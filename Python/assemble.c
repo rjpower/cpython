@@ -3,6 +3,7 @@
 #include "pycore_compile.h"
 #include "pycore_dict.h"          // _PyDict_NextValue()
 #include "pycore_flowgraph.h"
+#include "pycore_intrinsics.h"      // INTRINSIC_COMPARE_OP
 #include "pycore_ir.h"                // IR_WORD()
 #include "pycore_list.h"              // PyList_GET_VALUE()
 #include "pycore_long.h"              // _PyLong_CheckExactAndCompact()
@@ -791,17 +792,170 @@ handler_oparg(_PyRegCfg *cfg, _PyRegOp *op)
     return op->oparg;
 }
 
-/* Choose the handlers and place the feedback entries.  Sites past the
- * IR_FIELD_MAX-th share entry 0, which never specialises; those whose
- * handler would read its static operand from its entry take the NOFB form,
- * which carries it in the word. */
+/* The order in which sites get feedback entries (pyjit/design/register-ir.md
+ * G5): sites whose handler keeps its operation in the entry, which cannot
+ * run without one; then, in a function-like body, sites inside a loop; then
+ * the rest. */
+enum {
+    FB_CLASS_REQUIRED,
+    FB_CLASS_LOOP,
+    FB_CLASS_OTHER,
+    FB_NCLASSES,
+};
+
+/* Whether the generic handler needs its entry for its operand: COMPARE_OP
+ * and CONTAINS_OP.  BINARY_OP has a handler per operation, which runs at
+ * entry 0. */
 static int
-assign_handlers(struct assembler *a, _PyRegCfg *cfg, PyObject *consts)
+needs_entry(int handler)
 {
-    a->a_nfb = 1;
+    const _PyIRFormat *fmt = _PyIR_FormatOf(handler);
+    return fmt->imm == _PyIR_LOC_FBARG
+           && !(handler >= _PyIR_BINARY_OP_FIRST
+                && handler <= _PyIR_BINARY_OP_FIRST + NB_OPARG_LAST);
+}
+
+/* The CALL_INTRINSIC_2 intrinsic that does what a COMPARE_OP or
+ * CONTAINS_OP of oparg does, for a site that gets no entry. */
+static int
+fallback_intrinsic(int opcode, int oparg)
+{
+    if (opcode == CONTAINS_OP) {
+        return INTRINSIC_CONTAINS_OP + (oparg & 1);
+    }
+    assert(opcode == COMPARE_OP);
+    assert((oparg >> 5) <= Py_GE);
+    return INTRINSIC_COMPARE_OP + (oparg >> 5) * 2 + ((oparg >> 4) & 1);
+}
+
+/* The sites inside a loop: the ops of the blocks of the natural loop of each
+ * backward jump, which are its target and the blocks that reach the jump
+ * without passing the target.  The flow graph has the edges of jumps and
+ * fall-through, not of exceptions, so a handler laid out after the function
+ * that jumps back into a loop does not put the code between them in it. */
+static int
+mark_loops(_PyRegCfg *cfg, char *in_loop)
+{
+    int n = cfg->nblocks;
+    // Predecessors in compressed form: pred[start[b] .. start[b + 1] - 1]
+    int *start = PyMem_Calloc(n + 2, sizeof(int));
+    int *fill = PyMem_Calloc(n + 1, sizeof(int));
+    int *seen = PyMem_Calloc(n + 1, sizeof(int));
+    int *stack = PyMem_Calloc(n + 1, sizeof(int));
+    int *pred = NULL;
+    char *blk_in_loop = PyMem_Calloc(n + 1, 1);
+    int res = ERROR;
+    if (start == NULL || fill == NULL || seen == NULL || stack == NULL
+        || blk_in_loop == NULL)
+    {
+        PyErr_NoMemory();
+        goto done;
+    }
+    for (int pass = 0; pass < 2; pass++) {
+        for (int b = 0; b < n; b++) {
+            const _PyRegBlock *blk = &cfg->blocks[b];
+            for (int i = blk->start; i <= blk->end; i++) {
+                int succ = -1;
+                if (i < blk->end) {
+                    succ = cfg->ops[i].target;
+                }
+                else if (blk->falls_through && b + 1 < n) {
+                    succ = b + 1;
+                }
+                if (succ < 0) {
+                    continue;
+                }
+                if (pass == 0) {
+                    start[succ + 1]++;
+                }
+                else {
+                    pred[fill[succ]++] = b;
+                }
+            }
+        }
+        if (pass == 0) {
+            for (int b = 0; b < n; b++) {
+                start[b + 1] += start[b];
+            }
+            pred = PyMem_Malloc((start[n] + 1) * sizeof(int));
+            if (pred == NULL) {
+                PyErr_NoMemory();
+                goto done;
+            }
+            memcpy(fill, start, n * sizeof(int));
+        }
+    }
+    int stamp = 0;
+    for (int b = 0; b < n; b++) {
+        for (int i = cfg->blocks[b].start; i < cfg->blocks[b].end; i++) {
+            int t = cfg->ops[i].target;
+            if (t < 0 || t > b) {
+                continue;
+            }
+            stamp++;
+            int top = 0;
+            seen[t] = stamp;
+            blk_in_loop[t] = 1;
+            if (seen[b] != stamp) {
+                seen[b] = stamp;
+                stack[top++] = b;
+            }
+            while (top > 0) {
+                int x = stack[--top];
+                blk_in_loop[x] = 1;
+                for (int k = start[x]; k < start[x + 1]; k++) {
+                    if (seen[pred[k]] != stamp) {
+                        seen[pred[k]] = stamp;
+                        stack[top++] = pred[k];
+                    }
+                }
+            }
+        }
+    }
+    for (int b = 0; b < n; b++) {
+        for (int i = cfg->blocks[b].start; i < cfg->blocks[b].end; i++) {
+            in_loop[i] = blk_in_loop[b];
+        }
+    }
+    res = SUCCESS;
+done:
+    PyMem_Free(blk_in_loop);
+    PyMem_Free(fill);
+    PyMem_Free(start);
+    PyMem_Free(seen);
+    PyMem_Free(stack);
+    PyMem_Free(pred);
+    return res;
+}
+
+/* Choose the handlers and place the feedback entries, in the units of
+ * pycore_ir.h: entry 0 is the header, the others follow in the order of
+ * FB_CLASS_*, each in source order, as long as they end by IR_FB_UNITS_MAX.
+ * Sites past that share entry 0, which never specialises and keeps no
+ * operand; a COMPARE_OP or CONTAINS_OP among them becomes the intrinsic
+ * call.  a_fbinit gets one word per entry, in unit order. */
+static int
+assign_handlers(struct assembler *a, _PyRegCfg *cfg, PyObject *consts,
+                int code_flags)
+{
+    int nsites = 0;
+    char *cls = PyMem_Calloc(cfg->nops + 1, 2);
+    if (cls == NULL) {
+        PyErr_NoMemory();
+        return ERROR;
+    }
+    char *in_loop = cls + cfg->nops + 1;
+    int res = ERROR;
+    // A module or class body runs once, and ranks no loops
+    if (code_flags & CO_OPTIMIZED) {
+        if (mark_loops(cfg, in_loop) < 0) {
+            goto done;
+        }
+    }
     for (int i = 0; i < cfg->nops; i++) {
         _PyRegOp *op = &cfg->ops[i];
         op->fb = -1;
+        cls[i] = -1;
         if (op->opcode == _PyReg_DEAD) {
             op->nwords = 0;
             continue;
@@ -810,26 +964,69 @@ assign_handlers(struct assembler *a, _PyRegCfg *cfg, PyObject *consts)
         assert(IS_VALID_OPCODE(op->opcode));
         op->handler = choose_handler(op, consts);
         if (op->handler < 0) {
-            return ERROR;
+            goto done;
         }
         op->nwords = 1;
         const _PyIRFormat *fmt = _PyIR_FormatOf(op->handler);
         if (fmt->fb == _PyIR_LOC_NONE) {
             continue;
         }
-        // Only entry 0, which the sites past the limit share, is a counter
+        // Only entry 0, which the sites without an entry share, is a counter
         assert(fmt->fb_size != 0 && fmt->fb_kind != FB_COUNTER);
-        if (a->a_nfb <= IR_FIELD_MAX) {
-            op->fb = a->a_nfb++;
-            continue;
-        }
-        op->fb = 0;
-        if (fmt->imm == _PyIR_LOC_FBARG && fmt->nofb != 0) {
-            op->handler = fmt->nofb;
-            op->fb = -1;
+        cls[i] = needs_entry(op->handler) ? FB_CLASS_REQUIRED
+                 : in_loop[i] ? FB_CLASS_LOOP : FB_CLASS_OTHER;
+        nsites++;
+    }
+    a->a_fbinit = PyBytes_FromStringAndSize(NULL, (nsites + 1) * sizeof(uint32_t));
+    if (a->a_fbinit == NULL) {
+        goto done;
+    }
+    uint32_t *fbinit = (uint32_t *)PyBytes_AS_STRING(a->a_fbinit);
+    uint32_t unit = IR_FB_FIRST_UNIT;
+    int nfb = 1;
+    for (int c = 0; c < FB_NCLASSES; c++) {
+        for (int i = 0; i < cfg->nops; i++) {
+            if (cls[i] != c) {
+                continue;
+            }
+            _PyRegOp *op = &cfg->ops[i];
+            const _PyIRFormat *fmt = _PyIR_FormatOf(op->handler);
+            uint32_t size = fmt->fb_size >> IR_FB_UNIT_SHIFT;
+            if (unit + size <= IR_FB_UNITS_MAX) {
+                int arg = 0;
+                if (fmt->imm == _PyIR_LOC_FBARG) {
+                    arg = handler_oparg(cfg, op);
+                    if (arg < 0 || arg > 0xFFFF) {
+                        too_large("oparg", arg);
+                        goto done;
+                    }
+                }
+                fbinit[nfb++] = _PyIR_FBINIT(fmt->fb_kind, unit, arg);
+                op->fb = (int)unit;
+                unit += size;
+            }
+            else if (c == FB_CLASS_REQUIRED) {
+                op->oparg = fallback_intrinsic(op->opcode, op->oparg);
+                op->opcode = CALL_INTRINSIC_2;
+                op->handler = CALL_INTRINSIC_2;
+            }
+            else {
+                op->fb = 0;
+            }
         }
     }
-    return SUCCESS;
+    // Entry 0 exists only with others
+    if (nfb > 1) {
+        fbinit[0] = _PyIR_FBINIT(FB_COUNTER, 0, unit);
+    }
+    a->a_nfb = nfb > 1 ? nfb : 0;
+    if (_PyBytes_Resize(&a->a_fbinit, a->a_nfb * sizeof(uint32_t)) < 0) {
+        goto done;
+    }
+    res = SUCCESS;
+done:
+    PyMem_Free(cls);
+    return res;
 }
 
 /* Place the words, relaxing each FOR_ITER and SEND whose exit is too far,
@@ -946,7 +1143,7 @@ jump_word(int target)
 /* The words and the feedback table, in a->a_bytecode and a->a_fbinit */
 static int
 assemble_words(struct assembler *a, _PyRegCfg *cfg, PyObject *consts,
-               int nlocalsplus, int stacksize)
+               int nlocalsplus, int stacksize, int code_flags)
 {
     if (nlocalsplus + stacksize > IR_MAX_SLOTS) {
         PyErr_Format(PyExc_SyntaxError,
@@ -955,22 +1152,15 @@ assemble_words(struct assembler *a, _PyRegCfg *cfg, PyObject *consts,
                      nlocalsplus + stacksize, IR_MAX_SLOTS);
         return ERROR;
     }
-    RETURN_IF_ERROR(assign_handlers(a, cfg, consts));
+    RETURN_IF_ERROR(assign_handlers(a, cfg, consts, code_flags));
     RETURN_IF_ERROR(layout(a, cfg));
 
     a->a_bytecode = PyBytes_FromStringAndSize(NULL,
                                               a->a_nwords * sizeof(_PyIRWord));
-    // Entry 0 exists only with others
-    int nfb = a->a_nfb > 1 ? a->a_nfb : 0;
-    a->a_fbinit = PyBytes_FromStringAndSize(NULL, nfb * sizeof(uint32_t));
-    if (a->a_bytecode == NULL || a->a_fbinit == NULL) {
+    if (a->a_bytecode == NULL) {
         return ERROR;
     }
     _PyIRWord *words = (_PyIRWord *)PyBytes_AS_STRING(a->a_bytecode);
-    uint32_t *fbinit = (uint32_t *)PyBytes_AS_STRING(a->a_fbinit);
-    if (nfb) {
-        fbinit[0] = _PyIR_FBINIT(FB_COUNTER, 0);
-    }
     for (int b = 0; b < cfg->nblocks; b++) {
         _PyRegBlock *blk = &cfg->blocks[b];
         for (int i = blk->start; i < blk->end; i++) {
@@ -980,17 +1170,6 @@ assemble_words(struct assembler *a, _PyRegCfg *cfg, PyObject *consts,
                 continue;
             }
             RETURN_IF_ERROR(encode(cfg, op, blk->reachable, &words[w]));
-            if (op->fb > 0) {
-                int kind = _PyIR_FormatOf(op->handler)->fb_kind;
-                int arg = 0;
-                if (kind != FB_BRANCH) {
-                    arg = handler_oparg(cfg, op);
-                    if (arg < 0 || arg > IR_CD_MAX) {
-                        return too_large("oparg", arg);
-                    }
-                }
-                fbinit[op->fb] = _PyIR_FBINIT(kind, arg);
-            }
             if (op->nwords > 1) {
                 int exit = jump_target(cfg, op);
                 if (op->opcode == FOR_ITER) {
@@ -1045,7 +1224,8 @@ _PyAssemble_MakeCodeObject(_PyCompile_CodeUnitMetadata *umd, PyObject *const_cac
         res = make_constslots(&a, cfg);
     }
     if (res == SUCCESS) {
-        res = assemble_words(&a, cfg, consts, nlocalsplus, stacksize);
+        res = assemble_words(&a, cfg, consts, nlocalsplus, stacksize,
+                             code_flags);
     }
     if (res == SUCCESS) {
         res = assemble_emit(&a, cfg, umd->u_firstlineno, const_cache);

@@ -5,7 +5,7 @@ Include/internal/pycore_ir_metadata.h, which pycore_ir.h includes:
 
 - the handler indices of the IR-only instructions (annotation `ir_only`),
   which follow the 256 opcodes in name order, then those of the BINARY_OP
-  operations and of the NOFB forms, and IR_NUM_HANDLERS;
+  operations, and IR_NUM_HANDLERS;
 - _PyFb_<family>, the type of the feedback entry of each family that has
   one (ir_generator.FEEDBACK_LAYOUTS);
 - _PyIR_Formats, the instruction contract of every handler, indexed by
@@ -26,7 +26,6 @@ from cwriter import CWriter
 from ir_generator import (
     BINARY_OP_FAMILY,
     first_ir_only_handler,
-    NOFB_SUFFIX,
     Extent,
     HandlerContract,
     IRFormat,
@@ -37,7 +36,6 @@ from ir_generator import (
     handler_ids,
     handler_instructions,
     monitoring_events,
-    nofb_bases,
     num_handlers,
 )
 from typing import TextIO
@@ -47,10 +45,10 @@ DEFAULT_OUTPUT = ROOT / "Include/internal/pycore_ir_metadata.h"
 
 def shadow_of(name: str, analysis: Analysis) -> str:
     """The instruction that the handler stands for: itself, for the handler
-    of a BINARY_OP operation BINARY_OP, and for a NOFB form its base."""
+    of a BINARY_OP operation BINARY_OP."""
     if name in binary_op_handlers(analysis):
         return BINARY_OP_FAMILY
-    return name.removesuffix(NOFB_SUFFIX)
+    return name
 
 
 def bits(names: list[str]) -> str:
@@ -62,7 +60,7 @@ def extent_initializer(e: Extent) -> str:
     return f"{{ {k}, {form} }}"
 
 
-def format_initializer(fmt: IRFormat, shadow: str, nofb: str,
+def format_initializer(fmt: IRFormat, shadow: str,
                        contract: HandlerContract, events: list[str]) -> str:
     flags = ["_PyIR_VALID"]
     for present, flag in (
@@ -92,7 +90,7 @@ def format_initializer(fmt: IRFormat, shadow: str, nofb: str,
         f".reads = {extent_initializer(contract.reads)}, "
         f".writes = {extent_initializer(contract.writes)}, "
         f".through = {extent_initializer(contract.through)}, "
-        f".shadow = {shadow}, .nofb = {nofb}, "
+        f".shadow = {shadow}, "
         f".twin = {contract.twin or 0}, .events = {events_init} }}"
     )
 
@@ -156,13 +154,11 @@ def generate_ir_metadata(
         if BINARY_OP_FAMILY in analysis.instructions:
             indices[BINARY_OP_FAMILY] = analysis.instructions[BINARY_OP_FAMILY].opcode
             rows[BINARY_OP_FAMILY] = contracts[binary_op_handlers(analysis)[0]]
-        has_nofb = set(nofb_bases(analysis))
         for name in sorted(indices, key=lambda name: indices[name]):
-            nofb = name + NOFB_SUFFIX if name in has_nofb else "0"
             twin = rows[name].twin
             events = monitoring_events(twin, insts[twin]) if twin else []
             init = format_initializer(formats[name], shadow_of(name, analysis),
-                                      nofb, rows[name], events)
+                                      rows[name], events)
             out.emit(f"[{name}] = {init},\n")
         out.emit("};\n")
         out.emit("#endif\n\n")

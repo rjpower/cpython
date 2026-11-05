@@ -322,17 +322,17 @@ BINARY_OP_INPLACE_TRUE_DIVIDE 292
 BINARY_OP_INPLACE_XOR 293
 BINARY_OP_SUBSCR 294
 
-# NOFB forms
-COMPARE_OP_NOFB 295
-CONTAINS_OP_NOFB 296
-INSTRUMENTED_LOAD_SUPER_ATTR_NOFB 297
-LOAD_ATTR_NOFB 298
-LOAD_GLOBAL_NOFB 299
-LOAD_SUPER_ATTR_NOFB 300
-STORE_ATTR_NOFB 301
+# removed: COMPARE_OP_NOFB 295
+# removed: CONTAINS_OP_NOFB 296
+# removed: INSTRUMENTED_LOAD_SUPER_ATTR_NOFB 297
+# removed: LOAD_ATTR_NOFB 298
+# removed: LOAD_GLOBAL_NOFB 299
+# removed: LOAD_SUPER_ATTR_NOFB 300
+# removed: STORE_ATTR_NOFB 301
 
-# Reserved for B4: the LOAD_ATTR head replaces the seven NOFB forms; it takes
-# one new number.  The NOFB forms above become holes (`# removed:`).
+# Reserved for B4 and left unused: the seven NOFB forms above are removed and
+# LOAD_ATTR keeps one head (its oparg, with the method bit, is in D), so B4
+# adds no handler.  The number stays a hole.
 # range B4 302 303
 
 # Reserved for B6: 11 fused handlers and 5 spare.  Numbers not used stay holes

@@ -333,8 +333,10 @@ Known values:
    five dead handlers are removed (register IR v2 B2).
    64406: code objects carry a constant-slot table after the feedback table,
    and inline scalar constants read in loops are hidden frame slots
-   (register IR v2 B7). */
-#define PYC_MAGIC_NUMBER 64406
+   (register IR v2 B7).
+   64407: B4: feedback entries sized by kind, names past 2,048 through the
+   GETATTR intrinsic */
+#define PYC_MAGIC_NUMBER 64407
 /* This is equivalent to converting PYC_MAGIC_NUMBER to 2 bytes
    (little-endian) and then appending b'\r\n'. */
 #define PYC_MAGIC_NUMBER_TOKEN \

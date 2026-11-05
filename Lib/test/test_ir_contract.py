@@ -101,14 +101,11 @@ class ContractTests(unittest.TestCase):
                 self.assertIn(opcode.opname[h], named)
                 self.assertIn(row.base, opcode.opmap.values())
                 self.assertIn(row.shadow, ROWS)
-                if row.nofb is not None:
-                    self.assertIn(row.nofb, ROWS)
-                    self.assertEqual(ROWS[row.nofb].fb, _opcode.IR_LOC_NONE)
         for name in (*opcode._specialized_opmap, *opcode._ir_opmap):
             self.assertIn(name, BY_NAME)
 
     def test_stack_effects(self):
-        # The generic handler of an instruction, its NOFB form and the
+        # The generic handler of an instruction and the
         # handlers of its operations have its stack effect, which is what the
         # compiler counts (_PyOpcode_num_popped() and _pushed()).  A
         # specialisation has its own, for the opargs it specialises.
@@ -253,8 +250,8 @@ class ContractTests(unittest.TestCase):
                 for _, h, _, _, _, fb in dis._unpack_opargs(co.co_code, fbinit):
                     if not fb or fbinit is None:
                         continue
-                    kind = int.from_bytes(fbinit[4 * fb:4 * fb + 4],
-                                          sys.byteorder) >> 24
+                    kind, _, units = dis._feedback_entry(fbinit, fb)
+                    self.assertGreaterEqual(units * 8, CONTRACT[h].fb_size)
                     self.assertEqual(kind, CONTRACT[h].fb_kind,
                                      opcode.opname[h])
                     seen.add(dis._FEEDBACK_KINDS[kind])

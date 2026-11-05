@@ -2088,6 +2088,7 @@ dummy_func(
             }
         }
 
+        // The oparg (name << 1 | NULL bit) is in CD; B5 removes the NULL bit
         macro(LOAD_GLOBAL) =
             unused/1 +
             _SPECIALIZE_LOAD_GLOBAL +

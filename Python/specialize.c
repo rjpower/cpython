@@ -283,7 +283,7 @@ instr_fb(_PyInstr *instr)
                                instr);
 }
 
-/* Whether h is entry 0, which the sites past the IR_FIELD_MAX-th share and
+/* Whether h is entry 0, the header that the sites without an entry share and
  * which never specialises */
 static inline int
 is_shared_entry(_PyFbHeader *h)
@@ -296,6 +296,8 @@ instr_entry(_PyInstr *instr)
 {
     _PyFbHeader *h = instr_fb(instr);
     assert(h != NULL);
+    // The specialisers write the fields past the header
+    assert(!is_shared_entry(h));
     return h;
 }
 
@@ -438,6 +440,8 @@ fb_begin_ex(_PyInstr *instr, bool may_allocate)
 {
     _PyFbHeader *h = instr_fb(instr);
     assert(h != NULL);
+    // Entry 0 is a header and never specialises
+    assert(!is_shared_entry(h));
     uint8_t opcode = instr_opcode(instr);
     if (h->state == FB_MONO && h->poly == 0 && _PyOpcode_Deopt[opcode] != opcode) {
         fb_save_mono(instr, h, opcode, may_allocate);

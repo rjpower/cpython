@@ -25,6 +25,7 @@
 #include "pycore_dict.h"          // _PyDict_NextValue()
 #include "pycore_instruction_sequence.h" // _PyInstructionSequence_NewLabel()
 #include "pycore_intrinsics.h"
+#include "pycore_ir.h"             // IR_FIELD_MAX
 #include "pycore_list.h"          // PyList_GET_VALUE()
 #include "pycore_long.h"          // _PyLong_GetZero()
 #include "pycore_object.h"        // _Py_ANNOTATE_FORMAT_VALUE_WITH_FAKE_GLOBALS
@@ -371,6 +372,29 @@ codegen_addop_o(compiler *c, location loc,
 #define LOAD_ZERO_SUPER_ATTR -3
 #define LOAD_ZERO_SUPER_METHOD -4
 
+/* LOAD_ATTR (low is its method bit) or STORE_ATTR of name, for a name index
+ * that does not fit the instruction. */
+static int
+codegen_attr_by_intrinsic(compiler *c, location loc, int opcode, int low,
+                          PyObject *name)
+{
+    ADDOP_LOAD_CONST(c, loc, name);
+    if (opcode == LOAD_ATTR) {
+        ADDOP_I(c, loc, CALL_INTRINSIC_2, INTRINSIC_GETATTR);
+        if (low) {
+            // The method form leaves a NULL above the attribute.  B5
+            // removes PUSH_NULL; this lowering follows it then.
+            ADDOP(c, loc, PUSH_NULL);
+        }
+        return SUCCESS;
+    }
+    // The value is NULL for a deletion
+    ADDOP_I(c, loc, BUILD_TUPLE, 2);
+    ADDOP_I(c, loc, CALL_INTRINSIC_2, INTRINSIC_SETATTR);
+    ADDOP(c, loc, POP_TOP);
+    return SUCCESS;
+}
+
 static int
 codegen_addop_name_custom(compiler *c, location loc, int opcode,
                           PyObject *dict, PyObject *o, int shift, int low)
@@ -380,11 +404,21 @@ codegen_addop_name_custom(compiler *c, location loc, int opcode,
         return ERROR;
     }
     Py_ssize_t arg = _PyCompile_DictAddObj(dict, mangled);
-    Py_DECREF(mangled);
     if (arg < 0) {
+        Py_DECREF(mangled);
         return ERROR;
     }
-    ADDOP_I(c, loc, opcode, (arg << shift) | low);
+    Py_ssize_t oparg = (arg << shift) | low;
+    if ((opcode == LOAD_ATTR || opcode == STORE_ATTR) && oparg > IR_FIELD_MAX) {
+        // The oparg is a 12-bit field of the word: the name goes through
+        // an intrinsic call instead, from a constant (the limits rule of
+        // pyjit/design/register-ir.md 1.14)
+        int ret = codegen_attr_by_intrinsic(c, loc, opcode, low, mangled);
+        Py_DECREF(mangled);
+        return ret;
+    }
+    Py_DECREF(mangled);
+    ADDOP_I(c, loc, opcode, oparg);
     return SUCCESS;
 }
 
@@ -3945,7 +3979,7 @@ is_import_originated(compiler *c, expr_ty e)
 }
 
 static int
-can_optimize_super_call(compiler *c, expr_ty attr)
+can_optimize_super_call_impl(compiler *c, expr_ty attr)
 {
     expr_ty e = attr->v.Attribute.value;
     if (e->kind != Call_kind ||
@@ -3997,6 +4031,27 @@ can_optimize_super_call(compiler *c, expr_ty attr)
         return 1;
     }
     return 0;
+}
+
+/* Whether attr, a call of super() and an attribute, can be one
+ * LOAD_SUPER_ATTR.  Its oparg, with the name index and two flags, is a
+ * 12-bit field of the word, so a name from index 1,024 on is loaded from the
+ * super object instead. */
+static int
+can_optimize_super_call(compiler *c, expr_ty attr)
+{
+    int ret = can_optimize_super_call_impl(c, attr);
+    if (ret <= 0) {
+        return ret;
+    }
+    PyObject *mangled = _PyCompile_MaybeMangle(c, attr->v.Attribute.attr);
+    if (mangled == NULL) {
+        return ERROR;
+    }
+    Py_ssize_t arg = _PyCompile_DictAddObj(METADATA(c)->u_names, mangled);
+    Py_DECREF(mangled);
+    RETURN_IF_ERROR(arg);
+    return ((arg << 2) | 3) <= IR_FIELD_MAX;
 }
 
 static int

@@ -725,8 +725,8 @@ PyDoc_STRVAR(_opcode_get_ir_contract__doc__,
 "whose fields are those of _PyIRFormat in Include/internal/pycore_ir.h,\n"
 "which documents them, and base, the opcode that the handler stands for.\n"
 "roles holds the roles of fields A to D; reads, writes and through are\n"
-"(k, form) extents; dst is None for a format without one; nofb and twin\n"
-"are handlers or None.");
+"(k, form) extents; dst is None for a format without one; twin\n"
+"is a handler or None.");
 
 #define _OPCODE_GET_IR_CONTRACT_METHODDEF    \
     {"get_ir_contract", (PyCFunction)_opcode_get_ir_contract, METH_NOARGS, _opcode_get_ir_contract__doc__},
@@ -739,4 +739,4 @@ _opcode_get_ir_contract(PyObject *module, PyObject *Py_UNUSED(ignored))
 {
     return _opcode_get_ir_contract_impl(module);
 }
-/*[clinic end generated code: output=a43bc545a85f9e2d input=a9049054013a1b77]*/
+/*[clinic end generated code: output=a3b8c4e3d9184f84 input=a9049054013a1b77]*/

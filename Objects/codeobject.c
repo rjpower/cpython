@@ -531,6 +531,56 @@ check_constslots(struct _PyCodeConstructor *con)
     return check_const_layout(con, (int)first, (int)nconst);
 }
 
+/* The units that an entry of each kind takes at least (pycore_feedback.h) */
+static const uint8_t fb_kind_units[] = {
+    [FB_COUNTER] = sizeof(_PyFbHeader) / 8,
+    [FB_BRANCH] = sizeof(_PyFbHeader) / 8,
+    [FB_UNARY] = sizeof(_PyFbUnary) / 8,
+    [FB_BINARY] = sizeof(_PyFbBinary) / 8,
+    [FB_ATTR] = sizeof(_PyFbAttr) / 8,
+    [FB_GLOBAL] = sizeof(_PyFbGlobal) / 8,
+    [FB_CALL] = sizeof(_PyFbCall) / 8,
+};
+
+/* Whether fbinit, the feedback table of a code object, describes a vector:
+ * entry 0 first, the others in order of unit, each with room for its kind,
+ * all within the units that entry 0 gives. */
+static int
+fbinit_is_valid(PyObject *fbinit)
+{
+    Py_ssize_t size = PyBytes_GET_SIZE(fbinit);
+    if (size % sizeof(uint32_t) != 0) {
+        return 0;
+    }
+    Py_ssize_t n = size / (Py_ssize_t)sizeof(uint32_t);
+    if (n == 0) {
+        return 1;
+    }
+    uint32_t word;
+    memcpy(&word, PyBytes_AS_STRING(fbinit), sizeof(word));
+    uint32_t total = _PyIR_FBINIT_ARG(word);
+    if (_PyIR_FBINIT_KIND(word) != FB_COUNTER || _PyIR_FBINIT_UNIT(word) != 0
+        || total < IR_FB_FIRST_UNIT || total > IR_FB_UNITS_MAX)
+    {
+        return 0;
+    }
+    uint32_t next = IR_FB_FIRST_UNIT;
+    for (Py_ssize_t i = 1; i < n; i++) {
+        memcpy(&word, PyBytes_AS_STRING(fbinit) + i * sizeof(word), sizeof(word));
+        int kind = _PyIR_FBINIT_KIND(word);
+        if (kind <= FB_COUNTER || kind > FB_CALL
+            || _PyIR_FBINIT_UNIT(word) < next)
+        {
+            return 0;
+        }
+        next = _PyIR_FBINIT_UNIT(word) + fb_kind_units[kind];
+        if (next > total) {
+            return 0;
+        }
+    }
+    return 1;
+}
+
 int
 _PyCode_Validate(struct _PyCodeConstructor *con)
 {
@@ -568,9 +618,7 @@ _PyCode_Validate(struct _PyCodeConstructor *con)
         return -1;
     }
     if (con->fbinit != NULL
-        && (!PyBytes_Check(con->fbinit)
-            || PyBytes_GET_SIZE(con->fbinit) % sizeof(uint32_t) != 0
-            || PyBytes_GET_SIZE(con->fbinit) / sizeof(uint32_t) > IR_FIELD_MAX + 1))
+        && (!PyBytes_Check(con->fbinit) || !fbinit_is_valid(con->fbinit)))
     {
         PyErr_SetString(PyExc_ValueError, "code: co_fbinit is malformed");
         return -1;
@@ -895,6 +943,27 @@ inline_const_fits(_PyIRWord word, PyObject *consts)
     return PyValue_IsInlineFloat(value);
 }
 
+static int
+fb_field_is_valid(const _PyIRFormat *fmt, int handler, uint32_t unit,
+                  const uint32_t *table, int nfb)
+{
+    if (nfb == 0) {
+        return 0;
+    }
+    if (unit == 0) {
+        return !(fmt->imm == _PyIR_LOC_FBARG
+                 && !(handler >= _PyIR_BINARY_OP_FIRST
+                      && handler <= _PyIR_BINARY_OP_FIRST + NB_OPARG_LAST));
+    }
+    int i = _PyIR_FbFind(table, nfb, unit);
+    if (i < 0) {
+        return 0;
+    }
+    uint32_t end = i + 1 < nfb ? _PyIR_FBINIT_UNIT(table[i + 1])
+                               : _PyIR_FBINIT_ARG(table[0]);
+    return (end - unit) * 8 >= fmt->fb_size;
+}
+
 /* Check the fields of words from outside the compiler and marshal that the
  * interpreter uses as indices without checking them: each handler exists,
  * each slot is in the frame, and each feedback index has an entry, which
@@ -908,8 +977,10 @@ check_words(PyObject *code, PyObject *fbinit, PyObject *consts, int nslots)
     PyObject *result = Py_NewRef(code);
     const char *bytes = PyBytes_AS_STRING(code);
     Py_ssize_t nwords = PyBytes_GET_SIZE(code) / (Py_ssize_t)sizeof(_PyIRWord);
-    Py_ssize_t nfb = fbinit == NULL ? 0
-        : PyBytes_GET_SIZE(fbinit) / (Py_ssize_t)sizeof(uint32_t);
+    const uint32_t *table = fbinit == NULL ? NULL
+        : (const uint32_t *)PyBytes_AS_STRING(fbinit);
+    int nfb = fbinit == NULL ? 0
+        : (int)(PyBytes_GET_SIZE(fbinit) / (Py_ssize_t)sizeof(uint32_t));
     for (Py_ssize_t i = 0; i < nwords; i++) {
         _PyIRWord word;
         memcpy(&word, bytes + i * sizeof(_PyIRWord), sizeof(word));
@@ -933,11 +1004,11 @@ check_words(PyObject *code, PyObject *fbinit, PyObject *consts, int nslots)
                              nslots);
                 goto error;
             }
-            if (role == _PyIR_ROLE_FB
-                && (value >= (uint32_t)nfb
-                    || (value == 0 && fmt->imm == _PyIR_LOC_FBARG
-                        && !(handler >= _PyIR_BINARY_OP_FIRST
-                             && handler <= _PyIR_BINARY_OP_FIRST + NB_OPARG_LAST))))
+            // The field is the unit of an entry that fits the handler's
+            // type; 0 is the shared header, which only a handler with no
+            // operand in its entry can use.
+            if (role == _PyIR_ROLE_FB && !fb_field_is_valid(fmt, handler, value,
+                                                            table, nfb))
             {
                 PyErr_Format(PyExc_ValueError,
                              "code: word %zd has no feedback entry %u", i,
@@ -2955,7 +3026,7 @@ code_getcodeadaptive(PyObject *self, void *closure)
                                      exec->nwords * sizeof(_PyIRWord));
 }
 
-/* The feedback entries of the executing copy, FB_STRIDE bytes each and
+/* The feedback entries of the executing copy, in units of 8 bytes with
  * entry 0 first, or None before the first call or without entries. */
 static PyObject *
 code_getfeedback(PyObject *self, void *closure)
@@ -2966,7 +3037,8 @@ code_getfeedback(PyObject *self, void *closure)
         Py_RETURN_NONE;
     }
     return PyBytes_FromStringAndSize(exec->entries,
-                                     code->co_nfeedback * FB_STRIDE);
+                                     (Py_ssize_t)_PyCode_FbUnits(code)
+                                     << IR_FB_UNIT_SHIFT);
 }
 
 /* The feedback table: per feedback entry, its kind and static operand */

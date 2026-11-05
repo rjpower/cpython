@@ -392,45 +392,63 @@ class AssemblerTest(unittest.TestCase):
             make(IR_MAX_SLOTS - stacksize + 1)
 
     def test_shared_feedback_entry(self):
-        # The sites past the IR_FIELD_MAX-th share entry 0: they never
-        # specialise, and those with a static operand run a NOFB form that
-        # carries it in the word.
+        # The sites that get no entry (fb 0) share entry 0, a header: they
+        # never specialise and keep running their generic handler, which
+        # reads its operand from the word.  The compare and contains sites
+        # have their entries before all the others.
         class O:
             def __init__(self):
                 self.attr = 5
                 self.other = 7
-        nsites = IR_FIELD_MAX + 10
+        nsites = 1000     # attribute entries are 40 bytes: 817 fit after the compares
         source = ("def f(o, n):\n"
                   + "".join(f"    x = o.attr\n" for i in range(nsites))
                   + "    return (o.attr - o.other, o.other // n,\n"
                   + "            o.attr < o.other, 5 in [o.attr])\n")
         f = make_function(source)
         expected = (-2, 3, True, True)
-        for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 1):
+        for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD * 4):
             self.assertEqual(f(O(), 2), expected)
-        load_attrs = [instr for instr in dis.get_instructions(f)
-                      if instr.opname == "LOAD_ATTR"]
-        self.assertEqual([instr.fb for instr in load_attrs[:3]], [1, 2, 3])
-        shared = load_attrs[IR_FIELD_MAX:]
-        self.assertEqual({instr.fb for instr in shared}, {None})
-        self.assertEqual({instr.handler for instr in shared},
-                         {"LOAD_ATTR_NOFB"})
-        self.assertEqual({instr.argval for instr in shared},
-                         {"attr", "other"})
+        instrs = list(dis.get_instructions(f))
+        compares = [i for i in instrs if i.opname in ("COMPARE_OP", "CONTAINS_OP")]
+        self.assertEqual([i.fb for i in compares], [2, 6])
+        load_attrs = [i for i in instrs if i.opname == "LOAD_ATTR"]
+        self.assertEqual(load_attrs[0].fb, 10)
+        self.assertEqual(load_attrs[1].fb, 15)
+        shared = [i for i in load_attrs if i.fb == 0]
+        owned = [i for i in load_attrs if i.fb != 0]
+        self.assertEqual(len(owned), 817)
+        self.assertEqual(len(shared), nsites + 6 - len(owned))
+        self.assertEqual({i.argval for i in shared}, {"attr", "other"})
         ir = handlers(f)
+        self.assertEqual({ir[i.offset] for i in shared}, {"LOAD_ATTR"})
         if SPECIALIZES:
-            self.assertNotEqual(ir[load_attrs[0].offset], "LOAD_ATTR")
-        self.assertEqual({ir[instr.offset] for instr in shared},
-                         {"LOAD_ATTR_NOFB"})
-        for name in ("BINARY_OP_SUBTRACT", "BINARY_OP_FLOOR_DIVIDE",
-                     "COMPARE_OP_NOFB", "CONTAINS_OP_NOFB"):
+            self.assertNotEqual(ir[owned[0].offset], "LOAD_ATTR")
+        # The binary operations, last in source order, have no entry left
+        # and keep the handlers of their operations
+        for name in ("BINARY_OP_SUBTRACT", "BINARY_OP_FLOOR_DIVIDE"):
             self.assertIn(name, ir)
-        # Other operands take the generic paths
+        # Other operands take the generic paths, and many runs more change
+        # nothing about the shared sites
         self.assertEqual(f(O(), 2.0), (-2, 3.0, True, True))
         with self.assertRaises(ZeroDivisionError):
             f(O(), 0)
-        # The shared entry holds nothing that dis could show
+        header = f.__code__._co_feedback[:4]       # kind, state, counter
+        self.assertEqual(header[:2], bytes([0, 4]))  # COUNTER, OFF
+        for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD * 8):
+            f(O(), 2)
+        after = f.__code__._co_feedback[:4]
+        self.assertEqual(after[:2], header[:2])
+        # The counter of entry 0 stays unreachable (backoff bits 7)
+        self.assertEqual(after[2] & 7, 7)
+        self.assertEqual({handlers(f)[i.offset] for i in shared}, {"LOAD_ATTR"})
+        # The shared entry is the header and nothing else is written
         dis.dis(f, adaptive=True, show_caches=True, file=io.StringIO())
+        fbinit = f.__code__.co_fbinit
+        self.assertLessEqual(int.from_bytes(fbinit[:4], sys.byteorder) & 0xFFFF,
+                             4096)
+        self.assertEqual(len(f.__code__._co_feedback),
+                         (int.from_bytes(fbinit[:4], sys.byteorder) & 0xFFFF) * 8)
 
     def test_sizeof(self):
         # The first call makes the executing copy
@@ -534,6 +552,459 @@ class SlotLimitTest(unittest.TestCase):
         for value in (-1, 4096):
             with self.assertRaises(ValueError):
                 _testinternalcapi.set_ir_max_slots(value)
+
+
+def fb_entries(code):
+    """The (kind, unit, arg, units) of each entry of code's feedback table,
+    entry 0 first"""
+    return [(kind, unit, arg, units) for kind, arg, units, unit in
+            ((*dis._feedback_entry(code.co_fbinit, w), w) for w in
+             [(int.from_bytes(code.co_fbinit[i:i + 4], sys.byteorder) >> 16)
+              & IR_FIELD_MAX for i in range(0, len(code.co_fbinit), 4)])]
+
+
+COMPARE_OPS = ("<", "<=", "==", "!=", ">", ">=", "in", "not in")
+
+
+class FeedbackLayoutTest(unittest.TestCase):
+    """The feedback vector: 8-byte units, per-kind sizes, entry 0 a header,
+    compare sites first, and the limits (Python/assemble.c)"""
+
+    def test_layout(self):
+        def f(o, n):
+            pre = o.pre
+            for i in range(n):
+                if o.a < i and o.b in (1, 2):
+                    o.c = o.a - i
+            return o.a
+        code = f.__code__
+        entries = fb_entries(code)
+        kinds = dis._FEEDBACK_KINDS
+        self.assertEqual(entries[0][:2], (0, 0))
+        self.assertEqual(entries[0][3], 2)
+        # Entries are in order of unit, without gaps; entry 0 gives the total
+        total = int.from_bytes(code.co_fbinit[:4], sys.byteorder) & 0xFFFF
+        position = 2
+        sizes = {"UNARY": (24,), "BINARY": (32,), "ATTR": (40,),
+                 "GLOBAL": (32,), "CALL": (24,), "BRANCH": (16, 24)}
+        for kind, unit, arg, units in entries[1:]:
+            self.assertEqual(unit, position)
+            self.assertIn(units * 8, sizes[kinds[kind]])
+            position += units
+        self.assertEqual(position, total)
+        # The compare and contains entries come first, then the sites in the
+        # loop, then the others
+        by_name = {}
+        for instr in dis.get_instructions(f):
+            by_name.setdefault(instr.opname, []).append(instr.fb)
+        self.assertEqual(by_name["COMPARE_OP"], [2])
+        self.assertEqual(by_name["CONTAINS_OP"], [6])
+        pre, a1, b, a2 = by_name["LOAD_ATTR"][:4]
+        after = by_name["LOAD_ATTR"][4]
+        self.assertEqual(sorted([a1, b, a2, by_name["STORE_ATTR"][0]]),
+                         [a1, b, a2, by_name["STORE_ATTR"][0]])
+        self.assertLess(by_name["STORE_ATTR"][0], pre)
+        self.assertLess(pre, after)
+        o = types.SimpleNamespace(a=1, b=2, c=0, pre=0)
+        self.assertEqual(f(o, 4), 1)
+        self.assertEqual(len(f.__code__._co_feedback), total * 8)
+
+    def test_loop_sites_before_others(self):
+        # In a function, the sites inside a loop get entries before the sites
+        # outside; in a module body no site is ranked as in a loop
+        source = ("def f(o, n):\n"
+                  "    x = o.a\n"
+                  "    for i in range(n):\n"
+                  "        y = o.b\n"
+                  "    return o.c\n")
+        f = make_function(source)
+        attrs = [i for i in dis.get_instructions(f) if i.opname == "LOAD_ATTR"]
+        self.assertEqual([i.argval for i in attrs], ["a", "b", "c"])
+        self.assertLess(attrs[1].fb, attrs[0].fb)
+        self.assertLess(attrs[0].fb, attrs[2].fb)
+        module = compile("x = a.p\nfor i in range(3):\n    y = a.q\nz = a.r\n",
+                         "<test>", "exec")
+        attrs = [i for i in dis.get_instructions(module)
+                 if i.opname == "LOAD_ATTR"]
+        self.assertEqual(sorted(i.fb for i in attrs), [i.fb for i in attrs])
+
+    def test_loops_are_in_the_flow_graph(self):
+        # The handler of a try in a loop is laid out after the function and
+        # jumps back to the loop; the code after the loop is not in it
+        def f(o, n):
+            o.pre0
+            for i in range(n):
+                try:
+                    o.inside
+                except KeyError:
+                    pass
+            o.after
+        fbs = {i.argval: i.fb for i in dis.get_instructions(f)
+               if i.opname == "LOAD_ATTR"}
+        self.assertLess(fbs["inside"], fbs["pre0"])
+        self.assertLess(fbs["pre0"], fbs["after"])
+
+    def compare_source(self, ncopies, extra=""):
+        lines = ["def f(a, b, c=None, d=None):", "    r = []", "    n = 0"]
+        for i in range(ncopies):
+            for op in COMPARE_OPS:
+                lines.append(f"    r.append(a {op} b)")
+                lines.append(f"    if a {op} b:")
+                lines.append("        n += 1")
+        lines.append(extra)
+        lines.append("    return r, n")
+        return "\n".join(lines) + "\n"
+
+    def test_compare_sites_past_the_entry_limit(self):
+        # 1023 compare entries fit; the other sites become intrinsic calls
+        # of the same result, whatever the operation and the use of the result
+        ncopies = 70
+        f = make_function(self.compare_source(ncopies))
+        nsites = ncopies * len(COMPARE_OPS) * 2
+        instrs = list(dis.get_instructions(f))
+        compares = [i for i in instrs if i.opname in ("COMPARE_OP", "CONTAINS_OP")]
+        intrinsics = [i for i in instrs if i.opname == "CALL_INTRINSIC_2"]
+        self.assertEqual(len(compares), 1023)
+        self.assertEqual(len(intrinsics), nsites - 1023)
+        self.assertEqual([i.fb for i in compares],
+                         [2 + 4 * k for k in range(1023)])
+        names = {i.argrepr for i in intrinsics}
+        self.assertTrue(all(n.startswith(("INTRINSIC_COMPARE_", "INTRINSIC_CONTAINS_"))
+                            for n in names), names)
+        total = int.from_bytes(f.__code__.co_fbinit[:4], sys.byteorder) & 0xFFFF
+        self.assertEqual(total, 2 + 4 * 1023)
+
+        import operator
+        ops = {"<": operator.lt, "<=": operator.le, "==": operator.eq,
+               "!=": operator.ne, ">": operator.gt, ">=": operator.ge,
+               "in": lambda a, b: a in b, "not in": lambda a, b: a not in b}
+        def expect(a, b):
+            r, n = [], 0
+            for _ in range(ncopies):
+                for op in COMPARE_OPS:
+                    v = ops[op](a, b)
+                    r.append(v)
+                    n += bool(v)
+            return r, n
+        for a, b in ((1, 2), (3, 3), (2.5, 1), ("a", "ab"), (1, [1, 2]),
+                     (4, [1, 2]), (2, {2: 3})):
+            try:
+                want = expect(a, b)
+            except TypeError:
+                with self.assertRaises(TypeError):
+                    f(a, b)
+                continue
+            for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD * 2):
+                self.assertEqual(f(a, b), want)
+
+    def test_compare_error_at_an_intrinsic_site(self):
+        same = [1, 2]
+        for extra, good, bad, message in (
+                ("c < d", (1, 5), (1, "x"), "not supported between"),
+                ("c in d", (1, [1, 5]), (1, 5.5), "not a container|not iterable")):
+            lines = self.compare_source(75).splitlines()
+            lines[-2:-1] = [f"    r.append({extra})"]
+            f = make_function("\n".join(lines) + "\n")
+            self.assertTrue(f(same, same, *good)[0][-1])
+            with self.assertRaisesRegex(TypeError, message):
+                f(same, same, *bad)
+
+    def test_big_vector(self):
+        # More than 4,096 units of entries: the later sites share entry 0
+        class O:
+            def __init__(self):
+                self.attr = 5
+        lines = ["def f(o):", "    t = 0"]
+        for i in range(2000):
+            lines.append("    t += o.attr")
+        lines.append("    return t")
+        f = make_function("\n".join(lines) + "\n")
+        total = int.from_bytes(f.__code__.co_fbinit[:4], sys.byteorder) & 0xFFFF
+        self.assertLessEqual(total, 4096)
+        for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD * 3):
+            self.assertEqual(f(O()), 10000)
+        self.assertEqual(len(f.__code__._co_feedback), total * 8)
+        # Round trips through marshal and the constructor
+        import marshal
+        g = types.FunctionType(marshal.loads(marshal.dumps(f.__code__)), {})
+        self.assertEqual(g(O()), 10000)
+        self.assertEqual(f.__code__.replace(co_fbinit=f.__code__.co_fbinit),
+                         f.__code__)
+
+    def test_fbinit_is_checked(self):
+        import struct
+        def f(a):
+            return a.x
+        c = f.__code__
+        entries = fb_entries(c)
+        self.assertEqual(entries[1][0], dis._FEEDBACK_KINDS.index("ATTR"))
+        def table(*words):
+            return struct.pack(f"<{len(words)}I", *words)
+        def word(kind, unit, arg):
+            return kind << 28 | unit << 16 | arg
+        attr = dis._FEEDBACK_KINDS.index("ATTR")
+        good = table(word(0, 0, 7), word(attr, 2, 0))
+        self.assertEqual(c.replace(co_fbinit=good).co_fbinit, good)
+        bad = {
+            "entry 0 is not a counter": table(word(attr, 0, 7), word(attr, 2, 0)),
+            "unit out of order": table(word(0, 0, 12), word(attr, 7, 0),
+                                       word(attr, 2, 0)),
+            "entry does not fit": table(word(0, 0, 6), word(attr, 2, 0)),
+            "entry in the header": table(word(0, 0, 7), word(attr, 1, 0)),
+            "past the limit": table(word(0, 0, 5000), word(attr, 2, 0)),
+            "no entry 0 units": table(word(0, 0, 1), word(attr, 2, 0)),
+        }
+        for name, fbinit in bad.items():
+            with self.subTest(name):
+                with self.assertRaisesRegex(ValueError, "malformed"):
+                    c.replace(co_fbinit=fbinit)
+        # A word that names a unit that starts no entry, or whose entry is
+        # too small for its handler
+        short = table(word(0, 0, 5), word(dis._FEEDBACK_KINDS.index("CALL"), 2, 0))
+        with self.assertRaisesRegex(ValueError, "feedback"):
+            c.replace(co_fbinit=short)
+
+
+class AllOps:
+    """Supports every operation of COMPARE_OPS, with the operand on either side"""
+    def __lt__(self, other): return True
+    __gt__ = __le__ = __ge__ = __lt__
+    def __contains__(self, item): return item == 1
+
+
+class IntrinsicSiteTest(unittest.TestCase):
+    """Sites past the limits: the intrinsic calls, entry 0, and the tools"""
+
+    def mixed(self, nattrs=6000, ncopies=70):
+        # More attribute loads than 2,048 names allow, and more compares
+        # than the vector holds, in one function
+        lines = ["def f(o, a, b):", "    t = 0", "    r = []"]
+        for i in range(nattrs):
+            lines.append(f"    t += o.n{i}")
+        for _ in range(ncopies):
+            for op in COMPARE_OPS:
+                lines.append(f"    r.append(a {op} b)")
+        lines.append("    return t, r")
+        return make_function("\n".join(lines) + "\n")
+
+    def expected(self, a, b, ncopies=70):
+        import operator
+        ops = {"<": operator.lt, "<=": operator.le, "==": operator.eq,
+               "!=": operator.ne, ">": operator.gt, ">=": operator.ge,
+               "in": lambda a, b: a in b, "not in": lambda a, b: a not in b}
+        return [ops[op](a, b) for _ in range(ncopies) for op in COMPARE_OPS]
+
+    def test_mixed_function_marshal_and_tools(self):
+        import marshal
+        n = 6000
+        o = types.SimpleNamespace(**{f"n{i}": 1 for i in range(n)})
+        f = self.mixed(n)
+        a, b = 1, AllOps()
+        want = (n, self.expected(a, b))
+        for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD * 2):
+            self.assertEqual(f(o, a, b), want)
+        g = types.FunctionType(marshal.loads(marshal.dumps(f.__code__)),
+                               f.__globals__)
+        self.assertEqual(g.__code__, f.__code__)
+        for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD * 2):
+            self.assertEqual(g(o, a, b), want)
+
+        # Monitoring and tracing see the same results at the sites that
+        # share entry 0 or call an intrinsic
+        events = []
+        mon = sys.monitoring
+        mon.use_tool_id(3, "test_ir")
+        try:
+            mon.set_events(3, mon.events.INSTRUCTION | mon.events.LINE)
+            mon.register_callback(3, mon.events.INSTRUCTION,
+                                  lambda code, off: events.append(off))
+            mon.register_callback(3, mon.events.LINE,
+                                  lambda code, line: mon.DISABLE)
+            self.assertEqual(f(o, a, b), want)
+        finally:
+            mon.set_events(3, 0)
+            mon.free_tool_id(3)
+        self.assertGreater(len(events), n)
+        lines = []
+        def tracer(frame, event, arg):
+            if frame.f_code is f.__code__:
+                frame.f_trace_opcodes = True
+                lines.append(event)
+            return tracer
+        sys.settrace(tracer)
+        try:
+            self.assertEqual(f(o, a, b), want)
+        finally:
+            sys.settrace(None)
+        self.assertGreater(len(lines), n)
+
+    def test_compares_match_plain_python(self):
+        class Rich:
+            def __init__(self, v):
+                self.v = v
+            def __lt__(self, other):
+                return [self.v]
+            def __eq__(self, other):
+                return NotImplemented
+            def __contains__(self, item):
+                return item == self.v
+            __hash__ = None
+        class BadBool:
+            def __bool__(self):
+                raise ZeroDivisionError
+        class Rich2(AllOps):
+            def __lt__(self, other):
+                return BadBool()
+            __gt__ = __lt__
+            def __contains__(self, item):
+                raise KeyError(item)
+        f = make_function(FeedbackLayoutTest.compare_source(
+            FeedbackLayoutTest, 70))
+        nan = float("nan")
+        cases = [(1, 2), (nan, nan), (nan, 1.0), (2.5, 2.5), ("a", "abc"),
+                 (1, AllOps()), (Rich(1), Rich(1)), (Rich(2), [1])]
+        for a, b in cases:
+            for _ in range(2):
+                try:
+                    want = self.expected(a, b, 70)
+                except TypeError:
+                    with self.assertRaises(TypeError):
+                        f(a, b)
+                    continue
+                r, count = f(a, b)
+                self.assertEqual([x is True for x in r],
+                                 [x is True for x in want])
+        # Errors raised by the operands propagate from intrinsic sites
+        for a, b, exc in ((Rich2(), Rich2(), ZeroDivisionError),
+                          (1, Rich2(), ZeroDivisionError)):
+            with self.assertRaises(exc):
+                f(a, b)
+
+    @support.cpython_only
+    def test_no_leak(self):
+        f = make_function(FeedbackLayoutTest.compare_source(
+            FeedbackLayoutTest, 70))
+        for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD * 2):
+            f(1, AllOps())
+        if not hasattr(sys, "gettotalrefcount"):
+            return
+        before = sys.gettotalrefcount()
+        for _ in range(200):
+            f(1, AllOps())
+            with self.assertRaises(TypeError):
+                f(1, 2)
+        self.assertLess(sys.gettotalrefcount() - before, 100)
+
+    def test_delete_attr_at_a_lowered_site(self):
+        n = 5000
+        class O:
+            def __delattr__(self, name):
+                raise RuntimeError(name)
+        lines = ["def f(o):"] + [f"    o.n{i}" for i in range(n)]
+        lines.append(f"    del o.n{n - 1}")
+        lines.append("    return 1")
+        f = make_function("\n".join(lines) + "\n")
+        o = types.SimpleNamespace(**{f"n{i}": i for i in range(n)})
+        self.assertEqual(f(o), 1)
+        self.assertFalse(hasattr(o, f"n{n - 1}"))
+        class P(O):
+            def __getattr__(self, name):
+                return 0
+        with self.assertRaisesRegex(RuntimeError, f"n{n - 1}"):
+            f(P())
+        # A method call by a name past 1,024 in a function that declines
+        # the super optimisation
+        lines = ["class B:"] + [f"    def m{i}(self): return {i}" for i in range(1100)]
+        lines += ["class C(B):", "    def m1099(self):",
+                  "        return super().m1099() + super().m0()"]
+        ns = {}
+        exec("\n".join(lines) + "\n", ns)
+        self.assertEqual(ns["C"]().m1099(), 1099)
+
+
+class NameLimitTest(unittest.TestCase):
+    """A name index that does not fit the field of the word is lowered by
+    the compiler to an intrinsic call (Python/codegen.c)"""
+
+    NAMES = 5000
+
+    def make(self, body_lines, extra_args=""):
+        lines = [f"def f(o{extra_args}):", "    t = 0"] + body_lines + ["    return t"]
+        return make_function("\n".join(lines) + "\n")
+
+    def test_load_attr(self):
+        n = self.NAMES
+        ns = types.SimpleNamespace(**{f"n{i}": i for i in range(n)})
+        f = self.make([f"    t += o.n{i}" for i in range(n)])
+        self.assertEqual(len(f.__code__.co_names), n)
+        instrs = list(dis.get_instructions(f))
+        loads = [i for i in instrs if i.opname == "LOAD_ATTR"]
+        gets = [i for i in instrs if i.opname == "CALL_INTRINSIC_2"
+                and i.argrepr == "INTRINSIC_GETATTR"]
+        # oparg = index << 1 must fit 12 bits: 2,048 names
+        self.assertEqual(len(loads), 2048)
+        self.assertEqual(len(gets), n - 2048)
+        for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD * 2):
+            self.assertEqual(f(ns), sum(range(n)))
+        with self.assertRaises(AttributeError):
+            f(types.SimpleNamespace())
+        ns.n4000 = None
+        with self.assertRaises(TypeError):
+            f(ns)
+
+    def test_method_call_store_delete_augassign(self):
+        n = 2200
+        lines = []
+        for i in range(n):
+            lines.append(f"    t += o.m{i}()")
+        for i in range(n):
+            lines.append(f"    o.s{i} = {i}")
+            lines.append(f"    t += o.s{i}")
+            lines.append(f"    o.s{i} += 1")
+            lines.append(f"    del o.s{i}")
+        f = self.make(lines)
+        ns = types.SimpleNamespace(**{f"m{i}": (lambda i=i: i) for i in range(n)})
+        want = sum(range(n)) + sum(range(n))
+        for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD * 2):
+            self.assertEqual(f(ns), want)
+            self.assertEqual(vars(ns).keys(), {f"m{i}" for i in range(n)})
+        instrs = list(dis.get_instructions(f))
+        self.assertIn("INTRINSIC_SETATTR",
+                      {i.argrepr for i in instrs if i.opname == "CALL_INTRINSIC_2"})
+        # A store to an object that refuses it raises from the lowered site
+        class Frozen:
+            def __getattr__(self, name):
+                return lambda: 0
+            def __setattr__(self, name, value):
+                raise AttributeError(name)
+        with self.assertRaises(AttributeError):
+            f(Frozen())
+
+    def test_super_attr(self):
+        n = 1500
+        ns = {}
+        lines = ["class Base:"]
+        lines += [f"    def m{i}(self): return {i}" for i in range(n)]
+        lines += ["class D(Base):", "    def f(self):", "        t = 0"]
+        lines += [f"        t += super().m{i}()" for i in range(n)]
+        lines += ["        return t"]
+        exec("\n".join(lines) + "\n", ns)
+        d = ns["D"]()
+        code = ns["D"].f.__code__
+        names = [i.opname for i in dis.get_instructions(code)]
+        self.assertIn("LOAD_SUPER_ATTR", names)
+        self.assertGreater(names.count("LOAD_SUPER_ATTR"), 1000)
+        self.assertLess(names.count("LOAD_SUPER_ATTR"), n)
+        for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD * 2):
+            self.assertEqual(d.f(), sum(range(n)))
+
+    def test_wide_names_survive_marshal(self):
+        import marshal
+        n = self.NAMES
+        ns = types.SimpleNamespace(**{f"n{i}": i for i in range(n)})
+        f = self.make([f"    t += o.n{i}" for i in range(n)])
+        g = types.FunctionType(marshal.loads(marshal.dumps(f.__code__)), {})
+        self.assertEqual(g(ns), sum(range(n)))
 
 
 class RelaxationTest(unittest.TestCase):

@@ -4572,7 +4572,7 @@
                         ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
                         slots = _PyFrame_Slots(frame);
                         window = slots + call_base;
-                        fb = (_PyFb_CALL *)(frame->ir_feedback + call_feedback * FB_STRIDE);
+                        fb = (_PyFb_CALL *)(frame->ir_feedback + ((size_t)call_feedback << 3));
                         if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL; }
                         DISPATCH_SAME_OPARG();
                     }
@@ -4594,7 +4594,7 @@
                 ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
                 slots = _PyFrame_Slots(frame);
                 window = slots + call_base;
-                fb = (_PyFb_CALL *)(frame->ir_feedback + call_feedback * FB_STRIDE);
+                fb = (_PyFb_CALL *)(frame->ir_feedback + ((size_t)call_feedback << 3));
                 callable = window[0];
                 self_or_null = window[1];
             }
@@ -5025,7 +5025,7 @@
                 ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
                 slots = _PyFrame_Slots(frame);
                 window = slots + call_base;
-                fb = (_PyFb_CALL *)(frame->ir_feedback + call_feedback * FB_STRIDE);
+                fb = (_PyFb_CALL *)(frame->ir_feedback + ((size_t)call_feedback << 3));
                 callable = window[0];
                 self_or_null = window[1];
             }
@@ -5706,7 +5706,7 @@
                     ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
                     slots = _PyFrame_Slots(frame);
                     window = slots + call_base;
-                    fb = (_PyFb_CALL_FUNCTION_EX *)(frame->ir_feedback + call_feedback * FB_STRIDE);
+                    fb = (_PyFb_CALL_FUNCTION_EX *)(frame->ir_feedback + ((size_t)call_feedback << 3));
                     if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_FUNCTION_EX; }
                     DISPATCH_SAME_OPARG();
                 }
@@ -5726,7 +5726,7 @@
                 ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
                 slots = _PyFrame_Slots(frame);
                 window = slots + call_base;
-                fb = (_PyFb_CALL_FUNCTION_EX *)(frame->ir_feedback + call_feedback * FB_STRIDE);
+                fb = (_PyFb_CALL_FUNCTION_EX *)(frame->ir_feedback + ((size_t)call_feedback << 3));
                 func = window[0];
                 callargs = window[2];
                 kwargs = window[3];
@@ -6032,7 +6032,7 @@
                     ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
                     slots = _PyFrame_Slots(frame);
                     window = slots + call_base;
-                    fb = (_PyFb_CALL_KW *)(frame->ir_feedback + call_feedback * FB_STRIDE);
+                    fb = (_PyFb_CALL_KW *)(frame->ir_feedback + ((size_t)call_feedback << 3));
                     if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_KW; }
                     DISPATCH_SAME_OPARG();
                 }
@@ -6053,7 +6053,7 @@
                 ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
                 slots = _PyFrame_Slots(frame);
                 window = slots + call_base;
-                fb = (_PyFb_CALL_KW *)(frame->ir_feedback + call_feedback * FB_STRIDE);
+                fb = (_PyFb_CALL_KW *)(frame->ir_feedback + ((size_t)call_feedback << 3));
                 callable = window[0];
                 self_or_null = window[1];
             }
@@ -6173,7 +6173,7 @@
                 ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
                 slots = _PyFrame_Slots(frame);
                 window = slots + call_base;
-                fb = (_PyFb_CALL_KW *)(frame->ir_feedback + call_feedback * FB_STRIDE);
+                fb = (_PyFb_CALL_KW *)(frame->ir_feedback + ((size_t)call_feedback << 3));
                 callable = window[0];
                 self_or_null = window[1];
             }
@@ -8118,75 +8118,6 @@
             DISPATCH();
         }
 
-        TARGET(COMPARE_OP_NOFB) {
-            int opcode = COMPARE_OP_NOFB;
-            (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            next_instr += 1;
-            INSTRUCTION_STATS(COMPARE_OP);
-            PyValue ir_displaced = PyValue_NULL;
-            (void)ir_displaced;
-            _PyFb_COMPARE_OP *fb = (_PyFb_COMPARE_OP *)IR_FB(0);
-            int oparg = (int)IR_D(ir_word);
-            (void)oparg;
-            PyValueBorrow left;
-            PyValueBorrow right;
-            PyValue res;
-            PyValue ir_own_B = PyValue_NULL;
-            (void)ir_own_B;
-            PyValue ir_own_C = PyValue_NULL;
-            (void)ir_own_C;
-            // _SPECIALIZE_COMPARE_OP
-            {
-                right = IR_VIEW(IR_C(ir_word));
-                left = IR_VIEW(IR_B(ir_word));
-                #if ENABLE_SPECIALIZATION
-                _PyFbHeader *feedback = ((_PyFbHeader *)fb);
-                if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
-                    next_instr = this_instr;
-                    _Py_Specialize_CompareOp(left, right, next_instr, oparg);
-                    DISPATCH_SAME_OPARG();
-                }
-                OPCODE_DEFERRED_INC(COMPARE_OP);
-                ADVANCE_ADAPTIVE_COUNTER(feedback);
-                #endif  /* ENABLE_SPECIALIZATION */
-            }
-            // _COMPARE_OP
-            {
-                assert((oparg >> 5) <= Py_GE);
-                PyValue cmp = _PyValue_RichCompare(left, right, oparg >> 5);
-                ir_own_C = IR_CONSUME_INPUT(IR_C(ir_word), right);
-                PyValue_XCLOSE(ir_own_C);
-                ir_own_B = IR_CONSUME_INPUT(IR_B(ir_word), left);
-                PyValue_XCLOSE(ir_own_B);
-                if (PyValue_IsNull(cmp)) {
-                    JUMP_TO_LABEL(error);
-                }
-                if (oparg & 16) {
-                    int res_bool = _PyValue_IsTrue(cmp);
-                    PyValue_CLOSE(cmp);
-                    if (res_bool < 0) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    res = res_bool ? PyValue_True : PyValue_False;
-                }
-                else {
-                    res = cmp;
-                }
-            }
-            IR_STORE_DST(IR_A(ir_word), res);
-            if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
-                next_instr = frame->instr_ptr + 1;
-                JUMP_TO_LABEL(error);
-            }
-            DISPATCH();
-        }
-
         TARGET(COMPARE_OP_STR) {
             int opcode = COMPARE_OP_STR;
             (void)(opcode);
@@ -8426,81 +8357,6 @@
                 (void)value;
                 IR_STORE_TEMP_DST(IR_A(ir_word), b);
                 _PyValue_XCLOSE_POINTER(ir_own_C);
-            }
-            // _POP_TOP
-            {
-                value = l;
-                (void)value;
-                IR_STORE_TEMP_DST(IR_A(ir_word), b);
-                PyValue_XCLOSE(ir_own_B);
-            }
-            IR_STORE_DST(IR_A(ir_word), b);
-            if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
-                next_instr = frame->instr_ptr + 1;
-                JUMP_TO_LABEL(error);
-            }
-            DISPATCH();
-        }
-
-        TARGET(CONTAINS_OP_NOFB) {
-            int opcode = CONTAINS_OP_NOFB;
-            (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            next_instr += 1;
-            INSTRUCTION_STATS(CONTAINS_OP);
-            PyValue ir_displaced = PyValue_NULL;
-            (void)ir_displaced;
-            _PyFb_CONTAINS_OP *fb = (_PyFb_CONTAINS_OP *)IR_FB(0);
-            int oparg = (int)IR_D(ir_word);
-            (void)oparg;
-            PyValueBorrow left;
-            PyValueBorrow right;
-            PyValue b;
-            PyValueBorrow l;
-            PyValueBorrow r;
-            PyValueBorrow value;
-            PyValue ir_own_B = PyValue_NULL;
-            (void)ir_own_B;
-            PyValue ir_own_C = PyValue_NULL;
-            (void)ir_own_C;
-            // _SPECIALIZE_CONTAINS_OP
-            {
-                right = IR_VIEW(IR_C(ir_word));
-                left = IR_VIEW(IR_B(ir_word));
-                #if ENABLE_SPECIALIZATION
-                _PyFbHeader *feedback = ((_PyFbHeader *)fb);
-                if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
-                    next_instr = this_instr;
-                    _Py_Specialize_ContainsOp(left, right, next_instr);
-                    DISPATCH_SAME_OPARG();
-                }
-                OPCODE_DEFERRED_INC(CONTAINS_OP);
-                ADVANCE_ADAPTIVE_COUNTER(feedback);
-                #endif  /* ENABLE_SPECIALIZATION */
-            }
-            // _CONTAINS_OP
-            {
-                int res = _PyValue_Contains(right, left);
-                if (res < 0) {
-                    JUMP_TO_LABEL(error);
-                }
-                b = (res ^ oparg) ? PyValue_True : PyValue_False;
-                l = left;
-                r = right;
-                ir_own_B = IR_CONSUME_INPUT(IR_B(ir_word), l);
-                ir_own_C = IR_CONSUME_INPUT(IR_C(ir_word), r);
-            }
-            // _POP_TOP
-            {
-                value = r;
-                (void)value;
-                IR_STORE_TEMP_DST(IR_A(ir_word), b);
-                PyValue_XCLOSE(ir_own_C);
             }
             // _POP_TOP
             {
@@ -10729,161 +10585,11 @@
             _PyValueTemps *value_temps = &value_owners;
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
-            _PyFb_LOAD_SUPER_ATTR *fb = (_PyFb_LOAD_SUPER_ATTR *)IR_FB(IR_C(ir_word));
-            int oparg = IR_FB_ARG(fb, IR_C(ir_word));
+            int oparg = (int)IR_D(ir_word);
             (void)oparg;
             PyValue *window = &IR_SLOT(IR_B(ir_word));
             (void)window;
             opcode = INSTRUMENTED_LOAD_SUPER_ATTR;
-            PyValue global_super_st;
-            PyValue class_st;
-            PyValue self_st;
-            PyValue attr;
-            PyValue *null;
-            PyObject *ir_obj_class_st = NULL;
-            PyObject *ir_obj_global_super_st = NULL;
-            PyObject *ir_obj_self_st = NULL;
-            // _LOAD_SUPER_ATTR
-            {
-                self_st = window[2];
-                class_st = window[1];
-                global_super_st = window[0];
-                if (Py_UNLIKELY(PyValue_IsInlineAt(&window[0]))) {
-                    ir_obj_global_super_st = _PyValueTemps_Box(value_temps, global_super_st);
-                    if (ir_obj_global_super_st == NULL) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(INSTRUMENTED_LOAD_SUPER_ATTR);
-                }
-                else {
-                    ir_obj_global_super_st = PyValue_AsKnownObjectBorrow(global_super_st);
-                }
-                if (Py_UNLIKELY(PyValue_IsInlineAt(&window[1]))) {
-                    ir_obj_class_st = _PyValueTemps_Box(value_temps, class_st);
-                    if (ir_obj_class_st == NULL) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(INSTRUMENTED_LOAD_SUPER_ATTR);
-                }
-                else {
-                    ir_obj_class_st = PyValue_AsKnownObjectBorrow(class_st);
-                }
-                if (Py_UNLIKELY(PyValue_IsInlineAt(&window[2]))) {
-                    ir_obj_self_st = _PyValueTemps_Box(value_temps, self_st);
-                    if (ir_obj_self_st == NULL) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(INSTRUMENTED_LOAD_SUPER_ATTR);
-                }
-                else {
-                    ir_obj_self_st = PyValue_AsKnownObjectBorrow(self_st);
-                }
-                PyObject *global_super = ir_obj_global_super_st;
-                PyObject *class = ir_obj_class_st;
-                PyObject *self = ir_obj_self_st;
-                if (opcode == INSTRUMENTED_LOAD_SUPER_ATTR) {
-                    PyObject *arg = oparg & 2 ? class : &_PyInstrumentation_MISSING;
-                    int err = _Py_call_instrumentation_2args(
-                        tstate, PY_MONITORING_EVENT_CALL,
-                        frame, this_instr, global_super, arg);
-                    if (err) {
-                        PyValue tmp = self_st;
-                        self_st = PyValue_NULL;
-                        IR_PUBLISH_TEMP(window[2], self_st);
-                        PyValue_CLOSE(tmp);
-                        tmp = class_st;
-                        class_st = PyValue_NULL;
-                        IR_PUBLISH_TEMP(window[1], class_st);
-                        PyValue_CLOSE(tmp);
-                        tmp = global_super_st;
-                        global_super_st = PyValue_NULL;
-                        IR_PUBLISH_TEMP(window[0], global_super_st);
-                        PyValue_CLOSE(tmp);
-                        window[0] = PyValue_NULL;
-                        window[1] = PyValue_NULL;
-                        window[2] = PyValue_NULL;
-                        JUMP_TO_LABEL(error);
-                    }
-                }
-                PyObject *super = super_call(global_super, class, self, oparg & 2);
-                if (opcode == INSTRUMENTED_LOAD_SUPER_ATTR) {
-                    PyObject *arg = oparg & 2 ? class : &_PyInstrumentation_MISSING;
-                    if (super == NULL) {
-                        _Py_call_instrumentation_exc2(
-                            tstate, PY_MONITORING_EVENT_C_RAISE,
-                            frame, this_instr, global_super, arg);
-                    }
-                    else {
-                        int err = _Py_call_instrumentation_2args(
-                            tstate, PY_MONITORING_EVENT_C_RETURN,
-                            frame, this_instr, global_super, arg);
-                        if (err < 0) {
-                            Py_CLEAR(super);
-                        }
-                    }
-                }
-                PyValue tmp = self_st;
-                self_st = PyValue_NULL;
-                IR_PUBLISH_TEMP(window[2], self_st);
-                PyValue_CLOSE(tmp);
-                tmp = class_st;
-                class_st = PyValue_NULL;
-                IR_PUBLISH_TEMP(window[1], class_st);
-                PyValue_CLOSE(tmp);
-                tmp = global_super_st;
-                global_super_st = PyValue_NULL;
-                IR_PUBLISH_TEMP(window[0], global_super_st);
-                PyValue_CLOSE(tmp);
-                window[0] = PyValue_NULL;
-                window[1] = PyValue_NULL;
-                window[2] = PyValue_NULL;
-                if (super == NULL) {
-                    JUMP_TO_LABEL(error);
-                }
-                PyObject *name = GETITEM(FRAME_CO_NAMES, oparg >> 2);
-                PyObject *attr_o = PyObject_GetAttr(super, name);
-                Py_DECREF(super);
-                if (attr_o == NULL) {
-                    JUMP_TO_LABEL(error);
-                }
-                attr = PyValue_FromObjectSteal(attr_o);
-            }
-            // _PUSH_NULL_CONDITIONAL
-            {
-                null = &window[1];
-                if (oparg & 1) {
-                    null[0] = PyValue_NULL;
-                }
-            }
-            IR_PUBLISH_TEMP(window[0], attr);
-            IR_MOVE_TO_DST(IR_A(ir_word), window[0]);
-            if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
-                next_instr = frame->instr_ptr + 1;
-                JUMP_TO_LABEL(error);
-            }
-            DISPATCH();
-        }
-
-        TARGET(INSTRUMENTED_LOAD_SUPER_ATTR_NOFB) {
-            int opcode = INSTRUMENTED_LOAD_SUPER_ATTR_NOFB;
-            (void)(opcode);
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            next_instr += 1;
-            INSTRUCTION_STATS(INSTRUMENTED_LOAD_SUPER_ATTR);
-            PyObject *value_boxes[7];
-            _PyValueTemps value_owners;
-            value_owners = (_PyValueTemps){value_boxes, 0, 7};
-            _PyValueTemps *value_temps = &value_owners;
-            PyValue ir_displaced = PyValue_NULL;
-            (void)ir_displaced;
-            int oparg = (int)IR_CD(ir_word);
-            (void)oparg;
-            PyValue *window = &IR_SLOT(IR_B(ir_word));
-            (void)window;
-            opcode = INSTRUMENTED_LOAD_SUPER_ATTR_NOFB;
             PyValue global_super_st;
             PyValue class_st;
             PyValue self_st;
@@ -11761,7 +11467,7 @@
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_C(ir_word));
-            int oparg = IR_FB_ARG(fb, IR_C(ir_word));
+            int oparg = (int)IR_D(ir_word);
             (void)oparg;
             PyValueBorrow owner;
             PyValue attr;
@@ -11836,7 +11542,7 @@
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_C(ir_word));
-            int oparg = (int)((_PyFbHeader *)fb)->arg;
+            int oparg = (int)IR_D(ir_word);
             (void)oparg;
             PyValueBorrow owner;
             PyValue attr;
@@ -11903,7 +11609,7 @@
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_C(ir_word));
-            int oparg = (int)((_PyFbHeader *)fb)->arg;
+            int oparg = (int)IR_D(ir_word);
             (void)oparg;
             PyValueBorrow owner;
             PyValue attr;
@@ -11981,7 +11687,7 @@
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_C(ir_word));
-            int oparg = (int)((_PyFbHeader *)fb)->arg;
+            int oparg = (int)IR_D(ir_word);
             (void)oparg;
             PyValueBorrow owner;
             PyValue new_frame;
@@ -12080,7 +11786,7 @@
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_C(ir_word));
-            int oparg = (int)((_PyFbHeader *)fb)->arg;
+            int oparg = (int)IR_D(ir_word);
             (void)oparg;
             PyValueBorrow owner;
             PyValue attr;
@@ -12175,7 +11881,7 @@
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_C(ir_word));
-            int oparg = (int)((_PyFbHeader *)fb)->arg;
+            int oparg = (int)IR_D(ir_word);
             (void)oparg;
             assert(!IR_IS_LOCAL(IR_A(ir_word)));
             PyValueBorrow owner;
@@ -12245,7 +11951,7 @@
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_C(ir_word));
-            int oparg = (int)((_PyFbHeader *)fb)->arg;
+            int oparg = (int)IR_D(ir_word);
             (void)oparg;
             assert(!IR_IS_LOCAL(IR_A(ir_word)));
             PyValueBorrow owner;
@@ -12305,7 +12011,7 @@
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_C(ir_word));
-            int oparg = (int)((_PyFbHeader *)fb)->arg;
+            int oparg = (int)IR_D(ir_word);
             (void)oparg;
             assert(!IR_IS_LOCAL(IR_A(ir_word)));
             PyValueBorrow owner;
@@ -12375,7 +12081,7 @@
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_C(ir_word));
-            int oparg = (int)((_PyFbHeader *)fb)->arg;
+            int oparg = (int)IR_D(ir_word);
             (void)oparg;
             PyValueBorrow owner;
             PyValue attr;
@@ -12455,83 +12161,6 @@
             DISPATCH();
         }
 
-        TARGET(LOAD_ATTR_NOFB) {
-            int opcode = LOAD_ATTR_NOFB;
-            (void)(opcode);
-            _PyIRWord* this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            next_instr += 1;
-            INSTRUCTION_STATS(LOAD_ATTR);
-            PyObject *value_boxes[7];
-            _PyValueTemps value_owners;
-            value_owners = (_PyValueTemps){value_boxes, 0, 7};
-            _PyValueTemps *value_temps = &value_owners;
-            PyValue ir_displaced = PyValue_NULL;
-            (void)ir_displaced;
-            _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(0);
-            int oparg = (int)IR_CD(ir_word);
-            (void)oparg;
-            PyValueBorrow owner;
-            PyValue attr;
-            PyValue ir_own_B = PyValue_NULL;
-            (void)ir_own_B;
-            // _SPECIALIZE_LOAD_ATTR
-            {
-                owner = IR_VIEW(IR_B(ir_word));
-                #if ENABLE_SPECIALIZATION
-                _PyFbHeader *feedback = ((_PyFbHeader *)fb);
-                if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
-                    PyObject *name = GETITEM(FRAME_CO_NAMES, oparg>>1);
-                    next_instr = this_instr;
-                    _Py_Specialize_LoadAttr(owner, next_instr, name);
-                    DISPATCH_SAME_OPARG();
-                }
-                OPCODE_DEFERRED_INC(LOAD_ATTR);
-                ADVANCE_ADAPTIVE_COUNTER(feedback);
-                #endif  /* ENABLE_SPECIALIZATION */
-            }
-            // _LOAD_ATTR
-            {
-                PyObject *name = GETITEM(FRAME_CO_NAMES, oparg >> 1);
-                int method = oparg & 1;
-                ir_own_B = IR_CONSUME_INPUT(IR_B(ir_word), owner);
-                PyValue receiver = IR_TAKE(owner, ir_own_B);
-                PyObject *object = _PyValueTemps_Object(value_temps, receiver);
-                if (object == NULL) {
-                    receiver = value_operation_restore1(tstate, frame, receiver, IR_B(ir_word));
-                    value_operation_close3(receiver, PyValue_NULL, PyValue_NULL);
-                    (void)value_operation_finish(tstate, frame, this_instr, value_temps);
-                    JUMP_TO_LABEL(error);
-                }
-                _PyValuePair loaded = value_load_attribute(tstate, receiver, object, name, method);
-                PyValue pending = loaded.first;
-                PyValue pending_self = loaded.second;
-                if (PyValue_IsNull(pending)) {
-                    value_operation_close3(receiver, PyValue_NULL, PyValue_NULL);
-                    (void)value_operation_finish(tstate, frame, this_instr, value_temps);
-                    JUMP_TO_LABEL(error);
-                }
-                pending = value_attribute_complete(tstate, frame, this_instr, value_temps, IR_A(ir_word), pending, pending_self, receiver, method);
-                if (PyValue_IsNull(pending)) {
-                    JUMP_TO_LABEL(error);
-                }
-                this_instr = frame->instr_ptr;
-                ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
-                slots = _PyFrame_Slots(frame);
-                attr = pending;
-            }
-            if (IR_IS_LOCAL(IR_A(ir_word))) {
-                IR_STORE_DST(IR_A(ir_word), attr);
-            }
-            if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
-                next_instr = frame->instr_ptr + 1;
-                JUMP_TO_LABEL(error);
-            }
-            DISPATCH();
-        }
-
         TARGET(LOAD_ATTR_NONDESCRIPTOR_NO_DICT) {
             int opcode = LOAD_ATTR_NONDESCRIPTOR_NO_DICT;
             (void)(opcode);
@@ -12545,7 +12174,7 @@
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_C(ir_word));
-            int oparg = (int)((_PyFbHeader *)fb)->arg;
+            int oparg = (int)IR_D(ir_word);
             (void)oparg;
             PyValueBorrow owner;
             PyValue attr;
@@ -12601,7 +12230,7 @@
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_C(ir_word));
-            int oparg = (int)((_PyFbHeader *)fb)->arg;
+            int oparg = (int)IR_D(ir_word);
             (void)oparg;
             PyValueBorrow owner;
             PyValue attr;
@@ -12667,7 +12296,7 @@
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_C(ir_word));
-            int oparg = (int)((_PyFbHeader *)fb)->arg;
+            int oparg = (int)IR_D(ir_word);
             (void)oparg;
             PyValueBorrow owner;
             PyValue new_frame;
@@ -12761,7 +12390,7 @@
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_C(ir_word));
-            int oparg = (int)((_PyFbHeader *)fb)->arg;
+            int oparg = (int)IR_D(ir_word);
             (void)oparg;
             PyValueBorrow owner;
             PyValue attr;
@@ -12850,7 +12479,7 @@
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_C(ir_word));
-            int oparg = (int)((_PyFbHeader *)fb)->arg;
+            int oparg = (int)IR_D(ir_word);
             (void)oparg;
             PyValueBorrow owner;
             PyValue attr;
@@ -12935,7 +12564,7 @@
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_C(ir_word));
-            int oparg = (int)((_PyFbHeader *)fb)->arg;
+            int oparg = (int)IR_D(ir_word);
             (void)oparg;
             PyValueBorrow owner;
             PyValue attr;
@@ -13481,7 +13110,7 @@
             _PyIRWord* this_instr = next_instr - 1;
             (void)this_instr;
             _PyFb_LOAD_GLOBAL *fb = (_PyFb_LOAD_GLOBAL *)IR_FB(IR_B(ir_word));
-            int oparg = IR_FB_ARG(fb, IR_B(ir_word));
+            int oparg = (int)IR_CD(ir_word);
             (void)oparg;
             PyValue *res;
             PyValue *null;
@@ -13538,7 +13167,7 @@
             next_instr += 1;
             INSTRUCTION_STATS(LOAD_GLOBAL_BUILTIN);
             _PyFb_LOAD_GLOBAL *fb = (_PyFb_LOAD_GLOBAL *)IR_FB(IR_B(ir_word));
-            int oparg = (int)((_PyFbHeader *)fb)->arg;
+            int oparg = (int)IR_CD(ir_word);
             (void)oparg;
             PyValue res;
             PyValue *null;
@@ -13613,7 +13242,7 @@
             next_instr += 1;
             INSTRUCTION_STATS(LOAD_GLOBAL_MODULE);
             _PyFb_LOAD_GLOBAL *fb = (_PyFb_LOAD_GLOBAL *)IR_FB(IR_B(ir_word));
-            int oparg = (int)((_PyFbHeader *)fb)->arg;
+            int oparg = (int)IR_CD(ir_word);
             (void)oparg;
             PyValue res;
             PyValue *null;
@@ -13657,63 +13286,6 @@
                 }
             }
             IR_STORE_TEMP(IR_SLOT(IR_A(ir_word)), res);
-            DISPATCH();
-        }
-
-        TARGET(LOAD_GLOBAL_NOFB) {
-            int opcode = LOAD_GLOBAL_NOFB;
-            (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
-            _PyIRWord* this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            next_instr += 1;
-            INSTRUCTION_STATS(LOAD_GLOBAL);
-            _PyFb_LOAD_GLOBAL *fb = (_PyFb_LOAD_GLOBAL *)IR_FB(0);
-            int oparg = (int)IR_CD(ir_word);
-            (void)oparg;
-            PyValue *res;
-            PyValue *null;
-            // _SPECIALIZE_LOAD_GLOBAL
-            {
-                #if ENABLE_SPECIALIZATION
-                _PyFbHeader *feedback = ((_PyFbHeader *)fb);
-                if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
-                    PyObject *name = GETITEM(FRAME_CO_NAMES, oparg>>1);
-                    next_instr = this_instr;
-                    _Py_Specialize_LoadGlobal(GLOBALS(), BUILTINS(), next_instr, name);
-                    DISPATCH_SAME_OPARG();
-                }
-                OPCODE_DEFERRED_INC(LOAD_GLOBAL);
-                ADVANCE_ADAPTIVE_COUNTER(feedback);
-                #endif  /* ENABLE_SPECIALIZATION */
-            }
-            // _LOAD_GLOBAL
-            {
-                res = &IR_SLOT(IR_A(ir_word));
-                PyObject *name = GETITEM(FRAME_CO_NAMES, oparg>>1);
-                _PyEval_LoadGlobalValue(GLOBALS(), BUILTINS(), name, res);
-                {
-                    int operation_failed = value_operation_finish(tstate, frame, this_instr, NULL);
-                    if (operation_failed < 0) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    this_instr = frame->instr_ptr;
-                    ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
-                    slots = _PyFrame_Slots(frame);
-                }
-                if (PyValue_IsNull(*res)) {
-                    JUMP_TO_LABEL(error);
-                }
-            }
-            // _PUSH_NULL_CONDITIONAL
-            {
-                null = &IR_SLOT(IR_A(ir_word) + 1);
-                if (oparg & 1) {
-                    null[0] = PyValue_NULL;
-                }
-            }
             DISPATCH();
         }
 
@@ -13896,7 +13468,7 @@
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             _PyFb_LOAD_SUPER_ATTR *fb = (_PyFb_LOAD_SUPER_ATTR *)IR_FB(IR_C(ir_word));
-            int oparg = IR_FB_ARG(fb, IR_C(ir_word));
+            int oparg = (int)IR_D(ir_word);
             (void)oparg;
             PyValue *window = &IR_SLOT(IR_B(ir_word));
             (void)window;
@@ -14059,8 +13631,7 @@
             _PyValueTemps *value_temps = &value_owners;
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
-            _PyFb_LOAD_SUPER_ATTR *fb = (_PyFb_LOAD_SUPER_ATTR *)IR_FB(IR_C(ir_word));
-            int oparg = (int)((_PyFbHeader *)fb)->arg;
+            int oparg = (int)IR_D(ir_word);
             (void)oparg;
             PyValue *window = &IR_SLOT(IR_B(ir_word));
             (void)window;
@@ -14139,8 +13710,7 @@
             _PyValueTemps *value_temps = &value_owners;
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
-            _PyFb_LOAD_SUPER_ATTR *fb = (_PyFb_LOAD_SUPER_ATTR *)IR_FB(IR_C(ir_word));
-            int oparg = (int)((_PyFbHeader *)fb)->arg;
+            int oparg = (int)IR_D(ir_word);
             (void)oparg;
             PyValue *window = &IR_SLOT(IR_B(ir_word));
             (void)window;
@@ -14224,170 +13794,6 @@
             }
             IR_PUBLISH_TEMP(window[0], attr);
             IR_PUBLISH_TEMP(window[1], self_or_null);
-            if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
-                next_instr = frame->instr_ptr + 1;
-                JUMP_TO_LABEL(error);
-            }
-            DISPATCH();
-        }
-
-        TARGET(LOAD_SUPER_ATTR_NOFB) {
-            int opcode = LOAD_SUPER_ATTR_NOFB;
-            (void)(opcode);
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            next_instr += 1;
-            INSTRUCTION_STATS(LOAD_SUPER_ATTR);
-            PyObject *value_boxes[13];
-            _PyValueTemps value_owners;
-            value_owners = (_PyValueTemps){value_boxes, 0, 13};
-            _PyValueTemps *value_temps = &value_owners;
-            PyValue ir_displaced = PyValue_NULL;
-            (void)ir_displaced;
-            _PyFb_LOAD_SUPER_ATTR *fb = (_PyFb_LOAD_SUPER_ATTR *)IR_FB(0);
-            int oparg = (int)IR_CD(ir_word);
-            (void)oparg;
-            PyValue *window = &IR_SLOT(IR_B(ir_word));
-            (void)window;
-            opcode = LOAD_SUPER_ATTR_NOFB;
-            PyValue global_super_st;
-            PyValue class_st;
-            PyValue self_st;
-            PyValue attr;
-            PyValue *null;
-            PyObject *ir_obj_class_st = NULL;
-            PyObject *ir_obj_global_super_st = NULL;
-            PyObject *ir_obj_self_st = NULL;
-            // _SPECIALIZE_LOAD_SUPER_ATTR
-            {
-                class_st = window[1];
-                global_super_st = window[0];
-                #if ENABLE_SPECIALIZATION
-                _PyFbHeader *feedback = ((_PyFbHeader *)fb);
-                int load_method = oparg & 1;
-                if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
-                    next_instr = this_instr;
-                    _Py_Specialize_LoadSuperAttr(global_super_st, class_st, next_instr, load_method);
-                    DISPATCH_SAME_OPARG();
-                }
-                OPCODE_DEFERRED_INC(LOAD_SUPER_ATTR);
-                ADVANCE_ADAPTIVE_COUNTER(feedback);
-                #endif  /* ENABLE_SPECIALIZATION */
-            }
-            // _LOAD_SUPER_ATTR
-            {
-                self_st = window[2];
-                if (Py_UNLIKELY(PyValue_IsInlineAt(&window[0]))) {
-                    ir_obj_global_super_st = _PyValueTemps_Box(value_temps, global_super_st);
-                    if (ir_obj_global_super_st == NULL) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(LOAD_SUPER_ATTR);
-                }
-                else {
-                    ir_obj_global_super_st = PyValue_AsKnownObjectBorrow(global_super_st);
-                }
-                if (Py_UNLIKELY(PyValue_IsInlineAt(&window[1]))) {
-                    ir_obj_class_st = _PyValueTemps_Box(value_temps, class_st);
-                    if (ir_obj_class_st == NULL) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(LOAD_SUPER_ATTR);
-                }
-                else {
-                    ir_obj_class_st = PyValue_AsKnownObjectBorrow(class_st);
-                }
-                if (Py_UNLIKELY(PyValue_IsInlineAt(&window[2]))) {
-                    ir_obj_self_st = _PyValueTemps_Box(value_temps, self_st);
-                    if (ir_obj_self_st == NULL) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(LOAD_SUPER_ATTR);
-                }
-                else {
-                    ir_obj_self_st = PyValue_AsKnownObjectBorrow(self_st);
-                }
-                PyObject *global_super = ir_obj_global_super_st;
-                PyObject *class = ir_obj_class_st;
-                PyObject *self = ir_obj_self_st;
-                if (opcode == INSTRUMENTED_LOAD_SUPER_ATTR) {
-                    PyObject *arg = oparg & 2 ? class : &_PyInstrumentation_MISSING;
-                    int err = _Py_call_instrumentation_2args(
-                        tstate, PY_MONITORING_EVENT_CALL,
-                        frame, this_instr, global_super, arg);
-                    if (err) {
-                        PyValue tmp = self_st;
-                        self_st = PyValue_NULL;
-                        IR_PUBLISH_TEMP(window[2], self_st);
-                        PyValue_CLOSE(tmp);
-                        tmp = class_st;
-                        class_st = PyValue_NULL;
-                        IR_PUBLISH_TEMP(window[1], class_st);
-                        PyValue_CLOSE(tmp);
-                        tmp = global_super_st;
-                        global_super_st = PyValue_NULL;
-                        IR_PUBLISH_TEMP(window[0], global_super_st);
-                        PyValue_CLOSE(tmp);
-                        window[0] = PyValue_NULL;
-                        window[1] = PyValue_NULL;
-                        window[2] = PyValue_NULL;
-                        JUMP_TO_LABEL(error);
-                    }
-                }
-                PyObject *super = super_call(global_super, class, self, oparg & 2);
-                if (opcode == INSTRUMENTED_LOAD_SUPER_ATTR) {
-                    PyObject *arg = oparg & 2 ? class : &_PyInstrumentation_MISSING;
-                    if (super == NULL) {
-                        _Py_call_instrumentation_exc2(
-                            tstate, PY_MONITORING_EVENT_C_RAISE,
-                            frame, this_instr, global_super, arg);
-                    }
-                    else {
-                        int err = _Py_call_instrumentation_2args(
-                            tstate, PY_MONITORING_EVENT_C_RETURN,
-                            frame, this_instr, global_super, arg);
-                        if (err < 0) {
-                            Py_CLEAR(super);
-                        }
-                    }
-                }
-                PyValue tmp = self_st;
-                self_st = PyValue_NULL;
-                IR_PUBLISH_TEMP(window[2], self_st);
-                PyValue_CLOSE(tmp);
-                tmp = class_st;
-                class_st = PyValue_NULL;
-                IR_PUBLISH_TEMP(window[1], class_st);
-                PyValue_CLOSE(tmp);
-                tmp = global_super_st;
-                global_super_st = PyValue_NULL;
-                IR_PUBLISH_TEMP(window[0], global_super_st);
-                PyValue_CLOSE(tmp);
-                window[0] = PyValue_NULL;
-                window[1] = PyValue_NULL;
-                window[2] = PyValue_NULL;
-                if (super == NULL) {
-                    JUMP_TO_LABEL(error);
-                }
-                PyObject *name = GETITEM(FRAME_CO_NAMES, oparg >> 2);
-                PyObject *attr_o = PyObject_GetAttr(super, name);
-                Py_DECREF(super);
-                if (attr_o == NULL) {
-                    JUMP_TO_LABEL(error);
-                }
-                attr = PyValue_FromObjectSteal(attr_o);
-            }
-            // _PUSH_NULL_CONDITIONAL
-            {
-                null = &window[1];
-                if (oparg & 1) {
-                    null[0] = PyValue_NULL;
-                }
-            }
-            IR_PUBLISH_TEMP(window[0], attr);
-            IR_MOVE_TO_DST(IR_A(ir_word), window[0]);
             if (!PyValue_IsNull(ir_displaced) &&
                 finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
@@ -16541,7 +15947,7 @@
             value_owners = (_PyValueTemps){value_boxes, 0, 8};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_STORE_ATTR *fb = (_PyFb_STORE_ATTR *)IR_FB(IR_C(ir_word));
-            int oparg = IR_FB_ARG(fb, IR_C(ir_word));
+            int oparg = (int)IR_D(ir_word);
             (void)oparg;
             PyValueBorrow v;
             PyValueBorrow owner;
@@ -16716,77 +16122,6 @@
                     else {
                         PyValue_XCLOSE(receiver); receiver = PyValue_NULL;
                     }
-                }
-            }
-            DISPATCH();
-        }
-
-        TARGET(STORE_ATTR_NOFB) {
-            int opcode = STORE_ATTR_NOFB;
-            (void)(opcode);
-            _PyIRWord* this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            next_instr += 1;
-            INSTRUCTION_STATS(STORE_ATTR);
-            PyObject *value_boxes[8];
-            _PyValueTemps value_owners;
-            value_owners = (_PyValueTemps){value_boxes, 0, 8};
-            _PyValueTemps *value_temps = &value_owners;
-            _PyFb_STORE_ATTR *fb = (_PyFb_STORE_ATTR *)IR_FB(0);
-            int oparg = (int)IR_CD(ir_word);
-            (void)oparg;
-            PyValueBorrow v;
-            PyValueBorrow owner;
-            PyValue ir_own_B = PyValue_NULL;
-            (void)ir_own_B;
-            PyValue ir_own_A = PyValue_NULL;
-            (void)ir_own_A;
-            // _SPECIALIZE_STORE_ATTR
-            {
-                owner = IR_VIEW(IR_A(ir_word));
-                v = IR_VIEW(IR_B(ir_word));
-                #if ENABLE_SPECIALIZATION
-                _PyFbHeader *feedback = ((_PyFbHeader *)fb);
-                if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
-                    if (!PyValue_IsNull(v)) {
-                        PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
-                        next_instr = this_instr;
-                        _Py_Specialize_StoreAttr(owner, next_instr, name);
-                        DISPATCH_SAME_OPARG();
-                    }
-                }
-                OPCODE_DEFERRED_INC(STORE_ATTR);
-                ADVANCE_ADAPTIVE_COUNTER(feedback);
-                #endif  /* ENABLE_SPECIALIZATION */
-            }
-            // _STORE_ATTR
-            {
-                PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
-                ir_own_B = IR_CONSUME_INPUT(IR_B(ir_word), v);
-                PyValue held_value = IR_TAKE(v, ir_own_B);
-                ir_own_A = IR_CONSUME_INPUT(IR_A(ir_word), owner);
-                PyValue receiver = IR_TAKE(owner, ir_own_A);
-                int err = value_store_attribute(receiver, held_value, name, value_temps);
-                if (err == -2) {
-                    {
-                        _PyValuePair ir_rest = value_operation_restore2(tstate, frame, held_value, receiver, IR_B(ir_word), IR_A(ir_word));
-                        held_value = ir_rest.first;
-                        receiver = ir_rest.second;
-                    }
-                }
-                value_operation_close3(receiver, held_value, PyValue_NULL);
-                {
-                    int operation_failed = value_operation_finish(tstate, frame, this_instr, value_temps);
-                    if (operation_failed < 0) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    this_instr = frame->instr_ptr;
-                    ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
-                    slots = _PyFrame_Slots(frame);
-                }
-                if (err) {
-                    JUMP_TO_LABEL(error);
                 }
             }
             DISPATCH();
@@ -17029,7 +16364,7 @@
             next_instr += 1;
             INSTRUCTION_STATS(STORE_ATTR_WITH_HINT);
             _PyFb_STORE_ATTR *fb = (_PyFb_STORE_ATTR *)IR_FB(IR_C(ir_word));
-            int oparg = (int)((_PyFbHeader *)fb)->arg;
+            int oparg = (int)IR_D(ir_word);
             (void)oparg;
             PyValueBorrow owner;
             PyValueBorrow value;

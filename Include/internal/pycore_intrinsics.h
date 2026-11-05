@@ -33,7 +33,16 @@
 #define INTRINSIC_ADD_CONDITIONAL_ANNOTATION     6
 #define INTRINSIC_MATCH_CLASS_ISINSTANCE         7
 
-#define MAX_INTRINSIC_2                          7
+/* The comparisons that a COMPARE_OP or CONTAINS_OP without a feedback entry
+ * becomes (Python/assemble.c): INTRINSIC_COMPARE_OP + 2 * (oparg >> 5) + the
+ * bool bit of the oparg (16), then `in` and `not in`.  The compiler uses
+ * GETATTR and SETATTR for a name its instruction cannot hold (codegen.c). */
+#define INTRINSIC_COMPARE_OP                     8
+#define INTRINSIC_CONTAINS_OP                   20
+#define INTRINSIC_GETATTR                       22
+#define INTRINSIC_SETATTR                       23
+
+#define MAX_INTRINSIC_2                         23
 
 typedef PyObject *(*intrinsic_func1)(PyThreadState* tstate, PyObject *value);
 typedef PyObject *(*intrinsic_func2)(PyThreadState* tstate, PyObject *value1, PyObject *value2);

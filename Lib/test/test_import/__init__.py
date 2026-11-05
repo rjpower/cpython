@@ -3562,7 +3562,7 @@ class TestMagicNumber(unittest.TestCase):
         # Register IR uses a private namespace, separate from upstream and
         # tracing-collector bytecode caches.
         magic_number = int.from_bytes(magic_number_bytes[:2], 'little')
-        self.assertEqual(magic_number, 64406)
+        self.assertEqual(magic_number, 64407)
         self.assertEqual(sys.implementation.cache_tag,
                          f'cpython-valrc1-{sys.version_info.major}{sys.version_info.minor}')
 
@@ -3572,8 +3572,8 @@ class TestMagicNumber(unittest.TestCase):
     # and this pair then follows.  Comments other than `# removed:` and
     # `# range` do not count.
     PINNED_MAGIC_AND_TABLE = (
-        64406,
-        'eaf6820d698aee4547bbb0b2ba850928982aeec01d515300ae3aaa6ae1368e2d')
+        64407,
+        '2f5777d821350254f78ca8cb4714235a816910e27c9e4df87d614b7212f83409')
 
     def test_handler_numbers_follow_magic_number(self):
         table = (pathlib.Path(__file__).parents[3]

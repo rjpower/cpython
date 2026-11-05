@@ -28,10 +28,13 @@ static_assert(sizeof(_PyCodeExec) % sizeof(_PyIRWord) == 0,
               "words must follow the header aligned");
 static_assert(sizeof(_PyFbBlock) % sizeof(_PyIRWord) == 0,
               "entries must follow the feedback header aligned");
-static_assert(FB_STRIDE % sizeof(void *) == 0, "entries must stay aligned");
-static_assert(sizeof(_PyFbUnary) <= FB_STRIDE && sizeof(_PyFbBinary) <= FB_STRIDE
-              && sizeof(_PyFbGlobal) <= FB_STRIDE && sizeof(_PyFbCall) <= FB_STRIDE,
-              "FB_STRIDE must hold every entry");
+static_assert(sizeof(_PyFbHeader) == IR_FB_FIRST_UNIT << IR_FB_UNIT_SHIFT,
+              "entry 0 is the header");
+static_assert(sizeof(_PyFbUnary) % 8 == 0 && sizeof(_PyFbBinary) % 8 == 0
+              && sizeof(_PyFbAttr) % 8 == 0 && sizeof(_PyFbGlobal) % 8 == 0
+              && sizeof(_PyFbCall) % 8 == 0,
+              "entries are whole units");
+static_assert(FB_COUNTER < 16 && FB_CALL < 16, "a kind has 4 bits in co_fbinit");
 
 
 /* _Py_InitCleanup (Python/specialize.c) runs with self in slot 0 and the
@@ -147,6 +150,18 @@ _PyCode_InstrStoredLocal(PyCodeObject *co, int i)
 }
 
 int
+_PyCode_FbOrdinal(PyCodeObject *co, uint32_t unit)
+{
+    return _PyIR_FbFind(_PyCode_FBINIT(co), co->co_nfeedback, unit);
+}
+
+uint32_t
+_PyCode_FbUnits(PyCodeObject *co)
+{
+    return co->co_nfeedback ? _PyIR_FBINIT_ARG(_PyCode_FBINIT(co)[0]) : 0;
+}
+
+int
 _PyCode_InstrFbIndex(PyCodeObject *co, int i)
 {
     assert(i >= 0 && i < Py_SIZE(co));
@@ -172,10 +187,10 @@ _PyCode_InstrOparg(PyCodeObject *co, int i)
             if (is_binary_op_handler(handler)) {
                 return handler - _PyIR_BINARY_OP_FIRST;
             }
-            int fb = (int)read_field(word, fmt->fb);
-            // Sites that share entry 0 have a NOFB handler instead
-            assert(fb > 0 && fb < co->co_nfeedback);
-            return (int)_PyIR_FBINIT_ARG(_PyCode_FBINIT(co)[fb]);
+            // The sites that need the operation have an entry of their own
+            int i = _PyCode_FbOrdinal(co, read_field(word, fmt->fb));
+            assert(i > 0);
+            return (int)_PyIR_FBINIT_ARG(_PyCode_FBINIT(co)[i]);
         }
         default:
             return (int)read_field(word, fmt->imm);
@@ -220,12 +235,6 @@ _PyCode_HandlerFor(PyCodeObject *co, int i, int opcode)
     if (_PyIR_BaseOpcode(handler) == opcode) {
         return handler;
     }
-    // The instrumented twin of a NOFB form is NOFB too
-    if (handler >= IR_FIRST_ONLY_HANDLER && _PyIR_FormatOf(handler)->fb == _PyIR_LOC_NONE
-        && _PyIR_FormatOf(opcode)->nofb != 0)
-    {
-        return _PyIR_FormatOf(opcode)->nofb;
-    }
     return opcode;
 }
 
@@ -257,7 +266,9 @@ make_exec(PyCodeObject *co)
     Py_ssize_t nwords = Py_SIZE(co);
     int nfb = co->co_nfeedback;
     size_t words_size = (size_t)nwords * sizeof(_PyIRWord);
-    size_t fb_size = nfb ? sizeof(_PyFbBlock) + (size_t)nfb * FB_STRIDE : 0;
+    size_t fb_size = nfb
+        ? sizeof(_PyFbBlock) + ((size_t)_PyCode_FbUnits(co) << IR_FB_UNIT_SHIFT)
+        : 0;
     // Feedback entries hold borrowed pointers only.
     _PyCodeExec *exec = _PyMem_NoScanMalloc(sizeof(_PyCodeExec) + words_size + fb_size);
     if (exec == NULL) {
@@ -278,7 +289,8 @@ make_exec(PyCodeObject *co)
     memset(exec->feedback, 0, fb_size);
     exec->feedback->size = (uint32_t)fb_size;
     exec->entries = (char *)(exec->feedback + 1);
-    // The shared entry never specialises: its counter never triggers
+    // The shared entry is a header only and never specialises: its counter
+    // never triggers
     _PyFbHeader *shared = _PyIR_FbEntry(exec->entries, 0);
     shared->kind = FB_COUNTER;
     shared->state = FB_OFF;
@@ -293,7 +305,8 @@ make_exec(PyCodeObject *co)
         ? adaptive_counter_warmup() : initial_unreachable_backoff_counter();
     const uint32_t *fbinit = _PyCode_FBINIT(co);
     for (int i = 1; i < nfb; i++) {
-        _PyFbHeader *h = _PyIR_FbEntry(exec->entries, (uint32_t)i);
+        _PyFbHeader *h = _PyIR_FbEntry(exec->entries,
+                                       _PyIR_FBINIT_UNIT(fbinit[i]));
         h->kind = (uint8_t)_PyIR_FBINIT_KIND(fbinit[i]);
         h->counter = counter;
         if (h->kind == FB_BRANCH) {

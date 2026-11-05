@@ -1608,7 +1608,9 @@ get_feedback(PyObject *self, PyObject *args)
         }
     }
     uint32_t fields[2] = {0, 0};
-    if (h->kind != FB_COUNTER) {
+    // Entries are not padded to a common size: read what the type has
+    if (_PyIR_FormatOf(_PyCode_InstrHandler(code, i))->fb_size
+            >= sizeof(_PyFbHeader) + sizeof(fields)) {
         memcpy(fields, h + 1, sizeof(fields));
     }
     return Py_BuildValue("(ssIIN)", kinds[h->kind], states[h->state],

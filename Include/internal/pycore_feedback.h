@@ -15,18 +15,19 @@ extern "C" {
 /* Typed feedback.
  *
  * Every instruction of a family below, and every conditional branch, owns
- * one feedback entry.  The assembler numbers the entries and stores in the
- * IR word the index of its entry (Include/internal/pycore_ir.h).  The code
- * object keeps one 32-bit initialiser per entry after its words, the kind
- * and the static operand that does not fit the word (_PyIR_FBINIT).  At
- * the first call the executing copy is allocated with the entries after the
+ * one feedback entry unless the vector is full.  The assembler places the
+ * entries in 8-byte units, entry 0 first, each ending by unit 4,096, and
+ * stores in the IR word the unit at which its entry starts
+ * (Include/internal/pycore_ir.h).  The code object keeps one 32-bit
+ * initialiser per entry, in order of unit: its kind, its unit and the
+ * operand that does not fit the word (_PyIR_FBINIT).  At the first call the executing copy is allocated with the entries after the
  * words:
  *
  *     | _PyCodeExec | words | _PyFbBlock | entries |
  *
  * Entry 0 is shared by every instruction that has no entry of its own: the
- * instructions past the IR's entry limit and _Py_InitCleanup.  It never
- * specialises.  dis reads the entries of the executing copy for
+ * instructions past the limit of the vector and _Py_InitCleanup.  It never
+ * specialises, because its counter never triggers.  dis reads the entries of the executing copy for
  * show_caches and adaptive.
  *
  * Each entry begins with a 16-byte header.  The entry type of each family,

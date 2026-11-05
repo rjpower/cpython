@@ -399,7 +399,6 @@ static PyStructSequence_Field ir_contract_fields[] = {
     {"through", "the deepest inputs left in place, a (k, form) extent"},
     {"shadow", "the instruction that the handler stands for"},
     {"base", "the opcode that the handler stands for"},
-    {"nofb", "the NOFB form of the handler, or None"},
     {"twin", "the handler that instrumentation runs, or None"},
     {"events", "bit e: the twin fires sys.monitoring event e"},
     {NULL}
@@ -445,7 +444,6 @@ ir_contract_row(PyTypeObject *type, int h)
         Py_BuildValue("(ii)", fmt->through.k, fmt->through.form),
         PyLong_FromLong(fmt->shadow),
         PyLong_FromLong(_PyIR_BaseOpcode(h)),
-        handler_or_none(fmt->nofb),
         handler_or_none(fmt->twin),
         PyLong_FromUnsignedLong(fmt->events),
     };
@@ -474,13 +472,13 @@ Item h describes handler h: None if there is none, else an IRContract,
 whose fields are those of _PyIRFormat in Include/internal/pycore_ir.h,
 which documents them, and base, the opcode that the handler stands for.
 roles holds the roles of fields A to D; reads, writes and through are
-(k, form) extents; dst is None for a format without one; nofb and twin
-are handlers or None.
+(k, form) extents; dst is None for a format without one; twin
+is a handler or None.
 [clinic start generated code]*/
 
 static PyObject *
 _opcode_get_ir_contract_impl(PyObject *module)
-/*[clinic end generated code: output=a77fe2cab663997d input=187318e229d5562c]*/
+/*[clinic end generated code: output=a77fe2cab663997d input=0fe500acc87ed1d2]*/
 {
     PyTypeObject *type = get_opcode_state(module)->ir_contract_type;
     PyObject *contract = PyTuple_New(IR_NUM_HANDLERS);

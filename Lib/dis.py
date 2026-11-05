@@ -366,11 +366,29 @@ def _field(fields, loc):
         return fields[2] | fields[3] << 12
     return fields[loc - _LOC_A]
 
-def _feedback_arg(fbinit, fb):
-    """The static operand in entry fb of the feedback table fbinit"""
-    if fbinit is None or not 0 < fb < len(fbinit) // 4:
+def _feedback_entry(fbinit, unit):
+    """The (kind, arg, units) of the entry of the feedback table fbinit that
+    starts at unit, or None.  A word of the table is the kind (4 bits), the
+    unit (12 bits) and the arg (16 bits); an entry ends where the next
+    begins, and the arg of entry 0 is the number of units."""
+    if fbinit is None:
         return None
-    return int.from_bytes(fbinit[4 * fb:4 * fb + 4], sys.byteorder) & 0xFFFFFF
+    words = [int.from_bytes(fbinit[i:i + 4], sys.byteorder)
+             for i in range(0, len(fbinit), 4)]
+    units = [(w >> 16) & _FIELD_MAX for w in words]
+    try:
+        i = units.index(unit)
+    except ValueError:
+        return None
+    end = units[i + 1] if i + 1 < len(units) else words[0] & 0xFFFF
+    return words[i] >> 28, words[i] & 0xFFFF, end - unit
+
+def _feedback_arg(fbinit, fb):
+    """The static operand in the entry at unit fb of the feedback table fbinit"""
+    if not fb:
+        return None
+    entry = _feedback_entry(fbinit, fb)
+    return None if entry is None else entry[1]
 
 def _decode_word(handler, fields, fbinit=None):
     """The oparg, dst, srcs and feedback index of a word, which has the
@@ -820,24 +838,25 @@ def _parse_exception_table(code):
         return entries
 
 def _feedback_info(fb, fbinit, feedback):
-    """The cache_info of feedback entry fb: of the executing copy if
-    feedback holds its entries, else the kind and static operand in fbinit,
-    the code object's feedback table."""
-    if fb is None or fb == 0 or fbinit is None or fb >= len(fbinit) // 4:
+    """The cache_info of the feedback entry at unit fb: of the executing copy
+    if feedback holds its entries, else the kind and static operand in
+    fbinit, the code object's feedback table."""
+    if fb is None or fb == 0:
         return None
+    found = _feedback_entry(fbinit, fb)
+    if found is None:
+        return None
+    kind, arg, units = found
     if feedback is not None:
-        stride = len(feedback) // (len(fbinit) // 4)
-        entry = feedback[fb * stride:(fb + 1) * stride]
+        entry = feedback[fb * 8:(fb + units) * 8]
         # _PyFbHeader (Include/internal/pycore_feedback.h), then the first
-        # two 32-bit fields of the entry
+        # two 32-bit fields of the entry if it has them
         layout = (("kind", 0, 1), ("state", 1, 1), ("counter", 2, 2),
                   ("arg", 8, 4), ("first", 16, 4), ("second", 20, 4))
         return [(name, size, entry[start:start + size])
-                for name, start, size in layout]
-    init = fbinit[4 * fb:4 * fb + 4]
-    value = int.from_bytes(init, sys.byteorder)
-    return [("kind", 1, (value >> 24).to_bytes(1, sys.byteorder)),
-            ("arg", 3, (value & 0xFFFFFF).to_bytes(3, sys.byteorder))]
+                for name, start, size in layout if start + size <= len(entry)]
+    return [("kind", 1, kind.to_bytes(1, sys.byteorder)),
+            ("arg", 2, arg.to_bytes(2, sys.byteorder))]
 
 def _get_instructions_bytes(code, linestarts=None, line_offset=0, co_positions=None,
                             original_code=None, arg_resolver=None, fbinit=None,
@@ -875,7 +894,7 @@ def _get_instructions_bytes(code, linestarts=None, line_offset=0, co_positions=N
             # the code object's
             runs = int.from_bytes(code[offset * _WORD_SIZE:offset * _WORD_SIZE + 2],
                                   sys.byteorder)
-            # A handler of the IR only, such as BINARY_OP_ADD or a NOFB form,
+            # A handler of the IR only, such as BINARY_OP_ADD,
             # shows as the instruction that it runs; a specialisation shows
             # as itself
             op = _deoptop(runs) if runs >= _IR_FIRST_ONLY_HANDLER else runs

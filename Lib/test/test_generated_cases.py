@@ -1472,11 +1472,9 @@ class TestIRCases(unittest.TestCase):
             self.formats(input)
 
     def test_feedback_mapping(self):
-        # A family shares one format. A name index, which may not fit in a
-        # field, moves into the entry's arg field, and cache effects read the
-        # entry.  The sites past the last index share entry 0 and run the
-        # NOFB form of the generic handler, which carries the oparg in the
-        # word; a specialisation never does.
+        # A family shares one format. A name index takes the free field of
+        # the word, and cache effects read the entry.  The sites that get no
+        # entry share entry 0 and run the same handlers.
         input = """
         specializing op(_SPECIALIZE_OP, (counter/1, owner -- owner)) {
             _PyFbHeader *feedback = FB_COUNTER();
@@ -1510,63 +1508,7 @@ class TestIRCases(unittest.TestCase):
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             _PyFb_OP *fb = (_PyFb_OP *)IR_FB(IR_C(ir_word));
-            int oparg = IR_FB_ARG(fb, IR_C(ir_word));
-            (void)oparg;
-            PyValueBorrow owner;
-            PyValue res;
-            PyValue ir_own_B = PyValue_NULL;
-            (void)ir_own_B;
-            PyObject *ir_obj_owner = NULL;
-            // _SPECIALIZE_OP
-            {
-                uint32_t counter = fb->counter;
-                (void)counter;
-                _PyFbHeader *feedback = ((_PyFbHeader *)fb);
-                ADVANCE_ADAPTIVE_COUNTER(feedback);
-            }
-            // _OP
-            {
-                owner = IR_VIEW(IR_B(ir_word));
-                if (Py_UNLIKELY(PyValue_IsInline(owner))) {
-                    ir_obj_owner = _PyValueTemps_Box(value_temps, owner);
-                    if (ir_obj_owner == NULL) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(OP);
-                }
-                else {
-                    ir_obj_owner = PyValue_AsKnownObjectBorrow(owner);
-                }
-                PyObject *o = ir_obj_owner;
-                res = SPAM(o, GETITEM(FRAME_CO_NAMES, oparg));
-                ir_own_B = IR_CONSUME_INPUT(IR_B(ir_word), owner);
-                PyValue_XCLOSE(ir_own_B);
-            }
-            IR_STORE_DST(IR_A(ir_word), res);
-            if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
-                next_instr = frame->instr_ptr + 1;
-                JUMP_TO_LABEL(error);
-            }
-            DISPATCH();
-        }
-
-        TARGET(OP_NOFB) {
-            int opcode = OP_NOFB;
-            (void)(opcode);
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            next_instr += 1;
-            INSTRUCTION_STATS(OP);
-            PyObject *value_boxes[6];
-            _PyValueTemps value_owners;
-            value_owners = (_PyValueTemps){value_boxes, 0, 6};
-            _PyValueTemps *value_temps = &value_owners;
-            PyValue ir_displaced = PyValue_NULL;
-            (void)ir_displaced;
-            _PyFb_OP *fb = (_PyFb_OP *)IR_FB(0);
-            int oparg = (int)IR_CD(ir_word);
+            int oparg = (int)IR_D(ir_word);
             (void)oparg;
             PyValueBorrow owner;
             PyValue res;
@@ -1620,7 +1562,7 @@ class TestIRCases(unittest.TestCase):
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             _PyFb_OP *fb = (_PyFb_OP *)IR_FB(IR_C(ir_word));
-            int oparg = (int)((_PyFbHeader *)fb)->arg;
+            int oparg = (int)IR_D(ir_word);
             (void)oparg;
             PyValueBorrow owner;
             PyValue res;
@@ -1663,11 +1605,11 @@ class TestIRCases(unittest.TestCase):
         fmt = self.formats(input)["OP_SPECIALIZED"]
         self.assertEqual(fmt.group, "OP")
         self.assertEqual(fmt.fb, ir_generator.LOC_C)
-        self.assertEqual(fmt.imm, ir_generator.LOC_FBARG)
+        self.assertEqual(fmt.imm, ir_generator.LOC_D)
 
     def test_oparg_in_entry(self):
         # Two inputs, a destination and an entry fill the word, so the oparg
-        # lives in the entry, or for the NOFB form in the field of the entry.
+        # lives in the entry.
         input = """
         inst(OP, (counter/1, left, right -- res)) {
             _PyFbHeader *feedback = FB_COUNTER();
@@ -1691,42 +1633,6 @@ class TestIRCases(unittest.TestCase):
             (void)ir_displaced;
             _PyFb_OP *fb = (_PyFb_OP *)IR_FB(IR_D(ir_word));
             int oparg = IR_FB_ARG(fb, IR_D(ir_word));
-            (void)oparg;
-            PyValue left;
-            PyValue right;
-            PyValue res;
-            right = IR_SLOT(IR_C(ir_word));
-            left = IR_SLOT(IR_B(ir_word));
-            uint32_t counter = fb->counter;
-            (void)counter;
-            _PyFbHeader *feedback = ((_PyFbHeader *)fb);
-            ADVANCE_ADAPTIVE_COUNTER(feedback);
-            res = SPAM(left, right, oparg);
-            IR_SLOT(IR_B(ir_word)) = PyValue_NULL;
-            IR_SLOT(IR_C(ir_word)) = PyValue_NULL;
-            IR_STORE_DST(IR_A(ir_word), res);
-            if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
-                next_instr = frame->instr_ptr + 1;
-                JUMP_TO_LABEL(error);
-            }
-            DISPATCH();
-        }
-
-        TARGET(OP_NOFB) {
-            int opcode = OP_NOFB;
-            (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            next_instr += 1;
-            INSTRUCTION_STATS(OP);
-            PyValue ir_displaced = PyValue_NULL;
-            (void)ir_displaced;
-            _PyFb_OP *fb = (_PyFb_OP *)IR_FB(0);
-            int oparg = (int)IR_D(ir_word);
             (void)oparg;
             PyValue left;
             PyValue right;
@@ -1849,7 +1755,7 @@ class TestIRCases(unittest.TestCase):
                 ".reads = { 0, _PyIR_EXT_FIXED }, "
                 ".writes = { 1, _PyIR_EXT_FIXED }, "
                 ".through = { 0, _PyIR_EXT_FIXED }, .shadow = LOAD, "
-                ".nofb = 0, .twin = INSTRUMENTED_LOAD, .events = 0 }")
+                ".twin = INSTRUMENTED_LOAD, .events = 0 }")
         instrumented = (load.replace(".effects = 0", ".effects = _PyIR_RUNS_PYTHON")
                             .replace("shadow = LOAD", "shadow = INSTRUMENTED_LOAD"))
         for expected in [
@@ -1866,7 +1772,7 @@ class TestIRCases(unittest.TestCase):
             ".fb_kind = 0, .fb_size = 0, .reads = { 0, _PyIR_EXT_FIXED }, "
             ".writes = { 0, _PyIR_EXT_FIXED }, "
             ".through = { 0, _PyIR_EXT_FIXED }, .shadow = IR_PASS, "
-            ".nofb = 0, .twin = 0, .events = 0 },",
+            ".twin = 0, .events = 0 },",
             '[IR_BACON - IR_FIRST_ONLY_HANDLER] = "IR_BACON",',
             '[IR_PASS - IR_FIRST_ONLY_HANDLER] = "IR_PASS",',
         ]:

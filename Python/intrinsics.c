@@ -220,6 +220,8 @@ make_frozenset(PyThreadState* Py_UNUSED(ignored), PyObject *set)
 
 #define INTRINSIC_FUNC_ENTRY(N, F) \
     [N] = {F, #N},
+#define INTRINSIC_FUNC_NAMED(N, NAME, F) \
+    [N] = {F, NAME},
 
 const intrinsic_func1_info
 _PyIntrinsics_UnaryFunctions[] = {
@@ -307,6 +309,85 @@ match_class_isinstance(PyThreadState* tstate, PyObject *subject, PyObject *type)
     return res ? Py_True : Py_False;
 }
 
+/* COMPARE_OP and CONTAINS_OP at a site without a feedback entry, and the
+ * names that no instruction can hold. */
+#define COMPARE(NAME, OP) \
+static PyObject * \
+compare_##NAME(PyThreadState* Py_UNUSED(ignored), PyObject *a, PyObject *b) \
+{ \
+    return PyObject_RichCompare(a, b, OP); \
+} \
+static PyObject * \
+compare_##NAME##_bool(PyThreadState* Py_UNUSED(ignored), PyObject *a, PyObject *b) \
+{ \
+    PyObject *res = PyObject_RichCompare(a, b, OP); \
+    if (res == NULL) { \
+        return NULL; \
+    } \
+    int truth = PyObject_IsTrue(res); \
+    Py_DECREF(res); \
+    if (truth < 0) { \
+        return NULL; \
+    } \
+    return truth ? Py_True : Py_False; \
+}
+
+COMPARE(lt, Py_LT)
+COMPARE(le, Py_LE)
+COMPARE(eq, Py_EQ)
+COMPARE(ne, Py_NE)
+COMPARE(gt, Py_GT)
+COMPARE(ge, Py_GE)
+#undef COMPARE
+
+static PyObject *
+contains_in(PyThreadState* Py_UNUSED(ignored), PyObject *item, PyObject *container)
+{
+    int res = PySequence_Contains(container, item);
+    if (res < 0) {
+        return NULL;
+    }
+    return res ? Py_True : Py_False;
+}
+
+static PyObject *
+contains_not_in(PyThreadState* Py_UNUSED(ignored), PyObject *item, PyObject *container)
+{
+    int res = PySequence_Contains(container, item);
+    if (res < 0) {
+        return NULL;
+    }
+    return res ? Py_False : Py_True;
+}
+
+static PyObject *
+get_attr(PyThreadState* Py_UNUSED(ignored), PyObject *owner, PyObject *name)
+{
+    return PyObject_GetAttr(owner, name);
+}
+
+/* value is NULL for a deletion, the tuple holds (owner, name) */
+static PyObject *
+set_attr(PyThreadState* Py_UNUSED(ignored), PyObject *value, PyObject *target)
+{
+    assert(PyTuple_CheckExact(target) && PyTuple_GET_SIZE(target) == 2);
+    // The elements may be inline values, which get a box
+    PyValue owner_value = PyTuple_GetValue(target, 0);
+    PyValue name_value = PyTuple_GetValue(target, 1);
+    PyObject *owner = PyValue_AsObject(owner_value);
+    PyObject *name = PyValue_AsObject(name_value);
+    PyValue_CLOSE(owner_value);
+    PyValue_CLOSE(name_value);
+    int err = owner == NULL || name == NULL
+              || PyObject_SetAttr(owner, name, value) < 0;
+    Py_XDECREF(owner);
+    Py_XDECREF(name);
+    if (err) {
+        return NULL;
+    }
+    Py_RETURN_NONE;
+}
+
 const intrinsic_func2_info
 _PyIntrinsics_BinaryFunctions[] = {
     INTRINSIC_FUNC_ENTRY(INTRINSIC_2_INVALID, no_intrinsic2)
@@ -317,6 +398,22 @@ _PyIntrinsics_BinaryFunctions[] = {
     INTRINSIC_FUNC_ENTRY(INTRINSIC_SET_TYPEPARAM_DEFAULT, _Py_set_typeparam_default)
     INTRINSIC_FUNC_ENTRY(INTRINSIC_ADD_CONDITIONAL_ANNOTATION, add_conditional_annotation)
     INTRINSIC_FUNC_ENTRY(INTRINSIC_MATCH_CLASS_ISINSTANCE, match_class_isinstance)
+    INTRINSIC_FUNC_NAMED(INTRINSIC_COMPARE_OP + 0, "INTRINSIC_COMPARE_LT", compare_lt)
+    INTRINSIC_FUNC_NAMED(INTRINSIC_COMPARE_OP + 1, "INTRINSIC_COMPARE_LT_BOOL", compare_lt_bool)
+    INTRINSIC_FUNC_NAMED(INTRINSIC_COMPARE_OP + 2, "INTRINSIC_COMPARE_LE", compare_le)
+    INTRINSIC_FUNC_NAMED(INTRINSIC_COMPARE_OP + 3, "INTRINSIC_COMPARE_LE_BOOL", compare_le_bool)
+    INTRINSIC_FUNC_NAMED(INTRINSIC_COMPARE_OP + 4, "INTRINSIC_COMPARE_EQ", compare_eq)
+    INTRINSIC_FUNC_NAMED(INTRINSIC_COMPARE_OP + 5, "INTRINSIC_COMPARE_EQ_BOOL", compare_eq_bool)
+    INTRINSIC_FUNC_NAMED(INTRINSIC_COMPARE_OP + 6, "INTRINSIC_COMPARE_NE", compare_ne)
+    INTRINSIC_FUNC_NAMED(INTRINSIC_COMPARE_OP + 7, "INTRINSIC_COMPARE_NE_BOOL", compare_ne_bool)
+    INTRINSIC_FUNC_NAMED(INTRINSIC_COMPARE_OP + 8, "INTRINSIC_COMPARE_GT", compare_gt)
+    INTRINSIC_FUNC_NAMED(INTRINSIC_COMPARE_OP + 9, "INTRINSIC_COMPARE_GT_BOOL", compare_gt_bool)
+    INTRINSIC_FUNC_NAMED(INTRINSIC_COMPARE_OP + 10, "INTRINSIC_COMPARE_GE", compare_ge)
+    INTRINSIC_FUNC_NAMED(INTRINSIC_COMPARE_OP + 11, "INTRINSIC_COMPARE_GE_BOOL", compare_ge_bool)
+    INTRINSIC_FUNC_NAMED(INTRINSIC_CONTAINS_OP, "INTRINSIC_CONTAINS_IN", contains_in)
+    INTRINSIC_FUNC_NAMED(INTRINSIC_CONTAINS_OP + 1, "INTRINSIC_CONTAINS_NOT_IN", contains_not_in)
+    INTRINSIC_FUNC_ENTRY(INTRINSIC_GETATTR, get_attr)
+    INTRINSIC_FUNC_ENTRY(INTRINSIC_SETATTR, set_attr)
 };
 
 #undef INTRINSIC_FUNC_ENTRY

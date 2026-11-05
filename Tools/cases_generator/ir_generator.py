@@ -34,20 +34,22 @@ D. Otherwise an oparg that can need more than 12 bits, a constant or name
 index, takes CD, and a narrow one the next free field; window style puts it
 before the feedback index, as CALL's argc. An instruction with a feedback
 entry keeps a wide oparg, or one that does not fit, in the entry's arg field.
-Such a handler has a NOFB form (LOAD_ATTR_NOFB, ...), with the fields placed
-as if it had no entry, for the sites past the IR_FIELD_MAX-th, which share
-entry 0 and never specialise. BINARY_OP has one handler per operation instead
-(BINARY_OP_ADD, ...), each with its operation as a constant, and its
-specialisations deoptimise to the handler of the operation that the entry
-records.
+A wide oparg of an instruction with an entry takes CD if two fields are free
+and otherwise the one free field, as D (LOAD_ATTR, STORE_ATTR and
+LOAD_SUPER_ATTR; the compiler lowers an access whose oparg does not fit,
+Python/codegen.c); only an oparg that has no field left stays in the entry
+(COMPARE_OP, CONTAINS_OP and BINARY_OP), so that the sites past the
+feedback limit, which share entry 0 and never specialise, need no second
+handler.  BINARY_OP has one handler per operation (BINARY_OP_ADD, ...), each
+with its operation as a constant, and its specialisations deoptimise to the
+handler of the operation that the entry records.
 
 Invariants:
 
 - The handler index of an instruction with an opcode is its opcode. IR-only
   handlers (annotation `ir_only`) follow the pseudo-instructions, then the
   handlers of the
-  BINARY_OP operations in the order of their NB_ constants, then the NOFB
-  forms in name order.
+  BINARY_OP operations in the order of their NB_ constants.
 - Members of a family share the format of the family, and INSTRUMENTED_X that
   of X, so specialisation and instrumentation rewrite only the handler field.
   INSTRUMENTED_LINE and INSTRUMENTED_INSTRUCTION take no format: they run
@@ -238,9 +240,6 @@ class IRFormat:
     forward: bool = False           # the oparg is a forward distance
     no_fold: bool = False
     transparent: bool = False       # see is_transparent()
-    # What place_fields() placed, from which the NOFB form follows
-    slot_roles: tuple[str, ...] = ()
-    imm_kind: str | None = None
     store_dst: bool = False         # dst may name a local, see
                                     # stores_to_dst(); the handlers release
                                     # the local's old value
@@ -1024,30 +1023,12 @@ def all_instructions(analysis: Analysis) -> dict[str, Instruction]:
     return {**analysis.instructions, **analysis.ir_only}
 
 
-NOFB_SUFFIX = "_NOFB"
-
-
-def nofb_bases(analysis: Analysis) -> list[str]:
-    """The handlers that have a NOFB form: the generic and instrumented
-    handlers that take their oparg from their feedback entry.  A site past
-    the IR_FIELD_MAX-th shares entry 0, which holds no oparg, and runs the
-    NOFB form, which keeps it in the word.  The handlers of the BINARY_OP
-    operations have their operation as a constant and need none."""
-    formats = base_formats(analysis)
-    return sorted(
-        name for name, inst in all_instructions(analysis).items()
-        if name != BINARY_OP_FAMILY and inst.properties.oparg
-        and not is_specialization(inst)
-        and formats[name].imm == LOC_FBARG)
-
-
 def handler_ids(analysis: Analysis) -> dict[str, int]:
     """Handler index of each handler, by name, from the pinned table.
     BINARY_OP itself has none: its operations do."""
     ids = {name: inst.opcode for name, inst in analysis.instructions.items()
            if name != BINARY_OP_FAMILY}
-    names = (sorted(analysis.ir_only) + binary_op_handlers(analysis)
-             + [name + NOFB_SUFFIX for name in nofb_bases(analysis)])
+    names = sorted(analysis.ir_only) + binary_op_handlers(analysis)
     table = analysis.numbers
     for name in names:
         ids[name] = table.number(
@@ -1062,8 +1043,6 @@ def handler_instructions(analysis: Analysis) -> dict[str, Instruction]:
               if name in insts}
     for name in binary_op_handlers(analysis):
         result[name] = insts[BINARY_OP_FAMILY]
-    for name in nofb_bases(analysis):
-        result[name + NOFB_SUFFIX] = insts[name]
     return result
 
 
@@ -1136,7 +1115,9 @@ def place_fields(slots: list[str], has_fb: bool, imm_kind: str | None,
     feedback index, given the slot roles, or None if they do not fit.
 
     imm_kind is None, "target" (an absolute jump target, in CD), "forward"
-    (a distance, in D), "wide" (in CD) or "narrow" (in a 12-bit field)."""
+    (a distance, in D), "wide" (in CD, or with a feedback index in the one
+    free 12-bit field) or "narrow" (in a 12-bit field).  An oparg that fits
+    no field stays in the feedback entry (LOC_FBARG)."""
     fields = list(slots)
     imm, fb = LOC_NONE, LOC_NONE
 
@@ -1160,7 +1141,15 @@ def place_fields(slots: list[str], has_fb: bool, imm_kind: str | None,
         imm = LOC_D
     elif imm_kind == "wide" and has_fb:
         add_fb()
-        imm = LOC_FBARG
+        if len(fields) <= 2:
+            fields += [ROLE_NONE] * (2 - len(fields)) + [ROLE_IMM, ROLE_IMM]
+            imm = LOC_CD
+        elif len(fields) < 4:
+            # The compiler lowers an oparg that does not fit 12 bits
+            imm = FIELD_LOCS[FIELDS[len(fields)]]
+            fields.append(ROLE_IMM)
+        else:
+            imm = LOC_FBARG
     elif imm_kind == "wide":
         if len(fields) > 2:
             return None
@@ -1248,7 +1237,6 @@ def compute_format(group: str, members: list[Instruction]) -> IRFormat:
                 f"the fields of {group} do not fit in a word", head.where)
         n_inputs = 0
     roles, imm, fb = placed
-    slot_roles = tuple(slots)
     if imm in FIELD_LOCS.values():
         k = list(FIELD_LOCS.values()).index(imm)
         role = oparg_slot_role(members)
@@ -1298,7 +1286,7 @@ def compute_format(group: str, members: list[Instruction]) -> IRFormat:
         group=group, window=window, roles=roles, inputs=names,
         n_inputs=n_inputs, dst_offset=dst_offset, borrow_mask=borrow_mask,
         imm=imm, fb=fb, jumps=jumps and not forward, forward=forward,
-        no_fold=no_fold, slot_roles=slot_roles, imm_kind=imm_kind,
+        no_fold=no_fold,
         store_dst=store_dst, runs_code=any(runs_code(m) for m in members),
         jump_always=jumps and jumps_always(head),
         names_target=jumps and names_target_only(head),
@@ -1638,26 +1626,8 @@ def stores_to_dst(members: list[Instruction],
     return True
 
 
-def nofb_format(fmt: IRFormat) -> IRFormat:
-    "The format of the NOFB form of a handler of format fmt"
-    placed = place_fields(list(fmt.slot_roles), False, fmt.imm_kind, fmt.window)
-    assert placed is not None, fmt.group
-    roles, imm, fb = placed
-    # The form runs on entry 0, which is no entry of its own
-    return replace(fmt, roles=roles, imm=imm, fb=fb, fb_layout=None,
-                   fb_kind=None)
-
-
 def compute_formats(analysis: Analysis) -> dict[str, IRFormat]:
     "The format of every handler and instruction, by name"
-    formats = base_formats(analysis)
-    for name in nofb_bases(analysis):
-        formats[name + NOFB_SUFFIX] = nofb_format(formats[name])
-    return formats
-
-
-def base_formats(analysis: Analysis) -> dict[str, IRFormat]:
-    "The formats of compute_formats() but those of the NOFB forms"
     insts = all_instructions(analysis)
     groups: dict[str, list[Instruction]] = {}
     transparent = {name for name, inst in insts.items() if is_transparent(inst)}
@@ -2268,8 +2238,7 @@ class IREmitter(Emitter):
         self.call_argc = ""
         self.call_kind = ""
         self.call_flags = ""
-        # The format of the handler being emitted, which for a NOFB form
-        # is not its instruction's
+        # The format of the handler being emitted
         self.handler_format: IRFormat | None = None
         # Whether the handler being emitted has a value record, value_temps:
         # only a handler whose contract has BOXES does (boxing_handlers)
@@ -2447,7 +2416,7 @@ class IREmitter(Emitter):
         self.emit("window = slots + call_base;\n")
         if self.call_has_feedback:
             self.emit(f"fb = ({feedback_type(self.format_of(inst))} *)"
-                      "(frame->ir_feedback + call_feedback * FB_STRIDE);\n")
+                      "(frame->ir_feedback + ((size_t)call_feedback << 3));\n")
 
     def prepare_call(self, tkn, tkn_iter, uop, storage, inst):
         """A step of the call before its invocation, which records in the
@@ -3565,8 +3534,7 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
     emitter.taken_outputs = set()
     operation = None
     emitter.has_record = record
-    nofb = name == inst.name + NOFB_SUFFIX
-    if name != inst.name and not nofb:
+    if name != inst.name:
         operation = "NB_" + name.removeprefix(BINARY_OP_FAMILY + "_")
     transaction = uses_call_transaction(inst)
     emitter.call_finished = False
@@ -3587,8 +3555,8 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
     if not is_target:
         qualifier = "" if transaction or inst.name == "BINARY_OP" or name in ("CALL", "CALL_KW", "INSTRUMENTED_CALL", "INSTRUMENTED_CALL_KW", "CALL_NON_PY_GENERAL", "CALL_KW_NON_PY", "CALL_BUILTIN_O", "LOAD_ATTR_SLOT", "STORE_ATTR_SLOT",
                                    "BUILD_MAP", "STORE_SUBSCR", "STORE_SUBSCR_DICT",
-                                   "STORE_ATTR_WITH_HINT", "BINARY_OP_SUBSCR_DICT", "LOAD_GLOBAL", "LOAD_GLOBAL_NOFB",
-                                   "LOAD_ATTR", "LOAD_ATTR_NOFB", "STORE_ATTR", "STORE_ATTR_NOFB",
+                                   "STORE_ATTR_WITH_HINT", "BINARY_OP_SUBSCR_DICT", "LOAD_GLOBAL",
+                                   "LOAD_ATTR", "STORE_ATTR",
                                    "STORE_ATTR_INSTANCE_VALUE", "STORE_ATTR_SHAPE", "STORE_ATTR_SHAPE_ADD",
                                    "LOAD_ATTR_INSTANCE_VALUE", "LOAD_ATTR_SHAPE",
                                    "LOAD_ATTR_MODULE", "LOAD_ATTR_WITH_HINT") else "const "
@@ -3599,7 +3567,7 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
     out.emit(f"next_instr += 1;\n")
     out.emit(f"INSTRUCTION_STATS({inst.name});\n")
     if is_target:
-        qualifier = "" if transaction or inst.name == "BINARY_OP" or name in ("CALL", "CALL_KW", "STORE_SUBSCR", "LOAD_GLOBAL", "LOAD_GLOBAL_NOFB", "LOAD_ATTR", "LOAD_ATTR_NOFB", "STORE_ATTR", "STORE_ATTR_NOFB") else "const "
+        qualifier = "" if transaction or inst.name == "BINARY_OP" or name in ("CALL", "CALL_KW", "STORE_SUBSCR", "LOAD_GLOBAL", "LOAD_ATTR", "STORE_ATTR") else "const "
         out.emit(f"_PyIRWord* {qualifier}this_instr = next_instr - 1;\n")
         out.emit("(void)this_instr;\n")
     if record:
@@ -3615,13 +3583,10 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
         out.emit("(void)ir_displaced;\n")
     use_fb = fmt.fb != LOC_NONE and (
         uses_feedback(inst) or reads_fb_arg(inst, fmt, operation))
-    emitter.call_has_feedback = use_fb or nofb and uses_feedback(inst)
+    emitter.call_has_feedback = use_fb
     if use_fb:
         out.emit(f"{feedback_type(fmt)} *fb = ({feedback_type(fmt)} *)"
                  f"IR_FB({field_expr(fmt.fb)});\n")
-    elif nofb and uses_feedback(inst):
-        # The shared entry, which never specialises
-        out.emit(f"{feedback_type(fmt)} *fb = ({feedback_type(fmt)} *)IR_FB(0);\n")
     if inst.properties.oparg:
         if operation is not None:
             out.emit(f"int oparg = {operation};\n")
@@ -3926,11 +3891,10 @@ def monitoring_events(name: str, inst: Instruction) -> list[str]:
 
 def twin_of(name: str, fmt: IRFormat, ids: dict[str, int]) -> str | None:
     """The handler that instrumentation runs on a word of handler name: the
-    twin of its family, of the NOFB form for a NOFB form; a twin is its own"""
+    twin of its family; a twin is its own"""
     if name.startswith("INSTRUMENTED_"):
         return name
-    suffix = NOFB_SUFFIX if name.endswith(NOFB_SUFFIX) else ""
-    twin = "INSTRUMENTED_" + fmt.group + suffix
+    twin = "INSTRUMENTED_" + fmt.group
     return twin if twin in ids else None
 
 

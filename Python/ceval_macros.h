@@ -307,9 +307,19 @@ static void dtrace_function_return(_PyInterpreterFrame *);
 #endif
 
 /* Counters live in feedback entries (pycore_feedback.h).  FB is the entry
- * header of the instruction, or NULL if it has none, which never triggers. */
+ * header of the instruction, or NULL if it has none, which never triggers.
+ * Entry 0, the header that the sites without an entry share, never triggers
+ * either, so nothing after a trigger writes past a header there. */
+#ifdef Py_DEBUG
+#  define IR_SHARED_ENTRY_NEVER_TRIGGERS(FB) \
+    (assert((char *)(FB) != frame->ir_feedback \
+            || !backoff_counter_triggers((FB)->counter)), 1)
+#else
+#  define IR_SHARED_ENTRY_NEVER_TRIGGERS(FB) 1
+#endif
 #define ADAPTIVE_COUNTER_TRIGGERS(FB) \
-    ((FB) != NULL && backoff_counter_triggers((FB)->counter))
+    ((FB) != NULL && IR_SHARED_ENTRY_NEVER_TRIGGERS(FB) \
+     && backoff_counter_triggers((FB)->counter))
 
 #ifdef Py_GIL_DISABLED
 /* Counters are unreachable when thread-local bytecode is disabled,
@@ -623,9 +633,10 @@ _PyIR_AdoptTemp(PyValueBorrow view)
 /* The feedback entry at index F. */
 #define IR_FB(F) (IR_CHECK_BLOCK(), (void *)_PyIR_FbEntry(frame->ir_feedback, (F)))
 
-/* The oparg that the generic handler of an instruction with entry FB, at
- * index F, keeps in the arg field of the entry.  The sites that share entry
- * 0 run NOFB forms, which keep theirs in the word. */
+/* The oparg that the generic handler of COMPARE_OP or CONTAINS_OP, with
+ * entry FB at unit F, keeps in the arg field of the entry.  These sites
+ * always have an entry of their own: the assembler assigns theirs first and
+ * lowers a site that gets none to CALL_INTRINSIC_2. */
 #define IR_FB_ARG(FB, F) \
     (assert((F) != 0), (int)((_PyFbHeader *)(FB))->arg)
 

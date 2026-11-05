@@ -23,7 +23,7 @@ extern "C" {
  *     +----------+----------+----------+----------+----------+
  *
  * The handler of an instruction that has an opcode is that opcode.  The
- * handlers of the IR only (IR_JUMP, BINARY_OP_ADD, LOAD_ATTR_NOFB, ...)
+ * handlers of the IR only (IR_JUMP, BINARY_OP_ADD, ...)
  * follow from IR_FIRST_ONLY_HANDLER, after the pseudo-instructions of the
  * compiler, so that opcode.opname names each number once.  A, B, C and D are 12-bit fields,
  * and C and D together form a 24-bit field CD.  A field plays one of these
@@ -47,14 +47,18 @@ extern "C" {
  * window-style instruction names its dst, if it has one, and the slot of
  * its deepest input (base), and binds the rest by offset.
  *
- * The static operand of an instruction that has a feedback entry, such as
- * the name of LOAD_ATTR, lives in the arg field of the entry unless a field
- * of the word is free for it; the code object's feedback table, which
- * follows its words, holds it until the first call copies it into the
- * entry.  BINARY_OP has a handler per operation instead.  Entry 0 of every
- * feedback vector is shared by the sites past the IR_FIELD_MAX-th and never
- * specialises; those of them that need a static operand run a NOFB form of
- * their handler, which carries it in a field of the word.
+ * The oparg of an instruction that has a feedback entry lives in a field of
+ * the word (the name of LOAD_GLOBAL in CD, that of LOAD_ATTR, STORE_ATTR and
+ * LOAD_SUPER_ATTR in D) unless no field is free: COMPARE_OP and CONTAINS_OP
+ * keep their operation in the arg field of the entry, and the assembler
+ * gives them entries before any other site.  The code object's feedback
+ * table, which follows its words, holds it until the first call copies it
+ * into the entry.  BINARY_OP has a handler per operation instead.  Entry 0
+ * of every feedback vector is a header only, shared by the sites that get
+ * no entry of their own; it never specialises and nothing but its header is
+ * ever written.  No handler reads an operand from it, so no handler has a
+ * second form for those sites; a COMPARE_OP or CONTAINS_OP that gets no
+ * entry becomes CALL_INTRINSIC_2.
  *
  * Word indices are the offsets of the IR: f_lasti, the line table and the
  * exception table count words.
@@ -84,9 +88,14 @@ extern "C" {
      (_PyIRWord)((C) & IR_FIELD_MAX) << 40 | \
      (_PyIRWord)((D) & IR_FIELD_MAX) << 52)
 
-/* Feedback entries are FB_STRIDE bytes apart, the size of the largest, so
- * that an index finds its entry without a table. */
-#define FB_STRIDE       sizeof(_PyFbAttr)
+/* The fb field is an offset in 8-byte units into the feedback vector, and
+ * each kind of entry takes its own size (pycore_feedback.h): the entry is at
+ * entries + (fb << 3), with no table.  Entry 0 is the 16-byte header, so
+ * entries start at unit IR_FB_FIRST_UNIT, and an entry ends by unit
+ * IR_FB_UNITS_MAX, a vector of at most 32 KB. */
+#define IR_FB_UNIT_SHIFT    3
+#define IR_FB_FIRST_UNIT    2
+#define IR_FB_UNITS_MAX     4096
 
 /* Field roles; input k of a register-style instruction is _PyIR_ROLE_IN0 + k.
  * A field that holds the oparg has role IMM, or one of the slot roles when
@@ -234,8 +243,6 @@ typedef struct _PyIRFormat {
                             // The other inputs are consumed, and a
                             // temporary that names them is cleared
     uint16_t shadow;        // the instruction that the handler stands for
-    uint16_t nofb;          // the NOFB form of a generic handler that keeps
-                            // its oparg in its entry, or 0
     uint16_t twin;          // the handler that instrumentation runs on the
                             // word (itself for a twin), or 0
     uint32_t events;        // bit e: twin fires sys.monitoring event e
@@ -303,10 +310,16 @@ typedef struct _PyCodeExec {
 } _PyCodeExec;
 
 /* The feedback table of a code object, which follows its words: per entry,
- * entry 0 included, its kind and the static operand of its instruction. */
-#define _PyIR_FBINIT(KIND, ARG)  ((uint32_t)(KIND) << 24 | (uint32_t)(ARG))
-#define _PyIR_FBINIT_KIND(V)     ((int)((V) >> 24))
-#define _PyIR_FBINIT_ARG(V)      ((uint32_t)(V) & IR_CD_MAX)
+ * entry 0 included, in order of unit, a word of the kind (4 bits), the unit
+ * where the entry starts (12 bits) and its arg (16 bits): the operation of
+ * COMPARE_OP, CONTAINS_OP and BINARY_OP, the only operands that live in an
+ * entry.  An entry ends where the next begins; the arg of entry 0 is the
+ * number of units of the vector. */
+#define _PyIR_FBINIT(KIND, UNIT, ARG) \
+    ((uint32_t)(KIND) << 28 | (uint32_t)(UNIT) << 16 | (uint32_t)(ARG))
+#define _PyIR_FBINIT_KIND(V)     ((int)((V) >> 28))
+#define _PyIR_FBINIT_UNIT(V)     ((uint32_t)((V) >> 16) & IR_FIELD_MAX)
+#define _PyIR_FBINIT_ARG(V)      ((uint32_t)(V) & 0xFFFF)
 
 /* The executing copy of _Py_InitCleanup (Python/specialize.c), which runs
  * with self in slot 0 and the result of __init__ in slot 1. */
@@ -341,8 +354,8 @@ PyAPI_DATA(int) _PyIR_MaxSlots;
  * same. */
 
 /* The generic handler of the instruction at index i: the head of its
- * family, the handler of a BINARY_OP operation, an inline constant form or
- * a NOFB form, as the assembler chose it. */
+ * family, the handler of a BINARY_OP operation, or an inline constant form,
+ * as the assembler chose it. */
 static inline int
 _PyCode_InstrHandler(PyCodeObject *co, int i)
 {
@@ -351,7 +364,7 @@ _PyCode_InstrHandler(PyCodeObject *co, int i)
 
 /* The opcode of the stack instruction that handler stands for, without
  * specialisation or instrumentation: BINARY_OP for BINARY_OP_ADD, LOAD_ATTR
- * for LOAD_ATTR_NOFB.  IR_JUMP, which has no stack instruction, is
+ * for LOAD_ATTR.  IR_JUMP, which has no stack instruction, is
  * JUMP_FORWARD. */
 PyAPI_FUNC(int) _PyIR_BaseOpcode(int handler);
 
@@ -399,8 +412,8 @@ PyAPI_FUNC(int) _PyIR_RealHandler(struct _PyInterpreterFrame *frame,
 
 /* The handler that INSTRUMENTED_LINE or INSTRUMENTED_INSTRUCTION at instr
  * goes on to, given the opcode that instrumentation returned for it: the
- * code object's handler where that opcode is the uninstrumented one, the
- * NOFB form of an instrumented opcode for a NOFB word, otherwise opcode. */
+ * code object's handler where that opcode is the uninstrumented one,
+ * otherwise opcode. */
 PyAPI_FUNC(int) _PyIR_OriginalHandler(struct _PyInterpreterFrame *frame,
                                       const _PyIRWord *instr, int opcode);
 
@@ -429,13 +442,41 @@ _PyIR_FormatOf(int handler)
     return &_PyIR_Formats[handler];
 }
 
-/* The feedback entry at index I of a vector whose entry 0 is at ENTRIES */
+/* The feedback entry at unit I of a vector whose entry 0 is at ENTRIES */
 static inline _PyFbHeader *
 _PyIR_FbEntry(char *entries, uint32_t i)
 {
     assert(entries != NULL && i <= IR_FIELD_MAX);
-    return (_PyFbHeader *)(entries + (size_t)i * FB_STRIDE);
+    return (_PyFbHeader *)(entries + ((size_t)i << IR_FB_UNIT_SHIFT));
 }
+
+/* The index in the feedback table fbinit of n words of the entry that starts
+ * at unit, or -1.  The table is in order of unit. */
+static inline int
+_PyIR_FbFind(const uint32_t *fbinit, int n, uint32_t unit)
+{
+    int low = 0, high = n - 1;
+    while (low <= high) {
+        int mid = (low + high) / 2;
+        uint32_t u = _PyIR_FBINIT_UNIT(fbinit[mid]);
+        if (u == unit) {
+            return mid;
+        }
+        if (u < unit) {
+            low = mid + 1;
+        }
+        else {
+            high = mid - 1;
+        }
+    }
+    return -1;
+}
+
+/* The index in co_fbinit of the entry that starts at unit, or -1 */
+PyAPI_FUNC(int) _PyCode_FbOrdinal(PyCodeObject *co, uint32_t unit);
+
+/* The number of units of co's feedback vector, 0 without entries */
+PyAPI_FUNC(uint32_t) _PyCode_FbUnits(PyCodeObject *co);
 
 #ifdef __cplusplus
 }

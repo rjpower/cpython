@@ -29,10 +29,12 @@ and backend. The stage pages distinguish selected designs from working code.
   failure debugging, and is never fanned out. Sonnet at medium effort, or
   Haiku, does porting, finishing, reviews and doc syncs. In the W1 pilot,
   Haiku's mechanical batch matched Sonnet's site for site.
-- Finishers run the full suite only through the coordinator's landing run,
-  `tools/integrate.sh`. Each release-compiles its own tree, because release
-  builds compile `#ifndef Py_DEBUG` code that debug builds skip; two landings
-  broke on this.
+- Step agents run no full suite. A landing runs the step's test list plus a
+  smoke set on both builds (`tools/integrate.sh <tag> <tests>`); the full
+  suites run only at integration points (`tools/full.sh`, see
+  [PROCESS](PROCESS.md) step 6). Each step agent release-compiles its own
+  tree, because release builds compile `#ifndef Py_DEBUG` code that debug
+  builds skip; two landings broke on this.
 
 ## Locations
 

@@ -182,14 +182,17 @@ agent-hours, taken in parallel, plus a rebase unit of 30 minutes per landing.
 | B-pin | 1 | 90 | 90 |
 | Longest chain, B2 then B6 | 1 | 600 (3 h + 7 h) | 600 |
 | Other branches in parallel (B4 9 h, B5 7.5 h, B7 6.5 h, B1 1.5 h) | 4 | within the chain | 0 |
-| Landing: rebase, regen, bump, both suites | 5 | 60 | 300 |
-| Total | | | about 990 (16.5 h) |
+| Landing: rebase, regen, bump, builds, step tests | 5 | 20 | 100 |
+| Full suites at the end of the batch | 1 | 40 | 40 |
+| Total | | | about 830 (14 h) |
 
-A landing takes 60 minutes because the two full suites alone take 25 to 40
-minutes on this host (coordinator correction; the draft said 30). Against the
-packet's sequence of 34.5 agent-hours for B1 to B7 plus rebasing each step on
-the last, this is about 2 times faster in wall-clock, and it
-costs the same tokens. Haiku on mechanical parts may cut each branch by 10 to
+A landing runs the step's tests and a smoke set on both builds, not the full
+suites (user ruling, 2026-11-04: a broken bytecode format is not a subtle
+failure). The two full suites, 25 to 40 minutes on this host, run once at
+the end of the batch and before the measurement. Against the packet's
+sequence of 34.5 agent-hours for B1 to B7 plus rebasing each step on the
+last, this is about 2.5 times faster in wall-clock, and it costs the same
+tokens. Haiku on mechanical parts may cut each branch by 10 to
 20 percent; I have not measured that.
 
 ## 5. The generator change: B-pin
@@ -230,6 +233,7 @@ suites pass; `--check-numbers` fails on a hand-made unnumbered handler.
   and `specialize.c`.
 - Landing order: B-pin, B1, B4, B2, B5, B6, B7, with G2 when ready.
 - Critical path: B-pin (1.5 h), then B2 and B6 (10 h), then the landings
-  (5 h): about 16.5 h wall-clock against 34.5 h in sequence.
+  with step tests (1.7 h) and one full-suite run (0.7 h): about 14 h
+  wall-clock against 34.5 h in sequence.
 - Cost of holes: about 24 to 40 table rows and 8 bytes each in the dispatch
   table, roughly 3 KB of static data; nothing assumes density.

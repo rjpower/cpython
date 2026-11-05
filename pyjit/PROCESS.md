@@ -41,6 +41,14 @@ representations merely to preserve optionality.
    the merged tree. Component reviews do not prove their composition works.
    Call a feature integrated only after that. Label an unbuildable checkpoint
    as such.
+   - A landing runs `tools/integrate.sh <tag> <tests>`: regenerate, build
+     debug and release, the lint, then the step's own test list plus a fixed
+     smoke set on both builds. Breakage in a core area (bytecode, the
+     compiler, the value API) shows up in that set; it is not subtle.
+   - The full suites (`tools/full.sh`, 25 to 40 minutes for both) run only at
+     integration points: after a batch of landings, before a measurement or
+     the checkpoint recap, and before the status pages call a HEAD clean. A
+     full-suite failure is bisected over the batch's commits.
 
 Designs and reviews are short markdown files. Git commits are the identity of
 a change: there are no SHA seals, author seals or receipt JSON. Cite a commit

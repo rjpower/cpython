@@ -57,7 +57,7 @@ costs, then the qualified baseline.
 
 ## Position
 
-- Runtime branch `boil/pyvalue-rc-universal`, HEAD `df1503353d7`.
+- Runtime branch `boil/pyvalue-rc-universal`, HEAD `e8cb83c42be`.
 - Landed 2026-11-03: native boundary P3 (`56ff66a596b`, `643c69c7244`,
   `6d39221996d`) and P4 (`2558376b321`, post-review fixes `fdd7fed3216`);
   representation steps 1 (`f129780a9a7`), 2 (`f7dfc5b961f`), 3 (`dbce7b1260d`,
@@ -164,6 +164,13 @@ costs, then the qualified baseline.
   field contract tested on a type with fields of each kind;
   `structseq.__reduce__` stores by value. Suite (M4's T_1): run=51,631,
   failures=2.
+- Landed 2026-11-04 (continued): SOABI `boilvalrc2` (`6ce98fe4790`) and value
+  API V2a-0 part 1 (`e8cb83c42be`): 53 value-slot fields in `PyTypeObject`
+  as opaque storage, the slot table, inheritance pass and debug invariant,
+  `PyValue_NotImplemented`, thunk and NotImplemented macros; no type
+  converted. Post-review: one must-fix (the invariant check never saw a
+  Python class's final slots) fixed before landing. Suite (V2a-0's T_1):
+  run=51,636, failures=2; targeted on both shared builds 4,742, failures=2.
 - Suites at `faddfd1454d`, debug and release alike: run=51,615, failures=2
   (38 more skipped than at `a6002e5854b`: the JIT tests),
   both in test_capi (test_is_unique_temporary, test_unicode.test_new): a local

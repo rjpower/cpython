@@ -11,6 +11,7 @@
 #include "pycore_abstract.h"      // _PyNumber_Index()
 #include "pycore_bitutils.h"      // _Py_bswap16()
 #include "pycore_dtoa.h"          // _Py_dg_dtoa()
+#include "pycore_descrobject.h"   // _Py_VALUE_GETTER()
 #include "pycore_floatobject.h"   // _PyFloat_FormatAdvancedWriter()
 #include "pycore_freelist.h"      // _Py_FREELIST_FREE(), _Py_FREELIST_POP()
 #include "pycore_initconfig.h"    // _PyStatus_OK()
@@ -1867,16 +1868,19 @@ float___getformat___impl(PyTypeObject *type, const char *typestr)
                                 "IEEE, little-endian" : "IEEE, big-endian");
 }
 
-static PyObject *
-float_getreal(PyObject *v, void *Py_UNUSED(closure))
+static PyValue
+float_getreal_value(PyValueBorrow v, void *Py_UNUSED(closure))
 {
-    return float_exact(v);
+    if (PyValue_IsInline(v)) {
+        return PyValue_DUP(v);
+    }
+    return PyValue_FromObjectSteal(float_exact(PyValue_AsKnownObjectBorrow(v)));
 }
 
-static PyObject *
-float_getimag(PyObject *Py_UNUSED(v), void *Py_UNUSED(closure))
+static PyValue
+float_getimag_value(PyValueBorrow Py_UNUSED(v), void *Py_UNUSED(closure))
 {
-    return PyFloat_FromDouble(0.0);
+    return PyValue_FromDouble(0.0);
 }
 
 /*[clinic input]
@@ -1925,14 +1929,10 @@ static PyMethodDef float_methods[] = {
 };
 
 static PyGetSetDef float_getset[] = {
-    {"real",
-     float_getreal, NULL,
-     "the real part of a complex number",
-     NULL},
-    {"imag",
-     float_getimag, NULL,
-     "the imaginary part of a complex number",
-     NULL},
+    _Py_VALUE_GETTER("real", float_getreal_value,
+                     "the real part of a complex number", NULL),
+    _Py_VALUE_GETTER("imag", float_getimag_value,
+                     "the imaginary part of a complex number", NULL),
     {NULL}  /* Sentinel */
 };
 

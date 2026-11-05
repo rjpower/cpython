@@ -591,6 +591,7 @@ OBJECT_OBJS=	\
 		Objects/templateobject.o \
 		Objects/tupleobject.o \
 		Objects/value_ops.o \
+		Objects/value_pairs.o \
 		Objects/typeobject.o \
 		Objects/typevarobject.o \
 		Objects/unicode_format.o \

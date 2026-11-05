@@ -240,7 +240,11 @@ Py_VALUE_ENTRY PyAPI_FUNC(int) _PyDict_GetItemRef_KnownHash_LockHeld(PyDictObjec
 Py_VALUE_COMPAT(_PyDict_GetValue_KnownHash)
 PyAPI_FUNC(int) _PyDict_GetItemRef_KnownHash(PyDictObject *op, PyObject *key, Py_hash_t hash, PyObject **result);
 Py_VALUE_ENTRY extern int _PyDict_GetItemRef_Unicode_LockHeld(PyDictObject *op, PyObject *key, PyObject **result);
-PyAPI_FUNC(int) _PyObjectDict_SetItem(PyTypeObject *tp, PyObject *obj, PyObject **dictptr, PyObject *name, PyObject *value);
+/* Store value (PyValue_NULL deletes) under name in the non-managed instance
+   dict at dictptr, creating the dict if needed. */
+PyAPI_FUNC(int) _PyObjectDict_SetValue(PyTypeObject *tp, PyObject *obj, PyObject **dictptr, PyObject *name, PyValueBorrow value);
+#define _PyObjectDict_SetValue(T, O, P, N, V) \
+    (_PyObjectDict_SetValue)(T, O, P, N, PyValue_Borrow(V))
 
 extern int _PyDict_Pop_KnownHash(
     PyDictObject *dict,

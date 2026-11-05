@@ -9,6 +9,7 @@
 #include "pycore_critical_section.h"
 #include "pycore_value.h"
 #include "pycore_value_api.h"     // _PyValue_AsObjectAt()
+#include "pycore_value_slots.h"   // _PyValue_THUNK_EXIT(, BOX_SITE_ATTRIBUTE)
 
 
 static inline PyObject *
@@ -86,62 +87,57 @@ int
 PyObject *
 PyMember_GetOne(const char *obj_addr, PyMemberDef *l)
 {
+    return _PyValue_THUNK_EXIT(_PyMember_GetOneValue(obj_addr, l), BOX_SITE_ATTRIBUTE);
+}
+
+PyValue
+_PyMember_GetOneValue(const char *obj_addr, PyMemberDef *l)
+{
     PyObject *v;
     if (l->flags & Py_RELATIVE_OFFSET) {
         PyErr_SetString(
             PyExc_SystemError,
             "PyMember_GetOne used with Py_RELATIVE_OFFSET");
-        return NULL;
+        return PyValue_NULL;
     }
 
     const void *addr = _PyMember_GetOffset((PyObject *)obj_addr, l);
     switch (l->type) {
     case _Py_T_VALUE:
     case _Py_T_VALUE_EX: {
-        PyValue value = _PyMember_GetValue((PyObject *)obj_addr, l);
-        if (PyValue_IsNull(value)) {
-            return NULL;
-        }
-        v = _PyValue_AsObjectAt(value, BOX_SITE_FIELD);
-        PyValue_CLOSE(value);
-        break;
+        return _PyMember_GetValue((PyObject *)obj_addr, l);
     }
     case Py_T_BOOL:
         v = PyBool_FromLong(FT_ATOMIC_LOAD_CHAR_RELAXED(*(char*)addr));
         break;
     case Py_T_BYTE:
-        v = PyLong_FromLong(FT_ATOMIC_LOAD_CHAR_RELAXED(*(char*)addr));
-        break;
+        return PyValue_FromInt64((int64_t)FT_ATOMIC_LOAD_CHAR_RELAXED(*(char*)addr));
     case Py_T_UBYTE:
-        v = PyLong_FromUnsignedLong(FT_ATOMIC_LOAD_UCHAR_RELAXED(*(unsigned char*)addr));
-        break;
+        return PyValue_FromInt64((int64_t)FT_ATOMIC_LOAD_UCHAR_RELAXED(*(unsigned char*)addr));
     case Py_T_SHORT:
-        v = PyLong_FromLong(FT_ATOMIC_LOAD_SHORT_RELAXED(*(short*)addr));
-        break;
+        return PyValue_FromInt64((int64_t)FT_ATOMIC_LOAD_SHORT_RELAXED(*(short*)addr));
     case Py_T_USHORT:
-        v = PyLong_FromUnsignedLong(FT_ATOMIC_LOAD_USHORT_RELAXED(*(unsigned short*)addr));
-        break;
+        return PyValue_FromInt64((int64_t)FT_ATOMIC_LOAD_USHORT_RELAXED(*(unsigned short*)addr));
     case Py_T_INT:
-        v = PyLong_FromLong(FT_ATOMIC_LOAD_INT_RELAXED(*(int*)addr));
-        break;
+        return PyValue_FromInt64((int64_t)FT_ATOMIC_LOAD_INT_RELAXED(*(int*)addr));
     case Py_T_UINT:
-        v = PyLong_FromUnsignedLong(FT_ATOMIC_LOAD_UINT_RELAXED(*(unsigned int*)addr));
-        break;
+        return PyValue_FromInt64((int64_t)FT_ATOMIC_LOAD_UINT_RELAXED(*(unsigned int*)addr));
     case Py_T_LONG:
-        v = PyLong_FromLong(FT_ATOMIC_LOAD_LONG_RELAXED(*(long*)addr));
+        return PyValue_FromInt64((int64_t)FT_ATOMIC_LOAD_LONG_RELAXED(*(long*)addr));
+    case Py_T_ULONG: {
+        unsigned long u = FT_ATOMIC_LOAD_ULONG_RELAXED(*(unsigned long*)addr);
+        if (u <= (unsigned long)INT64_MAX) {
+            return PyValue_FromInt64((int64_t)u);
+        }
+        v = PyLong_FromUnsignedLong(u);
         break;
-    case Py_T_ULONG:
-        v = PyLong_FromUnsignedLong(FT_ATOMIC_LOAD_ULONG_RELAXED(*(unsigned long*)addr));
-        break;
+    }
     case Py_T_PYSSIZET:
-        v = PyLong_FromSsize_t(FT_ATOMIC_LOAD_SSIZE_RELAXED(*(Py_ssize_t*)addr));
-        break;
+        return PyValue_FromInt64((int64_t)FT_ATOMIC_LOAD_SSIZE_RELAXED(*(Py_ssize_t*)addr));
     case Py_T_FLOAT:
-        v = PyFloat_FromDouble((double)FT_ATOMIC_LOAD_FLOAT_RELAXED(*(float*)addr));
-        break;
+        return PyValue_FromDouble((double)FT_ATOMIC_LOAD_FLOAT_RELAXED(*(float*)addr));
     case Py_T_DOUBLE:
-        v = PyFloat_FromDouble(FT_ATOMIC_LOAD_DOUBLE_RELAXED(*(double*)addr));
-        break;
+        return PyValue_FromDouble(FT_ATOMIC_LOAD_DOUBLE_RELAXED(*(double*)addr));
     case Py_T_STRING:
         if (*(char**)addr == NULL) {
             v = Py_NewRef(Py_None);
@@ -191,11 +187,15 @@ PyMember_GetOne(const char *obj_addr, PyMemberDef *l)
 #endif
         break;
     case Py_T_LONGLONG:
-        v = PyLong_FromLongLong(FT_ATOMIC_LOAD_LLONG_RELAXED(*(long long *)addr));
+        return PyValue_FromInt64((int64_t)FT_ATOMIC_LOAD_LLONG_RELAXED(*(long long *)addr));
+    case Py_T_ULONGLONG: {
+        unsigned long long u = FT_ATOMIC_LOAD_ULLONG_RELAXED(*(unsigned long long *)addr);
+        if (u <= (unsigned long long)INT64_MAX) {
+            return PyValue_FromInt64((int64_t)u);
+        }
+        v = PyLong_FromUnsignedLongLong(u);
         break;
-    case Py_T_ULONGLONG:
-        v = PyLong_FromUnsignedLongLong(FT_ATOMIC_LOAD_ULLONG_RELAXED(*(unsigned long long *)addr));
-        break;
+    }
     case _Py_T_NONE:
         // doesn't require free-threading code path
         v = Py_NewRef(Py_None);
@@ -204,7 +204,7 @@ PyMember_GetOne(const char *obj_addr, PyMemberDef *l)
         PyErr_SetString(PyExc_SystemError, "bad memberdescr type");
         v = NULL;
     }
-    return v;
+    return v == NULL ? PyValue_NULL : PyValue_FromObjectSteal(v);
 }
 
 #define WARN(msg)                                               \
@@ -216,14 +216,14 @@ PyMember_GetOne(const char *obj_addr, PyMemberDef *l)
 int
 PyMember_SetOne(char *addr, PyMemberDef *l, PyObject *v)
 {
-    PyObject *oldv;
-    if (l->flags & Py_RELATIVE_OFFSET) {
-        PyErr_SetString(
-            PyExc_SystemError,
-            "PyMember_SetOne used with Py_RELATIVE_OFFSET");
-        return -1;
-    }
+    return (_PyMember_SetOneValue)(addr, l, _Py_VALUE_ARG(v));
+}
 
+// Stores the object v (NULL deletes) in a member that is not a value field.
+static int
+member_set_object(char *addr, PyMemberDef *l, PyObject *v)
+{
+    PyObject *oldv;
     PyObject *obj = (PyObject *)addr;
     addr = _PyMember_GetOffset(obj, l);
 
@@ -232,17 +232,12 @@ PyMember_SetOne(char *addr, PyMemberDef *l, PyObject *v)
         PyErr_SetString(PyExc_AttributeError, "readonly attribute");
         return -1;
     }
-    if (v == NULL && l->type != Py_T_OBJECT_EX && l->type != _Py_T_OBJECT &&
-        l->type != _Py_T_VALUE && l->type != _Py_T_VALUE_EX) {
+    if (v == NULL && l->type != Py_T_OBJECT_EX && l->type != _Py_T_OBJECT) {
         PyErr_SetString(PyExc_TypeError,
                         "can't delete numeric/char attribute");
         return -1;
     }
     switch (l->type) {
-    case _Py_T_VALUE:
-    case _Py_T_VALUE_EX:
-        return _PyMember_SetValue(obj, l, v == NULL ? PyValue_Borrow(PyValue_NULL) :
-                                  PyValue_FromObjectBorrow(v));
     case Py_T_BOOL:{
         if (!PyBool_Check(v)) {
             PyErr_SetString(PyExc_TypeError,
@@ -455,4 +450,34 @@ PyMember_SetOne(char *addr, PyMemberDef *l, PyObject *v)
         return -1;
     }
     return 0;
+}
+
+int
+(_PyMember_SetOneValue)(char *addr, PyMemberDef *l, PyValueBorrow v)
+{
+    if (l->flags & Py_RELATIVE_OFFSET) {
+        PyErr_SetString(
+            PyExc_SystemError,
+            "PyMember_SetOne used with Py_RELATIVE_OFFSET");
+        return -1;
+    }
+    if (l->type == _Py_T_VALUE || l->type == _Py_T_VALUE_EX) {
+        return _PyMember_SetValue((PyObject *)addr, l, v);
+    }
+    // The other member types store C data or an object, never a value.
+    PyObject *object = NULL;
+    if (PyValue_IsInline(v)) {
+        object = _PyValue_AsObjectAt(v, BOX_SITE_FIELD);
+        if (object == NULL) {
+            return -1;
+        }
+    }
+    else if (!PyValue_IsNull(v)) {
+        object = PyValue_AsKnownObjectBorrow(v);
+    }
+    int res = member_set_object(addr, l, object);
+    if (PyValue_IsInline(v)) {
+        Py_DECREF(object);
+    }
+    return res;
 }

@@ -13,6 +13,7 @@ import operator
 import os
 import re
 import sys
+import types
 import unittest
 
 from test import support
@@ -44,6 +45,14 @@ value_construct = _testinternalcapi.value_construct
 ObjAdd = _testcapi.ObjAdd
 ObjIndex = _testcapi.ObjIndex
 ObjNotImpl = _testcapi.ObjNotImpl
+value_getattr = _testinternalcapi.value_getattr
+value_getoptionalattr = _testinternalcapi.value_getoptionalattr
+value_setattr = _testinternalcapi.value_setattr
+value_delattr = _testinternalcapi.value_delattr
+value_functions = _testinternalcapi.value_functions
+getset_direct_get = _testinternalcapi.getset_direct_get
+VGetSet = _testinternalcapi.VGetSet
+ObjGetAttr = _testcapi.ObjGetAttr
 
 VINT_FIELDS = ('nb_add', 'nb_multiply', 'richcompare', 'hash', 'repr',
                'nb_negative', 'nb_power', 'nb_bool')
@@ -1144,14 +1153,14 @@ class IntValueRowsTests(unittest.TestCase):
     def test_int_rows(self):
         # str is object's, inherited.
         self.assertEqual(len(INT_ROWS), 24)
-        self.assertEqual(set_rows(int), set(INT_ROWS) | {'str'})
+        self.assertEqual(set_rows(int), set(INT_ROWS) | {'str'} | {'getattro', 'setattro'})
         for name in INT_ROWS:
             with self.subTest(row=name):
                 self.assertNotEqual(object_slot(int, name), 0)
 
     def test_float_rows(self):
         self.assertEqual(len(FLOAT_ROWS), 17)
-        self.assertEqual(set_rows(float), set(FLOAT_ROWS) | {'str'})
+        self.assertEqual(set_rows(float), set(FLOAT_ROWS) | {'str'} | {'getattro', 'setattro'})
         for name in FLOAT_ROWS:
             with self.subTest(row=name):
                 self.assertNotEqual(object_slot(float, name), 0)
@@ -1159,7 +1168,7 @@ class IntValueRowsTests(unittest.TestCase):
     def test_bool_rows(self):
         # bool has its own four rows and inherits int's others, but not
         # repr: bool_repr has no value side. str is object's.
-        self.assertEqual(set_rows(bool), set(INT_ROWS) - {'repr'} | {'str'})
+        self.assertEqual(set_rows(bool), set(INT_ROWS) - {'repr'} | {'str'} | {'getattro', 'setattro'})
         self.assertEqual(value_slot(bool, 'repr'), 0)
         for name in INT_ROWS:
             if name == 'repr':
@@ -1174,7 +1183,7 @@ class IntValueRowsTests(unittest.TestCase):
 
     def test_object_rows(self):
         # hash predates V2a-1a; richcompare and str are its.
-        self.assertEqual(set_rows(object), {'hash', 'richcompare', 'str'})
+        self.assertEqual(set_rows(object), {'hash', 'richcompare', 'str', 'getattro', 'setattro'})
 
     def test_none_and_sentinel_inherit_richcompare(self):
         types = [type(None)]
@@ -1189,7 +1198,7 @@ class IntValueRowsTests(unittest.TestCase):
                                  object_slot(object, 'richcompare'))
 
     def test_str_rows(self):
-        self.assertEqual(set_rows(str), {'richcompare'})
+        self.assertEqual(set_rows(str), {'richcompare', 'getattro', 'setattro'})
 
     def test_python_subclass_inherits(self):
         self.assertEqual(int_slots(I), int_slots(int))
@@ -1856,6 +1865,20 @@ class PythonNextTests(unittest.TestCase):
                                     "'NoneType' object is not callable"):
             list(Y())
 
+    def test_class_without_next_is_not_an_iterator(self):
+        # PyIter_Check, reached through iter(): the pair table gives a
+        # class with no __next__ the NextNotImplemented value side.
+        class Y:
+            pass
+
+        class X:
+            def __iter__(self):
+                return Y()
+
+        with self.assertRaisesRegex(TypeError,
+                                    "must return an iterator, not .*Y"):
+            iter(X())
+
     def test_next_added_later(self):
         class Z:
             pass
@@ -2243,6 +2266,495 @@ class IterationBoxTests(unittest.TestCase):
             with self.subTest(func.__name__):
                 self.assertEqual(self.extra_boxes(func),
                                  {kind: 0 for kind in self.KINDS})
+
+
+# M2: attributes with value receivers (value-api-m1b-m2.md, section 2.8).
+# A NULL slot reads as 0 through value_slot() and object_slot().
+
+INLINE_READS = (
+    (1, 'real', 1),
+    (2.5, 'imag', 0.0),
+    (1000, 'numerator', 1000),
+    (2**60, 'denominator', 1),
+)
+
+
+class AttributeReadTests(unittest.TestCase):
+    def test_python_reads(self):
+        self.assertEqual((1).real, 1)
+        self.assertEqual((2.5).imag, 0.0)
+        self.assertEqual((1000).numerator, 1000)
+        self.assertEqual((2**60).denominator, 1)
+        self.assertIs((1).__class__, int)
+        self.assertIs(type(True.real), int)
+        self.assertEqual(True.real, 1)
+
+    def test_float_real_identity(self):
+        # A heap float is its own real part; no box and no copy.
+        for x in (2.5, float('nan'), 1e300, -0.0):
+            self.assertIs(x.real, x)
+        y = float('1e300') * 1.0
+        self.assertIs(y.real, y)
+
+    def test_explicit_getattribute(self):
+        self.assertEqual(object.__getattribute__(1000, 'real'), 1000)
+        self.assertIs(type(object.__getattribute__(1000, 'real')), int)
+        self.assertIs(type.__getattribute__(int, 'real'), int.real)
+
+    def test_value_getattr(self):
+        for obj, name, expected in INLINE_READS:
+            with self.subTest(obj=obj, name=name):
+                result, was_inline = value_getattr(obj, name)
+                self.assertEqual(result, expected)
+                self.assertIs(type(result), type(expected))
+                self.assertTrue(was_inline)
+
+    def test_value_getattr_class_and_bool(self):
+        self.assertEqual(value_getattr(1, '__class__'), (int, False))
+        result, _ = value_getattr(True, 'real')
+        self.assertEqual(result, 1)
+        self.assertIs(type(result), int)
+        self.assertIs(value_getattr(int, 'real')[0], int.real)
+
+    def test_value_getattr_method(self):
+        method, was_inline = value_getattr(5, 'bit_length')
+        self.assertFalse(was_inline)
+        self.assertEqual(method(), 3)
+
+    def test_getset_descriptor_type(self):
+        self.assertIs(type(int.real), types.GetSetDescriptorType)
+
+    def test_class_attribute_1000(self):
+        class C:
+            x = 1000
+        self.assertEqual(C().x, 1000)
+        self.assertEqual(C.x, 1000)
+        self.assertEqual(getattr(C(), 'x'), 1000)
+        self.assertEqual(getattr(C(), 'y', 7), 7)
+        self.assertEqual(value_getattr(C(), 'x'), (1000, True))
+        self.assertEqual(value_getattr(C, 'x'), (1000, True))
+        self.assertEqual(value_getoptionalattr(C(), 'y'), (0, None))
+
+
+class AttributeErrorTests(unittest.TestCase):
+    def test_missing_attribute(self):
+        with self.assertRaises(AttributeError) as cm:
+            (1).foo
+        self.assertEqual(cm.exception.name, 'foo')
+        self.assertEqual(cm.exception.obj, 1)
+        self.assertEqual(str(cm.exception),
+                         "'int' object has no attribute 'foo'")
+
+    def test_value_getattr_missing(self):
+        with self.assertRaises(AttributeError) as cm:
+            value_getattr(1, 'foo')
+        self.assertEqual(cm.exception.name, 'foo')
+        self.assertEqual(cm.exception.obj, 1)
+
+    def test_getoptionalattr(self):
+        self.assertEqual(value_getoptionalattr(1, 'foo'), (0, None))
+        self.assertEqual(value_getoptionalattr(1, 'real'), (1, 1))
+        self.assertEqual(value_getoptionalattr(2.5, 'imag'), (1, 0.0))
+
+    def test_non_str_name(self):
+        with self.assertRaises(TypeError):
+            value_getattr(1, 5)
+        with self.assertRaises(TypeError):
+            value_setattr(1, 5, 2)
+
+    def test_set_read_only(self):
+        message = "attribute 'real' of 'int' objects is not writable"
+        with self.assertRaisesRegex(AttributeError, message):
+            setattr(1, 'real', 2)
+        with self.assertRaisesRegex(AttributeError, message):
+            value_setattr(1, 'real', 2)
+
+    def test_delete_read_only(self):
+        message = "attribute 'real' of 'int' objects is not writable"
+        with self.assertRaisesRegex(AttributeError, message):
+            del (1).real
+        with self.assertRaisesRegex(AttributeError, message):
+            value_delattr(1, 'real')
+
+    def test_set_new_attribute(self):
+        message = ("'int' object has no attribute 'foo' and no __dict__ "
+                   "for setting new attributes")
+        with self.assertRaisesRegex(AttributeError, message) as cm:
+            setattr(1, 'foo', 2)
+        self.assertEqual(cm.exception.name, 'foo')
+        self.assertEqual(cm.exception.obj, 1)
+        with self.assertRaisesRegex(AttributeError, message):
+            value_setattr(1, 'foo', 2)
+
+    def test_assign_class(self):
+        message = ("__class__ assignment only supported for mutable types "
+                   "or ModuleType subclasses")
+        with self.assertRaisesRegex(TypeError, message):
+            (1).__class__ = bool
+        with self.assertRaisesRegex(TypeError, message):
+            value_setattr(1, '__class__', bool)
+
+
+class ObjGetAttrTests(unittest.TestCase):
+    def test_python_round_trip(self):
+        o = ObjGetAttr()
+        setattr(o, 'x', 1000)
+        self.assertEqual(o.x, 1000)
+        self.assertEqual(getattr(o, 'x'), 1000)
+
+    def test_value_round_trip(self):
+        o = ObjGetAttr()
+        value_setattr(o, 'x', 1000)
+        self.assertEqual(value_getattr(o, 'x')[0], 1000)
+        self.assertEqual(o.x, 1000)
+
+    def test_missing_and_delete(self):
+        o = ObjGetAttr()
+        with self.assertRaises(AttributeError):
+            o.x
+        self.assertEqual(value_getoptionalattr(o, 'x'), (0, None))
+        o.x = 1
+        del o.x
+        with self.assertRaises(AttributeError):
+            o.x
+        value_setattr(o, 'x', 2.5)
+        value_delattr(o, 'x')
+        with self.assertRaises(AttributeError):
+            o.x
+
+    def test_getset_through_adapter(self):
+        o = ObjGetAttr()
+        o.g = 'a'
+        self.assertEqual(o.g, 'a')
+        value_setattr(o, 'g', 1000)
+        self.assertEqual(o.g, 1000)
+        self.assertEqual(value_getattr(o, 'g')[0], 1000)
+        o.g = 2.5
+        self.assertEqual(value_getattr(o, 'g')[0], 2.5)
+
+    def test_getset_error(self):
+        o = ObjGetAttr()
+        with self.assertRaises(AttributeError):
+            o.g
+        with self.assertRaises(AttributeError):
+            del o.g
+
+
+class ValueGetSetTests(unittest.TestCase):
+    # VGetSet.x is a _Py_VALUE_GETSET; the value starts as the inline 1000
+    # and a delete raises AttributeError.
+
+    def read_all(self, o):
+        descr = VGetSet.__dict__['x']
+        return (o.x, value_getattr(o, 'x')[0], getset_direct_get(descr, o),
+                descr.__get__(o))
+
+    def test_descriptor_type(self):
+        self.assertIs(type(VGetSet.__dict__['x']), types.GetSetDescriptorType)
+
+    def test_initial_value_each_way(self):
+        o = VGetSet()
+        self.assertEqual(self.read_all(o), (1000,) * 4)
+        self.assertEqual(value_getattr(o, 'x'), (1000, True))
+
+    def test_write_from_python(self):
+        for new in (7, 2.5, 2**70, 'text', None):
+            with self.subTest(new=new):
+                o = VGetSet()
+                o.x = new
+                self.assertEqual(self.read_all(o), (new,) * 4)
+
+    def test_write_through_value_setattr(self):
+        # Inline ints and floats, a boxed int and objects.
+        for new in (7, 2.5, 2**70, 'text', None):
+            with self.subTest(new=new):
+                o = VGetSet()
+                value_setattr(o, 'x', new)
+                self.assertEqual(self.read_all(o), (new,) * 4)
+
+    def test_read_inline_result(self):
+        o = VGetSet()
+        value_setattr(o, 'x', 2.5)
+        self.assertEqual(value_getattr(o, 'x'), (2.5, True))
+        value_setattr(o, 'x', 2**70)
+        self.assertEqual(value_getattr(o, 'x'), (2**70, False))
+
+    def test_delete(self):
+        o = VGetSet()
+        with self.assertRaises(AttributeError):
+            del o.x
+        with self.assertRaises(AttributeError):
+            value_delattr(o, 'x')
+        self.assertEqual(o.x, 1000)
+
+    def test_wrong_receiver(self):
+        descr = VGetSet.__dict__['x']
+        with self.assertRaises(TypeError):
+            descr.__get__(1000)
+
+
+class SuperTests(unittest.TestCase):
+    def test_super_int(self):
+        self.assertEqual(super(int, 5).__self__, 5)
+        self.assertRegex(super(int, 5).__repr__(),
+                         r'^<int object at 0x[0-9a-f]+>$')
+        self.assertEqual(super(float, 2.5).__sizeof__(), (2.5).__sizeof__())
+        self.assertIs(super(int, 5).__thisclass__, int)
+
+    def test_super_unrelated_zero_argument(self):
+        class C:
+            def f(self):
+                return super().__repr__()
+        message = (r"super\(type, obj\): obj \(instance of int\) is not an "
+                   r"instance or subtype of type \(C\)")
+        with self.assertRaisesRegex(TypeError, message):
+            C.f(5)
+
+    def test_super_subclass(self):
+        class MySuper(super):
+            pass
+        s = MySuper(int, 5)
+        self.assertEqual(s.__self__, 5)
+        self.assertIs(s.__thisclass__, int)
+        self.assertRegex(s.__repr__(), r'^<int object at 0x[0-9a-f]+>$')
+
+    def test_super_classmethod(self):
+        class B:
+            @classmethod
+            def m(cls):
+                return super().__thisclass__, super().__self_class__
+        self.assertEqual(B.m(), (B, B))
+
+    def test_self_captured_by_lambda(self):
+        class M(int):
+            def f(self):
+                get_self = lambda: self
+                return get_self(), super().__sizeof__()
+        m = M(5)
+        result, size = M.f(m)
+        self.assertIs(result, m)
+        self.assertEqual(size, int.__sizeof__(m))
+        with self.assertRaises(TypeError):
+            M.f(5)
+
+    def test_rebound_class_cell(self):
+        class A:
+            def f(self):
+                return super().__repr__()
+        index = A.f.__code__.co_freevars.index('__class__')
+        A.f.__closure__[index].cell_contents = object
+        # Nothing follows object in the MRO, so the lookup falls back to
+        # the attributes of the super object itself.
+        self.assertEqual(A.f(5), "<super: <class 'object'>, <int object>>")
+        self.assertEqual(A.f(2.5), "<super: <class 'object'>, <float object>>")
+
+
+def getattro_pair_names(cls):
+    names = {address: name for name, address in value_functions().items()}
+    return (names.get(object_slot(cls, 'getattro')),
+            names.get(value_slot(cls, 'getattro')))
+
+
+class GetAttroPairTests(unittest.TestCase):
+    def test_plain_class(self):
+        functions = value_functions()
+        class Plain:
+            pass
+        self.assertEqual(value_slot(Plain, 'getattro'),
+                         functions['_PyObject_GenericGetAttrValue'])
+        self.assertEqual(value_slot(Plain, 'setattro'),
+                         functions['_PyObject_GenericSetAttrValue'])
+        self.assertEqual(object_slot(Plain, 'getattro'),
+                         functions['PyObject_GenericGetAttr'])
+        self.assertEqual(object_slot(Plain, 'setattro'),
+                         functions['PyObject_GenericSetAttr'])
+
+    def test_type_and_module(self):
+        functions = value_functions()
+        self.assertEqual(value_slot(type, 'getattro'),
+                         functions['_Py_type_getattro_value'])
+        self.assertEqual(object_slot(type, 'getattro'),
+                         functions['_Py_type_getattro'])
+        self.assertEqual(value_slot(types.ModuleType, 'getattro'),
+                         functions['_Py_module_getattro_value'])
+        self.assertEqual(object_slot(types.ModuleType, 'getattro'),
+                         functions['_Py_module_getattro'])
+
+    def test_getattr_hook_added_and_removed(self):
+        hook = ('_Py_slot_tp_getattr_hook', '_Py_slot_tp_getattr_hook_value')
+        plain = ('_Py_slot_tp_getattro', '_Py_slot_tp_getattro_value')
+
+        class C:
+            def __getattribute__(self, name):
+                return object.__getattribute__(self, name)
+        c = C()
+        c.x = 1000
+        # update_one_slot() installs the hook pair; a read that finds no
+        # __getattr__ replaces it with the simpler pair.
+        self.assertEqual(getattro_pair_names(C), hook)
+        self.assertEqual(c.x, 1000)
+        self.assertEqual(getattro_pair_names(C), plain)
+        self.assertEqual(value_getattr(c, 'x')[0], 1000)
+
+        C.__getattr__ = lambda self, name: name
+        self.assertEqual(getattro_pair_names(C), hook)
+        self.assertEqual(c.x, 1000)
+        self.assertEqual(c.missing, 'missing')
+        self.assertEqual(value_getattr(c, 'missing'), ('missing', False))
+        self.assertEqual(getattro_pair_names(C), hook)
+
+        del C.__getattr__
+        self.assertEqual(getattro_pair_names(C), hook)
+        self.assertEqual(c.x, 1000)
+        with self.assertRaises(AttributeError):
+            c.missing
+        self.assertEqual(getattro_pair_names(C), plain)
+        self.assertEqual(value_getattr(c, 'x')[0], 1000)
+
+    def test_getattr_hook_inline_attribute(self):
+        class C:
+            def __getattr__(self, name):
+                return 1000
+        self.assertEqual(C().anything, 1000)
+        self.assertEqual(value_getattr(C(), 'anything'), (1000, True))
+
+
+class DescrGetDeletedTests(unittest.TestCase):
+    def test_non_data_descriptor(self):
+        class Desc:
+            def __get__(self, obj, owner=None):
+                return 1000
+        class Owner:
+            d = Desc()
+        self.assertEqual(Owner().d, 1000)
+        self.assertEqual(value_getattr(Owner(), 'd'), (1000, True))
+        # slot_tp_descr_get has no value side until M2-d.
+        self.assertNotEqual(object_slot(Desc, 'descr_get'), 0)
+        self.assertEqual(value_slot(Desc, 'descr_get'), 0)
+        del Desc.__get__
+        self.assertIsInstance(Owner().d, Desc)
+        self.assertIsInstance(value_getattr(Owner(), 'd')[0], Desc)
+        self.assertEqual(value_slot(Desc, 'descr_get'), 0)
+        self.assertEqual(object_slot(Desc, 'descr_get'), 0)
+
+    def test_data_descriptor(self):
+        stored = []
+        class Desc:
+            def __get__(self, obj, owner=None):
+                return 1000
+            def __set__(self, obj, value):
+                stored.append(value)
+        class Owner:
+            d = Desc()
+        o = Owner()
+        self.assertEqual(o.d, 1000)
+        o.d = 5
+        value_setattr(o, 'd', 2.5)
+        self.assertEqual(stored, [5, 2.5])
+        del Desc.__get__
+        self.assertIs(o.d, Owner.__dict__['d'])
+        self.assertIs(value_getattr(o, 'd')[0], Owner.__dict__['d'])
+        self.assertEqual(value_slot(Desc, 'descr_get'), 0)
+        self.assertEqual(object_slot(Desc, 'descr_get'), 0)
+        # slot_tp_descr_set has no value side until M2-d.
+        self.assertEqual(value_slot(Desc, 'descr_set'), 0)
+        self.assertNotEqual(object_slot(Desc, 'descr_set'), 0)
+        o.d = 6
+        self.assertEqual(stored, [5, 2.5, 6])
+
+
+class ModuleAttributeTests(unittest.TestCase):
+    def test_module_getattr(self):
+        module = types.ModuleType('m2_module')
+        def module_getattr(name):
+            if name == 'answer':
+                return 1000
+            raise AttributeError(f'no {name}')
+        module.__getattr__ = module_getattr
+        module.present = 5
+        self.assertEqual(module.answer, 1000)
+        self.assertEqual(value_getattr(module, 'answer'), (1000, True))
+        self.assertEqual(value_getattr(module, 'present'), (5, True))
+        self.assertEqual(value_getoptionalattr(module, 'answer'), (1, 1000))
+        self.assertEqual(value_getoptionalattr(module, 'other'), (0, None))
+        with self.assertRaisesRegex(AttributeError, 'no other'):
+            value_getattr(module, 'other')
+
+    def test_math_pi(self):
+        import math
+        self.assertEqual(value_getattr(math, 'pi'), (math.pi, True))
+        self.assertEqual(value_getoptionalattr(math, 'pi'), (1, math.pi))
+
+    def test_missing_module_attribute(self):
+        import math
+        message = "module 'math' has no attribute 'nope'"
+        with self.assertRaisesRegex(AttributeError, message) as cm:
+            math.nope
+        self.assertEqual(cm.exception.name, 'nope')
+        with self.assertRaisesRegex(AttributeError, message):
+            value_getattr(math, 'nope')
+        self.assertEqual(value_getoptionalattr(math, 'nope'), (0, None))
+
+
+
+class AttributeSlotWrapperTests(unittest.TestCase):
+    # The slot descriptors of the attribute and descriptor rows; they call
+    # the value side through M2-e's value wrappers once those land, and the
+    # object side until then.
+
+    def test_getattribute(self):
+        self.assertEqual(object.__getattribute__(1000, 'real'), 1000)
+        self.assertIs(type.__getattribute__(int, 'real'), int.real)
+        with self.assertRaisesRegex(TypeError,
+                                    "attribute name must be string, not 'int'"):
+            object.__getattribute__(1, 5)
+        with self.assertRaisesRegex(AttributeError,
+                                    "'int' object has no attribute 'foo'"):
+            object.__getattribute__(1, 'foo')
+
+    def test_setattr_delattr(self):
+        class C:
+            pass
+        c = C()
+        object.__setattr__(c, 'x', 1000)
+        self.assertEqual(object.__getattribute__(c, 'x'), 1000)
+        object.__delattr__(c, 'x')
+        self.assertFalse(hasattr(c, 'x'))
+        with self.assertRaisesRegex(TypeError,
+                                    "__setattr__ expected 2 arguments, got 1"):
+            object.__setattr__(c, 'x')
+        with self.assertRaisesRegex(
+                AttributeError, "attribute 'real' of 'int' objects is not writable"):
+            object.__delattr__(1, 'real')
+
+    def test_setattr_hackcheck(self):
+        with self.assertRaisesRegex(
+                TypeError, "can't apply this __setattr__ to type object"):
+            object.__setattr__(int, 'x', 1)
+
+    def test_get(self):
+        r = int.real
+        self.assertEqual(r.__get__(5), 5)
+        self.assertEqual(r.__get__(5, int), 5)
+        self.assertIs(r.__get__(None, int), r)
+        with self.assertRaisesRegex(TypeError, r"__get__\(None, None\) is invalid"):
+            r.__get__(None, None)
+        with self.assertRaisesRegex(
+                TypeError, "__get__ expected at least 1 argument, got 0"):
+            r.__get__()
+        with self.assertRaisesRegex(
+                TypeError, "__get__ expected at most 2 arguments, got 3"):
+            r.__get__(1, 2, 3)
+
+    def test_set_delete(self):
+        descr = VGetSet.__dict__['x']
+        o = VGetSet()
+        descr.__set__(o, 7)
+        self.assertEqual(o.x, 7)
+        descr.__set__(o, 2.5)
+        self.assertEqual(value_getattr(o, 'x'), (2.5, True))
+        with self.assertRaisesRegex(AttributeError, 'cannot delete x'):
+            descr.__delete__(o)
 
 
 if __name__ == '__main__':

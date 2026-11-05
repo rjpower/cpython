@@ -44,6 +44,41 @@ extern PyValue _PyMember_GetValue(PyObject *, PyMemberDef *);
 extern int _PyMember_SetValue(PyObject *, PyMemberDef *, PyValueBorrow);
 #define _PyMember_SetValue(O, M, V) (_PyMember_SetValue)(O, M, PyValue_Borrow(V))
 
+/* Value getsets. The PyGetSetDef of such an attribute holds the shared thunks
+   below, and its closure is a _PyValueGetSet record: only the shared thunks
+   and PyDescr_NewGetSet() interpret it. The descriptor's value slots call
+   the record's functions directly, without boxing. */
+typedef PyValue (*_Py_valuegetter)(PyValueBorrow self, void *closure);
+typedef int (*_Py_valuesetter)(PyValueBorrow self, PyValueBorrow value,
+                               void *closure);
+typedef struct {
+    _Py_valuegetter get;
+    _Py_valuesetter set;
+    void *closure;
+} _PyValueGetSet;
+
+// Export for static extension modules that define value getsets
+PyAPI_FUNC(PyObject *) _PyGetSet_ValueGet(PyObject *self, void *record);
+PyAPI_FUNC(int) _PyGetSet_ValueSet(PyObject *self, PyObject *value,
+                                   void *record);
+
+#define _Py_VALUE_GETSET(NAME, VGET, VSET, DOC, CLOSURE) \
+    {NAME, _PyGetSet_ValueGet, _PyGetSet_ValueSet, DOC, \
+     (void *)&(const _PyValueGetSet){VGET, VSET, CLOSURE}}
+
+// Read-only form: no setter in the PyGetSetDef or in the record.
+#define _Py_VALUE_GETTER(NAME, VGET, DOC, CLOSURE) \
+    {NAME, _PyGetSet_ValueGet, NULL, DOC, \
+     (void *)&(const _PyValueGetSet){VGET, NULL, CLOSURE}}
+
+/* Members as values (the object forms PyMember_GetOne() and PyMember_SetOne()
+   are their thunks). Get returns an owner; Set borrows v, which is
+   PyValue_NULL for a delete. */
+extern PyValue _PyMember_GetOneValue(const char *obj_addr, PyMemberDef *l);
+extern int _PyMember_SetOneValue(char *addr, PyMemberDef *l, PyValueBorrow v);
+#define _PyMember_SetOneValue(A, M, V) \
+    (_PyMember_SetOneValue)(A, M, PyValue_Borrow(V))
+
 #ifdef __cplusplus
 }
 #endif

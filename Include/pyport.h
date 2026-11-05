@@ -286,7 +286,10 @@ extern "C" {
  *    Py_VALUE_COMPAT(_PyValue_Add) PyAPI_FUNC(PyObject *) PyNumber_Add(...);
  *
  * There is no weaker fallback: a compiler without the unavailable attribute
- * cannot build value-native units.
+ * cannot build value-native units. Objects/value_pairs.c, which holds only
+ * the pair table of object functions and their value sides, defines
+ * Py_VALUE_PAIR_TABLE: the one unit where a marked function's address is
+ * taken.
  *
  * A unit that defines Py_VALUE_DEFER_MARKS before including Python.h sees no
  * mark: the defer line of a bulk wave (value-api-v2a0.md, section 1.5), for a
@@ -313,7 +316,7 @@ extern "C" {
     && !defined(Py_BUILD_CORE_MODULE) && !defined(Py_VALUE_CORE)
 #  define Py_VALUE_CORE 1
 #endif
-#if defined(Py_VALUE_CORE)
+#if defined(Py_VALUE_CORE) && !defined(Py_VALUE_PAIR_TABLE)
 #  if !defined(__clang__) && !(defined(__GNUC__) && __GNUC__ >= 12)
 #    error "value-native units need __attribute__((unavailable)): Clang or GCC 12+"
 #  elif defined(Py_VALUE_DEFER_MARKS)

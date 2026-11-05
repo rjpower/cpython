@@ -1763,9 +1763,11 @@ class SizeofTest(unittest.TestCase):
         # member_descriptor (descriptor object)
         import datetime
         check(datetime.timedelta.days, size('3PP'))
-        # getset_descriptor (descriptor object)
+        # member_descriptor (defaultdict.default_factory is a member)
         import collections
         check(collections.defaultdict.default_factory, size('3PP'))
+        # getset_descriptor (descriptor object)
+        check(int.real, size('3PPP'))  # d_value (fork-specific)
         # wrapper_descriptor (descriptor object)
         check(int.__add__, size('3P3P'))  # d_wrapped_value (fork-specific)
         # method-wrapper (descriptor object)

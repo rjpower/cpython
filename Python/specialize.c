@@ -21,6 +21,8 @@
 #include "pycore_pylifecycle.h"   // _PyOS_URandomNonblock()
 #include "pycore_runtime.h"       // _Py_ID()
 #include "pycore_unicodeobject.h" // _PyUnicodeASCIIIter_Type
+#include "pycore_value_ops.h"     // _PyObject_GenericGetAttrValue()
+#include "pycore_value_slots.h"   // _PyType_VALUE_SLOT()
 
 #include <stdlib.h> // rand()
 
@@ -794,7 +796,8 @@ analyze_descriptor_load(PyTypeObject *type, PyObject *name,
         }
         PyValue_XCLOSE(getattribute);
     }
-    else if (slot != PyObject_GenericGetAttr) {
+    else if (_PyType_VALUE_SLOT(type, getattro)
+             != _PyObject_GenericGetAttrValue) {
         return GETSET_OVERRIDDEN;
     }
     if (_PyType_TryLookupValueNoAlloc(type, name, descr, tp_version) != 1) {
@@ -813,7 +816,7 @@ static DescriptorClassification
 analyze_descriptor_store(PyTypeObject *type, PyObject *name,
                          PyValue *descr, unsigned int *tp_version)
 {
-    if (type->tp_setattro != PyObject_GenericSetAttr ||
+    if (_PyType_VALUE_SLOT(type, setattro) != _PyObject_GenericSetAttrValue ||
         _PyType_TryLookupValueNoAlloc(type, name, descr, tp_version) != 1) {
         return GETSET_OVERRIDDEN;
     }
@@ -1478,7 +1481,7 @@ specialize_class_load_attr(PyObject *owner, _PyInstr *instr,
     assert(PyType_Check(owner));
     PyTypeObject *cls = (PyTypeObject *)owner;
     _PyFbAttr *fb = instr_entry(instr);
-    if (Py_TYPE(cls)->tp_getattro != _Py_type_getattro) {
+    if (_PyType_VALUE_SLOT(Py_TYPE(cls), getattro) != _Py_type_getattro_value) {
         SPECIALIZATION_FAIL(LOAD_ATTR, SPEC_FAIL_ATTR_METACLASS_OVERRIDDEN);
         return -1;
     }

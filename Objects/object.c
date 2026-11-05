@@ -1365,154 +1365,154 @@ restore:
     return 0;
 }
 
-PyObject *
-PyObject_GetAttr(PyObject *v, PyObject *name)
+/* The receiver of an attribute error raised for v: as
+   _PyObject_SetAttributeErrorContext(), with an inline v boxed for the
+   exception's obj field (a box on the error path, value-api-m1b-m2.md Q4). */
+static void
+value_attribute_error_context(PyValueBorrow v, PyObject *name)
 {
-    PyTypeObject *tp = Py_TYPE(v);
+    if (!PyValue_IsInline(v)) {
+        _PyObject_SetAttributeErrorContext(PyValue_AsKnownObjectBorrow(v),
+                                           name);
+        return;
+    }
+    if (!PyErr_ExceptionMatches(PyExc_AttributeError)) {
+        return;
+    }
+    PyObject *exc = PyErr_GetRaisedException();
+    PyObject *obj = _PyValue_AsObjectAt(v, BOX_SITE_ATTRIBUTE);
+    if (obj == NULL) {
+        // Keep the AttributeError; the context is a best effort.
+        PyErr_Clear();
+        PyErr_SetRaisedException(exc);
+        return;
+    }
+    PyErr_SetRaisedException(exc);
+    _PyObject_SetAttributeErrorContext(obj, name);
+    Py_DECREF(obj);
+}
+
+static int
+check_attribute_name(PyObject *name)
+{
     if (!PyUnicode_Check(name)) {
         PyErr_Format(PyExc_TypeError,
                      "attribute name must be string, not '%.200s'",
                      Py_TYPE(name)->tp_name);
-        return NULL;
+        return -1;
     }
+    return 0;
+}
 
-    PyObject* result = NULL;
-    if (tp->tp_getattro != NULL) {
-        result = (*tp->tp_getattro)(v, name);
+/* The getattro of tp, the type of v: its value slot, or its object slot or
+   tp_getattr through the adapter. Neither slot: AttributeError. */
+static PyValue
+call_getattro(PyTypeObject *tp, PyValueBorrow v, PyObject *name)
+{
+    _Py_getattrovaluefunc f = _PyType_VALUE_SLOT(tp, getattro);
+    if (f != NULL) {
+        _PyType_CHECK_VALUE_ROW(tp, _Py_VALUE_SLOT_INDEX_getattro);
+        return f(v, name);
     }
-    else if (tp->tp_getattr != NULL) {
-        const char *name_str = PyUnicode_AsUTF8(name);
-        if (name_str == NULL) {
-            return NULL;
-        }
-        result = (*tp->tp_getattr)(v, (char *)name_str);
+    if (tp->tp_getattro == NULL && tp->tp_getattr == NULL) {
+        PyErr_Format(PyExc_AttributeError,
+                     "'%.100s' object has no attribute '%U'",
+                     tp->tp_name, name);
+        return PyValue_NULL;
+    }
+    PyObject *self = _PyValue_AdapterBox(v, BOX_SITE_ATTRIBUTE, tp->tp_getattro);
+    if (self == NULL) {
+        return PyValue_NULL;
+    }
+    PyObject *result;
+    if (tp->tp_getattro != NULL) {
+        result = tp->tp_getattro(self, name);
     }
     else {
-        PyErr_Format(PyExc_AttributeError,
-                    "'%.100s' object has no attribute '%U'",
-                    tp->tp_name, name);
+        const char *name_str = PyUnicode_AsUTF8(name);
+        result = name_str == NULL ? NULL
+                                  : tp->tp_getattr(self, (char *)name_str);
     }
+    _PyValue_AdapterRelease(v, self);
+    return _PyValue_FromObjectResult(result);
+}
 
-    if (result == NULL) {
-        _PyObject_SetAttributeErrorContext(v, name);
+PyValue
+(_PyValue_GetAttr)(PyValueBorrow v, PyObject *name)
+{
+    if (check_attribute_name(name) < 0) {
+        return PyValue_NULL;
+    }
+    PyValue result = call_getattro(PyValue_TYPE(v), v, name);
+    if (PyValue_IsNull(result)) {
+        value_attribute_error_context(v, name);
     }
     return result;
 }
 
-/* Like PyObject_GetAttr but returns a PyValue.
-   For types (tp_getattro == _Py_type_getattro), this can return
-   a deferred reference to reduce reference count contention. */
+Py_VALUE_ENTRY PyObject *
+PyObject_GetAttr(PyObject *v, PyObject *name)
+{
+    return _PyValue_THUNK_EXIT((_PyValue_GetAttr)(_Py_VALUE_ARG(v), name), BOX_SITE_ATTRIBUTE);
+}
+
 PyValue
 _PyObject_GetAttrValue(PyObject *v, PyObject *name)
 {
-    PyTypeObject *tp = Py_TYPE(v);
-    if (!PyUnicode_Check(name)) {
-        PyErr_Format(PyExc_TypeError,
-                     "attribute name must be string, not '%.200s'",
-                     Py_TYPE(name)->tp_name);
-        return PyValue_NULL;
-    }
-
-    /* Fast path for types - can return deferred references */
-    if (tp->tp_getattro == _Py_type_getattro) {
-        PyValue result = _Py_type_getattro_value((PyTypeObject *)v, name, NULL);
-        if (PyValue_IsNull(result)) {
-            _PyObject_SetAttributeErrorContext(v, name);
-        }
-        return result;
-    }
-
-    /* Fall back to regular PyObject_GetAttr and convert to value */
-    PyObject *result = NULL;
-    if (tp->tp_getattro != NULL) {
-        result = (*tp->tp_getattro)(v, name);
-    }
-    else if (tp->tp_getattr != NULL) {
-        const char *name_str = PyUnicode_AsUTF8(name);
-        if (name_str == NULL) {
-            return PyValue_NULL;
-        }
-        result = (*tp->tp_getattr)(v, (char *)name_str);
-    }
-    else {
-        PyErr_Format(PyExc_AttributeError,
-                    "'%.100s' object has no attribute '%U'",
-                    tp->tp_name, name);
-    }
-
-    if (result == NULL) {
-        _PyObject_SetAttributeErrorContext(v, name);
-        return PyValue_NULL;
-    }
-    return PyValue_FromObjectSteal(result);
+    return (_PyValue_GetAttr)(_Py_VALUE_ARG(v), name);
 }
 
-int
-PyObject_GetOptionalAttr(PyObject *v, PyObject *name, PyObject **result)
+_PyStatusValue
+(_PyValue_GetOptionalAttr)(PyValueBorrow v, PyObject *name)
 {
-    PyTypeObject *tp = Py_TYPE(v);
-
-    if (!PyUnicode_Check(name)) {
-        PyErr_Format(PyExc_TypeError,
-                     "attribute name must be string, not '%.200s'",
-                     Py_TYPE(name)->tp_name);
-        *result = NULL;
-        return -1;
+    if (check_attribute_name(name) < 0) {
+        return (_PyStatusValue){-1, PyValue_NULL};
     }
-
-    if (tp->tp_getattro == PyObject_GenericGetAttr) {
-        *result = _PyObject_GenericGetAttrWithDict(v, name, NULL, 1);
-        if (*result != NULL) {
-            return 1;
-        }
-        if (PyErr_Occurred()) {
-            return -1;
-        }
-        return 0;
+    PyTypeObject *tp = PyValue_TYPE(v);
+    /* The fast paths suppress AttributeError without raising it. A type
+       and a module are never inline. */
+    _Py_getattrovaluefunc f = _PyType_VALUE_SLOT(tp, getattro);
+    if (f == _PyObject_GenericGetAttrValue) {
+        return (_PyObject_GenericLookupAttrValue)(v, name, NULL);
     }
-    if (tp->tp_getattro == _Py_type_getattro) {
-        int suppress_missing_attribute_exception = 0;
-        *result = _Py_type_getattro_impl((PyTypeObject*)v, name, &suppress_missing_attribute_exception);
-        if (suppress_missing_attribute_exception) {
-            // return 0 without having to clear the exception
-            return 0;
+    PyValue result;
+    if (f == _Py_type_getattro_value) {
+        int suppressed = 0;
+        result = _Py_type_getattro_impl(
+            (PyTypeObject *)PyValue_AsKnownObjectBorrow(v), name, &suppressed);
+        if (suppressed) {
+            return (_PyStatusValue){0, PyValue_NULL};
         }
     }
-    else if (tp->tp_getattro == (getattrofunc)_Py_module_getattro) {
-        // optimization: suppress attribute error from module getattro method
-        *result = _Py_module_getattro_impl((PyModuleObject*)v, name, 1);
-        if (*result != NULL) {
-            return 1;
+    else if (f == _Py_module_getattro_value) {
+        result = _Py_module_getattro_impl(
+            (PyModuleObject *)PyValue_AsKnownObjectBorrow(v), name, 1);
+        if (!PyValue_IsNull(result)) {
+            return (_PyStatusValue){1, result};
         }
-        if (PyErr_Occurred()) {
-            return -1;
-        }
-        return 0;
+        return (_PyStatusValue){PyErr_Occurred() ? -1 : 0, PyValue_NULL};
     }
-    else if (tp->tp_getattro != NULL) {
-        *result = (*tp->tp_getattro)(v, name);
-    }
-    else if (tp->tp_getattr != NULL) {
-        const char *name_str = PyUnicode_AsUTF8(name);
-        if (name_str == NULL) {
-            *result = NULL;
-            return -1;
-        }
-        *result = (*tp->tp_getattr)(v, (char *)name_str);
+    else if (f == NULL && tp->tp_getattro == NULL && tp->tp_getattr == NULL) {
+        return (_PyStatusValue){0, PyValue_NULL};
     }
     else {
-        *result = NULL;
-        return 0;
+        result = call_getattro(tp, v, name);
     }
-
-    if (*result != NULL) {
-        return 1;
+    if (!PyValue_IsNull(result)) {
+        return (_PyStatusValue){1, result};
     }
     if (!PyErr_ExceptionMatches(PyExc_AttributeError)) {
-        return -1;
+        return (_PyStatusValue){-1, PyValue_NULL};
     }
     PyErr_Clear();
-    return 0;
+    return (_PyStatusValue){0, PyValue_NULL};
+}
+
+Py_VALUE_ENTRY int
+PyObject_GetOptionalAttr(PyObject *v, PyObject *name, PyObject **result)
+{
+    return _PyValue_THUNK_EXIT_STATUS(
+        (_PyValue_GetOptionalAttr)(_Py_VALUE_ARG(v), name), result, BOX_SITE_ATTRIBUTE);
 }
 
 int
@@ -1543,10 +1543,9 @@ PyObject_GetOptionalAttrString(PyObject *obj, const char *name, PyObject **resul
 int
 PyObject_HasAttrWithError(PyObject *obj, PyObject *name)
 {
-    PyObject *res;
-    int rc = PyObject_GetOptionalAttr(obj, name, &res);
-    Py_XDECREF(res);
-    return rc;
+    _PyStatusValue r = (_PyValue_GetOptionalAttr)(_Py_VALUE_ARG(obj), name);
+    PyValue_XCLOSE(r.value);
+    return r.status;
 }
 
 int
@@ -1564,10 +1563,10 @@ PyObject_HasAttr(PyObject *obj, PyObject *name)
 }
 
 int
-PyObject_SetAttr(PyObject *v, PyObject *name, PyObject *value)
+(_PyValue_SetAttr)(PyValueBorrow v, PyObject *name, PyValueBorrow value)
 {
     PyThreadState *tstate = _PyThreadState_GET();
-    if (value == NULL && _PyErr_Occurred(tstate)) {
+    if (PyValue_IsNull(value) && _PyErr_Occurred(tstate)) {
         PyObject *exc = _PyErr_GetRaisedException(tstate);
         _PyErr_SetString(tstate, PyExc_SystemError,
             "PyObject_SetAttr() must not be called with NULL value "
@@ -1576,30 +1575,51 @@ PyObject_SetAttr(PyObject *v, PyObject *name, PyObject *value)
         return -1;
     }
 
-    PyTypeObject *tp = Py_TYPE(v);
+    PyTypeObject *tp = PyValue_TYPE(v);
     int err;
 
-    if (!PyUnicode_Check(name)) {
-        PyErr_Format(PyExc_TypeError,
-                     "attribute name must be string, not '%.200s'",
-                     Py_TYPE(name)->tp_name);
+    if (check_attribute_name(name) < 0) {
         return -1;
     }
     Py_INCREF(name);
 
     _PyUnicode_InternMortal(tstate->interp, &name);
-    if (tp->tp_setattro != NULL) {
-        err = (*tp->tp_setattro)(v, name, value);
+    _Py_setattrovaluefunc f = _PyType_VALUE_SLOT(tp, setattro);
+    if (f != NULL) {
+        _PyType_CHECK_VALUE_ROW(tp, _Py_VALUE_SLOT_INDEX_setattro);
+        err = f(v, name, value);
         Py_DECREF(name);
         return err;
     }
-    if (tp->tp_setattr != NULL) {
-        const char *name_str = PyUnicode_AsUTF8(name);
-        if (name_str == NULL) {
-            Py_DECREF(name);
-            return -1;
+    if (tp->tp_setattro != NULL || tp->tp_setattr != NULL) {
+        // The adapter: an inline receiver or value is boxed for the call.
+        PyObject *self = _PyValue_AdapterBox(v, BOX_SITE_ATTRIBUTE, tp->tp_setattro);
+        PyObject *w = NULL;
+        err = -1;
+        if (self == NULL) {
+            goto adapted;
         }
-        err = (*tp->tp_setattr)(v, (char *)name_str, value);
+        if (!PyValue_IsNull(value)) {
+            w = _PyValue_AdapterBox(value, BOX_SITE_ATTRIBUTE, tp->tp_setattro);
+            if (w == NULL) {
+                _PyValue_AdapterRelease(v, self);
+                goto adapted;
+            }
+        }
+        if (tp->tp_setattro != NULL) {
+            err = tp->tp_setattro(self, name, w);
+        }
+        else {
+            const char *name_str = PyUnicode_AsUTF8(name);
+            if (name_str != NULL) {
+                err = tp->tp_setattr(self, (char *)name_str, w);
+            }
+        }
+        if (w != NULL) {
+            _PyValue_AdapterRelease(value, w);
+        }
+        _PyValue_AdapterRelease(v, self);
+    adapted:
         Py_DECREF(name);
         return err;
     }
@@ -1610,16 +1630,22 @@ PyObject_SetAttr(PyObject *v, PyObject *name, PyObject *value)
                      "'%.100s' object has no attributes "
                      "(%s .%U)",
                      tp->tp_name,
-                     value==NULL ? "del" : "assign to",
+                     PyValue_IsNull(value) ? "del" : "assign to",
                      name);
     else
         PyErr_Format(PyExc_TypeError,
                      "'%.100s' object has only read-only attributes "
                      "(%s .%U)",
                      tp->tp_name,
-                     value==NULL ? "del" : "assign to",
+                     PyValue_IsNull(value) ? "del" : "assign to",
                      name);
     return -1;
+}
+
+int
+PyObject_SetAttr(PyObject *v, PyObject *name, PyObject *value)
+{
+    return (_PyValue_SetAttr)(_Py_VALUE_ARG(v), name, _Py_VALUE_ARG(value));
 }
 
 int
@@ -1699,66 +1725,54 @@ _PyObject_NextNotImplemented(PyObject *self)
 }
 
 
-// Look up a method on `self` by `name`.
-//
-// On success, `*method` is set and the function returns 0 or 1. If the
-// return value is 1, the call is an unbound method and `*self` is the
-// "self" or "cls" argument to pass. If the return value is 0, the call is
-// a regular function and `*self` is cleared.
-//
-// On error, returns -1, clears `*self`, and sets an exception.
-int
-_PyObject_GetMethodValue(PyThreadState *ts, PyValue *self,
-                        PyObject *name, PyValue *method, PyObject *obj)
+/* The port of _PyObject_GetMethod(): a method descriptor found on the type
+   gives status 1 with the descriptor, to call with obj as self, so that no
+   bound method is made; anything else is the attribute, status 0. A
+   classmethod therefore gives its bound method (status 0): the status
+   cannot carry a self other than obj. */
+_PyStatusValue
+(_PyValue_GetMethod)(PyValueBorrow v, PyObject *name)
 {
-    assert(PyValue_IsNull(*method));
+    _PyStatusValue r = {-1, PyValue_NULL};
     PyValue descriptor = PyValue_NULL;
-    PyValue result = PyValue_NULL, result_self = PyValue_NULL;
-    // a move: cleared below
-    PyValue original_self = *self;
-    *self = PyValue_NULL;
-    PyTypeObject *tp = Py_TYPE(obj);
+    PyTypeObject *tp = PyValue_TYPE(v);
     Py_INCREF(tp);
-    int status = -1;
     if (!_PyType_IsReady(tp) && PyType_Ready(tp) < 0) {
         goto done;
     }
-    if (tp->tp_getattro != PyObject_GenericGetAttr || !PyUnicode_CheckExact(name)) {
-        PyObject *value = PyObject_GetAttr(obj, name);
-        if (value != NULL) {
-            result = PyValue_FromObjectSteal(value);
-            status = 0;
-        }
+    if (_PyType_VALUE_SLOT(tp, getattro) != _PyObject_GenericGetAttrValue
+        || !PyUnicode_CheckExact(name))
+    {
+        r.value = (_PyValue_GetAttr)(v, name);
+        r.status = PyValue_IsNull(r.value) ? -1 : 0;
         goto done;
     }
     (void)_PyType_LookupValueAndVersion(tp, name, &descriptor);
     PyObject *descr = PyValue_IsObject(descriptor) ?
         PyValue_AsKnownObjectBorrow(descriptor) : NULL;
-    descrgetfunc get = descr == NULL ? NULL : Py_TYPE(descr)->tp_descr_get;
+    int has_get = descr != NULL && Py_TYPE(descr)->tp_descr_get != NULL;
     bool method_descriptor = descr != NULL &&
         _PyType_HasFeature(Py_TYPE(descr), Py_TPFLAGS_METHOD_DESCRIPTOR);
-    if (get != NULL && PyDescr_IsData(descr)) {
-        PyObject *value = get(descr, obj, (PyObject *)tp);
-        if (value != NULL) {
-            result = PyValue_FromObjectSteal(value);
-            status = 0;
-        }
+    if (has_get && PyDescr_IsData(descr)) {
+        r.value = (_PyValue_DescrGet)(descr, v, tp);
+        r.status = PyValue_IsNull(r.value) ? -1 : 0;
         goto done;
     }
+    // An inline value has no instance attributes.
+    PyObject *obj = PyValue_IsInline(v) ? NULL : PyValue_AsKnownObjectBorrow(v);
     PyValue attr = PyValue_NULL;
-    int handled = (Py_TYPE(obj)->tp_flags & Py_TPFLAGS_INLINE_VALUES) ?
+    int handled = (obj != NULL && (tp->tp_flags & Py_TPFLAGS_INLINE_VALUES)) ?
         _PyObject_TryGetInstanceValue(obj, name, &attr) : 0;
     if (handled < 0) {
         goto done;
     }
     if (!PyValue_IsNull(attr)) {
-        result = attr;
-        status = 0;
+        r = (_PyStatusValue){0, attr};
         goto done;
     }
     PyObject *dict = NULL;
-    if (!handled) {
-        if (Py_TYPE(obj)->tp_flags & Py_TPFLAGS_MANAGED_DICT) {
+    if (obj != NULL && !handled) {
+        if (tp->tp_flags & Py_TPFLAGS_MANAGED_DICT) {
             dict = (PyObject *)_PyObject_GetManagedDict(obj);
         }
         else {
@@ -1775,87 +1789,149 @@ _PyObject_GetMethodValue(PyThreadState *ts, PyValue *self,
             goto done;
         }
         if (found) {
-            result = attr;
-            status = 0;
+            r = (_PyStatusValue){0, attr};
             goto done;
         }
     }
     if (method_descriptor) {
-        result = descriptor;
+        r = (_PyStatusValue){1, descriptor};
         descriptor = PyValue_NULL;
-        result_self = original_self;
-        original_self = PyValue_NULL;
-        status = 1;
     }
-    else if (get != NULL) {
-        if (Py_IS_TYPE(descr, &PyClassMethod_Type)) {
-            result = PyValue_DUP(PyValue_FromObjectBorrow(_PyClassMethod_GetFunc(descr)));
-            result_self = PyValue_DUP(PyValue_FromObjectBorrow((PyObject *)tp));
-            status = 1;
-        }
-        else if (Py_IS_TYPE(descr, &PyStaticMethod_Type)) {
-            result = PyValue_DUP(PyValue_FromObjectBorrow(_PyStaticMethod_GetFunc(descr)));
-            status = 0;
+    else if (has_get) {
+        if (Py_IS_TYPE(descr, &PyStaticMethod_Type)) {
+            r = (_PyStatusValue){
+                0, PyValue_DUP(PyValue_FromObjectBorrow(_PyStaticMethod_GetFunc(descr)))};
         }
         else {
-            PyObject *value = get(descr, obj, (PyObject *)tp);
-            if (value != NULL) {
-                result = PyValue_FromObjectSteal(value);
-                status = 0;
-            }
+            r.value = (_PyValue_DescrGet)(descr, v, tp);
+            r.status = PyValue_IsNull(r.value) ? -1 : 0;
         }
     }
     else if (!PyValue_IsNull(descriptor)) {
-        result = descriptor;
+        r = (_PyStatusValue){0, descriptor};
         descriptor = PyValue_NULL;
-        status = 0;
     }
     else {
         PyErr_Format(PyExc_AttributeError, "'%.100s' object has no attribute '%U'",
                      tp->tp_name, name);
-        _PyObject_SetAttributeErrorContext(obj, name);
+        value_attribute_error_context(v, name);
     }
  done:
-    /* Caller owns the original receiver until both output homes publish.
-     * These canonical C outputs precede any displaced metadata release. */
-    *method = _PyValue_Publish(&result);
-    *self = _PyValue_Publish(&result_self);
     PyValue_XCLOSE(descriptor);
-    PyValue_XCLOSE(original_self);
     Py_DECREF(tp);
-    return status;
+    return r;
+}
+
+// Look up a method on `*self` (the value of obj) by `name`: the thunk of
+// _PyValue_GetMethod(). Status 1 leaves `*self` as the "self" argument to
+// pass, status 0 and -1 clear it; `*method` is the result.
+int
+_PyObject_GetMethodValue(PyThreadState *ts, PyValue *self,
+                        PyObject *name, PyValue *method, PyObject *obj)
+{
+    assert(PyValue_IsNull(*method));
+    assert(PyValue_Is(*self, PyValue_FromObjectBorrow(obj)));
+    PyValue original_self = *self;
+    *self = PyValue_NULL;
+    _PyStatusValue r = (_PyValue_GetMethod)(PyValue_Borrow(original_self),
+                                            name);
+    /* The caller owns the receiver until both output homes publish. */
+    *method = _PyValue_Publish(&r.value);
+    if (r.status == 1) {
+        *self = _PyValue_Publish(&original_self);
+    }
+    else {
+        PyValue_XCLOSE(original_self);
+    }
+    return r.status;
+}
+
+PyValue
+(_PyValue_DescrGet)(PyObject *descr, PyValueBorrow obj, PyTypeObject *type)
+{
+    PyTypeObject *dt = Py_TYPE(descr);
+    _Py_descrgetvaluefunc f = _PyType_VALUE_SLOT(dt, descr_get);
+    if (f != NULL) {
+        _PyType_CHECK_VALUE_ROW(dt, _Py_VALUE_SLOT_INDEX_descr_get);
+        return f(descr, obj, (PyObject *)type);
+    }
+    descrgetfunc get = dt->tp_descr_get;
+    assert(get != NULL);
+    PyObject *o = NULL;
+    if (!PyValue_IsNull(obj)) {
+        o = _PyValue_AdapterBox(obj, BOX_SITE_ATTRIBUTE, get);
+        if (o == NULL) {
+            return PyValue_NULL;
+        }
+    }
+    PyObject *result = get(descr, o, (PyObject *)type);
+    if (o != NULL) {
+        _PyValue_AdapterRelease(obj, o);
+    }
+    return _PyValue_FromObjectResult(result);
+}
+
+int
+(_PyValue_DescrSet)(PyObject *descr, PyValueBorrow obj, PyValueBorrow value)
+{
+    PyTypeObject *dt = Py_TYPE(descr);
+    _Py_descrsetvaluefunc f = _PyType_VALUE_SLOT(dt, descr_set);
+    if (f != NULL) {
+        _PyType_CHECK_VALUE_ROW(dt, _Py_VALUE_SLOT_INDEX_descr_set);
+        return f(descr, obj, value);
+    }
+    descrsetfunc set = dt->tp_descr_set;
+    assert(set != NULL);
+    PyObject *o = _PyValue_AdapterBox(obj, BOX_SITE_ATTRIBUTE, set);
+    if (o == NULL) {
+        return -1;
+    }
+    PyObject *w = NULL;
+    if (!PyValue_IsNull(value)) {
+        w = _PyValue_AdapterBox(value, BOX_SITE_ATTRIBUTE, set);
+        if (w == NULL) {
+            _PyValue_AdapterRelease(obj, o);
+            return -1;
+        }
+    }
+    int res = set(descr, o, w);
+    if (w != NULL) {
+        _PyValue_AdapterRelease(value, w);
+    }
+    _PyValue_AdapterRelease(obj, o);
+    return res;
 }
 
 
 /* Generic GetAttr functions - put these in your tp_[gs]etattro slot. */
 
-PyObject *
-_PyObject_GenericGetAttrWithDict(PyObject *obj, PyObject *name,
-                                 PyObject *dict, int suppress)
+/* The generic attribute read of v (_PyObject_GenericGetAttrWithDict()).
+   When suppress is 1, an AttributeError is suppressed: PyValue_NULL with no
+   exception set means the attribute is missing. An inline v has no
+   instance attributes, and its type's descriptors see it inline. */
+static PyValue
+generic_getattr_value(PyValueBorrow v, PyObject *name, PyObject *dict,
+                      int suppress)
 {
-    /* Make sure the logic of _PyObject_GetMethodValue is in sync with
+    /* Make sure the logic of _PyValue_GetMethod is in sync with
        this method.
-
-       When suppress=1, this function suppresses AttributeError.
     */
 
-    PyTypeObject *tp = Py_TYPE(obj);
+    PyTypeObject *tp = PyValue_TYPE(v);
+    PyObject *obj = PyValue_IsInline(v) ? NULL : PyValue_AsKnownObjectBorrow(v);
     PyObject *descr = NULL;
-    PyObject *res = NULL;
-    descrgetfunc f;
+    PyValue res = PyValue_NULL;
+    int has_get = 0;
 
-    if (!PyUnicode_Check(name)){
-        PyErr_Format(PyExc_TypeError,
-                     "attribute name must be string, not '%.200s'",
-                     Py_TYPE(name)->tp_name);
-        return NULL;
+    if (check_attribute_name(name) < 0) {
+        return PyValue_NULL;
     }
 
     Py_INCREF(tp);
     if (!_PyType_IsReady(tp)) {
         if (PyType_Ready(tp) < 0) {
             Py_DECREF(tp);
-            return NULL;
+            return PyValue_NULL;
         }
     }
 
@@ -1868,13 +1944,12 @@ _PyObject_GenericGetAttrWithDict(PyObject *obj, PyObject *name,
     (void)_PyType_LookupValueAndVersion(tp, name, &cref.ref);
     descr = PyValue_IsObject(cref.ref) ? PyValue_AsKnownObjectBorrow(cref.ref) : NULL;
 
-    f = NULL;
     if (descr != NULL) {
-        f = Py_TYPE(descr)->tp_descr_get;
-        if (f != NULL && PyDescr_IsData(descr)) {
+        has_get = Py_TYPE(descr)->tp_descr_get != NULL;
+        if (has_get && PyDescr_IsData(descr)) {
             // gh-157840: We special-case member descriptors here to avoid
             // allocating an extra AttributeError
-            if (suppress && Py_IS_TYPE(descr, &PyMemberDescr_Type)) {
+            if (suppress && obj != NULL && Py_IS_TYPE(descr, &PyMemberDescr_Type)) {
                 PyMemberDef *member = ((PyMemberDescrObject *)descr)->d_member;
                 if ((member->type == Py_T_OBJECT_EX ||
                      member->type == _Py_T_VALUE_EX)
@@ -1889,15 +1964,15 @@ _PyObject_GenericGetAttrWithDict(PyObject *obj, PyObject *name,
                     }
                 }
             }
-            res = f(descr, obj, (PyObject *)Py_TYPE(obj));
-            if (res == NULL && suppress &&
+            res = (_PyValue_DescrGet)(descr, v, tp);
+            if (PyValue_IsNull(res) && suppress &&
                     PyErr_ExceptionMatches(PyExc_AttributeError)) {
                 PyErr_Clear();
             }
             goto done;
         }
     }
-    if (dict == NULL) {
+    if (dict == NULL && obj != NULL) {
         if ((tp->tp_flags & Py_TPFLAGS_INLINE_VALUES)) {
             PyValue attr = PyValue_NULL;
             int handled = PyUnicode_CheckExact(name) ?
@@ -1907,9 +1982,7 @@ _PyObject_GenericGetAttrWithDict(PyObject *obj, PyObject *name,
             }
             if (handled) {
                 if (!PyValue_IsNull(attr)) {
-                    /* NULL with an exception set if boxing fails. */
-                    res = _PyValue_AsObjectAt(attr, BOX_SITE_ATTRIBUTE);
-                    PyValue_CLOSE(attr);
+                    res = attr;
                     goto done;
                 }
             }
@@ -1936,23 +2009,23 @@ _PyObject_GenericGetAttrWithDict(PyObject *obj, PyObject *name,
     }
     if (dict != NULL) {
         Py_INCREF(dict);
-        int rc = PyDict_GetItemRef(dict, name, &res);
+        int rc = PyDict_GetValue(dict, PyValue_FromObjectBorrow(name), &res);
         /* Suppress the lookup's AttributeError before retirement, so a
          * later cleanup failure remains an error. */
-        if (rc < 0 && res == NULL && suppress &&
+        if (rc < 0 && PyValue_IsNull(res) && suppress &&
             PyErr_ExceptionMatches(PyExc_AttributeError)) {
             PyErr_Clear();
             rc = 0;
         }
         Py_CLEAR(dict);
-        if (res != NULL || rc < 0) {
+        if (!PyValue_IsNull(res) || rc < 0) {
             goto done;
         }
     }
 
-    if (f != NULL) {
-        res = f(descr, obj, (PyObject *)Py_TYPE(obj));
-        if (res == NULL && suppress &&
+    if (has_get) {
+        res = (_PyValue_DescrGet)(descr, v, tp);
+        if (PyValue_IsNull(res) && suppress &&
                 PyErr_ExceptionMatches(PyExc_AttributeError)) {
             PyErr_Clear();
         }
@@ -1960,9 +2033,9 @@ _PyObject_GenericGetAttrWithDict(PyObject *obj, PyObject *name,
     }
 
     if (!PyValue_IsNull(cref.ref)) {
-        /* The selected class value may be inline. Keep its canonical
-         * owner through fallible creation and cleanup of the object view. */
-        res = _PyValue_AsObjectAt(cref.ref, BOX_SITE_ATTRIBUTE);
+        // A class attribute, perhaps inline: the result owns the lookup's.
+        res = cref.ref;
+        cref.ref = PyValue_NULL;
         goto done;
     }
 
@@ -1971,13 +2044,38 @@ _PyObject_GenericGetAttrWithDict(PyObject *obj, PyObject *name,
                      "'%.100s' object has no attribute '%U'",
                      tp->tp_name, name);
 
-        _PyObject_SetAttributeErrorContext(obj, name);
+        value_attribute_error_context(v, name);
     }
   done:
     _PyThreadState_PopCValue(tstate, &cref);
     Py_CLEAR(name);
     Py_DECREF(tp);
     return res;
+}
+
+PyValue
+(_PyObject_GenericGetAttrValue)(PyValueBorrow v, PyObject *name)
+{
+    return generic_getattr_value(v, name, NULL, 0);
+}
+
+_PyStatusValue
+(_PyObject_GenericLookupAttrValue)(PyValueBorrow v, PyObject *name,
+                                   PyObject *dict)
+{
+    PyValue res = generic_getattr_value(v, name, dict, 1);
+    if (!PyValue_IsNull(res)) {
+        return (_PyStatusValue){1, res};
+    }
+    return (_PyStatusValue){PyErr_Occurred() ? -1 : 0, PyValue_NULL};
+}
+
+Py_VALUE_ENTRY PyObject *
+_PyObject_GenericGetAttrWithDict(PyObject *obj, PyObject *name,
+                                 PyObject *dict, int suppress)
+{
+    return _PyValue_THUNK_EXIT(
+        generic_getattr_value(_Py_VALUE_ARG(obj), name, dict, suppress), BOX_SITE_ATTRIBUTE);
 }
 
 PyObject *
@@ -1987,20 +2085,18 @@ PyObject_GenericGetAttr(PyObject *obj, PyObject *name)
 }
 
 int
-_PyObject_GenericSetAttrWithDict(PyObject *obj, PyObject *name,
-                                 PyObject *value, PyObject *dict)
+(_PyObject_GenericSetAttrWithDictValue)(PyValueBorrow v, PyObject *name,
+                                        PyValueBorrow value, PyObject *dict)
 {
-    PyTypeObject *tp = Py_TYPE(obj);
+    PyTypeObject *tp = PyValue_TYPE(v);
+    // An inline value has no instance dict.
+    PyObject *obj = PyValue_IsInline(v) ? NULL : PyValue_AsKnownObjectBorrow(v);
     PyObject *owned_dict = NULL;
     PyObject *descr;
-    descrsetfunc f;
     int res = -1;
 
     assert(!PyType_IsSubtype(tp, &PyType_Type));
-    if (!PyUnicode_Check(name)){
-        PyErr_Format(PyExc_TypeError,
-                     "attribute name must be string, not '%.200s'",
-                     Py_TYPE(name)->tp_name);
+    if (check_attribute_name(name) < 0) {
         return -1;
     }
 
@@ -2019,23 +2115,22 @@ _PyObject_GenericSetAttrWithDict(PyObject *obj, PyObject *name,
     (void)_PyType_LookupValueAndVersion(tp, name, &cref.ref);
     descr = PyValue_IsObject(cref.ref) ? PyValue_AsKnownObjectBorrow(cref.ref) : NULL;
 
-    if (descr != NULL) {
-        f = Py_TYPE(descr)->tp_descr_set;
-        if (f != NULL) {
-            res = f(descr, obj, value);
-            goto done;
-        }
+    if (descr != NULL && Py_TYPE(descr)->tp_descr_set != NULL) {
+        res = (_PyValue_DescrSet)(descr, v, value);
+        goto done;
     }
 
     if (dict == NULL) {
         PyObject **dictptr;
 
-        if ((tp->tp_flags & Py_TPFLAGS_INLINE_VALUES)) {
-            res = _PyObject_StoreInstanceAttribute(obj, name, value);
+        if (obj == NULL) {
+            dictptr = NULL;
+        }
+        else if ((tp->tp_flags & Py_TPFLAGS_INLINE_VALUES)) {
+            res = _PyObject_StoreInstanceValue(obj, name, value);
             goto error_check;
         }
-
-        if ((tp->tp_flags & Py_TPFLAGS_MANAGED_DICT)) {
+        else if ((tp->tp_flags & Py_TPFLAGS_MANAGED_DICT)) {
             PyManagedDictPointer *managed_dict = _PyObject_ManagedDictPointer(obj);
             dictptr = (PyObject **)&managed_dict->dict;
         }
@@ -2044,7 +2139,9 @@ _PyObject_GenericSetAttrWithDict(PyObject *obj, PyObject *name,
         }
         if (dictptr == NULL) {
             if (PyValue_IsNull(cref.ref)) {
-                if (tp->tp_setattro == PyObject_GenericSetAttr) {
+                if (_PyType_VALUE_SLOT(tp, setattro)
+                    == _PyObject_GenericSetAttrValue)
+                {
                     PyErr_Format(PyExc_AttributeError,
                                 "'%.100s' object has no attribute '%U' and no "
                                 "__dict__ for setting new attributes",
@@ -2055,7 +2152,7 @@ _PyObject_GenericSetAttrWithDict(PyObject *obj, PyObject *name,
                                 "'%.100s' object has no attribute '%U'",
                                 tp->tp_name, name);
                 }
-                _PyObject_SetAttributeErrorContext(obj, name);
+                value_attribute_error_context(v, name);
             }
             else {
                 PyErr_Format(PyExc_AttributeError,
@@ -2065,22 +2162,22 @@ _PyObject_GenericSetAttrWithDict(PyObject *obj, PyObject *name,
             goto done;
         }
         else {
-            res = _PyObjectDict_SetItem(tp, obj, dictptr, name, value);
+            res = _PyObjectDict_SetValue(tp, obj, dictptr, name, value);
         }
     }
     else {
         owned_dict = Py_NewRef(dict);
-        if (value == NULL)
+        if (PyValue_IsNull(value))
             res = PyDict_DelValue(dict, PyValue_FromObjectBorrow(name));
         else
-            res = PyDict_SetValue(dict, PyValue_FromObjectBorrow(name), PyValue_FromObjectBorrow(value));
+            res = PyDict_SetValue(dict, PyValue_FromObjectBorrow(name), value);
     }
   error_check:
     if (res < 0 && PyErr_ExceptionMatches(PyExc_KeyError)) {
         PyErr_Format(PyExc_AttributeError,
                         "'%.100s' object has no attribute '%U'",
                         tp->tp_name, name);
-        _PyObject_SetAttributeErrorContext(obj, name);
+        value_attribute_error_context(v, name);
     }
   done:
     _PyThreadState_PopCValue(tstate, &cref);
@@ -2091,9 +2188,25 @@ _PyObject_GenericSetAttrWithDict(PyObject *obj, PyObject *name,
 }
 
 int
+(_PyObject_GenericSetAttrValue)(PyValueBorrow v, PyObject *name,
+                                PyValueBorrow value)
+{
+    return (_PyObject_GenericSetAttrWithDictValue)(v, name, value, NULL);
+}
+
+int
+_PyObject_GenericSetAttrWithDict(PyObject *obj, PyObject *name,
+                                 PyObject *value, PyObject *dict)
+{
+    return (_PyObject_GenericSetAttrWithDictValue)(
+        _Py_VALUE_ARG(obj), name, _Py_VALUE_ARG(value), dict);
+}
+
+int
 PyObject_GenericSetAttr(PyObject *obj, PyObject *name, PyObject *value)
 {
-    return _PyObject_GenericSetAttrWithDict(obj, name, value, NULL);
+    return (_PyObject_GenericSetAttrValue)(_Py_VALUE_ARG(obj), name,
+                                           _Py_VALUE_ARG(value));
 }
 
 int

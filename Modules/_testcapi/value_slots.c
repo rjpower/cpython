@@ -193,6 +193,112 @@ static PyTypeObject IntSubAdd_Type = {
     .tp_as_number = &intsubadd_as_number,
 };
 
+/* M2: attributes */
+
+/* ObjGetAttr: object tp_getattro and tp_setattro over a per-instance dict,
+ * and an object-form getset g that stores an object. */
+
+typedef struct {
+    PyObject_HEAD
+    PyObject *dict;
+    PyObject *g;
+} ObjGetAttrObject;
+
+static PyObject *
+objgetattr_new(PyTypeObject *type, PyObject *Py_UNUSED(args),
+               PyObject *Py_UNUSED(kwds))
+{
+    ObjGetAttrObject *self = (ObjGetAttrObject *)type->tp_alloc(type, 0);
+    if (self == NULL) {
+        return NULL;
+    }
+    self->dict = PyDict_New();
+    if (self->dict == NULL) {
+        Py_DECREF(self);
+        return NULL;
+    }
+    return (PyObject *)self;
+}
+
+static void
+objgetattr_dealloc(PyObject *op)
+{
+    ObjGetAttrObject *self = (ObjGetAttrObject *)op;
+    Py_XDECREF(self->dict);
+    Py_XDECREF(self->g);
+    Py_TYPE(op)->tp_free(op);
+}
+
+static PyObject *
+objgetattr_getattro(PyObject *op, PyObject *name)
+{
+    ObjGetAttrObject *self = (ObjGetAttrObject *)op;
+    PyObject *value;
+    if (PyDict_GetItemRef(self->dict, name, &value) != 0) {
+        return value;
+    }
+    /* Methods and getsets of the type. */
+    return PyObject_GenericGetAttr(op, name);
+}
+
+static int
+objgetattr_setattro(PyObject *op, PyObject *name, PyObject *value)
+{
+    ObjGetAttrObject *self = (ObjGetAttrObject *)op;
+    /* The getset g is stored by its descriptor, not by the dict. */
+    if (PyUnicode_Check(name) && PyUnicode_EqualToUTF8(name, "g")) {
+        return PyObject_GenericSetAttr(op, name, value);
+    }
+    if (value == NULL) {
+        int res = PyDict_Pop(self->dict, name, NULL);
+        if (res == 0) {
+            PyErr_SetObject(PyExc_AttributeError, name);
+        }
+        return res > 0 ? 0 : -1;
+    }
+    return PyDict_SetItem(self->dict, name, value);
+}
+
+static PyObject *
+objgetattr_get_g(PyObject *op, void *Py_UNUSED(closure))
+{
+    ObjGetAttrObject *self = (ObjGetAttrObject *)op;
+    if (self->g == NULL) {
+        PyErr_SetString(PyExc_AttributeError, "g is not set");
+        return NULL;
+    }
+    return Py_NewRef(self->g);
+}
+
+static int
+objgetattr_set_g(PyObject *op, PyObject *value, void *Py_UNUSED(closure))
+{
+    ObjGetAttrObject *self = (ObjGetAttrObject *)op;
+    if (value == NULL) {
+        PyErr_SetString(PyExc_AttributeError, "cannot delete g");
+        return -1;
+    }
+    Py_XSETREF(self->g, Py_NewRef(value));
+    return 0;
+}
+
+static PyGetSetDef objgetattr_getset[] = {
+    {"g", objgetattr_get_g, objgetattr_set_g, NULL, NULL},
+    {NULL},
+};
+
+static PyTypeObject ObjGetAttr_Type = {
+    PyVarObject_HEAD_INIT(NULL, 0)
+    .tp_name = "_testcapi.ObjGetAttr",
+    .tp_basicsize = sizeof(ObjGetAttrObject),
+    .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE,
+    .tp_new = objgetattr_new,
+    .tp_dealloc = objgetattr_dealloc,
+    .tp_getattro = objgetattr_getattro,
+    .tp_setattro = objgetattr_setattro,
+    .tp_getset = objgetattr_getset,
+};
+
 
 static PyMethodDef test_methods[] = {
     {"set_value_slots_log", set_value_slots_log, METH_O},
@@ -212,6 +318,7 @@ _PyTestCapi_Init_ValueSlots(PyObject *mod)
         &IntSubNothing_Type,
         &IntSubRepr_Type,
         &IntSubAdd_Type,
+        &ObjGetAttr_Type,  /* M2 */
     };
     for (size_t i = 0; i < Py_ARRAY_LENGTH(types); i++) {
         if (PyType_Ready(types[i]) < 0) {

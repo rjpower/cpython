@@ -78,8 +78,12 @@ extern Py_ssize_t _PyModule_GetFilenameUTF8(
         char *buffer,
         Py_ssize_t maxlen);
 
-PyObject* _Py_module_getattro_impl(PyModuleObject *m, PyObject *name, int suppress);
-PyObject* _Py_module_getattro(PyObject *m, PyObject *name);
+/* A module's getattro: the body, which can suppress AttributeError; the
+   value slot; its object thunk. */
+PyValue _Py_module_getattro_impl(PyModuleObject *m, PyObject *name, int suppress);
+// Export the pair for '_testinternalcapi' shared extension
+PyAPI_FUNC(PyValue) _Py_module_getattro_value(PyValueBorrow m, PyObject *name);
+PyAPI_FUNC(PyObject*) _Py_module_getattro(PyObject *m, PyObject *name);
 
 #ifdef __cplusplus
 }

@@ -173,6 +173,80 @@ PyAPI_FUNC(PyObject *) _PyValue_ASCII(PyValueBorrow v);
 #define _PyValue_Str(V) (_PyValue_Str)(PyValue_Borrow(V))
 #define _PyValue_ASCII(V) (_PyValue_ASCII)(PyValue_Borrow(V))
 
+/* Attribute and descriptor dispatch (pyjit/design/proposals/
+   value-api-m1b-m2.md, section 2.2). The receiver v, and a descriptor's
+   obj, may be inline; name must be a str (a TypeError otherwise). A
+   _PyStatusValue result has status 1 (found, value owned), 0 (missing:
+   value NULL, no exception) or -1 (error). */
+PyAPI_FUNC(PyValue) _PyValue_GetAttr(PyValueBorrow v, PyObject *name);
+PyAPI_FUNC(_PyStatusValue) _PyValue_GetOptionalAttr(PyValueBorrow v,
+                                                    PyObject *name);
+/* A PyValue_NULL value deletes. */
+PyAPI_FUNC(int) _PyValue_SetAttr(PyValueBorrow v, PyObject *name,
+                                 PyValueBorrow value);
+/* Status 1: an unbound method, to call with obj as its first argument;
+   0: the attribute itself. */
+PyAPI_FUNC(_PyStatusValue) _PyValue_GetMethod(PyValueBorrow obj,
+                                              PyObject *name);
+/* The tp_descr_get and tp_descr_set of descr's type, through its value
+   slot or the adapter. obj is PyValue_NULL for class access; type may be
+   NULL. */
+PyAPI_FUNC(PyValue) _PyValue_DescrGet(PyObject *descr, PyValueBorrow obj,
+                                      PyTypeObject *type);
+PyAPI_FUNC(int) _PyValue_DescrSet(PyObject *descr, PyValueBorrow obj,
+                                  PyValueBorrow value);
+/* The special method name of self's type, bound to self by its
+   descriptor: _PyObject_LookupSpecial(). */
+PyAPI_FUNC(_PyStatusValue) _PyValue_LookupSpecial(PyValueBorrow self,
+                                                  PyObject *name);
+#define _PyValue_GetAttr(V, N) (_PyValue_GetAttr)(PyValue_Borrow(V), N)
+#define _PyValue_GetOptionalAttr(V, N) \
+    (_PyValue_GetOptionalAttr)(PyValue_Borrow(V), N)
+#define _PyValue_SetAttr(V, N, W) \
+    (_PyValue_SetAttr)(PyValue_Borrow(V), N, PyValue_Borrow(W))
+#define _PyValue_GetMethod(V, N) (_PyValue_GetMethod)(PyValue_Borrow(V), N)
+#define _PyValue_DescrGet(D, V, T) (_PyValue_DescrGet)(D, PyValue_Borrow(V), T)
+#define _PyValue_DescrSet(D, V, W) \
+    (_PyValue_DescrSet)(D, PyValue_Borrow(V), PyValue_Borrow(W))
+#define _PyValue_LookupSpecial(V, N) \
+    (_PyValue_LookupSpecial)(PyValue_Borrow(V), N)
+
+/* The value sides of the generic attribute pair (section 2.4), which the
+   pair table gives every type whose object slots are
+   PyObject_GenericGetAttr and PyObject_GenericSetAttr. A PyValue_NULL value
+   deletes. _PyObject_GenericLookupAttrValue() reads dict, if not NULL, as
+   the instance dict; a missing attribute gives status 0 without an
+   exception. */
+PyAPI_FUNC(PyValue) _PyObject_GenericGetAttrValue(PyValueBorrow v,
+                                                  PyObject *name);
+PyAPI_FUNC(_PyStatusValue) _PyObject_GenericLookupAttrValue(
+    PyValueBorrow v, PyObject *name, PyObject *dict);
+PyAPI_FUNC(int) _PyObject_GenericSetAttrValue(PyValueBorrow v, PyObject *name,
+                                              PyValueBorrow value);
+PyAPI_FUNC(int) _PyObject_GenericSetAttrWithDictValue(
+    PyValueBorrow v, PyObject *name, PyValueBorrow value, PyObject *dict);
+#define _PyObject_GenericGetAttrValue(V, N) \
+    (_PyObject_GenericGetAttrValue)(PyValue_Borrow(V), N)
+#define _PyObject_GenericLookupAttrValue(V, N, D) \
+    (_PyObject_GenericLookupAttrValue)(PyValue_Borrow(V), N, D)
+#define _PyObject_GenericSetAttrValue(V, N, W) \
+    (_PyObject_GenericSetAttrValue)(PyValue_Borrow(V), N, PyValue_Borrow(W))
+#define _PyObject_GenericSetAttrWithDictValue(V, N, W, D) \
+    (_PyObject_GenericSetAttrWithDictValue)(PyValue_Borrow(V), N, \
+                                            PyValue_Borrow(W), D)
+
+/* name in the MRO of type: status 1 with an owner, or 0; it never fails
+   (_PyType_LookupRef()). */
+extern _PyStatusValue _PyType_LookupValue(PyTypeObject *type, PyObject *name);
+
+/* The value form of _PySuper_Lookup(): status 1 is an unbound method, to
+   call with su_obj (only if want_method), 0 the attribute. */
+extern _PyStatusValue _PySuper_LookupValue(PyTypeObject *su_type,
+                                           PyValueBorrow su_obj,
+                                           PyObject *name, int want_method);
+#define _PySuper_LookupValue(T, V, N, M) \
+    (_PySuper_LookupValue)(T, PyValue_Borrow(V), N, M)
+
 /* Paths of the containers. An owning object result, including arbitrary
    Python comparison results. */
 extern PyObject *_PyValue_RichCompareObject(PyValueBorrow left, PyValueBorrow right, int op);

@@ -11,6 +11,7 @@
 #include "pycore_bitutils.h"      // _Py_popcount32()
 #include "pycore_initconfig.h"    // _PyStatus_OK()
 #include "pycore_call.h"          // _PyObject_MakeTpCall
+#include "pycore_descrobject.h"   // _Py_VALUE_GETTER()
 #include "pycore_freelist.h"      // _Py_FREELIST_FREE, _Py_FREELIST_POP
 #include "pycore_long.h"          // _Py_SmallInts
 #include "pycore_long_value.h"    // _PyLong_ValueAdd()
@@ -6032,18 +6033,6 @@ int___getnewargs___impl(PyObject *self)
     return Py_BuildValue("(N)", _PyLong_Copy((PyLongObject *)self));
 }
 
-static PyObject *
-long_get0(PyObject *Py_UNUSED(self), void *Py_UNUSED(context))
-{
-    return PyLong_FromLong(0L);
-}
-
-static PyObject *
-long_get1(PyObject *Py_UNUSED(self), void *Py_UNUSED(ignored))
-{
-    return PyLong_FromLong(1L);
-}
-
 /*[clinic input]
 int.__format__
 
@@ -6482,10 +6471,28 @@ long_long_meth(PyObject *self, PyObject *Py_UNUSED(ignored))
     return long_long(self);
 }
 
-static PyObject *
-long_long_getter(PyObject *self, void *Py_UNUSED(ignored))
+// The value of an int as its own real part or numerator: an int subclass
+// instance gives the exact int copy.
+static PyValue
+long_real_value(PyValueBorrow self, void *Py_UNUSED(closure))
 {
-    return long_long(self);
+    if (PyValue_IsInline(self)) {
+        return PyValue_DUP(self);
+    }
+    return PyValue_FromObjectSteal(
+        long_long(PyValue_AsKnownObjectBorrow(self)));
+}
+
+static PyValue
+long_imag_value(PyValueBorrow Py_UNUSED(self), void *Py_UNUSED(closure))
+{
+    return PyValue_FromInlineInt(0);
+}
+
+static PyValue
+long_denominator_value(PyValueBorrow Py_UNUSED(self), void *Py_UNUSED(closure))
+{
+    return PyValue_FromInlineInt(1);
 }
 
 /*[clinic input]
@@ -6548,22 +6555,16 @@ static PyMethodDef long_methods[] = {
 };
 
 static PyGetSetDef long_getset[] = {
-    {"real",
-     long_long_getter, NULL,
-     "the real part of a complex number",
-     NULL},
-    {"imag",
-     long_get0, NULL,
-     "the imaginary part of a complex number",
-     NULL},
-    {"numerator",
-     long_long_getter, NULL,
-     "the numerator of a rational number in lowest terms",
-     NULL},
-    {"denominator",
-     long_get1, NULL,
-     "the denominator of a rational number in lowest terms",
-     NULL},
+    _Py_VALUE_GETTER("real", long_real_value,
+                     "the real part of a complex number", NULL),
+    _Py_VALUE_GETTER("imag", long_imag_value,
+                     "the imaginary part of a complex number", NULL),
+    _Py_VALUE_GETTER("numerator", long_real_value,
+                     "the numerator of a rational number in lowest terms",
+                     NULL),
+    _Py_VALUE_GETTER("denominator", long_denominator_value,
+                     "the denominator of a rational number in lowest terms",
+                     NULL),
     {NULL}  /* Sentinel */
 };
 

@@ -15,6 +15,9 @@
 #include "pycore_value_slots.h"   // _Py_VALUE_SLOT_TABLE
 #include "pycore_slots.h"         // _Py_value_nb_add
 #include "pycore_tuple.h"         // _PyTuple_FromValueStealOnSuccess()
+#include "pycore_descrobject.h"   // _Py_VALUE_GETSET (M2)
+#include "pycore_moduleobject.h"  // _Py_module_getattro_value (M2)
+#include "pycore_typeobject.h"    // _Py_type_getattro_value (M2)
 
 #include <stddef.h>               // offsetof()
 #include <stdint.h>               // uintptr_t
@@ -1687,6 +1690,19 @@ value_functions(PyObject *Py_UNUSED(module), PyObject *Py_UNUSED(args))
         {"SplitSeq.iconcat.value", (const void *)splitseq_iconcat_value},
         {"PyObject_HashNotImplemented", (const void *)PyObject_HashNotImplemented},
         {"PyObject_GenericHash", (const void *)PyObject_GenericHash},
+        /* M2: attributes */
+        {"_PyObject_GenericGetAttrValue", (const void *)_PyObject_GenericGetAttrValue},
+        {"_PyObject_GenericSetAttrValue", (const void *)_PyObject_GenericSetAttrValue},
+        {"PyObject_GenericGetAttr", (const void *)PyObject_GenericGetAttr},
+        {"PyObject_GenericSetAttr", (const void *)PyObject_GenericSetAttr},
+        {"_Py_type_getattro_value", (const void *)_Py_type_getattro_value},
+        {"_Py_type_getattro", (const void *)_Py_type_getattro},
+        {"_Py_module_getattro_value", (const void *)_Py_module_getattro_value},
+        {"_Py_module_getattro", (const void *)_Py_module_getattro},
+        {"_Py_slot_tp_getattro_value", (const void *)_Py_slot_tp_getattro_value},
+        {"_Py_slot_tp_getattro", (const void *)_Py_slot_tp_getattro},
+        {"_Py_slot_tp_getattr_hook_value", (const void *)_Py_slot_tp_getattr_hook_value},
+        {"_Py_slot_tp_getattr_hook", (const void *)_Py_slot_tp_getattr_hook},
     };
     for (size_t i = 0; i < Py_ARRAY_LENGTH(entries); i++) {
         PyObject *address = address_to_int(entries[i].address);
@@ -2427,6 +2443,150 @@ static PyTypeObject VItems_Type = {
 };
 
 
+/* M2: attributes */
+
+/* value_getattr(obj, name) -> (result, was_inline). An exact int or float
+ * that fits is passed inline. */
+static PyObject *
+value_getattr(PyObject *Py_UNUSED(module), PyObject *args)
+{
+    PyObject *obj, *name;
+    if (!PyArg_ParseTuple(args, "OO:value_getattr", &obj, &name)) {
+        return NULL;
+    }
+    return dispatch_value_result(_PyValue_GetAttr(_Py_VALUE_ARG(obj), name));
+}
+
+/* value_getoptionalattr(obj, name) -> (status, result or None) */
+static PyObject *
+value_getoptionalattr(PyObject *Py_UNUSED(module), PyObject *args)
+{
+    PyObject *obj, *name;
+    if (!PyArg_ParseTuple(args, "OO:value_getoptionalattr", &obj, &name)) {
+        return NULL;
+    }
+    _PyStatusValue res = _PyValue_GetOptionalAttr(_Py_VALUE_ARG(obj), name);
+    if (res.status < 0) {
+        return NULL;
+    }
+    PyObject *result = Py_NewRef(Py_None);
+    if (res.status > 0) {
+        Py_DECREF(result);
+        result = value_result(res.value);
+        if (result == NULL) {
+            return NULL;
+        }
+    }
+    return Py_BuildValue("iN", res.status, result);
+}
+
+/* value_setattr(obj, name, value) -> None; both are passed as borrows */
+static PyObject *
+value_setattr(PyObject *Py_UNUSED(module), PyObject *args)
+{
+    PyObject *obj, *name, *value;
+    if (!PyArg_ParseTuple(args, "OOO:value_setattr", &obj, &name, &value)) {
+        return NULL;
+    }
+    if (_PyValue_SetAttr(_Py_VALUE_ARG(obj), name, _Py_VALUE_ARG(value)) < 0) {
+        return NULL;
+    }
+    Py_RETURN_NONE;
+}
+
+/* value_delattr(obj, name) -> None; passes PyValue_NULL */
+static PyObject *
+value_delattr(PyObject *Py_UNUSED(module), PyObject *args)
+{
+    PyObject *obj, *name;
+    if (!PyArg_ParseTuple(args, "OO:value_delattr", &obj, &name)) {
+        return NULL;
+    }
+    if (_PyValue_SetAttr(_Py_VALUE_ARG(obj), name, PyValue_NULL) < 0) {
+        return NULL;
+    }
+    Py_RETURN_NONE;
+}
+
+/* VGetSet: an instance holds one owned PyValue, the attribute x, which
+ * starts as the inline int 1000. The setter stores a new owner; deleting x
+ * raises AttributeError. */
+typedef struct {
+    PyObject_HEAD
+    PyValue x;
+} VGetSetObject;
+
+static PyObject *
+vgetset_new(PyTypeObject *type, PyObject *Py_UNUSED(args),
+            PyObject *Py_UNUSED(kwds))
+{
+    VGetSetObject *self = (VGetSetObject *)type->tp_alloc(type, 0);
+    if (self == NULL) {
+        return NULL;
+    }
+    self->x = PyValue_FromInlineInt(1000);
+    return (PyObject *)self;
+}
+
+static void
+vgetset_dealloc(PyObject *op)
+{
+    VGetSetObject *self = (VGetSetObject *)op;
+    PyValue_CLOSE(self->x);
+    Py_TYPE(op)->tp_free(op);
+}
+
+static PyValue
+vgetset_get_x(PyValueBorrow self, void *Py_UNUSED(closure))
+{
+    VGetSetObject *obj = (VGetSetObject *)PyValue_AsKnownObjectBorrow(self);
+    return PyValue_DUP(obj->x);
+}
+
+static int
+vgetset_set_x(PyValueBorrow self, PyValueBorrow value,
+              void *Py_UNUSED(closure))
+{
+    if (PyValue_IsNull(value)) {
+        PyErr_SetString(PyExc_AttributeError, "cannot delete x");
+        return -1;
+    }
+    VGetSetObject *obj = (VGetSetObject *)PyValue_AsKnownObjectBorrow(self);
+    PyValue new_x = PyValue_DUP(value);
+    PyValue old = obj->x;
+    obj->x = new_x;
+    PyValue_CLOSE(old);
+    return 0;
+}
+
+static PyGetSetDef vgetset_getset[] = {
+    _Py_VALUE_GETSET("x", vgetset_get_x, vgetset_set_x, NULL, NULL),
+    {NULL},
+};
+
+static PyTypeObject VGetSet_Type = {
+    PyVarObject_HEAD_INIT(NULL, 0)
+    .tp_name = "_testinternalcapi.VGetSet",
+    .tp_basicsize = sizeof(VGetSetObject),
+    .tp_flags = Py_TPFLAGS_DEFAULT,
+    .tp_new = vgetset_new,
+    .tp_dealloc = vgetset_dealloc,
+    .tp_getset = vgetset_getset,
+};
+
+/* getset_direct_get(descr, obj): the shared object thunk, called directly */
+static PyObject *
+getset_direct_get(PyObject *Py_UNUSED(module), PyObject *args)
+{
+    PyObject *descr, *obj;
+    if (!PyArg_ParseTuple(args, "O!O:getset_direct_get",
+                          &PyGetSetDescr_Type, &descr, &obj)) {
+        return NULL;
+    }
+    PyGetSetDef *getset = ((PyGetSetDescrObject *)descr)->d_getset;
+    return getset->get(obj, getset->closure);
+}
+
 static PyMethodDef methods[] = {
     {"set_value_slots_log", set_value_slots_log, METH_O},
     {"value_slot_names", value_slot_names, METH_NOARGS},
@@ -2444,6 +2604,12 @@ static PyMethodDef methods[] = {
     {"iternext_call", iternext_call, METH_O},
     {"iter_send", iter_send, METH_VARARGS},
     {"set_key_error_value", set_key_error_value, METH_O},
+    /* M2: attributes */
+    {"value_getattr", value_getattr, METH_VARARGS},
+    {"value_getoptionalattr", value_getoptionalattr, METH_VARARGS},
+    {"value_setattr", value_setattr, METH_VARARGS},
+    {"value_delattr", value_delattr, METH_VARARGS},
+    {"getset_direct_get", getset_direct_get, METH_VARARGS},
     {NULL},
 };
 
@@ -2469,6 +2635,7 @@ _PyTestInternalCapi_Init_ValueSlots(PyObject *module)
         &SeqOnly_Type,
         &VMap_Type,
         &VItems_Type,
+        &VGetSet_Type,  /* M2 */
     };
     for (size_t i = 0; i < Py_ARRAY_LENGTH(static_types); i++) {
         if (PyType_Ready(static_types[i]) < 0) {

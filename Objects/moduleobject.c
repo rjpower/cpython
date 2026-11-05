@@ -18,6 +18,8 @@
 #include "pycore_slots.h"         // _PySlotIterator_Init
 #include "pycore_unicodeobject.h" // _PyUnicode_EqualToASCIIString()
 #include "pycore_value_api.h"     // _PyValue_FromObjectKnown()
+#include "pycore_value_ops.h"     // _PyObject_GenericGetAttrValue()
+#include "pycore_value_slots.h"   // _PyValue_THUNK_EXIT(, BOX_SITE_ATTRIBUTE)
 #include "pycore_weakref.h"       // FT_CLEAR_WEAKREFS()
 
 #include "osdefs.h"               // MAXPATHLEN
@@ -1378,12 +1380,14 @@ module_get_resolved_dict_item(PyObject *dict, PyObject *name, PyObject **result)
     return value == NULL ? -1 : 1;
 }
 
-PyObject*
-_Py_module_getattro_impl(PyModuleObject *m, PyObject *name, int suppress)
+/* The rest of a module's attribute read, given attr, the object result of
+   the generic read (NULL if it failed or found nothing): a lazy import is
+   reified; otherwise a lazy submodule, then __getattr__, then the error. */
+static PyObject *
+module_getattro_object(PyModuleObject *m, PyObject *name, int suppress,
+                       PyObject *attr)
 {
-    // When suppress=1, this function suppresses AttributeError.
-    PyObject *attr, *mod_name, *getattr;
-    attr = _PyObject_GenericGetAttrWithDict((PyObject *)m, name, NULL, suppress);
+    PyObject *mod_name, *getattr;
     if (attr == NULL) {
         if (suppress == 1) {
             if (PyErr_Occurred()) {
@@ -1568,11 +1572,45 @@ done:
 }
 
 
+/* The value getattro of a module, as module_getattro_object() below, with
+   the common case first: an attribute found by the generic read that is not
+   a lazy import is returned as its value, so that an inline one (math.pi)
+   is not boxed. When suppress=1, this function suppresses AttributeError. */
+PyValue
+_Py_module_getattro_impl(PyModuleObject *m, PyObject *name, int suppress)
+{
+    PyValueBorrow self = PyValue_FromObjectBorrow((PyObject *)m);
+    PyValue value;
+    if (suppress) {
+        value = _PyObject_GenericLookupAttrValue(self, name, NULL).value;
+    }
+    else {
+        value = _PyObject_GenericGetAttrValue(self, name);
+    }
+    if (!PyValue_IsNull(value)) {
+        if (!PyValue_IsObject(value)
+            || !PyLazyImport_CheckExact(PyValue_AsKnownObjectBorrow(value)))
+        {
+            return value;
+        }
+    }
+    return _PyValue_FromObjectResult(
+        module_getattro_object(m, name, suppress,
+                               _PyValue_THUNK_EXIT(value, BOX_SITE_ATTRIBUTE)));
+}
+
+PyValue
+_Py_module_getattro_value(PyValueBorrow self, PyObject *name)
+{
+    return _Py_module_getattro_impl(
+        _PyModule_CAST(PyValue_AsKnownObjectBorrow(self)), name, 0);
+}
+
 PyObject*
 _Py_module_getattro(PyObject *self, PyObject *name)
 {
-    PyModuleObject *m = _PyModule_CAST(self);
-    return _Py_module_getattro_impl(m, name, 0);
+    return _PyValue_THUNK_EXIT(_Py_module_getattro_value(_Py_VALUE_ARG(self),
+                                                         name), BOX_SITE_ATTRIBUTE);
 }
 
 static int
@@ -1878,4 +1916,7 @@ PyTypeObject PyModule_Type = {
     0,                                          /* tp_alloc */
     new_module,                                 /* tp_new */
     PyObject_GC_Del,                            /* tp_free */
+    .tp_value = {
+        .getattro = _Py_VALUE_SLOT_INIT(getattro, _Py_module_getattro_value),
+    },
 };

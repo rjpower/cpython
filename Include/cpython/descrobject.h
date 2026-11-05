@@ -52,6 +52,9 @@ typedef struct {
 typedef struct {
     PyDescr_COMMON;
     PyGetSetDef *d_getset;
+    /* The const _PyValueGetSet * record of d_getset, or NULL. Internal to
+       the VM; set once by PyDescr_NewGetSet. */
+    void *d_value;
 } PyGetSetDescrObject;
 
 typedef struct {

@@ -111,7 +111,7 @@ typedef PyValue (*_Py_concatvaluefunc)(PyObject *, PyValueBorrow);
     X(hash, ht_type.tp_hash, HASH, HASH) \
     X(nb_bool, as_number.nb_bool, INQUIRY, INQUIRY) \
     X(nb_index, as_number.nb_index, UNARY, UNARY) \
-    X(getattro, ht_type.tp_getattro, GETATTRO, NONE) \
+    X(getattro, ht_type.tp_getattro, GETATTRO, GETATTRO) \
     X(subscript, as_mapping.mp_subscript, SUBSCRIPT, SUBSCRIPT) \
     X(ass_subscript, as_mapping.mp_ass_subscript, ASSSUBSCRIPT, ASSSUBSCRIPT) \
     X(contains, as_sequence.sq_contains, CONTAINS, CONTAINS) \
@@ -149,9 +149,9 @@ typedef PyValue (*_Py_concatvaluefunc)(PyObject *, PyValueBorrow);
       BINARY, BINARY) \
     X(repr, ht_type.tp_repr, REPR, REPR) \
     X(str, ht_type.tp_str, REPR, REPR) \
-    X(setattro, ht_type.tp_setattro, SETATTRO, NONE) \
-    X(descr_get, ht_type.tp_descr_get, DESCRGET, NONE) \
-    X(descr_set, ht_type.tp_descr_set, DESCRSET, NONE) \
+    X(setattro, ht_type.tp_setattro, SETATTRO, SETATTRO) \
+    X(descr_get, ht_type.tp_descr_get, DESCRGET, DESCRGET) \
+    X(descr_set, ht_type.tp_descr_set, DESCRSET, DESCRSET) \
     X(item, as_sequence.sq_item, ITEM, ITEM) \
     X(ass_item, as_sequence.sq_ass_item, ASSITEM, ASSITEM) \
     X(send, as_async.am_send, SEND, NONE) \
@@ -203,6 +203,20 @@ _Py_VALUE_SLOT_TABLE(_Py_VALUE_SLOT_TYPEDEF)
  * above). */
 #define _PyType_VALUE_FIELD_AT(t, row) \
     (((_Py_valuefunc *)&(t)->tp_value)[row])
+
+/* The pair table (value-api-v2a0.md, section 4.3): object functions that
+ * many types share, with their value sides. A type whose object slot of
+ * row is object, and whose value field is 0, gets value in PyType_Ready.
+ * It lives in Objects/value_pairs.c, the one unit that may name a marked
+ * function (value-api-m1b-m2.md, A8). A row whose value side is NULL waits
+ * for the step that writes it: M1b (iteration), M3 (calls). */
+typedef struct {
+    int row;
+    void *object;
+    _Py_valuefunc value;
+} _PyValueSlotPair;
+extern const _PyValueSlotPair _PyValueSlot_Pairs[];
+extern const size_t _PyValueSlot_PairCount;
 
 #ifdef Py_DEBUG
 /* Check that the value field of row pairs with the object slot beside it
@@ -483,6 +497,40 @@ _PyValue_AdapterRelease(PyValueBorrow v, PyObject *obj)
             BOX_SITE_ITERATION); \
     }
 
+
+/* The attribute thunks (value-api-m1b-m2.md, section 2.2). A NULL obj
+   (class access) or value (deletion) becomes PyValue_NULL. */
+
+#define _Py_VALUE_THUNK_GETATTRO(name, valuefn) \
+    Py_VALUE_ENTRY static PyObject * \
+    name(PyObject *self, PyObject *attr) \
+    { \
+        return _PyValue_THUNK_EXIT((valuefn)(_Py_VALUE_ARG(self), attr), \
+                                   BOX_SITE_ATTRIBUTE); \
+    }
+
+#define _Py_VALUE_THUNK_SETATTRO(name, valuefn) \
+    Py_VALUE_ENTRY static int \
+    name(PyObject *self, PyObject *attr, PyObject *value) \
+    { \
+        return (valuefn)(_Py_VALUE_ARG(self), attr, _Py_VALUE_ARG(value)); \
+    }
+
+#define _Py_VALUE_THUNK_DESCRGET(name, valuefn) \
+    Py_VALUE_ENTRY static PyObject * \
+    name(PyObject *descr, PyObject *obj, PyObject *type) \
+    { \
+        return _PyValue_THUNK_EXIT( \
+            (valuefn)(descr, _Py_VALUE_ARG(obj), type), \
+            BOX_SITE_ATTRIBUTE); \
+    }
+
+#define _Py_VALUE_THUNK_DESCRSET(name, valuefn) \
+    Py_VALUE_ENTRY static int \
+    name(PyObject *descr, PyObject *obj, PyObject *value) \
+    { \
+        return (valuefn)(descr, _Py_VALUE_ARG(obj), _Py_VALUE_ARG(value)); \
+    }
 
 /* NotImplemented sides (D12, script class N): _Py_VALUE_NOTIMPL_<kind>(name,
  * objfn) defines name, the value side of a binary, ternary or compare object

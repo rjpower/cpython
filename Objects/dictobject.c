@@ -7475,8 +7475,8 @@ PyObject_GenericGetDict(PyObject *obj, void *context)
 }
 
 int
-_PyObjectDict_SetItem(PyTypeObject *tp, PyObject *obj, PyObject **dictptr,
-                      PyObject *key, PyObject *value)
+(_PyObjectDict_SetValue)(PyTypeObject *tp, PyObject *obj, PyObject **dictptr,
+                         PyObject *key, PyValueBorrow value)
 {
     PyObject *dict;
     int res;
@@ -7488,10 +7488,10 @@ _PyObjectDict_SetItem(PyTypeObject *tp, PyObject *obj, PyObject **dictptr,
     }
 
     Py_INCREF(dict);  /* The attribute store can replace obj's dictionary. */
-    Py_BEGIN_CRITICAL_SECTION(dict);
-    res = _PyDict_SetItem_LockHeld((PyDictObject *)dict, key, value);
+    res = PyValue_IsNull(value) ?
+        PyDict_DelValue(dict, PyValue_FromObjectBorrow(key)) :
+        PyDict_SetValue(dict, PyValue_FromObjectBorrow(key), value);
     ASSERT_CONSISTENT(dict);
-    Py_END_CRITICAL_SECTION();
     Py_XDECREF(dict);
     return res;
 }

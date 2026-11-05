@@ -11,7 +11,7 @@
 #include "pycore_ceval.h"         // _Py_EnterRecursiveCallTstate()
 #include "pycore_dict.h"          // PyDict_ContainsValue()
 #include "pycore_wasm_trampoline.h" // descr_set_trampoline_call(), descr_get_trampoline_call()
-#include "pycore_descrobject.h"   // _PyMethodWrapper_Type
+#include "pycore_descrobject.h"   // _PyMethodWrapper_Type, _PyValueGetSet
 #include "pycore_modsupport.h"    // _PyArg_UnpackStack()
 #include "pycore_object.h"        // _PyObject_GC_UNTRACK()
 #include "pycore_object_deferred.h" // _PyObject_SetDeferredRefcount()
@@ -88,35 +88,25 @@ wrapperdescr_repr(PyObject *descr)
 }
 
 static int
-descr_check(PyDescrObject *descr, PyObject *obj)
+descr_check_value(PyDescrObject *descr, PyValueBorrow obj)
 {
-    if (!PyObject_TypeCheck(obj, descr->d_type)) {
+    PyTypeObject *type = PyValue_TYPE(obj);
+    if (type != descr->d_type && !PyType_IsSubtype(type, descr->d_type)) {
         PyErr_Format(PyExc_TypeError,
                      "descriptor '%V' for '%.100s' objects "
                      "doesn't apply to a '%.100s' object",
                      descr_name((PyDescrObject *)descr), "?",
                      descr->d_type->tp_name,
-                     Py_TYPE(obj)->tp_name);
+                     type->tp_name);
         return -1;
     }
     return 0;
 }
 
-/* descr_check() for a value receiver: no box for an inline one. */
 static int
-descr_check_value(PyDescrObject *descr, PyValueBorrow obj)
+descr_check(PyDescrObject *descr, PyObject *obj)
 {
-    PyTypeObject *tp = PyValue_TYPE(obj);
-    if (!PyType_IsSubtype(tp, descr->d_type)) {
-        PyErr_Format(PyExc_TypeError,
-                     "descriptor '%V' for '%.100s' objects "
-                     "doesn't apply to a '%.100s' object",
-                     descr_name((PyDescrObject *)descr), "?",
-                     descr->d_type->tp_name,
-                     tp->tp_name);
-        return -1;
-    }
-    return 0;
+    return descr_check_value(descr, _Py_VALUE_ARG(obj));
 }
 
 static PyObject *
@@ -191,45 +181,81 @@ method_get(PyObject *self, PyObject *obj, PyObject *type)
     }
 }
 
-static PyObject *
-member_get(PyObject *self, PyObject *obj, PyObject *type)
+static PyValue
+member_get_value(PyObject *self, PyValueBorrow obj, PyObject *type)
 {
     PyMemberDescrObject *descr = (PyMemberDescrObject *)self;
-    if (obj == NULL) {
-        return Py_NewRef(descr);
+    if (PyValue_IsNull(obj)) {
+        return PyValue_DUP(PyValue_FromObjectBorrow(self));
     }
-    if (descr_check((PyDescrObject *)descr, obj) < 0) {
-        return NULL;
+    if (descr_check_value((PyDescrObject *)descr, obj) < 0) {
+        return PyValue_NULL;
     }
+    // No member descriptor applies to an exact int or float.
+    assert(!PyValue_IsInline(obj));
+    PyObject *object = PyValue_AsKnownObjectBorrow(obj);
 
     if (descr->d_member->flags & Py_AUDIT_READ) {
         if (PySys_Audit("object.__getattr__", "Os",
-            obj ? obj : Py_None, descr->d_member->name) < 0) {
-            return NULL;
+            object, descr->d_member->name) < 0) {
+            return PyValue_NULL;
         }
     }
 
-    return PyMember_GetOne((char *)obj, descr->d_member);
+    return _PyMember_GetOneValue((char *)object, descr->d_member);
 }
 
-static PyObject *
-getset_get(PyObject *self, PyObject *obj, PyObject *type)
+_Py_VALUE_THUNK_DESCRGET(member_get, member_get_value)
+
+static PyValue
+getset_get_value(PyObject *self, PyValueBorrow obj, PyObject *type)
 {
     PyGetSetDescrObject *descr = (PyGetSetDescrObject *)self;
-    if (obj == NULL) {
-        return Py_NewRef(descr);
+    if (PyValue_IsNull(obj)) {
+        return PyValue_DUP(PyValue_FromObjectBorrow(self));
     }
-    if (descr_check((PyDescrObject *)descr, obj) < 0) {
-        return NULL;
+    if (descr_check_value((PyDescrObject *)descr, obj) < 0) {
+        return PyValue_NULL;
     }
-    if (descr->d_getset->get != NULL)
-        return descr_get_trampoline_call(
-            descr->d_getset->get, obj, descr->d_getset->closure);
+    if (descr->d_getset->get != NULL) {
+        if (descr->d_value != NULL) {
+            const _PyValueGetSet *record = descr->d_value;
+            return record->get(obj, record->closure);
+        }
+        PyObject *box = _PyValue_AdapterBox(obj, BOX_SITE_ATTRIBUTE, descr->d_getset->get);
+        if (box == NULL) {
+            return PyValue_NULL;
+        }
+        PyObject *result = descr_get_trampoline_call(
+            descr->d_getset->get, box, descr->d_getset->closure);
+        _PyValue_AdapterRelease(obj, box);
+        return _PyValue_FromObjectResult(result);
+    }
     PyErr_Format(PyExc_AttributeError,
                  "attribute '%V' of '%.100s' objects is not readable",
                  descr_name((PyDescrObject *)descr), "?",
                  PyDescr_TYPE(descr)->tp_name);
-    return NULL;
+    return PyValue_NULL;
+}
+
+_Py_VALUE_THUNK_DESCRGET(getset_get, getset_get_value)
+
+PyObject *
+_PyGetSet_ValueGet(PyObject *self, void *record)
+{
+    const _PyValueGetSet *r = record;
+    return _PyValue_THUNK_EXIT(r->get(_Py_VALUE_ARG(self), r->closure), BOX_SITE_ATTRIBUTE);
+}
+
+int
+_PyGetSet_ValueSet(PyObject *self, PyObject *value, void *record)
+{
+    const _PyValueGetSet *r = record;
+    if (r->set == NULL) {
+        PyErr_SetString(PyExc_AttributeError, "attribute is not writable");
+        return -1;
+    }
+    return r->set(_Py_VALUE_ARG(self), _Py_VALUE_ARG(value), r->closure);
 }
 
 static PyObject *
@@ -246,42 +272,55 @@ wrapperdescr_get(PyObject *self, PyObject *obj, PyObject *type)
 }
 
 static int
-descr_setcheck(PyDescrObject *descr, PyObject *obj, PyObject *value)
-{
-    assert(obj != NULL);
-    if (!PyObject_TypeCheck(obj, descr->d_type)) {
-        PyErr_Format(PyExc_TypeError,
-                     "descriptor '%V' for '%.100s' objects "
-                     "doesn't apply to a '%.100s' object",
-                     descr_name(descr), "?",
-                     descr->d_type->tp_name,
-                     Py_TYPE(obj)->tp_name);
-        return -1;
-    }
-    return 0;
-}
-
-static int
-member_set(PyObject *self, PyObject *obj, PyObject *value)
+member_set_value(PyObject *self, PyValueBorrow obj, PyValueBorrow value)
 {
     PyMemberDescrObject *descr = (PyMemberDescrObject *)self;
-    if (descr_setcheck((PyDescrObject *)descr, obj, value) < 0) {
+    assert(!PyValue_IsNull(obj));
+    if (descr_check_value((PyDescrObject *)descr, obj) < 0) {
         return -1;
     }
-    return PyMember_SetOne((char *)obj, descr->d_member, value);
+    assert(!PyValue_IsInline(obj));
+    return _PyMember_SetOneValue((char *)PyValue_AsKnownObjectBorrow(obj),
+                                 descr->d_member, value);
 }
 
+_Py_VALUE_THUNK_DESCRSET(member_set, member_set_value)
+
 static int
-getset_set(PyObject *self, PyObject *obj, PyObject *value)
+getset_set_value(PyObject *self, PyValueBorrow obj, PyValueBorrow value)
 {
     PyGetSetDescrObject *descr = (PyGetSetDescrObject *)self;
-    if (descr_setcheck((PyDescrObject *)descr, obj, value) < 0) {
+    assert(!PyValue_IsNull(obj));
+    if (descr_check_value((PyDescrObject *)descr, obj) < 0) {
         return -1;
     }
     if (descr->d_getset->set != NULL) {
-        return descr_set_trampoline_call(
-            descr->d_getset->set, obj, value,
-            descr->d_getset->closure);
+        const _PyValueGetSet *record = descr->d_value;
+        if (record != NULL && record->set != NULL) {
+            return record->set(obj, value, record->closure);
+        }
+        if (record == NULL) {
+            PyObject *box = _PyValue_AdapterBox(obj, BOX_SITE_ATTRIBUTE, descr->d_getset->set);
+            if (box == NULL) {
+                return -1;
+            }
+            PyObject *vbox = NULL;
+            if (!PyValue_IsNull(value)) {
+                vbox = _PyValue_AdapterBox(value, BOX_SITE_ATTRIBUTE, descr->d_getset->set);
+                if (vbox == NULL) {
+                    _PyValue_AdapterRelease(obj, box);
+                    return -1;
+                }
+            }
+            int res = descr_set_trampoline_call(
+                descr->d_getset->set, box, vbox,
+                descr->d_getset->closure);
+            if (vbox != NULL) {
+                _PyValue_AdapterRelease(value, vbox);
+            }
+            _PyValue_AdapterRelease(obj, box);
+            return res;
+        }
     }
     PyErr_Format(PyExc_AttributeError,
                  "attribute '%V' of '%.100s' objects is not writable",
@@ -289,6 +328,8 @@ getset_set(PyObject *self, PyObject *obj, PyObject *value)
                  PyDescr_TYPE(descr)->tp_name);
     return -1;
 }
+
+_Py_VALUE_THUNK_DESCRSET(getset_set, getset_set_value)
 
 
 /* Vectorcall functions for each of the PyMethodDescr calling conventions.
@@ -984,6 +1025,10 @@ PyTypeObject PyMemberDescr_Type = {
     0,                                          /* tp_dict */
     member_get,                                 /* tp_descr_get */
     member_set,                                 /* tp_descr_set */
+    .tp_value = {
+        .descr_get = _Py_VALUE_SLOT_INIT(descr_get, member_get_value),
+        .descr_set = _Py_VALUE_SLOT_INIT(descr_set, member_set_value),
+    },
 };
 
 PyTypeObject PyGetSetDescr_Type = {
@@ -1021,6 +1066,10 @@ PyTypeObject PyGetSetDescr_Type = {
     0,                                          /* tp_dict */
     getset_get,                                 /* tp_descr_get */
     getset_set,                                 /* tp_descr_set */
+    .tp_value = {
+        .descr_get = _Py_VALUE_SLOT_INIT(descr_get, getset_get_value),
+        .descr_set = _Py_VALUE_SLOT_INIT(descr_set, getset_set_value),
+    },
 };
 
 PyTypeObject PyWrapperDescr_Type = {
@@ -1174,8 +1223,10 @@ PyDescr_NewGetSet(PyTypeObject *type, PyGetSetDef *getset)
 
     descr = (PyGetSetDescrObject *)descr_new(&PyGetSetDescr_Type,
                                              type, getset->name);
-    if (descr != NULL)
+    if (descr != NULL) {
         descr->d_getset = getset;
+        descr->d_value = getset->get == _PyGetSet_ValueGet ? getset->closure : NULL;
+    }
     return (PyObject *)descr;
 }
 

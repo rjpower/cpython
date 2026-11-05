@@ -64,6 +64,20 @@ Py_BUILD_CORE_MODULE, or one that defines Py_VALUE_CORE (Include/pyport.h).
   should be a PyValueBorrow (register-ir-v2-a5b.md, section 5.3). Reported,
   not failing.
 
+* slot-write: an assignment through a pointer to an object slot field of
+  SLOT_FAMILIES in Objects/ or Python/, outside the type-construction
+  functions (SLOT_WRITE_FUNCTIONS). After PyType_Ready the hook rewrite
+  and slot_tp_descr_get change an object slot through _PyType_WriteSlotPair(),
+  which writes its value field beside it, and update_one_slot() writes both
+  fields through slotptr() (pyjit/design/proposals/value-api-m1b-m2.md, A7). The
+  check is syntactic: writes through an offset (update_one_slot(),
+  PyType_FromMetaclass()) are out of its reach, and in Modules/, where
+  writes before ready are normal, the debug check of the pairs
+  (value-api-v2a0.md, D6) is the only one.
+* pair-table: a function body in Objects/value_pairs.c. That unit holds
+  only the pair table, and is the one unit where Py_VALUE_COMPAT is off, so
+  that a marked function's address may be taken there (A8).
+
 * compat-body: a box primitive or box helper (BOX_PRIMITIVES) called
   directly in the body of a function that Py_VALUE_COMPAT marks. Such a
   function is a thunk of a value dispatcher
@@ -119,6 +133,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import textwrap
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -1887,6 +1902,108 @@ PUBLIC_VALUE_TESTS = {
 }
 
 
+# The functions that build a type before PyType_Ready finishes, and the
+# writer after it (slot-write).
+SLOT_WRITE_FUNCTIONS = frozenset({
+    "type_new_set_slots", "inherit_slots", "type_ready_set_hash",
+    "initialize_static_fields", "_PyType_WriteSlotPair",
+})
+SLOT_WRITE = re.compile(r"->\s*({})\s*=(?!=)".format(
+    "|".join(sorted(SLOT_FAMILIES, key=len, reverse=True))))
+FUNCTION_HEAD = re.compile(r"^([A-Za-z_]\w*)\s*\(", re.M)
+SLOT_WRITE_DIRS = ("Objects", "Python")
+PAIR_TABLE_UNIT = "Objects/value_pairs.c"
+
+
+def slot_write_text(path, text):
+    """The slot-write findings of the text of one C file."""
+    code = strip_c(text)
+    line_of = lines_of(code)
+    heads = [(m.start(), m[1]) for m in FUNCTION_HEAD.finditer(code)]
+    findings = []
+    for m in SLOT_WRITE.finditer(code):
+        i = bisect.bisect_right(heads, (m.start(), "")) - 1
+        function = heads[i][1] if i >= 0 else None
+        if function in SLOT_WRITE_FUNCTIONS:
+            continue
+        column = m.start() - code.rfind("\n", 0, m.start())
+        findings.append(Finding(
+            path, line_of(m.start()), column, "slot-write",
+            f"writes the object slot {m[1]} in {function or 'file scope'}; "
+            "use _PyType_WriteSlotPair()", True))
+    return findings
+
+
+def pair_table_text(path, text):
+    """The pair-table findings of the text of the pair table's unit: a
+    brace at file scope that opens a function body."""
+    code = re.sub(r"^[ \t]*#(?:\\\n|[^\n])*", blank, strip_c(text),
+                  flags=re.M)
+    line_of = lines_of(code)
+    findings = []
+    depth = 0
+    for i, c in enumerate(code):
+        if c == "{":
+            if depth == 0 and code[:i].rstrip().endswith(")"):
+                column = i - code.rfind("\n", 0, i)
+                findings.append(Finding(
+                    path, line_of(i), column, "pair-table",
+                    "a function body in the pair table's unit", True))
+            depth += 1
+        elif c == "}":
+            depth -= 1
+    return findings
+
+
+def check_slot_writes(srcdir):
+    findings = []
+    for directory in SLOT_WRITE_DIRS:
+        for path in sorted(Path(srcdir, directory).rglob("*.c")):
+            rel = str(path.relative_to(srcdir))
+            findings.extend(slot_write_text(
+                rel, path.read_text(errors="replace")))
+    pairs = Path(srcdir, PAIR_TABLE_UNIT)
+    findings.extend(pair_table_text(PAIR_TABLE_UNIT, pairs.read_text()))
+    return findings
+
+
+SLOT_WRITE_TESTS = {
+    "slot_write_after_ready": ("""
+        static PyObject *
+        f(PyObject *self)
+        {
+            Py_TYPE(self)->tp_getattro = NULL;
+            Py_TYPE(self)->tp_as_number->nb_add = NULL;
+            if (Py_TYPE(self)->tp_hash == NULL) { return NULL; }
+            return self;
+        }""", 2),
+    "slot_write_construction": ("""
+        static void
+        inherit_slots(PyTypeObject *type, PyTypeObject *base)
+        {
+            type->tp_getattro = base->tp_getattro;  /* x->tp_hash = 0 */
+        }
+        static PyTypeObject T = {.tp_hash = NULL};""", 0),
+}
+
+PAIR_TABLE_TESTS = {
+    "pair_table_data": ("""
+        #define Py_VALUE_PAIR_TABLE 1
+        #include "Python.h"
+        const _PyValueSlotPair _PyValueSlot_Pairs[] = {
+            {_Py_VALUE_SLOT_INDEX_hash, (void *)PyObject_GenericHash,
+             _Py_VALUE_SLOT_INIT(hash, _PyValue_GenericHash)},
+        };
+        const size_t _PyValueSlot_PairCount = 1;""", 0),
+    "pair_table_function": ("""
+        static int
+        f(void)
+        {
+            return 0;
+        }""", 1),
+}
+
+
 def text_self_test():
     """Run the self-tests of the text rules. Return a list of failures."""
     failures = encoding_names_defined(SRCDIR)
@@ -1900,6 +2017,12 @@ def text_self_test():
     cases += [(name, rule, window_read_text(path, text)
                + vectorcall_thunk_text(path, text), count)
               for name, (path, text, rule, count) in CALL_TEXT_TESTS.items()]
+    cases += [(name, "slot-write",
+               slot_write_text(name, textwrap.dedent(text)), count)
+              for name, (text, count) in SLOT_WRITE_TESTS.items()]
+    cases += [(name, "pair-table",
+               pair_table_text(name, textwrap.dedent(text)), count)
+              for name, (text, count) in PAIR_TABLE_TESTS.items()]
     for name, rule, got, count in cases:
         got = ([f for f in got if f.rule == rule]
                if rule not in ("raw-bits", "box-text") else got)
@@ -2214,7 +2337,8 @@ def main():
     text_findings = (check_raw_bits_text(SRCDIR, checked)
                      + check_public_headers(SRCDIR)
                      + check_call_text(SRCDIR)
-                     + check_box_text(SRCDIR))
+                     + check_box_text(SRCDIR)
+                     + check_slot_writes(SRCDIR))
     entry_entries = []
     for entry in database:
         path = display_path(entry["file"], entry["directory"])

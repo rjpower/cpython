@@ -1786,12 +1786,14 @@ static PyMemberDef Uuid_members[] = {
     {NULL}
 };
 
-/* The type is not a GC type, but the tracing mark must reach its
-   members.  The mark visits the heap type itself. */
+/* The base type is not a GC type, but its subclasses are.  Their
+   subtype_traverse skips visiting the heap type when the base traverse
+   belongs to a heap type, so this function must visit it. */
 static int
 Uuid_traverse(PyObject *op, visitproc visit, void *arg)
 {
     uuidobject *self = uuidobject_CAST(op);
+    Py_VISIT(Py_TYPE(self));
     Py_VISIT(self->is_safe);
     return 0;
 }

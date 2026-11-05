@@ -4,11 +4,6 @@
    Tools/build/check_value_api.py does not list its slot-field reads. */
 #define Py_VALUE_ADAPTER 1
 
-/* The defer line of the value-API waves (value-api-v2a0.md, section 1.5):
-   the W1 container marks do not apply here until the steps that are
-   rewriting this file (V2a-1a, M1b, M2, M3a) land. */
-#define Py_VALUE_DEFER_MARKS 1
-
 #include "Python.h"
 #include "pycore_abstract.h"      // _PySequence_IterSearch()
 #include "pycore_borrow.h"        // _PyBorrowScope_Enter()
@@ -1712,13 +1707,31 @@ type_set_qualname(PyObject *tp, PyObject *value, void *context)
     return 0;
 }
 
+/* PyDict_GetItemRef() through the value form: the result is an object, so an
+   inline int or float in the dict is boxed here. */
+static int
+type_dict_get_object(PyObject *dict, PyValueBorrow key, PyObject **result)
+{
+    PyValue v;
+    int rc = PyDict_GetValue(dict, key, &v);
+    *result = NULL;
+    if (rc > 0) {
+        *result = _PyValue_AsObjectAt(v, BOX_SITE_DICT);
+        PyValue_CLOSE(v);
+        if (*result == NULL) {
+            rc = -1;
+        }
+    }
+    return rc;
+}
+
 static PyObject *
 type_module(PyTypeObject *type)
 {
     PyObject *mod;
     if (type->tp_flags & Py_TPFLAGS_HEAPTYPE) {
         PyObject *dict = lookup_tp_dict(type);
-        if (PyDict_GetItemRef(dict, &_Py_ID(__module__), &mod) == 0) {
+        if (type_dict_get_object(dict, _PyValue_FromObjectKnown(&_Py_ID(__module__)), &mod) == 0) {
             PyErr_Format(PyExc_AttributeError, "__module__");
         }
     }
@@ -1828,7 +1841,7 @@ type_abstractmethods(PyObject *tp, void *Py_UNUSED(closure))
     }
     else {
         PyObject *dict = lookup_tp_dict(type);
-        if (PyDict_GetItemRef(dict, &_Py_ID(__abstractmethods__), &res) == 0) {
+        if (type_dict_get_object(dict, _PyValue_FromObjectKnown(&_Py_ID(__abstractmethods__)), &res) == 0) {
             PyErr_SetObject(PyExc_AttributeError, &_Py_ID(__abstractmethods__));
         }
     }
@@ -2254,7 +2267,7 @@ type_get_doc(PyObject *tp, void *Py_UNUSED(closure))
         return _PyType_GetDocFromInternalDoc(type->tp_name, type->tp_doc);
     }
     PyObject *dict = lookup_tp_dict(type);
-    if (PyDict_GetItemRef(dict, &_Py_ID(__doc__), &result) == 0) {
+    if (type_dict_get_object(dict, _PyValue_FromObjectKnown(&_Py_ID(__doc__)), &result) == 0) {
         result = Py_NewRef(Py_None);
     }
     else if (result) {
@@ -2318,11 +2331,11 @@ type_get_annotate(PyObject *tp, void *Py_UNUSED(closure))
     if (dict == NULL) {
         goto done;
     }
-    if (PyDict_GetItemRef(dict, &_Py_ID(__annotate__), &annotate) < 0) {
+    if (type_dict_get_object(dict, _PyValue_FromObjectKnown(&_Py_ID(__annotate__)), &annotate) < 0) {
         goto done;
     }
     if (annotate == NULL &&
-        PyDict_GetItemRef(dict, &_Py_ID(__annotate_func__), &annotate) < 0) {
+        type_dict_get_object(dict, _PyValue_FromObjectKnown(&_Py_ID(__annotate_func__)), &annotate) < 0) {
         goto done;
     }
     if (annotate != NULL) {
@@ -2405,11 +2418,11 @@ type_get_annotations(PyObject *tp, void *Py_UNUSED(closure))
     }
     dict = type_mutation_get_dict(type);
     if (dict == NULL ||
-        PyDict_GetItemRef(dict, &_Py_ID(__annotations__), &annotations) < 0) {
+        type_dict_get_object(dict, _PyValue_FromObjectKnown(&_Py_ID(__annotations__)), &annotations) < 0) {
         goto done;
     }
     if (annotations == NULL &&
-        PyDict_GetItemRef(dict, &_Py_ID(__annotations_cache__), &annotations) < 0) {
+        type_dict_get_object(dict, _PyValue_FromObjectKnown(&_Py_ID(__annotations_cache__)), &annotations) < 0) {
         goto done;
     }
     if (annotations != NULL) {
@@ -2520,7 +2533,7 @@ type_get_type_params(PyObject *tp, void *Py_UNUSED(closure))
     }
 
     PyObject *params;
-    if (PyDict_GetItemRef(lookup_tp_dict(type), &_Py_ID(__type_params__), &params) == 0) {
+    if (type_dict_get_object(lookup_tp_dict(type), _PyValue_FromObjectKnown(&_Py_ID(__type_params__)), &params) == 0) {
         return PyTuple_New(0);
     }
     return params;
@@ -4879,7 +4892,7 @@ type_new_set_module(PyObject *dict)
     }
 
     PyObject *module;
-    r = PyDict_GetItemRef(globals, &_Py_ID(__name__), &module);
+    r = type_dict_get_object(globals, _PyValue_FromObjectKnown(&_Py_ID(__name__)), &module);
     if (module) {
         r = PyDict_SetValue(dict, _PyValue_FromObjectKnown(&_Py_ID(__module__)), PyValue_FromObjectBorrow(module));
         Py_DECREF(module);
@@ -4895,7 +4908,7 @@ type_new_set_ht_name(PyTypeObject *type, PyObject *dict)
 {
     PyHeapTypeObject *et = (PyHeapTypeObject *)type;
     PyObject *qualname;
-    if (PyDict_GetItemRef(dict, &_Py_ID(__qualname__), &qualname) < 0) {
+    if (type_dict_get_object(dict, _PyValue_FromObjectKnown(&_Py_ID(__qualname__)), &qualname) < 0) {
         return -1;
     }
     if (qualname != NULL) {
@@ -8441,7 +8454,7 @@ _PyType_GetSlotNames(PyTypeObject *cls)
 
     /* Get the slot names from the cache in the class if possible. */
     PyObject *dict = lookup_tp_dict(cls);
-    if (PyDict_GetItemRef(dict, &_Py_ID(__slotnames__), &slotnames) < 0) {
+    if (type_dict_get_object(dict, _PyValue_FromObjectKnown(&_Py_ID(__slotnames__)), &slotnames) < 0) {
         return NULL;
     }
     if (slotnames != NULL) {
@@ -10899,7 +10912,7 @@ wrap_binaryfunc(PyObject *self, PyObject *args, void *wrapped)
     if (!check_num_args(tuple, 1)) {
         goto done;
     }
-    other = PyTuple_GetItemRef(tuple, 0);
+    other = _PyValue_AsObjectAt(PyTuple_GET_VALUE(tuple, 0), BOX_SITE_TUPLE);
     if (other == NULL) {
         goto done;
     }
@@ -10926,7 +10939,7 @@ wrap_binaryfunc_l(PyObject *self, PyObject *args, void *wrapped)
     if (!check_num_args(tuple, 1)) {
         goto done;
     }
-    other = PyTuple_GetItemRef(tuple, 0);
+    other = _PyValue_AsObjectAt(PyTuple_GET_VALUE(tuple, 0), BOX_SITE_TUPLE);
     if (other == NULL) {
         goto done;
     }
@@ -10953,7 +10966,7 @@ wrap_binaryfunc_r(PyObject *self, PyObject *args, void *wrapped)
     if (!check_num_args(tuple, 1)) {
         goto done;
     }
-    other = PyTuple_GetItemRef(tuple, 0);
+    other = _PyValue_AsObjectAt(PyTuple_GET_VALUE(tuple, 0), BOX_SITE_TUPLE);
     if (other == NULL) {
         goto done;
     }
@@ -10986,12 +10999,12 @@ wrap_ternaryfunc(PyObject *self, PyObject *args, void *wrapped)
     if (size == -1) {
         goto done;
     }
-    other = PyTuple_GetItemRef(tuple, 0);
+    other = _PyValue_AsObjectAt(PyTuple_GET_VALUE(tuple, 0), BOX_SITE_TUPLE);
     if (other == NULL) {
         goto done;
     }
     if (size == 2) {
-        third_owner = PyTuple_GetItemRef(tuple, 1);
+        third_owner = _PyValue_AsObjectAt(PyTuple_GET_VALUE(tuple, 1), BOX_SITE_TUPLE);
         if (third_owner == NULL) {
             goto done;
         }
@@ -11027,12 +11040,12 @@ wrap_ternaryfunc_r(PyObject *self, PyObject *args, void *wrapped)
     if (size == -1) {
         goto done;
     }
-    other = PyTuple_GetItemRef(tuple, 0);
+    other = _PyValue_AsObjectAt(PyTuple_GET_VALUE(tuple, 0), BOX_SITE_TUPLE);
     if (other == NULL) {
         goto done;
     }
     if (size == 2) {
-        third_owner = PyTuple_GetItemRef(tuple, 1);
+        third_owner = _PyValue_AsObjectAt(PyTuple_GET_VALUE(tuple, 1), BOX_SITE_TUPLE);
         if (third_owner == NULL) {
             goto done;
         }
@@ -11073,7 +11086,7 @@ wrap_indexargfunc(PyObject *self, PyObject *args, void *wrapped)
     if (!check_num_args(tuple, 1)) {
         goto done;
     }
-    operand = PyTuple_GetItemRef(tuple, 0);
+    operand = _PyValue_AsObjectAt(PyTuple_GET_VALUE(tuple, 0), BOX_SITE_TUPLE);
     if (operand == NULL) {
         goto done;
     }
@@ -11125,7 +11138,7 @@ wrap_sq_item(PyObject *self, PyObject *args, void *wrapped)
     receiver = Py_NewRef(self);
     tuple = Py_NewRef(args);
     if (PyTuple_GET_SIZE(tuple) == 1) {
-        operand = PyTuple_GetItemRef(tuple, 0);
+        operand = _PyValue_AsObjectAt(PyTuple_GET_VALUE(tuple, 0), BOX_SITE_TUPLE);
         if (operand == NULL) {
             goto done;
         }
@@ -11180,7 +11193,7 @@ wrap_sq_delitem(PyObject *self, PyObject *args, void *wrapped)
     if (!check_num_args(tuple, 1)) {
         goto done;
     }
-    operand = PyTuple_GetItemRef(tuple, 0);
+    operand = _PyValue_AsObjectAt(PyTuple_GET_VALUE(tuple, 0), BOX_SITE_TUPLE);
     if (operand == NULL) {
         goto done;
     }
@@ -11217,7 +11230,7 @@ wrap_objobjproc(PyObject *self, PyObject *args, void *wrapped)
     if (!check_num_args(tuple, 1)) {
         goto done;
     }
-    operand = PyTuple_GetItemRef(tuple, 0);
+    operand = _PyValue_AsObjectAt(PyTuple_GET_VALUE(tuple, 0), BOX_SITE_TUPLE);
     if (operand == NULL) {
         goto done;
     }
@@ -11263,7 +11276,7 @@ wrap_delitem(PyObject *self, PyObject *args, void *wrapped)
     if (!check_num_args(tuple, 1)) {
         goto done;
     }
-    operand = PyTuple_GetItemRef(tuple, 0);
+    operand = _PyValue_AsObjectAt(PyTuple_GET_VALUE(tuple, 0), BOX_SITE_TUPLE);
     if (operand == NULL) {
         goto done;
     }
@@ -11400,7 +11413,7 @@ wrap_delattr(PyObject *self, PyObject *args, void *wrapped)
     if (!check_num_args(tuple, 1)) {
         goto done;
     }
-    name = PyTuple_GetItemRef(tuple, 0);
+    name = _PyValue_AsObjectAt(PyTuple_GET_VALUE(tuple, 0), BOX_SITE_TUPLE);
     if (name == NULL) {
         goto done;
     }
@@ -11469,7 +11482,7 @@ wrap_richcmpfunc(PyObject *self, PyObject *args, void *wrapped, int op)
     if (!check_num_args(tuple, 1)) {
         goto done;
     }
-    other = PyTuple_GetItemRef(tuple, 0);
+    other = _PyValue_AsObjectAt(PyTuple_GET_VALUE(tuple, 0), BOX_SITE_TUPLE);
     if (other == NULL) {
         goto done;
     }
@@ -12097,7 +12110,7 @@ wrap_descr_delete(PyObject *self, PyObject *args, void *wrapped)
     if (!check_num_args(tuple, 1)) {
         goto done;
     }
-    operand = PyTuple_GetItemRef(tuple, 0);
+    operand = _PyValue_AsObjectAt(PyTuple_GET_VALUE(tuple, 0), BOX_SITE_TUPLE);
     if (operand == NULL) {
         goto done;
     }
@@ -14381,7 +14394,7 @@ _PyType_InitSlotDefs(PyInterpreterState *interp)
     Py_ssize_t idx = 0;
     for (p = slotdefs; p->name_strobj; p++, idx++) {
         assert(idx < 255);
-        int found = PyDict_GetItemRef(cache, p->name_strobj, &bytearray);
+        int found = type_dict_get_object(cache, _PyValue_FromObjectKnown(p->name_strobj), &bytearray);
         if (found < 0) {
             goto done;
         }
@@ -14466,8 +14479,19 @@ type_new_set_names(PyTypeObject *type)
     int result = -1;
     Py_ssize_t i = 0;
     PyObject *key, *value;
+    PyValue key_value, value_value;
     int found;
-    while ((found = PyDict_NextEntryRef(names_to_set, &i, &key, &value)) > 0) {
+    while ((found = PyDict_NextValue(names_to_set, &i, &key_value,
+                                     &value_value)) > 0) {
+        key = _PyValue_AsObjectAt(key_value, BOX_SITE_DICT);
+        value = (key != NULL)
+            ? _PyValue_AsObjectAt(value_value, BOX_SITE_DICT) : NULL;
+        PyValue_CLOSE(key_value);
+        PyValue_CLOSE(value_value);
+        if (value == NULL) {
+            Py_XDECREF(key);
+            goto done;
+        }
         PyObject *set_name = _PyObject_LookupSpecial(value,
                                                      &_Py_ID(__set_name__));
         if (set_name == NULL) {
@@ -14809,7 +14833,7 @@ _PySuper_LookupDescr(PyTypeObject *su_type, PyTypeObject *su_obj_type, PyObject 
         return NULL;
 
     /* Keep a strong reference to mro because su_obj_type->tp_mro can be
-       replaced during PyDict_GetItemRef(dict, name, &res). */
+       replaced during PyDict_GetItemRef(). */
     Py_INCREF(mro);
 
     assert(PyTuple_Check(mro));
@@ -14826,7 +14850,7 @@ _PySuper_LookupDescr(PyTypeObject *su_type, PyTypeObject *su_obj_type, PyObject 
         PyObject *dict = lookup_tp_dict(_PyType_CAST(obj));
         assert(dict != NULL && PyDict_Check(dict));
 
-        if (PyDict_GetItemRef(dict, name, &res) != 0) {
+        if (type_dict_get_object(dict, PyValue_FromObjectBorrow(name), &res) != 0) {
             // found or error
             break;
         }
@@ -15143,7 +15167,10 @@ super_init_without_args(_PyInterpreterFrame *cframe, PyTypeObject **type_p,
                 return -1;
             }
             PyObject *cell = PyValue_AsKnownObjectBorrow(cell_value);
-            type = (PyTypeObject *)PyCell_Get(cell);
+            PyValue cell_content = PyCell_GetValue(cell);
+            type = PyValue_IsNull(cell_content) ? NULL
+                : (PyTypeObject *)_PyValue_AsObjectAt(cell_content, BOX_SITE_CELL);
+            PyValue_XCLOSE(cell_content);
             if (type == NULL) {
                 /* NULL is an empty cell, or a failed box of an inline value. */
                 if (!PyErr_Occurred()) {

@@ -4,11 +4,6 @@
    Tools/build/check_value_api.py does not list its slot-field reads. */
 #define Py_VALUE_ADAPTER 1
 
-/* The defer line of the value-API waves (value-api-v2a0.md, section 1.5):
-   the W1 container marks do not apply here until the steps that are
-   rewriting this file (V2a-1a, M1b, M2, M3a) land. */
-#define Py_VALUE_DEFER_MARKS 1
-
 #include "Python.h"
 #include "pycore_abstract.h"      // _PyIndex_Check()
 #include "pycore_call.h"          // _PyObject_CallNoArgs()
@@ -3615,7 +3610,7 @@ abstract_issubclass(PyObject *derived, PyObject *cls)
         }
         /* Avoid recursivity in the single inheritance case */
         if (n == 1) {
-            PyObject *child = PyTuple_GetItemRef(bases, 0);
+            PyObject *child = _PyValue_AsObjectAt(PyTuple_GET_VALUE(bases, 0), BOX_SITE_TUPLE);
             if (child == NULL) {
                 Py_CLEAR(child);
                 r = -1;
@@ -3632,7 +3627,7 @@ abstract_issubclass(PyObject *derived, PyObject *cls)
             break;
         }
         for (i = 0; i < n; i++) {
-            PyObject *child = PyTuple_GetItemRef(bases, i);
+            PyObject *child = _PyValue_AsObjectAt(PyTuple_GET_VALUE(bases, i), BOX_SITE_TUPLE);
             if (child == NULL) {
                 Py_CLEAR(child);
                 r = -1;
@@ -3772,7 +3767,7 @@ object_recursive_isinstance(PyThreadState *tstate, PyObject *inst, PyObject *cls
         Py_ssize_t n = PyTuple_GET_SIZE(cls);
         int r = 0;
         for (Py_ssize_t i = 0; i < n; ++i) {
-            PyObject *item = PyTuple_GetItemRef(cls, i);
+            PyObject *item = _PyValue_AsObjectAt(PyTuple_GET_VALUE(cls, i), BOX_SITE_TUPLE);
             if (item == NULL) {
                 Py_CLEAR(item);
                 r = -1;
@@ -3857,7 +3852,7 @@ object_issubclass(PyThreadState *tstate, PyObject *derived, PyObject *cls)
         Py_ssize_t n = PyTuple_GET_SIZE(cls);
         int r = 0;
         for (Py_ssize_t i = 0; i < n; ++i) {
-            PyObject *item = PyTuple_GetItemRef(cls, i);
+            PyObject *item = _PyValue_AsObjectAt(PyTuple_GET_VALUE(cls, i), BOX_SITE_TUPLE);
             if (item == NULL) {
                 Py_CLEAR(item);
                 r = -1;

@@ -6,11 +6,6 @@
    slot-field reads. */
 #define Py_VALUE_ADAPTER 1
 
-/* The defer line of the value-API waves (value-api-v2a0.md, section 1.5):
-   the W1 container marks do not apply here until the steps that are
-   rewriting this file (V2a-1a, M1b, M2, M3a) land. */
-#define Py_VALUE_DEFER_MARKS 1
-
 #include "Python.h"
 #include "pycore_brc.h"           // _Py_brc_queue_object()
 #include "pycore_call.h"          // _PyObject_CallNoArgs()
@@ -2800,12 +2795,16 @@ _PyTypes_InitTypes(PyInterpreterState *interp)
 
     // Cache __reduce__ from PyBaseObject_Type object
     PyObject *baseobj_dict = _PyType_GetDict(&PyBaseObject_Type);
-    PyObject *baseobj_reduce = NULL;
-    int found = PyDict_GetItemRef(baseobj_dict, &_Py_ID(__reduce__),
-                                &baseobj_reduce);
+    PyValue baseobj_reduce_value;
+    int found = PyDict_GetValue(baseobj_dict,
+                                _PyValue_FromObjectKnown(&_Py_ID(__reduce__)),
+                                &baseobj_reduce_value);
     if (found < 0) {
         return _PyStatus_ERR("Can't get __reduce__ from base object");
     }
+    /* object's own namespace holds only descriptors, never an int or float. */
+    PyObject *baseobj_reduce = found > 0
+        ? PyValue_AsKnownObjectSteal(baseobj_reduce_value) : NULL;
     /* This identity cache borrows the immutable builtin namespace's
      * descriptor. Dropping the extra lookup owner cannot finalize it. */
     assert(baseobj_reduce == NULL ||

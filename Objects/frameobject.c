@@ -50,6 +50,10 @@ framelocalsproxy_getval(_PyInterpreterFrame *frame, PyCodeObject *co, int i)
     PyValue *fast = _PyFrame_GetLocalsArray(frame);
     _PyLocals_Kind kind = _PyLocals_GetKind(co->co_localspluskinds, i);
 
+    if (kind & CO_FAST_CONST) {
+        // A constant slot is not a variable
+        return NULL;
+    }
     if (PyValue_IsInline(fast[i])) {
         return _PyValue_AsObjectAt(fast[i], BOX_SITE_FRAME);
     }
@@ -93,6 +97,9 @@ framelocalsproxy_getval(_PyInterpreterFrame *frame, PyCodeObject *co, int i)
 static bool
 framelocalsproxy_hasval(_PyInterpreterFrame *frame, PyCodeObject *co, int i)
 {
+    if (_PyLocals_GetKind(co->co_localspluskinds, i) & CO_FAST_CONST) {
+        return false;
+    }
     if (PyValue_IsInline(_PyFrame_GetLocalsArray(frame)[i])) {
         return true;
     }
@@ -2384,6 +2391,9 @@ frame_get_var(_PyInterpreterFrame *frame, PyCodeObject *co, int i,
        We don't want to accidentally copy free variables
        into the locals dict used by the class.
     */
+    if (kind & CO_FAST_CONST) {
+        return 0;
+    }
     if (kind & CO_FAST_FREE && !(co->co_flags & CO_OPTIMIZED)) {
         return 0;
     }

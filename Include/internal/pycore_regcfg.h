@@ -109,6 +109,12 @@ typedef struct _PyRegCfg {
                             // or -1, after compaction
     int ntemps;             // temporary slots the frame needs
     int maxdepth;           // the deepest stack of the stack instructions
+    /* Constant slots (_PyRegCfg_AssignConstSlots()): the registers
+     * const_first .. const_first + nconst - 1 are hidden locals that no op
+     * writes, whose frame slots hold const_index[j] of co_consts. */
+    int const_first;
+    int nconst;
+    int *const_index;
 } _PyRegCfg;
 
 /* Canonical temporaries are numbered by stack position below the frame
@@ -133,6 +139,14 @@ int _PyRegCfg_AddInstr(_PyRegCfg *cfg, int opcode, int oparg,
 /* Convert the stack instructions into register ops, run the passes and
  * assign the slots. */
 int _PyRegCfg_Build(_PyRegCfg *cfg);
+
+/* Give the inline scalar constants that ops inside loops read in place a
+ * hidden slot each (G6): the constant loads that copy propagation would fold
+ * if the constant were a local go, the readers name the slot, and the slots
+ * are inserted before the free variables (nfree of them), which move up
+ * with the temporaries.  consts is the list of co_consts, to which the
+ * values of LOAD_SMALL_INT are added.  Compacts again. */
+int _PyRegCfg_AssignConstSlots(_PyRegCfg *cfg, PyObject *consts, int nfree);
 
 /* The slot of register v: v for a local, its slot for a temporary. */
 static inline int
@@ -182,6 +196,8 @@ int _PyRegPass_CopyProp(_PyRegCfg *cfg);
 int _PyRegPass_StoreElim(_PyRegCfg *cfg);
 int _PyRegPass_PopTop(_PyRegCfg *cfg);
 int _PyRegPass_TruthFold(_PyRegCfg *cfg);
+/* Returns the number of constant slots, or -1 */
+int _PyRegPass_ConstSlots(_PyRegCfg *cfg, PyObject *consts, int nfree);
 
 /* For tests only (_testinternalcapi.compile_without_copyprop_kill()): if
  * keep is set, copy propagation keeps a pending load across an op that may

@@ -195,6 +195,7 @@ None
 """
 
 import copy
+import types
 import inspect
 import sys
 import threading
@@ -1219,6 +1220,391 @@ class CodeTest(unittest.TestCase):
 
 def isinterned(s):
     return s is sys.intern(('_' + s + '_')[1:-1])
+
+types_FunctionType = type(lambda: None)
+
+
+class ConstSlotsTest(unittest.TestCase):
+    """Inline scalar constants read in a loop live in hidden slots."""
+
+    @staticmethod
+    def loop(n):
+        total = 0
+        for i in range(n):
+            total += i * 3 + 1.5
+            if total > 100:
+                total -= 7
+        return total
+
+    def slots(self, code):
+        data = code.co_constslots
+        return [(int.from_bytes(data[i:i + 4], sys.byteorder),
+                 int.from_bytes(data[i + 4:i + 8], sys.byteorder))
+                for i in range(0, len(data), 8)]
+
+    def test_table(self):
+        code = self.loop.__code__
+        slots = self.slots(code)
+        self.assertEqual(len(slots), 4)
+        values = [code.co_consts[index] for _, index in slots]
+        self.assertEqual(sorted(values), [1.5, 3, 7, 100])
+        self.assertEqual([slot for slot, _ in slots],
+                         list(range(code.co_nlocals,
+                                    code.co_nlocals + len(slots))))
+        self.assertEqual(code.co_varnames, ('n', 'total', 'i'))
+        self.assertEqual(code.co_nlocals, 3)
+        self.assertEqual(self.loop(10), 136.0)
+
+    def test_no_loop_no_slots(self):
+        def f(x):
+            return x * 3 + 1.5
+        self.assertEqual(f.__code__.co_constslots, b'')
+
+    def test_not_in_f_locals(self):
+        def f(n):
+            seen = None
+            for i in range(n):
+                seen = sys._getframe().f_locals
+                i += 1000
+            return seen
+        self.assertTrue(f.__code__.co_constslots)
+        self.assertEqual(sorted(f(2)), ['i', 'n', 'seen'])
+
+    def test_locals_in_unoptimized_code(self):
+        ns = {}
+        exec("x = 0\nfor i in range(3):\n    x += 5\nloc = dict(locals())",
+             ns)
+        self.assertEqual(ns['x'], 15)
+        self.assertEqual(sorted(k for k in ns['loc'] if k != '__builtins__'),
+                         ['i', 'x'])
+
+    def test_f_locals_write_refused(self):
+        def f(n):
+            for i in range(n):
+                frame = sys._getframe()
+                frame.f_locals['.k0'] = 99
+                i += 1
+            return i
+        self.assertEqual(f(3), 3)
+
+    def test_replace_keeps_table(self):
+        code = self.loop.__code__
+        same = code.replace(co_name='other')
+        self.assertEqual(same.co_constslots, code.co_constslots)
+        self.assertEqual(same.co_varnames, code.co_varnames)
+        self.assertEqual(same.co_nlocals, code.co_nlocals)
+        self.assertEqual(same.co_freevars, code.co_freevars)
+        self.assertEqual(code.replace(), code)
+        self.assertNotEqual(same, code)
+        # The words name the slots, so the table cannot go
+        with self.assertRaises(ValueError):
+            code.replace(co_constslots=b'')
+
+    def test_replace_consts(self):
+        code = self.loop.__code__
+        slots = self.slots(code)
+        consts = list(code.co_consts)
+        for _, index in slots:
+            if consts[index] == 3:
+                consts[index] = 5
+        new = code.replace(co_consts=tuple(consts))
+        f = types_FunctionType(new, globals())
+        self.assertEqual(f(4), 4 * 0 + (0 + 1.5) + (5 + 1.5) + (10 + 1.5)
+                         + (15 + 1.5))
+
+    def test_replace_to_mortal_constant(self):
+        # A constant that is no scalar any more is held by the frame
+        code = self.loop.__code__
+        consts = list(code.co_consts)
+        for _, index in self.slots(code):
+            if consts[index] == 7:
+                consts[index] = 2 ** 70 + 7
+        new = code.replace(co_consts=tuple(consts))
+        f = types_FunctionType(new, globals())
+        mortal = [c for c in new.co_consts if type(c) is int
+                  and c > 2 ** 69][0]
+        before = sys.getrefcount(mortal)
+        for _ in range(3):
+            self.assertEqual(f(60), self.loop_with_seven(60, 2 ** 70 + 7))
+        self.assertEqual(sys.getrefcount(mortal), before)
+
+    @staticmethod
+    def loop_with_seven(n, seven):
+        total = 0
+        for i in range(n):
+            total += i * 3 + 1.5
+            if total > 100:
+                total -= seven
+        return total
+
+    def test_malformed_table(self):
+        code = self.loop.__code__
+        slots = self.slots(code)
+        bad = code.co_constslots[:-4]
+        with self.assertRaises(ValueError):
+            code.replace(co_constslots=bad)
+        index = len(code.co_consts)
+        data = bytearray(code.co_constslots)
+        data[4:8] = index.to_bytes(4, sys.byteorder)
+        with self.assertRaises(ValueError):
+            code.replace(co_constslots=bytes(data))
+        data = bytearray(code.co_constslots)
+        data[0:4] = (slots[0][0] + 1).to_bytes(4, sys.byteorder)
+        with self.assertRaises(ValueError):
+            code.replace(co_constslots=bytes(data))
+
+    def test_table_may_not_add_a_slot_over_temporaries(self):
+        import struct
+        code = self.loop.__code__
+        n = len(self.slots(code))
+        extra = code.co_constslots + struct.pack('II', code.co_nlocals + n, 0)
+        with self.assertRaisesRegex(ValueError, "writes constant slot|window"):
+            code.replace(co_constslots=extra)
+        with self.assertRaisesRegex(ValueError, "writes constant slot|window"):
+            types.CodeType(
+                code.co_argcount, code.co_posonlyargcount,
+                code.co_kwonlyargcount, code.co_nlocals, code.co_stacksize,
+                code.co_flags, code.co_code, code.co_consts, code.co_names,
+                code.co_varnames, code.co_filename, code.co_name,
+                code.co_qualname, code.co_firstlineno, code.co_linetable,
+                code.co_exceptiontable, code.co_freevars, code.co_cellvars,
+                code.co_fbinit, extra)
+
+    def test_table_with_a_mortal_slot_over_temporaries(self):
+        import struct
+        code = self.loop.__code__
+        n = len(self.slots(code))
+        extra = code.co_constslots + struct.pack('II', code.co_nlocals + n,
+                                                 len(code.co_consts))
+        with self.assertRaises(ValueError):
+            code.replace(co_consts=code.co_consts + ([1, 2],),
+                         co_constslots=extra)
+
+    def test_changing_variable_count(self):
+        code = self.loop.__code__
+        with self.assertRaisesRegex(
+                ValueError, "changing the number of variables"):
+            code.replace(co_varnames=code.co_varnames + ('extra',))
+        with self.assertRaisesRegex(
+                ValueError, "changing the number of variables"):
+            code.replace(co_nlocals=2, co_varnames=code.co_varnames[:2])
+        renamed = code.replace(co_varnames=('a', 'b', 'c'))
+        self.assertEqual(renamed.co_constslots, code.co_constslots)
+
+    def test_malformed_marshal_table(self):
+        import marshal
+        import struct
+        code = self.loop.__code__
+        data = marshal.dumps(code)
+        table = code.co_constslots
+        at = data.find(table)
+        self.assertGreater(at, 0)
+        index = len(code.co_consts)
+        for bad in (struct.pack('II', *struct.unpack('II', table[:8])[:1]
+                                + (index,)) + table[8:],
+                    struct.pack('II', 2, 0) + table[8:],
+                    table[:8] + table[:8] + table[16:]):
+            patched = data[:at] + bad + data[at + len(bad):]
+            with self.assertRaises(ValueError):
+                marshal.loads(patched)
+        self.assertEqual(marshal.loads(data), code)
+
+    def test_async_generator(self):
+        async def agen(n):
+            total = 0
+            for i in range(n):
+                total += 2
+                yield total * 3
+        self.assertTrue(agen.__code__.co_constslots)
+        async def collect():
+            return [x async for x in agen(3)]
+        c = collect()
+        try:
+            c.send(None)
+        except StopIteration as e:
+            self.assertEqual(e.value, [6, 12, 18])
+
+    def test_class_body(self):
+        class C:
+            total = 0
+            for i in range(3):
+                total += 5
+            seen = dict(locals())
+        self.assertEqual(C.total, 15)
+        self.assertEqual(sorted(C.seen), ['__firstlineno__', '__module__',
+                                          '__qualname__', 'i', 'total'])
+        self.assertEqual([k for k in vars(C) if k.startswith('.')], [])
+
+    def test_exec_with_closure(self):
+        def outer():
+            x = 10
+            def inner():
+                total = 0
+                for i in range(3):
+                    total += x + 4
+                return total
+            return inner
+        inner = outer()
+        self.assertTrue(inner.__code__.co_constslots)
+        cell = inner.__closure__
+        ns = {'range': range}
+        code = inner.__code__
+        f = types_FunctionType(code, ns, closure=cell)
+        self.assertEqual(f(), 42)
+
+    def test_function_locals_and_vars(self):
+        def f(n):
+            total = 0
+            for i in range(n):
+                total += 7
+            return locals(), vars(), dict(sys._getframe().f_locals)
+        for got in f(2):
+            self.assertEqual(got, {'n': 2, 'total': 14, 'i': 1})
+
+    def test_capture_locals(self):
+        import traceback
+        def f(n):
+            total = 0
+            for i in range(n):
+                total += 7
+            1 / 0
+        try:
+            f(2)
+        except ZeroDivisionError as e:
+            tb = traceback.TracebackException.from_exception(
+                e, capture_locals=True)
+            text = "".join(tb.format())
+        self.assertIn("total = 14", text)
+        self.assertNotIn(".k", text)
+
+    def test_settrace_lineno_jump(self):
+        def f():
+            total = 0
+            for i in range(3):
+                total += 5
+                total += 6
+            return total
+        lines = []
+        def tracer(frame, event, arg):
+            if frame.f_code is not f.__code__:
+                return None
+            if event == 'line':
+                lines.append(frame.f_lineno)
+                if len(lines) == 4:
+                    # Jump back to the start of the loop body
+                    frame.f_lineno = lines[2]
+            return tracer
+        sys.settrace(tracer)
+        try:
+            result = f()
+        finally:
+            sys.settrace(None)
+        self.assertIsInstance(result, int)
+        self.assertGreater(len(lines), 6)
+
+    def test_marshal_copy(self):
+        import marshal
+        code = self.loop.__code__
+        for new in (marshal.loads(marshal.dumps(code)), copy.copy(code),
+                    copy.replace(code)):
+            self.assertEqual(new, code)
+            self.assertEqual(new.co_constslots, code.co_constslots)
+            self.assertEqual(types_FunctionType(new, globals())(10), 136.0)
+
+    def test_pickle_refused(self):
+        import pickle
+        with self.assertRaises(TypeError):
+            pickle.dumps(self.loop.__code__)
+
+    def test_generator_and_coroutine(self):
+        def gen(n):
+            total = 0
+            for i in range(n):
+                total += 2.5
+                yield total + 1
+        self.assertTrue(gen.__code__.co_constslots)
+        self.assertEqual(list(gen(3)), [3.5, 6.0, 8.5])
+
+        async def coro(n):
+            total = 0
+            for i in range(n):
+                total += 4
+                total = total - 1
+            return total
+        self.assertTrue(coro.__code__.co_constslots)
+        c = coro(5)
+        try:
+            c.send(None)
+        except StopIteration as e:
+            self.assertEqual(e.value, 15)
+
+    def test_closure_with_constants(self):
+        def outer(k):
+            def inner(n):
+                total = 0
+                for i in range(n):
+                    total += k + 3
+                return total
+            return inner
+        inner = outer(2)
+        self.assertTrue(inner.__code__.co_constslots)
+        self.assertEqual(inner.__code__.co_freevars, ('k',))
+        self.assertEqual(inner(4), 20)
+
+    def test_cell_and_free_around_constants(self):
+        def f(n):
+            cell = 1
+            def g():
+                return cell
+            total = 0
+            for i in range(n):
+                cell += 1
+                total += g() + 2
+            return total
+        self.assertTrue(f.__code__.co_constslots)
+        self.assertEqual(f(3), 2 + 2 + 3 + 2 + 4 + 2)
+
+    def test_recursion_and_overlap(self):
+        def fib(n):
+            if n < 2:
+                return n
+            total = 0
+            for i in range(1):
+                total += fib(n - 1) + fib(n - 2)
+            return total
+        self.assertTrue(fib.__code__.co_constslots)
+        self.assertEqual(fib(15), 610)
+
+    def test_slot_limit(self):
+        # More distinct constants than the frame can hold: the rest keep
+        # their loads
+        n = 5000
+        body = "".join(f"        t += {i}.5\n" for i in range(n))
+        ns = {}
+        exec("def f(m):\n    t = 0\n    for i in range(m):\n" + body
+             + "    return t\n", ns)
+        f = ns['f']
+        slots = self.slots(f.__code__)
+        self.assertTrue(0 < len(slots) < n)
+        code = f.__code__
+        self.assertLessEqual(code.co_nlocals + len(slots) + code.co_stacksize,
+                             4095)
+        self.assertEqual(f(2), 2 * sum(i + 0.5 for i in range(n)))
+
+    def test_exception_in_loop_with_constants(self):
+        def f(n):
+            total = 0
+            for i in range(n):
+                try:
+                    total += 10 // (i - 3)
+                except ZeroDivisionError:
+                    total += 100
+            return total
+        self.assertEqual(f(6), 10 // -3 + 10 // -2 + 10 // -1 + 100
+                         + 10 // 1 + 10 // 2)
+
+
+
 
 class CodeConstsTest(unittest.TestCase):
 

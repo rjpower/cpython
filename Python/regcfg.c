@@ -65,6 +65,7 @@ _PyRegCfg_Free(_PyRegCfg *cfg)
     PyMem_Free(cfg->operands);
     PyMem_Free(cfg->blocks);
     PyMem_Free(cfg->slot);
+    PyMem_Free(cfg->const_index);
     PyMem_Free(cfg);
 }
 
@@ -1161,6 +1162,10 @@ check_folded_load(_PyRegCfg *cfg, const char *after, int i)
 {
     const _PyRegOp *load = &cfg->ops[i];
     int x = load->oparg;
+    if (x >= cfg->const_first && x < cfg->const_first + cfg->nconst) {
+        // A constant slot is written by nobody (checked in _PyRegCfg_Verify())
+        return SUCCESS;
+    }
     if (load->reader <= i || load->reader >= cfg->nops) {
         return verify_error(after, load, "a folded load without a reader "
                             "after it");
@@ -1278,6 +1283,21 @@ _PyRegCfg_Verify(_PyRegCfg *cfg, const char *after, int physical)
             }
             if (op->dst >= 0 && !(fmt->flags & _PyIR_STORE_DST)) {
                 err = verify_error(after, op, "a local dst");
+            }
+            if (cfg->nconst) {
+                int role = _PyIR_OpargRole(fmt);
+                int written = op->dst;
+                if (role == _PyIR_ROLE_LOCAL_OUT
+                    || role == _PyIR_ROLE_LOCAL_CLEAR
+                    || role == _PyIR_ROLE_LOCAL_MOVE)
+                {
+                    written = op->oparg;
+                }
+                if (written >= cfg->const_first
+                    && written < cfg->const_first + cfg->nconst)
+                {
+                    err = verify_error(after, op, "a write to a constant slot");
+                }
             }
         }
     }
@@ -1531,6 +1551,30 @@ _PyRegCfg_Build(_PyRegCfg *cfg)
     RETURN_IF_ERROR(err);
     if (verify_wanted()) {
         RETURN_IF_ERROR(_PyRegCfg_Verify(cfg, "compaction", 1));
+    }
+    return SUCCESS;
+}
+
+
+/* Constant slots (G6), after the passes and compaction have run */
+
+int
+_PyRegCfg_AssignConstSlots(_PyRegCfg *cfg, PyObject *consts, int nfree)
+{
+    int n = _PyRegPass_ConstSlots(cfg, consts, nfree);
+    RETURN_IF_ERROR(n);
+    if (n == 0) {
+        return SUCCESS;
+    }
+    DUMP(cfg, "constant slots");
+    if (verify_wanted()) {
+        RETURN_IF_ERROR(_PyRegCfg_Verify(cfg, "constant slots", 0));
+    }
+    int err = _PyRegCfg_Compact(cfg);
+    DUMP(cfg, "second compaction");
+    RETURN_IF_ERROR(err);
+    if (verify_wanted()) {
+        RETURN_IF_ERROR(_PyRegCfg_Verify(cfg, "second compaction", 1));
     }
     return SUCCESS;
 }

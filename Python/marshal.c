@@ -1007,6 +1007,15 @@ w_complex_object(PyObject *v, WFILE *p)
             p->error = true;
             return;
         }
+        PyObject *co_constslots = PyBytes_FromStringAndSize(
+            (const char *)_PyCode_CONSTSLOTS(co),
+            co->co_nconstslots * 2 * sizeof(uint32_t));
+        if (co_constslots == NULL) {
+            Py_DECREF(co_code);
+            Py_DECREF(co_fbinit);
+            p->error = true;
+            return;
+        }
         W_TYPE(TYPE_CODE, p);
         w_long(co->co_argcount, p);
         w_long(co->co_posonlyargcount, p);
@@ -1015,6 +1024,7 @@ w_complex_object(PyObject *v, WFILE *p)
         w_long(co->co_flags, p);
         w_object(co_code, p);
         w_object(co_fbinit, p);
+        w_object(co_constslots, p);
         w_object(co->co_consts, p);
         w_object(co->co_names, p);
         w_object(co->co_localsplusnames, p);
@@ -1027,6 +1037,7 @@ w_complex_object(PyObject *v, WFILE *p)
         w_object(co->co_exceptiontable, p);
         Py_DECREF(co_code);
         Py_DECREF(co_fbinit);
+        Py_DECREF(co_constslots);
         w_complete(v, p);
     }
     else if (PyObject_CheckBuffer(v)) {
@@ -1922,6 +1933,7 @@ r_object(RFILE *p)
             int flags;
             PyObject *code = NULL;
             PyObject *fbinit = NULL;
+            PyObject *constslots = NULL;
             PyObject *consts = NULL;
             PyObject *names = NULL;
             PyObject *localsplusnames = NULL;
@@ -1967,6 +1979,9 @@ r_object(RFILE *p)
             fbinit = r_object(p);
             if (fbinit == NULL)
                 goto code_error;
+            constslots = r_object(p);
+            if (constslots == NULL)
+                goto code_error;
             consts = r_object(p);
             if (consts == NULL)
                 goto code_error;
@@ -2006,6 +2021,7 @@ r_object(RFILE *p)
 
                 .code = code,
                 .fbinit = fbinit,
+                .constslots = constslots,
                 .firstlineno = firstlineno,
                 .linetable = linetable,
 
@@ -2042,6 +2058,7 @@ r_object(RFILE *p)
             }
             Py_XDECREF(code);
             Py_XDECREF(fbinit);
+            Py_XDECREF(constslots);
             Py_XDECREF(consts);
             Py_XDECREF(names);
             Py_XDECREF(localsplusnames);

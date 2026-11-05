@@ -20,6 +20,10 @@ extern "C" {
 /* The feedback table, co_nfeedback entries after the words */
 #define _PyCode_FBINIT(CO) \
     _Py_RVALUE((const uint32_t *)((CO)->co_words + Py_SIZE(CO)))
+/* The constant-slot table, co_nconstslots pairs of (slot, co_consts index)
+ * after the feedback table */
+#define _PyCode_CONSTSLOTS(CO) \
+    _Py_RVALUE(_PyCode_FBINIT(CO) + (CO)->co_nfeedback)
 
 
 // We hide some of the newer PyCodeObject fields behind macros.
@@ -77,6 +81,9 @@ extern void _PyCode_Fini(PyInterpreterState *interp);
  */
 
 // Note that these all fit within a byte, as do combinations.
+#define CO_FAST_CONST   (0x01)  // a constant slot (with CO_FAST_HIDDEN), none of
+                                // the kinds below: the frame fills it with an
+                                // inline scalar from co_consts at entry
 #define CO_FAST_ARG_POS (0x02)  // pos-only, pos-or-kw, varargs
 #define CO_FAST_ARG_KW  (0x04)  // kw-only, pos-or-kw, varkwargs
 #define CO_FAST_ARG_VAR (0x08)  // varargs, varkwargs
@@ -118,6 +125,9 @@ struct _PyCodeConstructor {
        entry per feedback entry, see pycore_ir.h), or NULL for none */
     PyObject *code;
     PyObject *fbinit;
+    /* the constant-slot table: (slot, co_consts index) pairs of uint32, or
+       NULL for none; the slots are in localsplusnames */
+    PyObject *constslots;
     int firstlineno;
     PyObject *linetable;
 

@@ -375,6 +375,7 @@ _PyStaticObjects_CheckAll(PyInterpreterState *interp) {
     _PyStaticObject_CheckUnicodeSingleton((PyObject *)&_Py_ID(co_cellvars), "co_cellvars", 11);
     _PyStaticObject_CheckUnicodeSingleton((PyObject *)&_Py_ID(co_code), "co_code", 7);
     _PyStaticObject_CheckUnicodeSingleton((PyObject *)&_Py_ID(co_consts), "co_consts", 9);
+    _PyStaticObject_CheckUnicodeSingleton((PyObject *)&_Py_ID(co_constslots), "co_constslots", 13);
     _PyStaticObject_CheckUnicodeSingleton((PyObject *)&_Py_ID(co_exceptiontable), "co_exceptiontable", 17);
     _PyStaticObject_CheckUnicodeSingleton((PyObject *)&_Py_ID(co_fbinit), "co_fbinit", 9);
     _PyStaticObject_CheckUnicodeSingleton((PyObject *)&_Py_ID(co_filename), "co_filename", 11);
@@ -783,6 +784,7 @@ _PyStaticObjects_CheckAll(PyInterpreterState *interp) {
     _PyStaticObject_CheckUnicodeSingleton((PyObject *)&_Py_ID(salt), "salt", 4);
     _PyStaticObject_CheckUnicodeSingleton((PyObject *)&_Py_ID(sample_interval_us), "sample_interval_us", 18);
     _PyStaticObject_CheckUnicodeSingleton((PyObject *)&_Py_ID(sample_rate), "sample_rate", 11);
+    _PyStaticObject_CheckUnicodeSingleton((PyObject *)&_Py_ID(scale), "scale", 5);
     _PyStaticObject_CheckUnicodeSingleton((PyObject *)&_Py_ID(sched_priority), "sched_priority", 14);
     _PyStaticObject_CheckUnicodeSingleton((PyObject *)&_Py_ID(scheduler), "scheduler", 9);
     _PyStaticObject_CheckUnicodeSingleton((PyObject *)&_Py_ID(script), "script", 6);

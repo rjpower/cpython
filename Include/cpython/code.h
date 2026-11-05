@@ -110,10 +110,12 @@ typedef struct {
        people to go through the proper APIs. */                                \
     void *co_extra;                                                            \
     int co_nfeedback;             /* feedback entries, entry 0 included, or 0 */ \
+    int co_nconstslots;           /* constant slots, see CO_FAST_CONST */      \
     _PyCode_DEF_FEEDBACK()                                                     \
     _PyCode_DEF_THREAD_LOCAL_BYTECODE()                                        \
     /* The IR, one 64-bit word per instruction (Py_SIZE() of them), then the   \
-       feedback table: co_nfeedback 32-bit entries. */                         \
+       feedback table: co_nfeedback 32-bit entries, then the constant-slot     \
+       table: co_nconstslots pairs of 32-bit (slot, co_consts index). */       \
     uint64_t co_words[(SIZE)];                                                 \
 }
 

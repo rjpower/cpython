@@ -426,6 +426,111 @@ get_localsplus_names(PyCodeObject *co, _PyLocals_Kind kind, int num)
     return names;
 }
 
+/* The words against the layout of the frame, which the compiler's verifier
+ * (Python/regcfg.c) guarantees for its own output: no word writes a
+ * constant slot, through a field whose role is a destination or a local
+ * written, and no window starts below the temporaries.  Words of unknown
+ * handlers are for check_words(). */
+static int
+check_const_layout(struct _PyCodeConstructor *con, int first, int nconst)
+{
+    Py_ssize_t nwords = PyBytes_GET_SIZE(con->code) / (Py_ssize_t)sizeof(_PyIRWord);
+    const char *bytes = PyBytes_AS_STRING(con->code);
+    int nlocalsplus = (int)PyTuple_GET_SIZE(con->localsplusnames);
+    for (Py_ssize_t i = 0; i < nwords; i++) {
+        _PyIRWord word;
+        memcpy(&word, bytes + i * sizeof(_PyIRWord), sizeof(word));
+        int handler = IR_HANDLER(word);
+        if (handler >= IR_NUM_HANDLERS
+            || !(_PyIR_Formats[handler].flags & _PyIR_VALID))
+        {
+            continue;
+        }
+        const _PyIRFormat *fmt = &_PyIR_Formats[handler];
+        for (int k = 0; k < 4; k++) {
+            int role = fmt->roles[k];
+            int value = (int)((word >> (16 + 12 * k)) & IR_FIELD_MAX);
+            int writes = (role == _PyIR_ROLE_DST && fmt->dst != _PyIR_NO_DST)
+                         || role == _PyIR_ROLE_LOCAL_OUT
+                         || role == _PyIR_ROLE_LOCAL_CLEAR
+                         || role == _PyIR_ROLE_LOCAL_MOVE;
+            if (writes && value >= first && value < first + nconst) {
+                PyErr_Format(PyExc_ValueError,
+                             "code: word %zd writes constant slot %d", i, value);
+                return -1;
+            }
+            if (role == _PyIR_ROLE_BASE && (fmt->flags & _PyIR_WINDOW)
+                && value < nlocalsplus)
+            {
+                PyErr_Format(PyExc_ValueError,
+                             "code: word %zd has a window at slot %d, below "
+                             "the temporaries", i, value);
+                return -1;
+            }
+        }
+    }
+    return 0;
+}
+
+/* The constant-slot table: pairs of (slot, co_consts index), in the
+ * order of the constant slots of localsplusnames, which are consecutive
+ * and have the kind CO_FAST_CONST | CO_FAST_HIDDEN, one per pair. */
+static int
+check_constslots(struct _PyCodeConstructor *con)
+{
+    Py_ssize_t nconst = 0;
+    Py_ssize_t first = -1;
+    Py_ssize_t n = PyBytes_GET_SIZE(con->localspluskinds);
+    for (Py_ssize_t i = 0; i < n; i++) {
+        _PyLocals_Kind kind = _PyLocals_GetKind(con->localspluskinds, (int)i);
+        if (kind & CO_FAST_CONST) {
+            if (kind != (CO_FAST_CONST | CO_FAST_HIDDEN)
+                || (first >= 0 && i != first + nconst))
+            {
+                PyErr_SetString(PyExc_ValueError,
+                                "code: malformed constant slot kinds");
+                return -1;
+            }
+            if (first < 0) {
+                first = i;
+            }
+            nconst++;
+        }
+    }
+    if (con->constslots != NULL && !PyBytes_Check(con->constslots)) {
+        PyErr_SetString(PyExc_ValueError, "code: co_constslots is malformed");
+        return -1;
+    }
+    Py_ssize_t size = con->constslots == NULL ? 0
+                      : PyBytes_GET_SIZE(con->constslots);
+    if (size % (2 * sizeof(uint32_t)) != 0
+        || size / (Py_ssize_t)(2 * sizeof(uint32_t)) != nconst)
+    {
+        PyErr_SetString(PyExc_ValueError, "code: co_constslots is malformed");
+        return -1;
+    }
+    const uint32_t *table = size == 0 ? NULL
+        : (const uint32_t *)PyBytes_AS_STRING(con->constslots);
+    Py_ssize_t nconsts = PyTuple_GET_SIZE(con->consts);
+    for (Py_ssize_t j = 0; j < nconst; j++) {
+        if (table[2 * j] != first + j) {
+            // The slots follow the cells, so a different number of
+            // variables moves them
+            PyErr_SetString(PyExc_ValueError,
+                            "code: changing the number of variables of code "
+                            "with constant slots is not supported "
+                            "(co_constslots names other slots)");
+            return -1;
+        }
+        if (table[2 * j + 1] >= nconsts) {
+            PyErr_SetString(PyExc_ValueError,
+                            "code: co_constslots is malformed");
+            return -1;
+        }
+    }
+    return check_const_layout(con, (int)first, (int)nconst);
+}
+
 int
 _PyCode_Validate(struct _PyCodeConstructor *con)
 {
@@ -468,6 +573,9 @@ _PyCode_Validate(struct _PyCodeConstructor *con)
             || PyBytes_GET_SIZE(con->fbinit) / sizeof(uint32_t) > IR_FIELD_MAX + 1))
     {
         PyErr_SetString(PyExc_ValueError, "code: co_fbinit is malformed");
+        return -1;
+    }
+    if (check_constslots(con) < 0) {
         return -1;
     }
 
@@ -564,6 +672,13 @@ init_code(PyCodeObject *co, struct _PyCodeConstructor *con)
         co->co_nfeedback = (int)(PyBytes_GET_SIZE(con->fbinit) / sizeof(uint32_t));
         memcpy((uint32_t *)_PyCode_FBINIT(co), PyBytes_AS_STRING(con->fbinit),
                PyBytes_GET_SIZE(con->fbinit));
+    }
+    co->co_nconstslots = 0;
+    if (con->constslots != NULL && PyBytes_GET_SIZE(con->constslots)) {
+        Py_ssize_t size = PyBytes_GET_SIZE(con->constslots);
+        co->co_nconstslots = (int)(size / (2 * sizeof(uint32_t)));
+        memcpy((uint32_t *)_PyCode_CONSTSLOTS(co),
+               PyBytes_AS_STRING(con->constslots), size);
     }
     co->_co_exec = NULL;
 #ifdef Py_GIL_DISABLED
@@ -724,7 +839,11 @@ _PyCode_New(struct _PyCodeConstructor *con)
     // The feedback table follows the words, two entries to an item
     Py_ssize_t nfb = con->fbinit != NULL
         ? PyBytes_GET_SIZE(con->fbinit) / (Py_ssize_t)sizeof(uint32_t) : 0;
-    Py_ssize_t nitems = size + (nfb + 1) / 2;
+    // The constant-slot table follows, two entries to an item
+    Py_ssize_t nconstslots = con->constslots != NULL
+        ? PyBytes_GET_SIZE(con->constslots) / (Py_ssize_t)sizeof(uint32_t) / 2
+        : 0;
+    Py_ssize_t nitems = size + (nfb + 1) / 2 + nconstslots;
     PyCodeObject *co;
 #ifdef Py_GIL_DISABLED
     co = PyObject_GC_NewVar(PyCodeObject, &PyCode_Type, nitems);
@@ -849,12 +968,15 @@ error:
 }
 
 /* As PyUnstable_Code_NewWithPosOnlyArgs(), with the feedback table of the
- * words in fbinit, or NULL for none. */
+ * words in fbinit, or NULL for none, and the constant-slot table in
+ * constslots, or NULL for none: the constructor adds its hidden slots to
+ * localsplus, between the cells and the free variables. */
 static PyCodeObject *
 code_new_with_fbinit(
                           int argcount, int posonlyargcount, int kwonlyargcount,
                           int nlocals, int stacksize, int flags,
                           PyObject *code, PyObject *fbinit,
+                          PyObject *constslots,
                           PyObject *consts, PyObject *names,
                           PyObject *varnames, PyObject *freevars, PyObject *cellvars,
                           PyObject *filename, PyObject *name,
@@ -904,7 +1026,13 @@ code_new_with_fbinit(
     int nvarnames = (int)PyTuple_GET_SIZE(varnames);
     int ncellvars = (int)PyTuple_GET_SIZE(cellvars);
     int nfreevars = (int)PyTuple_GET_SIZE(freevars);
-    int nlocalsplus = nvarnames + ncellvars + nfreevars;
+    if (constslots != NULL && !PyBytes_Check(constslots)) {
+        PyErr_SetString(PyExc_ValueError, "code: co_constslots is malformed");
+        goto error;
+    }
+    int nconstslots = constslots == NULL ? 0
+        : (int)(PyBytes_GET_SIZE(constslots) / (2 * sizeof(uint32_t)));
+    int nlocalsplus = nvarnames + ncellvars + nconstslots + nfreevars;
     localsplusnames = PyTuple_New(nlocalsplus);
     if (localsplusnames == NULL) {
         goto error;
@@ -941,6 +1069,15 @@ code_new_with_fbinit(
         }
         _Py_set_localsplus_info(offset, name, CO_FAST_CELL,
                                localsplusnames, localspluskinds);
+    }
+    for (int i = 0; i < nconstslots; i++, offset++) {
+        PyObject *name = PyUnicode_FromFormat(".k%d", i);
+        if (name == NULL) {
+            goto error;
+        }
+        _Py_set_localsplus_info(offset, name, CO_FAST_CONST | CO_FAST_HIDDEN,
+                               localsplusnames, localspluskinds);
+        Py_DECREF(name);
     }
     for (int i = 0; i < nfreevars; i++, offset++) {
         PyObject *name = _PyTuple_GET_OBJECT(freevars, i);
@@ -985,6 +1122,7 @@ code_new_with_fbinit(
 
         .code = code,
         .fbinit = fbinit,
+        .constslots = constslots,
         .firstlineno = firstlineno,
         .linetable = linetable,
 
@@ -1042,7 +1180,7 @@ PyUnstable_Code_NewWithPosOnlyArgs(
                           PyObject *exceptiontable)
 {
     return code_new_with_fbinit(argcount, posonlyargcount, kwonlyargcount,
-                                nlocals, stacksize, flags, code, NULL, consts,
+                                nlocals, stacksize, flags, code, NULL, NULL, consts,
                                 names, varnames, freevars, cellvars, filename,
                                 name, qualname, firstlineno, linetable,
                                 exceptiontable);
@@ -1990,11 +2128,16 @@ _PyCode_GetVarCounts(PyCodeObject *co, _PyCode_var_counts_t *counts)
     // Count the locals, cells, and free vars.
     struct co_locals_counts locals = {0};
     int numfree = 0;
+    int numconst = 0;
     PyObject *kinds = co->co_localspluskinds;
     Py_ssize_t numlocalplusfree = PyBytes_GET_SIZE(kinds);
     for (int i = 0; i < numlocalplusfree; i++) {
         _PyLocals_Kind kind = _PyLocals_GetKind(co->co_localspluskinds, i);
-        if (kind & CO_FAST_FREE) {
+        if (kind & CO_FAST_CONST) {
+            // A constant slot is none of these
+            numconst += 1;
+        }
+        else if (kind & CO_FAST_FREE) {
             assert(!(kind & CO_FAST_LOCAL));
             assert(!(kind & CO_FAST_HIDDEN));
             assert(!(kind & CO_FAST_ARG));
@@ -2066,7 +2209,8 @@ _PyCode_GetVarCounts(PyCodeObject *co, _PyCode_var_counts_t *counts)
     assert(locals.cells.total == co->co_ncellvars);
     assert(locals.args.total + locals.numpure == co->co_nlocals);
     assert(locals.total + locals.cells.numargs == co->co_nlocals + co->co_ncellvars);
-    assert(locals.total + numfree == co->co_nlocalsplus);
+    assert(numconst == co->co_nconstslots);
+    assert(locals.total + numfree + numconst == co->co_nlocalsplus);
     assert(numfree == co->co_nfreevars);
 
     // Get the unbound counts.
@@ -2377,6 +2521,7 @@ code.__new__ as code_new
     freevars: object(subclass_of="&PyTuple_Type", c_default="NULL") = ()
     cellvars: object(subclass_of="&PyTuple_Type", c_default="NULL") = ()
     fbinit: object(subclass_of="&PyBytes_Type", c_default="NULL") = b''
+    constslots: object(subclass_of="&PyBytes_Type", c_default="NULL") = b''
     /
 
 Create a code object.  Not for the faint of heart.
@@ -2389,8 +2534,8 @@ code_new_impl(PyTypeObject *type, int argcount, int posonlyargcount,
               PyObject *varnames, PyObject *filename, PyObject *name,
               PyObject *qualname, int firstlineno, PyObject *linetable,
               PyObject *exceptiontable, PyObject *freevars,
-              PyObject *cellvars, PyObject *fbinit)
-/*[clinic end generated code: output=9e0481ed272aa222 input=9534933ed7e73334]*/
+              PyObject *cellvars, PyObject *fbinit, PyObject *constslots)
+/*[clinic end generated code: output=d843a7ac96697603 input=c95e5e3b3712cb94]*/
 {
     PyObject *co = NULL;
     PyObject *ournames = NULL;
@@ -2453,7 +2598,7 @@ code_new_impl(PyTypeObject *type, int argcount, int posonlyargcount,
     co = (PyObject *)code_new_with_fbinit(argcount, posonlyargcount,
                                           kwonlyargcount,
                                           nlocals, stacksize, flags,
-                                          code, fbinit, consts, ournames,
+                                          code, fbinit, constslots, consts, ournames,
                                           ourvarnames, ourfreevars,
                                           ourcellvars, filename,
                                           name, qualname, firstlineno,
@@ -2654,7 +2799,10 @@ code_richcompare(PyObject *self, PyObject *other, int op)
     eq = co->co_nfeedback == cp->co_nfeedback
         && memcmp(co->co_words, cp->co_words, _PyCode_NBYTES(co)) == 0
         && memcmp(_PyCode_FBINIT(co), _PyCode_FBINIT(cp),
-                  co->co_nfeedback * sizeof(uint32_t)) == 0;
+                  co->co_nfeedback * sizeof(uint32_t)) == 0
+        && co->co_nconstslots == cp->co_nconstslots
+        && memcmp(_PyCode_CONSTSLOTS(co), _PyCode_CONSTSLOTS(cp),
+                  co->co_nconstslots * 2 * sizeof(uint32_t)) == 0;
     if (!eq) {
         goto unequal;
     }
@@ -2740,6 +2888,9 @@ code_hash(PyObject *self)
     }
     for (int i = 0; i < co->co_nfeedback; i++) {
         SCRAMBLE_IN(_PyCode_FBINIT(co)[i]);
+    }
+    for (int i = 0; i < 2 * co->co_nconstslots; i++) {
+        SCRAMBLE_IN(_PyCode_CONSTSLOTS(co)[i]);
     }
     if ((Py_hash_t)uhash == -1) {
         return -2;
@@ -2827,6 +2978,16 @@ code_getfbinit(PyObject *self, void *closure)
                                      code->co_nfeedback * sizeof(uint32_t));
 }
 
+/* The constant-slot table: per constant slot, the slot and the index in
+ * co_consts of its value, two 32-bit integers each */
+static PyObject *
+code_getconstslots(PyObject *self, void *closure)
+{
+    PyCodeObject *code = _PyCodeObject_CAST(self);
+    return PyBytes_FromStringAndSize((const char *)_PyCode_CONSTSLOTS(code),
+                                     code->co_nconstslots * 2 * sizeof(uint32_t));
+}
+
 static PyObject *
 code_getcode(PyObject *self, void *closure)
 {
@@ -2837,6 +2998,7 @@ code_getcode(PyObject *self, void *closure)
 static PyGetSetDef code_getsetlist[] = {
     {"_co_code_adaptive", code_getcodeadaptive, NULL, NULL},
     {"co_fbinit",         code_getfbinit,       NULL, NULL},
+    {"co_constslots",     code_getconstslots,   NULL, NULL},
     {"_co_feedback",      code_getfeedback,     NULL, NULL},
     // The following old names are kept for backward compatibility.
     {"co_varnames",       code_getvarnames,     NULL, NULL},
@@ -2852,6 +3014,8 @@ code_sizeof(PyObject *self, PyObject *Py_UNUSED(args))
 {
     PyCodeObject *co = _PyCodeObject_CAST(self);
     size_t res = _PyObject_VAR_SIZE(Py_TYPE(co), Py_SIZE(co));
+    // The feedback table is not counted (follow-up); the constant slots are
+    res += (size_t)co->co_nconstslots * 2 * sizeof(uint32_t);
     res += _PyCode_ExecSizeOf(co);
     _PyCodeObjectExtra *co_extra = (_PyCodeObjectExtra*) co->co_extra;
     if (co_extra != NULL) {
@@ -2900,6 +3064,7 @@ code.replace
     co_linetable: object(subclass_of="&PyBytes_Type", c_default="((PyCodeObject *)self)->co_linetable") = unchanged
     co_exceptiontable: object(subclass_of="&PyBytes_Type", c_default="((PyCodeObject *)self)->co_exceptiontable") = unchanged
     co_fbinit: object(subclass_of="&PyBytes_Type", c_default="NULL") = unchanged
+    co_constslots: object(subclass_of="&PyBytes_Type", c_default="NULL") = unchanged
 
 Return a copy of the code object with new values for the specified fields.
 [clinic start generated code]*/
@@ -2913,8 +3078,9 @@ code_replace_impl(PyCodeObject *self, int co_argcount,
                   PyObject *co_freevars, PyObject *co_cellvars,
                   PyObject *co_filename, PyObject *co_name,
                   PyObject *co_qualname, PyObject *co_linetable,
-                  PyObject *co_exceptiontable, PyObject *co_fbinit)
-/*[clinic end generated code: output=ca4997a8f05a288c input=f2236468f8933e03]*/
+                  PyObject *co_exceptiontable, PyObject *co_fbinit,
+                  PyObject *co_constslots)
+/*[clinic end generated code: output=eea43d61e16aa1b2 input=ad2ea43603862ce7]*/
 {
 #define CHECK_INT_ARG(ARG) \
         if (ARG < 0) { \
@@ -2955,6 +3121,7 @@ code_replace_impl(PyCodeObject *self, int co_argcount,
     PyObject *cellvars = NULL;
     PyObject *freevars = NULL;
     PyObject *fbinit = NULL;
+    PyObject *constslots = NULL;
     if (co_varnames == NULL) {
         varnames = get_localsplus_names(self, CO_FAST_LOCAL, self->co_nlocals);
         if (varnames == NULL) {
@@ -2985,15 +3152,26 @@ code_replace_impl(PyCodeObject *self, int co_argcount,
         }
         co_fbinit = fbinit;
     }
+    if (co_constslots == NULL) {
+        constslots = PyBytes_FromStringAndSize(
+            (const char *)_PyCode_CONSTSLOTS(self),
+            self->co_nconstslots * 2 * sizeof(uint32_t));
+        if (constslots == NULL) {
+            goto error;
+        }
+        co_constslots = constslots;
+    }
     co = code_new_with_fbinit(
         co_argcount, co_posonlyargcount, co_kwonlyargcount, co_nlocals,
-        co_stacksize, co_flags, co_code, co_fbinit, co_consts, co_names,
+        co_stacksize, co_flags, co_code, co_fbinit, co_constslots,
+        co_consts, co_names,
         co_varnames, co_freevars, co_cellvars, co_filename, co_name,
         co_qualname, co_firstlineno,
         co_linetable, co_exceptiontable);
 
 error:
     Py_XDECREF(fbinit);
+    Py_XDECREF(constslots);
     Py_XDECREF(code);
     Py_XDECREF(varnames);
     Py_XDECREF(cellvars);

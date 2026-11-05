@@ -11,6 +11,7 @@
 #include "pycore_pyatomic_ft_wrappers.h" // FT_ATOMIC_LOAD_PTR_ACQUIRE()
 #include "pycore_value.h"      // PyValue_AsKnownObjectBorrow()
 #include "pycore_stats.h"         // CALL_STAT_INC()
+#include "pycore_tuple.h"         // PyTuple_GET_VALUE()
 
 #ifdef __cplusplus
 extern "C" {
@@ -249,6 +250,20 @@ static inline void _PyFrame_Copy(_PyInterpreterFrame *src, _PyInterpreterFrame *
 }
 
 
+/* Write the constants of the constant slots of code (CO_FAST_CONST) into the
+ * slots of frame: owners of inline scalars and immortals, which own no
+ * count.  A mortal constant, as after code.replace(co_consts=...), gets
+ * one. */
+static inline void
+_PyFrame_FillConstSlots(_PyInterpreterFrame *frame, PyCodeObject *code)
+{
+    const uint32_t *table = _PyCode_CONSTSLOTS(code);
+    for (int i = 0; i < code->co_nconstslots; i++) {
+        frame->base[table[2 * i]] =
+            PyValue_XDUP(PyTuple_GET_VALUE(code->co_consts, table[2 * i + 1]));
+    }
+}
+
 /* Consumes reference to func and locals.
    Does not initialize frame->previous, which happens
    when frame is linked into the frame stack.
@@ -280,6 +295,12 @@ _PyFrame_Initialize(
     int nslots = _PyFrame_NumSlotsForCodeObject(code);
     for (int i = null_locals_from; i < nslots; i++) {
         frame->base[i] = PyValue_NULL;
+    }
+    // The constant slots (CO_FAST_CONST): owners of inline scalars and
+    // immortals, which own no count.  A mortal constant, as after
+    // code.replace(co_consts=...), gets one.
+    if (code->co_nconstslots) {
+        _PyFrame_FillConstSlots(frame, code);
     }
 }
 

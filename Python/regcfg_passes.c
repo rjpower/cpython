@@ -13,7 +13,9 @@
 #include "pycore_ir.h"
 #include "pycore_opcode_metadata.h"
 #include "pycore_opcode_utils.h"
+#include "pycore_list.h"            // PyList_GET_VALUE()
 #include "pycore_regcfg.h"
+#include "pycore_value.h"           // PyValue_FromInlineInt()
 
 #undef SUCCESS
 #undef ERROR
@@ -646,4 +648,324 @@ int
 _PyRegPass_TruthFold(_PyRegCfg *cfg)
 {
     return for_each_region_backward(cfg, truth_fold_region);
+}
+
+
+/* Constant slots (G6).
+ *
+ * An inline scalar constant (small or inline int, inline float, None, True,
+ * False) that an op inside a loop reads through a field that may name a
+ * local becomes a hidden local, filled when the frame is pushed
+ * (CO_FAST_CONST, _PyFrame_FillConstSlots()): the load goes, as a load of a
+ * local does under copy propagation, and the reader names the slot.  The
+ * same conditions apply as there, less the rules about writes: nobody writes
+ * a constant slot.  Window inputs, constants outside loops and every other
+ * constant keep their loads.
+ *
+ * The slots sit between the cells and the free variables, so the free
+ * variables and everything above them move up, and so do the opargs that
+ * name them.  The pass runs after compaction, which the caller repeats. */
+
+typedef struct {
+    int load;               // the op of the load
+    int reader;
+    int reader_k;
+    uintptr_t bits;         // the constant
+    int index;              // in consts, or -1 for a small int not in it
+    int oparg;              // of a LOAD_SMALL_INT
+} const_fold;
+
+/* The loop blocks: those from the target of a backward jump to the block
+ * of the jump. */
+static uint8_t *
+loop_blocks(const _PyRegCfg *cfg, int *any)
+{
+    uint8_t *in_loop = PyMem_Calloc(Py_MAX(cfg->nblocks, 1), 1);
+    if (in_loop == NULL) {
+        PyErr_NoMemory();
+        return NULL;
+    }
+    *any = 0;
+    for (int b = 0; b < cfg->nblocks; b++) {
+        const _PyRegBlock *blk = &cfg->blocks[b];
+        if (!blk->reachable) {
+            continue;
+        }
+        for (int i = blk->start; i < blk->end; i++) {
+            const _PyRegOp *op = &cfg->ops[i];
+            if (op->opcode == _PyReg_DEAD || op->target < 0
+                || (_PyRegCfg_FormatOf(op->opcode)->flags & _PyIR_NAMES_TARGET)
+                || op->target > b)
+            {
+                continue;
+            }
+            for (int t = op->target; t <= b; t++) {
+                in_loop[t] = 1;
+            }
+            *any = 1;
+        }
+    }
+    return in_loop;
+}
+
+/* Whether value is None, True or False */
+static int
+is_singleton(PyValueBorrow value)
+{
+    if (!PyValue_IsObject(value)) {
+        return 0;
+    }
+    PyObject *obj = PyValue_AsKnownObjectBorrow(value);
+    return obj == Py_None || obj == Py_True || obj == Py_False;
+}
+
+/* Whether load is a load of a constant that can live in a slot, and if so
+ * its bits and its index in consts (-1 if a small int is not there). */
+static int
+const_of_load(const _PyRegOp *load, PyObject *consts, uintptr_t *bits,
+              int *index)
+{
+    if (load->opcode == LOAD_SMALL_INT) {
+        *bits = _PyValue_Identity(PyValue_FromInlineInt(load->oparg));
+        *index = -1;
+        // An equal entry may exist
+        for (Py_ssize_t i = 0; i < PyList_GET_SIZE(consts); i++) {
+            if (_PyValue_Identity(PyList_GET_VALUE(consts, i)) == *bits) {
+                *index = (int)i;
+                break;
+            }
+        }
+        return 1;
+    }
+    if (load->opcode != LOAD_CONST || load->oparg >= PyList_GET_SIZE(consts)) {
+        return 0;
+    }
+    PyValueBorrow value = PyList_GET_VALUE(consts, load->oparg);
+    if (!PyValue_IsInlineInt(value) && !PyValue_IsInlineFloat(value)
+        && !is_singleton(value))
+    {
+        return 0;
+    }
+    *bits = _PyValue_Identity(value);
+    *index = load->oparg;
+    return 1;
+}
+
+static int
+find_const_folds(_PyRegCfg *cfg, PyObject *consts, const uint8_t *in_loop,
+                 const_fold **folds, int *nfolds)
+{
+    pending_load *pend = PyMem_Malloc(Py_MAX(cfg->nops, 1) * sizeof(pending_load));
+    *folds = PyMem_Malloc(Py_MAX(cfg->nops, 1) * sizeof(const_fold));
+    if (pend == NULL || *folds == NULL) {
+        PyMem_Free(pend);
+        PyMem_Free(*folds);
+        PyErr_NoMemory();
+        return ERROR;
+    }
+    *nfolds = 0;
+    int npend = 0;
+    for (int b = 0; b < cfg->nblocks; b++) {
+        _PyRegBlock *blk = &cfg->blocks[b];
+        if (!blk->continued || !blk->reachable) {
+            npend = 0;
+        }
+        if (!blk->reachable) {
+            continue;
+        }
+        for (int i = blk->start; i < blk->end; i++) {
+            _PyRegOp *op = &cfg->ops[i];
+            if (op->opcode == _PyReg_DEAD) {
+                continue;
+            }
+            int *in = _PyReg_IN(cfg, op);
+            int n = 0;
+            for (int p = 0; p < npend; p++) {
+                _PyRegOp *load = pend[p].load;
+                int v = pend[p].reg;
+                if (load->loc.lineno != op->loc.lineno) {
+                    continue;
+                }
+                int uses = reads_count(cfg, op, v);
+                if (uses == 0) {
+                    pend[n++] = pend[p];
+                    continue;
+                }
+                if (uses != 1) {
+                    continue;
+                }
+                for (int k = 0; k < op->nread; k++) {
+                    if (in[k] == v && borrow_field(cfg, op, k) >= 0) {
+                        const_fold *f = &(*folds)[(*nfolds)++];
+                        f->load = (int)(load - cfg->ops);
+                        f->reader = i;
+                        f->reader_k = k;
+                        uintptr_t bits;
+                        const_of_load(load, consts, &bits, &f->index);
+                        f->bits = bits;
+                        f->oparg = load->oparg;
+                    }
+                }
+            }
+            npend = n;
+            uintptr_t bits;
+            int index;
+            if (in_loop[b] && (op->opcode == LOAD_CONST
+                               || op->opcode == LOAD_SMALL_INT)
+                && is_fresh(cfg, _PyReg_OUT(cfg, op)[0])
+                && const_of_load(op, consts, &bits, &index))
+            {
+                pend[npend].load = op;
+                pend[npend].reg = _PyReg_OUT(cfg, op)[0];
+                npend++;
+            }
+        }
+    }
+    PyMem_Free(pend);
+    return SUCCESS;
+}
+
+/* Move the registers from first_free up, and the opargs that name slots
+ * from there, up by k. */
+static void
+shift_slots(_PyRegCfg *cfg, int first_free, int k)
+{
+    for (int i = 0; i < cfg->nops; i++) {
+        _PyRegOp *op = &cfg->ops[i];
+        int *in = _PyReg_IN(cfg, op);
+        for (int j = 0; j < op->nread + op->nimplicit; j++) {
+            if (in[j] >= first_free) {
+                in[j] += k;
+            }
+        }
+        int *out = _PyReg_OUT(cfg, op);
+        for (int j = 0; j < op->nout; j++) {
+            if (out[j] >= first_free) {
+                out[j] += k;
+            }
+        }
+        if (op->dst >= first_free) {
+            op->dst += k;
+        }
+        if (op->opcode == _PyReg_DEAD) {
+            continue;
+        }
+        int role = _PyIR_OpargRole(_PyRegCfg_FormatOf(op->opcode));
+        if ((role == _PyIR_ROLE_LOCAL_IN || role == _PyIR_ROLE_LOCAL_OUT
+             || role == _PyIR_ROLE_LOCAL_CLEAR || role == _PyIR_ROLE_LOCAL_MOVE
+             || role == _PyIR_ROLE_CELL)
+            && op->oparg >= first_free)
+        {
+            op->oparg += k;
+        }
+    }
+    cfg->nlocalsplus += k;
+    cfg->nvregs += k;
+}
+
+int
+_PyRegPass_ConstSlots(_PyRegCfg *cfg, PyObject *consts, int nfree)
+{
+    int any;
+    uint8_t *in_loop = loop_blocks(cfg, &any);
+    if (in_loop == NULL) {
+        return ERROR;
+    }
+    const_fold *folds = NULL;
+    int nfolds = 0;
+    int nconst = 0;
+    uintptr_t *keys = NULL;
+    int *key_index = NULL;
+    int *fold_slot = NULL;
+    if (!any) {
+        goto done;
+    }
+    if (find_const_folds(cfg, consts, in_loop, &folds, &nfolds) < 0) {
+        PyMem_Free(in_loop);
+        return ERROR;
+    }
+    // One slot per distinct constant, in order of use, while the frame fits
+    keys = PyMem_Malloc(Py_MAX(nfolds, 1) * sizeof(uintptr_t));
+    key_index = PyMem_Malloc(Py_MAX(nfolds, 1) * sizeof(int));
+    fold_slot = PyMem_Malloc(Py_MAX(nfolds, 1) * sizeof(int));
+    if (keys == NULL || key_index == NULL || fold_slot == NULL) {
+        PyErr_NoMemory();
+        goto error;
+    }
+    int room = IR_MAX_SLOTS - cfg->nlocalsplus - cfg->ntemps;
+    for (int f = 0; f < nfolds; f++) {
+        int j;
+        for (j = 0; j < nconst && keys[j] != folds[f].bits; j++) {
+        }
+        if (j == nconst) {
+            if (nconst >= room) {
+                fold_slot[f] = -1;
+                continue;
+            }
+            keys[nconst] = folds[f].bits;
+            key_index[nconst] = folds[f].index;
+            nconst++;
+        }
+        fold_slot[f] = j;
+    }
+    if (nconst == 0) {
+        goto done;
+    }
+    // A small int that consts lacks gets an entry
+    for (int j = 0; j < nconst; j++) {
+        if (key_index[j] >= 0) {
+            continue;
+        }
+        int oparg = -1;
+        for (int f = 0; f < nfolds; f++) {
+            if (fold_slot[f] == j) {
+                oparg = folds[f].oparg;
+                break;
+            }
+        }
+        if (PyList_AppendValue(consts, PyValue_FromInlineInt(oparg)) < 0) {
+            goto error;
+        }
+        key_index[j] = (int)PyList_GET_SIZE(consts) - 1;
+        assert(_PyValue_Identity(PyList_GET_VALUE(consts, key_index[j]))
+               == keys[j]);
+    }
+    int first_free = cfg->nlocalsplus - nfree;
+    shift_slots(cfg, first_free, nconst);
+    for (int f = 0; f < nfolds; f++) {
+        if (fold_slot[f] < 0) {
+            continue;
+        }
+        _PyRegOp *load = &cfg->ops[folds[f].load];
+        _PyRegOp *reader = &cfg->ops[folds[f].reader];
+        int slot = first_free + fold_slot[f];
+        _PyReg_IN(cfg, reader)[folds[f].reader_k] = slot;
+        load->oparg = slot;
+        load->opcode = _PyReg_DEAD;
+        load->flags |= _PyReg_LOAD_FOLDED;
+        load->reader = folds[f].reader;
+        load->reader_k = folds[f].reader_k;
+    }
+    cfg->const_first = first_free;
+    cfg->nconst = nconst;
+    cfg->const_index = PyMem_Malloc(nconst * sizeof(int));
+    if (cfg->const_index == NULL) {
+        PyErr_NoMemory();
+        goto error;
+    }
+    memcpy(cfg->const_index, key_index, nconst * sizeof(int));
+done:
+    PyMem_Free(in_loop);
+    PyMem_Free(folds);
+    PyMem_Free(keys);
+    PyMem_Free(key_index);
+    PyMem_Free(fold_slot);
+    return nconst;
+error:
+    PyMem_Free(in_loop);
+    PyMem_Free(folds);
+    PyMem_Free(keys);
+    PyMem_Free(key_index);
+    PyMem_Free(fold_slot);
+    return ERROR;
 }

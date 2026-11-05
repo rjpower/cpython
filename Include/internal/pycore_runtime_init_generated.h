@@ -1662,6 +1662,7 @@ extern "C" {
     INIT_ID(co_cellvars), \
     INIT_ID(co_code), \
     INIT_ID(co_consts), \
+    INIT_ID(co_constslots), \
     INIT_ID(co_exceptiontable), \
     INIT_ID(co_fbinit), \
     INIT_ID(co_filename), \
@@ -2070,6 +2071,7 @@ extern "C" {
     INIT_ID(salt), \
     INIT_ID(sample_interval_us), \
     INIT_ID(sample_rate), \
+    INIT_ID(scale), \
     INIT_ID(sched_priority), \
     INIT_ID(scheduler), \
     INIT_ID(script), \

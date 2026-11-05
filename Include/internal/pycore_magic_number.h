@@ -330,8 +330,11 @@ Known values:
    64404: an int constant outside int32 and inside int51 is inline and
    loads with LOAD_CONST_INLINE_INT.
    64405: no NOT_TAKEN; conditional jumps fire BRANCH_LEFT themselves, and
-   five dead handlers are removed (register IR v2 B2). */
-#define PYC_MAGIC_NUMBER 64405
+   five dead handlers are removed (register IR v2 B2).
+   64406: code objects carry a constant-slot table after the feedback table,
+   and inline scalar constants read in loops are hidden frame slots
+   (register IR v2 B7). */
+#define PYC_MAGIC_NUMBER 64406
 /* This is equivalent to converting PYC_MAGIC_NUMBER to 2 bytes
    (little-endian) and then appending b'\r\n'. */
 #define PYC_MAGIC_NUMBER_TOKEN \

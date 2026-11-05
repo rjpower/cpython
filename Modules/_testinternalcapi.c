@@ -3173,6 +3173,7 @@ inline_locals(PyObject *self, PyObject *frame)
     }
     for (int i = 0; i < co->co_nlocalsplus; i++) {
         if (PyValue_IsInline(f->base[i]) &&
+            !(_PyLocals_GetKind(co->co_localspluskinds, i) & CO_FAST_CONST) &&
             PySet_Add(names, _PyTuple_GET_OBJECT(co->co_localsplusnames, i)) < 0)
         {
             Py_DECREF(names);

@@ -51,6 +51,7 @@ struct assembler {
     int a_nfb;                 /* feedback entries, entry 0 included */
     PyObject *a_bytecode;      /* bytes containing the words */
     PyObject *a_fbinit;        /* bytes containing the feedback table */
+    PyObject *a_constslots;    /* bytes: the constant-slot table */
     PyBytesWriter *a_except_table_writer; /* writer containing exception table */
     PyObject *a_except_table;  /* bytes containing exception table */
     int a_except_table_off;    /* offset into exception table */
@@ -89,6 +90,7 @@ assemble_free(struct assembler *a)
     PyBytesWriter_Discard(a->a_except_table_writer);
     Py_XDECREF(a->a_bytecode);
     Py_XDECREF(a->a_fbinit);
+    Py_XDECREF(a->a_constslots);
     Py_XDECREF(a->a_linetable);
     Py_XDECREF(a->a_except_table);
 }
@@ -372,6 +374,7 @@ assemble_emit(struct assembler *a, _PyRegCfg *cfg, int first_lineno,
     RETURN_IF_ERROR(_PyCompile_ConstCacheMergeOne(const_cache, &a->a_linetable));
     RETURN_IF_ERROR(_PyCompile_ConstCacheMergeOne(const_cache, &a->a_bytecode));
     RETURN_IF_ERROR(_PyCompile_ConstCacheMergeOne(const_cache, &a->a_fbinit));
+    RETURN_IF_ERROR(_PyCompile_ConstCacheMergeOne(const_cache, &a->a_constslots));
     return SUCCESS;
 }
 
@@ -434,7 +437,8 @@ extern void _Py_set_localsplus_info(int, PyObject *, unsigned char,
 
 static int
 compute_localsplus_info(_PyCompile_CodeUnitMetadata *umd, int nlocalsplus,
-                        int flags, PyObject *names, PyObject *kinds)
+                        int nconst, int flags, PyObject *names,
+                        PyObject *kinds)
 {
     PyValue key = PyValue_NULL, value = PyValue_NULL;
     int status = 0;
@@ -560,7 +564,8 @@ compute_localsplus_info(_PyCompile_CodeUnitMetadata *umd, int nlocalsplus,
             PyErr_SetString(PyExc_SystemError, "invalid free variable index");
             goto error;
         }
-        offset += nlocals - numdropped;
+        // The constant slots come before the free variables
+        offset += nlocals - numdropped + nconst;
         assert(offset < nlocalsplus);
         /* XXX If the assertion below fails it is most likely because a freevar
            was added to u_freevars with the wrong index due to not taking into
@@ -570,7 +575,21 @@ compute_localsplus_info(_PyCompile_CodeUnitMetadata *umd, int nlocalsplus,
         PyValue_CLEAR(key);
         PyValue_CLEAR(value);
     }
-    return status < 0 ? ERROR : SUCCESS;
+    if (status < 0) {
+        return ERROR;
+    }
+    // The constant slots, named .k0, .k1, ... as the code constructor does
+    int first = nlocalsplus - nconst - (int)PyDict_GET_SIZE(umd->u_freevars);
+    for (int j = 0; j < nconst; j++) {
+        PyObject *name = PyUnicode_FromFormat(".k%d", j);
+        if (name == NULL) {
+            return ERROR;
+        }
+        _Py_set_localsplus_info(first + j, name,
+                                CO_FAST_CONST | CO_FAST_HIDDEN, names, kinds);
+        Py_DECREF(name);
+    }
+    return SUCCESS;
 
 error:;
     PyValue_XCLOSE(key);
@@ -580,7 +599,8 @@ error:;
 
 static PyCodeObject *
 makecode(_PyCompile_CodeUnitMetadata *umd, struct assembler *a, PyObject *const_cache,
-         PyObject *constslist, int maxdepth, int nlocalsplus, int code_flags,
+         PyObject *constslist, int maxdepth, int nlocalsplus, int nconst,
+         int code_flags,
          PyObject *filename)
 {
     PyCodeObject *co = NULL;
@@ -621,7 +641,7 @@ makecode(_PyCompile_CodeUnitMetadata *umd, struct assembler *a, PyObject *const_
         goto error;
     }
     if (compute_localsplus_info(
-            umd, nlocalsplus, code_flags,
+            umd, nlocalsplus, nconst, code_flags,
             localsplusnames, localspluskinds) == ERROR)
     {
         goto error;
@@ -635,6 +655,7 @@ makecode(_PyCompile_CodeUnitMetadata *umd, struct assembler *a, PyObject *const_
 
         .code = a->a_bytecode,
         .fbinit = a->a_fbinit,
+        .constslots = a->a_constslots,
         .firstlineno = umd->u_firstlineno,
         .linetable = a->a_linetable,
 
@@ -988,6 +1009,23 @@ assemble_words(struct assembler *a, _PyRegCfg *cfg, PyObject *consts,
     return SUCCESS;
 }
 
+/* The constant-slot table: (slot, co_consts index) pairs */
+static int
+make_constslots(struct assembler *a, _PyRegCfg *cfg)
+{
+    a->a_constslots = PyBytes_FromStringAndSize(
+        NULL, cfg->nconst * 2 * sizeof(uint32_t));
+    if (a->a_constslots == NULL) {
+        return ERROR;
+    }
+    uint32_t *table = (uint32_t *)PyBytes_AS_STRING(a->a_constslots);
+    for (int j = 0; j < cfg->nconst; j++) {
+        table[2 * j] = (uint32_t)(cfg->const_first + j);
+        table[2 * j + 1] = (uint32_t)cfg->const_index[j];
+    }
+    return SUCCESS;
+}
+
 PyCodeObject *
 _PyAssemble_MakeCodeObject(_PyCompile_CodeUnitMetadata *umd, PyObject *const_cache,
                            PyObject *consts, _PyRegCfg *cfg,
@@ -996,16 +1034,25 @@ _PyAssemble_MakeCodeObject(_PyCompile_CodeUnitMetadata *umd, PyObject *const_cac
     PyCodeObject *co = NULL;
     // co_stacksize keeps its meaning for tools: the slots for temporaries,
     // which compaction may make fewer than the deepest stack
-    int stacksize = cfg->ntemps;
     struct assembler a;
     memset(&a, 0, sizeof(a));
-    int res = assemble_words(&a, cfg, consts, nlocalsplus, stacksize);
+    int res = _PyRegCfg_AssignConstSlots(
+        cfg, consts, (int)PyDict_GET_SIZE(umd->u_freevars));
+    // The hidden constant slots are part of the frame
+    nlocalsplus = cfg->nlocalsplus;
+    int stacksize = cfg->ntemps;
+    if (res == SUCCESS) {
+        res = make_constslots(&a, cfg);
+    }
+    if (res == SUCCESS) {
+        res = assemble_words(&a, cfg, consts, nlocalsplus, stacksize);
+    }
     if (res == SUCCESS) {
         res = assemble_emit(&a, cfg, umd->u_firstlineno, const_cache);
     }
     if (res == SUCCESS) {
         co = makecode(umd, &a, const_cache, consts, stacksize, nlocalsplus,
-                      code_flags, filename);
+                      cfg->nconst, code_flags, filename);
     }
     assemble_free(&a);
     return co;

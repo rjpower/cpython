@@ -25,6 +25,7 @@
 #  define Py_BUILD_CORE_MODULE 1
 #endif
 
+#define Py_VALUE_CORE 1
 #include "connection.h"
 #include "statement.h"
 #include "cursor.h"
@@ -41,6 +42,11 @@
 #define clinic_state() (pysqlite_get_state(module))
 #include "clinic/module.c.h"
 #undef clinic_state
+
+/*[clinic input]
+value_emission
+[clinic start generated code]*/
+/*[clinic end generated code: output=da39a3ee5e6b4b0d input=eb7b17088bfd7215]*/
 
 /*[clinic input]
 module _sqlite3
@@ -93,9 +99,9 @@ _sqlite3.complete_statement as pysqlite_complete_statement
 Checks if a string contains a complete SQL statement.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 pysqlite_complete_statement_impl(PyObject *module, const char *statement)
-/*[clinic end generated code: output=e55f1ff1952df558 input=ac45d257375bb828]*/
+/*[clinic end generated code: output=a69b5ca0bc8587a9 input=ac45d257375bb828]*/
 {
     if (sqlite3_complete(statement)) {
         return Py_NewRef(Py_True);
@@ -107,17 +113,17 @@ pysqlite_complete_statement_impl(PyObject *module, const char *statement)
 /*[clinic input]
 _sqlite3.register_adapter as pysqlite_register_adapter
 
-    type: object(type='PyTypeObject *')
+    type: object(type='PyTypeObject *', subclass_of='&PyType_Type')
     adapter as caster: object
     /
 
 Register a function to adapt Python objects to SQLite values.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 pysqlite_register_adapter_impl(PyObject *module, PyTypeObject *type,
-                               PyObject *caster)
-/*[clinic end generated code: output=a287e8db18e8af23 input=29a5e0f213030242]*/
+                               PyValueBorrow caster)
+/*[clinic end generated code: output=86d88df7fe97c228 input=7c1d4596c2186e79]*/
 {
     int rc;
 
@@ -149,10 +155,10 @@ _sqlite3.register_converter as pysqlite_register_converter
 Register a function to convert SQLite values to Python objects.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 pysqlite_register_converter_impl(PyObject *module, PyObject *orig_name,
-                                 PyObject *callable)
-/*[clinic end generated code: output=a2f2bfeed7230062 input=159a444971b40378]*/
+                                 PyValueBorrow callable)
+/*[clinic end generated code: output=12c986dc1cd60800 input=159a444971b40378]*/
 {
     PyObject* name = NULL;
     PyObject* retval = NULL;
@@ -183,9 +189,9 @@ _sqlite3.enable_callback_tracebacks as pysqlite_enable_callback_trace
 Enable or disable callback functions throwing errors to stderr.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 pysqlite_enable_callback_trace_impl(PyObject *module, int enable)
-/*[clinic end generated code: output=4ff1d051c698f194 input=cb79d3581eb77c40]*/
+/*[clinic end generated code: output=c60facd165848b5b input=cb79d3581eb77c40]*/
 {
     pysqlite_state *state = pysqlite_get_state(module);
     state->enable_callback_tracebacks = enable;
@@ -204,10 +210,10 @@ _sqlite3.adapt as pysqlite_adapt
 Adapt given object to given protocol.
 [clinic start generated code]*/
 
-static PyObject *
-pysqlite_adapt_impl(PyObject *module, PyObject *obj, PyObject *proto,
-                    PyObject *alt)
-/*[clinic end generated code: output=0c3927c5fcd23dd9 input=a53dc9993e81e15f]*/
+static PyValue
+pysqlite_adapt_impl(PyObject *module, PyValueBorrow obj, PyValueBorrow proto,
+                    PyValueBorrow alt)
+/*[clinic end generated code: output=1ed477114c16cc7e input=a53dc9993e81e15f]*/
 {
     pysqlite_state *state = pysqlite_get_state(module);
     return pysqlite_microprotocols_adapt(state, obj, proto, alt);

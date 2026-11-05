@@ -5,6 +5,7 @@
  * process memory, including strings, bytes, and integers.
  ******************************************************************************/
 
+#define Py_VALUE_CORE 1
 #include "_remote_debugging.h"
 #include <limits.h>
 

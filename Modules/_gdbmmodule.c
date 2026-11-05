@@ -7,9 +7,12 @@
 #  define Py_BUILD_CORE_MODULE 1
 #endif
 
+#define Py_VALUE_CORE 1
 #include "Python.h"
+#include "pycore_list.h"          // PyList_AppendValue()
 #include "pycore_object.h"        // _PyObject_VisitType()
 #include "pycore_pyerrors.h"      // _PyErr_SetLocaleString()
+#include "pycore_value.h"         // PyValue
 #include "gdbm.h"
 
 #include <fcntl.h>
@@ -54,6 +57,11 @@ set_gdbm_error(_gdbm_state *state, const char *generic_error)
 }
 
 /*[clinic input]
+value_emission
+[clinic start generated code]*/
+/*[clinic end generated code: output=da39a3ee5e6b4b0d input=eb7b17088bfd7215]*/
+
+/*[clinic input]
 module _gdbm
 class _gdbm.gdbm "gdbmobject *" "&Gdbmtype"
 [clinic start generated code]*/
@@ -86,6 +94,14 @@ typedef struct {
     if ((v)->di_dbm == NULL) {                                       \
         PyErr_SetString(err, "GDBM object has already been closed"); \
         return NULL;                                                 \
+    }
+
+/* Same check for the functions that return a PyValue. */
+#define check_gdbmobject_open_value(v, err)                                 \
+    _Py_CRITICAL_SECTION_ASSERT_OBJECT_LOCKED((v))                   \
+    if ((v)->di_dbm == NULL) {                                       \
+        PyErr_SetString(err, "GDBM object has already been closed"); \
+        return PyValue_NULL;                                                 \
     }
 
 PyDoc_STRVAR(gdbm_object__doc__,
@@ -290,18 +306,24 @@ _gdbm.gdbm.get
 Get the value for key, or default if not present.
 [clinic start generated code]*/
 
-static PyObject *
-_gdbm_gdbm_get_impl(gdbmobject *self, PyObject *key, PyObject *default_value)
-/*[clinic end generated code: output=92421838f3a852f4 input=a9c20423f34c17b6]*/
+static PyValue
+_gdbm_gdbm_get_impl(gdbmobject *self, PyValueBorrow key,
+                    PyValueBorrow default_value)
+/*[clinic end generated code: output=a11f34ef2e76aa41 input=a9c20423f34c17b6]*/
 {
     PyObject *res;
+    PyObject *key_obj = _PyValue_AsObjectAt(key, BOX_SITE_PARSER);
+    if (key_obj == NULL) {
+        return PyValue_NULL;
+    }
 
-    res = gdbm_subscript((PyObject *)self, key);
+    res = gdbm_subscript((PyObject *)self, key_obj);
+    Py_DECREF(key_obj);
     if (res == NULL && PyErr_ExceptionMatches(PyExc_KeyError)) {
         PyErr_Clear();
-        return Py_NewRef(default_value);
+        return PyValue_DUP(default_value);
     }
-    return res;
+    return _PyValue_FromObjectResult(res);
 }
 
 /*[clinic input]
@@ -372,21 +394,36 @@ _gdbm.gdbm.setdefault
 Get value for key, or set it to default and return default if not present.
 [clinic start generated code]*/
 
-static PyObject *
-_gdbm_gdbm_setdefault_impl(gdbmobject *self, PyObject *key,
-                           PyObject *default_value)
-/*[clinic end generated code: output=f3246e880509f142 input=f4008b358165bbb8]*/
+static PyValue
+_gdbm_gdbm_setdefault_impl(gdbmobject *self, PyValueBorrow key,
+                           PyValueBorrow default_value)
+/*[clinic end generated code: output=63d62526a3807593 input=f4008b358165bbb8]*/
 {
     PyObject *res;
+    PyObject *key_obj = _PyValue_AsObjectAt(key, BOX_SITE_PARSER);
+    if (key_obj == NULL) {
+        return PyValue_NULL;
+    }
 
-    res = gdbm_subscript((PyObject *)self, key);
+    res = gdbm_subscript((PyObject *)self, key_obj);
     if (res == NULL && PyErr_ExceptionMatches(PyExc_KeyError)) {
         PyErr_Clear();
-        if (gdbm_ass_sub((PyObject *)self, key, default_value) < 0)
-            return NULL;
-        return gdbm_subscript((PyObject *)self, key);
+        PyObject *default_obj = _PyValue_AsObjectAt(default_value,
+                                                    BOX_SITE_PARSER);
+        if (default_obj == NULL) {
+            Py_DECREF(key_obj);
+            return PyValue_NULL;
+        }
+        int r = gdbm_ass_sub((PyObject *)self, key_obj, default_obj);
+        Py_DECREF(default_obj);
+        if (r < 0) {
+            Py_DECREF(key_obj);
+            return PyValue_NULL;
+        }
+        res = gdbm_subscript((PyObject *)self, key_obj);
     }
-    return res;
+    Py_DECREF(key_obj);
+    return _PyValue_FromObjectResult(res);
 }
 
 /*[clinic input]
@@ -396,15 +433,15 @@ _gdbm.gdbm.close
 Close the database.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _gdbm_gdbm_close_impl(gdbmobject *self)
-/*[clinic end generated code: output=f5abb4d6bb9e52d5 input=56b604f4e77f533d]*/
+/*[clinic end generated code: output=f75c693d0eb60f6f input=56b604f4e77f533d]*/
 {
     if (self->di_dbm) {
         gdbm_close(self->di_dbm);
     }
     self->di_dbm = NULL;
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 /* XXX Should return a set or a set view */
@@ -417,9 +454,9 @@ _gdbm.gdbm.keys
 Get a list of all keys in the database.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _gdbm_gdbm_keys_impl(gdbmobject *self, PyTypeObject *cls)
-/*[clinic end generated code: output=c24b824e81404755 input=785988b1ea8f77e0]*/
+/*[clinic end generated code: output=ea6317665f611dfe input=785988b1ea8f77e0]*/
 {
     PyObject *v, *item;
     datum key, nextkey;
@@ -430,13 +467,13 @@ _gdbm_gdbm_keys_impl(gdbmobject *self, PyTypeObject *cls)
 
     if (self == NULL || !Py_IS_TYPE(self, state->gdbm_type)) {
         PyErr_BadInternalCall();
-        return NULL;
+        return PyValue_NULL;
     }
-    check_gdbmobject_open(self, state->gdbm_error);
+    check_gdbmobject_open_value(self, state->gdbm_error);
 
     v = PyList_New(0);
     if (v == NULL)
-        return NULL;
+        return PyValue_NULL;
 
     key = gdbm_firstkey(self->di_dbm);
     while (key.dptr) {
@@ -444,20 +481,20 @@ _gdbm_gdbm_keys_impl(gdbmobject *self, PyTypeObject *cls)
         if (item == NULL) {
             free(key.dptr);
             Py_DECREF(v);
-            return NULL;
+            return PyValue_NULL;
         }
-        err = PyList_Append(v, item);
+        err = PyList_AppendValue(v, PyValue_FromObjectBorrow(item));
         Py_DECREF(item);
         if (err != 0) {
             free(key.dptr);
             Py_DECREF(v);
-            return NULL;
+            return PyValue_NULL;
         }
         nextkey = gdbm_nextkey(self->di_dbm, key);
         free(key.dptr);
         key = nextkey;
     }
-    return v;
+    return _PyValue_FromObjectResult(v);
 }
 
 /*[clinic input]
@@ -513,24 +550,24 @@ method and the nextkey() method.  The traversal is ordered by GDBM's
 internal hash values, and won't be sorted by the key values.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _gdbm_gdbm_firstkey_impl(gdbmobject *self, PyTypeObject *cls)
-/*[clinic end generated code: output=139275e9c8b60827 input=ba40f0d81eae0f35]*/
+/*[clinic end generated code: output=dd9a294314c4c317 input=ba40f0d81eae0f35]*/
 {
     PyObject *v;
     datum key;
     _gdbm_state *state = PyType_GetModuleState(cls);
     assert(state != NULL);
 
-    check_gdbmobject_open(self, state->gdbm_error);
+    check_gdbmobject_open_value(self, state->gdbm_error);
     key = gdbm_firstkey(self->di_dbm);
     if (key.dptr) {
         v = PyBytes_FromStringAndSize(key.dptr, key.dsize);
         free(key.dptr);
-        return v;
+        return _PyValue_FromObjectResult(v);
     }
     else {
-        Py_RETURN_NONE;
+        return PyValue_None;
     }
 }
 
@@ -592,13 +629,13 @@ except by using this reorganization; otherwise, deleted file space
 will be kept and reused as new (key,value) pairs are added.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _gdbm_gdbm_reorganize_impl(gdbmobject *self, PyTypeObject *cls)
-/*[clinic end generated code: output=d77c69e8e3dd644a input=d7fcf03051c6f7cd]*/
+/*[clinic end generated code: output=1ba82b33bde2f1ff input=d7fcf03051c6f7cd]*/
 {
     _gdbm_state *state = PyType_GetModuleState(cls);
     assert(state != NULL);
-    check_gdbmobject_open(self, state->gdbm_error);
+    check_gdbmobject_open_value(self, state->gdbm_error);
     errno = 0;
     if (gdbm_reorganize(self->di_dbm) < 0) {
         if (errno != 0) {
@@ -607,9 +644,9 @@ _gdbm_gdbm_reorganize_impl(gdbmobject *self, PyTypeObject *cls)
         else {
             set_gdbm_error(state, "gdbm_reorganize() error");
         }
-        return NULL;
+        return PyValue_NULL;
     }
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 /*[clinic input]
@@ -624,15 +661,15 @@ When the database has been opened in fast mode, this method forces
 any unwritten data to be written to the disk.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _gdbm_gdbm_sync_impl(gdbmobject *self, PyTypeObject *cls)
-/*[clinic end generated code: output=bb680a2035c3f592 input=6054385b071d238a]*/
+/*[clinic end generated code: output=c94f368c86aa472d input=6054385b071d238a]*/
 {
     _gdbm_state *state = PyType_GetModuleState(cls);
     assert(state != NULL);
-    check_gdbmobject_open(self, state->gdbm_error);
+    check_gdbmobject_open_value(self, state->gdbm_error);
     gdbm_sync(self->di_dbm);
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 /*[clinic input]
@@ -644,13 +681,13 @@ Remove all items from the database.
 
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _gdbm_gdbm_clear_impl(gdbmobject *self, PyTypeObject *cls)
-/*[clinic end generated code: output=673577c573318661 input=b17467adfe62f23d]*/
+/*[clinic end generated code: output=057557629442fd8e input=b17467adfe62f23d]*/
 {
     _gdbm_state *state = PyType_GetModuleState(cls);
     assert(state != NULL);
-    check_gdbmobject_open(self, state->gdbm_error);
+    check_gdbmobject_open_value(self, state->gdbm_error);
     datum key;
     // Invalidate cache
     self->di_size = -1;
@@ -662,11 +699,11 @@ _gdbm_gdbm_clear_impl(gdbmobject *self, PyTypeObject *cls)
         if (gdbm_delete(self->di_dbm, key) < 0) {
             PyErr_SetString(state->gdbm_error, "cannot delete item from database");
             free(key.dptr);
-            return NULL;
+            return PyValue_NULL;
         }
         free(key.dptr);
     }
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 static PyObject *
@@ -684,10 +721,10 @@ _gdbm.gdbm.__exit__
 Close the database.
 [clinic start generated code]*/
 
-static PyObject *
-_gdbm_gdbm___exit___impl(gdbmobject *self, PyObject * const *exc_info,
+static PyValue
+_gdbm_gdbm___exit___impl(gdbmobject *self, const PyValue *exc_info,
                          Py_ssize_t exc_info_length)
-/*[clinic end generated code: output=4bb425e091228932 input=b22b90a00b22cf18]*/
+/*[clinic end generated code: output=3defe959cacae64a input=b22b90a00b22cf18]*/
 {
     return _gdbm_gdbm_close_impl(self);
 }
@@ -766,10 +803,10 @@ The optional mode argument is the Unix mode of the file, used only
 when the database has to be created.  It defaults to octal 0o666.
 [clinic start generated code]*/
 
-static PyObject *
-dbmopen_impl(PyObject *module, PyObject *filename, const char *flags,
+static PyValue
+dbmopen_impl(PyObject *module, PyValueBorrow filename, const char *flags,
              int mode)
-/*[clinic end generated code: output=9527750f5df90764 input=bca6ec81dc49292c]*/
+/*[clinic end generated code: output=9a2037a2f8d05067 input=bca6ec81dc49292c]*/
 {
     int iflags;
     _gdbm_state *state = get_gdbm_state(module);
@@ -791,7 +828,7 @@ dbmopen_impl(PyObject *module, PyObject *filename, const char *flags,
     default:
         PyErr_SetString(state->gdbm_error,
                         "First flag must be one of 'r', 'w', 'c' or 'n'");
-        return NULL;
+        return PyValue_NULL;
     }
     for (flags++; *flags != '\0'; flags++) {
         switch (*flags) {
@@ -813,24 +850,30 @@ dbmopen_impl(PyObject *module, PyObject *filename, const char *flags,
             default:
                 PyErr_Format(state->gdbm_error,
                              "Flag '%c' is not supported.", (unsigned char)*flags);
-                return NULL;
+                return PyValue_NULL;
         }
     }
 
+    PyObject *filename_obj = _PyValue_AsObjectAt(filename, BOX_SITE_PARSER);
+    if (filename_obj == NULL) {
+        return PyValue_NULL;
+    }
     PyObject *filenamebytes;
-    if (!PyUnicode_FSConverter(filename, &filenamebytes)) {
-        return NULL;
+    int converted = PyUnicode_FSConverter(filename_obj, &filenamebytes);
+    Py_DECREF(filename_obj);
+    if (!converted) {
+        return PyValue_NULL;
     }
 
     const char *name = PyBytes_AS_STRING(filenamebytes);
     if (strlen(name) != (size_t)PyBytes_GET_SIZE(filenamebytes)) {
         Py_DECREF(filenamebytes);
         PyErr_SetString(PyExc_ValueError, "embedded null character");
-        return NULL;
+        return PyValue_NULL;
     }
     PyObject *self = newgdbmobject(state, name, iflags, mode);
     Py_DECREF(filenamebytes);
-    return self;
+    return _PyValue_FromObjectResult(self);
 }
 
 static const char gdbmmodule_open_flags[] = "rwcn"
@@ -881,15 +924,11 @@ make_gdbm_version_info(PyTypeObject *type, int major, int minor, int patch)
     }
 
 #define SetItem(VALUE) \
-    PyStructSequence_SET_ITEM(version, pos++, VALUE); \
-    if (PyErr_Occurred()) { \
-        Py_DECREF(version); \
-        return NULL; \
-    }
+    PyStructSequence_SET_VALUE(version, pos++, VALUE);
 
-    SetItem(PyLong_FromLong(major))
-    SetItem(PyLong_FromLong(minor))
-    SetItem(PyLong_FromLong(patch))
+    SetItem(PyValue_FromInt64(major))
+    SetItem(PyValue_FromInt64(minor))
+    SetItem(PyValue_FromInt64(patch))
 #undef SetItem
 
     return version;

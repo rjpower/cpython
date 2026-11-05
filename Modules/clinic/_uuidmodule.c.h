@@ -2,14 +2,19 @@
 preserve
 [clinic start generated code]*/
 
+#ifndef Py_VALUE_CORE
+#  error "value-emission Clinic output requires Py_VALUE_CORE"
+#endif
+
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 #  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
 #  include "pycore_value.h"       // _PyValue_STATIC_IMMORTAL()
 #endif
-#include "pycore_borrow.h"        // _PyBorrow_TupleItems()
 #include "pycore_critical_section.h"// Py_BEGIN_CRITICAL_SECTION()
-#include "pycore_modsupport.h"    // _PyArg_UnpackKeywords()
+#include "pycore_modsupport.h"    // _PyArg_UnpackKeywordsValue()
+#include "pycore_tuple.h"         // _PyTuple_ITEMS()
+#include "pycore_value_call.h"    // METH_VALUE
 
 PyDoc_STRVAR(_uuid_uuid4__doc__,
 "uuid4($module, /)\n"
@@ -18,18 +23,18 @@ PyDoc_STRVAR(_uuid_uuid4__doc__,
 "Generate a random UUID (version 4).");
 
 #define _UUID_UUID4_METHODDEF    \
-    {"uuid4", (PyCFunction)_uuid_uuid4, METH_NOARGS, _uuid_uuid4__doc__},
+    {"uuid4", _PyCFunction_CAST(_uuid_uuid4), METH_VALUE|METH_NOARGS, _uuid_uuid4__doc__},
 
-static PyObject *
+static PyValue
 _uuid_uuid4_impl(PyObject *module);
 
-static PyObject *
-_uuid_uuid4(PyObject *module, PyObject *Py_UNUSED(ignored))
+static PyValue
+_uuid_uuid4(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
 
-    Py_BEGIN_CRITICAL_SECTION(module);
-    return_value = _uuid_uuid4_impl(module);
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(module));
+    return_value = _uuid_uuid4_impl(PyValue_AsKnownObjectBorrow(module));
     Py_END_CRITICAL_SECTION();
 
     return return_value;
@@ -44,18 +49,18 @@ PyDoc_STRVAR(_uuid_uuid7__doc__,
 "UUIDv7 objects feature monotonicity within a millisecond.");
 
 #define _UUID_UUID7_METHODDEF    \
-    {"uuid7", (PyCFunction)_uuid_uuid7, METH_NOARGS, _uuid_uuid7__doc__},
+    {"uuid7", _PyCFunction_CAST(_uuid_uuid7), METH_VALUE|METH_NOARGS, _uuid_uuid7__doc__},
 
-static PyObject *
+static PyValue
 _uuid_uuid7_impl(PyObject *module);
 
-static PyObject *
-_uuid_uuid7(PyObject *module, PyObject *Py_UNUSED(ignored))
+static PyValue
+_uuid_uuid7(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
 
-    Py_BEGIN_CRITICAL_SECTION(module);
-    return_value = _uuid_uuid7_impl(module);
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(module));
+    return_value = _uuid_uuid7_impl(PyValue_AsKnownObjectBorrow(module));
     Py_END_CRITICAL_SECTION();
 
     return return_value;
@@ -67,16 +72,16 @@ PyDoc_STRVAR(_uuid__install_c_hooks__doc__,
 "\n");
 
 #define _UUID__INSTALL_C_HOOKS_METHODDEF    \
-    {"_install_c_hooks", _PyCFunction_CAST(_uuid__install_c_hooks), METH_FASTCALL|METH_KEYWORDS, _uuid__install_c_hooks__doc__},
+    {"_install_c_hooks", _PyCFunction_CAST(_uuid__install_c_hooks), METH_VALUE|METH_KEYWORDS, _uuid__install_c_hooks__doc__},
 
-static PyObject *
-_uuid__install_c_hooks_impl(PyObject *module, PyObject *random_func,
-                            PyObject *time_func);
+static PyValue
+_uuid__install_c_hooks_impl(PyObject *module, PyValueBorrow random_func,
+                            PyValueBorrow time_func);
 
-static PyObject *
-_uuid__install_c_hooks(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_uuid__install_c_hooks(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 2
@@ -104,19 +109,18 @@ _uuid__install_c_hooks(PyObject *module, PyObject *const *args, Py_ssize_t nargs
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[2];
-    PyObject *random_func;
-    PyObject *time_func;
+    Py_ssize_t _idx[2];
+    PyValueBorrow random_func;
+    PyValueBorrow time_func;
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 0, /*maxpos*/ 0, /*minkw*/ 2, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 0, /*maxpos*/ 0, /*minkw*/ 2, /*varpos*/ 0, _idx, 2)) {
         goto exit;
     }
-    random_func = args[0];
-    time_func = args[1];
-    Py_BEGIN_CRITICAL_SECTION(module);
-    return_value = _uuid__install_c_hooks_impl(module, random_func, time_func);
+    random_func = PyValue_Borrow(args[_idx[0]]);
+    time_func = PyValue_Borrow(args[_idx[1]]);
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(module));
+    return_value = _uuid__install_c_hooks_impl(PyValue_AsKnownObjectBorrow(module), random_func, time_func);
     Py_END_CRITICAL_SECTION();
 
 exit:
@@ -131,13 +135,13 @@ PyDoc_STRVAR(_uuid_UUID___init____doc__,
 "UUID is a fast base implementation type for uuid.UUID.");
 
 static int
-_uuid_UUID___init___impl(uuidobject *self, PyObject *hex, PyObject *bytes,
-                         PyObject *bytes_le, PyObject *fields,
-                         PyObject *int_value, PyObject *version,
-                         PyObject *is_safe);
+_uuid_UUID___init___impl(uuidobject *self, PyValueBorrow hex,
+                         PyValueBorrow bytes, PyValueBorrow bytes_le,
+                         PyValueBorrow fields, PyValueBorrow int_value,
+                         PyValueBorrow version, PyValueBorrow is_safe);
 
 static int
-_uuid_UUID___init__(PyObject *self, PyObject *args, PyObject *kwargs)
+_uuid_UUID___init___value(PyObject *self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
     int return_value = -1;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
@@ -167,76 +171,62 @@ _uuid_UUID___init__(PyObject *self, PyObject *args, PyObject *kwargs)
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[7];
-    PyObject * const *fastargs;
-    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
-    Py_ssize_t noptargs = nargs + (kwargs ? PyDict_GET_SIZE(kwargs) : 0) - 0;
-    PyObject *hex = Py_None;
-    PyObject *bytes = Py_None;
-    PyObject *bytes_le = Py_None;
-    PyObject *fields = Py_None;
-    PyObject *int_value = Py_None;
-    PyObject *version = Py_None;
-    PyObject *is_safe = NULL;
+    Py_ssize_t _idx[7];
+    PyValueBorrow hex = PyValue_Borrow(PyValue_None);
+    PyValueBorrow bytes = PyValue_Borrow(PyValue_None);
+    PyValueBorrow bytes_le = PyValue_Borrow(PyValue_None);
+    PyValueBorrow fields = PyValue_Borrow(PyValue_None);
+    PyValueBorrow int_value = PyValue_Borrow(PyValue_None);
+    PyValueBorrow version = PyValue_Borrow(PyValue_None);
+    PyValueBorrow is_safe = PyValue_Borrow(PyValue_NULL);
 
-    PyObject *const *_args_items = _PyBorrow_TupleItems(args, Py_MIN(nargs, 6));
-    if (_args_items == NULL) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 0, /*maxpos*/ 6, /*minkw*/ 0, /*varpos*/ 0, _idx, 7)) {
         goto exit;
     }
-    fastargs = _PyArg_UnpackKeywords(_args_items, nargs, kwargs, NULL, &_parser,
-            /*minpos*/ 0, /*maxpos*/ 6, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!fastargs) {
-        goto exit;
+    if (_idx[0] >= 0) {
+        hex = PyValue_Borrow(args[_idx[0]]);
     }
-    if (!noptargs) {
-        goto skip_optional_pos;
+    if (_idx[1] >= 0) {
+        bytes = PyValue_Borrow(args[_idx[1]]);
     }
-    if (fastargs[0]) {
-        hex = fastargs[0];
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
+    if (_idx[2] >= 0) {
+        bytes_le = PyValue_Borrow(args[_idx[2]]);
     }
-    if (fastargs[1]) {
-        bytes = fastargs[1];
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
+    if (_idx[3] >= 0) {
+        fields = PyValue_Borrow(args[_idx[3]]);
     }
-    if (fastargs[2]) {
-        bytes_le = fastargs[2];
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
+    if (_idx[4] >= 0) {
+        int_value = PyValue_Borrow(args[_idx[4]]);
     }
-    if (fastargs[3]) {
-        fields = fastargs[3];
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
+    if (_idx[5] >= 0) {
+        version = PyValue_Borrow(args[_idx[5]]);
     }
-    if (fastargs[4]) {
-        int_value = fastargs[4];
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
+    if (_idx[6] >= 0) {
+        is_safe = PyValue_Borrow(args[_idx[6]]);
     }
-    if (fastargs[5]) {
-        version = fastargs[5];
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
-    }
-skip_optional_pos:
-    if (!noptargs) {
-        goto skip_optional_kwonly;
-    }
-    is_safe = fastargs[6];
-skip_optional_kwonly:
     return_value = _uuid_UUID___init___impl((uuidobject *)self, hex, bytes, bytes_le, fields, int_value, version, is_safe);
 
 exit:
     return return_value;
+}
+
+static int
+_uuid_UUID___init__(PyObject *self, PyObject *args, PyObject *kwargs)
+{
+    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
+    if (kwargs == NULL || PyDict_GET_SIZE(kwargs) == 0) {
+        return _uuid_UUID___init___value(self, _PyTuple_ITEMS(args), nargs, NULL);
+    }
+    PyObject *kwnames;
+    PyValue *window = _PyValue_StackUnpackDict(_PyThreadState_GET(),
+        _PyTuple_ITEMS(args), nargs, kwargs, &kwnames);
+    if (window == NULL) {
+        return -1;
+    }
+    int result = _uuid_UUID___init___value(self, window, nargs, kwnames);
+    _PyValue_StackUnpackDict_Free(window, nargs, kwnames);
+    return result;
 }
 
 PyDoc_STRVAR(_uuid_UUID__from_int__doc__,
@@ -246,17 +236,19 @@ PyDoc_STRVAR(_uuid_UUID__from_int__doc__,
 "Create a UUID from an integer value. Internal use only.");
 
 #define _UUID_UUID__FROM_INT_METHODDEF    \
-    {"_from_int", (PyCFunction)_uuid_UUID__from_int, METH_O|METH_CLASS, _uuid_UUID__from_int__doc__},
+    {"_from_int", _PyCFunction_CAST(_uuid_UUID__from_int), METH_VALUE|METH_O|METH_CLASS, _uuid_UUID__from_int__doc__},
 
-static PyObject *
-_uuid_UUID__from_int_impl(PyTypeObject *type, PyObject *value);
+static PyValue
+_uuid_UUID__from_int_impl(PyTypeObject *type, PyValueBorrow value);
 
-static PyObject *
-_uuid_UUID__from_int(PyObject *type, PyObject *value)
+static PyValue
+_uuid_UUID__from_int(PyValueBorrow type, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow value;
 
-    return_value = _uuid_UUID__from_int_impl((PyTypeObject *)type, value);
+    value = PyValue_Borrow(args[0]);
+    return_value = _uuid_UUID__from_int_impl((PyTypeObject *)PyValue_AsKnownObjectBorrow(type), value);
 
     return return_value;
 }
@@ -268,15 +260,19 @@ PyDoc_STRVAR(_uuid_UUID___getstate____doc__,
 "Return the UUID\'s state for pickling.");
 
 #define _UUID_UUID___GETSTATE___METHODDEF    \
-    {"__getstate__", (PyCFunction)_uuid_UUID___getstate__, METH_NOARGS, _uuid_UUID___getstate____doc__},
+    {"__getstate__", _PyCFunction_CAST(_uuid_UUID___getstate__), METH_VALUE|METH_NOARGS, _uuid_UUID___getstate____doc__},
 
-static PyObject *
+static PyValue
 _uuid_UUID___getstate___impl(uuidobject *self);
 
-static PyObject *
-_uuid_UUID___getstate__(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+_uuid_UUID___getstate__(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _uuid_UUID___getstate___impl((uuidobject *)self);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _uuid_UUID___getstate___impl((uuidobject *)PyValue_AsKnownObjectBorrow(self));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(_uuid_UUID___setstate____doc__,
@@ -288,18 +284,20 @@ PyDoc_STRVAR(_uuid_UUID___setstate____doc__,
 "Expects a mapping with \'int\' and optionally \'is_safe\' keys.");
 
 #define _UUID_UUID___SETSTATE___METHODDEF    \
-    {"__setstate__", (PyCFunction)_uuid_UUID___setstate__, METH_O, _uuid_UUID___setstate____doc__},
+    {"__setstate__", _PyCFunction_CAST(_uuid_UUID___setstate__), METH_VALUE|METH_O, _uuid_UUID___setstate____doc__},
 
-static PyObject *
-_uuid_UUID___setstate___impl(uuidobject *self, PyObject *state);
+static PyValue
+_uuid_UUID___setstate___impl(uuidobject *self, PyValueBorrow state);
 
-static PyObject *
-_uuid_UUID___setstate__(PyObject *self, PyObject *state)
+static PyValue
+_uuid_UUID___setstate__(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow state;
 
-    return_value = _uuid_UUID___setstate___impl((uuidobject *)self, state);
+    state = PyValue_Borrow(args[0]);
+    return_value = _uuid_UUID___setstate___impl((uuidobject *)PyValue_AsKnownObjectBorrow(self), state);
 
     return return_value;
 }
-/*[clinic end generated code: output=a627fa9998eeb9aa input=a9049054013a1b77]*/
+/*[clinic end generated code: output=94e10d272add3683 input=a9049054013a1b77]*/

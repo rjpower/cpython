@@ -4,12 +4,19 @@
 #define Py_BUILD_CORE
 #endif
 
+#define Py_VALUE_CORE 1
 #include "Python.h"
 #include "internal/pycore_interp.h"
 #include "internal/pycore_typevarobject.h"
 #include "internal/pycore_unionobject.h"  // _PyUnion_Type
 #include "pycore_pystate.h"       // _PyInterpreterState_GET()
+#include "pycore_value.h"         // PyValue
 #include "clinic/_typingmodule.c.h"
+
+/*[clinic input]
+value_emission
+[clinic start generated code]*/
+/*[clinic end generated code: output=da39a3ee5e6b4b0d input=eb7b17088bfd7215]*/
 
 /*[clinic input]
 module _typing
@@ -27,11 +34,11 @@ _typing._idfunc -> object
 
 [clinic start generated code]*/
 
-static PyObject *
-_typing__idfunc(PyObject *module, PyObject *x)
-/*[clinic end generated code: output=63c38be4a6ec5f2c input=49f17284b43de451]*/
+static PyValue
+_typing__idfunc_impl(PyObject *module, PyValueBorrow x)
+/*[clinic end generated code: output=de26f154041e13a7 input=49f17284b43de451]*/
 {
-    return Py_NewRef(x);
+    return PyValue_DUP(x);
 }
 
 

@@ -3,6 +3,11 @@
 /* ZstdCompressor class definitions */
 
 /*[clinic input]
+value_emission
+[clinic start generated code]*/
+/*[clinic end generated code: output=da39a3ee5e6b4b0d input=eb7b17088bfd7215]*/
+
+/*[clinic input]
 module _zstd
 class _zstd.ZstdCompressor "ZstdCompressor *" "&zstd_compressor_type_spec"
 [clinic start generated code]*/
@@ -12,7 +17,11 @@ class _zstd.ZstdCompressor "ZstdCompressor *" "&zstd_compressor_type_spec"
 #  define Py_BUILD_CORE_MODULE 1
 #endif
 
+#define Py_VALUE_CORE 1
 #include "Python.h"
+#include "pycore_dict.h"          // PyDict_NextValue()
+#include "pycore_long_value.h"     // _PyValue_AsInt()
+#include "pycore_value.h"         // PyValue
 
 #include "_zstdmodule.h"
 #include "buffer.h"
@@ -56,17 +65,17 @@ class zstd_contentsize_converter(CConverter):
 
 
 static int
-zstd_contentsize_converter(PyObject *size, unsigned long long *p)
+zstd_contentsize_converter(PyValueBorrow size, unsigned long long *p)
 {
     // None means the user indicates the size is unknown.
-    if (size == Py_None) {
+    if (PyValue_IsNone(size)) {
         *p = ZSTD_CONTENTSIZE_UNKNOWN;
     }
     else {
         /* ZSTD_CONTENTSIZE_UNKNOWN is 0ULL - 1
            ZSTD_CONTENTSIZE_ERROR   is 0ULL - 2
            Users should only pass values < ZSTD_CONTENTSIZE_ERROR */
-        unsigned long long pledged_size = PyLong_AsUnsignedLongLong(size);
+        unsigned long long pledged_size = _PyValue_IntAsUnsignedLongLong(size);
         /* Here we check for (unsigned long long)-1 as a sign of an error in
            PyLong_AsUnsignedLongLong */
         if (pledged_size == (unsigned long long)-1 && PyErr_Occurred()) {
@@ -138,28 +147,28 @@ _zstd_set_c_parameters(ZstdCompressor *self, PyObject *options)
     }
 
     Py_ssize_t pos = 0;
-    PyObject *key, *value;
+    PyValue key, value;
     int rc;
-    while ((rc = PyDict_NextEntryRef(options, &pos, &key, &value)) > 0) {
+    while ((rc = PyDict_NextValue(options, &pos, &key, &value)) > 0) {
         /* Check key type */
-        if (Py_TYPE(key) == mod_state->DParameter_type) {
+        if (PyValue_TYPE(key) == mod_state->DParameter_type) {
             PyErr_SetString(PyExc_TypeError,
                 "compression options dictionary key must not be a "
                 "DecompressionParameter attribute");
-            Py_DECREF(key);
-            Py_DECREF(value);
+            PyValue_CLOSE(key);
+            PyValue_CLOSE(value);
             return -1;
         }
 
-        int key_v = PyLong_AsInt(key);
-        Py_DECREF(key);
+        int key_v = _PyValue_AsInt(key);
+        PyValue_CLOSE(key);
         if (key_v == -1 && PyErr_Occurred()) {
-            Py_DECREF(value);
+            PyValue_CLOSE(value);
             return -1;
         }
 
-        int value_v = PyLong_AsInt(value);
-        Py_DECREF(value);
+        int value_v = _PyValue_AsInt(value);
+        PyValue_CLOSE(value);
         if (value_v == -1 && PyErr_Occurred()) {
             return -1;
         }
@@ -208,24 +217,22 @@ ZSTD_CDict *
 _get_CDict(ZstdDict *self, int compressionLevel)
 {
     assert(PyMutex_IsLocked(&self->lock));
-    PyObject *level = NULL;
+    PyValue level = PyValue_NULL;
+    PyValue capsule_v = PyValue_NULL;
     PyObject *capsule = NULL;
     ZSTD_CDict *cdict;
     int ret;
 
 
     /* int level object */
-    level = PyLong_FromLong(compressionLevel);
-    if (level == NULL) {
-        goto error;
-    }
+    level = PyValue_FromInt64(compressionLevel);
 
     /* Get PyCapsule object from self->c_dicts */
-    ret = PyDict_GetItemRef(self->c_dicts, level, &capsule);
+    ret = PyDict_GetValue(self->c_dicts, level, &capsule_v);
     if (ret < 0) {
         goto error;
     }
-    if (capsule == NULL) {
+    if (ret == 0) {
         /* Create ZSTD_CDict instance */
         Py_BEGIN_ALLOW_THREADS
         cdict = ZSTD_createCDict(self->dict_buffer, self->dict_len,
@@ -250,13 +257,19 @@ _get_CDict(ZstdDict *self, int compressionLevel)
         }
 
         /* Add PyCapsule object to self->c_dicts */
-        ret = PyDict_SetItem(self->c_dicts, level, capsule);
+        ret = PyDict_SetValue(self->c_dicts, level,
+                              PyValue_FromObjectBorrow(capsule));
         if (ret < 0) {
             goto error;
         }
     }
     else {
         /* ZSTD_CDict instance already exists */
+        capsule = _PyValue_AsObjectStealAt(capsule_v, BOX_SITE_FIELD);
+        capsule_v = PyValue_NULL;
+        if (capsule == NULL) {
+            goto error;
+        }
         cdict = PyCapsule_GetPointer(capsule, NULL);
     }
     goto success;
@@ -264,7 +277,8 @@ _get_CDict(ZstdDict *self, int compressionLevel)
 error:
     cdict = NULL;
 success:
-    Py_XDECREF(level);
+    PyValue_XCLOSE(level);
+    PyValue_XCLOSE(capsule_v);
     Py_XDECREF(capsule);
     return cdict;
 }
@@ -340,11 +354,13 @@ Thread-safe at method level.  For one-shot compression, use the
 compress() function instead.
 [clinic start generated code]*/
 
-static PyObject *
-_zstd_ZstdCompressor_new_impl(PyTypeObject *type, PyObject *level,
-                              PyObject *options, PyObject *zstd_dict)
-/*[clinic end generated code: output=cdef61eafecac3d7 input=bbfeeaa06fd3bd4d]*/
+static PyValue
+_zstd_ZstdCompressor_new_impl(PyTypeObject *type, PyValueBorrow level,
+                              PyValueBorrow options, PyValueBorrow zstd_dict)
+/*[clinic end generated code: output=e5e56e0c037b50b0 input=bbfeeaa06fd3bd4d]*/
 {
+    PyObject *options_obj = NULL;
+    PyObject *dict_obj = NULL;
     ZstdCompressor* self = PyObject_GC_New(ZstdCompressor, type);
     if (self == NULL) {
         goto error;
@@ -369,20 +385,20 @@ _zstd_ZstdCompressor_new_impl(PyTypeObject *type, PyObject *level,
     /* Last mode */
     self->last_mode = ZSTD_e_end;
 
-    if (level != Py_None && options != Py_None) {
+    if (!PyValue_IsNone(level) && !PyValue_IsNone(options)) {
         PyErr_SetString(PyExc_TypeError,
                         "Only one of level or options should be used.");
         goto error;
     }
 
     /* Set compression level */
-    if (level != Py_None) {
-        if (!PyLong_Check(level)) {
+    if (!PyValue_IsNone(level)) {
+        if (!PyType_IsSubtype(PyValue_TYPE(level), &PyLong_Type)) {
             PyErr_SetString(PyExc_TypeError,
                 "invalid type for level, expected int");
             goto error;
         }
-        int level_v = PyLong_AsInt(level);
+        int level_v = _PyValue_AsInt(level);
         if (level_v == -1 && PyErr_Occurred()) {
             if (PyErr_ExceptionMatches(PyExc_OverflowError)) {
                 PyErr_Format(PyExc_ValueError,
@@ -397,29 +413,40 @@ _zstd_ZstdCompressor_new_impl(PyTypeObject *type, PyObject *level,
     }
 
     /* Set options dictionary */
-    if (options != Py_None) {
-        if (_zstd_set_c_parameters(self, options) < 0) {
+    if (!PyValue_IsNone(options)) {
+        options_obj = _PyValue_AsObjectAt(options, BOX_SITE_PARSER);
+        if (options_obj == NULL) {
+            goto error;
+        }
+        if (_zstd_set_c_parameters(self, options_obj) < 0) {
             goto error;
         }
     }
 
     /* Load Zstandard dictionary to compression context */
-    if (zstd_dict != Py_None) {
-        if (_zstd_load_c_dict(self, zstd_dict) < 0) {
+    if (!PyValue_IsNone(zstd_dict)) {
+        dict_obj = _PyValue_AsObjectAt(zstd_dict, BOX_SITE_FIELD);
+        if (dict_obj == NULL) {
             goto error;
         }
-        Py_INCREF(zstd_dict);
-        self->dict = zstd_dict;
+        if (_zstd_load_c_dict(self, dict_obj) < 0) {
+            goto error;
+        }
+        self->dict = dict_obj;
+        dict_obj = NULL;
     }
 
     // We can only start GC tracking once self->dict is set.
     PyObject_GC_Track(self);
 
-    return (PyObject*)self;
+    Py_XDECREF(options_obj);
+    return _PyValue_FromObjectResult((PyObject*)self);
 
 error:
+    Py_XDECREF(options_obj);
+    Py_XDECREF(dict_obj);
     Py_XDECREF(self);
-    return NULL;
+    return PyValue_NULL;
 }
 
 static void
@@ -602,10 +629,10 @@ When you have finished providing data to the compressor, call the
 flush() method to finish the compression process.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _zstd_ZstdCompressor_compress_impl(ZstdCompressor *self, Py_buffer *data,
                                    int mode)
-/*[clinic end generated code: output=ed7982d1cf7b4f98 input=11726dff64d7b2f9]*/
+/*[clinic end generated code: output=f730c3e96211da45 input=11726dff64d7b2f9]*/
 {
     PyObject *ret;
 
@@ -618,7 +645,7 @@ _zstd_ZstdCompressor_compress_impl(ZstdCompressor *self, Py_buffer *data,
                         "mode argument wrong value, it should be one of "
                         "ZstdCompressor.CONTINUE, ZstdCompressor.FLUSH_BLOCK, "
                         "ZstdCompressor.FLUSH_FRAME.");
-        return NULL;
+        return PyValue_NULL;
     }
 
     /* Thread-safe code */
@@ -643,7 +670,7 @@ _zstd_ZstdCompressor_compress_impl(ZstdCompressor *self, Py_buffer *data,
     }
     PyMutex_Unlock(&self->lock);
 
-    return ret;
+    return _PyValue_FromObjectResult(ret);
 }
 
 /*[clinic input]
@@ -660,9 +687,9 @@ data consists of one or more independent frames, the compressor
 object can still be used after this method is called.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _zstd_ZstdCompressor_flush_impl(ZstdCompressor *self, int mode)
-/*[clinic end generated code: output=b7cf2c8d64dcf2e3 input=130e0b1eddf0f498]*/
+/*[clinic end generated code: output=7d82774749b85ae9 input=130e0b1eddf0f498]*/
 {
     PyObject *ret;
 
@@ -672,7 +699,7 @@ _zstd_ZstdCompressor_flush_impl(ZstdCompressor *self, int mode)
                         "mode argument wrong value, it should be "
                         "ZstdCompressor.FLUSH_FRAME or "
                         "ZstdCompressor.FLUSH_BLOCK.");
-        return NULL;
+        return PyValue_NULL;
     }
 
     /* Thread-safe code */
@@ -691,7 +718,7 @@ _zstd_ZstdCompressor_flush_impl(ZstdCompressor *self, int mode)
     }
     PyMutex_Unlock(&self->lock);
 
-    return ret;
+    return _PyValue_FromObjectResult(ret);
 }
 
 
@@ -715,10 +742,10 @@ actual data size.  If they do not match the compressed output data
 may be corrupted and the final chunk written may be lost.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _zstd_ZstdCompressor_set_pledged_input_size_impl(ZstdCompressor *self,
                                                  unsigned long long size)
-/*[clinic end generated code: output=3a09e55cc0e3b4f9 input=714cd7a9aa10e2a8]*/
+/*[clinic end generated code: output=cfd2979e8296b236 input=714cd7a9aa10e2a8]*/
 {
     // Error occurred while converting argument, should be unreachable
     assert(size != ZSTD_CONTENTSIZE_ERROR);
@@ -732,7 +759,7 @@ _zstd_ZstdCompressor_set_pledged_input_size_impl(ZstdCompressor *self,
                         "set_pledged_input_size() method must be called "
                         "when last_mode == FLUSH_FRAME");
         PyMutex_Unlock(&self->lock);
-        return NULL;
+        return PyValue_NULL;
     }
 
     /* Set pledged content size */
@@ -741,10 +768,10 @@ _zstd_ZstdCompressor_set_pledged_input_size_impl(ZstdCompressor *self,
     if (ZSTD_isError(zstd_ret)) {
         _zstd_state* mod_state = PyType_GetModuleState(Py_TYPE(self));
         set_zstd_error(mod_state, ERR_SET_PLEDGED_INPUT_SIZE, zstd_ret);
-        return NULL;
+        return PyValue_NULL;
     }
 
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 static PyMethodDef ZstdCompressor_methods[] = {

@@ -25,6 +25,7 @@
 #  define Py_BUILD_CORE_MODULE 1
 #endif
 
+#define Py_VALUE_CORE 1
 #include "module.h"
 #include "pycore_long.h"          // _PyLong_AsByteArray()
 #include "connection.h"

@@ -2,8 +2,13 @@
 preserve
 [clinic start generated code]*/
 
-#include "pycore_borrow.h"        // _PyBorrow_TupleItems()
+#ifndef Py_VALUE_CORE
+#  error "value-emission Clinic output requires Py_VALUE_CORE"
+#endif
+
 #include "pycore_modsupport.h"    // _PyArg_CheckPositional()
+#include "pycore_tuple.h"         // _PyTuple_FromValueArray()
+#include "pycore_value_call.h"    // METH_VALUE
 
 PyDoc_STRVAR(atexit_register__doc__,
 "register($module, func, /, *args, **kwargs)\n"
@@ -18,42 +23,35 @@ PyDoc_STRVAR(atexit_register__doc__,
 "    func is returned to facilitate usage as a decorator.");
 
 #define ATEXIT_REGISTER_METHODDEF    \
-    {"register", _PyCFunction_CAST(atexit_register), METH_VARARGS|METH_KEYWORDS, atexit_register__doc__},
+    {"register", _PyCFunction_CAST(atexit_register), METH_VALUE|METH_KEYWORDS, atexit_register__doc__},
 
-static PyObject *
-atexit_register_impl(PyObject *module, PyObject *func, PyObject *args,
+static PyValue
+atexit_register_impl(PyObject *module, PyValueBorrow func, PyObject *args,
                      PyObject *kwargs);
 
-static PyObject *
-atexit_register(PyObject *module, PyObject *args, PyObject *kwargs)
+static PyValue
+atexit_register(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
-    PyObject *func;
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow func;
     PyObject *__clinic_args = NULL;
     PyObject *__clinic_kwargs = NULL;
 
-    if (!_PyArg_CheckPositional("register", PyTuple_GET_SIZE(args), 1, PY_SSIZE_T_MAX)) {
+    if (!_PyArg_CheckPositional("register", nargs, 1, PY_SSIZE_T_MAX)) {
         goto exit;
     }
-    PyObject *const *_args_items = _PyBorrow_TupleItems(args, Py_MIN(PyTuple_GET_SIZE(args), 1));
-    if (_args_items == NULL) {
+    func = PyValue_Borrow(args[0]);
+    __clinic_args = _PyTuple_FromValueArray(args + 1,
+                                          Py_MAX(nargs - 1, 0));
+    if (__clinic_args == NULL) {
         goto exit;
     }
-    func = _args_items[0];
-    __clinic_args = PyTuple_GetSlice(args, 1, PY_SSIZE_T_MAX);
-    if (!__clinic_args) {
+    __clinic_kwargs = kwnames == NULL ? PyDict_New()
+        : _PyValue_StackAsDict(args + nargs, kwnames);
+    if (__clinic_kwargs == NULL) {
         goto exit;
     }
-    if (kwargs == NULL) {
-        __clinic_kwargs = PyDict_New();
-        if (__clinic_kwargs == NULL) {
-            goto exit;
-        }
-    }
-    else {
-        __clinic_kwargs = Py_NewRef(kwargs);
-    }
-    return_value = atexit_register_impl(module, func, __clinic_args, __clinic_kwargs);
+    return_value = atexit_register_impl(PyValue_AsKnownObjectBorrow(module), func, __clinic_args, __clinic_kwargs);
 
 exit:
     /* Cleanup for args */
@@ -63,4 +61,4 @@ exit:
 
     return return_value;
 }
-/*[clinic end generated code: output=fac58c670aac4fab input=a9049054013a1b77]*/
+/*[clinic end generated code: output=6b3dba32b3541e52 input=a9049054013a1b77]*/

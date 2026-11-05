@@ -8,11 +8,16 @@
 #  define Py_BUILD_CORE_MODULE 1
 #endif
 
+#define Py_VALUE_CORE 1
 #include "Python.h"
 
 #include "multibytecodec.h"
 #include "clinic/multibytecodec.c.h"
+#include "pycore_long_value.h"    // _PyValue_AsSsize_t()
 #include "pycore_tuple.h"         // _PyTuple_FromPairSteal
+#include "pycore_value.h"         // PyValue_AsKnownObjectBorrow()
+#include "pycore_value_ops.h"     // _PyValue_Str()
+#include "pycore_value_slots.h"// _PyValue_FromObjectResult()
 
 #include <stddef.h>               // offsetof()
 
@@ -46,6 +51,11 @@ find_state_by_def(PyTypeObject *type)
 }
 
 #define clinic_get_state() find_state_by_def(type)
+/*[clinic input]
+value_emission
+[clinic start generated code]*/
+/*[clinic end generated code: output=da39a3ee5e6b4b0d input=eb7b17088bfd7215]*/
+
 /*[clinic input]
 module _multibytecodec
 class _multibytecodec.MultibyteCodec "MultibyteCodecObject *" "clinic_get_state()->multibytecodec_type"
@@ -114,7 +124,7 @@ make_tuple(PyObject *object, Py_ssize_t len)
         return NULL;
     }
 
-    return _PyTuple_FromPairSteal(object, len_obj);
+    return _PyTuple_FromPairTakeValue(PyValue_PrepareOwned(object), PyValue_PrepareOwned(len_obj));
 }
 
 static PyObject *
@@ -342,8 +352,10 @@ multibytecodec_encerror(const MultibyteCodec *codec,
         goto errorexit;
 
     if (PyTuple_Check(retobj) && PyTuple_GET_SIZE(retobj) == 2) {
-        tobj = PyTuple_GetItemRef(retobj, 0);
-        posobj = PyTuple_GetItemRef(retobj, 1);
+        PyValue tobj_v = PyTuple_GetValue(retobj, 0);
+        tobj = PyValue_IsNull(tobj_v) ? NULL : _PyValue_AsObjectStealAt(tobj_v, BOX_SITE_TUPLE);
+        PyValue posobj_v = PyTuple_GetValue(retobj, 1);
+        posobj = PyValue_IsNull(posobj_v) ? NULL : _PyValue_AsObjectStealAt(posobj_v, BOX_SITE_TUPLE);
         if (tobj == NULL || posobj == NULL)
             goto errorexit;
     }
@@ -477,8 +489,10 @@ multibytecodec_decerror(const MultibyteCodec *codec,
         goto errorexit;
 
     if (PyTuple_Check(retobj) && PyTuple_GET_SIZE(retobj) == 2) {
-        retuni = PyTuple_GetItemRef(retobj, 0);
-        posobj = PyTuple_GetItemRef(retobj, 1);
+        PyValue retuni_v = PyTuple_GetValue(retobj, 0);
+        retuni = PyValue_IsNull(retuni_v) ? NULL : _PyValue_AsObjectStealAt(retuni_v, BOX_SITE_TUPLE);
+        PyValue posobj_v2 = PyTuple_GetValue(retobj, 1);
+        posobj = PyValue_IsNull(posobj_v2) ? NULL : _PyValue_AsObjectStealAt(posobj_v2, BOX_SITE_TUPLE);
         if (retuni == NULL || posobj == NULL)
             goto errorexit;
     }
@@ -616,55 +630,59 @@ and 'xmlcharrefreplace' as well as any other name registered with
 codecs.register_error that can handle UnicodeEncodeErrors.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _multibytecodec_MultibyteCodec_encode_impl(MultibyteCodecObject *self,
-                                           PyObject *input,
+                                           PyValueBorrow input,
                                            const char *errors)
-/*[clinic end generated code: output=7b26652045ba56a9 input=980002ed1447697b]*/
+/*[clinic end generated code: output=49f12cc4ec492a28 input=980002ed1447697b]*/
 {
     MultibyteCodec_State state;
     PyObject *errorcb, *r, *ucvt;
+    PyObject *input_obj;
     Py_ssize_t datalen;
 
-    if (PyUnicode_Check(input))
+    if ((PyValue_IsObject(input) && PyUnicode_Check(PyValue_AsKnownObjectBorrow(input)))) {
         ucvt = NULL;
+        input_obj = PyValue_AsKnownObjectBorrow(input);
+    }
     else {
-        input = ucvt = PyObject_Str(input);
-        if (input == NULL)
-            return NULL;
-        else if (!PyUnicode_Check(input)) {
+        input_obj = _PyValue_Str(input);
+        ucvt = input_obj;
+        if (input_obj == NULL)
+            return PyValue_NULL;
+        else if (!PyUnicode_Check(input_obj)) {
             PyErr_SetString(PyExc_TypeError,
                 "couldn't convert the object to unicode.");
             Py_DECREF(ucvt);
-            return NULL;
+            return PyValue_NULL;
         }
     }
 
-    datalen = PyUnicode_GET_LENGTH(input);
+    datalen = PyUnicode_GET_LENGTH(input_obj);
 
     errorcb = internal_error_callback(errors);
     if (errorcb == NULL) {
         Py_XDECREF(ucvt);
-        return NULL;
+        return PyValue_NULL;
     }
 
     if (self->codec->encinit != NULL &&
         self->codec->encinit(&state, self->codec) != 0)
         goto errorexit;
     r = multibytecodec_encode(self->codec, &state,
-                    input, NULL, errorcb,
+                    input_obj, NULL, errorcb,
                     MBENC_FLUSH | MBENC_RESET);
     if (r == NULL)
         goto errorexit;
 
     ERROR_DECREF(errorcb);
     Py_XDECREF(ucvt);
-    return make_tuple(r, datalen);
+    return _PyValue_FromObjectResult(make_tuple(r, datalen));
 
 errorexit:
     ERROR_DECREF(errorcb);
     Py_XDECREF(ucvt);
-    return NULL;
+    return PyValue_NULL;
 }
 
 /*[clinic input]
@@ -682,11 +700,11 @@ a UnicodeDecodeError.  Other possible values are 'ignore' and
 codecs.register_error that is able to handle UnicodeDecodeErrors."
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _multibytecodec_MultibyteCodec_decode_impl(MultibyteCodecObject *self,
                                            Py_buffer *input,
                                            const char *errors)
-/*[clinic end generated code: output=ff419f65bad6cc77 input=dbf93d8bb98ca440]*/
+/*[clinic end generated code: output=7021b578209c57e0 input=dbf93d8bb98ca440]*/
 {
     MultibyteCodec_State state;
     MultibyteDecodeBuffer buf;
@@ -699,12 +717,12 @@ _multibytecodec_MultibyteCodec_decode_impl(MultibyteCodecObject *self,
 
     errorcb = internal_error_callback(errors);
     if (errorcb == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     if (datalen == 0) {
         ERROR_DECREF(errorcb);
-        return make_tuple(Py_GetConstant(Py_CONSTANT_EMPTY_STR), 0);
+        return _PyValue_FromObjectResult(make_tuple(Py_GetConstant(Py_CONSTANT_EMPTY_STR), 0));
     }
 
     _PyUnicodeWriter_Init(&buf.writer);
@@ -737,14 +755,14 @@ _multibytecodec_MultibyteCodec_decode_impl(MultibyteCodecObject *self,
 
     Py_XDECREF(buf.excobj);
     ERROR_DECREF(errorcb);
-    return make_tuple(res, datalen);
+    return _PyValue_FromObjectResult(make_tuple(res, datalen));
 
 errorexit:
     ERROR_DECREF(errorcb);
     Py_XDECREF(buf.excobj);
     _PyUnicodeWriter_Dealloc(&buf.writer);
 
-    return NULL;
+    return PyValue_NULL;
 }
 
 static struct PyMethodDef multibytecodec_methods[] = {
@@ -817,7 +835,7 @@ encoder_encode_stateful(MultibyteStatefulEncoderContext *ctx,
     if (PyUnicode_Check(unistr))
         ucvt = NULL;
     else {
-        unistr = ucvt = PyObject_Str(unistr);
+        unistr = ucvt = _PyValue_Str(PyValue_FromObjectBorrow(unistr));
         if (unistr == NULL)
             return NULL;
         else if (!PyUnicode_Check(unistr)) {
@@ -957,22 +975,29 @@ _multibytecodec.MultibyteIncrementalEncoder.encode
     final: bool = False
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _multibytecodec_MultibyteIncrementalEncoder_encode_impl(MultibyteIncrementalEncoderObject *self,
-                                                        PyObject *input,
+                                                        PyValueBorrow input,
                                                         int final)
-/*[clinic end generated code: output=123361b6c505e2c1 input=bd5f7d40d43e99b0]*/
+/*[clinic end generated code: output=6d21b0f3461b4d34 input=bd5f7d40d43e99b0]*/
 {
-    return encoder_encode_stateful(STATEFUL_ECTX(self), input, final);
+    PyObject *input_obj = _PyValue_AsObjectAt(input, BOX_SITE_PARSER);
+    if (input_obj == NULL) {
+        return PyValue_NULL;
+    }
+    PyObject *res = encoder_encode_stateful(STATEFUL_ECTX(self), input_obj,
+                                            final);
+    Py_DECREF(input_obj);
+    return _PyValue_FromObjectResult(res);
 }
 
 /*[clinic input]
 _multibytecodec.MultibyteIncrementalEncoder.getstate
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _multibytecodec_MultibyteIncrementalEncoder_getstate_impl(MultibyteIncrementalEncoderObject *self)
-/*[clinic end generated code: output=9794a5ace70d7048 input=4a2a82874ffa40bb]*/
+/*[clinic end generated code: output=1dc665d461d128b1 input=4a2a82874ffa40bb]*/
 {
     /* state made up of 1 byte for buffer size, up to MAXENCPENDING*4 bytes
        for UTF-8 encoded buffer (each character can use up to 4
@@ -988,7 +1013,7 @@ _multibytecodec_MultibyteIncrementalEncoder_getstate_impl(MultibyteIncrementalEn
     if (self->pending != NULL) {
         pendingbuffer = PyUnicode_AsUTF8AndSize(self->pending, &pendingsize);
         if (pendingbuffer == NULL) {
-            return NULL;
+            return PyValue_NULL;
         }
         if (pendingsize > MAXENCPENDING*4) {
             PyObject *excobj = PyObject_CallFunction(PyExc_UnicodeEncodeError,
@@ -998,11 +1023,11 @@ _multibytecodec_MultibyteIncrementalEncoder_getstate_impl(MultibyteIncrementalEn
                                                      0, PyUnicode_GET_LENGTH(self->pending),
                                                      "pending buffer too large");
             if (excobj == NULL) {
-                return NULL;
+                return PyValue_NULL;
             }
             PyErr_SetObject(PyExc_UnicodeEncodeError, excobj);
             Py_DECREF(excobj);
-            return NULL;
+            return PyValue_NULL;
         }
         statebytes[0] = (unsigned char)pendingsize;
         memcpy(statebytes + 1, pendingbuffer, pendingsize);
@@ -1015,9 +1040,9 @@ _multibytecodec_MultibyteIncrementalEncoder_getstate_impl(MultibyteIncrementalEn
            sizeof(self->state.c));
     statesize += sizeof(self->state.c);
 
-    return (PyObject *)_PyLong_FromByteArray(statebytes, statesize,
+    return _PyValue_FromObjectResult((PyObject *)_PyLong_FromByteArray(statebytes, statesize,
                                              1 /* little-endian */ ,
-                                             0 /* unsigned */ );
+                                             0 /* unsigned */ ));
 }
 
 /*[clinic input]
@@ -1026,24 +1051,31 @@ _multibytecodec.MultibyteIncrementalEncoder.setstate
     /
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _multibytecodec_MultibyteIncrementalEncoder_setstate_impl(MultibyteIncrementalEncoderObject *self,
-                                                          PyLongObject *statelong)
-/*[clinic end generated code: output=4e5e98ac1f4039ca input=c80fb5830d4d2f76]*/
+                                                          PyValueBorrow statelong)
+/*[clinic end generated code: output=599bd1650c73404a input=c80fb5830d4d2f76]*/
 {
     PyObject *pending = NULL;
     unsigned char statebytes[1 + MAXENCPENDING*4 + sizeof(self->state.c)];
 
-    if (_PyLong_AsByteArray(statelong, statebytes, sizeof(statebytes),
-                            1 /* little-endian */ ,
-                            0 /* unsigned */ ,
-                            1 /* with_exceptions */) < 0) {
+    PyObject *statelong_obj = _PyValue_AsObjectAt(statelong, BOX_SITE_PARSER);
+    if (statelong_obj == NULL) {
+        goto errorexit;
+    }
+    int bytes_rc = _PyLong_AsByteArray((PyLongObject *)statelong_obj,
+                                       statebytes, sizeof(statebytes),
+                                       1 /* little-endian */ ,
+                                       0 /* unsigned */ ,
+                                       1 /* with_exceptions */);
+    Py_DECREF(statelong_obj);
+    if (bytes_rc < 0) {
         goto errorexit;
     }
 
     if (statebytes[0] > MAXENCPENDING*4) {
         PyErr_SetString(PyExc_UnicodeError, "pending buffer too large");
-        return NULL;
+        return PyValue_NULL;
     }
 
     pending = PyUnicode_DecodeUTF8((const char *)statebytes+1,
@@ -1056,20 +1088,20 @@ _multibytecodec_MultibyteIncrementalEncoder_setstate_impl(MultibyteIncrementalEn
     memcpy(self->state.c, statebytes+1+statebytes[0],
            sizeof(self->state.c));
 
-    Py_RETURN_NONE;
+    return PyValue_None;
 
 errorexit:
     Py_XDECREF(pending);
-    return NULL;
+    return PyValue_NULL;
 }
 
 /*[clinic input]
 _multibytecodec.MultibyteIncrementalEncoder.reset
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _multibytecodec_MultibyteIncrementalEncoder_reset_impl(MultibyteIncrementalEncoderObject *self)
-/*[clinic end generated code: output=b4125d8f537a253f input=930f06760707b6ea]*/
+/*[clinic end generated code: output=28f212d4d3b00d1a input=930f06760707b6ea]*/
 {
     /* Longest output: 4 bytes (b'\x0F\x1F(B') with ISO 2022 */
     unsigned char buffer[4], *outbuf;
@@ -1079,10 +1111,10 @@ _multibytecodec_MultibyteIncrementalEncoder_reset_impl(MultibyteIncrementalEncod
         r = self->codec->encreset(&self->state, self->codec,
                                   &outbuf, sizeof(buffer));
         if (r != 0)
-            return NULL;
+            return PyValue_NULL;
     }
     Py_CLEAR(self->pending);
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 static struct PyMethodDef mbiencoder_methods[] = {
@@ -1193,11 +1225,11 @@ _multibytecodec.MultibyteIncrementalDecoder.decode
     final: bool = False
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _multibytecodec_MultibyteIncrementalDecoder_decode_impl(MultibyteIncrementalDecoderObject *self,
                                                         Py_buffer *input,
                                                         int final)
-/*[clinic end generated code: output=b9b9090e8a9ce2ba input=8795fbb20860027a]*/
+/*[clinic end generated code: output=dbf03e514342b6c2 input=8795fbb20860027a]*/
 {
     MultibyteDecodeBuffer buf;
     char *data, *wdata = NULL;
@@ -1259,23 +1291,23 @@ _multibytecodec_MultibyteIncrementalDecoder_decode_impl(MultibyteIncrementalDeco
     if (wdata != data)
         PyMem_Free(wdata);
     Py_XDECREF(buf.excobj);
-    return res;
+    return _PyValue_FromObjectResult(res);
 
 errorexit:
     if (wdata != NULL && wdata != data)
         PyMem_Free(wdata);
     Py_XDECREF(buf.excobj);
     _PyUnicodeWriter_Dealloc(&buf.writer);
-    return NULL;
+    return PyValue_NULL;
 }
 
 /*[clinic input]
 _multibytecodec.MultibyteIncrementalDecoder.getstate
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _multibytecodec_MultibyteIncrementalDecoder_getstate_impl(MultibyteIncrementalDecoderObject *self)
-/*[clinic end generated code: output=255009c4713b7f82 input=4006aa49bddbaa75]*/
+/*[clinic end generated code: output=78b3f6f3d4495c73 input=4006aa49bddbaa75]*/
 {
     PyObject *buffer;
     PyObject *statelong;
@@ -1283,7 +1315,7 @@ _multibytecodec_MultibyteIncrementalDecoder_getstate_impl(MultibyteIncrementalDe
     buffer = PyBytes_FromStringAndSize((const char *)self->pending,
                                        self->pendingsize);
     if (buffer == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     statelong = (PyObject *)_PyLong_FromByteArray(self->state.c,
@@ -1292,10 +1324,10 @@ _multibytecodec_MultibyteIncrementalDecoder_getstate_impl(MultibyteIncrementalDe
                                                   0 /* unsigned */ );
     if (statelong == NULL) {
         Py_DECREF(buffer);
-        return NULL;
+        return PyValue_NULL;
     }
 
-    return Py_BuildValue("NN", buffer, statelong);
+    return _PyValue_FromObjectResult(Py_BuildValue("NN", buffer, statelong));
 }
 
 /*[clinic input]
@@ -1304,10 +1336,10 @@ _multibytecodec.MultibyteIncrementalDecoder.setstate
     /
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _multibytecodec_MultibyteIncrementalDecoder_setstate_impl(MultibyteIncrementalDecoderObject *self,
                                                           PyObject *state)
-/*[clinic end generated code: output=106b2fbca3e2dcc2 input=e5d794e8baba1a47]*/
+/*[clinic end generated code: output=0525d1fa528ae673 input=e5d794e8baba1a47]*/
 {
     PyObject *buffer;
     PyLongObject *statelong;
@@ -1318,19 +1350,19 @@ _multibytecodec_MultibyteIncrementalDecoder_setstate_impl(MultibyteIncrementalDe
     if (!PyArg_ParseTuple(state, "SO!;setstate(): illegal state argument",
                           &buffer, &PyLong_Type, &statelong))
     {
-        return NULL;
+        return PyValue_NULL;
     }
 
     if (_PyLong_AsByteArray(statelong, statebytes, sizeof(statebytes),
                             1 /* little-endian */ ,
                             0 /* unsigned */ ,
                             1 /* with_exceptions */) < 0) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     buffersize = PyBytes_Size(buffer);
     if (buffersize == -1) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     if (buffersize > MAXDECPENDING) {
@@ -1338,37 +1370,37 @@ _multibytecodec_MultibyteIncrementalDecoder_setstate_impl(MultibyteIncrementalDe
                                                        PyBytes_AS_STRING(buffer), buffersize,
                                                        0, buffersize,
                                                        "pending buffer too large");
-        if (excobj == NULL) return NULL;
+        if (excobj == NULL) return PyValue_NULL;
         PyErr_SetObject(PyExc_UnicodeDecodeError, excobj);
         Py_DECREF(excobj);
-        return NULL;
+        return PyValue_NULL;
     }
 
     bufferstr = PyBytes_AsString(buffer);
     if (bufferstr == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
     self->pendingsize = buffersize;
     memcpy(self->pending, bufferstr, self->pendingsize);
     memcpy(self->state.c, statebytes, sizeof(statebytes));
 
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 /*[clinic input]
 _multibytecodec.MultibyteIncrementalDecoder.reset
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _multibytecodec_MultibyteIncrementalDecoder_reset_impl(MultibyteIncrementalDecoderObject *self)
-/*[clinic end generated code: output=da423b1782c23ed1 input=3b63b3be85b2fb45]*/
+/*[clinic end generated code: output=855c478b4538e625 input=3b63b3be85b2fb45]*/
 {
     if (self->codec->decreset != NULL &&
         self->codec->decreset(&self->state, self->codec) != 0)
-        return NULL;
+        return PyValue_NULL;
     self->pendingsize = 0;
 
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 static struct PyMethodDef mbidecoder_methods[] = {
@@ -1581,26 +1613,26 @@ errorexit:
     /
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _multibytecodec_MultibyteStreamReader_read_impl(MultibyteStreamReaderObject *self,
-                                                PyObject *sizeobj)
-/*[clinic end generated code: output=35621eb75355d5b8 input=015b0d3ff2fca485]*/
+                                                PyValueBorrow sizeobj)
+/*[clinic end generated code: output=964073e208266c20 input=015b0d3ff2fca485]*/
 {
     Py_ssize_t size;
 
-    if (sizeobj == Py_None)
+    if (PyValue_IsNone(sizeobj))
         size = -1;
-    else if (PyLong_Check(sizeobj))
-        size = PyLong_AsSsize_t(sizeobj);
+    else if (PyType_IsSubtype(PyValue_TYPE(sizeobj), &PyLong_Type))
+        size = _PyValue_AsSsize_t(sizeobj, PyExc_OverflowError);
     else {
         PyErr_SetString(PyExc_TypeError, "arg 1 must be an integer");
-        return NULL;
+        return PyValue_NULL;
     }
 
     if (size == -1 && PyErr_Occurred())
-        return NULL;
+        return PyValue_NULL;
 
-    return mbstreamreader_iread(self, "read", size);
+    return _PyValue_FromObjectResult(mbstreamreader_iread(self, "read", size));
 }
 
 /*[clinic input]
@@ -1610,26 +1642,26 @@ _multibytecodec_MultibyteStreamReader_read_impl(MultibyteStreamReaderObject *sel
     /
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _multibytecodec_MultibyteStreamReader_readline_impl(MultibyteStreamReaderObject *self,
-                                                    PyObject *sizeobj)
-/*[clinic end generated code: output=4fbfaae1ed457a11 input=41ccc64f9bb0cec3]*/
+                                                    PyValueBorrow sizeobj)
+/*[clinic end generated code: output=01d95432be385d32 input=41ccc64f9bb0cec3]*/
 {
     Py_ssize_t size;
 
-    if (sizeobj == Py_None)
+    if (PyValue_IsNone(sizeobj))
         size = -1;
-    else if (PyLong_Check(sizeobj))
-        size = PyLong_AsSsize_t(sizeobj);
+    else if (PyType_IsSubtype(PyValue_TYPE(sizeobj), &PyLong_Type))
+        size = _PyValue_AsSsize_t(sizeobj, PyExc_OverflowError);
     else {
         PyErr_SetString(PyExc_TypeError, "arg 1 must be an integer");
-        return NULL;
+        return PyValue_NULL;
     }
 
     if (size == -1 && PyErr_Occurred())
-        return NULL;
+        return PyValue_NULL;
 
-    return mbstreamreader_iread(self, "readline", size);
+    return _PyValue_FromObjectResult(mbstreamreader_iread(self, "readline", size));
 }
 
 /*[clinic input]
@@ -1639,49 +1671,49 @@ _multibytecodec_MultibyteStreamReader_readline_impl(MultibyteStreamReaderObject 
     /
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _multibytecodec_MultibyteStreamReader_readlines_impl(MultibyteStreamReaderObject *self,
-                                                     PyObject *sizehintobj)
-/*[clinic end generated code: output=e7c4310768ed2ad4 input=54932f5d4d88e880]*/
+                                                     PyValueBorrow sizehintobj)
+/*[clinic end generated code: output=3f8cd76901aa2f8b input=54932f5d4d88e880]*/
 {
     PyObject *r, *sr;
     Py_ssize_t sizehint;
 
-    if (sizehintobj == Py_None)
+    if (PyValue_IsNone(sizehintobj))
         sizehint = -1;
-    else if (PyLong_Check(sizehintobj))
-        sizehint = PyLong_AsSsize_t(sizehintobj);
+    else if (PyType_IsSubtype(PyValue_TYPE(sizehintobj), &PyLong_Type))
+        sizehint = _PyValue_AsSsize_t(sizehintobj, PyExc_OverflowError);
     else {
         PyErr_SetString(PyExc_TypeError, "arg 1 must be an integer");
-        return NULL;
+        return PyValue_NULL;
     }
 
     if (sizehint == -1 && PyErr_Occurred())
-        return NULL;
+        return PyValue_NULL;
 
     r = mbstreamreader_iread(self, "read", sizehint);
     if (r == NULL)
-        return NULL;
+        return PyValue_NULL;
 
     sr = PyUnicode_Splitlines(r, 1);
     Py_DECREF(r);
-    return sr;
+    return _PyValue_FromObjectResult(sr);
 }
 
 /*[clinic input]
  _multibytecodec.MultibyteStreamReader.reset
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _multibytecodec_MultibyteStreamReader_reset_impl(MultibyteStreamReaderObject *self)
-/*[clinic end generated code: output=138490370a680abc input=5d4140db84b5e1e2]*/
+/*[clinic end generated code: output=51572a5c54be761d input=5d4140db84b5e1e2]*/
 {
     if (self->codec->decreset != NULL &&
         self->codec->decreset(&self->state, self->codec) != 0)
-        return NULL;
+        return PyValue_NULL;
     self->pendingsize = 0;
 
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 static struct PyMethodDef mbstreamreader_methods[] = {
@@ -1820,18 +1852,24 @@ mbstreamwriter_iwrite(MultibyteStreamWriterObject *self,
     /
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _multibytecodec_MultibyteStreamWriter_write_impl(MultibyteStreamWriterObject *self,
                                                  PyTypeObject *cls,
-                                                 PyObject *strobj)
-/*[clinic end generated code: output=68ade3aea26410ac input=199f26f68bd8425a]*/
+                                                 PyValueBorrow strobj)
+/*[clinic end generated code: output=4f236e697027e830 input=199f26f68bd8425a]*/
 {
     module_state *state = PyType_GetModuleState(cls);
     assert(state != NULL);
-    if (mbstreamwriter_iwrite(self, strobj, state->str_write)) {
-        return NULL;
+    PyObject *str_obj = _PyValue_AsObjectAt(strobj, BOX_SITE_PARSER);
+    if (str_obj == NULL) {
+        return PyValue_NULL;
     }
-    Py_RETURN_NONE;
+    int rc = mbstreamwriter_iwrite(self, str_obj, state->str_write);
+    Py_DECREF(str_obj);
+    if (rc) {
+        return PyValue_NULL;
+    }
+    return PyValue_None;
 }
 
 /*[clinic input]
@@ -1842,39 +1880,44 @@ _multibytecodec_MultibyteStreamWriter_write_impl(MultibyteStreamWriterObject *se
     /
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _multibytecodec_MultibyteStreamWriter_writelines_impl(MultibyteStreamWriterObject *self,
                                                       PyTypeObject *cls,
-                                                      PyObject *lines)
-/*[clinic end generated code: output=b4c99d2cf23ffb88 input=a6d5fe7c74972a34]*/
+                                                      PyValueBorrow lines)
+/*[clinic end generated code: output=6e42bba41c970267 input=a6d5fe7c74972a34]*/
 {
     PyObject *strobj;
     int i, r;
 
-    if (!PySequence_Check(lines)) {
+    if (!(PyValue_IsObject(lines) && PySequence_Check(PyValue_AsKnownObjectBorrow(lines)))) {
         PyErr_SetString(PyExc_TypeError,
                         "arg must be a sequence object");
-        return NULL;
+        return PyValue_NULL;
     }
+    PyObject *lines_obj = PyValue_AsKnownObjectBorrow(lines);
 
     module_state *state = PyType_GetModuleState(cls);
     assert(state != NULL);
-    for (i = 0; i < PySequence_Length(lines); i++) {
+    for (i = 0; i < PySequence_Length(lines_obj); i++) {
         /* length can be changed even within this loop */
-        strobj = PySequence_GetItem(lines, i);
+        PyValue item = _PyValue_SequenceGetItem(lines, i);
+        if (PyValue_IsNull(item))
+            return PyValue_NULL;
+        strobj = _PyValue_AsObjectAt(item, BOX_SITE_PARSER);
+        PyValue_CLOSE(item);
         if (strobj == NULL)
-            return NULL;
+            return PyValue_NULL;
 
         r = mbstreamwriter_iwrite(self, strobj, state->str_write);
         Py_DECREF(strobj);
         if (r == -1)
-            return NULL;
+            return PyValue_NULL;
     }
     /* PySequence_Length() can fail */
     if (PyErr_Occurred())
-        return NULL;
+        return PyValue_NULL;
 
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 /*[clinic input]
@@ -1885,15 +1928,15 @@ _multibytecodec_MultibyteStreamWriter_writelines_impl(MultibyteStreamWriterObjec
 
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _multibytecodec_MultibyteStreamWriter_reset_impl(MultibyteStreamWriterObject *self,
                                                  PyTypeObject *cls)
-/*[clinic end generated code: output=32ef224c2a38aa3d input=28af6a9cd38d1979]*/
+/*[clinic end generated code: output=0975f1c714a178f9 input=28af6a9cd38d1979]*/
 {
     PyObject *pwrt;
 
     if (!self->pending)
-        Py_RETURN_NONE;
+        return PyValue_None;
 
     pwrt = multibytecodec_encode(self->codec, &self->state,
                     self->pending, NULL, self->errors,
@@ -1904,7 +1947,7 @@ _multibytecodec_MultibyteStreamWriter_reset_impl(MultibyteStreamWriterObject *se
      * ought to be missed */
     Py_CLEAR(self->pending);
     if (pwrt == NULL)
-        return NULL;
+        return PyValue_NULL;
 
     assert(PyBytes_Check(pwrt));
 
@@ -1917,12 +1960,12 @@ _multibytecodec_MultibyteStreamWriter_reset_impl(MultibyteStreamWriterObject *se
         wr = PyObject_CallMethodOneArg(self->stream, state->str_write, pwrt);
         if (wr == NULL) {
             Py_DECREF(pwrt);
-            return NULL;
+            return PyValue_NULL;
         }
     }
     Py_DECREF(pwrt);
 
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 static PyObject *
@@ -2041,31 +2084,32 @@ _multibytecodec.__create_codec
     /
 [clinic start generated code]*/
 
-static PyObject *
-_multibytecodec___create_codec(PyObject *module, PyObject *arg)
-/*[clinic end generated code: output=cfa3dce8260e809d input=6840b2a6b183fcfa]*/
+static PyValue
+_multibytecodec___create_codec_impl(PyObject *module, PyValueBorrow arg)
+/*[clinic end generated code: output=e8e574907ff9777b input=6840b2a6b183fcfa]*/
 {
     MultibyteCodecObject *self;
 
-    if (!PyCapsule_IsValid(arg, CODEC_CAPSULE)) {
+    if (!PyValue_IsObject(arg) ||
+        !PyCapsule_IsValid(PyValue_AsKnownObjectBorrow(arg), CODEC_CAPSULE)) {
         PyErr_SetString(PyExc_ValueError, "argument type invalid");
-        return NULL;
+        return PyValue_NULL;
     }
 
-    codec_capsule *data = PyCapsule_GetPointer(arg, CODEC_CAPSULE);
+    codec_capsule *data = PyCapsule_GetPointer(PyValue_AsKnownObjectBorrow(arg), CODEC_CAPSULE);
     const MultibyteCodec *codec = data->codec;
     if (codec->codecinit != NULL && codec->codecinit(codec) != 0)
-        return NULL;
+        return PyValue_NULL;
 
     module_state *state = get_module_state(module);
     self = PyObject_GC_New(MultibyteCodecObject, state->multibytecodec_type);
     if (self == NULL)
-        return NULL;
+        return PyValue_NULL;
     self->codec = codec;
     self->cjk_module = Py_NewRef(data->cjk_module);
 
     PyObject_GC_Track(self);
-    return (PyObject *)self;
+    return _PyValue_FromObjectResult((PyObject *)self);
 }
 
 static int

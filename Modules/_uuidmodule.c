@@ -13,13 +13,18 @@
 #  define Py_BUILD_CORE_MODULE 1
 #endif
 
+#define Py_VALUE_CORE 1
 #include "Python.h"
 
 #include "pycore_critical_section.h"  // _Py_CRITICAL_SECTION_ASSERT_OBJECT_LOCKED()
 #include "pycore_long.h"          // _PyLong_AsByteArray(), _PyLong_GetOne()
 #include "pycore_pylifecycle.h"   // _PyOS_URandom()
 #include "pycore_runtime_init.h"  // _Py_ID()
+#include "pycore_dict.h"          // PyDict_SetValue()
+#include "pycore_long_value.h"     // _PyValue_AsLong()
 #include "pycore_strhex.h"        // _Py_strhex()
+#include "pycore_value.h"         // PyValue
+#include "pycore_value_ops.h"     // _PyValue_GetItem()
 
 #if defined(HAVE_UUID_H)
   // AIX, FreeBSD, libuuid with pkgconf
@@ -50,6 +55,11 @@
 
 #ifndef MS_WINDOWS
 
+
+/*[clinic input]
+value_emission
+[clinic start generated code]*/
+/*[clinic end generated code: output=da39a3ee5e6b4b0d input=eb7b17088bfd7215]*/
 
 /*[clinic input]
 module _uuid
@@ -363,22 +373,22 @@ _uuid.uuid4
 Generate a random UUID (version 4).
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _uuid_uuid4_impl(PyObject *module)
-/*[clinic end generated code: output=b835af30d9d6efc5 input=9cfb3a3b71c25cdf]*/
+/*[clinic end generated code: output=09d44e8c0c0c2996 input=9cfb3a3b71c25cdf]*/
 {
     uuid_state *state = get_uuid_state(module);
     uint8_t bytes[UUID_SIZE];
 
     if (gen_random_lock_held(module, state, bytes, sizeof(bytes)) < 0) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     // Set version (4) and variant
     bytes[6] = (uint8_t)((bytes[6] & 0x0f) | 0x40);
     bytes[8] = (uint8_t)((bytes[8] & 0x3f) | 0x80);
 
-    return uuid_from_bytes_array(state->uuid_type, bytes);
+    return _PyValue_FromObjectResult(uuid_from_bytes_array(state->uuid_type, bytes));
 }
 
 static inline int
@@ -413,9 +423,9 @@ Generate a UUID from a Unix timestamp in milliseconds and random bits.
 UUIDv7 objects feature monotonicity within a millisecond.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _uuid_uuid7_impl(PyObject *module)
-/*[clinic end generated code: output=f301accc11162c91 input=88514d61dc785108]*/
+/*[clinic end generated code: output=a5624685aa666c36 input=88514d61dc785108]*/
 {
     uuid_state *state = get_uuid_state(module);
     uint8_t bytes[UUID_SIZE];
@@ -423,7 +433,7 @@ _uuid_uuid7_impl(PyObject *module)
 
     PyTime_t pytime;
     if (gen_time(state, &pytime) < 0) {
-        return NULL;
+        return PyValue_NULL;
     }
     uint64_t last_timestamp, last_counter;
     uint8_t last_timestamp_init;
@@ -435,7 +445,7 @@ _uuid_uuid7_impl(PyObject *module)
 
         if (!last_timestamp_init || timestamp_ms > last_timestamp) {
             if (uuid7_get_counter_and_tail(module, state, &counter, bytes + 12) < 0) {
-                return NULL;
+                return PyValue_NULL;
             }
         }
         else {
@@ -448,14 +458,14 @@ _uuid_uuid7_impl(PyObject *module)
                 // advance the 48-bit timestamp
                 timestamp_ms += 1;
                 if (uuid7_get_counter_and_tail(module, state, &counter, bytes + 12) < 0) {
-                    return NULL;
+                    return PyValue_NULL;
                 }
             }
             else {
                 // This is the common fast path, we only need 4 bytes of entropy
                 // 32-bit random data
                 if (gen_random_lock_held(module, state, bytes + 12, 4) < 0) {
-                    return NULL;
+                    return PyValue_NULL;
                 }
             }
         }
@@ -489,7 +499,7 @@ _uuid_uuid7_impl(PyObject *module)
     state->last_timestamp_v7 = timestamp_ms;
     state->last_counter_v7 = counter;
 
-    return uuid_from_bytes_array(state->uuid_type, bytes);
+    return _PyValue_FromObjectResult(uuid_from_bytes_array(state->uuid_type, bytes));
 }
 
 /*[clinic input]
@@ -502,10 +512,10 @@ _uuid._install_c_hooks
 
 [clinic start generated code]*/
 
-static PyObject *
-_uuid__install_c_hooks_impl(PyObject *module, PyObject *random_func,
-                            PyObject *time_func)
-/*[clinic end generated code: output=884aa6e91b2ea832 input=6c5017297067e2ea]*/
+static PyValue
+_uuid__install_c_hooks_impl(PyObject *module, PyValueBorrow random_func,
+                            PyValueBorrow time_func)
+/*[clinic end generated code: output=b12b59b2fd96d654 input=6c5017297067e2ea]*/
 {
     uuid_state *state = get_uuid_state(module);
 
@@ -515,21 +525,29 @@ _uuid__install_c_hooks_impl(PyObject *module, PyObject *random_func,
     state->random_idx = RANDOM_BUF_SIZE;
     state->last_timestamp_v7_init = 0;
 
-    if (random_func == Py_None) {
+    if (PyValue_IsNone(random_func)) {
         Py_CLEAR(state->random_func);
     }
     else {
-        Py_XSETREF(state->random_func, Py_NewRef(random_func));
+        PyObject *random_obj = _PyValue_AsObjectAt(random_func, BOX_SITE_FIELD);
+        if (random_obj == NULL) {
+            return PyValue_NULL;
+        }
+        Py_XSETREF(state->random_func, random_obj);
     }
 
-    if (time_func == Py_None) {
+    if (PyValue_IsNone(time_func)) {
         Py_CLEAR(state->time_func);
     }
     else {
-        Py_XSETREF(state->time_func, Py_NewRef(time_func));
+        PyObject *time_obj = _PyValue_AsObjectAt(time_func, BOX_SITE_FIELD);
+        if (time_obj == NULL) {
+            return PyValue_NULL;
+        }
+        Py_XSETREF(state->time_func, time_obj);
     }
 
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 /*[clinic input]
@@ -548,20 +566,20 @@ UUID is a fast base implementation type for uuid.UUID.
 [clinic start generated code]*/
 
 static int
-_uuid_UUID___init___impl(uuidobject *self, PyObject *hex, PyObject *bytes,
-                         PyObject *bytes_le, PyObject *fields,
-                         PyObject *int_value, PyObject *version,
-                         PyObject *is_safe)
-/*[clinic end generated code: output=6d100803f5ecd751 input=23c754454cc11724]*/
+_uuid_UUID___init___impl(uuidobject *self, PyValueBorrow hex,
+                         PyValueBorrow bytes, PyValueBorrow bytes_le,
+                         PyValueBorrow fields, PyValueBorrow int_value,
+                         PyValueBorrow version, PyValueBorrow is_safe)
+/*[clinic end generated code: output=512783f4664bc5d4 input=23c754454cc11724]*/
 
 {
     // Explicit None values do not select a UUID input form.
     int passed = 0;
-    if (hex != Py_None) passed++;
-    if (bytes != Py_None) passed++;
-    if (bytes_le != Py_None) passed++;
-    if (fields != Py_None) passed++;
-    if (int_value != Py_None) passed++;
+    if (!PyValue_IsNone(hex)) passed++;
+    if (!PyValue_IsNone(bytes)) passed++;
+    if (!PyValue_IsNone(bytes_le)) passed++;
+    if (!PyValue_IsNone(fields)) passed++;
+    if (!PyValue_IsNone(int_value)) passed++;
     if (passed != 1) {
         PyErr_SetString(
             PyExc_TypeError,
@@ -570,46 +588,62 @@ _uuid_UUID___init___impl(uuidobject *self, PyObject *hex, PyObject *bytes,
         return -1;
     }
 
-    if (hex != Py_None) {
-        if (from_hex(self, hex) < 0) {
-            return -1;
-        }
+    PyValueBorrow input = hex;
+    if (!PyValue_IsNone(bytes)) {
+        input = bytes;
     }
-    else if (bytes != Py_None) {
-        if (!PyBytes_Check(bytes)) {
+    else if (!PyValue_IsNone(bytes_le)) {
+        input = bytes_le;
+    }
+    else if (!PyValue_IsNone(fields)) {
+        input = fields;
+    }
+    else if (!PyValue_IsNone(int_value)) {
+        input = int_value;
+    }
+    PyObject *input_obj = _PyValue_AsObjectAt(input, BOX_SITE_PARSER);
+    if (input_obj == NULL) {
+        return -1;
+    }
+
+    int res;
+    if (!PyValue_IsNone(hex)) {
+        res = from_hex(self, input_obj);
+    }
+    else if (!PyValue_IsNone(bytes)) {
+        if (!PyBytes_Check(input_obj)) {
             PyErr_SetString(PyExc_TypeError, "bytes must be a bytes object");
-            return -1;
+            res = -1;
         }
-        if (PyBytes_GET_SIZE(bytes) != UUID_SIZE) {
+        else if (PyBytes_GET_SIZE(input_obj) != UUID_SIZE) {
             PyErr_SetString(
                 PyExc_ValueError,
                 "bytes is not a 16-char string"
             );
-            return -1;
+            res = -1;
         }
-        memcpy(self->bytes, PyBytes_AS_STRING(bytes), sizeof(self->bytes));
-    }
-    else if (bytes_le != Py_None) {
-        if (from_bytes_le(self, bytes_le) < 0) {
-            return -1;
-        }
-    }
-    else if (fields != Py_None) {
-        if (from_fields(self, fields) < 0) {
-            return -1;
+        else {
+            memcpy(self->bytes, PyBytes_AS_STRING(input_obj),
+                   sizeof(self->bytes));
+            res = 0;
         }
     }
-    else if (int_value != Py_None) {
-        if (from_int(self, int_value, 1) < 0) {
-            return -1;
-        }
+    else if (!PyValue_IsNone(bytes_le)) {
+        res = from_bytes_le(self, input_obj);
+    }
+    else if (!PyValue_IsNone(fields)) {
+        res = from_fields(self, input_obj);
     }
     else {
-        Py_UNREACHABLE();
+        res = from_int(self, input_obj, 1);
+    }
+    Py_DECREF(input_obj);
+    if (res < 0) {
+        return -1;
     }
 
-    if (version != Py_None) {
-        long version_num = PyLong_AsLong(version);
+    if (!PyValue_IsNone(version)) {
+        long version_num = _PyValue_AsLong(version);
         if (version_num == -1 && PyErr_Occurred()) {
             return -1;
         }
@@ -628,7 +662,14 @@ _uuid_UUID___init___impl(uuidobject *self, PyObject *hex, PyObject *bytes,
         self->bytes[6] |= (uint8_t)(version_num << 4);
     }
 
-    Py_XSETREF(self->is_safe, Py_XNewRef(is_safe));
+    PyObject *is_safe_obj = NULL;
+    if (!PyValue_IsNull(is_safe)) {
+        is_safe_obj = _PyValue_AsObjectAt(is_safe, BOX_SITE_FIELD);
+        if (is_safe_obj == NULL) {
+            return -1;
+        }
+    }
+    Py_XSETREF(self->is_safe, is_safe_obj);
 
     return 0;
 }
@@ -819,7 +860,9 @@ validate_int(uuid_state *state, PyObject *int_value)
     }
 
     // Check if it's greater than max (2^128 - 1)
-    cmp = PyObject_RichCompareBool(int_value, state->uint128_max, Py_GT);
+    cmp = _PyValue_RichCompareBool(PyValue_FromObjectBorrow(int_value),
+                                   PyValue_FromObjectBorrow(state->uint128_max),
+                                   Py_GT);
     if (cmp < 0) {
         return -1;
     }
@@ -861,7 +904,12 @@ extract_field(
     const char *error_msg,
     uint64_t *result
 ) {
-    PyObject *field = PySequence_GetItem(fields, field_num);
+    PyValue field_v = _PyValue_SequenceGetItem(PyValue_FromObjectBorrow(fields),
+                                               field_num);
+    if (PyValue_IsNull(field_v)) {
+        return -1;
+    }
+    PyObject *field = _PyValue_AsObjectStealAt(field_v, BOX_SITE_TUPLE);
     if (field == NULL) {
         return -1;
     }
@@ -1543,28 +1591,37 @@ _uuid.UUID._from_int
 Create a UUID from an integer value. Internal use only.
 [clinic start generated code]*/
 
-static PyObject *
-_uuid_UUID__from_int_impl(PyTypeObject *type, PyObject *value)
-/*[clinic end generated code: output=05af0cfa4805fcae input=3f472ebfd07bbf50]*/
+static PyValue
+_uuid_UUID__from_int_impl(PyTypeObject *type, PyValueBorrow value)
+/*[clinic end generated code: output=acdfc7cd5e5ef2d9 input=3f472ebfd07bbf50]*/
 {
     uuid_state *state = get_uuid_state_by_cls(type);
 
-    if (validate_int(state, value) < 0) {
-        return NULL;
+    PyObject *value_obj = _PyValue_AsObjectAt(value, BOX_SITE_PARSER);
+    if (value_obj == NULL) {
+        return PyValue_NULL;
+    }
+
+    if (validate_int(state, value_obj) < 0) {
+        Py_DECREF(value_obj);
+        return PyValue_NULL;
     }
 
     uuidobject *self = make_uuid(type);
     if (self == NULL) {
-        return NULL;
+        Py_DECREF(value_obj);
+        return PyValue_NULL;
     }
 
-    if (from_int(self, value, 0) < 0) {
+    int res = from_int(self, value_obj, 0);
+    Py_DECREF(value_obj);
+    if (res < 0) {
         // We validated before creating an instance, so now we don't need to
         // validate again
-        return NULL;
+        return PyValue_NULL;
     }
 
-    return (PyObject *)self;
+    return _PyValue_FromObjectResult((PyObject *)self);
 }
 
 static PyGetSetDef Uuid_getset[] = {
@@ -1599,34 +1656,36 @@ _uuid.UUID.__getstate__
 Return the UUID's state for pickling.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _uuid_UUID___getstate___impl(uuidobject *self)
-/*[clinic end generated code: output=f9278a4d28ccac91 input=4b471ae24b705e8e]*/
+/*[clinic end generated code: output=70ebc7d7325766b6 input=4b471ae24b705e8e]*/
 {
     PyObject *dict = PyDict_New();
     if (dict == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     // Always add 'int' key
     PyObject *int_value = get_int(self);
     if (int_value == NULL) {
         Py_DECREF(dict);
-        return NULL;
+        return PyValue_NULL;
     }
-    if (PyDict_SetItem(dict, &_Py_ID(int), int_value) < 0) {
+    if (PyDict_SetValue(dict, PyValue_FromObjectBorrow(&_Py_ID(int)),
+                          PyValue_FromObjectBorrow(int_value)) < 0) {
         Py_DECREF(int_value);
         Py_DECREF(dict);
-        return NULL;
+        return PyValue_NULL;
     }
     Py_DECREF(int_value);
 
-    if (PyDict_SetItem(dict, &_Py_ID(is_safe), self->is_safe) < 0) {
+    if (PyDict_SetValue(dict, PyValue_FromObjectBorrow(&_Py_ID(is_safe)),
+                          PyValue_FromObjectBorrow(self->is_safe)) < 0) {
         Py_DECREF(dict);
-        return NULL;
+        return PyValue_NULL;
     }
 
-    return dict;
+    return _PyValue_FromObjectResult(dict);
 }
 
 /*[clinic input]
@@ -1640,48 +1699,60 @@ Restore the UUID's state from pickling.
 Expects a mapping with 'int' and optionally 'is_safe' keys.
 [clinic start generated code]*/
 
-static PyObject *
-_uuid_UUID___setstate___impl(uuidobject *self, PyObject *state)
-/*[clinic end generated code: output=cdf6bd4a2a680b3f input=fc65bdad0a8d6211]*/
+static PyValue
+_uuid_UUID___setstate___impl(uuidobject *self, PyValueBorrow state)
+/*[clinic end generated code: output=ad1c5d5c6d17c303 input=fc65bdad0a8d6211]*/
 {
     // Get and set the 'int' value
-    PyObject *int_value = PyObject_GetItem(state, &_Py_ID(int));
+    PyValue int_v = _PyValue_GetItem(state, PyValue_FromObjectBorrow(&_Py_ID(int)));
+    if (PyValue_IsNull(int_v)) {
+        return PyValue_NULL;
+    }
+    PyObject *int_value = _PyValue_AsObjectStealAt(int_v, BOX_SITE_ATTRIBUTE);
     if (int_value == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     int result = from_int(self, int_value, 1);
     Py_DECREF(int_value);
     if (result < 0) {
-        return NULL;
+        return PyValue_NULL;
     }
 
-    int has_is_safe = PySequence_Contains(state, &_Py_ID(is_safe));
+    int has_is_safe = _PyValue_Contains(state,
+                                        PyValue_FromObjectBorrow(&_Py_ID(is_safe)));
     if (has_is_safe < 0) {
-        return NULL;
+        return PyValue_NULL;
     }
-    PyObject *is_safe = has_is_safe
-        ? PyObject_GetItem(state, &_Py_ID(is_safe))
-        : Py_NewRef(Py_None);
+    PyObject *is_safe = Py_NewRef(Py_None);
+    if (has_is_safe) {
+        PyValue is_safe_v = _PyValue_GetItem(
+            state, PyValue_FromObjectBorrow(&_Py_ID(is_safe)));
+        if (PyValue_IsNull(is_safe_v)) {
+            Py_DECREF(is_safe);
+            return PyValue_NULL;
+        }
+        Py_SETREF(is_safe, _PyValue_AsObjectStealAt(is_safe_v, BOX_SITE_ATTRIBUTE));
+    }
     if (is_safe == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     uuid_state *module_state = get_uuid_state_by_cls(Py_TYPE(self));
     PyObject *SafeUUID = get_SafeUUID(module_state);
     if (SafeUUID == NULL) {
         Py_DECREF(is_safe);
-        return NULL;
+        return PyValue_NULL;
     }
     PyObject *safety = PyObject_CallOneArg(SafeUUID, is_safe);
     Py_DECREF(SafeUUID);
     Py_DECREF(is_safe);
     if (safety == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
     Py_XSETREF(self->is_safe, safety);
 
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 static PyObject *
@@ -1689,20 +1760,18 @@ compute_uuid_max(void)
 {
     // Compute `(1 << 128) - 1`
 
-    PyObject *shift = PyLong_FromLong(128);
-    if (shift == NULL) {
+    PyValue shifted = _PyValue_Lshift(PyValue_FromInt64(1),
+                                      PyValue_FromInt64(128));
+    if (PyValue_IsNull(shifted)) {
         return NULL;
     }
 
-    PyObject *shifted = PyNumber_Lshift(_PyLong_GetOne(), shift);
-    Py_DECREF(shift);
-    if (shifted == NULL) {
+    PyValue result = _PyValue_Subtract(shifted, PyValue_FromInt64(1));
+    PyValue_CLOSE(shifted);
+    if (PyValue_IsNull(result)) {
         return NULL;
     }
-
-    PyObject *result = PyNumber_Subtract(shifted, _PyLong_GetOne());
-    Py_DECREF(shifted);
-    return result;
+    return _PyValue_AsObjectStealAt(result, BOX_SITE_NUMBER);
 }
 
 static PyMethodDef Uuid_methods[] = {

@@ -25,6 +25,7 @@
 #  define Py_BUILD_CORE_MODULE 1
 #endif
 
+#define Py_VALUE_CORE 1
 #include "row.h"
 #include "cursor.h"
 
@@ -33,6 +34,11 @@
 #undef clinic_state
 
 #define _pysqlite_Row_CAST(op)  ((pysqlite_Row *)(op))
+
+/*[clinic input]
+value_emission
+[clinic start generated code]*/
+/*[clinic end generated code: output=da39a3ee5e6b4b0d input=eb7b17088bfd7215]*/
 
 /*[clinic input]
 module _sqlite3
@@ -79,10 +85,10 @@ _sqlite3.Row.__new__ as pysqlite_row_new
 
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 pysqlite_row_new_impl(PyTypeObject *type, pysqlite_Cursor *cursor,
                       PyObject *data)
-/*[clinic end generated code: output=10d58b09a819a4c1 input=b9e954ca31345dbf]*/
+/*[clinic end generated code: output=0de4117141a6b947 input=b9e954ca31345dbf]*/
 {
     pysqlite_Row *self;
 
@@ -200,9 +206,9 @@ _sqlite3.Row.keys as pysqlite_row_keys
 Returns the keys of the row.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 pysqlite_row_keys_impl(pysqlite_Row *self)
-/*[clinic end generated code: output=efe3dfb3af6edc07 input=7549a122827c5563]*/
+/*[clinic end generated code: output=71c9e1197beb42e7 input=7549a122827c5563]*/
 {
     PyObject *list = PyList_New(0);
     if (!list) {

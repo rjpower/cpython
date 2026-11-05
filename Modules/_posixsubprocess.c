@@ -3,11 +3,15 @@
 #  define Py_BUILD_CORE_MODULE 1
 #endif
 
+#define Py_VALUE_CORE 1
 #include "Python.h"
 #include "pycore_fileutils.h"     // _Py_set_inheritable_async_safe()
 #include "pycore_interp.h"        // _PyInterpreterState_GetFinalizing()
 #include "pycore_pystate.h"       // _PyInterpreterState_GET()
 #include "pycore_signal.h"        // _Py_RestoreSignals()
+#include "pycore_value.h"      // _PyValue_AsObjectAt()
+#include "pycore_value_ops.h"  // _PyValue_SequenceFast()
+#include "pycore_value_slots.h"// _PyValue_FromObjectResult()
 
 #if defined(HAVE_PIPE2) && !defined(_GNU_SOURCE)
 #  define _GNU_SOURCE
@@ -80,6 +84,11 @@
 static struct PyModuleDef _posixsubprocessmodule;
 
 /*[clinic input]
+value_emission
+[clinic start generated code]*/
+/*[clinic end generated code: output=da39a3ee5e6b4b0d input=eb7b17088bfd7215]*/
+
+/*[clinic input]
 module _posixsubprocess
 [clinic start generated code]*/
 /*[clinic end generated code: output=da39a3ee5e6b4b0d input=c62211df27cf7334]*/
@@ -132,7 +141,8 @@ _sanity_check_python_fd_sequence(PyObject *fd_sequence)
     Py_ssize_t seq_idx;
     long prev_fd = -1;
     for (seq_idx = 0; seq_idx < PyTuple_GET_SIZE(fd_sequence); ++seq_idx) {
-        PyObject* py_fd = PyTuple_GetItemRef(fd_sequence, seq_idx);
+        PyValue py_fd_v = PyTuple_GetValue(fd_sequence, seq_idx);
+        PyObject* py_fd = PyValue_IsNull(py_fd_v) ? NULL : _PyValue_AsObjectStealAt(py_fd_v, BOX_SITE_FIELD);
         long iter_fd;
         if (py_fd == NULL) {
             return -1;
@@ -214,7 +224,8 @@ _PySequence_BytesToCharpArray(PyObject* self)
     }
     for (i = 0; i < argc; ++i) {
         char *data;
-        item = PySequence_GetItem(self, i);
+        PyValue item_v = _PyValue_SequenceGetItem(PyValue_FromObjectBorrow(self), i);
+        item = PyValue_IsNull(item_v) ? NULL : _PyValue_AsObjectStealAt(item_v, BOX_SITE_FIELD);
         if (item == NULL) {
             /* NULL terminate before freeing. */
             array[i] = NULL;
@@ -275,7 +286,8 @@ convert_fds_to_keep_to_c(PyObject *py_fds_to_keep, int *c_fds_to_keep)
 
     len = PyTuple_GET_SIZE(py_fds_to_keep);
     for (i = 0; i < len; ++i) {
-        PyObject* fdobj = PyTuple_GetItemRef(py_fds_to_keep, i);
+        PyValue fdobj_v = PyTuple_GetValue(py_fds_to_keep, i);
+        PyObject* fdobj = PyValue_IsNull(fdobj_v) ? NULL : _PyValue_AsObjectStealAt(fdobj_v, BOX_SITE_FIELD);
         if (fdobj == NULL) {
             return -1;
         }
@@ -1023,22 +1035,23 @@ Returns: the child process's PID.
 Raises: Only on an error in the parent process.
 [clinic start generated code]*/
 
-static PyObject *
-subprocess_fork_exec_impl(PyObject *module, PyObject *process_args,
-                          PyObject *executable_list, int close_fds,
-                          PyObject *py_fds_to_keep, PyObject *cwd_obj,
-                          PyObject *env_list, int p2cread, int p2cwrite,
+static PyValue
+subprocess_fork_exec_impl(PyObject *module, PyValueBorrow process_args,
+                          PyValueBorrow executable_list, int close_fds,
+                          PyObject *py_fds_to_keep, PyValueBorrow cwd_obj,
+                          PyValueBorrow env_list, int p2cread, int p2cwrite,
                           int c2pread, int c2pwrite, int errread,
                           int errwrite, int errpipe_read, int errpipe_write,
                           int restore_signals, int call_setsid,
-                          pid_t pgid_to_set, PyObject *gid_object,
-                          PyObject *extra_groups_packed,
-                          PyObject *uid_object, int child_umask,
-                          PyObject *preexec_fn)
-/*[clinic end generated code: output=288464dc56e373c7 input=5e56eac3e036e349]*/
+                          pid_t pgid_to_set, PyValueBorrow gid_object,
+                          PyValueBorrow extra_groups_packed,
+                          PyValueBorrow uid_object, int child_umask,
+                          PyValueBorrow preexec_fn)
+/*[clinic end generated code: output=9fff68848f2b5ccb input=5e56eac3e036e349]*/
 {
     PyObject *converted_args = NULL, *fast_args = NULL;
     PyObject *preexec_fn_args_tuple = NULL;
+    PyObject *preexec_fn_obj = NULL;
     gid_t *extra_groups = NULL;
     PyObject *cwd_obj2 = NULL;
     const char *cwd = NULL;
@@ -1051,49 +1064,54 @@ subprocess_fork_exec_impl(PyObject *module, PyObject *process_args,
     Py_ssize_t fds_to_keep_len = PyTuple_GET_SIZE(py_fds_to_keep);
 
     PyInterpreterState *interp = _PyInterpreterState_GET();
-    if ((preexec_fn != Py_None) &&
+    if ((!PyValue_IsNone(preexec_fn)) &&
         _PyInterpreterState_GetFinalizing(interp) != NULL)
     {
         PyErr_SetString(PyExc_PythonFinalizationError,
                         "preexec_fn not supported at interpreter shutdown");
-        return NULL;
+        return PyValue_NULL;
     }
-    if ((preexec_fn != Py_None) && (interp != PyInterpreterState_Main())) {
+    if ((!PyValue_IsNone(preexec_fn)) && (interp != PyInterpreterState_Main())) {
         PyErr_SetString(PyExc_RuntimeError,
                         "preexec_fn not supported within subinterpreters");
-        return NULL;
+        return PyValue_NULL;
     }
 
     if (close_fds && errpipe_write < 3) {  /* precondition */
         PyErr_SetString(PyExc_ValueError, "errpipe_write must be >= 3");
-        return NULL;
+        return PyValue_NULL;
     }
     int bad_fds = _sanity_check_python_fd_sequence(py_fds_to_keep);
     if (bad_fds < 0) {
-        return NULL;
+        return PyValue_NULL;
     }
     if (bad_fds) {
         PyErr_SetString(PyExc_ValueError, "bad value(s) in fds_to_keep");
-        return NULL;
+        return PyValue_NULL;
     }
 
     /* We need to call gc.disable() when we'll be calling preexec_fn */
-    if (preexec_fn != Py_None) {
+    if (!PyValue_IsNone(preexec_fn)) {
         need_to_reenable_gc = PyGC_Disable();
     }
 
-    char *const *exec_array = _PySequence_BytesToCharpArray(executable_list);
+    char *const *exec_array = NULL;
+    PyObject *executable_obj = _PyValue_AsObjectAt(executable_list, BOX_SITE_PARSER);
+    if (executable_obj != NULL) {
+        exec_array = _PySequence_BytesToCharpArray(executable_obj);
+        Py_DECREF(executable_obj);
+    }
     if (!exec_array)
         goto cleanup;
 
     /* Convert args and env into appropriate arguments for exec() */
     /* These conversions are done in the parent process to avoid allocating
        or freeing memory in the child process. */
-    if (process_args != Py_None) {
+    if (!PyValue_IsNone(process_args)) {
         Py_ssize_t num_args;
         /* Equivalent to:  */
         /*  tuple(PyUnicode_FSConverter(arg) for arg in process_args)  */
-        fast_args = PySequence_Fast(process_args, "argv must be a tuple");
+        fast_args = _PyValue_SequenceFast(process_args, "argv must be a tuple");
         if (fast_args == NULL)
             goto cleanup;
         num_args = PySequence_Fast_GET_SIZE(fast_args);
@@ -1108,7 +1126,9 @@ subprocess_fork_exec_impl(PyObject *module, PyObject *process_args,
             }
             /* Own arg: its __fspath__() may run Python that drops
                fast_args' last reference to it. */
-            arg = PySequence_GetItem(fast_args, arg_num);
+            PyValue arg_v = _PyValue_SequenceGetItem(
+                PyValue_FromObjectBorrow(fast_args), arg_num);
+            arg = PyValue_IsNull(arg_v) ? NULL : _PyValue_AsObjectStealAt(arg_v, BOX_SITE_FIELD);
             if (arg == NULL) {
                 goto cleanup;
             }
@@ -1117,7 +1137,7 @@ subprocess_fork_exec_impl(PyObject *module, PyObject *process_args,
                 goto cleanup;
             }
             Py_DECREF(arg);
-            PyTuple_SET_ITEM(converted_args, arg_num, converted_arg);
+            PyTuple_SET_VALUE(converted_args, arg_num, PyValue_PrepareOwned(converted_arg));
         }
 
         argv = _PySequence_BytesToCharpArray(converted_args);
@@ -1127,14 +1147,23 @@ subprocess_fork_exec_impl(PyObject *module, PyObject *process_args,
             goto cleanup;
     }
 
-    if (env_list != Py_None) {
-        envp = _PySequence_BytesToCharpArray(env_list);
+    if (!PyValue_IsNone(env_list)) {
+        PyObject *env_obj = _PyValue_AsObjectAt(env_list, BOX_SITE_PARSER);
+        if (env_obj == NULL)
+            goto cleanup;
+        envp = _PySequence_BytesToCharpArray(env_obj);
+        Py_DECREF(env_obj);
         if (!envp)
             goto cleanup;
     }
 
-    if (cwd_obj != Py_None) {
-        if (PyUnicode_FSConverter(cwd_obj, &cwd_obj2) == 0)
+    if (!PyValue_IsNone(cwd_obj)) {
+        PyObject *cwd_arg = _PyValue_AsObjectAt(cwd_obj, BOX_SITE_PARSER);
+        if (cwd_arg == NULL)
+            goto cleanup;
+        int cwd_converted = PyUnicode_FSConverter(cwd_arg, &cwd_obj2);
+        Py_DECREF(cwd_arg);
+        if (cwd_converted == 0)
             goto cleanup;
         cwd = PyBytes_AsString(cwd_obj2);
     }
@@ -1146,14 +1175,15 @@ subprocess_fork_exec_impl(PyObject *module, PyObject *process_args,
     // there is no setgroups call.
     Py_ssize_t extra_group_size = -2;
 
-    if (extra_groups_packed != Py_None) {
+    if (!PyValue_IsNone(extra_groups_packed)) {
 #ifdef HAVE_SETGROUPS
-        if (!PyList_Check(extra_groups_packed)) {
+        if (!(PyValue_IsObject(extra_groups_packed) && PyList_Check(PyValue_AsKnownObjectBorrow(extra_groups_packed)))) {
             PyErr_SetString(PyExc_TypeError,
                     "setgroups argument must be a list");
             goto cleanup;
         }
-        extra_group_size = PySequence_Size(extra_groups_packed);
+        PyObject *extra_groups_list = PyValue_AsKnownObjectBorrow(extra_groups_packed);  /* a list, checked above */
+        extra_group_size = PySequence_Size(extra_groups_list);
 
         if (extra_group_size < 0)
             goto cleanup;
@@ -1175,7 +1205,9 @@ subprocess_fork_exec_impl(PyObject *module, PyObject *process_args,
 
         for (Py_ssize_t i = 0; i < extra_group_size; i++) {
             PyObject *elem;
-            elem = PySequence_GetItem(extra_groups_packed, i);
+            PyValue elem_v = _PyValue_SequenceGetItem(
+                PyValue_FromObjectBorrow(extra_groups_list), i);
+            elem = PyValue_IsNull(elem_v) ? NULL : _PyValue_AsObjectStealAt(elem_v, BOX_SITE_FIELD);
             if (!elem)
                 goto cleanup;
             if (!PyLong_Check(elem)) {
@@ -1202,9 +1234,14 @@ subprocess_fork_exec_impl(PyObject *module, PyObject *process_args,
     }
 
     gid_t gid = (gid_t)-1;
-    if (gid_object != Py_None) {
+    if (!PyValue_IsNone(gid_object)) {
 #ifdef HAVE_SETREGID
-        if (!_Py_Gid_Converter(gid_object, &gid))
+        PyObject *gid_arg = _PyValue_AsObjectAt(gid_object, BOX_SITE_PARSER);
+        if (gid_arg == NULL)
+            goto cleanup;
+        int gid_converted = _Py_Gid_Converter(gid_arg, &gid);
+        Py_DECREF(gid_arg);
+        if (!gid_converted)
             goto cleanup;
 
 #else /* HAVE_SETREGID */
@@ -1214,9 +1251,14 @@ subprocess_fork_exec_impl(PyObject *module, PyObject *process_args,
     }
 
     uid_t uid = (uid_t)-1;
-    if (uid_object != Py_None) {
+    if (!PyValue_IsNone(uid_object)) {
 #ifdef HAVE_SETREUID
-        if (!_Py_Uid_Converter(uid_object, &uid))
+        PyObject *uid_arg = _PyValue_AsObjectAt(uid_object, BOX_SITE_PARSER);
+        if (uid_arg == NULL)
+            goto cleanup;
+        int uid_converted = _Py_Uid_Converter(uid_arg, &uid);
+        Py_DECREF(uid_arg);
+        if (!uid_converted)
             goto cleanup;
 
 #else /* HAVE_SETREUID */
@@ -1239,18 +1281,33 @@ subprocess_fork_exec_impl(PyObject *module, PyObject *process_args,
      * The audit hook receives the original object, so would nevertheless
      * be able to detect weird behaviour, hence we do not add extra
      * complexity or performance penalties to attempt to avoid this. */
-    if (PySys_Audit("_posixsubprocess.fork_exec",
-                    "OOO",
-                    executable_list,
-                    process_args,
-                    env_list) < 0) {
+    {
+        // PySys_Audit() reads "O" arguments as PyObject *.
+        PyObject *audit_executable = _PyValue_AsObjectAt(executable_list, BOX_SITE_PARSER);
+        PyObject *audit_args = _PyValue_AsObjectAt(process_args, BOX_SITE_PARSER);
+        PyObject *audit_env = _PyValue_AsObjectAt(env_list, BOX_SITE_PARSER);
+        int audit_res = -1;
+        if (audit_executable != NULL && audit_args != NULL && audit_env != NULL) {
+            audit_res = PySys_Audit("_posixsubprocess.fork_exec", "OOO",
+                                    audit_executable, audit_args, audit_env);
+        }
+        Py_XDECREF(audit_executable);
+        Py_XDECREF(audit_args);
+        Py_XDECREF(audit_env);
+        if (audit_res < 0) {
+            goto cleanup;
+        }
+    }
+
+    preexec_fn_obj = _PyValue_AsObjectAt(preexec_fn, BOX_SITE_PARSER);
+    if (preexec_fn_obj == NULL) {
         goto cleanup;
     }
 
     /* This must be the last thing done before fork() because we do not
      * want to call PyOS_BeforeFork() if there is any chance of another
      * error leading to the cleanup: code without calling fork(). */
-    if (preexec_fn != Py_None) {
+    if (!PyValue_IsNone(preexec_fn)) {
         preexec_fn_args_tuple = PyTuple_New(0);
         if (!preexec_fn_args_tuple)
             goto cleanup;
@@ -1263,7 +1320,7 @@ subprocess_fork_exec_impl(PyObject *module, PyObject *process_args,
 #ifdef VFORK_USABLE
     /* Use vfork() only if it's safe. See the comment above child_exec(). */
     sigset_t old_sigs;
-    if (preexec_fn == Py_None &&
+    if (PyValue_IsNone(preexec_fn) &&
         uid == (uid_t)-1 && gid == (gid_t)-1 && extra_group_size < 0) {
         /* Block all signals to ensure that no signal handlers are run in the
          * child process while it shares memory with us. Note that signals
@@ -1290,7 +1347,7 @@ subprocess_fork_exec_impl(PyObject *module, PyObject *process_args,
                        gid, extra_group_size, extra_groups,
                        uid, child_umask, old_sigmask,
                        c_fds_to_keep, fds_to_keep_len,
-                       preexec_fn, preexec_fn_args_tuple);
+                       preexec_fn_obj, preexec_fn_args_tuple);
 
     /* Parent (original) process */
     if (pid == (pid_t)-1) {
@@ -1332,6 +1389,7 @@ cleanup:
     }
 
     Py_XDECREF(preexec_fn_args_tuple);
+    Py_XDECREF(preexec_fn_obj);
     PyMem_RawFree(extra_groups);
     Py_XDECREF(cwd_obj2);
     if (envp)
@@ -1347,7 +1405,7 @@ cleanup:
         PyGC_Enable();
     }
 
-    return pid == -1 ? NULL : PyLong_FromPid(pid);
+    return _PyValue_FromObjectResult(pid == -1 ? NULL : PyLong_FromPid(pid));
 }
 
 /* module level code ********************************************************/

@@ -4,12 +4,19 @@
 #  define Py_BUILD_CORE_MODULE 1
 #endif
 
+#define Py_VALUE_CORE 1
 #include "Python.h"
+#include "pycore_value.h"         // PyValue
 
 #include "_zstdmodule.h"
 
 #include <zstd.h>                 // ZSTD_*()
 #include <zdict.h>                // ZDICT_*()
+
+/*[clinic input]
+value_emission
+[clinic start generated code]*/
+/*[clinic end generated code: output=da39a3ee5e6b4b0d input=eb7b17088bfd7215]*/
 
 /*[clinic input]
 module _zstd
@@ -33,8 +40,12 @@ _Py_parse_zstd_dict(const _zstd_state *state, PyObject *dict, int *ptype)
 
     /* Check (ZstdDict, type) */
     if (PyTuple_CheckExact(dict) && PyTuple_GET_SIZE(dict) == 2) {
-        PyObject *zd = PyTuple_GetItemRef(dict, 0);
-        PyObject *type_obj = PyTuple_GetItemRef(dict, 1);
+        PyValue zd_v = PyTuple_GetValue(dict, 0);
+        PyObject *zd = PyValue_IsNull(zd_v) ? NULL
+            : _PyValue_AsObjectStealAt(zd_v, BOX_SITE_TUPLE);
+        PyValue type_v = PyTuple_GetValue(dict, 1);
+        PyObject *type_obj = PyValue_IsNull(type_v) ? NULL
+            : _PyValue_AsObjectStealAt(type_v, BOX_SITE_TUPLE);
         if (zd == NULL || type_obj == NULL) {
             Py_XDECREF(zd);
             Py_XDECREF(type_obj);
@@ -242,7 +253,9 @@ calculate_samples_stats(PyBytesObject *samples_bytes, PyObject *samples_sizes,
 
     sizes_sum = PyBytes_GET_SIZE(samples_bytes);
     for (i = 0; i < chunks_number; i++) {
-        PyObject *size_obj = PyTuple_GetItemRef(samples_sizes, i);
+        PyValue size_v = PyTuple_GetValue(samples_sizes, i);
+        PyObject *size_obj = PyValue_IsNull(size_v) ? NULL
+            : _PyValue_AsObjectStealAt(size_v, BOX_SITE_TUPLE);
         if (size_obj == NULL) {
             return -1;
         }
@@ -286,10 +299,10 @@ _zstd.train_dict
 Train a Zstandard dictionary on sample data.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _zstd_train_dict_impl(PyObject *module, PyBytesObject *samples_bytes,
                       PyObject *samples_sizes, Py_ssize_t dict_size)
-/*[clinic end generated code: output=8e87fe43935e8f77 input=d20dedb21c72cb62]*/
+/*[clinic end generated code: output=fb4b14d2796591d8 input=d20dedb21c72cb62]*/
 {
     PyBytesWriter *dst_dict_bytes = NULL;
     size_t *chunk_sizes = NULL;
@@ -300,7 +313,7 @@ _zstd_train_dict_impl(PyObject *module, PyBytesObject *samples_bytes,
     if (dict_size <= 0) {
         PyErr_SetString(PyExc_ValueError,
                         "dict_size argument should be positive number.");
-        return NULL;
+        return PyValue_NULL;
     }
 
     /* Check that the samples are valid and get their sizes */
@@ -335,12 +348,12 @@ _zstd_train_dict_impl(PyObject *module, PyBytesObject *samples_bytes,
     PyMem_Free(chunk_sizes);
 
     /* Resize dict_buffer */
-    return PyBytesWriter_FinishWithSize(dst_dict_bytes, zstd_ret);
+    return _PyValue_FromObjectResult(PyBytesWriter_FinishWithSize(dst_dict_bytes, zstd_ret));
 
 error:
     PyBytesWriter_Discard(dst_dict_bytes);
     PyMem_Free(chunk_sizes);
-    return NULL;
+    return PyValue_NULL;
 }
 
 /*[clinic input]
@@ -361,12 +374,12 @@ _zstd.finalize_dict
 Finalize a Zstandard dictionary.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _zstd_finalize_dict_impl(PyObject *module, PyBytesObject *custom_dict_bytes,
                          PyBytesObject *samples_bytes,
                          PyObject *samples_sizes, Py_ssize_t dict_size,
                          int compression_level)
-/*[clinic end generated code: output=f91821ba5ae85bda input=3c7e2480aa08fb56]*/
+/*[clinic end generated code: output=ba272da20a39c8ba input=3c7e2480aa08fb56]*/
 {
     Py_ssize_t chunks_number;
     size_t *chunk_sizes = NULL;
@@ -379,7 +392,7 @@ _zstd_finalize_dict_impl(PyObject *module, PyBytesObject *custom_dict_bytes,
     if (dict_size <= 0) {
         PyErr_SetString(PyExc_ValueError,
                         "dict_size argument should be positive number.");
-        return NULL;
+        return PyValue_NULL;
     }
 
     /* Check that the samples are valid and get their sizes */
@@ -431,7 +444,7 @@ error:
 
 done:
     PyMem_Free(chunk_sizes);
-    return result;
+    return _PyValue_FromObjectResult(result);
 }
 
 
@@ -446,9 +459,9 @@ _zstd.get_param_bounds
 Get CompressionParameter/DecompressionParameter bounds.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _zstd_get_param_bounds_impl(PyObject *module, int parameter, int is_compress)
-/*[clinic end generated code: output=4acf5a876f0620ca input=45742ef0a3531b65]*/
+/*[clinic end generated code: output=201ee84092612ba4 input=45742ef0a3531b65]*/
 {
     ZSTD_bounds bound;
     if (is_compress) {
@@ -456,7 +469,7 @@ _zstd_get_param_bounds_impl(PyObject *module, int parameter, int is_compress)
         if (ZSTD_isError(bound.error)) {
             _zstd_state* mod_state = get_zstd_state(module);
             set_zstd_error(mod_state, ERR_GET_C_BOUNDS, bound.error);
-            return NULL;
+            return PyValue_NULL;
         }
     }
     else {
@@ -464,7 +477,7 @@ _zstd_get_param_bounds_impl(PyObject *module, int parameter, int is_compress)
         if (ZSTD_isError(bound.error)) {
             _zstd_state* mod_state = get_zstd_state(module);
             set_zstd_error(mod_state, ERR_GET_D_BOUNDS, bound.error);
-            return NULL;
+            return PyValue_NULL;
         }
     }
 
@@ -482,9 +495,9 @@ _zstd.get_frame_size
 Get the size of a Zstandard frame, including the header and optional checksum.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _zstd_get_frame_size_impl(PyObject *module, Py_buffer *frame_buffer)
-/*[clinic end generated code: output=a7384c2f8780f442 input=aac83b33045b5f43]*/
+/*[clinic end generated code: output=2a6b10038fe3231c input=aac83b33045b5f43]*/
 {
     size_t frame_size;
 
@@ -498,10 +511,10 @@ _zstd_get_frame_size_impl(PyObject *module, Py_buffer *frame_buffer)
             "beginning of a frame, and its length is not less than this "
             "complete frame. Zstd error message: %s.",
             ZSTD_getErrorName(frame_size));
-        return NULL;
+        return PyValue_NULL;
     }
 
-    return PyLong_FromSize_t(frame_size);
+    return _PyValue_FromObjectResult(PyLong_FromSize_t(frame_size));
 }
 
 /*[clinic input]
@@ -513,9 +526,9 @@ _zstd.get_frame_info
 Get Zstandard frame infomation from a frame header.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _zstd_get_frame_info_impl(PyObject *module, Py_buffer *frame_buffer)
-/*[clinic end generated code: output=56e033cf48001929 input=94b240583ae22ca5]*/
+/*[clinic end generated code: output=a5d5a02cf623842a input=94b240583ae22ca5]*/
 {
     uint64_t decompressed_size;
     uint32_t dict_id;
@@ -533,7 +546,7 @@ _zstd_get_frame_info_impl(PyObject *module, Py_buffer *frame_buffer)
             "a Zstandard frame. Ensure the frame_buffer argument "
             "starts from the beginning of a frame, and its length "
             "is not less than the frame header (6~18 bytes).");
-        return NULL;
+        return PyValue_NULL;
     }
 
     /* ZSTD_getDictID_fromFrame */
@@ -541,9 +554,9 @@ _zstd_get_frame_info_impl(PyObject *module, Py_buffer *frame_buffer)
 
     /* Build tuple */
     if (decompressed_size == ZSTD_CONTENTSIZE_UNKNOWN) {
-        return Py_BuildValue("OI", Py_None, dict_id);
+        return _PyValue_FromObjectResult(Py_BuildValue("OI", Py_None, dict_id));
     }
-    return Py_BuildValue("KI", decompressed_size, dict_id);
+    return _PyValue_FromObjectResult(Py_BuildValue("KI", decompressed_size, dict_id));
 }
 
 /*[clinic input]
@@ -558,10 +571,10 @@ _zstd.set_parameter_types
 Set CompressionParameter and DecompressionParameter types for validity check.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _zstd_set_parameter_types_impl(PyObject *module, PyObject *c_parameter_type,
                                PyObject *d_parameter_type)
-/*[clinic end generated code: output=f3313b1294f19502 input=0529e918dfe54863]*/
+/*[clinic end generated code: output=82c48af6ba09f5d2 input=0529e918dfe54863]*/
 {
     _zstd_state* mod_state = get_zstd_state(module);
 
@@ -570,7 +583,7 @@ _zstd_set_parameter_types_impl(PyObject *module, PyObject *c_parameter_type,
     Py_INCREF(d_parameter_type);
     Py_XSETREF(mod_state->DParameter_type, (PyTypeObject*)d_parameter_type);
 
-    Py_RETURN_NONE;
+    _PyValue_FromObjectResult(Py_RETURN_NONE);
 }
 
 static PyMethodDef _zstd_methods[] = {
@@ -617,7 +630,7 @@ make_zstd_version_info(PyTypeObject *type, unsigned int number)
     }
 
 #define SetIntItem(VALUE) \
-    PyStructSequence_SET_ITEM(version, pos++, PyLong_FromUnsignedLong(VALUE)); \
+    PyStructSequence_SET_VALUE(version, pos++, PyValue_PrepareOwned(PyLong_FromUnsignedLong(VALUE))); \
     if (PyErr_Occurred()) { \
         Py_DECREF(version); \
         return NULL; \

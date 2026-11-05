@@ -21,9 +21,12 @@
 #  define Py_BUILD_CORE_MODULE 1
 #endif
 
+#define Py_VALUE_CORE 1
 #include "Python.h"
 #include "pycore_object.h"        // _PyObject_VisitType()
 #include "pycore_strhex.h"        // _Py_strhex()
+#include "pycore_value.h"         // _PyValue_AsObjectAt()
+#include "pycore_value_slots.h"// _PyValue_FromObjectResult()
 
 #include "hashlib.h"
 
@@ -58,6 +61,11 @@ md5_get_state(PyObject *module)
 }
 
 // --- Module clinic configuration --------------------------------------------
+
+/*[clinic input]
+value_emission
+[clinic start generated code]*/
+/*[clinic end generated code: output=da39a3ee5e6b4b0d input=eb7b17088bfd7215]*/
 
 /*[clinic input]
 module _md5
@@ -109,15 +117,15 @@ MD5Type.copy
 Return a copy of the hash object.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 MD5Type_copy_impl(MD5object *self, PyTypeObject *cls)
-/*[clinic end generated code: output=bf055e08244bf5ee input=d89087dcfb2a8620]*/
+/*[clinic end generated code: output=123f1b1b847c6d93 input=d89087dcfb2a8620]*/
 {
     MD5State *st = PyType_GetModuleState(cls);
 
     MD5object *newobj;
     if ((newobj = newMD5object(st)) == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     HASHLIB_ACQUIRE_LOCK(self);
@@ -125,9 +133,9 @@ MD5Type_copy_impl(MD5object *self, PyTypeObject *cls)
     HASHLIB_RELEASE_LOCK(self);
     if (newobj->hash_state == NULL) {
         Py_DECREF(newobj);
-        return PyErr_NoMemory();
+        return _PyValue_FromObjectResult(PyErr_NoMemory());
     }
-    return (PyObject *)newobj;
+    return _PyValue_FromObjectResult((PyObject *)newobj);
 }
 
 /*[clinic input]
@@ -136,15 +144,15 @@ MD5Type.digest
 Return the digest value as a bytes object.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 MD5Type_digest_impl(MD5object *self)
-/*[clinic end generated code: output=eb691dc4190a07ec input=bc0c4397c2994be6]*/
+/*[clinic end generated code: output=49d651664c14540f input=bc0c4397c2994be6]*/
 {
     uint8_t digest[MD5_DIGESTSIZE];
     HASHLIB_ACQUIRE_LOCK(self);
     Hacl_Hash_MD5_digest(self->hash_state, digest);
     HASHLIB_RELEASE_LOCK(self);
-    return PyBytes_FromStringAndSize((const char *)digest, MD5_DIGESTSIZE);
+    return _PyValue_FromObjectResult(PyBytes_FromStringAndSize((const char *)digest, MD5_DIGESTSIZE));
 }
 
 /*[clinic input]
@@ -153,15 +161,15 @@ MD5Type.hexdigest
 Return the digest value as a string of hexadecimal digits.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 MD5Type_hexdigest_impl(MD5object *self)
-/*[clinic end generated code: output=17badced1f3ac932 input=b60b19de644798dd]*/
+/*[clinic end generated code: output=8d0ff176af20e61d input=b60b19de644798dd]*/
 {
     uint8_t digest[MD5_DIGESTSIZE];
     HASHLIB_ACQUIRE_LOCK(self);
     Hacl_Hash_MD5_digest(self->hash_state, digest);
     HASHLIB_RELEASE_LOCK(self);
-    return _Py_strhex((const char *)digest, MD5_DIGESTSIZE);
+    return _PyValue_FromObjectResult(_Py_strhex((const char *)digest, MD5_DIGESTSIZE));
 }
 
 static void
@@ -193,18 +201,23 @@ MD5Type.update
 Update this hash object's state with the provided string.
 [clinic start generated code]*/
 
-static PyObject *
-MD5Type_update_impl(MD5object *self, PyObject *obj)
-/*[clinic end generated code: output=b0fed9a7ce7ad253 input=6e1efcd9ecf17032]*/
+static PyValue
+MD5Type_update_impl(MD5object *self, PyValueBorrow obj)
+/*[clinic end generated code: output=48e7ff6801e62e53 input=6e1efcd9ecf17032]*/
 {
     Py_buffer buf;
-    GET_BUFFER_VIEW_OR_ERROUT(obj, &buf);
+    PyObject *obj_o = _PyValue_AsObjectAt(obj, BOX_SITE_PARSER);
+    if (obj_o == NULL) {
+        return PyValue_NULL;
+    }
+    GET_BUFFER_VIEW_OR_ERROR(obj_o, &buf, {Py_DECREF(obj_o); return PyValue_NULL;});
+    Py_DECREF(obj_o);
     HASHLIB_EXTERNAL_INSTRUCTIONS_LOCKED(
         self, buf.len,
         update(self->hash_state, buf.buf, buf.len)
     );
     PyBuffer_Release(&buf);
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 static PyMethodDef MD5_methods[] = {
@@ -269,41 +282,66 @@ _md5.md5
 Return a new MD5 hash object; optionally initialized with a string.
 [clinic start generated code]*/
 
-static PyObject *
-_md5_md5_impl(PyObject *module, PyObject *data, int usedforsecurity,
-              PyObject *string_obj)
-/*[clinic end generated code: output=d45e187d3d16f3a8 input=7ea5c5366dbb44bf]*/
+static PyValue
+_md5_md5_impl(PyObject *module, PyValueBorrow data, int usedforsecurity,
+              PyValueBorrow string_obj)
+/*[clinic end generated code: output=f7fb887f6bd3918b input=7ea5c5366dbb44bf]*/
 {
+    PyObject *data_o = NULL, *string_o = NULL;
+    if (!PyValue_IsNull(data)) {
+        data_o = _PyValue_AsObjectAt(data, BOX_SITE_PARSER);
+        if (data_o == NULL) {
+            return PyValue_NULL;
+        }
+    }
+    if (!PyValue_IsNull(string_obj)) {
+        string_o = _PyValue_AsObjectAt(string_obj, BOX_SITE_PARSER);
+        if (string_o == NULL) {
+            Py_XDECREF(data_o);
+            return PyValue_NULL;
+        }
+    }
     PyObject *string;
-    if (_Py_hashlib_data_argument(&string, data, string_obj) < 0) {
-        return NULL;
+    if (_Py_hashlib_data_argument(&string, data_o, string_o) < 0) {
+        Py_XDECREF(data_o);
+        Py_XDECREF(string_o);
+        return PyValue_NULL;
     }
 
     MD5object *new;
-    Py_buffer buf;
+    Py_buffer buf = {NULL, NULL};
 
+    // buf.obj is NULL for an exporter that fills the view without one.
+    int have_string = (string != NULL);
     if (string) {
-        GET_BUFFER_VIEW_OR_ERROUT(string, &buf);
+        GET_BUFFER_VIEW_OR_ERROR(string, &buf, {
+            Py_XDECREF(data_o);
+            Py_XDECREF(string_o);
+            return PyValue_NULL;
+        });
     }
+    // buf keeps its own reference to the object, so the boxes can go.
+    Py_XDECREF(data_o);
+    Py_XDECREF(string_o);
 
     MD5State *st = md5_get_state(module);
     if ((new = newMD5object(st)) == NULL) {
-        if (string) {
+        if (have_string) {
             PyBuffer_Release(&buf);
         }
-        return NULL;
+        return PyValue_NULL;
     }
 
     new->hash_state = Hacl_Hash_MD5_malloc();
     if (new->hash_state == NULL) {
         Py_DECREF(new);
-        if (string) {
+        if (have_string) {
             PyBuffer_Release(&buf);
         }
-        return PyErr_NoMemory();
+        return _PyValue_FromObjectResult(PyErr_NoMemory());
     }
 
-    if (string) {
+    if (have_string) {
         /* Do not use self->mutex here as this is the constructor
          * where it is not yet possible to have concurrent access. */
         HASHLIB_EXTERNAL_INSTRUCTIONS_UNLOCKED(
@@ -313,7 +351,7 @@ _md5_md5_impl(PyObject *module, PyObject *data, int usedforsecurity,
         PyBuffer_Release(&buf);
     }
 
-    return (PyObject *)new;
+    return _PyValue_FromObjectResult((PyObject *)new);
 }
 
 

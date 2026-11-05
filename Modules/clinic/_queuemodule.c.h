@@ -2,13 +2,21 @@
 preserve
 [clinic start generated code]*/
 
+#ifndef Py_VALUE_CORE
+#  error "value-emission Clinic output requires Py_VALUE_CORE"
+#endif
+
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 #  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
 #  include "pycore_value.h"       // _PyValue_STATIC_IMMORTAL()
 #endif
 #include "pycore_critical_section.h"// Py_BEGIN_CRITICAL_SECTION()
-#include "pycore_modsupport.h"    // _PyArg_NoKeywords()
+#include "pycore_modsupport.h"    // _PyArg_NoPositionalStack()
+#include "pycore_tuple.h"         // _PyTuple_ITEMS()
+#include "pycore_value_call.h"    // METH_VALUE
+#include "pycore_value_ops.h"     // _PyValue_IsTrue()
+#include "pycore_value_slots.h"   // _PyValue_THUNK_EXIT()
 
 PyDoc_STRVAR(simplequeue_new__doc__,
 "SimpleQueue()\n"
@@ -16,27 +24,45 @@ PyDoc_STRVAR(simplequeue_new__doc__,
 "\n"
 "Simple, unbounded, reentrant FIFO queue.");
 
-static PyObject *
+static PyValue
 simplequeue_new_impl(PyTypeObject *type);
 
-static PyObject *
-simplequeue_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
+static PyValue
+simplequeue_new_value(PyTypeObject *type, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyTypeObject *base_tp = simplequeue_get_state_by_type(type)->SimpleQueueType;
 
     if ((type == base_tp || type->tp_init == base_tp->tp_init) &&
-        !_PyArg_NoPositional("SimpleQueue", args)) {
+        !_PyArg_NoPositionalStack("SimpleQueue", nargs)) {
         goto exit;
     }
     if ((type == base_tp || type->tp_init == base_tp->tp_init) &&
-        !_PyArg_NoKeywords("SimpleQueue", kwargs)) {
+        !_PyArg_NoKwnames("SimpleQueue", kwnames)) {
         goto exit;
     }
     return_value = simplequeue_new_impl(type);
 
 exit:
     return return_value;
+}
+
+Py_VALUE_ENTRY static PyObject *
+simplequeue_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
+{
+    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
+    if (kwargs == NULL || PyDict_GET_SIZE(kwargs) == 0) {
+        return _PyValue_THUNK_EXIT(simplequeue_new_value(type, _PyTuple_ITEMS(args), nargs, NULL), BOX_SITE_CALL);
+    }
+    PyObject *kwnames;
+    PyValue *window = _PyValue_StackUnpackDict(_PyThreadState_GET(),
+        _PyTuple_ITEMS(args), nargs, kwargs, &kwnames);
+    if (window == NULL) {
+        return NULL;
+    }
+    PyValue result = simplequeue_new_value(type, window, nargs, kwnames);
+    _PyValue_StackUnpackDict_Free(window, nargs, kwnames);
+    return _PyValue_THUNK_EXIT(result, BOX_SITE_CALL);
 }
 
 PyDoc_STRVAR(_queue_SimpleQueue_put__doc__,
@@ -50,16 +76,16 @@ PyDoc_STRVAR(_queue_SimpleQueue_put__doc__,
 "Queue class.");
 
 #define _QUEUE_SIMPLEQUEUE_PUT_METHODDEF    \
-    {"put", _PyCFunction_CAST(_queue_SimpleQueue_put), METH_FASTCALL|METH_KEYWORDS, _queue_SimpleQueue_put__doc__},
+    {"put", _PyCFunction_CAST(_queue_SimpleQueue_put), METH_VALUE|METH_KEYWORDS, _queue_SimpleQueue_put__doc__},
 
-static PyObject *
-_queue_SimpleQueue_put_impl(simplequeueobject *self, PyObject *item,
-                            int block, PyObject *timeout);
+static PyValue
+_queue_SimpleQueue_put_impl(simplequeueobject *self, PyValueBorrow item,
+                            int block, PyValueBorrow timeout);
 
-static PyObject *
-_queue_SimpleQueue_put(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_queue_SimpleQueue_put(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 3
@@ -87,34 +113,27 @@ _queue_SimpleQueue_put(PyObject *self, PyObject *const *args, Py_ssize_t nargs, 
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[3];
-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 1;
-    PyObject *item;
+    Py_ssize_t _idx[3];
+    PyValueBorrow item;
     int block = 1;
-    PyObject *timeout = Py_None;
+    PyValueBorrow timeout = PyValue_Borrow(PyValue_None);
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 1, /*maxpos*/ 3, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 1, /*maxpos*/ 3, /*minkw*/ 0, /*varpos*/ 0, _idx, 3)) {
         goto exit;
     }
-    item = args[0];
-    if (!noptargs) {
-        goto skip_optional_pos;
-    }
-    if (args[1]) {
-        block = PyObject_IsTrue(args[1]);
+    item = PyValue_Borrow(args[_idx[0]]);
+    if (_idx[1] >= 0) {
+        block = _PyValue_IsTrue(PyValue_Borrow(args[_idx[1]]));
         if (block < 0) {
             goto exit;
         }
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
     }
-    timeout = args[2];
-skip_optional_pos:
-    Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = _queue_SimpleQueue_put_impl((simplequeueobject *)self, item, block, timeout);
+    if (_idx[2] >= 0) {
+        timeout = PyValue_Borrow(args[_idx[2]]);
+    }
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(self));
+    return_value = _queue_SimpleQueue_put_impl((simplequeueobject *)PyValue_AsKnownObjectBorrow(self), item, block, timeout);
     Py_END_CRITICAL_SECTION();
 
 exit:
@@ -131,15 +150,16 @@ PyDoc_STRVAR(_queue_SimpleQueue_put_nowait__doc__,
 "for compatibility with the Queue class.");
 
 #define _QUEUE_SIMPLEQUEUE_PUT_NOWAIT_METHODDEF    \
-    {"put_nowait", _PyCFunction_CAST(_queue_SimpleQueue_put_nowait), METH_FASTCALL|METH_KEYWORDS, _queue_SimpleQueue_put_nowait__doc__},
+    {"put_nowait", _PyCFunction_CAST(_queue_SimpleQueue_put_nowait), METH_VALUE|METH_KEYWORDS, _queue_SimpleQueue_put_nowait__doc__},
 
-static PyObject *
-_queue_SimpleQueue_put_nowait_impl(simplequeueobject *self, PyObject *item);
+static PyValue
+_queue_SimpleQueue_put_nowait_impl(simplequeueobject *self,
+                                   PyValueBorrow item);
 
-static PyObject *
-_queue_SimpleQueue_put_nowait(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_queue_SimpleQueue_put_nowait(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
@@ -167,17 +187,16 @@ _queue_SimpleQueue_put_nowait(PyObject *self, PyObject *const *args, Py_ssize_t 
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[1];
-    PyObject *item;
+    Py_ssize_t _idx[1];
+    PyValueBorrow item;
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, _idx, 1)) {
         goto exit;
     }
-    item = args[0];
-    Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = _queue_SimpleQueue_put_nowait_impl((simplequeueobject *)self, item);
+    item = PyValue_Borrow(args[_idx[0]]);
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(self));
+    return_value = _queue_SimpleQueue_put_nowait_impl((simplequeueobject *)PyValue_AsKnownObjectBorrow(self), item);
     Py_END_CRITICAL_SECTION();
 
 exit:
@@ -200,16 +219,16 @@ PyDoc_STRVAR(_queue_SimpleQueue_get__doc__,
 "in that case).");
 
 #define _QUEUE_SIMPLEQUEUE_GET_METHODDEF    \
-    {"get", _PyCFunction_CAST(_queue_SimpleQueue_get), METH_METHOD|METH_FASTCALL|METH_KEYWORDS, _queue_SimpleQueue_get__doc__},
+    {"get", _PyCFunction_CAST(_queue_SimpleQueue_get), METH_VALUE|METH_METHOD|METH_KEYWORDS, _queue_SimpleQueue_get__doc__},
 
-static PyObject *
+static PyValue
 _queue_SimpleQueue_get_impl(simplequeueobject *self, PyTypeObject *cls,
-                            int block, PyObject *timeout_obj);
+                            int block, PyValueBorrow timeout_obj);
 
-static PyObject *
-_queue_SimpleQueue_get(PyObject *self, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_queue_SimpleQueue_get(PyValueBorrow self, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 2
@@ -237,32 +256,25 @@ _queue_SimpleQueue_get(PyObject *self, PyTypeObject *cls, PyObject *const *args,
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[2];
-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 0;
+    Py_ssize_t _idx[2];
     int block = 1;
-    PyObject *timeout_obj = Py_None;
+    PyValueBorrow timeout_obj = PyValue_Borrow(PyValue_None);
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 0, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 0, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, _idx, 2)) {
         goto exit;
     }
-    if (!noptargs) {
-        goto skip_optional_pos;
-    }
-    if (args[0]) {
-        block = PyObject_IsTrue(args[0]);
+    if (_idx[0] >= 0) {
+        block = _PyValue_IsTrue(PyValue_Borrow(args[_idx[0]]));
         if (block < 0) {
             goto exit;
         }
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
     }
-    timeout_obj = args[1];
-skip_optional_pos:
-    Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = _queue_SimpleQueue_get_impl((simplequeueobject *)self, cls, block, timeout_obj);
+    if (_idx[1] >= 0) {
+        timeout_obj = PyValue_Borrow(args[_idx[1]]);
+    }
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(self));
+    return_value = _queue_SimpleQueue_get_impl((simplequeueobject *)PyValue_AsKnownObjectBorrow(self), cls, block, timeout_obj);
     Py_END_CRITICAL_SECTION();
 
 exit:
@@ -279,23 +291,23 @@ PyDoc_STRVAR(_queue_SimpleQueue_get_nowait__doc__,
 "raise the Empty exception.");
 
 #define _QUEUE_SIMPLEQUEUE_GET_NOWAIT_METHODDEF    \
-    {"get_nowait", _PyCFunction_CAST(_queue_SimpleQueue_get_nowait), METH_METHOD|METH_FASTCALL|METH_KEYWORDS, _queue_SimpleQueue_get_nowait__doc__},
+    {"get_nowait", _PyCFunction_CAST(_queue_SimpleQueue_get_nowait), METH_VALUE|METH_METHOD|METH_KEYWORDS, _queue_SimpleQueue_get_nowait__doc__},
 
-static PyObject *
+static PyValue
 _queue_SimpleQueue_get_nowait_impl(simplequeueobject *self,
                                    PyTypeObject *cls);
 
-static PyObject *
-_queue_SimpleQueue_get_nowait(PyObject *self, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_queue_SimpleQueue_get_nowait(PyValueBorrow self, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
 
     if (nargs || (kwnames && PyTuple_GET_SIZE(kwnames))) {
         PyErr_SetString(PyExc_TypeError, "get_nowait() takes no arguments");
         goto exit;
     }
-    Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = _queue_SimpleQueue_get_nowait_impl((simplequeueobject *)self, cls);
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(self));
+    return_value = _queue_SimpleQueue_get_nowait_impl((simplequeueobject *)PyValue_AsKnownObjectBorrow(self), cls);
     Py_END_CRITICAL_SECTION();
 
 exit:
@@ -309,24 +321,24 @@ PyDoc_STRVAR(_queue_SimpleQueue_empty__doc__,
 "Return True if the queue is empty, False otherwise (not reliable!).");
 
 #define _QUEUE_SIMPLEQUEUE_EMPTY_METHODDEF    \
-    {"empty", (PyCFunction)_queue_SimpleQueue_empty, METH_NOARGS, _queue_SimpleQueue_empty__doc__},
+    {"empty", _PyCFunction_CAST(_queue_SimpleQueue_empty), METH_VALUE|METH_NOARGS, _queue_SimpleQueue_empty__doc__},
 
 static int
 _queue_SimpleQueue_empty_impl(simplequeueobject *self);
 
-static PyObject *
-_queue_SimpleQueue_empty(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+_queue_SimpleQueue_empty(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int _return_value;
 
-    Py_BEGIN_CRITICAL_SECTION(self);
-    _return_value = _queue_SimpleQueue_empty_impl((simplequeueobject *)self);
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(self));
+    _return_value = _queue_SimpleQueue_empty_impl((simplequeueobject *)PyValue_AsKnownObjectBorrow(self));
     Py_END_CRITICAL_SECTION();
     if ((_return_value == -1) && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = PyBool_FromLong((long)_return_value);
+    return_value = _return_value ? PyValue_True : PyValue_False;
 
 exit:
     return return_value;
@@ -339,24 +351,24 @@ PyDoc_STRVAR(_queue_SimpleQueue_qsize__doc__,
 "Return the approximate size of the queue (not reliable!).");
 
 #define _QUEUE_SIMPLEQUEUE_QSIZE_METHODDEF    \
-    {"qsize", (PyCFunction)_queue_SimpleQueue_qsize, METH_NOARGS, _queue_SimpleQueue_qsize__doc__},
+    {"qsize", _PyCFunction_CAST(_queue_SimpleQueue_qsize), METH_VALUE|METH_NOARGS, _queue_SimpleQueue_qsize__doc__},
 
 static Py_ssize_t
 _queue_SimpleQueue_qsize_impl(simplequeueobject *self);
 
-static PyObject *
-_queue_SimpleQueue_qsize(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+_queue_SimpleQueue_qsize(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     Py_ssize_t _return_value;
 
-    Py_BEGIN_CRITICAL_SECTION(self);
-    _return_value = _queue_SimpleQueue_qsize_impl((simplequeueobject *)self);
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(self));
+    _return_value = _queue_SimpleQueue_qsize_impl((simplequeueobject *)PyValue_AsKnownObjectBorrow(self));
     Py_END_CRITICAL_SECTION();
     if ((_return_value == -1) && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = PyLong_FromSsize_t(_return_value);
+    return_value = PyValue_FromInt64((int64_t)_return_value);
 
 exit:
     return return_value;
@@ -369,26 +381,26 @@ PyDoc_STRVAR(_queue_SimpleQueue___sizeof____doc__,
 "Returns size in memory, in bytes.");
 
 #define _QUEUE_SIMPLEQUEUE___SIZEOF___METHODDEF    \
-    {"__sizeof__", (PyCFunction)_queue_SimpleQueue___sizeof__, METH_NOARGS, _queue_SimpleQueue___sizeof____doc__},
+    {"__sizeof__", _PyCFunction_CAST(_queue_SimpleQueue___sizeof__), METH_VALUE|METH_NOARGS, _queue_SimpleQueue___sizeof____doc__},
 
 static Py_ssize_t
 _queue_SimpleQueue___sizeof___impl(simplequeueobject *self);
 
-static PyObject *
-_queue_SimpleQueue___sizeof__(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+_queue_SimpleQueue___sizeof__(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     Py_ssize_t _return_value;
 
-    Py_BEGIN_CRITICAL_SECTION(self);
-    _return_value = _queue_SimpleQueue___sizeof___impl((simplequeueobject *)self);
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(self));
+    _return_value = _queue_SimpleQueue___sizeof___impl((simplequeueobject *)PyValue_AsKnownObjectBorrow(self));
     Py_END_CRITICAL_SECTION();
     if ((_return_value == -1) && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = PyLong_FromSsize_t(_return_value);
+    return_value = PyValue_FromInt64((int64_t)_return_value);
 
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=2f9e63a22ac60c45 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=5c285913e151852c input=a9049054013a1b77]*/

@@ -1,10 +1,20 @@
+#ifndef Py_BUILD_CORE_BUILTIN
+#  define Py_BUILD_CORE_MODULE 1
+#endif
+#define Py_VALUE_CORE 1
 #include "Python.h"
+#include "pycore_value.h"         // PyValue
 #include "../_ssl.h"
 
 #include "openssl/err.h"
 #include "openssl/bio.h"
 #include "openssl/pem.h"
 #include "openssl/x509.h"
+
+/*[clinic input]
+value_emission
+[clinic start generated code]*/
+/*[clinic end generated code: output=da39a3ee5e6b4b0d input=eb7b17088bfd7215]*/
 
 /*[clinic input]
 module _ssl
@@ -59,7 +69,7 @@ _PySSL_CertificateFromX509Stack(_sslmodulestate *state, STACK_OF(X509) *stack, i
             Py_DECREF(result);
             return NULL;
         }
-        PyList_SetItem(result, i, ocert);
+        PyList_SET_VALUE(result, i, PyValue_PrepareOwned(ocert));
     }
     return result;
 }
@@ -70,9 +80,9 @@ _ssl.Certificate.public_bytes
 
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _ssl_Certificate_public_bytes_impl(PySSLCertificate *self, int format)
-/*[clinic end generated code: output=c01ddbb697429e12 input=4d38c45e874b0e64]*/
+/*[clinic end generated code: output=c77d8423a7ba13b2 input=4d38c45e874b0e64]*/
 {
     BIO *bio;
     int retcode;
@@ -83,7 +93,7 @@ _ssl_Certificate_public_bytes_impl(PySSLCertificate *self, int format)
     if (bio == NULL) {
         PyErr_SetString(state->PySSLErrorObject,
                         "failed to allocate BIO");
-        return NULL;
+        return PyValue_NULL;
     }
     switch(format) {
     case PY_SSL_ENCODING_PEM:
@@ -98,12 +108,12 @@ _ssl_Certificate_public_bytes_impl(PySSLCertificate *self, int format)
     default:
         PyErr_SetString(PyExc_ValueError, "Unsupported format");
         BIO_free(bio);
-        return NULL;
+        return PyValue_NULL;
     }
     if (retcode != 1) {
         BIO_free(bio);
         _setSSLError(state, NULL, 0, __FILE__, __LINE__);
-        return NULL;
+        return PyValue_NULL;
     }
     if (format == PY_SSL_ENCODING_DER) {
         result = _PySSL_BytesFromBIO(state, bio);
@@ -111,7 +121,7 @@ _ssl_Certificate_public_bytes_impl(PySSLCertificate *self, int format)
         result = _PySSL_UnicodeFromBIO(state, bio, "error");
     }
     BIO_free(bio);
-    return result;
+    return _PyValue_FromObjectResult(result);
 }
 
 
@@ -120,9 +130,9 @@ _ssl.Certificate.get_info
 
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _ssl_Certificate_get_info_impl(PySSLCertificate *self)
-/*[clinic end generated code: output=0f0deaac54f4408b input=ba2c1694b39d0778]*/
+/*[clinic end generated code: output=313cbcb143f4acf3 input=ba2c1694b39d0778]*/
 {
     return _decode_certificate(get_state_cert(self), self->cert);
 }

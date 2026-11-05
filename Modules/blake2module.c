@@ -14,12 +14,16 @@
 #  define Py_BUILD_CORE_MODULE 1
 #endif
 
+#define Py_VALUE_CORE 1
 #include "Python.h"
 #include "hashlib.h"
+#include "pycore_dict.h"          // PyDict_SetValueString()
 #include "pycore_moduleobject.h"
 #include "pycore_object.h"        // _PyObject_VisitType()
 #include "pycore_strhex.h"        // _Py_strhex()
 #include "pycore_typeobject.h"
+#include "pycore_value.h"         // _PyValue_AsObjectAt()
+#include "pycore_value_slots.h"// _PyValue_FromObjectResult()
 
 // QUICK CPU AUTODETECTION
 //
@@ -215,7 +219,7 @@ blake2_exec(PyObject *m)
         if (x == NULL) {                                \
             return -1;                                  \
         }                                               \
-        int rc = PyDict_SetItemString(DICT, NAME, x);   \
+        int rc = PyDict_SetValueString(DICT, NAME, PyValue_FromObjectBorrow(x));   \
         Py_DECREF(x);                                   \
         if (rc < 0) {                                   \
             return -1;                                  \
@@ -372,6 +376,11 @@ typedef struct {
 #define _Blake2Object_CAST(op)  ((Blake2Object *)(op))
 
 // --- Module clinic configuration --------------------------------------------
+
+/*[clinic input]
+value_emission
+[clinic start generated code]*/
+/*[clinic end generated code: output=da39a3ee5e6b4b0d input=eb7b17088bfd7215]*/
 
 /*[clinic input]
 module _blake2
@@ -686,22 +695,41 @@ _blake2.blake2b.__new__ as py_blake2b_new
 Return a new BLAKE2b hash object.
 [clinic start generated code]*/
 
-static PyObject *
-py_blake2b_new_impl(PyTypeObject *type, PyObject *data_obj, int digest_size,
-                    Py_buffer *key, Py_buffer *salt, Py_buffer *person,
-                    int fanout, int depth, unsigned long leaf_size,
-                    unsigned long long node_offset, int node_depth,
-                    int inner_size, int last_node, int usedforsecurity,
-                    PyObject *string)
-/*[clinic end generated code: output=de64bd850606b6a0 input=32832fb37d13c03d]*/
+static PyValue
+py_blake2b_new_impl(PyTypeObject *type, PyValueBorrow data_obj,
+                    int digest_size, Py_buffer *key, Py_buffer *salt,
+                    Py_buffer *person, int fanout, int depth,
+                    unsigned long leaf_size, unsigned long long node_offset,
+                    int node_depth, int inner_size, int last_node,
+                    int usedforsecurity, PyValueBorrow string)
+/*[clinic end generated code: output=39f8b63146425600 input=32832fb37d13c03d]*/
 {
-    PyObject *data;
-    if (_Py_hashlib_data_argument(&data, data_obj, string) < 0) {
-        return NULL;
+    PyObject *data_o = NULL, *string_o = NULL;
+    if (!PyValue_IsNull(data_obj)) {
+        data_o = _PyValue_AsObjectAt(data_obj, BOX_SITE_PARSER);
+        if (data_o == NULL) {
+            return PyValue_NULL;
+        }
     }
-    return py_blake2_new(type, data, digest_size, key, salt, person,
+    if (!PyValue_IsNull(string)) {
+        string_o = _PyValue_AsObjectAt(string, BOX_SITE_PARSER);
+        if (string_o == NULL) {
+            Py_XDECREF(data_o);
+            return PyValue_NULL;
+        }
+    }
+    PyObject *data;
+    if (_Py_hashlib_data_argument(&data, data_o, string_o) < 0) {
+        Py_XDECREF(data_o);
+        Py_XDECREF(string_o);
+        return PyValue_NULL;
+    }
+    PyObject *result = py_blake2_new(type, data, digest_size, key, salt, person,
                          fanout, depth, leaf_size, node_offset, node_depth,
                          inner_size, last_node, usedforsecurity);
+    Py_XDECREF(data_o);
+    Py_XDECREF(string_o);
+    return _PyValue_FromObjectResult(result);
 }
 
 /*[clinic input]
@@ -726,22 +754,41 @@ _blake2.blake2s.__new__ as py_blake2s_new
 Return a new BLAKE2s hash object.
 [clinic start generated code]*/
 
-static PyObject *
-py_blake2s_new_impl(PyTypeObject *type, PyObject *data_obj, int digest_size,
-                    Py_buffer *key, Py_buffer *salt, Py_buffer *person,
-                    int fanout, int depth, unsigned long leaf_size,
-                    unsigned long long node_offset, int node_depth,
-                    int inner_size, int last_node, int usedforsecurity,
-                    PyObject *string)
-/*[clinic end generated code: output=582a0c4295cc3a3c input=da467fc9dae646bb]*/
+static PyValue
+py_blake2s_new_impl(PyTypeObject *type, PyValueBorrow data_obj,
+                    int digest_size, Py_buffer *key, Py_buffer *salt,
+                    Py_buffer *person, int fanout, int depth,
+                    unsigned long leaf_size, unsigned long long node_offset,
+                    int node_depth, int inner_size, int last_node,
+                    int usedforsecurity, PyValueBorrow string)
+/*[clinic end generated code: output=9bf32b91c9acc7d2 input=da467fc9dae646bb]*/
 {
-    PyObject *data;
-    if (_Py_hashlib_data_argument(&data, data_obj, string) < 0) {
-        return NULL;
+    PyObject *data_o = NULL, *string_o = NULL;
+    if (!PyValue_IsNull(data_obj)) {
+        data_o = _PyValue_AsObjectAt(data_obj, BOX_SITE_PARSER);
+        if (data_o == NULL) {
+            return PyValue_NULL;
+        }
     }
-    return py_blake2_new(type, data, digest_size, key, salt, person,
+    if (!PyValue_IsNull(string)) {
+        string_o = _PyValue_AsObjectAt(string, BOX_SITE_PARSER);
+        if (string_o == NULL) {
+            Py_XDECREF(data_o);
+            return PyValue_NULL;
+        }
+    }
+    PyObject *data;
+    if (_Py_hashlib_data_argument(&data, data_o, string_o) < 0) {
+        Py_XDECREF(data_o);
+        Py_XDECREF(string_o);
+        return PyValue_NULL;
+    }
+    PyObject *result = py_blake2_new(type, data, digest_size, key, salt, person,
                          fanout, depth, leaf_size, node_offset, node_depth,
                          inner_size, last_node, usedforsecurity);
+    Py_XDECREF(data_o);
+    Py_XDECREF(string_o);
+    return _PyValue_FromObjectResult(result);
 }
 
 static int
@@ -796,15 +843,15 @@ _blake2.blake2b.copy
 Return a copy of the hash object.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _blake2_blake2b_copy_impl(Blake2Object *self, PyTypeObject *cls)
-/*[clinic end generated code: output=5f8ea31c56c52287 input=f38f3475e9aec98d]*/
+/*[clinic end generated code: output=9ead5a46d12baa6a input=f38f3475e9aec98d]*/
 {
     int rc;
     Blake2Object *cpy;
 
     if ((cpy = new_Blake2Object(cls)) == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     HASHLIB_ACQUIRE_LOCK(self);
@@ -812,9 +859,9 @@ _blake2_blake2b_copy_impl(Blake2Object *self, PyTypeObject *cls)
     HASHLIB_RELEASE_LOCK(self);
     if (rc < 0) {
         Py_DECREF(cpy);
-        return NULL;
+        return PyValue_NULL;
     }
-    return (PyObject *)cpy;
+    return _PyValue_FromObjectResult((PyObject *)cpy);
 }
 
 /*[clinic input]
@@ -826,18 +873,23 @@ _blake2.blake2b.update
 Update this hash object's state with the provided bytes-like object.
 [clinic start generated code]*/
 
-static PyObject *
-_blake2_blake2b_update_impl(Blake2Object *self, PyObject *data)
-/*[clinic end generated code: output=99330230068e8c99 input=ffc4aa6a6a225d31]*/
+static PyValue
+_blake2_blake2b_update_impl(Blake2Object *self, PyValueBorrow data)
+/*[clinic end generated code: output=6b59451d9f28e8ff input=ffc4aa6a6a225d31]*/
 {
     Py_buffer buf;
-    GET_BUFFER_VIEW_OR_ERROUT(data, &buf);
+    PyObject *data_o = _PyValue_AsObjectAt(data, BOX_SITE_PARSER);
+    if (data_o == NULL) {
+        return PyValue_NULL;
+    }
+    GET_BUFFER_VIEW_OR_ERROR(data_o, &buf, {Py_DECREF(data_o); return PyValue_NULL;});
+    Py_DECREF(data_o);
     HASHLIB_EXTERNAL_INSTRUCTIONS_LOCKED(
         self, buf.len,
         blake2_update_unlocked(self, buf.buf, buf.len)
     );
     PyBuffer_Release(&buf);
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 static uint8_t
@@ -869,15 +921,15 @@ _blake2.blake2b.digest
 Return the digest value as a bytes object.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _blake2_blake2b_digest_impl(Blake2Object *self)
-/*[clinic end generated code: output=31ab8ad477f4a2f7 input=7d21659e9c5fff02]*/
+/*[clinic end generated code: output=467bc939b5535585 input=7d21659e9c5fff02]*/
 {
     uint8_t digest_length = 0, digest[HACL_HASH_BLAKE2B_OUT_BYTES];
     HASHLIB_ACQUIRE_LOCK(self);
     digest_length = blake2_blake2b_compute_digest(self, digest);
     HASHLIB_RELEASE_LOCK(self);
-    return PyBytes_FromStringAndSize((const char *)digest, digest_length);
+    return _PyValue_FromObjectResult(PyBytes_FromStringAndSize((const char *)digest, digest_length));
 }
 
 /*[clinic input]
@@ -886,15 +938,15 @@ _blake2.blake2b.hexdigest
 Return the digest value as a string of hexadecimal digits.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _blake2_blake2b_hexdigest_impl(Blake2Object *self)
-/*[clinic end generated code: output=5ef54b138db6610a input=76930f6946351f56]*/
+/*[clinic end generated code: output=ec0f861f198ddc80 input=76930f6946351f56]*/
 {
     uint8_t digest_length = 0, digest[HACL_HASH_BLAKE2B_OUT_BYTES];
     HASHLIB_ACQUIRE_LOCK(self);
     digest_length = blake2_blake2b_compute_digest(self, digest);
     HASHLIB_RELEASE_LOCK(self);
-    return _Py_strhex((const char *)digest, digest_length);
+    return _PyValue_FromObjectResult(_Py_strhex((const char *)digest, digest_length));
 }
 
 

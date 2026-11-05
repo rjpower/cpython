@@ -13,11 +13,24 @@ module instead.
 #  define Py_BUILD_CORE_MODULE 1
 #endif
 
+#define Py_VALUE_CORE 1
 #include "Python.h"
+#include "pycore_dict.h"          // PyDict_PopValue()
+#include "pycore_list.h"          // PyList_AppendValue()
 #include "pycore_pyatomic_ft_wrappers.h"
+#include "pycore_long_value.h"    // _PyValue_IntAsSsize_t()
+#include "pycore_tuple.h"         // _PyTuple_PackValues()
+#include "pycore_value.h"         // PyValue_AsKnownObjectBorrow()
+#include "pycore_value_ops.h"     // _PyValue_GetIter()
+#include "pycore_value_slots.h"// _PyValue_FromObjectResult()
 
 #include <stddef.h>               // offsetof()
 #include <stdbool.h>
+
+/*[clinic input]
+value_emission
+[clinic start generated code]*/
+/*[clinic end generated code: output=da39a3ee5e6b4b0d input=eb7b17088bfd7215]*/
 
 /*[clinic input]
 module _csv
@@ -169,10 +182,18 @@ typedef struct {
 static PyObject *
 get_dialect_from_registry(PyObject *name_obj, _csvstate *module_state)
 {
-    PyObject *dialect_obj;
-    if (PyDict_GetItemRef(module_state->dialects, name_obj, &dialect_obj) == 0) {
+    PyValue dialect;
+    int found = PyDict_GetValue(module_state->dialects,
+                                PyValue_FromObjectBorrow(name_obj), &dialect);
+    if (found == 0) {
         PyErr_SetString(module_state->error_obj, "unknown dialect");
     }
+    if (found <= 0) {
+        return NULL;
+    }
+    /* The registry holds dialect objects, never inline numbers. */
+    PyObject *dialect_obj = _PyValue_AsObjectAt(dialect, BOX_SITE_DICT);
+    PyValue_CLOSE(dialect);
     return dialect_obj;
 }
 
@@ -227,7 +248,7 @@ _set_bool(const char *name, char *target, PyObject *src, bool dflt)
     if (src == NULL)
         *target = dflt;
     else {
-        int b = PyObject_IsTrue(src);
+        int b = _PyValue_IsTrue(PyValue_FromObjectBorrow(src));
         if (b < 0)
             return -1;
         *target = (char)b;
@@ -639,13 +660,13 @@ _csv.Dialect.__reduce__
 Raise an exception to avoid pickling.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _csv_Dialect___reduce___impl(DialectObj *self)
-/*[clinic end generated code: output=f728b34af509ed69 input=e46419b46279e480]*/
+/*[clinic end generated code: output=1771887562f86137 input=e46419b46279e480]*/
 {
     PyErr_Format(PyExc_TypeError,
         "cannot pickle '%.100s' instances", _PyType_Name(Py_TYPE(self)));
-    return NULL;
+    return PyValue_NULL;
 }
 
 /*[clinic input]
@@ -657,9 +678,9 @@ _csv.Dialect.__reduce_ex__
 Raise an exception to avoid pickling.
 [clinic start generated code]*/
 
-static PyObject *
-_csv_Dialect___reduce_ex___impl(DialectObj *self, PyObject *protocol)
-/*[clinic end generated code: output=d45dec397da6575a input=c6ebd579e8959040]*/
+static PyValue
+_csv_Dialect___reduce_ex___impl(DialectObj *self, PyValueBorrow protocol)
+/*[clinic end generated code: output=ad9ce0fa5437dfb9 input=c6ebd579e8959040]*/
 {
     return _csv_Dialect___reduce___impl(self);
 }
@@ -672,17 +693,17 @@ _csv.Dialect.__replace__
 Return a copy of the dialect with the specified options replaced.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _csv_Dialect___replace___impl(DialectObj *self, PyObject *changes)
-/*[clinic end generated code: output=8f692c2c63a61b50 input=154beb565fbabd4c]*/
+/*[clinic end generated code: output=28fbe8175bc5f7b9 input=154beb565fbabd4c]*/
 {
-    PyObject *newargs = PyTuple_Pack(1, self);
+    PyObject *newargs = _PyTuple_PackValues(1, (PyValueBorrow[]){PyValue_FromObjectBorrow(_PyObject_CAST(self))});
     if (newargs == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
     PyObject *result = dialect_new(Py_TYPE(self), newargs, changes);
     Py_DECREF(newargs);
-    return result;
+    return _PyValue_FromObjectResult(result);
 }
 
 static struct PyMethodDef dialect_methods[] = {
@@ -740,11 +761,18 @@ PyType_Spec Dialect_Type_spec = {
  * description of the dialect
  */
 static PyObject *
-_call_dialect(_csvstate *module_state, PyObject *dialect_inst, PyObject *kwargs)
+_call_dialect(_csvstate *module_state, PyValueBorrow dialect_inst,
+              PyObject *kwargs)
 {
     PyObject *type = (PyObject *)module_state->dialect_type;
-    if (dialect_inst) {
-        return PyObject_VectorcallDict(type, &dialect_inst, 1, kwargs);
+    if (!PyValue_IsNull(dialect_inst)) {
+        PyObject *inst = _PyValue_AsObjectAt(dialect_inst, BOX_SITE_PARSER);
+        if (inst == NULL) {
+            return NULL;
+        }
+        PyObject *res = PyObject_VectorcallDict(type, &inst, 1, kwargs);
+        Py_DECREF(inst);
+        return res;
     }
     else {
         return PyObject_VectorcallDict(type, NULL, 0, kwargs);
@@ -758,38 +786,39 @@ static int
 parse_save_field(ReaderObj *self)
 {
     int quoting = self->dialect->quoting;
-    PyObject *field;
+    PyValue field;
 
     if (self->unquoted_field &&
         self->field_len == 0 &&
         (quoting == QUOTE_NOTNULL || quoting == QUOTE_STRINGS))
     {
-        field = Py_NewRef(Py_None);
+        field = PyValue_None;
     }
     else {
-        field = PyUnicode_FromKindAndData(PyUnicode_4BYTE_KIND,
-                                        (void *) self->field, self->field_len);
-        if (field == NULL) {
+        field = _PyValue_FromObjectResult(
+            PyUnicode_FromKindAndData(PyUnicode_4BYTE_KIND,
+                                      (void *) self->field, self->field_len));
+        if (PyValue_IsNull(field)) {
             return -1;
         }
         if (self->unquoted_field &&
             self->field_len != 0 &&
             (quoting == QUOTE_NONNUMERIC || quoting == QUOTE_STRINGS))
         {
-            PyObject *tmp = PyNumber_Float(field);
-            Py_DECREF(field);
-            if (tmp == NULL) {
+            PyValue tmp = _PyValue_Float(field);
+            PyValue_CLOSE(field);
+            if (PyValue_IsNull(tmp)) {
                 return -1;
             }
             field = tmp;
         }
         self->field_len = 0;
     }
-    if (PyList_Append(self->fields, field) < 0) {
-        Py_DECREF(field);
+    if (PyList_AppendValue(self->fields, field) < 0) {
+        PyValue_CLOSE(field);
         return -1;
     }
-    Py_DECREF(field);
+    PyValue_CLOSE(field);
     return 0;
 }
 
@@ -1197,10 +1226,10 @@ The returned object is an iterator.  Each iteration returns a row
 of the CSV file (which can span multiple input lines).
 [clinic start generated code]*/
 
-static PyObject *
-_csv_reader_impl(PyObject *module, PyObject *iterable, PyObject *dialect,
-                 PyObject *fmtparams)
-/*[clinic end generated code: output=c7033323f4e82fae input=330c6d58878e33b7]*/
+static PyValue
+_csv_reader_impl(PyObject *module, PyValueBorrow iterable,
+                 PyValueBorrow dialect, PyObject *fmtparams)
+/*[clinic end generated code: output=60a66876686e820a input=330c6d58878e33b7]*/
 {
     _csvstate *module_state = get_csv_state(module);
     ReaderObj * self = PyObject_GC_New(
@@ -1208,7 +1237,7 @@ _csv_reader_impl(PyObject *module, PyObject *iterable, PyObject *dialect,
         module_state->reader_type);
 
     if (!self)
-        return NULL;
+        return PyValue_NULL;
 
     self->dialect = NULL;
     self->fields = NULL;
@@ -1219,23 +1248,23 @@ _csv_reader_impl(PyObject *module, PyObject *iterable, PyObject *dialect,
 
     if (parse_reset(self) < 0) {
         Py_DECREF(self);
-        return NULL;
+        return PyValue_NULL;
     }
 
-    self->input_iter = PyObject_GetIter(iterable);
+    self->input_iter = _PyValue_GetIter(iterable);
     if (self->input_iter == NULL) {
         Py_DECREF(self);
-        return NULL;
+        return PyValue_NULL;
     }
     self->dialect = (DialectObj *)_call_dialect(module_state, dialect,
                                                 fmtparams);
     if (self->dialect == NULL) {
         Py_DECREF(self);
-        return NULL;
+        return PyValue_NULL;
     }
 
     PyObject_GC_Track(self);
-    return (PyObject *)self;
+    return _PyValue_FromObjectResult((PyObject *)self);
 }
 
 /*
@@ -1435,7 +1464,7 @@ csv_writerow_lock_held(PyObject *op, PyObject *seq)
     PyObject *iter, *field, *line, *result;
     bool null_field = false;
 
-    iter = PyObject_GetIter(seq);
+    iter = _PyValue_GetIter(PyValue_FromObjectBorrow(seq));
     if (iter == NULL) {
         if (PyErr_ExceptionMatches(PyExc_TypeError)) {
             PyErr_Format(self->error_obj,
@@ -1482,7 +1511,7 @@ csv_writerow_lock_held(PyObject *op, PyObject *seq)
         else {
             PyObject *str;
 
-            str = PyObject_Str(field);
+            str = _PyValue_Str(PyValue_FromObjectBorrow(field));
             Py_DECREF(field);
             if (str == NULL) {
                 Py_DECREF(iter);
@@ -1560,7 +1589,7 @@ csv_writerows(PyObject *self, PyObject *seqseq)
 {
     PyObject *row_iter, *row_obj, *result;
 
-    row_iter = PyObject_GetIter(seqseq);
+    row_iter = _PyValue_GetIter(PyValue_FromObjectBorrow(seqseq));
     if (row_iter == NULL) {
         return NULL;
     }
@@ -1672,16 +1701,16 @@ also accepts optional keyword arguments which override settings
 provided by the dialect.
 [clinic start generated code]*/
 
-static PyObject *
-_csv_writer_impl(PyObject *module, PyObject *output_file, PyObject *dialect,
-                 PyObject *fmtparams)
-/*[clinic end generated code: output=3f57919e03cca475 input=18d396d2aa8138f0]*/
+static PyValue
+_csv_writer_impl(PyObject *module, PyValueBorrow output_file,
+                 PyValueBorrow dialect, PyObject *fmtparams)
+/*[clinic end generated code: output=8e8a29b74befe5a6 input=18d396d2aa8138f0]*/
 {
     _csvstate *module_state = get_csv_state(module);
     WriterObj * self = PyObject_GC_New(WriterObj, module_state->writer_type);
 
     if (!self)
-        return NULL;
+        return PyValue_NULL;
 
     self->dialect = NULL;
     self->write = NULL;
@@ -1693,26 +1722,33 @@ _csv_writer_impl(PyObject *module, PyObject *output_file, PyObject *dialect,
 
     self->error_obj = Py_NewRef(module_state->error_obj);
 
-    if (PyObject_GetOptionalAttr(output_file,
-                             module_state->str_write,
-                             &self->write) < 0) {
+    PyObject *output_file_obj = _PyValue_AsObjectAt(output_file, BOX_SITE_PARSER);
+    if (output_file_obj == NULL) {
         Py_DECREF(self);
-        return NULL;
+        return PyValue_NULL;
+    }
+    int attr_rc = PyObject_GetOptionalAttr(output_file_obj,
+                             module_state->str_write,
+                             &self->write);
+    Py_DECREF(output_file_obj);
+    if (attr_rc < 0) {
+        Py_DECREF(self);
+        return PyValue_NULL;
     }
     if (self->write == NULL || !PyCallable_Check(self->write)) {
         PyErr_SetString(PyExc_TypeError,
                         "argument 1 must have a \"write\" method");
         Py_DECREF(self);
-        return NULL;
+        return PyValue_NULL;
     }
     self->dialect = (DialectObj *)_call_dialect(module_state, dialect,
                                                 fmtparams);
     if (self->dialect == NULL) {
         Py_DECREF(self);
-        return NULL;
+        return PyValue_NULL;
     }
     PyObject_GC_Track(self);
-    return (PyObject *)self;
+    return _PyValue_FromObjectResult((PyObject *)self);
 }
 
 /*
@@ -1725,11 +1761,11 @@ _csv.list_dialects
 Return a list of all known dialect names.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _csv_list_dialects_impl(PyObject *module)
-/*[clinic end generated code: output=a5b92b215b006a6d input=ec58040aafd6a20a]*/
+/*[clinic end generated code: output=ba88d3865b3cb71c input=ec58040aafd6a20a]*/
 {
-    return PyDict_Keys(get_csv_state(module)->dialects);
+    return _PyValue_FromObjectResult(PyDict_Keys(get_csv_state(module)->dialects));
 }
 
 /*[clinic input]
@@ -1748,28 +1784,28 @@ optional keyword arguments which override settings provided by the
 dialect.
 [clinic start generated code]*/
 
-static PyObject *
-_csv_register_dialect_impl(PyObject *module, PyObject *name_obj,
-                           PyObject *dialect_obj, PyObject *fmtparams)
-/*[clinic end generated code: output=b00b54de5b950472 input=64e9180e18d88a97]*/
+static PyValue
+_csv_register_dialect_impl(PyObject *module, PyValueBorrow name_obj,
+                           PyValueBorrow dialect_obj, PyObject *fmtparams)
+/*[clinic end generated code: output=6d204404f134c646 input=64e9180e18d88a97]*/
 {
     _csvstate *module_state = get_csv_state(module);
     PyObject *dialect;
 
-    if (!PyUnicode_Check(name_obj)) {
+    if (!(PyValue_IsObject(name_obj) && PyUnicode_Check(PyValue_AsKnownObjectBorrow(name_obj)))) {
         PyErr_SetString(PyExc_TypeError,
                         "dialect name must be a string");
-        return NULL;
+        return PyValue_NULL;
     }
     dialect = _call_dialect(module_state, dialect_obj, fmtparams);
     if (dialect == NULL)
-        return NULL;
-    if (PyDict_SetItem(module_state->dialects, name_obj, dialect) < 0) {
+        return PyValue_NULL;
+    if (PyDict_SetValue(module_state->dialects, name_obj, PyValue_FromObjectBorrow(dialect)) < 0) {
         Py_DECREF(dialect);
-        return NULL;
+        return PyValue_NULL;
     }
     Py_DECREF(dialect);
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 
@@ -1781,20 +1817,25 @@ _csv.unregister_dialect
 Delete the name/dialect mapping associated with a string name.
 [clinic start generated code]*/
 
-static PyObject *
-_csv_unregister_dialect_impl(PyObject *module, PyObject *name)
-/*[clinic end generated code: output=0813ebca6c058df4 input=e1cf81bfe3ba0f62]*/
+static PyValue
+_csv_unregister_dialect_impl(PyObject *module, PyValueBorrow name)
+/*[clinic end generated code: output=a5eed2f1a1393c64 input=e1cf81bfe3ba0f62]*/
 {
     _csvstate *module_state = get_csv_state(module);
-    int rc = PyDict_Pop(module_state->dialects, name, NULL);
+    PyObject *name_obj = _PyValue_AsObjectAt(name, BOX_SITE_PARSER);
+    if (name_obj == NULL) {
+        return PyValue_NULL;
+    }
+    int rc = PyDict_PopValue(module_state->dialects, PyValue_FromObjectBorrow(name_obj), NULL);
+    Py_DECREF(name_obj);
     if (rc < 0) {
-        return NULL;
+        return PyValue_NULL;
     }
     if (rc == 0) {
         PyErr_Format(module_state->error_obj, "unknown dialect");
-        return NULL;
+        return PyValue_NULL;
     }
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 /*[clinic input]
@@ -1805,11 +1846,18 @@ _csv.get_dialect
 Return the dialect instance associated with name.
 [clinic start generated code]*/
 
-static PyObject *
-_csv_get_dialect_impl(PyObject *module, PyObject *name)
-/*[clinic end generated code: output=aa988cd573bebebb input=74865c659dcb441f]*/
+static PyValue
+_csv_get_dialect_impl(PyObject *module, PyValueBorrow name)
+/*[clinic end generated code: output=88714594d23832a3 input=74865c659dcb441f]*/
 {
-    return get_dialect_from_registry(name, get_csv_state(module));
+    PyObject *name_obj = _PyValue_AsObjectAt(name, BOX_SITE_PARSER);
+    if (name_obj == NULL) {
+        return PyValue_NULL;
+    }
+    PyObject *dialect = get_dialect_from_registry(name_obj,
+                                                  get_csv_state(module));
+    Py_DECREF(name_obj);
+    return _PyValue_FromObjectResult(dialect);
 }
 
 /*[clinic input]
@@ -1823,25 +1871,25 @@ Returns old limit. If limit is not given, no new limit is set and
 the old limit is returned
 [clinic start generated code]*/
 
-static PyObject *
-_csv_field_size_limit_impl(PyObject *module, PyObject *new_limit)
-/*[clinic end generated code: output=f2799ecd908e250b input=77db7485ee3ae90a]*/
+static PyValue
+_csv_field_size_limit_impl(PyObject *module, PyValueBorrow new_limit)
+/*[clinic end generated code: output=56dacd70b671bb40 input=77db7485ee3ae90a]*/
 {
     _csvstate *module_state = get_csv_state(module);
     Py_ssize_t old_limit = FT_ATOMIC_LOAD_SSIZE_RELAXED(module_state->field_limit);
-    if (new_limit != NULL) {
-        if (!PyLong_CheckExact(new_limit)) {
+    if (!PyValue_IsNull(new_limit)) {
+        if (PyValue_TYPE(new_limit) != &PyLong_Type) {
             PyErr_Format(PyExc_TypeError,
                          "limit must be an integer");
-            return NULL;
+            return PyValue_NULL;
         }
-        Py_ssize_t new_limit_value = PyLong_AsSsize_t(new_limit);
+        Py_ssize_t new_limit_value = _PyValue_IntAsSsize_t(new_limit);
         if (new_limit_value == -1 && PyErr_Occurred()) {
-            return NULL;
+            return PyValue_NULL;
         }
         FT_ATOMIC_STORE_SSIZE_RELAXED(module_state->field_limit, new_limit_value);
     }
-    return PyLong_FromSsize_t(old_limit);
+    return PyValue_FromInt64(old_limit);
 }
 
 static PyType_Slot error_slots[] = {
@@ -1912,7 +1960,7 @@ csv_exec(PyObject *module) {
     }
 
     /* Add the CSV exception object to the module. */
-    PyObject *bases = PyTuple_Pack(1, PyExc_Exception);
+    PyObject *bases = _PyTuple_PackValues(1, (PyValueBorrow[]){PyValue_FromObjectBorrow(_PyObject_CAST(PyExc_Exception))});
     if (bases == NULL) {
         return -1;
     }

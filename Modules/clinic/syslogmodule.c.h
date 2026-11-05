@@ -2,14 +2,20 @@
 preserve
 [clinic start generated code]*/
 
+#ifndef Py_VALUE_CORE
+#  error "value-emission Clinic output requires Py_VALUE_CORE"
+#endif
+
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 #  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
 #  include "pycore_value.h"       // _PyValue_STATIC_IMMORTAL()
 #endif
 #include "pycore_critical_section.h"// Py_BEGIN_CRITICAL_SECTION()
-#include "pycore_modsupport.h"    // _PyArg_UnpackKeywords()
+#include "pycore_long_value.h"    // _PyValue_AsLong()
+#include "pycore_modsupport.h"    // _PyArg_UnpackKeywordsValue()
 #include "pycore_unicodeobject.h" // _PyUnicode_AsUTF8NoNUL()
+#include "pycore_value_call.h"    // METH_VALUE
 
 PyDoc_STRVAR(syslog_openlog__doc__,
 "openlog($module, /, ident=<unrepresentable>, logoption=0,\n"
@@ -19,16 +25,16 @@ PyDoc_STRVAR(syslog_openlog__doc__,
 "Set logging options of subsequent syslog() calls.");
 
 #define SYSLOG_OPENLOG_METHODDEF    \
-    {"openlog", _PyCFunction_CAST(syslog_openlog), METH_FASTCALL|METH_KEYWORDS, syslog_openlog__doc__},
+    {"openlog", _PyCFunction_CAST(syslog_openlog), METH_VALUE|METH_KEYWORDS, syslog_openlog__doc__},
 
-static PyObject *
+static PyValue
 syslog_openlog_impl(PyObject *module, PyObject *ident, long logopt,
                     long facility);
 
-static PyObject *
-syslog_openlog(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+syslog_openlog(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 3
@@ -56,46 +62,40 @@ syslog_openlog(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObje
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[3];
-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 0;
+    Py_ssize_t _idx[3];
     PyObject *ident = NULL;
     long logopt = 0;
     long facility = LOG_USER;
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 0, /*maxpos*/ 3, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 0, /*maxpos*/ 3, /*minkw*/ 0, /*varpos*/ 0, _idx, 3)) {
         goto exit;
     }
-    if (!noptargs) {
-        goto skip_optional_pos;
-    }
-    if (args[0]) {
-        if (!PyUnicode_Check(args[0])) {
-            _PyArg_BadArgument("openlog", "argument 'ident'", "str", args[0]);
+    if (_idx[0] >= 0) {
+        if (!PyValue_IsObject(PyValue_Borrow(args[_idx[0]]))) {
+            _PyArg_BadArgumentValue("openlog", "argument 'ident'", "str", PyValue_Borrow(args[_idx[0]]));
             goto exit;
         }
-        ident = args[0];
-        if (!--noptargs) {
-            goto skip_optional_pos;
+        if (!PyUnicode_Check(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[0]])))) {
+            _PyArg_BadArgument("openlog", "argument 'ident'", "str", PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[0]])));
+            goto exit;
         }
+        ident = PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[0]]));
     }
-    if (args[1]) {
-        logopt = PyLong_AsLong(args[1]);
+    if (_idx[1] >= 0) {
+        logopt = _PyValue_AsLong(PyValue_Borrow(args[_idx[1]]));
         if (logopt == -1 && PyErr_Occurred()) {
             goto exit;
         }
-        if (!--noptargs) {
-            goto skip_optional_pos;
+    }
+    if (_idx[2] >= 0) {
+        facility = _PyValue_AsLong(PyValue_Borrow(args[_idx[2]]));
+        if (facility == -1 && PyErr_Occurred()) {
+            goto exit;
         }
     }
-    facility = PyLong_AsLong(args[2]);
-    if (facility == -1 && PyErr_Occurred()) {
-        goto exit;
-    }
-skip_optional_pos:
-    Py_BEGIN_CRITICAL_SECTION(module);
-    return_value = syslog_openlog_impl(module, ident, logopt, facility);
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(module));
+    return_value = syslog_openlog_impl(PyValue_AsKnownObjectBorrow(module), ident, logopt, facility);
     Py_END_CRITICAL_SECTION();
 
 exit:
@@ -155,18 +155,18 @@ PyDoc_STRVAR(syslog_closelog__doc__,
 "Reset the syslog module values and call the system library closelog().");
 
 #define SYSLOG_CLOSELOG_METHODDEF    \
-    {"closelog", (PyCFunction)syslog_closelog, METH_NOARGS, syslog_closelog__doc__},
+    {"closelog", _PyCFunction_CAST(syslog_closelog), METH_VALUE|METH_NOARGS, syslog_closelog__doc__},
 
-static PyObject *
+static PyValue
 syslog_closelog_impl(PyObject *module);
 
-static PyObject *
-syslog_closelog(PyObject *module, PyObject *Py_UNUSED(ignored))
+static PyValue
+syslog_closelog(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
 
-    Py_BEGIN_CRITICAL_SECTION(module);
-    return_value = syslog_closelog_impl(module);
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(module));
+    return_value = syslog_closelog_impl(PyValue_AsKnownObjectBorrow(module));
     Py_END_CRITICAL_SECTION();
 
     return return_value;
@@ -179,27 +179,27 @@ PyDoc_STRVAR(syslog_setlogmask__doc__,
 "Set the priority mask to maskpri and return the previous mask value.");
 
 #define SYSLOG_SETLOGMASK_METHODDEF    \
-    {"setlogmask", (PyCFunction)syslog_setlogmask, METH_O, syslog_setlogmask__doc__},
+    {"setlogmask", _PyCFunction_CAST(syslog_setlogmask), METH_VALUE|METH_O, syslog_setlogmask__doc__},
 
 static long
 syslog_setlogmask_impl(PyObject *module, long maskpri);
 
-static PyObject *
-syslog_setlogmask(PyObject *module, PyObject *arg)
+static PyValue
+syslog_setlogmask(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     long maskpri;
     long _return_value;
 
-    maskpri = PyLong_AsLong(arg);
+    maskpri = _PyValue_AsLong(PyValue_Borrow(args[0]));
     if (maskpri == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    _return_value = syslog_setlogmask_impl(module, maskpri);
+    _return_value = syslog_setlogmask_impl(PyValue_AsKnownObjectBorrow(module), maskpri);
     if ((_return_value == -1) && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = PyLong_FromLong(_return_value);
+    return_value = PyValue_FromInt64((int64_t)_return_value);
 
 exit:
     return return_value;
@@ -212,27 +212,27 @@ PyDoc_STRVAR(syslog_LOG_MASK__doc__,
 "Calculates the mask for the individual priority pri.");
 
 #define SYSLOG_LOG_MASK_METHODDEF    \
-    {"LOG_MASK", (PyCFunction)syslog_LOG_MASK, METH_O, syslog_LOG_MASK__doc__},
+    {"LOG_MASK", _PyCFunction_CAST(syslog_LOG_MASK), METH_VALUE|METH_O, syslog_LOG_MASK__doc__},
 
 static long
 syslog_LOG_MASK_impl(PyObject *module, long pri);
 
-static PyObject *
-syslog_LOG_MASK(PyObject *module, PyObject *arg)
+static PyValue
+syslog_LOG_MASK(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     long pri;
     long _return_value;
 
-    pri = PyLong_AsLong(arg);
+    pri = _PyValue_AsLong(PyValue_Borrow(args[0]));
     if (pri == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    _return_value = syslog_LOG_MASK_impl(module, pri);
+    _return_value = syslog_LOG_MASK_impl(PyValue_AsKnownObjectBorrow(module), pri);
     if ((_return_value == -1) && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = PyLong_FromLong(_return_value);
+    return_value = PyValue_FromInt64((int64_t)_return_value);
 
 exit:
     return return_value;
@@ -245,29 +245,29 @@ PyDoc_STRVAR(syslog_LOG_UPTO__doc__,
 "Calculates the mask for all priorities up to and including pri.");
 
 #define SYSLOG_LOG_UPTO_METHODDEF    \
-    {"LOG_UPTO", (PyCFunction)syslog_LOG_UPTO, METH_O, syslog_LOG_UPTO__doc__},
+    {"LOG_UPTO", _PyCFunction_CAST(syslog_LOG_UPTO), METH_VALUE|METH_O, syslog_LOG_UPTO__doc__},
 
 static long
 syslog_LOG_UPTO_impl(PyObject *module, long pri);
 
-static PyObject *
-syslog_LOG_UPTO(PyObject *module, PyObject *arg)
+static PyValue
+syslog_LOG_UPTO(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     long pri;
     long _return_value;
 
-    pri = PyLong_AsLong(arg);
+    pri = _PyValue_AsLong(PyValue_Borrow(args[0]));
     if (pri == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    _return_value = syslog_LOG_UPTO_impl(module, pri);
+    _return_value = syslog_LOG_UPTO_impl(PyValue_AsKnownObjectBorrow(module), pri);
     if ((_return_value == -1) && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = PyLong_FromLong(_return_value);
+    return_value = PyValue_FromInt64((int64_t)_return_value);
 
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=efbcb6d213c2c5a8 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=c24ebb2cc001eff5 input=a9049054013a1b77]*/

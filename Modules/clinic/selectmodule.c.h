@@ -2,15 +2,21 @@
 preserve
 [clinic start generated code]*/
 
+#ifndef Py_VALUE_CORE
+#  error "value-emission Clinic output requires Py_VALUE_CORE"
+#endif
+
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 #  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
 #  include "pycore_value.h"       // _PyValue_STATIC_IMMORTAL()
 #endif
-#include "pycore_borrow.h"        // _PyBorrow_TupleItems()
 #include "pycore_critical_section.h"// Py_BEGIN_CRITICAL_SECTION()
-#include "pycore_long.h"          // _PyLong_UnsignedShort_Converter()
+#include "pycore_long_value.h"    // _PyValue_AsInt()
 #include "pycore_modsupport.h"    // _PyArg_CheckPositional()
+#include "pycore_tuple.h"         // _PyTuple_ITEMS()
+#include "pycore_value_call.h"    // METH_VALUE
+#include "pycore_value_slots.h"   // _PyValue_THUNK_EXIT()
 
 PyDoc_STRVAR(select_select__doc__,
 "select($module, rlist, wlist, xlist, timeout=None, /)\n"
@@ -41,33 +47,34 @@ PyDoc_STRVAR(select_select__doc__,
 "descriptors can be used.");
 
 #define SELECT_SELECT_METHODDEF    \
-    {"select", _PyCFunction_CAST(select_select), METH_FASTCALL, select_select__doc__},
+    {"select", _PyCFunction_CAST(select_select), METH_VALUE, select_select__doc__},
 
-static PyObject *
-select_select_impl(PyObject *module, PyObject *rlist, PyObject *wlist,
-                   PyObject *xlist, PyObject *timeout_obj);
+static PyValue
+select_select_impl(PyObject *module, PyValueBorrow rlist,
+                   PyValueBorrow wlist, PyValueBorrow xlist,
+                   PyValueBorrow timeout_obj);
 
-static PyObject *
-select_select(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+select_select(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
-    PyObject *rlist;
-    PyObject *wlist;
-    PyObject *xlist;
-    PyObject *timeout_obj = Py_None;
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow rlist;
+    PyValueBorrow wlist;
+    PyValueBorrow xlist;
+    PyValueBorrow timeout_obj = PyValue_Borrow(PyValue_None);
 
     if (!_PyArg_CheckPositional("select", nargs, 3, 4)) {
         goto exit;
     }
-    rlist = args[0];
-    wlist = args[1];
-    xlist = args[2];
+    rlist = PyValue_Borrow(args[0]);
+    wlist = PyValue_Borrow(args[1]);
+    xlist = PyValue_Borrow(args[2]);
     if (nargs < 4) {
         goto skip_optional;
     }
-    timeout_obj = args[3];
+    timeout_obj = PyValue_Borrow(args[3]);
 skip_optional:
-    return_value = select_select_impl(module, rlist, wlist, xlist, timeout_obj);
+    return_value = select_select_impl(PyValue_AsKnownObjectBorrow(module), rlist, wlist, xlist, timeout_obj);
 
 exit:
     return return_value;
@@ -88,34 +95,65 @@ PyDoc_STRVAR(select_poll_register__doc__,
 "    an optional bitmask describing the type of events to check for");
 
 #define SELECT_POLL_REGISTER_METHODDEF    \
-    {"register", _PyCFunction_CAST(select_poll_register), METH_FASTCALL, select_poll_register__doc__},
+    {"register", _PyCFunction_CAST(select_poll_register), METH_VALUE, select_poll_register__doc__},
 
-static PyObject *
+static PyValue
 select_poll_register_impl(pollObject *self, int fd, unsigned short eventmask);
 
-static PyObject *
-select_poll_register(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+select_poll_register(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int fd;
     unsigned short eventmask = POLLIN | POLLPRI | POLLOUT;
 
     if (!_PyArg_CheckPositional("register", nargs, 1, 2)) {
         goto exit;
     }
-    fd = PyObject_AsFileDescriptor(args[0]);
-    if (fd < 0) {
-        goto exit;
+    if (PyValue_IsInlineInt(PyValue_Borrow(args[0]))) {
+        fd = _PyValue_AsInt(PyValue_Borrow(args[0]));
+        if (fd == -1 && PyErr_Occurred()) {
+            goto exit;
+        }
+        if (fd < 0) {
+            PyErr_Format(PyExc_ValueError,
+                         "file descriptor cannot be a negative integer (%i)",
+                         fd);
+            goto exit;
+        }
+    }
+    else {
+        PyObject *_obj = _PyValue_AsObjectAt(PyValue_Borrow(args[0]), BOX_SITE_PARSER);
+        if (_obj == NULL) {
+            goto exit;
+        }
+        fd = PyObject_AsFileDescriptor(_obj);
+        Py_DECREF(_obj);
+        if (fd < 0) {
+            goto exit;
+        }
     }
     if (nargs < 2) {
         goto skip_optional;
     }
-    if (!_PyLong_UnsignedShort_Converter(args[1], &eventmask)) {
-        goto exit;
+    {
+        Py_ssize_t _bytes = _PyValue_AsNativeBytes(PyValue_Borrow(args[1]), &eventmask, sizeof(unsigned short),
+                Py_ASNATIVEBYTES_NATIVE_ENDIAN |
+                Py_ASNATIVEBYTES_ALLOW_INDEX |
+                Py_ASNATIVEBYTES_REJECT_NEGATIVE |
+                Py_ASNATIVEBYTES_UNSIGNED_BUFFER);
+        if (_bytes < 0) {
+            goto exit;
+        }
+        if ((size_t)_bytes > sizeof(unsigned short)) {
+            PyErr_SetString(PyExc_OverflowError,
+                        "Python int too large for C unsigned short");
+            goto exit;
+        }
     }
 skip_optional:
-    Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = select_poll_register_impl((pollObject *)self, fd, eventmask);
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(self));
+    return_value = select_poll_register_impl((pollObject *)PyValue_AsKnownObjectBorrow(self), fd, eventmask);
     Py_END_CRITICAL_SECTION();
 
 exit:
@@ -139,30 +177,61 @@ PyDoc_STRVAR(select_poll_modify__doc__,
 "    a bitmask describing the type of events to check for");
 
 #define SELECT_POLL_MODIFY_METHODDEF    \
-    {"modify", _PyCFunction_CAST(select_poll_modify), METH_FASTCALL, select_poll_modify__doc__},
+    {"modify", _PyCFunction_CAST(select_poll_modify), METH_VALUE, select_poll_modify__doc__},
 
-static PyObject *
+static PyValue
 select_poll_modify_impl(pollObject *self, int fd, unsigned short eventmask);
 
-static PyObject *
-select_poll_modify(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+select_poll_modify(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int fd;
     unsigned short eventmask;
 
     if (!_PyArg_CheckPositional("modify", nargs, 2, 2)) {
         goto exit;
     }
-    fd = PyObject_AsFileDescriptor(args[0]);
-    if (fd < 0) {
-        goto exit;
+    if (PyValue_IsInlineInt(PyValue_Borrow(args[0]))) {
+        fd = _PyValue_AsInt(PyValue_Borrow(args[0]));
+        if (fd == -1 && PyErr_Occurred()) {
+            goto exit;
+        }
+        if (fd < 0) {
+            PyErr_Format(PyExc_ValueError,
+                         "file descriptor cannot be a negative integer (%i)",
+                         fd);
+            goto exit;
+        }
     }
-    if (!_PyLong_UnsignedShort_Converter(args[1], &eventmask)) {
-        goto exit;
+    else {
+        PyObject *_obj = _PyValue_AsObjectAt(PyValue_Borrow(args[0]), BOX_SITE_PARSER);
+        if (_obj == NULL) {
+            goto exit;
+        }
+        fd = PyObject_AsFileDescriptor(_obj);
+        Py_DECREF(_obj);
+        if (fd < 0) {
+            goto exit;
+        }
     }
-    Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = select_poll_modify_impl((pollObject *)self, fd, eventmask);
+    {
+        Py_ssize_t _bytes = _PyValue_AsNativeBytes(PyValue_Borrow(args[1]), &eventmask, sizeof(unsigned short),
+                Py_ASNATIVEBYTES_NATIVE_ENDIAN |
+                Py_ASNATIVEBYTES_ALLOW_INDEX |
+                Py_ASNATIVEBYTES_REJECT_NEGATIVE |
+                Py_ASNATIVEBYTES_UNSIGNED_BUFFER);
+        if (_bytes < 0) {
+            goto exit;
+        }
+        if ((size_t)_bytes > sizeof(unsigned short)) {
+            PyErr_SetString(PyExc_OverflowError,
+                        "Python int too large for C unsigned short");
+            goto exit;
+        }
+    }
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(self));
+    return_value = select_poll_modify_impl((pollObject *)PyValue_AsKnownObjectBorrow(self), fd, eventmask);
     Py_END_CRITICAL_SECTION();
 
 exit:
@@ -180,23 +249,42 @@ PyDoc_STRVAR(select_poll_unregister__doc__,
 "Remove a file descriptor being tracked by the polling object.");
 
 #define SELECT_POLL_UNREGISTER_METHODDEF    \
-    {"unregister", (PyCFunction)select_poll_unregister, METH_O, select_poll_unregister__doc__},
+    {"unregister", _PyCFunction_CAST(select_poll_unregister), METH_VALUE|METH_O, select_poll_unregister__doc__},
 
-static PyObject *
+static PyValue
 select_poll_unregister_impl(pollObject *self, int fd);
 
-static PyObject *
-select_poll_unregister(PyObject *self, PyObject *arg)
+static PyValue
+select_poll_unregister(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int fd;
 
-    fd = PyObject_AsFileDescriptor(arg);
-    if (fd < 0) {
-        goto exit;
+    if (PyValue_IsInlineInt(PyValue_Borrow(args[0]))) {
+        fd = _PyValue_AsInt(PyValue_Borrow(args[0]));
+        if (fd == -1 && PyErr_Occurred()) {
+            goto exit;
+        }
+        if (fd < 0) {
+            PyErr_Format(PyExc_ValueError,
+                         "file descriptor cannot be a negative integer (%i)",
+                         fd);
+            goto exit;
+        }
     }
-    Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = select_poll_unregister_impl((pollObject *)self, fd);
+    else {
+        PyObject *_obj = _PyValue_AsObjectAt(PyValue_Borrow(args[0]), BOX_SITE_PARSER);
+        if (_obj == NULL) {
+            goto exit;
+        }
+        fd = PyObject_AsFileDescriptor(_obj);
+        Py_DECREF(_obj);
+        if (fd < 0) {
+            goto exit;
+        }
+    }
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(self));
+    return_value = select_poll_unregister_impl((pollObject *)PyValue_AsKnownObjectBorrow(self), fd);
     Py_END_CRITICAL_SECTION();
 
 exit:
@@ -221,16 +309,16 @@ PyDoc_STRVAR(select_poll_poll__doc__,
 "to report, as a list of (fd, event) 2-tuples.");
 
 #define SELECT_POLL_POLL_METHODDEF    \
-    {"poll", _PyCFunction_CAST(select_poll_poll), METH_FASTCALL, select_poll_poll__doc__},
+    {"poll", _PyCFunction_CAST(select_poll_poll), METH_VALUE, select_poll_poll__doc__},
 
-static PyObject *
-select_poll_poll_impl(pollObject *self, PyObject *timeout_obj);
+static PyValue
+select_poll_poll_impl(pollObject *self, PyValueBorrow timeout_obj);
 
-static PyObject *
-select_poll_poll(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+select_poll_poll(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
-    PyObject *timeout_obj = Py_None;
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow timeout_obj = PyValue_Borrow(PyValue_None);
 
     if (!_PyArg_CheckPositional("poll", nargs, 0, 1)) {
         goto exit;
@@ -238,10 +326,10 @@ select_poll_poll(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
     if (nargs < 1) {
         goto skip_optional;
     }
-    timeout_obj = args[0];
+    timeout_obj = PyValue_Borrow(args[0]);
 skip_optional:
-    Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = select_poll_poll_impl((pollObject *)self, timeout_obj);
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(self));
+    return_value = select_poll_poll_impl((pollObject *)PyValue_AsKnownObjectBorrow(self), timeout_obj);
     Py_END_CRITICAL_SECTION();
 
 exit:
@@ -266,35 +354,66 @@ PyDoc_STRVAR(select_devpoll_register__doc__,
 "    an optional bitmask describing the type of events to check for");
 
 #define SELECT_DEVPOLL_REGISTER_METHODDEF    \
-    {"register", _PyCFunction_CAST(select_devpoll_register), METH_FASTCALL, select_devpoll_register__doc__},
+    {"register", _PyCFunction_CAST(select_devpoll_register), METH_VALUE, select_devpoll_register__doc__},
 
-static PyObject *
+static PyValue
 select_devpoll_register_impl(devpollObject *self, int fd,
                              unsigned short eventmask);
 
-static PyObject *
-select_devpoll_register(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+select_devpoll_register(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int fd;
     unsigned short eventmask = POLLIN | POLLPRI | POLLOUT;
 
     if (!_PyArg_CheckPositional("register", nargs, 1, 2)) {
         goto exit;
     }
-    fd = PyObject_AsFileDescriptor(args[0]);
-    if (fd < 0) {
-        goto exit;
+    if (PyValue_IsInlineInt(PyValue_Borrow(args[0]))) {
+        fd = _PyValue_AsInt(PyValue_Borrow(args[0]));
+        if (fd == -1 && PyErr_Occurred()) {
+            goto exit;
+        }
+        if (fd < 0) {
+            PyErr_Format(PyExc_ValueError,
+                         "file descriptor cannot be a negative integer (%i)",
+                         fd);
+            goto exit;
+        }
+    }
+    else {
+        PyObject *_obj = _PyValue_AsObjectAt(PyValue_Borrow(args[0]), BOX_SITE_PARSER);
+        if (_obj == NULL) {
+            goto exit;
+        }
+        fd = PyObject_AsFileDescriptor(_obj);
+        Py_DECREF(_obj);
+        if (fd < 0) {
+            goto exit;
+        }
     }
     if (nargs < 2) {
         goto skip_optional;
     }
-    if (!_PyLong_UnsignedShort_Converter(args[1], &eventmask)) {
-        goto exit;
+    {
+        Py_ssize_t _bytes = _PyValue_AsNativeBytes(PyValue_Borrow(args[1]), &eventmask, sizeof(unsigned short),
+                Py_ASNATIVEBYTES_NATIVE_ENDIAN |
+                Py_ASNATIVEBYTES_ALLOW_INDEX |
+                Py_ASNATIVEBYTES_REJECT_NEGATIVE |
+                Py_ASNATIVEBYTES_UNSIGNED_BUFFER);
+        if (_bytes < 0) {
+            goto exit;
+        }
+        if ((size_t)_bytes > sizeof(unsigned short)) {
+            PyErr_SetString(PyExc_OverflowError,
+                        "Python int too large for C unsigned short");
+            goto exit;
+        }
     }
 skip_optional:
-    Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = select_devpoll_register_impl((devpollObject *)self, fd, eventmask);
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(self));
+    return_value = select_devpoll_register_impl((devpollObject *)PyValue_AsKnownObjectBorrow(self), fd, eventmask);
     Py_END_CRITICAL_SECTION();
 
 exit:
@@ -319,35 +438,66 @@ PyDoc_STRVAR(select_devpoll_modify__doc__,
 "    an optional bitmask describing the type of events to check for");
 
 #define SELECT_DEVPOLL_MODIFY_METHODDEF    \
-    {"modify", _PyCFunction_CAST(select_devpoll_modify), METH_FASTCALL, select_devpoll_modify__doc__},
+    {"modify", _PyCFunction_CAST(select_devpoll_modify), METH_VALUE, select_devpoll_modify__doc__},
 
-static PyObject *
+static PyValue
 select_devpoll_modify_impl(devpollObject *self, int fd,
                            unsigned short eventmask);
 
-static PyObject *
-select_devpoll_modify(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+select_devpoll_modify(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int fd;
     unsigned short eventmask = POLLIN | POLLPRI | POLLOUT;
 
     if (!_PyArg_CheckPositional("modify", nargs, 1, 2)) {
         goto exit;
     }
-    fd = PyObject_AsFileDescriptor(args[0]);
-    if (fd < 0) {
-        goto exit;
+    if (PyValue_IsInlineInt(PyValue_Borrow(args[0]))) {
+        fd = _PyValue_AsInt(PyValue_Borrow(args[0]));
+        if (fd == -1 && PyErr_Occurred()) {
+            goto exit;
+        }
+        if (fd < 0) {
+            PyErr_Format(PyExc_ValueError,
+                         "file descriptor cannot be a negative integer (%i)",
+                         fd);
+            goto exit;
+        }
+    }
+    else {
+        PyObject *_obj = _PyValue_AsObjectAt(PyValue_Borrow(args[0]), BOX_SITE_PARSER);
+        if (_obj == NULL) {
+            goto exit;
+        }
+        fd = PyObject_AsFileDescriptor(_obj);
+        Py_DECREF(_obj);
+        if (fd < 0) {
+            goto exit;
+        }
     }
     if (nargs < 2) {
         goto skip_optional;
     }
-    if (!_PyLong_UnsignedShort_Converter(args[1], &eventmask)) {
-        goto exit;
+    {
+        Py_ssize_t _bytes = _PyValue_AsNativeBytes(PyValue_Borrow(args[1]), &eventmask, sizeof(unsigned short),
+                Py_ASNATIVEBYTES_NATIVE_ENDIAN |
+                Py_ASNATIVEBYTES_ALLOW_INDEX |
+                Py_ASNATIVEBYTES_REJECT_NEGATIVE |
+                Py_ASNATIVEBYTES_UNSIGNED_BUFFER);
+        if (_bytes < 0) {
+            goto exit;
+        }
+        if ((size_t)_bytes > sizeof(unsigned short)) {
+            PyErr_SetString(PyExc_OverflowError,
+                        "Python int too large for C unsigned short");
+            goto exit;
+        }
     }
 skip_optional:
-    Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = select_devpoll_modify_impl((devpollObject *)self, fd, eventmask);
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(self));
+    return_value = select_devpoll_modify_impl((devpollObject *)PyValue_AsKnownObjectBorrow(self), fd, eventmask);
     Py_END_CRITICAL_SECTION();
 
 exit:
@@ -365,23 +515,42 @@ PyDoc_STRVAR(select_devpoll_unregister__doc__,
 "Remove a file descriptor being tracked by the polling object.");
 
 #define SELECT_DEVPOLL_UNREGISTER_METHODDEF    \
-    {"unregister", (PyCFunction)select_devpoll_unregister, METH_O, select_devpoll_unregister__doc__},
+    {"unregister", _PyCFunction_CAST(select_devpoll_unregister), METH_VALUE|METH_O, select_devpoll_unregister__doc__},
 
-static PyObject *
+static PyValue
 select_devpoll_unregister_impl(devpollObject *self, int fd);
 
-static PyObject *
-select_devpoll_unregister(PyObject *self, PyObject *arg)
+static PyValue
+select_devpoll_unregister(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int fd;
 
-    fd = PyObject_AsFileDescriptor(arg);
-    if (fd < 0) {
-        goto exit;
+    if (PyValue_IsInlineInt(PyValue_Borrow(args[0]))) {
+        fd = _PyValue_AsInt(PyValue_Borrow(args[0]));
+        if (fd == -1 && PyErr_Occurred()) {
+            goto exit;
+        }
+        if (fd < 0) {
+            PyErr_Format(PyExc_ValueError,
+                         "file descriptor cannot be a negative integer (%i)",
+                         fd);
+            goto exit;
+        }
     }
-    Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = select_devpoll_unregister_impl((devpollObject *)self, fd);
+    else {
+        PyObject *_obj = _PyValue_AsObjectAt(PyValue_Borrow(args[0]), BOX_SITE_PARSER);
+        if (_obj == NULL) {
+            goto exit;
+        }
+        fd = PyObject_AsFileDescriptor(_obj);
+        Py_DECREF(_obj);
+        if (fd < 0) {
+            goto exit;
+        }
+    }
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(self));
+    return_value = select_devpoll_unregister_impl((devpollObject *)PyValue_AsKnownObjectBorrow(self), fd);
     Py_END_CRITICAL_SECTION();
 
 exit:
@@ -406,16 +575,16 @@ PyDoc_STRVAR(select_devpoll_poll__doc__,
 "to report, as a list of (fd, event) 2-tuples.");
 
 #define SELECT_DEVPOLL_POLL_METHODDEF    \
-    {"poll", _PyCFunction_CAST(select_devpoll_poll), METH_FASTCALL, select_devpoll_poll__doc__},
+    {"poll", _PyCFunction_CAST(select_devpoll_poll), METH_VALUE, select_devpoll_poll__doc__},
 
-static PyObject *
-select_devpoll_poll_impl(devpollObject *self, PyObject *timeout_obj);
+static PyValue
+select_devpoll_poll_impl(devpollObject *self, PyValueBorrow timeout_obj);
 
-static PyObject *
-select_devpoll_poll(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+select_devpoll_poll(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
-    PyObject *timeout_obj = Py_None;
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow timeout_obj = PyValue_Borrow(PyValue_None);
 
     if (!_PyArg_CheckPositional("poll", nargs, 0, 1)) {
         goto exit;
@@ -423,10 +592,10 @@ select_devpoll_poll(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
     if (nargs < 1) {
         goto skip_optional;
     }
-    timeout_obj = args[0];
+    timeout_obj = PyValue_Borrow(args[0]);
 skip_optional:
-    Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = select_devpoll_poll_impl((devpollObject *)self, timeout_obj);
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(self));
+    return_value = select_devpoll_poll_impl((devpollObject *)PyValue_AsKnownObjectBorrow(self), timeout_obj);
     Py_END_CRITICAL_SECTION();
 
 exit:
@@ -446,18 +615,18 @@ PyDoc_STRVAR(select_devpoll_close__doc__,
 "Further operations on the devpoll object will raise an exception.");
 
 #define SELECT_DEVPOLL_CLOSE_METHODDEF    \
-    {"close", (PyCFunction)select_devpoll_close, METH_NOARGS, select_devpoll_close__doc__},
+    {"close", _PyCFunction_CAST(select_devpoll_close), METH_VALUE|METH_NOARGS, select_devpoll_close__doc__},
 
-static PyObject *
+static PyValue
 select_devpoll_close_impl(devpollObject *self);
 
-static PyObject *
-select_devpoll_close(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+select_devpoll_close(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
 
-    Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = select_devpoll_close_impl((devpollObject *)self);
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(self));
+    return_value = select_devpoll_close_impl((devpollObject *)PyValue_AsKnownObjectBorrow(self));
     Py_END_CRITICAL_SECTION();
 
     return return_value;
@@ -474,18 +643,18 @@ PyDoc_STRVAR(select_devpoll_fileno__doc__,
 "Return the file descriptor.");
 
 #define SELECT_DEVPOLL_FILENO_METHODDEF    \
-    {"fileno", (PyCFunction)select_devpoll_fileno, METH_NOARGS, select_devpoll_fileno__doc__},
+    {"fileno", _PyCFunction_CAST(select_devpoll_fileno), METH_VALUE|METH_NOARGS, select_devpoll_fileno__doc__},
 
-static PyObject *
+static PyValue
 select_devpoll_fileno_impl(devpollObject *self);
 
-static PyObject *
-select_devpoll_fileno(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+select_devpoll_fileno(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
 
-    Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = select_devpoll_fileno_impl((devpollObject *)self);
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(self));
+    return_value = select_devpoll_fileno_impl((devpollObject *)PyValue_AsKnownObjectBorrow(self));
     Py_END_CRITICAL_SECTION();
 
     return return_value;
@@ -505,15 +674,19 @@ PyDoc_STRVAR(select_poll__doc__,
 "then polling them for I/O events.");
 
 #define SELECT_POLL_METHODDEF    \
-    {"poll", (PyCFunction)select_poll, METH_NOARGS, select_poll__doc__},
+    {"poll", _PyCFunction_CAST(select_poll), METH_VALUE|METH_NOARGS, select_poll__doc__},
 
-static PyObject *
+static PyValue
 select_poll_impl(PyObject *module);
 
-static PyObject *
-select_poll(PyObject *module, PyObject *Py_UNUSED(ignored))
+static PyValue
+select_poll(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return select_poll_impl(module);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = select_poll_impl(PyValue_AsKnownObjectBorrow(module));
+
+    return return_value;
 }
 
 #endif /* ((defined(HAVE_POLL) || defined(HAVE_PPOLL)) && !defined(HAVE_BROKEN_POLL)) */
@@ -530,15 +703,19 @@ PyDoc_STRVAR(select_devpoll__doc__,
 "then polling them for I/O events.");
 
 #define SELECT_DEVPOLL_METHODDEF    \
-    {"devpoll", (PyCFunction)select_devpoll, METH_NOARGS, select_devpoll__doc__},
+    {"devpoll", _PyCFunction_CAST(select_devpoll), METH_VALUE|METH_NOARGS, select_devpoll__doc__},
 
-static PyObject *
+static PyValue
 select_devpoll_impl(PyObject *module);
 
-static PyObject *
-select_devpoll(PyObject *module, PyObject *Py_UNUSED(ignored))
+static PyValue
+select_devpoll(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return select_devpoll_impl(module);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = select_devpoll_impl(PyValue_AsKnownObjectBorrow(module));
+
+    return return_value;
 }
 
 #endif /* ((defined(HAVE_POLL) || defined(HAVE_PPOLL)) && !defined(HAVE_BROKEN_POLL)) && defined(HAVE_SYS_DEVPOLL_H) */
@@ -560,13 +737,13 @@ PyDoc_STRVAR(select_epoll__doc__,
 "    Deprecated and completely ignored.  However, when supplied, its value\n"
 "    must be 0 or select.EPOLL_CLOEXEC, otherwise OSError is raised.");
 
-static PyObject *
+static PyValue
 select_epoll_impl(PyTypeObject *type, int sizehint, int flags);
 
-static PyObject *
-select_epoll(PyTypeObject *type, PyObject *args, PyObject *kwargs)
+static PyValue
+select_epoll_value(PyTypeObject *type, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 2
@@ -594,43 +771,48 @@ select_epoll(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[2];
-    PyObject * const *fastargs;
-    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
-    Py_ssize_t noptargs = nargs + (kwargs ? PyDict_GET_SIZE(kwargs) : 0) - 0;
+    Py_ssize_t _idx[2];
     int sizehint = -1;
     int flags = 0;
 
-    PyObject *const *_args_items = _PyBorrow_TupleItems(args, Py_MIN(nargs, 2));
-    if (_args_items == NULL) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 0, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, _idx, 2)) {
         goto exit;
     }
-    fastargs = _PyArg_UnpackKeywords(_args_items, nargs, kwargs, NULL, &_parser,
-            /*minpos*/ 0, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!fastargs) {
-        goto exit;
-    }
-    if (!noptargs) {
-        goto skip_optional_pos;
-    }
-    if (fastargs[0]) {
-        sizehint = PyLong_AsInt(fastargs[0]);
+    if (_idx[0] >= 0) {
+        sizehint = _PyValue_AsInt(PyValue_Borrow(args[_idx[0]]));
         if (sizehint == -1 && PyErr_Occurred()) {
             goto exit;
         }
-        if (!--noptargs) {
-            goto skip_optional_pos;
+    }
+    if (_idx[1] >= 0) {
+        flags = _PyValue_AsInt(PyValue_Borrow(args[_idx[1]]));
+        if (flags == -1 && PyErr_Occurred()) {
+            goto exit;
         }
     }
-    flags = PyLong_AsInt(fastargs[1]);
-    if (flags == -1 && PyErr_Occurred()) {
-        goto exit;
-    }
-skip_optional_pos:
     return_value = select_epoll_impl(type, sizehint, flags);
 
 exit:
     return return_value;
+}
+
+Py_VALUE_ENTRY static PyObject *
+select_epoll(PyTypeObject *type, PyObject *args, PyObject *kwargs)
+{
+    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
+    if (kwargs == NULL || PyDict_GET_SIZE(kwargs) == 0) {
+        return _PyValue_THUNK_EXIT(select_epoll_value(type, _PyTuple_ITEMS(args), nargs, NULL), BOX_SITE_CALL);
+    }
+    PyObject *kwnames;
+    PyValue *window = _PyValue_StackUnpackDict(_PyThreadState_GET(),
+        _PyTuple_ITEMS(args), nargs, kwargs, &kwnames);
+    if (window == NULL) {
+        return NULL;
+    }
+    PyValue result = select_epoll_value(type, window, nargs, kwnames);
+    _PyValue_StackUnpackDict_Free(window, nargs, kwnames);
+    return _PyValue_THUNK_EXIT(result, BOX_SITE_CALL);
 }
 
 #endif /* defined(HAVE_EPOLL) */
@@ -646,18 +828,18 @@ PyDoc_STRVAR(select_epoll_close__doc__,
 "Further operations on the epoll object will raise an exception.");
 
 #define SELECT_EPOLL_CLOSE_METHODDEF    \
-    {"close", (PyCFunction)select_epoll_close, METH_NOARGS, select_epoll_close__doc__},
+    {"close", _PyCFunction_CAST(select_epoll_close), METH_VALUE|METH_NOARGS, select_epoll_close__doc__},
 
-static PyObject *
+static PyValue
 select_epoll_close_impl(pyEpoll_Object *self);
 
-static PyObject *
-select_epoll_close(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+select_epoll_close(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
 
-    Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = select_epoll_close_impl((pyEpoll_Object *)self);
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(self));
+    return_value = select_epoll_close_impl((pyEpoll_Object *)PyValue_AsKnownObjectBorrow(self));
     Py_END_CRITICAL_SECTION();
 
     return return_value;
@@ -674,15 +856,19 @@ PyDoc_STRVAR(select_epoll_fileno__doc__,
 "Return the epoll control file descriptor.");
 
 #define SELECT_EPOLL_FILENO_METHODDEF    \
-    {"fileno", (PyCFunction)select_epoll_fileno, METH_NOARGS, select_epoll_fileno__doc__},
+    {"fileno", _PyCFunction_CAST(select_epoll_fileno), METH_VALUE|METH_NOARGS, select_epoll_fileno__doc__},
 
-static PyObject *
+static PyValue
 select_epoll_fileno_impl(pyEpoll_Object *self);
 
-static PyObject *
-select_epoll_fileno(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+select_epoll_fileno(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return select_epoll_fileno_impl((pyEpoll_Object *)self);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = select_epoll_fileno_impl((pyEpoll_Object *)PyValue_AsKnownObjectBorrow(self));
+
+    return return_value;
 }
 
 #endif /* defined(HAVE_EPOLL) */
@@ -696,22 +882,22 @@ PyDoc_STRVAR(select_epoll_fromfd__doc__,
 "Create an epoll object from a given control fd.");
 
 #define SELECT_EPOLL_FROMFD_METHODDEF    \
-    {"fromfd", (PyCFunction)select_epoll_fromfd, METH_O|METH_CLASS, select_epoll_fromfd__doc__},
+    {"fromfd", _PyCFunction_CAST(select_epoll_fromfd), METH_VALUE|METH_O|METH_CLASS, select_epoll_fromfd__doc__},
 
-static PyObject *
+static PyValue
 select_epoll_fromfd_impl(PyTypeObject *type, int fd);
 
-static PyObject *
-select_epoll_fromfd(PyObject *type, PyObject *arg)
+static PyValue
+select_epoll_fromfd(PyValueBorrow type, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int fd;
 
-    fd = PyLong_AsInt(arg);
+    fd = _PyValue_AsInt(PyValue_Borrow(args[0]));
     if (fd == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = select_epoll_fromfd_impl((PyTypeObject *)type, fd);
+    return_value = select_epoll_fromfd_impl((PyTypeObject *)PyValue_AsKnownObjectBorrow(type), fd);
 
 exit:
     return return_value;
@@ -736,16 +922,16 @@ PyDoc_STRVAR(select_epoll_register__doc__,
 "The epoll interface supports all file descriptors that support poll.");
 
 #define SELECT_EPOLL_REGISTER_METHODDEF    \
-    {"register", _PyCFunction_CAST(select_epoll_register), METH_FASTCALL|METH_KEYWORDS, select_epoll_register__doc__},
+    {"register", _PyCFunction_CAST(select_epoll_register), METH_VALUE|METH_KEYWORDS, select_epoll_register__doc__},
 
-static PyObject *
+static PyValue
 select_epoll_register_impl(pyEpoll_Object *self, int fd,
                            unsigned int eventmask);
 
-static PyObject *
-select_epoll_register(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+select_epoll_register(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 2
@@ -773,41 +959,56 @@ select_epoll_register(PyObject *self, PyObject *const *args, Py_ssize_t nargs, P
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[2];
-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 1;
+    Py_ssize_t _idx[2];
     int fd;
     unsigned int eventmask = EPOLLIN | EPOLLPRI | EPOLLOUT;
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 1, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 1, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, _idx, 2)) {
         goto exit;
     }
-    fd = PyObject_AsFileDescriptor(args[0]);
-    if (fd < 0) {
-        goto exit;
-    }
-    if (!noptargs) {
-        goto skip_optional_pos;
-    }
-    {
-        Py_ssize_t _bytes = PyLong_AsNativeBytes(args[1], &eventmask, sizeof(unsigned int),
-                Py_ASNATIVEBYTES_NATIVE_ENDIAN |
-                Py_ASNATIVEBYTES_ALLOW_INDEX |
-                Py_ASNATIVEBYTES_UNSIGNED_BUFFER);
-        if (_bytes < 0) {
+    if (PyValue_IsInlineInt(PyValue_Borrow(args[_idx[0]]))) {
+        fd = _PyValue_AsInt(PyValue_Borrow(args[_idx[0]]));
+        if (fd == -1 && PyErr_Occurred()) {
             goto exit;
         }
-        if ((size_t)_bytes > sizeof(unsigned int)) {
-            if (PyErr_WarnEx(PyExc_DeprecationWarning,
-                "integer value out of range", 1) < 0)
-            {
+        if (fd < 0) {
+            PyErr_Format(PyExc_ValueError,
+                         "file descriptor cannot be a negative integer (%i)",
+                         fd);
+            goto exit;
+        }
+    }
+    else {
+        PyObject *_obj = _PyValue_AsObjectAt(PyValue_Borrow(args[_idx[0]]), BOX_SITE_PARSER);
+        if (_obj == NULL) {
+            goto exit;
+        }
+        fd = PyObject_AsFileDescriptor(_obj);
+        Py_DECREF(_obj);
+        if (fd < 0) {
+            goto exit;
+        }
+    }
+    if (_idx[1] >= 0) {
+        {
+            Py_ssize_t _bytes = _PyValue_AsNativeBytes(PyValue_Borrow(args[_idx[1]]), &eventmask, sizeof(unsigned int),
+                    Py_ASNATIVEBYTES_NATIVE_ENDIAN |
+                    Py_ASNATIVEBYTES_ALLOW_INDEX |
+                    Py_ASNATIVEBYTES_UNSIGNED_BUFFER);
+            if (_bytes < 0) {
                 goto exit;
+            }
+            if ((size_t)_bytes > sizeof(unsigned int)) {
+                if (PyErr_WarnEx(PyExc_DeprecationWarning,
+                    "integer value out of range", 1) < 0)
+                {
+                    goto exit;
+                }
             }
         }
     }
-skip_optional_pos:
-    return_value = select_epoll_register_impl((pyEpoll_Object *)self, fd, eventmask);
+    return_value = select_epoll_register_impl((pyEpoll_Object *)PyValue_AsKnownObjectBorrow(self), fd, eventmask);
 
 exit:
     return return_value;
@@ -829,16 +1030,16 @@ PyDoc_STRVAR(select_epoll_modify__doc__,
 "    a bit set composed of the various EPOLL constants");
 
 #define SELECT_EPOLL_MODIFY_METHODDEF    \
-    {"modify", _PyCFunction_CAST(select_epoll_modify), METH_FASTCALL|METH_KEYWORDS, select_epoll_modify__doc__},
+    {"modify", _PyCFunction_CAST(select_epoll_modify), METH_VALUE|METH_KEYWORDS, select_epoll_modify__doc__},
 
-static PyObject *
+static PyValue
 select_epoll_modify_impl(pyEpoll_Object *self, int fd,
                          unsigned int eventmask);
 
-static PyObject *
-select_epoll_modify(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+select_epoll_modify(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 2
@@ -866,21 +1067,39 @@ select_epoll_modify(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyO
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[2];
+    Py_ssize_t _idx[2];
     int fd;
     unsigned int eventmask;
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 2, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 2, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, _idx, 2)) {
         goto exit;
     }
-    fd = PyObject_AsFileDescriptor(args[0]);
-    if (fd < 0) {
-        goto exit;
+    if (PyValue_IsInlineInt(PyValue_Borrow(args[_idx[0]]))) {
+        fd = _PyValue_AsInt(PyValue_Borrow(args[_idx[0]]));
+        if (fd == -1 && PyErr_Occurred()) {
+            goto exit;
+        }
+        if (fd < 0) {
+            PyErr_Format(PyExc_ValueError,
+                         "file descriptor cannot be a negative integer (%i)",
+                         fd);
+            goto exit;
+        }
+    }
+    else {
+        PyObject *_obj = _PyValue_AsObjectAt(PyValue_Borrow(args[_idx[0]]), BOX_SITE_PARSER);
+        if (_obj == NULL) {
+            goto exit;
+        }
+        fd = PyObject_AsFileDescriptor(_obj);
+        Py_DECREF(_obj);
+        if (fd < 0) {
+            goto exit;
+        }
     }
     {
-        Py_ssize_t _bytes = PyLong_AsNativeBytes(args[1], &eventmask, sizeof(unsigned int),
+        Py_ssize_t _bytes = _PyValue_AsNativeBytes(PyValue_Borrow(args[_idx[1]]), &eventmask, sizeof(unsigned int),
                 Py_ASNATIVEBYTES_NATIVE_ENDIAN |
                 Py_ASNATIVEBYTES_ALLOW_INDEX |
                 Py_ASNATIVEBYTES_UNSIGNED_BUFFER);
@@ -895,7 +1114,7 @@ select_epoll_modify(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyO
             }
         }
     }
-    return_value = select_epoll_modify_impl((pyEpoll_Object *)self, fd, eventmask);
+    return_value = select_epoll_modify_impl((pyEpoll_Object *)PyValue_AsKnownObjectBorrow(self), fd, eventmask);
 
 exit:
     return return_value;
@@ -915,15 +1134,15 @@ PyDoc_STRVAR(select_epoll_unregister__doc__,
 "    the target file descriptor of the operation");
 
 #define SELECT_EPOLL_UNREGISTER_METHODDEF    \
-    {"unregister", _PyCFunction_CAST(select_epoll_unregister), METH_FASTCALL|METH_KEYWORDS, select_epoll_unregister__doc__},
+    {"unregister", _PyCFunction_CAST(select_epoll_unregister), METH_VALUE|METH_KEYWORDS, select_epoll_unregister__doc__},
 
-static PyObject *
+static PyValue
 select_epoll_unregister_impl(pyEpoll_Object *self, int fd);
 
-static PyObject *
-select_epoll_unregister(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+select_epoll_unregister(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
@@ -951,19 +1170,37 @@ select_epoll_unregister(PyObject *self, PyObject *const *args, Py_ssize_t nargs,
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[1];
+    Py_ssize_t _idx[1];
     int fd;
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, _idx, 1)) {
         goto exit;
     }
-    fd = PyObject_AsFileDescriptor(args[0]);
-    if (fd < 0) {
-        goto exit;
+    if (PyValue_IsInlineInt(PyValue_Borrow(args[_idx[0]]))) {
+        fd = _PyValue_AsInt(PyValue_Borrow(args[_idx[0]]));
+        if (fd == -1 && PyErr_Occurred()) {
+            goto exit;
+        }
+        if (fd < 0) {
+            PyErr_Format(PyExc_ValueError,
+                         "file descriptor cannot be a negative integer (%i)",
+                         fd);
+            goto exit;
+        }
     }
-    return_value = select_epoll_unregister_impl((pyEpoll_Object *)self, fd);
+    else {
+        PyObject *_obj = _PyValue_AsObjectAt(PyValue_Borrow(args[_idx[0]]), BOX_SITE_PARSER);
+        if (_obj == NULL) {
+            goto exit;
+        }
+        fd = PyObject_AsFileDescriptor(_obj);
+        Py_DECREF(_obj);
+        if (fd < 0) {
+            goto exit;
+        }
+    }
+    return_value = select_epoll_unregister_impl((pyEpoll_Object *)PyValue_AsKnownObjectBorrow(self), fd);
 
 exit:
     return return_value;
@@ -989,16 +1226,16 @@ PyDoc_STRVAR(select_epoll_poll__doc__,
 "report, as a list of (fd, events) 2-tuples.");
 
 #define SELECT_EPOLL_POLL_METHODDEF    \
-    {"poll", _PyCFunction_CAST(select_epoll_poll), METH_FASTCALL|METH_KEYWORDS, select_epoll_poll__doc__},
+    {"poll", _PyCFunction_CAST(select_epoll_poll), METH_VALUE|METH_KEYWORDS, select_epoll_poll__doc__},
 
-static PyObject *
-select_epoll_poll_impl(pyEpoll_Object *self, PyObject *timeout_obj,
+static PyValue
+select_epoll_poll_impl(pyEpoll_Object *self, PyValueBorrow timeout_obj,
                        int maxevents);
 
-static PyObject *
-select_epoll_poll(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+select_epoll_poll(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 2
@@ -1026,31 +1263,24 @@ select_epoll_poll(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObj
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[2];
-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 0;
-    PyObject *timeout_obj = Py_None;
+    Py_ssize_t _idx[2];
+    PyValueBorrow timeout_obj = PyValue_Borrow(PyValue_None);
     int maxevents = -1;
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 0, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 0, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, _idx, 2)) {
         goto exit;
     }
-    if (!noptargs) {
-        goto skip_optional_pos;
+    if (_idx[0] >= 0) {
+        timeout_obj = PyValue_Borrow(args[_idx[0]]);
     }
-    if (args[0]) {
-        timeout_obj = args[0];
-        if (!--noptargs) {
-            goto skip_optional_pos;
+    if (_idx[1] >= 0) {
+        maxevents = _PyValue_AsInt(PyValue_Borrow(args[_idx[1]]));
+        if (maxevents == -1 && PyErr_Occurred()) {
+            goto exit;
         }
     }
-    maxevents = PyLong_AsInt(args[1]);
-    if (maxevents == -1 && PyErr_Occurred()) {
-        goto exit;
-    }
-skip_optional_pos:
-    return_value = select_epoll_poll_impl((pyEpoll_Object *)self, timeout_obj, maxevents);
+    return_value = select_epoll_poll_impl((pyEpoll_Object *)PyValue_AsKnownObjectBorrow(self), timeout_obj, maxevents);
 
 exit:
     return return_value;
@@ -1066,15 +1296,19 @@ PyDoc_STRVAR(select_epoll___enter____doc__,
 "\n");
 
 #define SELECT_EPOLL___ENTER___METHODDEF    \
-    {"__enter__", (PyCFunction)select_epoll___enter__, METH_NOARGS, select_epoll___enter____doc__},
+    {"__enter__", _PyCFunction_CAST(select_epoll___enter__), METH_VALUE|METH_NOARGS, select_epoll___enter____doc__},
 
-static PyObject *
+static PyValue
 select_epoll___enter___impl(pyEpoll_Object *self);
 
-static PyObject *
-select_epoll___enter__(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+select_epoll___enter__(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return select_epoll___enter___impl((pyEpoll_Object *)self);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = select_epoll___enter___impl((pyEpoll_Object *)PyValue_AsKnownObjectBorrow(self));
+
+    return return_value;
 }
 
 #endif /* defined(HAVE_EPOLL) */
@@ -1087,19 +1321,19 @@ PyDoc_STRVAR(select_epoll___exit____doc__,
 "\n");
 
 #define SELECT_EPOLL___EXIT___METHODDEF    \
-    {"__exit__", _PyCFunction_CAST(select_epoll___exit__), METH_FASTCALL, select_epoll___exit____doc__},
+    {"__exit__", _PyCFunction_CAST(select_epoll___exit__), METH_VALUE, select_epoll___exit____doc__},
 
-static PyObject *
-select_epoll___exit___impl(pyEpoll_Object *self, PyObject *exc_type,
-                           PyObject *exc_value, PyObject *exc_tb);
+static PyValue
+select_epoll___exit___impl(pyEpoll_Object *self, PyValueBorrow exc_type,
+                           PyValueBorrow exc_value, PyValueBorrow exc_tb);
 
-static PyObject *
-select_epoll___exit__(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+select_epoll___exit__(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
-    PyObject *exc_type = Py_None;
-    PyObject *exc_value = Py_None;
-    PyObject *exc_tb = Py_None;
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow exc_type = PyValue_Borrow(PyValue_None);
+    PyValueBorrow exc_value = PyValue_Borrow(PyValue_None);
+    PyValueBorrow exc_tb = PyValue_Borrow(PyValue_None);
 
     if (!_PyArg_CheckPositional("__exit__", nargs, 0, 3)) {
         goto exit;
@@ -1107,17 +1341,17 @@ select_epoll___exit__(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
     if (nargs < 1) {
         goto skip_optional;
     }
-    exc_type = args[0];
+    exc_type = PyValue_Borrow(args[0]);
     if (nargs < 2) {
         goto skip_optional;
     }
-    exc_value = args[1];
+    exc_value = PyValue_Borrow(args[1]);
     if (nargs < 3) {
         goto skip_optional;
     }
-    exc_tb = args[2];
+    exc_tb = PyValue_Borrow(args[2]);
 skip_optional:
-    return_value = select_epoll___exit___impl((pyEpoll_Object *)self, exc_type, exc_value, exc_tb);
+    return_value = select_epoll___exit___impl((pyEpoll_Object *)PyValue_AsKnownObjectBorrow(self), exc_type, exc_value, exc_tb);
 
 exit:
     return return_value;
@@ -1145,27 +1379,45 @@ PyDoc_STRVAR(select_kqueue__doc__,
 "To stop listening:\n"
 ">>> kq.control([kevent(sock, KQ_FILTER_WRITE, KQ_EV_DELETE)], 0)");
 
-static PyObject *
+static PyValue
 select_kqueue_impl(PyTypeObject *type);
 
-static PyObject *
-select_kqueue(PyTypeObject *type, PyObject *args, PyObject *kwargs)
+static PyValue
+select_kqueue_value(PyTypeObject *type, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyTypeObject *base_tp = _selectstate_by_type(type)->kqueue_queue_Type;
 
     if ((type == base_tp || type->tp_init == base_tp->tp_init) &&
-        !_PyArg_NoPositional("kqueue", args)) {
+        !_PyArg_NoPositionalStack("kqueue", nargs)) {
         goto exit;
     }
     if ((type == base_tp || type->tp_init == base_tp->tp_init) &&
-        !_PyArg_NoKeywords("kqueue", kwargs)) {
+        !_PyArg_NoKwnames("kqueue", kwnames)) {
         goto exit;
     }
     return_value = select_kqueue_impl(type);
 
 exit:
     return return_value;
+}
+
+Py_VALUE_ENTRY static PyObject *
+select_kqueue(PyTypeObject *type, PyObject *args, PyObject *kwargs)
+{
+    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
+    if (kwargs == NULL || PyDict_GET_SIZE(kwargs) == 0) {
+        return _PyValue_THUNK_EXIT(select_kqueue_value(type, _PyTuple_ITEMS(args), nargs, NULL), BOX_SITE_CALL);
+    }
+    PyObject *kwnames;
+    PyValue *window = _PyValue_StackUnpackDict(_PyThreadState_GET(),
+        _PyTuple_ITEMS(args), nargs, kwargs, &kwnames);
+    if (window == NULL) {
+        return NULL;
+    }
+    PyValue result = select_kqueue_value(type, window, nargs, kwnames);
+    _PyValue_StackUnpackDict_Free(window, nargs, kwnames);
+    return _PyValue_THUNK_EXIT(result, BOX_SITE_CALL);
 }
 
 #endif /* defined(HAVE_KQUEUE) */
@@ -1181,18 +1433,18 @@ PyDoc_STRVAR(select_kqueue_close__doc__,
 "Further operations on the kqueue object will raise an exception.");
 
 #define SELECT_KQUEUE_CLOSE_METHODDEF    \
-    {"close", (PyCFunction)select_kqueue_close, METH_NOARGS, select_kqueue_close__doc__},
+    {"close", _PyCFunction_CAST(select_kqueue_close), METH_VALUE|METH_NOARGS, select_kqueue_close__doc__},
 
-static PyObject *
+static PyValue
 select_kqueue_close_impl(kqueue_queue_Object *self);
 
-static PyObject *
-select_kqueue_close(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+select_kqueue_close(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
 
-    Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = select_kqueue_close_impl((kqueue_queue_Object *)self);
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(self));
+    return_value = select_kqueue_close_impl((kqueue_queue_Object *)PyValue_AsKnownObjectBorrow(self));
     Py_END_CRITICAL_SECTION();
 
     return return_value;
@@ -1209,15 +1461,19 @@ PyDoc_STRVAR(select_kqueue_fileno__doc__,
 "Return the kqueue control file descriptor.");
 
 #define SELECT_KQUEUE_FILENO_METHODDEF    \
-    {"fileno", (PyCFunction)select_kqueue_fileno, METH_NOARGS, select_kqueue_fileno__doc__},
+    {"fileno", _PyCFunction_CAST(select_kqueue_fileno), METH_VALUE|METH_NOARGS, select_kqueue_fileno__doc__},
 
-static PyObject *
+static PyValue
 select_kqueue_fileno_impl(kqueue_queue_Object *self);
 
-static PyObject *
-select_kqueue_fileno(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+select_kqueue_fileno(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return select_kqueue_fileno_impl((kqueue_queue_Object *)self);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = select_kqueue_fileno_impl((kqueue_queue_Object *)PyValue_AsKnownObjectBorrow(self));
+
+    return return_value;
 }
 
 #endif /* defined(HAVE_KQUEUE) */
@@ -1231,22 +1487,22 @@ PyDoc_STRVAR(select_kqueue_fromfd__doc__,
 "Create a kqueue object from a given control fd.");
 
 #define SELECT_KQUEUE_FROMFD_METHODDEF    \
-    {"fromfd", (PyCFunction)select_kqueue_fromfd, METH_O|METH_CLASS, select_kqueue_fromfd__doc__},
+    {"fromfd", _PyCFunction_CAST(select_kqueue_fromfd), METH_VALUE|METH_O|METH_CLASS, select_kqueue_fromfd__doc__},
 
-static PyObject *
+static PyValue
 select_kqueue_fromfd_impl(PyTypeObject *type, int fd);
 
-static PyObject *
-select_kqueue_fromfd(PyObject *type, PyObject *arg)
+static PyValue
+select_kqueue_fromfd(PyValueBorrow type, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int fd;
 
-    fd = PyLong_AsInt(arg);
+    fd = _PyValue_AsInt(PyValue_Borrow(args[0]));
     if (fd == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = select_kqueue_fromfd_impl((PyTypeObject *)type, fd);
+    return_value = select_kqueue_fromfd_impl((PyTypeObject *)PyValue_AsKnownObjectBorrow(type), fd);
 
 exit:
     return return_value;
@@ -1272,34 +1528,35 @@ PyDoc_STRVAR(select_kqueue_control__doc__,
 "    This accepts non-integers for smaller timeouts, too.");
 
 #define SELECT_KQUEUE_CONTROL_METHODDEF    \
-    {"control", _PyCFunction_CAST(select_kqueue_control), METH_FASTCALL, select_kqueue_control__doc__},
+    {"control", _PyCFunction_CAST(select_kqueue_control), METH_VALUE, select_kqueue_control__doc__},
 
-static PyObject *
-select_kqueue_control_impl(kqueue_queue_Object *self, PyObject *changelist,
-                           int maxevents, PyObject *otimeout);
+static PyValue
+select_kqueue_control_impl(kqueue_queue_Object *self,
+                           PyValueBorrow changelist, int maxevents,
+                           PyValueBorrow otimeout);
 
-static PyObject *
-select_kqueue_control(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+select_kqueue_control(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
-    PyObject *changelist;
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow changelist;
     int maxevents;
-    PyObject *otimeout = Py_None;
+    PyValueBorrow otimeout = PyValue_Borrow(PyValue_None);
 
     if (!_PyArg_CheckPositional("control", nargs, 2, 3)) {
         goto exit;
     }
-    changelist = args[0];
-    maxevents = PyLong_AsInt(args[1]);
+    changelist = PyValue_Borrow(args[0]);
+    maxevents = _PyValue_AsInt(PyValue_Borrow(args[1]));
     if (maxevents == -1 && PyErr_Occurred()) {
         goto exit;
     }
     if (nargs < 3) {
         goto skip_optional;
     }
-    otimeout = args[2];
+    otimeout = PyValue_Borrow(args[2]);
 skip_optional:
-    return_value = select_kqueue_control_impl((kqueue_queue_Object *)self, changelist, maxevents, otimeout);
+    return_value = select_kqueue_control_impl((kqueue_queue_Object *)PyValue_AsKnownObjectBorrow(self), changelist, maxevents, otimeout);
 
 exit:
     return return_value;
@@ -1406,4 +1663,4 @@ exit:
 #ifndef SELECT_KQUEUE_CONTROL_METHODDEF
     #define SELECT_KQUEUE_CONTROL_METHODDEF
 #endif /* !defined(SELECT_KQUEUE_CONTROL_METHODDEF) */
-/*[clinic end generated code: output=f6bc02b86073eb99 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=e443ceaebcfda8a8 input=a9049054013a1b77]*/

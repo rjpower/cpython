@@ -5,7 +5,10 @@
 #  define Py_BUILD_CORE_MODULE 1
 #endif
 
+#define Py_VALUE_CORE 1
 #include "Python.h"
+#include "pycore_list.h"          // PyList_AppendValue()
+#include "pycore_value_slots.h"// _PyValue_FromObjectResult()
 #include "posixmodule.h"
 
 #include <errno.h>                // ERANGE
@@ -14,6 +17,11 @@
 #include <unistd.h>               // sysconf()
 
 #include "clinic/grpmodule.c.h"
+/*[clinic input]
+value_emission
+[clinic start generated code]*/
+/*[clinic end generated code: output=da39a3ee5e6b4b0d input=eb7b17088bfd7215]*/
+
 /*[clinic input]
 module grp
 [clinic start generated code]*/
@@ -85,7 +93,7 @@ mkgrent(PyObject *module, struct group *p)
             break;
         }
         PyObject *x = PyUnicode_DecodeFSDefault(group_member);
-        if (x == NULL || PyList_Append(w, x) != 0) {
+        if (x == NULL || PyList_AppendValue(w, PyValue_FromObjectBorrow(x)) != 0) {
             Py_XDECREF(x);
             Py_DECREF(w);
             Py_DECREF(v);
@@ -94,7 +102,7 @@ mkgrent(PyObject *module, struct group *p)
         Py_DECREF(x);
     }
 
-#define SET(i,val) PyStructSequence_SetItem(v, i, val)
+#define SET(i,val) PyStructSequence_SET_VALUE(v, i, PyValue_PrepareOwned(val))
     SET(setIndex++, PyUnicode_DecodeFSDefault(p->gr_name));
     if (p->gr_passwd)
             SET(setIndex++, PyUnicode_DecodeFSDefault(p->gr_passwd));
@@ -125,9 +133,9 @@ Return the group database entry for the given numeric group ID.
 If id is not valid, raise KeyError.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 grp_getgrgid_impl(PyObject *module, gid_t gid)
-/*[clinic end generated code: output=a9e7385cd6df08da input=fca15128dd772588]*/
+/*[clinic end generated code: output=de9f8b801e362942 input=fca15128dd772588]*/
 {
     PyObject *retval = NULL;
     int nomem = 0;
@@ -181,14 +189,14 @@ grp_getgrgid_impl(PyObject *module, gid_t gid)
 #endif
         PyMem_RawFree(buf);
         if (nomem == 1) {
-            return PyErr_NoMemory();
+            return _PyValue_FromObjectResult(PyErr_NoMemory());
         }
         PyObject *gid_obj = _PyLong_FromGid(gid);
         if (gid_obj == NULL)
-            return NULL;
+            return PyValue_NULL;
         PyErr_Format(PyExc_KeyError, "getgrgid(): gid not found: %S", gid_obj);
         Py_DECREF(gid_obj);
-        return NULL;
+        return PyValue_NULL;
     }
     retval = mkgrent(module, p);
 #ifdef HAVE_GETGRGID_R
@@ -196,7 +204,7 @@ grp_getgrgid_impl(PyObject *module, gid_t gid)
 #else
     PyMutex_Unlock(&group_db_mutex);
 #endif
-    return retval;
+    return _PyValue_FromObjectResult(retval);
 }
 
 /*[clinic input]
@@ -209,9 +217,9 @@ Return the group database entry for the given group name.
 If name is not valid, raise KeyError.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 grp_getgrnam_impl(PyObject *module, PyObject *name)
-/*[clinic end generated code: output=67905086f403c21c input=08ded29affa3c863]*/
+/*[clinic end generated code: output=4a91977e9bcdd2d1 input=08ded29affa3c863]*/
 {
     char *buf = NULL, *buf2 = NULL, *name_chars;
     int nomem = 0;
@@ -219,7 +227,7 @@ grp_getgrnam_impl(PyObject *module, PyObject *name)
     PyObject *bytes, *retval = NULL;
 
     if ((bytes = PyUnicode_EncodeFSDefault(name)) == NULL)
-        return NULL;
+        return PyValue_NULL;
     /* check for embedded null bytes */
     if (PyBytes_AsStringAndSize(bytes, &name_chars, NULL) == -1)
         goto out;
@@ -283,7 +291,7 @@ grp_getgrnam_impl(PyObject *module, PyObject *name)
 out:
     PyMem_RawFree(buf);
     Py_DECREF(bytes);
-    return retval;
+    return _PyValue_FromObjectResult(retval);
 }
 
 /*[clinic input]
@@ -295,13 +303,13 @@ An entry whose name starts with '+' or '-' represents an instruction
 to use YP/NIS and may not be accessible via getgrnam or getgrgid.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 grp_getgrall_impl(PyObject *module)
-/*[clinic end generated code: output=585dad35e2e763d7 input=d7df76c825c367df]*/
+/*[clinic end generated code: output=169c5dfcd018e2ab input=d7df76c825c367df]*/
 {
     PyObject *d = PyList_New(0);
     if (d == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     PyMutex_Lock(&group_db_mutex);
@@ -314,7 +322,7 @@ grp_getgrall_impl(PyObject *module)
         // is unlikely since mkgrent() should not be able to call arbitrary
         // Python code.
         PyObject *v = mkgrent(module, p);
-        if (v == NULL || PyList_Append(d, v) != 0) {
+        if (v == NULL || PyList_AppendValue(d, PyValue_FromObjectBorrow(v)) != 0) {
             Py_XDECREF(v);
             Py_CLEAR(d);
             goto done;
@@ -325,7 +333,7 @@ grp_getgrall_impl(PyObject *module)
 done:
     endgrent();
     PyMutex_Unlock(&group_db_mutex);
-    return d;
+    return _PyValue_FromObjectResult(d);
 }
 
 static PyMethodDef grp_methods[] = {

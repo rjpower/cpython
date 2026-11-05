@@ -2,15 +2,23 @@
 preserve
 [clinic start generated code]*/
 
+#ifndef Py_VALUE_CORE
+#  error "value-emission Clinic output requires Py_VALUE_CORE"
+#endif
+
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 #  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
 #  include "pycore_value.h"       // _PyValue_STATIC_IMMORTAL()
 #endif
-#include "pycore_borrow.h"        // _PyBorrow_TupleItems()
 #include "pycore_long.h"          // _PyLong_UnsignedInt_Converter()
-#include "pycore_modsupport.h"    // _PyArg_UnpackKeywords()
+#include "pycore_long_value.h"    // _PyValue_AsInt()
+#include "pycore_modsupport.h"    // _PyArg_UnpackKeywordsValue()
+#include "pycore_tuple.h"         // _PyTuple_ITEMS()
 #include "pycore_unicodeobject.h" // _PyUnicode_AsUTF8NoNUL()
+#include "pycore_value_call.h"    // METH_VALUE
+#include "pycore_value_ops.h"     // _PyValue_IsTrue()
+#include "pycore_value_slots.h"   // _PyValue_THUNK_EXIT()
 
 PyDoc_STRVAR(complexchar_new__doc__,
 "complexchar(text, /, attr=0, pair=0)\n"
@@ -30,14 +38,14 @@ PyDoc_STRVAR(complexchar_new__doc__,
 "is a color pair number.  The object is immutable; str(cc) returns its\n"
 "text, and the attr and pair attributes return its rendition.");
 
-static PyObject *
+static PyValue
 complexchar_new_impl(PyTypeObject *type, PyObject *text, attr_t attr,
                      int pair);
 
-static PyObject *
-complexchar_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
+static PyValue
+complexchar_new_value(PyTypeObject *type, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 2
@@ -65,48 +73,57 @@ complexchar_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[3];
-    PyObject * const *fastargs;
-    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
-    Py_ssize_t noptargs = nargs + (kwargs ? PyDict_GET_SIZE(kwargs) : 0) - 1;
+    Py_ssize_t _idx[3];
     PyObject *text;
     attr_t attr = 0;
     int pair = 0;
 
-    PyObject *const *_args_items = _PyBorrow_TupleItems(args, Py_MIN(nargs, 3));
-    if (_args_items == NULL) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 1, /*maxpos*/ 3, /*minkw*/ 0, /*varpos*/ 0, _idx, 3)) {
         goto exit;
     }
-    fastargs = _PyArg_UnpackKeywords(_args_items, nargs, kwargs, NULL, &_parser,
-            /*minpos*/ 1, /*maxpos*/ 3, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!fastargs) {
+    if (!PyValue_IsObject(PyValue_Borrow(args[_idx[0]]))) {
+        _PyArg_BadArgumentValue("complexchar", "argument 1", "str", PyValue_Borrow(args[_idx[0]]));
         goto exit;
     }
-    if (!PyUnicode_Check(fastargs[0])) {
-        _PyArg_BadArgument("complexchar", "argument 1", "str", fastargs[0]);
+    if (!PyUnicode_Check(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[0]])))) {
+        _PyArg_BadArgument("complexchar", "argument 1", "str", PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[0]])));
         goto exit;
     }
-    text = fastargs[0];
-    if (!noptargs) {
-        goto skip_optional_pos;
-    }
-    if (fastargs[1]) {
-        if (!attr_converter(fastargs[1], &attr)) {
+    text = PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[0]]));
+    if (_idx[1] >= 0) {
+        if (!attr_converter(PyValue_Borrow(args[_idx[1]]), &attr)) {
             goto exit;
         }
-        if (!--noptargs) {
-            goto skip_optional_pos;
+    }
+    if (_idx[2] >= 0) {
+        pair = _PyValue_AsInt(PyValue_Borrow(args[_idx[2]]));
+        if (pair == -1 && PyErr_Occurred()) {
+            goto exit;
         }
     }
-    pair = PyLong_AsInt(fastargs[2]);
-    if (pair == -1 && PyErr_Occurred()) {
-        goto exit;
-    }
-skip_optional_pos:
     return_value = complexchar_new_impl(type, text, attr, pair);
 
 exit:
     return return_value;
+}
+
+Py_VALUE_ENTRY static PyObject *
+complexchar_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
+{
+    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
+    if (kwargs == NULL || PyDict_GET_SIZE(kwargs) == 0) {
+        return _PyValue_THUNK_EXIT(complexchar_new_value(type, _PyTuple_ITEMS(args), nargs, NULL), BOX_SITE_CALL);
+    }
+    PyObject *kwnames;
+    PyValue *window = _PyValue_StackUnpackDict(_PyThreadState_GET(),
+        _PyTuple_ITEMS(args), nargs, kwargs, &kwnames);
+    if (window == NULL) {
+        return NULL;
+    }
+    PyValue result = complexchar_new_value(type, window, nargs, kwnames);
+    _PyValue_StackUnpackDict_Free(window, nargs, kwnames);
+    return _PyValue_THUNK_EXIT(result, BOX_SITE_CALL);
 }
 
 PyDoc_STRVAR(complexstr_new__doc__,
@@ -130,14 +147,14 @@ PyDoc_STRVAR(complexstr_new__doc__,
 "pair (if given) style every cell.  Otherwise each item carries its own\n"
 "rendition, and attr and pair must be omitted.");
 
-static PyObject *
-complexstr_new_impl(PyTypeObject *type, PyObject *cells, PyObject *attr,
-                    PyObject *pair);
+static PyValue
+complexstr_new_impl(PyTypeObject *type, PyValueBorrow cells,
+                    PyValueBorrow attr, PyValueBorrow pair);
 
-static PyObject *
-complexstr_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
+static PyValue
+complexstr_new_value(PyTypeObject *type, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 2
@@ -165,39 +182,44 @@ complexstr_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[3];
-    PyObject * const *fastargs;
-    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
-    Py_ssize_t noptargs = nargs + (kwargs ? PyDict_GET_SIZE(kwargs) : 0) - 1;
-    PyObject *cells;
-    PyObject *attr = NULL;
-    PyObject *pair = NULL;
+    Py_ssize_t _idx[3];
+    PyValueBorrow cells;
+    PyValueBorrow attr = PyValue_Borrow(PyValue_NULL);
+    PyValueBorrow pair = PyValue_Borrow(PyValue_NULL);
 
-    PyObject *const *_args_items = _PyBorrow_TupleItems(args, Py_MIN(nargs, 3));
-    if (_args_items == NULL) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 1, /*maxpos*/ 3, /*minkw*/ 0, /*varpos*/ 0, _idx, 3)) {
         goto exit;
     }
-    fastargs = _PyArg_UnpackKeywords(_args_items, nargs, kwargs, NULL, &_parser,
-            /*minpos*/ 1, /*maxpos*/ 3, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!fastargs) {
-        goto exit;
+    cells = PyValue_Borrow(args[_idx[0]]);
+    if (_idx[1] >= 0) {
+        attr = PyValue_Borrow(args[_idx[1]]);
     }
-    cells = fastargs[0];
-    if (!noptargs) {
-        goto skip_optional_pos;
+    if (_idx[2] >= 0) {
+        pair = PyValue_Borrow(args[_idx[2]]);
     }
-    if (fastargs[1]) {
-        attr = fastargs[1];
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
-    }
-    pair = fastargs[2];
-skip_optional_pos:
     return_value = complexstr_new_impl(type, cells, attr, pair);
 
 exit:
     return return_value;
+}
+
+Py_VALUE_ENTRY static PyObject *
+complexstr_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
+{
+    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
+    if (kwargs == NULL || PyDict_GET_SIZE(kwargs) == 0) {
+        return _PyValue_THUNK_EXIT(complexstr_new_value(type, _PyTuple_ITEMS(args), nargs, NULL), BOX_SITE_CALL);
+    }
+    PyObject *kwnames;
+    PyValue *window = _PyValue_StackUnpackDict(_PyThreadState_GET(),
+        _PyTuple_ITEMS(args), nargs, kwargs, &kwnames);
+    if (window == NULL) {
+        return NULL;
+    }
+    PyValue result = complexstr_new_value(type, window, nargs, kwnames);
+    _PyValue_StackUnpackDict_Free(window, nargs, kwnames);
+    return _PyValue_THUNK_EXIT(result, BOX_SITE_CALL);
 }
 
 PyDoc_STRVAR(_curses_window_addch__doc__,
@@ -256,7 +278,7 @@ _curses_window_addch(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
     }
     ch = args[offset];
     if (nargs == 2 || nargs == 4) {
-        if (!attr_converter(args[nargs - 1], &attr)) {
+        if (!attr_converter_object(args[nargs - 1], &attr)) {
             goto exit;
         }
         group_right_1 = 1;
@@ -323,7 +345,7 @@ _curses_window_addstr(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
     }
     str = args[offset];
     if (nargs == 2 || nargs == 4) {
-        if (!attr_converter(args[nargs - 1], &attr)) {
+        if (!attr_converter_object(args[nargs - 1], &attr)) {
             goto exit;
         }
         group_right_1 = 1;
@@ -397,7 +419,7 @@ _curses_window_addnstr(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
         goto exit;
     }
     if (nargs == 3 || nargs == 5) {
-        if (!attr_converter(args[nargs - 1], &attr)) {
+        if (!attr_converter_object(args[nargs - 1], &attr)) {
             goto exit;
         }
         group_right_1 = 1;
@@ -438,7 +460,7 @@ _curses_window_bkgd(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
     }
     ch = args[0];
     if (nargs >= 2) {
-        if (!attr_converter(args[1], &attr)) {
+        if (!attr_converter_object(args[1], &attr)) {
             goto exit;
         }
         group_right_1 = 1;
@@ -456,21 +478,21 @@ PyDoc_STRVAR(_curses_window_attroff__doc__,
 "Remove attribute attr from the \"background\" set.");
 
 #define _CURSES_WINDOW_ATTROFF_METHODDEF    \
-    {"attroff", (PyCFunction)_curses_window_attroff, METH_O, _curses_window_attroff__doc__},
+    {"attroff", _PyCFunction_CAST(_curses_window_attroff), METH_VALUE|METH_O, _curses_window_attroff__doc__},
 
-static PyObject *
+static PyValue
 _curses_window_attroff_impl(PyCursesWindowObject *self, attr_t attr);
 
-static PyObject *
-_curses_window_attroff(PyObject *self, PyObject *arg)
+static PyValue
+_curses_window_attroff(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     attr_t attr;
 
-    if (!attr_converter(arg, &attr)) {
+    if (!attr_converter(PyValue_Borrow(args[0]), &attr)) {
         goto exit;
     }
-    return_value = _curses_window_attroff_impl((PyCursesWindowObject *)self, attr);
+    return_value = _curses_window_attroff_impl((PyCursesWindowObject *)PyValue_AsKnownObjectBorrow(self), attr);
 
 exit:
     return return_value;
@@ -483,21 +505,21 @@ PyDoc_STRVAR(_curses_window_attron__doc__,
 "Add attribute attr to the \"background\" set.");
 
 #define _CURSES_WINDOW_ATTRON_METHODDEF    \
-    {"attron", (PyCFunction)_curses_window_attron, METH_O, _curses_window_attron__doc__},
+    {"attron", _PyCFunction_CAST(_curses_window_attron), METH_VALUE|METH_O, _curses_window_attron__doc__},
 
-static PyObject *
+static PyValue
 _curses_window_attron_impl(PyCursesWindowObject *self, attr_t attr);
 
-static PyObject *
-_curses_window_attron(PyObject *self, PyObject *arg)
+static PyValue
+_curses_window_attron(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     attr_t attr;
 
-    if (!attr_converter(arg, &attr)) {
+    if (!attr_converter(PyValue_Borrow(args[0]), &attr)) {
         goto exit;
     }
-    return_value = _curses_window_attron_impl((PyCursesWindowObject *)self, attr);
+    return_value = _curses_window_attron_impl((PyCursesWindowObject *)PyValue_AsKnownObjectBorrow(self), attr);
 
 exit:
     return return_value;
@@ -510,21 +532,21 @@ PyDoc_STRVAR(_curses_window_attrset__doc__,
 "Set the \"background\" set of attributes.");
 
 #define _CURSES_WINDOW_ATTRSET_METHODDEF    \
-    {"attrset", (PyCFunction)_curses_window_attrset, METH_O, _curses_window_attrset__doc__},
+    {"attrset", _PyCFunction_CAST(_curses_window_attrset), METH_VALUE|METH_O, _curses_window_attrset__doc__},
 
-static PyObject *
+static PyValue
 _curses_window_attrset_impl(PyCursesWindowObject *self, attr_t attr);
 
-static PyObject *
-_curses_window_attrset(PyObject *self, PyObject *arg)
+static PyValue
+_curses_window_attrset(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     attr_t attr;
 
-    if (!attr_converter(arg, &attr)) {
+    if (!attr_converter(PyValue_Borrow(args[0]), &attr)) {
         goto exit;
     }
-    return_value = _curses_window_attrset_impl((PyCursesWindowObject *)self, attr);
+    return_value = _curses_window_attrset_impl((PyCursesWindowObject *)PyValue_AsKnownObjectBorrow(self), attr);
 
 exit:
     return return_value;
@@ -539,15 +561,19 @@ PyDoc_STRVAR(_curses_window_attr_get__doc__,
 "Return the window\'s attributes and color pair as (attrs, pair).");
 
 #define _CURSES_WINDOW_ATTR_GET_METHODDEF    \
-    {"attr_get", (PyCFunction)_curses_window_attr_get, METH_NOARGS, _curses_window_attr_get__doc__},
+    {"attr_get", _PyCFunction_CAST(_curses_window_attr_get), METH_VALUE|METH_NOARGS, _curses_window_attr_get__doc__},
 
-static PyObject *
+static PyValue
 _curses_window_attr_get_impl(PyCursesWindowObject *self);
 
-static PyObject *
-_curses_window_attr_get(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+_curses_window_attr_get(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _curses_window_attr_get_impl((PyCursesWindowObject *)self);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _curses_window_attr_get_impl((PyCursesWindowObject *)PyValue_AsKnownObjectBorrow(self));
+
+    return return_value;
 }
 
 #endif /* defined(HAVE_CURSES_WATTR_GET) */
@@ -561,33 +587,33 @@ PyDoc_STRVAR(_curses_window_attr_set__doc__,
 "Set the window\'s attributes and color pair.");
 
 #define _CURSES_WINDOW_ATTR_SET_METHODDEF    \
-    {"attr_set", _PyCFunction_CAST(_curses_window_attr_set), METH_FASTCALL, _curses_window_attr_set__doc__},
+    {"attr_set", _PyCFunction_CAST(_curses_window_attr_set), METH_VALUE, _curses_window_attr_set__doc__},
 
-static PyObject *
+static PyValue
 _curses_window_attr_set_impl(PyCursesWindowObject *self, attr_t attr,
                              int pair);
 
-static PyObject *
-_curses_window_attr_set(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_curses_window_attr_set(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     attr_t attr;
     int pair = 0;
 
     if (!_PyArg_CheckPositional("attr_set", nargs, 1, 2)) {
         goto exit;
     }
-    if (!attr_converter(args[0], &attr)) {
+    if (!attr_converter(PyValue_Borrow(args[0]), &attr)) {
         goto exit;
     }
     if (nargs < 2) {
         goto skip_optional;
     }
-    if (!pair_converter(args[1], &pair)) {
+    if (!pair_converter(PyValue_Borrow(args[1]), &pair)) {
         goto exit;
     }
 skip_optional:
-    return_value = _curses_window_attr_set_impl((PyCursesWindowObject *)self, attr, pair);
+    return_value = _curses_window_attr_set_impl((PyCursesWindowObject *)PyValue_AsKnownObjectBorrow(self), attr, pair);
 
 exit:
     return return_value;
@@ -604,21 +630,21 @@ PyDoc_STRVAR(_curses_window_attr_on__doc__,
 "Turn on the given attributes without affecting any others.");
 
 #define _CURSES_WINDOW_ATTR_ON_METHODDEF    \
-    {"attr_on", (PyCFunction)_curses_window_attr_on, METH_O, _curses_window_attr_on__doc__},
+    {"attr_on", _PyCFunction_CAST(_curses_window_attr_on), METH_VALUE|METH_O, _curses_window_attr_on__doc__},
 
-static PyObject *
+static PyValue
 _curses_window_attr_on_impl(PyCursesWindowObject *self, attr_t attr);
 
-static PyObject *
-_curses_window_attr_on(PyObject *self, PyObject *arg)
+static PyValue
+_curses_window_attr_on(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     attr_t attr;
 
-    if (!attr_converter(arg, &attr)) {
+    if (!attr_converter(PyValue_Borrow(args[0]), &attr)) {
         goto exit;
     }
-    return_value = _curses_window_attr_on_impl((PyCursesWindowObject *)self, attr);
+    return_value = _curses_window_attr_on_impl((PyCursesWindowObject *)PyValue_AsKnownObjectBorrow(self), attr);
 
 exit:
     return return_value;
@@ -635,21 +661,21 @@ PyDoc_STRVAR(_curses_window_attr_off__doc__,
 "Turn off the given attributes without affecting any others.");
 
 #define _CURSES_WINDOW_ATTR_OFF_METHODDEF    \
-    {"attr_off", (PyCFunction)_curses_window_attr_off, METH_O, _curses_window_attr_off__doc__},
+    {"attr_off", _PyCFunction_CAST(_curses_window_attr_off), METH_VALUE|METH_O, _curses_window_attr_off__doc__},
 
-static PyObject *
+static PyValue
 _curses_window_attr_off_impl(PyCursesWindowObject *self, attr_t attr);
 
-static PyObject *
-_curses_window_attr_off(PyObject *self, PyObject *arg)
+static PyValue
+_curses_window_attr_off(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     attr_t attr;
 
-    if (!attr_converter(arg, &attr)) {
+    if (!attr_converter(PyValue_Borrow(args[0]), &attr)) {
         goto exit;
     }
-    return_value = _curses_window_attr_off_impl((PyCursesWindowObject *)self, attr);
+    return_value = _curses_window_attr_off_impl((PyCursesWindowObject *)PyValue_AsKnownObjectBorrow(self), attr);
 
 exit:
     return return_value;
@@ -666,21 +692,21 @@ PyDoc_STRVAR(_curses_window_color_set__doc__,
 "Set the window\'s color pair attribute.");
 
 #define _CURSES_WINDOW_COLOR_SET_METHODDEF    \
-    {"color_set", (PyCFunction)_curses_window_color_set, METH_O, _curses_window_color_set__doc__},
+    {"color_set", _PyCFunction_CAST(_curses_window_color_set), METH_VALUE|METH_O, _curses_window_color_set__doc__},
 
-static PyObject *
+static PyValue
 _curses_window_color_set_impl(PyCursesWindowObject *self, int pair);
 
-static PyObject *
-_curses_window_color_set(PyObject *self, PyObject *arg)
+static PyValue
+_curses_window_color_set(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int pair;
 
-    if (!pair_converter(arg, &pair)) {
+    if (!pair_converter(PyValue_Borrow(args[0]), &pair)) {
         goto exit;
     }
-    return_value = _curses_window_color_set_impl((PyCursesWindowObject *)self, pair);
+    return_value = _curses_window_color_set_impl((PyCursesWindowObject *)PyValue_AsKnownObjectBorrow(self), pair);
 
 exit:
     return return_value;
@@ -695,15 +721,19 @@ PyDoc_STRVAR(_curses_window_getattrs__doc__,
 "Return the window\'s current attributes.");
 
 #define _CURSES_WINDOW_GETATTRS_METHODDEF    \
-    {"getattrs", (PyCFunction)_curses_window_getattrs, METH_NOARGS, _curses_window_getattrs__doc__},
+    {"getattrs", _PyCFunction_CAST(_curses_window_getattrs), METH_VALUE|METH_NOARGS, _curses_window_getattrs__doc__},
 
-static PyObject *
+static PyValue
 _curses_window_getattrs_impl(PyCursesWindowObject *self);
 
-static PyObject *
-_curses_window_getattrs(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+_curses_window_getattrs(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _curses_window_getattrs_impl((PyCursesWindowObject *)self);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _curses_window_getattrs_impl((PyCursesWindowObject *)PyValue_AsKnownObjectBorrow(self));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(_curses_window_bkgdset__doc__,
@@ -736,7 +766,7 @@ _curses_window_bkgdset(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
     }
     ch = args[0];
     if (nargs >= 2) {
-        if (!attr_converter(args[1], &attr)) {
+        if (!attr_converter_object(args[1], &attr)) {
             goto exit;
         }
         group_right_1 = 1;
@@ -776,26 +806,27 @@ PyDoc_STRVAR(_curses_window_border__doc__,
 "default character to be used for that parameter.");
 
 #define _CURSES_WINDOW_BORDER_METHODDEF    \
-    {"border", _PyCFunction_CAST(_curses_window_border), METH_FASTCALL, _curses_window_border__doc__},
+    {"border", _PyCFunction_CAST(_curses_window_border), METH_VALUE, _curses_window_border__doc__},
 
-static PyObject *
-_curses_window_border_impl(PyCursesWindowObject *self, PyObject *ls,
-                           PyObject *rs, PyObject *ts, PyObject *bs,
-                           PyObject *tl, PyObject *tr, PyObject *bl,
-                           PyObject *br);
+static PyValue
+_curses_window_border_impl(PyCursesWindowObject *self, PyValueBorrow ls,
+                           PyValueBorrow rs, PyValueBorrow ts,
+                           PyValueBorrow bs, PyValueBorrow tl,
+                           PyValueBorrow tr, PyValueBorrow bl,
+                           PyValueBorrow br);
 
-static PyObject *
-_curses_window_border(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_curses_window_border(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
-    PyObject *ls = NULL;
-    PyObject *rs = NULL;
-    PyObject *ts = NULL;
-    PyObject *bs = NULL;
-    PyObject *tl = NULL;
-    PyObject *tr = NULL;
-    PyObject *bl = NULL;
-    PyObject *br = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow ls = PyValue_Borrow(PyValue_NULL);
+    PyValueBorrow rs = PyValue_Borrow(PyValue_NULL);
+    PyValueBorrow ts = PyValue_Borrow(PyValue_NULL);
+    PyValueBorrow bs = PyValue_Borrow(PyValue_NULL);
+    PyValueBorrow tl = PyValue_Borrow(PyValue_NULL);
+    PyValueBorrow tr = PyValue_Borrow(PyValue_NULL);
+    PyValueBorrow bl = PyValue_Borrow(PyValue_NULL);
+    PyValueBorrow br = PyValue_Borrow(PyValue_NULL);
 
     if (!_PyArg_CheckPositional("border", nargs, 0, 8)) {
         goto exit;
@@ -803,37 +834,37 @@ _curses_window_border(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
     if (nargs < 1) {
         goto skip_optional;
     }
-    ls = args[0];
+    ls = PyValue_Borrow(args[0]);
     if (nargs < 2) {
         goto skip_optional;
     }
-    rs = args[1];
+    rs = PyValue_Borrow(args[1]);
     if (nargs < 3) {
         goto skip_optional;
     }
-    ts = args[2];
+    ts = PyValue_Borrow(args[2]);
     if (nargs < 4) {
         goto skip_optional;
     }
-    bs = args[3];
+    bs = PyValue_Borrow(args[3]);
     if (nargs < 5) {
         goto skip_optional;
     }
-    tl = args[4];
+    tl = PyValue_Borrow(args[4]);
     if (nargs < 6) {
         goto skip_optional;
     }
-    tr = args[5];
+    tr = PyValue_Borrow(args[5]);
     if (nargs < 7) {
         goto skip_optional;
     }
-    bl = args[6];
+    bl = PyValue_Borrow(args[6]);
     if (nargs < 8) {
         goto skip_optional;
     }
-    br = args[7];
+    br = PyValue_Borrow(args[7]);
 skip_optional:
-    return_value = _curses_window_border_impl((PyCursesWindowObject *)self, ls, rs, ts, bs, tl, tr, bl, br);
+    return_value = _curses_window_border_impl((PyCursesWindowObject *)PyValue_AsKnownObjectBorrow(self), ls, rs, ts, bs, tl, tr, bl, br);
 
 exit:
     return return_value;
@@ -948,7 +979,7 @@ _curses_window_chgat(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
         }
         group_left_2 = 1;
     }
-    if (!attr_converter(args[nargs - 1], &attr)) {
+    if (!attr_converter_object(args[nargs - 1], &attr)) {
         goto exit;
     }
     return_value = _curses_window_chgat_impl((PyCursesWindowObject *)self, group_left_1, y, x, group_left_2, n, attr);
@@ -1089,15 +1120,19 @@ PyDoc_STRVAR(_curses_window_dupwin__doc__,
 "changes to one do not affect the other.");
 
 #define _CURSES_WINDOW_DUPWIN_METHODDEF    \
-    {"dupwin", (PyCFunction)_curses_window_dupwin, METH_NOARGS, _curses_window_dupwin__doc__},
+    {"dupwin", _PyCFunction_CAST(_curses_window_dupwin), METH_VALUE|METH_NOARGS, _curses_window_dupwin__doc__},
 
-static PyObject *
+static PyValue
 _curses_window_dupwin_impl(PyCursesWindowObject *self);
 
-static PyObject *
-_curses_window_dupwin(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+_curses_window_dupwin(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _curses_window_dupwin_impl((PyCursesWindowObject *)self);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _curses_window_dupwin_impl((PyCursesWindowObject *)PyValue_AsKnownObjectBorrow(self));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(_curses_window_echochar__doc__,
@@ -1130,7 +1165,7 @@ _curses_window_echochar(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
     }
     ch = args[0];
     if (nargs >= 2) {
-        if (!attr_converter(args[1], &attr)) {
+        if (!attr_converter_object(args[1], &attr)) {
             goto exit;
         }
         group_right_1 = 1;
@@ -1155,30 +1190,30 @@ PyDoc_STRVAR(_curses_window_enclose__doc__,
 "    X-coordinate.");
 
 #define _CURSES_WINDOW_ENCLOSE_METHODDEF    \
-    {"enclose", _PyCFunction_CAST(_curses_window_enclose), METH_FASTCALL, _curses_window_enclose__doc__},
+    {"enclose", _PyCFunction_CAST(_curses_window_enclose), METH_VALUE, _curses_window_enclose__doc__},
 
-static PyObject *
+static PyValue
 _curses_window_enclose_impl(PyCursesWindowObject *self, int y, int x);
 
-static PyObject *
-_curses_window_enclose(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_curses_window_enclose(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int y;
     int x;
 
     if (!_PyArg_CheckPositional("enclose", nargs, 2, 2)) {
         goto exit;
     }
-    y = PyLong_AsInt(args[0]);
+    y = _PyValue_AsInt(PyValue_Borrow(args[0]));
     if (y == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    x = PyLong_AsInt(args[1]);
+    x = _PyValue_AsInt(PyValue_Borrow(args[1]));
     if (x == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = _curses_window_enclose_impl((PyCursesWindowObject *)self, y, x);
+    return_value = _curses_window_enclose_impl((PyCursesWindowObject *)PyValue_AsKnownObjectBorrow(self), y, x);
 
 exit:
     return return_value;
@@ -1206,16 +1241,16 @@ PyDoc_STRVAR(_curses_window_mouse_trafo__doc__,
 "outside the window.");
 
 #define _CURSES_WINDOW_MOUSE_TRAFO_METHODDEF    \
-    {"mouse_trafo", _PyCFunction_CAST(_curses_window_mouse_trafo), METH_FASTCALL, _curses_window_mouse_trafo__doc__},
+    {"mouse_trafo", _PyCFunction_CAST(_curses_window_mouse_trafo), METH_VALUE, _curses_window_mouse_trafo__doc__},
 
-static PyObject *
+static PyValue
 _curses_window_mouse_trafo_impl(PyCursesWindowObject *self, int y, int x,
                                 int to_screen);
 
-static PyObject *
-_curses_window_mouse_trafo(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_curses_window_mouse_trafo(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int y;
     int x;
     int to_screen;
@@ -1223,19 +1258,19 @@ _curses_window_mouse_trafo(PyObject *self, PyObject *const *args, Py_ssize_t nar
     if (!_PyArg_CheckPositional("mouse_trafo", nargs, 3, 3)) {
         goto exit;
     }
-    y = PyLong_AsInt(args[0]);
+    y = _PyValue_AsInt(PyValue_Borrow(args[0]));
     if (y == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    x = PyLong_AsInt(args[1]);
+    x = _PyValue_AsInt(PyValue_Borrow(args[1]));
     if (x == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    to_screen = PyObject_IsTrue(args[2]);
+    to_screen = _PyValue_IsTrue(PyValue_Borrow(args[2]));
     if (to_screen < 0) {
         goto exit;
     }
-    return_value = _curses_window_mouse_trafo_impl((PyCursesWindowObject *)self, y, x, to_screen);
+    return_value = _curses_window_mouse_trafo_impl((PyCursesWindowObject *)PyValue_AsKnownObjectBorrow(self), y, x, to_screen);
 
 exit:
     return return_value;
@@ -1250,15 +1285,19 @@ PyDoc_STRVAR(_curses_window_getbkgd__doc__,
 "Return the window\'s current background character/attribute pair.");
 
 #define _CURSES_WINDOW_GETBKGD_METHODDEF    \
-    {"getbkgd", (PyCFunction)_curses_window_getbkgd, METH_NOARGS, _curses_window_getbkgd__doc__},
+    {"getbkgd", _PyCFunction_CAST(_curses_window_getbkgd), METH_VALUE|METH_NOARGS, _curses_window_getbkgd__doc__},
 
-static PyObject *
+static PyValue
 _curses_window_getbkgd_impl(PyCursesWindowObject *self);
 
-static PyObject *
-_curses_window_getbkgd(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+_curses_window_getbkgd(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _curses_window_getbkgd_impl((PyCursesWindowObject *)self);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _curses_window_getbkgd_impl((PyCursesWindowObject *)PyValue_AsKnownObjectBorrow(self));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(_curses_window_in_wch__doc__,
@@ -1320,15 +1359,19 @@ PyDoc_STRVAR(_curses_window_getbkgrnd__doc__,
 "Return the window\'s current background complex character.");
 
 #define _CURSES_WINDOW_GETBKGRND_METHODDEF    \
-    {"getbkgrnd", (PyCFunction)_curses_window_getbkgrnd, METH_NOARGS, _curses_window_getbkgrnd__doc__},
+    {"getbkgrnd", _PyCFunction_CAST(_curses_window_getbkgrnd), METH_VALUE|METH_NOARGS, _curses_window_getbkgrnd__doc__},
 
-static PyObject *
+static PyValue
 _curses_window_getbkgrnd_impl(PyCursesWindowObject *self);
 
-static PyObject *
-_curses_window_getbkgrnd(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+_curses_window_getbkgrnd(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _curses_window_getbkgrnd_impl((PyCursesWindowObject *)self);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _curses_window_getbkgrnd_impl((PyCursesWindowObject *)PyValue_AsKnownObjectBorrow(self));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(_curses_window_getch__doc__,
@@ -1621,7 +1664,7 @@ _curses_window_hline(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
         goto exit;
     }
     if (nargs == 3 || nargs == 5) {
-        if (!attr_converter(args[nargs - 1], &attr)) {
+        if (!attr_converter_object(args[nargs - 1], &attr)) {
             goto exit;
         }
         group_right_1 = 1;
@@ -1686,7 +1729,7 @@ _curses_window_insch(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
     }
     ch = args[offset];
     if (nargs == 2 || nargs == 4) {
-        if (!attr_converter(args[nargs - 1], &attr)) {
+        if (!attr_converter_object(args[nargs - 1], &attr)) {
             goto exit;
         }
         group_right_1 = 1;
@@ -2049,7 +2092,7 @@ _curses_window_insstr(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
     }
     str = args[offset];
     if (nargs == 2 || nargs == 4) {
-        if (!attr_converter(args[nargs - 1], &attr)) {
+        if (!attr_converter_object(args[nargs - 1], &attr)) {
             goto exit;
         }
         group_right_1 = 1;
@@ -2125,7 +2168,7 @@ _curses_window_insnstr(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
         goto exit;
     }
     if (nargs == 3 || nargs == 5) {
-        if (!attr_converter(args[nargs - 1], &attr)) {
+        if (!attr_converter_object(args[nargs - 1], &attr)) {
             goto exit;
         }
         group_right_1 = 1;
@@ -2149,22 +2192,22 @@ PyDoc_STRVAR(_curses_window_is_linetouched__doc__,
 "window.");
 
 #define _CURSES_WINDOW_IS_LINETOUCHED_METHODDEF    \
-    {"is_linetouched", (PyCFunction)_curses_window_is_linetouched, METH_O, _curses_window_is_linetouched__doc__},
+    {"is_linetouched", _PyCFunction_CAST(_curses_window_is_linetouched), METH_VALUE|METH_O, _curses_window_is_linetouched__doc__},
 
-static PyObject *
+static PyValue
 _curses_window_is_linetouched_impl(PyCursesWindowObject *self, int line);
 
-static PyObject *
-_curses_window_is_linetouched(PyObject *self, PyObject *arg)
+static PyValue
+_curses_window_is_linetouched(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int line;
 
-    line = PyLong_AsInt(arg);
+    line = _PyValue_AsInt(PyValue_Borrow(args[0]));
     if (line == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = _curses_window_is_linetouched_impl((PyCursesWindowObject *)self, line);
+    return_value = _curses_window_is_linetouched_impl((PyCursesWindowObject *)PyValue_AsKnownObjectBorrow(self), line);
 
 exit:
     return return_value;
@@ -2257,15 +2300,19 @@ PyDoc_STRVAR(_curses_window_noutrefresh__doc__,
 "screen.  To accomplish that, call doupdate().");
 
 #define _CURSES_WINDOW_NOUTREFRESH_METHODDEF    \
-    {"noutrefresh", (PyCFunction)_curses_window_noutrefresh, METH_NOARGS, _curses_window_noutrefresh__doc__},
+    {"noutrefresh", _PyCFunction_CAST(_curses_window_noutrefresh), METH_VALUE|METH_NOARGS, _curses_window_noutrefresh__doc__},
 
-static PyObject *
+static PyValue
 _curses_window_noutrefresh_impl(PyCursesWindowObject *self);
 
-static PyObject *
-_curses_window_noutrefresh(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+_curses_window_noutrefresh(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _curses_window_noutrefresh_impl((PyCursesWindowObject *)self);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _curses_window_noutrefresh_impl((PyCursesWindowObject *)PyValue_AsKnownObjectBorrow(self));
+
+    return return_value;
 }
 
 #endif /* !defined(py_is_pad) */
@@ -2445,17 +2492,19 @@ PyDoc_STRVAR(_curses_window_putwin__doc__,
 "This information can be later retrieved using the getwin() function.");
 
 #define _CURSES_WINDOW_PUTWIN_METHODDEF    \
-    {"putwin", (PyCFunction)_curses_window_putwin, METH_O, _curses_window_putwin__doc__},
+    {"putwin", _PyCFunction_CAST(_curses_window_putwin), METH_VALUE|METH_O, _curses_window_putwin__doc__},
 
-static PyObject *
-_curses_window_putwin_impl(PyCursesWindowObject *self, PyObject *file);
+static PyValue
+_curses_window_putwin_impl(PyCursesWindowObject *self, PyValueBorrow file);
 
-static PyObject *
-_curses_window_putwin(PyObject *self, PyObject *file)
+static PyValue
+_curses_window_putwin(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow file;
 
-    return_value = _curses_window_putwin_impl((PyCursesWindowObject *)self, file);
+    file = PyValue_Borrow(args[0]);
+    return_value = _curses_window_putwin_impl((PyCursesWindowObject *)PyValue_AsKnownObjectBorrow(self), file);
 
     return return_value;
 }
@@ -2474,30 +2523,30 @@ PyDoc_STRVAR(_curses_window_redrawln__doc__,
 "They should be completely redrawn on the next refresh() call.");
 
 #define _CURSES_WINDOW_REDRAWLN_METHODDEF    \
-    {"redrawln", _PyCFunction_CAST(_curses_window_redrawln), METH_FASTCALL, _curses_window_redrawln__doc__},
+    {"redrawln", _PyCFunction_CAST(_curses_window_redrawln), METH_VALUE, _curses_window_redrawln__doc__},
 
-static PyObject *
+static PyValue
 _curses_window_redrawln_impl(PyCursesWindowObject *self, int beg, int num);
 
-static PyObject *
-_curses_window_redrawln(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_curses_window_redrawln(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int beg;
     int num;
 
     if (!_PyArg_CheckPositional("redrawln", nargs, 2, 2)) {
         goto exit;
     }
-    beg = PyLong_AsInt(args[0]);
+    beg = _PyValue_AsInt(PyValue_Borrow(args[0]));
     if (beg == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    num = PyLong_AsInt(args[1]);
+    num = _PyValue_AsInt(PyValue_Borrow(args[1]));
     if (num == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = _curses_window_redrawln_impl((PyCursesWindowObject *)self, beg, num);
+    return_value = _curses_window_redrawln_impl((PyCursesWindowObject *)PyValue_AsKnownObjectBorrow(self), beg, num);
 
 exit:
     return return_value;
@@ -2595,31 +2644,31 @@ PyDoc_STRVAR(_curses_window_setscrreg__doc__,
 "All scrolling actions will take place in this region.");
 
 #define _CURSES_WINDOW_SETSCRREG_METHODDEF    \
-    {"setscrreg", _PyCFunction_CAST(_curses_window_setscrreg), METH_FASTCALL, _curses_window_setscrreg__doc__},
+    {"setscrreg", _PyCFunction_CAST(_curses_window_setscrreg), METH_VALUE, _curses_window_setscrreg__doc__},
 
-static PyObject *
+static PyValue
 _curses_window_setscrreg_impl(PyCursesWindowObject *self, int top,
                               int bottom);
 
-static PyObject *
-_curses_window_setscrreg(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_curses_window_setscrreg(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int top;
     int bottom;
 
     if (!_PyArg_CheckPositional("setscrreg", nargs, 2, 2)) {
         goto exit;
     }
-    top = PyLong_AsInt(args[0]);
+    top = _PyValue_AsInt(PyValue_Borrow(args[0]));
     if (top == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    bottom = PyLong_AsInt(args[1]);
+    bottom = _PyValue_AsInt(PyValue_Borrow(args[1]));
     if (bottom == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = _curses_window_setscrreg_impl((PyCursesWindowObject *)self, top, bottom);
+    return_value = _curses_window_setscrreg_impl((PyCursesWindowObject *)PyValue_AsKnownObjectBorrow(self), top, bottom);
 
 exit:
     return return_value;
@@ -2769,7 +2818,7 @@ _curses_window_touchline(PyObject *self, PyObject *const *args, Py_ssize_t nargs
         goto exit;
     }
     if (nargs >= 3) {
-        changed = PyObject_IsTrue(args[2]);
+        changed = _PyValue_IsTrue(PyValue_FromObjectBorrow(args[2]));
         if (changed < 0) {
             goto exit;
         }
@@ -2839,7 +2888,7 @@ _curses_window_vline(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
         goto exit;
     }
     if (nargs == 3 || nargs == 5) {
-        if (!attr_converter(args[nargs - 1], &attr)) {
+        if (!attr_converter_object(args[nargs - 1], &attr)) {
             goto exit;
         }
         group_right_1 = 1;
@@ -2864,15 +2913,19 @@ PyDoc_STRVAR(_curses_filter__doc__,
 "screen.");
 
 #define _CURSES_FILTER_METHODDEF    \
-    {"filter", (PyCFunction)_curses_filter, METH_NOARGS, _curses_filter__doc__},
+    {"filter", _PyCFunction_CAST(_curses_filter), METH_VALUE|METH_NOARGS, _curses_filter__doc__},
 
-static PyObject *
+static PyValue
 _curses_filter_impl(PyObject *module);
 
-static PyObject *
-_curses_filter(PyObject *module, PyObject *Py_UNUSED(ignored))
+static PyValue
+_curses_filter(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _curses_filter_impl(module);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _curses_filter_impl(PyValue_AsKnownObjectBorrow(module));
+
+    return return_value;
 }
 
 #endif /* defined(HAVE_CURSES_FILTER) */
@@ -2890,15 +2943,19 @@ PyDoc_STRVAR(_curses_nofilter__doc__,
 "screen rather than a single line.");
 
 #define _CURSES_NOFILTER_METHODDEF    \
-    {"nofilter", (PyCFunction)_curses_nofilter, METH_NOARGS, _curses_nofilter__doc__},
+    {"nofilter", _PyCFunction_CAST(_curses_nofilter), METH_VALUE|METH_NOARGS, _curses_nofilter__doc__},
 
-static PyObject *
+static PyValue
 _curses_nofilter_impl(PyObject *module);
 
-static PyObject *
-_curses_nofilter(PyObject *module, PyObject *Py_UNUSED(ignored))
+static PyValue
+_curses_nofilter(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _curses_nofilter_impl(module);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _curses_nofilter_impl(PyValue_AsKnownObjectBorrow(module));
+
+    return return_value;
 }
 
 #endif /* defined(HAVE_CURSES_NOFILTER) */
@@ -2910,15 +2967,19 @@ PyDoc_STRVAR(_curses_baudrate__doc__,
 "Return the output speed of the terminal in bits per second.");
 
 #define _CURSES_BAUDRATE_METHODDEF    \
-    {"baudrate", (PyCFunction)_curses_baudrate, METH_NOARGS, _curses_baudrate__doc__},
+    {"baudrate", _PyCFunction_CAST(_curses_baudrate), METH_VALUE|METH_NOARGS, _curses_baudrate__doc__},
 
-static PyObject *
+static PyValue
 _curses_baudrate_impl(PyObject *module);
 
-static PyObject *
-_curses_baudrate(PyObject *module, PyObject *Py_UNUSED(ignored))
+static PyValue
+_curses_baudrate(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _curses_baudrate_impl(module);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _curses_baudrate_impl(PyValue_AsKnownObjectBorrow(module));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(_curses_beep__doc__,
@@ -2928,15 +2989,19 @@ PyDoc_STRVAR(_curses_beep__doc__,
 "Emit a short attention sound.");
 
 #define _CURSES_BEEP_METHODDEF    \
-    {"beep", (PyCFunction)_curses_beep, METH_NOARGS, _curses_beep__doc__},
+    {"beep", _PyCFunction_CAST(_curses_beep), METH_VALUE|METH_NOARGS, _curses_beep__doc__},
 
-static PyObject *
+static PyValue
 _curses_beep_impl(PyObject *module);
 
-static PyObject *
-_curses_beep(PyObject *module, PyObject *Py_UNUSED(ignored))
+static PyValue
+_curses_beep(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _curses_beep_impl(module);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _curses_beep_impl(PyValue_AsKnownObjectBorrow(module));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(_curses_can_change_color__doc__,
@@ -2946,15 +3011,19 @@ PyDoc_STRVAR(_curses_can_change_color__doc__,
 "Return True if the programmer can change the colors displayed by the terminal.");
 
 #define _CURSES_CAN_CHANGE_COLOR_METHODDEF    \
-    {"can_change_color", (PyCFunction)_curses_can_change_color, METH_NOARGS, _curses_can_change_color__doc__},
+    {"can_change_color", _PyCFunction_CAST(_curses_can_change_color), METH_VALUE|METH_NOARGS, _curses_can_change_color__doc__},
 
-static PyObject *
+static PyValue
 _curses_can_change_color_impl(PyObject *module);
 
-static PyObject *
-_curses_can_change_color(PyObject *module, PyObject *Py_UNUSED(ignored))
+static PyValue
+_curses_can_change_color(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _curses_can_change_color_impl(module);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _curses_can_change_color_impl(PyValue_AsKnownObjectBorrow(module));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(_curses_cbreak__doc__,
@@ -2974,15 +3043,15 @@ PyDoc_STRVAR(_curses_cbreak__doc__,
 "cbreak mode.");
 
 #define _CURSES_CBREAK_METHODDEF    \
-    {"cbreak", _PyCFunction_CAST(_curses_cbreak), METH_FASTCALL, _curses_cbreak__doc__},
+    {"cbreak", _PyCFunction_CAST(_curses_cbreak), METH_VALUE, _curses_cbreak__doc__},
 
-static PyObject *
+static PyValue
 _curses_cbreak_impl(PyObject *module, int flag);
 
-static PyObject *
-_curses_cbreak(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_curses_cbreak(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int flag = 1;
 
     if (!_PyArg_CheckPositional("cbreak", nargs, 0, 1)) {
@@ -2991,12 +3060,12 @@ _curses_cbreak(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
     if (nargs < 1) {
         goto skip_optional;
     }
-    flag = PyObject_IsTrue(args[0]);
+    flag = _PyValue_IsTrue(PyValue_Borrow(args[0]));
     if (flag < 0) {
         goto exit;
     }
 skip_optional:
-    return_value = _curses_cbreak_impl(module, flag);
+    return_value = _curses_cbreak_impl(PyValue_AsKnownObjectBorrow(module), flag);
 
 exit:
     return return_value;
@@ -3011,15 +3080,19 @@ PyDoc_STRVAR(_curses_is_cbreak__doc__,
 "Return True if cbreak mode is enabled, False otherwise.");
 
 #define _CURSES_IS_CBREAK_METHODDEF    \
-    {"is_cbreak", (PyCFunction)_curses_is_cbreak, METH_NOARGS, _curses_is_cbreak__doc__},
+    {"is_cbreak", _PyCFunction_CAST(_curses_is_cbreak), METH_VALUE|METH_NOARGS, _curses_is_cbreak__doc__},
 
-static PyObject *
+static PyValue
 _curses_is_cbreak_impl(PyObject *module);
 
-static PyObject *
-_curses_is_cbreak(PyObject *module, PyObject *Py_UNUSED(ignored))
+static PyValue
+_curses_is_cbreak(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _curses_is_cbreak_impl(module);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _curses_is_cbreak_impl(PyValue_AsKnownObjectBorrow(module));
+
+    return return_value;
 }
 
 #endif /* ((defined(NCURSES_EXT_FUNCS) && NCURSES_EXT_FUNCS >= 20240427) || defined(PDCURSES)) */
@@ -3033,15 +3106,19 @@ PyDoc_STRVAR(_curses_is_echo__doc__,
 "Return True if echo mode is enabled, False otherwise.");
 
 #define _CURSES_IS_ECHO_METHODDEF    \
-    {"is_echo", (PyCFunction)_curses_is_echo, METH_NOARGS, _curses_is_echo__doc__},
+    {"is_echo", _PyCFunction_CAST(_curses_is_echo), METH_VALUE|METH_NOARGS, _curses_is_echo__doc__},
 
-static PyObject *
+static PyValue
 _curses_is_echo_impl(PyObject *module);
 
-static PyObject *
-_curses_is_echo(PyObject *module, PyObject *Py_UNUSED(ignored))
+static PyValue
+_curses_is_echo(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _curses_is_echo_impl(module);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _curses_is_echo_impl(PyValue_AsKnownObjectBorrow(module));
+
+    return return_value;
 }
 
 #endif /* ((defined(NCURSES_EXT_FUNCS) && NCURSES_EXT_FUNCS >= 20240427) || defined(PDCURSES)) */
@@ -3055,15 +3132,19 @@ PyDoc_STRVAR(_curses_is_nl__doc__,
 "Return True if nl mode is enabled, False otherwise.");
 
 #define _CURSES_IS_NL_METHODDEF    \
-    {"is_nl", (PyCFunction)_curses_is_nl, METH_NOARGS, _curses_is_nl__doc__},
+    {"is_nl", _PyCFunction_CAST(_curses_is_nl), METH_VALUE|METH_NOARGS, _curses_is_nl__doc__},
 
-static PyObject *
+static PyValue
 _curses_is_nl_impl(PyObject *module);
 
-static PyObject *
-_curses_is_nl(PyObject *module, PyObject *Py_UNUSED(ignored))
+static PyValue
+_curses_is_nl(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _curses_is_nl_impl(module);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _curses_is_nl_impl(PyValue_AsKnownObjectBorrow(module));
+
+    return return_value;
 }
 
 #endif /* ((defined(NCURSES_EXT_FUNCS) && NCURSES_EXT_FUNCS >= 20240427) || defined(PDCURSES)) */
@@ -3077,15 +3158,19 @@ PyDoc_STRVAR(_curses_is_raw__doc__,
 "Return True if raw mode is enabled, False otherwise.");
 
 #define _CURSES_IS_RAW_METHODDEF    \
-    {"is_raw", (PyCFunction)_curses_is_raw, METH_NOARGS, _curses_is_raw__doc__},
+    {"is_raw", _PyCFunction_CAST(_curses_is_raw), METH_VALUE|METH_NOARGS, _curses_is_raw__doc__},
 
-static PyObject *
+static PyValue
 _curses_is_raw_impl(PyObject *module);
 
-static PyObject *
-_curses_is_raw(PyObject *module, PyObject *Py_UNUSED(ignored))
+static PyValue
+_curses_is_raw(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _curses_is_raw_impl(module);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _curses_is_raw_impl(PyValue_AsKnownObjectBorrow(module));
+
+    return return_value;
 }
 
 #endif /* ((defined(NCURSES_EXT_FUNCS) && NCURSES_EXT_FUNCS >= 20240427) || defined(PDCURSES)) */
@@ -3104,21 +3189,21 @@ PyDoc_STRVAR(_curses_color_content__doc__,
 "of component).");
 
 #define _CURSES_COLOR_CONTENT_METHODDEF    \
-    {"color_content", (PyCFunction)_curses_color_content, METH_O, _curses_color_content__doc__},
+    {"color_content", _PyCFunction_CAST(_curses_color_content), METH_VALUE|METH_O, _curses_color_content__doc__},
 
-static PyObject *
+static PyValue
 _curses_color_content_impl(PyObject *module, int color_number);
 
-static PyObject *
-_curses_color_content(PyObject *module, PyObject *arg)
+static PyValue
+_curses_color_content(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int color_number;
 
-    if (!color_converter(arg, &color_number)) {
+    if (!color_converter(PyValue_Borrow(args[0]), &color_number)) {
         goto exit;
     }
-    return_value = _curses_color_content_impl(module, color_number);
+    return_value = _curses_color_content_impl(PyValue_AsKnownObjectBorrow(module), color_number);
 
 exit:
     return return_value;
@@ -3138,22 +3223,22 @@ PyDoc_STRVAR(_curses_color_pair__doc__,
 "function.");
 
 #define _CURSES_COLOR_PAIR_METHODDEF    \
-    {"color_pair", (PyCFunction)_curses_color_pair, METH_O, _curses_color_pair__doc__},
+    {"color_pair", _PyCFunction_CAST(_curses_color_pair), METH_VALUE|METH_O, _curses_color_pair__doc__},
 
-static PyObject *
+static PyValue
 _curses_color_pair_impl(PyObject *module, int pair_number);
 
-static PyObject *
-_curses_color_pair(PyObject *module, PyObject *arg)
+static PyValue
+_curses_color_pair(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int pair_number;
 
-    pair_number = PyLong_AsInt(arg);
+    pair_number = _PyValue_AsInt(PyValue_Borrow(args[0]));
     if (pair_number == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = _curses_color_pair_impl(module, pair_number);
+    return_value = _curses_color_pair_impl(PyValue_AsKnownObjectBorrow(module), pair_number);
 
 exit:
     return return_value;
@@ -3174,22 +3259,22 @@ PyDoc_STRVAR(_curses_curs_set__doc__,
 "visible\" mode is a block cursor.");
 
 #define _CURSES_CURS_SET_METHODDEF    \
-    {"curs_set", (PyCFunction)_curses_curs_set, METH_O, _curses_curs_set__doc__},
+    {"curs_set", _PyCFunction_CAST(_curses_curs_set), METH_VALUE|METH_O, _curses_curs_set__doc__},
 
-static PyObject *
+static PyValue
 _curses_curs_set_impl(PyObject *module, int visibility);
 
-static PyObject *
-_curses_curs_set(PyObject *module, PyObject *arg)
+static PyValue
+_curses_curs_set(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int visibility;
 
-    visibility = PyLong_AsInt(arg);
+    visibility = _PyValue_AsInt(PyValue_Borrow(args[0]));
     if (visibility == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = _curses_curs_set_impl(module, visibility);
+    return_value = _curses_curs_set_impl(PyValue_AsKnownObjectBorrow(module), visibility);
 
 exit:
     return return_value;
@@ -3206,15 +3291,19 @@ PyDoc_STRVAR(_curses_def_prog_mode__doc__,
 "Subsequent calls to reset_prog_mode() will restore this mode.");
 
 #define _CURSES_DEF_PROG_MODE_METHODDEF    \
-    {"def_prog_mode", (PyCFunction)_curses_def_prog_mode, METH_NOARGS, _curses_def_prog_mode__doc__},
+    {"def_prog_mode", _PyCFunction_CAST(_curses_def_prog_mode), METH_VALUE|METH_NOARGS, _curses_def_prog_mode__doc__},
 
-static PyObject *
+static PyValue
 _curses_def_prog_mode_impl(PyObject *module);
 
-static PyObject *
-_curses_def_prog_mode(PyObject *module, PyObject *Py_UNUSED(ignored))
+static PyValue
+_curses_def_prog_mode(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _curses_def_prog_mode_impl(module);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _curses_def_prog_mode_impl(PyValue_AsKnownObjectBorrow(module));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(_curses_def_shell_mode__doc__,
@@ -3229,15 +3318,19 @@ PyDoc_STRVAR(_curses_def_shell_mode__doc__,
 "Subsequent calls to reset_shell_mode() will restore this mode.");
 
 #define _CURSES_DEF_SHELL_MODE_METHODDEF    \
-    {"def_shell_mode", (PyCFunction)_curses_def_shell_mode, METH_NOARGS, _curses_def_shell_mode__doc__},
+    {"def_shell_mode", _PyCFunction_CAST(_curses_def_shell_mode), METH_VALUE|METH_NOARGS, _curses_def_shell_mode__doc__},
 
-static PyObject *
+static PyValue
 _curses_def_shell_mode_impl(PyObject *module);
 
-static PyObject *
-_curses_def_shell_mode(PyObject *module, PyObject *Py_UNUSED(ignored))
+static PyValue
+_curses_def_shell_mode(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _curses_def_shell_mode_impl(module);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _curses_def_shell_mode_impl(PyValue_AsKnownObjectBorrow(module));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(_curses_delay_output__doc__,
@@ -3250,22 +3343,22 @@ PyDoc_STRVAR(_curses_delay_output__doc__,
 "    Duration in milliseconds.");
 
 #define _CURSES_DELAY_OUTPUT_METHODDEF    \
-    {"delay_output", (PyCFunction)_curses_delay_output, METH_O, _curses_delay_output__doc__},
+    {"delay_output", _PyCFunction_CAST(_curses_delay_output), METH_VALUE|METH_O, _curses_delay_output__doc__},
 
-static PyObject *
+static PyValue
 _curses_delay_output_impl(PyObject *module, int ms);
 
-static PyObject *
-_curses_delay_output(PyObject *module, PyObject *arg)
+static PyValue
+_curses_delay_output(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int ms;
 
-    ms = PyLong_AsInt(arg);
+    ms = _PyValue_AsInt(PyValue_Borrow(args[0]));
     if (ms == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = _curses_delay_output_impl(module, ms);
+    return_value = _curses_delay_output_impl(PyValue_AsKnownObjectBorrow(module), ms);
 
 exit:
     return return_value;
@@ -3278,15 +3371,19 @@ PyDoc_STRVAR(_curses_doupdate__doc__,
 "Update the physical screen to match the virtual screen.");
 
 #define _CURSES_DOUPDATE_METHODDEF    \
-    {"doupdate", (PyCFunction)_curses_doupdate, METH_NOARGS, _curses_doupdate__doc__},
+    {"doupdate", _PyCFunction_CAST(_curses_doupdate), METH_VALUE|METH_NOARGS, _curses_doupdate__doc__},
 
-static PyObject *
+static PyValue
 _curses_doupdate_impl(PyObject *module);
 
-static PyObject *
-_curses_doupdate(PyObject *module, PyObject *Py_UNUSED(ignored))
+static PyValue
+_curses_doupdate(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _curses_doupdate_impl(module);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _curses_doupdate_impl(PyValue_AsKnownObjectBorrow(module));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(_curses_echo__doc__,
@@ -3302,15 +3399,15 @@ PyDoc_STRVAR(_curses_echo__doc__,
 "entered.");
 
 #define _CURSES_ECHO_METHODDEF    \
-    {"echo", _PyCFunction_CAST(_curses_echo), METH_FASTCALL, _curses_echo__doc__},
+    {"echo", _PyCFunction_CAST(_curses_echo), METH_VALUE, _curses_echo__doc__},
 
-static PyObject *
+static PyValue
 _curses_echo_impl(PyObject *module, int flag);
 
-static PyObject *
-_curses_echo(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_curses_echo(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int flag = 1;
 
     if (!_PyArg_CheckPositional("echo", nargs, 0, 1)) {
@@ -3319,12 +3416,12 @@ _curses_echo(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
     if (nargs < 1) {
         goto skip_optional;
     }
-    flag = PyObject_IsTrue(args[0]);
+    flag = _PyValue_IsTrue(PyValue_Borrow(args[0]));
     if (flag < 0) {
         goto exit;
     }
 skip_optional:
-    return_value = _curses_echo_impl(module, flag);
+    return_value = _curses_echo_impl(PyValue_AsKnownObjectBorrow(module), flag);
 
 exit:
     return return_value;
@@ -3337,15 +3434,19 @@ PyDoc_STRVAR(_curses_endwin__doc__,
 "De-initialize the library, and return terminal to normal status.");
 
 #define _CURSES_ENDWIN_METHODDEF    \
-    {"endwin", (PyCFunction)_curses_endwin, METH_NOARGS, _curses_endwin__doc__},
+    {"endwin", _PyCFunction_CAST(_curses_endwin), METH_VALUE|METH_NOARGS, _curses_endwin__doc__},
 
-static PyObject *
+static PyValue
 _curses_endwin_impl(PyObject *module);
 
-static PyObject *
-_curses_endwin(PyObject *module, PyObject *Py_UNUSED(ignored))
+static PyValue
+_curses_endwin(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _curses_endwin_impl(module);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _curses_endwin_impl(PyValue_AsKnownObjectBorrow(module));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(_curses_erasechar__doc__,
@@ -3355,15 +3456,19 @@ PyDoc_STRVAR(_curses_erasechar__doc__,
 "Return the user\'s current erase character.");
 
 #define _CURSES_ERASECHAR_METHODDEF    \
-    {"erasechar", (PyCFunction)_curses_erasechar, METH_NOARGS, _curses_erasechar__doc__},
+    {"erasechar", _PyCFunction_CAST(_curses_erasechar), METH_VALUE|METH_NOARGS, _curses_erasechar__doc__},
 
-static PyObject *
+static PyValue
 _curses_erasechar_impl(PyObject *module);
 
-static PyObject *
-_curses_erasechar(PyObject *module, PyObject *Py_UNUSED(ignored))
+static PyValue
+_curses_erasechar(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _curses_erasechar_impl(module);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _curses_erasechar_impl(PyValue_AsKnownObjectBorrow(module));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(_curses_erasewchar__doc__,
@@ -3373,15 +3478,19 @@ PyDoc_STRVAR(_curses_erasewchar__doc__,
 "Return the user\'s current wide-character erase character.");
 
 #define _CURSES_ERASEWCHAR_METHODDEF    \
-    {"erasewchar", (PyCFunction)_curses_erasewchar, METH_NOARGS, _curses_erasewchar__doc__},
+    {"erasewchar", _PyCFunction_CAST(_curses_erasewchar), METH_VALUE|METH_NOARGS, _curses_erasewchar__doc__},
 
-static PyObject *
+static PyValue
 _curses_erasewchar_impl(PyObject *module);
 
-static PyObject *
-_curses_erasewchar(PyObject *module, PyObject *Py_UNUSED(ignored))
+static PyValue
+_curses_erasewchar(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _curses_erasewchar_impl(module);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _curses_erasewchar_impl(PyValue_AsKnownObjectBorrow(module));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(_curses_flash__doc__,
@@ -3394,15 +3503,19 @@ PyDoc_STRVAR(_curses_flash__doc__,
 "interval.");
 
 #define _CURSES_FLASH_METHODDEF    \
-    {"flash", (PyCFunction)_curses_flash, METH_NOARGS, _curses_flash__doc__},
+    {"flash", _PyCFunction_CAST(_curses_flash), METH_VALUE|METH_NOARGS, _curses_flash__doc__},
 
-static PyObject *
+static PyValue
 _curses_flash_impl(PyObject *module);
 
-static PyObject *
-_curses_flash(PyObject *module, PyObject *Py_UNUSED(ignored))
+static PyValue
+_curses_flash(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _curses_flash_impl(module);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _curses_flash_impl(PyValue_AsKnownObjectBorrow(module));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(_curses_flushinp__doc__,
@@ -3415,15 +3528,19 @@ PyDoc_STRVAR(_curses_flushinp__doc__,
 "not yet been processed by the program.");
 
 #define _CURSES_FLUSHINP_METHODDEF    \
-    {"flushinp", (PyCFunction)_curses_flushinp, METH_NOARGS, _curses_flushinp__doc__},
+    {"flushinp", _PyCFunction_CAST(_curses_flushinp), METH_VALUE|METH_NOARGS, _curses_flushinp__doc__},
 
-static PyObject *
+static PyValue
 _curses_flushinp_impl(PyObject *module);
 
-static PyObject *
-_curses_flushinp(PyObject *module, PyObject *Py_UNUSED(ignored))
+static PyValue
+_curses_flushinp(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _curses_flushinp_impl(module);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _curses_flushinp_impl(PyValue_AsKnownObjectBorrow(module));
+
+    return return_value;
 }
 
 #if defined(getsyx)
@@ -3437,15 +3554,19 @@ PyDoc_STRVAR(_curses_getsyx__doc__,
 "Return a (y, x) tuple.  If leaveok is currently true, return (-1, -1).");
 
 #define _CURSES_GETSYX_METHODDEF    \
-    {"getsyx", (PyCFunction)_curses_getsyx, METH_NOARGS, _curses_getsyx__doc__},
+    {"getsyx", _PyCFunction_CAST(_curses_getsyx), METH_VALUE|METH_NOARGS, _curses_getsyx__doc__},
 
-static PyObject *
+static PyValue
 _curses_getsyx_impl(PyObject *module);
 
-static PyObject *
-_curses_getsyx(PyObject *module, PyObject *Py_UNUSED(ignored))
+static PyValue
+_curses_getsyx(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _curses_getsyx_impl(module);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _curses_getsyx_impl(PyValue_AsKnownObjectBorrow(module));
+
+    return return_value;
 }
 
 #endif /* defined(getsyx) */
@@ -3462,15 +3583,19 @@ PyDoc_STRVAR(_curses_getmouse__doc__,
 "returns a 5-tuple (id, x, y, z, bstate).");
 
 #define _CURSES_GETMOUSE_METHODDEF    \
-    {"getmouse", (PyCFunction)_curses_getmouse, METH_NOARGS, _curses_getmouse__doc__},
+    {"getmouse", _PyCFunction_CAST(_curses_getmouse), METH_VALUE|METH_NOARGS, _curses_getmouse__doc__},
 
-static PyObject *
+static PyValue
 _curses_getmouse_impl(PyObject *module);
 
-static PyObject *
-_curses_getmouse(PyObject *module, PyObject *Py_UNUSED(ignored))
+static PyValue
+_curses_getmouse(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _curses_getmouse_impl(module);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _curses_getmouse_impl(PyValue_AsKnownObjectBorrow(module));
+
+    return return_value;
 }
 
 #endif /* (defined(HAVE_CURSES_GETMOUSE) || defined(PDCURSES)) */
@@ -3486,16 +3611,16 @@ PyDoc_STRVAR(_curses_ungetmouse__doc__,
 "The following getmouse() will return the given state data.");
 
 #define _CURSES_UNGETMOUSE_METHODDEF    \
-    {"ungetmouse", _PyCFunction_CAST(_curses_ungetmouse), METH_FASTCALL, _curses_ungetmouse__doc__},
+    {"ungetmouse", _PyCFunction_CAST(_curses_ungetmouse), METH_VALUE, _curses_ungetmouse__doc__},
 
-static PyObject *
+static PyValue
 _curses_ungetmouse_impl(PyObject *module, short id, int x, int y, int z,
                         unsigned long bstate);
 
-static PyObject *
-_curses_ungetmouse(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_curses_ungetmouse(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     short id;
     int x;
     int y;
@@ -3506,7 +3631,7 @@ _curses_ungetmouse(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
         goto exit;
     }
     {
-        long ival = PyLong_AsLong(args[0]);
+        long ival = _PyValue_AsLong(PyValue_Borrow(args[0]));
         if (ival == -1 && PyErr_Occurred()) {
             goto exit;
         }
@@ -3524,24 +3649,27 @@ _curses_ungetmouse(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
             id = (short) ival;
         }
     }
-    x = PyLong_AsInt(args[1]);
+    x = _PyValue_AsInt(PyValue_Borrow(args[1]));
     if (x == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    y = PyLong_AsInt(args[2]);
+    y = _PyValue_AsInt(PyValue_Borrow(args[2]));
     if (y == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    z = PyLong_AsInt(args[3]);
+    z = _PyValue_AsInt(PyValue_Borrow(args[3]));
     if (z == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    if (!PyIndex_Check(args[4])) {
-        _PyArg_BadArgument("ungetmouse", "argument 5", "int", args[4]);
-        goto exit;
-    }
+        if (PyValue_TYPE(PyValue_Borrow(args[4]))->tp_as_number == NULL ||
+            PyValue_TYPE(PyValue_Borrow(args[4]))->tp_as_number->nb_index == NULL)
+        {
+            _PyArg_BadArgumentValue("ungetmouse", "argument 5", "int", PyValue_Borrow(args[4]));
+            goto exit;
+        }
+
     {
-        Py_ssize_t _bytes = PyLong_AsNativeBytes(args[4], &bstate, sizeof(unsigned long),
+        Py_ssize_t _bytes = _PyValue_AsNativeBytes(PyValue_Borrow(args[4]), &bstate, sizeof(unsigned long),
                 Py_ASNATIVEBYTES_NATIVE_ENDIAN |
                 Py_ASNATIVEBYTES_ALLOW_INDEX |
                 Py_ASNATIVEBYTES_UNSIGNED_BUFFER);
@@ -3556,7 +3684,7 @@ _curses_ungetmouse(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
             }
         }
     }
-    return_value = _curses_ungetmouse_impl(module, id, x, y, z, bstate);
+    return_value = _curses_ungetmouse_impl(PyValue_AsKnownObjectBorrow(module), id, x, y, z, bstate);
 
 exit:
     return return_value;
@@ -3574,7 +3702,22 @@ PyDoc_STRVAR(_curses_getwin__doc__,
 "returning the new window object.");
 
 #define _CURSES_GETWIN_METHODDEF    \
-    {"getwin", (PyCFunction)_curses_getwin, METH_O, _curses_getwin__doc__},
+    {"getwin", _PyCFunction_CAST(_curses_getwin), METH_VALUE|METH_O, _curses_getwin__doc__},
+
+static PyValue
+_curses_getwin_impl(PyObject *module, PyValueBorrow file);
+
+static PyValue
+_curses_getwin(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+{
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow file;
+
+    file = PyValue_Borrow(args[0]);
+    return_value = _curses_getwin_impl(PyValue_AsKnownObjectBorrow(module), file);
+
+    return return_value;
+}
 
 #if defined(HAVE_CURSES_SCR_DUMP)
 
@@ -3591,7 +3734,22 @@ PyDoc_STRVAR(_curses_scr_dump__doc__,
 "scr_init() or scr_set().");
 
 #define _CURSES_SCR_DUMP_METHODDEF    \
-    {"scr_dump", (PyCFunction)_curses_scr_dump, METH_O, _curses_scr_dump__doc__},
+    {"scr_dump", _PyCFunction_CAST(_curses_scr_dump), METH_VALUE|METH_O, _curses_scr_dump__doc__},
+
+static PyValue
+_curses_scr_dump_impl(PyObject *module, PyValueBorrow filename);
+
+static PyValue
+_curses_scr_dump(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+{
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow filename;
+
+    filename = PyValue_Borrow(args[0]);
+    return_value = _curses_scr_dump_impl(PyValue_AsKnownObjectBorrow(module), filename);
+
+    return return_value;
+}
 
 #endif /* defined(HAVE_CURSES_SCR_DUMP) */
 
@@ -3610,7 +3768,22 @@ PyDoc_STRVAR(_curses_scr_restore__doc__,
 "contents.");
 
 #define _CURSES_SCR_RESTORE_METHODDEF    \
-    {"scr_restore", (PyCFunction)_curses_scr_restore, METH_O, _curses_scr_restore__doc__},
+    {"scr_restore", _PyCFunction_CAST(_curses_scr_restore), METH_VALUE|METH_O, _curses_scr_restore__doc__},
+
+static PyValue
+_curses_scr_restore_impl(PyObject *module, PyValueBorrow filename);
+
+static PyValue
+_curses_scr_restore(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+{
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow filename;
+
+    filename = PyValue_Borrow(args[0]);
+    return_value = _curses_scr_restore_impl(PyValue_AsKnownObjectBorrow(module), filename);
+
+    return return_value;
+}
 
 #endif /* defined(HAVE_CURSES_SCR_DUMP) */
 
@@ -3629,7 +3802,22 @@ PyDoc_STRVAR(_curses_scr_init__doc__,
 "another program has drawn the screen.");
 
 #define _CURSES_SCR_INIT_METHODDEF    \
-    {"scr_init", (PyCFunction)_curses_scr_init, METH_O, _curses_scr_init__doc__},
+    {"scr_init", _PyCFunction_CAST(_curses_scr_init), METH_VALUE|METH_O, _curses_scr_init__doc__},
+
+static PyValue
+_curses_scr_init_impl(PyObject *module, PyValueBorrow filename);
+
+static PyValue
+_curses_scr_init(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+{
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow filename;
+
+    filename = PyValue_Borrow(args[0]);
+    return_value = _curses_scr_init_impl(PyValue_AsKnownObjectBorrow(module), filename);
+
+    return return_value;
+}
 
 #endif /* defined(HAVE_CURSES_SCR_DUMP) */
 
@@ -3647,7 +3835,22 @@ PyDoc_STRVAR(_curses_scr_set__doc__,
 "This combines the effects of scr_restore() and scr_init().");
 
 #define _CURSES_SCR_SET_METHODDEF    \
-    {"scr_set", (PyCFunction)_curses_scr_set, METH_O, _curses_scr_set__doc__},
+    {"scr_set", _PyCFunction_CAST(_curses_scr_set), METH_VALUE|METH_O, _curses_scr_set__doc__},
+
+static PyValue
+_curses_scr_set_impl(PyObject *module, PyValueBorrow filename);
+
+static PyValue
+_curses_scr_set(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+{
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow filename;
+
+    filename = PyValue_Borrow(args[0]);
+    return_value = _curses_scr_set_impl(PyValue_AsKnownObjectBorrow(module), filename);
+
+    return return_value;
+}
 
 #endif /* defined(HAVE_CURSES_SCR_DUMP) && defined(HAVE_CURSES_SCR_SET) */
 
@@ -3663,19 +3866,19 @@ PyDoc_STRVAR(_curses_halfdelay__doc__,
 "Use nocbreak() to leave half-delay mode.");
 
 #define _CURSES_HALFDELAY_METHODDEF    \
-    {"halfdelay", (PyCFunction)_curses_halfdelay, METH_O, _curses_halfdelay__doc__},
+    {"halfdelay", _PyCFunction_CAST(_curses_halfdelay), METH_VALUE|METH_O, _curses_halfdelay__doc__},
 
-static PyObject *
+static PyValue
 _curses_halfdelay_impl(PyObject *module, unsigned char tenths);
 
-static PyObject *
-_curses_halfdelay(PyObject *module, PyObject *arg)
+static PyValue
+_curses_halfdelay(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     unsigned char tenths;
 
     {
-        long ival = PyLong_AsLong(arg);
+        long ival = _PyValue_AsLong(PyValue_Borrow(args[0]));
         if (ival == -1 && PyErr_Occurred()) {
             goto exit;
         }
@@ -3693,7 +3896,7 @@ _curses_halfdelay(PyObject *module, PyObject *arg)
             tenths = (unsigned char) ival;
         }
     }
-    return_value = _curses_halfdelay_impl(module, tenths);
+    return_value = _curses_halfdelay_impl(PyValue_AsKnownObjectBorrow(module), tenths);
 
 exit:
     return return_value;
@@ -3706,15 +3909,19 @@ PyDoc_STRVAR(_curses_has_colors__doc__,
 "Return True if the terminal can display colors; otherwise, return False.");
 
 #define _CURSES_HAS_COLORS_METHODDEF    \
-    {"has_colors", (PyCFunction)_curses_has_colors, METH_NOARGS, _curses_has_colors__doc__},
+    {"has_colors", _PyCFunction_CAST(_curses_has_colors), METH_VALUE|METH_NOARGS, _curses_has_colors__doc__},
 
-static PyObject *
+static PyValue
 _curses_has_colors_impl(PyObject *module);
 
-static PyObject *
-_curses_has_colors(PyObject *module, PyObject *Py_UNUSED(ignored))
+static PyValue
+_curses_has_colors(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _curses_has_colors_impl(module);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _curses_has_colors_impl(PyValue_AsKnownObjectBorrow(module));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(_curses_has_ic__doc__,
@@ -3724,15 +3931,19 @@ PyDoc_STRVAR(_curses_has_ic__doc__,
 "Return True if the terminal has insert- and delete-character capabilities.");
 
 #define _CURSES_HAS_IC_METHODDEF    \
-    {"has_ic", (PyCFunction)_curses_has_ic, METH_NOARGS, _curses_has_ic__doc__},
+    {"has_ic", _PyCFunction_CAST(_curses_has_ic), METH_VALUE|METH_NOARGS, _curses_has_ic__doc__},
 
-static PyObject *
+static PyValue
 _curses_has_ic_impl(PyObject *module);
 
-static PyObject *
-_curses_has_ic(PyObject *module, PyObject *Py_UNUSED(ignored))
+static PyValue
+_curses_has_ic(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _curses_has_ic_impl(module);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _curses_has_ic_impl(PyValue_AsKnownObjectBorrow(module));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(_curses_has_il__doc__,
@@ -3742,15 +3953,19 @@ PyDoc_STRVAR(_curses_has_il__doc__,
 "Return True if the terminal has insert- and delete-line capabilities.");
 
 #define _CURSES_HAS_IL_METHODDEF    \
-    {"has_il", (PyCFunction)_curses_has_il, METH_NOARGS, _curses_has_il__doc__},
+    {"has_il", _PyCFunction_CAST(_curses_has_il), METH_VALUE|METH_NOARGS, _curses_has_il__doc__},
 
-static PyObject *
+static PyValue
 _curses_has_il_impl(PyObject *module);
 
-static PyObject *
-_curses_has_il(PyObject *module, PyObject *Py_UNUSED(ignored))
+static PyValue
+_curses_has_il(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _curses_has_il_impl(module);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _curses_has_il_impl(PyValue_AsKnownObjectBorrow(module));
+
+    return return_value;
 }
 
 #if defined(HAVE_CURSES_HAS_KEY)
@@ -3765,22 +3980,22 @@ PyDoc_STRVAR(_curses_has_key__doc__,
 "    Key number.");
 
 #define _CURSES_HAS_KEY_METHODDEF    \
-    {"has_key", (PyCFunction)_curses_has_key, METH_O, _curses_has_key__doc__},
+    {"has_key", _PyCFunction_CAST(_curses_has_key), METH_VALUE|METH_O, _curses_has_key__doc__},
 
-static PyObject *
+static PyValue
 _curses_has_key_impl(PyObject *module, int key);
 
-static PyObject *
-_curses_has_key(PyObject *module, PyObject *arg)
+static PyValue
+_curses_has_key(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int key;
 
-    key = PyLong_AsInt(arg);
+    key = _PyValue_AsInt(PyValue_Borrow(args[0]));
     if (key == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = _curses_has_key_impl(module, key);
+    return_value = _curses_has_key_impl(PyValue_AsKnownObjectBorrow(module), key);
 
 exit:
     return return_value;
@@ -3805,40 +4020,44 @@ PyDoc_STRVAR(_curses_define_key__doc__,
 "If keycode is zero or negative, the binding for definition is removed.");
 
 #define _CURSES_DEFINE_KEY_METHODDEF    \
-    {"define_key", _PyCFunction_CAST(_curses_define_key), METH_FASTCALL, _curses_define_key__doc__},
+    {"define_key", _PyCFunction_CAST(_curses_define_key), METH_VALUE, _curses_define_key__doc__},
 
-static PyObject *
+static PyValue
 _curses_define_key_impl(PyObject *module, const char *definition,
                         int keycode);
 
-static PyObject *
-_curses_define_key(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_curses_define_key(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     const char *definition;
     int keycode;
 
     if (!_PyArg_CheckPositional("define_key", nargs, 2, 2)) {
         goto exit;
     }
-    if (args[0] == Py_None) {
+    if (!PyValue_IsObject(PyValue_Borrow(args[0]))) {
+        _PyArg_BadArgumentValue("define_key", "argument 1", "str or None", PyValue_Borrow(args[0]));
+        goto exit;
+    }
+    if (PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])) == Py_None) {
         definition = NULL;
     }
-    else if (PyUnicode_Check(args[0])) {
-        definition = _PyUnicode_AsUTF8NoNUL(args[0]);
+    else if (PyUnicode_Check(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])))) {
+        definition = _PyUnicode_AsUTF8NoNUL(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])));
         if (definition == NULL) {
             goto exit;
         }
     }
     else {
-        _PyArg_BadArgument("define_key", "argument 1", "str or None", args[0]);
+        _PyArg_BadArgument("define_key", "argument 1", "str or None", PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])));
         goto exit;
     }
-    keycode = PyLong_AsInt(args[1]);
+    keycode = _PyValue_AsInt(PyValue_Borrow(args[1]));
     if (keycode == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = _curses_define_key_impl(module, definition, keycode);
+    return_value = _curses_define_key_impl(PyValue_AsKnownObjectBorrow(module), definition, keycode);
 
 exit:
     return return_value;
@@ -3861,26 +4080,30 @@ PyDoc_STRVAR(_curses_key_defined__doc__,
 "escape sequence is a prefix of another bound sequence (so ambiguous).");
 
 #define _CURSES_KEY_DEFINED_METHODDEF    \
-    {"key_defined", (PyCFunction)_curses_key_defined, METH_O, _curses_key_defined__doc__},
+    {"key_defined", _PyCFunction_CAST(_curses_key_defined), METH_VALUE|METH_O, _curses_key_defined__doc__},
 
-static PyObject *
+static PyValue
 _curses_key_defined_impl(PyObject *module, const char *definition);
 
-static PyObject *
-_curses_key_defined(PyObject *module, PyObject *arg)
+static PyValue
+_curses_key_defined(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     const char *definition;
 
-    if (!PyUnicode_Check(arg)) {
-        _PyArg_BadArgument("key_defined", "argument", "str", arg);
+    if (!PyValue_IsObject(PyValue_Borrow(args[0]))) {
+        _PyArg_BadArgumentValue("key_defined", "argument", "str", PyValue_Borrow(args[0]));
         goto exit;
     }
-    definition = _PyUnicode_AsUTF8NoNUL(arg);
+    if (!PyUnicode_Check(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])))) {
+        _PyArg_BadArgument("key_defined", "argument", "str", PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])));
+        goto exit;
+    }
+    definition = _PyUnicode_AsUTF8NoNUL(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])));
     if (definition == NULL) {
         goto exit;
     }
-    return_value = _curses_key_defined_impl(module, definition);
+    return_value = _curses_key_defined_impl(PyValue_AsKnownObjectBorrow(module), definition);
 
 exit:
     return return_value;
@@ -3902,30 +4125,30 @@ PyDoc_STRVAR(_curses_keyok__doc__,
 "    Whether the key code is interpreted.");
 
 #define _CURSES_KEYOK_METHODDEF    \
-    {"keyok", _PyCFunction_CAST(_curses_keyok), METH_FASTCALL, _curses_keyok__doc__},
+    {"keyok", _PyCFunction_CAST(_curses_keyok), METH_VALUE, _curses_keyok__doc__},
 
-static PyObject *
+static PyValue
 _curses_keyok_impl(PyObject *module, int keycode, int enable);
 
-static PyObject *
-_curses_keyok(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_curses_keyok(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int keycode;
     int enable;
 
     if (!_PyArg_CheckPositional("keyok", nargs, 2, 2)) {
         goto exit;
     }
-    keycode = PyLong_AsInt(args[0]);
+    keycode = _PyValue_AsInt(PyValue_Borrow(args[0]));
     if (keycode == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    enable = PyObject_IsTrue(args[1]);
+    enable = _PyValue_IsTrue(PyValue_Borrow(args[1]));
     if (enable < 0) {
         goto exit;
     }
-    return_value = _curses_keyok_impl(module, keycode, enable);
+    return_value = _curses_keyok_impl(PyValue_AsKnownObjectBorrow(module), keycode, enable);
 
 exit:
     return return_value;
@@ -3953,16 +4176,16 @@ PyDoc_STRVAR(_curses_init_color__doc__,
 "most terminals; it is active only if can_change_color() returns true.");
 
 #define _CURSES_INIT_COLOR_METHODDEF    \
-    {"init_color", _PyCFunction_CAST(_curses_init_color), METH_FASTCALL, _curses_init_color__doc__},
+    {"init_color", _PyCFunction_CAST(_curses_init_color), METH_VALUE, _curses_init_color__doc__},
 
-static PyObject *
+static PyValue
 _curses_init_color_impl(PyObject *module, int color_number, short r, short g,
                         short b);
 
-static PyObject *
-_curses_init_color(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_curses_init_color(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int color_number;
     short r;
     short g;
@@ -3971,19 +4194,19 @@ _curses_init_color(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
     if (!_PyArg_CheckPositional("init_color", nargs, 4, 4)) {
         goto exit;
     }
-    if (!color_converter(args[0], &color_number)) {
+    if (!color_converter(PyValue_Borrow(args[0]), &color_number)) {
         goto exit;
     }
-    if (!component_converter(args[1], &r)) {
+    if (!component_converter(PyValue_Borrow(args[1]), &r)) {
         goto exit;
     }
-    if (!component_converter(args[2], &g)) {
+    if (!component_converter(PyValue_Borrow(args[2]), &g)) {
         goto exit;
     }
-    if (!component_converter(args[3], &b)) {
+    if (!component_converter(PyValue_Borrow(args[3]), &b)) {
         goto exit;
     }
-    return_value = _curses_init_color_impl(module, color_number, r, g, b);
+    return_value = _curses_init_color_impl(PyValue_AsKnownObjectBorrow(module), color_number, r, g, b);
 
 exit:
     return return_value;
@@ -4007,15 +4230,15 @@ PyDoc_STRVAR(_curses_init_pair__doc__,
 "definition.");
 
 #define _CURSES_INIT_PAIR_METHODDEF    \
-    {"init_pair", _PyCFunction_CAST(_curses_init_pair), METH_FASTCALL, _curses_init_pair__doc__},
+    {"init_pair", _PyCFunction_CAST(_curses_init_pair), METH_VALUE, _curses_init_pair__doc__},
 
-static PyObject *
+static PyValue
 _curses_init_pair_impl(PyObject *module, int pair_number, int fg, int bg);
 
-static PyObject *
-_curses_init_pair(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_curses_init_pair(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int pair_number;
     int fg;
     int bg;
@@ -4023,16 +4246,16 @@ _curses_init_pair(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
     if (!_PyArg_CheckPositional("init_pair", nargs, 3, 3)) {
         goto exit;
     }
-    if (!pair_converter(args[0], &pair_number)) {
+    if (!pair_converter(PyValue_Borrow(args[0]), &pair_number)) {
         goto exit;
     }
-    if (!color_allow_default_converter(args[1], &fg)) {
+    if (!color_allow_default_converter(PyValue_Borrow(args[1]), &fg)) {
         goto exit;
     }
-    if (!color_allow_default_converter(args[2], &bg)) {
+    if (!color_allow_default_converter(PyValue_Borrow(args[2]), &bg)) {
         goto exit;
     }
-    return_value = _curses_init_pair_impl(module, pair_number, fg, bg);
+    return_value = _curses_init_pair_impl(PyValue_AsKnownObjectBorrow(module), pair_number, fg, bg);
 
 exit:
     return return_value;
@@ -4055,28 +4278,28 @@ PyDoc_STRVAR(_curses_alloc_pair__doc__,
 "Otherwise allocate a new color pair and return its number.");
 
 #define _CURSES_ALLOC_PAIR_METHODDEF    \
-    {"alloc_pair", _PyCFunction_CAST(_curses_alloc_pair), METH_FASTCALL, _curses_alloc_pair__doc__},
+    {"alloc_pair", _PyCFunction_CAST(_curses_alloc_pair), METH_VALUE, _curses_alloc_pair__doc__},
 
-static PyObject *
+static PyValue
 _curses_alloc_pair_impl(PyObject *module, int fg, int bg);
 
-static PyObject *
-_curses_alloc_pair(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_curses_alloc_pair(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int fg;
     int bg;
 
     if (!_PyArg_CheckPositional("alloc_pair", nargs, 2, 2)) {
         goto exit;
     }
-    if (!color_allow_default_converter(args[0], &fg)) {
+    if (!color_allow_default_converter(PyValue_Borrow(args[0]), &fg)) {
         goto exit;
     }
-    if (!color_allow_default_converter(args[1], &bg)) {
+    if (!color_allow_default_converter(PyValue_Borrow(args[1]), &bg)) {
         goto exit;
     }
-    return_value = _curses_alloc_pair_impl(module, fg, bg);
+    return_value = _curses_alloc_pair_impl(PyValue_AsKnownObjectBorrow(module), fg, bg);
 
 exit:
     return return_value;
@@ -4101,28 +4324,28 @@ PyDoc_STRVAR(_curses_find_pair__doc__,
 "background colors has been allocated.");
 
 #define _CURSES_FIND_PAIR_METHODDEF    \
-    {"find_pair", _PyCFunction_CAST(_curses_find_pair), METH_FASTCALL, _curses_find_pair__doc__},
+    {"find_pair", _PyCFunction_CAST(_curses_find_pair), METH_VALUE, _curses_find_pair__doc__},
 
-static PyObject *
+static PyValue
 _curses_find_pair_impl(PyObject *module, int fg, int bg);
 
-static PyObject *
-_curses_find_pair(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_curses_find_pair(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int fg;
     int bg;
 
     if (!_PyArg_CheckPositional("find_pair", nargs, 2, 2)) {
         goto exit;
     }
-    if (!color_allow_default_converter(args[0], &fg)) {
+    if (!color_allow_default_converter(PyValue_Borrow(args[0]), &fg)) {
         goto exit;
     }
-    if (!color_allow_default_converter(args[1], &bg)) {
+    if (!color_allow_default_converter(PyValue_Borrow(args[1]), &bg)) {
         goto exit;
     }
-    return_value = _curses_find_pair_impl(module, fg, bg);
+    return_value = _curses_find_pair_impl(PyValue_AsKnownObjectBorrow(module), fg, bg);
 
 exit:
     return return_value;
@@ -4142,21 +4365,21 @@ PyDoc_STRVAR(_curses_free_pair__doc__,
 "    The number of the color pair to free.");
 
 #define _CURSES_FREE_PAIR_METHODDEF    \
-    {"free_pair", (PyCFunction)_curses_free_pair, METH_O, _curses_free_pair__doc__},
+    {"free_pair", _PyCFunction_CAST(_curses_free_pair), METH_VALUE|METH_O, _curses_free_pair__doc__},
 
-static PyObject *
+static PyValue
 _curses_free_pair_impl(PyObject *module, int pair);
 
-static PyObject *
-_curses_free_pair(PyObject *module, PyObject *arg)
+static PyValue
+_curses_free_pair(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int pair;
 
-    if (!pair_converter(arg, &pair)) {
+    if (!pair_converter(PyValue_Borrow(args[0]), &pair)) {
         goto exit;
     }
-    return_value = _curses_free_pair_impl(module, pair);
+    return_value = _curses_free_pair_impl(PyValue_AsKnownObjectBorrow(module), pair);
 
 exit:
     return return_value;
@@ -4173,15 +4396,19 @@ PyDoc_STRVAR(_curses_reset_color_pairs__doc__,
 "Discard all color-pair definitions.");
 
 #define _CURSES_RESET_COLOR_PAIRS_METHODDEF    \
-    {"reset_color_pairs", (PyCFunction)_curses_reset_color_pairs, METH_NOARGS, _curses_reset_color_pairs__doc__},
+    {"reset_color_pairs", _PyCFunction_CAST(_curses_reset_color_pairs), METH_VALUE|METH_NOARGS, _curses_reset_color_pairs__doc__},
 
-static PyObject *
+static PyValue
 _curses_reset_color_pairs_impl(PyObject *module);
 
-static PyObject *
-_curses_reset_color_pairs(PyObject *module, PyObject *Py_UNUSED(ignored))
+static PyValue
+_curses_reset_color_pairs(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _curses_reset_color_pairs_impl(module);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _curses_reset_color_pairs_impl(PyValue_AsKnownObjectBorrow(module));
+
+    return return_value;
 }
 
 #endif /* (_NCURSES_EXTENDED_COLOR_FUNCS) */
@@ -4195,15 +4422,19 @@ PyDoc_STRVAR(_curses_initscr__doc__,
 "Return a window object which represents the whole screen.");
 
 #define _CURSES_INITSCR_METHODDEF    \
-    {"initscr", (PyCFunction)_curses_initscr, METH_NOARGS, _curses_initscr__doc__},
+    {"initscr", _PyCFunction_CAST(_curses_initscr), METH_VALUE|METH_NOARGS, _curses_initscr__doc__},
 
-static PyObject *
+static PyValue
 _curses_initscr_impl(PyObject *module);
 
-static PyObject *
-_curses_initscr(PyObject *module, PyObject *Py_UNUSED(ignored))
+static PyValue
+_curses_initscr(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _curses_initscr_impl(module);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _curses_initscr_impl(PyValue_AsKnownObjectBorrow(module));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(_curses_setupterm__doc__,
@@ -4220,15 +4451,15 @@ PyDoc_STRVAR(_curses_setupterm__doc__,
 "    If not supplied, the file descriptor for sys.stdout will be used.");
 
 #define _CURSES_SETUPTERM_METHODDEF    \
-    {"setupterm", _PyCFunction_CAST(_curses_setupterm), METH_FASTCALL|METH_KEYWORDS, _curses_setupterm__doc__},
+    {"setupterm", _PyCFunction_CAST(_curses_setupterm), METH_VALUE|METH_KEYWORDS, _curses_setupterm__doc__},
 
-static PyObject *
+static PyValue
 _curses_setupterm_impl(PyObject *module, const char *term, int fd);
 
-static PyObject *
-_curses_setupterm(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_curses_setupterm(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 2
@@ -4256,43 +4487,40 @@ _curses_setupterm(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyO
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[2];
-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 0;
+    Py_ssize_t _idx[2];
     const char *term = NULL;
     int fd = -1;
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 0, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 0, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, _idx, 2)) {
         goto exit;
     }
-    if (!noptargs) {
-        goto skip_optional_pos;
-    }
-    if (args[0]) {
-        if (args[0] == Py_None) {
+    if (_idx[0] >= 0) {
+        if (!PyValue_IsObject(PyValue_Borrow(args[_idx[0]]))) {
+            _PyArg_BadArgumentValue("setupterm", "argument 'term'", "str or None", PyValue_Borrow(args[_idx[0]]));
+            goto exit;
+        }
+        if (PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[0]])) == Py_None) {
             term = NULL;
         }
-        else if (PyUnicode_Check(args[0])) {
-            term = _PyUnicode_AsUTF8NoNUL(args[0]);
+        else if (PyUnicode_Check(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[0]])))) {
+            term = _PyUnicode_AsUTF8NoNUL(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[0]])));
             if (term == NULL) {
                 goto exit;
             }
         }
         else {
-            _PyArg_BadArgument("setupterm", "argument 'term'", "str or None", args[0]);
+            _PyArg_BadArgument("setupterm", "argument 'term'", "str or None", PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[0]])));
             goto exit;
         }
-        if (!--noptargs) {
-            goto skip_optional_pos;
+    }
+    if (_idx[1] >= 0) {
+        fd = _PyValue_AsInt(PyValue_Borrow(args[_idx[1]]));
+        if (fd == -1 && PyErr_Occurred()) {
+            goto exit;
         }
     }
-    fd = PyLong_AsInt(args[1]);
-    if (fd == -1 && PyErr_Occurred()) {
-        goto exit;
-    }
-skip_optional_pos:
-    return_value = _curses_setupterm_impl(module, term, fd);
+    return_value = _curses_setupterm_impl(PyValue_AsKnownObjectBorrow(module), term, fd);
 
 exit:
     return return_value;
@@ -4315,19 +4543,19 @@ PyDoc_STRVAR(_curses_newterm__doc__,
 "one terminal.  Use set_term() to switch between the screens.");
 
 #define _CURSES_NEWTERM_METHODDEF    \
-    {"newterm", _PyCFunction_CAST(_curses_newterm), METH_FASTCALL, _curses_newterm__doc__},
+    {"newterm", _PyCFunction_CAST(_curses_newterm), METH_VALUE, _curses_newterm__doc__},
 
-static PyObject *
-_curses_newterm_impl(PyObject *module, const char *type, PyObject *fd,
-                     PyObject *infd);
+static PyValue
+_curses_newterm_impl(PyObject *module, const char *type, PyValueBorrow fd,
+                     PyValueBorrow infd);
 
-static PyObject *
-_curses_newterm(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_curses_newterm(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     const char *type = NULL;
-    PyObject *fd = Py_None;
-    PyObject *infd = Py_None;
+    PyValueBorrow fd = PyValue_Borrow(PyValue_None);
+    PyValueBorrow infd = PyValue_Borrow(PyValue_None);
 
     if (!_PyArg_CheckPositional("newterm", nargs, 0, 3)) {
         goto exit;
@@ -4335,29 +4563,33 @@ _curses_newterm(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
     if (nargs < 1) {
         goto skip_optional;
     }
-    if (args[0] == Py_None) {
+    if (!PyValue_IsObject(PyValue_Borrow(args[0]))) {
+        _PyArg_BadArgumentValue("newterm", "argument 1", "str or None", PyValue_Borrow(args[0]));
+        goto exit;
+    }
+    if (PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])) == Py_None) {
         type = NULL;
     }
-    else if (PyUnicode_Check(args[0])) {
-        type = _PyUnicode_AsUTF8NoNUL(args[0]);
+    else if (PyUnicode_Check(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])))) {
+        type = _PyUnicode_AsUTF8NoNUL(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])));
         if (type == NULL) {
             goto exit;
         }
     }
     else {
-        _PyArg_BadArgument("newterm", "argument 1", "str or None", args[0]);
+        _PyArg_BadArgument("newterm", "argument 1", "str or None", PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])));
         goto exit;
     }
     if (nargs < 2) {
         goto skip_optional;
     }
-    fd = args[1];
+    fd = PyValue_Borrow(args[1]);
     if (nargs < 3) {
         goto skip_optional;
     }
-    infd = args[2];
+    infd = PyValue_Borrow(args[2]);
 skip_optional:
-    return_value = _curses_newterm_impl(module, type, fd, infd);
+    return_value = _curses_newterm_impl(PyValue_AsKnownObjectBorrow(module), type, fd, infd);
 
 exit:
     return return_value;
@@ -4372,7 +4604,22 @@ PyDoc_STRVAR(_curses_set_term__doc__,
 "Returns None if the previous screen was the one created by initscr().");
 
 #define _CURSES_SET_TERM_METHODDEF    \
-    {"set_term", (PyCFunction)_curses_set_term, METH_O, _curses_set_term__doc__},
+    {"set_term", _PyCFunction_CAST(_curses_set_term), METH_VALUE|METH_O, _curses_set_term__doc__},
+
+static PyValue
+_curses_set_term_impl(PyObject *module, PyValueBorrow screen);
+
+static PyValue
+_curses_set_term(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+{
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow screen;
+
+    screen = PyValue_Borrow(args[0]);
+    return_value = _curses_set_term_impl(PyValue_AsKnownObjectBorrow(module), screen);
+
+    return return_value;
+}
 
 #if defined(HAVE_CURSES_NEW_PRESCR)
 
@@ -4386,15 +4633,19 @@ PyDoc_STRVAR(_curses_new_prescr__doc__,
 "calling newterm() or initscr().");
 
 #define _CURSES_NEW_PRESCR_METHODDEF    \
-    {"new_prescr", (PyCFunction)_curses_new_prescr, METH_NOARGS, _curses_new_prescr__doc__},
+    {"new_prescr", _PyCFunction_CAST(_curses_new_prescr), METH_VALUE|METH_NOARGS, _curses_new_prescr__doc__},
 
-static PyObject *
+static PyValue
 _curses_new_prescr_impl(PyObject *module);
 
-static PyObject *
-_curses_new_prescr(PyObject *module, PyObject *Py_UNUSED(ignored))
+static PyValue
+_curses_new_prescr(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _curses_new_prescr_impl(module);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _curses_new_prescr_impl(PyValue_AsKnownObjectBorrow(module));
+
+    return return_value;
 }
 
 #endif /* defined(HAVE_CURSES_NEW_PRESCR) */
@@ -4412,15 +4663,19 @@ PyDoc_STRVAR(_curses_get_escdelay__doc__,
 "on the keyboard from escape sequences sent by cursor and function keys.");
 
 #define _CURSES_GET_ESCDELAY_METHODDEF    \
-    {"get_escdelay", (PyCFunction)_curses_get_escdelay, METH_NOARGS, _curses_get_escdelay__doc__},
+    {"get_escdelay", _PyCFunction_CAST(_curses_get_escdelay), METH_VALUE|METH_NOARGS, _curses_get_escdelay__doc__},
 
-static PyObject *
+static PyValue
 _curses_get_escdelay_impl(PyObject *module);
 
-static PyObject *
-_curses_get_escdelay(PyObject *module, PyObject *Py_UNUSED(ignored))
+static PyValue
+_curses_get_escdelay(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _curses_get_escdelay_impl(module);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _curses_get_escdelay_impl(PyValue_AsKnownObjectBorrow(module));
+
+    return return_value;
 }
 
 #endif /* defined(HAVE_CURSES_ESCDELAY) */
@@ -4441,22 +4696,22 @@ PyDoc_STRVAR(_curses_set_escdelay__doc__,
 "on the keyboard from escape sequences sent by cursor and function keys.");
 
 #define _CURSES_SET_ESCDELAY_METHODDEF    \
-    {"set_escdelay", (PyCFunction)_curses_set_escdelay, METH_O, _curses_set_escdelay__doc__},
+    {"set_escdelay", _PyCFunction_CAST(_curses_set_escdelay), METH_VALUE|METH_O, _curses_set_escdelay__doc__},
 
-static PyObject *
+static PyValue
 _curses_set_escdelay_impl(PyObject *module, int ms);
 
-static PyObject *
-_curses_set_escdelay(PyObject *module, PyObject *arg)
+static PyValue
+_curses_set_escdelay(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int ms;
 
-    ms = PyLong_AsInt(arg);
+    ms = _PyValue_AsInt(PyValue_Borrow(args[0]));
     if (ms == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = _curses_set_escdelay_impl(module, ms);
+    return_value = _curses_set_escdelay_impl(PyValue_AsKnownObjectBorrow(module), ms);
 
 exit:
     return return_value;
@@ -4476,15 +4731,19 @@ PyDoc_STRVAR(_curses_get_tabsize__doc__,
 "a tab character to spaces as it adds the tab to a window.");
 
 #define _CURSES_GET_TABSIZE_METHODDEF    \
-    {"get_tabsize", (PyCFunction)_curses_get_tabsize, METH_NOARGS, _curses_get_tabsize__doc__},
+    {"get_tabsize", _PyCFunction_CAST(_curses_get_tabsize), METH_VALUE|METH_NOARGS, _curses_get_tabsize__doc__},
 
-static PyObject *
+static PyValue
 _curses_get_tabsize_impl(PyObject *module);
 
-static PyObject *
-_curses_get_tabsize(PyObject *module, PyObject *Py_UNUSED(ignored))
+static PyValue
+_curses_get_tabsize(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _curses_get_tabsize_impl(module);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _curses_get_tabsize_impl(PyValue_AsKnownObjectBorrow(module));
+
+    return return_value;
 }
 
 #endif /* defined(HAVE_CURSES_TABSIZE) */
@@ -4504,22 +4763,22 @@ PyDoc_STRVAR(_curses_set_tabsize__doc__,
 "a tab character to spaces as it adds the tab to a window.");
 
 #define _CURSES_SET_TABSIZE_METHODDEF    \
-    {"set_tabsize", (PyCFunction)_curses_set_tabsize, METH_O, _curses_set_tabsize__doc__},
+    {"set_tabsize", _PyCFunction_CAST(_curses_set_tabsize), METH_VALUE|METH_O, _curses_set_tabsize__doc__},
 
-static PyObject *
+static PyValue
 _curses_set_tabsize_impl(PyObject *module, int size);
 
-static PyObject *
-_curses_set_tabsize(PyObject *module, PyObject *arg)
+static PyValue
+_curses_set_tabsize(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int size;
 
-    size = PyLong_AsInt(arg);
+    size = _PyValue_AsInt(PyValue_Borrow(args[0]));
     if (size == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = _curses_set_tabsize_impl(module, size);
+    return_value = _curses_set_tabsize_impl(PyValue_AsKnownObjectBorrow(module), size);
 
 exit:
     return return_value;
@@ -4538,22 +4797,22 @@ PyDoc_STRVAR(_curses_intrflush__doc__,
 "flushing is done.");
 
 #define _CURSES_INTRFLUSH_METHODDEF    \
-    {"intrflush", (PyCFunction)_curses_intrflush, METH_O, _curses_intrflush__doc__},
+    {"intrflush", _PyCFunction_CAST(_curses_intrflush), METH_VALUE|METH_O, _curses_intrflush__doc__},
 
-static PyObject *
+static PyValue
 _curses_intrflush_impl(PyObject *module, int flag);
 
-static PyObject *
-_curses_intrflush(PyObject *module, PyObject *arg)
+static PyValue
+_curses_intrflush(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int flag;
 
-    flag = PyObject_IsTrue(arg);
+    flag = _PyValue_IsTrue(PyValue_Borrow(args[0]));
     if (flag < 0) {
         goto exit;
     }
-    return_value = _curses_intrflush_impl(module, flag);
+    return_value = _curses_intrflush_impl(PyValue_AsKnownObjectBorrow(module), flag);
 
 exit:
     return return_value;
@@ -4566,15 +4825,19 @@ PyDoc_STRVAR(_curses_isendwin__doc__,
 "Return True if endwin() has been called.");
 
 #define _CURSES_ISENDWIN_METHODDEF    \
-    {"isendwin", (PyCFunction)_curses_isendwin, METH_NOARGS, _curses_isendwin__doc__},
+    {"isendwin", _PyCFunction_CAST(_curses_isendwin), METH_VALUE|METH_NOARGS, _curses_isendwin__doc__},
 
-static PyObject *
+static PyValue
 _curses_isendwin_impl(PyObject *module);
 
-static PyObject *
-_curses_isendwin(PyObject *module, PyObject *Py_UNUSED(ignored))
+static PyValue
+_curses_isendwin(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _curses_isendwin_impl(module);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _curses_isendwin_impl(PyValue_AsKnownObjectBorrow(module));
+
+    return return_value;
 }
 
 #if defined(HAVE_CURSES_IS_TERM_RESIZED)
@@ -4591,30 +4854,30 @@ PyDoc_STRVAR(_curses_is_term_resized__doc__,
 "    Width.");
 
 #define _CURSES_IS_TERM_RESIZED_METHODDEF    \
-    {"is_term_resized", _PyCFunction_CAST(_curses_is_term_resized), METH_FASTCALL, _curses_is_term_resized__doc__},
+    {"is_term_resized", _PyCFunction_CAST(_curses_is_term_resized), METH_VALUE, _curses_is_term_resized__doc__},
 
-static PyObject *
+static PyValue
 _curses_is_term_resized_impl(PyObject *module, int nlines, int ncols);
 
-static PyObject *
-_curses_is_term_resized(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_curses_is_term_resized(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int nlines;
     int ncols;
 
     if (!_PyArg_CheckPositional("is_term_resized", nargs, 2, 2)) {
         goto exit;
     }
-    nlines = PyLong_AsInt(args[0]);
+    nlines = _PyValue_AsInt(PyValue_Borrow(args[0]));
     if (nlines == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    ncols = PyLong_AsInt(args[1]);
+    ncols = _PyValue_AsInt(PyValue_Borrow(args[1]));
     if (ncols == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = _curses_is_term_resized_impl(module, nlines, ncols);
+    return_value = _curses_is_term_resized_impl(PyValue_AsKnownObjectBorrow(module), nlines, ncols);
 
 exit:
     return return_value;
@@ -4632,22 +4895,22 @@ PyDoc_STRVAR(_curses_keyname__doc__,
 "    Key number.");
 
 #define _CURSES_KEYNAME_METHODDEF    \
-    {"keyname", (PyCFunction)_curses_keyname, METH_O, _curses_keyname__doc__},
+    {"keyname", _PyCFunction_CAST(_curses_keyname), METH_VALUE|METH_O, _curses_keyname__doc__},
 
-static PyObject *
+static PyValue
 _curses_keyname_impl(PyObject *module, int key);
 
-static PyObject *
-_curses_keyname(PyObject *module, PyObject *arg)
+static PyValue
+_curses_keyname(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int key;
 
-    key = PyLong_AsInt(arg);
+    key = _PyValue_AsInt(PyValue_Borrow(args[0]));
     if (key == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = _curses_keyname_impl(module, key);
+    return_value = _curses_keyname_impl(PyValue_AsKnownObjectBorrow(module), key);
 
 exit:
     return return_value;
@@ -4660,15 +4923,19 @@ PyDoc_STRVAR(_curses_killchar__doc__,
 "Return the user\'s current line kill character.");
 
 #define _CURSES_KILLCHAR_METHODDEF    \
-    {"killchar", (PyCFunction)_curses_killchar, METH_NOARGS, _curses_killchar__doc__},
+    {"killchar", _PyCFunction_CAST(_curses_killchar), METH_VALUE|METH_NOARGS, _curses_killchar__doc__},
 
-static PyObject *
+static PyValue
 _curses_killchar_impl(PyObject *module);
 
-static PyObject *
-_curses_killchar(PyObject *module, PyObject *Py_UNUSED(ignored))
+static PyValue
+_curses_killchar(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _curses_killchar_impl(module);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _curses_killchar_impl(PyValue_AsKnownObjectBorrow(module));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(_curses_killwchar__doc__,
@@ -4678,15 +4945,19 @@ PyDoc_STRVAR(_curses_killwchar__doc__,
 "Return the user\'s current wide-character line kill character.");
 
 #define _CURSES_KILLWCHAR_METHODDEF    \
-    {"killwchar", (PyCFunction)_curses_killwchar, METH_NOARGS, _curses_killwchar__doc__},
+    {"killwchar", _PyCFunction_CAST(_curses_killwchar), METH_VALUE|METH_NOARGS, _curses_killwchar__doc__},
 
-static PyObject *
+static PyValue
 _curses_killwchar_impl(PyObject *module);
 
-static PyObject *
-_curses_killwchar(PyObject *module, PyObject *Py_UNUSED(ignored))
+static PyValue
+_curses_killwchar(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _curses_killwchar_impl(module);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _curses_killwchar_impl(PyValue_AsKnownObjectBorrow(module));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(_curses_longname__doc__,
@@ -4699,15 +4970,19 @@ PyDoc_STRVAR(_curses_longname__doc__,
 "defined only after the call to initscr().");
 
 #define _CURSES_LONGNAME_METHODDEF    \
-    {"longname", (PyCFunction)_curses_longname, METH_NOARGS, _curses_longname__doc__},
+    {"longname", _PyCFunction_CAST(_curses_longname), METH_VALUE|METH_NOARGS, _curses_longname__doc__},
 
-static PyObject *
+static PyValue
 _curses_longname_impl(PyObject *module);
 
-static PyObject *
-_curses_longname(PyObject *module, PyObject *Py_UNUSED(ignored))
+static PyValue
+_curses_longname(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _curses_longname_impl(module);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _curses_longname_impl(PyValue_AsKnownObjectBorrow(module));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(_curses_meta__doc__,
@@ -4720,22 +4995,22 @@ PyDoc_STRVAR(_curses_meta__doc__,
 "allow only 7-bit characters.");
 
 #define _CURSES_META_METHODDEF    \
-    {"meta", (PyCFunction)_curses_meta, METH_O, _curses_meta__doc__},
+    {"meta", _PyCFunction_CAST(_curses_meta), METH_VALUE|METH_O, _curses_meta__doc__},
 
-static PyObject *
+static PyValue
 _curses_meta_impl(PyObject *module, int yes);
 
-static PyObject *
-_curses_meta(PyObject *module, PyObject *arg)
+static PyValue
+_curses_meta(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int yes;
 
-    yes = PyObject_IsTrue(arg);
+    yes = _PyValue_IsTrue(PyValue_Borrow(args[0]));
     if (yes < 0) {
         goto exit;
     }
-    return_value = _curses_meta_impl(module, yes);
+    return_value = _curses_meta_impl(PyValue_AsKnownObjectBorrow(module), yes);
 
 exit:
     return return_value;
@@ -4750,15 +5025,19 @@ PyDoc_STRVAR(_curses_has_mouse__doc__,
 "Return True if the mouse driver has been successfully initialized.");
 
 #define _CURSES_HAS_MOUSE_METHODDEF    \
-    {"has_mouse", (PyCFunction)_curses_has_mouse, METH_NOARGS, _curses_has_mouse__doc__},
+    {"has_mouse", _PyCFunction_CAST(_curses_has_mouse), METH_VALUE|METH_NOARGS, _curses_has_mouse__doc__},
 
-static PyObject *
+static PyValue
 _curses_has_mouse_impl(PyObject *module);
 
-static PyObject *
-_curses_has_mouse(PyObject *module, PyObject *Py_UNUSED(ignored))
+static PyValue
+_curses_has_mouse(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _curses_has_mouse_impl(module);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _curses_has_mouse_impl(PyValue_AsKnownObjectBorrow(module));
+
+    return return_value;
 }
 
 #endif /* (defined(HAVE_CURSES_GETMOUSE) || defined(PDCURSES)) && (defined(HAVE_CURSES_HAS_MOUSE) || defined(PDCURSES)) */
@@ -4779,22 +5058,22 @@ PyDoc_STRVAR(_curses_mouseinterval__doc__,
 "interval value.");
 
 #define _CURSES_MOUSEINTERVAL_METHODDEF    \
-    {"mouseinterval", (PyCFunction)_curses_mouseinterval, METH_O, _curses_mouseinterval__doc__},
+    {"mouseinterval", _PyCFunction_CAST(_curses_mouseinterval), METH_VALUE|METH_O, _curses_mouseinterval__doc__},
 
-static PyObject *
+static PyValue
 _curses_mouseinterval_impl(PyObject *module, int interval);
 
-static PyObject *
-_curses_mouseinterval(PyObject *module, PyObject *arg)
+static PyValue
+_curses_mouseinterval(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int interval;
 
-    interval = PyLong_AsInt(arg);
+    interval = _PyValue_AsInt(PyValue_Borrow(args[0]));
     if (interval == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = _curses_mouseinterval_impl(module, interval);
+    return_value = _curses_mouseinterval_impl(PyValue_AsKnownObjectBorrow(module), interval);
 
 exit:
     return return_value;
@@ -4816,23 +5095,26 @@ PyDoc_STRVAR(_curses_mousemask__doc__,
 "function is never called, no mouse events are ever reported.");
 
 #define _CURSES_MOUSEMASK_METHODDEF    \
-    {"mousemask", (PyCFunction)_curses_mousemask, METH_O, _curses_mousemask__doc__},
+    {"mousemask", _PyCFunction_CAST(_curses_mousemask), METH_VALUE|METH_O, _curses_mousemask__doc__},
 
-static PyObject *
+static PyValue
 _curses_mousemask_impl(PyObject *module, unsigned long newmask);
 
-static PyObject *
-_curses_mousemask(PyObject *module, PyObject *arg)
+static PyValue
+_curses_mousemask(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     unsigned long newmask;
 
-    if (!PyIndex_Check(arg)) {
-        _PyArg_BadArgument("mousemask", "argument", "int", arg);
-        goto exit;
-    }
+        if (PyValue_TYPE(PyValue_Borrow(args[0]))->tp_as_number == NULL ||
+            PyValue_TYPE(PyValue_Borrow(args[0]))->tp_as_number->nb_index == NULL)
+        {
+            _PyArg_BadArgumentValue("mousemask", "argument", "int", PyValue_Borrow(args[0]));
+            goto exit;
+        }
+
     {
-        Py_ssize_t _bytes = PyLong_AsNativeBytes(arg, &newmask, sizeof(unsigned long),
+        Py_ssize_t _bytes = _PyValue_AsNativeBytes(PyValue_Borrow(args[0]), &newmask, sizeof(unsigned long),
                 Py_ASNATIVEBYTES_NATIVE_ENDIAN |
                 Py_ASNATIVEBYTES_ALLOW_INDEX |
                 Py_ASNATIVEBYTES_UNSIGNED_BUFFER);
@@ -4847,7 +5129,7 @@ _curses_mousemask(PyObject *module, PyObject *arg)
             }
         }
     }
-    return_value = _curses_mousemask_impl(module, newmask);
+    return_value = _curses_mousemask_impl(PyValue_AsKnownObjectBorrow(module), newmask);
 
 exit:
     return return_value;
@@ -4865,27 +5147,27 @@ PyDoc_STRVAR(_curses_napms__doc__,
 "    Duration in milliseconds.");
 
 #define _CURSES_NAPMS_METHODDEF    \
-    {"napms", (PyCFunction)_curses_napms, METH_O, _curses_napms__doc__},
+    {"napms", _PyCFunction_CAST(_curses_napms), METH_VALUE|METH_O, _curses_napms__doc__},
 
 static int
 _curses_napms_impl(PyObject *module, int ms);
 
-static PyObject *
-_curses_napms(PyObject *module, PyObject *arg)
+static PyValue
+_curses_napms(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int ms;
     int _return_value;
 
-    ms = PyLong_AsInt(arg);
+    ms = _PyValue_AsInt(PyValue_Borrow(args[0]));
     if (ms == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    _return_value = _curses_napms_impl(module, ms);
+    _return_value = _curses_napms_impl(PyValue_AsKnownObjectBorrow(module), ms);
     if ((_return_value == -1) && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = PyLong_FromLong((long)_return_value);
+    return_value = PyValue_FromInt64((int64_t)_return_value);
 
 exit:
     return return_value;
@@ -4903,30 +5185,30 @@ PyDoc_STRVAR(_curses_newpad__doc__,
 "    Width.");
 
 #define _CURSES_NEWPAD_METHODDEF    \
-    {"newpad", _PyCFunction_CAST(_curses_newpad), METH_FASTCALL, _curses_newpad__doc__},
+    {"newpad", _PyCFunction_CAST(_curses_newpad), METH_VALUE, _curses_newpad__doc__},
 
-static PyObject *
+static PyValue
 _curses_newpad_impl(PyObject *module, int nlines, int ncols);
 
-static PyObject *
-_curses_newpad(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_curses_newpad(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int nlines;
     int ncols;
 
     if (!_PyArg_CheckPositional("newpad", nargs, 2, 2)) {
         goto exit;
     }
-    nlines = PyLong_AsInt(args[0]);
+    nlines = _PyValue_AsInt(PyValue_Borrow(args[0]));
     if (nlines == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    ncols = PyLong_AsInt(args[1]);
+    ncols = _PyValue_AsInt(PyValue_Borrow(args[1]));
     if (ncols == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = _curses_newpad_impl(module, nlines, ncols);
+    return_value = _curses_newpad_impl(PyValue_AsKnownObjectBorrow(module), nlines, ncols);
 
 exit:
     return return_value;
@@ -5012,15 +5294,15 @@ PyDoc_STRVAR(_curses_nl__doc__,
 "is initially on.");
 
 #define _CURSES_NL_METHODDEF    \
-    {"nl", _PyCFunction_CAST(_curses_nl), METH_FASTCALL, _curses_nl__doc__},
+    {"nl", _PyCFunction_CAST(_curses_nl), METH_VALUE, _curses_nl__doc__},
 
-static PyObject *
+static PyValue
 _curses_nl_impl(PyObject *module, int flag);
 
-static PyObject *
-_curses_nl(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_curses_nl(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int flag = 1;
 
     if (!_PyArg_CheckPositional("nl", nargs, 0, 1)) {
@@ -5029,12 +5311,12 @@ _curses_nl(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
     if (nargs < 1) {
         goto skip_optional;
     }
-    flag = PyObject_IsTrue(args[0]);
+    flag = _PyValue_IsTrue(PyValue_Borrow(args[0]));
     if (flag < 0) {
         goto exit;
     }
 skip_optional:
-    return_value = _curses_nl_impl(module, flag);
+    return_value = _curses_nl_impl(PyValue_AsKnownObjectBorrow(module), flag);
 
 exit:
     return return_value;
@@ -5049,15 +5331,19 @@ PyDoc_STRVAR(_curses_nocbreak__doc__,
 "Return to normal \"cooked\" mode with line buffering.");
 
 #define _CURSES_NOCBREAK_METHODDEF    \
-    {"nocbreak", (PyCFunction)_curses_nocbreak, METH_NOARGS, _curses_nocbreak__doc__},
+    {"nocbreak", _PyCFunction_CAST(_curses_nocbreak), METH_VALUE|METH_NOARGS, _curses_nocbreak__doc__},
 
-static PyObject *
+static PyValue
 _curses_nocbreak_impl(PyObject *module);
 
-static PyObject *
-_curses_nocbreak(PyObject *module, PyObject *Py_UNUSED(ignored))
+static PyValue
+_curses_nocbreak(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _curses_nocbreak_impl(module);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _curses_nocbreak_impl(PyValue_AsKnownObjectBorrow(module));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(_curses_noecho__doc__,
@@ -5069,15 +5355,19 @@ PyDoc_STRVAR(_curses_noecho__doc__,
 "Echoing of input characters is turned off.");
 
 #define _CURSES_NOECHO_METHODDEF    \
-    {"noecho", (PyCFunction)_curses_noecho, METH_NOARGS, _curses_noecho__doc__},
+    {"noecho", _PyCFunction_CAST(_curses_noecho), METH_VALUE|METH_NOARGS, _curses_noecho__doc__},
 
-static PyObject *
+static PyValue
 _curses_noecho_impl(PyObject *module);
 
-static PyObject *
-_curses_noecho(PyObject *module, PyObject *Py_UNUSED(ignored))
+static PyValue
+_curses_noecho(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _curses_noecho_impl(module);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _curses_noecho_impl(PyValue_AsKnownObjectBorrow(module));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(_curses_nonl__doc__,
@@ -5090,15 +5380,19 @@ PyDoc_STRVAR(_curses_nonl__doc__,
 "low-level translation of newline into newline/return on output.");
 
 #define _CURSES_NONL_METHODDEF    \
-    {"nonl", (PyCFunction)_curses_nonl, METH_NOARGS, _curses_nonl__doc__},
+    {"nonl", _PyCFunction_CAST(_curses_nonl), METH_VALUE|METH_NOARGS, _curses_nonl__doc__},
 
-static PyObject *
+static PyValue
 _curses_nonl_impl(PyObject *module);
 
-static PyObject *
-_curses_nonl(PyObject *module, PyObject *Py_UNUSED(ignored))
+static PyValue
+_curses_nonl(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _curses_nonl_impl(module);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _curses_nonl_impl(PyValue_AsKnownObjectBorrow(module));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(_curses_noqiflush__doc__,
@@ -5111,15 +5405,19 @@ PyDoc_STRVAR(_curses_noqiflush__doc__,
 "associated with the INTR, QUIT and SUSP characters will not be done.");
 
 #define _CURSES_NOQIFLUSH_METHODDEF    \
-    {"noqiflush", (PyCFunction)_curses_noqiflush, METH_NOARGS, _curses_noqiflush__doc__},
+    {"noqiflush", _PyCFunction_CAST(_curses_noqiflush), METH_VALUE|METH_NOARGS, _curses_noqiflush__doc__},
 
-static PyObject *
+static PyValue
 _curses_noqiflush_impl(PyObject *module);
 
-static PyObject *
-_curses_noqiflush(PyObject *module, PyObject *Py_UNUSED(ignored))
+static PyValue
+_curses_noqiflush(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _curses_noqiflush_impl(module);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _curses_noqiflush_impl(PyValue_AsKnownObjectBorrow(module));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(_curses_noraw__doc__,
@@ -5131,15 +5429,19 @@ PyDoc_STRVAR(_curses_noraw__doc__,
 "Return to normal \"cooked\" mode with line buffering.");
 
 #define _CURSES_NORAW_METHODDEF    \
-    {"noraw", (PyCFunction)_curses_noraw, METH_NOARGS, _curses_noraw__doc__},
+    {"noraw", _PyCFunction_CAST(_curses_noraw), METH_VALUE|METH_NOARGS, _curses_noraw__doc__},
 
-static PyObject *
+static PyValue
 _curses_noraw_impl(PyObject *module);
 
-static PyObject *
-_curses_noraw(PyObject *module, PyObject *Py_UNUSED(ignored))
+static PyValue
+_curses_noraw(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _curses_noraw_impl(module);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _curses_noraw_impl(PyValue_AsKnownObjectBorrow(module));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(_curses_pair_content__doc__,
@@ -5152,21 +5454,21 @@ PyDoc_STRVAR(_curses_pair_content__doc__,
 "    The number of the color pair (0 - (COLOR_PAIRS-1)).");
 
 #define _CURSES_PAIR_CONTENT_METHODDEF    \
-    {"pair_content", (PyCFunction)_curses_pair_content, METH_O, _curses_pair_content__doc__},
+    {"pair_content", _PyCFunction_CAST(_curses_pair_content), METH_VALUE|METH_O, _curses_pair_content__doc__},
 
-static PyObject *
+static PyValue
 _curses_pair_content_impl(PyObject *module, int pair_number);
 
-static PyObject *
-_curses_pair_content(PyObject *module, PyObject *arg)
+static PyValue
+_curses_pair_content(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int pair_number;
 
-    if (!pair_converter(arg, &pair_number)) {
+    if (!pair_converter(PyValue_Borrow(args[0]), &pair_number)) {
         goto exit;
     }
-    return_value = _curses_pair_content_impl(module, pair_number);
+    return_value = _curses_pair_content_impl(PyValue_AsKnownObjectBorrow(module), pair_number);
 
 exit:
     return return_value;
@@ -5181,21 +5483,21 @@ PyDoc_STRVAR(_curses_pair_number__doc__,
 "color_pair() is the counterpart to this function.");
 
 #define _CURSES_PAIR_NUMBER_METHODDEF    \
-    {"pair_number", (PyCFunction)_curses_pair_number, METH_O, _curses_pair_number__doc__},
+    {"pair_number", _PyCFunction_CAST(_curses_pair_number), METH_VALUE|METH_O, _curses_pair_number__doc__},
 
-static PyObject *
+static PyValue
 _curses_pair_number_impl(PyObject *module, attr_t attr);
 
-static PyObject *
-_curses_pair_number(PyObject *module, PyObject *arg)
+static PyValue
+_curses_pair_number(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     attr_t attr;
 
-    if (!attr_converter(arg, &attr)) {
+    if (!attr_converter(PyValue_Borrow(args[0]), &attr)) {
         goto exit;
     }
-    return_value = _curses_pair_number_impl(module, attr);
+    return_value = _curses_pair_number_impl(PyValue_AsKnownObjectBorrow(module), attr);
 
 exit:
     return return_value;
@@ -5243,15 +5545,15 @@ PyDoc_STRVAR(_curses_qiflush__doc__,
 "will be flushed when the INTR, QUIT and SUSP characters are read.");
 
 #define _CURSES_QIFLUSH_METHODDEF    \
-    {"qiflush", _PyCFunction_CAST(_curses_qiflush), METH_FASTCALL, _curses_qiflush__doc__},
+    {"qiflush", _PyCFunction_CAST(_curses_qiflush), METH_VALUE, _curses_qiflush__doc__},
 
-static PyObject *
+static PyValue
 _curses_qiflush_impl(PyObject *module, int flag);
 
-static PyObject *
-_curses_qiflush(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_curses_qiflush(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int flag = 1;
 
     if (!_PyArg_CheckPositional("qiflush", nargs, 0, 1)) {
@@ -5260,12 +5562,12 @@ _curses_qiflush(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
     if (nargs < 1) {
         goto skip_optional;
     }
-    flag = PyObject_IsTrue(args[0]);
+    flag = _PyValue_IsTrue(PyValue_Borrow(args[0]));
     if (flag < 0) {
         goto exit;
     }
 skip_optional:
-    return_value = _curses_qiflush_impl(module, flag);
+    return_value = _curses_qiflush_impl(PyValue_AsKnownObjectBorrow(module), flag);
 
 exit:
     return return_value;
@@ -5280,15 +5582,19 @@ PyDoc_STRVAR(_curses_update_lines_cols__doc__,
 "This is useful for detecting manual screen resize.");
 
 #define _CURSES_UPDATE_LINES_COLS_METHODDEF    \
-    {"update_lines_cols", (PyCFunction)_curses_update_lines_cols, METH_NOARGS, _curses_update_lines_cols__doc__},
+    {"update_lines_cols", _PyCFunction_CAST(_curses_update_lines_cols), METH_VALUE|METH_NOARGS, _curses_update_lines_cols__doc__},
 
-static PyObject *
+static PyValue
 _curses_update_lines_cols_impl(PyObject *module);
 
-static PyObject *
-_curses_update_lines_cols(PyObject *module, PyObject *Py_UNUSED(ignored))
+static PyValue
+_curses_update_lines_cols(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _curses_update_lines_cols_impl(module);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _curses_update_lines_cols_impl(PyValue_AsKnownObjectBorrow(module));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(_curses_raw__doc__,
@@ -5305,15 +5611,15 @@ PyDoc_STRVAR(_curses_raw__doc__,
 "to curses input functions one by one.");
 
 #define _CURSES_RAW_METHODDEF    \
-    {"raw", _PyCFunction_CAST(_curses_raw), METH_FASTCALL, _curses_raw__doc__},
+    {"raw", _PyCFunction_CAST(_curses_raw), METH_VALUE, _curses_raw__doc__},
 
-static PyObject *
+static PyValue
 _curses_raw_impl(PyObject *module, int flag);
 
-static PyObject *
-_curses_raw(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_curses_raw(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int flag = 1;
 
     if (!_PyArg_CheckPositional("raw", nargs, 0, 1)) {
@@ -5322,12 +5628,12 @@ _curses_raw(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
     if (nargs < 1) {
         goto skip_optional;
     }
-    flag = PyObject_IsTrue(args[0]);
+    flag = _PyValue_IsTrue(PyValue_Borrow(args[0]));
     if (flag < 0) {
         goto exit;
     }
 skip_optional:
-    return_value = _curses_raw_impl(module, flag);
+    return_value = _curses_raw_impl(PyValue_AsKnownObjectBorrow(module), flag);
 
 exit:
     return return_value;
@@ -5340,15 +5646,19 @@ PyDoc_STRVAR(_curses_reset_prog_mode__doc__,
 "Restore the terminal to \"program\" mode, as previously saved by def_prog_mode().");
 
 #define _CURSES_RESET_PROG_MODE_METHODDEF    \
-    {"reset_prog_mode", (PyCFunction)_curses_reset_prog_mode, METH_NOARGS, _curses_reset_prog_mode__doc__},
+    {"reset_prog_mode", _PyCFunction_CAST(_curses_reset_prog_mode), METH_VALUE|METH_NOARGS, _curses_reset_prog_mode__doc__},
 
-static PyObject *
+static PyValue
 _curses_reset_prog_mode_impl(PyObject *module);
 
-static PyObject *
-_curses_reset_prog_mode(PyObject *module, PyObject *Py_UNUSED(ignored))
+static PyValue
+_curses_reset_prog_mode(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _curses_reset_prog_mode_impl(module);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _curses_reset_prog_mode_impl(PyValue_AsKnownObjectBorrow(module));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(_curses_reset_shell_mode__doc__,
@@ -5358,15 +5668,19 @@ PyDoc_STRVAR(_curses_reset_shell_mode__doc__,
 "Restore the terminal to \"shell\" mode, as previously saved by def_shell_mode().");
 
 #define _CURSES_RESET_SHELL_MODE_METHODDEF    \
-    {"reset_shell_mode", (PyCFunction)_curses_reset_shell_mode, METH_NOARGS, _curses_reset_shell_mode__doc__},
+    {"reset_shell_mode", _PyCFunction_CAST(_curses_reset_shell_mode), METH_VALUE|METH_NOARGS, _curses_reset_shell_mode__doc__},
 
-static PyObject *
+static PyValue
 _curses_reset_shell_mode_impl(PyObject *module);
 
-static PyObject *
-_curses_reset_shell_mode(PyObject *module, PyObject *Py_UNUSED(ignored))
+static PyValue
+_curses_reset_shell_mode(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _curses_reset_shell_mode_impl(module);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _curses_reset_shell_mode_impl(PyValue_AsKnownObjectBorrow(module));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(_curses_resetty__doc__,
@@ -5376,15 +5690,19 @@ PyDoc_STRVAR(_curses_resetty__doc__,
 "Restore terminal mode.");
 
 #define _CURSES_RESETTY_METHODDEF    \
-    {"resetty", (PyCFunction)_curses_resetty, METH_NOARGS, _curses_resetty__doc__},
+    {"resetty", _PyCFunction_CAST(_curses_resetty), METH_VALUE|METH_NOARGS, _curses_resetty__doc__},
 
-static PyObject *
+static PyValue
 _curses_resetty_impl(PyObject *module);
 
-static PyObject *
-_curses_resetty(PyObject *module, PyObject *Py_UNUSED(ignored))
+static PyValue
+_curses_resetty(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _curses_resetty_impl(module);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _curses_resetty_impl(PyValue_AsKnownObjectBorrow(module));
+
+    return return_value;
 }
 
 #if defined(HAVE_CURSES_RESIZETERM)
@@ -5404,15 +5722,15 @@ PyDoc_STRVAR(_curses_resizeterm__doc__,
 "the window dimensions (in particular the SIGWINCH handler).");
 
 #define _CURSES_RESIZETERM_METHODDEF    \
-    {"resizeterm", _PyCFunction_CAST(_curses_resizeterm), METH_FASTCALL, _curses_resizeterm__doc__},
+    {"resizeterm", _PyCFunction_CAST(_curses_resizeterm), METH_VALUE, _curses_resizeterm__doc__},
 
-static PyObject *
+static PyValue
 _curses_resizeterm_impl(PyObject *module, short nlines, short ncols);
 
-static PyObject *
-_curses_resizeterm(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_curses_resizeterm(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     short nlines;
     short ncols;
 
@@ -5420,7 +5738,7 @@ _curses_resizeterm(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
         goto exit;
     }
     {
-        long ival = PyLong_AsLong(args[0]);
+        long ival = _PyValue_AsLong(PyValue_Borrow(args[0]));
         if (ival == -1 && PyErr_Occurred()) {
             goto exit;
         }
@@ -5439,7 +5757,7 @@ _curses_resizeterm(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
         }
     }
     {
-        long ival = PyLong_AsLong(args[1]);
+        long ival = _PyValue_AsLong(PyValue_Borrow(args[1]));
         if (ival == -1 && PyErr_Occurred()) {
             goto exit;
         }
@@ -5457,7 +5775,7 @@ _curses_resizeterm(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
             ncols = (short) ival;
         }
     }
-    return_value = _curses_resizeterm_impl(module, nlines, ncols);
+    return_value = _curses_resizeterm_impl(PyValue_AsKnownObjectBorrow(module), nlines, ncols);
 
 exit:
     return return_value;
@@ -5486,15 +5804,15 @@ PyDoc_STRVAR(_curses_resize_term__doc__,
 "application.");
 
 #define _CURSES_RESIZE_TERM_METHODDEF    \
-    {"resize_term", _PyCFunction_CAST(_curses_resize_term), METH_FASTCALL, _curses_resize_term__doc__},
+    {"resize_term", _PyCFunction_CAST(_curses_resize_term), METH_VALUE, _curses_resize_term__doc__},
 
-static PyObject *
+static PyValue
 _curses_resize_term_impl(PyObject *module, short nlines, short ncols);
 
-static PyObject *
-_curses_resize_term(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_curses_resize_term(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     short nlines;
     short ncols;
 
@@ -5502,7 +5820,7 @@ _curses_resize_term(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
         goto exit;
     }
     {
-        long ival = PyLong_AsLong(args[0]);
+        long ival = _PyValue_AsLong(PyValue_Borrow(args[0]));
         if (ival == -1 && PyErr_Occurred()) {
             goto exit;
         }
@@ -5521,7 +5839,7 @@ _curses_resize_term(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
         }
     }
     {
-        long ival = PyLong_AsLong(args[1]);
+        long ival = _PyValue_AsLong(PyValue_Borrow(args[1]));
         if (ival == -1 && PyErr_Occurred()) {
             goto exit;
         }
@@ -5539,7 +5857,7 @@ _curses_resize_term(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
             ncols = (short) ival;
         }
     }
-    return_value = _curses_resize_term_impl(module, nlines, ncols);
+    return_value = _curses_resize_term_impl(PyValue_AsKnownObjectBorrow(module), nlines, ncols);
 
 exit:
     return return_value;
@@ -5554,15 +5872,19 @@ PyDoc_STRVAR(_curses_savetty__doc__,
 "Save terminal mode.");
 
 #define _CURSES_SAVETTY_METHODDEF    \
-    {"savetty", (PyCFunction)_curses_savetty, METH_NOARGS, _curses_savetty__doc__},
+    {"savetty", _PyCFunction_CAST(_curses_savetty), METH_VALUE|METH_NOARGS, _curses_savetty__doc__},
 
-static PyObject *
+static PyValue
 _curses_savetty_impl(PyObject *module);
 
-static PyObject *
-_curses_savetty(PyObject *module, PyObject *Py_UNUSED(ignored))
+static PyValue
+_curses_savetty(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _curses_savetty_impl(module);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _curses_savetty_impl(PyValue_AsKnownObjectBorrow(module));
+
+    return return_value;
 }
 
 #if defined(getsyx)
@@ -5581,30 +5903,30 @@ PyDoc_STRVAR(_curses_setsyx__doc__,
 "If y and x are both -1, then leaveok is set.");
 
 #define _CURSES_SETSYX_METHODDEF    \
-    {"setsyx", _PyCFunction_CAST(_curses_setsyx), METH_FASTCALL, _curses_setsyx__doc__},
+    {"setsyx", _PyCFunction_CAST(_curses_setsyx), METH_VALUE, _curses_setsyx__doc__},
 
-static PyObject *
+static PyValue
 _curses_setsyx_impl(PyObject *module, int y, int x);
 
-static PyObject *
-_curses_setsyx(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_curses_setsyx(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int y;
     int x;
 
     if (!_PyArg_CheckPositional("setsyx", nargs, 2, 2)) {
         goto exit;
     }
-    y = PyLong_AsInt(args[0]);
+    y = _PyValue_AsInt(PyValue_Borrow(args[0]));
     if (y == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    x = PyLong_AsInt(args[1]);
+    x = _PyValue_AsInt(PyValue_Borrow(args[1]));
     if (x == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = _curses_setsyx_impl(module, y, x);
+    return_value = _curses_setsyx_impl(PyValue_AsKnownObjectBorrow(module), y, x);
 
 exit:
     return return_value;
@@ -5626,15 +5948,19 @@ PyDoc_STRVAR(_curses_start_color__doc__,
 "the terminal was just turned on.");
 
 #define _CURSES_START_COLOR_METHODDEF    \
-    {"start_color", (PyCFunction)_curses_start_color, METH_NOARGS, _curses_start_color__doc__},
+    {"start_color", _PyCFunction_CAST(_curses_start_color), METH_VALUE|METH_NOARGS, _curses_start_color__doc__},
 
-static PyObject *
+static PyValue
 _curses_start_color_impl(PyObject *module);
 
-static PyObject *
-_curses_start_color(PyObject *module, PyObject *Py_UNUSED(ignored))
+static PyValue
+_curses_start_color(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _curses_start_color_impl(module);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _curses_start_color_impl(PyValue_AsKnownObjectBorrow(module));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(_curses_termattrs__doc__,
@@ -5644,15 +5970,19 @@ PyDoc_STRVAR(_curses_termattrs__doc__,
 "Return a logical OR of all video attributes supported by the terminal.");
 
 #define _CURSES_TERMATTRS_METHODDEF    \
-    {"termattrs", (PyCFunction)_curses_termattrs, METH_NOARGS, _curses_termattrs__doc__},
+    {"termattrs", _PyCFunction_CAST(_curses_termattrs), METH_VALUE|METH_NOARGS, _curses_termattrs__doc__},
 
-static PyObject *
+static PyValue
 _curses_termattrs_impl(PyObject *module);
 
-static PyObject *
-_curses_termattrs(PyObject *module, PyObject *Py_UNUSED(ignored))
+static PyValue
+_curses_termattrs(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _curses_termattrs_impl(module);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _curses_termattrs_impl(PyValue_AsKnownObjectBorrow(module));
+
+    return return_value;
 }
 
 #if defined(HAVE_CURSES_TERM_ATTRS)
@@ -5667,15 +5997,19 @@ PyDoc_STRVAR(_curses_term_attrs__doc__,
 "the A_* values returned by termattrs().");
 
 #define _CURSES_TERM_ATTRS_METHODDEF    \
-    {"term_attrs", (PyCFunction)_curses_term_attrs, METH_NOARGS, _curses_term_attrs__doc__},
+    {"term_attrs", _PyCFunction_CAST(_curses_term_attrs), METH_VALUE|METH_NOARGS, _curses_term_attrs__doc__},
 
-static PyObject *
+static PyValue
 _curses_term_attrs_impl(PyObject *module);
 
-static PyObject *
-_curses_term_attrs(PyObject *module, PyObject *Py_UNUSED(ignored))
+static PyValue
+_curses_term_attrs(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _curses_term_attrs_impl(module);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _curses_term_attrs_impl(PyValue_AsKnownObjectBorrow(module));
+
+    return return_value;
 }
 
 #endif /* defined(HAVE_CURSES_TERM_ATTRS) */
@@ -5687,15 +6021,19 @@ PyDoc_STRVAR(_curses_termname__doc__,
 "Return the value of the environment variable TERM, truncated to 14 characters.");
 
 #define _CURSES_TERMNAME_METHODDEF    \
-    {"termname", (PyCFunction)_curses_termname, METH_NOARGS, _curses_termname__doc__},
+    {"termname", _PyCFunction_CAST(_curses_termname), METH_VALUE|METH_NOARGS, _curses_termname__doc__},
 
-static PyObject *
+static PyValue
 _curses_termname_impl(PyObject *module);
 
-static PyObject *
-_curses_termname(PyObject *module, PyObject *Py_UNUSED(ignored))
+static PyValue
+_curses_termname(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _curses_termname_impl(module);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _curses_termname_impl(PyValue_AsKnownObjectBorrow(module));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(_curses_tigetflag__doc__,
@@ -5711,26 +6049,30 @@ PyDoc_STRVAR(_curses_tigetflag__doc__,
 "it is canceled or absent from the terminal description.");
 
 #define _CURSES_TIGETFLAG_METHODDEF    \
-    {"tigetflag", (PyCFunction)_curses_tigetflag, METH_O, _curses_tigetflag__doc__},
+    {"tigetflag", _PyCFunction_CAST(_curses_tigetflag), METH_VALUE|METH_O, _curses_tigetflag__doc__},
 
-static PyObject *
+static PyValue
 _curses_tigetflag_impl(PyObject *module, const char *capname);
 
-static PyObject *
-_curses_tigetflag(PyObject *module, PyObject *arg)
+static PyValue
+_curses_tigetflag(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     const char *capname;
 
-    if (!PyUnicode_Check(arg)) {
-        _PyArg_BadArgument("tigetflag", "argument", "str", arg);
+    if (!PyValue_IsObject(PyValue_Borrow(args[0]))) {
+        _PyArg_BadArgumentValue("tigetflag", "argument", "str", PyValue_Borrow(args[0]));
         goto exit;
     }
-    capname = _PyUnicode_AsUTF8NoNUL(arg);
+    if (!PyUnicode_Check(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])))) {
+        _PyArg_BadArgument("tigetflag", "argument", "str", PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])));
+        goto exit;
+    }
+    capname = _PyUnicode_AsUTF8NoNUL(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])));
     if (capname == NULL) {
         goto exit;
     }
-    return_value = _curses_tigetflag_impl(module, capname);
+    return_value = _curses_tigetflag_impl(PyValue_AsKnownObjectBorrow(module), capname);
 
 exit:
     return return_value;
@@ -5749,26 +6091,30 @@ PyDoc_STRVAR(_curses_tigetnum__doc__,
 "if it is canceled or absent from the terminal description.");
 
 #define _CURSES_TIGETNUM_METHODDEF    \
-    {"tigetnum", (PyCFunction)_curses_tigetnum, METH_O, _curses_tigetnum__doc__},
+    {"tigetnum", _PyCFunction_CAST(_curses_tigetnum), METH_VALUE|METH_O, _curses_tigetnum__doc__},
 
-static PyObject *
+static PyValue
 _curses_tigetnum_impl(PyObject *module, const char *capname);
 
-static PyObject *
-_curses_tigetnum(PyObject *module, PyObject *arg)
+static PyValue
+_curses_tigetnum(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     const char *capname;
 
-    if (!PyUnicode_Check(arg)) {
-        _PyArg_BadArgument("tigetnum", "argument", "str", arg);
+    if (!PyValue_IsObject(PyValue_Borrow(args[0]))) {
+        _PyArg_BadArgumentValue("tigetnum", "argument", "str", PyValue_Borrow(args[0]));
         goto exit;
     }
-    capname = _PyUnicode_AsUTF8NoNUL(arg);
+    if (!PyUnicode_Check(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])))) {
+        _PyArg_BadArgument("tigetnum", "argument", "str", PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])));
+        goto exit;
+    }
+    capname = _PyUnicode_AsUTF8NoNUL(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])));
     if (capname == NULL) {
         goto exit;
     }
-    return_value = _curses_tigetnum_impl(module, capname);
+    return_value = _curses_tigetnum_impl(PyValue_AsKnownObjectBorrow(module), capname);
 
 exit:
     return return_value;
@@ -5787,26 +6133,30 @@ PyDoc_STRVAR(_curses_tigetstr__doc__,
 "or absent from the terminal description.");
 
 #define _CURSES_TIGETSTR_METHODDEF    \
-    {"tigetstr", (PyCFunction)_curses_tigetstr, METH_O, _curses_tigetstr__doc__},
+    {"tigetstr", _PyCFunction_CAST(_curses_tigetstr), METH_VALUE|METH_O, _curses_tigetstr__doc__},
 
-static PyObject *
+static PyValue
 _curses_tigetstr_impl(PyObject *module, const char *capname);
 
-static PyObject *
-_curses_tigetstr(PyObject *module, PyObject *arg)
+static PyValue
+_curses_tigetstr(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     const char *capname;
 
-    if (!PyUnicode_Check(arg)) {
-        _PyArg_BadArgument("tigetstr", "argument", "str", arg);
+    if (!PyValue_IsObject(PyValue_Borrow(args[0]))) {
+        _PyArg_BadArgumentValue("tigetstr", "argument", "str", PyValue_Borrow(args[0]));
         goto exit;
     }
-    capname = _PyUnicode_AsUTF8NoNUL(arg);
+    if (!PyUnicode_Check(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])))) {
+        _PyArg_BadArgument("tigetstr", "argument", "str", PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])));
+        goto exit;
+    }
+    capname = _PyUnicode_AsUTF8NoNUL(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])));
     if (capname == NULL) {
         goto exit;
     }
-    return_value = _curses_tigetstr_impl(module, capname);
+    return_value = _curses_tigetstr_impl(PyValue_AsKnownObjectBorrow(module), capname);
 
 exit:
     return return_value;
@@ -5868,22 +6218,22 @@ PyDoc_STRVAR(_curses_typeahead__doc__,
 "If fd is -1, then no typeahead checking is done.");
 
 #define _CURSES_TYPEAHEAD_METHODDEF    \
-    {"typeahead", (PyCFunction)_curses_typeahead, METH_O, _curses_typeahead__doc__},
+    {"typeahead", _PyCFunction_CAST(_curses_typeahead), METH_VALUE|METH_O, _curses_typeahead__doc__},
 
-static PyObject *
+static PyValue
 _curses_typeahead_impl(PyObject *module, int fd);
 
-static PyObject *
-_curses_typeahead(PyObject *module, PyObject *arg)
+static PyValue
+_curses_typeahead(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int fd;
 
-    fd = PyLong_AsInt(arg);
+    fd = _PyValue_AsInt(PyValue_Borrow(args[0]));
     if (fd == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = _curses_typeahead_impl(module, fd);
+    return_value = _curses_typeahead_impl(PyValue_AsKnownObjectBorrow(module), fd);
 
 exit:
     return return_value;
@@ -5903,7 +6253,22 @@ PyDoc_STRVAR(_curses_unctrl__doc__,
 "single byte; use wunctrl() for other characters.");
 
 #define _CURSES_UNCTRL_METHODDEF    \
-    {"unctrl", (PyCFunction)_curses_unctrl, METH_O, _curses_unctrl__doc__},
+    {"unctrl", _PyCFunction_CAST(_curses_unctrl), METH_VALUE|METH_O, _curses_unctrl__doc__},
+
+static PyValue
+_curses_unctrl_impl(PyObject *module, PyValueBorrow ch);
+
+static PyValue
+_curses_unctrl(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+{
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow ch;
+
+    ch = PyValue_Borrow(args[0]);
+    return_value = _curses_unctrl_impl(PyValue_AsKnownObjectBorrow(module), ch);
+
+    return return_value;
+}
 
 PyDoc_STRVAR(_curses_wunctrl__doc__,
 "wunctrl($module, ch, /)\n"
@@ -5915,7 +6280,22 @@ PyDoc_STRVAR(_curses_wunctrl__doc__,
 "for example as ^C.  Printing characters are left as they are.");
 
 #define _CURSES_WUNCTRL_METHODDEF    \
-    {"wunctrl", (PyCFunction)_curses_wunctrl, METH_O, _curses_wunctrl__doc__},
+    {"wunctrl", _PyCFunction_CAST(_curses_wunctrl), METH_VALUE|METH_O, _curses_wunctrl__doc__},
+
+static PyValue
+_curses_wunctrl_impl(PyObject *module, PyValueBorrow ch);
+
+static PyValue
+_curses_wunctrl(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+{
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow ch;
+
+    ch = PyValue_Borrow(args[0]);
+    return_value = _curses_wunctrl_impl(PyValue_AsKnownObjectBorrow(module), ch);
+
+    return return_value;
+}
 
 PyDoc_STRVAR(_curses_ungetch__doc__,
 "ungetch($module, ch, /)\n"
@@ -5924,7 +6304,22 @@ PyDoc_STRVAR(_curses_ungetch__doc__,
 "Push ch so the next getch() will return it.");
 
 #define _CURSES_UNGETCH_METHODDEF    \
-    {"ungetch", (PyCFunction)_curses_ungetch, METH_O, _curses_ungetch__doc__},
+    {"ungetch", _PyCFunction_CAST(_curses_ungetch), METH_VALUE|METH_O, _curses_ungetch__doc__},
+
+static PyValue
+_curses_ungetch_impl(PyObject *module, PyValueBorrow ch);
+
+static PyValue
+_curses_ungetch(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+{
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow ch;
+
+    ch = PyValue_Borrow(args[0]);
+    return_value = _curses_ungetch_impl(PyValue_AsKnownObjectBorrow(module), ch);
+
+    return return_value;
+}
 
 PyDoc_STRVAR(_curses_unget_wch__doc__,
 "unget_wch($module, ch, /)\n"
@@ -5933,7 +6328,22 @@ PyDoc_STRVAR(_curses_unget_wch__doc__,
 "Push ch so the next get_wch() will return it.");
 
 #define _CURSES_UNGET_WCH_METHODDEF    \
-    {"unget_wch", (PyCFunction)_curses_unget_wch, METH_O, _curses_unget_wch__doc__},
+    {"unget_wch", _PyCFunction_CAST(_curses_unget_wch), METH_VALUE|METH_O, _curses_unget_wch__doc__},
+
+static PyValue
+_curses_unget_wch_impl(PyObject *module, PyValueBorrow ch);
+
+static PyValue
+_curses_unget_wch(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+{
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow ch;
+
+    ch = PyValue_Borrow(args[0]);
+    return_value = _curses_unget_wch_impl(PyValue_AsKnownObjectBorrow(module), ch);
+
+    return return_value;
+}
 
 PyDoc_STRVAR(_curses_slk_init__doc__,
 "slk_init($module, fmt=0, /)\n"
@@ -5948,15 +6358,15 @@ PyDoc_STRVAR(_curses_slk_init__doc__,
 "Must be called before initscr() or newterm().");
 
 #define _CURSES_SLK_INIT_METHODDEF    \
-    {"slk_init", _PyCFunction_CAST(_curses_slk_init), METH_FASTCALL, _curses_slk_init__doc__},
+    {"slk_init", _PyCFunction_CAST(_curses_slk_init), METH_VALUE, _curses_slk_init__doc__},
 
-static PyObject *
+static PyValue
 _curses_slk_init_impl(PyObject *module, int fmt);
 
-static PyObject *
-_curses_slk_init(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_curses_slk_init(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int fmt = 0;
 
     if (!_PyArg_CheckPositional("slk_init", nargs, 0, 1)) {
@@ -5965,12 +6375,12 @@ _curses_slk_init(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
     if (nargs < 1) {
         goto skip_optional;
     }
-    fmt = PyLong_AsInt(args[0]);
+    fmt = _PyValue_AsInt(PyValue_Borrow(args[0]));
     if (fmt == -1 && PyErr_Occurred()) {
         goto exit;
     }
 skip_optional:
-    return_value = _curses_slk_init_impl(module, fmt);
+    return_value = _curses_slk_init_impl(PyValue_AsKnownObjectBorrow(module), fmt);
 
 exit:
     return return_value;
@@ -5990,16 +6400,16 @@ PyDoc_STRVAR(_curses_slk_set__doc__,
 "    0 = left, 1 = center, 2 = right.");
 
 #define _CURSES_SLK_SET_METHODDEF    \
-    {"slk_set", _PyCFunction_CAST(_curses_slk_set), METH_FASTCALL, _curses_slk_set__doc__},
+    {"slk_set", _PyCFunction_CAST(_curses_slk_set), METH_VALUE, _curses_slk_set__doc__},
 
-static PyObject *
+static PyValue
 _curses_slk_set_impl(PyObject *module, int labnum, PyObject *label,
                      int justify);
 
-static PyObject *
-_curses_slk_set(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_curses_slk_set(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int labnum;
     PyObject *label;
     int justify = 0;
@@ -6007,24 +6417,28 @@ _curses_slk_set(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
     if (!_PyArg_CheckPositional("slk_set", nargs, 2, 3)) {
         goto exit;
     }
-    labnum = PyLong_AsInt(args[0]);
+    labnum = _PyValue_AsInt(PyValue_Borrow(args[0]));
     if (labnum == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    if (!PyUnicode_Check(args[1])) {
-        _PyArg_BadArgument("slk_set", "argument 2", "str", args[1]);
+    if (!PyValue_IsObject(PyValue_Borrow(args[1]))) {
+        _PyArg_BadArgumentValue("slk_set", "argument 2", "str", PyValue_Borrow(args[1]));
         goto exit;
     }
-    label = args[1];
+    if (!PyUnicode_Check(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[1])))) {
+        _PyArg_BadArgument("slk_set", "argument 2", "str", PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[1])));
+        goto exit;
+    }
+    label = PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[1]));
     if (nargs < 3) {
         goto skip_optional;
     }
-    justify = PyLong_AsInt(args[2]);
+    justify = _PyValue_AsInt(PyValue_Borrow(args[2]));
     if (justify == -1 && PyErr_Occurred()) {
         goto exit;
     }
 skip_optional:
-    return_value = _curses_slk_set_impl(module, labnum, label, justify);
+    return_value = _curses_slk_set_impl(PyValue_AsKnownObjectBorrow(module), labnum, label, justify);
 
 exit:
     return return_value;
@@ -6040,22 +6454,22 @@ PyDoc_STRVAR(_curses_slk_label__doc__,
 "    The label number.");
 
 #define _CURSES_SLK_LABEL_METHODDEF    \
-    {"slk_label", (PyCFunction)_curses_slk_label, METH_O, _curses_slk_label__doc__},
+    {"slk_label", _PyCFunction_CAST(_curses_slk_label), METH_VALUE|METH_O, _curses_slk_label__doc__},
 
-static PyObject *
+static PyValue
 _curses_slk_label_impl(PyObject *module, int labnum);
 
-static PyObject *
-_curses_slk_label(PyObject *module, PyObject *arg)
+static PyValue
+_curses_slk_label(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int labnum;
 
-    labnum = PyLong_AsInt(arg);
+    labnum = _PyValue_AsInt(PyValue_Borrow(args[0]));
     if (labnum == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = _curses_slk_label_impl(module, labnum);
+    return_value = _curses_slk_label_impl(PyValue_AsKnownObjectBorrow(module), labnum);
 
 exit:
     return return_value;
@@ -6068,15 +6482,19 @@ PyDoc_STRVAR(_curses_slk_refresh__doc__,
 "Update the soft labels on the screen.");
 
 #define _CURSES_SLK_REFRESH_METHODDEF    \
-    {"slk_refresh", (PyCFunction)_curses_slk_refresh, METH_NOARGS, _curses_slk_refresh__doc__},
+    {"slk_refresh", _PyCFunction_CAST(_curses_slk_refresh), METH_VALUE|METH_NOARGS, _curses_slk_refresh__doc__},
 
-static PyObject *
+static PyValue
 _curses_slk_refresh_impl(PyObject *module);
 
-static PyObject *
-_curses_slk_refresh(PyObject *module, PyObject *Py_UNUSED(ignored))
+static PyValue
+_curses_slk_refresh(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _curses_slk_refresh_impl(module);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _curses_slk_refresh_impl(PyValue_AsKnownObjectBorrow(module));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(_curses_slk_noutrefresh__doc__,
@@ -6086,15 +6504,19 @@ PyDoc_STRVAR(_curses_slk_noutrefresh__doc__,
 "Update the soft labels on the virtual screen only.");
 
 #define _CURSES_SLK_NOUTREFRESH_METHODDEF    \
-    {"slk_noutrefresh", (PyCFunction)_curses_slk_noutrefresh, METH_NOARGS, _curses_slk_noutrefresh__doc__},
+    {"slk_noutrefresh", _PyCFunction_CAST(_curses_slk_noutrefresh), METH_VALUE|METH_NOARGS, _curses_slk_noutrefresh__doc__},
 
-static PyObject *
+static PyValue
 _curses_slk_noutrefresh_impl(PyObject *module);
 
-static PyObject *
-_curses_slk_noutrefresh(PyObject *module, PyObject *Py_UNUSED(ignored))
+static PyValue
+_curses_slk_noutrefresh(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _curses_slk_noutrefresh_impl(module);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _curses_slk_noutrefresh_impl(PyValue_AsKnownObjectBorrow(module));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(_curses_slk_clear__doc__,
@@ -6104,15 +6526,19 @@ PyDoc_STRVAR(_curses_slk_clear__doc__,
 "Erase the soft labels from the screen.");
 
 #define _CURSES_SLK_CLEAR_METHODDEF    \
-    {"slk_clear", (PyCFunction)_curses_slk_clear, METH_NOARGS, _curses_slk_clear__doc__},
+    {"slk_clear", _PyCFunction_CAST(_curses_slk_clear), METH_VALUE|METH_NOARGS, _curses_slk_clear__doc__},
 
-static PyObject *
+static PyValue
 _curses_slk_clear_impl(PyObject *module);
 
-static PyObject *
-_curses_slk_clear(PyObject *module, PyObject *Py_UNUSED(ignored))
+static PyValue
+_curses_slk_clear(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _curses_slk_clear_impl(module);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _curses_slk_clear_impl(PyValue_AsKnownObjectBorrow(module));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(_curses_slk_restore__doc__,
@@ -6122,15 +6548,19 @@ PyDoc_STRVAR(_curses_slk_restore__doc__,
 "Restore the soft labels after a preceding slk_clear().");
 
 #define _CURSES_SLK_RESTORE_METHODDEF    \
-    {"slk_restore", (PyCFunction)_curses_slk_restore, METH_NOARGS, _curses_slk_restore__doc__},
+    {"slk_restore", _PyCFunction_CAST(_curses_slk_restore), METH_VALUE|METH_NOARGS, _curses_slk_restore__doc__},
 
-static PyObject *
+static PyValue
 _curses_slk_restore_impl(PyObject *module);
 
-static PyObject *
-_curses_slk_restore(PyObject *module, PyObject *Py_UNUSED(ignored))
+static PyValue
+_curses_slk_restore(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _curses_slk_restore_impl(module);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _curses_slk_restore_impl(PyValue_AsKnownObjectBorrow(module));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(_curses_slk_touch__doc__,
@@ -6140,15 +6570,19 @@ PyDoc_STRVAR(_curses_slk_touch__doc__,
 "Force the soft labels to be redrawn by the next slk_refresh().");
 
 #define _CURSES_SLK_TOUCH_METHODDEF    \
-    {"slk_touch", (PyCFunction)_curses_slk_touch, METH_NOARGS, _curses_slk_touch__doc__},
+    {"slk_touch", _PyCFunction_CAST(_curses_slk_touch), METH_VALUE|METH_NOARGS, _curses_slk_touch__doc__},
 
-static PyObject *
+static PyValue
 _curses_slk_touch_impl(PyObject *module);
 
-static PyObject *
-_curses_slk_touch(PyObject *module, PyObject *Py_UNUSED(ignored))
+static PyValue
+_curses_slk_touch(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _curses_slk_touch_impl(module);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _curses_slk_touch_impl(PyValue_AsKnownObjectBorrow(module));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(_curses_slk_attron__doc__,
@@ -6158,21 +6592,21 @@ PyDoc_STRVAR(_curses_slk_attron__doc__,
 "Add the given chtype attributes to the soft labels.");
 
 #define _CURSES_SLK_ATTRON_METHODDEF    \
-    {"slk_attron", (PyCFunction)_curses_slk_attron, METH_O, _curses_slk_attron__doc__},
+    {"slk_attron", _PyCFunction_CAST(_curses_slk_attron), METH_VALUE|METH_O, _curses_slk_attron__doc__},
 
-static PyObject *
+static PyValue
 _curses_slk_attron_impl(PyObject *module, attr_t attr);
 
-static PyObject *
-_curses_slk_attron(PyObject *module, PyObject *arg)
+static PyValue
+_curses_slk_attron(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     attr_t attr;
 
-    if (!attr_converter(arg, &attr)) {
+    if (!attr_converter(PyValue_Borrow(args[0]), &attr)) {
         goto exit;
     }
-    return_value = _curses_slk_attron_impl(module, attr);
+    return_value = _curses_slk_attron_impl(PyValue_AsKnownObjectBorrow(module), attr);
 
 exit:
     return return_value;
@@ -6185,21 +6619,21 @@ PyDoc_STRVAR(_curses_slk_attroff__doc__,
 "Remove the given chtype attributes from the soft labels.");
 
 #define _CURSES_SLK_ATTROFF_METHODDEF    \
-    {"slk_attroff", (PyCFunction)_curses_slk_attroff, METH_O, _curses_slk_attroff__doc__},
+    {"slk_attroff", _PyCFunction_CAST(_curses_slk_attroff), METH_VALUE|METH_O, _curses_slk_attroff__doc__},
 
-static PyObject *
+static PyValue
 _curses_slk_attroff_impl(PyObject *module, attr_t attr);
 
-static PyObject *
-_curses_slk_attroff(PyObject *module, PyObject *arg)
+static PyValue
+_curses_slk_attroff(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     attr_t attr;
 
-    if (!attr_converter(arg, &attr)) {
+    if (!attr_converter(PyValue_Borrow(args[0]), &attr)) {
         goto exit;
     }
-    return_value = _curses_slk_attroff_impl(module, attr);
+    return_value = _curses_slk_attroff_impl(PyValue_AsKnownObjectBorrow(module), attr);
 
 exit:
     return return_value;
@@ -6212,21 +6646,21 @@ PyDoc_STRVAR(_curses_slk_attrset__doc__,
 "Set the chtype attributes of the soft labels.");
 
 #define _CURSES_SLK_ATTRSET_METHODDEF    \
-    {"slk_attrset", (PyCFunction)_curses_slk_attrset, METH_O, _curses_slk_attrset__doc__},
+    {"slk_attrset", _PyCFunction_CAST(_curses_slk_attrset), METH_VALUE|METH_O, _curses_slk_attrset__doc__},
 
-static PyObject *
+static PyValue
 _curses_slk_attrset_impl(PyObject *module, attr_t attr);
 
-static PyObject *
-_curses_slk_attrset(PyObject *module, PyObject *arg)
+static PyValue
+_curses_slk_attrset(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     attr_t attr;
 
-    if (!attr_converter(arg, &attr)) {
+    if (!attr_converter(PyValue_Borrow(args[0]), &attr)) {
         goto exit;
     }
-    return_value = _curses_slk_attrset_impl(module, attr);
+    return_value = _curses_slk_attrset_impl(PyValue_AsKnownObjectBorrow(module), attr);
 
 exit:
     return return_value;
@@ -6241,15 +6675,19 @@ PyDoc_STRVAR(_curses_slk_attr__doc__,
 "Return the current chtype attributes of the soft labels.");
 
 #define _CURSES_SLK_ATTR_METHODDEF    \
-    {"slk_attr", (PyCFunction)_curses_slk_attr, METH_NOARGS, _curses_slk_attr__doc__},
+    {"slk_attr", _PyCFunction_CAST(_curses_slk_attr), METH_VALUE|METH_NOARGS, _curses_slk_attr__doc__},
 
-static PyObject *
+static PyValue
 _curses_slk_attr_impl(PyObject *module);
 
-static PyObject *
-_curses_slk_attr(PyObject *module, PyObject *Py_UNUSED(ignored))
+static PyValue
+_curses_slk_attr(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _curses_slk_attr_impl(module);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _curses_slk_attr_impl(PyValue_AsKnownObjectBorrow(module));
+
+    return return_value;
 }
 
 #endif /* (defined(NCURSES_EXT_FUNCS) || defined(PDCURSES)) */
@@ -6263,21 +6701,21 @@ PyDoc_STRVAR(_curses_slk_attr_on__doc__,
 "Turn on attributes of the soft labels without affecting others.");
 
 #define _CURSES_SLK_ATTR_ON_METHODDEF    \
-    {"slk_attr_on", (PyCFunction)_curses_slk_attr_on, METH_O, _curses_slk_attr_on__doc__},
+    {"slk_attr_on", _PyCFunction_CAST(_curses_slk_attr_on), METH_VALUE|METH_O, _curses_slk_attr_on__doc__},
 
-static PyObject *
+static PyValue
 _curses_slk_attr_on_impl(PyObject *module, attr_t attr);
 
-static PyObject *
-_curses_slk_attr_on(PyObject *module, PyObject *arg)
+static PyValue
+_curses_slk_attr_on(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     attr_t attr;
 
-    if (!attr_converter(arg, &attr)) {
+    if (!attr_converter(PyValue_Borrow(args[0]), &attr)) {
         goto exit;
     }
-    return_value = _curses_slk_attr_on_impl(module, attr);
+    return_value = _curses_slk_attr_on_impl(PyValue_AsKnownObjectBorrow(module), attr);
 
 exit:
     return return_value;
@@ -6294,21 +6732,21 @@ PyDoc_STRVAR(_curses_slk_attr_off__doc__,
 "Turn off attributes of the soft labels without affecting others.");
 
 #define _CURSES_SLK_ATTR_OFF_METHODDEF    \
-    {"slk_attr_off", (PyCFunction)_curses_slk_attr_off, METH_O, _curses_slk_attr_off__doc__},
+    {"slk_attr_off", _PyCFunction_CAST(_curses_slk_attr_off), METH_VALUE|METH_O, _curses_slk_attr_off__doc__},
 
-static PyObject *
+static PyValue
 _curses_slk_attr_off_impl(PyObject *module, attr_t attr);
 
-static PyObject *
-_curses_slk_attr_off(PyObject *module, PyObject *arg)
+static PyValue
+_curses_slk_attr_off(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     attr_t attr;
 
-    if (!attr_converter(arg, &attr)) {
+    if (!attr_converter(PyValue_Borrow(args[0]), &attr)) {
         goto exit;
     }
-    return_value = _curses_slk_attr_off_impl(module, attr);
+    return_value = _curses_slk_attr_off_impl(PyValue_AsKnownObjectBorrow(module), attr);
 
 exit:
     return return_value;
@@ -6325,32 +6763,32 @@ PyDoc_STRVAR(_curses_slk_attr_set__doc__,
 "Set the attributes and color pair of the soft labels.");
 
 #define _CURSES_SLK_ATTR_SET_METHODDEF    \
-    {"slk_attr_set", _PyCFunction_CAST(_curses_slk_attr_set), METH_FASTCALL, _curses_slk_attr_set__doc__},
+    {"slk_attr_set", _PyCFunction_CAST(_curses_slk_attr_set), METH_VALUE, _curses_slk_attr_set__doc__},
 
-static PyObject *
+static PyValue
 _curses_slk_attr_set_impl(PyObject *module, attr_t attr, int pair);
 
-static PyObject *
-_curses_slk_attr_set(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_curses_slk_attr_set(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     attr_t attr;
     int pair = 0;
 
     if (!_PyArg_CheckPositional("slk_attr_set", nargs, 1, 2)) {
         goto exit;
     }
-    if (!attr_converter(args[0], &attr)) {
+    if (!attr_converter(PyValue_Borrow(args[0]), &attr)) {
         goto exit;
     }
     if (nargs < 2) {
         goto skip_optional;
     }
-    if (!pair_converter(args[1], &pair)) {
+    if (!pair_converter(PyValue_Borrow(args[1]), &pair)) {
         goto exit;
     }
 skip_optional:
-    return_value = _curses_slk_attr_set_impl(module, attr, pair);
+    return_value = _curses_slk_attr_set_impl(PyValue_AsKnownObjectBorrow(module), attr, pair);
 
 exit:
     return return_value;
@@ -6367,21 +6805,21 @@ PyDoc_STRVAR(_curses_slk_color__doc__,
 "Set the color pair of the soft labels.");
 
 #define _CURSES_SLK_COLOR_METHODDEF    \
-    {"slk_color", (PyCFunction)_curses_slk_color, METH_O, _curses_slk_color__doc__},
+    {"slk_color", _PyCFunction_CAST(_curses_slk_color), METH_VALUE|METH_O, _curses_slk_color__doc__},
 
-static PyObject *
+static PyValue
 _curses_slk_color_impl(PyObject *module, int pair);
 
-static PyObject *
-_curses_slk_color(PyObject *module, PyObject *arg)
+static PyValue
+_curses_slk_color(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int pair;
 
-    if (!pair_converter(arg, &pair)) {
+    if (!pair_converter(PyValue_Borrow(args[0]), &pair)) {
         goto exit;
     }
-    return_value = _curses_slk_color_impl(module, pair);
+    return_value = _curses_slk_color_impl(PyValue_AsKnownObjectBorrow(module), pair);
 
 exit:
     return return_value;
@@ -6407,22 +6845,22 @@ PyDoc_STRVAR(_curses_use_env__doc__,
 "and COLUMNS are not set).");
 
 #define _CURSES_USE_ENV_METHODDEF    \
-    {"use_env", (PyCFunction)_curses_use_env, METH_O, _curses_use_env__doc__},
+    {"use_env", _PyCFunction_CAST(_curses_use_env), METH_VALUE|METH_O, _curses_use_env__doc__},
 
-static PyObject *
+static PyValue
 _curses_use_env_impl(PyObject *module, int flag);
 
-static PyObject *
-_curses_use_env(PyObject *module, PyObject *arg)
+static PyValue
+_curses_use_env(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int flag;
 
-    flag = PyObject_IsTrue(arg);
+    flag = _PyValue_IsTrue(PyValue_Borrow(args[0]));
     if (flag < 0) {
         goto exit;
     }
-    return_value = _curses_use_env_impl(module, flag);
+    return_value = _curses_use_env_impl(PyValue_AsKnownObjectBorrow(module), flag);
 
 exit:
     return return_value;
@@ -6439,15 +6877,19 @@ PyDoc_STRVAR(_curses_use_default_colors__doc__,
 "Equivalent to assume_default_colors(-1, -1).");
 
 #define _CURSES_USE_DEFAULT_COLORS_METHODDEF    \
-    {"use_default_colors", (PyCFunction)_curses_use_default_colors, METH_NOARGS, _curses_use_default_colors__doc__},
+    {"use_default_colors", _PyCFunction_CAST(_curses_use_default_colors), METH_VALUE|METH_NOARGS, _curses_use_default_colors__doc__},
 
-static PyObject *
+static PyValue
 _curses_use_default_colors_impl(PyObject *module);
 
-static PyObject *
-_curses_use_default_colors(PyObject *module, PyObject *Py_UNUSED(ignored))
+static PyValue
+_curses_use_default_colors(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _curses_use_default_colors_impl(module);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _curses_use_default_colors_impl(PyValue_AsKnownObjectBorrow(module));
+
+    return return_value;
 }
 
 #endif /* !defined(STRICT_SYSV_CURSES) */
@@ -6466,30 +6908,30 @@ PyDoc_STRVAR(_curses_assume_default_colors__doc__,
 "Use this to support transparency in your application.");
 
 #define _CURSES_ASSUME_DEFAULT_COLORS_METHODDEF    \
-    {"assume_default_colors", _PyCFunction_CAST(_curses_assume_default_colors), METH_FASTCALL, _curses_assume_default_colors__doc__},
+    {"assume_default_colors", _PyCFunction_CAST(_curses_assume_default_colors), METH_VALUE, _curses_assume_default_colors__doc__},
 
-static PyObject *
+static PyValue
 _curses_assume_default_colors_impl(PyObject *module, int fg, int bg);
 
-static PyObject *
-_curses_assume_default_colors(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_curses_assume_default_colors(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int fg;
     int bg;
 
     if (!_PyArg_CheckPositional("assume_default_colors", nargs, 2, 2)) {
         goto exit;
     }
-    fg = PyLong_AsInt(args[0]);
+    fg = _PyValue_AsInt(PyValue_Borrow(args[0]));
     if (fg == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    bg = PyLong_AsInt(args[1]);
+    bg = _PyValue_AsInt(PyValue_Borrow(args[1]));
     if (bg == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = _curses_assume_default_colors_impl(module, fg, bg);
+    return_value = _curses_assume_default_colors_impl(PyValue_AsKnownObjectBorrow(module), fg, bg);
 
 exit:
     return return_value;
@@ -6507,15 +6949,19 @@ PyDoc_STRVAR(_curses_has_extended_color_support__doc__,
 "that support more than 16 colors (e.g. xterm-256color).");
 
 #define _CURSES_HAS_EXTENDED_COLOR_SUPPORT_METHODDEF    \
-    {"has_extended_color_support", (PyCFunction)_curses_has_extended_color_support, METH_NOARGS, _curses_has_extended_color_support__doc__},
+    {"has_extended_color_support", _PyCFunction_CAST(_curses_has_extended_color_support), METH_VALUE|METH_NOARGS, _curses_has_extended_color_support__doc__},
 
-static PyObject *
+static PyValue
 _curses_has_extended_color_support_impl(PyObject *module);
 
-static PyObject *
-_curses_has_extended_color_support(PyObject *module, PyObject *Py_UNUSED(ignored))
+static PyValue
+_curses_has_extended_color_support(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _curses_has_extended_color_support_impl(module);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _curses_has_extended_color_support_impl(PyValue_AsKnownObjectBorrow(module));
+
+    return return_value;
 }
 
 #ifndef _CURSES_WINDOW_ATTR_GET_METHODDEF
@@ -6725,4 +7171,4 @@ _curses_has_extended_color_support(PyObject *module, PyObject *Py_UNUSED(ignored
 #ifndef _CURSES_ASSUME_DEFAULT_COLORS_METHODDEF
     #define _CURSES_ASSUME_DEFAULT_COLORS_METHODDEF
 #endif /* !defined(_CURSES_ASSUME_DEFAULT_COLORS_METHODDEF) */
-/*[clinic end generated code: output=d80b534e70758362 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=0f24b7d1948f74d4 input=a9049054013a1b77]*/

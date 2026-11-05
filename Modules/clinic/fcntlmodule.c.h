@@ -2,7 +2,14 @@
 preserve
 [clinic start generated code]*/
 
+#ifndef Py_VALUE_CORE
+#  error "value-emission Clinic output requires Py_VALUE_CORE"
+#endif
+
+#include "pycore_long_value.h"    // _PyValue_AsInt()
 #include "pycore_modsupport.h"    // _PyArg_CheckPositional()
+#include "pycore_value_call.h"    // METH_VALUE
+#include "pycore_value_ops.h"     // _PyValue_IsTrue()
 
 PyDoc_STRVAR(fcntl_fcntl__doc__,
 "fcntl($module, fd, cmd, arg=0, /)\n"
@@ -26,36 +33,55 @@ PyDoc_STRVAR(fcntl_fcntl__doc__,
 "arg buffer by the operating system.");
 
 #define FCNTL_FCNTL_METHODDEF    \
-    {"fcntl", _PyCFunction_CAST(fcntl_fcntl), METH_FASTCALL, fcntl_fcntl__doc__},
+    {"fcntl", _PyCFunction_CAST(fcntl_fcntl), METH_VALUE, fcntl_fcntl__doc__},
 
-static PyObject *
-fcntl_fcntl_impl(PyObject *module, int fd, int code, PyObject *arg);
+static PyValue
+fcntl_fcntl_impl(PyObject *module, int fd, int code, PyValueBorrow arg);
 
-static PyObject *
-fcntl_fcntl(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+fcntl_fcntl(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int fd;
     int code;
-    PyObject *arg = NULL;
+    PyValueBorrow arg = PyValue_Borrow(PyValue_NULL);
 
     if (!_PyArg_CheckPositional("fcntl", nargs, 2, 3)) {
         goto exit;
     }
-    fd = PyObject_AsFileDescriptor(args[0]);
-    if (fd < 0) {
-        goto exit;
+    if (PyValue_IsInlineInt(PyValue_Borrow(args[0]))) {
+        fd = _PyValue_AsInt(PyValue_Borrow(args[0]));
+        if (fd == -1 && PyErr_Occurred()) {
+            goto exit;
+        }
+        if (fd < 0) {
+            PyErr_Format(PyExc_ValueError,
+                         "file descriptor cannot be a negative integer (%i)",
+                         fd);
+            goto exit;
+        }
     }
-    code = PyLong_AsInt(args[1]);
+    else {
+        PyObject *_obj = _PyValue_AsObjectAt(PyValue_Borrow(args[0]), BOX_SITE_PARSER);
+        if (_obj == NULL) {
+            goto exit;
+        }
+        fd = PyObject_AsFileDescriptor(_obj);
+        Py_DECREF(_obj);
+        if (fd < 0) {
+            goto exit;
+        }
+    }
+    code = _PyValue_AsInt(PyValue_Borrow(args[1]));
     if (code == -1 && PyErr_Occurred()) {
         goto exit;
     }
     if (nargs < 3) {
         goto skip_optional;
     }
-    arg = args[2];
+    arg = PyValue_Borrow(args[2]);
 skip_optional:
-    return_value = fcntl_fcntl_impl(module, fd, code, arg);
+    return_value = fcntl_fcntl_impl(PyValue_AsKnownObjectBorrow(module), fd, code, arg);
 
 exit:
     return return_value;
@@ -94,34 +120,56 @@ PyDoc_STRVAR(fcntl_ioctl__doc__,
 "buffer.");
 
 #define FCNTL_IOCTL_METHODDEF    \
-    {"ioctl", _PyCFunction_CAST(fcntl_ioctl), METH_FASTCALL, fcntl_ioctl__doc__},
+    {"ioctl", _PyCFunction_CAST(fcntl_ioctl), METH_VALUE, fcntl_ioctl__doc__},
 
-static PyObject *
-fcntl_ioctl_impl(PyObject *module, int fd, unsigned long code, PyObject *arg,
-                 int mutate_arg);
+static PyValue
+fcntl_ioctl_impl(PyObject *module, int fd, unsigned long code,
+                 PyValueBorrow arg, int mutate_arg);
 
-static PyObject *
-fcntl_ioctl(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+fcntl_ioctl(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int fd;
     unsigned long code;
-    PyObject *arg = NULL;
+    PyValueBorrow arg = PyValue_Borrow(PyValue_NULL);
     int mutate_arg = 1;
 
     if (!_PyArg_CheckPositional("ioctl", nargs, 2, 4)) {
         goto exit;
     }
-    fd = PyObject_AsFileDescriptor(args[0]);
-    if (fd < 0) {
-        goto exit;
+    if (PyValue_IsInlineInt(PyValue_Borrow(args[0]))) {
+        fd = _PyValue_AsInt(PyValue_Borrow(args[0]));
+        if (fd == -1 && PyErr_Occurred()) {
+            goto exit;
+        }
+        if (fd < 0) {
+            PyErr_Format(PyExc_ValueError,
+                         "file descriptor cannot be a negative integer (%i)",
+                         fd);
+            goto exit;
+        }
     }
-    if (!PyIndex_Check(args[1])) {
-        _PyArg_BadArgument("ioctl", "argument 2", "int", args[1]);
-        goto exit;
+    else {
+        PyObject *_obj = _PyValue_AsObjectAt(PyValue_Borrow(args[0]), BOX_SITE_PARSER);
+        if (_obj == NULL) {
+            goto exit;
+        }
+        fd = PyObject_AsFileDescriptor(_obj);
+        Py_DECREF(_obj);
+        if (fd < 0) {
+            goto exit;
+        }
     }
+        if (PyValue_TYPE(PyValue_Borrow(args[1]))->tp_as_number == NULL ||
+            PyValue_TYPE(PyValue_Borrow(args[1]))->tp_as_number->nb_index == NULL)
+        {
+            _PyArg_BadArgumentValue("ioctl", "argument 2", "int", PyValue_Borrow(args[1]));
+            goto exit;
+        }
+
     {
-        Py_ssize_t _bytes = PyLong_AsNativeBytes(args[1], &code, sizeof(unsigned long),
+        Py_ssize_t _bytes = _PyValue_AsNativeBytes(PyValue_Borrow(args[1]), &code, sizeof(unsigned long),
                 Py_ASNATIVEBYTES_NATIVE_ENDIAN |
                 Py_ASNATIVEBYTES_ALLOW_INDEX |
                 Py_ASNATIVEBYTES_UNSIGNED_BUFFER);
@@ -139,16 +187,16 @@ fcntl_ioctl(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
     if (nargs < 3) {
         goto skip_optional;
     }
-    arg = args[2];
+    arg = PyValue_Borrow(args[2]);
     if (nargs < 4) {
         goto skip_optional;
     }
-    mutate_arg = PyObject_IsTrue(args[3]);
+    mutate_arg = _PyValue_IsTrue(PyValue_Borrow(args[3]));
     if (mutate_arg < 0) {
         goto exit;
     }
 skip_optional:
-    return_value = fcntl_ioctl_impl(module, fd, code, arg, mutate_arg);
+    return_value = fcntl_ioctl_impl(PyValue_AsKnownObjectBorrow(module), fd, code, arg, mutate_arg);
 
 exit:
     return return_value;
@@ -164,30 +212,49 @@ PyDoc_STRVAR(fcntl_flock__doc__,
 "function is emulated using fcntl()).");
 
 #define FCNTL_FLOCK_METHODDEF    \
-    {"flock", _PyCFunction_CAST(fcntl_flock), METH_FASTCALL, fcntl_flock__doc__},
+    {"flock", _PyCFunction_CAST(fcntl_flock), METH_VALUE, fcntl_flock__doc__},
 
-static PyObject *
+static PyValue
 fcntl_flock_impl(PyObject *module, int fd, int code);
 
-static PyObject *
-fcntl_flock(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+fcntl_flock(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int fd;
     int code;
 
     if (!_PyArg_CheckPositional("flock", nargs, 2, 2)) {
         goto exit;
     }
-    fd = PyObject_AsFileDescriptor(args[0]);
-    if (fd < 0) {
-        goto exit;
+    if (PyValue_IsInlineInt(PyValue_Borrow(args[0]))) {
+        fd = _PyValue_AsInt(PyValue_Borrow(args[0]));
+        if (fd == -1 && PyErr_Occurred()) {
+            goto exit;
+        }
+        if (fd < 0) {
+            PyErr_Format(PyExc_ValueError,
+                         "file descriptor cannot be a negative integer (%i)",
+                         fd);
+            goto exit;
+        }
     }
-    code = PyLong_AsInt(args[1]);
+    else {
+        PyObject *_obj = _PyValue_AsObjectAt(PyValue_Borrow(args[0]), BOX_SITE_PARSER);
+        if (_obj == NULL) {
+            goto exit;
+        }
+        fd = PyObject_AsFileDescriptor(_obj);
+        Py_DECREF(_obj);
+        if (fd < 0) {
+            goto exit;
+        }
+    }
+    code = _PyValue_AsInt(PyValue_Borrow(args[1]));
     if (code == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = fcntl_flock_impl(module, fd, code);
+    return_value = fcntl_flock_impl(PyValue_AsKnownObjectBorrow(module), fd, code);
 
 exit:
     return return_value;
@@ -221,52 +288,71 @@ PyDoc_STRVAR(fcntl_lockf__doc__,
 "    2 - relative to the end of the file (SEEK_END)");
 
 #define FCNTL_LOCKF_METHODDEF    \
-    {"lockf", _PyCFunction_CAST(fcntl_lockf), METH_FASTCALL, fcntl_lockf__doc__},
+    {"lockf", _PyCFunction_CAST(fcntl_lockf), METH_VALUE, fcntl_lockf__doc__},
 
-static PyObject *
-fcntl_lockf_impl(PyObject *module, int fd, int code, PyObject *lenobj,
-                 PyObject *startobj, int whence);
+static PyValue
+fcntl_lockf_impl(PyObject *module, int fd, int code, PyValueBorrow lenobj,
+                 PyValueBorrow startobj, int whence);
 
-static PyObject *
-fcntl_lockf(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+fcntl_lockf(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int fd;
     int code;
-    PyObject *lenobj = NULL;
-    PyObject *startobj = NULL;
+    PyValueBorrow lenobj = PyValue_Borrow(PyValue_NULL);
+    PyValueBorrow startobj = PyValue_Borrow(PyValue_NULL);
     int whence = 0;
 
     if (!_PyArg_CheckPositional("lockf", nargs, 2, 5)) {
         goto exit;
     }
-    fd = PyObject_AsFileDescriptor(args[0]);
-    if (fd < 0) {
-        goto exit;
+    if (PyValue_IsInlineInt(PyValue_Borrow(args[0]))) {
+        fd = _PyValue_AsInt(PyValue_Borrow(args[0]));
+        if (fd == -1 && PyErr_Occurred()) {
+            goto exit;
+        }
+        if (fd < 0) {
+            PyErr_Format(PyExc_ValueError,
+                         "file descriptor cannot be a negative integer (%i)",
+                         fd);
+            goto exit;
+        }
     }
-    code = PyLong_AsInt(args[1]);
+    else {
+        PyObject *_obj = _PyValue_AsObjectAt(PyValue_Borrow(args[0]), BOX_SITE_PARSER);
+        if (_obj == NULL) {
+            goto exit;
+        }
+        fd = PyObject_AsFileDescriptor(_obj);
+        Py_DECREF(_obj);
+        if (fd < 0) {
+            goto exit;
+        }
+    }
+    code = _PyValue_AsInt(PyValue_Borrow(args[1]));
     if (code == -1 && PyErr_Occurred()) {
         goto exit;
     }
     if (nargs < 3) {
         goto skip_optional;
     }
-    lenobj = args[2];
+    lenobj = PyValue_Borrow(args[2]);
     if (nargs < 4) {
         goto skip_optional;
     }
-    startobj = args[3];
+    startobj = PyValue_Borrow(args[3]);
     if (nargs < 5) {
         goto skip_optional;
     }
-    whence = PyLong_AsInt(args[4]);
+    whence = _PyValue_AsInt(PyValue_Borrow(args[4]));
     if (whence == -1 && PyErr_Occurred()) {
         goto exit;
     }
 skip_optional:
-    return_value = fcntl_lockf_impl(module, fd, code, lenobj, startobj, whence);
+    return_value = fcntl_lockf_impl(PyValue_AsKnownObjectBorrow(module), fd, code, lenobj, startobj, whence);
 
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=c782fcf9dd6690e0 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=f136070eeb3102ce input=a9049054013a1b77]*/

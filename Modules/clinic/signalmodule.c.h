@@ -2,12 +2,19 @@
 preserve
 [clinic start generated code]*/
 
+#ifndef Py_VALUE_CORE
+#  error "value-emission Clinic output requires Py_VALUE_CORE"
+#endif
+
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 #  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
 #  include "pycore_value.h"       // _PyValue_STATIC_IMMORTAL()
 #endif
+#include "pycore_long_value.h"    // _PyValue_AsInt()
 #include "pycore_modsupport.h"    // _PyArg_CheckPositional()
+#include "pycore_value_call.h"    // METH_VALUE
+#include "pycore_value_ops.h"     // _PyValue_IsTrue()
 
 PyDoc_STRVAR(signal_default_int_handler__doc__,
 "default_int_handler($module, signalnum, frame, /)\n"
@@ -18,28 +25,28 @@ PyDoc_STRVAR(signal_default_int_handler__doc__,
 "It raises KeyboardInterrupt.");
 
 #define SIGNAL_DEFAULT_INT_HANDLER_METHODDEF    \
-    {"default_int_handler", _PyCFunction_CAST(signal_default_int_handler), METH_FASTCALL, signal_default_int_handler__doc__},
+    {"default_int_handler", _PyCFunction_CAST(signal_default_int_handler), METH_VALUE, signal_default_int_handler__doc__},
 
-static PyObject *
+static PyValue
 signal_default_int_handler_impl(PyObject *module, int signalnum,
-                                PyObject *frame);
+                                PyValueBorrow frame);
 
-static PyObject *
-signal_default_int_handler(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+signal_default_int_handler(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int signalnum;
-    PyObject *frame;
+    PyValueBorrow frame;
 
     if (!_PyArg_CheckPositional("default_int_handler", nargs, 2, 2)) {
         goto exit;
     }
-    signalnum = PyLong_AsInt(args[0]);
+    signalnum = _PyValue_AsInt(PyValue_Borrow(args[0]));
     if (signalnum == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    frame = args[1];
-    return_value = signal_default_int_handler_impl(module, signalnum, frame);
+    frame = PyValue_Borrow(args[1]);
+    return_value = signal_default_int_handler_impl(PyValue_AsKnownObjectBorrow(module), signalnum, frame);
 
 exit:
     return return_value;
@@ -54,27 +61,27 @@ PyDoc_STRVAR(signal_alarm__doc__,
 "Arrange for SIGALRM to arrive after the given number of seconds.");
 
 #define SIGNAL_ALARM_METHODDEF    \
-    {"alarm", (PyCFunction)signal_alarm, METH_O, signal_alarm__doc__},
+    {"alarm", _PyCFunction_CAST(signal_alarm), METH_VALUE|METH_O, signal_alarm__doc__},
 
 static long
 signal_alarm_impl(PyObject *module, int seconds);
 
-static PyObject *
-signal_alarm(PyObject *module, PyObject *arg)
+static PyValue
+signal_alarm(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int seconds;
     long _return_value;
 
-    seconds = PyLong_AsInt(arg);
+    seconds = _PyValue_AsInt(PyValue_Borrow(args[0]));
     if (seconds == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    _return_value = signal_alarm_impl(module, seconds);
+    _return_value = signal_alarm_impl(PyValue_AsKnownObjectBorrow(module), seconds);
     if ((_return_value == -1) && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = PyLong_FromLong(_return_value);
+    return_value = PyValue_FromInt64((int64_t)_return_value);
 
 exit:
     return return_value;
@@ -91,15 +98,19 @@ PyDoc_STRVAR(signal_pause__doc__,
 "Wait until a signal arrives.");
 
 #define SIGNAL_PAUSE_METHODDEF    \
-    {"pause", (PyCFunction)signal_pause, METH_NOARGS, signal_pause__doc__},
+    {"pause", _PyCFunction_CAST(signal_pause), METH_VALUE|METH_NOARGS, signal_pause__doc__},
 
-static PyObject *
+static PyValue
 signal_pause_impl(PyObject *module);
 
-static PyObject *
-signal_pause(PyObject *module, PyObject *Py_UNUSED(ignored))
+static PyValue
+signal_pause(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return signal_pause_impl(module);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = signal_pause_impl(PyValue_AsKnownObjectBorrow(module));
+
+    return return_value;
 }
 
 #endif /* defined(HAVE_PAUSE) */
@@ -111,22 +122,22 @@ PyDoc_STRVAR(signal_raise_signal__doc__,
 "Send a signal to the executing process.");
 
 #define SIGNAL_RAISE_SIGNAL_METHODDEF    \
-    {"raise_signal", (PyCFunction)signal_raise_signal, METH_O, signal_raise_signal__doc__},
+    {"raise_signal", _PyCFunction_CAST(signal_raise_signal), METH_VALUE|METH_O, signal_raise_signal__doc__},
 
-static PyObject *
+static PyValue
 signal_raise_signal_impl(PyObject *module, int signalnum);
 
-static PyObject *
-signal_raise_signal(PyObject *module, PyObject *arg)
+static PyValue
+signal_raise_signal(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int signalnum;
 
-    signalnum = PyLong_AsInt(arg);
+    signalnum = _PyValue_AsInt(PyValue_Borrow(args[0]));
     if (signalnum == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = signal_raise_signal_impl(module, signalnum);
+    return_value = signal_raise_signal_impl(PyValue_AsKnownObjectBorrow(module), signalnum);
 
 exit:
     return return_value;
@@ -147,27 +158,27 @@ PyDoc_STRVAR(signal_signal__doc__,
 "the signal number, the second is the interrupted stack frame.");
 
 #define SIGNAL_SIGNAL_METHODDEF    \
-    {"signal", _PyCFunction_CAST(signal_signal), METH_FASTCALL, signal_signal__doc__},
+    {"signal", _PyCFunction_CAST(signal_signal), METH_VALUE, signal_signal__doc__},
 
-static PyObject *
-signal_signal_impl(PyObject *module, int signalnum, PyObject *handler);
+static PyValue
+signal_signal_impl(PyObject *module, int signalnum, PyValueBorrow handler);
 
-static PyObject *
-signal_signal(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+signal_signal(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int signalnum;
-    PyObject *handler;
+    PyValueBorrow handler;
 
     if (!_PyArg_CheckPositional("signal", nargs, 2, 2)) {
         goto exit;
     }
-    signalnum = PyLong_AsInt(args[0]);
+    signalnum = _PyValue_AsInt(PyValue_Borrow(args[0]));
     if (signalnum == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    handler = args[1];
-    return_value = signal_signal_impl(module, signalnum, handler);
+    handler = PyValue_Borrow(args[1]);
+    return_value = signal_signal_impl(PyValue_AsKnownObjectBorrow(module), signalnum, handler);
 
 exit:
     return return_value;
@@ -186,22 +197,22 @@ PyDoc_STRVAR(signal_getsignal__doc__,
 "  anything else -- the callable Python object used as a handler");
 
 #define SIGNAL_GETSIGNAL_METHODDEF    \
-    {"getsignal", (PyCFunction)signal_getsignal, METH_O, signal_getsignal__doc__},
+    {"getsignal", _PyCFunction_CAST(signal_getsignal), METH_VALUE|METH_O, signal_getsignal__doc__},
 
-static PyObject *
+static PyValue
 signal_getsignal_impl(PyObject *module, int signalnum);
 
-static PyObject *
-signal_getsignal(PyObject *module, PyObject *arg)
+static PyValue
+signal_getsignal(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int signalnum;
 
-    signalnum = PyLong_AsInt(arg);
+    signalnum = _PyValue_AsInt(PyValue_Borrow(args[0]));
     if (signalnum == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = signal_getsignal_impl(module, signalnum);
+    return_value = signal_getsignal_impl(PyValue_AsKnownObjectBorrow(module), signalnum);
 
 exit:
     return return_value;
@@ -218,22 +229,22 @@ PyDoc_STRVAR(signal_strsignal__doc__,
 "description. Raises :exc:`ValueError` if *signalnum* is invalid.");
 
 #define SIGNAL_STRSIGNAL_METHODDEF    \
-    {"strsignal", (PyCFunction)signal_strsignal, METH_O, signal_strsignal__doc__},
+    {"strsignal", _PyCFunction_CAST(signal_strsignal), METH_VALUE|METH_O, signal_strsignal__doc__},
 
-static PyObject *
+static PyValue
 signal_strsignal_impl(PyObject *module, int signalnum);
 
-static PyObject *
-signal_strsignal(PyObject *module, PyObject *arg)
+static PyValue
+signal_strsignal(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int signalnum;
 
-    signalnum = PyLong_AsInt(arg);
+    signalnum = _PyValue_AsInt(PyValue_Borrow(args[0]));
     if (signalnum == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = signal_strsignal_impl(module, signalnum);
+    return_value = signal_strsignal_impl(PyValue_AsKnownObjectBorrow(module), signalnum);
 
 exit:
     return return_value;
@@ -251,30 +262,30 @@ PyDoc_STRVAR(signal_siginterrupt__doc__,
 "signal sig, else system calls will be interrupted.");
 
 #define SIGNAL_SIGINTERRUPT_METHODDEF    \
-    {"siginterrupt", _PyCFunction_CAST(signal_siginterrupt), METH_FASTCALL, signal_siginterrupt__doc__},
+    {"siginterrupt", _PyCFunction_CAST(signal_siginterrupt), METH_VALUE, signal_siginterrupt__doc__},
 
-static PyObject *
+static PyValue
 signal_siginterrupt_impl(PyObject *module, int signalnum, int flag);
 
-static PyObject *
-signal_siginterrupt(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+signal_siginterrupt(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int signalnum;
     int flag;
 
     if (!_PyArg_CheckPositional("siginterrupt", nargs, 2, 2)) {
         goto exit;
     }
-    signalnum = PyLong_AsInt(args[0]);
+    signalnum = _PyValue_AsInt(PyValue_Borrow(args[0]));
     if (signalnum == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    flag = PyLong_AsInt(args[1]);
+    flag = _PyValue_AsInt(PyValue_Borrow(args[1]));
     if (flag == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = signal_siginterrupt_impl(module, signalnum, flag);
+    return_value = signal_siginterrupt_impl(PyValue_AsKnownObjectBorrow(module), signalnum, flag);
 
 exit:
     return return_value;
@@ -294,16 +305,16 @@ PyDoc_STRVAR(signal_set_wakeup_fd__doc__,
 "The fd must be non-blocking.");
 
 #define SIGNAL_SET_WAKEUP_FD_METHODDEF    \
-    {"set_wakeup_fd", _PyCFunction_CAST(signal_set_wakeup_fd), METH_FASTCALL|METH_KEYWORDS, signal_set_wakeup_fd__doc__},
+    {"set_wakeup_fd", _PyCFunction_CAST(signal_set_wakeup_fd), METH_VALUE|METH_KEYWORDS, signal_set_wakeup_fd__doc__},
 
-static PyObject *
-signal_set_wakeup_fd_impl(PyObject *module, PyObject *fdobj,
+static PyValue
+signal_set_wakeup_fd_impl(PyObject *module, PyValueBorrow fdobj,
                           int warn_on_full_buffer);
 
-static PyObject *
-signal_set_wakeup_fd(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+signal_set_wakeup_fd(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
@@ -331,26 +342,22 @@ signal_set_wakeup_fd(PyObject *module, PyObject *const *args, Py_ssize_t nargs, 
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[2];
-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 1;
-    PyObject *fdobj;
+    Py_ssize_t _idx[2];
+    PyValueBorrow fdobj;
     int warn_on_full_buffer = 1;
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, _idx, 2)) {
         goto exit;
     }
-    fdobj = args[0];
-    if (!noptargs) {
-        goto skip_optional_kwonly;
+    fdobj = PyValue_Borrow(args[_idx[0]]);
+    if (_idx[1] >= 0) {
+        warn_on_full_buffer = _PyValue_IsTrue(PyValue_Borrow(args[_idx[1]]));
+        if (warn_on_full_buffer < 0) {
+            goto exit;
+        }
     }
-    warn_on_full_buffer = PyObject_IsTrue(args[1]);
-    if (warn_on_full_buffer < 0) {
-        goto exit;
-    }
-skip_optional_kwonly:
-    return_value = signal_set_wakeup_fd_impl(module, fdobj, warn_on_full_buffer);
+    return_value = signal_set_wakeup_fd_impl(PyValue_AsKnownObjectBorrow(module), fdobj, warn_on_full_buffer);
 
 exit:
     return return_value;
@@ -370,34 +377,34 @@ PyDoc_STRVAR(signal_setitimer__doc__,
 "Returns old values as a tuple: (delay, interval).");
 
 #define SIGNAL_SETITIMER_METHODDEF    \
-    {"setitimer", _PyCFunction_CAST(signal_setitimer), METH_FASTCALL, signal_setitimer__doc__},
+    {"setitimer", _PyCFunction_CAST(signal_setitimer), METH_VALUE, signal_setitimer__doc__},
 
-static PyObject *
-signal_setitimer_impl(PyObject *module, int which, PyObject *seconds,
-                      PyObject *interval);
+static PyValue
+signal_setitimer_impl(PyObject *module, int which, PyValueBorrow seconds,
+                      PyValueBorrow interval);
 
-static PyObject *
-signal_setitimer(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+signal_setitimer(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int which;
-    PyObject *seconds;
-    PyObject *interval = NULL;
+    PyValueBorrow seconds;
+    PyValueBorrow interval = PyValue_Borrow(PyValue_NULL);
 
     if (!_PyArg_CheckPositional("setitimer", nargs, 2, 3)) {
         goto exit;
     }
-    which = PyLong_AsInt(args[0]);
+    which = _PyValue_AsInt(PyValue_Borrow(args[0]));
     if (which == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    seconds = args[1];
+    seconds = PyValue_Borrow(args[1]);
     if (nargs < 3) {
         goto skip_optional;
     }
-    interval = args[2];
+    interval = PyValue_Borrow(args[2]);
 skip_optional:
-    return_value = signal_setitimer_impl(module, which, seconds, interval);
+    return_value = signal_setitimer_impl(PyValue_AsKnownObjectBorrow(module), which, seconds, interval);
 
 exit:
     return return_value;
@@ -414,22 +421,22 @@ PyDoc_STRVAR(signal_getitimer__doc__,
 "Returns current value of given itimer.");
 
 #define SIGNAL_GETITIMER_METHODDEF    \
-    {"getitimer", (PyCFunction)signal_getitimer, METH_O, signal_getitimer__doc__},
+    {"getitimer", _PyCFunction_CAST(signal_getitimer), METH_VALUE|METH_O, signal_getitimer__doc__},
 
-static PyObject *
+static PyValue
 signal_getitimer_impl(PyObject *module, int which);
 
-static PyObject *
-signal_getitimer(PyObject *module, PyObject *arg)
+static PyValue
+signal_getitimer(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int which;
 
-    which = PyLong_AsInt(arg);
+    which = _PyValue_AsInt(PyValue_Borrow(args[0]));
     if (which == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = signal_getitimer_impl(module, which);
+    return_value = signal_getitimer_impl(PyValue_AsKnownObjectBorrow(module), which);
 
 exit:
     return return_value;
@@ -446,29 +453,29 @@ PyDoc_STRVAR(signal_pthread_sigmask__doc__,
 "Fetch and/or change the signal mask of the calling thread.");
 
 #define SIGNAL_PTHREAD_SIGMASK_METHODDEF    \
-    {"pthread_sigmask", _PyCFunction_CAST(signal_pthread_sigmask), METH_FASTCALL, signal_pthread_sigmask__doc__},
+    {"pthread_sigmask", _PyCFunction_CAST(signal_pthread_sigmask), METH_VALUE, signal_pthread_sigmask__doc__},
 
-static PyObject *
+static PyValue
 signal_pthread_sigmask_impl(PyObject *module, int how, sigset_t mask);
 
-static PyObject *
-signal_pthread_sigmask(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+signal_pthread_sigmask(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int how;
     sigset_t mask;
 
     if (!_PyArg_CheckPositional("pthread_sigmask", nargs, 2, 2)) {
         goto exit;
     }
-    how = PyLong_AsInt(args[0]);
+    how = _PyValue_AsInt(PyValue_Borrow(args[0]));
     if (how == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    if (!_Py_Sigset_Converter(args[1], &mask)) {
+    if (!_Py_Sigset_Converter(PyValue_Borrow(args[1]), &mask)) {
         goto exit;
     }
-    return_value = signal_pthread_sigmask_impl(module, how, mask);
+    return_value = signal_pthread_sigmask_impl(PyValue_AsKnownObjectBorrow(module), how, mask);
 
 exit:
     return return_value;
@@ -488,15 +495,19 @@ PyDoc_STRVAR(signal_sigpending__doc__,
 "the calling thread.");
 
 #define SIGNAL_SIGPENDING_METHODDEF    \
-    {"sigpending", (PyCFunction)signal_sigpending, METH_NOARGS, signal_sigpending__doc__},
+    {"sigpending", _PyCFunction_CAST(signal_sigpending), METH_VALUE|METH_NOARGS, signal_sigpending__doc__},
 
-static PyObject *
+static PyValue
 signal_sigpending_impl(PyObject *module);
 
-static PyObject *
-signal_sigpending(PyObject *module, PyObject *Py_UNUSED(ignored))
+static PyValue
+signal_sigpending(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return signal_sigpending_impl(module);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = signal_sigpending_impl(PyValue_AsKnownObjectBorrow(module));
+
+    return return_value;
 }
 
 #endif /* defined(HAVE_SIGSET_T) && defined(HAVE_SIGPENDING) */
@@ -514,21 +525,21 @@ PyDoc_STRVAR(signal_sigwait__doc__,
 "signal and returns the signal number.");
 
 #define SIGNAL_SIGWAIT_METHODDEF    \
-    {"sigwait", (PyCFunction)signal_sigwait, METH_O, signal_sigwait__doc__},
+    {"sigwait", _PyCFunction_CAST(signal_sigwait), METH_VALUE|METH_O, signal_sigwait__doc__},
 
-static PyObject *
+static PyValue
 signal_sigwait_impl(PyObject *module, sigset_t sigset);
 
-static PyObject *
-signal_sigwait(PyObject *module, PyObject *arg)
+static PyValue
+signal_sigwait(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     sigset_t sigset;
 
-    if (!_Py_Sigset_Converter(arg, &sigset)) {
+    if (!_Py_Sigset_Converter(PyValue_Borrow(args[0]), &sigset)) {
         goto exit;
     }
-    return_value = signal_sigwait_impl(module, sigset);
+    return_value = signal_sigwait_impl(PyValue_AsKnownObjectBorrow(module), sigset);
 
 exit:
     return return_value;
@@ -548,15 +559,19 @@ PyDoc_STRVAR(signal_valid_signals__doc__,
 "functions like `pthread_sigmask`.");
 
 #define SIGNAL_VALID_SIGNALS_METHODDEF    \
-    {"valid_signals", (PyCFunction)signal_valid_signals, METH_NOARGS, signal_valid_signals__doc__},
+    {"valid_signals", _PyCFunction_CAST(signal_valid_signals), METH_VALUE|METH_NOARGS, signal_valid_signals__doc__},
 
-static PyObject *
+static PyValue
 signal_valid_signals_impl(PyObject *module);
 
-static PyObject *
-signal_valid_signals(PyObject *module, PyObject *Py_UNUSED(ignored))
+static PyValue
+signal_valid_signals(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return signal_valid_signals_impl(module);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = signal_valid_signals_impl(PyValue_AsKnownObjectBorrow(module));
+
+    return return_value;
 }
 
 #endif /* ((defined(HAVE_SIGFILLSET) && defined(HAVE_SIGSET_T)) || defined(MS_WINDOWS)) */
@@ -572,21 +587,21 @@ PyDoc_STRVAR(signal_sigwaitinfo__doc__,
 "Returns a struct_siginfo containing information about the signal.");
 
 #define SIGNAL_SIGWAITINFO_METHODDEF    \
-    {"sigwaitinfo", (PyCFunction)signal_sigwaitinfo, METH_O, signal_sigwaitinfo__doc__},
+    {"sigwaitinfo", _PyCFunction_CAST(signal_sigwaitinfo), METH_VALUE|METH_O, signal_sigwaitinfo__doc__},
 
-static PyObject *
+static PyValue
 signal_sigwaitinfo_impl(PyObject *module, sigset_t sigset);
 
-static PyObject *
-signal_sigwaitinfo(PyObject *module, PyObject *arg)
+static PyValue
+signal_sigwaitinfo(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     sigset_t sigset;
 
-    if (!_Py_Sigset_Converter(arg, &sigset)) {
+    if (!_Py_Sigset_Converter(PyValue_Borrow(args[0]), &sigset)) {
         goto exit;
     }
-    return_value = signal_sigwaitinfo_impl(module, sigset);
+    return_value = signal_sigwaitinfo_impl(PyValue_AsKnownObjectBorrow(module), sigset);
 
 exit:
     return return_value;
@@ -605,27 +620,27 @@ PyDoc_STRVAR(signal_sigtimedwait__doc__,
 "The timeout is specified in seconds, rounded up to nanoseconds.");
 
 #define SIGNAL_SIGTIMEDWAIT_METHODDEF    \
-    {"sigtimedwait", _PyCFunction_CAST(signal_sigtimedwait), METH_FASTCALL, signal_sigtimedwait__doc__},
+    {"sigtimedwait", _PyCFunction_CAST(signal_sigtimedwait), METH_VALUE, signal_sigtimedwait__doc__},
 
-static PyObject *
+static PyValue
 signal_sigtimedwait_impl(PyObject *module, sigset_t sigset,
-                         PyObject *timeout_obj);
+                         PyValueBorrow timeout_obj);
 
-static PyObject *
-signal_sigtimedwait(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+signal_sigtimedwait(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     sigset_t sigset;
-    PyObject *timeout_obj;
+    PyValueBorrow timeout_obj;
 
     if (!_PyArg_CheckPositional("sigtimedwait", nargs, 2, 2)) {
         goto exit;
     }
-    if (!_Py_Sigset_Converter(args[0], &sigset)) {
+    if (!_Py_Sigset_Converter(PyValue_Borrow(args[0]), &sigset)) {
         goto exit;
     }
-    timeout_obj = args[1];
-    return_value = signal_sigtimedwait_impl(module, sigset, timeout_obj);
+    timeout_obj = PyValue_Borrow(args[1]);
+    return_value = signal_sigtimedwait_impl(PyValue_AsKnownObjectBorrow(module), sigset, timeout_obj);
 
 exit:
     return return_value;
@@ -642,28 +657,31 @@ PyDoc_STRVAR(signal_pthread_kill__doc__,
 "Send a signal to a thread.");
 
 #define SIGNAL_PTHREAD_KILL_METHODDEF    \
-    {"pthread_kill", _PyCFunction_CAST(signal_pthread_kill), METH_FASTCALL, signal_pthread_kill__doc__},
+    {"pthread_kill", _PyCFunction_CAST(signal_pthread_kill), METH_VALUE, signal_pthread_kill__doc__},
 
-static PyObject *
+static PyValue
 signal_pthread_kill_impl(PyObject *module, unsigned long thread_id,
                          int signalnum);
 
-static PyObject *
-signal_pthread_kill(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+signal_pthread_kill(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     unsigned long thread_id;
     int signalnum;
 
     if (!_PyArg_CheckPositional("pthread_kill", nargs, 2, 2)) {
         goto exit;
     }
-    if (!PyIndex_Check(args[0])) {
-        _PyArg_BadArgument("pthread_kill", "argument 1", "int", args[0]);
-        goto exit;
-    }
+        if (PyValue_TYPE(PyValue_Borrow(args[0]))->tp_as_number == NULL ||
+            PyValue_TYPE(PyValue_Borrow(args[0]))->tp_as_number->nb_index == NULL)
+        {
+            _PyArg_BadArgumentValue("pthread_kill", "argument 1", "int", PyValue_Borrow(args[0]));
+            goto exit;
+        }
+
     {
-        Py_ssize_t _bytes = PyLong_AsNativeBytes(args[0], &thread_id, sizeof(unsigned long),
+        Py_ssize_t _bytes = _PyValue_AsNativeBytes(PyValue_Borrow(args[0]), &thread_id, sizeof(unsigned long),
                 Py_ASNATIVEBYTES_NATIVE_ENDIAN |
                 Py_ASNATIVEBYTES_ALLOW_INDEX |
                 Py_ASNATIVEBYTES_UNSIGNED_BUFFER);
@@ -678,11 +696,11 @@ signal_pthread_kill(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
             }
         }
     }
-    signalnum = PyLong_AsInt(args[1]);
+    signalnum = _PyValue_AsInt(PyValue_Borrow(args[1]));
     if (signalnum == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = signal_pthread_kill_impl(module, thread_id, signalnum);
+    return_value = signal_pthread_kill_impl(PyValue_AsKnownObjectBorrow(module), thread_id, signalnum);
 
 exit:
     return return_value;
@@ -699,41 +717,41 @@ PyDoc_STRVAR(signal_pidfd_send_signal__doc__,
 "Send a signal to a process referred to by a pid file descriptor.");
 
 #define SIGNAL_PIDFD_SEND_SIGNAL_METHODDEF    \
-    {"pidfd_send_signal", _PyCFunction_CAST(signal_pidfd_send_signal), METH_FASTCALL, signal_pidfd_send_signal__doc__},
+    {"pidfd_send_signal", _PyCFunction_CAST(signal_pidfd_send_signal), METH_VALUE, signal_pidfd_send_signal__doc__},
 
-static PyObject *
+static PyValue
 signal_pidfd_send_signal_impl(PyObject *module, int pidfd, int signalnum,
-                              PyObject *siginfo, unsigned int flags);
+                              PyValueBorrow siginfo, unsigned int flags);
 
-static PyObject *
-signal_pidfd_send_signal(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+signal_pidfd_send_signal(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int pidfd;
     int signalnum;
-    PyObject *siginfo = Py_None;
+    PyValueBorrow siginfo = PyValue_Borrow(PyValue_None);
     unsigned int flags = 0;
 
     if (!_PyArg_CheckPositional("pidfd_send_signal", nargs, 2, 4)) {
         goto exit;
     }
-    pidfd = PyLong_AsInt(args[0]);
+    pidfd = _PyValue_AsInt(PyValue_Borrow(args[0]));
     if (pidfd == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    signalnum = PyLong_AsInt(args[1]);
+    signalnum = _PyValue_AsInt(PyValue_Borrow(args[1]));
     if (signalnum == -1 && PyErr_Occurred()) {
         goto exit;
     }
     if (nargs < 3) {
         goto skip_optional;
     }
-    siginfo = args[2];
+    siginfo = PyValue_Borrow(args[2]);
     if (nargs < 4) {
         goto skip_optional;
     }
     {
-        Py_ssize_t _bytes = PyLong_AsNativeBytes(args[3], &flags, sizeof(unsigned int),
+        Py_ssize_t _bytes = _PyValue_AsNativeBytes(PyValue_Borrow(args[3]), &flags, sizeof(unsigned int),
                 Py_ASNATIVEBYTES_NATIVE_ENDIAN |
                 Py_ASNATIVEBYTES_ALLOW_INDEX |
                 Py_ASNATIVEBYTES_UNSIGNED_BUFFER);
@@ -749,7 +767,7 @@ signal_pidfd_send_signal(PyObject *module, PyObject *const *args, Py_ssize_t nar
         }
     }
 skip_optional:
-    return_value = signal_pidfd_send_signal_impl(module, pidfd, signalnum, siginfo, flags);
+    return_value = signal_pidfd_send_signal_impl(PyValue_AsKnownObjectBorrow(module), pidfd, signalnum, siginfo, flags);
 
 exit:
     return return_value;
@@ -808,4 +826,4 @@ exit:
 #ifndef SIGNAL_PIDFD_SEND_SIGNAL_METHODDEF
     #define SIGNAL_PIDFD_SEND_SIGNAL_METHODDEF
 #endif /* !defined(SIGNAL_PIDFD_SEND_SIGNAL_METHODDEF) */
-/*[clinic end generated code: output=36e8cf84326567ed input=a9049054013a1b77]*/
+/*[clinic end generated code: output=625b74cfc7e57a52 input=a9049054013a1b77]*/

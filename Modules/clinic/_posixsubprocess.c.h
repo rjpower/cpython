@@ -2,7 +2,14 @@
 preserve
 [clinic start generated code]*/
 
+#ifndef Py_VALUE_CORE
+#  error "value-emission Clinic output requires Py_VALUE_CORE"
+#endif
+
+#include "pycore_long_value.h"    // _PyValue_AsInt()
 #include "pycore_modsupport.h"    // _PyArg_CheckPositional()
+#include "pycore_value_call.h"    // METH_VALUE
+#include "pycore_value_ops.h"     // _PyValue_IsTrue()
 
 PyDoc_STRVAR(subprocess_fork_exec__doc__,
 "fork_exec($module, args, executable_list, close_fds, pass_fds, cwd,\n"
@@ -35,31 +42,31 @@ PyDoc_STRVAR(subprocess_fork_exec__doc__,
 "Raises: Only on an error in the parent process.");
 
 #define SUBPROCESS_FORK_EXEC_METHODDEF    \
-    {"fork_exec", _PyCFunction_CAST(subprocess_fork_exec), METH_FASTCALL, subprocess_fork_exec__doc__},
+    {"fork_exec", _PyCFunction_CAST(subprocess_fork_exec), METH_VALUE, subprocess_fork_exec__doc__},
 
-static PyObject *
-subprocess_fork_exec_impl(PyObject *module, PyObject *process_args,
-                          PyObject *executable_list, int close_fds,
-                          PyObject *py_fds_to_keep, PyObject *cwd_obj,
-                          PyObject *env_list, int p2cread, int p2cwrite,
+static PyValue
+subprocess_fork_exec_impl(PyObject *module, PyValueBorrow process_args,
+                          PyValueBorrow executable_list, int close_fds,
+                          PyObject *py_fds_to_keep, PyValueBorrow cwd_obj,
+                          PyValueBorrow env_list, int p2cread, int p2cwrite,
                           int c2pread, int c2pwrite, int errread,
                           int errwrite, int errpipe_read, int errpipe_write,
                           int restore_signals, int call_setsid,
-                          pid_t pgid_to_set, PyObject *gid_object,
-                          PyObject *extra_groups_packed,
-                          PyObject *uid_object, int child_umask,
-                          PyObject *preexec_fn);
+                          pid_t pgid_to_set, PyValueBorrow gid_object,
+                          PyValueBorrow extra_groups_packed,
+                          PyValueBorrow uid_object, int child_umask,
+                          PyValueBorrow preexec_fn);
 
-static PyObject *
-subprocess_fork_exec(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+subprocess_fork_exec(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
-    PyObject *process_args;
-    PyObject *executable_list;
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow process_args;
+    PyValueBorrow executable_list;
     int close_fds;
     PyObject *py_fds_to_keep;
-    PyObject *cwd_obj;
-    PyObject *env_list;
+    PyValueBorrow cwd_obj;
+    PyValueBorrow env_list;
     int p2cread;
     int p2cwrite;
     int c2pread;
@@ -71,83 +78,89 @@ subprocess_fork_exec(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
     int restore_signals;
     int call_setsid;
     pid_t pgid_to_set;
-    PyObject *gid_object;
-    PyObject *extra_groups_packed;
-    PyObject *uid_object;
+    PyValueBorrow gid_object;
+    PyValueBorrow extra_groups_packed;
+    PyValueBorrow uid_object;
     int child_umask;
-    PyObject *preexec_fn;
+    PyValueBorrow preexec_fn;
 
     if (!_PyArg_CheckPositional("fork_exec", nargs, 22, 22)) {
         goto exit;
     }
-    process_args = args[0];
-    executable_list = args[1];
-    close_fds = PyObject_IsTrue(args[2]);
+    process_args = PyValue_Borrow(args[0]);
+    executable_list = PyValue_Borrow(args[1]);
+    close_fds = _PyValue_IsTrue(PyValue_Borrow(args[2]));
     if (close_fds < 0) {
         goto exit;
     }
-    if (!PyTuple_Check(args[3])) {
-        _PyArg_BadArgument("fork_exec", "argument 4", "tuple", args[3]);
+    if (!PyType_IsSubtype(PyValue_TYPE(PyValue_Borrow(args[3])), &PyTuple_Type)) {
+        _PyArg_BadArgumentValue("fork_exec", "argument 4", "tuple", PyValue_Borrow(args[3]));
         goto exit;
     }
-    py_fds_to_keep = args[3];
-    cwd_obj = args[4];
-    env_list = args[5];
-    p2cread = PyLong_AsInt(args[6]);
+    py_fds_to_keep = PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[3]));
+    cwd_obj = PyValue_Borrow(args[4]);
+    env_list = PyValue_Borrow(args[5]);
+    p2cread = _PyValue_AsInt(PyValue_Borrow(args[6]));
     if (p2cread == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    p2cwrite = PyLong_AsInt(args[7]);
+    p2cwrite = _PyValue_AsInt(PyValue_Borrow(args[7]));
     if (p2cwrite == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    c2pread = PyLong_AsInt(args[8]);
+    c2pread = _PyValue_AsInt(PyValue_Borrow(args[8]));
     if (c2pread == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    c2pwrite = PyLong_AsInt(args[9]);
+    c2pwrite = _PyValue_AsInt(PyValue_Borrow(args[9]));
     if (c2pwrite == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    errread = PyLong_AsInt(args[10]);
+    errread = _PyValue_AsInt(PyValue_Borrow(args[10]));
     if (errread == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    errwrite = PyLong_AsInt(args[11]);
+    errwrite = _PyValue_AsInt(PyValue_Borrow(args[11]));
     if (errwrite == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    errpipe_read = PyLong_AsInt(args[12]);
+    errpipe_read = _PyValue_AsInt(PyValue_Borrow(args[12]));
     if (errpipe_read == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    errpipe_write = PyLong_AsInt(args[13]);
+    errpipe_write = _PyValue_AsInt(PyValue_Borrow(args[13]));
     if (errpipe_write == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    restore_signals = PyObject_IsTrue(args[14]);
+    restore_signals = _PyValue_IsTrue(PyValue_Borrow(args[14]));
     if (restore_signals < 0) {
         goto exit;
     }
-    call_setsid = PyObject_IsTrue(args[15]);
+    call_setsid = _PyValue_IsTrue(PyValue_Borrow(args[15]));
     if (call_setsid < 0) {
         goto exit;
     }
-    pgid_to_set = PyLong_AsPid(args[16]);
+    #if !defined(SIZEOF_PID_T) || SIZEOF_PID_T == SIZEOF_INT
+    pgid_to_set = _PyValue_AsInt(PyValue_Borrow(args[16]));
+    #elif SIZEOF_PID_T == SIZEOF_LONG
+    pgid_to_set = _PyValue_AsLong(PyValue_Borrow(args[16]));
+    #else
+    pgid_to_set = _PyValue_AsLongLong(PyValue_Borrow(args[16]));
+    #endif
     if (pgid_to_set == (pid_t)(-1) && PyErr_Occurred()) {
         goto exit;
     }
-    gid_object = args[17];
-    extra_groups_packed = args[18];
-    uid_object = args[19];
-    child_umask = PyLong_AsInt(args[20]);
+    gid_object = PyValue_Borrow(args[17]);
+    extra_groups_packed = PyValue_Borrow(args[18]);
+    uid_object = PyValue_Borrow(args[19]);
+    child_umask = _PyValue_AsInt(PyValue_Borrow(args[20]));
     if (child_umask == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    preexec_fn = args[21];
-    return_value = subprocess_fork_exec_impl(module, process_args, executable_list, close_fds, py_fds_to_keep, cwd_obj, env_list, p2cread, p2cwrite, c2pread, c2pwrite, errread, errwrite, errpipe_read, errpipe_write, restore_signals, call_setsid, pgid_to_set, gid_object, extra_groups_packed, uid_object, child_umask, preexec_fn);
+    preexec_fn = PyValue_Borrow(args[21]);
+    return_value = subprocess_fork_exec_impl(PyValue_AsKnownObjectBorrow(module), process_args, executable_list, close_fds, py_fds_to_keep, cwd_obj, env_list, p2cread, p2cwrite, c2pread, c2pwrite, errread, errwrite, errpipe_read, errpipe_write, restore_signals, call_setsid, pgid_to_set, gid_object, extra_groups_packed, uid_object, child_umask, preexec_fn);
 
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=59df66f994e6251d input=a9049054013a1b77]*/
+/*[clinic end generated code: output=b2c70566f1c31088 input=a9049054013a1b77]*/

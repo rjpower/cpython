@@ -1,5 +1,9 @@
 /* Implements the getpath API for compiling with no functionality */
 
+#ifndef Py_BUILD_CORE_BUILTIN
+#  define Py_BUILD_CORE_MODULE 1
+#endif
+#define Py_VALUE_CORE 1
 #include "Python.h"
 #include "pycore_initconfig.h"    // _Py_Get_Getpath_CodeObject()
 #include "pycore_pathconfig.h"    // _PyConfig_InitPathConfig()

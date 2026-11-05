@@ -2,12 +2,17 @@
 preserve
 [clinic start generated code]*/
 
+#ifndef Py_VALUE_CORE
+#  error "value-emission Clinic output requires Py_VALUE_CORE"
+#endif
+
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 #  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
-#  include "pycore_value.h"       // _PyValue_STATIC_IMMORTAL()
 #endif
-#include "pycore_modsupport.h"    // _PyArg_UnpackKeywords()
+#include "pycore_modsupport.h"    // _PyArg_UnpackKeywordsValue()
+#include "pycore_value.h"         // _PyValue_AsObjectAt()
+#include "pycore_value_call.h"    // METH_VALUE
 
 PyDoc_STRVAR(grp_getgrgid__doc__,
 "getgrgid($module, /, id)\n"
@@ -18,15 +23,15 @@ PyDoc_STRVAR(grp_getgrgid__doc__,
 "If id is not valid, raise KeyError.");
 
 #define GRP_GETGRGID_METHODDEF    \
-    {"getgrgid", _PyCFunction_CAST(grp_getgrgid), METH_FASTCALL|METH_KEYWORDS, grp_getgrgid__doc__},
+    {"getgrgid", _PyCFunction_CAST(grp_getgrgid), METH_VALUE|METH_KEYWORDS, grp_getgrgid__doc__},
 
-static PyObject *
+static PyValue
 grp_getgrgid_impl(PyObject *module, gid_t gid);
 
-static PyObject *
-grp_getgrgid(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+grp_getgrgid(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
@@ -54,18 +59,28 @@ grp_getgrgid(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[1];
+    Py_ssize_t _idx[1];
     gid_t gid;
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, _idx, 1)) {
         goto exit;
     }
-    if (!_Py_Gid_Converter(args[0], &gid)) {
-        goto exit;
+    {
+        PyObject *_obj = _PyValue_AsObjectAt(PyValue_Borrow(args[_idx[0]]), BOX_SITE_PARSER);
+        if (_obj == NULL) {
+            goto exit;
+        }
+        int _ok;
+
+        _ok = _Py_Gid_Converter(_obj, &gid);
+
+        Py_DECREF(_obj);
+        if (!_ok) {
+            goto exit;
+        }
     }
-    return_value = grp_getgrgid_impl(module, gid);
+    return_value = grp_getgrgid_impl(PyValue_AsKnownObjectBorrow(module), gid);
 
 exit:
     return return_value;
@@ -80,15 +95,15 @@ PyDoc_STRVAR(grp_getgrnam__doc__,
 "If name is not valid, raise KeyError.");
 
 #define GRP_GETGRNAM_METHODDEF    \
-    {"getgrnam", _PyCFunction_CAST(grp_getgrnam), METH_FASTCALL|METH_KEYWORDS, grp_getgrnam__doc__},
+    {"getgrnam", _PyCFunction_CAST(grp_getgrnam), METH_VALUE|METH_KEYWORDS, grp_getgrnam__doc__},
 
-static PyObject *
+static PyValue
 grp_getgrnam_impl(PyObject *module, PyObject *name);
 
-static PyObject *
-grp_getgrnam(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+grp_getgrnam(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
@@ -116,20 +131,23 @@ grp_getgrnam(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[1];
+    Py_ssize_t _idx[1];
     PyObject *name;
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, _idx, 1)) {
         goto exit;
     }
-    if (!PyUnicode_Check(args[0])) {
-        _PyArg_BadArgument("getgrnam", "argument 'name'", "str", args[0]);
+    if (!PyValue_IsObject(PyValue_Borrow(args[_idx[0]]))) {
+        _PyArg_BadArgumentValue("getgrnam", "argument 'name'", "str", PyValue_Borrow(args[_idx[0]]));
         goto exit;
     }
-    name = args[0];
-    return_value = grp_getgrnam_impl(module, name);
+    if (!PyUnicode_Check(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[0]])))) {
+        _PyArg_BadArgument("getgrnam", "argument 'name'", "str", PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[0]])));
+        goto exit;
+    }
+    name = PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[0]]));
+    return_value = grp_getgrnam_impl(PyValue_AsKnownObjectBorrow(module), name);
 
 exit:
     return return_value;
@@ -145,14 +163,18 @@ PyDoc_STRVAR(grp_getgrall__doc__,
 "to use YP/NIS and may not be accessible via getgrnam or getgrgid.");
 
 #define GRP_GETGRALL_METHODDEF    \
-    {"getgrall", (PyCFunction)grp_getgrall, METH_NOARGS, grp_getgrall__doc__},
+    {"getgrall", _PyCFunction_CAST(grp_getgrall), METH_VALUE|METH_NOARGS, grp_getgrall__doc__},
 
-static PyObject *
+static PyValue
 grp_getgrall_impl(PyObject *module);
 
-static PyObject *
-grp_getgrall(PyObject *module, PyObject *Py_UNUSED(ignored))
+static PyValue
+grp_getgrall(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return grp_getgrall_impl(module);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = grp_getgrall_impl(PyValue_AsKnownObjectBorrow(module));
+
+    return return_value;
 }
-/*[clinic end generated code: output=ed6ccacb6736a278 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=a3d5bce60e59f38a input=a9049054013a1b77]*/

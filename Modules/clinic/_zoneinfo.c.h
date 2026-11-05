@@ -2,14 +2,21 @@
 preserve
 [clinic start generated code]*/
 
+#ifndef Py_VALUE_CORE
+#  error "value-emission Clinic output requires Py_VALUE_CORE"
+#endif
+
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 #  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
 #  include "pycore_value.h"       // _PyValue_STATIC_IMMORTAL()
 #endif
-#include "pycore_borrow.h"        // _PyBorrow_TupleItems()
 #include "pycore_critical_section.h"// Py_BEGIN_CRITICAL_SECTION()
-#include "pycore_modsupport.h"    // _PyArg_UnpackKeywords()
+#include "pycore_long_value.h"    // _PyValue_AsNativeBytes()
+#include "pycore_modsupport.h"    // _PyArg_UnpackKeywordsValue()
+#include "pycore_tuple.h"         // _PyTuple_ITEMS()
+#include "pycore_value_call.h"    // METH_VALUE
+#include "pycore_value_slots.h"   // _PyValue_THUNK_EXIT()
 
 PyDoc_STRVAR(zoneinfo_ZoneInfo__doc__,
 "ZoneInfo(key)\n"
@@ -17,13 +24,13 @@ PyDoc_STRVAR(zoneinfo_ZoneInfo__doc__,
 "\n"
 "Create a new ZoneInfo instance.");
 
-static PyObject *
-zoneinfo_ZoneInfo_impl(PyTypeObject *type, PyObject *key);
+static PyValue
+zoneinfo_ZoneInfo_impl(PyTypeObject *type, PyValueBorrow key);
 
-static PyObject *
-zoneinfo_ZoneInfo(PyTypeObject *type, PyObject *args, PyObject *kwargs)
+static PyValue
+zoneinfo_ZoneInfo_value(PyTypeObject *type, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
@@ -51,27 +58,38 @@ zoneinfo_ZoneInfo(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[1];
-    PyObject * const *fastargs;
-    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
-    PyObject *key;
+    Py_ssize_t _idx[1];
+    PyValueBorrow key;
 
-    PyObject *const *_args_items = _PyBorrow_TupleItems(args, Py_MIN(nargs, 1));
-    if (_args_items == NULL) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, _idx, 1)) {
         goto exit;
     }
-    fastargs = _PyArg_UnpackKeywords(_args_items, nargs, kwargs, NULL, &_parser,
-            /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!fastargs) {
-        goto exit;
-    }
-    key = fastargs[0];
-    Py_BEGIN_CRITICAL_SECTION(type);
+    key = PyValue_Borrow(args[_idx[0]]);
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(type));
     return_value = zoneinfo_ZoneInfo_impl(type, key);
     Py_END_CRITICAL_SECTION();
 
 exit:
     return return_value;
+}
+
+Py_VALUE_ENTRY static PyObject *
+zoneinfo_ZoneInfo(PyTypeObject *type, PyObject *args, PyObject *kwargs)
+{
+    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
+    if (kwargs == NULL || PyDict_GET_SIZE(kwargs) == 0) {
+        return _PyValue_THUNK_EXIT(zoneinfo_ZoneInfo_value(type, _PyTuple_ITEMS(args), nargs, NULL), BOX_SITE_CALL);
+    }
+    PyObject *kwnames;
+    PyValue *window = _PyValue_StackUnpackDict(_PyThreadState_GET(),
+        _PyTuple_ITEMS(args), nargs, kwargs, &kwnames);
+    if (window == NULL) {
+        return NULL;
+    }
+    PyValue result = zoneinfo_ZoneInfo_value(type, window, nargs, kwnames);
+    _PyValue_StackUnpackDict_Free(window, nargs, kwnames);
+    return _PyValue_THUNK_EXIT(result, BOX_SITE_CALL);
 }
 
 PyDoc_STRVAR(zoneinfo_ZoneInfo_from_file__doc__,
@@ -81,16 +99,16 @@ PyDoc_STRVAR(zoneinfo_ZoneInfo_from_file__doc__,
 "Create a ZoneInfo file from a file object.");
 
 #define ZONEINFO_ZONEINFO_FROM_FILE_METHODDEF    \
-    {"from_file", _PyCFunction_CAST(zoneinfo_ZoneInfo_from_file), METH_METHOD|METH_FASTCALL|METH_KEYWORDS|METH_CLASS, zoneinfo_ZoneInfo_from_file__doc__},
+    {"from_file", _PyCFunction_CAST(zoneinfo_ZoneInfo_from_file), METH_VALUE|METH_METHOD|METH_KEYWORDS|METH_CLASS, zoneinfo_ZoneInfo_from_file__doc__},
 
-static PyObject *
+static PyValue
 zoneinfo_ZoneInfo_from_file_impl(PyTypeObject *type, PyTypeObject *cls,
-                                 PyObject *file_obj, PyObject *key);
+                                 PyValueBorrow file_obj, PyValueBorrow key);
 
-static PyObject *
-zoneinfo_ZoneInfo_from_file(PyObject *type, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+zoneinfo_ZoneInfo_from_file(PyValueBorrow type, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
@@ -118,23 +136,19 @@ zoneinfo_ZoneInfo_from_file(PyObject *type, PyTypeObject *cls, PyObject *const *
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[2];
-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 1;
-    PyObject *file_obj;
-    PyObject *key = Py_None;
+    Py_ssize_t _idx[2];
+    PyValueBorrow file_obj;
+    PyValueBorrow key = PyValue_Borrow(PyValue_None);
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 1, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 1, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, _idx, 2)) {
         goto exit;
     }
-    file_obj = args[0];
-    if (!noptargs) {
-        goto skip_optional_pos;
+    file_obj = PyValue_Borrow(args[_idx[0]]);
+    if (_idx[1] >= 0) {
+        key = PyValue_Borrow(args[_idx[1]]);
     }
-    key = args[1];
-skip_optional_pos:
-    return_value = zoneinfo_ZoneInfo_from_file_impl((PyTypeObject *)type, cls, file_obj, key);
+    return_value = zoneinfo_ZoneInfo_from_file_impl((PyTypeObject *)PyValue_AsKnownObjectBorrow(type), cls, file_obj, key);
 
 exit:
     return return_value;
@@ -147,16 +161,16 @@ PyDoc_STRVAR(zoneinfo_ZoneInfo_no_cache__doc__,
 "Get a new instance of ZoneInfo, bypassing the cache.");
 
 #define ZONEINFO_ZONEINFO_NO_CACHE_METHODDEF    \
-    {"no_cache", _PyCFunction_CAST(zoneinfo_ZoneInfo_no_cache), METH_METHOD|METH_FASTCALL|METH_KEYWORDS|METH_CLASS, zoneinfo_ZoneInfo_no_cache__doc__},
+    {"no_cache", _PyCFunction_CAST(zoneinfo_ZoneInfo_no_cache), METH_VALUE|METH_METHOD|METH_KEYWORDS|METH_CLASS, zoneinfo_ZoneInfo_no_cache__doc__},
 
-static PyObject *
+static PyValue
 zoneinfo_ZoneInfo_no_cache_impl(PyTypeObject *type, PyTypeObject *cls,
-                                PyObject *key);
+                                PyValueBorrow key);
 
-static PyObject *
-zoneinfo_ZoneInfo_no_cache(PyObject *type, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+zoneinfo_ZoneInfo_no_cache(PyValueBorrow type, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
@@ -184,16 +198,15 @@ zoneinfo_ZoneInfo_no_cache(PyObject *type, PyTypeObject *cls, PyObject *const *a
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[1];
-    PyObject *key;
+    Py_ssize_t _idx[1];
+    PyValueBorrow key;
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, _idx, 1)) {
         goto exit;
     }
-    key = args[0];
-    return_value = zoneinfo_ZoneInfo_no_cache_impl((PyTypeObject *)type, cls, key);
+    key = PyValue_Borrow(args[_idx[0]]);
+    return_value = zoneinfo_ZoneInfo_no_cache_impl((PyTypeObject *)PyValue_AsKnownObjectBorrow(type), cls, key);
 
 exit:
     return return_value;
@@ -206,16 +219,16 @@ PyDoc_STRVAR(zoneinfo_ZoneInfo_clear_cache__doc__,
 "Clear the ZoneInfo cache.");
 
 #define ZONEINFO_ZONEINFO_CLEAR_CACHE_METHODDEF    \
-    {"clear_cache", _PyCFunction_CAST(zoneinfo_ZoneInfo_clear_cache), METH_METHOD|METH_FASTCALL|METH_KEYWORDS|METH_CLASS, zoneinfo_ZoneInfo_clear_cache__doc__},
+    {"clear_cache", _PyCFunction_CAST(zoneinfo_ZoneInfo_clear_cache), METH_VALUE|METH_METHOD|METH_KEYWORDS|METH_CLASS, zoneinfo_ZoneInfo_clear_cache__doc__},
 
-static PyObject *
+static PyValue
 zoneinfo_ZoneInfo_clear_cache_impl(PyTypeObject *type, PyTypeObject *cls,
-                                   PyObject *only_keys);
+                                   PyValueBorrow only_keys);
 
-static PyObject *
-zoneinfo_ZoneInfo_clear_cache(PyObject *type, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+zoneinfo_ZoneInfo_clear_cache(PyValueBorrow type, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
@@ -243,22 +256,18 @@ zoneinfo_ZoneInfo_clear_cache(PyObject *type, PyTypeObject *cls, PyObject *const
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[1];
-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 0;
-    PyObject *only_keys = Py_None;
+    Py_ssize_t _idx[1];
+    PyValueBorrow only_keys = PyValue_Borrow(PyValue_None);
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 0, /*maxpos*/ 0, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 0, /*maxpos*/ 0, /*minkw*/ 0, /*varpos*/ 0, _idx, 1)) {
         goto exit;
     }
-    if (!noptargs) {
-        goto skip_optional_kwonly;
+    if (_idx[0] >= 0) {
+        only_keys = PyValue_Borrow(args[_idx[0]]);
     }
-    only_keys = args[0];
-skip_optional_kwonly:
-    Py_BEGIN_CRITICAL_SECTION(type);
-    return_value = zoneinfo_ZoneInfo_clear_cache_impl((PyTypeObject *)type, cls, only_keys);
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(type));
+    return_value = zoneinfo_ZoneInfo_clear_cache_impl((PyTypeObject *)PyValue_AsKnownObjectBorrow(type), cls, only_keys);
     Py_END_CRITICAL_SECTION();
 
 exit:
@@ -272,17 +281,17 @@ PyDoc_STRVAR(zoneinfo_ZoneInfo_utcoffset__doc__,
 "Retrieve a timedelta representing the UTC offset in a zone at the given datetime.");
 
 #define ZONEINFO_ZONEINFO_UTCOFFSET_METHODDEF    \
-    {"utcoffset", _PyCFunction_CAST(zoneinfo_ZoneInfo_utcoffset), METH_METHOD|METH_FASTCALL|METH_KEYWORDS, zoneinfo_ZoneInfo_utcoffset__doc__},
+    {"utcoffset", _PyCFunction_CAST(zoneinfo_ZoneInfo_utcoffset), METH_VALUE|METH_METHOD|METH_KEYWORDS, zoneinfo_ZoneInfo_utcoffset__doc__},
 
-static PyObject *
+static PyValue
 zoneinfo_ZoneInfo_utcoffset_impl(PyObject *self, PyTypeObject *cls,
-                                 PyObject *dt);
+                                 PyValueBorrow dt);
 
-static PyObject *
-zoneinfo_ZoneInfo_utcoffset(PyObject *self, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+zoneinfo_ZoneInfo_utcoffset(PyValueBorrow self, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
-    PyObject *dt;
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow dt;
 
     if (!_PyArg_NoKwnames("utcoffset", kwnames)) {
         goto exit;
@@ -290,8 +299,8 @@ zoneinfo_ZoneInfo_utcoffset(PyObject *self, PyTypeObject *cls, PyObject *const *
     if (!_PyArg_CheckPositional("utcoffset", nargs, 1, 1)) {
         goto exit;
     }
-    dt = args[0];
-    return_value = zoneinfo_ZoneInfo_utcoffset_impl(self, cls, dt);
+    dt = PyValue_Borrow(args[0]);
+    return_value = zoneinfo_ZoneInfo_utcoffset_impl(PyValue_AsKnownObjectBorrow(self), cls, dt);
 
 exit:
     return return_value;
@@ -304,16 +313,17 @@ PyDoc_STRVAR(zoneinfo_ZoneInfo_dst__doc__,
 "Retrieve a timedelta representing the amount of DST applied in a zone at the given datetime.");
 
 #define ZONEINFO_ZONEINFO_DST_METHODDEF    \
-    {"dst", _PyCFunction_CAST(zoneinfo_ZoneInfo_dst), METH_METHOD|METH_FASTCALL|METH_KEYWORDS, zoneinfo_ZoneInfo_dst__doc__},
+    {"dst", _PyCFunction_CAST(zoneinfo_ZoneInfo_dst), METH_VALUE|METH_METHOD|METH_KEYWORDS, zoneinfo_ZoneInfo_dst__doc__},
 
-static PyObject *
-zoneinfo_ZoneInfo_dst_impl(PyObject *self, PyTypeObject *cls, PyObject *dt);
+static PyValue
+zoneinfo_ZoneInfo_dst_impl(PyObject *self, PyTypeObject *cls,
+                           PyValueBorrow dt);
 
-static PyObject *
-zoneinfo_ZoneInfo_dst(PyObject *self, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+zoneinfo_ZoneInfo_dst(PyValueBorrow self, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
-    PyObject *dt;
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow dt;
 
     if (!_PyArg_NoKwnames("dst", kwnames)) {
         goto exit;
@@ -321,8 +331,8 @@ zoneinfo_ZoneInfo_dst(PyObject *self, PyTypeObject *cls, PyObject *const *args, 
     if (!_PyArg_CheckPositional("dst", nargs, 1, 1)) {
         goto exit;
     }
-    dt = args[0];
-    return_value = zoneinfo_ZoneInfo_dst_impl(self, cls, dt);
+    dt = PyValue_Borrow(args[0]);
+    return_value = zoneinfo_ZoneInfo_dst_impl(PyValue_AsKnownObjectBorrow(self), cls, dt);
 
 exit:
     return return_value;
@@ -335,17 +345,17 @@ PyDoc_STRVAR(zoneinfo_ZoneInfo_tzname__doc__,
 "Retrieve a string containing the abbreviation for the time zone that applies in a zone at a given datetime.");
 
 #define ZONEINFO_ZONEINFO_TZNAME_METHODDEF    \
-    {"tzname", _PyCFunction_CAST(zoneinfo_ZoneInfo_tzname), METH_METHOD|METH_FASTCALL|METH_KEYWORDS, zoneinfo_ZoneInfo_tzname__doc__},
+    {"tzname", _PyCFunction_CAST(zoneinfo_ZoneInfo_tzname), METH_VALUE|METH_METHOD|METH_KEYWORDS, zoneinfo_ZoneInfo_tzname__doc__},
 
-static PyObject *
+static PyValue
 zoneinfo_ZoneInfo_tzname_impl(PyObject *self, PyTypeObject *cls,
-                              PyObject *dt);
+                              PyValueBorrow dt);
 
-static PyObject *
-zoneinfo_ZoneInfo_tzname(PyObject *self, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+zoneinfo_ZoneInfo_tzname(PyValueBorrow self, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
-    PyObject *dt;
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow dt;
 
     if (!_PyArg_NoKwnames("tzname", kwnames)) {
         goto exit;
@@ -353,8 +363,8 @@ zoneinfo_ZoneInfo_tzname(PyObject *self, PyTypeObject *cls, PyObject *const *arg
     if (!_PyArg_CheckPositional("tzname", nargs, 1, 1)) {
         goto exit;
     }
-    dt = args[0];
-    return_value = zoneinfo_ZoneInfo_tzname_impl(self, cls, dt);
+    dt = PyValue_Borrow(args[0]);
+    return_value = zoneinfo_ZoneInfo_tzname_impl(PyValue_AsKnownObjectBorrow(self), cls, dt);
 
 exit:
     return return_value;
@@ -367,17 +377,17 @@ PyDoc_STRVAR(zoneinfo_ZoneInfo__unpickle__doc__,
 "Private method used in unpickling.");
 
 #define ZONEINFO_ZONEINFO__UNPICKLE_METHODDEF    \
-    {"_unpickle", _PyCFunction_CAST(zoneinfo_ZoneInfo__unpickle), METH_METHOD|METH_FASTCALL|METH_KEYWORDS|METH_CLASS, zoneinfo_ZoneInfo__unpickle__doc__},
+    {"_unpickle", _PyCFunction_CAST(zoneinfo_ZoneInfo__unpickle), METH_VALUE|METH_METHOD|METH_KEYWORDS|METH_CLASS, zoneinfo_ZoneInfo__unpickle__doc__},
 
-static PyObject *
+static PyValue
 zoneinfo_ZoneInfo__unpickle_impl(PyTypeObject *type, PyTypeObject *cls,
-                                 PyObject *key, unsigned char from_cache);
+                                 PyValueBorrow key, unsigned char from_cache);
 
-static PyObject *
-zoneinfo_ZoneInfo__unpickle(PyObject *type, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+zoneinfo_ZoneInfo__unpickle(PyValueBorrow type, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
-    PyObject *key;
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow key;
     unsigned char from_cache;
 
     if (!_PyArg_NoKwnames("_unpickle", kwnames)) {
@@ -386,9 +396,9 @@ zoneinfo_ZoneInfo__unpickle(PyObject *type, PyTypeObject *cls, PyObject *const *
     if (!_PyArg_CheckPositional("_unpickle", nargs, 2, 2)) {
         goto exit;
     }
-    key = args[0];
+    key = PyValue_Borrow(args[0]);
     {
-        Py_ssize_t _bytes = PyLong_AsNativeBytes(args[1], &from_cache, sizeof(unsigned char),
+        Py_ssize_t _bytes = _PyValue_AsNativeBytes(PyValue_Borrow(args[1]), &from_cache, sizeof(unsigned char),
                 Py_ASNATIVEBYTES_NATIVE_ENDIAN |
                 Py_ASNATIVEBYTES_ALLOW_INDEX |
                 Py_ASNATIVEBYTES_UNSIGNED_BUFFER);
@@ -403,7 +413,7 @@ zoneinfo_ZoneInfo__unpickle(PyObject *type, PyTypeObject *cls, PyObject *const *
             }
         }
     }
-    return_value = zoneinfo_ZoneInfo__unpickle_impl((PyTypeObject *)type, cls, key, from_cache);
+    return_value = zoneinfo_ZoneInfo__unpickle_impl((PyTypeObject *)PyValue_AsKnownObjectBorrow(type), cls, key, from_cache);
 
 exit:
     return return_value;
@@ -416,35 +426,27 @@ PyDoc_STRVAR(zoneinfo_ZoneInfo___init_subclass____doc__,
 "Function to initialize subclasses.");
 
 #define ZONEINFO_ZONEINFO___INIT_SUBCLASS___METHODDEF    \
-    {"__init_subclass__", _PyCFunction_CAST(zoneinfo_ZoneInfo___init_subclass__), METH_VARARGS|METH_KEYWORDS|METH_CLASS, zoneinfo_ZoneInfo___init_subclass____doc__},
+    {"__init_subclass__", _PyCFunction_CAST(zoneinfo_ZoneInfo___init_subclass__), METH_VALUE|METH_KEYWORDS|METH_CLASS, zoneinfo_ZoneInfo___init_subclass____doc__},
 
-static PyObject *
+static PyValue
 zoneinfo_ZoneInfo___init_subclass___impl(PyTypeObject *type,
                                          PyObject *kwargs);
 
-static PyObject *
-zoneinfo_ZoneInfo___init_subclass__(PyObject *type, PyObject *args, PyObject *kwargs)
+static PyValue
+zoneinfo_ZoneInfo___init_subclass__(PyValueBorrow type, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *__clinic_kwargs = NULL;
 
-    if (!_PyArg_NoPositional("__init_subclass__", args)) {
+    if (!_PyArg_CheckPositional("__init_subclass__", nargs, 0, 0)) {
         goto exit;
     }
-    PyObject *const *_args_items = _PyBorrow_TupleItems(args, PyTuple_GET_SIZE(args));
-    if (_args_items == NULL) {
+    __clinic_kwargs = kwnames == NULL ? PyDict_New()
+        : _PyValue_StackAsDict(args + nargs, kwnames);
+    if (__clinic_kwargs == NULL) {
         goto exit;
     }
-    if (kwargs == NULL) {
-        __clinic_kwargs = PyDict_New();
-        if (__clinic_kwargs == NULL) {
-            goto exit;
-        }
-    }
-    else {
-        __clinic_kwargs = Py_NewRef(kwargs);
-    }
-    return_value = zoneinfo_ZoneInfo___init_subclass___impl((PyTypeObject *)type, __clinic_kwargs);
+    return_value = zoneinfo_ZoneInfo___init_subclass___impl((PyTypeObject *)PyValue_AsKnownObjectBorrow(type), __clinic_kwargs);
 
 exit:
     /* Cleanup for kwargs */
@@ -452,4 +454,4 @@ exit:
 
     return return_value;
 }
-/*[clinic end generated code: output=828bbc4276d9f9cd input=a9049054013a1b77]*/
+/*[clinic end generated code: output=59e6ba0af0725f94 input=a9049054013a1b77]*/

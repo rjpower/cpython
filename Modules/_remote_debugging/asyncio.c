@@ -5,9 +5,13 @@
  * and awaited_by relationships from remote process memory.
  ******************************************************************************/
 
+#define Py_VALUE_CORE 1
 #include "_remote_debugging.h"
 #include "debug_offsets_validation.h"
+#include "pycore_list.h"          // PyList_AppendValue()
 #include "pycore_pyvalue.h"       // PyValue_IsObject()
+#include "pycore_structseq.h"    // PyStructSequence_GET_VALUE()
+#include "pycore_value.h"         // PyValue
 
 /* ============================================================================
  * ASYNCIO DEBUG ADDRESS FUNCTIONS
@@ -417,7 +421,7 @@ parse_coro_chain(
             return 0;
         }
 
-        if (PyList_Append(render_to, name)) {
+        if (PyList_AppendValue(render_to, PyValue_FromObjectBorrow(name))) {
             Py_DECREF(name);
             set_exception_cause(unwinder, PyExc_RuntimeError, "Failed to append frame to coro chain");
             return -1;
@@ -496,8 +500,8 @@ create_task_result(
     }
 
     // PyStructSequence_SetItem steals references, so we don't need to DECREF on success
-    PyStructSequence_SetItem(result, 0, call_stack);  // This steals the reference
-    PyStructSequence_SetItem(result, 1, tn);  // This steals the reference
+    PyStructSequence_SET_VALUE(result, 0, PyValue_PrepareOwned(call_stack));  // This steals the reference
+    PyStructSequence_SET_VALUE(result, 1, PyValue_PrepareOwned(tn));  // This steals the reference
 
     return result;
 
@@ -552,10 +556,10 @@ parse_task(
             set_exception_cause(unwinder, PyExc_RuntimeError, "Failed to create task name");
             goto error;
         }
-        PyStructSequence_SetItem(result, 0, empty_list);  // This steals the reference
-        PyStructSequence_SetItem(result, 1, task_name);  // This steals the reference
+        PyStructSequence_SET_VALUE(result, 0, PyValue_PrepareOwned(empty_list));  // This steals the reference
+        PyStructSequence_SET_VALUE(result, 1, PyValue_PrepareOwned(task_name));  // This steals the reference
     }
-    if (PyList_Append(render_to, result)) {
+    if (PyList_AppendValue(render_to, PyValue_FromObjectBorrow(result))) {
         set_exception_cause(unwinder, PyExc_RuntimeError, "Failed to append task result to render list");
         goto error;
     }
@@ -652,10 +656,10 @@ process_single_task_node(
         goto error;
     }
 
-    PyStructSequence_SetItem(result_item, 0, task_id);  // steals ref
-    PyStructSequence_SetItem(result_item, 1, tn);  // steals ref
-    PyStructSequence_SetItem(result_item, 2, coroutine_stack);  // steals ref
-    PyStructSequence_SetItem(result_item, 3, current_awaited_by);  // steals ref
+    PyStructSequence_SET_VALUE(result_item, 0, PyValue_PrepareOwned(task_id));  // steals ref
+    PyStructSequence_SET_VALUE(result_item, 1, PyValue_PrepareOwned(tn));  // steals ref
+    PyStructSequence_SET_VALUE(result_item, 2, PyValue_PrepareOwned(coroutine_stack));  // steals ref
+    PyStructSequence_SET_VALUE(result_item, 3, PyValue_PrepareOwned(current_awaited_by));  // steals ref
 
     // References transferred to tuple
     task_id = NULL;
@@ -663,7 +667,7 @@ process_single_task_node(
     coroutine_stack = NULL;
     current_awaited_by = NULL;
 
-    if (PyList_Append(result, result_item)) {
+    if (PyList_AppendValue(result, PyValue_FromObjectBorrow(result_item))) {
         Py_DECREF(result_item);
         set_exception_cause(unwinder, PyExc_RuntimeError, "Failed to append result item in single task node");
         return -1;
@@ -674,7 +678,8 @@ process_single_task_node(
     Py_DECREF(result_item);
 
     // Get back current_awaited_by reference for parse_task_awaited_by
-    current_awaited_by = PyStructSequence_GetItemRef(result_item, 3);
+    PyValue current_awaited_by_v = PyValue_DUP(PyStructSequence_GET_VALUE(result_item, 3));
+    current_awaited_by = PyValue_IsNull(current_awaited_by_v) ? NULL : _PyValue_AsObjectStealAt(current_awaited_by_v, BOX_SITE_FIELD);
     if (current_awaited_by == NULL) {
         set_exception_cause(unwinder, PyExc_RuntimeError, "Failed to get awaited_by in single task node");
         return -1;
@@ -705,11 +710,13 @@ process_task_waiters(
     PyObject *result
 ) {
     for (Py_ssize_t i = 0; i < PyList_GET_SIZE(result); i++) {
-        PyObject *task_info = PyList_GetItemRef(result, i);
+        PyValue task_info_v = PyList_GetValue(result, i);
+        PyObject *task_info = PyValue_IsNull(task_info_v) ? NULL : _PyValue_AsObjectStealAt(task_info_v, BOX_SITE_FIELD);
         if (task_info == NULL) {
             return -1;
         }
-        PyObject *waiters = PyStructSequence_GetItemRef(task_info, 3);
+        PyValue waiters_v = PyValue_DUP(PyStructSequence_GET_VALUE(task_info, 3));
+        PyObject *waiters = PyValue_IsNull(waiters_v) ? NULL : _PyValue_AsObjectStealAt(waiters_v, BOX_SITE_FIELD);
         Py_DECREF(task_info);
         if (waiters == NULL) {
             return -1;
@@ -723,13 +730,15 @@ process_task_waiters(
                 Py_DECREF(waiters);
                 return -1;
             }
-            PyObject *waiter = PyList_GetItemRef(waiters, j);
+            PyValue waiter_v = PyList_GetValue(waiters, j);
+            PyObject *waiter = PyValue_IsNull(waiter_v) ? NULL : _PyValue_AsObjectStealAt(waiter_v, BOX_SITE_FIELD);
             if (waiter == NULL) {
                 Py_DECREF(waiters);
                 return -1;
             }
             // CoroInfo item 1 holds the waiter task address stored by parse_task().
-            PyObject *task_id = PyStructSequence_GetItemRef(waiter, 1);
+            PyValue task_id_v = PyValue_DUP(PyStructSequence_GET_VALUE(waiter, 1));
+            PyObject *task_id = PyValue_IsNull(task_id_v) ? NULL : _PyValue_AsObjectStealAt(task_id_v, BOX_SITE_FIELD);
             Py_DECREF(waiter);
             if (task_id == NULL) {
                 Py_DECREF(waiters);
@@ -866,7 +875,7 @@ parse_async_frame_chain(
             continue;
         }
 
-        if (PyList_Append(calls, frame_info) == -1) {
+        if (PyList_AppendValue(calls, PyValue_FromObjectBorrow(frame_info)) == -1) {
             Py_DECREF(frame_info);
             set_exception_cause(unwinder, PyExc_RuntimeError, "Failed to append frame info to async chain");
             return -1;
@@ -971,9 +980,9 @@ append_awaited_by(
         return -1;
     }
 
-    PyStructSequence_SetItem(result_item, 0, tid_py);  // steals ref
-    PyStructSequence_SetItem(result_item, 1, awaited_by_for_thread);  // steals ref
-    if (PyList_Append(result, result_item)) {
+    PyStructSequence_SET_VALUE(result_item, 0, PyValue_PrepareOwned(tid_py));  // steals ref
+    PyStructSequence_SET_VALUE(result_item, 1, PyValue_PrepareOwned(awaited_by_for_thread));  // steals ref
+    if (PyList_AppendValue(result, PyValue_FromObjectBorrow(result_item))) {
         Py_DECREF(result_item);
         set_exception_cause(unwinder, PyExc_RuntimeError, "Failed to append awaited_by result item");
         return -1;
@@ -1024,7 +1033,8 @@ process_running_task_chain(
     }
 
     // Get the chain from the current frame to this task
-    PyObject *coro_chain = PyStructSequence_GetItemRef(task_info, 2);
+    PyValue coro_chain_v = PyValue_DUP(PyStructSequence_GET_VALUE(task_info, 2));
+    PyObject *coro_chain = PyValue_IsNull(coro_chain_v) ? NULL : _PyValue_AsObjectStealAt(coro_chain_v, BOX_SITE_FIELD);
     if (coro_chain == NULL) {
         return -1;
     }
@@ -1037,11 +1047,13 @@ process_running_task_chain(
         set_exception_cause(unwinder, PyExc_RuntimeError, "Coro chain is not a single item");
         goto error;
     }
-    coro_info = PyList_GetItemRef(coro_chain, 0);
+    PyValue coro_info_v = PyList_GetValue(coro_chain, 0);
+    coro_info = PyValue_IsNull(coro_info_v) ? NULL : _PyValue_AsObjectStealAt(coro_info_v, BOX_SITE_FIELD);
     if (coro_info == NULL) {
         goto error;
     }
-    frame_chain = PyStructSequence_GetItemRef(coro_info, 0);
+    PyValue frame_chain_v = PyValue_DUP(PyStructSequence_GET_VALUE(coro_info, 0));
+    frame_chain = PyValue_IsNull(frame_chain_v) ? NULL : _PyValue_AsObjectStealAt(frame_chain_v, BOX_SITE_FIELD);
     if (frame_chain == NULL) {
         goto error;
     }
@@ -1120,10 +1132,10 @@ process_thread_for_async_stack_trace(
             return -1;
         }
 
-        PyStructSequence_SetItem(awaited_info, 0, tid_py);  // steals ref
-        PyStructSequence_SetItem(awaited_info, 1, task_list);  // steals ref
+        PyStructSequence_SET_VALUE(awaited_info, 0, PyValue_PrepareOwned(tid_py));  // steals ref
+        PyStructSequence_SET_VALUE(awaited_info, 1, PyValue_PrepareOwned(task_list));  // steals ref
 
-        if (PyList_Append(result, awaited_info)) {
+        if (PyList_AppendValue(result, PyValue_FromObjectBorrow(awaited_info))) {
             Py_DECREF(awaited_info);
             set_exception_cause(unwinder, PyExc_RuntimeError, "Failed to append AwaitedInfo to result");
             return -1;

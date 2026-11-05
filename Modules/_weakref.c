@@ -1,10 +1,22 @@
+#ifndef Py_BUILD_CORE_BUILTIN
+#  define Py_BUILD_CORE_MODULE 1
+#endif
+#define Py_VALUE_CORE 1
 #include "Python.h"
 #include "pycore_dict.h"              // _PyDict_DelItemIf()
+#include "pycore_list.h"          // PyList_AppendValue()
 #include "pycore_object.h"            // _PyObject_GET_WEAKREFS_LISTPTR()
+#include "pycore_value.h"            // PyValue_AsKnownObjectBorrow(), _PyValue_AsObjectAt()
+#include "pycore_value_slots.h"// _PyValue_FromObjectResult()
 #include "pycore_weakref.h"           // _PyWeakref_IS_DEAD()
 
 #define GET_WEAKREFS_LISTPTR(o) \
         ((PyWeakReference **) _PyObject_GET_WEAKREFS_LISTPTR(o))
+
+/*[clinic input]
+value_emission
+[clinic start generated code]*/
+/*[clinic end generated code: output=da39a3ee5e6b4b0d input=eb7b17088bfd7215]*/
 
 /*[clinic input]
 module _weakref
@@ -23,10 +35,16 @@ Return the number of weak references to 'object'.
 [clinic start generated code]*/
 
 static Py_ssize_t
-_weakref_getweakrefcount_impl(PyObject *module, PyObject *object)
-/*[clinic end generated code: output=301806d59558ff3e input=7d4d04fcaccf64d5]*/
+_weakref_getweakrefcount_impl(PyObject *module, PyValueBorrow object)
+/*[clinic end generated code: output=93f2722b5c118a2b input=7d4d04fcaccf64d5]*/
 {
-    return _PyWeakref_GetWeakrefCount(object);
+    PyObject *obj = _PyValue_AsObjectAt(object, BOX_SITE_PARSER);
+    if (obj == NULL) {
+        return -1;
+    }
+    Py_ssize_t count = _PyWeakref_GetWeakrefCount(obj);
+    Py_DECREF(obj);
+    return count;
 }
 
 
@@ -51,15 +69,21 @@ _weakref._remove_dead_weakref -> object
 Atomically remove key from dict if it points to a dead weakref.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _weakref__remove_dead_weakref_impl(PyObject *module, PyObject *dct,
-                                   PyObject *key)
-/*[clinic end generated code: output=d9ff53061fcb875c input=19fc91f257f96a1d]*/
+                                   PyValueBorrow key)
+/*[clinic end generated code: output=d81fbf4809689aeb input=19fc91f257f96a1d]*/
 {
-    if (_PyDict_DelItemIf(dct, key, is_dead_weakref, NULL) < 0) {
-        return NULL;
+    PyObject *keyobj = _PyValue_AsObjectAt(key, BOX_SITE_PARSER);
+    if (keyobj == NULL) {
+        return PyValue_NULL;
     }
-    Py_RETURN_NONE;
+    int res = _PyDict_DelItemIf(dct, keyobj, is_dead_weakref, NULL);
+    Py_DECREF(keyobj);
+    if (res < 0) {
+        return PyValue_NULL;
+    }
+    return PyValue_None;
 }
 
 
@@ -71,29 +95,31 @@ _weakref.getweakrefs
 Return a list of all weak reference objects pointing to 'object'.
 [clinic start generated code]*/
 
-static PyObject *
-_weakref_getweakrefs(PyObject *module, PyObject *object)
-/*[clinic end generated code: output=25c7731d8e011824 input=00c6d0e5d3206693]*/
+static PyValue
+_weakref_getweakrefs_impl(PyObject *module, PyValueBorrow object)
+/*[clinic end generated code: output=7934c4673294d996 input=00c6d0e5d3206693]*/
 {
-    if (!_PyType_SUPPORTS_WEAKREFS(Py_TYPE(object))) {
-        return PyList_New(0);
+    if (!_PyType_SUPPORTS_WEAKREFS(PyValue_TYPE(object))) {
+        return _PyValue_FromObjectResult(PyList_New(0));
     }
 
     PyObject *result = PyList_New(0);
     if (result == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
 
-    LOCK_WEAKREFS(object);
-    PyWeakReference *current = *GET_WEAKREFS_LISTPTR(object);
+    // Only an object that supports weakrefs gets here, so it is not inline.
+    PyObject *obj = PyValue_AsKnownObjectBorrow(object);
+    LOCK_WEAKREFS(obj);
+    PyWeakReference *current = *GET_WEAKREFS_LISTPTR(obj);
     while (current != NULL) {
         PyObject *curobj = (PyObject *) current;
         if (_Py_TryIncref(curobj)) {
-            if (PyList_Append(result, curobj)) {
-                UNLOCK_WEAKREFS(object);
+            if (PyList_AppendValue(result, PyValue_FromObjectBorrow(curobj))) {
+                UNLOCK_WEAKREFS(obj);
                 Py_DECREF(curobj);
                 Py_DECREF(result);
-                return NULL;
+                return PyValue_NULL;
             }
             else {
                 // Undo our _Py_TryIncref. This is safe to do with the lock
@@ -104,8 +130,8 @@ _weakref_getweakrefs(PyObject *module, PyObject *object)
         }
         current = current->wr_next;
     }
-    UNLOCK_WEAKREFS(object);
-    return result;
+    UNLOCK_WEAKREFS(obj);
+    return _PyValue_FromObjectResult(result);
 }
 
 
@@ -122,11 +148,27 @@ Create a proxy object that weakly references 'object'.
 proxy when 'object' is about to be finalized.
 [clinic start generated code]*/
 
-static PyObject *
-_weakref_proxy_impl(PyObject *module, PyObject *object, PyObject *callback)
-/*[clinic end generated code: output=d68fa4ad9ea40519 input=4808adf22fd137e7]*/
+static PyValue
+_weakref_proxy_impl(PyObject *module, PyValueBorrow object,
+                    PyValueBorrow callback)
+/*[clinic end generated code: output=df2571ecd901b803 input=4808adf22fd137e7]*/
 {
-    return PyWeakref_NewProxy(object, callback);
+    PyObject *obj = _PyValue_AsObjectAt(object, BOX_SITE_PARSER);
+    if (obj == NULL) {
+        return PyValue_NULL;
+    }
+    PyObject *cb = NULL;
+    if (!PyValue_IsNull(callback)) {
+        cb = _PyValue_AsObjectAt(callback, BOX_SITE_PARSER);
+        if (cb == NULL) {
+            Py_DECREF(obj);
+            return PyValue_NULL;
+        }
+    }
+    PyObject *proxy = PyWeakref_NewProxy(obj, cb);
+    Py_DECREF(obj);
+    Py_XDECREF(cb);
+    return _PyValue_FromObjectResult(proxy);
 }
 
 

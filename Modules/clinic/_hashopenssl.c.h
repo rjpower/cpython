@@ -2,15 +2,20 @@
 preserve
 [clinic start generated code]*/
 
+#ifndef Py_VALUE_CORE
+#  error "value-emission Clinic output requires Py_VALUE_CORE"
+#endif
+
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 #  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
 #  include "pycore_value.h"       // _PyValue_STATIC_IMMORTAL()
 #endif
-#include "pycore_abstract.h"      // _PyNumber_Index()
-#include "pycore_long.h"          // _PyLong_UnsignedLong_Converter()
-#include "pycore_modsupport.h"    // _PyArg_UnpackKeywords()
+#include "pycore_long_value.h"    // _PyValue_IntAsSsize_t()
+#include "pycore_modsupport.h"    // _PyArg_UnpackKeywordsValue()
 #include "pycore_unicodeobject.h" // _PyUnicode_AsUTF8NoNUL()
+#include "pycore_value_call.h"    // METH_VALUE
+#include "pycore_value_ops.h"     // _PyValue_Index()
 
 PyDoc_STRVAR(_hashlib_HASH_copy__doc__,
 "copy($self, /)\n"
@@ -19,15 +24,19 @@ PyDoc_STRVAR(_hashlib_HASH_copy__doc__,
 "Return a copy of the hash object.");
 
 #define _HASHLIB_HASH_COPY_METHODDEF    \
-    {"copy", (PyCFunction)_hashlib_HASH_copy, METH_NOARGS, _hashlib_HASH_copy__doc__},
+    {"copy", _PyCFunction_CAST(_hashlib_HASH_copy), METH_VALUE|METH_NOARGS, _hashlib_HASH_copy__doc__},
 
-static PyObject *
+static PyValue
 _hashlib_HASH_copy_impl(HASHobject *self);
 
-static PyObject *
-_hashlib_HASH_copy(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+_hashlib_HASH_copy(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _hashlib_HASH_copy_impl((HASHobject *)self);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _hashlib_HASH_copy_impl((HASHobject *)PyValue_AsKnownObjectBorrow(self));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(_hashlib_HASH_digest__doc__,
@@ -37,15 +46,19 @@ PyDoc_STRVAR(_hashlib_HASH_digest__doc__,
 "Return the digest value as a bytes object.");
 
 #define _HASHLIB_HASH_DIGEST_METHODDEF    \
-    {"digest", (PyCFunction)_hashlib_HASH_digest, METH_NOARGS, _hashlib_HASH_digest__doc__},
+    {"digest", _PyCFunction_CAST(_hashlib_HASH_digest), METH_VALUE|METH_NOARGS, _hashlib_HASH_digest__doc__},
 
-static PyObject *
+static PyValue
 _hashlib_HASH_digest_impl(HASHobject *self);
 
-static PyObject *
-_hashlib_HASH_digest(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+_hashlib_HASH_digest(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _hashlib_HASH_digest_impl((HASHobject *)self);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _hashlib_HASH_digest_impl((HASHobject *)PyValue_AsKnownObjectBorrow(self));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(_hashlib_HASH_hexdigest__doc__,
@@ -55,15 +68,19 @@ PyDoc_STRVAR(_hashlib_HASH_hexdigest__doc__,
 "Return the digest value as a string of hexadecimal digits.");
 
 #define _HASHLIB_HASH_HEXDIGEST_METHODDEF    \
-    {"hexdigest", (PyCFunction)_hashlib_HASH_hexdigest, METH_NOARGS, _hashlib_HASH_hexdigest__doc__},
+    {"hexdigest", _PyCFunction_CAST(_hashlib_HASH_hexdigest), METH_VALUE|METH_NOARGS, _hashlib_HASH_hexdigest__doc__},
 
-static PyObject *
+static PyValue
 _hashlib_HASH_hexdigest_impl(HASHobject *self);
 
-static PyObject *
-_hashlib_HASH_hexdigest(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+_hashlib_HASH_hexdigest(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _hashlib_HASH_hexdigest_impl((HASHobject *)self);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _hashlib_HASH_hexdigest_impl((HASHobject *)PyValue_AsKnownObjectBorrow(self));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(_hashlib_HASH_update__doc__,
@@ -73,17 +90,19 @@ PyDoc_STRVAR(_hashlib_HASH_update__doc__,
 "Update this hash object\'s state with the provided string.");
 
 #define _HASHLIB_HASH_UPDATE_METHODDEF    \
-    {"update", (PyCFunction)_hashlib_HASH_update, METH_O, _hashlib_HASH_update__doc__},
+    {"update", _PyCFunction_CAST(_hashlib_HASH_update), METH_VALUE|METH_O, _hashlib_HASH_update__doc__},
 
-static PyObject *
-_hashlib_HASH_update_impl(HASHobject *self, PyObject *obj);
+static PyValue
+_hashlib_HASH_update_impl(HASHobject *self, PyValueBorrow obj);
 
-static PyObject *
-_hashlib_HASH_update(PyObject *self, PyObject *obj)
+static PyValue
+_hashlib_HASH_update(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow obj;
 
-    return_value = _hashlib_HASH_update_impl((HASHobject *)self, obj);
+    obj = PyValue_Borrow(args[0]);
+    return_value = _hashlib_HASH_update_impl((HASHobject *)PyValue_AsKnownObjectBorrow(self), obj);
 
     return return_value;
 }
@@ -97,15 +116,15 @@ PyDoc_STRVAR(_hashlib_HASHXOF_digest__doc__,
 "Return the digest value as a bytes object.");
 
 #define _HASHLIB_HASHXOF_DIGEST_METHODDEF    \
-    {"digest", _PyCFunction_CAST(_hashlib_HASHXOF_digest), METH_FASTCALL|METH_KEYWORDS, _hashlib_HASHXOF_digest__doc__},
+    {"digest", _PyCFunction_CAST(_hashlib_HASHXOF_digest), METH_VALUE|METH_KEYWORDS, _hashlib_HASHXOF_digest__doc__},
 
-static PyObject *
+static PyValue
 _hashlib_HASHXOF_digest_impl(HASHobject *self, Py_ssize_t length);
 
-static PyObject *
-_hashlib_HASHXOF_digest(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_hashlib_HASHXOF_digest(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
@@ -133,20 +152,19 @@ _hashlib_HASHXOF_digest(PyObject *self, PyObject *const *args, Py_ssize_t nargs,
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[1];
+    Py_ssize_t _idx[1];
     Py_ssize_t length;
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, _idx, 1)) {
         goto exit;
     }
     {
         Py_ssize_t ival = -1;
-        PyObject *iobj = _PyNumber_Index(args[0]);
-        if (iobj != NULL) {
-            ival = PyLong_AsSsize_t(iobj);
-            Py_DECREF(iobj);
+        PyValue iobj = _PyValue_Index(PyValue_Borrow(args[_idx[0]]));
+        if (!PyValue_IsNull(iobj)) {
+            ival = _PyValue_IntAsSsize_t(PyValue_Borrow(iobj));
+            PyValue_CLOSE(iobj);
         }
         if (ival == -1 && PyErr_Occurred()) {
             goto exit;
@@ -158,7 +176,7 @@ _hashlib_HASHXOF_digest(PyObject *self, PyObject *const *args, Py_ssize_t nargs,
             goto exit;
         }
     }
-    return_value = _hashlib_HASHXOF_digest_impl((HASHobject *)self, length);
+    return_value = _hashlib_HASHXOF_digest_impl((HASHobject *)PyValue_AsKnownObjectBorrow(self), length);
 
 exit:
     return return_value;
@@ -175,15 +193,15 @@ PyDoc_STRVAR(_hashlib_HASHXOF_hexdigest__doc__,
 "Return the digest value as a string of hexadecimal digits.");
 
 #define _HASHLIB_HASHXOF_HEXDIGEST_METHODDEF    \
-    {"hexdigest", _PyCFunction_CAST(_hashlib_HASHXOF_hexdigest), METH_FASTCALL|METH_KEYWORDS, _hashlib_HASHXOF_hexdigest__doc__},
+    {"hexdigest", _PyCFunction_CAST(_hashlib_HASHXOF_hexdigest), METH_VALUE|METH_KEYWORDS, _hashlib_HASHXOF_hexdigest__doc__},
 
-static PyObject *
+static PyValue
 _hashlib_HASHXOF_hexdigest_impl(HASHobject *self, Py_ssize_t length);
 
-static PyObject *
-_hashlib_HASHXOF_hexdigest(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_hashlib_HASHXOF_hexdigest(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
@@ -211,20 +229,19 @@ _hashlib_HASHXOF_hexdigest(PyObject *self, PyObject *const *args, Py_ssize_t nar
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[1];
+    Py_ssize_t _idx[1];
     Py_ssize_t length;
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, _idx, 1)) {
         goto exit;
     }
     {
         Py_ssize_t ival = -1;
-        PyObject *iobj = _PyNumber_Index(args[0]);
-        if (iobj != NULL) {
-            ival = PyLong_AsSsize_t(iobj);
-            Py_DECREF(iobj);
+        PyValue iobj = _PyValue_Index(PyValue_Borrow(args[_idx[0]]));
+        if (!PyValue_IsNull(iobj)) {
+            ival = _PyValue_IntAsSsize_t(PyValue_Borrow(iobj));
+            PyValue_CLOSE(iobj);
         }
         if (ival == -1 && PyErr_Occurred()) {
             goto exit;
@@ -236,7 +253,7 @@ _hashlib_HASHXOF_hexdigest(PyObject *self, PyObject *const *args, Py_ssize_t nar
             goto exit;
         }
     }
-    return_value = _hashlib_HASHXOF_hexdigest_impl((HASHobject *)self, length);
+    return_value = _hashlib_HASHXOF_hexdigest_impl((HASHobject *)PyValue_AsKnownObjectBorrow(self), length);
 
 exit:
     return return_value;
@@ -256,16 +273,17 @@ PyDoc_STRVAR(_hashlib_HASH_new__doc__,
 "The MD5 and SHA1 algorithms are always supported.");
 
 #define _HASHLIB_HASH_NEW_METHODDEF    \
-    {"new", _PyCFunction_CAST(_hashlib_HASH_new), METH_FASTCALL|METH_KEYWORDS, _hashlib_HASH_new__doc__},
+    {"new", _PyCFunction_CAST(_hashlib_HASH_new), METH_VALUE|METH_KEYWORDS, _hashlib_HASH_new__doc__},
 
-static PyObject *
-_hashlib_HASH_new_impl(PyObject *module, const char *name, PyObject *data,
-                       int usedforsecurity, PyObject *string);
+static PyValue
+_hashlib_HASH_new_impl(PyObject *module, const char *name,
+                       PyValueBorrow data, int usedforsecurity,
+                       PyValueBorrow string);
 
-static PyObject *
-_hashlib_HASH_new(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_hashlib_HASH_new(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 4
@@ -293,51 +311,41 @@ _hashlib_HASH_new(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyO
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[4];
-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 1;
+    Py_ssize_t _idx[4];
     const char *name;
-    PyObject *data = NULL;
+    PyValueBorrow data = PyValue_Borrow(PyValue_NULL);
     int usedforsecurity = 1;
-    PyObject *string = NULL;
+    PyValueBorrow string = PyValue_Borrow(PyValue_NULL);
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 1, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 1, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, _idx, 4)) {
         goto exit;
     }
-    if (!PyUnicode_Check(args[0])) {
-        _PyArg_BadArgument("new", "argument 'name'", "str", args[0]);
+    if (!PyValue_IsObject(PyValue_Borrow(args[_idx[0]]))) {
+        _PyArg_BadArgumentValue("new", "argument 'name'", "str", PyValue_Borrow(args[_idx[0]]));
         goto exit;
     }
-    name = _PyUnicode_AsUTF8NoNUL(args[0]);
+    if (!PyUnicode_Check(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[0]])))) {
+        _PyArg_BadArgument("new", "argument 'name'", "str", PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[0]])));
+        goto exit;
+    }
+    name = _PyUnicode_AsUTF8NoNUL(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[0]])));
     if (name == NULL) {
         goto exit;
     }
-    if (!noptargs) {
-        goto skip_optional_pos;
+    if (_idx[1] >= 0) {
+        data = PyValue_Borrow(args[_idx[1]]);
     }
-    if (args[1]) {
-        data = args[1];
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
-    }
-skip_optional_pos:
-    if (!noptargs) {
-        goto skip_optional_kwonly;
-    }
-    if (args[2]) {
-        usedforsecurity = PyObject_IsTrue(args[2]);
+    if (_idx[2] >= 0) {
+        usedforsecurity = _PyValue_IsTrue(PyValue_Borrow(args[_idx[2]]));
         if (usedforsecurity < 0) {
             goto exit;
         }
-        if (!--noptargs) {
-            goto skip_optional_kwonly;
-        }
     }
-    string = args[3];
-skip_optional_kwonly:
-    return_value = _hashlib_HASH_new_impl(module, name, data, usedforsecurity, string);
+    if (_idx[3] >= 0) {
+        string = PyValue_Borrow(args[_idx[3]]);
+    }
+    return_value = _hashlib_HASH_new_impl(PyValue_AsKnownObjectBorrow(module), name, data, usedforsecurity, string);
 
 exit:
     return return_value;
@@ -350,16 +358,16 @@ PyDoc_STRVAR(_hashlib_openssl_md5__doc__,
 "Returns a md5 hash object; optionally initialized with a string");
 
 #define _HASHLIB_OPENSSL_MD5_METHODDEF    \
-    {"openssl_md5", _PyCFunction_CAST(_hashlib_openssl_md5), METH_FASTCALL|METH_KEYWORDS, _hashlib_openssl_md5__doc__},
+    {"openssl_md5", _PyCFunction_CAST(_hashlib_openssl_md5), METH_VALUE|METH_KEYWORDS, _hashlib_openssl_md5__doc__},
 
-static PyObject *
-_hashlib_openssl_md5_impl(PyObject *module, PyObject *data,
-                          int usedforsecurity, PyObject *string);
+static PyValue
+_hashlib_openssl_md5_impl(PyObject *module, PyValueBorrow data,
+                          int usedforsecurity, PyValueBorrow string);
 
-static PyObject *
-_hashlib_openssl_md5(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_hashlib_openssl_md5(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 3
@@ -387,42 +395,28 @@ _hashlib_openssl_md5(PyObject *module, PyObject *const *args, Py_ssize_t nargs, 
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[3];
-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 0;
-    PyObject *data = NULL;
+    Py_ssize_t _idx[3];
+    PyValueBorrow data = PyValue_Borrow(PyValue_NULL);
     int usedforsecurity = 1;
-    PyObject *string = NULL;
+    PyValueBorrow string = PyValue_Borrow(PyValue_NULL);
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 0, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 0, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, _idx, 3)) {
         goto exit;
     }
-    if (!noptargs) {
-        goto skip_optional_pos;
+    if (_idx[0] >= 0) {
+        data = PyValue_Borrow(args[_idx[0]]);
     }
-    if (args[0]) {
-        data = args[0];
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
-    }
-skip_optional_pos:
-    if (!noptargs) {
-        goto skip_optional_kwonly;
-    }
-    if (args[1]) {
-        usedforsecurity = PyObject_IsTrue(args[1]);
+    if (_idx[1] >= 0) {
+        usedforsecurity = _PyValue_IsTrue(PyValue_Borrow(args[_idx[1]]));
         if (usedforsecurity < 0) {
             goto exit;
         }
-        if (!--noptargs) {
-            goto skip_optional_kwonly;
-        }
     }
-    string = args[2];
-skip_optional_kwonly:
-    return_value = _hashlib_openssl_md5_impl(module, data, usedforsecurity, string);
+    if (_idx[2] >= 0) {
+        string = PyValue_Borrow(args[_idx[2]]);
+    }
+    return_value = _hashlib_openssl_md5_impl(PyValue_AsKnownObjectBorrow(module), data, usedforsecurity, string);
 
 exit:
     return return_value;
@@ -435,16 +429,16 @@ PyDoc_STRVAR(_hashlib_openssl_sha1__doc__,
 "Returns a sha1 hash object; optionally initialized with a string");
 
 #define _HASHLIB_OPENSSL_SHA1_METHODDEF    \
-    {"openssl_sha1", _PyCFunction_CAST(_hashlib_openssl_sha1), METH_FASTCALL|METH_KEYWORDS, _hashlib_openssl_sha1__doc__},
+    {"openssl_sha1", _PyCFunction_CAST(_hashlib_openssl_sha1), METH_VALUE|METH_KEYWORDS, _hashlib_openssl_sha1__doc__},
 
-static PyObject *
-_hashlib_openssl_sha1_impl(PyObject *module, PyObject *data,
-                           int usedforsecurity, PyObject *string);
+static PyValue
+_hashlib_openssl_sha1_impl(PyObject *module, PyValueBorrow data,
+                           int usedforsecurity, PyValueBorrow string);
 
-static PyObject *
-_hashlib_openssl_sha1(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_hashlib_openssl_sha1(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 3
@@ -472,42 +466,28 @@ _hashlib_openssl_sha1(PyObject *module, PyObject *const *args, Py_ssize_t nargs,
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[3];
-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 0;
-    PyObject *data = NULL;
+    Py_ssize_t _idx[3];
+    PyValueBorrow data = PyValue_Borrow(PyValue_NULL);
     int usedforsecurity = 1;
-    PyObject *string = NULL;
+    PyValueBorrow string = PyValue_Borrow(PyValue_NULL);
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 0, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 0, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, _idx, 3)) {
         goto exit;
     }
-    if (!noptargs) {
-        goto skip_optional_pos;
+    if (_idx[0] >= 0) {
+        data = PyValue_Borrow(args[_idx[0]]);
     }
-    if (args[0]) {
-        data = args[0];
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
-    }
-skip_optional_pos:
-    if (!noptargs) {
-        goto skip_optional_kwonly;
-    }
-    if (args[1]) {
-        usedforsecurity = PyObject_IsTrue(args[1]);
+    if (_idx[1] >= 0) {
+        usedforsecurity = _PyValue_IsTrue(PyValue_Borrow(args[_idx[1]]));
         if (usedforsecurity < 0) {
             goto exit;
         }
-        if (!--noptargs) {
-            goto skip_optional_kwonly;
-        }
     }
-    string = args[2];
-skip_optional_kwonly:
-    return_value = _hashlib_openssl_sha1_impl(module, data, usedforsecurity, string);
+    if (_idx[2] >= 0) {
+        string = PyValue_Borrow(args[_idx[2]]);
+    }
+    return_value = _hashlib_openssl_sha1_impl(PyValue_AsKnownObjectBorrow(module), data, usedforsecurity, string);
 
 exit:
     return return_value;
@@ -521,16 +501,16 @@ PyDoc_STRVAR(_hashlib_openssl_sha224__doc__,
 "Returns a sha224 hash object; optionally initialized with a string");
 
 #define _HASHLIB_OPENSSL_SHA224_METHODDEF    \
-    {"openssl_sha224", _PyCFunction_CAST(_hashlib_openssl_sha224), METH_FASTCALL|METH_KEYWORDS, _hashlib_openssl_sha224__doc__},
+    {"openssl_sha224", _PyCFunction_CAST(_hashlib_openssl_sha224), METH_VALUE|METH_KEYWORDS, _hashlib_openssl_sha224__doc__},
 
-static PyObject *
-_hashlib_openssl_sha224_impl(PyObject *module, PyObject *data,
-                             int usedforsecurity, PyObject *string);
+static PyValue
+_hashlib_openssl_sha224_impl(PyObject *module, PyValueBorrow data,
+                             int usedforsecurity, PyValueBorrow string);
 
-static PyObject *
-_hashlib_openssl_sha224(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_hashlib_openssl_sha224(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 3
@@ -558,42 +538,28 @@ _hashlib_openssl_sha224(PyObject *module, PyObject *const *args, Py_ssize_t narg
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[3];
-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 0;
-    PyObject *data = NULL;
+    Py_ssize_t _idx[3];
+    PyValueBorrow data = PyValue_Borrow(PyValue_NULL);
     int usedforsecurity = 1;
-    PyObject *string = NULL;
+    PyValueBorrow string = PyValue_Borrow(PyValue_NULL);
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 0, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 0, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, _idx, 3)) {
         goto exit;
     }
-    if (!noptargs) {
-        goto skip_optional_pos;
+    if (_idx[0] >= 0) {
+        data = PyValue_Borrow(args[_idx[0]]);
     }
-    if (args[0]) {
-        data = args[0];
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
-    }
-skip_optional_pos:
-    if (!noptargs) {
-        goto skip_optional_kwonly;
-    }
-    if (args[1]) {
-        usedforsecurity = PyObject_IsTrue(args[1]);
+    if (_idx[1] >= 0) {
+        usedforsecurity = _PyValue_IsTrue(PyValue_Borrow(args[_idx[1]]));
         if (usedforsecurity < 0) {
             goto exit;
         }
-        if (!--noptargs) {
-            goto skip_optional_kwonly;
-        }
     }
-    string = args[2];
-skip_optional_kwonly:
-    return_value = _hashlib_openssl_sha224_impl(module, data, usedforsecurity, string);
+    if (_idx[2] >= 0) {
+        string = PyValue_Borrow(args[_idx[2]]);
+    }
+    return_value = _hashlib_openssl_sha224_impl(PyValue_AsKnownObjectBorrow(module), data, usedforsecurity, string);
 
 exit:
     return return_value;
@@ -607,16 +573,16 @@ PyDoc_STRVAR(_hashlib_openssl_sha256__doc__,
 "Returns a sha256 hash object; optionally initialized with a string");
 
 #define _HASHLIB_OPENSSL_SHA256_METHODDEF    \
-    {"openssl_sha256", _PyCFunction_CAST(_hashlib_openssl_sha256), METH_FASTCALL|METH_KEYWORDS, _hashlib_openssl_sha256__doc__},
+    {"openssl_sha256", _PyCFunction_CAST(_hashlib_openssl_sha256), METH_VALUE|METH_KEYWORDS, _hashlib_openssl_sha256__doc__},
 
-static PyObject *
-_hashlib_openssl_sha256_impl(PyObject *module, PyObject *data,
-                             int usedforsecurity, PyObject *string);
+static PyValue
+_hashlib_openssl_sha256_impl(PyObject *module, PyValueBorrow data,
+                             int usedforsecurity, PyValueBorrow string);
 
-static PyObject *
-_hashlib_openssl_sha256(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_hashlib_openssl_sha256(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 3
@@ -644,42 +610,28 @@ _hashlib_openssl_sha256(PyObject *module, PyObject *const *args, Py_ssize_t narg
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[3];
-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 0;
-    PyObject *data = NULL;
+    Py_ssize_t _idx[3];
+    PyValueBorrow data = PyValue_Borrow(PyValue_NULL);
     int usedforsecurity = 1;
-    PyObject *string = NULL;
+    PyValueBorrow string = PyValue_Borrow(PyValue_NULL);
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 0, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 0, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, _idx, 3)) {
         goto exit;
     }
-    if (!noptargs) {
-        goto skip_optional_pos;
+    if (_idx[0] >= 0) {
+        data = PyValue_Borrow(args[_idx[0]]);
     }
-    if (args[0]) {
-        data = args[0];
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
-    }
-skip_optional_pos:
-    if (!noptargs) {
-        goto skip_optional_kwonly;
-    }
-    if (args[1]) {
-        usedforsecurity = PyObject_IsTrue(args[1]);
+    if (_idx[1] >= 0) {
+        usedforsecurity = _PyValue_IsTrue(PyValue_Borrow(args[_idx[1]]));
         if (usedforsecurity < 0) {
             goto exit;
         }
-        if (!--noptargs) {
-            goto skip_optional_kwonly;
-        }
     }
-    string = args[2];
-skip_optional_kwonly:
-    return_value = _hashlib_openssl_sha256_impl(module, data, usedforsecurity, string);
+    if (_idx[2] >= 0) {
+        string = PyValue_Borrow(args[_idx[2]]);
+    }
+    return_value = _hashlib_openssl_sha256_impl(PyValue_AsKnownObjectBorrow(module), data, usedforsecurity, string);
 
 exit:
     return return_value;
@@ -693,16 +645,16 @@ PyDoc_STRVAR(_hashlib_openssl_sha384__doc__,
 "Returns a sha384 hash object; optionally initialized with a string");
 
 #define _HASHLIB_OPENSSL_SHA384_METHODDEF    \
-    {"openssl_sha384", _PyCFunction_CAST(_hashlib_openssl_sha384), METH_FASTCALL|METH_KEYWORDS, _hashlib_openssl_sha384__doc__},
+    {"openssl_sha384", _PyCFunction_CAST(_hashlib_openssl_sha384), METH_VALUE|METH_KEYWORDS, _hashlib_openssl_sha384__doc__},
 
-static PyObject *
-_hashlib_openssl_sha384_impl(PyObject *module, PyObject *data,
-                             int usedforsecurity, PyObject *string);
+static PyValue
+_hashlib_openssl_sha384_impl(PyObject *module, PyValueBorrow data,
+                             int usedforsecurity, PyValueBorrow string);
 
-static PyObject *
-_hashlib_openssl_sha384(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_hashlib_openssl_sha384(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 3
@@ -730,42 +682,28 @@ _hashlib_openssl_sha384(PyObject *module, PyObject *const *args, Py_ssize_t narg
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[3];
-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 0;
-    PyObject *data = NULL;
+    Py_ssize_t _idx[3];
+    PyValueBorrow data = PyValue_Borrow(PyValue_NULL);
     int usedforsecurity = 1;
-    PyObject *string = NULL;
+    PyValueBorrow string = PyValue_Borrow(PyValue_NULL);
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 0, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 0, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, _idx, 3)) {
         goto exit;
     }
-    if (!noptargs) {
-        goto skip_optional_pos;
+    if (_idx[0] >= 0) {
+        data = PyValue_Borrow(args[_idx[0]]);
     }
-    if (args[0]) {
-        data = args[0];
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
-    }
-skip_optional_pos:
-    if (!noptargs) {
-        goto skip_optional_kwonly;
-    }
-    if (args[1]) {
-        usedforsecurity = PyObject_IsTrue(args[1]);
+    if (_idx[1] >= 0) {
+        usedforsecurity = _PyValue_IsTrue(PyValue_Borrow(args[_idx[1]]));
         if (usedforsecurity < 0) {
             goto exit;
         }
-        if (!--noptargs) {
-            goto skip_optional_kwonly;
-        }
     }
-    string = args[2];
-skip_optional_kwonly:
-    return_value = _hashlib_openssl_sha384_impl(module, data, usedforsecurity, string);
+    if (_idx[2] >= 0) {
+        string = PyValue_Borrow(args[_idx[2]]);
+    }
+    return_value = _hashlib_openssl_sha384_impl(PyValue_AsKnownObjectBorrow(module), data, usedforsecurity, string);
 
 exit:
     return return_value;
@@ -779,16 +717,16 @@ PyDoc_STRVAR(_hashlib_openssl_sha512__doc__,
 "Returns a sha512 hash object; optionally initialized with a string");
 
 #define _HASHLIB_OPENSSL_SHA512_METHODDEF    \
-    {"openssl_sha512", _PyCFunction_CAST(_hashlib_openssl_sha512), METH_FASTCALL|METH_KEYWORDS, _hashlib_openssl_sha512__doc__},
+    {"openssl_sha512", _PyCFunction_CAST(_hashlib_openssl_sha512), METH_VALUE|METH_KEYWORDS, _hashlib_openssl_sha512__doc__},
 
-static PyObject *
-_hashlib_openssl_sha512_impl(PyObject *module, PyObject *data,
-                             int usedforsecurity, PyObject *string);
+static PyValue
+_hashlib_openssl_sha512_impl(PyObject *module, PyValueBorrow data,
+                             int usedforsecurity, PyValueBorrow string);
 
-static PyObject *
-_hashlib_openssl_sha512(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_hashlib_openssl_sha512(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 3
@@ -816,42 +754,28 @@ _hashlib_openssl_sha512(PyObject *module, PyObject *const *args, Py_ssize_t narg
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[3];
-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 0;
-    PyObject *data = NULL;
+    Py_ssize_t _idx[3];
+    PyValueBorrow data = PyValue_Borrow(PyValue_NULL);
     int usedforsecurity = 1;
-    PyObject *string = NULL;
+    PyValueBorrow string = PyValue_Borrow(PyValue_NULL);
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 0, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 0, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, _idx, 3)) {
         goto exit;
     }
-    if (!noptargs) {
-        goto skip_optional_pos;
+    if (_idx[0] >= 0) {
+        data = PyValue_Borrow(args[_idx[0]]);
     }
-    if (args[0]) {
-        data = args[0];
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
-    }
-skip_optional_pos:
-    if (!noptargs) {
-        goto skip_optional_kwonly;
-    }
-    if (args[1]) {
-        usedforsecurity = PyObject_IsTrue(args[1]);
+    if (_idx[1] >= 0) {
+        usedforsecurity = _PyValue_IsTrue(PyValue_Borrow(args[_idx[1]]));
         if (usedforsecurity < 0) {
             goto exit;
         }
-        if (!--noptargs) {
-            goto skip_optional_kwonly;
-        }
     }
-    string = args[2];
-skip_optional_kwonly:
-    return_value = _hashlib_openssl_sha512_impl(module, data, usedforsecurity, string);
+    if (_idx[2] >= 0) {
+        string = PyValue_Borrow(args[_idx[2]]);
+    }
+    return_value = _hashlib_openssl_sha512_impl(PyValue_AsKnownObjectBorrow(module), data, usedforsecurity, string);
 
 exit:
     return return_value;
@@ -867,16 +791,16 @@ PyDoc_STRVAR(_hashlib_openssl_sha3_224__doc__,
 "Returns a sha3-224 hash object; optionally initialized with a string");
 
 #define _HASHLIB_OPENSSL_SHA3_224_METHODDEF    \
-    {"openssl_sha3_224", _PyCFunction_CAST(_hashlib_openssl_sha3_224), METH_FASTCALL|METH_KEYWORDS, _hashlib_openssl_sha3_224__doc__},
+    {"openssl_sha3_224", _PyCFunction_CAST(_hashlib_openssl_sha3_224), METH_VALUE|METH_KEYWORDS, _hashlib_openssl_sha3_224__doc__},
 
-static PyObject *
-_hashlib_openssl_sha3_224_impl(PyObject *module, PyObject *data,
-                               int usedforsecurity, PyObject *string);
+static PyValue
+_hashlib_openssl_sha3_224_impl(PyObject *module, PyValueBorrow data,
+                               int usedforsecurity, PyValueBorrow string);
 
-static PyObject *
-_hashlib_openssl_sha3_224(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_hashlib_openssl_sha3_224(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 3
@@ -904,42 +828,28 @@ _hashlib_openssl_sha3_224(PyObject *module, PyObject *const *args, Py_ssize_t na
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[3];
-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 0;
-    PyObject *data = NULL;
+    Py_ssize_t _idx[3];
+    PyValueBorrow data = PyValue_Borrow(PyValue_NULL);
     int usedforsecurity = 1;
-    PyObject *string = NULL;
+    PyValueBorrow string = PyValue_Borrow(PyValue_NULL);
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 0, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 0, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, _idx, 3)) {
         goto exit;
     }
-    if (!noptargs) {
-        goto skip_optional_pos;
+    if (_idx[0] >= 0) {
+        data = PyValue_Borrow(args[_idx[0]]);
     }
-    if (args[0]) {
-        data = args[0];
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
-    }
-skip_optional_pos:
-    if (!noptargs) {
-        goto skip_optional_kwonly;
-    }
-    if (args[1]) {
-        usedforsecurity = PyObject_IsTrue(args[1]);
+    if (_idx[1] >= 0) {
+        usedforsecurity = _PyValue_IsTrue(PyValue_Borrow(args[_idx[1]]));
         if (usedforsecurity < 0) {
             goto exit;
         }
-        if (!--noptargs) {
-            goto skip_optional_kwonly;
-        }
     }
-    string = args[2];
-skip_optional_kwonly:
-    return_value = _hashlib_openssl_sha3_224_impl(module, data, usedforsecurity, string);
+    if (_idx[2] >= 0) {
+        string = PyValue_Borrow(args[_idx[2]]);
+    }
+    return_value = _hashlib_openssl_sha3_224_impl(PyValue_AsKnownObjectBorrow(module), data, usedforsecurity, string);
 
 exit:
     return return_value;
@@ -957,16 +867,16 @@ PyDoc_STRVAR(_hashlib_openssl_sha3_256__doc__,
 "Returns a sha3-256 hash object; optionally initialized with a string");
 
 #define _HASHLIB_OPENSSL_SHA3_256_METHODDEF    \
-    {"openssl_sha3_256", _PyCFunction_CAST(_hashlib_openssl_sha3_256), METH_FASTCALL|METH_KEYWORDS, _hashlib_openssl_sha3_256__doc__},
+    {"openssl_sha3_256", _PyCFunction_CAST(_hashlib_openssl_sha3_256), METH_VALUE|METH_KEYWORDS, _hashlib_openssl_sha3_256__doc__},
 
-static PyObject *
-_hashlib_openssl_sha3_256_impl(PyObject *module, PyObject *data,
-                               int usedforsecurity, PyObject *string);
+static PyValue
+_hashlib_openssl_sha3_256_impl(PyObject *module, PyValueBorrow data,
+                               int usedforsecurity, PyValueBorrow string);
 
-static PyObject *
-_hashlib_openssl_sha3_256(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_hashlib_openssl_sha3_256(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 3
@@ -994,42 +904,28 @@ _hashlib_openssl_sha3_256(PyObject *module, PyObject *const *args, Py_ssize_t na
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[3];
-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 0;
-    PyObject *data = NULL;
+    Py_ssize_t _idx[3];
+    PyValueBorrow data = PyValue_Borrow(PyValue_NULL);
     int usedforsecurity = 1;
-    PyObject *string = NULL;
+    PyValueBorrow string = PyValue_Borrow(PyValue_NULL);
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 0, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 0, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, _idx, 3)) {
         goto exit;
     }
-    if (!noptargs) {
-        goto skip_optional_pos;
+    if (_idx[0] >= 0) {
+        data = PyValue_Borrow(args[_idx[0]]);
     }
-    if (args[0]) {
-        data = args[0];
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
-    }
-skip_optional_pos:
-    if (!noptargs) {
-        goto skip_optional_kwonly;
-    }
-    if (args[1]) {
-        usedforsecurity = PyObject_IsTrue(args[1]);
+    if (_idx[1] >= 0) {
+        usedforsecurity = _PyValue_IsTrue(PyValue_Borrow(args[_idx[1]]));
         if (usedforsecurity < 0) {
             goto exit;
         }
-        if (!--noptargs) {
-            goto skip_optional_kwonly;
-        }
     }
-    string = args[2];
-skip_optional_kwonly:
-    return_value = _hashlib_openssl_sha3_256_impl(module, data, usedforsecurity, string);
+    if (_idx[2] >= 0) {
+        string = PyValue_Borrow(args[_idx[2]]);
+    }
+    return_value = _hashlib_openssl_sha3_256_impl(PyValue_AsKnownObjectBorrow(module), data, usedforsecurity, string);
 
 exit:
     return return_value;
@@ -1047,16 +943,16 @@ PyDoc_STRVAR(_hashlib_openssl_sha3_384__doc__,
 "Returns a sha3-384 hash object; optionally initialized with a string");
 
 #define _HASHLIB_OPENSSL_SHA3_384_METHODDEF    \
-    {"openssl_sha3_384", _PyCFunction_CAST(_hashlib_openssl_sha3_384), METH_FASTCALL|METH_KEYWORDS, _hashlib_openssl_sha3_384__doc__},
+    {"openssl_sha3_384", _PyCFunction_CAST(_hashlib_openssl_sha3_384), METH_VALUE|METH_KEYWORDS, _hashlib_openssl_sha3_384__doc__},
 
-static PyObject *
-_hashlib_openssl_sha3_384_impl(PyObject *module, PyObject *data,
-                               int usedforsecurity, PyObject *string);
+static PyValue
+_hashlib_openssl_sha3_384_impl(PyObject *module, PyValueBorrow data,
+                               int usedforsecurity, PyValueBorrow string);
 
-static PyObject *
-_hashlib_openssl_sha3_384(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_hashlib_openssl_sha3_384(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 3
@@ -1084,42 +980,28 @@ _hashlib_openssl_sha3_384(PyObject *module, PyObject *const *args, Py_ssize_t na
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[3];
-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 0;
-    PyObject *data = NULL;
+    Py_ssize_t _idx[3];
+    PyValueBorrow data = PyValue_Borrow(PyValue_NULL);
     int usedforsecurity = 1;
-    PyObject *string = NULL;
+    PyValueBorrow string = PyValue_Borrow(PyValue_NULL);
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 0, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 0, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, _idx, 3)) {
         goto exit;
     }
-    if (!noptargs) {
-        goto skip_optional_pos;
+    if (_idx[0] >= 0) {
+        data = PyValue_Borrow(args[_idx[0]]);
     }
-    if (args[0]) {
-        data = args[0];
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
-    }
-skip_optional_pos:
-    if (!noptargs) {
-        goto skip_optional_kwonly;
-    }
-    if (args[1]) {
-        usedforsecurity = PyObject_IsTrue(args[1]);
+    if (_idx[1] >= 0) {
+        usedforsecurity = _PyValue_IsTrue(PyValue_Borrow(args[_idx[1]]));
         if (usedforsecurity < 0) {
             goto exit;
         }
-        if (!--noptargs) {
-            goto skip_optional_kwonly;
-        }
     }
-    string = args[2];
-skip_optional_kwonly:
-    return_value = _hashlib_openssl_sha3_384_impl(module, data, usedforsecurity, string);
+    if (_idx[2] >= 0) {
+        string = PyValue_Borrow(args[_idx[2]]);
+    }
+    return_value = _hashlib_openssl_sha3_384_impl(PyValue_AsKnownObjectBorrow(module), data, usedforsecurity, string);
 
 exit:
     return return_value;
@@ -1137,16 +1019,16 @@ PyDoc_STRVAR(_hashlib_openssl_sha3_512__doc__,
 "Returns a sha3-512 hash object; optionally initialized with a string");
 
 #define _HASHLIB_OPENSSL_SHA3_512_METHODDEF    \
-    {"openssl_sha3_512", _PyCFunction_CAST(_hashlib_openssl_sha3_512), METH_FASTCALL|METH_KEYWORDS, _hashlib_openssl_sha3_512__doc__},
+    {"openssl_sha3_512", _PyCFunction_CAST(_hashlib_openssl_sha3_512), METH_VALUE|METH_KEYWORDS, _hashlib_openssl_sha3_512__doc__},
 
-static PyObject *
-_hashlib_openssl_sha3_512_impl(PyObject *module, PyObject *data,
-                               int usedforsecurity, PyObject *string);
+static PyValue
+_hashlib_openssl_sha3_512_impl(PyObject *module, PyValueBorrow data,
+                               int usedforsecurity, PyValueBorrow string);
 
-static PyObject *
-_hashlib_openssl_sha3_512(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_hashlib_openssl_sha3_512(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 3
@@ -1174,42 +1056,28 @@ _hashlib_openssl_sha3_512(PyObject *module, PyObject *const *args, Py_ssize_t na
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[3];
-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 0;
-    PyObject *data = NULL;
+    Py_ssize_t _idx[3];
+    PyValueBorrow data = PyValue_Borrow(PyValue_NULL);
     int usedforsecurity = 1;
-    PyObject *string = NULL;
+    PyValueBorrow string = PyValue_Borrow(PyValue_NULL);
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 0, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 0, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, _idx, 3)) {
         goto exit;
     }
-    if (!noptargs) {
-        goto skip_optional_pos;
+    if (_idx[0] >= 0) {
+        data = PyValue_Borrow(args[_idx[0]]);
     }
-    if (args[0]) {
-        data = args[0];
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
-    }
-skip_optional_pos:
-    if (!noptargs) {
-        goto skip_optional_kwonly;
-    }
-    if (args[1]) {
-        usedforsecurity = PyObject_IsTrue(args[1]);
+    if (_idx[1] >= 0) {
+        usedforsecurity = _PyValue_IsTrue(PyValue_Borrow(args[_idx[1]]));
         if (usedforsecurity < 0) {
             goto exit;
         }
-        if (!--noptargs) {
-            goto skip_optional_kwonly;
-        }
     }
-    string = args[2];
-skip_optional_kwonly:
-    return_value = _hashlib_openssl_sha3_512_impl(module, data, usedforsecurity, string);
+    if (_idx[2] >= 0) {
+        string = PyValue_Borrow(args[_idx[2]]);
+    }
+    return_value = _hashlib_openssl_sha3_512_impl(PyValue_AsKnownObjectBorrow(module), data, usedforsecurity, string);
 
 exit:
     return return_value;
@@ -1227,16 +1095,16 @@ PyDoc_STRVAR(_hashlib_openssl_shake_128__doc__,
 "Returns a shake-128 variable hash object; optionally initialized with a string");
 
 #define _HASHLIB_OPENSSL_SHAKE_128_METHODDEF    \
-    {"openssl_shake_128", _PyCFunction_CAST(_hashlib_openssl_shake_128), METH_FASTCALL|METH_KEYWORDS, _hashlib_openssl_shake_128__doc__},
+    {"openssl_shake_128", _PyCFunction_CAST(_hashlib_openssl_shake_128), METH_VALUE|METH_KEYWORDS, _hashlib_openssl_shake_128__doc__},
 
-static PyObject *
-_hashlib_openssl_shake_128_impl(PyObject *module, PyObject *data,
-                                int usedforsecurity, PyObject *string);
+static PyValue
+_hashlib_openssl_shake_128_impl(PyObject *module, PyValueBorrow data,
+                                int usedforsecurity, PyValueBorrow string);
 
-static PyObject *
-_hashlib_openssl_shake_128(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_hashlib_openssl_shake_128(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 3
@@ -1264,42 +1132,28 @@ _hashlib_openssl_shake_128(PyObject *module, PyObject *const *args, Py_ssize_t n
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[3];
-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 0;
-    PyObject *data = NULL;
+    Py_ssize_t _idx[3];
+    PyValueBorrow data = PyValue_Borrow(PyValue_NULL);
     int usedforsecurity = 1;
-    PyObject *string = NULL;
+    PyValueBorrow string = PyValue_Borrow(PyValue_NULL);
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 0, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 0, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, _idx, 3)) {
         goto exit;
     }
-    if (!noptargs) {
-        goto skip_optional_pos;
+    if (_idx[0] >= 0) {
+        data = PyValue_Borrow(args[_idx[0]]);
     }
-    if (args[0]) {
-        data = args[0];
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
-    }
-skip_optional_pos:
-    if (!noptargs) {
-        goto skip_optional_kwonly;
-    }
-    if (args[1]) {
-        usedforsecurity = PyObject_IsTrue(args[1]);
+    if (_idx[1] >= 0) {
+        usedforsecurity = _PyValue_IsTrue(PyValue_Borrow(args[_idx[1]]));
         if (usedforsecurity < 0) {
             goto exit;
         }
-        if (!--noptargs) {
-            goto skip_optional_kwonly;
-        }
     }
-    string = args[2];
-skip_optional_kwonly:
-    return_value = _hashlib_openssl_shake_128_impl(module, data, usedforsecurity, string);
+    if (_idx[2] >= 0) {
+        string = PyValue_Borrow(args[_idx[2]]);
+    }
+    return_value = _hashlib_openssl_shake_128_impl(PyValue_AsKnownObjectBorrow(module), data, usedforsecurity, string);
 
 exit:
     return return_value;
@@ -1317,16 +1171,16 @@ PyDoc_STRVAR(_hashlib_openssl_shake_256__doc__,
 "Returns a shake-256 variable hash object; optionally initialized with a string");
 
 #define _HASHLIB_OPENSSL_SHAKE_256_METHODDEF    \
-    {"openssl_shake_256", _PyCFunction_CAST(_hashlib_openssl_shake_256), METH_FASTCALL|METH_KEYWORDS, _hashlib_openssl_shake_256__doc__},
+    {"openssl_shake_256", _PyCFunction_CAST(_hashlib_openssl_shake_256), METH_VALUE|METH_KEYWORDS, _hashlib_openssl_shake_256__doc__},
 
-static PyObject *
-_hashlib_openssl_shake_256_impl(PyObject *module, PyObject *data,
-                                int usedforsecurity, PyObject *string);
+static PyValue
+_hashlib_openssl_shake_256_impl(PyObject *module, PyValueBorrow data,
+                                int usedforsecurity, PyValueBorrow string);
 
-static PyObject *
-_hashlib_openssl_shake_256(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_hashlib_openssl_shake_256(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 3
@@ -1354,42 +1208,28 @@ _hashlib_openssl_shake_256(PyObject *module, PyObject *const *args, Py_ssize_t n
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[3];
-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 0;
-    PyObject *data = NULL;
+    Py_ssize_t _idx[3];
+    PyValueBorrow data = PyValue_Borrow(PyValue_NULL);
     int usedforsecurity = 1;
-    PyObject *string = NULL;
+    PyValueBorrow string = PyValue_Borrow(PyValue_NULL);
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 0, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 0, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, _idx, 3)) {
         goto exit;
     }
-    if (!noptargs) {
-        goto skip_optional_pos;
+    if (_idx[0] >= 0) {
+        data = PyValue_Borrow(args[_idx[0]]);
     }
-    if (args[0]) {
-        data = args[0];
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
-    }
-skip_optional_pos:
-    if (!noptargs) {
-        goto skip_optional_kwonly;
-    }
-    if (args[1]) {
-        usedforsecurity = PyObject_IsTrue(args[1]);
+    if (_idx[1] >= 0) {
+        usedforsecurity = _PyValue_IsTrue(PyValue_Borrow(args[_idx[1]]));
         if (usedforsecurity < 0) {
             goto exit;
         }
-        if (!--noptargs) {
-            goto skip_optional_kwonly;
-        }
     }
-    string = args[2];
-skip_optional_kwonly:
-    return_value = _hashlib_openssl_shake_256_impl(module, data, usedforsecurity, string);
+    if (_idx[2] >= 0) {
+        string = PyValue_Borrow(args[_idx[2]]);
+    }
+    return_value = _hashlib_openssl_shake_256_impl(PyValue_AsKnownObjectBorrow(module), data, usedforsecurity, string);
 
 exit:
     return return_value;
@@ -1405,17 +1245,17 @@ PyDoc_STRVAR(pbkdf2_hmac__doc__,
 "Password based key derivation function 2 (PKCS #5 v2.0) with HMAC as pseudorandom function.");
 
 #define PBKDF2_HMAC_METHODDEF    \
-    {"pbkdf2_hmac", _PyCFunction_CAST(pbkdf2_hmac), METH_FASTCALL|METH_KEYWORDS, pbkdf2_hmac__doc__},
+    {"pbkdf2_hmac", _PyCFunction_CAST(pbkdf2_hmac), METH_VALUE|METH_KEYWORDS, pbkdf2_hmac__doc__},
 
-static PyObject *
+static PyValue
 pbkdf2_hmac_impl(PyObject *module, const char *hash_name,
                  Py_buffer *password, Py_buffer *salt, long iterations,
-                 PyObject *dklen_obj);
+                 PyValueBorrow dklen_obj);
 
-static PyObject *
-pbkdf2_hmac(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+pbkdf2_hmac(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 5
@@ -1443,43 +1283,51 @@ pbkdf2_hmac(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject 
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[5];
-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 4;
+    Py_ssize_t _idx[5];
     const char *hash_name;
     Py_buffer password = {NULL, NULL};
     Py_buffer salt = {NULL, NULL};
     long iterations;
-    PyObject *dklen_obj = Py_None;
+    PyValueBorrow dklen_obj = PyValue_Borrow(PyValue_None);
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 4, /*maxpos*/ 5, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 4, /*maxpos*/ 5, /*minkw*/ 0, /*varpos*/ 0, _idx, 5)) {
         goto exit;
     }
-    if (!PyUnicode_Check(args[0])) {
-        _PyArg_BadArgument("pbkdf2_hmac", "argument 'hash_name'", "str", args[0]);
+    if (!PyValue_IsObject(PyValue_Borrow(args[_idx[0]]))) {
+        _PyArg_BadArgumentValue("pbkdf2_hmac", "argument 'hash_name'", "str", PyValue_Borrow(args[_idx[0]]));
         goto exit;
     }
-    hash_name = _PyUnicode_AsUTF8NoNUL(args[0]);
+    if (!PyUnicode_Check(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[0]])))) {
+        _PyArg_BadArgument("pbkdf2_hmac", "argument 'hash_name'", "str", PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[0]])));
+        goto exit;
+    }
+    hash_name = _PyUnicode_AsUTF8NoNUL(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[0]])));
     if (hash_name == NULL) {
         goto exit;
     }
-    if (PyObject_GetBuffer(args[1], &password, PyBUF_SIMPLE) != 0) {
+    if (!PyValue_IsObject(PyValue_Borrow(args[_idx[1]]))) {
+        PyErr_Format(PyExc_TypeError, "a bytes-like object is required, not '%.100s'", PyValue_TYPE(PyValue_Borrow(args[_idx[1]]))->tp_name);
         goto exit;
     }
-    if (PyObject_GetBuffer(args[2], &salt, PyBUF_SIMPLE) != 0) {
+    if (PyObject_GetBuffer(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[1]])), &password, PyBUF_SIMPLE) != 0) {
         goto exit;
     }
-    iterations = PyLong_AsLong(args[3]);
+    if (!PyValue_IsObject(PyValue_Borrow(args[_idx[2]]))) {
+        PyErr_Format(PyExc_TypeError, "a bytes-like object is required, not '%.100s'", PyValue_TYPE(PyValue_Borrow(args[_idx[2]]))->tp_name);
+        goto exit;
+    }
+    if (PyObject_GetBuffer(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[2]])), &salt, PyBUF_SIMPLE) != 0) {
+        goto exit;
+    }
+    iterations = _PyValue_AsLong(PyValue_Borrow(args[_idx[3]]));
     if (iterations == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    if (!noptargs) {
-        goto skip_optional_pos;
+    if (_idx[4] >= 0) {
+        dklen_obj = PyValue_Borrow(args[_idx[4]]);
     }
-    dklen_obj = args[4];
-skip_optional_pos:
-    return_value = pbkdf2_hmac_impl(module, hash_name, &password, &salt, iterations, dklen_obj);
+    return_value = pbkdf2_hmac_impl(PyValue_AsKnownObjectBorrow(module), hash_name, &password, &salt, iterations, dklen_obj);
 
 exit:
     /* Cleanup for password */
@@ -1501,17 +1349,17 @@ PyDoc_STRVAR(_hashlib_scrypt__doc__,
 "scrypt password-based key derivation function.");
 
 #define _HASHLIB_SCRYPT_METHODDEF    \
-    {"scrypt", _PyCFunction_CAST(_hashlib_scrypt), METH_FASTCALL|METH_KEYWORDS, _hashlib_scrypt__doc__},
+    {"scrypt", _PyCFunction_CAST(_hashlib_scrypt), METH_VALUE|METH_KEYWORDS, _hashlib_scrypt__doc__},
 
-static PyObject *
+static PyValue
 _hashlib_scrypt_impl(PyObject *module, Py_buffer *password, Py_buffer *salt,
                      unsigned long n, unsigned long r, unsigned long p,
                      long maxmem, long dklen);
 
-static PyObject *
-_hashlib_scrypt(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_hashlib_scrypt(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 7
@@ -1539,8 +1387,7 @@ _hashlib_scrypt(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObj
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[7];
-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 5;
+    Py_ssize_t _idx[7];
     Py_buffer password = {NULL, NULL};
     Py_buffer salt = {NULL, NULL};
     unsigned long n;
@@ -1549,44 +1396,82 @@ _hashlib_scrypt(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObj
     long maxmem = 0;
     long dklen = 64;
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 4, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 4, /*varpos*/ 0, _idx, 7)) {
         goto exit;
     }
-    if (PyObject_GetBuffer(args[0], &password, PyBUF_SIMPLE) != 0) {
+    if (!PyValue_IsObject(PyValue_Borrow(args[_idx[0]]))) {
+        PyErr_Format(PyExc_TypeError, "a bytes-like object is required, not '%.100s'", PyValue_TYPE(PyValue_Borrow(args[_idx[0]]))->tp_name);
         goto exit;
     }
-    if (PyObject_GetBuffer(args[1], &salt, PyBUF_SIMPLE) != 0) {
+    if (PyObject_GetBuffer(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[0]])), &password, PyBUF_SIMPLE) != 0) {
         goto exit;
     }
-    if (!_PyLong_UnsignedLong_Converter(args[2], &n)) {
+    if (!PyValue_IsObject(PyValue_Borrow(args[_idx[1]]))) {
+        PyErr_Format(PyExc_TypeError, "a bytes-like object is required, not '%.100s'", PyValue_TYPE(PyValue_Borrow(args[_idx[1]]))->tp_name);
         goto exit;
     }
-    if (!_PyLong_UnsignedLong_Converter(args[3], &r)) {
+    if (PyObject_GetBuffer(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[1]])), &salt, PyBUF_SIMPLE) != 0) {
         goto exit;
     }
-    if (!_PyLong_UnsignedLong_Converter(args[4], &p)) {
-        goto exit;
+    {
+        Py_ssize_t _bytes = _PyValue_AsNativeBytes(PyValue_Borrow(args[_idx[2]]), &n, sizeof(unsigned long),
+                Py_ASNATIVEBYTES_NATIVE_ENDIAN |
+                Py_ASNATIVEBYTES_ALLOW_INDEX |
+                Py_ASNATIVEBYTES_REJECT_NEGATIVE |
+                Py_ASNATIVEBYTES_UNSIGNED_BUFFER);
+        if (_bytes < 0) {
+            goto exit;
+        }
+        if ((size_t)_bytes > sizeof(unsigned long)) {
+            PyErr_SetString(PyExc_OverflowError,
+                        "Python int too large for C unsigned long");
+            goto exit;
+        }
     }
-    if (!noptargs) {
-        goto skip_optional_kwonly;
+    {
+        Py_ssize_t _bytes = _PyValue_AsNativeBytes(PyValue_Borrow(args[_idx[3]]), &r, sizeof(unsigned long),
+                Py_ASNATIVEBYTES_NATIVE_ENDIAN |
+                Py_ASNATIVEBYTES_ALLOW_INDEX |
+                Py_ASNATIVEBYTES_REJECT_NEGATIVE |
+                Py_ASNATIVEBYTES_UNSIGNED_BUFFER);
+        if (_bytes < 0) {
+            goto exit;
+        }
+        if ((size_t)_bytes > sizeof(unsigned long)) {
+            PyErr_SetString(PyExc_OverflowError,
+                        "Python int too large for C unsigned long");
+            goto exit;
+        }
     }
-    if (args[5]) {
-        maxmem = PyLong_AsLong(args[5]);
+    {
+        Py_ssize_t _bytes = _PyValue_AsNativeBytes(PyValue_Borrow(args[_idx[4]]), &p, sizeof(unsigned long),
+                Py_ASNATIVEBYTES_NATIVE_ENDIAN |
+                Py_ASNATIVEBYTES_ALLOW_INDEX |
+                Py_ASNATIVEBYTES_REJECT_NEGATIVE |
+                Py_ASNATIVEBYTES_UNSIGNED_BUFFER);
+        if (_bytes < 0) {
+            goto exit;
+        }
+        if ((size_t)_bytes > sizeof(unsigned long)) {
+            PyErr_SetString(PyExc_OverflowError,
+                        "Python int too large for C unsigned long");
+            goto exit;
+        }
+    }
+    if (_idx[5] >= 0) {
+        maxmem = _PyValue_AsLong(PyValue_Borrow(args[_idx[5]]));
         if (maxmem == -1 && PyErr_Occurred()) {
             goto exit;
         }
-        if (!--noptargs) {
-            goto skip_optional_kwonly;
+    }
+    if (_idx[6] >= 0) {
+        dklen = _PyValue_AsLong(PyValue_Borrow(args[_idx[6]]));
+        if (dklen == -1 && PyErr_Occurred()) {
+            goto exit;
         }
     }
-    dklen = PyLong_AsLong(args[6]);
-    if (dklen == -1 && PyErr_Occurred()) {
-        goto exit;
-    }
-skip_optional_kwonly:
-    return_value = _hashlib_scrypt_impl(module, &password, &salt, n, r, p, maxmem, dklen);
+    return_value = _hashlib_scrypt_impl(PyValue_AsKnownObjectBorrow(module), &password, &salt, n, r, p, maxmem, dklen);
 
 exit:
     /* Cleanup for password */
@@ -1608,16 +1493,16 @@ PyDoc_STRVAR(_hashlib_hmac_singleshot__doc__,
 "Single-shot HMAC.");
 
 #define _HASHLIB_HMAC_SINGLESHOT_METHODDEF    \
-    {"hmac_digest", _PyCFunction_CAST(_hashlib_hmac_singleshot), METH_FASTCALL|METH_KEYWORDS, _hashlib_hmac_singleshot__doc__},
+    {"hmac_digest", _PyCFunction_CAST(_hashlib_hmac_singleshot), METH_VALUE|METH_KEYWORDS, _hashlib_hmac_singleshot__doc__},
 
-static PyObject *
+static PyValue
 _hashlib_hmac_singleshot_impl(PyObject *module, Py_buffer *key,
-                              Py_buffer *msg, PyObject *digest);
+                              Py_buffer *msg, PyValueBorrow digest);
 
-static PyObject *
-_hashlib_hmac_singleshot(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_hashlib_hmac_singleshot(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 3
@@ -1645,24 +1530,31 @@ _hashlib_hmac_singleshot(PyObject *module, PyObject *const *args, Py_ssize_t nar
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[3];
+    Py_ssize_t _idx[3];
     Py_buffer key = {NULL, NULL};
     Py_buffer msg = {NULL, NULL};
-    PyObject *digest;
+    PyValueBorrow digest;
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 3, /*maxpos*/ 3, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 3, /*maxpos*/ 3, /*minkw*/ 0, /*varpos*/ 0, _idx, 3)) {
         goto exit;
     }
-    if (PyObject_GetBuffer(args[0], &key, PyBUF_SIMPLE) != 0) {
+    if (!PyValue_IsObject(PyValue_Borrow(args[_idx[0]]))) {
+        PyErr_Format(PyExc_TypeError, "a bytes-like object is required, not '%.100s'", PyValue_TYPE(PyValue_Borrow(args[_idx[0]]))->tp_name);
         goto exit;
     }
-    if (PyObject_GetBuffer(args[1], &msg, PyBUF_SIMPLE) != 0) {
+    if (PyObject_GetBuffer(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[0]])), &key, PyBUF_SIMPLE) != 0) {
         goto exit;
     }
-    digest = args[2];
-    return_value = _hashlib_hmac_singleshot_impl(module, &key, &msg, digest);
+    if (!PyValue_IsObject(PyValue_Borrow(args[_idx[1]]))) {
+        PyErr_Format(PyExc_TypeError, "a bytes-like object is required, not '%.100s'", PyValue_TYPE(PyValue_Borrow(args[_idx[1]]))->tp_name);
+        goto exit;
+    }
+    if (PyObject_GetBuffer(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[1]])), &msg, PyBUF_SIMPLE) != 0) {
+        goto exit;
+    }
+    digest = PyValue_Borrow(args[_idx[2]]);
+    return_value = _hashlib_hmac_singleshot_impl(PyValue_AsKnownObjectBorrow(module), &key, &msg, digest);
 
 exit:
     /* Cleanup for key */
@@ -1684,16 +1576,16 @@ PyDoc_STRVAR(_hashlib_hmac_new__doc__,
 "Return a new hmac object.");
 
 #define _HASHLIB_HMAC_NEW_METHODDEF    \
-    {"hmac_new", _PyCFunction_CAST(_hashlib_hmac_new), METH_FASTCALL|METH_KEYWORDS, _hashlib_hmac_new__doc__},
+    {"hmac_new", _PyCFunction_CAST(_hashlib_hmac_new), METH_VALUE|METH_KEYWORDS, _hashlib_hmac_new__doc__},
 
-static PyObject *
-_hashlib_hmac_new_impl(PyObject *module, Py_buffer *key, PyObject *msg_obj,
-                       PyObject *digestmod);
+static PyValue
+_hashlib_hmac_new_impl(PyObject *module, Py_buffer *key,
+                       PyValueBorrow msg_obj, PyValueBorrow digestmod);
 
-static PyObject *
-_hashlib_hmac_new(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_hashlib_hmac_new(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 3
@@ -1721,32 +1613,29 @@ _hashlib_hmac_new(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyO
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[3];
-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 1;
+    Py_ssize_t _idx[3];
     Py_buffer key = {NULL, NULL};
-    PyObject *msg_obj = NULL;
-    PyObject *digestmod = NULL;
+    PyValueBorrow msg_obj = PyValue_Borrow(PyValue_NULL);
+    PyValueBorrow digestmod = PyValue_Borrow(PyValue_NULL);
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 1, /*maxpos*/ 3, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 1, /*maxpos*/ 3, /*minkw*/ 0, /*varpos*/ 0, _idx, 3)) {
         goto exit;
     }
-    if (PyObject_GetBuffer(args[0], &key, PyBUF_SIMPLE) != 0) {
+    if (!PyValue_IsObject(PyValue_Borrow(args[_idx[0]]))) {
+        PyErr_Format(PyExc_TypeError, "a bytes-like object is required, not '%.100s'", PyValue_TYPE(PyValue_Borrow(args[_idx[0]]))->tp_name);
         goto exit;
     }
-    if (!noptargs) {
-        goto skip_optional_pos;
+    if (PyObject_GetBuffer(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[0]])), &key, PyBUF_SIMPLE) != 0) {
+        goto exit;
     }
-    if (args[1]) {
-        msg_obj = args[1];
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
+    if (_idx[1] >= 0) {
+        msg_obj = PyValue_Borrow(args[_idx[1]]);
     }
-    digestmod = args[2];
-skip_optional_pos:
-    return_value = _hashlib_hmac_new_impl(module, &key, msg_obj, digestmod);
+    if (_idx[2] >= 0) {
+        digestmod = PyValue_Borrow(args[_idx[2]]);
+    }
+    return_value = _hashlib_hmac_new_impl(PyValue_AsKnownObjectBorrow(module), &key, msg_obj, digestmod);
 
 exit:
     /* Cleanup for key */
@@ -1764,15 +1653,19 @@ PyDoc_STRVAR(_hashlib_HMAC_copy__doc__,
 "Return a copy (\"clone\") of the HMAC object.");
 
 #define _HASHLIB_HMAC_COPY_METHODDEF    \
-    {"copy", (PyCFunction)_hashlib_HMAC_copy, METH_NOARGS, _hashlib_HMAC_copy__doc__},
+    {"copy", _PyCFunction_CAST(_hashlib_HMAC_copy), METH_VALUE|METH_NOARGS, _hashlib_HMAC_copy__doc__},
 
-static PyObject *
+static PyValue
 _hashlib_HMAC_copy_impl(HMACobject *self);
 
-static PyObject *
-_hashlib_HMAC_copy(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+_hashlib_HMAC_copy(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _hashlib_HMAC_copy_impl((HMACobject *)self);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _hashlib_HMAC_copy_impl((HMACobject *)PyValue_AsKnownObjectBorrow(self));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(_hashlib_HMAC_update__doc__,
@@ -1782,15 +1675,15 @@ PyDoc_STRVAR(_hashlib_HMAC_update__doc__,
 "Update the HMAC object with msg.");
 
 #define _HASHLIB_HMAC_UPDATE_METHODDEF    \
-    {"update", _PyCFunction_CAST(_hashlib_HMAC_update), METH_FASTCALL|METH_KEYWORDS, _hashlib_HMAC_update__doc__},
+    {"update", _PyCFunction_CAST(_hashlib_HMAC_update), METH_VALUE|METH_KEYWORDS, _hashlib_HMAC_update__doc__},
 
-static PyObject *
-_hashlib_HMAC_update_impl(HMACobject *self, PyObject *msg);
+static PyValue
+_hashlib_HMAC_update_impl(HMACobject *self, PyValueBorrow msg);
 
-static PyObject *
-_hashlib_HMAC_update(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_hashlib_HMAC_update(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
@@ -1818,16 +1711,15 @@ _hashlib_HMAC_update(PyObject *self, PyObject *const *args, Py_ssize_t nargs, Py
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[1];
-    PyObject *msg;
+    Py_ssize_t _idx[1];
+    PyValueBorrow msg;
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, _idx, 1)) {
         goto exit;
     }
-    msg = args[0];
-    return_value = _hashlib_HMAC_update_impl((HMACobject *)self, msg);
+    msg = PyValue_Borrow(args[_idx[0]]);
+    return_value = _hashlib_HMAC_update_impl((HMACobject *)PyValue_AsKnownObjectBorrow(self), msg);
 
 exit:
     return return_value;
@@ -1840,15 +1732,19 @@ PyDoc_STRVAR(_hashlib_HMAC_digest__doc__,
 "Return the digest of the bytes passed to the update() method so far.");
 
 #define _HASHLIB_HMAC_DIGEST_METHODDEF    \
-    {"digest", (PyCFunction)_hashlib_HMAC_digest, METH_NOARGS, _hashlib_HMAC_digest__doc__},
+    {"digest", _PyCFunction_CAST(_hashlib_HMAC_digest), METH_VALUE|METH_NOARGS, _hashlib_HMAC_digest__doc__},
 
-static PyObject *
+static PyValue
 _hashlib_HMAC_digest_impl(HMACobject *self);
 
-static PyObject *
-_hashlib_HMAC_digest(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+_hashlib_HMAC_digest(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _hashlib_HMAC_digest_impl((HMACobject *)self);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _hashlib_HMAC_digest_impl((HMACobject *)PyValue_AsKnownObjectBorrow(self));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(_hashlib_HMAC_hexdigest__doc__,
@@ -1861,15 +1757,19 @@ PyDoc_STRVAR(_hashlib_HMAC_hexdigest__doc__,
 "non-binary environments.");
 
 #define _HASHLIB_HMAC_HEXDIGEST_METHODDEF    \
-    {"hexdigest", (PyCFunction)_hashlib_HMAC_hexdigest, METH_NOARGS, _hashlib_HMAC_hexdigest__doc__},
+    {"hexdigest", _PyCFunction_CAST(_hashlib_HMAC_hexdigest), METH_VALUE|METH_NOARGS, _hashlib_HMAC_hexdigest__doc__},
 
-static PyObject *
+static PyValue
 _hashlib_HMAC_hexdigest_impl(HMACobject *self);
 
-static PyObject *
-_hashlib_HMAC_hexdigest(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+_hashlib_HMAC_hexdigest(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _hashlib_HMAC_hexdigest_impl((HMACobject *)self);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _hashlib_HMAC_hexdigest_impl((HMACobject *)PyValue_AsKnownObjectBorrow(self));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(_hashlib_get_fips_mode__doc__,
@@ -1886,22 +1786,22 @@ PyDoc_STRVAR(_hashlib_get_fips_mode__doc__,
 "values other than 1 may have additional significance.");
 
 #define _HASHLIB_GET_FIPS_MODE_METHODDEF    \
-    {"get_fips_mode", (PyCFunction)_hashlib_get_fips_mode, METH_NOARGS, _hashlib_get_fips_mode__doc__},
+    {"get_fips_mode", _PyCFunction_CAST(_hashlib_get_fips_mode), METH_VALUE|METH_NOARGS, _hashlib_get_fips_mode__doc__},
 
 static int
 _hashlib_get_fips_mode_impl(PyObject *module);
 
-static PyObject *
-_hashlib_get_fips_mode(PyObject *module, PyObject *Py_UNUSED(ignored))
+static PyValue
+_hashlib_get_fips_mode(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int _return_value;
 
-    _return_value = _hashlib_get_fips_mode_impl(module);
+    _return_value = _hashlib_get_fips_mode_impl(PyValue_AsKnownObjectBorrow(module));
     if ((_return_value == -1) && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = PyLong_FromLong((long)_return_value);
+    return_value = PyValue_FromInt64((int64_t)_return_value);
 
 exit:
     return return_value;
@@ -1924,24 +1824,25 @@ PyDoc_STRVAR(_hashlib_compare_digest__doc__,
 "types and lengths of a and b--but not their values.");
 
 #define _HASHLIB_COMPARE_DIGEST_METHODDEF    \
-    {"compare_digest", _PyCFunction_CAST(_hashlib_compare_digest), METH_FASTCALL, _hashlib_compare_digest__doc__},
+    {"compare_digest", _PyCFunction_CAST(_hashlib_compare_digest), METH_VALUE, _hashlib_compare_digest__doc__},
 
-static PyObject *
-_hashlib_compare_digest_impl(PyObject *module, PyObject *a, PyObject *b);
+static PyValue
+_hashlib_compare_digest_impl(PyObject *module, PyValueBorrow a,
+                             PyValueBorrow b);
 
-static PyObject *
-_hashlib_compare_digest(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_hashlib_compare_digest(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
-    PyObject *a;
-    PyObject *b;
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow a;
+    PyValueBorrow b;
 
     if (!_PyArg_CheckPositional("compare_digest", nargs, 2, 2)) {
         goto exit;
     }
-    a = args[0];
-    b = args[1];
-    return_value = _hashlib_compare_digest_impl(module, a, b);
+    a = PyValue_Borrow(args[0]);
+    b = PyValue_Borrow(args[1]);
+    return_value = _hashlib_compare_digest_impl(PyValue_AsKnownObjectBorrow(module), a, b);
 
 exit:
     return return_value;
@@ -1978,4 +1879,4 @@ exit:
 #ifndef _HASHLIB_OPENSSL_SHAKE_256_METHODDEF
     #define _HASHLIB_OPENSSL_SHAKE_256_METHODDEF
 #endif /* !defined(_HASHLIB_OPENSSL_SHAKE_256_METHODDEF) */
-/*[clinic end generated code: output=8209a70cbbed90aa input=a9049054013a1b77]*/
+/*[clinic end generated code: output=6231110504e4f79a input=a9049054013a1b77]*/

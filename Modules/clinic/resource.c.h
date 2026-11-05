@@ -2,7 +2,13 @@
 preserve
 [clinic start generated code]*/
 
+#ifndef Py_VALUE_CORE
+#  error "value-emission Clinic output requires Py_VALUE_CORE"
+#endif
+
+#include "pycore_long_value.h"    // _PyValue_AsInt()
 #include "pycore_modsupport.h"    // _PyArg_CheckPositional()
+#include "pycore_value_call.h"    // METH_VALUE
 
 #if defined(HAVE_GETRUSAGE)
 
@@ -12,22 +18,22 @@ PyDoc_STRVAR(resource_getrusage__doc__,
 "\n");
 
 #define RESOURCE_GETRUSAGE_METHODDEF    \
-    {"getrusage", (PyCFunction)resource_getrusage, METH_O, resource_getrusage__doc__},
+    {"getrusage", _PyCFunction_CAST(resource_getrusage), METH_VALUE|METH_O, resource_getrusage__doc__},
 
-static PyObject *
+static PyValue
 resource_getrusage_impl(PyObject *module, int who);
 
-static PyObject *
-resource_getrusage(PyObject *module, PyObject *arg)
+static PyValue
+resource_getrusage(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int who;
 
-    who = PyLong_AsInt(arg);
+    who = _PyValue_AsInt(PyValue_Borrow(args[0]));
     if (who == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = resource_getrusage_impl(module, who);
+    return_value = resource_getrusage_impl(PyValue_AsKnownObjectBorrow(module), who);
 
 exit:
     return return_value;
@@ -41,22 +47,22 @@ PyDoc_STRVAR(resource_getrlimit__doc__,
 "\n");
 
 #define RESOURCE_GETRLIMIT_METHODDEF    \
-    {"getrlimit", (PyCFunction)resource_getrlimit, METH_O, resource_getrlimit__doc__},
+    {"getrlimit", _PyCFunction_CAST(resource_getrlimit), METH_VALUE|METH_O, resource_getrlimit__doc__},
 
-static PyObject *
+static PyValue
 resource_getrlimit_impl(PyObject *module, int resource);
 
-static PyObject *
-resource_getrlimit(PyObject *module, PyObject *arg)
+static PyValue
+resource_getrlimit(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int resource;
 
-    resource = PyLong_AsInt(arg);
+    resource = _PyValue_AsInt(PyValue_Borrow(args[0]));
     if (resource == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = resource_getrlimit_impl(module, resource);
+    return_value = resource_getrlimit_impl(PyValue_AsKnownObjectBorrow(module), resource);
 
 exit:
     return return_value;
@@ -68,27 +74,27 @@ PyDoc_STRVAR(resource_setrlimit__doc__,
 "\n");
 
 #define RESOURCE_SETRLIMIT_METHODDEF    \
-    {"setrlimit", _PyCFunction_CAST(resource_setrlimit), METH_FASTCALL, resource_setrlimit__doc__},
+    {"setrlimit", _PyCFunction_CAST(resource_setrlimit), METH_VALUE, resource_setrlimit__doc__},
 
-static PyObject *
-resource_setrlimit_impl(PyObject *module, int resource, PyObject *limits);
+static PyValue
+resource_setrlimit_impl(PyObject *module, int resource, PyValueBorrow limits);
 
-static PyObject *
-resource_setrlimit(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+resource_setrlimit(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int resource;
-    PyObject *limits;
+    PyValueBorrow limits;
 
     if (!_PyArg_CheckPositional("setrlimit", nargs, 2, 2)) {
         goto exit;
     }
-    resource = PyLong_AsInt(args[0]);
+    resource = _PyValue_AsInt(PyValue_Borrow(args[0]));
     if (resource == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    limits = args[1];
-    return_value = resource_setrlimit_impl(module, resource, limits);
+    limits = PyValue_Borrow(args[1]);
+    return_value = resource_setrlimit_impl(PyValue_AsKnownObjectBorrow(module), resource, limits);
 
 exit:
     return return_value;
@@ -102,37 +108,43 @@ PyDoc_STRVAR(resource_prlimit__doc__,
 "\n");
 
 #define RESOURCE_PRLIMIT_METHODDEF    \
-    {"prlimit", _PyCFunction_CAST(resource_prlimit), METH_FASTCALL, resource_prlimit__doc__},
+    {"prlimit", _PyCFunction_CAST(resource_prlimit), METH_VALUE, resource_prlimit__doc__},
 
-static PyObject *
+static PyValue
 resource_prlimit_impl(PyObject *module, pid_t pid, int resource,
-                      PyObject *limits);
+                      PyValueBorrow limits);
 
-static PyObject *
-resource_prlimit(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+resource_prlimit(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     pid_t pid;
     int resource;
-    PyObject *limits = Py_None;
+    PyValueBorrow limits = PyValue_Borrow(PyValue_None);
 
     if (!_PyArg_CheckPositional("prlimit", nargs, 2, 3)) {
         goto exit;
     }
-    pid = PyLong_AsPid(args[0]);
+    #if !defined(SIZEOF_PID_T) || SIZEOF_PID_T == SIZEOF_INT
+    pid = _PyValue_AsInt(PyValue_Borrow(args[0]));
+    #elif SIZEOF_PID_T == SIZEOF_LONG
+    pid = _PyValue_AsLong(PyValue_Borrow(args[0]));
+    #else
+    pid = _PyValue_AsLongLong(PyValue_Borrow(args[0]));
+    #endif
     if (pid == (pid_t)(-1) && PyErr_Occurred()) {
         goto exit;
     }
-    resource = PyLong_AsInt(args[1]);
+    resource = _PyValue_AsInt(PyValue_Borrow(args[1]));
     if (resource == -1 && PyErr_Occurred()) {
         goto exit;
     }
     if (nargs < 3) {
         goto skip_optional;
     }
-    limits = args[2];
+    limits = PyValue_Borrow(args[2]);
 skip_optional:
-    return_value = resource_prlimit_impl(module, pid, resource, limits);
+    return_value = resource_prlimit_impl(PyValue_AsKnownObjectBorrow(module), pid, resource, limits);
 
 exit:
     return return_value;
@@ -146,22 +158,22 @@ PyDoc_STRVAR(resource_getpagesize__doc__,
 "\n");
 
 #define RESOURCE_GETPAGESIZE_METHODDEF    \
-    {"getpagesize", (PyCFunction)resource_getpagesize, METH_NOARGS, resource_getpagesize__doc__},
+    {"getpagesize", _PyCFunction_CAST(resource_getpagesize), METH_VALUE|METH_NOARGS, resource_getpagesize__doc__},
 
 static int
 resource_getpagesize_impl(PyObject *module);
 
-static PyObject *
-resource_getpagesize(PyObject *module, PyObject *Py_UNUSED(ignored))
+static PyValue
+resource_getpagesize(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int _return_value;
 
-    _return_value = resource_getpagesize_impl(module);
+    _return_value = resource_getpagesize_impl(PyValue_AsKnownObjectBorrow(module));
     if ((_return_value == -1) && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = PyLong_FromLong((long)_return_value);
+    return_value = PyValue_FromInt64((int64_t)_return_value);
 
 exit:
     return return_value;
@@ -174,4 +186,4 @@ exit:
 #ifndef RESOURCE_PRLIMIT_METHODDEF
     #define RESOURCE_PRLIMIT_METHODDEF
 #endif /* !defined(RESOURCE_PRLIMIT_METHODDEF) */
-/*[clinic end generated code: output=4044ef9ffbf7278b input=a9049054013a1b77]*/
+/*[clinic end generated code: output=331bb2a397e9a65f input=a9049054013a1b77]*/

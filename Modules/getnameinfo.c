@@ -45,6 +45,7 @@
 #include <string.h>
 #include <stddef.h>
 
+#define Py_VALUE_CORE 1
 #include "addrinfo.h"
 #endif
 

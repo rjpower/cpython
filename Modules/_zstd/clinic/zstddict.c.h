@@ -2,13 +2,20 @@
 preserve
 [clinic start generated code]*/
 
+#ifndef Py_VALUE_CORE
+#  error "value-emission Clinic output requires Py_VALUE_CORE"
+#endif
+
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 #  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
 #  include "pycore_value.h"       // _PyValue_STATIC_IMMORTAL()
 #endif
-#include "pycore_borrow.h"        // _PyBorrow_TupleItems()
-#include "pycore_modsupport.h"    // _PyArg_UnpackKeywords()
+#include "pycore_modsupport.h"    // _PyArg_UnpackKeywordsValue()
+#include "pycore_tuple.h"         // _PyTuple_ITEMS()
+#include "pycore_value_call.h"    // METH_VALUE
+#include "pycore_value_ops.h"     // _PyValue_IsTrue()
+#include "pycore_value_slots.h"   // _PyValue_THUNK_EXIT()
 
 PyDoc_STRVAR(_zstd_ZstdDict_new__doc__,
 "ZstdDict(dict_content, /, *, is_raw=False)\n"
@@ -26,14 +33,14 @@ PyDoc_STRVAR(_zstd_ZstdDict_new__doc__,
 "The dictionary can be used for compression or decompression, and can be\n"
 "shared by multiple ZstdCompressor or ZstdDecompressor objects.");
 
-static PyObject *
+static PyValue
 _zstd_ZstdDict_new_impl(PyTypeObject *type, Py_buffer *dict_content,
                         int is_raw);
 
-static PyObject *
-_zstd_ZstdDict_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
+static PyValue
+_zstd_ZstdDict_new_value(PyTypeObject *type, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
@@ -61,33 +68,27 @@ _zstd_ZstdDict_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[2];
-    PyObject * const *fastargs;
-    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
-    Py_ssize_t noptargs = nargs + (kwargs ? PyDict_GET_SIZE(kwargs) : 0) - 1;
+    Py_ssize_t _idx[2];
     Py_buffer dict_content = {NULL, NULL};
     int is_raw = 0;
 
-    PyObject *const *_args_items = _PyBorrow_TupleItems(args, Py_MIN(nargs, 1));
-    if (_args_items == NULL) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, _idx, 2)) {
         goto exit;
     }
-    fastargs = _PyArg_UnpackKeywords(_args_items, nargs, kwargs, NULL, &_parser,
-            /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!fastargs) {
+    if (!PyValue_IsObject(PyValue_Borrow(args[_idx[0]]))) {
+        PyErr_Format(PyExc_TypeError, "a bytes-like object is required, not '%.100s'", PyValue_TYPE(PyValue_Borrow(args[_idx[0]]))->tp_name);
         goto exit;
     }
-    if (PyObject_GetBuffer(fastargs[0], &dict_content, PyBUF_SIMPLE) != 0) {
+    if (PyObject_GetBuffer(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[0]])), &dict_content, PyBUF_SIMPLE) != 0) {
         goto exit;
     }
-    if (!noptargs) {
-        goto skip_optional_kwonly;
+    if (_idx[1] >= 0) {
+        is_raw = _PyValue_IsTrue(PyValue_Borrow(args[_idx[1]]));
+        if (is_raw < 0) {
+            goto exit;
+        }
     }
-    is_raw = PyObject_IsTrue(fastargs[1]);
-    if (is_raw < 0) {
-        goto exit;
-    }
-skip_optional_kwonly:
     return_value = _zstd_ZstdDict_new_impl(type, &dict_content, is_raw);
 
 exit:
@@ -97,6 +98,24 @@ exit:
     }
 
     return return_value;
+}
+
+Py_VALUE_ENTRY static PyObject *
+_zstd_ZstdDict_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
+{
+    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
+    if (kwargs == NULL || PyDict_GET_SIZE(kwargs) == 0) {
+        return _PyValue_THUNK_EXIT(_zstd_ZstdDict_new_value(type, _PyTuple_ITEMS(args), nargs, NULL), BOX_SITE_CALL);
+    }
+    PyObject *kwnames;
+    PyValue *window = _PyValue_StackUnpackDict(_PyThreadState_GET(),
+        _PyTuple_ITEMS(args), nargs, kwargs, &kwnames);
+    if (window == NULL) {
+        return NULL;
+    }
+    PyValue result = _zstd_ZstdDict_new_value(type, window, nargs, kwnames);
+    _PyValue_StackUnpackDict_Free(window, nargs, kwnames);
+    return _PyValue_THUNK_EXIT(result, BOX_SITE_CALL);
 }
 
 PyDoc_STRVAR(_zstd_ZstdDict_dict_content__doc__,
@@ -182,4 +201,4 @@ _zstd_ZstdDict_as_prefix_get(PyObject *self, void *Py_UNUSED(context))
 
 #define _ZSTD_ZSTDDICT_AS_PREFIX_GETSETDEF {"as_prefix", (getter)_zstd_ZstdDict_as_prefix_get, (setter)NULL, _zstd_ZstdDict_as_prefix__doc__},
 
-/*[clinic end generated code: output=566ca78fa0b4053d input=a9049054013a1b77]*/
+/*[clinic end generated code: output=bb30321bca8e9ec9 input=a9049054013a1b77]*/

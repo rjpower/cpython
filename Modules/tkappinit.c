@@ -16,6 +16,7 @@
 #include <tcl.h>
 #include <tk.h>
 
+#define Py_VALUE_CORE 1
 #include "tkinter.h"
 
 int

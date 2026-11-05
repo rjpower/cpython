@@ -9,6 +9,7 @@
 #  define Py_BUILD_CORE_MODULE 1
 #endif
 
+#define Py_VALUE_CORE 1
 #include "Python.h"
 
 
@@ -17,10 +18,14 @@
 
 #include <lzma.h>
 
+#include "pycore_dict.h"          // PyDict_SetValue()
 #include "pycore_long.h"          // _PyLong_UInt32_Converter()
 // Blocks output buffer wrappers
 #include "pycore_blocks_output_buffer.h"
 #include "pycore_pyatomic_ft_wrappers.h" // FT_ATOMIC_STORE_*_RELAXED
+#include "pycore_value.h"         // _PyValue_AsObjectAt()
+#include "pycore_value_ops.h"     // _PyValue_SequenceGetItem()
+#include "pycore_value_slots.h"// _PyValue_FromObjectResult()
 
 #if OUTPUT_BUFFER_MAX_BLOCK_SIZE > SIZE_MAX
     #error "The maximum block size accepted by liblzma is SIZE_MAX."
@@ -231,11 +236,23 @@ FUNCNAME(PyObject *obj, void *ptr)                                  \
     return 1;                                                       \
 }
 
-INT_TYPE_CONVERTER_FUNC(lzma_vli, lzma_vli_converter)
+INT_TYPE_CONVERTER_FUNC(lzma_vli, lzma_vli_obj_converter)
 INT_TYPE_CONVERTER_FUNC(lzma_mode, lzma_mode_converter)
 INT_TYPE_CONVERTER_FUNC(lzma_match_finder, lzma_mf_converter)
 
 #undef INT_TYPE_CONVERTER_FUNC
+
+static int
+lzma_vli_converter(PyValueBorrow value, void *ptr)
+{
+    PyObject *obj = _PyValue_AsObjectAt(value, BOX_SITE_PARSER);
+    if (obj == NULL) {
+        return 0;
+    }
+    int ok = lzma_vli_obj_converter(obj, ptr);
+    Py_DECREF(obj);
+    return ok;
+}
 
 
 /* Filter specifier parsing.
@@ -365,7 +382,7 @@ lzma_filter_converter(_lzma_state *state, PyObject *spec, void *ptr)
         return 0;
     }
     lzma_vli id;
-    if (!lzma_vli_converter(id_obj, &id)) {
+    if (!lzma_vli_obj_converter(id_obj, &id)) {
         Py_DECREF(id_obj);
         return 0;
     }
@@ -422,7 +439,14 @@ parse_filter_chain_spec(_lzma_state *state, lzma_filter filters[], PyObject *fil
 
     for (i = 0; i < num_filters; i++) {
         int ok = 1;
-        PyObject *spec = PySequence_GetItem(filterspecs, i);
+        PyValue specv = _PyValue_SequenceGetItem(
+            PyValue_FromObjectBorrow(filterspecs), i);
+        PyObject *spec = NULL;
+        if (!PyValue_IsNull(specv)) {
+            /* lzma_filter_converter() takes an object. */
+            spec = _PyValue_AsObjectAt(specv, BOX_SITE_SEQUENCE);
+            PyValue_CLOSE(specv);
+        }
         if (spec == NULL || !lzma_filter_converter(state, spec, &filters[i])) {
             ok = 0;
         }
@@ -455,7 +479,7 @@ spec_add_field(PyObject *spec, const char *key, unsigned long long value)
         Py_DECREF(value_object);
         return -1;
     }
-    int status = PyDict_SetItem(spec, key_object, value_object);
+    int status = PyDict_SetValue(spec, PyValue_FromObjectBorrow(key_object), PyValue_FromObjectBorrow(value_object));
     Py_DECREF(key_object);
     Py_DECREF(value_object);
     return status;
@@ -529,6 +553,11 @@ error:
     return NULL;
 }
 
+
+/*[clinic input]
+value_emission
+[clinic start generated code]*/
+/*[clinic end generated code: output=da39a3ee5e6b4b0d input=eb7b17088bfd7215]*/
 
 /*[clinic input]
 module _lzma
@@ -622,9 +651,9 @@ When you have finished providing data to the compressor, call the
 flush() method to finish the compression process.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _lzma_LZMACompressor_compress_impl(Compressor *self, Py_buffer *data)
-/*[clinic end generated code: output=31f615136963e00f input=64019eac7f2cc8d0]*/
+/*[clinic end generated code: output=a55b8ae950df0e4b input=64019eac7f2cc8d0]*/
 {
     PyObject *result = NULL;
 
@@ -636,7 +665,7 @@ _lzma_LZMACompressor_compress_impl(Compressor *self, Py_buffer *data)
         result = compress(self, data->buf, data->len, LZMA_RUN);
     }
     PyMutex_Unlock(&self->mutex);
-    return result;
+    return _PyValue_FromObjectResult(result);
 }
 
 /*[clinic input]
@@ -649,9 +678,9 @@ Returns the compressed data left in internal buffers.
 The compressor object may not be used after this method is called.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _lzma_LZMACompressor_flush_impl(Compressor *self)
-/*[clinic end generated code: output=fec21f3e22504f50 input=6b369303f67ad0a8]*/
+/*[clinic end generated code: output=c952c688a016031d input=6b369303f67ad0a8]*/
 {
     PyObject *result = NULL;
 
@@ -663,7 +692,7 @@ _lzma_LZMACompressor_flush_impl(Compressor *self)
         result = compress(self, NULL, 0, LZMA_FINISH);
     }
     PyMutex_Unlock(&self->mutex);
-    return result;
+    return _PyValue_FromObjectResult(result);
 }
 
 static int
@@ -1145,10 +1174,10 @@ raises an EOFError.  Any data found after the end of the stream is
 ignored and saved in the unused_data attribute.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _lzma_LZMADecompressor_decompress_impl(Decompressor *self, Py_buffer *data,
                                        Py_ssize_t max_length)
-/*[clinic end generated code: output=ef4e20ec7122241d input=0eb62669c4315dee]*/
+/*[clinic end generated code: output=a6605bd2cc5efd8a input=0eb62669c4315dee]*/
 {
     PyObject *result = NULL;
 
@@ -1158,7 +1187,7 @@ _lzma_LZMADecompressor_decompress_impl(Decompressor *self, Py_buffer *data,
     else
         result = decompress(self, data->buf, data->len, max_length);
     PyMutex_Unlock(&self->mutex);
-    return result;
+    return _PyValue_FromObjectResult(result);
 }
 
 static int
@@ -1206,10 +1235,10 @@ Create a decompressor object for decompressing data incrementally.
 For one-shot decompression, use the decompress() function instead.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _lzma_LZMADecompressor_impl(PyTypeObject *type, int format,
-                            PyObject *memlimit, PyObject *filters)
-/*[clinic end generated code: output=2d46d5e70f10bc7f input=ca40cd1cb1202b0d]*/
+                            PyValueBorrow memlimit, PyValueBorrow filters)
+/*[clinic end generated code: output=520b546cc3b16b95 input=ca40cd1cb1202b0d]*/
 {
     Decompressor *self;
     const uint32_t decoder_flags = LZMA_TELL_ANY_CHECK | LZMA_TELL_NO_CHECK;
@@ -1218,31 +1247,37 @@ _lzma_LZMADecompressor_impl(PyTypeObject *type, int format,
     _lzma_state *state = PyType_GetModuleState(type);
     assert(state != NULL);
 
-    if (memlimit != Py_None) {
+    if (!PyValue_IsNone(memlimit)) {
         if (format == FORMAT_RAW) {
             PyErr_SetString(PyExc_ValueError,
                             "Cannot specify memory limit with FORMAT_RAW");
-            return NULL;
+            return PyValue_NULL;
         }
-        if (!_PyLong_UInt64_Converter(memlimit, &memlimit_)) {
-            return NULL;
+        PyObject *memlimit_obj = _PyValue_AsObjectAt(memlimit, BOX_SITE_PARSER);
+        if (memlimit_obj == NULL) {
+            return PyValue_NULL;
+        }
+        int ok = _PyLong_UInt64_Converter(memlimit_obj, &memlimit_);
+        Py_DECREF(memlimit_obj);
+        if (!ok) {
+            return PyValue_NULL;
         }
     }
 
-    if (format == FORMAT_RAW && filters == Py_None) {
+    if (format == FORMAT_RAW && PyValue_IsNone(filters)) {
         PyErr_SetString(PyExc_ValueError,
                         "Must specify filters for FORMAT_RAW");
-        return NULL;
-    } else if (format != FORMAT_RAW && filters != Py_None) {
+        return PyValue_NULL;
+    } else if (format != FORMAT_RAW && !PyValue_IsNone(filters)) {
         PyErr_SetString(PyExc_ValueError,
                         "Cannot specify filters except with FORMAT_RAW");
-        return NULL;
+        return PyValue_NULL;
     }
 
     assert(type != NULL && type->tp_alloc != NULL);
     self = (Decompressor *)type->tp_alloc(type, 0);
     if (self == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
     self->alloc.opaque = NULL;
     self->alloc.alloc = PyLzma_Malloc;
@@ -1281,12 +1316,19 @@ _lzma_LZMADecompressor_impl(PyTypeObject *type, int format,
             }
             break;
 
-        case FORMAT_RAW:
+        case FORMAT_RAW: {
             self->check = LZMA_CHECK_NONE;
-            if (Decompressor_init_raw(state, &self->lzs, filters) == -1) {
+            PyObject *filters_obj = _PyValue_AsObjectAt(filters, BOX_SITE_PARSER);
+            if (filters_obj == NULL) {
+                goto error;
+            }
+            int rc = Decompressor_init_raw(state, &self->lzs, filters_obj);
+            Py_DECREF(filters_obj);
+            if (rc == -1) {
                 goto error;
             }
             break;
+        }
 
         default:
             PyErr_Format(PyExc_ValueError,
@@ -1294,11 +1336,11 @@ _lzma_LZMADecompressor_impl(PyTypeObject *type, int format,
             goto error;
     }
 
-    return (PyObject *)self;
+    return _PyValue_FromObjectResult((PyObject *)self);
 
 error:
     Py_DECREF(self);
-    return NULL;
+    return PyValue_NULL;
 }
 
 static void
@@ -1409,11 +1451,11 @@ Test whether the given integrity check is supported.
 Always returns True for CHECK_NONE and CHECK_CRC32.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _lzma_is_check_supported_impl(PyObject *module, int check_id)
-/*[clinic end generated code: output=e4f14ba3ce2ad0a5 input=5518297b97b2318f]*/
+/*[clinic end generated code: output=f660c054923aaf2f input=5518297b97b2318f]*/
 {
-    return PyBool_FromLong(lzma_check_is_supported(check_id));
+    return PyValue_FromBool(lzma_check_is_supported(check_id));
 }
 
 PyDoc_STRVAR(_lzma__encode_filter_properties__doc__,
@@ -1494,10 +1536,10 @@ Return a bytes object encoding the options (properties) of the filter specified 
 The result does not include the filter ID itself, only the options.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _lzma__decode_filter_properties_impl(PyObject *module, lzma_vli filter_id,
                                      Py_buffer *encoded_props)
-/*[clinic end generated code: output=714fd2ef565d5c60 input=b9750bf909109bbe]*/
+/*[clinic end generated code: output=2882a5d249fa4876 input=b9750bf909109bbe]*/
 {
     lzma_filter filter;
     lzma_ret lzret;
@@ -1509,7 +1551,7 @@ _lzma__decode_filter_properties_impl(PyObject *module, lzma_vli filter_id,
     lzret = lzma_properties_decode(
             &filter, NULL, encoded_props->buf, encoded_props->len);
     if (catch_lzma_error(state, lzret)) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     result = build_filter_spec(&filter);
@@ -1517,7 +1559,7 @@ _lzma__decode_filter_properties_impl(PyObject *module, lzma_vli filter_id,
     /* We use vanilla free() here instead of PyMem_Free() - filter.options was
        allocated by lzma_properties_decode() using the default allocator. */
     free(filter.options);
-    return result;
+    return _PyValue_FromObjectResult(result);
 }
 
 
@@ -1560,7 +1602,7 @@ make_lzma_version_info(PyTypeObject *type, unsigned int number)
     }
 
 #define SetItem(VALUE) \
-    PyStructSequence_SET_ITEM(version, pos++, VALUE); \
+    PyStructSequence_SET_VALUE(version, pos++, PyValue_PrepareOwned(_PyObject_CAST(VALUE))); \
     if (PyErr_Occurred()) { \
         Py_DECREF(version); \
         return NULL; \

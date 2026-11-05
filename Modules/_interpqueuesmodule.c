@@ -5,8 +5,11 @@
 #  define Py_BUILD_CORE_MODULE 1
 #endif
 
+#define Py_VALUE_CORE 1
 #include "Python.h"
 #include "pycore_crossinterp.h"   // _PyXIData_t
+#include "pycore_value.h"         // PyValue_AsKnownObjectBorrow(), _PyValue_AsObjectAt()
+#include "pycore_value_slots.h"// _PyValue_FromObjectResult()
 
 #define REGISTERS_HEAP_TYPES
 #define HAS_FALLBACK
@@ -21,6 +24,11 @@
 #define MODULE_NAME_STR Py_STRINGIFY(MODULE_NAME)
 #define MODINIT_FUNC_NAME RESOLVE_MODINIT_FUNC_NAME(MODULE_NAME)
 
+
+/*[clinic input]
+value_emission
+[clinic start generated code]*/
+/*[clinic end generated code: output=da39a3ee5e6b4b0d input=eb7b17088bfd7215]*/
 
 /*[clinic input]
 module _interpqueues
@@ -1483,13 +1491,18 @@ class qidarg_converter(CConverter):
 /*[python end generated code: output=da39a3ee5e6b4b0d input=c64fbf36771164d6]*/
 
 static int
-qidarg_converter(PyObject *arg, void *ptr)
+qidarg_converter(PyValueBorrow arg, void *ptr)
 {
     int64_t *qid_ptr = ptr;
     struct idarg_int64_converter_data data = {
         .label = "queue ID",
     };
-    int res = idarg_int64_converter(arg, &data);
+    PyObject *obj = _PyValue_AsObjectAt(arg, BOX_SITE_PARSER);
+    if (obj == NULL) {
+        return 0;
+    }
+    int res = idarg_int64_converter(obj, &data);
+    Py_DECREF(obj);
     *qid_ptr = data.id;
     return res;
 }
@@ -1510,31 +1523,31 @@ The caller is responsible for calling destroy() for the new queue
 before the runtime is finalized.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _interpqueues_create_impl(PyObject *module, Py_ssize_t maxsize,
                           int unboundarg, int fallbackarg)
-/*[clinic end generated code: output=9a889b93773251eb input=4f79b710a87360e1]*/
+/*[clinic end generated code: output=f89f518b8850505f input=4f79b710a87360e1]*/
 {
     struct _queuedefaults defaults = {0};
     if (resolve_unboundop(unboundarg, UNBOUND_REPLACE,
                           &defaults.unboundop) < 0)
     {
-        return NULL;
+        return PyValue_NULL;
     }
     if (resolve_fallback(fallbackarg, _PyXIDATA_FULL_FALLBACK,
                          &defaults.fallback) < 0)
     {
-        return NULL;
+        return PyValue_NULL;
     }
 
     int64_t qid = queue_create(&_globals.queues, maxsize, defaults);
     if (qid < 0) {
         (void)handle_queue_error((int)qid, module, qid);
-        return NULL;
+        return PyValue_NULL;
     }
 
-    PyObject *qidobj = PyLong_FromLongLong(qid);
-    if (qidobj == NULL) {
+    PyValue qidobj = PyValue_FromInt64(qid);
+    if (PyValue_IsNull(qidobj)) {
         PyObject *exc = PyErr_GetRaisedException();
         int err = queue_destroy(&_globals.queues, qid);
         if (handle_queue_error(err, module, qid)) {
@@ -1542,7 +1555,7 @@ _interpqueues_create_impl(PyObject *module, Py_ssize_t maxsize,
             PyErr_Clear();
         }
         PyErr_SetRaisedException(exc);
-        return NULL;
+        return PyValue_NULL;
     }
 
     return qidobj;
@@ -1558,15 +1571,15 @@ Afterward attempts to use the queue will behave as though it never
 existed.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _interpqueues_destroy_impl(PyObject *module, int64_t qid)
-/*[clinic end generated code: output=46b35623f080cbff input=75136ad807e28677]*/
+/*[clinic end generated code: output=f788861258341488 input=75136ad807e28677]*/
 {
     int err = queue_destroy(&_globals.queues, qid);
     if (handle_queue_error(err, module, qid)) {
-        return NULL;
+        return PyValue_NULL;
     }
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 /*[clinic input]
@@ -1577,17 +1590,17 @@ Return the list of ID triples for all queues.
 Each ID triple consists of (ID, default unbound op, default fallback).
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _interpqueues_list_all_impl(PyObject *module)
-/*[clinic end generated code: output=974280cb6442afdb input=19495f02cbb38b33]*/
+/*[clinic end generated code: output=a113999ba1f289eb input=19495f02cbb38b33]*/
 {
     int64_t count = 0;
     struct queue_id_and_info *qids = _queues_list_all(&_globals.queues, &count);
     if (qids == NULL) {
         if (!PyErr_Occurred() && count == 0) {
-            return PyList_New(0);
+            return _PyValue_FromObjectResult(PyList_New(0));
         }
-        return NULL;
+        return PyValue_NULL;
     }
     PyObject *ids = PyList_New((Py_ssize_t)count);
     if (ids == NULL) {
@@ -1602,12 +1615,12 @@ _interpqueues_list_all_impl(PyObject *module)
             Py_SETREF(ids, NULL);
             break;
         }
-        PyList_SET_ITEM(ids, (Py_ssize_t)i, item);
+        PyList_SET_VALUE(ids, (Py_ssize_t)i, PyValue_PrepareOwned(item));
     }
 
 finally:
     PyMem_Free(qids);
-    return ids;
+    return _PyValue_FromObjectResult(ids);
 }
 
 /*[clinic input]
@@ -1620,35 +1633,40 @@ _interpqueues.put
 Add the object's data to the queue.
 [clinic start generated code]*/
 
-static PyObject *
-_interpqueues_put_impl(PyObject *module, int64_t qid, PyObject *obj,
+static PyValue
+_interpqueues_put_impl(PyObject *module, int64_t qid, PyValueBorrow obj,
                        int unboundarg, int fallbackarg)
-/*[clinic end generated code: output=2e0b31c6eaec29c9 input=4906550ab5c73be3]*/
+/*[clinic end generated code: output=a0277e36be75599d input=4906550ab5c73be3]*/
 {
     struct _queuedefaults defaults = {-1, -1};
     if (unboundarg < 0 || fallbackarg < 0) {
         int err = queue_get_defaults(&_globals.queues, qid, &defaults);
         if (handle_queue_error(err, module, qid)) {
-            return NULL;
+            return PyValue_NULL;
         }
     }
     unboundop_t unboundop;
     if (resolve_unboundop(unboundarg, defaults.unboundop, &unboundop) < 0) {
-        return NULL;
+        return PyValue_NULL;
     }
     xidata_fallback_t fallback;
     if (resolve_fallback(fallbackarg, defaults.fallback, &fallback) < 0) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     /* Queue up the object. */
-    int err = queue_put(&_globals.queues, qid, obj, unboundop, fallback);
+    PyObject *item = _PyValue_AsObjectAt(obj, BOX_SITE_PARSER);
+    if (item == NULL) {
+        return PyValue_NULL;
+    }
+    int err = queue_put(&_globals.queues, qid, item, unboundop, fallback);
+    Py_DECREF(item);
     // This is the only place that raises QueueFull.
     if (handle_queue_error(err, module, qid)) {
-        return NULL;
+        return PyValue_NULL;
     }
 
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 /*[clinic input]
@@ -1660,24 +1678,24 @@ Return the (object, unbound op) from the front of the queue.
 If there is nothing to receive then raise QueueEmpty.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _interpqueues_get_impl(PyObject *module, int64_t qid)
-/*[clinic end generated code: output=b0988a0e29194f05 input=c5bccbc409ad0190]*/
+/*[clinic end generated code: output=0c9bcde3df6ede97 input=c5bccbc409ad0190]*/
 {
     PyObject *obj = NULL;
     int unboundop = 0;
     int err = queue_get(&_globals.queues, qid, &obj, &unboundop);
     // This is the only place that raises QueueEmpty.
     if (handle_queue_error(err, module, qid)) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     if (obj == NULL) {
-        return Py_BuildValue("Oi", Py_None, unboundop);
+        return _PyValue_FromObjectResult(Py_BuildValue("Oi", Py_None, unboundop));
     }
     PyObject *res = Py_BuildValue("OO", obj, Py_None);
     Py_DECREF(obj);
-    return res;
+    return _PyValue_FromObjectResult(res);
 }
 
 /*[clinic input]
@@ -1689,20 +1707,20 @@ Take a reference to the identified queue.
 The queue is not destroyed until there are no references left.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _interpqueues_bind_impl(PyObject *module, int64_t qid)
-/*[clinic end generated code: output=02b515e203c3f926 input=b0efd1a6ce0e576e]*/
+/*[clinic end generated code: output=6290ca179e78353c input=b0efd1a6ce0e576e]*/
 {
     // XXX Check module state if bound already.
 
     int err = _queues_incref(&_globals.queues, qid);
     if (handle_queue_error(err, module, qid)) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     // XXX Update module state.
 
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 /*[clinic input]
@@ -1714,9 +1732,9 @@ Release a reference to the queue.
 The queue is destroyed once there are no references left.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _interpqueues_release_impl(PyObject *module, int64_t qid)
-/*[clinic end generated code: output=a59545d7c61fc6ee input=664125cf0262ff6f]*/
+/*[clinic end generated code: output=6430cf6020c2d784 input=664125cf0262ff6f]*/
 {
     // Note that only the current interpreter is affected.
 
@@ -1725,10 +1743,10 @@ _interpqueues_release_impl(PyObject *module, int64_t qid)
 
     int err = _queues_decref(&_globals.queues, qid);
     if (handle_queue_error(err, module, qid)) {
-        return NULL;
+        return PyValue_NULL;
     }
 
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 /*[clinic input]
@@ -1738,16 +1756,16 @@ _interpqueues.get_maxsize
 Return the maximum number of items in the queue.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _interpqueues_get_maxsize_impl(PyObject *module, int64_t qid)
-/*[clinic end generated code: output=074202b9c6dc37bf input=ef55def3496cc379]*/
+/*[clinic end generated code: output=8353a955ed1fe4c2 input=ef55def3496cc379]*/
 {
     Py_ssize_t maxsize = -1;
     int err = queue_get_maxsize(&_globals.queues, qid, &maxsize);
     if (handle_queue_error(err, module, qid)) {
-        return NULL;
+        return PyValue_NULL;
     }
-    return PyLong_FromLongLong(maxsize);
+    return PyValue_FromInt64(maxsize);
 }
 
 /*[clinic input]
@@ -1757,18 +1775,18 @@ _interpqueues.get_queue_defaults
 Return the queue's default values, set when it was created.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _interpqueues_get_queue_defaults_impl(PyObject *module, int64_t qid)
-/*[clinic end generated code: output=b1b8b8103834191a input=3102315a7bff77fc]*/
+/*[clinic end generated code: output=215f6d7b2a3a0324 input=3102315a7bff77fc]*/
 {
     struct _queuedefaults defaults = {0};
     int err = queue_get_defaults(&_globals.queues, qid, &defaults);
     if (handle_queue_error(err, module, qid)) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     PyObject *res = Py_BuildValue("ii", defaults.unboundop, defaults.fallback);
-    return res;
+    return _PyValue_FromObjectResult(res);
 }
 
 /*[clinic input]
@@ -1778,19 +1796,19 @@ _interpqueues.is_full
 Return true if the queue has a maxsize and has reached it.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _interpqueues_is_full_impl(PyObject *module, int64_t qid)
-/*[clinic end generated code: output=47a6e18477cddfee input=25d86a327ed3a2e7]*/
+/*[clinic end generated code: output=344ee85179395e62 input=25d86a327ed3a2e7]*/
 {
     int is_full = 0;
     int err = queue_is_full(&_globals.queues, qid, &is_full);
     if (handle_queue_error(err, module, qid)) {
-        return NULL;
+        return PyValue_NULL;
     }
     if (is_full) {
-        Py_RETURN_TRUE;
+        return PyValue_True;
     }
-    Py_RETURN_FALSE;
+    return PyValue_False;
 }
 
 /*[clinic input]
@@ -1800,17 +1818,17 @@ _interpqueues.get_count
 Return the number of items in the queue.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _interpqueues_get_count_impl(PyObject *module, int64_t qid)
-/*[clinic end generated code: output=fb9e66e829cdd964 input=ce47690e7598884b]*/
+/*[clinic end generated code: output=b73b715c8189394b input=ce47690e7598884b]*/
 {
     Py_ssize_t count = -1;
     int err = queue_get_count(&_globals.queues, qid, &count);
     if (handle_queue_error(err, module, qid)) {
-        return NULL;
+        return PyValue_NULL;
     }
     assert(count >= 0);
-    return PyLong_FromSsize_t(count);
+    return PyValue_FromInt64(count);
 }
 
 /*[clinic input]
@@ -1822,34 +1840,35 @@ _interpqueues._register_heap_types
 Return the number of items in the queue.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _interpqueues__register_heap_types_impl(PyObject *module,
                                         PyTypeObject *queuetype,
-                                        PyObject *emptyerror,
-                                        PyObject *fullerror)
-/*[clinic end generated code: output=f33f6e8b5af905cd input=57d24ae405eda521]*/
+                                        PyValueBorrow emptyerror,
+                                        PyValueBorrow fullerror)
+/*[clinic end generated code: output=8d65595a2fef1626 input=57d24ae405eda521]*/
 {
-    if (!PyExceptionClass_Check(emptyerror)) {
+    if (!(PyValue_IsObject(emptyerror) && PyExceptionClass_Check(PyValue_AsKnownObjectBorrow(emptyerror)))) {
         PyErr_SetString(PyExc_TypeError,
                         "expected an exception type for 'emptyerror'");
-        return NULL;
+        return PyValue_NULL;
     }
-    if (!PyExceptionClass_Check(fullerror)) {
+    if (!(PyValue_IsObject(fullerror) && PyExceptionClass_Check(PyValue_AsKnownObjectBorrow(fullerror)))) {
         PyErr_SetString(PyExc_TypeError,
                         "expected an exception type for 'fullerror'");
-        return NULL;
+        return PyValue_NULL;
     }
 
     module_state *state = get_module_state(module);
 
     if (set_external_queue_type(state, queuetype) < 0) {
-        return NULL;
+        return PyValue_NULL;
     }
-    if (set_external_exc_types(state, emptyerror, fullerror) < 0) {
-        return NULL;
+    if (set_external_exc_types(state, PyValue_AsKnownObjectBorrow(emptyerror),
+                               PyValue_AsKnownObjectBorrow(fullerror)) < 0) {
+        return PyValue_NULL;
     }
 
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 static PyMethodDef module_functions[] = {

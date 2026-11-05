@@ -2,14 +2,20 @@
 preserve
 [clinic start generated code]*/
 
+#ifndef Py_VALUE_CORE
+#  error "value-emission Clinic output requires Py_VALUE_CORE"
+#endif
+
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 #  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
 #  include "pycore_value.h"       // _PyValue_STATIC_IMMORTAL()
 #endif
-#include "pycore_long.h"          // _PyLong_UnsignedLongLong_Converter()
-#include "pycore_modsupport.h"    // _PyArg_CheckPositional()
+#include "pycore_long_value.h"    // _PyValue_AsInt()
+#include "pycore_modsupport.h"    // _PyArg_NoKwnames()
 #include "pycore_unicodeobject.h" // _PyUnicode_AsUTF8NoNUL()
+#include "pycore_value_call.h"    // METH_VALUE
+#include "pycore_value_ops.h"     // _PyValue_IsTrue()
 
 PyDoc_STRVAR(pyexpat_xmlparser_SetReparseDeferralEnabled__doc__,
 "SetReparseDeferralEnabled($self, enabled, /)\n"
@@ -18,23 +24,23 @@ PyDoc_STRVAR(pyexpat_xmlparser_SetReparseDeferralEnabled__doc__,
 "Enable/Disable reparse deferral; enabled by default with Expat >=2.6.0.");
 
 #define PYEXPAT_XMLPARSER_SETREPARSEDEFERRALENABLED_METHODDEF    \
-    {"SetReparseDeferralEnabled", (PyCFunction)pyexpat_xmlparser_SetReparseDeferralEnabled, METH_O, pyexpat_xmlparser_SetReparseDeferralEnabled__doc__},
+    {"SetReparseDeferralEnabled", _PyCFunction_CAST(pyexpat_xmlparser_SetReparseDeferralEnabled), METH_VALUE|METH_O, pyexpat_xmlparser_SetReparseDeferralEnabled__doc__},
 
-static PyObject *
+static PyValue
 pyexpat_xmlparser_SetReparseDeferralEnabled_impl(xmlparseobject *self,
                                                  int enabled);
 
-static PyObject *
-pyexpat_xmlparser_SetReparseDeferralEnabled(PyObject *self, PyObject *arg)
+static PyValue
+pyexpat_xmlparser_SetReparseDeferralEnabled(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int enabled;
 
-    enabled = PyObject_IsTrue(arg);
+    enabled = _PyValue_IsTrue(PyValue_Borrow(args[0]));
     if (enabled < 0) {
         goto exit;
     }
-    return_value = pyexpat_xmlparser_SetReparseDeferralEnabled_impl((xmlparseobject *)self, enabled);
+    return_value = pyexpat_xmlparser_SetReparseDeferralEnabled_impl((xmlparseobject *)PyValue_AsKnownObjectBorrow(self), enabled);
 
 exit:
     return return_value;
@@ -47,15 +53,19 @@ PyDoc_STRVAR(pyexpat_xmlparser_GetReparseDeferralEnabled__doc__,
 "Retrieve reparse deferral enabled status; always returns false with Expat <2.6.0.");
 
 #define PYEXPAT_XMLPARSER_GETREPARSEDEFERRALENABLED_METHODDEF    \
-    {"GetReparseDeferralEnabled", (PyCFunction)pyexpat_xmlparser_GetReparseDeferralEnabled, METH_NOARGS, pyexpat_xmlparser_GetReparseDeferralEnabled__doc__},
+    {"GetReparseDeferralEnabled", _PyCFunction_CAST(pyexpat_xmlparser_GetReparseDeferralEnabled), METH_VALUE|METH_NOARGS, pyexpat_xmlparser_GetReparseDeferralEnabled__doc__},
 
-static PyObject *
+static PyValue
 pyexpat_xmlparser_GetReparseDeferralEnabled_impl(xmlparseobject *self);
 
-static PyObject *
-pyexpat_xmlparser_GetReparseDeferralEnabled(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+pyexpat_xmlparser_GetReparseDeferralEnabled(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return pyexpat_xmlparser_GetReparseDeferralEnabled_impl((xmlparseobject *)self);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = pyexpat_xmlparser_GetReparseDeferralEnabled_impl((xmlparseobject *)PyValue_AsKnownObjectBorrow(self));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(pyexpat_xmlparser_Parse__doc__,
@@ -69,17 +79,17 @@ PyDoc_STRVAR(pyexpat_xmlparser_Parse__doc__,
 "\'isfinal\' should be true at end of input.");
 
 #define PYEXPAT_XMLPARSER_PARSE_METHODDEF    \
-    {"Parse", _PyCFunction_CAST(pyexpat_xmlparser_Parse), METH_METHOD|METH_FASTCALL|METH_KEYWORDS, pyexpat_xmlparser_Parse__doc__},
+    {"Parse", _PyCFunction_CAST(pyexpat_xmlparser_Parse), METH_VALUE|METH_METHOD|METH_KEYWORDS, pyexpat_xmlparser_Parse__doc__},
 
-static PyObject *
+static PyValue
 pyexpat_xmlparser_Parse_impl(xmlparseobject *self, PyTypeObject *cls,
-                             PyObject *data, int isfinal);
+                             PyValueBorrow data, int isfinal);
 
-static PyObject *
-pyexpat_xmlparser_Parse(PyObject *self, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+pyexpat_xmlparser_Parse(PyValueBorrow self, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
-    PyObject *data;
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow data;
     int isfinal = 0;
 
     if (!_PyArg_NoKwnames("Parse", kwnames)) {
@@ -88,16 +98,16 @@ pyexpat_xmlparser_Parse(PyObject *self, PyTypeObject *cls, PyObject *const *args
     if (!_PyArg_CheckPositional("Parse", nargs, 1, 2)) {
         goto exit;
     }
-    data = args[0];
+    data = PyValue_Borrow(args[0]);
     if (nargs < 2) {
         goto skip_optional;
     }
-    isfinal = PyObject_IsTrue(args[1]);
+    isfinal = _PyValue_IsTrue(PyValue_Borrow(args[1]));
     if (isfinal < 0) {
         goto exit;
     }
 skip_optional:
-    return_value = pyexpat_xmlparser_Parse_impl((xmlparseobject *)self, cls, data, isfinal);
+    return_value = pyexpat_xmlparser_Parse_impl((xmlparseobject *)PyValue_AsKnownObjectBorrow(self), cls, data, isfinal);
 
 exit:
     return return_value;
@@ -112,17 +122,17 @@ PyDoc_STRVAR(pyexpat_xmlparser_ParseFile__doc__,
 "Its read() method should return bytes.");
 
 #define PYEXPAT_XMLPARSER_PARSEFILE_METHODDEF    \
-    {"ParseFile", _PyCFunction_CAST(pyexpat_xmlparser_ParseFile), METH_METHOD|METH_FASTCALL|METH_KEYWORDS, pyexpat_xmlparser_ParseFile__doc__},
+    {"ParseFile", _PyCFunction_CAST(pyexpat_xmlparser_ParseFile), METH_VALUE|METH_METHOD|METH_KEYWORDS, pyexpat_xmlparser_ParseFile__doc__},
 
-static PyObject *
+static PyValue
 pyexpat_xmlparser_ParseFile_impl(xmlparseobject *self, PyTypeObject *cls,
-                                 PyObject *file);
+                                 PyValueBorrow file);
 
-static PyObject *
-pyexpat_xmlparser_ParseFile(PyObject *self, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+pyexpat_xmlparser_ParseFile(PyValueBorrow self, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
-    PyObject *file;
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow file;
 
     if (!_PyArg_NoKwnames("ParseFile", kwnames)) {
         goto exit;
@@ -130,8 +140,8 @@ pyexpat_xmlparser_ParseFile(PyObject *self, PyTypeObject *cls, PyObject *const *
     if (!_PyArg_CheckPositional("ParseFile", nargs, 1, 1)) {
         goto exit;
     }
-    file = args[0];
-    return_value = pyexpat_xmlparser_ParseFile_impl((xmlparseobject *)self, cls, file);
+    file = PyValue_Borrow(args[0]);
+    return_value = pyexpat_xmlparser_ParseFile_impl((xmlparseobject *)PyValue_AsKnownObjectBorrow(self), cls, file);
 
 exit:
     return return_value;
@@ -144,26 +154,30 @@ PyDoc_STRVAR(pyexpat_xmlparser_SetBase__doc__,
 "Set the base URL for the parser.");
 
 #define PYEXPAT_XMLPARSER_SETBASE_METHODDEF    \
-    {"SetBase", (PyCFunction)pyexpat_xmlparser_SetBase, METH_O, pyexpat_xmlparser_SetBase__doc__},
+    {"SetBase", _PyCFunction_CAST(pyexpat_xmlparser_SetBase), METH_VALUE|METH_O, pyexpat_xmlparser_SetBase__doc__},
 
-static PyObject *
+static PyValue
 pyexpat_xmlparser_SetBase_impl(xmlparseobject *self, const char *base);
 
-static PyObject *
-pyexpat_xmlparser_SetBase(PyObject *self, PyObject *arg)
+static PyValue
+pyexpat_xmlparser_SetBase(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     const char *base;
 
-    if (!PyUnicode_Check(arg)) {
-        _PyArg_BadArgument("SetBase", "argument", "str", arg);
+    if (!PyValue_IsObject(PyValue_Borrow(args[0]))) {
+        _PyArg_BadArgumentValue("SetBase", "argument", "str", PyValue_Borrow(args[0]));
         goto exit;
     }
-    base = _PyUnicode_AsUTF8NoNUL(arg);
+    if (!PyUnicode_Check(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])))) {
+        _PyArg_BadArgument("SetBase", "argument", "str", PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])));
+        goto exit;
+    }
+    base = _PyUnicode_AsUTF8NoNUL(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])));
     if (base == NULL) {
         goto exit;
     }
-    return_value = pyexpat_xmlparser_SetBase_impl((xmlparseobject *)self, base);
+    return_value = pyexpat_xmlparser_SetBase_impl((xmlparseobject *)PyValue_AsKnownObjectBorrow(self), base);
 
 exit:
     return return_value;
@@ -176,15 +190,19 @@ PyDoc_STRVAR(pyexpat_xmlparser_GetBase__doc__,
 "Return base URL string for the parser.");
 
 #define PYEXPAT_XMLPARSER_GETBASE_METHODDEF    \
-    {"GetBase", (PyCFunction)pyexpat_xmlparser_GetBase, METH_NOARGS, pyexpat_xmlparser_GetBase__doc__},
+    {"GetBase", _PyCFunction_CAST(pyexpat_xmlparser_GetBase), METH_VALUE|METH_NOARGS, pyexpat_xmlparser_GetBase__doc__},
 
-static PyObject *
+static PyValue
 pyexpat_xmlparser_GetBase_impl(xmlparseobject *self);
 
-static PyObject *
-pyexpat_xmlparser_GetBase(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+pyexpat_xmlparser_GetBase(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return pyexpat_xmlparser_GetBase_impl((xmlparseobject *)self);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = pyexpat_xmlparser_GetBase_impl((xmlparseobject *)PyValue_AsKnownObjectBorrow(self));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(pyexpat_xmlparser_GetSpecifiedAttributeCount__doc__,
@@ -201,15 +219,19 @@ PyDoc_STRVAR(pyexpat_xmlparser_GetSpecifiedAttributeCount__doc__,
 "ordered_attributes is true.");
 
 #define PYEXPAT_XMLPARSER_GETSPECIFIEDATTRIBUTECOUNT_METHODDEF    \
-    {"GetSpecifiedAttributeCount", (PyCFunction)pyexpat_xmlparser_GetSpecifiedAttributeCount, METH_NOARGS, pyexpat_xmlparser_GetSpecifiedAttributeCount__doc__},
+    {"GetSpecifiedAttributeCount", _PyCFunction_CAST(pyexpat_xmlparser_GetSpecifiedAttributeCount), METH_VALUE|METH_NOARGS, pyexpat_xmlparser_GetSpecifiedAttributeCount__doc__},
 
-static PyObject *
+static PyValue
 pyexpat_xmlparser_GetSpecifiedAttributeCount_impl(xmlparseobject *self);
 
-static PyObject *
-pyexpat_xmlparser_GetSpecifiedAttributeCount(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+pyexpat_xmlparser_GetSpecifiedAttributeCount(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return pyexpat_xmlparser_GetSpecifiedAttributeCount_impl((xmlparseobject *)self);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = pyexpat_xmlparser_GetSpecifiedAttributeCount_impl((xmlparseobject *)PyValue_AsKnownObjectBorrow(self));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(pyexpat_xmlparser_GetInputContext__doc__,
@@ -225,15 +247,19 @@ PyDoc_STRVAR(pyexpat_xmlparser_GetInputContext__doc__,
 "available.");
 
 #define PYEXPAT_XMLPARSER_GETINPUTCONTEXT_METHODDEF    \
-    {"GetInputContext", (PyCFunction)pyexpat_xmlparser_GetInputContext, METH_NOARGS, pyexpat_xmlparser_GetInputContext__doc__},
+    {"GetInputContext", _PyCFunction_CAST(pyexpat_xmlparser_GetInputContext), METH_VALUE|METH_NOARGS, pyexpat_xmlparser_GetInputContext__doc__},
 
-static PyObject *
+static PyValue
 pyexpat_xmlparser_GetInputContext_impl(xmlparseobject *self);
 
-static PyObject *
-pyexpat_xmlparser_GetInputContext(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+pyexpat_xmlparser_GetInputContext(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return pyexpat_xmlparser_GetInputContext_impl((xmlparseobject *)self);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = pyexpat_xmlparser_GetInputContext_impl((xmlparseobject *)PyValue_AsKnownObjectBorrow(self));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(pyexpat_xmlparser_ExternalEntityParserCreate__doc__,
@@ -244,18 +270,18 @@ PyDoc_STRVAR(pyexpat_xmlparser_ExternalEntityParserCreate__doc__,
 "Create a parser for parsing an external entity based on the information passed to the ExternalEntityRefHandler.");
 
 #define PYEXPAT_XMLPARSER_EXTERNALENTITYPARSERCREATE_METHODDEF    \
-    {"ExternalEntityParserCreate", _PyCFunction_CAST(pyexpat_xmlparser_ExternalEntityParserCreate), METH_METHOD|METH_FASTCALL|METH_KEYWORDS, pyexpat_xmlparser_ExternalEntityParserCreate__doc__},
+    {"ExternalEntityParserCreate", _PyCFunction_CAST(pyexpat_xmlparser_ExternalEntityParserCreate), METH_VALUE|METH_METHOD|METH_KEYWORDS, pyexpat_xmlparser_ExternalEntityParserCreate__doc__},
 
-static PyObject *
+static PyValue
 pyexpat_xmlparser_ExternalEntityParserCreate_impl(xmlparseobject *self,
                                                   PyTypeObject *cls,
                                                   const char *context,
                                                   const char *encoding);
 
-static PyObject *
-pyexpat_xmlparser_ExternalEntityParserCreate(PyObject *self, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+pyexpat_xmlparser_ExternalEntityParserCreate(PyValueBorrow self, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     const char *context;
     const char *encoding = NULL;
 
@@ -265,32 +291,40 @@ pyexpat_xmlparser_ExternalEntityParserCreate(PyObject *self, PyTypeObject *cls, 
     if (!_PyArg_CheckPositional("ExternalEntityParserCreate", nargs, 1, 2)) {
         goto exit;
     }
-    if (args[0] == Py_None) {
+    if (!PyValue_IsObject(PyValue_Borrow(args[0]))) {
+        _PyArg_BadArgumentValue("ExternalEntityParserCreate", "argument 1", "str or None", PyValue_Borrow(args[0]));
+        goto exit;
+    }
+    if (PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])) == Py_None) {
         context = NULL;
     }
-    else if (PyUnicode_Check(args[0])) {
-        context = _PyUnicode_AsUTF8NoNUL(args[0]);
+    else if (PyUnicode_Check(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])))) {
+        context = _PyUnicode_AsUTF8NoNUL(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])));
         if (context == NULL) {
             goto exit;
         }
     }
     else {
-        _PyArg_BadArgument("ExternalEntityParserCreate", "argument 1", "str or None", args[0]);
+        _PyArg_BadArgument("ExternalEntityParserCreate", "argument 1", "str or None", PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])));
         goto exit;
     }
     if (nargs < 2) {
         goto skip_optional;
     }
-    if (!PyUnicode_Check(args[1])) {
-        _PyArg_BadArgument("ExternalEntityParserCreate", "argument 2", "str", args[1]);
+    if (!PyValue_IsObject(PyValue_Borrow(args[1]))) {
+        _PyArg_BadArgumentValue("ExternalEntityParserCreate", "argument 2", "str", PyValue_Borrow(args[1]));
         goto exit;
     }
-    encoding = _PyUnicode_AsUTF8NoNUL(args[1]);
+    if (!PyUnicode_Check(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[1])))) {
+        _PyArg_BadArgument("ExternalEntityParserCreate", "argument 2", "str", PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[1])));
+        goto exit;
+    }
+    encoding = _PyUnicode_AsUTF8NoNUL(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[1])));
     if (encoding == NULL) {
         goto exit;
     }
 skip_optional:
-    return_value = pyexpat_xmlparser_ExternalEntityParserCreate_impl((xmlparseobject *)self, cls, context, encoding);
+    return_value = pyexpat_xmlparser_ExternalEntityParserCreate_impl((xmlparseobject *)PyValue_AsKnownObjectBorrow(self), cls, context, encoding);
 
 exit:
     return return_value;
@@ -308,22 +342,22 @@ PyDoc_STRVAR(pyexpat_xmlparser_SetParamEntityParsing__doc__,
 "was successful.");
 
 #define PYEXPAT_XMLPARSER_SETPARAMENTITYPARSING_METHODDEF    \
-    {"SetParamEntityParsing", (PyCFunction)pyexpat_xmlparser_SetParamEntityParsing, METH_O, pyexpat_xmlparser_SetParamEntityParsing__doc__},
+    {"SetParamEntityParsing", _PyCFunction_CAST(pyexpat_xmlparser_SetParamEntityParsing), METH_VALUE|METH_O, pyexpat_xmlparser_SetParamEntityParsing__doc__},
 
-static PyObject *
+static PyValue
 pyexpat_xmlparser_SetParamEntityParsing_impl(xmlparseobject *self, int flag);
 
-static PyObject *
-pyexpat_xmlparser_SetParamEntityParsing(PyObject *self, PyObject *arg)
+static PyValue
+pyexpat_xmlparser_SetParamEntityParsing(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int flag;
 
-    flag = PyLong_AsInt(arg);
+    flag = _PyValue_AsInt(PyValue_Borrow(args[0]));
     if (flag == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = pyexpat_xmlparser_SetParamEntityParsing_impl((xmlparseobject *)self, flag);
+    return_value = pyexpat_xmlparser_SetParamEntityParsing_impl((xmlparseobject *)PyValue_AsKnownObjectBorrow(self), flag);
 
 exit:
     return return_value;
@@ -343,16 +377,16 @@ PyDoc_STRVAR(pyexpat_xmlparser_UseForeignDTD__doc__,
 "not provided.");
 
 #define PYEXPAT_XMLPARSER_USEFOREIGNDTD_METHODDEF    \
-    {"UseForeignDTD", _PyCFunction_CAST(pyexpat_xmlparser_UseForeignDTD), METH_METHOD|METH_FASTCALL|METH_KEYWORDS, pyexpat_xmlparser_UseForeignDTD__doc__},
+    {"UseForeignDTD", _PyCFunction_CAST(pyexpat_xmlparser_UseForeignDTD), METH_VALUE|METH_METHOD|METH_KEYWORDS, pyexpat_xmlparser_UseForeignDTD__doc__},
 
-static PyObject *
+static PyValue
 pyexpat_xmlparser_UseForeignDTD_impl(xmlparseobject *self, PyTypeObject *cls,
                                      int flag);
 
-static PyObject *
-pyexpat_xmlparser_UseForeignDTD(PyObject *self, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+pyexpat_xmlparser_UseForeignDTD(PyValueBorrow self, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int flag = 1;
 
     if (!_PyArg_NoKwnames("UseForeignDTD", kwnames)) {
@@ -364,12 +398,12 @@ pyexpat_xmlparser_UseForeignDTD(PyObject *self, PyTypeObject *cls, PyObject *con
     if (nargs < 1) {
         goto skip_optional;
     }
-    flag = PyObject_IsTrue(args[0]);
+    flag = _PyValue_IsTrue(PyValue_Borrow(args[0]));
     if (flag < 0) {
         goto exit;
     }
 skip_optional:
-    return_value = pyexpat_xmlparser_UseForeignDTD_impl((xmlparseobject *)self, cls, flag);
+    return_value = pyexpat_xmlparser_UseForeignDTD_impl((xmlparseobject *)PyValue_AsKnownObjectBorrow(self), cls, flag);
 
 exit:
     return return_value;
@@ -396,17 +430,17 @@ PyDoc_STRVAR(pyexpat_xmlparser_SetBillionLaughsAttackProtectionActivationThresho
 "DITA 1.3 payload and are hence not recommended.");
 
 #define PYEXPAT_XMLPARSER_SETBILLIONLAUGHSATTACKPROTECTIONACTIVATIONTHRESHOLD_METHODDEF    \
-    {"SetBillionLaughsAttackProtectionActivationThreshold", _PyCFunction_CAST(pyexpat_xmlparser_SetBillionLaughsAttackProtectionActivationThreshold), METH_METHOD|METH_FASTCALL|METH_KEYWORDS, pyexpat_xmlparser_SetBillionLaughsAttackProtectionActivationThreshold__doc__},
+    {"SetBillionLaughsAttackProtectionActivationThreshold", _PyCFunction_CAST(pyexpat_xmlparser_SetBillionLaughsAttackProtectionActivationThreshold), METH_VALUE|METH_METHOD|METH_KEYWORDS, pyexpat_xmlparser_SetBillionLaughsAttackProtectionActivationThreshold__doc__},
 
-static PyObject *
+static PyValue
 pyexpat_xmlparser_SetBillionLaughsAttackProtectionActivationThreshold_impl(xmlparseobject *self,
                                                                            PyTypeObject *cls,
                                                                            unsigned long long threshold);
 
-static PyObject *
-pyexpat_xmlparser_SetBillionLaughsAttackProtectionActivationThreshold(PyObject *self, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+pyexpat_xmlparser_SetBillionLaughsAttackProtectionActivationThreshold(PyValueBorrow self, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     unsigned long long threshold;
 
     if (!_PyArg_NoKwnames("SetBillionLaughsAttackProtectionActivationThreshold", kwnames)) {
@@ -415,10 +449,22 @@ pyexpat_xmlparser_SetBillionLaughsAttackProtectionActivationThreshold(PyObject *
     if (!_PyArg_CheckPositional("SetBillionLaughsAttackProtectionActivationThreshold", nargs, 1, 1)) {
         goto exit;
     }
-    if (!_PyLong_UnsignedLongLong_Converter(args[0], &threshold)) {
-        goto exit;
+    {
+        Py_ssize_t _bytes = _PyValue_AsNativeBytes(PyValue_Borrow(args[0]), &threshold, sizeof(unsigned long long),
+                Py_ASNATIVEBYTES_NATIVE_ENDIAN |
+                Py_ASNATIVEBYTES_ALLOW_INDEX |
+                Py_ASNATIVEBYTES_REJECT_NEGATIVE |
+                Py_ASNATIVEBYTES_UNSIGNED_BUFFER);
+        if (_bytes < 0) {
+            goto exit;
+        }
+        if ((size_t)_bytes > sizeof(unsigned long long)) {
+            PyErr_SetString(PyExc_OverflowError,
+                        "Python int too large for C unsigned long long");
+            goto exit;
+        }
     }
-    return_value = pyexpat_xmlparser_SetBillionLaughsAttackProtectionActivationThreshold_impl((xmlparseobject *)self, cls, threshold);
+    return_value = pyexpat_xmlparser_SetBillionLaughsAttackProtectionActivationThreshold_impl((xmlparseobject *)PyValue_AsKnownObjectBorrow(self), cls, threshold);
 
 exit:
     return return_value;
@@ -452,17 +498,17 @@ PyDoc_STRVAR(pyexpat_xmlparser_SetBillionLaughsAttackProtectionMaximumAmplificat
 "library.");
 
 #define PYEXPAT_XMLPARSER_SETBILLIONLAUGHSATTACKPROTECTIONMAXIMUMAMPLIFICATION_METHODDEF    \
-    {"SetBillionLaughsAttackProtectionMaximumAmplification", _PyCFunction_CAST(pyexpat_xmlparser_SetBillionLaughsAttackProtectionMaximumAmplification), METH_METHOD|METH_FASTCALL|METH_KEYWORDS, pyexpat_xmlparser_SetBillionLaughsAttackProtectionMaximumAmplification__doc__},
+    {"SetBillionLaughsAttackProtectionMaximumAmplification", _PyCFunction_CAST(pyexpat_xmlparser_SetBillionLaughsAttackProtectionMaximumAmplification), METH_VALUE|METH_METHOD|METH_KEYWORDS, pyexpat_xmlparser_SetBillionLaughsAttackProtectionMaximumAmplification__doc__},
 
-static PyObject *
+static PyValue
 pyexpat_xmlparser_SetBillionLaughsAttackProtectionMaximumAmplification_impl(xmlparseobject *self,
                                                                             PyTypeObject *cls,
                                                                             float max_factor);
 
-static PyObject *
-pyexpat_xmlparser_SetBillionLaughsAttackProtectionMaximumAmplification(PyObject *self, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+pyexpat_xmlparser_SetBillionLaughsAttackProtectionMaximumAmplification(PyValueBorrow self, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     float max_factor;
 
     if (!_PyArg_NoKwnames("SetBillionLaughsAttackProtectionMaximumAmplification", kwnames)) {
@@ -471,17 +517,11 @@ pyexpat_xmlparser_SetBillionLaughsAttackProtectionMaximumAmplification(PyObject 
     if (!_PyArg_CheckPositional("SetBillionLaughsAttackProtectionMaximumAmplification", nargs, 1, 1)) {
         goto exit;
     }
-    if (PyFloat_CheckExact(args[0])) {
-        max_factor = (float) (PyFloat_AS_DOUBLE(args[0]));
+    max_factor = (float) _PyValue_AsDouble(PyValue_Borrow(args[0]));
+    if (max_factor == -1.0 && PyErr_Occurred()) {
+        goto exit;
     }
-    else
-    {
-        max_factor = (float) PyFloat_AsDouble(args[0]);
-        if (max_factor == -1.0 && PyErr_Occurred()) {
-            goto exit;
-        }
-    }
-    return_value = pyexpat_xmlparser_SetBillionLaughsAttackProtectionMaximumAmplification_impl((xmlparseobject *)self, cls, max_factor);
+    return_value = pyexpat_xmlparser_SetBillionLaughsAttackProtectionMaximumAmplification_impl((xmlparseobject *)PyValue_AsKnownObjectBorrow(self), cls, max_factor);
 
 exit:
     return return_value;
@@ -502,17 +542,17 @@ PyDoc_STRVAR(pyexpat_xmlparser_SetAllocTrackerActivationThreshold__doc__,
 "library.");
 
 #define PYEXPAT_XMLPARSER_SETALLOCTRACKERACTIVATIONTHRESHOLD_METHODDEF    \
-    {"SetAllocTrackerActivationThreshold", _PyCFunction_CAST(pyexpat_xmlparser_SetAllocTrackerActivationThreshold), METH_METHOD|METH_FASTCALL|METH_KEYWORDS, pyexpat_xmlparser_SetAllocTrackerActivationThreshold__doc__},
+    {"SetAllocTrackerActivationThreshold", _PyCFunction_CAST(pyexpat_xmlparser_SetAllocTrackerActivationThreshold), METH_VALUE|METH_METHOD|METH_KEYWORDS, pyexpat_xmlparser_SetAllocTrackerActivationThreshold__doc__},
 
-static PyObject *
+static PyValue
 pyexpat_xmlparser_SetAllocTrackerActivationThreshold_impl(xmlparseobject *self,
                                                           PyTypeObject *cls,
                                                           unsigned long long threshold);
 
-static PyObject *
-pyexpat_xmlparser_SetAllocTrackerActivationThreshold(PyObject *self, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+pyexpat_xmlparser_SetAllocTrackerActivationThreshold(PyValueBorrow self, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     unsigned long long threshold;
 
     if (!_PyArg_NoKwnames("SetAllocTrackerActivationThreshold", kwnames)) {
@@ -521,10 +561,22 @@ pyexpat_xmlparser_SetAllocTrackerActivationThreshold(PyObject *self, PyTypeObjec
     if (!_PyArg_CheckPositional("SetAllocTrackerActivationThreshold", nargs, 1, 1)) {
         goto exit;
     }
-    if (!_PyLong_UnsignedLongLong_Converter(args[0], &threshold)) {
-        goto exit;
+    {
+        Py_ssize_t _bytes = _PyValue_AsNativeBytes(PyValue_Borrow(args[0]), &threshold, sizeof(unsigned long long),
+                Py_ASNATIVEBYTES_NATIVE_ENDIAN |
+                Py_ASNATIVEBYTES_ALLOW_INDEX |
+                Py_ASNATIVEBYTES_REJECT_NEGATIVE |
+                Py_ASNATIVEBYTES_UNSIGNED_BUFFER);
+        if (_bytes < 0) {
+            goto exit;
+        }
+        if ((size_t)_bytes > sizeof(unsigned long long)) {
+            PyErr_SetString(PyExc_OverflowError,
+                        "Python int too large for C unsigned long long");
+            goto exit;
+        }
     }
-    return_value = pyexpat_xmlparser_SetAllocTrackerActivationThreshold_impl((xmlparseobject *)self, cls, threshold);
+    return_value = pyexpat_xmlparser_SetAllocTrackerActivationThreshold_impl((xmlparseobject *)PyValue_AsKnownObjectBorrow(self), cls, threshold);
 
 exit:
     return return_value;
@@ -556,17 +608,17 @@ PyDoc_STRVAR(pyexpat_xmlparser_SetAllocTrackerMaximumAmplification__doc__,
 "library.");
 
 #define PYEXPAT_XMLPARSER_SETALLOCTRACKERMAXIMUMAMPLIFICATION_METHODDEF    \
-    {"SetAllocTrackerMaximumAmplification", _PyCFunction_CAST(pyexpat_xmlparser_SetAllocTrackerMaximumAmplification), METH_METHOD|METH_FASTCALL|METH_KEYWORDS, pyexpat_xmlparser_SetAllocTrackerMaximumAmplification__doc__},
+    {"SetAllocTrackerMaximumAmplification", _PyCFunction_CAST(pyexpat_xmlparser_SetAllocTrackerMaximumAmplification), METH_VALUE|METH_METHOD|METH_KEYWORDS, pyexpat_xmlparser_SetAllocTrackerMaximumAmplification__doc__},
 
-static PyObject *
+static PyValue
 pyexpat_xmlparser_SetAllocTrackerMaximumAmplification_impl(xmlparseobject *self,
                                                            PyTypeObject *cls,
                                                            float max_factor);
 
-static PyObject *
-pyexpat_xmlparser_SetAllocTrackerMaximumAmplification(PyObject *self, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+pyexpat_xmlparser_SetAllocTrackerMaximumAmplification(PyValueBorrow self, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     float max_factor;
 
     if (!_PyArg_NoKwnames("SetAllocTrackerMaximumAmplification", kwnames)) {
@@ -575,17 +627,11 @@ pyexpat_xmlparser_SetAllocTrackerMaximumAmplification(PyObject *self, PyTypeObje
     if (!_PyArg_CheckPositional("SetAllocTrackerMaximumAmplification", nargs, 1, 1)) {
         goto exit;
     }
-    if (PyFloat_CheckExact(args[0])) {
-        max_factor = (float) (PyFloat_AS_DOUBLE(args[0]));
+    max_factor = (float) _PyValue_AsDouble(PyValue_Borrow(args[0]));
+    if (max_factor == -1.0 && PyErr_Occurred()) {
+        goto exit;
     }
-    else
-    {
-        max_factor = (float) PyFloat_AsDouble(args[0]);
-        if (max_factor == -1.0 && PyErr_Occurred()) {
-            goto exit;
-        }
-    }
-    return_value = pyexpat_xmlparser_SetAllocTrackerMaximumAmplification_impl((xmlparseobject *)self, cls, max_factor);
+    return_value = pyexpat_xmlparser_SetAllocTrackerMaximumAmplification_impl((xmlparseobject *)PyValue_AsKnownObjectBorrow(self), cls, max_factor);
 
 exit:
     return return_value;
@@ -601,16 +647,17 @@ PyDoc_STRVAR(pyexpat_ParserCreate__doc__,
 "Return a new XML parser object.");
 
 #define PYEXPAT_PARSERCREATE_METHODDEF    \
-    {"ParserCreate", _PyCFunction_CAST(pyexpat_ParserCreate), METH_FASTCALL|METH_KEYWORDS, pyexpat_ParserCreate__doc__},
+    {"ParserCreate", _PyCFunction_CAST(pyexpat_ParserCreate), METH_VALUE|METH_KEYWORDS, pyexpat_ParserCreate__doc__},
 
-static PyObject *
+static PyValue
 pyexpat_ParserCreate_impl(PyObject *module, const char *encoding,
-                          const char *namespace_separator, PyObject *intern);
+                          const char *namespace_separator,
+                          PyValueBorrow intern);
 
-static PyObject *
-pyexpat_ParserCreate(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+pyexpat_ParserCreate(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 3
@@ -638,59 +685,57 @@ pyexpat_ParserCreate(PyObject *module, PyObject *const *args, Py_ssize_t nargs, 
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[3];
-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 0;
+    Py_ssize_t _idx[3];
     const char *encoding = NULL;
     const char *namespace_separator = NULL;
-    PyObject *intern = NULL;
+    PyValueBorrow intern = PyValue_Borrow(PyValue_NULL);
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 0, /*maxpos*/ 3, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 0, /*maxpos*/ 3, /*minkw*/ 0, /*varpos*/ 0, _idx, 3)) {
         goto exit;
     }
-    if (!noptargs) {
-        goto skip_optional_pos;
-    }
-    if (args[0]) {
-        if (args[0] == Py_None) {
+    if (_idx[0] >= 0) {
+        if (!PyValue_IsObject(PyValue_Borrow(args[_idx[0]]))) {
+            _PyArg_BadArgumentValue("ParserCreate", "argument 'encoding'", "str or None", PyValue_Borrow(args[_idx[0]]));
+            goto exit;
+        }
+        if (PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[0]])) == Py_None) {
             encoding = NULL;
         }
-        else if (PyUnicode_Check(args[0])) {
-            encoding = _PyUnicode_AsUTF8NoNUL(args[0]);
+        else if (PyUnicode_Check(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[0]])))) {
+            encoding = _PyUnicode_AsUTF8NoNUL(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[0]])));
             if (encoding == NULL) {
                 goto exit;
             }
         }
         else {
-            _PyArg_BadArgument("ParserCreate", "argument 'encoding'", "str or None", args[0]);
+            _PyArg_BadArgument("ParserCreate", "argument 'encoding'", "str or None", PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[0]])));
             goto exit;
         }
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
     }
-    if (args[1]) {
-        if (args[1] == Py_None) {
+    if (_idx[1] >= 0) {
+        if (!PyValue_IsObject(PyValue_Borrow(args[_idx[1]]))) {
+            _PyArg_BadArgumentValue("ParserCreate", "argument 'namespace_separator'", "str or None", PyValue_Borrow(args[_idx[1]]));
+            goto exit;
+        }
+        if (PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[1]])) == Py_None) {
             namespace_separator = NULL;
         }
-        else if (PyUnicode_Check(args[1])) {
-            namespace_separator = _PyUnicode_AsUTF8NoNUL(args[1]);
+        else if (PyUnicode_Check(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[1]])))) {
+            namespace_separator = _PyUnicode_AsUTF8NoNUL(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[1]])));
             if (namespace_separator == NULL) {
                 goto exit;
             }
         }
         else {
-            _PyArg_BadArgument("ParserCreate", "argument 'namespace_separator'", "str or None", args[1]);
+            _PyArg_BadArgument("ParserCreate", "argument 'namespace_separator'", "str or None", PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[1]])));
             goto exit;
         }
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
     }
-    intern = args[2];
-skip_optional_pos:
-    return_value = pyexpat_ParserCreate_impl(module, encoding, namespace_separator, intern);
+    if (_idx[2] >= 0) {
+        intern = PyValue_Borrow(args[_idx[2]]);
+    }
+    return_value = pyexpat_ParserCreate_impl(PyValue_AsKnownObjectBorrow(module), encoding, namespace_separator, intern);
 
 exit:
     return return_value;
@@ -703,22 +748,22 @@ PyDoc_STRVAR(pyexpat_ErrorString__doc__,
 "Returns string error for given number.");
 
 #define PYEXPAT_ERRORSTRING_METHODDEF    \
-    {"ErrorString", (PyCFunction)pyexpat_ErrorString, METH_O, pyexpat_ErrorString__doc__},
+    {"ErrorString", _PyCFunction_CAST(pyexpat_ErrorString), METH_VALUE|METH_O, pyexpat_ErrorString__doc__},
 
-static PyObject *
+static PyValue
 pyexpat_ErrorString_impl(PyObject *module, long code);
 
-static PyObject *
-pyexpat_ErrorString(PyObject *module, PyObject *arg)
+static PyValue
+pyexpat_ErrorString(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     long code;
 
-    code = PyLong_AsLong(arg);
+    code = _PyValue_AsLong(PyValue_Borrow(args[0]));
     if (code == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = pyexpat_ErrorString_impl(module, code);
+    return_value = pyexpat_ErrorString_impl(PyValue_AsKnownObjectBorrow(module), code);
 
 exit:
     return return_value;
@@ -743,4 +788,4 @@ exit:
 #ifndef PYEXPAT_XMLPARSER_SETALLOCTRACKERMAXIMUMAMPLIFICATION_METHODDEF
     #define PYEXPAT_XMLPARSER_SETALLOCTRACKERMAXIMUMAMPLIFICATION_METHODDEF
 #endif /* !defined(PYEXPAT_XMLPARSER_SETALLOCTRACKERMAXIMUMAMPLIFICATION_METHODDEF) */
-/*[clinic end generated code: output=fa4b4c1ffad09feb input=a9049054013a1b77]*/
+/*[clinic end generated code: output=0a3f6e421ca182a9 input=a9049054013a1b77]*/

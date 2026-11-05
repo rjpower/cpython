@@ -5,9 +5,11 @@
 #  define Py_BUILD_CORE_MODULE 1
 #endif
 
+#define Py_VALUE_CORE 1
 #include "Python.h"
 #include "pycore_code.h"          // _PyCode_HAS_EXECUTORS()
 #include "pycore_crossinterp.h"   // _PyXIData_t
+#include "pycore_list.h"          // PyList_InsertValue()
 #include "pycore_pyerrors.h"      // _PyErr_GetRaisedException()
 #include "pycore_interp.h"        // _PyInterpreterState_IDIncref()
 #include "pycore_modsupport.h"    // _PyArg_BadArgument()
@@ -15,6 +17,8 @@
 #include "pycore_pylifecycle.h"   // _PyInterpreterConfig_AsDict()
 #include "pycore_pystate.h"       // _PyInterpreterState_IsRunningMain()
 #include "pycore_tuple.h"         // _PyTuple_FromPairSteal
+#include "pycore_value.h"         // PyValue_AsKnownObjectBorrow(), _PyValue_AsObjectAt()
+#include "pycore_value_slots.h"// _PyValue_FromObjectResult()
 
 #include "marshal.h"              // PyMarshal_ReadObjectFromString()
 
@@ -26,6 +30,11 @@
 #define MODULE_NAME_STR Py_STRINGIFY(MODULE_NAME)
 #define MODINIT_FUNC_NAME RESOLVE_MODINIT_FUNC_NAME(MODULE_NAME)
 
+
+/*[clinic input]
+value_emission
+[clinic start generated code]*/
+/*[clinic end generated code: output=da39a3ee5e6b4b0d input=eb7b17088bfd7215]*/
 
 /*[clinic input]
 module _interpreters
@@ -806,6 +815,20 @@ resolve_interp(PyObject *idobj, int restricted, int reqready, const char *op)
     return interp;
 }
 
+// resolve_interp() of an ID value; an inline int ID is boxed for the lookup.
+static PyInterpreterState *
+resolve_interp_value(PyValueBorrow id, int restricted, int reqready,
+                     const char *op)
+{
+    PyObject *idobj = _PyValue_AsObjectAt(id, BOX_SITE_PARSER);
+    if (idobj == NULL) {
+        return NULL;
+    }
+    PyInterpreterState *interp = resolve_interp(idobj, restricted, reqready, op);
+    Py_DECREF(idobj);
+    return interp;
+}
+
 
 static PyObject *
 get_summary(PyInterpreterState *interp)
@@ -820,7 +843,7 @@ get_summary(PyInterpreterState *interp)
         Py_DECREF(idobj);
         return NULL;
     }
-    return _PyTuple_FromPairSteal(idobj, whenceobj);
+    return _PyTuple_FromPairTakeValue(PyValue_PrepareOwned(idobj), PyValue_PrepareOwned(whenceobj));
 }
 
 
@@ -840,30 +863,30 @@ Any keyword arguments are set on the corresponding config fields,
 overriding the initial values.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _interpreters_new_config_impl(PyObject *module, const char *name,
                               PyObject *overrides)
-/*[clinic end generated code: output=90ca53e5c8f66e31 input=67a5a2832894a72b]*/
+/*[clinic end generated code: output=90fe49fb55697046 input=67a5a2832894a72b]*/
 {
     PyInterpreterConfig config;
     if (init_named_config(&config, name) < 0) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     if (PyDict_GET_SIZE(overrides) > 0) {
         if (_PyInterpreterConfig_UpdateFromDict(&config, overrides) < 0) {
-            return NULL;
+            return PyValue_NULL;
         }
     }
 
     PyObject *dict = _PyInterpreterConfig_AsDict(&config);
     if (dict == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     PyObject *configobj = _PyNamespace_New(dict);
     Py_DECREF(dict);
-    return configobj;
+    return _PyValue_FromObjectResult(configobj);
 }
 
 
@@ -885,13 +908,24 @@ predefined config ('isolated' or 'legacy').  The default
 is 'isolated'.
 [clinic start generated code]*/
 
-static PyObject *
-_interpreters_create_impl(PyObject *module, PyObject *configobj, int reqrefs)
-/*[clinic end generated code: output=c1cc6835b1277c16 input=235ce396a23624d5]*/
+static PyValue
+_interpreters_create_impl(PyObject *module, PyValueBorrow configobj,
+                          int reqrefs)
+/*[clinic end generated code: output=26309fb2bb1c354e input=235ce396a23624d5]*/
 {
     PyInterpreterConfig config;
-    if (config_from_object(configobj, &config) < 0) {
-        return NULL;
+    /* The default is NULL, which config_from_object() reads as "isolated". */
+    PyObject *configarg = NULL;
+    if (!PyValue_IsNull(configobj)) {
+        configarg = _PyValue_AsObjectAt(configobj, BOX_SITE_PARSER);
+        if (configarg == NULL) {
+            return PyValue_NULL;
+        }
+    }
+    int res = config_from_object(configarg, &config);
+    Py_XDECREF(configarg);
+    if (res < 0) {
+        return PyValue_NULL;
     }
 
     long whence = _PyInterpreterState_WHENCE_STDLIB;
@@ -903,14 +937,14 @@ _interpreters_create_impl(PyObject *module, PyObject *configobj, int reqrefs)
         assert(exc != NULL);
         PyErr_SetString(PyExc_InterpreterError, "interpreter creation failed");
         _PyErr_ChainExceptions1(exc);
-        return NULL;
+        return PyValue_NULL;
     }
     assert(_PyInterpreterState_IsReady(interp));
 
     PyObject *idobj = _PyInterpreterState_GetIDObject(interp);
     if (idobj == NULL) {
         _PyXI_EndInterpreter(interp, NULL, NULL);
-        return NULL;
+        return PyValue_NULL;
     }
 
     if (reqrefs) {
@@ -918,7 +952,7 @@ _interpreters_create_impl(PyObject *module, PyObject *configobj, int reqrefs)
         _PyInterpreterState_RequireIDRef(interp, 1);
     }
 
-    return idobj;
+    return _PyValue_FromObjectResult(idobj);
 }
 
 
@@ -934,27 +968,28 @@ Attempting to destroy the current interpreter raises InterpreterError.
 So does an unrecognized ID.
 [clinic start generated code]*/
 
-static PyObject *
-_interpreters_destroy_impl(PyObject *module, PyObject *id, int restricted)
-/*[clinic end generated code: output=0bc20da8700ab4dd input=561bdd6537639d40]*/
+static PyValue
+_interpreters_destroy_impl(PyObject *module, PyValueBorrow id,
+                           int restricted)
+/*[clinic end generated code: output=b083d7a30d622f09 input=561bdd6537639d40]*/
 {
     // Look up the interpreter.
     int reqready = 0;
     PyInterpreterState *interp = \
-            resolve_interp(id, restricted, reqready, "destroy");
+            resolve_interp_value(id, restricted, reqready, "destroy");
     if (interp == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     // Ensure we don't try to destroy the current interpreter.
     PyInterpreterState *current = _get_current_interp();
     if (current == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
     if (interp == current) {
         PyErr_SetString(PyExc_InterpreterError,
                         "cannot destroy the current interpreter");
-        return NULL;
+        return PyValue_NULL;
     }
 
     // Ensure the interpreter isn't running.
@@ -962,13 +997,13 @@ _interpreters_destroy_impl(PyObject *module, PyObject *id, int restricted)
        aren't going to worry about it for now. */
     if (is_running_main(interp)) {
         PyErr_Format(PyExc_InterpreterError, "interpreter running");
-        return NULL;
+        return PyValue_NULL;
     }
 
     // Destroy the interpreter.
     _PyXI_EndInterpreter(interp, NULL, NULL);
 
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 
@@ -980,13 +1015,13 @@ _interpreters.list_all
 Return a list containing the ID of every existing interpreter.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _interpreters_list_all_impl(PyObject *module, int reqready)
-/*[clinic end generated code: output=3f21c1a7c78043c0 input=35bae91c381a2cf9]*/
+/*[clinic end generated code: output=5bbc84f0297c6113 input=35bae91c381a2cf9]*/
 {
     PyObject *ids = PyList_New(0);
     if (ids == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     PyInterpreterState *interp = PyInterpreterState_Head();
@@ -995,21 +1030,21 @@ _interpreters_list_all_impl(PyObject *module, int reqready)
             PyObject *item = get_summary(interp);
             if (item == NULL) {
                 Py_DECREF(ids);
-                return NULL;
+                return PyValue_NULL;
             }
 
             // insert at front of list
-            int res = PyList_Insert(ids, 0, item);
+            int res = PyList_InsertValue(ids, 0, PyValue_FromObjectBorrow(item));
             Py_DECREF(item);
             if (res < 0) {
                 Py_DECREF(ids);
-                return NULL;
+                return PyValue_NULL;
             }
         }
         interp = PyInterpreterState_Next(interp);
     }
 
-    return ids;
+    return _PyValue_FromObjectResult(ids);
 }
 
 
@@ -1019,16 +1054,16 @@ _interpreters.get_current
 Return (ID, whence) of the current interpreter.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _interpreters_get_current_impl(PyObject *module)
-/*[clinic end generated code: output=03161c8fcc0136eb input=37fb2c067c14d543]*/
+/*[clinic end generated code: output=4a6fee73ae82af66 input=37fb2c067c14d543]*/
 {
     PyInterpreterState *interp =_get_current_interp();
     if (interp == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
     assert(_PyInterpreterState_IsReady(interp));
-    return get_summary(interp);
+    return _PyValue_FromObjectResult(get_summary(interp));
 }
 
 
@@ -1038,13 +1073,13 @@ _interpreters.get_main
 Return (ID, whence) of the main interpreter.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _interpreters_get_main_impl(PyObject *module)
-/*[clinic end generated code: output=9647288aff735557 input=b4ace23ca562146f]*/
+/*[clinic end generated code: output=eb93d4aca5bf0352 input=b4ace23ca562146f]*/
 {
     PyInterpreterState *interp = _PyInterpreterState_Main();
     assert(_PyInterpreterState_IsReady(interp));
-    return get_summary(interp);
+    return _PyValue_FromObjectResult(get_summary(interp));
 }
 
 
@@ -1058,39 +1093,39 @@ _interpreters.set___main___attrs
 Bind the given attributes in the interpreter's __main__ module.
 [clinic start generated code]*/
 
-static PyObject *
-_interpreters_set___main___attrs_impl(PyObject *module, PyObject *id,
+static PyValue
+_interpreters_set___main___attrs_impl(PyObject *module, PyValueBorrow id,
                                       PyObject *updates, int restricted)
-/*[clinic end generated code: output=f3803010cb452bf0 input=d16ab8d81371f86a]*/
+/*[clinic end generated code: output=c606b9d7a24accd1 input=d16ab8d81371f86a]*/
 {
     // Look up the interpreter.
     int reqready = 1;
     PyInterpreterState *interp = \
-            resolve_interp(id, restricted, reqready, "update __main__ for");
+            resolve_interp_value(id, restricted, reqready, "update __main__ for");
     if (interp == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     // Check the updates.
     Py_ssize_t size = PyDict_Size(updates);
     if (size < 0) {
-        return NULL;
+        return PyValue_NULL;
     }
     if (size == 0) {
         PyErr_SetString(PyExc_ValueError,
                         "arg 2 must be a non-empty dict");
-        return NULL;
+        return PyValue_NULL;
     }
 
     _PyXI_session *session = _PyXI_NewSession();
     if (session == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     // Prep and switch interpreters, including apply the updates.
     if (_PyXI_Enter(session, interp, updates, NULL) < 0) {
         _PyXI_FreeSession(session);
-        return NULL;
+        return PyValue_NULL;
     }
 
     // Clean up and switch back.
@@ -1103,10 +1138,10 @@ _interpreters_set___main___attrs_impl(PyObject *module, PyObject *id,
         if (!PyErr_Occurred()) {
             PyErr_SetString(PyExc_RuntimeError, "unresolved error");
         }
-        return NULL;
+        return PyValue_NULL;
     }
 
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 
@@ -1146,25 +1181,31 @@ If a function is provided, its code object is used and all its state
 is ignored, including its __globals__ dict.
 [clinic start generated code]*/
 
-static PyObject *
-_interpreters_exec_impl(PyObject *module, PyObject *id, PyObject *code,
-                        PyObject *shared, int restricted)
-/*[clinic end generated code: output=492057c4f10dc304 input=5a22c1ed0c5dbcf3]*/
+static PyValue
+_interpreters_exec_impl(PyObject *module, PyValueBorrow id,
+                        PyValueBorrow code, PyObject *shared, int restricted)
+/*[clinic end generated code: output=90ffc8ba7516896f input=5a22c1ed0c5dbcf3]*/
 {
     PyThreadState *tstate = _PyThreadState_GET();
     int reqready = 1;
     PyInterpreterState *interp = \
-            resolve_interp(id, restricted, reqready, "exec code for");
+            resolve_interp_value(id, restricted, reqready, "exec code for");
     if (interp == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     // We don't need the script to be "pure", which means it can use
     // global variables.  They will be resolved against __main__.
+    PyObject *codeobj = _PyValue_AsObjectAt(code, BOX_SITE_PARSER);
+    if (codeobj == NULL) {
+        return PyValue_NULL;
+    }
     _PyXIData_t xidata = {0};
-    if (_PyCode_GetScriptXIData(tstate, code, &xidata) < 0) {
+    int xires = _PyCode_GetScriptXIData(tstate, codeobj, &xidata);
+    Py_DECREF(codeobj);
+    if (xires < 0) {
         unwrap_not_shareable(tstate, NULL);
-        return NULL;
+        return PyValue_NULL;
     }
 
     struct run_result runres = {0};
@@ -1172,10 +1213,10 @@ _interpreters_exec_impl(PyObject *module, PyObject *id, PyObject *code,
                     tstate, interp, &xidata, NULL, shared, &runres);
     _PyXIData_Release(&xidata);
     if (res < 0) {
-        return _handle_script_error(&runres);
+        return _PyValue_FromObjectResult(_handle_script_error(&runres));
     }
     assert(runres.result == NULL);
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 /*[clinic input]
@@ -1191,30 +1232,30 @@ Execute the provided string in the identified interpreter.
 (See _interpreters.exec().)
 [clinic start generated code]*/
 
-static PyObject *
-_interpreters_run_string_impl(PyObject *module, PyObject *id,
+static PyValue
+_interpreters_run_string_impl(PyObject *module, PyValueBorrow id,
                               PyObject *script, PyObject *shared,
                               int restricted)
-/*[clinic end generated code: output=a30a64fb9ad396a2 input=51ce549b9a8dbe21]*/
+/*[clinic end generated code: output=4c0539812ead8c26 input=51ce549b9a8dbe21]*/
 {
 #define FUNCNAME MODULE_NAME_STR ".run_string"
     PyThreadState *tstate = _PyThreadState_GET();
     int reqready = 1;
     PyInterpreterState *interp = \
-            resolve_interp(id, restricted, reqready, "run a string in");
+            resolve_interp_value(id, restricted, reqready, "run a string in");
     if (interp == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     if (PyFunction_Check(script) || PyCode_Check(script)) {
         _PyArg_BadArgument(FUNCNAME, "argument 2", "a string", script);
-        return NULL;
+        return PyValue_NULL;
     }
 
     _PyXIData_t xidata = {0};
     if (_PyCode_GetScriptXIData(tstate, script, &xidata) < 0) {
         unwrap_not_shareable(tstate, NULL);
-        return NULL;
+        return PyValue_NULL;
     }
 
     struct run_result runres = {0};
@@ -1222,10 +1263,10 @@ _interpreters_run_string_impl(PyObject *module, PyObject *id,
                     tstate, interp, &xidata, NULL, shared, &runres);
     _PyXIData_Release(&xidata);
     if (res < 0) {
-        return _handle_script_error(&runres);
+        return _PyValue_FromObjectResult(_handle_script_error(&runres));
     }
     assert(runres.result == NULL);
-    Py_RETURN_NONE;
+    return PyValue_None;
 #undef FUNCNAME
 }
 
@@ -1246,38 +1287,44 @@ either.
 (See _interpreters.exec().)
 [clinic start generated code]*/
 
-static PyObject *
-_interpreters_run_func_impl(PyObject *module, PyObject *id, PyObject *func,
-                            PyObject *shared, int restricted)
-/*[clinic end generated code: output=131f7202ca4a0c5e input=162b29823b33d5cc]*/
+static PyValue
+_interpreters_run_func_impl(PyObject *module, PyValueBorrow id,
+                            PyValueBorrow func, PyObject *shared,
+                            int restricted)
+/*[clinic end generated code: output=f4529f0f7cb49c25 input=162b29823b33d5cc]*/
 {
 #define FUNCNAME MODULE_NAME_STR ".run_func"
     PyThreadState *tstate = _PyThreadState_GET();
     int reqready = 1;
     PyInterpreterState *interp = \
-            resolve_interp(id, restricted, reqready, "run a function in");
+            resolve_interp_value(id, restricted, reqready, "run a function in");
     if (interp == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     // We don't worry about checking globals.  They will be resolved
     // against __main__.
     PyObject *code;
-    if (PyFunction_Check(func)) {
-        code = PyFunction_GET_CODE(func);
+    if ((PyValue_IsObject(func) && PyFunction_Check(PyValue_AsKnownObjectBorrow(func)))) {
+        code = PyFunction_GET_CODE(PyValue_AsKnownObjectBorrow(func));
     }
-    else if (PyCode_Check(func)) {
-        code = func;
+    else if ((PyValue_IsObject(func) && PyCode_Check(PyValue_AsKnownObjectBorrow(func)))) {
+        code = PyValue_AsKnownObjectBorrow(func);
     }
     else {
-        _PyArg_BadArgument(FUNCNAME, "argument 2", "a function", func);
-        return NULL;
+        PyObject *funcobj = _PyValue_AsObjectAt(func, BOX_SITE_PARSER);
+        if (funcobj == NULL) {
+            return PyValue_NULL;
+        }
+        _PyArg_BadArgument(FUNCNAME, "argument 2", "a function", funcobj);
+        Py_DECREF(funcobj);
+        return PyValue_NULL;
     }
 
     _PyXIData_t xidata = {0};
     if (_PyCode_GetScriptXIData(tstate, code, &xidata) < 0) {
         unwrap_not_shareable(tstate, NULL);
-        return NULL;
+        return PyValue_NULL;
     }
 
     struct run_result runres = {0};
@@ -1285,10 +1332,10 @@ _interpreters_run_func_impl(PyObject *module, PyObject *id, PyObject *func,
                     tstate, interp, &xidata, NULL, shared, &runres);
     _PyXIData_Release(&xidata);
     if (res < 0) {
-        return _handle_script_error(&runres);
+        return _PyValue_FromObjectResult(_handle_script_error(&runres));
     }
     assert(runres.result == NULL);
-    Py_RETURN_NONE;
+    return PyValue_None;
 #undef FUNCNAME
 }
 
@@ -1307,23 +1354,29 @@ Call the provided object in the identified interpreter.
 Pass the given args and kwargs, if possible.
 [clinic start generated code]*/
 
-static PyObject *
-_interpreters_call_impl(PyObject *module, PyObject *id, PyObject *callable,
-                        PyObject *args, PyObject *kwargs, int preserve_exc,
-                        int restricted)
-/*[clinic end generated code: output=b7a4a27d72df3ebc input=b026d0b212a575e6]*/
+static PyValue
+_interpreters_call_impl(PyObject *module, PyValueBorrow id,
+                        PyValueBorrow callable, PyObject *args,
+                        PyObject *kwargs, int preserve_exc, int restricted)
+/*[clinic end generated code: output=15700815cedf5276 input=b026d0b212a575e6]*/
 {
     PyThreadState *tstate = _PyThreadState_GET();
     int reqready = 1;
     PyInterpreterState *interp = \
-            resolve_interp(id, restricted, reqready, "make a call in");
+            resolve_interp_value(id, restricted, reqready, "make a call in");
     if (interp == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
 
+    PyObject *callableobj = _PyValue_AsObjectAt(callable, BOX_SITE_PARSER);
+    if (callableobj == NULL) {
+        return PyValue_NULL;
+    }
     struct interp_call call = {0};
-    if (_interp_call_pack(tstate, &call, callable, args, kwargs) < 0) {
-        return NULL;
+    int callres = _interp_call_pack(tstate, &call, callableobj, args, kwargs);
+    Py_DECREF(callableobj);
+    if (callres < 0) {
+        return PyValue_NULL;
     }
 
     PyObject *res_and_exc = NULL;
@@ -1343,7 +1396,7 @@ _interpreters_call_impl(PyObject *module, PyObject *id, PyObject *callable,
 finally:
     _interp_call_clear(&call);
     _run_result_clear(&runres);
-    return res_and_exc;
+    return _PyValue_FromObjectResult(res_and_exc);
 }
 
 
@@ -1355,16 +1408,22 @@ _interpreters.is_shareable
 Return True if the object's data may be shared between interpreters and False otherwise.
 [clinic start generated code]*/
 
-static PyObject *
-_interpreters_is_shareable_impl(PyObject *module, PyObject *obj)
-/*[clinic end generated code: output=227856926a22940b input=95f888d35a6d4bb3]*/
+static PyValue
+_interpreters_is_shareable_impl(PyObject *module, PyValueBorrow obj)
+/*[clinic end generated code: output=c342d4423ccf1b18 input=95f888d35a6d4bb3]*/
 {
     PyThreadState *tstate = _PyThreadState_GET();
-    if (_PyObject_CheckXIData(tstate, obj) == 0) {
-        Py_RETURN_TRUE;
+    PyObject *objobj = _PyValue_AsObjectAt(obj, BOX_SITE_PARSER);
+    if (objobj == NULL) {
+        return PyValue_NULL;
+    }
+    int res = _PyObject_CheckXIData(tstate, objobj);
+    Py_DECREF(objobj);
+    if (res == 0) {
+        return PyValue_True;
     }
     PyErr_Clear();
-    Py_RETURN_FALSE;
+    return PyValue_False;
 }
 
 
@@ -1377,21 +1436,22 @@ _interpreters.is_running
 Return whether or not the identified interpreter is running.
 [clinic start generated code]*/
 
-static PyObject *
-_interpreters_is_running_impl(PyObject *module, PyObject *id, int restricted)
-/*[clinic end generated code: output=32a6225d5ded9bdb input=3291578d04231125]*/
+static PyValue
+_interpreters_is_running_impl(PyObject *module, PyValueBorrow id,
+                              int restricted)
+/*[clinic end generated code: output=e9d942c3131a94bb input=3291578d04231125]*/
 {
     int reqready = 1;
     PyInterpreterState *interp = \
-            resolve_interp(id, restricted, reqready, "check if running for");
+            resolve_interp_value(id, restricted, reqready, "check if running for");
     if (interp == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     if (is_running_main(interp)) {
-        Py_RETURN_TRUE;
+        return PyValue_True;
     }
-    Py_RETURN_FALSE;
+    return PyValue_False;
 }
 
 
@@ -1405,33 +1465,36 @@ _interpreters.get_config
 Return a representation of the config used to initialize the interpreter.
 [clinic start generated code]*/
 
-static PyObject *
-_interpreters_get_config_impl(PyObject *module, PyObject *id, int restricted)
-/*[clinic end generated code: output=56773353b9b7224a input=8272d9ea9e4fb42a]*/
+static PyValue
+_interpreters_get_config_impl(PyObject *module, PyValueBorrow id,
+                              int restricted)
+/*[clinic end generated code: output=28fb6623a92eb7fa input=8272d9ea9e4fb42a]*/
 {
-    if (id == Py_None) {
-        id = NULL;
-    }
-
     int reqready = 0;
-    PyInterpreterState *interp = \
-            resolve_interp(id, restricted, reqready, "get the config of");
+    PyInterpreterState *interp;
+    if (PyValue_IsNone(id)) {
+        interp = resolve_interp(NULL, restricted, reqready, "get the config of");
+    }
+    else {
+        interp = resolve_interp_value(id, restricted, reqready,
+                                      "get the config of");
+    }
     if (interp == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     PyInterpreterConfig config;
     if (_PyInterpreterConfig_InitFromState(&config, interp) < 0) {
-        return NULL;
+        return PyValue_NULL;
     }
     PyObject *dict = _PyInterpreterConfig_AsDict(&config);
     if (dict == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     PyObject *configobj = _PyNamespace_New(dict);
     Py_DECREF(dict);
-    return configobj;
+    return _PyValue_FromObjectResult(configobj);
 }
 
 
@@ -1442,17 +1505,22 @@ _interpreters.whence
 Return an identifier for where the interpreter was created.
 [clinic start generated code]*/
 
-static PyObject *
-_interpreters_whence_impl(PyObject *module, PyObject *id)
-/*[clinic end generated code: output=ef2c21ab106c2c20 input=eeede0a2fbfa2968]*/
+static PyValue
+_interpreters_whence_impl(PyObject *module, PyValueBorrow id)
+/*[clinic end generated code: output=199b9405bfd381b3 input=eeede0a2fbfa2968]*/
 {
-    PyInterpreterState *interp = look_up_interp(id);
+    PyObject *idobj = _PyValue_AsObjectAt(id, BOX_SITE_PARSER);
+    if (idobj == NULL) {
+        return PyValue_NULL;
+    }
+    PyInterpreterState *interp = look_up_interp(idobj);
+    Py_DECREF(idobj);
     if (interp == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     long whence = get_whence(interp);
-    return PyLong_FromLong(whence);
+    return PyValue_FromInt64(whence);
 }
 
 
@@ -1465,16 +1533,16 @@ _interpreters.incref
 
 [clinic start generated code]*/
 
-static PyObject *
-_interpreters_incref_impl(PyObject *module, PyObject *id, int implieslink,
-                          int restricted)
-/*[clinic end generated code: output=eccaa4e03fbe8ee2 input=a0a614748f2e348c]*/
+static PyValue
+_interpreters_incref_impl(PyObject *module, PyValueBorrow id,
+                          int implieslink, int restricted)
+/*[clinic end generated code: output=9a56779acc1ad182 input=a0a614748f2e348c]*/
 {
     int reqready = 1;
     PyInterpreterState *interp = \
-            resolve_interp(id, restricted, reqready, "incref");
+            resolve_interp_value(id, restricted, reqready, "incref");
     if (interp == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     if (implieslink) {
@@ -1483,7 +1551,7 @@ _interpreters_incref_impl(PyObject *module, PyObject *id, int implieslink,
     }
     _PyInterpreterState_IDIncref(interp);
 
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 
@@ -1495,20 +1563,20 @@ _interpreters.decref
 
 [clinic start generated code]*/
 
-static PyObject *
-_interpreters_decref_impl(PyObject *module, PyObject *id, int restricted)
-/*[clinic end generated code: output=5c54db4b22086171 input=c4aa34f09c44e62a]*/
+static PyValue
+_interpreters_decref_impl(PyObject *module, PyValueBorrow id, int restricted)
+/*[clinic end generated code: output=ef9ce90000c98ef1 input=c4aa34f09c44e62a]*/
 {
     int reqready = 1;
     PyInterpreterState *interp = \
-            resolve_interp(id, restricted, reqready, "decref");
+            resolve_interp_value(id, restricted, reqready, "decref");
     if (interp == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     _PyInterpreterState_IDDecref(interp);
 
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 
@@ -1523,20 +1591,28 @@ cleared).  The returned snapshot is the same as what
 _interpreters.exec() returns.
 [clinic start generated code]*/
 
-static PyObject *
-_interpreters_capture_exception_impl(PyObject *module, PyObject *exc_arg)
-/*[clinic end generated code: output=ef3f5393ef9c88a6 input=4e6289f8f2a47b5b]*/
+static PyValue
+_interpreters_capture_exception_impl(PyObject *module, PyValueBorrow exc_arg)
+/*[clinic end generated code: output=cdabcf50d4f20c6c input=4e6289f8f2a47b5b]*/
 {
-    PyObject *exc = exc_arg;
-    if (exc == NULL || exc == Py_None) {
+    // The caller's exception (or the one that is raised) is an owner here.
+    PyObject *exc;
+    if (PyValue_IsNone(exc_arg)) {
         exc = PyErr_GetRaisedException();
         if (exc == NULL) {
-            Py_RETURN_NONE;
+            return PyValue_None;
         }
     }
-    else if (!PyExceptionInstance_Check(exc)) {
-        PyErr_Format(PyExc_TypeError, "expected exception, got %R", exc);
-        return NULL;
+    else {
+        exc = _PyValue_AsObjectAt(exc_arg, BOX_SITE_PARSER);
+        if (exc == NULL) {
+            return PyValue_NULL;
+        }
+        if (!PyExceptionInstance_Check(exc)) {
+            PyErr_Format(PyExc_TypeError, "expected exception, got %R", exc);
+            Py_DECREF(exc);
+            return PyValue_NULL;
+        }
     }
     PyObject *captured = NULL;
 
@@ -1565,7 +1641,7 @@ finally:
     if (info != NULL) {
         _PyXI_FreeExcInfo(info);
     }
-    if (exc != exc_arg) {
+    if (PyValue_IsNone(exc_arg)) {
         if (PyErr_Occurred()) {
             PyErr_SetRaisedException(exc);
         }
@@ -1573,7 +1649,10 @@ finally:
             _PyErr_ChainExceptions1(exc);
         }
     }
-    return captured;
+    else {
+        Py_DECREF(exc);
+    }
+    return _PyValue_FromObjectResult(captured);
 }
 
 

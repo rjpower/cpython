@@ -2,7 +2,13 @@
 preserve
 [clinic start generated code]*/
 
+#ifndef Py_VALUE_CORE
+#  error "value-emission Clinic output requires Py_VALUE_CORE"
+#endif
+
+#include "pycore_long_value.h"    // _PyValue_AsInt()
 #include "pycore_modsupport.h"    // _PyArg_CheckPositional()
+#include "pycore_value_call.h"    // METH_VALUE
 
 PyDoc_STRVAR(blob_close__doc__,
 "close($self, /)\n"
@@ -11,15 +17,19 @@ PyDoc_STRVAR(blob_close__doc__,
 "Close the blob.");
 
 #define BLOB_CLOSE_METHODDEF    \
-    {"close", (PyCFunction)blob_close, METH_NOARGS, blob_close__doc__},
+    {"close", _PyCFunction_CAST(blob_close), METH_VALUE|METH_NOARGS, blob_close__doc__},
 
-static PyObject *
+static PyValue
 blob_close_impl(pysqlite_Blob *self);
 
-static PyObject *
-blob_close(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+blob_close(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return blob_close_impl((pysqlite_Blob *)self);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = blob_close_impl((pysqlite_Blob *)PyValue_AsKnownObjectBorrow(self));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(blob_read__doc__,
@@ -36,15 +46,15 @@ PyDoc_STRVAR(blob_read__doc__,
 "Blob.read() will read until the end of the blob.");
 
 #define BLOB_READ_METHODDEF    \
-    {"read", _PyCFunction_CAST(blob_read), METH_FASTCALL, blob_read__doc__},
+    {"read", _PyCFunction_CAST(blob_read), METH_VALUE, blob_read__doc__},
 
-static PyObject *
+static PyValue
 blob_read_impl(pysqlite_Blob *self, int length);
 
-static PyObject *
-blob_read(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+blob_read(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int length = -1;
 
     if (!_PyArg_CheckPositional("read", nargs, 0, 1)) {
@@ -53,12 +63,12 @@ blob_read(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
     if (nargs < 1) {
         goto skip_optional;
     }
-    length = PyLong_AsInt(args[0]);
+    length = _PyValue_AsInt(PyValue_Borrow(args[0]));
     if (length == -1 && PyErr_Occurred()) {
         goto exit;
     }
 skip_optional:
-    return_value = blob_read_impl((pysqlite_Blob *)self, length);
+    return_value = blob_read_impl((pysqlite_Blob *)PyValue_AsKnownObjectBorrow(self), length);
 
 exit:
     return return_value;
@@ -74,21 +84,25 @@ PyDoc_STRVAR(blob_write__doc__,
 "of the blob will result in an exception being raised.");
 
 #define BLOB_WRITE_METHODDEF    \
-    {"write", (PyCFunction)blob_write, METH_O, blob_write__doc__},
+    {"write", _PyCFunction_CAST(blob_write), METH_VALUE|METH_O, blob_write__doc__},
 
-static PyObject *
+static PyValue
 blob_write_impl(pysqlite_Blob *self, Py_buffer *data);
 
-static PyObject *
-blob_write(PyObject *self, PyObject *arg)
+static PyValue
+blob_write(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     Py_buffer data = {NULL, NULL};
 
-    if (PyObject_GetBuffer(arg, &data, PyBUF_SIMPLE) != 0) {
+    if (!PyValue_IsObject(PyValue_Borrow(args[0]))) {
+        PyErr_Format(PyExc_TypeError, "a bytes-like object is required, not '%.100s'", PyValue_TYPE(PyValue_Borrow(args[0]))->tp_name);
         goto exit;
     }
-    return_value = blob_write_impl((pysqlite_Blob *)self, &data);
+    if (PyObject_GetBuffer(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])), &data, PyBUF_SIMPLE) != 0) {
+        goto exit;
+    }
+    return_value = blob_write_impl((pysqlite_Blob *)PyValue_AsKnownObjectBorrow(self), &data);
 
 exit:
     /* Cleanup for data */
@@ -111,34 +125,34 @@ PyDoc_STRVAR(blob_seek__doc__,
 "the blob\'s end).");
 
 #define BLOB_SEEK_METHODDEF    \
-    {"seek", _PyCFunction_CAST(blob_seek), METH_FASTCALL, blob_seek__doc__},
+    {"seek", _PyCFunction_CAST(blob_seek), METH_VALUE, blob_seek__doc__},
 
-static PyObject *
+static PyValue
 blob_seek_impl(pysqlite_Blob *self, int offset, int origin);
 
-static PyObject *
-blob_seek(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+blob_seek(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int offset;
     int origin = 0;
 
     if (!_PyArg_CheckPositional("seek", nargs, 1, 2)) {
         goto exit;
     }
-    offset = PyLong_AsInt(args[0]);
+    offset = _PyValue_AsInt(PyValue_Borrow(args[0]));
     if (offset == -1 && PyErr_Occurred()) {
         goto exit;
     }
     if (nargs < 2) {
         goto skip_optional;
     }
-    origin = PyLong_AsInt(args[1]);
+    origin = _PyValue_AsInt(PyValue_Borrow(args[1]));
     if (origin == -1 && PyErr_Occurred()) {
         goto exit;
     }
 skip_optional:
-    return_value = blob_seek_impl((pysqlite_Blob *)self, offset, origin);
+    return_value = blob_seek_impl((pysqlite_Blob *)PyValue_AsKnownObjectBorrow(self), offset, origin);
 
 exit:
     return return_value;
@@ -151,15 +165,19 @@ PyDoc_STRVAR(blob_tell__doc__,
 "Return the current access position for the blob.");
 
 #define BLOB_TELL_METHODDEF    \
-    {"tell", (PyCFunction)blob_tell, METH_NOARGS, blob_tell__doc__},
+    {"tell", _PyCFunction_CAST(blob_tell), METH_VALUE|METH_NOARGS, blob_tell__doc__},
 
-static PyObject *
+static PyValue
 blob_tell_impl(pysqlite_Blob *self);
 
-static PyObject *
-blob_tell(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+blob_tell(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return blob_tell_impl((pysqlite_Blob *)self);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = blob_tell_impl((pysqlite_Blob *)PyValue_AsKnownObjectBorrow(self));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(blob_enter__doc__,
@@ -169,15 +187,19 @@ PyDoc_STRVAR(blob_enter__doc__,
 "Blob context manager enter.");
 
 #define BLOB_ENTER_METHODDEF    \
-    {"__enter__", (PyCFunction)blob_enter, METH_NOARGS, blob_enter__doc__},
+    {"__enter__", _PyCFunction_CAST(blob_enter), METH_VALUE|METH_NOARGS, blob_enter__doc__},
 
-static PyObject *
+static PyValue
 blob_enter_impl(pysqlite_Blob *self);
 
-static PyObject *
-blob_enter(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+blob_enter(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return blob_enter_impl((pysqlite_Blob *)self);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = blob_enter_impl((pysqlite_Blob *)PyValue_AsKnownObjectBorrow(self));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(blob_exit__doc__,
@@ -187,29 +209,29 @@ PyDoc_STRVAR(blob_exit__doc__,
 "Blob context manager exit.");
 
 #define BLOB_EXIT_METHODDEF    \
-    {"__exit__", _PyCFunction_CAST(blob_exit), METH_FASTCALL, blob_exit__doc__},
+    {"__exit__", _PyCFunction_CAST(blob_exit), METH_VALUE, blob_exit__doc__},
 
-static PyObject *
-blob_exit_impl(pysqlite_Blob *self, PyObject *type, PyObject *val,
-               PyObject *tb);
+static PyValue
+blob_exit_impl(pysqlite_Blob *self, PyValueBorrow type, PyValueBorrow val,
+               PyValueBorrow tb);
 
-static PyObject *
-blob_exit(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+blob_exit(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
-    PyObject *type;
-    PyObject *val;
-    PyObject *tb;
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow type;
+    PyValueBorrow val;
+    PyValueBorrow tb;
 
     if (!_PyArg_CheckPositional("__exit__", nargs, 3, 3)) {
         goto exit;
     }
-    type = args[0];
-    val = args[1];
-    tb = args[2];
-    return_value = blob_exit_impl((pysqlite_Blob *)self, type, val, tb);
+    type = PyValue_Borrow(args[0]);
+    val = PyValue_Borrow(args[1]);
+    tb = PyValue_Borrow(args[2]);
+    return_value = blob_exit_impl((pysqlite_Blob *)PyValue_AsKnownObjectBorrow(self), type, val, tb);
 
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=b0e3d38063739b17 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=f702265f6dafdb2a input=a9049054013a1b77]*/

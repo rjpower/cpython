@@ -9,9 +9,13 @@
 #  define Py_BUILD_CORE_MODULE
 #endif
 
+#define Py_VALUE_CORE 1
 #include "binary_io.h"
 #include "_remote_debugging.h"
 #include "pycore_bitutils.h"   /* _Py_bswap32, _Py_bswap64 for cross-endian reading */
+#include "pycore_list.h"          // PyList_AppendValue()
+#include "pycore_pyvalue.h"       // PyValue_PrepareOwned()
+#include "pycore_value.h"         // PyValue_DUP()
 #include <math.h>
 #include <string.h>
 
@@ -981,11 +985,11 @@ build_frame_list(RemoteDebuggingState *state, BinaryReader *reader,
             opcode_obj = Py_NewRef(Py_None);
         }
 
-        PyStructSequence_SetItem(frame_info, 0, Py_NewRef(reader->strings[frame->filename_idx]));
-        PyStructSequence_SetItem(frame_info, 1, location);
-        PyStructSequence_SetItem(frame_info, 2, Py_NewRef(reader->strings[frame->funcname_idx]));
-        PyStructSequence_SetItem(frame_info, 3, opcode_obj);
-        PyList_SET_ITEM(frame_list, k, frame_info);
+        PyStructSequence_SET_VALUE(frame_info, 0, PyValue_DUP(PyValue_FromObjectBorrow(reader->strings[frame->filename_idx])));
+        PyStructSequence_SET_VALUE(frame_info, 1, PyValue_PrepareOwned(location));
+        PyStructSequence_SET_VALUE(frame_info, 2, PyValue_DUP(PyValue_FromObjectBorrow(reader->strings[frame->funcname_idx])));
+        PyStructSequence_SET_VALUE(frame_info, 3, PyValue_PrepareOwned(opcode_obj));
+        PyList_SET_VALUE(frame_list, k, PyValue_PrepareOwned(frame_info));
     }
 
     return frame_list;
@@ -1022,16 +1026,16 @@ build_sample_list(RemoteDebuggingState *state, BinaryReader *reader,
         Py_DECREF(tid);
         goto error;
     }
-    PyStructSequence_SetItem(thread_info, 0, tid);
-    PyStructSequence_SetItem(thread_info, 1, st);
-    PyStructSequence_SetItem(thread_info, 2, frame_list);
+    PyStructSequence_SET_VALUE(thread_info, 0, PyValue_PrepareOwned(tid));
+    PyStructSequence_SET_VALUE(thread_info, 1, PyValue_PrepareOwned(st));
+    PyStructSequence_SET_VALUE(thread_info, 2, PyValue_PrepareOwned(frame_list));
     frame_list = NULL;  /* ownership transferred */
 
     thread_list = PyList_New(1);
     if (!thread_list) {
         goto error;
     }
-    PyList_SET_ITEM(thread_list, 0, thread_info);
+    PyList_SET_VALUE(thread_list, 0, PyValue_PrepareOwned(thread_info));
     thread_info = NULL;
 
     interp_info = PyStructSequence_New(state->InterpreterInfo_Type);
@@ -1042,15 +1046,15 @@ build_sample_list(RemoteDebuggingState *state, BinaryReader *reader,
     if (!iid) {
         goto error;
     }
-    PyStructSequence_SetItem(interp_info, 0, iid);
-    PyStructSequence_SetItem(interp_info, 1, thread_list);
+    PyStructSequence_SET_VALUE(interp_info, 0, PyValue_PrepareOwned(iid));
+    PyStructSequence_SET_VALUE(interp_info, 1, PyValue_PrepareOwned(thread_list));
     thread_list = NULL;
 
     sample_list = PyList_New(1);
     if (!sample_list) {
         goto error;
     }
-    PyList_SET_ITEM(sample_list, 0, interp_info);
+    PyList_SET_VALUE(sample_list, 0, PyValue_PrepareOwned(interp_info));
     return sample_list;
 
 error:
@@ -1238,7 +1242,7 @@ binary_reader_replay(BinaryReader *reader, PyObject *collector, PyObject *progre
                     Py_DECREF(timestamps_list);
                     return -1;
                 }
-                int append_rc = PyList_Append(timestamps_list, ts_obj);
+                int append_rc = PyList_AppendValue(timestamps_list, PyValue_FromObjectBorrow(ts_obj));
                 Py_DECREF(ts_obj);
                 if (append_rc < 0) {
                     Py_DECREF(timestamps_list);
@@ -1316,7 +1320,7 @@ binary_reader_replay(BinaryReader *reader, PyObject *collector, PyObject *progre
                 Py_DECREF(ts_obj);
                 return -1;
             }
-            PyList_SET_ITEM(timestamps_list, 0, ts_obj);
+            PyList_SET_VALUE(timestamps_list, 0, PyValue_PrepareOwned(ts_obj));
 
             if (emit_sample(state, collector, thread_id, interpreter_id, status,
                            ts->current_stack, ts->current_stack_depth, reader,

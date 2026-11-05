@@ -22,11 +22,15 @@
 #  define Py_BUILD_CORE_MODULE 1
 #endif
 
+#define Py_VALUE_CORE 1
 #include <Python.h>
 #include "pycore_abstract.h"      // _Py_convert_optional_to_ssize_t()
 #include "pycore_bytesobject.h"   // _PyBytes_Find()
 #include "pycore_fileutils.h"     // _Py_stat_struct
 #include "pycore_mmap.h"          // _PyAnnotateMemoryMap()
+#include "pycore_value.h"         // PyValue_FromInt64()
+#include "pycore_value_ops.h"      // _PyValue_AsSsize_t()
+#include "pycore_value_slots.h"// _PyValue_FromObjectResult()
 #include "pycore_weakref.h"       // FT_CLEAR_WEAKREFS()
 
 #include <stddef.h>               // offsetof()
@@ -93,6 +97,11 @@ my_getpagesize(void)
 #endif
 
 /*[clinic input]
+value_emission
+[clinic start generated code]*/
+/*[clinic end generated code: output=da39a3ee5e6b4b0d input=eb7b17088bfd7215]*/
+
+/*[clinic input]
 module mmap
 class mmap.mmap "mmap_object *" ""
 [clinic start generated code]*/
@@ -145,15 +154,9 @@ typedef struct {
    Returns -1 on error. Use PyErr_Occurred() to disambiguate.
 */
 static Py_ssize_t
-_As_Py_ssize_t(PyObject *arg) {
-    assert(arg != NULL);
-    Py_ssize_t ival = -1;
-    PyObject *iobj = _PyNumber_Index(arg);
-    if (iobj != NULL) {
-        ival = PyLong_AsSsize_t(iobj);
-        Py_DECREF(iobj);
-    }
-    return ival;
+_As_Py_ssize_t(PyValueBorrow arg) {
+    assert(!PyValue_IsNull(arg));
+    return _PyValue_AsSsize_t(arg, PyExc_OverflowError);
 }
 
 static void
@@ -198,14 +201,14 @@ mmap.mmap.close
 
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 mmap_mmap_close_impl(mmap_object *self)
-/*[clinic end generated code: output=a1ae0c727546f78d input=25020035f047eae1]*/
+/*[clinic end generated code: output=506d130ac51e4e30 input=25020035f047eae1]*/
 {
     if (self->exports > 0) {
         PyErr_SetString(PyExc_BufferError, "cannot close "\
                         "exported pointers exist");
-        return NULL;
+        return PyValue_NULL;
     }
 #ifdef MS_WINDOWS
     /* For each resource we maintain, we need to check
@@ -248,7 +251,7 @@ mmap_mmap_close_impl(mmap_object *self)
     Py_END_ALLOW_THREADS
 #endif
 
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 #ifdef MS_WINDOWS
@@ -511,21 +514,21 @@ mmap.mmap.read_byte
 
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 mmap_mmap_read_byte_impl(mmap_object *self)
-/*[clinic end generated code: output=d931da1319f3869b input=5b8c6a904bdddda9]*/
+/*[clinic end generated code: output=faed3aff5bf34b95 input=5b8c6a904bdddda9]*/
 {
-    CHECK_VALID(NULL);
+    CHECK_VALID(PyValue_NULL);
     if (self->pos >= self->size) {
         PyErr_SetString(PyExc_ValueError, "read byte out of range");
-        return NULL;
+        return PyValue_NULL;
     }
     char dest;
     if (safe_byte_copy(&dest, self->data + self->pos) < 0) {
-        return NULL;
+        return PyValue_NULL;
     }
     self->pos++;
-    return PyLong_FromLong((unsigned char) dest);
+    return PyValue_FromInt64((unsigned char) dest);
 }
 
 /*[clinic input]
@@ -534,22 +537,22 @@ mmap.mmap.readline
 
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 mmap_mmap_readline_impl(mmap_object *self)
-/*[clinic end generated code: output=b9d2bf9999283311 input=2c4efd1d06e1cdd1]*/
+/*[clinic end generated code: output=e2529931f64b415c input=2c4efd1d06e1cdd1]*/
 {
     Py_ssize_t remaining;
     char *start, *eol;
 
-    CHECK_VALID(NULL);
+    CHECK_VALID(PyValue_NULL);
 
     remaining = (self->pos < self->size) ? self->size - self->pos : 0;
     if (!remaining)
-        return Py_GetConstant(Py_CONSTANT_EMPTY_BYTES);
+        return _PyValue_FromObjectResult(Py_GetConstant(Py_CONSTANT_EMPTY_BYTES));
     start = self->data + self->pos;
 
     if (safe_memchr(&eol, start, '\n', remaining) < 0) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     if (!eol)
@@ -561,25 +564,25 @@ mmap_mmap_readline_impl(mmap_object *self)
     if (result != NULL) {
         self->pos += (eol - start);
     }
-    return result;
+    return _PyValue_FromObjectResult(result);
 }
 
 /*[clinic input]
 @critical_section
 mmap.mmap.read
 
-  n as num_bytes: object(converter='_Py_convert_optional_to_ssize_t', type='Py_ssize_t', c_default='PY_SSIZE_T_MAX') = None
+  n as num_bytes: Py_ssize_t(accept={int, NoneType}, c_default='PY_SSIZE_T_MAX') = None
   /
 
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 mmap_mmap_read_impl(mmap_object *self, Py_ssize_t num_bytes)
-/*[clinic end generated code: output=3b4d4f3704ed0969 input=8f97f361d435e357]*/
+/*[clinic end generated code: output=f4fc8cdf9a05bde7 input=d42768fe5d93784c]*/
 {
     Py_ssize_t remaining;
 
-    CHECK_VALID(NULL);
+    CHECK_VALID(PyValue_NULL);
 
     /* silently 'adjust' out-of-range requests */
     remaining = (self->pos < self->size) ? self->size - self->pos : 0;
@@ -591,27 +594,27 @@ mmap_mmap_read_impl(mmap_object *self, Py_ssize_t num_bytes)
     if (result != NULL) {
         self->pos += num_bytes;
     }
-    return result;
+    return _PyValue_FromObjectResult(result);
 }
 
-static PyObject *
-mmap_gfind_lock_held(mmap_object *self, Py_buffer *view, PyObject *start_obj,
-                    PyObject *end_obj, int reverse)
+static PyValue
+mmap_gfind_lock_held(mmap_object *self, Py_buffer *view, PyValueBorrow start_obj,
+                    PyValueBorrow end_obj, int reverse)
 {
     Py_ssize_t start = self->pos;
     Py_ssize_t end = self->size;
 
-    CHECK_VALID(NULL);
-    if (start_obj != Py_None) {
+    CHECK_VALID(PyValue_NULL);
+    if (!PyValue_IsNone(start_obj)) {
         start = _As_Py_ssize_t(start_obj);
         if (start == -1 && PyErr_Occurred()) {
-            return NULL;
+            return PyValue_NULL;
         }
 
-        if (end_obj != Py_None) {
+        if (!PyValue_IsNone(end_obj)) {
             end = _As_Py_ssize_t(end_obj);
             if (end == -1 && PyErr_Occurred()) {
-                return NULL;
+                return PyValue_NULL;
             }
         }
     }
@@ -629,10 +632,10 @@ mmap_gfind_lock_held(mmap_object *self, Py_buffer *view, PyObject *start_obj,
         end = self->size;
 
     Py_ssize_t index;
-    PyObject *result;
-    CHECK_VALID(NULL);
+    PyValue result;
+    CHECK_VALID(PyValue_NULL);
     if (end < start) {
-        result = PyLong_FromSsize_t(-1);
+        result = PyValue_FromInt64(-1);
     }
     else if (reverse) {
         assert(0 <= start && start <= end && end <= self->size);
@@ -640,10 +643,10 @@ mmap_gfind_lock_held(mmap_object *self, Py_buffer *view, PyObject *start_obj,
             self->data + start, end - start,
             view->buf, view->len, start) < 0)
         {
-            result = NULL;
+            result = PyValue_NULL;
         }
         else {
-            result = PyLong_FromSsize_t(index);
+            result = PyValue_FromInt64(index);
         }
     }
     else {
@@ -652,10 +655,10 @@ mmap_gfind_lock_held(mmap_object *self, Py_buffer *view, PyObject *start_obj,
             self->data + start, end - start,
             view->buf, view->len, start) < 0)
         {
-            result = NULL;
+            result = PyValue_NULL;
         }
         else {
-            result = PyLong_FromSsize_t(index);
+            result = PyValue_FromInt64(index);
         }
     }
     return result;
@@ -672,10 +675,10 @@ mmap.mmap.find
 
 [clinic start generated code]*/
 
-static PyObject *
-mmap_mmap_find_impl(mmap_object *self, Py_buffer *view, PyObject *start,
-                    PyObject *end)
-/*[clinic end generated code: output=ef8878a322f00192 input=0135504494b52c2b]*/
+static PyValue
+mmap_mmap_find_impl(mmap_object *self, Py_buffer *view, PyValueBorrow start,
+                    PyValueBorrow end)
+/*[clinic end generated code: output=0f7bf8054a3e5833 input=0135504494b52c2b]*/
 {
     return mmap_gfind_lock_held(self, view, start, end, 0);
 }
@@ -686,10 +689,10 @@ mmap.mmap.rfind = mmap.mmap.find
 
 [clinic start generated code]*/
 
-static PyObject *
-mmap_mmap_rfind_impl(mmap_object *self, Py_buffer *view, PyObject *start,
-                     PyObject *end)
-/*[clinic end generated code: output=73b918940d67c2b8 input=8aecdd1f70c06c62]*/
+static PyValue
+mmap_mmap_rfind_impl(mmap_object *self, Py_buffer *view, PyValueBorrow start,
+                     PyValueBorrow end)
+/*[clinic end generated code: output=651a09df40fb1088 input=8aecdd1f70c06c62]*/
 {
     return mmap_gfind_lock_held(self, view, start, end, 1);
 }
@@ -736,28 +739,28 @@ mmap.mmap.write
 
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 mmap_mmap_write_impl(mmap_object *self, Py_buffer *data)
-/*[clinic end generated code: output=9e97063efb6fb27b input=3f16fa79aa89d6f7]*/
+/*[clinic end generated code: output=8d8c2b14d4c967b1 input=3f16fa79aa89d6f7]*/
 {
-    CHECK_VALID(NULL);
+    CHECK_VALID(PyValue_NULL);
     if (!is_writable(self)) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     if (self->pos > self->size || self->size - self->pos < data->len) {
         PyErr_SetString(PyExc_ValueError, "data out of range");
-        return NULL;
+        return PyValue_NULL;
     }
 
-    CHECK_VALID(NULL);
-    PyObject *result;
+    CHECK_VALID(PyValue_NULL);
+    PyValue result;
     if (safe_memcpy(self->data + self->pos, data->buf, data->len) < 0) {
-        result = NULL;
+        result = PyValue_NULL;
     }
     else {
         self->pos += data->len;
-        result = PyLong_FromSsize_t(data->len);
+        result = PyValue_FromInt64(data->len);
     }
     return result;
 }
@@ -771,25 +774,25 @@ mmap.mmap.write_byte
 
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 mmap_mmap_write_byte_impl(mmap_object *self, unsigned char value)
-/*[clinic end generated code: output=aa11adada9b17510 input=32740bfa174f0991]*/
+/*[clinic end generated code: output=ca93c48608b0a04a input=32740bfa174f0991]*/
 {
-    CHECK_VALID(NULL);
+    CHECK_VALID(PyValue_NULL);
     if (!is_writable(self))
-        return NULL;
+        return PyValue_NULL;
 
-    CHECK_VALID(NULL);
+    CHECK_VALID(PyValue_NULL);
     if (self->pos >= self->size) {
         PyErr_SetString(PyExc_ValueError, "write byte out of range");
-        return NULL;
+        return PyValue_NULL;
     }
 
     if (safe_byte_copy(self->data + self->pos, (const char*)&value) < 0) {
-        return NULL;
+        return PyValue_NULL;
     }
     self->pos++;
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 /*[clinic input]
@@ -798,11 +801,11 @@ mmap.mmap.size
 
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 mmap_mmap_size_impl(mmap_object *self)
-/*[clinic end generated code: output=c177e65e83a648ff input=f69c072efd2e1595]*/
+/*[clinic end generated code: output=9f24fe9e2e96fe60 input=f69c072efd2e1595]*/
 {
-    CHECK_VALID(NULL);
+    CHECK_VALID(PyValue_NULL);
 
 #ifdef MS_WINDOWS
     if (self->file_handle != INVALID_HANDLE_VALUE) {
@@ -819,21 +822,21 @@ mmap_mmap_size_impl(mmap_object *self)
     if (self->fd != -1) {
         struct _Py_stat_struct status;
         if (_Py_fstat(self->fd, &status) == -1)
-            return NULL;
+            return PyValue_NULL;
 #ifdef HAVE_LARGEFILE_SUPPORT
         return PyLong_FromLongLong(status.st_size);
 #else
-        return PyLong_FromLong(status.st_size);
+        return PyValue_FromInt64(status.st_size);
 #endif
     }
 #endif /* UNIX */
     else if (self->trackfd) {
-        return PyLong_FromSsize_t(self->size);
+        return PyValue_FromInt64(self->size);
     }
     else {
         PyErr_SetString(PyExc_ValueError,
             "can't get size with trackfd=False");
-        return NULL;
+        return PyValue_NULL;
     }
 }
 
@@ -856,17 +859,17 @@ mmap.mmap.resize
 
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 mmap_mmap_resize_impl(mmap_object *self, Py_ssize_t new_size)
-/*[clinic end generated code: output=6f262537ce9c2dcc input=b6b5dee52a41b79f]*/
+/*[clinic end generated code: output=982bae2dc810070a input=b6b5dee52a41b79f]*/
 {
-    CHECK_VALID(NULL);
+    CHECK_VALID(PyValue_NULL);
     if (!is_resizeable(self)) {
-        return NULL;
+        return PyValue_NULL;
     }
     if (new_size < 0 || PY_SSIZE_T_MAX - new_size < self->offset) {
         PyErr_SetString(PyExc_ValueError, "new size out of range");
-        return NULL;
+        return PyValue_NULL;
     }
 
     {
@@ -976,12 +979,12 @@ mmap_mmap_resize_impl(mmap_object *self, Py_ssize_t new_size)
         if (self->fd == -1 && !(self->flags & MAP_PRIVATE) && new_size > self->size) {
             PyErr_Format(PyExc_ValueError,
                 "mmap: can't expand a shared anonymous mapping");
-            return NULL;
+            return PyValue_NULL;
         }
 #endif
         if (self->fd != -1 && ftruncate(self->fd, self->offset + new_size) == -1) {
             PyErr_SetFromErrno(PyExc_OSError);
-            return NULL;
+            return PyValue_NULL;
         }
 
 #ifdef MREMAP_MAYMOVE
@@ -996,11 +999,11 @@ mmap_mmap_resize_impl(mmap_object *self, Py_ssize_t new_size)
         if (newmap == (void *)-1)
         {
             PyErr_SetFromErrno(PyExc_OSError);
-            return NULL;
+            return PyValue_NULL;
         }
         self->data = newmap;
         self->size = new_size;
-        Py_RETURN_NONE;
+        return PyValue_None;
 #endif /* UNIX */
     }
 }
@@ -1012,12 +1015,12 @@ mmap.mmap.tell
 
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 mmap_mmap_tell_impl(mmap_object *self)
-/*[clinic end generated code: output=6034958630e1b1d1 input=fd163acacf45c3a5]*/
+/*[clinic end generated code: output=a8b6786f605f9548 input=fd163acacf45c3a5]*/
 {
-    CHECK_VALID(NULL);
-    return PyLong_FromSize_t(self->pos);
+    CHECK_VALID(PyValue_NULL);
+    return PyValue_FromInt64(self->pos);
 }
 
 /*[clinic input]
@@ -1032,22 +1035,22 @@ mmap.mmap.flush
 
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 mmap_mmap_flush_impl(mmap_object *self, Py_ssize_t offset, Py_ssize_t size,
                      int flags)
-/*[clinic end generated code: output=4225f4174dc75a53 input=42ba5fb716b6c294]*/
+/*[clinic end generated code: output=e2c4637a20cd7676 input=42ba5fb716b6c294]*/
 {
-    CHECK_VALID(NULL);
+    CHECK_VALID(PyValue_NULL);
     if (size == -1) {
         size = self->size - offset;
     }
     if (size < 0 || offset < 0 || self->size - offset < size) {
         PyErr_SetString(PyExc_ValueError, "flush values out of range");
-        return NULL;
+        return PyValue_NULL;
     }
 
     if (self->access == ACCESS_READ || self->access == ACCESS_COPY)
-        Py_RETURN_NONE;
+        return PyValue_None;
 
 #if defined(MS_WINDOWS_DESKTOP) || defined(MS_WINDOWS_APP) || defined(MS_WINDOWS_SYSTEM)
     if (!FlushViewOfFile(self->data+offset, size)) {
@@ -1061,9 +1064,9 @@ mmap_mmap_flush_impl(mmap_object *self, Py_ssize_t offset, Py_ssize_t size,
     }
     if (-1 == msync(self->data + offset, size, flags)) {
         PyErr_SetFromErrno(PyExc_OSError);
-        return NULL;
+        return PyValue_NULL;
     }
-    Py_RETURN_NONE;
+    return PyValue_None;
 #else
     PyErr_SetString(PyExc_ValueError, "flush not supported on this system");
     return NULL;
@@ -1080,11 +1083,11 @@ mmap.mmap.seek
 
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 mmap_mmap_seek_impl(mmap_object *self, Py_ssize_t dist, int how)
-/*[clinic end generated code: output=00310494e8b8c592 input=e2fda5d081c3db22]*/
+/*[clinic end generated code: output=e77d0a29357b6d65 input=e2fda5d081c3db22]*/
 {
-    CHECK_VALID(NULL);
+    CHECK_VALID(PyValue_NULL);
     Py_ssize_t where;
     switch (how) {
     case 0: /* relative to start */
@@ -1102,16 +1105,16 @@ mmap_mmap_seek_impl(mmap_object *self, Py_ssize_t dist, int how)
         break;
     default:
         PyErr_SetString(PyExc_ValueError, "unknown seek type");
-        return NULL;
+        return PyValue_NULL;
     }
     if (where > self->size || where < 0)
         goto onoutofrange;
     self->pos = where;
-    return PyLong_FromSsize_t(self->pos);
+    return PyValue_FromInt64(self->pos);
 
   onoutofrange:
     PyErr_SetString(PyExc_ValueError, "seek out of range");
-    return NULL;
+    return PyValue_NULL;
 }
 
 /*[clinic input]
@@ -1123,30 +1126,30 @@ mmap.mmap.set_name
 
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 mmap_mmap_set_name_impl(mmap_object *self, const char *name)
-/*[clinic end generated code: output=1edaf4fd51277760 input=7c0e2a17ca6d1adc]*/
+/*[clinic end generated code: output=38bd2c9b698d86f2 input=7c0e2a17ca6d1adc]*/
 {
 #if defined(MAP_ANONYMOUS) && defined(__linux__)
     const char *prefix = "cpython:mmap:";
     if (strlen(name) + strlen(prefix) > 79) {
         PyErr_SetString(PyExc_ValueError, "name is too long");
-        return NULL;
+        return PyValue_NULL;
     }
     if (self->flags & MAP_ANONYMOUS) {
         char buf[80];
         sprintf(buf, "%s%s", prefix, name);
         if (_PyAnnotateMemoryMap(self->data, self->size, buf) < 0) {
             PyErr_SetFromErrno(PyExc_OSError);
-            return NULL;
+            return PyValue_NULL;
         }
-        Py_RETURN_NONE;
+        return PyValue_None;
     }
     else {
         /* cannot name non-anonymous mappings */
         PyErr_SetString(PyExc_ValueError,
                         "Cannot set annotation on non-anonymous mappings");
-        return NULL;
+        return PyValue_NULL;
     }
 #else
     /* naming not supported on this platform */
@@ -1161,11 +1164,11 @@ mmap.mmap.seekable
 
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 mmap_mmap_seekable_impl(mmap_object *self)
-/*[clinic end generated code: output=6311dc3ea300fa38 input=5132505f6e259001]*/
+/*[clinic end generated code: output=1b6b107d5910fee6 input=5132505f6e259001]*/
 {
-    Py_RETURN_TRUE;
+    return PyValue_True;
 }
 
 /*[clinic input]
@@ -1179,14 +1182,14 @@ mmap.mmap.move
 
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 mmap_mmap_move_impl(mmap_object *self, Py_ssize_t dest, Py_ssize_t src,
                     Py_ssize_t cnt)
-/*[clinic end generated code: output=391f549a44181793 input=cf8cfe10d9f6b448]*/
+/*[clinic end generated code: output=30a074f17c28c388 input=cf8cfe10d9f6b448]*/
 {
-    CHECK_VALID(NULL);
+    CHECK_VALID(PyValue_NULL);
     if (!is_writable(self)) {
-        return NULL;
+        return PyValue_NULL;
     } else {
         /* bounds check the values */
         if (dest < 0 || src < 0 || cnt < 0)
@@ -1194,16 +1197,16 @@ mmap_mmap_move_impl(mmap_object *self, Py_ssize_t dest, Py_ssize_t src,
         if (self->size - dest < cnt || self->size - src < cnt)
             goto bounds;
 
-        CHECK_VALID(NULL);
+        CHECK_VALID(PyValue_NULL);
         if (safe_memmove(self->data + dest, self->data + src, cnt) < 0) {
-            return NULL;
+            return PyValue_NULL;
         };
-        Py_RETURN_NONE;
+        return PyValue_None;
 
       bounds:
         PyErr_SetString(PyExc_ValueError,
                         "source, destination, or count out of range");
-        return NULL;
+        return PyValue_NULL;
     }
 }
 
@@ -1228,13 +1231,13 @@ mmap.mmap.__enter__
 
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 mmap_mmap___enter___impl(mmap_object *self)
-/*[clinic end generated code: output=92cfc59f4c4e2d26 input=a446541fbfe0b890]*/
+/*[clinic end generated code: output=227b677cb9d81e81 input=a446541fbfe0b890]*/
 {
-    CHECK_VALID(NULL);
+    CHECK_VALID(PyValue_NULL);
 
-    return Py_NewRef(self);
+    return PyValue_DUP(PyValue_FromObjectBorrow(self));
 }
 
 /*[clinic input]
@@ -1248,10 +1251,10 @@ mmap.mmap.__exit__
 
 [clinic start generated code]*/
 
-static PyObject *
-mmap_mmap___exit___impl(mmap_object *self, PyObject *exc_type,
-                        PyObject *exc_value, PyObject *traceback)
-/*[clinic end generated code: output=bec7e3e319c1f07e input=5f28e91cf752bc64]*/
+static PyValue
+mmap_mmap___exit___impl(mmap_object *self, PyValueBorrow exc_type,
+                        PyValueBorrow exc_value, PyValueBorrow traceback)
+/*[clinic end generated code: output=00ec43b0aea60c76 input=5f28e91cf752bc64]*/
 {
     return mmap_mmap_close_impl(self);
 }
@@ -1316,9 +1319,9 @@ mmap.mmap.__sizeof__
 
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 mmap_mmap___sizeof___impl(mmap_object *self)
-/*[clinic end generated code: output=1aed30daff807d09 input=8a648868a089553c]*/
+/*[clinic end generated code: output=de0877c893ade568 input=8a648868a089553c]*/
 {
     size_t res = _PyObject_SIZE(Py_TYPE(self));
     if (self->tagname) {
@@ -1340,14 +1343,14 @@ mmap.mmap._protect
 
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 mmap_mmap__protect_impl(mmap_object *self, unsigned int flNewProtect,
                         Py_ssize_t start, Py_ssize_t length)
-/*[clinic end generated code: output=a87271a34d1ad6cf input=9170498c5e1482da]*/
+/*[clinic end generated code: output=b1d91fa442b7e01b input=9170498c5e1482da]*/
 {
     DWORD flOldProtect;
 
-    CHECK_VALID(NULL);
+    CHECK_VALID(PyValue_NULL);
 
     if (!VirtualProtect((void *) (self->data + start), length, flNewProtect,
                         &flOldProtect))
@@ -1372,47 +1375,47 @@ mmap.mmap.madvise
 
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 mmap_mmap_madvise_impl(mmap_object *self, int option, Py_ssize_t start,
-                       PyObject *length_obj)
-/*[clinic end generated code: output=816be656f08c0e3c input=2d37f7a4c87f1053]*/
+                       PyValueBorrow length_obj)
+/*[clinic end generated code: output=ac79f155968ea276 input=2d37f7a4c87f1053]*/
 {
     Py_ssize_t length;
 
-    CHECK_VALID(NULL);
-    if (length_obj == Py_None) {
+    CHECK_VALID(PyValue_NULL);
+    if (PyValue_IsNone(length_obj)) {
         length = self->size;
     } else {
         length = _As_Py_ssize_t(length_obj);
         if (length == -1 && PyErr_Occurred()) {
-            return NULL;
+            return PyValue_NULL;
         }
     }
 
     if (start < 0 || start >= self->size) {
         PyErr_SetString(PyExc_ValueError, "madvise start out of bounds");
-        return NULL;
+        return PyValue_NULL;
     }
     if (length < 0) {
         PyErr_SetString(PyExc_ValueError, "madvise length invalid");
-        return NULL;
+        return PyValue_NULL;
     }
     if (PY_SSIZE_T_MAX - start < length) {
         PyErr_SetString(PyExc_OverflowError, "madvise length too large");
-        return NULL;
+        return PyValue_NULL;
     }
 
     if (start + length > self->size) {
         length = self->size - start;
     }
 
-    CHECK_VALID(NULL);
+    CHECK_VALID(PyValue_NULL);
     if (madvise(self->data + start, length, option) != 0) {
         PyErr_SetFromErrno(PyExc_OSError);
-        return NULL;
+        return PyValue_NULL;
     }
 
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 #endif // HAVE_MADVISE
 
@@ -1535,7 +1538,7 @@ mmap_subscript_impl(mmap_object *self, PyObject *item)
 {
     CHECK_VALID(NULL);
     if (PyIndex_Check(item)) {
-        Py_ssize_t i = PyNumber_AsSsize_t(item, PyExc_IndexError);
+        Py_ssize_t i = _PyValue_AsSsize_t(PyValue_FromObjectBorrow(item), PyExc_IndexError);
         if (i == -1 && PyErr_Occurred())
             return NULL;
         if (i < 0)
@@ -1649,7 +1652,7 @@ mmap_ass_subscript_impl(mmap_object *self, PyObject *item, PyObject *value)
         return -1;
 
     if (PyIndex_Check(item)) {
-        Py_ssize_t i = PyNumber_AsSsize_t(item, PyExc_IndexError);
+        Py_ssize_t i = _PyValue_AsSsize_t(PyValue_FromObjectBorrow(item), PyExc_IndexError);
         if (i == -1 && PyErr_Occurred())
             return -1;
 
@@ -1663,7 +1666,7 @@ mmap_ass_subscript_impl(mmap_object *self, PyObject *item, PyObject *value)
                             "mmap item value must be an int");
             return -1;
         }
-        Py_ssize_t v = PyNumber_AsSsize_t(value, PyExc_TypeError);
+        Py_ssize_t v = _PyValue_AsSsize_t(PyValue_FromObjectBorrow(value), PyExc_TypeError);
         if (v == -1 && PyErr_Occurred())
             return -1;
         if (v < 0 || v > 255) {

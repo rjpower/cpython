@@ -16,9 +16,12 @@
 #  define Py_BUILD_CORE_MODULE 1
 #endif
 
+#define Py_VALUE_CORE 1
 #include "Python.h"
 #include "pycore_hashtable.h"
 #include "pycore_strhex.h"              // _Py_strhex()
+#include "pycore_value.h"         // _PyValue_AsObjectAt()
+#include "pycore_value_slots.h"// _PyValue_FromObjectResult()
 
 /*
  * Taken from blake2module.c. In the future, detection of SIMD support
@@ -187,8 +190,8 @@ typedef void
                           uint8_t *key, uint32_t keylen,
                           uint8_t *msg, uint32_t msglen);
 /* Function pointer type for 1-shot HACL* HMAC CPython AC functions. */
-typedef PyObject *
-(*PyAC_HMAC_compute_func)(PyObject *module, PyObject *key, PyObject *msg);
+typedef PyValue
+(*PyAC_HMAC_compute_func)(PyObject *module, PyValueBorrow key, PyValueBorrow msg);
 
 /*
  * HACL* HMAC minimal interface.
@@ -291,6 +294,11 @@ typedef struct HMACObject {
 #define HMACObject_CAST(op) ((HMACObject *)(op))
 
 // --- HMAC module clinic configuration ---------------------------------------
+
+/*[clinic input]
+value_emission
+[clinic start generated code]*/
+/*[clinic end generated code: output=da39a3ee5e6b4b0d input=eb7b17088bfd7215]*/
 
 /*[clinic input]
 module _hmac
@@ -743,41 +751,56 @@ _hmac.new
 Return a new HMAC object.
 [clinic start generated code]*/
 
-static PyObject *
-_hmac_new_impl(PyObject *module, PyObject *keyobj, PyObject *msgobj,
-               PyObject *hash_info_ref)
-/*[clinic end generated code: output=7c7573a427d58758 input=92fc7c0a00707d42]*/
+static PyValue
+_hmac_new_impl(PyObject *module, PyValueBorrow keyobj, PyValueBorrow msgobj,
+               PyValueBorrow hash_info_ref)
+/*[clinic end generated code: output=7f5da7442b68f55b input=92fc7c0a00707d42]*/
 {
     hmacmodule_state *state = get_hmacmodule_state(module);
-    if (hash_info_ref == NULL) {
+    if (PyValue_IsNull(hash_info_ref)) {
         PyErr_SetString(PyExc_TypeError,
                         "new() missing 1 required argument 'digestmod'");
-        return NULL;
+        return PyValue_NULL;
     }
 
-    const py_hmac_hinfo *info = find_hash_info(state, hash_info_ref);
+    PyObject *hash_info_obj = _PyValue_AsObjectAt(hash_info_ref, BOX_SITE_PARSER);
+    if (hash_info_obj == NULL) {
+        return PyValue_NULL;
+    }
+    const py_hmac_hinfo *info = find_hash_info(state, hash_info_obj);
+    Py_DECREF(hash_info_obj);
     if (info == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     HMACObject *self = hmac_new_object(state->hmac_type);
     if (self == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
     hmac_set_hinfo(state, self, info);
     int rc;
     // Create the HACL* internal state with the given key.
     Py_buffer key;
-    GET_BUFFER_VIEW_OR_ERROR(keyobj, &key, goto error);
+    PyObject *keyobj_o = _PyValue_AsObjectAt(keyobj, BOX_SITE_PARSER);
+    if (keyobj_o == NULL) {
+        goto error;
+    }
+    GET_BUFFER_VIEW_OR_ERROR(keyobj_o, &key, {Py_DECREF(keyobj_o); goto error;});
+    Py_DECREF(keyobj_o);
     rc = hmac_new_initial_state(self, key.buf, key.len);
     PyBuffer_Release(&key);
     if (rc < 0) {
         goto error;
     }
     // Feed the internal state the initial message if any.
-    if (msgobj != NULL && msgobj != Py_None) {
+    if (!PyValue_IsNull(msgobj) && !PyValue_IsNone(msgobj)) {
         Py_buffer msg;
-        GET_BUFFER_VIEW_OR_ERROR(msgobj, &msg, goto error);
+        PyObject *msgobj_o = _PyValue_AsObjectAt(msgobj, BOX_SITE_PARSER);
+        if (msgobj_o == NULL) {
+            goto error;
+        }
+        GET_BUFFER_VIEW_OR_ERROR(msgobj_o, &msg, {Py_DECREF(msgobj_o); goto error;});
+        Py_DECREF(msgobj_o);
         /* Do not use self->mutex here as this is the constructor
          * where it is not yet possible to have concurrent access. */
         hacl_errno_t code;
@@ -792,11 +815,11 @@ _hmac_new_impl(PyObject *module, PyObject *keyobj, PyObject *msgobj,
         }
     }
     assert(rc == 0);
-    return (PyObject *)self;
+    return _PyValue_FromObjectResult((PyObject *)self);
 
 error:
     Py_DECREF(self);
-    return NULL;
+    return PyValue_NULL;
 }
 
 /*
@@ -845,13 +868,13 @@ _hmac.HMAC.copy
 Return a copy ("clone") of the HMAC object.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _hmac_HMAC_copy_impl(HMACObject *self, PyTypeObject *cls)
-/*[clinic end generated code: output=a955bfa55b65b215 input=17b2c0ad0b147e36]*/
+/*[clinic end generated code: output=5988ba62fe2492bb input=17b2c0ad0b147e36]*/
 {
     HMACObject *copy = hmac_new_object(cls);
     if (copy == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     HASHLIB_ACQUIRE_LOCK(self);
@@ -863,10 +886,10 @@ _hmac_HMAC_copy_impl(HMACObject *self, PyTypeObject *cls)
 
     if (rc < 0) {
         Py_DECREF(copy);
-        return NULL;
+        return PyValue_NULL;
     }
 
-    return (PyObject *)copy;
+    return _PyValue_FromObjectResult((PyObject *)copy);
 }
 
 /*[clinic input]
@@ -877,19 +900,24 @@ _hmac.HMAC.update
 Update the HMAC object with the given message.
 [clinic start generated code]*/
 
-static PyObject *
-_hmac_HMAC_update_impl(HMACObject *self, PyObject *msgobj)
-/*[clinic end generated code: output=962134ada5e55985 input=7c0ea830efb03367]*/
+static PyValue
+_hmac_HMAC_update_impl(HMACObject *self, PyValueBorrow msgobj)
+/*[clinic end generated code: output=b1fcd309d49b4e7a input=7c0ea830efb03367]*/
 {
     hacl_errno_t code;
     Py_buffer msg;
-    GET_BUFFER_VIEW_OR_ERROUT(msgobj, &msg);
+    PyObject *msgobj_o = _PyValue_AsObjectAt(msgobj, BOX_SITE_PARSER);
+    if (msgobj_o == NULL) {
+        return PyValue_NULL;
+    }
+    GET_BUFFER_VIEW_OR_ERROR(msgobj_o, &msg, {Py_DECREF(msgobj_o); return PyValue_NULL;});
+    Py_DECREF(msgobj_o);
     HASHLIB_EXTERNAL_INSTRUCTIONS_LOCKED(
         self, msg.len,
         code = _hacl_hmac_state_update(self->state, msg.buf, msg.len)
     );
     PyBuffer_Release(&msg);
-    return _hacl_convert_errno(code) < 0 ? NULL : Py_None;
+    return _PyValue_FromObjectResult(_hacl_convert_errno(code) < 0 ? NULL : Py_None);
 }
 
 /*
@@ -925,16 +953,16 @@ Return the digest of the bytes passed to the update() method so far.
 This method may raise a MemoryError.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _hmac_HMAC_digest_impl(HMACObject *self)
-/*[clinic end generated code: output=5bf3cc5862d26ada input=a70feb0b8e2bbe7d]*/
+/*[clinic end generated code: output=ddff8d12b08031f1 input=a70feb0b8e2bbe7d]*/
 {
     assert(self->digest_size <= Py_hmac_hash_max_digest_size);
     uint8_t digest[Py_hmac_hash_max_digest_size];
     if (hmac_digest_compute_locked(self, digest) < 0) {
-        return NULL;
+        return PyValue_NULL;
     }
-    return PyBytes_FromStringAndSize((const char *)digest, self->digest_size);
+    return _PyValue_FromObjectResult(PyBytes_FromStringAndSize((const char *)digest, self->digest_size));
 }
 
 /*[clinic input]
@@ -949,16 +977,16 @@ non-binary environments.
 This method may raise a MemoryError.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _hmac_HMAC_hexdigest_impl(HMACObject *self)
-/*[clinic end generated code: output=6659807a09ae14ec input=9097dce732ed808f]*/
+/*[clinic end generated code: output=7e391035a10bd8da input=9097dce732ed808f]*/
 {
     assert(self->digest_size <= Py_hmac_hash_max_digest_size);
     uint8_t digest[Py_hmac_hash_max_digest_size];
     if (hmac_digest_compute_locked(self, digest) < 0) {
-        return NULL;
+        return PyValue_NULL;
     }
-    return _Py_strhex((const char *)digest, self->digest_size);
+    return _PyValue_FromObjectResult(_Py_strhex((const char *)digest, self->digest_size));
 }
 
 /*[clinic input]
@@ -1080,15 +1108,20 @@ _hmac.compute_digest
 
 [clinic start generated code]*/
 
-static PyObject *
-_hmac_compute_digest_impl(PyObject *module, PyObject *key, PyObject *msg,
-                          PyObject *digest)
-/*[clinic end generated code: output=c519b7c4c9f57333 input=1c2bfc2cd8598574]*/
+static PyValue
+_hmac_compute_digest_impl(PyObject *module, PyValueBorrow key,
+                          PyValueBorrow msg, PyValueBorrow digest)
+/*[clinic end generated code: output=2ebc051fcf41e6ce input=1c2bfc2cd8598574]*/
 {
     hmacmodule_state *state = get_hmacmodule_state(module);
-    const py_hmac_hinfo *info = find_hash_info(state, digest);
+    PyObject *digest_obj = _PyValue_AsObjectAt(digest, BOX_SITE_PARSER);
+    if (digest_obj == NULL) {
+        return PyValue_NULL;
+    }
+    const py_hmac_hinfo *info = find_hash_info(state, digest_obj);
+    Py_DECREF(digest_obj);
     if (info == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
     assert(info->api.compute_py != NULL);
     return info->api.compute_py(module, key, msg);
@@ -1104,10 +1137,22 @@ _hmac_compute_digest_impl(PyObject *module, PyObject *key, PyObject *msg,
  * of dispatching to the OpenSSL implementation in this case.
  */
 static int
-hmac_get_buffer_views(PyObject *key, Py_buffer *keyview,
-                      PyObject *msg, Py_buffer *msgview)
+hmac_get_buffer_view_value(PyValueBorrow value, Py_buffer *view)
 {
-    if (_Py_hashlib_get_buffer_view(key, keyview) < 0) {
+    PyObject *obj = _PyValue_AsObjectAt(value, BOX_SITE_PARSER);
+    if (obj == NULL) {
+        return -1;
+    }
+    int rc = _Py_hashlib_get_buffer_view(obj, view);
+    Py_DECREF(obj);
+    return rc;
+}
+
+static int
+hmac_get_buffer_views(PyValueBorrow key, Py_buffer *keyview,
+                      PyValueBorrow msg, Py_buffer *msgview)
+{
+    if (hmac_get_buffer_view_value(key, keyview) < 0) {
         return -1;
     }
     if (!has_uint32_t_buffer_length(keyview)) {
@@ -1115,7 +1160,7 @@ hmac_get_buffer_views(PyObject *key, Py_buffer *keyview,
         set_invalid_key_length_error();
         return -1;
     }
-    if (_Py_hashlib_get_buffer_view(msg, msgview) < 0) {
+    if (hmac_get_buffer_view_value(msg, msgview) < 0) {
         PyBuffer_Release(keyview);
         return -1;
     }
@@ -1135,7 +1180,7 @@ hmac_get_buffer_views(PyObject *key, Py_buffer *keyview,
     do {                                                                \
         Py_buffer keyview, msgview;                                     \
         if (hmac_get_buffer_views(key, &keyview, msg, &msgview) < 0) {  \
-            return NULL;                                                \
+            return PyValue_NULL;                                        \
         }                                                               \
         uint8_t out[Py_hmac_## HACL_HID ##_digest_size];                \
         Py_hmac_## HACL_HID ##_compute_func(                            \
@@ -1145,10 +1190,10 @@ hmac_get_buffer_views(PyObject *key, Py_buffer *keyview,
         );                                                              \
         PyBuffer_Release(&msgview);                                     \
         PyBuffer_Release(&keyview);                                     \
-        return PyBytes_FromStringAndSize(                               \
+        return _PyValue_FromObjectResult(PyBytes_FromStringAndSize(     \
             (const char *)out,                                          \
             Py_hmac_## HACL_HID ##_digest_size                          \
-        );                                                              \
+        ));                                                             \
     } while (0)
 
 /*[clinic input]
@@ -1160,9 +1205,10 @@ _hmac.compute_md5
 
 [clinic start generated code]*/
 
-static PyObject *
-_hmac_compute_md5_impl(PyObject *module, PyObject *key, PyObject *msg)
-/*[clinic end generated code: output=7837a4ceccbbf636 input=77a4b774c7d61218]*/
+static PyValue
+_hmac_compute_md5_impl(PyObject *module, PyValueBorrow key,
+                       PyValueBorrow msg)
+/*[clinic end generated code: output=db0724463b9dd22d input=77a4b774c7d61218]*/
 {
     HACL_HMAC_COMPUTE_NAMED_DIGEST(md5, key, msg);
 }
@@ -1176,9 +1222,10 @@ _hmac.compute_sha1
 
 [clinic start generated code]*/
 
-static PyObject *
-_hmac_compute_sha1_impl(PyObject *module, PyObject *key, PyObject *msg)
-/*[clinic end generated code: output=79fd7689c83691d8 input=3b64dccc6bdbe4ba]*/
+static PyValue
+_hmac_compute_sha1_impl(PyObject *module, PyValueBorrow key,
+                        PyValueBorrow msg)
+/*[clinic end generated code: output=36176d81b3b20d20 input=3b64dccc6bdbe4ba]*/
 {
     HACL_HMAC_COMPUTE_NAMED_DIGEST(sha1, key, msg);
 }
@@ -1192,9 +1239,10 @@ _hmac.compute_sha224 as _hmac_compute_sha2_224
 
 [clinic start generated code]*/
 
-static PyObject *
-_hmac_compute_sha2_224_impl(PyObject *module, PyObject *key, PyObject *msg)
-/*[clinic end generated code: output=7f21f1613e53979e input=a1a75f25f23449af]*/
+static PyValue
+_hmac_compute_sha2_224_impl(PyObject *module, PyValueBorrow key,
+                            PyValueBorrow msg)
+/*[clinic end generated code: output=7113d29dffda2c7e input=a1a75f25f23449af]*/
 {
     HACL_HMAC_COMPUTE_NAMED_DIGEST(sha2_224, key, msg);
 }
@@ -1208,9 +1256,10 @@ _hmac.compute_sha256 as _hmac_compute_sha2_256
 
 [clinic start generated code]*/
 
-static PyObject *
-_hmac_compute_sha2_256_impl(PyObject *module, PyObject *key, PyObject *msg)
-/*[clinic end generated code: output=d4a291f7d9a82459 input=5c9ccf2df048ace3]*/
+static PyValue
+_hmac_compute_sha2_256_impl(PyObject *module, PyValueBorrow key,
+                            PyValueBorrow msg)
+/*[clinic end generated code: output=d1182d5192f0dc5e input=5c9ccf2df048ace3]*/
 {
     HACL_HMAC_COMPUTE_NAMED_DIGEST(sha2_256, key, msg);
 }
@@ -1224,9 +1273,10 @@ _hmac.compute_sha384 as _hmac_compute_sha2_384
 
 [clinic start generated code]*/
 
-static PyObject *
-_hmac_compute_sha2_384_impl(PyObject *module, PyObject *key, PyObject *msg)
-/*[clinic end generated code: output=f211fa26e3700c27 input=2fee2c14766af231]*/
+static PyValue
+_hmac_compute_sha2_384_impl(PyObject *module, PyValueBorrow key,
+                            PyValueBorrow msg)
+/*[clinic end generated code: output=a2c903267bf7ed62 input=2fee2c14766af231]*/
 {
     HACL_HMAC_COMPUTE_NAMED_DIGEST(sha2_384, key, msg);
 }
@@ -1240,9 +1290,10 @@ _hmac.compute_sha512 as _hmac_compute_sha2_512
 
 [clinic start generated code]*/
 
-static PyObject *
-_hmac_compute_sha2_512_impl(PyObject *module, PyObject *key, PyObject *msg)
-/*[clinic end generated code: output=d5c20373762cecca input=3371eaac315c7864]*/
+static PyValue
+_hmac_compute_sha2_512_impl(PyObject *module, PyValueBorrow key,
+                            PyValueBorrow msg)
+/*[clinic end generated code: output=130174480381ae2c input=3371eaac315c7864]*/
 {
     HACL_HMAC_COMPUTE_NAMED_DIGEST(sha2_512, key, msg);
 }
@@ -1256,9 +1307,10 @@ _hmac.compute_sha3_224
 
 [clinic start generated code]*/
 
-static PyObject *
-_hmac_compute_sha3_224_impl(PyObject *module, PyObject *key, PyObject *msg)
-/*[clinic end generated code: output=a242ccac9ad9c22b input=d0ab0c7d189c3d87]*/
+static PyValue
+_hmac_compute_sha3_224_impl(PyObject *module, PyValueBorrow key,
+                            PyValueBorrow msg)
+/*[clinic end generated code: output=6bf849de5c891e9b input=d0ab0c7d189c3d87]*/
 {
     HACL_HMAC_COMPUTE_NAMED_DIGEST(sha3_224, key, msg);
 }
@@ -1272,9 +1324,10 @@ _hmac.compute_sha3_256
 
 [clinic start generated code]*/
 
-static PyObject *
-_hmac_compute_sha3_256_impl(PyObject *module, PyObject *key, PyObject *msg)
-/*[clinic end generated code: output=b539dbb61af2fe0b input=f05d7b6364b35d02]*/
+static PyValue
+_hmac_compute_sha3_256_impl(PyObject *module, PyValueBorrow key,
+                            PyValueBorrow msg)
+/*[clinic end generated code: output=36948a41aabb67ac input=f05d7b6364b35d02]*/
 {
     HACL_HMAC_COMPUTE_NAMED_DIGEST(sha3_256, key, msg);
 }
@@ -1288,9 +1341,10 @@ _hmac.compute_sha3_384
 
 [clinic start generated code]*/
 
-static PyObject *
-_hmac_compute_sha3_384_impl(PyObject *module, PyObject *key, PyObject *msg)
-/*[clinic end generated code: output=5eb372fb5c4ffd3a input=d842d393e7aa05ae]*/
+static PyValue
+_hmac_compute_sha3_384_impl(PyObject *module, PyValueBorrow key,
+                            PyValueBorrow msg)
+/*[clinic end generated code: output=e193f125f6cc36e2 input=d842d393e7aa05ae]*/
 {
     HACL_HMAC_COMPUTE_NAMED_DIGEST(sha3_384, key, msg);
 }
@@ -1304,9 +1358,10 @@ _hmac.compute_sha3_512
 
 [clinic start generated code]*/
 
-static PyObject *
-_hmac_compute_sha3_512_impl(PyObject *module, PyObject *key, PyObject *msg)
-/*[clinic end generated code: output=154bcbf8c2eacac1 input=166fe5baaeaabfde]*/
+static PyValue
+_hmac_compute_sha3_512_impl(PyObject *module, PyValueBorrow key,
+                            PyValueBorrow msg)
+/*[clinic end generated code: output=2ce1c00f04c88b57 input=166fe5baaeaabfde]*/
 {
     HACL_HMAC_COMPUTE_NAMED_DIGEST(sha3_512, key, msg);
 }
@@ -1320,9 +1375,10 @@ _hmac.compute_blake2s_32
 
 [clinic start generated code]*/
 
-static PyObject *
-_hmac_compute_blake2s_32_impl(PyObject *module, PyObject *key, PyObject *msg)
-/*[clinic end generated code: output=cfc730791bc62361 input=d22c36e7fe31a985]*/
+static PyValue
+_hmac_compute_blake2s_32_impl(PyObject *module, PyValueBorrow key,
+                              PyValueBorrow msg)
+/*[clinic end generated code: output=a6c0409647578929 input=d22c36e7fe31a985]*/
 {
     HACL_HMAC_COMPUTE_NAMED_DIGEST(blake2s_32, key, msg);
 }
@@ -1336,9 +1392,10 @@ _hmac.compute_blake2b_32
 
 [clinic start generated code]*/
 
-static PyObject *
-_hmac_compute_blake2b_32_impl(PyObject *module, PyObject *key, PyObject *msg)
-/*[clinic end generated code: output=765c5c4fb9124636 input=4a35ee058d172f4b]*/
+static PyValue
+_hmac_compute_blake2b_32_impl(PyObject *module, PyValueBorrow key,
+                              PyValueBorrow msg)
+/*[clinic end generated code: output=6c14d7d19b7ce27e input=4a35ee058d172f4b]*/
 {
     HACL_HMAC_COMPUTE_NAMED_DIGEST(blake2b_32, key, msg);
 }

@@ -2,7 +2,13 @@
 preserve
 [clinic start generated code]*/
 
+#ifndef Py_VALUE_CORE
+#  error "value-emission Clinic output requires Py_VALUE_CORE"
+#endif
+
 #include "pycore_modsupport.h"    // _PyArg_BadArgument()
+#include "pycore_value.h"         // _PyValue_AsObjectAt()
+#include "pycore_value_call.h"    // METH_VALUE
 
 PyDoc_STRVAR(pwd_getpwuid__doc__,
 "getpwuid($module, uidobj, /)\n"
@@ -13,21 +19,32 @@ PyDoc_STRVAR(pwd_getpwuid__doc__,
 "See `help(pwd)` for more on password database entries.");
 
 #define PWD_GETPWUID_METHODDEF    \
-    {"getpwuid", (PyCFunction)pwd_getpwuid, METH_O, pwd_getpwuid__doc__},
+    {"getpwuid", _PyCFunction_CAST(pwd_getpwuid), METH_VALUE|METH_O, pwd_getpwuid__doc__},
 
-static PyObject *
+static PyValue
 pwd_getpwuid_impl(PyObject *module, uid_t uid);
 
-static PyObject *
-pwd_getpwuid(PyObject *module, PyObject *arg)
+static PyValue
+pwd_getpwuid(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     uid_t uid;
 
-    if (!_Py_Uid_Converter(arg, &uid)) {
-        goto exit;
+    {
+        PyObject *_obj = _PyValue_AsObjectAt(PyValue_Borrow(args[0]), BOX_SITE_PARSER);
+        if (_obj == NULL) {
+            goto exit;
+        }
+        int _ok;
+
+        _ok = _Py_Uid_Converter(_obj, &uid);
+
+        Py_DECREF(_obj);
+        if (!_ok) {
+            goto exit;
+        }
     }
-    return_value = pwd_getpwuid_impl(module, uid);
+    return_value = pwd_getpwuid_impl(PyValue_AsKnownObjectBorrow(module), uid);
 
 exit:
     return return_value;
@@ -42,23 +59,27 @@ PyDoc_STRVAR(pwd_getpwnam__doc__,
 "See `help(pwd)` for more on password database entries.");
 
 #define PWD_GETPWNAM_METHODDEF    \
-    {"getpwnam", (PyCFunction)pwd_getpwnam, METH_O, pwd_getpwnam__doc__},
+    {"getpwnam", _PyCFunction_CAST(pwd_getpwnam), METH_VALUE|METH_O, pwd_getpwnam__doc__},
 
-static PyObject *
+static PyValue
 pwd_getpwnam_impl(PyObject *module, PyObject *name);
 
-static PyObject *
-pwd_getpwnam(PyObject *module, PyObject *arg)
+static PyValue
+pwd_getpwnam(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *name;
 
-    if (!PyUnicode_Check(arg)) {
-        _PyArg_BadArgument("getpwnam", "argument", "str", arg);
+    if (!PyValue_IsObject(PyValue_Borrow(args[0]))) {
+        _PyArg_BadArgumentValue("getpwnam", "argument", "str", PyValue_Borrow(args[0]));
         goto exit;
     }
-    name = arg;
-    return_value = pwd_getpwnam_impl(module, name);
+    if (!PyUnicode_Check(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])))) {
+        _PyArg_BadArgument("getpwnam", "argument", "str", PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])));
+        goto exit;
+    }
+    name = PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0]));
+    return_value = pwd_getpwnam_impl(PyValue_AsKnownObjectBorrow(module), name);
 
 exit:
     return return_value;
@@ -75,15 +96,19 @@ PyDoc_STRVAR(pwd_getpwall__doc__,
 "See help(pwd) for more on password database entries.");
 
 #define PWD_GETPWALL_METHODDEF    \
-    {"getpwall", (PyCFunction)pwd_getpwall, METH_NOARGS, pwd_getpwall__doc__},
+    {"getpwall", _PyCFunction_CAST(pwd_getpwall), METH_VALUE|METH_NOARGS, pwd_getpwall__doc__},
 
-static PyObject *
+static PyValue
 pwd_getpwall_impl(PyObject *module);
 
-static PyObject *
-pwd_getpwall(PyObject *module, PyObject *Py_UNUSED(ignored))
+static PyValue
+pwd_getpwall(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return pwd_getpwall_impl(module);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = pwd_getpwall_impl(PyValue_AsKnownObjectBorrow(module));
+
+    return return_value;
 }
 
 #endif /* defined(HAVE_GETPWENT) */
@@ -91,4 +116,4 @@ pwd_getpwall(PyObject *module, PyObject *Py_UNUSED(ignored))
 #ifndef PWD_GETPWALL_METHODDEF
     #define PWD_GETPWALL_METHODDEF
 #endif /* !defined(PWD_GETPWALL_METHODDEF) */
-/*[clinic end generated code: output=5bca0b2c2f4c5e89 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=02eb9bcdbfe72d4f input=a9049054013a1b77]*/

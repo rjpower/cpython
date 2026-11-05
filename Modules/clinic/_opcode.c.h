@@ -2,12 +2,18 @@
 preserve
 [clinic start generated code]*/
 
+#ifndef Py_VALUE_CORE
+#  error "value-emission Clinic output requires Py_VALUE_CORE"
+#endif
+
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 #  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
 #  include "pycore_value.h"       // _PyValue_STATIC_IMMORTAL()
 #endif
-#include "pycore_modsupport.h"    // _PyArg_UnpackKeywords()
+#include "pycore_long_value.h"    // _PyValue_AsInt()
+#include "pycore_modsupport.h"    // _PyArg_UnpackKeywordsValue()
+#include "pycore_value_call.h"    // METH_VALUE
 
 PyDoc_STRVAR(_opcode_stack_effect__doc__,
 "stack_effect($module, opcode, oparg=None, /, *, jump=None)\n"
@@ -16,16 +22,16 @@ PyDoc_STRVAR(_opcode_stack_effect__doc__,
 "Compute the stack effect of the opcode.");
 
 #define _OPCODE_STACK_EFFECT_METHODDEF    \
-    {"stack_effect", _PyCFunction_CAST(_opcode_stack_effect), METH_FASTCALL|METH_KEYWORDS, _opcode_stack_effect__doc__},
+    {"stack_effect", _PyCFunction_CAST(_opcode_stack_effect), METH_VALUE|METH_KEYWORDS, _opcode_stack_effect__doc__},
 
 static int
-_opcode_stack_effect_impl(PyObject *module, int opcode, PyObject *oparg,
-                          PyObject *jump);
+_opcode_stack_effect_impl(PyObject *module, int opcode, PyValueBorrow oparg,
+                          PyValueBorrow jump);
 
-static PyObject *
-_opcode_stack_effect(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_opcode_stack_effect(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
@@ -53,38 +59,31 @@ _opcode_stack_effect(PyObject *module, PyObject *const *args, Py_ssize_t nargs, 
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[3];
-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 1;
+    Py_ssize_t _idx[3];
     int opcode;
-    PyObject *oparg = Py_None;
-    PyObject *jump = Py_None;
+    PyValueBorrow oparg = PyValue_Borrow(PyValue_None);
+    PyValueBorrow jump = PyValue_Borrow(PyValue_None);
     int _return_value;
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 1, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 1, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, _idx, 3)) {
         goto exit;
     }
-    opcode = PyLong_AsInt(args[0]);
+    opcode = _PyValue_AsInt(PyValue_Borrow(args[_idx[0]]));
     if (opcode == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    if (nargs < 2) {
-        goto skip_optional_posonly;
+    if (_idx[1] >= 0) {
+        oparg = PyValue_Borrow(args[_idx[1]]);
     }
-    noptargs--;
-    oparg = args[1];
-skip_optional_posonly:
-    if (!noptargs) {
-        goto skip_optional_kwonly;
+    if (_idx[2] >= 0) {
+        jump = PyValue_Borrow(args[_idx[2]]);
     }
-    jump = args[2];
-skip_optional_kwonly:
-    _return_value = _opcode_stack_effect_impl(module, opcode, oparg, jump);
+    _return_value = _opcode_stack_effect_impl(PyValue_AsKnownObjectBorrow(module), opcode, oparg, jump);
     if ((_return_value == -1) && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = PyLong_FromLong((long)_return_value);
+    return_value = PyValue_FromInt64((int64_t)_return_value);
 
 exit:
     return return_value;
@@ -97,15 +96,15 @@ PyDoc_STRVAR(_opcode_is_valid__doc__,
 "Return True if opcode is valid, False otherwise.");
 
 #define _OPCODE_IS_VALID_METHODDEF    \
-    {"is_valid", _PyCFunction_CAST(_opcode_is_valid), METH_FASTCALL|METH_KEYWORDS, _opcode_is_valid__doc__},
+    {"is_valid", _PyCFunction_CAST(_opcode_is_valid), METH_VALUE|METH_KEYWORDS, _opcode_is_valid__doc__},
 
 static int
 _opcode_is_valid_impl(PyObject *module, int opcode);
 
-static PyObject *
-_opcode_is_valid(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_opcode_is_valid(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
@@ -133,24 +132,23 @@ _opcode_is_valid(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyOb
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[1];
+    Py_ssize_t _idx[1];
     int opcode;
     int _return_value;
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, _idx, 1)) {
         goto exit;
     }
-    opcode = PyLong_AsInt(args[0]);
+    opcode = _PyValue_AsInt(PyValue_Borrow(args[_idx[0]]));
     if (opcode == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    _return_value = _opcode_is_valid_impl(module, opcode);
+    _return_value = _opcode_is_valid_impl(PyValue_AsKnownObjectBorrow(module), opcode);
     if ((_return_value == -1) && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = PyBool_FromLong((long)_return_value);
+    return_value = _return_value ? PyValue_True : PyValue_False;
 
 exit:
     return return_value;
@@ -163,15 +161,15 @@ PyDoc_STRVAR(_opcode_has_arg__doc__,
 "Return True if the opcode uses its oparg, False otherwise.");
 
 #define _OPCODE_HAS_ARG_METHODDEF    \
-    {"has_arg", _PyCFunction_CAST(_opcode_has_arg), METH_FASTCALL|METH_KEYWORDS, _opcode_has_arg__doc__},
+    {"has_arg", _PyCFunction_CAST(_opcode_has_arg), METH_VALUE|METH_KEYWORDS, _opcode_has_arg__doc__},
 
 static int
 _opcode_has_arg_impl(PyObject *module, int opcode);
 
-static PyObject *
-_opcode_has_arg(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_opcode_has_arg(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
@@ -199,24 +197,23 @@ _opcode_has_arg(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObj
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[1];
+    Py_ssize_t _idx[1];
     int opcode;
     int _return_value;
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, _idx, 1)) {
         goto exit;
     }
-    opcode = PyLong_AsInt(args[0]);
+    opcode = _PyValue_AsInt(PyValue_Borrow(args[_idx[0]]));
     if (opcode == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    _return_value = _opcode_has_arg_impl(module, opcode);
+    _return_value = _opcode_has_arg_impl(PyValue_AsKnownObjectBorrow(module), opcode);
     if ((_return_value == -1) && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = PyBool_FromLong((long)_return_value);
+    return_value = _return_value ? PyValue_True : PyValue_False;
 
 exit:
     return return_value;
@@ -229,15 +226,15 @@ PyDoc_STRVAR(_opcode_has_const__doc__,
 "Return True if the opcode accesses a constant, False otherwise.");
 
 #define _OPCODE_HAS_CONST_METHODDEF    \
-    {"has_const", _PyCFunction_CAST(_opcode_has_const), METH_FASTCALL|METH_KEYWORDS, _opcode_has_const__doc__},
+    {"has_const", _PyCFunction_CAST(_opcode_has_const), METH_VALUE|METH_KEYWORDS, _opcode_has_const__doc__},
 
 static int
 _opcode_has_const_impl(PyObject *module, int opcode);
 
-static PyObject *
-_opcode_has_const(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_opcode_has_const(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
@@ -265,24 +262,23 @@ _opcode_has_const(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyO
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[1];
+    Py_ssize_t _idx[1];
     int opcode;
     int _return_value;
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, _idx, 1)) {
         goto exit;
     }
-    opcode = PyLong_AsInt(args[0]);
+    opcode = _PyValue_AsInt(PyValue_Borrow(args[_idx[0]]));
     if (opcode == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    _return_value = _opcode_has_const_impl(module, opcode);
+    _return_value = _opcode_has_const_impl(PyValue_AsKnownObjectBorrow(module), opcode);
     if ((_return_value == -1) && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = PyBool_FromLong((long)_return_value);
+    return_value = _return_value ? PyValue_True : PyValue_False;
 
 exit:
     return return_value;
@@ -295,15 +291,15 @@ PyDoc_STRVAR(_opcode_has_name__doc__,
 "Return True if the opcode accesses an attribute by name, False otherwise.");
 
 #define _OPCODE_HAS_NAME_METHODDEF    \
-    {"has_name", _PyCFunction_CAST(_opcode_has_name), METH_FASTCALL|METH_KEYWORDS, _opcode_has_name__doc__},
+    {"has_name", _PyCFunction_CAST(_opcode_has_name), METH_VALUE|METH_KEYWORDS, _opcode_has_name__doc__},
 
 static int
 _opcode_has_name_impl(PyObject *module, int opcode);
 
-static PyObject *
-_opcode_has_name(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_opcode_has_name(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
@@ -331,24 +327,23 @@ _opcode_has_name(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyOb
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[1];
+    Py_ssize_t _idx[1];
     int opcode;
     int _return_value;
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, _idx, 1)) {
         goto exit;
     }
-    opcode = PyLong_AsInt(args[0]);
+    opcode = _PyValue_AsInt(PyValue_Borrow(args[_idx[0]]));
     if (opcode == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    _return_value = _opcode_has_name_impl(module, opcode);
+    _return_value = _opcode_has_name_impl(PyValue_AsKnownObjectBorrow(module), opcode);
     if ((_return_value == -1) && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = PyBool_FromLong((long)_return_value);
+    return_value = _return_value ? PyValue_True : PyValue_False;
 
 exit:
     return return_value;
@@ -361,15 +356,15 @@ PyDoc_STRVAR(_opcode_has_jump__doc__,
 "Return True if the opcode has a jump target, False otherwise.");
 
 #define _OPCODE_HAS_JUMP_METHODDEF    \
-    {"has_jump", _PyCFunction_CAST(_opcode_has_jump), METH_FASTCALL|METH_KEYWORDS, _opcode_has_jump__doc__},
+    {"has_jump", _PyCFunction_CAST(_opcode_has_jump), METH_VALUE|METH_KEYWORDS, _opcode_has_jump__doc__},
 
 static int
 _opcode_has_jump_impl(PyObject *module, int opcode);
 
-static PyObject *
-_opcode_has_jump(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_opcode_has_jump(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
@@ -397,24 +392,23 @@ _opcode_has_jump(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyOb
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[1];
+    Py_ssize_t _idx[1];
     int opcode;
     int _return_value;
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, _idx, 1)) {
         goto exit;
     }
-    opcode = PyLong_AsInt(args[0]);
+    opcode = _PyValue_AsInt(PyValue_Borrow(args[_idx[0]]));
     if (opcode == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    _return_value = _opcode_has_jump_impl(module, opcode);
+    _return_value = _opcode_has_jump_impl(PyValue_AsKnownObjectBorrow(module), opcode);
     if ((_return_value == -1) && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = PyBool_FromLong((long)_return_value);
+    return_value = _return_value ? PyValue_True : PyValue_False;
 
 exit:
     return return_value;
@@ -432,15 +426,15 @@ PyDoc_STRVAR(_opcode_has_free__doc__,
 "or builtin scopes.");
 
 #define _OPCODE_HAS_FREE_METHODDEF    \
-    {"has_free", _PyCFunction_CAST(_opcode_has_free), METH_FASTCALL|METH_KEYWORDS, _opcode_has_free__doc__},
+    {"has_free", _PyCFunction_CAST(_opcode_has_free), METH_VALUE|METH_KEYWORDS, _opcode_has_free__doc__},
 
 static int
 _opcode_has_free_impl(PyObject *module, int opcode);
 
-static PyObject *
-_opcode_has_free(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_opcode_has_free(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
@@ -468,24 +462,23 @@ _opcode_has_free(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyOb
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[1];
+    Py_ssize_t _idx[1];
     int opcode;
     int _return_value;
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, _idx, 1)) {
         goto exit;
     }
-    opcode = PyLong_AsInt(args[0]);
+    opcode = _PyValue_AsInt(PyValue_Borrow(args[_idx[0]]));
     if (opcode == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    _return_value = _opcode_has_free_impl(module, opcode);
+    _return_value = _opcode_has_free_impl(PyValue_AsKnownObjectBorrow(module), opcode);
     if ((_return_value == -1) && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = PyBool_FromLong((long)_return_value);
+    return_value = _return_value ? PyValue_True : PyValue_False;
 
 exit:
     return return_value;
@@ -498,15 +491,15 @@ PyDoc_STRVAR(_opcode_has_local__doc__,
 "Return True if the opcode accesses a local variable, False otherwise.");
 
 #define _OPCODE_HAS_LOCAL_METHODDEF    \
-    {"has_local", _PyCFunction_CAST(_opcode_has_local), METH_FASTCALL|METH_KEYWORDS, _opcode_has_local__doc__},
+    {"has_local", _PyCFunction_CAST(_opcode_has_local), METH_VALUE|METH_KEYWORDS, _opcode_has_local__doc__},
 
 static int
 _opcode_has_local_impl(PyObject *module, int opcode);
 
-static PyObject *
-_opcode_has_local(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_opcode_has_local(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
@@ -534,24 +527,23 @@ _opcode_has_local(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyO
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[1];
+    Py_ssize_t _idx[1];
     int opcode;
     int _return_value;
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, _idx, 1)) {
         goto exit;
     }
-    opcode = PyLong_AsInt(args[0]);
+    opcode = _PyValue_AsInt(PyValue_Borrow(args[_idx[0]]));
     if (opcode == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    _return_value = _opcode_has_local_impl(module, opcode);
+    _return_value = _opcode_has_local_impl(PyValue_AsKnownObjectBorrow(module), opcode);
     if ((_return_value == -1) && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = PyBool_FromLong((long)_return_value);
+    return_value = _return_value ? PyValue_True : PyValue_False;
 
 exit:
     return return_value;
@@ -564,15 +556,15 @@ PyDoc_STRVAR(_opcode_has_exc__doc__,
 "Return True if the opcode sets an exception handler, False otherwise.");
 
 #define _OPCODE_HAS_EXC_METHODDEF    \
-    {"has_exc", _PyCFunction_CAST(_opcode_has_exc), METH_FASTCALL|METH_KEYWORDS, _opcode_has_exc__doc__},
+    {"has_exc", _PyCFunction_CAST(_opcode_has_exc), METH_VALUE|METH_KEYWORDS, _opcode_has_exc__doc__},
 
 static int
 _opcode_has_exc_impl(PyObject *module, int opcode);
 
-static PyObject *
-_opcode_has_exc(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_opcode_has_exc(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
@@ -600,24 +592,23 @@ _opcode_has_exc(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObj
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[1];
+    Py_ssize_t _idx[1];
     int opcode;
     int _return_value;
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, _idx, 1)) {
         goto exit;
     }
-    opcode = PyLong_AsInt(args[0]);
+    opcode = _PyValue_AsInt(PyValue_Borrow(args[_idx[0]]));
     if (opcode == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    _return_value = _opcode_has_exc_impl(module, opcode);
+    _return_value = _opcode_has_exc_impl(PyValue_AsKnownObjectBorrow(module), opcode);
     if ((_return_value == -1) && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = PyBool_FromLong((long)_return_value);
+    return_value = _return_value ? PyValue_True : PyValue_False;
 
 exit:
     return return_value;
@@ -630,15 +621,19 @@ PyDoc_STRVAR(_opcode_get_specialization_stats__doc__,
 "Return the specialization stats");
 
 #define _OPCODE_GET_SPECIALIZATION_STATS_METHODDEF    \
-    {"get_specialization_stats", (PyCFunction)_opcode_get_specialization_stats, METH_NOARGS, _opcode_get_specialization_stats__doc__},
+    {"get_specialization_stats", _PyCFunction_CAST(_opcode_get_specialization_stats), METH_VALUE|METH_NOARGS, _opcode_get_specialization_stats__doc__},
 
-static PyObject *
+static PyValue
 _opcode_get_specialization_stats_impl(PyObject *module);
 
-static PyObject *
-_opcode_get_specialization_stats(PyObject *module, PyObject *Py_UNUSED(ignored))
+static PyValue
+_opcode_get_specialization_stats(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _opcode_get_specialization_stats_impl(module);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _opcode_get_specialization_stats_impl(PyValue_AsKnownObjectBorrow(module));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(_opcode_get_nb_ops__doc__,
@@ -650,15 +645,19 @@ PyDoc_STRVAR(_opcode_get_nb_ops__doc__,
 "Indexed by the BINARY_OP oparg value.");
 
 #define _OPCODE_GET_NB_OPS_METHODDEF    \
-    {"get_nb_ops", (PyCFunction)_opcode_get_nb_ops, METH_NOARGS, _opcode_get_nb_ops__doc__},
+    {"get_nb_ops", _PyCFunction_CAST(_opcode_get_nb_ops), METH_VALUE|METH_NOARGS, _opcode_get_nb_ops__doc__},
 
-static PyObject *
+static PyValue
 _opcode_get_nb_ops_impl(PyObject *module);
 
-static PyObject *
-_opcode_get_nb_ops(PyObject *module, PyObject *Py_UNUSED(ignored))
+static PyValue
+_opcode_get_nb_ops(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _opcode_get_nb_ops_impl(module);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _opcode_get_nb_ops_impl(PyValue_AsKnownObjectBorrow(module));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(_opcode_get_intrinsic1_descs__doc__,
@@ -668,15 +667,19 @@ PyDoc_STRVAR(_opcode_get_intrinsic1_descs__doc__,
 "Return a list of names of the unary intrinsics.");
 
 #define _OPCODE_GET_INTRINSIC1_DESCS_METHODDEF    \
-    {"get_intrinsic1_descs", (PyCFunction)_opcode_get_intrinsic1_descs, METH_NOARGS, _opcode_get_intrinsic1_descs__doc__},
+    {"get_intrinsic1_descs", _PyCFunction_CAST(_opcode_get_intrinsic1_descs), METH_VALUE|METH_NOARGS, _opcode_get_intrinsic1_descs__doc__},
 
-static PyObject *
+static PyValue
 _opcode_get_intrinsic1_descs_impl(PyObject *module);
 
-static PyObject *
-_opcode_get_intrinsic1_descs(PyObject *module, PyObject *Py_UNUSED(ignored))
+static PyValue
+_opcode_get_intrinsic1_descs(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _opcode_get_intrinsic1_descs_impl(module);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _opcode_get_intrinsic1_descs_impl(PyValue_AsKnownObjectBorrow(module));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(_opcode_get_intrinsic2_descs__doc__,
@@ -686,15 +689,19 @@ PyDoc_STRVAR(_opcode_get_intrinsic2_descs__doc__,
 "Return a list of names of the binary intrinsics.");
 
 #define _OPCODE_GET_INTRINSIC2_DESCS_METHODDEF    \
-    {"get_intrinsic2_descs", (PyCFunction)_opcode_get_intrinsic2_descs, METH_NOARGS, _opcode_get_intrinsic2_descs__doc__},
+    {"get_intrinsic2_descs", _PyCFunction_CAST(_opcode_get_intrinsic2_descs), METH_VALUE|METH_NOARGS, _opcode_get_intrinsic2_descs__doc__},
 
-static PyObject *
+static PyValue
 _opcode_get_intrinsic2_descs_impl(PyObject *module);
 
-static PyObject *
-_opcode_get_intrinsic2_descs(PyObject *module, PyObject *Py_UNUSED(ignored))
+static PyValue
+_opcode_get_intrinsic2_descs(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _opcode_get_intrinsic2_descs_impl(module);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _opcode_get_intrinsic2_descs_impl(PyValue_AsKnownObjectBorrow(module));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(_opcode_get_special_method_names__doc__,
@@ -704,15 +711,19 @@ PyDoc_STRVAR(_opcode_get_special_method_names__doc__,
 "Return a list of special method names.");
 
 #define _OPCODE_GET_SPECIAL_METHOD_NAMES_METHODDEF    \
-    {"get_special_method_names", (PyCFunction)_opcode_get_special_method_names, METH_NOARGS, _opcode_get_special_method_names__doc__},
+    {"get_special_method_names", _PyCFunction_CAST(_opcode_get_special_method_names), METH_VALUE|METH_NOARGS, _opcode_get_special_method_names__doc__},
 
-static PyObject *
+static PyValue
 _opcode_get_special_method_names_impl(PyObject *module);
 
-static PyObject *
-_opcode_get_special_method_names(PyObject *module, PyObject *Py_UNUSED(ignored))
+static PyValue
+_opcode_get_special_method_names(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _opcode_get_special_method_names_impl(module);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _opcode_get_special_method_names_impl(PyValue_AsKnownObjectBorrow(module));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(_opcode_get_ir_contract__doc__,
@@ -729,14 +740,18 @@ PyDoc_STRVAR(_opcode_get_ir_contract__doc__,
 "is a handler or None.");
 
 #define _OPCODE_GET_IR_CONTRACT_METHODDEF    \
-    {"get_ir_contract", (PyCFunction)_opcode_get_ir_contract, METH_NOARGS, _opcode_get_ir_contract__doc__},
+    {"get_ir_contract", _PyCFunction_CAST(_opcode_get_ir_contract), METH_VALUE|METH_NOARGS, _opcode_get_ir_contract__doc__},
 
-static PyObject *
+static PyValue
 _opcode_get_ir_contract_impl(PyObject *module);
 
-static PyObject *
-_opcode_get_ir_contract(PyObject *module, PyObject *Py_UNUSED(ignored))
+static PyValue
+_opcode_get_ir_contract(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _opcode_get_ir_contract_impl(module);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _opcode_get_ir_contract_impl(PyValue_AsKnownObjectBorrow(module));
+
+    return return_value;
 }
-/*[clinic end generated code: output=a3b8c4e3d9184f84 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=e8326d8f6574f3af input=a9049054013a1b77]*/

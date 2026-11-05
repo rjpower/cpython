@@ -5,8 +5,11 @@
  * thread status in remote process memory.
  ******************************************************************************/
 
+#define Py_VALUE_CORE 1
 #include "_remote_debugging.h"
 #include "pycore_fileutils.h"     // _Py_strerror()
+#include "pycore_pyvalue.h"       // PyValue_PrepareOwned()
+#include "pycore_value.h"         // PyValue
 
 #ifndef MS_WINDOWS
 #include <unistd.h>
@@ -619,9 +622,9 @@ unwind_stack_for_thread(
     }
 
     // py_status contains status flags (bitfield)
-    PyStructSequence_SetItem(result, 0, thread_id);
-    PyStructSequence_SetItem(result, 1, py_status);  // Steals reference
-    PyStructSequence_SetItem(result, 2, frame_info); // Steals reference
+    PyStructSequence_SET_VALUE(result, 0, PyValue_PrepareOwned(thread_id));
+    PyStructSequence_SET_VALUE(result, 1, PyValue_PrepareOwned(py_status));  // Steals reference
+    PyStructSequence_SET_VALUE(result, 2, PyValue_PrepareOwned(frame_info)); // Steals reference
 
     cleanup_stack_chunks(&chunks);
     return result;

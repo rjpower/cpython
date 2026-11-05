@@ -2,14 +2,21 @@
 preserve
 [clinic start generated code]*/
 
+#ifndef Py_VALUE_CORE
+#  error "value-emission Clinic output requires Py_VALUE_CORE"
+#endif
+
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 #  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
 #  include "pycore_value.h"       // _PyValue_STATIC_IMMORTAL()
 #endif
-#include "pycore_borrow.h"        // _PyBorrow_TupleItems()
-#include "pycore_long.h"          // _PyLong_UnsignedLong_Converter()
-#include "pycore_modsupport.h"    // _PyArg_UnpackKeywords()
+#include "pycore_long_value.h"    // _PyValue_AsInt()
+#include "pycore_modsupport.h"    // _PyArg_UnpackKeywordsValue()
+#include "pycore_tuple.h"         // _PyTuple_ITEMS()
+#include "pycore_value_call.h"    // METH_VALUE
+#include "pycore_value_ops.h"     // _PyValue_IsTrue()
+#include "pycore_value_slots.h"   // _PyValue_THUNK_EXIT()
 
 PyDoc_STRVAR(py_blake2b_new__doc__,
 "blake2b(data=b\'\', *, digest_size=_blake2.blake2b.MAX_DIGEST_SIZE,\n"
@@ -20,18 +27,18 @@ PyDoc_STRVAR(py_blake2b_new__doc__,
 "\n"
 "Return a new BLAKE2b hash object.");
 
-static PyObject *
-py_blake2b_new_impl(PyTypeObject *type, PyObject *data_obj, int digest_size,
-                    Py_buffer *key, Py_buffer *salt, Py_buffer *person,
-                    int fanout, int depth, unsigned long leaf_size,
-                    unsigned long long node_offset, int node_depth,
-                    int inner_size, int last_node, int usedforsecurity,
-                    PyObject *string);
+static PyValue
+py_blake2b_new_impl(PyTypeObject *type, PyValueBorrow data_obj,
+                    int digest_size, Py_buffer *key, Py_buffer *salt,
+                    Py_buffer *person, int fanout, int depth,
+                    unsigned long leaf_size, unsigned long long node_offset,
+                    int node_depth, int inner_size, int last_node,
+                    int usedforsecurity, PyValueBorrow string);
 
-static PyObject *
-py_blake2b_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
+static PyValue
+py_blake2b_new_value(PyTypeObject *type, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 14
@@ -59,11 +66,8 @@ py_blake2b_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[14];
-    PyObject * const *fastargs;
-    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
-    Py_ssize_t noptargs = nargs + (kwargs ? PyDict_GET_SIZE(kwargs) : 0) - 0;
-    PyObject *data_obj = NULL;
+    Py_ssize_t _idx[14];
+    PyValueBorrow data_obj = PyValue_Borrow(PyValue_NULL);
     int digest_size = HACL_HASH_BLAKE2B_OUT_BYTES;
     Py_buffer key = {.buf = "", .obj = NULL, .len = 0};
     Py_buffer salt = {.buf = "", .obj = NULL, .len = 0};
@@ -76,135 +80,121 @@ py_blake2b_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     int inner_size = 0;
     int last_node = 0;
     int usedforsecurity = 1;
-    PyObject *string = NULL;
+    PyValueBorrow string = PyValue_Borrow(PyValue_NULL);
 
-    PyObject *const *_args_items = _PyBorrow_TupleItems(args, Py_MIN(nargs, 1));
-    if (_args_items == NULL) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 0, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, _idx, 14)) {
         goto exit;
     }
-    fastargs = _PyArg_UnpackKeywords(_args_items, nargs, kwargs, NULL, &_parser,
-            /*minpos*/ 0, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!fastargs) {
-        goto exit;
+    if (_idx[0] >= 0) {
+        data_obj = PyValue_Borrow(args[_idx[0]]);
     }
-    if (!noptargs) {
-        goto skip_optional_pos;
-    }
-    if (fastargs[0]) {
-        data_obj = fastargs[0];
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
-    }
-skip_optional_pos:
-    if (!noptargs) {
-        goto skip_optional_kwonly;
-    }
-    if (fastargs[1]) {
-        digest_size = PyLong_AsInt(fastargs[1]);
+    if (_idx[1] >= 0) {
+        digest_size = _PyValue_AsInt(PyValue_Borrow(args[_idx[1]]));
         if (digest_size == -1 && PyErr_Occurred()) {
             goto exit;
         }
-        if (!--noptargs) {
-            goto skip_optional_kwonly;
-        }
     }
-    if (fastargs[2]) {
-        if (PyObject_GetBuffer(fastargs[2], &key, PyBUF_SIMPLE) != 0) {
+    if (_idx[2] >= 0) {
+        if (!PyValue_IsObject(PyValue_Borrow(args[_idx[2]]))) {
+            PyErr_Format(PyExc_TypeError, "a bytes-like object is required, not '%.100s'", PyValue_TYPE(PyValue_Borrow(args[_idx[2]]))->tp_name);
             goto exit;
         }
-        if (!--noptargs) {
-            goto skip_optional_kwonly;
-        }
-    }
-    if (fastargs[3]) {
-        if (PyObject_GetBuffer(fastargs[3], &salt, PyBUF_SIMPLE) != 0) {
+        if (PyObject_GetBuffer(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[2]])), &key, PyBUF_SIMPLE) != 0) {
             goto exit;
         }
-        if (!--noptargs) {
-            goto skip_optional_kwonly;
-        }
     }
-    if (fastargs[4]) {
-        if (PyObject_GetBuffer(fastargs[4], &person, PyBUF_SIMPLE) != 0) {
+    if (_idx[3] >= 0) {
+        if (!PyValue_IsObject(PyValue_Borrow(args[_idx[3]]))) {
+            PyErr_Format(PyExc_TypeError, "a bytes-like object is required, not '%.100s'", PyValue_TYPE(PyValue_Borrow(args[_idx[3]]))->tp_name);
             goto exit;
         }
-        if (!--noptargs) {
-            goto skip_optional_kwonly;
+        if (PyObject_GetBuffer(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[3]])), &salt, PyBUF_SIMPLE) != 0) {
+            goto exit;
         }
     }
-    if (fastargs[5]) {
-        fanout = PyLong_AsInt(fastargs[5]);
+    if (_idx[4] >= 0) {
+        if (!PyValue_IsObject(PyValue_Borrow(args[_idx[4]]))) {
+            PyErr_Format(PyExc_TypeError, "a bytes-like object is required, not '%.100s'", PyValue_TYPE(PyValue_Borrow(args[_idx[4]]))->tp_name);
+            goto exit;
+        }
+        if (PyObject_GetBuffer(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[4]])), &person, PyBUF_SIMPLE) != 0) {
+            goto exit;
+        }
+    }
+    if (_idx[5] >= 0) {
+        fanout = _PyValue_AsInt(PyValue_Borrow(args[_idx[5]]));
         if (fanout == -1 && PyErr_Occurred()) {
             goto exit;
         }
-        if (!--noptargs) {
-            goto skip_optional_kwonly;
-        }
     }
-    if (fastargs[6]) {
-        depth = PyLong_AsInt(fastargs[6]);
+    if (_idx[6] >= 0) {
+        depth = _PyValue_AsInt(PyValue_Borrow(args[_idx[6]]));
         if (depth == -1 && PyErr_Occurred()) {
             goto exit;
         }
-        if (!--noptargs) {
-            goto skip_optional_kwonly;
+    }
+    if (_idx[7] >= 0) {
+        {
+            Py_ssize_t _bytes = _PyValue_AsNativeBytes(PyValue_Borrow(args[_idx[7]]), &leaf_size, sizeof(unsigned long),
+                    Py_ASNATIVEBYTES_NATIVE_ENDIAN |
+                    Py_ASNATIVEBYTES_ALLOW_INDEX |
+                    Py_ASNATIVEBYTES_REJECT_NEGATIVE |
+                    Py_ASNATIVEBYTES_UNSIGNED_BUFFER);
+            if (_bytes < 0) {
+                goto exit;
+            }
+            if ((size_t)_bytes > sizeof(unsigned long)) {
+                PyErr_SetString(PyExc_OverflowError,
+                            "Python int too large for C unsigned long");
+                goto exit;
+            }
         }
     }
-    if (fastargs[7]) {
-        if (!_PyLong_UnsignedLong_Converter(fastargs[7], &leaf_size)) {
-            goto exit;
-        }
-        if (!--noptargs) {
-            goto skip_optional_kwonly;
+    if (_idx[8] >= 0) {
+        {
+            Py_ssize_t _bytes = _PyValue_AsNativeBytes(PyValue_Borrow(args[_idx[8]]), &node_offset, sizeof(unsigned long long),
+                    Py_ASNATIVEBYTES_NATIVE_ENDIAN |
+                    Py_ASNATIVEBYTES_ALLOW_INDEX |
+                    Py_ASNATIVEBYTES_REJECT_NEGATIVE |
+                    Py_ASNATIVEBYTES_UNSIGNED_BUFFER);
+            if (_bytes < 0) {
+                goto exit;
+            }
+            if ((size_t)_bytes > sizeof(unsigned long long)) {
+                PyErr_SetString(PyExc_OverflowError,
+                            "Python int too large for C unsigned long long");
+                goto exit;
+            }
         }
     }
-    if (fastargs[8]) {
-        if (!_PyLong_UnsignedLongLong_Converter(fastargs[8], &node_offset)) {
-            goto exit;
-        }
-        if (!--noptargs) {
-            goto skip_optional_kwonly;
-        }
-    }
-    if (fastargs[9]) {
-        node_depth = PyLong_AsInt(fastargs[9]);
+    if (_idx[9] >= 0) {
+        node_depth = _PyValue_AsInt(PyValue_Borrow(args[_idx[9]]));
         if (node_depth == -1 && PyErr_Occurred()) {
             goto exit;
         }
-        if (!--noptargs) {
-            goto skip_optional_kwonly;
-        }
     }
-    if (fastargs[10]) {
-        inner_size = PyLong_AsInt(fastargs[10]);
+    if (_idx[10] >= 0) {
+        inner_size = _PyValue_AsInt(PyValue_Borrow(args[_idx[10]]));
         if (inner_size == -1 && PyErr_Occurred()) {
             goto exit;
         }
-        if (!--noptargs) {
-            goto skip_optional_kwonly;
-        }
     }
-    if (fastargs[11]) {
-        last_node = PyObject_IsTrue(fastargs[11]);
+    if (_idx[11] >= 0) {
+        last_node = _PyValue_IsTrue(PyValue_Borrow(args[_idx[11]]));
         if (last_node < 0) {
             goto exit;
         }
-        if (!--noptargs) {
-            goto skip_optional_kwonly;
-        }
     }
-    if (fastargs[12]) {
-        usedforsecurity = PyObject_IsTrue(fastargs[12]);
+    if (_idx[12] >= 0) {
+        usedforsecurity = _PyValue_IsTrue(PyValue_Borrow(args[_idx[12]]));
         if (usedforsecurity < 0) {
             goto exit;
         }
-        if (!--noptargs) {
-            goto skip_optional_kwonly;
-        }
     }
-    string = fastargs[13];
-skip_optional_kwonly:
+    if (_idx[13] >= 0) {
+        string = PyValue_Borrow(args[_idx[13]]);
+    }
     return_value = py_blake2b_new_impl(type, data_obj, digest_size, &key, &salt, &person, fanout, depth, leaf_size, node_offset, node_depth, inner_size, last_node, usedforsecurity, string);
 
 exit:
@@ -224,6 +214,24 @@ exit:
     return return_value;
 }
 
+Py_VALUE_ENTRY static PyObject *
+py_blake2b_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
+{
+    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
+    if (kwargs == NULL || PyDict_GET_SIZE(kwargs) == 0) {
+        return _PyValue_THUNK_EXIT(py_blake2b_new_value(type, _PyTuple_ITEMS(args), nargs, NULL), BOX_SITE_CALL);
+    }
+    PyObject *kwnames;
+    PyValue *window = _PyValue_StackUnpackDict(_PyThreadState_GET(),
+        _PyTuple_ITEMS(args), nargs, kwargs, &kwnames);
+    if (window == NULL) {
+        return NULL;
+    }
+    PyValue result = py_blake2b_new_value(type, window, nargs, kwnames);
+    _PyValue_StackUnpackDict_Free(window, nargs, kwnames);
+    return _PyValue_THUNK_EXIT(result, BOX_SITE_CALL);
+}
+
 PyDoc_STRVAR(py_blake2s_new__doc__,
 "blake2s(data=b\'\', *, digest_size=_blake2.blake2s.MAX_DIGEST_SIZE,\n"
 "        key=b\'\', salt=b\'\', person=b\'\', fanout=1, depth=1, leaf_size=0,\n"
@@ -233,18 +241,18 @@ PyDoc_STRVAR(py_blake2s_new__doc__,
 "\n"
 "Return a new BLAKE2s hash object.");
 
-static PyObject *
-py_blake2s_new_impl(PyTypeObject *type, PyObject *data_obj, int digest_size,
-                    Py_buffer *key, Py_buffer *salt, Py_buffer *person,
-                    int fanout, int depth, unsigned long leaf_size,
-                    unsigned long long node_offset, int node_depth,
-                    int inner_size, int last_node, int usedforsecurity,
-                    PyObject *string);
+static PyValue
+py_blake2s_new_impl(PyTypeObject *type, PyValueBorrow data_obj,
+                    int digest_size, Py_buffer *key, Py_buffer *salt,
+                    Py_buffer *person, int fanout, int depth,
+                    unsigned long leaf_size, unsigned long long node_offset,
+                    int node_depth, int inner_size, int last_node,
+                    int usedforsecurity, PyValueBorrow string);
 
-static PyObject *
-py_blake2s_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
+static PyValue
+py_blake2s_new_value(PyTypeObject *type, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 14
@@ -272,11 +280,8 @@ py_blake2s_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[14];
-    PyObject * const *fastargs;
-    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
-    Py_ssize_t noptargs = nargs + (kwargs ? PyDict_GET_SIZE(kwargs) : 0) - 0;
-    PyObject *data_obj = NULL;
+    Py_ssize_t _idx[14];
+    PyValueBorrow data_obj = PyValue_Borrow(PyValue_NULL);
     int digest_size = HACL_HASH_BLAKE2S_OUT_BYTES;
     Py_buffer key = {.buf = "", .obj = NULL, .len = 0};
     Py_buffer salt = {.buf = "", .obj = NULL, .len = 0};
@@ -289,135 +294,121 @@ py_blake2s_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     int inner_size = 0;
     int last_node = 0;
     int usedforsecurity = 1;
-    PyObject *string = NULL;
+    PyValueBorrow string = PyValue_Borrow(PyValue_NULL);
 
-    PyObject *const *_args_items = _PyBorrow_TupleItems(args, Py_MIN(nargs, 1));
-    if (_args_items == NULL) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 0, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, _idx, 14)) {
         goto exit;
     }
-    fastargs = _PyArg_UnpackKeywords(_args_items, nargs, kwargs, NULL, &_parser,
-            /*minpos*/ 0, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!fastargs) {
-        goto exit;
+    if (_idx[0] >= 0) {
+        data_obj = PyValue_Borrow(args[_idx[0]]);
     }
-    if (!noptargs) {
-        goto skip_optional_pos;
-    }
-    if (fastargs[0]) {
-        data_obj = fastargs[0];
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
-    }
-skip_optional_pos:
-    if (!noptargs) {
-        goto skip_optional_kwonly;
-    }
-    if (fastargs[1]) {
-        digest_size = PyLong_AsInt(fastargs[1]);
+    if (_idx[1] >= 0) {
+        digest_size = _PyValue_AsInt(PyValue_Borrow(args[_idx[1]]));
         if (digest_size == -1 && PyErr_Occurred()) {
             goto exit;
         }
-        if (!--noptargs) {
-            goto skip_optional_kwonly;
-        }
     }
-    if (fastargs[2]) {
-        if (PyObject_GetBuffer(fastargs[2], &key, PyBUF_SIMPLE) != 0) {
+    if (_idx[2] >= 0) {
+        if (!PyValue_IsObject(PyValue_Borrow(args[_idx[2]]))) {
+            PyErr_Format(PyExc_TypeError, "a bytes-like object is required, not '%.100s'", PyValue_TYPE(PyValue_Borrow(args[_idx[2]]))->tp_name);
             goto exit;
         }
-        if (!--noptargs) {
-            goto skip_optional_kwonly;
-        }
-    }
-    if (fastargs[3]) {
-        if (PyObject_GetBuffer(fastargs[3], &salt, PyBUF_SIMPLE) != 0) {
+        if (PyObject_GetBuffer(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[2]])), &key, PyBUF_SIMPLE) != 0) {
             goto exit;
         }
-        if (!--noptargs) {
-            goto skip_optional_kwonly;
-        }
     }
-    if (fastargs[4]) {
-        if (PyObject_GetBuffer(fastargs[4], &person, PyBUF_SIMPLE) != 0) {
+    if (_idx[3] >= 0) {
+        if (!PyValue_IsObject(PyValue_Borrow(args[_idx[3]]))) {
+            PyErr_Format(PyExc_TypeError, "a bytes-like object is required, not '%.100s'", PyValue_TYPE(PyValue_Borrow(args[_idx[3]]))->tp_name);
             goto exit;
         }
-        if (!--noptargs) {
-            goto skip_optional_kwonly;
+        if (PyObject_GetBuffer(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[3]])), &salt, PyBUF_SIMPLE) != 0) {
+            goto exit;
         }
     }
-    if (fastargs[5]) {
-        fanout = PyLong_AsInt(fastargs[5]);
+    if (_idx[4] >= 0) {
+        if (!PyValue_IsObject(PyValue_Borrow(args[_idx[4]]))) {
+            PyErr_Format(PyExc_TypeError, "a bytes-like object is required, not '%.100s'", PyValue_TYPE(PyValue_Borrow(args[_idx[4]]))->tp_name);
+            goto exit;
+        }
+        if (PyObject_GetBuffer(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[4]])), &person, PyBUF_SIMPLE) != 0) {
+            goto exit;
+        }
+    }
+    if (_idx[5] >= 0) {
+        fanout = _PyValue_AsInt(PyValue_Borrow(args[_idx[5]]));
         if (fanout == -1 && PyErr_Occurred()) {
             goto exit;
         }
-        if (!--noptargs) {
-            goto skip_optional_kwonly;
-        }
     }
-    if (fastargs[6]) {
-        depth = PyLong_AsInt(fastargs[6]);
+    if (_idx[6] >= 0) {
+        depth = _PyValue_AsInt(PyValue_Borrow(args[_idx[6]]));
         if (depth == -1 && PyErr_Occurred()) {
             goto exit;
         }
-        if (!--noptargs) {
-            goto skip_optional_kwonly;
+    }
+    if (_idx[7] >= 0) {
+        {
+            Py_ssize_t _bytes = _PyValue_AsNativeBytes(PyValue_Borrow(args[_idx[7]]), &leaf_size, sizeof(unsigned long),
+                    Py_ASNATIVEBYTES_NATIVE_ENDIAN |
+                    Py_ASNATIVEBYTES_ALLOW_INDEX |
+                    Py_ASNATIVEBYTES_REJECT_NEGATIVE |
+                    Py_ASNATIVEBYTES_UNSIGNED_BUFFER);
+            if (_bytes < 0) {
+                goto exit;
+            }
+            if ((size_t)_bytes > sizeof(unsigned long)) {
+                PyErr_SetString(PyExc_OverflowError,
+                            "Python int too large for C unsigned long");
+                goto exit;
+            }
         }
     }
-    if (fastargs[7]) {
-        if (!_PyLong_UnsignedLong_Converter(fastargs[7], &leaf_size)) {
-            goto exit;
-        }
-        if (!--noptargs) {
-            goto skip_optional_kwonly;
+    if (_idx[8] >= 0) {
+        {
+            Py_ssize_t _bytes = _PyValue_AsNativeBytes(PyValue_Borrow(args[_idx[8]]), &node_offset, sizeof(unsigned long long),
+                    Py_ASNATIVEBYTES_NATIVE_ENDIAN |
+                    Py_ASNATIVEBYTES_ALLOW_INDEX |
+                    Py_ASNATIVEBYTES_REJECT_NEGATIVE |
+                    Py_ASNATIVEBYTES_UNSIGNED_BUFFER);
+            if (_bytes < 0) {
+                goto exit;
+            }
+            if ((size_t)_bytes > sizeof(unsigned long long)) {
+                PyErr_SetString(PyExc_OverflowError,
+                            "Python int too large for C unsigned long long");
+                goto exit;
+            }
         }
     }
-    if (fastargs[8]) {
-        if (!_PyLong_UnsignedLongLong_Converter(fastargs[8], &node_offset)) {
-            goto exit;
-        }
-        if (!--noptargs) {
-            goto skip_optional_kwonly;
-        }
-    }
-    if (fastargs[9]) {
-        node_depth = PyLong_AsInt(fastargs[9]);
+    if (_idx[9] >= 0) {
+        node_depth = _PyValue_AsInt(PyValue_Borrow(args[_idx[9]]));
         if (node_depth == -1 && PyErr_Occurred()) {
             goto exit;
         }
-        if (!--noptargs) {
-            goto skip_optional_kwonly;
-        }
     }
-    if (fastargs[10]) {
-        inner_size = PyLong_AsInt(fastargs[10]);
+    if (_idx[10] >= 0) {
+        inner_size = _PyValue_AsInt(PyValue_Borrow(args[_idx[10]]));
         if (inner_size == -1 && PyErr_Occurred()) {
             goto exit;
         }
-        if (!--noptargs) {
-            goto skip_optional_kwonly;
-        }
     }
-    if (fastargs[11]) {
-        last_node = PyObject_IsTrue(fastargs[11]);
+    if (_idx[11] >= 0) {
+        last_node = _PyValue_IsTrue(PyValue_Borrow(args[_idx[11]]));
         if (last_node < 0) {
             goto exit;
         }
-        if (!--noptargs) {
-            goto skip_optional_kwonly;
-        }
     }
-    if (fastargs[12]) {
-        usedforsecurity = PyObject_IsTrue(fastargs[12]);
+    if (_idx[12] >= 0) {
+        usedforsecurity = _PyValue_IsTrue(PyValue_Borrow(args[_idx[12]]));
         if (usedforsecurity < 0) {
             goto exit;
         }
-        if (!--noptargs) {
-            goto skip_optional_kwonly;
-        }
     }
-    string = fastargs[13];
-skip_optional_kwonly:
+    if (_idx[13] >= 0) {
+        string = PyValue_Borrow(args[_idx[13]]);
+    }
     return_value = py_blake2s_new_impl(type, data_obj, digest_size, &key, &salt, &person, fanout, depth, leaf_size, node_offset, node_depth, inner_size, last_node, usedforsecurity, string);
 
 exit:
@@ -437,6 +428,24 @@ exit:
     return return_value;
 }
 
+Py_VALUE_ENTRY static PyObject *
+py_blake2s_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
+{
+    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
+    if (kwargs == NULL || PyDict_GET_SIZE(kwargs) == 0) {
+        return _PyValue_THUNK_EXIT(py_blake2s_new_value(type, _PyTuple_ITEMS(args), nargs, NULL), BOX_SITE_CALL);
+    }
+    PyObject *kwnames;
+    PyValue *window = _PyValue_StackUnpackDict(_PyThreadState_GET(),
+        _PyTuple_ITEMS(args), nargs, kwargs, &kwnames);
+    if (window == NULL) {
+        return NULL;
+    }
+    PyValue result = py_blake2s_new_value(type, window, nargs, kwnames);
+    _PyValue_StackUnpackDict_Free(window, nargs, kwnames);
+    return _PyValue_THUNK_EXIT(result, BOX_SITE_CALL);
+}
+
 PyDoc_STRVAR(_blake2_blake2b_copy__doc__,
 "copy($self, /)\n"
 "--\n"
@@ -444,19 +453,24 @@ PyDoc_STRVAR(_blake2_blake2b_copy__doc__,
 "Return a copy of the hash object.");
 
 #define _BLAKE2_BLAKE2B_COPY_METHODDEF    \
-    {"copy", _PyCFunction_CAST(_blake2_blake2b_copy), METH_METHOD|METH_FASTCALL|METH_KEYWORDS, _blake2_blake2b_copy__doc__},
+    {"copy", _PyCFunction_CAST(_blake2_blake2b_copy), METH_VALUE|METH_METHOD|METH_KEYWORDS, _blake2_blake2b_copy__doc__},
 
-static PyObject *
+static PyValue
 _blake2_blake2b_copy_impl(Blake2Object *self, PyTypeObject *cls);
 
-static PyObject *
-_blake2_blake2b_copy(PyObject *self, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_blake2_blake2b_copy(PyValueBorrow self, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
+    PyValue return_value = PyValue_NULL;
+
     if (nargs || (kwnames && PyTuple_GET_SIZE(kwnames))) {
         PyErr_SetString(PyExc_TypeError, "copy() takes no arguments");
-        return NULL;
+        goto exit;
     }
-    return _blake2_blake2b_copy_impl((Blake2Object *)self, cls);
+    return_value = _blake2_blake2b_copy_impl((Blake2Object *)PyValue_AsKnownObjectBorrow(self), cls);
+
+exit:
+    return return_value;
 }
 
 PyDoc_STRVAR(_blake2_blake2b_update__doc__,
@@ -466,17 +480,19 @@ PyDoc_STRVAR(_blake2_blake2b_update__doc__,
 "Update this hash object\'s state with the provided bytes-like object.");
 
 #define _BLAKE2_BLAKE2B_UPDATE_METHODDEF    \
-    {"update", (PyCFunction)_blake2_blake2b_update, METH_O, _blake2_blake2b_update__doc__},
+    {"update", _PyCFunction_CAST(_blake2_blake2b_update), METH_VALUE|METH_O, _blake2_blake2b_update__doc__},
 
-static PyObject *
-_blake2_blake2b_update_impl(Blake2Object *self, PyObject *data);
+static PyValue
+_blake2_blake2b_update_impl(Blake2Object *self, PyValueBorrow data);
 
-static PyObject *
-_blake2_blake2b_update(PyObject *self, PyObject *data)
+static PyValue
+_blake2_blake2b_update(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow data;
 
-    return_value = _blake2_blake2b_update_impl((Blake2Object *)self, data);
+    data = PyValue_Borrow(args[0]);
+    return_value = _blake2_blake2b_update_impl((Blake2Object *)PyValue_AsKnownObjectBorrow(self), data);
 
     return return_value;
 }
@@ -488,15 +504,19 @@ PyDoc_STRVAR(_blake2_blake2b_digest__doc__,
 "Return the digest value as a bytes object.");
 
 #define _BLAKE2_BLAKE2B_DIGEST_METHODDEF    \
-    {"digest", (PyCFunction)_blake2_blake2b_digest, METH_NOARGS, _blake2_blake2b_digest__doc__},
+    {"digest", _PyCFunction_CAST(_blake2_blake2b_digest), METH_VALUE|METH_NOARGS, _blake2_blake2b_digest__doc__},
 
-static PyObject *
+static PyValue
 _blake2_blake2b_digest_impl(Blake2Object *self);
 
-static PyObject *
-_blake2_blake2b_digest(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+_blake2_blake2b_digest(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _blake2_blake2b_digest_impl((Blake2Object *)self);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _blake2_blake2b_digest_impl((Blake2Object *)PyValue_AsKnownObjectBorrow(self));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(_blake2_blake2b_hexdigest__doc__,
@@ -506,14 +526,18 @@ PyDoc_STRVAR(_blake2_blake2b_hexdigest__doc__,
 "Return the digest value as a string of hexadecimal digits.");
 
 #define _BLAKE2_BLAKE2B_HEXDIGEST_METHODDEF    \
-    {"hexdigest", (PyCFunction)_blake2_blake2b_hexdigest, METH_NOARGS, _blake2_blake2b_hexdigest__doc__},
+    {"hexdigest", _PyCFunction_CAST(_blake2_blake2b_hexdigest), METH_VALUE|METH_NOARGS, _blake2_blake2b_hexdigest__doc__},
 
-static PyObject *
+static PyValue
 _blake2_blake2b_hexdigest_impl(Blake2Object *self);
 
-static PyObject *
-_blake2_blake2b_hexdigest(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+_blake2_blake2b_hexdigest(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _blake2_blake2b_hexdigest_impl((Blake2Object *)self);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _blake2_blake2b_hexdigest_impl((Blake2Object *)PyValue_AsKnownObjectBorrow(self));
+
+    return return_value;
 }
-/*[clinic end generated code: output=96f29c6e0ae5f48c input=a9049054013a1b77]*/
+/*[clinic end generated code: output=f9e8a46914bccf10 input=a9049054013a1b77]*/

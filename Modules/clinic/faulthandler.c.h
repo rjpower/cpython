@@ -2,14 +2,19 @@
 preserve
 [clinic start generated code]*/
 
+#ifndef Py_VALUE_CORE
+#  error "value-emission Clinic output requires Py_VALUE_CORE"
+#endif
+
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 #  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
 #  include "pycore_value.h"       // _PyValue_STATIC_IMMORTAL()
 #endif
-#include "pycore_abstract.h"      // _PyNumber_Index()
-#include "pycore_long.h"          // _PyLong_UnsignedInt_Converter()
-#include "pycore_modsupport.h"    // _PyArg_UnpackKeywords()
+#include "pycore_long_value.h"    // _PyValue_IntAsSsize_t()
+#include "pycore_modsupport.h"    // _PyArg_UnpackKeywordsValue()
+#include "pycore_value_call.h"    // METH_VALUE
+#include "pycore_value_ops.h"     // _PyValue_IsTrue()
 
 PyDoc_STRVAR(faulthandler_dump_traceback_py__doc__,
 "dump_traceback($module, /, file=sys.stderr, all_threads=True, *,\n"
@@ -22,16 +27,16 @@ PyDoc_STRVAR(faulthandler_dump_traceback_py__doc__,
 "caps the number of threads dumped.");
 
 #define FAULTHANDLER_DUMP_TRACEBACK_PY_METHODDEF    \
-    {"dump_traceback", _PyCFunction_CAST(faulthandler_dump_traceback_py), METH_FASTCALL|METH_KEYWORDS, faulthandler_dump_traceback_py__doc__},
+    {"dump_traceback", _PyCFunction_CAST(faulthandler_dump_traceback_py), METH_VALUE|METH_KEYWORDS, faulthandler_dump_traceback_py__doc__},
 
-static PyObject *
-faulthandler_dump_traceback_py_impl(PyObject *module, PyObject *file,
+static PyValue
+faulthandler_dump_traceback_py_impl(PyObject *module, PyValueBorrow file,
                                     int all_threads, Py_ssize_t max_threads);
 
-static PyObject *
-faulthandler_dump_traceback_py(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+faulthandler_dump_traceback_py(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 3
@@ -59,53 +64,39 @@ faulthandler_dump_traceback_py(PyObject *module, PyObject *const *args, Py_ssize
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[3];
-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 0;
-    PyObject *file = NULL;
+    Py_ssize_t _idx[3];
+    PyValueBorrow file = PyValue_Borrow(PyValue_NULL);
     int all_threads = 1;
     Py_ssize_t max_threads = 100;
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 0, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 0, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, _idx, 3)) {
         goto exit;
     }
-    if (!noptargs) {
-        goto skip_optional_pos;
+    if (_idx[0] >= 0) {
+        file = PyValue_Borrow(args[_idx[0]]);
     }
-    if (args[0]) {
-        file = args[0];
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
-    }
-    if (args[1]) {
-        all_threads = PyObject_IsTrue(args[1]);
+    if (_idx[1] >= 0) {
+        all_threads = _PyValue_IsTrue(PyValue_Borrow(args[_idx[1]]));
         if (all_threads < 0) {
             goto exit;
         }
-        if (!--noptargs) {
-            goto skip_optional_pos;
+    }
+    if (_idx[2] >= 0) {
+        {
+            Py_ssize_t ival = -1;
+            PyValue iobj = _PyValue_Index(PyValue_Borrow(args[_idx[2]]));
+            if (!PyValue_IsNull(iobj)) {
+                ival = _PyValue_IntAsSsize_t(PyValue_Borrow(iobj));
+                PyValue_CLOSE(iobj);
+            }
+            if (ival == -1 && PyErr_Occurred()) {
+                goto exit;
+            }
+            max_threads = ival;
         }
     }
-skip_optional_pos:
-    if (!noptargs) {
-        goto skip_optional_kwonly;
-    }
-    {
-        Py_ssize_t ival = -1;
-        PyObject *iobj = _PyNumber_Index(args[2]);
-        if (iobj != NULL) {
-            ival = PyLong_AsSsize_t(iobj);
-            Py_DECREF(iobj);
-        }
-        if (ival == -1 && PyErr_Occurred()) {
-            goto exit;
-        }
-        max_threads = ival;
-    }
-skip_optional_kwonly:
-    return_value = faulthandler_dump_traceback_py_impl(module, file, all_threads, max_threads);
+    return_value = faulthandler_dump_traceback_py_impl(PyValue_AsKnownObjectBorrow(module), file, all_threads, max_threads);
 
 exit:
     return return_value;
@@ -118,15 +109,15 @@ PyDoc_STRVAR(faulthandler_dump_c_stack_py__doc__,
 "Dump the C stack of the current thread.");
 
 #define FAULTHANDLER_DUMP_C_STACK_PY_METHODDEF    \
-    {"dump_c_stack", _PyCFunction_CAST(faulthandler_dump_c_stack_py), METH_FASTCALL|METH_KEYWORDS, faulthandler_dump_c_stack_py__doc__},
+    {"dump_c_stack", _PyCFunction_CAST(faulthandler_dump_c_stack_py), METH_VALUE|METH_KEYWORDS, faulthandler_dump_c_stack_py__doc__},
 
-static PyObject *
-faulthandler_dump_c_stack_py_impl(PyObject *module, PyObject *file);
+static PyValue
+faulthandler_dump_c_stack_py_impl(PyObject *module, PyValueBorrow file);
 
-static PyObject *
-faulthandler_dump_c_stack_py(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+faulthandler_dump_c_stack_py(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
@@ -154,21 +145,17 @@ faulthandler_dump_c_stack_py(PyObject *module, PyObject *const *args, Py_ssize_t
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[1];
-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 0;
-    PyObject *file = NULL;
+    Py_ssize_t _idx[1];
+    PyValueBorrow file = PyValue_Borrow(PyValue_NULL);
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 0, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 0, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, _idx, 1)) {
         goto exit;
     }
-    if (!noptargs) {
-        goto skip_optional_pos;
+    if (_idx[0] >= 0) {
+        file = PyValue_Borrow(args[_idx[0]]);
     }
-    file = args[0];
-skip_optional_pos:
-    return_value = faulthandler_dump_c_stack_py_impl(module, file);
+    return_value = faulthandler_dump_c_stack_py_impl(PyValue_AsKnownObjectBorrow(module), file);
 
 exit:
     return return_value;
@@ -182,17 +169,17 @@ PyDoc_STRVAR(faulthandler_py_enable__doc__,
 "Enable the fault handler.");
 
 #define FAULTHANDLER_PY_ENABLE_METHODDEF    \
-    {"enable", _PyCFunction_CAST(faulthandler_py_enable), METH_FASTCALL|METH_KEYWORDS, faulthandler_py_enable__doc__},
+    {"enable", _PyCFunction_CAST(faulthandler_py_enable), METH_VALUE|METH_KEYWORDS, faulthandler_py_enable__doc__},
 
-static PyObject *
-faulthandler_py_enable_impl(PyObject *module, PyObject *file,
+static PyValue
+faulthandler_py_enable_impl(PyObject *module, PyValueBorrow file,
                             int all_threads, int c_stack,
                             Py_ssize_t max_threads);
 
-static PyObject *
-faulthandler_py_enable(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+faulthandler_py_enable(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 4
@@ -220,63 +207,46 @@ faulthandler_py_enable(PyObject *module, PyObject *const *args, Py_ssize_t nargs
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[4];
-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 0;
-    PyObject *file = NULL;
+    Py_ssize_t _idx[4];
+    PyValueBorrow file = PyValue_Borrow(PyValue_NULL);
     int all_threads = 1;
     int c_stack = 1;
     Py_ssize_t max_threads = 100;
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 0, /*maxpos*/ 3, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 0, /*maxpos*/ 3, /*minkw*/ 0, /*varpos*/ 0, _idx, 4)) {
         goto exit;
     }
-    if (!noptargs) {
-        goto skip_optional_pos;
+    if (_idx[0] >= 0) {
+        file = PyValue_Borrow(args[_idx[0]]);
     }
-    if (args[0]) {
-        file = args[0];
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
-    }
-    if (args[1]) {
-        all_threads = PyObject_IsTrue(args[1]);
+    if (_idx[1] >= 0) {
+        all_threads = _PyValue_IsTrue(PyValue_Borrow(args[_idx[1]]));
         if (all_threads < 0) {
             goto exit;
         }
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
     }
-    if (args[2]) {
-        c_stack = PyObject_IsTrue(args[2]);
+    if (_idx[2] >= 0) {
+        c_stack = _PyValue_IsTrue(PyValue_Borrow(args[_idx[2]]));
         if (c_stack < 0) {
             goto exit;
         }
-        if (!--noptargs) {
-            goto skip_optional_pos;
+    }
+    if (_idx[3] >= 0) {
+        {
+            Py_ssize_t ival = -1;
+            PyValue iobj = _PyValue_Index(PyValue_Borrow(args[_idx[3]]));
+            if (!PyValue_IsNull(iobj)) {
+                ival = _PyValue_IntAsSsize_t(PyValue_Borrow(iobj));
+                PyValue_CLOSE(iobj);
+            }
+            if (ival == -1 && PyErr_Occurred()) {
+                goto exit;
+            }
+            max_threads = ival;
         }
     }
-skip_optional_pos:
-    if (!noptargs) {
-        goto skip_optional_kwonly;
-    }
-    {
-        Py_ssize_t ival = -1;
-        PyObject *iobj = _PyNumber_Index(args[3]);
-        if (iobj != NULL) {
-            ival = PyLong_AsSsize_t(iobj);
-            Py_DECREF(iobj);
-        }
-        if (ival == -1 && PyErr_Occurred()) {
-            goto exit;
-        }
-        max_threads = ival;
-    }
-skip_optional_kwonly:
-    return_value = faulthandler_py_enable_impl(module, file, all_threads, c_stack, max_threads);
+    return_value = faulthandler_py_enable_impl(PyValue_AsKnownObjectBorrow(module), file, all_threads, c_stack, max_threads);
 
 exit:
     return return_value;
@@ -289,15 +259,19 @@ PyDoc_STRVAR(faulthandler_disable_py__doc__,
 "Disable the fault handler.");
 
 #define FAULTHANDLER_DISABLE_PY_METHODDEF    \
-    {"disable", (PyCFunction)faulthandler_disable_py, METH_NOARGS, faulthandler_disable_py__doc__},
+    {"disable", _PyCFunction_CAST(faulthandler_disable_py), METH_VALUE|METH_NOARGS, faulthandler_disable_py__doc__},
 
-static PyObject *
+static PyValue
 faulthandler_disable_py_impl(PyObject *module);
 
-static PyObject *
-faulthandler_disable_py(PyObject *module, PyObject *Py_UNUSED(ignored))
+static PyValue
+faulthandler_disable_py(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return faulthandler_disable_py_impl(module);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = faulthandler_disable_py_impl(PyValue_AsKnownObjectBorrow(module));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(faulthandler_is_enabled__doc__,
@@ -307,22 +281,22 @@ PyDoc_STRVAR(faulthandler_is_enabled__doc__,
 "Check if the handler is enabled.");
 
 #define FAULTHANDLER_IS_ENABLED_METHODDEF    \
-    {"is_enabled", (PyCFunction)faulthandler_is_enabled, METH_NOARGS, faulthandler_is_enabled__doc__},
+    {"is_enabled", _PyCFunction_CAST(faulthandler_is_enabled), METH_VALUE|METH_NOARGS, faulthandler_is_enabled__doc__},
 
 static int
 faulthandler_is_enabled_impl(PyObject *module);
 
-static PyObject *
-faulthandler_is_enabled(PyObject *module, PyObject *Py_UNUSED(ignored))
+static PyValue
+faulthandler_is_enabled(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int _return_value;
 
-    _return_value = faulthandler_is_enabled_impl(module);
+    _return_value = faulthandler_is_enabled_impl(PyValue_AsKnownObjectBorrow(module));
     if ((_return_value == -1) && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = PyBool_FromLong((long)_return_value);
+    return_value = _return_value ? PyValue_True : PyValue_False;
 
 exit:
     return return_value;
@@ -340,18 +314,18 @@ PyDoc_STRVAR(faulthandler_dump_traceback_later__doc__,
 "max_threads caps the number of threads dumped.");
 
 #define FAULTHANDLER_DUMP_TRACEBACK_LATER_METHODDEF    \
-    {"dump_traceback_later", _PyCFunction_CAST(faulthandler_dump_traceback_later), METH_FASTCALL|METH_KEYWORDS, faulthandler_dump_traceback_later__doc__},
+    {"dump_traceback_later", _PyCFunction_CAST(faulthandler_dump_traceback_later), METH_VALUE|METH_KEYWORDS, faulthandler_dump_traceback_later__doc__},
 
-static PyObject *
+static PyValue
 faulthandler_dump_traceback_later_impl(PyObject *module,
-                                       PyObject *timeout_obj, int repeat,
-                                       PyObject *file, int exit,
+                                       PyValueBorrow timeout_obj, int repeat,
+                                       PyValueBorrow file, int exit,
                                        Py_ssize_t max_threads);
 
-static PyObject *
-faulthandler_dump_traceback_later(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+faulthandler_dump_traceback_later(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 5
@@ -379,65 +353,48 @@ faulthandler_dump_traceback_later(PyObject *module, PyObject *const *args, Py_ss
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[5];
-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 1;
-    PyObject *timeout_obj;
+    Py_ssize_t _idx[5];
+    PyValueBorrow timeout_obj;
     int repeat = 0;
-    PyObject *file = NULL;
+    PyValueBorrow file = PyValue_Borrow(PyValue_NULL);
     int exit = 0;
     Py_ssize_t max_threads = 100;
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 1, /*maxpos*/ 4, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 1, /*maxpos*/ 4, /*minkw*/ 0, /*varpos*/ 0, _idx, 5)) {
         goto exit;
     }
-    timeout_obj = args[0];
-    if (!noptargs) {
-        goto skip_optional_pos;
-    }
-    if (args[1]) {
-        repeat = PyObject_IsTrue(args[1]);
+    timeout_obj = PyValue_Borrow(args[_idx[0]]);
+    if (_idx[1] >= 0) {
+        repeat = _PyValue_IsTrue(PyValue_Borrow(args[_idx[1]]));
         if (repeat < 0) {
             goto exit;
         }
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
     }
-    if (args[2]) {
-        file = args[2];
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
+    if (_idx[2] >= 0) {
+        file = PyValue_Borrow(args[_idx[2]]);
     }
-    if (args[3]) {
-        exit = PyObject_IsTrue(args[3]);
+    if (_idx[3] >= 0) {
+        exit = _PyValue_IsTrue(PyValue_Borrow(args[_idx[3]]));
         if (exit < 0) {
             goto exit;
         }
-        if (!--noptargs) {
-            goto skip_optional_pos;
+    }
+    if (_idx[4] >= 0) {
+        {
+            Py_ssize_t ival = -1;
+            PyValue iobj = _PyValue_Index(PyValue_Borrow(args[_idx[4]]));
+            if (!PyValue_IsNull(iobj)) {
+                ival = _PyValue_IntAsSsize_t(PyValue_Borrow(iobj));
+                PyValue_CLOSE(iobj);
+            }
+            if (ival == -1 && PyErr_Occurred()) {
+                goto exit;
+            }
+            max_threads = ival;
         }
     }
-skip_optional_pos:
-    if (!noptargs) {
-        goto skip_optional_kwonly;
-    }
-    {
-        Py_ssize_t ival = -1;
-        PyObject *iobj = _PyNumber_Index(args[4]);
-        if (iobj != NULL) {
-            ival = PyLong_AsSsize_t(iobj);
-            Py_DECREF(iobj);
-        }
-        if (ival == -1 && PyErr_Occurred()) {
-            goto exit;
-        }
-        max_threads = ival;
-    }
-skip_optional_kwonly:
-    return_value = faulthandler_dump_traceback_later_impl(module, timeout_obj, repeat, file, exit, max_threads);
+    return_value = faulthandler_dump_traceback_later_impl(PyValue_AsKnownObjectBorrow(module), timeout_obj, repeat, file, exit, max_threads);
 
 exit:
     return return_value;
@@ -450,15 +407,19 @@ PyDoc_STRVAR(faulthandler_cancel_dump_traceback_later_py__doc__,
 "Cancel the previous call to dump_traceback_later().");
 
 #define FAULTHANDLER_CANCEL_DUMP_TRACEBACK_LATER_PY_METHODDEF    \
-    {"cancel_dump_traceback_later", (PyCFunction)faulthandler_cancel_dump_traceback_later_py, METH_NOARGS, faulthandler_cancel_dump_traceback_later_py__doc__},
+    {"cancel_dump_traceback_later", _PyCFunction_CAST(faulthandler_cancel_dump_traceback_later_py), METH_VALUE|METH_NOARGS, faulthandler_cancel_dump_traceback_later_py__doc__},
 
-static PyObject *
+static PyValue
 faulthandler_cancel_dump_traceback_later_py_impl(PyObject *module);
 
-static PyObject *
-faulthandler_cancel_dump_traceback_later_py(PyObject *module, PyObject *Py_UNUSED(ignored))
+static PyValue
+faulthandler_cancel_dump_traceback_later_py(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return faulthandler_cancel_dump_traceback_later_py_impl(module);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = faulthandler_cancel_dump_traceback_later_py_impl(PyValue_AsKnownObjectBorrow(module));
+
+    return return_value;
 }
 
 #if defined(FAULTHANDLER_USER)
@@ -475,17 +436,17 @@ PyDoc_STRVAR(faulthandler_register_py__doc__,
 "dumped.");
 
 #define FAULTHANDLER_REGISTER_PY_METHODDEF    \
-    {"register", _PyCFunction_CAST(faulthandler_register_py), METH_FASTCALL|METH_KEYWORDS, faulthandler_register_py__doc__},
+    {"register", _PyCFunction_CAST(faulthandler_register_py), METH_VALUE|METH_KEYWORDS, faulthandler_register_py__doc__},
 
-static PyObject *
-faulthandler_register_py_impl(PyObject *module, int signum, PyObject *file,
-                              int all_threads, int chain,
+static PyValue
+faulthandler_register_py_impl(PyObject *module, int signum,
+                              PyValueBorrow file, int all_threads, int chain,
                               Py_ssize_t max_threads);
 
-static PyObject *
-faulthandler_register_py(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+faulthandler_register_py(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 5
@@ -513,68 +474,51 @@ faulthandler_register_py(PyObject *module, PyObject *const *args, Py_ssize_t nar
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[5];
-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 1;
+    Py_ssize_t _idx[5];
     int signum;
-    PyObject *file = NULL;
+    PyValueBorrow file = PyValue_Borrow(PyValue_NULL);
     int all_threads = 1;
     int chain = 0;
     Py_ssize_t max_threads = 100;
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 1, /*maxpos*/ 4, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 1, /*maxpos*/ 4, /*minkw*/ 0, /*varpos*/ 0, _idx, 5)) {
         goto exit;
     }
-    signum = PyLong_AsInt(args[0]);
+    signum = _PyValue_AsInt(PyValue_Borrow(args[_idx[0]]));
     if (signum == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    if (!noptargs) {
-        goto skip_optional_pos;
+    if (_idx[1] >= 0) {
+        file = PyValue_Borrow(args[_idx[1]]);
     }
-    if (args[1]) {
-        file = args[1];
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
-    }
-    if (args[2]) {
-        all_threads = PyObject_IsTrue(args[2]);
+    if (_idx[2] >= 0) {
+        all_threads = _PyValue_IsTrue(PyValue_Borrow(args[_idx[2]]));
         if (all_threads < 0) {
             goto exit;
         }
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
     }
-    if (args[3]) {
-        chain = PyObject_IsTrue(args[3]);
+    if (_idx[3] >= 0) {
+        chain = _PyValue_IsTrue(PyValue_Borrow(args[_idx[3]]));
         if (chain < 0) {
             goto exit;
         }
-        if (!--noptargs) {
-            goto skip_optional_pos;
+    }
+    if (_idx[4] >= 0) {
+        {
+            Py_ssize_t ival = -1;
+            PyValue iobj = _PyValue_Index(PyValue_Borrow(args[_idx[4]]));
+            if (!PyValue_IsNull(iobj)) {
+                ival = _PyValue_IntAsSsize_t(PyValue_Borrow(iobj));
+                PyValue_CLOSE(iobj);
+            }
+            if (ival == -1 && PyErr_Occurred()) {
+                goto exit;
+            }
+            max_threads = ival;
         }
     }
-skip_optional_pos:
-    if (!noptargs) {
-        goto skip_optional_kwonly;
-    }
-    {
-        Py_ssize_t ival = -1;
-        PyObject *iobj = _PyNumber_Index(args[4]);
-        if (iobj != NULL) {
-            ival = PyLong_AsSsize_t(iobj);
-            Py_DECREF(iobj);
-        }
-        if (ival == -1 && PyErr_Occurred()) {
-            goto exit;
-        }
-        max_threads = ival;
-    }
-skip_optional_kwonly:
-    return_value = faulthandler_register_py_impl(module, signum, file, all_threads, chain, max_threads);
+    return_value = faulthandler_register_py_impl(PyValue_AsKnownObjectBorrow(module), signum, file, all_threads, chain, max_threads);
 
 exit:
     return return_value;
@@ -591,22 +535,22 @@ PyDoc_STRVAR(faulthandler_unregister_py__doc__,
 "Unregister the handler of the signal \'signum\' registered by register().");
 
 #define FAULTHANDLER_UNREGISTER_PY_METHODDEF    \
-    {"unregister", (PyCFunction)faulthandler_unregister_py, METH_O, faulthandler_unregister_py__doc__},
+    {"unregister", _PyCFunction_CAST(faulthandler_unregister_py), METH_VALUE|METH_O, faulthandler_unregister_py__doc__},
 
-static PyObject *
+static PyValue
 faulthandler_unregister_py_impl(PyObject *module, int signum);
 
-static PyObject *
-faulthandler_unregister_py(PyObject *module, PyObject *arg)
+static PyValue
+faulthandler_unregister_py(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int signum;
 
-    signum = PyLong_AsInt(arg);
+    signum = _PyValue_AsInt(PyValue_Borrow(args[0]));
     if (signum == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = faulthandler_unregister_py_impl(module, signum);
+    return_value = faulthandler_unregister_py_impl(PyValue_AsKnownObjectBorrow(module), signum);
 
 exit:
     return return_value;
@@ -621,15 +565,15 @@ PyDoc_STRVAR(faulthandler__sigsegv__doc__,
 "Raise a SIGSEGV signal.");
 
 #define FAULTHANDLER__SIGSEGV_METHODDEF    \
-    {"_sigsegv", _PyCFunction_CAST(faulthandler__sigsegv), METH_FASTCALL, faulthandler__sigsegv__doc__},
+    {"_sigsegv", _PyCFunction_CAST(faulthandler__sigsegv), METH_VALUE, faulthandler__sigsegv__doc__},
 
-static PyObject *
+static PyValue
 faulthandler__sigsegv_impl(PyObject *module, int release_gil);
 
-static PyObject *
-faulthandler__sigsegv(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+faulthandler__sigsegv(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int release_gil = 0;
 
     if (!_PyArg_CheckPositional("_sigsegv", nargs, 0, 1)) {
@@ -638,12 +582,12 @@ faulthandler__sigsegv(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
     if (nargs < 1) {
         goto skip_optional;
     }
-    release_gil = PyObject_IsTrue(args[0]);
+    release_gil = _PyValue_IsTrue(PyValue_Borrow(args[0]));
     if (release_gil < 0) {
         goto exit;
     }
 skip_optional:
-    return_value = faulthandler__sigsegv_impl(module, release_gil);
+    return_value = faulthandler__sigsegv_impl(PyValue_AsKnownObjectBorrow(module), release_gil);
 
 exit:
     return return_value;
@@ -656,15 +600,19 @@ PyDoc_STRVAR(faulthandler__fatal_error_c_thread__doc__,
 "Call Py_FatalError() in a new C thread.");
 
 #define FAULTHANDLER__FATAL_ERROR_C_THREAD_METHODDEF    \
-    {"_fatal_error_c_thread", (PyCFunction)faulthandler__fatal_error_c_thread, METH_NOARGS, faulthandler__fatal_error_c_thread__doc__},
+    {"_fatal_error_c_thread", _PyCFunction_CAST(faulthandler__fatal_error_c_thread), METH_VALUE|METH_NOARGS, faulthandler__fatal_error_c_thread__doc__},
 
-static PyObject *
+static PyValue
 faulthandler__fatal_error_c_thread_impl(PyObject *module);
 
-static PyObject *
-faulthandler__fatal_error_c_thread(PyObject *module, PyObject *Py_UNUSED(ignored))
+static PyValue
+faulthandler__fatal_error_c_thread(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return faulthandler__fatal_error_c_thread_impl(module);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = faulthandler__fatal_error_c_thread_impl(PyValue_AsKnownObjectBorrow(module));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(faulthandler__sigfpe__doc__,
@@ -674,15 +622,19 @@ PyDoc_STRVAR(faulthandler__sigfpe__doc__,
 "Raise a SIGFPE signal.");
 
 #define FAULTHANDLER__SIGFPE_METHODDEF    \
-    {"_sigfpe", (PyCFunction)faulthandler__sigfpe, METH_NOARGS, faulthandler__sigfpe__doc__},
+    {"_sigfpe", _PyCFunction_CAST(faulthandler__sigfpe), METH_VALUE|METH_NOARGS, faulthandler__sigfpe__doc__},
 
-static PyObject *
+static PyValue
 faulthandler__sigfpe_impl(PyObject *module);
 
-static PyObject *
-faulthandler__sigfpe(PyObject *module, PyObject *Py_UNUSED(ignored))
+static PyValue
+faulthandler__sigfpe(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return faulthandler__sigfpe_impl(module);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = faulthandler__sigfpe_impl(PyValue_AsKnownObjectBorrow(module));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(faulthandler__sigabrt__doc__,
@@ -692,15 +644,19 @@ PyDoc_STRVAR(faulthandler__sigabrt__doc__,
 "Raise a SIGABRT signal.");
 
 #define FAULTHANDLER__SIGABRT_METHODDEF    \
-    {"_sigabrt", (PyCFunction)faulthandler__sigabrt, METH_NOARGS, faulthandler__sigabrt__doc__},
+    {"_sigabrt", _PyCFunction_CAST(faulthandler__sigabrt), METH_VALUE|METH_NOARGS, faulthandler__sigabrt__doc__},
 
-static PyObject *
+static PyValue
 faulthandler__sigabrt_impl(PyObject *module);
 
-static PyObject *
-faulthandler__sigabrt(PyObject *module, PyObject *Py_UNUSED(ignored))
+static PyValue
+faulthandler__sigabrt(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return faulthandler__sigabrt_impl(module);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = faulthandler__sigabrt_impl(PyValue_AsKnownObjectBorrow(module));
+
+    return return_value;
 }
 
 #if defined(FAULTHANDLER_USE_ALT_STACK)
@@ -712,15 +668,19 @@ PyDoc_STRVAR(faulthandler__stack_overflow__doc__,
 "Recursive call to raise a stack overflow.");
 
 #define FAULTHANDLER__STACK_OVERFLOW_METHODDEF    \
-    {"_stack_overflow", (PyCFunction)faulthandler__stack_overflow, METH_NOARGS, faulthandler__stack_overflow__doc__},
+    {"_stack_overflow", _PyCFunction_CAST(faulthandler__stack_overflow), METH_VALUE|METH_NOARGS, faulthandler__stack_overflow__doc__},
 
-static PyObject *
+static PyValue
 faulthandler__stack_overflow_impl(PyObject *module);
 
-static PyObject *
-faulthandler__stack_overflow(PyObject *module, PyObject *Py_UNUSED(ignored))
+static PyValue
+faulthandler__stack_overflow(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return faulthandler__stack_overflow_impl(module);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = faulthandler__stack_overflow_impl(PyValue_AsKnownObjectBorrow(module));
+
+    return return_value;
 }
 
 #endif /* defined(FAULTHANDLER_USE_ALT_STACK) */
@@ -734,33 +694,57 @@ PyDoc_STRVAR(faulthandler__raise_exception__doc__,
 "Call RaiseException(code, flags).");
 
 #define FAULTHANDLER__RAISE_EXCEPTION_METHODDEF    \
-    {"_raise_exception", _PyCFunction_CAST(faulthandler__raise_exception), METH_FASTCALL, faulthandler__raise_exception__doc__},
+    {"_raise_exception", _PyCFunction_CAST(faulthandler__raise_exception), METH_VALUE, faulthandler__raise_exception__doc__},
 
-static PyObject *
+static PyValue
 faulthandler__raise_exception_impl(PyObject *module, unsigned int code,
                                    unsigned int flags);
 
-static PyObject *
-faulthandler__raise_exception(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+faulthandler__raise_exception(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     unsigned int code;
     unsigned int flags = 0;
 
     if (!_PyArg_CheckPositional("_raise_exception", nargs, 1, 2)) {
         goto exit;
     }
-    if (!_PyLong_UnsignedInt_Converter(args[0], &code)) {
-        goto exit;
+    {
+        Py_ssize_t _bytes = _PyValue_AsNativeBytes(PyValue_Borrow(args[0]), &code, sizeof(unsigned int),
+                Py_ASNATIVEBYTES_NATIVE_ENDIAN |
+                Py_ASNATIVEBYTES_ALLOW_INDEX |
+                Py_ASNATIVEBYTES_REJECT_NEGATIVE |
+                Py_ASNATIVEBYTES_UNSIGNED_BUFFER);
+        if (_bytes < 0) {
+            goto exit;
+        }
+        if ((size_t)_bytes > sizeof(unsigned int)) {
+            PyErr_SetString(PyExc_OverflowError,
+                        "Python int too large for C unsigned int");
+            goto exit;
+        }
     }
     if (nargs < 2) {
         goto skip_optional;
     }
-    if (!_PyLong_UnsignedInt_Converter(args[1], &flags)) {
-        goto exit;
+    {
+        Py_ssize_t _bytes = _PyValue_AsNativeBytes(PyValue_Borrow(args[1]), &flags, sizeof(unsigned int),
+                Py_ASNATIVEBYTES_NATIVE_ENDIAN |
+                Py_ASNATIVEBYTES_ALLOW_INDEX |
+                Py_ASNATIVEBYTES_REJECT_NEGATIVE |
+                Py_ASNATIVEBYTES_UNSIGNED_BUFFER);
+        if (_bytes < 0) {
+            goto exit;
+        }
+        if ((size_t)_bytes > sizeof(unsigned int)) {
+            PyErr_SetString(PyExc_OverflowError,
+                        "Python int too large for C unsigned int");
+            goto exit;
+        }
     }
 skip_optional:
-    return_value = faulthandler__raise_exception_impl(module, code, flags);
+    return_value = faulthandler__raise_exception_impl(PyValue_AsKnownObjectBorrow(module), code, flags);
 
 exit:
     return return_value;
@@ -783,4 +767,4 @@ exit:
 #ifndef FAULTHANDLER__RAISE_EXCEPTION_METHODDEF
     #define FAULTHANDLER__RAISE_EXCEPTION_METHODDEF
 #endif /* !defined(FAULTHANDLER__RAISE_EXCEPTION_METHODDEF) */
-/*[clinic end generated code: output=8c52528f8564fd2d input=a9049054013a1b77]*/
+/*[clinic end generated code: output=175e82a533635ec7 input=a9049054013a1b77]*/

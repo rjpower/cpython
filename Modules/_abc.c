@@ -3,13 +3,23 @@
 #  define Py_BUILD_CORE_MODULE 1
 #endif
 
+#define Py_VALUE_CORE 1
 #include "Python.h"
+#include "pycore_dict.h"           // PyDict_PopValue()
 #include "pycore_moduleobject.h"  // _PyModule_GetState()
 #include "pycore_object.h"        // _PyType_GetSubclasses()
 #include "pycore_runtime.h"       // _Py_ID()
 #include "pycore_setobject.h"     // _PySet_NextEntryRef()
+#include "pycore_value.h"         // PyValue_CLOSE()
+#include "pycore_value_ops.h"     // _PyValue_GetIter()
+#include "pycore_value_slots.h"// _PyValue_FromObjectResult()
 #include "pycore_weakref.h"       // _PyWeakref_GET_REF()
 #include "clinic/_abc.c.h"
+
+/*[clinic input]
+value_emission
+[clinic start generated code]*/
+/*[clinic end generated code: output=da39a3ee5e6b4b0d input=eb7b17088bfd7215]*/
 
 /*[clinic input]
 module _abc
@@ -165,7 +175,8 @@ static _abc_data *
 _get_impl(PyObject *module, PyObject *self)
 {
     _abcmodule_state *state = get_abc_state(module);
-    PyObject *impl = PyObject_GetAttr(self, &_Py_ID(_abc_impl));
+    PyValue impl_v = _PyValue_GetAttr(PyValue_FromObjectBorrow(self), &_Py_ID(_abc_impl));
+    PyObject *impl = PyValue_IsNull(impl_v) ? NULL : _PyValue_AsObjectStealAt(impl_v, BOX_SITE_FIELD);
     if (impl == NULL) {
         return NULL;
     }
@@ -175,6 +186,19 @@ _get_impl(PyObject *module, PyObject *self)
         return NULL;
     }
     return (_abc_data *)impl;
+}
+
+/* _get_impl() of a value: an inline int or float is boxed first. */
+static _abc_data *
+_get_impl_value(PyObject *module, PyValueBorrow self)
+{
+    PyObject *self_obj = _PyValue_AsObjectAt(self, BOX_SITE_PARSER);
+    if (self_obj == NULL) {
+        return NULL;
+    }
+    _abc_data *impl = _get_impl(module, self_obj);
+    Py_DECREF(self_obj);
+    return impl;
 }
 
 static int
@@ -195,7 +219,7 @@ _in_weak_set(_abc_data *impl, PyObject **pset, PyObject *obj)
         }
         return -1;
     }
-    int res = PySet_Contains(set, ref);
+    int res = PySet_ContainsValue(set, PyValue_FromObjectBorrow(ref));
     Py_DECREF(ref);
     return res;
 }
@@ -207,7 +231,7 @@ _destroy(PyObject *setweakref, PyObject *objweakref)
     if (set == NULL) {
         Py_RETURN_NONE;
     }
-    if (PySet_Discard(set, objweakref) < 0) {
+    if (PySet_DiscardValue(set, PyValue_FromObjectBorrow(objweakref)) < 0) {
         Py_DECREF(set);
         return NULL;
     }
@@ -250,7 +274,7 @@ _add_to_weak_set(_abc_data *impl, PyObject **pset, PyObject *obj)
         Py_DECREF(wr);
         return -1;
     }
-    int ret = PySet_Add(set, ref);
+    int ret = PySet_AddValue(set, PyValue_FromObjectBorrow(ref));
     Py_DECREF(wr);
     Py_DECREF(ref);
     return ret;
@@ -267,13 +291,13 @@ Internal ABC helper to reset registry of a given class.
 Should be only used by refleak.py
 [clinic start generated code]*/
 
-static PyObject *
-_abc__reset_registry(PyObject *module, PyObject *self)
-/*[clinic end generated code: output=92d591a43566cc10 input=12a0b7eb339ac35c]*/
+static PyValue
+_abc__reset_registry_impl(PyObject *module, PyValueBorrow self)
+/*[clinic end generated code: output=58d9e874d176c159 input=12a0b7eb339ac35c]*/
 {
-    _abc_data *impl = _get_impl(module, self);
+    _abc_data *impl = _get_impl_value(module, self);
     if (impl == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
     PyObject *registry;
     Py_BEGIN_CRITICAL_SECTION(impl);
@@ -281,10 +305,10 @@ _abc__reset_registry(PyObject *module, PyObject *self)
     Py_END_CRITICAL_SECTION();
     if (registry != NULL && PySet_Clear(registry) < 0) {
         Py_DECREF(impl);
-        return NULL;
+        return PyValue_NULL;
     }
     Py_DECREF(impl);
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 /*[clinic input]
@@ -298,13 +322,13 @@ Internal ABC helper to reset both caches of a given class.
 Should be only used by refleak.py
 [clinic start generated code]*/
 
-static PyObject *
-_abc__reset_caches(PyObject *module, PyObject *self)
-/*[clinic end generated code: output=f296f0d5c513f80c input=c0ac616fd8acfb6f]*/
+static PyValue
+_abc__reset_caches_impl(PyObject *module, PyValueBorrow self)
+/*[clinic end generated code: output=dca934a1ec714955 input=c0ac616fd8acfb6f]*/
 {
-    _abc_data *impl = _get_impl(module, self);
+    _abc_data *impl = _get_impl_value(module, self);
     if (impl == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
     PyObject *cache, *negative_cache;
     Py_BEGIN_CRITICAL_SECTION(impl);
@@ -313,15 +337,15 @@ _abc__reset_caches(PyObject *module, PyObject *self)
     Py_END_CRITICAL_SECTION();
     if (cache != NULL && PySet_Clear(cache) < 0) {
         Py_DECREF(impl);
-        return NULL;
+        return PyValue_NULL;
     }
     /* also the second cache */
     if (negative_cache != NULL && PySet_Clear(negative_cache) < 0) {
         Py_DECREF(impl);
-        return NULL;
+        return PyValue_NULL;
     }
     Py_DECREF(impl);
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 /*[clinic input]
@@ -337,13 +361,13 @@ negative cache version. Don't call this function directly,
 instead use ABC._dump_registry() for a nice repr.
 [clinic start generated code]*/
 
-static PyObject *
-_abc__get_dump(PyObject *module, PyObject *self)
-/*[clinic end generated code: output=9d9569a8e2c1c443 input=2c5deb1bfe9e3c79]*/
+static PyValue
+_abc__get_dump_impl(PyObject *module, PyValueBorrow self)
+/*[clinic end generated code: output=f1123d5801e06e2e input=2c5deb1bfe9e3c79]*/
 {
-    _abc_data *impl = _get_impl(module, self);
+    _abc_data *impl = _get_impl_value(module, self);
     if (impl == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
     PyObject *res;
     Py_BEGIN_CRITICAL_SECTION(impl);
@@ -354,7 +378,7 @@ _abc__get_dump(PyObject *module, PyObject *self)
                         get_cache_version(impl));
     Py_END_CRITICAL_SECTION();
     Py_DECREF(impl);
-    return res;
+    return _PyValue_FromObjectResult(res);
 }
 
 // Compute set of abstract method names.
@@ -370,7 +394,8 @@ compute_abstract_methods(PyObject *self)
     PyObject *ns = NULL, *items = NULL, *bases = NULL;  // Py_XDECREF()ed on error.
 
     /* Stage 1: direct abstract methods. */
-    ns = PyObject_GetAttr(self, &_Py_ID(__dict__));
+    PyValue ns_v = _PyValue_GetAttr(PyValue_FromObjectBorrow(self), &_Py_ID(__dict__));
+    ns = PyValue_IsNull(ns_v) ? NULL : _PyValue_AsObjectStealAt(ns_v, BOX_SITE_FIELD);
     if (!ns) {
         goto error;
     }
@@ -383,7 +408,8 @@ compute_abstract_methods(PyObject *self)
     }
     assert(PyList_Check(items));
     for (Py_ssize_t pos = 0; pos < PyList_GET_SIZE(items); pos++) {
-        PyObject *pair = PyList_GetItemRef(items, pos);
+        PyValue pair_v = PyList_GetValue(items, pos);
+        PyObject *pair = PyValue_IsNull(pair_v) ? NULL : _PyValue_AsObjectStealAt(pair_v, BOX_SITE_FIELD);
         if (!pair) {
             goto error;
         }
@@ -401,33 +427,35 @@ compute_abstract_methods(PyObject *self)
 
         // items or it may be cleared while accessing __abstractmethod__
         // So we need to keep strong references for key and value
-        PyObject *key = PyList_CheckExact(it) ? PyList_GetItemRef(it, 0)
-                                              : PyTuple_GetItemRef(it, 0);
-        if (key == NULL) {
+        PyValue key = PyList_CheckExact(it) ? PyList_GetValue(it, 0)
+                                            : PyTuple_GetValue(it, 0);
+        if (PyValue_IsNull(key)) {
             Py_DECREF(it);
             goto error;
         }
-        PyObject *value = PyList_CheckExact(it) ? PyList_GetItemRef(it, 1)
-                                                : PyTuple_GetItemRef(it, 1);
+        PyValue value_v = PyList_CheckExact(it) ? PyList_GetValue(it, 1)
+                                  : PyTuple_GetValue(it, 1);
+        PyObject *value = PyValue_IsNull(value_v) ? NULL : _PyValue_AsObjectStealAt(value_v, BOX_SITE_FIELD);
         if (value == NULL) {
-            Py_DECREF(key);
+            PyValue_CLOSE(key);
             Py_DECREF(it);
             goto error;
         }
         int is_abstract = _PyObject_IsAbstract(value);
         Py_DECREF(value);
         if (is_abstract < 0 ||
-                (is_abstract && PySet_Add(abstracts, key) < 0)) {
+                (is_abstract && PySet_AddValue(abstracts, key) < 0)) {
             Py_DECREF(it);
-            Py_DECREF(key);
+            PyValue_CLOSE(key);
             goto error;
         }
-        Py_DECREF(key);
+        PyValue_CLOSE(key);
         Py_DECREF(it);
     }
 
     /* Stage 2: inherited abstract methods. */
-    bases = PyObject_GetAttr(self, &_Py_ID(__bases__));
+    PyValue bases_v = _PyValue_GetAttr(PyValue_FromObjectBorrow(self), &_Py_ID(__bases__));
+    bases = PyValue_IsNull(bases_v) ? NULL : _PyValue_AsObjectStealAt(bases_v, BOX_SITE_FIELD);
     if (!bases) {
         goto error;
     }
@@ -437,7 +465,8 @@ compute_abstract_methods(PyObject *self)
     }
 
     for (Py_ssize_t pos = 0; pos < PyTuple_GET_SIZE(bases); pos++) {
-        PyObject *item = PyTuple_GetItemRef(bases, pos);
+        PyValue item_v = PyTuple_GetValue(bases, pos);
+        PyObject *item = PyValue_IsNull(item_v) ? NULL : _PyValue_AsObjectStealAt(item_v, BOX_SITE_FIELD);
         PyObject *base_abstracts, *iter;
 
         if (item == NULL) {
@@ -452,7 +481,7 @@ compute_abstract_methods(PyObject *self)
         if (base_abstracts == NULL) {
             continue;
         }
-        if (!(iter = PyObject_GetIter(base_abstracts))) {
+        if (!(iter = _PyValue_GetIter(PyValue_FromObjectBorrow(base_abstracts)))) {
             Py_DECREF(base_abstracts);
             goto error;
         }
@@ -472,7 +501,7 @@ compute_abstract_methods(PyObject *self)
             int is_abstract = _PyObject_IsAbstract(value);
             Py_DECREF(value);
             if (is_abstract < 0 ||
-                    (is_abstract && PySet_Add(abstracts, key) < 0))
+                    (is_abstract && PySet_AddValue(abstracts, PyValue_FromObjectBorrow(key)) < 0))
             {
                 Py_DECREF(key);
                 Py_DECREF(iter);
@@ -486,7 +515,7 @@ compute_abstract_methods(PyObject *self)
         }
     }
 
-    if (PyObject_SetAttr(self, &_Py_ID(__abstractmethods__), abstracts) < 0) {
+    if (_PyValue_SetAttr(PyValue_FromObjectBorrow(self), &_Py_ID(__abstractmethods__), PyValue_FromObjectBorrow(abstracts)) < 0) {
         goto error;
     }
 
@@ -501,6 +530,9 @@ error:
 
 #define COLLECTION_FLAGS (Py_TPFLAGS_SEQUENCE | Py_TPFLAGS_MAPPING)
 
+static PyValue
+abc_abc_init_body(PyObject *module, PyObject *self);
+
 /*[clinic input]
 @permit_long_summary
 _abc._abc_init
@@ -511,24 +543,36 @@ _abc._abc_init
 Internal ABC helper for class set-up. Should be never used outside abc module.
 [clinic start generated code]*/
 
-static PyObject *
-_abc__abc_init(PyObject *module, PyObject *self)
-/*[clinic end generated code: output=594757375714cda1 input=0b3513f947736d39]*/
+static PyValue
+_abc__abc_init_impl(PyObject *module, PyValueBorrow self)
+/*[clinic end generated code: output=e9c20228f1136a63 input=0b3513f947736d39]*/
+{
+    PyObject *self_obj = _PyValue_AsObjectAt(self, BOX_SITE_PARSER);
+    if (self_obj == NULL) {
+        return PyValue_NULL;
+    }
+    PyValue result = abc_abc_init_body(module, self_obj);
+    Py_DECREF(self_obj);
+    return result;
+}
+
+static PyValue
+abc_abc_init_body(PyObject *module, PyObject *self)
 {
     _abcmodule_state *state = get_abc_state(module);
     PyObject *data;
     if (compute_abstract_methods(self) < 0) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     /* Set up inheritance registry. */
     data = abc_data_new(state->_abc_data_type, NULL, NULL);
     if (data == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
-    if (PyObject_SetAttr(self, &_Py_ID(_abc_impl), data) < 0) {
+    if (_PyValue_SetAttr(PyValue_FromObjectBorrow(self), &_Py_ID(_abc_impl), PyValue_FromObjectBorrow(data)) < 0) {
         Py_DECREF(data);
-        return NULL;
+        return PyValue_NULL;
     }
     Py_DECREF(data);
     /* If __abc_tpflags__ & COLLECTION_FLAGS is set, then set the corresponding bit(s)
@@ -538,28 +582,42 @@ _abc__abc_init(PyObject *module, PyObject *self)
     if (PyType_Check(self)) {
         PyTypeObject *cls = (PyTypeObject *)self;
         PyObject *dict = _PyType_GetDict(cls);
-        PyObject *flags = NULL;
-        if (PyDict_Pop(dict, &_Py_ID(__abc_tpflags__), &flags) < 0) {
-            return NULL;
+        PyValue flags = PyValue_NULL;
+        if (PyDict_PopValue(dict, PyValue_FromObjectBorrow(&_Py_ID(__abc_tpflags__)),
+                            &flags) < 0) {
+            return PyValue_NULL;
         }
-        if (flags == NULL || !PyLong_CheckExact(flags)) {
-            Py_XDECREF(flags);
-            Py_RETURN_NONE;
+        if (PyValue_IsNull(flags) || PyValue_TYPE(flags) != &PyLong_Type) {
+            PyValue_XCLOSE(flags);
+            return PyValue_None;
         }
 
-        long val = PyLong_AsLong(flags);
-        Py_DECREF(flags);
+        long val;
+        {
+            PyObject *flags_obj = _PyValue_AsObjectAt(flags, BOX_SITE_NUMBER);
+            if (flags_obj == NULL) {
+                PyValue_CLOSE(flags);
+                return PyValue_NULL;
+            }
+            val = PyLong_AsLong(flags_obj);
+            Py_DECREF(flags_obj);
+        }
+        PyValue_CLOSE(flags);
         if (val == -1 && PyErr_Occurred()) {
-            return NULL;
+            return PyValue_NULL;
         }
         if ((val & COLLECTION_FLAGS) == COLLECTION_FLAGS) {
             PyErr_SetString(PyExc_TypeError, "__abc_tpflags__ cannot be both Py_TPFLAGS_SEQUENCE and Py_TPFLAGS_MAPPING");
-            return NULL;
+            return PyValue_NULL;
         }
         _PyType_SetFlags((PyTypeObject *)self, 0, val & COLLECTION_FLAGS);
     }
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
+
+static PyValue
+abc_abc_register_body(PyObject *module, PyObject *self,
+                PyValueBorrow subclass);
 
 /*[clinic input]
 @permit_long_summary
@@ -572,39 +630,54 @@ _abc._abc_register
 Internal ABC helper for subclasss registration. Should be never used outside abc module.
 [clinic start generated code]*/
 
-static PyObject *
-_abc__abc_register_impl(PyObject *module, PyObject *self, PyObject *subclass)
-/*[clinic end generated code: output=7851e7668c963524 input=135ab13a581b4414]*/
+static PyValue
+_abc__abc_register_impl(PyObject *module, PyValueBorrow self,
+                        PyValueBorrow subclass)
+/*[clinic end generated code: output=e8fbf397452cbbaf input=135ab13a581b4414]*/
 {
-    if (!PyType_Check(subclass)) {
-        PyErr_SetString(PyExc_TypeError, "Can only register classes");
-        return NULL;
+    PyObject *self_obj = _PyValue_AsObjectAt(self, BOX_SITE_PARSER);
+    if (self_obj == NULL) {
+        return PyValue_NULL;
     }
-    int result = PyObject_IsSubclass(subclass, self);
+    PyValue result = abc_abc_register_body(module, self_obj, subclass);
+    Py_DECREF(self_obj);
+    return result;
+}
+
+static PyValue
+abc_abc_register_body(PyObject *module, PyObject *self,
+                PyValueBorrow subclass)
+{
+    if (!(PyValue_IsObject(subclass) && PyType_Check(PyValue_AsKnownObjectBorrow(subclass)))) {
+        PyErr_SetString(PyExc_TypeError, "Can only register classes");
+        return PyValue_NULL;
+    }
+    PyObject *subclass_obj = PyValue_AsKnownObjectBorrow(subclass);  // checked above
+    int result = PyObject_IsSubclass(subclass_obj, self);
     if (result > 0) {
-        return Py_NewRef(subclass);  /* Already a subclass. */
+        return PyValue_DUP(subclass);  /* Already a subclass. */
     }
     if (result < 0) {
-        return NULL;
+        return PyValue_NULL;
     }
     /* Subtle: test for cycles *after* testing for "already a subclass";
        this means we allow X.register(X) and interpret it as a no-op. */
-    result = PyObject_IsSubclass(self, subclass);
+    result = PyObject_IsSubclass(self, subclass_obj);
     if (result > 0) {
         /* This would create a cycle, which is bad for the algorithm below. */
         PyErr_SetString(PyExc_RuntimeError, "Refusing to create an inheritance cycle");
-        return NULL;
+        return PyValue_NULL;
     }
     if (result < 0) {
-        return NULL;
+        return PyValue_NULL;
     }
     _abc_data *impl = _get_impl(module, self);
     if (impl == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
-    if (_add_to_weak_set(impl, &impl->_abc_registry, subclass) < 0) {
+    if (_add_to_weak_set(impl, &impl->_abc_registry, subclass_obj) < 0) {
         Py_DECREF(impl);
-        return NULL;
+        return PyValue_NULL;
     }
     Py_DECREF(impl);
 
@@ -616,14 +689,18 @@ _abc__abc_register_impl(PyObject *module, PyObject *self, PyObject *subclass)
         unsigned long collection_flag =
             PyType_GetFlags((PyTypeObject *)self) & COLLECTION_FLAGS;
         if (collection_flag) {
-            _PyType_SetFlagsRecursive((PyTypeObject *)subclass,
+            _PyType_SetFlagsRecursive((PyTypeObject *)subclass_obj,
                                       COLLECTION_FLAGS,
                                       collection_flag);
         }
     }
-    return Py_NewRef(subclass);
+    return PyValue_DUP(subclass);
 }
 
+
+static PyValue
+abc_abc_instancecheck_body(PyObject *module, PyObject *self,
+                           PyObject *instance);
 
 /*[clinic input]
 @permit_long_summary
@@ -636,20 +713,39 @@ _abc._abc_instancecheck
 Internal ABC helper for instance checks. Should be never used outside abc module.
 [clinic start generated code]*/
 
-static PyObject *
-_abc__abc_instancecheck_impl(PyObject *module, PyObject *self,
-                             PyObject *instance)
-/*[clinic end generated code: output=b8b5148f63b6b56f input=0bbc8da0ea346719]*/
+static PyValue
+_abc__abc_instancecheck_impl(PyObject *module, PyValueBorrow self,
+                             PyValueBorrow instance)
+/*[clinic end generated code: output=583622aac3140613 input=0bbc8da0ea346719]*/
+{
+    PyObject *self_obj = _PyValue_AsObjectAt(self, BOX_SITE_PARSER);
+    if (self_obj == NULL) {
+        return PyValue_NULL;
+    }
+    PyObject *instance_obj = _PyValue_AsObjectAt(instance, BOX_SITE_PARSER);
+    if (instance_obj == NULL) {
+        Py_DECREF(self_obj);
+        return PyValue_NULL;
+    }
+    PyValue result = abc_abc_instancecheck_body(module, self_obj, instance_obj);
+    Py_DECREF(instance_obj);
+    Py_DECREF(self_obj);
+    return result;
+}
+
+static PyValue
+abc_abc_instancecheck_body(PyObject *module, PyObject *self,
+                           PyObject *instance)
 {
     PyObject *subtype, *result = NULL, *subclass = NULL;
     _abc_data *impl = _get_impl(module, self);
     if (impl == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     if (PyObject_GetOptionalAttr(instance, &_Py_ID(__class__), &subclass) < 0) {
         Py_DECREF(impl);
-        return NULL;
+        return PyValue_NULL;
     }
     if (subclass == NULL) {
         /* Fall back to the type when the instance has no __class__, matching
@@ -691,7 +787,7 @@ _abc__abc_instancecheck_impl(PyObject *module, PyObject *self,
         goto end;
     }
 
-    switch (PyObject_IsTrue(result)) {
+    switch (_PyValue_IsTrue(PyValue_FromObjectBorrow(result))) {
     case -1:
         Py_SETREF(result, NULL);
         break;
@@ -710,7 +806,7 @@ _abc__abc_instancecheck_impl(PyObject *module, PyObject *self,
 end:
     Py_XDECREF(impl);
     Py_XDECREF(subclass);
-    return result;
+    return _PyValue_FromObjectResult(result);
 }
 
 
@@ -719,6 +815,10 @@ end:
 // Return 0 otherwise.
 static int subclasscheck_check_registry(_abc_data *impl, PyObject *subclass,
                                         PyObject **result);
+
+static PyValue
+abc_abc_subclasscheck_body(PyObject *module, PyObject *self,
+                    PyValueBorrow subclass);
 
 /*[clinic input]
 @permit_long_summary
@@ -731,15 +831,29 @@ _abc._abc_subclasscheck
 Internal ABC helper for subclasss checks. Should be never used outside abc module.
 [clinic start generated code]*/
 
-static PyObject *
-_abc__abc_subclasscheck_impl(PyObject *module, PyObject *self,
-                             PyObject *subclass)
-/*[clinic end generated code: output=b56c9e4a530e3894 input=5bf1ef712f5d3610]*/
+static PyValue
+_abc__abc_subclasscheck_impl(PyObject *module, PyValueBorrow self,
+                             PyValueBorrow subclass)
+/*[clinic end generated code: output=09fc059365eb79c3 input=5bf1ef712f5d3610]*/
 {
-    if (!PyType_Check(subclass)) {
-        PyErr_SetString(PyExc_TypeError, "issubclass() arg 1 must be a class");
-        return NULL;
+    PyObject *self_obj = _PyValue_AsObjectAt(self, BOX_SITE_PARSER);
+    if (self_obj == NULL) {
+        return PyValue_NULL;
     }
+    PyValue result = abc_abc_subclasscheck_body(module, self_obj, subclass);
+    Py_DECREF(self_obj);
+    return result;
+}
+
+static PyValue
+abc_abc_subclasscheck_body(PyObject *module, PyObject *self,
+                    PyValueBorrow subclass)
+{
+    if (!(PyValue_IsObject(subclass) && PyType_Check(PyValue_AsKnownObjectBorrow(subclass)))) {
+        PyErr_SetString(PyExc_TypeError, "issubclass() arg 1 must be a class");
+        return PyValue_NULL;
+    }
+    PyObject *subclass_obj = PyValue_AsKnownObjectBorrow(subclass);  // checked above
 
     PyObject *ok, *subclasses = NULL, *result = NULL;
     _abcmodule_state *state = NULL;
@@ -747,11 +861,11 @@ _abc__abc_subclasscheck_impl(PyObject *module, PyObject *self,
     int incache;
     _abc_data *impl = _get_impl(module, self);
     if (impl == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     /* 1. Check cache. */
-    incache = _in_weak_set(impl, &impl->_abc_cache, subclass);
+    incache = _in_weak_set(impl, &impl->_abc_cache, subclass_obj);
     if (incache < 0) {
         goto end;
     }
@@ -775,7 +889,7 @@ _abc__abc_subclasscheck_impl(PyObject *module, PyObject *self,
         set_cache_version(impl, invalidation_counter);
     }
     else {
-        incache = _in_weak_set(impl, &impl->_abc_negative_cache, subclass);
+        incache = _in_weak_set(impl, &impl->_abc_negative_cache, subclass_obj);
         if (incache < 0) {
             goto end;
         }
@@ -787,13 +901,13 @@ _abc__abc_subclasscheck_impl(PyObject *module, PyObject *self,
 
     /* 3. Check the subclass hook. */
     ok = PyObject_CallMethodOneArg(
-            (PyObject *)self, &_Py_ID(__subclasshook__), subclass);
+            self, &_Py_ID(__subclasshook__), subclass_obj);
     if (ok == NULL) {
         goto end;
     }
     if (ok == Py_True) {
         Py_DECREF(ok);
-        if (_add_to_weak_set(impl, &impl->_abc_cache, subclass) < 0) {
+        if (_add_to_weak_set(impl, &impl->_abc_cache, subclass_obj) < 0) {
             goto end;
         }
         result = Py_True;
@@ -801,7 +915,7 @@ _abc__abc_subclasscheck_impl(PyObject *module, PyObject *self,
     }
     if (ok == Py_False) {
         Py_DECREF(ok);
-        if (_add_to_weak_set(impl, &impl->_abc_negative_cache, subclass) < 0) {
+        if (_add_to_weak_set(impl, &impl->_abc_negative_cache, subclass_obj) < 0) {
             goto end;
         }
         result = Py_False;
@@ -816,8 +930,8 @@ _abc__abc_subclasscheck_impl(PyObject *module, PyObject *self,
     Py_DECREF(ok);
 
     /* 4. Check if it's a direct subclass. */
-    if (PyType_IsSubtype((PyTypeObject *)subclass, (PyTypeObject *)self)) {
-        if (_add_to_weak_set(impl, &impl->_abc_cache, subclass) < 0) {
+    if (PyType_IsSubtype((PyTypeObject *)subclass_obj, (PyTypeObject *)self)) {
+        if (_add_to_weak_set(impl, &impl->_abc_cache, subclass_obj) < 0) {
             goto end;
         }
         result = Py_True;
@@ -825,7 +939,7 @@ _abc__abc_subclasscheck_impl(PyObject *module, PyObject *self,
     }
 
     /* 5. Check if it's a subclass of a registered class (recursive). */
-    if (subclasscheck_check_registry(impl, subclass, &result)) {
+    if (subclasscheck_check_registry(impl, subclass_obj, &result)) {
         // Exception occurred or result is set.
         goto end;
     }
@@ -840,14 +954,15 @@ _abc__abc_subclasscheck_impl(PyObject *module, PyObject *self,
         goto end;
     }
     for (pos = 0; pos < PyList_GET_SIZE(subclasses); pos++) {
-        PyObject *scls = PyList_GetItemRef(subclasses, pos);
+        PyValue scls_v = PyList_GetValue(subclasses, pos);
+        PyObject *scls = PyValue_IsNull(scls_v) ? NULL : _PyValue_AsObjectStealAt(scls_v, BOX_SITE_FIELD);
         if (scls == NULL) {
             goto end;
         }
-        int r = PyObject_IsSubclass(subclass, scls);
+        int r = PyObject_IsSubclass(subclass_obj, scls);
         Py_DECREF(scls);
         if (r > 0) {
-            if (_add_to_weak_set(impl, &impl->_abc_cache, subclass) < 0) {
+            if (_add_to_weak_set(impl, &impl->_abc_cache, subclass_obj) < 0) {
                 goto end;
             }
             result = Py_True;
@@ -859,7 +974,7 @@ _abc__abc_subclasscheck_impl(PyObject *module, PyObject *self,
     }
 
     /* No dice; update negative cache. */
-    if (_add_to_weak_set(impl, &impl->_abc_negative_cache, subclass) < 0) {
+    if (_add_to_weak_set(impl, &impl->_abc_negative_cache, subclass_obj) < 0) {
         goto end;
     }
     result = Py_False;
@@ -867,7 +982,7 @@ _abc__abc_subclasscheck_impl(PyObject *module, PyObject *self,
 end:
     Py_DECREF(impl);
     Py_XDECREF(subclasses);
-    return Py_XNewRef(result);
+    return _PyValue_FromObjectResult(Py_XNewRef(result));
 }
 
 
@@ -900,12 +1015,19 @@ subclasscheck_check_registry(_abc_data *impl, PyObject *subclass,
     if (registry == NULL) {
         return -1;
     }
-    PyObject *key;
+    PyValue keyv;
     Py_ssize_t pos = 0;
     Py_hash_t hash;
     int rc;
 
-    while ((rc = _PySet_NextEntryRef(registry, &pos, &key, &hash)) > 0) {
+    while ((rc = _PySet_NextValue(registry, &pos, &keyv, &hash)) > 0) {
+        PyValue key_v = keyv;
+        PyObject *key = PyValue_IsNull(key_v) ? NULL : _PyValue_AsObjectStealAt(key_v, BOX_SITE_FIELD);
+        if (key == NULL) {
+            ret = -1;
+            rc = 0;
+            break;
+        }
         PyObject *rkey;
         int wr = PyWeakref_GetRef(key, &rkey);
         Py_DECREF(key);
@@ -952,12 +1074,12 @@ the current version of the ABC cache for virtual subclasses.  The token
 changes with every call to register() on any ABC.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _abc_get_cache_token_impl(PyObject *module)
-/*[clinic end generated code: output=c7d87841e033dacc input=d87acc04492f6bf3]*/
+/*[clinic end generated code: output=c50002ea165181ff input=d87acc04492f6bf3]*/
 {
     _abcmodule_state *state = get_abc_state(module);
-    return PyLong_FromUnsignedLongLong(get_invalidation_counter(state));
+    return _PyValue_FromObjectResult(PyLong_FromUnsignedLongLong(get_invalidation_counter(state)));
 }
 
 static struct PyMethodDef _abcmodule_methods[] = {

@@ -7,8 +7,15 @@
  * Licensed to PSF under a Contributor Agreement.
  */
 
+#define Py_VALUE_CORE 1
 #include "multiprocessing.h"
+#include "pycore_dict.h"          // PyDict_SetValueString()
 
+
+/*[clinic input]
+value_emission
+[clinic start generated code]*/
+/*[clinic end generated code: output=da39a3ee5e6b4b0d input=eb7b17088bfd7215]*/
 
 /*[clinic input]
 module _multiprocessing
@@ -65,9 +72,9 @@ _multiprocessing.closesocket
 
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _multiprocessing_closesocket_impl(PyObject *module, HANDLE handle)
-/*[clinic end generated code: output=214f359f900966f4 input=8a20706dd386c6cc]*/
+/*[clinic end generated code: output=48fb89948d5df4f7 input=8a20706dd386c6cc]*/
 {
     int ret;
 
@@ -89,9 +96,9 @@ _multiprocessing.recv
 
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _multiprocessing_recv_impl(PyObject *module, HANDLE handle, int size)
-/*[clinic end generated code: output=92322781ba9ff598 input=6a5b0834372cee5b]*/
+/*[clinic end generated code: output=58f87974a932ff19 input=6a5b0834372cee5b]*/
 {
     PyBytesWriter *writer = PyBytesWriter_Create(size);
     if (!writer) {
@@ -120,9 +127,9 @@ _multiprocessing.send
 
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _multiprocessing_send_impl(PyObject *module, HANDLE handle, Py_buffer *buf)
-/*[clinic end generated code: output=52d7df0519c596cb input=41dce742f98d2210]*/
+/*[clinic end generated code: output=7ff85dd25e5d84d4 input=41dce742f98d2210]*/
 {
     int ret, length;
 
@@ -147,11 +154,11 @@ _multiprocessing.sem_unlink
 
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _multiprocessing_sem_unlink_impl(PyObject *module, const char *name)
-/*[clinic end generated code: output=fcbfeb1ed255e647 input=bf939aff9564f1d5]*/
+/*[clinic end generated code: output=4d209380703bb191 input=bf939aff9564f1d5]*/
 {
-    return _PyMp_sem_unlink(name);
+    return _PyValue_FromObjectResult(_PyMp_sem_unlink(name));
 }
 
 /*
@@ -207,8 +214,7 @@ multiprocessing_exec(PyObject *module)
     if (py_sem_value_max == NULL) {
         return -1;
     }
-    if (PyDict_SetItemString(semlock_type->tp_dict, "SEM_VALUE_MAX",
-                         py_sem_value_max) < 0) {
+    if (PyDict_SetValueString(semlock_type->tp_dict, "SEM_VALUE_MAX", PyValue_FromObjectBorrow(py_sem_value_max)) < 0) {
         Py_DECREF(py_sem_value_max);
         return -1;
     }
@@ -229,7 +235,7 @@ multiprocessing_exec(PyObject *module)
             Py_DECREF(flags);                                   \
             return -1;                                          \
         }                                                       \
-        if (PyDict_SetItemString(flags, #name, value) < 0) {    \
+        if (PyDict_SetValueString(flags, #name, PyValue_FromObjectBorrow(value)) < 0) {    \
             Py_DECREF(flags);                                   \
             Py_DECREF(value);                                   \
             return -1;                                          \

@@ -2,6 +2,7 @@
 #  define Py_BUILD_CORE_MODULE 1
 #endif
 
+#define Py_VALUE_CORE 1
 #include "Python.h"
 #include "compile.h"
 #include "opcode.h"
@@ -13,7 +14,9 @@
 #include "pycore_list.h"            // PyList_GET_VALUE()
 #include "pycore_opcode_metadata.h" // IS_VALID_OPCODE, OPCODE_HAS_*, etc
 #include "pycore_opcode_utils.h"
+#include "pycore_long_value.h"      // _PyValue_AsLong()
 #include "pycore_value.h"           // PyValue_IsNull()
+#include "pycore_value_slots.h"// _PyValue_FromObjectResult()
 
 typedef struct {
     PyTypeObject *ir_contract_type;     // _opcode.IRContract
@@ -24,6 +27,11 @@ get_opcode_state(PyObject *module)
 {
     return (opcode_state *)PyModule_GetState(module);
 }
+
+/*[clinic input]
+value_emission
+[clinic start generated code]*/
+/*[clinic end generated code: output=da39a3ee5e6b4b0d input=eb7b17088bfd7215]*/
 
 /*[clinic input]
 module _opcode
@@ -46,27 +54,27 @@ Compute the stack effect of the opcode.
 [clinic start generated code]*/
 
 static int
-_opcode_stack_effect_impl(PyObject *module, int opcode, PyObject *oparg,
-                          PyObject *jump)
-/*[clinic end generated code: output=64a18f2ead954dbb input=461c9d4a44851898]*/
+_opcode_stack_effect_impl(PyObject *module, int opcode, PyValueBorrow oparg,
+                          PyValueBorrow jump)
+/*[clinic end generated code: output=1208a7277aac7df2 input=461c9d4a44851898]*/
 {
     int oparg_int = 0;
     int jump_int;
 
-    if (oparg != Py_None) {
-        oparg_int = (int)PyLong_AsLong(oparg);
+    if (!PyValue_IsNone(oparg)) {
+        oparg_int = (int)_PyValue_AsLong(oparg);
         if ((oparg_int == -1) && PyErr_Occurred()) {
             return -1;
         }
     }
 
-    if (jump == Py_None) {
+    if (PyValue_IsNone(jump)) {
         jump_int = -1;
     }
-    else if (jump == Py_True) {
+    else if (PyValue_IsTrue(jump)) {
         jump_int = 1;
     }
-    else if (jump == Py_False) {
+    else if (PyValue_IsFalse(jump)) {
         jump_int = 0;
     }
     else {
@@ -222,14 +230,14 @@ _opcode.get_specialization_stats
 Return the specialization stats
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _opcode_get_specialization_stats_impl(PyObject *module)
-/*[clinic end generated code: output=fcbc32fdfbec5c17 input=e1f60db68d8ce5f6]*/
+/*[clinic end generated code: output=dc0b106c2fcef79c input=e1f60db68d8ce5f6]*/
 {
 #ifdef Py_STATS
-    return _Py_GetSpecializationStats();
+    return _PyValue_FromObjectResult(_Py_GetSpecializationStats());
 #else
-    Py_RETURN_NONE;
+    return PyValue_None;
 #endif
 }
 
@@ -242,22 +250,22 @@ Return array of symbols of binary ops.
 Indexed by the BINARY_OP oparg value.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _opcode_get_nb_ops_impl(PyObject *module)
-/*[clinic end generated code: output=d997d306cc15426f input=9462fc544c823176]*/
+/*[clinic end generated code: output=1dca136d0a389e92 input=9462fc544c823176]*/
 {
     PyObject *list = PyList_New(NB_OPARG_LAST + 1);
     if (list == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
 #define ADD_NB_OP(NUM, STR) \
     do { \
         PyObject *pair = Py_BuildValue("ss", #NUM, STR); \
         if (pair == NULL) { \
             Py_DECREF(list); \
-            return NULL; \
+            return PyValue_NULL; \
         } \
-        PyList_SET_ITEM(list, (NUM), pair); \
+        PyList_SET_VALUE(list, (NUM), PyValue_PrepareOwned(_PyObject_CAST(pair))); \
     } while(0);
 
     ADD_NB_OP(NB_ADD, "+");
@@ -296,10 +304,10 @@ _opcode_get_nb_ops_impl(PyObject *module)
             PyErr_Format(PyExc_ValueError,
                          "Missing initialization for NB_OP %d",
                          i);
-            return NULL;
+            return PyValue_NULL;
         }
     }
-    return list;
+    return _PyValue_FromObjectResult(list);
 }
 
 /*[clinic input]
@@ -309,23 +317,23 @@ _opcode.get_intrinsic1_descs
 Return a list of names of the unary intrinsics.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _opcode_get_intrinsic1_descs_impl(PyObject *module)
-/*[clinic end generated code: output=bd1ddb6b4447d18b input=13b51c712618459b]*/
+/*[clinic end generated code: output=70223d058698c63f input=13b51c712618459b]*/
 {
     PyObject *list = PyList_New(MAX_INTRINSIC_1 + 1);
     if (list == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
     for (int i=0; i <= MAX_INTRINSIC_1; i++) {
         PyObject *name = _PyCompile_GetUnaryIntrinsicName(i);
         if (name == NULL) {
             Py_DECREF(list);
-            return NULL;
+            return PyValue_NULL;
         }
-        PyList_SET_ITEM(list, i, name);
+        PyList_SET_VALUE(list, i, PyValue_PrepareOwned(name));
     }
-    return list;
+    return _PyValue_FromObjectResult(list);
 }
 
 
@@ -336,23 +344,23 @@ _opcode.get_intrinsic2_descs
 Return a list of names of the binary intrinsics.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _opcode_get_intrinsic2_descs_impl(PyObject *module)
-/*[clinic end generated code: output=40e62bc27584c8a0 input=e83068f249f5471b]*/
+/*[clinic end generated code: output=baee7177a6d2d600 input=e83068f249f5471b]*/
 {
     PyObject *list = PyList_New(MAX_INTRINSIC_2 + 1);
     if (list == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
     for (int i=0; i <= MAX_INTRINSIC_2; i++) {
         PyObject *name = _PyCompile_GetBinaryIntrinsicName(i);
         if (name == NULL) {
             Py_DECREF(list);
-            return NULL;
+            return PyValue_NULL;
         }
-        PyList_SET_ITEM(list, i, name);
+        PyList_SET_VALUE(list, i, PyValue_PrepareOwned(name));
     }
-    return list;
+    return _PyValue_FromObjectResult(list);
 }
 
 /*[clinic input]
@@ -362,23 +370,23 @@ _opcode.get_special_method_names
 Return a list of special method names.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _opcode_get_special_method_names_impl(PyObject *module)
-/*[clinic end generated code: output=fce72614cd988d17 input=25f2115560bdf163]*/
+/*[clinic end generated code: output=c513a3d7e8fb6c64 input=25f2115560bdf163]*/
 {
     PyObject *list = PyList_New(SPECIAL_MAX + 1);
     if (list == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
     for (int i=0; i <= SPECIAL_MAX; i++) {
         PyObject *name = _Py_SpecialMethods[i].name;
         if (name == NULL) {
             Py_DECREF(list);
-            return NULL;
+            return PyValue_NULL;
         }
-        PyList_SET_ITEM(list, i, name);
+        PyList_SET_VALUE(list, i, PyValue_PrepareOwned(name));
     }
-    return list;
+    return _PyValue_FromObjectResult(list);
 }
 
 /* The fields of an _opcode.IRContract, in the order of _PyIRFormat, with
@@ -453,7 +461,7 @@ ir_contract_row(PyTypeObject *type, int h)
     int failed = 0;
     for (Py_ssize_t i = 0; i < (Py_ssize_t)Py_ARRAY_LENGTH(items); i++) {
         failed |= items[i] == NULL;
-        PyStructSequence_SET_ITEM(row, i, items[i]);
+        PyStructSequence_SET_VALUE(row, i, PyValue_PrepareOwned(items[i]));
     }
     if (failed) {
         Py_DECREF(row);
@@ -476,25 +484,25 @@ roles holds the roles of fields A to D; reads, writes and through are
 is a handler or None.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _opcode_get_ir_contract_impl(PyObject *module)
-/*[clinic end generated code: output=a77fe2cab663997d input=0fe500acc87ed1d2]*/
+/*[clinic end generated code: output=cad532d9315c6dc9 input=0fe500acc87ed1d2]*/
 {
     PyTypeObject *type = get_opcode_state(module)->ir_contract_type;
     PyObject *contract = PyTuple_New(IR_NUM_HANDLERS);
     if (contract == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
     for (int h = 0; h < IR_NUM_HANDLERS; h++) {
         PyObject *item = (_PyIR_Formats[h].flags & _PyIR_VALID)
                          ? ir_contract_row(type, h) : Py_NewRef(Py_None);
         if (item == NULL) {
             Py_DECREF(contract);
-            return NULL;
+            return PyValue_NULL;
         }
-        PyTuple_SET_ITEM(contract, h, item);
+        PyTuple_SET_VALUE(contract, h, PyValue_PrepareOwned(item));
     }
-    return contract;
+    return _PyValue_FromObjectResult(contract);
 }
 
 static PyMethodDef

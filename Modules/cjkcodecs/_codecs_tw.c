@@ -4,6 +4,7 @@
  * Written by Hye-Shik Chang <perky@FreeBSD.org>
  */
 
+#define Py_VALUE_CORE 1
 #include "cjkcodecs.h"
 #include "mappings_tw.h"
 

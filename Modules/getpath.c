@@ -1,5 +1,6 @@
 /* Return the initial module search path. */
 
+#define Py_VALUE_CORE 1
 #include "Python.h"
 #include "pycore_dict.h"          // PyDict_SetValueString()
 #include "pycore_fileutils.h"     // _Py_abspath()
@@ -11,6 +12,7 @@
 #include "pycore_tuple.h"         // PyTuple_GET_VALUE()
 #include "pycore_value.h"         // PyValue_AsKnownObjectBorrow()
 #include "pycore_value_api.h"     // _PyValue_FromObjectKnown()
+#include "pycore_value_slots.h"   // _PyValue_FromObjectResult()
 
 #include "marshal.h"              // PyMarshal_ReadObjectFromString
 #include "osdefs.h"               // DELIM
@@ -64,6 +66,11 @@
 
 
 /*[clinic input]
+value_emission
+[clinic start generated code]*/
+/*[clinic end generated code: output=da39a3ee5e6b4b0d input=eb7b17088bfd7215]*/
+
+/*[clinic input]
 module getpath
 [clinic start generated code]*/
 /*[clinic end generated code: output=da39a3ee5e6b4b0d input=b425aa3ea7292100]*/
@@ -81,18 +88,18 @@ getpath.abspath
 Return the absolute path.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 getpath_abspath_impl(PyObject *module, const wchar_t *path)
-/*[clinic end generated code: output=5009336e32e75b9b input=0fd554ce535744f2]*/
+/*[clinic end generated code: output=67f1ef252d86fb4d input=0fd554ce535744f2]*/
 {
     wchar_t *abs;
     if (_Py_abspath(_Py_normpath((wchar_t *)path, -1), &abs) < 0 || abs == NULL) {
         PyErr_SetString(PyExc_OSError, "failed to make path absolute");
-        return NULL;
+        return PyValue_NULL;
     }
     PyObject *r = PyUnicode_FromWideChar(abs, -1);
     PyMem_RawFree((void *)abs);
-    return r;
+    return _PyValue_FromObjectResult(r);
 }
 
 
@@ -105,16 +112,16 @@ getpath.basename
 Return the final component of the path.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 getpath_basename_impl(PyObject *module, PyObject *path)
-/*[clinic end generated code: output=d383d3b34842236e input=0de5b71fc78bbad8]*/
+/*[clinic end generated code: output=ebf8506ac3a7b703 input=0de5b71fc78bbad8]*/
 {
     Py_ssize_t end = PyUnicode_GET_LENGTH(path);
     Py_ssize_t pos = PyUnicode_FindChar(path, SEP, 0, end, -1);
     if (pos < 0) {
-        return Py_NewRef(path);
+        return _PyValue_FromObjectResult(Py_NewRef(path));
     }
-    return PyUnicode_Substring(path, pos + 1, end);
+    return _PyValue_FromObjectResult(PyUnicode_Substring(path, pos + 1, end));
 }
 
 
@@ -127,16 +134,16 @@ getpath.dirname
 Return the directory component of the path.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 getpath_dirname_impl(PyObject *module, PyObject *path)
-/*[clinic end generated code: output=6887a025f5f6784c input=0c33269fe28957fb]*/
+/*[clinic end generated code: output=a379e5fe932980b2 input=0c33269fe28957fb]*/
 {
     Py_ssize_t end = PyUnicode_GET_LENGTH(path);
     Py_ssize_t pos = PyUnicode_FindChar(path, SEP, 0, end, -1);
     if (pos < 0) {
-        return Py_GetConstant(Py_CONSTANT_EMPTY_STR);
+        return _PyValue_FromObjectResult(Py_GetConstant(Py_CONSTANT_EMPTY_STR));
     }
-    return PyUnicode_Substring(path, 0, pos);
+    return _PyValue_FromObjectResult(PyUnicode_Substring(path, 0, pos));
 }
 
 
@@ -297,19 +304,19 @@ getpath.joinpath
 Join the path components.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 getpath_joinpath_impl(PyObject *module, PyObject *args)
-/*[clinic end generated code: output=0044d429b32e5f5a input=5c67eeca4a6d1413]*/
+/*[clinic end generated code: output=c2bf44ffbaf7ee60 input=5c67eeca4a6d1413]*/
 {
     Py_ssize_t n = PyTuple_GET_SIZE(args);
     if (n == 0) {
-        return Py_GetConstant(Py_CONSTANT_EMPTY_STR);
+        return _PyValue_FromObjectResult(Py_GetConstant(Py_CONSTANT_EMPTY_STR));
     }
     /* Convert all parts to wchar and accumulate max final length */
     wchar_t **parts = (wchar_t **)PyMem_Malloc(n * sizeof(wchar_t *));
     if (parts == NULL) {
         PyErr_NoMemory();
-        return NULL;
+        return PyValue_NULL;
     }
     memset(parts, 0, n * sizeof(wchar_t *));
     Py_ssize_t cchFinal = 0;
@@ -347,9 +354,9 @@ getpath_joinpath_impl(PyObject *module, PyObject *args)
         PyMem_Free(parts);
         if (cchFinal) {
             PyErr_NoMemory();
-            return NULL;
+            return PyValue_NULL;
         }
-        return Py_GetConstant(Py_CONSTANT_EMPTY_STR);
+        return _PyValue_FromObjectResult(Py_GetConstant(Py_CONSTANT_EMPTY_STR));
     }
 
     final[0] = '\0';
@@ -373,11 +380,11 @@ getpath_joinpath_impl(PyObject *module, PyObject *args)
     PyMem_Free(parts);
     if (!final) {
         PyErr_SetString(PyExc_SystemError, "failed to join paths");
-        return NULL;
+        return PyValue_NULL;
     }
     PyObject *r = PyUnicode_FromWideChar(_Py_normpath(final, -1), -1);
     PyMem_Free(final);
-    return r;
+    return _PyValue_FromObjectResult(r);
 }
 
 
@@ -390,19 +397,19 @@ getpath.readlines
 Return the lines of the file.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 getpath_readlines_impl(PyObject *module, PyObject *pathobj)
-/*[clinic end generated code: output=6a7c1a1d2bb23046 input=6f54150f72789b78]*/
+/*[clinic end generated code: output=9b41e7c55fdb727e input=6f54150f72789b78]*/
 {
     FILE *fp = Py_fopen(pathobj, "rb");
     if (!fp) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     PyObject *r = PyList_New(0);
     if (!r) {
         fclose(fp);
-        return NULL;
+        return PyValue_NULL;
     }
     const size_t MAX_FILE = 32 * 1024;
     char *buffer = (char *)PyMem_Malloc(MAX_FILE);
@@ -410,21 +417,21 @@ getpath_readlines_impl(PyObject *module, PyObject *pathobj)
         Py_DECREF(r);
         fclose(fp);
         PyErr_NoMemory();
-        return NULL;
+        return PyValue_NULL;
     }
 
     size_t cb = fread(buffer, 1, MAX_FILE, fp);
     fclose(fp);
     if (!cb) {
         PyMem_Free(buffer);
-        return r;
+        return _PyValue_FromObjectResult(r);
     }
     if (cb >= MAX_FILE) {
         PyMem_Free(buffer);
         Py_DECREF(r);
         PyErr_SetString(PyExc_MemoryError,
             "cannot read file larger than 32KB during initialization");
-        return NULL;
+        return PyValue_NULL;
     }
     buffer[cb] = '\0';
 
@@ -434,7 +441,7 @@ getpath_readlines_impl(PyObject *module, PyObject *pathobj)
     if (!wbuffer) {
         Py_DECREF(r);
         PyErr_NoMemory();
-        return NULL;
+        return PyValue_NULL;
     }
 
     wchar_t *p1 = wbuffer;
@@ -461,7 +468,7 @@ getpath_readlines_impl(PyObject *module, PyObject *pathobj)
         Py_XDECREF(u);
     }
     PyMem_RawFree(wbuffer);
-    return r;
+    return _PyValue_FromObjectResult(r);
 }
 
 
@@ -474,9 +481,9 @@ getpath.realpath
 Resolve a symlinked file.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 getpath_realpath_impl(PyObject *module, PyObject *pathobj)
-/*[clinic end generated code: output=8559260e3786874e input=d3c5eee0ddd2c3e2]*/
+/*[clinic end generated code: output=8dd51e74c00cfd3c input=d3c5eee0ddd2c3e2]*/
 {
 #if defined(HAVE_READLINK)
     /* This readlink calculation only resolves a symlinked file, and
@@ -526,7 +533,7 @@ getpath_realpath_impl(PyObject *module, PyObject *pathobj)
     }
 done:
     PyMem_RawFree((void *)path);
-    return r;
+    return _PyValue_FromObjectResult(r);
 
 #elif defined(HAVE_REALPATH)
     PyObject *r = NULL;
@@ -558,7 +565,7 @@ done:
 done:
     PyMem_Free((void *)path);
     PyMem_Free((void *)narrow);
-    return r;
+    return _PyValue_FromObjectResult(r);
 #elif defined(MS_WINDOWS)
     HANDLE hFile;
     wchar_t resolved[MAXPATHLEN+1];
@@ -568,11 +575,11 @@ done:
 
     wchar_t *path = PyUnicode_AsWideCharString(pathobj, &pathlen);
     if (!path) {
-        return NULL;
+        return PyValue_NULL;
     }
     if (wcslen(path) != pathlen) {
         PyErr_SetString(PyExc_ValueError, "path contains embedded nulls");
-        return NULL;
+        return PyValue_NULL;
     }
 
     Py_BEGIN_ALLOW_THREADS
@@ -606,10 +613,10 @@ done:
         result = Py_NewRef(pathobj);
     }
     PyMem_Free(path);
-    return result;
+    return _PyValue_FromObjectResult(result);
 #endif
 
-    return Py_NewRef(pathobj);
+    return _PyValue_FromObjectResult(Py_NewRef(pathobj));
 }
 
 

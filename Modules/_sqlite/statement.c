@@ -25,6 +25,7 @@
 #  define Py_BUILD_CORE_MODULE 1
 #endif
 
+#define Py_VALUE_CORE 1
 #include "connection.h"
 #include "statement.h"
 #include "util.h"

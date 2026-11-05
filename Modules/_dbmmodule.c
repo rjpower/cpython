@@ -7,8 +7,11 @@
 #  define Py_BUILD_CORE_MODULE 1
 #endif
 
+#define Py_VALUE_CORE 1
 #include "Python.h"
 #include "pycore_object.h"        // _PyObject_VisitType()
+#include "pycore_list.h"          // PyList_AppendValue()
+#include "pycore_value.h"         // PyValue
 
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -58,6 +61,11 @@ get_dbm_state(PyObject *module)
 }
 
 /*[clinic input]
+value_emission
+[clinic start generated code]*/
+/*[clinic end generated code: output=da39a3ee5e6b4b0d input=eb7b17088bfd7215]*/
+
+/*[clinic input]
 module _dbm
 class _dbm.dbm "dbmobject *" "&Dbmtype"
 [clinic start generated code]*/
@@ -79,6 +87,14 @@ typedef struct {
     if ((v)->di_dbm == NULL) {                                      \
         PyErr_SetString(err, "DBM object has already been closed"); \
         return NULL;                                                \
+    }
+
+/* Same check for the functions that return a PyValue. */
+#define check_dbmobject_open_value(v, err)                                \
+    _Py_CRITICAL_SECTION_ASSERT_OBJECT_LOCKED((v))                  \
+    if ((v)->di_dbm == NULL) {                                      \
+        PyErr_SetString(err, "DBM object has already been closed"); \
+        return PyValue_NULL;                                                \
     }
 
 static PyObject *
@@ -290,15 +306,15 @@ _dbm.dbm.close
 Close the database.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _dbm_dbm_close_impl(dbmobject *self)
-/*[clinic end generated code: output=c8dc5b6709600b86 input=4a94f79facbc28ca]*/
+/*[clinic end generated code: output=79de29aa9494e4cc input=4a94f79facbc28ca]*/
 {
     if (self->di_dbm) {
         dbm_close(self->di_dbm);
     }
     self->di_dbm = NULL;
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 /*[clinic input]
@@ -310,9 +326,9 @@ _dbm.dbm.keys
 Return a list of all keys in the database.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _dbm_dbm_keys_impl(dbmobject *self, PyTypeObject *cls)
-/*[clinic end generated code: output=f2a593b3038e5996 input=6ddefeadf2a80156]*/
+/*[clinic end generated code: output=8622af53b308baa7 input=6ddefeadf2a80156]*/
 {
     PyObject *v, *item;
     datum key;
@@ -320,26 +336,26 @@ _dbm_dbm_keys_impl(dbmobject *self, PyTypeObject *cls)
 
     _dbm_state *state = PyType_GetModuleState(cls);
     assert(state != NULL);
-    check_dbmobject_open(self, state->dbm_error);
+    check_dbmobject_open_value(self, state->dbm_error);
     v = PyList_New(0);
     if (v == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
     for (key = dbm_firstkey(self->di_dbm); key.dptr;
          key = dbm_nextkey(self->di_dbm)) {
         item = PyBytes_FromStringAndSize(key.dptr, key.dsize);
         if (item == NULL) {
             Py_DECREF(v);
-            return NULL;
+            return PyValue_NULL;
         }
-        err = PyList_Append(v, item);
+        err = PyList_AppendValue(v, PyValue_FromObjectBorrow(item));
         Py_DECREF(item);
         if (err != 0) {
             Py_DECREF(v);
-            return NULL;
+            return PyValue_NULL;
         }
     }
-    return v;
+    return _PyValue_FromObjectResult(v);
 }
 
 /*[clinic input]
@@ -476,13 +492,13 @@ Remove all items from the database.
 
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _dbm_dbm_clear_impl(dbmobject *self, PyTypeObject *cls)
-/*[clinic end generated code: output=8d126b9e1d01a434 input=a1aa5d99adfb9656]*/
+/*[clinic end generated code: output=323e50388097b68a input=a1aa5d99adfb9656]*/
 {
     _dbm_state *state = PyType_GetModuleState(cls);
     assert(state != NULL);
-    check_dbmobject_open(self, state->dbm_error);
+    check_dbmobject_open_value(self, state->dbm_error);
     datum key;
     // Invalidate cache
     self->di_size = -1;
@@ -494,10 +510,10 @@ _dbm_dbm_clear_impl(dbmobject *self, PyTypeObject *cls)
         if (dbm_delete(self->di_dbm, key) < 0) {
             dbm_clearerr(self->di_dbm);
             PyErr_SetString(state->dbm_error, "cannot delete item from database");
-            return NULL;
+            return PyValue_NULL;
         }
     }
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 static PyObject *
@@ -515,10 +531,10 @@ _dbm.dbm.__exit__
 Close the database.
 [clinic start generated code]*/
 
-static PyObject *
-_dbm_dbm___exit___impl(dbmobject *self, PyObject * const *exc_info,
+static PyValue
+_dbm_dbm___exit___impl(dbmobject *self, const PyValue *exc_info,
                        Py_ssize_t exc_info_length)
-/*[clinic end generated code: output=f9549bf513b3285d input=340d8190b6fb0f15]*/
+/*[clinic end generated code: output=27163437c9de54fc input=340d8190b6fb0f15]*/
 {
     return _dbm_dbm_close_impl(self);
 }
@@ -581,10 +597,10 @@ Return a database object.
 
 [clinic start generated code]*/
 
-static PyObject *
-dbmopen_impl(PyObject *module, PyObject *filename, const char *flags,
+static PyValue
+dbmopen_impl(PyObject *module, PyValueBorrow filename, const char *flags,
              int mode)
-/*[clinic end generated code: output=9527750f5df90764 input=d8cf50a9f81218c8]*/
+/*[clinic end generated code: output=9a2037a2f8d05067 input=d8cf50a9f81218c8]*/
 {
     int iflags;
     _dbm_state *state =  get_dbm_state(module);
@@ -608,18 +624,24 @@ dbmopen_impl(PyObject *module, PyObject *filename, const char *flags,
     else {
         PyErr_SetString(state->dbm_error,
                         "arg 2 to open should be 'r', 'w', 'c', or 'n'");
-        return NULL;
+        return PyValue_NULL;
     }
 
+    PyObject *filename_obj = _PyValue_AsObjectAt(filename, BOX_SITE_PARSER);
+    if (filename_obj == NULL) {
+        return PyValue_NULL;
+    }
     PyObject *filenamebytes;
-    if (!PyUnicode_FSConverter(filename, &filenamebytes)) {
-        return NULL;
+    int converted = PyUnicode_FSConverter(filename_obj, &filenamebytes);
+    Py_DECREF(filename_obj);
+    if (!converted) {
+        return PyValue_NULL;
     }
 
     const char *name = PyBytes_AS_STRING(filenamebytes);
     PyObject *self = newdbmobject(state, name, iflags, mode);
     Py_DECREF(filenamebytes);
-    return self;
+    return _PyValue_FromObjectResult(self);
 }
 
 static PyMethodDef dbmmodule_methods[] = {

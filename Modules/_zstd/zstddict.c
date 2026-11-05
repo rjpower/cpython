@@ -3,6 +3,11 @@
 /* ZstdDict class definitions */
 
 /*[clinic input]
+value_emission
+[clinic start generated code]*/
+/*[clinic end generated code: output=da39a3ee5e6b4b0d input=eb7b17088bfd7215]*/
+
+/*[clinic input]
 module _zstd
 class _zstd.ZstdDict "ZstdDict *" "&zstd_dict_type_spec"
 [clinic start generated code]*/
@@ -12,7 +17,9 @@ class _zstd.ZstdDict "ZstdDict *" "&zstd_dict_type_spec"
 #  define Py_BUILD_CORE_MODULE 1
 #endif
 
+#define Py_VALUE_CORE 1
 #include "Python.h"
+#include "pycore_value.h"         // PyValue
 
 #include "_zstdmodule.h"
 #include "clinic/zstddict.c.h"
@@ -40,22 +47,22 @@ The dictionary can be used for compression or decompression, and can be
 shared by multiple ZstdCompressor or ZstdDecompressor objects.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _zstd_ZstdDict_new_impl(PyTypeObject *type, Py_buffer *dict_content,
                         int is_raw)
-/*[clinic end generated code: output=685b7406a48b0949 input=3bb66063c0240433]*/
+/*[clinic end generated code: output=9a84b9dc47db49aa input=3bb66063c0240433]*/
 {
     /* All dictionaries must be at least 8 bytes */
     if (dict_content->len < 8) {
         PyErr_SetString(PyExc_ValueError,
                         "Zstandard dictionary content too short "
                         "(must have at least eight bytes)");
-        return NULL;
+        return PyValue_NULL;
     }
 
     ZstdDict* self = PyObject_GC_New(ZstdDict, type);
     if (self == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     self->d_dict = NULL;
@@ -88,11 +95,11 @@ _zstd_ZstdDict_new_impl(PyTypeObject *type, Py_buffer *dict_content,
 
     PyObject_GC_Track(self);
 
-    return (PyObject *)self;
+    return _PyValue_FromObjectResult((PyObject *)self);
 
 error:
     Py_XDECREF(self);
-    return NULL;
+    return PyValue_NULL;
 }
 
 static void

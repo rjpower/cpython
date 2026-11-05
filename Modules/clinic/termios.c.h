@@ -2,6 +2,14 @@
 preserve
 [clinic start generated code]*/
 
+#ifndef Py_VALUE_CORE
+#  error "value-emission Clinic output requires Py_VALUE_CORE"
+#endif
+
+#include "pycore_long_value.h"    // _PyValue_AsInt()
+#include "pycore_modsupport.h"    // _PyArg_CheckPositional()
+#include "pycore_value_call.h"    // METH_VALUE
+
 PyDoc_STRVAR(termios_tcgetattr__doc__,
 "tcgetattr($module, fd, /)\n"
 "--\n"
@@ -16,22 +24,41 @@ PyDoc_STRVAR(termios_tcgetattr__doc__,
 "done using the symbolic constants defined in this module.");
 
 #define TERMIOS_TCGETATTR_METHODDEF    \
-    {"tcgetattr", (PyCFunction)termios_tcgetattr, METH_O, termios_tcgetattr__doc__},
+    {"tcgetattr", _PyCFunction_CAST(termios_tcgetattr), METH_VALUE|METH_O, termios_tcgetattr__doc__},
 
-static PyObject *
+static PyValue
 termios_tcgetattr_impl(PyObject *module, int fd);
 
-static PyObject *
-termios_tcgetattr(PyObject *module, PyObject *arg)
+static PyValue
+termios_tcgetattr(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int fd;
 
-    fd = PyObject_AsFileDescriptor(arg);
-    if (fd < 0) {
-        goto exit;
+    if (PyValue_IsInlineInt(PyValue_Borrow(args[0]))) {
+        fd = _PyValue_AsInt(PyValue_Borrow(args[0]));
+        if (fd == -1 && PyErr_Occurred()) {
+            goto exit;
+        }
+        if (fd < 0) {
+            PyErr_Format(PyExc_ValueError,
+                         "file descriptor cannot be a negative integer (%i)",
+                         fd);
+            goto exit;
+        }
     }
-    return_value = termios_tcgetattr_impl(module, fd);
+    else {
+        PyObject *_obj = _PyValue_AsObjectAt(PyValue_Borrow(args[0]), BOX_SITE_PARSER);
+        if (_obj == NULL) {
+            goto exit;
+        }
+        fd = PyObject_AsFileDescriptor(_obj);
+        Py_DECREF(_obj);
+        if (fd < 0) {
+            goto exit;
+        }
+    }
+    return_value = termios_tcgetattr_impl(PyValue_AsKnownObjectBorrow(module), fd);
 
 exit:
     return return_value;
@@ -51,33 +78,52 @@ PyDoc_STRVAR(termios_tcsetattr__doc__,
 "queued output and discarding all queued input.");
 
 #define TERMIOS_TCSETATTR_METHODDEF    \
-    {"tcsetattr", (PyCFunction)(void(*)(void))termios_tcsetattr, METH_FASTCALL, termios_tcsetattr__doc__},
+    {"tcsetattr", _PyCFunction_CAST(termios_tcsetattr), METH_VALUE, termios_tcsetattr__doc__},
 
-static PyObject *
-termios_tcsetattr_impl(PyObject *module, int fd, int when, PyObject *term);
+static PyValue
+termios_tcsetattr_impl(PyObject *module, int fd, int when,
+                       PyValueBorrow term);
 
-static PyObject *
-termios_tcsetattr(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+termios_tcsetattr(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int fd;
     int when;
-    PyObject *term;
+    PyValueBorrow term;
 
-    if (nargs != 3) {
-        PyErr_Format(PyExc_TypeError, "tcsetattr expected 3 arguments, got %zd", nargs);
+    if (!_PyArg_CheckPositional("tcsetattr", nargs, 3, 3)) {
         goto exit;
     }
-    fd = PyObject_AsFileDescriptor(args[0]);
-    if (fd < 0) {
-        goto exit;
+    if (PyValue_IsInlineInt(PyValue_Borrow(args[0]))) {
+        fd = _PyValue_AsInt(PyValue_Borrow(args[0]));
+        if (fd == -1 && PyErr_Occurred()) {
+            goto exit;
+        }
+        if (fd < 0) {
+            PyErr_Format(PyExc_ValueError,
+                         "file descriptor cannot be a negative integer (%i)",
+                         fd);
+            goto exit;
+        }
     }
-    when = PyLong_AsInt(args[1]);
+    else {
+        PyObject *_obj = _PyValue_AsObjectAt(PyValue_Borrow(args[0]), BOX_SITE_PARSER);
+        if (_obj == NULL) {
+            goto exit;
+        }
+        fd = PyObject_AsFileDescriptor(_obj);
+        Py_DECREF(_obj);
+        if (fd < 0) {
+            goto exit;
+        }
+    }
+    when = _PyValue_AsInt(PyValue_Borrow(args[1]));
     if (when == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    term = args[2];
-    return_value = termios_tcsetattr_impl(module, fd, when, term);
+    term = PyValue_Borrow(args[2]);
+    return_value = termios_tcsetattr_impl(PyValue_AsKnownObjectBorrow(module), fd, when, term);
 
 exit:
     return return_value;
@@ -93,31 +139,49 @@ PyDoc_STRVAR(termios_tcsendbreak__doc__,
 "has a system dependent meaning.");
 
 #define TERMIOS_TCSENDBREAK_METHODDEF    \
-    {"tcsendbreak", (PyCFunction)(void(*)(void))termios_tcsendbreak, METH_FASTCALL, termios_tcsendbreak__doc__},
+    {"tcsendbreak", _PyCFunction_CAST(termios_tcsendbreak), METH_VALUE, termios_tcsendbreak__doc__},
 
-static PyObject *
+static PyValue
 termios_tcsendbreak_impl(PyObject *module, int fd, int duration);
 
-static PyObject *
-termios_tcsendbreak(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+termios_tcsendbreak(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int fd;
     int duration;
 
-    if (nargs != 2) {
-        PyErr_Format(PyExc_TypeError, "tcsendbreak expected 2 arguments, got %zd", nargs);
+    if (!_PyArg_CheckPositional("tcsendbreak", nargs, 2, 2)) {
         goto exit;
     }
-    fd = PyObject_AsFileDescriptor(args[0]);
-    if (fd < 0) {
-        goto exit;
+    if (PyValue_IsInlineInt(PyValue_Borrow(args[0]))) {
+        fd = _PyValue_AsInt(PyValue_Borrow(args[0]));
+        if (fd == -1 && PyErr_Occurred()) {
+            goto exit;
+        }
+        if (fd < 0) {
+            PyErr_Format(PyExc_ValueError,
+                         "file descriptor cannot be a negative integer (%i)",
+                         fd);
+            goto exit;
+        }
     }
-    duration = PyLong_AsInt(args[1]);
+    else {
+        PyObject *_obj = _PyValue_AsObjectAt(PyValue_Borrow(args[0]), BOX_SITE_PARSER);
+        if (_obj == NULL) {
+            goto exit;
+        }
+        fd = PyObject_AsFileDescriptor(_obj);
+        Py_DECREF(_obj);
+        if (fd < 0) {
+            goto exit;
+        }
+    }
+    duration = _PyValue_AsInt(PyValue_Borrow(args[1]));
     if (duration == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = termios_tcsendbreak_impl(module, fd, duration);
+    return_value = termios_tcsendbreak_impl(PyValue_AsKnownObjectBorrow(module), fd, duration);
 
 exit:
     return return_value;
@@ -130,22 +194,41 @@ PyDoc_STRVAR(termios_tcdrain__doc__,
 "Wait until all output written to file descriptor fd has been transmitted.");
 
 #define TERMIOS_TCDRAIN_METHODDEF    \
-    {"tcdrain", (PyCFunction)termios_tcdrain, METH_O, termios_tcdrain__doc__},
+    {"tcdrain", _PyCFunction_CAST(termios_tcdrain), METH_VALUE|METH_O, termios_tcdrain__doc__},
 
-static PyObject *
+static PyValue
 termios_tcdrain_impl(PyObject *module, int fd);
 
-static PyObject *
-termios_tcdrain(PyObject *module, PyObject *arg)
+static PyValue
+termios_tcdrain(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int fd;
 
-    fd = PyObject_AsFileDescriptor(arg);
-    if (fd < 0) {
-        goto exit;
+    if (PyValue_IsInlineInt(PyValue_Borrow(args[0]))) {
+        fd = _PyValue_AsInt(PyValue_Borrow(args[0]));
+        if (fd == -1 && PyErr_Occurred()) {
+            goto exit;
+        }
+        if (fd < 0) {
+            PyErr_Format(PyExc_ValueError,
+                         "file descriptor cannot be a negative integer (%i)",
+                         fd);
+            goto exit;
+        }
     }
-    return_value = termios_tcdrain_impl(module, fd);
+    else {
+        PyObject *_obj = _PyValue_AsObjectAt(PyValue_Borrow(args[0]), BOX_SITE_PARSER);
+        if (_obj == NULL) {
+            goto exit;
+        }
+        fd = PyObject_AsFileDescriptor(_obj);
+        Py_DECREF(_obj);
+        if (fd < 0) {
+            goto exit;
+        }
+    }
+    return_value = termios_tcdrain_impl(PyValue_AsKnownObjectBorrow(module), fd);
 
 exit:
     return return_value;
@@ -162,31 +245,49 @@ PyDoc_STRVAR(termios_tcflush__doc__,
 "both queues.");
 
 #define TERMIOS_TCFLUSH_METHODDEF    \
-    {"tcflush", (PyCFunction)(void(*)(void))termios_tcflush, METH_FASTCALL, termios_tcflush__doc__},
+    {"tcflush", _PyCFunction_CAST(termios_tcflush), METH_VALUE, termios_tcflush__doc__},
 
-static PyObject *
+static PyValue
 termios_tcflush_impl(PyObject *module, int fd, int queue);
 
-static PyObject *
-termios_tcflush(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+termios_tcflush(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int fd;
     int queue;
 
-    if (nargs != 2) {
-        PyErr_Format(PyExc_TypeError, "tcflush expected 2 arguments, got %zd", nargs);
+    if (!_PyArg_CheckPositional("tcflush", nargs, 2, 2)) {
         goto exit;
     }
-    fd = PyObject_AsFileDescriptor(args[0]);
-    if (fd < 0) {
-        goto exit;
+    if (PyValue_IsInlineInt(PyValue_Borrow(args[0]))) {
+        fd = _PyValue_AsInt(PyValue_Borrow(args[0]));
+        if (fd == -1 && PyErr_Occurred()) {
+            goto exit;
+        }
+        if (fd < 0) {
+            PyErr_Format(PyExc_ValueError,
+                         "file descriptor cannot be a negative integer (%i)",
+                         fd);
+            goto exit;
+        }
     }
-    queue = PyLong_AsInt(args[1]);
+    else {
+        PyObject *_obj = _PyValue_AsObjectAt(PyValue_Borrow(args[0]), BOX_SITE_PARSER);
+        if (_obj == NULL) {
+            goto exit;
+        }
+        fd = PyObject_AsFileDescriptor(_obj);
+        Py_DECREF(_obj);
+        if (fd < 0) {
+            goto exit;
+        }
+    }
+    queue = _PyValue_AsInt(PyValue_Borrow(args[1]));
     if (queue == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = termios_tcflush_impl(module, fd, queue);
+    return_value = termios_tcflush_impl(PyValue_AsKnownObjectBorrow(module), fd, queue);
 
 exit:
     return return_value;
@@ -203,31 +304,49 @@ PyDoc_STRVAR(termios_tcflow__doc__,
 "or termios.TCION to restart input.");
 
 #define TERMIOS_TCFLOW_METHODDEF    \
-    {"tcflow", (PyCFunction)(void(*)(void))termios_tcflow, METH_FASTCALL, termios_tcflow__doc__},
+    {"tcflow", _PyCFunction_CAST(termios_tcflow), METH_VALUE, termios_tcflow__doc__},
 
-static PyObject *
+static PyValue
 termios_tcflow_impl(PyObject *module, int fd, int action);
 
-static PyObject *
-termios_tcflow(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+termios_tcflow(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int fd;
     int action;
 
-    if (nargs != 2) {
-        PyErr_Format(PyExc_TypeError, "tcflow expected 2 arguments, got %zd", nargs);
+    if (!_PyArg_CheckPositional("tcflow", nargs, 2, 2)) {
         goto exit;
     }
-    fd = PyObject_AsFileDescriptor(args[0]);
-    if (fd < 0) {
-        goto exit;
+    if (PyValue_IsInlineInt(PyValue_Borrow(args[0]))) {
+        fd = _PyValue_AsInt(PyValue_Borrow(args[0]));
+        if (fd == -1 && PyErr_Occurred()) {
+            goto exit;
+        }
+        if (fd < 0) {
+            PyErr_Format(PyExc_ValueError,
+                         "file descriptor cannot be a negative integer (%i)",
+                         fd);
+            goto exit;
+        }
     }
-    action = PyLong_AsInt(args[1]);
+    else {
+        PyObject *_obj = _PyValue_AsObjectAt(PyValue_Borrow(args[0]), BOX_SITE_PARSER);
+        if (_obj == NULL) {
+            goto exit;
+        }
+        fd = PyObject_AsFileDescriptor(_obj);
+        Py_DECREF(_obj);
+        if (fd < 0) {
+            goto exit;
+        }
+    }
+    action = _PyValue_AsInt(PyValue_Borrow(args[1]));
     if (action == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = termios_tcflow_impl(module, fd, action);
+    return_value = termios_tcflow_impl(PyValue_AsKnownObjectBorrow(module), fd, action);
 
 exit:
     return return_value;
@@ -242,22 +361,41 @@ PyDoc_STRVAR(termios_tcgetwinsize__doc__,
 "Returns a tuple (ws_row, ws_col).");
 
 #define TERMIOS_TCGETWINSIZE_METHODDEF    \
-    {"tcgetwinsize", (PyCFunction)termios_tcgetwinsize, METH_O, termios_tcgetwinsize__doc__},
+    {"tcgetwinsize", _PyCFunction_CAST(termios_tcgetwinsize), METH_VALUE|METH_O, termios_tcgetwinsize__doc__},
 
-static PyObject *
+static PyValue
 termios_tcgetwinsize_impl(PyObject *module, int fd);
 
-static PyObject *
-termios_tcgetwinsize(PyObject *module, PyObject *arg)
+static PyValue
+termios_tcgetwinsize(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int fd;
 
-    fd = PyObject_AsFileDescriptor(arg);
-    if (fd < 0) {
-        goto exit;
+    if (PyValue_IsInlineInt(PyValue_Borrow(args[0]))) {
+        fd = _PyValue_AsInt(PyValue_Borrow(args[0]));
+        if (fd == -1 && PyErr_Occurred()) {
+            goto exit;
+        }
+        if (fd < 0) {
+            PyErr_Format(PyExc_ValueError,
+                         "file descriptor cannot be a negative integer (%i)",
+                         fd);
+            goto exit;
+        }
     }
-    return_value = termios_tcgetwinsize_impl(module, fd);
+    else {
+        PyObject *_obj = _PyValue_AsObjectAt(PyValue_Borrow(args[0]), BOX_SITE_PARSER);
+        if (_obj == NULL) {
+            goto exit;
+        }
+        fd = PyObject_AsFileDescriptor(_obj);
+        Py_DECREF(_obj);
+        if (fd < 0) {
+            goto exit;
+        }
+    }
+    return_value = termios_tcgetwinsize_impl(PyValue_AsKnownObjectBorrow(module), fd);
 
 exit:
     return return_value;
@@ -274,30 +412,48 @@ PyDoc_STRVAR(termios_tcsetwinsize__doc__,
 "tcgetwinsize().");
 
 #define TERMIOS_TCSETWINSIZE_METHODDEF    \
-    {"tcsetwinsize", (PyCFunction)(void(*)(void))termios_tcsetwinsize, METH_FASTCALL, termios_tcsetwinsize__doc__},
+    {"tcsetwinsize", _PyCFunction_CAST(termios_tcsetwinsize), METH_VALUE, termios_tcsetwinsize__doc__},
 
-static PyObject *
-termios_tcsetwinsize_impl(PyObject *module, int fd, PyObject *winsz);
+static PyValue
+termios_tcsetwinsize_impl(PyObject *module, int fd, PyValueBorrow winsz);
 
-static PyObject *
-termios_tcsetwinsize(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+termios_tcsetwinsize(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int fd;
-    PyObject *winsz;
+    PyValueBorrow winsz;
 
-    if (nargs != 2) {
-        PyErr_Format(PyExc_TypeError, "tcsetwinsize expected 2 arguments, got %zd", nargs);
+    if (!_PyArg_CheckPositional("tcsetwinsize", nargs, 2, 2)) {
         goto exit;
     }
-    fd = PyObject_AsFileDescriptor(args[0]);
-    if (fd < 0) {
-        goto exit;
+    if (PyValue_IsInlineInt(PyValue_Borrow(args[0]))) {
+        fd = _PyValue_AsInt(PyValue_Borrow(args[0]));
+        if (fd == -1 && PyErr_Occurred()) {
+            goto exit;
+        }
+        if (fd < 0) {
+            PyErr_Format(PyExc_ValueError,
+                         "file descriptor cannot be a negative integer (%i)",
+                         fd);
+            goto exit;
+        }
     }
-    winsz = args[1];
-    return_value = termios_tcsetwinsize_impl(module, fd, winsz);
+    else {
+        PyObject *_obj = _PyValue_AsObjectAt(PyValue_Borrow(args[0]), BOX_SITE_PARSER);
+        if (_obj == NULL) {
+            goto exit;
+        }
+        fd = PyObject_AsFileDescriptor(_obj);
+        Py_DECREF(_obj);
+        if (fd < 0) {
+            goto exit;
+        }
+    }
+    winsz = PyValue_Borrow(args[1]);
+    return_value = termios_tcsetwinsize_impl(PyValue_AsKnownObjectBorrow(module), fd, winsz);
 
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=d2176c4d9043d3cc input=a9049054013a1b77]*/
+/*[clinic end generated code: output=e8815d247f509f85 input=a9049054013a1b77]*/

@@ -2,13 +2,18 @@
 #  define Py_BUILD_CORE_MODULE 1
 #endif
 
+#define Py_VALUE_CORE 1
 #include "Python.h"
 #include "pycore_call.h"          // _PyObject_CallNoArgs()
 #include "pycore_ceval.h"         // _PyEval_SetProfile()
+#include "pycore_list.h"          // PyList_AppendValue()
 #include "pycore_pystate.h"       // _PyThreadState_GET()
 #include "pycore_time.h"          // _PyTime_FromSecondsObject()
 #include "pycore_typeobject.h"    // _PyType_GetModuleState()
 #include "pycore_unicodeobject.h" // _PyUnicode_EqualToASCIIString()
+#include "pycore_value.h"         // _PyValue_AsObjectAt()
+#include "pycore_value_ops.h"     // _PyValue_Repr()
+#include "pycore_value_slots.h"// _PyValue_FromObjectResult()
 
 #include "rotatingtree.h"
 
@@ -67,10 +72,15 @@ typedef struct {
 #define POF_NOMEMORY    0x100
 
 /*[clinic input]
-module _lsprof
-class _lsprof.Profiler "ProfilerObject *" "&ProfilerType"
+value_emission
 [clinic start generated code]*/
-/*[clinic end generated code: output=da39a3ee5e6b4b0d input=e349ac952152f336]*/
+/*[clinic end generated code: output=da39a3ee5e6b4b0d input=eb7b17088bfd7215]*/
+
+/*[clinic input]
+module _lsprof
+class _lsprof.Profiler "ProfilerObject *" "NULL"
+[clinic start generated code]*/
+/*[clinic end generated code: output=da39a3ee5e6b4b0d input=b36f9ecceefee401]*/
 
 #include "clinic/_lsprof.c.h"
 
@@ -194,7 +204,7 @@ normalizeUserObj(PyObject *obj)
                 PyValue_TYPE(fn->m_self), name);
             Py_DECREF(name);
             if (mo != NULL) {
-                PyObject *res = PyObject_Repr(mo);
+                PyObject *res = _PyValue_Repr(PyValue_FromObjectBorrow(mo));
                 Py_DECREF(mo);
                 if (res != NULL)
                     return res;
@@ -500,7 +510,7 @@ static int statsForSubEntry(rotating_node_t *node, void *arg)
                                   collect->factor * sentry->it);
     if (sinfo == NULL)
         return -1;
-    err = PyList_Append(collect->sublist, sinfo);
+    err = PyList_AppendValue(collect->sublist, PyValue_FromObjectBorrow(sinfo));
     Py_DECREF(sinfo);
     return err;
 }
@@ -539,7 +549,7 @@ static int statsForEntry(rotating_node_t *node, void *arg)
     Py_DECREF(collect->sublist);
     if (info == NULL)
         return -1;
-    err = PyList_Append(collect->list, info);
+    err = PyList_AppendValue(collect->list, PyValue_FromObjectBorrow(info));
     Py_DECREF(info);
     return err;
 }
@@ -575,14 +585,14 @@ profiler_subentry objects:
     inlinetime    inline time (not in further subcalls)
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _lsprof_Profiler_getstats_impl(ProfilerObject *self, PyTypeObject *cls)
-/*[clinic end generated code: output=1806ef720019ee03 input=3dc69eb85ed73d91]*/
+/*[clinic end generated code: output=cfec1b0e53408c2a input=3dc69eb85ed73d91]*/
 {
     statscollector_t collect;
     collect.state = _PyType_GetModuleState(cls);
     if (pending_exception(self)) {
-        return NULL;
+        return PyValue_NULL;
     }
     if (!self->externalTimer || self->externalTimerUnit == 0.0) {
         PyTime_t onesec = _PyTime_FromSeconds(1);
@@ -594,13 +604,13 @@ _lsprof_Profiler_getstats_impl(ProfilerObject *self, PyTypeObject *cls)
 
     collect.list = PyList_New(0);
     if (collect.list == NULL)
-        return NULL;
+        return PyValue_NULL;
     if (RotatingTree_Enum(self->profilerEntries, statsForEntry, &collect)
         != 0) {
         Py_DECREF(collect.list);
-        return NULL;
+        return PyValue_NULL;
     }
-    return collect.list;
+    return _PyValue_FromObjectResult(collect.list);
 }
 
 static int
@@ -634,14 +644,20 @@ _lsprof.Profiler._pystart_callback
 
 [clinic start generated code]*/
 
-static PyObject *
-_lsprof_Profiler__pystart_callback_impl(ProfilerObject *self, PyObject *code,
-                                        PyObject *instruction_offset)
-/*[clinic end generated code: output=5fec8b7ad5ed25e8 input=b61a0e79cf1f8499]*/
+static PyValue
+_lsprof_Profiler__pystart_callback_impl(ProfilerObject *self,
+                                        PyValueBorrow code,
+                                        PyValueBorrow instruction_offset)
+/*[clinic end generated code: output=e73cb1ab66ffceb3 input=b61a0e79cf1f8499]*/
 {
-    ptrace_enter_call((PyObject*)self, (void *)code, code);
+    PyObject *code_obj = _PyValue_AsObjectAt(code, BOX_SITE_PARSER);
+    if (code_obj == NULL) {
+        return PyValue_NULL;
+    }
+    ptrace_enter_call((PyObject*)self, (void *)code_obj, code_obj);
+    Py_DECREF(code_obj);
 
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 /*[clinic input]
@@ -655,15 +671,21 @@ _lsprof.Profiler._pythrow_callback
 
 [clinic start generated code]*/
 
-static PyObject *
-_lsprof_Profiler__pythrow_callback_impl(ProfilerObject *self, PyObject *code,
-                                        PyObject *instruction_offset,
-                                        PyObject *exception)
-/*[clinic end generated code: output=0a32988919dfb94c input=60c7f272206d3758]*/
+static PyValue
+_lsprof_Profiler__pythrow_callback_impl(ProfilerObject *self,
+                                        PyValueBorrow code,
+                                        PyValueBorrow instruction_offset,
+                                        PyValueBorrow exception)
+/*[clinic end generated code: output=c16e7077a066a802 input=60c7f272206d3758]*/
 {
-    ptrace_enter_call((PyObject*)self, (void *)code, code);
+    PyObject *code_obj = _PyValue_AsObjectAt(code, BOX_SITE_PARSER);
+    if (code_obj == NULL) {
+        return PyValue_NULL;
+    }
+    ptrace_enter_call((PyObject*)self, (void *)code_obj, code_obj);
+    Py_DECREF(code_obj);
 
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 /*[clinic input]
@@ -677,16 +699,21 @@ _lsprof.Profiler._pyreturn_callback
 
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _lsprof_Profiler__pyreturn_callback_impl(ProfilerObject *self,
-                                         PyObject *code,
-                                         PyObject *instruction_offset,
-                                         PyObject *retval)
-/*[clinic end generated code: output=9e2f6fc1b882c51e input=0ddcc1ec53faa928]*/
+                                         PyValueBorrow code,
+                                         PyValueBorrow instruction_offset,
+                                         PyValueBorrow retval)
+/*[clinic end generated code: output=96390c6c77b063ad input=0ddcc1ec53faa928]*/
 {
-    ptrace_leave_call((PyObject*)self, (void *)code);
+    PyObject *code_obj = _PyValue_AsObjectAt(code, BOX_SITE_PARSER);
+    if (code_obj == NULL) {
+        return PyValue_NULL;
+    }
+    ptrace_leave_call((PyObject*)self, (void *)code_obj);
+    Py_DECREF(code_obj);
 
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 PyObject* get_cfunc_from_callable(PyObject* callable, PyObject* self_arg, PyObject* missing)
@@ -730,14 +757,27 @@ _lsprof.Profiler._ccall_callback
 
 [clinic start generated code]*/
 
-static PyObject *
-_lsprof_Profiler__ccall_callback_impl(ProfilerObject *self, PyObject *code,
-                                      PyObject *instruction_offset,
-                                      PyObject *callable, PyObject *self_arg)
-/*[clinic end generated code: output=152db83cabd18cad input=2fc1e0630ee5e32b]*/
+static PyValue
+_lsprof_Profiler__ccall_callback_impl(ProfilerObject *self,
+                                      PyValueBorrow code,
+                                      PyValueBorrow instruction_offset,
+                                      PyValueBorrow callable,
+                                      PyValueBorrow self_arg)
+/*[clinic end generated code: output=60733c3fb365f8fb input=2fc1e0630ee5e32b]*/
 {
     if (self->flags & POF_BUILTINS) {
-        PyObject* cfunc = get_cfunc_from_callable(callable, self_arg, self->missing);
+        PyObject *callable_obj = _PyValue_AsObjectAt(callable, BOX_SITE_PARSER);
+        if (callable_obj == NULL) {
+            return PyValue_NULL;
+        }
+        PyObject *self_obj = _PyValue_AsObjectAt(self_arg, BOX_SITE_PARSER);
+        if (self_obj == NULL) {
+            Py_DECREF(callable_obj);
+            return PyValue_NULL;
+        }
+        PyObject* cfunc = get_cfunc_from_callable(callable_obj, self_obj, self->missing);
+        Py_DECREF(callable_obj);
+        Py_DECREF(self_obj);
 
         if (cfunc) {
             ptrace_enter_call((PyObject*)self,
@@ -746,7 +786,7 @@ _lsprof_Profiler__ccall_callback_impl(ProfilerObject *self, PyObject *code,
             Py_DECREF(cfunc);
         }
     }
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 /*[clinic input]
@@ -761,15 +801,27 @@ _lsprof.Profiler._creturn_callback
 
 [clinic start generated code]*/
 
-static PyObject *
-_lsprof_Profiler__creturn_callback_impl(ProfilerObject *self, PyObject *code,
-                                        PyObject *instruction_offset,
-                                        PyObject *callable,
-                                        PyObject *self_arg)
-/*[clinic end generated code: output=1e886dde8fed8fb0 input=bdc246d6b5b8714a]*/
+static PyValue
+_lsprof_Profiler__creturn_callback_impl(ProfilerObject *self,
+                                        PyValueBorrow code,
+                                        PyValueBorrow instruction_offset,
+                                        PyValueBorrow callable,
+                                        PyValueBorrow self_arg)
+/*[clinic end generated code: output=c9aa485bd0b6fca7 input=bdc246d6b5b8714a]*/
 {
     if (self->flags & POF_BUILTINS) {
-        PyObject* cfunc = get_cfunc_from_callable(callable, self_arg, self->missing);
+        PyObject *callable_obj = _PyValue_AsObjectAt(callable, BOX_SITE_PARSER);
+        if (callable_obj == NULL) {
+            return PyValue_NULL;
+        }
+        PyObject *self_obj = _PyValue_AsObjectAt(self_arg, BOX_SITE_PARSER);
+        if (self_obj == NULL) {
+            Py_DECREF(callable_obj);
+            return PyValue_NULL;
+        }
+        PyObject* cfunc = get_cfunc_from_callable(callable_obj, self_obj, self->missing);
+        Py_DECREF(callable_obj);
+        Py_DECREF(self_obj);
 
         if (cfunc) {
             ptrace_leave_call((PyObject*)self,
@@ -777,7 +829,7 @@ _lsprof_Profiler__creturn_callback_impl(ProfilerObject *self, PyObject *code,
             Py_DECREF(cfunc);
         }
     }
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 static const struct {
@@ -812,19 +864,19 @@ _lsprof.Profiler.enable
 Start collecting profiling information.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _lsprof_Profiler_enable_impl(ProfilerObject *self, int subcalls,
                              int builtins)
-/*[clinic end generated code: output=1e747f9dc1edd571 input=0b88115b1c796173]*/
+/*[clinic end generated code: output=50a318d72916d238 input=0b88115b1c796173]*/
 {
     int all_events = 0;
     if (setSubcalls(self, subcalls) < 0 || setBuiltins(self, builtins) < 0) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     PyObject* monitoring = PySys_GetAttrString("monitoring");
     if (!monitoring) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     PyObject *check = PyObject_CallMethod(monitoring,
@@ -862,11 +914,11 @@ _lsprof_Profiler_enable_impl(ProfilerObject *self, int subcalls,
     Py_DECREF(monitoring);
 
     self->flags |= POF_ENABLED;
-    Py_RETURN_NONE;
+    return PyValue_None;
 
 error:
     Py_DECREF(monitoring);
-    return NULL;
+    return PyValue_NULL;
 }
 
 static void
@@ -893,21 +945,21 @@ _lsprof.Profiler.disable
 Stop collecting profiling information.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _lsprof_Profiler_disable_impl(ProfilerObject *self)
-/*[clinic end generated code: output=838cffef7f651870 input=f7e4787cae20f7f6]*/
+/*[clinic end generated code: output=0d685850aaa5f80f input=f7e4787cae20f7f6]*/
 {
     if (self->flags & POF_EXT_TIMER) {
         PyErr_SetString(PyExc_RuntimeError,
                         "cannot disable profiler in external timer");
-        return NULL;
+        return PyValue_NULL;
     }
     if (self->flags & POF_ENABLED) {
         PyObject* result = NULL;
         PyObject* monitoring = PySys_GetAttrString("monitoring");
 
         if (!monitoring) {
-            return NULL;
+            return PyValue_NULL;
         }
 
         for (int i = 0; callback_table[i].callback_method; i++) {
@@ -915,7 +967,7 @@ _lsprof_Profiler_disable_impl(ProfilerObject *self)
                                          (1 << callback_table[i].event), Py_None);
             if (!result) {
                 Py_DECREF(monitoring);
-                return NULL;
+                return PyValue_NULL;
             }
             Py_DECREF(result);
         }
@@ -923,14 +975,14 @@ _lsprof_Profiler_disable_impl(ProfilerObject *self)
         result = PyObject_CallMethod(monitoring, "set_events", "ii", self->tool_id, 0);
         if (!result) {
             Py_DECREF(monitoring);
-            return NULL;
+            return PyValue_NULL;
         }
         Py_DECREF(result);
 
         result = PyObject_CallMethod(monitoring, "free_tool_id", "i", self->tool_id);
         if (!result) {
             Py_DECREF(monitoring);
-            return NULL;
+            return PyValue_NULL;
         }
         Py_DECREF(result);
 
@@ -941,9 +993,9 @@ _lsprof_Profiler_disable_impl(ProfilerObject *self)
     }
 
     if (pending_exception(self)) {
-        return NULL;
+        return PyValue_NULL;
     }
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 /*[clinic input]
@@ -953,17 +1005,17 @@ _lsprof.Profiler.clear
 Clear all profiling information collected so far.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _lsprof_Profiler_clear_impl(ProfilerObject *self)
-/*[clinic end generated code: output=dd1c668fb84b1335 input=4aab219d5d7a9bec]*/
+/*[clinic end generated code: output=775a74a890c3bc37 input=4aab219d5d7a9bec]*/
 {
     if (self->flags & POF_EXT_TIMER) {
         PyErr_SetString(PyExc_RuntimeError,
                         "cannot clear profiler in external timer");
-        return NULL;
+        return PyValue_NULL;
     }
     clearEntries(self);
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 struct entry_visit {
@@ -1050,15 +1102,22 @@ is, in seconds).
 [clinic start generated code]*/
 
 static int
-profiler_init_impl(ProfilerObject *self, PyObject *timer, double timeunit,
-                   int subcalls, int builtins)
-/*[clinic end generated code: output=ac523803ec9f9df2 input=8285ca746f96a414]*/
+profiler_init_impl(ProfilerObject *self, PyValueBorrow timer,
+                   double timeunit, int subcalls, int builtins)
+/*[clinic end generated code: output=6ce08b07146d1ec6 input=8285ca746f96a414]*/
 {
     if (setSubcalls(self, subcalls) < 0 || setBuiltins(self, builtins) < 0) {
         return -1;
     }
     self->externalTimerUnit = timeunit;
-    Py_XSETREF(self->externalTimer, Py_XNewRef(timer));
+    PyObject *timer_obj = NULL;
+    if (!PyValue_IsNull(timer)) {
+        timer_obj = _PyValue_AsObjectAt(timer, BOX_SITE_FIELD);
+        if (timer_obj == NULL) {
+            return -1;
+        }
+    }
+    Py_XSETREF(self->externalTimer, timer_obj);
     self->tool_id = PY_MONITORING_PROFILER_ID;
 
     PyObject* monitoring = PySys_GetAttrString("monitoring");

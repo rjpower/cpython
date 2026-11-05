@@ -2,6 +2,7 @@
 #  define Py_BUILD_CORE_MODULE 1
 #endif
 
+#define Py_VALUE_CORE 1
 #include <Python.h>
 #include <ffi.h>
 #ifdef MS_WIN32

@@ -1,7 +1,13 @@
 
 /* UNIX password file access module */
 
+#ifndef Py_BUILD_CORE_BUILTIN
+#  define Py_BUILD_CORE_MODULE 1
+#endif
+#define Py_VALUE_CORE 1
 #include "Python.h"
+#include "pycore_list.h"          // PyList_AppendValue()
+#include "pycore_value_slots.h"// _PyValue_FromObjectResult()
 #include "posixmodule.h"
 
 #include <errno.h>                // ERANGE
@@ -9,6 +15,11 @@
 #include <unistd.h>               // sysconf()
 
 #include "clinic/pwdmodule.c.h"
+/*[clinic input]
+value_emission
+[clinic start generated code]*/
+/*[clinic end generated code: output=da39a3ee5e6b4b0d input=eb7b17088bfd7215]*/
+
 /*[clinic input]
 module pwd
 [clinic start generated code]*/
@@ -89,7 +100,7 @@ mkpwent(PyObject *module, struct passwd *p)
         if (item == NULL) {                                  \
             goto error;                                      \
         }                                                    \
-        PyStructSequence_SetItem(v, setIndex++, item);       \
+        PyStructSequence_SET_VALUE(v, setIndex++, PyValue_PrepareOwned(item));       \
     } while(0)
 
     SET_STRING(p->pw_name);
@@ -129,9 +140,9 @@ Return the password database entry for the given numeric user ID.
 See `help(pwd)` for more on password database entries.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 pwd_getpwuid_impl(PyObject *module, uid_t uid)
-/*[clinic end generated code: output=631bad376fa670c3 input=506d3a592ef19799]*/
+/*[clinic end generated code: output=2c2eb45c13f4aa7c input=506d3a592ef19799]*/
 {
     PyObject *retval = NULL;
     int nomem = 0;
@@ -185,15 +196,15 @@ pwd_getpwuid_impl(PyObject *module, uid_t uid)
 #endif
         PyMem_RawFree(buf);
         if (nomem == 1) {
-            return PyErr_NoMemory();
+            return _PyValue_FromObjectResult(PyErr_NoMemory());
         }
         PyObject *uid_obj = _PyLong_FromUid(uid);
         if (uid_obj == NULL)
-            return NULL;
+            return PyValue_NULL;
         PyErr_Format(PyExc_KeyError,
                      "getpwuid(): uid not found: %S", uid_obj);
         Py_DECREF(uid_obj);
-        return NULL;
+        return PyValue_NULL;
     }
     retval = mkpwent(module, p);
 #ifdef HAVE_GETPWUID_R
@@ -201,7 +212,7 @@ pwd_getpwuid_impl(PyObject *module, uid_t uid)
 #else
     PyMutex_Unlock(&pwd_db_mutex);
 #endif
-    return retval;
+    return _PyValue_FromObjectResult(retval);
 }
 
 /*[clinic input]
@@ -215,9 +226,9 @@ Return the password database entry for the given user name.
 See `help(pwd)` for more on password database entries.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 pwd_getpwnam_impl(PyObject *module, PyObject *name)
-/*[clinic end generated code: output=359ce1ddeb7a824f input=a6aeb5e3447fb9e0]*/
+/*[clinic end generated code: output=b59bfaed7716b668 input=a6aeb5e3447fb9e0]*/
 {
     char *buf = NULL, *buf2 = NULL, *name_chars;
     int nomem = 0;
@@ -225,7 +236,7 @@ pwd_getpwnam_impl(PyObject *module, PyObject *name)
     PyObject *bytes, *retval = NULL;
 
     if ((bytes = PyUnicode_EncodeFSDefault(name)) == NULL)
-        return NULL;
+        return PyValue_NULL;
     /* check for embedded null bytes */
     if (PyBytes_AsStringAndSize(bytes, &name_chars, NULL) == -1)
         goto out;
@@ -290,7 +301,7 @@ pwd_getpwnam_impl(PyObject *module, PyObject *name)
 out:
     PyMem_RawFree(buf);
     Py_DECREF(bytes);
-    return retval;
+    return _PyValue_FromObjectResult(retval);
 }
 
 #ifdef HAVE_GETPWENT
@@ -303,14 +314,14 @@ Return a list of all available password database entries, in arbitrary order.
 See help(pwd) for more on password database entries.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 pwd_getpwall_impl(PyObject *module)
-/*[clinic end generated code: output=4853d2f5a0afac8a input=f8145e0d9a79e32c]*/
+/*[clinic end generated code: output=c6820572d6a3aee5 input=f8145e0d9a79e32c]*/
 {
     PyObject *d;
     struct passwd *p;
     if ((d = PyList_New(0)) == NULL)
-        return NULL;
+        return PyValue_NULL;
 
     PyMutex_Lock(&pwd_db_mutex);
     int failure = 0;
@@ -321,7 +332,7 @@ pwd_getpwall_impl(PyObject *module)
     setpwent();
     while ((p = getpwent()) != NULL) {
         v = mkpwent(module, p);
-        if (v == NULL || PyList_Append(d, v) != 0) {
+        if (v == NULL || PyList_AppendValue(d, PyValue_FromObjectBorrow(v)) != 0) {
             /* NOTE: cannot dec-ref here, while holding the mutex. */
             failure = 1;
             goto done;
@@ -336,7 +347,7 @@ done:
         Py_XDECREF(v);
         Py_CLEAR(d);
     }
-    return d;
+    return _PyValue_FromObjectResult(d);
 }
 #endif
 

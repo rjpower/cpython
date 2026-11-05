@@ -5,8 +5,11 @@
  * managing stack chunks from remote process memory.
  ******************************************************************************/
 
+#define Py_VALUE_CORE 1
 #include "_remote_debugging.h"
+#include "pycore_list.h"          // PyList_AppendValue()
 #include "pycore_pyvalue.h"       // Py_PTR_LIMIT
+#include "pycore_value.h"         // PyValue_FromObjectBorrow()
 
 /* ============================================================================
  * STACK CHUNK MANAGEMENT FUNCTIONS
@@ -375,7 +378,7 @@ parsed_frame:
                 Py_XDECREF(frame);
                 return -1;
             }
-            if (PyList_Append(ctx->frame_info, extra_frame_info) < 0) {
+            if (PyList_AppendValue(ctx->frame_info, PyValue_FromObjectBorrow(extra_frame_info)) < 0) {
                 Py_DECREF(extra_frame_info);
                 Py_XDECREF(frame);
                 set_exception_cause(unwinder, PyExc_RuntimeError, "Failed to append extra frame");
@@ -396,7 +399,7 @@ parsed_frame:
                 return -1;
             }
 
-            if (PyList_Append(ctx->frame_info, frame) < 0) {
+            if (PyList_AppendValue(ctx->frame_info, PyValue_FromObjectBorrow(frame)) < 0) {
                 Py_DECREF(frame);
                 set_exception_cause(unwinder, PyExc_RuntimeError, "Failed to append frame");
                 return -1;
@@ -555,7 +558,7 @@ try_full_cache_hit(
     }
 
     if (current_frame != NULL) {
-        if (PyList_Append(ctx->frame_info, current_frame) < 0) {
+        if (PyList_AppendValue(ctx->frame_info, PyValue_FromObjectBorrow(current_frame)) < 0) {
             Py_DECREF(current_frame);
             return -1;
         }
@@ -565,12 +568,12 @@ try_full_cache_hit(
 
     Py_ssize_t cached_size = PyList_GET_SIZE(entry->frame_list);
     for (Py_ssize_t i = 1; i < cached_size; i++) {
-        PyObject *cached_frame = PyList_GetItemRef(entry->frame_list, i);
-        if (cached_frame == NULL) {
+        PyValue cached_frame = PyList_GetValue(entry->frame_list, i);
+        if (PyValue_IsNull(cached_frame)) {
             return -1;
         }
-        int rc = PyList_Append(ctx->frame_info, cached_frame);
-        Py_DECREF(cached_frame);
+        int rc = PyList_AppendValue(ctx->frame_info, cached_frame);
+        PyValue_CLOSE(cached_frame);
         if (rc < 0) {
             return -1;
         }

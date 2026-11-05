@@ -5,7 +5,11 @@
  * repeated stack unwinding for profiling.
  ******************************************************************************/
 
+#define Py_VALUE_CORE 1
 #include "_remote_debugging.h"
+#include "pycore_list.h"          // PyList_GetValue()
+#include "pycore_structseq.h"    // PyStructSequence_GET_VALUE()
+#include "pycore_value.h"         // PyValue_CLOSE()
 
 /* ============================================================================
  * FRAME CACHE - stores (address, frame_info) pairs per thread
@@ -109,12 +113,14 @@ frame_cache_invalidate_stale(RemoteUnwinderObject *unwinder, PyObject *result)
 
     Py_ssize_t num_interps = PyList_GET_SIZE(result);
     for (Py_ssize_t i = 0; i < num_interps && num_seen < FRAME_CACHE_MAX_THREADS; i++) {
-        PyObject *interp_info = PyList_GetItemRef(result, i);
+        PyValue interp_info_v = PyList_GetValue(result, i);
+        PyObject *interp_info = PyValue_IsNull(interp_info_v) ? NULL : _PyValue_AsObjectStealAt(interp_info_v, BOX_SITE_FIELD);
         if (interp_info == NULL) {
             PyErr_Clear();
             continue;
         }
-        PyObject *threads = PyStructSequence_GetItemRef(interp_info, 1);
+        PyValue threads_v = PyValue_DUP(PyStructSequence_GET_VALUE(interp_info, 1));
+        PyObject *threads = PyValue_IsNull(threads_v) ? NULL : _PyValue_AsObjectStealAt(threads_v, BOX_SITE_FIELD);
         Py_DECREF(interp_info);
         if (!threads || !PyList_Check(threads)) {
             Py_XDECREF(threads);
@@ -123,12 +129,14 @@ frame_cache_invalidate_stale(RemoteUnwinderObject *unwinder, PyObject *result)
         }
         Py_ssize_t num_threads = PyList_GET_SIZE(threads);
         for (Py_ssize_t j = 0; j < num_threads && num_seen < FRAME_CACHE_MAX_THREADS; j++) {
-            PyObject *thread_info = PyList_GetItemRef(threads, j);
+            PyValue thread_info_v = PyList_GetValue(threads, j);
+            PyObject *thread_info = PyValue_IsNull(thread_info_v) ? NULL : _PyValue_AsObjectStealAt(thread_info_v, BOX_SITE_FIELD);
             if (thread_info == NULL) {
                 PyErr_Clear();
                 continue;
             }
-            PyObject *tid_obj = PyStructSequence_GetItemRef(thread_info, 0);
+            PyValue tid_obj_v = PyValue_DUP(PyStructSequence_GET_VALUE(thread_info, 0));
+            PyObject *tid_obj = PyValue_IsNull(tid_obj_v) ? NULL : _PyValue_AsObjectStealAt(tid_obj_v, BOX_SITE_FIELD);
             Py_DECREF(thread_info);
             if (tid_obj) {
                 uint64_t tid = PyLong_AsUnsignedLongLong(tid_obj);

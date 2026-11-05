@@ -2,13 +2,18 @@
 preserve
 [clinic start generated code]*/
 
+#ifndef Py_VALUE_CORE
+#  error "value-emission Clinic output requires Py_VALUE_CORE"
+#endif
+
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 #  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
 #  include "pycore_value.h"       // _PyValue_STATIC_IMMORTAL()
 #endif
-#include "pycore_modsupport.h"    // _PyArg_UnpackKeywords()
+#include "pycore_modsupport.h"    // _PyArg_UnpackKeywordsValue()
 #include "pycore_unicodeobject.h" // _PyUnicode_AsUTF8NoNUL()
+#include "pycore_value_call.h"    // METH_VALUE
 
 PyDoc_STRVAR(_symtable_symtable__doc__,
 "symtable($module, source, filename, startstr, /, *, module=None)\n"
@@ -19,17 +24,17 @@ PyDoc_STRVAR(_symtable_symtable__doc__,
 "The source can be a string, a bytes object, or an AST object.");
 
 #define _SYMTABLE_SYMTABLE_METHODDEF    \
-    {"symtable", _PyCFunction_CAST(_symtable_symtable), METH_FASTCALL|METH_KEYWORDS, _symtable_symtable__doc__},
+    {"symtable", _PyCFunction_CAST(_symtable_symtable), METH_VALUE|METH_KEYWORDS, _symtable_symtable__doc__},
 
-static PyObject *
-_symtable_symtable_impl(PyObject *module, PyObject *source,
+static PyValue
+_symtable_symtable_impl(PyObject *module, PyValueBorrow source,
                         PyObject *filename, const char *startstr,
-                        PyObject *modname);
+                        PyValueBorrow modname);
 
-static PyObject *
-_symtable_symtable(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_symtable_symtable(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
@@ -57,36 +62,40 @@ _symtable_symtable(PyObject *module, PyObject *const *args, Py_ssize_t nargs, Py
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[4];
-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 3;
-    PyObject *source;
+    Py_ssize_t _idx[4];
+    PyValueBorrow source;
     PyObject *filename = NULL;
     const char *startstr;
-    PyObject *modname = Py_None;
+    PyValueBorrow modname = PyValue_Borrow(PyValue_None);
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 3, /*maxpos*/ 3, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 3, /*maxpos*/ 3, /*minkw*/ 0, /*varpos*/ 0, _idx, 4)) {
         goto exit;
     }
-    source = args[0];
-    if (!PyUnicode_FSDecoder(args[1], &filename)) {
+    source = PyValue_Borrow(args[_idx[0]]);
+    if (!PyValue_IsObject(PyValue_Borrow(args[_idx[1]]))) {
+        PyErr_Format(PyExc_TypeError, "expected str, bytes or os.PathLike object, not %.200s", PyValue_TYPE(PyValue_Borrow(args[_idx[1]]))->tp_name);
         goto exit;
     }
-    if (!PyUnicode_Check(args[2])) {
-        _PyArg_BadArgument("symtable", "argument 3", "str", args[2]);
+    if (!PyUnicode_FSDecoder(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[1]])), &filename)) {
         goto exit;
     }
-    startstr = _PyUnicode_AsUTF8NoNUL(args[2]);
+    if (!PyValue_IsObject(PyValue_Borrow(args[_idx[2]]))) {
+        _PyArg_BadArgumentValue("symtable", "argument 3", "str", PyValue_Borrow(args[_idx[2]]));
+        goto exit;
+    }
+    if (!PyUnicode_Check(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[2]])))) {
+        _PyArg_BadArgument("symtable", "argument 3", "str", PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[2]])));
+        goto exit;
+    }
+    startstr = _PyUnicode_AsUTF8NoNUL(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[2]])));
     if (startstr == NULL) {
         goto exit;
     }
-    if (!noptargs) {
-        goto skip_optional_kwonly;
+    if (_idx[3] >= 0) {
+        modname = PyValue_Borrow(args[_idx[3]]);
     }
-    modname = args[3];
-skip_optional_kwonly:
-    return_value = _symtable_symtable_impl(module, source, filename, startstr, modname);
+    return_value = _symtable_symtable_impl(PyValue_AsKnownObjectBorrow(module), source, filename, startstr, modname);
 
 exit:
     /* Cleanup for filename */
@@ -94,4 +103,4 @@ exit:
 
     return return_value;
 }
-/*[clinic end generated code: output=70bf7a7b4a3253d9 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=14890ceb2dae516c input=a9049054013a1b77]*/

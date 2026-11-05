@@ -6,11 +6,24 @@
  +   Copyright 2007 Python Software Foundation.
  */
 
+#ifndef Py_BUILD_CORE_BUILTIN
+#  define Py_BUILD_CORE_MODULE 1
+#endif
+#define Py_VALUE_CORE 1
 #include "Python.h"
 #include "pycore_atexit.h"        // export _Py_AtExit()
 #include "pycore_initconfig.h"    // _PyStatus_NO_MEMORY
 #include "pycore_interp.h"        // PyInterpreterState.atexit
+#include "pycore_list.h"          // PyList_InsertValue()
 #include "pycore_pystate.h"       // _PyInterpreterState_GET
+#include "pycore_tuple.h"         // _PyTuple_PackValues()
+#include "pycore_value.h"         // PyValue
+#include "pycore_value_ops.h"     // _PyValue_RichCompareBool()
+
+/*[clinic input]
+value_emission
+[clinic start generated code]*/
+/*[clinic end generated code: output=da39a3ee5e6b4b0d input=eb7b17088bfd7215]*/
 
 /*[clinic input]
 module atexit
@@ -124,38 +137,47 @@ atexit_callfuncs(struct atexit_state *state)
     }
 
     for (Py_ssize_t i = 0; i < PyList_GET_SIZE(copy); ++i) {
-        PyObject *tuple = PyList_GetItemRef(copy, i);
-        if (tuple == NULL) {
+        PyValue tuple = PyList_GetValue(copy, i);
+        if (PyValue_IsNull(tuple)) {
             PyErr_FormatUnraisable("Exception ignored while "
                                    "reading atexit callbacks");
             continue;
         }
-        assert(PyTuple_CheckExact(tuple));
+        // Entries are the tuples built by atexit.register().
+        PyObject *tuple_obj = PyValue_AsKnownObjectBorrow(tuple);
+        assert(PyTuple_CheckExact(tuple_obj));
 
-        PyObject *func = PyTuple_GetItemRef(tuple, 0);
-        PyObject *args = PyTuple_GetItemRef(tuple, 1);
-        PyObject *kwargs = PyTuple_GetItemRef(tuple, 2);
-        Py_DECREF(tuple);
-        if (func == NULL || args == NULL || kwargs == NULL) {
+        PyValue func = PyTuple_GetValue(tuple_obj, 0);
+        PyValue args = PyTuple_GetValue(tuple_obj, 1);
+        PyValue kwargs = PyTuple_GetValue(tuple_obj, 2);
+        PyValue_CLOSE(tuple);
+        if (PyValue_IsNull(func) || PyValue_IsNull(args)
+            || PyValue_IsNull(kwargs))
+        {
             PyErr_FormatUnraisable("Exception ignored while "
                                    "reading atexit callbacks");
             goto next;
         }
 
-        PyObject *res = PyObject_Call(func,
-                                      args,
-                                      kwargs == Py_None ? NULL : kwargs);
+        // register() accepts only callables, the args tuple and the kwargs
+        // dict, so all three are objects.
+        PyObject *func_obj = PyValue_AsKnownObjectBorrow(func);
+        PyObject *res = PyObject_Call(func_obj,
+                                      PyValue_AsKnownObjectBorrow(args),
+                                      PyValue_IsNone(kwargs)
+                                      ? NULL
+                                      : PyValue_AsKnownObjectBorrow(kwargs));
         if (res == NULL) {
             PyErr_FormatUnraisable(
-                "Exception ignored in atexit callback %R", func);
+                "Exception ignored in atexit callback %R", func_obj);
         }
         else {
             Py_DECREF(res);
         }
 next:
-        Py_XDECREF(func);
-        Py_XDECREF(args);
-        Py_XDECREF(kwargs);
+        PyValue_XCLOSE(func);
+        PyValue_XCLOSE(args);
+        PyValue_XCLOSE(kwargs);
     }
 
     Py_DECREF(copy);
@@ -194,32 +216,33 @@ Register a function to be executed upon normal program termination
     func is returned to facilitate usage as a decorator.
 [clinic start generated code]*/
 
-static PyObject *
-atexit_register_impl(PyObject *module, PyObject *func, PyObject *args,
+static PyValue
+atexit_register_impl(PyObject *module, PyValueBorrow func, PyObject *args,
                      PyObject *kwargs)
-/*[clinic end generated code: output=c921286994bd8612 input=a682b5a343a82e4a]*/
+/*[clinic end generated code: output=10074b261955cfdc input=a682b5a343a82e4a]*/
 {
-    if (!PyCallable_Check(func)) {
+    // Inline ints and floats are never callable.
+    if (!(PyValue_IsObject(func) && PyCallable_Check(PyValue_AsKnownObjectBorrow(func)))) {
         PyErr_SetString(PyExc_TypeError,
                 "the first argument must be callable");
-        return NULL;
+        return PyValue_NULL;
     }
-    PyObject *callback = PyTuple_Pack(3, func, args, kwargs);
+    PyObject *callback = _PyTuple_PackValues(3, (PyValueBorrow[]){PyValue_Borrow(func), PyValue_FromObjectBorrow(args), PyValue_FromObjectBorrow(kwargs)});
     if (callback == NULL)
     {
-        return NULL;
+        return PyValue_NULL;
     }
 
     struct atexit_state *state = get_atexit_state();
     // atexit callbacks go in a LIFO order
-    if (PyList_Insert(state->callbacks, 0, callback) < 0)
+    if (PyList_InsertValue(state->callbacks, 0, PyValue_FromObjectBorrow(callback)) < 0)
     {
         Py_DECREF(callback);
-        return NULL;
+        return PyValue_NULL;
     }
     Py_DECREF(callback);
 
-    return Py_NewRef(func);
+    return PyValue_DUP(func);
 }
 
 PyDoc_STRVAR(atexit_run_exitfuncs__doc__,
@@ -270,20 +293,21 @@ static int
 atexit_unregister_locked(PyObject *callbacks, PyObject *func)
 {
     for (Py_ssize_t i = PyList_GET_SIZE(callbacks) - 1; i >= 0; --i) {
-        PyObject *tuple = PyList_GetItemRef(callbacks, i);
-        if (tuple == NULL) {
+        PyValue tuple = PyList_GetValue(callbacks, i);
+        if (PyValue_IsNull(tuple)) {
             return -1;
         }
-        assert(PyTuple_CheckExact(tuple));
-        PyObject *to_compare = PyTuple_GetItemRef(tuple, 0);
-        if (to_compare == NULL) {
-            Py_DECREF(tuple);
+        PyObject *tuple_obj = PyValue_AsKnownObjectBorrow(tuple);
+        assert(PyTuple_CheckExact(tuple_obj));
+        PyValue to_compare = PyTuple_GetValue(tuple_obj, 0);
+        if (PyValue_IsNull(to_compare)) {
+            PyValue_CLOSE(tuple);
             return -1;
         }
-        int cmp = PyObject_RichCompareBool(func, to_compare, Py_EQ);
-        Py_DECREF(to_compare);
+        int cmp = _PyValue_RichCompareBool(PyValue_FromObjectBorrow(func), to_compare, Py_EQ);
+        PyValue_CLOSE(to_compare);
         if (cmp < 0) {
-            Py_DECREF(tuple);
+            PyValue_CLOSE(tuple);
             return -1;
         }
         if (cmp == 1) {
@@ -293,17 +317,17 @@ atexit_unregister_locked(PyObject *callbacks, PyObject *func)
             Py_ssize_t j = PyList_GET_SIZE(callbacks) - 1;
             j = Py_MIN(j, i);
             for (; j >= 0; --j) {
-                PyObject *item = PyList_GetItemRef(callbacks, j);
-                if (item == NULL) {
-                    Py_DECREF(tuple);
+                PyValue item = PyList_GetValue(callbacks, j);
+                if (PyValue_IsNull(item)) {
+                    PyValue_CLOSE(tuple);
                     return -1;
                 }
-                int same = (item == tuple);
-                Py_DECREF(item);
+                int same = PyValue_Is(item, tuple);
+                PyValue_CLOSE(item);
                 if (same) {
                     // We found the callback index! For real!
                     if (PyList_SetSlice(callbacks, j, j + 1, NULL) < 0) {
-                        Py_DECREF(tuple);
+                        PyValue_CLOSE(tuple);
                         return -1;
                     }
                     i = j;
@@ -311,7 +335,7 @@ atexit_unregister_locked(PyObject *callbacks, PyObject *func)
                 }
             }
         }
-        Py_DECREF(tuple);
+        PyValue_CLOSE(tuple);
         if (i >= PyList_GET_SIZE(callbacks)) {
             i = PyList_GET_SIZE(callbacks);
         }

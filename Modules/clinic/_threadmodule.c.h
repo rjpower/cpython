@@ -2,13 +2,21 @@
 preserve
 [clinic start generated code]*/
 
+#ifndef Py_VALUE_CORE
+#  error "value-emission Clinic output requires Py_VALUE_CORE"
+#endif
+
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 #  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
 #  include "pycore_value.h"       // _PyValue_STATIC_IMMORTAL()
 #endif
-#include "pycore_abstract.h"      // _PyNumber_Index()
+#include "pycore_long_value.h"    // _PyValue_AsInt()
 #include "pycore_modsupport.h"    // _PyArg_CheckPositional()
+#include "pycore_tuple.h"         // _PyTuple_ITEMS()
+#include "pycore_value_call.h"    // METH_VALUE
+#include "pycore_value_ops.h"     // _PyValue_IsTrue()
+#include "pycore_value_slots.h"   // _PyValue_THUNK_EXIT()
 
 static PyObject *
 _thread__ThreadHandle_ident_get_impl(PyObject *self);
@@ -25,16 +33,16 @@ PyDoc_STRVAR(_thread__ThreadHandle_join__doc__,
 "\n");
 
 #define _THREAD__THREADHANDLE_JOIN_METHODDEF    \
-    {"join", _PyCFunction_CAST(_thread__ThreadHandle_join), METH_FASTCALL, _thread__ThreadHandle_join__doc__},
+    {"join", _PyCFunction_CAST(_thread__ThreadHandle_join), METH_VALUE, _thread__ThreadHandle_join__doc__},
 
-static PyObject *
-_thread__ThreadHandle_join_impl(PyObject *self, PyObject *timeout_obj);
+static PyValue
+_thread__ThreadHandle_join_impl(PyObject *self, PyValueBorrow timeout_obj);
 
-static PyObject *
-_thread__ThreadHandle_join(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_thread__ThreadHandle_join(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
-    PyObject *timeout_obj = Py_None;
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow timeout_obj = PyValue_Borrow(PyValue_None);
 
     if (!_PyArg_CheckPositional("join", nargs, 0, 1)) {
         goto exit;
@@ -42,9 +50,9 @@ _thread__ThreadHandle_join(PyObject *self, PyObject *const *args, Py_ssize_t nar
     if (nargs < 1) {
         goto skip_optional;
     }
-    timeout_obj = args[0];
+    timeout_obj = PyValue_Borrow(args[0]);
 skip_optional:
-    return_value = _thread__ThreadHandle_join_impl(self, timeout_obj);
+    return_value = _thread__ThreadHandle_join_impl(PyValue_AsKnownObjectBorrow(self), timeout_obj);
 
 exit:
     return return_value;
@@ -56,15 +64,19 @@ PyDoc_STRVAR(_thread__ThreadHandle_is_done__doc__,
 "\n");
 
 #define _THREAD__THREADHANDLE_IS_DONE_METHODDEF    \
-    {"is_done", (PyCFunction)_thread__ThreadHandle_is_done, METH_NOARGS, _thread__ThreadHandle_is_done__doc__},
+    {"is_done", _PyCFunction_CAST(_thread__ThreadHandle_is_done), METH_VALUE|METH_NOARGS, _thread__ThreadHandle_is_done__doc__},
 
-static PyObject *
+static PyValue
 _thread__ThreadHandle_is_done_impl(PyObject *self);
 
-static PyObject *
-_thread__ThreadHandle_is_done(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+_thread__ThreadHandle_is_done(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _thread__ThreadHandle_is_done_impl(self);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _thread__ThreadHandle_is_done_impl(PyValue_AsKnownObjectBorrow(self));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(_thread__ThreadHandle__set_done__doc__,
@@ -73,15 +85,19 @@ PyDoc_STRVAR(_thread__ThreadHandle__set_done__doc__,
 "\n");
 
 #define _THREAD__THREADHANDLE__SET_DONE_METHODDEF    \
-    {"_set_done", (PyCFunction)_thread__ThreadHandle__set_done, METH_NOARGS, _thread__ThreadHandle__set_done__doc__},
+    {"_set_done", _PyCFunction_CAST(_thread__ThreadHandle__set_done), METH_VALUE|METH_NOARGS, _thread__ThreadHandle__set_done__doc__},
 
-static PyObject *
+static PyValue
 _thread__ThreadHandle__set_done_impl(PyObject *self);
 
-static PyObject *
-_thread__ThreadHandle__set_done(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+_thread__ThreadHandle__set_done(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _thread__ThreadHandle__set_done_impl(self);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _thread__ThreadHandle__set_done_impl(PyValue_AsKnownObjectBorrow(self));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(_thread_lock_acquire__doc__,
@@ -98,16 +114,16 @@ PyDoc_STRVAR(_thread_lock_acquire__doc__,
 "The blocking operation is interruptible.");
 
 #define _THREAD_LOCK_ACQUIRE_METHODDEF    \
-    {"acquire", _PyCFunction_CAST(_thread_lock_acquire), METH_FASTCALL|METH_KEYWORDS, _thread_lock_acquire__doc__},
+    {"acquire", _PyCFunction_CAST(_thread_lock_acquire), METH_VALUE|METH_KEYWORDS, _thread_lock_acquire__doc__},
 
-static PyObject *
+static PyValue
 _thread_lock_acquire_impl(lockobject *self, int blocking,
-                          PyObject *timeoutobj);
+                          PyValueBorrow timeoutobj);
 
-static PyObject *
-_thread_lock_acquire(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_thread_lock_acquire(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 2
@@ -135,31 +151,24 @@ _thread_lock_acquire(PyObject *self, PyObject *const *args, Py_ssize_t nargs, Py
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[2];
-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 0;
+    Py_ssize_t _idx[2];
     int blocking = 1;
-    PyObject *timeoutobj = NULL;
+    PyValueBorrow timeoutobj = PyValue_Borrow(PyValue_NULL);
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 0, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 0, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, _idx, 2)) {
         goto exit;
     }
-    if (!noptargs) {
-        goto skip_optional_pos;
-    }
-    if (args[0]) {
-        blocking = PyObject_IsTrue(args[0]);
+    if (_idx[0] >= 0) {
+        blocking = _PyValue_IsTrue(PyValue_Borrow(args[_idx[0]]));
         if (blocking < 0) {
             goto exit;
         }
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
     }
-    timeoutobj = args[1];
-skip_optional_pos:
-    return_value = _thread_lock_acquire_impl((lockobject *)self, blocking, timeoutobj);
+    if (_idx[1] >= 0) {
+        timeoutobj = PyValue_Borrow(args[_idx[1]]);
+    }
+    return_value = _thread_lock_acquire_impl((lockobject *)PyValue_AsKnownObjectBorrow(self), blocking, timeoutobj);
 
 exit:
     return return_value;
@@ -172,16 +181,16 @@ PyDoc_STRVAR(_thread_lock_acquire_lock__doc__,
 "An obsolete synonym of acquire().");
 
 #define _THREAD_LOCK_ACQUIRE_LOCK_METHODDEF    \
-    {"acquire_lock", _PyCFunction_CAST(_thread_lock_acquire_lock), METH_FASTCALL|METH_KEYWORDS, _thread_lock_acquire_lock__doc__},
+    {"acquire_lock", _PyCFunction_CAST(_thread_lock_acquire_lock), METH_VALUE|METH_KEYWORDS, _thread_lock_acquire_lock__doc__},
 
-static PyObject *
+static PyValue
 _thread_lock_acquire_lock_impl(lockobject *self, int blocking,
-                               PyObject *timeoutobj);
+                               PyValueBorrow timeoutobj);
 
-static PyObject *
-_thread_lock_acquire_lock(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_thread_lock_acquire_lock(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 2
@@ -209,31 +218,24 @@ _thread_lock_acquire_lock(PyObject *self, PyObject *const *args, Py_ssize_t narg
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[2];
-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 0;
+    Py_ssize_t _idx[2];
     int blocking = 1;
-    PyObject *timeoutobj = NULL;
+    PyValueBorrow timeoutobj = PyValue_Borrow(PyValue_NULL);
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 0, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 0, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, _idx, 2)) {
         goto exit;
     }
-    if (!noptargs) {
-        goto skip_optional_pos;
-    }
-    if (args[0]) {
-        blocking = PyObject_IsTrue(args[0]);
+    if (_idx[0] >= 0) {
+        blocking = _PyValue_IsTrue(PyValue_Borrow(args[_idx[0]]));
         if (blocking < 0) {
             goto exit;
         }
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
     }
-    timeoutobj = args[1];
-skip_optional_pos:
-    return_value = _thread_lock_acquire_lock_impl((lockobject *)self, blocking, timeoutobj);
+    if (_idx[1] >= 0) {
+        timeoutobj = PyValue_Borrow(args[_idx[1]]);
+    }
+    return_value = _thread_lock_acquire_lock_impl((lockobject *)PyValue_AsKnownObjectBorrow(self), blocking, timeoutobj);
 
 exit:
     return return_value;
@@ -250,15 +252,19 @@ PyDoc_STRVAR(_thread_lock_release__doc__,
 "but it needn\'t be locked by the same thread that unlocks it.");
 
 #define _THREAD_LOCK_RELEASE_METHODDEF    \
-    {"release", (PyCFunction)_thread_lock_release, METH_NOARGS, _thread_lock_release__doc__},
+    {"release", _PyCFunction_CAST(_thread_lock_release), METH_VALUE|METH_NOARGS, _thread_lock_release__doc__},
 
-static PyObject *
+static PyValue
 _thread_lock_release_impl(lockobject *self);
 
-static PyObject *
-_thread_lock_release(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+_thread_lock_release(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _thread_lock_release_impl((lockobject *)self);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _thread_lock_release_impl((lockobject *)PyValue_AsKnownObjectBorrow(self));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(_thread_lock_release_lock__doc__,
@@ -268,15 +274,19 @@ PyDoc_STRVAR(_thread_lock_release_lock__doc__,
 "An obsolete synonym of release().");
 
 #define _THREAD_LOCK_RELEASE_LOCK_METHODDEF    \
-    {"release_lock", (PyCFunction)_thread_lock_release_lock, METH_NOARGS, _thread_lock_release_lock__doc__},
+    {"release_lock", _PyCFunction_CAST(_thread_lock_release_lock), METH_VALUE|METH_NOARGS, _thread_lock_release_lock__doc__},
 
-static PyObject *
+static PyValue
 _thread_lock_release_lock_impl(lockobject *self);
 
-static PyObject *
-_thread_lock_release_lock(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+_thread_lock_release_lock(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _thread_lock_release_lock_impl((lockobject *)self);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _thread_lock_release_lock_impl((lockobject *)PyValue_AsKnownObjectBorrow(self));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(_thread_lock___enter____doc__,
@@ -286,15 +296,19 @@ PyDoc_STRVAR(_thread_lock___enter____doc__,
 "Lock the lock.");
 
 #define _THREAD_LOCK___ENTER___METHODDEF    \
-    {"__enter__", (PyCFunction)_thread_lock___enter__, METH_NOARGS, _thread_lock___enter____doc__},
+    {"__enter__", _PyCFunction_CAST(_thread_lock___enter__), METH_VALUE|METH_NOARGS, _thread_lock___enter____doc__},
 
-static PyObject *
+static PyValue
 _thread_lock___enter___impl(lockobject *self);
 
-static PyObject *
-_thread_lock___enter__(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+_thread_lock___enter__(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _thread_lock___enter___impl((lockobject *)self);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _thread_lock___enter___impl((lockobject *)PyValue_AsKnownObjectBorrow(self));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(_thread_lock___exit____doc__,
@@ -304,27 +318,27 @@ PyDoc_STRVAR(_thread_lock___exit____doc__,
 "Release the lock.");
 
 #define _THREAD_LOCK___EXIT___METHODDEF    \
-    {"__exit__", _PyCFunction_CAST(_thread_lock___exit__), METH_FASTCALL, _thread_lock___exit____doc__},
+    {"__exit__", _PyCFunction_CAST(_thread_lock___exit__), METH_VALUE, _thread_lock___exit____doc__},
 
-static PyObject *
-_thread_lock___exit___impl(lockobject *self, PyObject *exc_type,
-                           PyObject *exc_value, PyObject *exc_tb);
+static PyValue
+_thread_lock___exit___impl(lockobject *self, PyValueBorrow exc_type,
+                           PyValueBorrow exc_value, PyValueBorrow exc_tb);
 
-static PyObject *
-_thread_lock___exit__(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_thread_lock___exit__(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
-    PyObject *exc_type;
-    PyObject *exc_value;
-    PyObject *exc_tb;
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow exc_type;
+    PyValueBorrow exc_value;
+    PyValueBorrow exc_tb;
 
     if (!_PyArg_CheckPositional("__exit__", nargs, 3, 3)) {
         goto exit;
     }
-    exc_type = args[0];
-    exc_value = args[1];
-    exc_tb = args[2];
-    return_value = _thread_lock___exit___impl((lockobject *)self, exc_type, exc_value, exc_tb);
+    exc_type = PyValue_Borrow(args[0]);
+    exc_value = PyValue_Borrow(args[1]);
+    exc_tb = PyValue_Borrow(args[2]);
+    return_value = _thread_lock___exit___impl((lockobject *)PyValue_AsKnownObjectBorrow(self), exc_type, exc_value, exc_tb);
 
 exit:
     return return_value;
@@ -337,15 +351,19 @@ PyDoc_STRVAR(_thread_lock_locked__doc__,
 "Return whether the lock is in the locked state.");
 
 #define _THREAD_LOCK_LOCKED_METHODDEF    \
-    {"locked", (PyCFunction)_thread_lock_locked, METH_NOARGS, _thread_lock_locked__doc__},
+    {"locked", _PyCFunction_CAST(_thread_lock_locked), METH_VALUE|METH_NOARGS, _thread_lock_locked__doc__},
 
-static PyObject *
+static PyValue
 _thread_lock_locked_impl(lockobject *self);
 
-static PyObject *
-_thread_lock_locked(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+_thread_lock_locked(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _thread_lock_locked_impl((lockobject *)self);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _thread_lock_locked_impl((lockobject *)PyValue_AsKnownObjectBorrow(self));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(_thread_lock_locked_lock__doc__,
@@ -355,15 +373,19 @@ PyDoc_STRVAR(_thread_lock_locked_lock__doc__,
 "An obsolete synonym of locked().");
 
 #define _THREAD_LOCK_LOCKED_LOCK_METHODDEF    \
-    {"locked_lock", (PyCFunction)_thread_lock_locked_lock, METH_NOARGS, _thread_lock_locked_lock__doc__},
+    {"locked_lock", _PyCFunction_CAST(_thread_lock_locked_lock), METH_VALUE|METH_NOARGS, _thread_lock_locked_lock__doc__},
 
-static PyObject *
+static PyValue
 _thread_lock_locked_lock_impl(lockobject *self);
 
-static PyObject *
-_thread_lock_locked_lock(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+_thread_lock_locked_lock(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _thread_lock_locked_lock_impl((lockobject *)self);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _thread_lock_locked_lock_impl((lockobject *)PyValue_AsKnownObjectBorrow(self));
+
+    return return_value;
 }
 
 #if defined(HAVE_FORK)
@@ -374,40 +396,62 @@ PyDoc_STRVAR(_thread_lock__at_fork_reinit__doc__,
 "\n");
 
 #define _THREAD_LOCK__AT_FORK_REINIT_METHODDEF    \
-    {"_at_fork_reinit", (PyCFunction)_thread_lock__at_fork_reinit, METH_NOARGS, _thread_lock__at_fork_reinit__doc__},
+    {"_at_fork_reinit", _PyCFunction_CAST(_thread_lock__at_fork_reinit), METH_VALUE|METH_NOARGS, _thread_lock__at_fork_reinit__doc__},
 
-static PyObject *
+static PyValue
 _thread_lock__at_fork_reinit_impl(lockobject *self);
 
-static PyObject *
-_thread_lock__at_fork_reinit(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+_thread_lock__at_fork_reinit(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _thread_lock__at_fork_reinit_impl((lockobject *)self);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _thread_lock__at_fork_reinit_impl((lockobject *)PyValue_AsKnownObjectBorrow(self));
+
+    return return_value;
 }
 
 #endif /* defined(HAVE_FORK) */
 
-static PyObject *
+static PyValue
 lock_new_impl(PyTypeObject *type);
 
-static PyObject *
-lock_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
+static PyValue
+lock_new_value(PyTypeObject *type, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyTypeObject *base_tp = clinic_state()->lock_type;
 
     if ((type == base_tp || type->tp_init == base_tp->tp_init) &&
-        !_PyArg_NoPositional("lock", args)) {
+        !_PyArg_NoPositionalStack("lock", nargs)) {
         goto exit;
     }
     if ((type == base_tp || type->tp_init == base_tp->tp_init) &&
-        !_PyArg_NoKeywords("lock", kwargs)) {
+        !_PyArg_NoKwnames("lock", kwnames)) {
         goto exit;
     }
     return_value = lock_new_impl(type);
 
 exit:
     return return_value;
+}
+
+Py_VALUE_ENTRY static PyObject *
+lock_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
+{
+    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
+    if (kwargs == NULL || PyDict_GET_SIZE(kwargs) == 0) {
+        return _PyValue_THUNK_EXIT(lock_new_value(type, _PyTuple_ITEMS(args), nargs, NULL), BOX_SITE_CALL);
+    }
+    PyObject *kwnames;
+    PyValue *window = _PyValue_StackUnpackDict(_PyThreadState_GET(),
+        _PyTuple_ITEMS(args), nargs, kwargs, &kwnames);
+    if (window == NULL) {
+        return NULL;
+    }
+    PyValue result = lock_new_value(type, window, nargs, kwnames);
+    _PyValue_StackUnpackDict_Free(window, nargs, kwnames);
+    return _PyValue_THUNK_EXIT(result, BOX_SITE_CALL);
 }
 
 PyDoc_STRVAR(_thread_RLock_acquire__doc__,
@@ -430,16 +474,16 @@ PyDoc_STRVAR(_thread_RLock_acquire__doc__,
 "the lock is taken and its internal counter initialized to 1.");
 
 #define _THREAD_RLOCK_ACQUIRE_METHODDEF    \
-    {"acquire", _PyCFunction_CAST(_thread_RLock_acquire), METH_FASTCALL|METH_KEYWORDS, _thread_RLock_acquire__doc__},
+    {"acquire", _PyCFunction_CAST(_thread_RLock_acquire), METH_VALUE|METH_KEYWORDS, _thread_RLock_acquire__doc__},
 
-static PyObject *
+static PyValue
 _thread_RLock_acquire_impl(rlockobject *self, int blocking,
-                           PyObject *timeoutobj);
+                           PyValueBorrow timeoutobj);
 
-static PyObject *
-_thread_RLock_acquire(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_thread_RLock_acquire(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 2
@@ -467,31 +511,24 @@ _thread_RLock_acquire(PyObject *self, PyObject *const *args, Py_ssize_t nargs, P
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[2];
-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 0;
+    Py_ssize_t _idx[2];
     int blocking = 1;
-    PyObject *timeoutobj = NULL;
+    PyValueBorrow timeoutobj = PyValue_Borrow(PyValue_NULL);
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 0, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 0, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, _idx, 2)) {
         goto exit;
     }
-    if (!noptargs) {
-        goto skip_optional_pos;
-    }
-    if (args[0]) {
-        blocking = PyObject_IsTrue(args[0]);
+    if (_idx[0] >= 0) {
+        blocking = _PyValue_IsTrue(PyValue_Borrow(args[_idx[0]]));
         if (blocking < 0) {
             goto exit;
         }
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
     }
-    timeoutobj = args[1];
-skip_optional_pos:
-    return_value = _thread_RLock_acquire_impl((rlockobject *)self, blocking, timeoutobj);
+    if (_idx[1] >= 0) {
+        timeoutobj = PyValue_Borrow(args[_idx[1]]);
+    }
+    return_value = _thread_RLock_acquire_impl((rlockobject *)PyValue_AsKnownObjectBorrow(self), blocking, timeoutobj);
 
 exit:
     return return_value;
@@ -504,15 +541,19 @@ PyDoc_STRVAR(_thread_RLock___enter____doc__,
 "Lock the lock.");
 
 #define _THREAD_RLOCK___ENTER___METHODDEF    \
-    {"__enter__", (PyCFunction)_thread_RLock___enter__, METH_NOARGS, _thread_RLock___enter____doc__},
+    {"__enter__", _PyCFunction_CAST(_thread_RLock___enter__), METH_VALUE|METH_NOARGS, _thread_RLock___enter____doc__},
 
-static PyObject *
+static PyValue
 _thread_RLock___enter___impl(rlockobject *self);
 
-static PyObject *
-_thread_RLock___enter__(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+_thread_RLock___enter__(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _thread_RLock___enter___impl((rlockobject *)self);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _thread_RLock___enter___impl((rlockobject *)PyValue_AsKnownObjectBorrow(self));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(_thread_RLock_release__doc__,
@@ -531,15 +572,19 @@ PyDoc_STRVAR(_thread_RLock_release__doc__,
 "the lock to be available for other threads.");
 
 #define _THREAD_RLOCK_RELEASE_METHODDEF    \
-    {"release", (PyCFunction)_thread_RLock_release, METH_NOARGS, _thread_RLock_release__doc__},
+    {"release", _PyCFunction_CAST(_thread_RLock_release), METH_VALUE|METH_NOARGS, _thread_RLock_release__doc__},
 
-static PyObject *
+static PyValue
 _thread_RLock_release_impl(rlockobject *self);
 
-static PyObject *
-_thread_RLock_release(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+_thread_RLock_release(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _thread_RLock_release_impl((rlockobject *)self);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _thread_RLock_release_impl((rlockobject *)PyValue_AsKnownObjectBorrow(self));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(_thread_RLock___exit____doc__,
@@ -549,27 +594,27 @@ PyDoc_STRVAR(_thread_RLock___exit____doc__,
 "Release the lock.");
 
 #define _THREAD_RLOCK___EXIT___METHODDEF    \
-    {"__exit__", _PyCFunction_CAST(_thread_RLock___exit__), METH_FASTCALL, _thread_RLock___exit____doc__},
+    {"__exit__", _PyCFunction_CAST(_thread_RLock___exit__), METH_VALUE, _thread_RLock___exit____doc__},
 
-static PyObject *
-_thread_RLock___exit___impl(rlockobject *self, PyObject *exc_type,
-                            PyObject *exc_value, PyObject *exc_tb);
+static PyValue
+_thread_RLock___exit___impl(rlockobject *self, PyValueBorrow exc_type,
+                            PyValueBorrow exc_value, PyValueBorrow exc_tb);
 
-static PyObject *
-_thread_RLock___exit__(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_thread_RLock___exit__(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
-    PyObject *exc_type;
-    PyObject *exc_value;
-    PyObject *exc_tb;
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow exc_type;
+    PyValueBorrow exc_value;
+    PyValueBorrow exc_tb;
 
     if (!_PyArg_CheckPositional("__exit__", nargs, 3, 3)) {
         goto exit;
     }
-    exc_type = args[0];
-    exc_value = args[1];
-    exc_tb = args[2];
-    return_value = _thread_RLock___exit___impl((rlockobject *)self, exc_type, exc_value, exc_tb);
+    exc_type = PyValue_Borrow(args[0]);
+    exc_value = PyValue_Borrow(args[1]);
+    exc_tb = PyValue_Borrow(args[2]);
+    return_value = _thread_RLock___exit___impl((rlockobject *)PyValue_AsKnownObjectBorrow(self), exc_type, exc_value, exc_tb);
 
 exit:
     return return_value;
@@ -582,15 +627,19 @@ PyDoc_STRVAR(_thread_RLock_locked__doc__,
 "Return a boolean indicating whether this object is locked right now.");
 
 #define _THREAD_RLOCK_LOCKED_METHODDEF    \
-    {"locked", (PyCFunction)_thread_RLock_locked, METH_NOARGS, _thread_RLock_locked__doc__},
+    {"locked", _PyCFunction_CAST(_thread_RLock_locked), METH_VALUE|METH_NOARGS, _thread_RLock_locked__doc__},
 
-static PyObject *
+static PyValue
 _thread_RLock_locked_impl(rlockobject *self);
 
-static PyObject *
-_thread_RLock_locked(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+_thread_RLock_locked(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _thread_RLock_locked_impl((rlockobject *)self);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _thread_RLock_locked_impl((rlockobject *)PyValue_AsKnownObjectBorrow(self));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(_thread_RLock__acquire_restore__doc__,
@@ -600,17 +649,19 @@ PyDoc_STRVAR(_thread_RLock__acquire_restore__doc__,
 "For internal use by `threading.Condition`.");
 
 #define _THREAD_RLOCK__ACQUIRE_RESTORE_METHODDEF    \
-    {"_acquire_restore", (PyCFunction)_thread_RLock__acquire_restore, METH_O, _thread_RLock__acquire_restore__doc__},
+    {"_acquire_restore", _PyCFunction_CAST(_thread_RLock__acquire_restore), METH_VALUE|METH_O, _thread_RLock__acquire_restore__doc__},
 
-static PyObject *
-_thread_RLock__acquire_restore_impl(rlockobject *self, PyObject *state);
+static PyValue
+_thread_RLock__acquire_restore_impl(rlockobject *self, PyValueBorrow state);
 
-static PyObject *
-_thread_RLock__acquire_restore(PyObject *self, PyObject *state)
+static PyValue
+_thread_RLock__acquire_restore(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow state;
 
-    return_value = _thread_RLock__acquire_restore_impl((rlockobject *)self, state);
+    state = PyValue_Borrow(args[0]);
+    return_value = _thread_RLock__acquire_restore_impl((rlockobject *)PyValue_AsKnownObjectBorrow(self), state);
 
     return return_value;
 }
@@ -622,15 +673,19 @@ PyDoc_STRVAR(_thread_RLock__release_save__doc__,
 "For internal use by `threading.Condition`.");
 
 #define _THREAD_RLOCK__RELEASE_SAVE_METHODDEF    \
-    {"_release_save", (PyCFunction)_thread_RLock__release_save, METH_NOARGS, _thread_RLock__release_save__doc__},
+    {"_release_save", _PyCFunction_CAST(_thread_RLock__release_save), METH_VALUE|METH_NOARGS, _thread_RLock__release_save__doc__},
 
-static PyObject *
+static PyValue
 _thread_RLock__release_save_impl(rlockobject *self);
 
-static PyObject *
-_thread_RLock__release_save(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+_thread_RLock__release_save(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _thread_RLock__release_save_impl((rlockobject *)self);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _thread_RLock__release_save_impl((rlockobject *)PyValue_AsKnownObjectBorrow(self));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(_thread_RLock__recursion_count__doc__,
@@ -640,15 +695,19 @@ PyDoc_STRVAR(_thread_RLock__recursion_count__doc__,
 "For internal use by reentrancy checks.");
 
 #define _THREAD_RLOCK__RECURSION_COUNT_METHODDEF    \
-    {"_recursion_count", (PyCFunction)_thread_RLock__recursion_count, METH_NOARGS, _thread_RLock__recursion_count__doc__},
+    {"_recursion_count", _PyCFunction_CAST(_thread_RLock__recursion_count), METH_VALUE|METH_NOARGS, _thread_RLock__recursion_count__doc__},
 
-static PyObject *
+static PyValue
 _thread_RLock__recursion_count_impl(rlockobject *self);
 
-static PyObject *
-_thread_RLock__recursion_count(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+_thread_RLock__recursion_count(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _thread_RLock__recursion_count_impl((rlockobject *)self);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _thread_RLock__recursion_count_impl((rlockobject *)PyValue_AsKnownObjectBorrow(self));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(_thread_RLock__is_owned__doc__,
@@ -658,38 +717,60 @@ PyDoc_STRVAR(_thread_RLock__is_owned__doc__,
 "For internal use by `threading.Condition`.");
 
 #define _THREAD_RLOCK__IS_OWNED_METHODDEF    \
-    {"_is_owned", (PyCFunction)_thread_RLock__is_owned, METH_NOARGS, _thread_RLock__is_owned__doc__},
+    {"_is_owned", _PyCFunction_CAST(_thread_RLock__is_owned), METH_VALUE|METH_NOARGS, _thread_RLock__is_owned__doc__},
 
-static PyObject *
+static PyValue
 _thread_RLock__is_owned_impl(rlockobject *self);
 
-static PyObject *
-_thread_RLock__is_owned(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+_thread_RLock__is_owned(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _thread_RLock__is_owned_impl((rlockobject *)self);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _thread_RLock__is_owned_impl((rlockobject *)PyValue_AsKnownObjectBorrow(self));
+
+    return return_value;
 }
 
-static PyObject *
+static PyValue
 rlock_new_impl(PyTypeObject *type);
 
-static PyObject *
-rlock_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
+static PyValue
+rlock_new_value(PyTypeObject *type, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyTypeObject *base_tp = clinic_state()->rlock_type;
 
     if ((type == base_tp || type->tp_init == base_tp->tp_init) &&
-        !_PyArg_NoPositional("RLock", args)) {
+        !_PyArg_NoPositionalStack("RLock", nargs)) {
         goto exit;
     }
     if ((type == base_tp || type->tp_init == base_tp->tp_init) &&
-        !_PyArg_NoKeywords("RLock", kwargs)) {
+        !_PyArg_NoKwnames("RLock", kwnames)) {
         goto exit;
     }
     return_value = rlock_new_impl(type);
 
 exit:
     return return_value;
+}
+
+Py_VALUE_ENTRY static PyObject *
+rlock_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
+{
+    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
+    if (kwargs == NULL || PyDict_GET_SIZE(kwargs) == 0) {
+        return _PyValue_THUNK_EXIT(rlock_new_value(type, _PyTuple_ITEMS(args), nargs, NULL), BOX_SITE_CALL);
+    }
+    PyObject *kwnames;
+    PyValue *window = _PyValue_StackUnpackDict(_PyThreadState_GET(),
+        _PyTuple_ITEMS(args), nargs, kwargs, &kwnames);
+    if (window == NULL) {
+        return NULL;
+    }
+    PyValue result = rlock_new_value(type, window, nargs, kwnames);
+    _PyValue_StackUnpackDict_Free(window, nargs, kwnames);
+    return _PyValue_THUNK_EXIT(result, BOX_SITE_CALL);
 }
 
 #if defined(HAVE_FORK)
@@ -700,15 +781,19 @@ PyDoc_STRVAR(_thread_RLock__at_fork_reinit__doc__,
 "\n");
 
 #define _THREAD_RLOCK__AT_FORK_REINIT_METHODDEF    \
-    {"_at_fork_reinit", (PyCFunction)_thread_RLock__at_fork_reinit, METH_NOARGS, _thread_RLock__at_fork_reinit__doc__},
+    {"_at_fork_reinit", _PyCFunction_CAST(_thread_RLock__at_fork_reinit), METH_VALUE|METH_NOARGS, _thread_RLock__at_fork_reinit__doc__},
 
-static PyObject *
+static PyValue
 _thread_RLock__at_fork_reinit_impl(rlockobject *self);
 
-static PyObject *
-_thread_RLock__at_fork_reinit(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+_thread_RLock__at_fork_reinit(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _thread_RLock__at_fork_reinit_impl((rlockobject *)self);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _thread_RLock__at_fork_reinit_impl((rlockobject *)PyValue_AsKnownObjectBorrow(self));
+
+    return return_value;
 }
 
 #endif /* defined(HAVE_FORK) */
@@ -722,15 +807,19 @@ PyDoc_STRVAR(_thread_daemon_threads_allowed__doc__,
 "Return False otherwise.");
 
 #define _THREAD_DAEMON_THREADS_ALLOWED_METHODDEF    \
-    {"daemon_threads_allowed", (PyCFunction)_thread_daemon_threads_allowed, METH_NOARGS, _thread_daemon_threads_allowed__doc__},
+    {"daemon_threads_allowed", _PyCFunction_CAST(_thread_daemon_threads_allowed), METH_VALUE|METH_NOARGS, _thread_daemon_threads_allowed__doc__},
 
-static PyObject *
+static PyValue
 _thread_daemon_threads_allowed_impl(PyObject *module);
 
-static PyObject *
-_thread_daemon_threads_allowed(PyObject *module, PyObject *Py_UNUSED(ignored))
+static PyValue
+_thread_daemon_threads_allowed(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _thread_daemon_threads_allowed_impl(module);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _thread_daemon_threads_allowed_impl(PyValue_AsKnownObjectBorrow(module));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(_thread_start_new_thread__doc__,
@@ -747,39 +836,39 @@ PyDoc_STRVAR(_thread_start_new_thread__doc__,
 "is SystemExit.");
 
 #define _THREAD_START_NEW_THREAD_METHODDEF    \
-    {"start_new_thread", _PyCFunction_CAST(_thread_start_new_thread), METH_FASTCALL, _thread_start_new_thread__doc__},
+    {"start_new_thread", _PyCFunction_CAST(_thread_start_new_thread), METH_VALUE, _thread_start_new_thread__doc__},
 
-static PyObject *
-_thread_start_new_thread_impl(PyObject *module, PyObject *func,
+static PyValue
+_thread_start_new_thread_impl(PyObject *module, PyValueBorrow func,
                               PyObject *args, PyObject *kwargs);
 
-static PyObject *
-_thread_start_new_thread(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_thread_start_new_thread(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
-    PyObject *func;
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow func;
     PyObject *__clinic_args;
     PyObject *__clinic_kwargs = NULL;
 
     if (!_PyArg_CheckPositional("start_new_thread", nargs, 2, 3)) {
         goto exit;
     }
-    func = args[0];
-    if (!PyTuple_Check(args[1])) {
-        _PyArg_BadArgument("start_new_thread", "argument 2", "tuple", args[1]);
+    func = PyValue_Borrow(args[0]);
+    if (!PyType_IsSubtype(PyValue_TYPE(PyValue_Borrow(args[1])), &PyTuple_Type)) {
+        _PyArg_BadArgumentValue("start_new_thread", "argument 2", "tuple", PyValue_Borrow(args[1]));
         goto exit;
     }
-    __clinic_args = args[1];
+    __clinic_args = PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[1]));
     if (nargs < 3) {
         goto skip_optional;
     }
-    if (!PyDict_Check(args[2])) {
-        _PyArg_BadArgument("start_new_thread", "argument 3", "dict", args[2]);
+    if (!PyType_IsSubtype(PyValue_TYPE(PyValue_Borrow(args[2])), &PyDict_Type)) {
+        _PyArg_BadArgumentValue("start_new_thread", "argument 3", "dict", PyValue_Borrow(args[2]));
         goto exit;
     }
-    __clinic_kwargs = args[2];
+    __clinic_kwargs = PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[2]));
 skip_optional:
-    return_value = _thread_start_new_thread_impl(module, func, __clinic_args, __clinic_kwargs);
+    return_value = _thread_start_new_thread_impl(PyValue_AsKnownObjectBorrow(module), func, __clinic_args, __clinic_kwargs);
 
 exit:
     return return_value;
@@ -800,16 +889,16 @@ PyDoc_STRVAR(_thread_start_joinable_thread__doc__,
 "newly created thread._ThreadHandle instance.");
 
 #define _THREAD_START_JOINABLE_THREAD_METHODDEF    \
-    {"start_joinable_thread", _PyCFunction_CAST(_thread_start_joinable_thread), METH_FASTCALL|METH_KEYWORDS, _thread_start_joinable_thread__doc__},
+    {"start_joinable_thread", _PyCFunction_CAST(_thread_start_joinable_thread), METH_VALUE|METH_KEYWORDS, _thread_start_joinable_thread__doc__},
 
-static PyObject *
-_thread_start_joinable_thread_impl(PyObject *module, PyObject *func,
-                                   PyObject *hobj, int daemon);
+static PyValue
+_thread_start_joinable_thread_impl(PyObject *module, PyValueBorrow func,
+                                   PyValueBorrow hobj, int daemon);
 
-static PyObject *
-_thread_start_joinable_thread(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_thread_start_joinable_thread(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 3
@@ -837,33 +926,26 @@ _thread_start_joinable_thread(PyObject *module, PyObject *const *args, Py_ssize_
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[3];
-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 1;
-    PyObject *func;
-    PyObject *hobj = Py_None;
+    Py_ssize_t _idx[3];
+    PyValueBorrow func;
+    PyValueBorrow hobj = PyValue_Borrow(PyValue_None);
     int daemon = 1;
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 1, /*maxpos*/ 3, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 1, /*maxpos*/ 3, /*minkw*/ 0, /*varpos*/ 0, _idx, 3)) {
         goto exit;
     }
-    func = args[0];
-    if (!noptargs) {
-        goto skip_optional_pos;
+    func = PyValue_Borrow(args[_idx[0]]);
+    if (_idx[1] >= 0) {
+        hobj = PyValue_Borrow(args[_idx[1]]);
     }
-    if (args[1]) {
-        hobj = args[1];
-        if (!--noptargs) {
-            goto skip_optional_pos;
+    if (_idx[2] >= 0) {
+        daemon = _PyValue_IsTrue(PyValue_Borrow(args[_idx[2]]));
+        if (daemon < 0) {
+            goto exit;
         }
     }
-    daemon = PyObject_IsTrue(args[2]);
-    if (daemon < 0) {
-        goto exit;
-    }
-skip_optional_pos:
-    return_value = _thread_start_joinable_thread_impl(module, func, hobj, daemon);
+    return_value = _thread_start_joinable_thread_impl(PyValue_AsKnownObjectBorrow(module), func, hobj, daemon);
 
 exit:
     return return_value;
@@ -879,15 +961,19 @@ PyDoc_STRVAR(_thread_exit__doc__,
 "is caught.");
 
 #define _THREAD_EXIT_METHODDEF    \
-    {"exit", (PyCFunction)_thread_exit, METH_NOARGS, _thread_exit__doc__},
+    {"exit", _PyCFunction_CAST(_thread_exit), METH_VALUE|METH_NOARGS, _thread_exit__doc__},
 
-static PyObject *
+static PyValue
 _thread_exit_impl(PyObject *module);
 
-static PyObject *
-_thread_exit(PyObject *module, PyObject *Py_UNUSED(ignored))
+static PyValue
+_thread_exit(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _thread_exit_impl(module);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _thread_exit_impl(PyValue_AsKnownObjectBorrow(module));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(_thread_interrupt_main__doc__,
@@ -904,15 +990,15 @@ PyDoc_STRVAR(_thread_interrupt_main__doc__,
 "``KeyboardInterrupt``.");
 
 #define _THREAD_INTERRUPT_MAIN_METHODDEF    \
-    {"interrupt_main", _PyCFunction_CAST(_thread_interrupt_main), METH_FASTCALL, _thread_interrupt_main__doc__},
+    {"interrupt_main", _PyCFunction_CAST(_thread_interrupt_main), METH_VALUE, _thread_interrupt_main__doc__},
 
-static PyObject *
+static PyValue
 _thread_interrupt_main_impl(PyObject *module, int signum);
 
-static PyObject *
-_thread_interrupt_main(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_thread_interrupt_main(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int signum = SIGINT;
 
     if (!_PyArg_CheckPositional("interrupt_main", nargs, 0, 1)) {
@@ -921,12 +1007,12 @@ _thread_interrupt_main(PyObject *module, PyObject *const *args, Py_ssize_t nargs
     if (nargs < 1) {
         goto skip_optional;
     }
-    signum = PyLong_AsInt(args[0]);
+    signum = _PyValue_AsInt(PyValue_Borrow(args[0]));
     if (signum == -1 && PyErr_Occurred()) {
         goto exit;
     }
 skip_optional:
-    return_value = _thread_interrupt_main_impl(module, signum);
+    return_value = _thread_interrupt_main_impl(PyValue_AsKnownObjectBorrow(module), signum);
 
 exit:
     return return_value;
@@ -941,15 +1027,19 @@ PyDoc_STRVAR(_thread_allocate_lock__doc__,
 "See help(type(threading.Lock())) for information about locks.");
 
 #define _THREAD_ALLOCATE_LOCK_METHODDEF    \
-    {"allocate_lock", (PyCFunction)_thread_allocate_lock, METH_NOARGS, _thread_allocate_lock__doc__},
+    {"allocate_lock", _PyCFunction_CAST(_thread_allocate_lock), METH_VALUE|METH_NOARGS, _thread_allocate_lock__doc__},
 
-static PyObject *
+static PyValue
 _thread_allocate_lock_impl(PyObject *module);
 
-static PyObject *
-_thread_allocate_lock(PyObject *module, PyObject *Py_UNUSED(ignored))
+static PyValue
+_thread_allocate_lock(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _thread_allocate_lock_impl(module);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _thread_allocate_lock_impl(PyValue_AsKnownObjectBorrow(module));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(_thread_get_ident__doc__,
@@ -966,15 +1056,19 @@ PyDoc_STRVAR(_thread_get_ident__doc__,
 "A thread\'s identity may be reused for another thread after it exits.");
 
 #define _THREAD_GET_IDENT_METHODDEF    \
-    {"get_ident", (PyCFunction)_thread_get_ident, METH_NOARGS, _thread_get_ident__doc__},
+    {"get_ident", _PyCFunction_CAST(_thread_get_ident), METH_VALUE|METH_NOARGS, _thread_get_ident__doc__},
 
-static PyObject *
+static PyValue
 _thread_get_ident_impl(PyObject *module);
 
-static PyObject *
-_thread_get_ident(PyObject *module, PyObject *Py_UNUSED(ignored))
+static PyValue
+_thread_get_ident(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _thread_get_ident_impl(module);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _thread_get_ident_impl(PyValue_AsKnownObjectBorrow(module));
+
+    return return_value;
 }
 
 #if defined(PY_HAVE_THREAD_NATIVE_ID)
@@ -989,15 +1083,19 @@ PyDoc_STRVAR(_thread_get_native_id__doc__,
 "identify a particular thread within a system.");
 
 #define _THREAD_GET_NATIVE_ID_METHODDEF    \
-    {"get_native_id", (PyCFunction)_thread_get_native_id, METH_NOARGS, _thread_get_native_id__doc__},
+    {"get_native_id", _PyCFunction_CAST(_thread_get_native_id), METH_VALUE|METH_NOARGS, _thread_get_native_id__doc__},
 
-static PyObject *
+static PyValue
 _thread_get_native_id_impl(PyObject *module);
 
-static PyObject *
-_thread_get_native_id(PyObject *module, PyObject *Py_UNUSED(ignored))
+static PyValue
+_thread_get_native_id(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _thread_get_native_id_impl(module);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _thread_get_native_id_impl(PyValue_AsKnownObjectBorrow(module));
+
+    return return_value;
 }
 
 #endif /* defined(PY_HAVE_THREAD_NATIVE_ID) */
@@ -1016,15 +1114,19 @@ PyDoc_STRVAR(_thread__count__doc__,
 "In most applications `threading.enumerate()` should be used instead.");
 
 #define _THREAD__COUNT_METHODDEF    \
-    {"_count", (PyCFunction)_thread__count, METH_NOARGS, _thread__count__doc__},
+    {"_count", _PyCFunction_CAST(_thread__count), METH_VALUE|METH_NOARGS, _thread__count__doc__},
 
-static PyObject *
+static PyValue
 _thread__count_impl(PyObject *module);
 
-static PyObject *
-_thread__count(PyObject *module, PyObject *Py_UNUSED(ignored))
+static PyValue
+_thread__count(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _thread__count_impl(module);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _thread__count_impl(PyValue_AsKnownObjectBorrow(module));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(_thread_stack_size__doc__,
@@ -1050,15 +1152,15 @@ PyDoc_STRVAR(_thread_stack_size__doc__,
 "the suggested approach in the absence of more specific information).");
 
 #define _THREAD_STACK_SIZE_METHODDEF    \
-    {"stack_size", _PyCFunction_CAST(_thread_stack_size), METH_FASTCALL, _thread_stack_size__doc__},
+    {"stack_size", _PyCFunction_CAST(_thread_stack_size), METH_VALUE, _thread_stack_size__doc__},
 
-static PyObject *
+static PyValue
 _thread_stack_size_impl(PyObject *module, Py_ssize_t new_size);
 
-static PyObject *
-_thread_stack_size(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_thread_stack_size(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     Py_ssize_t new_size = 0;
 
     if (!_PyArg_CheckPositional("stack_size", nargs, 0, 1)) {
@@ -1069,10 +1171,10 @@ _thread_stack_size(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
     }
     {
         Py_ssize_t ival = -1;
-        PyObject *iobj = _PyNumber_Index(args[0]);
-        if (iobj != NULL) {
-            ival = PyLong_AsSsize_t(iobj);
-            Py_DECREF(iobj);
+        PyValue iobj = _PyValue_Index(PyValue_Borrow(args[0]));
+        if (!PyValue_IsNull(iobj)) {
+            ival = _PyValue_IntAsSsize_t(PyValue_Borrow(iobj));
+            PyValue_CLOSE(iobj);
         }
         if (ival == -1 && PyErr_Occurred()) {
             goto exit;
@@ -1080,7 +1182,7 @@ _thread_stack_size(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
         new_size = ival;
     }
 skip_optional:
-    return_value = _thread_stack_size_impl(module, new_size);
+    return_value = _thread_stack_size_impl(PyValue_AsKnownObjectBorrow(module), new_size);
 
 exit:
     return return_value;
@@ -1093,7 +1195,22 @@ PyDoc_STRVAR(_thread__excepthook__doc__,
 "Handle uncaught Thread.run() exception.");
 
 #define _THREAD__EXCEPTHOOK_METHODDEF    \
-    {"_excepthook", (PyCFunction)_thread__excepthook, METH_O, _thread__excepthook__doc__},
+    {"_excepthook", _PyCFunction_CAST(_thread__excepthook), METH_VALUE|METH_O, _thread__excepthook__doc__},
+
+static PyValue
+_thread__excepthook_impl(PyObject *module, PyValueBorrow args);
+
+static PyValue
+_thread__excepthook(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+{
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow __clinic_args;
+
+    __clinic_args = PyValue_Borrow(args[0]);
+    return_value = _thread__excepthook_impl(PyValue_AsKnownObjectBorrow(module), __clinic_args);
+
+    return return_value;
+}
 
 PyDoc_STRVAR(_thread__is_main_interpreter__doc__,
 "_is_main_interpreter($module, /)\n"
@@ -1102,15 +1219,19 @@ PyDoc_STRVAR(_thread__is_main_interpreter__doc__,
 "Return True if the current interpreter is the main Python interpreter.");
 
 #define _THREAD__IS_MAIN_INTERPRETER_METHODDEF    \
-    {"_is_main_interpreter", (PyCFunction)_thread__is_main_interpreter, METH_NOARGS, _thread__is_main_interpreter__doc__},
+    {"_is_main_interpreter", _PyCFunction_CAST(_thread__is_main_interpreter), METH_VALUE|METH_NOARGS, _thread__is_main_interpreter__doc__},
 
-static PyObject *
+static PyValue
 _thread__is_main_interpreter_impl(PyObject *module);
 
-static PyObject *
-_thread__is_main_interpreter(PyObject *module, PyObject *Py_UNUSED(ignored))
+static PyValue
+_thread__is_main_interpreter(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _thread__is_main_interpreter_impl(module);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _thread__is_main_interpreter_impl(PyValue_AsKnownObjectBorrow(module));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(_thread__shutdown__doc__,
@@ -1120,15 +1241,19 @@ PyDoc_STRVAR(_thread__shutdown__doc__,
 "Wait for all non-daemon threads (other than the calling thread) to stop.");
 
 #define _THREAD__SHUTDOWN_METHODDEF    \
-    {"_shutdown", (PyCFunction)_thread__shutdown, METH_NOARGS, _thread__shutdown__doc__},
+    {"_shutdown", _PyCFunction_CAST(_thread__shutdown), METH_VALUE|METH_NOARGS, _thread__shutdown__doc__},
 
-static PyObject *
+static PyValue
 _thread__shutdown_impl(PyObject *module);
 
-static PyObject *
-_thread__shutdown(PyObject *module, PyObject *Py_UNUSED(ignored))
+static PyValue
+_thread__shutdown(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _thread__shutdown_impl(module);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _thread__shutdown_impl(PyValue_AsKnownObjectBorrow(module));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(_thread__make_thread_handle__doc__,
@@ -1141,7 +1266,22 @@ PyDoc_STRVAR(_thread__make_thread_handle__doc__,
 "threading module.");
 
 #define _THREAD__MAKE_THREAD_HANDLE_METHODDEF    \
-    {"_make_thread_handle", (PyCFunction)_thread__make_thread_handle, METH_O, _thread__make_thread_handle__doc__},
+    {"_make_thread_handle", _PyCFunction_CAST(_thread__make_thread_handle), METH_VALUE|METH_O, _thread__make_thread_handle__doc__},
+
+static PyValue
+_thread__make_thread_handle_impl(PyObject *module, PyValueBorrow identobj);
+
+static PyValue
+_thread__make_thread_handle(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+{
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow identobj;
+
+    identobj = PyValue_Borrow(args[0]);
+    return_value = _thread__make_thread_handle_impl(PyValue_AsKnownObjectBorrow(module), identobj);
+
+    return return_value;
+}
 
 PyDoc_STRVAR(_thread__get_main_thread_ident__doc__,
 "_get_main_thread_ident($module, /)\n"
@@ -1153,15 +1293,19 @@ PyDoc_STRVAR(_thread__get_main_thread_ident__doc__,
 "the main interpreter.");
 
 #define _THREAD__GET_MAIN_THREAD_IDENT_METHODDEF    \
-    {"_get_main_thread_ident", (PyCFunction)_thread__get_main_thread_ident, METH_NOARGS, _thread__get_main_thread_ident__doc__},
+    {"_get_main_thread_ident", _PyCFunction_CAST(_thread__get_main_thread_ident), METH_VALUE|METH_NOARGS, _thread__get_main_thread_ident__doc__},
 
-static PyObject *
+static PyValue
 _thread__get_main_thread_ident_impl(PyObject *module);
 
-static PyObject *
-_thread__get_main_thread_ident(PyObject *module, PyObject *Py_UNUSED(ignored))
+static PyValue
+_thread__get_main_thread_ident(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _thread__get_main_thread_ident_impl(module);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _thread__get_main_thread_ident_impl(PyValue_AsKnownObjectBorrow(module));
+
+    return return_value;
 }
 
 #if (defined(HAVE_PTHREAD_GETNAME_NP) || defined(HAVE_PTHREAD_GET_NAME_NP) || defined(MS_WINDOWS))
@@ -1173,15 +1317,19 @@ PyDoc_STRVAR(_thread__get_name__doc__,
 "Get the name of the current thread.");
 
 #define _THREAD__GET_NAME_METHODDEF    \
-    {"_get_name", (PyCFunction)_thread__get_name, METH_NOARGS, _thread__get_name__doc__},
+    {"_get_name", _PyCFunction_CAST(_thread__get_name), METH_VALUE|METH_NOARGS, _thread__get_name__doc__},
 
-static PyObject *
+static PyValue
 _thread__get_name_impl(PyObject *module);
 
-static PyObject *
-_thread__get_name(PyObject *module, PyObject *Py_UNUSED(ignored))
+static PyValue
+_thread__get_name(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _thread__get_name_impl(module);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _thread__get_name_impl(PyValue_AsKnownObjectBorrow(module));
+
+    return return_value;
 }
 
 #endif /* (defined(HAVE_PTHREAD_GETNAME_NP) || defined(HAVE_PTHREAD_GET_NAME_NP) || defined(MS_WINDOWS)) */
@@ -1195,15 +1343,15 @@ PyDoc_STRVAR(_thread_set_name__doc__,
 "Set the name of the current thread.");
 
 #define _THREAD_SET_NAME_METHODDEF    \
-    {"set_name", _PyCFunction_CAST(_thread_set_name), METH_FASTCALL|METH_KEYWORDS, _thread_set_name__doc__},
+    {"set_name", _PyCFunction_CAST(_thread_set_name), METH_VALUE|METH_KEYWORDS, _thread_set_name__doc__},
 
-static PyObject *
+static PyValue
 _thread_set_name_impl(PyObject *module, PyObject *name_obj);
 
-static PyObject *
-_thread_set_name(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_thread_set_name(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
@@ -1231,20 +1379,23 @@ _thread_set_name(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyOb
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[1];
+    Py_ssize_t _idx[1];
     PyObject *name_obj;
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, _idx, 1)) {
         goto exit;
     }
-    if (!PyUnicode_Check(args[0])) {
-        _PyArg_BadArgument("set_name", "argument 'name'", "str", args[0]);
+    if (!PyValue_IsObject(PyValue_Borrow(args[_idx[0]]))) {
+        _PyArg_BadArgumentValue("set_name", "argument 'name'", "str", PyValue_Borrow(args[_idx[0]]));
         goto exit;
     }
-    name_obj = args[0];
-    return_value = _thread_set_name_impl(module, name_obj);
+    if (!PyUnicode_Check(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[0]])))) {
+        _PyArg_BadArgument("set_name", "argument 'name'", "str", PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[0]])));
+        goto exit;
+    }
+    name_obj = PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[0]]));
+    return_value = _thread_set_name_impl(PyValue_AsKnownObjectBorrow(module), name_obj);
 
 exit:
     return return_value;
@@ -1273,4 +1424,4 @@ exit:
 #endif /* !defined(_THREAD_SET_NAME_METHODDEF) */
 #define _THREAD__THREADHANDLE_IDENT_GETSETDEF {"ident", (getter)_thread__ThreadHandle_ident_get, (setter)NULL, NULL},
 
-/*[clinic end generated code: output=12b73602cde7ccc5 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=8e64b88458d78936 input=a9049054013a1b77]*/

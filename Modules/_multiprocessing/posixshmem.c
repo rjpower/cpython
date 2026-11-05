@@ -2,13 +2,12 @@
 posixshmem - A Python extension that provides shm_open() and shm_unlink()
 */
 
-// Need limited C API version 3.13 for Py_mod_gil
-#include "pyconfig.h"   // Py_GIL_DISABLED
-#ifndef Py_GIL_DISABLED
-#  define Py_LIMITED_API 0x030d0000
+#ifndef Py_BUILD_CORE_BUILTIN
+#  define Py_BUILD_CORE_MODULE 1
 #endif
-
+#define Py_VALUE_CORE 1
 #include <Python.h>
+#include "pycore_value.h"         // PyValue
 
 #include <string.h>               // strlen()
 #include <errno.h>                // EINTR
@@ -16,6 +15,11 @@ posixshmem - A Python extension that provides shm_open() and shm_unlink()
 #  include <sys/mman.h>           // shm_open(), shm_unlink()
 #endif
 
+
+/*[clinic input]
+value_emission
+[clinic start generated code]*/
+/*[clinic end generated code: output=da39a3ee5e6b4b0d input=eb7b17088bfd7215]*/
 
 /*[clinic input]
 module _posixshmem
@@ -87,20 +91,20 @@ associated memory region.
 
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _posixshmem_shm_unlink_impl(PyObject *module, PyObject *path)
-/*[clinic end generated code: output=42f8b23d134b9ff5 input=cf7a30ec6503cf78]*/
+/*[clinic end generated code: output=836e905c3b155cb1 input=cf7a30ec6503cf78]*/
 {
     int rv;
     int async_err = 0;
     Py_ssize_t name_size;
     const char *name = PyUnicode_AsUTF8AndSize(path, &name_size);
     if (name == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
     if (strlen(name) != (size_t)name_size) {
         PyErr_SetString(PyExc_ValueError, "embedded null character");
-        return NULL;
+        return PyValue_NULL;
     }
     do {
         Py_BEGIN_ALLOW_THREADS
@@ -111,10 +115,10 @@ _posixshmem_shm_unlink_impl(PyObject *module, PyObject *path)
     if (rv < 0) {
         if (!async_err)
             PyErr_SetFromErrnoWithFilenameObject(PyExc_OSError, path);
-        return NULL;
+        return PyValue_NULL;
     }
 
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 #endif /* HAVE_SHM_UNLINK */
 

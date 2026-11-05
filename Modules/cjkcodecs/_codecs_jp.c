@@ -7,6 +7,7 @@
 #define USING_BINARY_PAIR_SEARCH
 #define EMPBASE 0x20000
 
+#define Py_VALUE_CORE 1
 #include "cjkcodecs.h"
 #include "mappings_jp.h"
 #include "mappings_jisx0213_pair.h"

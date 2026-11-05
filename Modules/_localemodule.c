@@ -9,9 +9,16 @@ This software comes with no warranty. Use at your own risk.
 
 ******************************************************************/
 
+#ifndef Py_BUILD_CORE_BUILTIN
+#  define Py_BUILD_CORE_MODULE 1
+#endif
+#define Py_VALUE_CORE 1
 #include "Python.h"
+#include "pycore_dict.h"          // PyDict_SetValueString()
 #include "pycore_fileutils.h"     // _Py_GetLocaleconvNumeric()
 #include "pycore_pymem.h"         // _PyMem_Strdup()
+#include "pycore_value.h"         // _PyValue_AsObjectAt(), PyValue_FromInt64()
+#include "pycore_value_slots.h"// _PyValue_FromObjectResult()
 
 #include <locale.h>               // setlocale()
 #include <string.h>               // strlen()
@@ -48,6 +55,11 @@ get_locale_state(PyObject *m)
 #include "clinic/_localemodule.c.h"
 
 /*[clinic input]
+value_emission
+[clinic start generated code]*/
+/*[clinic end generated code: output=da39a3ee5e6b4b0d input=eb7b17088bfd7215]*/
+
+/*[clinic input]
 module _locale
 [clinic start generated code]*/
 /*[clinic end generated code: output=da39a3ee5e6b4b0d input=ed98569b726feada]*/
@@ -81,7 +93,7 @@ copy_grouping(const char* s)
             Py_DECREF(result);
             return NULL;
         }
-        PyList_SET_ITEM(result, i, val);
+        PyList_SET_VALUE(result, i, PyValue_PrepareOwned(val));
     } while (s[i] != '\0' && s[i] != CHAR_MAX);
 
     return result;
@@ -132,9 +144,9 @@ _locale.setlocale
 Activates/queries locale processing.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _locale_setlocale_impl(PyObject *module, int category, const char *locale)
-/*[clinic end generated code: output=a0e777ae5d2ff117 input=b53449b63407179b]*/
+/*[clinic end generated code: output=79a808b7f8398842 input=b53449b63407179b]*/
 {
     char *result;
     PyObject *result_object;
@@ -167,22 +179,22 @@ _locale_setlocale_impl(PyObject *module, int category, const char *locale)
             /* operation failed, no setting was changed */
             PyErr_SetString(get_locale_state(module)->Error,
                             "unsupported locale setting");
-            return NULL;
+            return PyValue_NULL;
         }
         result_object = PyUnicode_DecodeLocale(result, NULL);
         if (!result_object)
-            return NULL;
+            return PyValue_NULL;
     } else {
         /* get locale */
         result = setlocale(category, NULL);
         if (!result) {
             PyErr_SetString(get_locale_state(module)->Error,
                             "locale query failed");
-            return NULL;
+            return PyValue_NULL;
         }
         result_object = PyUnicode_DecodeLocale(result, NULL);
     }
-    return result_object;
+    return _PyValue_FromObjectResult(result_object);
 }
 
 static int
@@ -256,7 +268,7 @@ locale_decode_monetary(PyObject *dict, struct lconv *lc)
         if (obj == NULL) { \
             goto done; \
         } \
-        if (PyDict_SetItemString(dict, Py_STRINGIFY(ATTR), obj) < 0) { \
+        if (PyDict_SetValueString(dict, Py_STRINGIFY(ATTR), PyValue_FromObjectBorrow(obj)) < 0) { \
             Py_DECREF(obj); \
             goto done; \
         } \
@@ -288,9 +300,9 @@ _locale.localeconv
 Returns numeric and monetary locale-specific parameters.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _locale_localeconv_impl(PyObject *module)
-/*[clinic end generated code: output=43a54515e0a2aef5 input=f1132d15accf4444]*/
+/*[clinic end generated code: output=ac7f8fc93e0d5bb9 input=f1132d15accf4444]*/
 {
     PyObject* result;
     struct lconv *lc;
@@ -298,7 +310,7 @@ _locale_localeconv_impl(PyObject *module)
 
     result = PyDict_New();
     if (!result) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     /* if LC_NUMERIC is different in the C library, use saved value */
@@ -311,7 +323,7 @@ _locale_localeconv_impl(PyObject *module)
     do { \
         if (obj == NULL) \
             goto failed; \
-        if (PyDict_SetItemString(result, key, obj) < 0) { \
+        if (PyDict_SetValueString(result, key, PyValue_FromObjectBorrow(obj)) < 0) { \
             Py_DECREF(obj); \
             goto failed; \
         } \
@@ -362,14 +374,14 @@ _locale_localeconv_impl(PyObject *module)
         goto failed;
     }
 
-    if (PyDict_SetItemString(result, "decimal_point", decimal_point) < 0) {
+    if (PyDict_SetValueString(result, "decimal_point", PyValue_FromObjectBorrow(decimal_point)) < 0) {
         Py_DECREF(decimal_point);
         Py_DECREF(thousands_sep);
         goto failed;
     }
     Py_DECREF(decimal_point);
 
-    if (PyDict_SetItemString(result, "thousands_sep", thousands_sep) < 0) {
+    if (PyDict_SetValueString(result, "thousands_sep", PyValue_FromObjectBorrow(thousands_sep)) < 0) {
         Py_DECREF(thousands_sep);
         goto failed;
     }
@@ -378,11 +390,11 @@ _locale_localeconv_impl(PyObject *module)
     x = copy_grouping(lc->grouping);
     RESULT("grouping", x);
 
-    return result;
+    return _PyValue_FromObjectResult(result);
 
   failed:
     Py_DECREF(result);
-    return NULL;
+    return PyValue_NULL;
 
 #undef RESULT
 #undef RESULT_STRING
@@ -402,11 +414,11 @@ _locale.strcoll
 Compares two strings according to the locale.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _locale_strcoll_impl(PyObject *module, PyObject *os1, PyObject *os2)
-/*[clinic end generated code: output=82ddc6d62c76d618 input=693cd02bcbf38dd8]*/
+/*[clinic end generated code: output=389494c6485d094d input=693cd02bcbf38dd8]*/
 {
-    PyObject *result = NULL;
+    PyValue result = PyValue_NULL;
     wchar_t *ws1 = NULL, *ws2 = NULL;
 
     /* Convert the unicode strings to wchar[]. */
@@ -417,7 +429,7 @@ _locale_strcoll_impl(PyObject *module, PyObject *os1, PyObject *os2)
     if (ws2 == NULL)
         goto done;
     /* Collate the strings. */
-    result = PyLong_FromLong(wcscoll(ws1, ws2));
+    result = PyValue_FromInt64(wcscoll(ws1, ws2));
   done:
     /* Deallocate everything. */
     if (ws1) PyMem_Free(ws1);
@@ -437,9 +449,9 @@ _locale.strxfrm
 Return a string that can be used as a key for locale-aware comparisons.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _locale_strxfrm_impl(PyObject *module, PyObject *str)
-/*[clinic end generated code: output=3081866ebffc01af input=1378bbe6a88b4780]*/
+/*[clinic end generated code: output=58353137f9a48603 input=1378bbe6a88b4780]*/
 {
     Py_ssize_t n1;
     wchar_t *s = NULL, *buf = NULL;
@@ -527,7 +539,7 @@ _locale_strxfrm_impl(PyObject *module, PyObject *str)
 exit:
     PyMem_Free(buf);
     PyMem_Free(s);
-    return result;
+    return _PyValue_FromObjectResult(result);
 }
 #endif
 
@@ -538,9 +550,9 @@ _locale._getdefaultlocale
 
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _locale__getdefaultlocale_impl(PyObject *module)
-/*[clinic end generated code: output=e6254088579534c2 input=003ea41acd17f7c7]*/
+/*[clinic end generated code: output=a86812cac8f04965 input=003ea41acd17f7c7]*/
 {
     char encoding[20];
     char locale[100];
@@ -790,9 +802,9 @@ _locale.nl_langinfo
 Return the value for the locale information associated with key.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _locale_nl_langinfo_impl(PyObject *module, int item)
-/*[clinic end generated code: output=6aea457b47e077a3 input=00798143eecfeddc]*/
+/*[clinic end generated code: output=ac6180460287df9b input=00798143eecfeddc]*/
 {
     int i;
     /* Check whether this is a supported constant. GNU libc sometimes
@@ -811,9 +823,9 @@ _locale_nl_langinfo_impl(PyObject *module, int item)
                 }
                 /* ALT_DIGITS is a sequence of NUL-separated strings. */
                 if (item == ALT_DIGITS && *wresult) {
-                    return decode_wide_strings(wresult, 100);
+                    return _PyValue_FromObjectResult(decode_wide_strings(wresult, 100));
                 }
-                return PyUnicode_FromWideChar(wresult, -1);
+                return _PyValue_FromObjectResult(PyUnicode_FromWideChar(wresult, -1));
             }
 #endif
             /* Check NULL as a workaround for GNU libc's returning NULL
@@ -830,7 +842,7 @@ _locale_nl_langinfo_impl(PyObject *module, int item)
                     !is_all_ascii(result))
                 && change_locale(langinfo_constants[i].category, &oldloc) < 0)
             {
-                return NULL;
+                return PyValue_NULL;
             }
             PyObject *pyresult;
 #ifdef __GLIBC__
@@ -846,11 +858,11 @@ _locale_nl_langinfo_impl(PyObject *module, int item)
                 pyresult = PyUnicode_DecodeLocale(result, NULL);
             }
             restore_locale(oldloc);
-            return pyresult;
+            return _PyValue_FromObjectResult(pyresult);
         }
     }
     PyErr_SetString(PyExc_ValueError, "unsupported langinfo constant");
-    return NULL;
+    return PyValue_NULL;
 }
 #endif /* HAVE_LANGINFO_H */
 
@@ -867,11 +879,11 @@ gettext(msg) -> string
 Return translation of msg.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _locale_gettext_impl(PyObject *module, const char *in)
-/*[clinic end generated code: output=493bb4b38a4704fe input=949fc8efc2bb3bc3]*/
+/*[clinic end generated code: output=ee2f4faee64101a6 input=949fc8efc2bb3bc3]*/
 {
-    return PyUnicode_DecodeLocale(gettext(in), NULL);
+    return _PyValue_FromObjectResult(PyUnicode_DecodeLocale(gettext(in), NULL));
 }
 
 /*[clinic input]
@@ -886,11 +898,11 @@ dgettext(domain, msg) -> string
 Return translation of msg in domain.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _locale_dgettext_impl(PyObject *module, const char *domain, const char *in)
-/*[clinic end generated code: output=3c0cd5287b972c8f input=a277388a635109d8]*/
+/*[clinic end generated code: output=df8893a744e26232 input=a277388a635109d8]*/
 {
-    return PyUnicode_DecodeLocale(dgettext(domain, in), NULL);
+    return _PyValue_FromObjectResult(PyUnicode_DecodeLocale(dgettext(domain, in), NULL));
 }
 
 /*[clinic input]
@@ -904,12 +916,12 @@ _locale.dcgettext
 Return translation of msg in domain and category.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _locale_dcgettext_impl(PyObject *module, const char *domain,
                        const char *msgid, int category)
-/*[clinic end generated code: output=0f4cc4fce0aa283f input=ec5f8fed4336de67]*/
+/*[clinic end generated code: output=98853146311a6ec6 input=ec5f8fed4336de67]*/
 {
-    return PyUnicode_DecodeLocale(dcgettext(domain,msgid,category), NULL);
+    return _PyValue_FromObjectResult(PyUnicode_DecodeLocale(dcgettext(domain,msgid,category), NULL));
 }
 
 /*[clinic input]
@@ -921,16 +933,16 @@ _locale.textdomain
 Set the C library's textdmain to domain, returning the new domain.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _locale_textdomain_impl(PyObject *module, const char *domain)
-/*[clinic end generated code: output=7992df06aadec313 input=66359716f5eb1d38]*/
+/*[clinic end generated code: output=f59272b04107c806 input=66359716f5eb1d38]*/
 {
     domain = textdomain(domain);
     if (!domain) {
         PyErr_SetFromErrno(PyExc_OSError);
-        return NULL;
+        return PyValue_NULL;
     }
-    return PyUnicode_DecodeLocale(domain, NULL);
+    return _PyValue_FromObjectResult(PyUnicode_DecodeLocale(domain, NULL));
 }
 
 /*[clinic input]
@@ -943,10 +955,10 @@ _locale.bindtextdomain
 Bind the C library's domain to dir.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _locale_bindtextdomain_impl(PyObject *module, const char *domain,
-                            PyObject *dirname_obj)
-/*[clinic end generated code: output=6d6f3c7b345d785c input=c0dff085acfe272b]*/
+                            PyValueBorrow dirname_obj)
+/*[clinic end generated code: output=0b6a93c0cf860ddf input=c0dff085acfe272b]*/
 {
     const char *dirname, *current_dirname;
     PyObject *dirname_bytes = NULL, *result;
@@ -954,11 +966,16 @@ _locale_bindtextdomain_impl(PyObject *module, const char *domain,
     if (!strlen(domain)) {
         PyErr_SetString(get_locale_state(module)->Error,
                         "domain must be a non-empty string");
-        return 0;
+        return _PyValue_FromObjectResult(0);
     }
-    if (dirname_obj != Py_None) {
-        if (!PyUnicode_FSConverter(dirname_obj, &dirname_bytes))
-            return NULL;
+    if (!PyValue_IsNone(dirname_obj)) {
+        PyObject *dirobj = _PyValue_AsObjectAt(dirname_obj, BOX_SITE_PARSER);
+        if (dirobj == NULL)
+            return PyValue_NULL;
+        int converted = PyUnicode_FSConverter(dirobj, &dirname_bytes);
+        Py_DECREF(dirobj);
+        if (!converted)
+            return PyValue_NULL;
         dirname = PyBytes_AsString(dirname_bytes);
     } else {
         dirname_bytes = NULL;
@@ -968,11 +985,11 @@ _locale_bindtextdomain_impl(PyObject *module, const char *domain,
     if (current_dirname == NULL) {
         PyErr_SetFromErrno(PyExc_OSError);
         Py_XDECREF(dirname_bytes);
-        return NULL;
+        return PyValue_NULL;
     }
     result = PyUnicode_DecodeLocale(current_dirname, NULL);
     Py_XDECREF(dirname_bytes);
-    return result;
+    return _PyValue_FromObjectResult(result);
 }
 
 #ifdef HAVE_BIND_TEXTDOMAIN_CODESET
@@ -987,16 +1004,16 @@ _locale.bind_textdomain_codeset
 Bind the C library's domain to codeset.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _locale_bind_textdomain_codeset_impl(PyObject *module, const char *domain,
                                      const char *codeset)
-/*[clinic end generated code: output=fa452f9c8b1b9e89 input=23fbe3540400f259]*/
+/*[clinic end generated code: output=c4657bf2044292d1 input=23fbe3540400f259]*/
 {
     codeset = bind_textdomain_codeset(domain, codeset);
     if (codeset) {
-        return PyUnicode_DecodeLocale(codeset, NULL);
+        return _PyValue_FromObjectResult(PyUnicode_DecodeLocale(codeset, NULL));
     }
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 #endif  // HAVE_BIND_TEXTDOMAIN_CODESET
 
@@ -1009,11 +1026,11 @@ _locale.getencoding
 Get the current locale encoding.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _locale_getencoding_impl(PyObject *module)
-/*[clinic end generated code: output=86b326b971872e46 input=6503d11e5958b360]*/
+/*[clinic end generated code: output=48c5d6e19453bafd input=6503d11e5958b360]*/
 {
-    return _Py_GetLocaleEncodingObject();
+    return _PyValue_FromObjectResult(_Py_GetLocaleEncodingObject());
 }
 
 

@@ -2,6 +2,7 @@
 #  define Py_BUILD_CORE_MODULE 1
 #endif
 
+#define Py_VALUE_CORE 1
 #include "Python.h"
 // windows.h must be included before pycore internal headers
 #ifdef MS_WIN32
@@ -10,11 +11,20 @@
 
 #include "pycore_bitutils.h"      // _Py_bswap32()
 #include "pycore_call.h"          // _PyObject_CallNoArgs()
+#include "pycore_value.h"         // PyValue_IsObject()
+#include "pycore_value_api.h"     // _PyValue_AsObjectAt()
+#include "pycore_value_ops.h"     // _PyValue_IsTrue()
+#include "pycore_value_slots.h"// _PyValue_FromObjectResult()
 
 #include <ffi.h>
 #include "ctypes.h"
 
 #define CTYPES_CFIELD_CAPSULE_NAME_PYMEM "_ctypes/cfield.c pymem"
+
+/*[clinic input]
+value_emission
+[clinic start generated code]*/
+/*[clinic end generated code: output=da39a3ee5e6b4b0d input=eb7b17088bfd7215]*/
 
 /*[clinic input]
 module _ctypes
@@ -63,12 +73,12 @@ _ctypes.CField.__new__ as PyCField_new
 
 [clinic start generated code]*/
 
-static PyObject *
-PyCField_new_impl(PyTypeObject *type, PyObject *name, PyObject *proto,
+static PyValue
+PyCField_new_impl(PyTypeObject *type, PyObject *name, PyValueBorrow proto,
                   Py_ssize_t byte_size, Py_ssize_t byte_offset,
                   Py_ssize_t index, int _internal_use,
-                  PyObject *bit_size_obj, PyObject *bit_offset_obj)
-/*[clinic end generated code: output=3f2885ee4108b6e2 input=b343436e33c0d782]*/
+                  PyValueBorrow bit_size_obj, PyValueBorrow bit_offset_obj)
+/*[clinic end generated code: output=9c9fe5e3e07a8450 input=b343436e33c0d782]*/
 {
     CFieldObject* self = NULL;
 
@@ -86,9 +96,14 @@ PyCField_new_impl(PyTypeObject *type, PyObject *name, PyObject *proto,
     }
 
     ctypes_state *st = get_module_state_by_class(type);
-    StgInfo *info;
-    if (PyStgInfo_FromType(st, proto, &info) < 0) {
-        goto error;
+    /* An inline int or float is not a C type: info stays NULL. */
+    StgInfo *info = NULL;
+    PyObject *protoobj = NULL;
+    if (PyValue_IsObject(proto)) {
+        protoobj = PyValue_AsKnownObjectBorrow(proto);
+        if (PyStgInfo_FromType(st, protoobj, &info) < 0) {
+            goto error;
+        }
     }
     if (info == NULL) {
         PyErr_Format(PyExc_TypeError,
@@ -104,7 +119,7 @@ PyCField_new_impl(PyTypeObject *type, PyObject *name, PyObject *proto,
 
     Py_ssize_t bitfield_size = 0;
     Py_ssize_t bit_offset = 0;
-    if (bit_size_obj != Py_None) {
+    if (!PyValue_IsNone(bit_size_obj)) {
         // It's a bit field!
         switch(info->ffi_type_pointer.type) {
             case FFI_TYPE_UINT8:
@@ -126,7 +141,7 @@ PyCField_new_impl(PyTypeObject *type, PyObject *name, PyObject *proto,
             default:
                 PyErr_Format(PyExc_TypeError,
                              "bit fields not allowed for type %s",
-                             ((PyTypeObject*)proto)->tp_name);
+                             ((PyTypeObject*)protoobj)->tp_name);
                 goto error;
         }
 
@@ -139,7 +154,13 @@ PyCField_new_impl(PyTypeObject *type, PyObject *name, PyObject *proto,
                          name, byte_size);
             goto error;
         }
-        bitfield_size = PyLong_AsSsize_t(bit_size_obj);
+        PyObject *bit_size_pyobj = _PyValue_AsObjectAt(bit_size_obj,
+                                                       BOX_SITE_PARSER);
+        if (bit_size_pyobj == NULL) {
+            goto error;
+        }
+        bitfield_size = PyLong_AsSsize_t(bit_size_pyobj);
+        Py_DECREF(bit_size_pyobj);
         if ((bitfield_size <= 0) || (bitfield_size > 255)) {
             if (!PyErr_Occurred()) {
                 PyErr_Format(PyExc_ValueError,
@@ -148,7 +169,13 @@ PyCField_new_impl(PyTypeObject *type, PyObject *name, PyObject *proto,
             }
             goto error;
         }
-        bit_offset = PyLong_AsSsize_t(bit_offset_obj);
+        PyObject *bit_offset_pyobj = _PyValue_AsObjectAt(bit_offset_obj,
+                                                         BOX_SITE_PARSER);
+        if (bit_offset_pyobj == NULL) {
+            goto error;
+        }
+        bit_offset = PyLong_AsSsize_t(bit_offset_pyobj);
+        Py_DECREF(bit_offset_pyobj);
         if ((bit_offset < 0) || (bit_offset > 255)) {
             if (!PyErr_Occurred()) {
                 PyErr_Format(PyExc_ValueError,
@@ -166,7 +193,7 @@ PyCField_new_impl(PyTypeObject *type, PyObject *name, PyObject *proto,
         }
     }
     else {
-        if (bit_offset_obj != Py_None) {
+        if (!PyValue_IsNone(bit_offset_obj)) {
             PyErr_Format(
                 PyExc_ValueError,
                 "field %R: bit_offset must be specified if bit_size is",
@@ -177,7 +204,7 @@ PyCField_new_impl(PyTypeObject *type, PyObject *name, PyObject *proto,
 
     self = _CFieldObject_CAST(type->tp_alloc(type, 0));
     if (!self) {
-        return NULL;
+        return PyValue_NULL;
     }
     self->name = PyUnicode_FromObject(name);
     if (!self->name) {
@@ -185,7 +212,7 @@ PyCField_new_impl(PyTypeObject *type, PyObject *name, PyObject *proto,
     }
     assert(PyUnicode_CheckExact(self->name));
 
-    self->proto = Py_NewRef(proto);
+    self->proto = Py_NewRef(protoobj);
     self->byte_size = byte_size;
     self->byte_offset = byte_offset;
     self->bitfield_size = (uint8_t)bitfield_size;
@@ -198,9 +225,9 @@ PyCField_new_impl(PyTypeObject *type, PyObject *name, PyObject *proto,
     */
     self->setfunc = NULL;
     self->getfunc = NULL;
-    if (PyCArrayTypeObject_Check(st, proto)) {
+    if (PyCArrayTypeObject_Check(st, protoobj)) {
         StgInfo *ainfo;
-        if (PyStgInfo_FromType(st, proto, &ainfo) < 0) {
+        if (PyStgInfo_FromType(st, protoobj, &ainfo) < 0) {
             goto error;
         }
 
@@ -227,10 +254,10 @@ PyCField_new_impl(PyTypeObject *type, PyObject *name, PyObject *proto,
         }
     }
 
-    return (PyObject *)self;
+    return _PyValue_FromObjectResult((PyObject *)self);
 error:
     Py_XDECREF(self);
-    return NULL;
+    return PyValue_NULL;
 }
 
 static inline Py_ssize_t
@@ -332,7 +359,12 @@ PyCField_get_bit_size(PyObject *self, void *Py_UNUSED(closure))
     if (!eight) {
         goto finally;
     }
-    result = PyNumber_Multiply(byte_size_obj, eight);
+    PyValue product = _PyValue_Multiply(PyValue_FromObjectBorrow(byte_size_obj),
+                                        PyValue_FromObjectBorrow(eight));
+    if (!PyValue_IsNull(product)) {
+        result = _PyValue_AsObjectAt(product, BOX_SITE_NUMBER);
+        PyValue_CLOSE(product);
+    }
 finally:
     Py_XDECREF(byte_size_obj);
     Py_XDECREF(eight);
@@ -671,7 +703,7 @@ static PyObject *
 v_set(void *ptr, PyObject *value, Py_ssize_t size)
 {
     assert(NUM_BITS(size) || (size == sizeof(short int)));
-    switch (PyObject_IsTrue(value)) {
+    switch (_PyValue_IsTrue(PyValue_FromObjectBorrow(value))) {
     case -1:
         return NULL;
     case 0:
@@ -695,7 +727,7 @@ static PyObject *
 bool_set(void *ptr, PyObject *value, Py_ssize_t size)
 {
     assert(NUM_BITS(size) || (size == sizeof(bool)));
-    switch (PyObject_IsTrue(value)) {
+    switch (_PyValue_IsTrue(PyValue_FromObjectBorrow(value))) {
     case -1:
         return NULL;
     case 0:

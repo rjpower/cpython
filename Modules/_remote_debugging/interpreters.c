@@ -4,6 +4,7 @@
  * This file contains function for iterating interpreters.
  ******************************************************************************/
 
+#define Py_VALUE_CORE 1
 #include "_remote_debugging.h"
 
 int

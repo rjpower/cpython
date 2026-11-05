@@ -2,7 +2,11 @@
 #  define Py_BUILD_CORE_MODULE 1
 #endif
 
+#define Py_VALUE_CORE 1
 #include "Python.h"
+#include "pycore_value.h"      // PyValue_IsNull()
+#include "pycore_value_ops.h"  // _PyValue_SequenceTuple()
+#include "pycore_value_slots.h"// _PyValue_FromObjectResult()
 #include <errno.h>                // errno
 #include <string.h>
 #include <sys/resource.h>         // getrusage()
@@ -16,6 +20,11 @@
    Worse, on some Linuxes, getpagesize() returns a size_t... */
 
 #define doubletime(TV) ((double)(TV).tv_sec + (TV).tv_usec * 0.000001)
+
+/*[clinic input]
+value_emission
+[clinic start generated code]*/
+/*[clinic end generated code: output=da39a3ee5e6b4b0d input=eb7b17088bfd7215]*/
 
 /*[clinic input]
 module resource
@@ -82,9 +91,9 @@ resource.getrusage
 
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 resource_getrusage_impl(PyObject *module, int who)
-/*[clinic end generated code: output=8fad2880ba6a9843 input=5c857bcc5b9ccb1b]*/
+/*[clinic end generated code: output=8c145c2ea064b6fa input=5c857bcc5b9ccb1b]*/
 {
     struct rusage ru;
     PyObject *result;
@@ -93,49 +102,52 @@ resource_getrusage_impl(PyObject *module, int who)
         if (errno == EINVAL) {
             PyErr_SetString(PyExc_ValueError,
                             "invalid who parameter");
-            return NULL;
+            return PyValue_NULL;
         }
         PyErr_SetFromErrno(PyExc_OSError);
-        return NULL;
+        return PyValue_NULL;
     }
 
     result = PyStructSequence_New(
         get_resource_state(module)->StructRUsageType);
     if (!result)
-        return NULL;
+        return PyValue_NULL;
 
-    PyStructSequence_SetItem(result, 0,
-                    PyFloat_FromDouble(doubletime(ru.ru_utime)));
-    PyStructSequence_SetItem(result, 1,
-                    PyFloat_FromDouble(doubletime(ru.ru_stime)));
-    PyStructSequence_SetItem(result, 2, PyLong_FromLong(ru.ru_maxrss));
-    PyStructSequence_SetItem(result, 3, PyLong_FromLong(ru.ru_ixrss));
-    PyStructSequence_SetItem(result, 4, PyLong_FromLong(ru.ru_idrss));
-    PyStructSequence_SetItem(result, 5, PyLong_FromLong(ru.ru_isrss));
-    PyStructSequence_SetItem(result, 6, PyLong_FromLong(ru.ru_minflt));
-    PyStructSequence_SetItem(result, 7, PyLong_FromLong(ru.ru_majflt));
-    PyStructSequence_SetItem(result, 8, PyLong_FromLong(ru.ru_nswap));
-    PyStructSequence_SetItem(result, 9, PyLong_FromLong(ru.ru_inblock));
-    PyStructSequence_SetItem(result, 10, PyLong_FromLong(ru.ru_oublock));
-    PyStructSequence_SetItem(result, 11, PyLong_FromLong(ru.ru_msgsnd));
-    PyStructSequence_SetItem(result, 12, PyLong_FromLong(ru.ru_msgrcv));
-    PyStructSequence_SetItem(result, 13, PyLong_FromLong(ru.ru_nsignals));
-    PyStructSequence_SetItem(result, 14, PyLong_FromLong(ru.ru_nvcsw));
-    PyStructSequence_SetItem(result, 15, PyLong_FromLong(ru.ru_nivcsw));
+    PyStructSequence_SET_VALUE(result, 0, PyValue_PrepareOwned(PyFloat_FromDouble(doubletime(ru.ru_utime))));
+    PyStructSequence_SET_VALUE(result, 1, PyValue_PrepareOwned(PyFloat_FromDouble(doubletime(ru.ru_stime))));
+    PyStructSequence_SET_VALUE(result, 2, PyValue_PrepareOwned(PyLong_FromLong(ru.ru_maxrss)));
+    PyStructSequence_SET_VALUE(result, 3, PyValue_PrepareOwned(PyLong_FromLong(ru.ru_ixrss)));
+    PyStructSequence_SET_VALUE(result, 4, PyValue_PrepareOwned(PyLong_FromLong(ru.ru_idrss)));
+    PyStructSequence_SET_VALUE(result, 5, PyValue_PrepareOwned(PyLong_FromLong(ru.ru_isrss)));
+    PyStructSequence_SET_VALUE(result, 6, PyValue_PrepareOwned(PyLong_FromLong(ru.ru_minflt)));
+    PyStructSequence_SET_VALUE(result, 7, PyValue_PrepareOwned(PyLong_FromLong(ru.ru_majflt)));
+    PyStructSequence_SET_VALUE(result, 8, PyValue_PrepareOwned(PyLong_FromLong(ru.ru_nswap)));
+    PyStructSequence_SET_VALUE(result, 9, PyValue_PrepareOwned(PyLong_FromLong(ru.ru_inblock)));
+    PyStructSequence_SET_VALUE(result, 10, PyValue_PrepareOwned(PyLong_FromLong(ru.ru_oublock)));
+    PyStructSequence_SET_VALUE(result, 11, PyValue_PrepareOwned(PyLong_FromLong(ru.ru_msgsnd)));
+    PyStructSequence_SET_VALUE(result, 12, PyValue_PrepareOwned(PyLong_FromLong(ru.ru_msgrcv)));
+    PyStructSequence_SET_VALUE(result, 13, PyValue_PrepareOwned(PyLong_FromLong(ru.ru_nsignals)));
+    PyStructSequence_SET_VALUE(result, 14, PyValue_PrepareOwned(PyLong_FromLong(ru.ru_nvcsw)));
+    PyStructSequence_SET_VALUE(result, 15, PyValue_PrepareOwned(PyLong_FromLong(ru.ru_nivcsw)));
 
     if (PyErr_Occurred()) {
         Py_DECREF(result);
-        return NULL;
+        return PyValue_NULL;
     }
 
-    return result;
+    return _PyValue_FromObjectResult(result);
 }
 #endif
 
 static int
-py2rlim(PyObject *obj, rlim_t *out)
+py2rlim(PyValueBorrow value, rlim_t *out)
 {
-    obj = PyNumber_Index(obj);
+    PyValue index = _PyValue_IndexExact(value);
+    if (PyValue_IsNull(index)) {
+        return -1;
+    }
+    PyObject *obj = _PyValue_AsObjectAt(index, BOX_SITE_NUMBER);
+    PyValue_CLOSE(index);
     if (obj == NULL) {
         return -1;
     }
@@ -168,11 +180,22 @@ py2rlim(PyObject *obj, rlim_t *out)
     return 0;
 }
 
-static int
-py2rlimit(PyObject *limits, struct rlimit *rl_out)
+// PySys_Audit() takes objects: a new reference to the value, boxing an inline
+// one, or to None for PyValue_NULL; NULL with an exception on failure.
+static PyObject *
+resource_audit_arg(PyValueBorrow v)
 {
-    PyObject *curobj = NULL, *maxobj = NULL;
-    limits = PySequence_Tuple(limits);
+    if (PyValue_IsNull(v)) {
+        return Py_NewRef(Py_None);
+    }
+    return _PyValue_AsObjectAt(v, BOX_SITE_PARSER);
+}
+
+static int
+py2rlimit(PyValueBorrow limits_value, struct rlimit *rl_out)
+{
+    PyValue curobj = PyValue_NULL, maxobj = PyValue_NULL;
+    PyObject *limits = _PyValue_SequenceTuple(limits_value);
     if (!limits)
         /* Here limits is a borrowed reference */
         return -1;
@@ -182,23 +205,23 @@ py2rlimit(PyObject *limits, struct rlimit *rl_out)
                         "expected a tuple of 2 integers");
         goto error;
     }
-    curobj = PyTuple_GetItemRef(limits, 0);
-    maxobj = PyTuple_GetItemRef(limits, 1);
-    if (curobj == NULL || maxobj == NULL ||
-        py2rlim(curobj, &rl_out->rlim_cur) < 0 ||
-        py2rlim(maxobj, &rl_out->rlim_max) < 0)
+    curobj = PyTuple_GetValue(limits, 0);
+    maxobj = PyTuple_GetValue(limits, 1);
+    if (PyValue_IsNull(curobj) || PyValue_IsNull(maxobj) ||
+        py2rlim(PyValue_Borrow(curobj), &rl_out->rlim_cur) < 0 ||
+        py2rlim(PyValue_Borrow(maxobj), &rl_out->rlim_max) < 0)
     {
         goto error;
     }
 
-    Py_DECREF(curobj);
-    Py_DECREF(maxobj);
+    PyValue_CLOSE(curobj);
+    PyValue_CLOSE(maxobj);
     Py_DECREF(limits);
     return 0;
 
 error:
-    Py_XDECREF(curobj);
-    Py_XDECREF(maxobj);
+    PyValue_XCLOSE(curobj);
+    PyValue_XCLOSE(maxobj);
     Py_DECREF(limits);
     return -1;
 }
@@ -228,23 +251,23 @@ resource.getrlimit
 
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 resource_getrlimit_impl(PyObject *module, int resource)
-/*[clinic end generated code: output=98327b25061ffe39 input=a697cb0004cb3c36]*/
+/*[clinic end generated code: output=8ef1eae94c5b7fbb input=a697cb0004cb3c36]*/
 {
     struct rlimit rl;
 
     if (resource < 0 || resource >= RLIM_NLIMITS) {
         PyErr_SetString(PyExc_ValueError,
                         "invalid resource specified");
-        return NULL;
+        return PyValue_NULL;
     }
 
     if (getrlimit(resource, &rl) == -1) {
         PyErr_SetFromErrno(PyExc_OSError);
-        return NULL;
+        return PyValue_NULL;
     }
-    return rlimit2py(rl);
+    return _PyValue_FromObjectResult(rlimit2py(rl));
 }
 
 /*[clinic input]
@@ -256,25 +279,31 @@ resource.setrlimit
 
 [clinic start generated code]*/
 
-static PyObject *
-resource_setrlimit_impl(PyObject *module, int resource, PyObject *limits)
-/*[clinic end generated code: output=4e82ec3f34d013d1 input=6235a6ce23b4ca75]*/
+static PyValue
+resource_setrlimit_impl(PyObject *module, int resource, PyValueBorrow limits)
+/*[clinic end generated code: output=c7c4ad193a0de8e0 input=6235a6ce23b4ca75]*/
 {
     struct rlimit rl;
 
     if (resource < 0 || resource >= RLIM_NLIMITS) {
         PyErr_SetString(PyExc_ValueError,
                         "invalid resource specified");
-        return NULL;
+        return PyValue_NULL;
     }
 
-    if (PySys_Audit("resource.setrlimit", "iO", resource,
-                    limits ? limits : Py_None) < 0) {
-        return NULL;
+    PyObject *audit_limits = resource_audit_arg(limits);
+    if (audit_limits == NULL) {
+        return PyValue_NULL;
+    }
+    int audit_res = PySys_Audit("resource.setrlimit", "iO", resource,
+                                audit_limits);
+    Py_DECREF(audit_limits);
+    if (audit_res < 0) {
+        return PyValue_NULL;
     }
 
     if (py2rlimit(limits, &rl) < 0) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     if (setrlimit(resource, &rl) == -1) {
@@ -286,9 +315,9 @@ resource_setrlimit_impl(PyObject *module, int resource, PyObject *limits)
                             "not allowed to raise maximum limit");
         else
             PyErr_SetFromErrno(PyExc_OSError);
-        return NULL;
+        return PyValue_NULL;
     }
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 #ifdef HAVE_PRLIMIT
@@ -302,10 +331,10 @@ resource.prlimit
 
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 resource_prlimit_impl(PyObject *module, pid_t pid, int resource,
-                      PyObject *limits)
-/*[clinic end generated code: output=6ebc49ff8c3a816e input=54bb69c9585e33bf]*/
+                      PyValueBorrow limits)
+/*[clinic end generated code: output=27881915a5cfeb73 input=54bb69c9585e33bf]*/
 {
     struct rlimit old_limit, new_limit;
     int retval;
@@ -313,17 +342,23 @@ resource_prlimit_impl(PyObject *module, pid_t pid, int resource,
     if (resource < 0 || resource >= RLIM_NLIMITS) {
         PyErr_SetString(PyExc_ValueError,
                         "invalid resource specified");
-        return NULL;
+        return PyValue_NULL;
     }
 
-    if (PySys_Audit("resource.prlimit", "iiO", pid, resource,
-                    limits ? limits : Py_None) < 0) {
-        return NULL;
+    PyObject *audit_limits = resource_audit_arg(limits);
+    if (audit_limits == NULL) {
+        return PyValue_NULL;
+    }
+    int audit_res = PySys_Audit("resource.prlimit", "iiO", pid, resource,
+                                audit_limits);
+    Py_DECREF(audit_limits);
+    if (audit_res < 0) {
+        return PyValue_NULL;
     }
 
-    if (limits != Py_None) {
+    if (!PyValue_IsNone(limits)) {
         if (py2rlimit(limits, &new_limit) < 0) {
-            return NULL;
+            return PyValue_NULL;
         }
         retval = prlimit(pid, resource, &new_limit, &old_limit);
     }
@@ -338,9 +373,9 @@ resource_prlimit_impl(PyObject *module, pid_t pid, int resource,
         } else {
             PyErr_SetFromErrno(PyExc_OSError);
         }
-        return NULL;
+        return PyValue_NULL;
     }
-    return rlimit2py(old_limit);
+    return _PyValue_FromObjectResult(rlimit2py(old_limit));
 }
 #endif /* HAVE_PRLIMIT */
 

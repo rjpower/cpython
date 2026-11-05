@@ -4,6 +4,7 @@
  * See Python/gc.c for the implementation of the garbage collector.
  */
 
+#define Py_VALUE_CORE 1
 #include "Python.h"
 #include "pycore_gc.h"
 #include "pycore_list.h"          // PyList_AppendValue()
@@ -12,6 +13,7 @@
 #include "pycore_pystate.h"     // _PyInterpreterState_GET()
 #include "pycore_value.h"         // PyValue_FromObjectBorrow()
 #include "pycore_value_api.h"     // _PyValue_AsObjectAt()
+#include "pycore_value_slots.h"// _PyValue_FromObjectResult()
 
 typedef struct _gc_runtime_state GCState;
 
@@ -21,6 +23,11 @@ get_gc_state(void)
     PyInterpreterState *interp = _PyInterpreterState_GET();
     return &interp->gc;
 }
+
+/*[clinic input]
+value_emission
+[clinic start generated code]*/
+/*[clinic end generated code: output=da39a3ee5e6b4b0d input=eb7b17088bfd7215]*/
 
 /*[clinic input]
 module gc
@@ -34,12 +41,12 @@ gc.enable
 Enable automatic garbage collection.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 gc_enable_impl(PyObject *module)
-/*[clinic end generated code: output=45a427e9dce9155c input=81ac4940ca579707]*/
+/*[clinic end generated code: output=68f0add3825e318a input=81ac4940ca579707]*/
 {
     PyGC_Enable();
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 /*[clinic input]
@@ -48,12 +55,12 @@ gc.disable
 Disable automatic garbage collection.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 gc_disable_impl(PyObject *module)
-/*[clinic end generated code: output=97d1030f7aa9d279 input=8c2e5a14e800d83b]*/
+/*[clinic end generated code: output=6a7fb642f73cdda3 input=8c2e5a14e800d83b]*/
 {
     PyGC_Disable();
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 /*[clinic input]
@@ -115,13 +122,13 @@ Set the garbage collection debugging flags.
 Debugging information is written to sys.stderr.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 gc_set_debug_impl(PyObject *module, int flags)
-/*[clinic end generated code: output=7c8366575486b228 input=5e5ce15e84fbed15]*/
+/*[clinic end generated code: output=6d7d6427814b96aa input=5e5ce15e84fbed15]*/
 {
     GCState *gcstate = get_gc_state();
     FT_ATOMIC_STORE_INT_RELAXED(gcstate->debug, flags);
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 /*[clinic input]
@@ -191,16 +198,16 @@ gc.get_threshold
 Return the current collection thresholds.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 gc_get_threshold_impl(PyObject *module)
-/*[clinic end generated code: output=7902bc9f41ecbbd8 input=286d79918034d6e6]*/
+/*[clinic end generated code: output=f8d72d471256aa16 input=286d79918034d6e6]*/
 {
     GCState *gcstate = get_gc_state();
 #if !defined(Py_GIL_DISABLED)
-    return Py_BuildValue("(iii)",
+    return _PyValue_FromObjectResult(Py_BuildValue("(iii)",
                          gcstate->generations[0].threshold,
                          gcstate->generations[1].threshold,
-                         gcstate->generations[2].threshold);
+                         gcstate->generations[2].threshold));
 #else
     return Py_BuildValue("(iii)",
                          gcstate->young.threshold,
@@ -215,9 +222,9 @@ gc.get_count
 Return a three-tuple of the current collection counts.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 gc_get_count_impl(PyObject *module)
-/*[clinic end generated code: output=354012e67b16398f input=a392794a08251751]*/
+/*[clinic end generated code: output=3802c33b8f70b7d1 input=a392794a08251751]*/
 {
     GCState *gcstate = get_gc_state();
 
@@ -234,10 +241,10 @@ gc_get_count_impl(PyObject *module)
 #endif
 
 #if !defined(Py_GIL_DISABLED)
-    return Py_BuildValue("(iii)",
+    return _PyValue_FromObjectResult(Py_BuildValue("(iii)",
                          gcstate->generations[0].count,
                          gcstate->generations[1].count,
-                         gcstate->generations[2].count);
+                         gcstate->generations[2].count));
 #else
     return Py_BuildValue("(iii)",
                          young,
@@ -254,16 +261,16 @@ gc.get_referrers
 Return the list of objects that directly refer to any of 'objs'.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 gc_get_referrers_impl(PyObject *module, PyObject *objs)
-/*[clinic end generated code: output=929d6dff26f609b9 input=9102be7ebee69ee3]*/
+/*[clinic end generated code: output=e6879206291718a7 input=9102be7ebee69ee3]*/
 {
     if (PySys_Audit("gc.get_referrers", "(O)", objs) < 0) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     PyInterpreterState *interp = _PyInterpreterState_GET();
-    return _PyGC_GetReferrers(interp, objs);
+    return _PyValue_FromObjectResult(_PyGC_GetReferrers(interp, objs));
 }
 
 /* Append obj to list; return true if error (out of memory), false if OK. */
@@ -311,18 +318,18 @@ gc.get_referents
 Return the list of objects that are directly referred to by 'objs'.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 gc_get_referents_impl(PyObject *module, PyObject *objs)
-/*[clinic end generated code: output=6dfde40cd1588e1d input=55c078a6d0248fe0]*/
+/*[clinic end generated code: output=07dd75ee158afe19 input=55c078a6d0248fe0]*/
 {
     if (PySys_Audit("gc.get_referents", "(O)", objs) < 0) {
-        return NULL;
+        return PyValue_NULL;
     }
     PyInterpreterState *interp = _PyInterpreterState_GET();
     PyObject *result = PyList_New(0);
 
     if (result == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     // NOTE: stop the world is a no-op in default build
@@ -334,7 +341,7 @@ gc_get_referents_impl(PyObject *module, PyObject *objs)
         Py_CLEAR(result);
     }
 
-    return result;
+    return _PyValue_FromObjectResult(result);
 }
 
 /*[clinic input]
@@ -349,29 +356,29 @@ If generation is not None, return only the objects tracked by the
 collector that are in that generation.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 gc_get_objects_impl(PyObject *module, Py_ssize_t generation)
-/*[clinic end generated code: output=48b35fea4ba6cb0e input=89bca0d4a64e0135]*/
+/*[clinic end generated code: output=85badfd55f3d19cf input=89bca0d4a64e0135]*/
 {
     if (PySys_Audit("gc.get_objects", "n", generation) < 0) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     if (generation >= NUM_GENERATIONS) {
-        return PyErr_Format(PyExc_ValueError,
+        return _PyValue_FromObjectResult(PyErr_Format(PyExc_ValueError,
                             "generation parameter must be less than the number of "
                             "available generations (%i)",
-                            NUM_GENERATIONS);
+                            NUM_GENERATIONS));
     }
 
     if (generation < -1) {
         PyErr_SetString(PyExc_ValueError,
                         "generation parameter cannot be negative");
-        return NULL;
+        return PyValue_NULL;
     }
 
     PyInterpreterState *interp = _PyInterpreterState_GET();
-    return _PyGC_GetObjects(interp, (int)generation);
+    return _PyValue_FromObjectResult(_PyGC_GetObjects(interp, (int)generation));
 }
 
 /*[clinic input]
@@ -380,9 +387,9 @@ gc.get_stats
 Return a list of dictionaries containing per-generation statistics.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 gc_get_stats_impl(PyObject *module)
-/*[clinic end generated code: output=a8ab1d8a5d26f3ab input=1ef4ed9d17b1a470]*/
+/*[clinic end generated code: output=fd1f28b115d47d9d input=1ef4ed9d17b1a470]*/
 {
     int i;
     struct gc_generation_stats stats[NUM_GENERATIONS], *st;
@@ -402,7 +409,7 @@ gc_get_stats_impl(PyObject *module)
 
     PyObject *result = PyList_New(0);
     if (result == NULL)
-        return NULL;
+        return PyValue_NULL;
 
     for (i = 0; i < NUM_GENERATIONS; i++) {
         PyObject *dict;
@@ -422,11 +429,11 @@ gc_get_stats_impl(PyObject *module)
         }
         Py_DECREF(dict);
     }
-    return result;
+    return _PyValue_FromObjectResult(result);
 
 error:
     Py_XDECREF(result);
-    return NULL;
+    return PyValue_NULL;
 }
 
 
@@ -442,10 +449,16 @@ Simple atomic objects will return false.
 [clinic start generated code]*/
 
 static int
-gc_is_tracked_impl(PyObject *module, PyObject *obj)
-/*[clinic end generated code: output=91c8d086b7f47a33 input=423b98ec680c3126]*/
+gc_is_tracked_impl(PyObject *module, PyValueBorrow obj)
+/*[clinic end generated code: output=2d67a0300f8a3e7a input=423b98ec680c3126]*/
 {
-    return PyObject_GC_IsTracked(obj);
+    PyObject *o = _PyValue_AsObjectAt(obj, BOX_SITE_PARSER);
+    if (o == NULL) {
+        return -1;
+    }
+    int tracked = PyObject_GC_IsTracked(o);
+    Py_DECREF(o);
+    return tracked;
 }
 
 /*[clinic input]
@@ -458,10 +471,16 @@ Returns true if the object has been already finalized by the GC.
 [clinic start generated code]*/
 
 static int
-gc_is_finalized_impl(PyObject *module, PyObject *obj)
-/*[clinic end generated code: output=401ff5d6fc660429 input=ca4d111c8f8c4e3a]*/
+gc_is_finalized_impl(PyObject *module, PyValueBorrow obj)
+/*[clinic end generated code: output=53b5e211cbc14d05 input=ca4d111c8f8c4e3a]*/
 {
-    return PyObject_GC_IsFinalized(obj);
+    PyObject *o = _PyValue_AsObjectAt(obj, BOX_SITE_PARSER);
+    if (o == NULL) {
+        return -1;
+    }
+    int finalized = PyObject_GC_IsFinalized(o);
+    Py_DECREF(o);
+    return finalized;
 }
 
 /*[clinic input]
@@ -476,13 +495,13 @@ Note: collection before a POSIX fork() call may free pages for future
 allocation which can cause copy-on-write.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 gc_freeze_impl(PyObject *module)
-/*[clinic end generated code: output=502159d9cdc4c139 input=02674706fc9c0de6]*/
+/*[clinic end generated code: output=07f3a5bd6e3b9204 input=02674706fc9c0de6]*/
 {
     PyInterpreterState *interp = _PyInterpreterState_GET();
     _PyGC_Freeze(interp);
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 /*[clinic input]
@@ -493,13 +512,13 @@ Unfreeze all objects in the permanent generation.
 Put all objects in the permanent generation back into oldest generation.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 gc_unfreeze_impl(PyObject *module)
-/*[clinic end generated code: output=1c15f2043b25e169 input=2dd52b170f4cef6c]*/
+/*[clinic end generated code: output=a29b75cab2b2f792 input=2dd52b170f4cef6c]*/
 {
     PyInterpreterState *interp = _PyInterpreterState_GET();
     _PyGC_Unfreeze(interp);
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 /*[clinic input]

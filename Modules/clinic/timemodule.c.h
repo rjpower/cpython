@@ -2,8 +2,14 @@
 preserve
 [clinic start generated code]*/
 
+#ifndef Py_VALUE_CORE
+#  error "value-emission Clinic output requires Py_VALUE_CORE"
+#endif
+
+#include "pycore_long_value.h"    // _PyValue_AsInt()
 #include "pycore_modsupport.h"    // _PyArg_CheckPositional()
 #include "pycore_unicodeobject.h" // _PyUnicode_AsUTF8NoNUL()
+#include "pycore_value_call.h"    // METH_VALUE
 
 PyDoc_STRVAR(time_time__doc__,
 "time($module, /)\n"
@@ -15,22 +21,22 @@ PyDoc_STRVAR(time_time__doc__,
 "them.");
 
 #define TIME_TIME_METHODDEF    \
-    {"time", (PyCFunction)time_time, METH_NOARGS, time_time__doc__},
+    {"time", _PyCFunction_CAST(time_time), METH_VALUE|METH_NOARGS, time_time__doc__},
 
 static double
 time_time_impl(PyObject *module);
 
-static PyObject *
-time_time(PyObject *module, PyObject *Py_UNUSED(ignored))
+static PyValue
+time_time(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     double _return_value;
 
-    _return_value = time_time_impl(module);
+    _return_value = time_time_impl(PyValue_AsKnownObjectBorrow(module));
     if ((_return_value == -1.0) && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = PyFloat_FromDouble(_return_value);
+    return_value = PyValue_FromDouble(_return_value);
 
 exit:
     return return_value;
@@ -43,15 +49,19 @@ PyDoc_STRVAR(time_time_ns__doc__,
 "Return the current time in nanoseconds since the Epoch.");
 
 #define TIME_TIME_NS_METHODDEF    \
-    {"time_ns", (PyCFunction)time_time_ns, METH_NOARGS, time_time_ns__doc__},
+    {"time_ns", _PyCFunction_CAST(time_time_ns), METH_VALUE|METH_NOARGS, time_time_ns__doc__},
 
-static PyObject *
+static PyValue
 time_time_ns_impl(PyObject *module);
 
-static PyObject *
-time_time_ns(PyObject *module, PyObject *Py_UNUSED(ignored))
+static PyValue
+time_time_ns(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return time_time_ns_impl(module);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = time_time_ns_impl(PyValue_AsKnownObjectBorrow(module));
+
+    return return_value;
 }
 
 #if defined(HAVE_CLOCK_GETTIME)
@@ -63,21 +73,21 @@ PyDoc_STRVAR(time_clock_gettime__doc__,
 "Return the time of the specified clock clk_id as a float.");
 
 #define TIME_CLOCK_GETTIME_METHODDEF    \
-    {"clock_gettime", (PyCFunction)time_clock_gettime, METH_O, time_clock_gettime__doc__},
+    {"clock_gettime", _PyCFunction_CAST(time_clock_gettime), METH_VALUE|METH_O, time_clock_gettime__doc__},
 
-static PyObject *
+static PyValue
 time_clock_gettime_impl(PyObject *module, clockid_t clk_id);
 
-static PyObject *
-time_clock_gettime(PyObject *module, PyObject *arg)
+static PyValue
+time_clock_gettime(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     clockid_t clk_id;
 
-    if (!time_clockid_converter(arg, &clk_id)) {
+    if (!time_clockid_converter(PyValue_Borrow(args[0]), &clk_id)) {
         goto exit;
     }
-    return_value = time_clock_gettime_impl(module, clk_id);
+    return_value = time_clock_gettime_impl(PyValue_AsKnownObjectBorrow(module), clk_id);
 
 exit:
     return return_value;
@@ -94,21 +104,21 @@ PyDoc_STRVAR(time_clock_gettime_ns__doc__,
 "Return the time of the specified clock clk_id as nanoseconds (int).");
 
 #define TIME_CLOCK_GETTIME_NS_METHODDEF    \
-    {"clock_gettime_ns", (PyCFunction)time_clock_gettime_ns, METH_O, time_clock_gettime_ns__doc__},
+    {"clock_gettime_ns", _PyCFunction_CAST(time_clock_gettime_ns), METH_VALUE|METH_O, time_clock_gettime_ns__doc__},
 
-static PyObject *
+static PyValue
 time_clock_gettime_ns_impl(PyObject *module, clockid_t clk_id);
 
-static PyObject *
-time_clock_gettime_ns(PyObject *module, PyObject *arg)
+static PyValue
+time_clock_gettime_ns(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     clockid_t clk_id;
 
-    if (!time_clockid_converter(arg, &clk_id)) {
+    if (!time_clockid_converter(PyValue_Borrow(args[0]), &clk_id)) {
         goto exit;
     }
-    return_value = time_clock_gettime_ns_impl(module, clk_id);
+    return_value = time_clock_gettime_ns_impl(PyValue_AsKnownObjectBorrow(module), clk_id);
 
 exit:
     return return_value;
@@ -125,27 +135,27 @@ PyDoc_STRVAR(time_clock_settime__doc__,
 "Set the time of the specified clock clk_id.");
 
 #define TIME_CLOCK_SETTIME_METHODDEF    \
-    {"clock_settime", _PyCFunction_CAST(time_clock_settime), METH_FASTCALL, time_clock_settime__doc__},
+    {"clock_settime", _PyCFunction_CAST(time_clock_settime), METH_VALUE, time_clock_settime__doc__},
 
-static PyObject *
-time_clock_settime_impl(PyObject *module, int clk_id, PyObject *obj);
+static PyValue
+time_clock_settime_impl(PyObject *module, int clk_id, PyValueBorrow obj);
 
-static PyObject *
-time_clock_settime(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+time_clock_settime(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int clk_id;
-    PyObject *obj;
+    PyValueBorrow obj;
 
     if (!_PyArg_CheckPositional("clock_settime", nargs, 2, 2)) {
         goto exit;
     }
-    clk_id = PyLong_AsInt(args[0]);
+    clk_id = _PyValue_AsInt(PyValue_Borrow(args[0]));
     if (clk_id == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    obj = args[1];
-    return_value = time_clock_settime_impl(module, clk_id, obj);
+    obj = PyValue_Borrow(args[1]);
+    return_value = time_clock_settime_impl(PyValue_AsKnownObjectBorrow(module), clk_id, obj);
 
 exit:
     return return_value;
@@ -162,27 +172,27 @@ PyDoc_STRVAR(time_clock_settime_ns__doc__,
 "Set the time of the specified clock clk_id with nanoseconds.");
 
 #define TIME_CLOCK_SETTIME_NS_METHODDEF    \
-    {"clock_settime_ns", _PyCFunction_CAST(time_clock_settime_ns), METH_FASTCALL, time_clock_settime_ns__doc__},
+    {"clock_settime_ns", _PyCFunction_CAST(time_clock_settime_ns), METH_VALUE, time_clock_settime_ns__doc__},
 
-static PyObject *
-time_clock_settime_ns_impl(PyObject *module, int clk_id, PyObject *obj);
+static PyValue
+time_clock_settime_ns_impl(PyObject *module, int clk_id, PyValueBorrow obj);
 
-static PyObject *
-time_clock_settime_ns(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+time_clock_settime_ns(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int clk_id;
-    PyObject *obj;
+    PyValueBorrow obj;
 
     if (!_PyArg_CheckPositional("clock_settime_ns", nargs, 2, 2)) {
         goto exit;
     }
-    clk_id = PyLong_AsInt(args[0]);
+    clk_id = _PyValue_AsInt(PyValue_Borrow(args[0]));
     if (clk_id == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    obj = args[1];
-    return_value = time_clock_settime_ns_impl(module, clk_id, obj);
+    obj = PyValue_Borrow(args[1]);
+    return_value = time_clock_settime_ns_impl(PyValue_AsKnownObjectBorrow(module), clk_id, obj);
 
 exit:
     return return_value;
@@ -199,27 +209,27 @@ PyDoc_STRVAR(time_clock_getres__doc__,
 "Return the resolution (precision) of the specified clock clk_id.");
 
 #define TIME_CLOCK_GETRES_METHODDEF    \
-    {"clock_getres", (PyCFunction)time_clock_getres, METH_O, time_clock_getres__doc__},
+    {"clock_getres", _PyCFunction_CAST(time_clock_getres), METH_VALUE|METH_O, time_clock_getres__doc__},
 
 static double
 time_clock_getres_impl(PyObject *module, int clk_id);
 
-static PyObject *
-time_clock_getres(PyObject *module, PyObject *arg)
+static PyValue
+time_clock_getres(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int clk_id;
     double _return_value;
 
-    clk_id = PyLong_AsInt(arg);
+    clk_id = _PyValue_AsInt(PyValue_Borrow(args[0]));
     if (clk_id == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    _return_value = time_clock_getres_impl(module, clk_id);
+    _return_value = time_clock_getres_impl(PyValue_AsKnownObjectBorrow(module), clk_id);
     if ((_return_value == -1.0) && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = PyFloat_FromDouble(_return_value);
+    return_value = PyValue_FromDouble(_return_value);
 
 exit:
     return return_value;
@@ -236,23 +246,26 @@ PyDoc_STRVAR(time_pthread_getcpuclockid__doc__,
 "Return the clk_id of a thread\'s CPU time clock.");
 
 #define TIME_PTHREAD_GETCPUCLOCKID_METHODDEF    \
-    {"pthread_getcpuclockid", (PyCFunction)time_pthread_getcpuclockid, METH_O, time_pthread_getcpuclockid__doc__},
+    {"pthread_getcpuclockid", _PyCFunction_CAST(time_pthread_getcpuclockid), METH_VALUE|METH_O, time_pthread_getcpuclockid__doc__},
 
-static PyObject *
+static PyValue
 time_pthread_getcpuclockid_impl(PyObject *module, unsigned long thread_id);
 
-static PyObject *
-time_pthread_getcpuclockid(PyObject *module, PyObject *arg)
+static PyValue
+time_pthread_getcpuclockid(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     unsigned long thread_id;
 
-    if (!PyIndex_Check(arg)) {
-        _PyArg_BadArgument("pthread_getcpuclockid", "argument", "int", arg);
-        goto exit;
-    }
+        if (PyValue_TYPE(PyValue_Borrow(args[0]))->tp_as_number == NULL ||
+            PyValue_TYPE(PyValue_Borrow(args[0]))->tp_as_number->nb_index == NULL)
+        {
+            _PyArg_BadArgumentValue("pthread_getcpuclockid", "argument", "int", PyValue_Borrow(args[0]));
+            goto exit;
+        }
+
     {
-        Py_ssize_t _bytes = PyLong_AsNativeBytes(arg, &thread_id, sizeof(unsigned long),
+        Py_ssize_t _bytes = _PyValue_AsNativeBytes(PyValue_Borrow(args[0]), &thread_id, sizeof(unsigned long),
                 Py_ASNATIVEBYTES_NATIVE_ENDIAN |
                 Py_ASNATIVEBYTES_ALLOW_INDEX |
                 Py_ASNATIVEBYTES_UNSIGNED_BUFFER);
@@ -267,7 +280,7 @@ time_pthread_getcpuclockid(PyObject *module, PyObject *arg)
             }
         }
     }
-    return_value = time_pthread_getcpuclockid_impl(module, thread_id);
+    return_value = time_pthread_getcpuclockid_impl(PyValue_AsKnownObjectBorrow(module), thread_id);
 
 exit:
     return return_value;
@@ -284,7 +297,22 @@ PyDoc_STRVAR(time_sleep__doc__,
 "The argument may be a floating-point number for subsecond precision.");
 
 #define TIME_SLEEP_METHODDEF    \
-    {"sleep", (PyCFunction)time_sleep, METH_O, time_sleep__doc__},
+    {"sleep", _PyCFunction_CAST(time_sleep), METH_VALUE|METH_O, time_sleep__doc__},
+
+static PyValue
+time_sleep_impl(PyObject *module, PyValueBorrow timeout_obj);
+
+static PyValue
+time_sleep(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+{
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow timeout_obj;
+
+    timeout_obj = PyValue_Borrow(args[0]);
+    return_value = time_sleep_impl(PyValue_AsKnownObjectBorrow(module), timeout_obj);
+
+    return return_value;
+}
 
 PyDoc_STRVAR(time_gmtime__doc__,
 "gmtime($module, seconds=None, /)\n"
@@ -299,16 +327,16 @@ PyDoc_STRVAR(time_gmtime__doc__,
 "as attributes only.");
 
 #define TIME_GMTIME_METHODDEF    \
-    {"gmtime", _PyCFunction_CAST(time_gmtime), METH_FASTCALL, time_gmtime__doc__},
+    {"gmtime", _PyCFunction_CAST(time_gmtime), METH_VALUE, time_gmtime__doc__},
 
-static PyObject *
-time_gmtime_impl(PyObject *module, PyObject *ot);
+static PyValue
+time_gmtime_impl(PyObject *module, PyValueBorrow ot);
 
-static PyObject *
-time_gmtime(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+time_gmtime(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
-    PyObject *ot = Py_None;
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow ot = PyValue_Borrow(PyValue_None);
 
     if (!_PyArg_CheckPositional("gmtime", nargs, 0, 1)) {
         goto exit;
@@ -316,9 +344,9 @@ time_gmtime(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
     if (nargs < 1) {
         goto skip_optional;
     }
-    ot = args[0];
+    ot = PyValue_Borrow(args[0]);
 skip_optional:
-    return_value = time_gmtime_impl(module, ot);
+    return_value = time_gmtime_impl(PyValue_AsKnownObjectBorrow(module), ot);
 
 exit:
     return return_value;
@@ -333,16 +361,16 @@ PyDoc_STRVAR(time_localtime__doc__,
 "When \'seconds\' is not passed in, convert the current time instead.");
 
 #define TIME_LOCALTIME_METHODDEF    \
-    {"localtime", _PyCFunction_CAST(time_localtime), METH_FASTCALL, time_localtime__doc__},
+    {"localtime", _PyCFunction_CAST(time_localtime), METH_VALUE, time_localtime__doc__},
 
-static PyObject *
-time_localtime_impl(PyObject *module, PyObject *ot);
+static PyValue
+time_localtime_impl(PyObject *module, PyValueBorrow ot);
 
-static PyObject *
-time_localtime(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+time_localtime(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
-    PyObject *ot = Py_None;
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow ot = PyValue_Borrow(PyValue_None);
 
     if (!_PyArg_CheckPositional("localtime", nargs, 0, 1)) {
         goto exit;
@@ -350,9 +378,9 @@ time_localtime(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
     if (nargs < 1) {
         goto skip_optional;
     }
-    ot = args[0];
+    ot = PyValue_Borrow(args[0]);
 skip_optional:
-    return_value = time_localtime_impl(module, ot);
+    return_value = time_localtime_impl(PyValue_AsKnownObjectBorrow(module), ot);
 
 exit:
     return return_value;
@@ -368,16 +396,16 @@ PyDoc_STRVAR(time_asctime__doc__,
 "localtime() is used.");
 
 #define TIME_ASCTIME_METHODDEF    \
-    {"asctime", _PyCFunction_CAST(time_asctime), METH_FASTCALL, time_asctime__doc__},
+    {"asctime", _PyCFunction_CAST(time_asctime), METH_VALUE, time_asctime__doc__},
 
-static PyObject *
-time_asctime_impl(PyObject *module, PyObject *tup);
+static PyValue
+time_asctime_impl(PyObject *module, PyValueBorrow tup);
 
-static PyObject *
-time_asctime(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+time_asctime(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
-    PyObject *tup = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow tup = PyValue_Borrow(PyValue_NULL);
 
     if (!_PyArg_CheckPositional("asctime", nargs, 0, 1)) {
         goto exit;
@@ -385,9 +413,9 @@ time_asctime(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
     if (nargs < 1) {
         goto skip_optional;
     }
-    tup = args[0];
+    tup = PyValue_Borrow(args[0]);
 skip_optional:
-    return_value = time_asctime_impl(module, tup);
+    return_value = time_asctime_impl(PyValue_AsKnownObjectBorrow(module), tup);
 
 exit:
     return return_value;
@@ -403,16 +431,16 @@ PyDoc_STRVAR(time_ctime__doc__,
 "not passed in, convert the current time instead.");
 
 #define TIME_CTIME_METHODDEF    \
-    {"ctime", _PyCFunction_CAST(time_ctime), METH_FASTCALL, time_ctime__doc__},
+    {"ctime", _PyCFunction_CAST(time_ctime), METH_VALUE, time_ctime__doc__},
 
-static PyObject *
-time_ctime_impl(PyObject *module, PyObject *ot);
+static PyValue
+time_ctime_impl(PyObject *module, PyValueBorrow ot);
 
-static PyObject *
-time_ctime(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+time_ctime(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
-    PyObject *ot = Py_None;
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow ot = PyValue_Borrow(PyValue_None);
 
     if (!_PyArg_CheckPositional("ctime", nargs, 0, 1)) {
         goto exit;
@@ -420,9 +448,9 @@ time_ctime(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
     if (nargs < 1) {
         goto skip_optional;
     }
-    ot = args[0];
+    ot = PyValue_Borrow(args[0]);
 skip_optional:
-    return_value = time_ctime_impl(module, ot);
+    return_value = time_ctime_impl(PyValue_AsKnownObjectBorrow(module), ot);
 
 exit:
     return return_value;
@@ -441,7 +469,22 @@ PyDoc_STRVAR(time_mktime__doc__,
 "the timezone or altzone attributes on the time module.");
 
 #define TIME_MKTIME_METHODDEF    \
-    {"mktime", (PyCFunction)time_mktime, METH_O, time_mktime__doc__},
+    {"mktime", _PyCFunction_CAST(time_mktime), METH_VALUE|METH_O, time_mktime__doc__},
+
+static PyValue
+time_mktime_impl(PyObject *module, PyValueBorrow tm_tuple);
+
+static PyValue
+time_mktime(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+{
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow tm_tuple;
+
+    tm_tuple = PyValue_Borrow(args[0]);
+    return_value = time_mktime_impl(PyValue_AsKnownObjectBorrow(module), tm_tuple);
+
+    return return_value;
+}
 
 #endif /* defined(HAVE_MKTIME) */
 
@@ -463,15 +506,19 @@ PyDoc_STRVAR(time_tzset__doc__,
 "methods such as localtime, but this behaviour should not be relied on.");
 
 #define TIME_TZSET_METHODDEF    \
-    {"tzset", (PyCFunction)time_tzset, METH_NOARGS, time_tzset__doc__},
+    {"tzset", _PyCFunction_CAST(time_tzset), METH_VALUE|METH_NOARGS, time_tzset__doc__},
 
-static PyObject *
+static PyValue
 time_tzset_impl(PyObject *module);
 
-static PyObject *
-time_tzset(PyObject *module, PyObject *Py_UNUSED(ignored))
+static PyValue
+time_tzset(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return time_tzset_impl(module);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = time_tzset_impl(PyValue_AsKnownObjectBorrow(module));
+
+    return return_value;
 }
 
 #endif /* defined(HAVE_WORKING_TZSET) */
@@ -483,22 +530,22 @@ PyDoc_STRVAR(time_monotonic__doc__,
 "Monotonic clock, cannot go backward.");
 
 #define TIME_MONOTONIC_METHODDEF    \
-    {"monotonic", (PyCFunction)time_monotonic, METH_NOARGS, time_monotonic__doc__},
+    {"monotonic", _PyCFunction_CAST(time_monotonic), METH_VALUE|METH_NOARGS, time_monotonic__doc__},
 
 static double
 time_monotonic_impl(PyObject *module);
 
-static PyObject *
-time_monotonic(PyObject *module, PyObject *Py_UNUSED(ignored))
+static PyValue
+time_monotonic(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     double _return_value;
 
-    _return_value = time_monotonic_impl(module);
+    _return_value = time_monotonic_impl(PyValue_AsKnownObjectBorrow(module));
     if ((_return_value == -1.0) && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = PyFloat_FromDouble(_return_value);
+    return_value = PyValue_FromDouble(_return_value);
 
 exit:
     return return_value;
@@ -511,15 +558,19 @@ PyDoc_STRVAR(time_monotonic_ns__doc__,
 "Monotonic clock, cannot go backward, as nanoseconds.");
 
 #define TIME_MONOTONIC_NS_METHODDEF    \
-    {"monotonic_ns", (PyCFunction)time_monotonic_ns, METH_NOARGS, time_monotonic_ns__doc__},
+    {"monotonic_ns", _PyCFunction_CAST(time_monotonic_ns), METH_VALUE|METH_NOARGS, time_monotonic_ns__doc__},
 
-static PyObject *
+static PyValue
 time_monotonic_ns_impl(PyObject *module);
 
-static PyObject *
-time_monotonic_ns(PyObject *module, PyObject *Py_UNUSED(ignored))
+static PyValue
+time_monotonic_ns(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return time_monotonic_ns_impl(module);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = time_monotonic_ns_impl(PyValue_AsKnownObjectBorrow(module));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(time_perf_counter__doc__,
@@ -529,22 +580,22 @@ PyDoc_STRVAR(time_perf_counter__doc__,
 "Performance counter for benchmarking.");
 
 #define TIME_PERF_COUNTER_METHODDEF    \
-    {"perf_counter", (PyCFunction)time_perf_counter, METH_NOARGS, time_perf_counter__doc__},
+    {"perf_counter", _PyCFunction_CAST(time_perf_counter), METH_VALUE|METH_NOARGS, time_perf_counter__doc__},
 
 static double
 time_perf_counter_impl(PyObject *module);
 
-static PyObject *
-time_perf_counter(PyObject *module, PyObject *Py_UNUSED(ignored))
+static PyValue
+time_perf_counter(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     double _return_value;
 
-    _return_value = time_perf_counter_impl(module);
+    _return_value = time_perf_counter_impl(PyValue_AsKnownObjectBorrow(module));
     if ((_return_value == -1.0) && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = PyFloat_FromDouble(_return_value);
+    return_value = PyValue_FromDouble(_return_value);
 
 exit:
     return return_value;
@@ -557,15 +608,19 @@ PyDoc_STRVAR(time_perf_counter_ns__doc__,
 "Performance counter for benchmarking as nanoseconds.");
 
 #define TIME_PERF_COUNTER_NS_METHODDEF    \
-    {"perf_counter_ns", (PyCFunction)time_perf_counter_ns, METH_NOARGS, time_perf_counter_ns__doc__},
+    {"perf_counter_ns", _PyCFunction_CAST(time_perf_counter_ns), METH_VALUE|METH_NOARGS, time_perf_counter_ns__doc__},
 
-static PyObject *
+static PyValue
 time_perf_counter_ns_impl(PyObject *module);
 
-static PyObject *
-time_perf_counter_ns(PyObject *module, PyObject *Py_UNUSED(ignored))
+static PyValue
+time_perf_counter_ns(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return time_perf_counter_ns_impl(module);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = time_perf_counter_ns_impl(PyValue_AsKnownObjectBorrow(module));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(time_process_time__doc__,
@@ -577,22 +632,22 @@ PyDoc_STRVAR(time_process_time__doc__,
 "That is the sum of the kernel and user-space CPU time.");
 
 #define TIME_PROCESS_TIME_METHODDEF    \
-    {"process_time", (PyCFunction)time_process_time, METH_NOARGS, time_process_time__doc__},
+    {"process_time", _PyCFunction_CAST(time_process_time), METH_VALUE|METH_NOARGS, time_process_time__doc__},
 
 static double
 time_process_time_impl(PyObject *module);
 
-static PyObject *
-time_process_time(PyObject *module, PyObject *Py_UNUSED(ignored))
+static PyValue
+time_process_time(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     double _return_value;
 
-    _return_value = time_process_time_impl(module);
+    _return_value = time_process_time_impl(PyValue_AsKnownObjectBorrow(module));
     if ((_return_value == -1.0) && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = PyFloat_FromDouble(_return_value);
+    return_value = PyValue_FromDouble(_return_value);
 
 exit:
     return return_value;
@@ -607,15 +662,19 @@ PyDoc_STRVAR(time_process_time_ns__doc__,
 "That is the sum of the kernel and user-space CPU time.");
 
 #define TIME_PROCESS_TIME_NS_METHODDEF    \
-    {"process_time_ns", (PyCFunction)time_process_time_ns, METH_NOARGS, time_process_time_ns__doc__},
+    {"process_time_ns", _PyCFunction_CAST(time_process_time_ns), METH_VALUE|METH_NOARGS, time_process_time_ns__doc__},
 
-static PyObject *
+static PyValue
 time_process_time_ns_impl(PyObject *module);
 
-static PyObject *
-time_process_time_ns(PyObject *module, PyObject *Py_UNUSED(ignored))
+static PyValue
+time_process_time_ns(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return time_process_time_ns_impl(module);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = time_process_time_ns_impl(PyValue_AsKnownObjectBorrow(module));
+
+    return return_value;
 }
 
 #if defined(HAVE_THREAD_TIME)
@@ -629,22 +688,22 @@ PyDoc_STRVAR(time_thread_time__doc__,
 "That is the sum of the kernel and user-space CPU time.");
 
 #define TIME_THREAD_TIME_METHODDEF    \
-    {"thread_time", (PyCFunction)time_thread_time, METH_NOARGS, time_thread_time__doc__},
+    {"thread_time", _PyCFunction_CAST(time_thread_time), METH_VALUE|METH_NOARGS, time_thread_time__doc__},
 
 static double
 time_thread_time_impl(PyObject *module);
 
-static PyObject *
-time_thread_time(PyObject *module, PyObject *Py_UNUSED(ignored))
+static PyValue
+time_thread_time(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     double _return_value;
 
-    _return_value = time_thread_time_impl(module);
+    _return_value = time_thread_time_impl(PyValue_AsKnownObjectBorrow(module));
     if ((_return_value == -1.0) && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = PyFloat_FromDouble(_return_value);
+    return_value = PyValue_FromDouble(_return_value);
 
 exit:
     return return_value;
@@ -663,15 +722,19 @@ PyDoc_STRVAR(time_thread_time_ns__doc__,
 "That is the sum of the kernel and user-space CPU time.");
 
 #define TIME_THREAD_TIME_NS_METHODDEF    \
-    {"thread_time_ns", (PyCFunction)time_thread_time_ns, METH_NOARGS, time_thread_time_ns__doc__},
+    {"thread_time_ns", _PyCFunction_CAST(time_thread_time_ns), METH_VALUE|METH_NOARGS, time_thread_time_ns__doc__},
 
-static PyObject *
+static PyValue
 time_thread_time_ns_impl(PyObject *module);
 
-static PyObject *
-time_thread_time_ns(PyObject *module, PyObject *Py_UNUSED(ignored))
+static PyValue
+time_thread_time_ns(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return time_thread_time_ns_impl(module);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = time_thread_time_ns_impl(PyValue_AsKnownObjectBorrow(module));
+
+    return return_value;
 }
 
 #endif /* defined(HAVE_THREAD_TIME) */
@@ -683,26 +746,30 @@ PyDoc_STRVAR(time_get_clock_info__doc__,
 "Get information of the specified clock.");
 
 #define TIME_GET_CLOCK_INFO_METHODDEF    \
-    {"get_clock_info", (PyCFunction)time_get_clock_info, METH_O, time_get_clock_info__doc__},
+    {"get_clock_info", _PyCFunction_CAST(time_get_clock_info), METH_VALUE|METH_O, time_get_clock_info__doc__},
 
-static PyObject *
+static PyValue
 time_get_clock_info_impl(PyObject *module, const char *name);
 
-static PyObject *
-time_get_clock_info(PyObject *module, PyObject *arg)
+static PyValue
+time_get_clock_info(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     const char *name;
 
-    if (!PyUnicode_Check(arg)) {
-        _PyArg_BadArgument("get_clock_info", "argument", "str", arg);
+    if (!PyValue_IsObject(PyValue_Borrow(args[0]))) {
+        _PyArg_BadArgumentValue("get_clock_info", "argument", "str", PyValue_Borrow(args[0]));
         goto exit;
     }
-    name = _PyUnicode_AsUTF8NoNUL(arg);
+    if (!PyUnicode_Check(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])))) {
+        _PyArg_BadArgument("get_clock_info", "argument", "str", PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])));
+        goto exit;
+    }
+    name = _PyUnicode_AsUTF8NoNUL(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])));
     if (name == NULL) {
         goto exit;
     }
-    return_value = time_get_clock_info_impl(module, name);
+    return_value = time_get_clock_info_impl(PyValue_AsKnownObjectBorrow(module), name);
 
 exit:
     return return_value;
@@ -747,4 +814,4 @@ exit:
 #ifndef TIME_THREAD_TIME_NS_METHODDEF
     #define TIME_THREAD_TIME_NS_METHODDEF
 #endif /* !defined(TIME_THREAD_TIME_NS_METHODDEF) */
-/*[clinic end generated code: output=d89be8cc2b2a7b05 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=2b4dbf211111624a input=a9049054013a1b77]*/

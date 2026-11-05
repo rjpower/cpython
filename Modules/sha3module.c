@@ -20,10 +20,13 @@
 #  define Py_BUILD_CORE_MODULE 1
 #endif
 
+#define Py_VALUE_CORE 1
 #include "Python.h"
 #include "pycore_object.h"        // _PyObject_VisitType()
 #include "pycore_strhex.h"        // _Py_strhex()
 #include "pycore_typeobject.h"    // _PyType_GetModuleState()
+#include "pycore_value.h"         // _PyValue_AsObjectAt()
+#include "pycore_value_slots.h"// _PyValue_FromObjectResult()
 #include "hashlib.h"
 
 #include "_hacl/Hacl_Hash_SHA3.h"
@@ -78,6 +81,11 @@ typedef struct {
 #define _SHA3object_CAST(op)    ((SHA3object *)(op))
 
 // --- Module clinic configuration --------------------------------------------
+
+/*[clinic input]
+value_emission
+[clinic start generated code]*/
+/*[clinic end generated code: output=da39a3ee5e6b4b0d input=eb7b17088bfd7215]*/
 
 /*[clinic input]
 module _sha3
@@ -139,14 +147,30 @@ _sha3.sha3_224.__new__ as py_sha3_new
 Return a new SHA3 hash object.
 [clinic start generated code]*/
 
-static PyObject *
-py_sha3_new_impl(PyTypeObject *type, PyObject *data_obj, int usedforsecurity,
-                 PyObject *string)
-/*[clinic end generated code: output=dcec1eca20395f2a input=c106e0b4e2d67d58]*/
+static PyValue
+py_sha3_new_impl(PyTypeObject *type, PyValueBorrow data_obj,
+                 int usedforsecurity, PyValueBorrow string)
+/*[clinic end generated code: output=ab82173f04126985 input=c106e0b4e2d67d58]*/
 {
+    PyObject *data_o = NULL, *string_o = NULL;
+    if (!PyValue_IsNull(data_obj)) {
+        data_o = _PyValue_AsObjectAt(data_obj, BOX_SITE_PARSER);
+        if (data_o == NULL) {
+            return PyValue_NULL;
+        }
+    }
+    if (!PyValue_IsNull(string)) {
+        string_o = _PyValue_AsObjectAt(string, BOX_SITE_PARSER);
+        if (string_o == NULL) {
+            Py_XDECREF(data_o);
+            return PyValue_NULL;
+        }
+    }
     PyObject *data;
-    if (_Py_hashlib_data_argument(&data, data_obj, string) < 0) {
-        return NULL;
+    if (_Py_hashlib_data_argument(&data, data_o, string_o) < 0) {
+        Py_XDECREF(data_o);
+        Py_XDECREF(string_o);
+        return PyValue_NULL;
     }
 
     Py_buffer buf = {NULL, NULL};
@@ -202,17 +226,21 @@ py_sha3_new_impl(PyTypeObject *type, PyObject *data_obj, int usedforsecurity,
     }
 
     PyBuffer_Release(&buf);
+    Py_XDECREF(data_o);
+    Py_XDECREF(string_o);
 
-    return (PyObject *)self;
+    return _PyValue_FromObjectResult((PyObject *)self);
 
 error:
     if (self) {
         Py_DECREF(self);
     }
-    if (data && buf.obj) {
+    if (buf.obj != NULL) {
         PyBuffer_Release(&buf);
     }
-    return NULL;
+    Py_XDECREF(data_o);
+    Py_XDECREF(string_o);
+    return PyValue_NULL;
 }
 
 
@@ -250,24 +278,24 @@ _sha3.sha3_224.copy
 Return a copy of the hash object.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _sha3_sha3_224_copy_impl(SHA3object *self, PyTypeObject *cls)
-/*[clinic end generated code: output=13958b44c244013e input=7134b4dc0a2fbcac]*/
+/*[clinic end generated code: output=bc53069129edf974 input=7134b4dc0a2fbcac]*/
 {
     SHA3object *newobj;
     if ((newobj = newSHA3object(cls)) == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
     HASHLIB_ACQUIRE_LOCK(self);
     newobj->hash_state = Hacl_Hash_SHA3_copy(self->hash_state);
     HASHLIB_RELEASE_LOCK(self);
     if (newobj->hash_state == NULL) {
         Py_DECREF(newobj);
-        return PyErr_NoMemory();
+        return _PyValue_FromObjectResult(PyErr_NoMemory());
     }
     newobj->digest_size = self->digest_size;
     newobj->block_size = self->block_size;
-    return (PyObject *)newobj;
+    return _PyValue_FromObjectResult((PyObject *)newobj);
 }
 
 
@@ -277,9 +305,9 @@ _sha3.sha3_224.digest
 Return the digest value as a bytes object.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _sha3_sha3_224_digest_impl(SHA3object *self)
-/*[clinic end generated code: output=fd531842e20b2d5b input=5b2a659536bbd248]*/
+/*[clinic end generated code: output=b440c8a581c65e35 input=5b2a659536bbd248]*/
 {
     unsigned char digest[SHA3_MAX_DIGESTSIZE];
     // This function errors out if the algorithm is SHAKE. Here, we know this
@@ -287,7 +315,7 @@ _sha3_sha3_224_digest_impl(SHA3object *self)
     HASHLIB_ACQUIRE_LOCK(self);
     (void)Hacl_Hash_SHA3_digest(self->hash_state, digest);
     HASHLIB_RELEASE_LOCK(self);
-    return PyBytes_FromStringAndSize((const char *)digest, self->digest_size);
+    return _PyValue_FromObjectResult(PyBytes_FromStringAndSize((const char *)digest, self->digest_size));
 }
 
 
@@ -297,15 +325,15 @@ _sha3.sha3_224.hexdigest
 Return the digest value as a string of hexadecimal digits.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _sha3_sha3_224_hexdigest_impl(SHA3object *self)
-/*[clinic end generated code: output=75ad03257906918d input=2d91bb6e0d114ee3]*/
+/*[clinic end generated code: output=02f567eaa34adc83 input=2d91bb6e0d114ee3]*/
 {
     unsigned char digest[SHA3_MAX_DIGESTSIZE];
     HASHLIB_ACQUIRE_LOCK(self);
     (void)Hacl_Hash_SHA3_digest(self->hash_state, digest);
     HASHLIB_RELEASE_LOCK(self);
-    return _Py_strhex((const char *)digest, self->digest_size);
+    return _PyValue_FromObjectResult(_Py_strhex((const char *)digest, self->digest_size));
 }
 
 
@@ -318,18 +346,23 @@ _sha3.sha3_224.update
 Update this hash object's state with the provided bytes-like object.
 [clinic start generated code]*/
 
-static PyObject *
-_sha3_sha3_224_update_impl(SHA3object *self, PyObject *data)
-/*[clinic end generated code: output=390b7abf7c9795a5 input=a887f54dcc4ae227]*/
+static PyValue
+_sha3_sha3_224_update_impl(SHA3object *self, PyValueBorrow data)
+/*[clinic end generated code: output=1bea14045b924880 input=a887f54dcc4ae227]*/
 {
     Py_buffer buf;
-    GET_BUFFER_VIEW_OR_ERROUT(data, &buf);
+    PyObject *data_o = _PyValue_AsObjectAt(data, BOX_SITE_PARSER);
+    if (data_o == NULL) {
+        return PyValue_NULL;
+    }
+    GET_BUFFER_VIEW_OR_ERROR(data_o, &buf, {Py_DECREF(data_o); return PyValue_NULL;});
+    Py_DECREF(data_o);
     HASHLIB_EXTERNAL_INSTRUCTIONS_LOCKED(
         self, buf.len,
         sha3_update(self->hash_state, buf.buf, buf.len)
     );
     PyBuffer_Release(&buf);
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 
@@ -501,12 +534,12 @@ _sha3.shake_128.digest
 Return the digest value as a bytes object.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _sha3_shake_128_digest_impl(SHA3object *self, Py_ssize_t length)
-/*[clinic end generated code: output=6c53fb71a6cff0a0 input=1160c9f86ae0f867]*/
+/*[clinic end generated code: output=dfc0374ee0cf8275 input=1160c9f86ae0f867]*/
 {
     if (sha3_shake_check_digest_length(length) < 0) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     /*
@@ -515,13 +548,13 @@ _sha3_shake_128_digest_impl(SHA3object *self, Py_ssize_t length)
      * behavior and return an empty digest, without raising an error.
      */
     if (length == 0) {
-        return Py_GetConstant(Py_CONSTANT_EMPTY_BYTES);
+        return _PyValue_FromObjectResult(Py_GetConstant(Py_CONSTANT_EMPTY_BYTES));
     }
     CHECK_HACL_UINT32_T_LENGTH(length);
 
     PyBytesWriter *writer = PyBytesWriter_Create(length);
     if (writer == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
     uint8_t *buffer = (uint8_t *)PyBytesWriter_GetData(writer);
 
@@ -529,7 +562,7 @@ _sha3_shake_128_digest_impl(SHA3object *self, Py_ssize_t length)
     (void)Hacl_Hash_SHA3_squeeze(self->hash_state, buffer, (uint32_t)length);
     HASHLIB_RELEASE_LOCK(self);
 
-    return PyBytesWriter_Finish(writer);
+    return _PyValue_FromObjectResult(PyBytesWriter_Finish(writer));
 }
 
 
@@ -541,23 +574,23 @@ _sha3.shake_128.hexdigest
 Return the digest value as a string of hexadecimal digits.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _sha3_shake_128_hexdigest_impl(SHA3object *self, Py_ssize_t length)
-/*[clinic end generated code: output=a27412d404f64512 input=ff06c9362949d2c8]*/
+/*[clinic end generated code: output=ef03d84feb11ef0d input=ff06c9362949d2c8]*/
 {
     if (sha3_shake_check_digest_length(length) < 0) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     /* See _sha3_shake_128_digest_impl() for the fast path rationale. */
     if (length == 0) {
-        return Py_GetConstant(Py_CONSTANT_EMPTY_STR);
+        return _PyValue_FromObjectResult(Py_GetConstant(Py_CONSTANT_EMPTY_STR));
     }
     CHECK_HACL_UINT32_T_LENGTH(length);
 
     uint8_t *buffer = PyMem_Malloc(length);
     if (buffer == NULL) {
-        return PyErr_NoMemory();
+        return _PyValue_FromObjectResult(PyErr_NoMemory());
     }
 
     HASHLIB_ACQUIRE_LOCK(self);
@@ -566,7 +599,7 @@ _sha3_shake_128_hexdigest_impl(SHA3object *self, Py_ssize_t length)
 
     PyObject *digest = _Py_strhex((const char *)buffer, length);
     PyMem_Free(buffer);
-    return digest;
+    return _PyValue_FromObjectResult(digest);
 }
 
 static PyObject *

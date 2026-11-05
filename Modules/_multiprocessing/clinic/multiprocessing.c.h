@@ -2,8 +2,14 @@
 preserve
 [clinic start generated code]*/
 
+#ifndef Py_VALUE_CORE
+#  error "value-emission Clinic output requires Py_VALUE_CORE"
+#endif
+
+#include "pycore_long_value.h"    // _PyValue_IntAsVoidPtr()
 #include "pycore_modsupport.h"    // _PyArg_CheckPositional()
 #include "pycore_unicodeobject.h" // _PyUnicode_AsUTF8NoNUL()
+#include "pycore_value_call.h"    // METH_VALUE
 
 #if defined(MS_WINDOWS)
 
@@ -13,22 +19,22 @@ PyDoc_STRVAR(_multiprocessing_closesocket__doc__,
 "\n");
 
 #define _MULTIPROCESSING_CLOSESOCKET_METHODDEF    \
-    {"closesocket", (PyCFunction)_multiprocessing_closesocket, METH_O, _multiprocessing_closesocket__doc__},
+    {"closesocket", _PyCFunction_CAST(_multiprocessing_closesocket), METH_VALUE|METH_O, _multiprocessing_closesocket__doc__},
 
-static PyObject *
+static PyValue
 _multiprocessing_closesocket_impl(PyObject *module, HANDLE handle);
 
-static PyObject *
-_multiprocessing_closesocket(PyObject *module, PyObject *arg)
+static PyValue
+_multiprocessing_closesocket(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     HANDLE handle;
 
-    handle = PyLong_AsVoidPtr(arg);
+    handle = _PyValue_IntAsVoidPtr(PyValue_Borrow(args[0]));
     if (!handle && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = _multiprocessing_closesocket_impl(module, handle);
+    return_value = _multiprocessing_closesocket_impl(PyValue_AsKnownObjectBorrow(module), handle);
 
 exit:
     return return_value;
@@ -44,30 +50,30 @@ PyDoc_STRVAR(_multiprocessing_recv__doc__,
 "\n");
 
 #define _MULTIPROCESSING_RECV_METHODDEF    \
-    {"recv", _PyCFunction_CAST(_multiprocessing_recv), METH_FASTCALL, _multiprocessing_recv__doc__},
+    {"recv", _PyCFunction_CAST(_multiprocessing_recv), METH_VALUE, _multiprocessing_recv__doc__},
 
-static PyObject *
+static PyValue
 _multiprocessing_recv_impl(PyObject *module, HANDLE handle, int size);
 
-static PyObject *
-_multiprocessing_recv(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_multiprocessing_recv(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     HANDLE handle;
     int size;
 
     if (!_PyArg_CheckPositional("recv", nargs, 2, 2)) {
         goto exit;
     }
-    handle = PyLong_AsVoidPtr(args[0]);
+    handle = _PyValue_IntAsVoidPtr(PyValue_Borrow(args[0]));
     if (!handle && PyErr_Occurred()) {
         goto exit;
     }
-    size = PyLong_AsInt(args[1]);
+    size = _PyValue_AsInt(PyValue_Borrow(args[1]));
     if (size == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = _multiprocessing_recv_impl(module, handle, size);
+    return_value = _multiprocessing_recv_impl(PyValue_AsKnownObjectBorrow(module), handle, size);
 
 exit:
     return return_value;
@@ -83,29 +89,33 @@ PyDoc_STRVAR(_multiprocessing_send__doc__,
 "\n");
 
 #define _MULTIPROCESSING_SEND_METHODDEF    \
-    {"send", _PyCFunction_CAST(_multiprocessing_send), METH_FASTCALL, _multiprocessing_send__doc__},
+    {"send", _PyCFunction_CAST(_multiprocessing_send), METH_VALUE, _multiprocessing_send__doc__},
 
-static PyObject *
+static PyValue
 _multiprocessing_send_impl(PyObject *module, HANDLE handle, Py_buffer *buf);
 
-static PyObject *
-_multiprocessing_send(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_multiprocessing_send(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     HANDLE handle;
     Py_buffer buf = {NULL, NULL};
 
     if (!_PyArg_CheckPositional("send", nargs, 2, 2)) {
         goto exit;
     }
-    handle = PyLong_AsVoidPtr(args[0]);
+    handle = _PyValue_IntAsVoidPtr(PyValue_Borrow(args[0]));
     if (!handle && PyErr_Occurred()) {
         goto exit;
     }
-    if (PyObject_GetBuffer(args[1], &buf, PyBUF_SIMPLE) != 0) {
+    if (!PyValue_IsObject(PyValue_Borrow(args[1]))) {
+        PyErr_Format(PyExc_TypeError, "a bytes-like object is required, not '%.100s'", PyValue_TYPE(PyValue_Borrow(args[1]))->tp_name);
         goto exit;
     }
-    return_value = _multiprocessing_send_impl(module, handle, &buf);
+    if (PyObject_GetBuffer(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[1])), &buf, PyBUF_SIMPLE) != 0) {
+        goto exit;
+    }
+    return_value = _multiprocessing_send_impl(PyValue_AsKnownObjectBorrow(module), handle, &buf);
 
 exit:
     /* Cleanup for buf */
@@ -124,26 +134,30 @@ PyDoc_STRVAR(_multiprocessing_sem_unlink__doc__,
 "\n");
 
 #define _MULTIPROCESSING_SEM_UNLINK_METHODDEF    \
-    {"sem_unlink", (PyCFunction)_multiprocessing_sem_unlink, METH_O, _multiprocessing_sem_unlink__doc__},
+    {"sem_unlink", _PyCFunction_CAST(_multiprocessing_sem_unlink), METH_VALUE|METH_O, _multiprocessing_sem_unlink__doc__},
 
-static PyObject *
+static PyValue
 _multiprocessing_sem_unlink_impl(PyObject *module, const char *name);
 
-static PyObject *
-_multiprocessing_sem_unlink(PyObject *module, PyObject *arg)
+static PyValue
+_multiprocessing_sem_unlink(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     const char *name;
 
-    if (!PyUnicode_Check(arg)) {
-        _PyArg_BadArgument("sem_unlink", "argument", "str", arg);
+    if (!PyValue_IsObject(PyValue_Borrow(args[0]))) {
+        _PyArg_BadArgumentValue("sem_unlink", "argument", "str", PyValue_Borrow(args[0]));
         goto exit;
     }
-    name = _PyUnicode_AsUTF8NoNUL(arg);
+    if (!PyUnicode_Check(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])))) {
+        _PyArg_BadArgument("sem_unlink", "argument", "str", PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])));
+        goto exit;
+    }
+    name = _PyUnicode_AsUTF8NoNUL(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])));
     if (name == NULL) {
         goto exit;
     }
-    return_value = _multiprocessing_sem_unlink_impl(module, name);
+    return_value = _multiprocessing_sem_unlink_impl(PyValue_AsKnownObjectBorrow(module), name);
 
 exit:
     return return_value;
@@ -160,4 +174,4 @@ exit:
 #ifndef _MULTIPROCESSING_SEND_METHODDEF
     #define _MULTIPROCESSING_SEND_METHODDEF
 #endif /* !defined(_MULTIPROCESSING_SEND_METHODDEF) */
-/*[clinic end generated code: output=f5147f6a6e2cbd17 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=b9a6f03d4c9e1e7b input=a9049054013a1b77]*/

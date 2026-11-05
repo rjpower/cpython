@@ -2,12 +2,15 @@
 #  define Py_BUILD_CORE_MODULE 1
 #endif
 
+#define Py_VALUE_CORE 1
 #include "Python.h"
 #include "pycore_ceval.h"         // Py_MakePendingCalls()
 #include "pycore_moduleobject.h"  // _PyModule_GetState()
 #include "pycore_parking_lot.h"
 #include "pycore_time.h"          // _PyTime_FromSecondsObject()
+#include "pycore_value.h"         // PyValue_FromObjectBorrow()
 #include "pycore_value_api.h"     // _PyValue_AsObjectStealAt()
+#include "pycore_value_slots.h"// _PyValue_FromObjectResult()
 #include "pycore_weakref.h"       // FT_CLEAR_WEAKREFS()
 
 #include <stdbool.h>
@@ -159,7 +162,7 @@ RingBuf_Get(RingBuf *buf)
 
 // Returns 0 on success or -1 if the buffer failed to grow.
 static int
-RingBuf_Put(RingBuf *buf, PyObject *item)
+RingBuf_Put(RingBuf *buf, PyValueBorrow item)
 {
     assert(buf->num_items <= buf->items_cap);
 
@@ -170,7 +173,7 @@ RingBuf_Put(RingBuf *buf, PyObject *item)
             return -1;
         }
     }
-    buf->items[buf->put_idx] = PyValue_DUP(PyValue_FromObjectBorrow(item));
+    buf->items[buf->put_idx] = PyValue_DUP(item);
     _PyValue_CheckHome(buf->items[buf->put_idx]);
     buf->put_idx = (buf->put_idx + 1) % buf->items_cap;
     buf->num_items++;
@@ -202,6 +205,11 @@ typedef struct {
 } simplequeueobject;
 
 #define simplequeueobject_CAST(op)  ((simplequeueobject *)(op))
+
+/*[clinic input]
+value_emission
+[clinic start generated code]*/
+/*[clinic end generated code: output=da39a3ee5e6b4b0d input=eb7b17088bfd7215]*/
 
 /*[clinic input]
 module _queue
@@ -250,9 +258,9 @@ _queue.SimpleQueue.__new__ as simplequeue_new
 Simple, unbounded, reentrant FIFO queue.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 simplequeue_new_impl(PyTypeObject *type)
-/*[clinic end generated code: output=ba97740608ba31cd input=a0674a1643e3e2fb]*/
+/*[clinic end generated code: output=3b3194eb95b9cef8 input=a0674a1643e3e2fb]*/
 {
     simplequeueobject *self;
 
@@ -261,11 +269,11 @@ simplequeue_new_impl(PyTypeObject *type)
         self->weakreflist = NULL;
         if (RingBuf_Init(&self->buf) < 0) {
             Py_DECREF(self);
-            return NULL;
+            return PyValue_NULL;
         }
     }
 
-    return (PyObject *) self;
+    return _PyValue_FromObjectResult((PyObject *) self);
 }
 
 typedef struct {
@@ -303,28 +311,34 @@ Queue class.
 
 [clinic start generated code]*/
 
-static PyObject *
-_queue_SimpleQueue_put_impl(simplequeueobject *self, PyObject *item,
-                            int block, PyObject *timeout)
-/*[clinic end generated code: output=4333136e88f90d8b input=9f9ff270a74670c3]*/
+static PyValue
+_queue_SimpleQueue_put_impl(simplequeueobject *self, PyValueBorrow item,
+                            int block, PyValueBorrow timeout)
+/*[clinic end generated code: output=1b10846436967231 input=9f9ff270a74670c3]*/
 {
     if (self->has_threads_waiting) {
+        // The handoff passes an object to the waiting thread, so box the item.
+        PyObject *item_obj = _PyValue_AsObjectAt(item, BOX_SITE_FIELD);
+        if (item_obj == NULL) {
+            return PyValue_NULL;
+        }
         HandoffData data = {
             .handed_off = 0,
-            .item = item,
+            .item = item_obj,
             .queue = self,
         };
         // Try to hand the item off directly if there are threads waiting
         _PyParkingLot_Unpark(&self->has_threads_waiting,
                              maybe_handoff_item, &data);
+        Py_DECREF(item_obj);
         if (data.handed_off) {
-            Py_RETURN_NONE;
+            return PyValue_None;
         }
     }
     if (RingBuf_Put(&self->buf, item) < 0) {
-        return NULL;
+        return PyValue_NULL;
     }
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 /*[clinic input]
@@ -339,11 +353,12 @@ for compatibility with the Queue class.
 
 [clinic start generated code]*/
 
-static PyObject *
-_queue_SimpleQueue_put_nowait_impl(simplequeueobject *self, PyObject *item)
-/*[clinic end generated code: output=0990536715efb1f1 input=ce949cc2cd8a4119]*/
+static PyValue
+_queue_SimpleQueue_put_nowait_impl(simplequeueobject *self,
+                                   PyValueBorrow item)
+/*[clinic end generated code: output=9d746741b9a53b34 input=ce949cc2cd8a4119]*/
 {
-    return _queue_SimpleQueue_put_impl(self, item, 0, Py_None);
+    return _queue_SimpleQueue_put_impl(self, item, 0, PyValue_FromObjectBorrow(Py_None));
 }
 
 static PyObject *
@@ -378,45 +393,52 @@ in that case).
 
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _queue_SimpleQueue_get_impl(simplequeueobject *self, PyTypeObject *cls,
-                            int block, PyObject *timeout_obj)
-/*[clinic end generated code: output=5c2cca914cd1e55b input=afa0889bbc6b4761]*/
+                            int block, PyValueBorrow timeout_obj)
+/*[clinic end generated code: output=a3fef58d9876601f input=afa0889bbc6b4761]*/
 {
     PyTime_t endtime = 0;
 
     // XXX Use PyThread_ParseTimeoutArg().
 
-    if (block != 0 && !Py_IsNone(timeout_obj)) {
+    if (block != 0 && !PyValue_IsNone(timeout_obj)) {
         /* With timeout */
         PyTime_t timeout;
-        if (_PyTime_FromSecondsObject(&timeout,
-                                      timeout_obj, _PyTime_ROUND_CEILING) < 0) {
-            return NULL;
+        PyObject *timeout_box = _PyValue_AsObjectAt(timeout_obj,
+                                                    BOX_SITE_PARSER);
+        if (timeout_box == NULL) {
+            return PyValue_NULL;
+        }
+        int res = _PyTime_FromSecondsObject(&timeout, timeout_box,
+                                            _PyTime_ROUND_CEILING);
+        Py_DECREF(timeout_box);
+        if (res < 0) {
+            return PyValue_NULL;
         }
         if (timeout < 0) {
             PyErr_SetString(PyExc_ValueError,
                             "'timeout' must be a non-negative number");
-            return NULL;
+            return PyValue_NULL;
         }
         endtime = _PyDeadline_Init(timeout);
     }
 
     for (;;) {
         if (!RingBuf_IsEmpty(&self->buf)) {
-            return _PyValue_AsObjectStealAt(RingBuf_Get(&self->buf),
-                                            BOX_SITE_FIELD);
+            return _PyValue_FromObjectResult(_PyValue_AsObjectStealAt(RingBuf_Get(&self->buf),
+                                            BOX_SITE_FIELD));
         }
 
         if (!block) {
-            return empty_error(cls);
+            return _PyValue_FromObjectResult(empty_error(cls));
         }
 
         int64_t timeout_ns = -1;
         if (endtime != 0) {
             timeout_ns = _PyDeadline_Get(endtime);
             if (timeout_ns < 0) {
-                return empty_error(cls);
+                return _PyValue_FromObjectResult(empty_error(cls));
             }
         }
 
@@ -430,15 +452,15 @@ _queue_SimpleQueue_get_impl(simplequeueobject *self, PyTypeObject *cls,
         switch (st) {
             case Py_PARK_OK: {
                 assert(item != NULL);
-                return item;
+                return _PyValue_FromObjectResult(item);
             }
             case Py_PARK_TIMEOUT: {
-                return empty_error(cls);
+                return _PyValue_FromObjectResult(empty_error(cls));
             }
             case Py_PARK_INTR: {
                 // Interrupted
                 if (Py_MakePendingCalls() < 0) {
-                    return NULL;
+                    return PyValue_NULL;
                 }
                 break;
             }
@@ -469,12 +491,12 @@ Only get an item if one is immediately available. Otherwise
 raise the Empty exception.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _queue_SimpleQueue_get_nowait_impl(simplequeueobject *self,
                                    PyTypeObject *cls)
-/*[clinic end generated code: output=620c58e2750f8b8a input=d48be63633fefae9]*/
+/*[clinic end generated code: output=f0fb5755cc0a993d input=d48be63633fefae9]*/
 {
-    return _queue_SimpleQueue_get_impl(self, cls, 0, Py_None);
+    return _queue_SimpleQueue_get_impl(self, cls, 0, PyValue_FromObjectBorrow(Py_None));
 }
 
 /*[clinic input]

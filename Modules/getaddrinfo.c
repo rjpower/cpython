@@ -53,6 +53,7 @@
 #include <stddef.h>
 #include <unistd.h>
 
+#define Py_VALUE_CORE 1
 #include "addrinfo.h"
 #endif
 

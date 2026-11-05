@@ -2,24 +2,32 @@
 preserve
 [clinic start generated code]*/
 
+#ifndef Py_VALUE_CORE
+#  error "value-emission Clinic output requires Py_VALUE_CORE"
+#endif
+
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 #  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
 #  include "pycore_value.h"       // _PyValue_STATIC_IMMORTAL()
 #endif
-#include "pycore_abstract.h"      // _PyNumber_Index()
-#include "pycore_modsupport.h"    // _PyArg_UnpackKeywords()
+#include "pycore_long_value.h"    // _PyValue_IntAsSsize_t()
+#include "pycore_modsupport.h"    // _PyArg_UnpackKeywordsValue()
+#include "pycore_tuple.h"         // _PyTuple_ITEMS()
+#include "pycore_value_call.h"    // METH_VALUE
+#include "pycore_value_ops.h"     // _PyValue_Index()
+#include "pycore_value_slots.h"   // _PyValue_THUNK_EXIT()
 
-static PyObject *
-PyCField_new_impl(PyTypeObject *type, PyObject *name, PyObject *proto,
+static PyValue
+PyCField_new_impl(PyTypeObject *type, PyObject *name, PyValueBorrow proto,
                   Py_ssize_t byte_size, Py_ssize_t byte_offset,
                   Py_ssize_t index, int _internal_use,
-                  PyObject *bit_size_obj, PyObject *bit_offset_obj);
+                  PyValueBorrow bit_size_obj, PyValueBorrow bit_offset_obj);
 
-static PyObject *
-PyCField_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
+static PyValue
+PyCField_new_value(PyTypeObject *type, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 8
@@ -47,37 +55,32 @@ PyCField_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[8];
-    PyObject * const *fastargs;
-    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
-    Py_ssize_t noptargs = nargs + (kwargs ? PyDict_GET_SIZE(kwargs) : 0) - 6;
+    Py_ssize_t _idx[8];
     PyObject *name;
-    PyObject *proto;
+    PyValueBorrow proto;
     Py_ssize_t byte_size;
     Py_ssize_t byte_offset;
     Py_ssize_t index;
     int _internal_use;
-    PyObject *bit_size_obj = Py_None;
-    PyObject *bit_offset_obj = Py_None;
+    PyValueBorrow bit_size_obj = PyValue_Borrow(PyValue_None);
+    PyValueBorrow bit_offset_obj = PyValue_Borrow(PyValue_None);
 
-    PyObject *const _args_items[1] = {NULL};
-    fastargs = _PyArg_UnpackKeywords(_args_items, nargs, kwargs, NULL, &_parser,
-            /*minpos*/ 0, /*maxpos*/ 0, /*minkw*/ 6, /*varpos*/ 0, argsbuf);
-    if (!fastargs) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 0, /*maxpos*/ 0, /*minkw*/ 6, /*varpos*/ 0, _idx, 8)) {
         goto exit;
     }
-    if (!PyUnicode_Check(fastargs[0])) {
-        _PyArg_BadArgument("CField", "argument 'name'", "str", fastargs[0]);
+    if (!PyType_IsSubtype(PyValue_TYPE(PyValue_Borrow(args[_idx[0]])), &PyUnicode_Type)) {
+        _PyArg_BadArgumentValue("CField", "argument 'name'", "str", PyValue_Borrow(args[_idx[0]]));
         goto exit;
     }
-    name = fastargs[0];
-    proto = fastargs[1];
+    name = PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[0]]));
+    proto = PyValue_Borrow(args[_idx[1]]);
     {
         Py_ssize_t ival = -1;
-        PyObject *iobj = _PyNumber_Index(fastargs[2]);
-        if (iobj != NULL) {
-            ival = PyLong_AsSsize_t(iobj);
-            Py_DECREF(iobj);
+        PyValue iobj = _PyValue_Index(PyValue_Borrow(args[_idx[2]]));
+        if (!PyValue_IsNull(iobj)) {
+            ival = _PyValue_IntAsSsize_t(PyValue_Borrow(iobj));
+            PyValue_CLOSE(iobj);
         }
         if (ival == -1 && PyErr_Occurred()) {
             goto exit;
@@ -86,10 +89,10 @@ PyCField_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     }
     {
         Py_ssize_t ival = -1;
-        PyObject *iobj = _PyNumber_Index(fastargs[3]);
-        if (iobj != NULL) {
-            ival = PyLong_AsSsize_t(iobj);
-            Py_DECREF(iobj);
+        PyValue iobj = _PyValue_Index(PyValue_Borrow(args[_idx[3]]));
+        if (!PyValue_IsNull(iobj)) {
+            ival = _PyValue_IntAsSsize_t(PyValue_Borrow(iobj));
+            PyValue_CLOSE(iobj);
         }
         if (ival == -1 && PyErr_Occurred()) {
             goto exit;
@@ -98,34 +101,47 @@ PyCField_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     }
     {
         Py_ssize_t ival = -1;
-        PyObject *iobj = _PyNumber_Index(fastargs[4]);
-        if (iobj != NULL) {
-            ival = PyLong_AsSsize_t(iobj);
-            Py_DECREF(iobj);
+        PyValue iobj = _PyValue_Index(PyValue_Borrow(args[_idx[4]]));
+        if (!PyValue_IsNull(iobj)) {
+            ival = _PyValue_IntAsSsize_t(PyValue_Borrow(iobj));
+            PyValue_CLOSE(iobj);
         }
         if (ival == -1 && PyErr_Occurred()) {
             goto exit;
         }
         index = ival;
     }
-    _internal_use = PyObject_IsTrue(fastargs[5]);
+    _internal_use = _PyValue_IsTrue(PyValue_Borrow(args[_idx[5]]));
     if (_internal_use < 0) {
         goto exit;
     }
-    if (!noptargs) {
-        goto skip_optional_kwonly;
+    if (_idx[6] >= 0) {
+        bit_size_obj = PyValue_Borrow(args[_idx[6]]);
     }
-    if (fastargs[6]) {
-        bit_size_obj = fastargs[6];
-        if (!--noptargs) {
-            goto skip_optional_kwonly;
-        }
+    if (_idx[7] >= 0) {
+        bit_offset_obj = PyValue_Borrow(args[_idx[7]]);
     }
-    bit_offset_obj = fastargs[7];
-skip_optional_kwonly:
     return_value = PyCField_new_impl(type, name, proto, byte_size, byte_offset, index, _internal_use, bit_size_obj, bit_offset_obj);
 
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=7a1505aa1b6e2182 input=a9049054013a1b77]*/
+
+Py_VALUE_ENTRY static PyObject *
+PyCField_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
+{
+    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
+    if (kwargs == NULL || PyDict_GET_SIZE(kwargs) == 0) {
+        return _PyValue_THUNK_EXIT(PyCField_new_value(type, _PyTuple_ITEMS(args), nargs, NULL), BOX_SITE_CALL);
+    }
+    PyObject *kwnames;
+    PyValue *window = _PyValue_StackUnpackDict(_PyThreadState_GET(),
+        _PyTuple_ITEMS(args), nargs, kwargs, &kwnames);
+    if (window == NULL) {
+        return NULL;
+    }
+    PyValue result = PyCField_new_value(type, window, nargs, kwnames);
+    _PyValue_StackUnpackDict_Free(window, nargs, kwnames);
+    return _PyValue_THUNK_EXIT(result, BOX_SITE_CALL);
+}
+/*[clinic end generated code: output=41126f1f4b62991d input=a9049054013a1b77]*/

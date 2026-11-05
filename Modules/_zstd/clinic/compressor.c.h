@@ -2,13 +2,20 @@
 preserve
 [clinic start generated code]*/
 
+#ifndef Py_VALUE_CORE
+#  error "value-emission Clinic output requires Py_VALUE_CORE"
+#endif
+
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 #  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
 #  include "pycore_value.h"       // _PyValue_STATIC_IMMORTAL()
 #endif
-#include "pycore_borrow.h"        // _PyBorrow_TupleItems()
-#include "pycore_modsupport.h"    // _PyArg_UnpackKeywords()
+#include "pycore_long_value.h"    // _PyValue_AsInt()
+#include "pycore_modsupport.h"    // _PyArg_UnpackKeywordsValue()
+#include "pycore_tuple.h"         // _PyTuple_ITEMS()
+#include "pycore_value_call.h"    // METH_VALUE
+#include "pycore_value_slots.h"   // _PyValue_THUNK_EXIT()
 
 PyDoc_STRVAR(_zstd_ZstdCompressor_new__doc__,
 "ZstdCompressor(level=None, options=None, zstd_dict=None)\n"
@@ -26,14 +33,14 @@ PyDoc_STRVAR(_zstd_ZstdCompressor_new__doc__,
 "Thread-safe at method level.  For one-shot compression, use the\n"
 "compress() function instead.");
 
-static PyObject *
-_zstd_ZstdCompressor_new_impl(PyTypeObject *type, PyObject *level,
-                              PyObject *options, PyObject *zstd_dict);
+static PyValue
+_zstd_ZstdCompressor_new_impl(PyTypeObject *type, PyValueBorrow level,
+                              PyValueBorrow options, PyValueBorrow zstd_dict);
 
-static PyObject *
-_zstd_ZstdCompressor_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
+static PyValue
+_zstd_ZstdCompressor_new_value(PyTypeObject *type, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 3
@@ -61,44 +68,46 @@ _zstd_ZstdCompressor_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[3];
-    PyObject * const *fastargs;
-    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
-    Py_ssize_t noptargs = nargs + (kwargs ? PyDict_GET_SIZE(kwargs) : 0) - 0;
-    PyObject *level = Py_None;
-    PyObject *options = Py_None;
-    PyObject *zstd_dict = Py_None;
+    Py_ssize_t _idx[3];
+    PyValueBorrow level = PyValue_Borrow(PyValue_None);
+    PyValueBorrow options = PyValue_Borrow(PyValue_None);
+    PyValueBorrow zstd_dict = PyValue_Borrow(PyValue_None);
 
-    PyObject *const *_args_items = _PyBorrow_TupleItems(args, Py_MIN(nargs, 3));
-    if (_args_items == NULL) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 0, /*maxpos*/ 3, /*minkw*/ 0, /*varpos*/ 0, _idx, 3)) {
         goto exit;
     }
-    fastargs = _PyArg_UnpackKeywords(_args_items, nargs, kwargs, NULL, &_parser,
-            /*minpos*/ 0, /*maxpos*/ 3, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!fastargs) {
-        goto exit;
+    if (_idx[0] >= 0) {
+        level = PyValue_Borrow(args[_idx[0]]);
     }
-    if (!noptargs) {
-        goto skip_optional_pos;
+    if (_idx[1] >= 0) {
+        options = PyValue_Borrow(args[_idx[1]]);
     }
-    if (fastargs[0]) {
-        level = fastargs[0];
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
+    if (_idx[2] >= 0) {
+        zstd_dict = PyValue_Borrow(args[_idx[2]]);
     }
-    if (fastargs[1]) {
-        options = fastargs[1];
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
-    }
-    zstd_dict = fastargs[2];
-skip_optional_pos:
     return_value = _zstd_ZstdCompressor_new_impl(type, level, options, zstd_dict);
 
 exit:
     return return_value;
+}
+
+Py_VALUE_ENTRY static PyObject *
+_zstd_ZstdCompressor_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
+{
+    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
+    if (kwargs == NULL || PyDict_GET_SIZE(kwargs) == 0) {
+        return _PyValue_THUNK_EXIT(_zstd_ZstdCompressor_new_value(type, _PyTuple_ITEMS(args), nargs, NULL), BOX_SITE_CALL);
+    }
+    PyObject *kwnames;
+    PyValue *window = _PyValue_StackUnpackDict(_PyThreadState_GET(),
+        _PyTuple_ITEMS(args), nargs, kwargs, &kwnames);
+    if (window == NULL) {
+        return NULL;
+    }
+    PyValue result = _zstd_ZstdCompressor_new_value(type, window, nargs, kwnames);
+    _PyValue_StackUnpackDict_Free(window, nargs, kwnames);
+    return _PyValue_THUNK_EXIT(result, BOX_SITE_CALL);
 }
 
 PyDoc_STRVAR(_zstd_ZstdCompressor_compress__doc__,
@@ -116,16 +125,16 @@ PyDoc_STRVAR(_zstd_ZstdCompressor_compress__doc__,
 "flush() method to finish the compression process.");
 
 #define _ZSTD_ZSTDCOMPRESSOR_COMPRESS_METHODDEF    \
-    {"compress", _PyCFunction_CAST(_zstd_ZstdCompressor_compress), METH_FASTCALL|METH_KEYWORDS, _zstd_ZstdCompressor_compress__doc__},
+    {"compress", _PyCFunction_CAST(_zstd_ZstdCompressor_compress), METH_VALUE|METH_KEYWORDS, _zstd_ZstdCompressor_compress__doc__},
 
-static PyObject *
+static PyValue
 _zstd_ZstdCompressor_compress_impl(ZstdCompressor *self, Py_buffer *data,
                                    int mode);
 
-static PyObject *
-_zstd_ZstdCompressor_compress(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_zstd_ZstdCompressor_compress(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 2
@@ -153,28 +162,28 @@ _zstd_ZstdCompressor_compress(PyObject *self, PyObject *const *args, Py_ssize_t 
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[2];
-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 1;
+    Py_ssize_t _idx[2];
     Py_buffer data = {NULL, NULL};
     int mode = ZSTD_e_continue;
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 1, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 1, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, _idx, 2)) {
         goto exit;
     }
-    if (PyObject_GetBuffer(args[0], &data, PyBUF_SIMPLE) != 0) {
+    if (!PyValue_IsObject(PyValue_Borrow(args[_idx[0]]))) {
+        PyErr_Format(PyExc_TypeError, "a bytes-like object is required, not '%.100s'", PyValue_TYPE(PyValue_Borrow(args[_idx[0]]))->tp_name);
         goto exit;
     }
-    if (!noptargs) {
-        goto skip_optional_pos;
-    }
-    mode = PyLong_AsInt(args[1]);
-    if (mode == -1 && PyErr_Occurred()) {
+    if (PyObject_GetBuffer(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[0]])), &data, PyBUF_SIMPLE) != 0) {
         goto exit;
     }
-skip_optional_pos:
-    return_value = _zstd_ZstdCompressor_compress_impl((ZstdCompressor *)self, &data, mode);
+    if (_idx[1] >= 0) {
+        mode = _PyValue_AsInt(PyValue_Borrow(args[_idx[1]]));
+        if (mode == -1 && PyErr_Occurred()) {
+            goto exit;
+        }
+    }
+    return_value = _zstd_ZstdCompressor_compress_impl((ZstdCompressor *)PyValue_AsKnownObjectBorrow(self), &data, mode);
 
 exit:
     /* Cleanup for data */
@@ -200,15 +209,15 @@ PyDoc_STRVAR(_zstd_ZstdCompressor_flush__doc__,
 "object can still be used after this method is called.");
 
 #define _ZSTD_ZSTDCOMPRESSOR_FLUSH_METHODDEF    \
-    {"flush", _PyCFunction_CAST(_zstd_ZstdCompressor_flush), METH_FASTCALL|METH_KEYWORDS, _zstd_ZstdCompressor_flush__doc__},
+    {"flush", _PyCFunction_CAST(_zstd_ZstdCompressor_flush), METH_VALUE|METH_KEYWORDS, _zstd_ZstdCompressor_flush__doc__},
 
-static PyObject *
+static PyValue
 _zstd_ZstdCompressor_flush_impl(ZstdCompressor *self, int mode);
 
-static PyObject *
-_zstd_ZstdCompressor_flush(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_zstd_ZstdCompressor_flush(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
@@ -236,24 +245,20 @@ _zstd_ZstdCompressor_flush(PyObject *self, PyObject *const *args, Py_ssize_t nar
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[1];
-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 0;
+    Py_ssize_t _idx[1];
     int mode = ZSTD_e_end;
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 0, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 0, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, _idx, 1)) {
         goto exit;
     }
-    if (!noptargs) {
-        goto skip_optional_pos;
+    if (_idx[0] >= 0) {
+        mode = _PyValue_AsInt(PyValue_Borrow(args[_idx[0]]));
+        if (mode == -1 && PyErr_Occurred()) {
+            goto exit;
+        }
     }
-    mode = PyLong_AsInt(args[0]);
-    if (mode == -1 && PyErr_Occurred()) {
-        goto exit;
-    }
-skip_optional_pos:
-    return_value = _zstd_ZstdCompressor_flush_impl((ZstdCompressor *)self, mode);
+    return_value = _zstd_ZstdCompressor_flush_impl((ZstdCompressor *)PyValue_AsKnownObjectBorrow(self), mode);
 
 exit:
     return return_value;
@@ -278,24 +283,24 @@ PyDoc_STRVAR(_zstd_ZstdCompressor_set_pledged_input_size__doc__,
 "may be corrupted and the final chunk written may be lost.");
 
 #define _ZSTD_ZSTDCOMPRESSOR_SET_PLEDGED_INPUT_SIZE_METHODDEF    \
-    {"set_pledged_input_size", (PyCFunction)_zstd_ZstdCompressor_set_pledged_input_size, METH_O, _zstd_ZstdCompressor_set_pledged_input_size__doc__},
+    {"set_pledged_input_size", _PyCFunction_CAST(_zstd_ZstdCompressor_set_pledged_input_size), METH_VALUE|METH_O, _zstd_ZstdCompressor_set_pledged_input_size__doc__},
 
-static PyObject *
+static PyValue
 _zstd_ZstdCompressor_set_pledged_input_size_impl(ZstdCompressor *self,
                                                  unsigned long long size);
 
-static PyObject *
-_zstd_ZstdCompressor_set_pledged_input_size(PyObject *self, PyObject *arg)
+static PyValue
+_zstd_ZstdCompressor_set_pledged_input_size(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     unsigned long long size;
 
-    if (!zstd_contentsize_converter(arg, &size)) {
+    if (!zstd_contentsize_converter(PyValue_Borrow(args[0]), &size)) {
         goto exit;
     }
-    return_value = _zstd_ZstdCompressor_set_pledged_input_size_impl((ZstdCompressor *)self, size);
+    return_value = _zstd_ZstdCompressor_set_pledged_input_size_impl((ZstdCompressor *)PyValue_AsKnownObjectBorrow(self), size);
 
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=eda26d56f6774c1a input=a9049054013a1b77]*/
+/*[clinic end generated code: output=b2530afdf73c929a input=a9049054013a1b77]*/

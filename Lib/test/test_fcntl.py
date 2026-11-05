@@ -82,6 +82,14 @@ class TestFcntl(unittest.TestCase):
                 print('struct.pack: ', repr(lockdata))
         return lockdata
 
+    def test_argument_type_error_names_the_type(self):
+        # A float is neither an int, a buffer nor a str: the message names
+        # its type.
+        for func in (fcntl.fcntl, fcntl.ioctl):
+            with self.subTest(func=func.__name__):
+                with self.assertRaisesRegex(TypeError, "not float"):
+                    func(0, 1, 1.5)
+
     def test_fcntl_fileno(self):
         # the example from the library docs
         self.f = open(TESTFN, 'wb')

@@ -2,13 +2,19 @@
 preserve
 [clinic start generated code]*/
 
+#ifndef Py_VALUE_CORE
+#  error "value-emission Clinic output requires Py_VALUE_CORE"
+#endif
+
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 #  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
 #  include "pycore_value.h"       // _PyValue_STATIC_IMMORTAL()
 #endif
-#include "pycore_abstract.h"      // _Py_convert_optional_to_ssize_t()
-#include "pycore_modsupport.h"    // _PyArg_UnpackKeywords()
+#include "pycore_long_value.h"    // _PyValue_AsInt()
+#include "pycore_modsupport.h"    // _PyArg_UnpackKeywordsValue()
+#include "pycore_tuple.h"         // _PyTuple_FromValueArray()
+#include "pycore_value_call.h"    // METH_VALUE
 
 PyDoc_STRVAR(gc_enable__doc__,
 "enable($module, /)\n"
@@ -17,15 +23,19 @@ PyDoc_STRVAR(gc_enable__doc__,
 "Enable automatic garbage collection.");
 
 #define GC_ENABLE_METHODDEF    \
-    {"enable", (PyCFunction)gc_enable, METH_NOARGS, gc_enable__doc__},
+    {"enable", _PyCFunction_CAST(gc_enable), METH_VALUE|METH_NOARGS, gc_enable__doc__},
 
-static PyObject *
+static PyValue
 gc_enable_impl(PyObject *module);
 
-static PyObject *
-gc_enable(PyObject *module, PyObject *Py_UNUSED(ignored))
+static PyValue
+gc_enable(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return gc_enable_impl(module);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = gc_enable_impl(PyValue_AsKnownObjectBorrow(module));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(gc_disable__doc__,
@@ -35,15 +45,19 @@ PyDoc_STRVAR(gc_disable__doc__,
 "Disable automatic garbage collection.");
 
 #define GC_DISABLE_METHODDEF    \
-    {"disable", (PyCFunction)gc_disable, METH_NOARGS, gc_disable__doc__},
+    {"disable", _PyCFunction_CAST(gc_disable), METH_VALUE|METH_NOARGS, gc_disable__doc__},
 
-static PyObject *
+static PyValue
 gc_disable_impl(PyObject *module);
 
-static PyObject *
-gc_disable(PyObject *module, PyObject *Py_UNUSED(ignored))
+static PyValue
+gc_disable(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return gc_disable_impl(module);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = gc_disable_impl(PyValue_AsKnownObjectBorrow(module));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(gc_isenabled__doc__,
@@ -53,22 +67,22 @@ PyDoc_STRVAR(gc_isenabled__doc__,
 "Returns true if automatic garbage collection is enabled.");
 
 #define GC_ISENABLED_METHODDEF    \
-    {"isenabled", (PyCFunction)gc_isenabled, METH_NOARGS, gc_isenabled__doc__},
+    {"isenabled", _PyCFunction_CAST(gc_isenabled), METH_VALUE|METH_NOARGS, gc_isenabled__doc__},
 
 static int
 gc_isenabled_impl(PyObject *module);
 
-static PyObject *
-gc_isenabled(PyObject *module, PyObject *Py_UNUSED(ignored))
+static PyValue
+gc_isenabled(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int _return_value;
 
-    _return_value = gc_isenabled_impl(module);
+    _return_value = gc_isenabled_impl(PyValue_AsKnownObjectBorrow(module));
     if ((_return_value == -1) && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = PyBool_FromLong((long)_return_value);
+    return_value = _return_value ? PyValue_True : PyValue_False;
 
 exit:
     return return_value;
@@ -87,15 +101,15 @@ PyDoc_STRVAR(gc_collect__doc__,
 "The number of unreachable objects is returned.");
 
 #define GC_COLLECT_METHODDEF    \
-    {"collect", _PyCFunction_CAST(gc_collect), METH_FASTCALL|METH_KEYWORDS, gc_collect__doc__},
+    {"collect", _PyCFunction_CAST(gc_collect), METH_VALUE|METH_KEYWORDS, gc_collect__doc__},
 
 static Py_ssize_t
 gc_collect_impl(PyObject *module, int generation);
 
-static PyObject *
-gc_collect(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+gc_collect(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
@@ -123,29 +137,25 @@ gc_collect(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[1];
-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 0;
+    Py_ssize_t _idx[1];
     int generation = NUM_GENERATIONS - 1;
     Py_ssize_t _return_value;
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 0, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 0, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, _idx, 1)) {
         goto exit;
     }
-    if (!noptargs) {
-        goto skip_optional_pos;
+    if (_idx[0] >= 0) {
+        generation = _PyValue_AsInt(PyValue_Borrow(args[_idx[0]]));
+        if (generation == -1 && PyErr_Occurred()) {
+            goto exit;
+        }
     }
-    generation = PyLong_AsInt(args[0]);
-    if (generation == -1 && PyErr_Occurred()) {
-        goto exit;
-    }
-skip_optional_pos:
-    _return_value = gc_collect_impl(module, generation);
+    _return_value = gc_collect_impl(PyValue_AsKnownObjectBorrow(module), generation);
     if ((_return_value == -1) && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = PyLong_FromSsize_t(_return_value);
+    return_value = PyValue_FromInt64((int64_t)_return_value);
 
 exit:
     return return_value;
@@ -169,22 +179,22 @@ PyDoc_STRVAR(gc_set_debug__doc__,
 "Debugging information is written to sys.stderr.");
 
 #define GC_SET_DEBUG_METHODDEF    \
-    {"set_debug", (PyCFunction)gc_set_debug, METH_O, gc_set_debug__doc__},
+    {"set_debug", _PyCFunction_CAST(gc_set_debug), METH_VALUE|METH_O, gc_set_debug__doc__},
 
-static PyObject *
+static PyValue
 gc_set_debug_impl(PyObject *module, int flags);
 
-static PyObject *
-gc_set_debug(PyObject *module, PyObject *arg)
+static PyValue
+gc_set_debug(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int flags;
 
-    flags = PyLong_AsInt(arg);
+    flags = _PyValue_AsInt(PyValue_Borrow(args[0]));
     if (flags == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = gc_set_debug_impl(module, flags);
+    return_value = gc_set_debug_impl(PyValue_AsKnownObjectBorrow(module), flags);
 
 exit:
     return return_value;
@@ -197,22 +207,22 @@ PyDoc_STRVAR(gc_get_debug__doc__,
 "Get the garbage collection debugging flags.");
 
 #define GC_GET_DEBUG_METHODDEF    \
-    {"get_debug", (PyCFunction)gc_get_debug, METH_NOARGS, gc_get_debug__doc__},
+    {"get_debug", _PyCFunction_CAST(gc_get_debug), METH_VALUE|METH_NOARGS, gc_get_debug__doc__},
 
 static int
 gc_get_debug_impl(PyObject *module);
 
-static PyObject *
-gc_get_debug(PyObject *module, PyObject *Py_UNUSED(ignored))
+static PyValue
+gc_get_debug(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int _return_value;
 
-    _return_value = gc_get_debug_impl(module);
+    _return_value = gc_get_debug_impl(PyValue_AsKnownObjectBorrow(module));
     if ((_return_value == -1) && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = PyLong_FromLong((long)_return_value);
+    return_value = PyValue_FromInt64((int64_t)_return_value);
 
 exit:
     return return_value;
@@ -276,15 +286,19 @@ PyDoc_STRVAR(gc_get_threshold__doc__,
 "Return the current collection thresholds.");
 
 #define GC_GET_THRESHOLD_METHODDEF    \
-    {"get_threshold", (PyCFunction)gc_get_threshold, METH_NOARGS, gc_get_threshold__doc__},
+    {"get_threshold", _PyCFunction_CAST(gc_get_threshold), METH_VALUE|METH_NOARGS, gc_get_threshold__doc__},
 
-static PyObject *
+static PyValue
 gc_get_threshold_impl(PyObject *module);
 
-static PyObject *
-gc_get_threshold(PyObject *module, PyObject *Py_UNUSED(ignored))
+static PyValue
+gc_get_threshold(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return gc_get_threshold_impl(module);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = gc_get_threshold_impl(PyValue_AsKnownObjectBorrow(module));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(gc_get_count__doc__,
@@ -294,15 +308,19 @@ PyDoc_STRVAR(gc_get_count__doc__,
 "Return a three-tuple of the current collection counts.");
 
 #define GC_GET_COUNT_METHODDEF    \
-    {"get_count", (PyCFunction)gc_get_count, METH_NOARGS, gc_get_count__doc__},
+    {"get_count", _PyCFunction_CAST(gc_get_count), METH_VALUE|METH_NOARGS, gc_get_count__doc__},
 
-static PyObject *
+static PyValue
 gc_get_count_impl(PyObject *module);
 
-static PyObject *
-gc_get_count(PyObject *module, PyObject *Py_UNUSED(ignored))
+static PyValue
+gc_get_count(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return gc_get_count_impl(module);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = gc_get_count_impl(PyValue_AsKnownObjectBorrow(module));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(gc_get_referrers__doc__,
@@ -312,22 +330,22 @@ PyDoc_STRVAR(gc_get_referrers__doc__,
 "Return the list of objects that directly refer to any of \'objs\'.");
 
 #define GC_GET_REFERRERS_METHODDEF    \
-    {"get_referrers", _PyCFunction_CAST(gc_get_referrers), METH_FASTCALL, gc_get_referrers__doc__},
+    {"get_referrers", _PyCFunction_CAST(gc_get_referrers), METH_VALUE, gc_get_referrers__doc__},
 
-static PyObject *
+static PyValue
 gc_get_referrers_impl(PyObject *module, PyObject *objs);
 
-static PyObject *
-gc_get_referrers(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+gc_get_referrers(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *objs = NULL;
 
-    objs = PyTuple_FromArray(args, nargs);
+    objs = _PyTuple_FromValueArray(args, nargs);
     if (objs == NULL) {
         goto exit;
     }
-    return_value = gc_get_referrers_impl(module, objs);
+    return_value = gc_get_referrers_impl(PyValue_AsKnownObjectBorrow(module), objs);
 
 exit:
     /* Cleanup for objs */
@@ -343,22 +361,22 @@ PyDoc_STRVAR(gc_get_referents__doc__,
 "Return the list of objects that are directly referred to by \'objs\'.");
 
 #define GC_GET_REFERENTS_METHODDEF    \
-    {"get_referents", _PyCFunction_CAST(gc_get_referents), METH_FASTCALL, gc_get_referents__doc__},
+    {"get_referents", _PyCFunction_CAST(gc_get_referents), METH_VALUE, gc_get_referents__doc__},
 
-static PyObject *
+static PyValue
 gc_get_referents_impl(PyObject *module, PyObject *objs);
 
-static PyObject *
-gc_get_referents(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+gc_get_referents(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *objs = NULL;
 
-    objs = PyTuple_FromArray(args, nargs);
+    objs = _PyTuple_FromValueArray(args, nargs);
     if (objs == NULL) {
         goto exit;
     }
-    return_value = gc_get_referents_impl(module, objs);
+    return_value = gc_get_referents_impl(PyValue_AsKnownObjectBorrow(module), objs);
 
 exit:
     /* Cleanup for objs */
@@ -380,15 +398,15 @@ PyDoc_STRVAR(gc_get_objects__doc__,
 "collector that are in that generation.");
 
 #define GC_GET_OBJECTS_METHODDEF    \
-    {"get_objects", _PyCFunction_CAST(gc_get_objects), METH_FASTCALL|METH_KEYWORDS, gc_get_objects__doc__},
+    {"get_objects", _PyCFunction_CAST(gc_get_objects), METH_VALUE|METH_KEYWORDS, gc_get_objects__doc__},
 
-static PyObject *
+static PyValue
 gc_get_objects_impl(PyObject *module, Py_ssize_t generation);
 
-static PyObject *
-gc_get_objects(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+gc_get_objects(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
@@ -416,23 +434,19 @@ gc_get_objects(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObje
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[1];
-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 0;
+    Py_ssize_t _idx[1];
     Py_ssize_t generation = -1;
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 0, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 0, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, _idx, 1)) {
         goto exit;
     }
-    if (!noptargs) {
-        goto skip_optional_pos;
+    if (_idx[0] >= 0) {
+        if (!_Py_convert_optional_to_ssize_t_value(PyValue_Borrow(args[_idx[0]]), &generation)) {
+            goto exit;
+        }
     }
-    if (!_Py_convert_optional_to_ssize_t(args[0], &generation)) {
-        goto exit;
-    }
-skip_optional_pos:
-    return_value = gc_get_objects_impl(module, generation);
+    return_value = gc_get_objects_impl(PyValue_AsKnownObjectBorrow(module), generation);
 
 exit:
     return return_value;
@@ -445,15 +459,19 @@ PyDoc_STRVAR(gc_get_stats__doc__,
 "Return a list of dictionaries containing per-generation statistics.");
 
 #define GC_GET_STATS_METHODDEF    \
-    {"get_stats", (PyCFunction)gc_get_stats, METH_NOARGS, gc_get_stats__doc__},
+    {"get_stats", _PyCFunction_CAST(gc_get_stats), METH_VALUE|METH_NOARGS, gc_get_stats__doc__},
 
-static PyObject *
+static PyValue
 gc_get_stats_impl(PyObject *module);
 
-static PyObject *
-gc_get_stats(PyObject *module, PyObject *Py_UNUSED(ignored))
+static PyValue
+gc_get_stats(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return gc_get_stats_impl(module);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = gc_get_stats_impl(PyValue_AsKnownObjectBorrow(module));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(gc_is_tracked__doc__,
@@ -465,22 +483,24 @@ PyDoc_STRVAR(gc_is_tracked__doc__,
 "Simple atomic objects will return false.");
 
 #define GC_IS_TRACKED_METHODDEF    \
-    {"is_tracked", (PyCFunction)gc_is_tracked, METH_O, gc_is_tracked__doc__},
+    {"is_tracked", _PyCFunction_CAST(gc_is_tracked), METH_VALUE|METH_O, gc_is_tracked__doc__},
 
 static int
-gc_is_tracked_impl(PyObject *module, PyObject *obj);
+gc_is_tracked_impl(PyObject *module, PyValueBorrow obj);
 
-static PyObject *
-gc_is_tracked(PyObject *module, PyObject *obj)
+static PyValue
+gc_is_tracked(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow obj;
     int _return_value;
 
-    _return_value = gc_is_tracked_impl(module, obj);
+    obj = PyValue_Borrow(args[0]);
+    _return_value = gc_is_tracked_impl(PyValue_AsKnownObjectBorrow(module), obj);
     if ((_return_value == -1) && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = PyBool_FromLong((long)_return_value);
+    return_value = _return_value ? PyValue_True : PyValue_False;
 
 exit:
     return return_value;
@@ -493,22 +513,24 @@ PyDoc_STRVAR(gc_is_finalized__doc__,
 "Returns true if the object has been already finalized by the GC.");
 
 #define GC_IS_FINALIZED_METHODDEF    \
-    {"is_finalized", (PyCFunction)gc_is_finalized, METH_O, gc_is_finalized__doc__},
+    {"is_finalized", _PyCFunction_CAST(gc_is_finalized), METH_VALUE|METH_O, gc_is_finalized__doc__},
 
 static int
-gc_is_finalized_impl(PyObject *module, PyObject *obj);
+gc_is_finalized_impl(PyObject *module, PyValueBorrow obj);
 
-static PyObject *
-gc_is_finalized(PyObject *module, PyObject *obj)
+static PyValue
+gc_is_finalized(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow obj;
     int _return_value;
 
-    _return_value = gc_is_finalized_impl(module, obj);
+    obj = PyValue_Borrow(args[0]);
+    _return_value = gc_is_finalized_impl(PyValue_AsKnownObjectBorrow(module), obj);
     if ((_return_value == -1) && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = PyBool_FromLong((long)_return_value);
+    return_value = _return_value ? PyValue_True : PyValue_False;
 
 exit:
     return return_value;
@@ -526,15 +548,19 @@ PyDoc_STRVAR(gc_freeze__doc__,
 "allocation which can cause copy-on-write.");
 
 #define GC_FREEZE_METHODDEF    \
-    {"freeze", (PyCFunction)gc_freeze, METH_NOARGS, gc_freeze__doc__},
+    {"freeze", _PyCFunction_CAST(gc_freeze), METH_VALUE|METH_NOARGS, gc_freeze__doc__},
 
-static PyObject *
+static PyValue
 gc_freeze_impl(PyObject *module);
 
-static PyObject *
-gc_freeze(PyObject *module, PyObject *Py_UNUSED(ignored))
+static PyValue
+gc_freeze(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return gc_freeze_impl(module);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = gc_freeze_impl(PyValue_AsKnownObjectBorrow(module));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(gc_unfreeze__doc__,
@@ -546,15 +572,19 @@ PyDoc_STRVAR(gc_unfreeze__doc__,
 "Put all objects in the permanent generation back into oldest generation.");
 
 #define GC_UNFREEZE_METHODDEF    \
-    {"unfreeze", (PyCFunction)gc_unfreeze, METH_NOARGS, gc_unfreeze__doc__},
+    {"unfreeze", _PyCFunction_CAST(gc_unfreeze), METH_VALUE|METH_NOARGS, gc_unfreeze__doc__},
 
-static PyObject *
+static PyValue
 gc_unfreeze_impl(PyObject *module);
 
-static PyObject *
-gc_unfreeze(PyObject *module, PyObject *Py_UNUSED(ignored))
+static PyValue
+gc_unfreeze(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return gc_unfreeze_impl(module);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = gc_unfreeze_impl(PyValue_AsKnownObjectBorrow(module));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(gc_get_freeze_count__doc__,
@@ -564,24 +594,24 @@ PyDoc_STRVAR(gc_get_freeze_count__doc__,
 "Return the number of objects in the permanent generation.");
 
 #define GC_GET_FREEZE_COUNT_METHODDEF    \
-    {"get_freeze_count", (PyCFunction)gc_get_freeze_count, METH_NOARGS, gc_get_freeze_count__doc__},
+    {"get_freeze_count", _PyCFunction_CAST(gc_get_freeze_count), METH_VALUE|METH_NOARGS, gc_get_freeze_count__doc__},
 
 static Py_ssize_t
 gc_get_freeze_count_impl(PyObject *module);
 
-static PyObject *
-gc_get_freeze_count(PyObject *module, PyObject *Py_UNUSED(ignored))
+static PyValue
+gc_get_freeze_count(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     Py_ssize_t _return_value;
 
-    _return_value = gc_get_freeze_count_impl(module);
+    _return_value = gc_get_freeze_count_impl(PyValue_AsKnownObjectBorrow(module));
     if ((_return_value == -1) && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = PyLong_FromSsize_t(_return_value);
+    return_value = PyValue_FromInt64((int64_t)_return_value);
 
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=5276e04f01fbfcff input=a9049054013a1b77]*/
+/*[clinic end generated code: output=dda9a8678dbe1423 input=a9049054013a1b77]*/

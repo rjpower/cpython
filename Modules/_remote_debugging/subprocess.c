@@ -5,8 +5,11 @@
  * processes of a given PID.
  ******************************************************************************/
 
+#define Py_VALUE_CORE 1
 #include "_remote_debugging.h"
 #include "pycore_fileutils.h"     // _Py_strerror()
+#include "pycore_pyvalue.h"       // PyValue_PrepareOwned()
+#include "pycore_value.h"         // PyValue
 
 #ifndef MS_WINDOWS
 #include <unistd.h>
@@ -492,7 +495,7 @@ enumerate_child_pids(pid_t target_pid, int recursive)
             pid_array_cleanup(&result);
             return NULL;
         }
-        PyList_SET_ITEM(list, i, pid_obj);
+        PyList_SET_VALUE(list, i, PyValue_PrepareOwned(pid_obj));
     }
 
     pid_array_cleanup(&result);

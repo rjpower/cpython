@@ -2,13 +2,19 @@
 preserve
 [clinic start generated code]*/
 
+#ifndef Py_VALUE_CORE
+#  error "value-emission Clinic output requires Py_VALUE_CORE"
+#endif
+
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 #  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
 #  include "pycore_value.h"       // _PyValue_STATIC_IMMORTAL()
 #endif
-#include "pycore_modsupport.h"    // _PyArg_UnpackKeywords()
+#include "pycore_modsupport.h"    // _PyArg_UnpackKeywordsValue()
 #include "pycore_unicodeobject.h" // _PyUnicode_AsUTF8NoNUL()
+#include "pycore_value_call.h"    // METH_VALUE
+#include "pycore_value_ops.h"     // _PyValue_IsTrue()
 
 PyDoc_STRVAR(_multibytecodec_MultibyteCodec_encode__doc__,
 "encode($self, /, input, errors=None)\n"
@@ -23,17 +29,17 @@ PyDoc_STRVAR(_multibytecodec_MultibyteCodec_encode__doc__,
 "codecs.register_error that can handle UnicodeEncodeErrors.");
 
 #define _MULTIBYTECODEC_MULTIBYTECODEC_ENCODE_METHODDEF    \
-    {"encode", _PyCFunction_CAST(_multibytecodec_MultibyteCodec_encode), METH_FASTCALL|METH_KEYWORDS, _multibytecodec_MultibyteCodec_encode__doc__},
+    {"encode", _PyCFunction_CAST(_multibytecodec_MultibyteCodec_encode), METH_VALUE|METH_KEYWORDS, _multibytecodec_MultibyteCodec_encode__doc__},
 
-static PyObject *
+static PyValue
 _multibytecodec_MultibyteCodec_encode_impl(MultibyteCodecObject *self,
-                                           PyObject *input,
+                                           PyValueBorrow input,
                                            const char *errors);
 
-static PyObject *
-_multibytecodec_MultibyteCodec_encode(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_multibytecodec_MultibyteCodec_encode(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 2
@@ -61,35 +67,35 @@ _multibytecodec_MultibyteCodec_encode(PyObject *self, PyObject *const *args, Py_
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[2];
-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 1;
-    PyObject *input;
+    Py_ssize_t _idx[2];
+    PyValueBorrow input;
     const char *errors = NULL;
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 1, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 1, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, _idx, 2)) {
         goto exit;
     }
-    input = args[0];
-    if (!noptargs) {
-        goto skip_optional_pos;
-    }
-    if (args[1] == Py_None) {
-        errors = NULL;
-    }
-    else if (PyUnicode_Check(args[1])) {
-        errors = _PyUnicode_AsUTF8NoNUL(args[1]);
-        if (errors == NULL) {
+    input = PyValue_Borrow(args[_idx[0]]);
+    if (_idx[1] >= 0) {
+        if (!PyValue_IsObject(PyValue_Borrow(args[_idx[1]]))) {
+            _PyArg_BadArgumentValue("encode", "argument 'errors'", "str or None", PyValue_Borrow(args[_idx[1]]));
+            goto exit;
+        }
+        if (PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[1]])) == Py_None) {
+            errors = NULL;
+        }
+        else if (PyUnicode_Check(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[1]])))) {
+            errors = _PyUnicode_AsUTF8NoNUL(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[1]])));
+            if (errors == NULL) {
+                goto exit;
+            }
+        }
+        else {
+            _PyArg_BadArgument("encode", "argument 'errors'", "str or None", PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[1]])));
             goto exit;
         }
     }
-    else {
-        _PyArg_BadArgument("encode", "argument 'errors'", "str or None", args[1]);
-        goto exit;
-    }
-skip_optional_pos:
-    return_value = _multibytecodec_MultibyteCodec_encode_impl((MultibyteCodecObject *)self, input, errors);
+    return_value = _multibytecodec_MultibyteCodec_encode_impl((MultibyteCodecObject *)PyValue_AsKnownObjectBorrow(self), input, errors);
 
 exit:
     return return_value;
@@ -108,17 +114,17 @@ PyDoc_STRVAR(_multibytecodec_MultibyteCodec_decode__doc__,
 "codecs.register_error that is able to handle UnicodeDecodeErrors.\"");
 
 #define _MULTIBYTECODEC_MULTIBYTECODEC_DECODE_METHODDEF    \
-    {"decode", _PyCFunction_CAST(_multibytecodec_MultibyteCodec_decode), METH_FASTCALL|METH_KEYWORDS, _multibytecodec_MultibyteCodec_decode__doc__},
+    {"decode", _PyCFunction_CAST(_multibytecodec_MultibyteCodec_decode), METH_VALUE|METH_KEYWORDS, _multibytecodec_MultibyteCodec_decode__doc__},
 
-static PyObject *
+static PyValue
 _multibytecodec_MultibyteCodec_decode_impl(MultibyteCodecObject *self,
                                            Py_buffer *input,
                                            const char *errors);
 
-static PyObject *
-_multibytecodec_MultibyteCodec_decode(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_multibytecodec_MultibyteCodec_decode(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 2
@@ -146,37 +152,41 @@ _multibytecodec_MultibyteCodec_decode(PyObject *self, PyObject *const *args, Py_
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[2];
-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 1;
+    Py_ssize_t _idx[2];
     Py_buffer input = {NULL, NULL};
     const char *errors = NULL;
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 1, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 1, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, _idx, 2)) {
         goto exit;
     }
-    if (PyObject_GetBuffer(args[0], &input, PyBUF_SIMPLE) != 0) {
+    if (!PyValue_IsObject(PyValue_Borrow(args[_idx[0]]))) {
+        PyErr_Format(PyExc_TypeError, "a bytes-like object is required, not '%.100s'", PyValue_TYPE(PyValue_Borrow(args[_idx[0]]))->tp_name);
         goto exit;
     }
-    if (!noptargs) {
-        goto skip_optional_pos;
+    if (PyObject_GetBuffer(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[0]])), &input, PyBUF_SIMPLE) != 0) {
+        goto exit;
     }
-    if (args[1] == Py_None) {
-        errors = NULL;
-    }
-    else if (PyUnicode_Check(args[1])) {
-        errors = _PyUnicode_AsUTF8NoNUL(args[1]);
-        if (errors == NULL) {
+    if (_idx[1] >= 0) {
+        if (!PyValue_IsObject(PyValue_Borrow(args[_idx[1]]))) {
+            _PyArg_BadArgumentValue("decode", "argument 'errors'", "str or None", PyValue_Borrow(args[_idx[1]]));
+            goto exit;
+        }
+        if (PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[1]])) == Py_None) {
+            errors = NULL;
+        }
+        else if (PyUnicode_Check(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[1]])))) {
+            errors = _PyUnicode_AsUTF8NoNUL(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[1]])));
+            if (errors == NULL) {
+                goto exit;
+            }
+        }
+        else {
+            _PyArg_BadArgument("decode", "argument 'errors'", "str or None", PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[1]])));
             goto exit;
         }
     }
-    else {
-        _PyArg_BadArgument("decode", "argument 'errors'", "str or None", args[1]);
-        goto exit;
-    }
-skip_optional_pos:
-    return_value = _multibytecodec_MultibyteCodec_decode_impl((MultibyteCodecObject *)self, &input, errors);
+    return_value = _multibytecodec_MultibyteCodec_decode_impl((MultibyteCodecObject *)PyValue_AsKnownObjectBorrow(self), &input, errors);
 
 exit:
     /* Cleanup for input */
@@ -193,17 +203,17 @@ PyDoc_STRVAR(_multibytecodec_MultibyteIncrementalEncoder_encode__doc__,
 "\n");
 
 #define _MULTIBYTECODEC_MULTIBYTEINCREMENTALENCODER_ENCODE_METHODDEF    \
-    {"encode", _PyCFunction_CAST(_multibytecodec_MultibyteIncrementalEncoder_encode), METH_FASTCALL|METH_KEYWORDS, _multibytecodec_MultibyteIncrementalEncoder_encode__doc__},
+    {"encode", _PyCFunction_CAST(_multibytecodec_MultibyteIncrementalEncoder_encode), METH_VALUE|METH_KEYWORDS, _multibytecodec_MultibyteIncrementalEncoder_encode__doc__},
 
-static PyObject *
+static PyValue
 _multibytecodec_MultibyteIncrementalEncoder_encode_impl(MultibyteIncrementalEncoderObject *self,
-                                                        PyObject *input,
+                                                        PyValueBorrow input,
                                                         int final);
 
-static PyObject *
-_multibytecodec_MultibyteIncrementalEncoder_encode(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_multibytecodec_MultibyteIncrementalEncoder_encode(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 2
@@ -231,26 +241,22 @@ _multibytecodec_MultibyteIncrementalEncoder_encode(PyObject *self, PyObject *con
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[2];
-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 1;
-    PyObject *input;
+    Py_ssize_t _idx[2];
+    PyValueBorrow input;
     int final = 0;
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 1, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 1, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, _idx, 2)) {
         goto exit;
     }
-    input = args[0];
-    if (!noptargs) {
-        goto skip_optional_pos;
+    input = PyValue_Borrow(args[_idx[0]]);
+    if (_idx[1] >= 0) {
+        final = _PyValue_IsTrue(PyValue_Borrow(args[_idx[1]]));
+        if (final < 0) {
+            goto exit;
+        }
     }
-    final = PyObject_IsTrue(args[1]);
-    if (final < 0) {
-        goto exit;
-    }
-skip_optional_pos:
-    return_value = _multibytecodec_MultibyteIncrementalEncoder_encode_impl((MultibyteIncrementalEncoderObject *)self, input, final);
+    return_value = _multibytecodec_MultibyteIncrementalEncoder_encode_impl((MultibyteIncrementalEncoderObject *)PyValue_AsKnownObjectBorrow(self), input, final);
 
 exit:
     return return_value;
@@ -262,15 +268,19 @@ PyDoc_STRVAR(_multibytecodec_MultibyteIncrementalEncoder_getstate__doc__,
 "\n");
 
 #define _MULTIBYTECODEC_MULTIBYTEINCREMENTALENCODER_GETSTATE_METHODDEF    \
-    {"getstate", (PyCFunction)_multibytecodec_MultibyteIncrementalEncoder_getstate, METH_NOARGS, _multibytecodec_MultibyteIncrementalEncoder_getstate__doc__},
+    {"getstate", _PyCFunction_CAST(_multibytecodec_MultibyteIncrementalEncoder_getstate), METH_VALUE|METH_NOARGS, _multibytecodec_MultibyteIncrementalEncoder_getstate__doc__},
 
-static PyObject *
+static PyValue
 _multibytecodec_MultibyteIncrementalEncoder_getstate_impl(MultibyteIncrementalEncoderObject *self);
 
-static PyObject *
-_multibytecodec_MultibyteIncrementalEncoder_getstate(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+_multibytecodec_MultibyteIncrementalEncoder_getstate(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _multibytecodec_MultibyteIncrementalEncoder_getstate_impl((MultibyteIncrementalEncoderObject *)self);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _multibytecodec_MultibyteIncrementalEncoder_getstate_impl((MultibyteIncrementalEncoderObject *)PyValue_AsKnownObjectBorrow(self));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(_multibytecodec_MultibyteIncrementalEncoder_setstate__doc__,
@@ -279,24 +289,24 @@ PyDoc_STRVAR(_multibytecodec_MultibyteIncrementalEncoder_setstate__doc__,
 "\n");
 
 #define _MULTIBYTECODEC_MULTIBYTEINCREMENTALENCODER_SETSTATE_METHODDEF    \
-    {"setstate", (PyCFunction)_multibytecodec_MultibyteIncrementalEncoder_setstate, METH_O, _multibytecodec_MultibyteIncrementalEncoder_setstate__doc__},
+    {"setstate", _PyCFunction_CAST(_multibytecodec_MultibyteIncrementalEncoder_setstate), METH_VALUE|METH_O, _multibytecodec_MultibyteIncrementalEncoder_setstate__doc__},
 
-static PyObject *
+static PyValue
 _multibytecodec_MultibyteIncrementalEncoder_setstate_impl(MultibyteIncrementalEncoderObject *self,
-                                                          PyLongObject *statelong);
+                                                          PyValueBorrow statelong);
 
-static PyObject *
-_multibytecodec_MultibyteIncrementalEncoder_setstate(PyObject *self, PyObject *arg)
+static PyValue
+_multibytecodec_MultibyteIncrementalEncoder_setstate(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
-    PyLongObject *statelong;
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow statelong;
 
-    if (!PyLong_Check(arg)) {
-        _PyArg_BadArgument("setstate", "argument", "int", arg);
+    if (!PyType_IsSubtype(PyValue_TYPE(PyValue_Borrow(args[0])), &PyLong_Type)) {
+        _PyArg_BadArgumentValue("setstate", "argument", "int", PyValue_Borrow(args[0]));
         goto exit;
     }
-    statelong = (PyLongObject *)arg;
-    return_value = _multibytecodec_MultibyteIncrementalEncoder_setstate_impl((MultibyteIncrementalEncoderObject *)self, statelong);
+    statelong = PyValue_Borrow(args[0]);
+    return_value = _multibytecodec_MultibyteIncrementalEncoder_setstate_impl((MultibyteIncrementalEncoderObject *)PyValue_AsKnownObjectBorrow(self), statelong);
 
 exit:
     return return_value;
@@ -308,15 +318,19 @@ PyDoc_STRVAR(_multibytecodec_MultibyteIncrementalEncoder_reset__doc__,
 "\n");
 
 #define _MULTIBYTECODEC_MULTIBYTEINCREMENTALENCODER_RESET_METHODDEF    \
-    {"reset", (PyCFunction)_multibytecodec_MultibyteIncrementalEncoder_reset, METH_NOARGS, _multibytecodec_MultibyteIncrementalEncoder_reset__doc__},
+    {"reset", _PyCFunction_CAST(_multibytecodec_MultibyteIncrementalEncoder_reset), METH_VALUE|METH_NOARGS, _multibytecodec_MultibyteIncrementalEncoder_reset__doc__},
 
-static PyObject *
+static PyValue
 _multibytecodec_MultibyteIncrementalEncoder_reset_impl(MultibyteIncrementalEncoderObject *self);
 
-static PyObject *
-_multibytecodec_MultibyteIncrementalEncoder_reset(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+_multibytecodec_MultibyteIncrementalEncoder_reset(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _multibytecodec_MultibyteIncrementalEncoder_reset_impl((MultibyteIncrementalEncoderObject *)self);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _multibytecodec_MultibyteIncrementalEncoder_reset_impl((MultibyteIncrementalEncoderObject *)PyValue_AsKnownObjectBorrow(self));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(_multibytecodec_MultibyteIncrementalDecoder_decode__doc__,
@@ -325,17 +339,17 @@ PyDoc_STRVAR(_multibytecodec_MultibyteIncrementalDecoder_decode__doc__,
 "\n");
 
 #define _MULTIBYTECODEC_MULTIBYTEINCREMENTALDECODER_DECODE_METHODDEF    \
-    {"decode", _PyCFunction_CAST(_multibytecodec_MultibyteIncrementalDecoder_decode), METH_FASTCALL|METH_KEYWORDS, _multibytecodec_MultibyteIncrementalDecoder_decode__doc__},
+    {"decode", _PyCFunction_CAST(_multibytecodec_MultibyteIncrementalDecoder_decode), METH_VALUE|METH_KEYWORDS, _multibytecodec_MultibyteIncrementalDecoder_decode__doc__},
 
-static PyObject *
+static PyValue
 _multibytecodec_MultibyteIncrementalDecoder_decode_impl(MultibyteIncrementalDecoderObject *self,
                                                         Py_buffer *input,
                                                         int final);
 
-static PyObject *
-_multibytecodec_MultibyteIncrementalDecoder_decode(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_multibytecodec_MultibyteIncrementalDecoder_decode(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 2
@@ -363,28 +377,28 @@ _multibytecodec_MultibyteIncrementalDecoder_decode(PyObject *self, PyObject *con
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[2];
-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 1;
+    Py_ssize_t _idx[2];
     Py_buffer input = {NULL, NULL};
     int final = 0;
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 1, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 1, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, _idx, 2)) {
         goto exit;
     }
-    if (PyObject_GetBuffer(args[0], &input, PyBUF_SIMPLE) != 0) {
+    if (!PyValue_IsObject(PyValue_Borrow(args[_idx[0]]))) {
+        PyErr_Format(PyExc_TypeError, "a bytes-like object is required, not '%.100s'", PyValue_TYPE(PyValue_Borrow(args[_idx[0]]))->tp_name);
         goto exit;
     }
-    if (!noptargs) {
-        goto skip_optional_pos;
-    }
-    final = PyObject_IsTrue(args[1]);
-    if (final < 0) {
+    if (PyObject_GetBuffer(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[0]])), &input, PyBUF_SIMPLE) != 0) {
         goto exit;
     }
-skip_optional_pos:
-    return_value = _multibytecodec_MultibyteIncrementalDecoder_decode_impl((MultibyteIncrementalDecoderObject *)self, &input, final);
+    if (_idx[1] >= 0) {
+        final = _PyValue_IsTrue(PyValue_Borrow(args[_idx[1]]));
+        if (final < 0) {
+            goto exit;
+        }
+    }
+    return_value = _multibytecodec_MultibyteIncrementalDecoder_decode_impl((MultibyteIncrementalDecoderObject *)PyValue_AsKnownObjectBorrow(self), &input, final);
 
 exit:
     /* Cleanup for input */
@@ -401,15 +415,19 @@ PyDoc_STRVAR(_multibytecodec_MultibyteIncrementalDecoder_getstate__doc__,
 "\n");
 
 #define _MULTIBYTECODEC_MULTIBYTEINCREMENTALDECODER_GETSTATE_METHODDEF    \
-    {"getstate", (PyCFunction)_multibytecodec_MultibyteIncrementalDecoder_getstate, METH_NOARGS, _multibytecodec_MultibyteIncrementalDecoder_getstate__doc__},
+    {"getstate", _PyCFunction_CAST(_multibytecodec_MultibyteIncrementalDecoder_getstate), METH_VALUE|METH_NOARGS, _multibytecodec_MultibyteIncrementalDecoder_getstate__doc__},
 
-static PyObject *
+static PyValue
 _multibytecodec_MultibyteIncrementalDecoder_getstate_impl(MultibyteIncrementalDecoderObject *self);
 
-static PyObject *
-_multibytecodec_MultibyteIncrementalDecoder_getstate(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+_multibytecodec_MultibyteIncrementalDecoder_getstate(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _multibytecodec_MultibyteIncrementalDecoder_getstate_impl((MultibyteIncrementalDecoderObject *)self);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _multibytecodec_MultibyteIncrementalDecoder_getstate_impl((MultibyteIncrementalDecoderObject *)PyValue_AsKnownObjectBorrow(self));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(_multibytecodec_MultibyteIncrementalDecoder_setstate__doc__,
@@ -418,24 +436,24 @@ PyDoc_STRVAR(_multibytecodec_MultibyteIncrementalDecoder_setstate__doc__,
 "\n");
 
 #define _MULTIBYTECODEC_MULTIBYTEINCREMENTALDECODER_SETSTATE_METHODDEF    \
-    {"setstate", (PyCFunction)_multibytecodec_MultibyteIncrementalDecoder_setstate, METH_O, _multibytecodec_MultibyteIncrementalDecoder_setstate__doc__},
+    {"setstate", _PyCFunction_CAST(_multibytecodec_MultibyteIncrementalDecoder_setstate), METH_VALUE|METH_O, _multibytecodec_MultibyteIncrementalDecoder_setstate__doc__},
 
-static PyObject *
+static PyValue
 _multibytecodec_MultibyteIncrementalDecoder_setstate_impl(MultibyteIncrementalDecoderObject *self,
                                                           PyObject *state);
 
-static PyObject *
-_multibytecodec_MultibyteIncrementalDecoder_setstate(PyObject *self, PyObject *arg)
+static PyValue
+_multibytecodec_MultibyteIncrementalDecoder_setstate(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *state;
 
-    if (!PyTuple_Check(arg)) {
-        _PyArg_BadArgument("setstate", "argument", "tuple", arg);
+    if (!PyType_IsSubtype(PyValue_TYPE(PyValue_Borrow(args[0])), &PyTuple_Type)) {
+        _PyArg_BadArgumentValue("setstate", "argument", "tuple", PyValue_Borrow(args[0]));
         goto exit;
     }
-    state = arg;
-    return_value = _multibytecodec_MultibyteIncrementalDecoder_setstate_impl((MultibyteIncrementalDecoderObject *)self, state);
+    state = PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0]));
+    return_value = _multibytecodec_MultibyteIncrementalDecoder_setstate_impl((MultibyteIncrementalDecoderObject *)PyValue_AsKnownObjectBorrow(self), state);
 
 exit:
     return return_value;
@@ -447,15 +465,19 @@ PyDoc_STRVAR(_multibytecodec_MultibyteIncrementalDecoder_reset__doc__,
 "\n");
 
 #define _MULTIBYTECODEC_MULTIBYTEINCREMENTALDECODER_RESET_METHODDEF    \
-    {"reset", (PyCFunction)_multibytecodec_MultibyteIncrementalDecoder_reset, METH_NOARGS, _multibytecodec_MultibyteIncrementalDecoder_reset__doc__},
+    {"reset", _PyCFunction_CAST(_multibytecodec_MultibyteIncrementalDecoder_reset), METH_VALUE|METH_NOARGS, _multibytecodec_MultibyteIncrementalDecoder_reset__doc__},
 
-static PyObject *
+static PyValue
 _multibytecodec_MultibyteIncrementalDecoder_reset_impl(MultibyteIncrementalDecoderObject *self);
 
-static PyObject *
-_multibytecodec_MultibyteIncrementalDecoder_reset(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+_multibytecodec_MultibyteIncrementalDecoder_reset(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _multibytecodec_MultibyteIncrementalDecoder_reset_impl((MultibyteIncrementalDecoderObject *)self);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _multibytecodec_MultibyteIncrementalDecoder_reset_impl((MultibyteIncrementalDecoderObject *)PyValue_AsKnownObjectBorrow(self));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(_multibytecodec_MultibyteStreamReader_read__doc__,
@@ -464,17 +486,17 @@ PyDoc_STRVAR(_multibytecodec_MultibyteStreamReader_read__doc__,
 "\n");
 
 #define _MULTIBYTECODEC_MULTIBYTESTREAMREADER_READ_METHODDEF    \
-    {"read", _PyCFunction_CAST(_multibytecodec_MultibyteStreamReader_read), METH_FASTCALL, _multibytecodec_MultibyteStreamReader_read__doc__},
+    {"read", _PyCFunction_CAST(_multibytecodec_MultibyteStreamReader_read), METH_VALUE, _multibytecodec_MultibyteStreamReader_read__doc__},
 
-static PyObject *
+static PyValue
 _multibytecodec_MultibyteStreamReader_read_impl(MultibyteStreamReaderObject *self,
-                                                PyObject *sizeobj);
+                                                PyValueBorrow sizeobj);
 
-static PyObject *
-_multibytecodec_MultibyteStreamReader_read(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_multibytecodec_MultibyteStreamReader_read(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
-    PyObject *sizeobj = Py_None;
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow sizeobj = PyValue_Borrow(PyValue_None);
 
     if (!_PyArg_CheckPositional("read", nargs, 0, 1)) {
         goto exit;
@@ -482,9 +504,9 @@ _multibytecodec_MultibyteStreamReader_read(PyObject *self, PyObject *const *args
     if (nargs < 1) {
         goto skip_optional;
     }
-    sizeobj = args[0];
+    sizeobj = PyValue_Borrow(args[0]);
 skip_optional:
-    return_value = _multibytecodec_MultibyteStreamReader_read_impl((MultibyteStreamReaderObject *)self, sizeobj);
+    return_value = _multibytecodec_MultibyteStreamReader_read_impl((MultibyteStreamReaderObject *)PyValue_AsKnownObjectBorrow(self), sizeobj);
 
 exit:
     return return_value;
@@ -496,17 +518,17 @@ PyDoc_STRVAR(_multibytecodec_MultibyteStreamReader_readline__doc__,
 "\n");
 
 #define _MULTIBYTECODEC_MULTIBYTESTREAMREADER_READLINE_METHODDEF    \
-    {"readline", _PyCFunction_CAST(_multibytecodec_MultibyteStreamReader_readline), METH_FASTCALL, _multibytecodec_MultibyteStreamReader_readline__doc__},
+    {"readline", _PyCFunction_CAST(_multibytecodec_MultibyteStreamReader_readline), METH_VALUE, _multibytecodec_MultibyteStreamReader_readline__doc__},
 
-static PyObject *
+static PyValue
 _multibytecodec_MultibyteStreamReader_readline_impl(MultibyteStreamReaderObject *self,
-                                                    PyObject *sizeobj);
+                                                    PyValueBorrow sizeobj);
 
-static PyObject *
-_multibytecodec_MultibyteStreamReader_readline(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_multibytecodec_MultibyteStreamReader_readline(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
-    PyObject *sizeobj = Py_None;
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow sizeobj = PyValue_Borrow(PyValue_None);
 
     if (!_PyArg_CheckPositional("readline", nargs, 0, 1)) {
         goto exit;
@@ -514,9 +536,9 @@ _multibytecodec_MultibyteStreamReader_readline(PyObject *self, PyObject *const *
     if (nargs < 1) {
         goto skip_optional;
     }
-    sizeobj = args[0];
+    sizeobj = PyValue_Borrow(args[0]);
 skip_optional:
-    return_value = _multibytecodec_MultibyteStreamReader_readline_impl((MultibyteStreamReaderObject *)self, sizeobj);
+    return_value = _multibytecodec_MultibyteStreamReader_readline_impl((MultibyteStreamReaderObject *)PyValue_AsKnownObjectBorrow(self), sizeobj);
 
 exit:
     return return_value;
@@ -528,17 +550,17 @@ PyDoc_STRVAR(_multibytecodec_MultibyteStreamReader_readlines__doc__,
 "\n");
 
 #define _MULTIBYTECODEC_MULTIBYTESTREAMREADER_READLINES_METHODDEF    \
-    {"readlines", _PyCFunction_CAST(_multibytecodec_MultibyteStreamReader_readlines), METH_FASTCALL, _multibytecodec_MultibyteStreamReader_readlines__doc__},
+    {"readlines", _PyCFunction_CAST(_multibytecodec_MultibyteStreamReader_readlines), METH_VALUE, _multibytecodec_MultibyteStreamReader_readlines__doc__},
 
-static PyObject *
+static PyValue
 _multibytecodec_MultibyteStreamReader_readlines_impl(MultibyteStreamReaderObject *self,
-                                                     PyObject *sizehintobj);
+                                                     PyValueBorrow sizehintobj);
 
-static PyObject *
-_multibytecodec_MultibyteStreamReader_readlines(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_multibytecodec_MultibyteStreamReader_readlines(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
-    PyObject *sizehintobj = Py_None;
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow sizehintobj = PyValue_Borrow(PyValue_None);
 
     if (!_PyArg_CheckPositional("readlines", nargs, 0, 1)) {
         goto exit;
@@ -546,9 +568,9 @@ _multibytecodec_MultibyteStreamReader_readlines(PyObject *self, PyObject *const 
     if (nargs < 1) {
         goto skip_optional;
     }
-    sizehintobj = args[0];
+    sizehintobj = PyValue_Borrow(args[0]);
 skip_optional:
-    return_value = _multibytecodec_MultibyteStreamReader_readlines_impl((MultibyteStreamReaderObject *)self, sizehintobj);
+    return_value = _multibytecodec_MultibyteStreamReader_readlines_impl((MultibyteStreamReaderObject *)PyValue_AsKnownObjectBorrow(self), sizehintobj);
 
 exit:
     return return_value;
@@ -560,15 +582,19 @@ PyDoc_STRVAR(_multibytecodec_MultibyteStreamReader_reset__doc__,
 "\n");
 
 #define _MULTIBYTECODEC_MULTIBYTESTREAMREADER_RESET_METHODDEF    \
-    {"reset", (PyCFunction)_multibytecodec_MultibyteStreamReader_reset, METH_NOARGS, _multibytecodec_MultibyteStreamReader_reset__doc__},
+    {"reset", _PyCFunction_CAST(_multibytecodec_MultibyteStreamReader_reset), METH_VALUE|METH_NOARGS, _multibytecodec_MultibyteStreamReader_reset__doc__},
 
-static PyObject *
+static PyValue
 _multibytecodec_MultibyteStreamReader_reset_impl(MultibyteStreamReaderObject *self);
 
-static PyObject *
-_multibytecodec_MultibyteStreamReader_reset(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+_multibytecodec_MultibyteStreamReader_reset(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _multibytecodec_MultibyteStreamReader_reset_impl((MultibyteStreamReaderObject *)self);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _multibytecodec_MultibyteStreamReader_reset_impl((MultibyteStreamReaderObject *)PyValue_AsKnownObjectBorrow(self));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(_multibytecodec_MultibyteStreamWriter_write__doc__,
@@ -577,18 +603,18 @@ PyDoc_STRVAR(_multibytecodec_MultibyteStreamWriter_write__doc__,
 "\n");
 
 #define _MULTIBYTECODEC_MULTIBYTESTREAMWRITER_WRITE_METHODDEF    \
-    {"write", _PyCFunction_CAST(_multibytecodec_MultibyteStreamWriter_write), METH_METHOD|METH_FASTCALL|METH_KEYWORDS, _multibytecodec_MultibyteStreamWriter_write__doc__},
+    {"write", _PyCFunction_CAST(_multibytecodec_MultibyteStreamWriter_write), METH_VALUE|METH_METHOD|METH_KEYWORDS, _multibytecodec_MultibyteStreamWriter_write__doc__},
 
-static PyObject *
+static PyValue
 _multibytecodec_MultibyteStreamWriter_write_impl(MultibyteStreamWriterObject *self,
                                                  PyTypeObject *cls,
-                                                 PyObject *strobj);
+                                                 PyValueBorrow strobj);
 
-static PyObject *
-_multibytecodec_MultibyteStreamWriter_write(PyObject *self, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_multibytecodec_MultibyteStreamWriter_write(PyValueBorrow self, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
-    PyObject *strobj;
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow strobj;
 
     if (!_PyArg_NoKwnames("write", kwnames)) {
         goto exit;
@@ -596,8 +622,8 @@ _multibytecodec_MultibyteStreamWriter_write(PyObject *self, PyTypeObject *cls, P
     if (!_PyArg_CheckPositional("write", nargs, 1, 1)) {
         goto exit;
     }
-    strobj = args[0];
-    return_value = _multibytecodec_MultibyteStreamWriter_write_impl((MultibyteStreamWriterObject *)self, cls, strobj);
+    strobj = PyValue_Borrow(args[0]);
+    return_value = _multibytecodec_MultibyteStreamWriter_write_impl((MultibyteStreamWriterObject *)PyValue_AsKnownObjectBorrow(self), cls, strobj);
 
 exit:
     return return_value;
@@ -609,18 +635,18 @@ PyDoc_STRVAR(_multibytecodec_MultibyteStreamWriter_writelines__doc__,
 "\n");
 
 #define _MULTIBYTECODEC_MULTIBYTESTREAMWRITER_WRITELINES_METHODDEF    \
-    {"writelines", _PyCFunction_CAST(_multibytecodec_MultibyteStreamWriter_writelines), METH_METHOD|METH_FASTCALL|METH_KEYWORDS, _multibytecodec_MultibyteStreamWriter_writelines__doc__},
+    {"writelines", _PyCFunction_CAST(_multibytecodec_MultibyteStreamWriter_writelines), METH_VALUE|METH_METHOD|METH_KEYWORDS, _multibytecodec_MultibyteStreamWriter_writelines__doc__},
 
-static PyObject *
+static PyValue
 _multibytecodec_MultibyteStreamWriter_writelines_impl(MultibyteStreamWriterObject *self,
                                                       PyTypeObject *cls,
-                                                      PyObject *lines);
+                                                      PyValueBorrow lines);
 
-static PyObject *
-_multibytecodec_MultibyteStreamWriter_writelines(PyObject *self, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_multibytecodec_MultibyteStreamWriter_writelines(PyValueBorrow self, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
-    PyObject *lines;
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow lines;
 
     if (!_PyArg_NoKwnames("writelines", kwnames)) {
         goto exit;
@@ -628,8 +654,8 @@ _multibytecodec_MultibyteStreamWriter_writelines(PyObject *self, PyTypeObject *c
     if (!_PyArg_CheckPositional("writelines", nargs, 1, 1)) {
         goto exit;
     }
-    lines = args[0];
-    return_value = _multibytecodec_MultibyteStreamWriter_writelines_impl((MultibyteStreamWriterObject *)self, cls, lines);
+    lines = PyValue_Borrow(args[0]);
+    return_value = _multibytecodec_MultibyteStreamWriter_writelines_impl((MultibyteStreamWriterObject *)PyValue_AsKnownObjectBorrow(self), cls, lines);
 
 exit:
     return return_value;
@@ -641,20 +667,25 @@ PyDoc_STRVAR(_multibytecodec_MultibyteStreamWriter_reset__doc__,
 "\n");
 
 #define _MULTIBYTECODEC_MULTIBYTESTREAMWRITER_RESET_METHODDEF    \
-    {"reset", _PyCFunction_CAST(_multibytecodec_MultibyteStreamWriter_reset), METH_METHOD|METH_FASTCALL|METH_KEYWORDS, _multibytecodec_MultibyteStreamWriter_reset__doc__},
+    {"reset", _PyCFunction_CAST(_multibytecodec_MultibyteStreamWriter_reset), METH_VALUE|METH_METHOD|METH_KEYWORDS, _multibytecodec_MultibyteStreamWriter_reset__doc__},
 
-static PyObject *
+static PyValue
 _multibytecodec_MultibyteStreamWriter_reset_impl(MultibyteStreamWriterObject *self,
                                                  PyTypeObject *cls);
 
-static PyObject *
-_multibytecodec_MultibyteStreamWriter_reset(PyObject *self, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_multibytecodec_MultibyteStreamWriter_reset(PyValueBorrow self, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
+    PyValue return_value = PyValue_NULL;
+
     if (nargs || (kwnames && PyTuple_GET_SIZE(kwnames))) {
         PyErr_SetString(PyExc_TypeError, "reset() takes no arguments");
-        return NULL;
+        goto exit;
     }
-    return _multibytecodec_MultibyteStreamWriter_reset_impl((MultibyteStreamWriterObject *)self, cls);
+    return_value = _multibytecodec_MultibyteStreamWriter_reset_impl((MultibyteStreamWriterObject *)PyValue_AsKnownObjectBorrow(self), cls);
+
+exit:
+    return return_value;
 }
 
 PyDoc_STRVAR(_multibytecodec___create_codec__doc__,
@@ -663,5 +694,20 @@ PyDoc_STRVAR(_multibytecodec___create_codec__doc__,
 "\n");
 
 #define _MULTIBYTECODEC___CREATE_CODEC_METHODDEF    \
-    {"__create_codec", (PyCFunction)_multibytecodec___create_codec, METH_O, _multibytecodec___create_codec__doc__},
-/*[clinic end generated code: output=c2b7ab94e94fcbd9 input=a9049054013a1b77]*/
+    {"__create_codec", _PyCFunction_CAST(_multibytecodec___create_codec), METH_VALUE|METH_O, _multibytecodec___create_codec__doc__},
+
+static PyValue
+_multibytecodec___create_codec_impl(PyObject *module, PyValueBorrow arg);
+
+static PyValue
+_multibytecodec___create_codec(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+{
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow arg;
+
+    arg = PyValue_Borrow(args[0]);
+    return_value = _multibytecodec___create_codec_impl(PyValue_AsKnownObjectBorrow(module), arg);
+
+    return return_value;
+}
+/*[clinic end generated code: output=838c9be4a9b90f9d input=a9049054013a1b77]*/

@@ -2,14 +2,19 @@
 preserve
 [clinic start generated code]*/
 
+#ifndef Py_VALUE_CORE
+#  error "value-emission Clinic output requires Py_VALUE_CORE"
+#endif
+
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 #  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
 #  include "pycore_value.h"       // _PyValue_STATIC_IMMORTAL()
 #endif
-#include "pycore_borrow.h"        // _PyBorrow_TupleItems()
 #include "pycore_modsupport.h"    // _PyArg_CheckPositional()
 #include "pycore_unicodeobject.h" // _PyUnicode_AsUTF8NoNUL()
+#include "pycore_value_call.h"    // METH_VALUE
+#include "pycore_value_ops.h"     // _PyValue_IsTrue()
 
 PyDoc_STRVAR(_interpreters_new_config__doc__,
 "new_config($module, name=\'isolated\', /, **overrides)\n"
@@ -24,48 +29,44 @@ PyDoc_STRVAR(_interpreters_new_config__doc__,
 "overriding the initial values.");
 
 #define _INTERPRETERS_NEW_CONFIG_METHODDEF    \
-    {"new_config", _PyCFunction_CAST(_interpreters_new_config), METH_VARARGS|METH_KEYWORDS, _interpreters_new_config__doc__},
+    {"new_config", _PyCFunction_CAST(_interpreters_new_config), METH_VALUE|METH_KEYWORDS, _interpreters_new_config__doc__},
 
-static PyObject *
+static PyValue
 _interpreters_new_config_impl(PyObject *module, const char *name,
                               PyObject *overrides);
 
-static PyObject *
-_interpreters_new_config(PyObject *module, PyObject *args, PyObject *kwargs)
+static PyValue
+_interpreters_new_config(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     const char *name = NULL;
     PyObject *overrides = NULL;
 
-    if (!_PyArg_CheckPositional("new_config", PyTuple_GET_SIZE(args), 0, 1)) {
+    if (!_PyArg_CheckPositional("new_config", nargs, 0, 1)) {
         goto exit;
     }
-    PyObject *const *_args_items = _PyBorrow_TupleItems(args, PyTuple_GET_SIZE(args));
-    if (_args_items == NULL) {
-        goto exit;
-    }
-    if (PyTuple_GET_SIZE(args) < 1) {
+    if (nargs < 1) {
         goto skip_optional;
     }
-    if (!PyUnicode_Check(_args_items[0])) {
-        _PyArg_BadArgument("new_config", "argument 1", "str", _args_items[0]);
+    if (!PyValue_IsObject(PyValue_Borrow(args[0]))) {
+        _PyArg_BadArgumentValue("new_config", "argument 1", "str", PyValue_Borrow(args[0]));
         goto exit;
     }
-    name = _PyUnicode_AsUTF8NoNUL(_args_items[0]);
+    if (!PyUnicode_Check(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])))) {
+        _PyArg_BadArgument("new_config", "argument 1", "str", PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])));
+        goto exit;
+    }
+    name = _PyUnicode_AsUTF8NoNUL(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])));
     if (name == NULL) {
         goto exit;
     }
 skip_optional:
-    if (kwargs == NULL) {
-        overrides = PyDict_New();
-        if (overrides == NULL) {
-            goto exit;
-        }
+    overrides = kwnames == NULL ? PyDict_New()
+        : _PyValue_StackAsDict(args + nargs, kwnames);
+    if (overrides == NULL) {
+        goto exit;
     }
-    else {
-        overrides = Py_NewRef(kwargs);
-    }
-    return_value = _interpreters_new_config_impl(module, name, overrides);
+    return_value = _interpreters_new_config_impl(PyValue_AsKnownObjectBorrow(module), name, overrides);
 
 exit:
     /* Cleanup for overrides */
@@ -90,15 +91,16 @@ PyDoc_STRVAR(_interpreters_create__doc__,
 "is \'isolated\'.");
 
 #define _INTERPRETERS_CREATE_METHODDEF    \
-    {"create", _PyCFunction_CAST(_interpreters_create), METH_FASTCALL|METH_KEYWORDS, _interpreters_create__doc__},
+    {"create", _PyCFunction_CAST(_interpreters_create), METH_VALUE|METH_KEYWORDS, _interpreters_create__doc__},
 
-static PyObject *
-_interpreters_create_impl(PyObject *module, PyObject *configobj, int reqrefs);
+static PyValue
+_interpreters_create_impl(PyObject *module, PyValueBorrow configobj,
+                          int reqrefs);
 
-static PyObject *
-_interpreters_create(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_interpreters_create(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 2
@@ -126,35 +128,24 @@ _interpreters_create(PyObject *module, PyObject *const *args, Py_ssize_t nargs, 
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[2];
-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 0;
-    PyObject *configobj = NULL;
+    Py_ssize_t _idx[2];
+    PyValueBorrow configobj = PyValue_Borrow(PyValue_NULL);
     int reqrefs = 0;
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 0, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 0, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, _idx, 2)) {
         goto exit;
     }
-    if (!noptargs) {
-        goto skip_optional_pos;
+    if (_idx[0] >= 0) {
+        configobj = PyValue_Borrow(args[_idx[0]]);
     }
-    if (args[0]) {
-        configobj = args[0];
-        if (!--noptargs) {
-            goto skip_optional_pos;
+    if (_idx[1] >= 0) {
+        reqrefs = _PyValue_IsTrue(PyValue_Borrow(args[_idx[1]]));
+        if (reqrefs < 0) {
+            goto exit;
         }
     }
-skip_optional_pos:
-    if (!noptargs) {
-        goto skip_optional_kwonly;
-    }
-    reqrefs = PyObject_IsTrue(args[1]);
-    if (reqrefs < 0) {
-        goto exit;
-    }
-skip_optional_kwonly:
-    return_value = _interpreters_create_impl(module, configobj, reqrefs);
+    return_value = _interpreters_create_impl(PyValue_AsKnownObjectBorrow(module), configobj, reqrefs);
 
 exit:
     return return_value;
@@ -170,15 +161,16 @@ PyDoc_STRVAR(_interpreters_destroy__doc__,
 "So does an unrecognized ID.");
 
 #define _INTERPRETERS_DESTROY_METHODDEF    \
-    {"destroy", _PyCFunction_CAST(_interpreters_destroy), METH_FASTCALL|METH_KEYWORDS, _interpreters_destroy__doc__},
+    {"destroy", _PyCFunction_CAST(_interpreters_destroy), METH_VALUE|METH_KEYWORDS, _interpreters_destroy__doc__},
 
-static PyObject *
-_interpreters_destroy_impl(PyObject *module, PyObject *id, int restricted);
+static PyValue
+_interpreters_destroy_impl(PyObject *module, PyValueBorrow id,
+                           int restricted);
 
-static PyObject *
-_interpreters_destroy(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_interpreters_destroy(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 2
@@ -206,26 +198,22 @@ _interpreters_destroy(PyObject *module, PyObject *const *args, Py_ssize_t nargs,
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[2];
-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 1;
-    PyObject *id;
+    Py_ssize_t _idx[2];
+    PyValueBorrow id;
     int restricted = 0;
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, _idx, 2)) {
         goto exit;
     }
-    id = args[0];
-    if (!noptargs) {
-        goto skip_optional_kwonly;
+    id = PyValue_Borrow(args[_idx[0]]);
+    if (_idx[1] >= 0) {
+        restricted = _PyValue_IsTrue(PyValue_Borrow(args[_idx[1]]));
+        if (restricted < 0) {
+            goto exit;
+        }
     }
-    restricted = PyObject_IsTrue(args[1]);
-    if (restricted < 0) {
-        goto exit;
-    }
-skip_optional_kwonly:
-    return_value = _interpreters_destroy_impl(module, id, restricted);
+    return_value = _interpreters_destroy_impl(PyValue_AsKnownObjectBorrow(module), id, restricted);
 
 exit:
     return return_value;
@@ -238,15 +226,15 @@ PyDoc_STRVAR(_interpreters_list_all__doc__,
 "Return a list containing the ID of every existing interpreter.");
 
 #define _INTERPRETERS_LIST_ALL_METHODDEF    \
-    {"list_all", _PyCFunction_CAST(_interpreters_list_all), METH_FASTCALL|METH_KEYWORDS, _interpreters_list_all__doc__},
+    {"list_all", _PyCFunction_CAST(_interpreters_list_all), METH_VALUE|METH_KEYWORDS, _interpreters_list_all__doc__},
 
-static PyObject *
+static PyValue
 _interpreters_list_all_impl(PyObject *module, int reqready);
 
-static PyObject *
-_interpreters_list_all(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_interpreters_list_all(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
@@ -274,24 +262,20 @@ _interpreters_list_all(PyObject *module, PyObject *const *args, Py_ssize_t nargs
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[1];
-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 0;
+    Py_ssize_t _idx[1];
     int reqready = 0;
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 0, /*maxpos*/ 0, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 0, /*maxpos*/ 0, /*minkw*/ 0, /*varpos*/ 0, _idx, 1)) {
         goto exit;
     }
-    if (!noptargs) {
-        goto skip_optional_kwonly;
+    if (_idx[0] >= 0) {
+        reqready = _PyValue_IsTrue(PyValue_Borrow(args[_idx[0]]));
+        if (reqready < 0) {
+            goto exit;
+        }
     }
-    reqready = PyObject_IsTrue(args[0]);
-    if (reqready < 0) {
-        goto exit;
-    }
-skip_optional_kwonly:
-    return_value = _interpreters_list_all_impl(module, reqready);
+    return_value = _interpreters_list_all_impl(PyValue_AsKnownObjectBorrow(module), reqready);
 
 exit:
     return return_value;
@@ -304,15 +288,19 @@ PyDoc_STRVAR(_interpreters_get_current__doc__,
 "Return (ID, whence) of the current interpreter.");
 
 #define _INTERPRETERS_GET_CURRENT_METHODDEF    \
-    {"get_current", (PyCFunction)_interpreters_get_current, METH_NOARGS, _interpreters_get_current__doc__},
+    {"get_current", _PyCFunction_CAST(_interpreters_get_current), METH_VALUE|METH_NOARGS, _interpreters_get_current__doc__},
 
-static PyObject *
+static PyValue
 _interpreters_get_current_impl(PyObject *module);
 
-static PyObject *
-_interpreters_get_current(PyObject *module, PyObject *Py_UNUSED(ignored))
+static PyValue
+_interpreters_get_current(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _interpreters_get_current_impl(module);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _interpreters_get_current_impl(PyValue_AsKnownObjectBorrow(module));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(_interpreters_get_main__doc__,
@@ -322,15 +310,19 @@ PyDoc_STRVAR(_interpreters_get_main__doc__,
 "Return (ID, whence) of the main interpreter.");
 
 #define _INTERPRETERS_GET_MAIN_METHODDEF    \
-    {"get_main", (PyCFunction)_interpreters_get_main, METH_NOARGS, _interpreters_get_main__doc__},
+    {"get_main", _PyCFunction_CAST(_interpreters_get_main), METH_VALUE|METH_NOARGS, _interpreters_get_main__doc__},
 
-static PyObject *
+static PyValue
 _interpreters_get_main_impl(PyObject *module);
 
-static PyObject *
-_interpreters_get_main(PyObject *module, PyObject *Py_UNUSED(ignored))
+static PyValue
+_interpreters_get_main(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _interpreters_get_main_impl(module);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _interpreters_get_main_impl(PyValue_AsKnownObjectBorrow(module));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(_interpreters_set___main___attrs__doc__,
@@ -340,16 +332,16 @@ PyDoc_STRVAR(_interpreters_set___main___attrs__doc__,
 "Bind the given attributes in the interpreter\'s __main__ module.");
 
 #define _INTERPRETERS_SET___MAIN___ATTRS_METHODDEF    \
-    {"set___main___attrs", _PyCFunction_CAST(_interpreters_set___main___attrs), METH_FASTCALL|METH_KEYWORDS, _interpreters_set___main___attrs__doc__},
+    {"set___main___attrs", _PyCFunction_CAST(_interpreters_set___main___attrs), METH_VALUE|METH_KEYWORDS, _interpreters_set___main___attrs__doc__},
 
-static PyObject *
-_interpreters_set___main___attrs_impl(PyObject *module, PyObject *id,
+static PyValue
+_interpreters_set___main___attrs_impl(PyObject *module, PyValueBorrow id,
                                       PyObject *updates, int restricted);
 
-static PyObject *
-_interpreters_set___main___attrs(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_interpreters_set___main___attrs(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 3
@@ -377,32 +369,28 @@ _interpreters_set___main___attrs(PyObject *module, PyObject *const *args, Py_ssi
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[3];
-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 2;
-    PyObject *id;
+    Py_ssize_t _idx[3];
+    PyValueBorrow id;
     PyObject *updates;
     int restricted = 0;
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 2, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 2, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, _idx, 3)) {
         goto exit;
     }
-    id = args[0];
-    if (!PyDict_Check(args[1])) {
-        _PyArg_BadArgument("set___main___attrs", "argument 'updates'", "dict", args[1]);
+    id = PyValue_Borrow(args[_idx[0]]);
+    if (!PyType_IsSubtype(PyValue_TYPE(PyValue_Borrow(args[_idx[1]])), &PyDict_Type)) {
+        _PyArg_BadArgumentValue("set___main___attrs", "argument 'updates'", "dict", PyValue_Borrow(args[_idx[1]]));
         goto exit;
     }
-    updates = args[1];
-    if (!noptargs) {
-        goto skip_optional_kwonly;
+    updates = PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[1]]));
+    if (_idx[2] >= 0) {
+        restricted = _PyValue_IsTrue(PyValue_Borrow(args[_idx[2]]));
+        if (restricted < 0) {
+            goto exit;
+        }
     }
-    restricted = PyObject_IsTrue(args[2]);
-    if (restricted < 0) {
-        goto exit;
-    }
-skip_optional_kwonly:
-    return_value = _interpreters_set___main___attrs_impl(module, id, updates, restricted);
+    return_value = _interpreters_set___main___attrs_impl(PyValue_AsKnownObjectBorrow(module), id, updates, restricted);
 
 exit:
     return return_value;
@@ -428,16 +416,16 @@ PyDoc_STRVAR(_interpreters_exec__doc__,
 "is ignored, including its __globals__ dict.");
 
 #define _INTERPRETERS_EXEC_METHODDEF    \
-    {"exec", _PyCFunction_CAST(_interpreters_exec), METH_FASTCALL|METH_KEYWORDS, _interpreters_exec__doc__},
+    {"exec", _PyCFunction_CAST(_interpreters_exec), METH_VALUE|METH_KEYWORDS, _interpreters_exec__doc__},
 
-static PyObject *
-_interpreters_exec_impl(PyObject *module, PyObject *id, PyObject *code,
-                        PyObject *shared, int restricted);
+static PyValue
+_interpreters_exec_impl(PyObject *module, PyValueBorrow id,
+                        PyValueBorrow code, PyObject *shared, int restricted);
 
-static PyObject *
-_interpreters_exec(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_interpreters_exec(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 4
@@ -465,43 +453,32 @@ _interpreters_exec(PyObject *module, PyObject *const *args, Py_ssize_t nargs, Py
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[4];
-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 2;
-    PyObject *id;
-    PyObject *code;
+    Py_ssize_t _idx[4];
+    PyValueBorrow id;
+    PyValueBorrow code;
     PyObject *shared = NULL;
     int restricted = 0;
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 2, /*maxpos*/ 3, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 2, /*maxpos*/ 3, /*minkw*/ 0, /*varpos*/ 0, _idx, 4)) {
         goto exit;
     }
-    id = args[0];
-    code = args[1];
-    if (!noptargs) {
-        goto skip_optional_pos;
-    }
-    if (args[2]) {
-        if (!PyDict_Check(args[2])) {
-            _PyArg_BadArgument("exec", "argument 'shared'", "dict", args[2]);
+    id = PyValue_Borrow(args[_idx[0]]);
+    code = PyValue_Borrow(args[_idx[1]]);
+    if (_idx[2] >= 0) {
+        if (!PyType_IsSubtype(PyValue_TYPE(PyValue_Borrow(args[_idx[2]])), &PyDict_Type)) {
+            _PyArg_BadArgumentValue("exec", "argument 'shared'", "dict", PyValue_Borrow(args[_idx[2]]));
             goto exit;
         }
-        shared = args[2];
-        if (!--noptargs) {
-            goto skip_optional_pos;
+        shared = PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[2]]));
+    }
+    if (_idx[3] >= 0) {
+        restricted = _PyValue_IsTrue(PyValue_Borrow(args[_idx[3]]));
+        if (restricted < 0) {
+            goto exit;
         }
     }
-skip_optional_pos:
-    if (!noptargs) {
-        goto skip_optional_kwonly;
-    }
-    restricted = PyObject_IsTrue(args[3]);
-    if (restricted < 0) {
-        goto exit;
-    }
-skip_optional_kwonly:
-    return_value = _interpreters_exec_impl(module, id, code, shared, restricted);
+    return_value = _interpreters_exec_impl(PyValue_AsKnownObjectBorrow(module), id, code, shared, restricted);
 
 exit:
     return return_value;
@@ -516,17 +493,17 @@ PyDoc_STRVAR(_interpreters_run_string__doc__,
 "(See _interpreters.exec().)");
 
 #define _INTERPRETERS_RUN_STRING_METHODDEF    \
-    {"run_string", _PyCFunction_CAST(_interpreters_run_string), METH_FASTCALL|METH_KEYWORDS, _interpreters_run_string__doc__},
+    {"run_string", _PyCFunction_CAST(_interpreters_run_string), METH_VALUE|METH_KEYWORDS, _interpreters_run_string__doc__},
 
-static PyObject *
-_interpreters_run_string_impl(PyObject *module, PyObject *id,
+static PyValue
+_interpreters_run_string_impl(PyObject *module, PyValueBorrow id,
                               PyObject *script, PyObject *shared,
                               int restricted);
 
-static PyObject *
-_interpreters_run_string(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_interpreters_run_string(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 4
@@ -554,47 +531,40 @@ _interpreters_run_string(PyObject *module, PyObject *const *args, Py_ssize_t nar
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[4];
-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 2;
-    PyObject *id;
+    Py_ssize_t _idx[4];
+    PyValueBorrow id;
     PyObject *script;
     PyObject *shared = NULL;
     int restricted = 0;
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 2, /*maxpos*/ 3, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 2, /*maxpos*/ 3, /*minkw*/ 0, /*varpos*/ 0, _idx, 4)) {
         goto exit;
     }
-    id = args[0];
-    if (!PyUnicode_Check(args[1])) {
-        _PyArg_BadArgument("run_string", "argument 'script'", "str", args[1]);
+    id = PyValue_Borrow(args[_idx[0]]);
+    if (!PyValue_IsObject(PyValue_Borrow(args[_idx[1]]))) {
+        _PyArg_BadArgumentValue("run_string", "argument 'script'", "str", PyValue_Borrow(args[_idx[1]]));
         goto exit;
     }
-    script = args[1];
-    if (!noptargs) {
-        goto skip_optional_pos;
+    if (!PyUnicode_Check(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[1]])))) {
+        _PyArg_BadArgument("run_string", "argument 'script'", "str", PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[1]])));
+        goto exit;
     }
-    if (args[2]) {
-        if (!PyDict_Check(args[2])) {
-            _PyArg_BadArgument("run_string", "argument 'shared'", "dict", args[2]);
+    script = PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[1]]));
+    if (_idx[2] >= 0) {
+        if (!PyType_IsSubtype(PyValue_TYPE(PyValue_Borrow(args[_idx[2]])), &PyDict_Type)) {
+            _PyArg_BadArgumentValue("run_string", "argument 'shared'", "dict", PyValue_Borrow(args[_idx[2]]));
             goto exit;
         }
-        shared = args[2];
-        if (!--noptargs) {
-            goto skip_optional_pos;
+        shared = PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[2]]));
+    }
+    if (_idx[3] >= 0) {
+        restricted = _PyValue_IsTrue(PyValue_Borrow(args[_idx[3]]));
+        if (restricted < 0) {
+            goto exit;
         }
     }
-skip_optional_pos:
-    if (!noptargs) {
-        goto skip_optional_kwonly;
-    }
-    restricted = PyObject_IsTrue(args[3]);
-    if (restricted < 0) {
-        goto exit;
-    }
-skip_optional_kwonly:
-    return_value = _interpreters_run_string_impl(module, id, script, shared, restricted);
+    return_value = _interpreters_run_string_impl(PyValue_AsKnownObjectBorrow(module), id, script, shared, restricted);
 
 exit:
     return return_value;
@@ -613,16 +583,17 @@ PyDoc_STRVAR(_interpreters_run_func__doc__,
 "(See _interpreters.exec().)");
 
 #define _INTERPRETERS_RUN_FUNC_METHODDEF    \
-    {"run_func", _PyCFunction_CAST(_interpreters_run_func), METH_FASTCALL|METH_KEYWORDS, _interpreters_run_func__doc__},
+    {"run_func", _PyCFunction_CAST(_interpreters_run_func), METH_VALUE|METH_KEYWORDS, _interpreters_run_func__doc__},
 
-static PyObject *
-_interpreters_run_func_impl(PyObject *module, PyObject *id, PyObject *func,
-                            PyObject *shared, int restricted);
+static PyValue
+_interpreters_run_func_impl(PyObject *module, PyValueBorrow id,
+                            PyValueBorrow func, PyObject *shared,
+                            int restricted);
 
-static PyObject *
-_interpreters_run_func(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_interpreters_run_func(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 4
@@ -650,43 +621,32 @@ _interpreters_run_func(PyObject *module, PyObject *const *args, Py_ssize_t nargs
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[4];
-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 2;
-    PyObject *id;
-    PyObject *func;
+    Py_ssize_t _idx[4];
+    PyValueBorrow id;
+    PyValueBorrow func;
     PyObject *shared = NULL;
     int restricted = 0;
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 2, /*maxpos*/ 3, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 2, /*maxpos*/ 3, /*minkw*/ 0, /*varpos*/ 0, _idx, 4)) {
         goto exit;
     }
-    id = args[0];
-    func = args[1];
-    if (!noptargs) {
-        goto skip_optional_pos;
-    }
-    if (args[2]) {
-        if (!PyDict_Check(args[2])) {
-            _PyArg_BadArgument("run_func", "argument 'shared'", "dict", args[2]);
+    id = PyValue_Borrow(args[_idx[0]]);
+    func = PyValue_Borrow(args[_idx[1]]);
+    if (_idx[2] >= 0) {
+        if (!PyType_IsSubtype(PyValue_TYPE(PyValue_Borrow(args[_idx[2]])), &PyDict_Type)) {
+            _PyArg_BadArgumentValue("run_func", "argument 'shared'", "dict", PyValue_Borrow(args[_idx[2]]));
             goto exit;
         }
-        shared = args[2];
-        if (!--noptargs) {
-            goto skip_optional_pos;
+        shared = PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[2]]));
+    }
+    if (_idx[3] >= 0) {
+        restricted = _PyValue_IsTrue(PyValue_Borrow(args[_idx[3]]));
+        if (restricted < 0) {
+            goto exit;
         }
     }
-skip_optional_pos:
-    if (!noptargs) {
-        goto skip_optional_kwonly;
-    }
-    restricted = PyObject_IsTrue(args[3]);
-    if (restricted < 0) {
-        goto exit;
-    }
-skip_optional_kwonly:
-    return_value = _interpreters_run_func_impl(module, id, func, shared, restricted);
+    return_value = _interpreters_run_func_impl(PyValue_AsKnownObjectBorrow(module), id, func, shared, restricted);
 
 exit:
     return return_value;
@@ -702,17 +662,17 @@ PyDoc_STRVAR(_interpreters_call__doc__,
 "Pass the given args and kwargs, if possible.");
 
 #define _INTERPRETERS_CALL_METHODDEF    \
-    {"call", _PyCFunction_CAST(_interpreters_call), METH_FASTCALL|METH_KEYWORDS, _interpreters_call__doc__},
+    {"call", _PyCFunction_CAST(_interpreters_call), METH_VALUE|METH_KEYWORDS, _interpreters_call__doc__},
 
-static PyObject *
-_interpreters_call_impl(PyObject *module, PyObject *id, PyObject *callable,
-                        PyObject *args, PyObject *kwargs, int preserve_exc,
-                        int restricted);
+static PyValue
+_interpreters_call_impl(PyObject *module, PyValueBorrow id,
+                        PyValueBorrow callable, PyObject *args,
+                        PyObject *kwargs, int preserve_exc, int restricted);
 
-static PyObject *
-_interpreters_call(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_interpreters_call(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 6
@@ -740,64 +700,47 @@ _interpreters_call(PyObject *module, PyObject *const *args, Py_ssize_t nargs, Py
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[6];
-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 2;
-    PyObject *id;
-    PyObject *callable;
+    Py_ssize_t _idx[6];
+    PyValueBorrow id;
+    PyValueBorrow callable;
     PyObject *__clinic_args = NULL;
     PyObject *__clinic_kwargs = NULL;
     int preserve_exc = 0;
     int restricted = 0;
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 2, /*maxpos*/ 4, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 2, /*maxpos*/ 4, /*minkw*/ 0, /*varpos*/ 0, _idx, 6)) {
         goto exit;
     }
-    id = args[0];
-    callable = args[1];
-    if (!noptargs) {
-        goto skip_optional_pos;
-    }
-    if (args[2]) {
-        if (!PyTuple_Check(args[2])) {
-            _PyArg_BadArgument("call", "argument 'args'", "tuple", args[2]);
+    id = PyValue_Borrow(args[_idx[0]]);
+    callable = PyValue_Borrow(args[_idx[1]]);
+    if (_idx[2] >= 0) {
+        if (!PyType_IsSubtype(PyValue_TYPE(PyValue_Borrow(args[_idx[2]])), &PyTuple_Type)) {
+            _PyArg_BadArgumentValue("call", "argument 'args'", "tuple", PyValue_Borrow(args[_idx[2]]));
             goto exit;
         }
-        __clinic_args = args[2];
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
+        __clinic_args = PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[2]]));
     }
-    if (args[3]) {
-        if (!PyDict_Check(args[3])) {
-            _PyArg_BadArgument("call", "argument 'kwargs'", "dict", args[3]);
+    if (_idx[3] >= 0) {
+        if (!PyType_IsSubtype(PyValue_TYPE(PyValue_Borrow(args[_idx[3]])), &PyDict_Type)) {
+            _PyArg_BadArgumentValue("call", "argument 'kwargs'", "dict", PyValue_Borrow(args[_idx[3]]));
             goto exit;
         }
-        __clinic_kwargs = args[3];
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
+        __clinic_kwargs = PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[3]]));
     }
-skip_optional_pos:
-    if (!noptargs) {
-        goto skip_optional_kwonly;
-    }
-    if (args[4]) {
-        preserve_exc = PyObject_IsTrue(args[4]);
+    if (_idx[4] >= 0) {
+        preserve_exc = _PyValue_IsTrue(PyValue_Borrow(args[_idx[4]]));
         if (preserve_exc < 0) {
             goto exit;
         }
-        if (!--noptargs) {
-            goto skip_optional_kwonly;
+    }
+    if (_idx[5] >= 0) {
+        restricted = _PyValue_IsTrue(PyValue_Borrow(args[_idx[5]]));
+        if (restricted < 0) {
+            goto exit;
         }
     }
-    restricted = PyObject_IsTrue(args[5]);
-    if (restricted < 0) {
-        goto exit;
-    }
-skip_optional_kwonly:
-    return_value = _interpreters_call_impl(module, id, callable, __clinic_args, __clinic_kwargs, preserve_exc, restricted);
+    return_value = _interpreters_call_impl(PyValue_AsKnownObjectBorrow(module), id, callable, __clinic_args, __clinic_kwargs, preserve_exc, restricted);
 
 exit:
     return return_value;
@@ -810,15 +753,15 @@ PyDoc_STRVAR(_interpreters_is_shareable__doc__,
 "Return True if the object\'s data may be shared between interpreters and False otherwise.");
 
 #define _INTERPRETERS_IS_SHAREABLE_METHODDEF    \
-    {"is_shareable", _PyCFunction_CAST(_interpreters_is_shareable), METH_FASTCALL|METH_KEYWORDS, _interpreters_is_shareable__doc__},
+    {"is_shareable", _PyCFunction_CAST(_interpreters_is_shareable), METH_VALUE|METH_KEYWORDS, _interpreters_is_shareable__doc__},
 
-static PyObject *
-_interpreters_is_shareable_impl(PyObject *module, PyObject *obj);
+static PyValue
+_interpreters_is_shareable_impl(PyObject *module, PyValueBorrow obj);
 
-static PyObject *
-_interpreters_is_shareable(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_interpreters_is_shareable(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
@@ -846,16 +789,15 @@ _interpreters_is_shareable(PyObject *module, PyObject *const *args, Py_ssize_t n
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[1];
-    PyObject *obj;
+    Py_ssize_t _idx[1];
+    PyValueBorrow obj;
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, _idx, 1)) {
         goto exit;
     }
-    obj = args[0];
-    return_value = _interpreters_is_shareable_impl(module, obj);
+    obj = PyValue_Borrow(args[_idx[0]]);
+    return_value = _interpreters_is_shareable_impl(PyValue_AsKnownObjectBorrow(module), obj);
 
 exit:
     return return_value;
@@ -868,15 +810,16 @@ PyDoc_STRVAR(_interpreters_is_running__doc__,
 "Return whether or not the identified interpreter is running.");
 
 #define _INTERPRETERS_IS_RUNNING_METHODDEF    \
-    {"is_running", _PyCFunction_CAST(_interpreters_is_running), METH_FASTCALL|METH_KEYWORDS, _interpreters_is_running__doc__},
+    {"is_running", _PyCFunction_CAST(_interpreters_is_running), METH_VALUE|METH_KEYWORDS, _interpreters_is_running__doc__},
 
-static PyObject *
-_interpreters_is_running_impl(PyObject *module, PyObject *id, int restricted);
+static PyValue
+_interpreters_is_running_impl(PyObject *module, PyValueBorrow id,
+                              int restricted);
 
-static PyObject *
-_interpreters_is_running(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_interpreters_is_running(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 2
@@ -904,26 +847,22 @@ _interpreters_is_running(PyObject *module, PyObject *const *args, Py_ssize_t nar
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[2];
-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 1;
-    PyObject *id;
+    Py_ssize_t _idx[2];
+    PyValueBorrow id;
     int restricted = 0;
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, _idx, 2)) {
         goto exit;
     }
-    id = args[0];
-    if (!noptargs) {
-        goto skip_optional_kwonly;
+    id = PyValue_Borrow(args[_idx[0]]);
+    if (_idx[1] >= 0) {
+        restricted = _PyValue_IsTrue(PyValue_Borrow(args[_idx[1]]));
+        if (restricted < 0) {
+            goto exit;
+        }
     }
-    restricted = PyObject_IsTrue(args[1]);
-    if (restricted < 0) {
-        goto exit;
-    }
-skip_optional_kwonly:
-    return_value = _interpreters_is_running_impl(module, id, restricted);
+    return_value = _interpreters_is_running_impl(PyValue_AsKnownObjectBorrow(module), id, restricted);
 
 exit:
     return return_value;
@@ -936,15 +875,16 @@ PyDoc_STRVAR(_interpreters_get_config__doc__,
 "Return a representation of the config used to initialize the interpreter.");
 
 #define _INTERPRETERS_GET_CONFIG_METHODDEF    \
-    {"get_config", _PyCFunction_CAST(_interpreters_get_config), METH_FASTCALL|METH_KEYWORDS, _interpreters_get_config__doc__},
+    {"get_config", _PyCFunction_CAST(_interpreters_get_config), METH_VALUE|METH_KEYWORDS, _interpreters_get_config__doc__},
 
-static PyObject *
-_interpreters_get_config_impl(PyObject *module, PyObject *id, int restricted);
+static PyValue
+_interpreters_get_config_impl(PyObject *module, PyValueBorrow id,
+                              int restricted);
 
-static PyObject *
-_interpreters_get_config(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_interpreters_get_config(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 2
@@ -972,26 +912,22 @@ _interpreters_get_config(PyObject *module, PyObject *const *args, Py_ssize_t nar
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[2];
-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 1;
-    PyObject *id;
+    Py_ssize_t _idx[2];
+    PyValueBorrow id;
     int restricted = 0;
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, _idx, 2)) {
         goto exit;
     }
-    id = args[0];
-    if (!noptargs) {
-        goto skip_optional_kwonly;
+    id = PyValue_Borrow(args[_idx[0]]);
+    if (_idx[1] >= 0) {
+        restricted = _PyValue_IsTrue(PyValue_Borrow(args[_idx[1]]));
+        if (restricted < 0) {
+            goto exit;
+        }
     }
-    restricted = PyObject_IsTrue(args[1]);
-    if (restricted < 0) {
-        goto exit;
-    }
-skip_optional_kwonly:
-    return_value = _interpreters_get_config_impl(module, id, restricted);
+    return_value = _interpreters_get_config_impl(PyValue_AsKnownObjectBorrow(module), id, restricted);
 
 exit:
     return return_value;
@@ -1004,15 +940,15 @@ PyDoc_STRVAR(_interpreters_whence__doc__,
 "Return an identifier for where the interpreter was created.");
 
 #define _INTERPRETERS_WHENCE_METHODDEF    \
-    {"whence", _PyCFunction_CAST(_interpreters_whence), METH_FASTCALL|METH_KEYWORDS, _interpreters_whence__doc__},
+    {"whence", _PyCFunction_CAST(_interpreters_whence), METH_VALUE|METH_KEYWORDS, _interpreters_whence__doc__},
 
-static PyObject *
-_interpreters_whence_impl(PyObject *module, PyObject *id);
+static PyValue
+_interpreters_whence_impl(PyObject *module, PyValueBorrow id);
 
-static PyObject *
-_interpreters_whence(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_interpreters_whence(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
@@ -1040,16 +976,15 @@ _interpreters_whence(PyObject *module, PyObject *const *args, Py_ssize_t nargs, 
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[1];
-    PyObject *id;
+    Py_ssize_t _idx[1];
+    PyValueBorrow id;
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, _idx, 1)) {
         goto exit;
     }
-    id = args[0];
-    return_value = _interpreters_whence_impl(module, id);
+    id = PyValue_Borrow(args[_idx[0]]);
+    return_value = _interpreters_whence_impl(PyValue_AsKnownObjectBorrow(module), id);
 
 exit:
     return return_value;
@@ -1061,16 +996,16 @@ PyDoc_STRVAR(_interpreters_incref__doc__,
 "\n");
 
 #define _INTERPRETERS_INCREF_METHODDEF    \
-    {"incref", _PyCFunction_CAST(_interpreters_incref), METH_FASTCALL|METH_KEYWORDS, _interpreters_incref__doc__},
+    {"incref", _PyCFunction_CAST(_interpreters_incref), METH_VALUE|METH_KEYWORDS, _interpreters_incref__doc__},
 
-static PyObject *
-_interpreters_incref_impl(PyObject *module, PyObject *id, int implieslink,
-                          int restricted);
+static PyValue
+_interpreters_incref_impl(PyObject *module, PyValueBorrow id,
+                          int implieslink, int restricted);
 
-static PyObject *
-_interpreters_incref(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_interpreters_incref(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 3
@@ -1098,36 +1033,29 @@ _interpreters_incref(PyObject *module, PyObject *const *args, Py_ssize_t nargs, 
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[3];
-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 1;
-    PyObject *id;
+    Py_ssize_t _idx[3];
+    PyValueBorrow id;
     int implieslink = 0;
     int restricted = 0;
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, _idx, 3)) {
         goto exit;
     }
-    id = args[0];
-    if (!noptargs) {
-        goto skip_optional_kwonly;
-    }
-    if (args[1]) {
-        implieslink = PyObject_IsTrue(args[1]);
+    id = PyValue_Borrow(args[_idx[0]]);
+    if (_idx[1] >= 0) {
+        implieslink = _PyValue_IsTrue(PyValue_Borrow(args[_idx[1]]));
         if (implieslink < 0) {
             goto exit;
         }
-        if (!--noptargs) {
-            goto skip_optional_kwonly;
+    }
+    if (_idx[2] >= 0) {
+        restricted = _PyValue_IsTrue(PyValue_Borrow(args[_idx[2]]));
+        if (restricted < 0) {
+            goto exit;
         }
     }
-    restricted = PyObject_IsTrue(args[2]);
-    if (restricted < 0) {
-        goto exit;
-    }
-skip_optional_kwonly:
-    return_value = _interpreters_incref_impl(module, id, implieslink, restricted);
+    return_value = _interpreters_incref_impl(PyValue_AsKnownObjectBorrow(module), id, implieslink, restricted);
 
 exit:
     return return_value;
@@ -1139,15 +1067,15 @@ PyDoc_STRVAR(_interpreters_decref__doc__,
 "\n");
 
 #define _INTERPRETERS_DECREF_METHODDEF    \
-    {"decref", _PyCFunction_CAST(_interpreters_decref), METH_FASTCALL|METH_KEYWORDS, _interpreters_decref__doc__},
+    {"decref", _PyCFunction_CAST(_interpreters_decref), METH_VALUE|METH_KEYWORDS, _interpreters_decref__doc__},
 
-static PyObject *
-_interpreters_decref_impl(PyObject *module, PyObject *id, int restricted);
+static PyValue
+_interpreters_decref_impl(PyObject *module, PyValueBorrow id, int restricted);
 
-static PyObject *
-_interpreters_decref(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_interpreters_decref(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 2
@@ -1175,26 +1103,22 @@ _interpreters_decref(PyObject *module, PyObject *const *args, Py_ssize_t nargs, 
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[2];
-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 1;
-    PyObject *id;
+    Py_ssize_t _idx[2];
+    PyValueBorrow id;
     int restricted = 0;
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, _idx, 2)) {
         goto exit;
     }
-    id = args[0];
-    if (!noptargs) {
-        goto skip_optional_kwonly;
+    id = PyValue_Borrow(args[_idx[0]]);
+    if (_idx[1] >= 0) {
+        restricted = _PyValue_IsTrue(PyValue_Borrow(args[_idx[1]]));
+        if (restricted < 0) {
+            goto exit;
+        }
     }
-    restricted = PyObject_IsTrue(args[1]);
-    if (restricted < 0) {
-        goto exit;
-    }
-skip_optional_kwonly:
-    return_value = _interpreters_decref_impl(module, id, restricted);
+    return_value = _interpreters_decref_impl(PyValue_AsKnownObjectBorrow(module), id, restricted);
 
 exit:
     return return_value;
@@ -1211,15 +1135,15 @@ PyDoc_STRVAR(_interpreters_capture_exception__doc__,
 "_interpreters.exec() returns.");
 
 #define _INTERPRETERS_CAPTURE_EXCEPTION_METHODDEF    \
-    {"capture_exception", _PyCFunction_CAST(_interpreters_capture_exception), METH_FASTCALL|METH_KEYWORDS, _interpreters_capture_exception__doc__},
+    {"capture_exception", _PyCFunction_CAST(_interpreters_capture_exception), METH_VALUE|METH_KEYWORDS, _interpreters_capture_exception__doc__},
 
-static PyObject *
-_interpreters_capture_exception_impl(PyObject *module, PyObject *exc_arg);
+static PyValue
+_interpreters_capture_exception_impl(PyObject *module, PyValueBorrow exc_arg);
 
-static PyObject *
-_interpreters_capture_exception(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_interpreters_capture_exception(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
@@ -1247,23 +1171,19 @@ _interpreters_capture_exception(PyObject *module, PyObject *const *args, Py_ssiz
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[1];
-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 0;
-    PyObject *exc_arg = Py_None;
+    Py_ssize_t _idx[1];
+    PyValueBorrow exc_arg = PyValue_Borrow(PyValue_None);
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 0, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 0, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, _idx, 1)) {
         goto exit;
     }
-    if (!noptargs) {
-        goto skip_optional_pos;
+    if (_idx[0] >= 0) {
+        exc_arg = PyValue_Borrow(args[_idx[0]]);
     }
-    exc_arg = args[0];
-skip_optional_pos:
-    return_value = _interpreters_capture_exception_impl(module, exc_arg);
+    return_value = _interpreters_capture_exception_impl(PyValue_AsKnownObjectBorrow(module), exc_arg);
 
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=cfad9682f02377d5 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=29a118d73d7d2546 input=a9049054013a1b77]*/

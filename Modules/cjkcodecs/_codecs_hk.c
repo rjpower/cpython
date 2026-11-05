@@ -10,6 +10,7 @@
     const encode_map *big5_encmap;  \
     const decode_map *big5_decmap;
 
+#define Py_VALUE_CORE 1
 #include "cjkcodecs.h"
 #include "mappings_hk.h"
 

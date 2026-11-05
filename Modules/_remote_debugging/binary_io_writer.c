@@ -9,9 +9,13 @@
 #  define Py_BUILD_CORE_MODULE
 #endif
 
+#define Py_VALUE_CORE 1
 #include "binary_io.h"
 #include "_remote_debugging.h"
 #include "pycore_opcode_utils.h"  // MAX_REAL_OPCODE
+#include "pycore_structseq.h"    // PyStructSequence_GET_VALUE()
+#include "pycore_value.h"         // PyValue_FromObjectBorrow()
+#include "pycore_value_ops.h"     // _PyValue_Hash()
 #include <math.h>
 #include <string.h>
 
@@ -293,7 +297,7 @@ static Py_uhash_t
 string_hash_func(const void *key)
 {
     PyObject *str = (PyObject *)key;
-    Py_hash_t hash = PyObject_Hash(str);
+    Py_hash_t hash = _PyValue_Hash(PyValue_FromObjectBorrow(str));
     if (hash == -1) {
         PyErr_Clear();
         return 0;
@@ -309,7 +313,7 @@ string_compare_func(const void *key1, const void *key2)
     if (str1 == str2) {
         return 1;
     }
-    int result = PyObject_RichCompareBool(str1, str2, Py_EQ);
+    int result = _PyValue_RichCompareBool(PyValue_FromObjectBorrow(str1), PyValue_FromObjectBorrow(str2), Py_EQ);
     if (result == -1) {
         PyErr_Clear();
         return 0;
@@ -855,9 +859,11 @@ error:
 static int
 location_field(PyObject *location, Py_ssize_t i, int32_t *out)
 {
-    PyObject *item = PyTuple_Check(location) ?
-        PyTuple_GetItemRef(location, i) :
-        PyStructSequence_GetItemRef(location, i);
+    PyValue item_v = PyTuple_Check(location)
+                         ? PyTuple_GetValue(location, i)
+                         : PyValue_DUP(PyStructSequence_GET_VALUE(location, i));
+    PyObject *item = PyValue_IsNull(item_v) ? NULL
+        : _PyValue_AsObjectStealAt(item_v, BOX_SITE_FIELD);
     if (item == NULL) {
         return -1;
     }
@@ -877,7 +883,8 @@ build_frame_stack(BinaryWriter *writer, PyObject *frame_list,
 
     for (Py_ssize_t k = 0; k < (Py_ssize_t)*curr_depth; k++) {
         int result = -1;
-        PyObject *frame_info = PyList_GetItemRef(frame_list, k);
+        PyValue frame_info_v = PyList_GetValue(frame_list, k);
+        PyObject *frame_info = PyValue_IsNull(frame_info_v) ? NULL : _PyValue_AsObjectStealAt(frame_info_v, BOX_SITE_FIELD);
         PyObject *filename = NULL;
         PyObject *location = NULL;
         PyObject *funcname = NULL;
@@ -894,10 +901,14 @@ build_frame_stack(BinaryWriter *writer, PyObject *frame_list,
         }
 
         /* Get filename, location, funcname, opcode from FrameInfo */
-        filename = PyStructSequence_GetItemRef(frame_info, 0);
-        location = PyStructSequence_GetItemRef(frame_info, 1);
-        funcname = PyStructSequence_GetItemRef(frame_info, 2);
-        opcode_obj = PyStructSequence_GetItemRef(frame_info, 3);
+        PyValue filename_v = PyValue_DUP(PyStructSequence_GET_VALUE(frame_info, 0));
+        filename = PyValue_IsNull(filename_v) ? NULL : _PyValue_AsObjectStealAt(filename_v, BOX_SITE_FIELD);
+        PyValue location_v = PyValue_DUP(PyStructSequence_GET_VALUE(frame_info, 1));
+        location = PyValue_IsNull(location_v) ? NULL : _PyValue_AsObjectStealAt(location_v, BOX_SITE_FIELD);
+        PyValue funcname_v = PyValue_DUP(PyStructSequence_GET_VALUE(frame_info, 2));
+        funcname = PyValue_IsNull(funcname_v) ? NULL : _PyValue_AsObjectStealAt(funcname_v, BOX_SITE_FIELD);
+        PyValue opcode_obj_v = PyValue_DUP(PyStructSequence_GET_VALUE(frame_info, 3));
+        opcode_obj = PyValue_IsNull(opcode_obj_v) ? NULL : _PyValue_AsObjectStealAt(opcode_obj_v, BOX_SITE_FIELD);
         if (filename == NULL || location == NULL || funcname == NULL ||
             opcode_obj == NULL)
         {
@@ -979,7 +990,8 @@ process_thread_sample(BinaryWriter *writer, PyObject *thread_info,
         return -1;
     }
 
-    PyObject *thread_id_obj = PyStructSequence_GetItemRef(thread_info, 0);
+    PyValue thread_id_obj_v = PyValue_DUP(PyStructSequence_GET_VALUE(thread_info, 0));
+    PyObject *thread_id_obj = PyValue_IsNull(thread_id_obj_v) ? NULL : _PyValue_AsObjectStealAt(thread_id_obj_v, BOX_SITE_FIELD);
     if (thread_id_obj == NULL) {
         return -1;
     }
@@ -988,7 +1000,8 @@ process_thread_sample(BinaryWriter *writer, PyObject *thread_info,
     if (thread_id == (uint64_t)-1 && PyErr_Occurred()) {
         return -1;
     }
-    PyObject *status_obj = PyStructSequence_GetItemRef(thread_info, 1);
+    PyValue status_obj_v = PyValue_DUP(PyStructSequence_GET_VALUE(thread_info, 1));
+    PyObject *status_obj = PyValue_IsNull(status_obj_v) ? NULL : _PyValue_AsObjectStealAt(status_obj_v, BOX_SITE_FIELD);
     if (status_obj == NULL) {
         return -1;
     }
@@ -1011,7 +1024,8 @@ process_thread_sample(BinaryWriter *writer, PyObject *thread_info,
     /* Process frames and build current stack */
     uint32_t curr_stack[MAX_STACK_DEPTH];
     size_t curr_depth;
-    PyObject *frame_list = PyStructSequence_GetItemRef(thread_info, 2);
+    PyValue frame_list_v = PyValue_DUP(PyStructSequence_GET_VALUE(thread_info, 2));
+    PyObject *frame_list = PyValue_IsNull(frame_list_v) ? NULL : _PyValue_AsObjectStealAt(frame_list_v, BOX_SITE_FIELD);
     if (frame_list == NULL) {
         return -1;
     }
@@ -1083,13 +1097,16 @@ binary_writer_write_sample(BinaryWriter *writer, PyObject *stack_frames, uint64_
 
     Py_ssize_t num_interpreters = PyList_GET_SIZE(stack_frames);
     for (Py_ssize_t i = 0; i < num_interpreters; i++) {
-        PyObject *interp_info = PyList_GetItemRef(stack_frames, i);
+        PyValue interp_info_v = PyList_GetValue(stack_frames, i);
+        PyObject *interp_info = PyValue_IsNull(interp_info_v) ? NULL : _PyValue_AsObjectStealAt(interp_info_v, BOX_SITE_FIELD);
         if (interp_info == NULL) {
             return -1;
         }
 
-        PyObject *interp_id_obj = PyStructSequence_GetItemRef(interp_info, 0);
-        PyObject *threads = PyStructSequence_GetItemRef(interp_info, 1);
+        PyValue interp_id_obj_v = PyValue_DUP(PyStructSequence_GET_VALUE(interp_info, 0));
+        PyObject *interp_id_obj = PyValue_IsNull(interp_id_obj_v) ? NULL : _PyValue_AsObjectStealAt(interp_id_obj_v, BOX_SITE_FIELD);
+        PyValue threads_v = PyValue_DUP(PyStructSequence_GET_VALUE(interp_info, 1));
+        PyObject *threads = PyValue_IsNull(threads_v) ? NULL : _PyValue_AsObjectStealAt(threads_v, BOX_SITE_FIELD);
         Py_DECREF(interp_info);
         if (interp_id_obj == NULL || threads == NULL) {
             Py_XDECREF(interp_id_obj);
@@ -1116,7 +1133,8 @@ binary_writer_write_sample(BinaryWriter *writer, PyObject *stack_frames, uint64_
 
         Py_ssize_t num_threads = PyList_GET_SIZE(threads);
         for (Py_ssize_t j = 0; j < num_threads; j++) {
-            PyObject *thread_info = PyList_GetItemRef(threads, j);
+            PyValue thread_info_v = PyList_GetValue(threads, j);
+            PyObject *thread_info = PyValue_IsNull(thread_info_v) ? NULL : _PyValue_AsObjectStealAt(thread_info_v, BOX_SITE_FIELD);
             if (thread_info == NULL) {
                 Py_DECREF(threads);
                 return -1;

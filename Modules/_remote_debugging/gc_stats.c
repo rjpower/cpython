@@ -4,7 +4,9 @@
  * This file contains functions for reading GC stats from interpreter state.
  ******************************************************************************/
 
+#define Py_VALUE_CORE 1
 #include "gc_stats.h"
+#include "pycore_list.h"          // PyList_AppendValue()
 
 typedef struct {
     PyObject *result;
@@ -21,7 +23,7 @@ read_gc_stats(struct gc_stats *stats, int64_t iid, PyObject *result,
     if (value == NULL) { \
         goto error; \
     } \
-    PyStructSequence_SetItem(item, field++, value); \
+    PyStructSequence_SET_VALUE(item, field++, PyValue_PrepareOwned(value)); \
 } while (0)
 
     PyObject *item = NULL;
@@ -57,7 +59,7 @@ read_gc_stats(struct gc_stats *stats, int64_t iid, PyObject *result,
 
             SET_FIELD(PyFloat_FromDouble, items->duration);
 
-            int rc = PyList_Append(result, item);
+            int rc = PyList_AppendValue(result, PyValue_FromObjectBorrow(item));
             Py_CLEAR(item);
             if (rc < 0) {
                 goto error;

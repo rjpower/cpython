@@ -2,14 +2,21 @@
 preserve
 [clinic start generated code]*/
 
+#ifndef Py_VALUE_CORE
+#  error "value-emission Clinic output requires Py_VALUE_CORE"
+#endif
+
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 #  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
 #  include "pycore_value.h"       // _PyValue_STATIC_IMMORTAL()
 #endif
-#include "pycore_abstract.h"      // _PyNumber_Index()
-#include "pycore_borrow.h"        // _PyBorrow_TupleItems()
+#include "pycore_long_value.h"    // _PyValue_IntAsSsize_t()
 #include "pycore_modsupport.h"    // _PyArg_BadArgument()
+#include "pycore_tuple.h"         // _PyTuple_ITEMS()
+#include "pycore_value_call.h"    // METH_VALUE
+#include "pycore_value_ops.h"     // _PyValue_Index()
+#include "pycore_value_slots.h"   // _PyValue_THUNK_EXIT()
 
 PyDoc_STRVAR(_lzma_LZMACompressor_compress__doc__,
 "compress($self, data, /)\n"
@@ -23,21 +30,25 @@ PyDoc_STRVAR(_lzma_LZMACompressor_compress__doc__,
 "flush() method to finish the compression process.");
 
 #define _LZMA_LZMACOMPRESSOR_COMPRESS_METHODDEF    \
-    {"compress", (PyCFunction)_lzma_LZMACompressor_compress, METH_O, _lzma_LZMACompressor_compress__doc__},
+    {"compress", _PyCFunction_CAST(_lzma_LZMACompressor_compress), METH_VALUE|METH_O, _lzma_LZMACompressor_compress__doc__},
 
-static PyObject *
+static PyValue
 _lzma_LZMACompressor_compress_impl(Compressor *self, Py_buffer *data);
 
-static PyObject *
-_lzma_LZMACompressor_compress(PyObject *self, PyObject *arg)
+static PyValue
+_lzma_LZMACompressor_compress(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     Py_buffer data = {NULL, NULL};
 
-    if (PyObject_GetBuffer(arg, &data, PyBUF_SIMPLE) != 0) {
+    if (!PyValue_IsObject(PyValue_Borrow(args[0]))) {
+        PyErr_Format(PyExc_TypeError, "a bytes-like object is required, not '%.100s'", PyValue_TYPE(PyValue_Borrow(args[0]))->tp_name);
         goto exit;
     }
-    return_value = _lzma_LZMACompressor_compress_impl((Compressor *)self, &data);
+    if (PyObject_GetBuffer(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])), &data, PyBUF_SIMPLE) != 0) {
+        goto exit;
+    }
+    return_value = _lzma_LZMACompressor_compress_impl((Compressor *)PyValue_AsKnownObjectBorrow(self), &data);
 
 exit:
     /* Cleanup for data */
@@ -59,15 +70,19 @@ PyDoc_STRVAR(_lzma_LZMACompressor_flush__doc__,
 "The compressor object may not be used after this method is called.");
 
 #define _LZMA_LZMACOMPRESSOR_FLUSH_METHODDEF    \
-    {"flush", (PyCFunction)_lzma_LZMACompressor_flush, METH_NOARGS, _lzma_LZMACompressor_flush__doc__},
+    {"flush", _PyCFunction_CAST(_lzma_LZMACompressor_flush), METH_VALUE|METH_NOARGS, _lzma_LZMACompressor_flush__doc__},
 
-static PyObject *
+static PyValue
 _lzma_LZMACompressor_flush_impl(Compressor *self);
 
-static PyObject *
-_lzma_LZMACompressor_flush(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+_lzma_LZMACompressor_flush(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _lzma_LZMACompressor_flush_impl((Compressor *)self);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _lzma_LZMACompressor_flush_impl((Compressor *)PyValue_AsKnownObjectBorrow(self));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(_lzma_LZMADecompressor_decompress__doc__,
@@ -91,16 +106,16 @@ PyDoc_STRVAR(_lzma_LZMADecompressor_decompress__doc__,
 "ignored and saved in the unused_data attribute.");
 
 #define _LZMA_LZMADECOMPRESSOR_DECOMPRESS_METHODDEF    \
-    {"decompress", _PyCFunction_CAST(_lzma_LZMADecompressor_decompress), METH_FASTCALL|METH_KEYWORDS, _lzma_LZMADecompressor_decompress__doc__},
+    {"decompress", _PyCFunction_CAST(_lzma_LZMADecompressor_decompress), METH_VALUE|METH_KEYWORDS, _lzma_LZMADecompressor_decompress__doc__},
 
-static PyObject *
+static PyValue
 _lzma_LZMADecompressor_decompress_impl(Decompressor *self, Py_buffer *data,
                                        Py_ssize_t max_length);
 
-static PyObject *
-_lzma_LZMADecompressor_decompress(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_lzma_LZMADecompressor_decompress(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 2
@@ -128,36 +143,36 @@ _lzma_LZMADecompressor_decompress(PyObject *self, PyObject *const *args, Py_ssiz
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[2];
-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 1;
+    Py_ssize_t _idx[2];
     Py_buffer data = {NULL, NULL};
     Py_ssize_t max_length = -1;
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 1, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 1, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, _idx, 2)) {
         goto exit;
     }
-    if (PyObject_GetBuffer(args[0], &data, PyBUF_SIMPLE) != 0) {
+    if (!PyValue_IsObject(PyValue_Borrow(args[_idx[0]]))) {
+        PyErr_Format(PyExc_TypeError, "a bytes-like object is required, not '%.100s'", PyValue_TYPE(PyValue_Borrow(args[_idx[0]]))->tp_name);
         goto exit;
     }
-    if (!noptargs) {
-        goto skip_optional_pos;
+    if (PyObject_GetBuffer(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[0]])), &data, PyBUF_SIMPLE) != 0) {
+        goto exit;
     }
-    {
-        Py_ssize_t ival = -1;
-        PyObject *iobj = _PyNumber_Index(args[1]);
-        if (iobj != NULL) {
-            ival = PyLong_AsSsize_t(iobj);
-            Py_DECREF(iobj);
+    if (_idx[1] >= 0) {
+        {
+            Py_ssize_t ival = -1;
+            PyValue iobj = _PyValue_Index(PyValue_Borrow(args[_idx[1]]));
+            if (!PyValue_IsNull(iobj)) {
+                ival = _PyValue_IntAsSsize_t(PyValue_Borrow(iobj));
+                PyValue_CLOSE(iobj);
+            }
+            if (ival == -1 && PyErr_Occurred()) {
+                goto exit;
+            }
+            max_length = ival;
         }
-        if (ival == -1 && PyErr_Occurred()) {
-            goto exit;
-        }
-        max_length = ival;
     }
-skip_optional_pos:
-    return_value = _lzma_LZMADecompressor_decompress_impl((Decompressor *)self, &data, max_length);
+    return_value = _lzma_LZMADecompressor_decompress_impl((Decompressor *)PyValue_AsKnownObjectBorrow(self), &data, max_length);
 
 exit:
     /* Cleanup for data */
@@ -191,14 +206,14 @@ PyDoc_STRVAR(_lzma_LZMADecompressor__doc__,
 "\n"
 "For one-shot decompression, use the decompress() function instead.");
 
-static PyObject *
+static PyValue
 _lzma_LZMADecompressor_impl(PyTypeObject *type, int format,
-                            PyObject *memlimit, PyObject *filters);
+                            PyValueBorrow memlimit, PyValueBorrow filters);
 
-static PyObject *
-_lzma_LZMADecompressor(PyTypeObject *type, PyObject *args, PyObject *kwargs)
+static PyValue
+_lzma_LZMADecompressor_value(PyTypeObject *type, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 3
@@ -226,47 +241,49 @@ _lzma_LZMADecompressor(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[3];
-    PyObject * const *fastargs;
-    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
-    Py_ssize_t noptargs = nargs + (kwargs ? PyDict_GET_SIZE(kwargs) : 0) - 0;
+    Py_ssize_t _idx[3];
     int format = FORMAT_AUTO;
-    PyObject *memlimit = Py_None;
-    PyObject *filters = Py_None;
+    PyValueBorrow memlimit = PyValue_Borrow(PyValue_None);
+    PyValueBorrow filters = PyValue_Borrow(PyValue_None);
 
-    PyObject *const *_args_items = _PyBorrow_TupleItems(args, Py_MIN(nargs, 3));
-    if (_args_items == NULL) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 0, /*maxpos*/ 3, /*minkw*/ 0, /*varpos*/ 0, _idx, 3)) {
         goto exit;
     }
-    fastargs = _PyArg_UnpackKeywords(_args_items, nargs, kwargs, NULL, &_parser,
-            /*minpos*/ 0, /*maxpos*/ 3, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!fastargs) {
-        goto exit;
-    }
-    if (!noptargs) {
-        goto skip_optional_pos;
-    }
-    if (fastargs[0]) {
-        format = PyLong_AsInt(fastargs[0]);
+    if (_idx[0] >= 0) {
+        format = _PyValue_AsInt(PyValue_Borrow(args[_idx[0]]));
         if (format == -1 && PyErr_Occurred()) {
             goto exit;
         }
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
     }
-    if (fastargs[1]) {
-        memlimit = fastargs[1];
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
+    if (_idx[1] >= 0) {
+        memlimit = PyValue_Borrow(args[_idx[1]]);
     }
-    filters = fastargs[2];
-skip_optional_pos:
+    if (_idx[2] >= 0) {
+        filters = PyValue_Borrow(args[_idx[2]]);
+    }
     return_value = _lzma_LZMADecompressor_impl(type, format, memlimit, filters);
 
 exit:
     return return_value;
+}
+
+Py_VALUE_ENTRY static PyObject *
+_lzma_LZMADecompressor(PyTypeObject *type, PyObject *args, PyObject *kwargs)
+{
+    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
+    if (kwargs == NULL || PyDict_GET_SIZE(kwargs) == 0) {
+        return _PyValue_THUNK_EXIT(_lzma_LZMADecompressor_value(type, _PyTuple_ITEMS(args), nargs, NULL), BOX_SITE_CALL);
+    }
+    PyObject *kwnames;
+    PyValue *window = _PyValue_StackUnpackDict(_PyThreadState_GET(),
+        _PyTuple_ITEMS(args), nargs, kwargs, &kwnames);
+    if (window == NULL) {
+        return NULL;
+    }
+    PyValue result = _lzma_LZMADecompressor_value(type, window, nargs, kwnames);
+    _PyValue_StackUnpackDict_Free(window, nargs, kwnames);
+    return _PyValue_THUNK_EXIT(result, BOX_SITE_CALL);
 }
 
 PyDoc_STRVAR(_lzma_is_check_supported__doc__,
@@ -278,22 +295,22 @@ PyDoc_STRVAR(_lzma_is_check_supported__doc__,
 "Always returns True for CHECK_NONE and CHECK_CRC32.");
 
 #define _LZMA_IS_CHECK_SUPPORTED_METHODDEF    \
-    {"is_check_supported", (PyCFunction)_lzma_is_check_supported, METH_O, _lzma_is_check_supported__doc__},
+    {"is_check_supported", _PyCFunction_CAST(_lzma_is_check_supported), METH_VALUE|METH_O, _lzma_is_check_supported__doc__},
 
-static PyObject *
+static PyValue
 _lzma_is_check_supported_impl(PyObject *module, int check_id);
 
-static PyObject *
-_lzma_is_check_supported(PyObject *module, PyObject *arg)
+static PyValue
+_lzma_is_check_supported(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int check_id;
 
-    check_id = PyLong_AsInt(arg);
+    check_id = _PyValue_AsInt(PyValue_Borrow(args[0]));
     if (check_id == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = _lzma_is_check_supported_impl(module, check_id);
+    return_value = _lzma_is_check_supported_impl(PyValue_AsKnownObjectBorrow(module), check_id);
 
 exit:
     return return_value;
@@ -308,29 +325,33 @@ PyDoc_STRVAR(_lzma__decode_filter_properties__doc__,
 "The result does not include the filter ID itself, only the options.");
 
 #define _LZMA__DECODE_FILTER_PROPERTIES_METHODDEF    \
-    {"_decode_filter_properties", _PyCFunction_CAST(_lzma__decode_filter_properties), METH_FASTCALL, _lzma__decode_filter_properties__doc__},
+    {"_decode_filter_properties", _PyCFunction_CAST(_lzma__decode_filter_properties), METH_VALUE, _lzma__decode_filter_properties__doc__},
 
-static PyObject *
+static PyValue
 _lzma__decode_filter_properties_impl(PyObject *module, lzma_vli filter_id,
                                      Py_buffer *encoded_props);
 
-static PyObject *
-_lzma__decode_filter_properties(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_lzma__decode_filter_properties(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     lzma_vli filter_id;
     Py_buffer encoded_props = {NULL, NULL};
 
     if (!_PyArg_CheckPositional("_decode_filter_properties", nargs, 2, 2)) {
         goto exit;
     }
-    if (!lzma_vli_converter(args[0], &filter_id)) {
+    if (!lzma_vli_converter(PyValue_Borrow(args[0]), &filter_id)) {
         goto exit;
     }
-    if (PyObject_GetBuffer(args[1], &encoded_props, PyBUF_SIMPLE) != 0) {
+    if (!PyValue_IsObject(PyValue_Borrow(args[1]))) {
+        PyErr_Format(PyExc_TypeError, "a bytes-like object is required, not '%.100s'", PyValue_TYPE(PyValue_Borrow(args[1]))->tp_name);
         goto exit;
     }
-    return_value = _lzma__decode_filter_properties_impl(module, filter_id, &encoded_props);
+    if (PyObject_GetBuffer(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[1])), &encoded_props, PyBUF_SIMPLE) != 0) {
+        goto exit;
+    }
+    return_value = _lzma__decode_filter_properties_impl(PyValue_AsKnownObjectBorrow(module), filter_id, &encoded_props);
 
 exit:
     /* Cleanup for encoded_props */
@@ -340,4 +361,4 @@ exit:
 
     return return_value;
 }
-/*[clinic end generated code: output=bb0bde0a0aa71f23 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=d728695910f44f95 input=a9049054013a1b77]*/

@@ -4,11 +4,19 @@
 #  define Py_BUILD_CORE_MODULE 1
 #endif
 
+#define Py_VALUE_CORE 1
 #include "Python.h"
 
+#include "pycore_dict.h"          // PyDict_SetValueString()
 #include "pycore_importdl.h"   // _PyImport_DynLoadFiletab
 #include "pycore_long.h"       // _PyLong_GetZero, _PyLong_GetOne
+#include "pycore_value_slots.h"// _PyValue_FromObjectResult()
 
+
+/*[clinic input]
+value_emission
+[clinic start generated code]*/
+/*[clinic end generated code: output=da39a3ee5e6b4b0d input=eb7b17088bfd7215]*/
 
 /*[clinic input]
 module _sysconfig
@@ -38,13 +46,13 @@ _sysconfig.config_vars
 Returns a dictionary containing build variables intended to be exposed by sysconfig.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _sysconfig_config_vars_impl(PyObject *module)
-/*[clinic end generated code: output=9c41cdee63ea9487 input=fdda9cab12ca19fe]*/
+/*[clinic end generated code: output=0f13bbebdc5caf55 input=fdda9cab12ca19fe]*/
 {
     PyObject *config = PyDict_New();
     if (config == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
 
 #ifdef MS_WINDOWS
@@ -63,9 +71,9 @@ _sysconfig_config_vars_impl(PyObject *module)
 #else
     PyObject *py_gil_disabled = _PyLong_GetZero();
 #endif
-    if (PyDict_SetItemString(config, "Py_GIL_DISABLED", py_gil_disabled) < 0) {
+    if (PyDict_SetValueString(config, "Py_GIL_DISABLED", PyValue_FromObjectBorrow(py_gil_disabled)) < 0) {
         Py_DECREF(config);
-        return NULL;
+        return PyValue_NULL;
     }
 
 #ifdef Py_DEBUG
@@ -73,12 +81,12 @@ _sysconfig_config_vars_impl(PyObject *module)
 #else
     PyObject *py_debug = _PyLong_GetZero();
 #endif
-    if (PyDict_SetItemString(config, "Py_DEBUG", py_debug) < 0) {
+    if (PyDict_SetValueString(config, "Py_DEBUG", PyValue_FromObjectBorrow(py_debug)) < 0) {
         Py_DECREF(config);
-        return NULL;
+        return PyValue_NULL;
     }
 
-    return config;
+    return _PyValue_FromObjectResult(config);
 }
 
 #ifdef MS_WINDOWS
@@ -88,9 +96,9 @@ _sysconfig.get_platform
 Return a string that identifies the current platform.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _sysconfig_get_platform_impl(PyObject *module)
-/*[clinic end generated code: output=4ecbbe2b77633f3e input=c0b43abda44f9a01]*/
+/*[clinic end generated code: output=5970c655789485fd input=c0b43abda44f9a01]*/
 {
 #ifdef MS_WIN64
 #  if defined(_M_X64) || defined(_M_AMD64)

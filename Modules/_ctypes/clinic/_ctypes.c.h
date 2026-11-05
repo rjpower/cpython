@@ -2,10 +2,16 @@
 preserve
 [clinic start generated code]*/
 
-#include "pycore_abstract.h"      // _PyNumber_Index()
+#ifndef Py_VALUE_CORE
+#  error "value-emission Clinic output requires Py_VALUE_CORE"
+#endif
+
 #include "pycore_critical_section.h"// Py_BEGIN_CRITICAL_SECTION()
-#include "pycore_modsupport.h"    // _PyArg_CheckPositional()
+#include "pycore_long_value.h"    // _PyValue_IntAsSsize_t()
+#include "pycore_modsupport.h"    // _PyArg_NoKwnames()
 #include "pycore_unicodeobject.h" // _PyUnicode_AsUTF8NoNUL()
+#include "pycore_value_call.h"    // METH_VALUE
+#include "pycore_value_ops.h"     // _PyValue_Index()
 
 PyDoc_STRVAR(_ctypes_CType_Type___sizeof____doc__,
 "__sizeof__($self, /)\n"
@@ -14,19 +20,24 @@ PyDoc_STRVAR(_ctypes_CType_Type___sizeof____doc__,
 "Return memory consumption of the type object.");
 
 #define _CTYPES_CTYPE_TYPE___SIZEOF___METHODDEF    \
-    {"__sizeof__", _PyCFunction_CAST(_ctypes_CType_Type___sizeof__), METH_METHOD|METH_FASTCALL|METH_KEYWORDS, _ctypes_CType_Type___sizeof____doc__},
+    {"__sizeof__", _PyCFunction_CAST(_ctypes_CType_Type___sizeof__), METH_VALUE|METH_METHOD|METH_KEYWORDS, _ctypes_CType_Type___sizeof____doc__},
 
-static PyObject *
+static PyValue
 _ctypes_CType_Type___sizeof___impl(PyObject *self, PyTypeObject *cls);
 
-static PyObject *
-_ctypes_CType_Type___sizeof__(PyObject *self, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_ctypes_CType_Type___sizeof__(PyValueBorrow self, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
+    PyValue return_value = PyValue_NULL;
+
     if (nargs || (kwnames && PyTuple_GET_SIZE(kwnames))) {
         PyErr_SetString(PyExc_TypeError, "__sizeof__() takes no arguments");
-        return NULL;
+        goto exit;
     }
-    return _ctypes_CType_Type___sizeof___impl(self, cls);
+    return_value = _ctypes_CType_Type___sizeof___impl(PyValue_AsKnownObjectBorrow(self), cls);
+
+exit:
+    return return_value;
 }
 
 static PyObject *
@@ -64,17 +75,17 @@ PyDoc_STRVAR(CDataType_from_address__doc__,
 "Access a C instance at the specified address.");
 
 #define CDATATYPE_FROM_ADDRESS_METHODDEF    \
-    {"from_address", _PyCFunction_CAST(CDataType_from_address), METH_METHOD|METH_FASTCALL|METH_KEYWORDS, CDataType_from_address__doc__},
+    {"from_address", _PyCFunction_CAST(CDataType_from_address), METH_VALUE|METH_METHOD|METH_KEYWORDS, CDataType_from_address__doc__},
 
-static PyObject *
+static PyValue
 CDataType_from_address_impl(PyObject *type, PyTypeObject *cls,
-                            PyObject *value);
+                            PyValueBorrow value);
 
-static PyObject *
-CDataType_from_address(PyObject *type, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+CDataType_from_address(PyValueBorrow type, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
-    PyObject *value;
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow value;
 
     if (!_PyArg_NoKwnames("from_address", kwnames)) {
         goto exit;
@@ -82,8 +93,8 @@ CDataType_from_address(PyObject *type, PyTypeObject *cls, PyObject *const *args,
     if (!_PyArg_CheckPositional("from_address", nargs, 1, 1)) {
         goto exit;
     }
-    value = args[0];
-    return_value = CDataType_from_address_impl(type, cls, value);
+    value = PyValue_Borrow(args[0]);
+    return_value = CDataType_from_address_impl(PyValue_AsKnownObjectBorrow(type), cls, value);
 
 exit:
     return return_value;
@@ -98,17 +109,17 @@ PyDoc_STRVAR(CDataType_from_buffer__doc__,
 "Create a C instance from a writeable buffer.");
 
 #define CDATATYPE_FROM_BUFFER_METHODDEF    \
-    {"from_buffer", _PyCFunction_CAST(CDataType_from_buffer), METH_METHOD|METH_FASTCALL|METH_KEYWORDS, CDataType_from_buffer__doc__},
+    {"from_buffer", _PyCFunction_CAST(CDataType_from_buffer), METH_VALUE|METH_METHOD|METH_KEYWORDS, CDataType_from_buffer__doc__},
 
-static PyObject *
-CDataType_from_buffer_impl(PyObject *type, PyTypeObject *cls, PyObject *obj,
-                           Py_ssize_t offset);
+static PyValue
+CDataType_from_buffer_impl(PyObject *type, PyTypeObject *cls,
+                           PyValueBorrow obj, Py_ssize_t offset);
 
-static PyObject *
-CDataType_from_buffer(PyObject *type, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+CDataType_from_buffer(PyValueBorrow type, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
-    PyObject *obj;
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow obj;
     Py_ssize_t offset = 0;
 
     if (!_PyArg_NoKwnames("from_buffer", kwnames)) {
@@ -117,16 +128,16 @@ CDataType_from_buffer(PyObject *type, PyTypeObject *cls, PyObject *const *args, 
     if (!_PyArg_CheckPositional("from_buffer", nargs, 1, 2)) {
         goto exit;
     }
-    obj = args[0];
+    obj = PyValue_Borrow(args[0]);
     if (nargs < 2) {
         goto skip_optional;
     }
     {
         Py_ssize_t ival = -1;
-        PyObject *iobj = _PyNumber_Index(args[1]);
-        if (iobj != NULL) {
-            ival = PyLong_AsSsize_t(iobj);
-            Py_DECREF(iobj);
+        PyValue iobj = _PyValue_Index(PyValue_Borrow(args[1]));
+        if (!PyValue_IsNull(iobj)) {
+            ival = _PyValue_IntAsSsize_t(PyValue_Borrow(iobj));
+            PyValue_CLOSE(iobj);
         }
         if (ival == -1 && PyErr_Occurred()) {
             goto exit;
@@ -139,7 +150,7 @@ CDataType_from_buffer(PyObject *type, PyTypeObject *cls, PyObject *const *args, 
         }
     }
 skip_optional:
-    return_value = CDataType_from_buffer_impl(type, cls, obj, offset);
+    return_value = CDataType_from_buffer_impl(PyValue_AsKnownObjectBorrow(type), cls, obj, offset);
 
 exit:
     return return_value;
@@ -154,16 +165,16 @@ PyDoc_STRVAR(CDataType_from_buffer_copy__doc__,
 "Create a C instance from a readable buffer.");
 
 #define CDATATYPE_FROM_BUFFER_COPY_METHODDEF    \
-    {"from_buffer_copy", _PyCFunction_CAST(CDataType_from_buffer_copy), METH_METHOD|METH_FASTCALL|METH_KEYWORDS, CDataType_from_buffer_copy__doc__},
+    {"from_buffer_copy", _PyCFunction_CAST(CDataType_from_buffer_copy), METH_VALUE|METH_METHOD|METH_KEYWORDS, CDataType_from_buffer_copy__doc__},
 
-static PyObject *
+static PyValue
 CDataType_from_buffer_copy_impl(PyObject *type, PyTypeObject *cls,
                                 Py_buffer *buffer, Py_ssize_t offset);
 
-static PyObject *
-CDataType_from_buffer_copy(PyObject *type, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+CDataType_from_buffer_copy(PyValueBorrow type, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     Py_buffer buffer = {NULL, NULL};
     Py_ssize_t offset = 0;
 
@@ -173,7 +184,11 @@ CDataType_from_buffer_copy(PyObject *type, PyTypeObject *cls, PyObject *const *a
     if (!_PyArg_CheckPositional("from_buffer_copy", nargs, 1, 2)) {
         goto exit;
     }
-    if (PyObject_GetBuffer(args[0], &buffer, PyBUF_SIMPLE) != 0) {
+    if (!PyValue_IsObject(PyValue_Borrow(args[0]))) {
+        PyErr_Format(PyExc_TypeError, "a bytes-like object is required, not '%.100s'", PyValue_TYPE(PyValue_Borrow(args[0]))->tp_name);
+        goto exit;
+    }
+    if (PyObject_GetBuffer(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])), &buffer, PyBUF_SIMPLE) != 0) {
         goto exit;
     }
     if (nargs < 2) {
@@ -181,10 +196,10 @@ CDataType_from_buffer_copy(PyObject *type, PyTypeObject *cls, PyObject *const *a
     }
     {
         Py_ssize_t ival = -1;
-        PyObject *iobj = _PyNumber_Index(args[1]);
-        if (iobj != NULL) {
-            ival = PyLong_AsSsize_t(iobj);
-            Py_DECREF(iobj);
+        PyValue iobj = _PyValue_Index(PyValue_Borrow(args[1]));
+        if (!PyValue_IsNull(iobj)) {
+            ival = _PyValue_IntAsSsize_t(PyValue_Borrow(iobj));
+            PyValue_CLOSE(iobj);
         }
         if (ival == -1 && PyErr_Occurred()) {
             goto exit;
@@ -197,7 +212,7 @@ CDataType_from_buffer_copy(PyObject *type, PyTypeObject *cls, PyObject *const *a
         }
     }
 skip_optional:
-    return_value = CDataType_from_buffer_copy_impl(type, cls, &buffer, offset);
+    return_value = CDataType_from_buffer_copy_impl(PyValue_AsKnownObjectBorrow(type), cls, &buffer, offset);
 
 exit:
     /* Cleanup for buffer */
@@ -217,17 +232,17 @@ PyDoc_STRVAR(CDataType_in_dll__doc__,
 "Access a C instance in a dll.");
 
 #define CDATATYPE_IN_DLL_METHODDEF    \
-    {"in_dll", _PyCFunction_CAST(CDataType_in_dll), METH_METHOD|METH_FASTCALL|METH_KEYWORDS, CDataType_in_dll__doc__},
+    {"in_dll", _PyCFunction_CAST(CDataType_in_dll), METH_VALUE|METH_METHOD|METH_KEYWORDS, CDataType_in_dll__doc__},
 
-static PyObject *
-CDataType_in_dll_impl(PyObject *type, PyTypeObject *cls, PyObject *dll,
+static PyValue
+CDataType_in_dll_impl(PyObject *type, PyTypeObject *cls, PyValueBorrow dll,
                       const char *name);
 
-static PyObject *
-CDataType_in_dll(PyObject *type, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+CDataType_in_dll(PyValueBorrow type, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
-    PyObject *dll;
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow dll;
     const char *name;
 
     if (!_PyArg_NoKwnames("in_dll", kwnames)) {
@@ -236,16 +251,20 @@ CDataType_in_dll(PyObject *type, PyTypeObject *cls, PyObject *const *args, Py_ss
     if (!_PyArg_CheckPositional("in_dll", nargs, 2, 2)) {
         goto exit;
     }
-    dll = args[0];
-    if (!PyUnicode_Check(args[1])) {
-        _PyArg_BadArgument("in_dll", "argument 2", "str", args[1]);
+    dll = PyValue_Borrow(args[0]);
+    if (!PyValue_IsObject(PyValue_Borrow(args[1]))) {
+        _PyArg_BadArgumentValue("in_dll", "argument 2", "str", PyValue_Borrow(args[1]));
         goto exit;
     }
-    name = _PyUnicode_AsUTF8NoNUL(args[1]);
+    if (!PyUnicode_Check(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[1])))) {
+        _PyArg_BadArgument("in_dll", "argument 2", "str", PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[1])));
+        goto exit;
+    }
+    name = _PyUnicode_AsUTF8NoNUL(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[1])));
     if (name == NULL) {
         goto exit;
     }
-    return_value = CDataType_in_dll_impl(type, cls, dll, name);
+    return_value = CDataType_in_dll_impl(PyValue_AsKnownObjectBorrow(type), cls, dll, name);
 
 exit:
     return return_value;
@@ -258,16 +277,17 @@ PyDoc_STRVAR(CDataType_from_param__doc__,
 "Convert a Python object into a function call parameter.");
 
 #define CDATATYPE_FROM_PARAM_METHODDEF    \
-    {"from_param", _PyCFunction_CAST(CDataType_from_param), METH_METHOD|METH_FASTCALL|METH_KEYWORDS, CDataType_from_param__doc__},
+    {"from_param", _PyCFunction_CAST(CDataType_from_param), METH_VALUE|METH_METHOD|METH_KEYWORDS, CDataType_from_param__doc__},
 
-static PyObject *
-CDataType_from_param_impl(PyObject *type, PyTypeObject *cls, PyObject *value);
+static PyValue
+CDataType_from_param_impl(PyObject *type, PyTypeObject *cls,
+                          PyValueBorrow value);
 
-static PyObject *
-CDataType_from_param(PyObject *type, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+CDataType_from_param(PyValueBorrow type, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
-    PyObject *value;
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow value;
 
     if (!_PyArg_NoKwnames("from_param", kwnames)) {
         goto exit;
@@ -275,8 +295,8 @@ CDataType_from_param(PyObject *type, PyTypeObject *cls, PyObject *const *args, P
     if (!_PyArg_CheckPositional("from_param", nargs, 1, 1)) {
         goto exit;
     }
-    value = args[0];
-    return_value = CDataType_from_param_impl(type, cls, value);
+    value = PyValue_Borrow(args[0]);
+    return_value = CDataType_from_param_impl(PyValue_AsKnownObjectBorrow(type), cls, value);
 
 exit:
     return return_value;
@@ -288,17 +308,17 @@ PyDoc_STRVAR(PyCPointerType_set_type__doc__,
 "\n");
 
 #define PYCPOINTERTYPE_SET_TYPE_METHODDEF    \
-    {"set_type", _PyCFunction_CAST(PyCPointerType_set_type), METH_METHOD|METH_FASTCALL|METH_KEYWORDS, PyCPointerType_set_type__doc__},
+    {"set_type", _PyCFunction_CAST(PyCPointerType_set_type), METH_VALUE|METH_METHOD|METH_KEYWORDS, PyCPointerType_set_type__doc__},
 
-static PyObject *
+static PyValue
 PyCPointerType_set_type_impl(PyTypeObject *self, PyTypeObject *cls,
-                             PyObject *type);
+                             PyValueBorrow type);
 
-static PyObject *
-PyCPointerType_set_type(PyObject *self, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+PyCPointerType_set_type(PyValueBorrow self, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
-    PyObject *type;
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow type;
 
     if (!_PyArg_NoKwnames("set_type", kwnames)) {
         goto exit;
@@ -306,8 +326,8 @@ PyCPointerType_set_type(PyObject *self, PyTypeObject *cls, PyObject *const *args
     if (!_PyArg_CheckPositional("set_type", nargs, 1, 1)) {
         goto exit;
     }
-    type = args[0];
-    return_value = PyCPointerType_set_type_impl((PyTypeObject *)self, cls, type);
+    type = PyValue_Borrow(args[0]);
+    return_value = PyCPointerType_set_type_impl((PyTypeObject *)PyValue_AsKnownObjectBorrow(self), cls, type);
 
 exit:
     return return_value;
@@ -320,17 +340,17 @@ PyDoc_STRVAR(PyCPointerType_from_param__doc__,
 "Convert a Python object into a function call parameter.");
 
 #define PYCPOINTERTYPE_FROM_PARAM_METHODDEF    \
-    {"from_param", _PyCFunction_CAST(PyCPointerType_from_param), METH_METHOD|METH_FASTCALL|METH_KEYWORDS, PyCPointerType_from_param__doc__},
+    {"from_param", _PyCFunction_CAST(PyCPointerType_from_param), METH_VALUE|METH_METHOD|METH_KEYWORDS, PyCPointerType_from_param__doc__},
 
-static PyObject *
+static PyValue
 PyCPointerType_from_param_impl(PyObject *type, PyTypeObject *cls,
-                               PyObject *value);
+                               PyValueBorrow value);
 
-static PyObject *
-PyCPointerType_from_param(PyObject *type, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+PyCPointerType_from_param(PyValueBorrow type, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
-    PyObject *value;
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow value;
 
     if (!_PyArg_NoKwnames("from_param", kwnames)) {
         goto exit;
@@ -338,8 +358,8 @@ PyCPointerType_from_param(PyObject *type, PyTypeObject *cls, PyObject *const *ar
     if (!_PyArg_CheckPositional("from_param", nargs, 1, 1)) {
         goto exit;
     }
-    value = args[0];
-    return_value = PyCPointerType_from_param_impl(type, cls, value);
+    value = PyValue_Borrow(args[0]);
+    return_value = PyCPointerType_from_param_impl(PyValue_AsKnownObjectBorrow(type), cls, value);
 
 exit:
     return return_value;
@@ -441,16 +461,17 @@ PyDoc_STRVAR(c_wchar_p_from_param__doc__,
 "\n");
 
 #define C_WCHAR_P_FROM_PARAM_METHODDEF    \
-    {"from_param", _PyCFunction_CAST(c_wchar_p_from_param), METH_METHOD|METH_FASTCALL|METH_KEYWORDS, c_wchar_p_from_param__doc__},
+    {"from_param", _PyCFunction_CAST(c_wchar_p_from_param), METH_VALUE|METH_METHOD|METH_KEYWORDS, c_wchar_p_from_param__doc__},
 
-static PyObject *
-c_wchar_p_from_param_impl(PyObject *type, PyTypeObject *cls, PyObject *value);
+static PyValue
+c_wchar_p_from_param_impl(PyObject *type, PyTypeObject *cls,
+                          PyValueBorrow value);
 
-static PyObject *
-c_wchar_p_from_param(PyObject *type, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+c_wchar_p_from_param(PyValueBorrow type, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
-    PyObject *value;
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow value;
 
     if (!_PyArg_NoKwnames("from_param", kwnames)) {
         goto exit;
@@ -458,8 +479,8 @@ c_wchar_p_from_param(PyObject *type, PyTypeObject *cls, PyObject *const *args, P
     if (!_PyArg_CheckPositional("from_param", nargs, 1, 1)) {
         goto exit;
     }
-    value = args[0];
-    return_value = c_wchar_p_from_param_impl(type, cls, value);
+    value = PyValue_Borrow(args[0]);
+    return_value = c_wchar_p_from_param_impl(PyValue_AsKnownObjectBorrow(type), cls, value);
 
 exit:
     return return_value;
@@ -471,16 +492,17 @@ PyDoc_STRVAR(c_char_p_from_param__doc__,
 "\n");
 
 #define C_CHAR_P_FROM_PARAM_METHODDEF    \
-    {"from_param", _PyCFunction_CAST(c_char_p_from_param), METH_METHOD|METH_FASTCALL|METH_KEYWORDS, c_char_p_from_param__doc__},
+    {"from_param", _PyCFunction_CAST(c_char_p_from_param), METH_VALUE|METH_METHOD|METH_KEYWORDS, c_char_p_from_param__doc__},
 
-static PyObject *
-c_char_p_from_param_impl(PyObject *type, PyTypeObject *cls, PyObject *value);
+static PyValue
+c_char_p_from_param_impl(PyObject *type, PyTypeObject *cls,
+                         PyValueBorrow value);
 
-static PyObject *
-c_char_p_from_param(PyObject *type, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+c_char_p_from_param(PyValueBorrow type, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
-    PyObject *value;
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow value;
 
     if (!_PyArg_NoKwnames("from_param", kwnames)) {
         goto exit;
@@ -488,8 +510,8 @@ c_char_p_from_param(PyObject *type, PyTypeObject *cls, PyObject *const *args, Py
     if (!_PyArg_CheckPositional("from_param", nargs, 1, 1)) {
         goto exit;
     }
-    value = args[0];
-    return_value = c_char_p_from_param_impl(type, cls, value);
+    value = PyValue_Borrow(args[0]);
+    return_value = c_char_p_from_param_impl(PyValue_AsKnownObjectBorrow(type), cls, value);
 
 exit:
     return return_value;
@@ -501,16 +523,17 @@ PyDoc_STRVAR(c_void_p_from_param__doc__,
 "\n");
 
 #define C_VOID_P_FROM_PARAM_METHODDEF    \
-    {"from_param", _PyCFunction_CAST(c_void_p_from_param), METH_METHOD|METH_FASTCALL|METH_KEYWORDS, c_void_p_from_param__doc__},
+    {"from_param", _PyCFunction_CAST(c_void_p_from_param), METH_VALUE|METH_METHOD|METH_KEYWORDS, c_void_p_from_param__doc__},
 
-static PyObject *
-c_void_p_from_param_impl(PyObject *type, PyTypeObject *cls, PyObject *value);
+static PyValue
+c_void_p_from_param_impl(PyObject *type, PyTypeObject *cls,
+                         PyValueBorrow value);
 
-static PyObject *
-c_void_p_from_param(PyObject *type, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+c_void_p_from_param(PyValueBorrow type, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
-    PyObject *value;
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow value;
 
     if (!_PyArg_NoKwnames("from_param", kwnames)) {
         goto exit;
@@ -518,8 +541,8 @@ c_void_p_from_param(PyObject *type, PyTypeObject *cls, PyObject *const *args, Py
     if (!_PyArg_CheckPositional("from_param", nargs, 1, 1)) {
         goto exit;
     }
-    value = args[0];
-    return_value = c_void_p_from_param_impl(type, cls, value);
+    value = PyValue_Borrow(args[0]);
+    return_value = c_void_p_from_param_impl(PyValue_AsKnownObjectBorrow(type), cls, value);
 
 exit:
     return return_value;
@@ -532,17 +555,17 @@ PyDoc_STRVAR(PyCSimpleType_from_param__doc__,
 "Convert a Python object into a function call parameter.");
 
 #define PYCSIMPLETYPE_FROM_PARAM_METHODDEF    \
-    {"from_param", _PyCFunction_CAST(PyCSimpleType_from_param), METH_METHOD|METH_FASTCALL|METH_KEYWORDS, PyCSimpleType_from_param__doc__},
+    {"from_param", _PyCFunction_CAST(PyCSimpleType_from_param), METH_VALUE|METH_METHOD|METH_KEYWORDS, PyCSimpleType_from_param__doc__},
 
-static PyObject *
+static PyValue
 PyCSimpleType_from_param_impl(PyObject *type, PyTypeObject *cls,
-                              PyObject *value);
+                              PyValueBorrow value);
 
-static PyObject *
-PyCSimpleType_from_param(PyObject *type, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+PyCSimpleType_from_param(PyValueBorrow type, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
-    PyObject *value;
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow value;
 
     if (!_PyArg_NoKwnames("from_param", kwnames)) {
         goto exit;
@@ -550,8 +573,8 @@ PyCSimpleType_from_param(PyObject *type, PyTypeObject *cls, PyObject *const *arg
     if (!_PyArg_CheckPositional("from_param", nargs, 1, 1)) {
         goto exit;
     }
-    value = args[0];
-    return_value = PyCSimpleType_from_param_impl(type, cls, value);
+    value = PyValue_Borrow(args[0]);
+    return_value = PyCSimpleType_from_param_impl(PyValue_AsKnownObjectBorrow(type), cls, value);
 
 exit:
     return return_value;
@@ -563,22 +586,22 @@ PyDoc_STRVAR(_ctypes_PyCData___reduce____doc__,
 "\n");
 
 #define _CTYPES_PYCDATA___REDUCE___METHODDEF    \
-    {"__reduce__", _PyCFunction_CAST(_ctypes_PyCData___reduce__), METH_METHOD|METH_FASTCALL|METH_KEYWORDS, _ctypes_PyCData___reduce____doc__},
+    {"__reduce__", _PyCFunction_CAST(_ctypes_PyCData___reduce__), METH_VALUE|METH_METHOD|METH_KEYWORDS, _ctypes_PyCData___reduce____doc__},
 
-static PyObject *
+static PyValue
 _ctypes_PyCData___reduce___impl(PyObject *myself, PyTypeObject *cls);
 
-static PyObject *
-_ctypes_PyCData___reduce__(PyObject *myself, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_ctypes_PyCData___reduce__(PyValueBorrow myself, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
 
     if (nargs || (kwnames && PyTuple_GET_SIZE(kwnames))) {
         PyErr_SetString(PyExc_TypeError, "__reduce__() takes no arguments");
         goto exit;
     }
-    Py_BEGIN_CRITICAL_SECTION(myself);
-    return_value = _ctypes_PyCData___reduce___impl(myself, cls);
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(myself));
+    return_value = _ctypes_PyCData___reduce___impl(PyValue_AsKnownObjectBorrow(myself), cls);
     Py_END_CRITICAL_SECTION();
 
 exit:
@@ -624,15 +647,19 @@ PyDoc_STRVAR(_ctypes_PyCData___ctypes_from_outparam____doc__,
 "default __ctypes_from_outparam__ method returns self.");
 
 #define _CTYPES_PYCDATA___CTYPES_FROM_OUTPARAM___METHODDEF    \
-    {"__ctypes_from_outparam__", (PyCFunction)_ctypes_PyCData___ctypes_from_outparam__, METH_NOARGS, _ctypes_PyCData___ctypes_from_outparam____doc__},
+    {"__ctypes_from_outparam__", _PyCFunction_CAST(_ctypes_PyCData___ctypes_from_outparam__), METH_VALUE|METH_NOARGS, _ctypes_PyCData___ctypes_from_outparam____doc__},
 
-static PyObject *
+static PyValue
 _ctypes_PyCData___ctypes_from_outparam___impl(PyObject *self);
 
-static PyObject *
-_ctypes_PyCData___ctypes_from_outparam__(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+_ctypes_PyCData___ctypes_from_outparam__(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _ctypes_PyCData___ctypes_from_outparam___impl(self);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _ctypes_PyCData___ctypes_from_outparam___impl(PyValue_AsKnownObjectBorrow(self));
+
+    return return_value;
 }
 
 static int
@@ -850,19 +877,24 @@ PyDoc_STRVAR(Simple_from_outparm__doc__,
 "\n");
 
 #define SIMPLE_FROM_OUTPARM_METHODDEF    \
-    {"__ctypes_from_outparam__", _PyCFunction_CAST(Simple_from_outparm), METH_METHOD|METH_FASTCALL|METH_KEYWORDS, Simple_from_outparm__doc__},
+    {"__ctypes_from_outparam__", _PyCFunction_CAST(Simple_from_outparm), METH_VALUE|METH_METHOD|METH_KEYWORDS, Simple_from_outparm__doc__},
 
-static PyObject *
+static PyValue
 Simple_from_outparm_impl(PyObject *self, PyTypeObject *cls);
 
-static PyObject *
-Simple_from_outparm(PyObject *self, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+Simple_from_outparm(PyValueBorrow self, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
+    PyValue return_value = PyValue_NULL;
+
     if (nargs || (kwnames && PyTuple_GET_SIZE(kwnames))) {
         PyErr_SetString(PyExc_TypeError, "__ctypes_from_outparam__() takes no arguments");
-        return NULL;
+        goto exit;
     }
-    return Simple_from_outparm_impl(self, cls);
+    return_value = Simple_from_outparm_impl(PyValue_AsKnownObjectBorrow(self), cls);
+
+exit:
+    return return_value;
 }
 
 static int
@@ -938,4 +970,4 @@ Pointer_bool(PyObject *self)
 
 #define _CTYPES_SIMPLE_VALUE_GETSETDEF {"value", (getter)_ctypes_Simple_value_get, (setter)_ctypes_Simple_value_set, NULL},
 
-/*[clinic end generated code: output=5d9dd4bbae13cfca input=a9049054013a1b77]*/
+/*[clinic end generated code: output=0d800a5cdf72aa4c input=a9049054013a1b77]*/

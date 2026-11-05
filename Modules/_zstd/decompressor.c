@@ -3,6 +3,11 @@
 /* ZstdDecompressor class definition */
 
 /*[clinic input]
+value_emission
+[clinic start generated code]*/
+/*[clinic end generated code: output=da39a3ee5e6b4b0d input=eb7b17088bfd7215]*/
+
+/*[clinic input]
 module _zstd
 class _zstd.ZstdDecompressor "ZstdDecompressor *" "&zstd_decompressor_type_spec"
 [clinic start generated code]*/
@@ -12,7 +17,11 @@ class _zstd.ZstdDecompressor "ZstdDecompressor *" "&zstd_decompressor_type_spec"
 #  define Py_BUILD_CORE_MODULE 1
 #endif
 
+#define Py_VALUE_CORE 1
 #include "Python.h"
+#include "pycore_dict.h"          // PyDict_NextValue()
+#include "pycore_long_value.h"     // _PyValue_AsInt()
+#include "pycore_value.h"         // PyValue
 
 #include "_zstdmodule.h"
 #include "buffer.h"
@@ -96,28 +105,28 @@ _zstd_set_d_parameters(ZstdDecompressor *self, PyObject *options)
     }
 
     Py_ssize_t pos = 0;
-    PyObject *key, *value;
+    PyValue key, value;
     int rc;
-    while ((rc = PyDict_NextEntryRef(options, &pos, &key, &value)) > 0) {
+    while ((rc = PyDict_NextValue(options, &pos, &key, &value)) > 0) {
         /* Check key type */
-        if (Py_TYPE(key) == mod_state->CParameter_type) {
+        if (PyValue_TYPE(key) == mod_state->CParameter_type) {
             PyErr_SetString(PyExc_TypeError,
                 "decompression options dictionary key must not be a "
                 "CompressionParameter attribute");
-            Py_DECREF(key);
-            Py_DECREF(value);
+            PyValue_CLOSE(key);
+            PyValue_CLOSE(value);
             return -1;
         }
 
-        int key_v = PyLong_AsInt(key);
-        Py_DECREF(key);
+        int key_v = _PyValue_AsInt(key);
+        PyValue_CLOSE(key);
         if (key_v == -1 && PyErr_Occurred()) {
-            Py_DECREF(value);
+            PyValue_CLOSE(value);
             return -1;
         }
 
-        int value_v = PyLong_AsInt(value);
-        Py_DECREF(value);
+        int value_v = _PyValue_AsInt(value);
+        PyValue_CLOSE(value);
         if (value_v == -1 && PyErr_Occurred()) {
             return -1;
         }
@@ -486,11 +495,13 @@ Thread-safe at method level.  For one-shot decompression, use the
 decompress() function instead.
 [clinic start generated code]*/
 
-static PyObject *
-_zstd_ZstdDecompressor_new_impl(PyTypeObject *type, PyObject *zstd_dict,
-                                PyObject *options)
-/*[clinic end generated code: output=590ca65c1102ff4a input=73879de69bf89f59]*/
+static PyValue
+_zstd_ZstdDecompressor_new_impl(PyTypeObject *type, PyValueBorrow zstd_dict,
+                                PyValueBorrow options)
+/*[clinic end generated code: output=7d6ee4338aa5abde input=73879de69bf89f59]*/
 {
+    PyObject *options_obj = NULL;
+    PyObject *dict_obj = NULL;
     ZstdDecompressor* self = PyObject_GC_New(ZstdDecompressor, type);
     if (self == NULL) {
         goto error;
@@ -520,17 +531,25 @@ _zstd_ZstdDecompressor_new_impl(PyTypeObject *type, PyObject *zstd_dict,
     }
 
     /* Load Zstandard dictionary to decompression context */
-    if (zstd_dict != Py_None) {
-        if (_zstd_load_d_dict(self, zstd_dict) < 0) {
+    if (!PyValue_IsNone(zstd_dict)) {
+        dict_obj = _PyValue_AsObjectAt(zstd_dict, BOX_SITE_FIELD);
+        if (dict_obj == NULL) {
             goto error;
         }
-        Py_INCREF(zstd_dict);
-        self->dict = zstd_dict;
+        if (_zstd_load_d_dict(self, dict_obj) < 0) {
+            goto error;
+        }
+        self->dict = dict_obj;
+        dict_obj = NULL;
     }
 
     /* Set options dictionary */
-    if (options != Py_None) {
-        if (_zstd_set_d_parameters(self, options) < 0) {
+    if (!PyValue_IsNone(options)) {
+        options_obj = _PyValue_AsObjectAt(options, BOX_SITE_PARSER);
+        if (options_obj == NULL) {
+            goto error;
+        }
+        if (_zstd_set_d_parameters(self, options_obj) < 0) {
             goto error;
         }
     }
@@ -538,11 +557,14 @@ _zstd_ZstdDecompressor_new_impl(PyTypeObject *type, PyObject *zstd_dict,
     // We can only start GC tracking once self->dict is set.
     PyObject_GC_Track(self);
 
-    return (PyObject*)self;
+    Py_XDECREF(options_obj);
+    return _PyValue_FromObjectResult((PyObject*)self);
 
 error:
+    Py_XDECREF(options_obj);
+    Py_XDECREF(dict_obj);
     Py_XDECREF(self);
-    return NULL;
+    return PyValue_NULL;
 }
 
 static void
@@ -647,18 +669,18 @@ raises an EOFError.  Any data found after the end of the frame is
 ignored and saved in the self.unused_data attribute.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _zstd_ZstdDecompressor_decompress_impl(ZstdDecompressor *self,
                                        Py_buffer *data,
                                        Py_ssize_t max_length)
-/*[clinic end generated code: output=a4302b3c940dbec6 input=4ddda5a0bdd00673]*/
+/*[clinic end generated code: output=81cf9adedee47483 input=4ddda5a0bdd00673]*/
 {
     PyObject *ret;
     /* Thread-safe code */
     PyMutex_Lock(&self->lock);
     ret = stream_decompress_lock_held(self, data, max_length);
     PyMutex_Unlock(&self->lock);
-    return ret;
+    return _PyValue_FromObjectResult(ret);
 }
 
 static PyMethodDef ZstdDecompressor_methods[] = {

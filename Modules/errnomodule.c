@@ -1,12 +1,12 @@
 /* Errno module */
 
-// Need limited C API version 3.13 for Py_mod_gil
-#include "pyconfig.h"   // Py_GIL_DISABLED
-#ifndef Py_GIL_DISABLED
-#  define Py_LIMITED_API 0x030d0000
+#ifndef Py_BUILD_CORE_BUILTIN
+#  define Py_BUILD_CORE_MODULE 1
 #endif
-
+#define Py_VALUE_CORE 1
 #include "Python.h"
+#include "pycore_dict.h"          // PyDict_SetValue()
+#include "pycore_value.h"         // PyValue_FromObjectBorrow()
 #include <errno.h>                // EPIPE
 
 /* Windows socket errors (WSA*)  */
@@ -71,11 +71,11 @@ _add_errcode(PyObject *module_dict, PyObject *error_dict, const char *name_str, 
 
     int ret = -1;
     /* insert in modules dict */
-    if (PyDict_SetItem(module_dict, name, code) < 0) {
+    if (PyDict_SetValue(module_dict, PyValue_FromObjectBorrow(name), PyValue_FromObjectBorrow(code)) < 0) {
         goto end;
     }
     /* insert in errorcode dict */
-    if (PyDict_SetItem(error_dict, code, name) < 0) {
+    if (PyDict_SetValue(error_dict, PyValue_FromObjectBorrow(code), PyValue_FromObjectBorrow(name)) < 0) {
         goto end;
     }
     ret = 0;
@@ -96,7 +96,7 @@ errno_exec(PyObject *module)
     if (error_dict == NULL) {
         return -1;
     }
-    if (PyDict_SetItemString(module_dict, "errorcode", error_dict) < 0) {
+    if (PyDict_SetValueString(module_dict, "errorcode", PyValue_FromObjectBorrow(error_dict)) < 0) {
         Py_DECREF(error_dict);
         return -1;
     }

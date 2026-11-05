@@ -2,12 +2,18 @@
 preserve
 [clinic start generated code]*/
 
+#ifndef Py_VALUE_CORE
+#  error "value-emission Clinic output requires Py_VALUE_CORE"
+#endif
+
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 #  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
 #  include "pycore_value.h"       // _PyValue_STATIC_IMMORTAL()
 #endif
-#include "pycore_modsupport.h"    // _PyArg_UnpackKeywords()
+#include "pycore_long_value.h"    // _PyValue_AsInt()
+#include "pycore_modsupport.h"    // _PyArg_UnpackKeywordsValue()
+#include "pycore_value_call.h"    // METH_VALUE
 
 PyDoc_STRVAR(_ssl_Certificate_public_bytes__doc__,
 "public_bytes($self, /, format=Encoding.PEM)\n"
@@ -15,15 +21,15 @@ PyDoc_STRVAR(_ssl_Certificate_public_bytes__doc__,
 "\n");
 
 #define _SSL_CERTIFICATE_PUBLIC_BYTES_METHODDEF    \
-    {"public_bytes", _PyCFunction_CAST(_ssl_Certificate_public_bytes), METH_FASTCALL|METH_KEYWORDS, _ssl_Certificate_public_bytes__doc__},
+    {"public_bytes", _PyCFunction_CAST(_ssl_Certificate_public_bytes), METH_VALUE|METH_KEYWORDS, _ssl_Certificate_public_bytes__doc__},
 
-static PyObject *
+static PyValue
 _ssl_Certificate_public_bytes_impl(PySSLCertificate *self, int format);
 
-static PyObject *
-_ssl_Certificate_public_bytes(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_ssl_Certificate_public_bytes(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
@@ -51,24 +57,20 @@ _ssl_Certificate_public_bytes(PyObject *self, PyObject *const *args, Py_ssize_t 
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[1];
-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 0;
+    Py_ssize_t _idx[1];
     int format = PY_SSL_ENCODING_PEM;
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 0, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 0, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, _idx, 1)) {
         goto exit;
     }
-    if (!noptargs) {
-        goto skip_optional_pos;
+    if (_idx[0] >= 0) {
+        format = _PyValue_AsInt(PyValue_Borrow(args[_idx[0]]));
+        if (format == -1 && PyErr_Occurred()) {
+            goto exit;
+        }
     }
-    format = PyLong_AsInt(args[0]);
-    if (format == -1 && PyErr_Occurred()) {
-        goto exit;
-    }
-skip_optional_pos:
-    return_value = _ssl_Certificate_public_bytes_impl((PySSLCertificate *)self, format);
+    return_value = _ssl_Certificate_public_bytes_impl((PySSLCertificate *)PyValue_AsKnownObjectBorrow(self), format);
 
 exit:
     return return_value;
@@ -80,14 +82,18 @@ PyDoc_STRVAR(_ssl_Certificate_get_info__doc__,
 "\n");
 
 #define _SSL_CERTIFICATE_GET_INFO_METHODDEF    \
-    {"get_info", (PyCFunction)_ssl_Certificate_get_info, METH_NOARGS, _ssl_Certificate_get_info__doc__},
+    {"get_info", _PyCFunction_CAST(_ssl_Certificate_get_info), METH_VALUE|METH_NOARGS, _ssl_Certificate_get_info__doc__},
 
-static PyObject *
+static PyValue
 _ssl_Certificate_get_info_impl(PySSLCertificate *self);
 
-static PyObject *
-_ssl_Certificate_get_info(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+_ssl_Certificate_get_info(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _ssl_Certificate_get_info_impl((PySSLCertificate *)self);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _ssl_Certificate_get_info_impl((PySSLCertificate *)PyValue_AsKnownObjectBorrow(self));
+
+    return return_value;
 }
-/*[clinic end generated code: output=9d80bad6775e3ff6 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=6f9933d51d8487fd input=a9049054013a1b77]*/

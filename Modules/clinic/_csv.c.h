@@ -2,14 +2,18 @@
 preserve
 [clinic start generated code]*/
 
+#ifndef Py_VALUE_CORE
+#  error "value-emission Clinic output requires Py_VALUE_CORE"
+#endif
+
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 #  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
 #  include "pycore_value.h"       // _PyValue_STATIC_IMMORTAL()
 #endif
-#include "pycore_borrow.h"        // _PyBorrow_TupleItems()
 #include "pycore_critical_section.h"// Py_BEGIN_CRITICAL_SECTION()
-#include "pycore_modsupport.h"    // _PyArg_NoPositional()
+#include "pycore_modsupport.h"    // _PyArg_CheckPositional()
+#include "pycore_value_call.h"    // METH_VALUE
 
 PyDoc_STRVAR(_csv_Dialect___reduce____doc__,
 "__reduce__($self, /)\n"
@@ -18,15 +22,19 @@ PyDoc_STRVAR(_csv_Dialect___reduce____doc__,
 "Raise an exception to avoid pickling.");
 
 #define _CSV_DIALECT___REDUCE___METHODDEF    \
-    {"__reduce__", (PyCFunction)_csv_Dialect___reduce__, METH_NOARGS, _csv_Dialect___reduce____doc__},
+    {"__reduce__", _PyCFunction_CAST(_csv_Dialect___reduce__), METH_VALUE|METH_NOARGS, _csv_Dialect___reduce____doc__},
 
-static PyObject *
+static PyValue
 _csv_Dialect___reduce___impl(DialectObj *self);
 
-static PyObject *
-_csv_Dialect___reduce__(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+_csv_Dialect___reduce__(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _csv_Dialect___reduce___impl((DialectObj *)self);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _csv_Dialect___reduce___impl((DialectObj *)PyValue_AsKnownObjectBorrow(self));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(_csv_Dialect___reduce_ex____doc__,
@@ -36,17 +44,19 @@ PyDoc_STRVAR(_csv_Dialect___reduce_ex____doc__,
 "Raise an exception to avoid pickling.");
 
 #define _CSV_DIALECT___REDUCE_EX___METHODDEF    \
-    {"__reduce_ex__", (PyCFunction)_csv_Dialect___reduce_ex__, METH_O, _csv_Dialect___reduce_ex____doc__},
+    {"__reduce_ex__", _PyCFunction_CAST(_csv_Dialect___reduce_ex__), METH_VALUE|METH_O, _csv_Dialect___reduce_ex____doc__},
 
-static PyObject *
-_csv_Dialect___reduce_ex___impl(DialectObj *self, PyObject *protocol);
+static PyValue
+_csv_Dialect___reduce_ex___impl(DialectObj *self, PyValueBorrow protocol);
 
-static PyObject *
-_csv_Dialect___reduce_ex__(PyObject *self, PyObject *protocol)
+static PyValue
+_csv_Dialect___reduce_ex__(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow protocol;
 
-    return_value = _csv_Dialect___reduce_ex___impl((DialectObj *)self, protocol);
+    protocol = PyValue_Borrow(args[0]);
+    return_value = _csv_Dialect___reduce_ex___impl((DialectObj *)PyValue_AsKnownObjectBorrow(self), protocol);
 
     return return_value;
 }
@@ -58,34 +68,26 @@ PyDoc_STRVAR(_csv_Dialect___replace____doc__,
 "Return a copy of the dialect with the specified options replaced.");
 
 #define _CSV_DIALECT___REPLACE___METHODDEF    \
-    {"__replace__", _PyCFunction_CAST(_csv_Dialect___replace__), METH_VARARGS|METH_KEYWORDS, _csv_Dialect___replace____doc__},
+    {"__replace__", _PyCFunction_CAST(_csv_Dialect___replace__), METH_VALUE|METH_KEYWORDS, _csv_Dialect___replace____doc__},
 
-static PyObject *
+static PyValue
 _csv_Dialect___replace___impl(DialectObj *self, PyObject *changes);
 
-static PyObject *
-_csv_Dialect___replace__(PyObject *self, PyObject *args, PyObject *kwargs)
+static PyValue
+_csv_Dialect___replace__(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *changes = NULL;
 
-    if (!_PyArg_NoPositional("__replace__", args)) {
+    if (!_PyArg_CheckPositional("__replace__", nargs, 0, 0)) {
         goto exit;
     }
-    PyObject *const *_args_items = _PyBorrow_TupleItems(args, PyTuple_GET_SIZE(args));
-    if (_args_items == NULL) {
+    changes = kwnames == NULL ? PyDict_New()
+        : _PyValue_StackAsDict(args + nargs, kwnames);
+    if (changes == NULL) {
         goto exit;
     }
-    if (kwargs == NULL) {
-        changes = PyDict_New();
-        if (changes == NULL) {
-            goto exit;
-        }
-    }
-    else {
-        changes = Py_NewRef(kwargs);
-    }
-    return_value = _csv_Dialect___replace___impl((DialectObj *)self, changes);
+    return_value = _csv_Dialect___replace___impl((DialectObj *)PyValue_AsKnownObjectBorrow(self), changes);
 
 exit:
     /* Cleanup for changes */
@@ -125,43 +127,35 @@ PyDoc_STRVAR(_csv_reader__doc__,
 "of the CSV file (which can span multiple input lines).");
 
 #define _CSV_READER_METHODDEF    \
-    {"reader", _PyCFunction_CAST(_csv_reader), METH_VARARGS|METH_KEYWORDS, _csv_reader__doc__},
+    {"reader", _PyCFunction_CAST(_csv_reader), METH_VALUE|METH_KEYWORDS, _csv_reader__doc__},
 
-static PyObject *
-_csv_reader_impl(PyObject *module, PyObject *iterable, PyObject *dialect,
-                 PyObject *fmtparams);
+static PyValue
+_csv_reader_impl(PyObject *module, PyValueBorrow iterable,
+                 PyValueBorrow dialect, PyObject *fmtparams);
 
-static PyObject *
-_csv_reader(PyObject *module, PyObject *args, PyObject *kwargs)
+static PyValue
+_csv_reader(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
-    PyObject *iterable;
-    PyObject *dialect = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow iterable;
+    PyValueBorrow dialect = PyValue_Borrow(PyValue_NULL);
     PyObject *fmtparams = NULL;
 
-    if (!_PyArg_CheckPositional("reader", PyTuple_GET_SIZE(args), 1, 2)) {
+    if (!_PyArg_CheckPositional("reader", nargs, 1, 2)) {
         goto exit;
     }
-    PyObject *const *_args_items = _PyBorrow_TupleItems(args, PyTuple_GET_SIZE(args));
-    if (_args_items == NULL) {
-        goto exit;
-    }
-    iterable = _args_items[0];
-    if (PyTuple_GET_SIZE(args) < 2) {
+    iterable = PyValue_Borrow(args[0]);
+    if (nargs < 2) {
         goto skip_optional;
     }
-    dialect = _args_items[1];
+    dialect = PyValue_Borrow(args[1]);
 skip_optional:
-    if (kwargs == NULL) {
-        fmtparams = PyDict_New();
-        if (fmtparams == NULL) {
-            goto exit;
-        }
+    fmtparams = kwnames == NULL ? PyDict_New()
+        : _PyValue_StackAsDict(args + nargs, kwnames);
+    if (fmtparams == NULL) {
+        goto exit;
     }
-    else {
-        fmtparams = Py_NewRef(kwargs);
-    }
-    return_value = _csv_reader_impl(module, iterable, dialect, fmtparams);
+    return_value = _csv_reader_impl(PyValue_AsKnownObjectBorrow(module), iterable, dialect, fmtparams);
 
 exit:
     /* Cleanup for fmtparams */
@@ -182,43 +176,35 @@ PyDoc_STRVAR(_csv_writer__doc__,
 "provided by the dialect.");
 
 #define _CSV_WRITER_METHODDEF    \
-    {"writer", _PyCFunction_CAST(_csv_writer), METH_VARARGS|METH_KEYWORDS, _csv_writer__doc__},
+    {"writer", _PyCFunction_CAST(_csv_writer), METH_VALUE|METH_KEYWORDS, _csv_writer__doc__},
 
-static PyObject *
-_csv_writer_impl(PyObject *module, PyObject *output_file, PyObject *dialect,
-                 PyObject *fmtparams);
+static PyValue
+_csv_writer_impl(PyObject *module, PyValueBorrow output_file,
+                 PyValueBorrow dialect, PyObject *fmtparams);
 
-static PyObject *
-_csv_writer(PyObject *module, PyObject *args, PyObject *kwargs)
+static PyValue
+_csv_writer(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
-    PyObject *output_file;
-    PyObject *dialect = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow output_file;
+    PyValueBorrow dialect = PyValue_Borrow(PyValue_NULL);
     PyObject *fmtparams = NULL;
 
-    if (!_PyArg_CheckPositional("writer", PyTuple_GET_SIZE(args), 1, 2)) {
+    if (!_PyArg_CheckPositional("writer", nargs, 1, 2)) {
         goto exit;
     }
-    PyObject *const *_args_items = _PyBorrow_TupleItems(args, PyTuple_GET_SIZE(args));
-    if (_args_items == NULL) {
-        goto exit;
-    }
-    output_file = _args_items[0];
-    if (PyTuple_GET_SIZE(args) < 2) {
+    output_file = PyValue_Borrow(args[0]);
+    if (nargs < 2) {
         goto skip_optional;
     }
-    dialect = _args_items[1];
+    dialect = PyValue_Borrow(args[1]);
 skip_optional:
-    if (kwargs == NULL) {
-        fmtparams = PyDict_New();
-        if (fmtparams == NULL) {
-            goto exit;
-        }
+    fmtparams = kwnames == NULL ? PyDict_New()
+        : _PyValue_StackAsDict(args + nargs, kwnames);
+    if (fmtparams == NULL) {
+        goto exit;
     }
-    else {
-        fmtparams = Py_NewRef(kwargs);
-    }
-    return_value = _csv_writer_impl(module, output_file, dialect, fmtparams);
+    return_value = _csv_writer_impl(PyValue_AsKnownObjectBorrow(module), output_file, dialect, fmtparams);
 
 exit:
     /* Cleanup for fmtparams */
@@ -234,15 +220,19 @@ PyDoc_STRVAR(_csv_list_dialects__doc__,
 "Return a list of all known dialect names.");
 
 #define _CSV_LIST_DIALECTS_METHODDEF    \
-    {"list_dialects", (PyCFunction)_csv_list_dialects, METH_NOARGS, _csv_list_dialects__doc__},
+    {"list_dialects", _PyCFunction_CAST(_csv_list_dialects), METH_VALUE|METH_NOARGS, _csv_list_dialects__doc__},
 
-static PyObject *
+static PyValue
 _csv_list_dialects_impl(PyObject *module);
 
-static PyObject *
-_csv_list_dialects(PyObject *module, PyObject *Py_UNUSED(ignored))
+static PyValue
+_csv_list_dialects(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _csv_list_dialects_impl(module);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _csv_list_dialects_impl(PyValue_AsKnownObjectBorrow(module));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(_csv_register_dialect__doc__,
@@ -257,43 +247,35 @@ PyDoc_STRVAR(_csv_register_dialect__doc__,
 "dialect.");
 
 #define _CSV_REGISTER_DIALECT_METHODDEF    \
-    {"register_dialect", _PyCFunction_CAST(_csv_register_dialect), METH_VARARGS|METH_KEYWORDS, _csv_register_dialect__doc__},
+    {"register_dialect", _PyCFunction_CAST(_csv_register_dialect), METH_VALUE|METH_KEYWORDS, _csv_register_dialect__doc__},
 
-static PyObject *
-_csv_register_dialect_impl(PyObject *module, PyObject *name_obj,
-                           PyObject *dialect_obj, PyObject *fmtparams);
+static PyValue
+_csv_register_dialect_impl(PyObject *module, PyValueBorrow name_obj,
+                           PyValueBorrow dialect_obj, PyObject *fmtparams);
 
-static PyObject *
-_csv_register_dialect(PyObject *module, PyObject *args, PyObject *kwargs)
+static PyValue
+_csv_register_dialect(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
-    PyObject *name_obj;
-    PyObject *dialect_obj = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow name_obj;
+    PyValueBorrow dialect_obj = PyValue_Borrow(PyValue_NULL);
     PyObject *fmtparams = NULL;
 
-    if (!_PyArg_CheckPositional("register_dialect", PyTuple_GET_SIZE(args), 1, 2)) {
+    if (!_PyArg_CheckPositional("register_dialect", nargs, 1, 2)) {
         goto exit;
     }
-    PyObject *const *_args_items = _PyBorrow_TupleItems(args, PyTuple_GET_SIZE(args));
-    if (_args_items == NULL) {
-        goto exit;
-    }
-    name_obj = _args_items[0];
-    if (PyTuple_GET_SIZE(args) < 2) {
+    name_obj = PyValue_Borrow(args[0]);
+    if (nargs < 2) {
         goto skip_optional;
     }
-    dialect_obj = _args_items[1];
+    dialect_obj = PyValue_Borrow(args[1]);
 skip_optional:
-    if (kwargs == NULL) {
-        fmtparams = PyDict_New();
-        if (fmtparams == NULL) {
-            goto exit;
-        }
+    fmtparams = kwnames == NULL ? PyDict_New()
+        : _PyValue_StackAsDict(args + nargs, kwnames);
+    if (fmtparams == NULL) {
+        goto exit;
     }
-    else {
-        fmtparams = Py_NewRef(kwargs);
-    }
-    return_value = _csv_register_dialect_impl(module, name_obj, dialect_obj, fmtparams);
+    return_value = _csv_register_dialect_impl(PyValue_AsKnownObjectBorrow(module), name_obj, dialect_obj, fmtparams);
 
 exit:
     /* Cleanup for fmtparams */
@@ -309,15 +291,15 @@ PyDoc_STRVAR(_csv_unregister_dialect__doc__,
 "Delete the name/dialect mapping associated with a string name.");
 
 #define _CSV_UNREGISTER_DIALECT_METHODDEF    \
-    {"unregister_dialect", _PyCFunction_CAST(_csv_unregister_dialect), METH_FASTCALL|METH_KEYWORDS, _csv_unregister_dialect__doc__},
+    {"unregister_dialect", _PyCFunction_CAST(_csv_unregister_dialect), METH_VALUE|METH_KEYWORDS, _csv_unregister_dialect__doc__},
 
-static PyObject *
-_csv_unregister_dialect_impl(PyObject *module, PyObject *name);
+static PyValue
+_csv_unregister_dialect_impl(PyObject *module, PyValueBorrow name);
 
-static PyObject *
-_csv_unregister_dialect(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_csv_unregister_dialect(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
@@ -345,16 +327,15 @@ _csv_unregister_dialect(PyObject *module, PyObject *const *args, Py_ssize_t narg
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[1];
-    PyObject *name;
+    Py_ssize_t _idx[1];
+    PyValueBorrow name;
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, _idx, 1)) {
         goto exit;
     }
-    name = args[0];
-    return_value = _csv_unregister_dialect_impl(module, name);
+    name = PyValue_Borrow(args[_idx[0]]);
+    return_value = _csv_unregister_dialect_impl(PyValue_AsKnownObjectBorrow(module), name);
 
 exit:
     return return_value;
@@ -367,15 +348,15 @@ PyDoc_STRVAR(_csv_get_dialect__doc__,
 "Return the dialect instance associated with name.");
 
 #define _CSV_GET_DIALECT_METHODDEF    \
-    {"get_dialect", _PyCFunction_CAST(_csv_get_dialect), METH_FASTCALL|METH_KEYWORDS, _csv_get_dialect__doc__},
+    {"get_dialect", _PyCFunction_CAST(_csv_get_dialect), METH_VALUE|METH_KEYWORDS, _csv_get_dialect__doc__},
 
-static PyObject *
-_csv_get_dialect_impl(PyObject *module, PyObject *name);
+static PyValue
+_csv_get_dialect_impl(PyObject *module, PyValueBorrow name);
 
-static PyObject *
-_csv_get_dialect(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_csv_get_dialect(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
@@ -403,16 +384,15 @@ _csv_get_dialect(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyOb
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[1];
-    PyObject *name;
+    Py_ssize_t _idx[1];
+    PyValueBorrow name;
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, _idx, 1)) {
         goto exit;
     }
-    name = args[0];
-    return_value = _csv_get_dialect_impl(module, name);
+    name = PyValue_Borrow(args[_idx[0]]);
+    return_value = _csv_get_dialect_impl(PyValue_AsKnownObjectBorrow(module), name);
 
 exit:
     return return_value;
@@ -428,15 +408,15 @@ PyDoc_STRVAR(_csv_field_size_limit__doc__,
 "the old limit is returned");
 
 #define _CSV_FIELD_SIZE_LIMIT_METHODDEF    \
-    {"field_size_limit", _PyCFunction_CAST(_csv_field_size_limit), METH_FASTCALL|METH_KEYWORDS, _csv_field_size_limit__doc__},
+    {"field_size_limit", _PyCFunction_CAST(_csv_field_size_limit), METH_VALUE|METH_KEYWORDS, _csv_field_size_limit__doc__},
 
-static PyObject *
-_csv_field_size_limit_impl(PyObject *module, PyObject *new_limit);
+static PyValue
+_csv_field_size_limit_impl(PyObject *module, PyValueBorrow new_limit);
 
-static PyObject *
-_csv_field_size_limit(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_csv_field_size_limit(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
@@ -464,23 +444,19 @@ _csv_field_size_limit(PyObject *module, PyObject *const *args, Py_ssize_t nargs,
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[1];
-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 0;
-    PyObject *new_limit = NULL;
+    Py_ssize_t _idx[1];
+    PyValueBorrow new_limit = PyValue_Borrow(PyValue_NULL);
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 0, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 0, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, _idx, 1)) {
         goto exit;
     }
-    if (!noptargs) {
-        goto skip_optional_pos;
+    if (_idx[0] >= 0) {
+        new_limit = PyValue_Borrow(args[_idx[0]]);
     }
-    new_limit = args[0];
-skip_optional_pos:
-    return_value = _csv_field_size_limit_impl(module, new_limit);
+    return_value = _csv_field_size_limit_impl(PyValue_AsKnownObjectBorrow(module), new_limit);
 
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=5438afcbac6f4d9f input=a9049054013a1b77]*/
+/*[clinic end generated code: output=505d51236adb4cb0 input=a9049054013a1b77]*/

@@ -15,10 +15,17 @@ static const char PyCursesVersion[] = "2.1";
 #  define Py_BUILD_CORE_MODULE 1
 #endif
 
+#define Py_VALUE_CORE 1
 #include "Python.h"
+#include "pycore_dict.h"          // PyDict_SetValueString()
+#include "pycore_value_slots.h"// _PyValue_FromObjectResult()
 
 #define CURSES_PANEL_MODULE
 #include "py_curses.h"
+
+/* PyCursesInitialised for a function that returns a PyValue. */
+#define PyCursesValueInitialised \
+    {if (! ((int (*)(void))PyCurses_API[2]) () ) return PyValue_NULL;}
 
 #if defined(HAVE_NCURSESW_PANEL_H)
 #  include <ncursesw/panel.h>
@@ -336,10 +343,15 @@ find_po(PANEL *pan, const char *called_funcname, const char *caller_funcname)
 }
 
 /*[clinic input]
-module _curses_panel
-class _curses_panel.panel "PyCursesPanelObject *" "&PyCursesPanel_Type"
+value_emission
 [clinic start generated code]*/
-/*[clinic end generated code: output=da39a3ee5e6b4b0d input=2f4ef263ca850a31]*/
+/*[clinic end generated code: output=da39a3ee5e6b4b0d input=eb7b17088bfd7215]*/
+
+/*[clinic input]
+module _curses_panel
+class _curses_panel.panel "PyCursesPanelObject *" "NULL"
+[clinic start generated code]*/
+/*[clinic end generated code: output=da39a3ee5e6b4b0d input=f8fc55ef66280e8f]*/
 
 #include "clinic/_curses_panel.c.h"
 
@@ -351,12 +363,12 @@ _curses_panel.panel.bottom
 Push the panel to the bottom of the stack.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _curses_panel_panel_bottom_impl(PyCursesPanelObject *self)
-/*[clinic end generated code: output=7aa7d14d7e1d1ce6 input=b6c920c071b61e2e]*/
+/*[clinic end generated code: output=6a9f03b7d5c36438 input=b6c920c071b61e2e]*/
 {
     int rtn = bottom_panel(self->pan);
-    return curses_panel_panel_check_err(self, rtn, "bottom_panel", "bottom");
+    return _PyValue_FromObjectResult(curses_panel_panel_check_err(self, rtn, "bottom_panel", "bottom"));
 }
 
 /*[clinic input]
@@ -368,12 +380,12 @@ This does not delete the object, it just makes the window on screen
 invisible.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _curses_panel_panel_hide_impl(PyCursesPanelObject *self)
-/*[clinic end generated code: output=a7bbbd523e1eab49 input=9456aca9b264dde1]*/
+/*[clinic end generated code: output=480899d9539b9ee1 input=9456aca9b264dde1]*/
 {
     int rtn = hide_panel(self->pan);
-    return curses_panel_panel_check_err(self, rtn, "hide_panel", "hide");
+    return _PyValue_FromObjectResult(curses_panel_panel_check_err(self, rtn, "hide_panel", "hide"));
 }
 
 /*[clinic input]
@@ -384,12 +396,12 @@ Display the panel (which might have been hidden).
 The panel is placed on top of the panel stack.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _curses_panel_panel_show_impl(PyCursesPanelObject *self)
-/*[clinic end generated code: output=6b4553ab45c97769 input=9997cf364ca71422]*/
+/*[clinic end generated code: output=fb5853b3d8ac1ce8 input=9997cf364ca71422]*/
 {
     int rtn = show_panel(self->pan);
-    return curses_panel_panel_check_err(self, rtn, "show_panel", "show");
+    return _PyValue_FromObjectResult(curses_panel_panel_check_err(self, rtn, "show_panel", "show"));
 }
 
 /*[clinic input]
@@ -398,12 +410,12 @@ _curses_panel.panel.top
 Push panel to the top of the stack.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _curses_panel_panel_top_impl(PyCursesPanelObject *self)
-/*[clinic end generated code: output=0f5f2f8cdd2d1777 input=be33975ec3ca0e9a]*/
+/*[clinic end generated code: output=0eb2e6c5190e8c18 input=be33975ec3ca0e9a]*/
 {
     int rtn = top_panel(self->pan);
-    return curses_panel_panel_check_err(self, rtn, "top_panel", "top");
+    return _PyValue_FromObjectResult(curses_panel_panel_check_err(self, rtn, "top_panel", "top"));
 }
 
 /* Allocation and deallocation of Panel Objects */
@@ -491,19 +503,19 @@ _curses_panel.panel.above
 Return the panel above the current panel.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _curses_panel_panel_above_impl(PyCursesPanelObject *self)
-/*[clinic end generated code: output=70ac06d25fd3b4da input=c059994022976788]*/
+/*[clinic end generated code: output=fbcbd4da32029941 input=c059994022976788]*/
 {
     PANEL *pan;
     PyCursesPanelObject *po;
 
     pan = panel_above(self->pan);
     if (pan == NULL) {  /* valid output: it means no panel exists yet */
-        Py_RETURN_NONE;
+        return PyValue_None;
     }
     po = find_po(pan, "panel_above", "above");
-    return Py_XNewRef(po);
+    return _PyValue_FromObjectResult(Py_XNewRef(po));
 }
 
 /* panel_below(NULL) returns the top panel in the stack. To get
@@ -514,19 +526,19 @@ _curses_panel.panel.below
 Return the panel below the current panel.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _curses_panel_panel_below_impl(PyCursesPanelObject *self)
-/*[clinic end generated code: output=282861122e06e3de input=cc08f61936d297c6]*/
+/*[clinic end generated code: output=73d94f3ee6f90241 input=cc08f61936d297c6]*/
 {
     PANEL *pan;
     PyCursesPanelObject *po;
 
     pan = panel_below(self->pan);
     if (pan == NULL) {  /* valid output: it means no panel exists yet */
-        Py_RETURN_NONE;
+        return PyValue_None;
     }
     po = find_po(pan, "panel_below", "below");
-    return Py_XNewRef(po);
+    return _PyValue_FromObjectResult(Py_XNewRef(po));
 }
 
 /*[clinic input]
@@ -535,14 +547,14 @@ _curses_panel.panel.hidden
 Return True if the panel is hidden (not visible), False otherwise.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _curses_panel_panel_hidden_impl(PyCursesPanelObject *self)
-/*[clinic end generated code: output=66eebd1ab4501a71 input=453d4b4fce25e21a]*/
+/*[clinic end generated code: output=7ba9c8d812ac99a5 input=453d4b4fce25e21a]*/
 {
     if (panel_hidden(self->pan))
-        Py_RETURN_TRUE;
+        return PyValue_True;
     else
-        Py_RETURN_FALSE;
+        return PyValue_False;
 }
 
 /*[clinic input]
@@ -555,12 +567,12 @@ _curses_panel.panel.move
 Move the panel to the screen coordinates (y, x).
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _curses_panel_panel_move_impl(PyCursesPanelObject *self, int y, int x)
-/*[clinic end generated code: output=d867535a89777415 input=e0b36b78acc03fba]*/
+/*[clinic end generated code: output=a862e84814d6e618 input=e0b36b78acc03fba]*/
 {
     int rtn = move_panel(self->pan, y, x);
-    return curses_panel_panel_check_err(self, rtn, "move_panel", "move");
+    return _PyValue_FromObjectResult(curses_panel_panel_check_err(self, rtn, "move_panel", "move"));
 }
 
 /*[clinic input]
@@ -569,11 +581,11 @@ _curses_panel.panel.window
 Return the window object associated with the panel.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _curses_panel_panel_window_impl(PyCursesPanelObject *self)
-/*[clinic end generated code: output=5f05940d4106b4cb input=6067353d2c307901]*/
+/*[clinic end generated code: output=96f0bb11f1296740 input=6067353d2c307901]*/
 {
-    return Py_NewRef(self->wo);
+    return PyValue_DUP(PyValue_FromObjectBorrow(self->wo));
 }
 
 /*[clinic input]
@@ -585,29 +597,29 @@ _curses_panel.panel.replace
 Change the window associated with the panel to the window win.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _curses_panel_panel_replace_impl(PyCursesPanelObject *self,
                                  PyCursesWindowObject *win)
-/*[clinic end generated code: output=2253a95f7b287255 input=4b1c4283987d9dfa]*/
+/*[clinic end generated code: output=d9aba1fe99cedcc8 input=4b1c4283987d9dfa]*/
 {
     PyCursesPanelObject *po = find_po(self->pan, "replace", NULL);
     if (po == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     if (win->win == NULL) {
         _curses_panel_state *state = get_curses_panel_state_by_panel(self);
         PyErr_SetString(state->error, "the window has been detached");
-        return NULL;
+        return PyValue_NULL;
     }
 
     int rtn = replace_panel(self->pan, win->win);
     if (rtn == ERR) {
         curses_panel_panel_set_error(self, "replace_panel", "replace");
-        return NULL;
+        return PyValue_NULL;
     }
     Py_SETREF(po->wo, (PyCursesWindowObject*)Py_NewRef(win));
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 /*[clinic input]
@@ -619,23 +631,28 @@ _curses_panel.panel.set_userptr
 Set the panel's user pointer to obj.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _curses_panel_panel_set_userptr_impl(PyCursesPanelObject *self,
-                                     PyObject *obj)
-/*[clinic end generated code: output=7fa1fd23f69db71e input=d2c6a9dbefabbf39]*/
+                                     PyValueBorrow obj)
+/*[clinic end generated code: output=90af169bed814c6a input=d2c6a9dbefabbf39]*/
 {
-    PyCursesInitialised;
-    Py_INCREF(obj);
+    PyCursesValueInitialised;
+    /* The user pointer owns a reference to the object (a new one, boxed if
+       obj is an inline int or float). */
+    PyObject *newobj = _PyValue_AsObjectAt(obj, BOX_SITE_FIELD);
+    if (newobj == NULL) {
+        return PyValue_NULL;
+    }
     PyObject *oldobj = (PyObject *) panel_userptr(self->pan);
-    int rc = set_panel_userptr(self->pan, (void*)obj);
+    int rc = set_panel_userptr(self->pan, (void*)newobj);
     if (rc == ERR) {
         /* In case of an ncurses error, decref the new object again */
-        Py_DECREF(obj);
+        Py_DECREF(newobj);
         curses_panel_panel_set_error(self, "set_panel_userptr", "set_userptr");
-        return NULL;
+        return PyValue_NULL;
     }
     Py_XDECREF(oldobj);
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 /*[clinic input]
@@ -644,18 +661,18 @@ _curses_panel.panel.userptr
 Return the user pointer for the panel.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _curses_panel_panel_userptr_impl(PyCursesPanelObject *self)
-/*[clinic end generated code: output=e849c307b5dc9237 input=f78b7a47aef0fd50]*/
+/*[clinic end generated code: output=2e3237fd59fa6eb4 input=f78b7a47aef0fd50]*/
 {
-    PyCursesInitialised;
+    PyCursesValueInitialised;
     PyObject *obj = (PyObject *) panel_userptr(self->pan);
     if (obj == NULL) {
         curses_panel_panel_set_null_error(self, "panel_userptr", "userptr");
-        return NULL;
+        return PyValue_NULL;
     }
 
-    return Py_NewRef(obj);
+    return PyValue_DUP(PyValue_FromObjectBorrow(obj));
 }
 
 
@@ -715,21 +732,21 @@ _curses_panel.bottom_panel
 Return the bottom panel in the panel stack.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _curses_panel_bottom_panel_impl(PyObject *module)
-/*[clinic end generated code: output=3aba9f985f4c2bd0 input=634c2a8078b3d7e4]*/
+/*[clinic end generated code: output=ff26ebfd653e765e input=634c2a8078b3d7e4]*/
 {
     PANEL *pan;
     PyCursesPanelObject *po;
 
-    PyCursesInitialised;
+    PyCursesValueInitialised;
 
     pan = panel_above(NULL);
     if (pan == NULL) {  /* valid output: it means no panel exists yet */
-        Py_RETURN_NONE;
+        return PyValue_None;
     }
     po = find_po(pan, "panel_above", "bottom_panel");
-    return Py_XNewRef(po);
+    return _PyValue_FromObjectResult(Py_XNewRef(po));
 }
 
 /*[clinic input]
@@ -743,17 +760,17 @@ Return a panel object, associating it with the given window win.
 The new panel is placed on top of the panel stack.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _curses_panel_new_panel_impl(PyObject *module, PyCursesWindowObject *win)
-/*[clinic end generated code: output=45e948e0176a9bd2 input=3b6fea647b808fd7]*/
+/*[clinic end generated code: output=de207133d2af6d55 input=3b6fea647b808fd7]*/
 {
     PANEL *pan = new_panel(win->win);
     if (pan == NULL) {
         curses_panel_set_null_error(module, "new_panel", NULL);
-        return NULL;
+        return PyValue_NULL;
     }
     _curses_panel_state *state = get_curses_panel_state(module);
-    return PyCursesPanel_New(state, pan, win);
+    return _PyValue_FromObjectResult(PyCursesPanel_New(state, pan, win));
 }
 
 
@@ -767,21 +784,21 @@ _curses_panel.top_panel
 Return the top panel in the panel stack.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _curses_panel_top_panel_impl(PyObject *module)
-/*[clinic end generated code: output=86704988bea8508e input=e62d6278dba39e79]*/
+/*[clinic end generated code: output=0abb6f04f0992cdf input=e62d6278dba39e79]*/
 {
     PANEL *pan;
     PyCursesPanelObject *po;
 
-    PyCursesInitialised;
+    PyCursesValueInitialised;
 
     pan = panel_below(NULL);
     if (pan == NULL) {  /* valid output: it means no panel exists yet */
-        Py_RETURN_NONE;
+        return PyValue_None;
     }
     po = find_po(pan, "panel_below", "top_panel");
-    return Py_XNewRef(po);
+    return _PyValue_FromObjectResult(Py_XNewRef(po));
 }
 
 /*[clinic input]
@@ -793,13 +810,13 @@ This does not call curses.doupdate(), so you'll have to do this
 yourself.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _curses_panel_update_panels_impl(PyObject *module)
-/*[clinic end generated code: output=2f3b4c2e03d90ded input=0d0db79f05ec3ef4]*/
+/*[clinic end generated code: output=5cdd71ec72839dad input=0d0db79f05ec3ef4]*/
 {
-    PyCursesInitialised;
+    PyCursesValueInitialised;
     update_panels();
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 /* List of functions defined in the module */
@@ -850,11 +867,11 @@ _curses_panel_exec(PyObject *mod)
     }
 
     PyObject *d = PyModule_GetDict(mod);
-    if (PyDict_SetItemString(d, "version", v) < 0) {
+    if (PyDict_SetValueString(d, "version", PyValue_FromObjectBorrow(v)) < 0) {
         Py_DECREF(v);
         return -1;
     }
-    if (PyDict_SetItemString(d, "__version__", v) < 0) {
+    if (PyDict_SetValueString(d, "__version__", PyValue_FromObjectBorrow(v)) < 0) {
         Py_DECREF(v);
         return -1;
     }

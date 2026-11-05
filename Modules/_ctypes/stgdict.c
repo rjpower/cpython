@@ -2,6 +2,7 @@
 #  define Py_BUILD_CORE_MODULE 1
 #endif
 
+#define Py_VALUE_CORE 1
 #include "Python.h"
 // windows.h must be included before pycore internal headers
 #ifdef MS_WIN32
@@ -11,6 +12,8 @@
 #include "pycore_call.h"          // _PyObject_CallNoArgs()
 #include "pycore_dict.h"          // _PyDict_SizeOf()
 #include "pycore_tuple.h"         // _PyTuple_GET_OBJECT()
+#include "pycore_value.h"         // _PyValue_AsObjectStealAt()
+#include "pycore_value_ops.h"     // _PyValue_IsTrue()
 #include <ffi.h>
 #ifdef MS_WIN32
 #  include <malloc.h>
@@ -101,7 +104,8 @@ MakeFields(PyObject *type, CFieldObject *descr,
     ctypes_state *st = get_module_state_by_class(Py_TYPE(descr));
     PyTypeObject *cfield_tp = st->PyCField_Type;
     for (i = 0; i < PySequence_Fast_GET_SIZE(fieldlist); ++i) {
-        PyObject *pair = PySequence_GetItem(fieldlist, i);
+        PyValue pair_v = _PyValue_SequenceGetItem(PyValue_FromObjectBorrow(fieldlist), i);
+        PyObject *pair = PyValue_IsNull(pair_v) ? NULL : _PyValue_AsObjectStealAt(pair_v, BOX_SITE_SEQUENCE);
         if (pair == NULL) {
             Py_DECREF(fieldlist);
             return -1;
@@ -115,7 +119,8 @@ MakeFields(PyObject *type, CFieldObject *descr,
             Py_DECREF(fieldlist);
             return -1;
         }
-        fdescr = (CFieldObject *)PyObject_GetAttr(descr->proto, fname);
+        PyValue item_v = _PyValue_GetAttr(PyValue_FromObjectBorrow(descr->proto), fname);
+        fdescr = (CFieldObject *)(PyValue_IsNull(item_v) ? NULL : _PyValue_AsObjectStealAt(item_v, BOX_SITE_ATTRIBUTE));
         if (fdescr == NULL) {
             Py_DECREF(pair);
             Py_DECREF(fieldlist);
@@ -162,7 +167,7 @@ MakeFields(PyObject *type, CFieldObject *descr,
 
         Py_DECREF(fdescr);
 
-        if (-1 == PyObject_SetAttr(type, fname, (PyObject *)new_descr)) {
+        if (-1 == _PyValue_SetAttr(PyValue_FromObjectBorrow(type), fname, PyValue_FromObjectBorrow((PyObject *)new_descr))) {
             Py_DECREF(pair);
             Py_DECREF(fieldlist);
             Py_DECREF(new_descr);
@@ -198,12 +203,14 @@ MakeAnonFields(PyObject *type)
     ctypes_state *st = get_module_state_by_def(Py_TYPE(type));
     PyTypeObject *cfield_tp = st->PyCField_Type;
     for (i = 0; i < PySequence_Fast_GET_SIZE(anon_names); ++i) {
-        PyObject *fname = PySequence_GetItem(anon_names, i);
+        PyValue fname_v = _PyValue_SequenceGetItem(PyValue_FromObjectBorrow(anon_names), i);
+        PyObject *fname = PyValue_IsNull(fname_v) ? NULL : _PyValue_AsObjectStealAt(fname_v, BOX_SITE_SEQUENCE);
         if (fname == NULL) {
             Py_DECREF(anon_names);
             return -1;
         }
-        CFieldObject *descr = (CFieldObject *)PyObject_GetAttr(type, fname);
+        PyValue item_v2 = _PyValue_GetAttr(PyValue_FromObjectBorrow(type), fname);
+        CFieldObject *descr = (CFieldObject *)(PyValue_IsNull(item_v2) ? NULL : _PyValue_AsObjectStealAt(item_v2, BOX_SITE_ATTRIBUTE));
         if (descr == NULL) {
             Py_DECREF(fname);
             Py_DECREF(anon_names);
@@ -298,10 +305,7 @@ PyCStructUnionType_update_stginfo(PyObject *type, PyObject *fields, int isStruct
     if (!layout_func) {
         goto error;
     }
-    kwnames = PyTuple_Pack(
-        2,
-        &_Py_ID(is_struct),
-        &_Py_ID(base));
+    kwnames = _PyTuple_PackValues(2, (PyValueBorrow[]){_PyValue_FromObjectKnown(&_Py_ID(is_struct)), _PyValue_FromObjectKnown(&_Py_ID(base))});
     if (!kwnames) {
         goto error;
     }
@@ -324,7 +328,8 @@ PyCStructUnionType_update_stginfo(PyObject *type, PyObject *fields, int isStruct
         goto error;
     }
 
-    align_obj = PyObject_GetAttr(layout, &_Py_ID(align));
+    PyValue align_obj_v = _PyValue_GetAttr(PyValue_FromObjectBorrow(layout), &_Py_ID(align));
+    align_obj = PyValue_IsNull(align_obj_v) ? NULL : _PyValue_AsObjectStealAt(align_obj_v, BOX_SITE_ATTRIBUTE);
     if (!align_obj) {
         goto error;
     }
@@ -338,7 +343,8 @@ PyCStructUnionType_update_stginfo(PyObject *type, PyObject *fields, int isStruct
         goto error;
     }
 
-    size_obj = PyObject_GetAttr(layout, &_Py_ID(size));
+    PyValue size_obj_v = _PyValue_GetAttr(PyValue_FromObjectBorrow(layout), &_Py_ID(size));
+    size_obj = PyValue_IsNull(size_obj_v) ? NULL : _PyValue_AsObjectStealAt(size_obj_v, BOX_SITE_ATTRIBUTE);
     if (!size_obj) {
         goto error;
     }
@@ -352,7 +358,8 @@ PyCStructUnionType_update_stginfo(PyObject *type, PyObject *fields, int isStruct
         goto error;
     }
 
-    format_spec_obj = PyObject_GetAttr(layout, &_Py_ID(format_spec));
+    PyValue format_spec_obj_v = _PyValue_GetAttr(PyValue_FromObjectBorrow(layout), &_Py_ID(format_spec));
+    format_spec_obj = PyValue_IsNull(format_spec_obj_v) ? NULL : _PyValue_AsObjectStealAt(format_spec_obj_v, BOX_SITE_ATTRIBUTE);
     if (!format_spec_obj) {
         goto error;
     }
@@ -374,11 +381,12 @@ PyCStructUnionType_update_stginfo(PyObject *type, PyObject *fields, int isStruct
     }
     memcpy(stginfo->format, format_spec, format_spec_size + 1);
 
-    layout_fields_obj = PyObject_GetAttr(layout, &_Py_ID(fields));
+    PyValue layout_fields_obj_v = _PyValue_GetAttr(PyValue_FromObjectBorrow(layout), &_Py_ID(fields));
+    layout_fields_obj = PyValue_IsNull(layout_fields_obj_v) ? NULL : _PyValue_AsObjectStealAt(layout_fields_obj_v, BOX_SITE_ATTRIBUTE);
     if (!layout_fields_obj) {
         goto error;
     }
-    layout_fields = PySequence_Tuple(layout_fields_obj);
+    layout_fields = _PyValue_SequenceTuple(PyValue_FromObjectBorrow(layout_fields_obj));
     if (!layout_fields) {
         goto error;
     }
@@ -420,7 +428,10 @@ PyCStructUnionType_update_stginfo(PyObject *type, PyObject *fields, int isStruct
     }
 
     for (Py_ssize_t i = 0; i < len; ++i) {
-        PyObject *prop_obj = PyTuple_GetItemRef(layout_fields, i);
+        PyValue prop_val = PyTuple_GetValue(layout_fields, i);
+        PyObject *prop_obj = PyValue_IsNull(prop_val)
+            ? NULL
+            : _PyValue_AsObjectStealAt(prop_val, BOX_SITE_TUPLE);
         if (prop_obj == NULL) {
             goto error;
         }
@@ -459,7 +470,7 @@ PyCStructUnionType_update_stginfo(PyObject *type, PyObject *fields, int isStruct
 
         stginfo_set_dict_final_lock_held(info); /* mark field type final */
         STGINFO_UNLOCK();
-        if (-1 == PyObject_SetAttr(type, prop->name, prop_obj)) {
+        if (-1 == _PyValue_SetAttr(PyValue_FromObjectBorrow(type), prop->name, PyValue_FromObjectBorrow(prop_obj))) {
             goto error;
         }
     }

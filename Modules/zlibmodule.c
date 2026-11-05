@@ -7,6 +7,7 @@
 #  define Py_BUILD_CORE_MODULE 1
 #endif
 
+#define Py_VALUE_CORE 1
 #include "Python.h"
 #include "pycore_pyatomic_ft_wrappers.h" // FT_ATOMIC_STORE_CHAR_RELAXED
 
@@ -30,6 +31,8 @@
 
 // Blocks output buffer wrappers
 #include "pycore_blocks_output_buffer.h"
+#include "pycore_value.h"         // _PyValue_AsObjectAt()
+#include "pycore_value_slots.h"// _PyValue_FromObjectResult()
 
 #if OUTPUT_BUFFER_MAX_BLOCK_SIZE > UINT32_MAX
     #error "The maximum block size accepted by zlib is UINT32_MAX."
@@ -255,6 +258,11 @@ zlib_error(zlibstate *state, z_stream zst, int err, const char *msg)
 }
 
 /*[clinic input]
+value_emission
+[clinic start generated code]*/
+/*[clinic end generated code: output=da39a3ee5e6b4b0d input=eb7b17088bfd7215]*/
+
+/*[clinic input]
 module zlib
 class zlib.Compress "compobject *" "&Comptype"
 class zlib.Decompress "compobject *" "&Decomptype"
@@ -324,9 +332,9 @@ zlib.compress
 Returns a bytes object containing compressed data.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 zlib_compress_impl(PyObject *module, Py_buffer *data, int level, int wbits)
-/*[clinic end generated code: output=46bd152fadd66df2 input=c4d06ee5782a7e3f]*/
+/*[clinic end generated code: output=1292d7eef38dce7b input=c4d06ee5782a7e3f]*/
 {
     PyObject *return_value;
     int flush;
@@ -399,13 +407,13 @@ zlib_compress_impl(PyObject *module, Py_buffer *data, int level, int wbits)
         if (return_value == NULL) {
             goto error;
         }
-        return return_value;
+        return _PyValue_FromObjectResult(return_value);
     }
     else
         zlib_error(state, zst, err, "while finishing compression");
  error:
     OutputBuffer_OnError(&buffer);
-    return NULL;
+    return PyValue_NULL;
 }
 
 /*[clinic input]
@@ -422,10 +430,10 @@ zlib.decompress
 Returns a bytes object containing the uncompressed data.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 zlib_decompress_impl(PyObject *module, Py_buffer *data, int wbits,
                      Py_ssize_t bufsize)
-/*[clinic end generated code: output=77c7e35111dc8c42 input=530077065b3a2233]*/
+/*[clinic end generated code: output=f856b58c9506e2dc input=530077065b3a2233]*/
 {
     PyObject *return_value;
     Byte *ibuf;
@@ -521,12 +529,12 @@ zlib_decompress_impl(PyObject *module, Py_buffer *data, int wbits,
 
     return_value = OutputBuffer_WindowFinish(&buffer, &window, zst.avail_out);
     if (return_value != NULL) {
-        return return_value;
+        return _PyValue_FromObjectResult(return_value);
     }
 
  error:
     OutputBuffer_WindowOnError(&buffer, &window);
-    return NULL;
+    return PyValue_NULL;
 }
 
 /*[clinic input]
@@ -557,16 +565,16 @@ zlib.compressobj
 Return a compressor object.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 zlib_compressobj_impl(PyObject *module, int level, int method, int wbits,
                       int memLevel, int strategy, Py_buffer *zdict)
-/*[clinic end generated code: output=8b5bed9c8fc3814d input=1a6f61d8a8885c0d]*/
+/*[clinic end generated code: output=7e0437570faf930f input=1a6f61d8a8885c0d]*/
 {
     zlibstate *state = get_zlib_state(module);
     if (zdict->buf != NULL && (size_t)zdict->len > UINT_MAX) {
         PyErr_SetString(PyExc_OverflowError,
                         "zdict length does not fit in an unsigned int");
-        return NULL;
+        return PyValue_NULL;
     }
 
     compobject *self = newcompobject(state->Comptype);
@@ -612,7 +620,7 @@ zlib_compressobj_impl(PyObject *module, int level, int method, int wbits,
  error:
     Py_CLEAR(self);
  success:
-    return (PyObject *)self;
+    return _PyValue_FromObjectResult((PyObject *)self);
 }
 
 static int
@@ -651,28 +659,30 @@ zlib.decompressobj
 Return a decompressor object.
 [clinic start generated code]*/
 
-static PyObject *
-zlib_decompressobj_impl(PyObject *module, int wbits, PyObject *zdict)
-/*[clinic end generated code: output=3069b99994f36906 input=d3832b8511fc977b]*/
+static PyValue
+zlib_decompressobj_impl(PyObject *module, int wbits, PyValueBorrow zdict)
+/*[clinic end generated code: output=c14d035ea624722c input=d3832b8511fc977b]*/
 {
     zlibstate *state = get_zlib_state(module);
 
-    if (zdict != NULL && !PyObject_CheckBuffer(zdict)) {
+    if (!PyValue_IsNull(zdict)
+        && (!PyValue_IsObject(zdict)
+            || !PyObject_CheckBuffer(PyValue_AsKnownObjectBorrow(zdict)))) {
         PyErr_SetString(PyExc_TypeError,
                         "zdict argument must support the buffer protocol");
-        return NULL;
+        return PyValue_NULL;
     }
 
     compobject *self = newcompobject(state->Decomptype);
     if (self == NULL)
-        return NULL;
+        return PyValue_NULL;
     self->zst.opaque = NULL;
     self->zst.zalloc = PyZlib_Malloc;
     self->zst.zfree = PyZlib_Free;
     self->zst.next_in = NULL;
     self->zst.avail_in = 0;
-    if (zdict != NULL) {
-        self->zdict = Py_NewRef(zdict);
+    if (!PyValue_IsNull(zdict)) {
+        self->zdict = Py_NewRef(PyValue_AsKnownObjectBorrow(zdict));
     }
     int err = inflateInit2(&self->zst, wbits);
     switch (err) {
@@ -681,23 +691,23 @@ zlib_decompressobj_impl(PyObject *module, int wbits, PyObject *zdict)
         if (self->zdict != NULL && wbits < 0) {
             if (set_inflate_zdict(state, self) < 0) {
                 Py_DECREF(self);
-                return NULL;
+                return PyValue_NULL;
             }
         }
-        return (PyObject *)self;
+        return _PyValue_FromObjectResult((PyObject *)self);
     case Z_STREAM_ERROR:
         Py_DECREF(self);
         PyErr_SetString(PyExc_ValueError, "Invalid initialization option");
-        return NULL;
+        return PyValue_NULL;
     case Z_MEM_ERROR:
         Py_DECREF(self);
         PyErr_SetString(PyExc_MemoryError,
                         "Can't allocate memory for decompression object");
-        return NULL;
+        return PyValue_NULL;
     default:
         zlib_error(state, self->zst, err, "while creating decompression object");
         Py_DECREF(self);
-        return NULL;
+        return PyValue_NULL;
     }
 }
 
@@ -756,10 +766,10 @@ be stored in internal buffers for later processing.
 Call the flush() method to clear these buffers.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 zlib_Compress_compress_impl(compobject *self, PyTypeObject *cls,
                             Py_buffer *data)
-/*[clinic end generated code: output=6731b3f0ff357ca6 input=04d00f65ab01d260]*/
+/*[clinic end generated code: output=9ed3c245c63ae148 input=04d00f65ab01d260]*/
 {
     PyObject *return_value;
     int err;
@@ -809,7 +819,7 @@ zlib_Compress_compress_impl(compobject *self, PyTypeObject *cls,
     return_value = NULL;
  success:
     PyMutex_Unlock(&self->mutex);
-    return return_value;
+    return _PyValue_FromObjectResult(return_value);
 }
 
 /* Helper for objdecompress() and flush(). Saves any unconsumed input data in
@@ -880,10 +890,10 @@ stored in internal buffers for later processing.
 Call the flush() method to clear these buffers.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 zlib_Decompress_decompress_impl(compobject *self, PyTypeObject *cls,
                                 Py_buffer *data, Py_ssize_t max_length)
-/*[clinic end generated code: output=b024a93c2c922d57 input=9035027c9e4be7fd]*/
+/*[clinic end generated code: output=6b18ec04640a4473 input=9035027c9e4be7fd]*/
 {
     int err = Z_OK;
     Py_ssize_t ibuflen;
@@ -892,7 +902,7 @@ zlib_Decompress_decompress_impl(compobject *self, PyTypeObject *cls,
 
     PyObject *module = PyType_GetModule(cls);
     if (module == NULL)
-        return NULL;
+        return PyValue_NULL;
 
     zlibstate *state = get_zlib_state(module);
     if (max_length == 0) {
@@ -972,7 +982,7 @@ zlib_Decompress_decompress_impl(compobject *self, PyTypeObject *cls,
     return_value = NULL;
  success:
     PyMutex_Unlock(&self->mutex);
-    return return_value;
+    return _PyValue_FromObjectResult(return_value);
 }
 
 /*[clinic input]
@@ -989,9 +999,9 @@ zlib.Compress.flush
 Return a bytes object containing any remaining compressed data.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 zlib_Compress_flush_impl(compobject *self, PyTypeObject *cls, int mode)
-/*[clinic end generated code: output=c7efd13efd62add2 input=286146e29442eb6c]*/
+/*[clinic end generated code: output=a670477c3483ab84 input=286146e29442eb6c]*/
 {
     int err;
     PyObject *return_value;
@@ -1001,7 +1011,7 @@ zlib_Compress_flush_impl(compobject *self, PyTypeObject *cls, int mode)
     /* Flushing with Z_NO_FLUSH is a no-op, so there's no point in
        doing any work at all; just return an empty string. */
     if (mode == Z_NO_FLUSH) {
-        return Py_GetConstant(Py_CONSTANT_EMPTY_BYTES);
+        return _PyValue_FromObjectResult(Py_GetConstant(Py_CONSTANT_EMPTY_BYTES));
     }
 
     PyMutex_Lock(&self->mutex);
@@ -1061,7 +1071,7 @@ error:
     return_value = NULL;
 success:
     PyMutex_Unlock(&self->mutex);
-    return return_value;
+    return _PyValue_FromObjectResult(return_value);
 }
 
 #ifdef HAVE_ZLIB_COPY
@@ -1074,14 +1084,14 @@ zlib.Compress.copy
 Return a copy of the compression object.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 zlib_Compress_copy_impl(compobject *self, PyTypeObject *cls)
-/*[clinic end generated code: output=c4d2cfb4b0d7350b input=235497e482d40986]*/
+/*[clinic end generated code: output=e7c22cbc23bd4447 input=235497e482d40986]*/
 {
     zlibstate *state = PyType_GetModuleState(cls);
 
     compobject *return_value = newcompobject(state->Comptype);
-    if (!return_value) return NULL;
+    if (!return_value) return PyValue_NULL;
 
     /* Copy the zstream state
      * We use mutex to make this thread-safe
@@ -1111,12 +1121,12 @@ zlib_Compress_copy_impl(compobject *self, PyTypeObject *cls)
     return_value->is_initialised = 1;
 
     PyMutex_Unlock(&self->mutex);
-    return (PyObject *)return_value;
+    return _PyValue_FromObjectResult((PyObject *)return_value);
 
 error:
     PyMutex_Unlock(&self->mutex);
     Py_XDECREF(return_value);
-    return NULL;
+    return PyValue_NULL;
 }
 
 /*[clinic input]
@@ -1126,9 +1136,9 @@ zlib.Compress.__copy__
 
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 zlib_Compress___copy___impl(compobject *self, PyTypeObject *cls)
-/*[clinic end generated code: output=074613db332cb668 input=5c0188367ab0fe64]*/
+/*[clinic end generated code: output=6d3d586a5e53ad4e input=5c0188367ab0fe64]*/
 {
     return zlib_Compress_copy_impl(self, cls);
 }
@@ -1142,10 +1152,10 @@ zlib.Compress.__deepcopy__
 
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 zlib_Compress___deepcopy___impl(compobject *self, PyTypeObject *cls,
-                                PyObject *memo)
-/*[clinic end generated code: output=24b3aed785f54033 input=c90347319a514430]*/
+                                PyValueBorrow memo)
+/*[clinic end generated code: output=f269d8c1dd18578b input=c90347319a514430]*/
 {
     return zlib_Compress_copy_impl(self, cls);
 }
@@ -1158,14 +1168,14 @@ zlib.Decompress.copy
 Return a copy of the decompression object.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 zlib_Decompress_copy_impl(compobject *self, PyTypeObject *cls)
-/*[clinic end generated code: output=a7ddc016e1d0a781 input=20ef3aa208282ff2]*/
+/*[clinic end generated code: output=9caed11e71b8d373 input=20ef3aa208282ff2]*/
 {
     zlibstate *state = PyType_GetModuleState(cls);
 
     compobject *return_value = newcompobject(state->Decomptype);
-    if (!return_value) return NULL;
+    if (!return_value) return PyValue_NULL;
 
     /* Copy the zstream state
      * We use mutex to make this thread-safe
@@ -1196,12 +1206,12 @@ zlib_Decompress_copy_impl(compobject *self, PyTypeObject *cls)
     return_value->is_initialised = 1;
 
     PyMutex_Unlock(&self->mutex);
-    return (PyObject *)return_value;
+    return _PyValue_FromObjectResult((PyObject *)return_value);
 
 error:
     PyMutex_Unlock(&self->mutex);
     Py_XDECREF(return_value);
-    return NULL;
+    return PyValue_NULL;
 }
 
 /*[clinic input]
@@ -1211,9 +1221,9 @@ zlib.Decompress.__copy__
 
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 zlib_Decompress___copy___impl(compobject *self, PyTypeObject *cls)
-/*[clinic end generated code: output=cf1e6473744f53fa input=cc3143067b622bdf]*/
+/*[clinic end generated code: output=a855db0b115a7252 input=cc3143067b622bdf]*/
 {
     return zlib_Decompress_copy_impl(self, cls);
 }
@@ -1227,10 +1237,10 @@ zlib.Decompress.__deepcopy__
 
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 zlib_Decompress___deepcopy___impl(compobject *self, PyTypeObject *cls,
-                                  PyObject *memo)
-/*[clinic end generated code: output=34f7b719a0c0d51b input=fc13b9c58622544e]*/
+                                  PyValueBorrow memo)
+/*[clinic end generated code: output=20eb72a25233b050 input=fc13b9c58622544e]*/
 {
     return zlib_Decompress_copy_impl(self, cls);
 }
@@ -1248,10 +1258,10 @@ zlib.Decompress.flush
 Return a bytes object containing any remaining decompressed data.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 zlib_Decompress_flush_impl(compobject *self, PyTypeObject *cls,
                            Py_ssize_t length)
-/*[clinic end generated code: output=4532fc280bd0f8f2 input=42f1f4b75230e2cd]*/
+/*[clinic end generated code: output=af47ce259fbada4e input=42f1f4b75230e2cd]*/
 {
     int err, flush;
     Py_buffer data;
@@ -1262,14 +1272,14 @@ zlib_Decompress_flush_impl(compobject *self, PyTypeObject *cls,
 
     PyObject *module = PyType_GetModule(cls);
     if (module == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     zlibstate *state = get_zlib_state(module);
 
     if (length <= 0) {
         PyErr_SetString(PyExc_ValueError, "length must be greater than zero");
-        return NULL;
+        return PyValue_NULL;
     }
 
     PyMutex_Lock(&self->mutex);
@@ -1278,12 +1288,12 @@ zlib_Decompress_flush_impl(compobject *self, PyTypeObject *cls,
        decompression state, so there is nothing left to process. */
     if (!self->is_initialised) {
         PyMutex_Unlock(&self->mutex);
-        return Py_GetConstant(Py_CONSTANT_EMPTY_BYTES);
+        return _PyValue_FromObjectResult(Py_GetConstant(Py_CONSTANT_EMPTY_BYTES));
     }
 
     if (PyObject_GetBuffer(self->unconsumed_tail, &data, PyBUF_SIMPLE) == -1) {
         PyMutex_Unlock(&self->mutex);
-        return NULL;
+        return PyValue_NULL;
     }
 
     self->zst.next_in = data.buf;
@@ -1354,7 +1364,7 @@ zlib_Decompress_flush_impl(compobject *self, PyTypeObject *cls,
  success:
     PyBuffer_Release(&data);
     PyMutex_Unlock(&self->mutex);
-    return return_value;
+    return _PyValue_FromObjectResult(return_value);
 }
 
 
@@ -1712,11 +1722,11 @@ raises an EOFError.  Any data found after the end of the stream is
 ignored and saved in the unused_data attribute.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 zlib__ZlibDecompressor_decompress_impl(ZlibDecompressor *self,
                                        Py_buffer *data,
                                        Py_ssize_t max_length)
-/*[clinic end generated code: output=ac00dcf73e843e99 input=d7862eade3f29d56]*/
+/*[clinic end generated code: output=345b092de732a56b input=d7862eade3f29d56]*/
 
 {
     PyObject *result = NULL;
@@ -1729,7 +1739,7 @@ zlib__ZlibDecompressor_decompress_impl(ZlibDecompressor *self,
         result = decompress(self, data->buf, data->len, max_length);
     }
     PyMutex_Unlock(&self->mutex);
-    return result;
+    return _PyValue_FromObjectResult(result);
 }
 
 /*[clinic input]
@@ -1748,22 +1758,29 @@ zlib._ZlibDecompressor.__new__
 Create a decompressor object for decompressing data incrementally.
 [clinic start generated code]*/
 
-static PyObject *
-zlib__ZlibDecompressor_impl(PyTypeObject *type, int wbits, PyObject *zdict)
-/*[clinic end generated code: output=1065607df0d33baa input=9ebad0be6de226e2]*/
+static PyValue
+zlib__ZlibDecompressor_impl(PyTypeObject *type, int wbits,
+                            PyValueBorrow zdict)
+/*[clinic end generated code: output=ea260a823d1af098 input=9ebad0be6de226e2]*/
 {
     assert(type != NULL && type->tp_alloc != NULL);
     zlibstate *state = PyType_GetModuleState(type);
     ZlibDecompressor *self = ZlibDecompressor_CAST(type->tp_alloc(type, 0));
     if (self == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
     self->eof = 0;
     self->needs_input = 1;
     self->avail_in_real = 0;
     self->input_buffer = NULL;
     self->input_buffer_size = 0;
-    self->zdict = Py_XNewRef(zdict);
+    if (!PyValue_IsNull(zdict)) {
+        self->zdict = _PyValue_AsObjectAt(zdict, BOX_SITE_FIELD);
+        if (self->zdict == NULL) {
+            Py_DECREF(self);
+            return PyValue_NULL;
+        }
+    }
     self->zst.opaque = NULL;
     self->zst.zalloc = PyZlib_Malloc;
     self->zst.zfree = PyZlib_Free;
@@ -1778,23 +1795,23 @@ zlib__ZlibDecompressor_impl(PyTypeObject *type, int wbits, PyObject *zdict)
         if (self->zdict != NULL && wbits < 0) {
             if (set_inflate_zdict_ZlibDecompressor(state, self) < 0) {
                 Py_DECREF(self);
-                return NULL;
+                return PyValue_NULL;
             }
         }
-        return (PyObject *)self;
+        return _PyValue_FromObjectResult((PyObject *)self);
     case Z_STREAM_ERROR:
         Py_DECREF(self);
         PyErr_SetString(PyExc_ValueError, "Invalid initialization option");
-        return NULL;
+        return PyValue_NULL;
     case Z_MEM_ERROR:
         Py_DECREF(self);
         PyErr_SetString(PyExc_MemoryError,
                         "Can't allocate memory for decompression object");
-        return NULL;
+        return PyValue_NULL;
     default:
         zlib_error(state, self->zst, err, "while creating decompression object");
         Py_DECREF(self);
-        return NULL;
+        return PyValue_NULL;
     }
 }
 
@@ -1907,9 +1924,9 @@ Compute an Adler-32 checksum of data.
 The returned checksum is an integer.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 zlib_adler32_impl(PyObject *module, Py_buffer *data, unsigned int value)
-/*[clinic end generated code: output=422106f5ca8c92c0 input=6ff4557872160e88]*/
+/*[clinic end generated code: output=0b4e11da35e4df10 input=6ff4557872160e88]*/
 {
     /* Releasing the GIL for very small buffers is inefficient
        and may lower performance */
@@ -1930,7 +1947,7 @@ zlib_adler32_impl(PyObject *module, Py_buffer *data, unsigned int value)
     } else {
         value = adler32(value, data->buf, (unsigned int)data->len);
     }
-    return PyLong_FromUnsignedLong(value & 0xffffffffU);
+    return PyValue_FromInt64((int64_t)(value & 0xffffffffU));
 }
 
 /*[clinic input]
@@ -1955,14 +1972,19 @@ return the Adler-32 checksum of A and B concatenated.
 
 static unsigned int
 zlib_adler32_combine_impl(PyObject *module, unsigned int adler1,
-                          unsigned int adler2, PyObject *len2)
-/*[clinic end generated code: output=61842cefb16afb1b input=51bb045c95130c6f]*/
+                          unsigned int adler2, PyValueBorrow len2)
+/*[clinic end generated code: output=5fd6b65c2c657bef input=51bb045c95130c6f]*/
 {
+    PyObject *len2_obj = _PyValue_AsObjectAt(len2, BOX_SITE_PARSER);
+    if (len2_obj == NULL) {
+        return (unsigned int)-1;
+    }
 #if defined(Z_WANT64)
-    z_off64_t len = convert_to_z_off_t(len2);
+    z_off64_t len = convert_to_z_off_t(len2_obj);
 #else
-    z_off_t len = convert_to_z_off_t(len2);
+    z_off_t len = convert_to_z_off_t(len2_obj);
 #endif
+    Py_DECREF(len2_obj);
     if (len < 0) {
         if (!PyErr_Occurred()) {
             PyErr_SetString(PyExc_ValueError, "len2 must be non-negative");
@@ -2043,14 +2065,19 @@ return the CRC-32 checksum of A and B concatenated.
 
 static unsigned int
 zlib_crc32_combine_impl(PyObject *module, unsigned int crc1,
-                        unsigned int crc2, PyObject *len2)
-/*[clinic end generated code: output=c4def907c602e6eb input=9c8a065d9040dc66]*/
+                        unsigned int crc2, PyValueBorrow len2)
+/*[clinic end generated code: output=12149cad5184d1b6 input=9c8a065d9040dc66]*/
 {
+    PyObject *len2_obj = _PyValue_AsObjectAt(len2, BOX_SITE_PARSER);
+    if (len2_obj == NULL) {
+        return (unsigned int)-1;
+    }
 #if defined(Z_WANT64)
-    z_off64_t len = convert_to_z_off_t(len2);
+    z_off64_t len = convert_to_z_off_t(len2_obj);
 #else
-    z_off_t len = convert_to_z_off_t(len2);
+    z_off_t len = convert_to_z_off_t(len2_obj);
 #endif
+    Py_DECREF(len2_obj);
     if (len < 0) {
         if (!PyErr_Occurred()) {
             PyErr_SetString(PyExc_ValueError, "len2 must be non-negative");
@@ -2146,7 +2173,7 @@ make_version_info(PyTypeObject *type, const char *string, Py_ssize_t size)
             Py_DECREF(version);
             return NULL;
         }
-        PyStructSequence_SET_ITEM(version, i, item);
+        PyStructSequence_SET_VALUE(version, i, PyValue_PrepareOwned(item));
     }
     return version;
 }

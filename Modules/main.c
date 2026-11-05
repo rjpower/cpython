@@ -1,5 +1,6 @@
 /* Python interpreter main program */
 
+#define Py_VALUE_CORE 1
 #include "Python.h"
 #include "pycore_call.h"          // _PyObject_CallNoArgs()
 #include "pycore_dict.h"          // PyDict_SetValueString()
@@ -16,6 +17,7 @@
 #include "pycore_sysmodule.h"     // _PySys_FormatV()
 #include "pycore_tuple.h"         // _PyTuple_FromPair
 #include "pycore_unicodeobject.h" // _PyUnicode_Dedent()
+#include "pycore_value.h"         // PyValue
 #include "pycore_value_api.h"     // _PyValue_AsObjectAt()
 
 /* Includes for exit_sigint() */

@@ -54,10 +54,17 @@ Revision history:
 #  define Py_BUILD_CORE_MODULE 1
 #endif
 
+#define Py_VALUE_CORE 1
 #include "Python.h"
+#include "pycore_value.h"         // PyValue
 #include "osdefs.h"               // SEP
 
 #include <syslog.h>
+
+/*[clinic input]
+value_emission
+[clinic start generated code]*/
+/*[clinic end generated code: output=da39a3ee5e6b4b0d input=eb7b17088bfd7215]*/
 
 /*[clinic input]
 module syslog
@@ -106,16 +113,20 @@ syslog_get_argv(void)
         return NULL;
     }
 
-    scriptobj = PyList_GetItemRef(argv, 0);
+    PyValue scriptvalue = PyList_GetValue(argv, 0);
     Py_DECREF(argv);
-    if (scriptobj == NULL) {
+    if (PyValue_IsNull(scriptvalue)) {
         PyErr_Clear();
         return NULL;
     }
-    if (!PyUnicode_Check(scriptobj)) {
-        Py_DECREF(scriptobj);
+    // An inline int or float is not a str.
+    if (!PyValue_IsObject(scriptvalue)
+        || !PyUnicode_Check(PyValue_AsKnownObjectBorrow(scriptvalue))) {
+        PyValue_CLOSE(scriptvalue);
         return NULL;
     }
+    scriptobj = Py_NewRef(PyValue_AsKnownObjectBorrow(scriptvalue));
+    PyValue_CLOSE(scriptvalue);
     scriptlen = PyUnicode_GET_LENGTH(scriptobj);
     if (scriptlen == 0) {
         Py_DECREF(scriptobj);
@@ -146,16 +157,16 @@ syslog.openlog
 Set logging options of subsequent syslog() calls.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 syslog_openlog_impl(PyObject *module, PyObject *ident, long logopt,
                     long facility)
-/*[clinic end generated code: output=5476c12829b6eb75 input=ee700b8786f81c23]*/
+/*[clinic end generated code: output=5e445755cd366bfe input=ee700b8786f81c23]*/
 {
     // Since the sys.openlog changes the process level state of syslog library,
     // this operation is only allowed for the main interpreter.
     if (!is_main_interpreter()) {
         PyErr_SetString(PyExc_RuntimeError, "subinterpreter can't use syslog.openlog()");
-        return NULL;
+        return PyValue_NULL;
     }
 
     const char *ident_str = NULL;
@@ -167,7 +178,7 @@ syslog_openlog_impl(PyObject *module, PyObject *ident, long logopt,
         /* get sys.argv[0] or NULL if we can't for some reason  */
         ident = syslog_get_argv();
         if (ident == NULL && PyErr_Occurred()) {
-            return NULL;
+            return PyValue_NULL;
         }
     }
 
@@ -179,19 +190,19 @@ syslog_openlog_impl(PyObject *module, PyObject *ident, long logopt,
         ident_str = PyUnicode_AsUTF8(ident);
         if (ident_str == NULL) {
             Py_DECREF(ident);
-            return NULL;
+            return PyValue_NULL;
         }
     }
     if (PySys_Audit("syslog.openlog", "Oll", ident ? ident : Py_None, logopt, facility) < 0) {
         Py_XDECREF(ident);
-        return NULL;
+        return PyValue_NULL;
     }
 
     openlog(ident_str, logopt, facility);
     _Py_atomic_store_int(&S_log_open, 1);
     Py_XSETREF(S_ident_o, ident);
 
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 
@@ -227,11 +238,11 @@ syslog_syslog_impl(PyObject *module, int group_left_1, int priority,
                                                 "until the syslog is opened by the main interpreter");
             return NULL;
         }
-        PyObject *openlog_ret = syslog_openlog_impl(module, NULL, 0, LOG_USER);
-        if (openlog_ret == NULL) {
+        PyValue openlog_ret = syslog_openlog_impl(module, NULL, 0, LOG_USER);
+        if (PyValue_IsNull(openlog_ret)) {
             return NULL;
         }
-        Py_DECREF(openlog_ret);
+        PyValue_CLOSE(openlog_ret);
     }
 
 #ifdef __APPLE__
@@ -253,19 +264,19 @@ syslog.closelog
 Reset the syslog module values and call the system library closelog().
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 syslog_closelog_impl(PyObject *module)
-/*[clinic end generated code: output=97890a80a24b1b84 input=167f489868bd5a72]*/
+/*[clinic end generated code: output=17a5b4f8b63178c9 input=167f489868bd5a72]*/
 {
     // Since the sys.closelog changes the process level state of syslog library,
     // this operation is only allowed for the main interpreter.
     if (!is_main_interpreter()) {
         PyErr_SetString(PyExc_RuntimeError, "subinterpreter can't use syslog.closelog()");
-        return NULL;
+        return PyValue_NULL;
     }
 
     if (PySys_Audit("syslog.closelog", NULL) < 0) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     int was_open = _Py_atomic_exchange_int(&S_log_open, 0);
@@ -273,7 +284,7 @@ syslog_closelog_impl(PyObject *module)
         closelog();
         Py_CLEAR(S_ident_o);
     }
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 /*[clinic input]

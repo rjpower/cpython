@@ -2,12 +2,18 @@
 preserve
 [clinic start generated code]*/
 
+#ifndef Py_VALUE_CORE
+#  error "value-emission Clinic output requires Py_VALUE_CORE"
+#endif
+
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 #  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
 #  include "pycore_value.h"       // _PyValue_STATIC_IMMORTAL()
 #endif
-#include "pycore_modsupport.h"    // _PyArg_UnpackKeywords()
+#include "pycore_modsupport.h"    // _PyArg_UnpackKeywordsValue()
+#include "pycore_value_call.h"    // METH_VALUE
+#include "pycore_value_ops.h"     // _PyValue_IsTrue()
 
 PyDoc_STRVAR(SHA1Type_copy__doc__,
 "copy($self, /)\n"
@@ -16,19 +22,24 @@ PyDoc_STRVAR(SHA1Type_copy__doc__,
 "Return a copy of the hash object.");
 
 #define SHA1TYPE_COPY_METHODDEF    \
-    {"copy", _PyCFunction_CAST(SHA1Type_copy), METH_METHOD|METH_FASTCALL|METH_KEYWORDS, SHA1Type_copy__doc__},
+    {"copy", _PyCFunction_CAST(SHA1Type_copy), METH_VALUE|METH_METHOD|METH_KEYWORDS, SHA1Type_copy__doc__},
 
-static PyObject *
+static PyValue
 SHA1Type_copy_impl(SHA1object *self, PyTypeObject *cls);
 
-static PyObject *
-SHA1Type_copy(PyObject *self, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+SHA1Type_copy(PyValueBorrow self, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
+    PyValue return_value = PyValue_NULL;
+
     if (nargs || (kwnames && PyTuple_GET_SIZE(kwnames))) {
         PyErr_SetString(PyExc_TypeError, "copy() takes no arguments");
-        return NULL;
+        goto exit;
     }
-    return SHA1Type_copy_impl((SHA1object *)self, cls);
+    return_value = SHA1Type_copy_impl((SHA1object *)PyValue_AsKnownObjectBorrow(self), cls);
+
+exit:
+    return return_value;
 }
 
 PyDoc_STRVAR(SHA1Type_digest__doc__,
@@ -38,15 +49,19 @@ PyDoc_STRVAR(SHA1Type_digest__doc__,
 "Return the digest value as a bytes object.");
 
 #define SHA1TYPE_DIGEST_METHODDEF    \
-    {"digest", (PyCFunction)SHA1Type_digest, METH_NOARGS, SHA1Type_digest__doc__},
+    {"digest", _PyCFunction_CAST(SHA1Type_digest), METH_VALUE|METH_NOARGS, SHA1Type_digest__doc__},
 
-static PyObject *
+static PyValue
 SHA1Type_digest_impl(SHA1object *self);
 
-static PyObject *
-SHA1Type_digest(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+SHA1Type_digest(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return SHA1Type_digest_impl((SHA1object *)self);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = SHA1Type_digest_impl((SHA1object *)PyValue_AsKnownObjectBorrow(self));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(SHA1Type_hexdigest__doc__,
@@ -56,15 +71,19 @@ PyDoc_STRVAR(SHA1Type_hexdigest__doc__,
 "Return the digest value as a string of hexadecimal digits.");
 
 #define SHA1TYPE_HEXDIGEST_METHODDEF    \
-    {"hexdigest", (PyCFunction)SHA1Type_hexdigest, METH_NOARGS, SHA1Type_hexdigest__doc__},
+    {"hexdigest", _PyCFunction_CAST(SHA1Type_hexdigest), METH_VALUE|METH_NOARGS, SHA1Type_hexdigest__doc__},
 
-static PyObject *
+static PyValue
 SHA1Type_hexdigest_impl(SHA1object *self);
 
-static PyObject *
-SHA1Type_hexdigest(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+SHA1Type_hexdigest(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return SHA1Type_hexdigest_impl((SHA1object *)self);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = SHA1Type_hexdigest_impl((SHA1object *)PyValue_AsKnownObjectBorrow(self));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(SHA1Type_update__doc__,
@@ -74,17 +93,19 @@ PyDoc_STRVAR(SHA1Type_update__doc__,
 "Update this hash object\'s state with the provided string.");
 
 #define SHA1TYPE_UPDATE_METHODDEF    \
-    {"update", (PyCFunction)SHA1Type_update, METH_O, SHA1Type_update__doc__},
+    {"update", _PyCFunction_CAST(SHA1Type_update), METH_VALUE|METH_O, SHA1Type_update__doc__},
 
-static PyObject *
-SHA1Type_update_impl(SHA1object *self, PyObject *obj);
+static PyValue
+SHA1Type_update_impl(SHA1object *self, PyValueBorrow obj);
 
-static PyObject *
-SHA1Type_update(PyObject *self, PyObject *obj)
+static PyValue
+SHA1Type_update(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow obj;
 
-    return_value = SHA1Type_update_impl((SHA1object *)self, obj);
+    obj = PyValue_Borrow(args[0]);
+    return_value = SHA1Type_update_impl((SHA1object *)PyValue_AsKnownObjectBorrow(self), obj);
 
     return return_value;
 }
@@ -96,16 +117,16 @@ PyDoc_STRVAR(_sha1_sha1__doc__,
 "Return a new SHA1 hash object; optionally initialized with a string.");
 
 #define _SHA1_SHA1_METHODDEF    \
-    {"sha1", _PyCFunction_CAST(_sha1_sha1), METH_FASTCALL|METH_KEYWORDS, _sha1_sha1__doc__},
+    {"sha1", _PyCFunction_CAST(_sha1_sha1), METH_VALUE|METH_KEYWORDS, _sha1_sha1__doc__},
 
-static PyObject *
-_sha1_sha1_impl(PyObject *module, PyObject *data, int usedforsecurity,
-                PyObject *string_obj);
+static PyValue
+_sha1_sha1_impl(PyObject *module, PyValueBorrow data, int usedforsecurity,
+                PyValueBorrow string_obj);
 
-static PyObject *
-_sha1_sha1(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_sha1_sha1(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 3
@@ -133,44 +154,30 @@ _sha1_sha1(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[3];
-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 0;
-    PyObject *data = NULL;
+    Py_ssize_t _idx[3];
+    PyValueBorrow data = PyValue_Borrow(PyValue_NULL);
     int usedforsecurity = 1;
-    PyObject *string_obj = NULL;
+    PyValueBorrow string_obj = PyValue_Borrow(PyValue_NULL);
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 0, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 0, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, _idx, 3)) {
         goto exit;
     }
-    if (!noptargs) {
-        goto skip_optional_pos;
+    if (_idx[0] >= 0) {
+        data = PyValue_Borrow(args[_idx[0]]);
     }
-    if (args[0]) {
-        data = args[0];
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
-    }
-skip_optional_pos:
-    if (!noptargs) {
-        goto skip_optional_kwonly;
-    }
-    if (args[1]) {
-        usedforsecurity = PyObject_IsTrue(args[1]);
+    if (_idx[1] >= 0) {
+        usedforsecurity = _PyValue_IsTrue(PyValue_Borrow(args[_idx[1]]));
         if (usedforsecurity < 0) {
             goto exit;
         }
-        if (!--noptargs) {
-            goto skip_optional_kwonly;
-        }
     }
-    string_obj = args[2];
-skip_optional_kwonly:
-    return_value = _sha1_sha1_impl(module, data, usedforsecurity, string_obj);
+    if (_idx[2] >= 0) {
+        string_obj = PyValue_Borrow(args[_idx[2]]);
+    }
+    return_value = _sha1_sha1_impl(PyValue_AsKnownObjectBorrow(module), data, usedforsecurity, string_obj);
 
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=596ee90a17ed76c7 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=e1fbbde937dc89f7 input=a9049054013a1b77]*/

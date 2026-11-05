@@ -2,15 +2,23 @@
 preserve
 [clinic start generated code]*/
 
+#ifndef Py_VALUE_CORE
+#  error "value-emission Clinic output requires Py_VALUE_CORE"
+#endif
+
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 #  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
 #  include "pycore_value.h"       // _PyValue_STATIC_IMMORTAL()
 #endif
-#include "pycore_borrow.h"        // _PyBorrow_TupleItems()
 #include "pycore_critical_section.h"// Py_BEGIN_CRITICAL_SECTION()
-#include "pycore_modsupport.h"    // _PyArg_UnpackKeywords()
+#include "pycore_long_value.h"    // _PyValue_AsInt()
+#include "pycore_modsupport.h"    // _PyArg_UnpackKeywordsValue()
+#include "pycore_tuple.h"         // _PyTuple_ITEMS()
 #include "pycore_unicodeobject.h" // _PyUnicode_AsUTF8NoNUL()
+#include "pycore_value_call.h"    // METH_VALUE
+#include "pycore_value_ops.h"     // _PyValue_IsTrue()
+#include "pycore_value_slots.h"   // _PyValue_THUNK_EXIT()
 
 #if defined(HAVE_MP_SEMAPHORE) && defined(MS_WINDOWS)
 
@@ -21,16 +29,16 @@ PyDoc_STRVAR(_multiprocessing_SemLock_acquire__doc__,
 "Acquire the semaphore/lock.");
 
 #define _MULTIPROCESSING_SEMLOCK_ACQUIRE_METHODDEF    \
-    {"acquire", _PyCFunction_CAST(_multiprocessing_SemLock_acquire), METH_FASTCALL|METH_KEYWORDS, _multiprocessing_SemLock_acquire__doc__},
+    {"acquire", _PyCFunction_CAST(_multiprocessing_SemLock_acquire), METH_VALUE|METH_KEYWORDS, _multiprocessing_SemLock_acquire__doc__},
 
-static PyObject *
+static PyValue
 _multiprocessing_SemLock_acquire_impl(SemLockObject *self, int blocking,
-                                      PyObject *timeout_obj);
+                                      PyValueBorrow timeout_obj);
 
-static PyObject *
-_multiprocessing_SemLock_acquire(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_multiprocessing_SemLock_acquire(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 2
@@ -58,32 +66,25 @@ _multiprocessing_SemLock_acquire(PyObject *self, PyObject *const *args, Py_ssize
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[2];
-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 0;
+    Py_ssize_t _idx[2];
     int blocking = 1;
-    PyObject *timeout_obj = Py_None;
+    PyValueBorrow timeout_obj = PyValue_Borrow(PyValue_None);
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 0, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 0, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, _idx, 2)) {
         goto exit;
     }
-    if (!noptargs) {
-        goto skip_optional_pos;
-    }
-    if (args[0]) {
-        blocking = PyObject_IsTrue(args[0]);
+    if (_idx[0] >= 0) {
+        blocking = _PyValue_IsTrue(PyValue_Borrow(args[_idx[0]]));
         if (blocking < 0) {
             goto exit;
         }
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
     }
-    timeout_obj = args[1];
-skip_optional_pos:
-    Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = _multiprocessing_SemLock_acquire_impl((SemLockObject *)self, blocking, timeout_obj);
+    if (_idx[1] >= 0) {
+        timeout_obj = PyValue_Borrow(args[_idx[1]]);
+    }
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(self));
+    return_value = _multiprocessing_SemLock_acquire_impl((SemLockObject *)PyValue_AsKnownObjectBorrow(self), blocking, timeout_obj);
     Py_END_CRITICAL_SECTION();
 
 exit:
@@ -101,18 +102,18 @@ PyDoc_STRVAR(_multiprocessing_SemLock_release__doc__,
 "Release the semaphore/lock.");
 
 #define _MULTIPROCESSING_SEMLOCK_RELEASE_METHODDEF    \
-    {"release", (PyCFunction)_multiprocessing_SemLock_release, METH_NOARGS, _multiprocessing_SemLock_release__doc__},
+    {"release", _PyCFunction_CAST(_multiprocessing_SemLock_release), METH_VALUE|METH_NOARGS, _multiprocessing_SemLock_release__doc__},
 
-static PyObject *
+static PyValue
 _multiprocessing_SemLock_release_impl(SemLockObject *self);
 
-static PyObject *
-_multiprocessing_SemLock_release(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+_multiprocessing_SemLock_release(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
 
-    Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = _multiprocessing_SemLock_release_impl((SemLockObject *)self);
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(self));
+    return_value = _multiprocessing_SemLock_release_impl((SemLockObject *)PyValue_AsKnownObjectBorrow(self));
     Py_END_CRITICAL_SECTION();
 
     return return_value;
@@ -129,16 +130,16 @@ PyDoc_STRVAR(_multiprocessing_SemLock_acquire__doc__,
 "Acquire the semaphore/lock.");
 
 #define _MULTIPROCESSING_SEMLOCK_ACQUIRE_METHODDEF    \
-    {"acquire", _PyCFunction_CAST(_multiprocessing_SemLock_acquire), METH_FASTCALL|METH_KEYWORDS, _multiprocessing_SemLock_acquire__doc__},
+    {"acquire", _PyCFunction_CAST(_multiprocessing_SemLock_acquire), METH_VALUE|METH_KEYWORDS, _multiprocessing_SemLock_acquire__doc__},
 
-static PyObject *
+static PyValue
 _multiprocessing_SemLock_acquire_impl(SemLockObject *self, int blocking,
-                                      PyObject *timeout_obj);
+                                      PyValueBorrow timeout_obj);
 
-static PyObject *
-_multiprocessing_SemLock_acquire(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_multiprocessing_SemLock_acquire(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 2
@@ -166,32 +167,25 @@ _multiprocessing_SemLock_acquire(PyObject *self, PyObject *const *args, Py_ssize
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[2];
-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 0;
+    Py_ssize_t _idx[2];
     int blocking = 1;
-    PyObject *timeout_obj = Py_None;
+    PyValueBorrow timeout_obj = PyValue_Borrow(PyValue_None);
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 0, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 0, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, _idx, 2)) {
         goto exit;
     }
-    if (!noptargs) {
-        goto skip_optional_pos;
-    }
-    if (args[0]) {
-        blocking = PyObject_IsTrue(args[0]);
+    if (_idx[0] >= 0) {
+        blocking = _PyValue_IsTrue(PyValue_Borrow(args[_idx[0]]));
         if (blocking < 0) {
             goto exit;
         }
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
     }
-    timeout_obj = args[1];
-skip_optional_pos:
-    Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = _multiprocessing_SemLock_acquire_impl((SemLockObject *)self, blocking, timeout_obj);
+    if (_idx[1] >= 0) {
+        timeout_obj = PyValue_Borrow(args[_idx[1]]);
+    }
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(self));
+    return_value = _multiprocessing_SemLock_acquire_impl((SemLockObject *)PyValue_AsKnownObjectBorrow(self), blocking, timeout_obj);
     Py_END_CRITICAL_SECTION();
 
 exit:
@@ -209,18 +203,18 @@ PyDoc_STRVAR(_multiprocessing_SemLock_release__doc__,
 "Release the semaphore/lock.");
 
 #define _MULTIPROCESSING_SEMLOCK_RELEASE_METHODDEF    \
-    {"release", (PyCFunction)_multiprocessing_SemLock_release, METH_NOARGS, _multiprocessing_SemLock_release__doc__},
+    {"release", _PyCFunction_CAST(_multiprocessing_SemLock_release), METH_VALUE|METH_NOARGS, _multiprocessing_SemLock_release__doc__},
 
-static PyObject *
+static PyValue
 _multiprocessing_SemLock_release_impl(SemLockObject *self);
 
-static PyObject *
-_multiprocessing_SemLock_release(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+_multiprocessing_SemLock_release(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
 
-    Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = _multiprocessing_SemLock_release_impl((SemLockObject *)self);
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(self));
+    return_value = _multiprocessing_SemLock_release_impl((SemLockObject *)PyValue_AsKnownObjectBorrow(self));
     Py_END_CRITICAL_SECTION();
 
     return return_value;
@@ -230,14 +224,14 @@ _multiprocessing_SemLock_release(PyObject *self, PyObject *Py_UNUSED(ignored))
 
 #if defined(HAVE_MP_SEMAPHORE)
 
-static PyObject *
+static PyValue
 _multiprocessing_SemLock_impl(PyTypeObject *type, int kind, int value,
                               int maxvalue, const char *name, int unlink);
 
-static PyObject *
-_multiprocessing_SemLock(PyTypeObject *type, PyObject *args, PyObject *kwargs)
+static PyValue
+_multiprocessing_SemLock_value(PyTypeObject *type, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 5
@@ -265,45 +259,42 @@ _multiprocessing_SemLock(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[5];
-    PyObject * const *fastargs;
-    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
+    Py_ssize_t _idx[5];
     int kind;
     int value;
     int maxvalue;
     const char *name;
     int unlink;
 
-    PyObject *const *_args_items = _PyBorrow_TupleItems(args, Py_MIN(nargs, 5));
-    if (_args_items == NULL) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 5, /*maxpos*/ 5, /*minkw*/ 0, /*varpos*/ 0, _idx, 5)) {
         goto exit;
     }
-    fastargs = _PyArg_UnpackKeywords(_args_items, nargs, kwargs, NULL, &_parser,
-            /*minpos*/ 5, /*maxpos*/ 5, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!fastargs) {
-        goto exit;
-    }
-    kind = PyLong_AsInt(fastargs[0]);
+    kind = _PyValue_AsInt(PyValue_Borrow(args[_idx[0]]));
     if (kind == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    value = PyLong_AsInt(fastargs[1]);
+    value = _PyValue_AsInt(PyValue_Borrow(args[_idx[1]]));
     if (value == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    maxvalue = PyLong_AsInt(fastargs[2]);
+    maxvalue = _PyValue_AsInt(PyValue_Borrow(args[_idx[2]]));
     if (maxvalue == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    if (!PyUnicode_Check(fastargs[3])) {
-        _PyArg_BadArgument("SemLock", "argument 'name'", "str", fastargs[3]);
+    if (!PyValue_IsObject(PyValue_Borrow(args[_idx[3]]))) {
+        _PyArg_BadArgumentValue("SemLock", "argument 'name'", "str", PyValue_Borrow(args[_idx[3]]));
         goto exit;
     }
-    name = _PyUnicode_AsUTF8NoNUL(fastargs[3]);
+    if (!PyUnicode_Check(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[3]])))) {
+        _PyArg_BadArgument("SemLock", "argument 'name'", "str", PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[3]])));
+        goto exit;
+    }
+    name = _PyUnicode_AsUTF8NoNUL(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[3]])));
     if (name == NULL) {
         goto exit;
     }
-    unlink = PyObject_IsTrue(fastargs[4]);
+    unlink = _PyValue_IsTrue(PyValue_Borrow(args[_idx[4]]));
     if (unlink < 0) {
         goto exit;
     }
@@ -311,6 +302,24 @@ _multiprocessing_SemLock(PyTypeObject *type, PyObject *args, PyObject *kwargs)
 
 exit:
     return return_value;
+}
+
+Py_VALUE_ENTRY static PyObject *
+_multiprocessing_SemLock(PyTypeObject *type, PyObject *args, PyObject *kwargs)
+{
+    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
+    if (kwargs == NULL || PyDict_GET_SIZE(kwargs) == 0) {
+        return _PyValue_THUNK_EXIT(_multiprocessing_SemLock_value(type, _PyTuple_ITEMS(args), nargs, NULL), BOX_SITE_CALL);
+    }
+    PyObject *kwnames;
+    PyValue *window = _PyValue_StackUnpackDict(_PyThreadState_GET(),
+        _PyTuple_ITEMS(args), nargs, kwargs, &kwnames);
+    if (window == NULL) {
+        return NULL;
+    }
+    PyValue result = _multiprocessing_SemLock_value(type, window, nargs, kwnames);
+    _PyValue_StackUnpackDict_Free(window, nargs, kwnames);
+    return _PyValue_THUNK_EXIT(result, BOX_SITE_CALL);
 }
 
 #endif /* defined(HAVE_MP_SEMAPHORE) */
@@ -360,18 +369,18 @@ PyDoc_STRVAR(_multiprocessing_SemLock__count__doc__,
 "Num of `acquire()`s minus num of `release()`s for this process.");
 
 #define _MULTIPROCESSING_SEMLOCK__COUNT_METHODDEF    \
-    {"_count", (PyCFunction)_multiprocessing_SemLock__count, METH_NOARGS, _multiprocessing_SemLock__count__doc__},
+    {"_count", _PyCFunction_CAST(_multiprocessing_SemLock__count), METH_VALUE|METH_NOARGS, _multiprocessing_SemLock__count__doc__},
 
-static PyObject *
+static PyValue
 _multiprocessing_SemLock__count_impl(SemLockObject *self);
 
-static PyObject *
-_multiprocessing_SemLock__count(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+_multiprocessing_SemLock__count(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
 
-    Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = _multiprocessing_SemLock__count_impl((SemLockObject *)self);
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(self));
+    return_value = _multiprocessing_SemLock__count_impl((SemLockObject *)PyValue_AsKnownObjectBorrow(self));
     Py_END_CRITICAL_SECTION();
 
     return return_value;
@@ -388,15 +397,19 @@ PyDoc_STRVAR(_multiprocessing_SemLock__is_mine__doc__,
 "Whether the lock is owned by this thread.");
 
 #define _MULTIPROCESSING_SEMLOCK__IS_MINE_METHODDEF    \
-    {"_is_mine", (PyCFunction)_multiprocessing_SemLock__is_mine, METH_NOARGS, _multiprocessing_SemLock__is_mine__doc__},
+    {"_is_mine", _PyCFunction_CAST(_multiprocessing_SemLock__is_mine), METH_VALUE|METH_NOARGS, _multiprocessing_SemLock__is_mine__doc__},
 
-static PyObject *
+static PyValue
 _multiprocessing_SemLock__is_mine_impl(SemLockObject *self);
 
-static PyObject *
-_multiprocessing_SemLock__is_mine(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+_multiprocessing_SemLock__is_mine(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _multiprocessing_SemLock__is_mine_impl((SemLockObject *)self);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _multiprocessing_SemLock__is_mine_impl((SemLockObject *)PyValue_AsKnownObjectBorrow(self));
+
+    return return_value;
 }
 
 #endif /* defined(HAVE_MP_SEMAPHORE) */
@@ -410,15 +423,19 @@ PyDoc_STRVAR(_multiprocessing_SemLock__get_value__doc__,
 "Get the value of the semaphore.");
 
 #define _MULTIPROCESSING_SEMLOCK__GET_VALUE_METHODDEF    \
-    {"_get_value", (PyCFunction)_multiprocessing_SemLock__get_value, METH_NOARGS, _multiprocessing_SemLock__get_value__doc__},
+    {"_get_value", _PyCFunction_CAST(_multiprocessing_SemLock__get_value), METH_VALUE|METH_NOARGS, _multiprocessing_SemLock__get_value__doc__},
 
-static PyObject *
+static PyValue
 _multiprocessing_SemLock__get_value_impl(SemLockObject *self);
 
-static PyObject *
-_multiprocessing_SemLock__get_value(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+_multiprocessing_SemLock__get_value(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _multiprocessing_SemLock__get_value_impl((SemLockObject *)self);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _multiprocessing_SemLock__get_value_impl((SemLockObject *)PyValue_AsKnownObjectBorrow(self));
+
+    return return_value;
 }
 
 #endif /* defined(HAVE_MP_SEMAPHORE) */
@@ -432,15 +449,19 @@ PyDoc_STRVAR(_multiprocessing_SemLock__is_zero__doc__,
 "Return whether semaphore has value zero.");
 
 #define _MULTIPROCESSING_SEMLOCK__IS_ZERO_METHODDEF    \
-    {"_is_zero", (PyCFunction)_multiprocessing_SemLock__is_zero, METH_NOARGS, _multiprocessing_SemLock__is_zero__doc__},
+    {"_is_zero", _PyCFunction_CAST(_multiprocessing_SemLock__is_zero), METH_VALUE|METH_NOARGS, _multiprocessing_SemLock__is_zero__doc__},
 
-static PyObject *
+static PyValue
 _multiprocessing_SemLock__is_zero_impl(SemLockObject *self);
 
-static PyObject *
-_multiprocessing_SemLock__is_zero(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+_multiprocessing_SemLock__is_zero(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _multiprocessing_SemLock__is_zero_impl((SemLockObject *)self);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _multiprocessing_SemLock__is_zero_impl((SemLockObject *)PyValue_AsKnownObjectBorrow(self));
+
+    return return_value;
 }
 
 #endif /* defined(HAVE_MP_SEMAPHORE) */
@@ -454,15 +475,19 @@ PyDoc_STRVAR(_multiprocessing_SemLock__after_fork__doc__,
 "Rezero the net acquisition count after fork().");
 
 #define _MULTIPROCESSING_SEMLOCK__AFTER_FORK_METHODDEF    \
-    {"_after_fork", (PyCFunction)_multiprocessing_SemLock__after_fork, METH_NOARGS, _multiprocessing_SemLock__after_fork__doc__},
+    {"_after_fork", _PyCFunction_CAST(_multiprocessing_SemLock__after_fork), METH_VALUE|METH_NOARGS, _multiprocessing_SemLock__after_fork__doc__},
 
-static PyObject *
+static PyValue
 _multiprocessing_SemLock__after_fork_impl(SemLockObject *self);
 
-static PyObject *
-_multiprocessing_SemLock__after_fork(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+_multiprocessing_SemLock__after_fork(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _multiprocessing_SemLock__after_fork_impl((SemLockObject *)self);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _multiprocessing_SemLock__after_fork_impl((SemLockObject *)PyValue_AsKnownObjectBorrow(self));
+
+    return return_value;
 }
 
 #endif /* defined(HAVE_MP_SEMAPHORE) */
@@ -476,18 +501,18 @@ PyDoc_STRVAR(_multiprocessing_SemLock___enter____doc__,
 "Enter the semaphore/lock.");
 
 #define _MULTIPROCESSING_SEMLOCK___ENTER___METHODDEF    \
-    {"__enter__", (PyCFunction)_multiprocessing_SemLock___enter__, METH_NOARGS, _multiprocessing_SemLock___enter____doc__},
+    {"__enter__", _PyCFunction_CAST(_multiprocessing_SemLock___enter__), METH_VALUE|METH_NOARGS, _multiprocessing_SemLock___enter____doc__},
 
-static PyObject *
+static PyValue
 _multiprocessing_SemLock___enter___impl(SemLockObject *self);
 
-static PyObject *
-_multiprocessing_SemLock___enter__(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+_multiprocessing_SemLock___enter__(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
 
-    Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = _multiprocessing_SemLock___enter___impl((SemLockObject *)self);
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(self));
+    return_value = _multiprocessing_SemLock___enter___impl((SemLockObject *)PyValue_AsKnownObjectBorrow(self));
     Py_END_CRITICAL_SECTION();
 
     return return_value;
@@ -504,20 +529,21 @@ PyDoc_STRVAR(_multiprocessing_SemLock___exit____doc__,
 "Exit the semaphore/lock.");
 
 #define _MULTIPROCESSING_SEMLOCK___EXIT___METHODDEF    \
-    {"__exit__", _PyCFunction_CAST(_multiprocessing_SemLock___exit__), METH_FASTCALL, _multiprocessing_SemLock___exit____doc__},
+    {"__exit__", _PyCFunction_CAST(_multiprocessing_SemLock___exit__), METH_VALUE, _multiprocessing_SemLock___exit____doc__},
 
-static PyObject *
+static PyValue
 _multiprocessing_SemLock___exit___impl(SemLockObject *self,
-                                       PyObject *exc_type,
-                                       PyObject *exc_value, PyObject *exc_tb);
+                                       PyValueBorrow exc_type,
+                                       PyValueBorrow exc_value,
+                                       PyValueBorrow exc_tb);
 
-static PyObject *
-_multiprocessing_SemLock___exit__(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_multiprocessing_SemLock___exit__(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
-    PyObject *exc_type = Py_None;
-    PyObject *exc_value = Py_None;
-    PyObject *exc_tb = Py_None;
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow exc_type = PyValue_Borrow(PyValue_None);
+    PyValueBorrow exc_value = PyValue_Borrow(PyValue_None);
+    PyValueBorrow exc_tb = PyValue_Borrow(PyValue_None);
 
     if (!_PyArg_CheckPositional("__exit__", nargs, 0, 3)) {
         goto exit;
@@ -525,18 +551,18 @@ _multiprocessing_SemLock___exit__(PyObject *self, PyObject *const *args, Py_ssiz
     if (nargs < 1) {
         goto skip_optional;
     }
-    exc_type = args[0];
+    exc_type = PyValue_Borrow(args[0]);
     if (nargs < 2) {
         goto skip_optional;
     }
-    exc_value = args[1];
+    exc_value = PyValue_Borrow(args[1]);
     if (nargs < 3) {
         goto skip_optional;
     }
-    exc_tb = args[2];
+    exc_tb = PyValue_Borrow(args[2]);
 skip_optional:
-    Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = _multiprocessing_SemLock___exit___impl((SemLockObject *)self, exc_type, exc_value, exc_tb);
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(self));
+    return_value = _multiprocessing_SemLock___exit___impl((SemLockObject *)PyValue_AsKnownObjectBorrow(self), exc_type, exc_value, exc_tb);
     Py_END_CRITICAL_SECTION();
 
 exit:
@@ -584,4 +610,4 @@ exit:
 #ifndef _MULTIPROCESSING_SEMLOCK___EXIT___METHODDEF
     #define _MULTIPROCESSING_SEMLOCK___EXIT___METHODDEF
 #endif /* !defined(_MULTIPROCESSING_SEMLOCK___EXIT___METHODDEF) */
-/*[clinic end generated code: output=5775cee97e5f3d9a input=a9049054013a1b77]*/
+/*[clinic end generated code: output=e51daf9c8b4a6426 input=a9049054013a1b77]*/

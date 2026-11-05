@@ -4,6 +4,7 @@
 #  define Py_BUILD_CORE_MODULE 1
 #endif
 
+#define Py_VALUE_CORE 1
 #include "Python.h"
 
 #include <bzlib.h>
@@ -13,6 +14,7 @@
 // Blocks output buffer wrappers
 #include "pycore_blocks_output_buffer.h"
 #include "pycore_pyatomic_ft_wrappers.h" // FT_ATOMIC_STORE_CHAR_RELAXED
+#include "pycore_value.h"         // PyValue
 
 #if OUTPUT_BUFFER_MAX_BLOCK_SIZE > UINT32_MAX
     #error "The maximum block size accepted by libbzip2 is UINT32_MAX."
@@ -234,6 +236,11 @@ error:
 }
 
 /*[clinic input]
+value_emission
+[clinic start generated code]*/
+/*[clinic end generated code: output=da39a3ee5e6b4b0d input=eb7b17088bfd7215]*/
+
+/*[clinic input]
 module _bz2
 class _bz2.BZ2Compressor "BZ2Compressor *" "clinic_state()->bz2_compressor_type"
 class _bz2.BZ2Decompressor "BZ2Decompressor *" "clinic_state()->bz2_decompressor_type"
@@ -258,9 +265,9 @@ When you have finished providing data to the compressor, call the
 flush() method to finish the compression process.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _bz2_BZ2Compressor_compress_impl(BZ2Compressor *self, Py_buffer *data)
-/*[clinic end generated code: output=59365426e941fbcc input=85c963218070fc4c]*/
+/*[clinic end generated code: output=73101082be379b1d input=85c963218070fc4c]*/
 {
     PyObject *result = NULL;
 
@@ -270,7 +277,7 @@ _bz2_BZ2Compressor_compress_impl(BZ2Compressor *self, Py_buffer *data)
     else
         result = compress(self, data->buf, data->len, BZ_RUN);
     PyMutex_Unlock(&self->mutex);
-    return result;
+    return _PyValue_FromObjectResult(result);
 }
 
 /*[clinic input]
@@ -283,9 +290,9 @@ Returns the compressed data left in internal buffers.
 The compressor object may not be used after this method is called.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _bz2_BZ2Compressor_flush_impl(BZ2Compressor *self)
-/*[clinic end generated code: output=3ef03fc1b092a701 input=d64405d3c6f76691]*/
+/*[clinic end generated code: output=1d8939ad0a7c44f5 input=d64405d3c6f76691]*/
 {
     PyObject *result = NULL;
 
@@ -297,7 +304,7 @@ _bz2_BZ2Compressor_flush_impl(BZ2Compressor *self)
         result = compress(self, NULL, 0, BZ_FINISH);
     }
     PyMutex_Unlock(&self->mutex);
-    return result;
+    return _PyValue_FromObjectResult(result);
 }
 
 static void*
@@ -331,9 +338,9 @@ Create a compressor object for compressing data incrementally.
 For one-shot compression, use the compress() function instead.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _bz2_BZ2Compressor_impl(PyTypeObject *type, int compresslevel)
-/*[clinic end generated code: output=83346c96beaacad7 input=d4500d2a52c8b263]*/
+/*[clinic end generated code: output=15b40b6c598d17e8 input=d4500d2a52c8b263]*/
 {
     int bzerror;
     BZ2Compressor *self;
@@ -341,13 +348,13 @@ _bz2_BZ2Compressor_impl(PyTypeObject *type, int compresslevel)
     if (!(1 <= compresslevel && compresslevel <= 9)) {
         PyErr_SetString(PyExc_ValueError,
                         "compresslevel must be between 1 and 9");
-        return NULL;
+        return PyValue_NULL;
     }
 
     assert(type != NULL && type->tp_alloc != NULL);
     self = (BZ2Compressor *)type->tp_alloc(type, 0);
     if (self == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     self->mutex = (PyMutex){0};
@@ -358,11 +365,11 @@ _bz2_BZ2Compressor_impl(PyTypeObject *type, int compresslevel)
     if (catch_bz2_error(bzerror))
         goto error;
 
-    return (PyObject *)self;
+    return _PyValue_FromObjectResult((PyObject *)self);
 
 error:
     Py_DECREF(self);
-    return NULL;
+    return PyValue_NULL;
 }
 
 static void
@@ -603,10 +610,10 @@ raises an EOFError.  Any data found after the end of the stream is
 ignored and saved in the unused_data attribute.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _bz2_BZ2Decompressor_decompress_impl(BZ2Decompressor *self, Py_buffer *data,
                                      Py_ssize_t max_length)
-/*[clinic end generated code: output=23e41045deb240a3 input=7f68faa9ff7a1b51]*/
+/*[clinic end generated code: output=a05f4408ced2cf9d input=7f68faa9ff7a1b51]*/
 {
     PyObject *result = NULL;
 
@@ -623,7 +630,7 @@ _bz2_BZ2Decompressor_decompress_impl(BZ2Decompressor *self, Py_buffer *data,
         result = decompress(self, data->buf, data->len, max_length);
     }
     PyMutex_Unlock(&self->mutex);
-    return result;
+    return _PyValue_FromObjectResult(result);
 }
 
 /*[clinic input]
@@ -635,9 +642,9 @@ Create a decompressor object for decompressing data incrementally.
 For one-shot decompression, use the decompress() function instead.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _bz2_BZ2Decompressor_impl(PyTypeObject *type)
-/*[clinic end generated code: output=5150d51ccaab220e input=b87413ce51853528]*/
+/*[clinic end generated code: output=8db29e93281139de input=b87413ce51853528]*/
 {
     BZ2Decompressor *self;
     int bzerror;
@@ -645,7 +652,7 @@ _bz2_BZ2Decompressor_impl(PyTypeObject *type)
     assert(type != NULL && type->tp_alloc != NULL);
     self = (BZ2Decompressor *)type->tp_alloc(type, 0);
     if (self == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     self->mutex = (PyMutex){0};
@@ -660,11 +667,11 @@ _bz2_BZ2Decompressor_impl(PyTypeObject *type)
     if (catch_bz2_error(bzerror))
         goto error;
 
-    return (PyObject *)self;
+    return _PyValue_FromObjectResult((PyObject *)self);
 
 error:
     Py_DECREF(self);
-    return NULL;
+    return PyValue_NULL;
 }
 
 static void
@@ -798,7 +805,7 @@ make_bzlib_version_info(PyTypeObject *type, const char *string)
     }
 
 #define SetIntItem(VALUE) \
-    PyStructSequence_SET_ITEM(version, pos++, PyLong_FromUnsignedLong(VALUE)); \
+    PyStructSequence_SET_VALUE(version, pos++, PyValue_PrepareOwned(PyLong_FromUnsignedLong(VALUE))); \
     if (PyErr_Occurred()) { \
         Py_DECREF(version); \
         return NULL; \

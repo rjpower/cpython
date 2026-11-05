@@ -5,10 +5,15 @@
 #  define Py_BUILD_CORE_MODULE 1
 #endif
 
+#define Py_VALUE_CORE 1
 #include "Python.h"
 #include "pycore_crossinterp.h"   // _PyXIData_t
 #include "pycore_interp.h"        // _PyInterpreterState_LookUpID()
+#include "pycore_list.h"          // PyList_InsertValue()
 #include "pycore_pystate.h"       // _PyInterpreterState_GetIDObject()
+#include "pycore_pyvalue.h"       // PyValue_PrepareOwned()
+#include "pycore_value.h"         // PyValue_FromObjectBorrow()
+#include "pycore_value_ops.h"     // _PyValue_Hash()
 
 #ifdef MS_WINDOWS
 #ifndef WIN32_LEAN_AND_MEAN
@@ -2257,8 +2262,8 @@ new_channel_info(PyObject *mod, struct channel_info *info)
 
     int pos = 0;
 #define SET_BOOL(val) \
-    PyStructSequence_SET_ITEM(self, pos++, \
-                              Py_NewRef(val ? Py_True : Py_False))
+    PyStructSequence_SET_VALUE(self, pos++, PyValue_PrepareOwned(_PyObject_CAST(\
+                              Py_NewRef(val ? Py_True : Py_False))))
 #define SET_COUNT(val) \
     do { \
         PyObject *obj = PyLong_FromLongLong(val); \
@@ -2266,7 +2271,7 @@ new_channel_info(PyObject *mod, struct channel_info *info)
             Py_CLEAR(self); \
             return NULL; \
         } \
-        PyStructSequence_SET_ITEM(self, pos++, obj); \
+        PyStructSequence_SET_VALUE(self, pos++, PyValue_PrepareOwned(_PyObject_CAST(obj))); \
     } while(0)
     SET_BOOL(info->status.closed == 0);
     SET_BOOL(info->status.closed == -1);
@@ -2492,7 +2497,7 @@ channelid_hash(PyObject *self)
     if (pyid == NULL) {
         return -1;
     }
-    Py_hash_t hash = PyObject_Hash(pyid);
+    Py_hash_t hash = _PyValue_Hash(PyValue_FromObjectBorrow(pyid));
     Py_DECREF(pyid);
     return hash;
 }
@@ -2535,12 +2540,12 @@ channelid_richcompare(PyObject *self, PyObject *other, int op)
         equal = !overflow && (othercid >= 0) && (cidobj->cid == othercid);
     }
     else if (PyNumber_Check(other)) {
-        PyObject *pyid = PyLong_FromLongLong(cidobj->cid);
-        if (pyid == NULL) {
-            goto done;
+        PyValue cmp = _PyValue_RichCompare(PyValue_FromInt64(cidobj->cid),
+                                           PyValue_FromObjectBorrow(other), op);
+        if (!PyValue_IsNull(cmp)) {
+            res = _PyValue_AsObjectAt(cmp, BOX_SITE_COMPARE);
+            PyValue_CLOSE(cmp);
         }
-        res = PyObject_RichCompare(pyid, other, op);
-        Py_DECREF(pyid);
         goto done;
     }
     else {
@@ -3044,7 +3049,7 @@ channelsmod_list_all(PyObject *self, PyObject *Py_UNUSED(ignored))
             Py_SETREF(ids, NULL);
             break;
         }
-        PyList_SET_ITEM(ids, (Py_ssize_t)i, item);
+        PyList_SET_VALUE(ids, (Py_ssize_t)i, PyValue_PrepareOwned(item));
     }
 
 finally:
@@ -3096,7 +3101,7 @@ channelsmod_list_interpreters(PyObject *self, PyObject *args, PyObject *kwds)
             if (interpid_obj == NULL) {
                 goto except;
             }
-            res = PyList_Insert(ids, 0, interpid_obj);
+            res = PyList_InsertValue(ids, 0, PyValue_FromObjectBorrow(interpid_obj));
             Py_DECREF(interpid_obj);
             if (res < 0) {
                 goto except;

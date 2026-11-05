@@ -1,12 +1,21 @@
 /* Time module */
 
+#ifndef Py_BUILD_CORE_BUILTIN
+#  define Py_BUILD_CORE_MODULE 1
+#endif
+#define Py_VALUE_CORE 1
 #include "Python.h"
+#include "pycore_dict.h"          // PyDict_SetValueString()
 #include "pycore_fileutils.h"     // _Py_BEGIN_SUPPRESS_IPH
+#include "pycore_long_value.h"    // _PyValue_AsInt()
 #include "pycore_moduleobject.h"  // _PyModule_GetState()
 #include "pycore_namespace.h"     // _PyNamespace_New()
 #include "pycore_runtime.h"       // _Py_ID()
 #include "pycore_structseq.h"     // _PyStructSequence_NewType()
 #include "pycore_time.h"          // _PyTimeFraction
+#include "pycore_value.h"         // PyValue_IsNone()
+#include "pycore_value_api.h"     // _PyValue_AsObjectAt()
+#include "pycore_value_slots.h"   // _PyValue_FromObjectResult()
 
 #include <time.h>                 // clock()
 #ifdef HAVE_SYS_TIMES_H
@@ -64,6 +73,11 @@
 
 #define SEC_TO_NS (1000 * 1000 * 1000)
 
+
+/*[clinic input]
+value_emission
+[clinic start generated code]*/
+/*[clinic end generated code: output=da39a3ee5e6b4b0d input=eb7b17088bfd7215]*/
 
 /*[clinic input]
 module time
@@ -124,15 +138,15 @@ time.time_ns
 Return the current time in nanoseconds since the Epoch.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 time_time_ns_impl(PyObject *module)
-/*[clinic end generated code: output=f5f1924ebdcf1cf3 input=3acccd9786731be4]*/
+/*[clinic end generated code: output=2f940f22d1e599a0 input=3acccd9786731be4]*/
 {
     PyTime_t t;
     if (PyTime_Time(&t) < 0) {
-        return NULL;
+        return PyValue_NULL;
     }
-    return PyLong_FromInt64(t);
+    return PyValue_FromInt64(t);
 }
 
 #ifdef HAVE_CLOCK
@@ -182,19 +196,19 @@ py_clock(time_module_state *state, PyTime_t *tp, _Py_clock_info_t *info)
 #endif
 
 static int
-time_clockid_converter(PyObject *obj, clockid_t *p)
+time_clockid_converter(PyValueBorrow obj, clockid_t *p)
 {
 #ifdef _AIX
-    long long clk_id = PyLong_AsLongLong(obj);
+    long long clk_id = _PyValue_AsLongLong(obj);
 #elif defined(__DragonFly__) || defined(__CYGWIN__)
-    long clk_id = PyLong_AsLong(obj);
+    long clk_id = _PyValue_AsLong(obj);
 #else
-    int clk_id = PyLong_AsInt(obj);
+    int clk_id = _PyValue_AsInt(obj);
 #endif
     if (clk_id == -1 && PyErr_Occurred()) {
         PyErr_Format(PyExc_TypeError,
                      "clk_id should be integer, not %s",
-                     _PyType_Name(Py_TYPE(obj)));
+                     _PyType_Name(PyValue_TYPE(obj)));
         return 0;
     }
 
@@ -223,17 +237,17 @@ time.clock_gettime
 Return the time of the specified clock clk_id as a float.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 time_clock_gettime_impl(PyObject *module, clockid_t clk_id)
-/*[clinic end generated code: output=832b9ebc03328020 input=7e89fcc42ca15e5d]*/
+/*[clinic end generated code: output=089ccde77846c8d6 input=7e89fcc42ca15e5d]*/
 {
     struct timespec tp;
     int ret = clock_gettime(clk_id, &tp);
     if (ret != 0) {
         PyErr_SetFromErrno(PyExc_OSError);
-        return NULL;
+        return PyValue_NULL;
     }
-    return PyFloat_FromDouble(tp.tv_sec + tp.tv_nsec * 1e-9);
+    return PyValue_FromDouble(tp.tv_sec + tp.tv_nsec * 1e-9);
 }
 
 /*[clinic input]
@@ -245,22 +259,22 @@ time.clock_gettime_ns
 Return the time of the specified clock clk_id as nanoseconds (int).
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 time_clock_gettime_ns_impl(PyObject *module, clockid_t clk_id)
-/*[clinic end generated code: output=4a045c3a36e60044 input=aabc248db8c8e3e5]*/
+/*[clinic end generated code: output=19600b00f5ac4ed3 input=aabc248db8c8e3e5]*/
 {
     struct timespec ts;
     int ret = clock_gettime(clk_id, &ts);
     if (ret != 0) {
         PyErr_SetFromErrno(PyExc_OSError);
-        return NULL;
+        return PyValue_NULL;
     }
 
     PyTime_t t;
     if (_PyTime_FromTimespec(&t, &ts) < 0) {
-        return NULL;
+        return PyValue_NULL;
     }
-    return PyLong_FromInt64(t);
+    return PyValue_FromInt64(t);
 }
 #endif   /* HAVE_CLOCK_GETTIME */
 
@@ -275,26 +289,33 @@ time.clock_settime
 Set the time of the specified clock clk_id.
 [clinic start generated code]*/
 
-static PyObject *
-time_clock_settime_impl(PyObject *module, int clk_id, PyObject *obj)
-/*[clinic end generated code: output=ff2fc2e129f5fdea input=0e71daa237ff6edc]*/
+static PyValue
+time_clock_settime_impl(PyObject *module, int clk_id, PyValueBorrow obj)
+/*[clinic end generated code: output=9d8e91f169bb56d2 input=0e71daa237ff6edc]*/
 {
     PyTime_t t;
     struct timespec tp;
     int ret;
 
-    if (_PyTime_FromSecondsObject(&t, obj, _PyTime_ROUND_FLOOR) < 0)
-        return NULL;
+    PyObject *seconds = _PyValue_AsObjectAt(obj, BOX_SITE_PARSER);
+    if (seconds == NULL) {
+        return PyValue_NULL;
+    }
+    int res = _PyTime_FromSecondsObject(&t, seconds, _PyTime_ROUND_FLOOR);
+    Py_DECREF(seconds);
+    if (res < 0) {
+        return PyValue_NULL;
+    }
 
     if (_PyTime_AsTimespec(t, &tp) == -1)
-        return NULL;
+        return PyValue_NULL;
 
     ret = clock_settime((clockid_t)clk_id, &tp);
     if (ret != 0) {
         PyErr_SetFromErrno(PyExc_OSError);
-        return NULL;
+        return PyValue_NULL;
     }
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 /*[clinic input]
@@ -307,27 +328,27 @@ time.clock_settime_ns
 Set the time of the specified clock clk_id with nanoseconds.
 [clinic start generated code]*/
 
-static PyObject *
-time_clock_settime_ns_impl(PyObject *module, int clk_id, PyObject *obj)
-/*[clinic end generated code: output=5d40ca0217bfe058 input=f2333aae32a7f441]*/
+static PyValue
+time_clock_settime_ns_impl(PyObject *module, int clk_id, PyValueBorrow obj)
+/*[clinic end generated code: output=186ebe866b60fbd2 input=f2333aae32a7f441]*/
 {
     PyTime_t t;
     struct timespec ts;
     int ret;
 
-    if (PyLong_AsInt64(obj, &t) < 0) {
-        return NULL;
+    if (_PyValue_AsInt64(obj, &t) < 0) {
+        return PyValue_NULL;
     }
     if (_PyTime_AsTimespec(t, &ts) == -1) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     ret = clock_settime((clockid_t)clk_id, &ts);
     if (ret != 0) {
         PyErr_SetFromErrno(PyExc_OSError);
-        return NULL;
+        return PyValue_NULL;
     }
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 #endif   /* HAVE_CLOCK_SETTIME */
@@ -374,9 +395,9 @@ time.pthread_getcpuclockid
 Return the clk_id of a thread's CPU time clock.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 time_pthread_getcpuclockid_impl(PyObject *module, unsigned long thread_id)
-/*[clinic end generated code: output=4fc7d4cb73d2e894 input=eb8af7bbcf189270]*/
+/*[clinic end generated code: output=f8e1605b06d1199a input=eb8af7bbcf189270]*/
 {
     int err;
     clockid_t clk_id;
@@ -384,12 +405,12 @@ time_pthread_getcpuclockid_impl(PyObject *module, unsigned long thread_id)
     if (err) {
         errno = err;
         PyErr_SetFromErrno(PyExc_OSError);
-        return NULL;
+        return PyValue_NULL;
     }
 #ifdef _Py_MEMORY_SANITIZER
     __msan_unpoison(&clk_id, sizeof(clk_id));
 #endif
-    return PyLong_FromLong(clk_id);
+    return PyValue_FromInt64(clk_id);
 }
 
 #endif /* HAVE_PTHREAD_GETCPUCLOCKID */
@@ -405,26 +426,35 @@ Delay execution for a given number of seconds.
 The argument may be a floating-point number for subsecond precision.
 [clinic start generated code]*/
 
-static PyObject *
-time_sleep(PyObject *module, PyObject *timeout_obj)
-/*[clinic end generated code: output=f46e88f5f5756f65 input=3928b1704a2faa12]*/
+static PyValue
+time_sleep_impl(PyObject *module, PyValueBorrow timeout_obj)
+/*[clinic end generated code: output=be5532a62218c56b input=3928b1704a2faa12]*/
 {
-    if (PySys_Audit("time.sleep", "O", timeout_obj) < 0) {
-        return NULL;
+    // PySys_Audit() reads an "O" argument as a PyObject *.
+    PyObject *timeout_o = _PyValue_AsObjectAt(timeout_obj, BOX_SITE_PARSER);
+    if (timeout_o == NULL) {
+        return PyValue_NULL;
+    }
+    if (PySys_Audit("time.sleep", "O", timeout_o) < 0) {
+        Py_DECREF(timeout_o);
+        return PyValue_NULL;
     }
 
     PyTime_t timeout;
-    if (_PyTime_FromSecondsObject(&timeout, timeout_obj, _PyTime_ROUND_TIMEOUT))
-        return NULL;
+    int res = _PyTime_FromSecondsObject(&timeout, timeout_o, _PyTime_ROUND_TIMEOUT);
+    Py_DECREF(timeout_o);
+    if (res) {
+        return PyValue_NULL;
+    }
     if (timeout < 0) {
         PyErr_SetString(PyExc_ValueError,
                         "sleep length must be non-negative");
-        return NULL;
+        return PyValue_NULL;
     }
     if (pysleep(timeout) != 0) {
-        return NULL;
+        return PyValue_NULL;
     }
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 static PyStructSequence_Field struct_time_type_fields[] = {
@@ -481,7 +511,7 @@ tmtotuple(time_module_state *state, struct tm *p
             Py_DECREF(v);                           \
             return NULL;                            \
         }                                           \
-        PyStructSequence_SET_ITEM(v, (INDEX), obj); \
+        PyStructSequence_SET_VALUE(v, (INDEX), PyValue_PrepareOwned(_PyObject_CAST(obj))); \
     } while (0)
 
 #define SET(INDEX, VAL) \
@@ -515,16 +545,23 @@ tmtotuple(time_module_state *state, struct tm *p
    Returns non-zero on success (parallels PyArg_ParseTuple).
 */
 static int
-parse_time_t_arg(PyObject *ot, time_t *pwhen)
+parse_time_t_arg(PyValueBorrow ot, time_t *pwhen)
 {
     time_t whent;
 
-    if (ot == Py_None) {
+    if (PyValue_IsNone(ot)) {
         whent = time(NULL);
     }
     else {
-        if (_PyTime_ObjectToTime_t(ot, &whent, _PyTime_ROUND_FLOOR) == -1)
+        PyObject *obj = _PyValue_AsObjectAt(ot, BOX_SITE_PARSER);
+        if (obj == NULL) {
             return 0;
+        }
+        int res = _PyTime_ObjectToTime_t(obj, &whent, _PyTime_ROUND_FLOOR);
+        Py_DECREF(obj);
+        if (res == -1) {
+            return 0;
+        }
     }
     *pwhen = whent;
     return 1;
@@ -545,23 +582,23 @@ If the platform supports the tm_gmtoff and tm_zone, they are available
 as attributes only.
 [clinic start generated code]*/
 
-static PyObject *
-time_gmtime_impl(PyObject *module, PyObject *ot)
-/*[clinic end generated code: output=375372dd236a6ed6 input=784de5b57649d4d7]*/
+static PyValue
+time_gmtime_impl(PyObject *module, PyValueBorrow ot)
+/*[clinic end generated code: output=b76c18732182b431 input=784de5b57649d4d7]*/
 {
     time_t when;
     struct tm buf;
 
     if (!parse_time_t_arg(ot, &when))
-        return NULL;
+        return PyValue_NULL;
 
     errno = 0;
     if (_PyTime_gmtime(when, &buf) != 0)
-        return NULL;
+        return PyValue_NULL;
 
     time_module_state *state = get_time_state(module);
 #ifdef HAVE_STRUCT_TM_TM_ZONE
-    return tmtotuple(state, &buf);
+    return _PyValue_FromObjectResult(tmtotuple(state, &buf));
 #else
     return tmtotuple(state, &buf, "UTC", 0);
 #endif
@@ -591,21 +628,21 @@ Convert seconds since the Epoch to a time tuple expressing local time.
 When 'seconds' is not passed in, convert the current time instead.
 [clinic start generated code]*/
 
-static PyObject *
-time_localtime_impl(PyObject *module, PyObject *ot)
-/*[clinic end generated code: output=d3c1c6818abd34a1 input=43b4e8bf4914300e]*/
+static PyValue
+time_localtime_impl(PyObject *module, PyValueBorrow ot)
+/*[clinic end generated code: output=b899ba53bc161333 input=43b4e8bf4914300e]*/
 {
     time_t when;
     struct tm buf;
 
     if (!parse_time_t_arg(ot, &when))
-        return NULL;
+        return PyValue_NULL;
     if (_PyTime_localtime(when, &buf) != 0)
-        return NULL;
+        return PyValue_NULL;
 
     time_module_state *state = get_time_state(module);
 #ifdef HAVE_STRUCT_TM_TM_ZONE
-    return tmtotuple(state, &buf);
+    return _PyValue_FromObjectResult(tmtotuple(state, &buf));
 #else
     {
         struct tm local = buf;
@@ -625,6 +662,7 @@ static const char *utc_string = NULL;
 /* Convert 9-item tuple to tm structure.  Return 1 on success, set
  * an exception and return 0 on error.
  */
+
 static int
 gettmarg(time_module_state *state, PyObject *args,
          struct tm *p, const char *format)
@@ -656,17 +694,18 @@ gettmarg(time_module_state *state, PyObject *args,
     p->tm_yday--;
 #ifdef HAVE_STRUCT_TM_TM_ZONE
     if (Py_IS_TYPE(args, state->struct_time_type)) {
-        PyObject *item;
-        item = PyStructSequence_GetItemRef(args, 9);
-        if (item == NULL) {
-            return 0;
-        }
-        if (item != Py_None) {
+        /* The items are borrowed: args keeps them alive. */
+        PyValueBorrow item = PyStructSequence_GET_VALUE(args, 9);
+        if (!PyValue_IsNone(item)) {
+            PyObject *zone = _PyValue_AsObjectAt(item, BOX_SITE_PARSER);
+            if (zone == NULL) {
+                return 0;
+            }
             /* The string stays alive through args, which keeps the UTF-8
                buffer valid after we drop our reference. */
-            p->tm_zone = (char *)PyUnicode_AsUTF8(item);
+            p->tm_zone = (char *)PyUnicode_AsUTF8(zone);
             if (p->tm_zone == NULL) {
-                Py_DECREF(item);
+                Py_DECREF(zone);
                 return 0;
             }
 #if defined(__linux__) && !defined(__GLIBC__)
@@ -683,23 +722,32 @@ gettmarg(time_module_state *state, PyObject *args,
                 p->tm_zone = tzname[1];
             }
 #endif
+            Py_DECREF(zone);
         }
-        Py_DECREF(item);
-        item = PyStructSequence_GetItemRef(args, 10);
-        if (item == NULL) {
-            return 0;
-        }
-        if (item != Py_None) {
-            p->tm_gmtoff = PyLong_AsLong(item);
+        item = PyStructSequence_GET_VALUE(args, 10);
+        if (!PyValue_IsNone(item)) {
+            p->tm_gmtoff = _PyValue_AsLong(item);
             if (PyErr_Occurred()) {
-                Py_DECREF(item);
                 return 0;
             }
         }
-        Py_DECREF(item);
     }
 #endif /* HAVE_STRUCT_TM_TM_ZONE */
     return 1;
+}
+
+/* gettmarg() for a value: only a tuple or struct_time is acceptable. */
+static int
+gettmarg_value(time_module_state *state, PyValueBorrow args,
+               struct tm *p, const char *format)
+{
+    if (!PyValue_IsObject(args)) {
+        memset((void *) p, '\0', sizeof(struct tm));
+        PyErr_SetString(PyExc_TypeError,
+                        "Tuple or struct_time argument required");
+        return 0;
+    }
+    return gettmarg(state, PyValue_AsKnownObjectBorrow(args), p, format);
 }
 
 /* Check values of the struct tm fields before it is passed to strftime() and
@@ -1023,11 +1071,22 @@ time_strptime(PyObject *self, PyObject *args)
     _PyTime_StrptimeFields fields;
     int parsed = 0;
     if (PyTuple_GET_SIZE(args) == 2) {
-        PyObject *string = PyTuple_GetItemRef(args, 0);
+        PyValue stringvalue = PyTuple_GetValue(args, 0);
+        if (PyValue_IsNull(stringvalue)) {
+            return NULL;
+        }
+        PyObject *string = _PyValue_AsObjectAt(stringvalue, BOX_SITE_TUPLE);
+        PyValue_CLOSE(stringvalue);
         if (string == NULL) {
             return NULL;
         }
-        PyObject *format = PyTuple_GetItemRef(args, 1);
+        PyValue formatvalue = PyTuple_GetValue(args, 1);
+        if (PyValue_IsNull(formatvalue)) {
+            Py_DECREF(string);
+            return NULL;
+        }
+        PyObject *format = _PyValue_AsObjectAt(formatvalue, BOX_SITE_TUPLE);
+        PyValue_CLOSE(formatvalue);
         if (format == NULL) {
             Py_DECREF(string);
             return NULL;
@@ -1053,10 +1112,10 @@ time_strptime(PyObject *self, PyObject *args)
                 Py_DECREF(result);
                 return NULL;
             }
-            PyStructSequence_SET_ITEM(result, i, value);
+            PyStructSequence_SET_VALUE(result, i, PyValue_PrepareOwned(value));
         }
         /* Numeric offsets don't supply a timezone name or DST information. */
-        PyStructSequence_SET_ITEM(result, 9, Py_NewRef(Py_None));
+        PyStructSequence_SET_VALUE(result, 9, PyValue_DUP(_PyValue_FromObjectKnown(Py_None)));
         PyObject *offset = fields.gmtoff == INT_MIN
                           ? Py_NewRef(Py_None)
                           : PyLong_FromLong(fields.gmtoff);
@@ -1064,7 +1123,7 @@ time_strptime(PyObject *self, PyObject *args)
             Py_DECREF(result);
             return NULL;
         }
-        PyStructSequence_SET_ITEM(result, 10, offset);
+        PyStructSequence_SET_VALUE(result, 10, PyValue_PrepareOwned(offset));
         return result;
     }
     PyObject *func, *result;
@@ -1121,25 +1180,25 @@ When the time tuple is not present, current time as returned by
 localtime() is used.
 [clinic start generated code]*/
 
-static PyObject *
-time_asctime_impl(PyObject *module, PyObject *tup)
-/*[clinic end generated code: output=a1bc45f84a00fb55 input=083c132f3cb23f1e]*/
+static PyValue
+time_asctime_impl(PyObject *module, PyValueBorrow tup)
+/*[clinic end generated code: output=6b386de62401862e input=083c132f3cb23f1e]*/
 {
     struct tm buf;
 
     time_module_state *state = get_time_state(module);
-    if (tup == NULL) {
+    if (PyValue_IsNull(tup)) {
         time_t tt = time(NULL);
         if (_PyTime_localtime(tt, &buf) != 0)
-            return NULL;
+            return PyValue_NULL;
     }
-    else if (!gettmarg(state, tup, &buf,
+    else if (!gettmarg_value(state, tup, &buf,
                        "iiiiiiiii;asctime(): illegal time tuple argument") ||
              !checktm(&buf))
     {
-        return NULL;
+        return PyValue_NULL;
     }
-    return _asctime(&buf);
+    return _PyValue_FromObjectResult(_asctime(&buf));
 }
 
 /*[clinic input]
@@ -1154,17 +1213,17 @@ This is equivalent to asctime(localtime(seconds)).  When 'seconds' is
 not passed in, convert the current time instead.
 [clinic start generated code]*/
 
-static PyObject *
-time_ctime_impl(PyObject *module, PyObject *ot)
-/*[clinic end generated code: output=c3a028f5c6931cbc input=ee744f25ce87d1ae]*/
+static PyValue
+time_ctime_impl(PyObject *module, PyValueBorrow ot)
+/*[clinic end generated code: output=6d4b239e6dc80b83 input=ee744f25ce87d1ae]*/
 {
     time_t tt;
     struct tm buf;
     if (!parse_time_t_arg(ot, &tt))
-        return NULL;
+        return PyValue_NULL;
     if (_PyTime_localtime(tt, &buf) != 0)
-        return NULL;
-    return _asctime(&buf);
+        return PyValue_NULL;
+    return _PyValue_FromObjectResult(_asctime(&buf));
 }
 
 #ifdef HAVE_MKTIME
@@ -1181,18 +1240,18 @@ time zones; instead the returned value will either be equal to that of
 the timezone or altzone attributes on the time module.
 [clinic start generated code]*/
 
-static PyObject *
-time_mktime(PyObject *module, PyObject *tm_tuple)
-/*[clinic end generated code: output=1b2a224cd309deb7 input=70b93e1c2e57e14e]*/
+static PyValue
+time_mktime_impl(PyObject *module, PyValueBorrow tm_tuple)
+/*[clinic end generated code: output=3fe378bb0fd4ec6f input=70b93e1c2e57e14e]*/
 {
     struct tm tm;
     time_t tt;
 
     time_module_state *state = get_time_state(module);
-    if (!gettmarg(state, tm_tuple, &tm,
+    if (!gettmarg_value(state, tm_tuple, &tm,
                   "iiiiiiiii;mktime(): illegal time tuple argument"))
     {
-        return NULL;
+        return PyValue_NULL;
     }
 
 #if defined(_AIX) || (defined(__VXWORKS__) && !defined(_WRS_CONFIG_LP64))
@@ -1236,7 +1295,7 @@ time_mktime(PyObject *module, PyObject *tm_tuple)
     {
         PyErr_SetString(PyExc_OverflowError,
                         "mktime argument out of range");
-        return NULL;
+        return PyValue_NULL;
     }
 
 #ifdef _AIX
@@ -1249,7 +1308,7 @@ time_mktime(PyObject *module, PyObject *tm_tuple)
     }
 #endif
 
-    return PyFloat_FromDouble((double)tt);
+    return PyValue_FromDouble((double)tt);
 }
 
 #endif /* HAVE_MKTIME */
@@ -1272,15 +1331,15 @@ variable without calling tzset *may* change the local timezone used by
 methods such as localtime, but this behaviour should not be relied on.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 time_tzset_impl(PyObject *module)
-/*[clinic end generated code: output=d1564ac4d48d320b input=a4d11aab49badf88]*/
+/*[clinic end generated code: output=0213acbac565f020 input=a4d11aab49badf88]*/
 {
     PyObject* m;
 
     m = PyImport_ImportModule("time");
     if (m == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
 
 #if !defined(MS_WINDOWS) || defined(MS_WINDOWS_DESKTOP) || defined(MS_WINDOWS_SYSTEM)
@@ -1290,13 +1349,13 @@ time_tzset_impl(PyObject *module)
     /* Reset timezone, altzone, daylight and tzname */
     if (init_timezone(m) < 0) {
         Py_DECREF(m);
-        return NULL;
+        return PyValue_NULL;
     }
     Py_DECREF(m);
     if (PyErr_Occurred())
-        return NULL;
+        return PyValue_NULL;
 
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 #endif /* HAVE_WORKING_TZSET */
@@ -1325,15 +1384,15 @@ time.monotonic_ns
 Monotonic clock, cannot go backward, as nanoseconds.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 time_monotonic_ns_impl(PyObject *module)
-/*[clinic end generated code: output=57a9261f91740349 input=14032d6b1601a300]*/
+/*[clinic end generated code: output=43a48dcef26d0778 input=14032d6b1601a300]*/
 {
     PyTime_t t;
     if (PyTime_Monotonic(&t) < 0) {
-        return NULL;
+        return PyValue_NULL;
     }
-    return PyLong_FromInt64(t);
+    return PyValue_FromInt64(t);
 }
 
 /*[clinic input]
@@ -1359,15 +1418,15 @@ time.perf_counter_ns
 Performance counter for benchmarking as nanoseconds.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 time_perf_counter_ns_impl(PyObject *module)
-/*[clinic end generated code: output=e11a728338108d42 input=178bf260d7d48a02]*/
+/*[clinic end generated code: output=3f9352a7969f3310 input=178bf260d7d48a02]*/
 {
     PyTime_t t;
     if (PyTime_PerfCounter(&t) < 0) {
-        return NULL;
+        return PyValue_NULL;
     }
-    return PyLong_FromInt64(t);
+    return PyValue_FromInt64(t);
 }
 
 // gh-115714: Don't use times() on WASI.
@@ -1554,16 +1613,16 @@ Process time for profiling as nanoseconds.
 That is the sum of the kernel and user-space CPU time.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 time_process_time_ns_impl(PyObject *module)
-/*[clinic end generated code: output=857f0c20105c4d1a input=6d998fd7a213c0cd]*/
+/*[clinic end generated code: output=75204234044a2fb3 input=6d998fd7a213c0cd]*/
 {
     time_module_state *state = get_time_state(module);
     PyTime_t t;
     if (py_process_time(state, &t, NULL) < 0) {
-        return NULL;
+        return PyValue_NULL;
     }
-    return PyLong_FromInt64(t);
+    return PyValue_FromInt64(t);
 }
 
 #if defined(MS_WINDOWS)
@@ -1734,15 +1793,15 @@ Thread time for profiling as nanoseconds.
 That is the sum of the kernel and user-space CPU time.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 time_thread_time_ns_impl(PyObject *module)
-/*[clinic end generated code: output=2a1ac9cc3e1d4c37 input=a79b2b91f308277d]*/
+/*[clinic end generated code: output=aadc367bc13b8b30 input=a79b2b91f308277d]*/
 {
     PyTime_t t;
     if (_PyTime_GetThreadTimeWithInfo(&t, NULL) < 0) {
-        return NULL;
+        return PyValue_NULL;
     }
-    return PyLong_FromInt64(t);
+    return PyValue_FromInt64(t);
 }
 
 #ifdef __APPLE__
@@ -1761,9 +1820,9 @@ time.get_clock_info
 Get information of the specified clock.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 time_get_clock_info_impl(PyObject *module, const char *name)
-/*[clinic end generated code: output=a77a07bdf3554bd6 input=6812ae049f1b1031]*/
+/*[clinic end generated code: output=e3986bd1b8c0f0e1 input=6812ae049f1b1031]*/
 {
     _Py_clock_info_t info;
     PyObject *obj = NULL, *dict, *ns;
@@ -1783,23 +1842,23 @@ time_get_clock_info_impl(PyObject *module, const char *name)
 
     if (strcmp(name, "time") == 0) {
         if (_PyTime_TimeWithInfo(&t, &info) < 0) {
-            return NULL;
+            return PyValue_NULL;
         }
     }
     else if (strcmp(name, "monotonic") == 0) {
         if (_PyTime_MonotonicWithInfo(&t, &info) < 0) {
-            return NULL;
+            return PyValue_NULL;
         }
     }
     else if (strcmp(name, "perf_counter") == 0) {
         if (_PyTime_PerfCounterWithInfo(&t, &info) < 0) {
-            return NULL;
+            return PyValue_NULL;
         }
     }
     else if (strcmp(name, "process_time") == 0) {
         time_module_state *state = get_time_state(module);
         if (py_process_time(state, &t, &info) < 0) {
-            return NULL;
+            return PyValue_NULL;
         }
     }
 #ifdef HAVE_THREAD_TIME
@@ -1809,7 +1868,7 @@ time_get_clock_info_impl(PyObject *module, const char *name)
         if (HAVE_CLOCK_GETTIME_RUNTIME) {
 #endif
             if (_PyTime_GetThreadTimeWithInfo(&t, &info) < 0) {
-                return NULL;
+                return PyValue_NULL;
             }
 #ifdef __APPLE__
         } else {
@@ -1821,12 +1880,12 @@ time_get_clock_info_impl(PyObject *module, const char *name)
 #endif
     else {
         PyErr_SetString(PyExc_ValueError, "unknown clock");
-        return NULL;
+        return PyValue_NULL;
     }
 
     dict = PyDict_New();
     if (dict == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     assert(info.implementation != NULL);
@@ -1834,7 +1893,7 @@ time_get_clock_info_impl(PyObject *module, const char *name)
     if (obj == NULL) {
         goto error;
     }
-    if (PyDict_SetItemString(dict, "implementation", obj) == -1) {
+    if (PyDict_SetValueString(dict, "implementation", PyValue_FromObjectBorrow(obj)) == -1) {
         goto error;
     }
     Py_CLEAR(obj);
@@ -1844,7 +1903,7 @@ time_get_clock_info_impl(PyObject *module, const char *name)
     if (obj == NULL) {
         goto error;
     }
-    if (PyDict_SetItemString(dict, "monotonic", obj) == -1) {
+    if (PyDict_SetValueString(dict, "monotonic", PyValue_FromObjectBorrow(obj)) == -1) {
         goto error;
     }
     Py_CLEAR(obj);
@@ -1854,7 +1913,7 @@ time_get_clock_info_impl(PyObject *module, const char *name)
     if (obj == NULL) {
         goto error;
     }
-    if (PyDict_SetItemString(dict, "adjustable", obj) == -1) {
+    if (PyDict_SetValueString(dict, "adjustable", PyValue_FromObjectBorrow(obj)) == -1) {
         goto error;
     }
     Py_CLEAR(obj);
@@ -1865,19 +1924,19 @@ time_get_clock_info_impl(PyObject *module, const char *name)
     if (obj == NULL) {
         goto error;
     }
-    if (PyDict_SetItemString(dict, "resolution", obj) == -1) {
+    if (PyDict_SetValueString(dict, "resolution", PyValue_FromObjectBorrow(obj)) == -1) {
         goto error;
     }
     Py_CLEAR(obj);
 
     ns = _PyNamespace_New(dict);
     Py_DECREF(dict);
-    return ns;
+    return _PyValue_FromObjectResult(ns);
 
 error:
     Py_DECREF(dict);
     Py_XDECREF(obj);
-    return NULL;
+    return PyValue_NULL;
 }
 
 #ifndef HAVE_DECL_TZNAME

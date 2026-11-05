@@ -31,6 +31,7 @@
     const decode_map *gb2312_decmap;
 
 
+#define Py_VALUE_CORE 1
 #include "cjkcodecs.h"
 #include "alg_jisx0201.h"
 #include "emu_jisx0213_2000.h"

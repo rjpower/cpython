@@ -2,18 +2,24 @@
 preserve
 [clinic start generated code]*/
 
+#ifndef Py_VALUE_CORE
+#  error "value-emission Clinic output requires Py_VALUE_CORE"
+#endif
+
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 #  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
 #  include "pycore_value.h"       // _PyValue_STATIC_IMMORTAL()
 #endif
-#include "pycore_abstract.h"      // _PyNumber_Index()
-#include "pycore_borrow.h"        // _PyBorrow_TupleItems()
 #include "pycore_critical_section.h"// Py_BEGIN_CRITICAL_SECTION()
-#include "pycore_fileutils.h"     // _Py_Off_t_Converter()
-#include "pycore_long.h"          // _PyLong_Size_t_Converter()
+#include "pycore_long.h"          // _PyLong_UnsignedLongLong_Converter()
+#include "pycore_long_value.h"    // _PyValue_AsInt()
 #include "pycore_modsupport.h"    // _PyArg_CheckPositional()
+#include "pycore_tuple.h"         // _PyTuple_ITEMS()
 #include "pycore_unicodeobject.h" // _PyUnicode_AsUTF8NoNUL()
+#include "pycore_value_call.h"    // METH_VALUE
+#include "pycore_value_ops.h"     // _PyValue_IsTrue()
+#include "pycore_value_slots.h"   // _PyValue_THUNK_EXIT()
 
 PyDoc_STRVAR(_ssl__SSLSocket_do_handshake__doc__,
 "do_handshake($self, /)\n"
@@ -21,18 +27,18 @@ PyDoc_STRVAR(_ssl__SSLSocket_do_handshake__doc__,
 "\n");
 
 #define _SSL__SSLSOCKET_DO_HANDSHAKE_METHODDEF    \
-    {"do_handshake", (PyCFunction)_ssl__SSLSocket_do_handshake, METH_NOARGS, _ssl__SSLSocket_do_handshake__doc__},
+    {"do_handshake", _PyCFunction_CAST(_ssl__SSLSocket_do_handshake), METH_VALUE|METH_NOARGS, _ssl__SSLSocket_do_handshake__doc__},
 
-static PyObject *
+static PyValue
 _ssl__SSLSocket_do_handshake_impl(PySSLSocket *self);
 
-static PyObject *
-_ssl__SSLSocket_do_handshake(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+_ssl__SSLSocket_do_handshake(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
 
-    Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = _ssl__SSLSocket_do_handshake_impl((PySSLSocket *)self);
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(self));
+    return_value = _ssl__SSLSocket_do_handshake_impl((PySSLSocket *)PyValue_AsKnownObjectBorrow(self));
     Py_END_CRITICAL_SECTION();
 
     return return_value;
@@ -44,21 +50,25 @@ PyDoc_STRVAR(_ssl__test_decode_cert__doc__,
 "\n");
 
 #define _SSL__TEST_DECODE_CERT_METHODDEF    \
-    {"_test_decode_cert", (PyCFunction)_ssl__test_decode_cert, METH_O, _ssl__test_decode_cert__doc__},
+    {"_test_decode_cert", _PyCFunction_CAST(_ssl__test_decode_cert), METH_VALUE|METH_O, _ssl__test_decode_cert__doc__},
 
-static PyObject *
+static PyValue
 _ssl__test_decode_cert_impl(PyObject *module, PyObject *path);
 
-static PyObject *
-_ssl__test_decode_cert(PyObject *module, PyObject *arg)
+static PyValue
+_ssl__test_decode_cert(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *path = NULL;
 
-    if (!PyUnicode_FSConverter(arg, &path)) {
+    if (!PyValue_IsObject(PyValue_Borrow(args[0]))) {
+        PyErr_Format(PyExc_TypeError, "expected str, bytes or os.PathLike object, not %.200s", PyValue_TYPE(PyValue_Borrow(args[0]))->tp_name);
         goto exit;
     }
-    return_value = _ssl__test_decode_cert_impl(module, path);
+    if (!PyUnicode_FSConverter(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])), &path)) {
+        goto exit;
+    }
+    return_value = _ssl__test_decode_cert_impl(PyValue_AsKnownObjectBorrow(module), path);
 
 exit:
     /* Cleanup for path */
@@ -82,15 +92,15 @@ PyDoc_STRVAR(_ssl__SSLSocket_getpeercert__doc__,
 "return the certificate even if it wasn\'t validated.");
 
 #define _SSL__SSLSOCKET_GETPEERCERT_METHODDEF    \
-    {"getpeercert", _PyCFunction_CAST(_ssl__SSLSocket_getpeercert), METH_FASTCALL, _ssl__SSLSocket_getpeercert__doc__},
+    {"getpeercert", _PyCFunction_CAST(_ssl__SSLSocket_getpeercert), METH_VALUE, _ssl__SSLSocket_getpeercert__doc__},
 
-static PyObject *
+static PyValue
 _ssl__SSLSocket_getpeercert_impl(PySSLSocket *self, int binary_mode);
 
-static PyObject *
-_ssl__SSLSocket_getpeercert(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_ssl__SSLSocket_getpeercert(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int binary_mode = 0;
 
     if (!_PyArg_CheckPositional("getpeercert", nargs, 0, 1)) {
@@ -99,13 +109,13 @@ _ssl__SSLSocket_getpeercert(PyObject *self, PyObject *const *args, Py_ssize_t na
     if (nargs < 1) {
         goto skip_optional;
     }
-    binary_mode = PyObject_IsTrue(args[0]);
+    binary_mode = _PyValue_IsTrue(PyValue_Borrow(args[0]));
     if (binary_mode < 0) {
         goto exit;
     }
 skip_optional:
-    Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = _ssl__SSLSocket_getpeercert_impl((PySSLSocket *)self, binary_mode);
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(self));
+    return_value = _ssl__SSLSocket_getpeercert_impl((PySSLSocket *)PyValue_AsKnownObjectBorrow(self), binary_mode);
     Py_END_CRITICAL_SECTION();
 
 exit:
@@ -118,18 +128,18 @@ PyDoc_STRVAR(_ssl__SSLSocket_get_verified_chain__doc__,
 "\n");
 
 #define _SSL__SSLSOCKET_GET_VERIFIED_CHAIN_METHODDEF    \
-    {"get_verified_chain", (PyCFunction)_ssl__SSLSocket_get_verified_chain, METH_NOARGS, _ssl__SSLSocket_get_verified_chain__doc__},
+    {"get_verified_chain", _PyCFunction_CAST(_ssl__SSLSocket_get_verified_chain), METH_VALUE|METH_NOARGS, _ssl__SSLSocket_get_verified_chain__doc__},
 
-static PyObject *
+static PyValue
 _ssl__SSLSocket_get_verified_chain_impl(PySSLSocket *self);
 
-static PyObject *
-_ssl__SSLSocket_get_verified_chain(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+_ssl__SSLSocket_get_verified_chain(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
 
-    Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = _ssl__SSLSocket_get_verified_chain_impl((PySSLSocket *)self);
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(self));
+    return_value = _ssl__SSLSocket_get_verified_chain_impl((PySSLSocket *)PyValue_AsKnownObjectBorrow(self));
     Py_END_CRITICAL_SECTION();
 
     return return_value;
@@ -141,18 +151,18 @@ PyDoc_STRVAR(_ssl__SSLSocket_get_unverified_chain__doc__,
 "\n");
 
 #define _SSL__SSLSOCKET_GET_UNVERIFIED_CHAIN_METHODDEF    \
-    {"get_unverified_chain", (PyCFunction)_ssl__SSLSocket_get_unverified_chain, METH_NOARGS, _ssl__SSLSocket_get_unverified_chain__doc__},
+    {"get_unverified_chain", _PyCFunction_CAST(_ssl__SSLSocket_get_unverified_chain), METH_VALUE|METH_NOARGS, _ssl__SSLSocket_get_unverified_chain__doc__},
 
-static PyObject *
+static PyValue
 _ssl__SSLSocket_get_unverified_chain_impl(PySSLSocket *self);
 
-static PyObject *
-_ssl__SSLSocket_get_unverified_chain(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+_ssl__SSLSocket_get_unverified_chain(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
 
-    Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = _ssl__SSLSocket_get_unverified_chain_impl((PySSLSocket *)self);
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(self));
+    return_value = _ssl__SSLSocket_get_unverified_chain_impl((PySSLSocket *)PyValue_AsKnownObjectBorrow(self));
     Py_END_CRITICAL_SECTION();
 
     return return_value;
@@ -164,18 +174,18 @@ PyDoc_STRVAR(_ssl__SSLSocket_shared_ciphers__doc__,
 "\n");
 
 #define _SSL__SSLSOCKET_SHARED_CIPHERS_METHODDEF    \
-    {"shared_ciphers", (PyCFunction)_ssl__SSLSocket_shared_ciphers, METH_NOARGS, _ssl__SSLSocket_shared_ciphers__doc__},
+    {"shared_ciphers", _PyCFunction_CAST(_ssl__SSLSocket_shared_ciphers), METH_VALUE|METH_NOARGS, _ssl__SSLSocket_shared_ciphers__doc__},
 
-static PyObject *
+static PyValue
 _ssl__SSLSocket_shared_ciphers_impl(PySSLSocket *self);
 
-static PyObject *
-_ssl__SSLSocket_shared_ciphers(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+_ssl__SSLSocket_shared_ciphers(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
 
-    Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = _ssl__SSLSocket_shared_ciphers_impl((PySSLSocket *)self);
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(self));
+    return_value = _ssl__SSLSocket_shared_ciphers_impl((PySSLSocket *)PyValue_AsKnownObjectBorrow(self));
     Py_END_CRITICAL_SECTION();
 
     return return_value;
@@ -187,18 +197,18 @@ PyDoc_STRVAR(_ssl__SSLSocket_cipher__doc__,
 "\n");
 
 #define _SSL__SSLSOCKET_CIPHER_METHODDEF    \
-    {"cipher", (PyCFunction)_ssl__SSLSocket_cipher, METH_NOARGS, _ssl__SSLSocket_cipher__doc__},
+    {"cipher", _PyCFunction_CAST(_ssl__SSLSocket_cipher), METH_VALUE|METH_NOARGS, _ssl__SSLSocket_cipher__doc__},
 
-static PyObject *
+static PyValue
 _ssl__SSLSocket_cipher_impl(PySSLSocket *self);
 
-static PyObject *
-_ssl__SSLSocket_cipher(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+_ssl__SSLSocket_cipher(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
 
-    Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = _ssl__SSLSocket_cipher_impl((PySSLSocket *)self);
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(self));
+    return_value = _ssl__SSLSocket_cipher_impl((PySSLSocket *)PyValue_AsKnownObjectBorrow(self));
     Py_END_CRITICAL_SECTION();
 
     return return_value;
@@ -210,18 +220,18 @@ PyDoc_STRVAR(_ssl__SSLSocket_group__doc__,
 "\n");
 
 #define _SSL__SSLSOCKET_GROUP_METHODDEF    \
-    {"group", (PyCFunction)_ssl__SSLSocket_group, METH_NOARGS, _ssl__SSLSocket_group__doc__},
+    {"group", _PyCFunction_CAST(_ssl__SSLSocket_group), METH_VALUE|METH_NOARGS, _ssl__SSLSocket_group__doc__},
 
-static PyObject *
+static PyValue
 _ssl__SSLSocket_group_impl(PySSLSocket *self);
 
-static PyObject *
-_ssl__SSLSocket_group(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+_ssl__SSLSocket_group(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
 
-    Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = _ssl__SSLSocket_group_impl((PySSLSocket *)self);
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(self));
+    return_value = _ssl__SSLSocket_group_impl((PySSLSocket *)PyValue_AsKnownObjectBorrow(self));
     Py_END_CRITICAL_SECTION();
 
     return return_value;
@@ -233,18 +243,18 @@ PyDoc_STRVAR(_ssl__SSLSocket_client_sigalg__doc__,
 "\n");
 
 #define _SSL__SSLSOCKET_CLIENT_SIGALG_METHODDEF    \
-    {"client_sigalg", (PyCFunction)_ssl__SSLSocket_client_sigalg, METH_NOARGS, _ssl__SSLSocket_client_sigalg__doc__},
+    {"client_sigalg", _PyCFunction_CAST(_ssl__SSLSocket_client_sigalg), METH_VALUE|METH_NOARGS, _ssl__SSLSocket_client_sigalg__doc__},
 
-static PyObject *
+static PyValue
 _ssl__SSLSocket_client_sigalg_impl(PySSLSocket *self);
 
-static PyObject *
-_ssl__SSLSocket_client_sigalg(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+_ssl__SSLSocket_client_sigalg(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
 
-    Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = _ssl__SSLSocket_client_sigalg_impl((PySSLSocket *)self);
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(self));
+    return_value = _ssl__SSLSocket_client_sigalg_impl((PySSLSocket *)PyValue_AsKnownObjectBorrow(self));
     Py_END_CRITICAL_SECTION();
 
     return return_value;
@@ -256,18 +266,18 @@ PyDoc_STRVAR(_ssl__SSLSocket_server_sigalg__doc__,
 "\n");
 
 #define _SSL__SSLSOCKET_SERVER_SIGALG_METHODDEF    \
-    {"server_sigalg", (PyCFunction)_ssl__SSLSocket_server_sigalg, METH_NOARGS, _ssl__SSLSocket_server_sigalg__doc__},
+    {"server_sigalg", _PyCFunction_CAST(_ssl__SSLSocket_server_sigalg), METH_VALUE|METH_NOARGS, _ssl__SSLSocket_server_sigalg__doc__},
 
-static PyObject *
+static PyValue
 _ssl__SSLSocket_server_sigalg_impl(PySSLSocket *self);
 
-static PyObject *
-_ssl__SSLSocket_server_sigalg(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+_ssl__SSLSocket_server_sigalg(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
 
-    Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = _ssl__SSLSocket_server_sigalg_impl((PySSLSocket *)self);
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(self));
+    return_value = _ssl__SSLSocket_server_sigalg_impl((PySSLSocket *)PyValue_AsKnownObjectBorrow(self));
     Py_END_CRITICAL_SECTION();
 
     return return_value;
@@ -279,18 +289,18 @@ PyDoc_STRVAR(_ssl__SSLSocket_version__doc__,
 "\n");
 
 #define _SSL__SSLSOCKET_VERSION_METHODDEF    \
-    {"version", (PyCFunction)_ssl__SSLSocket_version, METH_NOARGS, _ssl__SSLSocket_version__doc__},
+    {"version", _PyCFunction_CAST(_ssl__SSLSocket_version), METH_VALUE|METH_NOARGS, _ssl__SSLSocket_version__doc__},
 
-static PyObject *
+static PyValue
 _ssl__SSLSocket_version_impl(PySSLSocket *self);
 
-static PyObject *
-_ssl__SSLSocket_version(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+_ssl__SSLSocket_version(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
 
-    Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = _ssl__SSLSocket_version_impl((PySSLSocket *)self);
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(self));
+    return_value = _ssl__SSLSocket_version_impl((PySSLSocket *)PyValue_AsKnownObjectBorrow(self));
     Py_END_CRITICAL_SECTION();
 
     return return_value;
@@ -302,18 +312,18 @@ PyDoc_STRVAR(_ssl__SSLSocket_selected_alpn_protocol__doc__,
 "\n");
 
 #define _SSL__SSLSOCKET_SELECTED_ALPN_PROTOCOL_METHODDEF    \
-    {"selected_alpn_protocol", (PyCFunction)_ssl__SSLSocket_selected_alpn_protocol, METH_NOARGS, _ssl__SSLSocket_selected_alpn_protocol__doc__},
+    {"selected_alpn_protocol", _PyCFunction_CAST(_ssl__SSLSocket_selected_alpn_protocol), METH_VALUE|METH_NOARGS, _ssl__SSLSocket_selected_alpn_protocol__doc__},
 
-static PyObject *
+static PyValue
 _ssl__SSLSocket_selected_alpn_protocol_impl(PySSLSocket *self);
 
-static PyObject *
-_ssl__SSLSocket_selected_alpn_protocol(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+_ssl__SSLSocket_selected_alpn_protocol(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
 
-    Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = _ssl__SSLSocket_selected_alpn_protocol_impl((PySSLSocket *)self);
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(self));
+    return_value = _ssl__SSLSocket_selected_alpn_protocol_impl((PySSLSocket *)PyValue_AsKnownObjectBorrow(self));
     Py_END_CRITICAL_SECTION();
 
     return return_value;
@@ -325,15 +335,19 @@ PyDoc_STRVAR(_ssl__SSLSocket_compression__doc__,
 "\n");
 
 #define _SSL__SSLSOCKET_COMPRESSION_METHODDEF    \
-    {"compression", (PyCFunction)_ssl__SSLSocket_compression, METH_NOARGS, _ssl__SSLSocket_compression__doc__},
+    {"compression", _PyCFunction_CAST(_ssl__SSLSocket_compression), METH_VALUE|METH_NOARGS, _ssl__SSLSocket_compression__doc__},
 
-static PyObject *
+static PyValue
 _ssl__SSLSocket_compression_impl(PySSLSocket *self);
 
-static PyObject *
-_ssl__SSLSocket_compression(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+_ssl__SSLSocket_compression(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _ssl__SSLSocket_compression_impl((PySSLSocket *)self);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _ssl__SSLSocket_compression_impl((PySSLSocket *)PyValue_AsKnownObjectBorrow(self));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(_ssl__SSLSocket_context__doc__,
@@ -468,18 +482,18 @@ PyDoc_STRVAR(_ssl__SSLSocket_uses_ktls_for_send__doc__,
 "Check if the Kernel TLS data-path is used for sending.");
 
 #define _SSL__SSLSOCKET_USES_KTLS_FOR_SEND_METHODDEF    \
-    {"uses_ktls_for_send", (PyCFunction)_ssl__SSLSocket_uses_ktls_for_send, METH_NOARGS, _ssl__SSLSocket_uses_ktls_for_send__doc__},
+    {"uses_ktls_for_send", _PyCFunction_CAST(_ssl__SSLSocket_uses_ktls_for_send), METH_VALUE|METH_NOARGS, _ssl__SSLSocket_uses_ktls_for_send__doc__},
 
-static PyObject *
+static PyValue
 _ssl__SSLSocket_uses_ktls_for_send_impl(PySSLSocket *self);
 
-static PyObject *
-_ssl__SSLSocket_uses_ktls_for_send(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+_ssl__SSLSocket_uses_ktls_for_send(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
 
-    Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = _ssl__SSLSocket_uses_ktls_for_send_impl((PySSLSocket *)self);
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(self));
+    return_value = _ssl__SSLSocket_uses_ktls_for_send_impl((PySSLSocket *)PyValue_AsKnownObjectBorrow(self));
     Py_END_CRITICAL_SECTION();
 
     return return_value;
@@ -492,18 +506,18 @@ PyDoc_STRVAR(_ssl__SSLSocket_uses_ktls_for_recv__doc__,
 "Check if the Kernel TLS data-path is used for receiving.");
 
 #define _SSL__SSLSOCKET_USES_KTLS_FOR_RECV_METHODDEF    \
-    {"uses_ktls_for_recv", (PyCFunction)_ssl__SSLSocket_uses_ktls_for_recv, METH_NOARGS, _ssl__SSLSocket_uses_ktls_for_recv__doc__},
+    {"uses_ktls_for_recv", _PyCFunction_CAST(_ssl__SSLSocket_uses_ktls_for_recv), METH_VALUE|METH_NOARGS, _ssl__SSLSocket_uses_ktls_for_recv__doc__},
 
-static PyObject *
+static PyValue
 _ssl__SSLSocket_uses_ktls_for_recv_impl(PySSLSocket *self);
 
-static PyObject *
-_ssl__SSLSocket_uses_ktls_for_recv(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+_ssl__SSLSocket_uses_ktls_for_recv(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
 
-    Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = _ssl__SSLSocket_uses_ktls_for_recv_impl((PySSLSocket *)self);
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(self));
+    return_value = _ssl__SSLSocket_uses_ktls_for_recv_impl((PySSLSocket *)PyValue_AsKnownObjectBorrow(self));
     Py_END_CRITICAL_SECTION();
 
     return return_value;
@@ -524,16 +538,16 @@ PyDoc_STRVAR(_ssl__SSLSocket_sendfile__doc__,
 "The meaning of flags is platform dependent.");
 
 #define _SSL__SSLSOCKET_SENDFILE_METHODDEF    \
-    {"sendfile", _PyCFunction_CAST(_ssl__SSLSocket_sendfile), METH_FASTCALL, _ssl__SSLSocket_sendfile__doc__},
+    {"sendfile", _PyCFunction_CAST(_ssl__SSLSocket_sendfile), METH_VALUE, _ssl__SSLSocket_sendfile__doc__},
 
-static PyObject *
+static PyValue
 _ssl__SSLSocket_sendfile_impl(PySSLSocket *self, int fd, Py_off_t offset,
                               size_t size, int flags);
 
-static PyObject *
-_ssl__SSLSocket_sendfile(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_ssl__SSLSocket_sendfile(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int fd;
     Py_off_t offset;
     size_t size;
@@ -542,26 +556,43 @@ _ssl__SSLSocket_sendfile(PyObject *self, PyObject *const *args, Py_ssize_t nargs
     if (!_PyArg_CheckPositional("sendfile", nargs, 3, 4)) {
         goto exit;
     }
-    fd = PyLong_AsInt(args[0]);
+    fd = _PyValue_AsInt(PyValue_Borrow(args[0]));
     if (fd == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    if (!_Py_Off_t_Converter(args[1], &offset)) {
+    #ifdef HAVE_LARGEFILE_SUPPORT
+    offset = _PyValue_AsLongLong(PyValue_Borrow(args[1]));
+    #else
+    offset = _PyValue_AsLong(PyValue_Borrow(args[1]));
+    #endif
+    if (PyErr_Occurred()) {
         goto exit;
     }
-    if (!_PyLong_Size_t_Converter(args[2], &size)) {
-        goto exit;
+    {
+        Py_ssize_t _bytes = _PyValue_AsNativeBytes(PyValue_Borrow(args[2]), &size, sizeof(size_t),
+                Py_ASNATIVEBYTES_NATIVE_ENDIAN |
+                Py_ASNATIVEBYTES_ALLOW_INDEX |
+                Py_ASNATIVEBYTES_REJECT_NEGATIVE |
+                Py_ASNATIVEBYTES_UNSIGNED_BUFFER);
+        if (_bytes < 0) {
+            goto exit;
+        }
+        if ((size_t)_bytes > sizeof(size_t)) {
+            PyErr_SetString(PyExc_OverflowError,
+                        "Python int too large for C size_t");
+            goto exit;
+        }
     }
     if (nargs < 4) {
         goto skip_optional;
     }
-    flags = PyLong_AsInt(args[3]);
+    flags = _PyValue_AsInt(PyValue_Borrow(args[3]));
     if (flags == -1 && PyErr_Occurred()) {
         goto exit;
     }
 skip_optional:
-    Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = _ssl__SSLSocket_sendfile_impl((PySSLSocket *)self, fd, offset, size, flags);
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(self));
+    return_value = _ssl__SSLSocket_sendfile_impl((PySSLSocket *)PyValue_AsKnownObjectBorrow(self), fd, offset, size, flags);
     Py_END_CRITICAL_SECTION();
 
 exit:
@@ -579,22 +610,26 @@ PyDoc_STRVAR(_ssl__SSLSocket_write__doc__,
 "Returns the number of bytes written.");
 
 #define _SSL__SSLSOCKET_WRITE_METHODDEF    \
-    {"write", (PyCFunction)_ssl__SSLSocket_write, METH_O, _ssl__SSLSocket_write__doc__},
+    {"write", _PyCFunction_CAST(_ssl__SSLSocket_write), METH_VALUE|METH_O, _ssl__SSLSocket_write__doc__},
 
-static PyObject *
+static PyValue
 _ssl__SSLSocket_write_impl(PySSLSocket *self, Py_buffer *b);
 
-static PyObject *
-_ssl__SSLSocket_write(PyObject *self, PyObject *arg)
+static PyValue
+_ssl__SSLSocket_write(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     Py_buffer b = {NULL, NULL};
 
-    if (PyObject_GetBuffer(arg, &b, PyBUF_SIMPLE) != 0) {
+    if (!PyValue_IsObject(PyValue_Borrow(args[0]))) {
+        PyErr_Format(PyExc_TypeError, "a bytes-like object is required, not '%.100s'", PyValue_TYPE(PyValue_Borrow(args[0]))->tp_name);
         goto exit;
     }
-    Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = _ssl__SSLSocket_write_impl((PySSLSocket *)self, &b);
+    if (PyObject_GetBuffer(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])), &b, PyBUF_SIMPLE) != 0) {
+        goto exit;
+    }
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(self));
+    return_value = _ssl__SSLSocket_write_impl((PySSLSocket *)PyValue_AsKnownObjectBorrow(self), &b);
     Py_END_CRITICAL_SECTION();
 
 exit:
@@ -613,18 +648,18 @@ PyDoc_STRVAR(_ssl__SSLSocket_pending__doc__,
 "Returns the number of already decrypted bytes available for read, pending on the connection.");
 
 #define _SSL__SSLSOCKET_PENDING_METHODDEF    \
-    {"pending", (PyCFunction)_ssl__SSLSocket_pending, METH_NOARGS, _ssl__SSLSocket_pending__doc__},
+    {"pending", _PyCFunction_CAST(_ssl__SSLSocket_pending), METH_VALUE|METH_NOARGS, _ssl__SSLSocket_pending__doc__},
 
-static PyObject *
+static PyValue
 _ssl__SSLSocket_pending_impl(PySSLSocket *self);
 
-static PyObject *
-_ssl__SSLSocket_pending(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+_ssl__SSLSocket_pending(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
 
-    Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = _ssl__SSLSocket_pending_impl((PySSLSocket *)self);
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(self));
+    return_value = _ssl__SSLSocket_pending_impl((PySSLSocket *)PyValue_AsKnownObjectBorrow(self));
     Py_END_CRITICAL_SECTION();
 
     return return_value;
@@ -655,10 +690,10 @@ _ssl__SSLSocket_read(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
     }
     {
         Py_ssize_t ival = -1;
-        PyObject *iobj = _PyNumber_Index(args[0]);
-        if (iobj != NULL) {
-            ival = PyLong_AsSsize_t(iobj);
-            Py_DECREF(iobj);
+        PyValue iobj = _PyValue_Index(PyValue_FromObjectBorrow(args[0]));
+        if (!PyValue_IsNull(iobj)) {
+            ival = _PyValue_IntAsSsize_t(PyValue_Borrow(iobj));
+            PyValue_CLOSE(iobj);
         }
         if (ival == -1 && PyErr_Occurred()) {
             goto exit;
@@ -692,18 +727,18 @@ PyDoc_STRVAR(_ssl__SSLSocket_shutdown__doc__,
 "Does the SSL shutdown handshake with the remote end.");
 
 #define _SSL__SSLSOCKET_SHUTDOWN_METHODDEF    \
-    {"shutdown", (PyCFunction)_ssl__SSLSocket_shutdown, METH_NOARGS, _ssl__SSLSocket_shutdown__doc__},
+    {"shutdown", _PyCFunction_CAST(_ssl__SSLSocket_shutdown), METH_VALUE|METH_NOARGS, _ssl__SSLSocket_shutdown__doc__},
 
-static PyObject *
+static PyValue
 _ssl__SSLSocket_shutdown_impl(PySSLSocket *self);
 
-static PyObject *
-_ssl__SSLSocket_shutdown(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+_ssl__SSLSocket_shutdown(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
 
-    Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = _ssl__SSLSocket_shutdown_impl((PySSLSocket *)self);
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(self));
+    return_value = _ssl__SSLSocket_shutdown_impl((PySSLSocket *)PyValue_AsKnownObjectBorrow(self));
     Py_END_CRITICAL_SECTION();
 
     return return_value;
@@ -721,16 +756,16 @@ PyDoc_STRVAR(_ssl__SSLSocket_get_channel_binding__doc__,
 "Only \'tls-unique\' channel binding data from RFC 5929 is supported.");
 
 #define _SSL__SSLSOCKET_GET_CHANNEL_BINDING_METHODDEF    \
-    {"get_channel_binding", _PyCFunction_CAST(_ssl__SSLSocket_get_channel_binding), METH_FASTCALL|METH_KEYWORDS, _ssl__SSLSocket_get_channel_binding__doc__},
+    {"get_channel_binding", _PyCFunction_CAST(_ssl__SSLSocket_get_channel_binding), METH_VALUE|METH_KEYWORDS, _ssl__SSLSocket_get_channel_binding__doc__},
 
-static PyObject *
+static PyValue
 _ssl__SSLSocket_get_channel_binding_impl(PySSLSocket *self,
                                          const char *cb_type);
 
-static PyObject *
-_ssl__SSLSocket_get_channel_binding(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_ssl__SSLSocket_get_channel_binding(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
@@ -758,29 +793,29 @@ _ssl__SSLSocket_get_channel_binding(PyObject *self, PyObject *const *args, Py_ss
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[1];
-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 0;
+    Py_ssize_t _idx[1];
     const char *cb_type = "tls-unique";
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 0, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 0, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, _idx, 1)) {
         goto exit;
     }
-    if (!noptargs) {
-        goto skip_optional_pos;
+    if (_idx[0] >= 0) {
+        if (!PyValue_IsObject(PyValue_Borrow(args[_idx[0]]))) {
+            _PyArg_BadArgumentValue("get_channel_binding", "argument 'cb_type'", "str", PyValue_Borrow(args[_idx[0]]));
+            goto exit;
+        }
+        if (!PyUnicode_Check(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[0]])))) {
+            _PyArg_BadArgument("get_channel_binding", "argument 'cb_type'", "str", PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[0]])));
+            goto exit;
+        }
+        cb_type = _PyUnicode_AsUTF8NoNUL(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[0]])));
+        if (cb_type == NULL) {
+            goto exit;
+        }
     }
-    if (!PyUnicode_Check(args[0])) {
-        _PyArg_BadArgument("get_channel_binding", "argument 'cb_type'", "str", args[0]);
-        goto exit;
-    }
-    cb_type = _PyUnicode_AsUTF8NoNUL(args[0]);
-    if (cb_type == NULL) {
-        goto exit;
-    }
-skip_optional_pos:
-    Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = _ssl__SSLSocket_get_channel_binding_impl((PySSLSocket *)self, cb_type);
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(self));
+    return_value = _ssl__SSLSocket_get_channel_binding_impl((PySSLSocket *)PyValue_AsKnownObjectBorrow(self), cb_type);
     Py_END_CRITICAL_SECTION();
 
 exit:
@@ -794,18 +829,18 @@ PyDoc_STRVAR(_ssl__SSLSocket_verify_client_post_handshake__doc__,
 "Initiate TLS 1.3 post-handshake authentication");
 
 #define _SSL__SSLSOCKET_VERIFY_CLIENT_POST_HANDSHAKE_METHODDEF    \
-    {"verify_client_post_handshake", (PyCFunction)_ssl__SSLSocket_verify_client_post_handshake, METH_NOARGS, _ssl__SSLSocket_verify_client_post_handshake__doc__},
+    {"verify_client_post_handshake", _PyCFunction_CAST(_ssl__SSLSocket_verify_client_post_handshake), METH_VALUE|METH_NOARGS, _ssl__SSLSocket_verify_client_post_handshake__doc__},
 
-static PyObject *
+static PyValue
 _ssl__SSLSocket_verify_client_post_handshake_impl(PySSLSocket *self);
 
-static PyObject *
-_ssl__SSLSocket_verify_client_post_handshake(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+_ssl__SSLSocket_verify_client_post_handshake(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
 
-    Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = _ssl__SSLSocket_verify_client_post_handshake_impl((PySSLSocket *)self);
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(self));
+    return_value = _ssl__SSLSocket_verify_client_post_handshake_impl((PySSLSocket *)PyValue_AsKnownObjectBorrow(self));
     Py_END_CRITICAL_SECTION();
 
     return return_value;
@@ -870,37 +905,51 @@ _ssl__SSLSocket_session_reused_get(PyObject *self, void *Py_UNUSED(context))
     return return_value;
 }
 
-static PyObject *
+static PyValue
 _ssl__SSLContext_impl(PyTypeObject *type, int proto_version);
 
-static PyObject *
-_ssl__SSLContext(PyTypeObject *type, PyObject *args, PyObject *kwargs)
+static PyValue
+_ssl__SSLContext_value(PyTypeObject *type, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyTypeObject *base_tp = get_state_type(type)->PySSLContext_Type;
     int proto_version;
 
     if ((type == base_tp || type->tp_init == base_tp->tp_init) &&
-        !_PyArg_NoKeywords("_SSLContext", kwargs)) {
+        !_PyArg_NoKwnames("_SSLContext", kwnames)) {
         goto exit;
     }
-    if (!_PyArg_CheckPositional("_SSLContext", PyTuple_GET_SIZE(args), 1, 1)) {
+    if (!_PyArg_CheckPositional("_SSLContext", nargs, 1, 1)) {
         goto exit;
     }
-    PyObject *const *_args_items = _PyBorrow_TupleItems(args, PyTuple_GET_SIZE(args));
-    if (_args_items == NULL) {
-        goto exit;
-    }
-    proto_version = PyLong_AsInt(_args_items[0]);
+    proto_version = _PyValue_AsInt(PyValue_Borrow(args[0]));
     if (proto_version == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    Py_BEGIN_CRITICAL_SECTION(type);
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(type));
     return_value = _ssl__SSLContext_impl(type, proto_version);
     Py_END_CRITICAL_SECTION();
 
 exit:
     return return_value;
+}
+
+Py_VALUE_ENTRY static PyObject *
+_ssl__SSLContext(PyTypeObject *type, PyObject *args, PyObject *kwargs)
+{
+    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
+    if (kwargs == NULL || PyDict_GET_SIZE(kwargs) == 0) {
+        return _PyValue_THUNK_EXIT(_ssl__SSLContext_value(type, _PyTuple_ITEMS(args), nargs, NULL), BOX_SITE_CALL);
+    }
+    PyObject *kwnames;
+    PyValue *window = _PyValue_StackUnpackDict(_PyThreadState_GET(),
+        _PyTuple_ITEMS(args), nargs, kwargs, &kwnames);
+    if (window == NULL) {
+        return NULL;
+    }
+    PyValue result = _ssl__SSLContext_value(type, window, nargs, kwnames);
+    _PyValue_StackUnpackDict_Free(window, nargs, kwnames);
+    return _PyValue_THUNK_EXIT(result, BOX_SITE_CALL);
 }
 
 PyDoc_STRVAR(_ssl__SSLContext_set_ciphers__doc__,
@@ -909,27 +958,31 @@ PyDoc_STRVAR(_ssl__SSLContext_set_ciphers__doc__,
 "\n");
 
 #define _SSL__SSLCONTEXT_SET_CIPHERS_METHODDEF    \
-    {"set_ciphers", (PyCFunction)_ssl__SSLContext_set_ciphers, METH_O, _ssl__SSLContext_set_ciphers__doc__},
+    {"set_ciphers", _PyCFunction_CAST(_ssl__SSLContext_set_ciphers), METH_VALUE|METH_O, _ssl__SSLContext_set_ciphers__doc__},
 
-static PyObject *
+static PyValue
 _ssl__SSLContext_set_ciphers_impl(PySSLContext *self, const char *cipherlist);
 
-static PyObject *
-_ssl__SSLContext_set_ciphers(PyObject *self, PyObject *arg)
+static PyValue
+_ssl__SSLContext_set_ciphers(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     const char *cipherlist;
 
-    if (!PyUnicode_Check(arg)) {
-        _PyArg_BadArgument("set_ciphers", "argument", "str", arg);
+    if (!PyValue_IsObject(PyValue_Borrow(args[0]))) {
+        _PyArg_BadArgumentValue("set_ciphers", "argument", "str", PyValue_Borrow(args[0]));
         goto exit;
     }
-    cipherlist = _PyUnicode_AsUTF8NoNUL(arg);
+    if (!PyUnicode_Check(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])))) {
+        _PyArg_BadArgument("set_ciphers", "argument", "str", PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])));
+        goto exit;
+    }
+    cipherlist = _PyUnicode_AsUTF8NoNUL(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])));
     if (cipherlist == NULL) {
         goto exit;
     }
-    Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = _ssl__SSLContext_set_ciphers_impl((PySSLContext *)self, cipherlist);
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(self));
+    return_value = _ssl__SSLContext_set_ciphers_impl((PySSLContext *)PyValue_AsKnownObjectBorrow(self), cipherlist);
     Py_END_CRITICAL_SECTION();
 
 exit:
@@ -942,28 +995,32 @@ PyDoc_STRVAR(_ssl__SSLContext_set_ciphersuites__doc__,
 "\n");
 
 #define _SSL__SSLCONTEXT_SET_CIPHERSUITES_METHODDEF    \
-    {"set_ciphersuites", (PyCFunction)_ssl__SSLContext_set_ciphersuites, METH_O, _ssl__SSLContext_set_ciphersuites__doc__},
+    {"set_ciphersuites", _PyCFunction_CAST(_ssl__SSLContext_set_ciphersuites), METH_VALUE|METH_O, _ssl__SSLContext_set_ciphersuites__doc__},
 
-static PyObject *
+static PyValue
 _ssl__SSLContext_set_ciphersuites_impl(PySSLContext *self,
                                        const char *ciphersuites);
 
-static PyObject *
-_ssl__SSLContext_set_ciphersuites(PyObject *self, PyObject *arg)
+static PyValue
+_ssl__SSLContext_set_ciphersuites(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     const char *ciphersuites;
 
-    if (!PyUnicode_Check(arg)) {
-        _PyArg_BadArgument("set_ciphersuites", "argument", "str", arg);
+    if (!PyValue_IsObject(PyValue_Borrow(args[0]))) {
+        _PyArg_BadArgumentValue("set_ciphersuites", "argument", "str", PyValue_Borrow(args[0]));
         goto exit;
     }
-    ciphersuites = _PyUnicode_AsUTF8NoNUL(arg);
+    if (!PyUnicode_Check(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])))) {
+        _PyArg_BadArgument("set_ciphersuites", "argument", "str", PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])));
+        goto exit;
+    }
+    ciphersuites = _PyUnicode_AsUTF8NoNUL(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])));
     if (ciphersuites == NULL) {
         goto exit;
     }
-    Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = _ssl__SSLContext_set_ciphersuites_impl((PySSLContext *)self, ciphersuites);
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(self));
+    return_value = _ssl__SSLContext_set_ciphersuites_impl((PySSLContext *)PyValue_AsKnownObjectBorrow(self), ciphersuites);
     Py_END_CRITICAL_SECTION();
 
 exit:
@@ -976,18 +1033,18 @@ PyDoc_STRVAR(_ssl__SSLContext_get_ciphers__doc__,
 "\n");
 
 #define _SSL__SSLCONTEXT_GET_CIPHERS_METHODDEF    \
-    {"get_ciphers", (PyCFunction)_ssl__SSLContext_get_ciphers, METH_NOARGS, _ssl__SSLContext_get_ciphers__doc__},
+    {"get_ciphers", _PyCFunction_CAST(_ssl__SSLContext_get_ciphers), METH_VALUE|METH_NOARGS, _ssl__SSLContext_get_ciphers__doc__},
 
-static PyObject *
+static PyValue
 _ssl__SSLContext_get_ciphers_impl(PySSLContext *self);
 
-static PyObject *
-_ssl__SSLContext_get_ciphers(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+_ssl__SSLContext_get_ciphers(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
 
-    Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = _ssl__SSLContext_get_ciphers_impl((PySSLContext *)self);
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(self));
+    return_value = _ssl__SSLContext_get_ciphers_impl((PySSLContext *)PyValue_AsKnownObjectBorrow(self));
     Py_END_CRITICAL_SECTION();
 
     return return_value;
@@ -999,27 +1056,31 @@ PyDoc_STRVAR(_ssl__SSLContext_set_groups__doc__,
 "\n");
 
 #define _SSL__SSLCONTEXT_SET_GROUPS_METHODDEF    \
-    {"set_groups", (PyCFunction)_ssl__SSLContext_set_groups, METH_O, _ssl__SSLContext_set_groups__doc__},
+    {"set_groups", _PyCFunction_CAST(_ssl__SSLContext_set_groups), METH_VALUE|METH_O, _ssl__SSLContext_set_groups__doc__},
 
-static PyObject *
+static PyValue
 _ssl__SSLContext_set_groups_impl(PySSLContext *self, const char *grouplist);
 
-static PyObject *
-_ssl__SSLContext_set_groups(PyObject *self, PyObject *arg)
+static PyValue
+_ssl__SSLContext_set_groups(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     const char *grouplist;
 
-    if (!PyUnicode_Check(arg)) {
-        _PyArg_BadArgument("set_groups", "argument", "str", arg);
+    if (!PyValue_IsObject(PyValue_Borrow(args[0]))) {
+        _PyArg_BadArgumentValue("set_groups", "argument", "str", PyValue_Borrow(args[0]));
         goto exit;
     }
-    grouplist = _PyUnicode_AsUTF8NoNUL(arg);
+    if (!PyUnicode_Check(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])))) {
+        _PyArg_BadArgument("set_groups", "argument", "str", PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])));
+        goto exit;
+    }
+    grouplist = _PyUnicode_AsUTF8NoNUL(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])));
     if (grouplist == NULL) {
         goto exit;
     }
-    Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = _ssl__SSLContext_set_groups_impl((PySSLContext *)self, grouplist);
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(self));
+    return_value = _ssl__SSLContext_set_groups_impl((PySSLContext *)PyValue_AsKnownObjectBorrow(self), grouplist);
     Py_END_CRITICAL_SECTION();
 
 exit:
@@ -1032,15 +1093,15 @@ PyDoc_STRVAR(_ssl__SSLContext_get_groups__doc__,
 "\n");
 
 #define _SSL__SSLCONTEXT_GET_GROUPS_METHODDEF    \
-    {"get_groups", _PyCFunction_CAST(_ssl__SSLContext_get_groups), METH_FASTCALL|METH_KEYWORDS, _ssl__SSLContext_get_groups__doc__},
+    {"get_groups", _PyCFunction_CAST(_ssl__SSLContext_get_groups), METH_VALUE|METH_KEYWORDS, _ssl__SSLContext_get_groups__doc__},
 
-static PyObject *
+static PyValue
 _ssl__SSLContext_get_groups_impl(PySSLContext *self, int include_aliases);
 
-static PyObject *
-_ssl__SSLContext_get_groups(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_ssl__SSLContext_get_groups(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
@@ -1068,25 +1129,21 @@ _ssl__SSLContext_get_groups(PyObject *self, PyObject *const *args, Py_ssize_t na
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[1];
-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 0;
+    Py_ssize_t _idx[1];
     int include_aliases = 0;
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 0, /*maxpos*/ 0, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 0, /*maxpos*/ 0, /*minkw*/ 0, /*varpos*/ 0, _idx, 1)) {
         goto exit;
     }
-    if (!noptargs) {
-        goto skip_optional_kwonly;
+    if (_idx[0] >= 0) {
+        include_aliases = _PyValue_IsTrue(PyValue_Borrow(args[_idx[0]]));
+        if (include_aliases < 0) {
+            goto exit;
+        }
     }
-    include_aliases = PyObject_IsTrue(args[0]);
-    if (include_aliases < 0) {
-        goto exit;
-    }
-skip_optional_kwonly:
-    Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = _ssl__SSLContext_get_groups_impl((PySSLContext *)self, include_aliases);
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(self));
+    return_value = _ssl__SSLContext_get_groups_impl((PySSLContext *)PyValue_AsKnownObjectBorrow(self), include_aliases);
     Py_END_CRITICAL_SECTION();
 
 exit:
@@ -1099,28 +1156,32 @@ PyDoc_STRVAR(_ssl__SSLContext_set_client_sigalgs__doc__,
 "\n");
 
 #define _SSL__SSLCONTEXT_SET_CLIENT_SIGALGS_METHODDEF    \
-    {"set_client_sigalgs", (PyCFunction)_ssl__SSLContext_set_client_sigalgs, METH_O, _ssl__SSLContext_set_client_sigalgs__doc__},
+    {"set_client_sigalgs", _PyCFunction_CAST(_ssl__SSLContext_set_client_sigalgs), METH_VALUE|METH_O, _ssl__SSLContext_set_client_sigalgs__doc__},
 
-static PyObject *
+static PyValue
 _ssl__SSLContext_set_client_sigalgs_impl(PySSLContext *self,
                                          const char *sigalgslist);
 
-static PyObject *
-_ssl__SSLContext_set_client_sigalgs(PyObject *self, PyObject *arg)
+static PyValue
+_ssl__SSLContext_set_client_sigalgs(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     const char *sigalgslist;
 
-    if (!PyUnicode_Check(arg)) {
-        _PyArg_BadArgument("set_client_sigalgs", "argument", "str", arg);
+    if (!PyValue_IsObject(PyValue_Borrow(args[0]))) {
+        _PyArg_BadArgumentValue("set_client_sigalgs", "argument", "str", PyValue_Borrow(args[0]));
         goto exit;
     }
-    sigalgslist = _PyUnicode_AsUTF8NoNUL(arg);
+    if (!PyUnicode_Check(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])))) {
+        _PyArg_BadArgument("set_client_sigalgs", "argument", "str", PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])));
+        goto exit;
+    }
+    sigalgslist = _PyUnicode_AsUTF8NoNUL(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])));
     if (sigalgslist == NULL) {
         goto exit;
     }
-    Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = _ssl__SSLContext_set_client_sigalgs_impl((PySSLContext *)self, sigalgslist);
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(self));
+    return_value = _ssl__SSLContext_set_client_sigalgs_impl((PySSLContext *)PyValue_AsKnownObjectBorrow(self), sigalgslist);
     Py_END_CRITICAL_SECTION();
 
 exit:
@@ -1133,28 +1194,32 @@ PyDoc_STRVAR(_ssl__SSLContext_set_server_sigalgs__doc__,
 "\n");
 
 #define _SSL__SSLCONTEXT_SET_SERVER_SIGALGS_METHODDEF    \
-    {"set_server_sigalgs", (PyCFunction)_ssl__SSLContext_set_server_sigalgs, METH_O, _ssl__SSLContext_set_server_sigalgs__doc__},
+    {"set_server_sigalgs", _PyCFunction_CAST(_ssl__SSLContext_set_server_sigalgs), METH_VALUE|METH_O, _ssl__SSLContext_set_server_sigalgs__doc__},
 
-static PyObject *
+static PyValue
 _ssl__SSLContext_set_server_sigalgs_impl(PySSLContext *self,
                                          const char *sigalgslist);
 
-static PyObject *
-_ssl__SSLContext_set_server_sigalgs(PyObject *self, PyObject *arg)
+static PyValue
+_ssl__SSLContext_set_server_sigalgs(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     const char *sigalgslist;
 
-    if (!PyUnicode_Check(arg)) {
-        _PyArg_BadArgument("set_server_sigalgs", "argument", "str", arg);
+    if (!PyValue_IsObject(PyValue_Borrow(args[0]))) {
+        _PyArg_BadArgumentValue("set_server_sigalgs", "argument", "str", PyValue_Borrow(args[0]));
         goto exit;
     }
-    sigalgslist = _PyUnicode_AsUTF8NoNUL(arg);
+    if (!PyUnicode_Check(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])))) {
+        _PyArg_BadArgument("set_server_sigalgs", "argument", "str", PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])));
+        goto exit;
+    }
+    sigalgslist = _PyUnicode_AsUTF8NoNUL(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])));
     if (sigalgslist == NULL) {
         goto exit;
     }
-    Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = _ssl__SSLContext_set_server_sigalgs_impl((PySSLContext *)self, sigalgslist);
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(self));
+    return_value = _ssl__SSLContext_set_server_sigalgs_impl((PySSLContext *)PyValue_AsKnownObjectBorrow(self), sigalgslist);
     Py_END_CRITICAL_SECTION();
 
 exit:
@@ -1167,23 +1232,27 @@ PyDoc_STRVAR(_ssl__SSLContext__set_alpn_protocols__doc__,
 "\n");
 
 #define _SSL__SSLCONTEXT__SET_ALPN_PROTOCOLS_METHODDEF    \
-    {"_set_alpn_protocols", (PyCFunction)_ssl__SSLContext__set_alpn_protocols, METH_O, _ssl__SSLContext__set_alpn_protocols__doc__},
+    {"_set_alpn_protocols", _PyCFunction_CAST(_ssl__SSLContext__set_alpn_protocols), METH_VALUE|METH_O, _ssl__SSLContext__set_alpn_protocols__doc__},
 
-static PyObject *
+static PyValue
 _ssl__SSLContext__set_alpn_protocols_impl(PySSLContext *self,
                                           Py_buffer *protos);
 
-static PyObject *
-_ssl__SSLContext__set_alpn_protocols(PyObject *self, PyObject *arg)
+static PyValue
+_ssl__SSLContext__set_alpn_protocols(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     Py_buffer protos = {NULL, NULL};
 
-    if (PyObject_GetBuffer(arg, &protos, PyBUF_SIMPLE) != 0) {
+    if (!PyValue_IsObject(PyValue_Borrow(args[0]))) {
+        PyErr_Format(PyExc_TypeError, "a bytes-like object is required, not '%.100s'", PyValue_TYPE(PyValue_Borrow(args[0]))->tp_name);
         goto exit;
     }
-    Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = _ssl__SSLContext__set_alpn_protocols_impl((PySSLContext *)self, &protos);
+    if (PyObject_GetBuffer(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])), &protos, PyBUF_SIMPLE) != 0) {
+        goto exit;
+    }
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(self));
+    return_value = _ssl__SSLContext__set_alpn_protocols_impl((PySSLContext *)PyValue_AsKnownObjectBorrow(self), &protos);
     Py_END_CRITICAL_SECTION();
 
 exit:
@@ -1587,7 +1656,7 @@ _ssl__SSLContext_check_hostname_set(PyObject *self, PyObject *arg, void *Py_UNUS
                      Py_TYPE(self)->tp_name);
         return -1;
     }
-    value = PyObject_IsTrue(arg);
+    value = _PyValue_IsTrue(PyValue_FromObjectBorrow(arg));
     if (value < 0) {
         goto exit;
     }
@@ -1620,16 +1689,18 @@ PyDoc_STRVAR(_ssl__SSLContext_load_cert_chain__doc__,
 "\n");
 
 #define _SSL__SSLCONTEXT_LOAD_CERT_CHAIN_METHODDEF    \
-    {"load_cert_chain", _PyCFunction_CAST(_ssl__SSLContext_load_cert_chain), METH_FASTCALL|METH_KEYWORDS, _ssl__SSLContext_load_cert_chain__doc__},
+    {"load_cert_chain", _PyCFunction_CAST(_ssl__SSLContext_load_cert_chain), METH_VALUE|METH_KEYWORDS, _ssl__SSLContext_load_cert_chain__doc__},
 
-static PyObject *
-_ssl__SSLContext_load_cert_chain_impl(PySSLContext *self, PyObject *certfile,
-                                      PyObject *keyfile, PyObject *password);
+static PyValue
+_ssl__SSLContext_load_cert_chain_impl(PySSLContext *self,
+                                      PyValueBorrow certfile,
+                                      PyValueBorrow keyfile,
+                                      PyValueBorrow password);
 
-static PyObject *
-_ssl__SSLContext_load_cert_chain(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_ssl__SSLContext_load_cert_chain(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 3
@@ -1657,30 +1728,23 @@ _ssl__SSLContext_load_cert_chain(PyObject *self, PyObject *const *args, Py_ssize
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[3];
-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 1;
-    PyObject *certfile;
-    PyObject *keyfile = Py_None;
-    PyObject *password = Py_None;
+    Py_ssize_t _idx[3];
+    PyValueBorrow certfile;
+    PyValueBorrow keyfile = PyValue_Borrow(PyValue_None);
+    PyValueBorrow password = PyValue_Borrow(PyValue_None);
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 1, /*maxpos*/ 3, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 1, /*maxpos*/ 3, /*minkw*/ 0, /*varpos*/ 0, _idx, 3)) {
         goto exit;
     }
-    certfile = args[0];
-    if (!noptargs) {
-        goto skip_optional_pos;
+    certfile = PyValue_Borrow(args[_idx[0]]);
+    if (_idx[1] >= 0) {
+        keyfile = PyValue_Borrow(args[_idx[1]]);
     }
-    if (args[1]) {
-        keyfile = args[1];
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
+    if (_idx[2] >= 0) {
+        password = PyValue_Borrow(args[_idx[2]]);
     }
-    password = args[2];
-skip_optional_pos:
-    return_value = _ssl__SSLContext_load_cert_chain_impl((PySSLContext *)self, certfile, keyfile, password);
+    return_value = _ssl__SSLContext_load_cert_chain_impl((PySSLContext *)PyValue_AsKnownObjectBorrow(self), certfile, keyfile, password);
 
 exit:
     return return_value;
@@ -1692,18 +1756,18 @@ PyDoc_STRVAR(_ssl__SSLContext_load_verify_locations__doc__,
 "\n");
 
 #define _SSL__SSLCONTEXT_LOAD_VERIFY_LOCATIONS_METHODDEF    \
-    {"load_verify_locations", _PyCFunction_CAST(_ssl__SSLContext_load_verify_locations), METH_FASTCALL|METH_KEYWORDS, _ssl__SSLContext_load_verify_locations__doc__},
+    {"load_verify_locations", _PyCFunction_CAST(_ssl__SSLContext_load_verify_locations), METH_VALUE|METH_KEYWORDS, _ssl__SSLContext_load_verify_locations__doc__},
 
-static PyObject *
+static PyValue
 _ssl__SSLContext_load_verify_locations_impl(PySSLContext *self,
-                                            PyObject *cafile,
-                                            PyObject *capath,
-                                            PyObject *cadata);
+                                            PyValueBorrow cafile,
+                                            PyValueBorrow capath,
+                                            PyValueBorrow cadata);
 
-static PyObject *
-_ssl__SSLContext_load_verify_locations(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_ssl__SSLContext_load_verify_locations(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 3
@@ -1731,36 +1795,26 @@ _ssl__SSLContext_load_verify_locations(PyObject *self, PyObject *const *args, Py
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[3];
-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 0;
-    PyObject *cafile = Py_None;
-    PyObject *capath = Py_None;
-    PyObject *cadata = Py_None;
+    Py_ssize_t _idx[3];
+    PyValueBorrow cafile = PyValue_Borrow(PyValue_None);
+    PyValueBorrow capath = PyValue_Borrow(PyValue_None);
+    PyValueBorrow cadata = PyValue_Borrow(PyValue_None);
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 0, /*maxpos*/ 3, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 0, /*maxpos*/ 3, /*minkw*/ 0, /*varpos*/ 0, _idx, 3)) {
         goto exit;
     }
-    if (!noptargs) {
-        goto skip_optional_pos;
+    if (_idx[0] >= 0) {
+        cafile = PyValue_Borrow(args[_idx[0]]);
     }
-    if (args[0]) {
-        cafile = args[0];
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
+    if (_idx[1] >= 0) {
+        capath = PyValue_Borrow(args[_idx[1]]);
     }
-    if (args[1]) {
-        capath = args[1];
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
+    if (_idx[2] >= 0) {
+        cadata = PyValue_Borrow(args[_idx[2]]);
     }
-    cadata = args[2];
-skip_optional_pos:
-    Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = _ssl__SSLContext_load_verify_locations_impl((PySSLContext *)self, cafile, capath, cadata);
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(self));
+    return_value = _ssl__SSLContext_load_verify_locations_impl((PySSLContext *)PyValue_AsKnownObjectBorrow(self), cafile, capath, cadata);
     Py_END_CRITICAL_SECTION();
 
 exit:
@@ -1773,18 +1827,21 @@ PyDoc_STRVAR(_ssl__SSLContext_load_dh_params__doc__,
 "\n");
 
 #define _SSL__SSLCONTEXT_LOAD_DH_PARAMS_METHODDEF    \
-    {"load_dh_params", (PyCFunction)_ssl__SSLContext_load_dh_params, METH_O, _ssl__SSLContext_load_dh_params__doc__},
+    {"load_dh_params", _PyCFunction_CAST(_ssl__SSLContext_load_dh_params), METH_VALUE|METH_O, _ssl__SSLContext_load_dh_params__doc__},
 
-static PyObject *
-_ssl__SSLContext_load_dh_params_impl(PySSLContext *self, PyObject *filepath);
+static PyValue
+_ssl__SSLContext_load_dh_params_impl(PySSLContext *self,
+                                     PyValueBorrow filepath);
 
-static PyObject *
-_ssl__SSLContext_load_dh_params(PyObject *self, PyObject *filepath)
+static PyValue
+_ssl__SSLContext_load_dh_params(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow filepath;
 
-    Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = _ssl__SSLContext_load_dh_params_impl((PySSLContext *)self, filepath);
+    filepath = PyValue_Borrow(args[0]);
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(self));
+    return_value = _ssl__SSLContext_load_dh_params_impl((PySSLContext *)PyValue_AsKnownObjectBorrow(self), filepath);
     Py_END_CRITICAL_SECTION();
 
     return return_value;
@@ -1797,17 +1854,19 @@ PyDoc_STRVAR(_ssl__SSLContext__wrap_socket__doc__,
 "\n");
 
 #define _SSL__SSLCONTEXT__WRAP_SOCKET_METHODDEF    \
-    {"_wrap_socket", _PyCFunction_CAST(_ssl__SSLContext__wrap_socket), METH_FASTCALL|METH_KEYWORDS, _ssl__SSLContext__wrap_socket__doc__},
+    {"_wrap_socket", _PyCFunction_CAST(_ssl__SSLContext__wrap_socket), METH_VALUE|METH_KEYWORDS, _ssl__SSLContext__wrap_socket__doc__},
 
-static PyObject *
+static PyValue
 _ssl__SSLContext__wrap_socket_impl(PySSLContext *self, PyObject *sock,
-                                   int server_side, PyObject *hostname_obj,
-                                   PyObject *owner, PyObject *session);
+                                   int server_side,
+                                   PyValueBorrow hostname_obj,
+                                   PyValueBorrow owner,
+                                   PyValueBorrow session);
 
-static PyObject *
-_ssl__SSLContext__wrap_socket(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_ssl__SSLContext__wrap_socket(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 5
@@ -1835,51 +1894,37 @@ _ssl__SSLContext__wrap_socket(PyObject *self, PyObject *const *args, Py_ssize_t 
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[5];
-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 2;
+    Py_ssize_t _idx[5];
     PyObject *sock;
     int server_side;
-    PyObject *hostname_obj = Py_None;
-    PyObject *owner = Py_None;
-    PyObject *session = Py_None;
+    PyValueBorrow hostname_obj = PyValue_Borrow(PyValue_None);
+    PyValueBorrow owner = PyValue_Borrow(PyValue_None);
+    PyValueBorrow session = PyValue_Borrow(PyValue_None);
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 2, /*maxpos*/ 3, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 2, /*maxpos*/ 3, /*minkw*/ 0, /*varpos*/ 0, _idx, 5)) {
         goto exit;
     }
-    if (!PyObject_TypeCheck(args[0], get_state_ctx(self)->Sock_Type)) {
-        _PyArg_BadArgument("_wrap_socket", "argument 'sock'", (get_state_ctx(self)->Sock_Type)->tp_name, args[0]);
+    if (!PyType_IsSubtype(PyValue_TYPE(PyValue_Borrow(args[_idx[0]])), get_state_ctx(self)->Sock_Type)) {
+        _PyArg_BadArgumentValue("_wrap_socket", "argument 'sock'", (get_state_ctx(self)->Sock_Type)->tp_name, PyValue_Borrow(args[_idx[0]]));
         goto exit;
     }
-    sock = args[0];
-    server_side = PyObject_IsTrue(args[1]);
+    sock = PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[0]]));
+    server_side = _PyValue_IsTrue(PyValue_Borrow(args[_idx[1]]));
     if (server_side < 0) {
         goto exit;
     }
-    if (!noptargs) {
-        goto skip_optional_pos;
+    if (_idx[2] >= 0) {
+        hostname_obj = PyValue_Borrow(args[_idx[2]]);
     }
-    if (args[2]) {
-        hostname_obj = args[2];
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
+    if (_idx[3] >= 0) {
+        owner = PyValue_Borrow(args[_idx[3]]);
     }
-skip_optional_pos:
-    if (!noptargs) {
-        goto skip_optional_kwonly;
+    if (_idx[4] >= 0) {
+        session = PyValue_Borrow(args[_idx[4]]);
     }
-    if (args[3]) {
-        owner = args[3];
-        if (!--noptargs) {
-            goto skip_optional_kwonly;
-        }
-    }
-    session = args[4];
-skip_optional_kwonly:
-    Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = _ssl__SSLContext__wrap_socket_impl((PySSLContext *)self, sock, server_side, hostname_obj, owner, session);
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(self));
+    return_value = _ssl__SSLContext__wrap_socket_impl((PySSLContext *)PyValue_AsKnownObjectBorrow(self), sock, server_side, hostname_obj, owner, session);
     Py_END_CRITICAL_SECTION();
 
 exit:
@@ -1893,18 +1938,18 @@ PyDoc_STRVAR(_ssl__SSLContext__wrap_bio__doc__,
 "\n");
 
 #define _SSL__SSLCONTEXT__WRAP_BIO_METHODDEF    \
-    {"_wrap_bio", _PyCFunction_CAST(_ssl__SSLContext__wrap_bio), METH_FASTCALL|METH_KEYWORDS, _ssl__SSLContext__wrap_bio__doc__},
+    {"_wrap_bio", _PyCFunction_CAST(_ssl__SSLContext__wrap_bio), METH_VALUE|METH_KEYWORDS, _ssl__SSLContext__wrap_bio__doc__},
 
-static PyObject *
+static PyValue
 _ssl__SSLContext__wrap_bio_impl(PySSLContext *self, PySSLMemoryBIO *incoming,
                                 PySSLMemoryBIO *outgoing, int server_side,
-                                PyObject *hostname_obj, PyObject *owner,
-                                PyObject *session);
+                                PyValueBorrow hostname_obj,
+                                PyValueBorrow owner, PyValueBorrow session);
 
-static PyObject *
-_ssl__SSLContext__wrap_bio(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_ssl__SSLContext__wrap_bio(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 6
@@ -1932,57 +1977,43 @@ _ssl__SSLContext__wrap_bio(PyObject *self, PyObject *const *args, Py_ssize_t nar
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[6];
-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 3;
+    Py_ssize_t _idx[6];
     PySSLMemoryBIO *incoming;
     PySSLMemoryBIO *outgoing;
     int server_side;
-    PyObject *hostname_obj = Py_None;
-    PyObject *owner = Py_None;
-    PyObject *session = Py_None;
+    PyValueBorrow hostname_obj = PyValue_Borrow(PyValue_None);
+    PyValueBorrow owner = PyValue_Borrow(PyValue_None);
+    PyValueBorrow session = PyValue_Borrow(PyValue_None);
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 3, /*maxpos*/ 4, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 3, /*maxpos*/ 4, /*minkw*/ 0, /*varpos*/ 0, _idx, 6)) {
         goto exit;
     }
-    if (!PyObject_TypeCheck(args[0], get_state_ctx(self)->PySSLMemoryBIO_Type)) {
-        _PyArg_BadArgument("_wrap_bio", "argument 'incoming'", (get_state_ctx(self)->PySSLMemoryBIO_Type)->tp_name, args[0]);
+    if (!PyType_IsSubtype(PyValue_TYPE(PyValue_Borrow(args[_idx[0]])), get_state_ctx(self)->PySSLMemoryBIO_Type)) {
+        _PyArg_BadArgumentValue("_wrap_bio", "argument 'incoming'", (get_state_ctx(self)->PySSLMemoryBIO_Type)->tp_name, PyValue_Borrow(args[_idx[0]]));
         goto exit;
     }
-    incoming = (PySSLMemoryBIO *)args[0];
-    if (!PyObject_TypeCheck(args[1], get_state_ctx(self)->PySSLMemoryBIO_Type)) {
-        _PyArg_BadArgument("_wrap_bio", "argument 'outgoing'", (get_state_ctx(self)->PySSLMemoryBIO_Type)->tp_name, args[1]);
+    incoming = (PySSLMemoryBIO *)PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[0]]));
+    if (!PyType_IsSubtype(PyValue_TYPE(PyValue_Borrow(args[_idx[1]])), get_state_ctx(self)->PySSLMemoryBIO_Type)) {
+        _PyArg_BadArgumentValue("_wrap_bio", "argument 'outgoing'", (get_state_ctx(self)->PySSLMemoryBIO_Type)->tp_name, PyValue_Borrow(args[_idx[1]]));
         goto exit;
     }
-    outgoing = (PySSLMemoryBIO *)args[1];
-    server_side = PyObject_IsTrue(args[2]);
+    outgoing = (PySSLMemoryBIO *)PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[1]]));
+    server_side = _PyValue_IsTrue(PyValue_Borrow(args[_idx[2]]));
     if (server_side < 0) {
         goto exit;
     }
-    if (!noptargs) {
-        goto skip_optional_pos;
+    if (_idx[3] >= 0) {
+        hostname_obj = PyValue_Borrow(args[_idx[3]]);
     }
-    if (args[3]) {
-        hostname_obj = args[3];
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
+    if (_idx[4] >= 0) {
+        owner = PyValue_Borrow(args[_idx[4]]);
     }
-skip_optional_pos:
-    if (!noptargs) {
-        goto skip_optional_kwonly;
+    if (_idx[5] >= 0) {
+        session = PyValue_Borrow(args[_idx[5]]);
     }
-    if (args[4]) {
-        owner = args[4];
-        if (!--noptargs) {
-            goto skip_optional_kwonly;
-        }
-    }
-    session = args[5];
-skip_optional_kwonly:
-    Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = _ssl__SSLContext__wrap_bio_impl((PySSLContext *)self, incoming, outgoing, server_side, hostname_obj, owner, session);
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(self));
+    return_value = _ssl__SSLContext__wrap_bio_impl((PySSLContext *)PyValue_AsKnownObjectBorrow(self), incoming, outgoing, server_side, hostname_obj, owner, session);
     Py_END_CRITICAL_SECTION();
 
 exit:
@@ -1995,18 +2026,18 @@ PyDoc_STRVAR(_ssl__SSLContext_session_stats__doc__,
 "\n");
 
 #define _SSL__SSLCONTEXT_SESSION_STATS_METHODDEF    \
-    {"session_stats", (PyCFunction)_ssl__SSLContext_session_stats, METH_NOARGS, _ssl__SSLContext_session_stats__doc__},
+    {"session_stats", _PyCFunction_CAST(_ssl__SSLContext_session_stats), METH_VALUE|METH_NOARGS, _ssl__SSLContext_session_stats__doc__},
 
-static PyObject *
+static PyValue
 _ssl__SSLContext_session_stats_impl(PySSLContext *self);
 
-static PyObject *
-_ssl__SSLContext_session_stats(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+_ssl__SSLContext_session_stats(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
 
-    Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = _ssl__SSLContext_session_stats_impl((PySSLContext *)self);
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(self));
+    return_value = _ssl__SSLContext_session_stats_impl((PySSLContext *)PyValue_AsKnownObjectBorrow(self));
     Py_END_CRITICAL_SECTION();
 
     return return_value;
@@ -2018,18 +2049,18 @@ PyDoc_STRVAR(_ssl__SSLContext_set_default_verify_paths__doc__,
 "\n");
 
 #define _SSL__SSLCONTEXT_SET_DEFAULT_VERIFY_PATHS_METHODDEF    \
-    {"set_default_verify_paths", (PyCFunction)_ssl__SSLContext_set_default_verify_paths, METH_NOARGS, _ssl__SSLContext_set_default_verify_paths__doc__},
+    {"set_default_verify_paths", _PyCFunction_CAST(_ssl__SSLContext_set_default_verify_paths), METH_VALUE|METH_NOARGS, _ssl__SSLContext_set_default_verify_paths__doc__},
 
-static PyObject *
+static PyValue
 _ssl__SSLContext_set_default_verify_paths_impl(PySSLContext *self);
 
-static PyObject *
-_ssl__SSLContext_set_default_verify_paths(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+_ssl__SSLContext_set_default_verify_paths(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
 
-    Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = _ssl__SSLContext_set_default_verify_paths_impl((PySSLContext *)self);
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(self));
+    return_value = _ssl__SSLContext_set_default_verify_paths_impl((PySSLContext *)PyValue_AsKnownObjectBorrow(self));
     Py_END_CRITICAL_SECTION();
 
     return return_value;
@@ -2041,18 +2072,20 @@ PyDoc_STRVAR(_ssl__SSLContext_set_ecdh_curve__doc__,
 "\n");
 
 #define _SSL__SSLCONTEXT_SET_ECDH_CURVE_METHODDEF    \
-    {"set_ecdh_curve", (PyCFunction)_ssl__SSLContext_set_ecdh_curve, METH_O, _ssl__SSLContext_set_ecdh_curve__doc__},
+    {"set_ecdh_curve", _PyCFunction_CAST(_ssl__SSLContext_set_ecdh_curve), METH_VALUE|METH_O, _ssl__SSLContext_set_ecdh_curve__doc__},
 
-static PyObject *
-_ssl__SSLContext_set_ecdh_curve_impl(PySSLContext *self, PyObject *name);
+static PyValue
+_ssl__SSLContext_set_ecdh_curve_impl(PySSLContext *self, PyValueBorrow name);
 
-static PyObject *
-_ssl__SSLContext_set_ecdh_curve(PyObject *self, PyObject *name)
+static PyValue
+_ssl__SSLContext_set_ecdh_curve(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow name;
 
-    Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = _ssl__SSLContext_set_ecdh_curve_impl((PySSLContext *)self, name);
+    name = PyValue_Borrow(args[0]);
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(self));
+    return_value = _ssl__SSLContext_set_ecdh_curve_impl((PySSLContext *)PyValue_AsKnownObjectBorrow(self), name);
     Py_END_CRITICAL_SECTION();
 
     return return_value;
@@ -2118,18 +2151,18 @@ PyDoc_STRVAR(_ssl__SSLContext_cert_store_stats__doc__,
 "have been used at least once.");
 
 #define _SSL__SSLCONTEXT_CERT_STORE_STATS_METHODDEF    \
-    {"cert_store_stats", (PyCFunction)_ssl__SSLContext_cert_store_stats, METH_NOARGS, _ssl__SSLContext_cert_store_stats__doc__},
+    {"cert_store_stats", _PyCFunction_CAST(_ssl__SSLContext_cert_store_stats), METH_VALUE|METH_NOARGS, _ssl__SSLContext_cert_store_stats__doc__},
 
-static PyObject *
+static PyValue
 _ssl__SSLContext_cert_store_stats_impl(PySSLContext *self);
 
-static PyObject *
-_ssl__SSLContext_cert_store_stats(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+_ssl__SSLContext_cert_store_stats(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
 
-    Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = _ssl__SSLContext_cert_store_stats_impl((PySSLContext *)self);
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(self));
+    return_value = _ssl__SSLContext_cert_store_stats_impl((PySSLContext *)PyValue_AsKnownObjectBorrow(self));
     Py_END_CRITICAL_SECTION();
 
     return return_value;
@@ -2148,15 +2181,15 @@ PyDoc_STRVAR(_ssl__SSLContext_get_ca_certs__doc__,
 "have been used at least once.");
 
 #define _SSL__SSLCONTEXT_GET_CA_CERTS_METHODDEF    \
-    {"get_ca_certs", _PyCFunction_CAST(_ssl__SSLContext_get_ca_certs), METH_FASTCALL|METH_KEYWORDS, _ssl__SSLContext_get_ca_certs__doc__},
+    {"get_ca_certs", _PyCFunction_CAST(_ssl__SSLContext_get_ca_certs), METH_VALUE|METH_KEYWORDS, _ssl__SSLContext_get_ca_certs__doc__},
 
-static PyObject *
+static PyValue
 _ssl__SSLContext_get_ca_certs_impl(PySSLContext *self, int binary_form);
 
-static PyObject *
-_ssl__SSLContext_get_ca_certs(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_ssl__SSLContext_get_ca_certs(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
@@ -2184,25 +2217,21 @@ _ssl__SSLContext_get_ca_certs(PyObject *self, PyObject *const *args, Py_ssize_t 
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[1];
-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 0;
+    Py_ssize_t _idx[1];
     int binary_form = 0;
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 0, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 0, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, _idx, 1)) {
         goto exit;
     }
-    if (!noptargs) {
-        goto skip_optional_pos;
+    if (_idx[0] >= 0) {
+        binary_form = _PyValue_IsTrue(PyValue_Borrow(args[_idx[0]]));
+        if (binary_form < 0) {
+            goto exit;
+        }
     }
-    binary_form = PyObject_IsTrue(args[0]);
-    if (binary_form < 0) {
-        goto exit;
-    }
-skip_optional_pos:
-    Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = _ssl__SSLContext_get_ca_certs_impl((PySSLContext *)self, binary_form);
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(self));
+    return_value = _ssl__SSLContext_get_ca_certs_impl((PySSLContext *)PyValue_AsKnownObjectBorrow(self), binary_form);
     Py_END_CRITICAL_SECTION();
 
 exit:
@@ -2215,16 +2244,16 @@ PyDoc_STRVAR(_ssl__SSLContext_set_psk_client_callback__doc__,
 "\n");
 
 #define _SSL__SSLCONTEXT_SET_PSK_CLIENT_CALLBACK_METHODDEF    \
-    {"set_psk_client_callback", _PyCFunction_CAST(_ssl__SSLContext_set_psk_client_callback), METH_FASTCALL|METH_KEYWORDS, _ssl__SSLContext_set_psk_client_callback__doc__},
+    {"set_psk_client_callback", _PyCFunction_CAST(_ssl__SSLContext_set_psk_client_callback), METH_VALUE|METH_KEYWORDS, _ssl__SSLContext_set_psk_client_callback__doc__},
 
-static PyObject *
+static PyValue
 _ssl__SSLContext_set_psk_client_callback_impl(PySSLContext *self,
-                                              PyObject *callback);
+                                              PyValueBorrow callback);
 
-static PyObject *
-_ssl__SSLContext_set_psk_client_callback(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_ssl__SSLContext_set_psk_client_callback(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
@@ -2252,17 +2281,16 @@ _ssl__SSLContext_set_psk_client_callback(PyObject *self, PyObject *const *args, 
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[1];
-    PyObject *callback;
+    Py_ssize_t _idx[1];
+    PyValueBorrow callback;
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, _idx, 1)) {
         goto exit;
     }
-    callback = args[0];
-    Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = _ssl__SSLContext_set_psk_client_callback_impl((PySSLContext *)self, callback);
+    callback = PyValue_Borrow(args[_idx[0]]);
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(self));
+    return_value = _ssl__SSLContext_set_psk_client_callback_impl((PySSLContext *)PyValue_AsKnownObjectBorrow(self), callback);
     Py_END_CRITICAL_SECTION();
 
 exit:
@@ -2275,17 +2303,17 @@ PyDoc_STRVAR(_ssl__SSLContext_set_psk_server_callback__doc__,
 "\n");
 
 #define _SSL__SSLCONTEXT_SET_PSK_SERVER_CALLBACK_METHODDEF    \
-    {"set_psk_server_callback", _PyCFunction_CAST(_ssl__SSLContext_set_psk_server_callback), METH_FASTCALL|METH_KEYWORDS, _ssl__SSLContext_set_psk_server_callback__doc__},
+    {"set_psk_server_callback", _PyCFunction_CAST(_ssl__SSLContext_set_psk_server_callback), METH_VALUE|METH_KEYWORDS, _ssl__SSLContext_set_psk_server_callback__doc__},
 
-static PyObject *
+static PyValue
 _ssl__SSLContext_set_psk_server_callback_impl(PySSLContext *self,
-                                              PyObject *callback,
+                                              PyValueBorrow callback,
                                               const char *identity_hint);
 
-static PyObject *
-_ssl__SSLContext_set_psk_server_callback(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_ssl__SSLContext_set_psk_server_callback(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 2
@@ -2313,65 +2341,83 @@ _ssl__SSLContext_set_psk_server_callback(PyObject *self, PyObject *const *args, 
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[2];
-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 1;
-    PyObject *callback;
+    Py_ssize_t _idx[2];
+    PyValueBorrow callback;
     const char *identity_hint = NULL;
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 1, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 1, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, _idx, 2)) {
         goto exit;
     }
-    callback = args[0];
-    if (!noptargs) {
-        goto skip_optional_pos;
-    }
-    if (args[1] == Py_None) {
-        identity_hint = NULL;
-    }
-    else if (PyUnicode_Check(args[1])) {
-        identity_hint = _PyUnicode_AsUTF8NoNUL(args[1]);
-        if (identity_hint == NULL) {
+    callback = PyValue_Borrow(args[_idx[0]]);
+    if (_idx[1] >= 0) {
+        if (!PyValue_IsObject(PyValue_Borrow(args[_idx[1]]))) {
+            _PyArg_BadArgumentValue("set_psk_server_callback", "argument 'identity_hint'", "str or None", PyValue_Borrow(args[_idx[1]]));
+            goto exit;
+        }
+        if (PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[1]])) == Py_None) {
+            identity_hint = NULL;
+        }
+        else if (PyUnicode_Check(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[1]])))) {
+            identity_hint = _PyUnicode_AsUTF8NoNUL(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[1]])));
+            if (identity_hint == NULL) {
+                goto exit;
+            }
+        }
+        else {
+            _PyArg_BadArgument("set_psk_server_callback", "argument 'identity_hint'", "str or None", PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[1]])));
             goto exit;
         }
     }
-    else {
-        _PyArg_BadArgument("set_psk_server_callback", "argument 'identity_hint'", "str or None", args[1]);
-        goto exit;
-    }
-skip_optional_pos:
-    Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = _ssl__SSLContext_set_psk_server_callback_impl((PySSLContext *)self, callback, identity_hint);
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(self));
+    return_value = _ssl__SSLContext_set_psk_server_callback_impl((PySSLContext *)PyValue_AsKnownObjectBorrow(self), callback, identity_hint);
     Py_END_CRITICAL_SECTION();
 
 exit:
     return return_value;
 }
 
-static PyObject *
+static PyValue
 _ssl_MemoryBIO_impl(PyTypeObject *type);
 
-static PyObject *
-_ssl_MemoryBIO(PyTypeObject *type, PyObject *args, PyObject *kwargs)
+static PyValue
+_ssl_MemoryBIO_value(PyTypeObject *type, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyTypeObject *base_tp = get_state_type(type)->PySSLMemoryBIO_Type;
 
     if ((type == base_tp || type->tp_init == base_tp->tp_init) &&
-        !_PyArg_NoPositional("MemoryBIO", args)) {
+        !_PyArg_NoPositionalStack("MemoryBIO", nargs)) {
         goto exit;
     }
     if ((type == base_tp || type->tp_init == base_tp->tp_init) &&
-        !_PyArg_NoKeywords("MemoryBIO", kwargs)) {
+        !_PyArg_NoKwnames("MemoryBIO", kwnames)) {
         goto exit;
     }
-    Py_BEGIN_CRITICAL_SECTION(type);
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(type));
     return_value = _ssl_MemoryBIO_impl(type);
     Py_END_CRITICAL_SECTION();
 
 exit:
     return return_value;
+}
+
+Py_VALUE_ENTRY static PyObject *
+_ssl_MemoryBIO(PyTypeObject *type, PyObject *args, PyObject *kwargs)
+{
+    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
+    if (kwargs == NULL || PyDict_GET_SIZE(kwargs) == 0) {
+        return _PyValue_THUNK_EXIT(_ssl_MemoryBIO_value(type, _PyTuple_ITEMS(args), nargs, NULL), BOX_SITE_CALL);
+    }
+    PyObject *kwnames;
+    PyValue *window = _PyValue_StackUnpackDict(_PyThreadState_GET(),
+        _PyTuple_ITEMS(args), nargs, kwargs, &kwnames);
+    if (window == NULL) {
+        return NULL;
+    }
+    PyValue result = _ssl_MemoryBIO_value(type, window, nargs, kwnames);
+    _PyValue_StackUnpackDict_Free(window, nargs, kwnames);
+    return _PyValue_THUNK_EXIT(result, BOX_SITE_CALL);
 }
 
 PyDoc_STRVAR(_ssl_MemoryBIO_pending__doc__,
@@ -2422,15 +2468,15 @@ PyDoc_STRVAR(_ssl_MemoryBIO_read__doc__,
 "distinguish between the two.");
 
 #define _SSL_MEMORYBIO_READ_METHODDEF    \
-    {"read", _PyCFunction_CAST(_ssl_MemoryBIO_read), METH_FASTCALL, _ssl_MemoryBIO_read__doc__},
+    {"read", _PyCFunction_CAST(_ssl_MemoryBIO_read), METH_VALUE, _ssl_MemoryBIO_read__doc__},
 
-static PyObject *
+static PyValue
 _ssl_MemoryBIO_read_impl(PySSLMemoryBIO *self, int len);
 
-static PyObject *
-_ssl_MemoryBIO_read(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_ssl_MemoryBIO_read(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int len = -1;
 
     if (!_PyArg_CheckPositional("read", nargs, 0, 1)) {
@@ -2439,13 +2485,13 @@ _ssl_MemoryBIO_read(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
     if (nargs < 1) {
         goto skip_optional;
     }
-    len = PyLong_AsInt(args[0]);
+    len = _PyValue_AsInt(PyValue_Borrow(args[0]));
     if (len == -1 && PyErr_Occurred()) {
         goto exit;
     }
 skip_optional:
-    Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = _ssl_MemoryBIO_read_impl((PySSLMemoryBIO *)self, len);
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(self));
+    return_value = _ssl_MemoryBIO_read_impl((PySSLMemoryBIO *)PyValue_AsKnownObjectBorrow(self), len);
     Py_END_CRITICAL_SECTION();
 
 exit:
@@ -2461,22 +2507,26 @@ PyDoc_STRVAR(_ssl_MemoryBIO_write__doc__,
 "Returns the number of bytes written.");
 
 #define _SSL_MEMORYBIO_WRITE_METHODDEF    \
-    {"write", (PyCFunction)_ssl_MemoryBIO_write, METH_O, _ssl_MemoryBIO_write__doc__},
+    {"write", _PyCFunction_CAST(_ssl_MemoryBIO_write), METH_VALUE|METH_O, _ssl_MemoryBIO_write__doc__},
 
-static PyObject *
+static PyValue
 _ssl_MemoryBIO_write_impl(PySSLMemoryBIO *self, Py_buffer *b);
 
-static PyObject *
-_ssl_MemoryBIO_write(PyObject *self, PyObject *arg)
+static PyValue
+_ssl_MemoryBIO_write(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     Py_buffer b = {NULL, NULL};
 
-    if (PyObject_GetBuffer(arg, &b, PyBUF_SIMPLE) != 0) {
+    if (!PyValue_IsObject(PyValue_Borrow(args[0]))) {
+        PyErr_Format(PyExc_TypeError, "a bytes-like object is required, not '%.100s'", PyValue_TYPE(PyValue_Borrow(args[0]))->tp_name);
         goto exit;
     }
-    Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = _ssl_MemoryBIO_write_impl((PySSLMemoryBIO *)self, &b);
+    if (PyObject_GetBuffer(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])), &b, PyBUF_SIMPLE) != 0) {
+        goto exit;
+    }
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(self));
+    return_value = _ssl_MemoryBIO_write_impl((PySSLMemoryBIO *)PyValue_AsKnownObjectBorrow(self), &b);
     Py_END_CRITICAL_SECTION();
 
 exit:
@@ -2497,18 +2547,18 @@ PyDoc_STRVAR(_ssl_MemoryBIO_write_eof__doc__,
 "When all data has been read, the \"eof\" property will be True.");
 
 #define _SSL_MEMORYBIO_WRITE_EOF_METHODDEF    \
-    {"write_eof", (PyCFunction)_ssl_MemoryBIO_write_eof, METH_NOARGS, _ssl_MemoryBIO_write_eof__doc__},
+    {"write_eof", _PyCFunction_CAST(_ssl_MemoryBIO_write_eof), METH_VALUE|METH_NOARGS, _ssl_MemoryBIO_write_eof__doc__},
 
-static PyObject *
+static PyValue
 _ssl_MemoryBIO_write_eof_impl(PySSLMemoryBIO *self);
 
-static PyObject *
-_ssl_MemoryBIO_write_eof(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+_ssl_MemoryBIO_write_eof(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
 
-    Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = _ssl_MemoryBIO_write_eof_impl((PySSLMemoryBIO *)self);
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(self));
+    return_value = _ssl_MemoryBIO_write_eof_impl((PySSLMemoryBIO *)PyValue_AsKnownObjectBorrow(self));
     Py_END_CRITICAL_SECTION();
 
     return return_value;
@@ -2614,48 +2664,46 @@ PyDoc_STRVAR(_ssl_RAND_add__doc__,
 "string.  See RFC 4086.");
 
 #define _SSL_RAND_ADD_METHODDEF    \
-    {"RAND_add", _PyCFunction_CAST(_ssl_RAND_add), METH_FASTCALL, _ssl_RAND_add__doc__},
+    {"RAND_add", _PyCFunction_CAST(_ssl_RAND_add), METH_VALUE, _ssl_RAND_add__doc__},
 
-static PyObject *
+static PyValue
 _ssl_RAND_add_impl(PyObject *module, Py_buffer *view, double entropy);
 
-static PyObject *
-_ssl_RAND_add(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_ssl_RAND_add(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     Py_buffer view = {NULL, NULL};
     double entropy;
 
     if (!_PyArg_CheckPositional("RAND_add", nargs, 2, 2)) {
         goto exit;
     }
-    if (PyUnicode_Check(args[0])) {
+    if (!PyValue_IsObject(PyValue_Borrow(args[0]))) {
+        PyErr_Format(PyExc_TypeError, "a bytes-like object is required, not '%.100s'", PyValue_TYPE(PyValue_Borrow(args[0]))->tp_name);
+        goto exit;
+    }
+    if (PyUnicode_Check(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])))) {
         Py_ssize_t len;
-        const char *ptr = PyUnicode_AsUTF8AndSize(args[0], &len);
+        const char *ptr = PyUnicode_AsUTF8AndSize(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])), &len);
         if (ptr == NULL) {
             goto exit;
         }
-        if (PyBuffer_FillInfo(&view, args[0], (void *)ptr, len, 1, PyBUF_SIMPLE) < 0) {
+        if (PyBuffer_FillInfo(&view, PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])), (void *)ptr, len, 1, PyBUF_SIMPLE) < 0) {
             goto exit;
         }
     }
     else { /* any bytes-like object */
-        if (PyObject_GetBuffer(args[0], &view, PyBUF_SIMPLE) != 0) {
+        if (PyObject_GetBuffer(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])), &view, PyBUF_SIMPLE) != 0) {
             goto exit;
         }
     }
-    if (PyFloat_CheckExact(args[1])) {
-        entropy = PyFloat_AS_DOUBLE(args[1]);
+    entropy = _PyValue_AsDouble(PyValue_Borrow(args[1]));
+    if (entropy == -1.0 && PyErr_Occurred()) {
+        goto exit;
     }
-    else
-    {
-        entropy = PyFloat_AsDouble(args[1]);
-        if (entropy == -1.0 && PyErr_Occurred()) {
-            goto exit;
-        }
-    }
-    Py_BEGIN_CRITICAL_SECTION(module);
-    return_value = _ssl_RAND_add_impl(module, &view, entropy);
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(module));
+    return_value = _ssl_RAND_add_impl(PyValue_AsKnownObjectBorrow(module), &view, entropy);
     Py_END_CRITICAL_SECTION();
 
 exit:
@@ -2674,23 +2722,23 @@ PyDoc_STRVAR(_ssl_RAND_bytes__doc__,
 "Generate n cryptographically strong pseudo-random bytes.");
 
 #define _SSL_RAND_BYTES_METHODDEF    \
-    {"RAND_bytes", (PyCFunction)_ssl_RAND_bytes, METH_O, _ssl_RAND_bytes__doc__},
+    {"RAND_bytes", _PyCFunction_CAST(_ssl_RAND_bytes), METH_VALUE|METH_O, _ssl_RAND_bytes__doc__},
 
-static PyObject *
+static PyValue
 _ssl_RAND_bytes_impl(PyObject *module, int n);
 
-static PyObject *
-_ssl_RAND_bytes(PyObject *module, PyObject *arg)
+static PyValue
+_ssl_RAND_bytes(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int n;
 
-    n = PyLong_AsInt(arg);
+    n = _PyValue_AsInt(PyValue_Borrow(args[0]));
     if (n == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    Py_BEGIN_CRITICAL_SECTION(module);
-    return_value = _ssl_RAND_bytes_impl(module, n);
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(module));
+    return_value = _ssl_RAND_bytes_impl(PyValue_AsKnownObjectBorrow(module), n);
     Py_END_CRITICAL_SECTION();
 
 exit:
@@ -2707,18 +2755,18 @@ PyDoc_STRVAR(_ssl_RAND_status__doc__,
 "before using the ssl() function.");
 
 #define _SSL_RAND_STATUS_METHODDEF    \
-    {"RAND_status", (PyCFunction)_ssl_RAND_status, METH_NOARGS, _ssl_RAND_status__doc__},
+    {"RAND_status", _PyCFunction_CAST(_ssl_RAND_status), METH_VALUE|METH_NOARGS, _ssl_RAND_status__doc__},
 
-static PyObject *
+static PyValue
 _ssl_RAND_status_impl(PyObject *module);
 
-static PyObject *
-_ssl_RAND_status(PyObject *module, PyObject *Py_UNUSED(ignored))
+static PyValue
+_ssl_RAND_status(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
 
-    Py_BEGIN_CRITICAL_SECTION(module);
-    return_value = _ssl_RAND_status_impl(module);
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(module));
+    return_value = _ssl_RAND_status_impl(PyValue_AsKnownObjectBorrow(module));
     Py_END_CRITICAL_SECTION();
 
     return return_value;
@@ -2733,18 +2781,18 @@ PyDoc_STRVAR(_ssl_get_default_verify_paths__doc__,
 "The values are \'cert_file_env\', \'cert_file\', \'cert_dir_env\', \'cert_dir\'.");
 
 #define _SSL_GET_DEFAULT_VERIFY_PATHS_METHODDEF    \
-    {"get_default_verify_paths", (PyCFunction)_ssl_get_default_verify_paths, METH_NOARGS, _ssl_get_default_verify_paths__doc__},
+    {"get_default_verify_paths", _PyCFunction_CAST(_ssl_get_default_verify_paths), METH_VALUE|METH_NOARGS, _ssl_get_default_verify_paths__doc__},
 
-static PyObject *
+static PyValue
 _ssl_get_default_verify_paths_impl(PyObject *module);
 
-static PyObject *
-_ssl_get_default_verify_paths(PyObject *module, PyObject *Py_UNUSED(ignored))
+static PyValue
+_ssl_get_default_verify_paths(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
 
-    Py_BEGIN_CRITICAL_SECTION(module);
-    return_value = _ssl_get_default_verify_paths_impl(module);
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(module));
+    return_value = _ssl_get_default_verify_paths_impl(PyValue_AsKnownObjectBorrow(module));
     Py_END_CRITICAL_SECTION();
 
     return return_value;
@@ -2756,15 +2804,19 @@ PyDoc_STRVAR(_ssl_get_sigalgs__doc__,
 "\n");
 
 #define _SSL_GET_SIGALGS_METHODDEF    \
-    {"get_sigalgs", (PyCFunction)_ssl_get_sigalgs, METH_NOARGS, _ssl_get_sigalgs__doc__},
+    {"get_sigalgs", _PyCFunction_CAST(_ssl_get_sigalgs), METH_VALUE|METH_NOARGS, _ssl_get_sigalgs__doc__},
 
-static PyObject *
+static PyValue
 _ssl_get_sigalgs_impl(PyObject *module);
 
-static PyObject *
-_ssl_get_sigalgs(PyObject *module, PyObject *Py_UNUSED(ignored))
+static PyValue
+_ssl_get_sigalgs(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _ssl_get_sigalgs_impl(module);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _ssl_get_sigalgs_impl(PyValue_AsKnownObjectBorrow(module));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(_ssl_txt2obj__doc__,
@@ -2777,15 +2829,15 @@ PyDoc_STRVAR(_ssl_txt2obj__doc__,
 "long name are also matched.");
 
 #define _SSL_TXT2OBJ_METHODDEF    \
-    {"txt2obj", _PyCFunction_CAST(_ssl_txt2obj), METH_FASTCALL|METH_KEYWORDS, _ssl_txt2obj__doc__},
+    {"txt2obj", _PyCFunction_CAST(_ssl_txt2obj), METH_VALUE|METH_KEYWORDS, _ssl_txt2obj__doc__},
 
-static PyObject *
+static PyValue
 _ssl_txt2obj_impl(PyObject *module, const char *txt, int name);
 
-static PyObject *
-_ssl_txt2obj(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_ssl_txt2obj(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 2
@@ -2813,34 +2865,34 @@ _ssl_txt2obj(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[2];
-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 1;
+    Py_ssize_t _idx[2];
     const char *txt;
     int name = 0;
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 1, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 1, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, _idx, 2)) {
         goto exit;
     }
-    if (!PyUnicode_Check(args[0])) {
-        _PyArg_BadArgument("txt2obj", "argument 'txt'", "str", args[0]);
+    if (!PyValue_IsObject(PyValue_Borrow(args[_idx[0]]))) {
+        _PyArg_BadArgumentValue("txt2obj", "argument 'txt'", "str", PyValue_Borrow(args[_idx[0]]));
         goto exit;
     }
-    txt = _PyUnicode_AsUTF8NoNUL(args[0]);
+    if (!PyUnicode_Check(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[0]])))) {
+        _PyArg_BadArgument("txt2obj", "argument 'txt'", "str", PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[0]])));
+        goto exit;
+    }
+    txt = _PyUnicode_AsUTF8NoNUL(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[0]])));
     if (txt == NULL) {
         goto exit;
     }
-    if (!noptargs) {
-        goto skip_optional_pos;
+    if (_idx[1] >= 0) {
+        name = _PyValue_IsTrue(PyValue_Borrow(args[_idx[1]]));
+        if (name < 0) {
+            goto exit;
+        }
     }
-    name = PyObject_IsTrue(args[1]);
-    if (name < 0) {
-        goto exit;
-    }
-skip_optional_pos:
-    Py_BEGIN_CRITICAL_SECTION(module);
-    return_value = _ssl_txt2obj_impl(module, txt, name);
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(module));
+    return_value = _ssl_txt2obj_impl(PyValue_AsKnownObjectBorrow(module), txt, name);
     Py_END_CRITICAL_SECTION();
 
 exit:
@@ -2854,23 +2906,23 @@ PyDoc_STRVAR(_ssl_nid2obj__doc__,
 "Lookup NID, short name, long name and OID of an ASN1_OBJECT by NID.");
 
 #define _SSL_NID2OBJ_METHODDEF    \
-    {"nid2obj", (PyCFunction)_ssl_nid2obj, METH_O, _ssl_nid2obj__doc__},
+    {"nid2obj", _PyCFunction_CAST(_ssl_nid2obj), METH_VALUE|METH_O, _ssl_nid2obj__doc__},
 
-static PyObject *
+static PyValue
 _ssl_nid2obj_impl(PyObject *module, int nid);
 
-static PyObject *
-_ssl_nid2obj(PyObject *module, PyObject *arg)
+static PyValue
+_ssl_nid2obj(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int nid;
 
-    nid = PyLong_AsInt(arg);
+    nid = _PyValue_AsInt(PyValue_Borrow(args[0]));
     if (nid == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    Py_BEGIN_CRITICAL_SECTION(module);
-    return_value = _ssl_nid2obj_impl(module, nid);
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(module));
+    return_value = _ssl_nid2obj_impl(PyValue_AsKnownObjectBorrow(module), nid);
     Py_END_CRITICAL_SECTION();
 
 exit:
@@ -2892,15 +2944,15 @@ PyDoc_STRVAR(_ssl_enum_certificates__doc__,
 "trust setting is either a set of OIDs or the boolean True.");
 
 #define _SSL_ENUM_CERTIFICATES_METHODDEF    \
-    {"enum_certificates", _PyCFunction_CAST(_ssl_enum_certificates), METH_FASTCALL|METH_KEYWORDS, _ssl_enum_certificates__doc__},
+    {"enum_certificates", _PyCFunction_CAST(_ssl_enum_certificates), METH_VALUE|METH_KEYWORDS, _ssl_enum_certificates__doc__},
 
-static PyObject *
+static PyValue
 _ssl_enum_certificates_impl(PyObject *module, const char *store_name);
 
-static PyObject *
-_ssl_enum_certificates(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_ssl_enum_certificates(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
@@ -2928,24 +2980,27 @@ _ssl_enum_certificates(PyObject *module, PyObject *const *args, Py_ssize_t nargs
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[1];
+    Py_ssize_t _idx[1];
     const char *store_name;
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, _idx, 1)) {
         goto exit;
     }
-    if (!PyUnicode_Check(args[0])) {
-        _PyArg_BadArgument("enum_certificates", "argument 'store_name'", "str", args[0]);
+    if (!PyValue_IsObject(PyValue_Borrow(args[_idx[0]]))) {
+        _PyArg_BadArgumentValue("enum_certificates", "argument 'store_name'", "str", PyValue_Borrow(args[_idx[0]]));
         goto exit;
     }
-    store_name = _PyUnicode_AsUTF8NoNUL(args[0]);
+    if (!PyUnicode_Check(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[0]])))) {
+        _PyArg_BadArgument("enum_certificates", "argument 'store_name'", "str", PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[0]])));
+        goto exit;
+    }
+    store_name = _PyUnicode_AsUTF8NoNUL(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[0]])));
     if (store_name == NULL) {
         goto exit;
     }
-    Py_BEGIN_CRITICAL_SECTION(module);
-    return_value = _ssl_enum_certificates_impl(module, store_name);
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(module));
+    return_value = _ssl_enum_certificates_impl(PyValue_AsKnownObjectBorrow(module), store_name);
     Py_END_CRITICAL_SECTION();
 
 exit:
@@ -2968,15 +3023,15 @@ PyDoc_STRVAR(_ssl_enum_crls__doc__,
 "X509_ASN_ENCODING or PKCS_7_ASN_ENCODING.");
 
 #define _SSL_ENUM_CRLS_METHODDEF    \
-    {"enum_crls", _PyCFunction_CAST(_ssl_enum_crls), METH_FASTCALL|METH_KEYWORDS, _ssl_enum_crls__doc__},
+    {"enum_crls", _PyCFunction_CAST(_ssl_enum_crls), METH_VALUE|METH_KEYWORDS, _ssl_enum_crls__doc__},
 
-static PyObject *
+static PyValue
 _ssl_enum_crls_impl(PyObject *module, const char *store_name);
 
-static PyObject *
-_ssl_enum_crls(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_ssl_enum_crls(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
@@ -3004,24 +3059,27 @@ _ssl_enum_crls(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObje
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[1];
+    Py_ssize_t _idx[1];
     const char *store_name;
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, _idx, 1)) {
         goto exit;
     }
-    if (!PyUnicode_Check(args[0])) {
-        _PyArg_BadArgument("enum_crls", "argument 'store_name'", "str", args[0]);
+    if (!PyValue_IsObject(PyValue_Borrow(args[_idx[0]]))) {
+        _PyArg_BadArgumentValue("enum_crls", "argument 'store_name'", "str", PyValue_Borrow(args[_idx[0]]));
         goto exit;
     }
-    store_name = _PyUnicode_AsUTF8NoNUL(args[0]);
+    if (!PyUnicode_Check(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[0]])))) {
+        _PyArg_BadArgument("enum_crls", "argument 'store_name'", "str", PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[0]])));
+        goto exit;
+    }
+    store_name = _PyUnicode_AsUTF8NoNUL(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[0]])));
     if (store_name == NULL) {
         goto exit;
     }
-    Py_BEGIN_CRITICAL_SECTION(module);
-    return_value = _ssl_enum_crls_impl(module, store_name);
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(module));
+    return_value = _ssl_enum_crls_impl(PyValue_AsKnownObjectBorrow(module), store_name);
     Py_END_CRITICAL_SECTION();
 
 exit:
@@ -3089,4 +3147,4 @@ exit:
 
 #define _SSL_SSLSESSION_HAS_TICKET_GETSETDEF {"has_ticket", (getter)_ssl_SSLSession_has_ticket_get, (setter)NULL, _ssl_SSLSession_has_ticket__doc__},
 
-/*[clinic end generated code: output=18a94d2b6b16d766 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=19a11f8110ccffea input=a9049054013a1b77]*/

@@ -28,7 +28,7 @@ PyAPI_FUNC(int) _Py_Gid_Converter(PyObject *, gid_t *);
 #  define HAVE_SIGSET_T
 #endif
 
-extern int _Py_Sigset_Converter(PyObject *, void *);
+extern int _Py_Sigset_Converter(PyValueBorrow, void *);
 
 #ifdef __cplusplus
 }

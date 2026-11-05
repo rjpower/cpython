@@ -1,18 +1,30 @@
 /* Thread module */
 /* Interface to Sjoerd's portable C thread library */
 
+#ifndef Py_BUILD_CORE_BUILTIN
+#  define Py_BUILD_CORE_MODULE 1
+#endif
+#define Py_VALUE_CORE 1
 #include "Python.h"
+#include "pycore_dict.h"          // PyDict_DelValue()
 #include "pycore_fileutils.h"     // _PyFile_Flush
 #include "pycore_gc_trace.h"      // _PyGC_AddRoot()
 #include "pycore_interp.h"        // _PyInterpreterState.threads.count
 #include "pycore_lock.h"
+#include "pycore_long_value.h"    // _PyValue_AsLong()
 #include "pycore_modsupport.h"    // _PyArg_NoKeywords()
 #include "pycore_moduleobject.h"  // _PyModule_GetState()
 #include "pycore_object_deferred.h" // _PyObject_SetDeferredRefcount()
 #include "pycore_pylifecycle.h"
 #include "pycore_pystate.h"       // _PyThreadState_SetCurrent()
+#include "pycore_setobject.h"     // PySet_AddValue()
+#include "pycore_structseq.h"     // PyStructSequence_GET_VALUE()
 #include "pycore_time.h"          // _PyTime_FromSeconds()
 #include "pycore_tuple.h"         // _PyTuple_FromPairSteal
+#include "pycore_value.h"         // PyValue_IsObject()
+#include "pycore_value_call.h"    // METH_VALUE
+#include "pycore_value_ops.h"     // _PyValue_IsTrue()
+#include "pycore_value_slots.h"// _PyValue_FromObjectResult()
 #include "pycore_weakref.h"       // _PyWeakref_GET_REF()
 
 #include <stddef.h>               // offsetof()
@@ -83,6 +95,11 @@ static PF_SET_THREAD_DESCRIPTION pSetThreadDescription = NULL;
 
 
 /*[clinic input]
+value_emission
+[clinic start generated code]*/
+/*[clinic end generated code: output=da39a3ee5e6b4b0d input=eb7b17088bfd7215]*/
+
+/*[clinic input]
 module _thread
 class _thread.lock "lockobject *" "clinic_state()->lock_type"
 class _thread.RLock "rlockobject *" "clinic_state()->rlock_type"
@@ -93,6 +110,19 @@ class _thread._ThreadHandle "PyObject *" "clinic_state()->thread_handle_type"
 #define clinic_state() get_thread_state_by_cls(type)
 #include "clinic/_threadmodule.c.h"
 #undef clinic_state
+
+// _PyTime_FromSecondsObject() of a value, which may be an inline int or float.
+static int
+time_from_seconds_value(PyTime_t *t, PyValueBorrow v, _PyTime_round_t round)
+{
+    PyObject *obj = _PyValue_AsObjectAt(v, BOX_SITE_PARSER);
+    if (obj == NULL) {
+        return -1;
+    }
+    int res = _PyTime_FromSecondsObject(t, obj, round);
+    Py_DECREF(obj);
+    return res;
+}
 
 // _ThreadHandle type
 
@@ -703,44 +733,44 @@ _thread._ThreadHandle.join
     /
 [clinic start generated code]*/
 
-static PyObject *
-_thread__ThreadHandle_join_impl(PyObject *self, PyObject *timeout_obj)
-/*[clinic end generated code: output=d3a4f0b20c21442e input=b66d17a0f77d6e9c]*/
+static PyValue
+_thread__ThreadHandle_join_impl(PyObject *self, PyValueBorrow timeout_obj)
+/*[clinic end generated code: output=bc35c32a5745a57f input=b66d17a0f77d6e9c]*/
 {
     PyThreadHandleObject *handle = PyThreadHandleObject_CAST(self);
 
     PyTime_t timeout_ns = -1;
-    if (timeout_obj != Py_None) {
-        if (_PyTime_FromSecondsObject(&timeout_ns, timeout_obj,
-                                      _PyTime_ROUND_TIMEOUT) < 0) {
-            return NULL;
+    if (!PyValue_IsNone(timeout_obj)) {
+        if (time_from_seconds_value(&timeout_ns, timeout_obj,
+                                    _PyTime_ROUND_TIMEOUT) < 0) {
+            return PyValue_NULL;
         }
     }
 
     if (ThreadHandle_join(handle->handle, timeout_ns) < 0) {
-        return NULL;
+        return PyValue_NULL;
     }
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 /*[clinic input]
 _thread._ThreadHandle.is_done
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _thread__ThreadHandle_is_done_impl(PyObject *self)
-/*[clinic end generated code: output=f5c00923fb61967b input=dd905a1ac7fc2e7c]*/
+/*[clinic end generated code: output=c258c23af622a43a input=dd905a1ac7fc2e7c]*/
 {
     PyThreadHandleObject *handle = PyThreadHandleObject_CAST(self);
     if (_PyEvent_IsSet(&handle->handle->thread_is_exiting)) {
         if (_PyOnceFlag_CallOnce(&handle->handle->once, join_thread,
                                  handle->handle) == -1) {
-            return NULL;
+            return PyValue_NULL;
         }
-        Py_RETURN_TRUE;
+        return PyValue_True;
     }
     else {
-        Py_RETURN_FALSE;
+        return PyValue_False;
     }
 }
 
@@ -748,15 +778,15 @@ _thread__ThreadHandle_is_done_impl(PyObject *self)
 _thread._ThreadHandle._set_done
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _thread__ThreadHandle__set_done_impl(PyObject *self)
-/*[clinic end generated code: output=709b4d7ca318bb6d input=9f0115db8d84806b]*/
+/*[clinic end generated code: output=ef79e828d9307b27 input=9f0115db8d84806b]*/
 {
     PyThreadHandleObject *handle = PyThreadHandleObject_CAST(self);
     if (ThreadHandle_set_done(handle->handle) < 0) {
-        return NULL;
+        return PyValue_NULL;
     }
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 static PyGetSetDef ThreadHandle_getsetlist[] = {
@@ -803,16 +833,16 @@ lock_dealloc(PyObject *self)
 
 
 static int
-lock_acquire_parse_timeout(PyObject *timeout_obj, int blocking, PyTime_t *timeout)
+lock_acquire_parse_timeout(PyValueBorrow timeout_obj, int blocking, PyTime_t *timeout)
 {
     // XXX Use PyThread_ParseTimeoutArg().
 
     const PyTime_t unset_timeout = _PyTime_FromSeconds(-1);
     *timeout = unset_timeout;
 
-    if (timeout_obj
-        && _PyTime_FromSecondsObject(timeout,
-                                     timeout_obj, _PyTime_ROUND_TIMEOUT) < 0)
+    if (!PyValue_IsNull(timeout_obj)
+        && time_from_seconds_value(timeout,
+                                   timeout_obj, _PyTime_ROUND_TIMEOUT) < 0)
         return -1;
 
     if (!blocking && *timeout != unset_timeout ) {
@@ -854,15 +884,15 @@ and the return value reflects whether the lock is acquired.
 The blocking operation is interruptible.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _thread_lock_acquire_impl(lockobject *self, int blocking,
-                          PyObject *timeoutobj)
-/*[clinic end generated code: output=569d6b25d508bf6f input=73e75b3d2ec32677]*/
+                          PyValueBorrow timeoutobj)
+/*[clinic end generated code: output=c4e5169c4495d559 input=73e75b3d2ec32677]*/
 {
     PyTime_t timeout;
 
     if (lock_acquire_parse_timeout(timeoutobj, blocking, &timeout) < 0) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     PyLockStatus r = _PyMutex_LockTimed(
@@ -870,13 +900,13 @@ _thread_lock_acquire_impl(lockobject *self, int blocking,
         _PY_LOCK_PYTHONLOCK | _PY_LOCK_HANDLE_SIGNALS | _PY_LOCK_DETACH);
     if (r == PY_LOCK_INTR) {
         assert(PyErr_Occurred());
-        return NULL;
+        return PyValue_NULL;
     }
     if (r == PY_LOCK_FAILURE && PyErr_Occurred()) {
-        return NULL;
+        return PyValue_NULL;
     }
 
-    return PyBool_FromLong(r == PY_LOCK_ACQUIRED);
+    return PyValue_FromBool(r == PY_LOCK_ACQUIRED);
 }
 
 /*[clinic input]
@@ -885,10 +915,10 @@ _thread.lock.acquire_lock = _thread.lock.acquire
 An obsolete synonym of acquire().
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _thread_lock_acquire_lock_impl(lockobject *self, int blocking,
-                               PyObject *timeoutobj)
-/*[clinic end generated code: output=ea6c87ea13b56694 input=5e65bd56327ebe85]*/
+                               PyValueBorrow timeoutobj)
+/*[clinic end generated code: output=3c7a232dc1ceca41 input=5e65bd56327ebe85]*/
 {
     return _thread_lock_acquire_impl(self, blocking, timeoutobj);
 }
@@ -903,17 +933,17 @@ the lock to acquire the lock.  The lock must be in the locked state,
 but it needn't be locked by the same thread that unlocks it.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _thread_lock_release_impl(lockobject *self)
-/*[clinic end generated code: output=a4ab0d75d6e9fb73 input=dfe48f962dfe99b4]*/
+/*[clinic end generated code: output=885471b234f680ff input=dfe48f962dfe99b4]*/
 {
     /* Sanity check: the lock must be locked */
     if (_PyMutex_TryUnlock(&self->lock) < 0) {
         PyErr_SetString(ThreadError, "release unlocked lock");
-        return NULL;
+        return PyValue_NULL;
     }
 
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 /*[clinic input]
@@ -922,9 +952,9 @@ _thread.lock.release_lock
 An obsolete synonym of release().
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _thread_lock_release_lock_impl(lockobject *self)
-/*[clinic end generated code: output=43025044d51789bb input=74d91374fc601433]*/
+/*[clinic end generated code: output=2a258a9bd49494f4 input=74d91374fc601433]*/
 {
     return _thread_lock_release_impl(self);
 }
@@ -935,11 +965,11 @@ _thread.lock.__enter__
 Lock the lock.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _thread_lock___enter___impl(lockobject *self)
-/*[clinic end generated code: output=f27725de751ae064 input=8f982991608d38e7]*/
+/*[clinic end generated code: output=8dd96640ff9788aa input=8f982991608d38e7]*/
 {
-    return _thread_lock_acquire_impl(self, 1, NULL);
+    return _thread_lock_acquire_impl(self, 1, PyValue_Borrow(PyValue_NULL));
 }
 
 /*[clinic input]
@@ -952,10 +982,10 @@ _thread.lock.__exit__
 Release the lock.
 [clinic start generated code]*/
 
-static PyObject *
-_thread_lock___exit___impl(lockobject *self, PyObject *exc_type,
-                           PyObject *exc_value, PyObject *exc_tb)
-/*[clinic end generated code: output=c9e8eefa69beed07 input=c74d4abe15a6c037]*/
+static PyValue
+_thread_lock___exit___impl(lockobject *self, PyValueBorrow exc_type,
+                           PyValueBorrow exc_value, PyValueBorrow exc_tb)
+/*[clinic end generated code: output=9832d65e4db10f66 input=c74d4abe15a6c037]*/
 {
     return _thread_lock_release_impl(self);
 }
@@ -967,11 +997,11 @@ _thread.lock.locked
 Return whether the lock is in the locked state.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _thread_lock_locked_impl(lockobject *self)
-/*[clinic end generated code: output=63bb94e5a9efa382 input=d8e3d64861bbce73]*/
+/*[clinic end generated code: output=c35688925f508a03 input=d8e3d64861bbce73]*/
 {
-    return PyBool_FromLong(PyMutex_IsLocked(&self->lock));
+    return PyValue_FromBool(PyMutex_IsLocked(&self->lock));
 }
 
 /*[clinic input]
@@ -980,9 +1010,9 @@ _thread.lock.locked_lock
 An obsolete synonym of locked().
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _thread_lock_locked_lock_impl(lockobject *self)
-/*[clinic end generated code: output=f747c8329e905f8e input=500b0c3592f9bf84]*/
+/*[clinic end generated code: output=82cdbd3d654d7c53 input=500b0c3592f9bf84]*/
 {
     return _thread_lock_locked_impl(self);
 }
@@ -1000,12 +1030,12 @@ lock_repr(PyObject *op)
 _thread.lock._at_fork_reinit
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _thread_lock__at_fork_reinit_impl(lockobject *self)
-/*[clinic end generated code: output=d8609f2d3bfa1fd5 input=a970cb76e2a0a131]*/
+/*[clinic end generated code: output=8ee7f61375920e06 input=a970cb76e2a0a131]*/
 {
     _PyMutex_at_fork_reinit(&self->lock);
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 #endif  /* HAVE_FORK */
 
@@ -1014,16 +1044,16 @@ _thread_lock__at_fork_reinit_impl(lockobject *self)
 _thread.lock.__new__ as lock_new
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 lock_new_impl(PyTypeObject *type)
-/*[clinic end generated code: output=eab660d5a4c05c8a input=260208a4e277d250]*/
+/*[clinic end generated code: output=5c87e5ea415eba77 input=260208a4e277d250]*/
 {
     lockobject *self = (lockobject *)type->tp_alloc(type, 0);
     if (self == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
     self->lock = (PyMutex){0};
-    return (PyObject *)self;
+    return _PyValue_FromObjectResult((PyObject *)self);
 }
 
 
@@ -1114,15 +1144,15 @@ internal counter is simply incremented. If nobody holds the lock,
 the lock is taken and its internal counter initialized to 1.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _thread_RLock_acquire_impl(rlockobject *self, int blocking,
-                           PyObject *timeoutobj)
-/*[clinic end generated code: output=73df5af6f67c1513 input=d55a0f5014522a8d]*/
+                           PyValueBorrow timeoutobj)
+/*[clinic end generated code: output=b96777c8d9ed2542 input=d55a0f5014522a8d]*/
 {
     PyTime_t timeout;
 
     if (lock_acquire_parse_timeout(timeoutobj, blocking, &timeout) < 0) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     PyLockStatus r = _PyRecursiveMutex_LockTimed(
@@ -1130,13 +1160,13 @@ _thread_RLock_acquire_impl(rlockobject *self, int blocking,
         _PY_LOCK_PYTHONLOCK | _PY_LOCK_HANDLE_SIGNALS | _PY_LOCK_DETACH);
     if (r == PY_LOCK_INTR) {
         assert(PyErr_Occurred());
-        return NULL;
+        return PyValue_NULL;
     }
     if (r == PY_LOCK_FAILURE && PyErr_Occurred()) {
-        return NULL;
+        return PyValue_NULL;
     }
 
-    return PyBool_FromLong(r == PY_LOCK_ACQUIRED);
+    return PyValue_FromBool(r == PY_LOCK_ACQUIRED);
 }
 
 /*[clinic input]
@@ -1145,11 +1175,11 @@ _thread.RLock.__enter__
 Lock the lock.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _thread_RLock___enter___impl(rlockobject *self)
-/*[clinic end generated code: output=63135898476bf89f input=33be37f459dca390]*/
+/*[clinic end generated code: output=3b93159b8309a729 input=33be37f459dca390]*/
 {
-    return _thread_RLock_acquire_impl(self, 1, NULL);
+    return _thread_RLock_acquire_impl(self, 1, PyValue_Borrow(PyValue_NULL));
 }
 
 /*[clinic input]
@@ -1167,16 +1197,16 @@ the current thread, release() needs to be called as many times for
 the lock to be available for other threads.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _thread_RLock_release_impl(rlockobject *self)
-/*[clinic end generated code: output=51f4a013c5fae2c5 input=7c188f60189be13a]*/
+/*[clinic end generated code: output=9fbf0539d8b68c22 input=7c188f60189be13a]*/
 {
     if (_PyRecursiveMutex_TryUnlock(&self->lock) < 0) {
         PyErr_SetString(PyExc_RuntimeError,
                         "cannot release un-acquired lock");
-        return NULL;
+        return PyValue_NULL;
     }
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 /*[clinic input]
@@ -1190,10 +1220,10 @@ Release the lock.
 
 [clinic start generated code]*/
 
-static PyObject *
-_thread_RLock___exit___impl(rlockobject *self, PyObject *exc_type,
-                            PyObject *exc_value, PyObject *exc_tb)
-/*[clinic end generated code: output=79bb44d551aedeb5 input=79accf0778d91002]*/
+static PyValue
+_thread_RLock___exit___impl(rlockobject *self, PyValueBorrow exc_type,
+                            PyValueBorrow exc_value, PyValueBorrow exc_tb)
+/*[clinic end generated code: output=d92d577d5644f3c6 input=79accf0778d91002]*/
 {
     return _thread_RLock_release_impl(self);
 }
@@ -1204,12 +1234,12 @@ _thread.RLock.locked
 Return a boolean indicating whether this object is locked right now.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _thread_RLock_locked_impl(rlockobject *self)
-/*[clinic end generated code: output=e9b6060492b3f94e input=8866d9237ba5391b]*/
+/*[clinic end generated code: output=44e5b379881ad0b9 input=8866d9237ba5391b]*/
 {
     int is_locked = rlock_locked_impl(self);
-    return PyBool_FromLong(is_locked);
+    return PyValue_FromBool(is_locked);
 }
 
 /*[clinic input]
@@ -1220,21 +1250,28 @@ _thread.RLock._acquire_restore
 For internal use by `threading.Condition`.
 [clinic start generated code]*/
 
-static PyObject *
-_thread_RLock__acquire_restore_impl(rlockobject *self, PyObject *state)
-/*[clinic end generated code: output=beb8f2713a35e775 input=c8f2094fde059447]*/
+static PyValue
+_thread_RLock__acquire_restore_impl(rlockobject *self, PyValueBorrow state)
+/*[clinic end generated code: output=ea1c730c6852f570 input=c8f2094fde059447]*/
 {
     PyThread_ident_t owner;
     Py_ssize_t count;
 
-    if (!PyArg_Parse(state, "(n" Py_PARSE_THREAD_IDENT_T "):_acquire_restore",
-            &count, &owner))
-        return NULL;
+    PyObject *state_obj = _PyValue_AsObjectAt(state, BOX_SITE_PARSER);
+    if (state_obj == NULL) {
+        return PyValue_NULL;
+    }
+    int parsed = PyArg_Parse(state_obj,
+                             "(n" Py_PARSE_THREAD_IDENT_T "):_acquire_restore",
+                             &count, &owner);
+    Py_DECREF(state_obj);
+    if (!parsed)
+        return PyValue_NULL;
 
     _PyRecursiveMutex_Lock(&self->lock);
     _Py_atomic_store_ullong_relaxed(&self->lock.thread, owner);
     self->lock.level = (size_t)count - 1;
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 
@@ -1244,21 +1281,21 @@ _thread.RLock._release_save
 For internal use by `threading.Condition`.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _thread_RLock__release_save_impl(rlockobject *self)
-/*[clinic end generated code: output=d2916487315bea93 input=809d227cfc4a112c]*/
+/*[clinic end generated code: output=ffbb65df7a3fffcf input=809d227cfc4a112c]*/
 {
     if (!_PyRecursiveMutex_IsLockedByCurrentThread(&self->lock)) {
         PyErr_SetString(PyExc_RuntimeError,
                         "cannot release un-acquired lock");
-        return NULL;
+        return PyValue_NULL;
     }
 
     PyThread_ident_t owner = self->lock.thread;
     Py_ssize_t count = self->lock.level + 1;
     self->lock.level = 0;  // ensure the unlock releases the lock
     _PyRecursiveMutex_Unlock(&self->lock);
-    return Py_BuildValue("n" Py_PARSE_THREAD_IDENT_T, count, owner);
+    return _PyValue_FromObjectResult(Py_BuildValue("n" Py_PARSE_THREAD_IDENT_T, count, owner));
 }
 
 
@@ -1268,14 +1305,14 @@ _thread.RLock._recursion_count
 For internal use by reentrancy checks.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _thread_RLock__recursion_count_impl(rlockobject *self)
-/*[clinic end generated code: output=7993fb9695ef2c4d input=7fd1834cd7a4b044]*/
+/*[clinic end generated code: output=9c80fb8624e72fa3 input=7fd1834cd7a4b044]*/
 {
     if (_PyRecursiveMutex_IsLockedByCurrentThread(&self->lock)) {
-        return PyLong_FromSize_t(self->lock.level + 1);
+        return PyValue_FromUInt64(self->lock.level + 1);
     }
-    return PyLong_FromLong(0);
+    return PyValue_FromInt64(0);
 }
 
 
@@ -1285,12 +1322,12 @@ _thread.RLock._is_owned
 For internal use by `threading.Condition`.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _thread_RLock__is_owned_impl(rlockobject *self)
-/*[clinic end generated code: output=bf14268a3cabbe07 input=fba6535538deb858]*/
+/*[clinic end generated code: output=5b50b401caa67d93 input=fba6535538deb858]*/
 {
     long owned = _PyRecursiveMutex_IsLockedByCurrentThread(&self->lock);
-    return PyBool_FromLong(owned);
+    return PyValue_FromBool(owned);
 }
 
 /*[clinic input]
@@ -1298,16 +1335,16 @@ _thread_RLock__is_owned_impl(rlockobject *self)
 _thread.RLock.__new__ as rlock_new
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 rlock_new_impl(PyTypeObject *type)
-/*[clinic end generated code: output=bb4fb1edf6818df5 input=013591361bf1ac6e]*/
+/*[clinic end generated code: output=c4e4470abc486f3e input=013591361bf1ac6e]*/
 {
     rlockobject *self = (rlockobject *) type->tp_alloc(type, 0);
     if (self == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
     self->lock = (_PyRecursiveMutex){0};
-    return (PyObject *) self;
+    return _PyValue_FromObjectResult((PyObject *) self);
 }
 
 static PyObject *
@@ -1336,12 +1373,12 @@ rlock_repr(PyObject *op)
 _thread.RLock._at_fork_reinit
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _thread_RLock__at_fork_reinit_impl(rlockobject *self)
-/*[clinic end generated code: output=d77a4ce40351817c input=a3b625b026a8df4f]*/
+/*[clinic end generated code: output=a1ef5a4d95893567 input=a3b625b026a8df4f]*/
 {
     self->lock = (_PyRecursiveMutex){0};
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 #endif  /* HAVE_FORK */
 
@@ -1507,8 +1544,7 @@ create_sentinel_wr(localobject *self)
         return NULL;
     }
 
-    PyObject *args = _PyTuple_FromPairSteal(self_wr,
-                                            Py_NewRef(tstate->threading_local_key));
+    PyObject *args = _PyTuple_FromPairTakeValue(PyValue_PrepareOwned(self_wr), PyValue_DUP(PyValue_FromObjectBorrow(tstate->threading_local_key)));
     if (args == NULL) {
         return NULL;
     }
@@ -1531,9 +1567,9 @@ local_new(PyTypeObject *type, PyObject *args, PyObject *kw)
     if (type->tp_init == PyBaseObject_Type.tp_init) {
         int rc = 0;
         if (args != NULL)
-            rc = PyObject_IsTrue(args);
+            rc = _PyValue_IsTrue(PyValue_FromObjectBorrow(args));
         if (rc == 0 && kw != NULL)
-            rc = PyObject_IsTrue(kw);
+            rc = _PyValue_IsTrue(PyValue_FromObjectBorrow(kw));
         if (rc != 0) {
             if (rc > 0) {
                 PyErr_SetString(PyExc_TypeError,
@@ -1674,8 +1710,7 @@ create_localsdict(localobject *self, thread_module_state *state,
         goto err;
     }
 
-    if (PyDict_SetItem(self->localdicts, tstate->threading_local_key,
-                       ldict) < 0)
+    if (PyDict_SetValue(self->localdicts, PyValue_FromObjectBorrow(tstate->threading_local_key), PyValue_FromObjectBorrow(ldict)) < 0)
     {
         goto err;
     }
@@ -1683,8 +1718,7 @@ create_localsdict(localobject *self, thread_module_state *state,
     wr = create_sentinel_wr(self);
     if (wr == NULL) {
         PyObject *exc = PyErr_GetRaisedException();
-        if (PyDict_DelItem(self->localdicts,
-                           tstate->threading_local_key) < 0)
+        if (PyDict_DelValue(self->localdicts, PyValue_FromObjectBorrow(tstate->threading_local_key)) < 0)
         {
             PyErr_FormatUnraisable("Exception ignored while deleting "
                                    "thread local of %R", self);
@@ -1693,10 +1727,9 @@ create_localsdict(localobject *self, thread_module_state *state,
         goto err;
     }
 
-    if (PySet_Add(self->thread_watchdogs, wr) < 0) {
+    if (PySet_AddValue(self->thread_watchdogs, PyValue_FromObjectBorrow(wr)) < 0) {
         PyObject *exc = PyErr_GetRaisedException();
-        if (PyDict_DelItem(self->localdicts,
-                           tstate->threading_local_key) < 0)
+        if (PyDict_DelValue(self->localdicts, PyValue_FromObjectBorrow(tstate->threading_local_key)) < 0)
         {
             PyErr_FormatUnraisable("Exception ignored while deleting "
                                    "thread local of %R", self);
@@ -1727,12 +1760,17 @@ _ldict(localobject *self, thread_module_state *state)
 
     /* Check if a localsdict already exists */
     PyObject *ldict;
+    PyValue found;
     PyThreadState *tstate = _PyThreadState_GET();
-    if (PyDict_GetItemRef(self->localdicts, tstate->threading_local_key,
-                          &ldict) < 0) {
+    if (PyDict_GetValue(self->localdicts,
+                        PyValue_FromObjectBorrow(tstate->threading_local_key),
+                        &found) < 0) {
         return NULL;
     }
-    if (ldict != NULL) {
+    if (!PyValue_IsNull(found)) {
+        /* The stored value is always the locals dict. */
+        ldict = _PyValue_AsObjectAt(found, BOX_SITE_DICT);
+        PyValue_CLOSE(found);
         return ldict;
     }
 
@@ -1749,14 +1787,13 @@ _ldict(localobject *self, thread_module_state *state)
            we create a new one the next time we do an attr
            access */
         PyObject *exc = PyErr_GetRaisedException();
-        if (PyDict_DelItem(self->localdicts,
-                           tstate->threading_local_key) < 0)
+        if (PyDict_DelValue(self->localdicts, PyValue_FromObjectBorrow(tstate->threading_local_key)) < 0)
         {
             PyErr_FormatUnraisable("Exception ignored while deleting "
                                    "thread local of %R", self);
             assert(!PyErr_Occurred());
         }
-        if (PySet_Discard(self->thread_watchdogs, wr) < 0) {
+        if (PySet_DiscardValue(self->thread_watchdogs, PyValue_FromObjectBorrow(wr)) < 0) {
             PyErr_FormatUnraisable("Exception ignored while discarding "
                                    "thread watchdog of %R", self);
         }
@@ -1783,7 +1820,7 @@ local_setattro(PyObject *op, PyObject *name, PyObject *v)
         goto err;
     }
 
-    int r = PyObject_RichCompareBool(name, &_Py_ID(__dict__), Py_EQ);
+    int r = _PyValue_RichCompareBool(PyValue_FromObjectBorrow(name), _PyValue_FromObjectKnown(&_Py_ID(__dict__)), Py_EQ);
     if (r == -1) {
         goto err;
     }
@@ -1842,7 +1879,7 @@ local_getattro(PyObject *op, PyObject *name)
     if (ldict == NULL)
         return NULL;
 
-    int r = PyObject_RichCompareBool(name, &_Py_ID(__dict__), Py_EQ);
+    int r = _PyValue_RichCompareBool(PyValue_FromObjectBorrow(name), _PyValue_FromObjectKnown(&_Py_ID(__dict__)), Py_EQ);
     if (r == 1) {
         return ldict;
     }
@@ -1859,11 +1896,17 @@ local_getattro(PyObject *op, PyObject *name)
     }
 
     /* Optimization: just look in dict ourselves */
-    PyObject *value;
-    if (PyDict_GetItemRef(ldict, name, &value) != 0) {
+    PyValue value;
+    int found = PyDict_GetValue(ldict, PyValue_FromObjectBorrow(name), &value);
+    if (found != 0) {
         // found or error
         Py_DECREF(ldict);
-        return value;
+        if (found < 0) {
+            return NULL;
+        }
+        PyObject *res = _PyValue_AsObjectAt(value, BOX_SITE_ATTRIBUTE);
+        PyValue_CLOSE(value);
+        return res;
     }
 
     /* Fall back on generic to get __class__ and __dict__ */
@@ -1877,12 +1920,14 @@ local_getattro(PyObject *op, PyObject *name)
 static PyObject *
 clear_locals(PyObject *locals_and_key, PyObject *dummyweakref)
 {
-    PyObject *localweakref = PyTuple_GetItemRef(locals_and_key, 0);
-    if (localweakref == NULL) {
+    PyValue localweakref = PyTuple_GetValue(locals_and_key, 0);
+    if (PyValue_IsNull(localweakref)) {
         return NULL;
     }
-    localobject *self = localobject_CAST(_PyWeakref_GET_REF(localweakref));
-    Py_DECREF(localweakref);
+    /* The tuple was built by create_sentinel_wr() with a weakref first. */
+    localobject *self = localobject_CAST(
+        _PyWeakref_GET_REF(PyValue_AsKnownObjectBorrow(localweakref)));
+    PyValue_CLOSE(localweakref);
     if (self == NULL) {
         Py_RETURN_NONE;
     }
@@ -1890,19 +1935,19 @@ clear_locals(PyObject *locals_and_key, PyObject *dummyweakref)
     /* If the thread-local object is still alive and not being cleared,
        remove the corresponding local dict */
     if (self->localdicts != NULL) {
-        PyObject *key = PyTuple_GetItemRef(locals_and_key, 1);
-        if (key == NULL) {
+        PyValue key = PyTuple_GetValue(locals_and_key, 1);
+        if (PyValue_IsNull(key)) {
             Py_DECREF(self);
             return NULL;
         }
-        if (PyDict_Pop(self->localdicts, key, NULL) < 0) {
+        if (PyDict_PopValue(self->localdicts, key, NULL) < 0) {
             PyErr_FormatUnraisable("Exception ignored while clearing "
                                    "thread local %R", (PyObject *)self);
         }
-        Py_DECREF(key);
+        PyValue_CLOSE(key);
     }
     if (self->thread_watchdogs != NULL) {
-        if (PySet_Discard(self->thread_watchdogs, dummyweakref) < 0) {
+        if (PySet_DiscardValue(self->thread_watchdogs, PyValue_FromObjectBorrow(dummyweakref)) < 0) {
             PyErr_FormatUnraisable("Exception ignored while clearing "
                                    "thread local %R", (PyObject *)self);
         }
@@ -1922,16 +1967,16 @@ Return True if daemon threads are allowed in the current interpreter.
 Return False otherwise.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _thread_daemon_threads_allowed_impl(PyObject *module)
-/*[clinic end generated code: output=c82b3b9490c7e11e input=f94150f9e14b7d0c]*/
+/*[clinic end generated code: output=57bbdbc40687e1ff input=f94150f9e14b7d0c]*/
 {
     PyInterpreterState *interp = _PyInterpreterState_GET();
     if (interp->feature_flags & Py_RTFLAGS_DAEMON_THREADS) {
-        Py_RETURN_TRUE;
+        return PyValue_True;
     }
     else {
-        Py_RETURN_FALSE;
+        return PyValue_False;
     }
 }
 
@@ -1986,37 +2031,40 @@ unhandled exception; a stack trace will be printed unless the exception
 is SystemExit.
 [clinic start generated code]*/
 
-static PyObject *
-_thread_start_new_thread_impl(PyObject *module, PyObject *func,
+static PyValue
+_thread_start_new_thread_impl(PyObject *module, PyValueBorrow func,
                               PyObject *args, PyObject *kwargs)
-/*[clinic end generated code: output=0c27eb61b7a7152b input=b85f6b3301d30719]*/
+/*[clinic end generated code: output=d42d8f33f7890997 input=b85f6b3301d30719]*/
 {
     thread_module_state *state = get_thread_state(module);
 
-    if (!PyCallable_Check(func)) {
+    // An inline value is an int or float, never callable.
+    if (!PyValue_IsObject(func)
+        || !PyCallable_Check(PyValue_AsKnownObjectBorrow(func))) {
         PyErr_SetString(PyExc_TypeError,
                         "first arg must be callable");
-        return NULL;
+        return PyValue_NULL;
     }
+    PyObject *func_obj = PyValue_AsKnownObjectBorrow(func);
     if (PySys_Audit("_thread.start_new_thread", "OOO",
-                    func, args, kwargs ? kwargs : Py_None) < 0) {
-        return NULL;
+                    func_obj, args, kwargs ? kwargs : Py_None) < 0) {
+        return PyValue_NULL;
     }
 
     ThreadHandle *handle = ThreadHandle_new();
     if (handle == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     int st =
-        do_start_new_thread(state, func, args, kwargs, handle, /*daemon=*/1);
+        do_start_new_thread(state, func_obj, args, kwargs, handle, /*daemon=*/1);
     if (st < 0) {
         ThreadHandle_decref(handle);
-        return NULL;
+        return PyValue_NULL;
     }
     PyThread_ident_t ident = ThreadHandle_ident(handle);
     ThreadHandle_decref(handle);
-    return PyLong_FromUnsignedLongLong(ident);
+    return PyValue_FromUInt64(ident);
 }
 
 PyDoc_STRVAR(start_new_doc,
@@ -2043,51 +2091,58 @@ thread to exit if daemon is True.  If handle is provided it must be a
 newly created thread._ThreadHandle instance.
 [clinic start generated code]*/
 
-static PyObject *
-_thread_start_joinable_thread_impl(PyObject *module, PyObject *func,
-                                   PyObject *hobj, int daemon)
-/*[clinic end generated code: output=58691769e60620cf input=e17b3aebc087952a]*/
+static PyValue
+_thread_start_joinable_thread_impl(PyObject *module, PyValueBorrow func,
+                                   PyValueBorrow hobj, int daemon)
+/*[clinic end generated code: output=fbe3ed002dd7029f input=e17b3aebc087952a]*/
 {
     thread_module_state *state = get_thread_state(module);
 
-    if (!PyCallable_Check(func)) {
+    // An inline value is an int or float, never callable.
+    if (!PyValue_IsObject(func)
+        || !PyCallable_Check(PyValue_AsKnownObjectBorrow(func))) {
         PyErr_SetString(PyExc_TypeError,
                         "thread function must be callable");
-        return NULL;
+        return PyValue_NULL;
     }
+    PyObject *func_obj = PyValue_AsKnownObjectBorrow(func);
 
-    if (hobj != Py_None && !Py_IS_TYPE(hobj, state->thread_handle_type)) {
+    if (!PyValue_IsNone(hobj)
+        && PyValue_TYPE(hobj) != state->thread_handle_type) {
         PyErr_SetString(PyExc_TypeError, "'handle' must be a _ThreadHandle");
-        return NULL;
+        return PyValue_NULL;
     }
 
-    if (PySys_Audit("_thread.start_joinable_thread", "OiO", func, daemon,
-                    hobj) < 0) {
-        return NULL;
+    // hobj is None or a _ThreadHandle: an object either way.
+    if (PySys_Audit("_thread.start_joinable_thread", "OiO", func_obj, daemon,
+                    PyValue_IsNone(hobj) ? Py_None
+                                         : PyValue_AsKnownObjectBorrow(hobj)) < 0) {
+        return PyValue_NULL;
     }
 
-    if (hobj == Py_None) {
-        hobj = (PyObject *)PyThreadHandleObject_new(state->thread_handle_type);
-        if (hobj == NULL) {
-            return NULL;
+    PyObject *hobj_obj;
+    if (PyValue_IsNone(hobj)) {
+        hobj_obj = (PyObject *)PyThreadHandleObject_new(state->thread_handle_type);
+        if (hobj_obj == NULL) {
+            return PyValue_NULL;
         }
     }
     else {
-        Py_INCREF(hobj);
+        hobj_obj = Py_NewRef(PyValue_AsKnownObjectBorrow(hobj));
     }
 
     PyObject* args = PyTuple_New(0);
     if (args == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
-    int st = do_start_new_thread(state, func, args,
-                                 /*kwargs=*/ NULL, ((PyThreadHandleObject*)hobj)->handle, daemon);
+    int st = do_start_new_thread(state, func_obj, args,
+                                 /*kwargs=*/ NULL, ((PyThreadHandleObject*)hobj_obj)->handle, daemon);
     Py_DECREF(args);
     if (st < 0) {
-        Py_DECREF(hobj);
-        return NULL;
+        Py_DECREF(hobj_obj);
+        return PyValue_NULL;
     }
-    return (PyObject *) hobj;
+    return _PyValue_FromObjectResult(hobj_obj);
 }
 
 /*[clinic input]
@@ -2099,12 +2154,12 @@ It will cause the current thread to exit silently unless the exception
 is caught.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _thread_exit_impl(PyObject *module)
-/*[clinic end generated code: output=b03924346e743f4c input=1f3dc5da8ad48c70]*/
+/*[clinic end generated code: output=268f7e7f92cfaf3b input=1f3dc5da8ad48c70]*/
 {
     PyErr_SetNone(PyExc_SystemExit);
-    return NULL;
+    return PyValue_NULL;
 }
 
 PyDoc_STRVAR(exit_thread_doc,
@@ -2129,15 +2184,15 @@ Note: the default signal handler for SIGINT raises
 ``KeyboardInterrupt``.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _thread_interrupt_main_impl(PyObject *module, int signum)
-/*[clinic end generated code: output=fdafa7261ceb26e9 input=a8cf392f3a7f2a84]*/
+/*[clinic end generated code: output=0b37d7331a967d47 input=a8cf392f3a7f2a84]*/
 {
     if (PyErr_SetInterruptEx(signum)) {
         PyErr_SetString(PyExc_ValueError, "signal number out of range");
-        return NULL;
+        return PyValue_NULL;
     }
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 /*[clinic input]
@@ -2148,9 +2203,9 @@ Create a new lock object.
 See help(type(threading.Lock())) for information about locks.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _thread_allocate_lock_impl(PyObject *module)
-/*[clinic end generated code: output=884a4be6cb9ca731 input=49f5b1f966361bb6]*/
+/*[clinic end generated code: output=9bc12710edc0f967 input=49f5b1f966361bb6]*/
 {
     thread_module_state *state = get_thread_state(module);
     return lock_new_impl(state->lock_type);
@@ -2175,16 +2230,16 @@ be relied upon, and the number should be seen purely as a magic cookie.
 A thread's identity may be reused for another thread after it exits.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _thread_get_ident_impl(PyObject *module)
-/*[clinic end generated code: output=8c3f9d8aa938b332 input=08faef37d1fd9e67]*/
+/*[clinic end generated code: output=b691f55f806fbb10 input=08faef37d1fd9e67]*/
 {
     PyThread_ident_t ident = PyThread_get_thread_ident_ex();
     if (ident == PYTHREAD_INVALID_THREAD_ID) {
         PyErr_SetString(ThreadError, "no current thread ident");
-        return NULL;
+        return PyValue_NULL;
     }
-    return PyLong_FromUnsignedLongLong(ident);
+    return PyValue_FromUInt64(ident);
 }
 
 #ifdef PY_HAVE_THREAD_NATIVE_ID
@@ -2197,12 +2252,12 @@ It is reported by the OS (kernel).  This may be used to uniquely
 identify a particular thread within a system.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _thread_get_native_id_impl(PyObject *module)
-/*[clinic end generated code: output=d69767224b4ba922 input=454af91013e4f747]*/
+/*[clinic end generated code: output=40b96d2c45283773 input=454af91013e4f747]*/
 {
     unsigned long native_id = PyThread_get_thread_native_id();
-    return PyLong_FromUnsignedLong(native_id);
+    return PyValue_FromUInt64(native_id);
 }
 
 #endif
@@ -2220,12 +2275,12 @@ This function is meant for internal and specialized purposes only.
 In most applications `threading.enumerate()` should be used instead.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _thread__count_impl(PyObject *module)
-/*[clinic end generated code: output=4cd03377c3e8521d input=bbd340043d174d48]*/
+/*[clinic end generated code: output=0ec6d039a9598d67 input=bbd340043d174d48]*/
 {
     PyInterpreterState *interp = _PyInterpreterState_GET();
-    return PyLong_FromSsize_t(_Py_atomic_load_ssize(&interp->threads.count));
+    return PyValue_FromInt64(_Py_atomic_load_ssize(&interp->threads.count));
 }
 
 /*[clinic input]
@@ -2253,9 +2308,9 @@ KiB or requiring allocation in multiples of the system memory page size
 the suggested approach in the absence of more specific information).
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _thread_stack_size_impl(PyObject *module, Py_ssize_t new_size)
-/*[clinic end generated code: output=cc7ba71bd35afc30 input=3249feb8ed2350f8]*/
+/*[clinic end generated code: output=8f8fc7153d330042 input=3249feb8ed2350f8]*/
 {
     size_t old_size;
     int rc;
@@ -2264,7 +2319,7 @@ _thread_stack_size_impl(PyObject *module, Py_ssize_t new_size)
     if (new_size != 0 && new_size < min_size) {
         PyErr_Format(PyExc_ValueError,
                      "size must be at least %zi bytes", min_size);
-        return NULL;
+        return PyValue_NULL;
     }
 
     old_size = PyThread_get_stacksize();
@@ -2274,15 +2329,15 @@ _thread_stack_size_impl(PyObject *module, Py_ssize_t new_size)
         PyErr_Format(PyExc_ValueError,
                      "size not valid: %zd bytes",
                      new_size);
-        return NULL;
+        return PyValue_NULL;
     }
     if (rc == -2) {
         PyErr_SetString(ThreadError,
                         "setting stack size not supported");
-        return NULL;
+        return PyValue_NULL;
     }
 
-    return PyLong_FromSsize_t((Py_ssize_t) old_size);
+    return PyValue_FromInt64((Py_ssize_t) old_size);
 }
 
 static int
@@ -2372,32 +2427,38 @@ _thread._excepthook
 Handle uncaught Thread.run() exception.
 [clinic start generated code]*/
 
-static PyObject *
-_thread__excepthook(PyObject *module, PyObject *args)
-/*[clinic end generated code: output=cadc54a3be0e6007 input=5ae2316c400a3497]*/
+static PyValue
+_thread__excepthook_impl(PyObject *module, PyValueBorrow args)
+/*[clinic end generated code: output=ecf7081b5518c1dd input=5ae2316c400a3497]*/
 {
     thread_module_state *state = get_thread_state(module);
 
-    if (!Py_IS_TYPE(args, state->excepthook_type)) {
+    if (PyValue_TYPE(args) != state->excepthook_type) {
         PyErr_SetString(PyExc_TypeError,
                         "_thread.excepthook argument type "
                         "must be ExceptHookArgs");
-        return NULL;
+        return PyValue_NULL;
     }
 
-    PyObject *exc_type = PyStructSequence_GetItemRef(args, 0);
+    // args has the struct sequence type checked above: an object.
+    PyObject *args_obj = PyValue_AsKnownObjectBorrow(args);
+    PyValueBorrow exc_type_v = PyStructSequence_GET_VALUE(args_obj, 0);
+    PyObject *exc_type = PyValue_IsNull(exc_type_v) ? NULL : _PyValue_AsObjectAt(exc_type_v, BOX_SITE_CELL);
     if (exc_type == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
     if (exc_type == PyExc_SystemExit) {
         /* silently ignore SystemExit */
         Py_DECREF(exc_type);
-        Py_RETURN_NONE;
+        return PyValue_None;
     }
 
-    PyObject *exc_value = PyStructSequence_GetItemRef(args, 1);
-    PyObject *exc_tb = PyStructSequence_GetItemRef(args, 2);
-    PyObject *thread = PyStructSequence_GetItemRef(args, 3);
+    PyValueBorrow exc_value_v = PyStructSequence_GET_VALUE(args_obj, 1);
+    PyObject *exc_value = PyValue_IsNull(exc_value_v) ? NULL : _PyValue_AsObjectAt(exc_value_v, BOX_SITE_CELL);
+    PyValueBorrow exc_tb_v = PyStructSequence_GET_VALUE(args_obj, 2);
+    PyObject *exc_tb = PyValue_IsNull(exc_tb_v) ? NULL : _PyValue_AsObjectAt(exc_tb_v, BOX_SITE_CELL);
+    PyValueBorrow thread_v = PyStructSequence_GET_VALUE(args_obj, 3);
+    PyObject *thread = PyValue_IsNull(thread_v) ? NULL : _PyValue_AsObjectAt(thread_v, BOX_SITE_CELL);
     PyObject *file = NULL;
     PyObject *result = NULL;
     if (exc_value == NULL || exc_tb == NULL || thread == NULL) {
@@ -2440,7 +2501,7 @@ done:
     Py_XDECREF(exc_value);
     Py_XDECREF(exc_tb);
     Py_XDECREF(thread);
-    return Py_XNewRef(result);
+    return _PyValue_FromObjectResult(Py_XNewRef(result));
 }
 
 /*[clinic input]
@@ -2449,12 +2510,12 @@ _thread._is_main_interpreter
 Return True if the current interpreter is the main Python interpreter.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _thread__is_main_interpreter_impl(PyObject *module)
-/*[clinic end generated code: output=7dd82e1728339adc input=cc1eb00fd4598915]*/
+/*[clinic end generated code: output=dd4e689395a485a2 input=cc1eb00fd4598915]*/
 {
     PyInterpreterState *interp = _PyInterpreterState_GET();
-    return PyBool_FromLong(_Py_IsMainInterpreter(interp));
+    return PyValue_FromBool(_Py_IsMainInterpreter(interp));
 }
 
 /*[clinic input]
@@ -2463,9 +2524,9 @@ _thread._shutdown
 Wait for all non-daemon threads (other than the calling thread) to stop.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _thread__shutdown_impl(PyObject *module)
-/*[clinic end generated code: output=a19afe92bddc1824 input=bcaeaceb3a6fa590]*/
+/*[clinic end generated code: output=6d90942a30c4d90e input=bcaeaceb3a6fa590]*/
 {
     PyThread_ident_t ident = PyThread_get_thread_ident_ex();
     thread_module_state *state = get_thread_state(module);
@@ -2495,13 +2556,13 @@ _thread__shutdown_impl(PyObject *module)
         // as by a ctrl-c we print the error and exit early.
         if (ThreadHandle_join(handle, -1) < 0) {
             ThreadHandle_decref(handle);
-            return NULL;
+            return PyValue_NULL;
         }
 
         ThreadHandle_decref(handle);
     }
 
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 /*[clinic input]
@@ -2516,29 +2577,29 @@ Make a thread handle for threads not spawned by the _thread or
 threading module.
 [clinic start generated code]*/
 
-static PyObject *
-_thread__make_thread_handle(PyObject *module, PyObject *identobj)
-/*[clinic end generated code: output=afa56c40a7e1c394 input=57bb20ebf5825dd1]*/
+static PyValue
+_thread__make_thread_handle_impl(PyObject *module, PyValueBorrow identobj)
+/*[clinic end generated code: output=e2151eb479154e6f input=57bb20ebf5825dd1]*/
 {
     thread_module_state *state = get_thread_state(module);
-    if (!PyLong_Check(identobj)) {
+    if (!PyValue_LongCheck(identobj)) {
         PyErr_SetString(PyExc_TypeError, "ident must be an integer");
-        return NULL;
+        return PyValue_NULL;
     }
-    PyThread_ident_t ident = PyLong_AsUnsignedLongLong(identobj);
+    PyThread_ident_t ident = _PyValue_IntAsUnsignedLongLong(identobj);
     if (PyErr_Occurred()) {
-        return NULL;
+        return PyValue_NULL;
     }
     PyThreadHandleObject *hobj =
         PyThreadHandleObject_new(state->thread_handle_type);
     if (hobj == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
     PyMutex_Lock(&hobj->handle->mutex);
     hobj->handle->ident = ident;
     hobj->handle->state = THREAD_HANDLE_RUNNING;
     PyMutex_Unlock(&hobj->handle->mutex);
-    return (PyObject*) hobj;
+    return _PyValue_FromObjectResult((PyObject*) hobj);
 }
 
 /*[clinic input]
@@ -2550,11 +2611,11 @@ Return a non-zero integer that uniquely identifies the main thread of
 the main interpreter.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _thread__get_main_thread_ident_impl(PyObject *module)
-/*[clinic end generated code: output=01aa07c5553458bf input=feea25c7039ba4b5]*/
+/*[clinic end generated code: output=bd38a356824431ae input=feea25c7039ba4b5]*/
 {
-    return PyLong_FromUnsignedLongLong(_PyRuntime.main_thread);
+    return PyValue_FromUInt64(_PyRuntime.main_thread);
 }
 
 #if defined(__OpenBSD__)
@@ -2573,9 +2634,9 @@ _thread._get_name
 Get the name of the current thread.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _thread__get_name_impl(PyObject *module)
-/*[clinic end generated code: output=20026e7ee3da3dd7 input=35cec676833d04c8]*/
+/*[clinic end generated code: output=170115477a4163e0 input=35cec676833d04c8]*/
 {
 #ifndef MS_WINDOWS
     // Linux and macOS are limited to respectively 16 and 64 bytes
@@ -2589,7 +2650,7 @@ _thread__get_name_impl(PyObject *module)
 #endif
     if (rc) {
         errno = rc;
-        return PyErr_SetFromErrno(PyExc_OSError);
+        return _PyValue_FromObjectResult(PyErr_SetFromErrno(PyExc_OSError));
     }
 
 #ifdef __sun
@@ -2597,7 +2658,7 @@ _thread__get_name_impl(PyObject *module)
     // from ASCII, since OpenIndiana only supports ASCII names.
     return PyUnicode_DecodeASCII(name, strlen(name), "surrogateescape");
 #else
-    return PyUnicode_DecodeFSDefault(name);
+    return _PyValue_FromObjectResult(PyUnicode_DecodeFSDefault(name));
 #endif
 #else
     // Windows implementation
@@ -2627,9 +2688,9 @@ _thread.set_name
 Set the name of the current thread.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _thread_set_name_impl(PyObject *module, PyObject *name_obj)
-/*[clinic end generated code: output=402b0c68e0c0daed input=7e7acd98261be82f]*/
+/*[clinic end generated code: output=869bd3c492cb7cf7 input=7e7acd98261be82f]*/
 {
 #ifndef MS_WINDOWS
 #ifdef __sun
@@ -2645,7 +2706,7 @@ _thread_set_name_impl(PyObject *module, PyObject *name_obj)
     PyObject *name_encoded;
     name_encoded = PyUnicode_AsEncodedString(name_obj, encoding, "replace");
     if (name_encoded == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
 
 #ifdef _PYTHREAD_NAME_MAXLEN
@@ -2656,7 +2717,7 @@ _thread_set_name_impl(PyObject *module, PyObject *name_obj)
                                               _PYTHREAD_NAME_MAXLEN);
         if (truncated == NULL) {
             Py_DECREF(name_encoded);
-            return NULL;
+            return PyValue_NULL;
         }
         Py_SETREF(name_encoded, truncated);
     }
@@ -2679,9 +2740,9 @@ _thread_set_name_impl(PyObject *module, PyObject *name_obj)
     Py_DECREF(name_encoded);
     if (rc) {
         errno = rc;
-        return PyErr_SetFromErrno(PyExc_OSError);
+        return _PyValue_FromObjectResult(PyErr_SetFromErrno(PyExc_OSError));
     }
-    Py_RETURN_NONE;
+    return PyValue_None;
 #else
     // Windows implementation
     assert(pSetThreadDescription != NULL);
@@ -2718,14 +2779,14 @@ _thread_set_name_impl(PyObject *module, PyObject *name_obj)
 static PyMethodDef thread_methods[] = {
     _THREAD_START_NEW_THREAD_METHODDEF
     {"start_new",               _PyCFunction_CAST(_thread_start_new_thread),
-     METH_FASTCALL, start_new_doc},
+     METH_VALUE, start_new_doc},
     _THREAD_START_JOINABLE_THREAD_METHODDEF
     _THREAD_DAEMON_THREADS_ALLOWED_METHODDEF
     _THREAD_ALLOCATE_LOCK_METHODDEF
-    {"allocate",                _thread_allocate_lock,
-     METH_NOARGS, allocate_doc},
-    {"exit_thread",             _thread_exit,
-     METH_NOARGS, exit_thread_doc},
+    {"allocate",                _PyCFunction_CAST(_thread_allocate_lock),
+     METH_VALUE, allocate_doc},
+    {"exit_thread",             _PyCFunction_CAST(_thread_exit),
+     METH_VALUE, exit_thread_doc},
     _THREAD_EXIT_METHODDEF
     _THREAD_INTERRUPT_MAIN_METHODDEF
     _THREAD_GET_IDENT_METHODDEF
@@ -2761,7 +2822,7 @@ thread_module_exec(PyObject *module)
     if (state->thread_handle_type == NULL) {
         return -1;
     }
-    if (PyDict_SetItemString(d, "_ThreadHandle", (PyObject *)state->thread_handle_type) < 0) {
+    if (PyDict_SetValueString(d, "_ThreadHandle", _PyValue_FromObjectKnown((PyObject *)state->thread_handle_type)) < 0) {
         return -1;
     }
 
@@ -2774,7 +2835,7 @@ thread_module_exec(PyObject *module)
         return -1;
     }
     // Old alias: lock -> LockType
-    if (PyDict_SetItemString(d, "LockType", (PyObject *)state->lock_type) < 0) {
+    if (PyDict_SetValueString(d, "LockType", _PyValue_FromObjectKnown((PyObject *)state->lock_type)) < 0) {
         return -1;
     }
 
@@ -2803,7 +2864,7 @@ thread_module_exec(PyObject *module)
     }
 
     // Add module attributes
-    if (PyDict_SetItemString(d, "error", ThreadError) < 0) {
+    if (PyDict_SetValueString(d, "error", PyValue_FromObjectBorrow(ThreadError)) < 0) {
         return -1;
     }
 

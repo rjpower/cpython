@@ -1,5 +1,9 @@
 /* _types module */
 
+#ifndef Py_BUILD_CORE_BUILTIN
+#  define Py_BUILD_CORE_MODULE 1
+#endif
+#define Py_VALUE_CORE 1
 #include "Python.h"
 #include "pycore_descrobject.h"   // _PyMethodWrapper_Type
 #include "pycore_lazyimportobject.h" // PyLazyImport_Type

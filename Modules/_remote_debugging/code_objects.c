@@ -5,6 +5,7 @@
  * from remote process memory.
  ******************************************************************************/
 
+#define Py_VALUE_CORE 1
 #include "_remote_debugging.h"
 
 #define MAX_LINETABLE_SIZE (64 * 1024)
@@ -289,28 +290,28 @@ make_location_info(RemoteUnwinderObject *unwinder, int lineno, int end_lineno,
         Py_DECREF(info);
         return NULL;
     }
-    PyStructSequence_SetItem(info, 0, py_lineno);  // steals reference
+    PyStructSequence_SET_VALUE(info, 0, PyValue_PrepareOwned(py_lineno));  // steals reference
 
     PyObject *py_end_lineno = PyLong_FromLong(end_lineno);
     if (py_end_lineno == NULL) {
         Py_DECREF(info);
         return NULL;
     }
-    PyStructSequence_SetItem(info, 1, py_end_lineno);  // steals reference
+    PyStructSequence_SET_VALUE(info, 1, PyValue_PrepareOwned(py_end_lineno));  // steals reference
 
     PyObject *py_col_offset = PyLong_FromLong(col_offset);
     if (py_col_offset == NULL) {
         Py_DECREF(info);
         return NULL;
     }
-    PyStructSequence_SetItem(info, 2, py_col_offset);  // steals reference
+    PyStructSequence_SET_VALUE(info, 2, PyValue_PrepareOwned(py_col_offset));  // steals reference
 
     PyObject *py_end_col_offset = PyLong_FromLong(end_col_offset);
     if (py_end_col_offset == NULL) {
         Py_DECREF(info);
         return NULL;
     }
-    PyStructSequence_SetItem(info, 3, py_end_col_offset);  // steals reference
+    PyStructSequence_SET_VALUE(info, 3, PyValue_PrepareOwned(py_end_col_offset));  // steals reference
 
     return info;
 }
@@ -329,10 +330,10 @@ make_frame_info(RemoteUnwinderObject *unwinder, PyObject *file, PyObject *locati
     Py_INCREF(location);
     Py_INCREF(func);
     Py_INCREF(opcode);
-    PyStructSequence_SetItem(info, 0, file);
-    PyStructSequence_SetItem(info, 1, location);
-    PyStructSequence_SetItem(info, 2, func);
-    PyStructSequence_SetItem(info, 3, opcode);
+    PyStructSequence_SET_VALUE(info, 0, PyValue_PrepareOwned(file));
+    PyStructSequence_SET_VALUE(info, 1, PyValue_PrepareOwned(location));
+    PyStructSequence_SET_VALUE(info, 2, PyValue_PrepareOwned(func));
+    PyStructSequence_SET_VALUE(info, 3, PyValue_PrepareOwned(opcode));
     return info;
 }
 

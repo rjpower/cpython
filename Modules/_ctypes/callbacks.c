@@ -2,6 +2,7 @@
 #  define Py_BUILD_CORE_MODULE 1
 #endif
 
+#define Py_VALUE_CORE 1
 #include "Python.h"
 // windows.h must be included before pycore internal headers
 #ifdef MS_WIN32
@@ -10,6 +11,8 @@
 
 #include "pycore_call.h"          // _PyObject_CallNoArgs()
 #include "pycore_runtime.h"       // _Py_ID()
+#include "pycore_value.h"         // PyValue_IsNull()
+#include "pycore_value_api.h"     // _PyValue_AsObjectAt()
 
 #include <ffi.h>
 #include "ctypes.h"
@@ -144,7 +147,8 @@ static void _CallPythonObject(ctypes_state *st,
     assert(nargs <= CTYPES_MAX_ARGCOUNT);
     PyObject **args = alloca(nargs * sizeof(PyObject *));
     for (i = 0; i < nargs; i++) {
-        PyObject *cnv = PyTuple_GetItemRef(converters, i);
+        PyValue cnv_v = PyTuple_GetValue(converters, i);
+        PyObject *cnv = PyValue_IsNull(cnv_v) ? NULL : _PyValue_AsObjectStealAt(cnv_v, BOX_SITE_TUPLE);
         if (cnv == NULL) {
             goto Error;
         }
@@ -448,7 +452,8 @@ CThunkObject *_ctypes_alloc_callback(ctypes_state *st,
 
     p->flags = flags;
     for (i = 0; i < nargs; ++i) {
-        PyObject *cnv = PyTuple_GetItemRef(converters, i);
+        PyValue cnv_v2 = PyTuple_GetValue(converters, i);
+        PyObject *cnv = PyValue_IsNull(cnv_v2) ? NULL : _PyValue_AsObjectStealAt(cnv_v2, BOX_SITE_TUPLE);
         if (cnv == NULL) {
             goto error;
         }

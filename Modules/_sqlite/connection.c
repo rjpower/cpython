@@ -25,6 +25,7 @@
 #  define Py_BUILD_CORE_MODULE 1
 #endif
 
+#define Py_VALUE_CORE 1
 #include "module.h"
 
 #include "connection.h"
@@ -38,6 +39,7 @@
 #include "pycore_pyerrors.h"      // _PyErr_ChainExceptions1()
 #include "pycore_pylifecycle.h"   // _Py_IsInterpreterFinalizing()
 #include "pycore_unicodeobject.h" // _PyUnicode_AsUTF8NoNUL
+#include "pycore_value.h"         // PyValue
 
 #include <stdbool.h>
 
@@ -143,6 +145,11 @@ sqlite3_int64_converter(PyObject *obj, sqlite3_int64 *result)
 #define _pysqlite_Connection_CAST(op)   ((pysqlite_Connection *)(op))
 
 /*[clinic input]
+value_emission
+[clinic start generated code]*/
+/*[clinic end generated code: output=da39a3ee5e6b4b0d input=eb7b17088bfd7215]*/
+
+/*[clinic input]
 module _sqlite3
 class _sqlite3.Connection "pysqlite_Connection *" "clinic_state()->ConnectionType"
 [clinic start generated code]*/
@@ -231,13 +238,13 @@ _sqlite3.Connection.__init__ as pysqlite_connection_init
 [clinic start generated code]*/
 
 static int
-pysqlite_connection_init_impl(pysqlite_Connection *self, PyObject *database,
-                              double timeout, int detect_types,
-                              const char *isolation_level,
-                              int check_same_thread, PyObject *factory,
+pysqlite_connection_init_impl(pysqlite_Connection *self,
+                              PyValueBorrow database, double timeout,
+                              int detect_types, const char *isolation_level,
+                              int check_same_thread, PyValueBorrow factory,
                               int cache_size, int uri,
                               enum autocommit_mode autocommit)
-/*[clinic end generated code: output=cba057313ea7712f input=5ca4883d8747a49b]*/
+/*[clinic end generated code: output=a315b6cd150a1ac1 input=5ca4883d8747a49b]*/
 {
     if (PySys_Audit("sqlite3.connect", "O", database) < 0) {
         return -1;
@@ -529,9 +536,10 @@ _sqlite3.Connection.cursor as pysqlite_connection_cursor
 Return a cursor for the connection.
 [clinic start generated code]*/
 
-static PyObject *
-pysqlite_connection_cursor_impl(pysqlite_Connection *self, PyObject *factory)
-/*[clinic end generated code: output=562432a9e6af2aa1 input=4127345aa091b650]*/
+static PyValue
+pysqlite_connection_cursor_impl(pysqlite_Connection *self,
+                                PyValueBorrow factory)
+/*[clinic end generated code: output=e564abef84789ab5 input=4127345aa091b650]*/
 {
     PyObject* cursor;
 
@@ -622,10 +630,10 @@ _sqlite3.Connection.blobopen as blobopen
 Open and return a BLOB object.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 blobopen_impl(pysqlite_Connection *self, const char *table, const char *col,
               sqlite3_int64 row, int readonly, const char *name)
-/*[clinic end generated code: output=6a02d43efb885d1c input=cc3d4b47dac08401]*/
+/*[clinic end generated code: output=024e6f17644ef598 input=cc3d4b47dac08401]*/
 {
     if (!pysqlite_check_thread(self) || !pysqlite_check_connection(self)) {
         return NULL;
@@ -685,9 +693,9 @@ Close the database connection.
 Any pending transaction is not committed implicitly.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 pysqlite_connection_close_impl(pysqlite_Connection *self)
-/*[clinic end generated code: output=a546a0da212c9b97 input=b3ed5b74f6fefc06]*/
+/*[clinic end generated code: output=cf1c16491bbf01aa input=b3ed5b74f6fefc06]*/
 {
     if (!pysqlite_check_thread(self)) {
         return NULL;
@@ -741,9 +749,9 @@ Commit any pending transaction to the database.
 If there is no open transaction, this method is a no-op.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 pysqlite_connection_commit_impl(pysqlite_Connection *self)
-/*[clinic end generated code: output=3da45579e89407f2 input=c8793c97c3446065]*/
+/*[clinic end generated code: output=9e56cbd0dfed32f4 input=c8793c97c3446065]*/
 {
     if (!pysqlite_check_thread(self) || !pysqlite_check_connection(self)) {
         return NULL;
@@ -775,9 +783,9 @@ Roll back to the start of any pending transaction.
 If there is no open transaction, this method is a no-op.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 pysqlite_connection_rollback_impl(pysqlite_Connection *self)
-/*[clinic end generated code: output=b66fa0d43e7ef305 input=7f60a2f1076f16b3]*/
+/*[clinic end generated code: output=4fc72dc45d5759e2 input=7f60a2f1076f16b3]*/
 {
     if (!pysqlite_check_thread(self) || !pysqlite_check_connection(self)) {
         return NULL;
@@ -1200,12 +1208,12 @@ _sqlite3.Connection.create_function as pysqlite_connection_create_function
 Creates a new function.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 pysqlite_connection_create_function_impl(pysqlite_Connection *self,
                                          PyTypeObject *cls, const char *name,
-                                         int narg, PyObject *func,
+                                         int narg, PyValueBorrow func,
                                          int deterministic)
-/*[clinic end generated code: output=8a811529287ad240 input=a896096ed5390ae1]*/
+/*[clinic end generated code: output=3fef33f5f916938e input=a896096ed5390ae1]*/
 {
     int rc;
     int flags = SQLITE_UTF8;
@@ -1347,11 +1355,11 @@ _sqlite3.Connection.create_window_function as create_window_function
 Creates or redefines an aggregate window function. Non-standard.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 create_window_function_impl(pysqlite_Connection *self, PyTypeObject *cls,
                             const char *name, int num_params,
-                            PyObject *aggregate_class)
-/*[clinic end generated code: output=5332cd9464522235 input=46d57a54225b5228]*/
+                            PyValueBorrow aggregate_class)
+/*[clinic end generated code: output=d110a22a9d970d61 input=46d57a54225b5228]*/
 {
     if (sqlite3_libversion_number() < 3025000) {
         PyErr_SetString(self->NotSupportedError,
@@ -1408,12 +1416,12 @@ _sqlite3.Connection.create_aggregate as pysqlite_connection_create_aggregate
 Creates a new aggregate.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 pysqlite_connection_create_aggregate_impl(pysqlite_Connection *self,
                                           PyTypeObject *cls,
                                           const char *name, int n_arg,
-                                          PyObject *aggregate_class)
-/*[clinic end generated code: output=1b02d0f0aec7ff96 input=aa2773f6a42f7e17]*/
+                                          PyValueBorrow aggregate_class)
+/*[clinic end generated code: output=9ee69ef1b5d29bdb input=aa2773f6a42f7e17]*/
 {
     int rc;
 
@@ -1574,11 +1582,11 @@ _sqlite3.Connection.set_authorizer as pysqlite_connection_set_authorizer
 Set authorizer callback.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 pysqlite_connection_set_authorizer_impl(pysqlite_Connection *self,
                                         PyTypeObject *cls,
-                                        PyObject *callable)
-/*[clinic end generated code: output=75fa60114fc971c3 input=e76469ab0bb1bbcd]*/
+                                        PyValueBorrow callable)
+/*[clinic end generated code: output=eea85a993ddc69bc input=e76469ab0bb1bbcd]*/
 {
     if (!pysqlite_check_thread(self) || !pysqlite_check_connection(self)) {
         return NULL;
@@ -1625,11 +1633,11 @@ If 'progress_handler' is None or 'n' is 0, the progress handler is
 disabled.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 pysqlite_connection_set_progress_handler_impl(pysqlite_Connection *self,
                                               PyTypeObject *cls,
-                                              PyObject *callable, int n)
-/*[clinic end generated code: output=0739957fd8034a50 input=fd0d5abb004f370f]*/
+                                              PyValueBorrow callable, int n)
+/*[clinic end generated code: output=9e9374101d8136ea input=fd0d5abb004f370f]*/
 {
     if (!pysqlite_check_thread(self) || !pysqlite_check_connection(self)) {
         return NULL;
@@ -1662,11 +1670,11 @@ _sqlite3.Connection.set_trace_callback as pysqlite_connection_set_trace_callback
 Set a trace callback called for each SQL statement (passed as unicode).
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 pysqlite_connection_set_trace_callback_impl(pysqlite_Connection *self,
                                             PyTypeObject *cls,
-                                            PyObject *callable)
-/*[clinic end generated code: output=d91048c03bfcee05 input=edfd7d890200a9cb]*/
+                                            PyValueBorrow callable)
+/*[clinic end generated code: output=688cea14fdd953f4 input=edfd7d890200a9cb]*/
 {
     if (!pysqlite_check_thread(self) || !pysqlite_check_connection(self)) {
         return NULL;
@@ -1705,10 +1713,10 @@ _sqlite3.Connection.enable_load_extension as pysqlite_connection_enable_load_ext
 Enable dynamic loading of SQLite extension modules.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 pysqlite_connection_enable_load_extension_impl(pysqlite_Connection *self,
                                                int onoff)
-/*[clinic end generated code: output=9cac37190d388baf input=2a1e87931486380f]*/
+/*[clinic end generated code: output=1023ccd638915675 input=2a1e87931486380f]*/
 {
     int rc;
 
@@ -1743,11 +1751,11 @@ _sqlite3.Connection.load_extension as pysqlite_connection_load_extension
 Load SQLite extension module.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 pysqlite_connection_load_extension_impl(pysqlite_Connection *self,
                                         const char *extension_name,
                                         const char *entrypoint)
-/*[clinic end generated code: output=7e61a7add9de0286 input=c36b14ea702e04f5]*/
+/*[clinic end generated code: output=4f0f5cfd414b5515 input=c36b14ea702e04f5]*/
 {
     int rc;
     char* errmsg;
@@ -1883,10 +1891,10 @@ _sqlite3.Connection.execute as pysqlite_connection_execute
 Executes an SQL statement.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 pysqlite_connection_execute_impl(pysqlite_Connection *self, PyObject *sql,
-                                 PyObject *parameters)
-/*[clinic end generated code: output=5be05ae01ee17ee4 input=847390a17de45cc7]*/
+                                 PyValueBorrow parameters)
+/*[clinic end generated code: output=f1e118668c2a97b0 input=847390a17de45cc7]*/
 {
     PyObject* result = 0;
 
@@ -1916,10 +1924,10 @@ _sqlite3.Connection.executemany as pysqlite_connection_executemany
 Repeatedly executes an SQL statement.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 pysqlite_connection_executemany_impl(pysqlite_Connection *self,
-                                     PyObject *sql, PyObject *parameters)
-/*[clinic end generated code: output=776cd2fd20bfe71f input=495be76551d525db]*/
+                                     PyObject *sql, PyValueBorrow parameters)
+/*[clinic end generated code: output=2aec6aaa45145025 input=495be76551d525db]*/
 {
     PyObject* result = 0;
 
@@ -1948,10 +1956,10 @@ _sqlite3.Connection.executescript as pysqlite_connection_executescript
 Executes multiple SQL statements at once.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 pysqlite_connection_executescript_impl(pysqlite_Connection *self,
-                                       PyObject *script_obj)
-/*[clinic end generated code: output=e921c49e2291782c input=f6e5f1ccfa313db4]*/
+                                       PyValueBorrow script_obj)
+/*[clinic end generated code: output=c9b1668ef4ba1adc input=f6e5f1ccfa313db4]*/
 {
     PyObject* result = 0;
 
@@ -2038,9 +2046,9 @@ _sqlite3.Connection.interrupt as pysqlite_connection_interrupt
 Abort any pending database operation.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 pysqlite_connection_interrupt_impl(pysqlite_Connection *self)
-/*[clinic end generated code: output=f193204bc9e70b47 input=75ad03ade7012859]*/
+/*[clinic end generated code: output=629faa1f747da15e input=75ad03ade7012859]*/
 {
     PyObject* retval = NULL;
 
@@ -2070,10 +2078,10 @@ _sqlite3.Connection.iterdump as pysqlite_connection_iterdump
 Returns iterator to the dump of the database in an SQL text format.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 pysqlite_connection_iterdump_impl(pysqlite_Connection *self,
-                                  PyObject *filter)
-/*[clinic end generated code: output=fd81069c4bdeb6b0 input=4ae6d9a898f108df]*/
+                                  PyValueBorrow filter)
+/*[clinic end generated code: output=077af41e83fb40ac input=4ae6d9a898f108df]*/
 {
     if (!pysqlite_check_connection(self)) {
         return NULL;
@@ -2113,12 +2121,12 @@ _sqlite3.Connection.backup as pysqlite_connection_backup
 Makes a backup of the database.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 pysqlite_connection_backup_impl(pysqlite_Connection *self,
                                 pysqlite_Connection *target, int pages,
-                                PyObject *progress, const char *name,
+                                PyValueBorrow progress, const char *name,
                                 double sleep)
-/*[clinic end generated code: output=306a3e6a38c36334 input=c6519d0f59d0fd7f]*/
+/*[clinic end generated code: output=0fbc8d224932966d input=c6519d0f59d0fd7f]*/
 {
     int rc;
     int sleep_ms = (int)(sleep * 1000.0);
@@ -2210,12 +2218,12 @@ _sqlite3.Connection.create_collation as pysqlite_connection_create_collation
 Creates a collation function.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 pysqlite_connection_create_collation_impl(pysqlite_Connection *self,
                                           PyTypeObject *cls,
                                           const char *name,
-                                          PyObject *callable)
-/*[clinic end generated code: output=32d339e97869c378 input=f67ecd2e31e61ad3]*/
+                                          PyValueBorrow callable)
+/*[clinic end generated code: output=ffebfa7028f3d629 input=f67ecd2e31e61ad3]*/
 {
     if (!pysqlite_check_thread(self) || !pysqlite_check_connection(self)) {
         return NULL;
@@ -2273,9 +2281,9 @@ database, the serialization is the same sequence of bytes which
 would be written to disk if that database were backed up to disk.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 serialize_impl(pysqlite_Connection *self, const char *name)
-/*[clinic end generated code: output=97342b0e55239dd3 input=7e48654e8e082fa8]*/
+/*[clinic end generated code: output=cf22f4f3e0adfa7e input=7e48654e8e082fa8]*/
 {
     if (!pysqlite_check_thread(self) || !pysqlite_check_connection(self)) {
         return NULL;
@@ -2329,10 +2337,10 @@ is currently in a read transaction or is involved in a backup
 operation.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 deserialize_impl(pysqlite_Connection *self, Py_buffer *data,
                  const char *name)
-/*[clinic end generated code: output=e394c798b98bad89 input=5d20e028d98c0686]*/
+/*[clinic end generated code: output=768ab5bf54a557ab input=5d20e028d98c0686]*/
 {
     if (!pysqlite_check_thread(self) || !pysqlite_check_connection(self)) {
         return NULL;
@@ -2385,9 +2393,9 @@ Called when the connection is used as a context manager.
 Returns itself as a convenience to the caller.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 pysqlite_connection_enter_impl(pysqlite_Connection *self)
-/*[clinic end generated code: output=457b09726d3e9dcd input=127d7a4f17e86d8f]*/
+/*[clinic end generated code: output=174b2525da622bae input=127d7a4f17e86d8f]*/
 {
     if (!pysqlite_check_connection(self)) {
         return NULL;
@@ -2409,10 +2417,11 @@ If there was any exception, a rollback takes place; otherwise we
 commit.
 [clinic start generated code]*/
 
-static PyObject *
-pysqlite_connection_exit_impl(pysqlite_Connection *self, PyObject *exc_type,
-                              PyObject *exc_value, PyObject *exc_tb)
-/*[clinic end generated code: output=0705200e9321202a input=8fdb0392ee6f3466]*/
+static PyValue
+pysqlite_connection_exit_impl(pysqlite_Connection *self,
+                              PyValueBorrow exc_type,
+                              PyValueBorrow exc_value, PyValueBorrow exc_tb)
+/*[clinic end generated code: output=a5e3375a14d1551d input=8fdb0392ee6f3466]*/
 {
     int commit = 0;
     PyObject* result;
@@ -2463,9 +2472,9 @@ truncated to the hard upper bound. Regardless of whether or not the
 limit was changed, the prior value of the limit is returned.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 setlimit_impl(pysqlite_Connection *self, int category, int limit)
-/*[clinic end generated code: output=0d208213f8d68ccd input=5c2e430091206677]*/
+/*[clinic end generated code: output=5f532bc4fba656b0 input=5c2e430091206677]*/
 {
     if (!pysqlite_check_thread(self) || !pysqlite_check_connection(self)) {
         return NULL;
@@ -2489,9 +2498,9 @@ _sqlite3.Connection.getlimit as getlimit
 Get connection run-time limits.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 getlimit_impl(pysqlite_Connection *self, int category)
-/*[clinic end generated code: output=7c3f5d11f24cecb1 input=61e0849fb4fb058f]*/
+/*[clinic end generated code: output=9268998411232a12 input=61e0849fb4fb058f]*/
 {
     return setlimit_impl(self, category, -1);
 }
@@ -2551,9 +2560,9 @@ _sqlite3.Connection.setconfig as setconfig
 Set a boolean connection configuration option.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 setconfig_impl(pysqlite_Connection *self, int op, int enable)
-/*[clinic end generated code: output=c60b13e618aff873 input=a10f1539c2d7da6b]*/
+/*[clinic end generated code: output=3e51be018f5d32c5 input=a10f1539c2d7da6b]*/
 {
     if (!pysqlite_check_thread(self) || !pysqlite_check_connection(self)) {
         return NULL;

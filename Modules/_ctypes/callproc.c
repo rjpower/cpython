@@ -55,6 +55,11 @@
  */
 
 /*[clinic input]
+value_emission
+[clinic start generated code]*/
+/*[clinic end generated code: output=da39a3ee5e6b4b0d input=eb7b17088bfd7215]*/
+
+/*[clinic input]
 module _ctypes
 [clinic start generated code]*/
 /*[clinic end generated code: output=da39a3ee5e6b4b0d input=476a19c49b31a75c]*/
@@ -63,6 +68,7 @@ module _ctypes
 #  define Py_BUILD_CORE_MODULE 1
 #endif
 
+#define Py_VALUE_CORE 1
 #include "Python.h"
 
 
@@ -92,9 +98,15 @@ module _ctypes
 #endif
 
 #include "pycore_ceval.h"         // _Py_EnterRecursiveCall()
+#include "pycore_dict.h"          // PyDict_SetValue()
+#include "pycore_list.h"          // PyList_AppendValue()
 #include "pycore_runtime.h"       // _PyRuntime
 #include "pycore_global_objects.h"// _Py_ID()
 #include "pycore_traceback.h"     // _PyTraceback_Add()
+#include "pycore_value.h"         // PyValue_FromUInt64()
+#include "pycore_value_api.h"     // _PyValue_AsObjectAt()
+#include "pycore_value_ops.h"     // _PyValue_Str()
+#include "pycore_value_slots.h"// _PyValue_FromObjectResult()
 
 #ifndef MS_WIN32
 #  if HAVE_DECL_RTLD_LOCAL
@@ -105,8 +117,8 @@ module _ctypes
 #  endif
 #endif
 
-static int _parse_voidp(PyObject *obj, void *arg);
-static int _parse_voidp_object(PyObject *obj, void *arg);
+static int _parse_voidp(PyValueBorrow obj, void *arg);
+static int _parse_voidp_object(PyValueBorrow obj, void *arg);
 
 /*[python input]
 class voidp_converter(CConverter):
@@ -115,8 +127,9 @@ class voidp_converter(CConverter):
 [python start generated code]*/
 /*[python end generated code: output=da39a3ee5e6b4b0d input=c230831f53ec0946]*/
 
-#define clinic_state() (get_module_state(module))
+#define clinic_state() (get_module_state(PyValue_AsKnownObjectBorrow(module)))
 #include "clinic/callproc.c.h"
+
 #undef clinic_state
 
 #define CTYPES_CAPSULE_NAME_PYMEM "_ctypes pymem"
@@ -175,7 +188,13 @@ _ctypes_get_errobj(ctypes_state *st, int **pspace)
         return NULL;
     }
     assert(st->error_object_name != NULL);
-    if (PyDict_GetItemRef(dict, st->error_object_name, &errobj) < 0) {
+    PyValue errobj_v;
+    int rc_dict = PyDict_GetValue(dict, PyValue_FromObjectBorrow(st->error_object_name), &errobj_v);
+    errobj = NULL;
+    if (rc_dict > 0 && (errobj = _PyValue_AsObjectStealAt(errobj_v, BOX_SITE_DICT)) == NULL) {
+        rc_dict = -1;
+    }
+    if (rc_dict < 0) {
         return NULL;
     }
     if (errobj) {
@@ -196,7 +215,7 @@ _ctypes_get_errobj(ctypes_state *st, int **pspace)
             PyMem_Free(space);
             return NULL;
         }
-        if (PyDict_SetItem(dict, st->error_object_name, errobj) < 0) {
+        if (PyDict_SetValue(dict, PyValue_FromObjectBorrow(st->error_object_name), PyValue_FromObjectBorrow(errobj)) < 0) {
             Py_DECREF(errobj);
             return NULL;
         }
@@ -243,14 +262,14 @@ _ctypes.get_errno
 Return the current value of the ctypes-private copy of errno.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _ctypes_get_errno_impl(PyObject *module)
-/*[clinic end generated code: output=82992e823984b48e input=bf578c7a7608b0f4]*/
+/*[clinic end generated code: output=9637ace94b74f91d input=bf578c7a7608b0f4]*/
 {
     if (PySys_Audit("ctypes.get_errno", NULL) < 0) {
-        return NULL;
+        return PyValue_NULL;
     }
-    return get_error_internal(module, 0);
+    return _PyValue_FromObjectResult(get_error_internal(module, 0));
 }
 
 /*[clinic input]
@@ -260,14 +279,14 @@ _ctypes.set_errno
     /
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _ctypes_set_errno_impl(PyObject *module, int value)
-/*[clinic end generated code: output=0c85e07ccf0749c2 input=b2550d9d2cdfab20]*/
+/*[clinic end generated code: output=90e31727002d97b9 input=b2550d9d2cdfab20]*/
 {
     if (PySys_Audit("ctypes.set_errno", "i", value) < 0) {
-        return NULL;
+        return PyValue_NULL;
     }
-    return set_error_internal(module, value, 0);
+    return _PyValue_FromObjectResult(set_error_internal(module, value, 0));
 }
 
 #ifdef MS_WIN32
@@ -278,9 +297,9 @@ _ctypes.get_last_error
 Return the current value of the ctypes-private copy of the last error.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _ctypes_get_last_error_impl(PyObject *module)
-/*[clinic end generated code: output=e237c4d3b75eb1eb input=d25599a79c030bb4]*/
+/*[clinic end generated code: output=228bd73248806635 input=d25599a79c030bb4]*/
 {
     if (PySys_Audit("ctypes.get_last_error", NULL) < 0) {
         return NULL;
@@ -295,9 +314,9 @@ _ctypes.set_last_error
     /
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _ctypes_set_last_error_impl(PyObject *module, int value)
-/*[clinic end generated code: output=dce5b4be6255bcb5 input=1a3f4ba970902db7]*/
+/*[clinic end generated code: output=5de5381ff8c2b068 input=1a3f4ba970902db7]*/
 {
     if (PySys_Audit("ctypes.set_last_error", "i", value) < 0) {
         return NULL;
@@ -500,9 +519,9 @@ _ctypes._check_HRESULT
     /
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _ctypes__check_HRESULT_impl(PyObject *module, int hr)
-/*[clinic end generated code: output=ba872ad9e32b2d1f input=75e2334791d6cf29]*/
+/*[clinic end generated code: output=23304a16274ebc08 input=75e2334791d6cf29]*/
 {
     if (FAILED(hr))
         return PyErr_SetFromWindowsErr(hr);
@@ -1120,7 +1139,7 @@ void _ctypes_extend_error(PyObject *exc_class, const char *fmt, ...)
         PyErr_Clear();
     }
 
-    PyObject *msg_str = PyObject_Str(exc);
+    PyObject *msg_str = _PyValue_Str(PyValue_FromObjectBorrow(exc));
     if (msg_str) {
         PyUnicode_AppendAndDel(&s, msg_str);
     }
@@ -1291,7 +1310,8 @@ PyObject *_ctypes_callproc(ctypes_state *st,
         PyObject *arg;
         int err;
 
-        arg = PyTuple_GetItemRef(argtuple, i);
+        PyValue arg_v = PyTuple_GetValue(argtuple, i);
+        arg = PyValue_IsNull(arg_v) ? NULL : _PyValue_AsObjectStealAt(arg_v, BOX_SITE_TUPLE);
         if (arg == NULL) {
             goto cleanup;
         }
@@ -1301,7 +1321,8 @@ PyObject *_ctypes_callproc(ctypes_state *st,
         */
         if (argtypes && argtype_count > i) {
             PyObject *v;
-            converter = PyTuple_GetItemRef(argtypes, i);
+            PyValue converter_v = PyTuple_GetValue(argtypes, i);
+            converter = PyValue_IsNull(converter_v) ? NULL : _PyValue_AsObjectStealAt(converter_v, BOX_SITE_TUPLE);
             if (converter == NULL) {
                 Py_DECREF(arg);
                 goto cleanup;
@@ -1425,10 +1446,15 @@ PyObject *_ctypes_callproc(ctypes_state *st,
 }
 
 static int
-_parse_voidp(PyObject *obj, void *arg)
+_parse_voidp(PyValueBorrow obj, void *arg)
 {
     void **address = (void **)arg;
-    *address = PyLong_AsVoidPtr(obj);
+    PyObject *o = _PyValue_AsObjectAt(obj, BOX_SITE_PARSER);
+    if (o == NULL) {
+        return 0;
+    }
+    *address = PyLong_AsVoidPtr(o);
+    Py_DECREF(o);
     if (*address == NULL)
         return 0;
     return 1;
@@ -1448,9 +1474,9 @@ If the error code is not given, the return value of a call to
 GetLastError() is used.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _ctypes_FormatError_impl(PyObject *module, int code)
-/*[clinic end generated code: output=ccc560dddfd0b3d7 input=e0c98f1c644e5153]*/
+/*[clinic end generated code: output=9b017346c46477f9 input=e0c98f1c644e5153]*/
 {
     PyObject *result;
     wchar_t *lpMsgBuf;
@@ -1480,9 +1506,9 @@ The handle may be used to locate exported functions in this module.
 load_flags are as defined for LoadLibraryEx in the Windows API.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _ctypes_LoadLibrary_impl(PyObject *module, PyObject *nameobj, int load_flags)
-/*[clinic end generated code: output=4e33b2cda4b12af6 input=69e4b6512653825e]*/
+/*[clinic end generated code: output=30445d429291db6e input=69e4b6512653825e]*/
 {
     HMODULE hMod;
     DWORD err;
@@ -1530,9 +1556,9 @@ _ctypes.FreeLibrary
 Free the handle of an executable previously loaded by LoadLibrary.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _ctypes_FreeLibrary_impl(PyObject *module, void *hMod)
-/*[clinic end generated code: output=2424a8daf3fe93df input=e722e432560e849a]*/
+/*[clinic end generated code: output=502dc22975bf5e70 input=e722e432560e849a]*/
 {
     BOOL result;
     DWORD err;
@@ -1558,9 +1584,10 @@ _ctypes.CopyComPointer
 Copy a COM pointer and return the HRESULT value.
 [clinic start generated code]*/
 
-static PyObject *
-_ctypes_CopyComPointer_impl(PyObject *module, PyObject *p1, PyObject *p2)
-/*[clinic end generated code: output=bbe731fea856eba2 input=296c1f3e026bbf27]*/
+static PyValue
+_ctypes_CopyComPointer_impl(PyObject *module, PyValueBorrow p1,
+                            PyValueBorrow p2)
+/*[clinic end generated code: output=964b34c92c96b3ac input=296c1f3e026bbf27]*/
 {
     PyObject *r = NULL;
     struct argument a, b;
@@ -1628,9 +1655,10 @@ _ctypes._dyld_shared_cache_contains_path
 Check whether a path is in the shared cache.
 [clinic start generated code]*/
 
-static PyObject *
-_ctypes__dyld_shared_cache_contains_path(PyObject *module, PyObject *name)
-/*[clinic end generated code: output=1d3fed04c0490294 input=bb910a42599d991f]*/
+static PyValue
+_ctypes__dyld_shared_cache_contains_path_impl(PyObject *module,
+                                              PyValueBorrow name)
+/*[clinic end generated code: output=abbfa462e558ff9f input=bb910a42599d991f]*/
 {
      PyObject *name2;
      char *name_str;
@@ -1672,38 +1700,46 @@ _ctypes.dlopen
 Open a shared library.
 [clinic start generated code]*/
 
-static PyObject *
-_ctypes_dlopen_impl(PyObject *module, PyObject *name, int mode)
-/*[clinic end generated code: output=d68f1775017199b8 input=df6aa38a12f91cfe]*/
+static PyValue
+_ctypes_dlopen_impl(PyObject *module, PyValueBorrow name, int mode)
+/*[clinic end generated code: output=f9ed30c8c77e319b input=df6aa38a12f91cfe]*/
 {
     PyObject *name2;
     const char *name_str;
     void * handle;
 
     mode |= RTLD_NOW;
-    if (name != Py_None) {
-        if (PyUnicode_FSConverter(name, &name2) == 0)
-            return NULL;
+    PyObject *nameobj = _PyValue_AsObjectAt(name, BOX_SITE_PARSER);
+    if (nameobj == NULL) {
+        return PyValue_NULL;
+    }
+    if (nameobj != Py_None) {
+        if (PyUnicode_FSConverter(nameobj, &name2) == 0) {
+            Py_DECREF(nameobj);
+            return PyValue_NULL;
+        }
         name_str = PyBytes_AS_STRING(name2);
     } else {
         name_str = NULL;
         name2 = NULL;
     }
-    if (PySys_Audit("ctypes.dlopen", "O", name) < 0) {
-        return NULL;
+    if (PySys_Audit("ctypes.dlopen", "O", nameobj) < 0) {
+        Py_DECREF(nameobj);
+        return PyValue_NULL;
     }
+    Py_DECREF(nameobj);
     handle = dlopen(name_str, mode);
     Py_XDECREF(name2);
     if (!handle) {
         const char *errmsg = dlerror();
         if (errmsg) {
             _PyErr_SetLocaleString(PyExc_OSError, errmsg);
-            return NULL;
+            return PyValue_NULL;
         }
         PyErr_SetString(PyExc_OSError, "dlopen() error");
-        return NULL;
+        return PyValue_NULL;
     }
-    return PyLong_FromVoidPtr(handle);
+    return PyValue_FromUInt64((uint64_t)(uintptr_t)handle);
 }
 
 /*[clinic input]
@@ -1715,20 +1751,20 @@ _ctypes.dlclose
 Close a shared library.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _ctypes_dlclose_impl(PyObject *module, void *handle)
-/*[clinic end generated code: output=80a4d433a7c81348 input=b8a3d95439746deb]*/
+/*[clinic end generated code: output=3997cf76ff79254a input=b8a3d95439746deb]*/
 {
     if (dlclose(handle)) {
         const char *errmsg = dlerror();
         if (errmsg) {
             _PyErr_SetLocaleString(PyExc_OSError, errmsg);
-            return NULL;
+            return PyValue_NULL;
         }
         PyErr_SetString(PyExc_OSError, "dlclose() error");
-        return NULL;
+        return PyValue_NULL;
     }
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 /*[clinic input]
@@ -1741,15 +1777,15 @@ _ctypes.dlsym
 Find a symbol in a shared library.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _ctypes_dlsym_impl(PyObject *module, void *handle, const char *name)
-/*[clinic end generated code: output=fada3d0f0447614c input=ee37a4935a19550c]*/
+/*[clinic end generated code: output=30579079e0c0b6d8 input=ee37a4935a19550c]*/
 {
     void *ptr;
 
     if (PySys_Audit("ctypes.dlsym/handle", "ns", (Py_ssize_t)handle,
                     name) < 0) {
-        return NULL;
+        return PyValue_NULL;
     }
 #undef USE_DLERROR
     #ifdef __CYGWIN__
@@ -1765,18 +1801,18 @@ _ctypes_dlsym_impl(PyObject *module, void *handle, const char *name)
     #endif
     ptr = dlsym((void*)handle, name);
     if (ptr) {
-        return PyLong_FromVoidPtr(ptr);
+        return PyValue_FromUInt64((uint64_t)(uintptr_t)ptr);
     }
     #ifdef USE_DLERROR
     const char *errmsg = dlerror();
     if (errmsg) {
         _PyErr_SetLocaleString(PyExc_OSError, errmsg);
-        return NULL;
+        return PyValue_NULL;
     }
     #endif
     #undef USE_DLERROR
     PyErr_Format(PyExc_OSError, "symbol '%s' not found", name);
-    return NULL;
+    return PyValue_NULL;
 }
 
 // Apple platforms use the dyld API in ctypes.util instead.
@@ -1791,7 +1827,7 @@ _dllist_callback(struct dl_phdr_info *info, size_t size, void *data)
     if (name == NULL) {
         return -1;
     }
-    int res = PyList_Append(list, name);
+    int res = PyList_AppendValue(list, PyValue_FromObjectBorrow(name));
     Py_DECREF(name);
     return res;
 }
@@ -1802,23 +1838,23 @@ _ctypes.dllist
 Return a list of loaded shared libraries.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _ctypes_dllist_impl(PyObject *module)
-/*[clinic end generated code: output=7b4eaaecc7abf21a input=5bfb4e345425f59f]*/
+/*[clinic end generated code: output=d02487091a7be1af input=5bfb4e345425f59f]*/
 {
     // On NetBSD dl_iterate_phdr() only reports the link-map group of the
     // caller, so it cannot be called via a libffi trampoline.
     PyObject *list = PyList_New(0);
     if (list == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
     // The return value only echoes the callback result.
     dl_iterate_phdr(_dllist_callback, list);
     if (PyErr_Occurred()) {
         Py_DECREF(list);
-        return NULL;
+        return PyValue_NULL;
     }
-    return list;
+    return _PyValue_FromObjectResult(list);
 }
 #endif
 #endif
@@ -1836,9 +1872,9 @@ _ctypes.call_function
     /
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _ctypes_call_function_impl(PyObject *module, void *func, PyObject *arguments)
-/*[clinic end generated code: output=e90059bba8e0f0de input=2f2a7a5ea1b4031f]*/
+/*[clinic end generated code: output=2ee6acdd66f795bf input=2f2a7a5ea1b4031f]*/
 {
     PyObject *result;
 
@@ -1854,7 +1890,7 @@ _ctypes_call_function_impl(PyObject *module, void *func, PyObject *arguments)
                 NULL, /* self->argtypes */
                 NULL, /* self->restype */
                 NULL); /* checker */
-    return result;
+    return _PyValue_FromObjectResult(result);
 }
 
 /*
@@ -1870,10 +1906,10 @@ _ctypes.call_cdeclfunction
     /
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _ctypes_call_cdeclfunction_impl(PyObject *module, void *func,
                                 PyObject *arguments)
-/*[clinic end generated code: output=697e21ce2e298acd input=bc3260e856aa7416]*/
+/*[clinic end generated code: output=2d608ba8bfd902fe input=bc3260e856aa7416]*/
 {
     PyObject *result;
 
@@ -1889,7 +1925,7 @@ _ctypes_call_cdeclfunction_impl(PyObject *module, void *func,
                         NULL, /* self->argtypes */
                         NULL, /* self->restype */
                         NULL); /* checker */
-    return result;
+    return _PyValue_FromObjectResult(result);
 }
 
 /*****************************************************************
@@ -1904,30 +1940,35 @@ Return the size in bytes of a C instance.
 
 [clinic start generated code]*/
 
-static PyObject *
-_ctypes_sizeof(PyObject *module, PyObject *obj)
-/*[clinic end generated code: output=ed38a3f364d7bd3e input=321fd0f65cb2d623]*/
+static PyValue
+_ctypes_sizeof_impl(PyObject *module, PyValueBorrow obj)
+/*[clinic end generated code: output=3c65be3bcaf47e8a input=321fd0f65cb2d623]*/
 {
     ctypes_state *st = get_module_state(module);
 
-    StgInfo *info;
-    if (PyStgInfo_FromType(st, obj, &info) < 0) {
-        return NULL;
+    /* An inline int or float is neither a ctypes type nor an instance. */
+    StgInfo *info = NULL;
+    PyObject *o = NULL;
+    if (PyValue_IsObject(obj)) {
+        o = PyValue_AsKnownObjectBorrow(obj);
+        if (PyStgInfo_FromType(st, o, &info) < 0) {
+            return PyValue_NULL;
+        }
     }
     if (info) {
-        return PyLong_FromSsize_t(info->size);
+        return PyValue_FromInt64(info->size);
     }
 
-    if (CDataObject_Check(st, obj)) {
-        PyObject *ret = NULL;
-        Py_BEGIN_CRITICAL_SECTION(obj);
-        ret = PyLong_FromSsize_t(((CDataObject *)obj)->b_size);
+    if (o != NULL && CDataObject_Check(st, o)) {
+        PyValue ret = PyValue_NULL;
+        Py_BEGIN_CRITICAL_SECTION(o);
+        ret = PyValue_FromInt64(((CDataObject *)o)->b_size);
         Py_END_CRITICAL_SECTION();
         return ret;
     }
     PyErr_SetString(PyExc_TypeError,
                     "this type has no size");
-    return NULL;
+    return PyValue_NULL;
 }
 
 /*[clinic input]
@@ -1941,21 +1982,24 @@ Return the alignment requirements of a C instance.
 The argument is a C type or a C instance.
 [clinic start generated code]*/
 
-static PyObject *
-_ctypes_alignment(PyObject *module, PyObject *obj)
-/*[clinic end generated code: output=a7abe04d98641d93 input=3c78c5425bc83928]*/
+static PyValue
+_ctypes_alignment_impl(PyObject *module, PyValueBorrow obj)
+/*[clinic end generated code: output=b57e8d0150307e95 input=3c78c5425bc83928]*/
 {
     ctypes_state *st = get_module_state(module);
-    StgInfo *info;
-    if (PyStgInfo_FromAny(st, obj, &info) < 0) {
-        return NULL;
+    /* An inline int or float is neither a ctypes type nor an instance. */
+    StgInfo *info = NULL;
+    if (PyValue_IsObject(obj)
+        && PyStgInfo_FromAny(st, PyValue_AsKnownObjectBorrow(obj), &info) < 0)
+    {
+        return PyValue_NULL;
     }
     if (info) {
-        return PyLong_FromSsize_t(info->align);
+        return PyValue_FromInt64(info->align);
     }
     PyErr_SetString(PyExc_TypeError,
                     "no alignment info");
-    return NULL;
+    return PyValue_NULL;
 }
 
 
@@ -1970,21 +2014,21 @@ Return a pointer lookalike to a C instance, only usable as function argument.
 
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _ctypes_byref_impl(PyObject *module, PyObject *obj, Py_ssize_t offset)
-/*[clinic end generated code: output=60dec5ed520c71de input=870076149a2de427]*/
+/*[clinic end generated code: output=e9f719442b796841 input=870076149a2de427]*/
 {
     ctypes_state *st = get_module_state(module);
 
     PyCArgObject *parg = PyCArgObject_new(st);
     if (parg == NULL)
-        return NULL;
+        return PyValue_NULL;
 
     parg->tag = "P";
     parg->pffi_type = &ffi_type_pointer;
     parg->obj = Py_NewRef(obj);
     parg->value.p = (char *)((CDataObject *)obj)->b_ptr + offset;
-    return (PyObject *)parg;
+    return _PyValue_FromObjectResult((PyObject *)parg);
 }
 
 /*[clinic input]
@@ -1996,21 +2040,26 @@ Return the address of the C instance internal buffer
 
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _ctypes_addressof_impl(PyObject *module, PyObject *obj)
-/*[clinic end generated code: output=30d8e80c4bab70c7 input=d83937d105d3a442]*/
+/*[clinic end generated code: output=104acc3040ec6f9b input=d83937d105d3a442]*/
 {
     if (PySys_Audit("ctypes.addressof", "(O)", obj) < 0) {
-        return NULL;
+        return PyValue_NULL;
     }
-    return PyLong_FromVoidPtr(((CDataObject *)obj)->b_ptr);
+    return PyValue_FromUInt64((uint64_t)(uintptr_t)((CDataObject *)obj)->b_ptr);
 }
 
 static int
-_parse_voidp_object(PyObject *obj, void *arg)
+_parse_voidp_object(PyValueBorrow obj, void *arg)
 {
     PyObject **address = (PyObject **)arg;
-    *address = PyLong_AsVoidPtr(obj);
+    PyObject *o = _PyValue_AsObjectAt(obj, BOX_SITE_PARSER);
+    if (o == NULL) {
+        return 0;
+    }
+    *address = PyLong_AsVoidPtr(o);
+    Py_DECREF(o);
     return *address != NULL;
 }
 
@@ -2021,14 +2070,14 @@ _ctypes.PyObj_FromPtr
     /
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _ctypes_PyObj_FromPtr_impl(PyObject *module, PyObject *ob)
-/*[clinic end generated code: output=225d11c8e84c2926 input=1baea4849458fe7c]*/
+/*[clinic end generated code: output=828bef29f73594f6 input=1baea4849458fe7c]*/
 {
     if (PySys_Audit("ctypes.PyObj_FromPtr", "(O)", ob) < 0) {
-        return NULL;
+        return PyValue_NULL;
     }
-    return Py_NewRef(ob);
+    return PyValue_DUP(PyValue_FromObjectBorrow(ob));
 }
 
 /*[clinic input]
@@ -2040,13 +2089,15 @@ _ctypes.Py_INCREF
 Increment the reference count of the object and return it.
 [clinic start generated code]*/
 
-static PyObject *
-_ctypes_Py_INCREF(PyObject *module, PyObject *arg)
-/*[clinic end generated code: output=ebf05a7f9ba69657 input=04fcd9c30fee39ea]*/
+static PyValue
+_ctypes_Py_INCREF_impl(PyObject *module, PyValueBorrow arg)
+/*[clinic end generated code: output=e30e3df71f7328e9 input=04fcd9c30fee39ea]*/
 {
-    Py_INCREF(arg); /* that's what this function is for */
-    Py_INCREF(arg); /* that for returning it */
-    return arg;
+    /* An inline int or float has no reference count. */
+    if (PyValue_IsObject(arg)) {
+        Py_INCREF(PyValue_AsKnownObjectBorrow(arg)); /* that's what this function is for */
+    }
+    return PyValue_DUP(arg); /* that for returning it */
 }
 
 /*[clinic input]
@@ -2058,13 +2109,15 @@ _ctypes.Py_DECREF
 Decrement the reference count of the object and return it.
 [clinic start generated code]*/
 
-static PyObject *
-_ctypes_Py_DECREF(PyObject *module, PyObject *arg)
-/*[clinic end generated code: output=d7933cd7be22ccde input=108543079a732003]*/
+static PyValue
+_ctypes_Py_DECREF_impl(PyObject *module, PyValueBorrow arg)
+/*[clinic end generated code: output=40de724481bc0f4b input=108543079a732003]*/
 {
-    Py_DECREF(arg); /* that's what this function is for */
-    Py_INCREF(arg); /* that's for returning it */
-    return arg;
+    /* An inline int or float has no reference count. */
+    if (PyValue_IsObject(arg)) {
+        Py_DECREF(PyValue_AsKnownObjectBorrow(arg)); /* that's what this function is for */
+    }
+    return PyValue_DUP(arg); /* that's for returning it */
 }
 
 /*[clinic input]
@@ -2076,31 +2129,31 @@ _ctypes.resize
 
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _ctypes_resize_impl(PyObject *module, CDataObject *obj, Py_ssize_t size)
-/*[clinic end generated code: output=11c89c7dbdbcd53f input=bf5a6aaea8514261]*/
+/*[clinic end generated code: output=0b82a2b1cfe4d1b4 input=bf5a6aaea8514261]*/
 {
     ctypes_state *st = get_module_state(module);
     StgInfo *info;
     int result = PyStgInfo_FromObject(st, (PyObject *)obj, &info);
     if (result < 0) {
-        return NULL;
+        return PyValue_NULL;
     }
     if (info == NULL) {
         PyErr_SetString(PyExc_TypeError,
                         "expected ctypes instance");
-        return NULL;
+        return PyValue_NULL;
     }
     if (size < info->size) {
         PyErr_Format(PyExc_ValueError,
                      "minimum size is %zd",
                      info->size);
-        return NULL;
+        return PyValue_NULL;
     }
     if (obj->b_needsfree == 0) {
         PyErr_Format(PyExc_ValueError,
                      "Memory cannot be resized because this object doesn't own it");
-        return NULL;
+        return PyValue_NULL;
     }
     if ((size_t)size <= sizeof(obj->b_value)) {
         /* internal default buffer is large enough */
@@ -2112,19 +2165,19 @@ _ctypes_resize_impl(PyObject *module, CDataObject *obj, Py_ssize_t size)
            isn't large enough any more. */
         void *ptr = PyMem_Calloc(1, size);
         if (ptr == NULL)
-            return PyErr_NoMemory();
+            return _PyValue_FromObjectResult(PyErr_NoMemory());
         memmove(ptr, obj->b_ptr, obj->b_size);
         obj->b_ptr = ptr;
         obj->b_size = size;
     } else {
         void * ptr = PyMem_Realloc(obj->b_ptr, size);
         if (ptr == NULL)
-            return PyErr_NoMemory();
+            return _PyValue_FromObjectResult(PyErr_NoMemory());
         obj->b_ptr = ptr;
         obj->b_size = size;
     }
   done:
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 /*[clinic input]
@@ -2135,17 +2188,28 @@ _ctypes._unpickle
     /
 [clinic start generated code]*/
 
-static PyObject *
-_ctypes__unpickle_impl(PyObject *module, PyObject *typ, PyObject *state)
-/*[clinic end generated code: output=358df408ddcf5145 input=1cdb32990e0ef9b8]*/
+static PyValue
+_ctypes__unpickle_impl(PyObject *module, PyValueBorrow typ, PyObject *state)
+/*[clinic end generated code: output=fe152a68a3439848 input=1cdb32990e0ef9b8]*/
 {
     PyObject *meth, *obj, *result;
 
-    obj = PyObject_CallMethodOneArg(typ, &_Py_ID(__new__), typ);
+    PyObject *typobj = _PyValue_AsObjectAt(typ, BOX_SITE_PARSER);
+    if (typobj == NULL) {
+        return PyValue_NULL;
+    }
+    obj = PyObject_CallMethodOneArg(typobj, &_Py_ID(__new__), typobj);
+    Py_DECREF(typobj);
     if (obj == NULL)
-        return NULL;
+        return PyValue_NULL;
 
-    meth = PyObject_GetAttr(obj, &_Py_ID(__setstate__));
+    PyValue methvalue = _PyValue_GetAttr(PyValue_FromObjectBorrow(obj),
+                                         &_Py_ID(__setstate__));
+    if (PyValue_IsNull(methvalue)) {
+        goto error;
+    }
+    meth = _PyValue_AsObjectAt(methvalue, BOX_SITE_ATTRIBUTE);
+    PyValue_CLOSE(methvalue);
     if (meth == NULL) {
         goto error;
     }
@@ -2157,11 +2221,11 @@ _ctypes__unpickle_impl(PyObject *module, PyObject *typ, PyObject *state)
     }
     Py_DECREF(result);
 
-    return obj;
+    return _PyValue_FromObjectResult(obj);
 
 error:
     Py_DECREF(obj);
-    return NULL;
+    return PyValue_NULL;
 }
 
 /*[clinic input]
@@ -2173,34 +2237,37 @@ _ctypes.buffer_info
 Return buffer interface information.
 [clinic start generated code]*/
 
-static PyObject *
-_ctypes_buffer_info(PyObject *module, PyObject *arg)
-/*[clinic end generated code: output=31f942a6fce6d671 input=cb023e7f9c959f72]*/
+static PyValue
+_ctypes_buffer_info_impl(PyObject *module, PyValueBorrow arg)
+/*[clinic end generated code: output=e9670ec605978a43 input=cb023e7f9c959f72]*/
 {
     PyObject *shape;
     Py_ssize_t i;
 
     ctypes_state *st = get_module_state(module);
-    StgInfo *info;
-    if (PyStgInfo_FromAny(st, arg, &info) < 0) {
-        return NULL;
+    /* An inline int or float is neither a ctypes type nor an instance. */
+    StgInfo *info = NULL;
+    if (PyValue_IsObject(arg)
+        && PyStgInfo_FromAny(st, PyValue_AsKnownObjectBorrow(arg), &info) < 0)
+    {
+        return PyValue_NULL;
     }
     if (info == NULL) {
         PyErr_SetString(PyExc_TypeError,
                         "not a ctypes type or object");
-        return NULL;
+        return PyValue_NULL;
     }
     shape = PyTuple_New(info->ndim);
     if (shape == NULL)
-        return NULL;
+        return PyValue_NULL;
     for (i = 0; i < (int)info->ndim; ++i)
-        PyTuple_SET_ITEM(shape, i, PyLong_FromSsize_t(info->shape[i]));
+        PyTuple_SET_VALUE(shape, i, PyValue_PrepareOwned(PyLong_FromSsize_t(info->shape[i])));
 
     if (PyErr_Occurred()) {
         Py_DECREF(shape);
-        return NULL;
+        return PyValue_NULL;
     }
-    return Py_BuildValue("siN", info->format, info->ndim, shape);
+    return _PyValue_FromObjectResult(Py_BuildValue("siN", info->format, info->ndim, shape));
 }
 
 

@@ -2,50 +2,57 @@
 preserve
 [clinic start generated code]*/
 
+#ifndef Py_VALUE_CORE
+#  error "value-emission Clinic output requires Py_VALUE_CORE"
+#endif
+
+#include "pycore_long_value.h"    // _PyValue_AsDouble()
+#include "pycore_modsupport.h"    // _PyArg_CheckPositional()
+#include "pycore_value_call.h"    // METH_VALUE
+
 PyDoc_STRVAR(_statistics__normal_dist_inv_cdf__doc__,
 "_normal_dist_inv_cdf($module, p, mu, sigma, /)\n"
 "--\n"
 "\n");
 
 #define _STATISTICS__NORMAL_DIST_INV_CDF_METHODDEF    \
-    {"_normal_dist_inv_cdf", (PyCFunction)(void(*)(void))_statistics__normal_dist_inv_cdf, METH_FASTCALL, _statistics__normal_dist_inv_cdf__doc__},
+    {"_normal_dist_inv_cdf", _PyCFunction_CAST(_statistics__normal_dist_inv_cdf), METH_VALUE, _statistics__normal_dist_inv_cdf__doc__},
 
 static double
 _statistics__normal_dist_inv_cdf_impl(PyObject *module, double p, double mu,
                                       double sigma);
 
-static PyObject *
-_statistics__normal_dist_inv_cdf(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_statistics__normal_dist_inv_cdf(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     double p;
     double mu;
     double sigma;
     double _return_value;
 
-    if (nargs != 3) {
-        PyErr_Format(PyExc_TypeError, "_normal_dist_inv_cdf expected 3 arguments, got %zd", nargs);
+    if (!_PyArg_CheckPositional("_normal_dist_inv_cdf", nargs, 3, 3)) {
         goto exit;
     }
-    p = PyFloat_AsDouble(args[0]);
+    p = _PyValue_AsDouble(PyValue_Borrow(args[0]));
     if (p == -1.0 && PyErr_Occurred()) {
         goto exit;
     }
-    mu = PyFloat_AsDouble(args[1]);
+    mu = _PyValue_AsDouble(PyValue_Borrow(args[1]));
     if (mu == -1.0 && PyErr_Occurred()) {
         goto exit;
     }
-    sigma = PyFloat_AsDouble(args[2]);
+    sigma = _PyValue_AsDouble(PyValue_Borrow(args[2]));
     if (sigma == -1.0 && PyErr_Occurred()) {
         goto exit;
     }
-    _return_value = _statistics__normal_dist_inv_cdf_impl(module, p, mu, sigma);
+    _return_value = _statistics__normal_dist_inv_cdf_impl(PyValue_AsKnownObjectBorrow(module), p, mu, sigma);
     if ((_return_value == -1.0) && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = PyFloat_FromDouble(_return_value);
+    return_value = PyValue_FromDouble(_return_value);
 
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=0f0c849d51f16f1b input=a9049054013a1b77]*/
+/*[clinic end generated code: output=5cefd386f3fb161c input=a9049054013a1b77]*/

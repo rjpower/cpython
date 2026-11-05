@@ -11,13 +11,14 @@
  *
  */
 
-// Need limited C API version 3.13 for PyModule_Add() on Windows
-#include "pyconfig.h"   // Py_GIL_DISABLED
-#ifndef Py_GIL_DISABLED
-#  define Py_LIMITED_API 0x030d0000
+#ifndef Py_BUILD_CORE_BUILTIN
+#  define Py_BUILD_CORE_MODULE 1
 #endif
-
+#define Py_VALUE_CORE 1
 #include "Python.h"
+#include "pycore_long_value.h"  // _PyValue_IntAsUnsignedLong()
+#include "pycore_value.h"         // PyValue_FromObjectBorrow()
+#include "pycore_value_ops.h"     // _PyValue_Index()
 
 #ifdef HAVE_SYS_TYPES_H
 #include <sys/types.h>
@@ -299,12 +300,12 @@ _PyLong_AsMode_t(PyObject *op)
         value = PyLong_AsUnsignedLong(op);
     }
     else {
-        op = PyNumber_Index(op);
-        if (op == NULL) {
+        PyValue index = _PyValue_IndexExact(PyValue_FromObjectBorrow(op));
+        if (PyValue_IsNull(index)) {
             return (mode_t)-1;
         }
-        value = PyLong_AsUnsignedLong(op);
-        Py_DECREF(op);
+        value = _PyValue_IntAsUnsignedLong(index);
+        PyValue_CLOSE(index);
     }
 
     if ((value == (unsigned long)-1) && PyErr_Occurred()) {

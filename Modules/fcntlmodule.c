@@ -5,7 +5,12 @@
 #  define Py_BUILD_CORE_MODULE 1
 #endif
 
+#define Py_VALUE_CORE 1
 #include "Python.h"
+#include "pycore_abstract.h"  // _PyIndex_Check()
+#include "pycore_long_value.h" // _PyValue_AsLong()
+#include "pycore_value.h"      // PyValue_AsKnownObjectBorrow()
+#include "pycore_value_slots.h"// _PyValue_FromObjectResult()
 
 #include <errno.h>                // EINTR
 #include <fcntl.h>                // fcntl()
@@ -24,6 +29,45 @@
 #define GUARDSZ 8
 // NUL followed by random bytes.
 static const char guard[GUARDSZ] _Py_NONSTRING = "\x00\xfa\x69\xc4\x67\xa3\x6c\x58";
+
+/*[clinic input]
+value_emission
+[clinic start generated code]*/
+/*[clinic end generated code: output=da39a3ee5e6b4b0d input=eb7b17088bfd7215]*/
+
+// _PyIndex_Check() of a value: an inline int has __index__, a float not.
+static int
+fcntl_index_check(PyValueBorrow v)
+{
+    if (PyValue_IsInline(v)) {
+        return PyValue_IsInlineInt(v);
+    }
+    return _PyIndex_Check(PyValue_AsKnownObjectBorrow(v));
+}
+
+// PySys_Audit() takes objects: box an inline value for the event arguments.
+// Returns a new reference (None for PyValue_NULL) or NULL with an exception.
+static PyObject *
+fcntl_audit_arg(PyValueBorrow v)
+{
+    if (PyValue_IsNull(v)) {
+        return Py_NewRef(Py_None);
+    }
+    return _PyValue_AsObjectAt(v, BOX_SITE_PARSER);
+}
+
+// PyArg_Parse() of a value, which may be an inline int.
+static int
+fcntl_arg_parse(PyValueBorrow v, const char *format, void *result)
+{
+    PyObject *obj = _PyValue_AsObjectAt(v, BOX_SITE_PARSER);
+    if (obj == NULL) {
+        return 0;
+    }
+    int ok = PyArg_Parse(obj, format, result);
+    Py_DECREF(obj);
+    return ok;
+}
 
 /*[clinic input]
 module fcntl
@@ -58,22 +102,28 @@ bytes object of that length, containing the resulting value put in the
 arg buffer by the operating system.
 [clinic start generated code]*/
 
-static PyObject *
-fcntl_fcntl_impl(PyObject *module, int fd, int code, PyObject *arg)
-/*[clinic end generated code: output=888fc93b51c295bd input=77340720f11665da]*/
+static PyValue
+fcntl_fcntl_impl(PyObject *module, int fd, int code, PyValueBorrow arg)
+/*[clinic end generated code: output=8e55a63e262e9288 input=77340720f11665da]*/
 {
     int ret;
     int async_err = 0;
 
-    if (PySys_Audit("fcntl.fcntl", "iiO", fd, code, arg ? arg : Py_None) < 0) {
-        return NULL;
+    PyObject *audit_arg = fcntl_audit_arg(arg);
+    if (audit_arg == NULL) {
+        return PyValue_NULL;
+    }
+    int audit_res = PySys_Audit("fcntl.fcntl", "iiO", fd, code, audit_arg);
+    Py_DECREF(audit_arg);
+    if (audit_res < 0) {
+        return PyValue_NULL;
     }
 
-    if (arg == NULL || PyIndex_Check(arg)) {
+    if (PyValue_IsNull(arg) || fcntl_index_check(arg)) {
         unsigned int int_arg = 0;
-        if (arg != NULL) {
-            if (!PyArg_Parse(arg, "I", &int_arg)) {
-                return NULL;
+        if (!PyValue_IsNull(arg)) {
+            if (!fcntl_arg_parse(arg, "I", &int_arg)) {
+                return PyValue_NULL;
             }
         }
 
@@ -83,18 +133,18 @@ fcntl_fcntl_impl(PyObject *module, int fd, int code, PyObject *arg)
             Py_END_ALLOW_THREADS
         } while (ret == -1 && errno == EINTR && !(async_err = PyErr_CheckSignals()));
         if (ret < 0) {
-            return !async_err ? PyErr_SetFromErrno(PyExc_OSError) : NULL;
+            return _PyValue_FromObjectResult(!async_err ? PyErr_SetFromErrno(PyExc_OSError) : NULL);
         }
-        return PyLong_FromLong(ret);
+        return PyValue_FromInt64(ret);
     }
-    if (PyUnicode_Check(arg) || PyObject_CheckBuffer(arg)) {
+    if ((PyValue_IsObject(arg) && PyUnicode_Check(PyValue_AsKnownObjectBorrow(arg))) || (PyValue_IsObject(arg) && PyObject_CheckBuffer(PyValue_AsKnownObjectBorrow(arg)))) {
         Py_buffer view;
 #define FCNTL_BUFSZ 1024
         /* argument plus NUL byte plus guard to detect a buffer overflow */
         char buf[FCNTL_BUFSZ+GUARDSZ];
 
-        if (!PyArg_Parse(arg, "s*", &view)) {
-            return NULL;
+        if (!PyArg_Parse(PyValue_AsKnownObjectBorrow(arg), "s*", &view)) {
+            return PyValue_NULL;
         }
         Py_ssize_t len = view.len;
         if (len <= FCNTL_BUFSZ) {
@@ -108,7 +158,7 @@ fcntl_fcntl_impl(PyObject *module, int fd, int code, PyObject *arg)
                 Py_END_ALLOW_THREADS
             } while (ret == -1 && errno == EINTR && !(async_err = PyErr_CheckSignals()));
             if (ret < 0) {
-                return !async_err ? PyErr_SetFromErrno(PyExc_OSError) : NULL;
+                return _PyValue_FromObjectResult(!async_err ? PyErr_SetFromErrno(PyExc_OSError) : NULL);
             }
             if (memcmp(buf + len, guard, GUARDSZ) != 0) {
                 PyErr_SetString(PyExc_SystemError,
@@ -116,15 +166,15 @@ fcntl_fcntl_impl(PyObject *module, int fd, int code, PyObject *arg)
                         "buffer overflow. "
                         "Provide an argument of sufficient size as "
                         "determined by the operation.");
-                return NULL;
+                return PyValue_NULL;
             }
-            return PyBytes_FromStringAndSize(buf, len);
+            return _PyValue_FromObjectResult(PyBytes_FromStringAndSize(buf, len));
         }
         else {
             PyBytesWriter *writer = PyBytesWriter_Create(len + GUARDSZ);
             if (writer == NULL) {
                 PyBuffer_Release(&view);
-                return NULL;
+                return PyValue_NULL;
             }
             char *ptr = PyBytesWriter_GetData(writer);
             memcpy(ptr, view.buf, len);
@@ -141,7 +191,7 @@ fcntl_fcntl_impl(PyObject *module, int fd, int code, PyObject *arg)
                     PyErr_SetFromErrno(PyExc_OSError);
                 }
                 PyBytesWriter_Discard(writer);
-                return NULL;
+                return PyValue_NULL;
             }
             if (memcmp(ptr + len, guard, GUARDSZ) != 0) {
                 PyErr_SetString(PyExc_SystemError,
@@ -150,18 +200,18 @@ fcntl_fcntl_impl(PyObject *module, int fd, int code, PyObject *arg)
                         "Provide an argument of sufficient size as "
                         "determined by the operation.");
                 PyBytesWriter_Discard(writer);
-                return NULL;
+                return PyValue_NULL;
             }
             // Truncate the trailing guard bytes
-            return PyBytesWriter_FinishWithSize(writer, len);
+            return _PyValue_FromObjectResult(PyBytesWriter_FinishWithSize(writer, len));
         }
 #undef FCNTL_BUFSZ
     }
     PyErr_Format(PyExc_TypeError,
                  "fcntl() argument 3 must be an integer, "
-                 "a bytes-like object, or a string, not %T",
+                 "a bytes-like object, or a string, not %vT",
                  arg);
-    return NULL;
+    return PyValue_NULL;
 }
 
 
@@ -203,10 +253,10 @@ the same length containing whatever the operating system put in the
 buffer.
 [clinic start generated code]*/
 
-static PyObject *
-fcntl_ioctl_impl(PyObject *module, int fd, unsigned long code, PyObject *arg,
-                 int mutate_arg)
-/*[clinic end generated code: output=f72baba2454d7a62 input=954fe75c208cc492]*/
+static PyValue
+fcntl_ioctl_impl(PyObject *module, int fd, unsigned long code,
+                 PyValueBorrow arg, int mutate_arg)
+/*[clinic end generated code: output=366c7cb70dd16486 input=954fe75c208cc492]*/
 {
     /* We use the unsigned non-checked 'I' format for the 'code' parameter
        because the system expects it to be a 32bit bit field value
@@ -221,15 +271,21 @@ fcntl_ioctl_impl(PyObject *module, int fd, unsigned long code, PyObject *arg,
     int ret;
     int async_err = 0;
 
-    if (PySys_Audit("fcntl.ioctl", "ikO", fd, code, arg ? arg : Py_None) < 0) {
-        return NULL;
+    PyObject *audit_arg = fcntl_audit_arg(arg);
+    if (audit_arg == NULL) {
+        return PyValue_NULL;
+    }
+    int audit_res = PySys_Audit("fcntl.ioctl", "ikO", fd, code, audit_arg);
+    Py_DECREF(audit_arg);
+    if (audit_res < 0) {
+        return PyValue_NULL;
     }
 
-    if (arg == NULL || PyIndex_Check(arg)) {
+    if (PyValue_IsNull(arg) || fcntl_index_check(arg)) {
         int int_arg = 0;
-        if (arg != NULL) {
-            if (!PyArg_Parse(arg, "i", &int_arg)) {
-                return NULL;
+        if (!PyValue_IsNull(arg)) {
+            if (!fcntl_arg_parse(arg, "i", &int_arg)) {
+                return PyValue_NULL;
             }
         }
 
@@ -239,17 +295,17 @@ fcntl_ioctl_impl(PyObject *module, int fd, unsigned long code, PyObject *arg,
             Py_END_ALLOW_THREADS
         } while (ret == -1 && errno == EINTR && !(async_err = PyErr_CheckSignals()));
         if (ret < 0) {
-            return !async_err ? PyErr_SetFromErrno(PyExc_OSError) : NULL;
+            return _PyValue_FromObjectResult(!async_err ? PyErr_SetFromErrno(PyExc_OSError) : NULL);
         }
-        return PyLong_FromLong(ret);
+        return PyValue_FromInt64(ret);
     }
-    if (PyUnicode_Check(arg) || PyObject_CheckBuffer(arg)) {
+    if ((PyValue_IsObject(arg) && PyUnicode_Check(PyValue_AsKnownObjectBorrow(arg))) || (PyValue_IsObject(arg) && PyObject_CheckBuffer(PyValue_AsKnownObjectBorrow(arg)))) {
         Py_buffer view;
 #define IOCTL_BUFSZ 1024
         /* argument plus NUL byte plus guard to detect a buffer overflow */
         char buf[IOCTL_BUFSZ+GUARDSZ];
-        if (mutate_arg && !PyBytes_Check(arg) && !PyUnicode_Check(arg)) {
-            if (PyObject_GetBuffer(arg, &view, PyBUF_WRITABLE) == 0) {
+        if (mutate_arg && !(PyValue_IsObject(arg) && PyBytes_Check(PyValue_AsKnownObjectBorrow(arg))) && !(PyValue_IsObject(arg) && PyUnicode_Check(PyValue_AsKnownObjectBorrow(arg)))) {
+            if (PyObject_GetBuffer(PyValue_AsKnownObjectBorrow(arg), &view, PyBUF_WRITABLE) == 0) {
                 Py_ssize_t len = view.len;
                 void *ptr = view.buf;
                 if (len <= IOCTL_BUFSZ) {
@@ -267,7 +323,7 @@ fcntl_ioctl_impl(PyObject *module, int fd, unsigned long code, PyObject *arg,
                         PyErr_SetFromErrno(PyExc_OSError);
                     }
                     PyBuffer_Release(&view);
-                    return NULL;
+                    return PyValue_NULL;
                 }
                 if (ptr == buf) {
                     memcpy(view.buf, buf, len);
@@ -280,18 +336,18 @@ fcntl_ioctl_impl(PyObject *module, int fd, unsigned long code, PyObject *arg,
                             "Provide a writable buffer argument of "
                             "sufficient size as determined by "
                             "the operation.");
-                    return NULL;
+                    return PyValue_NULL;
                 }
-                return PyLong_FromLong(ret);
+                return PyValue_FromInt64(ret);
             }
             if (!PyErr_ExceptionMatches(PyExc_BufferError)) {
-                return NULL;
+                return PyValue_NULL;
             }
             PyErr_Clear();
         }
 
-        if (!PyArg_Parse(arg, "s*", &view)) {
-            return NULL;
+        if (!PyArg_Parse(PyValue_AsKnownObjectBorrow(arg), "s*", &view)) {
+            return PyValue_NULL;
         }
         Py_ssize_t len = view.len;
         if (len <= IOCTL_BUFSZ) {
@@ -305,7 +361,7 @@ fcntl_ioctl_impl(PyObject *module, int fd, unsigned long code, PyObject *arg,
                 Py_END_ALLOW_THREADS
             } while (ret == -1 && errno == EINTR && !(async_err = PyErr_CheckSignals()));
             if (ret < 0) {
-                return !async_err ? PyErr_SetFromErrno(PyExc_OSError) : NULL;
+                return _PyValue_FromObjectResult(!async_err ? PyErr_SetFromErrno(PyExc_OSError) : NULL);
             }
             if (memcmp(buf + len, guard, GUARDSZ) != 0) {
                 PyErr_SetString(PyExc_SystemError,
@@ -313,15 +369,15 @@ fcntl_ioctl_impl(PyObject *module, int fd, unsigned long code, PyObject *arg,
                         "buffer overflow. "
                         "Provide an argument of sufficient size as "
                         "determined by the operation.");
-                return NULL;
+                return PyValue_NULL;
             }
-            return PyBytes_FromStringAndSize(buf, len);
+            return _PyValue_FromObjectResult(PyBytes_FromStringAndSize(buf, len));
         }
         else {
             PyBytesWriter *writer = PyBytesWriter_Create(len + GUARDSZ);
             if (writer == NULL) {
                 PyBuffer_Release(&view);
-                return NULL;
+                return PyValue_NULL;
             }
             char *ptr = PyBytesWriter_GetData(writer);
             memcpy(ptr, view.buf, len);
@@ -338,7 +394,7 @@ fcntl_ioctl_impl(PyObject *module, int fd, unsigned long code, PyObject *arg,
                     PyErr_SetFromErrno(PyExc_OSError);
                 }
                 PyBytesWriter_Discard(writer);
-                return NULL;
+                return PyValue_NULL;
             }
             if (memcmp(ptr + len, guard, GUARDSZ) != 0) {
                 PyErr_SetString(PyExc_SystemError,
@@ -347,18 +403,18 @@ fcntl_ioctl_impl(PyObject *module, int fd, unsigned long code, PyObject *arg,
                         "Provide an argument of sufficient size as "
                         "determined by the operation.");
                 PyBytesWriter_Discard(writer);
-                return NULL;
+                return PyValue_NULL;
             }
             // Truncate the trailing guard bytes
-            return PyBytesWriter_FinishWithSize(writer, len);
+            return _PyValue_FromObjectResult(PyBytesWriter_FinishWithSize(writer, len));
         }
 #undef IOCTL_BUFSZ
     }
     PyErr_Format(PyExc_TypeError,
                  "ioctl() argument 3 must be an integer, "
-                 "a bytes-like object, or a string, not %T",
+                 "a bytes-like object, or a string, not %vT",
                  arg);
-    return NULL;
+    return PyValue_NULL;
 }
 
 /*[clinic input]
@@ -374,15 +430,15 @@ See the Unix manual page for flock(2) for details (On some systems, this
 function is emulated using fcntl()).
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 fcntl_flock_impl(PyObject *module, int fd, int code)
-/*[clinic end generated code: output=84059e2b37d2fc64 input=ade68943e8599f0a]*/
+/*[clinic end generated code: output=322893ae68db993c input=ade68943e8599f0a]*/
 {
     int ret;
     int async_err = 0;
 
     if (PySys_Audit("fcntl.flock", "ii", fd, code) < 0) {
-        return NULL;
+        return PyValue_NULL;
     }
 
 #ifdef HAVE_FLOCK
@@ -421,9 +477,9 @@ fcntl_flock_impl(PyObject *module, int fd, int code)
     }
 #endif /* HAVE_FLOCK */
     if (ret < 0) {
-        return !async_err ? PyErr_SetFromErrno(PyExc_OSError) : NULL;
+        return _PyValue_FromObjectResult(!async_err ? PyErr_SetFromErrno(PyExc_OSError) : NULL);
     }
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 
@@ -461,17 +517,26 @@ starts.  whence is as with fileobj.seek(), specifically:
     2 - relative to the end of the file (SEEK_END)
 [clinic start generated code]*/
 
-static PyObject *
-fcntl_lockf_impl(PyObject *module, int fd, int code, PyObject *lenobj,
-                 PyObject *startobj, int whence)
-/*[clinic end generated code: output=4985e7a172e7461a input=369bef4d7a1c5ff4]*/
+static PyValue
+fcntl_lockf_impl(PyObject *module, int fd, int code, PyValueBorrow lenobj,
+                 PyValueBorrow startobj, int whence)
+/*[clinic end generated code: output=9ecd71ee6c9392c7 input=369bef4d7a1c5ff4]*/
 {
     int ret;
     int async_err = 0;
 
-    if (PySys_Audit("fcntl.lockf", "iiOOi", fd, code, lenobj ? lenobj : Py_None,
-                    startobj ? startobj : Py_None, whence) < 0) {
-        return NULL;
+    PyObject *audit_len = fcntl_audit_arg(lenobj);
+    PyObject *audit_start = audit_len == NULL ? NULL : fcntl_audit_arg(startobj);
+    if (audit_start == NULL) {
+        Py_XDECREF(audit_len);
+        return PyValue_NULL;
+    }
+    int audit_res = PySys_Audit("fcntl.lockf", "iiOOi", fd, code, audit_len,
+                                audit_start, whence);
+    Py_DECREF(audit_len);
+    Py_DECREF(audit_start);
+    if (audit_res < 0) {
+        return PyValue_NULL;
     }
 
 #ifndef LOCK_SH
@@ -491,30 +556,30 @@ fcntl_lockf_impl(PyObject *module, int fd, int code, PyObject *lenobj,
         else {
             PyErr_SetString(PyExc_ValueError,
                             "unrecognized lockf argument");
-            return NULL;
+            return PyValue_NULL;
         }
         l.l_start = l.l_len = 0;
-        if (startobj != NULL) {
+        if (!PyValue_IsNull(startobj)) {
 #if !defined(HAVE_LARGEFILE_SUPPORT)
-            l.l_start = PyLong_AsLong(startobj);
+            l.l_start = _PyValue_AsLong(startobj);
 #else
-            l.l_start = PyLong_Check(startobj) ?
-                            PyLong_AsLongLong(startobj) :
-                    PyLong_AsLong(startobj);
+            l.l_start = PyValue_LongCheck(startobj) ?
+                            _PyValue_AsLongLong(startobj) :
+                    _PyValue_AsLong(startobj);
 #endif
             if (PyErr_Occurred())
-                return NULL;
+                return PyValue_NULL;
         }
-        if (lenobj != NULL) {
+        if (!PyValue_IsNull(lenobj)) {
 #if !defined(HAVE_LARGEFILE_SUPPORT)
-            l.l_len = PyLong_AsLong(lenobj);
+            l.l_len = _PyValue_AsLong(lenobj);
 #else
-            l.l_len = PyLong_Check(lenobj) ?
-                            PyLong_AsLongLong(lenobj) :
-                    PyLong_AsLong(lenobj);
+            l.l_len = PyValue_LongCheck(lenobj) ?
+                            _PyValue_AsLongLong(lenobj) :
+                    _PyValue_AsLong(lenobj);
 #endif
             if (PyErr_Occurred())
-                return NULL;
+                return PyValue_NULL;
         }
         l.l_whence = whence;
         do {
@@ -524,9 +589,9 @@ fcntl_lockf_impl(PyObject *module, int fd, int code, PyObject *lenobj,
         } while (ret == -1 && errno == EINTR && !(async_err = PyErr_CheckSignals()));
     }
     if (ret < 0) {
-        return !async_err ? PyErr_SetFromErrno(PyExc_OSError) : NULL;
+        return _PyValue_FromObjectResult(!async_err ? PyErr_SetFromErrno(PyExc_OSError) : NULL);
     }
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 /* List of functions */

@@ -25,12 +25,14 @@
 #  define Py_BUILD_CORE_MODULE 1
 #endif
 
+#define Py_VALUE_CORE 1
 #include "cursor.h"
 #include "microprotocols.h"
 #include "module.h"
 #include "util.h"
 
 #include "pycore_pyerrors.h"      // _PyErr_FormatFromCause()
+#include "pycore_value.h"         // PyValue
 #include "pycore_weakref.h"       // FT_CLEAR_WEAKREFS()
 
 typedef enum {
@@ -92,6 +94,11 @@ cursor_cannot_reset_stmt_error(pysqlite_Cursor *cursor, int chain_exceptions)
                                   "cannot reset statement",
                                   chain_exceptions);
 }
+
+/*[clinic input]
+value_emission
+[clinic start generated code]*/
+/*[clinic end generated code: output=da39a3ee5e6b4b0d input=eb7b17088bfd7215]*/
 
 /*[clinic input]
 module _sqlite3
@@ -1035,10 +1042,10 @@ _sqlite3.Cursor.execute as pysqlite_cursor_execute
 Executes an SQL statement.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 pysqlite_cursor_execute_impl(pysqlite_Cursor *self, PyObject *sql,
-                             PyObject *parameters)
-/*[clinic end generated code: output=d81b4655c7c0bbad input=a8e0200a11627f94]*/
+                             PyValueBorrow parameters)
+/*[clinic end generated code: output=22322b53fb390d53 input=a8e0200a11627f94]*/
 {
     return _pysqlite_query_execute(self, 0, sql, parameters);
 }
@@ -1053,10 +1060,10 @@ _sqlite3.Cursor.executemany as pysqlite_cursor_executemany
 Repeatedly executes an SQL statement.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 pysqlite_cursor_executemany_impl(pysqlite_Cursor *self, PyObject *sql,
-                                 PyObject *seq_of_parameters)
-/*[clinic end generated code: output=2c65a3c4733fb5d8 input=0d0a52e5eb7ccd35]*/
+                                 PyValueBorrow seq_of_parameters)
+/*[clinic end generated code: output=ca1c214fafefdf61 input=0d0a52e5eb7ccd35]*/
 {
     return _pysqlite_query_execute(self, 1, sql, seq_of_parameters);
 }
@@ -1070,10 +1077,10 @@ _sqlite3.Cursor.executescript as pysqlite_cursor_executescript
 Executes multiple SQL statements at once.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 pysqlite_cursor_executescript_impl(pysqlite_Cursor *self,
                                    const char *sql_script)
-/*[clinic end generated code: output=8fd726dde1c65164 input=78f093be415a8a2c]*/
+/*[clinic end generated code: output=6bc781c8e36450f1 input=78f093be415a8a2c]*/
 {
     if (!check_cursor(self)) {
         return NULL;
@@ -1200,9 +1207,9 @@ _sqlite3.Cursor.fetchone as pysqlite_cursor_fetchone
 Fetches one row from the resultset.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 pysqlite_cursor_fetchone_impl(pysqlite_Cursor *self)
-/*[clinic end generated code: output=4bd2eabf5baaddb0 input=e78294ec5980fdba]*/
+/*[clinic end generated code: output=cb5c15e32d37c9e3 input=e78294ec5980fdba]*/
 {
     PyObject* row;
 
@@ -1217,15 +1224,15 @@ pysqlite_cursor_fetchone_impl(pysqlite_Cursor *self)
 /*[clinic input]
 _sqlite3.Cursor.fetchmany as pysqlite_cursor_fetchmany
 
-    size as maxrows: uint32(c_default='((pysqlite_Cursor *)self)->arraysize') = 1
+    size as maxrows: uint32(c_default='((pysqlite_Cursor *)PyValue_AsKnownObjectBorrow(self))->arraysize') = 1
         The default value is set by the Cursor.arraysize attribute.
 
 Fetches several rows from the resultset.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 pysqlite_cursor_fetchmany_impl(pysqlite_Cursor *self, uint32_t maxrows)
-/*[clinic end generated code: output=3325f2b477c71baf input=a509c412aa70b27e]*/
+/*[clinic end generated code: output=5147c7c64dc36886 input=3b61411a66234f03]*/
 {
     PyObject* row;
     PyObject* list;
@@ -1258,9 +1265,9 @@ _sqlite3.Cursor.fetchall as pysqlite_cursor_fetchall
 Fetches all rows from the resultset.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 pysqlite_cursor_fetchall_impl(pysqlite_Cursor *self)
-/*[clinic end generated code: output=d5da12aca2da4b27 input=f5d401086a8df25a]*/
+/*[clinic end generated code: output=09794bb8fb398a91 input=f5d401086a8df25a]*/
 {
     PyObject* row;
     PyObject* list;
@@ -1295,9 +1302,10 @@ _sqlite3.Cursor.setinputsizes as pysqlite_cursor_setinputsizes
 Required by DB-API. Does nothing in sqlite3.
 [clinic start generated code]*/
 
-static PyObject *
-pysqlite_cursor_setinputsizes_impl(pysqlite_Cursor *self, PyObject *sizes)
-/*[clinic end generated code: output=a06c12790bd05f2e input=de7950a3aec79bdf]*/
+static PyValue
+pysqlite_cursor_setinputsizes_impl(pysqlite_Cursor *self,
+                                   PyValueBorrow sizes)
+/*[clinic end generated code: output=4437be8d019f9fbd input=de7950a3aec79bdf]*/
 {
     Py_RETURN_NONE;
 }
@@ -1312,10 +1320,10 @@ _sqlite3.Cursor.setoutputsize as pysqlite_cursor_setoutputsize
 Required by DB-API. Does nothing in sqlite3.
 [clinic start generated code]*/
 
-static PyObject *
-pysqlite_cursor_setoutputsize_impl(pysqlite_Cursor *self, PyObject *size,
-                                   PyObject *column)
-/*[clinic end generated code: output=018d7e9129d45efe input=607a6bece8bbb273]*/
+static PyValue
+pysqlite_cursor_setoutputsize_impl(pysqlite_Cursor *self, PyValueBorrow size,
+                                   PyValueBorrow column)
+/*[clinic end generated code: output=94ac584c2bee94f4 input=607a6bece8bbb273]*/
 {
     Py_RETURN_NONE;
 }
@@ -1326,9 +1334,9 @@ _sqlite3.Cursor.close as pysqlite_cursor_close
 Closes the cursor.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 pysqlite_cursor_close_impl(pysqlite_Cursor *self)
-/*[clinic end generated code: output=b6055e4ec6fe63b6 input=08b36552dbb9a986]*/
+/*[clinic end generated code: output=89608b93f895fde6 input=08b36552dbb9a986]*/
 {
     if (!check_cursor_locked(self)) {
         return NULL;

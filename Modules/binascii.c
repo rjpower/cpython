@@ -57,9 +57,13 @@
 #  define Py_BUILD_CORE_MODULE 1
 #endif
 
+#define Py_VALUE_CORE 1
 #include "Python.h"
+#include "pycore_dict.h"          // PyDict_SetValue()
 #include "pycore_long.h"          // _PyLong_DigitValue
 #include "pycore_strhex.h"        // _Py_strhex_bytes_with_sep()
+#include "pycore_value.h"         // _PyValue_AsObjectAt()
+#include "pycore_value_slots.h"// _PyValue_FromObjectResult()
 #ifdef USE_ZLIB_CRC32
 #  include "zlib.h"
 #endif
@@ -406,6 +410,11 @@ static const unsigned short crctab_hqx[256] = {
 };
 
 /*[clinic input]
+value_emission
+[clinic start generated code]*/
+/*[clinic end generated code: output=da39a3ee5e6b4b0d input=eb7b17088bfd7215]*/
+
+/*[clinic input]
 module binascii
 [clinic start generated code]*/
 /*[clinic end generated code: output=da39a3ee5e6b4b0d input=de89fb46bcaf3fec]*/
@@ -426,28 +435,36 @@ class ascii_buffer_converter(CConverter):
 /*[python end generated code: output=da39a3ee5e6b4b0d input=3eb7b63610da92cd]*/
 
 static int
-ascii_buffer_converter(PyObject *arg, Py_buffer *buf)
+ascii_buffer_converter(PyValueBorrow arg, Py_buffer *buf)
 {
-    if (arg == NULL) {
+    if (PyValue_IsNull(arg)) {
         PyBuffer_Release(buf);
         return 1;
     }
-    if (PyUnicode_Check(arg)) {
-        if (!PyUnicode_IS_ASCII(arg)) {
+    if (!PyValue_IsObject(arg)) {
+        // An inline int or float is neither a str nor a buffer.
+        PyErr_Format(PyExc_TypeError,
+                     "argument should be bytes, buffer or ASCII string, "
+                     "not '%.100s'", PyValue_TYPE(arg)->tp_name);
+        return 0;
+    }
+    PyObject *obj = PyValue_AsKnownObjectBorrow(arg);
+    if (PyUnicode_Check(obj)) {
+        if (!PyUnicode_IS_ASCII(obj)) {
             PyErr_SetString(PyExc_ValueError,
                             "string argument should contain only ASCII characters");
             return 0;
         }
-        assert(PyUnicode_KIND(arg) == PyUnicode_1BYTE_KIND);
-        buf->buf = (void *) PyUnicode_1BYTE_DATA(arg);
-        buf->len = PyUnicode_GET_LENGTH(arg);
+        assert(PyUnicode_KIND(obj) == PyUnicode_1BYTE_KIND);
+        buf->buf = (void *) PyUnicode_1BYTE_DATA(obj);
+        buf->len = PyUnicode_GET_LENGTH(obj);
         buf->obj = NULL;
         return 1;
     }
-    if (PyObject_GetBuffer(arg, buf, PyBUF_SIMPLE) != 0) {
+    if (PyObject_GetBuffer(obj, buf, PyBUF_SIMPLE) != 0) {
         PyErr_Format(PyExc_TypeError,
                      "argument should be bytes, buffer or ASCII string, "
-                     "not '%.100s'", Py_TYPE(arg)->tp_name);
+                     "not '%.100s'", Py_TYPE(obj)->tp_name);
         return 0;
     }
     assert(PyBuffer_IsContiguous(buf, 'C'));
@@ -491,9 +508,9 @@ binascii.a2b_uu
 Decode a line of uuencoded data.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 binascii_a2b_uu_impl(PyObject *module, Py_buffer *data)
-/*[clinic end generated code: output=e027f8e0b0598742 input=7cafeaf73df63d1c]*/
+/*[clinic end generated code: output=3d7748ef63e2c9bc input=7cafeaf73df63d1c]*/
 {
     const unsigned char *ascii_data;
     int leftbits = 0;
@@ -511,10 +528,10 @@ binascii_a2b_uu_impl(PyObject *module, Py_buffer *data)
     if (ascii_len == 0) {
         state = get_binascii_state(module);
         if (state == NULL) {
-            return NULL;
+            return PyValue_NULL;
         }
         PyErr_SetString(state->Error, "Missing length byte");
-        return NULL;
+        return PyValue_NULL;
     }
     bin_len = (*ascii_data++ - ' ') & 077;
     ascii_len--;
@@ -522,7 +539,7 @@ binascii_a2b_uu_impl(PyObject *module, Py_buffer *data)
     /* Allocate the buffer */
     PyBytesWriter *writer = PyBytesWriter_Create(bin_len);
     if (writer == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
     unsigned char *bin_data = PyBytesWriter_GetData(writer);
 
@@ -581,11 +598,11 @@ binascii_a2b_uu_impl(PyObject *module, Py_buffer *data)
             goto error;
         }
     }
-    return PyBytesWriter_Finish(writer);
+    return _PyValue_FromObjectResult(PyBytesWriter_Finish(writer));
 
 error:
     PyBytesWriter_Discard(writer);
-    return NULL;
+    return PyValue_NULL;
 }
 
 /*[clinic input]
@@ -599,9 +616,9 @@ binascii.b2a_uu
 Uuencode line of data.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 binascii_b2a_uu_impl(PyObject *module, Py_buffer *data, int backtick)
-/*[clinic end generated code: output=b1b99de62d9bbeb8 input=beb27822241095cd]*/
+/*[clinic end generated code: output=c3ec3ff65dae112c input=beb27822241095cd]*/
 {
     const unsigned char *bin_data;
     int leftbits = 0;
@@ -616,17 +633,17 @@ binascii_b2a_uu_impl(PyObject *module, Py_buffer *data, int backtick)
         /* The 45 is a limit that appears in all uuencode's */
         state = get_binascii_state(module);
         if (state == NULL) {
-            return NULL;
+            return PyValue_NULL;
         }
         PyErr_SetString(state->Error, "At most 45 bytes at once");
-        return NULL;
+        return PyValue_NULL;
     }
 
     /* We're lazy and allocate to much (fixed up later) */
     Py_ssize_t out_len = 2 + (bin_len + 2) / 3 * 4;
     PyBytesWriter *writer = PyBytesWriter_Create(out_len);
     if (writer == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
     unsigned char *ascii_data = PyBytesWriter_GetData(writer);
 
@@ -656,13 +673,14 @@ binascii_b2a_uu_impl(PyObject *module, Py_buffer *data, int backtick)
     }
     *ascii_data++ = '\n';       /* Append a courtesy newline */
 
-    return PyBytesWriter_FinishWithPointer(writer, ascii_data);
+    return _PyValue_FromObjectResult(PyBytesWriter_FinishWithPointer(writer, ascii_data));
 }
 
 static PyObject *
 get_reverse_table(binascii_state *state, PyObject *alphabet, int size, int padchar)
 {
     PyObject *reverse_table;
+    PyValue cached;
     if (state == NULL) {
         return NULL;
     }
@@ -670,10 +688,12 @@ get_reverse_table(binascii_state *state, PyObject *alphabet, int size, int padch
         PyErr_Format(PyExc_ValueError, "alphabet must have length %d", size);
         return NULL;
     }
-    if (PyDict_GetItemRef(state->reverse_table_cache, alphabet, &reverse_table) < 0) {
+    int found = PyDict_GetValue(state->reverse_table_cache,
+                                PyValue_FromObjectBorrow(alphabet), &cached);
+    if (found < 0) {
         return NULL;
     }
-    if (reverse_table == NULL) {
+    if (found == 0) {
         unsigned char out[256];
         memset(out, (unsigned char)-1, 256);
         const unsigned char *in = (const unsigned char *)PyBytes_AS_STRING(alphabet);
@@ -688,19 +708,22 @@ get_reverse_table(binascii_state *state, PyObject *alphabet, int size, int padch
         if (reverse_table == NULL) {
             return NULL;
         }
-        if (PyDict_SetItem(state->reverse_table_cache, alphabet, reverse_table) < 0) {
+        if (PyDict_SetValue(state->reverse_table_cache, PyValue_FromObjectBorrow(alphabet), PyValue_FromObjectBorrow(reverse_table)) < 0) {
             Py_DECREF(reverse_table);
             return NULL;
         }
     }
     else {
-        if (!PyBytes_Check(reverse_table)
-            || PyBytes_GET_SIZE(reverse_table) != 256)
+        if (!PyValue_IsObject(cached)
+            || !PyBytes_Check(PyValue_AsKnownObjectBorrow(cached))
+            || PyBytes_GET_SIZE(PyValue_AsKnownObjectBorrow(cached)) != 256)
         {
             PyErr_SetString(PyExc_RuntimeError, "Broken binascii cache");
-            Py_DECREF(reverse_table);
+            PyValue_CLOSE(cached);
             return NULL;
         }
+        reverse_table = _PyValue_AsObjectAt(cached, BOX_SITE_DICT);
+        PyValue_CLOSE(cached);
     }
     return reverse_table;
 }
@@ -746,11 +769,11 @@ binascii.a2b_base64
 Decode a line of base64 data.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 binascii_a2b_base64_impl(PyObject *module, Py_buffer *data, int strict_mode,
                          int padded, PyBytesObject *alphabet,
                          Py_buffer *ignorechars, int canonical)
-/*[clinic end generated code: output=77c46dcbf4239527 input=c99096d071deeec8]*/
+/*[clinic end generated code: output=bd2e6152feab2bb9 input=c99096d071deeec8]*/
 {
     assert(data->len >= 0);
 
@@ -775,7 +798,7 @@ binascii_a2b_base64_impl(PyObject *module, Py_buffer *data, int strict_mode,
         state = get_binascii_state(module);
         table_obj = get_reverse_table(state, (PyObject *)alphabet, 64, BASE64_PAD);
         if (table_obj == NULL) {
-            return NULL;
+            return PyValue_NULL;
         }
         table_a2b = (const unsigned char *)PyBytes_AS_STRING(table_obj);
     }
@@ -785,7 +808,7 @@ binascii_a2b_base64_impl(PyObject *module, Py_buffer *data, int strict_mode,
     PyBytesWriter *writer = PyBytesWriter_Create(bin_len);
     if (writer == NULL) {
         Py_XDECREF(table_obj);
-        return NULL;
+        return PyValue_NULL;
     }
     unsigned char *bin_data = PyBytesWriter_GetData(writer);
 
@@ -933,12 +956,12 @@ fastpath:
     }
 
     Py_XDECREF(table_obj);
-    return PyBytesWriter_FinishWithPointer(writer, bin_data);
+    return _PyValue_FromObjectResult(PyBytesWriter_FinishWithPointer(writer, bin_data));
 
 error_end:
     Py_XDECREF(table_obj);
     PyBytesWriter_Discard(writer);
-    return NULL;
+    return PyValue_NULL;
 }
 
 
@@ -957,10 +980,10 @@ binascii.b2a_base64
 Base64-code line of data.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 binascii_b2a_base64_impl(PyObject *module, Py_buffer *data, int padded,
                          size_t wrapcol, int newline, Py_buffer *alphabet)
-/*[clinic end generated code: output=a2057b906dc201ab input=cfa33ad73051d3f7]*/
+/*[clinic end generated code: output=2111f0175972f7e0 input=cfa33ad73051d3f7]*/
 {
     const unsigned char *table_b2a = table_b2a_base64;
     const unsigned char *bin_data = data->buf;
@@ -970,7 +993,7 @@ binascii_b2a_base64_impl(PyObject *module, Py_buffer *data, int padded,
     if (alphabet->buf != NULL) {
         if (alphabet->len != 64) {
             PyErr_SetString(PyExc_ValueError, "alphabet must have length 64");
-            return NULL;
+            return PyValue_NULL;
         }
         table_b2a = alphabet->buf;
     }
@@ -997,14 +1020,14 @@ binascii_b2a_base64_impl(PyObject *module, Py_buffer *data, int padded,
     if (out_len > PY_SSIZE_T_MAX) {
         binascii_state *state = get_binascii_state(module);
         if (state == NULL) {
-            return NULL;
+            return PyValue_NULL;
         }
         PyErr_SetString(state->Error, "Too much data for base64");
-        return NULL;
+        return PyValue_NULL;
     }
     PyBytesWriter *writer = PyBytesWriter_Create(out_len);
     if (writer == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
     unsigned char *ascii_data = PyBytesWriter_GetData(writer);
 
@@ -1045,7 +1068,7 @@ binascii_b2a_base64_impl(PyObject *module, Py_buffer *data, int padded,
     if (newline)
         *ascii_data++ = '\n';       /* Append a courtesy newline */
 
-    return PyBytesWriter_FinishWithPointer(writer, ascii_data);
+    return _PyValue_FromObjectResult(PyBytesWriter_FinishWithPointer(writer, ascii_data));
 }
 
 /*[clinic input]
@@ -1067,10 +1090,10 @@ binascii.a2b_ascii85
 Decode Ascii85 data.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 binascii_a2b_ascii85_impl(PyObject *module, Py_buffer *data, int foldspaces,
                           int adobe, Py_buffer *ignorechars, int canonical)
-/*[clinic end generated code: output=09b35f1eac531357 input=08eab2e53c62f1a8]*/
+/*[clinic end generated code: output=bfc05809b8208735 input=08eab2e53c62f1a8]*/
 {
     const unsigned char *ascii_data = data->buf;
     Py_ssize_t ascii_len = data->len;
@@ -1089,7 +1112,7 @@ binascii_a2b_ascii85_impl(PyObject *module, Py_buffer *data, int foldspaces,
                 PyErr_SetString(state->Error,
                                 "Ascii85 encoded byte sequences must end with b'~>'");
             }
-            return NULL;
+            return PyValue_NULL;
         }
         ascii_len -= 2;
         if (ascii_len >= 2
@@ -1118,16 +1141,16 @@ binascii_a2b_ascii85_impl(PyObject *module, Py_buffer *data, int foldspaces,
     if (count_yz > (PY_SSIZE_T_MAX - bin_len) / 4) {
         binascii_state *state = get_binascii_state(module);
         if (state == NULL) {
-            return NULL;
+            return PyValue_NULL;
         }
         PyErr_SetString(state->Error, "Too much Ascii85 data");
-        return NULL;
+        return PyValue_NULL;
     }
     bin_len += count_yz * 4;
 
     PyBytesWriter *writer = PyBytesWriter_Create(bin_len);
     if (writer == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
     unsigned char *bin_data = PyBytesWriter_GetData(writer);
 
@@ -1247,11 +1270,11 @@ binascii_a2b_ascii85_impl(PyObject *module, Py_buffer *data, int foldspaces,
         leftchar = 0;
     }
 
-    return PyBytesWriter_FinishWithPointer(writer, bin_data);
+    return _PyValue_FromObjectResult(PyBytesWriter_FinishWithPointer(writer, bin_data));
 
 error:
     PyBytesWriter_Discard(writer);
-    return NULL;
+    return PyValue_NULL;
 }
 
 /*[clinic input]
@@ -1272,10 +1295,10 @@ binascii.b2a_ascii85
 Ascii85-encode data.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 binascii_b2a_ascii85_impl(PyObject *module, Py_buffer *data, int foldspaces,
                           size_t wrapcol, int pad, int adobe)
-/*[clinic end generated code: output=5ce8fdee843073f4 input=a77e31d63517bf19]*/
+/*[clinic end generated code: output=31db2b7aba9c7615 input=a77e31d63517bf19]*/
 {
     const unsigned char *bin_data = data->buf;
     Py_ssize_t bin_len = data->len;
@@ -1300,15 +1323,15 @@ binascii_b2a_ascii85_impl(PyObject *module, Py_buffer *data, int foldspaces,
     if (out_len > PY_SSIZE_T_MAX) {
         binascii_state *state = get_binascii_state(module);
         if (state == NULL) {
-            return NULL;
+            return PyValue_NULL;
         }
         PyErr_SetString(state->Error, "Too much data for Ascii85");
-        return NULL;
+        return PyValue_NULL;
     }
 
     PyBytesWriter *writer = PyBytesWriter_Create(out_len);
     if (writer == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
     unsigned char *ascii_data = PyBytesWriter_GetData(writer);
 
@@ -1382,7 +1405,7 @@ binascii_b2a_ascii85_impl(PyObject *module, Py_buffer *data, int foldspaces,
         }
     }
 
-    return PyBytesWriter_FinishWithPointer(writer, ascii_data);
+    return _PyValue_FromObjectResult(PyBytesWriter_FinishWithPointer(writer, ascii_data));
 }
 
 /*[clinic input]
@@ -1400,11 +1423,11 @@ binascii.a2b_base85
 Decode a line of Base85 data.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 binascii_a2b_base85_impl(PyObject *module, Py_buffer *data,
                          PyBytesObject *alphabet, Py_buffer *ignorechars,
                          int canonical)
-/*[clinic end generated code: output=90dfef0c6b51e5f3 input=2819dc8aeffee5a2]*/
+/*[clinic end generated code: output=dd181a4bd3a76d64 input=2819dc8aeffee5a2]*/
 {
     const unsigned char *ascii_data = data->buf;
     Py_ssize_t ascii_len = data->len;
@@ -1416,7 +1439,7 @@ binascii_a2b_base85_impl(PyObject *module, Py_buffer *data,
         state = get_binascii_state(module);
         table_obj = get_reverse_table(state, (PyObject *)alphabet, 85, -1);
         if (table_obj == NULL) {
-            return NULL;
+            return PyValue_NULL;
         }
         table_a2b = (const unsigned char *)PyBytes_AS_STRING(table_obj);
     }
@@ -1436,7 +1459,7 @@ binascii_a2b_base85_impl(PyObject *module, Py_buffer *data,
     PyBytesWriter *writer = PyBytesWriter_Create(bin_len);
     if (writer == NULL) {
         Py_XDECREF(table_obj);
-        return NULL;
+        return PyValue_NULL;
     }
     unsigned char *bin_data = PyBytesWriter_GetData(writer);
 
@@ -1525,12 +1548,12 @@ binascii_a2b_base85_impl(PyObject *module, Py_buffer *data,
     }
 
     Py_XDECREF(table_obj);
-    return PyBytesWriter_FinishWithPointer(writer, bin_data);
+    return _PyValue_FromObjectResult(PyBytesWriter_FinishWithPointer(writer, bin_data));
 
 error:
     PyBytesWriter_Discard(writer);
     Py_XDECREF(table_obj);
-    return NULL;
+    return PyValue_NULL;
 }
 
 /*[clinic input]
@@ -1547,10 +1570,10 @@ binascii.b2a_base85
 Base85-code line of data.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 binascii_b2a_base85_impl(PyObject *module, Py_buffer *data, int pad,
                          size_t wrapcol, Py_buffer *alphabet)
-/*[clinic end generated code: output=98b962ed52c776a4 input=54886d05128d41a8]*/
+/*[clinic end generated code: output=991af39b120d25ad input=54886d05128d41a8]*/
 {
     const unsigned char *bin_data = data->buf;
     Py_ssize_t bin_len = data->len;
@@ -1559,7 +1582,7 @@ binascii_b2a_base85_impl(PyObject *module, Py_buffer *data, int pad,
     if (alphabet->buf != NULL) {
         if (alphabet->len != 85) {
             PyErr_SetString(PyExc_ValueError, "alphabet must have length 85");
-            return NULL;
+            return PyValue_NULL;
         }
         table_b2a = alphabet->buf;
     }
@@ -1579,15 +1602,15 @@ binascii_b2a_base85_impl(PyObject *module, Py_buffer *data, int pad,
     if (out_len > PY_SSIZE_T_MAX) {
         binascii_state *state = get_binascii_state(module);
         if (state == NULL) {
-            return NULL;
+            return PyValue_NULL;
         }
         PyErr_SetString(state->Error, "Too much data for Base85");
-        return NULL;
+        return PyValue_NULL;
     }
 
     PyBytesWriter *writer = PyBytesWriter_Create(out_len);
     if (writer == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
     unsigned char *ascii_data = PyBytesWriter_GetData(writer);
 
@@ -1633,7 +1656,7 @@ binascii_b2a_base85_impl(PyObject *module, Py_buffer *data, int pad,
         ascii_data = start + wraplines(start, ascii_data - start, wrapcol);
     }
 
-    return PyBytesWriter_FinishWithPointer(writer, ascii_data);
+    return _PyValue_FromObjectResult(PyBytesWriter_FinishWithPointer(writer, ascii_data));
 }
 
 /*[clinic input]
@@ -1653,11 +1676,11 @@ binascii.a2b_base32
 Decode a line of base32 data.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 binascii_a2b_base32_impl(PyObject *module, Py_buffer *data, int padded,
                          PyBytesObject *alphabet, Py_buffer *ignorechars,
                          int canonical)
-/*[clinic end generated code: output=bc70f2bb6001fb55 input=5bfe6d1ea2f30e3b]*/
+/*[clinic end generated code: output=1d858edf36ccfb29 input=5bfe6d1ea2f30e3b]*/
 {
     const unsigned char *ascii_data = data->buf;
     Py_ssize_t ascii_len = data->len;
@@ -1671,7 +1694,7 @@ binascii_a2b_base32_impl(PyObject *module, Py_buffer *data, int padded,
         state = get_binascii_state(module);
         table_obj = get_reverse_table(state, (PyObject *)alphabet, 32, BASE32_PAD);
         if (table_obj == NULL) {
-            return NULL;
+            return PyValue_NULL;
         }
         table_a2b = (const unsigned char *)PyBytes_AS_STRING(table_obj);
     }
@@ -1689,7 +1712,7 @@ binascii_a2b_base32_impl(PyObject *module, Py_buffer *data, int padded,
     PyBytesWriter *writer = PyBytesWriter_Create(bin_len);
     if (writer == NULL) {
         Py_XDECREF(table_obj);
-        return NULL;
+        return PyValue_NULL;
     }
     unsigned char *bin_data = PyBytesWriter_GetData(writer);
 
@@ -1849,12 +1872,12 @@ fastpath:
     }
 
     Py_XDECREF(table_obj);
-    return PyBytesWriter_FinishWithPointer(writer, bin_data);
+    return _PyValue_FromObjectResult(PyBytesWriter_FinishWithPointer(writer, bin_data));
 
 error:
     PyBytesWriter_Discard(writer);
     Py_XDECREF(table_obj);
-    return NULL;
+    return PyValue_NULL;
 }
 
 /*[clinic input]
@@ -1871,10 +1894,10 @@ binascii.b2a_base32
 Base32-code line of data.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 binascii_b2a_base32_impl(PyObject *module, Py_buffer *data, int padded,
                          size_t wrapcol, Py_buffer *alphabet)
-/*[clinic end generated code: output=acc09e685569aab9 input=1889b0c497a1d3c2]*/
+/*[clinic end generated code: output=e96a20023dff19e3 input=1889b0c497a1d3c2]*/
 {
     const unsigned char *table_b2a = table_b2a_base32;
     const unsigned char *bin_data = data->buf;
@@ -1886,7 +1909,7 @@ binascii_b2a_base32_impl(PyObject *module, Py_buffer *data, int padded,
     if (alphabet->buf != NULL) {
         if (alphabet->len != 32) {
             PyErr_SetString(PyExc_ValueError, "alphabet must have length 32");
-            return NULL;
+            return PyValue_NULL;
         }
         table_b2a = alphabet->buf;
     }
@@ -1911,11 +1934,11 @@ binascii_b2a_base32_impl(PyObject *module, Py_buffer *data, int padded,
         if (state) {
             PyErr_SetString(state->Error, "Too much data for base32");
         }
-        return NULL;
+        return PyValue_NULL;
     }
     PyBytesWriter *writer = PyBytesWriter_Create(ascii_len);
     if (writer == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
     unsigned char *ascii_data = PyBytesWriter_GetData(writer);
 
@@ -1982,7 +2005,7 @@ binascii_b2a_base32_impl(PyObject *module, Py_buffer *data, int padded,
         ascii_data = start + wraplines(start, ascii_data - start, wrapcol);
     }
 
-    return PyBytesWriter_FinishWithPointer(writer, ascii_data);
+    return _PyValue_FromObjectResult(PyBytesWriter_FinishWithPointer(writer, ascii_data));
 }
 
 /*[clinic input]
@@ -1995,9 +2018,9 @@ binascii.crc_hqx
 Compute CRC-CCITT incrementally.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 binascii_crc_hqx_impl(PyObject *module, Py_buffer *data, unsigned int crc)
-/*[clinic end generated code: output=2fde213d0f547a98 input=56237755370a951c]*/
+/*[clinic end generated code: output=2a47fe10bd8fe39e input=56237755370a951c]*/
 {
     const unsigned char *bin_data;
     Py_ssize_t len;
@@ -2010,7 +2033,7 @@ binascii_crc_hqx_impl(PyObject *module, Py_buffer *data, unsigned int crc)
         crc = ((crc<<8)&0xff00) ^ crctab_hqx[(crc>>8)^*bin_data++];
     }
 
-    return PyLong_FromUnsignedLong(crc);
+    return PyValue_FromInt64(crc);
 }
 
 #ifndef USE_ZLIB_CRC32
@@ -2238,13 +2261,22 @@ b'b9:01:ef'
 b'b9_01ef'
 [clinic start generated code]*/
 
-static PyObject *
-binascii_b2a_hex_impl(PyObject *module, Py_buffer *data, PyObject *sep,
+static PyValue
+binascii_b2a_hex_impl(PyObject *module, Py_buffer *data, PyValueBorrow sep,
                       Py_ssize_t bytes_per_sep)
-/*[clinic end generated code: output=7d703f866f74a813 input=6a1606f01a87118c]*/
+/*[clinic end generated code: output=8a7d47921de1f73f input=6a1606f01a87118c]*/
 {
-    return _Py_strhex_bytes_with_sep((const char *)data->buf, data->len,
-                                     sep, bytes_per_sep);
+    PyObject *sep_o = NULL;
+    if (!PyValue_IsNull(sep)) {
+        sep_o = _PyValue_AsObjectAt(sep, BOX_SITE_PARSER);
+        if (sep_o == NULL) {
+            return PyValue_NULL;
+        }
+    }
+    PyObject *result = _Py_strhex_bytes_with_sep((const char *)data->buf, data->len,
+                                     sep_o, bytes_per_sep);
+    Py_XDECREF(sep_o);
+    return _PyValue_FromObjectResult(result);
 }
 
 /*[clinic input]
@@ -2256,13 +2288,22 @@ The return value is a bytes object.  This function is also
 available as "b2a_hex()".
 [clinic start generated code]*/
 
-static PyObject *
-binascii_hexlify_impl(PyObject *module, Py_buffer *data, PyObject *sep,
+static PyValue
+binascii_hexlify_impl(PyObject *module, Py_buffer *data, PyValueBorrow sep,
                       Py_ssize_t bytes_per_sep)
-/*[clinic end generated code: output=b99b3b39d234a3d4 input=bc317bd4e241f76b]*/
+/*[clinic end generated code: output=6e07e4ad150dcefe input=bc317bd4e241f76b]*/
 {
-    return _Py_strhex_bytes_with_sep((const char *)data->buf, data->len,
-                                     sep, bytes_per_sep);
+    PyObject *sep_o = NULL;
+    if (!PyValue_IsNull(sep)) {
+        sep_o = _PyValue_AsObjectAt(sep, BOX_SITE_PARSER);
+        if (sep_o == NULL) {
+            return PyValue_NULL;
+        }
+    }
+    PyObject *result = _Py_strhex_bytes_with_sep((const char *)data->buf, data->len,
+                                     sep_o, bytes_per_sep);
+    Py_XDECREF(sep_o);
+    return _PyValue_FromObjectResult(result);
 }
 
 /*[clinic input]
@@ -2280,10 +2321,10 @@ hexstr must contain an even number of hex digits (upper or lower case).
 This function is also available as "unhexlify()".
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 binascii_a2b_hex_impl(PyObject *module, Py_buffer *hexstr,
                       Py_buffer *ignorechars)
-/*[clinic end generated code: output=021a7ed5a742cb20 input=6154b3f4e6e2c0c3]*/
+/*[clinic end generated code: output=36199acb7db03c0d input=6154b3f4e6e2c0c3]*/
 {
     const unsigned char *ascii_data = hexstr->buf;
     size_t ascii_len = hexstr->len;
@@ -2301,7 +2342,7 @@ binascii_a2b_hex_impl(PyObject *module, Py_buffer *hexstr,
     Py_ssize_t bin_len = ascii_len/2;
     PyBytesWriter *writer = PyBytesWriter_Create(bin_len);
     if (writer == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
     unsigned char *bin_data = PyBytesWriter_GetData(writer);
 
@@ -2342,11 +2383,11 @@ binascii_a2b_hex_impl(PyObject *module, Py_buffer *hexstr,
         goto error;
     }
 
-    return PyBytesWriter_FinishWithPointer(writer, bin_data);
+    return _PyValue_FromObjectResult(PyBytesWriter_FinishWithPointer(writer, bin_data));
 
 error:
     PyBytesWriter_Discard(writer);
-    return NULL;
+    return PyValue_NULL;
 }
 
 /*[clinic input]
@@ -2357,10 +2398,10 @@ Binary data of hexadecimal representation.
 hexstr must contain an even number of hex digits (upper or lower case).
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 binascii_unhexlify_impl(PyObject *module, Py_buffer *hexstr,
                         Py_buffer *ignorechars)
-/*[clinic end generated code: output=40e87f8a0ded5880 input=dd8c012725f462da]*/
+/*[clinic end generated code: output=c37dc2d29ad47db6 input=dd8c012725f462da]*/
 {
     return binascii_a2b_hex_impl(module, hexstr, ignorechars);
 }
@@ -2382,10 +2423,10 @@ If strip_ws is true, whitespace at the end of a line is stripped, as
 required by RFC 2045 when decoding a quoted-printable body.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 binascii_a2b_qp_impl(PyObject *module, Py_buffer *data, int header,
                      int strip_ws)
-/*[clinic end generated code: output=7e9431376a28709d input=679b714f08932dd1]*/
+/*[clinic end generated code: output=0e47effb12e838b4 input=679b714f08932dd1]*/
 {
     Py_ssize_t in, out;
     char ch;
@@ -2426,7 +2467,7 @@ binascii_a2b_qp_impl(PyObject *module, Py_buffer *data, int header,
                     stripped = (unsigned char *) PyMem_Malloc(datalen);
                     if (stripped == NULL) {
                         PyErr_NoMemory();
-                        return NULL;
+                        return PyValue_NULL;
                     }
                 }
                 memcpy(stripped + j, ascii_data + start, i - start);
@@ -2449,7 +2490,7 @@ binascii_a2b_qp_impl(PyObject *module, Py_buffer *data, int header,
     if (odata == NULL) {
         PyMem_Free(stripped);
         PyErr_NoMemory();
-        return NULL;
+        return PyValue_NULL;
     }
 
     in = out = 0;
@@ -2495,7 +2536,7 @@ binascii_a2b_qp_impl(PyObject *module, Py_buffer *data, int header,
     rv = PyBytes_FromStringAndSize((char *)odata, out);
     PyMem_Free(odata);
     PyMem_Free(stripped);
-    return rv;
+    return _PyValue_FromObjectResult(rv);
 }
 
 static int
@@ -2528,10 +2569,10 @@ space at end of lines is.  When istext is not set, \r and \n (CR/LF)
 are both encoded.  When quotetabs is set, space and tabs are encoded.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 binascii_b2a_qp_impl(PyObject *module, Py_buffer *data, int quotetabs,
                      int istext, int header)
-/*[clinic end generated code: output=e9884472ebb1a94c input=e9102879afb0defd]*/
+/*[clinic end generated code: output=81dfdda5aee84d51 input=e9102879afb0defd]*/
 {
     Py_ssize_t in, out;
     const unsigned char *databuf;
@@ -2617,7 +2658,7 @@ binascii_b2a_qp_impl(PyObject *module, Py_buffer *data, int quotetabs,
         }
         if (PY_SSIZE_T_MAX - delta < odatalen) {
             PyErr_NoMemory();
-            return NULL;
+            return PyValue_NULL;
         }
         odatalen += delta;
     }
@@ -2627,7 +2668,7 @@ binascii_b2a_qp_impl(PyObject *module, Py_buffer *data, int quotetabs,
     odata = (unsigned char *) PyMem_Calloc(1, odatalen);
     if (odata == NULL) {
         PyErr_NoMemory();
-        return NULL;
+        return PyValue_NULL;
     }
 
     in = out = linelen = 0;
@@ -2700,7 +2741,7 @@ binascii_b2a_qp_impl(PyObject *module, Py_buffer *data, int quotetabs,
     }
     rv = PyBytes_FromStringAndSize((char *)odata, out);
     PyMem_Free(odata);
-    return rv;
+    return _PyValue_FromObjectResult(rv);
 }
 
 /* List of functions defined in the module */

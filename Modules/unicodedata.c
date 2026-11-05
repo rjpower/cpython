@@ -16,10 +16,13 @@
 #  define Py_BUILD_CORE_MODULE 1
 #endif
 
+#define Py_VALUE_CORE 1
 #include "Python.h"
 #include "pycore_object.h"        // _PyObject_VisitType()
 #include "pycore_ucnhash.h"       // _PyUnicode_Name_CAPI
 #include "pycore_unicodectype.h"  // _PyUnicode_IsXidStart()
+#include "pycore_value.h"         // PyValue_DUP()
+#include "pycore_value_slots.h"// _PyValue_FromObjectResult()
 
 #include <stdbool.h>
 #include <stddef.h>               // offsetof()
@@ -43,6 +46,11 @@
             }                           \
         }                               \
     } while (0)
+
+/*[clinic input]
+value_emission
+[clinic start generated code]*/
+/*[clinic end generated code: output=da39a3ee5e6b4b0d input=eb7b17088bfd7215]*/
 
 /*[clinic input]
 module unicodedata
@@ -168,10 +176,10 @@ If no such value is defined, default is returned, or, if not given,
 ValueError is raised.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 unicodedata_UCD_decimal_impl(PyObject *self, int chr,
-                             PyObject *default_value)
-/*[clinic end generated code: output=be23376e1a185231 input=933f8107993f23d0]*/
+                             PyValueBorrow default_value)
+/*[clinic end generated code: output=9ccf6b4efa999890 input=933f8107993f23d0]*/
 {
     int have_old = 0;
     long rc;
@@ -193,16 +201,16 @@ unicodedata_UCD_decimal_impl(PyObject *self, int chr,
     if (!have_old)
         rc = Py_UNICODE_TODECIMAL(c);
     if (rc < 0) {
-        if (default_value == NULL) {
+        if (PyValue_IsNull(default_value)) {
             PyErr_SetString(PyExc_ValueError,
                             "not a decimal");
-            return NULL;
+            return PyValue_NULL;
         }
         else {
-            return Py_NewRef(default_value);
+            return PyValue_DUP(default_value);
         }
     }
-    return PyLong_FromLong(rc);
+    return PyValue_FromInt64(rc);
 }
 
 /*[clinic input]
@@ -220,23 +228,24 @@ If no such value is defined, default is returned, or, if not given,
 ValueError is raised.
 [clinic start generated code]*/
 
-static PyObject *
-unicodedata_UCD_digit_impl(PyObject *self, int chr, PyObject *default_value)
-/*[clinic end generated code: output=96e18c950171fd2f input=e27d6e4565cd29f2]*/
+static PyValue
+unicodedata_UCD_digit_impl(PyObject *self, int chr,
+                           PyValueBorrow default_value)
+/*[clinic end generated code: output=41c4b9832a751127 input=e27d6e4565cd29f2]*/
 {
     long rc;
     Py_UCS4 c = (Py_UCS4)chr;
     rc = Py_UNICODE_TODIGIT(c);
     if (rc < 0) {
-        if (default_value == NULL) {
+        if (PyValue_IsNull(default_value)) {
             PyErr_SetString(PyExc_ValueError, "not a digit");
-            return NULL;
+            return PyValue_NULL;
         }
         else {
-            return Py_NewRef(default_value);
+            return PyValue_DUP(default_value);
         }
     }
-    return PyLong_FromLong(rc);
+    return PyValue_FromInt64(rc);
 }
 
 /*[clinic input]
@@ -254,10 +263,10 @@ If no such value is defined, default is returned, or, if not given,
 ValueError is raised.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 unicodedata_UCD_numeric_impl(PyObject *self, int chr,
-                             PyObject *default_value)
-/*[clinic end generated code: output=53ce281fe85b10c4 input=fdf5871a5542893c]*/
+                             PyValueBorrow default_value)
+/*[clinic end generated code: output=a1f0df636c47a238 input=fdf5871a5542893c]*/
 {
     int have_old = 0;
     double rc;
@@ -279,15 +288,15 @@ unicodedata_UCD_numeric_impl(PyObject *self, int chr,
     if (!have_old)
         rc = Py_UNICODE_TONUMERIC(c);
     if (rc == -1.0) {
-        if (default_value == NULL) {
+        if (PyValue_IsNull(default_value)) {
             PyErr_SetString(PyExc_ValueError, "not a numeric character");
-            return NULL;
+            return PyValue_NULL;
         }
         else {
-            return Py_NewRef(default_value);
+            return PyValue_DUP(default_value);
         }
     }
-    return PyFloat_FromDouble(rc);
+    return PyValue_FromDouble(rc);
 }
 
 /*[clinic input]
@@ -301,9 +310,9 @@ unicodedata.UCD.category
 Returns the general category assigned to the character chr as string.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 unicodedata_UCD_category_impl(PyObject *self, int chr)
-/*[clinic end generated code: output=8571539ee2e6783a input=1d729c67299e8a31]*/
+/*[clinic end generated code: output=8edc6a8d82e95ce7 input=1d729c67299e8a31]*/
 {
     int index;
     Py_UCS4 c = (Py_UCS4)chr;
@@ -313,7 +322,7 @@ unicodedata_UCD_category_impl(PyObject *self, int chr)
         if (old->category_changed != 0xFF)
             index = old->category_changed;
     }
-    return PyUnicode_FromString(_PyUnicode_CategoryNames[index]);
+    return _PyValue_FromObjectResult(PyUnicode_FromString(_PyUnicode_CategoryNames[index]));
 }
 
 /*[clinic input]
@@ -329,9 +338,9 @@ Returns the bidirectional class assigned to the character chr as string.
 If no such value is defined, an empty string is returned.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 unicodedata_UCD_bidirectional_impl(PyObject *self, int chr)
-/*[clinic end generated code: output=d36310ce2039bb92 input=838f8a2203bd2990]*/
+/*[clinic end generated code: output=47e8146bb3656e10 input=838f8a2203bd2990]*/
 {
     int index;
     Py_UCS4 c = (Py_UCS4)chr;
@@ -343,7 +352,7 @@ unicodedata_UCD_bidirectional_impl(PyObject *self, int chr)
         else if (old->bidir_changed != 0xFF)
             index = old->bidir_changed;
     }
-    return PyUnicode_FromString(_PyUnicode_BidirectionalNames[index]);
+    return _PyValue_FromObjectResult(PyUnicode_FromString(_PyUnicode_BidirectionalNames[index]));
 }
 
 /*[clinic input]
@@ -416,9 +425,9 @@ unicodedata.UCD.east_asian_width
 Returns the east asian width assigned to the character chr as string.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 unicodedata_UCD_east_asian_width_impl(PyObject *self, int chr)
-/*[clinic end generated code: output=484e8537d9ee8197 input=207c5f68fa475516]*/
+/*[clinic end generated code: output=d83743e6209abc25 input=207c5f68fa475516]*/
 {
     int index;
     Py_UCS4 c = (Py_UCS4)chr;
@@ -430,7 +439,7 @@ unicodedata_UCD_east_asian_width_impl(PyObject *self, int chr)
         else if (old->east_asian_width_changed != 0xFF)
             index = old->east_asian_width_changed;
     }
-    return PyUnicode_FromString(_PyUnicode_EastAsianWidthNames[index]);
+    return _PyValue_FromObjectResult(PyUnicode_FromString(_PyUnicode_EastAsianWidthNames[index]));
 }
 
 // For Hangul decomposition
@@ -457,9 +466,9 @@ Returns the character decomposition mapping assigned to the character chr as str
 An empty string is returned in case no such mapping is defined.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 unicodedata_UCD_decomposition_impl(PyObject *self, int chr)
-/*[clinic end generated code: output=7d699f3ec7565d27 input=84d628d1abfd01ec]*/
+/*[clinic end generated code: output=5c16fb7038a2ed9c input=84d628d1abfd01ec]*/
 {
     char decomp[256];
     int code, index, count;
@@ -472,7 +481,7 @@ unicodedata_UCD_decomposition_impl(PyObject *self, int chr)
     if (UCD_Check(self)) {
         const change_record *old = get_old_record(self, c);
         if (old->category_changed == 0)
-            return Py_GetConstant(Py_CONSTANT_EMPTY_STR); /* unassigned */
+            return _PyValue_FromObjectResult(Py_GetConstant(Py_CONSTANT_EMPTY_STR)); /* unassigned */
     }
 
     // Hangul Decomposition.
@@ -491,7 +500,7 @@ unicodedata_UCD_decomposition_impl(PyObject *self, int chr)
             PyOS_snprintf(decomp, sizeof(decomp),
                           "%04X %04X", L, V);
         }
-        return PyUnicode_FromString(decomp);
+        return _PyValue_FromObjectResult(PyUnicode_FromString(decomp));
     }
 
     if (code < 0 || code >= 0x110000)
@@ -527,7 +536,7 @@ unicodedata_UCD_decomposition_impl(PyObject *self, int chr)
                       decomp_data[++index]);
         i += strlen(decomp + i);
     }
-    return PyUnicode_FromStringAndSize(decomp, i);
+    return _PyValue_FromObjectResult(PyUnicode_FromStringAndSize(decomp, i));
 }
 
 static void
@@ -1008,14 +1017,14 @@ Return whether the Unicode string unistr is in the normal form 'form'.
 Valid values for form are 'NFC', 'NFKC', 'NFD', and 'NFKD'.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 unicodedata_UCD_is_normalized_impl(PyObject *self, PyObject *form,
                                    PyObject *input)
-/*[clinic end generated code: output=11e5a3694e723ca5 input=de66aa679265300b]*/
+/*[clinic end generated code: output=c858f8909cf82e59 input=de66aa679265300b]*/
 {
     if (PyUnicode_GET_LENGTH(input) == 0) {
         /* special case empty input strings. */
-        Py_RETURN_TRUE;
+        return PyValue_True;
     }
 
     PyObject *result;
@@ -1041,7 +1050,7 @@ unicodedata_UCD_is_normalized_impl(PyObject *self, PyObject *form,
     }
     else {
         PyErr_SetString(PyExc_ValueError, "invalid normalization form");
-        return NULL;
+        return PyValue_NULL;
     }
 
     m = is_normalized_quickcheck(self, input, nfc, k, false);
@@ -1049,7 +1058,7 @@ unicodedata_UCD_is_normalized_impl(PyObject *self, PyObject *form,
     if (m == MAYBE) {
         cmp = (nfc ? nfc_nfkc : nfd_nfkd)(self, input, k);
         if (cmp == NULL) {
-            return NULL;
+            return PyValue_NULL;
         }
         match = PyUnicode_Compare(input, cmp);
         Py_DECREF(cmp);
@@ -1059,7 +1068,7 @@ unicodedata_UCD_is_normalized_impl(PyObject *self, PyObject *form,
         result = (m == YES) ? Py_True : Py_False;
     }
 
-    return Py_NewRef(result);
+    return PyValue_DUP(PyValue_FromObjectBorrow(result));
 }
 
 
@@ -1076,47 +1085,47 @@ Return the normal form 'form' for the Unicode string unistr.
 Valid values for form are 'NFC', 'NFKC', 'NFD', and 'NFKD'.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 unicodedata_UCD_normalize_impl(PyObject *self, PyObject *form,
                                PyObject *input)
-/*[clinic end generated code: output=05ca4385a2ad6983 input=3a5206c0ad2833fb]*/
+/*[clinic end generated code: output=7b524272e95e132b input=3a5206c0ad2833fb]*/
 {
     if (PyUnicode_GET_LENGTH(input) == 0) {
         /* Special case empty input strings, since resizing
            them  later would cause internal errors. */
-        return PyUnicode_FromObject(input);
+        return _PyValue_FromObjectResult(PyUnicode_FromObject(input));
     }
 
     if (PyUnicode_CompareWithASCIIString(form, "NFC") == 0) {
         if (is_normalized_quickcheck(self, input,
                                      true,  false, true) == YES) {
-            return PyUnicode_FromObject(input);
+            return _PyValue_FromObjectResult(PyUnicode_FromObject(input));
         }
-        return nfc_nfkc(self, input, 0);
+        return _PyValue_FromObjectResult(nfc_nfkc(self, input, 0));
     }
     if (PyUnicode_CompareWithASCIIString(form, "NFKC") == 0) {
         if (is_normalized_quickcheck(self, input,
                                      true,  true,  true) == YES) {
-            return PyUnicode_FromObject(input);
+            return _PyValue_FromObjectResult(PyUnicode_FromObject(input));
         }
-        return nfc_nfkc(self, input, 1);
+        return _PyValue_FromObjectResult(nfc_nfkc(self, input, 1));
     }
     if (PyUnicode_CompareWithASCIIString(form, "NFD") == 0) {
         if (is_normalized_quickcheck(self, input,
                                      false, false, true) == YES) {
-            return PyUnicode_FromObject(input);
+            return _PyValue_FromObjectResult(PyUnicode_FromObject(input));
         }
-        return nfd_nfkd(self, input, 0);
+        return _PyValue_FromObjectResult(nfd_nfkd(self, input, 0));
     }
     if (PyUnicode_CompareWithASCIIString(form, "NFKD") == 0) {
         if (is_normalized_quickcheck(self, input,
                                      false, true,  true) == YES) {
-            return PyUnicode_FromObject(input);
+            return _PyValue_FromObjectResult(PyUnicode_FromObject(input));
         }
-        return nfd_nfkd(self, input, 1);
+        return _PyValue_FromObjectResult(nfd_nfkd(self, input, 1));
     }
     PyErr_SetString(PyExc_ValueError, "invalid normalization form");
-    return NULL;
+    return PyValue_NULL;
 }
 
 /* -------------------------------------------------------------------- */
@@ -1658,24 +1667,25 @@ If no name is defined, default is returned, or, if not given,
 ValueError is raised.
 [clinic start generated code]*/
 
-static PyObject *
-unicodedata_UCD_name_impl(PyObject *self, int chr, PyObject *default_value)
-/*[clinic end generated code: output=6bbb37a326407707 input=3e0367f534de56d9]*/
+static PyValue
+unicodedata_UCD_name_impl(PyObject *self, int chr,
+                          PyValueBorrow default_value)
+/*[clinic end generated code: output=5e0ef95223d618f6 input=3e0367f534de56d9]*/
 {
     char name[NAME_MAXLEN+1];
     Py_UCS4 c = (Py_UCS4)chr;
 
     if (!_getucname(self, c, name, NAME_MAXLEN, 0)) {
-        if (default_value == NULL) {
+        if (PyValue_IsNull(default_value)) {
             PyErr_SetString(PyExc_ValueError, "no such name");
-            return NULL;
+            return PyValue_NULL;
         }
         else {
-            return Py_NewRef(default_value);
+            return PyValue_DUP(default_value);
         }
     }
 
-    return PyUnicode_FromString(name);
+    return _PyValue_FromObjectResult(PyUnicode_FromString(name));
 }
 
 /*[clinic input]
@@ -1688,11 +1698,11 @@ Return True if the character has the XID_Start property, else False.
 
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 unicodedata_isxidstart_impl(PyObject *module, int chr)
-/*[clinic end generated code: output=7ae0e1a3915aa031 input=3812717f3a6bfc56]*/
+/*[clinic end generated code: output=3761a5d49c605e40 input=3812717f3a6bfc56]*/
 {
-    return PyBool_FromLong(_PyUnicode_IsXidStart(chr));
+    return PyValue_FromBool(_PyUnicode_IsXidStart(chr));
 }
 
 /*[clinic input]
@@ -1705,11 +1715,11 @@ Return True if the character has the XID_Continue property, else False.
 
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 unicodedata_isxidcontinue_impl(PyObject *module, int chr)
-/*[clinic end generated code: output=517caa8b38c73aed input=a971ed6e57cac374]*/
+/*[clinic end generated code: output=4cb00ad8c89817e3 input=a971ed6e57cac374]*/
 {
-    return PyBool_FromLong(_PyUnicode_IsXidContinue(chr));
+    return PyValue_FromBool(_PyUnicode_IsXidContinue(chr));
 }
 
 /*[clinic input]
@@ -2122,16 +2132,16 @@ Returns an iterator to iterate over grapheme clusters.
 It uses extended grapheme cluster rules from TR29.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 unicodedata_iter_graphemes_impl(PyObject *module, PyObject *unistr,
                                 Py_ssize_t start, Py_ssize_t end)
-/*[clinic end generated code: output=b0b831944265d36f input=a1454d9e8135951f]*/
+/*[clinic end generated code: output=99107816dd08c23d input=a1454d9e8135951f]*/
 {
     PyObject *GraphemeBreakIteratorType = get_unicodedata_state(module)->GraphemeBreakIteratorType;
     GraphemeBreakIterator *gbi = PyObject_GC_New(GraphemeBreakIterator,
             (PyTypeObject *)GraphemeBreakIteratorType);
     if (!gbi) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     Py_ssize_t len = PyUnicode_GET_LENGTH(unistr);
@@ -2139,7 +2149,7 @@ unicodedata_iter_graphemes_impl(PyObject *module, PyObject *unistr,
     Py_INCREF(unistr);
     _Py_InitGraphemeBreak(&gbi->iter, unistr, start, end);
     PyObject_GC_Track(gbi);
-    return (PyObject*)gbi;
+    return _PyValue_FromObjectResult((PyObject*)gbi);
 }
 
 /*[clinic input]
@@ -2151,9 +2161,9 @@ unicodedata.block
 Return block assigned to the character chr.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 unicodedata_block_impl(PyObject *module, int chr)
-/*[clinic end generated code: output=5f8b40c49eaec75a input=0834cf2642d6eaae]*/
+/*[clinic end generated code: output=6b31e661d25d8aff input=0834cf2642d6eaae]*/
 {
     Py_UCS4 c = (Py_UCS4)chr;
     int lo = 0, hi = BLOCK_COUNT - 1;
@@ -2167,12 +2177,12 @@ unicodedata_block_impl(PyObject *module, int chr)
         }
         else {
             size_t name = _PyUnicode_Blocks[mid].name;
-            return PyUnicode_FromString(_PyUnicode_BlockNames[name]);
+            return _PyValue_FromObjectResult(PyUnicode_FromString(_PyUnicode_BlockNames[name]));
         }
     }
     // Otherwise, return the default value per
     // https://www.unicode.org/versions/latest/core-spec/chapter-3/#G64189
-    return PyUnicode_FromString("No_Block");
+    return _PyValue_FromObjectResult(PyUnicode_FromString("No_Block"));
 }
 
 /*[clinic input]
@@ -2184,13 +2194,13 @@ unicodedata.grapheme_cluster_break
 Returns the Grapheme_Cluster_Break property assigned to the character.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 unicodedata_grapheme_cluster_break_impl(PyObject *module, int chr)
-/*[clinic end generated code: output=39542e0f63bba36f input=5da75e86435576fd]*/
+/*[clinic end generated code: output=f1b69ba014d65b47 input=5da75e86435576fd]*/
 {
     Py_UCS4 c = (Py_UCS4)chr;
     int index = (int) _getrecord_ex(c)->grapheme_cluster_break;
-    return PyUnicode_FromString(_PyUnicode_GraphemeBreakNames[index]);
+    return _PyValue_FromObjectResult(PyUnicode_FromString(_PyUnicode_GraphemeBreakNames[index]));
 }
 
 /*[clinic input]
@@ -2202,13 +2212,13 @@ unicodedata.indic_conjunct_break
 Returns the Indic_Conjunct_Break property assigned to the character.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 unicodedata_indic_conjunct_break_impl(PyObject *module, int chr)
-/*[clinic end generated code: output=673eff2caf797f08 input=5c730f78e469f2e8]*/
+/*[clinic end generated code: output=b84ce93365a3709c input=5c730f78e469f2e8]*/
 {
     Py_UCS4 c = (Py_UCS4)chr;
     int index = (int) _getrecord_ex(c)->incb;
-    return PyUnicode_FromString(_PyUnicode_IndicConjunctBreakNames[index]);
+    return _PyValue_FromObjectResult(PyUnicode_FromString(_PyUnicode_IndicConjunctBreakNames[index]));
 }
 
 /*[clinic input]
@@ -2221,13 +2231,13 @@ unicodedata.extended_pictographic
 Returns the Extended_Pictographic property assigned to the character, as boolean.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 unicodedata_extended_pictographic_impl(PyObject *module, int chr)
-/*[clinic end generated code: output=b6bbb349427370b1 input=250d7bd988997eb3]*/
+/*[clinic end generated code: output=8a5f17bf232b473e input=250d7bd988997eb3]*/
 {
     Py_UCS4 c = (Py_UCS4)chr;
     int index = (int) _getrecord_ex(c)->ext_pict;
-    return PyBool_FromLong(index);
+    return PyValue_FromBool(index);
 }
 
 

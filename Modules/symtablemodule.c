@@ -1,10 +1,21 @@
+#ifndef Py_BUILD_CORE_BUILTIN
+#  define Py_BUILD_CORE_MODULE 1
+#endif
+#define Py_VALUE_CORE 1
 #include "Python.h"
 #include "pycore_ast.h"           // PyAST_Check()
 #include "pycore_pyarena.h"       // _PyArena_New()
 #include "pycore_pythonrun.h"     // _Py_SourceAsString()
 #include "pycore_symtable.h"      // struct symtable
+#include "pycore_value.h"         // _PyValue_AsObjectAt()
+#include "pycore_value_slots.h"// _PyValue_FromObjectResult()
 
 #include "clinic/symtablemodule.c.h"
+/*[clinic input]
+value_emission
+[clinic start generated code]*/
+/*[clinic end generated code: output=da39a3ee5e6b4b0d input=eb7b17088bfd7215]*/
+
 /*[clinic input]
 module _symtable
 [clinic start generated code]*/
@@ -49,11 +60,11 @@ Return symbol and scope dictionaries used internally by compiler.
 The source can be a string, a bytes object, or an AST object.
 [clinic start generated code]*/
 
-static PyObject *
-_symtable_symtable_impl(PyObject *module, PyObject *source,
+static PyValue
+_symtable_symtable_impl(PyObject *module, PyValueBorrow source,
                         PyObject *filename, const char *startstr,
-                        PyObject *modname)
-/*[clinic end generated code: output=235ec5a87a9ce178 input=6cadac0485f576a7]*/
+                        PyValueBorrow modname)
+/*[clinic end generated code: output=6812f58881ea9ad5 input=6cadac0485f576a7]*/
 {
     struct symtable *st;
     PyObject *t;
@@ -68,20 +79,25 @@ _symtable_symtable_impl(PyObject *module, PyObject *source,
     else {
         PyErr_SetString(PyExc_ValueError,
            "symtable() arg 3 must be 'exec' or 'eval' or 'single'");
-        return NULL;
+        return PyValue_NULL;
     }
-    if (modname == Py_None) {
-        modname = NULL;
-    }
-    else if (!PyUnicode_Check(modname)) {
-        PyErr_Format(PyExc_TypeError,
-                     "symtable() argument 'module' must be str or None, not %T",
-                     modname);
-        return NULL;
+    PyObject *modname_obj = NULL;
+    if (!PyValue_IsNone(modname)) {
+        if (!(PyValue_IsObject(modname) && PyUnicode_Check(PyValue_AsKnownObjectBorrow(modname)))) {
+            PyErr_Format(PyExc_TypeError,
+                         "symtable() argument 'module' must be str or None, not %vT",
+                         modname);
+            return PyValue_NULL;
+        }
+        modname_obj = PyValue_AsKnownObjectBorrow(modname);
     }
 
-    if (PyAST_Check(source)) {
-        st = symtable_from_ast(source, filename, compile_mode);
+    PyObject *source_obj = _PyValue_AsObjectAt(source, BOX_SITE_PARSER);
+    if (source_obj == NULL) {
+        return PyValue_NULL;
+    }
+    if (PyAST_Check(source_obj)) {
+        st = symtable_from_ast(source_obj, filename, compile_mode);
     }
     else {
         static const int starts[] = {
@@ -90,23 +106,25 @@ _symtable_symtable_impl(PyObject *module, PyObject *source,
         PyObject *source_copy = NULL;
 
         cf.cf_flags = PyCF_SOURCE_IS_UTF8;
-        const char *str = _Py_SourceAsString(source, "symtable",
+        const char *str = _Py_SourceAsString(source_obj, "symtable",
                                              "string, bytes or AST",
                                              &cf, &source_copy);
         if (str == NULL) {
-            return NULL;
+            Py_DECREF(source_obj);
+            return PyValue_NULL;
         }
         st = _Py_SymtableStringObjectFlags(str, filename,
                                            starts[compile_mode], &cf,
-                                           modname);
+                                           modname_obj);
         Py_XDECREF(source_copy);
     }
+    Py_DECREF(source_obj);
     if (st == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
     t = Py_NewRef(st->st_top);
     _PySymtable_Free(st);
-    return t;
+    return _PyValue_FromObjectResult(t);
 }
 
 static PyMethodDef symtable_methods[] = {

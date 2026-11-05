@@ -2,13 +2,19 @@
 preserve
 [clinic start generated code]*/
 
+#ifndef Py_VALUE_CORE
+#  error "value-emission Clinic output requires Py_VALUE_CORE"
+#endif
+
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 #  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
 #  include "pycore_value.h"       // _PyValue_STATIC_IMMORTAL()
 #endif
-#include "pycore_modsupport.h"    // _PyArg_UnpackKeywords()
+#include "pycore_long_value.h"    // _PyValue_AsInt()
+#include "pycore_modsupport.h"    // _PyArg_UnpackKeywordsValue()
 #include "pycore_unicodeobject.h" // _PyUnicode_AsUTF8NoNUL()
+#include "pycore_value_call.h"    // METH_VALUE
 
 PyDoc_STRVAR(pysqlite_complete_statement__doc__,
 "complete_statement($module, /, statement)\n"
@@ -17,15 +23,15 @@ PyDoc_STRVAR(pysqlite_complete_statement__doc__,
 "Checks if a string contains a complete SQL statement.");
 
 #define PYSQLITE_COMPLETE_STATEMENT_METHODDEF    \
-    {"complete_statement", _PyCFunction_CAST(pysqlite_complete_statement), METH_FASTCALL|METH_KEYWORDS, pysqlite_complete_statement__doc__},
+    {"complete_statement", _PyCFunction_CAST(pysqlite_complete_statement), METH_VALUE|METH_KEYWORDS, pysqlite_complete_statement__doc__},
 
-static PyObject *
+static PyValue
 pysqlite_complete_statement_impl(PyObject *module, const char *statement);
 
-static PyObject *
-pysqlite_complete_statement(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+pysqlite_complete_statement(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
@@ -53,23 +59,26 @@ pysqlite_complete_statement(PyObject *module, PyObject *const *args, Py_ssize_t 
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[1];
+    Py_ssize_t _idx[1];
     const char *statement;
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, _idx, 1)) {
         goto exit;
     }
-    if (!PyUnicode_Check(args[0])) {
-        _PyArg_BadArgument("complete_statement", "argument 'statement'", "str", args[0]);
+    if (!PyValue_IsObject(PyValue_Borrow(args[_idx[0]]))) {
+        _PyArg_BadArgumentValue("complete_statement", "argument 'statement'", "str", PyValue_Borrow(args[_idx[0]]));
         goto exit;
     }
-    statement = _PyUnicode_AsUTF8NoNUL(args[0]);
+    if (!PyUnicode_Check(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[0]])))) {
+        _PyArg_BadArgument("complete_statement", "argument 'statement'", "str", PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[0]])));
+        goto exit;
+    }
+    statement = _PyUnicode_AsUTF8NoNUL(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[0]])));
     if (statement == NULL) {
         goto exit;
     }
-    return_value = pysqlite_complete_statement_impl(module, statement);
+    return_value = pysqlite_complete_statement_impl(PyValue_AsKnownObjectBorrow(module), statement);
 
 exit:
     return return_value;
@@ -82,25 +91,29 @@ PyDoc_STRVAR(pysqlite_register_adapter__doc__,
 "Register a function to adapt Python objects to SQLite values.");
 
 #define PYSQLITE_REGISTER_ADAPTER_METHODDEF    \
-    {"register_adapter", _PyCFunction_CAST(pysqlite_register_adapter), METH_FASTCALL, pysqlite_register_adapter__doc__},
+    {"register_adapter", _PyCFunction_CAST(pysqlite_register_adapter), METH_VALUE, pysqlite_register_adapter__doc__},
 
-static PyObject *
+static PyValue
 pysqlite_register_adapter_impl(PyObject *module, PyTypeObject *type,
-                               PyObject *caster);
+                               PyValueBorrow caster);
 
-static PyObject *
-pysqlite_register_adapter(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+pysqlite_register_adapter(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyTypeObject *type;
-    PyObject *caster;
+    PyValueBorrow caster;
 
     if (!_PyArg_CheckPositional("register_adapter", nargs, 2, 2)) {
         goto exit;
     }
-    type = (PyTypeObject *)args[0];
-    caster = args[1];
-    return_value = pysqlite_register_adapter_impl(module, type, caster);
+    if (!PyType_IsSubtype(PyValue_TYPE(PyValue_Borrow(args[0])), &PyType_Type)) {
+        _PyArg_BadArgumentValue("register_adapter", "argument 1", (&PyType_Type)->tp_name, PyValue_Borrow(args[0]));
+        goto exit;
+    }
+    type = (PyTypeObject *)PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0]));
+    caster = PyValue_Borrow(args[1]);
+    return_value = pysqlite_register_adapter_impl(PyValue_AsKnownObjectBorrow(module), type, caster);
 
 exit:
     return return_value;
@@ -113,29 +126,33 @@ PyDoc_STRVAR(pysqlite_register_converter__doc__,
 "Register a function to convert SQLite values to Python objects.");
 
 #define PYSQLITE_REGISTER_CONVERTER_METHODDEF    \
-    {"register_converter", _PyCFunction_CAST(pysqlite_register_converter), METH_FASTCALL, pysqlite_register_converter__doc__},
+    {"register_converter", _PyCFunction_CAST(pysqlite_register_converter), METH_VALUE, pysqlite_register_converter__doc__},
 
-static PyObject *
+static PyValue
 pysqlite_register_converter_impl(PyObject *module, PyObject *orig_name,
-                                 PyObject *callable);
+                                 PyValueBorrow callable);
 
-static PyObject *
-pysqlite_register_converter(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+pysqlite_register_converter(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *orig_name;
-    PyObject *callable;
+    PyValueBorrow callable;
 
     if (!_PyArg_CheckPositional("register_converter", nargs, 2, 2)) {
         goto exit;
     }
-    if (!PyUnicode_Check(args[0])) {
-        _PyArg_BadArgument("register_converter", "argument 1", "str", args[0]);
+    if (!PyValue_IsObject(PyValue_Borrow(args[0]))) {
+        _PyArg_BadArgumentValue("register_converter", "argument 1", "str", PyValue_Borrow(args[0]));
         goto exit;
     }
-    orig_name = args[0];
-    callable = args[1];
-    return_value = pysqlite_register_converter_impl(module, orig_name, callable);
+    if (!PyUnicode_Check(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])))) {
+        _PyArg_BadArgument("register_converter", "argument 1", "str", PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])));
+        goto exit;
+    }
+    orig_name = PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0]));
+    callable = PyValue_Borrow(args[1]);
+    return_value = pysqlite_register_converter_impl(PyValue_AsKnownObjectBorrow(module), orig_name, callable);
 
 exit:
     return return_value;
@@ -148,22 +165,22 @@ PyDoc_STRVAR(pysqlite_enable_callback_trace__doc__,
 "Enable or disable callback functions throwing errors to stderr.");
 
 #define PYSQLITE_ENABLE_CALLBACK_TRACE_METHODDEF    \
-    {"enable_callback_tracebacks", (PyCFunction)pysqlite_enable_callback_trace, METH_O, pysqlite_enable_callback_trace__doc__},
+    {"enable_callback_tracebacks", _PyCFunction_CAST(pysqlite_enable_callback_trace), METH_VALUE|METH_O, pysqlite_enable_callback_trace__doc__},
 
-static PyObject *
+static PyValue
 pysqlite_enable_callback_trace_impl(PyObject *module, int enable);
 
-static PyObject *
-pysqlite_enable_callback_trace(PyObject *module, PyObject *arg)
+static PyValue
+pysqlite_enable_callback_trace(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int enable;
 
-    enable = PyLong_AsInt(arg);
+    enable = _PyValue_AsInt(PyValue_Borrow(args[0]));
     if (enable == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = pysqlite_enable_callback_trace_impl(module, enable);
+    return_value = pysqlite_enable_callback_trace_impl(PyValue_AsKnownObjectBorrow(module), enable);
 
 exit:
     return return_value;
@@ -176,36 +193,36 @@ PyDoc_STRVAR(pysqlite_adapt__doc__,
 "Adapt given object to given protocol.");
 
 #define PYSQLITE_ADAPT_METHODDEF    \
-    {"adapt", _PyCFunction_CAST(pysqlite_adapt), METH_FASTCALL, pysqlite_adapt__doc__},
+    {"adapt", _PyCFunction_CAST(pysqlite_adapt), METH_VALUE, pysqlite_adapt__doc__},
 
-static PyObject *
-pysqlite_adapt_impl(PyObject *module, PyObject *obj, PyObject *proto,
-                    PyObject *alt);
+static PyValue
+pysqlite_adapt_impl(PyObject *module, PyValueBorrow obj, PyValueBorrow proto,
+                    PyValueBorrow alt);
 
-static PyObject *
-pysqlite_adapt(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+pysqlite_adapt(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
-    PyObject *obj;
-    PyObject *proto = (PyObject *)clinic_state()->PrepareProtocolType;
-    PyObject *alt = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow obj;
+    PyValueBorrow proto = PyValue_FromObjectBorrow((PyObject *)clinic_state()->PrepareProtocolType);
+    PyValueBorrow alt = PyValue_Borrow(PyValue_NULL);
 
     if (!_PyArg_CheckPositional("adapt", nargs, 1, 3)) {
         goto exit;
     }
-    obj = args[0];
+    obj = PyValue_Borrow(args[0]);
     if (nargs < 2) {
         goto skip_optional;
     }
-    proto = args[1];
+    proto = PyValue_Borrow(args[1]);
     if (nargs < 3) {
         goto skip_optional;
     }
-    alt = args[2];
+    alt = PyValue_Borrow(args[2]);
 skip_optional:
-    return_value = pysqlite_adapt_impl(module, obj, proto, alt);
+    return_value = pysqlite_adapt_impl(PyValue_AsKnownObjectBorrow(module), obj, proto, alt);
 
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=f8f8bd0d17e2e0bd input=a9049054013a1b77]*/
+/*[clinic end generated code: output=300906a07bb026a8 input=a9049054013a1b77]*/

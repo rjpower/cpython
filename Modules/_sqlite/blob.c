@@ -2,8 +2,10 @@
 #  define Py_BUILD_CORE_MODULE 1
 #endif
 
+#define Py_VALUE_CORE 1
 #include "blob.h"
 #include "util.h"
+#include "pycore_value.h"         // PyValue
 #include "pycore_weakref.h"    // FT_CLEAR_WEAKREFS()
 
 #define clinic_state() (pysqlite_get_state_by_type(Py_TYPE(self)))
@@ -11,6 +13,11 @@
 #undef clinic_state
 
 #define _pysqlite_Blob_CAST(op) ((pysqlite_Blob *)(op))
+
+/*[clinic input]
+value_emission
+[clinic start generated code]*/
+/*[clinic end generated code: output=da39a3ee5e6b4b0d input=eb7b17088bfd7215]*/
 
 /*[clinic input]
 module _sqlite3
@@ -87,9 +94,9 @@ _sqlite3.Blob.close as blob_close
 Close the blob.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 blob_close_impl(pysqlite_Blob *self)
-/*[clinic end generated code: output=848accc20a138d1b input=7bc178a402a40bd8]*/
+/*[clinic end generated code: output=dd13b4a32c5f5879 input=7bc178a402a40bd8]*/
 {
     if (!pysqlite_check_connection(self->connection) ||
         !pysqlite_check_thread(self->connection))
@@ -194,9 +201,9 @@ be returned.  When length is not specified, or is negative,
 Blob.read() will read until the end of the blob.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 blob_read_impl(pysqlite_Blob *self, int length)
-/*[clinic end generated code: output=1fc99b2541360dde input=6b745ad37720e556]*/
+/*[clinic end generated code: output=202cbab71f35c6a0 input=6b745ad37720e556]*/
 {
     if (!check_blob(self)) {
         return NULL;
@@ -260,9 +267,9 @@ This function cannot change the blob length.  Writing beyond the end
 of the blob will result in an exception being raised.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 blob_write_impl(pysqlite_Blob *self, Py_buffer *data)
-/*[clinic end generated code: output=b34cf22601b570b2 input=0d372cb0240a5d49]*/
+/*[clinic end generated code: output=4516ebf6aa6dbf0e input=0d372cb0240a5d49]*/
 {
     if (!check_blob(self)) {
         return NULL;
@@ -292,9 +299,9 @@ relative to the current position) and os.SEEK_END (seek relative to
 the blob's end).
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 blob_seek_impl(pysqlite_Blob *self, int offset, int origin)
-/*[clinic end generated code: output=854c5a0e208547a5 input=84aea1b6b48607dd]*/
+/*[clinic end generated code: output=508a7aa4a9c675a7 input=84aea1b6b48607dd]*/
 {
     if (!check_blob(self)) {
         return NULL;
@@ -343,9 +350,9 @@ _sqlite3.Blob.tell as blob_tell
 Return the current access position for the blob.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 blob_tell_impl(pysqlite_Blob *self)
-/*[clinic end generated code: output=3d3ba484a90b3a99 input=7e34057aa303612c]*/
+/*[clinic end generated code: output=b71af175191fe9d8 input=7e34057aa303612c]*/
 {
     if (!check_blob(self)) {
         return NULL;
@@ -360,9 +367,9 @@ _sqlite3.Blob.__enter__ as blob_enter
 Blob context manager enter.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 blob_enter_impl(pysqlite_Blob *self)
-/*[clinic end generated code: output=4fd32484b071a6cd input=fe4842c3c582d5a7]*/
+/*[clinic end generated code: output=af81346a33c318fd input=fe4842c3c582d5a7]*/
 {
     if (!check_blob(self)) {
         return NULL;
@@ -382,10 +389,10 @@ _sqlite3.Blob.__exit__ as blob_exit
 Blob context manager exit.
 [clinic start generated code]*/
 
-static PyObject *
-blob_exit_impl(pysqlite_Blob *self, PyObject *type, PyObject *val,
-               PyObject *tb)
-/*[clinic end generated code: output=fc86ceeb2b68c7b2 input=575d9ecea205f35f]*/
+static PyValue
+blob_exit_impl(pysqlite_Blob *self, PyValueBorrow type, PyValueBorrow val,
+               PyValueBorrow tb)
+/*[clinic end generated code: output=3977951f385c77d3 input=575d9ecea205f35f]*/
 {
     if (!check_blob(self)) {
         return NULL;

@@ -1,3 +1,7 @@
+#ifndef Py_BUILD_CORE_BUILTIN
+#  define Py_BUILD_CORE_MODULE 1
+#endif
+#define Py_VALUE_CORE 1
 #include "Python.h"
 #include "pycore_ceval.h"         // _PyEval_IsGILEnabled()
 #include "pycore_initconfig.h"    // _PyStatus_ERR()
@@ -7,7 +11,10 @@
 #include "pycore_runtime.h"       // _Py_ID()
 #include "pycore_signal.h"        // Py_NSIG
 #include "pycore_time.h"          // _PyTime_FromSecondsObject()
+#include "pycore_long_value.h"    // _PyValue_AsInt()
 #include "pycore_traceback.h"     // _Py_DumpStack()
+#include "pycore_value.h"         // PyValue_IsNull()
+#include "pycore_value_slots.h"// _PyValue_FromObjectResult()
 #ifdef HAVE_UNISTD_H
 #  include <unistd.h>             // _exit()
 #endif
@@ -41,6 +48,11 @@
 
 #define PUTS(fd, str) (void)_Py_write_noraise(fd, str, strlen(str))
 
+
+/*[clinic input]
+value_emission
+[clinic start generated code]*/
+/*[clinic end generated code: output=da39a3ee5e6b4b0d input=eb7b17088bfd7215]*/
 
 /*[clinic input]
 module faulthandler
@@ -94,16 +106,17 @@ static const size_t faulthandler_nsignals = \
    If file is NULL or Py_None, use sys.stderr as the new file.
    If file is an integer, it will be treated as file descriptor.
 
-   On success, return the file descriptor and write the new file into *file_ptr.
+   On success, return the file descriptor and write the new file, as a new
+   reference, into *file_out (NULL if file is an integer).
    On error, return -1. */
 
 static int
-faulthandler_get_fileno(PyObject **file_ptr)
+faulthandler_get_fileno(PyValueBorrow file_in, PyObject **file_out)
 {
     PyObject *result;
-    PyObject *file = *file_ptr;
+    PyObject *file;
 
-    if (file == NULL || file == Py_None) {
+    if (PyValue_IsNull(file_in) || PyValue_IsNone(file_in)) {
         file = PySys_GetAttr(&_Py_ID(stderr));
         if (file == NULL) {
             return -1;
@@ -114,15 +127,15 @@ faulthandler_get_fileno(PyObject **file_ptr)
             return -1;
         }
     }
-    else if (PyLong_Check(file)) {
-        if (PyBool_Check(file)) {
+    else if (PyValue_LongCheck(file_in)) {
+        if (PyValue_BoolCheck(file_in)) {
             if (PyErr_WarnEx(PyExc_RuntimeWarning,
                     "bool is used as a file descriptor", 1))
             {
                 return -1;
             }
         }
-        int fd = PyLong_AsInt(file);
+        int fd = _PyValue_AsInt(file_in);
         if (fd == -1 && PyErr_Occurred())
             return -1;
         if (fd < 0) {
@@ -130,11 +143,16 @@ faulthandler_get_fileno(PyObject **file_ptr)
                             "file is not a valid file descriptor");
             return -1;
         }
-        *file_ptr = NULL;
+        *file_out = NULL;
         return fd;
     }
     else {
-        Py_INCREF(file);
+        // An inline float is not a file, but its fileno() lookup must fail
+        // as for any object.
+        file = _PyValue_AsObjectAt(file_in, BOX_SITE_PARSER);
+        if (file == NULL) {
+            return -1;
+        }
     }
 
     result = PyObject_CallMethodNoArgs(file, &_Py_ID(fileno));
@@ -163,7 +181,7 @@ faulthandler_get_fileno(PyObject **file_ptr)
         /* ignore flush() error */
         PyErr_Clear();
     }
-    *file_ptr = file;
+    *file_out = file;
     return fd;
 }
 
@@ -253,23 +271,25 @@ Dump the traceback of all threads if all_threads is true. max_threads
 caps the number of threads dumped.
 [clinic start generated code]*/
 
-static PyObject *
-faulthandler_dump_traceback_py_impl(PyObject *module, PyObject *file,
+static PyValue
+faulthandler_dump_traceback_py_impl(PyObject *module, PyValueBorrow file,
                                     int all_threads, Py_ssize_t max_threads)
-/*[clinic end generated code: output=ee1bbc2668e56e77 input=38630eb40e641de6]*/
+/*[clinic end generated code: output=a040a83c128a12f8 input=38630eb40e641de6]*/
 {
     PyThreadState *tstate;
     const char *errmsg;
     int fd;
 
-    fd = faulthandler_get_fileno(&file);
+    PyObject *file_obj = NULL;
+
+    fd = faulthandler_get_fileno(file, &file_obj);
     if (fd < 0)
-        return NULL;
+        return PyValue_NULL;
 
     tstate = get_thread_state();
     if (tstate == NULL) {
-        Py_XDECREF(file);
-        return NULL;
+        Py_XDECREF(file_obj);
+        return PyValue_NULL;
     }
 
     if (all_threads) {
@@ -285,16 +305,16 @@ faulthandler_dump_traceback_py_impl(PyObject *module, PyObject *file,
     }
     if (errmsg != NULL) {
         PyErr_SetString(PyExc_RuntimeError, errmsg);
-        Py_XDECREF(file);
-        return NULL;
+        Py_XDECREF(file_obj);
+        return PyValue_NULL;
     }
 
-    Py_XDECREF(file);
+    Py_XDECREF(file_obj);
 
     if (PyErr_CheckSignals())
-        return NULL;
+        return PyValue_NULL;
 
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 
@@ -306,23 +326,24 @@ faulthandler.dump_c_stack as faulthandler_dump_c_stack_py
 Dump the C stack of the current thread.
 [clinic start generated code]*/
 
-static PyObject *
-faulthandler_dump_c_stack_py_impl(PyObject *module, PyObject *file)
-/*[clinic end generated code: output=151d6c95e9f8c0f6 input=10f6b6f29b635109]*/
+static PyValue
+faulthandler_dump_c_stack_py_impl(PyObject *module, PyValueBorrow file)
+/*[clinic end generated code: output=fe678bc958f9c3ac input=10f6b6f29b635109]*/
 {
-    int fd = faulthandler_get_fileno(&file);
+    PyObject *file_obj = NULL;
+    int fd = faulthandler_get_fileno(file, &file_obj);
     if (fd < 0) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     _Py_DumpStack(fd);
-    Py_XDECREF(file);
+    Py_XDECREF(file_obj);
 
     if (PyErr_CheckSignals()) {
-        return NULL;
+        return PyValue_NULL;
     }
 
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 static void
@@ -601,26 +622,28 @@ faulthandler.enable as faulthandler_py_enable
 Enable the fault handler.
 [clinic start generated code]*/
 
-static PyObject *
-faulthandler_py_enable_impl(PyObject *module, PyObject *file,
+static PyValue
+faulthandler_py_enable_impl(PyObject *module, PyValueBorrow file,
                             int all_threads, int c_stack,
                             Py_ssize_t max_threads)
-/*[clinic end generated code: output=7ee655332317c47a input=e64759714f27b466]*/
+/*[clinic end generated code: output=465091229a6279b7 input=e64759714f27b466]*/
 {
     int fd;
     PyThreadState *tstate;
 
-    fd = faulthandler_get_fileno(&file);
+    PyObject *file_obj = NULL;
+
+    fd = faulthandler_get_fileno(file, &file_obj);
     if (fd < 0)
-        return NULL;
+        return PyValue_NULL;
 
     tstate = get_thread_state();
     if (tstate == NULL) {
-        Py_XDECREF(file);
-        return NULL;
+        Py_XDECREF(file_obj);
+        return PyValue_NULL;
     }
 
-    Py_XSETREF(fatal_error.file, file);
+    Py_XSETREF(fatal_error.file, file_obj);
     fatal_error.fd = fd;
     fatal_error.all_threads = all_threads;
     fatal_error.interp = PyThreadState_GetInterpreter(tstate);
@@ -628,10 +651,10 @@ faulthandler_py_enable_impl(PyObject *module, PyObject *file,
     fatal_error.max_threads = max_threads;
 
     if (faulthandler_enable() < 0) {
-        return NULL;
+        return PyValue_NULL;
     }
 
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 static void
@@ -661,15 +684,15 @@ faulthandler.disable as faulthandler_disable_py
 Disable the fault handler.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 faulthandler_disable_py_impl(PyObject *module)
-/*[clinic end generated code: output=e9087a04535af3cb input=6223eac6804550af]*/
+/*[clinic end generated code: output=2d967a535fc5fca1 input=6223eac6804550af]*/
 {
     if (!fatal_error.enabled) {
-        Py_RETURN_FALSE;
+        return PyValue_False;
     }
     faulthandler_disable();
-    Py_RETURN_TRUE;
+    return PyValue_True;
 }
 
 
@@ -797,12 +820,12 @@ timeout seconds.  If exit is true, call _exit(1) which is not safe.
 max_threads caps the number of threads dumped.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 faulthandler_dump_traceback_later_impl(PyObject *module,
-                                       PyObject *timeout_obj, int repeat,
-                                       PyObject *file, int exit,
+                                       PyValueBorrow timeout_obj, int repeat,
+                                       PyValueBorrow file, int exit,
                                        Py_ssize_t max_threads)
-/*[clinic end generated code: output=543a0f3807113394 input=32aaf7437d0928db]*/
+/*[clinic end generated code: output=3113938b946a2b79 input=32aaf7437d0928db]*/
 {
     PyTime_t timeout, timeout_us;
     int fd;
@@ -810,44 +833,52 @@ faulthandler_dump_traceback_later_impl(PyObject *module,
     char *header;
     size_t header_len;
 
-    if (_PyTime_FromSecondsObject(&timeout, timeout_obj,
-                                  _PyTime_ROUND_TIMEOUT) < 0) {
-        return NULL;
+    PyObject *timeout_pyobj = _PyValue_AsObjectAt(timeout_obj, BOX_SITE_PARSER);
+    if (timeout_pyobj == NULL) {
+        return PyValue_NULL;
+    }
+    int timeout_res = _PyTime_FromSecondsObject(&timeout, timeout_pyobj,
+                                                _PyTime_ROUND_TIMEOUT);
+    Py_DECREF(timeout_pyobj);
+    if (timeout_res < 0) {
+        return PyValue_NULL;
     }
     timeout_us = _PyTime_AsMicroseconds(timeout, _PyTime_ROUND_TIMEOUT);
     if (timeout_us <= 0) {
         PyErr_SetString(PyExc_ValueError, "timeout must be greater than 0");
-        return NULL;
+        return PyValue_NULL;
     }
     /* Limit to LONG_MAX seconds for format_timeout() */
     if (timeout_us > PY_TIMEOUT_MAX || timeout_us / SEC_TO_US > LONG_MAX) {
         PyErr_SetString(PyExc_OverflowError,
                         "timeout value is too large");
-        return NULL;
+        return PyValue_NULL;
     }
 
     tstate = get_thread_state();
     if (tstate == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
 
-    fd = faulthandler_get_fileno(&file);
+    PyObject *file_obj = NULL;
+
+    fd = faulthandler_get_fileno(file, &file_obj);
     if (fd < 0) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     if (!thread.running) {
         thread.running = PyThread_allocate_lock();
         if (!thread.running) {
-            Py_XDECREF(file);
-            return PyErr_NoMemory();
+            Py_XDECREF(file_obj);
+            return _PyValue_FromObjectResult(PyErr_NoMemory());
         }
     }
     if (!thread.cancel_event) {
         thread.cancel_event = PyThread_allocate_lock();
         if (!thread.cancel_event || !thread.running) {
-            Py_XDECREF(file);
-            return PyErr_NoMemory();
+            Py_XDECREF(file_obj);
+            return _PyValue_FromObjectResult(PyErr_NoMemory());
         }
 
         /* cancel_event starts to be acquired: it's only released to cancel
@@ -858,15 +889,15 @@ faulthandler_dump_traceback_later_impl(PyObject *module,
     /* format the timeout */
     header = format_timeout(timeout_us);
     if (header == NULL) {
-        Py_XDECREF(file);
-        return PyErr_NoMemory();
+        Py_XDECREF(file_obj);
+        return _PyValue_FromObjectResult(PyErr_NoMemory());
     }
     header_len = strlen(header);
 
     /* Cancel previous thread, if running */
     cancel_dump_traceback_later();
 
-    Py_XSETREF(thread.file, file);
+    Py_XSETREF(thread.file, file_obj);
     thread.fd = fd;
     /* the downcast is safe: we check that 0 < timeout_us < PY_TIMEOUT_MAX */
     thread.timeout_us = (PY_TIMEOUT_T)timeout_us;
@@ -887,10 +918,10 @@ faulthandler_dump_traceback_later_impl(PyObject *module,
         thread.header = NULL;
         PyErr_SetString(PyExc_RuntimeError,
                         "unable to start watchdog thread");
-        return NULL;
+        return PyValue_NULL;
     }
 
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 
@@ -900,12 +931,12 @@ faulthandler.cancel_dump_traceback_later as faulthandler_cancel_dump_traceback_l
 Cancel the previous call to dump_traceback_later().
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 faulthandler_cancel_dump_traceback_later_py_impl(PyObject *module)
-/*[clinic end generated code: output=2cf303015d39c926 input=51ad64b6ca8412a4]*/
+/*[clinic end generated code: output=1c1bbf3563452ca6 input=51ad64b6ca8412a4]*/
 {
     cancel_dump_traceback_later();
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 
@@ -1021,11 +1052,11 @@ all_threads is True, into file. max_threads caps the number of threads
 dumped.
 [clinic start generated code]*/
 
-static PyObject *
-faulthandler_register_py_impl(PyObject *module, int signum, PyObject *file,
-                              int all_threads, int chain,
+static PyValue
+faulthandler_register_py_impl(PyObject *module, int signum,
+                              PyValueBorrow file, int all_threads, int chain,
                               Py_ssize_t max_threads)
-/*[clinic end generated code: output=d63a5b4f388dee5f input=c75096a20de502fe]*/
+/*[clinic end generated code: output=0868ced9deb0d8ae input=c75096a20de502fe]*/
 {
     int fd;
     user_signal_t *user;
@@ -1034,21 +1065,23 @@ faulthandler_register_py_impl(PyObject *module, int signum, PyObject *file,
     int err;
 
     if (!check_signum(signum))
-        return NULL;
+        return PyValue_NULL;
 
     tstate = get_thread_state();
     if (tstate == NULL)
-        return NULL;
+        return PyValue_NULL;
 
-    fd = faulthandler_get_fileno(&file);
+    PyObject *file_obj = NULL;
+
+    fd = faulthandler_get_fileno(file, &file_obj);
     if (fd < 0)
-        return NULL;
+        return PyValue_NULL;
 
     if (user_signals == NULL) {
         user_signals = PyMem_Calloc(Py_NSIG, sizeof(user_signal_t));
         if (user_signals == NULL) {
-            Py_XDECREF(file);
-            return PyErr_NoMemory();
+            Py_XDECREF(file_obj);
+            return _PyValue_FromObjectResult(PyErr_NoMemory());
         }
     }
     user = &user_signals[signum];
@@ -1056,22 +1089,22 @@ faulthandler_register_py_impl(PyObject *module, int signum, PyObject *file,
     if (!user->enabled) {
 #ifdef FAULTHANDLER_USE_ALT_STACK
         if (faulthandler_allocate_stack() < 0) {
-            Py_XDECREF(file);
-            return NULL;
+            Py_XDECREF(file_obj);
+            return PyValue_NULL;
         }
 #endif
 
         err = faulthandler_register(signum, chain, &previous);
         if (err) {
             PyErr_SetFromErrno(PyExc_OSError);
-            Py_XDECREF(file);
-            return NULL;
+            Py_XDECREF(file_obj);
+            return PyValue_NULL;
         }
 
         user->previous = previous;
     }
 
-    Py_XSETREF(user->file, file);
+    Py_XSETREF(user->file, file_obj);
     user->fd = fd;
     user->all_threads = all_threads;
     user->chain = chain;
@@ -1079,7 +1112,7 @@ faulthandler_register_py_impl(PyObject *module, int signum, PyObject *file,
     user->max_threads = max_threads;
     user->enabled = 1;
 
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 static int
@@ -1108,22 +1141,22 @@ faulthandler.unregister as faulthandler_unregister_py
 Unregister the handler of the signal 'signum' registered by register().
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 faulthandler_unregister_py_impl(PyObject *module, int signum)
-/*[clinic end generated code: output=01734423da1155ed input=c016de014495d384]*/
+/*[clinic end generated code: output=9347f0a806c802cb input=c016de014495d384]*/
 {
     user_signal_t *user;
     int change;
 
     if (!check_signum(signum))
-        return NULL;
+        return PyValue_NULL;
 
     if (user_signals == NULL)
-        Py_RETURN_FALSE;
+        return PyValue_False;
 
     user = &user_signals[signum];
     change = faulthandler_unregister(user, signum);
-    return PyBool_FromLong(change);
+    return PyValue_FromBool(change);
 }
 #endif   /* FAULTHANDLER_USER */
 
@@ -1190,9 +1223,9 @@ faulthandler._sigsegv
 Raise a SIGSEGV signal.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 faulthandler__sigsegv_impl(PyObject *module, int release_gil)
-/*[clinic end generated code: output=96e5a2f215b01b76 input=c6ad893cf2ea2b41]*/
+/*[clinic end generated code: output=f869d2945fd96e67 input=c6ad893cf2ea2b41]*/
 {
     if (release_gil) {
         Py_BEGIN_ALLOW_THREADS
@@ -1201,7 +1234,7 @@ faulthandler__sigsegv_impl(PyObject *module, int release_gil)
     } else {
         faulthandler_raise_sigsegv();
     }
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 static void _Py_NO_RETURN
@@ -1217,9 +1250,9 @@ faulthandler._fatal_error_c_thread
 Call Py_FatalError() in a new C thread.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 faulthandler__fatal_error_c_thread_impl(PyObject *module)
-/*[clinic end generated code: output=101bc8aaf4a5eec1 input=fbdca6fffd639a39]*/
+/*[clinic end generated code: output=b7e6ca71a3561d9d input=fbdca6fffd639a39]*/
 {
     unsigned long tid;
     PyThread_type_lock lock;
@@ -1228,7 +1261,7 @@ faulthandler__fatal_error_c_thread_impl(PyObject *module)
 
     lock = PyThread_allocate_lock();
     if (lock == NULL)
-        return PyErr_NoMemory();
+        return _PyValue_FromObjectResult(PyErr_NoMemory());
 
     PyThread_acquire_lock(lock, WAIT_LOCK);
 
@@ -1236,7 +1269,7 @@ faulthandler__fatal_error_c_thread_impl(PyObject *module)
     if (tid == PYTHREAD_INVALID_THREAD_ID) {
         PyThread_free_lock(lock);
         PyErr_SetString(PyExc_RuntimeError, "unable to start the thread");
-        return NULL;
+        return PyValue_NULL;
     }
 
     /* wait until the thread completes: it will never occur, since Py_FatalError()
@@ -1245,7 +1278,7 @@ faulthandler__fatal_error_c_thread_impl(PyObject *module)
     PyThread_release_lock(lock);
     PyThread_free_lock(lock);
 
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 
@@ -1255,9 +1288,9 @@ faulthandler._sigfpe
 Raise a SIGFPE signal.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 faulthandler__sigfpe_impl(PyObject *module)
-/*[clinic end generated code: output=dec9c98100e986db input=fd608a92d4421d28]*/
+/*[clinic end generated code: output=8de72394e348c18e input=fd608a92d4421d28]*/
 {
     faulthandler_suppress_crash_report();
     raise(SIGFPE);
@@ -1271,13 +1304,13 @@ faulthandler._sigabrt
 Raise a SIGABRT signal.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 faulthandler__sigabrt_impl(PyObject *module)
-/*[clinic end generated code: output=58c1378a0c166682 input=be3e0ecefb8676b8]*/
+/*[clinic end generated code: output=53fef80b58dd2696 input=be3e0ecefb8676b8]*/
 {
     faulthandler_suppress_crash_report();
     abort();
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 #if defined(FAULTHANDLER_USE_ALT_STACK)
@@ -1307,9 +1340,9 @@ faulthandler._stack_overflow
 Recursive call to raise a stack overflow.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 faulthandler__stack_overflow_impl(PyObject *module)
-/*[clinic end generated code: output=efffba4be522d8fb input=4291594a790b6c35]*/
+/*[clinic end generated code: output=7a8df6fd035ad3f7 input=4291594a790b6c35]*/
 {
     size_t depth, size;
     uintptr_t sp = (uintptr_t)&depth;
@@ -1341,7 +1374,7 @@ faulthandler__stack_overflow_impl(PyObject *module)
         "unable to raise a stack overflow (allocated %zu bytes "
         "on the stack, %zu recursive calls)",
         size, depth);
-    return NULL;
+    return PyValue_NULL;
 }
 #endif   /* defined(FAULTHANDLER_USE_ALT_STACK) && defined(HAVE_SIGACTION) */
 
@@ -1357,10 +1390,10 @@ faulthandler._raise_exception
 Call RaiseException(code, flags).
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 faulthandler__raise_exception_impl(PyObject *module, unsigned int code,
                                    unsigned int flags)
-/*[clinic end generated code: output=2346cf318eab10dc input=43a5ba0eb7794504]*/
+/*[clinic end generated code: output=1832cb261236afbb input=43a5ba0eb7794504]*/
 {
     faulthandler_suppress_crash_report();
     RaiseException(code, flags, 0, NULL);

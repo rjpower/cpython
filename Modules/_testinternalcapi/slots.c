@@ -1,8 +1,10 @@
 #include "parts.h"
 #include "pycore_descrobject.h"
 #include "pycore_dict.h"
+#include "pycore_modsupport.h"    // _PyArg_NoKeywords()
 #include "pycore_tuple.h"
 #include "pycore_value.h"
+#include "pycore_value_api.h"     // _PyValue_FromObjectKnown()
 
 static PyObject *
 slot_value_storage(PyObject *module, PyObject *args)
@@ -249,6 +251,173 @@ static PyTypeObject calloc_values_type = {
     .tp_members = calloc_values_members,
 };
 
+/* A static type with value fields of each kind (pyjit/design/proposals/
+   value-api-v2a0.md, M4a): i, f and o read as None when absent
+   (_Py_T_VALUE), ex raises when absent (_Py_T_VALUE_EX), and ro reads i and
+   refuses writes. ValueFields(i, f, o) stores the arguments it is given. */
+typedef struct {
+    PyObject_HEAD
+    PyValue i;
+    PyValue f;
+    PyValue o;
+    PyValue ex;
+} ValueFieldsObject;
+
+#define _ValueFields_CAST(op) ((ValueFieldsObject *)(op))
+
+static PyObject *
+value_fields_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
+{
+    PyObject *i = NULL, *f = NULL, *o = NULL;
+    if (!_PyArg_NoKeywords("ValueFields", kwargs) ||
+        !PyArg_UnpackTuple(args, "ValueFields", 0, 3, &i, &f, &o)) {
+        return NULL;
+    }
+    PyObject *self = type->tp_alloc(type, 0);
+    if (self == NULL) {
+        return NULL;
+    }
+    // tp_alloc zero-fills, so every field starts empty.
+    ValueFieldsObject *fields = _ValueFields_CAST(self);
+    PyObject *given[3] = {i, f, o};
+    PyValue *homes[3] = {&fields->i, &fields->f, &fields->o};
+    for (int k = 0; k < 3; k++) {
+        if (given[k] != NULL) {
+            *homes[k] = PyValue_FromPyObjectNew(given[k]);
+            _PyValue_CheckHome(*homes[k]);
+        }
+    }
+    return self;
+}
+
+static int
+value_fields_traverse(PyObject *op, visitproc visit, void *arg)
+{
+    ValueFieldsObject *self = _ValueFields_CAST(op);
+    _Py_VISIT_VALUE(self->i);
+    _Py_VISIT_VALUE(self->f);
+    _Py_VISIT_VALUE(self->o);
+    _Py_VISIT_VALUE(self->ex);
+    return 0;
+}
+
+static int
+value_fields_clear(PyObject *op)
+{
+    ValueFieldsObject *self = _ValueFields_CAST(op);
+    PyValue_CLEAR(self->i);
+    PyValue_CLEAR(self->f);
+    PyValue_CLEAR(self->o);
+    PyValue_CLEAR(self->ex);
+    return 0;
+}
+
+static void
+value_fields_dealloc(PyObject *op)
+{
+    ValueFieldsObject *self = _ValueFields_CAST(op);
+    PyObject_GC_UnTrack(op);
+    PyValue_XCLOSE(self->i);
+    PyValue_XCLOSE(self->f);
+    PyValue_XCLOSE(self->o);
+    PyValue_XCLOSE(self->ex);
+    Py_TYPE(op)->tp_free(op);
+}
+
+static char
+value_field_kind(PyValueBorrow value)
+{
+    return PyValue_IsNull(value) ? 'n' :
+           PyValue_IsInlineInt(value) ? 'i' :
+           PyValue_IsInlineFloat(value) ? 'f' : 'o';
+}
+
+/* The storage of i, f, o and ex, one letter each: n (empty), i (inline
+   int), f (inline float) or o (object). */
+static PyObject *
+value_fields_kinds(PyObject *op, PyObject *Py_UNUSED(args))
+{
+    ValueFieldsObject *self = _ValueFields_CAST(op);
+    char kinds[5] = {
+        value_field_kind(PyValue_Borrow(self->i)),
+        value_field_kind(PyValue_Borrow(self->f)),
+        value_field_kind(PyValue_Borrow(self->o)),
+        value_field_kind(PyValue_Borrow(self->ex)),
+        '\0',
+    };
+    return PyUnicode_FromString(kinds);
+}
+
+/* (type, (i, f, o), (None, {'ex': ex})), built from the fields by value, so
+   nothing boxes. An absent i, f or o is passed as None, which it reads as;
+   the state is None when ex is absent. */
+static PyObject *
+value_fields_reduce(PyObject *op, PyObject *Py_UNUSED(args))
+{
+    ValueFieldsObject *self = _ValueFields_CAST(op);
+    PyObject *key = NULL, *slots = NULL, *state = NULL, *result = NULL;
+    PyObject *fields = PyTuple_New(3);
+    if (fields == NULL) {
+        goto done;
+    }
+    PyValue *homes[3] = {&self->i, &self->f, &self->o};
+    for (int k = 0; k < 3; k++) {
+        PyTuple_SET_VALUE(fields, k, PyValue_IsNull(*homes[k])
+                                     ? PyValue_None : PyValue_DUP(*homes[k]));
+    }
+    if (PyValue_IsNull(self->ex)) {
+        state = Py_NewRef(Py_None);
+    }
+    else {
+        key = PyUnicode_FromString("ex");
+        slots = key == NULL ? NULL : PyDict_New();
+        if (slots == NULL ||
+            PyDict_SetValue(slots, _PyValue_FromObjectKnown(key),
+                            self->ex) < 0) {
+            goto done;
+        }
+        state = PyTuple_Pack(2, Py_None, slots);
+        if (state == NULL) {
+            goto done;
+        }
+    }
+    result = PyTuple_Pack(3, (PyObject *)Py_TYPE(self), fields, state);
+done:
+    Py_XDECREF(fields);
+    Py_XDECREF(key);
+    Py_XDECREF(slots);
+    Py_XDECREF(state);
+    return result;
+}
+
+static PyMemberDef value_fields_members[] = {
+    {"i", _Py_T_VALUE, offsetof(ValueFieldsObject, i), 0},
+    {"f", _Py_T_VALUE, offsetof(ValueFieldsObject, f), 0},
+    {"o", _Py_T_VALUE, offsetof(ValueFieldsObject, o), 0},
+    {"ex", _Py_T_VALUE_EX, offsetof(ValueFieldsObject, ex), 0},
+    {"ro", _Py_T_VALUE, offsetof(ValueFieldsObject, i), Py_READONLY},
+    {NULL},
+};
+
+static PyMethodDef value_fields_methods[] = {
+    {"kinds", value_fields_kinds, METH_NOARGS},
+    {"__reduce__", value_fields_reduce, METH_NOARGS},
+    {NULL},
+};
+
+static PyTypeObject value_fields_type = {
+    PyVarObject_HEAD_INIT(NULL, 0)
+    .tp_name = "_testinternalcapi.ValueFields",
+    .tp_basicsize = sizeof(ValueFieldsObject),
+    .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC,
+    .tp_new = value_fields_new,
+    .tp_dealloc = value_fields_dealloc,
+    .tp_traverse = value_fields_traverse,
+    .tp_clear = value_fields_clear,
+    .tp_members = value_fields_members,
+    .tp_methods = value_fields_methods,
+};
+
 static PyMethodDef methods[] = {
     {"slot_value_storage", slot_value_storage, METH_VARARGS},
     {"slot_clear", slot_clear, METH_O},
@@ -261,6 +430,9 @@ int
 _PyTestInternalCapi_Init_Slots(PyObject *module)
 {
     if (PyModule_AddType(module, &calloc_values_type) < 0) {
+        return -1;
+    }
+    if (PyModule_AddType(module, &value_fields_type) < 0) {
         return -1;
     }
     return PyModule_AddFunctions(module, methods);

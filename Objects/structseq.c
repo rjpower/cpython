@@ -8,6 +8,7 @@
 */
 
 #include "Python.h"
+#include "pycore_dict.h"          // PyDict_SetValue()
 #include "pycore_initconfig.h"    // _PyStatus_OK()
 #include "pycore_modsupport.h"    // _PyArg_NoPositional()
 #include "pycore_object.h"        // _PyObject_GC_TRACK()
@@ -390,10 +391,12 @@ structseq_reduce(PyObject *op, PyObject *Py_UNUSED(ignored))
 
     for (i = n_visible_fields; i < n_fields; i++) {
         const char *n = Py_TYPE(self)->tp_members[i-n_unnamed_fields].name;
-        PyObject *value = _PyValue_AsObjectAt(self->ob_item[i], BOX_SITE_CELL);
-        if (value == NULL) goto error;
-        int stored = PyDict_SetItemString(dict, n, value);
-        Py_DECREF(value);
+        PyObject *key = PyUnicode_FromString(n);
+        if (key == NULL) goto error;
+        // The dict holds the field's value, so an inline value needs no box.
+        int stored = PyDict_SetValue(dict, _PyValue_FromObjectKnown(key),
+                                     self->ob_item[i]);
+        Py_DECREF(key);
         if (stored < 0) goto error;
     }
 

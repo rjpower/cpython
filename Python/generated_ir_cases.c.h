@@ -5198,8 +5198,8 @@
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
-                if ((PyCFunction_GET_FLAGS(callable_o) &
-                     _Py_METH_CALL_FLAGS) != METH_FASTCALL) {
+                int flags = PyCFunction_GET_FLAGS(callable_o) & _Py_METH_CALL_FLAGS;
+                if (flags != METH_FASTCALL && flags != METH_VALUE) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -6627,8 +6627,8 @@
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
-                if ((method->d_method->ml_flags & _Py_METH_CALL_FLAGS) !=
-                    METH_FASTCALL) {
+                int flags = method->d_method->ml_flags & _Py_METH_CALL_FLAGS;
+                if (flags != METH_FASTCALL && flags != METH_VALUE) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);

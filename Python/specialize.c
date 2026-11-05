@@ -2095,6 +2095,22 @@ specialize_method_descriptor(PyMethodDescrObject *descr, PyValue self_or_null,
             specialize(instr, CALL_METHOD_DESCRIPTOR_O);
             return 0;
         }
+        case METH_VALUE: {
+            /* The callee checks its own arity. list.append(x) is the only
+               method with a handler of its own. */
+            PyInterpreterState *interp = _PyInterpreterState_GET();
+            if ((PyObject *)descr == interp->callable_cache.list_append
+                && instr_oparg(instr) == 1
+                && nargs == 2
+                && PyValue_TYPE(self_or_null) == &PyList_Type)
+            {
+                assert(!PyValue_IsNull(self_or_null));
+                specialize(instr, CALL_LIST_APPEND);
+                return 0;
+            }
+            specialize(instr, CALL_METHOD_DESCRIPTOR_FAST);
+            return 0;
+        }
         case METH_FASTCALL: {
             specialize(instr, CALL_METHOD_DESCRIPTOR_FAST);
             return 0;
@@ -2221,8 +2237,8 @@ specialize_c_call(PyObject *callable, _PyInstr *instr, int nargs)
         }
         case METH_VALUE: {
             /* len() and isinstance() are METH_VALUE since core Clinic emits
-               values; every other value builtin goes through the value
-               vectorcall in CALL_NON_PY_GENERAL. */
+               values; every other value builtin calls the value vectorcall
+               in CALL_BUILTIN_FAST (CALL passes no keywords). */
             PyInterpreterState *interp = _PyInterpreterState_GET();
             if (nargs == 1 && instr_oparg(instr) == 1
                 && callable == interp->callable_cache.len)
@@ -2236,7 +2252,7 @@ specialize_c_call(PyObject *callable, _PyInstr *instr, int nargs)
                 specialize(instr, CALL_ISINSTANCE);
                 return 0;
             }
-            specialize(instr, CALL_NON_PY_GENERAL);
+            specialize(instr, CALL_BUILTIN_FAST);
             return 0;
         }
         default:

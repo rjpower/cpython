@@ -2290,7 +2290,7 @@ class TestSpecializer(TestBase):
 
         list_append([])
         self.assert_specialized(list_append, "CALL_LIST_APPEND")
-        self.assert_no_opcode(list_append, "CALL_METHOD_DESCRIPTOR_O")
+        self.assert_no_opcode(list_append, "CALL_METHOD_DESCRIPTOR_FAST")
         self.assert_no_opcode(list_append, "CALL")
 
         def my_list_append(l):
@@ -2299,7 +2299,7 @@ class TestSpecializer(TestBase):
 
         class MyList(list): pass
         my_list_append(MyList())
-        self.assert_specialized(my_list_append, "CALL_METHOD_DESCRIPTOR_O")
+        self.assert_specialized(my_list_append, "CALL_METHOD_DESCRIPTOR_FAST")
         self.assert_no_opcode(my_list_append, "CALL_LIST_APPEND")
         self.assert_no_opcode(my_list_append, "CALL")
 
@@ -2357,6 +2357,9 @@ class TestSpecializer(TestBase):
         def call_method(obj, arg):
             return obj.__contains__(arg)
 
+        def call_method_o(obj, arg):
+            return obj.meth_o_coexist(arg)
+
         def call_method_noargs(obj):
             return obj.meth_noargs_coexist()
 
@@ -2377,9 +2380,15 @@ class TestSpecializer(TestBase):
 
         coexist = _testcapi.MethInstance()
         cases = [
-            # dict.__contains__ has METH_O | METH_COEXIST
-            (call_1, {}.__contains__, ("key",), "CALL_BUILTIN_O"),
-            (call_method, {}, ("key",), "CALL_METHOD_DESCRIPTOR_O"),
+            # dict.__contains__ has METH_VALUE | METH_COEXIST, which calls
+            # the value vectorcall like METH_FASTCALL does.
+            (call_1, {}.__contains__, ("key",), "CALL_BUILTIN_FAST"),
+            (call_method, {}, ("key",), "CALL_METHOD_DESCRIPTOR_FAST"),
+            # meth_o_coexist has METH_O | METH_COEXIST
+            (call_1, _testcapi.DocStringNoSignatureTest().meth_o_coexist,
+             (1,), "CALL_BUILTIN_O"),
+            (call_method_o, _testcapi.DocStringNoSignatureTest(), (1,),
+             "CALL_METHOD_DESCRIPTOR_O"),
             # meth_noargs_coexist has METH_NOARGS | METH_COEXIST
             (call_method_noargs, _testcapi.DocStringNoSignatureTest(), (),
              "CALL_METHOD_DESCRIPTOR_NOARGS"),

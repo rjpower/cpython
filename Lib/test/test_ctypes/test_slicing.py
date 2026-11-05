@@ -1,5 +1,6 @@
+import sys
 import unittest
-from ctypes import (CDLL, POINTER, sizeof,
+from ctypes import (CDLL, POINTER, cast, sizeof,
                     c_byte, c_short, c_int, c_long, c_char, c_wchar, c_char_p)
 from test.support import import_helper
 _ctypes_test = import_helper.import_module("_ctypes_test")
@@ -98,6 +99,41 @@ class SlicesTestCase(unittest.TestCase):
         self.assertEqual(res[:len(s)], list(range(ord("a"), ord("z")+1)))
         self.assertEqual(res[:len(s):], list(range(ord("a"), ord("z")+1)))
         dll.my_free(res)
+
+    def test_pointer_slice_bounds(self):
+        # A pointer slice reads each bound as an index: ints, bools and
+        # __index__ objects index, floats raise TypeError and ints beyond
+        # Py_ssize_t raise ValueError.
+        class Index:
+            def __init__(self, value):
+                self.value = value
+
+            def __index__(self):
+                return self.value
+
+        a = (c_int * 10)(*range(10))
+        p = cast(a, POINTER(c_int))
+        self.assertEqual(p[True:3], [1, 2])
+        self.assertEqual(p[False:2], [0, 1])
+        self.assertEqual(p[:3:True], [0, 1, 2])
+        self.assertEqual(p[Index(2):Index(6):Index(2)], [2, 4])
+        self.assertEqual(p[0:4:sys.maxsize], [0])
+        self.assertEqual(p[sys.maxsize:0], [])
+
+        big = sys.maxsize + 1
+        for s in (slice(big), slice(-big - 1, 0), slice(0, 3, big),
+                  slice(Index(big), 3)):
+            with self.subTest(s=s):
+                with self.assertRaises(ValueError):
+                    p[s]
+        for s in (slice(1.5, 3), slice(1.5), slice(0, 3, 1.5)):
+            with self.subTest(s=s):
+                with self.assertRaises(TypeError):
+                    p[s]
+        for step in (0, False, Index(0)):
+            with self.subTest(step=step):
+                with self.assertRaisesRegex(ValueError, 'step cannot be zero'):
+                    p[0:3:step]
 
     def test_char_ptr_with_free(self):
         dll = CDLL(_ctypes_test.__file__)

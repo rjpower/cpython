@@ -1,7 +1,9 @@
 # tests for slice objects; in particular the indices method.
 
 import itertools
+import math
 import operator
+import pickle
 import sys
 import unittest
 import weakref
@@ -230,6 +232,68 @@ class SliceTest(unittest.TestCase):
         self.assertEqual(slice(0, MyIndexable(10), 1).indices(5), (0, 5, 1))
         self.assertEqual(slice(0, 10, MyIndexable(1)).indices(5), (0, 5, 1))
         self.assertEqual(slice(0, 10, 1).indices(MyIndexable(5)), (0, 5, 1))
+
+    def test_value_fields(self):
+        # start, stop and step hold values: inline ints and floats, and
+        # objects. None of this is visible from Python.
+        class MyInt(int):
+            pass
+
+        s = slice(1, 2**60, None)
+        self.assertEqual((s.start, s.stop, s.step), (1, 2**60, None))
+        self.assertEqual(repr(s), 'slice(1, 1152921504606846976, None)')
+        self.assertEqual(repr(slice(1.5)), 'slice(None, 1.5, None)')
+        self.assertEqual(repr(slice('a', None)), "slice('a', None, None)")
+        self.assertEqual(s.indices(2**61), (1, 2**60, 1))
+        self.assertEqual(slice(-(2**60), None, -3).indices(10), (-1, -1, -3))
+        self.assertEqual(slice(-5, None, -3).indices(10), (5, -1, -3))
+        self.assertEqual(slice(None, None, -1).indices(0), (-1, -1, -1))
+        self.assertEqual(slice(3, 2**60).indices(2**70), (3, 2**60, 1))
+        self.assertRaises(ValueError, slice(1, 2, 0).indices, 5)
+        self.assertRaises(TypeError, slice(1.5).indices, 5)
+        self.assertRaises(TypeError, slice('a', None).indices, 5)
+        self.assertRaises(TypeError, [1, 2, 3].__getitem__, slice(1.5))
+        self.assertRaises(TypeError, [1, 2, 3].__getitem__, slice('a', None))
+        self.assertEqual([0, 1, 2, 3][slice(1, 2**60)], [1, 2, 3])
+        self.assertEqual([0, 1, 2, 3][slice(-(2**60), 2, None)], [0, 1])
+
+        # Equal values, inline in one slice and objects in the other.
+        for a, b in [(slice(1, 2, 3), slice(MyInt(1), 2.0, True + 2)),
+                     (slice(2**60), slice(float(2**60))),
+                     (slice(0.5, -1), slice(0.5, MyInt(-1)))]:
+            with self.subTest(a=a, b=b):
+                self.assertEqual(a, b)
+                self.assertEqual(hash(a), hash(b))
+                self.assertFalse(a != b)
+                self.assertLessEqual(a, b)
+        self.assertLess(slice(1, 2), slice(1, 2**60))
+        self.assertGreater(slice(2.5), slice(MyInt(2)))
+        self.assertEqual(hash(slice(1, 2, 3)), hash(slice(1, 2, 3)))
+        self.assertNotEqual(hash(slice(1, 2, 3)), hash(slice(3, 2, 1)))
+        self.assertRaises(TypeError, hash, slice([], 1))
+
+        for s in (slice(1, 2**60, None), slice('a', None), slice(1.5),
+                  slice(-0.0, math.inf, -(2**50))):
+            for proto in range(pickle.HIGHEST_PROTOCOL + 1):
+                with self.subTest(s=s, proto=proto):
+                    t = pickle.loads(pickle.dumps(s, proto))
+                    self.assertEqual(t, s)
+                    self.assertEqual(repr(t), repr(s))
+        self.assertEqual(math.copysign(1, copy.copy(slice(-0.0)).stop), -1)
+
+    def test_index_objects_as_bounds(self):
+        class Index:
+            def __init__(self, value):
+                self.value = value
+            def __index__(self):
+                return self.value
+
+        s = slice(Index(1), Index(10), Index(2))
+        self.assertEqual(list(range(10))[s], [1, 3, 5, 7, 9])
+        self.assertEqual(s.indices(6), (1, 6, 2))
+        self.assertEqual(range(10)[s], range(1, 10, 2))
+        self.assertEqual([0, 1, 2, 3][Index(1):Index(3)], [1, 2])
+        self.assertEqual(slice(Index(2**60)).indices(5), (0, 5, 1))
 
     def test_setslice_without_getslice(self):
         tmp = []

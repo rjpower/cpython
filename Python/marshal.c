@@ -14,8 +14,10 @@
 #include "pycore_object.h"           // _PyObject_IsUniquelyReferenced
 #include "pycore_pystate.h"          // _PyInterpreterState_GET()
 #include "pycore_setobject.h"        // _PySet_NextEntryRef()
+#include "pycore_sliceobject.h"      // PySliceObject
 #include "pycore_tuple.h"            // _PyTuple_FromPairSteal
 #include "pycore_unicodeobject.h"    // _PyUnicode_InternImmortal()
+#include "pycore_value_api.h"        // _PyValue_AsObjectAt()
 
 #include "marshal.h"                 // Py_MARSHAL_VERSION
 
@@ -1022,9 +1024,17 @@ w_complex_object(PyObject *v, WFILE *p)
         }
         PySliceObject *slice = (PySliceObject *)v;
         W_TYPE(TYPE_SLICE, p);
-        w_object(slice->start, p);
-        w_object(slice->stop, p);
-        w_object(slice->step, p);
+        // Each field is written as an object, as a tuple item is.
+        PyValue *fields[3] = {&slice->start, &slice->stop, &slice->step};
+        for (i = 0; i < 3 && !p->error; i++) {
+            PyObject *field = _PyValue_AsObjectAt(*fields[i], BOX_SITE_FIELD);
+            if (field == NULL) {
+                p->error = true;
+                break;
+            }
+            w_object(field, p);
+            Py_DECREF(field);
+        }
         w_complete(v, p);
     }
     else {

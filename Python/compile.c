@@ -26,6 +26,7 @@
 #include "pycore_pystate.h"       // _Py_GetConfig()
 #include "pycore_runtime.h"       // _Py_ID()
 #include "pycore_setobject.h"     // _PySet_NextValue()
+#include "pycore_sliceobject.h"   // _PySlice_AsTuple()
 #include "pycore_stats.h"
 #include "pycore_tuple.h"         // _PyTuple_FromPair
 #include "pycore_unicodeobject.h" // _PyUnicode_EqualToASCIIString()
@@ -1614,8 +1615,7 @@ intern_constant(PyObject *const_cache, PyValue constant)
         }
     }
     else {
-        PySliceObject *slice = (PySliceObject *)o;
-        items = PyTuple_Pack(3, slice->start, slice->stop, slice->step);
+        items = _PySlice_AsTuple((PySliceObject *)o);
     }
     if (items == NULL) {
         PyValue_CLOSE(selected);
@@ -1657,19 +1657,13 @@ intern_constant(PyObject *const_cache, PyValue constant)
             }
         }
         else {
-            PyObject *fields[3] = {NULL, NULL, NULL};
-            int i;
-            for (i = 0; i < 3; i++) {
-                PyValue item = PyTuple_GetValue(items, i);
-                fields[i] = _PyValue_AsObjectAt(item, BOX_SITE_COMPILER);
-                PyValue_CLOSE(item);
-                if (fields[i] == NULL) {
-                    break;
-                }
+            PyValue fields[3];
+            for (int i = 0; i < 3; i++) {
+                fields[i] = PyTuple_GetValue(items, i);
             }
-            new = i == 3 ? PySlice_New(fields[0], fields[1], fields[2]) : NULL;
-            for (i = 0; i < 3; i++) {
-                Py_XDECREF(fields[i]);
+            new = _PySlice_FromValues(fields[0], fields[1], fields[2]);
+            for (int i = 0; i < 3; i++) {
+                PyValue_CLOSE(fields[i]);
             }
         }
         if (new == NULL) {

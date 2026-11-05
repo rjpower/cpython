@@ -16,6 +16,7 @@
 #include "pycore_value_ops.h"
 #include "pycore_tuple.h"         // _PyTuple_RESET_HASH_CACHE()
 #include "pycore_typeobject.h"    // _PyStaticType_FiniBuiltin()
+#include "pycore_unicodeobject.h" // _PyUnicode_InternImmortal()
 #include "pycore_value_api.h"     // _PyValue_AsObjectAt()
 
 static const char visible_length_key[] = "n_sequence_fields";
@@ -393,6 +394,8 @@ structseq_reduce(PyObject *op, PyObject *Py_UNUSED(ignored))
         const char *n = Py_TYPE(self)->tp_members[i-n_unnamed_fields].name;
         PyObject *key = PyUnicode_FromString(n);
         if (key == NULL) goto error;
+        // As PyDict_SetItemString(), so that the dict is the same.
+        _PyUnicode_InternImmortal(_PyInterpreterState_GET(), &key);
         // The dict holds the field's value, so an inline value needs no box.
         int stored = PyDict_SetValue(dict, _PyValue_FromObjectKnown(key),
                                      self->ob_item[i]);

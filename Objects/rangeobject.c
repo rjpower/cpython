@@ -7,6 +7,7 @@
 #include "pycore_long.h"          // _PyLong_GetZero()
 #include "pycore_modsupport.h"    // _PyArg_NoKwnames()
 #include "pycore_range.h"
+#include "pycore_sliceobject.h"   // _PySlice_GetLongIndices()
 #include "pycore_tuple.h"         // _PyTuple_ITEMS()
 
 typedef struct {

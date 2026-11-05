@@ -111,6 +111,9 @@ bytes(cdata)
 #include "pycore_unicodeobject.h" // _PyUnicode_EqualToASCIIString()
 #include "pycore_pyatomic_ft_wrappers.h"
 #include "pycore_object.h"
+#include "pycore_sliceobject.h"   // PySliceObject
+#include "pycore_value.h"         // PyValue_IsNone()
+#include "pycore_value_api.h"     // _PyValue_AsObjectAt()
 #include "pycore_tuple.h"         // _PyTuple_FromPair
 #ifdef MS_WIN32
 #  include "pycore_modsupport.h"  // _PyArg_NoKeywords()
@@ -5950,6 +5953,24 @@ copy_pointer_to_list_lock_held(PyObject *myself, PyObject *np, Py_ssize_t len,
     return 0;
 }
 
+/* PyNumber_AsSsize_t(field, PyExc_ValueError) of a slice field other than
+   None: an inline int is read directly, and only an inline float, which has
+   no __index__, boxes to raise the TypeError. */
+static Py_ssize_t
+slice_field_as_ssize_t(PyValueBorrow field)
+{
+    if (PyValue_IsInlineInt(field)) {
+        return (Py_ssize_t)PyValue_InlineInt64(field);
+    }
+    PyObject *obj = _PyValue_AsObjectAt(field, BOX_SITE_FIELD);
+    if (obj == NULL) {
+        return -1;
+    }
+    Py_ssize_t result = PyNumber_AsSsize_t(obj, PyExc_ValueError);
+    Py_DECREF(obj);
+    return result;
+}
+
 static PyObject *
 Pointer_subscript(PyObject *myself, PyObject *item)
 {
@@ -5971,12 +5992,11 @@ Pointer_subscript(PyObject *myself, PyObject *item)
         /* Since pointers have no length, and we want to apply
            different semantics to negative indices than normal
            slicing, we have to dissect the slice object ourselves.*/
-        if (slice->step == Py_None) {
+        if (PyValue_IsNone(slice->step)) {
             step = 1;
         }
         else {
-            step = PyNumber_AsSsize_t(slice->step,
-                                      PyExc_ValueError);
+            step = slice_field_as_ssize_t(PyValue_Borrow(slice->step));
             if (step == -1 && PyErr_Occurred())
                 return NULL;
             if (step == 0) {
@@ -5985,7 +6005,7 @@ Pointer_subscript(PyObject *myself, PyObject *item)
                 return NULL;
             }
         }
-        if (slice->start == Py_None) {
+        if (PyValue_IsNone(slice->start)) {
             if (step < 0) {
                 PyErr_SetString(PyExc_ValueError,
                                 "slice start is required "
@@ -5995,18 +6015,16 @@ Pointer_subscript(PyObject *myself, PyObject *item)
             start = 0;
         }
         else {
-            start = PyNumber_AsSsize_t(slice->start,
-                                       PyExc_ValueError);
+            start = slice_field_as_ssize_t(PyValue_Borrow(slice->start));
             if (start == -1 && PyErr_Occurred())
                 return NULL;
         }
-        if (slice->stop == Py_None) {
+        if (PyValue_IsNone(slice->stop)) {
             PyErr_SetString(PyExc_ValueError,
                             "slice stop is required");
             return NULL;
         }
-        stop = PyNumber_AsSsize_t(slice->stop,
-                                  PyExc_ValueError);
+        stop = slice_field_as_ssize_t(PyValue_Borrow(slice->stop));
         if (stop == -1 && PyErr_Occurred())
             return NULL;
         if ((step > 0 && start > stop) ||

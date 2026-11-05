@@ -13,6 +13,7 @@
 #include "pycore_pymem.h"         // _PyMem_FreeDelayed()
 #include "pycore_pystate.h"       // _PyInterpreterState_GET()
 #include "pycore_setobject.h"     // _PySet_NextValue()
+#include "pycore_sliceobject.h"   // _PySlice_FromValues()
 #include "pycore_tuple.h"         // _PyTuple_ITEMS()
 #include "pycore_unicodeobject.h" // _PyUnicode_InternImmortal()
 #include "pycore_uniqueid.h"      // _PyObject_AssignUniqueId()
@@ -3197,19 +3198,14 @@ _PyCode_ConstantValueKey(PyValue constant)
     else if (PySlice_Check(op)) {
         PySliceObject *slice = (PySliceObject *)op;
         PyValue keys[3] = {PyValue_NULL, PyValue_NULL, PyValue_NULL};
-        PyObject *items[3] = {NULL, NULL, NULL};
-        PyObject *fields[3] = {slice->start, slice->stop, slice->step};
+        PyValue *fields[3] = {&slice->start, &slice->stop, &slice->step};
         for (int i = 0; i < 3; i++) {
-            keys[i] = _PyCode_ConstantValueKey(PyValue_FromObjectBorrow(fields[i]));
+            keys[i] = _PyCode_ConstantValueKey(*fields[i]);
             if (PyValue_IsNull(keys[i])) {
                 goto slice_done;
             }
-            items[i] = _PyValue_AsObjectAt(keys[i], BOX_SITE_COMPILER);
-            if (items[i] == NULL) {
-                goto slice_done;
-            }
         }
-        PyObject *slice_key = PySlice_New(items[0], items[1], items[2]);
+        PyObject *slice_key = _PySlice_FromValues(keys[0], keys[1], keys[2]);
         if (slice_key != NULL) {
             key = constant_key_tuple(PyValue_FromObjectBorrow(slice_key), value,
                                      PyValue_NULL);
@@ -3217,7 +3213,6 @@ _PyCode_ConstantValueKey(PyValue constant)
         }
 slice_done:
         for (int i = 0; i < 3; i++) {
-            Py_XDECREF(items[i]);
             PyValue_XCLOSE(keys[i]);
         }
     }

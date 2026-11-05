@@ -2,6 +2,7 @@
 #include "pycore_descrobject.h"
 #include "pycore_dict.h"
 #include "pycore_modsupport.h"    // _PyArg_NoKeywords()
+#include "pycore_sliceobject.h"   // _PySlice_FromValues()
 #include "pycore_tuple.h"
 #include "pycore_value.h"
 #include "pycore_value_api.h"     // _PyValue_FromObjectKnown()
@@ -418,7 +419,30 @@ static PyTypeObject value_fields_type = {
     .tp_methods = value_fields_methods,
 };
 
+/* _PySlice_FromValues() of up to three objects, each passed as the view of
+   an owned value; a missing argument is passed as PyValue_NULL. */
+static PyObject *
+slice_from_values(PyObject *module, PyObject *args)
+{
+    PyObject *objects[3] = {NULL, NULL, NULL};
+    if (!PyArg_UnpackTuple(args, "slice_from_values", 0, 3,
+                           &objects[0], &objects[1], &objects[2])) {
+        return NULL;
+    }
+    PyValue values[3];
+    for (int k = 0; k < 3; k++) {
+        values[k] = objects[k] == NULL ? PyValue_NULL
+                                       : PyValue_FromPyObjectNew(objects[k]);
+    }
+    PyObject *slice = _PySlice_FromValues(values[0], values[1], values[2]);
+    for (int k = 0; k < 3; k++) {
+        PyValue_XCLOSE(values[k]);
+    }
+    return slice;
+}
+
 static PyMethodDef methods[] = {
+    {"slice_from_values", slice_from_values, METH_VARARGS},
     {"slot_value_storage", slot_value_storage, METH_VARARGS},
     {"slot_clear", slot_clear, METH_O},
     {"slot_new_with_tracer", slot_new_with_tracer, METH_VARARGS},

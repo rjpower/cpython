@@ -22,6 +22,18 @@ extern "C" {
  * Any other value is returned unchanged. */
 PyAPI_FUNC(PyValue) _PyValue_Canonicalize(PyValue source);
 
+/* The one three-outcome result: a status and the value it carries, returned
+ * in two registers (rax:rdx under the x86-64 SysV ABI).  The statuses are
+ * PySendResult's: PYGEN_ERROR (-1, value PyValue_NULL, exception set),
+ * PYGEN_RETURN (0) and PYGEN_NEXT (1). */
+typedef struct {
+    int status;
+    PyValue value;
+} _PyStatusValue;
+
+static_assert(PYGEN_ERROR == -1 && PYGEN_RETURN == 0 && PYGEN_NEXT == 1,
+              "_PyStatusValue's statuses are PySendResult's");
+
 /* A handler's boxes of inline inputs, which it passes to C code that takes
  * objects; it releases them when it finishes. The generated bound counts its
  * fixed scalar input occurrences; variable windows use owned object arrays.

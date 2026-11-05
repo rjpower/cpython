@@ -68,6 +68,10 @@ a feedback vector after them. Specialisation and instrumentation rewrite only th
 16-bit handler field of that copy. The interpreter is generated C: one handler per
 handler index, dispatched by computed goto or by tail calls.
 
+After the interpreter checkpoint, `co_code` and the `.pyc` return to stack
+bytecode and the IR becomes a hidden cache lowered from it
+([proposal](proposals/stack-bytecode-recovery.md)).
+
 ```mermaid
 flowchart LR
     src[source] --> ast[AST / codegen.c]

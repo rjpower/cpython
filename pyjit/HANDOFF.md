@@ -244,6 +244,10 @@ overwritten.
    ([packet](design/proposals/register-ir-v2-packet.md)).
 3. Value API V1 follow-ups (`FOLLOWUPS.md`), then V2a-0 onwards.
 4. Follow-ups in `build/pyjit-link-wave1/FOLLOWUPS.md`.
+5. After the interpreter checkpoint: return `co_code` and `.pyc` to stack
+   bytecode with the IR as a hidden cache
+   ([proposal](design/proposals/stack-bytecode-recovery.md), user decision
+   2026-11-05).
 
 Use the time metric; the instruction-count metric needs `perf_event_paranoid`
 lowered, which the user has not done. Do not present host controls, object files

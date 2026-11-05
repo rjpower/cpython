@@ -999,7 +999,7 @@ check_words(PyObject *code, PyObject *fbinit, PyObject *consts, int nslots)
             int role = fmt->roles[k];
             uint32_t value = (uint32_t)(word >> (16 + 12 * k)) & IR_FIELD_MAX;
             if (role == _PyIR_ROLE_DST && value == IR_NO_DST
-                && (fmt->flags & _PyIR_DISCARDS))
+                && (fmt->flags & (_PyIR_DISCARDS | _PyIR_UNPACKS)))
             {
                 continue;
             }

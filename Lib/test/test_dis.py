@@ -796,7 +796,7 @@ Disassembly of <code object foo at 0x..., file "%s", line %d>:
                LOAD_DEREF               1 (y)  r4 <-
                CALL                     0  r3 <- r3
        L1:     FOR_ITER                 2 (to L2)  r5 <- r3
-               LIST_APPEND              3  <- r2
+               LIST_APPEND              3  <- r2, r5
                JUMP_BACKWARD           16 (to L1)
        L2:     END_FOR               <- r3, r4, r5
                POP_ITER              <- r3, r4

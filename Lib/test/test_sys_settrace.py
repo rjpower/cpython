@@ -2993,6 +2993,92 @@ output.append(4)
             output)
         output.append(4)
 
+    # Unpacks whose targets are consecutive locals write them in the
+    # unpack word itself, and the comprehension appends read the loop
+    # variable in place: neither has a word of its own to stop at.
+    @jump_test(2, 4, [3], warning=(RuntimeWarning, unbound_locals))
+    def test_jump_into_unpack_to_locals(output):
+        p = (1, 2)
+        output.append(2)
+        q = (5, 6)
+        a, b = p
+        output.append(a + b)
+
+    @jump_test(4, 3, [2, 3])
+    def test_jump_back_into_unpack_to_locals(output):
+        p = (1, 2)
+        output.append(2)
+        a, b = p
+        output.append(a + b)
+
+    @jump_test(2, 3, [3], warning=(RuntimeWarning, unbound_locals))
+    def test_jump_out_of_unpack_to_locals(output):
+        p = (1, 2)
+        a, b = p
+        output.append(3)
+
+    @jump_test(1, 3, [3], warning=(RuntimeWarning, unbound_locals))
+    def test_jump_over_unpack_to_locals(output):
+        p = (1, 2)
+        a, b = p
+        output.append(3)
+
+    @jump_test(4, 2, [1, 3, 3, [4]])
+    def test_jump_back_over_unpack_ex_to_locals(output):
+        output.append(1)
+        a, *b = [3, 4]
+        output.append(a)
+        output.append(b)
+
+    @jump_test(1, 4, [4], warning=(RuntimeWarning, unbound_locals))
+    def test_jump_over_unpack_in_for_header(output):
+        for a, b in [(1, 2), (3, 4)]:
+            output.append(a)
+            output.append(b)
+        output.append(4)
+
+    @jump_test(2, 4, [4])
+    def test_jump_out_of_loop_after_unpack_to_locals(output):
+        for a, b in [(1, 2), (3, 4)]:
+            output.append(a)
+            output.append(b)
+        output.append(4)
+
+    @jump_test(1, 4, [4], warning=(RuntimeWarning, unbound_locals))
+    def test_jump_over_comprehension_with_append_sources(output):
+        x = [i for i in range(3)]
+        y = {i: i for i in range(3)}
+        z = {i for i in range(3)}
+        output.append(4)
+
+    @jump_test(1, 6, [6, 7], warning=(RuntimeWarning, unbound_locals))
+    def test_jump_over_multiline_comprehension(output):
+        y = 0
+        x = [
+            i * 2
+            for i in range(3)
+        ]
+        output.append(6)
+        output.append(7)
+
+    @jump_test(4, 6, [6, 7], warning=(RuntimeWarning, unbound_locals))
+    def test_jump_out_of_multiline_comprehension(output):
+        y = 0
+        x = [
+            i * 2
+            for i in range(3)
+        ]
+        output.append(6)
+        output.append(7)
+
+    @jump_test(5, 2, [1, 3, 3, 5], warning=(RuntimeWarning, unbound_locals))
+    def test_jump_back_over_comprehensions(output):
+        output.append(1)
+        x = [i for i in range(2)]
+        output.append(3)
+        y = {i: i for i in range(2)}
+        output.append(5)
+
     @jump_test(2, 3, [1, 3], warning=(RuntimeWarning, unbound_locals))
     def test_jump_extended_args_unpack_ex_simple(output):
         output.append(1)
@@ -3108,10 +3194,63 @@ class JumpStackModelTestCase(unittest.TestCase):
             with self.subTest(name):
                 self.run_with_line_jumps(source)
 
+    def test_jump_out_of_comprehension_at_each_line_event(self):
+        # The appends of a comprehension read the loop variable in place;
+        # the model must still hold the stack of the loop head, where every
+        # iteration after the first stops for its line event
+        sources = {
+            "list": "def f(lst):\n    x = [m for m in lst]\n    return 1\n",
+            "set": "def f(lst):\n    x = {m for m in lst}\n    return 1\n",
+            "dict": "def f(lst):\n    x = {m: m for m in lst}\n    return 1\n",
+            "unpack_in_for":
+                "def f(lst):\n    for a, b in lst:\n        pass\n"
+                "    return 1\n",
+            "unpack_to_locals":
+                "def f(lst):\n    a, b = lst[0]\n    c, d = lst[1]\n"
+                "    return 1\n",
+            "in_call":
+                "def f(lst):\n    x = max([m for m in lst],\n"
+                "            {n: n for n in lst},\n            3)\n"
+                "    return 1\n",
+        }
+        for name, source in sources.items():
+            namespace = {}
+            exec(source, namespace)
+            function = namespace["f"]
+            code = function.__code__
+            target = max(line for _, _, line in code.co_lines() if line)
+            for event_number in range(1, 8):
+                with self.subTest(name, event=event_number):
+                    seen = []
+
+                    def tracer(frame, event, arg):
+                        if frame.f_code is not code or event != "line":
+                            return tracer
+                        seen.append(frame.f_lineno)
+                        if len(seen) == event_number:
+                            frame.f_lineno = target
+                            sys.settrace(None)
+                        return tracer
+
+                    # A jump may bind None to locals the line expects bound
+                    with warnings.catch_warnings():
+                        warnings.simplefilter("ignore", RuntimeWarning)
+                        sys.settrace(tracer)
+                        try:
+                            try:
+                                function([(1, 2), (3, 4), (5, 6)])
+                            except TypeError:
+                                pass
+                        finally:
+                            sys.settrace(None)
+
     def test_stack_too_deep_is_refused(self):
-        # More temporaries than the stack model can hold: the jump is
-        # refused, not guessed
-        args = ", ".join("a" for _ in range(40))
+        # More temporaries than the stack model can hold, or than it can
+        # scan to place: the jump is refused, not guessed.  A hundred
+        # arguments are built by as many appends, which read their operands
+        # in place, so the call's NULL is placed after more words than the
+        # scan follows.
+        args = ", ".join("a" for _ in range(100))
         source = f"def f(a):\n    return a({args},\n        a)\n"
         namespace = {}
         exec(source, namespace)
@@ -3127,6 +3266,9 @@ class JumpStackModelTestCase(unittest.TestCase):
                     frame.f_lineno = 2
                 except ValueError as e:
                     refused.append(str(e))
+                else:
+                    # Do not loop on a jump that was allowed
+                    sys.settrace(None)
             return tracer
 
         sys.settrace(tracer)

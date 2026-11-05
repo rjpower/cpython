@@ -177,6 +177,10 @@ enum {
 #define _PyIR_FUSED_IF_FALSE 0x100  // jump where the condition is false
 #define _PyIR_DISCARDS      0x800   // dst may be IR_NO_DST: the handler
                                     // releases the result (the calls)
+#define _PyIR_UNPACKS       0x1000  // dst names the first of a run of locals
+                                    // that receive the elements of an
+                                    // unpack in order, or is IR_NO_DST: the
+                                    // elements stay in the window
 
 /* _PyIRFormat.effects: what the handler itself may do, from the cases
  * generator's analysis of its instruction.  For a stack opcode they agree
@@ -440,6 +444,11 @@ PyAPI_FUNC(int) _PyCode_InstrHoles(PyCodeObject *co, int i, int holes[4]);
 /* Whether the call at index i releases its result (its dst is IR_NO_DST):
  * the POP_TOP of the stack form is folded into it. */
 PyAPI_FUNC(int) _PyCode_InstrDiscards(PyCodeObject *co, int i);
+
+/* The number of elements that the unpack at index i stores to locals (its
+ * dst names a run of them), where its stack instruction pushed them; 0 if
+ * its elements stay in the window or it is no unpack. */
+PyAPI_FUNC(int) _PyCode_InstrUnpackedLocals(PyCodeObject *co, int i);
 
 /* The word index that the instruction at index i jumps to, or -1 if it
  * does not jump.  END_ASYNC_FOR, which names its SEND, counts as a jump. */

@@ -337,8 +337,9 @@ Known values:
    64407: B4: feedback entries sized by kind, names past 2,048 through the
    GETATTR intrinsic
    64408: B6: fused compare-and-jump handlers
-   64409: B5: discarded call results and no PUSH_NULL */
-#define PYC_MAGIC_NUMBER 64409
+   64409: B5: discarded call results and no PUSH_NULL
+   64410: B5b: unpack to locals and append sources */
+#define PYC_MAGIC_NUMBER 64410
 /* This is equivalent to converting PYC_MAGIC_NUMBER to 2 bytes
    (little-endian) and then appending b'\r\n'. */
 #define PYC_MAGIC_NUMBER_TOKEN \

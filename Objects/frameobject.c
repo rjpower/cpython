@@ -1865,6 +1865,10 @@ mark_stacks(PyCodeObject *code_obj, int len)
                     stacks[next_i] = next_stack;
                 }
             }
+            for (int n = _PyCode_InstrUnpackedLocals(code_obj, i); n > 0; n--) {
+                // The STORE_FASTs of the elements are folded into the word
+                stacks[next_i] = pop_value(stacks[next_i]);
+            }
             if (_PyCode_InstrStoredLocal(code_obj, i) >= 0
                 || _PyCode_InstrDiscards(code_obj, i)) {
                 // A STORE_FAST of the result is folded into the word

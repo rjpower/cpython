@@ -208,6 +208,19 @@ FUSED_SHADOWS = {"COMPARE_OP_JUMP": "COMPARE_OP",
 # intrinsics are not calls in this sense and keep their POP_TOP.
 DISCARDING = ("CALL", "CALL_KW", "CALL_FUNCTION_EX")
 
+# The unpacks: their dst field names the first of a run of locals that
+# receive the elements in order (the STORE_FASTs folded in), or is IR_NO_DST.
+# The count of elements as a function of the oparg.
+UNPACKS = {
+    "UNPACK_SEQUENCE": "oparg",
+    "UNPACK_EX": "((oparg & 0xFF) + 1 + (oparg >> 8))",
+}
+
+# The appends: a window (the container, and the entries above it) whose
+# top NSRC inputs are read through fields of their own, so that a value in a
+# local is read in place and one in a temporary needs no particular slot.
+APPEND_SOURCES = {"LIST_APPEND": 1, "SET_ADD": 1, "MAP_ADD": 2}
+
 # Instructions whose oparg can need more than 12 bits although their bodies
 # name no constant or name table, see wide_oparg().
 WIDE_OPARGS = ("UNPACK_EX",)
@@ -260,6 +273,8 @@ class IRFormat:
     runs_code: bool = False         # a member may run Python code, see
                                     # runs_code()
     discards: bool = False          # dst may be IR_NO_DST, see DISCARDING
+    unpacks: bool = False           # dst names a run of locals for the
+                                    # elements, or IR_NO_DST, see UNPACKS
     # The rest of the instruction contract (pycore_ir.h, _PyIRFormat)
     jump_always: bool = False       # see jumps_always()
     names_target: bool = False      # see names_target_only()
@@ -1260,12 +1275,18 @@ def compute_format(group: str, members: list[Instruction]) -> IRFormat:
         # as SEND_ASYNC_GEN does
         dst_offset = window_dst(io[head.name][1])
         slots = ([ROLE_DST] if dst_offset is not None else []) + [ROLE_BASE]
+        n_inputs = APPEND_SOURCES.get(group, 0)
+        slots += [f"{ROLE_IN0} + {k}" for k in range(n_inputs)]
         placed = place_fields(slots, has_fb, imm_kind, True)
         if placed is None:
             raise analysis_error(
                 f"the fields of {group} do not fit in a word", head.where)
-        n_inputs = 0
     roles, imm, fb = placed
+    unpacks = group in UNPACKS
+    if unpacks:
+        # The first free field names the run of locals
+        roles = list(roles)
+        roles[roles.index(ROLE_NONE)] = ROLE_DST
     if imm in FIELD_LOCS.values():
         k = list(FIELD_LOCS.values()).index(imm)
         role = oparg_slot_role(members)
@@ -1300,6 +1321,20 @@ def compute_format(group: str, members: list[Instruction]) -> IRFormat:
             # holds a value whenever code that reads the stack runs.
             if all(u[k] in ("object", "raw") for u in uses):
                 borrow_mask |= 1 << k
+    if window and n_inputs:
+        # The sources are the top inputs of the window, which the handler
+        # may read in place unless it keeps or passes them on
+        assert len(members) == 1, group
+        m_inputs, m_outputs = io[head.name]
+        first = len(m_inputs) - n_inputs
+        uses = classify_inputs(head, len(m_inputs))
+        passthrough = {e.external for e in m_outputs if e.external >= 0}
+        kept = kept_inputs(head, len(m_inputs))
+        for k in range(n_inputs):
+            if first + k in passthrough or first + k in kept:
+                continue
+            if uses[first + k] in ("object", "raw"):
+                borrow_mask |= 1 << k
     store_dst = stores_to_dst(members, io, dst_offset, window)
     fb_layout = fb_kind = None
     if has_fb:
@@ -1319,6 +1354,7 @@ def compute_format(group: str, members: list[Instruction]) -> IRFormat:
         no_fold=no_fold,
         store_dst=store_dst, runs_code=any(runs_code(m) for m in members),
         discards=store_dst and window and group in DISCARDING,
+        unpacks=unpacks,
         jump_always=jumps and jumps_always(head),
         names_target=jumps and names_target_only(head),
         fb_layout=fb_layout, fb_kind=fb_kind,
@@ -1840,8 +1876,7 @@ class IRStack(Stack):
         # position, "in" the slot of its input or "out" the slot from dst.
         # Positions that are not constant are outputs.
         self.owner: dict[int, str] = {}
-        if not self.layout.window:
-            self.owner = {p: "in" for p in self.layout.in_fields}
+        self.owner = {p: "in" for p in self.layout.in_fields}
         # Set for the flush at the end of the handler, where a dst that
         # names a local is written; and after the frame changed, when no
         # position may be written.
@@ -1925,11 +1960,11 @@ class IRStack(Stack):
 
     def address(self, memory_offset: PointerOffset) -> str:
         lay = self.layout
-        if lay.window:
-            return self.window_slot(memory_offset)
         p = memory_offset.as_int()
         if p is not None and self.home_of(p) == "in":
             return f"IR_SLOT({self.input_field(p)})"
+        if lay.window:
+            return self.window_slot(memory_offset)
         return self.out_slot(memory_offset)
 
     def home_of(self, p: int) -> str | None:
@@ -1944,7 +1979,7 @@ class IRStack(Stack):
 
     def load(self, var: StackItem, memory_offset: PointerOffset) -> str:
         lay = self.layout
-        if not lay.window and not var.is_array():
+        if not var.is_array():
             p = memory_offset.as_int()
             if (p is not None and self.owner.get(p) == "in"
                     and p in lay.borrowable):
@@ -1957,7 +1992,7 @@ class IRStack(Stack):
         fresh = before is None or not before.in_local
         local = super().pop(var, out)
         lay = self.layout
-        if (not lay.window and local.memory_offset is not None and var.used
+        if (local.memory_offset is not None and var.used
                 and local.ir_input is None and not var.is_array()):
             p = local.memory_offset.as_int()
             if p is not None and self.owner.get(p) == "in":
@@ -2106,7 +2141,15 @@ class IRStack(Stack):
                 out.emit(f"IR_CLEAR_SLOTS(&{self.window_slot(low)}, {count.to_c()});\n")
                 return
             for i in range(n):
-                out.emit(f"{self.window_slot(low + PointerOffset(i, (), ()))} = PyValue_NULL;\n")
+                position = low + PointerOffset(i, (), ())
+                p = position.as_int()
+                if p is not None and p in lay.in_fields:
+                    # A source: its owner takes it, a local stays
+                    if self.owner.get(p) == "in":
+                        del self.owner[p]
+                        self.consume(out, p)
+                    continue
+                out.emit(f"{self.window_slot(position)} = PyValue_NULL;\n")
             return
         lo = low.as_int()
         if lo is not None and n is not None:
@@ -2429,6 +2472,24 @@ class IREmitter(Emitter):
                   f"{self.temps}, ir_displaced) < 0) {{\n")
         self.emit("next_instr = frame->instr_ptr + 1;\n")
         self.reader_error()
+        self.emit("}\n")
+
+    def unpack_to_locals(self, fmt, count):
+        """The elements are in the window, in stack order; if dst names a
+        run of locals they go there, one element at a time as the STORE_FASTs
+        they replace would, so that a __del__ sees the same locals.  A
+        release that may run Python is out of line."""
+        dst = FIELD_VARS[fmt.field_of(ROLE_DST)]
+        self.emit(f"if (IR_IS_LOCAL({dst})) {{\n")
+        self.emit(f"int ir_n = {count};\n")
+        self.emit(f"int ir_rest = IR_UNPACK_TO_LOCALS(&IR_SLOT({dst}), "
+                  "window, ir_n);\n")
+        self.emit("if (ir_rest >= 0 &&\n")
+        self.emit("    finish_unpack_to_locals(tstate, frame, next_instr, "
+                  f"{self.temps}, &IR_SLOT({dst}), window, ir_n, ir_rest) < 0) {{\n")
+        self.emit("next_instr = frame->instr_ptr + 1;\n")
+        self.reader_error()
+        self.emit("}\n")
         self.emit("}\n")
 
     def reader_reload(self):
@@ -2825,7 +2886,7 @@ class IREmitter(Emitter):
         input's slot holds NULL, on every path"""
         stack = storage.stack
         assert isinstance(stack, IRStack)
-        if stack.layout.window:
+        if stack.layout.window and not stack.layout.in_fields:
             return
         for var in storage.inputs:
             p = var.ir_input
@@ -3483,8 +3544,13 @@ def slot_layout(inst: Instruction, fmt: IRFormat, mode: str | None) -> SlotLayou
     if fmt.transparent:
         return SlotLayout.empty()
     if fmt.window:
-        return SlotLayout(True, get_stack_effect(inst).base_offset, {},
-                          frozenset())
+        # The top inputs of a window with sources are read through fields
+        in_fields = {k - fmt.n_inputs: fmt.input_field(k)
+                     for k in range(fmt.n_inputs)}
+        borrowable = frozenset(k - fmt.n_inputs for k in range(fmt.n_inputs)
+                               if fmt.borrow_mask & (1 << k))
+        return SlotLayout(True, get_stack_effect(inst).base_offset, in_fields,
+                          borrowable)
     in_fields = {k - fmt.n_inputs: fmt.input_field(k)
                  for k in range(fmt.n_inputs)}
     borrowable = frozenset(k - fmt.n_inputs for k in range(fmt.n_inputs)
@@ -3725,6 +3791,8 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
             out.emit(f"{stack.dst_stores[-1]};\n")
         if fmt.store_dst:
             emitter.release_displaced()
+        if fmt.unpacks:
+            emitter.unpack_to_locals(fmt, UNPACKS[fmt.group])
         out.emit("DISPATCH();\n")
     if transaction and emitter.call_fallback_used:
         out.emit(f"{emitter.call_fallback}:;\n")
@@ -3946,7 +4014,7 @@ CONSTRUCTOR = re.compile(r"New(?!Ref)|Alloc|^PyValue_From|_PyFrame_Push|_Py_Make
 # releases the boxes and adds none, so a handler that boxes nothing passes
 # it NULL.  The macros that box without naming value_temps are listed;
 # test_ir_contract checks the list against Python/ceval_macros.h.
-NON_BOXING_CALLS = {"finish_displaced_local", "retire_published_values",
+NON_BOXING_CALLS = {"finish_displaced_local", "finish_unpack_to_locals", "retire_published_values",
                     "value_attribute_complete", "value_operation_finish",
                     "value_reader_complete"}
 

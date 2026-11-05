@@ -168,9 +168,14 @@ class ContractTests(unittest.TestCase):
                 self.assertEqual(sorted(inputs), list(range(row.ninputs)))
                 if row.flags & _opcode.IR_WINDOW:
                     self.assertIn(_opcode.IR_ROLE_BASE, roles)
-                    self.assertEqual(row.ninputs, 0)
+                    # at most the sources read through fields of their own
+                    self.assertLessEqual(row.ninputs, 2)
                 self.assertEqual(row.borrow_mask >> row.ninputs, 0)
-                if row.dst is None:
+                if row.flags & _opcode.IR_UNPACKS:
+                    # dst names a run of locals for the elements
+                    self.assertIn(_opcode.IR_ROLE_DST, roles)
+                    self.assertTrue(row.flags & _opcode.IR_WINDOW)
+                elif row.dst is None:
                     self.assertNotIn(_opcode.IR_ROLE_DST, roles)
                     self.assertFalse(row.flags & _opcode.IR_STORE_DST)
                 self.assertEqual(_opcode.IR_ROLE_FB in roles,

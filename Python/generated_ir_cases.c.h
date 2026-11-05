@@ -12163,16 +12163,18 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(LIST_APPEND);
-            int oparg = (int)IR_B(ir_word);
+            int oparg = (int)IR_C(ir_word);
             (void)oparg;
             PyValue *window = &IR_SLOT(IR_A(ir_word));
             (void)window;
             PyValue list;
-            PyValue v;
-            v = window[1 + (oparg-1)];
+            PyValueBorrow v;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            v = IR_VIEW(IR_B(ir_word));
             list = window[0];
-            PyValue item = v;
-            window[1 + (oparg-1)] = PyValue_NULL;
+            ir_own_B = IR_CONSUME_INPUT(IR_B(ir_word), v);
+            PyValue item = IR_TAKE(v, ir_own_B);
             int err = _PyList_AppendTakeValue((PyListObject *)PyValue_AsKnownObjectBorrow(list), item);
             if (err < 0) {
                 JUMP_TO_LABEL(error);
@@ -14633,22 +14635,26 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(MAP_ADD);
-            int oparg = (int)IR_B(ir_word);
+            int oparg = (int)IR_D(ir_word);
             (void)oparg;
             PyValue *window = &IR_SLOT(IR_A(ir_word));
             (void)window;
             PyValue dict_st;
-            PyValue key;
-            PyValue value;
-            value = window[2 + (oparg - 1)];
-            key = window[1 + (oparg - 1)];
+            PyValueBorrow key;
+            PyValueBorrow value;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            PyValue ir_own_C = PyValue_NULL;
+            (void)ir_own_C;
+            value = IR_VIEW(IR_C(ir_word));
+            key = IR_VIEW(IR_B(ir_word));
             dict_st = window[0];
             PyObject *dict = PyValue_AsKnownObjectBorrow(dict_st);
             assert(PyDict_CheckExact(dict));
-            PyValue stored_key = key;
-            PyValue stored_value = value;
-            window[1 + (oparg - 1)] = PyValue_NULL;
-            window[2 + (oparg - 1)] = PyValue_NULL;
+            ir_own_B = IR_CONSUME_INPUT(IR_B(ir_word), key);
+            PyValue stored_key = IR_TAKE(key, ir_own_B);
+            ir_own_C = IR_CONSUME_INPUT(IR_C(ir_word), value);
+            PyValue stored_value = IR_TAKE(value, ir_own_C);
             int err = _PyDict_SetValue_Take2(
                 (PyDictObject *)dict, stored_key, stored_value);
             if (err != 0) {
@@ -16481,16 +16487,18 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(SET_ADD);
-            int oparg = (int)IR_B(ir_word);
+            int oparg = (int)IR_C(ir_word);
             (void)oparg;
             PyValue *window = &IR_SLOT(IR_A(ir_word));
             (void)window;
             PyValue set;
-            PyValue v;
-            v = window[1 + (oparg-1)];
+            PyValueBorrow v;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            v = IR_VIEW(IR_B(ir_word));
             set = window[0];
-            PyValue item = v;
-            window[1 + (oparg-1)] = PyValue_NULL;
+            ir_own_B = IR_CONSUME_INPUT(IR_B(ir_word), v);
+            PyValue item = IR_TAKE(v, ir_own_B);
             int err = _PySet_AddValueTakeRef((PySetObject *)PyValue_AsKnownObjectBorrow(set), item);
             if (err) {
                 JUMP_TO_LABEL(error);
@@ -18045,6 +18053,15 @@
             if (res == 0) {
                 JUMP_TO_LABEL(error);
             }
+            if (IR_IS_LOCAL(IR_B(ir_word))) {
+                int ir_n = ((oparg & 0xFF) + 1 + (oparg >> 8));
+                int ir_rest = IR_UNPACK_TO_LOCALS(&IR_SLOT(IR_B(ir_word)), window, ir_n);
+                if (ir_rest >= 0 &&
+                    finish_unpack_to_locals(tstate, frame, next_instr, value_temps, &IR_SLOT(IR_B(ir_word)), window, ir_n, ir_rest) < 0) {
+                    next_instr = frame->instr_ptr + 1;
+                    JUMP_TO_LABEL(error);
+                }
+            }
             DISPATCH();
         }
 
@@ -18101,6 +18118,15 @@
                 int res = _PyEval_UnpackIterableValue(tstate, seq_o, oparg, -1, top);
                 Py_DECREF(seq_o);
                 if (res == 0) {
+                    JUMP_TO_LABEL(error);
+                }
+            }
+            if (IR_IS_LOCAL(IR_D(ir_word))) {
+                int ir_n = oparg;
+                int ir_rest = IR_UNPACK_TO_LOCALS(&IR_SLOT(IR_D(ir_word)), window, ir_n);
+                if (ir_rest >= 0 &&
+                    finish_unpack_to_locals(tstate, frame, next_instr, value_temps, &IR_SLOT(IR_D(ir_word)), window, ir_n, ir_rest) < 0) {
+                    next_instr = frame->instr_ptr + 1;
                     JUMP_TO_LABEL(error);
                 }
             }
@@ -18167,6 +18193,15 @@
                 IR_CLEAR_SLOTS(&window[oparg], 1 - oparg);
                 _PyValue_CLOSE_POINTER(seq);
             }
+            if (IR_IS_LOCAL(IR_D(ir_word))) {
+                int ir_n = oparg;
+                int ir_rest = IR_UNPACK_TO_LOCALS(&IR_SLOT(IR_D(ir_word)), window, ir_n);
+                if (ir_rest >= 0 &&
+                    finish_unpack_to_locals(tstate, frame, next_instr, NULL, &IR_SLOT(IR_D(ir_word)), window, ir_n, ir_rest) < 0) {
+                    next_instr = frame->instr_ptr + 1;
+                    JUMP_TO_LABEL(error);
+                }
+            }
             DISPATCH();
         }
 
@@ -18221,6 +18256,15 @@
                 IR_CLEAR_SLOTS(&window[oparg], 1 - oparg);
                 _PyValue_CLOSE_POINTER(seq);
             }
+            if (IR_IS_LOCAL(IR_D(ir_word))) {
+                int ir_n = oparg;
+                int ir_rest = IR_UNPACK_TO_LOCALS(&IR_SLOT(IR_D(ir_word)), window, ir_n);
+                if (ir_rest >= 0 &&
+                    finish_unpack_to_locals(tstate, frame, next_instr, NULL, &IR_SLOT(IR_D(ir_word)), window, ir_n, ir_rest) < 0) {
+                    next_instr = frame->instr_ptr + 1;
+                    JUMP_TO_LABEL(error);
+                }
+            }
             DISPATCH();
         }
 
@@ -18274,6 +18318,15 @@
                 IR_PUBLISH_TEMP(window[0], val1);
                 IR_PUBLISH_TEMP(window[1], val0);
                 _PyValue_CLOSE_POINTER(seq);
+            }
+            if (IR_IS_LOCAL(IR_D(ir_word))) {
+                int ir_n = oparg;
+                int ir_rest = IR_UNPACK_TO_LOCALS(&IR_SLOT(IR_D(ir_word)), window, ir_n);
+                if (ir_rest >= 0 &&
+                    finish_unpack_to_locals(tstate, frame, next_instr, NULL, &IR_SLOT(IR_D(ir_word)), window, ir_n, ir_rest) < 0) {
+                    next_instr = frame->instr_ptr + 1;
+                    JUMP_TO_LABEL(error);
+                }
             }
             DISPATCH();
         }

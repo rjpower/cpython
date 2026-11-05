@@ -200,7 +200,10 @@ _PyCode_InstrDepthBefore(PyCodeObject *co, int i, int *floor)
                 *floor = slot - nl;
             }
         }
-        else if (role >= _PyIR_ROLE_IN0 && slot >= nl && slot != IR_NO_DST) {
+        else if (role >= _PyIR_ROLE_IN0 && slot >= nl && slot != IR_NO_DST
+                 && !(fmt->flags & _PyIR_WINDOW)) {
+            // (A window's sources are its top entries: the extent that its
+            // base gives counts them.)
             // The k-th of n inputs lies n-k-1 slots below the top
             int d = slot - nl + fmt->ninputs - (role - _PyIR_ROLE_IN0);
             if (depth >= 0 && d != depth) {
@@ -270,6 +273,27 @@ _PyCode_InstrDiscards(PyCodeObject *co, int i)
     for (int r = 0; r < 4; r++) {
         if (fmt->roles[r] == _PyIR_ROLE_DST) {
             return (int)((word >> (16 + 12 * r)) & IR_FIELD_MAX) == IR_NO_DST;
+        }
+    }
+    return 0;
+}
+
+int
+_PyCode_InstrUnpackedLocals(PyCodeObject *co, int i)
+{
+    assert(i >= 0 && i < Py_SIZE(co));
+    _PyIRWord word = _PyCode_WORDS(co)[i];
+    const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
+    if (!(fmt->flags & _PyIR_UNPACKS)) {
+        return 0;
+    }
+    for (int r = 0; r < 4; r++) {
+        if (fmt->roles[r] == _PyIR_ROLE_DST) {
+            int dst = (int)((word >> (16 + 12 * r)) & IR_FIELD_MAX);
+            if (dst >= co->co_nlocalsplus) {
+                return 0;
+            }
+            return _PyIR_Extent(fmt->writes, _PyCode_InstrOparg(co, i));
         }
     }
     return 0;

@@ -63,6 +63,10 @@ extern "C" {
 #define _PyReg_ELIDED_NOP       32  // ... but a NOP stands for it, because it
                                     // alone holds its line
 
+#define _PyReg_UNPACK_LOCALS    128 // an unpack whose elements go to the run
+                                    // of locals from dst; out[] stay as the
+                                    // window's scratch registers
+
 typedef struct _PyRegOp {
     int opcode;             // the stack instruction, or _PyReg_DEAD
     int oparg;
@@ -139,6 +143,20 @@ typedef struct _PyRegCfg {
 #define _PyReg_IN(CFG, OP)      (&(CFG)->operands[(OP)->in])
 #define _PyReg_OUT(CFG, OP)     (&(CFG)->operands[(OP)->out])
 
+/* Whether op writes local z through its dst (a run of nout locals for an
+ * unpack) */
+static inline int
+_PyRegOp_WritesLocal(const _PyRegOp *op, int z)
+{
+    if (op->dst < 0) {
+        return 0;
+    }
+    if (op->flags & _PyReg_UNPACK_LOCALS) {
+        return z >= op->dst && z < op->dst + op->nout;
+    }
+    return z == op->dst;
+}
+
 /* Building: blocks in layout order, each with its stack instructions,
  * whose targets and handlers are block indices. */
 _PyRegCfg *_PyRegCfg_New(int nlocalsplus, int maxdepth);
@@ -206,6 +224,7 @@ int _PyRegCfg_Verify(_PyRegCfg *cfg, const char *after, int physical);
 int _PyRegPass_SwapRename(_PyRegCfg *cfg);
 int _PyRegPass_CopyProp(_PyRegCfg *cfg);
 int _PyRegPass_StoreElim(_PyRegCfg *cfg);
+int _PyRegPass_UnpackLocals(_PyRegCfg *cfg);
 int _PyRegPass_PopTop(_PyRegCfg *cfg);
 int _PyRegPass_Discard(_PyRegCfg *cfg);
 int _PyRegPass_ElideNull(_PyRegCfg *cfg);

@@ -2161,6 +2161,35 @@ finish_displaced_local(PyThreadState *tstate, _PyInterpreterFrame *frame,
                                    PyValue_NULL);
 }
 
+/* The rest of IR_UNPACK_TO_LOCALS(): store the elements from index first on,
+ * releasing each local's old value before the next is stored, as the
+ * STORE_FAST sequence does, and refreshing after each release, which can run
+ * Python.  Out of line for the address of the old value (as
+ * finish_displaced_local) and for unpacks of many elements. */
+static Py_NO_INLINE int
+finish_unpack_to_locals(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                        _PyInstr *next, _PyValueTemps *temps,
+                        PyValue *locals, PyValue *window, int n, int first)
+{
+    int err = 0;
+    for (int i = first; i < n; i++) {
+        PyValue *element = &window[n - 1 - i];
+        if (err < 0) {
+            PyValue rest = *element;
+            *element = PyValue_NULL;
+            PyValue_XCLOSE(rest);
+            continue;
+        }
+        PyValue old = locals[i];
+        locals[i] = _PyValue_Publish(element);
+        _PyValue_CheckHome(locals[i]);
+        *element = PyValue_NULL;
+        err = finish_value_bridges_ex(tstate, frame, next, temps, &old, 1,
+                                      PyValue_NULL);
+    }
+    return err;
+}
+
 typedef struct {
     PyThreadState *tstate;
     _PyInterpreterFrame *frame;

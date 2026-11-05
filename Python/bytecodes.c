@@ -1244,8 +1244,7 @@ dummy_func(
         }
 
         inline_ok inst(SET_ADD, (set, unused[oparg-1], v -- set, unused[oparg-1])) {
-            PyValue item = v;
-            DEAD(v);
+            PyValue item = TAKE(v);
             int err = _PySet_AddValueTakeRef((PySetObject *)PyValue_AsKnownObjectBorrow(set), item);
             ERROR_IF(err);
         }
@@ -2458,10 +2457,8 @@ dummy_func(
             assert(PyDict_CheckExact(dict));
             /* dict[key] = value */
             // Do not DECREF INPUTS because the function steals the references
-            PyValue stored_key = key;
-            PyValue stored_value = value;
-            DEAD(key);
-            DEAD(value);
+            PyValue stored_key = TAKE(key);
+            PyValue stored_value = TAKE(value);
             int err = _PyDict_SetValue_Take2(
                 (PyDictObject *)dict, stored_key, stored_value);
             ERROR_IF(err != 0);

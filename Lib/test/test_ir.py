@@ -1824,6 +1824,253 @@ class RegCfgTest(unittest.TestCase):
         self.assertEqual(f([0, 2]), 0.5)
         self.assertIsInstance(f([0]), ZeroDivisionError)
 
+class UnpackToLocalsTest(unittest.TestCase):
+    """Unpacks that write their targets, a run of locals, themselves
+    (Python/regcfg_passes.c, _PyRegPass_UnpackLocals)"""
+
+    def run_specialized(self, check):
+        for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 2):
+            check()
+
+    def unpack_word(self, func):
+        found = [w for w in words(func)
+                 if w[0] in ("UNPACK_SEQUENCE", "UNPACK_EX")]
+        self.assertEqual(len(found), 1)
+        return found[0]
+
+    def names(self, func):
+        return [w[0] for w in words(func)]
+
+    def test_consecutive_locals(self):
+        def two(p):
+            a, b = p
+            return a + b
+        def many(p):
+            a, b, c, d = p
+            return a + b + c + d
+        def star(p):
+            a, *b, c = p
+            return a, b, c
+        for func, targets, source in (
+                (two, "ab", (1, 2)),
+                (many, "abcd", (1, 2, 3, 4)),
+                (star, "abc", (1, 2, 3, 4))):
+            with self.subTest(func=func.__name__):
+                varnames = func.__code__.co_varnames
+                self.assertNotIn("STORE_FAST", self.names(func))
+                # The word writes the run from the first target
+                _, dst, _ = self.unpack_word(func)
+                self.assertEqual(dst, varnames.index(targets[0]))
+                self.assertEqual(
+                    [varnames.index(c) for c in targets],
+                    list(range(dst, dst + len(targets))))
+        self.run_specialized(lambda: self.assertEqual(two((1, 2)), 3))
+        self.run_specialized(lambda: self.assertEqual(two([3, 4]), 7))
+        self.run_specialized(lambda: self.assertEqual(many(range(4)), 6))
+        self.run_specialized(
+            lambda: self.assertEqual(star((1, 2, 3, 4)), (1, [2, 3], 4)))
+
+    def test_dis_shows_the_run(self):
+        def f(p):
+            a, b = p
+            return a + b
+        lines = [line for line in self.disassembly(f).splitlines()
+                 if "UNPACK_SEQUENCE" in line]
+        self.assertEqual(len(lines), 1)
+        dst = f.__code__.co_varnames.index("a")
+        self.assertRegex(lines[0], rf"UNPACK_SEQUENCE\s+2\s+r{dst} <- r")
+
+    def disassembly(self, func):
+        import io
+        out = io.StringIO()
+        dis.dis(func, file=out)
+        return out.getvalue()
+
+    def assert_stores_stay(self, func):
+        self.assertIn("STORE_FAST", self.names(func))
+        _, dst, _ = self.unpack_word(func)
+        # The elements stay in the window: no run of locals
+        self.assertIsNone(dst)
+
+    def test_non_consecutive_locals_stay(self):
+        # b is numbered before a, so the targets are not ascending
+        def f(p):
+            b = 0
+            a, b = p
+            return a, b
+        varnames = f.__code__.co_varnames
+        self.assertGreater(varnames.index("a"), varnames.index("b"))
+        self.assert_stores_stay(f)
+        self.run_specialized(lambda: self.assertEqual(f((1, 2)), (1, 2)))
+
+    def test_skipped_local_stays(self):
+        # x is numbered between the targets, so a and b are not adjacent
+        def f(p):
+            a = x = 0
+            a, b = p
+            return a, b, x
+        varnames = f.__code__.co_varnames
+        self.assertNotEqual(varnames.index("b") - varnames.index("a"), 1)
+        self.assert_stores_stay(f)
+        self.run_specialized(lambda: self.assertEqual(f((1, 2)), (1, 2, 0)))
+
+    def test_store_on_another_line_stays(self):
+        # A store on a line of its own keeps its line event
+        def f(p):
+            (a,
+             b) = p
+            return a + b
+        self.assertIn("STORE_FAST", self.names(f))
+        self.run_specialized(lambda: self.assertEqual(f((1, 2)), 3))
+
+    def test_other_targets_stay(self):
+        class Box:
+            pass
+        def attribute(p, box):
+            a, box.x = p
+            return a, box.x
+        def subscript(p, box):
+            a, box[0] = p
+            return a, box[0]
+        def cell(p):
+            def inner():
+                return a
+            a, b = p
+            return inner, b
+        for func, store in ((attribute, "STORE_ATTR"),
+                            (subscript, "STORE_SUBSCR"),
+                            (cell, "STORE_DEREF")):
+            with self.subTest(func=func.__name__):
+                self.assertIn(store, self.names(func))
+                self.assert_stores_stay(func)
+        box = Box()
+        self.run_specialized(
+            lambda: self.assertEqual(attribute((1, 2), box), (1, 2)))
+        self.run_specialized(
+            lambda: self.assertEqual(subscript((1, 2), [0]), (1, 2)))
+        inner, b = cell((1, 2))
+        self.assertEqual((inner(), b), (1, 2))
+
+    def test_nested_unpack_stays(self):
+        # The outer unpack's second element is unpacked again, not stored
+        def f(p):
+            a, (b, c) = p
+            return a, b, c
+        outer, inner = [w for w in words(f) if w[0] == "UNPACK_SEQUENCE"]
+        self.assertIsNone(outer[1])
+        self.assertEqual(inner[1], f.__code__.co_varnames.index("b"))
+        self.run_specialized(
+            lambda: self.assertEqual(f((1, (2, 3))), (1, 2, 3)))
+
+
+class AppendSourcesTest(unittest.TestCase):
+    """LIST_APPEND, SET_ADD and MAP_ADD read the loop variable of an inlined
+    comprehension in place (Python/bytecodes.c)"""
+
+    def refcounts(self, objs):
+        return [sys.getrefcount(o) for o in objs]
+
+    def sources(self, func, handler):
+        found = [w for w in words(func) if w[0] == handler]
+        self.assertEqual(len(found), 1)
+        return found[0][2]
+
+    def test_sources_are_the_loop_variable(self):
+        def lst(xs):
+            return [x for x in xs]
+        def st(xs):
+            return {x for x in xs}
+        def dct(xs):
+            return {k: k for k in xs}
+        for func, handler, count in ((lst, "LIST_APPEND", 1),
+                                     (st, "SET_ADD", 1),
+                                     (dct, "MAP_ADD", 2)):
+            with self.subTest(handler=handler):
+                loop_var = func.__code__.co_varnames.index(
+                    "x" if func is not dct else "k")
+                srcs = self.sources(func, handler)
+                # The container, then the sources, which are the local
+                self.assertEqual(srcs[1:], (loop_var,) * count)
+                self.assertGreaterEqual(srcs[0], nlocalsplus(func))
+
+    def rebind_x(self):
+        # Rebinds the loop variable of the comprehension that called us
+        sys._getframe(1).f_locals["x"] = "new"
+        return True
+
+    def test_body_rebinds_the_loop_variable(self):
+        # The append reads the local after the body ran
+        def lst(xs, rebind):
+            return [x for x in xs if rebind()]
+        def st(xs, rebind):
+            return {x for x in xs if rebind()}
+        def dct(xs, rebind):
+            return {x: x for x in xs if rebind()}
+        for func, expected in ((lst, ["new"] * 3), (st, {"new"}),
+                               (dct, {"new": "new"})):
+            with self.subTest(func=func.__name__):
+                self.assertEqual(func([1, 2, 3], self.rebind_x), expected)
+
+    def test_key_and_value_from_one_local(self):
+        class Key:
+            pass
+        keys = [Key() for _ in range(3)]
+        before = self.refcounts(keys)
+        d = {k: k for k in keys}
+        # The dict holds a reference for the key and one for the value
+        self.assertEqual(self.refcounts(keys), [n + 2 for n in before])
+        self.assertEqual(list(d.items()), list(zip(keys, keys)))
+        del d
+        self.assertEqual(self.refcounts(keys), before)
+
+    def test_sources_are_counted_once_per_append(self):
+        class Item:
+            pass
+        items = [Item() for _ in range(3)]
+        before = self.refcounts(items)
+        lst = [i for i in items]
+        st = {i for i in items}
+        self.assertEqual(self.refcounts(items), [n + 2 for n in before])
+        del lst, st
+        self.assertEqual(self.refcounts(items), before)
+
+    def test_duplicate_keys(self):
+        # The first key object stays, the last value wins, as in the stack
+        # form of the comprehension
+        a, b = "".join("ab"), "".join("ab")
+        self.assertIsNot(a, b)
+        d = {k: i for i, k in enumerate([a, b, a])}
+        self.assertEqual(d, {"ab": 2})
+        self.assertIs(list(d)[0], a)
+        d = {k: k for k in (a, b)}
+        self.assertIs(list(d)[0], a)
+        self.assertIs(d["ab"], b)
+        s = {k for k in (a, b)}
+        self.assertIs(list(s)[0], a)
+
+    def test_hash_and_eq_raise(self):
+        class BadHash:
+            def __hash__(self):
+                raise ZeroDivisionError("hash")
+        class BadEq:
+            def __hash__(self):
+                return 1
+            def __eq__(self, other):
+                raise ZeroDivisionError("eq")
+        for bad in BadHash(), BadEq():
+            first = BadEq() if isinstance(bad, BadEq) else None
+            items = [first, bad] if first is not None else [bad]
+            before = self.refcounts(items)
+            for build in (lambda: {k: 1 for k in items},
+                          lambda: {k: k for k in items},
+                          lambda: {k for k in items}):
+                with self.subTest(type=type(bad).__name__):
+                    with self.assertRaises(ZeroDivisionError):
+                        build()
+                    # The failing add leaves nothing behind
+                    self.assertEqual(self.refcounts(items), before)
+
+
 FUSED = {"COMPARE_OP_JUMP", "CONTAINS_OP_JUMP", "IS_OP_JUMP"}
 
 

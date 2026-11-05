@@ -752,6 +752,15 @@ _PyRegCfg_OpSlots(const _PyRegCfg *cfg, const _PyRegOp *op,
     }
     if (fmt->flags & _PyIR_WINDOW) {
         slots->base = op->nread > 0 ? _PyRegCfg_Slot(cfg, in[0]) : op->base;
+        // The top ninputs inputs of a window are its sources
+        int first = op->nread - fmt->ninputs;
+        for (int k = 0; k < fmt->ninputs && k < 4; k++) {
+            slots->in[k] = first + k >= 0 ? _PyRegCfg_Slot(cfg, in[first + k]) : 0;
+        }
+        if (fmt->flags & _PyIR_UNPACKS) {
+            slots->dst = op->dst >= 0 ? op->dst : IR_NO_DST;
+            return;
+        }
         slots->dst = (op->flags & _PyReg_DISCARD) ? IR_NO_DST
                    : op->dst >= 0 ? op->dst : slots->base + fmt->dst;
         return;
@@ -908,7 +917,7 @@ compact_op(_PyRegCfg *cfg, occupancy *o, _PyRegOp *op)
         int base;
         if (op->nread > 0) {
             base = _PyRegCfg_Slot(cfg, in[0]);
-            for (int k = 1; k < op->nread; k++) {
+            for (int k = 1; k < op->nread - fmt->ninputs; k++) {
                 if (in[k] < nl || _PyRegCfg_Slot(cfg, in[k]) != base + k) {
                     return slot_error(op, "a window that is not consecutive");
                 }
@@ -994,7 +1003,8 @@ compact_op(_PyRegCfg *cfg, occupancy *o, _PyRegOp *op)
         cfg->ntemps = Py_MAX(cfg->ntemps, s - nl + 1);
         // A jump whose result a store elimination sent to a local leaves
         // the result's slot NULL where it falls through
-        if ((op->dst >= 0 && j == stored) || (op->flags & _PyReg_JUMP_OUTPUT)
+        if ((op->flags & _PyReg_UNPACK_LOCALS)
+            || (op->dst >= 0 && j == stored) || (op->flags & _PyReg_JUMP_OUTPUT)
             || ((op->flags & _PyReg_DISCARD) && j == stored)) {
             continue;
         }
@@ -1198,7 +1208,7 @@ check_folded_load(_PyRegCfg *cfg, const char *after, int i)
         }
         const _PyIRFormat *fmt = _PyRegCfg_FormatOf(op->opcode);
         int role = _PyIR_OpargRole(fmt);
-        if (op->dst == x || (op->oparg == x && (role == _PyIR_ROLE_LOCAL_OUT
+        if (_PyRegOp_WritesLocal(op, x) || (op->oparg == x && (role == _PyIR_ROLE_LOCAL_OUT
                                                 || role == _PyIR_ROLE_LOCAL_CLEAR
                                                 || role == _PyIR_ROLE_LOCAL_MOVE)))
         {
@@ -1263,11 +1273,16 @@ _PyRegCfg_Verify(_PyRegCfg *cfg, const char *after, int physical)
             // exit, as in a finally that never ends, keeps what is below it
             // until the frame is cleared or an exception unwinds it.
             if (fmt->flags & _PyIR_WINDOW) {
+                int nwin = op->nread - fmt->ninputs;
                 for (int k = 0; k < op->nread; k++) {
                     if (in[k] < nl) {
-                        err = verify_error(after, op, "a local in a window");
+                        // Only a source that its field borrows may be a local
+                        int f = k - nwin;
+                        if (f < 0 || !(fmt->borrow_mask & (1 << f))) {
+                            err = verify_error(after, op, "a local in a window");
+                        }
                     }
-                    else if (physical && _PyRegCfg_Slot(cfg, in[k])
+                    else if (physical && k < nwin && _PyRegCfg_Slot(cfg, in[k])
                              != _PyRegCfg_Slot(cfg, in[0]) + k)
                     {
                         err = verify_error(after, op, "a window that is not "
@@ -1296,7 +1311,8 @@ _PyRegCfg_Verify(_PyRegCfg *cfg, const char *after, int physical)
                     }
                 }
             }
-            if (op->dst >= 0 && !(fmt->flags & _PyIR_STORE_DST)) {
+            if (op->dst >= 0
+                && !(fmt->flags & (_PyIR_STORE_DST | _PyIR_UNPACKS))) {
                 err = verify_error(after, op, "a local dst");
             }
             if (cfg->nconst) {
@@ -1559,6 +1575,7 @@ static const struct {
     {"swap renaming", _PyRegPass_SwapRename},
     {"copy propagation", _PyRegPass_CopyProp},
     {"store elimination", _PyRegPass_StoreElim},
+    {"unpack to locals", _PyRegPass_UnpackLocals},
     {"pop top", _PyRegPass_PopTop},
     {"discard", _PyRegPass_Discard},
     {"truth folding", _PyRegPass_TruthFold},

@@ -1,5 +1,7 @@
 import doctest
+import sys
 import unittest
+from test import support
 
 
 doctests = """
@@ -217,6 +219,164 @@ class TestCornerCases(unittest.TestCase):
         for _ in range(30):
             y = unpack_400(range(400))
             self.assertEqual(y, 399)
+
+
+class Logged:
+    "A value whose release records the locals of the frame that holds it"
+    def __init__(self, name, log, frame_locals):
+        self.name = name
+        self.log = log
+        self.frame_locals = frame_locals
+
+    def __del__(self):
+        self.log.append((self.name, self.frame_locals()))
+
+
+class FailingIterator:
+    def __init__(self, fail_at, size):
+        self.fail_at = fail_at
+        self.size = size
+        self.i = 0
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        self.i += 1
+        if self.i == self.fail_at:
+            raise RuntimeError("boom")
+        if self.i > self.size:
+            raise StopIteration
+        return self.i
+
+
+class TestUnpackToLocals(unittest.TestCase):
+    # Targets that are consecutive locals receive the elements directly; the
+    # observable behaviour must be that of the stores they replace.
+
+    def test_failing_next_leaves_locals(self):
+        def three(it):
+            a = b = c = "old"
+            try:
+                a, b, c = it
+            except RuntimeError:
+                pass
+            return a, b, c
+
+        def twelve(it):
+            a = b = c = d = e = f = g = h = i = j = k = l = "old"
+            try:
+                a, b, c, d, e, f, g, h, i, j, k, l = it
+            except RuntimeError:
+                pass
+            return a, b, c, d, e, f, g, h, i, j, k, l
+
+        for fail_at in (1, 2, 3):
+            self.assertEqual(three(FailingIterator(fail_at, 3)), ("old",) * 3)
+        for fail_at in (1, 6, 12):
+            self.assertEqual(twelve(FailingIterator(fail_at, 12)), ("old",) * 12)
+
+    def test_failing_next_releases_values(self):
+        import weakref
+
+        class Obj:
+            pass
+
+        class Iterator(FailingIterator):
+            def __next__(self):
+                value = super().__next__()
+                obj = Obj()
+                refs.append(weakref.ref(obj))
+                return obj
+
+        def f(it):
+            a = b = c = None
+            try:
+                a, b, c = it
+            except RuntimeError:
+                pass
+
+        refs = []
+        f(Iterator(3, 3))
+        support.gc_collect()
+        self.assertEqual([r() for r in refs], [None] * len(refs))
+        self.assertEqual(len(refs), 2)
+
+    def test_wrong_length_leaves_locals(self):
+        def f(seq):
+            a = b = "old"
+            try:
+                a, b = seq
+            except ValueError:
+                pass
+            return a, b
+
+        for seq in ((1, 2, 3), (1,), [1, 2, 3], iter([1]), iter([1, 2, 3])):
+            for _ in range(3):
+                self.assertEqual(f(seq), ("old", "old"))
+        self.assertEqual(f((1, 2)), (1, 2))
+        self.assertEqual(f([3, 4]), (3, 4))
+
+    def test_release_order_of_old_values(self):
+        # The old value of each target is released before the next target
+        # is stored, as a sequence of STORE_FASTs does.
+        log = []
+        def frame_locals():
+            frame = sys._getframe(2)
+            return {k: getattr(v, "name", v)
+                    for k, v in frame.f_locals.items() if k in "abc"}
+
+        def f(seq):
+            a = Logged("a", log, frame_locals)
+            b = Logged("b", log, frame_locals)
+            c = Logged("c", log, frame_locals)
+            a, b, c = seq
+            return a, b, c
+
+        for seq in ((1, 2, 3), [1, 2, 3], iter((1, 2, 3))):
+            del log[:]
+            f(seq)
+            self.assertEqual(log, [
+                ("a", {"a": 1, "b": "b", "c": "c"}),
+                ("b", {"a": 1, "b": 2, "c": "c"}),
+                ("c", {"a": 1, "b": 2, "c": 3}),
+            ])
+
+    def test_source_is_a_target(self):
+        def f(a):
+            a, b = a
+            return a, b
+
+        def g(a):
+            b, a = a
+            return a, b
+
+        for _ in range(3):
+            self.assertEqual(f((1, 2)), (1, 2))
+            self.assertEqual(f([3, 4]), (3, 4))
+            self.assertEqual(g((1, 2)), (2, 1))
+
+    def test_star_to_locals(self):
+        def f(seq):
+            a, *b, c = seq
+            return a, b, c
+
+        for _ in range(3):
+            self.assertEqual(f(range(5)), (0, [1, 2, 3], 4))
+            self.assertEqual(f((1, 2)), (1, [], 2))
+        with self.assertRaises(ValueError):
+            f((1,))
+
+    def test_many_elements(self):
+        names = [f"v{i}" for i in range(30)]
+        ns = {}
+        exec(f"def f(x):\n    {', '.join(names)} = x\n"
+             f"    return ({', '.join(names)})\n", ns)
+        for _ in range(3):
+            self.assertEqual(ns["f"](range(30)), tuple(range(30)))
+            self.assertEqual(ns["f"](tuple(range(30))), tuple(range(30)))
+            self.assertEqual(ns["f"](list(range(30))), tuple(range(30)))
+
 
 if __name__ == "__main__":
     unittest.main()

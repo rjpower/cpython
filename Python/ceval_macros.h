@@ -641,6 +641,31 @@ _PyIR_AdoptTemp(PyValueBorrow view)
         } \
     } while (0)
 
+/* The elements of an unpack, in WINDOW in stack order (element i in
+ * WINDOW[N - 1 - i]), go to the locals LOCALS[0..N-1], one at a time as the
+ * STORE_FAST words that the unpack replaces would store them.  The old value
+ * of a local is released at once if that cannot run Python.  Returns -1 when
+ * all are stored, or the index of the first element whose local's old value
+ * may run __del__ (a last reference): nothing from it on is stored, and
+ * finish_unpack_to_locals() does the rest out of line, so that the release
+ * sees the locals as the STORE_FAST sequence leaves them. */
+static inline int
+_PyIR_UnpackToLocals(PyValue *locals, PyValue *window, int n)
+{
+    for (int i = 0; i < n; i++) {
+        PyValue old = locals[i];
+        if (_PyValue_MayDealloc(old)) {
+            return i;
+        }
+        locals[i] = _PyValue_Publish(&window[n - 1 - i]);
+        _PyValue_CheckHome(locals[i]);
+        window[n - 1 - i] = PyValue_NULL;
+        PyValue_XCLOSE(old);
+    }
+    return -1;
+}
+#define IR_UNPACK_TO_LOCALS(L, W, N) _PyIR_UnpackToLocals((L), (W), (N))
+
 /* Clear N slots from PTR on; N may be zero or less. */
 #define IR_CLEAR_SLOTS(PTR, N) \
     do { \

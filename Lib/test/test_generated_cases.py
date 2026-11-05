@@ -38,6 +38,7 @@ with test_tools.imports_under_tool("cases_generator"):
     from cwriter import CWriter
     import ir_generator
     import ir_metadata_generator
+    import lexer
     import parser
     from stack import Local, Stack
 
@@ -491,6 +492,96 @@ class TestIRCases(unittest.TestCase):
         self.assertIn("res = IR_TAKE(copy, ir_own_B);", output)
         self.assertIn("PyValueBorrow copy;", output)
 
+    def test_no_addressable_locals(self):
+        # The lint: no uop or label body takes the address of a local it
+        # declares or of a stack item that is not an array
+        bad = [
+            ("&held", "PyValue held = PyValue_NULL; spam_call(&held);"),
+            ("&scope", "_PyNativeScope scope; spam_call(&scope.result);"),
+            ("&small", "PyValue small[2]; spam_call(&small[0]);"),
+            ("&count", "int other, count = 0; spam_call(&count);"),
+            ("&o", "PyObject *o = NULL; spam_call(&o);"),
+            ("&value", "spam_call(&value);"),
+            ("&oparg", "spam_call(&oparg);"),
+            # Unary contexts other than an argument or an initializer
+            ("&held", "PyValue held = PyValue_NULL; spam_call(oparg ? &held : NULL);"),
+            ("&held", "PyValue held = PyValue_NULL; spam_call(!&held);"),
+            ("&held", "PyValue held = PyValue_NULL; spam_call((void *)&held);"),
+            ("&held", "PyValue held = PyValue_NULL; spam_call(&(held));"),
+            ("&held", "PyValue held = PyValue_NULL; int x = spam_call() == &held;"),
+            ("&held", "PyValue held = PyValue_NULL; intptr_t x = 0; x += &held;"),
+            # A local array decays to its address
+            ("small\\[\\] \\(a local array", "PyValue small[2]; spam_call(small);"),
+            # The locals that the generator declares around a body
+            ("&ir_displaced", "spam_call(&ir_displaced);"),
+            ("&call_state", "spam_call(&call_state);"),
+            ("&ir_own_B", "spam_call(&ir_own_B);"),
+        ]
+        for site, body in bad:
+            with self.subTest(site=site):
+                input = f"""
+        inst(OP, (value -- )) {{
+            {body}
+            DEAD(value);
+        }}
+    """
+                with self.assertRaisesRegex(SyntaxError, f"OP: line \\d+: {site}\\b"):
+                    self.ir_output(input)
+        good = [
+            "PyObject *o = spam_call(); spam_call(&o->ob_type);",
+            "PyValue *p = window; spam_call(&p[1]);",
+            "spam_call(&window[1], &IR_SLOT(0));",
+            "spam_call(&_PyInstrumentation_MISSING);",
+            "int a = 1, b = 2, sum; spam_call(__builtin_add_overflow(a, b, &sum));",
+            "int a = oparg & 1; spam_call(a);",
+            "int a = spam_call(oparg) & oparg; spam_call(a);",
+            "int a = (int)sizeof(PyValue) & oparg; spam_call(a);",
+        ]
+        for body in good:
+            with self.subTest(body=body):
+                input = f"""
+        inst(OP, (value -- )) {{
+            {body}
+            DEAD(value);
+        }}
+    """
+                self.ir_output(input)
+
+    def test_value_operation_by_value(self):
+        # R-a, R-b: the helpers of a value operation take the handler's
+        # values, its frame and instruction, and slot numbers from the word;
+        # there is no operation record
+        input = """
+        inst(OP, (left, right -- res)) {
+            PyValue held_left = TAKE(left);
+            PyValue held_right = TAKE(right);
+            INPUTS_DEAD();
+            SYNC_SP();
+            PyValue pending = spam_call(held_left, held_right);
+            if (PyValue_IsNull(pending)) {
+                IR_RESTORE_VALUE_INPUTS(held_left, held_right);
+                value_operation_close3(held_right, held_left, PyValue_NULL);
+                IR_ABORT_VALUE_READER();
+            }
+            IR_COMPLETE_VALUE_READER(pending, held_right, held_left);
+            res = pending;
+        }
+    """
+        output = self.handler(self.ir_output(input), "OP")
+        self.assertIn("_PyValuePair ir_rest = value_operation_restore2(tstate, "
+                      "frame, held_left, held_right, IR_B(ir_word), IR_C(ir_word));\n"
+                      "                    held_left = ir_rest.first;\n"
+                      "                    held_right = ir_rest.second;", output)
+        self.assertIn("(void)value_operation_finish(tstate, frame, this_instr, ", output)
+        self.assertIn("pending = value_reader_complete(tstate, frame, this_instr, "
+                      "NULL, IR_A(ir_word), pending, held_right, held_left);\n"
+                      "            if (PyValue_IsNull(pending)) {", output)
+        self.assertNotIn("operation", output.replace("value_operation", ""))
+        # The record form is gone
+        old = input.replace("IR_ABORT_VALUE_READER()", "IR_ABORT_VALUE_READER(operation)")
+        with self.assertRaisesRegex(SyntaxError, "IR_ABORT_VALUE_READER takes 0 variables"):
+            self.ir_output(old)
+
     def test_owner(self):
         # OWNER() gives the owner itself, NULL for a local, which only
         # IR_RETIRE_PUBLISHED may read, with no call that can run code
@@ -505,6 +596,9 @@ class TestIRCases(unittest.TestCase):
         self.assertIn("ir_own_A = IR_CONSUME_INPUT(IR_A(ir_word), value);\n"
                       "            PyValue held = ir_own_A;", output)
         self.assertIn("retire_published_values(", output)
+        # By value (R-a): the retired owner is dead after the call
+        self.assertIn(", held, PyValue_NULL, PyValue_NULL);", output)
+        self.assertNotIn("&held", output)
         gap = """
         inst(OP, (value -- )) {
             PyValue held = OWNER(value);
@@ -1929,6 +2023,23 @@ class TestIRCases(unittest.TestCase):
         self.assertIn('static_assert(BINARY_OP_ADD == _PyIR_BINARY_OP_FIRST + '
                       'NB_ADD, "BINARY_OP_ADD");', lines)
 
+# The box area's sites, which only the generator emits (R27 deletes them)
+BOX_AREA_SITES = ("&value_owners", "value_boxes[] (a local array)")
+
+
+def generated_address_sites(text):
+    "The sites in each generated handler or label that take a local's address"
+    parts = re.split(r"\n\s*(?:TARGET|LABEL)\((\w+)\)", text)
+    sites = {}
+    for name, body in zip(parts[1::2], parts[2::2]):
+        tokens = [t for t in lexer.tokenize(body)
+                  if t.kind not in ("COMMENT", "NEWLINE", "CMACRO",
+                                    "CMACRO_OTHER")]
+        sites[name] = [site for site, _ in
+                       ir_generator.addressed_locals(name, tokens, {})]
+    return sites
+
+
 class TestCallTransactionMarkers(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -1975,7 +2086,7 @@ class TestCallTransactionMarkers(unittest.TestCase):
             with self.subTest(name=name):
                 body = self.interpreter.split(f"TARGET({name}) {{", 1)[1].split("TARGET(", 1)[0]
                 capture = body.index("call_transaction_begin(")
-                invoke = body.index("call_transaction_invoke(")
+                invoke = body.index("call_transaction_run_")
                 self.assertLess(capture, invoke)
                 for preparation in ("_Py_Specialize_Call",
                                     "call_transaction_expand_method(",
@@ -1987,9 +2098,51 @@ class TestCallTransactionMarkers(unittest.TestCase):
                 self.assertNotIn("IR_CLEAR_SLOTS", body[invoke:])
                 self.assertNotIn("_PyValue_Publish", body[invoke:])
                 self.assertNotIn("_Py_VectorCall", body)
-                self.assertIn("DISPATCH_INLINED(call_child)", body)
+                self.assertIn("DISPATCH_INLINED(call_result.child)", body)
+                # The transaction lives in the out-of-line run (R-c)
+                self.assertNotIn("_PyCallTransaction", body)
+                self.assertNotIn("&call", body)
         labels = re.findall(r"^\s*(call_transaction_fallback_\w+):", self.interpreter, re.M)
         self.assertEqual(len(labels), len(set(labels)))
+
+    def test_handlers_take_no_local_address(self):
+        # The generated handlers and labels take the address of none of
+        # their locals except the box area (register-ir-v2-a3.md 3.5): the
+        # check of the uop bodies, applied to what the generator emits.
+        # The box area is exactly in the handlers that box, and R27 deletes
+        # it, so their number may only fall.
+        _, rest = self.interpreter.split(ir_generator.INSTRUCTION_START_MARKER)
+        sites = generated_address_sites(rest)
+        self.assertGreater(len(sites), 200)
+        box_area = set()
+        for name, found in sites.items():
+            others = [site for site in found if not site.endswith(BOX_AREA_SITES)]
+            self.assertEqual(others, [], name)
+            if len(others) < len(found):
+                box_area.add(name)
+        formats = ir_generator.compute_formats(self.analysis)
+        self.assertEqual(box_area,
+                         ir_generator.boxing_handlers(self.analysis, formats))
+        self.assertLessEqual(len(box_area), 97)
+
+    def test_generated_address_sites(self):
+        # The check of the generated output sees an address in a
+        # conditional, after a cast, in parentheses and in a comparison
+        sites = generated_address_sites("""
+            TARGET(OP) {
+                PyValue attr = PyValue_NULL;
+                PyValue receiver = ir_own_B;
+                int retire_failed = retire_published_values(tstate, frame,
+                    next_instr, NULL, &receiver, NULL,
+                    (IR_IS_LOCAL(IR_A(ir_word)) ? &attr : NULL));
+                spam_call((void *)&retire_failed, &(ir_own_B),
+                          receiver.bits == &attr, oparg & 1);
+                DISPATCH();
+            }
+        """)
+        self.assertEqual([site.split(": ")[-1] for site in sites["OP"]],
+                         ["&receiver", "&attr", "&retire_failed",
+                          "&ir_own_B", "&attr"])
 
 
 if __name__ == "__main__":

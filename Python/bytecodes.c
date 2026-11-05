@@ -1009,7 +1009,7 @@ dummy_func(
             assert(Py_REFCNT(left_o) >= 1);
             PyObject *temp = PyValue_AsKnownObjectSteal(*target_local);
             PyObject *right_o = PyValue_AsKnownObjectSteal(right);
-            PyUnicode_Append(&temp, right_o);
+            temp = value_unicode_append(temp, right_o);
             _Py_DECREF_SPECIALIZED(right_o, _PyUnicode_ExactDealloc);
             *target_local = PyValue_NULL;
             ERROR_IF(temp == NULL);
@@ -1234,19 +1234,16 @@ dummy_func(
         inline_ok op(_BINARY_OP_SUBSCR_DICT, (dict_st, sub_st -- res)) {
             PyValue held_dict = TAKE(dict_st);
             PyValue held_sub = TAKE(sub_st);
-            _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
-            IR_CAPTURE_VALUE_INPUTS(operation);
-            IR_CAPTURE_VALUE_RESULT(operation);
             INPUTS_DEAD();
             SYNC_SP();
             STAT_INC(BINARY_OP, hit);
             PyValue pending = value_binary_operation(NB_SUBSCR, held_dict, held_sub, value_temps);
             if (PyValue_IsNull(pending)) {
-                IR_RESTORE_VALUE_INPUTS(operation, held_dict, held_sub);
-                value_operation_close3(&held_sub, &held_dict, NULL);
-                IR_ABORT_VALUE_READER(operation);
+                IR_RESTORE_VALUE_INPUTS(held_dict, held_sub);
+                value_operation_close3(held_sub, held_dict, PyValue_NULL);
+                IR_ABORT_VALUE_READER();
             }
-            IR_COMPLETE_VALUE_READER(operation, pending, held_sub, held_dict);
+            IR_COMPLETE_VALUE_READER(pending, held_sub, held_dict);
             res = pending;
         }
 
@@ -1319,13 +1316,12 @@ dummy_func(
             PyValue held_value = TAKE(v);
             PyValue held_container = TAKE(container);
             PyValue held_sub = TAKE(sub);
-            _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
             INPUTS_DEAD();
             SYNC_SP();
             int err = value_store_subscript(held_container, held_sub, held_value,
                                             value_temps);
-            value_operation_close3(&held_sub, &held_container, &held_value);
-            IR_FINISH_VALUE_OPERATION(operation);
+            value_operation_close3(held_sub, held_container, held_value);
+            IR_FINISH_VALUE_OPERATION();
             ERROR_IF(err);
         }
 
@@ -1374,12 +1370,11 @@ dummy_func(
             PyValue key = TAKE(sub);
             PyValue stored = TAKE(value);
             PyValue retained_dict = TAKE(dict_st);
-            _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
             INPUTS_DEAD();
             SYNC_SP();
             int err = _PyDict_SetValue_Take2((PyDictObject *)dict, key, stored);
-            value_operation_close3(&retained_dict, NULL, NULL);
-            IR_FINISH_VALUE_OPERATION(operation);
+            value_operation_close3(retained_dict, PyValue_NULL, PyValue_NULL);
+            IR_FINISH_VALUE_OPERATION();
             ERROR_IF(err);
         }
 
@@ -1623,8 +1618,10 @@ dummy_func(
                 DISPATCH_INLINED(gen_frame);
             }
             if (!PyValue_IsNull(null_or_index) && PyValue_IsNone(v)) {
-                PyValue item;
-                int found = _PyForIter_VirtualIteratorNext(tstate, frame, receiver, &null_or_index, &item);
+                _PyStatusValue next = _PyForIter_VirtualIteratorNext(tstate, frame, receiver, &window[1]);
+                null_or_index = window[1];
+                PyValue item = next.value;
+                int found = next.status;
                 if (found <= 0) {
                     if (found < 0) {
                         ERROR_NO_POP();
@@ -1722,9 +1719,9 @@ dummy_func(
             PyObject *iter_o = PyValue_AsKnownObjectBorrow(iter);
             assert(PyAsyncGenASend_CheckExact(iter_o));
             PyObject *val = PyValue_AsKnownObjectBorrow(v);
-            PyObject *retval_o;
-
-            PySendResult what = _PyAsyncGenASend_Send(iter_o, val, &retval_o);
+            _PyStatusObject sent = value_async_gen_send(iter_o, val);
+            PyObject *retval_o = sent.object;
+            PySendResult what = (PySendResult)sent.status;
             if (what == PYGEN_ERROR) {
                 ERROR_NO_POP();
             }
@@ -1881,9 +1878,9 @@ dummy_func(
         }
 
         inst(LOAD_BUILD_CLASS, ( -- bc)) {
-            int err;
-            PyObject *bc_o = _PyMapping_GetOptionalItem2(BUILTINS(), &_Py_ID(__build_class__), &err);
-            ERROR_IF(err < 0);
+            _PyStatusObject found = value_mapping_get_optional_item(BUILTINS(), &_Py_ID(__build_class__));
+            PyObject *bc_o = found.object;
+            ERROR_IF(found.status < 0);
             if (bc_o == NULL) {
                 _PyErr_SetString(tstate, PyExc_NameError,
                                  "__build_class__ not found");
@@ -2013,17 +2010,14 @@ dummy_func(
             PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
             PyValue held_value = TAKE(v);
             PyValue receiver = TAKE(owner);
-            _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
-            IR_CAPTURE_VALUE_INPUTS(operation);
             INPUTS_DEAD();
             SYNC_SP();
-            int invoked;
-            int err = value_store_attribute(receiver, held_value, name, value_temps, &invoked);
-            if (!invoked) {
-                IR_RESTORE_VALUE_INPUTS(operation, held_value, receiver);
+            int err = value_store_attribute(receiver, held_value, name, value_temps);
+            if (err == -2) {
+                IR_RESTORE_VALUE_INPUTS(held_value, receiver);
             }
-            value_operation_close3(&receiver, &held_value, NULL);
-            IR_FINISH_VALUE_OPERATION(operation);
+            value_operation_close3(receiver, held_value, PyValue_NULL);
+            IR_FINISH_VALUE_OPERATION();
             ERROR_IF(err);
         }
 
@@ -2063,8 +2057,9 @@ dummy_func(
             PyObject *namespace = PyValue_AsKnownObjectBorrow(mod_or_class_dict);
             // Taken before the lookup, which can run code
             PyValue held_namespace = TAKE(mod_or_class_dict);
-            int err;
-            PyObject *v_o = _PyMapping_GetOptionalItem2(namespace, name, &err);
+            _PyStatusObject found = value_mapping_get_optional_item(namespace, name);
+            PyObject *v_o = found.object;
+            int err = found.status;
             if (v_o != NULL && PyLazyImport_CheckExact(v_o)) {
                 Py_SETREF(v_o, _PyLazyImport_Reify(tstate, v_o, name, namespace));
                 if (v_o == NULL) {
@@ -2074,7 +2069,7 @@ dummy_func(
             PyValue_CLOSE(held_namespace);
             ERROR_IF(err < 0);
             if (v_o == NULL) {
-                _PyEval_LoadGlobalValue(GLOBALS(), BUILTINS(), name, &v);
+                v = value_load_global(GLOBALS(), BUILTINS(), name);
                 ERROR_IF(PyValue_IsNull(v));
             }
             else {
@@ -2111,9 +2106,8 @@ dummy_func(
         // res[1] because we need a pointer to res to pass it to _PyEval_LoadGlobalValue
         op(_LOAD_GLOBAL, ( -- res[1])) {
             PyObject *name = GETITEM(FRAME_CO_NAMES, oparg>>1);
-            _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
             _PyEval_LoadGlobalValue(GLOBALS(), BUILTINS(), name, res);
-            IR_FINISH_VALUE_OPERATION(operation);
+            IR_FINISH_VALUE_OPERATION();
             ERROR_IF(PyValue_IsNull(*res));
         }
 
@@ -2226,9 +2220,9 @@ dummy_func(
             assert(class_dict);
             assert(oparg >= 0 && oparg < _PyFrame_GetCode(frame)->co_nlocalsplus);
             name = _PyTuple_GET_OBJECT(_PyFrame_GetCode(frame)->co_localsplusnames, oparg);
-            int err;
-            PyObject* value_o = _PyMapping_GetOptionalItem2(class_dict, name, &err);
-            if (err < 0) {
+            _PyStatusObject found = value_mapping_get_optional_item(class_dict, name);
+            PyObject* value_o = found.object;
+            if (found.status < 0) {
                 PyValue_CLOSE(held_class_dict);
                 ERROR_NO_POP();
             }
@@ -2410,13 +2404,12 @@ dummy_func(
         }
 
         inline_ok inst(BUILD_MAP, (values[oparg*2] -- map)) {
-            _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
             PyObject *map_o = _Py_BuildMap_ValueSteal(values, oparg);
             DEAD(values);
             int failed = map_o == NULL;
             map = failed ? PyValue_NULL : PyValue_FromPyObjectSteal(map_o);
             SYNC_SP();
-            IR_FINISH_VALUE_OPERATION(operation);
+            IR_FINISH_VALUE_OPERATION();
             ERROR_IF(failed);
         }
 
@@ -2427,9 +2420,10 @@ dummy_func(
                 ERROR_IF(true);
             }
             /* check if __annotations__ in locals()... */
+            _PyStatusObject found = value_mapping_get_optional_item(LOCALS(), &_Py_ID(__annotations__));
+            PyObject* ann_dict = found.object;
+            ERROR_IF(found.status < 0);
             int err;
-            PyObject* ann_dict = _PyMapping_GetOptionalItem2(LOCALS(), &_Py_ID(__annotations__), &err);
-            ERROR_IF(err < 0);
             if (ann_dict == NULL) {
                 ann_dict = PyDict_New();
                 ERROR_IF(ann_dict == NULL);
@@ -2479,12 +2473,11 @@ dummy_func(
             PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
             PyObject *dict_o = PyValue_AsKnownObjectBorrow(dict);
             PyObject *update_o = PyValue_AsKnownObjectBorrow(update);
-            PyObject *dupkey = NULL;
 
-            int err = _PyDict_MergeUniq(dict_o, update_o, &dupkey);
-            if (err < 0) {
-                _PyEval_FormatKwargsError(tstate, callable_o, update_o, dupkey);
-                Py_XDECREF(dupkey);
+            _PyStatusObject merged = value_dict_merge_uniq(dict_o, update_o);
+            if (merged.status < 0) {
+                _PyEval_FormatKwargsError(tstate, callable_o, update_o, merged.object);
+                Py_XDECREF(merged.object);
                 ERROR_NO_POP();
             }
             u = update;
@@ -2548,13 +2541,7 @@ dummy_func(
             }
             // we make no attempt to optimize here; specializations should
             // handle any case whose performance we care about
-            PyObject *super;
-            {
-                // scope to tell MSVC that stack is not escaping
-                PyObject *stack[] = {class, self};
-                super = PyObject_Vectorcall(global_super, stack, oparg & 2, NULL);
-                _PyGC_CLEAR_ARRAY(stack);
-            }
+            PyObject *super = super_call(global_super, class, self, oparg & 2);
             if (opcode == INSTRUMENTED_LOAD_SUPER_ATTR) {
                 PyObject *arg = oparg & 2 ? class : &_PyInstrumentation_MISSING;
                 if (super == NULL) {
@@ -2625,18 +2612,12 @@ dummy_func(
             STAT_INC(LOAD_SUPER_ATTR, hit);
             PyObject *name = GETITEM(FRAME_CO_NAMES, oparg >> 2);
             PyTypeObject *cls = (PyTypeObject *)class;
-            int method_found = 0;
-            PyObject *attr_o;
-            {
-                // scope to tell MSVC that method_found_ptr is not escaping
-                int *method_found_ptr = &method_found;
-                attr_o = _PySuper_Lookup(cls, self, name,
-                    Py_TYPE(self)->tp_getattro == PyObject_GenericGetAttr ? method_found_ptr : NULL);
-            }
+            _PyStatusObject found = super_lookup(cls, self, name);
+            PyObject *attr_o = found.object;
             if (attr_o == NULL) {
                 ERROR_NO_POP();
             }
-            if (method_found) {
+            if (found.status) {
                 self_or_null = self_st; // transfer ownership
                 DEAD(self_st);
             } else {
@@ -2683,25 +2664,22 @@ dummy_func(
             PyObject *name = GETITEM(FRAME_CO_NAMES, oparg >> 1);
             int method = oparg & 1;
             PyValue receiver = TAKE(owner);
-            _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
-            IR_CAPTURE_VALUE_INPUTS(operation);
-            IR_CAPTURE_VALUE_RESULT(operation);
             INPUTS_DEAD();
             SYNC_SP();
-            PyValue pending, pending_self;
-            int invoked;
-            int failed = value_load_attribute(tstate, receiver, name, method,
-                value_temps, &pending, &pending_self, &invoked);
-            if (failed < 0) {
-                if (!invoked) {
-                    IR_RESTORE_ATTR_INPUT(operation, receiver);
-                }
-                drop_failed_value(&pending);
-                drop_failed_value(&pending_self);
-                value_operation_close3(&receiver, NULL, NULL);
-                IR_ABORT_VALUE_READER(operation);
+            PyObject *object = _PyValueTemps_Object(value_temps, receiver);
+            if (object == NULL) {
+                IR_RESTORE_ATTR_INPUT(receiver);
+                value_operation_close3(receiver, PyValue_NULL, PyValue_NULL);
+                IR_ABORT_VALUE_READER();
             }
-            IR_COMPLETE_ATTR_READER(operation, pending, pending_self, receiver, method);
+            _PyValuePair loaded = value_load_attribute(tstate, receiver, object, name, method);
+            PyValue pending = loaded.first;
+            PyValue pending_self = loaded.second;
+            if (PyValue_IsNull(pending)) {
+                value_operation_close3(receiver, PyValue_NULL, PyValue_NULL);
+                IR_ABORT_VALUE_READER();
+            }
+            IR_COMPLETE_ATTR_READER(pending, pending_self, receiver, method);
             attr = pending;
         }
 
@@ -3079,8 +3057,6 @@ dummy_func(
                 PyValue watched_dict = PyValue_FromPyObjectNew((PyObject *)dict);
                 PyValue release_value = TAKE(value);
                 PyValue receiver = TAKE(owner);
-                _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
-                IR_CAPTURE_VALUE_INPUTS(operation);
                 UNLOCK_OBJECT(dict);
                 INPUTS_DEAD();
                 SYNC_SP();
@@ -3089,13 +3065,13 @@ dummy_func(
                 if (err < 0) {
                     /* ERROR_NO_POP kept these temporary owners until the
                      * ordinary full-frame unwind, including deeper temps. */
-                    IR_RESTORE_VALUE_INPUTS(operation, release_value, receiver);
-                    value_operation_close3(&watched_dict, &release_value, &receiver);
+                    IR_RESTORE_VALUE_INPUTS(release_value, receiver);
+                    value_operation_close3(watched_dict, release_value, receiver);
                 }
                 else {
-                    value_operation_close3(&release_value, &watched_dict, &receiver);
+                    value_operation_close3(release_value, watched_dict, receiver);
                 }
-                IR_FINISH_VALUE_OPERATION(operation);
+                IR_FINISH_VALUE_OPERATION();
                 ERROR_IF(err < 0);
             }
             else {
@@ -3356,15 +3332,12 @@ dummy_func(
                 ERROR_IF(true);
             }
 
-            PyObject *match_o = NULL;
-            PyObject *rest_o = NULL;
-            int res = _PyEval_ExceptionGroupMatch(frame, exc_value, match_type,
-                                                  &match_o, &rest_o);
+            _PyObjectPair matched = value_exception_group_match(frame, exc_value, match_type);
+            PyObject *match_o = matched.match;
+            PyObject *rest_o = matched.rest;
             PyValue_CLOSE(held_type);
             PyValue_CLOSE(held_exc);
-            ERROR_IF(res < 0);
-
-            assert((match_o == NULL) == (rest_o == NULL));
+            // A null match is an error, including a failed match (res < 0)
             ERROR_IF(match_o == NULL);
 
             if (!Py_IsNone(match_o)) {
@@ -3690,10 +3663,11 @@ dummy_func(
         }
 
         op(_GET_ITER, (iterable -- iter, index_or_null)) {
-            PyValue result = _PyEval_GetIter(iterable, &index_or_null, oparg);
+            _PyValuePair got = _PyEval_GetIter(iterable, oparg);
             DEAD(iterable);
-            ERROR_IF(PyValue_IsNull(result));
-            iter = result;
+            ERROR_IF(PyValue_IsNull(got.first));
+            iter = got.first;
+            index_or_null = got.second;
         }
 
         macro(GET_ITER) =
@@ -3754,8 +3728,10 @@ dummy_func(
         }
 
         replaced op(_FOR_ITER, (iter, null_or_index -- iter, null_or_index, next)) {
-            PyValue item;
-            int found = _PyForIter_VirtualIteratorNext(tstate, frame, iter, &null_or_index, &item);
+            _PyStatusValue step = _PyForIter_VirtualIteratorNext(tstate, frame, iter, &window[1]);
+            null_or_index = window[1];
+            PyValue item = step.value;
+            int found = step.status;
             if (found <= 0) {
                 if (found < 0) {
                     ERROR_NO_POP();
@@ -3797,8 +3773,10 @@ dummy_func(
             _FOR_ITER_VIRTUAL;
 
         inst(INSTRUMENTED_FOR_ITER, (unused/1, iter, null_or_index -- iter, null_or_index, next)) {
-            PyValue item;
-            int found = _PyForIter_VirtualIteratorNext(tstate, frame, iter, &null_or_index, &item);
+            _PyStatusValue step = _PyForIter_VirtualIteratorNext(tstate, frame, iter, &window[1]);
+            null_or_index = window[1];
+            PyValue item = step.value;
+            int found = step.status;
             if (found <= 0) {
                 if (found < 0) {
                     ERROR_NO_POP();
@@ -4010,15 +3988,9 @@ dummy_func(
             }
             assert(PyValue_IsTaggedIndex(lasti));
             (void)lasti; // Shut up compiler warning if asserts are off
-            PyObject* res_o;
-            {
-                // scope to tell MSVC that stack is not escaping
-                PyObject *stack[5] = {NULL, PyValue_AsKnownObjectBorrow(exit_self), exc, val_o, tb};
-                int has_self = !PyValue_IsNull(exit_self);
-                res_o = PyObject_Vectorcall(exit_func_o, stack + 2 - has_self,
-                        (3 + has_self) | PY_VECTORCALL_ARGUMENTS_OFFSET, NULL);
-                _PyGC_CLEAR_ARRAY(stack);
-            }
+            PyObject *res_o = with_exit_call(exit_func_o,
+                PyValue_AsKnownObjectBorrow(exit_self),
+                !PyValue_IsNull(exit_self), exc, val_o, tb);
             Py_XDECREF(original_tb);
             ERROR_IF(res_o == NULL);
             res = PyValue_FromPyObjectSteal(res_o);
@@ -4606,41 +4578,22 @@ dummy_func(
 
         op(_CALL_BUILTIN_O, (callable, self_or_null, args[oparg] -- res)) {
             /* Builtin METH_O functions */
-            PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
-
             if (!PyValue_IsNull(self_or_null)) {
                 args--;
             }
             STAT_INC(CALL, hit);
-            _PyNativeScope scope;
-            PyValue pending = PyValue_NULL;
-            _PyNativeCallPublication publication = native_call_publication(
-                tstate, frame, next_instr, IR_BASE, oparg + 2, &pending);
-            int status = _PyNativeScope_Begin(
-                &scope, tstate, args, 1, 1, PyValue_NULL, NULL);
-            if (status == 0) {
-                status = _PyCFunction_CallScoped(&scope, callable_o, &scope.result);
-            }
-            if (status < 0) {
-                _PyNativeResult_Abort(&scope.result, native_call_publish_pc, &publication);
-                (void)native_call_finish(&publication, &scope, NULL, NULL, next_instr);
-                ERROR_NO_POP();
-            }
-            PyValue c = callable;
-            PyValue s = args[0];
-            INPUTS_DEAD();
-            _PyNativeResult_Publish(&scope.result, &pending,
-                                    native_call_publish_result, &publication);
-            res = pending;
-            SYNC_SP();
-            int failed = native_call_finish(&publication, &scope, &s, &c, next_instr);
-            if (failed < 0) {
+            PyValue result = native_call_builtin_o(
+                tstate, frame, next_instr, IR_BASE, oparg + 2, callable, args);
+            if (PyValue_IsNull(result)) {
                 ERROR_NO_POP();
             }
             this_instr = frame->instr_ptr;
             ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
             slots = _PyFrame_Slots(frame);
             window = &slots[IR_BASE];
+            INPUTS_DEAD();
+            res = result;
+            SYNC_SP();
         }
 
         macro(CALL_BUILTIN_O) =
@@ -5388,18 +5341,15 @@ dummy_func(
         inline_ok op(_BINARY_OP, (lhs, rhs -- res)) {
             PyValue held_left = TAKE(lhs);
             PyValue held_right = TAKE(rhs);
-            _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
-            IR_CAPTURE_VALUE_INPUTS(operation);
-            IR_CAPTURE_VALUE_RESULT(operation);
             INPUTS_DEAD();
             SYNC_SP();
             PyValue pending = value_binary_operation(oparg, held_left, held_right, value_temps);
             if (PyValue_IsNull(pending)) {
-                IR_RESTORE_VALUE_INPUTS(operation, held_left, held_right);
-                value_operation_close3(&held_right, &held_left, NULL);
-                IR_ABORT_VALUE_READER(operation);
+                IR_RESTORE_VALUE_INPUTS(held_left, held_right);
+                value_operation_close3(held_right, held_left, PyValue_NULL);
+                IR_ABORT_VALUE_READER();
             }
-            IR_COMPLETE_VALUE_READER(operation, pending, held_right, held_left);
+            IR_COMPLETE_VALUE_READER(pending, held_right, held_left);
             res = pending;
         }
 
@@ -5618,9 +5568,9 @@ dummy_func(
         spilled label(exception_unwind) {
             /* We can't use frame->instr_ptr here, as RERAISE may have set it */
             int offset = CURRENT_OFFSET();
-            int exc_slot, handler, lasti;
-            int handled = get_exception_handler(_PyFrame_GetCode(frame), offset, &exc_slot, &handler, &lasti);
-            if (handled == 0) {
+            _PyExceptionHandler found = get_exception_handler(_PyFrame_GetCode(frame), offset);
+            int exc_slot = found.exc_slot, handler = found.handler, lasti = found.lasti;
+            if (found.handled == 0) {
                 // No handlers, so exit.
                 assert(_PyErr_Occurred(tstate));
                 _PyFrame_ClearTemporaries(frame, _PyFrame_GetCode(frame)->co_nlocalsplus);

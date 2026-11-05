@@ -612,9 +612,9 @@ OBJECT_READERS = {
     "PyObject_DelItem", "PyObject_Format", "PyObject_IsTrue",
     "PyObject_RichCompare", "PySequence_Contains", "PyUnicode_Concat",
     "_PyDict_SetValue_Take2", "_PyEval_CheckExceptStarTypeValid",
-    "_PyEval_CheckExceptTypeValid", "_PyEval_ExceptionGroupMatch",
+    "_PyEval_CheckExceptTypeValid", "value_exception_group_match",
     "_PyEval_GetAwaitable", "_PyLazyImport_Reify", "_PyList_SliceSubscript",
-    "_PyMapping_GetOptionalItem2", "_PySet_Contains", "_PyTemplate_Build",
+    "value_mapping_get_optional_item", "_PySet_Contains", "_PyTemplate_Build",
     "_PyUnicode_Equal", "_Py_call_instrumentation_arg",
     "monitor_stop_iteration",
     # The indirect calls of BINARY_OP_EXTEND, CONVERT_VALUE and
@@ -2218,9 +2218,7 @@ class IREmitter(Emitter):
         self._replacers["IR_RETIRE_PUBLISHED"] = self.retire_published
         self._replacers["IR_RETIRE_PUBLISHED_PAIR"] = self.retire_published
         self._replacers["IR_FINISH_VALUE_OPERATION"] = self.finish_value_operation
-        self._replacers["IR_CAPTURE_VALUE_INPUTS"] = self.capture_value_inputs
         self._replacers["IR_RESTORE_VALUE_INPUTS"] = self.restore_value_inputs
-        self._replacers["IR_CAPTURE_VALUE_RESULT"] = self.capture_value_result
         self._replacers["IR_COMPLETE_VALUE_READER"] = self.complete_value_reader
         self._replacers["IR_ABORT_VALUE_READER"] = self.abort_value_reader
         self._replacers["IR_RESTORE_ATTR_INPUT"] = self.restore_attr_input
@@ -2259,6 +2257,11 @@ class IREmitter(Emitter):
         self.call_fallback_used = False
         self.call_fallback = ""
         self.call_has_feedback = False
+        # The handler's call_transaction_run_*() and its constant arguments
+        self.call_run = ""
+        self.call_argc = ""
+        self.call_kind = ""
+        self.call_flags = ""
         # The format of the handler being emitted, which for a NOFB form
         # is not its instruction's
         self.handler_format: IRFormat | None = None
@@ -2310,12 +2313,12 @@ class IREmitter(Emitter):
                     f"{tkn.text}({retired.text}) of a view: retire its "
                     f"OWNER()", retired)
         self.pending_owner = None
-        failure_result = "NULL"
+        failure_result = "PyValue_NULL"
         if inst.name in ("LOAD_ATTR_SLOT", "LOAD_ATTR_INSTANCE_VALUE", "LOAD_ATTR_SHAPE",
                          "LOAD_ATTR_MODULE", "LOAD_ATTR_WITH_HINT"):
             fmt = self.format_of(inst)
             dst = FIELD_VARS[fmt.field_of(ROLE_DST)]
-            failure_result = f"(IR_IS_LOCAL({dst}) ? &attr : NULL)"
+            failure_result = f"(IR_IS_LOCAL({dst}) ? attr : PyValue_NULL)"
         self.emit("{\n")
         boxes = " || value_temps->count != 0" if self.has_record else ""
         self.emit(f"int retire_needed = _PyValue_MayDealloc({first.text}){boxes};\n")
@@ -2325,8 +2328,9 @@ class IREmitter(Emitter):
             self.emit(f"retire_needed = _PyValue_MayDealloc({second.text});\n")
         self.emit("}\n")
         self.emit("if (retire_needed) {\n")
-        second_ptr = "NULL" if second is None else "&" + second.text
-        self.emit(f"int retire_failed = retire_published_values(tstate, frame, next_instr, {self.temps}, &{first.text}, {second_ptr}, {failure_result});\n")
+        # The values pass by value and are dead after the call (R-a)
+        second_value = "PyValue_NULL" if second is None else second.text
+        self.emit(f"int retire_failed = retire_published_values(tstate, frame, next_instr, {self.temps}, {first.text}, {second_value}, {failure_result});\n")
         self.emit("if (retire_failed < 0) { JUMP_TO_LABEL(error); }\n")
         self.emit("this_instr = frame->instr_ptr;\n")
         self.emit("ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);\n")
@@ -2345,45 +2349,49 @@ class IREmitter(Emitter):
         stack.code_ran()
         return True
 
-    def capture_value_inputs(self, tkn, tkn_iter, uop, storage, inst):
-        assert inst is not None
+    def macro_args(self, tkn, tkn_iter, count: int) -> list[str]:
+        "The count identifiers of the statement IR_X(a, b, ...);"
         assert next(tkn_iter).kind == "LPAREN"
-        state = next(tkn_iter)
-        assert state.kind == "IDENTIFIER"
-        assert next(tkn_iter).kind == "RPAREN"
+        names = []
+        for index in range(count):
+            name = next(tkn_iter)
+            if name.kind != "IDENTIFIER":
+                raise analysis_error(
+                    f"{tkn.text} takes {count} variables (register-ir-v2-a3.md "
+                    f"3.5: no cached operation)", name)
+            names.append(name.text)
+            if index < count - 1:
+                assert next(tkn_iter).kind == "COMMA"
+        end = next(tkn_iter)
+        if end.kind != "RPAREN":
+            raise analysis_error(f"{tkn.text} takes {count} variables", end)
         assert next(tkn_iter).kind == "SEMI"
+        return names
+
+    def input_slot(self, inst: Instruction, index: int) -> str:
+        """The slot of input index, from the handler's word as read before
+        the operation ran: no reload happens between an operation and the
+        helper that restores or completes it (R-b)"""
         fmt = self.format_of(inst)
-        assert fmt.n_inputs in (1, 2)
-        for index in range(fmt.n_inputs):
-            field = FIELD_VARS[fmt.input_field(index)]
-            self.emit(f"{state.text}.input_slots[{index}] = {field};\n")
-        return True
+        return FIELD_VARS[fmt.input_field(index)]
 
     def restore_attr_input(self, tkn, tkn_iter, uop, storage, inst):
-        assert next(tkn_iter).kind == "LPAREN"
-        state = next(tkn_iter)
-        assert next(tkn_iter).kind == "COMMA"
-        owner = next(tkn_iter)
-        assert next(tkn_iter).kind == "RPAREN"
-        assert next(tkn_iter).kind == "SEMI"
+        assert inst is not None
+        (owner,) = self.macro_args(tkn, tkn_iter, 1)
+        assert self.format_of(inst).n_inputs >= 1
         self.out.start_line()
-        self.emit(f"(void)value_operation_restore1(&{state.text}, &{owner.text});\n")
+        self.emit(f"{owner} = value_operation_restore1(tstate, frame, {owner}, "
+                  f"{self.input_slot(inst, 0)});\n")
         return True
 
     def complete_attr_reader(self, tkn, tkn_iter, uop, storage, inst):
-        assert next(tkn_iter).kind == "LPAREN"
-        names = []
-        for index in range(5):
-            name = next(tkn_iter)
-            assert name.kind == "IDENTIFIER"
-            names.append(name.text)
-            if index < 4:
-                assert next(tkn_iter).kind == "COMMA"
-        assert next(tkn_iter).kind == "RPAREN"
-        assert next(tkn_iter).kind == "SEMI"
-        state, result, self_value, receiver, method = names
+        assert inst is not None
+        result, self_value, receiver, method = self.macro_args(tkn, tkn_iter, 4)
+        dst = FIELD_VARS[self.format_of(inst).field_of(ROLE_DST)]
         self.out.start_line()
-        self.emit(f"if (value_attribute_complete(&{state}, next_instr, {self.temps}, &{result}, &{self_value}, &{receiver}, {method}) < 0) {{\n")
+        self.emit(f"{result} = value_attribute_complete(tstate, frame, this_instr, "
+                  f"{self.temps}, {dst}, {result}, {self_value}, {receiver}, {method});\n")
+        self.emit(f"if (PyValue_IsNull({result})) {{\n")
         self.reader_error()
         self.emit("}\n")
         self.reader_reload()
@@ -2392,32 +2400,21 @@ class IREmitter(Emitter):
         return True
 
     def restore_value_inputs(self, tkn, tkn_iter, uop, storage, inst):
+        """Each input whose slot is a temporary goes back to it; the
+        variables keep the owners not moved"""
         assert inst is not None
-        assert next(tkn_iter).kind == "LPAREN"
-        names = []
-        for index in range(3):
-            name = next(tkn_iter)
-            assert name.kind == "IDENTIFIER"
-            names.append(name.text)
-            if index < 2:
-                assert next(tkn_iter).kind == "COMMA"
-        assert next(tkn_iter).kind == "RPAREN"
-        assert next(tkn_iter).kind == "SEMI"
+        first, second = self.macro_args(tkn, tkn_iter, 2)
+        assert self.format_of(inst).n_inputs == 2
         self.out.start_line()
-        self.emit(f"(void)value_operation_restore2(&{names[0]}, &{names[1]}, &{names[2]});\n")
+        self.emit("{\n")
+        self.emit(f"_PyValuePair ir_rest = value_operation_restore2(tstate, frame, "
+                  f"{first}, {second}, {self.input_slot(inst, 0)}, "
+                  f"{self.input_slot(inst, 1)});\n")
+        self.emit(f"{first} = ir_rest.first;\n")
+        self.emit(f"{second} = ir_rest.second;\n")
+        self.emit("}\n")
         # Cleanup and forced finish follow even if restoration rejects the
         # frame; it must not strand any of the still-owning C variables.
-        return True
-
-    def capture_value_result(self, tkn, tkn_iter, uop, storage, inst):
-        assert inst is not None
-        assert next(tkn_iter).kind == "LPAREN"
-        state = next(tkn_iter)
-        assert state.kind == "IDENTIFIER"
-        assert next(tkn_iter).kind == "RPAREN"
-        assert next(tkn_iter).kind == "SEMI"
-        field = FIELD_VARS[self.format_of(inst).field_of(ROLE_DST)]
-        self.emit(f"{state.text}.result_slot = {field};\n")
         return True
 
     def reader_error(self):
@@ -2441,43 +2438,52 @@ class IREmitter(Emitter):
 
     def call_reload(self, inst):
         self.reader_reload()
-        self.emit("window = slots + call.base;\n")
+        self.emit("window = slots + call_base;\n")
         if self.call_has_feedback:
             self.emit(f"fb = ({feedback_type(self.format_of(inst))} *)"
                       "(frame->ir_feedback + call_feedback * FB_STRIDE);\n")
 
     def prepare_call(self, tkn, tkn_iter, uop, storage, inst):
+        """A step of the call before its invocation, which records in the
+        register local call_state what it did (register-ir-v2-a3.md 3.5,
+        R-c): CALL_EFFECTS sends a later failed guard to the fallback"""
         assert inst is not None
-        assert next(tkn_iter).kind == "LPAREN"
-        assert next(tkn_iter).kind == "RPAREN"
-        assert next(tkn_iter).kind == "SEMI"
-        helper = {
-            "IR_PREPARE_CALL_METHOD": "call_transaction_expand_method",
-            "IR_PREPARE_CALL_TUPLE": "call_transaction_prepare_tuple",
-            "IR_MONITOR_CALL": "call_transaction_monitor",
-        }[tkn.text]
+        self.macro_args(tkn, tkn_iter, 0)
         storage.flush(self.out)
         self.out.start_line()
-        self.emit(f"if ({helper}(&call, next_instr) < 0) {{\n")
-        self.reader_error()
-        self.emit("}\n")
+        if tkn.text == "IR_PREPARE_CALL_METHOD":
+            self.emit("{\n")
+            self.emit("int ir_expanded = call_transaction_expand_method(tstate, frame, this_instr, call_base);\n")
+            self.emit("if (ir_expanded < 0) {\n")
+            self.reader_error()
+            self.emit("}\n")
+            self.emit("call_state |= CALL_PREPARED | (ir_expanded ? CALL_EFFECTS : 0);\n")
+            self.emit("}\n")
+        else:
+            if tkn.text == "IR_PREPARE_CALL_TUPLE":
+                self.emit("call_state |= CALL_PREPARED | CALL_EFFECTS;\n")
+                call = "call_transaction_prepare_tuple(tstate, frame, this_instr, call_base)"
+            else:
+                assert tkn.text == "IR_MONITOR_CALL"
+                self.emit("call_state |= CALL_MONITORED | CALL_EFFECTS;\n")
+                call = (f"call_transaction_monitor(tstate, frame, this_instr, call_base, "
+                        f"{self.call_argc}, {self.call_kind})")
+            self.emit(f"if ({call} < 0) {{\n")
+            self.reader_error()
+            self.emit("}\n")
         self.call_reload(inst)
         return True
 
     def call_effects(self, tkn, tkn_iter, uop, storage, inst):
-        assert next(tkn_iter).kind == "LPAREN"
-        assert next(tkn_iter).kind == "RPAREN"
-        assert next(tkn_iter).kind == "SEMI"
+        self.macro_args(tkn, tkn_iter, 0)
         self.out.start_line()
-        self.emit("call.effects = 1;\n")
+        self.emit("call_state |= CALL_EFFECTS;\n")
         return True
 
     def refresh_call(self, tkn, tkn_iter, uop, storage, inst):
-        assert next(tkn_iter).kind == "LPAREN"
-        assert next(tkn_iter).kind == "RPAREN"
-        assert next(tkn_iter).kind == "SEMI"
+        self.macro_args(tkn, tkn_iter, 0)
         self.out.start_line()
-        self.emit("if (call_transaction_refresh(&call, next_instr) < 0) {\n")
+        self.emit("if (call_transaction_refresh(tstate, frame, this_instr) < 0) {\n")
         self.reader_error()
         self.emit("}\n")
         self.call_reload(inst)
@@ -2486,70 +2492,63 @@ class IREmitter(Emitter):
     def call_completion(self):
         if self.has_record:
             self.emit("assert(value_temps->count == 0);\n")
-        self.emit("_PyInterpreterFrame *call_child;\n")
-        self.emit("if (call_transaction_invoke(&call, next_instr, &call_child) < 0) {\n")
+        # One out-of-line call, which keeps the transaction record in its own
+        # frame and returns {status, child} in two registers (R-c).  The run
+        # takes its current instruction from frame->instr_ptr: every
+        # preparation restores it to this_instr.
+        self.emit("assert(frame->instr_ptr == this_instr);\n")
+        self.emit("{\n")
+        argc = f"{self.call_argc}, " if self.call_kind != "CALL_TRANSACTION_EX" else ""
+        self.emit(f"_PyCallResult call_result = {self.call_run}(tstate, frame, "
+                  f"call_base, call_destination, {argc}{self.call_flags} | call_state);\n")
+        self.emit("if (call_result.status < 0) {\n")
         self.reader_error()
         self.emit("}\n")
-        self.emit("if (call_child != NULL) {\n")
-        self.emit("DISPATCH_INLINED(call_child);\n")
+        self.emit("if (call_result.child != NULL) {\n")
+        self.emit("DISPATCH_INLINED(call_result.child);\n")
         self.emit("}\n")
         # Both result and callback-current destination are already published.
         # No stack flush or delayed move from window[0] may consume stale C
         # inputs after this point.
         self.emit("slots = _PyFrame_Slots(frame);\n")
         self.emit("DISPATCH();\n")
+        self.emit("}\n")
 
     def invoke_call(self, tkn, tkn_iter, uop, storage, inst):
-        assert next(tkn_iter).kind == "LPAREN"
-        assert next(tkn_iter).kind == "RPAREN"
-        assert next(tkn_iter).kind == "SEMI"
+        self.macro_args(tkn, tkn_iter, 0)
         self.call_completion()
         self.call_finished = True
         return False
 
     def complete_value_reader(self, tkn, tkn_iter, uop, storage, inst):
-        assert next(tkn_iter).kind == "LPAREN"
-        names = []
-        for index in range(4):
-            name = next(tkn_iter)
-            assert name.kind == "IDENTIFIER"
-            names.append(name.text)
-            if index < 3:
-                assert next(tkn_iter).kind == "COMMA"
-        assert next(tkn_iter).kind == "RPAREN"
-        assert next(tkn_iter).kind == "SEMI"
-        state, result, first, second = names
+        assert inst is not None
+        result, first, second = self.macro_args(tkn, tkn_iter, 3)
+        dst = FIELD_VARS[self.format_of(inst).field_of(ROLE_DST)]
         # The DSL output is deliberately undefined here. Failed providers
         # restored their inputs; no NULL result may overwrite those homes.
         self.out.start_line()
-        self.emit(f"if (value_reader_complete(&{state}, next_instr, {self.temps}, &{result}, &{first}, &{second}) < 0) {{\n")
+        self.emit(f"{result} = value_reader_complete(tstate, frame, this_instr, "
+                  f"{self.temps}, {dst}, {result}, {first}, {second});\n")
+        self.emit(f"if (PyValue_IsNull({result})) {{\n")
         self.reader_error()
         self.emit("}\n")
         self.reader_reload()
         return True
 
     def abort_value_reader(self, tkn, tkn_iter, uop, storage, inst):
-        assert next(tkn_iter).kind == "LPAREN"
-        state = next(tkn_iter)
-        assert state.kind == "IDENTIFIER"
-        assert next(tkn_iter).kind == "RPAREN"
-        assert next(tkn_iter).kind == "SEMI"
+        self.macro_args(tkn, tkn_iter, 0)
         # Never flush the undefined result on this edge: its destination
         # may be one of the just-restored input temporary homes.
-        self.emit(f"(void)value_operation_finish(&{state.text}, next_instr, {self.temps});\n")
+        self.emit(f"(void)value_operation_finish(tstate, frame, this_instr, {self.temps});\n")
         self.reader_error()
         return False
 
     def finish_value_operation(self, tkn, tkn_iter, uop, storage, inst):
         assert inst is not None
-        assert next(tkn_iter).kind == "LPAREN"
-        state = next(tkn_iter)
-        assert state.kind == "IDENTIFIER"
-        assert next(tkn_iter).kind == "RPAREN"
-        assert next(tkn_iter).kind == "SEMI"
+        self.macro_args(tkn, tkn_iter, 0)
         storage.flush(self.out)
         self.emit("{\n")
-        self.emit(f"int operation_failed = value_operation_finish(&{state.text}, next_instr, {self.temps});\n")
+        self.emit(f"int operation_failed = value_operation_finish(tstate, frame, this_instr, {self.temps});\n")
         self.emit("if (operation_failed < 0) {\n")
         self.emit("JUMP_TO_LABEL(error);\n")
         self.emit("}\n")
@@ -3312,7 +3311,7 @@ class IREmitter(Emitter):
         assert inst is not None
         self.check_exit_inputs(tkn, storage)
         if uses_call_transaction(inst):
-            self.emit(f"if (call.effects) {{ goto {self.call_fallback}; }}\n")
+            self.emit(f"if (call_state & CALL_EFFECTS) {{ goto {self.call_fallback}; }}\n")
             self.call_fallback_used = True
         self.emit(tkn)
         return False
@@ -3320,7 +3319,7 @@ class IREmitter(Emitter):
     def emit_jump_to_predicted(self, inst: Instruction | None) -> None:
         assert inst is not None
         if uses_call_transaction(inst):
-            self.emit(f"if (call.effects) {{ goto {self.call_fallback}; }}\n")
+            self.emit(f"if (call_state & CALL_EFFECTS) {{ goto {self.call_fallback}; }}\n")
             self.call_fallback_used = True
         fmt = self.format_of(inst)
         binary_op = inst.family is not None and inst.family.name == BINARY_OP_FAMILY
@@ -3644,13 +3643,34 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
                 ("CALL_FUNCTION_EX", "INSTRUMENTED_CALL_FUNCTION_EX") else
                 "CALL_TRANSACTION_KEYWORDS" if call_family == "CALL_KW" else
                 "CALL_TRANSACTION_VECTOR")
+        # call_transaction_run_*() derives the window's size from its kind
+        fixed = sum(1 for item in inputs if not item.size)
+        arrays = [item.size for item in inputs if item.size]
+        expected = {"CALL_TRANSACTION_VECTOR": (2, ["oparg"]),
+                    "CALL_TRANSACTION_KEYWORDS": (3, ["oparg"]),
+                    "CALL_TRANSACTION_EX": (4, [])}[kind]
+        if (fixed, arrays) != expected:
+            raise analysis_error(
+                f"{name}: a {kind} call with inputs {count}", inst.where)
         base = FIELD_VARS[fmt.field_of(ROLE_BASE)]
         dst = FIELD_VARS[fmt.field_of(ROLE_DST)]
-        argc = "oparg" if inst.properties.oparg else "0"
-        periodic = int(polls_at_end(name, inst))
-        out.emit(f"_PyCallTransaction call = call_transaction_begin(tstate, frame, next_instr, "
-                 f"{base}, {count}, {dst}, {argc}, {kind}, "
-                 f"{int(name.startswith('INSTRUMENTED_'))}, {periodic});\n")
+        emitter.call_argc = "oparg" if inst.properties.oparg else "0"
+        emitter.call_kind = kind
+        emitter.call_run = {"CALL_TRANSACTION_VECTOR": "call_transaction_run_vector",
+                            "CALL_TRANSACTION_KEYWORDS": "call_transaction_run_keywords",
+                            "CALL_TRANSACTION_EX": "call_transaction_run_ex"}[kind]
+        flags = []
+        if name.startswith("INSTRUMENTED_"):
+            flags.append("CALL_INSTRUMENTED")
+        if polls_at_end(name, inst):
+            flags.append("CALL_PERIODIC")
+        emitter.call_flags = "(" + (" | ".join(flags) or "0") + ")"
+        # The transaction's state is in registers: its numeric homes, read
+        # once, and what the handler did (register-ir-v2-a3.md 3.5, R-b)
+        out.emit(f"int call_base = {base};\n")
+        out.emit(f"int call_destination = {dst};\n")
+        out.emit("int call_state = 0;\n")
+        out.emit(f"call_transaction_begin(frame, call_base, {count}, call_destination);\n")
         if emitter.call_has_feedback:
             out.emit(f"uint32_t call_feedback = {field_expr(fmt.fb)};\n")
     elif fmt.window and call_family in ("CALL", "CALL_KW"):
@@ -4034,9 +4054,204 @@ def handler_contracts(analysis: Analysis,
     return result
 
 
+# No handler takes the address of one of its own locals
+# (pyjit/design/proposals/register-ir-v2-a3.md 3.5): helpers take and return
+# values, work that needs memory runs out of line, and state that outlives a
+# call lives in a frame slot.  The address of a handler local makes the
+# handler keep a C frame and a stack canary, and GCC cannot then prove its
+# musttail dispatch safe.  The exceptions: calls that always inline, and the
+# box area (value_owners), which only the generator emits and which R27
+# deletes.
+ADDRESS_INLINE_CALLS = {
+    "__builtin_add_overflow", "__builtin_sub_overflow",
+    "__builtin_mul_overflow", "PyValue_FloatOperandValues",
+}
+# The handler's parameters and the locals the generator declares around a
+# body, so that a body cannot take their address either
+HANDLER_LOCALS = {
+    "frame", "slots", "tstate", "next_instr", "ir_word", "this_instr",
+    "window", "oparg", "fb", "opcode", "value_temps", "ir_displaced",
+    "ir_rest", "ir_expanded", "value_owners", "value_boxes", "call_base",
+    "call_destination", "call_state", "call_result", "call_feedback",
+    "retire_needed", "retire_failed", "operation_failed",
+}
+HANDLER_POINTERS = {"slots", "window", "fb", "value_temps", "frame", "tstate",
+                    "next_instr", "this_instr"}
+DECL_KINDS = {"INT", "CHAR", "SHORT", "LONG", "SIGNED", "UNSIGNED", "DOUBLE",
+              "FLOAT", "VOID", "CONST", "VOLATILE", "STATIC", "STRUCT",
+              "UNION", "ENUM", "REGISTER"}
+
+
+def declared_locals(tokens: list[Token]) -> dict[str, str]:
+    """The local variables that a body declares, each with its form:
+    "pointer" (T *x), "array" (T x[N]) or "value".  A declaration is a
+    statement of type words, then declarators: `T x = ...;`, `T *x;`,
+    `T a, b[2], *c;`"""
+    found: dict[str, str] = {}
+    n = len(tokens)
+    i = 0
+    while i < n:
+        at_start = i == 0 or tokens[i - 1].kind in ("LBRACE", "RBRACE", "SEMI") or (
+            tokens[i - 1].kind == "LPAREN" and i >= 2 and tokens[i - 2].kind == "FOR")
+        if not at_start:
+            i += 1
+            continue
+        j = i
+        while j < n and (tokens[j].kind in DECL_KINDS or tokens[j].kind == "IDENTIFIER"):
+            j += 1
+        if j >= n:
+            break
+        words = j - i
+        if words >= 1 and tokens[j].kind == "TIMES":
+            m = j            # T *x
+        elif words >= 2 and tokens[j].kind in ("EQUALS", "SEMI", "COMMA", "LBRACKET"):
+            m = j - 1        # T x
+        else:
+            i += 1
+            continue
+        # The declarators, to the ';' at depth 0
+        while m < n:
+            pointer = False
+            while m < n and tokens[m].kind in ("TIMES", "CONST"):
+                pointer = pointer or tokens[m].kind == "TIMES"
+                m += 1
+            if m >= n or tokens[m].kind != "IDENTIFIER":
+                break
+            name = tokens[m].text
+            m += 1
+            form = "pointer" if pointer else "value"
+            if m < n and tokens[m].kind == "LBRACKET":
+                form = "array"
+            found.setdefault(name, form)
+            depth = 0
+            while m < n:
+                kind = tokens[m].kind
+                if kind in ("LPAREN", "LBRACKET", "LBRACE"):
+                    depth += 1
+                elif kind in ("RPAREN", "RBRACKET", "RBRACE"):
+                    depth -= 1
+                elif depth == 0 and kind in ("COMMA", "SEMI"):
+                    break
+                m += 1
+            if m >= n or tokens[m].kind == "SEMI":
+                break
+            m += 1           # the comma
+        i = m + 1
+    return found
+
+
+def address_callee(tokens: list[Token], index: int) -> str | None:
+    "The function whose argument list holds tokens[index], or None"
+    depth = 0
+    for j in range(index - 1, 0, -1):
+        kind = tokens[j].kind
+        if kind == "RPAREN":
+            depth += 1
+        elif kind == "LPAREN":
+            if depth == 0:
+                if tokens[j - 1].kind == "IDENTIFIER":
+                    return tokens[j - 1].text
+                depth = 0
+                continue
+            depth -= 1
+    return None
+
+
+# The tokens that end an operand: an `&` after one is a bitwise and.  After
+# any other token (an operator, `?`, `!`, `==`, `+=`, `return`, a cast's `)`)
+# it takes an address.
+OPERAND_END = {"IDENTIFIER", "NUMBER", "STRING", "CHARACTER", "RBRACKET",
+               "PLUSPLUS", "MINUSMINUS"}
+CAST_WORDS = DECL_KINDS | {"IDENTIFIER", "TIMES"}
+
+
+def closes_cast(tokens: list[Token], index: int) -> bool:
+    "Whether the `)` at tokens[index] closes a cast, `(` type words `*`s `)`"
+    j = index - 1
+    while j >= 0 and tokens[j].kind in CAST_WORDS:
+        j -= 1
+    if j < 0 or j == index - 1 or tokens[j].kind != "LPAREN":
+        return False
+    before = tokens[j - 1].kind if j > 0 else ""
+    # f(x) and sizeof(T) are operands, if (x) is a condition
+    return before not in OPERAND_END | {"RPAREN", "SIZEOF", "IF", "WHILE",
+                                        "SWITCH"}
+
+
+def is_unary_and(tokens: list[Token], index: int) -> bool:
+    if index == 0:
+        return True
+    before = tokens[index - 1]
+    if before.kind in OPERAND_END:
+        return False
+    if before.kind == "RPAREN":
+        return closes_cast(tokens, index - 1)
+    return True
+
+
+def addressed_locals(name: str, tokens: list[Token],
+                     stack_items: dict[str, bool]) -> list[tuple[str, Token]]:
+    """The sites in a uop or label body that take the address of one of the
+    handler's locals: a local the body declares, a stack item that is not an
+    array, or a local that the generator declares"""
+    declared = declared_locals(tokens)
+    errors = []
+    # A local array is addressable by definition: it decays to a pointer
+    for tkn, after in zip(tokens, tokens[1:]):
+        if (after.kind == "LBRACKET" and tkn.kind == "IDENTIFIER"
+                and declared.get(tkn.text) == "array"):
+            errors.append((f"{name}: line {tkn.line}: {tkn.text}[] "
+                           "(a local array)", tkn))
+            declared[tkn.text] = "reported"
+    n = len(tokens)
+    for i, tkn in enumerate(tokens[:-1]):
+        if tkn.kind != "AND" or not is_unary_and(tokens, i):
+            continue
+        j = i + 1
+        while j < n and tokens[j].kind == "LPAREN":
+            j += 1     # &(x)
+        if j >= n or tokens[j].kind != "IDENTIFIER":
+            continue
+        var = tokens[j]
+        after = tokens[j + 1].kind if j + 1 < n else ""
+        if var.text in declared:
+            form = declared[var.text]
+        elif var.text in stack_items:
+            form = "pointer" if stack_items[var.text] else "value"
+        elif var.text in HANDLER_LOCALS or var.text.startswith("ir_own_"):
+            form = "pointer" if var.text in HANDLER_POINTERS else "value"
+        else:
+            continue   # a global or a static
+        if after == "ARROW" or (after == "LBRACKET" and form == "pointer"):
+            continue   # an address reached through a pointer
+        if address_callee(tokens, i) in ADDRESS_INLINE_CALLS:
+            continue
+        errors.append((f"{name}: line {tkn.line}: &{var.text}", tkn))
+    return errors
+
+
+def check_no_addressable_locals(analysis: Analysis) -> None:
+    "Refuse a uop or label that takes the address of a handler local"
+    errors = []
+    for uop in analysis.uops.values():
+        items = {item.name: item.is_array()
+                 for item in uop.stack.inputs + uop.stack.outputs}
+        tokens = [t for t in uop.body.tokens() if t.kind != "COMMENT"]
+        errors += addressed_locals(uop.name, tokens, items)
+    for label in analysis.labels.values():
+        tokens = [t for t in label.body.tokens() if t.kind != "COMMENT"]
+        errors += addressed_locals(label.name, tokens, {})
+    if errors:
+        raise analysis_error(
+            "the address of a handler local (register-ir-v2-a3.md 3.5: pass "
+            "values, move memory work out of line, keep state in slots):\n  "
+            + "\n  ".join(sorted({text for text, _ in errors})), errors[0][1])
+
+
 def generate_ir(filenames: list[str], analysis: Analysis, outfile: TextIO,
                 lines: bool) -> None:
     formats = compute_formats(analysis)
+    check_no_addressable_locals(analysis)
     boxing = boxing_handlers(analysis, formats)
     write_header(__file__, filenames, outfile)
     outfile.write(f"""

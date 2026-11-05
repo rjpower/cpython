@@ -53,18 +53,19 @@
                 PyValue held_left = IR_TAKE(lhs, ir_own_B);
                 ir_own_C = IR_CONSUME_INPUT(IR_C(ir_word), rhs);
                 PyValue held_right = IR_TAKE(rhs, ir_own_C);
-                _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
-                operation.input_slots[0] = IR_B(ir_word);
-                operation.input_slots[1] = IR_C(ir_word);
-                operation.result_slot = IR_A(ir_word);
                 PyValue pending = value_binary_operation(oparg, held_left, held_right, value_temps);
                 if (PyValue_IsNull(pending)) {
-                    (void)value_operation_restore2(&operation, &held_left, &held_right);
-                    value_operation_close3(&held_right, &held_left, NULL);
-                    (void)value_operation_finish(&operation, next_instr, value_temps);
+                    {
+                        _PyValuePair ir_rest = value_operation_restore2(tstate, frame, held_left, held_right, IR_B(ir_word), IR_C(ir_word));
+                        held_left = ir_rest.first;
+                        held_right = ir_rest.second;
+                    }
+                    value_operation_close3(held_right, held_left, PyValue_NULL);
+                    (void)value_operation_finish(tstate, frame, this_instr, value_temps);
                     JUMP_TO_LABEL(error);
                 }
-                if (value_reader_complete(&operation, next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
+                pending = value_reader_complete(tstate, frame, this_instr, value_temps, IR_A(ir_word), pending, held_right, held_left);
+                if (PyValue_IsNull(pending)) {
                     JUMP_TO_LABEL(error);
                 }
                 this_instr = frame->instr_ptr;
@@ -368,18 +369,19 @@
                 PyValue held_left = IR_TAKE(lhs, ir_own_B);
                 ir_own_C = IR_CONSUME_INPUT(IR_C(ir_word), rhs);
                 PyValue held_right = IR_TAKE(rhs, ir_own_C);
-                _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
-                operation.input_slots[0] = IR_B(ir_word);
-                operation.input_slots[1] = IR_C(ir_word);
-                operation.result_slot = IR_A(ir_word);
                 PyValue pending = value_binary_operation(oparg, held_left, held_right, value_temps);
                 if (PyValue_IsNull(pending)) {
-                    (void)value_operation_restore2(&operation, &held_left, &held_right);
-                    value_operation_close3(&held_right, &held_left, NULL);
-                    (void)value_operation_finish(&operation, next_instr, value_temps);
+                    {
+                        _PyValuePair ir_rest = value_operation_restore2(tstate, frame, held_left, held_right, IR_B(ir_word), IR_C(ir_word));
+                        held_left = ir_rest.first;
+                        held_right = ir_rest.second;
+                    }
+                    value_operation_close3(held_right, held_left, PyValue_NULL);
+                    (void)value_operation_finish(tstate, frame, this_instr, value_temps);
                     JUMP_TO_LABEL(error);
                 }
-                if (value_reader_complete(&operation, next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
+                pending = value_reader_complete(tstate, frame, this_instr, value_temps, IR_A(ir_word), pending, held_right, held_left);
+                if (PyValue_IsNull(pending)) {
                     JUMP_TO_LABEL(error);
                 }
                 this_instr = frame->instr_ptr;
@@ -595,18 +597,19 @@
                 PyValue held_left = IR_TAKE(lhs, ir_own_B);
                 ir_own_C = IR_CONSUME_INPUT(IR_C(ir_word), rhs);
                 PyValue held_right = IR_TAKE(rhs, ir_own_C);
-                _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
-                operation.input_slots[0] = IR_B(ir_word);
-                operation.input_slots[1] = IR_C(ir_word);
-                operation.result_slot = IR_A(ir_word);
                 PyValue pending = value_binary_operation(oparg, held_left, held_right, value_temps);
                 if (PyValue_IsNull(pending)) {
-                    (void)value_operation_restore2(&operation, &held_left, &held_right);
-                    value_operation_close3(&held_right, &held_left, NULL);
-                    (void)value_operation_finish(&operation, next_instr, value_temps);
+                    {
+                        _PyValuePair ir_rest = value_operation_restore2(tstate, frame, held_left, held_right, IR_B(ir_word), IR_C(ir_word));
+                        held_left = ir_rest.first;
+                        held_right = ir_rest.second;
+                    }
+                    value_operation_close3(held_right, held_left, PyValue_NULL);
+                    (void)value_operation_finish(tstate, frame, this_instr, value_temps);
                     JUMP_TO_LABEL(error);
                 }
-                if (value_reader_complete(&operation, next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
+                pending = value_reader_complete(tstate, frame, this_instr, value_temps, IR_A(ir_word), pending, held_right, held_left);
+                if (PyValue_IsNull(pending)) {
                     JUMP_TO_LABEL(error);
                 }
                 this_instr = frame->instr_ptr;
@@ -755,18 +758,19 @@
                 PyValue held_left = IR_TAKE(lhs, ir_own_B);
                 ir_own_C = IR_CONSUME_INPUT(IR_C(ir_word), rhs);
                 PyValue held_right = IR_TAKE(rhs, ir_own_C);
-                _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
-                operation.input_slots[0] = IR_B(ir_word);
-                operation.input_slots[1] = IR_C(ir_word);
-                operation.result_slot = IR_A(ir_word);
                 PyValue pending = value_binary_operation(oparg, held_left, held_right, value_temps);
                 if (PyValue_IsNull(pending)) {
-                    (void)value_operation_restore2(&operation, &held_left, &held_right);
-                    value_operation_close3(&held_right, &held_left, NULL);
-                    (void)value_operation_finish(&operation, next_instr, value_temps);
+                    {
+                        _PyValuePair ir_rest = value_operation_restore2(tstate, frame, held_left, held_right, IR_B(ir_word), IR_C(ir_word));
+                        held_left = ir_rest.first;
+                        held_right = ir_rest.second;
+                    }
+                    value_operation_close3(held_right, held_left, PyValue_NULL);
+                    (void)value_operation_finish(tstate, frame, this_instr, value_temps);
                     JUMP_TO_LABEL(error);
                 }
-                if (value_reader_complete(&operation, next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
+                pending = value_reader_complete(tstate, frame, this_instr, value_temps, IR_A(ir_word), pending, held_right, held_left);
+                if (PyValue_IsNull(pending)) {
                     JUMP_TO_LABEL(error);
                 }
                 this_instr = frame->instr_ptr;
@@ -853,7 +857,7 @@
                 PyObject *temp = PyValue_AsKnownObjectSteal(*target_local);
                 ir_own_C = IR_CONSUME_INPUT(IR_C(ir_word), right);
                 PyObject *right_o = _PyValue_AsPyObjectStealPointer(IR_TAKE(right, ir_own_C));
-                PyUnicode_Append(&temp, right_o);
+                temp = value_unicode_append(temp, right_o);
                 _Py_DECREF_SPECIALIZED(right_o, _PyUnicode_ExactDealloc);
                 *target_local = PyValue_NULL;
                 if (temp == NULL) {
@@ -917,18 +921,19 @@
                 PyValue held_left = IR_TAKE(lhs, ir_own_B);
                 ir_own_C = IR_CONSUME_INPUT(IR_C(ir_word), rhs);
                 PyValue held_right = IR_TAKE(rhs, ir_own_C);
-                _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
-                operation.input_slots[0] = IR_B(ir_word);
-                operation.input_slots[1] = IR_C(ir_word);
-                operation.result_slot = IR_A(ir_word);
                 PyValue pending = value_binary_operation(oparg, held_left, held_right, value_temps);
                 if (PyValue_IsNull(pending)) {
-                    (void)value_operation_restore2(&operation, &held_left, &held_right);
-                    value_operation_close3(&held_right, &held_left, NULL);
-                    (void)value_operation_finish(&operation, next_instr, value_temps);
+                    {
+                        _PyValuePair ir_rest = value_operation_restore2(tstate, frame, held_left, held_right, IR_B(ir_word), IR_C(ir_word));
+                        held_left = ir_rest.first;
+                        held_right = ir_rest.second;
+                    }
+                    value_operation_close3(held_right, held_left, PyValue_NULL);
+                    (void)value_operation_finish(tstate, frame, this_instr, value_temps);
                     JUMP_TO_LABEL(error);
                 }
-                if (value_reader_complete(&operation, next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
+                pending = value_reader_complete(tstate, frame, this_instr, value_temps, IR_A(ir_word), pending, held_right, held_left);
+                if (PyValue_IsNull(pending)) {
                     JUMP_TO_LABEL(error);
                 }
                 this_instr = frame->instr_ptr;
@@ -992,18 +997,19 @@
                 PyValue held_left = IR_TAKE(lhs, ir_own_B);
                 ir_own_C = IR_CONSUME_INPUT(IR_C(ir_word), rhs);
                 PyValue held_right = IR_TAKE(rhs, ir_own_C);
-                _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
-                operation.input_slots[0] = IR_B(ir_word);
-                operation.input_slots[1] = IR_C(ir_word);
-                operation.result_slot = IR_A(ir_word);
                 PyValue pending = value_binary_operation(oparg, held_left, held_right, value_temps);
                 if (PyValue_IsNull(pending)) {
-                    (void)value_operation_restore2(&operation, &held_left, &held_right);
-                    value_operation_close3(&held_right, &held_left, NULL);
-                    (void)value_operation_finish(&operation, next_instr, value_temps);
+                    {
+                        _PyValuePair ir_rest = value_operation_restore2(tstate, frame, held_left, held_right, IR_B(ir_word), IR_C(ir_word));
+                        held_left = ir_rest.first;
+                        held_right = ir_rest.second;
+                    }
+                    value_operation_close3(held_right, held_left, PyValue_NULL);
+                    (void)value_operation_finish(tstate, frame, this_instr, value_temps);
                     JUMP_TO_LABEL(error);
                 }
-                if (value_reader_complete(&operation, next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
+                pending = value_reader_complete(tstate, frame, this_instr, value_temps, IR_A(ir_word), pending, held_right, held_left);
+                if (PyValue_IsNull(pending)) {
                     JUMP_TO_LABEL(error);
                 }
                 this_instr = frame->instr_ptr;
@@ -1067,18 +1073,19 @@
                 PyValue held_left = IR_TAKE(lhs, ir_own_B);
                 ir_own_C = IR_CONSUME_INPUT(IR_C(ir_word), rhs);
                 PyValue held_right = IR_TAKE(rhs, ir_own_C);
-                _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
-                operation.input_slots[0] = IR_B(ir_word);
-                operation.input_slots[1] = IR_C(ir_word);
-                operation.result_slot = IR_A(ir_word);
                 PyValue pending = value_binary_operation(oparg, held_left, held_right, value_temps);
                 if (PyValue_IsNull(pending)) {
-                    (void)value_operation_restore2(&operation, &held_left, &held_right);
-                    value_operation_close3(&held_right, &held_left, NULL);
-                    (void)value_operation_finish(&operation, next_instr, value_temps);
+                    {
+                        _PyValuePair ir_rest = value_operation_restore2(tstate, frame, held_left, held_right, IR_B(ir_word), IR_C(ir_word));
+                        held_left = ir_rest.first;
+                        held_right = ir_rest.second;
+                    }
+                    value_operation_close3(held_right, held_left, PyValue_NULL);
+                    (void)value_operation_finish(tstate, frame, this_instr, value_temps);
                     JUMP_TO_LABEL(error);
                 }
-                if (value_reader_complete(&operation, next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
+                pending = value_reader_complete(tstate, frame, this_instr, value_temps, IR_A(ir_word), pending, held_right, held_left);
+                if (PyValue_IsNull(pending)) {
                     JUMP_TO_LABEL(error);
                 }
                 this_instr = frame->instr_ptr;
@@ -1142,18 +1149,19 @@
                 PyValue held_left = IR_TAKE(lhs, ir_own_B);
                 ir_own_C = IR_CONSUME_INPUT(IR_C(ir_word), rhs);
                 PyValue held_right = IR_TAKE(rhs, ir_own_C);
-                _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
-                operation.input_slots[0] = IR_B(ir_word);
-                operation.input_slots[1] = IR_C(ir_word);
-                operation.result_slot = IR_A(ir_word);
                 PyValue pending = value_binary_operation(oparg, held_left, held_right, value_temps);
                 if (PyValue_IsNull(pending)) {
-                    (void)value_operation_restore2(&operation, &held_left, &held_right);
-                    value_operation_close3(&held_right, &held_left, NULL);
-                    (void)value_operation_finish(&operation, next_instr, value_temps);
+                    {
+                        _PyValuePair ir_rest = value_operation_restore2(tstate, frame, held_left, held_right, IR_B(ir_word), IR_C(ir_word));
+                        held_left = ir_rest.first;
+                        held_right = ir_rest.second;
+                    }
+                    value_operation_close3(held_right, held_left, PyValue_NULL);
+                    (void)value_operation_finish(tstate, frame, this_instr, value_temps);
                     JUMP_TO_LABEL(error);
                 }
-                if (value_reader_complete(&operation, next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
+                pending = value_reader_complete(tstate, frame, this_instr, value_temps, IR_A(ir_word), pending, held_right, held_left);
+                if (PyValue_IsNull(pending)) {
                     JUMP_TO_LABEL(error);
                 }
                 this_instr = frame->instr_ptr;
@@ -1217,18 +1225,19 @@
                 PyValue held_left = IR_TAKE(lhs, ir_own_B);
                 ir_own_C = IR_CONSUME_INPUT(IR_C(ir_word), rhs);
                 PyValue held_right = IR_TAKE(rhs, ir_own_C);
-                _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
-                operation.input_slots[0] = IR_B(ir_word);
-                operation.input_slots[1] = IR_C(ir_word);
-                operation.result_slot = IR_A(ir_word);
                 PyValue pending = value_binary_operation(oparg, held_left, held_right, value_temps);
                 if (PyValue_IsNull(pending)) {
-                    (void)value_operation_restore2(&operation, &held_left, &held_right);
-                    value_operation_close3(&held_right, &held_left, NULL);
-                    (void)value_operation_finish(&operation, next_instr, value_temps);
+                    {
+                        _PyValuePair ir_rest = value_operation_restore2(tstate, frame, held_left, held_right, IR_B(ir_word), IR_C(ir_word));
+                        held_left = ir_rest.first;
+                        held_right = ir_rest.second;
+                    }
+                    value_operation_close3(held_right, held_left, PyValue_NULL);
+                    (void)value_operation_finish(tstate, frame, this_instr, value_temps);
                     JUMP_TO_LABEL(error);
                 }
-                if (value_reader_complete(&operation, next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
+                pending = value_reader_complete(tstate, frame, this_instr, value_temps, IR_A(ir_word), pending, held_right, held_left);
+                if (PyValue_IsNull(pending)) {
                     JUMP_TO_LABEL(error);
                 }
                 this_instr = frame->instr_ptr;
@@ -1292,18 +1301,19 @@
                 PyValue held_left = IR_TAKE(lhs, ir_own_B);
                 ir_own_C = IR_CONSUME_INPUT(IR_C(ir_word), rhs);
                 PyValue held_right = IR_TAKE(rhs, ir_own_C);
-                _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
-                operation.input_slots[0] = IR_B(ir_word);
-                operation.input_slots[1] = IR_C(ir_word);
-                operation.result_slot = IR_A(ir_word);
                 PyValue pending = value_binary_operation(oparg, held_left, held_right, value_temps);
                 if (PyValue_IsNull(pending)) {
-                    (void)value_operation_restore2(&operation, &held_left, &held_right);
-                    value_operation_close3(&held_right, &held_left, NULL);
-                    (void)value_operation_finish(&operation, next_instr, value_temps);
+                    {
+                        _PyValuePair ir_rest = value_operation_restore2(tstate, frame, held_left, held_right, IR_B(ir_word), IR_C(ir_word));
+                        held_left = ir_rest.first;
+                        held_right = ir_rest.second;
+                    }
+                    value_operation_close3(held_right, held_left, PyValue_NULL);
+                    (void)value_operation_finish(tstate, frame, this_instr, value_temps);
                     JUMP_TO_LABEL(error);
                 }
-                if (value_reader_complete(&operation, next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
+                pending = value_reader_complete(tstate, frame, this_instr, value_temps, IR_A(ir_word), pending, held_right, held_left);
+                if (PyValue_IsNull(pending)) {
                     JUMP_TO_LABEL(error);
                 }
                 this_instr = frame->instr_ptr;
@@ -1367,18 +1377,19 @@
                 PyValue held_left = IR_TAKE(lhs, ir_own_B);
                 ir_own_C = IR_CONSUME_INPUT(IR_C(ir_word), rhs);
                 PyValue held_right = IR_TAKE(rhs, ir_own_C);
-                _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
-                operation.input_slots[0] = IR_B(ir_word);
-                operation.input_slots[1] = IR_C(ir_word);
-                operation.result_slot = IR_A(ir_word);
                 PyValue pending = value_binary_operation(oparg, held_left, held_right, value_temps);
                 if (PyValue_IsNull(pending)) {
-                    (void)value_operation_restore2(&operation, &held_left, &held_right);
-                    value_operation_close3(&held_right, &held_left, NULL);
-                    (void)value_operation_finish(&operation, next_instr, value_temps);
+                    {
+                        _PyValuePair ir_rest = value_operation_restore2(tstate, frame, held_left, held_right, IR_B(ir_word), IR_C(ir_word));
+                        held_left = ir_rest.first;
+                        held_right = ir_rest.second;
+                    }
+                    value_operation_close3(held_right, held_left, PyValue_NULL);
+                    (void)value_operation_finish(tstate, frame, this_instr, value_temps);
                     JUMP_TO_LABEL(error);
                 }
-                if (value_reader_complete(&operation, next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
+                pending = value_reader_complete(tstate, frame, this_instr, value_temps, IR_A(ir_word), pending, held_right, held_left);
+                if (PyValue_IsNull(pending)) {
                     JUMP_TO_LABEL(error);
                 }
                 this_instr = frame->instr_ptr;
@@ -1442,18 +1453,19 @@
                 PyValue held_left = IR_TAKE(lhs, ir_own_B);
                 ir_own_C = IR_CONSUME_INPUT(IR_C(ir_word), rhs);
                 PyValue held_right = IR_TAKE(rhs, ir_own_C);
-                _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
-                operation.input_slots[0] = IR_B(ir_word);
-                operation.input_slots[1] = IR_C(ir_word);
-                operation.result_slot = IR_A(ir_word);
                 PyValue pending = value_binary_operation(oparg, held_left, held_right, value_temps);
                 if (PyValue_IsNull(pending)) {
-                    (void)value_operation_restore2(&operation, &held_left, &held_right);
-                    value_operation_close3(&held_right, &held_left, NULL);
-                    (void)value_operation_finish(&operation, next_instr, value_temps);
+                    {
+                        _PyValuePair ir_rest = value_operation_restore2(tstate, frame, held_left, held_right, IR_B(ir_word), IR_C(ir_word));
+                        held_left = ir_rest.first;
+                        held_right = ir_rest.second;
+                    }
+                    value_operation_close3(held_right, held_left, PyValue_NULL);
+                    (void)value_operation_finish(tstate, frame, this_instr, value_temps);
                     JUMP_TO_LABEL(error);
                 }
-                if (value_reader_complete(&operation, next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
+                pending = value_reader_complete(tstate, frame, this_instr, value_temps, IR_A(ir_word), pending, held_right, held_left);
+                if (PyValue_IsNull(pending)) {
                     JUMP_TO_LABEL(error);
                 }
                 this_instr = frame->instr_ptr;
@@ -1517,18 +1529,19 @@
                 PyValue held_left = IR_TAKE(lhs, ir_own_B);
                 ir_own_C = IR_CONSUME_INPUT(IR_C(ir_word), rhs);
                 PyValue held_right = IR_TAKE(rhs, ir_own_C);
-                _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
-                operation.input_slots[0] = IR_B(ir_word);
-                operation.input_slots[1] = IR_C(ir_word);
-                operation.result_slot = IR_A(ir_word);
                 PyValue pending = value_binary_operation(oparg, held_left, held_right, value_temps);
                 if (PyValue_IsNull(pending)) {
-                    (void)value_operation_restore2(&operation, &held_left, &held_right);
-                    value_operation_close3(&held_right, &held_left, NULL);
-                    (void)value_operation_finish(&operation, next_instr, value_temps);
+                    {
+                        _PyValuePair ir_rest = value_operation_restore2(tstate, frame, held_left, held_right, IR_B(ir_word), IR_C(ir_word));
+                        held_left = ir_rest.first;
+                        held_right = ir_rest.second;
+                    }
+                    value_operation_close3(held_right, held_left, PyValue_NULL);
+                    (void)value_operation_finish(tstate, frame, this_instr, value_temps);
                     JUMP_TO_LABEL(error);
                 }
-                if (value_reader_complete(&operation, next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
+                pending = value_reader_complete(tstate, frame, this_instr, value_temps, IR_A(ir_word), pending, held_right, held_left);
+                if (PyValue_IsNull(pending)) {
                     JUMP_TO_LABEL(error);
                 }
                 this_instr = frame->instr_ptr;
@@ -1592,18 +1605,19 @@
                 PyValue held_left = IR_TAKE(lhs, ir_own_B);
                 ir_own_C = IR_CONSUME_INPUT(IR_C(ir_word), rhs);
                 PyValue held_right = IR_TAKE(rhs, ir_own_C);
-                _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
-                operation.input_slots[0] = IR_B(ir_word);
-                operation.input_slots[1] = IR_C(ir_word);
-                operation.result_slot = IR_A(ir_word);
                 PyValue pending = value_binary_operation(oparg, held_left, held_right, value_temps);
                 if (PyValue_IsNull(pending)) {
-                    (void)value_operation_restore2(&operation, &held_left, &held_right);
-                    value_operation_close3(&held_right, &held_left, NULL);
-                    (void)value_operation_finish(&operation, next_instr, value_temps);
+                    {
+                        _PyValuePair ir_rest = value_operation_restore2(tstate, frame, held_left, held_right, IR_B(ir_word), IR_C(ir_word));
+                        held_left = ir_rest.first;
+                        held_right = ir_rest.second;
+                    }
+                    value_operation_close3(held_right, held_left, PyValue_NULL);
+                    (void)value_operation_finish(tstate, frame, this_instr, value_temps);
                     JUMP_TO_LABEL(error);
                 }
-                if (value_reader_complete(&operation, next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
+                pending = value_reader_complete(tstate, frame, this_instr, value_temps, IR_A(ir_word), pending, held_right, held_left);
+                if (PyValue_IsNull(pending)) {
                     JUMP_TO_LABEL(error);
                 }
                 this_instr = frame->instr_ptr;
@@ -1667,18 +1681,19 @@
                 PyValue held_left = IR_TAKE(lhs, ir_own_B);
                 ir_own_C = IR_CONSUME_INPUT(IR_C(ir_word), rhs);
                 PyValue held_right = IR_TAKE(rhs, ir_own_C);
-                _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
-                operation.input_slots[0] = IR_B(ir_word);
-                operation.input_slots[1] = IR_C(ir_word);
-                operation.result_slot = IR_A(ir_word);
                 PyValue pending = value_binary_operation(oparg, held_left, held_right, value_temps);
                 if (PyValue_IsNull(pending)) {
-                    (void)value_operation_restore2(&operation, &held_left, &held_right);
-                    value_operation_close3(&held_right, &held_left, NULL);
-                    (void)value_operation_finish(&operation, next_instr, value_temps);
+                    {
+                        _PyValuePair ir_rest = value_operation_restore2(tstate, frame, held_left, held_right, IR_B(ir_word), IR_C(ir_word));
+                        held_left = ir_rest.first;
+                        held_right = ir_rest.second;
+                    }
+                    value_operation_close3(held_right, held_left, PyValue_NULL);
+                    (void)value_operation_finish(tstate, frame, this_instr, value_temps);
                     JUMP_TO_LABEL(error);
                 }
-                if (value_reader_complete(&operation, next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
+                pending = value_reader_complete(tstate, frame, this_instr, value_temps, IR_A(ir_word), pending, held_right, held_left);
+                if (PyValue_IsNull(pending)) {
                     JUMP_TO_LABEL(error);
                 }
                 this_instr = frame->instr_ptr;
@@ -1742,18 +1757,19 @@
                 PyValue held_left = IR_TAKE(lhs, ir_own_B);
                 ir_own_C = IR_CONSUME_INPUT(IR_C(ir_word), rhs);
                 PyValue held_right = IR_TAKE(rhs, ir_own_C);
-                _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
-                operation.input_slots[0] = IR_B(ir_word);
-                operation.input_slots[1] = IR_C(ir_word);
-                operation.result_slot = IR_A(ir_word);
                 PyValue pending = value_binary_operation(oparg, held_left, held_right, value_temps);
                 if (PyValue_IsNull(pending)) {
-                    (void)value_operation_restore2(&operation, &held_left, &held_right);
-                    value_operation_close3(&held_right, &held_left, NULL);
-                    (void)value_operation_finish(&operation, next_instr, value_temps);
+                    {
+                        _PyValuePair ir_rest = value_operation_restore2(tstate, frame, held_left, held_right, IR_B(ir_word), IR_C(ir_word));
+                        held_left = ir_rest.first;
+                        held_right = ir_rest.second;
+                    }
+                    value_operation_close3(held_right, held_left, PyValue_NULL);
+                    (void)value_operation_finish(tstate, frame, this_instr, value_temps);
                     JUMP_TO_LABEL(error);
                 }
-                if (value_reader_complete(&operation, next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
+                pending = value_reader_complete(tstate, frame, this_instr, value_temps, IR_A(ir_word), pending, held_right, held_left);
+                if (PyValue_IsNull(pending)) {
                     JUMP_TO_LABEL(error);
                 }
                 this_instr = frame->instr_ptr;
@@ -1817,18 +1833,19 @@
                 PyValue held_left = IR_TAKE(lhs, ir_own_B);
                 ir_own_C = IR_CONSUME_INPUT(IR_C(ir_word), rhs);
                 PyValue held_right = IR_TAKE(rhs, ir_own_C);
-                _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
-                operation.input_slots[0] = IR_B(ir_word);
-                operation.input_slots[1] = IR_C(ir_word);
-                operation.result_slot = IR_A(ir_word);
                 PyValue pending = value_binary_operation(oparg, held_left, held_right, value_temps);
                 if (PyValue_IsNull(pending)) {
-                    (void)value_operation_restore2(&operation, &held_left, &held_right);
-                    value_operation_close3(&held_right, &held_left, NULL);
-                    (void)value_operation_finish(&operation, next_instr, value_temps);
+                    {
+                        _PyValuePair ir_rest = value_operation_restore2(tstate, frame, held_left, held_right, IR_B(ir_word), IR_C(ir_word));
+                        held_left = ir_rest.first;
+                        held_right = ir_rest.second;
+                    }
+                    value_operation_close3(held_right, held_left, PyValue_NULL);
+                    (void)value_operation_finish(tstate, frame, this_instr, value_temps);
                     JUMP_TO_LABEL(error);
                 }
-                if (value_reader_complete(&operation, next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
+                pending = value_reader_complete(tstate, frame, this_instr, value_temps, IR_A(ir_word), pending, held_right, held_left);
+                if (PyValue_IsNull(pending)) {
                     JUMP_TO_LABEL(error);
                 }
                 this_instr = frame->instr_ptr;
@@ -1982,18 +1999,19 @@
                 PyValue held_left = IR_TAKE(lhs, ir_own_B);
                 ir_own_C = IR_CONSUME_INPUT(IR_C(ir_word), rhs);
                 PyValue held_right = IR_TAKE(rhs, ir_own_C);
-                _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
-                operation.input_slots[0] = IR_B(ir_word);
-                operation.input_slots[1] = IR_C(ir_word);
-                operation.result_slot = IR_A(ir_word);
                 PyValue pending = value_binary_operation(oparg, held_left, held_right, value_temps);
                 if (PyValue_IsNull(pending)) {
-                    (void)value_operation_restore2(&operation, &held_left, &held_right);
-                    value_operation_close3(&held_right, &held_left, NULL);
-                    (void)value_operation_finish(&operation, next_instr, value_temps);
+                    {
+                        _PyValuePair ir_rest = value_operation_restore2(tstate, frame, held_left, held_right, IR_B(ir_word), IR_C(ir_word));
+                        held_left = ir_rest.first;
+                        held_right = ir_rest.second;
+                    }
+                    value_operation_close3(held_right, held_left, PyValue_NULL);
+                    (void)value_operation_finish(tstate, frame, this_instr, value_temps);
                     JUMP_TO_LABEL(error);
                 }
-                if (value_reader_complete(&operation, next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
+                pending = value_reader_complete(tstate, frame, this_instr, value_temps, IR_A(ir_word), pending, held_right, held_left);
+                if (PyValue_IsNull(pending)) {
                     JUMP_TO_LABEL(error);
                 }
                 this_instr = frame->instr_ptr;
@@ -2057,18 +2075,19 @@
                 PyValue held_left = IR_TAKE(lhs, ir_own_B);
                 ir_own_C = IR_CONSUME_INPUT(IR_C(ir_word), rhs);
                 PyValue held_right = IR_TAKE(rhs, ir_own_C);
-                _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
-                operation.input_slots[0] = IR_B(ir_word);
-                operation.input_slots[1] = IR_C(ir_word);
-                operation.result_slot = IR_A(ir_word);
                 PyValue pending = value_binary_operation(oparg, held_left, held_right, value_temps);
                 if (PyValue_IsNull(pending)) {
-                    (void)value_operation_restore2(&operation, &held_left, &held_right);
-                    value_operation_close3(&held_right, &held_left, NULL);
-                    (void)value_operation_finish(&operation, next_instr, value_temps);
+                    {
+                        _PyValuePair ir_rest = value_operation_restore2(tstate, frame, held_left, held_right, IR_B(ir_word), IR_C(ir_word));
+                        held_left = ir_rest.first;
+                        held_right = ir_rest.second;
+                    }
+                    value_operation_close3(held_right, held_left, PyValue_NULL);
+                    (void)value_operation_finish(tstate, frame, this_instr, value_temps);
                     JUMP_TO_LABEL(error);
                 }
-                if (value_reader_complete(&operation, next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
+                pending = value_reader_complete(tstate, frame, this_instr, value_temps, IR_A(ir_word), pending, held_right, held_left);
+                if (PyValue_IsNull(pending)) {
                     JUMP_TO_LABEL(error);
                 }
                 this_instr = frame->instr_ptr;
@@ -2279,18 +2298,19 @@
                 PyValue held_left = IR_TAKE(lhs, ir_own_B);
                 ir_own_C = IR_CONSUME_INPUT(IR_C(ir_word), rhs);
                 PyValue held_right = IR_TAKE(rhs, ir_own_C);
-                _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
-                operation.input_slots[0] = IR_B(ir_word);
-                operation.input_slots[1] = IR_C(ir_word);
-                operation.result_slot = IR_A(ir_word);
                 PyValue pending = value_binary_operation(oparg, held_left, held_right, value_temps);
                 if (PyValue_IsNull(pending)) {
-                    (void)value_operation_restore2(&operation, &held_left, &held_right);
-                    value_operation_close3(&held_right, &held_left, NULL);
-                    (void)value_operation_finish(&operation, next_instr, value_temps);
+                    {
+                        _PyValuePair ir_rest = value_operation_restore2(tstate, frame, held_left, held_right, IR_B(ir_word), IR_C(ir_word));
+                        held_left = ir_rest.first;
+                        held_right = ir_rest.second;
+                    }
+                    value_operation_close3(held_right, held_left, PyValue_NULL);
+                    (void)value_operation_finish(tstate, frame, this_instr, value_temps);
                     JUMP_TO_LABEL(error);
                 }
-                if (value_reader_complete(&operation, next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
+                pending = value_reader_complete(tstate, frame, this_instr, value_temps, IR_A(ir_word), pending, held_right, held_left);
+                if (PyValue_IsNull(pending)) {
                     JUMP_TO_LABEL(error);
                 }
                 this_instr = frame->instr_ptr;
@@ -2429,18 +2449,19 @@
                 PyValue held_left = IR_TAKE(lhs, ir_own_B);
                 ir_own_C = IR_CONSUME_INPUT(IR_C(ir_word), rhs);
                 PyValue held_right = IR_TAKE(rhs, ir_own_C);
-                _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
-                operation.input_slots[0] = IR_B(ir_word);
-                operation.input_slots[1] = IR_C(ir_word);
-                operation.result_slot = IR_A(ir_word);
                 PyValue pending = value_binary_operation(oparg, held_left, held_right, value_temps);
                 if (PyValue_IsNull(pending)) {
-                    (void)value_operation_restore2(&operation, &held_left, &held_right);
-                    value_operation_close3(&held_right, &held_left, NULL);
-                    (void)value_operation_finish(&operation, next_instr, value_temps);
+                    {
+                        _PyValuePair ir_rest = value_operation_restore2(tstate, frame, held_left, held_right, IR_B(ir_word), IR_C(ir_word));
+                        held_left = ir_rest.first;
+                        held_right = ir_rest.second;
+                    }
+                    value_operation_close3(held_right, held_left, PyValue_NULL);
+                    (void)value_operation_finish(tstate, frame, this_instr, value_temps);
                     JUMP_TO_LABEL(error);
                 }
-                if (value_reader_complete(&operation, next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
+                pending = value_reader_complete(tstate, frame, this_instr, value_temps, IR_A(ir_word), pending, held_right, held_left);
+                if (PyValue_IsNull(pending)) {
                     JUMP_TO_LABEL(error);
                 }
                 this_instr = frame->instr_ptr;
@@ -2504,18 +2525,19 @@
                 PyValue held_left = IR_TAKE(lhs, ir_own_B);
                 ir_own_C = IR_CONSUME_INPUT(IR_C(ir_word), rhs);
                 PyValue held_right = IR_TAKE(rhs, ir_own_C);
-                _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
-                operation.input_slots[0] = IR_B(ir_word);
-                operation.input_slots[1] = IR_C(ir_word);
-                operation.result_slot = IR_A(ir_word);
                 PyValue pending = value_binary_operation(oparg, held_left, held_right, value_temps);
                 if (PyValue_IsNull(pending)) {
-                    (void)value_operation_restore2(&operation, &held_left, &held_right);
-                    value_operation_close3(&held_right, &held_left, NULL);
-                    (void)value_operation_finish(&operation, next_instr, value_temps);
+                    {
+                        _PyValuePair ir_rest = value_operation_restore2(tstate, frame, held_left, held_right, IR_B(ir_word), IR_C(ir_word));
+                        held_left = ir_rest.first;
+                        held_right = ir_rest.second;
+                    }
+                    value_operation_close3(held_right, held_left, PyValue_NULL);
+                    (void)value_operation_finish(tstate, frame, this_instr, value_temps);
                     JUMP_TO_LABEL(error);
                 }
-                if (value_reader_complete(&operation, next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
+                pending = value_reader_complete(tstate, frame, this_instr, value_temps, IR_A(ir_word), pending, held_right, held_left);
+                if (PyValue_IsNull(pending)) {
                     JUMP_TO_LABEL(error);
                 }
                 this_instr = frame->instr_ptr;
@@ -2664,18 +2686,19 @@
                 PyValue held_left = IR_TAKE(lhs, ir_own_B);
                 ir_own_C = IR_CONSUME_INPUT(IR_C(ir_word), rhs);
                 PyValue held_right = IR_TAKE(rhs, ir_own_C);
-                _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
-                operation.input_slots[0] = IR_B(ir_word);
-                operation.input_slots[1] = IR_C(ir_word);
-                operation.result_slot = IR_A(ir_word);
                 PyValue pending = value_binary_operation(oparg, held_left, held_right, value_temps);
                 if (PyValue_IsNull(pending)) {
-                    (void)value_operation_restore2(&operation, &held_left, &held_right);
-                    value_operation_close3(&held_right, &held_left, NULL);
-                    (void)value_operation_finish(&operation, next_instr, value_temps);
+                    {
+                        _PyValuePair ir_rest = value_operation_restore2(tstate, frame, held_left, held_right, IR_B(ir_word), IR_C(ir_word));
+                        held_left = ir_rest.first;
+                        held_right = ir_rest.second;
+                    }
+                    value_operation_close3(held_right, held_left, PyValue_NULL);
+                    (void)value_operation_finish(tstate, frame, this_instr, value_temps);
                     JUMP_TO_LABEL(error);
                 }
-                if (value_reader_complete(&operation, next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
+                pending = value_reader_complete(tstate, frame, this_instr, value_temps, IR_A(ir_word), pending, held_right, held_left);
+                if (PyValue_IsNull(pending)) {
                     JUMP_TO_LABEL(error);
                 }
                 this_instr = frame->instr_ptr;
@@ -2820,18 +2843,19 @@
                 PyValue held_left = IR_TAKE(lhs, ir_own_B);
                 ir_own_C = IR_CONSUME_INPUT(IR_C(ir_word), rhs);
                 PyValue held_right = IR_TAKE(rhs, ir_own_C);
-                _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
-                operation.input_slots[0] = IR_B(ir_word);
-                operation.input_slots[1] = IR_C(ir_word);
-                operation.result_slot = IR_A(ir_word);
                 PyValue pending = value_binary_operation(oparg, held_left, held_right, value_temps);
                 if (PyValue_IsNull(pending)) {
-                    (void)value_operation_restore2(&operation, &held_left, &held_right);
-                    value_operation_close3(&held_right, &held_left, NULL);
-                    (void)value_operation_finish(&operation, next_instr, value_temps);
+                    {
+                        _PyValuePair ir_rest = value_operation_restore2(tstate, frame, held_left, held_right, IR_B(ir_word), IR_C(ir_word));
+                        held_left = ir_rest.first;
+                        held_right = ir_rest.second;
+                    }
+                    value_operation_close3(held_right, held_left, PyValue_NULL);
+                    (void)value_operation_finish(tstate, frame, this_instr, value_temps);
                     JUMP_TO_LABEL(error);
                 }
-                if (value_reader_complete(&operation, next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
+                pending = value_reader_complete(tstate, frame, this_instr, value_temps, IR_A(ir_word), pending, held_right, held_left);
+                if (PyValue_IsNull(pending)) {
                     JUMP_TO_LABEL(error);
                 }
                 this_instr = frame->instr_ptr;
@@ -2896,19 +2920,20 @@
                 PyValue held_dict = IR_TAKE(dict_st, ir_own_B);
                 ir_own_C = IR_CONSUME_INPUT(IR_C(ir_word), sub_st);
                 PyValue held_sub = IR_TAKE(sub_st, ir_own_C);
-                _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
-                operation.input_slots[0] = IR_B(ir_word);
-                operation.input_slots[1] = IR_C(ir_word);
-                operation.result_slot = IR_A(ir_word);
                 STAT_INC(BINARY_OP, hit);
                 PyValue pending = value_binary_operation(NB_SUBSCR, held_dict, held_sub, value_temps);
                 if (PyValue_IsNull(pending)) {
-                    (void)value_operation_restore2(&operation, &held_dict, &held_sub);
-                    value_operation_close3(&held_sub, &held_dict, NULL);
-                    (void)value_operation_finish(&operation, next_instr, value_temps);
+                    {
+                        _PyValuePair ir_rest = value_operation_restore2(tstate, frame, held_dict, held_sub, IR_B(ir_word), IR_C(ir_word));
+                        held_dict = ir_rest.first;
+                        held_sub = ir_rest.second;
+                    }
+                    value_operation_close3(held_sub, held_dict, PyValue_NULL);
+                    (void)value_operation_finish(tstate, frame, this_instr, value_temps);
                     JUMP_TO_LABEL(error);
                 }
-                if (value_reader_complete(&operation, next_instr, value_temps, &pending, &held_sub, &held_dict) < 0) {
+                pending = value_reader_complete(tstate, frame, this_instr, value_temps, IR_A(ir_word), pending, held_sub, held_dict);
+                if (PyValue_IsNull(pending)) {
                     JUMP_TO_LABEL(error);
                 }
                 this_instr = frame->instr_ptr;
@@ -3544,18 +3569,19 @@
                 PyValue held_left = IR_TAKE(lhs, ir_own_B);
                 ir_own_C = IR_CONSUME_INPUT(IR_C(ir_word), rhs);
                 PyValue held_right = IR_TAKE(rhs, ir_own_C);
-                _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
-                operation.input_slots[0] = IR_B(ir_word);
-                operation.input_slots[1] = IR_C(ir_word);
-                operation.result_slot = IR_A(ir_word);
                 PyValue pending = value_binary_operation(oparg, held_left, held_right, value_temps);
                 if (PyValue_IsNull(pending)) {
-                    (void)value_operation_restore2(&operation, &held_left, &held_right);
-                    value_operation_close3(&held_right, &held_left, NULL);
-                    (void)value_operation_finish(&operation, next_instr, value_temps);
+                    {
+                        _PyValuePair ir_rest = value_operation_restore2(tstate, frame, held_left, held_right, IR_B(ir_word), IR_C(ir_word));
+                        held_left = ir_rest.first;
+                        held_right = ir_rest.second;
+                    }
+                    value_operation_close3(held_right, held_left, PyValue_NULL);
+                    (void)value_operation_finish(tstate, frame, this_instr, value_temps);
                     JUMP_TO_LABEL(error);
                 }
-                if (value_reader_complete(&operation, next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
+                pending = value_reader_complete(tstate, frame, this_instr, value_temps, IR_A(ir_word), pending, held_right, held_left);
+                if (PyValue_IsNull(pending)) {
                     JUMP_TO_LABEL(error);
                 }
                 this_instr = frame->instr_ptr;
@@ -3834,18 +3860,19 @@
                 PyValue held_left = IR_TAKE(lhs, ir_own_B);
                 ir_own_C = IR_CONSUME_INPUT(IR_C(ir_word), rhs);
                 PyValue held_right = IR_TAKE(rhs, ir_own_C);
-                _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
-                operation.input_slots[0] = IR_B(ir_word);
-                operation.input_slots[1] = IR_C(ir_word);
-                operation.result_slot = IR_A(ir_word);
                 PyValue pending = value_binary_operation(oparg, held_left, held_right, value_temps);
                 if (PyValue_IsNull(pending)) {
-                    (void)value_operation_restore2(&operation, &held_left, &held_right);
-                    value_operation_close3(&held_right, &held_left, NULL);
-                    (void)value_operation_finish(&operation, next_instr, value_temps);
+                    {
+                        _PyValuePair ir_rest = value_operation_restore2(tstate, frame, held_left, held_right, IR_B(ir_word), IR_C(ir_word));
+                        held_left = ir_rest.first;
+                        held_right = ir_rest.second;
+                    }
+                    value_operation_close3(held_right, held_left, PyValue_NULL);
+                    (void)value_operation_finish(tstate, frame, this_instr, value_temps);
                     JUMP_TO_LABEL(error);
                 }
-                if (value_reader_complete(&operation, next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
+                pending = value_reader_complete(tstate, frame, this_instr, value_temps, IR_A(ir_word), pending, held_right, held_left);
+                if (PyValue_IsNull(pending)) {
                     JUMP_TO_LABEL(error);
                 }
                 this_instr = frame->instr_ptr;
@@ -3909,18 +3936,19 @@
                 PyValue held_left = IR_TAKE(lhs, ir_own_B);
                 ir_own_C = IR_CONSUME_INPUT(IR_C(ir_word), rhs);
                 PyValue held_right = IR_TAKE(rhs, ir_own_C);
-                _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
-                operation.input_slots[0] = IR_B(ir_word);
-                operation.input_slots[1] = IR_C(ir_word);
-                operation.result_slot = IR_A(ir_word);
                 PyValue pending = value_binary_operation(oparg, held_left, held_right, value_temps);
                 if (PyValue_IsNull(pending)) {
-                    (void)value_operation_restore2(&operation, &held_left, &held_right);
-                    value_operation_close3(&held_right, &held_left, NULL);
-                    (void)value_operation_finish(&operation, next_instr, value_temps);
+                    {
+                        _PyValuePair ir_rest = value_operation_restore2(tstate, frame, held_left, held_right, IR_B(ir_word), IR_C(ir_word));
+                        held_left = ir_rest.first;
+                        held_right = ir_rest.second;
+                    }
+                    value_operation_close3(held_right, held_left, PyValue_NULL);
+                    (void)value_operation_finish(tstate, frame, this_instr, value_temps);
                     JUMP_TO_LABEL(error);
                 }
-                if (value_reader_complete(&operation, next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
+                pending = value_reader_complete(tstate, frame, this_instr, value_temps, IR_A(ir_word), pending, held_right, held_left);
+                if (PyValue_IsNull(pending)) {
                     JUMP_TO_LABEL(error);
                 }
                 this_instr = frame->instr_ptr;
@@ -4199,14 +4227,13 @@
             PyValue *values;
             PyValue map;
             values = &window[0];
-            _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
             PyObject *map_o = _Py_BuildMap_ValueSteal(values, oparg);
             int failed = map_o == NULL;
             map = failed ? PyValue_NULL : PyValue_FromPyObjectSteal(map_o);
             IR_CLEAR_SLOTS(&window[1], -1 + oparg*2);
             IR_PUBLISH_TEMP(window[0], map);
             {
-                int operation_failed = value_operation_finish(&operation, next_instr, NULL);
+                int operation_failed = value_operation_finish(tstate, frame, this_instr, NULL);
                 if (operation_failed < 0) {
                     JUMP_TO_LABEL(error);
                 }
@@ -4510,7 +4537,10 @@
             (void)oparg;
             PyValue *window = &IR_SLOT(IR_B(ir_word));
             (void)window;
-            _PyCallTransaction call = call_transaction_begin(tstate, frame, next_instr, IR_B(ir_word), (1) + (1) + (oparg), IR_A(ir_word), oparg, CALL_TRANSACTION_VECTOR, 0, 1);
+            int call_base = IR_B(ir_word);
+            int call_destination = IR_A(ir_word);
+            int call_state = 0;
+            call_transaction_begin(frame, call_base, (1) + (1) + (oparg), call_destination);
             uint32_t call_feedback = IR_D(ir_word);
             PyValue callable;
             PyValue self_or_null;
@@ -4522,17 +4552,17 @@
                 {
                     _PyFbHeader *feedback = ((_PyFbHeader *)fb);
                     if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
-                        call.effects = 1;
+                        call_state |= CALL_EFFECTS;
                         _Py_Specialize_Call(callable, self_or_null, this_instr, oparg + !PyValue_IsNull(self_or_null));
-                        if (call_transaction_refresh(&call, next_instr) < 0) {
+                        if (call_transaction_refresh(tstate, frame, this_instr) < 0) {
                             JUMP_TO_LABEL(error);
                         }
                         this_instr = frame->instr_ptr;
                         ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
                         slots = _PyFrame_Slots(frame);
-                        window = slots + call.base;
+                        window = slots + call_base;
                         fb = (_PyFb_CALL *)(frame->ir_feedback + call_feedback * FB_STRIDE);
-                        if (call.effects) { goto call_transaction_fallback_CALL; }
+                        if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL; }
                         DISPATCH_SAME_OPARG();
                     }
                     OPCODE_DEFERRED_INC(CALL);
@@ -4542,39 +4572,49 @@
             }
             // _MAYBE_EXPAND_METHOD
             {
-                if (call_transaction_expand_method(&call, next_instr) < 0) {
-                    JUMP_TO_LABEL(error);
+                {
+                    int ir_expanded = call_transaction_expand_method(tstate, frame, this_instr, call_base);
+                    if (ir_expanded < 0) {
+                        JUMP_TO_LABEL(error);
+                    }
+                    call_state |= CALL_PREPARED | (ir_expanded ? CALL_EFFECTS : 0);
                 }
                 this_instr = frame->instr_ptr;
                 ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
                 slots = _PyFrame_Slots(frame);
-                window = slots + call.base;
+                window = slots + call_base;
                 fb = (_PyFb_CALL *)(frame->ir_feedback + call_feedback * FB_STRIDE);
                 callable = window[0];
                 self_or_null = window[1];
             }
             // _DO_CALL
             {
-                _PyInterpreterFrame *call_child;
-                if (call_transaction_invoke(&call, next_instr, &call_child) < 0) {
+                assert(frame->instr_ptr == this_instr);
+                {
+                    _PyCallResult call_result = call_transaction_run_vector(tstate, frame, call_base, call_destination, oparg, (CALL_PERIODIC) | call_state);
+                    if (call_result.status < 0) {
+                        JUMP_TO_LABEL(error);
+                    }
+                    if (call_result.child != NULL) {
+                        DISPATCH_INLINED(call_result.child);
+                    }
+                    slots = _PyFrame_Slots(frame);
+                    DISPATCH();
+                }
+            }
+            call_transaction_fallback_CALL:;
+            assert(frame->instr_ptr == this_instr);
+            {
+                _PyCallResult call_result = call_transaction_run_vector(tstate, frame, call_base, call_destination, oparg, (CALL_PERIODIC) | call_state);
+                if (call_result.status < 0) {
                     JUMP_TO_LABEL(error);
                 }
-                if (call_child != NULL) {
-                    DISPATCH_INLINED(call_child);
+                if (call_result.child != NULL) {
+                    DISPATCH_INLINED(call_result.child);
                 }
                 slots = _PyFrame_Slots(frame);
                 DISPATCH();
             }
-            call_transaction_fallback_CALL:;
-            _PyInterpreterFrame *call_child;
-            if (call_transaction_invoke(&call, next_instr, &call_child) < 0) {
-                JUMP_TO_LABEL(error);
-            }
-            if (call_child != NULL) {
-                DISPATCH_INLINED(call_child);
-            }
-            slots = _PyFrame_Slots(frame);
-            DISPATCH();
         }
 
         TARGET(CALL_ALLOC_AND_ENTER_INIT) {
@@ -4905,7 +4945,10 @@
             (void)oparg;
             PyValue *window = &IR_SLOT(IR_B(ir_word));
             (void)window;
-            _PyCallTransaction call = call_transaction_begin(tstate, frame, next_instr, IR_B(ir_word), (1) + (1) + (oparg), IR_A(ir_word), oparg, CALL_TRANSACTION_VECTOR, 0, 0);
+            int call_base = IR_B(ir_word);
+            int call_destination = IR_A(ir_word);
+            int call_state = 0;
+            call_transaction_begin(frame, call_base, (1) + (1) + (oparg), call_destination);
             uint32_t call_feedback = IR_D(ir_word);
             PyValue callable;
             PyValue null;
@@ -4913,7 +4956,7 @@
             // _CHECK_PEP_523
             {
                 if (IS_PEP523_HOOKED(tstate)) {
-                    if (call.effects) { goto call_transaction_fallback_CALL_BOUND_METHOD_GENERAL; }
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_BOUND_METHOD_GENERAL; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -4925,33 +4968,33 @@
                 callable = window[0];
                 uint32_t func_version = fb->func_version;
                 if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&window[0]))) {
-                    if (call.effects) { goto call_transaction_fallback_CALL_BOUND_METHOD_GENERAL; }
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_BOUND_METHOD_GENERAL; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
                 PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
                 if (Py_TYPE(callable_o) != &PyMethod_Type) {
-                    if (call.effects) { goto call_transaction_fallback_CALL_BOUND_METHOD_GENERAL; }
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_BOUND_METHOD_GENERAL; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
                 PyObject *func = ((PyMethodObject *)callable_o)->im_func;
                 if (!PyFunction_Check(func)) {
-                    if (call.effects) { goto call_transaction_fallback_CALL_BOUND_METHOD_GENERAL; }
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_BOUND_METHOD_GENERAL; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
                 if (((PyFunctionObject *)func)->func_version != func_version) {
-                    if (call.effects) { goto call_transaction_fallback_CALL_BOUND_METHOD_GENERAL; }
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_BOUND_METHOD_GENERAL; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
                 if (!PyValue_IsNull(null)) {
-                    if (call.effects) { goto call_transaction_fallback_CALL_BOUND_METHOD_GENERAL; }
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_BOUND_METHOD_GENERAL; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -4960,13 +5003,17 @@
             // _EXPAND_METHOD
             {
                 self_or_null = null;
-                if (call_transaction_expand_method(&call, next_instr) < 0) {
-                    JUMP_TO_LABEL(error);
+                {
+                    int ir_expanded = call_transaction_expand_method(tstate, frame, this_instr, call_base);
+                    if (ir_expanded < 0) {
+                        JUMP_TO_LABEL(error);
+                    }
+                    call_state |= CALL_PREPARED | (ir_expanded ? CALL_EFFECTS : 0);
                 }
                 this_instr = frame->instr_ptr;
                 ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
                 slots = _PyFrame_Slots(frame);
-                window = slots + call.base;
+                window = slots + call_base;
                 fb = (_PyFb_CALL *)(frame->ir_feedback + call_feedback * FB_STRIDE);
                 callable = window[0];
                 self_or_null = window[1];
@@ -4977,7 +5024,7 @@
             // _CHECK_RECURSION_REMAINING
             {
                 if (tstate->py_recursion_remaining <= 1) {
-                    if (call.effects) { goto call_transaction_fallback_CALL_BOUND_METHOD_GENERAL; }
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_BOUND_METHOD_GENERAL; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -4985,26 +5032,32 @@
             }
             // _PY_FRAME_GENERAL
             {
-                _PyInterpreterFrame *call_child;
-                if (call_transaction_invoke(&call, next_instr, &call_child) < 0) {
+                assert(frame->instr_ptr == this_instr);
+                {
+                    _PyCallResult call_result = call_transaction_run_vector(tstate, frame, call_base, call_destination, oparg, (0) | call_state);
+                    if (call_result.status < 0) {
+                        JUMP_TO_LABEL(error);
+                    }
+                    if (call_result.child != NULL) {
+                        DISPATCH_INLINED(call_result.child);
+                    }
+                    slots = _PyFrame_Slots(frame);
+                    DISPATCH();
+                }
+            }
+            call_transaction_fallback_CALL_BOUND_METHOD_GENERAL:;
+            assert(frame->instr_ptr == this_instr);
+            {
+                _PyCallResult call_result = call_transaction_run_vector(tstate, frame, call_base, call_destination, oparg, (0) | call_state);
+                if (call_result.status < 0) {
                     JUMP_TO_LABEL(error);
                 }
-                if (call_child != NULL) {
-                    DISPATCH_INLINED(call_child);
+                if (call_result.child != NULL) {
+                    DISPATCH_INLINED(call_result.child);
                 }
                 slots = _PyFrame_Slots(frame);
                 DISPATCH();
             }
-            call_transaction_fallback_CALL_BOUND_METHOD_GENERAL:;
-            _PyInterpreterFrame *call_child;
-            if (call_transaction_invoke(&call, next_instr, &call_child) < 0) {
-                JUMP_TO_LABEL(error);
-            }
-            if (call_child != NULL) {
-                DISPATCH_INLINED(call_child);
-            }
-            slots = _PyFrame_Slots(frame);
-            DISPATCH();
         }
 
         TARGET(CALL_BUILTIN_CLASS) {
@@ -5344,40 +5397,22 @@
             // _CALL_BUILTIN_O
             {
                 args = &window[2];
-                PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
                 if (!PyValue_IsNull(self_or_null)) {
                     args--;
                 }
                 STAT_INC(CALL, hit);
-                _PyNativeScope scope;
-                PyValue pending = PyValue_NULL;
-                _PyNativeCallPublication publication = native_call_publication(
-                    tstate, frame, next_instr,IR_B(ir_word), oparg + 2, &pending);
-                int status = _PyNativeScope_Begin(
-                    &scope, tstate, args, 1, 1, PyValue_NULL, NULL);
-                if (status == 0) {
-                    status = _PyCFunction_CallScoped(&scope, callable_o, &scope.result);
-                }
-                if (status < 0) {
-                    _PyNativeResult_Abort(&scope.result, native_call_publish_pc, &publication);
-                    (void)native_call_finish(&publication, &scope, NULL, NULL, next_instr);
-                    JUMP_TO_LABEL(error);
-                }
-                PyValue c = callable;
-                PyValue s = args[0];
-                IR_CLEAR_SLOTS(&window[0], 2 + oparg);
-                _PyNativeResult_Publish(&scope.result, &pending,
-                                    native_call_publish_result, &publication);
-                res = pending;
-                IR_PUBLISH_TEMP(window[0], res);
-                int failed = native_call_finish(&publication, &scope, &s, &c, next_instr);
-                if (failed < 0) {
+                PyValue result = native_call_builtin_o(
+                    tstate, frame, next_instr,IR_B(ir_word), oparg + 2, callable, args);
+                if (PyValue_IsNull(result)) {
                     JUMP_TO_LABEL(error);
                 }
                 this_instr = frame->instr_ptr;
                 ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
                 slots = _PyFrame_Slots(frame);
                 window = &slots[IR_B(ir_word)];
+                res = result;
+                IR_CLEAR_SLOTS(&window[1], 1 + oparg);
+                IR_PUBLISH_TEMP(window[0], res);
             }
             // _CHECK_PERIODIC_AT_END
             {
@@ -5409,7 +5444,10 @@
             (void)ir_displaced;
             PyValue *window = &IR_SLOT(IR_B(ir_word));
             (void)window;
-            _PyCallTransaction call = call_transaction_begin(tstate, frame, next_instr, IR_B(ir_word), (1) + (1) + (1) + (1), IR_A(ir_word), 0, CALL_TRANSACTION_EX, 0, 1);
+            int call_base = IR_B(ir_word);
+            int call_destination = IR_A(ir_word);
+            int call_state = 0;
+            call_transaction_begin(frame, call_base, (1) + (1) + (1) + (1), call_destination);
             PyValue func_st;
             PyValue func;
             PyValue callargs;
@@ -5418,14 +5456,14 @@
             {
                 func_st = window[0];
                 if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&window[0]))) {
-                    if (call.effects) { goto call_transaction_fallback_CALL_EX_NON_PY_GENERAL; }
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_EX_NON_PY_GENERAL; }
                     UPDATE_MISS_STATS(CALL_FUNCTION_EX);
                     assert(_PyOpcode_Deopt[opcode] == (CALL_FUNCTION_EX));
                     JUMP_TO_PREDICTED(CALL_FUNCTION_EX);
                 }
                 PyObject *func = PyValue_AsKnownObjectBorrow(func_st);
                 if (Py_TYPE(func) == &PyFunction_Type && ((PyFunctionObject *)func)->vectorcall == _PyFunction_Vectorcall) {
-                    if (call.effects) { goto call_transaction_fallback_CALL_EX_NON_PY_GENERAL; }
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_EX_NON_PY_GENERAL; }
                     UPDATE_MISS_STATS(CALL_FUNCTION_EX);
                     assert(_PyOpcode_Deopt[opcode] == (CALL_FUNCTION_EX));
                     JUMP_TO_PREDICTED(CALL_FUNCTION_EX);
@@ -5436,13 +5474,14 @@
                 kwargs = window[3];
                 callargs = window[2];
                 func = func_st;
-                if (call_transaction_prepare_tuple(&call, next_instr) < 0) {
+                call_state |= CALL_PREPARED | CALL_EFFECTS;
+                if (call_transaction_prepare_tuple(tstate, frame, this_instr, call_base) < 0) {
                     JUMP_TO_LABEL(error);
                 }
                 this_instr = frame->instr_ptr;
                 ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
                 slots = _PyFrame_Slots(frame);
-                window = slots + call.base;
+                window = slots + call_base;
                 func = window[0];
                 callargs = window[2];
                 kwargs = window[3];
@@ -5451,14 +5490,14 @@
             {
                 func_st = func;
                 if (Py_UNLIKELY(!PyValue_IsPointerSpace(func_st))) {
-                    if (call.effects) { goto call_transaction_fallback_CALL_EX_NON_PY_GENERAL; }
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_EX_NON_PY_GENERAL; }
                     UPDATE_MISS_STATS(CALL_FUNCTION_EX);
                     assert(_PyOpcode_Deopt[opcode] == (CALL_FUNCTION_EX));
                     JUMP_TO_PREDICTED(CALL_FUNCTION_EX);
                 }
                 PyObject *func = PyValue_AsKnownObjectBorrow(func_st);
                 if (Py_TYPE(func) == &PyFunction_Type && ((PyFunctionObject *)func)->vectorcall == _PyFunction_Vectorcall) {
-                    if (call.effects) { goto call_transaction_fallback_CALL_EX_NON_PY_GENERAL; }
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_EX_NON_PY_GENERAL; }
                     UPDATE_MISS_STATS(CALL_FUNCTION_EX);
                     assert(_PyOpcode_Deopt[opcode] == (CALL_FUNCTION_EX));
                     JUMP_TO_PREDICTED(CALL_FUNCTION_EX);
@@ -5466,26 +5505,32 @@
             }
             // _CALL_FUNCTION_EX_NON_PY_GENERAL
             {
-                _PyInterpreterFrame *call_child;
-                if (call_transaction_invoke(&call, next_instr, &call_child) < 0) {
+                assert(frame->instr_ptr == this_instr);
+                {
+                    _PyCallResult call_result = call_transaction_run_ex(tstate, frame, call_base, call_destination, (CALL_PERIODIC) | call_state);
+                    if (call_result.status < 0) {
+                        JUMP_TO_LABEL(error);
+                    }
+                    if (call_result.child != NULL) {
+                        DISPATCH_INLINED(call_result.child);
+                    }
+                    slots = _PyFrame_Slots(frame);
+                    DISPATCH();
+                }
+            }
+            call_transaction_fallback_CALL_EX_NON_PY_GENERAL:;
+            assert(frame->instr_ptr == this_instr);
+            {
+                _PyCallResult call_result = call_transaction_run_ex(tstate, frame, call_base, call_destination, (CALL_PERIODIC) | call_state);
+                if (call_result.status < 0) {
                     JUMP_TO_LABEL(error);
                 }
-                if (call_child != NULL) {
-                    DISPATCH_INLINED(call_child);
+                if (call_result.child != NULL) {
+                    DISPATCH_INLINED(call_result.child);
                 }
                 slots = _PyFrame_Slots(frame);
                 DISPATCH();
             }
-            call_transaction_fallback_CALL_EX_NON_PY_GENERAL:;
-            _PyInterpreterFrame *call_child;
-            if (call_transaction_invoke(&call, next_instr, &call_child) < 0) {
-                JUMP_TO_LABEL(error);
-            }
-            if (call_child != NULL) {
-                DISPATCH_INLINED(call_child);
-            }
-            slots = _PyFrame_Slots(frame);
-            DISPATCH();
         }
 
         TARGET(CALL_EX_PY) {
@@ -5502,7 +5547,10 @@
             (void)ir_displaced;
             PyValue *window = &IR_SLOT(IR_B(ir_word));
             (void)window;
-            _PyCallTransaction call = call_transaction_begin(tstate, frame, next_instr, IR_B(ir_word), (1) + (1) + (1) + (1), IR_A(ir_word), 0, CALL_TRANSACTION_EX, 0, 0);
+            int call_base = IR_B(ir_word);
+            int call_destination = IR_A(ir_word);
+            int call_state = 0;
+            call_transaction_begin(frame, call_base, (1) + (1) + (1) + (1), call_destination);
             PyValue func_st;
             PyValue func;
             PyValue callargs;
@@ -5510,7 +5558,7 @@
             // _CHECK_PEP_523
             {
                 if (IS_PEP523_HOOKED(tstate)) {
-                    if (call.effects) { goto call_transaction_fallback_CALL_EX_PY; }
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_EX_PY; }
                     UPDATE_MISS_STATS(CALL_FUNCTION_EX);
                     assert(_PyOpcode_Deopt[opcode] == (CALL_FUNCTION_EX));
                     JUMP_TO_PREDICTED(CALL_FUNCTION_EX);
@@ -5520,20 +5568,20 @@
             {
                 func_st = window[0];
                 if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&window[0]))) {
-                    if (call.effects) { goto call_transaction_fallback_CALL_EX_PY; }
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_EX_PY; }
                     UPDATE_MISS_STATS(CALL_FUNCTION_EX);
                     assert(_PyOpcode_Deopt[opcode] == (CALL_FUNCTION_EX));
                     JUMP_TO_PREDICTED(CALL_FUNCTION_EX);
                 }
                 PyObject *func = PyValue_AsKnownObjectBorrow(func_st);
                 if (Py_TYPE(func) != &PyFunction_Type) {
-                    if (call.effects) { goto call_transaction_fallback_CALL_EX_PY; }
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_EX_PY; }
                     UPDATE_MISS_STATS(CALL_FUNCTION_EX);
                     assert(_PyOpcode_Deopt[opcode] == (CALL_FUNCTION_EX));
                     JUMP_TO_PREDICTED(CALL_FUNCTION_EX);
                 }
                 if (((PyFunctionObject *)func)->vectorcall != _PyFunction_Vectorcall) {
-                    if (call.effects) { goto call_transaction_fallback_CALL_EX_PY; }
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_EX_PY; }
                     UPDATE_MISS_STATS(CALL_FUNCTION_EX);
                     assert(_PyOpcode_Deopt[opcode] == (CALL_FUNCTION_EX));
                     JUMP_TO_PREDICTED(CALL_FUNCTION_EX);
@@ -5544,13 +5592,14 @@
                 kwargs = window[3];
                 callargs = window[2];
                 func = func_st;
-                if (call_transaction_prepare_tuple(&call, next_instr) < 0) {
+                call_state |= CALL_PREPARED | CALL_EFFECTS;
+                if (call_transaction_prepare_tuple(tstate, frame, this_instr, call_base) < 0) {
                     JUMP_TO_LABEL(error);
                 }
                 this_instr = frame->instr_ptr;
                 ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
                 slots = _PyFrame_Slots(frame);
-                window = slots + call.base;
+                window = slots + call_base;
                 func = window[0];
                 callargs = window[2];
                 kwargs = window[3];
@@ -5559,20 +5608,20 @@
             {
                 func_st = func;
                 if (Py_UNLIKELY(!PyValue_IsPointerSpace(func_st))) {
-                    if (call.effects) { goto call_transaction_fallback_CALL_EX_PY; }
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_EX_PY; }
                     UPDATE_MISS_STATS(CALL_FUNCTION_EX);
                     assert(_PyOpcode_Deopt[opcode] == (CALL_FUNCTION_EX));
                     JUMP_TO_PREDICTED(CALL_FUNCTION_EX);
                 }
                 PyObject *func = PyValue_AsKnownObjectBorrow(func_st);
                 if (Py_TYPE(func) != &PyFunction_Type) {
-                    if (call.effects) { goto call_transaction_fallback_CALL_EX_PY; }
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_EX_PY; }
                     UPDATE_MISS_STATS(CALL_FUNCTION_EX);
                     assert(_PyOpcode_Deopt[opcode] == (CALL_FUNCTION_EX));
                     JUMP_TO_PREDICTED(CALL_FUNCTION_EX);
                 }
                 if (((PyFunctionObject *)func)->vectorcall != _PyFunction_Vectorcall) {
-                    if (call.effects) { goto call_transaction_fallback_CALL_EX_PY; }
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_EX_PY; }
                     UPDATE_MISS_STATS(CALL_FUNCTION_EX);
                     assert(_PyOpcode_Deopt[opcode] == (CALL_FUNCTION_EX));
                     JUMP_TO_PREDICTED(CALL_FUNCTION_EX);
@@ -5580,26 +5629,32 @@
             }
             // _PY_FRAME_EX
             {
-                _PyInterpreterFrame *call_child;
-                if (call_transaction_invoke(&call, next_instr, &call_child) < 0) {
+                assert(frame->instr_ptr == this_instr);
+                {
+                    _PyCallResult call_result = call_transaction_run_ex(tstate, frame, call_base, call_destination, (0) | call_state);
+                    if (call_result.status < 0) {
+                        JUMP_TO_LABEL(error);
+                    }
+                    if (call_result.child != NULL) {
+                        DISPATCH_INLINED(call_result.child);
+                    }
+                    slots = _PyFrame_Slots(frame);
+                    DISPATCH();
+                }
+            }
+            call_transaction_fallback_CALL_EX_PY:;
+            assert(frame->instr_ptr == this_instr);
+            {
+                _PyCallResult call_result = call_transaction_run_ex(tstate, frame, call_base, call_destination, (0) | call_state);
+                if (call_result.status < 0) {
                     JUMP_TO_LABEL(error);
                 }
-                if (call_child != NULL) {
-                    DISPATCH_INLINED(call_child);
+                if (call_result.child != NULL) {
+                    DISPATCH_INLINED(call_result.child);
                 }
                 slots = _PyFrame_Slots(frame);
                 DISPATCH();
             }
-            call_transaction_fallback_CALL_EX_PY:;
-            _PyInterpreterFrame *call_child;
-            if (call_transaction_invoke(&call, next_instr, &call_child) < 0) {
-                JUMP_TO_LABEL(error);
-            }
-            if (call_child != NULL) {
-                DISPATCH_INLINED(call_child);
-            }
-            slots = _PyFrame_Slots(frame);
-            DISPATCH();
         }
 
         TARGET(CALL_FUNCTION_EX) {
@@ -5617,7 +5672,10 @@
             _PyFb_CALL_FUNCTION_EX *fb = (_PyFb_CALL_FUNCTION_EX *)IR_FB(IR_C(ir_word));
             PyValue *window = &IR_SLOT(IR_B(ir_word));
             (void)window;
-            _PyCallTransaction call = call_transaction_begin(tstate, frame, next_instr, IR_B(ir_word), (1) + (1) + (1) + (1), IR_A(ir_word), 0, CALL_TRANSACTION_EX, 0, 1);
+            int call_base = IR_B(ir_word);
+            int call_destination = IR_A(ir_word);
+            int call_state = 0;
+            call_transaction_begin(frame, call_base, (1) + (1) + (1) + (1), call_destination);
             uint32_t call_feedback = IR_C(ir_word);
             PyValue func;
             PyValue callargs;
@@ -5628,17 +5686,17 @@
                 #if ENABLE_SPECIALIZATION
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
                 if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
-                    call.effects = 1;
+                    call_state |= CALL_EFFECTS;
                     _Py_Specialize_CallFunctionEx(func, this_instr);
-                    if (call_transaction_refresh(&call, next_instr) < 0) {
+                    if (call_transaction_refresh(tstate, frame, this_instr) < 0) {
                         JUMP_TO_LABEL(error);
                     }
                     this_instr = frame->instr_ptr;
                     ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
                     slots = _PyFrame_Slots(frame);
-                    window = slots + call.base;
+                    window = slots + call_base;
                     fb = (_PyFb_CALL_FUNCTION_EX *)(frame->ir_feedback + call_feedback * FB_STRIDE);
-                    if (call.effects) { goto call_transaction_fallback_CALL_FUNCTION_EX; }
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_FUNCTION_EX; }
                     DISPATCH_SAME_OPARG();
                 }
                 OPCODE_DEFERRED_INC(CALL_FUNCTION_EX);
@@ -5649,13 +5707,14 @@
             {
                 kwargs = window[3];
                 callargs = window[2];
-                if (call_transaction_prepare_tuple(&call, next_instr) < 0) {
+                call_state |= CALL_PREPARED | CALL_EFFECTS;
+                if (call_transaction_prepare_tuple(tstate, frame, this_instr, call_base) < 0) {
                     JUMP_TO_LABEL(error);
                 }
                 this_instr = frame->instr_ptr;
                 ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
                 slots = _PyFrame_Slots(frame);
-                window = slots + call.base;
+                window = slots + call_base;
                 fb = (_PyFb_CALL_FUNCTION_EX *)(frame->ir_feedback + call_feedback * FB_STRIDE);
                 func = window[0];
                 callargs = window[2];
@@ -5663,26 +5722,32 @@
             }
             // _DO_CALL_FUNCTION_EX
             {
-                _PyInterpreterFrame *call_child;
-                if (call_transaction_invoke(&call, next_instr, &call_child) < 0) {
+                assert(frame->instr_ptr == this_instr);
+                {
+                    _PyCallResult call_result = call_transaction_run_ex(tstate, frame, call_base, call_destination, (CALL_PERIODIC) | call_state);
+                    if (call_result.status < 0) {
+                        JUMP_TO_LABEL(error);
+                    }
+                    if (call_result.child != NULL) {
+                        DISPATCH_INLINED(call_result.child);
+                    }
+                    slots = _PyFrame_Slots(frame);
+                    DISPATCH();
+                }
+            }
+            call_transaction_fallback_CALL_FUNCTION_EX:;
+            assert(frame->instr_ptr == this_instr);
+            {
+                _PyCallResult call_result = call_transaction_run_ex(tstate, frame, call_base, call_destination, (CALL_PERIODIC) | call_state);
+                if (call_result.status < 0) {
                     JUMP_TO_LABEL(error);
                 }
-                if (call_child != NULL) {
-                    DISPATCH_INLINED(call_child);
+                if (call_result.child != NULL) {
+                    DISPATCH_INLINED(call_result.child);
                 }
                 slots = _PyFrame_Slots(frame);
                 DISPATCH();
             }
-            call_transaction_fallback_CALL_FUNCTION_EX:;
-            _PyInterpreterFrame *call_child;
-            if (call_transaction_invoke(&call, next_instr, &call_child) < 0) {
-                JUMP_TO_LABEL(error);
-            }
-            if (call_child != NULL) {
-                DISPATCH_INLINED(call_child);
-            }
-            slots = _PyFrame_Slots(frame);
-            DISPATCH();
         }
 
         TARGET(CALL_INTRINSIC_1) {
@@ -5932,7 +5997,10 @@
             (void)oparg;
             PyValue *window = &IR_SLOT(IR_B(ir_word));
             (void)window;
-            _PyCallTransaction call = call_transaction_begin(tstate, frame, next_instr, IR_B(ir_word), (1) + (1) + (oparg) + (1), IR_A(ir_word), oparg, CALL_TRANSACTION_KEYWORDS, 0, 0);
+            int call_base = IR_B(ir_word);
+            int call_destination = IR_A(ir_word);
+            int call_state = 0;
+            call_transaction_begin(frame, call_base, (1) + (1) + (oparg) + (1), call_destination);
             uint32_t call_feedback = IR_D(ir_word);
             PyValue callable;
             PyValue self_or_null;
@@ -5943,17 +6011,17 @@
                 #if ENABLE_SPECIALIZATION
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
                 if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
-                    call.effects = 1;
+                    call_state |= CALL_EFFECTS;
                     _Py_Specialize_CallKw(callable, this_instr, oparg + !PyValue_IsNull(self_or_null));
-                    if (call_transaction_refresh(&call, next_instr) < 0) {
+                    if (call_transaction_refresh(tstate, frame, this_instr) < 0) {
                         JUMP_TO_LABEL(error);
                     }
                     this_instr = frame->instr_ptr;
                     ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
                     slots = _PyFrame_Slots(frame);
-                    window = slots + call.base;
+                    window = slots + call_base;
                     fb = (_PyFb_CALL_KW *)(frame->ir_feedback + call_feedback * FB_STRIDE);
-                    if (call.effects) { goto call_transaction_fallback_CALL_KW; }
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_KW; }
                     DISPATCH_SAME_OPARG();
                 }
                 OPCODE_DEFERRED_INC(CALL_KW);
@@ -5962,39 +6030,49 @@
             }
             // _MAYBE_EXPAND_METHOD_KW
             {
-                if (call_transaction_expand_method(&call, next_instr) < 0) {
-                    JUMP_TO_LABEL(error);
+                {
+                    int ir_expanded = call_transaction_expand_method(tstate, frame, this_instr, call_base);
+                    if (ir_expanded < 0) {
+                        JUMP_TO_LABEL(error);
+                    }
+                    call_state |= CALL_PREPARED | (ir_expanded ? CALL_EFFECTS : 0);
                 }
                 this_instr = frame->instr_ptr;
                 ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
                 slots = _PyFrame_Slots(frame);
-                window = slots + call.base;
+                window = slots + call_base;
                 fb = (_PyFb_CALL_KW *)(frame->ir_feedback + call_feedback * FB_STRIDE);
                 callable = window[0];
                 self_or_null = window[1];
             }
             // _DO_CALL_KW
             {
-                _PyInterpreterFrame *call_child;
-                if (call_transaction_invoke(&call, next_instr, &call_child) < 0) {
+                assert(frame->instr_ptr == this_instr);
+                {
+                    _PyCallResult call_result = call_transaction_run_keywords(tstate, frame, call_base, call_destination, oparg, (0) | call_state);
+                    if (call_result.status < 0) {
+                        JUMP_TO_LABEL(error);
+                    }
+                    if (call_result.child != NULL) {
+                        DISPATCH_INLINED(call_result.child);
+                    }
+                    slots = _PyFrame_Slots(frame);
+                    DISPATCH();
+                }
+            }
+            call_transaction_fallback_CALL_KW:;
+            assert(frame->instr_ptr == this_instr);
+            {
+                _PyCallResult call_result = call_transaction_run_keywords(tstate, frame, call_base, call_destination, oparg, (0) | call_state);
+                if (call_result.status < 0) {
                     JUMP_TO_LABEL(error);
                 }
-                if (call_child != NULL) {
-                    DISPATCH_INLINED(call_child);
+                if (call_result.child != NULL) {
+                    DISPATCH_INLINED(call_result.child);
                 }
                 slots = _PyFrame_Slots(frame);
                 DISPATCH();
             }
-            call_transaction_fallback_CALL_KW:;
-            _PyInterpreterFrame *call_child;
-            if (call_transaction_invoke(&call, next_instr, &call_child) < 0) {
-                JUMP_TO_LABEL(error);
-            }
-            if (call_child != NULL) {
-                DISPATCH_INLINED(call_child);
-            }
-            slots = _PyFrame_Slots(frame);
-            DISPATCH();
         }
 
         TARGET(CALL_KW_BOUND_METHOD) {
@@ -6014,7 +6092,10 @@
             (void)oparg;
             PyValue *window = &IR_SLOT(IR_B(ir_word));
             (void)window;
-            _PyCallTransaction call = call_transaction_begin(tstate, frame, next_instr, IR_B(ir_word), (1) + (1) + (oparg) + (1), IR_A(ir_word), oparg, CALL_TRANSACTION_KEYWORDS, 0, 0);
+            int call_base = IR_B(ir_word);
+            int call_destination = IR_A(ir_word);
+            int call_state = 0;
+            call_transaction_begin(frame, call_base, (1) + (1) + (oparg) + (1), call_destination);
             uint32_t call_feedback = IR_D(ir_word);
             PyValue callable;
             PyValue null;
@@ -6022,7 +6103,7 @@
             // _CHECK_PEP_523
             {
                 if (IS_PEP523_HOOKED(tstate)) {
-                    if (call.effects) { goto call_transaction_fallback_CALL_KW_BOUND_METHOD; }
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_KW_BOUND_METHOD; }
                     UPDATE_MISS_STATS(CALL_KW);
                     assert(_PyOpcode_Deopt[opcode] == (CALL_KW));
                     JUMP_TO_PREDICTED(CALL_KW);
@@ -6034,33 +6115,33 @@
                 callable = window[0];
                 uint32_t func_version = fb->func_version;
                 if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&window[0]))) {
-                    if (call.effects) { goto call_transaction_fallback_CALL_KW_BOUND_METHOD; }
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_KW_BOUND_METHOD; }
                     UPDATE_MISS_STATS(CALL_KW);
                     assert(_PyOpcode_Deopt[opcode] == (CALL_KW));
                     JUMP_TO_PREDICTED(CALL_KW);
                 }
                 PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
                 if (Py_TYPE(callable_o) != &PyMethod_Type) {
-                    if (call.effects) { goto call_transaction_fallback_CALL_KW_BOUND_METHOD; }
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_KW_BOUND_METHOD; }
                     UPDATE_MISS_STATS(CALL_KW);
                     assert(_PyOpcode_Deopt[opcode] == (CALL_KW));
                     JUMP_TO_PREDICTED(CALL_KW);
                 }
                 PyObject *func = ((PyMethodObject *)callable_o)->im_func;
                 if (!PyFunction_Check(func)) {
-                    if (call.effects) { goto call_transaction_fallback_CALL_KW_BOUND_METHOD; }
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_KW_BOUND_METHOD; }
                     UPDATE_MISS_STATS(CALL_KW);
                     assert(_PyOpcode_Deopt[opcode] == (CALL_KW));
                     JUMP_TO_PREDICTED(CALL_KW);
                 }
                 if (((PyFunctionObject *)func)->func_version != func_version) {
-                    if (call.effects) { goto call_transaction_fallback_CALL_KW_BOUND_METHOD; }
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_KW_BOUND_METHOD; }
                     UPDATE_MISS_STATS(CALL_KW);
                     assert(_PyOpcode_Deopt[opcode] == (CALL_KW));
                     JUMP_TO_PREDICTED(CALL_KW);
                 }
                 if (!PyValue_IsNull(null)) {
-                    if (call.effects) { goto call_transaction_fallback_CALL_KW_BOUND_METHOD; }
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_KW_BOUND_METHOD; }
                     UPDATE_MISS_STATS(CALL_KW);
                     assert(_PyOpcode_Deopt[opcode] == (CALL_KW));
                     JUMP_TO_PREDICTED(CALL_KW);
@@ -6069,13 +6150,17 @@
             // _EXPAND_METHOD_KW
             {
                 self_or_null = null;
-                if (call_transaction_expand_method(&call, next_instr) < 0) {
-                    JUMP_TO_LABEL(error);
+                {
+                    int ir_expanded = call_transaction_expand_method(tstate, frame, this_instr, call_base);
+                    if (ir_expanded < 0) {
+                        JUMP_TO_LABEL(error);
+                    }
+                    call_state |= CALL_PREPARED | (ir_expanded ? CALL_EFFECTS : 0);
                 }
                 this_instr = frame->instr_ptr;
                 ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
                 slots = _PyFrame_Slots(frame);
-                window = slots + call.base;
+                window = slots + call_base;
                 fb = (_PyFb_CALL_KW *)(frame->ir_feedback + call_feedback * FB_STRIDE);
                 callable = window[0];
                 self_or_null = window[1];
@@ -6085,26 +6170,32 @@
             IR_PUBLISH_TEMP(window[1], self_or_null);
             // _PY_FRAME_KW
             {
-                _PyInterpreterFrame *call_child;
-                if (call_transaction_invoke(&call, next_instr, &call_child) < 0) {
+                assert(frame->instr_ptr == this_instr);
+                {
+                    _PyCallResult call_result = call_transaction_run_keywords(tstate, frame, call_base, call_destination, oparg, (0) | call_state);
+                    if (call_result.status < 0) {
+                        JUMP_TO_LABEL(error);
+                    }
+                    if (call_result.child != NULL) {
+                        DISPATCH_INLINED(call_result.child);
+                    }
+                    slots = _PyFrame_Slots(frame);
+                    DISPATCH();
+                }
+            }
+            call_transaction_fallback_CALL_KW_BOUND_METHOD:;
+            assert(frame->instr_ptr == this_instr);
+            {
+                _PyCallResult call_result = call_transaction_run_keywords(tstate, frame, call_base, call_destination, oparg, (0) | call_state);
+                if (call_result.status < 0) {
                     JUMP_TO_LABEL(error);
                 }
-                if (call_child != NULL) {
-                    DISPATCH_INLINED(call_child);
+                if (call_result.child != NULL) {
+                    DISPATCH_INLINED(call_result.child);
                 }
                 slots = _PyFrame_Slots(frame);
                 DISPATCH();
             }
-            call_transaction_fallback_CALL_KW_BOUND_METHOD:;
-            _PyInterpreterFrame *call_child;
-            if (call_transaction_invoke(&call, next_instr, &call_child) < 0) {
-                JUMP_TO_LABEL(error);
-            }
-            if (call_child != NULL) {
-                DISPATCH_INLINED(call_child);
-            }
-            slots = _PyFrame_Slots(frame);
-            DISPATCH();
         }
 
         TARGET(CALL_KW_NON_PY) {
@@ -6123,7 +6214,10 @@
             (void)oparg;
             PyValue *window = &IR_SLOT(IR_B(ir_word));
             (void)window;
-            _PyCallTransaction call = call_transaction_begin(tstate, frame, next_instr, IR_B(ir_word), (1) + (1) + (oparg) + (1), IR_A(ir_word), oparg, CALL_TRANSACTION_KEYWORDS, 0, 1);
+            int call_base = IR_B(ir_word);
+            int call_destination = IR_A(ir_word);
+            int call_state = 0;
+            call_transaction_begin(frame, call_base, (1) + (1) + (oparg) + (1), call_destination);
             PyValue callable;
             // _CHECK_IS_NOT_PY_CALLABLE_KW
             {
@@ -6131,13 +6225,13 @@
                 if (PyValue_IsObject(callable)) {
                     PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
                     if (PyFunction_Check(callable_o)) {
-                        if (call.effects) { goto call_transaction_fallback_CALL_KW_NON_PY; }
+                        if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_KW_NON_PY; }
                         UPDATE_MISS_STATS(CALL_KW);
                         assert(_PyOpcode_Deopt[opcode] == (CALL_KW));
                         JUMP_TO_PREDICTED(CALL_KW);
                     }
                     if (Py_TYPE(callable_o) == &PyMethod_Type) {
-                        if (call.effects) { goto call_transaction_fallback_CALL_KW_NON_PY; }
+                        if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_KW_NON_PY; }
                         UPDATE_MISS_STATS(CALL_KW);
                         assert(_PyOpcode_Deopt[opcode] == (CALL_KW));
                         JUMP_TO_PREDICTED(CALL_KW);
@@ -6146,26 +6240,32 @@
             }
             // _CALL_KW_NON_PY
             {
-                _PyInterpreterFrame *call_child;
-                if (call_transaction_invoke(&call, next_instr, &call_child) < 0) {
+                assert(frame->instr_ptr == this_instr);
+                {
+                    _PyCallResult call_result = call_transaction_run_keywords(tstate, frame, call_base, call_destination, oparg, (CALL_PERIODIC) | call_state);
+                    if (call_result.status < 0) {
+                        JUMP_TO_LABEL(error);
+                    }
+                    if (call_result.child != NULL) {
+                        DISPATCH_INLINED(call_result.child);
+                    }
+                    slots = _PyFrame_Slots(frame);
+                    DISPATCH();
+                }
+            }
+            call_transaction_fallback_CALL_KW_NON_PY:;
+            assert(frame->instr_ptr == this_instr);
+            {
+                _PyCallResult call_result = call_transaction_run_keywords(tstate, frame, call_base, call_destination, oparg, (CALL_PERIODIC) | call_state);
+                if (call_result.status < 0) {
                     JUMP_TO_LABEL(error);
                 }
-                if (call_child != NULL) {
-                    DISPATCH_INLINED(call_child);
+                if (call_result.child != NULL) {
+                    DISPATCH_INLINED(call_result.child);
                 }
                 slots = _PyFrame_Slots(frame);
                 DISPATCH();
             }
-            call_transaction_fallback_CALL_KW_NON_PY:;
-            _PyInterpreterFrame *call_child;
-            if (call_transaction_invoke(&call, next_instr, &call_child) < 0) {
-                JUMP_TO_LABEL(error);
-            }
-            if (call_child != NULL) {
-                DISPATCH_INLINED(call_child);
-            }
-            slots = _PyFrame_Slots(frame);
-            DISPATCH();
         }
 
         TARGET(CALL_KW_PY) {
@@ -6185,13 +6285,16 @@
             (void)oparg;
             PyValue *window = &IR_SLOT(IR_B(ir_word));
             (void)window;
-            _PyCallTransaction call = call_transaction_begin(tstate, frame, next_instr, IR_B(ir_word), (1) + (1) + (oparg) + (1), IR_A(ir_word), oparg, CALL_TRANSACTION_KEYWORDS, 0, 0);
+            int call_base = IR_B(ir_word);
+            int call_destination = IR_A(ir_word);
+            int call_state = 0;
+            call_transaction_begin(frame, call_base, (1) + (1) + (oparg) + (1), call_destination);
             uint32_t call_feedback = IR_D(ir_word);
             PyValue callable;
             // _CHECK_PEP_523
             {
                 if (IS_PEP523_HOOKED(tstate)) {
-                    if (call.effects) { goto call_transaction_fallback_CALL_KW_PY; }
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_KW_PY; }
                     UPDATE_MISS_STATS(CALL_KW);
                     assert(_PyOpcode_Deopt[opcode] == (CALL_KW));
                     JUMP_TO_PREDICTED(CALL_KW);
@@ -6202,21 +6305,21 @@
                 callable = window[0];
                 uint32_t func_version = fb->func_version;
                 if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&window[0]))) {
-                    if (call.effects) { goto call_transaction_fallback_CALL_KW_PY; }
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_KW_PY; }
                     UPDATE_MISS_STATS(CALL_KW);
                     assert(_PyOpcode_Deopt[opcode] == (CALL_KW));
                     JUMP_TO_PREDICTED(CALL_KW);
                 }
                 PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
                 if (!PyFunction_Check(callable_o)) {
-                    if (call.effects) { goto call_transaction_fallback_CALL_KW_PY; }
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_KW_PY; }
                     UPDATE_MISS_STATS(CALL_KW);
                     assert(_PyOpcode_Deopt[opcode] == (CALL_KW));
                     JUMP_TO_PREDICTED(CALL_KW);
                 }
                 PyFunctionObject *func = (PyFunctionObject *)callable_o;
                 if (func->func_version != func_version) {
-                    if (call.effects) { goto call_transaction_fallback_CALL_KW_PY; }
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_KW_PY; }
                     UPDATE_MISS_STATS(CALL_KW);
                     assert(_PyOpcode_Deopt[opcode] == (CALL_KW));
                     JUMP_TO_PREDICTED(CALL_KW);
@@ -6225,7 +6328,7 @@
             // _CHECK_RECURSION_REMAINING
             {
                 if (tstate->py_recursion_remaining <= 1) {
-                    if (call.effects) { goto call_transaction_fallback_CALL_KW_PY; }
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_KW_PY; }
                     UPDATE_MISS_STATS(CALL_KW);
                     assert(_PyOpcode_Deopt[opcode] == (CALL_KW));
                     JUMP_TO_PREDICTED(CALL_KW);
@@ -6233,26 +6336,32 @@
             }
             // _PY_FRAME_KW
             {
-                _PyInterpreterFrame *call_child;
-                if (call_transaction_invoke(&call, next_instr, &call_child) < 0) {
+                assert(frame->instr_ptr == this_instr);
+                {
+                    _PyCallResult call_result = call_transaction_run_keywords(tstate, frame, call_base, call_destination, oparg, (0) | call_state);
+                    if (call_result.status < 0) {
+                        JUMP_TO_LABEL(error);
+                    }
+                    if (call_result.child != NULL) {
+                        DISPATCH_INLINED(call_result.child);
+                    }
+                    slots = _PyFrame_Slots(frame);
+                    DISPATCH();
+                }
+            }
+            call_transaction_fallback_CALL_KW_PY:;
+            assert(frame->instr_ptr == this_instr);
+            {
+                _PyCallResult call_result = call_transaction_run_keywords(tstate, frame, call_base, call_destination, oparg, (0) | call_state);
+                if (call_result.status < 0) {
                     JUMP_TO_LABEL(error);
                 }
-                if (call_child != NULL) {
-                    DISPATCH_INLINED(call_child);
+                if (call_result.child != NULL) {
+                    DISPATCH_INLINED(call_result.child);
                 }
                 slots = _PyFrame_Slots(frame);
                 DISPATCH();
             }
-            call_transaction_fallback_CALL_KW_PY:;
-            _PyInterpreterFrame *call_child;
-            if (call_transaction_invoke(&call, next_instr, &call_child) < 0) {
-                JUMP_TO_LABEL(error);
-            }
-            if (call_child != NULL) {
-                DISPATCH_INLINED(call_child);
-            }
-            slots = _PyFrame_Slots(frame);
-            DISPATCH();
         }
 
         TARGET(CALL_LEN) {
@@ -7001,7 +7110,10 @@
             (void)oparg;
             PyValue *window = &IR_SLOT(IR_B(ir_word));
             (void)window;
-            _PyCallTransaction call = call_transaction_begin(tstate, frame, next_instr, IR_B(ir_word), (1) + (1) + (oparg), IR_A(ir_word), oparg, CALL_TRANSACTION_VECTOR, 0, 1);
+            int call_base = IR_B(ir_word);
+            int call_destination = IR_A(ir_word);
+            int call_state = 0;
+            call_transaction_begin(frame, call_base, (1) + (1) + (oparg), call_destination);
             PyValue callable;
             // _CHECK_IS_NOT_PY_CALLABLE
             {
@@ -7009,13 +7121,13 @@
                 if (PyValue_IsObject(callable)) {
                     PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
                     if (PyFunction_Check(callable_o)) {
-                        if (call.effects) { goto call_transaction_fallback_CALL_NON_PY_GENERAL; }
+                        if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_NON_PY_GENERAL; }
                         UPDATE_MISS_STATS(CALL);
                         assert(_PyOpcode_Deopt[opcode] == (CALL));
                         JUMP_TO_PREDICTED(CALL);
                     }
                     if (Py_TYPE(callable_o) == &PyMethod_Type) {
-                        if (call.effects) { goto call_transaction_fallback_CALL_NON_PY_GENERAL; }
+                        if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_NON_PY_GENERAL; }
                         UPDATE_MISS_STATS(CALL);
                         assert(_PyOpcode_Deopt[opcode] == (CALL));
                         JUMP_TO_PREDICTED(CALL);
@@ -7024,26 +7136,32 @@
             }
             // _CALL_NON_PY_GENERAL
             {
-                _PyInterpreterFrame *call_child;
-                if (call_transaction_invoke(&call, next_instr, &call_child) < 0) {
+                assert(frame->instr_ptr == this_instr);
+                {
+                    _PyCallResult call_result = call_transaction_run_vector(tstate, frame, call_base, call_destination, oparg, (CALL_PERIODIC) | call_state);
+                    if (call_result.status < 0) {
+                        JUMP_TO_LABEL(error);
+                    }
+                    if (call_result.child != NULL) {
+                        DISPATCH_INLINED(call_result.child);
+                    }
+                    slots = _PyFrame_Slots(frame);
+                    DISPATCH();
+                }
+            }
+            call_transaction_fallback_CALL_NON_PY_GENERAL:;
+            assert(frame->instr_ptr == this_instr);
+            {
+                _PyCallResult call_result = call_transaction_run_vector(tstate, frame, call_base, call_destination, oparg, (CALL_PERIODIC) | call_state);
+                if (call_result.status < 0) {
                     JUMP_TO_LABEL(error);
                 }
-                if (call_child != NULL) {
-                    DISPATCH_INLINED(call_child);
+                if (call_result.child != NULL) {
+                    DISPATCH_INLINED(call_result.child);
                 }
                 slots = _PyFrame_Slots(frame);
                 DISPATCH();
             }
-            call_transaction_fallback_CALL_NON_PY_GENERAL:;
-            _PyInterpreterFrame *call_child;
-            if (call_transaction_invoke(&call, next_instr, &call_child) < 0) {
-                JUMP_TO_LABEL(error);
-            }
-            if (call_child != NULL) {
-                DISPATCH_INLINED(call_child);
-            }
-            slots = _PyFrame_Slots(frame);
-            DISPATCH();
         }
 
         TARGET(CALL_PY_EXACT_ARGS) {
@@ -7198,13 +7316,16 @@
             (void)oparg;
             PyValue *window = &IR_SLOT(IR_B(ir_word));
             (void)window;
-            _PyCallTransaction call = call_transaction_begin(tstate, frame, next_instr, IR_B(ir_word), (1) + (1) + (oparg), IR_A(ir_word), oparg, CALL_TRANSACTION_VECTOR, 0, 0);
+            int call_base = IR_B(ir_word);
+            int call_destination = IR_A(ir_word);
+            int call_state = 0;
+            call_transaction_begin(frame, call_base, (1) + (1) + (oparg), call_destination);
             uint32_t call_feedback = IR_D(ir_word);
             PyValue callable;
             // _CHECK_PEP_523
             {
                 if (IS_PEP523_HOOKED(tstate)) {
-                    if (call.effects) { goto call_transaction_fallback_CALL_PY_GENERAL; }
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_PY_GENERAL; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -7215,21 +7336,21 @@
                 callable = window[0];
                 uint32_t func_version = fb->func_version;
                 if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&window[0]))) {
-                    if (call.effects) { goto call_transaction_fallback_CALL_PY_GENERAL; }
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_PY_GENERAL; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
                 PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
                 if (!PyFunction_Check(callable_o)) {
-                    if (call.effects) { goto call_transaction_fallback_CALL_PY_GENERAL; }
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_PY_GENERAL; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
                 PyFunctionObject *func = (PyFunctionObject *)callable_o;
                 if (func->func_version != func_version) {
-                    if (call.effects) { goto call_transaction_fallback_CALL_PY_GENERAL; }
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_PY_GENERAL; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -7238,7 +7359,7 @@
             // _CHECK_RECURSION_REMAINING
             {
                 if (tstate->py_recursion_remaining <= 1) {
-                    if (call.effects) { goto call_transaction_fallback_CALL_PY_GENERAL; }
+                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_PY_GENERAL; }
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -7246,26 +7367,32 @@
             }
             // _PY_FRAME_GENERAL
             {
-                _PyInterpreterFrame *call_child;
-                if (call_transaction_invoke(&call, next_instr, &call_child) < 0) {
+                assert(frame->instr_ptr == this_instr);
+                {
+                    _PyCallResult call_result = call_transaction_run_vector(tstate, frame, call_base, call_destination, oparg, (0) | call_state);
+                    if (call_result.status < 0) {
+                        JUMP_TO_LABEL(error);
+                    }
+                    if (call_result.child != NULL) {
+                        DISPATCH_INLINED(call_result.child);
+                    }
+                    slots = _PyFrame_Slots(frame);
+                    DISPATCH();
+                }
+            }
+            call_transaction_fallback_CALL_PY_GENERAL:;
+            assert(frame->instr_ptr == this_instr);
+            {
+                _PyCallResult call_result = call_transaction_run_vector(tstate, frame, call_base, call_destination, oparg, (0) | call_state);
+                if (call_result.status < 0) {
                     JUMP_TO_LABEL(error);
                 }
-                if (call_child != NULL) {
-                    DISPATCH_INLINED(call_child);
+                if (call_result.child != NULL) {
+                    DISPATCH_INLINED(call_result.child);
                 }
                 slots = _PyFrame_Slots(frame);
                 DISPATCH();
             }
-            call_transaction_fallback_CALL_PY_GENERAL:;
-            _PyInterpreterFrame *call_child;
-            if (call_transaction_invoke(&call, next_instr, &call_child) < 0) {
-                JUMP_TO_LABEL(error);
-            }
-            if (call_child != NULL) {
-                DISPATCH_INLINED(call_child);
-            }
-            slots = _PyFrame_Slots(frame);
-            DISPATCH();
         }
 
         TARGET(CALL_STR_1) {
@@ -7593,16 +7720,11 @@
                 PyValue_CLOSE(held_exc);
                 JUMP_TO_LABEL(error);
             }
-            PyObject *match_o = NULL;
-            PyObject *rest_o = NULL;
-            int res = _PyEval_ExceptionGroupMatch(frame, exc_value, match_type,
-                &match_o, &rest_o);
+            _PyObjectPair matched = value_exception_group_match(frame, exc_value, match_type);
+            PyObject *match_o = matched.match;
+            PyObject *rest_o = matched.rest;
             PyValue_CLOSE(held_type);
             PyValue_CLOSE(held_exc);
-            if (res < 0) {
-                JUMP_TO_LABEL(error);
-            }
-            assert((match_o == NULL) == (rest_o == NULL));
             if (match_o == NULL) {
                 JUMP_TO_LABEL(error);
             }
@@ -8823,11 +8945,10 @@
                 PyObject *callable_o = ir_obj_callable;
                 PyObject *dict_o = ir_obj_dict;
                 PyObject *update_o = ir_obj_update;
-                PyObject *dupkey = NULL;
-                int err = _PyDict_MergeUniq(dict_o, update_o, &dupkey);
-                if (err < 0) {
-                    _PyEval_FormatKwargsError(tstate, callable_o, update_o, dupkey);
-                    Py_XDECREF(dupkey);
+                _PyStatusObject merged = value_dict_merge_uniq(dict_o, update_o);
+                if (merged.status < 0) {
+                    _PyEval_FormatKwargsError(tstate, callable_o, update_o, merged.object);
+                    Py_XDECREF(merged.object);
                     JUMP_TO_LABEL(error);
                 }
                 u = update;
@@ -9229,8 +9350,10 @@
             }
             // _FOR_ITER
             {
-                PyValue item;
-                int found = _PyForIter_VirtualIteratorNext(tstate, frame, iter, &null_or_index, &item);
+                _PyStatusValue step = _PyForIter_VirtualIteratorNext(tstate, frame, iter, &window[1]);
+                null_or_index = window[1];
+                PyValue item = step.value;
+                int found = step.status;
                 if (found <= 0) {
                     if (found < 0) {
                         IR_PUBLISH_TEMP(window[1], null_or_index);
@@ -9818,12 +9941,13 @@
             }
             // _GET_ITER
             {
-                PyValue result = _PyEval_GetIter(iterable, &index_or_null, oparg);
+                _PyValuePair got = _PyEval_GetIter(iterable, oparg);
                 IR_SLOT(IR_B(ir_word)) = PyValue_NULL;
-                if (PyValue_IsNull(result)) {
+                if (PyValue_IsNull(got.first)) {
                     JUMP_TO_LABEL(error);
                 }
-                iter = result;
+                iter = got.first;
+                index_or_null = got.second;
             }
             IR_STORE_TEMP(IR_SLOT(IR_A(ir_word)), iter);
             IR_STORE_TEMP(IR_SLOT(IR_A(ir_word) + 1), index_or_null);
@@ -10101,7 +10225,10 @@
             (void)oparg;
             PyValue *window = &IR_SLOT(IR_B(ir_word));
             (void)window;
-            _PyCallTransaction call = call_transaction_begin(tstate, frame, next_instr, IR_B(ir_word), (1) + (1) + (oparg), IR_A(ir_word), oparg, CALL_TRANSACTION_VECTOR, 1, 1);
+            int call_base = IR_B(ir_word);
+            int call_destination = IR_A(ir_word);
+            int call_state = 0;
+            call_transaction_begin(frame, call_base, (1) + (1) + (oparg), call_destination);
             PyValue callable;
             PyValue self_or_null;
             PyValue func;
@@ -10111,13 +10238,17 @@
             {
                 self_or_null = window[1];
                 callable = window[0];
-                if (call_transaction_expand_method(&call, next_instr) < 0) {
-                    JUMP_TO_LABEL(error);
+                {
+                    int ir_expanded = call_transaction_expand_method(tstate, frame, this_instr, call_base);
+                    if (ir_expanded < 0) {
+                        JUMP_TO_LABEL(error);
+                    }
+                    call_state |= CALL_PREPARED | (ir_expanded ? CALL_EFFECTS : 0);
                 }
                 this_instr = frame->instr_ptr;
                 ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
                 slots = _PyFrame_Slots(frame);
-                window = slots + call.base;
+                window = slots + call_base;
                 callable = window[0];
                 self_or_null = window[1];
             }
@@ -10128,28 +10259,32 @@
                 func = callable;
                 IR_PUBLISH_TEMP(window[0], func);
                 IR_PUBLISH_TEMP(window[1], maybe_self);
-                if (call_transaction_monitor(&call, next_instr) < 0) {
+                call_state |= CALL_MONITORED | CALL_EFFECTS;
+                if (call_transaction_monitor(tstate, frame, this_instr, call_base, oparg, CALL_TRANSACTION_VECTOR) < 0) {
                     JUMP_TO_LABEL(error);
                 }
                 this_instr = frame->instr_ptr;
                 ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
                 slots = _PyFrame_Slots(frame);
-                window = slots + call.base;
+                window = slots + call_base;
                 func = window[0];
                 maybe_self = window[1];
                 args = window + 2;
             }
             // _DO_CALL
             {
-                _PyInterpreterFrame *call_child;
-                if (call_transaction_invoke(&call, next_instr, &call_child) < 0) {
-                    JUMP_TO_LABEL(error);
+                assert(frame->instr_ptr == this_instr);
+                {
+                    _PyCallResult call_result = call_transaction_run_vector(tstate, frame, call_base, call_destination, oparg, (CALL_INSTRUMENTED | CALL_PERIODIC) | call_state);
+                    if (call_result.status < 0) {
+                        JUMP_TO_LABEL(error);
+                    }
+                    if (call_result.child != NULL) {
+                        DISPATCH_INLINED(call_result.child);
+                    }
+                    slots = _PyFrame_Slots(frame);
+                    DISPATCH();
                 }
-                if (call_child != NULL) {
-                    DISPATCH_INLINED(call_child);
-                }
-                slots = _PyFrame_Slots(frame);
-                DISPATCH();
             }
         }
 
@@ -10167,7 +10302,10 @@
             (void)ir_displaced;
             PyValue *window = &IR_SLOT(IR_B(ir_word));
             (void)window;
-            _PyCallTransaction call = call_transaction_begin(tstate, frame, next_instr, IR_B(ir_word), (1) + (1) + (1) + (1), IR_A(ir_word), 0, CALL_TRANSACTION_EX, 1, 1);
+            int call_base = IR_B(ir_word);
+            int call_destination = IR_A(ir_word);
+            int call_state = 0;
+            call_transaction_begin(frame, call_base, (1) + (1) + (1) + (1), call_destination);
             PyValue func;
             PyValue callargs;
             PyValue kwargs;
@@ -10176,28 +10314,32 @@
                 kwargs = window[3];
                 callargs = window[2];
                 func = window[0];
-                if (call_transaction_prepare_tuple(&call, next_instr) < 0) {
+                call_state |= CALL_PREPARED | CALL_EFFECTS;
+                if (call_transaction_prepare_tuple(tstate, frame, this_instr, call_base) < 0) {
                     JUMP_TO_LABEL(error);
                 }
                 this_instr = frame->instr_ptr;
                 ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
                 slots = _PyFrame_Slots(frame);
-                window = slots + call.base;
+                window = slots + call_base;
                 func = window[0];
                 callargs = window[2];
                 kwargs = window[3];
             }
             // _DO_CALL_FUNCTION_EX
             {
-                _PyInterpreterFrame *call_child;
-                if (call_transaction_invoke(&call, next_instr, &call_child) < 0) {
-                    JUMP_TO_LABEL(error);
+                assert(frame->instr_ptr == this_instr);
+                {
+                    _PyCallResult call_result = call_transaction_run_ex(tstate, frame, call_base, call_destination, (CALL_INSTRUMENTED | CALL_PERIODIC) | call_state);
+                    if (call_result.status < 0) {
+                        JUMP_TO_LABEL(error);
+                    }
+                    if (call_result.child != NULL) {
+                        DISPATCH_INLINED(call_result.child);
+                    }
+                    slots = _PyFrame_Slots(frame);
+                    DISPATCH();
                 }
-                if (call_child != NULL) {
-                    DISPATCH_INLINED(call_child);
-                }
-                slots = _PyFrame_Slots(frame);
-                DISPATCH();
             }
         }
 
@@ -10217,7 +10359,10 @@
             (void)oparg;
             PyValue *window = &IR_SLOT(IR_B(ir_word));
             (void)window;
-            _PyCallTransaction call = call_transaction_begin(tstate, frame, next_instr, IR_B(ir_word), (1) + (1) + (oparg) + (1), IR_A(ir_word), oparg, CALL_TRANSACTION_KEYWORDS, 1, 0);
+            int call_base = IR_B(ir_word);
+            int call_destination = IR_A(ir_word);
+            int call_state = 0;
+            call_transaction_begin(frame, call_base, (1) + (1) + (oparg) + (1), call_destination);
             PyValue callable;
             PyValue self_or_null;
             PyValue *args;
@@ -10225,13 +10370,17 @@
             {
                 self_or_null = window[1];
                 callable = window[0];
-                if (call_transaction_expand_method(&call, next_instr) < 0) {
-                    JUMP_TO_LABEL(error);
+                {
+                    int ir_expanded = call_transaction_expand_method(tstate, frame, this_instr, call_base);
+                    if (ir_expanded < 0) {
+                        JUMP_TO_LABEL(error);
+                    }
+                    call_state |= CALL_PREPARED | (ir_expanded ? CALL_EFFECTS : 0);
                 }
                 this_instr = frame->instr_ptr;
                 ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
                 slots = _PyFrame_Slots(frame);
-                window = slots + call.base;
+                window = slots + call_base;
                 callable = window[0];
                 self_or_null = window[1];
             }
@@ -10240,28 +10389,32 @@
                 args = &window[2];
                 IR_PUBLISH_TEMP(window[0], callable);
                 IR_PUBLISH_TEMP(window[1], self_or_null);
-                if (call_transaction_monitor(&call, next_instr) < 0) {
+                call_state |= CALL_MONITORED | CALL_EFFECTS;
+                if (call_transaction_monitor(tstate, frame, this_instr, call_base, oparg, CALL_TRANSACTION_KEYWORDS) < 0) {
                     JUMP_TO_LABEL(error);
                 }
                 this_instr = frame->instr_ptr;
                 ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
                 slots = _PyFrame_Slots(frame);
-                window = slots + call.base;
+                window = slots + call_base;
                 callable = window[0];
                 self_or_null = window[1];
                 args = window + 2;
             }
             // _DO_CALL_KW
             {
-                _PyInterpreterFrame *call_child;
-                if (call_transaction_invoke(&call, next_instr, &call_child) < 0) {
-                    JUMP_TO_LABEL(error);
+                assert(frame->instr_ptr == this_instr);
+                {
+                    _PyCallResult call_result = call_transaction_run_keywords(tstate, frame, call_base, call_destination, oparg, (CALL_INSTRUMENTED) | call_state);
+                    if (call_result.status < 0) {
+                        JUMP_TO_LABEL(error);
+                    }
+                    if (call_result.child != NULL) {
+                        DISPATCH_INLINED(call_result.child);
+                    }
+                    slots = _PyFrame_Slots(frame);
+                    DISPATCH();
                 }
-                if (call_child != NULL) {
-                    DISPATCH_INLINED(call_child);
-                }
-                slots = _PyFrame_Slots(frame);
-                DISPATCH();
             }
         }
 
@@ -10457,8 +10610,10 @@
             PyValue next;
             null_or_index = window[1];
             iter = window[0];
-            PyValue item;
-            int found = _PyForIter_VirtualIteratorNext(tstate, frame, iter, &null_or_index, &item);
+            _PyStatusValue step = _PyForIter_VirtualIteratorNext(tstate, frame, iter, &window[1]);
+            null_or_index = window[1];
+            PyValue item = step.value;
+            int found = step.status;
             if (found <= 0) {
                 if (found < 0) {
                     IR_PUBLISH_TEMP(window[1], null_or_index);
@@ -10755,12 +10910,7 @@
                         JUMP_TO_LABEL(error);
                     }
                 }
-                PyObject *super;
-                {
-                    PyObject *stack[] = {class, self};
-                    super = PyObject_Vectorcall(global_super, stack, oparg & 2, NULL);
-                    _PyGC_CLEAR_ARRAY(stack);
-                }
+                PyObject *super = super_call(global_super, class, self, oparg & 2);
                 if (opcode == INSTRUMENTED_LOAD_SUPER_ATTR) {
                     PyObject *arg = oparg & 2 ? class : &_PyInstrumentation_MISSING;
                     if (super == NULL) {
@@ -10909,12 +11059,7 @@
                         JUMP_TO_LABEL(error);
                     }
                 }
-                PyObject *super;
-                {
-                    PyObject *stack[] = {class, self};
-                    super = PyObject_Vectorcall(global_super, stack, oparg & 2, NULL);
-                    _PyGC_CLEAR_ARRAY(stack);
-                }
+                PyObject *super = super_call(global_super, class, self, oparg & 2);
                 if (opcode == INSTRUMENTED_LOAD_SUPER_ATTR) {
                     PyObject *arg = oparg & 2 ? class : &_PyInstrumentation_MISSING;
                     if (super == NULL) {
@@ -11776,24 +11921,23 @@
                 int method = oparg & 1;
                 ir_own_B = IR_CONSUME_INPUT(IR_B(ir_word), owner);
                 PyValue receiver = IR_TAKE(owner, ir_own_B);
-                _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
-                operation.input_slots[0] = IR_B(ir_word);
-                operation.result_slot = IR_A(ir_word);
-                PyValue pending, pending_self;
-                int invoked;
-                int failed = value_load_attribute(tstate, receiver, name, method,
-                    value_temps, &pending, &pending_self, &invoked);
-                if (failed < 0) {
-                    if (!invoked) {
-                        (void)value_operation_restore1(&operation, &receiver);
-                    }
-                    drop_failed_value(&pending);
-                    drop_failed_value(&pending_self);
-                    value_operation_close3(&receiver, NULL, NULL);
-                    (void)value_operation_finish(&operation, next_instr, value_temps);
+                PyObject *object = _PyValueTemps_Object(value_temps, receiver);
+                if (object == NULL) {
+                    receiver = value_operation_restore1(tstate, frame, receiver, IR_B(ir_word));
+                    value_operation_close3(receiver, PyValue_NULL, PyValue_NULL);
+                    (void)value_operation_finish(tstate, frame, this_instr, value_temps);
                     JUMP_TO_LABEL(error);
                 }
-                if (value_attribute_complete(&operation, next_instr, value_temps, &pending, &pending_self, &receiver, method) < 0) {
+                _PyValuePair loaded = value_load_attribute(tstate, receiver, object, name, method);
+                PyValue pending = loaded.first;
+                PyValue pending_self = loaded.second;
+                if (PyValue_IsNull(pending)) {
+                    value_operation_close3(receiver, PyValue_NULL, PyValue_NULL);
+                    (void)value_operation_finish(tstate, frame, this_instr, value_temps);
+                    JUMP_TO_LABEL(error);
+                }
+                pending = value_attribute_complete(tstate, frame, this_instr, value_temps, IR_A(ir_word), pending, pending_self, receiver, method);
+                if (PyValue_IsNull(pending)) {
                     JUMP_TO_LABEL(error);
                 }
                 this_instr = frame->instr_ptr;
@@ -12127,7 +12271,7 @@
                         PyValue_XCLOSE(receiver); receiver = PyValue_NULL;
                     }
                     if (retire_needed) {
-                        int retire_failed = retire_published_values(tstate, frame, next_instr, NULL, &receiver, NULL, (IR_IS_LOCAL(IR_A(ir_word)) ? &attr : NULL));
+                        int retire_failed = retire_published_values(tstate, frame, next_instr, NULL, receiver, PyValue_NULL, (IR_IS_LOCAL(IR_A(ir_word)) ? attr : PyValue_NULL));
                         if (retire_failed < 0) { JUMP_TO_LABEL(error); }
                         this_instr = frame->instr_ptr;
                         ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
@@ -12420,7 +12564,7 @@
                         PyValue_XCLOSE(receiver); receiver = PyValue_NULL;
                     }
                     if (retire_needed) {
-                        int retire_failed = retire_published_values(tstate, frame, next_instr, NULL, &receiver, NULL, (IR_IS_LOCAL(IR_A(ir_word)) ? &attr : NULL));
+                        int retire_failed = retire_published_values(tstate, frame, next_instr, NULL, receiver, PyValue_NULL, (IR_IS_LOCAL(IR_A(ir_word)) ? attr : PyValue_NULL));
                         if (retire_failed < 0) { JUMP_TO_LABEL(error); }
                         this_instr = frame->instr_ptr;
                         ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
@@ -12486,24 +12630,23 @@
                 int method = oparg & 1;
                 ir_own_B = IR_CONSUME_INPUT(IR_B(ir_word), owner);
                 PyValue receiver = IR_TAKE(owner, ir_own_B);
-                _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
-                operation.input_slots[0] = IR_B(ir_word);
-                operation.result_slot = IR_A(ir_word);
-                PyValue pending, pending_self;
-                int invoked;
-                int failed = value_load_attribute(tstate, receiver, name, method,
-                    value_temps, &pending, &pending_self, &invoked);
-                if (failed < 0) {
-                    if (!invoked) {
-                        (void)value_operation_restore1(&operation, &receiver);
-                    }
-                    drop_failed_value(&pending);
-                    drop_failed_value(&pending_self);
-                    value_operation_close3(&receiver, NULL, NULL);
-                    (void)value_operation_finish(&operation, next_instr, value_temps);
+                PyObject *object = _PyValueTemps_Object(value_temps, receiver);
+                if (object == NULL) {
+                    receiver = value_operation_restore1(tstate, frame, receiver, IR_B(ir_word));
+                    value_operation_close3(receiver, PyValue_NULL, PyValue_NULL);
+                    (void)value_operation_finish(tstate, frame, this_instr, value_temps);
                     JUMP_TO_LABEL(error);
                 }
-                if (value_attribute_complete(&operation, next_instr, value_temps, &pending, &pending_self, &receiver, method) < 0) {
+                _PyValuePair loaded = value_load_attribute(tstate, receiver, object, name, method);
+                PyValue pending = loaded.first;
+                PyValue pending_self = loaded.second;
+                if (PyValue_IsNull(pending)) {
+                    value_operation_close3(receiver, PyValue_NULL, PyValue_NULL);
+                    (void)value_operation_finish(tstate, frame, this_instr, value_temps);
+                    JUMP_TO_LABEL(error);
+                }
+                pending = value_attribute_complete(tstate, frame, this_instr, value_temps, IR_A(ir_word), pending, pending_self, receiver, method);
+                if (PyValue_IsNull(pending)) {
                     JUMP_TO_LABEL(error);
                 }
                 this_instr = frame->instr_ptr;
@@ -12802,7 +12945,7 @@
                         PyValue_XCLOSE(receiver); receiver = PyValue_NULL;
                     }
                     if (retire_needed) {
-                        int retire_failed = retire_published_values(tstate, frame, next_instr, NULL, &receiver, NULL, (IR_IS_LOCAL(IR_A(ir_word)) ? &attr : NULL));
+                        int retire_failed = retire_published_values(tstate, frame, next_instr, NULL, receiver, PyValue_NULL, (IR_IS_LOCAL(IR_A(ir_word)) ? attr : PyValue_NULL));
                         if (retire_failed < 0) { JUMP_TO_LABEL(error); }
                         this_instr = frame->instr_ptr;
                         ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
@@ -12886,7 +13029,7 @@
                         PyValue_XCLOSE(receiver); receiver = PyValue_NULL;
                     }
                     if (retire_needed) {
-                        int retire_failed = retire_published_values(tstate, frame, next_instr, NULL, &receiver, NULL, (IR_IS_LOCAL(IR_A(ir_word)) ? &attr : NULL));
+                        int retire_failed = retire_published_values(tstate, frame, next_instr, NULL, receiver, PyValue_NULL, (IR_IS_LOCAL(IR_A(ir_word)) ? attr : PyValue_NULL));
                         if (retire_failed < 0) { JUMP_TO_LABEL(error); }
                         this_instr = frame->instr_ptr;
                         ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
@@ -13011,7 +13154,7 @@
                         PyValue_XCLOSE(receiver); receiver = PyValue_NULL;
                     }
                     if (retire_needed) {
-                        int retire_failed = retire_published_values(tstate, frame, next_instr, NULL, &receiver, NULL, (IR_IS_LOCAL(IR_A(ir_word)) ? &attr : NULL));
+                        int retire_failed = retire_published_values(tstate, frame, next_instr, NULL, receiver, PyValue_NULL, (IR_IS_LOCAL(IR_A(ir_word)) ? attr : PyValue_NULL));
                         if (retire_failed < 0) { JUMP_TO_LABEL(error); }
                         this_instr = frame->instr_ptr;
                         ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
@@ -13048,9 +13191,9 @@
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             PyValue bc;
-            int err;
-            PyObject *bc_o = _PyMapping_GetOptionalItem2(BUILTINS(), &_Py_ID(__build_class__), &err);
-            if (err < 0) {
+            _PyStatusObject found = value_mapping_get_optional_item(BUILTINS(), &_Py_ID(__build_class__));
+            PyObject *bc_o = found.object;
+            if (found.status < 0) {
                 JUMP_TO_LABEL(error);
             }
             if (bc_o == NULL) {
@@ -13415,9 +13558,9 @@
             assert(class_dict);
             assert(oparg >= 0 && oparg < _PyFrame_GetCode(frame)->co_nlocalsplus);
             name = _PyTuple_GET_OBJECT(_PyFrame_GetCode(frame)->co_localsplusnames, oparg);
-            int err;
-            PyObject* value_o = _PyMapping_GetOptionalItem2(class_dict, name, &err);
-            if (err < 0) {
+            _PyStatusObject found = value_mapping_get_optional_item(class_dict, name);
+            PyObject* value_o = found.object;
+            if (found.status < 0) {
                 PyValue_CLOSE(held_class_dict);
                 JUMP_TO_LABEL(error);
             }
@@ -13489,8 +13632,9 @@
             PyObject *namespace = ir_obj_mod_or_class_dict;
             ir_own_B = IR_CONSUME_INPUT(IR_B(ir_word), mod_or_class_dict);
             PyValue held_namespace = IR_TAKE(mod_or_class_dict, ir_own_B);
-            int err;
-            PyObject *v_o = _PyMapping_GetOptionalItem2(namespace, name, &err);
+            _PyStatusObject found = value_mapping_get_optional_item(namespace, name);
+            PyObject *v_o = found.object;
+            int err = found.status;
             if (v_o != NULL && PyLazyImport_CheckExact(v_o)) {
                 Py_SETREF(v_o, _PyLazyImport_Reify(tstate, v_o, name, namespace));
                 if (v_o == NULL) {
@@ -13502,7 +13646,7 @@
                 JUMP_TO_LABEL(error);
             }
             if (v_o == NULL) {
-                _PyEval_LoadGlobalValue(GLOBALS(), BUILTINS(), name, &v);
+                v = value_load_global(GLOBALS(), BUILTINS(), name);
                 if (PyValue_IsNull(v)) {
                     JUMP_TO_LABEL(error);
                 }
@@ -13552,10 +13696,9 @@
             {
                 res = &IR_SLOT(IR_A(ir_word));
                 PyObject *name = GETITEM(FRAME_CO_NAMES, oparg>>1);
-                _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
                 _PyEval_LoadGlobalValue(GLOBALS(), BUILTINS(), name, res);
                 {
-                    int operation_failed = value_operation_finish(&operation, next_instr, NULL);
+                    int operation_failed = value_operation_finish(tstate, frame, this_instr, NULL);
                     if (operation_failed < 0) {
                         JUMP_TO_LABEL(error);
                     }
@@ -13743,10 +13886,9 @@
             {
                 res = &IR_SLOT(IR_A(ir_word));
                 PyObject *name = GETITEM(FRAME_CO_NAMES, oparg>>1);
-                _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
                 _PyEval_LoadGlobalValue(GLOBALS(), BUILTINS(), name, res);
                 {
-                    int operation_failed = value_operation_finish(&operation, next_instr, NULL);
+                    int operation_failed = value_operation_finish(tstate, frame, this_instr, NULL);
                     if (operation_failed < 0) {
                         JUMP_TO_LABEL(error);
                     }
@@ -14036,12 +14178,7 @@
                         JUMP_TO_LABEL(error);
                     }
                 }
-                PyObject *super;
-                {
-                    PyObject *stack[] = {class, self};
-                    super = PyObject_Vectorcall(global_super, stack, oparg & 2, NULL);
-                    _PyGC_CLEAR_ARRAY(stack);
-                }
+                PyObject *super = super_call(global_super, class, self, oparg & 2);
                 if (opcode == INSTRUMENTED_LOAD_SUPER_ATTR) {
                     PyObject *arg = oparg & 2 ? class : &_PyInstrumentation_MISSING;
                     if (super == NULL) {
@@ -14253,17 +14390,12 @@
                 STAT_INC(LOAD_SUPER_ATTR, hit);
                 PyObject *name = GETITEM(FRAME_CO_NAMES, oparg >> 2);
                 PyTypeObject *cls = (PyTypeObject *)class;
-                int method_found = 0;
-                PyObject *attr_o;
-                {
-                    int *method_found_ptr = &method_found;
-                    attr_o = _PySuper_Lookup(cls, self, name,
-                        Py_TYPE(self)->tp_getattro == PyObject_GenericGetAttr ? method_found_ptr : NULL);
-                }
+                _PyStatusObject found = super_lookup(cls, self, name);
+                PyObject *attr_o = found.object;
                 if (attr_o == NULL) {
                     JUMP_TO_LABEL(error);
                 }
-                if (method_found) {
+                if (found.status) {
                     self_or_null = self_st;
                 } else {
                     window[2] = PyValue_NULL;
@@ -14397,12 +14529,7 @@
                         JUMP_TO_LABEL(error);
                     }
                 }
-                PyObject *super;
-                {
-                    PyObject *stack[] = {class, self};
-                    super = PyObject_Vectorcall(global_super, stack, oparg & 2, NULL);
-                    _PyGC_CLEAR_ARRAY(stack);
-                }
+                PyObject *super = super_call(global_super, class, self, oparg & 2);
                 if (opcode == INSTRUMENTED_LOAD_SUPER_ATTR) {
                     PyObject *arg = oparg & 2 ? class : &_PyInstrumentation_MISSING;
                     if (super == NULL) {
@@ -16224,8 +16351,10 @@
                     DISPATCH_INLINED(gen_frame);
                 }
                 if (!PyValue_IsNull(null_or_index) && PyValue_IsNone(v)) {
-                    PyValue item;
-                    int found = _PyForIter_VirtualIteratorNext(tstate, frame, receiver, &null_or_index, &item);
+                    _PyStatusValue next = _PyForIter_VirtualIteratorNext(tstate, frame, receiver, &window[1]);
+                    null_or_index = window[1];
+                    PyValue item = next.value;
+                    int found = next.status;
                     if (found <= 0) {
                         if (found < 0) {
                             IR_PUBLISH_TEMP(window[1], null_or_index);
@@ -16314,8 +16443,9 @@
                 PyObject *iter_o = PyValue_AsKnownObjectBorrow(iter);
                 assert(PyAsyncGenASend_CheckExact(iter_o));
                 PyObject *val = ir_obj_v;
-                PyObject *retval_o;
-                PySendResult what = _PyAsyncGenASend_Send(iter_o, val, &retval_o);
+                _PyStatusObject sent = value_async_gen_send(iter_o, val);
+                PyObject *retval_o = sent.object;
+                PySendResult what = (PySendResult)sent.status;
                 if (what == PYGEN_ERROR) {
                     JUMP_TO_LABEL(error);
                 }
@@ -16497,11 +16627,12 @@
                               "no locals found when setting up annotations");
                 JUMP_TO_LABEL(error);
             }
-            int err;
-            PyObject* ann_dict = _PyMapping_GetOptionalItem2(LOCALS(), &_Py_ID(__annotations__), &err);
-            if (err < 0) {
+            _PyStatusObject found = value_mapping_get_optional_item(LOCALS(), &_Py_ID(__annotations__));
+            PyObject* ann_dict = found.object;
+            if (found.status < 0) {
                 JUMP_TO_LABEL(error);
             }
+            int err;
             if (ann_dict == NULL) {
                 ann_dict = PyDict_New();
                 if (ann_dict == NULL) {
@@ -16715,17 +16846,17 @@
                 PyValue held_value = IR_TAKE(v, ir_own_B);
                 ir_own_A = IR_CONSUME_INPUT(IR_A(ir_word), owner);
                 PyValue receiver = IR_TAKE(owner, ir_own_A);
-                _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
-                operation.input_slots[0] = IR_B(ir_word);
-                operation.input_slots[1] = IR_A(ir_word);
-                int invoked;
-                int err = value_store_attribute(receiver, held_value, name, value_temps, &invoked);
-                if (!invoked) {
-                    (void)value_operation_restore2(&operation, &held_value, &receiver);
+                int err = value_store_attribute(receiver, held_value, name, value_temps);
+                if (err == -2) {
+                    {
+                        _PyValuePair ir_rest = value_operation_restore2(tstate, frame, held_value, receiver, IR_B(ir_word), IR_A(ir_word));
+                        held_value = ir_rest.first;
+                        receiver = ir_rest.second;
+                    }
                 }
-                value_operation_close3(&receiver, &held_value, NULL);
+                value_operation_close3(receiver, held_value, PyValue_NULL);
                 {
-                    int operation_failed = value_operation_finish(&operation, next_instr, value_temps);
+                    int operation_failed = value_operation_finish(tstate, frame, this_instr, value_temps);
                     if (operation_failed < 0) {
                         JUMP_TO_LABEL(error);
                     }
@@ -16848,7 +16979,7 @@
                         retire_needed = _PyValue_MayDealloc(receiver);
                     }
                     if (retire_needed) {
-                        int retire_failed = retire_published_values(tstate, frame, next_instr, NULL, &old_value, &receiver, NULL);
+                        int retire_failed = retire_published_values(tstate, frame, next_instr, NULL, old_value, receiver, PyValue_NULL);
                         if (retire_failed < 0) { JUMP_TO_LABEL(error); }
                         this_instr = frame->instr_ptr;
                         ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
@@ -16908,17 +17039,17 @@
                 PyValue held_value = IR_TAKE(v, ir_own_B);
                 ir_own_A = IR_CONSUME_INPUT(IR_A(ir_word), owner);
                 PyValue receiver = IR_TAKE(owner, ir_own_A);
-                _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
-                operation.input_slots[0] = IR_B(ir_word);
-                operation.input_slots[1] = IR_A(ir_word);
-                int invoked;
-                int err = value_store_attribute(receiver, held_value, name, value_temps, &invoked);
-                if (!invoked) {
-                    (void)value_operation_restore2(&operation, &held_value, &receiver);
+                int err = value_store_attribute(receiver, held_value, name, value_temps);
+                if (err == -2) {
+                    {
+                        _PyValuePair ir_rest = value_operation_restore2(tstate, frame, held_value, receiver, IR_B(ir_word), IR_A(ir_word));
+                        held_value = ir_rest.first;
+                        receiver = ir_rest.second;
+                    }
                 }
-                value_operation_close3(&receiver, &held_value, NULL);
+                value_operation_close3(receiver, held_value, PyValue_NULL);
                 {
-                    int operation_failed = value_operation_finish(&operation, next_instr, value_temps);
+                    int operation_failed = value_operation_finish(tstate, frame, this_instr, value_temps);
                     if (operation_failed < 0) {
                         JUMP_TO_LABEL(error);
                     }
@@ -16996,7 +17127,7 @@
                         retire_needed = _PyValue_MayDealloc(receiver);
                     }
                     if (retire_needed) {
-                        int retire_failed = retire_published_values(tstate, frame, next_instr, NULL, &old_value, &receiver, NULL);
+                        int retire_failed = retire_published_values(tstate, frame, next_instr, NULL, old_value, receiver, PyValue_NULL);
                         if (retire_failed < 0) { JUMP_TO_LABEL(error); }
                         this_instr = frame->instr_ptr;
                         ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
@@ -17075,7 +17206,7 @@
                         PyValue_XCLOSE(receiver); receiver = PyValue_NULL;
                     }
                     if (retire_needed) {
-                        int retire_failed = retire_published_values(tstate, frame, next_instr, NULL, &receiver, NULL, NULL);
+                        int retire_failed = retire_published_values(tstate, frame, next_instr, NULL, receiver, PyValue_NULL, PyValue_NULL);
                         if (retire_failed < 0) { JUMP_TO_LABEL(error); }
                         this_instr = frame->instr_ptr;
                         ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
@@ -17145,7 +17276,7 @@
                         retire_needed = _PyValue_MayDealloc(receiver);
                     }
                     if (retire_needed) {
-                        int retire_failed = retire_published_values(tstate, frame, next_instr, NULL, &old_value, &receiver, NULL);
+                        int retire_failed = retire_published_values(tstate, frame, next_instr, NULL, old_value, receiver, PyValue_NULL);
                         if (retire_failed < 0) { JUMP_TO_LABEL(error); }
                         this_instr = frame->instr_ptr;
                         ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
@@ -17250,21 +17381,22 @@
                     PyValue release_value = IR_TAKE(value, ir_own_B);
                     ir_own_A = IR_CONSUME_INPUT(IR_A(ir_word), owner);
                     PyValue receiver = IR_TAKE(owner, ir_own_A);
-                    _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
-                    operation.input_slots[0] = IR_B(ir_word);
-                    operation.input_slots[1] = IR_A(ir_word);
                     UNLOCK_OBJECT(dict);
                     int err = PyDict_SetValue((PyObject *)dict,
                         PyValue_FromObjectBorrow(name), release_value);
                     if (err < 0) {
-                        (void)value_operation_restore2(&operation, &release_value, &receiver);
-                        value_operation_close3(&watched_dict, &release_value, &receiver);
+                        {
+                            _PyValuePair ir_rest = value_operation_restore2(tstate, frame, release_value, receiver, IR_B(ir_word), IR_A(ir_word));
+                            release_value = ir_rest.first;
+                            receiver = ir_rest.second;
+                        }
+                        value_operation_close3(watched_dict, release_value, receiver);
                     }
                     else {
-                        value_operation_close3(&release_value, &watched_dict, &receiver);
+                        value_operation_close3(release_value, watched_dict, receiver);
                     }
                     {
-                        int operation_failed = value_operation_finish(&operation, next_instr, NULL);
+                        int operation_failed = value_operation_finish(tstate, frame, this_instr, NULL);
                         if (operation_failed < 0) {
                             JUMP_TO_LABEL(error);
                         }
@@ -17289,7 +17421,7 @@
                             retire_needed = _PyValue_MayDealloc(receiver);
                         }
                         if (retire_needed) {
-                            int retire_failed = retire_published_values(tstate, frame, next_instr, NULL, &old_value, &receiver, NULL);
+                            int retire_failed = retire_published_values(tstate, frame, next_instr, NULL, old_value, receiver, PyValue_NULL);
                             if (retire_failed < 0) { JUMP_TO_LABEL(error); }
                             this_instr = frame->instr_ptr;
                             ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
@@ -17584,12 +17716,11 @@
                 PyValue held_container = IR_TAKE(container, ir_own_A);
                 ir_own_B = IR_CONSUME_INPUT(IR_B(ir_word), sub);
                 PyValue held_sub = IR_TAKE(sub, ir_own_B);
-                _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
                 int err = value_store_subscript(held_container, held_sub, held_value,
                     value_temps);
-                value_operation_close3(&held_sub, &held_container, &held_value);
+                value_operation_close3(held_sub, held_container, held_value);
                 {
-                    int operation_failed = value_operation_finish(&operation, next_instr, value_temps);
+                    int operation_failed = value_operation_finish(tstate, frame, this_instr, value_temps);
                     if (operation_failed < 0) {
                         JUMP_TO_LABEL(error);
                     }
@@ -17659,11 +17790,10 @@
                 PyValue stored = IR_TAKE(value, ir_own_C);
                 ir_own_A = IR_CONSUME_INPUT(IR_A(ir_word), dict_st);
                 PyValue retained_dict = IR_TAKE(dict_st, ir_own_A);
-                _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
                 int err = _PyDict_SetValue_Take2((PyDictObject *)dict, key, stored);
-                value_operation_close3(&retained_dict, NULL, NULL);
+                value_operation_close3(retained_dict, PyValue_NULL, PyValue_NULL);
                 {
-                    int operation_failed = value_operation_finish(&operation, next_instr, NULL);
+                    int operation_failed = value_operation_finish(tstate, frame, this_instr, NULL);
                     if (operation_failed < 0) {
                         JUMP_TO_LABEL(error);
                     }
@@ -18570,14 +18700,9 @@
             }
             assert(PyValue_IsTaggedIndex(lasti));
             (void)lasti;
-            PyObject* res_o;
-            {
-                PyObject *stack[5] = {NULL, ir_obj_exit_self, exc, val_o, tb};
-                int has_self = !PyValue_IsNull(exit_self);
-                res_o = PyObject_Vectorcall(exit_func_o, stack + 2 - has_self,
-                    (3 + has_self) | PY_VECTORCALL_ARGUMENTS_OFFSET, NULL);
-                _PyGC_CLEAR_ARRAY(stack);
-            }
+            PyObject *res_o = with_exit_call(exit_func_o,
+                ir_obj_exit_self,
+                !PyValue_IsNull(exit_self), exc, val_o, tb);
             Py_XDECREF(original_tb);
             if (res_o == NULL) {
                 JUMP_TO_LABEL(error);
@@ -18687,9 +18812,9 @@
             _PyValueTemps *const value_temps = NULL;
             {
                 int offset = _PyFrame_InstrOffset(frame, next_instr - 1);
-                int exc_slot, handler, lasti;
-                int handled = get_exception_handler(_PyFrame_GetCode(frame), offset, &exc_slot, &handler, &lasti);
-                if (handled == 0) {
+                _PyExceptionHandler found = get_exception_handler(_PyFrame_GetCode(frame), offset);
+                int exc_slot = found.exc_slot, handler = found.handler, lasti = found.lasti;
+                if (found.handled == 0) {
                     assert(_PyErr_Occurred(tstate));
                     _PyFrame_ClearTemporaries(frame, _PyFrame_GetCode(frame)->co_nlocalsplus);
                     monitor_unwind(tstate, frame, next_instr-1);

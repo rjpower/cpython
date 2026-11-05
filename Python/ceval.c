@@ -761,15 +761,29 @@ clear_value_arguments(PyValue *arguments, int count)
     }
 }
 
+/* Two-word results of the helpers that handlers call: returned in rax:rdx
+ * under the x86-64 SysV ABI, so a handler keeps no addressable local for
+ * them (pyjit/design/proposals/register-ir-v2-a3.md 3.5, R-a).
+ * _PyStatusValue is in pycore_value.h. */
 typedef struct {
-    PyThreadState *tstate;
-    _PyInterpreterFrame *frame;
-    PyCodeObject *code;
-    Py_ssize_t current_word;
-    Py_ssize_t next_word;
-    int input_slots[2];
-    int result_slot;
-} _PyValueOperation;
+    PyValue first;
+    PyValue second;
+} _PyValuePair;
+
+typedef struct {
+    int status;
+    PyObject *object;
+} _PyStatusObject;
+
+typedef struct {
+    int status;
+    _PyInterpreterFrame *child;
+} _PyCallResult;
+
+typedef struct {
+    PyObject *match;
+    PyObject *rest;
+} _PyObjectPair;
 
 typedef enum {
     CALL_TRANSACTION_VECTOR,
@@ -777,11 +791,24 @@ typedef enum {
     CALL_TRANSACTION_EX,
 } _PyCallTransactionKind;
 
-/* Numeric homes survive instrumentation changes. This record owns no
- * preparation resource: each preparation helper drains its locals before
- * returning, including before an inlined Python frame can escape. */
+/* The flags of call_transaction_run_*(): what the handler did before the
+ * call (CALL_EFFECTS, CALL_PREPARED, CALL_MONITORED, in its register
+ * local call_state) and two constants of the handler. */
+#define CALL_EFFECTS 1
+#define CALL_PREPARED 2
+#define CALL_MONITORED 4
+#define CALL_INSTRUMENTED 8
+#define CALL_PERIODIC 16
+
+/* The state of one call, which lives only in the frame of the out-of-line
+ * call_transaction_run_*(), across the helpers it calls (R-c).  Numeric
+ * homes survive instrumentation changes.  This record owns no preparation
+ * resource: each preparation helper drains its locals before returning,
+ * including before an inlined Python frame can escape. */
 typedef struct {
-    _PyValueOperation operation;
+    PyThreadState *tstate;
+    _PyInterpreterFrame *frame;
+    _PyInstr *current;
     int base;
     int count;
     int destination;
@@ -793,20 +820,6 @@ typedef struct {
     int periodic;
     int prepared;
 } _PyCallTransaction;
-
-static inline _PyValueOperation
-value_operation_begin(PyThreadState *tstate, _PyInterpreterFrame *frame,
-                      _PyInstr *next)
-{
-    PyCodeObject *code = _PyFrame_GetCode(frame);
-    _PyCodeExec *exec = code->_co_exec;
-    assert(exec != NULL && frame->ir_words == exec->words);
-    assert(frame->instr_ptr >= exec->words &&
-           frame->instr_ptr < exec->words + exec->nwords);
-    assert(next >= exec->words && next <= exec->words + exec->nwords);
-    return (_PyValueOperation){tstate, frame, code,
-        frame->instr_ptr - exec->words, next - exec->words, {-1, -1}, -1};
-}
 
 /* Raise the SystemError of a failed revalidation. An operation error can be
  * pending; it becomes the SystemError's __cause__ (as in
@@ -822,58 +835,67 @@ value_revalidation_error(const char *message)
     }
 }
 
-static int
-value_operation_restore2(_PyValueOperation *operation,
-                         PyValue *first, PyValue *second)
+/* Whether frame is still the thread's current frame and still runs the
+ * executing copy of its code.  An operation can run Python; the frame and
+ * its code are values the handler keeps in registers, so the check needs
+ * no record of them (R-b). */
+static inline int
+value_frame_is_current(PyThreadState *tstate, _PyInterpreterFrame *frame)
 {
-    _PyInterpreterFrame *frame = operation->frame;
-    if (operation->tstate->current_frame != frame ||
-        _PyFrame_GetCode(frame) != operation->code) {
-        value_revalidation_error("dictionary store changed the active frame");
-        return -1;
+    if (tstate->current_frame != frame) {
+        return 0;
     }
-    int nlocals = operation->code->co_nlocalsplus;
+    _PyCodeExec *exec = _PyFrame_GetCode(frame)->_co_exec;
+    return exec != NULL && frame->ir_words == exec->words;
+}
+
+/* Move each owner whose slot is a temporary back into it, and return the
+ * owners it did not move (PyValue_NULL for a moved one). */
+static _PyValuePair
+value_operation_restore2(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                         PyValue first, PyValue second,
+                         int first_slot, int second_slot)
+{
+    _PyValuePair rest = {first, second};
+    if (!value_frame_is_current(tstate, frame)) {
+        value_revalidation_error("dictionary store changed the active frame");
+        return rest;
+    }
+    int nlocals = _PyFrame_GetCode(frame)->co_nlocalsplus;
     int nslots = _PyFrame_NumSlots(frame);
     PyValue *slots = _PyFrame_Slots(frame);
+    int input_slots[2] = {first_slot, second_slot};
     for (int i = 0; i < 2; i++) {
-        int slot = operation->input_slots[i];
+        int slot = input_slots[i];
         if (slot < 0 || slot >= nslots ||
             (slot >= nlocals && !PyValue_IsNull(slots[slot]))) {
             value_revalidation_error("dictionary store changed an input home");
-            return -1;
+            return rest;
         }
     }
-    PyValue *owners[2] = {first, second};
-    for (int i = 0; i < 2; i++) {
-        int slot = operation->input_slots[i];
-        if (slot >= nlocals) {
-            slots[slot] = *owners[i];
-            _PyValue_CheckTemp(slots[slot]);
-            *owners[i] = PyValue_NULL;
-        }
+    if (first_slot >= nlocals) {
+        slots[first_slot] = first;
+        _PyValue_CheckTemp(slots[first_slot]);
+        rest.first = PyValue_NULL;
+    }
+    if (second_slot >= nlocals) {
+        slots[second_slot] = second;
+        _PyValue_CheckTemp(slots[second_slot]);
+        rest.second = PyValue_NULL;
     }
     /* Callback-current locals remain intact. Their extra evaluated
      * snapshots are still C-owned; only temporary owners moved back. */
-    return 0;
+    return rest;
 }
 
 /* Fixed store operands have already moved out of their frame homes. Keep
  * their original release order, with no decoded slot access between closes. */
-static void
-value_operation_close3(PyValue *first, PyValue *second, PyValue *third)
+static inline void
+value_operation_close3(PyValue first, PyValue second, PyValue third)
 {
-    PyValue owners[3] = {*first, second == NULL ? PyValue_NULL : *second,
-                        third == NULL ? PyValue_NULL : *third};
-    *first = PyValue_NULL;
-    if (second != NULL) {
-        *second = PyValue_NULL;
-    }
-    if (third != NULL) {
-        *third = PyValue_NULL;
-    }
-    for (int i = 0; i < 3; i++) {
-        PyValue_XCLOSE(owners[i]);
-    }
+    PyValue_XCLOSE(first);
+    PyValue_XCLOSE(second);
+    PyValue_XCLOSE(third);
 }
 
 static int
@@ -920,63 +942,67 @@ value_store_subscript(PyValue container, PyValue key, PyValue value,
     return PyObject_SetItem(obj, key_obj, value_obj);
 }
 
+/* 0: stored; -1: the store raised; -2: a box failed before anything ran,
+ * so the caller restores its inputs.  Borrows both values. */
 static int
 value_store_attribute(PyValue owner, PyValue value, PyObject *name,
-                      _PyValueTemps *temps, int *invoked)
+                      _PyValueTemps *temps)
 {
-    *invoked = 0;
     PyObject *object = _PyValueTemps_Object(temps, owner);
     if (object == NULL) {
-        return -1;
+        return -2;
     }
     PyObject *object_value = PyValue_IsNull(value) ? NULL :
         _PyValueTemps_Object(temps, value);
     if (!PyValue_IsNull(value) && object_value == NULL) {
-        return -1;
+        return -2;
     }
-    *invoked = 1;
-    return PyObject_SetAttr(object, name, object_value);
+    return PyObject_SetAttr(object, name, object_value) < 0 ? -1 : 0;
 }
 
-static int
-value_operation_restore1(_PyValueOperation *operation, PyValue *owner)
+/* Move owner back into its slot if that is a temporary, and return it if
+ * not moved (PyValue_NULL if moved). */
+static PyValue
+value_operation_restore1(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                         PyValue owner, int slot)
 {
-    _PyInterpreterFrame *frame = operation->frame;
-    int slot = operation->input_slots[0];
-    if (operation->tstate->current_frame != frame ||
-        _PyFrame_GetCode(frame) != operation->code || slot < 0 ||
+    if (!value_frame_is_current(tstate, frame) || slot < 0 ||
         slot >= _PyFrame_NumSlots(frame) ||
-        (slot >= operation->code->co_nlocalsplus &&
+        (slot >= _PyFrame_GetCode(frame)->co_nlocalsplus &&
          !PyValue_IsNull(_PyFrame_Slots(frame)[slot]))) {
         value_revalidation_error("attribute operation changed its input home");
-        return -1;
+        return owner;
     }
-    if (slot >= operation->code->co_nlocalsplus) {
-        _PyFrame_Slots(frame)[slot] = *owner;
+    if (slot >= _PyFrame_GetCode(frame)->co_nlocalsplus) {
+        _PyFrame_Slots(frame)[slot] = owner;
         _PyValue_CheckTemp(_PyFrame_Slots(frame)[slot]);
-        *owner = PyValue_NULL;
+        return PyValue_NULL;
     }
-    return 0;
+    return owner;
 }
 
-static int
-value_load_attribute(PyThreadState *tstate, PyValue owner, PyObject *name,
-                     int method, _PyValueTemps *temps,
-                     PyValue *result, PyValue *self, int *invoked)
+/* The attribute name of object, owner's object, which the caller boxed
+ * first: {attr, self}, where self is the owner when method found a method.
+ * On error first is PyValue_NULL and the partial results are closed.  Out
+ * of line: _PyObject_GetMethodValue writes through pointers to its two
+ * results, which must not be the handler's locals (R-a, R-c). */
+static Py_NO_INLINE _PyValuePair
+value_load_attribute(PyThreadState *tstate, PyValue owner, PyObject *object,
+                     PyObject *name, int method)
 {
-    *result = *self = PyValue_NULL;
-    *invoked = 0;
-    PyObject *object = _PyValueTemps_Object(temps, owner);
-    if (object == NULL) {
-        return -1;
-    }
-    *invoked = 1;
+    _PyValuePair loaded = {PyValue_NULL, PyValue_NULL};
     if (method) {
-        *self = PyValue_DUP(owner);
-        return _PyObject_GetMethodValue(tstate, self, name, result, object);
+        loaded.second = PyValue_DUP(owner);
+        if (_PyObject_GetMethodValue(tstate, &loaded.second, name,
+                                     &loaded.first, object) < 0) {
+            PyValue_XCLOSE(loaded.first);
+            PyValue_XCLOSE(loaded.second);
+            return (_PyValuePair){PyValue_NULL, PyValue_NULL};
+        }
+        return loaded;
     }
-    *result = _PyObject_GetAttrValue(object, name);
-    return PyValue_IsNull(*result) ? -1 : 0;
+    loaded.first = _PyObject_GetAttrValue(object, name);
+    return loaded;
 }
 
 static PyValue
@@ -1034,6 +1060,54 @@ value_binary_operation(int operation, PyValue left, PyValue right,
     assert(_PyEval_BinaryOps[operation] != NULL);
     PyObject *result = _PyEval_BinaryOps[operation](left_obj, right_obj);
     return result == NULL ? PyValue_NULL : PyValue_FromPyObjectSteal(result);
+}
+
+/* The wrappers below keep a runtime-API out-parameter in their own C frame,
+ * so that the handler that calls them takes the address of none of its
+ * locals (spec 3.5, R-c).  Py_NO_INLINE keeps the address from returning to
+ * the handler. */
+
+/* PyUnicode_Append takes the address of the string it replaces.  Consumes
+ * `left` and returns the result, or NULL with an exception set; `left` is
+ * released on error, as PyUnicode_Append does. */
+static Py_NO_INLINE PyObject *
+value_unicode_append(PyObject *left, PyObject *right)
+{
+    PyUnicode_Append(&left, right);
+    return left;
+}
+
+/* _PyDict_MergeUniq reports the duplicate key through an out-parameter.
+ * Returns the status and, on a negative status, the new reference to the
+ * duplicate key or NULL. */
+static Py_NO_INLINE _PyStatusObject
+value_dict_merge_uniq(PyObject *dict, PyObject *update)
+{
+    PyObject *dupkey = NULL;
+    _PyStatusObject result;
+    result.status = _PyDict_MergeUniq(dict, update, &dupkey);
+    result.object = dupkey;
+    return result;
+}
+
+/* _PyEval_ExceptionGroupMatch returns its two results through
+ * out-parameters.  Returns {match, rest} as new references; match is NULL
+ * when the match raised (an exception is set). */
+static Py_NO_INLINE _PyObjectPair
+value_exception_group_match(_PyInterpreterFrame *frame, PyObject *exc_value,
+                            PyObject *match_type)
+{
+    PyObject *match = NULL;
+    PyObject *rest = NULL;
+    _PyObjectPair result = {NULL, NULL};
+    if (_PyEval_ExceptionGroupMatch(frame, exc_value, match_type,
+                                    &match, &rest) < 0) {
+        return result;
+    }
+    assert((match == NULL) == (rest == NULL));
+    result.match = match;
+    result.rest = rest;
+    return result;
 }
 
 #include "ceval_macros.h"
@@ -1278,7 +1352,45 @@ _Py_BuildMap_ValueSteal(
     return res;
 }
 
+/* Out of line because _PySuper_Lookup writes through a pointer to
+ * method_found: the local lives in this frame, not in the handler's. */
+static Py_NO_INLINE _PyStatusObject
+super_lookup(PyTypeObject *cls, PyObject *self, PyObject *name)
+{
+    int method_found = 0;
+    PyObject *attr = _PySuper_Lookup(cls, self, name,
+        Py_TYPE(self)->tp_getattro == PyObject_GenericGetAttr ?
+        &method_found : NULL);
+    _PyStatusObject result = {method_found, attr};
+    return result;
+}
 
+/* Out of line: the vectorcall's argument array is a local, which would be
+ * the handler's (spec 3.5, R-c).  super(class, self), or super() when nargs
+ * is 0. */
+static Py_NO_INLINE PyObject *
+super_call(PyObject *global_super, PyObject *class, PyObject *self, int nargs)
+{
+    // scope to tell MSVC that stack is not escaping
+    PyObject *stack[] = {class, self};
+    PyObject *super = PyObject_Vectorcall(global_super, stack, nargs, NULL);
+    _PyGC_CLEAR_ARRAY(stack);
+    return super;
+}
+
+/* Out of line, as super_call: exit_func(exit_self, exc, val, tb), or
+ * exit_func(exc, val, tb) when has_self is 0.  The array keeps a free slot
+ * before the arguments for PY_VECTORCALL_ARGUMENTS_OFFSET. */
+static Py_NO_INLINE PyObject *
+with_exit_call(PyObject *exit_func, PyObject *exit_self, int has_self,
+               PyObject *exc, PyObject *val, PyObject *tb)
+{
+    PyObject *stack[5] = {NULL, exit_self, exc, val, tb};
+    PyObject *res = PyObject_Vectorcall(exit_func, stack + 2 - has_self,
+            (3 + has_self) | PY_VECTORCALL_ARGUMENTS_OFFSET, NULL);
+    _PyGC_CLEAR_ARRAY(stack);
+    return res;
+}
 
 int _Py_CheckRecursiveCallPy(
     PyThreadState *tstate)
@@ -1343,18 +1455,25 @@ const _PyInstr *_Py_INTERPRETER_TRAMPOLINE_INSTRUCTIONS_PTR = (_PyInstr*)_Py_INT
 #endif
 
 
-PyValue
-_PyEval_GetIter(PyValue iterable, PyValue *index_or_null, int yield_from)
+/* The iterator of iterable and its index: {iterable, tagged index 0} when
+   the interpreter indexes it, {iterator, PyValue_NULL} otherwise, and
+   {PyValue_NULL, PyValue_NULL} with an exception set.  Consumes iterable.
+   Both come back in registers (spec 3.5, R-a); out of line, as when it was
+   exported. */
+static Py_NO_INLINE _PyValuePair
+_PyEval_GetIter(PyValue iterable, int yield_from)
 {
+    _PyValuePair result = {PyValue_NULL, PyValue_NULL};
     PyTypeObject *tp = PyValue_TYPE(iterable);
     if (tp->_tp_iteritem != NULL) {
         /* Leave iterable on stack and push tagged index 0 */
-        *index_or_null = PyValue_TagIndex(0);
-        return iterable;
+        result.first = iterable;
+        result.second = PyValue_TagIndex(0);
+        return result;
     }
-    *index_or_null = PyValue_NULL;
     if (tp->tp_iter == PyObject_SelfIter) {
-        return iterable;
+        result.first = iterable;
+        return result;
     }
     if (yield_from && tp == &PyCoro_Type) {
         if (yield_from == GET_ITER_YIELD_FROM) {
@@ -1371,22 +1490,24 @@ _PyEval_GetIter(PyValue iterable, PyValue *index_or_null, int yield_from)
                             "cannot 'yield from' a coroutine object "
                             "in a non-coroutine generator");
             PyValue_CLOSE(iterable);
-            return PyValue_NULL;
+            return result;
         }
-        return iterable;
+        result.first = iterable;
+        return result;
     }
     /* Pop iterable, and push iterator then NULL. An int or float is not
        iterable; PyObject_GetIter() raises the error. */
     iterable = PyValue_Box(iterable);
     if (PyValue_IsInline(iterable)) {
-        return PyValue_NULL;
+        return result;
     }
     PyObject *iter_o = PyObject_GetIter(PyValue_AsKnownObjectBorrow(iterable));
     PyValue_CLOSE(iterable);
     if (iter_o == NULL) {
-        return PyValue_NULL;
+        return result;
     }
-    return PyValue_FromPyObjectSteal(iter_o);
+    result.first = PyValue_FromPyObjectSteal(iter_o);
+    return result;
 }
 
 int (_PyEval_StoreName)(PyThreadState *tstate, PyValueBorrow v, PyObject *name, PyObject* ns)
@@ -1422,6 +1543,49 @@ int (_PyEval_StoreName)(PyThreadState *tstate, PyValueBorrow v, PyObject *name, 
     int err = PyObject_SetItem(ns, name, v_o);
     Py_DECREF(v_o);
     return err;
+}
+
+/* The wrappers below keep the address of a C local out of the interpreter
+   handlers (spec 3.5, R-c): each runtime API with an out-parameter runs in
+   its own C frame and returns its outputs by value. */
+
+/* Out of line: _PyMapping_GetOptionalItem2 writes its status through a
+   pointer. status: -1 error, 0 missing, 1 found. */
+static Py_NO_INLINE _PyStatusObject
+value_mapping_get_optional_item(PyObject *obj, PyObject *key)
+{
+    _PyStatusObject result;
+    result.object = _PyMapping_GetOptionalItem2(obj, key, &result.status);
+    return result;
+}
+
+/* Out of line: _PyEval_LoadGlobalValue writes the value through a pointer.
+   Returns PyValue_NULL, with an exception set, on error. */
+static Py_NO_INLINE PyValue
+value_load_global(PyObject *globals, PyObject *builtins, PyObject *name)
+{
+    PyValue v = PyValue_NULL;
+    _PyEval_LoadGlobalValue(globals, builtins, name, &v);
+    return v;
+}
+
+/* The next item of iter: {1, item} (owned), {0, PyValue_NULL} at the end
+   with no exception set, {-1, PyValue_NULL} with an exception set.  The
+   index lives in the caller's frame slot, *index_ptr, which it updates
+   (spec 3.5, R-a and R-d). */
+static _PyStatusValue
+_PyForIter_VirtualIteratorNext(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                               PyValue iter, PyValue *index_ptr);
+
+/* Out of line: _PyAsyncGenASend_Send returns its result through a pointer.
+   status is the PySendResult. */
+static Py_NO_INLINE _PyStatusObject
+value_async_gen_send(PyObject *iter, PyObject *val)
+{
+    _PyStatusObject result;
+    result.object = NULL;
+    result.status = _PyAsyncGenASend_Send(iter, val, &result.object);
+    return result;
 }
 
 #if (defined(__GNUC__) && __GNUC__ >= 10 && !defined(__clang__)) && defined(__x86_64__)
@@ -1487,16 +1651,6 @@ dtrace_function_return(_PyInterpreterFrame *frame)
 }
 #endif
 
-/* Only object bridges enter this cold path. Inline operations and handlers
- * with no private boxes need neither a call nor an observer/epoch lookup. */
-static void
-drop_failed_value(PyValue *result)
-{
-    if (result != NULL && !PyValue_IsNull(*result)) {
-        PyValue_CLEAR(*result);
-    }
-}
-
 #ifndef NDEBUG
 /* Whether the instrumentation of code, which a running frame of tstate
  * executes, is as the eval loop keeps it.  Setting events re-instruments
@@ -1527,43 +1681,38 @@ instrumentation_is_current(PyThreadState *tstate, PyCodeObject *code)
 #endif
 
 /* After the operation, check that the frame is still its own and restore
- * the frame's instr_ptr.  The operation can run Python, and so can the
- * release of its operands, of its results and of a displaced local
- * (__del__, weakref callbacks).  Python can change the instrumentation,
- * which rewrites handler fields in place and which dispatch reads, but the
- * executing copy is fixed for the code object's life
+ * the frame's instr_ptr to current, the handler's instruction (its
+ * this_instr), which the handler passes by value (R-b).  The operation can
+ * run Python, and so can the release of its operands, of its results and of
+ * a displaced local (__del__, weakref callbacks).  Python can change the
+ * instrumentation, which rewrites handler fields in place and which dispatch
+ * reads, but the executing copy is fixed for the code object's life
  * (pyjit/design/register-ir.md 1.10): frame->ir_words and the handler's
- * next_instr, NEXT, stay valid, and the checks here only assert it. */
+ * current and next instructions stay valid, and the checks here only assert
+ * it.  On failure it closes failed_result. */
 static int
-value_operation_refresh(_PyValueOperation *operation, _PyInstr *next,
-                        PyValue *failed_result)
+value_operation_refresh(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                        _PyInstr *current, PyValue failed_result)
 {
-    PyThreadState *tstate = operation->tstate;
-    _PyInterpreterFrame *frame = operation->frame;
-    PyCodeObject *code = operation->code;
-    Py_ssize_t word = operation->next_word;
-    Py_ssize_t current = operation->current_word;
-    if (tstate->current_frame != frame || _PyFrame_GetCode(frame) != code) {
+    if (tstate->current_frame != frame) {
         value_revalidation_error("value bridge changed the active frame");
-        drop_failed_value(failed_result);
+        PyValue_XCLOSE(failed_result);
         return -1;
     }
+    PyCodeObject *code = _PyFrame_GetCode(frame);
     assert(instrumentation_is_current(tstate, code));
     _PyCodeExec *exec = code->_co_exec;
-    if (exec == NULL || word < 0 || word > exec->nwords ||
-        current < 0 || current >= exec->nwords) {
+    if (exec == NULL || frame->ir_words != exec->words ||
+        current < exec->words || current >= exec->words + exec->nwords) {
         /* Keep a pending operation error. */
         if (!PyErr_Occurred()) {
             PyErr_SetString(PyExc_SystemError, "value bridge changed executing words");
         }
-        drop_failed_value(failed_result);
+        PyValue_XCLOSE(failed_result);
         return -1;
     }
-    assert(frame->ir_words == exec->words);
     assert(frame->ir_feedback == exec->entries);
-    assert(next == exec->words + word);
-    (void)next;
-    frame->instr_ptr = exec->words + current;
+    frame->instr_ptr = current;
     return 0;
 }
 
@@ -1572,7 +1721,7 @@ value_operation_refresh(_PyValueOperation *operation, _PyInstr *next,
 static int
 finish_value_bridges_ex(PyThreadState *tstate, _PyInterpreterFrame *frame,
                        _PyInstr *next, _PyValueTemps *temps,
-                       PyValue *owners, int count, PyValue *failed_result)
+                       PyValue *owners, int count, PyValue failed_result)
 {
     if (frame->owner == FRAME_OWNED_BY_INTERPRETER) {
         for (int i = 0; i < count; i++) {
@@ -1581,52 +1730,53 @@ finish_value_bridges_ex(PyThreadState *tstate, _PyInterpreterFrame *frame,
         _PyValueTemps_Close(temps);
         return 0;
     }
-    _PyValueOperation operation = value_operation_begin(tstate, frame, next);
+    _PyInstr *current = frame->instr_ptr;
+#ifndef NDEBUG
+    _PyCodeExec *exec = _PyFrame_GetCode(frame)->_co_exec;
+    assert(exec != NULL && frame->ir_words == exec->words);
+    assert(current >= exec->words && current < exec->words + exec->nwords);
+    assert(next >= exec->words && next <= exec->words + exec->nwords);
+#endif
+    (void)next;
     for (int i = 0; i < count; i++) {
         PyValue_XCLOSE(owners[i]);
     }
     _PyValueTemps_Close(temps);
-    return value_operation_refresh(&operation, next, failed_result);
+    return value_operation_refresh(tstate, frame, current, failed_result);
 }
 
 static int
-value_operation_finish(_PyValueOperation *operation, _PyInstr *next,
-                       _PyValueTemps *temps)
+value_operation_finish(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                       _PyInstr *current, _PyValueTemps *temps)
 {
     /* The operation can run Python even when it created no private boxes:
      * check the frame even when the owner record is empty. */
     _PyValueTemps_Close(temps);
-    return value_operation_refresh(operation, next, NULL);
+    return value_operation_refresh(tstate, frame, current, PyValue_NULL);
 }
 
-static _PyCallTransaction
-call_transaction_begin(PyThreadState *tstate, _PyInterpreterFrame *frame,
-                       _PyInstr *next, int base, int count, int destination,
-                       int argument_count, _PyCallTransactionKind kind,
-                       int instrumented, int periodic)
+/* The checks of a call's window, before the call has any effect; the
+ * handler keeps base and destination in registers. */
+static inline void
+call_transaction_begin(_PyInterpreterFrame *frame, int base, int count,
+                       int destination)
 {
-    _PyValueOperation operation = value_operation_begin(tstate, frame, next);
-    assert(base >= operation.code->co_nlocalsplus);
+    assert(base >= _PyFrame_GetCode(frame)->co_nlocalsplus);
     assert(count >= 0 && base <= _PyFrame_NumSlots(frame) - count);
     assert(destination >= 0 && destination < _PyFrame_NumSlots(frame));
+    (void)destination;
     /* Every call input is an evaluated temporary, including snapshots of
      * locals, and owns its value. Callback-current LOCAL homes are never
      * consumed by this record. */
     _PyValue_RecheckWindow(_PyFrame_Slots(frame) + base, count);
-    return (_PyCallTransaction){
-        .operation = operation, .base = base, .count = count,
-        .destination = destination, .argument_count = argument_count,
-        .kind = kind, .instrumented = instrumented, .periodic = periodic,
-    };
 }
 
 static int
-call_transaction_refresh(_PyCallTransaction *call, _PyInstr *next)
+call_transaction_refresh(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                         _PyInstr *current)
 {
-    _PyValueOperation *op = &call->operation;
-    int status = value_operation_refresh(op, next, NULL);
-    if (op->tstate->current_frame != op->frame ||
-        _PyFrame_GetCode(op->frame) != op->code) {
+    int status = value_operation_refresh(tstate, frame, current, PyValue_NULL);
+    if (!value_frame_is_current(tstate, frame)) {
         value_revalidation_error(
             "call preparation changed the active frame");
         return -1;
@@ -1634,11 +1784,13 @@ call_transaction_refresh(_PyCallTransaction *call, _PyInstr *next)
     return status;
 }
 
+/* Expand a bound method in the window: 1 if it did (an effect), 0 if the
+ * callable is not one, -1 on error. */
 static int
-call_transaction_expand_method(_PyCallTransaction *call, _PyInstr *next)
+call_transaction_expand_method(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                               _PyInstr *current, int base)
 {
-    call->prepared = 1;
-    PyValue *homes = _PyFrame_Slots(call->operation.frame) + call->base;
+    PyValue *homes = _PyFrame_Slots(frame) + base;
     if (PyValue_TYPE(homes[0]) != &PyMethod_Type ||
         !PyValue_IsNull(homes[1])) {
         return 0;
@@ -1653,23 +1805,22 @@ call_transaction_expand_method(_PyCallTransaction *call, _PyInstr *next)
     homes[1] = self;
     _PyValue_CheckHome(homes[0]);
     _PyValue_CheckHome(homes[1]);
-    call->effects = 1;
-    PyValue_CLEAR(obsolete);
-    return call_transaction_refresh(call, next);
+    PyValue_CLOSE(obsolete);
+    return call_transaction_refresh(tstate, frame, current) < 0 ? -1 : 1;
 }
 
+/* Replace CALL_FUNCTION_EX's positional arguments by a tuple.  It is an
+ * effect even when they are one already. */
 static int
-call_transaction_prepare_tuple(_PyCallTransaction *call, _PyInstr *next)
+call_transaction_prepare_tuple(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                               _PyInstr *current, int base)
 {
-    assert(call->kind == CALL_TRANSACTION_EX);
-    call->prepared = 1;
-    PyValue *homes = _PyFrame_Slots(call->operation.frame) + call->base;
+    PyValue *homes = _PyFrame_Slots(frame) + base;
     PyValue args = PyValue_DUP(homes[2]);
     PyValue func = PyValue_DUP(homes[0]);
     PyValue obsolete = PyValue_NULL;
     PyObject *args_object = NULL, *func_object = NULL, *tuple = NULL;
     int status = -1;
-    call->effects = 1;
     args_object = PyValue_AsObject(args);
     if (args_object == NULL) {
         goto done;
@@ -1682,15 +1833,14 @@ call_transaction_prepare_tuple(_PyCallTransaction *call, _PyInstr *next)
     if (func_object == NULL) {
         goto done;
     }
-    if (_Py_Check_ArgsIterable(call->operation.tstate, func_object,
-                              args_object) < 0) {
+    if (_Py_Check_ArgsIterable(tstate, func_object, args_object) < 0) {
         goto done;
     }
     tuple = PySequence_Tuple(args_object);
-    if (tuple == NULL || call_transaction_refresh(call, next) < 0) {
+    if (tuple == NULL || call_transaction_refresh(tstate, frame, current) < 0) {
         goto done;
     }
-    homes = _PyFrame_Slots(call->operation.frame) + call->base;
+    homes = _PyFrame_Slots(frame) + base;
     obsolete = homes[2];
     /* A tuple is a heap object, so this pure owner transfer cannot retire a
      * scalar box. Only the final tuple home is visible during local cleanup. */
@@ -1704,20 +1854,22 @@ done:
     PyValue_CLEAR(func);
     PyValue_CLEAR(args);
     PyValue_CLEAR(obsolete);
-    if (call_transaction_refresh(call, next) < 0) {
+    if (call_transaction_refresh(tstate, frame, current) < 0) {
         return -1;
     }
     return status;
 }
 
+/* The CALL event of an instrumented call. */
 static int
-call_transaction_monitor(_PyCallTransaction *call, _PyInstr *next)
+call_transaction_monitor(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                         _PyInstr *current, int base, int argument_count,
+                         _PyCallTransactionKind kind)
 {
-    assert(!call->monitored);
-    PyValue *homes = _PyFrame_Slots(call->operation.frame) + call->base;
+    PyValue *homes = _PyFrame_Slots(frame) + base;
     PyValue function = PyValue_DUP(homes[0]);
     PyValue first = PyValue_NULL;
-    if (call->kind == CALL_TRANSACTION_EX) {
+    if (kind == CALL_TRANSACTION_EX) {
         PyObject *tuple = PyValue_AsKnownObjectBorrow(homes[2]);
         if (PyTuple_GET_SIZE(tuple)) {
             first = PyValue_DUP(PyTuple_GET_VALUE(tuple, 0));
@@ -1726,55 +1878,94 @@ call_transaction_monitor(_PyCallTransaction *call, _PyInstr *next)
     else if (!PyValue_IsNull(homes[1])) {
         first = PyValue_DUP(homes[1]);
     }
-    else if (call->argument_count) {
+    else if (argument_count) {
         first = PyValue_DUP(homes[2]);
     }
     PyObject *function_object = NULL, *argument = NULL;
     int status = -1;
-    call->effects = 1;
-    call->monitored = 1;
     function_object = PyValue_AsObject(function);
     if (function_object == NULL) {
         goto done;
     }
     argument = PyValue_IsNull(first) ? Py_NewRef(&_PyInstrumentation_MISSING)
                                    : PyValue_AsObject(first);
-    if (argument == NULL || call_transaction_refresh(call, next) < 0) {
+    if (argument == NULL || call_transaction_refresh(tstate, frame, current) < 0) {
         goto done;
     }
     status = _Py_call_instrumentation_2args(
-        call->operation.tstate, PY_MONITORING_EVENT_CALL, call->operation.frame,
-        call->operation.frame->instr_ptr, function_object, argument);
+        tstate, PY_MONITORING_EVENT_CALL, frame,
+        frame->instr_ptr, function_object, argument);
 done:
     Py_CLEAR(argument);
     Py_CLEAR(function_object);
     PyValue_CLEAR(first);
     PyValue_CLEAR(function);
-    if (call_transaction_refresh(call, next) < 0) {
+    if (call_transaction_refresh(tstate, frame, current) < 0) {
         return -1;
     }
     return status < 0 ? -1 : 0;
+}
+
+/* The transaction-record forms of the three preparations, for
+ * call_transaction_run_*(), which records their effects. */
+static int
+call_record_refresh(_PyCallTransaction *call)
+{
+    return call_transaction_refresh(call->tstate, call->frame, call->current);
+}
+
+static int
+call_record_expand_method(_PyCallTransaction *call)
+{
+    call->prepared = 1;
+    int status = call_transaction_expand_method(call->tstate, call->frame,
+                                                call->current, call->base);
+    if (status > 0) {
+        call->effects = 1;
+    }
+    return status < 0 ? -1 : 0;
+}
+
+static int
+call_record_prepare_tuple(_PyCallTransaction *call)
+{
+    assert(call->kind == CALL_TRANSACTION_EX);
+    call->prepared = 1;
+    call->effects = 1;
+    return call_transaction_prepare_tuple(call->tstate, call->frame,
+                                          call->current, call->base);
+}
+
+static int
+call_record_monitor(_PyCallTransaction *call)
+{
+    assert(!call->monitored);
+    call->effects = 1;
+    call->monitored = 1;
+    return call_transaction_monitor(call->tstate, call->frame, call->current,
+                                    call->base, call->argument_count,
+                                    call->kind);
 }
 
 static void
 call_transaction_publish_pc(void *opaque)
 {
     _PyCallTransaction *call = opaque;
-    _PyValueOperation *op = &call->operation;
-    assert(op->tstate->current_frame == op->frame);
-    assert(_PyFrame_GetCode(op->frame) == op->code);
-    _PyCodeExec *exec = op->code->_co_exec;
-    assert(exec != NULL && op->current_word >= 0 &&
-           op->current_word < exec->nwords);
-    assert(op->frame->ir_words == exec->words);
-    assert(op->frame->ir_feedback == exec->entries);
-    op->frame->instr_ptr = exec->words + op->current_word;
+    assert(call->tstate->current_frame == call->frame);
+#ifndef NDEBUG
+    _PyCodeExec *exec = _PyFrame_GetCode(call->frame)->_co_exec;
+    assert(exec != NULL && call->current >= exec->words &&
+           call->current < exec->words + exec->nwords);
+    assert(call->frame->ir_words == exec->words);
+    assert(call->frame->ir_feedback == exec->entries);
+#endif
+    call->frame->instr_ptr = call->current;
 }
 
 static void
 call_transaction_detach(_PyCallTransaction *call, PyValue *retired)
 {
-    PyValue *homes = _PyFrame_Slots(call->operation.frame) + call->base;
+    PyValue *homes = _PyFrame_Slots(call->frame) + call->base;
     for (int i = 0; i < call->count; i++) {
         retired[i] = homes[i];
         homes[i] = PyValue_NULL;
@@ -1799,7 +1990,7 @@ call_transaction_retire(PyValue *retired, int count, PyValue *small)
  * The producer must not move window[0] afterward, even on an error edge
  * after cleanup. */
 static int
-call_transaction_native(_PyCallTransaction *call, _PyInstr *next)
+call_transaction_native(_PyCallTransaction *call)
 {
     PyValue small[8];
     PyValue *retired = small;
@@ -1809,7 +2000,7 @@ call_transaction_native(_PyCallTransaction *call, _PyInstr *next)
     _PyNativeScope scope;
     call->effects = 1;
     if (call->instrumented && !call->monitored &&
-        call_transaction_monitor(call, next) < 0) {
+        call_record_monitor(call) < 0) {
         return -1;
     }
     if (call->count > (int)Py_ARRAY_LENGTH(small)) {
@@ -1817,23 +2008,23 @@ call_transaction_native(_PyCallTransaction *call, _PyInstr *next)
         if (retired == NULL) {
             PyErr_NoMemory();
         }
-        if (retired == NULL || call_transaction_refresh(call, next) < 0) {
+        if (retired == NULL || call_record_refresh(call) < 0) {
             goto done;
         }
     }
-    PyValue *homes = _PyFrame_Slots(call->operation.frame) + call->base;
+    PyValue *homes = _PyFrame_Slots(call->frame) + call->base;
     callable = PyValue_AsObject(homes[0]);
-    if (callable == NULL || call_transaction_refresh(call, next) < 0) {
+    if (callable == NULL || call_record_refresh(call) < 0) {
         goto done;
     }
-    homes = _PyFrame_Slots(call->operation.frame) + call->base;
+    homes = _PyFrame_Slots(call->frame) + call->base;
     scope_started = 1;
     int status;
     if (call->kind == CALL_TRANSACTION_EX) {
         PyObject *tuple = PyValue_AsKnownObjectBorrow(homes[2]);
         PyObject *kwargs = PyValue_AsKnownObjectBorrow(homes[3]);
         status = _PyNativeScope_BeginTupleCall(
-            &scope, call->operation.tstate, callable, tuple, kwargs);
+            &scope, call->tstate, callable, tuple, kwargs);
     }
     else {
         int offset = PyValue_IsNull(homes[1]) ? 2 : 1;
@@ -1843,16 +2034,16 @@ call_transaction_native(_PyCallTransaction *call, _PyInstr *next)
         Py_ssize_t positional = total - (names == NULL ? 0 : PyTuple_GET_SIZE(names));
         if (_PyCFunction_CanCallScoped(callable)) {
             status = _PyNativeScope_BeginVector(
-                &scope, call->operation.tstate, callable, homes + offset,
+                &scope, call->tstate, callable, homes + offset,
                 positional, total, names);
         }
         else {
             status = _PyNativeScope_BeginObjectVector(
-                &scope, call->operation.tstate, callable, homes + offset,
+                &scope, call->tstate, callable, homes + offset,
                 positional, total, names);
         }
     }
-    if (status < 0 || call_transaction_refresh(call, next) < 0) {
+    if (status < 0 || call_record_refresh(call) < 0) {
         goto abort;
     }
     if (call->kind != CALL_TRANSACTION_EX) {
@@ -1874,7 +2065,7 @@ call_transaction_native(_PyCallTransaction *call, _PyInstr *next)
             goto abort;
         }
     }
-    if (call_transaction_refresh(call, next) < 0) {
+    if (call_record_refresh(call) < 0) {
         goto abort;
     }
     if (call->kind == CALL_TRANSACTION_EX) {
@@ -1889,33 +2080,33 @@ call_transaction_native(_PyCallTransaction *call, _PyInstr *next)
         }
     }
     /* The call can run Python: refresh before monitoring reads the frame. */
-    int refreshed = call_transaction_refresh(call, next);
+    int refreshed = call_record_refresh(call);
     if (call->instrumented &&
         !(call->kind == CALL_TRANSACTION_EX &&
           (PyFunction_Check(callable) || PyMethod_Check(callable)))) {
         if (status < 0 || refreshed < 0) {
             _Py_call_instrumentation_exc2(
-                call->operation.tstate, PY_MONITORING_EVENT_C_RAISE,
-                call->operation.frame, call->operation.frame->instr_ptr,
+                call->tstate, PY_MONITORING_EVENT_C_RAISE,
+                call->frame, call->frame->instr_ptr,
                 callable, monitor_argument);
         }
         else if (_Py_call_instrumentation_2args(
-                     call->operation.tstate, PY_MONITORING_EVENT_C_RETURN,
-                     call->operation.frame, call->operation.frame->instr_ptr,
+                     call->tstate, PY_MONITORING_EVENT_C_RETURN,
+                     call->frame, call->frame->instr_ptr,
                      callable, monitor_argument) < 0) {
             status = -1;
         }
     }
     if (status < 0 || refreshed < 0 ||
-        call_transaction_refresh(call, next) < 0) {
+        call_record_refresh(call) < 0) {
         goto abort;
     }
     call_transaction_detach(call, retired);
     retired_count = call->count;
-    to_local = call->destination < call->operation.code->co_nlocalsplus;
+    to_local = call->destination < _PyFrame_GetCode(call->frame)->co_nlocalsplus;
     _PyNativeResult_Publish(&scope.result,
         to_local ? &local_result
-                 : _PyFrame_Slots(call->operation.frame) + call->destination,
+                 : _PyFrame_Slots(call->frame) + call->destination,
         call_transaction_publish_pc, call);
     call_status = 0;
     goto end_scope;
@@ -1928,15 +2119,15 @@ done:
     Py_CLEAR(monitor_argument);
     Py_CLEAR(callable);
     call_transaction_retire(retired, retired_count, small);
-    int failed = call_transaction_refresh(call, next);
+    int failed = call_record_refresh(call);
     if (call_status < 0) {
         assert(PyValue_IsNull(local_result));
         return -1;
     }
     if (failed == 0 && call->periodic) {
-        int periodic = check_periodics_at_end(call->operation.tstate,
-                                              call->operation.frame);
-        failed = call_transaction_refresh(call, next);
+        int periodic = check_periodics_at_end(call->tstate,
+                                              call->frame);
+        failed = call_record_refresh(call);
         if (periodic < 0) {
             failed = -1;
         }
@@ -1950,60 +2141,72 @@ done:
          * the result waits in window[0], where the unwinder releases it after
          * the traceback entry and the RAISE event, as upstream pops it. */
         if (failed < 0) {
-            PyValue *window = _PyFrame_Slots(call->operation.frame) + call->base;
+            PyValue *window = _PyFrame_Slots(call->frame) + call->base;
             assert(PyValue_IsNull(window[0]));
             window[0] = local_result;
             return -1;
         }
-        PyValue *home = _PyFrame_Slots(call->operation.frame) + call->destination;
+        PyValue *home = _PyFrame_Slots(call->frame) + call->destination;
         PyValue displaced = *home;
         *home = local_result;
         _PyValue_CheckHome(*home);
         PyValue_XCLOSE(displaced);
-        failed = call_transaction_refresh(call, next);
+        failed = call_record_refresh(call);
     }
     return failed;
 }
 
-static int call_transaction_invoke(_PyCallTransaction *, _PyInstr *,
-                                    _PyInterpreterFrame **);
+/* The handlers' calls (call_transaction_run_*), after
+ * _PyEvalFramePushAndInit and its kin, which they use. */
+static _PyCallResult call_transaction_run_vector(
+    PyThreadState *, _PyInterpreterFrame *, int, int, int, int);
+static _PyCallResult call_transaction_run_keywords(
+    PyThreadState *, _PyInterpreterFrame *, int, int, int, int);
+static _PyCallResult call_transaction_run_ex(
+    PyThreadState *, _PyInterpreterFrame *, int, int, int);
 
-static int
-value_reader_complete(_PyValueOperation *operation, _PyInstr *next,
-                      _PyValueTemps *temps, PyValue *result,
-                      PyValue *first, PyValue *second)
+/* Publish result, the operation's value (to its slot if that is a
+ * temporary), then close the operands first and second, then the boxes, and
+ * refresh.  Returns the published result, or PyValue_NULL on error, when it
+ * has closed result unless the slot already owns it.  All indices come from
+ * the handler's word, as read before the provider: a folded destination
+ * stays untouched until the original operand owners have retired. */
+static PyValue
+value_reader_complete(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                      _PyInstr *current, _PyValueTemps *temps,
+                      int result_slot, PyValue result,
+                      PyValue first, PyValue second)
 {
-    _PyInterpreterFrame *frame = operation->frame;
-    int slot = operation->result_slot;
-    /* All indices were captured before the provider. A folded destination
-     * stays untouched until the original operand owners have retired. */
-    if (operation->tstate->current_frame != frame ||
-        _PyFrame_GetCode(frame) != operation->code) {
+    if (!value_frame_is_current(tstate, frame)) {
         PyErr_SetString(PyExc_SystemError, "value reader changed the active frame");
-        drop_failed_value(result);
-        value_operation_close3(first, second, NULL);
+        PyValue_XCLOSE(result);
+        value_operation_close3(first, second, PyValue_NULL);
         _PyValueTemps_Close(temps);
-        return -1;
+        return PyValue_NULL;
     }
-    int local = slot < operation->code->co_nlocalsplus;
-    if (slot < 0 ||
-        slot >= _PyFrame_NumSlots(frame) ||
-        (!local && !PyValue_IsNull(_PyFrame_Slots(frame)[slot]))) {
+    int local = result_slot < _PyFrame_GetCode(frame)->co_nlocalsplus;
+    if (result_slot < 0 ||
+        result_slot >= _PyFrame_NumSlots(frame) ||
+        (!local && !PyValue_IsNull(_PyFrame_Slots(frame)[result_slot]))) {
         PyErr_SetString(PyExc_SystemError, "value reader changed its result home");
-        drop_failed_value(result);
-        value_operation_close3(first, second, NULL);
+        PyValue_XCLOSE(result);
+        value_operation_close3(first, second, PyValue_NULL);
         _PyValueTemps_Close(temps);
-        (void)value_operation_refresh(operation, next, NULL);
-        return -1;
+        (void)value_operation_refresh(tstate, frame, current, PyValue_NULL);
+        return PyValue_NULL;
     }
-    *result = _PyValue_Publish(result);
+    result = _PyValue_Publish(&result);
     if (!local) {
-        _PyFrame_Slots(frame)[slot] = *result;
-        _PyValue_CheckTemp(_PyFrame_Slots(frame)[slot]);
+        _PyFrame_Slots(frame)[result_slot] = result;
+        _PyValue_CheckTemp(_PyFrame_Slots(frame)[result_slot]);
     }
-    value_operation_close3(first, second, NULL);
+    value_operation_close3(first, second, PyValue_NULL);
     _PyValueTemps_Close(temps);
-    return value_operation_refresh(operation, next, local ? result : NULL);
+    if (value_operation_refresh(tstate, frame, current,
+                                local ? result : PyValue_NULL) < 0) {
+        return PyValue_NULL;
+    }
+    return result;
 }
 
 static int
@@ -2013,55 +2216,64 @@ finish_value_bridges(PyThreadState *tstate, _PyInterpreterFrame *frame,
     if (temps == NULL || temps->count == 0) {
         return 0;
     }
-    return finish_value_bridges_ex(tstate, frame, next, temps, NULL, 0, NULL);
+    return finish_value_bridges_ex(tstate, frame, next, temps, NULL, 0,
+                                   PyValue_NULL);
 }
 
-static int
-value_attribute_complete(_PyValueOperation *operation, _PyInstr *next,
-                         _PyValueTemps *temps, PyValue *result,
-                         PyValue *self, PyValue *receiver, int method)
+/* value_reader_complete() for LOAD_ATTR, whose method form has two results,
+ * the attribute and self, for result_slot and the slot after it.  Returns
+ * the published attribute, or PyValue_NULL on error. */
+static PyValue
+value_attribute_complete(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                         _PyInstr *current, _PyValueTemps *temps,
+                         int result_slot, PyValue result, PyValue self,
+                         PyValue receiver, int method)
 {
     if (!method) {
-        return value_reader_complete(operation, next, temps, result, receiver, NULL);
+        return value_reader_complete(tstate, frame, current, temps,
+                                     result_slot, result, receiver,
+                                     PyValue_NULL);
     }
-    _PyInterpreterFrame *frame = operation->frame;
-    int slot = operation->result_slot;
-    if (operation->tstate->current_frame != frame ||
-        _PyFrame_GetCode(frame) != operation->code ||
-        slot < operation->code->co_nlocalsplus || slot + 1 >= _PyFrame_NumSlots(frame) ||
+    int slot = result_slot;
+    if (!value_frame_is_current(tstate, frame) ||
+        slot < _PyFrame_GetCode(frame)->co_nlocalsplus ||
+        slot + 1 >= _PyFrame_NumSlots(frame) ||
         !PyValue_IsNull(_PyFrame_Slots(frame)[slot]) ||
         !PyValue_IsNull(_PyFrame_Slots(frame)[slot + 1])) {
         PyErr_SetString(PyExc_SystemError, "method lookup changed its output homes");
-        drop_failed_value(result);
-        drop_failed_value(self);
-        value_operation_close3(receiver, NULL, NULL);
+        PyValue_XCLOSE(result);
+        PyValue_XCLOSE(self);
+        value_operation_close3(receiver, PyValue_NULL, PyValue_NULL);
         _PyValueTemps_Close(temps);
-        (void)value_operation_refresh(operation, next, NULL);
-        return -1;
+        (void)value_operation_refresh(tstate, frame, current, PyValue_NULL);
+        return PyValue_NULL;
     }
-    *result = _PyValue_Publish(result);
-    *self = _PyValue_Publish(self);
-    _PyFrame_Slots(frame)[slot] = *result;
-    _PyFrame_Slots(frame)[slot + 1] = *self;
+    result = _PyValue_Publish(&result);
+    self = _PyValue_Publish(&self);
+    _PyFrame_Slots(frame)[slot] = result;
+    _PyFrame_Slots(frame)[slot + 1] = self;
     _PyValue_CheckTemp(_PyFrame_Slots(frame)[slot]);
     _PyValue_CheckTemp(_PyFrame_Slots(frame)[slot + 1]);
-    value_operation_close3(receiver, NULL, NULL);
+    value_operation_close3(receiver, PyValue_NULL, PyValue_NULL);
     _PyValueTemps_Close(temps);
-    return value_operation_refresh(operation, next, NULL);
+    if (value_operation_refresh(tstate, frame, current, PyValue_NULL) < 0) {
+        return PyValue_NULL;
+    }
+    return result;
 }
 
-static int
+/* Release first, then second, the values that a handler's published result
+ * displaced or whose receiver it no longer needs, then the input boxes, and
+ * refresh.  Both are detached before any callback, and no raw field pointer
+ * crosses it.  On failure, also close failed_result, the handler's result
+ * that a local was to receive.  Out of line: the owners array is this
+ * function's (R-a, R-c). */
+static Py_NO_INLINE int
 retire_published_values(PyThreadState *tstate, _PyInterpreterFrame *frame,
                         _PyInstr *next, _PyValueTemps *temps,
-                        PyValue *first, PyValue *second, PyValue *failed_result)
+                        PyValue first, PyValue second, PyValue failed_result)
 {
-    PyValue owners[2] = {*first, second == NULL ? PyValue_NULL : *second};
-    *first = PyValue_NULL;
-    if (second != NULL) {
-        *second = PyValue_NULL;
-    }
-    /* The displaced field is released before its receiver. Both are
-     * detached before any callback, and no raw field pointer crosses it. */
+    PyValue owners[2] = {first, second};
     return finish_value_bridges_ex(tstate, frame, next, temps, owners, 2,
                                    failed_result);
 }
@@ -2077,7 +2289,7 @@ finish_displaced_local(PyThreadState *tstate, _PyInterpreterFrame *frame,
                        PyValue displaced)
 {
     return finish_value_bridges_ex(tstate, frame, next, temps, &displaced, 1,
-                                   NULL);
+                                   PyValue_NULL);
 }
 
 typedef struct {
@@ -2168,9 +2380,62 @@ native_call_finish(_PyNativeCallPublication *state, _PyNativeScope *scope,
     return 0;
 }
 
+/* CALL_BUILTIN_O's native call, out of line (spec 3.5, R-c): the scope, its
+ * result and the publication record are addressed by the runtime API and by
+ * the publish callbacks, so they live in this function's own frame, not the
+ * handler's.  Returns the published result, or PyValue_NULL with the error
+ * set; on failure the inputs stay in the window (the frame owns them). */
+static Py_NO_INLINE PyValue
+native_call_builtin_o(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                      _PyInstr *next, int base, int inputs,
+                      PyValue callable, PyValue *args)
+{
+    PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
+    _PyNativeScope scope;
+    PyValue pending = PyValue_NULL;
+    _PyNativeCallPublication publication = native_call_publication(
+        tstate, frame, next, base, inputs, &pending);
+    int status = _PyNativeScope_Begin(
+        &scope, tstate, args, 1, 1, PyValue_NULL, NULL);
+    if (status == 0) {
+        status = _PyCFunction_CallScoped(&scope, callable_o, &scope.result);
+    }
+    if (status < 0) {
+        _PyNativeResult_Abort(&scope.result, native_call_publish_pc, &publication);
+        (void)native_call_finish(&publication, &scope, NULL, NULL, next);
+        return PyValue_NULL;
+    }
+    PyValue c = callable;
+    PyValue s = args[0];
+    _PyNativeResult_Publish(&scope.result, &pending,
+                            native_call_publish_result, &publication);
+    if (native_call_finish(&publication, &scope, &s, &c, next) < 0) {
+        return PyValue_NULL;
+    }
+    return pending;
+}
+
 /* The handlers, after the helpers that they call, and their table */
 #include "ir_targets.h"
 #include "generated_ir_cases.c.h"
+
+/* The only non-tail call into the handlers.  GCC 15.2 miscompiles a call
+   to a no_callee_saved_registers function that has a value live across it,
+   at -Og to -O3: it reloads the value from a callee-saved register that it
+   never set (reproducer: build/pyjit-link-wave1/a3/gcc-ncsr-bug.c in the
+   pyjit build tree).  This function has the normal ABI and nothing live
+   across the call, so it saves the callee-saved registers itself, and the
+   caller keeps its values across a normal call.  It is not inlined, and the
+   call is not a tail call: a handler does not preserve the registers that
+   our own caller expects.  Clang's preserve_none is not known to have the
+   bug; both compilers take this path, so there is one form.  The object
+   check (a3/step2/objcheck.sh) refuses any other non-tail call to a
+   _TAIL_CALL_* function. */
+static Py_NO_INLINE PyObject *
+enter_handlers(py_tail_call_funcptr handler, TAIL_CALL_PARAMS)
+{
+    return handler(TAIL_CALL_ARGS);
+}
 
 /* The evaluation loop.  _PyEval_EvalFrameDefault() wraps each activation in
    its borrow floor.  The loop sets up the activation and calls the first
@@ -2255,14 +2520,14 @@ _PyEval_EvalFrameLoop(PyThreadState *tstate, _PyInterpreterFrame *frame, int thr
         monitor_throw(tstate, frame, next_instr);
         PyValue *slots = _PyFrame_Slots(frame);
         _PyIRWord ir_word = 0;
-        result = _TAIL_CALL_error(TAIL_CALL_ARGS);
+        result = enter_handlers(_TAIL_CALL_error, TAIL_CALL_ARGS);
     }
     else {
         /* start_frame takes its word and slots from the frame */
         PyValue *slots = NULL;
         _PyInstr *next_instr = NULL;
         _PyIRWord ir_word = 0;
-        result = _TAIL_CALL_start_frame(TAIL_CALL_ARGS);
+        result = enter_handlers(_TAIL_CALL_start_frame, TAIL_CALL_ARGS);
     }
     /* The handler that returned, INTERPRETER_EXIT or exit_unwind_notrace,
      * left the entry frame */
@@ -3076,7 +3341,7 @@ _PyEvalFramePushAndInit_Ex(PyThreadState *tstate, PyValue func,
 /* Parent inputs are never offered to a consuming binder. Copies can fail
  * and retire while the parent's actual IN_CALL homes remain owning. */
 static int
-call_transaction_push_python(_PyCallTransaction *call, _PyInstr *next,
+call_transaction_push_python(_PyCallTransaction *call,
                              _PyInterpreterFrame **out)
 {
     PyValue small[16];
@@ -3088,23 +3353,22 @@ call_transaction_push_python(_PyCallTransaction *call, _PyInstr *next,
     PyObject *locals = NULL, *names = NULL, *tuple = NULL, *kwargs = NULL;
     PyCodeObject *code = NULL;
     _PyInterpreterFrame *child = NULL;
-    _PyValueOperation *op = &call->operation;
     call->effects = 1;
     if (call->count > (int)Py_ARRAY_LENGTH(small) / 2) {
         storage = PyMem_Malloc((size_t)call->count * 2 * sizeof(PyValue));
         if (storage == NULL) {
             PyErr_NoMemory();
         }
-        if (storage == NULL || call_transaction_refresh(call, next) < 0) {
+        if (storage == NULL || call_record_refresh(call) < 0) {
             status = -1;
             goto done;
         }
     }
-    PyValue *homes = _PyFrame_Slots(op->frame) + call->base;
+    PyValue *homes = _PyFrame_Slots(call->frame) + call->base;
     PyObject *callable = PyValue_AsKnownObjectBorrow(homes[0]);
     /* Allocation above may have changed vectorcall. Choose a new adapter
      * inside the same record; never replay method/monitor/EX preparation. */
-    if (Py_TYPE(callable) != &PyFunction_Type || IS_PEP523_HOOKED(op->tstate) ||
+    if (Py_TYPE(callable) != &PyFunction_Type || IS_PEP523_HOOKED(call->tstate) ||
         ((PyFunctionObject *)callable)->vectorcall != _PyFunction_Vectorcall) {
         goto done;
     }
@@ -3122,9 +3386,9 @@ call_transaction_push_python(_PyCallTransaction *call, _PyInstr *next,
         PyObject *consumed_tuple = tuple, *consumed_kwargs = kwargs;
         tuple = kwargs = NULL;
         child = eval_frame_push_and_init_ex_code(
-            op->tstate, consumed_function, consumed_locals,
+            call->tstate, consumed_function, consumed_locals,
             PyTuple_GET_SIZE(consumed_tuple), consumed_tuple, consumed_kwargs,
-            op->frame, code);
+            call->frame, code);
     }
     else {
         int offset = PyValue_IsNull(homes[1]) ? 2 : 1;
@@ -3140,10 +3404,10 @@ call_transaction_push_python(_PyCallTransaction *call, _PyInstr *next,
         /* Even on failure all these bits are consumed by the provider. */
         copied = 0;
         child = eval_frame_push_and_init_code(
-            op->tstate, consumed_function, consumed_locals, storage,
-            positional, names, op->frame, code);
+            call->tstate, consumed_function, consumed_locals, storage,
+            positional, names, call->frame, code);
     }
-    if (call_transaction_refresh(call, next) < 0 || child == NULL) {
+    if (call_record_refresh(call) < 0 || child == NULL) {
         status = -1;
         goto done;
     }
@@ -3162,9 +3426,9 @@ call_transaction_push_python(_PyCallTransaction *call, _PyInstr *next,
     PyValue *retired = storage + call->count;
     call_transaction_detach(call, retired);
     retired_count = call->count;
-    op->frame->return_slot = (uint16_t)call->destination;
-    assert(child->previous == op->frame);
-    op->tstate->current_frame = child;
+    call->frame->return_slot = (uint16_t)call->destination;
+    assert(child->previous == call->frame);
+    call->tstate->current_frame = child;
     status = 0;
 done:
     PyValue_CLEAR(function);
@@ -3187,7 +3451,7 @@ done:
     /* The releases above ran with the child current.  The child has not
      * started, so it needs no refresh: its words are fixed, and its RESUME
      * brings its instrumentation up to date, as for every frame that starts. */
-    if (status == 0 && op->tstate->current_frame != child) {
+    if (status == 0 && call->tstate->current_frame != child) {
         value_revalidation_error("value bridge changed the active frame");
         status = -1;
     }
@@ -3196,16 +3460,16 @@ done:
     if (child != NULL && status < 0) {
         /* The child has not entered its recursion/monitor protocol. Restore
          * the actual parent before clearing it; do not unwind it as executed. */
-        op->tstate->current_frame = op->frame;
+        call->tstate->current_frame = call->frame;
         call_transaction_publish_pc(call);
-        _PyEval_FrameClearAndPop(op->tstate, child);
+        _PyEval_FrameClearAndPop(call->tstate, child);
         child = NULL;
     }
     if (child == NULL) {
         /* Either the call was not invoked (1), or it failed (-1) and the
          * failing step above set its own error. */
         assert(status == 1 || (status < 0 && PyErr_Occurred()));
-        int failed = call_transaction_refresh(call, next);
+        int failed = call_record_refresh(call);
         if (failed < 0 || status < 0) {
             return -1;
         }
@@ -3215,36 +3479,93 @@ done:
 }
 
 static int
-call_transaction_invoke(_PyCallTransaction *call, _PyInstr *next,
-                        _PyInterpreterFrame **child)
+call_transaction_invoke(_PyCallTransaction *call, _PyInterpreterFrame **child)
 {
     *child = NULL;
     if (!call->prepared) {
         int prepared = call->kind == CALL_TRANSACTION_EX
-            ? call_transaction_prepare_tuple(call, next)
-            : call_transaction_expand_method(call, next);
+            ? call_record_prepare_tuple(call)
+            : call_record_expand_method(call);
         if (prepared < 0) {
             return -1;
         }
     }
     if (call->instrumented && !call->monitored &&
-        call_transaction_monitor(call, next) < 0) {
+        call_record_monitor(call) < 0) {
         return -1;
     }
-    PyValue callable = _PyFrame_Slots(call->operation.frame)[call->base];
+    PyValue callable = _PyFrame_Slots(call->frame)[call->base];
     if (PyValue_IsObject(callable)) {
         PyObject *object = PyValue_AsKnownObjectBorrow(callable);
         if (Py_TYPE(object) == &PyFunction_Type &&
-            !IS_PEP523_HOOKED(call->operation.tstate) &&
+            !IS_PEP523_HOOKED(call->tstate) &&
             ((PyFunctionObject *)object)->vectorcall == _PyFunction_Vectorcall &&
             !(call->kind == CALL_TRANSACTION_EX && call->instrumented)) {
-            int status = call_transaction_push_python(call, next, child);
+            int status = call_transaction_push_python(call, child);
             if (status <= 0) {
                 return status;
             }
         }
     }
-    return call_transaction_native(call, next);
+    return call_transaction_native(call);
+}
+
+/* Run a call: the rest of its preparation, its CALL event, and either a
+ * pushed Python frame or a native call.  The handler keeps the call's state
+ * in registers (flags: CALL_EFFECTS, CALL_PREPARED and CALL_MONITORED for
+ * what it did, CALL_INSTRUMENTED and CALL_PERIODIC for what it is).  The
+ * transaction record, whose helpers take its address, lives only in this
+ * function's frame (register-ir-v2-a3.md 3.5, R-c).  Returns {-1, NULL} on
+ * error, {0, child} for a pushed frame, {0, NULL} for a finished call. */
+static inline _PyCallResult
+call_transaction_run(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                     int base, int count, int destination, int argument_count,
+                     _PyCallTransactionKind kind, int flags)
+{
+    _PyCallTransaction call = {
+        .tstate = tstate, .frame = frame, .current = frame->instr_ptr,
+        .base = base, .count = count, .destination = destination,
+        .argument_count = argument_count, .kind = kind,
+        .instrumented = (flags & CALL_INSTRUMENTED) != 0,
+        .effects = (flags & CALL_EFFECTS) != 0,
+        .monitored = (flags & CALL_MONITORED) != 0,
+        .periodic = (flags & CALL_PERIODIC) != 0,
+        .prepared = (flags & CALL_PREPARED) != 0,
+    };
+    _PyInterpreterFrame *child;
+    int status = call_transaction_invoke(&call, &child);
+    return (_PyCallResult){status < 0 ? -1 : 0, status < 0 ? NULL : child};
+}
+
+/* One out-of-line run per call kind.  The handler's instr_ptr is its
+ * instruction here: every preparation helper the handler called restored
+ * it. */
+static Py_NO_INLINE _PyCallResult
+call_transaction_run_vector(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                            int base, int destination, int argument_count,
+                            int flags)
+{
+    return call_transaction_run(tstate, frame, base, argument_count + 2,
+                                destination, argument_count,
+                                CALL_TRANSACTION_VECTOR, flags);
+}
+
+static Py_NO_INLINE _PyCallResult
+call_transaction_run_keywords(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                              int base, int destination, int argument_count,
+                              int flags)
+{
+    return call_transaction_run(tstate, frame, base, argument_count + 3,
+                                destination, argument_count,
+                                CALL_TRANSACTION_KEYWORDS, flags);
+}
+
+static Py_NO_INLINE _PyCallResult
+call_transaction_run_ex(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                        int base, int destination, int flags)
+{
+    return call_transaction_run(tstate, frame, base, 4, destination, 0,
+                                CALL_TRANSACTION_EX, flags);
 }
 
 PyObject *
@@ -5074,9 +5395,12 @@ found:
     return value;
 }
 
-int
-_PyForIter_VirtualIteratorNext(PyThreadState* tstate, _PyInterpreterFrame* frame, PyValue iter, PyValue* index_ptr, PyValue *next)
+/* Out of line, as when it was exported. */
+static Py_NO_INLINE _PyStatusValue
+_PyForIter_VirtualIteratorNext(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                               PyValue iter, PyValue *index_ptr)
 {
+    _PyStatusValue result = {0, PyValue_NULL};
     PyObject *iter_o = PyValue_AsKnownObjectBorrow(iter);
     PyValue index = *index_ptr;
     if (PyValue_IsTaggedIndex(index)) {
@@ -5084,29 +5408,31 @@ _PyForIter_VirtualIteratorNext(PyThreadState* tstate, _PyInterpreterFrame* frame
         assert(i >= 0);
         _PyValueIndexPair next_index = Py_TYPE(iter_o)->_tp_iteritem(iter_o, i);
         i = next_index.index;
-        *next = next_index.value;
+        result.value = next_index.value;
         if (PyValue_IsNull(next_index.value)) {
-            return i < 0 ? -1 : 0;
+            result.status = i < 0 ? -1 : 0;
+            return result;
         }
         *index_ptr = PyValue_TagIndex(i);
-        return 1;
+        result.status = 1;
+        return result;
     }
     PyObject *next_o = (*Py_TYPE(iter_o)->tp_iternext)(iter_o);
     if (next_o == NULL) {
-        *next = PyValue_NULL;
         if (_PyErr_Occurred(tstate)) {
             if (_PyErr_ExceptionMatches(tstate, PyExc_StopIteration)) {
                 _PyEval_MonitorRaise(tstate, frame, frame->instr_ptr);
                 _PyErr_Clear(tstate);
             }
             else {
-                return -1;
+                result.status = -1;
             }
         }
-        return 0;
+        return result;
     }
-    *next = PyValue_FromPyObjectSteal(next_o);
-    return 1;
+    result.value = PyValue_FromPyObjectSteal(next_o);
+    result.status = 1;
+    return result;
 }
 
 /* Check if a 'cls' provides the given special method. */

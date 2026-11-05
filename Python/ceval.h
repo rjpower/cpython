@@ -324,7 +324,16 @@ static void monitor_throw(PyThreadState *tstate,
                  _PyInterpreterFrame *frame,
                  _PyInstr *instr);
 
-static int get_exception_handler(PyCodeObject *, int, int*, int*, int*);
+/* The result of a handler lookup: four ints, which the x86-64 SysV ABI
+   returns in rax:rdx, so the unwinder needs no addressable locals. */
+typedef struct {
+    int handled;
+    int exc_slot;
+    int handler;
+    int lasti;
+} _PyExceptionHandler;
+
+static _PyExceptionHandler get_exception_handler(PyCodeObject *, int);
 
 #ifdef HAVE_ERRNO_H
 #include <errno.h>
@@ -463,9 +472,10 @@ skip_to_next_entry(unsigned char *p, unsigned char *end) {
 
 #define MAX_LINEAR_SEARCH 40
 
-static Py_NO_INLINE int
-get_exception_handler(PyCodeObject *code, int index, int *exc_slot, int *handler, int *lasti)
+static Py_NO_INLINE _PyExceptionHandler
+get_exception_handler(PyCodeObject *code, int index)
 {
+    _PyExceptionHandler none = {0, 0, 0, 0};
     unsigned char *start = (unsigned char *)PyBytes_AS_STRING(code->co_exceptiontable);
     unsigned char *end = start + PyBytes_GET_SIZE(code->co_exceptiontable);
     /* Invariants:
@@ -477,7 +487,7 @@ get_exception_handler(PyCodeObject *code, int index, int *exc_slot, int *handler
         int offset;
         parse_varint(start, &offset);
         if (offset > index) {
-            return 0;
+            return none;
         }
         do {
             unsigned char * mid = start + ((end-start)>>1);
@@ -501,16 +511,16 @@ get_exception_handler(PyCodeObject *code, int index, int *exc_slot, int *handler
         }
         scan = parse_varint(scan, &size);
         if (start_offset + size > index) {
-            scan = parse_varint(scan, handler);
-            int slot_and_lasti;
+            int handler, slot_and_lasti;
+            scan = parse_varint(scan, &handler);
             parse_varint(scan, &slot_and_lasti);
-            *exc_slot = slot_and_lasti >> 1;
-            *lasti = slot_and_lasti & 1;
-            return 1;
+            _PyExceptionHandler found = {1, slot_and_lasti >> 1, handler,
+                                         slot_and_lasti & 1};
+            return found;
         }
         scan = skip_to_next_entry(scan, end);
     }
-    return 0;
+    return none;
 }
 
 

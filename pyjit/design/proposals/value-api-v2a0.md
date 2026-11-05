@@ -631,9 +631,13 @@ read only on the mixed-type path, which upstream also reads (D8).
 
 **What V2a-0 changes at run time.** No core type has a value number,
 compare or repr slot yet, so those dispatches take the adapter;
-`value_ops.c`'s mixed paths make the same boxes as before, now of kind
-SLOT_ADAPTER. C callers of the thunks with exact ints box twice until V2a-1a
-(Q8).
+`value_ops.c`'s mixed paths box an inline operand once for every object slot
+the dispatcher tries, of kind SLOT_ADAPTER. Measured after V2a-0
+(review-v2a0-2): `1000 == 'a'` makes 3 boxes (1 before), `'a' in [1000,
+2000, 'a']` 4 (2), `pow(x, 2, 7)` 7 (3). Exact int and float operations in
+the interpreter still make none. C callers of the thunks with exact ints box
+twice (Q8). V2a-1a gives `int` and `float` value slots, which takes the
+adapter off these paths; until then the cost is recorded, not optimised.
 
 ### 4.7 New declarations
 

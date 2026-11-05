@@ -524,14 +524,21 @@ def machine() -> dict:
 
 
 def build_info(python: Path, label: str) -> dict:
-    probe = ("import json, sys; "
-             "print(json.dumps([sys.version, list(sys._git), sys.flags.hash_randomization]))")
+    probe = ("import json, sys, sysconfig; "
+             "print(json.dumps([sys.version, list(sys._git), sys.flags.hash_randomization, "
+             "sysconfig.get_config_var('PY_TAIL_CALL_CC')]))")
     proc = run_checked([str(python), "-S", "-c", probe], "build version probe")
-    version, git_info, randomized = json.loads(proc.stdout)
+    version, git_info, randomized, tail_call_cc = json.loads(proc.stdout)
     if randomized:
         raise MeasurementError("PYTHONHASHSEED=0 did not reach the child interpreter")
+    # A tail-calling build without a calling-convention attribute (plain
+    # musttail) is not qualified (register-ir-v2-a3.md, 2.4).  Builds that
+    # predate the variable, such as upstream's, report None.
+    if tail_call_cc == "none":
+        raise MeasurementError(f"{python} was built with PY_TAIL_CALL_CC=none "
+                               "(plain musttail), which is not measured")
     return {"label": label, "path": str(python), "version": version, "git": git_info,
-            "hash_seed": 0}
+            "hash_seed": 0, "tail_call_cc": tail_call_cc}
 
 
 def resolve_build(build: str) -> Path:

@@ -167,22 +167,21 @@ costs, then the qualified baseline.
 Running now, in parallel (briefs in `build/pyjit-link-wave1/`):
 
 1. Register IR v2 A5b, the typed borrow, in bulk style
-   (`A5B-RESUME2-BRIEF.md`; [proposal](design/proposals/register-ir-v2-a5b.md),
-   revision 3): A5b-2 finished from its saved diff, then A5b-3 as hand-made
-   type changes, a script for the mechanical classes, and parallel Sonnet
-   workers on the remaining compile errors. A5b-4's renames move into the
-   first value-API wave. About 5 h of wall clock.
-2. Proposal for A3a and A3c, tail calls as the only backend, with the JIT
-   out of the build and A3b dropped (`A3-BRIEF.md` and addendum).
-3. Proposal for the value API's route to R27 (no box inside the core): small
-   reviewed mechanism steps, then compiler-driven bulk waves on parallel
-   Sonnet workers (`V2A0-BRIEF.md` and addendum).
+   (`A5B-RESUME2-BRIEF.md`): A5b-2 is fixing its post-review findings
+   (`review-irv2-a5b-2.md`: three fail-open generator rules, made
+   fail-closed); A5b-3 is scripted down to 201 compile errors in 45 files
+   for a parallel Sonnet fan-out.
+2. Value API V2a-0, value slots with no type converted (`V2A0-IMPL-BRIEF.md`,
+   two increments, about 7 h).
+3. Value API M4, value fields with slices first (`M4-IMPL-BRIEF.md`, two
+   increments, about 4 h).
 
-Proposals 2 and 3 are written
-([A3](design/proposals/register-ir-v2-a3.md),
-[V2a-0](design/proposals/value-api-v2a0.md)) and under critical review.
-Next: fold the reviews, then implement where files allow; the `BUILD_SLICE` value form after A5b-2 lands; value API V1
-follow-ups.
+Next: A3 step 1 (`A3-STEP1-BRIEF.md`: JIT source and hooks deleted, one
+tail-call backend, the convention, two helper fixes) starts when A5b-2
+lands and runs beside A5b-3; A3 step 2 (G9) after A5b-3. Then the value-API
+mechanism steps and waves on the
+[plan](design/proposals/value-api-v2a0.md) (revision 3: about 225 agent-h,
+the R27 gate at about T21 of wall clock from V2a-0's start).
 
 ## Design decisions
 
@@ -194,6 +193,14 @@ follow-ups.
 - [Native boundary](design/native-boundary.md),
   [review 1](design/reviews/native-boundary-review-1.md): accepted with changes;
   the page describes P4 as built.
+- [A3 tail calls](design/proposals/register-ir-v2-a3.md), revision 3 after
+  [review 1](design/reviews/register-ir-v2-a3-review-1.md) and the user's
+  review: no addressable locals in handlers by construction; 128 B record;
+  two landings, 16.5 agent-h, about 6 h.
+- [Value-API route to R27](design/proposals/value-api-v2a0.md), revision 3
+  after [review 1](design/reviews/value-api-v2a0-review-1.md): mechanism
+  steps, then compiler-driven waves; inline value slots; gate attribution by
+  boundary address.
 - [Value API](design/value-api.md): values are the internal API and
   `PyObject *` is the compatibility layer. Review 1, revision 2, review 2 and
   revision 3 (`74236263ef1`) are done; accepted for packet V1.

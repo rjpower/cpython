@@ -31,7 +31,7 @@ and backend. The stage pages distinguish selected designs from working code.
 | --- | --- |
 | Documentation root (canonical `pyjit/`) | `/home/power/code/cpython/.worktrees/python-jit`, branch `weaver/python-jit` |
 | Runtime tree (nested worktree) | `/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/pyvalue-rc-universal` |
-| Runtime branch / HEAD | `boil/pyvalue-rc-universal`, `15859d9a592` (see STATUS.md, Position) |
+| Runtime branch / HEAD | `boil/pyvalue-rc-universal`, `f7d374b1f92` (see STATUS.md, Position) |
 | Shared builds at HEAD | `build/pyvalue-rc-repr-debug`, `build/pyvalue-rc-repr-release` (under the `python-boil-the-ocean` worktree) |
 | Older debug build | `build/pyvalue-rc-debug-20261102-v1` |
 | Triage debug builds | `build/pyvalue-rc-bringup-debug`, `build/pyvalue-rc-triage-rt-debug` |
@@ -61,7 +61,7 @@ and shapes. Read the build directories for the exact commands.
 The runtime tree has no held modifications. Debug and release builds link and
 run. All 67 shared modules whose third-party headers exist build; the decimal,
 tkinter, ssl, sqlite and zstd headers are not installed on this host. Suites
-at `15859d9a592`, debug and release: run=51,627, failures=2 (test_capi
+at `f7d374b1f92`, debug and release: run=51,681, failures=2 (test_capi
 test_is_unique_temporary and test_unicode.test_new, open for IR v2 B5). The
 fork's JIT source is deleted (A3 step 1; history keeps it) until the JIT
 stage. Tail calls are the only interpreter backend; `--with-computed-gotos`

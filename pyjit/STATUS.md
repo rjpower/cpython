@@ -1,6 +1,6 @@
 # Project status
 
-Status as of 2026-11-04 13:25 PST, from the coordinator fact sheet. Update this
+Status as of 2026-11-04 19:15 PST, from the coordinator fact sheet. Update this
 page at each landing.
 
 ## Outcome and next milestone
@@ -57,7 +57,7 @@ costs, then the qualified baseline.
 
 ## Position
 
-- Runtime branch `boil/pyvalue-rc-universal`, HEAD `15859d9a592`.
+- Runtime branch `boil/pyvalue-rc-universal`, HEAD `f7d374b1f92`.
 - Landed 2026-11-03: native boundary P3 (`56ff66a596b`, `643c69c7244`,
   `6d39221996d`) and P4 (`2558376b321`, post-review fixes `fdd7fed3216`);
   representation steps 1 (`f129780a9a7`), 2 (`f7dfc5b961f`), 3 (`dbce7b1260d`,
@@ -186,6 +186,30 @@ costs, then the qualified baseline.
   gcc debug and release: run=51,627, failures=2 (the known `test_capi`
   pair; 60 JIT tests deleted). The agent's clang-21 release suite:
   run=51,586, failures=2.
+- Landed 2026-11-04 (continued): register IR v2 A5b-3 (`c71a3ca6aa2`), the
+  typed borrow's heap side: producers that lend a value return
+  `PyValueBorrow`; stores take owners with `PyValue_DUP`; `MakeHeapSafe`,
+  `IsHeapSafe`, `OwnArray`, `BorrowAt`, `AsStrongReference` and
+  `_PyValue_BorrowTagged` deleted, so no mortal carries the no-count tag;
+  the heap-safety asserts become the home check; `PyDict_*Value`,
+  `PySet_ContainsValue` and the cell value forms are internal; R26 lints
+  `raw-bits` (widened), `public-value`, `borrow-field`, report-only
+  `home-copy` (93). An 8-worker Sonnet fan-out fixed 186 of 194 compile
+  sites in 3.6 minutes. Post-review: no must-fix, 4 should-fix (two lint
+  holes, public getters returning a borrow, the home-copy retype), all in
+  A5b-4. With it, `eab52a937a6` lets A3's activation record sit at the stack
+  pointer (clang-21 debug aborted). Suites at `c71a3ca6aa2`, gcc debug and
+  release: run=51,630, failures=2 (the known pair).
+- Landed 2026-11-04 (continued): value API V2a-0 part 2 (`f7d374b1f92`):
+  slotdef value data and pairs, the value dispatchers and slot adapter, core
+  object slots as thunks, box kinds in stats builds, the compat-body lint
+  rule; no type converted (V2a-1a converts int, float, bool, None).
+  Post-review: no must-fix; three should-fix fixed before landing (box
+  helpers in the compat-body rule, the mixed-operand box record:
+  `x == 'a'` boxes 1 before, 3 now, removed by V2a-1a; an
+  `object.__hash__` test). Suites at `f7d374b1f92`, gcc debug and release:
+  run=51,681, failures=2 (the known pair). `make check-value-api`: 169
+  units, 0 failing findings.
 - Suites at `faddfd1454d`, debug and release alike: run=51,615, failures=2
   (38 more skipped than at `a6002e5854b`: the JIT tests),
   both in test_capi (test_is_unique_temporary, test_unicode.test_new): a local
@@ -198,16 +222,17 @@ costs, then the qualified baseline.
 
 Running now, in parallel (briefs in `build/pyjit-link-wave1/`):
 
-1. Register IR v2 A5b-3, the typed borrow's heap side: the Sonnet fan-out
-   fixed 186 of 194 sites in 3.6 minutes; the lead is moving onto
-   `15859d9a592`, then lints, tests and `A5b-3 ready`.
-2. Register IR v2 A3 step 2 (`A3-STEP2-BRIEF.md`): no addressable locals in
-   handlers by construction; generator plus up to four Sonnet workers.
-3. Value API V2a-0 part 2 (`V2A0-IMPL-BRIEF.md`): slotdef value data,
-   dispatchers, adapter, thunks.
+1. Register IR v2 A3 step 2 (`A3-STEP2-BRIEF.md`): no addressable locals in
+   handlers (G9), rebased onto A5b-3; post-review ready with should-fix (two
+   lint holes), being folded in; lands next.
+2. A5b-4 = W1a (`A5B4-BRIEF.md`): the §7 renames by script, plus the A5b-3
+   review fixes and the home-copy retype.
+3. Proposals in peer review: M3 (value vectorcall, `METH_VALUE`, Clinic
+   value emission), V2a-1a (int, float, bool, None value slots), M1b and M2
+   (sequence, iteration and attribute dispatchers), G (R27 gate owners).
 
-Next: the measurement after A3 step 2; then V2a-1a, M1b, M2, M3 and the
-value-API waves on the [plan](design/proposals/value-api-v2a0.md).
+Next: the measurement after A3 step 2; then the implementations of the four
+proposals and the value-API waves on the [plan](design/proposals/value-api-v2a0.md).
 
 ## Design decisions
 

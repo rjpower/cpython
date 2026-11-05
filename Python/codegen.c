@@ -12,11 +12,6 @@
  * objects.
  */
 
-/* Defer line of the value-API waves (value-api-v2a0.md, section 1.5): the
-   callers of the protocol marks in this unit are converted by W2's caller
-   batches, which remove this line. */
-#define Py_VALUE_DEFER_MARKS 1
-
 #include "Python.h"
 #include "opcode.h"
 #include "pycore_ast.h"           // _PyAST_GetDocString()
@@ -819,7 +814,7 @@ codegen_rename_annotations_format_param(PyCodeObject *co)
     // "format" appears in the annotations, it doesn't get clobbered
     // by this name.  This code is essentially:
     // co->co_localsplusnames = ("format", *co->co_localsplusnames[1:])
-    const Py_ssize_t size = PyObject_Size(co->co_localsplusnames);
+    const Py_ssize_t size = _PyValue_Size(PyValue_FromObjectBorrow(co->co_localsplusnames));
     if (size == -1) {
         return ERROR;
     }
@@ -6185,7 +6180,7 @@ codegen_pattern_helper_store_name(compiler *c, location loc,
         return SUCCESS;
     }
     // Can't assign to the same name twice:
-    int duplicate = PySequence_Contains(pc->stores, n);
+    int duplicate = _PyValue_Contains(PyValue_FromObjectBorrow(pc->stores), PyValue_FromObjectBorrow(n));
     RETURN_IF_ERROR(duplicate);
     if (duplicate) {
         return codegen_error_duplicate_store(c, loc, n);
@@ -6685,7 +6680,7 @@ codegen_pattern_or(compiler *c, pattern_ty p, pattern_context *pc)
         // Update the list of previous stores with this new name, checking for
         // duplicates:
         PyObject *name = codegen_list_name(control, i);
-        int dupe = PySequence_Contains(pc->stores, name);
+        int dupe = _PyValue_Contains(PyValue_FromObjectBorrow(pc->stores), PyValue_FromObjectBorrow(name));
         if (dupe < 0) {
             goto error;
         }

@@ -445,19 +445,4 @@ OrderedDict_move_to_end(PyValueBorrow self, const PyValue *args, Py_ssize_t narg
 exit:
     return return_value;
 }
-
-static PyObject *
-odictiter_iternext_impl(PyObject *self);
-
-static PyObject *
-odictiter_iternext(PyObject *self)
-{
-    PyObject *return_value = NULL;
-
-    Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = odictiter_iternext_impl(self);
-    Py_END_CRITICAL_SECTION();
-
-    return return_value;
-}
-/*[clinic end generated code: output=7a0f909e9d049113 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=6377d1c2ec6ef5d2 input=a9049054013a1b77]*/

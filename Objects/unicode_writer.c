@@ -38,15 +38,11 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 */
 
-/* Defer line of the value-API waves (value-api-v2a0.md, section 1.5): the
-   callers of the protocol marks in this unit are converted by W2's caller
-   batches, which remove this line. */
-#define Py_VALUE_DEFER_MARKS 1
-
 #include "Python.h"
 #include "pycore_freelist.h"      // _Py_FREELIST_FREE()
 #include "pycore_long.h"          // _PyLong_FormatWriter()
 #include "pycore_unicodeobject.h" // _PyUnicode_Result()
+#include "pycore_value_ops.h"     // _PyValue_Repr()
 
 
 #ifdef MS_WINDOWS
@@ -303,7 +299,7 @@ PyUnicodeWriter_WriteStr(PyUnicodeWriter *pub_writer, PyObject *obj)
         return _PyLong_FormatWriter(writer, obj, 10, 0);
     }
 
-    PyObject *str = PyObject_Str(obj);
+    PyObject *str = _PyValue_Str(PyValue_FromObjectBorrow(obj));
     if (str == NULL) {
         return -1;
     }
@@ -330,7 +326,7 @@ PyUnicodeWriter_WriteRepr(PyUnicodeWriter *pub_writer, PyObject *obj)
         return _PyUnicodeWriter_WriteASCIIString(writer, "None", 4);
     }
 
-    PyObject *repr = PyObject_Repr(obj);
+    PyObject *repr = _PyValue_Repr(PyValue_FromObjectBorrow(obj));
     if (repr == NULL) {
         return -1;
     }

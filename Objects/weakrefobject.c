@@ -1,8 +1,3 @@
-/* Defer line of the value-API waves (value-api-v2a0.md, section 1.5): the
-   callers of the protocol marks in this unit are converted by W2's caller
-   batches, which remove this line. */
-#define Py_VALUE_DEFER_MARKS 1
-
 #include "Python.h"
 #include "pycore_critical_section.h"
 #include "pycore_lock.h"
@@ -12,6 +7,7 @@
 #include "pycore_pystate.h"
 #include "pycore_pyvalue.h"       // PyValue_PrepareOwned()
 #include "pycore_value_api.h"     // _PyValue_AsObjectAt()
+#include "pycore_value_ops.h"     // _PyValue_Contains()
 #include "pycore_weakref.h"       // _PyWeakref_GET_REF()
 
 /*[clinic input]
@@ -221,7 +217,7 @@ weakref_hash_impl(PyWeakReference *self)
         PyErr_SetString(PyExc_TypeError, "weak object has gone away");
         return -1;
     }
-    self->hash = PyObject_Hash(obj);
+    self->hash = _PyValue_Hash(PyValue_FromObjectBorrow(obj));
     Py_DECREF(obj);
     return self->hash;
 }
@@ -280,7 +276,10 @@ weakref_richcompare(PyObject* self, PyObject* other, int op)
         else
             Py_RETURN_FALSE;
     }
-    PyObject* res = PyObject_RichCompare(obj, other_obj, op);
+    PyValue res_v = _PyValue_RichCompare(PyValue_FromObjectBorrow(obj),
+                                         PyValue_FromObjectBorrow(other_obj), op);
+    PyObject* res = PyValue_IsNull(res_v) ? NULL
+        : _PyValue_AsObjectStealAt(res_v, BOX_SITE_COMPARE);
     Py_DECREF(obj);
     Py_DECREF(other_obj);
     return res;
@@ -579,30 +578,6 @@ proxy_unwrap(PyObject *obj)
             return NULL; \
         }
 
-#define WRAP_UNARY(method, generic) \
-    static PyObject * \
-    method(PyObject *proxy) { \
-        UNWRAP(proxy); \
-        PyObject* res = generic(proxy); \
-        Py_DECREF(proxy); \
-        return res; \
-    }
-
-#define WRAP_BINARY(method, generic) \
-    static PyObject * \
-    method(PyObject *x, PyObject *y) { \
-        UNWRAP(x); \
-        y = proxy_unwrap(y); \
-        if (y == NULL) { \
-            Py_DECREF(x); \
-            return NULL; \
-        } \
-        PyObject* res = generic(x, y); \
-        Py_DECREF(x); \
-        Py_DECREF(y); \
-        return res; \
-    }
-
 /* Note that the third arg needs to be checked for NULL since the tp_call
  * slot can receive NULL for this arg.
  */
@@ -630,6 +605,84 @@ proxy_unwrap(PyObject *obj)
         return res; \
     }
 
+/* The value forms of the operators: the referents are objects here, so the
+   operands are borrowed from them and the result leaves as an object at
+   the slot. */
+#define WRAP_VUNARY(method, generic, SITE) \
+    static PyObject * \
+    method(PyObject *proxy) { \
+        UNWRAP(proxy); \
+        PyObject* res = _PyValue_AsObjectResultAt( \
+            generic(PyValue_FromObjectBorrow(proxy)), SITE); \
+        Py_DECREF(proxy); \
+        return res; \
+    }
+
+#define WRAP_VBINARY(method, generic, SITE) \
+    static PyObject * \
+    method(PyObject *x, PyObject *y) { \
+        UNWRAP(x); \
+        y = proxy_unwrap(y); \
+        if (y == NULL) { \
+            Py_DECREF(x); \
+            return NULL; \
+        } \
+        PyObject* res = _PyValue_AsObjectResultAt( \
+            generic(PyValue_FromObjectBorrow(x), \
+                    PyValue_FromObjectBorrow(y)), SITE); \
+        Py_DECREF(x); \
+        Py_DECREF(y); \
+        return res; \
+    }
+
+/* A name is an object (the attribute name), not an operand. */
+#define WRAP_VGETATTR(method, generic, SITE) \
+    static PyObject * \
+    method(PyObject *x, PyObject *y) { \
+        UNWRAP(x); \
+        y = proxy_unwrap(y); \
+        if (y == NULL) { \
+            Py_DECREF(x); \
+            return NULL; \
+        } \
+        PyObject* res = _PyValue_AsObjectResultAt( \
+            generic(PyValue_FromObjectBorrow(x), y), SITE); \
+        Py_DECREF(x); \
+        Py_DECREF(y); \
+        return res; \
+    }
+
+/* The modulus argument of a power slot is None, never NULL. */
+#define WRAP_VPOWER(method, generic) \
+    static PyObject * \
+    method(PyObject *proxy, PyObject *v, PyObject *w) { \
+        UNWRAP(proxy); \
+        v = proxy_unwrap(v); \
+        if (v == NULL) { \
+            Py_DECREF(proxy); \
+            return NULL; \
+        } \
+        if (w != NULL) { \
+            w = proxy_unwrap(w); \
+            if (w == NULL) { \
+                Py_DECREF(proxy); \
+                Py_DECREF(v); \
+                return NULL; \
+            } \
+        } \
+        PyValueBorrow z = PyValue_Borrow(PyValue_None); \
+        if (w != NULL) { \
+            z = PyValue_FromObjectBorrow(w); \
+        } \
+        PyObject* res = _PyValue_AsObjectResultAt( \
+            generic(PyValue_FromObjectBorrow(proxy), \
+                    PyValue_FromObjectBorrow(v), z), BOX_SITE_NUMBER); \
+        Py_DECREF(proxy); \
+        Py_DECREF(v); \
+        Py_XDECREF(w); \
+        return res; \
+    }
+
 #define WRAP_METHOD(method, SPECIAL) \
     static PyObject * \
     method(PyObject *proxy, PyObject *Py_UNUSED(ignored)) { \
@@ -642,8 +695,14 @@ proxy_unwrap(PyObject *obj)
 
 /* direct slots */
 
-WRAP_BINARY(proxy_getattr, PyObject_GetAttr)
-WRAP_UNARY(proxy_str, PyObject_Str)
+WRAP_VGETATTR(proxy_getattr, _PyValue_GetAttr, BOX_SITE_ATTRIBUTE)
+static PyObject *
+proxy_str(PyObject *proxy) {
+    UNWRAP(proxy);
+    PyObject* res = _PyValue_Str(PyValue_FromObjectBorrow(proxy));
+    Py_DECREF(proxy);
+    return res;
+}
 WRAP_TERNARY(proxy_call, PyObject_Call)
 
 static PyObject *
@@ -673,7 +732,7 @@ proxy_setattr(PyObject *proxy, PyObject *name, PyObject *value)
     if (!proxy_check_ref(obj)) {
         return -1;
     }
-    int res = PyObject_SetAttr(obj, name, value);
+    int res = _PyValue_SetAttr(PyValue_FromObjectBorrow(obj), name, PyValue_FromObjectBorrow(value));
     Py_DECREF(obj);
     return res;
 }
@@ -687,47 +746,49 @@ proxy_richcompare(PyObject *proxy, PyObject *v, int op)
         Py_DECREF(proxy);
         return NULL;
     }
-    PyObject* res = PyObject_RichCompare(proxy, v, op);
+    PyObject* res = _PyValue_AsObjectResultAt(
+        _PyValue_RichCompare(PyValue_FromObjectBorrow(proxy),
+                             PyValue_FromObjectBorrow(v), op), BOX_SITE_COMPARE);
     Py_DECREF(proxy);
     Py_DECREF(v);
     return res;
 }
 
 /* number slots */
-WRAP_BINARY(proxy_add, PyNumber_Add)
-WRAP_BINARY(proxy_sub, PyNumber_Subtract)
-WRAP_BINARY(proxy_mul, PyNumber_Multiply)
-WRAP_BINARY(proxy_floor_div, PyNumber_FloorDivide)
-WRAP_BINARY(proxy_true_div, PyNumber_TrueDivide)
-WRAP_BINARY(proxy_mod, PyNumber_Remainder)
-WRAP_BINARY(proxy_divmod, PyNumber_Divmod)
-WRAP_TERNARY(proxy_pow, PyNumber_Power)
-WRAP_UNARY(proxy_neg, PyNumber_Negative)
-WRAP_UNARY(proxy_pos, PyNumber_Positive)
-WRAP_UNARY(proxy_abs, PyNumber_Absolute)
-WRAP_UNARY(proxy_invert, PyNumber_Invert)
-WRAP_BINARY(proxy_lshift, PyNumber_Lshift)
-WRAP_BINARY(proxy_rshift, PyNumber_Rshift)
-WRAP_BINARY(proxy_and, PyNumber_And)
-WRAP_BINARY(proxy_xor, PyNumber_Xor)
-WRAP_BINARY(proxy_or, PyNumber_Or)
-WRAP_UNARY(proxy_int, PyNumber_Long)
-WRAP_UNARY(proxy_float, PyNumber_Float)
-WRAP_BINARY(proxy_iadd, PyNumber_InPlaceAdd)
-WRAP_BINARY(proxy_isub, PyNumber_InPlaceSubtract)
-WRAP_BINARY(proxy_imul, PyNumber_InPlaceMultiply)
-WRAP_BINARY(proxy_ifloor_div, PyNumber_InPlaceFloorDivide)
-WRAP_BINARY(proxy_itrue_div, PyNumber_InPlaceTrueDivide)
-WRAP_BINARY(proxy_imod, PyNumber_InPlaceRemainder)
-WRAP_TERNARY(proxy_ipow, PyNumber_InPlacePower)
-WRAP_BINARY(proxy_ilshift, PyNumber_InPlaceLshift)
-WRAP_BINARY(proxy_irshift, PyNumber_InPlaceRshift)
-WRAP_BINARY(proxy_iand, PyNumber_InPlaceAnd)
-WRAP_BINARY(proxy_ixor, PyNumber_InPlaceXor)
-WRAP_BINARY(proxy_ior, PyNumber_InPlaceOr)
-WRAP_UNARY(proxy_index, PyNumber_Index)
-WRAP_BINARY(proxy_matmul, PyNumber_MatrixMultiply)
-WRAP_BINARY(proxy_imatmul, PyNumber_InPlaceMatrixMultiply)
+WRAP_VBINARY(proxy_add, _PyValue_Add, BOX_SITE_NUMBER)
+WRAP_VBINARY(proxy_sub, _PyValue_Subtract, BOX_SITE_NUMBER)
+WRAP_VBINARY(proxy_mul, _PyValue_Multiply, BOX_SITE_NUMBER)
+WRAP_VBINARY(proxy_floor_div, _PyValue_FloorDivide, BOX_SITE_NUMBER)
+WRAP_VBINARY(proxy_true_div, _PyValue_TrueDivide, BOX_SITE_NUMBER)
+WRAP_VBINARY(proxy_mod, _PyValue_Remainder, BOX_SITE_NUMBER)
+WRAP_VBINARY(proxy_divmod, _PyValue_Divmod, BOX_SITE_NUMBER)
+WRAP_VPOWER(proxy_pow, _PyValue_Power)
+WRAP_VUNARY(proxy_neg, _PyValue_Negative, BOX_SITE_NUMBER)
+WRAP_VUNARY(proxy_pos, _PyValue_Positive, BOX_SITE_NUMBER)
+WRAP_VUNARY(proxy_abs, _PyValue_Absolute, BOX_SITE_NUMBER)
+WRAP_VUNARY(proxy_invert, _PyValue_Invert, BOX_SITE_NUMBER)
+WRAP_VBINARY(proxy_lshift, _PyValue_Lshift, BOX_SITE_NUMBER)
+WRAP_VBINARY(proxy_rshift, _PyValue_Rshift, BOX_SITE_NUMBER)
+WRAP_VBINARY(proxy_and, _PyValue_And, BOX_SITE_NUMBER)
+WRAP_VBINARY(proxy_xor, _PyValue_Xor, BOX_SITE_NUMBER)
+WRAP_VBINARY(proxy_or, _PyValue_Or, BOX_SITE_NUMBER)
+WRAP_VUNARY(proxy_int, _PyValue_Long, BOX_SITE_NUMBER)
+WRAP_VUNARY(proxy_float, _PyValue_Float, BOX_SITE_NUMBER)
+WRAP_VBINARY(proxy_iadd, _PyValue_InPlaceAdd, BOX_SITE_NUMBER)
+WRAP_VBINARY(proxy_isub, _PyValue_InPlaceSubtract, BOX_SITE_NUMBER)
+WRAP_VBINARY(proxy_imul, _PyValue_InPlaceMultiply, BOX_SITE_NUMBER)
+WRAP_VBINARY(proxy_ifloor_div, _PyValue_InPlaceFloorDivide, BOX_SITE_NUMBER)
+WRAP_VBINARY(proxy_itrue_div, _PyValue_InPlaceTrueDivide, BOX_SITE_NUMBER)
+WRAP_VBINARY(proxy_imod, _PyValue_InPlaceRemainder, BOX_SITE_NUMBER)
+WRAP_VPOWER(proxy_ipow, _PyValue_InPlacePower)
+WRAP_VBINARY(proxy_ilshift, _PyValue_InPlaceLshift, BOX_SITE_NUMBER)
+WRAP_VBINARY(proxy_irshift, _PyValue_InPlaceRshift, BOX_SITE_NUMBER)
+WRAP_VBINARY(proxy_iand, _PyValue_InPlaceAnd, BOX_SITE_NUMBER)
+WRAP_VBINARY(proxy_ixor, _PyValue_InPlaceXor, BOX_SITE_NUMBER)
+WRAP_VBINARY(proxy_ior, _PyValue_InPlaceOr, BOX_SITE_NUMBER)
+WRAP_VUNARY(proxy_index, _PyValue_Index, BOX_SITE_NUMBER)
+WRAP_VBINARY(proxy_matmul, _PyValue_MatrixMultiply, BOX_SITE_NUMBER)
+WRAP_VBINARY(proxy_imatmul, _PyValue_InPlaceMatrixMultiply, BOX_SITE_NUMBER)
 
 static int
 proxy_bool(PyObject *proxy)
@@ -736,7 +797,7 @@ proxy_bool(PyObject *proxy)
     if (!proxy_check_ref(o)) {
         return -1;
     }
-    int res = PyObject_IsTrue(o);
+    int res = _PyValue_IsTrue(PyValue_FromObjectBorrow(o));
     Py_DECREF(o);
     return res;
 }
@@ -758,7 +819,7 @@ proxy_contains(PyObject *proxy, PyObject *value)
     if (!proxy_check_ref(obj)) {
         return -1;
     }
-    int res = PySequence_Contains(obj, value);
+    int res = _PyValue_Contains(PyValue_FromObjectBorrow(obj), PyValue_FromObjectBorrow(value));
     Py_DECREF(obj);
     return res;
 }
@@ -772,12 +833,12 @@ proxy_length(PyObject *proxy)
     if (!proxy_check_ref(obj)) {
         return -1;
     }
-    Py_ssize_t res = PyObject_Length(obj);
+    Py_ssize_t res = _PyValue_Size(PyValue_FromObjectBorrow(obj));
     Py_DECREF(obj);
     return res;
 }
 
-WRAP_BINARY(proxy_getitem, PyObject_GetItem)
+WRAP_VBINARY(proxy_getitem, _PyValue_GetItem, BOX_SITE_SEQUENCE)
 
 static int
 proxy_setitem(PyObject *proxy, PyObject *key, PyObject *value)
@@ -788,9 +849,9 @@ proxy_setitem(PyObject *proxy, PyObject *key, PyObject *value)
     }
     int res;
     if (value == NULL) {
-        res = PyObject_DelItem(obj, key);
+        res = _PyValue_DelItem(PyValue_FromObjectBorrow(obj), PyValue_FromObjectBorrow(key));
     } else {
-        res = PyObject_SetItem(obj, key, value);
+        res = _PyValue_SetItem(PyValue_FromObjectBorrow(obj), PyValue_FromObjectBorrow(key), PyValue_FromObjectBorrow(value));
     }
     Py_DECREF(obj);
     return res;
@@ -805,7 +866,7 @@ proxy_iter(PyObject *proxy)
     if (!proxy_check_ref(obj)) {
         return NULL;
     }
-    PyObject* res = PyObject_GetIter(obj);
+    PyObject* res = _PyValue_GetIter(PyValue_FromObjectBorrow(obj));
     Py_DECREF(obj);
     return res;
 }

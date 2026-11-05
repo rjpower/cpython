@@ -1,9 +1,4 @@
 // TypeVar, TypeVarTuple, ParamSpec, and TypeAlias
-/* Defer line of the value-API waves (value-api-v2a0.md, section 1.5): the
-   callers of the protocol marks in this unit are converted by W2's caller
-   batches, which remove this line. */
-#define Py_VALUE_DEFER_MARKS 1
-
 #include "Python.h"
 #include "pycore_interpframe.h"   // _PyInterpreterFrame
 #include "pycore_object.h"        // _PyObject_GC_TRACK/UNTRACK, PyAnnotateFormat
@@ -12,6 +7,8 @@
 #include "pycore_unicodeobject.h" // _PyUnicode_EqualToASCIIString()
 #include "pycore_unionobject.h"   // _Py_union_type_or, _Py_union_from_tuple
 #include "pycore_value.h"         // PyValue_TYPE()
+#include "pycore_value_ops.h"    // _PyValue_GetItem()
+#include "pycore_value_slots.h"  // _Py_VALUE_NOTIMPL_BINARY()
 #include "pycore_value_api.h"     // _PyValue_FromObjectKnown()
 #include "structmember.h"
 
@@ -331,7 +328,7 @@ _Py_typing_type_repr(PyUnicodeWriter *writer, PyObject *p)
         _PyUnicode_EqualToASCIIString(module, "builtins"))
     {
         // builtins don't need a module name
-        r = PyObject_Str(qualname);
+        r = _PyValue_Str(PyValue_FromObjectBorrow(qualname));
         goto exit;
     }
     else {
@@ -340,7 +337,7 @@ _Py_typing_type_repr(PyUnicodeWriter *writer, PyObject *p)
     }
 
 use_repr:
-    r = PyObject_Repr(p);
+    r = _PyValue_Repr(PyValue_FromObjectBorrow(p));
 exit:
     Py_XDECREF(qualname);
     Py_XDECREF(module);
@@ -438,7 +435,10 @@ unpack(PyObject *self)
         Py_DECREF(typing);
         return NULL;
     }
-    PyObject *unpacked = PyObject_GetItem(unpack, self);
+    PyValue unpacked_v = _PyValue_GetItem(PyValue_FromObjectBorrow(unpack),
+                                          PyValue_FromObjectBorrow(self));
+    PyObject *unpacked = PyValue_IsNull(unpacked_v) ? NULL
+        : _PyValue_AsObjectStealAt(unpacked_v, BOX_SITE_ATTRIBUTE);
     Py_DECREF(typing);
     Py_DECREF(unpack);
     return unpacked;
@@ -867,7 +867,11 @@ typevar_typing_prepare_subst_impl(typevarobject *self, PyValueBorrow alias,
                 Py_DECREF(params);
                 goto error;
             }
-            PyObject *result = PySequence_Concat(args_obj, new_args);
+            PyValue result_v = _PyValue_SequenceConcat(
+                PyValue_FromObjectBorrow(args_obj),
+                PyValue_FromObjectBorrow(new_args));
+            PyObject *result = PyValue_IsNull(result_v) ? NULL
+                : _PyValue_AsObjectStealAt(result_v, BOX_SITE_SEQUENCE);
             Py_DECREF(params);
             Py_DECREF(new_args);
             Py_DECREF(alias_obj);
@@ -1050,7 +1054,10 @@ paramspecattr_richcompare(PyObject *a, PyObject *b, int op)
     }
     paramspecattrobject *lhs = paramspecattrobject_CAST(a); // may be unsafe
     paramspecattrobject *rhs = (paramspecattrobject *)b;    // safe fast cast
-    return PyObject_RichCompare(lhs->__origin__, rhs->__origin__, op);
+    PyValue cmp = _PyValue_RichCompare(PyValue_FromObjectBorrow(lhs->__origin__),
+                                       PyValue_FromObjectBorrow(rhs->__origin__), op);
+    return PyValue_IsNull(cmp) ? NULL
+        : _PyValue_AsObjectStealAt(cmp, BOX_SITE_COMPARE);
 }
 
 static PyMemberDef paramspecattr_members[] = {
@@ -1643,7 +1650,7 @@ unpack_iter(PyObject *self)
         Py_DECREF(unpacked);
         return NULL;
     }
-    PyObject *result = PyObject_GetIter(tuple);
+    PyObject *result = _PyValue_GetIter(PyValue_FromObjectBorrow(tuple));
     Py_DECREF(unpacked);
     Py_DECREF(tuple);
     return result;
@@ -2378,6 +2385,8 @@ static PyMappingMethods typealias_as_mapping = {
     .mp_subscript = typealias_subscript,
 };
 
+_Py_VALUE_NOTIMPL_BINARY(_Py_union_type_or_value, _Py_union_type_or)
+
 PyTypeObject _PyTypeAlias_Type = {
     PyVarObject_HEAD_INIT(&PyType_Type, 0)
     .tp_name = "typing.TypeAliasType",
@@ -2397,6 +2406,9 @@ PyTypeObject _PyTypeAlias_Type = {
     .tp_repr = typealias_repr,
     .tp_as_number = &typealias_as_number,
     .tp_as_mapping = &typealias_as_mapping,
+    .tp_value = {
+        .nb_or = _Py_VALUE_SLOT_INIT(nb_or, _Py_union_type_or_value),
+    },
 };
 
 PyObject *

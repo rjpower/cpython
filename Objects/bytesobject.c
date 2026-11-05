@@ -1,10 +1,5 @@
 /* bytes object implementation */
 
-/* Defer line of the value-API waves (value-api-v2a0.md, section 1.5): the
-   callers of the protocol marks in this unit are converted by W2's caller
-   batches, which remove this line. */
-#define Py_VALUE_DEFER_MARKS 1
-
 #include "Python.h"
 #include "pycore_abstract.h"      // _PyIndex_Check()
 #include "pycore_bytes_methods.h" // _Py_bytes_startswith()
@@ -25,6 +20,7 @@
 #include "pycore_value_call.h"     // _PyValue_VectorcallThunk()
 #include "pycore_value.h"
 #include "pycore_value_api.h"     // _PyValue_AsObjectAt()
+#include "pycore_value_ops.h"     // _PyValue_Index()
 #include "pycore_value_slots.h"   // _PyValue_FromObjectResult()
 
 #include <stddef.h>
@@ -565,10 +561,13 @@ formatlong(PyObject *v, Py_ssize_t argidx, PyObject *key,
         return _PyUnicode_FormatLong(v, flags & F_ALT, prec, type);
     if (PyNumber_Check(v)) {
         /* make sure number is a type of integer for o, x, and X */
+        PyValue iv;
         if (type == 'o' || type == 'x' || type == 'X')
-            iobj = _PyNumber_Index(v);
+            iv = _PyValue_Index(PyValue_FromObjectBorrow(v));
         else
-            iobj = PyNumber_Long(v);
+            iv = _PyValue_Long(PyValue_FromObjectBorrow(v));
+        iobj = PyValue_IsNull(iv) ? NULL
+            : _PyValue_AsObjectStealAt(iv, BOX_SITE_NUMBER);
         if (iobj != NULL) {
             assert(PyLong_Check(iobj));
             result = _PyUnicode_FormatLong(iobj, flags & F_ALT, prec, type);
@@ -815,7 +814,10 @@ _PyBytes_FormatEx(const char *format, Py_ssize_t format_len,
                     Py_DECREF(args);
                     args_owned = 0;
                 }
-                args = PyObject_GetItem(dict, key);
+                PyValue args_v = _PyValue_GetItem(PyValue_FromObjectBorrow(dict),
+                                                  PyValue_FromObjectBorrow(key));
+                args = PyValue_IsNull(args_v) ? NULL
+                    : _PyValue_AsObjectStealAt(args_v, BOX_SITE_DICT);
                 if (args == NULL) {
                     goto error;
                 }
@@ -1662,6 +1664,20 @@ _PyBytes_Concat(PyObject *a, PyObject *b)
     return result;
 }
 
+static PyValue
+bytes_concat_value(PyObject *a, PyValueBorrow b)
+{
+    if (PyValue_IsInline(b)) {
+        PyErr_Format(PyExc_TypeError, "can't concat %.100s to %.100s",
+                     PyValue_TYPE(b)->tp_name, Py_TYPE(a)->tp_name);
+        return PyValue_NULL;
+    }
+    return _PyValue_FromObjectResult(
+        _PyBytes_Concat(a, PyValue_AsKnownObjectBorrow(b)));
+}
+
+_Py_VALUE_THUNK_CONCAT(bytes_concat, bytes_concat_value)
+
 PyObject *
 _PyBytes_Repeat(PyObject *self, Py_ssize_t n)
 {
@@ -1696,21 +1712,26 @@ _PyBytes_Repeat(PyObject *self, Py_ssize_t n)
 }
 
 static int
-bytes_contains(PyObject *self, PyObject *arg)
+bytes_contains_value(PyObject *self, PyValueBorrow arg)
 {
-    return _Py_bytes_contains(PyBytes_AS_STRING(self), PyBytes_GET_SIZE(self), arg);
+    return _Py_bytes_contains_value(PyBytes_AS_STRING(self),
+                                    PyBytes_GET_SIZE(self), arg);
 }
 
-static PyObject *
-bytes_item(PyObject *self, Py_ssize_t i)
+_Py_VALUE_THUNK_CONTAINS(bytes_contains, bytes_contains_value)
+
+static PyValue
+bytes_item_value(PyObject *self, Py_ssize_t i)
 {
     PyBytesObject *a = _PyBytes_CAST(self);
     if (i < 0 || i >= Py_SIZE(a)) {
         PyErr_SetString(PyExc_IndexError, "index out of range");
-        return NULL;
+        return PyValue_NULL;
     }
-    return _PyLong_FromUnsignedChar((unsigned char)a->ob_sval[i]);
+    return PyValue_FromInt64((unsigned char)a->ob_sval[i]);
 }
+
+_Py_VALUE_THUNK_ITEM(bytes_item, bytes_item_value)
 
 static int
 bytes_compare_eq(PyBytesObject *a, PyBytesObject *b)
@@ -1805,53 +1826,55 @@ bytes_hash(PyObject *self)
     return hash;
 }
 
-static PyObject*
-bytes_subscript(PyObject *op, PyObject* item)
+static PyValue
+bytes_subscript_value(PyObject *op, PyValueBorrow key)
 {
     PyBytesObject *self = _PyBytes_CAST(op);
-    if (_PyIndex_Check(item)) {
-        Py_ssize_t i = PyNumber_AsSsize_t(item, PyExc_IndexError);
+    if (_PyValue_IndexCheck(key)) {
+        Py_ssize_t i = _PyValue_AsSsize_t(key, PyExc_IndexError);
         if (i == -1 && PyErr_Occurred())
-            return NULL;
+            return PyValue_NULL;
         if (i < 0)
             i += PyBytes_GET_SIZE(self);
         if (i < 0 || i >= PyBytes_GET_SIZE(self)) {
             PyErr_SetString(PyExc_IndexError,
                             "index out of range");
-            return NULL;
+            return PyValue_NULL;
         }
-        return _PyLong_FromUnsignedChar((unsigned char)self->ob_sval[i]);
+        return PyValue_FromInt64((unsigned char)self->ob_sval[i]);
     }
-    else if (PySlice_Check(item)) {
+    else if (PyValue_IsObject(key)
+             && PySlice_Check(PyValue_AsKnownObjectBorrow(key))) {
+        PyObject *item = PyValue_AsKnownObjectBorrow(key);
         Py_ssize_t start, stop, step, slicelength, i;
         size_t cur;
         const char* source_buf;
         char* result_buf;
 
         if (PySlice_Unpack(item, &start, &stop, &step) < 0) {
-            return NULL;
+            return PyValue_NULL;
         }
         slicelength = PySlice_AdjustIndices(PyBytes_GET_SIZE(self), &start,
                                             &stop, step);
 
         if (slicelength <= 0) {
-            return Py_GetConstant(Py_CONSTANT_EMPTY_BYTES);
+            return PyValue_FromObjectSteal(Py_GetConstant(Py_CONSTANT_EMPTY_BYTES));
         }
         else if (start == 0 && step == 1 &&
                  slicelength == PyBytes_GET_SIZE(self) &&
                  PyBytes_CheckExact(self)) {
-            return Py_NewRef(self);
+            return PyValue_FromObjectSteal(Py_NewRef(self));
         }
         else if (step == 1) {
-            return _PyBytes_FromStringAndSize(
+            return _PyValue_FromObjectResult(_PyBytes_FromStringAndSize(
                 PyBytes_AS_STRING(self) + start,
-                slicelength);
+                slicelength));
         }
         else {
             source_buf = PyBytes_AS_STRING(self);
             PyObject* result = bytes_alloc(slicelength);
             if (result == NULL) {
-                return NULL;
+                return PyValue_NULL;
             }
 
             result_buf = PyBytes_AS_STRING(result);
@@ -1859,16 +1882,19 @@ bytes_subscript(PyObject *op, PyObject* item)
                  cur += step, i++) {
                 result_buf[i] = source_buf[cur];
             }
-            return result;
+            return PyValue_FromObjectSteal(result);
         }
     }
     else {
         PyErr_Format(PyExc_TypeError,
                      "byte indices must be integers or slices, not %.200s",
-                     Py_TYPE(item)->tp_name);
-        return NULL;
+                     PyValue_TYPE(key)->tp_name);
+        return PyValue_NULL;
     }
 }
+
+
+_Py_VALUE_THUNK_SUBSCRIPT(bytes_subscript, bytes_subscript_value)
 
 static int
 bytes_buffer_getbuffer(PyObject *op, Py_buffer *view, int flags)
@@ -1880,7 +1906,7 @@ bytes_buffer_getbuffer(PyObject *op, Py_buffer *view, int flags)
 
 static PySequenceMethods bytes_as_sequence = {
     bytes_length,       /*sq_length*/
-    _PyBytes_Concat,       /*sq_concat*/
+    bytes_concat,       /*sq_concat*/
     _PyBytes_Repeat,    /*sq_repeat*/
     bytes_item,         /*sq_item*/
     0,                  /*sq_slice*/
@@ -2976,15 +3002,33 @@ bytes_methods[] = {
     {NULL,     NULL}                         /* sentinel */
 };
 
-static PyObject *
-bytes_mod(PyObject *self, PyObject *arg)
+static PyValue
+bytes_mod_value(PyValueBorrow self, PyValueBorrow arg)
 {
-    if (!PyBytes_Check(self)) {
-        Py_RETURN_NOTIMPLEMENTED;
+    if (!PyValue_IsObject(self)
+        || !PyBytes_Check(PyValue_AsKnownObjectBorrow(self))) {
+        return PyValue_NotImplemented;
     }
-    return _PyBytes_FormatEx(PyBytes_AS_STRING(self), PyBytes_GET_SIZE(self),
-                             arg, 0);
+    PyObject *bytes = PyValue_AsKnownObjectBorrow(self);
+    /* The format code works on objects; an inline argument is boxed here. */
+    PyObject *boxed = NULL;
+    PyObject *args;
+    if (PyValue_IsObject(arg)) {
+        args = PyValue_AsKnownObjectBorrow(arg);
+    }
+    else {
+        boxed = args = _PyValue_AsObjectAt(arg, BOX_SITE_NUMBER);
+        if (boxed == NULL) {
+            return PyValue_NULL;
+        }
+    }
+    PyObject *res = _PyBytes_FormatEx(PyBytes_AS_STRING(bytes),
+                                      PyBytes_GET_SIZE(bytes), args, 0);
+    Py_XDECREF(boxed);
+    return _PyValue_FromObjectResult(res);
 }
+
+_Py_VALUE_THUNK_BINARY(bytes_mod, bytes_mod_value)
 
 static PyNumberMethods bytes_as_number = {
     0,              /*nb_add*/
@@ -3213,7 +3257,7 @@ _PyBytes_FromIterator(PyObject *it, PyObject *x)
         }
 
         /* Interpret it as an int (__index__) */
-        value = PyNumber_AsSsize_t(item, NULL);
+        value = _PyValue_AsSsize_t(PyValue_FromObjectBorrow(item), NULL);
         Py_DECREF(item);
         if (value == -1 && PyErr_Occurred())
             goto error;
@@ -3273,7 +3317,7 @@ PyBytes_FromObject(PyObject *x)
     }
 
     if (!PyUnicode_Check(x)) {
-        it = PyObject_GetIter(x);
+        it = _PyValue_GetIter(PyValue_FromObjectBorrow(x));
         if (it != NULL) {
             result = _PyBytes_FromIterator(it, x);
             Py_DECREF(it);
@@ -3428,6 +3472,13 @@ PyTypeObject PyBytes_Type = {
     .tp_value_vectorcall = (_Py_valuefunc)bytes_vectorcall,
     .tp_version_tag = _Py_TYPE_VERSION_BYTES,
     ._tp_iteritem = bytes_iteritem,
+    .tp_value = {
+        .subscript = _Py_VALUE_SLOT_INIT(subscript, bytes_subscript_value),
+        .contains = _Py_VALUE_SLOT_INIT(contains, bytes_contains_value),
+        .item = _Py_VALUE_SLOT_INIT(item, bytes_item_value),
+        .sq_concat = _Py_VALUE_SLOT_INIT(sq_concat, bytes_concat_value),
+        .nb_remainder = _Py_VALUE_SLOT_INIT(nb_remainder, bytes_mod_value),
+    },
 };
 
 void
@@ -3679,8 +3730,8 @@ striter_traverse(PyObject *op, visitproc visit, void *arg)
     return 0;
 }
 
-static PyObject *
-striter_next(PyObject *op)
+static _PyStatusValue
+striter_next_value(PyObject *op)
 {
     striterobject *it = _striterobject_CAST(op);
     PyBytesObject *seq;
@@ -3688,18 +3739,20 @@ striter_next(PyObject *op)
     assert(it != NULL);
     seq = it->it_seq;
     if (seq == NULL)
-        return NULL;
+        return (_PyStatusValue){PYGEN_RETURN, PyValue_NULL};
     assert(PyBytes_Check(seq));
 
     if (it->it_index < PyBytes_GET_SIZE(seq)) {
-        return _PyLong_FromUnsignedChar(
-            (unsigned char)seq->ob_sval[it->it_index++]);
+        return (_PyStatusValue){PYGEN_NEXT, PyValue_FromInt64(
+            (unsigned char)seq->ob_sval[it->it_index++])};
     }
 
     it->it_seq = NULL;
     Py_DECREF(seq);
-    return NULL;
+    return (_PyStatusValue){PYGEN_RETURN, PyValue_NULL};
 }
+
+_Py_VALUE_THUNK_ITERNEXT(striter_next, striter_next_value)
 
 static PyObject *
 striter_len(PyObject *op, PyObject *Py_UNUSED(ignored))
@@ -3789,6 +3842,9 @@ PyTypeObject PyBytesIter_Type = {
     striter_next,                               /* tp_iternext */
     striter_methods,                            /* tp_methods */
     0,
+    .tp_value = {
+        .iternext = _Py_VALUE_SLOT_INIT(iternext, striter_next_value),
+    },
 };
 
 static PyObject *

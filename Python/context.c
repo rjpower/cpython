@@ -1,8 +1,3 @@
-/* Defer line of the value-API waves (value-api-v2a0.md, section 1.5): the
-   callers of the protocol marks in this unit are converted by W2's caller
-   batches, which remove this line. */
-#define Py_VALUE_DEFER_MARKS 1
-
 #include "Python.h"
 #include "pycore_call.h"          // _PyObject_VectorcallTstate()
 #include "pycore_context.h"
@@ -17,6 +12,8 @@
 #include "pycore_pyerrors.h"
 #include "pycore_pystate.h"       // _PyThreadState_GET()
 #include "pycore_value.h"         // PyValue_FromObjectBorrow()
+#include "pycore_value_ops.h"     // _PyValue_Hash()
+#include "pycore_value_slots.h"  // _Py_VALUE_NOTIMPL_RICHCMP()
 
 
 
@@ -850,6 +847,8 @@ static PyMappingMethods PyContext_as_mapping = {
     .mp_subscript = context_tp_subscript
 };
 
+_Py_VALUE_NOTIMPL_RICHCMP(context_tp_richcompare_value, context_tp_richcompare)
+
 PyTypeObject PyContext_Type = {
     PyVarObject_HEAD_INIT(&PyType_Type, 0)
     "_contextvars.Context",
@@ -867,6 +866,9 @@ PyTypeObject PyContext_Type = {
     .tp_new = context_tp_new,
     .tp_weaklistoffset = offsetof(PyContext, ctx_weakreflist),
     .tp_hash = PyObject_HashNotImplemented,
+    .tp_value = {
+        .richcompare = _Py_VALUE_SLOT_INIT(richcompare, context_tp_richcompare_value),
+    },
 };
 
 
@@ -949,7 +951,7 @@ contextvar_generate_hash(void *addr, PyObject *name)
            different hashes.
     */
 
-    Py_hash_t name_hash = PyObject_Hash(name);
+    Py_hash_t name_hash = _PyValue_Hash(PyValue_FromObjectBorrow(name));
     if (name_hash == -1) {
         return -1;
     }

@@ -1,8 +1,3 @@
-/* Defer line of the value-API waves (value-api-v2a0.md, section 1.5): the
-   callers of the protocol marks in this unit are converted by W2's caller
-   batches, which remove this line. */
-#define Py_VALUE_DEFER_MARKS 1
-
 #include "Python.h"
 #include "opcode.h"
 #include "pycore_c_array.h"       // _Py_CArray_EnsureCapacity
@@ -1884,7 +1879,9 @@ const_folding_safe_multiply(PyObject *v, PyObject *w)
         return const_folding_safe_multiply(w, v);
     }
 
-    return PyNumber_Multiply(v, w);
+    PyValue rv = _PyValue_Multiply(PyValue_FromObjectBorrow(v), PyValue_FromObjectBorrow(w));
+    return PyValue_IsNull(rv) ? NULL
+        : _PyValue_AsObjectStealAt(rv, BOX_SITE_COMPILER);
 }
 
 static PyObject *
@@ -1904,7 +1901,10 @@ const_folding_safe_power(PyObject *v, PyObject *w)
         }
     }
 
-    return PyNumber_Power(v, w, Py_None);
+    PyValue rv = _PyValue_Power(PyValue_FromObjectBorrow(v), PyValue_FromObjectBorrow(w),
+                                 PyValue_None);
+    return PyValue_IsNull(rv) ? NULL
+        : _PyValue_AsObjectStealAt(rv, BOX_SITE_COMPILER);
 }
 
 static PyObject *
@@ -1924,7 +1924,9 @@ const_folding_safe_lshift(PyObject *v, PyObject *w)
         }
     }
 
-    return PyNumber_Lshift(v, w);
+    PyValue rv = _PyValue_Lshift(PyValue_FromObjectBorrow(v), PyValue_FromObjectBorrow(w));
+    return PyValue_IsNull(rv) ? NULL
+        : _PyValue_AsObjectStealAt(rv, BOX_SITE_COMPILER);
 }
 
 static PyObject *
@@ -1934,7 +1936,9 @@ const_folding_safe_mod(PyObject *v, PyObject *w)
         return NULL;
     }
 
-    return PyNumber_Remainder(v, w);
+    PyValue rv = _PyValue_Remainder(PyValue_FromObjectBorrow(v), PyValue_FromObjectBorrow(w));
+    return PyValue_IsNull(rv) ? NULL
+        : _PyValue_AsObjectStealAt(rv, BOX_SITE_COMPILER);
 }
 
 static PyObject *
@@ -1946,20 +1950,40 @@ eval_const_binop(PyObject *left, int op, PyObject *right)
     PyObject *result = NULL;
     switch (op) {
         case NB_ADD:
-            result = PyNumber_Add(left, right);
-            break;
+            {
+                PyValue rv = _PyValue_Add(PyValue_FromObjectBorrow(left),
+                                  PyValue_FromObjectBorrow(right));
+                result = PyValue_IsNull(rv) ? NULL
+                    : _PyValue_AsObjectStealAt(rv, BOX_SITE_COMPILER);
+                break;
+            }
         case NB_SUBTRACT:
-            result = PyNumber_Subtract(left, right);
-            break;
+            {
+                PyValue rv = _PyValue_Subtract(PyValue_FromObjectBorrow(left),
+                                  PyValue_FromObjectBorrow(right));
+                result = PyValue_IsNull(rv) ? NULL
+                    : _PyValue_AsObjectStealAt(rv, BOX_SITE_COMPILER);
+                break;
+            }
         case NB_MULTIPLY:
             result = const_folding_safe_multiply(left, right);
             break;
         case NB_TRUE_DIVIDE:
-            result = PyNumber_TrueDivide(left, right);
-            break;
+            {
+                PyValue rv = _PyValue_TrueDivide(PyValue_FromObjectBorrow(left),
+                                  PyValue_FromObjectBorrow(right));
+                result = PyValue_IsNull(rv) ? NULL
+                    : _PyValue_AsObjectStealAt(rv, BOX_SITE_COMPILER);
+                break;
+            }
         case NB_FLOOR_DIVIDE:
-            result = PyNumber_FloorDivide(left, right);
-            break;
+            {
+                PyValue rv = _PyValue_FloorDivide(PyValue_FromObjectBorrow(left),
+                                  PyValue_FromObjectBorrow(right));
+                result = PyValue_IsNull(rv) ? NULL
+                    : _PyValue_AsObjectStealAt(rv, BOX_SITE_COMPILER);
+                break;
+            }
         case NB_REMAINDER:
             result = const_folding_safe_mod(left, right);
             break;
@@ -1970,20 +1994,45 @@ eval_const_binop(PyObject *left, int op, PyObject *right)
             result = const_folding_safe_lshift(left, right);
             break;
         case NB_RSHIFT:
-            result = PyNumber_Rshift(left, right);
-            break;
+            {
+                PyValue rv = _PyValue_Rshift(PyValue_FromObjectBorrow(left),
+                                  PyValue_FromObjectBorrow(right));
+                result = PyValue_IsNull(rv) ? NULL
+                    : _PyValue_AsObjectStealAt(rv, BOX_SITE_COMPILER);
+                break;
+            }
         case NB_OR:
-            result = PyNumber_Or(left, right);
-            break;
+            {
+                PyValue rv = _PyValue_Or(PyValue_FromObjectBorrow(left),
+                                  PyValue_FromObjectBorrow(right));
+                result = PyValue_IsNull(rv) ? NULL
+                    : _PyValue_AsObjectStealAt(rv, BOX_SITE_COMPILER);
+                break;
+            }
         case NB_XOR:
-            result = PyNumber_Xor(left, right);
-            break;
+            {
+                PyValue rv = _PyValue_Xor(PyValue_FromObjectBorrow(left),
+                                  PyValue_FromObjectBorrow(right));
+                result = PyValue_IsNull(rv) ? NULL
+                    : _PyValue_AsObjectStealAt(rv, BOX_SITE_COMPILER);
+                break;
+            }
         case NB_AND:
-            result = PyNumber_And(left, right);
-            break;
+            {
+                PyValue rv = _PyValue_And(PyValue_FromObjectBorrow(left),
+                                  PyValue_FromObjectBorrow(right));
+                result = PyValue_IsNull(rv) ? NULL
+                    : _PyValue_AsObjectStealAt(rv, BOX_SITE_COMPILER);
+                break;
+            }
         case NB_SUBSCR:
-            result = PyObject_GetItem(left, right);
-            break;
+            {
+                PyValue rv = _PyValue_GetItem(PyValue_FromObjectBorrow(left),
+                                  PyValue_FromObjectBorrow(right));
+                result = PyValue_IsNull(rv) ? NULL
+                    : _PyValue_AsObjectStealAt(rv, BOX_SITE_COMPILER);
+                break;
+            }
         case NB_MATRIX_MULTIPLY:
             // No builtin constants implement matrix multiplication
             break;
@@ -2053,17 +2102,25 @@ eval_const_unaryop(PyObject *operand, int opcode, int oparg)
     PyObject *result;
     switch (opcode) {
         case UNARY_NEGATIVE:
-            result = PyNumber_Negative(operand);
-            break;
+            {
+                PyValue rv = _PyValue_Negative(PyValue_FromObjectBorrow(operand));
+                result = PyValue_IsNull(rv) ? NULL
+                    : _PyValue_AsObjectStealAt(rv, BOX_SITE_COMPILER);
+                break;
+            }
         case UNARY_INVERT:
             // XXX: This should be removed once the ~bool depreciation expires.
             if (PyBool_Check(operand)) {
                 return NULL;
             }
-            result = PyNumber_Invert(operand);
-            break;
+            {
+                PyValue rv = _PyValue_Invert(PyValue_FromObjectBorrow(operand));
+                result = PyValue_IsNull(rv) ? NULL
+                    : _PyValue_AsObjectStealAt(rv, BOX_SITE_COMPILER);
+                break;
+            }
         case UNARY_NOT: {
-            int r = PyObject_IsTrue(operand);
+            int r = _PyValue_IsTrue(PyValue_FromObjectBorrow(operand));
             if (r < 0) {
                 return NULL;
             }
@@ -2074,8 +2131,12 @@ eval_const_unaryop(PyObject *operand, int opcode, int oparg)
             if (oparg != INTRINSIC_UNARY_POSITIVE) {
                 Py_UNREACHABLE();
             }
-            result = PyNumber_Positive(operand);
-            break;
+            {
+                PyValue rv = _PyValue_Positive(PyValue_FromObjectBorrow(operand));
+                result = PyValue_IsNull(rv) ? NULL
+                    : _PyValue_AsObjectStealAt(rv, BOX_SITE_COMPILER);
+                break;
+            }
         default:
             Py_UNREACHABLE();
     }
@@ -2359,7 +2420,7 @@ basicblock_optimize_load_const(PyObject *const_cache, basicblock *bb,
                 if (cnt == NULL) {
                     return ERROR;
                 }
-                int is_true = PyObject_IsTrue(cnt);
+                int is_true = _PyValue_IsTrue(PyValue_FromObjectBorrow(cnt));
                 Py_DECREF(cnt);
                 if (is_true == -1) {
                     return ERROR;
@@ -2429,7 +2490,7 @@ basicblock_optimize_load_const(PyObject *const_cache, basicblock *bb,
                 if (cnt == NULL) {
                     return ERROR;
                 }
-                int is_true = PyObject_IsTrue(cnt);
+                int is_true = _PyValue_IsTrue(PyValue_FromObjectBorrow(cnt));
                 Py_DECREF(cnt);
                 if (is_true == -1) {
                     return ERROR;

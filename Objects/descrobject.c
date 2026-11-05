@@ -1,10 +1,5 @@
 /* Descriptors -- a new, flexible way to describe attributes */
 
-/* Defer line of the value-API waves (value-api-v2a0.md, section 1.5): the
-   callers of the protocol marks in this unit are converted by W2's caller
-   batches, which remove this line. */
-#define Py_VALUE_DEFER_MARKS 1
-
 #include "Python.h"
 #include "pycore_borrow.h"        // _PyBorrowScope_Enter()
 #include "pycore_call.h"          // _PyStack_AsDict()
@@ -881,8 +876,10 @@ calculate_qualname(PyDescrObject *descr)
         return NULL;
     }
 
-    type_qualname = PyObject_GetAttr(
-            (PyObject *)descr->d_type, &_Py_ID(__qualname__));
+    type_qualname = _PyValue_AsObjectResultAt(
+            _PyValue_GetAttr(_PyValue_FromObjectKnown((PyObject *)descr->d_type),
+                             &_Py_ID(__qualname__)),
+            BOX_SITE_ATTRIBUTE);
     if (type_qualname == NULL)
         return NULL;
 
@@ -1379,14 +1376,17 @@ static Py_ssize_t
 mappingproxy_len(PyObject *self)
 {
     mappingproxyobject *pp = (mappingproxyobject *)self;
-    return PyObject_Size(pp->mapping);
+    return _PyValue_Size(PyValue_FromObjectBorrow(pp->mapping));
 }
 
 static PyObject *
 mappingproxy_getitem(PyObject *self, PyObject *key)
 {
     mappingproxyobject *pp = (mappingproxyobject *)self;
-    return PyObject_GetItem(pp->mapping, key);
+    return _PyValue_AsObjectResultAt(
+        _PyValue_GetItem(PyValue_FromObjectBorrow(pp->mapping),
+                         PyValue_FromObjectBorrow(key)),
+        BOX_SITE_SEQUENCE);
 }
 
 static PyMappingMethods mappingproxy_as_mapping = {
@@ -1404,7 +1404,10 @@ mappingproxy_or(PyObject *left, PyObject *right)
     if (PyObject_TypeCheck(right, &PyDictProxy_Type)) {
         right = ((mappingproxyobject*)right)->mapping;
     }
-    return PyNumber_Or(left, right);
+    return _PyValue_AsObjectResultAt(
+        _PyValue_Or(PyValue_FromObjectBorrow(left),
+                    PyValue_FromObjectBorrow(right)),
+        BOX_SITE_NUMBER);
 }
 
 static PyObject *
@@ -1426,7 +1429,7 @@ mappingproxy_contains(PyObject *self, PyObject *key)
     if (PyDict_CheckExact(pp->mapping))
         return PyDict_ContainsValue(pp->mapping, PyValue_FromObjectBorrow(key));
     else
-        return PySequence_Contains(pp->mapping, key);
+        return _PyValue_Contains(PyValue_FromObjectBorrow(pp->mapping), PyValue_FromObjectBorrow(key));
 }
 
 static PySequenceMethods mappingproxy_as_sequence = {
@@ -1531,21 +1534,21 @@ static PyObject *
 mappingproxy_getiter(PyObject *self)
 {
     mappingproxyobject *pp = (mappingproxyobject *)self;
-    return PyObject_GetIter(pp->mapping);
+    return _PyValue_GetIter(PyValue_FromObjectBorrow(pp->mapping));
 }
 
 static Py_hash_t
 mappingproxy_hash(PyObject *self)
 {
     mappingproxyobject *pp = (mappingproxyobject *)self;
-    return PyObject_Hash(pp->mapping);
+    return _PyValue_Hash(PyValue_FromObjectBorrow(pp->mapping));
 }
 
 static PyObject *
 mappingproxy_str(PyObject *self)
 {
     mappingproxyobject *pp = (mappingproxyobject *)self;
-    return PyObject_Str(pp->mapping);
+    return _PyValue_Str(PyValue_FromObjectBorrow(pp->mapping));
 }
 
 static PyObject *
@@ -1584,12 +1587,18 @@ mappingproxy_richcompare(PyObject *self, PyObject *w, int op)
             if (copy == NULL) {
                 return NULL;
             }
-            PyObject *res = PyObject_RichCompare(copy, w, op);
+            PyObject *res = _PyValue_AsObjectResultAt(
+                _PyValue_RichCompare(PyValue_FromObjectBorrow(copy),
+                                     PyValue_FromObjectBorrow(w), op),
+                BOX_SITE_COMPARE);
             Py_DECREF(copy);
             return res;
         }
         // Otherwise we are free to share the mapping directly:
-        return PyObject_RichCompare(v->mapping, w, op);
+        return _PyValue_AsObjectResultAt(
+            _PyValue_RichCompare(PyValue_FromObjectBorrow(v->mapping),
+                                 PyValue_FromObjectBorrow(w), op),
+            BOX_SITE_COMPARE);
     }
     Py_RETURN_NOTIMPLEMENTED;
 }
@@ -1815,6 +1824,8 @@ wrapper_traverse(PyObject *self, visitproc visit, void *arg)
     return 0;
 }
 
+_Py_VALUE_NOTIMPL_RICHCMP(wrapper_richcompare_value, wrapper_richcompare)
+
 PyTypeObject _PyMethodWrapper_Type = {
     PyVarObject_HEAD_INIT(&PyType_Type, 0)
     "method-wrapper",                           /* tp_name */
@@ -1851,7 +1862,10 @@ PyTypeObject _PyMethodWrapper_Type = {
     0,                                          /* tp_dict */
     0,                                          /* tp_descr_get */
     0,                                          /* tp_descr_set */
-    .tp_value.call = _Py_VALUE_SLOT_INIT(call, wrapper_value_call),
+    .tp_value = {
+        .call = _Py_VALUE_SLOT_INIT(call, wrapper_value_call),
+        .richcompare = _Py_VALUE_SLOT_INIT(richcompare, wrapper_richcompare_value),
+    },
 };
 
 PyObject *
@@ -2281,8 +2295,7 @@ property_init_impl(propertyobject *self, PyValueBorrow fget,
         if (prop_doc == NULL) {
             prop_doc = Py_NewRef(Py_None);
         }
-        int err = PyObject_SetAttr(
-                    (PyObject *)self, &_Py_ID(__doc__), prop_doc);
+        int err = _PyValue_SetAttr(PyValue_FromObjectBorrow((PyObject *)self), &_Py_ID(__doc__), PyValue_FromObjectBorrow(prop_doc));
         Py_DECREF(prop_doc);
         if (err < 0) {
             assert(PyErr_Occurred());

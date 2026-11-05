@@ -1,8 +1,3 @@
-/* Defer line of the value-API waves (value-api-v2a0.md, section 1.5): the
-   callers of the protocol marks in this unit are converted by W2's caller
-   batches, which remove this line. */
-#define Py_VALUE_DEFER_MARKS 1
-
 #include "Python.h"
 #include "opcode.h"
 
@@ -24,6 +19,7 @@
 #include "pycore_unicodeobject.h" // _PyUnicode_InternImmortal()
 #include "pycore_uniqueid.h"      // _PyObject_AssignUniqueId()
 #include "pycore_value.h"         // _PyCode_ConstantValueKey()
+#include "pycore_value_slots.h"  // _Py_VALUE_NOTIMPL_RICHCMP()
 #include "pycore_value_api.h"     // _PyValue_AsObjectAt()
 #include "pycore_weakref.h"       // FT_CLEAR_WEAKREFS()
 
@@ -2868,7 +2864,7 @@ code_richcompare(PyObject *self, PyObject *other, int op)
     co = (PyCodeObject *)self;
     cp = (PyCodeObject *)other;
 
-    eq = PyObject_RichCompareBool(co->co_name, cp->co_name, Py_EQ);
+    eq = _PyValue_RichCompareBool(PyValue_FromObjectBorrow(co->co_name), PyValue_FromObjectBorrow(cp->co_name), Py_EQ);
     if (eq <= 0) goto unequal;
     eq = co->co_argcount == cp->co_argcount;
     if (!eq) goto unequal;
@@ -2904,22 +2900,20 @@ code_richcompare(PyObject *self, PyObject *other, int op)
         Py_DECREF(consts1);
         return NULL;
     }
-    eq = PyObject_RichCompareBool(consts1, consts2, Py_EQ);
+    eq = _PyValue_RichCompareBool(PyValue_FromObjectBorrow(consts1), PyValue_FromObjectBorrow(consts2), Py_EQ);
     Py_DECREF(consts1);
     Py_DECREF(consts2);
     if (eq <= 0) goto unequal;
 
-    eq = PyObject_RichCompareBool(co->co_names, cp->co_names, Py_EQ);
+    eq = _PyValue_RichCompareBool(PyValue_FromObjectBorrow(co->co_names), PyValue_FromObjectBorrow(cp->co_names), Py_EQ);
     if (eq <= 0) goto unequal;
-    eq = PyObject_RichCompareBool(co->co_localsplusnames,
-                                  cp->co_localsplusnames, Py_EQ);
+    eq = _PyValue_RichCompareBool(PyValue_FromObjectBorrow(co->co_localsplusnames), PyValue_FromObjectBorrow(cp->co_localsplusnames), Py_EQ);
     if (eq <= 0) goto unequal;
-    eq = PyObject_RichCompareBool(co->co_linetable, cp->co_linetable, Py_EQ);
+    eq = _PyValue_RichCompareBool(PyValue_FromObjectBorrow(co->co_linetable), PyValue_FromObjectBorrow(cp->co_linetable), Py_EQ);
     if (eq <= 0) {
         goto unequal;
     }
-    eq = PyObject_RichCompareBool(co->co_exceptiontable,
-                                  cp->co_exceptiontable, Py_EQ);
+    eq = _PyValue_RichCompareBool(PyValue_FromObjectBorrow(co->co_exceptiontable), PyValue_FromObjectBorrow(cp->co_exceptiontable), Py_EQ);
     if (eq <= 0) {
         goto unequal;
     }
@@ -2952,7 +2946,7 @@ code_hash(PyObject *self)
         uhash *= PyHASH_MULTIPLIER;  \
     } while (0)
     #define SCRAMBLE_IN_HASH(EXPR) do {     \
-        Py_hash_t h = PyObject_Hash(EXPR);  \
+        Py_hash_t h = _PyValue_Hash(PyValue_FromObjectBorrow(EXPR));  \
         if (h == -1) {                      \
             return -1;                      \
         }                                   \
@@ -3304,6 +3298,8 @@ static struct PyMethodDef code_methods[] = {
 };
 
 
+_Py_VALUE_NOTIMPL_RICHCMP(code_richcompare_value, code_richcompare)
+
 PyTypeObject PyCode_Type = {
     PyVarObject_HEAD_INIT(&PyType_Type, 0)
     "code",
@@ -3347,6 +3343,9 @@ PyTypeObject PyCode_Type = {
     0,                                  /* tp_init */
     0,                                  /* tp_alloc */
     code_new,                           /* tp_new */
+    .tp_value = {
+        .richcompare = _Py_VALUE_SLOT_INIT(richcompare, code_richcompare_value),
+    },
 };
 
 

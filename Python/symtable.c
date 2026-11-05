@@ -1,8 +1,3 @@
-/* Defer line of the value-API waves (value-api-v2a0.md, section 1.5): the
-   callers of the protocol marks in this unit are converted by W2's caller
-   batches, which remove this line. */
-#define Py_VALUE_DEFER_MARKS 1
-
 #include "Python.h"
 #include "pycore_ast.h"           // stmt_ty
 #include "pycore_dict.h"          // _PyDict_NextValue()
@@ -38,7 +33,7 @@ symtable_get_flags(PyObject *dict, PyObject *name, long *flags)
 {
     PyValue value = PyValue_NULL;
     *flags = 0;
-    Py_hash_t hash = PyObject_Hash(name);
+    Py_hash_t hash = _PyValue_Hash(PyValue_FromObjectBorrow(name));
     if (hash == -1) {
         return -1;
     }
@@ -1149,7 +1144,7 @@ update_symbols(PyObject *symbols, PyObject *scopes,
     }
 
     /* Record not yet resolved free variables from children (if any). */
-    itr = PyObject_GetIter(free);
+    itr = _PyValue_GetIter(PyValue_FromObjectBorrow(free));
     if (itr == NULL) {
         goto error;
     }
@@ -1230,7 +1225,7 @@ analyze_block(PySTEntryObject *ste, PyObject *bound, PyObject *free,
     long flags;
     int status;
     PyObject *newglobal = NULL, *newfree = NULL, *inlined_cells = NULL;
-    PyObject *temp;
+    PyValue temp;
     int success = 0;
     Py_ssize_t i, pos = 0;
 
@@ -1271,16 +1266,18 @@ analyze_block(PySTEntryObject *ste, PyObject *bound, PyObject *free,
      */
     if (ste->ste_type == ClassBlock) {
         /* Pass down known globals */
-        temp = PyNumber_InPlaceOr(newglobal, global);
-        if (!temp)
+        temp = _PyValue_InPlaceOr(PyValue_FromObjectBorrow(newglobal),
+                                 PyValue_FromObjectBorrow(global));
+        if (PyValue_IsNull(temp))
             goto error;
-        Py_DECREF(temp);
+        PyValue_CLOSE(temp);
         /* Pass down previously bound symbols */
         if (bound) {
-            temp = PyNumber_InPlaceOr(newbound, bound);
-            if (!temp)
+            temp = _PyValue_InPlaceOr(PyValue_FromObjectBorrow(newbound),
+                                 PyValue_FromObjectBorrow(bound));
+            if (PyValue_IsNull(temp))
                 goto error;
-            Py_DECREF(temp);
+            PyValue_CLOSE(temp);
         }
     }
 
@@ -1307,23 +1304,26 @@ analyze_block(PySTEntryObject *ste, PyObject *bound, PyObject *free,
     if (ste->ste_type != ClassBlock) {
         /* Add function locals to bound set */
         if (ste_uses_fast_locals(ste)) {
-            temp = PyNumber_InPlaceOr(newbound, local);
-            if (!temp)
+            temp = _PyValue_InPlaceOr(PyValue_FromObjectBorrow(newbound),
+                                 PyValue_FromObjectBorrow(local));
+            if (PyValue_IsNull(temp))
                 goto error;
-            Py_DECREF(temp);
+            PyValue_CLOSE(temp);
         }
         /* Pass down previously bound symbols */
         if (bound) {
-            temp = PyNumber_InPlaceOr(newbound, bound);
-            if (!temp)
+            temp = _PyValue_InPlaceOr(PyValue_FromObjectBorrow(newbound),
+                                 PyValue_FromObjectBorrow(bound));
+            if (PyValue_IsNull(temp))
                 goto error;
-            Py_DECREF(temp);
+            PyValue_CLOSE(temp);
         }
         /* Pass down known globals */
-        temp = PyNumber_InPlaceOr(newglobal, global);
-        if (!temp)
+        temp = _PyValue_InPlaceOr(PyValue_FromObjectBorrow(newglobal),
+                                 PyValue_FromObjectBorrow(global));
+        if (PyValue_IsNull(temp))
             goto error;
-        Py_DECREF(temp);
+        PyValue_CLOSE(temp);
     }
     else {
         /* Special-case __class__ and __classdict__ */
@@ -1373,11 +1373,12 @@ analyze_block(PySTEntryObject *ste, PyObject *bound, PyObject *free,
                 goto error;
             }
         }
-        temp = PyNumber_InPlaceOr(newfree, child_free);
+        temp = _PyValue_InPlaceOr(PyValue_FromObjectBorrow(newfree),
+                                 PyValue_FromObjectBorrow(child_free));
         Py_DECREF(child_free);
-        if (!temp)
+        if (PyValue_IsNull(temp))
             goto error;
-        Py_DECREF(temp);
+        PyValue_CLOSE(temp);
     }
 
     /* Complete the classification. */
@@ -1413,10 +1414,11 @@ analyze_block(PySTEntryObject *ste, PyObject *bound, PyObject *free,
     if (!update_symbols(ste->ste_symbols, scopes, bound, newfree,
                         (ste->ste_type == ClassBlock) || ste->ste_can_see_class_scope))
         goto error;
-    temp = PyNumber_InPlaceOr(free, newfree);
-    if (!temp)
+    temp = _PyValue_InPlaceOr(PyValue_FromObjectBorrow(free),
+                                 PyValue_FromObjectBorrow(newfree));
+    if (PyValue_IsNull(temp))
         goto error;
-    Py_DECREF(temp);
+    PyValue_CLOSE(temp);
     success = 1;
  error:;
     PyValue_CLEAR(key);

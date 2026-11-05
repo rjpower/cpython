@@ -202,6 +202,8 @@ static PyGetSetDef cell_getsetlist[] = {
     {NULL} /* sentinel */
 };
 
+_Py_VALUE_NOTIMPL_RICHCMP(cell_richcompare_value, cell_richcompare)
+
 PyTypeObject PyCell_Type = {
     PyVarObject_HEAD_INIT(&PyType_Type, 0)
     "cell",
@@ -242,4 +244,7 @@ PyTypeObject PyCell_Type = {
     0,                                          /* tp_alloc */
     cell_new,                                   /* tp_new */
     0,                                          /* tp_free */
+    .tp_value = {
+        .richcompare = _Py_VALUE_SLOT_INIT(richcompare, cell_richcompare_value),
+    },
 };

@@ -1,11 +1,6 @@
 
 /* Module support implementation */
 
-/* Defer line of the value-API waves (value-api-v2a0.md, section 1.5): the
-   callers of the protocol marks in this unit are converted by W2's caller
-   batches, which remove this line. */
-#define Py_VALUE_DEFER_MARKS 1
-
 #include "Python.h"
 #include "pycore_abstract.h"   // _PyIndex_Check()
 #include "pycore_dict.h"          // PyDict_SetValue()
@@ -13,6 +8,7 @@
 #include "pycore_pyvalue.h"       // PyValue_PrepareOwned()
 #include "pycore_unicodeobject.h"     // _PyUnicodeWriter_FormatV()
 #include "pycore_value.h"         // PyValue_FromObjectBorrow()
+#include "pycore_value_ops.h"     // _PyValue_AsSsize_t()
 
 typedef double va_double;
 
@@ -27,7 +23,7 @@ _Py_convert_optional_to_ssize_t(PyObject *obj, void *result)
         return 1;
     }
     else if (_PyIndex_Check(obj)) {
-        limit = PyNumber_AsSsize_t(obj, PyExc_OverflowError);
+        limit = _PyValue_AsSsize_t(PyValue_FromObjectBorrow(obj), PyExc_OverflowError);
         if (limit == -1 && PyErr_Occurred()) {
             return 0;
         }

@@ -1,8 +1,3 @@
-/* Defer line of the value-API waves (value-api-v2a0.md, section 1.5): the
-   callers of the protocol marks in this unit are converted by W2's caller
-   batches, which remove this line. */
-#define Py_VALUE_DEFER_MARKS 1
-
 #include <Python.h>
 #include "pycore_ast.h"           // _PyAST_Validate(),
 #include "pycore_pystate.h"       // _PyThreadState_GET()
@@ -11,6 +6,7 @@
 #include "pycore_pyvalue.h"       // PyValue_PrepareOwned()
 #include "pycore_runtime.h"       // _PyRuntime
 #include "pycore_unicodeobject.h" // _PyUnicode_InternImmortal
+#include "pycore_value_ops.h"     // _PyValue_Hash()
 #include <errcode.h>
 
 #include "lexer/state.h"
@@ -729,7 +725,7 @@ get_cached_identifier(Parser *p, PyObject *bytes)
     // so borrowed references are valid for the lifetime of the parse
     // (including the second error pass, which reuses parser and arena).
     Py_ssize_t len = PyBytes_GET_SIZE(bytes);
-    Py_hash_t hash = PyObject_Hash(bytes);
+    Py_hash_t hash = _PyValue_Hash(PyValue_FromObjectBorrow(bytes));
     if (hash == -1) {
         p->error_indicator = 1;
         return NULL;

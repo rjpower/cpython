@@ -4,11 +4,6 @@
  * Thanks go to Tim Peters and Michael Hudson for debugging.
  */
 
-/* Defer line of the value-API waves (value-api-v2a0.md, section 1.5): the
-   callers of the protocol marks in this unit are converted by W2's caller
-   batches, which remove this line. */
-#define Py_VALUE_DEFER_MARKS 1
-
 #include <Python.h>
 #include <stdbool.h>
 #include "pycore_abstract.h"      // _PyObject_RealIsSubclass()
@@ -199,7 +194,7 @@ BaseException_str_impl(PyBaseExceptionObject *self)
         return result;
     }
     default:
-        return PyObject_Str(self->args);
+        return _PyValue_Str(PyValue_FromObjectBorrow(self->args));
     }
 }
 
@@ -280,7 +275,7 @@ BaseException___setstate___impl(PyBaseExceptionObject *self,
                 Py_XDECREF(d_value);
                 return PyValue_NULL;
             }
-            int res = PyObject_SetAttr((PyObject *)self, d_key, d_value);
+            int res = _PyValue_SetAttr(_PyValue_FromObjectKnown((PyObject *)self), d_key, PyValue_FromObjectBorrow(d_value));
             Py_DECREF(d_value);
             Py_DECREF(d_key);
             if (res < 0) {
@@ -344,7 +339,7 @@ BaseException_add_note_impl(PyBaseExceptionObject *self, PyObject *note)
         if (notes == NULL) {
             return PyValue_NULL;
         }
-        if (PyObject_SetAttr((PyObject *)self, &_Py_ID(__notes__), notes) < 0) {
+        if (_PyValue_SetAttr(_PyValue_FromObjectKnown((PyObject *)self), &_Py_ID(__notes__), PyValue_FromObjectBorrow(notes)) < 0) {
             Py_DECREF(notes);
             return PyValue_NULL;
         }
@@ -397,7 +392,7 @@ BaseException_args_set_impl(PyBaseExceptionObject *self, PyObject *value)
 /*[clinic end generated code: output=331137e11d8f9e80 input=2400047ea5970a84]*/
 {
     PyObject *seq;
-    seq = PySequence_Tuple(value);
+    seq = _PyValue_SequenceTuple(PyValue_FromObjectBorrow(value));
     if (!seq)
         return -1;
     Py_XSETREF(self->args, seq);
@@ -941,7 +936,7 @@ BaseExceptionGroup_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
 
     /* Save initial exceptions sequence as a string in case sequence is mutated */
     if (!PyList_Check(exceptions) && !PyTuple_Check(exceptions)) {
-        exceptions_str = PyObject_Repr(exceptions);
+        exceptions_str = _PyValue_Repr(PyValue_FromObjectBorrow(exceptions));
         if (exceptions_str == NULL) {
             /* We don't hold a reference to exceptions, so clear it before
              * attempting a decref in the cleanup.
@@ -951,7 +946,7 @@ BaseExceptionGroup_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
         }
     }
 
-    exceptions = PySequence_Tuple(exceptions);
+    exceptions = _PyValue_SequenceTuple(PyValue_FromObjectBorrow(exceptions));
     if (!exceptions) {
         goto error;
     }
@@ -1150,16 +1145,16 @@ BaseExceptionGroup_repr(PyObject *op)
         int is_list = args_exceptions != NULL && PyList_Check(args_exceptions);
         Py_XDECREF(args_exceptions);
         if (is_list) {
-            PyObject *exceptions_list = PySequence_List(self->excs);
+            PyObject *exceptions_list = _PyValue_SequenceList(PyValue_FromObjectBorrow(self->excs));
             if (!exceptions_list) {
                 return NULL;
             }
 
-            exceptions_str = PyObject_Repr(exceptions_list);
+            exceptions_str = _PyValue_Repr(PyValue_FromObjectBorrow(exceptions_list));
             Py_DECREF(exceptions_list);
         }
         else {
-            exceptions_str = PyObject_Repr(self->excs);
+            exceptions_str = _PyValue_Repr(PyValue_FromObjectBorrow(self->excs));
         }
 
         if (!exceptions_str) {
@@ -1255,12 +1250,12 @@ exceptiongroup_subset(
     if (notes) {
         if (PySequence_Check(notes)) {
             /* Make a copy so the parts have independent notes lists. */
-            PyObject *notes_copy = PySequence_List(notes);
+            PyObject *notes_copy = _PyValue_SequenceList(PyValue_FromObjectBorrow(notes));
             Py_DECREF(notes);
             if (notes_copy == NULL) {
                 goto error;
             }
-            int res = PyObject_SetAttr(eg, &_Py_ID(__notes__), notes_copy);
+            int res = _PyValue_SetAttr(PyValue_FromObjectBorrow(eg), &_Py_ID(__notes__), PyValue_FromObjectBorrow(notes_copy));
             Py_DECREF(notes_copy);
             if (res < 0) {
                 goto error;
@@ -1358,7 +1353,7 @@ exceptiongroup_split_check_match(PyObject *exc,
         if (exc_matches == NULL) {
             return -1;
         }
-        int is_true = PyObject_IsTrue(exc_matches);
+        int is_true = _PyValue_IsTrue(PyValue_FromObjectBorrow(exc_matches));
         Py_DECREF(exc_matches);
         return is_true;
     }
@@ -2252,7 +2247,7 @@ oserror_init(PyOSErrorObject *self, PyObject **p_args,
             /* BlockingIOError's 3rd argument can be the number of
              * characters written.
              */
-            self->written = PyNumber_AsSsize_t(filename, PyExc_ValueError);
+            self->written = _PyValue_AsSsize_t(PyValue_FromObjectBorrow(filename), PyExc_ValueError);
             if (self->written == -1 && PyErr_Occurred())
                 return -1;
         }
@@ -2594,7 +2589,7 @@ OSError_written_set(PyObject *op, PyObject *arg, void *context)
         return 0;
     }
     Py_ssize_t n;
-    n = PyNumber_AsSsize_t(arg, PyExc_ValueError);
+    n = _PyValue_AsSsize_t(PyValue_FromObjectBorrow(arg), PyExc_ValueError);
     if (n == -1 && PyErr_Occurred())
         return -1;
     self->written = n;
@@ -3032,7 +3027,7 @@ SyntaxError_init(PyObject *op, PyObject *args, PyObject *kwds)
         if (info == NULL) {
             return -1;
         }
-        Py_SETREF(info, PySequence_Tuple(info));
+        Py_SETREF(info, _PyValue_SequenceTuple(PyValue_FromObjectBorrow(info)));
         if (!info) {
             return -1;
         }
@@ -3159,7 +3154,7 @@ SyntaxError_str(PyObject *op)
     have_lineno = (self->lineno != NULL) && PyLong_CheckExact(self->lineno);
 
     if (!filename && !have_lineno)
-        return PyObject_Str(self->msg ? self->msg : Py_None);
+        return _PyValue_Str(PyValue_FromObjectBorrow(self->msg ? self->msg : Py_None));
 
     // Even if 'filename' can be an instance of a subclass of 'str',
     // we only render its "true" content and do not use str(filename).
@@ -3988,11 +3983,11 @@ UnicodeEncodeError_str(PyObject *self)
 
     /* Get reason and encoding as strings, which they might not be if
        they've been modified after we were constructed. */
-    reason_str = PyObject_Str(exc->reason);
+    reason_str = _PyValue_Str(PyValue_FromObjectBorrow(exc->reason));
     if (reason_str == NULL) {
         goto done;
     }
-    encoding_str = PyObject_Str(exc->encoding);
+    encoding_str = _PyValue_Str(PyValue_FromObjectBorrow(exc->encoding));
     if (encoding_str == NULL) {
         goto done;
     }
@@ -4111,11 +4106,11 @@ UnicodeDecodeError_str(PyObject *self)
 
     /* Get reason and encoding as strings, which they might not be if
        they've been modified after we were constructed. */
-    reason_str = PyObject_Str(exc->reason);
+    reason_str = _PyValue_Str(PyValue_FromObjectBorrow(exc->reason));
     if (reason_str == NULL) {
         goto done;
     }
-    encoding_str = PyObject_Str(exc->encoding);
+    encoding_str = _PyValue_Str(PyValue_FromObjectBorrow(exc->encoding));
     if (encoding_str == NULL) {
         goto done;
     }
@@ -4214,7 +4209,7 @@ UnicodeTranslateError_str(PyObject *self)
 
     /* Get reason as a string, which it might not be if it's been
        modified after we were constructed. */
-    reason_str = PyObject_Str(exc->reason);
+    reason_str = _PyValue_Str(PyValue_FromObjectBorrow(exc->reason));
     if (reason_str == NULL) {
         goto done;
     }

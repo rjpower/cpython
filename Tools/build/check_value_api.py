@@ -1057,7 +1057,9 @@ THUNK_FILES = (
     # vectorcall, stored beside the object thunk.
     "Objects/tupleobject.c", "Objects/bytesobject.c",
     "Objects/bytearrayobject.c", "Objects/floatobject.c",
-    "Objects/enumobject.c",
+    "Objects/enumobject.c", "Objects/boolobject.c", "Objects/longobject.c",
+    "Objects/unicodeobject.c", "Objects/listobject.c", "Objects/setobject.c",
+    "Objects/rangeobject.c",
     # The test helpers: a spec type that stores the thunk, and an accessor
     # that compares against both.
     "Modules/_testinternalcapi/value_call.c",

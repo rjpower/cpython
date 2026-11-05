@@ -6,11 +6,6 @@
    slot-field reads. */
 #define Py_VALUE_ADAPTER 1
 
-/* Defer line of the value-API waves (value-api-v2a0.md, section 1.5): the
-   callers of the protocol marks in this unit are converted by W2's caller
-   batches, which remove this line. */
-#define Py_VALUE_DEFER_MARKS 1
-
 #include "Python.h"
 #include "pycore_brc.h"           // _Py_brc_queue_object()
 #include "pycore_call.h"          // _PyObject_CallNoArgs()
@@ -667,9 +662,9 @@ PyObject_Print(PyObject *op, FILE *fp, int flags)
         else {
             PyObject *s;
             if (flags & Py_PRINT_RAW)
-                s = PyObject_Str(op);
+                s = _PyValue_Str(PyValue_FromObjectBorrow(op));
             else
-                s = PyObject_Repr(op);
+                s = _PyValue_Repr(PyValue_FromObjectBorrow(op));
             if (s == NULL) {
                 ret = -1;
             }
@@ -1039,13 +1034,13 @@ _PyObject_FunctionStr(PyObject *x)
         if (ret < 0) {
             return NULL;
         }
-        return PyObject_Str(x);
+        return _PyValue_Str(PyValue_FromObjectBorrow(x));
     }
     PyObject *module;
     PyObject *result = NULL;
     ret = PyObject_GetOptionalAttr(x, &_Py_ID(__module__), &module);
     if (module != NULL && module != Py_None) {
-        ret = PyObject_RichCompareBool(module, &_Py_ID(builtins), Py_NE);
+        ret = _PyValue_RichCompareBool(PyValue_FromObjectBorrow(module), _PyValue_FromObjectKnown(&_Py_ID(builtins)), Py_NE);
         if (ret < 0) {
             // error
             goto done;
@@ -1244,7 +1239,7 @@ PyObject_GetAttrString(PyObject *v, const char *name)
     w = PyUnicode_FromString(name);
     if (w == NULL)
         return NULL;
-    res = PyObject_GetAttr(v, w);
+    res = _PyValue_AsObjectResultAt(_PyValue_GetAttr(PyValue_FromObjectBorrow(v), w), BOX_SITE_ATTRIBUTE);
     Py_DECREF(w);
     return res;
 }
@@ -1295,7 +1290,7 @@ PyObject_SetAttrString(PyObject *v, const char *name, PyObject *w)
         return -1;
     }
 
-    int res = PyObject_SetAttr(v, s, w);
+    int res = _PyValue_SetAttr(PyValue_FromObjectBorrow(v), s, PyValue_FromObjectBorrow(w));
     Py_DECREF(s);
     return res;
 }
@@ -1317,7 +1312,7 @@ _PyObject_IsAbstract(PyObject *obj)
 
     res = PyObject_GetOptionalAttr(obj, &_Py_ID(__isabstractmethod__), &isabstract);
     if (res > 0) {
-        res = PyObject_IsTrue(isabstract);
+        res = _PyValue_IsTrue(PyValue_FromObjectBorrow(isabstract));
         Py_DECREF(isabstract);
     }
     return res;
@@ -1333,7 +1328,7 @@ _Py_COMP_DIAG_IGNORE_DEPR_DECLS
 _Py_COMP_DIAG_POP
     if (!oname)
         return NULL;
-    result = PyObject_GetAttr(v, oname);
+    result = _PyValue_AsObjectResultAt(_PyValue_GetAttr(PyValue_FromObjectBorrow(v), oname), BOX_SITE_ATTRIBUTE);
     return result;
 }
 
@@ -1355,8 +1350,8 @@ _PyObject_SetAttributeErrorContext(PyObject* v, PyObject* name)
         goto restore;
     }
     // Augment the exception with the name and object
-    if (PyObject_SetAttr(exc, &_Py_ID(name), name) ||
-        PyObject_SetAttr(exc, &_Py_ID(obj), v)) {
+    if (_PyValue_SetAttr(PyValue_FromObjectBorrow(exc), &_Py_ID(name), PyValue_FromObjectBorrow(name)) ||
+        _PyValue_SetAttr(PyValue_FromObjectBorrow(exc), &_Py_ID(obj), PyValue_FromObjectBorrow(v))) {
         Py_DECREF(exc);
         return 1;
     }
@@ -1645,7 +1640,7 @@ PyObject_SetAttr(PyObject *v, PyObject *name, PyObject *value)
 int
 PyObject_DelAttr(PyObject *v, PyObject *name)
 {
-    return PyObject_SetAttr(v, name, NULL);
+    return _PyValue_SetAttr(PyValue_FromObjectBorrow(v), name, PyValue_FromObjectBorrow(NULL));
 }
 
 PyObject **
@@ -2340,7 +2335,7 @@ _dir_object(PyObject *obj)
     if (result == NULL)
         return NULL;
     /* return sorted(result) */
-    sorted = PySequence_List(result);
+    sorted = _PyValue_SequenceList(PyValue_FromObjectBorrow(result));
     Py_DECREF(result);
     if (sorted == NULL)
         return NULL;
@@ -3175,10 +3170,6 @@ _Py_GetObjects(PyObject *self, PyObject *args)
 #endif  /* Py_TRACE_REFS */
 
 
-/* Hack to force loading of abstract.o */
-Py_ssize_t (*_Py_abstract_hack)(PyObject *) = PyObject_Size;
-
-
 void
 _PyObject_DebugTypeStats(FILE *out)
 {
@@ -3217,7 +3208,7 @@ Py_ReprEnter(PyObject *obj)
     }
     Py_INCREF(dict);
     PyValueBorrow name = PyValue_FromObjectBorrow(&_Py_ID(Py_Repr));
-    Py_hash_t hash = PyObject_Hash(&_Py_ID(Py_Repr));
+    Py_hash_t hash = _PyValue_Hash(_PyValue_FromObjectKnown(&_Py_ID(Py_Repr)));
     if (hash == -1) {
         goto done;
     }
@@ -3271,7 +3262,7 @@ Py_ReprLeave(PyObject *obj)
     if (dict == NULL)
         goto finally;
     Py_INCREF(dict);
-    Py_hash_t hash = PyObject_Hash(&_Py_ID(Py_Repr));
+    Py_hash_t hash = _PyValue_Hash(_PyValue_FromObjectKnown(&_Py_ID(Py_Repr)));
     if (hash == -1 || _PyDict_GetValue_KnownHash(dict,
             PyValue_FromObjectBorrow(&_Py_ID(Py_Repr)), hash, &guard) <= 0) {
         goto finally;

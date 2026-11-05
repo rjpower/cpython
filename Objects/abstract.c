@@ -4,11 +4,6 @@
    Tools/build/check_value_api.py does not list its slot-field reads. */
 #define Py_VALUE_ADAPTER 1
 
-/* Defer line of the value-API waves (value-api-v2a0.md, section 1.5): the
-   callers of the protocol marks in this unit are converted by W2's caller
-   batches, which remove this line. */
-#define Py_VALUE_DEFER_MARKS 1
-
 #include "Python.h"
 #include "pycore_abstract.h"      // _PyIndex_Check()
 #include "pycore_call.h"          // _PyObject_CallNoArgs()
@@ -71,17 +66,6 @@ null_error(void)
 #define seq_adapter_release(v, obj) _PyValue_AdapterRelease((v), (obj))
 
 static void value_type_error(const char *msg, PyValueBorrow v);
-
-// _PyIndex_Check() of a value: an inline int has __index__, a float not.
-static inline int
-value_index_check(PyValueBorrow v)
-{
-    if (PyValue_IsInline(v)) {
-        return PyValue_IsInlineInt(v);
-    }
-    return _PyIndex_Check(PyValue_AsKnownObjectBorrow(v));
-}
-#define value_index_check(V) (value_index_check)(PyValue_Borrow(V))
 
 static PyValue
 call_subscript(PyObject *o, binaryfunc slot, PyValueBorrow key)
@@ -428,7 +412,7 @@ PyValue
 
     PySequenceMethods *ms = Py_TYPE(o)->tp_as_sequence;
     if (ms && ms->sq_item) {
-        if (value_index_check(key)) {
+        if (_PyValue_IndexCheck(key)) {
             Py_ssize_t key_value;
             key_value = _PyValue_AsSsize_t(key, PyExc_IndexError);
             if (key_value == -1 && PyErr_Occurred())
@@ -539,7 +523,7 @@ value_ass_item(PyValueBorrow v, PyValueBorrow key, PyValueBorrow value)
         }
 
         if (Py_TYPE(o)->tp_as_sequence) {
-            if (value_index_check(key)) {
+            if (_PyValue_IndexCheck(key)) {
                 Py_ssize_t key_value;
                 key_value = _PyValue_AsSsize_t(key, PyExc_IndexError);
                 if (key_value == -1 && PyErr_Occurred())
@@ -1146,56 +1130,75 @@ _PyBuffer_ReleaseInInterpreterAndRawFree(PyInterpreterState *interp,
     return _Py_CallInInterpreterAndRawFree(interp, _buffer_release_call, view);
 }
 
+/* format(obj, format_spec): obj.__format__(format_spec), with obj as a
+   value, so that an inline int or float is not boxed. format_spec is
+   PyValue_NULL for none. */
 PyObject *
-PyObject_Format(PyObject *obj, PyObject *format_spec)
+(_PyValue_Format)(PyValueBorrow obj, PyValueBorrow format_spec)
 {
-    PyObject *meth;
-    PyObject *empty = NULL;
+    PyObject *spec = NULL;
     PyObject *result = NULL;
 
-    if (format_spec != NULL && !PyUnicode_Check(format_spec)) {
-        PyErr_Format(PyExc_SystemError,
-                     "Format specifier must be a string, not %.200s",
-                     Py_TYPE(format_spec)->tp_name);
-        return NULL;
+    if (!PyValue_IsNull(format_spec)) {
+        if (!PyValue_IsObject(format_spec)
+            || !PyUnicode_Check(PyValue_AsKnownObjectBorrow(format_spec)))
+        {
+            PyErr_Format(PyExc_SystemError,
+                         "Format specifier must be a string, not %.200s",
+                         PyValue_TYPE(format_spec)->tp_name);
+            return NULL;
+        }
+        spec = PyValue_AsKnownObjectBorrow(format_spec);
     }
 
     /* Fast path for common types. */
-    if (format_spec == NULL || PyUnicode_GET_LENGTH(format_spec) == 0) {
-        if (PyUnicode_CheckExact(obj)) {
-            return Py_NewRef(obj);
+    if (spec == NULL || PyUnicode_GET_LENGTH(spec) == 0) {
+        if (PyValue_IsObject(obj)) {
+            PyObject *o = PyValue_AsKnownObjectBorrow(obj);
+            if (PyUnicode_CheckExact(o)) {
+                return Py_NewRef(o);
+            }
+            if (PyLong_CheckExact(o)) {
+                return (_PyValue_Str)(obj);
+            }
         }
-        if (PyLong_CheckExact(obj)) {
-            return PyObject_Str(obj);
+        else if (PyValue_IsInlineInt(obj)) {
+            return (_PyValue_Str)(obj);
         }
     }
 
     /* If no format_spec is provided, use an empty string */
-    if (format_spec == NULL) {
+    PyObject *empty = NULL;
+    if (spec == NULL) {
         empty = Py_GetConstant(Py_CONSTANT_EMPTY_STR);
-        format_spec = empty;
+        spec = empty;
     }
 
     /* Find the (unbound!) __format__ method */
-    meth = _PyObject_LookupSpecial(obj, &_Py_ID(__format__));
-    if (meth == NULL) {
-        PyThreadState *tstate = _PyThreadState_GET();
-        if (!_PyErr_Occurred(tstate)) {
+    PyThreadState *tstate = _PyThreadState_GET();
+    _PyStatusValue lookup = (_PyValue_LookupSpecial)(obj, &_Py_ID(__format__));
+    if (lookup.status <= 0) {
+        if (lookup.status == 0 && !_PyErr_Occurred(tstate)) {
             _PyErr_Format(tstate, PyExc_TypeError,
                           "Type %.100s doesn't define __format__",
-                          Py_TYPE(obj)->tp_name);
+                          PyValue_TYPE(obj)->tp_name);
         }
         goto done;
     }
+    PyValue meth = lookup.value;
 
     /* And call it. */
-    result = PyObject_CallOneArg(meth, format_spec);
-    Py_DECREF(meth);
-
+    PyValue res = (_PyValue_CallOneArg)(tstate, PyValue_Borrow(meth),
+                                        PyValue_FromObjectBorrow(spec));
+    PyValue_CLOSE(meth);
+    if (PyValue_IsNull(res)) {
+        goto done;
+    }
+    result = _PyValue_AsObjectStealAt(res, BOX_SITE_REPR);
     if (result && !PyUnicode_Check(result)) {
         PyErr_Format(PyExc_TypeError,
-                     "%T.__format__() must return a str, not %T",
-                     obj, result);
+                     "%N.__format__() must return a str, not %T",
+                     PyValue_TYPE(obj), result);
         Py_SETREF(result, NULL);
         goto done;
     }
@@ -1203,6 +1206,12 @@ PyObject_Format(PyObject *obj, PyObject *format_spec)
 done:
     Py_XDECREF(empty);
     return result;
+}
+
+PyObject *
+PyObject_Format(PyObject *obj, PyObject *format_spec)
+{
+    return (_PyValue_Format)(_Py_VALUE_ARG(obj), _Py_VALUE_ARG(format_spec));
 }
 /* Operations on numbers */
 
@@ -1738,12 +1747,6 @@ PyNumber_Power(PyObject *v, PyObject *w, PyObject *z)
         BOX_SITE_NUMBER);
 }
 
-PyObject *
-_PyNumber_PowerNoMod(PyObject *lhs, PyObject *rhs)
-{
-    return PyNumber_Power(lhs, rhs, Py_None);
-}
-
 /* Binary in-place operators */
 
 /* The in-place operators are defined to fall back to the 'normal',
@@ -1938,12 +1941,6 @@ PyNumber_InPlacePower(PyObject *v, PyObject *w, PyObject *z)
     return _PyValue_THUNK_EXIT((_PyValue_InPlacePower)(
         _Py_VALUE_ARG(v), _Py_VALUE_ARG(w), _Py_VALUE_ARG(z)),
         BOX_SITE_NUMBER);
-}
-
-PyObject *
-_PyNumber_InPlacePowerNoMod(PyObject *lhs, PyObject *rhs)
-{
-    return PyNumber_InPlacePower(lhs, rhs, Py_None);
 }
 
 /* The value dispatchers by BINARY_OP's oparg (D14). */
@@ -2386,7 +2383,8 @@ PyNumber_ToBase(PyObject *n, int base)
                         "PyNumber_ToBase: base must be 2, 8, 10 or 16");
         return NULL;
     }
-    PyObject *index = _PyNumber_Index(n);
+    PyObject *index = _PyValue_AsObjectResultAt(
+        _PyValue_Index(PyValue_FromObjectBorrow(n)), BOX_SITE_NUMBER);
     if (!index)
         return NULL;
     PyObject *res = _PyLong_Format(index, base);
@@ -3823,7 +3821,7 @@ object_recursive_isinstance(PyThreadState *tstate, PyObject *inst, PyObject *cls
     int found = call_special_method(tstate, cls, &_Py_ID(__instancecheck__),
                                     " in __instancecheck__", inst, &res);
     if (found > 0) {
-        int ok = PyObject_IsTrue(res);
+        int ok = _PyValue_IsTrue(PyValue_FromObjectBorrow(res));
         Py_DECREF(res);
         return ok;
     }
@@ -3907,7 +3905,7 @@ object_issubclass(PyThreadState *tstate, PyObject *derived, PyObject *cls)
     int found = call_special_method(tstate, cls, &_Py_ID(__subclasscheck__),
                                     " in __subclasscheck__", derived, &res);
     if (found > 0) {
-        int ok = PyObject_IsTrue(res);
+        int ok = _PyValue_IsTrue(PyValue_FromObjectBorrow(res));
         Py_DECREF(res);
         return ok;
     }

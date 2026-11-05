@@ -6,6 +6,7 @@ section 4.8 (the test types).
 """
 
 import builtins
+import collections
 import itertools
 import math
 import opcode
@@ -14,6 +15,7 @@ import os
 import re
 import sys
 import types
+import typing
 import unittest
 
 from test import support
@@ -1202,7 +1204,66 @@ class IntValueRowsTests(unittest.TestCase):
                                  object_slot(object, 'richcompare'))
 
     def test_str_rows(self):
-        self.assertEqual(set_rows(str), {'richcompare', 'getattro', 'setattro'})
+        self.assertEqual(set_rows(str), {
+            'richcompare', 'getattro', 'setattro', 'nb_remainder',
+            'subscript', 'contains', 'sq_concat'})
+
+    def test_container_rows(self):
+        base = {'getattro', 'setattro', 'hash', 'str', 'richcompare'}
+        self.assertEqual(set_rows(list) - base, {
+            'subscript', 'ass_subscript', 'contains', 'item', 'ass_item',
+            'sq_concat', 'sq_inplace_concat'})
+        self.assertEqual(set_rows(tuple) - base, {
+            'subscript', 'contains', 'item', 'sq_concat'})
+        self.assertEqual(set_rows(dict) - base, {
+            'subscript', 'ass_subscript', 'contains', 'nb_or',
+            'nb_inplace_or'})
+        self.assertEqual(set_rows(range) - base, {
+            'subscript', 'item', 'contains'})
+        set_ops = {'nb_subtract', 'nb_and', 'nb_xor', 'nb_or'}
+        self.assertEqual(set_rows(frozenset) - base, {'contains'} | set_ops)
+        self.assertEqual(set_rows(set) - base, {
+            'contains', 'nb_inplace_subtract', 'nb_inplace_and',
+            'nb_inplace_xor', 'nb_inplace_or'} | set_ops)
+        for view in (type({}.keys()), type({}.items())):
+            with self.subTest(view=view):
+                self.assertEqual(set_rows(view) - base, {'contains'})
+
+    def test_bytes_rows(self):
+        base = {'getattro', 'setattro', 'hash', 'str', 'richcompare'}
+        read = {'item', 'subscript', 'contains', 'nb_remainder', 'sq_concat'}
+        self.assertEqual(set_rows(bytes) - base, read)
+        self.assertEqual(set_rows(bytearray) - base, read | {
+            'ass_item', 'ass_subscript', 'sq_inplace_concat'})
+        self.assertEqual(set_rows(memoryview) - base, {
+            'item', 'subscript', 'ass_subscript'})
+
+    def test_iterator_rows(self):
+        for it in (iter(range(3)), iter(range(2**70, 2**70 + 3)), iter(b''),
+                   iter(bytearray()), iter(memoryview(b'')), reversed([]),
+                   iter(lambda: 0, 1)):
+            with self.subTest(type=type(it)):
+                self.assertIn('iternext', set_rows(type(it)))
+
+    def test_rare_richcompare_rows(self):
+        # Class N: the slot yields NotImplemented for an inline operand.
+        for t in (types.CellType, types.CodeType, slice, types.MethodType,
+                  types.GenericAlias, types.UnionType, types.SimpleNamespace,
+                  type({}.keys()), type({}.items()), range, list, tuple, set,
+                  frozenset, dict, memoryview, complex):
+            with self.subTest(type=t):
+                self.assertTrue(value_slot(t, 'richcompare'))
+
+    def test_union_nb_or_rows(self):
+        for t in (type, types.GenericAlias, typing.TypeAliasType):
+            with self.subTest(type=t):
+                self.assertTrue(value_slot(t, 'nb_or'))
+
+    def test_complex_rows(self):
+        self.assertEqual(set_rows(complex) - {'getattro', 'setattro', 'str'}, {
+            'richcompare', 'nb_add', 'nb_subtract', 'nb_multiply',
+            'nb_true_divide', 'nb_power', 'nb_negative', 'nb_positive',
+            'nb_absolute', 'nb_bool'})
 
     def test_python_subclass_inherits(self):
         self.assertEqual(int_slots(I), int_slots(int))
@@ -2987,6 +3048,379 @@ class IndexExactTests(unittest.TestCase):
                 index, _ = next(enumerate('a', start))
                 self.assertIs(type(index), int)
                 self.assertEqual(index, int(start))
+
+    def test_index_result_of_a_subclass(self):
+        class Holder:
+            def __index__(self):
+                return IndexExactTests.MyInt(7)
+        with self.assertWarns(DeprecationWarning):
+            result = operator.index(Holder())
+        self.assertIs(type(result), int)
+        self.assertEqual(result, 7)
+
+
+class ContainerSlotTests(unittest.TestCase):
+    """The value slots of list, tuple, dict and str: an inline int or float
+    key, index or operand reaches them unboxed, and the errors read as the
+    object forms did."""
+
+    def test_list(self):
+        a = [10, 20.5, 30, 40]
+        self.assertEqual((a[1], a[-1], a[1:3], a[::-2]), (20.5, 40, [20.5, 30], [40, 20.5]))
+        self.assertEqual(a[True], 20.5)
+        with self.assertRaisesRegex(TypeError, "list indices must be integers or slices, not float"):
+            a[1.5]
+        with self.assertRaisesRegex(TypeError, "list indices must be integers or slices, not str"):
+            a["x"]
+        with self.assertRaises(IndexError):
+            a[4]
+        with self.assertRaisesRegex(IndexError, "cannot fit 'int' into an index-sized integer"):
+            a[2**70]
+        a[0] = 11
+        a[-1] = 4.5
+        a[1:3] = (1, 2, 3)
+        self.assertEqual(a, [11, 1, 2, 3, 4.5])
+        del a[0]
+        del a[-1]
+        self.assertEqual(a, [1, 2, 3])
+        with self.assertRaisesRegex(IndexError, "list assignment index out of range"):
+            a[3] = 1
+        with self.assertRaisesRegex(IndexError, "list assignment index out of range"):
+            del a[3]
+        with self.assertRaisesRegex(TypeError, "list indices must be integers or slices, not float"):
+            a[1.5] = 1
+        with self.assertRaisesRegex(TypeError, "must assign iterable to extended slice"):
+            a[::2] = 5
+        self.assertIn(2, a)
+        self.assertNotIn(2.5, a)
+        self.assertIn(2.0, a)
+        self.assertEqual(a + [4], [1, 2, 3, 4])
+        with self.assertRaisesRegex(TypeError, r'can only concatenate list \(not "int"\) to list'):
+            a + 1
+        with self.assertRaisesRegex(TypeError, r'can only concatenate list \(not "float"\) to list'):
+            a + 1.5
+        a += (7, 8)
+        self.assertEqual(a, [1, 2, 3, 7, 8])
+        with self.assertRaisesRegex(TypeError, "'int' object is not iterable"):
+            a += 5
+        self.assertEqual([1, 2, 3].pop(0), 1)
+        b = [1, 2.5, 3]
+        self.assertEqual((b.pop(), b.pop(0), b), (3, 1, [2.5]))
+
+    def test_tuple(self):
+        t = (10, 20.5, 30)
+        self.assertEqual((t[1], t[-1], t[1:], t[::-1]), (20.5, 30, (20.5, 30), (30, 20.5, 10)))
+        with self.assertRaisesRegex(TypeError, "tuple indices must be integers or slices, not float"):
+            t[1.5]
+        with self.assertRaisesRegex(IndexError, "tuple index out of range"):
+            t[3]
+        self.assertIn(20.5, t)
+        self.assertNotIn(21, t)
+        self.assertEqual(t + (1,), (10, 20.5, 30, 1))
+        with self.assertRaisesRegex(TypeError, r'can only concatenate tuple \(not "int"\) to tuple'):
+            t + 1
+
+    def test_dict(self):
+        d = {1: 'a', 2.5: 'b', 'k': 'c'}
+        self.assertEqual((d[1], d[2.5], d['k'], d[True]), ('a', 'b', 'c', 'a'))
+        for key in (3, 3.5, 2**70):
+            with self.subTest(key=key):
+                with self.assertRaises(KeyError) as cm:
+                    d[key]
+                self.assertEqual(cm.exception.args, (key,))
+        d[3] = 'd'
+        d[4.5] = 'e'
+        del d[3]
+        self.assertEqual(d, {1: 'a', 2.5: 'b', 'k': 'c', 4.5: 'e'})
+        with self.assertRaises(KeyError):
+            del d[3]
+        self.assertIn(4.5, d)
+        self.assertNotIn(5, d)
+        class Missing(dict):
+            def __missing__(self, key):
+                return ('missing', key)
+        self.assertEqual(Missing()[5], ('missing', 5))
+        self.assertEqual(Missing()[2.5], ('missing', 2.5))
+        with self.assertRaises(TypeError):
+            d | 5
+        with self.assertRaises(TypeError):
+            5 | d
+        self.assertEqual({1: 2} | {3: 4}, {1: 2, 3: 4})
+        e = {1: 2}
+        e |= [(3, 4)]
+        self.assertEqual(e, {1: 2, 3: 4})
+        with self.assertRaisesRegex(TypeError, "'int' object is not iterable"):
+            e |= 5
+        with self.assertRaisesRegex(TypeError, "unhashable type: 'list'"):
+            e[[1]]
+
+    def test_str(self):
+        s = "abcd"
+        self.assertEqual((s[1], s[-1], s[1:3], s[::-1]), ("b", "d", "bc", "dcba"))
+        with self.assertRaisesRegex(TypeError, "string indices must be integers, not 'float'"):
+            s[1.5]
+        with self.assertRaisesRegex(IndexError, "string index out of range"):
+            s[4]
+        with self.assertRaisesRegex(TypeError, r'can only concatenate str \(not "int"\) to str'):
+            s + 1
+        with self.assertRaisesRegex(TypeError, "'in <string>' requires string as left operand, not int"):
+            1 in s
+        self.assertIn("bc", s)
+        with self.assertRaises(TypeError):
+            s - 1
+
+    def test_str_format(self):
+        cases = [
+            ("%d", 5, "5"), ("%i", -7, "-7"), ("%u", 2**59, str(2**59)),
+            ("%5d|%-5d|%05d", (3, 4, -5), "    3|4    |-0005"),
+            ("%+d % d", (3, 4), "+3  4"), ("%.3d", 5, "005"),
+            ("%x %X %o %#x %#X %#o", (255,) * 6, "ff FF 377 0xff 0XFF 0o377"),
+            ("%x", -255, "-ff"), ("%#x", -255, "-0xff"), ("%#x", 0, "0x0"),
+            ("%s %r %a", (5, 5, 5), "5 5 5"), ("%s %r", (2.5, 2.5), "2.5 2.5"),
+            ("%s", 1e22, "1e+22"), ("%5s|%-5r|%.1s", (1, 2, 345), "    1|2    |3"),
+            ("%f %e %g", (1.5, 1.5, 1.5), "1.500000 1.500000e+00 1.5"),
+            ("%f %.2f %10.3f", (3, 3, 3), "3.000000 3.00      3.000"),
+            ("%c %c", (65, "x"), "A x"), ("%5c", 66, "    B"),
+            ("%(a)d %(b)s %(c).1f", {"a": 5, "b": 2.5, "c": 1}, "5 2.5 1.0"),
+            ("%*d %.*f", (4, 5, 1, 2.25), "   5 2.2"),
+            ("%d", 3.9, "3"), ("%x", True, "1"), ("%s", None, "None"),
+        ]
+        for fmt, args, expected in cases:
+            with self.subTest(fmt=fmt, args=args):
+                self.assertEqual(fmt % args, expected)
+        with self.assertRaisesRegex(TypeError, "format argument: %x requires an integer, not float"):
+            "%x" % 2.5
+        with self.assertRaisesRegex(TypeError, "format argument: %c requires an integer or a unicode character, not float"):
+            "%c" % 2.5
+        with self.assertRaisesRegex(OverflowError, r"%c argument not in range\(0x110000\)"):
+            "%c" % -1
+        with self.assertRaisesRegex(TypeError, "not all arguments converted"):
+            "%d" % (1, 2)
+        with self.assertRaisesRegex(TypeError, "not enough arguments"):
+            "%d %d" % 1
+        with self.assertRaisesRegex(TypeError, "format requires a mapping, not int"):
+            "%(a)d" % 1
+
+class RareTypeSlotTests(unittest.TestCase):
+    """The value slots of range, set, dict views, complex and the types whose
+    compare and number slots decline an inline operand."""
+
+    def test_range_index(self):
+        r = range(10, 100, 7)
+        self.assertEqual([r[i] for i in range(len(r))], list(r))
+        self.assertEqual((r[-1], r[-len(r)], r[True]), (r[len(r) - 1], 10, 17))
+        for i in (len(r), -len(r) - 1):
+            with self.assertRaisesRegex(IndexError, "range object index out of range"):
+                r[i]
+        with self.assertRaisesRegex(TypeError, "range indices must be integers or slices, not float"):
+            r[1.5]
+        self.assertEqual(r[1:4], range(17, 38, 7))
+        down = range(5, -20, -3)
+        self.assertEqual([down[i] for i in range(len(down))], list(down))
+        self.assertEqual(range(0)[0:0], range(0))
+        with self.assertRaises(IndexError):
+            range(0)[0]
+
+    def test_range_large(self):
+        r = range(2**70, 2**70 + 10, 3)
+        self.assertEqual((r[0], r[-1]), (2**70, 2**70 + 9))
+        with self.assertRaisesRegex(IndexError, "range object index out of range"):
+            range(3)[2**70]
+        self.assertIn(2**70 + 3, r)
+        self.assertNotIn(2**70 + 4, r)
+        self.assertEqual(range(0, 2**40, 2**20)[-1], 2**40 - 2**20)
+
+    def test_range_contains(self):
+        r = range(10, 100, 7)
+        for v in range(-5, 110):
+            with self.subTest(v=v):
+                self.assertEqual(v in r, v in list(r))
+        down = range(50, -50, -5)
+        for v in range(-60, 60):
+            with self.subTest(v=v):
+                self.assertEqual(v in down, v in list(down))
+        self.assertIn(17.0, r)
+        self.assertNotIn(17.5, r)
+        self.assertIn(True, range(3))
+        self.assertNotIn("x", r)
+        self.assertNotIn(1, range(0))
+        self.assertNotIn(2**70, r)
+
+    def test_set_contains(self):
+        s = {1, 2.5, "a", (1, 2), frozenset({1})}
+        self.assertIn(1, s)
+        self.assertIn(2.5, s)
+        self.assertIn(1.0, s)
+        self.assertNotIn(3, s)
+        self.assertIn(frozenset({1}), s)
+        self.assertIn({1}, s)
+        with self.assertRaisesRegex(TypeError, "unhashable type: 'list'"):
+            [1] in s
+        f = frozenset(s - {frozenset({1})})
+        self.assertIn(2.5, f)
+        self.assertNotIn(2.6, f)
+
+    def test_set_operators(self):
+        a, b = {1, 2, 3}, {2, 3, 4}
+        self.assertEqual((a - b, a & b, a ^ b, a | b), ({1}, {2, 3}, {1, 4}, {1, 2, 3, 4}))
+        fa = frozenset(a)
+        self.assertEqual(type(fa | b), frozenset)
+        c = set(a)
+        c -= b
+        c |= {9}
+        c &= {1, 9}
+        c ^= {9, 10}
+        self.assertEqual(c, {1, 10})
+        for op in (operator.sub, operator.and_, operator.xor, operator.or_):
+            with self.subTest(op=op):
+                with self.assertRaises(TypeError):
+                    op(a, 1)
+                with self.assertRaises(TypeError):
+                    op(1, a)
+        with self.assertRaises(TypeError):
+            c |= 5
+        self.assertTrue(a >= {1})
+        self.assertFalse(a == 1)
+        self.assertTrue(a != 1.5)
+
+    def test_dict_views(self):
+        d = {1: 'a', 2.5: 'b', 'k': (1, 2)}
+        self.assertIn(1, d.keys())
+        self.assertIn(2.5, d.keys())
+        self.assertNotIn(3, d.keys())
+        self.assertIn((1, 'a'), d.items())
+        self.assertIn((2.5, 'b'), d.items())
+        self.assertIn(('k', (1, 2)), d.items())
+        self.assertNotIn((1, 'b'), d.items())
+        self.assertNotIn(1, d.items())
+        self.assertNotIn((1, 'a', 3), d.items())
+        self.assertEqual(d.keys(), {1, 2.5, 'k'})
+        self.assertNotEqual(d.keys(), 1)
+        self.assertNotEqual(d.items(), 2.5)
+
+    def test_complex_operators(self):
+        z = 3 + 4j
+        self.assertEqual((z + 1, 1 + z, z + 1.5, 1.5 + z), (4 + 4j, 4 + 4j, 4.5 + 4j, 4.5 + 4j))
+        self.assertEqual((z - 1, 1 - z, z * 2, 2 * z), (2 + 4j, -2 - 4j, 6 + 8j, 6 + 8j))
+        self.assertEqual((z / 2, z / 2.0), (1.5 + 2j, 1.5 + 2j))
+        self.assertAlmostEqual(2 / z, 0.24 - 0.32j)
+        self.assertEqual(z ** 2, -7 + 24j)
+        self.assertEqual((-z, +z, abs(z), bool(z), bool(0j)), (-3 - 4j, z, 5.0, True, False))
+        self.assertIs(type(abs(z)), float)
+        self.assertEqual(z + 2**70, complex(3 + 2**70, 4))
+        with self.assertRaisesRegex(OverflowError, "int too large to convert to float"):
+            z + 10**400
+        with self.assertRaisesRegex(ZeroDivisionError, "division by zero"):
+            z / 0
+        with self.assertRaisesRegex(ZeroDivisionError, "zero to a negative or complex power"):
+            0j ** -1
+        with self.assertRaisesRegex(ValueError, "complex modulo"):
+            pow(z, 2, 5)
+        with self.assertRaisesRegex(TypeError, "unsupported operand"):
+            z + "a"
+
+    def test_complex_compare(self):
+        self.assertTrue(1 + 0j == 1)
+        self.assertTrue(1 == 1 + 0j)
+        self.assertTrue(1.5 + 0j == 1.5)
+        self.assertTrue(1.5 != 1.5 + 1j)
+        self.assertTrue(1j != 1)
+        self.assertTrue(2**70 + 0j == 2**70)
+        self.assertTrue(complex(2**53 + 1, 0) != 2**53 + 1)
+        self.assertTrue(True == 1 + 0j)
+        self.assertFalse(1j == "a")
+        with self.assertRaisesRegex(TypeError, "'<' not supported"):
+            1j < 1
+        with self.assertRaisesRegex(TypeError, "'<' not supported"):
+            1 < 1j
+
+    def test_bytearray_from_list_of_ints(self):
+        self.assertEqual(bytearray([0, 1, 255]), b'\x00\x01\xff')
+        self.assertEqual(bytearray((7, 8)), b'\x07\x08')
+        self.assertEqual(bytearray([True, 2, 3]), b'\x01\x02\x03')
+        class Idx:
+            def __index__(self):
+                return 9
+        self.assertEqual(bytearray([1, Idx()]), b'\x01\x09')
+        for bad, exc in (([1, 256], ValueError), ([1, -1], ValueError),
+                         ([1, 2**70], ValueError), ([1, 1.5], TypeError),
+                         ([1, "a"], TypeError), ((1, None), TypeError)):
+            with self.subTest(bad=bad):
+                with self.assertRaises(exc):
+                    bytearray(bad)
+
+    def test_rare_compare_and_or(self):
+        for obj in (slice(1), types.SimpleNamespace(a=1), range(3), (1,), [1],
+                    {1: 2}, {1}, frozenset({1}), {}.keys(), {}.items(),
+                    list[int], int | str, memoryview(b'a'),
+                    collections.OrderedDict(), (lambda: 0).__code__):
+            with self.subTest(obj=obj):
+                self.assertFalse(obj == 1)
+                self.assertTrue(obj != 2.5)
+                self.assertTrue(obj == obj)
+        self.assertEqual(int | str, typing.Union[int, str])
+        self.assertEqual(list[int] | None, typing.Optional[list[int]])
+        for bad in (1, 2.5):
+            with self.assertRaises(TypeError):
+                int | bad
+            with self.assertRaises(TypeError):
+                bad | int
+            with self.assertRaises(TypeError):
+                list[int] | bad
+
+
+class IndexExactTests(unittest.TestCase):
+    """PyNumber_Index() gives an exact int (a subclass instance is copied);
+    _PyNumber_Index() may give the subclass. The value forms keep the
+    difference: _PyValue_IndexExact() and _PyValue_Index()."""
+
+    class MyInt(int):
+        pass
+
+    def test_operator_index(self):
+        for value in (5, self.MyInt(5), True, 2**70, self.MyInt(2**70)):
+            with self.subTest(value=value):
+                result = operator.index(value)
+                self.assertIs(type(result), int)
+                self.assertEqual(result, int(value))
+
+    def test_math_integer_functions(self):
+        MyInt = self.MyInt
+        self.assertIs(type(math.gcd(MyInt(12))), int)
+        self.assertIs(type(math.gcd(MyInt(12), MyInt(18))), int)
+        self.assertEqual(math.gcd(MyInt(12), MyInt(18)), 6)
+        self.assertIs(type(math.lcm(MyInt(4))), int)
+        self.assertEqual(math.lcm(MyInt(4), MyInt(6)), 12)
+        self.assertEqual(math.comb(MyInt(5), MyInt(2)), 10)
+        self.assertEqual(math.perm(MyInt(5), MyInt(2)), 20)
+        self.assertEqual(math.comb(MyInt(2**70), MyInt(1)), 2**70)
+
+    def test_nextafter_steps(self):
+        MyInt = self.MyInt
+        self.assertEqual(math.nextafter(1.0, 2.0, steps=MyInt(1)),
+                         math.nextafter(1.0, 2.0))
+        self.assertEqual(math.nextafter(1.0, 2.0, steps=MyInt(0)), 1.0)
+        self.assertEqual(math.nextafter(1.0, 2.0, steps=MyInt(2**70)), 2.0)
+        with self.assertRaisesRegex(ValueError, "non-negative"):
+            math.nextafter(1.0, 2.0, steps=MyInt(-1))
+
+    def test_enumerate_start(self):
+        for start in (self.MyInt(2**70), self.MyInt(5)):
+            with self.subTest(start=start):
+                index, _ = next(enumerate('a', start))
+                self.assertIs(type(index), int)
+                self.assertEqual(index, int(start))
+
+    def test_range_and_slice_arguments(self):
+        MyInt = self.MyInt
+        r = range(MyInt(2), MyInt(7), MyInt(1))
+        for part in (r.start, r.stop, r.step):
+            self.assertIs(type(part), int)
+        self.assertIs(type(range(MyInt(5)).stop), int)
+        self.assertEqual(range(10)[MyInt(2)], 2)
+        self.assertEqual(slice(None).indices(MyInt(10)), (0, 10, 1))
+        self.assertIs(type(slice(None).indices(MyInt(10))[1]), int)
+        self.assertEqual([1, 2, 3][MyInt(1):MyInt(3)], [2, 3])
 
     def test_index_result_of_a_subclass(self):
         class Holder:

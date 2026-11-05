@@ -1,8 +1,3 @@
-/* Defer line of the value-API waves (value-api-v2a0.md, section 1.5): the
-   callers of the protocol marks in this unit are converted by W2's caller
-   batches, which remove this line. */
-#define Py_VALUE_DEFER_MARKS 1
-
 #include "Python.h"
 #include "pycore_abstract.h"   // _PyIndex_Check()
 #include "pycore_bytes_methods.h"
@@ -422,7 +417,7 @@ parse_args_finds_byte(const char *function_name, PyObject **subobj, char *byte)
         return 0;
     }
 
-    Py_ssize_t ival = PyNumber_AsSsize_t(*subobj, NULL);
+    Py_ssize_t ival = _PyValue_AsSsize_t(PyValue_FromObjectBorrow(*subobj), NULL);
     if (ival == -1 && PyErr_Occurred()) {
         return 0;
     }
@@ -608,7 +603,7 @@ _Py_bytes_count(const char *str, Py_ssize_t len, PyObject *sub_obj,
 int
 _Py_bytes_contains(const char *str, Py_ssize_t len, PyObject *arg)
 {
-    Py_ssize_t ival = PyNumber_AsSsize_t(arg, NULL);
+    Py_ssize_t ival = _PyValue_AsSsize_t(PyValue_FromObjectBorrow(arg), NULL);
     if (ival == -1 && PyErr_Occurred()) {
         Py_buffer varg;
         Py_ssize_t pos;

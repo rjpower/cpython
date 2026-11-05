@@ -462,11 +462,6 @@ later:
 
 */
 
-/* Defer line of the value-API waves (value-api-v2a0.md, section 1.5): the
-   callers of the protocol marks in this unit are converted by W2's caller
-   batches, which remove this line. */
-#define Py_VALUE_DEFER_MARKS 1
-
 #include "Python.h"
 #include "pycore_call.h"             // _PyObject_CallNoArgs()
 #include "pycore_ceval.h"            // _PyEval_GetBuiltin()
@@ -477,6 +472,8 @@ later:
 #include "pycore_tuple.h"            // _PyTuple_Recycle()
 #include <stddef.h>                  // offsetof()
 #include "pycore_value_api.h"     // _PyValue_FromObjectKnown()
+#include "pycore_value_ops.h"     // _PyValue_GetItem()
+#include "pycore_value_slots.h"   // _Py_VALUE_THUNK_ITERNEXT()
 #include "pycore_weakref.h"          // FT_CLEAR_WEAKREFS()
 
 #include "clinic/odictobject.c.h"
@@ -643,7 +640,7 @@ _odict_find_node(PyODictObject *od, PyObject *key)
 
     if (_odict_EMPTY(od))
         return NULL;
-    hash = PyObject_Hash(key);
+    hash = _PyValue_Hash(PyValue_FromObjectBorrow(key));
     if (hash == -1)
         return NULL;
     index = _odict_get_index(od, key, hash);
@@ -842,7 +839,7 @@ _odict_keys_equal(PyODictObject *a, PyODictObject *b)
         else {
             PyObject *key_a = Py_NewRef(_odictnode_KEY(node_a));
             PyObject *key_b = Py_NewRef(_odictnode_KEY(node_b));
-            int res = PyObject_RichCompareBool(key_a, key_b, Py_EQ);
+            int res = _PyValue_RichCompareBool(PyValue_FromObjectBorrow(key_a), PyValue_FromObjectBorrow(key_b), Py_EQ);
             Py_DECREF(key_a);
             Py_DECREF(key_b);
             if (res < 0) {
@@ -1023,7 +1020,7 @@ OrderedDict___reduce___impl(PyODictObject *od)
     if (items == NULL)
         goto Done;
 
-    items_iter = PyObject_GetIter(items);
+    items_iter = _PyValue_GetIter(PyValue_FromObjectBorrow(items));
     Py_DECREF(items);
     if (items_iter == NULL)
         goto Done;
@@ -1097,13 +1094,19 @@ OrderedDict_setdefault_impl(PyODictObject *self, PyValueBorrow key,
         if (key_obj == NULL) {
             return PyValue_NULL;
         }
-        int exists = PySequence_Contains((PyObject *)self, key_obj);
+        int exists = _PyValue_Contains(_PyValue_FromObjectKnown((PyObject *)self), PyValue_FromObjectBorrow(key_obj));
         if (exists < 0) {
             Py_DECREF(key_obj);
             return PyValue_NULL;
         }
         else if (exists) {
-            result = PyObject_GetItem((PyObject *)self, key_obj);
+            PyValue item = _PyValue_GetItem(
+                _PyValue_FromObjectKnown((PyObject *)self),
+                PyValue_FromObjectBorrow(key_obj));
+            if (!PyValue_IsNull(item)) {
+                result = _PyValue_AsObjectAt(item, BOX_SITE_DICT);
+                PyValue_CLOSE(item);
+            }
         }
         else {
             default_obj = _PyValue_AsObjectAt(default_value, BOX_SITE_PARSER);
@@ -1111,7 +1114,7 @@ OrderedDict_setdefault_impl(PyODictObject *self, PyValueBorrow key,
                 Py_DECREF(key_obj);
                 return PyValue_NULL;
             }
-            if (PyObject_SetItem((PyObject *)self, key_obj, default_obj) >= 0) {
+            if (_PyValue_SetItem(_PyValue_FromObjectKnown((PyObject *)self), PyValue_FromObjectBorrow(key_obj), PyValue_FromObjectBorrow(default_obj)) >= 0) {
                 result = Py_NewRef(default_obj);
             }
         }
@@ -1353,13 +1356,14 @@ OrderedDict_copy_impl(PyObject *od)
     else {
         _odict_FOREACH(od, node) {
             PyObject *key = Py_NewRef(_odictnode_KEY(node));
-            PyObject *value = PyObject_GetItem(od, key);
-            if (value == NULL) {
+            PyValue value = _PyValue_GetItem(PyValue_FromObjectBorrow(od),
+                                             PyValue_FromObjectBorrow(key));
+            if (PyValue_IsNull(value)) {
                 Py_DECREF(key);
                 goto fail;
             }
-            int res = PyObject_SetItem((PyObject *)od_copy, key, value);
-            Py_DECREF(value);
+            int res = _PyValue_SetItem(PyValue_FromObjectBorrow((PyObject *)od_copy), PyValue_FromObjectBorrow(key), value);
+            PyValue_CLOSE(value);
             Py_DECREF(key);
             if (res != 0)
                 goto fail;
@@ -1645,7 +1649,7 @@ static int
 odict_init(PyObject *self, PyObject *args, PyObject *kwds)
 {
     PyObject *res;
-    Py_ssize_t len = PyObject_Length(args);
+    Py_ssize_t len = _PyValue_Size(PyValue_FromObjectBorrow(args));
 
     if (len == -1)
         return -1;
@@ -1666,6 +1670,8 @@ odict_init(PyObject *self, PyObject *args, PyObject *kwds)
 }
 
 /* PyODict_Type */
+
+_Py_VALUE_NOTIMPL_RICHCMP(odict_richcompare_value, odict_richcompare)
 
 PyTypeObject PyODict_Type = {
     PyVarObject_HEAD_INIT(&PyType_Type, 0)
@@ -1707,6 +1713,9 @@ PyTypeObject PyODict_Type = {
     PyType_GenericAlloc,                        /* tp_alloc */
     0,                                          /* tp_new */
     0,                                          /* tp_free */
+    .tp_value = {
+        .richcompare = _Py_VALUE_SLOT_INIT(richcompare, odict_richcompare_value),
+    },
 };
 
 
@@ -1743,7 +1752,7 @@ static int
 PyODict_SetItem_LockHeld(PyObject *od, PyObject *key, PyObject *value)
 {
     _Py_CRITICAL_SECTION_ASSERT_OBJECT_LOCKED(od);
-    Py_hash_t hash = PyObject_Hash(key);
+    Py_hash_t hash = _PyValue_Hash(PyValue_FromObjectBorrow(key));
     if (hash == -1) {
         return -1;
     }
@@ -1765,7 +1774,7 @@ PyODict_DelItem_LockHeld(PyObject *od, PyObject *key)
 {
     _Py_CRITICAL_SECTION_ASSERT_OBJECT_LOCKED(od);
     int res;
-    Py_hash_t hash = PyObject_Hash(key);
+    Py_hash_t hash = _PyValue_Hash(PyValue_FromObjectBorrow(key));
     if (hash == -1)
         return -1;
     res = _odict_clear_node(_PyODictObject_CAST(od), NULL, key, hash);
@@ -1891,37 +1900,25 @@ odictiter_nextkey(odictiterobject *di)
     return res;
 }
 
-/*[clinic input]
-@critical_section
-odictiter.__next__ as odictiter_iternext
-[clinic start generated code]*/
-
-static PyObject *
-odictiter_iternext_impl(PyObject *self)
-/*[clinic end generated code: output=71aef8eec9e1a133 input=bc8bec6c85481b93]*/
+/* The iterator's lock is held by the caller. */
+static _PyStatusValue
+odictiter_iternext_lock_held(odictiterobject *di)
 {
-    odictiterobject *di = (odictiterobject*)self;
-    PyObject *result, *value;
+    PyValue result, value_v;
     PyObject *key = odictiter_nextkey(di);  /* new reference */
 
-    if (key == NULL)
-        return NULL;
+    if (key == NULL) {
+        return (_PyStatusValue){PyErr_Occurred() ? PYGEN_ERROR : PYGEN_RETURN,
+                                PyValue_NULL};
+    }
 
     /* Handle the keys case. */
     if (! (di->kind & _odict_ITER_VALUES)) {
-        return key;
+        return (_PyStatusValue){PYGEN_NEXT, PyValue_FromObjectSteal(key)};
     }
 
-    PyValue value_v;
     int value_rc = PyDict_GetValue((PyObject *)di->di_odict,
                                    PyValue_FromObjectBorrow(key), &value_v);
-    if (value_rc > 0) {
-        value = _PyValue_AsObjectAt(value_v, BOX_SITE_DICT);
-        PyValue_CLOSE(value_v);
-        if (value == NULL) {
-            value_rc = -1;
-        }
-    }
     if (value_rc != 1) {
         if (!PyErr_Occurred())
             PyErr_SetObject(PyExc_KeyError, key);
@@ -1932,36 +1929,49 @@ odictiter_iternext_impl(PyObject *self)
     /* Handle the values case. */
     if (!(di->kind & _odict_ITER_KEYS)) {
         Py_DECREF(key);
-        return value;
+        return (_PyStatusValue){PYGEN_NEXT, value_v};
     }
 
     /* Handle the items case. */
-    result = di->di_result;
+    PyObject *tuple = di->di_result;
 
-    if (_PyObject_IsUniquelyReferenced(result)) {
+    if (_PyObject_IsUniquelyReferenced(tuple)) {
         /* not in use so we can reuse it
          * (the common case during iteration) */
-        Py_INCREF(result);
-        _PyTuple_ReplaceTakeValue(result, 0, PyValue_PrepareOwned(key));
-        _PyTuple_ReplaceTakeValue(result, 1, PyValue_PrepareOwned(value));
+        Py_INCREF(tuple);
+        _PyTuple_ReplaceTakeValue(tuple, 0, PyValue_PrepareOwned(key));
+        _PyTuple_ReplaceTakeValue(tuple, 1, value_v);
         // bpo-42536: The GC may have untracked this result tuple. Since we're
         // recycling it, make sure it's tracked again:
-        _PyTuple_Recycle(result);
+        _PyTuple_Recycle(tuple);
     }
     else {
-        result = _PyTuple_FromPairTakeValue(PyValue_PrepareOwned(key), PyValue_PrepareOwned(value));
-        if (result == NULL) {
+        tuple = _PyTuple_FromPairTakeValue(PyValue_PrepareOwned(key), value_v);
+        if (tuple == NULL) {
             goto error;
         }
     }
 
-    return result;
+    result = PyValue_FromObjectSteal(tuple);
+    return (_PyStatusValue){PYGEN_NEXT, result};
 
 error:
     Py_CLEAR(di->di_current);
     Py_CLEAR(di->di_odict);
-    return NULL;
+    return (_PyStatusValue){PYGEN_ERROR, PyValue_NULL};
 }
+
+static _PyStatusValue
+odictiter_iternext_value(PyObject *self)
+{
+    _PyStatusValue r;
+    Py_BEGIN_CRITICAL_SECTION(self);
+    r = odictiter_iternext_lock_held((odictiterobject *)self);
+    Py_END_CRITICAL_SECTION();
+    return r;
+}
+
+_Py_VALUE_THUNK_ITERNEXT(odictiter_iternext, odictiter_iternext_value)
 
 
 /* No need for tp_clear because odictiterobject is not mutable. */
@@ -1979,7 +1989,7 @@ odictiter_reduce(PyObject *op, PyObject *Py_UNUSED(ignored))
     Py_XINCREF(tmp.di_current);
 
     /* iterate the temporary into a list */
-    PyObject *list = PySequence_List((PyObject*)&tmp);
+    PyObject *list = _PyValue_SequenceList(PyValue_FromObjectBorrow((PyObject*)&tmp));
     Py_XDECREF(tmp.di_odict);
     Py_XDECREF(tmp.di_current);
     if (list == NULL) {
@@ -2024,6 +2034,9 @@ PyTypeObject PyODictIter_Type = {
     odictiter_iternext,                       /* tp_iternext */
     odictiter_methods,                        /* tp_methods */
     0,
+    .tp_value = {
+        .iternext = _Py_VALUE_SLOT_INIT(iternext, odictiter_iternext_value),
+    },
 };
 
 static PyObject *
@@ -2319,14 +2332,14 @@ mutablemapping_add_pairs(PyObject *self, PyObject *pairs)
     PyObject *pair, *iterator, *unexpected;
     int res = 0;
 
-    iterator = PyObject_GetIter(pairs);
+    iterator = _PyValue_GetIter(PyValue_FromObjectBorrow(pairs));
     if (iterator == NULL)
         return -1;
 
     while ((pair = PyIter_Next(iterator)) != NULL) {
         /* could be more efficient (see UNPACK_SEQUENCE in ceval.c) */
         PyObject *key = NULL, *value = NULL;
-        PyObject *pair_iterator = PyObject_GetIter(pair);
+        PyObject *pair_iterator = _PyValue_GetIter(PyValue_FromObjectBorrow(pair));
         if (pair_iterator == NULL)
             goto Done;
 
@@ -2356,7 +2369,7 @@ mutablemapping_add_pairs(PyObject *self, PyObject *pairs)
         else if (PyErr_Occurred())
             goto Done;
 
-        res = PyObject_SetItem(self, key, value);
+        res = _PyValue_SetItem(PyValue_FromObjectBorrow(self), PyValue_FromObjectBorrow(key), PyValue_FromObjectBorrow(value));
 
 Done:
         Py_DECREF(pair);
@@ -2397,17 +2410,18 @@ mutablemapping_update_arg(PyObject *self, PyObject *arg)
         if (keys == NULL) {
             return -1;
         }
-        PyObject *iterator = PyObject_GetIter(keys);
+        PyObject *iterator = _PyValue_GetIter(PyValue_FromObjectBorrow(keys));
         Py_DECREF(keys);
         if (iterator == NULL) {
             return -1;
         }
         PyObject *key;
         while (res == 0 && (key = PyIter_Next(iterator))) {
-            PyObject *value = PyObject_GetItem(arg, key);
-            if (value != NULL) {
-                res = PyObject_SetItem(self, key, value);
-                Py_DECREF(value);
+            PyValue value = _PyValue_GetItem(PyValue_FromObjectBorrow(arg),
+                                             PyValue_FromObjectBorrow(key));
+            if (!PyValue_IsNull(value)) {
+                res = _PyValue_SetItem(PyValue_FromObjectBorrow(self), PyValue_FromObjectBorrow(key), value);
+                PyValue_CLOSE(value);
             }
             else {
                 res = -1;

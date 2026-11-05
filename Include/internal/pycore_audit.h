@@ -24,6 +24,10 @@ extern int _PySys_Audit(
     const char *argFormat,
     ...);
 
+// True if some audit hook, or a DTrace probe, will see an event. A caller
+// that must build an argument only for the event tests it first.
+extern int _PySys_AuditEnabled(PyThreadState *tstate);
+
 // _PySys_ClearAuditHooks() must not be exported: use extern rather than
 // PyAPI_FUNC(). We want minimal exposure of this function.
 extern void _PySys_ClearAuditHooks(PyThreadState *tstate);

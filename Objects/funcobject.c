@@ -1,10 +1,5 @@
 /* Function object implementation */
 
-/* Defer line of the value-API waves (value-api-v2a0.md, section 1.5): the
-   callers of the protocol marks in this unit are converted by W2's caller
-   batches, which remove this line. */
-#define Py_VALUE_DEFER_MARKS 1
-
 #include "Python.h"
 #include "pycore_classobject.h"   // _PyMethod_NewValue()
 #include "pycore_code.h"          // _PyCode_VerifyStateless()
@@ -20,6 +15,7 @@
 #include "pycore_tuple.h"         // PyTuple_GET_VALUE()
 #include "pycore_value.h"         // PyValue_TYPE()
 #include "pycore_value_api.h"     // _PyValue_AsObjectAt()
+#include "pycore_value_ops.h"     // _PyValue_GetAttr()
 #include "pycore_weakref.h"       // FT_CLEAR_WEAKREFS()
 
 static const char *
@@ -1416,7 +1412,7 @@ functools_copy_attr(PyObject *wrapper, PyObject *wrapped, PyObject *name)
     PyObject *value;
     int res = PyObject_GetOptionalAttr(wrapped, name, &value);
     if (value != NULL) {
-        res = PyObject_SetAttr(wrapper, name, value);
+        res = _PyValue_SetAttr(PyValue_FromObjectBorrow(wrapper), name, PyValue_FromObjectBorrow(value));
         Py_DECREF(value);
     }
     return res;
@@ -1469,7 +1465,9 @@ descriptor_get_wrapped_attribute(PyObject *wrapped, PyObject *obj, PyObject *nam
         Py_DECREF(dict);
         return res;
     }
-    res = PyObject_GetAttr(wrapped, name);
+    PyValue wrapped_attr = _PyValue_GetAttr(PyValue_FromObjectBorrow(wrapped), name);
+    res = PyValue_IsNull(wrapped_attr) ? NULL
+        : _PyValue_AsObjectStealAt(wrapped_attr, BOX_SITE_ATTRIBUTE);
     if (res == NULL) {
         Py_DECREF(dict);
         return NULL;

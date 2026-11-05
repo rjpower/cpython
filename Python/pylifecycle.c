@@ -1,10 +1,5 @@
 /* Python interpreter top-level routines, including init/exit */
 
-/* Defer line of the value-API waves (value-api-v2a0.md, section 1.5): the
-   callers of the protocol marks in this unit are converted by W2's caller
-   batches, which remove this line. */
-#define Py_VALUE_DEFER_MARKS 1
-
 #include "Python.h"
 #include "pycore_audit.h"         // _PySys_ClearAuditHooks()
 #include "pycore_borrow.h"        // _PyBorrowScope_Enter()
@@ -1301,7 +1296,9 @@ presite_resolve_name(PyObject *obj, PyObject *attr)
         if (name == NULL) {
             goto error;
         }
-        res = PyObject_GetAttr(obj, name);
+        PyValue res_v = _PyValue_GetAttr(PyValue_FromObjectBorrow(obj), name);
+        res = PyValue_IsNull(res_v) ? NULL
+            : _PyValue_AsObjectStealAt(res_v, BOX_SITE_ATTRIBUTE);
         Py_DECREF(name);
         if (res == NULL) {
             goto error;
@@ -1315,7 +1312,9 @@ presite_resolve_name(PyObject *obj, PyObject *attr)
         Py_SETREF(attr, suffix);
     }
 
-    res = PyObject_GetAttr(obj, attr);
+    PyValue res_v = _PyValue_GetAttr(PyValue_FromObjectBorrow(obj), attr);
+    res = PyValue_IsNull(res_v) ? NULL
+        : _PyValue_AsObjectStealAt(res_v, BOX_SITE_ATTRIBUTE);
     Py_DECREF(obj);
     Py_DECREF(attr);
     return res;
@@ -1815,7 +1814,7 @@ finalize_remove_modules(PyObject *modules, int verbose)
                 PySys_FormatStderr("# cleanup[2] removing %U\n", name); \
             } \
             STORE_MODULE_WEAKREF(name, mod); \
-            if (PyObject_SetItem(modules, name, Py_None) < 0) { \
+            if (_PyValue_SetItem(PyValue_FromObjectBorrow(modules), PyValue_FromObjectBorrow(name), _PyValue_FromObjectKnown(Py_None)) < 0) { \
                 PyErr_FormatUnraisable("Exception ignored while removing modules"); \
             } \
         }
@@ -1845,14 +1844,17 @@ finalize_remove_modules(PyObject *modules, int verbose)
         // The last module must not outlive its removal in this frame.
     }
     else {
-        PyObject *iterator = PyObject_GetIter(modules);
+        PyObject *iterator = _PyValue_GetIter(PyValue_FromObjectBorrow(modules));
         if (iterator == NULL) {
             PyErr_FormatUnraisable("Exception ignored while removing modules");
         }
         else {
             PyObject *key;
             while ((key = PyIter_Next(iterator))) {
-                PyObject *value = PyObject_GetItem(modules, key);
+                PyValue value_v = _PyValue_GetItem(PyValue_FromObjectBorrow(modules),
+                                                  PyValue_FromObjectBorrow(key));
+                PyObject *value = PyValue_IsNull(value_v) ? NULL
+                    : _PyValue_AsObjectStealAt(value_v, BOX_SITE_DICT);
                 if (value == NULL) {
                     PyErr_FormatUnraisable("Exception ignored while removing modules");
                     Py_DECREF(key);
@@ -2075,7 +2077,7 @@ file_is_closed(PyObject *fobj)
         PyErr_Clear();
         return 0;
     }
-    r = PyObject_IsTrue(tmp);
+    r = _PyValue_IsTrue(PyValue_FromObjectBorrow(tmp));
     Py_DECREF(tmp);
     if (r < 0)
         PyErr_Clear();
@@ -3094,7 +3096,9 @@ create_stdio(const PyConfig *config, PyObject* io,
         goto error;
 
     if (buffering) {
-        raw = PyObject_GetAttr(buf, &_Py_ID(raw));
+        PyValue raw_v = _PyValue_GetAttr(PyValue_FromObjectBorrow(buf), &_Py_ID(raw));
+        raw = PyValue_IsNull(raw_v) ? NULL
+            : _PyValue_AsObjectStealAt(raw_v, BOX_SITE_ATTRIBUTE);
         if (raw == NULL)
             goto error;
     }
@@ -3117,12 +3121,12 @@ create_stdio(const PyConfig *config, PyObject* io,
 #endif
 
     text = PyUnicode_FromString(name);
-    if (text == NULL || PyObject_SetAttr(raw, &_Py_ID(name), text) < 0)
+    if (text == NULL || _PyValue_SetAttr(PyValue_FromObjectBorrow(raw), &_Py_ID(name), PyValue_FromObjectBorrow(text)) < 0)
         goto error;
     res = PyObject_CallMethodNoArgs(raw, &_Py_ID(isatty));
     if (res == NULL)
         goto error;
-    isatty = PyObject_IsTrue(res);
+    isatty = _PyValue_IsTrue(PyValue_FromObjectBorrow(res));
     Py_DECREF(res);
     if (isatty == -1)
         goto error;
@@ -3187,7 +3191,7 @@ create_stdio(const PyConfig *config, PyObject* io,
     else
         mode = "r";
     text = PyUnicode_FromString(mode);
-    if (!text || PyObject_SetAttr(stream, &_Py_ID(mode), text) < 0)
+    if (!text || _PyValue_SetAttr(PyValue_FromObjectBorrow(stream), &_Py_ID(mode), PyValue_FromObjectBorrow(text)) < 0)
         goto error;
     Py_CLEAR(text);
     return stream;

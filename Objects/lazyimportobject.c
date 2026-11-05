@@ -1,10 +1,5 @@
 // Lazy object implementation.
 
-/* Defer line of the value-API waves (value-api-v2a0.md, section 1.5): the
-   callers of the protocol marks in this unit are converted by W2's caller
-   batches, which remove this line. */
-#define Py_VALUE_DEFER_MARKS 1
-
 #include "Python.h"
 #include "pycore_ceval.h"
 #include "pycore_dict.h"
@@ -344,7 +339,7 @@ lazy_import_add_exception_cause(PyThreadState *tstate, PyLazyImportObject *lz)
         if (note != NULL) {
             PyObject *notes;
             if (PyObject_GetOptionalAttr(exc, &_Py_ID(__notes__), &notes) >= 0) {
-                if (notes == NULL || PySequence_Contains(notes, note) == 0) {
+                if (notes == NULL || _PyValue_Contains(PyValue_FromObjectBorrow(notes), PyValue_FromObjectBorrow(note)) == 0) {
                     (void)_PyException_AddNote(exc, note);
                 }
                 Py_XDECREF(notes);
@@ -716,7 +711,7 @@ _PyLazyImport_Reify(PyThreadState *tstate, PyObject *placeholder,
         rc = PyMapping_GetOptionalItem(namespace, name, &current);
         if (rc > 0) {
             if (current == placeholder) {
-                rc = PyObject_SetItem(namespace, name, value);
+                rc = _PyValue_SetItem(PyValue_FromObjectBorrow(namespace), PyValue_FromObjectBorrow(name), PyValue_FromObjectBorrow(value));
             }
             Py_DECREF(current);
         }

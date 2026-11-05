@@ -7,7 +7,6 @@ preserve
 #  include "pycore_runtime.h"     // _Py_ID()
 #  include "pycore_value.h"       // _PyValue_STATIC_IMMORTAL()
 #endif
-#include "pycore_abstract.h"      // _PyNumber_Index()
 #include "pycore_modsupport.h"    // _PyArg_UnpackKeywords()
 
 PyDoc_STRVAR(stringlib_expandtabs__doc__,
@@ -102,17 +101,8 @@ stringlib_ljust(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
     if (!_PyArg_CheckPositional("ljust", nargs, 1, 2)) {
         goto exit;
     }
-    {
-        Py_ssize_t ival = -1;
-        PyObject *iobj = _PyNumber_Index(args[0]);
-        if (iobj != NULL) {
-            ival = PyLong_AsSsize_t(iobj);
-            Py_DECREF(iobj);
-        }
-        if (ival == -1 && PyErr_Occurred()) {
-            goto exit;
-        }
-        width = ival;
+    if (!stringlib_convert_width(args[0], &width)) {
+        goto exit;
     }
     if (nargs < 2) {
         goto skip_optional;
@@ -172,17 +162,8 @@ stringlib_rjust(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
     if (!_PyArg_CheckPositional("rjust", nargs, 1, 2)) {
         goto exit;
     }
-    {
-        Py_ssize_t ival = -1;
-        PyObject *iobj = _PyNumber_Index(args[0]);
-        if (iobj != NULL) {
-            ival = PyLong_AsSsize_t(iobj);
-            Py_DECREF(iobj);
-        }
-        if (ival == -1 && PyErr_Occurred()) {
-            goto exit;
-        }
-        width = ival;
+    if (!stringlib_convert_width(args[0], &width)) {
+        goto exit;
     }
     if (nargs < 2) {
         goto skip_optional;
@@ -242,17 +223,8 @@ stringlib_center(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
     if (!_PyArg_CheckPositional("center", nargs, 1, 2)) {
         goto exit;
     }
-    {
-        Py_ssize_t ival = -1;
-        PyObject *iobj = _PyNumber_Index(args[0]);
-        if (iobj != NULL) {
-            ival = PyLong_AsSsize_t(iobj);
-            Py_DECREF(iobj);
-        }
-        if (ival == -1 && PyErr_Occurred()) {
-            goto exit;
-        }
-        width = ival;
+    if (!stringlib_convert_width(args[0], &width)) {
+        goto exit;
     }
     if (nargs < 2) {
         goto skip_optional;
@@ -308,21 +280,12 @@ stringlib_zfill(PyObject *self, PyObject *arg)
     PyObject *return_value = NULL;
     Py_ssize_t width;
 
-    {
-        Py_ssize_t ival = -1;
-        PyObject *iobj = _PyNumber_Index(arg);
-        if (iobj != NULL) {
-            ival = PyLong_AsSsize_t(iobj);
-            Py_DECREF(iobj);
-        }
-        if (ival == -1 && PyErr_Occurred()) {
-            goto exit;
-        }
-        width = ival;
+    if (!stringlib_convert_width(arg, &width)) {
+        goto exit;
     }
     return_value = stringlib_zfill_impl(self, width);
 
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=51cf38fb1e09b74a input=a9049054013a1b77]*/
+/*[clinic end generated code: output=99d3422c56b4ef0a input=a9049054013a1b77]*/

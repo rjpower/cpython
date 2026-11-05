@@ -1,11 +1,6 @@
 
 /* Support for dynamic loading of extension modules */
 
-/* Defer line of the value-API waves (value-api-v2a0.md, section 1.5): the
-   callers of the protocol marks in this unit are converted by W2's caller
-   batches, which remove this line. */
-#define Py_VALUE_DEFER_MARKS 1
-
 #include "Python.h"
 #include "pycore_call.h"          // _PyObject_CallMethod()
 #include "pycore_import.h"        // _PyImport_SwapPackageContext()
@@ -13,6 +8,9 @@
 #include "pycore_moduleobject.h"  // _PyModule_GetDefOrNull()
 #include "pycore_pyerrors.h"      // _PyErr_FormatFromCause()
 #include "pycore_runtime.h"       // _Py_ID()
+#include "pycore_value.h"         // PyValue_IsNull()
+#include "pycore_value_ops.h"     // _PyValue_GetAttr()
+#include "pycore_value_slots.h"   // _PyValue_AsObjectStealAt()
 #include "pycore_global_objects.h"  // _Py_SINGLETON()
 
 
@@ -113,7 +111,9 @@ _Py_ext_module_loader_info_init(struct _Py_ext_module_loader_info *p_info,
 
     if (name == NULL) {
         assert(spec != NULL);
-        info.name = PyObject_GetAttr(spec, &_Py_ID(name));
+        PyValue info_name_v = _PyValue_GetAttr(PyValue_FromObjectBorrow(spec), &_Py_ID(name));
+        info.name = PyValue_IsNull(info_name_v) ? NULL
+            : _PyValue_AsObjectStealAt(info_name_v, BOX_SITE_ATTRIBUTE);
         if (info.name == NULL) {
             goto error;
         }
@@ -146,7 +146,9 @@ _Py_ext_module_loader_info_init(struct _Py_ext_module_loader_info *p_info,
 
     if (origin == _Py_ext_module_origin_DYNAMIC) {
         assert(spec != NULL);
-        info.filename = PyObject_GetAttr(spec, &_Py_ID(origin));
+        PyValue info_filename_v = _PyValue_GetAttr(PyValue_FromObjectBorrow(spec), &_Py_ID(origin));
+        info.filename = PyValue_IsNull(info_filename_v) ? NULL
+            : _PyValue_AsObjectStealAt(info_filename_v, BOX_SITE_ATTRIBUTE);
         if (info.filename == NULL) {
             goto error;
         }

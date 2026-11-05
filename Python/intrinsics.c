@@ -1,11 +1,6 @@
 
 #define _PY_INTERPRETER
 
-/* Defer line of the value-API waves (value-api-v2a0.md, section 1.5): the
-   callers of the protocol marks in this unit are converted by W2's caller
-   batches, which remove this line. */
-#define Py_VALUE_DEFER_MARKS 1
-
 #include "Python.h"
 #include "pycore_compile.h"       // _PyCompile_GetUnaryIntrinsicName
 #include "pycore_dict.h"          // PyDict_SetValue()
@@ -20,6 +15,7 @@
 #include "pycore_runtime.h"       // _Py_ID()
 #include "pycore_typevarobject.h" // _Py_make_typevar()
 #include "pycore_unicodeobject.h" // _PyUnicode_FromASCII()
+#include "pycore_value_ops.h"     // _PyValue_GetAttr()
 
 
 /******** Unary functions ********/
@@ -46,7 +42,8 @@ print_expr(PyThreadState* Py_UNUSED(ignored), PyObject *value)
 static int
 import_all_from(PyThreadState *tstate, PyObject *locals, PyObject *v)
 {
-    PyObject *all, *dict, *name, *value;
+    PyObject *all, *dict, *name;
+    PyValue value;
     int skip_leading_underscores = 0;
     int pos, err;
 
@@ -70,7 +67,10 @@ import_all_from(PyThreadState *tstate, PyObject *locals, PyObject *v)
     }
 
     for (pos = 0, err = 0; ; pos++) {
-        name = PySequence_GetItem(all, pos);
+        PyValue name_v = _PyValue_SequenceGetItem(PyValue_FromObjectBorrow(all),
+                                                  pos);
+        name = PyValue_IsNull(name_v) ? NULL
+            : _PyValue_AsObjectStealAt(name_v, BOX_SITE_PARSER);
         if (name == NULL) {
             if (!_PyErr_ExceptionMatches(tstate, PyExc_IndexError)) {
                 err = -1;
@@ -81,7 +81,10 @@ import_all_from(PyThreadState *tstate, PyObject *locals, PyObject *v)
             break;
         }
         if (!PyUnicode_Check(name)) {
-            PyObject *modname = PyObject_GetAttr(v, &_Py_ID(__name__));
+            PyValue modname_v = _PyValue_GetAttr(PyValue_FromObjectBorrow(v),
+                                                 &_Py_ID(__name__));
+            PyObject *modname = PyValue_IsNull(modname_v) ? NULL
+                : _PyValue_AsObjectStealAt(modname_v, BOX_SITE_ATTRIBUTE);
             if (modname == NULL) {
                 Py_DECREF(name);
                 err = -1;
@@ -111,15 +114,15 @@ import_all_from(PyThreadState *tstate, PyObject *locals, PyObject *v)
                 continue;
             }
         }
-        value = PyObject_GetAttr(v, name);
-        if (value == NULL)
+        value = _PyValue_GetAttr(PyValue_FromObjectBorrow(v), name);
+        if (PyValue_IsNull(value))
             err = -1;
         else if (PyDict_CheckExact(locals))
-            err = PyDict_SetValue(locals, PyValue_FromObjectBorrow(name), PyValue_FromObjectBorrow(value));
+            err = PyDict_SetValue(locals, PyValue_FromObjectBorrow(name), value);
         else
-            err = PyObject_SetItem(locals, name, value);
+            err = _PyValue_SetItem(PyValue_FromObjectBorrow(locals), PyValue_FromObjectBorrow(name), value);
         Py_DECREF(name);
-        Py_XDECREF(value);
+        PyValue_XCLOSE(value);
         if (err < 0)
             break;
     }
@@ -193,7 +196,9 @@ stopiteration_error(PyThreadState* tstate, PyObject *exc)
 static PyObject *
 unary_pos(PyThreadState* unused, PyObject *value)
 {
-    return PyNumber_Positive(value);
+    PyValue res = _PyValue_Positive(PyValue_FromObjectBorrow(value));
+    return PyValue_IsNull(res) ? NULL
+        : _PyValue_AsObjectStealAt(res, BOX_SITE_NUMBER);
 }
 
 static PyObject *
@@ -320,17 +325,21 @@ match_class_isinstance(PyThreadState* tstate, PyObject *subject, PyObject *type)
 static PyObject * \
 compare_##NAME(PyThreadState* Py_UNUSED(ignored), PyObject *a, PyObject *b) \
 { \
-    return PyObject_RichCompare(a, b, OP); \
+    PyValue res = _PyValue_RichCompare(PyValue_FromObjectBorrow(a), \
+                                       PyValue_FromObjectBorrow(b), OP); \
+    return PyValue_IsNull(res) ? NULL \
+        : _PyValue_AsObjectStealAt(res, BOX_SITE_COMPARE); \
 } \
 static PyObject * \
 compare_##NAME##_bool(PyThreadState* Py_UNUSED(ignored), PyObject *a, PyObject *b) \
 { \
-    PyObject *res = PyObject_RichCompare(a, b, OP); \
-    if (res == NULL) { \
+    PyValue res = _PyValue_RichCompare(PyValue_FromObjectBorrow(a), \
+                                       PyValue_FromObjectBorrow(b), OP); \
+    if (PyValue_IsNull(res)) { \
         return NULL; \
     } \
-    int truth = PyObject_IsTrue(res); \
-    Py_DECREF(res); \
+    int truth = _PyValue_IsTrue(res); \
+    PyValue_CLOSE(res); \
     if (truth < 0) { \
         return NULL; \
     } \
@@ -348,7 +357,7 @@ COMPARE(ge, Py_GE)
 static PyObject *
 contains_in(PyThreadState* Py_UNUSED(ignored), PyObject *item, PyObject *container)
 {
-    int res = PySequence_Contains(container, item);
+    int res = _PyValue_Contains(PyValue_FromObjectBorrow(container), PyValue_FromObjectBorrow(item));
     if (res < 0) {
         return NULL;
     }
@@ -358,7 +367,7 @@ contains_in(PyThreadState* Py_UNUSED(ignored), PyObject *item, PyObject *contain
 static PyObject *
 contains_not_in(PyThreadState* Py_UNUSED(ignored), PyObject *item, PyObject *container)
 {
-    int res = PySequence_Contains(container, item);
+    int res = _PyValue_Contains(PyValue_FromObjectBorrow(container), PyValue_FromObjectBorrow(item));
     if (res < 0) {
         return NULL;
     }
@@ -368,7 +377,9 @@ contains_not_in(PyThreadState* Py_UNUSED(ignored), PyObject *item, PyObject *con
 static PyObject *
 get_attr(PyThreadState* Py_UNUSED(ignored), PyObject *owner, PyObject *name)
 {
-    return PyObject_GetAttr(owner, name);
+    PyValue res = _PyValue_GetAttr(PyValue_FromObjectBorrow(owner), name);
+    return PyValue_IsNull(res) ? NULL
+        : _PyValue_AsObjectStealAt(res, BOX_SITE_ATTRIBUTE);
 }
 
 /* value is NULL for a deletion, the tuple holds (owner, name) */
@@ -384,7 +395,7 @@ set_attr(PyThreadState* Py_UNUSED(ignored), PyObject *value, PyObject *target)
     PyValue_CLOSE(owner_value);
     PyValue_CLOSE(name_value);
     int err = owner == NULL || name == NULL
-              || PyObject_SetAttr(owner, name, value) < 0;
+              || _PyValue_SetAttr(PyValue_FromObjectBorrow(owner), name, PyValue_FromObjectBorrow(value)) < 0;
     Py_XDECREF(owner);
     Py_XDECREF(name);
     if (err) {

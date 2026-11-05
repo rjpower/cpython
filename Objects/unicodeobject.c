@@ -38,11 +38,6 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 */
 
-/* Defer line of the value-API waves (value-api-v2a0.md, section 1.5): the
-   callers of the protocol marks in this unit are converted by W2's caller
-   batches, which remove this line. */
-#define Py_VALUE_DEFER_MARKS 1
-
 #include "Python.h"
 #include "pycore_abstract.h"      // _PyIndex_Check()
 #include "pycore_bytes_methods.h" // _Py_bytes_lower()
@@ -50,6 +45,7 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #include "pycore_bytesobject.h"   // _PyBytes_RepeatBuffer()
 #include "pycore_ceval.h"         // _PyEval_GetBuiltin()
 #include "pycore_tuple.h"         // _PyTuple_PackValues()
+#include "pycore_value_call.h"    // _PyValue_VectorcallThunk()
 #include "pycore_value.h"
 #include "pycore_codecs.h"        // _PyCodec_Lookup()
 #include "pycore_critical_section.h" // Py_*_CRITICAL_SECTION_SEQUENCE_FAST
@@ -3058,13 +3054,13 @@ unicode_fromformat_arg(_PyUnicodeWriter *writer,
             if (obj == NULL) {
                 return NULL;
             }
-            str = PyObject_Str(obj);
+            str = _PyValue_Str(PyValue_FromObjectBorrow(obj));
             Py_DECREF(obj);
         }
         else {
             PyObject *obj = va_arg(*vargs, PyObject *);
             assert(obj);
-            str = PyObject_Str(obj);
+            str = _PyValue_Str(PyValue_FromObjectBorrow(obj));
         }
         if (!str)
             return NULL;
@@ -3084,13 +3080,13 @@ unicode_fromformat_arg(_PyUnicodeWriter *writer,
             if (obj == NULL) {
                 return NULL;
             }
-            repr = PyObject_Repr(obj);
+            repr = _PyValue_Repr(PyValue_FromObjectBorrow(obj));
             Py_DECREF(obj);
         }
         else {
             PyObject *obj = va_arg(*vargs, PyObject *);
             assert(obj);
-            repr = PyObject_Repr(obj);
+            repr = _PyValue_Repr(PyValue_FromObjectBorrow(obj));
         }
         if (!repr)
             return NULL;
@@ -14405,13 +14401,20 @@ static PyMethodDef unicode_methods[] = {
     {NULL, NULL}
 };
 
-static PyObject *
-unicode_mod(PyObject *v, PyObject *w)
+/* v % w: w may be an inline value, which the formatter reads as it is. */
+static PyValue
+unicode_mod_value(PyValueBorrow v, PyValueBorrow w)
 {
-    if (!PyUnicode_Check(v))
-        Py_RETURN_NOTIMPLEMENTED;
-    return PyUnicode_Format(v, w);
+    if (!PyValue_IsObject(v)
+        || !PyUnicode_Check(PyValue_AsKnownObjectBorrow(v)))
+    {
+        return PyValue_NotImplemented;
+    }
+    return _PyValue_FromObjectResult(
+        _PyUnicode_FormatValue(PyValue_AsKnownObjectBorrow(v), w));
 }
+
+_Py_VALUE_THUNK_BINARY(unicode_mod, unicode_mod_value)
 
 static PyNumberMethods unicode_as_number = {
     0,              /*nb_add*/
@@ -14419,6 +14422,35 @@ static PyNumberMethods unicode_as_number = {
     0,              /*nb_multiply*/
     unicode_mod,            /*nb_remainder*/
 };
+
+static PyValue
+unicode_concat_value(PyObject *left, PyValueBorrow right)
+{
+    if (!PyValue_IsObject(right)
+        || !PyUnicode_Check(PyValue_AsKnownObjectBorrow(right)))
+    {
+        PyErr_Format(PyExc_TypeError,
+            "can only concatenate str (not \"%.200s\") to str",
+            PyValue_TYPE(right)->tp_name);
+        return PyValue_NULL;
+    }
+    return _PyValue_FromObjectResult(
+        PyUnicode_Concat(left, PyValue_AsKnownObjectBorrow(right)));
+}
+
+static int
+unicode_contains_value(PyObject *str, PyValueBorrow substr)
+{
+    if (!PyValue_IsObject(substr)
+        || !PyUnicode_Check(PyValue_AsKnownObjectBorrow(substr)))
+    {
+        PyErr_Format(PyExc_TypeError,
+                     "'in <string>' requires string as left operand, not %.100s",
+                     PyValue_TYPE(substr)->tp_name);
+        return -1;
+    }
+    return PyUnicode_Contains(str, PyValue_AsKnownObjectBorrow(substr));
+}
 
 static PySequenceMethods unicode_as_sequence = {
     unicode_length,     /* sq_length */
@@ -14431,75 +14463,87 @@ static PySequenceMethods unicode_as_sequence = {
     PyUnicode_Contains, /* sq_contains */
 };
 
+/* self[slice]: a new reference, or NULL with an exception set. */
 static PyObject*
-unicode_subscript(PyObject* self, PyObject* item)
+unicode_slice_subscript(PyObject *self, PyObject *item)
 {
-    if (_PyIndex_Check(item)) {
-        Py_ssize_t i = PyNumber_AsSsize_t(item, PyExc_IndexError);
-        if (i == -1 && PyErr_Occurred())
-            return NULL;
-        if (i < 0)
-            i += PyUnicode_GET_LENGTH(self);
-        return unicode_getitem(self, i);
-    } else if (PySlice_Check(item)) {
-        Py_ssize_t start, stop, step, slicelength, i;
-        size_t cur;
-        PyObject *result;
-        const void *src_data;
-        void *dest_data;
-        int src_kind, dest_kind;
-        Py_UCS4 ch, max_char, kind_limit;
+    Py_ssize_t start, stop, step, slicelength, i;
+    size_t cur;
+    PyObject *result;
+    const void *src_data;
+    void *dest_data;
+    int src_kind, dest_kind;
+    Py_UCS4 ch, max_char, kind_limit;
 
-        if (PySlice_Unpack(item, &start, &stop, &step) < 0) {
-            return NULL;
-        }
-        slicelength = PySlice_AdjustIndices(PyUnicode_GET_LENGTH(self),
-                                            &start, &stop, step);
-
-        if (slicelength <= 0) {
-            _Py_RETURN_UNICODE_EMPTY();
-        } else if (start == 0 && step == 1 &&
-                   slicelength == PyUnicode_GET_LENGTH(self)) {
-            return unicode_result_unchanged(self);
-        } else if (step == 1) {
-            return PyUnicode_Substring(self,
-                                       start, start + slicelength);
-        }
-        /* General case */
-        src_kind = PyUnicode_KIND(self);
-        src_data = PyUnicode_DATA(self);
-        if (!PyUnicode_IS_ASCII(self)) {
-            kind_limit = kind_maxchar_limit(src_kind);
-            max_char = 0;
-            for (cur = start, i = 0; i < slicelength; cur += step, i++) {
-                ch = PyUnicode_READ(src_kind, src_data, cur);
-                if (ch > max_char) {
-                    max_char = ch;
-                    if (max_char >= kind_limit)
-                        break;
-                }
-            }
-        }
-        else
-            max_char = 127;
-        result = PyUnicode_New(slicelength, max_char);
-        if (result == NULL)
-            return NULL;
-        dest_kind = PyUnicode_KIND(result);
-        dest_data = PyUnicode_DATA(result);
-
-        for (cur = start, i = 0; i < slicelength; cur += step, i++) {
-            Py_UCS4 ch = PyUnicode_READ(src_kind, src_data, cur);
-            PyUnicode_WRITE(dest_kind, dest_data, i, ch);
-        }
-        assert(_PyUnicode_CheckConsistency(result, 1));
-        return result;
-    } else {
-        PyErr_Format(PyExc_TypeError, "string indices must be integers, not '%.200s'",
-                     Py_TYPE(item)->tp_name);
+    if (PySlice_Unpack(item, &start, &stop, &step) < 0) {
         return NULL;
     }
+    slicelength = PySlice_AdjustIndices(PyUnicode_GET_LENGTH(self),
+                                        &start, &stop, step);
+
+    if (slicelength <= 0) {
+        _Py_RETURN_UNICODE_EMPTY();
+    } else if (start == 0 && step == 1 &&
+               slicelength == PyUnicode_GET_LENGTH(self)) {
+        return unicode_result_unchanged(self);
+    } else if (step == 1) {
+        return PyUnicode_Substring(self,
+                                   start, start + slicelength);
+    }
+    /* General case */
+    src_kind = PyUnicode_KIND(self);
+    src_data = PyUnicode_DATA(self);
+    if (!PyUnicode_IS_ASCII(self)) {
+        kind_limit = kind_maxchar_limit(src_kind);
+        max_char = 0;
+        for (cur = start, i = 0; i < slicelength; cur += step, i++) {
+            ch = PyUnicode_READ(src_kind, src_data, cur);
+            if (ch > max_char) {
+                max_char = ch;
+                if (max_char >= kind_limit)
+                    break;
+            }
+        }
+    }
+    else
+        max_char = 127;
+    result = PyUnicode_New(slicelength, max_char);
+    if (result == NULL)
+        return NULL;
+    dest_kind = PyUnicode_KIND(result);
+    dest_data = PyUnicode_DATA(result);
+
+    for (cur = start, i = 0; i < slicelength; cur += step, i++) {
+        Py_UCS4 ch = PyUnicode_READ(src_kind, src_data, cur);
+        PyUnicode_WRITE(dest_kind, dest_data, i, ch);
+    }
+    assert(_PyUnicode_CheckConsistency(result, 1));
+    return result;
 }
+
+static PyValue
+unicode_subscript_value(PyObject *self, PyValueBorrow item)
+{
+    if (_PyValue_IndexCheck(item)) {
+        Py_ssize_t i = _PyValue_AsSsize_t(item, PyExc_IndexError);
+        if (i == -1 && PyErr_Occurred())
+            return PyValue_NULL;
+        if (i < 0)
+            i += PyUnicode_GET_LENGTH(self);
+        return _PyValue_FromObjectResult(unicode_getitem(self, i));
+    }
+    if (PyValue_IsObject(item)
+        && PySlice_Check(PyValue_AsKnownObjectBorrow(item)))
+    {
+        return _PyValue_FromObjectResult(
+            unicode_slice_subscript(self, PyValue_AsKnownObjectBorrow(item)));
+    }
+    PyErr_Format(PyExc_TypeError, "string indices must be integers, not '%.200s'",
+                 PyValue_TYPE(item)->tp_name);
+    return PyValue_NULL;
+}
+
+_Py_VALUE_THUNK_SUBSCRIPT(unicode_subscript, unicode_subscript_value)
 
 static PyMappingMethods unicode_as_mapping = {
     unicode_length,     /* mp_length */
@@ -14560,8 +14604,8 @@ arg_as_utf8(PyObject *obj, const char *name)
     return _PyUnicode_AsUTF8NoNUL(obj);
 }
 
-static PyObject *
-unicode_vectorcall(PyObject *type, PyObject *const *args,
+static PyValue
+unicode_vectorcall(PyThreadState *tstate, PyObject *type, const PyValue *args,
                    size_t nargsf, PyObject *kwnames)
 {
     assert(Py_Is(_PyType_CAST(type), &PyUnicode_Type));
@@ -14569,42 +14613,50 @@ unicode_vectorcall(PyObject *type, PyObject *const *args,
     Py_ssize_t nargs = PyVectorcall_NARGS(nargsf);
     if (kwnames != NULL && PyTuple_GET_SIZE(kwnames) != 0) {
         // Fallback to unicode_new()
-        PyObject *tuple = PyTuple_FromArray(args, nargs);
-        if (tuple == NULL) {
-            return NULL;
-        }
-        PyObject *dict = _PyStack_AsDict(args + nargs, kwnames);
-        if (dict == NULL) {
-            Py_DECREF(tuple);
-            return NULL;
-        }
-        PyObject *ret = unicode_new(_PyType_CAST(type), tuple, dict);
-        Py_DECREF(tuple);
-        Py_DECREF(dict);
-        return ret;
+        return _PyValue_TpCallAdapter(tstate, type, args, nargsf, kwnames);
     }
     if (!_PyArg_CheckPositional("str", nargs, 0, 3)) {
-        return NULL;
+        return PyValue_NULL;
     }
     if (nargs == 0) {
-        return _PyUnicode_GetEmpty();
+        return PyValue_FromObjectSteal(_PyUnicode_GetEmpty());
     }
-    PyObject *object = args[0];
     if (nargs == 1) {
-        return PyObject_Str(object);
+        return _PyValue_FromObjectResult(
+            _PyValue_Str(PyValue_Borrow(args[0])));
     }
-    const char *encoding = arg_as_utf8(args[1], "encoding");
+    // str(object, encoding[, errors]) decodes a buffer: objects only.
+    PyObject *object = _PyValue_AsObjectAt(PyValue_Borrow(args[0]),
+                                           BOX_SITE_CALL);
+    PyObject *encoding_arg = object == NULL ? NULL
+        : _PyValue_AsObjectAt(PyValue_Borrow(args[1]), BOX_SITE_CALL);
+    PyObject *errors_arg = NULL;
+    PyObject *result = NULL;
+    if (encoding_arg == NULL) {
+        goto done;
+    }
+    const char *encoding = arg_as_utf8(encoding_arg, "encoding");
     if (encoding == NULL) {
-        return NULL;
+        goto done;
     }
     const char *errors = NULL;
     if (nargs == 3) {
-        errors = arg_as_utf8(args[2], "errors");
+        errors_arg = _PyValue_AsObjectAt(PyValue_Borrow(args[2]),
+                                         BOX_SITE_CALL);
+        if (errors_arg == NULL) {
+            goto done;
+        }
+        errors = arg_as_utf8(errors_arg, "errors");
         if (errors == NULL) {
-            return NULL;
+            goto done;
         }
     }
-    return PyUnicode_FromEncodedObject(object, encoding, errors);
+    result = PyUnicode_FromEncodedObject(object, encoding, errors);
+done:
+    Py_XDECREF(object);
+    Py_XDECREF(encoding_arg);
+    Py_XDECREF(errors_arg);
+    return _PyValue_FromObjectResult(result);
 }
 
 static PyObject *
@@ -14768,11 +14820,16 @@ PyTypeObject PyUnicode_Type = {
     unicode_new,                  /* tp_new */
     PyObject_Free,                /* tp_free */
     .tp_version_tag = _Py_TYPE_VERSION_STR,
-    .tp_vectorcall = unicode_vectorcall,
+    .tp_vectorcall = _PyValue_VectorcallThunk,
+    .tp_value_vectorcall = (_Py_valuefunc)unicode_vectorcall,
     ._tp_iteritem = unicode_iteritem,
     .tp_value = {
         .richcompare = _Py_VALUE_SLOT_INIT(richcompare,
                                            unicode_value_richcompare),
+        .nb_remainder = _Py_VALUE_SLOT_INIT(nb_remainder, unicode_mod_value),
+        .subscript = _Py_VALUE_SLOT_INIT(subscript, unicode_subscript_value),
+        .contains = _Py_VALUE_SLOT_INIT(contains, unicode_contains_value),
+        .sq_concat = _Py_VALUE_SLOT_INIT(sq_concat, unicode_concat_value),
     },
 };
 

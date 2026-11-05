@@ -1,11 +1,6 @@
 
 /* Traceback implementation */
 
-/* Defer line of the value-API waves (value-api-v2a0.md, section 1.5): the
-   callers of the protocol marks in this unit are converted by W2's caller
-   batches, which remove this line. */
-#define Py_VALUE_DEFER_MARKS 1
-
 #include "Python.h"
 #include "pycore_call.h"          // _PyObject_CallMethod()
 #include "pycore_fileutils.h"     // _Py_BEGIN_SUPPRESS_IPH
@@ -16,6 +11,7 @@
 #include "pycore_pystate.h"       // _PyThreadState_GET()
 #include "pycore_traceback.h"     // EXCEPTION_TB_HEADER
 #include "pycore_value_api.h"     // _PyValue_AsObjectAt()
+#include "pycore_value_ops.h"     // _PyValue_GetAttr()
 
 #include "frameobject.h"          // PyFrame_New()
 #include "../Parser/tokenizer/tokenizer.h"
@@ -422,7 +418,9 @@ _Py_FindSourceFile(PyObject *filename, char* namebuf, size_t namelen, PyObject *
     }
     npath = PyList_Size(syspath);
 
-    open = PyObject_GetAttr(io, &_Py_ID(open));
+    PyValue open_v = _PyValue_GetAttr(PyValue_FromObjectBorrow(io), &_Py_ID(open));
+    open = PyValue_IsNull(open_v) ? NULL
+        : _PyValue_AsObjectStealAt(open_v, BOX_SITE_ATTRIBUTE);
     if (open == NULL) {
         goto error;
     }

@@ -1,11 +1,6 @@
 
 /* Map C struct members to Python object attributes */
 
-/* Defer line of the value-API waves (value-api-v2a0.md, section 1.5): the
-   callers of the protocol marks in this unit are converted by W2's caller
-   batches, which remove this line. */
-#define Py_VALUE_DEFER_MARKS 1
-
 #include "Python.h"
 #include "pycore_abstract.h"      // _PyNumber_Index()
 #include "pycore_descrobject.h"   // _PyMember_GetOffset()
@@ -14,6 +9,7 @@
 #include "pycore_critical_section.h"
 #include "pycore_value.h"
 #include "pycore_value_api.h"     // _PyValue_AsObjectAt()
+#include "pycore_value_ops.h"     // _PyValue_Index()
 #include "pycore_value_slots.h"   // _PyValue_THUNK_EXIT(, BOX_SITE_ATTRIBUTE)
 
 
@@ -305,7 +301,9 @@ member_set_object(char *addr, PyMemberDef *l, PyObject *v)
     case Py_T_UINT: {
         /* XXX: For compatibility, accept negative int values
            as well. */
-        v = _PyNumber_Index(v);
+        PyValue index_v = _PyValue_Index(PyValue_FromObjectBorrow(v));
+        v = PyValue_IsNull(index_v) ? NULL
+            : _PyValue_AsObjectStealAt(index_v, BOX_SITE_NUMBER);
         if (v == NULL) {
             return -1;
         }
@@ -341,7 +339,9 @@ member_set_object(char *addr, PyMemberDef *l, PyObject *v)
     case Py_T_ULONG: {
         /* XXX: For compatibility, accept negative int values
            as well. */
-        v = _PyNumber_Index(v);
+        PyValue index_v = _PyValue_Index(PyValue_FromObjectBorrow(v));
+        v = PyValue_IsNull(index_v) ? NULL
+            : _PyValue_AsObjectStealAt(index_v, BOX_SITE_NUMBER);
         if (v == NULL) {
             return -1;
         }
@@ -426,7 +426,9 @@ member_set_object(char *addr, PyMemberDef *l, PyObject *v)
         break;
         }
     case Py_T_ULONGLONG: {
-        v = _PyNumber_Index(v);
+        PyValue index_v = _PyValue_Index(PyValue_FromObjectBorrow(v));
+        v = PyValue_IsNull(index_v) ? NULL
+            : _PyValue_AsObjectStealAt(index_v, BOX_SITE_NUMBER);
         if (v == NULL) {
             return -1;
         }

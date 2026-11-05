@@ -11,6 +11,7 @@ extern "C" {
 #include "pycore_fileutils.h"     // _Py_error_handler
 #include "pycore_ucnhash.h"       // _PyUnicode_Name_CAPI
 #include "pycore_runtime.h"       // _Py_LATIN1_CHR()
+#include "pycore_value.h"         // PyValueBorrow
 
 
 // Maximum code point of Unicode 6.0: 0x10ffff (1,114,111).
@@ -428,6 +429,10 @@ extern PyObject* _PyUnicode_Dedent(PyObject *unicode);
 /* --- Misc functions ----------------------------------------------------- */
 
 extern PyObject* _PyUnicode_FormatLong(PyObject *, int, int, int);
+
+/* format % args, for args a tuple, a mapping or one argument (possibly an
+   inline value). */
+extern PyObject* _PyUnicode_FormatValue(PyObject *format, PyValueBorrow args);
 
 // Fast equality check when the inputs are known to be exact unicode types.
 // Export for '_pickle' shared extension.

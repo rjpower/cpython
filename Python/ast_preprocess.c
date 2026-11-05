@@ -1,15 +1,13 @@
 /* AST pre-processing */
-/* Defer line of the value-API waves (value-api-v2a0.md, section 1.5): the
-   callers of the protocol marks in this unit are converted by W2's caller
-   batches, which remove this line. */
-#define Py_VALUE_DEFER_MARKS 1
-
 #include "Python.h"
 #include "pycore_ast.h"           // _PyAST_GetDocString()
 #include "pycore_c_array.h"       // _Py_CArray_EnsureCapacity()
 #include "pycore_format.h"        // F_LJUST
 #include "pycore_runtime.h"       // _Py_STR()
 #include "pycore_unicodeobject.h" // _PyUnicode_EqualToASCIIString()
+#include "pycore_value.h"         // PyValue_FromObjectBorrow()
+#include "pycore_value_ops.h"     // _PyValue_Add()
+#include "pycore_value_api.h"     // _PyValue_AsObjectStealAt()
 
 
 /* See PEP 765 */
@@ -876,7 +874,11 @@ fold_const_match_patterns(expr_ty node, PyArena *ctx_, _PyASTPreprocessState *st
                 node->v.UnaryOp.operand->kind == Constant_kind)
             {
                 PyObject *operand = node->v.UnaryOp.operand->v.Constant.value;
-                PyObject *folded = node->v.UnaryOp.op == USub ? PyNumber_Negative(operand) : PyNumber_Positive(operand);
+                PyValue folded_v = node->v.UnaryOp.op == USub
+                    ? _PyValue_Negative(PyValue_FromObjectBorrow(operand))
+                    : _PyValue_Positive(PyValue_FromObjectBorrow(operand));
+                PyObject *folded = PyValue_IsNull(folded_v) ? NULL
+                    : _PyValue_AsObjectStealAt(folded_v, BOX_SITE_NUMBER);
                 return make_const(node, folded, ctx_);
             }
             break;
@@ -891,7 +893,11 @@ fold_const_match_patterns(expr_ty node, PyArena *ctx_, _PyASTPreprocessState *st
                 if (node->v.BinOp.left->kind == Constant_kind) {
                     PyObject *left = node->v.BinOp.left->v.Constant.value;
                     PyObject *right = node->v.BinOp.right->v.Constant.value;
-                    PyObject *folded = op == Add ? PyNumber_Add(left, right) : PyNumber_Subtract(left, right);
+                    PyValue folded_v = op == Add
+                        ? _PyValue_Add(PyValue_FromObjectBorrow(left), PyValue_FromObjectBorrow(right))
+                        : _PyValue_Subtract(PyValue_FromObjectBorrow(left), PyValue_FromObjectBorrow(right));
+                    PyObject *folded = PyValue_IsNull(folded_v) ? NULL
+                        : _PyValue_AsObjectStealAt(folded_v, BOX_SITE_NUMBER);
                     return make_const(node, folded, ctx_);
                 }
             }

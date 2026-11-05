@@ -3,17 +3,14 @@
 // bool's value slots call int's value functions, never an int thunk (D12).
 #define Py_VALUE_MARK_NUMBERS 1
 
-/* Defer line of the value-API waves (value-api-v2a0.md, section 1.5): the
-   callers of the protocol marks in this unit are converted by W2's caller
-   batches, which remove this line. */
-#define Py_VALUE_DEFER_MARKS 1
-
 #include "Python.h"
 #include "pycore_long.h"          // FALSE_TAG TRUE_TAG
 #include "pycore_long_value.h"    // _PyLong_ValueAnd()
 #include "pycore_modsupport.h"    // _PyArg_NoKwnames()
 #include "pycore_object.h"        // _Py_FatalRefcountError()
 #include "pycore_runtime.h"       // _Py_ID()
+#include "pycore_value_call.h"    // _PyValue_VectorcallThunk()
+#include "pycore_value_ops.h"     // _PyValue_IsTrue()
 #include "pycore_value_slots.h"   // _Py_VALUE_THUNK_BINARY()
 
 #include <stddef.h>
@@ -45,34 +42,34 @@ bool_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
         return NULL;
     if (!PyArg_UnpackTuple(args, "bool", 0, 1, &x))
         return NULL;
-    ok = PyObject_IsTrue(x);
+    ok = _PyValue_IsTrue(PyValue_FromObjectBorrow(x));
     if (ok < 0)
         return NULL;
     return PyBool_FromLong(ok);
 }
 
-static PyObject *
-bool_vectorcall(PyObject *type, PyObject * const*args,
+static PyValue
+bool_vectorcall(PyThreadState *tstate, PyObject *type, const PyValue *args,
                 size_t nargsf, PyObject *kwnames)
 {
     long ok = 0;
     if (!_PyArg_NoKwnames("bool", kwnames)) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     Py_ssize_t nargs = PyVectorcall_NARGS(nargsf);
     if (!_PyArg_CheckPositional("bool", nargs, 0, 1)) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     assert(PyType_Check(type));
     if (nargs) {
-        ok = PyObject_IsTrue(args[0]);
+        ok = _PyValue_IsTrue(PyValue_Borrow(args[0]));
         if (ok < 0) {
-            return NULL;
+            return PyValue_NULL;
         }
     }
-    return PyBool_FromLong(ok);
+    return PyValue_FromBool(ok);
 }
 
 /* Arithmetic operations redefined to return bool if both args are bool. */
@@ -225,7 +222,8 @@ PyTypeObject PyBool_Type = {
     0,                                          /* tp_init */
     0,                                          /* tp_alloc */
     bool_new,                                   /* tp_new */
-    .tp_vectorcall = bool_vectorcall,
+    .tp_vectorcall = _PyValue_VectorcallThunk,
+    .tp_value_vectorcall = (_Py_valuefunc)bool_vectorcall,
     .tp_value = {
         .nb_invert = _Py_VALUE_SLOT_INIT(nb_invert, _PyBool_ValueInvert),
         .nb_and = _Py_VALUE_SLOT_INIT(nb_and, _PyBool_ValueAnd),

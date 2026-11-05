@@ -2002,7 +2002,7 @@ dummy_func(
             int err;
             if (PyValue_IsNull(v)) {
                 DEAD(v);
-                err = PyDict_Pop(GLOBALS(), name, NULL);
+                err = PyDict_PopValue(GLOBALS(), PyValue_FromObjectBorrow(name), NULL);
                 if (err == 0) {
                     err = -1;
                     _PyEval_FormatExcCheckArg(tstate, PyExc_NameError,
@@ -2392,8 +2392,9 @@ dummy_func(
                 PyObject *ann_dict;
                 ann_dict = PyDict_New();
                 ERROR_IF(ann_dict == NULL);
-                err = PyObject_SetItem(LOCALS(), &_Py_ID(__annotations__),
-                                       ann_dict);
+                err = _PyValue_SetItem(PyValue_FromObjectBorrow(LOCALS()),
+                                       PyValue_FromObjectBorrow(&_Py_ID(__annotations__)),
+                                       PyValue_FromObjectBorrow(ann_dict));
                 Py_DECREF(ann_dict);
                 ERROR_IF(err);
             }
@@ -4448,11 +4449,9 @@ dummy_func(
         }
 
         op(_CALL_TUPLE_1, (callable, null, arg -- res, a)) {
-            PyObject *arg_o = PyValue_AsKnownObjectBorrow(arg);
-
             assert(oparg == 1);
             STAT_INC(CALL, hit);
-            PyObject *res_o = PySequence_Tuple(arg_o);
+            PyObject *res_o = _PyValue_SequenceTuple(arg);
             if (res_o == NULL) {
                 ERROR_NO_POP();
             }
@@ -4708,9 +4707,11 @@ dummy_func(
             POP_TOP;
 
         op(_GUARD_CALLABLE_LEN, (callable, unused, unused -- callable, unused, unused)){
-            PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
+            // A rebinding to an inline value must exit before the borrow.
             PyInterpreterState *interp = tstate->interp;
-            EXIT_IF(callable_o != interp->callable_cache.len);
+            EXIT_IF(!PyValue_IsObject(callable)
+                    || PyValue_AsKnownObjectBorrow(callable)
+                       != interp->callable_cache.len);
         }
 
         op(_CALL_LEN, (callable, null, arg -- res, a, c)) {
@@ -4731,9 +4732,11 @@ dummy_func(
         }
 
         op(_GUARD_CALLABLE_ISINSTANCE, (callable, unused, unused, unused -- callable, unused, unused, unused)) {
-            PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
+            // A rebinding to an inline value must exit before the borrow.
             PyInterpreterState *interp = tstate->interp;
-            EXIT_IF(callable_o != interp->callable_cache.isinstance);
+            EXIT_IF(!PyValue_IsObject(callable)
+                    || PyValue_AsKnownObjectBorrow(callable)
+                       != interp->callable_cache.isinstance);
         }
 
         inline_ok op(_CALL_ISINSTANCE, (callable, null, instance, cls -- res)) {
@@ -4777,9 +4780,11 @@ dummy_func(
             POP_TOP;
 
         op(_GUARD_CALLABLE_LIST_APPEND, (callable, unused, unused -- callable, unused, unused)){
-            PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
+            // A rebinding to an inline value must exit before the borrow.
             PyInterpreterState *interp = tstate->interp;
-            EXIT_IF(callable_o != interp->callable_cache.list_append);
+            EXIT_IF(!PyValue_IsObject(callable)
+                    || PyValue_AsKnownObjectBorrow(callable)
+                       != interp->callable_cache.list_append);
         }
 
         inline_ok op(_CALL_LIST_APPEND, (callable, self, arg -- none, c, s)) {
@@ -5301,7 +5306,7 @@ dummy_func(
                 res = PyValue_FromObjectSteal(res_o);
             }
             else if (!PyUnicode_CheckExact(PyValue_AsKnownObjectBorrow(value))) {
-                PyObject *res_o = PyObject_Format(PyValue_AsKnownObjectBorrow(value), NULL);
+                PyObject *res_o = _PyValue_Format(value, PyValue_NULL);
                 PyValue_CLOSE(value);
                 ERROR_IF(res_o == NULL);
                 res = PyValue_FromObjectSteal(res_o);
@@ -5312,7 +5317,7 @@ dummy_func(
         }
 
         inst(FORMAT_WITH_SPEC, (value, fmt_spec -- res)) {
-            PyObject *res_o = PyObject_Format(PyValue_AsKnownObjectBorrow(value), PyValue_AsKnownObjectBorrow(fmt_spec));
+            PyObject *res_o = _PyValue_Format(value, fmt_spec);
             DECREF_INPUTS();
             ERROR_IF(res_o == NULL);
             res = PyValue_FromObjectSteal(res_o);

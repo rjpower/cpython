@@ -4,11 +4,6 @@
    Tools/build/check_value_api.py does not list its slot-field reads. */
 #define Py_VALUE_ADAPTER 1
 
-/* Defer line of the value-API waves (value-api-v2a0.md, section 1.5): the
-   callers of the protocol marks in this unit are converted by W2's caller
-   batches, which remove this line. */
-#define Py_VALUE_DEFER_MARKS 1
-
 #include "Python.h"
 #include "pycore_abstract.h"      // _PySequence_IterSearch()
 #include "pycore_borrow.h"        // _PyBorrowScope_Enter()
@@ -22,6 +17,7 @@
 #include "pycore_interpframe.h"   // _PyInterpreterFrame
 #include "pycore_list.h"          // PyList_GET_VALUE(), PyList_AppendValue()
 #include "pycore_long.h"          // _PyLong_IsNegative(), _PyLong_GetOne()
+#include "pycore_long_value.h"    // _PyLong_SpanOfValue()
 #include "pycore_memoryobject.h"  // _PyMemoryView_FromBufferProc()
 #include "pycore_modsupport.h"    // _PyArg_NoKwnames()
 #include "pycore_moduleobject.h"  // _PyModule_GetDef()
@@ -1877,7 +1873,7 @@ type_set_abstractmethods(PyObject *tp, PyObject *value, void *Py_UNUSED(closure)
         goto done;
     }
     if (value != NULL) {
-        abstract = PyObject_IsTrue(value);
+        abstract = _PyValue_IsTrue(PyValue_FromObjectBorrow(value));
         if (abstract < 0) {
             goto done;
         }
@@ -3690,7 +3686,7 @@ class_name(PyObject *cls)
     PyObject *name;
     // Note that this is potentially re-entrant.
     if (PyObject_GetOptionalAttr(cls, &_Py_ID(__name__), &name) == 0) {
-        name = PyObject_Repr(cls);
+        name = _PyValue_Repr(PyValue_FromObjectBorrow(cls));
     }
     return name;
 }
@@ -3974,7 +3970,7 @@ type_mro_impl(PyTypeObject *self)
     PyObject *seq;
     seq = mro_implementation(self);
     if (seq != NULL && !PyList_Check(seq)) {
-        Py_SETREF(seq, PySequence_List(seq));
+        Py_SETREF(seq, _PyValue_SequenceList(PyValue_FromObjectBorrow(seq)));
     }
     return _PyValue_FromObjectResult(seq);
 }
@@ -4048,7 +4044,7 @@ mro_invoke(PyTypeObject *type)
     if (mro_result == NULL)
         return NULL;
 
-    new_mro = PySequence_Tuple(mro_result);
+    new_mro = _PyValue_SequenceTuple(PyValue_FromObjectBorrow(mro_result));
     Py_DECREF(mro_result);
     if (new_mro == NULL) {
         return NULL;
@@ -5396,7 +5392,7 @@ type_new_get_slots(type_new_ctx *ctx, PyObject *dict)
         new_slots = _PyTuple_PackValues(1, (PyValueBorrow[]){PyValue_FromObjectBorrow(slots)});
     }
     else {
-        new_slots = PySequence_Tuple(slots);
+        new_slots = _PyValue_SequenceTuple(PyValue_FromObjectBorrow(slots));
     }
     Py_DECREF(slots);
     if (new_slots == NULL) {
@@ -7708,7 +7704,9 @@ merge_class_dict(PyObject *dict, PyObject *aclass)
         else {
             for (i = 0; i < n; i++) {
                 int status;
-                PyObject *base = PySequence_GetItem(bases, i);
+                PyObject *base = _PyValue_AsObjectResultAt(
+                    _PyValue_SequenceGetItem(PyValue_FromObjectBorrow(bases), i),
+                    BOX_SITE_SEQUENCE);
                 if (base == NULL) {
                     Py_DECREF(bases);
                     return -1;
@@ -7909,6 +7907,8 @@ static PyNumberMethods type_as_number = {
         .nb_or = _Py_union_type_or, // Add __or__ function
 };
 
+_Py_VALUE_NOTIMPL_BINARY(_Py_union_type_or_value, _Py_union_type_or)
+
 PyTypeObject PyType_Type = {
     PyVarObject_HEAD_INIT(&PyType_Type, 0)
     "type",                                     /* tp_name */
@@ -7958,6 +7958,7 @@ PyTypeObject PyType_Type = {
     .tp_value_vectorcall = (_Py_valuefunc)type_value_vectorcall,
     .tp_value = {
         .getattro = _Py_VALUE_SLOT_INIT(getattro, _Py_type_getattro_value),
+        .nb_or = _Py_VALUE_SLOT_INIT(nb_or, _Py_union_type_or_value),
     },
 };
 
@@ -8057,7 +8058,7 @@ object_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
         abstract_methods = type_abstractmethods((PyObject *)type, NULL);
         if (abstract_methods == NULL)
             return NULL;
-        sorted_methods = PySequence_List(abstract_methods);
+        sorted_methods = _PyValue_SequenceList(PyValue_FromObjectBorrow(abstract_methods));
         Py_DECREF(abstract_methods);
         if (sorted_methods == NULL)
             return NULL;
@@ -8076,7 +8077,7 @@ object_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
             Py_DECREF(sorted_methods);
             return NULL;
         }
-        method_count = PyObject_Length(sorted_methods);
+        method_count = _PyValue_Size(PyValue_FromObjectBorrow(sorted_methods));
         Py_DECREF(sorted_methods);
         if (method_count == -1) {
             Py_DECREF(joined);
@@ -8240,7 +8241,7 @@ same_slots_added(PyTypeObject *a, PyTypeObject *b)
     slots_a = ((PyHeapTypeObject *)a)->ht_slots;
     slots_b = ((PyHeapTypeObject *)b)->ht_slots;
     if (slots_a && slots_b) {
-        if (PyObject_RichCompareBool(slots_a, slots_b, Py_EQ) != 1)
+        if (_PyValue_RichCompareBool(PyValue_FromObjectBorrow(slots_a), PyValue_FromObjectBorrow(slots_b), Py_EQ) != 1)
             return 0;
         size += sizeof(PyObject *) * PyTuple_GET_SIZE(slots_a);
     }
@@ -8757,7 +8758,7 @@ object_getstate(PyObject *obj, int required)
 {
     PyObject *getstate, *state;
 
-    getstate = PyObject_GetAttr(obj, &_Py_ID(__getstate__));
+    getstate = _PyValue_AsObjectResultAt(_PyValue_GetAttr(PyValue_FromObjectBorrow(obj), &_Py_ID(__getstate__)), BOX_SITE_ATTRIBUTE);
     if (getstate == NULL) {
         return NULL;
     }
@@ -8918,7 +8919,7 @@ _PyObject_GetItemsIter(PyObject *obj, PyObject **listitems,
         *listitems = Py_NewRef(Py_None);
     }
     else {
-        *listitems = PyObject_GetIter(obj);
+        *listitems = _PyValue_GetIter(PyValue_FromObjectBorrow(obj));
         if (*listitems == NULL)
             return -1;
     }
@@ -8932,7 +8933,7 @@ _PyObject_GetItemsIter(PyObject *obj, PyObject **listitems,
             Py_CLEAR(*listitems);
             return -1;
         }
-        *dictitems = PyObject_GetIter(items);
+        *dictitems = _PyValue_GetIter(PyValue_FromObjectBorrow(items));
         Py_DECREF(items);
         if (*dictitems == NULL) {
             Py_CLEAR(*listitems);
@@ -8975,7 +8976,7 @@ reduce_newobj(PyObject *obj)
         Py_ssize_t i, n;
 
         Py_XDECREF(kwargs);
-        newobj = PyObject_GetAttr(copyreg, &_Py_ID(__newobj__));
+        newobj = _PyValue_AsObjectResultAt(_PyValue_GetAttr(_PyValue_FromObjectKnown(copyreg), &_Py_ID(__newobj__)), BOX_SITE_ATTRIBUTE);
         Py_DECREF(copyreg);
         if (newobj == NULL) {
             Py_XDECREF(args);
@@ -8996,7 +8997,7 @@ reduce_newobj(PyObject *obj)
         Py_XDECREF(args);
     }
     else if (args != NULL) {
-        newobj = PyObject_GetAttr(copyreg, &_Py_ID(__newobj_ex__));
+        newobj = _PyValue_AsObjectResultAt(_PyValue_GetAttr(_PyValue_FromObjectKnown(copyreg), &_Py_ID(__newobj_ex__)), BOX_SITE_ATTRIBUTE);
         Py_DECREF(copyreg);
         if (newobj == NULL) {
             Py_DECREF(args);
@@ -9112,7 +9113,7 @@ object___reduce_ex___object(PyObject *self, int protocol)
         int override;
 
         cls = (PyObject *) Py_TYPE(self);
-        clsreduce = PyObject_GetAttr(cls, &_Py_ID(__reduce__));
+        clsreduce = _PyValue_AsObjectResultAt(_PyValue_GetAttr(_PyValue_FromObjectKnown(cls), &_Py_ID(__reduce__)), BOX_SITE_ATTRIBUTE);
         if (clsreduce == NULL) {
             Py_DECREF(reduce);
             return PyValue_NULL;
@@ -9193,7 +9194,7 @@ object___format___object(PyObject *self, PyObject *format_spec)
                      Py_TYPE(self)->tp_name);
         return PyValue_NULL;
     }
-    return _PyValue_FromObjectResult(PyObject_Str(self));
+    return _PyValue_FromObjectResult(_PyValue_Str(PyValue_FromObjectBorrow(self)));
 }
 
 /*[clinic input]
@@ -9235,9 +9236,16 @@ object___sizeof___impl(PyValueBorrow self)
 
     res = 0;
     isize = PyValue_TYPE(self)->tp_itemsize;
-    if (isize > 0 && PyValue_IsObject(self)) {
+    if (PyValue_IsInlineInt(self)) {
+        /* The size of the int's box, as int.__sizeof__() reports it: upstream
+           reads the digit count from ob_size, which is not valid for
+           PyLongObject. */
+        digit buf[_PyLong_WORD_DIGITS];
+        res = isize * Py_MAX(_PyLong_SpanOfValue(self, buf).n, 1);
+    }
+    else if (isize > 0) {
         /* This assumes that ob_size is valid if tp_itemsize is not 0,
-         which isn't true for PyLongObject. An inline value has no items. */
+         which isn't true for PyLongObject. */
         res = _PyVarObject_CAST(PyValue_AsKnownObjectBorrow(self))->ob_size
               * isize;
     }
@@ -11242,7 +11250,7 @@ wrap_indexargfunc(PyObject *self, PyObject *args, void *wrapped)
     if (operand == NULL) {
         goto done;
     }
-    i = PyNumber_AsSsize_t(operand, PyExc_OverflowError);
+    i = _PyValue_AsSsize_t(PyValue_FromObjectBorrow(operand), PyExc_OverflowError);
     if (i == -1 && PyErr_Occurred()) {
         goto done;
     }
@@ -11260,7 +11268,7 @@ getindex(PyObject *self, PyObject *arg)
 {
     Py_ssize_t i;
 
-    i = PyNumber_AsSsize_t(arg, PyExc_OverflowError);
+    i = _PyValue_AsSsize_t(PyValue_FromObjectBorrow(arg), PyExc_OverflowError);
     if (i == -1 && PyErr_Occurred())
         return -1;
     if (i < 0) {
@@ -12287,7 +12295,7 @@ wrap_buffer(PyObject *self, PyObject *args, void *wrapped)
     if (!PyArg_UnpackTuple(args, "__buffer__", 1, 1, &arg)) {
         return NULL;
     }
-    Py_ssize_t flags = PyNumber_AsSsize_t(arg, PyExc_OverflowError);
+    Py_ssize_t flags = _PyValue_AsSsize_t(PyValue_FromObjectBorrow(arg), PyExc_OverflowError);
     if (flags == -1 && PyErr_Occurred()) {
         return NULL;
     }
@@ -12484,7 +12492,7 @@ method_is_overloaded(PyTypeObject *left, PyTypeObject *right, PyObject *name)
         return 1;
     }
 
-    ok = PyObject_RichCompareBool(a, b, Py_NE);
+    ok = _PyValue_RichCompareBool(PyValue_FromObjectBorrow(a), PyValue_FromObjectBorrow(b), Py_NE);
     Py_DECREF(a);
     Py_DECREF(b);
     return ok;
@@ -12584,7 +12592,10 @@ slot_sq_length(PyObject *self)
     if (res == NULL)
         return -1;
 
-    Py_SETREF(res, _PyNumber_Index(res));
+    PyObject *index = _PyValue_AsObjectResultAt(
+        _PyValue_Index(PyValue_FromObjectBorrow(res)), BOX_SITE_NUMBER);
+    Py_DECREF(res);
+    res = index;
     if (res == NULL)
         return -1;
 
@@ -12596,7 +12607,7 @@ slot_sq_length(PyObject *self)
         return -1;
     }
 
-    len = PyNumber_AsSsize_t(res, PyExc_OverflowError);
+    len = _PyValue_AsSsize_t(PyValue_FromObjectBorrow(res), PyExc_OverflowError);
     assert(len >= 0 || PyErr_ExceptionMatches(PyExc_OverflowError));
     Py_DECREF(res);
     return len;
@@ -13344,7 +13355,7 @@ static PyObject *
 slot_tp_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
 {
     PyThreadState *tstate = _PyThreadState_GET();
-    PyObject *func = PyObject_GetAttr((PyObject *)type, &_Py_ID(__new__));
+    PyObject *func = _PyValue_AsObjectResultAt(_PyValue_GetAttr(_PyValue_FromObjectKnown((PyObject *)type), &_Py_ID(__new__)), BOX_SITE_ATTRIBUTE);
     if (func == NULL) {
         return NULL;
     }
@@ -14275,6 +14286,13 @@ check_ready_value_row(PyTypeObject *type, int row)
     if (value_slot_pair_is_known(type, row, object, value)) {
         return;
     }
+    /* A static type is immutable: nothing rewrites its slots after
+       PyType_Ready, which checked its own pairs. Its slot descriptor may
+       also be another function's, as list.__setitem__ (mp_ass_subscript's)
+       beside sq_ass_item. */
+    if (!(type->tp_flags & Py_TPFLAGS_HEAPTYPE)) {
+        return;
+    }
     int named = 0;
     for (pytype_slotdef *p = slotdefs; p->name; p++) {
         slotdef_value *v = &slotdef_values[p - slotdefs];
@@ -14902,7 +14920,7 @@ type_new_init_subclass(PyTypeObject *type, PyObject *kwds)
         return -1;
     }
 
-    PyObject *func = PyObject_GetAttr(super, &_Py_ID(__init_subclass__));
+    PyObject *func = _PyValue_AsObjectResultAt(_PyValue_GetAttr(PyValue_FromObjectBorrow(super), &_Py_ID(__init_subclass__)), BOX_SITE_ATTRIBUTE);
     Py_DECREF(super);
     if (func == NULL) {
         return -1;

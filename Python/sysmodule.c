@@ -14,11 +14,6 @@ Data members:
 - ps1, ps2: optional primary and secondary prompts (strings)
 */
 
-/* Defer line of the value-API waves (value-api-v2a0.md, section 1.5): the
-   callers of the protocol marks in this unit are converted by W2's caller
-   batches, which remove this line. */
-#define Py_VALUE_DEFER_MARKS 1
-
 #include "Python.h"
 #include "pycore_audit.h"         // _Py_AuditHookEntry
 #include "pycore_call.h"          // _PyObject_CallNoArgs()
@@ -331,7 +326,7 @@ sys_audit_tstate(PyThreadState *ts, const char *event,
             goto exit;
         }
 
-        hooks = PyObject_GetIter(is->audit_hooks);
+        hooks = _PyValue_GetIter(PyValue_FromObjectBorrow(is->audit_hooks));
         if (!hooks) {
             goto exit;
         }
@@ -342,7 +337,7 @@ sys_audit_tstate(PyThreadState *ts, const char *event,
             PyObject *o;
             int canTrace = PyObject_GetOptionalAttr(hook, &_Py_ID(__cantrace__), &o);
             if (o) {
-                canTrace = PyObject_IsTrue(o);
+                canTrace = _PyValue_IsTrue(PyValue_FromObjectBorrow(o));
                 Py_DECREF(o);
             }
             if (canTrace < 0) {
@@ -385,6 +380,12 @@ exit:
     }
 
     return res;
+}
+
+int
+_PySys_AuditEnabled(PyThreadState *tstate)
+{
+    return should_audit(tstate->interp);
 }
 
 int
@@ -708,14 +709,16 @@ sys_displayhook_unencodable(PyObject *outf, PyObject *o)
     const char *stdout_encoding_str;
     int ret;
 
-    stdout_encoding = PyObject_GetAttr(outf, &_Py_ID(encoding));
+    PyValue stdout_encoding_v = _PyValue_GetAttr(PyValue_FromObjectBorrow(outf), &_Py_ID(encoding));
+    stdout_encoding = PyValue_IsNull(stdout_encoding_v) ? NULL
+        : _PyValue_AsObjectStealAt(stdout_encoding_v, BOX_SITE_ATTRIBUTE);
     if (stdout_encoding == NULL)
         goto error;
     stdout_encoding_str = PyUnicode_AsUTF8(stdout_encoding);
     if (stdout_encoding_str == NULL)
         goto error;
 
-    repr_str = PyObject_Repr(o);
+    repr_str = _PyValue_Repr(PyValue_FromObjectBorrow(o));
     if (repr_str == NULL)
         goto error;
     encoded = PyUnicode_AsEncodedString(repr_str,
@@ -791,7 +794,7 @@ sys_displayhook_impl(PyObject *module, PyValueBorrow o)
     if (PyValue_IsNone(o)) {
         return PyValue_None;
     }
-    if (PyObject_SetAttr(builtins, _Py_LATIN1_CHR('_'), Py_None) != 0)
+    if (_PyValue_SetAttr(PyValue_FromObjectBorrow(builtins), _Py_LATIN1_CHR('_'), _PyValue_FromObjectKnown(Py_None)) != 0)
         return PyValue_NULL;
     outf = PySys_GetAttr(&_Py_ID(stdout));
     if (outf == NULL) {
@@ -833,7 +836,7 @@ sys_displayhook_impl(PyObject *module, PyValueBorrow o)
         return PyValue_NULL;
     }
     Py_DECREF(outf);
-    if (PyObject_SetAttr(builtins, _Py_LATIN1_CHR('_'), obj) != 0) {
+    if (_PyValue_SetAttr(PyValue_FromObjectBorrow(builtins), _Py_LATIN1_CHR('_'), PyValue_FromObjectBorrow(obj)) != 0) {
         Py_DECREF(obj);
         return PyValue_NULL;
     }

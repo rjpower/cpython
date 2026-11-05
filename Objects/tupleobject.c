@@ -1,10 +1,5 @@
 /* Tuple object implementation */
 
-/* Defer line of the value-API waves (value-api-v2a0.md, section 1.5): the
-   callers of the protocol marks in this unit are converted by W2's caller
-   batches, which remove this line. */
-#define Py_VALUE_DEFER_MARKS 1
-
 #include "Python.h"
 #include "pycore_abstract.h"      // _PyIndex_Check()
 #include "pycore_ceval.h"         // _PyEval_GetBuiltin()
@@ -541,27 +536,30 @@ tuple_length(PyObject *self)
 }
 
 static int
-tuple_contains(PyObject *self, PyObject *el)
+tuple_contains_value(PyObject *self, PyValueBorrow query)
 {
     PyTupleObject *a = _PyTuple_CAST(self);
     int cmp = 0;
     for (Py_ssize_t i = 0; cmp == 0 && i < Py_SIZE(a); ++i) {
-        cmp = _PyValue_RichCompareBool(a->ob_item[i],
-                                      PyValue_FromObjectBorrow(el), Py_EQ);
+        cmp = _PyValue_RichCompareBool(a->ob_item[i], query, Py_EQ);
     }
     return cmp;
 }
 
-static PyObject *
-tuple_item(PyObject *op, Py_ssize_t i)
+_Py_VALUE_THUNK_CONTAINS(tuple_contains, tuple_contains_value)
+
+static PyValue
+tuple_item_value(PyObject *op, Py_ssize_t i)
 {
     PyTupleObject *a = _PyTuple_CAST(op);
     if (i < 0 || i >= Py_SIZE(a)) {
         PyErr_SetString(PyExc_IndexError, "tuple index out of range");
-        return NULL;
+        return PyValue_NULL;
     }
-    return _PyValue_AsObjectAt(a->ob_item[i], BOX_SITE_TUPLE);
+    return PyValue_DUP(a->ob_item[i]);
 }
+
+_Py_VALUE_THUNK_ITEM(tuple_item, tuple_item_value)
 
 PyObject *
 _PyTuple_FromValueArray(const PyValue *src, Py_ssize_t n)
@@ -988,9 +986,26 @@ tuple_subtype_new(PyTypeObject *type, PyValueBorrow iterable)
     return _PyValue_FromObjectResult(newobj);
 }
 
+static PyValue
+tuple_concat_value(PyObject *aa, PyValueBorrow bb)
+{
+    if (!PyValue_IsObject(bb)
+        || !PyTuple_Check(PyValue_AsKnownObjectBorrow(bb)))
+    {
+        PyErr_Format(PyExc_TypeError,
+             "can only concatenate tuple (not \"%.200s\") to tuple",
+                 PyValue_TYPE(bb)->tp_name);
+        return PyValue_NULL;
+    }
+    return _PyValue_FromObjectResult(
+        _PyTuple_Concat(aa, PyValue_AsKnownObjectBorrow(bb)));
+}
+
+_Py_VALUE_THUNK_CONCAT(tuple_concat, tuple_concat_value)
+
 static PySequenceMethods tuple_as_sequence = {
     tuple_length,                               /* sq_length */
-    _PyTuple_Concat,                            /* sq_concat */
+    tuple_concat,                               /* sq_concat */
     _PyTuple_Repeat,                            /* sq_repeat */
     tuple_item,                                 /* sq_item */
     0,                                          /* sq_slice */
@@ -1010,41 +1025,43 @@ _PyTuple_IterValue(PyObject *obj, Py_ssize_t index)
     return (_PyValueIndexPair) { .value = result, .index = index + 1 };
 }
 
-static PyObject*
-tuple_subscript(PyObject *op, PyObject* item)
+static PyValue
+tuple_subscript_value(PyObject *op, PyValueBorrow item)
 {
     PyTupleObject *self = _PyTuple_CAST(op);
-    if (_PyIndex_Check(item)) {
-        Py_ssize_t i = PyNumber_AsSsize_t(item, PyExc_IndexError);
+    if (_PyValue_IndexCheck(item)) {
+        Py_ssize_t i = _PyValue_AsSsize_t(item, PyExc_IndexError);
         if (i == -1 && PyErr_Occurred())
-            return NULL;
+            return PyValue_NULL;
         if (i < 0)
             i += PyTuple_GET_SIZE(self);
-        return tuple_item(op, i);
+        return tuple_item_value(op, i);
     }
-    else if (PySlice_Check(item)) {
+    else if (PyValue_IsObject(item)
+             && PySlice_Check(PyValue_AsKnownObjectBorrow(item)))
+    {
         Py_ssize_t start, stop, step, slicelength, i;
         size_t cur;
         PyValue it;
         PyValue *src, *dest;
 
-        if (PySlice_Unpack(item, &start, &stop, &step) < 0) {
-            return NULL;
+        if (PySlice_Unpack(PyValue_AsKnownObjectBorrow(item), &start, &stop, &step) < 0) {
+            return PyValue_NULL;
         }
         slicelength = PySlice_AdjustIndices(PyTuple_GET_SIZE(self), &start,
                                             &stop, step);
 
         if (slicelength <= 0) {
-            return tuple_get_empty();
+            return _PyValue_FromObjectResult(tuple_get_empty());
         }
         else if (start == 0 && step == 1 &&
                  slicelength == PyTuple_GET_SIZE(self) &&
                  PyTuple_CheckExact(self)) {
-            return Py_NewRef(self);
+            return PyValue_FromObjectSteal(Py_NewRef(self));
         }
         else {
             PyTupleObject* result = tuple_alloc(slicelength);
-            if (!result) return NULL;
+            if (!result) return PyValue_NULL;
 
             src = self->ob_item;
             dest = result->ob_item;
@@ -1055,16 +1072,18 @@ tuple_subscript(PyObject *op, PyObject* item)
             }
 
             _PyObject_GC_TRACK(result);
-            return (PyObject *)result;
+            return PyValue_FromObjectSteal((PyObject *)result);
         }
     }
     else {
         PyErr_Format(PyExc_TypeError,
                      "tuple indices must be integers or slices, not %.200s",
-                     Py_TYPE(item)->tp_name);
-        return NULL;
+                     PyValue_TYPE(item)->tp_name);
+        return PyValue_NULL;
     }
 }
+
+_Py_VALUE_THUNK_SUBSCRIPT(tuple_subscript, tuple_subscript_value)
 
 /*[clinic input]
 tuple.__getnewargs__
@@ -1100,6 +1119,8 @@ static PyMappingMethods tuple_as_mapping = {
 };
 
 static PyObject *tuple_iter(PyObject *seq);
+
+_Py_VALUE_NOTIMPL_RICHCMP(tuple_richcompare_value, tuple_richcompare)
 
 PyTypeObject PyTuple_Type = {
     PyVarObject_HEAD_INIT(&PyType_Type, 0)
@@ -1147,6 +1168,13 @@ PyTypeObject PyTuple_Type = {
     .tp_value_vectorcall = (_Py_valuefunc)tuple_vectorcall,
     .tp_version_tag = _Py_TYPE_VERSION_TUPLE,
     ._tp_iteritem = _PyTuple_IterValue,
+    .tp_value = {
+        .subscript = _Py_VALUE_SLOT_INIT(subscript, tuple_subscript_value),
+        .contains = _Py_VALUE_SLOT_INIT(contains, tuple_contains_value),
+        .item = _Py_VALUE_SLOT_INIT(item, tuple_item_value),
+        .sq_concat = _Py_VALUE_SLOT_INIT(sq_concat, tuple_concat_value),
+        .richcompare = _Py_VALUE_SLOT_INIT(richcompare, tuple_richcompare_value),
+    },
 };
 
 /* The following function breaks the notion that tuples are immutable:

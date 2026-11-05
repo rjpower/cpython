@@ -1,10 +1,5 @@
 /* Class object implementation (dead now except for methods) */
 
-/* Defer line of the value-API waves (value-api-v2a0.md, section 1.5): the
-   callers of the protocol marks in this unit are converted by W2's caller
-   batches, which remove this line. */
-#define Py_VALUE_DEFER_MARKS 1
-
 #include "Python.h"
 #include "pycore_call.h"          // _PyObject_VectorcallTstate()
 #include "pycore_classobject.h"    // _PyMethod_NewValue()
@@ -15,8 +10,10 @@
 #include "pycore_pystate.h"       // _PyThreadState_GET()
 #include "pycore_symtable.h"      // _Py_Mangle()
 #include "pycore_value.h"         // _PyValue_IdentityHash()
+#include "pycore_value_slots.h"  // _Py_VALUE_NOTIMPL_RICHCMP()
 #include "pycore_value_api.h"
 #include "pycore_value_call.h"    // _PyValue_VectorcallPrepend()
+#include "pycore_value_ops.h"     // _PyValue_GetAttr()
 #include "pycore_weakref.h"       // FT_CLEAR_WEAKREFS()
 
 
@@ -127,7 +124,10 @@ method___reduce___impl(PyMethodObject *self)
         return PyValue_NULL;
     }
     PyObject *func = PyMethod_GET_FUNCTION(self);
-    PyObject *funcname = PyObject_GetAttr(func, &_Py_ID(__name__));
+    PyValue funcname_v = _PyValue_GetAttr(PyValue_FromObjectBorrow(func),
+                                          &_Py_ID(__name__));
+    PyObject *funcname = PyValue_IsNull(funcname_v) ? NULL
+        : _PyValue_AsObjectStealAt(funcname_v, BOX_SITE_ATTRIBUTE);
     if (funcname == NULL) {
         Py_DECREF(funcself);
         return PyValue_NULL;
@@ -182,7 +182,10 @@ static PyObject *
 method_get_doc(PyObject *self, void *context)
 {
     PyMethodObject *im = _PyMethodObject_CAST(self);
-    return PyObject_GetAttr(im->im_func, &_Py_ID(__doc__));
+    PyValue doc = _PyValue_GetAttr(PyValue_FromObjectBorrow(im->im_func),
+                                   &_Py_ID(__doc__));
+    return PyValue_IsNull(doc) ? NULL
+        : _PyValue_AsObjectStealAt(doc, BOX_SITE_ATTRIBUTE);
 }
 
 static PyGetSetDef method_getset[] = {
@@ -217,7 +220,10 @@ method_getattro(PyObject *obj, PyObject *name)
         }
     }
 
-    return PyObject_GetAttr(im->im_func, name);
+    PyValue attr = _PyValue_GetAttr(PyValue_FromObjectBorrow(im->im_func),
+                                    name);
+    return PyValue_IsNull(attr) ? NULL
+        : _PyValue_AsObjectStealAt(attr, BOX_SITE_ATTRIBUTE);
 }
 
 /*[clinic input]
@@ -278,7 +284,7 @@ method_richcompare(PyObject *self, PyObject *other, int op)
     }
     a = (PyMethodObject *)self;
     b = (PyMethodObject *)other;
-    eq = PyObject_RichCompareBool(a->im_func, b->im_func, Py_EQ);
+    eq = _PyValue_RichCompareBool(PyValue_FromObjectBorrow(a->im_func), PyValue_FromObjectBorrow(b->im_func), Py_EQ);
     if (eq == 1) {
         eq = PyValue_Is(a->im_self, b->im_self);
     }
@@ -330,7 +336,7 @@ method_hash(PyObject *self)
 {
     PyMethodObject *a = _PyMethodObject_CAST(self);
     Py_hash_t x = _PyValue_IdentityHash(a->im_self);
-    Py_hash_t y = PyObject_Hash(a->im_func);
+    Py_hash_t y = _PyValue_Hash(PyValue_FromObjectBorrow(a->im_func));
     if (y == -1) {
         return -1;
     }
@@ -358,6 +364,8 @@ method_descr_get(PyObject *meth, PyObject *obj, PyObject *cls)
     return meth;
 }
 
+_Py_VALUE_NOTIMPL_RICHCMP(method_richcompare_value, method_richcompare)
+
 PyTypeObject PyMethod_Type = {
     PyVarObject_HEAD_INIT(&PyType_Type, 0)
     .tp_name = "method",
@@ -381,6 +389,9 @@ PyTypeObject PyMethod_Type = {
     .tp_descr_get = method_descr_get,
     .tp_new = method_new,
     .tp_value_vectorcall_offset = offsetof(PyMethodObject, value_vectorcall),
+    .tp_value = {
+        .richcompare = _Py_VALUE_SLOT_INIT(richcompare, method_richcompare_value),
+    },
 };
 
 /* ------------------------------------------------------------------------
@@ -424,8 +435,11 @@ static PyMemberDef instancemethod_memberlist[] = {
 static PyObject *
 instancemethod_get_doc(PyObject *self, void *context)
 {
-    return PyObject_GetAttr(PyInstanceMethod_GET_FUNCTION(self),
-                            &_Py_ID(__doc__));
+    PyValue doc = _PyValue_GetAttr(
+        PyValue_FromObjectBorrow(PyInstanceMethod_GET_FUNCTION(self)),
+        &_Py_ID(__doc__));
+    return PyValue_IsNull(doc) ? NULL
+        : _PyValue_AsObjectStealAt(doc, BOX_SITE_ATTRIBUTE);
 }
 
 static PyGetSetDef instancemethod_getset[] = {
@@ -457,7 +471,10 @@ instancemethod_getattro(PyObject *self, PyObject *name)
         }
     }
 
-    return PyObject_GetAttr(PyInstanceMethod_GET_FUNCTION(self), name);
+    PyValue attr = _PyValue_GetAttr(
+        PyValue_FromObjectBorrow(PyInstanceMethod_GET_FUNCTION(self)), name);
+    return PyValue_IsNull(attr) ? NULL
+        : _PyValue_AsObjectStealAt(attr, BOX_SITE_ATTRIBUTE);
 }
 
 static void
@@ -504,7 +521,7 @@ instancemethod_richcompare(PyObject *self, PyObject *other, int op)
     }
     a = (PyInstanceMethodObject *)self;
     b = (PyInstanceMethodObject *)other;
-    eq = PyObject_RichCompareBool(a->func, b->func, Py_EQ);
+    eq = _PyValue_RichCompareBool(PyValue_FromObjectBorrow(a->func), PyValue_FromObjectBorrow(b->func), Py_EQ);
     if (eq < 0)
         return NULL;
     if (op == Py_EQ)

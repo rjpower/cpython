@@ -1,10 +1,5 @@
 /* Module definition and import implementation */
 
-/* Defer line of the value-API waves (value-api-v2a0.md, section 1.5): the
-   callers of the protocol marks in this unit are converted by W2's caller
-   batches, which remove this line. */
-#define Py_VALUE_DEFER_MARKS 1
-
 #include "Python.h"
 #include "pycore_audit.h"         // _PySys_Audit()
 #include "pycore_ceval.h"
@@ -34,6 +29,7 @@
 #include "pycore_unicodeobject.h" // _PyUnicode_AsUTF8NoNUL()
 #include "pycore_value.h"         // PyValue_AsKnownObjectBorrow()
 #include "pycore_value_api.h"     // _PyValue_FromObjectKnown()
+#include "pycore_value_ops.h"     // _PyValue_GetAttr()
 #include "pycore_weakref.h"       // _PyWeakref_GET_REF()
 
 #include "marshal.h"              // PyMarshal_ReadObjectFromString()
@@ -254,7 +250,7 @@ _PyImport_SetModule(PyObject *name, PyObject *m)
 {
     PyThreadState *tstate = _PyThreadState_GET();
     PyObject *modules = get_modules_dict(tstate, true);
-    return PyObject_SetItem(modules, name, m);
+    return _PyValue_SetItem(PyValue_FromObjectBorrow(modules), PyValue_FromObjectBorrow(name), PyValue_FromObjectBorrow(m));
 }
 
 int
@@ -426,7 +422,7 @@ import_add_module_lock_held(PyObject *modules, PyObject *name)
     m = PyModule_NewObject(name);
     if (m == NULL)
         return NULL;
-    if (PyObject_SetItem(modules, name, m) != 0) {
+    if (_PyValue_SetItem(PyValue_FromObjectBorrow(modules), PyValue_FromObjectBorrow(name), PyValue_FromObjectBorrow(m)) != 0) {
         Py_DECREF(m);
         return NULL;
     }
@@ -528,7 +524,8 @@ remove_module(PyThreadState *tstate, PyObject *name)
         // Error is reported to the caller
         (void)PyDict_PopValue(modules, PyValue_FromObjectBorrow(name), NULL);
     }
-    else if (PyMapping_DelItem(modules, name) < 0) {
+    else if (_PyValue_DelItem(PyValue_FromObjectBorrow(modules),
+                             PyValue_FromObjectBorrow(name)) < 0) {
         if (_PyErr_ExceptionMatches(tstate, PyExc_KeyError)) {
             _PyErr_Clear(tstate);
         }
@@ -1938,7 +1935,7 @@ finish_singlephase_extension(PyThreadState *tstate, PyObject *mod,
     }
 
     if (modules != NULL) {
-        if (PyObject_SetItem(modules, name, mod) < 0) {
+        if (_PyValue_SetItem(PyValue_FromObjectBorrow(modules), PyValue_FromObjectBorrow(name), PyValue_FromObjectBorrow(mod)) < 0) {
             return -1;
         }
     }
@@ -2042,7 +2039,7 @@ reload_singlephase_extension(PyThreadState *tstate,
             }
         }
 
-        if (PyObject_SetItem(modules, info->name, mod) == -1) {
+        if (_PyValue_SetItem(PyValue_FromObjectBorrow(modules), PyValue_FromObjectBorrow(info->name), PyValue_FromObjectBorrow(mod)) == -1) {
             Py_DECREF(mod);
             return NULL;
         }
@@ -2050,7 +2047,8 @@ reload_singlephase_extension(PyThreadState *tstate,
 
     Py_ssize_t index = _get_cached_module_index(cached);
     if (_modules_by_index_set(tstate->interp, index, mod) < 0) {
-        PyMapping_DelItem(modules, info->name);
+        _PyValue_DelItem(PyValue_FromObjectBorrow(modules),
+                         PyValue_FromObjectBorrow(info->name));
         Py_DECREF(mod);
         return NULL;
     }
@@ -2829,8 +2827,11 @@ PyImport_ExecCodeModuleWithPathnames(const char *name, PyObject *co,
             Py_FatalError("no current interpreter");
         }
 
-        external= PyObject_GetAttr(IMPORTLIB(interp),
-                                   &_Py_ID(_bootstrap_external));
+        PyValue external_v = _PyValue_GetAttr(
+            PyValue_FromObjectBorrow(IMPORTLIB(interp)),
+            &_Py_ID(_bootstrap_external));
+        external = PyValue_IsNull(external_v) ? NULL
+            : _PyValue_AsObjectStealAt(external_v, BOX_SITE_ATTRIBUTE);
         if (external != NULL) {
             pathobj = PyObject_CallMethodOneArg(
                 external, &_Py_ID(_get_sourcefile), cpathobj);
@@ -2914,8 +2915,11 @@ PyImport_ExecCodeModuleObject(PyObject *name, PyObject *co, PyObject *pathname,
     if (pathname == NULL) {
         pathname = ((PyCodeObject *)co)->co_filename;
     }
-    external = PyObject_GetAttr(IMPORTLIB(tstate->interp),
-                                &_Py_ID(_bootstrap_external));
+    PyValue external_v = _PyValue_GetAttr(
+        PyValue_FromObjectBorrow(IMPORTLIB(tstate->interp)),
+        &_Py_ID(_bootstrap_external));
+    external = PyValue_IsNull(external_v) ? NULL
+        : _PyValue_AsObjectStealAt(external_v, BOX_SITE_ATTRIBUTE);
     if (external == NULL) {
         Py_DECREF(d);
         return NULL;
@@ -3069,7 +3073,7 @@ list_frozen_module_names(void)
             if (nameobj == NULL) {
                 goto error;
             }
-            int found = PySequence_Contains(names, nameobj);
+            int found = _PyValue_Contains(PyValue_FromObjectBorrow(names), PyValue_FromObjectBorrow(nameobj));
             if (found < 0) {
                 Py_DECREF(nameobj);
                 goto error;
@@ -3496,8 +3500,11 @@ PyObject *
 _PyImport_GetImportlibExternalLoader(PyInterpreterState *interp,
                                      const char *loader_name)
 {
-    PyObject *bootstrap = PyObject_GetAttr(IMPORTLIB(interp),
-                                           &_Py_ID(_bootstrap_external));
+    PyValue bootstrap_v = _PyValue_GetAttr(
+        PyValue_FromObjectBorrow(IMPORTLIB(interp)),
+        &_Py_ID(_bootstrap_external));
+    PyObject *bootstrap = PyValue_IsNull(bootstrap_v) ? NULL
+        : _PyValue_AsObjectStealAt(bootstrap_v, BOX_SITE_ATTRIBUTE);
     if (bootstrap == NULL) {
         return NULL;
     }
@@ -3510,8 +3517,11 @@ _PyImport_GetImportlibExternalLoader(PyInterpreterState *interp,
 PyObject *
 _PyImport_BlessMyLoader(PyInterpreterState *interp, PyObject *module_globals)
 {
-    PyObject *external = PyObject_GetAttr(IMPORTLIB(interp),
-                                          &_Py_ID(_bootstrap_external));
+    PyValue external_v = _PyValue_GetAttr(
+        PyValue_FromObjectBorrow(IMPORTLIB(interp)),
+        &_Py_ID(_bootstrap_external));
+    PyObject *external = PyValue_IsNull(external_v) ? NULL
+        : _PyValue_AsObjectStealAt(external_v, BOX_SITE_ATTRIBUTE);
     if (external == NULL) {
         return NULL;
     }
@@ -3831,12 +3841,15 @@ resolve_name(PyThreadState *tstate, PyObject *name, PyObject *globals, int level
         }
         else if (spec != NULL && spec != Py_None) {
             int equal;
-            PyObject *parent = PyObject_GetAttr(spec, &_Py_ID(parent));
+            PyValue parent_v = _PyValue_GetAttr(PyValue_FromObjectBorrow(spec),
+                                                &_Py_ID(parent));
+            PyObject *parent = PyValue_IsNull(parent_v) ? NULL
+                : _PyValue_AsObjectStealAt(parent_v, BOX_SITE_ATTRIBUTE);
             if (parent == NULL) {
                 goto error;
             }
 
-            equal = PyObject_RichCompareBool(package, parent, Py_EQ);
+            equal = _PyValue_RichCompareBool(PyValue_FromObjectBorrow(package), PyValue_FromObjectBorrow(parent), Py_EQ);
             Py_DECREF(parent);
             if (equal < 0) {
                 goto error;
@@ -3850,7 +3863,10 @@ resolve_name(PyThreadState *tstate, PyObject *name, PyObject *globals, int level
         }
     }
     else if (spec != NULL && spec != Py_None) {
-        package = PyObject_GetAttr(spec, &_Py_ID(parent));
+        PyValue package_v = _PyValue_GetAttr(PyValue_FromObjectBorrow(spec),
+                                             &_Py_ID(parent));
+        package = PyValue_IsNull(package_v) ? NULL
+            : _PyValue_AsObjectStealAt(package_v, BOX_SITE_ATTRIBUTE);
         if (package == NULL) {
             goto error;
         }
@@ -4110,7 +4126,7 @@ PyImport_ImportModuleLevelObject(PyObject *name, PyObject *globals,
 
     has_from = 0;
     if (fromlist != NULL && fromlist != Py_None) {
-        has_from = PyObject_IsTrue(fromlist);
+        has_from = _PyValue_IsTrue(PyValue_FromObjectBorrow(fromlist));
         if (has_from < 0)
             goto error;
     }
@@ -4564,7 +4580,7 @@ _PyImport_LazyImportModuleLevelObject(PyThreadState *tstate,
             goto done;
         }
 
-        int is_true = PyObject_IsTrue(decision);
+        int is_true = _PyValue_IsTrue(PyValue_FromObjectBorrow(decision));
         Py_DECREF(decision);
 
         if (is_true < 0) {
@@ -4697,7 +4713,11 @@ PyImport_Import(PyObject *module_name)
     if (globals != NULL) {
         Py_INCREF(globals);
         // XXX Use _PyEval_EnsureBuiltins()?
-        builtins = PyObject_GetItem(globals, &_Py_ID(__builtins__));
+        PyValue builtins_v = _PyValue_GetItem(
+            PyValue_FromObjectBorrow(globals),
+            PyValue_FromObjectBorrow(&_Py_ID(__builtins__)));
+        builtins = PyValue_IsNull(builtins_v) ? NULL
+            : _PyValue_AsObjectStealAt(builtins_v, BOX_SITE_DICT);
         if (builtins == NULL) {
             // XXX Fall back to interp->builtins or sys.modules['builtins']?
             goto err;
@@ -4719,13 +4739,22 @@ PyImport_Import(PyObject *module_name)
 
     /* Get the __import__ function from the builtins */
     if (PyDict_Check(builtins)) {
-        import = PyObject_GetItem(builtins, &_Py_ID(__import__));
+        PyValue import_v = _PyValue_GetItem(
+            PyValue_FromObjectBorrow(builtins),
+            PyValue_FromObjectBorrow(&_Py_ID(__import__)));
+        import = PyValue_IsNull(import_v) ? NULL
+            : _PyValue_AsObjectStealAt(import_v, BOX_SITE_DICT);
         if (import == NULL) {
             _PyErr_SetObject(tstate, PyExc_KeyError, &_Py_ID(__import__));
         }
     }
     else
-        import = PyObject_GetAttr(builtins, &_Py_ID(__import__));
+    {
+        PyValue import_v = _PyValue_GetAttr(
+            PyValue_FromObjectBorrow(builtins), &_Py_ID(__import__));
+        import = PyValue_IsNull(import_v) ? NULL
+            : _PyValue_AsObjectStealAt(import_v, BOX_SITE_ATTRIBUTE);
+    }
     if (import == NULL)
         goto err;
 
@@ -4951,8 +4980,10 @@ PyImport_ImportModuleAttr(PyObject *modname, PyObject *attrname)
     if (mod == NULL) {
         return NULL;
     }
-    PyObject *result = PyObject_GetAttr(mod, attrname);
+    PyValue result_v = _PyValue_GetAttr(PyValue_FromObjectBorrow(mod), attrname);
     Py_DECREF(mod);
+    PyObject *result = PyValue_IsNull(result_v) ? NULL
+        : _PyValue_AsObjectStealAt(result_v, BOX_SITE_ATTRIBUTE);
     return result;
 }
 

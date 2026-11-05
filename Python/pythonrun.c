@@ -8,11 +8,6 @@
 
 /* TODO: Cull includes following phase split */
 
-/* Defer line of the value-API waves (value-api-v2a0.md, section 1.5): the
-   callers of the protocol marks in this unit are converted by W2's caller
-   batches, which remove this line. */
-#define Py_VALUE_DEFER_MARKS 1
-
 #include "Python.h"
 
 #include "pycore_ast.h"           // PyAST_mod2obj()
@@ -35,6 +30,7 @@
 #include "pycore_unicodeobject.h" // _PyUnicode_Equal()
 #include "pycore_value.h"         // PyValue_CLOSE()
 #include "pycore_value_api.h"     // _PyValue_AsObjectAt()
+#include "pycore_value_ops.h"     // _PyValue_SetAttr()
 
 #include "errcode.h"              // E_EOF
 #include "marshal.h"              // PyMarshal_ReadLongFromFile()
@@ -263,7 +259,7 @@ pyrun_one_parse_ast(FILE *fp, PyObject *filename,
         PyErr_Clear();
     }
     else if (attr != NULL) {
-        ps1_obj = PyObject_Str(attr);
+        ps1_obj = _PyValue_Str(PyValue_FromObjectBorrow(attr));
         Py_DECREF(attr);
         if (ps1_obj == NULL) {
             PyErr_Clear();
@@ -284,7 +280,7 @@ pyrun_one_parse_ast(FILE *fp, PyObject *filename,
         PyErr_Clear();
     }
     else if (attr != NULL) {
-        ps2_obj = PyObject_Str(attr);
+        ps2_obj = _PyValue_Str(PyValue_FromObjectBorrow(attr));
         Py_DECREF(attr);
         if (ps2_obj == NULL) {
             PyErr_Clear();
@@ -364,7 +360,10 @@ _PyRun_InteractiveOne(FILE *fp, PyObject *filename, PyCompilerFlags *flags)
             if (xs == NULL) {
                 goto error;
             }
-            PyObject *exc_lineno = PyObject_GetAttr(exc, &_Py_ID(lineno));
+            PyValue exc_lineno_v = _PyValue_GetAttr(PyValue_FromObjectBorrow(exc),
+                                                        &_Py_ID(lineno));
+            PyObject *exc_lineno = PyValue_IsNull(exc_lineno_v) ? NULL
+                : _PyValue_AsObjectStealAt(exc_lineno_v, BOX_SITE_ATTRIBUTE);
             if (exc_lineno == NULL) {
                 Py_DECREF(xs);
                 goto error;
@@ -383,7 +382,7 @@ _PyRun_InteractiveOne(FILE *fp, PyObject *filename, PyCompilerFlags *flags)
             if (line == NULL) {
                 goto error;
             }
-            PyObject_SetAttr(exc, &_Py_ID(text), line);
+            _PyValue_SetAttr(PyValue_FromObjectBorrow(exc), &_Py_ID(text), PyValue_FromObjectBorrow(line));
             Py_DECREF(line);
         }
 error:
@@ -673,7 +672,10 @@ _Py_HandleSystemExitAndKeyboardInterrupt(int *exitcode_p)
     PyObject *exc = PyErr_GetRaisedException();
     assert(exc != NULL && PyExceptionInstance_Check(exc));
 
-    PyObject *code = PyObject_GetAttr(exc, &_Py_ID(code));
+    PyValue code_v = _PyValue_GetAttr(PyValue_FromObjectBorrow(exc),
+                                          &_Py_ID(code));
+    PyObject *code = PyValue_IsNull(code_v) ? NULL
+        : _PyValue_AsObjectStealAt(code_v, BOX_SITE_ATTRIBUTE);
     if (code == NULL) {
         // If the exception has no 'code' attribute, print the exception below
         PyErr_Clear();
@@ -872,7 +874,10 @@ print_exception_file_and_line(struct exception_print_context *ctx,
 
     PyObject *filename = NULL;
     Py_ssize_t lineno = 0;
-    PyObject* v = PyObject_GetAttr(*value_p, &_Py_ID(filename));
+    PyValue v_v = _PyValue_GetAttr(PyValue_FromObjectBorrow(*value_p),
+                                       &_Py_ID(filename));
+    PyObject *v = PyValue_IsNull(v_v) ? NULL
+        : _PyValue_AsObjectStealAt(v_v, BOX_SITE_ATTRIBUTE);
     if (!v) {
         return -1;
     }
@@ -919,7 +924,10 @@ print_exception_message(struct exception_print_context *ctx, PyObject *type,
 
     assert(PyExceptionClass_Check(type));
 
-    PyObject *modulename = PyObject_GetAttr(type, &_Py_ID(__module__));
+    PyValue modulename_v = _PyValue_GetAttr(PyValue_FromObjectBorrow(type),
+                                                &_Py_ID(__module__));
+    PyObject *modulename = PyValue_IsNull(modulename_v) ? NULL
+        : _PyValue_AsObjectStealAt(modulename_v, BOX_SITE_ATTRIBUTE);
     if (modulename == NULL || !PyUnicode_Check(modulename)) {
         Py_XDECREF(modulename);
         PyErr_Clear();
@@ -965,7 +973,7 @@ print_exception_message(struct exception_print_context *ctx, PyObject *type,
         return 0;
     }
 
-    PyObject *s = PyObject_Str(value);
+    PyObject *s = _PyValue_Str(PyValue_FromObjectBorrow(value));
     if (s == NULL) {
         PyErr_Clear();
         if (PyFile_WriteString(": <exception str() failed>", f) < 0) {

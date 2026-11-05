@@ -14,11 +14,6 @@
  *
  */
 
-/* Defer line of the value-API waves (value-api-v2a0.md, section 1.5): the
-   callers of the protocol marks in this unit are converted by W2's caller
-   batches, which remove this line. */
-#define Py_VALUE_DEFER_MARKS 1
-
 #include "Python.h"
 #include "pycore_ast.h"           // PyAST_Check()
 #include "pycore_capsule.h"       // _PyCapsule_SetTraverse()
@@ -741,7 +736,7 @@ compiler_cellvars(PySTEntryObject *ste)
         Py_DECREF(names);
         return NULL;
     }
-    PyObject *sorted = PySequence_List(names);
+    PyObject *sorted = _PyValue_SequenceList(PyValue_FromObjectBorrow(names));
     Py_DECREF(names);
     if (sorted == NULL) {
         return NULL;
@@ -1196,7 +1191,7 @@ PyObject *
 _PyCompile_StaticAttributesAsTuple(compiler *c)
 {
     assert(c->u->u_static_attributes);
-    PyObject *static_attributes_unsorted = PySequence_List(c->u->u_static_attributes);
+    PyObject *static_attributes_unsorted = _PyValue_SequenceList(PyValue_FromObjectBorrow(c->u->u_static_attributes));
     if (static_attributes_unsorted == NULL) {
         return NULL;
     }
@@ -1204,7 +1199,7 @@ _PyCompile_StaticAttributesAsTuple(compiler *c)
         Py_DECREF(static_attributes_unsorted);
         return NULL;
     }
-    PyObject *static_attributes = PySequence_Tuple(static_attributes_unsorted);
+    PyObject *static_attributes = _PyValue_SequenceTuple(PyValue_FromObjectBorrow(static_attributes_unsorted));
     Py_DECREF(static_attributes_unsorted);
     return static_attributes;
 }

@@ -8,11 +8,6 @@ Copyright (c) Corporation for National Research Initiatives.
 
    ------------------------------------------------------------------------ */
 
-/* Defer line of the value-API waves (value-api-v2a0.md, section 1.5): the
-   callers of the protocol marks in this unit are converted by W2's caller
-   batches, which remove this line. */
-#define Py_VALUE_DEFER_MARKS 1
-
 #include "Python.h"
 #include "pycore_call.h"          // _PyObject_CallNoArgs()
 #include "pycore_codecs.h"        // export _PyCodec_LookupTextEncoding()
@@ -577,7 +572,7 @@ PyObject * _PyCodec_LookupTextEncoding(const char *encoding,
             return NULL;
         }
         if (attr != NULL) {
-            is_text_codec = PyObject_IsTrue(attr);
+            is_text_codec = _PyValue_IsTrue(PyValue_FromObjectBorrow(attr));
             Py_DECREF(attr);
             if (is_text_codec <= 0) {
                 Py_DECREF(codec);

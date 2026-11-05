@@ -1,14 +1,10 @@
 /* File object implementation (what's left of it -- see io.py) */
 
-/* Defer line of the value-API waves (value-api-v2a0.md, section 1.5): the
-   callers of the protocol marks in this unit are converted by W2's caller
-   batches, which remove this line. */
-#define Py_VALUE_DEFER_MARKS 1
-
 #include "Python.h"
 #include "pycore_call.h"          // _PyObject_CallNoArgs()
 #include "pycore_runtime.h"       // _PyRuntime
 #include "pycore_unicodeobject.h" // _PyUnicode_AsUTF8String()
+#include "pycore_value_ops.h"     // _PyValue_Repr()
 
 #ifdef HAVE_UNISTD_H
 #  include <unistd.h>             // isatty()
@@ -117,14 +113,18 @@ PyFile_WriteObject(PyObject *v, PyObject *f, int flags)
         PyErr_SetString(PyExc_TypeError, "writeobject with NULL file");
         return -1;
     }
-    writer = PyObject_GetAttr(f, &_Py_ID(write));
+    PyValue writer_v = _PyValue_GetAttr(PyValue_FromObjectBorrow(f),
+                                        &_Py_ID(write));
+    if (PyValue_IsNull(writer_v))
+        return -1;
+    writer = _PyValue_AsObjectStealAt(writer_v, BOX_SITE_ATTRIBUTE);
     if (writer == NULL)
         return -1;
     if (flags & Py_PRINT_RAW) {
-        value = PyObject_Str(v);
+        value = _PyValue_Str(PyValue_FromObjectBorrow(v));
     }
     else
-        value = PyObject_Repr(v);
+        value = _PyValue_Repr(PyValue_FromObjectBorrow(v));
     if (value == NULL) {
         Py_DECREF(writer);
         return -1;

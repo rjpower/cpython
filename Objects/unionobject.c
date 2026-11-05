@@ -1,9 +1,4 @@
 // typing.Union -- used to represent e.g. Union[int, str], int | str
-/* Defer line of the value-API waves (value-api-v2a0.md, section 1.5): the
-   callers of the protocol marks in this unit are converted by W2's caller
-   batches, which remove this line. */
-#define Py_VALUE_DEFER_MARKS 1
-
 #include "Python.h"
 #include "pycore_list.h"          // PyList_AppendValue()
 #include "pycore_object.h"  // _PyObject_GC_TRACK/UNTRACK
@@ -13,6 +8,7 @@
 #include "pycore_unicodeobject.h" // _PyUnicode_EqualToASCIIString
 #include "pycore_unionobject.h"
 #include "pycore_value.h"         // PyValue_FromObjectBorrow()
+#include "pycore_value_slots.h"  // _Py_VALUE_NOTIMPL_RICHCMP()
 #include "pycore_value_api.h"     // _PyValue_AsObjectAt()
 #include "pycore_weakref.h"       // FT_CLEAR_WEAKREFS()
 
@@ -68,7 +64,7 @@ union_hash(PyObject *self)
             if (arg == NULL) {
                 return -1;
             }
-            Py_hash_t hash = PyObject_Hash(arg);
+            Py_hash_t hash = _PyValue_Hash(PyValue_FromObjectBorrow(arg));
             Py_DECREF(arg);
             if (hash == -1) {
                 return -1;
@@ -79,13 +75,13 @@ union_hash(PyObject *self)
         PyErr_Format(PyExc_TypeError, "union contains %zd unhashable elements", n);
         return -1;
     }
-    return PyObject_Hash(alias->hashable_args);
+    return _PyValue_Hash(PyValue_FromObjectBorrow(alias->hashable_args));
 }
 
 static int
 unions_equal(unionobject *a, unionobject *b)
 {
-    int result = PyObject_RichCompareBool(a->hashable_args, b->hashable_args, Py_EQ);
+    int result = _PyValue_RichCompareBool(PyValue_FromObjectBorrow(a->hashable_args), PyValue_FromObjectBorrow(b->hashable_args), Py_EQ);
     if (result == -1) {
         return -1;
     }
@@ -103,7 +99,7 @@ unions_equal(unionobject *a, unionobject *b)
             if (arg_a == NULL) {
                 return -1;
             }
-            int result = PySequence_Contains(b->unhashable_args, arg_a);
+            int result = _PyValue_Contains(PyValue_FromObjectBorrow(b->unhashable_args), PyValue_FromObjectBorrow(arg_a));
             Py_DECREF(arg_a);
             if (result == -1) {
                 return -1;
@@ -118,7 +114,7 @@ unions_equal(unionobject *a, unionobject *b)
             if (arg_b == NULL) {
                 return -1;
             }
-            int result = PySequence_Contains(a->unhashable_args, arg_b);
+            int result = _PyValue_Contains(PyValue_FromObjectBorrow(a->unhashable_args), PyValue_FromObjectBorrow(arg_b));
             Py_DECREF(arg_b);
             if (result == -1) {
                 return -1;
@@ -192,7 +188,7 @@ unionbuilder_finalize(unionbuilder *ub)
 static bool
 unionbuilder_add_single_unchecked(unionbuilder *ub, PyObject *arg)
 {
-    Py_hash_t hash = PyObject_Hash(arg);
+    Py_hash_t hash = _PyValue_Hash(PyValue_FromObjectBorrow(arg));
     if (hash == -1) {
         PyErr_Clear();
         if (ub->unhashable_args == NULL) {
@@ -202,7 +198,7 @@ unionbuilder_add_single_unchecked(unionbuilder *ub, PyObject *arg)
             }
         }
         else {
-            int contains = PySequence_Contains(ub->unhashable_args, arg);
+            int contains = _PyValue_Contains(PyValue_FromObjectBorrow(ub->unhashable_args), PyValue_FromObjectBorrow(arg));
             if (contains < 0) {
                 return false;
             }
@@ -464,7 +460,10 @@ union_getattro(PyObject *self, PyObject *name)
                 break;
             }
             if (_PyUnicode_EqualToASCIIString(name, *p)) {
-                return PyObject_GetAttr((PyObject *) Py_TYPE(alias), name);
+                PyValue attr_v = _PyValue_GetAttr(
+                    PyValue_FromObjectBorrow((PyObject *) Py_TYPE(alias)), name);
+                return PyValue_IsNull(attr_v) ? NULL
+                     : _PyValue_AsObjectStealAt(attr_v, BOX_SITE_ATTRIBUTE);
             }
         }
     }
@@ -559,6 +558,8 @@ static PyMethodDef union_methods[] = {
     {0}
 };
 
+_Py_VALUE_NOTIMPL_RICHCMP(union_richcompare_value, union_richcompare)
+
 PyTypeObject _PyUnion_Type = {
     PyVarObject_HEAD_INIT(&PyType_Type, 0)
     .tp_name = "typing.Union",
@@ -581,6 +582,9 @@ PyTypeObject _PyUnion_Type = {
     .tp_repr = union_repr,
     .tp_getset = union_properties,
     .tp_weaklistoffset = offsetof(unionobject, weakreflist),
+    .tp_value = {
+        .richcompare = _Py_VALUE_SLOT_INIT(richcompare, union_richcompare_value),
+    },
 };
 
 static PyObject *

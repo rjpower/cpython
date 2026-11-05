@@ -20,21 +20,6 @@ preserve
 #include "pycore_value_ops.h"     // _PyValue_Index()
 
 static PyObject *
-bytearray_iconcat_impl(PyByteArrayObject *self, PyObject *other);
-
-static PyObject *
-bytearray_iconcat(PyObject *self, PyObject *other)
-{
-    PyObject *return_value = NULL;
-
-    Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = bytearray_iconcat_impl((PyByteArrayObject *)self, other);
-    Py_END_CRITICAL_SECTION();
-
-    return return_value;
-}
-
-static PyObject *
 bytearray_repeat_impl(PyByteArrayObject *self, Py_ssize_t count);
 
 static PyObject *
@@ -59,37 +44,6 @@ bytearray_irepeat(PyObject *self, Py_ssize_t count)
 
     Py_BEGIN_CRITICAL_SECTION(self);
     return_value = bytearray_irepeat_impl((PyByteArrayObject *)self, count);
-    Py_END_CRITICAL_SECTION();
-
-    return return_value;
-}
-
-static PyObject *
-bytearray_getitem_impl(PyByteArrayObject *self, Py_ssize_t i);
-
-static PyObject *
-bytearray_getitem(PyObject *self, Py_ssize_t i)
-{
-    PyObject *return_value = NULL;
-
-    Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = bytearray_getitem_impl((PyByteArrayObject *)self, i);
-    Py_END_CRITICAL_SECTION();
-
-    return return_value;
-}
-
-static int
-bytearray_setitem_impl(PyByteArrayObject *self, Py_ssize_t i,
-                       PyObject *value);
-
-static int
-bytearray_setitem(PyObject *self, Py_ssize_t i, PyObject *value)
-{
-    int return_value = -1;
-
-    Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = bytearray_setitem_impl((PyByteArrayObject *)self, i, value);
     Py_END_CRITICAL_SECTION();
 
     return return_value;
@@ -2008,4 +1962,4 @@ bytearray_sizeof(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyOb
 
     return return_value;
 }
-/*[clinic end generated code: output=f810ef73739caf48 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=c4d5800023949df1 input=a9049054013a1b77]*/

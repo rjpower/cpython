@@ -1,11 +1,6 @@
 
 /* Error handling */
 
-/* Defer line of the value-API waves (value-api-v2a0.md, section 1.5): the
-   callers of the protocol marks in this unit are converted by W2's caller
-   batches, which remove this line. */
-#define Py_VALUE_DEFER_MARKS 1
-
 #include "Python.h"
 #include "pycore_audit.h"         // _PySys_Audit()
 #include "pycore_call.h"          // _PyObject_CallNoArgs()
@@ -140,7 +135,7 @@ _PyErr_GetTopmostException(PyThreadState *tstate)
 static PyObject *
 get_normalization_failure_note(PyThreadState *tstate, PyObject *exception, PyObject *value)
 {
-    PyObject *args = PyObject_Repr(value);
+    PyObject *args = _PyValue_Repr(PyValue_FromObjectBorrow(value));
     if (args == NULL) {
         _PyErr_Clear(tstate);
         args = PyUnicode_FromFormat("<unknown>");
@@ -1572,7 +1567,10 @@ write_unraisable_exc_file(PyThreadState *tstate, PyObject *exc_type,
 
     assert(PyExceptionClass_Check(exc_type));
 
-    PyObject *modulename = PyObject_GetAttr(exc_type, &_Py_ID(__module__));
+    PyValue modulename_v = _PyValue_GetAttr(PyValue_FromObjectBorrow(exc_type),
+                                            &_Py_ID(__module__));
+    PyObject *modulename = PyValue_IsNull(modulename_v) ? NULL
+        : _PyValue_AsObjectStealAt(modulename_v, BOX_SITE_ATTRIBUTE);
     if (modulename == NULL || !PyUnicode_Check(modulename)) {
         Py_XDECREF(modulename);
         _PyErr_Clear(tstate);
@@ -1875,7 +1873,7 @@ PyErr_SyntaxLocationObjectEx(PyObject *filename, int lineno, int col_offset,
         _PyErr_Clear(tstate);
     }
     else {
-        if (PyObject_SetAttr(exc, &_Py_ID(lineno), tmp)) {
+        if (_PyValue_SetAttr(PyValue_FromObjectBorrow(exc), &_Py_ID(lineno), PyValue_FromObjectBorrow(tmp))) {
             _PyErr_Clear(tstate);
         }
         Py_DECREF(tmp);
@@ -1887,7 +1885,7 @@ PyErr_SyntaxLocationObjectEx(PyObject *filename, int lineno, int col_offset,
             _PyErr_Clear(tstate);
         }
     }
-    if (PyObject_SetAttr(exc, &_Py_ID(offset), tmp ? tmp : Py_None)) {
+    if (_PyValue_SetAttr(PyValue_FromObjectBorrow(exc), &_Py_ID(offset), PyValue_FromObjectBorrow(tmp ? tmp : Py_None))) {
         _PyErr_Clear(tstate);
     }
     Py_XDECREF(tmp);
@@ -1899,7 +1897,7 @@ PyErr_SyntaxLocationObjectEx(PyObject *filename, int lineno, int col_offset,
             _PyErr_Clear(tstate);
         }
     }
-    if (PyObject_SetAttr(exc, &_Py_ID(end_lineno), tmp ? tmp : Py_None)) {
+    if (_PyValue_SetAttr(PyValue_FromObjectBorrow(exc), &_Py_ID(end_lineno), PyValue_FromObjectBorrow(tmp ? tmp : Py_None))) {
         _PyErr_Clear(tstate);
     }
     Py_XDECREF(tmp);
@@ -1911,20 +1909,20 @@ PyErr_SyntaxLocationObjectEx(PyObject *filename, int lineno, int col_offset,
             _PyErr_Clear(tstate);
         }
     }
-    if (PyObject_SetAttr(exc, &_Py_ID(end_offset), tmp ? tmp : Py_None)) {
+    if (_PyValue_SetAttr(PyValue_FromObjectBorrow(exc), &_Py_ID(end_offset), PyValue_FromObjectBorrow(tmp ? tmp : Py_None))) {
         _PyErr_Clear(tstate);
     }
     Py_XDECREF(tmp);
 
     tmp = NULL;
     if (filename != NULL) {
-        if (PyObject_SetAttr(exc, &_Py_ID(filename), filename)) {
+        if (_PyValue_SetAttr(PyValue_FromObjectBorrow(exc), &_Py_ID(filename), PyValue_FromObjectBorrow(filename))) {
             _PyErr_Clear(tstate);
         }
 
         tmp = PyErr_ProgramTextObject(filename, lineno);
         if (tmp) {
-            if (PyObject_SetAttr(exc, &_Py_ID(text), tmp)) {
+            if (_PyValue_SetAttr(PyValue_FromObjectBorrow(exc), &_Py_ID(text), PyValue_FromObjectBorrow(tmp))) {
                 _PyErr_Clear(tstate);
             }
             Py_DECREF(tmp);
@@ -1939,9 +1937,9 @@ PyErr_SyntaxLocationObjectEx(PyObject *filename, int lineno, int col_offset,
             _PyErr_Clear(tstate);
         }
         else if (!rc) {
-            tmp = PyObject_Str(exc);
+            tmp = _PyValue_Str(PyValue_FromObjectBorrow(exc));
             if (tmp) {
-                if (PyObject_SetAttr(exc, &_Py_ID(msg), tmp)) {
+                if (_PyValue_SetAttr(PyValue_FromObjectBorrow(exc), &_Py_ID(msg), PyValue_FromObjectBorrow(tmp))) {
                     _PyErr_Clear(tstate);
                 }
                 Py_DECREF(tmp);
@@ -1956,7 +1954,7 @@ PyErr_SyntaxLocationObjectEx(PyObject *filename, int lineno, int col_offset,
             _PyErr_Clear(tstate);
         }
         else if (!rc) {
-            if (PyObject_SetAttr(exc, &_Py_ID(print_file_and_line), Py_None)) {
+            if (_PyValue_SetAttr(PyValue_FromObjectBorrow(exc), &_Py_ID(print_file_and_line), _PyValue_FromObjectKnown(Py_None))) {
                 _PyErr_Clear(tstate);
             }
         }

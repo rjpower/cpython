@@ -1,13 +1,9 @@
-/* Defer line of the value-API waves (value-api-v2a0.md, section 1.5): the
-   callers of the protocol marks in this unit are converted by W2's caller
-   batches, which remove this line. */
-#define Py_VALUE_DEFER_MARKS 1
-
 #include "Python.h"
 #include "pycore_ast.h"           // expr_ty
 #include "pycore_pystate.h"       // _PyInterpreterState_GET()
 #include "pycore_runtime.h"       // _Py_ID()
 #include "pycore_value_api.h"     // _PyValue_AsObjectAt()
+#include "pycore_value_ops.h"     // _PyValue_Repr()
 #include <stdbool.h>
 
 /* This limited unparser is used to convert annotations back to strings
@@ -92,7 +88,7 @@ append_charp(PyUnicodeWriter *writer, const char *charp)
 static int
 append_repr(PyUnicodeWriter *writer, PyObject *obj)
 {
-    PyObject *repr = PyObject_Repr(obj);
+    PyObject *repr = _PyValue_Repr(PyValue_FromObjectBorrow(obj));
     if (!repr) {
         return -1;
     }

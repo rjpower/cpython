@@ -2,15 +2,11 @@
    built-in formatters for string, int, float.  that is, the versions
    of int.__float__, etc., that take and return unicode objects */
 
-/* Defer line of the value-API waves (value-api-v2a0.md, section 1.5): the
-   callers of the protocol marks in this unit are converted by W2's caller
-   batches, which remove this line. */
-#define Py_VALUE_DEFER_MARKS 1
-
 #include "Python.h"
 #include "pycore_fileutils.h"     // _Py_GetLocaleconvNumeric()
 #include "pycore_long.h"          // _PyLong_FormatWriter()
 #include "pycore_unicodeobject.h" // PyUnicode_MAX_CHAR_VALUE()
+#include "pycore_value_ops.h"     // _PyValue_Str()
 #include <locale.h>
 
 
@@ -1790,7 +1786,7 @@ format_obj(PyObject *obj, _PyUnicodeWriter *writer)
     PyObject *str;
     int err;
 
-    str = PyObject_Str(obj);
+    str = _PyValue_Str(PyValue_FromObjectBorrow(obj));
     if (str == NULL)
         return -1;
     err = _PyUnicodeWriter_WriteStr(writer, str);
@@ -1879,7 +1875,11 @@ _PyLong_FormatAdvancedWriter(_PyUnicodeWriter *writer,
     case 'G':
     case '%':
         /* convert to float */
-        tmp = PyNumber_Float(obj);
+        {
+            PyValue tmp_v = _PyValue_Float(PyValue_FromObjectBorrow(obj));
+            tmp = PyValue_IsNull(tmp_v) ? NULL
+                : _PyValue_AsObjectStealAt(tmp_v, BOX_SITE_NUMBER);
+        }
         if (tmp == NULL)
             goto done;
         result = format_float_internal(tmp, &format, writer);

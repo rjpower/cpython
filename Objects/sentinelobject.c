@@ -6,6 +6,7 @@
 #include "pycore_interpframe.h"   // _PyFrame_IsIncomplete()
 #include "pycore_object.h"        // _PyObject_GC_TRACK/UNTRACK()
 #include "pycore_value.h"      // PyValue_AsKnownObjectBorrow()
+#include "pycore_value_slots.h"  // _Py_VALUE_NOTIMPL_BINARY()
 #include "pycore_tuple.h"         // _PyTuple_FromPair
 #include "pycore_typeobject.h"    // _Py_BaseObject_RichCompare()
 #include "pycore_unionobject.h"   // _Py_union_type_or()
@@ -206,6 +207,8 @@ PyDoc_STRVAR(sentinel_doc,
 "--\n\n"
 "Create a unique sentinel object with the given name.");
 
+_Py_VALUE_NOTIMPL_BINARY(_Py_union_type_or_value, _Py_union_type_or)
+
 PyTypeObject PySentinel_Type = {
     PyVarObject_HEAD_INIT(&PyType_Type, 0)
     .tp_name = "sentinel",
@@ -225,4 +228,7 @@ PyTypeObject PySentinel_Type = {
     .tp_members = sentinel_members,
     .tp_new = sentinel_new,
     .tp_free = PyObject_GC_Del,
+    .tp_value = {
+        .nb_or = _Py_VALUE_SLOT_INIT(nb_or, _Py_union_type_or_value),
+    },
 };

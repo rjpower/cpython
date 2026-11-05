@@ -63,21 +63,6 @@ list_inplace_repeat(PyObject *self, Py_ssize_t n)
     return return_value;
 }
 
-static int
-list_ass_item_impl(PyListObject *a, Py_ssize_t i, PyObject *v);
-
-static int
-list_ass_item(PyObject *a, Py_ssize_t i, PyObject *v)
-{
-    int return_value = -1;
-
-    Py_BEGIN_CRITICAL_SECTION(a);
-    return_value = list_ass_item_impl((PyListObject *)a, i, v);
-    Py_END_CRITICAL_SECTION();
-
-    return return_value;
-}
-
 PyDoc_STRVAR(list_insert__doc__,
 "insert($self, index, object, /)\n"
 "--\n"
@@ -563,4 +548,4 @@ list___reversed__(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyO
 
     return return_value;
 }
-/*[clinic end generated code: output=c945538307cb82a2 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=7b40eff22bbb7e8f input=a9049054013a1b77]*/

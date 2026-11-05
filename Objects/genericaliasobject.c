@@ -1,10 +1,5 @@
 // types.GenericAlias -- used to represent e.g. list[int].
 
-/* Defer line of the value-API waves (value-api-v2a0.md, section 1.5): the
-   callers of the protocol marks in this unit are converted by W2's caller
-   batches, which remove this line. */
-#define Py_VALUE_DEFER_MARKS 1
-
 #include "Python.h"
 #include "pycore_ceval.h"         // _PyEval_GetBuiltin()
 #include "pycore_critical_section.h" // Py_BEGIN_CRITICAL_SECTION()
@@ -16,6 +11,8 @@
 #include "pycore_unicodeobject.h" // _PyUnicode_EqualToASCIIString()
 #include "pycore_unionobject.h"   // _Py_union_type_or, _PyGenericAlias_Check
 #include "pycore_value.h"
+#include "pycore_value_ops.h"    // _PyValue_GetItem()
+#include "pycore_value_slots.h"  // _Py_VALUE_NOTIMPL_RICHCMP()
 #include "pycore_value_api.h"     // _PyValue_AsObjectAt()
 #include "pycore_weakref.h"       // FT_CLEAR_WEAKREFS()
 
@@ -213,7 +210,7 @@ _Py_make_parameters(PyObject *args)
     const bool is_args_list = PyList_Check(args);
     PyObject *tuple_args = NULL;
     if (is_args_list) {
-        args = tuple_args = PySequence_Tuple(args);
+        args = tuple_args = _PyValue_SequenceTuple(PyValue_FromObjectBorrow(args));
         if (args == NULL) {
             goto cleanup;
         }
@@ -374,7 +371,10 @@ subs_tvars(PyObject *obj, PyObject *params, PyObject *argitems,
         }
         assert(j == PyTuple_GET_SIZE(subargs));
 
-        obj = PyObject_GetItem(obj, subargs);
+        PyValue item_v = _PyValue_GetItem(PyValue_FromObjectBorrow(obj),
+                                          PyValue_FromObjectBorrow(subargs));
+        obj = PyValue_IsNull(item_v) ? NULL
+            : _PyValue_AsObjectStealAt(item_v, BOX_SITE_SEQUENCE);
 
         Py_DECREF(subargs);
     }
@@ -394,7 +394,7 @@ _is_unpacked_typevartuple(PyObject *arg)
     }
     int res = PyObject_GetOptionalAttr(arg, &_Py_ID(__typing_is_unpacked_typevartuple__), &tmp);
     if (res > 0) {
-        res = PyObject_IsTrue(tmp);
+        res = _PyValue_IsTrue(PyValue_FromObjectBorrow(tmp));
         Py_DECREF(tmp);
     }
     return res;
@@ -478,7 +478,7 @@ _unpack_args(PyObject *item)
             return NULL;
         }
     }
-    Py_SETREF(newargs, PySequence_Tuple(newargs));
+    Py_SETREF(newargs, _PyValue_SequenceTuple(PyValue_FromObjectBorrow(newargs)));
     return newargs;
 }
 
@@ -547,7 +547,7 @@ _Py_subs_parameters(PyObject *self, PyObject *args, PyObject *parameters, PyObje
     const bool is_args_list = PyList_Check(args);
     PyObject *tuple_args = NULL;
     if (is_args_list) {
-        args = tuple_args = PySequence_Tuple(args);
+        args = tuple_args = _PyValue_SequenceTuple(PyValue_FromObjectBorrow(args));
         if (args == NULL) {
             Py_DECREF(item);
             return NULL;
@@ -583,7 +583,7 @@ _Py_subs_parameters(PyObject *self, PyObject *args, PyObject *parameters, PyObje
             else {
                 // _Py_subs_parameters returns a tuple. If the original arg was a list,
                 // convert subargs to a list as well.
-                PyObject *subargs_list = PySequence_List(subargs);
+                PyObject *subargs_list = _PyValue_SequenceList(PyValue_FromObjectBorrow(subargs));
                 Py_DECREF(subargs);
                 if (subargs_list == NULL) {
                     Py_DECREF(arg);
@@ -725,11 +725,11 @@ ga_hash(PyObject *self)
 {
     gaobject *alias = (gaobject *)self;
     // TODO: Hash in the hash for the origin
-    Py_hash_t h0 = PyObject_Hash(alias->origin);
+    Py_hash_t h0 = _PyValue_Hash(PyValue_FromObjectBorrow(alias->origin));
     if (h0 == -1) {
         return -1;
     }
-    Py_hash_t h1 = PyObject_Hash(alias->args);
+    Py_hash_t h1 = _PyValue_Hash(PyValue_FromObjectBorrow(alias->args));
     if (h1 == -1) {
         return -1;
     }
@@ -740,7 +740,7 @@ static inline PyObject *
 set_orig_class(PyObject *obj, PyObject *self)
 {
     if (obj != NULL) {
-        if (PyObject_SetAttr(obj, &_Py_ID(__orig_class__), self) < 0) {
+        if (_PyValue_SetAttr(PyValue_FromObjectBorrow(obj), &_Py_ID(__orig_class__), PyValue_FromObjectBorrow(self)) < 0) {
             if (!PyErr_ExceptionMatches(PyExc_AttributeError) &&
                 !PyErr_ExceptionMatches(PyExc_TypeError))
             {
@@ -809,7 +809,10 @@ ga_getattro(PyObject *self, PyObject *name)
         // When we see own attrs, it has a priority over `__origin__`'s attr.
         for (const char * const *p = attr_exceptions; ; p++) {
             if (*p == NULL) {
-                return PyObject_GetAttr(alias->origin, name);
+                PyValue attr_v = _PyValue_GetAttr(
+                    PyValue_FromObjectBorrow(alias->origin), name);
+                return PyValue_IsNull(attr_v) ? NULL
+                     : _PyValue_AsObjectStealAt(attr_v, BOX_SITE_ATTRIBUTE);
             }
             if (_PyUnicode_EqualToASCIIString(name, *p)) {
                 goto generic_getattr;
@@ -848,14 +851,17 @@ ga_richcompare(PyObject *a, PyObject *b, int op)
     if (aa->starred != bb->starred) {
         Py_RETURN_FALSE;
     }
-    int eq = PyObject_RichCompareBool(aa->origin, bb->origin, Py_EQ);
+    int eq = _PyValue_RichCompareBool(PyValue_FromObjectBorrow(aa->origin), PyValue_FromObjectBorrow(bb->origin), Py_EQ);
     if (eq < 0) {
         return NULL;
     }
     if (!eq) {
         Py_RETURN_FALSE;
     }
-    return PyObject_RichCompare(aa->args, bb->args, Py_EQ);
+    PyValue cmp_v = _PyValue_RichCompare(PyValue_FromObjectBorrow(aa->args),
+                                         PyValue_FromObjectBorrow(bb->args), Py_EQ);
+    return PyValue_IsNull(cmp_v) ? NULL
+         : _PyValue_AsObjectStealAt(cmp_v, BOX_SITE_COMPARE);
 }
 
 static PyObject *
@@ -888,7 +894,7 @@ ga_reduce(PyObject *self, PyObject *Py_UNUSED(ignored))
     if (alias->starred) {
         PyObject *tmp = Py_GenericAlias(alias->origin, alias->args);
         if (tmp != NULL) {
-            Py_SETREF(tmp, PyObject_GetIter(tmp));
+            Py_SETREF(tmp, _PyValue_GetIter(PyValue_FromObjectBorrow(tmp)));
         }
         if (tmp == NULL) {
             return NULL;
@@ -918,7 +924,7 @@ ga_dir(PyObject *self, PyObject *Py_UNUSED(ignored))
             if (dir_entry == NULL) {
                 goto error;
             }
-            int contains = PySequence_Contains(dir, dir_entry);
+            int contains = _PyValue_Contains(PyValue_FromObjectBorrow(dir), PyValue_FromObjectBorrow(dir_entry));
             if (contains < 0) {
                 goto error;
             }
@@ -1165,6 +1171,10 @@ ga_iter(PyObject *self) {
 // TODO:
 // - argument clinic?
 // - cache?
+_Py_VALUE_NOTIMPL_RICHCMP(ga_richcompare_value, ga_richcompare)
+
+_Py_VALUE_NOTIMPL_BINARY(_Py_union_type_or_value, _Py_union_type_or)
+
 PyTypeObject Py_GenericAliasType = {
     PyVarObject_HEAD_INIT(&PyType_Type, 0)
     .tp_name = "types.GenericAlias",
@@ -1189,6 +1199,10 @@ PyTypeObject Py_GenericAliasType = {
     .tp_getset = ga_properties,
     .tp_iter = ga_iter,
     .tp_vectorcall_offset = offsetof(gaobject, vectorcall),
+    .tp_value = {
+        .richcompare = _Py_VALUE_SLOT_INIT(richcompare, ga_richcompare_value),
+        .nb_or = _Py_VALUE_SLOT_INIT(nb_or, _Py_union_type_or_value),
+    },
 };
 
 PyObject *

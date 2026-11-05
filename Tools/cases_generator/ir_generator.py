@@ -582,7 +582,8 @@ INPLACE_READERS = {
     # as values and take a count of what they keep
     "_PyValue_Contains", "_PyValue_Invert", "_PyValue_IsTrue",
     "_PyValue_Negative", "_PyValue_Positive", "_PyValue_RichCompare",
-    "_PyValue_Str", "_PyValue_Repr", "_PyValue_ASCII",
+    "_PyValue_Str", "_PyValue_Repr", "_PyValue_ASCII", "_PyValue_Format",
+    "_PyValue_SequenceTuple",
     # Attribute and subscript dispatchers (I4, I3)
     "_PyValue_GetAttr", "_PyValue_SetAttr", "_PyValue_GetMethod",
     "_PySuper_LookupValue", "value_import_level", "super_call",
@@ -651,7 +652,7 @@ OBJECT_READERS = {
     # the key as a value)
     "PyDict_ContainsValue", "PySet_ContainsValue",
     "PyFunction_New",
-    "PyObject_Format", "PyUnicode_Concat",
+    "PyUnicode_Concat",
 
     "_PyDict_SetValue_Take2", "_PyEval_CheckExceptStarTypeValid",
     "_PyEval_CheckExceptTypeValid", "value_exception_group_match",

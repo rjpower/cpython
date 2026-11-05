@@ -1,10 +1,5 @@
 /* Frame object implementation */
 
-/* Defer line of the value-API waves (value-api-v2a0.md, section 1.5): the
-   callers of the protocol marks in this unit are converted by W2's caller
-   batches, which remove this line. */
-#define Py_VALUE_DEFER_MARKS 1
-
 #include "Python.h"
 #include "pycore_cell.h"          // _PyCell_GetValue()
 #include "pycore_ceval.h"         // _PyEval_SetOpcodeTrace()
@@ -21,6 +16,7 @@
 #include "pycore_setobject.h"     // PySet_AddValue()
 #include "pycore_tuple.h"         // _PyTuple_FromPair
 #include "pycore_unicodeobject.h" // _PyUnicode_Equal()
+#include "pycore_value_ops.h"     // _PyValue_GetItem()
 #include "pycore_value_api.h"     // _PyValue_AsObjectAt()
 #include "pycore_weakref.h"       // FT_CLEAR_WEAKREFS()
 
@@ -157,7 +153,7 @@ framelocalsproxy_getkeyindex(PyFrameObject *frame, PyObject *key, bool read, PyO
     PyCodeObject *co = _PyFrame_GetCode(frame->f_frame);
 
     // Ensure that the key is hashable.
-    Py_hash_t key_hash = PyObject_Hash(key);
+    Py_hash_t key_hash = _PyValue_Hash(PyValue_FromObjectBorrow(key));
     if (key_hash == -1) {
         return -2;
     }
@@ -200,12 +196,12 @@ framelocalsproxy_getkeyindex(PyFrameObject *frame, PyObject *key, bool read, PyO
     // is not interned.
     for (int i = 0; i < co->co_nlocalsplus; i++) {
         PyObject *name = _PyTuple_GET_OBJECT(co->co_localsplusnames, i);
-        Py_hash_t name_hash = PyObject_Hash(name);
+        Py_hash_t name_hash = _PyValue_Hash(PyValue_FromObjectBorrow(name));
         assert(name_hash != -1);  // keys are exact unicode
         if (name_hash != key_hash) {
             continue;
         }
-        int same = PyObject_RichCompareBool(name, key, Py_EQ);
+        int same = _PyValue_RichCompareBool(PyValue_FromObjectBorrow(name), PyValue_FromObjectBorrow(key), Py_EQ);
         if (same < 0) {
             return -2;
         }
@@ -391,7 +387,7 @@ framelocalsproxy_merge(PyObject* self, PyObject* other)
         return -1;
     }
 
-    PyObject *iter = PyObject_GetIter(keys);
+    PyObject *iter = _PyValue_GetIter(PyValue_FromObjectBorrow(keys));
     Py_DECREF(keys);
     if (iter == NULL) {
         return -1;
@@ -401,7 +397,10 @@ framelocalsproxy_merge(PyObject* self, PyObject* other)
     PyObject *value = NULL;
 
     while ((key = PyIter_Next(iter)) != NULL) {
-        value = PyObject_GetItem(other, key);
+        PyValue value_v = _PyValue_GetItem(PyValue_FromObjectBorrow(other),
+                                           PyValue_FromObjectBorrow(key));
+        value = PyValue_IsNull(value_v) ? NULL
+              : _PyValue_AsObjectStealAt(value_v, BOX_SITE_FRAME);
         if (value == NULL) {
             Py_DECREF(key);
             Py_DECREF(iter);
@@ -560,7 +559,7 @@ framelocalsproxy_iter(PyObject *self)
         return NULL;
     }
 
-    PyObject* iter = PyObject_GetIter(keys);
+    PyObject* iter = _PyValue_GetIter(PyValue_FromObjectBorrow(keys));
     Py_XDECREF(keys);
 
     return iter;
@@ -589,9 +588,11 @@ framelocalsproxy_richcompare(PyObject *lhs, PyObject *rhs, int op)
             return NULL;
         }
 
-        PyObject *result = PyObject_RichCompare(dct, rhs, op);
+        PyValue result_v = _PyValue_RichCompare(PyValue_FromObjectBorrow(dct),
+                                                PyValue_FromObjectBorrow(rhs), op);
         Py_DECREF(dct);
-        return result;
+        return PyValue_IsNull(result_v) ? NULL
+             : _PyValue_AsObjectStealAt(result_v, BOX_SITE_COMPARE);
     }
 
     Py_RETURN_NOTIMPLEMENTED;
@@ -617,7 +618,7 @@ framelocalsproxy_repr(PyObject *self)
         return NULL;
     }
 
-    PyObject *repr = PyObject_Repr(dct);
+    PyObject *repr = _PyValue_Repr(PyValue_FromObjectBorrow(dct));
     Py_DECREF(dct);
 
     Py_ReprLeave(self);

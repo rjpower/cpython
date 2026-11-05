@@ -1,13 +1,9 @@
 /* Format bytes as hexadecimal */
 
-/* Defer line of the value-API waves (value-api-v2a0.md, section 1.5): the
-   callers of the protocol marks in this unit are converted by W2's caller
-   batches, which remove this line. */
-#define Py_VALUE_DEFER_MARKS 1
-
 #include "Python.h"
 #include "pycore_strhex.h"        // _Py_strhex_with_sep()
 #include "pycore_unicodeobject.h" // _PyUnicode_CheckConsistency()
+#include "pycore_value_ops.h"     // _PyValue_Size()
 
 /* Scalar hexlify: convert len bytes to 2*len hex characters.
    Uses table lookup via Py_hexdigits for the conversion. */
@@ -126,7 +122,7 @@ _Py_strhex_impl(const char* argbuf, Py_ssize_t arglen,
 
     Py_UCS1 sep_char = 0;
     if (sep) {
-        Py_ssize_t seplen = PyObject_Length((PyObject*)sep);
+        Py_ssize_t seplen = _PyValue_Size(PyValue_FromObjectBorrow((PyObject*)sep));
         if (seplen < 0) {
             return NULL;
         }

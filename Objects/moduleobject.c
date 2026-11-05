@@ -1,10 +1,5 @@
 /* Module object implementation */
 
-/* Defer line of the value-API waves (value-api-v2a0.md, section 1.5): the
-   callers of the protocol marks in this unit are converted by W2's caller
-   batches, which remove this line. */
-#define Py_VALUE_DEFER_MARKS 1
-
 #include "Python.h"
 #include "pycore_call.h"          // _PyObject_CallNoArgs()
 #include "pycore_ceval.h"         // _PyEval_EnableGILTransient()
@@ -827,7 +822,7 @@ PyModule_SetDocString(PyObject *m, const char *doc)
     PyObject *v;
 
     v = PyUnicode_FromString(doc);
-    if (v == NULL || PyObject_SetAttr(m, &_Py_ID(__doc__), v) != 0) {
+    if (v == NULL || _PyValue_SetAttr(PyValue_FromObjectBorrow(m), &_Py_ID(__doc__), PyValue_FromObjectBorrow(v)) != 0) {
         Py_XDECREF(v);
         return -1;
     }
@@ -1243,7 +1238,7 @@ _PyModuleSpec_IsInitializing(PyObject *spec)
     PyObject *value;
     int rc = PyObject_GetOptionalAttr(spec, &_Py_ID(_initializing), &value);
     if (rc > 0) {
-        rc = PyObject_IsTrue(value);
+        rc = _PyValue_IsTrue(PyValue_FromObjectBorrow(value));
         Py_DECREF(value);
     }
     return rc;
@@ -1262,7 +1257,7 @@ _PyModuleSpec_IsUninitializedSubmodule(PyObject *spec, PyObject *name)
     PyObject *value;
     int rc = PyObject_GetOptionalAttr(spec, &_Py_ID(_uninitialized_submodules), &value);
     if (rc > 0) {
-        rc = PySequence_Contains(value, name);
+        rc = _PyValue_Contains(PyValue_FromObjectBorrow(value), PyValue_FromObjectBorrow(name));
         Py_DECREF(value);
     }
     return rc;
@@ -1279,7 +1274,7 @@ _PyModuleSpec_GetFileOrigin(PyObject *spec, PyObject **p_origin)
     // If origin is not a location, or doesn't exist, or is not a str, we could consider falling
     // back to module.__file__. But the cases in which module.__file__ is not __spec__.origin
     // are cases in which we probably shouldn't be guessing.
-    rc = PyObject_IsTrue(has_location);
+    rc = _PyValue_IsTrue(PyValue_FromObjectBorrow(has_location));
     Py_DECREF(has_location);
     if (rc <= 0) {
         return rc;
@@ -1673,7 +1668,10 @@ module_dir(PyObject *self, PyObject *args)
     if (PyModule_CheckExact(self)) {
         dict = Py_NewRef(((PyModuleObject *)self)->md_dict);
     } else {
-        dict = PyObject_GetAttr(self, &_Py_ID(__dict__));
+        PyValue dict_v = _PyValue_GetAttr(PyValue_FromObjectBorrow(self),
+                                          &_Py_ID(__dict__));
+        dict = PyValue_IsNull(dict_v) ? NULL
+            : _PyValue_AsObjectStealAt(dict_v, BOX_SITE_ATTRIBUTE);
     }
 
     if (dict != NULL) {
@@ -1707,7 +1705,10 @@ static PyMethodDef module_methods[] = {
 static PyObject *
 module_load_dict(PyModuleObject *m)
 {
-    PyObject *dict = PyObject_GetAttr((PyObject *)m, &_Py_ID(__dict__));
+    PyValue dict_v = _PyValue_GetAttr(PyValue_FromObjectBorrow((PyObject *)m),
+                                      &_Py_ID(__dict__));
+    PyObject *dict = PyValue_IsNull(dict_v) ? NULL
+        : _PyValue_AsObjectStealAt(dict_v, BOX_SITE_ATTRIBUTE);
     if (dict == NULL) {
         return NULL;
     }

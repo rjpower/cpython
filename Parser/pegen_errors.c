@@ -1,8 +1,3 @@
-/* Defer line of the value-API waves (value-api-v2a0.md, section 1.5): the
-   callers of the protocol marks in this unit are converted by W2's caller
-   batches, which remove this line. */
-#define Py_VALUE_DEFER_MARKS 1
-
 #include <Python.h>
 #include <errcode.h>
 
@@ -123,7 +118,7 @@ _Pypegen_raise_decode_error(Parser *p)
         PyObject *tback;
         PyObject *errstr;
         PyErr_Fetch(&type, &value, &tback);
-        errstr = PyObject_Str(value);
+        errstr = _PyValue_Str(PyValue_FromObjectBorrow(value));
         if (errstr) {
             RAISE_SYNTAX_ERROR("(%s) %U", errtype, errstr);
             Py_DECREF(errstr);

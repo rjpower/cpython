@@ -1,10 +1,5 @@
 /* t-string Template object implementation */
 
-/* Defer line of the value-API waves (value-api-v2a0.md, section 1.5): the
-   callers of the protocol marks in this unit are converted by W2's caller
-   batches, which remove this line. */
-#define Py_VALUE_DEFER_MARKS 1
-
 #include "Python.h"
 #include "pycore_interpolation.h" // _PyInterpolation_CheckExact()
 #include "pycore_runtime.h"       // _Py_STR()
@@ -237,13 +232,13 @@ template_iter(PyObject *op)
     iter->stringsiter = NULL;
     iter->interpolationsiter = NULL;
 
-    PyObject *stringsiter = PyObject_GetIter(self->strings);
+    PyObject *stringsiter = _PyValue_GetIter(PyValue_FromObjectBorrow(self->strings));
     if (stringsiter == NULL) {
         Py_DECREF(iter);
         return NULL;
     }
 
-    PyObject *interpolationsiter = PyObject_GetIter(self->interpolations);
+    PyObject *interpolationsiter = _PyValue_GetIter(PyValue_FromObjectBorrow(self->interpolations));
     if (interpolationsiter == NULL) {
         Py_DECREF(iter);
         Py_DECREF(stringsiter);
@@ -311,7 +306,11 @@ template_concat_templates(templateobject *self, templateobject *other)
         return NULL;
     }
 
-    PyObject *newinterpolations = PySequence_Concat(self->interpolations, other->interpolations);
+    PyValue newinterpolations_v = _PyValue_SequenceConcat(
+        PyValue_FromObjectBorrow(self->interpolations),
+        PyValue_FromObjectBorrow(other->interpolations));
+    PyObject *newinterpolations = PyValue_IsNull(newinterpolations_v) ? NULL
+        : _PyValue_AsObjectStealAt(newinterpolations_v, BOX_SITE_SEQUENCE);
     if (newinterpolations == NULL) {
         Py_DECREF(newstrings);
         return NULL;

@@ -9,6 +9,7 @@ import enum
 import functools
 import gc
 import sys
+import pickle
 import unittest
 
 from test.support import import_helper
@@ -204,6 +205,77 @@ class MethodDescriptorMessageTests(unittest.TestCase):
                                    r"exactly one argument"):
                     f()
 
+    def test_sizeof_of_an_inline_int(self):
+        # The size of the box, as int.__sizeof__() reports it.
+        for n in (0, 5, -5, 2**30, 2**40):
+            with self.subTest(n=n):
+                self.assertEqual(object.__sizeof__(n), int.__sizeof__(n))
+
+
+class TypeCallTests(unittest.TestCase):
+    """The value vectorcall of int, bool, str, list, set, frozenset and range
+    agrees with the tp_new path (type.__call__) on every shape of call."""
+
+    SHAPES = [
+        (int, (), {}), (int, (5,), {}), (int, (2**70,), {}),
+        (int, (1.5,), {}), (int, ('7', 8), {}), (int, ('11',), {'base': 2}),
+        (int, (), {'x': 1}), (int, (b'1', 10), {}),
+        (int, ([],), {}),
+        (bool, (), {}), (bool, (0,), {}), (bool, (2.5,), {}),
+        (bool, ([],), {}), (bool, (1, 2), {}), (bool, (), {'x': 1}),
+        (str, (), {}), (str, (5,), {}), (str, (1.5,), {}),
+        (str, (b'ab', 'ascii'), {}), (str, (b'ab', 'ascii', 'strict'), {}),
+        (str, (b'ab',), {'encoding': 'ascii'}), (str, (1, 'ascii'), {}),
+        (str, (b'ab', 1), {}), (str, (b'ab', 'ascii', 1), {}),
+        (str, (), {'object': 1}),
+        (list, (), {}), (list, ((1, 2),), {}), (list, (5,), {}),
+        (list, (), {'x': 1}), (list, ([], []), {}),
+        (set, (), {}), (set, ([1, 2],), {}), (set, (5,), {}),
+        (set, (), {'x': 1}), (set, ([[]],), {}),
+        (frozenset, (), {}), (frozenset, ([1, 2],), {}), (frozenset, (5,), {}),
+        (frozenset, (), {'x': 1}),
+        (range, (), {}), (range, (5,), {}), (range, (1, 10, 2), {}),
+        (range, (1.5,), {}), (range, (1, 2, 0), {}), (range, (1, 2, 3, 4), {}),
+        (range, (2**70,), {}), (range, (), {'x': 1}), (range, ('a',), {}),
+    ]
+
+    def outcome(self, func, *args, **kwargs):
+        try:
+            result = func(*args, **kwargs)
+        except Exception as exc:
+            return type(exc), str(exc)
+        return type(result), result
+
+    def test_shapes(self):
+        for cls, args, kwargs in self.SHAPES:
+            with self.subTest(cls=cls.__name__, args=args, kwargs=kwargs):
+                direct = self.outcome(cls, *args, **kwargs)
+                slow = self.outcome(type.__call__, cls, *args, **kwargs)
+                self.assertEqual(direct, slow)
+
+    def test_too_many_arguments(self):
+        # The vectorcall words these as upstream's does; tp_new differs.
+        with self.assertRaisesRegex(
+                TypeError, r"^int expected at most 2 arguments, got 3$"):
+            int(1, 2, 3)
+        with self.assertRaisesRegex(
+                TypeError, r"^str expected at most 3 arguments, got 4$"):
+            str(1, 2, 3, 4)
+
+    def test_inline_arguments(self):
+        self.assertIs(bool(5), True)
+        self.assertIs(bool(0.0), False)
+        self.assertEqual(int(), 0)
+        self.assertEqual(int(7.9), 7)
+        self.assertEqual(str(5), '5')
+        self.assertEqual(list(range(3)), [0, 1, 2])
+        self.assertEqual(range(3, 10, 2)[1], 5)
+
+    def test_value_vectorcall_is_set(self):
+        for cls in (int, bool, str, list, set, frozenset, range, float, tuple):
+            with self.subTest(cls=cls.__name__):
+                self.assertTrue(value_vectorcall_is_set(cls))
+
 
 def function_str(func):
     """_PyObject_FunctionStr(): "math.gcd()", "list.append()"."""
@@ -323,6 +395,71 @@ class KeywordMessageTests(unittest.TestCase):
                     self.check_rejects(getattr(obj, name))
                 checked += 1
         self.assertGreater(checked, 300)
+
+
+class BuiltinValueCallTests(unittest.TestCase):
+    """min, max and sum read and return inline ints and floats as values."""
+
+    def test_min_max(self):
+        self.assertEqual(min(3, 1, 2), 1)
+        self.assertEqual(max(3, 1, 2), 3)
+        self.assertEqual(min([4, 2, 9]), 2)
+        self.assertEqual(max(1.5, 2), 2)
+        self.assertEqual(max([], default=7), 7)
+        self.assertEqual(min((), default=None), None)
+        self.assertEqual(max(3, -5, key=abs), -5)
+        self.assertEqual(min([3, -5], key=None), -5)
+        self.assertEqual(min(2**70, 5), 5)
+        self.assertIs(max(1, 1.0), 1)
+        self.assertIs(min(1.0, 1), 1.0)
+
+    def test_min_max_errors(self):
+        for func in (min, max):
+            name = func.__name__
+            with self.subTest(func=name):
+                with self.assertRaisesRegex(
+                        TypeError, rf"^{name} expected at least 1 argument, "
+                                   r"got 0$"):
+                    func()
+                with self.assertRaisesRegex(
+                        TypeError, rf"^{name}\(\) got an unexpected keyword "
+                                   r"argument 'foo'$"):
+                    func(1, 2, foo=3)
+                with self.assertRaisesRegex(
+                        TypeError, rf"^Cannot specify a default for {name}"
+                                   r"\(\) with multiple positional arguments$"):
+                    func(1, 2, default=3)
+                with self.assertRaisesRegex(
+                        ValueError, rf"^{name}\(\) iterable argument is empty$"):
+                    func([])
+                with self.assertRaisesRegex(
+                        TypeError, r"^'int' object is not iterable$"):
+                    func(5)
+                with self.assertRaisesRegex(
+                        TypeError, r"^'int' object is not callable$"):
+                    func(1, 2, key=1)
+
+    def test_sum(self):
+        self.assertEqual(sum([]), 0)
+        self.assertEqual(sum([1, 2, 3]), 6)
+        self.assertEqual(sum((1.5, 2, 3)), 6.5)
+        self.assertEqual(sum([0.1] * 10), 1.0)
+        self.assertEqual(sum([1, 2.5]), 3.5)
+        self.assertEqual(sum([1j, 2, 3.5]), (5.5 + 1j))
+        self.assertEqual(sum([2**62, 2**62, 2**62]), 3 * 2**62)
+        self.assertEqual(sum([2**70, 1, 2]), 2**70 + 3)
+        self.assertEqual(sum([1, 2], 10), 13)
+        self.assertEqual(sum([1, 2], 0.5), 3.5)
+        self.assertEqual(sum([[1], [2]], []), [1, 2])
+        self.assertEqual(sum([True, True, 1]), 3)
+        self.assertEqual(sum([1, 2], True), 4)
+        self.assertEqual(sum(range(10), start=5), 50)
+        with self.assertRaisesRegex(TypeError, "can't sum strings"):
+            sum(['a'], '')
+        with self.assertRaisesRegex(TypeError, "unsupported operand"):
+            sum([1, 'a'])
+        with self.assertRaises(OverflowError):
+            sum([1.5, 10**400])
 
 
 class ProfilerNameTests(unittest.TestCase):
@@ -594,6 +731,75 @@ class SpecTypeTests(unittest.TestCase):
         with self.assertRaises(TypeError):
             class Sub(VCall):
                 pass
+
+
+class RangeFieldTests(unittest.TestCase):
+    # start, stop, step and length are value fields: inline when they fit.
+    BIG = 1 << 80
+
+    def test_fields_and_repr(self):
+        for args in [(5,), (2, 9), (2, 9, 3), (-3, -20, -4),
+                     (self.BIG, self.BIG + 10, 3), (-self.BIG, 0, self.BIG),
+                     (1 << 51, (1 << 51) + 5), ((1 << 50) - 2, (1 << 50) + 2)]:
+            with self.subTest(args=args):
+                r = range(*args)
+                self.assertEqual((r.start, r.stop, r.step),
+                                 (args[0] if len(args) > 1 else 0, args[-1] if len(args) < 3 else args[1],
+                                  args[2] if len(args) == 3 else 1))
+                self.assertEqual(eval(repr(r)), r)
+                self.assertEqual(list(r), [r[i] for i in range(len(r))])
+                self.assertEqual(list(reversed(r)), list(r)[::-1])
+                self.assertEqual(len(r), len(list(r)))
+                for proto in range(pickle.HIGHEST_PROTOCOL + 1):
+                    self.assertEqual(pickle.loads(pickle.dumps(r, proto)), r)
+                    it = iter(r)
+                    next(it, None)
+                    self.assertEqual(list(pickle.loads(pickle.dumps(it, proto))),
+                                     list(r)[1:])
+
+    def test_index_slice_contains(self):
+        r = range(self.BIG, self.BIG + 30, 3)
+        self.assertEqual(r[2], self.BIG + 6)
+        self.assertEqual(r[-1], self.BIG + 27)
+        self.assertEqual(r[1:4], range(self.BIG + 3, self.BIG + 12, 3))
+        self.assertEqual(r[::-2], range(self.BIG + 27, self.BIG - 3, -6))
+        self.assertIn(self.BIG + 9, r)
+        self.assertNotIn(self.BIG + 10, r)
+        self.assertEqual(r.index(self.BIG + 9), 3)
+        self.assertEqual(r.count(self.BIG + 9), 1)
+        s = range(10, 0, -3)
+        self.assertEqual(s[1:], range(7, -2, -3))
+        self.assertIn(4, s)
+        self.assertNotIn(5, s)
+        self.assertRaises(IndexError, s.__getitem__, 4)
+        self.assertRaises(TypeError, s.__getitem__, 1.5)
+
+    def test_hash_eq(self):
+        self.assertEqual(hash(range(0, 10, 2)), hash(range(0, 9, 2)))
+        self.assertEqual(range(self.BIG, self.BIG), range(0))
+        self.assertNotEqual(range(self.BIG), range(self.BIG + 1))
+        self.assertEqual(hash(range(self.BIG)), hash(range(0, self.BIG, 1)))
+
+
+class UnpackIteratorTests(unittest.TestCase):
+    # UNPACK_SEQUENCE and UNPACK_EX over an iterator take its items as words.
+    def test_unpack(self):
+        a, b, c = range(3)
+        self.assertEqual((a, b, c), (0, 1, 2))
+        a, *b, c = iter(range(1 << 60, (1 << 60) + 5))
+        self.assertEqual((a, b, c), (1 << 60, list(range((1 << 60) + 1, (1 << 60) + 4)), (1 << 60) + 4))
+
+    def test_errors(self):
+        with self.assertRaisesRegex(ValueError, r"not enough values to unpack \(expected 3, got 2\)"):
+            a, b, c = range(2)
+        with self.assertRaisesRegex(ValueError, r"too many values to unpack \(expected 3\)"):
+            a, b, c = range(4)
+
+        def gen():
+            yield 1
+            raise KeyError('x')
+        with self.assertRaises(KeyError):
+            a, b = gen()
 
 
 if __name__ == '__main__':

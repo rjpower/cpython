@@ -8,6 +8,7 @@ extern "C" {
 #  error "this header requires Py_BUILD_CORE define"
 #endif
 
+#include "pycore_abstract.h"       // _PyIndex_Check()
 #include "pycore_value.h"
 
 /* The value dispatchers (pyjit/design/proposals/value-api-v2a0.md, section
@@ -131,6 +132,17 @@ PyAPI_FUNC(Py_ssize_t) _PyValue_AsSsize_t(PyValueBorrow v, PyObject *exc);
 #define _PyValue_Float(V) (_PyValue_Float)(PyValue_Borrow(V))
 #define _PyValue_AsSsize_t(V, E) (_PyValue_AsSsize_t)(PyValue_Borrow(V), E)
 
+/* _PyIndex_Check() of a value: an inline int has __index__, a float not. */
+static inline int
+_PyValue_IndexCheck(PyValueBorrow v)
+{
+    if (PyValue_IsInline(v)) {
+        return PyValue_IsInlineInt(v);
+    }
+    return _PyIndex_Check(PyValue_AsKnownObjectBorrow(v));
+}
+#define _PyValue_IndexCheck(V) (_PyValue_IndexCheck)(PyValue_Borrow(V))
+
 /* PyObject_RichCompare() and PyObject_RichCompareBool(); the latter
    compares two inline values by R-inline (value_ops.c). */
 PyAPI_FUNC(PyValue) _PyValue_RichCompare(PyValueBorrow v, PyValueBorrow w,
@@ -209,6 +221,11 @@ _PyObject_HashDictKey(PyObject *op)
 
 PyAPI_FUNC(PyObject *) _PyValue_Repr(PyValueBorrow v);
 PyAPI_FUNC(PyObject *) _PyValue_Str(PyValueBorrow v);
+/* format(v, spec): spec is a str object, or PyValue_NULL for none. Returns
+   a str, or NULL with an exception set. */
+PyAPI_FUNC(PyObject *) _PyValue_Format(PyValueBorrow v, PyValueBorrow spec);
+#define _PyValue_Format(V, S) \
+    (_PyValue_Format)(PyValue_Borrow(V), PyValue_Borrow(S))
 PyAPI_FUNC(PyObject *) _PyValue_ASCII(PyValueBorrow v);
 #define _PyValue_Repr(V) (_PyValue_Repr)(PyValue_Borrow(V))
 #define _PyValue_Str(V) (_PyValue_Str)(PyValue_Borrow(V))

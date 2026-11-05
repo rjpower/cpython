@@ -13,11 +13,6 @@ the Py_NoneStruct in that there is no way to create other objects of
 this type and there is exactly one in existence.
 */
 
-/* Defer line of the value-API waves (value-api-v2a0.md, section 1.5): the
-   callers of the protocol marks in this unit are converted by W2's caller
-   batches, which remove this line. */
-#define Py_VALUE_DEFER_MARKS 1
-
 #include "Python.h"
 #include "pycore_abstract.h"      // _PyIndex_Check()
 #include "pycore_freelist.h"      // _Py_FREELIST_FREE(), _Py_FREELIST_POP()
@@ -27,6 +22,7 @@ this type and there is exactly one in existence.
 #include "pycore_sliceobject.h"   // PySliceObject
 #include "pycore_tuple.h"         // _PyTuple_PackValues()
 #include "pycore_value.h"         // PyValue_CLOSE()
+#include "pycore_value_slots.h"  // _Py_VALUE_NOTIMPL_RICHCMP()
 #include "pycore_value_api.h"     // _PyValue_AsObjectAt()
 #include "pycore_value_ops.h"     // _PyValue_Hash(), _PyValue_WriteRepr()
 
@@ -473,8 +469,10 @@ evaluate_slice_index(PyValueBorrow field)
         return NULL;
     }
     if (_PyIndex_Check(v)) {
-        Py_SETREF(v, PyNumber_Index(v));
-        return v;
+        PyValue iv = _PyValue_IndexExact(PyValue_FromObjectBorrow(v));
+        Py_DECREF(v);
+        return PyValue_IsNull(iv) ? NULL
+            : _PyValue_AsObjectStealAt(iv, BOX_SITE_NUMBER);
     }
     else {
         Py_DECREF(v);
@@ -593,7 +591,10 @@ long_indices(PySliceObject *self, PyObject *length,
         if (lower == NULL)
             goto error;
 
-        upper = PyNumber_Add(length, lower);
+        PyValue uv = _PyValue_Add(PyValue_FromObjectBorrow(length),
+                                  PyValue_FromObjectBorrow(lower));
+        upper = PyValue_IsNull(uv) ? NULL
+            : _PyValue_AsObjectStealAt(uv, BOX_SITE_NUMBER);
         if (upper == NULL)
             goto error;
     }
@@ -613,12 +614,15 @@ long_indices(PySliceObject *self, PyObject *length,
 
         if (_PyLong_IsNegative((PyLongObject *)start)) {
             /* start += length */
-            PyObject *tmp = PyNumber_Add(start, length);
+            PyValue tv = _PyValue_Add(PyValue_FromObjectBorrow(start),
+                                      PyValue_FromObjectBorrow(length));
+            PyObject *tmp = PyValue_IsNull(tv) ? NULL
+                : _PyValue_AsObjectStealAt(tv, BOX_SITE_NUMBER);
             Py_SETREF(start, tmp);
             if (start == NULL)
                 goto error;
 
-            cmp_result = PyObject_RichCompareBool(start, lower, Py_LT);
+            cmp_result = _PyValue_RichCompareBool(PyValue_FromObjectBorrow(start), PyValue_FromObjectBorrow(lower), Py_LT);
             if (cmp_result < 0)
                 goto error;
             if (cmp_result) {
@@ -626,7 +630,7 @@ long_indices(PySliceObject *self, PyObject *length,
             }
         }
         else {
-            cmp_result = PyObject_RichCompareBool(start, upper, Py_GT);
+            cmp_result = _PyValue_RichCompareBool(PyValue_FromObjectBorrow(start), PyValue_FromObjectBorrow(upper), Py_GT);
             if (cmp_result < 0)
                 goto error;
             if (cmp_result) {
@@ -646,12 +650,15 @@ long_indices(PySliceObject *self, PyObject *length,
 
         if (_PyLong_IsNegative((PyLongObject *)stop)) {
             /* stop += length */
-            PyObject *tmp = PyNumber_Add(stop, length);
+            PyValue tv = _PyValue_Add(PyValue_FromObjectBorrow(stop),
+                                      PyValue_FromObjectBorrow(length));
+            PyObject *tmp = PyValue_IsNull(tv) ? NULL
+                : _PyValue_AsObjectStealAt(tv, BOX_SITE_NUMBER);
             Py_SETREF(stop, tmp);
             if (stop == NULL)
                 goto error;
 
-            cmp_result = PyObject_RichCompareBool(stop, lower, Py_LT);
+            cmp_result = _PyValue_RichCompareBool(PyValue_FromObjectBorrow(stop), PyValue_FromObjectBorrow(lower), Py_LT);
             if (cmp_result < 0)
                 goto error;
             if (cmp_result) {
@@ -659,7 +666,7 @@ long_indices(PySliceObject *self, PyObject *length,
             }
         }
         else {
-            cmp_result = PyObject_RichCompareBool(stop, upper, Py_GT);
+            cmp_result = _PyValue_RichCompareBool(PyValue_FromObjectBorrow(stop), PyValue_FromObjectBorrow(upper), Py_GT);
             if (cmp_result < 0)
                 goto error;
             if (cmp_result) {
@@ -717,7 +724,9 @@ slice_indices(PyObject *op, PyObject* len)
     Py_ssize_t istart, istop, istep;
 
     /* Convert length to an integer if necessary; raise for negative length. */
-    length = PyNumber_Index(len);
+    PyValue length_v = _PyValue_IndexExact(PyValue_FromObjectBorrow(len));
+    length = PyValue_IsNull(length_v) ? NULL
+        : _PyValue_AsObjectStealAt(length_v, BOX_SITE_NUMBER);
     if (length == NULL)
         return NULL;
 
@@ -807,10 +816,12 @@ slice_richcompare(PyObject *v, PyObject *w, int op)
         return NULL;
     }
 
-    PyObject *res = PyObject_RichCompare(t1, t2, op);
+    PyValue res_v = _PyValue_RichCompare(PyValue_FromObjectBorrow(t1),
+                                         PyValue_FromObjectBorrow(t2), op);
     Py_DECREF(t1);
     Py_DECREF(t2);
-    return res;
+    return PyValue_IsNull(res_v) ? NULL
+        : _PyValue_AsObjectStealAt(res_v, BOX_SITE_COMPARE);
 }
 
 static int
@@ -860,6 +871,8 @@ slice_hash(PyObject *op)
     return acc;
 }
 
+_Py_VALUE_NOTIMPL_RICHCMP(slice_richcompare_value, slice_richcompare)
+
 PyTypeObject PySlice_Type = {
     PyVarObject_HEAD_INIT(&PyType_Type, 0)
     "slice",                    /* Name of this type */
@@ -899,4 +912,7 @@ PyTypeObject PySlice_Type = {
     0,                                          /* tp_init */
     0,                                          /* tp_alloc */
     slice_new,                                  /* tp_new */
+    .tp_value = {
+        .richcompare = _Py_VALUE_SLOT_INIT(richcompare, slice_richcompare_value),
+    },
 };

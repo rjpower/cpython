@@ -1,12 +1,8 @@
 /* Built-in functions */
 
-/* Defer line of the value-API waves (value-api-v2a0.md, section 1.5): the
-   callers of the protocol marks in this unit are converted by W2's caller
-   batches, which remove this line. */
-#define Py_VALUE_DEFER_MARKS 1
-
 #include "Python.h"
 #include "pycore_ast.h"           // _PyAST_Validate()
+#include "pycore_audit.h"         // _PySys_AuditEnabled()
 #include "pycore_call.h"          // _PyObject_CallNoArgs()
 #include "pycore_cell.h"          // PyCell_GetRef()
 #include "pycore_ceval.h"         // _PyEval_Vector()
@@ -681,7 +677,7 @@ filter_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
         return NULL;
 
     /* Get iterator. */
-    it = PyObject_GetIter(seq);
+    it = _PyValue_GetIter(PyValue_FromObjectBorrow(seq));
     if (it == NULL)
         return NULL;
 
@@ -712,7 +708,7 @@ filter_vectorcall(PyObject *type, PyObject * const*args,
         return NULL;
     }
 
-    PyObject *it = PyObject_GetIter(args[1]);
+    PyObject *it = _PyValue_GetIter(PyValue_FromObjectBorrow(args[1]));
     if (it == NULL) {
         return NULL;
     }
@@ -768,22 +764,15 @@ filter_next_value(PyObject *self)
         if (checktrue) {
             ok = _PyValue_IsTrue(item.value);
         } else {
-            // The function takes an object until value calls (M3).
-            PyObject *arg = _PyValue_AsObjectAt(item.value,
-                                                BOX_SITE_CALL_ADAPTER);
-            if (arg == NULL) {
+            PyValue good = _PyValue_CallOneArg(_PyThreadState_GET(),
+                                               PyValue_FromObjectBorrow(lz->func),
+                                               item.value);
+            if (PyValue_IsNull(good)) {
                 PyValue_CLOSE(item.value);
                 return (_PyStatusValue){PYGEN_ERROR, PyValue_NULL};
             }
-            PyObject *good;
-            good = PyObject_CallOneArg(lz->func, arg);
-            Py_DECREF(arg);
-            if (good == NULL) {
-                PyValue_CLOSE(item.value);
-                return (_PyStatusValue){PYGEN_ERROR, PyValue_NULL};
-            }
-            ok = PyObject_IsTrue(good);
-            Py_DECREF(good);
+            ok = _PyValue_IsTrue(good);
+            PyValue_CLOSE(good);
         }
         if (ok > 0)
             return item;
@@ -888,12 +877,13 @@ builtin_format_impl(PyObject *module, PyValueBorrow value,
                     PyObject *format_spec)
 /*[clinic end generated code: output=b92f89205b44f619 input=45ef3934b86d5624]*/
 {
-    PyObject *value_o = _PyValue_AsObjectAt(value, BOX_SITE_PARSER);
-    if (value_o == NULL) {
-        return PyValue_NULL;
+    PyObject *res;
+    if (format_spec == NULL) {
+        res = _PyValue_Format(value, PyValue_NULL);
     }
-    PyObject *res = PyObject_Format(value_o, format_spec);
-    Py_DECREF(value_o);
+    else {
+        res = _PyValue_Format(value, PyValue_FromObjectBorrow(format_spec));
+    }
     return _PyValue_FromObjectResult(res);
 }
 
@@ -1504,7 +1494,9 @@ builtin_getattr(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
         }
     }
     else {
-        result = PyObject_GetAttr(v, name);
+        PyValue result_v = _PyValue_GetAttr(PyValue_FromObjectBorrow(v), name);
+        result = PyValue_IsNull(result_v) ? NULL
+            : _PyValue_AsObjectStealAt(result_v, BOX_SITE_ATTRIBUTE);
     }
     return result;
 }
@@ -1610,7 +1602,12 @@ builtin_id_impl(PyModuleDef *self, PyValueBorrow v)
         return PyValue_NULL;
     }
 
-    /* The audit event carries the id as an object. */
+    /* The audit event carries the id as an object: box it only when a hook
+       will see the event. */
+    PyThreadState *tstate = _PyThreadState_GET();
+    if (!_PySys_AuditEnabled(tstate)) {
+        return id;
+    }
     PyObject *id_o = _PyValue_AsObjectAt(id, BOX_SITE_PARSER);
     if (id_o == NULL) {
         PyValue_CLOSE(id);
@@ -1681,7 +1678,7 @@ map_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
             Py_DECREF(iters);
             return NULL;
         }
-        it = PyObject_GetIter(arg);
+        it = _PyValue_GetIter(PyValue_FromObjectBorrow(arg));
         Py_DECREF(arg);
         if (it == NULL) {
             Py_DECREF(iters);
@@ -1737,7 +1734,7 @@ map_vectorcall(PyObject *type, PyObject * const*args,
     }
 
     for (int i=1; i<nargs; i++) {
-        PyObject *it = PyObject_GetIter(args[i]);
+        PyObject *it = _PyValue_GetIter(PyValue_FromObjectBorrow(args[i]));
         if (it == NULL) {
             Py_DECREF(iters);
             return NULL;
@@ -1783,8 +1780,8 @@ map_next_value(PyObject *self)
 {
     mapobject *lz = _mapobject_CAST(self);
     Py_ssize_t i;
-    PyObject *small_stack[_PY_FASTCALL_SMALL_STACK];
-    PyObject **stack;
+    PyValue small_stack[_PY_FASTCALL_SMALL_STACK];
+    PyValue *stack;
     _PyStatusValue result = {PYGEN_ERROR, PyValue_NULL};
     PyThreadState *tstate = _PyThreadState_GET();
 
@@ -1802,7 +1799,7 @@ map_next_value(PyObject *self)
 
     Py_ssize_t nargs = 0;
     _PyStatusValue val;
-    PyObject *call_result;
+    PyValue call_result;
     for (i = 0; i < niters; i++) {
         // iters holds only iterators made by PyObject_GetIter(): never a scalar.
         PyObject *it = _PyTuple_GET_OBJECT(lz->iters, i);
@@ -1814,20 +1811,14 @@ map_next_value(PyObject *self)
             result = val;
             goto exit;
         }
-        // The function takes objects until value calls (M3).
-        stack[i] = _PyValue_AsObjectAt(val.value, BOX_SITE_CALL_ADAPTER);
-        PyValue_CLOSE(val.value);
-        if (stack[i] == NULL) {
-            goto exit_no_result;
-        }
+        stack[i] = val.value;
         nargs++;
     }
 
-    call_result = _PyObject_VectorcallTstate(tstate, lz->func, stack, nargs,
-                                             NULL);
-    if (call_result != NULL) {
-        result = (_PyStatusValue){PYGEN_NEXT,
-                                  PyValue_FromObjectSteal(call_result)};
+    call_result = _PyValue_VectorcallTstate(tstate, PyValue_FromObjectBorrow(lz->func), stack, nargs,
+                                            NULL);
+    if (!PyValue_IsNull(call_result)) {
+        result = (_PyStatusValue){PYGEN_NEXT, call_result};
     }
     goto exit;
 
@@ -1885,7 +1876,7 @@ exit_no_result:
 
 exit:
     for (i = 0; i < nargs; i++) {
-        Py_DECREF(stack[i]);
+        PyValue_CLOSE(stack[i]);
     }
     if (stack != small_stack) {
         PyMem_Free(stack);
@@ -1921,7 +1912,7 @@ PyDoc_STRVAR(setstate_doc, "Set state information for unpickling.");
 static PyObject *
 map_setstate(PyObject *self, PyObject *state)
 {
-    int strict = PyObject_IsTrue(state);
+    int strict = _PyValue_IsTrue(PyValue_FromObjectBorrow(state));
     if (strict < 0) {
         return NULL;
     }
@@ -2263,127 +2254,147 @@ builtin_locals_impl(PyObject *module)
 }
 
 
-static PyObject *
-min_max(PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames, int op)
+static PyValue
+min_max(const PyValue *args, Py_ssize_t nargs, PyObject *kwnames, int op)
 {
-    PyObject *it = NULL, *item, *val, *maxitem, *maxval, *keyfunc=NULL;
-    PyObject *defaultval = NULL;
-    static const char * const keywords[] = {"key", "default", NULL};
-    static _PyArg_Parser _parser_min = {"|$OO:min", keywords, 0};
-    static _PyArg_Parser _parser_max = {"|$OO:max", keywords, 0};
+    PyObject *it = NULL;
+    PyValue item, val;
+    PyValue maxitem = PyValue_NULL;   /* the result */
+    PyValue maxval = PyValue_NULL;    /* the value associated with the result */
+    PyValueBorrow keyfunc = PyValue_Borrow(PyValue_NULL);
+    PyValueBorrow defaultval = PyValue_Borrow(PyValue_NULL);
     const char *name = (op == Py_LT) ? "min" : "max";
-    _PyArg_Parser *_parser = (op == Py_LT) ? &_parser_min : &_parser_max;
+    PyThreadState *tstate = _PyThreadState_GET();
 
     if (nargs == 0) {
         PyErr_Format(PyExc_TypeError, "%s expected at least 1 argument, got 0", name);
-        return NULL;
+        return PyValue_NULL;
     }
 
-    if (kwnames != NULL && !_PyArg_ParseStackAndKeywords(args + nargs, 0, kwnames, _parser,
-                                                         &keyfunc, &defaultval)) {
-        return NULL;
-    }
-
-    const int positional = nargs > 1; // False iff nargs == 1
-    if (positional && defaultval != NULL) {
-        PyErr_Format(PyExc_TypeError,
-                        "Cannot specify a default for %s() with multiple "
-                        "positional arguments", name);
-        return NULL;
-    }
-
-    if (!positional) {
-        it = PyObject_GetIter(args[0]);
-        if (it == NULL) {
-            return NULL;
+    /* The keyword-only key and default follow the positional words. */
+    if (kwnames != NULL) {
+        Py_ssize_t nkw = PyTuple_GET_SIZE(kwnames);
+        if (nkw > 2) {
+            PyErr_Format(PyExc_TypeError,
+                         "%s() takes at most 2 keyword arguments (%zd given)",
+                         name, nkw);
+            return PyValue_NULL;
+        }
+        for (Py_ssize_t k = 0; k < nkw; k++) {
+            PyObject *kw = PyValue_AsKnownObjectBorrow(PyTuple_GET_VALUE(kwnames, k));
+            if (_PyUnicode_Equal(kw, &_Py_ID(key))) {
+                keyfunc = PyValue_Borrow(args[nargs + k]);
+            }
+            else if (_PyUnicode_Equal(kw, &_Py_ID(default))) {
+                defaultval = PyValue_Borrow(args[nargs + k]);
+            }
+            else {
+                PyErr_Format(PyExc_TypeError,
+                             "%s() got an unexpected keyword argument '%S'",
+                             name, kw);
+                return PyValue_NULL;
+            }
         }
     }
 
-    if (keyfunc == Py_None) {
-        keyfunc = NULL;
+    const int positional = nargs > 1; // False iff nargs == 1
+    if (positional && !PyValue_IsNull(defaultval)) {
+        PyErr_Format(PyExc_TypeError,
+                        "Cannot specify a default for %s() with multiple "
+                        "positional arguments", name);
+        return PyValue_NULL;
     }
 
-    maxitem = NULL; /* the result */
-    maxval = NULL;  /* the value associated with the result */
+    if (!positional) {
+        it = _PyValue_GetIter(PyValue_Borrow(args[0]));
+        if (it == NULL) {
+            return PyValue_NULL;
+        }
+    }
+
+    if (PyValue_IsNone(keyfunc)) {
+        keyfunc = PyValue_Borrow(PyValue_NULL);
+    }
+
     while (1) {
         if (it == NULL) {
             if (nargs-- <= 0) {
                 break;
             }
-            item = *args++;
-            Py_INCREF(item);
+            item = PyValue_DUP(PyValue_Borrow(*args++));
         }
         else {
-            item = PyIter_Next(it);
-            if (item == NULL) {
-                if (PyErr_Occurred()) {
-                    goto Fail_it;
-                }
+            _PyStatusValue step = _PyValue_IterNext(it);
+            if (step.status == PYGEN_ERROR) {
+                goto Fail_it;
+            }
+            if (step.status == PYGEN_RETURN) {
                 break;
             }
+            item = step.value;
         }
 
         /* get the value from the key function */
-        if (keyfunc != NULL) {
-            val = PyObject_CallOneArg(keyfunc, item);
-            if (val == NULL)
+        if (!PyValue_IsNull(keyfunc)) {
+            val = _PyValue_CallOneArg(tstate, keyfunc, item);
+            if (PyValue_IsNull(val))
                 goto Fail_it_item;
         }
         /* no key function; the value is the item */
         else {
-            val = Py_NewRef(item);
+            val = PyValue_DUP(PyValue_Borrow(item));
         }
 
         /* maximum value and item are unset; set them */
-        if (maxval == NULL) {
+        if (PyValue_IsNull(maxval)) {
             maxitem = item;
             maxval = val;
         }
         /* maximum value and item are set; update them as necessary */
         else {
-            int cmp = PyObject_RichCompareBool(val, maxval, op);
+            int cmp = _PyValue_RichCompareBool(val, maxval, op);
             if (cmp < 0)
                 goto Fail_it_item_and_val;
             else if (cmp > 0) {
-                Py_DECREF(maxval);
-                Py_DECREF(maxitem);
+                PyValue_CLOSE(maxval);
+                PyValue_CLOSE(maxitem);
                 maxval = val;
                 maxitem = item;
             }
             else {
-                Py_DECREF(item);
-                Py_DECREF(val);
+                PyValue_CLOSE(item);
+                PyValue_CLOSE(val);
             }
         }
     }
-    if (maxval == NULL) {
-        assert(maxitem == NULL);
-        if (defaultval != NULL) {
-            maxitem = Py_NewRef(defaultval);
+    if (PyValue_IsNull(maxval)) {
+        assert(PyValue_IsNull(maxitem));
+        if (!PyValue_IsNull(defaultval)) {
+            maxitem = PyValue_DUP(defaultval);
         } else {
             PyErr_Format(PyExc_ValueError,
                          "%s() iterable argument is empty", name);
         }
     }
     else
-        Py_DECREF(maxval);
+        PyValue_CLOSE(maxval);
     Py_XDECREF(it);
     return maxitem;
 
 Fail_it_item_and_val:
-    Py_DECREF(val);
+    PyValue_CLOSE(val);
 Fail_it_item:
-    Py_DECREF(item);
+    PyValue_CLOSE(item);
 Fail_it:
-    Py_XDECREF(maxval);
-    Py_XDECREF(maxitem);
+    PyValue_XCLOSE(maxval);
+    PyValue_XCLOSE(maxitem);
     Py_XDECREF(it);
-    return NULL;
+    return PyValue_NULL;
 }
 
 /* AC: cannot convert yet, waiting for *args support */
-static PyObject *
-builtin_min(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+builtin_min(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
     return min_max(args, nargs, kwnames, Py_LT);
 }
@@ -2399,8 +2410,8 @@ With two or more positional arguments, return the smallest argument.");
 
 
 /* AC: cannot convert yet, waiting for *args support */
-static PyObject *
-builtin_max(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+builtin_max(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
     return min_max(args, nargs, kwnames, Py_GT);
 }
@@ -2754,12 +2765,18 @@ builtin_input_impl(PyObject *module, PyValueBorrow prompt)
         size_t len;
 
         /* stdin is a text stream, so it must have an encoding. */
-        stdin_encoding = PyObject_GetAttr(fin, &_Py_ID(encoding));
+        PyValue stdin_encoding_v = _PyValue_GetAttr(PyValue_FromObjectBorrow(fin),
+                                                        &_Py_ID(encoding));
+        stdin_encoding = PyValue_IsNull(stdin_encoding_v) ? NULL
+            : _PyValue_AsObjectStealAt(stdin_encoding_v, BOX_SITE_ATTRIBUTE);
         if (stdin_encoding == NULL) {
             tty = 0;
             goto _readline_errors;
         }
-        stdin_errors = PyObject_GetAttr(fin, &_Py_ID(errors));
+        PyValue stdin_errors_v = _PyValue_GetAttr(PyValue_FromObjectBorrow(fin),
+                                                      &_Py_ID(errors));
+        stdin_errors = PyValue_IsNull(stdin_errors_v) ? NULL
+            : _PyValue_AsObjectStealAt(stdin_errors_v, BOX_SITE_ATTRIBUTE);
         if (stdin_errors == NULL) {
             tty = 0;
             goto _readline_errors;
@@ -2785,12 +2802,18 @@ builtin_input_impl(PyObject *module, PyValueBorrow prompt)
             /* We have a prompt, encode it as stdout would */
             const char *stdout_encoding_str, *stdout_errors_str;
             PyObject *stringpo;
-            stdout_encoding = PyObject_GetAttr(fout, &_Py_ID(encoding));
+            PyValue stdout_encoding_v = _PyValue_GetAttr(PyValue_FromObjectBorrow(fout),
+                                                             &_Py_ID(encoding));
+            stdout_encoding = PyValue_IsNull(stdout_encoding_v) ? NULL
+                : _PyValue_AsObjectStealAt(stdout_encoding_v, BOX_SITE_ATTRIBUTE);
             if (stdout_encoding == NULL) {
                 tty = 0;
                 goto _readline_errors;
             }
-            stdout_errors = PyObject_GetAttr(fout, &_Py_ID(errors));
+            PyValue stdout_errors_v = _PyValue_GetAttr(PyValue_FromObjectBorrow(fout),
+                                                           &_Py_ID(errors));
+            stdout_errors = PyValue_IsNull(stdout_errors_v) ? NULL
+                : _PyValue_AsObjectStealAt(stdout_errors_v, BOX_SITE_ATTRIBUTE);
             if (stdout_errors == NULL) {
                 tty = 0;
                 goto _readline_errors;
@@ -2809,7 +2832,7 @@ builtin_input_impl(PyObject *module, PyValueBorrow prompt)
             if (stdout_errors_str == NULL) {
                 goto _readline_errors;
             }
-            stringpo = PyObject_Str(prompt_o);
+            stringpo = _PyValue_Str(PyValue_FromObjectBorrow(prompt_o));
             if (stringpo == NULL)
                 goto _readline_errors;
             po = PyUnicode_AsEncodedString(stringpo,
@@ -3015,11 +3038,14 @@ builtin_sorted(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject
     if (!_PyArg_UnpackStack(args, nargs, "sorted", 1, 1, &seq))
         return NULL;
 
-    newlist = PySequence_List(seq);
+    newlist = _PyValue_SequenceList(PyValue_FromObjectBorrow(seq));
     if (newlist == NULL)
         return NULL;
 
-    callable = PyObject_GetAttr(newlist, &_Py_ID(sort));
+    PyValue callable_v = _PyValue_GetAttr(PyValue_FromObjectBorrow(newlist),
+                                              &_Py_ID(sort));
+    callable = PyValue_IsNull(callable_v) ? NULL
+        : _PyValue_AsObjectStealAt(callable_v, BOX_SITE_ATTRIBUTE);
     if (callable == NULL) {
         Py_DECREF(newlist);
         return NULL;
@@ -3133,6 +3159,80 @@ cs_to_double(CompensatedSum total)
     return total.hi;
 }
 
+/* The helpers of sum(): items are values, and an inline int or float is read
+   without a box. */
+
+/* An exact int (or, with allow_bool, a bool) as a Py_ssize_t, unless it does
+   not fit. */
+static int
+sum_exact_int(PyValueBorrow v, int allow_bool, Py_ssize_t *out)
+{
+    if (PyValue_IsInlineInt(v)) {
+        *out = (Py_ssize_t)PyValue_InlineInt64(v);
+        return 1;
+    }
+    if (!PyValue_IsObject(v)) {
+        return 0;
+    }
+    PyObject *o = PyValue_AsKnownObjectBorrow(v);
+    if (!(PyLong_CheckExact(o) || (allow_bool && PyBool_Check(o)))) {
+        return 0;
+    }
+    if (_PyLong_IsCompact((PyLongObject *)o)) {
+        *out = _PyLong_CompactValue((PyLongObject *)o);
+        return 1;
+    }
+    int overflow = 0;
+    Py_ssize_t b = PyLong_AsLongAndOverflow(o, &overflow);
+    if (overflow != 0) {
+        return 0;
+    }
+    *out = b;
+    return 1;
+}
+
+/* An exact float: inline, or a float object that is not a subclass. */
+static int
+sum_exact_float(PyValueBorrow v)
+{
+    return PyValue_IsInlineFloat(v)
+        || (PyValue_IsObject(v)
+            && PyFloat_CheckExact(PyValue_AsKnownObjectBorrow(v)));
+}
+
+static double
+sum_float_value(PyValueBorrow v)
+{
+    return PyValue_IsInlineFloat(v) ? PyValue_InlineFloat(v)
+        : PyFloat_AS_DOUBLE(PyValue_AsKnownObjectBorrow(v));
+}
+
+/* Any float, subclasses included (PyFloat_Check()). */
+static double
+sum_any_float_value(PyValueBorrow v)
+{
+    return sum_float_value(v);
+}
+
+/* An int of any size, or a subclass of int (PyLong_Check()). */
+static int
+sum_is_int(PyValueBorrow v)
+{
+    return PyValue_IsInlineInt(v)
+        || (PyValue_IsObject(v)
+            && PyLong_Check(PyValue_AsKnownObjectBorrow(v)));
+}
+
+/* PyLong_AsDouble() of sum_is_int(); -1.0 with an exception for an overflow. */
+static double
+sum_int_as_double(PyValueBorrow v)
+{
+    if (PyValue_IsInlineInt(v)) {
+        return (double)PyValue_InlineInt64(v);
+    }
+    return PyLong_AsDouble(PyValue_AsKnownObjectBorrow(v));
+}
+
 /*[clinic input]
 @permit_long_summary
 sum as builtin_sum
@@ -3153,19 +3253,13 @@ builtin_sum_impl(PyObject *module, PyValueBorrow iterable,
                  PyValueBorrow start)
 /*[clinic end generated code: output=b3f2dbd80f1410e3 input=d464d57815196b73]*/
 {
-    PyObject *result;
-    PyObject *temp, *item, *iter;
-
-    iter = _PyValue_GetIter(iterable);
+    PyObject *iter = _PyValue_GetIter(iterable);
     if (iter == NULL)
         return PyValue_NULL;
 
+    PyValue result;   /* owned */
     if (PyValue_IsNull(start)) {
-        result = PyLong_FromLong(0);
-        if (result == NULL) {
-            Py_DECREF(iter);
-            return PyValue_NULL;
-        }
+        result = PyValue_FromInt64(0);
     } else {
         /* reject string values for 'start' parameter */
         if (PyValue_IsObject(start)
@@ -3189,169 +3283,157 @@ builtin_sum_impl(PyObject *module, PyValueBorrow iterable,
             Py_DECREF(iter);
             return PyValue_NULL;
         }
-        result = _PyValue_AsObjectAt(start, BOX_SITE_PARSER);
-        if (result == NULL) {
-            Py_DECREF(iter);
-            return PyValue_NULL;
-        }
+        result = PyValue_DUP(start);
     }
 
 #ifndef SLOW_SUM
     /* Fast addition by keeping temporary sums in C instead of new Python objects.
        Assumes all inputs are the same type.  If the assumption fails, default
-       to the more general routine.
+       to the more general routine.  The items are values: an inline int or
+       float is never boxed.
     */
-    if (PyLong_CheckExact(result)) {
-        int overflow;
-        Py_ssize_t i_result = PyLong_AsLongAndOverflow(result, &overflow);
+    Py_ssize_t i_result;
+    if (sum_exact_int(PyValue_Borrow(result), 0, &i_result)) {
         /* If this already overflowed, don't even enter the loop. */
-        if (overflow == 0) {
-            Py_SETREF(result, NULL);
-        }
-        while(result == NULL) {
-            item = PyIter_Next(iter);
-            if (item == NULL) {
+        PyValue_CLOSE(result);
+        result = PyValue_NULL;
+        while (PyValue_IsNull(result)) {
+            _PyStatusValue step = _PyValue_IterNext(iter);
+            if (step.status == PYGEN_ERROR) {
                 Py_DECREF(iter);
-                if (PyErr_Occurred())
-                    return PyValue_NULL;
+                return PyValue_NULL;
+            }
+            if (step.status == PYGEN_RETURN) {
+                Py_DECREF(iter);
                 return PyValue_FromInt64(i_result);
             }
-            if (PyLong_CheckExact(item) || PyBool_Check(item)) {
-                Py_ssize_t b;
-                overflow = 0;
-                /* Single digits are common, fast, and cannot overflow on unpacking. */
-                if (_PyLong_IsCompact((PyLongObject *)item)) {
-                    b = _PyLong_CompactValue((PyLongObject *)item);
-                }
-                else {
-                    b = PyLong_AsLongAndOverflow(item, &overflow);
-                }
-                if (overflow == 0 &&
-                    (i_result >= 0 ? (b <= PY_SSIZE_T_MAX - i_result)
-                                   : (b >= PY_SSIZE_T_MIN - i_result)))
-                {
-                    i_result += b;
-                    Py_DECREF(item);
-                    continue;
-                }
+            PyValue item = step.value;
+            Py_ssize_t b;
+            /* Single digits are common, fast, and cannot overflow on unpacking. */
+            if (sum_exact_int(PyValue_Borrow(item), 1, &b)
+                && (i_result >= 0 ? (b <= PY_SSIZE_T_MAX - i_result)
+                                  : (b >= PY_SSIZE_T_MIN - i_result)))
+            {
+                i_result += b;
+                PyValue_CLOSE(item);
+                continue;
             }
             /* Either overflowed or is not an int. Restore real objects and process normally */
-            result = PyLong_FromSsize_t(i_result);
-            if (result == NULL) {
-                Py_DECREF(item);
+            PyValue partial = PyValue_FromInt64(i_result);
+            if (PyValue_IsNull(partial)) {
+                PyValue_CLOSE(item);
                 Py_DECREF(iter);
                 return PyValue_NULL;
             }
-            temp = PyNumber_Add(result, item);
-            Py_DECREF(result);
-            Py_DECREF(item);
-            result = temp;
-            if (result == NULL) {
+            result = _PyValue_Add(partial, item);
+            PyValue_CLOSE(partial);
+            PyValue_CLOSE(item);
+            if (PyValue_IsNull(result)) {
                 Py_DECREF(iter);
                 return PyValue_NULL;
             }
         }
     }
 
-    if (PyFloat_CheckExact(result)) {
-        CompensatedSum re_sum = cs_from_double(PyFloat_AS_DOUBLE(result));
-        Py_SETREF(result, NULL);
-        while(result == NULL) {
-            item = PyIter_Next(iter);
-            if (item == NULL) {
+    if (sum_exact_float(PyValue_Borrow(result))) {
+        CompensatedSum re_sum = cs_from_double(sum_float_value(PyValue_Borrow(result)));
+        PyValue_CLOSE(result);
+        result = PyValue_NULL;
+        while (PyValue_IsNull(result)) {
+            _PyStatusValue step = _PyValue_IterNext(iter);
+            if (step.status == PYGEN_ERROR) {
                 Py_DECREF(iter);
-                if (PyErr_Occurred())
-                    return PyValue_NULL;
+                return PyValue_NULL;
+            }
+            if (step.status == PYGEN_RETURN) {
+                Py_DECREF(iter);
                 return PyValue_FromDouble(cs_to_double(re_sum));
             }
-            if (PyFloat_CheckExact(item)) {
-                re_sum = cs_add(re_sum, PyFloat_AS_DOUBLE(item));
-                _Py_DECREF_SPECIALIZED(item, _PyFloat_ExactDealloc);
+            PyValue item = step.value;
+            if (sum_exact_float(PyValue_Borrow(item))) {
+                re_sum = cs_add(re_sum, sum_float_value(PyValue_Borrow(item)));
+                PyValue_CLOSE(item);
                 continue;
             }
-            if (PyLong_Check(item)) {
-                double value = PyLong_AsDouble(item);
+            if (sum_is_int(PyValue_Borrow(item))) {
+                double value = sum_int_as_double(PyValue_Borrow(item));
                 if (value != -1.0 || !PyErr_Occurred()) {
                     re_sum = cs_add(re_sum, value);
-                    Py_DECREF(item);
+                    PyValue_CLOSE(item);
                     continue;
                 }
-                else {
-                    Py_DECREF(item);
-                    Py_DECREF(iter);
-                    return PyValue_NULL;
-                }
-            }
-            result = PyFloat_FromDouble(cs_to_double(re_sum));
-            if (result == NULL) {
-                Py_DECREF(item);
+                PyValue_CLOSE(item);
                 Py_DECREF(iter);
                 return PyValue_NULL;
             }
-            temp = PyNumber_Add(result, item);
-            Py_DECREF(result);
-            Py_DECREF(item);
-            result = temp;
-            if (result == NULL) {
+            PyValue partial = PyValue_FromDouble(cs_to_double(re_sum));
+            result = _PyValue_Add(partial, item);
+            PyValue_CLOSE(partial);
+            PyValue_CLOSE(item);
+            if (PyValue_IsNull(result)) {
                 Py_DECREF(iter);
                 return PyValue_NULL;
             }
         }
     }
 
-    if (PyComplex_CheckExact(result)) {
-        Py_complex z = PyComplex_AsCComplex(result);
+    if (PyValue_IsObject(result)
+        && PyComplex_CheckExact(PyValue_AsKnownObjectBorrow(result))) {
+        Py_complex z = PyComplex_AsCComplex(PyValue_AsKnownObjectBorrow(result));
         CompensatedSum re_sum = cs_from_double(z.real);
         CompensatedSum im_sum = cs_from_double(z.imag);
-        Py_SETREF(result, NULL);
-        while (result == NULL) {
-            item = PyIter_Next(iter);
-            if (item == NULL) {
-                Py_DECREF(iter);
-                if (PyErr_Occurred()) {
-                    return PyValue_NULL;
-                }
-                return _PyValue_FromObjectResult(PyComplex_FromDoubles(cs_to_double(re_sum),
-                                             cs_to_double(im_sum)));
-            }
-            if (PyComplex_CheckExact(item)) {
-                z = PyComplex_AsCComplex(item);
-                re_sum = cs_add(re_sum, z.real);
-                im_sum = cs_add(im_sum, z.imag);
-                Py_DECREF(item);
-                continue;
-            }
-            if (PyLong_Check(item)) {
-                double value = PyLong_AsDouble(item);
-                if (value != -1.0 || !PyErr_Occurred()) {
-                    re_sum = cs_add(re_sum, value);
-                    Py_DECREF(item);
-                    continue;
-                }
-                else {
-                    Py_DECREF(item);
-                    Py_DECREF(iter);
-                    return PyValue_NULL;
-                }
-            }
-            if (PyFloat_Check(item)) {
-                double value = PyFloat_AS_DOUBLE(item);
-                re_sum = cs_add(re_sum, value);
-                _Py_DECREF_SPECIALIZED(item, _PyFloat_ExactDealloc);
-                continue;
-            }
-            result = PyComplex_FromDoubles(cs_to_double(re_sum),
-                                           cs_to_double(im_sum));
-            if (result == NULL) {
-                Py_DECREF(item);
+        PyValue_CLOSE(result);
+        result = PyValue_NULL;
+        while (PyValue_IsNull(result)) {
+            _PyStatusValue step = _PyValue_IterNext(iter);
+            if (step.status == PYGEN_ERROR) {
                 Py_DECREF(iter);
                 return PyValue_NULL;
             }
-            temp = PyNumber_Add(result, item);
-            Py_DECREF(result);
-            Py_DECREF(item);
-            result = temp;
-            if (result == NULL) {
+            if (step.status == PYGEN_RETURN) {
+                Py_DECREF(iter);
+                return _PyValue_FromObjectResult(
+                    PyComplex_FromDoubles(cs_to_double(re_sum),
+                                          cs_to_double(im_sum)));
+            }
+            PyValue item = step.value;
+            if (PyValue_IsObject(item)
+                && PyComplex_CheckExact(PyValue_AsKnownObjectBorrow(item))) {
+                z = PyComplex_AsCComplex(PyValue_AsKnownObjectBorrow(item));
+                re_sum = cs_add(re_sum, z.real);
+                im_sum = cs_add(im_sum, z.imag);
+                PyValue_CLOSE(item);
+                continue;
+            }
+            if (sum_is_int(PyValue_Borrow(item))) {
+                double value = sum_int_as_double(PyValue_Borrow(item));
+                if (value != -1.0 || !PyErr_Occurred()) {
+                    re_sum = cs_add(re_sum, value);
+                    PyValue_CLOSE(item);
+                    continue;
+                }
+                PyValue_CLOSE(item);
+                Py_DECREF(iter);
+                return PyValue_NULL;
+            }
+            if (PyValue_IsInlineFloat(item)
+                || (PyValue_IsObject(item)
+                    && PyFloat_Check(PyValue_AsKnownObjectBorrow(item)))) {
+                re_sum = cs_add(re_sum, sum_any_float_value(PyValue_Borrow(item)));
+                PyValue_CLOSE(item);
+                continue;
+            }
+            PyObject *partial = PyComplex_FromDoubles(cs_to_double(re_sum),
+                                                      cs_to_double(im_sum));
+            if (partial == NULL) {
+                PyValue_CLOSE(item);
+                Py_DECREF(iter);
+                return PyValue_NULL;
+            }
+            result = _PyValue_Add(PyValue_FromObjectBorrow(partial), item);
+            Py_DECREF(partial);
+            PyValue_CLOSE(item);
+            if (PyValue_IsNull(result)) {
                 Py_DECREF(iter);
                 return PyValue_NULL;
             }
@@ -3360,14 +3442,16 @@ builtin_sum_impl(PyObject *module, PyValueBorrow iterable,
 #endif
 
     for(;;) {
-        item = PyIter_Next(iter);
-        if (item == NULL) {
-            /* error, or end-of-sequence */
-            if (PyErr_Occurred()) {
-                Py_SETREF(result, NULL);
-            }
+        _PyStatusValue step = _PyValue_IterNext(iter);
+        if (step.status == PYGEN_ERROR) {
+            PyValue_CLOSE(result);
+            result = PyValue_NULL;
             break;
         }
+        if (step.status == PYGEN_RETURN) {
+            break;
+        }
+        PyValue item = step.value;
         /* It's tempting to use PyNumber_InPlaceAdd instead of
            PyNumber_Add here, to avoid quadratic running time
            when doing 'sum(list_of_lists, [])'.  However, this
@@ -3381,15 +3465,15 @@ builtin_sum_impl(PyObject *module, PyValueBorrow iterable,
            any of the steps introduces subtle behavior changes:
 
            https://bugs.python.org/issue18305 */
-        temp = PyNumber_Add(result, item);
-        Py_DECREF(result);
-        Py_DECREF(item);
+        PyValue temp = _PyValue_Add(result, item);
+        PyValue_CLOSE(result);
+        PyValue_CLOSE(item);
         result = temp;
-        if (result == NULL)
+        if (PyValue_IsNull(result))
             break;
     }
     Py_DECREF(iter);
-    return _PyValue_FromObjectResult(result);
+    return result;
 }
 
 
@@ -3511,7 +3595,7 @@ zip_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
             Py_DECREF(ittuple);
             return NULL;
         }
-        PyObject *it = PyObject_GetIter(item);
+        PyObject *it = _PyValue_GetIter(PyValue_FromObjectBorrow(item));
         Py_DECREF(item);
         if (it == NULL) {
             Py_DECREF(ittuple);
@@ -3680,7 +3764,7 @@ zip_reduce(PyObject *self, PyObject *Py_UNUSED(ignored))
 static PyObject *
 zip_setstate(PyObject *self, PyObject *state)
 {
-    int strict = PyObject_IsTrue(state);
+    int strict = _PyValue_IsTrue(PyValue_FromObjectBorrow(state));
     if (strict < 0) {
         return NULL;
     }
@@ -3788,8 +3872,8 @@ static PyMethodDef builtin_methods[] = {
     BUILTIN_ITER_METHODDEF
     BUILTIN_LEN_METHODDEF
     BUILTIN_LOCALS_METHODDEF
-    {"max", _PyCFunction_CAST(builtin_max), METH_FASTCALL | METH_KEYWORDS, max_doc},
-    {"min", _PyCFunction_CAST(builtin_min), METH_FASTCALL | METH_KEYWORDS, min_doc},
+    {"max", _PyCFunction_CAST(builtin_max), METH_VALUE | METH_KEYWORDS, max_doc},
+    {"min", _PyCFunction_CAST(builtin_min), METH_VALUE | METH_KEYWORDS, min_doc},
     {"next", _PyCFunction_CAST(builtin_next), METH_FASTCALL, next_doc},
     BUILTIN_OCT_METHODDEF
     BUILTIN_ORD_METHODDEF
@@ -3854,7 +3938,10 @@ _PyBuiltin_InitPythonFunctions(PyObject *dict)
     }
 
     int rc = -1;
-    PyObject *all = PyObject_GetAttr(mod, &_Py_ID(__all__));
+    PyValue all_v = _PyValue_GetAttr(PyValue_FromObjectBorrow(mod),
+                                     &_Py_ID(__all__));
+    PyObject *all = PyValue_IsNull(all_v) ? NULL
+        : _PyValue_AsObjectStealAt(all_v, BOX_SITE_ATTRIBUTE);
     if (all == NULL) {
         goto done;
     }
@@ -3870,13 +3957,13 @@ _PyBuiltin_InitPythonFunctions(PyObject *dict)
         if (name == NULL) {
             goto done;
         }
-        PyObject *func = PyObject_GetAttr(mod, name);
-        if (func == NULL) {
+        PyValue func = _PyValue_GetAttr(PyValue_FromObjectBorrow(mod), name);
+        if (PyValue_IsNull(func)) {
             Py_DECREF(name);
             goto done;
         }
-        int r = PyDict_SetValue(dict, PyValue_FromObjectBorrow(name), PyValue_FromObjectBorrow(func));
-        Py_DECREF(func);
+        int r = PyDict_SetValue(dict, PyValue_FromObjectBorrow(name), func);
+        PyValue_CLOSE(func);
         Py_DECREF(name);
         if (r < 0) {
             goto done;

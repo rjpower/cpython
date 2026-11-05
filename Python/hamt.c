@@ -1,14 +1,13 @@
-/* Defer line of the value-API waves (value-api-v2a0.md, section 1.5): the
-   callers of the protocol marks in this unit are converted by W2's caller
-   batches, which remove this line. */
-#define Py_VALUE_DEFER_MARKS 1
-
 #include "Python.h"
 #include "pycore_bitutils.h"      // _Py_popcount32()
 #include "pycore_hamt.h"
 #include "pycore_initconfig.h"    // _PyStatus_OK()
 #include "pycore_long.h"          // _PyLong_Format()
 #include "pycore_object.h"        // _PyObject_GC_TRACK()
+#include "pycore_value.h"        // PyValue_FromObjectBorrow()
+#include "pycore_value_api.h"    // _PyValue_AsObjectStealAt()
+#include "pycore_value_ops.h"    // _PyValue_Multiply()
+#include "pycore_value_slots.h"  // _Py_VALUE_NOTIMPL_RICHCMP()
 #include "pycore_tuple.h"         // _PyTuple_FromPair
 
 #include <stddef.h>               // offsetof()
@@ -411,7 +410,7 @@ _hamt_node_array_validate(void *obj_raw)
 static inline int32_t
 hamt_hash(PyObject *o)
 {
-    Py_hash_t hash = PyObject_Hash(o);
+    Py_hash_t hash = _PyValue_Hash(PyValue_FromObjectBorrow(o));
 
 #if SIZEOF_PY_HASH_T <= 4
     return hash;
@@ -484,7 +483,10 @@ _hamt_dump_ident(PyUnicodeWriter *writer, int level)
         goto error;
     }
 
-    res = PyNumber_Multiply(str, num);
+    PyValue res_v = _PyValue_Multiply(PyValue_FromObjectBorrow(str),
+                                      PyValue_FromObjectBorrow(num));
+    res = PyValue_IsNull(res_v) ? NULL
+        : _PyValue_AsObjectStealAt(res_v, BOX_SITE_NUMBER);
     if (res == NULL) {
         goto error;
     }
@@ -730,7 +732,7 @@ hamt_node_bitmap_assoc(PyHamtNode_Bitmap *self,
         /* key is not NULL.  This means that we have only one other
            key in this collection that matches our hash for this shift. */
 
-        int comp_err = PyObject_RichCompareBool(key, key_or_null, Py_EQ);
+        int comp_err = _PyValue_RichCompareBool(PyValue_FromObjectBorrow(key), PyValue_FromObjectBorrow(key_or_null), Py_EQ);
         if (comp_err < 0) {  /* exception in __eq__ */
             return NULL;
         }
@@ -1035,7 +1037,7 @@ hamt_node_bitmap_without(PyHamtNode_Bitmap *self,
     else {
         /* We have a regular key/value pair */
 
-        int cmp = PyObject_RichCompareBool(key_or_null, key, Py_EQ);
+        int cmp = _PyValue_RichCompareBool(PyValue_FromObjectBorrow(key_or_null), PyValue_FromObjectBorrow(key), Py_EQ);
         if (cmp < 0) {
             return W_ERROR;
         }
@@ -1096,7 +1098,7 @@ hamt_node_bitmap_find(PyHamtNode_Bitmap *self,
     /* We have only one key -- a potential match.  Let's compare if the
        key we are looking at is equal to the key we are looking for. */
     assert(key != NULL);
-    comp_err = PyObject_RichCompareBool(key, key_or_null, Py_EQ);
+    comp_err = _PyValue_RichCompareBool(PyValue_FromObjectBorrow(key), PyValue_FromObjectBorrow(key_or_null), Py_EQ);
     if (comp_err < 0) {  /* exception in __eq__ */
         return F_ERROR;
     }
@@ -1272,7 +1274,7 @@ hamt_node_collision_find_index(PyHamtNode_Collision *self, PyObject *key,
         el = self->c_array[i];
 
         assert(el != NULL);
-        int cmp = PyObject_RichCompareBool(key, el, Py_EQ);
+        int cmp = _PyValue_RichCompareBool(PyValue_FromObjectBorrow(key), PyValue_FromObjectBorrow(el), Py_EQ);
         if (cmp < 0) {
             return F_ERROR;
         }
@@ -2378,7 +2380,7 @@ _PyHamt_Eq(PyHamtObject *v, PyHamtObject *w)
                     Py_INCREF(v_key);
                     Py_INCREF(v_val);
                     Py_INCREF(w_val);
-                    int cmp = PyObject_RichCompareBool(v_val, w_val, Py_EQ);
+                    int cmp = _PyValue_RichCompareBool(PyValue_FromObjectBorrow(v_val), PyValue_FromObjectBorrow(w_val), Py_EQ);
                     Py_DECREF(v_key);
                     Py_DECREF(v_val);
                     Py_DECREF(w_val);
@@ -2873,6 +2875,8 @@ static PyMappingMethods PyHamt_as_mapping = {
     .mp_subscript = hamt_tp_subscript,
 };
 
+_Py_VALUE_NOTIMPL_RICHCMP(hamt_tp_richcompare_value, hamt_tp_richcompare)
+
 PyTypeObject _PyHamt_Type = {
     PyVarObject_HEAD_INIT(&PyType_Type, 0)
     "hamt",
@@ -2890,6 +2894,9 @@ PyTypeObject _PyHamt_Type = {
     .tp_new = hamt_tp_new,
     .tp_weaklistoffset = offsetof(PyHamtObject, h_weakreflist),
     .tp_hash = PyObject_HashNotImplemented,
+    .tp_value = {
+        .richcompare = _Py_VALUE_SLOT_INIT(richcompare, hamt_tp_richcompare_value),
+    },
 };
 
 

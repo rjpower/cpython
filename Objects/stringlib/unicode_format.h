@@ -152,8 +152,10 @@ getattr(PyObject *obj, SubString *name)
     PyObject *str = SubString_new_object(name);
     if (str == NULL)
         return NULL;
-    newobj = PyObject_GetAttr(obj, str);
+    PyValue newval = _PyValue_GetAttr(PyValue_FromObjectBorrow(obj), str);
     Py_DECREF(str);
+    newobj = PyValue_IsNull(newval) ? NULL
+           : _PyValue_AsObjectStealAt(newval, BOX_SITE_ATTRIBUTE);
     return newobj;
 }
 
@@ -161,7 +163,9 @@ getattr(PyObject *obj, SubString *name)
 static PyObject *
 getitem_sequence(PyObject *obj, Py_ssize_t idx)
 {
-    return PySequence_GetItem(obj, idx);
+    PyValue item = _PyValue_SequenceGetItem(PyValue_FromObjectBorrow(obj), idx);
+    return PyValue_IsNull(item) ? NULL
+         : _PyValue_AsObjectStealAt(item, BOX_SITE_SEQUENCE);
 }
 
 /* do the equivalent of obj[idx], where obj is not a sequence */
@@ -172,8 +176,11 @@ getitem_idx(PyObject *obj, Py_ssize_t idx)
     PyObject *idx_obj = PyLong_FromSsize_t(idx);
     if (idx_obj == NULL)
         return NULL;
-    newobj = PyObject_GetItem(obj, idx_obj);
+    PyValue newval = _PyValue_GetItem(PyValue_FromObjectBorrow(obj),
+                                      PyValue_FromObjectBorrow(idx_obj));
     Py_DECREF(idx_obj);
+    newobj = PyValue_IsNull(newval) ? NULL
+           : _PyValue_AsObjectStealAt(newval, BOX_SITE_SEQUENCE);
     return newobj;
 }
 
@@ -185,8 +192,11 @@ getitem_str(PyObject *obj, SubString *name)
     PyObject *str = SubString_new_object(name);
     if (str == NULL)
         return NULL;
-    newobj = PyObject_GetItem(obj, str);
+    PyValue newval = _PyValue_GetItem(PyValue_FromObjectBorrow(obj),
+                                      PyValue_FromObjectBorrow(str));
     Py_DECREF(str);
+    newobj = PyValue_IsNull(newval) ? NULL
+           : _PyValue_AsObjectStealAt(newval, BOX_SITE_SEQUENCE);
     return newobj;
 }
 
@@ -425,8 +435,11 @@ get_field_object(SubString *input, PyObject *args, PyObject *kwargs,
         /* Use PyObject_GetItem instead of PyDict_GetItem because this
            code is no longer just used with kwargs. It might be passed
            a non-dict when called through format_map. */
-        obj = PyObject_GetItem(kwargs, key);
+        PyValue obj_v = _PyValue_GetItem(PyValue_FromObjectBorrow(kwargs),
+                                         PyValue_FromObjectBorrow(key));
         Py_DECREF(key);
+        obj = PyValue_IsNull(obj_v) ? NULL
+            : _PyValue_AsObjectStealAt(obj_v, BOX_SITE_SEQUENCE);
         if (obj == NULL) {
             goto error;
         }
@@ -443,7 +456,10 @@ get_field_object(SubString *input, PyObject *args, PyObject *kwargs,
         }
 
         /* look up in args */
-        obj = PySequence_GetItem(args, index);
+        PyValue obj_v = _PyValue_SequenceGetItem(PyValue_FromObjectBorrow(args),
+                                                 index);
+        obj = PyValue_IsNull(obj_v) ? NULL
+            : _PyValue_AsObjectStealAt(obj_v, BOX_SITE_SEQUENCE);
         if (obj == NULL) {
             PyErr_Format(PyExc_IndexError,
                          "Replacement index %zd out of range for positional "
@@ -769,9 +785,9 @@ do_conversion(PyObject *obj, Py_UCS4 conversion)
        might have returned a string? */
     switch (conversion) {
     case 'r':
-        return PyObject_Repr(obj);
+        return _PyValue_Repr(PyValue_FromObjectBorrow(obj));
     case 's':
-        return PyObject_Str(obj);
+        return _PyValue_Str(PyValue_FromObjectBorrow(obj));
     case 'a':
         return PyObject_ASCII(obj);
     default:

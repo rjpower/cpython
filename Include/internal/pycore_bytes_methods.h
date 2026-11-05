@@ -6,6 +6,8 @@
 #  error "this header requires Py_BUILD_CORE define"
 #endif
 
+#include "pycore_value_api.h"     // _PyValue_AsObjectAt()
+
 /*
  * The internal implementation behind PyBytes (bytes) and PyByteArray (bytearray)
  * methods of the given names, they operate on ASCII byte strings.
@@ -37,6 +39,32 @@ extern PyObject *_Py_bytes_rindex(const char *str, Py_ssize_t len, PyObject *sub
 extern PyObject *_Py_bytes_count(const char *str, Py_ssize_t len, PyObject *sub,
                                  Py_ssize_t start, Py_ssize_t end);
 extern int _Py_bytes_contains(const char *str, Py_ssize_t len, PyObject *arg);
+
+/* _Py_bytes_contains() for a value: an inline int is searched directly; any
+   other inline value is boxed only to raise the usual error. */
+static inline int
+_Py_bytes_contains_value(const char *str, Py_ssize_t len, PyValueBorrow arg)
+{
+    if (PyValue_IsInlineInt(arg)) {
+        int64_t ival = PyValue_InlineInt64(arg);
+        if (ival < 0 || ival >= 256) {
+            PyErr_SetString(PyExc_ValueError,
+                            "byte must be in range(0, 256)");
+            return -1;
+        }
+        return memchr(str, (int)ival, len) != NULL;
+    }
+    if (PyValue_IsObject(arg)) {
+        return _Py_bytes_contains(str, len, PyValue_AsKnownObjectBorrow(arg));
+    }
+    PyObject *boxed = _PyValue_AsObjectAt(arg, BOX_SITE_SEQUENCE);
+    if (boxed == NULL) {
+        return -1;
+    }
+    int res = _Py_bytes_contains(str, len, boxed);
+    Py_DECREF(boxed);
+    return res;
+}
 extern PyObject *_Py_bytes_startswith(const char *str, Py_ssize_t len,
                                       PyObject *subobj, Py_ssize_t start,
                                       Py_ssize_t end);

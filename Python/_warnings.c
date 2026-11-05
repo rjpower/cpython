@@ -1,8 +1,3 @@
-/* Defer line of the value-API waves (value-api-v2a0.md, section 1.5): the
-   callers of the protocol marks in this unit are converted by W2's caller
-   batches, which remove this line. */
-#define Py_VALUE_DEFER_MARKS 1
-
 #include "Python.h"
 #include "pycore_dict.h"          // PyDict_SetValue()
 #include "pycore_frame.h"         // PyFrameObject
@@ -17,6 +12,7 @@
 #include "pycore_tuple.h"         // _PyTuple_FromPair
 #include "pycore_unicodeobject.h" // _PyUnicode_EqualToASCIIString()
 #include "pycore_value_api.h"     // _PyValue_FromObjectKnown()
+#include "pycore_value_ops.h"     // _PyValue_GetAttr()
 #include "pycore_warnings.h"      // _PyWarnings_AfterFork()
 
 #include <stdbool.h>
@@ -219,7 +215,7 @@ check_matched(PyInterpreterState *interp, PyObject *obj, PyObject *arg, PyObject
     }
     if (result == NULL)
         return -1;
-    rc = PyObject_IsTrue(result);
+    rc = _PyValue_IsTrue(PyValue_FromObjectBorrow(result));
     Py_DECREF(result);
     return rc;
 }
@@ -330,8 +326,11 @@ get_warnings_context_filters(PyInterpreterState *interp)
     if (ctx == Py_None) {
         Py_RETURN_NONE;
     }
-    PyObject *context_filters = PyObject_GetAttr(ctx, &_Py_ID(_filters));
+    PyValue filters_v = _PyValue_GetAttr(PyValue_FromObjectBorrow(ctx),
+                                         &_Py_ID(_filters));
     Py_DECREF(ctx);
+    PyObject *context_filters = PyValue_IsNull(filters_v) ? NULL
+        : _PyValue_AsObjectStealAt(filters_v, BOX_SITE_ATTRIBUTE);
     if (context_filters == NULL) {
         return NULL;
     }
@@ -726,7 +725,10 @@ show_warning(PyThreadState *tstate, PyObject *filename, int lineno,
 
     PyOS_snprintf(lineno_str, sizeof(lineno_str), ":%d: ", lineno);
 
-    name = PyObject_GetAttr(category, &_Py_ID(__name__));
+    PyValue name_v = _PyValue_GetAttr(PyValue_FromObjectBorrow(category),
+                                      &_Py_ID(__name__));
+    name = PyValue_IsNull(name_v) ? NULL
+         : _PyValue_AsObjectStealAt(name_v, BOX_SITE_ATTRIBUTE);
     if (name == NULL) {
         goto error;
     }
@@ -871,7 +873,7 @@ warn_explicit(PyThreadState *tstate, PyObject *category, PyObject *message,
     /* Normalize message. */
     Py_INCREF(message);  /* DECREF'ed in cleanup. */
     if (PyObject_TypeCheck(message, (PyTypeObject *)PyExc_Warning)) {
-        text = PyObject_Str(message);
+        text = _PyValue_Str(PyValue_FromObjectBorrow(message));
         if (text == NULL)
             goto cleanup;
         category = (PyObject*)Py_TYPE(message);

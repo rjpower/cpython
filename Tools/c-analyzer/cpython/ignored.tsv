@@ -339,7 +339,6 @@ Objects/genobject.c	ag_getstate	state_strings	-
 Objects/longobject.c	-	_PyLong_DigitValue	-
 Objects/longobject.c	-	PyLong_LAYOUT	-
 Objects/object.c	-	_Py_SwappedOp	-
-Objects/object.c	-	_Py_abstract_hack	-
 Objects/object.c	-	last_final_reftotal	-
 Objects/object.c	-	static_types	-
 Objects/obmalloc.c	-	_PyMem	-

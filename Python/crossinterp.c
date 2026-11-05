@@ -1,11 +1,6 @@
 
 /* API for managing interactions between isolated interpreters */
 
-/* Defer line of the value-API waves (value-api-v2a0.md, section 1.5): the
-   callers of the protocol marks in this unit are converted by W2's caller
-   batches, which remove this line. */
-#define Py_VALUE_DEFER_MARKS 1
-
 #include "Python.h"
 #include "marshal.h"              // PyMarshal_WriteObjectToString()
 #include "osdefs.h"               // MAXPATHLEN
@@ -22,6 +17,7 @@
 #include "pycore_setobject.h"     // _PySet_NextEntry()
 #include "pycore_tuple.h"         // _PyTuple_PackValues()
 #include "pycore_typeobject.h"    // _PyStaticType_InitBuiltin()
+#include "pycore_value_ops.h"     // _PyValue_SequenceGetItem()
 #include "pycore_value_api.h"     // _PyValue_FromObjectKnown()
 
 
@@ -667,14 +663,16 @@ check_missing___main___attr(PyObject *exc)
 
     // Get the error message.
     PyObject *args = PyException_GetArgs(exc);
-    if (args == NULL || args == Py_None || PyObject_Size(args) < 1) {
+    if (args == NULL || args == Py_None || _PyValue_Size(PyValue_FromObjectBorrow(args)) < 1) {
         Py_XDECREF(args);
         assert(!PyErr_Occurred());
         return 0;
     }
     PyObject *msgobj = args;
     if (!PyUnicode_Check(msgobj)) {
-        msgobj = PySequence_GetItem(args, 0);
+        PyValue msg_v = _PyValue_SequenceGetItem(PyValue_FromObjectBorrow(args), 0);
+        msgobj = PyValue_IsNull(msg_v) ? NULL
+            : _PyValue_AsObjectStealAt(msg_v, BOX_SITE_SEQUENCE);
         Py_DECREF(args);
         if (msgobj == NULL) {
             PyErr_Clear();
@@ -1453,7 +1451,7 @@ _PyXI_excinfo_InitFromException(_PyXI_excinfo *info, PyObject *exc)
     }
 
     // Extract the exception message.
-    PyObject *msgobj = PyObject_Str(exc);
+    PyObject *msgobj = _PyValue_Str(PyValue_FromObjectBorrow(exc));
     if (msgobj == NULL) {
         failure = "error while formatting exception";
         goto error;
@@ -1886,7 +1884,7 @@ _PyXI_InitFailure(_PyXI_failure *failure, _PyXI_errcode code, PyObject *obj)
         return 0;
     }
 
-    PyObject *msgobj = PyObject_Str(obj);
+    PyObject *msgobj = _PyValue_Str(PyValue_FromObjectBorrow(obj));
     if (msgobj == NULL) {
         return -1;
     }
@@ -2444,7 +2442,9 @@ _create_sharedns(PyObject *names)
     }
     else if (PySequence_Check(names)) {
         for (Py_ssize_t i = 0; i < numnames; i++) {
-            PyObject *name = PySequence_GetItem(names, i);
+            PyValue name_v = _PyValue_SequenceGetItem(PyValue_FromObjectBorrow(names), i);
+            PyObject *name = PyValue_IsNull(name_v) ? NULL
+                : _PyValue_AsObjectStealAt(name_v, BOX_SITE_SEQUENCE);
             if (name == NULL) {
                 goto error;
             }

@@ -115,11 +115,6 @@ As a consequence of this, split keys have a maximum size of 16.
 #define PyDict_LOG_MINSIZE 3
 #define PyDict_MINSIZE 8
 
-/* Defer line of the value-API waves (value-api-v2a0.md, section 1.5): the
-   callers of the protocol marks in this unit are converted by W2's caller
-   batches, which remove this line. */
-#define Py_VALUE_DEFER_MARKS 1
-
 #include "Python.h"
 #include "pycore_bitutils.h"      // _Py_bit_length
 #include "pycore_call.h"          // _PyObject_CallNoArgs()
@@ -2106,7 +2101,7 @@ _PyDict_LookupIndexAndOwnedValue(PyDictObject *mp, PyObject *name, PyValue *out)
      * returned index remains usable only with the same current keys/layout. */
     PyValue query = PyValue_DUP(PyValue_FromObjectBorrow(name));
     PyValueBorrow value = PyValue_Borrow(PyValue_NULL);
-    Py_hash_t hash = PyObject_Hash(name);
+    Py_hash_t hash = _PyValue_Hash(PyValue_FromObjectBorrow(name));
     Py_ssize_t index = hash == -1 ? DKIX_ERROR : _Py_dict_lookup(mp, query, hash, &value);
     if (index >= 0 && !PyValue_IsNull(value)) {
         *out = PyValue_DUP(value);
@@ -3457,7 +3452,7 @@ _PyDict_FromKeys(PyObject *cls, PyObject *iterable, PyObject *value)
         }
     }
 
-    it = PyObject_GetIter(iterable);
+    it = _PyValue_GetIter(PyValue_FromObjectBorrow(iterable));
     if (it == NULL){
         goto Fail;
     }
@@ -3514,7 +3509,7 @@ _PyDict_FromKeys(PyObject *cls, PyObject *iterable, PyObject *value)
                 break;
             }
 
-            status = PyObject_SetItem(d, key, value);
+            status = _PyValue_SetItem(PyValue_FromObjectBorrow(d), PyValue_FromObjectBorrow(key), PyValue_FromObjectBorrow(value));
             Py_DECREF(key);
             if (status < 0) {
                 goto Fail;
@@ -3682,52 +3677,55 @@ frozendict_length(PyObject *self)
     return _PyAnyDict_CAST(self)->ma_used;
 }
 
-PyObject *
-_PyDict_SubscriptKnownHash(PyObject *self, PyObject *key, Py_hash_t hash)
+static PyValue
+dict_subscript_value(PyObject *self, PyValueBorrow key)
 {
-    PyValue v;
-    int status = _PyDict_GetValue_KnownHash(self, PyValue_FromObjectBorrow(key), hash, &v);
-    PyObject *value = NULL;
-    if (status > 0) {
-        value = _PyValue_AsObjectAt(v, BOX_SITE_DICT);
-        PyValue_CLOSE(v);
-    }
+    PyValue value;
+    int status = PyDict_GetValue(self, key, &value);
     if (status != 0) {
-        return value;
+        return status > 0 ? value : PyValue_NULL;
     }
     if (!PyAnyDict_CheckExact(self)) {
         PyObject *missing = _PyObject_LookupSpecial(self, &_Py_ID(__missing__));
         if (missing != NULL) {
-            value = PyObject_CallOneArg(missing, key);
-            Py_XDECREF(missing);
-            return value;
+            PyObject *key_object = _PyValue_AsObjectAt(key, BOX_SITE_DICT);
+            if (key_object == NULL) {
+                Py_DECREF(missing);
+                return PyValue_NULL;
+            }
+            PyObject *result = PyObject_CallOneArg(missing, key_object);
+            Py_DECREF(missing);
+            Py_DECREF(key_object);
+            return _PyValue_FromObjectResult(result);
         }
         if (PyErr_Occurred()) {
-            return NULL;
+            return PyValue_NULL;
         }
     }
-    _PyErr_SetKeyError(key);
-    return NULL;
+    _PyErr_SetKeyErrorValue(key);
+    return PyValue_NULL;
 }
 
-PyObject *
+Py_VALUE_ENTRY PyObject *
 _PyDict_Subscript(PyObject *self, PyObject *key)
 {
-    Py_hash_t hash = _PyObject_HashDictKey(key);
-    if (hash == -1) {
-        dict_unhashable_type(self, key);
-        return NULL;
-    }
-    return _PyDict_SubscriptKnownHash(self, key, hash);
+    return _PyValue_THUNK_EXIT(dict_subscript_value(self, _Py_VALUE_ARG(key)),
+                               BOX_SITE_DICT);
 }
 
-int
+static int
+dict_ass_subscript_value(PyObject *mp, PyValueBorrow key, PyValueBorrow value)
+{
+    if (PyValue_IsNull(value)) {
+        return PyDict_DelValue(mp, key);
+    }
+    return PyDict_SetValue(mp, key, value);
+}
+
+Py_VALUE_ENTRY int
 _PyDict_StoreSubscript(PyObject *mp, PyObject *v, PyObject *w)
 {
-    if (w == NULL)
-        return PyDict_DelValue(mp, PyValue_FromObjectBorrow(v));
-    else
-        return PyDict_SetValue(mp, PyValue_FromObjectBorrow(v), PyValue_FromObjectBorrow(w));
+    return dict_ass_subscript_value(mp, _Py_VALUE_ARG(v), _Py_VALUE_ARG(w));
 }
 
 static PyMappingMethods dict_as_mapping = {
@@ -3945,7 +3943,7 @@ dict_update(PyObject *self, PyObject *args, PyObject *kwds)
 static int
 merge_from_seq2_lock_held(PyObject *d, PyObject *seq2, int override)
 {
-    PyObject *iterator = PyObject_GetIter(seq2);
+    PyObject *iterator = _PyValue_GetIter(PyValue_FromObjectBorrow(seq2));
     if (iterator == NULL) {
         return -1;
     }
@@ -4142,7 +4140,7 @@ dict_merge(PyObject *a, PyObject *b, int override, PyObject **dupkey)
     if (keys == NULL) {
         return -1;
     }
-    PyObject *iterator = PyObject_GetIter(keys);
+    PyObject *iterator = _PyValue_GetIter(PyValue_FromObjectBorrow(keys));
     Py_XDECREF(keys);
     if (iterator == NULL) {
         return -1;
@@ -4156,7 +4154,7 @@ dict_merge(PyObject *a, PyObject *b, int override, PyObject **dupkey)
         }
         PyValue query = PyValue_DUP(PyValue_FromObjectBorrow(key));
         PyValue found = PyValue_NULL;
-        PyObject *value = NULL;
+        PyValue value = PyValue_NULL;
         Py_hash_t hash = -1;
         int skip = 0;
         if (override != 1) {
@@ -4180,8 +4178,9 @@ dict_merge(PyObject *a, PyObject *b, int override, PyObject **dupkey)
             }
         }
         if (status == 0 && !skip) {
-            value = PyObject_GetItem(b, key);
-            if (value == NULL) {
+            value = _PyValue_GetItem(PyValue_FromObjectBorrow(b),
+                                    PyValue_FromObjectBorrow(key));
+            if (PyValue_IsNull(value)) {
                 status = -1;
             }
             else {
@@ -4198,13 +4197,13 @@ dict_merge(PyObject *a, PyObject *b, int override, PyObject **dupkey)
                 }
                 else if (override == 1) {
                     status = _PyDict_SetValue_Take2_KnownHash(mp,
-                        PyValue_DUP(query), PyValue_DUP(PyValue_FromObjectBorrow(value)), hash);
+                        PyValue_DUP(query), PyValue_DUP(value), hash);
                 }
                 else {
                     /* __getitem__ can populate the target. Re-probe using
                      * conditional insertion, never an unconditional Set. */
                     status = dict_setdefault_value_lock_held(mp, query,
-                        PyValue_FromObjectBorrow(value), hash, NULL);
+                        value, hash, NULL);
                     if (status == 1 && override == 2 && dupkey != NULL) {
                         *dupkey = Py_NewRef(key);
                         status = -2;
@@ -4215,7 +4214,7 @@ dict_merge(PyObject *a, PyObject *b, int override, PyObject **dupkey)
                 }
             }
         }
-        Py_XDECREF(value);
+        PyValue_XCLOSE(value);
         PyValue_XCLOSE(query);
         Py_XDECREF(key);
         if (status != 0) {
@@ -5062,6 +5061,25 @@ _PyDict_IOr(PyObject *self, PyObject *other)
     return Py_NewRef(self);
 }
 
+/* d | other has an object other only: NotImplemented for any other value. */
+_Py_VALUE_NOTIMPL_BINARY(dict_or_value, _PyDict_Or)
+_Py_VALUE_NOTIMPL_BINARY(frozendict_or_value, frozendict_or)
+
+/* d |= other takes any iterable of pairs or mapping; an inline other is
+   boxed to fail as a value that is not one. */
+static PyValue
+dict_ior_value(PyValueBorrow self, PyValueBorrow other)
+{
+    PyObject *other_object = _PyValue_AsObjectAt(other, BOX_SITE_DICT);
+    if (other_object == NULL) {
+        return PyValue_NULL;
+    }
+    PyObject *result = _PyDict_IOr(PyValue_AsKnownObjectBorrow(self),
+                                   other_object);
+    Py_DECREF(other_object);
+    return _PyValue_FromObjectResult(result);
+}
+
 PyDoc_STRVAR(getitem__doc__,
 "__getitem__($self, key, /)\n--\n\nReturn self[key].");
 
@@ -5097,16 +5115,12 @@ static PyMethodDef mapp_methods[] = {
 };
 
 static int
-dict_contains(PyObject *op, PyObject *key)
+dict_contains_value(PyObject *op, PyValueBorrow key)
 {
-    Py_hash_t hash = _PyObject_HashDictKey(key);
-    if (hash == -1) {
-        dict_unhashable_type(op, key);
-        return -1;
-    }
-
-    return _PyDict_Contains_KnownHash(op, key, hash);
+    return PyDict_ContainsValue(op, key);
 }
+
+_Py_VALUE_THUNK_CONTAINS(dict_contains, dict_contains_value)
 
 /* Return 1 if `key` is in dict `op`, 0 if not, and -1 on error. */
 int
@@ -5117,7 +5131,7 @@ PyDict_Contains(PyObject *op, PyObject *key)
         return -1;
     }
 
-    return dict_contains(op, key);
+    return dict_contains_value(op, PyValue_FromObjectBorrow(key));
 }
 
 int
@@ -5306,6 +5320,8 @@ PyDoc_STRVAR(dictionary_doc,
 "dict(**kwargs) -> new dictionary initialized with the name=value pairs\n"
 "    in the keyword argument list.  For example:  dict(one=1, two=2)");
 
+_Py_VALUE_NOTIMPL_RICHCMP(dict_richcompare_value, dict_richcompare)
+
 PyTypeObject PyDict_Type = {
     PyVarObject_HEAD_INIT(&PyType_Type, 0)
     "dict",
@@ -5350,6 +5366,15 @@ PyTypeObject PyDict_Type = {
     PyObject_GC_Del,                            /* tp_free */
     .tp_vectorcall = dict_vectorcall,
     .tp_version_tag = _Py_TYPE_VERSION_DICT,
+    .tp_value = {
+        .nb_or = _Py_VALUE_SLOT_INIT(nb_or, dict_or_value),
+        .nb_inplace_or = _Py_VALUE_SLOT_INIT(nb_inplace_or, dict_ior_value),
+        .subscript = _Py_VALUE_SLOT_INIT(subscript, dict_subscript_value),
+        .ass_subscript = _Py_VALUE_SLOT_INIT(ass_subscript,
+                                             dict_ass_subscript_value),
+        .contains = _Py_VALUE_SLOT_INIT(contains, dict_contains_value),
+        .richcompare = _Py_VALUE_SLOT_INIT(richcompare, dict_richcompare_value),
+    },
 };
 
 
@@ -5868,7 +5893,7 @@ dictiter_reduce(PyObject *self, PyObject *Py_UNUSED(ignored))
     /* copy the iterator state */
     dictiterobject tmp = *di;
     Py_XINCREF(tmp.di_dict);
-    PyObject *list = PySequence_List((PyObject*)&tmp);
+    PyObject *list = _PyValue_SequenceList(PyValue_FromObjectBorrow((PyObject*)&tmp));
     Py_XDECREF(tmp.di_dict);
     if (list == NULL) {
         return NULL;
@@ -5992,7 +6017,7 @@ static PyGetSetDef dictview_getset[] = {
 static int
 all_contained_in(PyObject *self, PyObject *other)
 {
-    PyObject *iter = PyObject_GetIter(self);
+    PyObject *iter = _PyValue_GetIter(PyValue_FromObjectBorrow(self));
     int ok = 1;
 
     if (iter == NULL)
@@ -6004,7 +6029,7 @@ all_contained_in(PyObject *self, PyObject *other)
                 ok = -1;
             break;
         }
-        ok = PySequence_Contains(other, next);
+        ok = _PyValue_Contains(PyValue_FromObjectBorrow(other), PyValue_FromObjectBorrow(next));
         Py_DECREF(next);
         if (ok <= 0)
             break;
@@ -6027,10 +6052,10 @@ dictview_richcompare(PyObject *self, PyObject *other, int op)
     if (!PyAnySet_Check(other) && !PyDictViewSet_Check(other))
         Py_RETURN_NOTIMPLEMENTED;
 
-    len_self = PyObject_Size(self);
+    len_self = _PyValue_Size(PyValue_FromObjectBorrow(self));
     if (len_self < 0)
         return NULL;
-    len_other = PyObject_Size(other);
+    len_other = _PyValue_Size(PyValue_FromObjectBorrow(other));
     if (len_other < 0)
         return NULL;
 
@@ -6084,7 +6109,7 @@ dictview_repr(PyObject *self)
     if (rc != 0) {
         return rc > 0 ? PyUnicode_FromString("...") : NULL;
     }
-    seq = PySequence_List((PyObject *)dv);
+    seq = _PyValue_SequenceList(_PyValue_FromObjectKnown((PyObject *)dv));
     if (seq == NULL) {
         goto Done;
     }
@@ -6109,13 +6134,14 @@ dictkeys_iter(PyObject *self)
 }
 
 static int
-dictkeys_contains(PyObject *self, PyObject *obj)
+dictkeys_contains_value(PyObject *self, PyValueBorrow obj)
 {
     _PyDictViewObject *dv = (_PyDictViewObject *)self;
     if (dv->dv_dict == NULL)
         return 0;
-    return dict_contains((PyObject *)dv->dv_dict, obj);
+    return dict_contains_value((PyObject *)dv->dv_dict, obj);
 }
+_Py_VALUE_THUNK_CONTAINS(dictkeys_contains, dictkeys_contains_value)
 
 static PySequenceMethods dictkeys_as_sequence = {
     dictview_len,                       /* sq_length */
@@ -6189,7 +6215,7 @@ _PyDictView_Intersect(PyObject* self, PyObject *other)
 
     /* if other is a set and self is smaller than other,
        reuse set intersection logic */
-    if (PySet_CheckExact(other) && len_self <= PyObject_Size(other)) {
+    if (PySet_CheckExact(other) && len_self <= _PyValue_Size(PyValue_FromObjectBorrow(other))) {
         return PyObject_CallMethodObjArgs(
                 other, &_Py_ID(intersection), self, NULL);
     }
@@ -6212,7 +6238,7 @@ _PyDictView_Intersect(PyObject* self, PyObject *other)
     if (result == NULL)
         return NULL;
 
-    it = PyObject_GetIter(other);
+    it = _PyValue_GetIter(PyValue_FromObjectBorrow(other));
     if (it == NULL) {
         Py_DECREF(result);
         return NULL;
@@ -6421,7 +6447,7 @@ dictviews_isdisjoint(PyObject *self, PyObject *other)
      * because PySequence_Contains may be expensive otherwise): */
     if (PyAnySet_Check(other) || PyDictViewSet_Check(other)) {
         Py_ssize_t len_self = dictview_len(self);
-        Py_ssize_t len_other = PyObject_Size(other);
+        Py_ssize_t len_other = _PyValue_Size(PyValue_FromObjectBorrow(other));
         if (len_other == -1)
             return NULL;
 
@@ -6432,12 +6458,12 @@ dictviews_isdisjoint(PyObject *self, PyObject *other)
         }
     }
 
-    it = PyObject_GetIter(other);
+    it = _PyValue_GetIter(PyValue_FromObjectBorrow(other));
     if (it == NULL)
         return NULL;
 
     while ((item = PyIter_Next(it)) != NULL) {
-        int contains = PySequence_Contains(self, item);
+        int contains = _PyValue_Contains(PyValue_FromObjectBorrow(self), PyValue_FromObjectBorrow(item));
         Py_DECREF(item);
         if (contains == -1) {
             Py_DECREF(it);
@@ -6471,6 +6497,8 @@ static PyMethodDef dictkeys_methods[] = {
     {NULL,              NULL}           /* sentinel */
 };
 
+_Py_VALUE_NOTIMPL_RICHCMP(dictview_richcompare_value, dictview_richcompare)
+
 PyTypeObject PyDictKeys_Type = {
     PyVarObject_HEAD_INIT(&PyType_Type, 0)
     "dict_keys",                                /* tp_name */
@@ -6502,6 +6530,10 @@ PyTypeObject PyDictKeys_Type = {
     0,                                          /* tp_iternext */
     dictkeys_methods,                           /* tp_methods */
     .tp_getset = dictview_getset,
+    .tp_value = {
+        .richcompare = _Py_VALUE_SLOT_INIT(richcompare, dictview_richcompare_value),
+        .contains = _Py_VALUE_SLOT_INIT(contains, dictkeys_contains_value),
+    },
 };
 
 /*[clinic input]
@@ -6540,17 +6572,19 @@ dictitems_iter(PyObject *self)
 }
 
 static int
-dictitems_contains(PyObject *self, PyObject *obj)
+dictitems_contains_value(PyObject *self, PyValueBorrow obj)
 {
     _PyDictViewObject *dv = (_PyDictViewObject *)self;
-    if (dv->dv_dict == NULL || !PyTuple_Check(obj) ||
-        PyTuple_GET_SIZE(obj) != 2)
-    {
+    if (dv->dv_dict == NULL || !PyValue_IsObject(obj)) {
+        return 0;
+    }
+    PyObject *item = PyValue_AsKnownObjectBorrow(obj);
+    if (!PyTuple_Check(item) || PyTuple_GET_SIZE(item) != 2) {
         return 0;
     }
     PyObject *dict = Py_NewRef((PyObject *)dv->dv_dict);
-    PyValue key = PyValue_DUP(PyTuple_GET_VALUE(obj, 0));
-    PyValue value = PyValue_DUP(PyTuple_GET_VALUE(obj, 1));
+    PyValue key = PyValue_DUP(PyTuple_GET_VALUE(item, 0));
+    PyValue value = PyValue_DUP(PyTuple_GET_VALUE(item, 1));
     PyValue found = PyValue_NULL;
     Py_hash_t hash = _PyValue_Hash(key);
     int result = -1;
@@ -6569,6 +6603,7 @@ dictitems_contains(PyObject *self, PyObject *obj)
     Py_XDECREF(dict);
     return result;
 }
+_Py_VALUE_THUNK_CONTAINS(dictitems_contains, dictitems_contains_value)
 
 static PySequenceMethods dictitems_as_sequence = {
     dictview_len,                       /* sq_length */
@@ -6625,6 +6660,10 @@ PyTypeObject PyDictItems_Type = {
     0,                                          /* tp_iternext */
     dictitems_methods,                          /* tp_methods */
     .tp_getset = dictview_getset,
+    .tp_value = {
+        .richcompare = _Py_VALUE_SLOT_INIT(richcompare, dictview_richcompare_value),
+        .contains = _Py_VALUE_SLOT_INIT(contains, dictitems_contains_value),
+    },
 };
 
 /*[clinic input]
@@ -6874,7 +6913,7 @@ _PyDict_NewKeysForClass(PyHeapTypeObject *cls)
     init_keys_object(keys, NEXT_LOG2_SHARED_KEYS_MAX_SIZE, log2_bytes,
                      DICT_KEYS_SPLIT, SHARED_KEYS_MAX_SIZE, sizeof(PyDictUnicodeEntry));
     if (cls->ht_type.tp_dict != NULL) {
-        Py_hash_t hash = PyObject_Hash(&_Py_ID(__static_attributes__));
+        Py_hash_t hash = _PyValue_Hash(_PyValue_FromObjectKnown(&_Py_ID(__static_attributes__)));
         int found = hash == -1 ? -1 : _PyDict_GetValue_KnownHash(
             cls->ht_type.tp_dict, PyValue_FromObjectBorrow(&_Py_ID(__static_attributes__)),
             hash, &attrs);
@@ -6888,7 +6927,7 @@ _PyDict_NewKeysForClass(PyHeapTypeObject *cls)
                 PyValue key = PyTuple_GetValue(tuple, i);
                 if (!PyValue_IsNull(key) && value_is_exact_unicode(key)) {
                     PyObject *name = PyValue_AsKnownObjectBorrow(key);
-                    Py_hash_t key_hash = PyObject_Hash(name);
+                    Py_hash_t key_hash = _PyValue_Hash(PyValue_FromObjectBorrow(name));
                     Py_ssize_t ix = key_hash == -1 ? DKIX_ERROR :
                         insert_split_key(keys, name, key_hash);
                     PyValue_XCLOSE(key);
@@ -7095,7 +7134,7 @@ store_instance_attr_lock_held(PyObject *obj, PyObject *name, PyValue value)
         Py_INCREF(type);
         PyDictKeysObject *keys = CACHED_KEYS(type);
         dictkeys_incref(keys);
-        Py_hash_t hash = PyObject_Hash(name);
+        Py_hash_t hash = _PyValue_Hash(PyValue_FromObjectBorrow(name));
         Py_ssize_t ix = hash == -1 ? DKIX_ERROR : insert_split_key(keys, name, hash);
         /* insert_split_key() notifies type watchers, which can run Python that
          * changes obj's class, the class's keys or obj's dictionary; start
@@ -8032,4 +8071,10 @@ PyTypeObject PyFrozenDict_Type = {
     .tp_free = PyObject_GC_Del,
     .tp_vectorcall = frozendict_vectorcall,
     .tp_version_tag = _Py_TYPE_VERSION_FROZENDICT,
+    .tp_value = {
+        .nb_or = _Py_VALUE_SLOT_INIT(nb_or, frozendict_or_value),
+        .subscript = _Py_VALUE_SLOT_INIT(subscript, dict_subscript_value),
+        .contains = _Py_VALUE_SLOT_INIT(contains, dict_contains_value),
+        .richcompare = _Py_VALUE_SLOT_INIT(richcompare, dict_richcompare_value),
+    },
 };

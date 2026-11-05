@@ -5,6 +5,31 @@
 /* the more complicated methods.  parts of these should be pulled out into the
    shared code in bytes_methods.c to cut down on duplicate code bloat.  */
 
+/* The width of ljust(), rjust(), center() and zfill(): an index, converted as
+   the Clinic Py_ssize_t converter does, through the value forms. */
+static int
+stringlib_convert_width(PyObject *arg, void *ptr)
+{
+    PyValue iobj = _PyValue_Index(PyValue_FromObjectBorrow(arg));
+    if (PyValue_IsNull(iobj)) {
+        return 0;
+    }
+    Py_ssize_t ival = _PyValue_IntAsSsize_t(iobj);
+    PyValue_CLOSE(iobj);
+    if (ival == -1 && PyErr_Occurred()) {
+        return 0;
+    }
+    *(Py_ssize_t *)ptr = ival;
+    return 1;
+}
+
+/*[python input]
+class width_converter(CConverter):
+    type = 'Py_ssize_t'
+    converter = 'stringlib_convert_width'
+[python start generated code]*/
+/*[python end generated code: output=da39a3ee5e6b4b0d input=5ebb21e0fc00412b]*/
+
 /*[clinic input]
 class B "PyObject *" "&PyType_Type"
 [clinic start generated code]*/
@@ -133,7 +158,7 @@ pad(PyObject *self, Py_ssize_t left, Py_ssize_t right, char fill)
 /*[clinic input]
 B.ljust as stringlib_ljust
 
-    width: Py_ssize_t
+    width: width
     fillchar: char = b' '
     /
 
@@ -144,7 +169,7 @@ Padding is done using the specified fill character.
 
 static PyObject *
 stringlib_ljust_impl(PyObject *self, Py_ssize_t width, char fillchar)
-/*[clinic end generated code: output=c79ca173c5ff8337 input=eff2d014bc7d80df]*/
+/*[clinic end generated code: output=c79ca173c5ff8337 input=272c8621ff3b2e46]*/
 {
     if (STRINGLIB_LEN(self) >= width) {
         return return_self(self);
@@ -157,7 +182,7 @@ stringlib_ljust_impl(PyObject *self, Py_ssize_t width, char fillchar)
 /*[clinic input]
 B.rjust as stringlib_rjust
 
-    width: Py_ssize_t
+    width: width
     fillchar: char = b' '
     /
 
@@ -168,7 +193,7 @@ Padding is done using the specified fill character.
 
 static PyObject *
 stringlib_rjust_impl(PyObject *self, Py_ssize_t width, char fillchar)
-/*[clinic end generated code: output=7df5d728a5439570 input=218b0bd31308955d]*/
+/*[clinic end generated code: output=7df5d728a5439570 input=a92e8c911bdd582d]*/
 {
     if (STRINGLIB_LEN(self) >= width) {
         return return_self(self);
@@ -181,7 +206,7 @@ stringlib_rjust_impl(PyObject *self, Py_ssize_t width, char fillchar)
 /*[clinic input]
 B.center as stringlib_center
 
-    width: Py_ssize_t
+    width: width
     fillchar: char = b' '
     /
 
@@ -192,7 +217,7 @@ Padding is done using the specified fill character.
 
 static PyObject *
 stringlib_center_impl(PyObject *self, Py_ssize_t width, char fillchar)
-/*[clinic end generated code: output=d8da2e055288b4c2 input=3776fd278765d89b]*/
+/*[clinic end generated code: output=d8da2e055288b4c2 input=06347ded7e0f50ba]*/
 {
     Py_ssize_t marg, left;
 
@@ -210,7 +235,7 @@ stringlib_center_impl(PyObject *self, Py_ssize_t width, char fillchar)
 @permit_long_summary
 B.zfill as stringlib_zfill
 
-    width: Py_ssize_t
+    width: width
     /
 
 Pad a numeric string with zeros on the left, to fill a field of the given width.
@@ -220,7 +245,7 @@ The original string is never truncated.
 
 static PyObject *
 stringlib_zfill_impl(PyObject *self, Py_ssize_t width)
-/*[clinic end generated code: output=0b3c684a7f1b2319 input=dfb9cbb16f521756]*/
+/*[clinic end generated code: output=0b3c684a7f1b2319 input=02aeeaf7acac7016]*/
 {
     Py_ssize_t fill;
     PyObject *s;

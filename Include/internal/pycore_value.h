@@ -1212,6 +1212,19 @@ _PyValue_AsObjectSteal(PyValue ref _PyBox_AT_PARAM)
 #define _PyValue_AsObjectStealAt(V0, SITE) \
     (_PyValue_AsObjectSteal)(V0 _PyBox_AT_ARG(_PyBox_CORE(SITE)))
 
+/* _PyValue_AsObjectStealAt() of the result of a value form: PyValue_NULL,
+   which has set an exception, gives NULL. */
+static inline PyObject *
+_PyValue_AsObjectResult(PyValue ref _PyBox_AT_PARAM)
+{
+    if (PyValue_IsNull(ref)) {
+        return NULL;
+    }
+    return (_PyValue_AsObjectSteal)(ref _PyBox_AT_ARG(at));
+}
+#define _PyValue_AsObjectResultAt(V0, SITE) \
+    (_PyValue_AsObjectResult)(V0 _PyBox_AT_ARG(_PyBox_CORE(SITE)))
+
 /* PyValue_AsObject() of a boundary box, whose kind and owner at states: a
    thunk exit, an adapter or a foreign exit. In stats builds, a function of
    its own name, so that the lint can tell it from the CORE forms; it inlines

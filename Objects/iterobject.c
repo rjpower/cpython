@@ -1,10 +1,5 @@
 /* Iterator objects */
 
-/* Defer line of the value-API waves (value-api-v2a0.md, section 1.5): the
-   callers of the protocol marks in this unit are converted by W2's caller
-   batches, which remove this line. */
-#define Py_VALUE_DEFER_MARKS 1
-
 #include "Python.h"
 #include "pycore_abstract.h"      // _PyObject_HasLen()
 #include "pycore_call.h"          // _PyObject_CallNoArgs()
@@ -17,6 +12,9 @@
 #include "pycore_pystate.h"       // _PyThreadState_GET()
 #include "pycore_tuple.h"         // PyTuple_GET_VALUE()
 #include "pycore_value_api.h"     // _PyValue_AsObjectAt()
+#include "pycore_value_call.h"    // _PyValue_CallNoArgs()
+#include "pycore_value_ops.h"     // _PyValue_SequenceGetItem()
+#include "pycore_value_slots.h"   // _Py_VALUE_THUNK_ITERNEXT()
 
 
 typedef struct {
@@ -61,31 +59,31 @@ iter_traverse(PyObject *op, visitproc visit, void *arg)
     return 0;
 }
 
-static PyObject *
-iter_iternext(PyObject *iterator)
+static _PyStatusValue
+iter_iternext_value(PyObject *iterator)
 {
     seqiterobject *it;
     PyObject *seq;
-    PyObject *result;
+    PyValue result;
 
     assert(PySeqIter_Check(iterator));
     it = (seqiterobject *)iterator;
     Py_ssize_t index = FT_ATOMIC_LOAD_SSIZE_RELAXED(it->it_index);
     if (index < 0)
-        return NULL;
+        return (_PyStatusValue){PYGEN_RETURN, PyValue_NULL};
     seq = it->it_seq;
 #ifndef Py_GIL_DISABLED
     if (seq == NULL)
-        return NULL;
+        return (_PyStatusValue){PYGEN_RETURN, PyValue_NULL};
 #endif
     if (index == PY_SSIZE_T_MAX) {
         PyErr_SetString(PyExc_OverflowError,
                         "iter index too large");
-        return NULL;
+        return (_PyStatusValue){PYGEN_ERROR, PyValue_NULL};
     }
 
-    result = PySequence_GetItem(seq, index);
-    if (result != NULL) {
+    result = _PyValue_SequenceGetItem(_Py_VALUE_ARG(seq), index);
+    if (!PyValue_IsNull(result)) {
         /* PySequence_GetItem() can exhaust the iterator re-entrantly.
          * Preserve the exhaustion sentinel if it is observed.  Concurrent
          * exhaustion can still race with the store, but remains memory-safe
@@ -93,7 +91,7 @@ iter_iternext(PyObject *iterator)
         if (FT_ATOMIC_LOAD_SSIZE_RELAXED(it->it_index) >= 0) {
             FT_ATOMIC_STORE_SSIZE_RELAXED(it->it_index, index + 1);
         }
-        return result;
+        return (_PyStatusValue){PYGEN_NEXT, result};
     }
     if (PyErr_ExceptionMatches(PyExc_IndexError) ||
         PyErr_ExceptionMatches(PyExc_StopIteration))
@@ -105,9 +103,12 @@ iter_iternext(PyObject *iterator)
         Py_CLEAR(it->it_seq);
 #endif
         PyErr_Clear();
+        return (_PyStatusValue){PYGEN_RETURN, PyValue_NULL};
     }
-    return NULL;
+    return (_PyStatusValue){PYGEN_ERROR, PyValue_NULL};
 }
+
+_Py_VALUE_THUNK_ITERNEXT(iter_iternext, iter_iternext_value)
 
 static PyObject *
 iter_len(PyObject *op, PyObject *Py_UNUSED(ignored))
@@ -208,6 +209,9 @@ PyTypeObject PySeqIter_Type = {
     iter_iternext,                              /* tp_iternext */
     seqiter_methods,                            /* tp_methods */
     0,                                          /* tp_members */
+    .tp_value = {
+        .iternext = _Py_VALUE_SLOT_INIT(iternext, iter_iternext_value),
+    },
 };
 
 /* -------------------------------------- */
@@ -273,25 +277,27 @@ calliter_traverse(PyObject *op, visitproc visit, void *arg)
     return 0;
 }
 
-static PyObject *
-calliter_iternext(PyObject *op)
+static _PyStatusValue
+calliter_iternext_value(PyObject *op)
 {
     calliterobject *it = (calliterobject*)op;
-    PyObject *result;
+    PyValue result;
 
     if (it->it_callable == NULL) {
-        return NULL;
+        return (_PyStatusValue){PYGEN_RETURN, PyValue_NULL};
     }
 
-    result = _PyObject_CallNoArgs(it->it_callable);
+    result = _PyValue_CallNoArgs(_PyThreadState_GET(),
+                                 _Py_VALUE_ARG(it->it_callable));
     /* The call can exhaust the iterator re-entrantly. */
-    if (result != NULL && it->it_callable != NULL) {
+    if (!PyValue_IsNull(result) && it->it_callable != NULL) {
         if (it->it_sentinel == NULL) {
-            return result; /* Common case, fast path */
+            return (_PyStatusValue){PYGEN_NEXT, result}; /* Common case */
         }
-        int ok = PyObject_RichCompareBool(it->it_sentinel, result, Py_EQ);
+        int ok = _PyValue_RichCompareBool(_Py_VALUE_ARG(it->it_sentinel),
+                                          result, Py_EQ);
         if (ok == 0) {
-            return result; /* Common case, fast path */
+            return (_PyStatusValue){PYGEN_NEXT, result}; /* Common case */
         }
 
         if (ok > 0) {
@@ -307,9 +313,12 @@ calliter_iternext(PyObject *op)
         _PyErr_FormatFromCause(PyExc_RuntimeError,
                                "callable raised StopIteration");
     }
-    Py_XDECREF(result);
-    return NULL;
+    PyValue_XCLOSE(result);
+    return (_PyStatusValue){PyErr_Occurred() ? PYGEN_ERROR : PYGEN_RETURN,
+                            PyValue_NULL};
 }
+
+_Py_VALUE_THUNK_ITERNEXT(calliter_iternext, calliter_iternext_value)
 
 static PyObject *
 calliter_reduce(PyObject *op, PyObject *Py_UNUSED(ignored))
@@ -420,4 +429,8 @@ PyTypeObject PyCallIter_Type = {
     PyObject_SelfIter,                          /* tp_iter */
     calliter_iternext,                          /* tp_iternext */
     calliter_methods,                           /* tp_methods */
+    0,                                          /* tp_members */
+    .tp_value = {
+        .iternext = _Py_VALUE_SLOT_INIT(iternext, calliter_iternext_value),
+    },
 };

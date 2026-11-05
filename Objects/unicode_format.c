@@ -40,26 +40,27 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 // PyUnicode_Format() implementation
 
-/* Defer line of the value-API waves (value-api-v2a0.md, section 1.5): the
-   callers of the protocol marks in this unit are converted by W2's caller
-   batches, which remove this line. */
-#define Py_VALUE_DEFER_MARKS 1
-
 #include "Python.h"
 #include "pycore_abstract.h"      // _PyIndex_Check()
 #include "pycore_format.h"        // F_ALT
 #include "pycore_long.h"          // _PyLong_FormatWriter()
 #include "pycore_object.h"        // _PyObject_IsUniquelyReferenced()
+#include "pycore_tuple.h"         // PyTuple_GET_VALUE()
 #include "pycore_unicodeobject.h" // _Py_MAX_UNICODE
 #include "pycore_value_api.h"     // _PyValue_AsObjectAt()
+#include "pycore_value_ops.h"     // _PyValue_GetItem()
 
 
 #define MAX_UNICODE _Py_MAX_UNICODE
 #define ensure_unicode _PyUnicode_EnsureUnicode
 
 struct unicode_formatter_t {
+    /* The tuple, mapping or single object argument; NULL when the single
+       argument is an inline value (then only single holds it). */
     PyObject *args;
-    int args_owned;
+    /* The argument when it is not a tuple, or the value that a "%(key)"
+       lookup found: owned. */
+    PyValue single;
     Py_ssize_t arglen, argidx;
     PyObject *dict;
     /* Owns the tuple item most recently returned by
@@ -102,27 +103,52 @@ struct unicode_format_arg_t {
 } while (0)
 
 
-static PyObject *
-unicode_format_getnextarg(struct unicode_formatter_t *ctx, int allowone)
+/* The next argument as a borrow: an item of the argument tuple, or the single
+   argument. Return 0, or -1 with an exception set. */
+static int
+unicode_format_nextarg(struct unicode_formatter_t *ctx, int allowone,
+                       PyValueBorrow *arg)
 {
     Py_ssize_t argidx = ctx->argidx;
 
     if (argidx < ctx->arglen && (allowone || ctx->arglen >= 0)) {
         ctx->argidx++;
         if (ctx->arglen >= 0) {
-            PyValue argv = PyTuple_GetValue(ctx->args, argidx);
-            Py_XSETREF(ctx->curarg, PyValue_IsNull(argv) ? NULL : _PyValue_AsObjectAt(argv, BOX_SITE_TUPLE));
-            PyValue_XCLOSE(argv);
-            return ctx->curarg;
+            *arg = PyValue_Borrow(PyTuple_GET_VALUE(ctx->args, argidx));
+            return 0;
         }
         else if (allowone) {
-            return ctx->args;
+            *arg = PyValue_Borrow(ctx->single);
+            return 0;
         }
     }
     PyErr_Format(PyExc_TypeError,
                  "not enough arguments for format string (got %zd)",
                  ctx->arglen < 0 ? 1 : ctx->arglen);
-    return NULL;
+    return -1;
+}
+
+/* The object of an argument for the formats that need one; an inline value
+   is boxed into ctx->curarg, which the next call releases. */
+static PyObject *
+unicode_format_arg_object(struct unicode_formatter_t *ctx, PyValueBorrow arg)
+{
+    if (PyValue_IsObject(arg)) {
+        return PyValue_AsKnownObjectBorrow(arg);
+    }
+    PyObject *boxed = _PyValue_AsObjectAt(arg, BOX_SITE_TUPLE);
+    Py_XSETREF(ctx->curarg, boxed);
+    return boxed;
+}
+
+static PyObject *
+unicode_format_getnextarg(struct unicode_formatter_t *ctx, int allowone)
+{
+    PyValueBorrow arg;
+    if (unicode_format_nextarg(ctx, allowone, &arg) < 0) {
+        return NULL;
+    }
+    return unicode_format_arg_object(ctx, arg);
 }
 
 
@@ -133,27 +159,15 @@ unicode_format_getnextarg(struct unicode_formatter_t *ctx, int allowone)
 
    Return 0 on success, raise an exception and return -1 on error. */
 static int
-formatfloat(PyObject *v,
-            struct unicode_formatter_t *ctx,
-            struct unicode_format_arg_t *arg,
-            PyObject **p_output,
-            _PyUnicodeWriter *writer)
+formatfloat_double(double x,
+                   struct unicode_format_arg_t *arg,
+                   PyObject **p_output,
+                   _PyUnicodeWriter *writer)
 {
     char *p;
-    double x;
     Py_ssize_t len;
     int prec;
     int dtoa_flags = 0;
-
-    x = PyFloat_AsDouble(v);
-    if (x == -1.0 && PyErr_Occurred()) {
-        if (PyErr_ExceptionMatches(PyExc_TypeError)) {
-            FORMAT_ERROR(PyExc_TypeError,
-                         "%%%c requires a real number, not %T",
-                         arg->ch, v);
-        }
-        return -1;
-    }
 
     prec = arg->prec;
     if (prec < 0)
@@ -180,6 +194,25 @@ formatfloat(PyObject *v,
     }
     PyMem_Free(p);
     return 0;
+}
+
+static int
+formatfloat(PyObject *v,
+            struct unicode_formatter_t *ctx,
+            struct unicode_format_arg_t *arg,
+            PyObject **p_output,
+            _PyUnicodeWriter *writer)
+{
+    double x = PyFloat_AsDouble(v);
+    if (x == -1.0 && PyErr_Occurred()) {
+        if (PyErr_ExceptionMatches(PyExc_TypeError)) {
+            FORMAT_ERROR(PyExc_TypeError,
+                         "%%%c requires a real number, not %T",
+                         arg->ch, v);
+        }
+        return -1;
+    }
+    return formatfloat_double(x, arg, p_output, writer);
 }
 
 
@@ -339,6 +372,7 @@ mainformatlong(PyObject *v,
                _PyUnicodeWriter *writer)
 {
     PyObject *iobj, *res;
+    PyValue iobj_v;
     char type = (char)arg->ch;
 
     if (!PyNumber_Check(v))
@@ -347,11 +381,13 @@ mainformatlong(PyObject *v,
     /* make sure number is a type of integer for o, x, and X */
     if (!PyLong_Check(v)) {
         if (type == 'o' || type == 'x' || type == 'X') {
-            iobj = _PyNumber_Index(v);
+            iobj_v = _PyValue_Index(PyValue_FromObjectBorrow(v));
         }
         else {
-            iobj = PyNumber_Long(v);
+            iobj_v = _PyValue_Long(PyValue_FromObjectBorrow(v));
         }
+        iobj = PyValue_IsNull(iobj_v) ? NULL
+             : _PyValue_AsObjectStealAt(iobj_v, BOX_SITE_NUMBER);
         if (iobj == NULL ) {
             if (PyErr_ExceptionMatches(PyExc_TypeError))
                 goto wrongtype;
@@ -426,6 +462,20 @@ wrongtype:
 
 
 static Py_UCS4
+formatchar_code(long x,
+                struct unicode_formatter_t *ctx,
+                struct unicode_format_arg_t *arg)
+{
+    if (x < 0 || x > MAX_UNICODE) {
+        /* this includes an overflow in converting to C long */
+        FORMAT_ERROR(PyExc_OverflowError,
+                     "%%c argument not in range(0x110000)%s", "");
+        return (Py_UCS4) -1;
+    }
+    return (Py_UCS4) x;
+}
+
+static Py_UCS4
 formatchar(PyObject *v,
            struct unicode_formatter_t *ctx,
            struct unicode_format_arg_t *arg)
@@ -453,15 +503,7 @@ formatchar(PyObject *v,
             }
             return (Py_UCS4) -1;
         }
-
-        if (x < 0 || x > MAX_UNICODE) {
-            /* this includes an overflow in converting to C long */
-            FORMAT_ERROR(PyExc_OverflowError,
-                         "%%c argument not in range(0x110000)%s", "");
-            return (Py_UCS4) -1;
-        }
-
-        return (Py_UCS4) x;
+        return formatchar_code(x, ctx, arg);
     }
 }
 
@@ -488,9 +530,12 @@ unicode_format_arg_parse(struct unicode_formatter_t *ctx,
         int pcount = 1;
 
         if (ctx->dict == NULL) {
+            PyObject *args = unicode_format_arg_object(ctx, PyValue_Borrow(ctx->single));
+            if (args == NULL) {
+                return -1;
+            }
             PyErr_Format(PyExc_TypeError,
-                         "format requires a mapping, not %T",
-                         ctx->args);
+                         "format requires a mapping, not %T", args);
             return -1;
         }
         ++ctx->fmtpos;
@@ -516,14 +561,12 @@ unicode_format_arg_parse(struct unicode_formatter_t *ctx,
                                        keystart, keystart + keylen);
         if (arg->key == NULL)
             return -1;
-        if (ctx->args_owned) {
-            ctx->args_owned = 0;
-            Py_DECREF(ctx->args);
-        }
-        ctx->args = PyObject_GetItem(ctx->dict, arg->key);
-        if (ctx->args == NULL)
+        PyValue item = _PyValue_GetItem(PyValue_FromObjectBorrow(ctx->dict),
+                                        PyValue_FromObjectBorrow(arg->key));
+        if (PyValue_IsNull(item))
             return -1;
-        ctx->args_owned = 1;
+        PyValue_XCLOSE(ctx->single);
+        ctx->single = item;
         ctx->arglen = -3;
         ctx->argidx = -4;
     }
@@ -686,6 +729,161 @@ unicode_format_arg_parse(struct unicode_formatter_t *ctx,
 }
 
 
+/* The conversions of an inline int or float that need no object: the same
+   text as the object path writes. */
+
+#define FORMAT_INLINE_UNHANDLED 2
+
+/* The text that _PyUnicode_FormatLong() gives for the int v: its sign, the
+   base marker if alt, zeros up to prec digits, the digits. Return its
+   length; buf holds at least FORMAT_INT_BUFLEN characters. */
+#define FORMAT_INT_PREC_MAX 64
+#define FORMAT_INT_BUFLEN (FORMAT_INT_PREC_MAX + 32)
+static Py_ssize_t
+format_inline_int(char *buf, int64_t v, int type, int alt, int prec)
+{
+    int base = type == 'o' ? 8 : (type == 'x' || type == 'X') ? 16 : 10;
+    uint64_t u = v < 0 ? 0 - (uint64_t)v : (uint64_t)v;
+    char digits[24];
+    int ndigits = 0;
+    do {
+        int d = (int)(u % base);
+        digits[ndigits++] = d < 10 ? '0' + d
+                                   : (type == 'X' ? 'A' : 'a') + d - 10;
+        u /= base;
+    } while (u);
+    char *p = buf;
+    if (v < 0) {
+        *p++ = '-';
+    }
+    if (alt && base != 10) {
+        *p++ = '0';
+        *p++ = type == 'o' ? 'o' : (char)type;
+    }
+    for (int i = ndigits; i < prec; i++) {
+        *p++ = '0';
+    }
+    while (ndigits) {
+        *p++ = digits[--ndigits];
+    }
+    return p - buf;
+}
+
+/* Return 1 if the text is written to the writer, 0 if it is made into
+   *p_str (None on failure), -1 on error. */
+static int
+format_inline_text(struct unicode_formatter_t *ctx,
+                   struct unicode_format_arg_t *arg,
+                   const char *text, Py_ssize_t len, int fast,
+                   PyObject **p_str)
+{
+    if (fast) {
+        if (_PyUnicodeWriter_WriteASCIIString(&ctx->writer, text, len) < 0) {
+            return -1;
+        }
+        return 1;
+    }
+    *p_str = _PyUnicode_FromASCII(text, len);
+    return *p_str == NULL ? -1 : 0;
+}
+
+static int
+unicode_format_inline_arg(struct unicode_formatter_t *ctx,
+                          struct unicode_format_arg_t *arg,
+                          PyValueBorrow v, PyObject **p_str)
+{
+    int is_int = PyValue_IsInlineInt(v);
+    char buf[FORMAT_INT_BUFLEN];
+    Py_ssize_t len;
+
+    switch (arg->ch) {
+    case 's':
+    case 'r':
+    case 'a':
+        if (is_int) {
+            len = format_inline_int(buf, PyValue_InlineInt64(v), 'd', 0, -1);
+            return format_inline_text(ctx, arg, buf, len,
+                                      arg->width < 0 && arg->prec < 0, p_str);
+        }
+        else {
+            char *p = PyOS_double_to_string(PyValue_InlineFloat(v), 'r', 0,
+                                            Py_DTSF_ADD_DOT_0, NULL);
+            if (p == NULL) {
+                return -1;
+            }
+            int ret = format_inline_text(ctx, arg, p, strlen(p),
+                                         arg->width < 0 && arg->prec < 0,
+                                         p_str);
+            PyMem_Free(p);
+            return ret;
+        }
+
+    case 'i':
+    case 'd':
+    case 'u':
+    case 'o':
+    case 'x':
+    case 'X':
+        if (!is_int || arg->prec > FORMAT_INT_PREC_MAX) {
+            return FORMAT_INLINE_UNHANDLED;
+        }
+        len = format_inline_int(buf, PyValue_InlineInt64(v),
+                                arg->ch == 'u' || arg->ch == 'i'
+                                    ? 'd' : (int)arg->ch,
+                                arg->flags & F_ALT, arg->prec);
+        if (arg->width == -1 && arg->prec == -1
+            && !(arg->flags & (F_SIGN | F_BLANK)))
+        {
+            return format_inline_text(ctx, arg, buf, len, 1, p_str);
+        }
+        arg->sign = 1;
+        return format_inline_text(ctx, arg, buf, len, 0, p_str);
+
+    case 'e':
+    case 'E':
+    case 'f':
+    case 'F':
+    case 'g':
+    case 'G':
+    {
+        double x = is_int ? (double)PyValue_InlineInt64(v)
+                          : PyValue_InlineFloat(v);
+        if (arg->width == -1 && arg->prec == -1
+            && !(arg->flags & (F_SIGN | F_BLANK)))
+        {
+            if (formatfloat_double(x, arg, NULL, &ctx->writer) == -1)
+                return -1;
+            return 1;
+        }
+        arg->sign = 1;
+        if (formatfloat_double(x, arg, p_str, NULL) == -1)
+            return -1;
+        return 0;
+    }
+
+    case 'c':
+    {
+        if (!is_int) {
+            return FORMAT_INLINE_UNHANDLED;
+        }
+        Py_UCS4 ch = formatchar_code((long)PyValue_InlineInt64(v), ctx, arg);
+        if (ch == (Py_UCS4) -1)
+            return -1;
+        if (arg->width == -1 && arg->prec == -1) {
+            if (_PyUnicodeWriter_WriteCharInline(&ctx->writer, ch) < 0)
+                return -1;
+            return 1;
+        }
+        *p_str = PyUnicode_FromOrdinal(ch);
+        return *p_str == NULL ? -1 : 0;
+    }
+
+    default:
+        return FORMAT_INLINE_UNHANDLED;
+    }
+}
+
+
 /* Format one argument. Supported conversion specifiers:
 
    - "s", "r", "a": any type
@@ -706,15 +904,24 @@ unicode_format_arg_format(struct unicode_formatter_t *ctx,
                           PyObject **p_str)
 {
     PyObject *v;
+    PyValueBorrow value;
     _PyUnicodeWriter *writer = &ctx->writer;
 
     if (ctx->fmtcnt == 0)
         ctx->writer.overallocate = 0;
 
-    v = unicode_format_getnextarg(ctx, 1);
-    if (v == NULL)
+    if (unicode_format_nextarg(ctx, 1, &value) < 0)
         return -1;
 
+    if (PyValue_IsInline(value)) {
+        int ret = unicode_format_inline_arg(ctx, arg, value, p_str);
+        if (ret != FORMAT_INLINE_UNHANDLED) {
+            return ret;
+        }
+    }
+    v = unicode_format_arg_object(ctx, value);
+    if (v == NULL)
+        return -1;
 
     switch (arg->ch) {
     case 's':
@@ -736,9 +943,9 @@ unicode_format_arg_format(struct unicode_formatter_t *ctx,
         }
 
         if (arg->ch == 's')
-            *p_str = PyObject_Str(v);
+            *p_str = _PyValue_Str(PyValue_FromObjectBorrow(v));
         else if (arg->ch == 'r')
-            *p_str = PyObject_Repr(v);
+            *p_str = _PyValue_Repr(PyValue_FromObjectBorrow(v));
         else
             *p_str = PyObject_ASCII(v);
         break;
@@ -1048,15 +1255,24 @@ unicode_format_arg(struct unicode_formatter_t *ctx)
 PyObject *
 PyUnicode_Format(PyObject *format, PyObject *args)
 {
-    struct unicode_formatter_t ctx;
-
     if (format == NULL || args == NULL) {
         PyErr_BadInternalCall();
         return NULL;
     }
+    return _PyUnicode_FormatValue(format, PyValue_FromObjectBorrow(args));
+}
+
+/* format % args, with args as a borrow: a tuple, a mapping or one argument
+   that may be an inline int or float, which the conversions read as it is. */
+PyObject *
+_PyUnicode_FormatValue(PyObject *format, PyValueBorrow args_value)
+{
+    struct unicode_formatter_t ctx;
 
     if (ensure_unicode(format) < 0)
         return NULL;
+    PyObject *args = PyValue_IsObject(args_value)
+                     ? PyValue_AsKnownObjectBorrow(args_value) : NULL;
 
     ctx.fmtstr = format;
     ctx.fmtdata = PyUnicode_DATA(ctx.fmtstr);
@@ -1068,7 +1284,7 @@ PyUnicode_Format(PyObject *format, PyObject *args)
     ctx.writer.min_length = ctx.fmtcnt + 100;
     ctx.writer.overallocate = 1;
 
-    if (PyTuple_Check(args)) {
+    if (args != NULL && PyTuple_Check(args)) {
         ctx.arglen = PyTuple_Size(args);
         ctx.argidx = 0;
     }
@@ -1076,9 +1292,10 @@ PyUnicode_Format(PyObject *format, PyObject *args)
         ctx.arglen = -1;
         ctx.argidx = -2;
     }
-    ctx.args_owned = 0;
+    ctx.single = PyValue_DUP(args_value);
     ctx.curarg = NULL;
-    if (PyMapping_Check(args) && !PyTuple_Check(args) && !PyUnicode_Check(args))
+    if (args != NULL && PyMapping_Check(args) && !PyTuple_Check(args)
+        && !PyUnicode_Check(args))
         ctx.dict = args;
     else
         ctx.dict = NULL;
@@ -1120,16 +1337,12 @@ PyUnicode_Format(PyObject *format, PyObject *args)
     }
 
     Py_XDECREF(ctx.curarg);
-    if (ctx.args_owned) {
-        Py_DECREF(ctx.args);
-    }
+    PyValue_XCLOSE(ctx.single);
     return _PyUnicodeWriter_Finish(&ctx.writer);
 
   onError:
     _PyUnicodeWriter_Dealloc(&ctx.writer);
     Py_XDECREF(ctx.curarg);
-    if (ctx.args_owned) {
-        Py_DECREF(ctx.args);
-    }
+    PyValue_XCLOSE(ctx.single);
     return NULL;
 }

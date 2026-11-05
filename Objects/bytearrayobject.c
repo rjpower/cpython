@@ -1,10 +1,5 @@
 /* PyByteArray (bytearray) implementation */
 
-/* Defer line of the value-API waves (value-api-v2a0.md, section 1.5): the
-   callers of the protocol marks in this unit are converted by W2's caller
-   batches, which remove this line. */
-#define Py_VALUE_DEFER_MARKS 1
-
 #include "Python.h"
 #include "pycore_abstract.h"      // _PyIndex_Check()
 #include "pycore_bytes_methods.h"
@@ -430,6 +425,20 @@ PyByteArray_Concat(PyObject *a, PyObject *b)
     return (PyObject *)result;
 }
 
+static PyValue
+bytearray_concat_value(PyObject *a, PyValueBorrow b)
+{
+    if (PyValue_IsInline(b)) {
+        PyErr_Format(PyExc_TypeError, "can't concat %.100s to %.100s",
+                     PyValue_TYPE(b)->tp_name, Py_TYPE(a)->tp_name);
+        return PyValue_NULL;
+    }
+    return _PyValue_FromObjectResult(
+        PyByteArray_Concat(a, PyValue_AsKnownObjectBorrow(b)));
+}
+
+_Py_VALUE_THUNK_CONCAT(bytearray_concat, bytearray_concat_value)
+
 /* Functions stuffed into the type object */
 
 static Py_ssize_t
@@ -438,17 +447,8 @@ bytearray_length(PyObject *op)
     return PyByteArray_GET_SIZE(op);
 }
 
-/*[clinic input]
-@critical_section
-bytearray.__iadd__ as bytearray_iconcat
-
-    other: object
-    /
-[clinic start generated code]*/
-
 static PyObject *
-bytearray_iconcat_impl(PyByteArrayObject *self, PyObject *other)
-/*[clinic end generated code: output=ba172f2db8f7a8dd input=5b6fb07ab387084d]*/
+bytearray_iconcat_lock_held(PyByteArrayObject *self, PyObject *other)
 {
     _Py_CRITICAL_SECTION_ASSERT_OBJECT_LOCKED(self);
 
@@ -474,6 +474,24 @@ bytearray_iconcat_impl(PyByteArrayObject *self, PyObject *other)
     PyBuffer_Release(&vo);
     return Py_NewRef(self);
 }
+
+static PyValue
+bytearray_iconcat_value(PyObject *op, PyValueBorrow other)
+{
+    if (PyValue_IsInline(other)) {
+        PyErr_Format(PyExc_TypeError, "can't concat %.100s to %.100s",
+                     PyValue_TYPE(other)->tp_name, Py_TYPE(op)->tp_name);
+        return PyValue_NULL;
+    }
+    PyObject *ret;
+    Py_BEGIN_CRITICAL_SECTION(op);
+    ret = bytearray_iconcat_lock_held((PyByteArrayObject *)op,
+                                      PyValue_AsKnownObjectBorrow(other));
+    Py_END_CRITICAL_SECTION();
+    return _PyValue_FromObjectResult(ret);
+}
+
+_Py_VALUE_THUNK_CONCAT(bytearray_iconcat, bytearray_iconcat_value)
 
 /*[clinic input]
 @critical_section
@@ -540,59 +558,61 @@ bytearray_irepeat_impl(PyByteArrayObject *self, Py_ssize_t count)
     return Py_NewRef(self);
 }
 
-/*[clinic input]
-@critical_section
-bytearray.__getitem__ as bytearray_getitem
-    i: Py_ssize_t
-    /
-[clinic start generated code]*/
-
-static PyObject *
-bytearray_getitem_impl(PyByteArrayObject *self, Py_ssize_t i)
-/*[clinic end generated code: output=743cb7a5f892f7ed input=f90e2c70f80e2917]*/
+static PyValue
+bytearray_item_value(PyObject *op, Py_ssize_t i)
 {
-    _Py_CRITICAL_SECTION_ASSERT_OBJECT_LOCKED(self);
+    PyByteArrayObject *self = _PyByteArray_CAST(op);
+    PyValue ret;
+    Py_BEGIN_CRITICAL_SECTION(self);
     if (i < 0 || i >= Py_SIZE(self)) {
         PyErr_SetString(PyExc_IndexError, "bytearray index out of range");
-        return NULL;
+        ret = PyValue_NULL;
     }
-    return _PyLong_FromUnsignedChar((unsigned char)(self->ob_start[i]));
+    else {
+        ret = PyValue_FromInt64((unsigned char)(self->ob_start[i]));
+    }
+    Py_END_CRITICAL_SECTION();
+    return ret;
 }
 
-static PyObject *
-bytearray_subscript_lock_held(PyObject *op, PyObject *index)
+_Py_VALUE_THUNK_ITEM(bytearray_item, bytearray_item_value)
+
+static PyValue
+bytearray_subscript_lock_held(PyObject *op, PyValueBorrow index)
 {
     _Py_CRITICAL_SECTION_ASSERT_OBJECT_LOCKED(op);
     PyByteArrayObject *self = _PyByteArray_CAST(op);
-    if (_PyIndex_Check(index)) {
-        Py_ssize_t i = PyNumber_AsSsize_t(index, PyExc_IndexError);
+    if (_PyValue_IndexCheck(index)) {
+        Py_ssize_t i = _PyValue_AsSsize_t(index, PyExc_IndexError);
 
         if (i == -1 && PyErr_Occurred())
-            return NULL;
+            return PyValue_NULL;
 
         if (i < 0)
             i += PyByteArray_GET_SIZE(self);
 
         if (i < 0 || i >= Py_SIZE(self)) {
             PyErr_SetString(PyExc_IndexError, "bytearray index out of range");
-            return NULL;
+            return PyValue_NULL;
         }
-        return _PyLong_FromUnsignedChar((unsigned char)(self->ob_start[i]));
+        return PyValue_FromInt64((unsigned char)(self->ob_start[i]));
     }
-    else if (PySlice_Check(index)) {
+    else if (PyValue_IsObject(index)
+             && PySlice_Check(PyValue_AsKnownObjectBorrow(index))) {
         Py_ssize_t start, stop, step, slicelength, i;
         size_t cur;
-        if (PySlice_Unpack(index, &start, &stop, &step) < 0) {
-            return NULL;
+        if (PySlice_Unpack(PyValue_AsKnownObjectBorrow(index),
+                           &start, &stop, &step) < 0) {
+            return PyValue_NULL;
         }
         slicelength = PySlice_AdjustIndices(PyByteArray_GET_SIZE(self),
                                             &start, &stop, step);
 
         if (slicelength <= 0)
-            return PyByteArray_FromStringAndSize("", 0);
+            return _PyValue_FromObjectResult(PyByteArray_FromStringAndSize("", 0));
         else if (step == 1) {
-            return PyByteArray_FromStringAndSize(
-                PyByteArray_AS_STRING(self) + start, slicelength);
+            return _PyValue_FromObjectResult(PyByteArray_FromStringAndSize(
+                PyByteArray_AS_STRING(self) + start, slicelength));
         }
         else {
             char *source_buf = PyByteArray_AS_STRING(self);
@@ -601,34 +621,36 @@ bytearray_subscript_lock_held(PyObject *op, PyObject *index)
 
             result = PyByteArray_FromStringAndSize(NULL, slicelength);
             if (result == NULL)
-                return NULL;
+                return PyValue_NULL;
 
             result_buf = PyByteArray_AS_STRING(result);
             for (cur = start, i = 0; i < slicelength;
                  cur += step, i++) {
                      result_buf[i] = source_buf[cur];
             }
-            return result;
+            return PyValue_FromObjectSteal(result);
         }
     }
     else {
         PyErr_Format(PyExc_TypeError,
                      "bytearray indices must be integers or slices, not %.200s",
-                     Py_TYPE(index)->tp_name);
-        return NULL;
+                     PyValue_TYPE(index)->tp_name);
+        return PyValue_NULL;
     }
 }
 
-static PyObject *
-bytearray_subscript(PyObject *op, PyObject *index)
+static PyValue
+bytearray_subscript_value(PyObject *op, PyValueBorrow index)
 {
-    PyObject *ret;
+    PyValue ret;
     Py_BEGIN_CRITICAL_SECTION(op);
     ret = bytearray_subscript_lock_held(op, index);
     Py_END_CRITICAL_SECTION();
     return ret;
 
 }
+
+_Py_VALUE_THUNK_SUBSCRIPT(bytearray_subscript, bytearray_subscript_value)
 
 static int
 bytearray_setslice_linear(PyByteArrayObject *self,
@@ -769,26 +791,16 @@ bytearray_setslice(PyByteArrayObject *self, Py_ssize_t lo, Py_ssize_t hi,
     return res;
 }
 
-/*[clinic input]
-@critical_section
-bytearray.__setitem__ as bytearray_setitem
-
-    i: Py_ssize_t
-    value: object
-    /
-[clinic start generated code]*/
-
 static int
-bytearray_setitem_impl(PyByteArrayObject *self, Py_ssize_t i,
-                       PyObject *value)
-/*[clinic end generated code: output=c8e973819dd58098 input=460a77c3d8b7268f]*/
+bytearray_ass_item_lock_held(PyByteArrayObject *self, Py_ssize_t i,
+                             PyValueBorrow value)
 {
     _Py_CRITICAL_SECTION_ASSERT_OBJECT_LOCKED(self);
 
     // GH-91153: We need to do this *before* the size check, in case value has a
     // nasty __index__ method that changes the size of the bytearray:
     int ival = -1;
-    if (value && !_getbytevalue(PyValue_FromObjectBorrow(value), &ival)) {
+    if (!PyValue_IsNull(value) && !_getbytevalue(value, &ival)) {
         return -1;
     }
 
@@ -801,7 +813,7 @@ bytearray_setitem_impl(PyByteArrayObject *self, Py_ssize_t i,
         return -1;
     }
 
-    if (value == NULL) {
+    if (PyValue_IsNull(value)) {
         return bytearray_setslice(self, i, i+1, NULL);
     }
 
@@ -811,7 +823,20 @@ bytearray_setitem_impl(PyByteArrayObject *self, Py_ssize_t i,
 }
 
 static int
-bytearray_ass_subscript_lock_held(PyObject *op, PyObject *index, PyObject *values)
+bytearray_ass_item_value(PyObject *op, Py_ssize_t i, PyValueBorrow value)
+{
+    int ret;
+    Py_BEGIN_CRITICAL_SECTION(op);
+    ret = bytearray_ass_item_lock_held(_PyByteArray_CAST(op), i, value);
+    Py_END_CRITICAL_SECTION();
+    return ret;
+}
+
+_Py_VALUE_THUNK_ASSITEM(bytearray_ass_item, bytearray_ass_item_value)
+
+static int
+bytearray_ass_subscript_lock_held(PyObject *op, PyValueBorrow index,
+                                  PyValueBorrow values)
 {
     _Py_CRITICAL_SECTION_ASSERT_OBJECT_LOCKED(op);
     PyByteArrayObject *self = _PyByteArray_CAST(op);
@@ -820,8 +845,8 @@ bytearray_ass_subscript_lock_held(PyObject *op, PyObject *index, PyObject *value
     // index.__index__() or _getbytevalue() may alter 'self'.
     // See https://github.com/python/cpython/issues/91153.
 
-    if (_PyIndex_Check(index)) {
-        Py_ssize_t i = PyNumber_AsSsize_t(index, PyExc_IndexError);
+    if (_PyValue_IndexCheck(index)) {
+        Py_ssize_t i = _PyValue_AsSsize_t(index, PyExc_IndexError);
 
         if (i == -1 && PyErr_Occurred()) {
             return -1;
@@ -831,7 +856,7 @@ bytearray_ass_subscript_lock_held(PyObject *op, PyObject *index, PyObject *value
 
         // GH-91153: We need to do this *before* the size check, in case values
         // has a nasty __index__ method that changes the size of the bytearray:
-        if (values && !_getbytevalue(PyValue_FromObjectBorrow(values), &ival)) {
+        if (!PyValue_IsNull(values) && !_getbytevalue(values, &ival)) {
             return -1;
         }
 
@@ -844,7 +869,7 @@ bytearray_ass_subscript_lock_held(PyObject *op, PyObject *index, PyObject *value
             return -1;
         }
 
-        if (values == NULL) {
+        if (PyValue_IsNull(values)) {
             /* Fall through to slice assignment */
             start = i;
             stop = i + 1;
@@ -857,8 +882,10 @@ bytearray_ass_subscript_lock_held(PyObject *op, PyObject *index, PyObject *value
             return 0;
         }
     }
-    else if (PySlice_Check(index)) {
-        if (PySlice_Unpack(index, &start, &stop, &step) < 0) {
+    else if (PyValue_IsObject(index)
+             && PySlice_Check(PyValue_AsKnownObjectBorrow(index))) {
+        if (PySlice_Unpack(PyValue_AsKnownObjectBorrow(index),
+                           &start, &stop, &step) < 0) {
             return -1;
         }
         slicelen = PySlice_AdjustIndices(PyByteArray_GET_SIZE(self), &start,
@@ -867,36 +894,46 @@ bytearray_ass_subscript_lock_held(PyObject *op, PyObject *index, PyObject *value
     else {
         PyErr_Format(PyExc_TypeError,
                      "bytearray indices must be integers or slices, not %.200s",
-                      Py_TYPE(index)->tp_name);
+                      PyValue_TYPE(index)->tp_name);
         return -1;
     }
 
     char *bytes;
     Py_ssize_t needed;
-    if (values == NULL) {
+    if (PyValue_IsNull(values)) {
         bytes = NULL;
         needed = 0;
     }
-    else if (values == (PyObject *)self || !PyByteArray_Check(values)) {
+    else if (PyValue_IsInline(values)) {
+        /* An inline int or float is a number. */
+        PyErr_SetString(PyExc_TypeError,
+                        "can assign only bytes, buffers, or iterables "
+                        "of ints in range(0, 256)");
+        return -1;
+    }
+    else if (PyValue_AsKnownObjectBorrow(values) == (PyObject *)self
+             || !PyByteArray_Check(PyValue_AsKnownObjectBorrow(values))) {
+        PyObject *vobj = PyValue_AsKnownObjectBorrow(values);
         int err;
-        if (PyNumber_Check(values) || PyUnicode_Check(values)) {
+        if (PyNumber_Check(vobj) || PyUnicode_Check(vobj)) {
             PyErr_SetString(PyExc_TypeError,
                             "can assign only bytes, buffers, or iterables "
                             "of ints in range(0, 256)");
             return -1;
         }
         /* Make a copy and call this function recursively */
-        values = PyByteArray_FromObject(values);
-        if (values == NULL)
+        PyObject *copy = PyByteArray_FromObject(vobj);
+        if (copy == NULL)
             return -1;
-        err = bytearray_ass_subscript_lock_held((PyObject*)self, index, values);
-        Py_DECREF(values);
+        err = bytearray_ass_subscript_lock_held(
+            (PyObject*)self, index, PyValue_FromObjectBorrow(copy));
+        Py_DECREF(copy);
         return err;
     }
     else {
-        assert(PyByteArray_Check(values));
-        bytes = PyByteArray_AS_STRING(values);
-        needed = Py_SIZE(values);
+        PyObject *vobj = PyValue_AsKnownObjectBorrow(values);
+        bytes = PyByteArray_AS_STRING(vobj);
+        needed = Py_SIZE(vobj);
     }
 
     /* Make sure b[5:2] = ... inserts before 5, not before 2. */
@@ -972,11 +1009,13 @@ bytearray_ass_subscript_lock_held(PyObject *op, PyObject *index, PyObject *value
 }
 
 static int
-bytearray_ass_subscript(PyObject *op, PyObject *index, PyObject *values)
+bytearray_ass_subscript_value(PyObject *op, PyValueBorrow index,
+                              PyValueBorrow values)
 {
     int ret;
-    if (values != NULL && PyByteArray_Check(values)) {
-        Py_BEGIN_CRITICAL_SECTION2(op, values);
+    if (PyValue_IsObject(values)
+        && PyByteArray_Check(PyValue_AsKnownObjectBorrow(values))) {
+        Py_BEGIN_CRITICAL_SECTION2(op, PyValue_AsKnownObjectBorrow(values));
         ret = bytearray_ass_subscript_lock_held(op, index, values);
         Py_END_CRITICAL_SECTION2();
     }
@@ -987,6 +1026,9 @@ bytearray_ass_subscript(PyObject *op, PyObject *index, PyObject *values)
     }
     return ret;
 }
+
+_Py_VALUE_THUNK_ASSSUBSCRIPT(bytearray_ass_subscript,
+                               bytearray_ass_subscript_value)
 
 static PyObject *
 bytearray_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
@@ -1133,27 +1175,27 @@ bytearray___init___impl(PyByteArrayObject *self, PyValueBorrow arg,
         return -1;
     }
 
-    if ((PyValue_IsObject(arg) && PyList_CheckExact(PyValue_AsKnownObjectBorrow(arg))) || (PyValue_IsObject(arg) && PyTuple_CheckExact(PyValue_AsKnownObjectBorrow(arg)))) {
-        Py_ssize_t size = PySequence_Fast_GET_SIZE(PyValue_AsKnownObjectBorrow(arg));
+    PyObject *seq = PyValue_IsObject(arg) ? PyValue_AsKnownObjectBorrow(arg) : NULL;
+    if (seq != NULL && (PyList_CheckExact(seq) || PyTuple_CheckExact(seq))) {
+        Py_ssize_t size = PySequence_Fast_GET_SIZE(seq);
         if (PyByteArray_Resize((PyObject *)self, size) < 0) {
             return -1;
         }
         char *s = PyByteArray_AS_STRING(self);
         for (Py_ssize_t i = 0; i < size; i++) {
             int value;
-            PyValue ref = (PyValue_IsObject(arg) && PyList_CheckExact(PyValue_AsKnownObjectBorrow(arg))) ? PyList_GetValue(PyValue_AsKnownObjectBorrow(arg), i)
-                                                 : PyTuple_GetValue(PyValue_AsKnownObjectBorrow(arg), i);
-            PyObject *item = PyValue_IsNull(ref) ? NULL
-                : _PyValue_AsObjectAt(ref, PyList_CheckExact(
-                                          PyValue_AsKnownObjectBorrow(arg))
-                                      ? BOX_SITE_LIST : BOX_SITE_TUPLE);
-            PyValue_XCLOSE(ref);
-            if (item == NULL) {
+            PyValue ref = PyList_CheckExact(seq) ? PyList_GetValue(seq, i)
+                                                 : PyTuple_GetValue(seq, i);
+            if (PyValue_IsNull(ref)) {
                 (void)PyByteArray_Resize((PyObject *)self, 0);
                 return -1;
             }
-            if (!PyLong_CheckExact(item)) {
-                Py_DECREF(item);
+            /* An exact int (inline or not) converts without a box. */
+            if (!PyValue_IsInlineInt(ref)
+                && !(PyValue_IsObject(ref)
+                     && PyLong_CheckExact(PyValue_AsKnownObjectBorrow(ref))))
+            {
+                PyValue_CLOSE(ref);
                 /* Resize to 0 and go through slowpath */
                 if (Py_SIZE(self) != 0) {
                    if (PyByteArray_Resize((PyObject *)self, 0) < 0) {
@@ -1162,8 +1204,8 @@ bytearray___init___impl(PyByteArrayObject *self, PyValueBorrow arg,
                 }
                 goto slowpath;
             }
-            int rc = _getbytevalue(PyValue_FromObjectBorrow(item), &value);
-            Py_DECREF(item);
+            int rc = _getbytevalue(PyValue_Borrow(ref), &value);
+            PyValue_CLOSE(ref);
             if (!rc) {
                 /* Don't expose the uninitialized bytes: reset to empty */
                 (void)PyByteArray_Resize((PyObject *)self, 0);
@@ -1493,7 +1535,7 @@ bytearray_rindex_impl(PyByteArrayObject *self, PyValueBorrow sub,
 }
 
 static int
-bytearray_contains(PyObject *self, PyObject *arg)
+bytearray_contains_value(PyObject *self, PyValueBorrow arg)
 {
     int ret = -1;
     Py_BEGIN_CRITICAL_SECTION(self);
@@ -1501,13 +1543,15 @@ bytearray_contains(PyObject *self, PyObject *arg)
 
     /* Increase exports to prevent bytearray storage from changing during _Py_bytes_contains(). */
     ba->ob_exports++;
-    ret = _Py_bytes_contains(PyByteArray_AS_STRING(ba),
-                             PyByteArray_GET_SIZE(self),
-                             arg);
+    ret = _Py_bytes_contains_value(PyByteArray_AS_STRING(ba),
+                                   PyByteArray_GET_SIZE(self),
+                                   arg);
     ba->ob_exports--;
     Py_END_CRITICAL_SECTION();
     return ret;
 }
+
+_Py_VALUE_THUNK_CONTAINS(bytearray_contains, bytearray_contains_value)
 
 /*[clinic input]
 @permit_long_summary
@@ -2913,11 +2957,11 @@ bytearray_sizeof_impl(PyByteArrayObject *self)
 
 static PySequenceMethods bytearray_as_sequence = {
     bytearray_length,                       /* sq_length */
-    PyByteArray_Concat,                     /* sq_concat */
+    bytearray_concat,                       /* sq_concat */
     bytearray_repeat,                       /* sq_repeat */
-    bytearray_getitem,                      /* sq_item */
+    bytearray_item,                         /* sq_item */
     0,                                      /* sq_slice */
-    bytearray_setitem,                      /* sq_ass_item */
+    bytearray_ass_item,                     /* sq_ass_item */
     0,                                      /* sq_ass_slice */
     bytearray_contains,                     /* sq_contains */
     bytearray_iconcat,                      /* sq_inplace_concat */
@@ -3016,22 +3060,42 @@ bytearray_mod_lock_held(PyObject *v, PyObject *w)
     return res;
 }
 
-static PyObject *
-bytearray_mod(PyObject *v, PyObject *w)
+static PyValue
+bytearray_mod_value(PyValueBorrow v, PyValueBorrow w)
 {
+    if (!PyValue_IsObject(v)
+        || !PyByteArray_Check(PyValue_AsKnownObjectBorrow(v))) {
+        return PyValue_NotImplemented;
+    }
+    PyObject *vobj = PyValue_AsKnownObjectBorrow(v);
+    /* The format code works on objects; an inline argument is boxed here. */
+    PyObject *boxed = NULL;
+    PyObject *wobj;
+    if (PyValue_IsObject(w)) {
+        wobj = PyValue_AsKnownObjectBorrow(w);
+    }
+    else {
+        boxed = wobj = _PyValue_AsObjectAt(w, BOX_SITE_NUMBER);
+        if (boxed == NULL) {
+            return PyValue_NULL;
+        }
+    }
     PyObject *ret;
-    if (PyByteArray_Check(w)) {
-        Py_BEGIN_CRITICAL_SECTION2(v, w);
-        ret = bytearray_mod_lock_held(v, w);
+    if (PyByteArray_Check(wobj)) {
+        Py_BEGIN_CRITICAL_SECTION2(vobj, wobj);
+        ret = bytearray_mod_lock_held(vobj, wobj);
         Py_END_CRITICAL_SECTION2();
     }
     else {
-        Py_BEGIN_CRITICAL_SECTION(v);
-        ret = bytearray_mod_lock_held(v, w);
+        Py_BEGIN_CRITICAL_SECTION(vobj);
+        ret = bytearray_mod_lock_held(vobj, wobj);
         Py_END_CRITICAL_SECTION();
     }
-    return ret;
+    Py_XDECREF(boxed);
+    return _PyValue_FromObjectResult(ret);
 }
+
+_Py_VALUE_THUNK_BINARY(bytearray_mod, bytearray_mod_value)
 
 static PyNumberMethods bytearray_as_number = {
     0,              /*nb_add*/
@@ -3110,6 +3174,19 @@ PyTypeObject PyByteArray_Type = {
     .tp_vectorcall = _PyValue_VectorcallThunk,
     .tp_value_vectorcall = (_Py_valuefunc)bytearray_vectorcall,
     .tp_version_tag = _Py_TYPE_VERSION_BYTEARRAY,
+    .tp_value = {
+        .subscript = _Py_VALUE_SLOT_INIT(subscript, bytearray_subscript_value),
+        .ass_subscript = _Py_VALUE_SLOT_INIT(ass_subscript,
+                                             bytearray_ass_subscript_value),
+        .contains = _Py_VALUE_SLOT_INIT(contains, bytearray_contains_value),
+        .item = _Py_VALUE_SLOT_INIT(item, bytearray_item_value),
+        .ass_item = _Py_VALUE_SLOT_INIT(ass_item, bytearray_ass_item_value),
+        .sq_concat = _Py_VALUE_SLOT_INIT(sq_concat, bytearray_concat_value),
+        .sq_inplace_concat = _Py_VALUE_SLOT_INIT(sq_inplace_concat,
+                                                 bytearray_iconcat_value),
+        .nb_remainder = _Py_VALUE_SLOT_INIT(nb_remainder,
+                                            bytearray_mod_value),
+    },
 };
 
 /*********************** Bytearray Iterator ****************************/
@@ -3139,8 +3216,8 @@ bytearrayiter_traverse(PyObject *self, visitproc visit, void *arg)
     return 0;
 }
 
-static PyObject *
-bytearrayiter_next(PyObject *self)
+static _PyStatusValue
+bytearrayiter_next_value(PyObject *self)
 {
     bytesiterobject *it = _bytesiterobject_CAST(self);
     int val;
@@ -3148,7 +3225,7 @@ bytearrayiter_next(PyObject *self)
     assert(it != NULL);
     Py_ssize_t index = FT_ATOMIC_LOAD_SSIZE_RELAXED(it->it_index);
     if (index < 0) {
-        return NULL;
+        return (_PyStatusValue){PYGEN_RETURN, PyValue_NULL};
     }
     PyByteArrayObject *seq = it->it_seq;
     assert(PyByteArray_Check(seq));
@@ -3167,11 +3244,13 @@ bytearrayiter_next(PyObject *self)
 #ifndef Py_GIL_DISABLED
         Py_CLEAR(it->it_seq);
 #endif
-        return NULL;
+        return (_PyStatusValue){PYGEN_RETURN, PyValue_NULL};
     }
     FT_ATOMIC_STORE_SSIZE_RELAXED(it->it_index, index + 1);
-    return _PyLong_FromUnsignedChar((unsigned char)val);
+    return (_PyStatusValue){PYGEN_NEXT, PyValue_FromInt64((unsigned char)val)};
 }
+
+_Py_VALUE_THUNK_ITERNEXT(bytearrayiter_next, bytearrayiter_next_value)
 
 static PyObject *
 bytearrayiter_length_hint(PyObject *self, PyObject *Py_UNUSED(ignored))
@@ -3274,6 +3353,9 @@ PyTypeObject PyByteArrayIter_Type = {
     bytearrayiter_next,                /* tp_iternext */
     bytearrayiter_methods,             /* tp_methods */
     0,
+    .tp_value = {
+        .iternext = _Py_VALUE_SLOT_INIT(iternext, bytearrayiter_next_value),
+    },
 };
 
 static PyObject *

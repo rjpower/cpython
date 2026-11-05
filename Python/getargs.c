@@ -2,11 +2,6 @@
 /* New getargs implementation */
 
 #define PY_CXX_CONST const
-/* Defer line of the value-API waves (value-api-v2a0.md, section 1.5): the
-   callers of the protocol marks in this unit are converted by W2's caller
-   batches, which remove this line. */
-#define Py_VALUE_DEFER_MARKS 1
-
 #include "Python.h"
 #include "pycore_abstract.h"      // _PyNumber_Index()
 #include "pycore_borrow.h"        // _PyBorrow_TupleItems()
@@ -624,7 +619,7 @@ converttuple(PyObject *arg, const char **p_format, va_list *p_va, int flags,
                           mustbetuple ? "tuple" : "sequence", n, len);
             return msgbuf;
         }
-        arg = PySequence_Tuple(arg);
+        arg = _PyValue_SequenceTuple(PyValue_FromObjectBorrow(arg));
         if (arg == NULL) {
             return msgbuf;
         }
@@ -881,7 +876,9 @@ convertsimple(PyObject *arg, const char **p_format, va_list *p_va, int flags,
         PyObject *iobj;
         Py_ssize_t *p = va_arg(*p_va, Py_ssize_t *);
         Py_ssize_t ival = -1;
-        iobj = _PyNumber_Index(arg);
+        PyValue iobj_v = _PyValue_Index(PyValue_FromObjectBorrow(arg));
+        iobj = PyValue_IsNull(iobj_v) ? NULL
+            : _PyValue_AsObjectStealAt(iobj_v, BOX_SITE_PARSER);
         if (iobj != NULL) {
             ival = PyLong_AsSsize_t(iobj);
             Py_DECREF(iobj);
@@ -1031,7 +1028,7 @@ convertsimple(PyObject *arg, const char **p_format, va_list *p_va, int flags,
 
     case 'p': {/* boolean *p*redicate */
         int *p = va_arg(*p_va, int *);
-        int val = PyObject_IsTrue(arg);
+        int val = _PyValue_IsTrue(PyValue_FromObjectBorrow(arg));
         if (val > 0)
             *p = 1;
         else if (val == 0)
@@ -1613,7 +1610,7 @@ error_unexpected_keyword_arg(PyObject *kwargs, PyObject *kwnames,
                              PyObject *kwtuple, const char *fname)
 {
     /* Freeze names before comparisons/formatting can mutate the source dict. */
-    PyObject *names = kwargs != NULL ? PyDict_Keys(kwargs) : PySequence_List(kwnames);
+    PyObject *names = kwargs != NULL ? PyDict_Keys(kwargs) : _PyValue_SequenceList(PyValue_FromObjectBorrow(kwnames));
     if (names == NULL) {
         return;
     }
@@ -1630,10 +1627,10 @@ error_unexpected_keyword_arg(PyObject *kwargs, PyObject *kwnames,
             PyErr_SetString(PyExc_TypeError, "keywords must be strings");
             goto done;
         }
-        int match = PySequence_Contains(kwtuple, keyword);
+        int match = _PyValue_Contains(PyValue_FromObjectBorrow(kwtuple), PyValue_FromObjectBorrow(keyword));
         if (match <= 0) {
             if (!match) {
-                PyObject *kwlist = PySequence_List(kwtuple);
+                PyObject *kwlist = _PyValue_SequenceList(PyValue_FromObjectBorrow(kwtuple));
                 if (kwlist == NULL) {
                     goto done;
                 }
@@ -2074,7 +2071,7 @@ vgetargskeywords_impl(PyObject *const *args, PyObject *tuple, Py_ssize_t nargs,
                 if (!_pykwtuple) {
                     return cleanreturn(0, &freelist);
                 }
-                PyObject *pykwlist = PySequence_List(_pykwtuple);
+                PyObject *pykwlist = _PyValue_SequenceList(PyValue_FromObjectBorrow(_pykwtuple));
                 Py_DECREF(_pykwtuple);
                 if (!pykwlist) {
                     return cleanreturn(0, &freelist);

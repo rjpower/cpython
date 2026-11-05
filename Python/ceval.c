@@ -1,11 +1,5 @@
 /* Execute compiled code */
 
-/* The defer line of the value-API waves (value-api-v2a0.md, section 1.5):
-   the interpreter unit (this file, bytecodes.c, the generated cases and
-   ceval_macros.h) is converted by the interpreter steps I1-I5, not by the
-   waves, so the compatibility marks do not apply here yet. */
-#define Py_VALUE_DEFER_MARKS 1
-
 #include "ceval.h"
 #include "pycore_long.h"
 #include "pycore_native_scope.h"
@@ -453,7 +447,9 @@ _PyEval_MatchKeys(PyThreadState *tstate, PyObject *map, PyObject *keys)
         if (PySet_ContainsValue(seen, key_v) || PySet_AddValue(seen, key_v)) {
             if (!_PyErr_Occurred(tstate)) {
                 // Seen it before!
-                key = PyTuple_GetItemRef(keys, i);
+                PyValue key_owner = PyTuple_GetValue(keys, i);
+                key = PyValue_IsNull(key_owner) ? NULL
+                    : _PyValue_AsObjectStealAt(key_owner, BOX_SITE_TUPLE);
                 if (key != NULL) {
                     _PyErr_Format(tstate, PyExc_ValueError,
                                   "mapping pattern checks duplicate key (%R)", key);
@@ -527,7 +523,7 @@ match_class_attr(PyThreadState *tstate, PyValueBorrow subject, PyObject *type,
     // Only check for duplicates if seen is not NULL.
     if (seen != NULL) {
         assert(PySet_CheckExact(seen));
-        if (PySet_Contains(seen, name) || PySet_Add(seen, name)) {
+        if (PySet_ContainsValue(seen, PyValue_FromObjectBorrow(name)) || PySet_AddValue(seen, PyValue_FromObjectBorrow(name))) {
             if (!_PyErr_Occurred(tstate)) {
                 // Seen it before!
                 _PyErr_Format(tstate, PyExc_TypeError,
@@ -1171,7 +1167,7 @@ int (_PyEval_StoreName)(PyThreadState *tstate, PyValueBorrow v, PyObject *name, 
     }
 
     if (deletion) {
-        int error = PyObject_DelItem(ns, name);
+        int error = _PyValue_DelItem(PyValue_FromObjectBorrow(ns), PyValue_FromObjectBorrow(name));
         if (error) {
             _PyEval_FormatExcCheckArg(tstate, PyExc_NameError,
                                     NAME_ERROR_MSG,
@@ -1188,7 +1184,7 @@ int (_PyEval_StoreName)(PyThreadState *tstate, PyValueBorrow v, PyObject *name, 
     if (v_o == NULL) {
         return -1;
     }
-    int err = PyObject_SetItem(ns, name, v_o);
+    int err = _PyValue_SetItem(PyValue_FromObjectBorrow(ns), PyValue_FromObjectBorrow(name), PyValue_FromObjectBorrow(v_o));
     Py_DECREF(v_o);
     return err;
 }
@@ -1487,7 +1483,7 @@ call_transaction_prepare_tuple(PyThreadState *tstate, _PyInterpreterFrame *frame
     if (_Py_Check_ArgsIterable(tstate, func_object, args_object) < 0) {
         goto done;
     }
-    tuple = PySequence_Tuple(args_object);
+    tuple = _PyValue_SequenceTuple(PyValue_FromObjectBorrow(args_object));
     if (tuple == NULL || call_transaction_refresh(tstate, frame, current) < 0) {
         goto done;
     }
@@ -2404,12 +2400,12 @@ missing_arguments(PyThreadState *tstate, PyCodeObject *co,
     for (i = start; i < end; i++) {
         if (PyValue_IsNull(localsplus[i])) {
             PyObject *raw = _PyTuple_GET_OBJECT(co->co_localsplusnames, i);
-            PyObject *name = PyObject_Repr(raw);
+            PyObject *name = _PyValue_Repr(PyValue_FromObjectBorrow(raw));
             if (name == NULL) {
                 Py_DECREF(missing_names);
                 return;
             }
-            PyList_SET_ITEM(missing_names, j++, name);
+            PyList_SET_VALUE(missing_names, j++, PyValue_PrepareOwned(name));
         }
     }
     assert(j == missing);
@@ -2536,17 +2532,17 @@ positional_only_passed_as_keyword(PyThreadState *tstate, PyCodeObject *co,
             }
             PyObject* kwname = PyValue_AsKnownObjectBorrow(kwvalue);
             if (kwname == posonly_name){
-                if(PyList_Append(posonly_names, kwname) != 0) {
+                if(PyList_AppendValue(posonly_names, PyValue_FromObjectBorrow(kwname)) != 0) {
                     goto fail;
                 }
                 posonly_conflicts++;
                 continue;
             }
 
-            int cmp = PyObject_RichCompareBool(posonly_name, kwname, Py_EQ);
+            int cmp = _PyValue_RichCompareBool(PyValue_FromObjectBorrow(posonly_name), PyValue_FromObjectBorrow(kwname), Py_EQ);
 
             if ( cmp > 0) {
-                if(PyList_Append(posonly_names, kwname) != 0) {
+                if(PyList_AppendValue(posonly_names, PyValue_FromObjectBorrow(kwname)) != 0) {
                     goto fail;
                 }
                 posonly_conflicts++;
@@ -2691,7 +2687,7 @@ initialize_locals(PyThreadState *tstate, PyFunctionObject *func, PyCodeObject *c
             /* Slow fallback, just in case */
             for (j = co->co_posonlyargcount; j < total_args; j++) {
                 PyObject *varname = PyValue_AsKnownObjectBorrow(co_varnames[j]);
-                int cmp = PyObject_RichCompareBool( keyword, varname, Py_EQ);
+                int cmp = _PyValue_RichCompareBool(PyValue_FromObjectBorrow(keyword), PyValue_FromObjectBorrow(varname), Py_EQ);
                 if (cmp > 0) {
                     goto kw_found;
                 }
@@ -2747,7 +2743,7 @@ initialize_locals(PyThreadState *tstate, PyFunctionObject *func, PyCodeObject *c
             if (value == NULL) {
                 goto kw_fail;
             }
-            int err = PyDict_SetItem(kwdict, keyword, value);
+            int err = PyDict_SetValue(kwdict, PyValue_FromObjectBorrow(keyword), PyValue_FromObjectBorrow(value));
             Py_DECREF(value);
             if (err == -1) {
                 goto kw_fail;
@@ -2821,12 +2817,15 @@ initialize_locals(PyThreadState *tstate, PyFunctionObject *func, PyCodeObject *c
                 continue;
             PyObject *varname = _PyTuple_GET_OBJECT(co->co_localsplusnames, i);
             if (func->func_kwdefaults != NULL) {
-                PyObject *def;
-                if (PyDict_GetItemRef(func->func_kwdefaults, varname, &def) < 0) {
+                PyValue def;
+                int found = PyDict_GetValue(func->func_kwdefaults,
+                                            PyValue_FromObjectBorrow(varname),
+                                            &def);
+                if (found < 0) {
                     goto fail_post_args;
                 }
-                if (def) {
-                    localsplus[i] = PyValue_PrepareOwned(def);
+                if (found > 0) {
+                    localsplus[i] = def;
                     continue;
                 }
             }
@@ -3375,7 +3374,7 @@ PyEval_EvalCodeEx(PyObject *_co, PyObject *globals, PyObject *locals,
             newargs[i] = args[i];
         }
         for (int i = 0; i < kwcount; i++) {
-            PyTuple_SET_ITEM(kwnames, i, Py_NewRef(kws[2*i]));
+            PyTuple_SET_VALUE(kwnames, i, PyValue_DUP(PyValue_FromObjectBorrow(_PyObject_CAST(kws[2*i]))));
             newargs[argcount+i] = kws[2*i+1];
         }
         allargs = newargs;
@@ -3430,7 +3429,7 @@ _PyEval_ExceptionGroupMatch(_PyInterpreterFrame *frame, PyObject* exc_value,
         }
         else {
             /* naked exception - wrap it */
-            PyObject *excs = PyTuple_Pack(1, exc_value);
+            PyObject *excs = _PyTuple_PackValues(1, (PyValueBorrow[]){PyValue_FromObjectBorrow(exc_value)});
             if (excs == NULL) {
                 return -1;
             }
@@ -3487,12 +3486,16 @@ _PyEval_ExceptionGroupMatch(_PyInterpreterFrame *frame, PyObject* exc_value,
             return -1;
         }
 
-        *match = PyTuple_GetItemRef(pair, 0);
+        PyValue match_owner = PyTuple_GetValue(pair, 0);
+        *match = PyValue_IsNull(match_owner) ? NULL
+            : _PyValue_AsObjectStealAt(match_owner, BOX_SITE_TUPLE);
         if (*match == NULL) {
             Py_DECREF(pair);
             return -1;
         }
-        *rest = PyTuple_GetItemRef(pair, 1);
+        PyValue rest_owner = PyTuple_GetValue(pair, 1);
+        *rest = PyValue_IsNull(rest_owner) ? NULL
+            : _PyValue_AsObjectStealAt(rest_owner, BOX_SITE_TUPLE);
         if (*rest == NULL) {
             Py_CLEAR(*match);
             Py_DECREF(pair);
@@ -3521,11 +3524,11 @@ _PyEval_UnpackIterableValue(PyThreadState *tstate, PyObject *v,
     int i = 0, j = 0;
     Py_ssize_t ll = 0;
     PyObject *it;  /* iter(v) */
-    PyObject *w;
+    _PyStatusValue step;
     PyObject *l = NULL; /* variable list */
     assert(v != NULL);
 
-    it = PyObject_GetIter(v);
+    it = _PyValue_GetIter(PyValue_FromObjectBorrow(v));
     if (it == NULL) {
         if (_PyErr_ExceptionMatches(tstate, PyExc_TypeError) &&
             Py_TYPE(v)->tp_iter == NULL && !PySequence_Check(v))
@@ -3538,10 +3541,10 @@ _PyEval_UnpackIterableValue(PyThreadState *tstate, PyObject *v,
     }
 
     for (; i < argcnt; i++) {
-        w = PyIter_Next(it);
-        if (w == NULL) {
+        step = _PyValue_IterNext(it);
+        if (step.status != PYGEN_NEXT) {
             /* Iterator done, via error or exhaustion. */
-            if (!_PyErr_Occurred(tstate)) {
+            if (step.status == PYGEN_RETURN) {
                 if (argcntafter == -1) {
                     _PyErr_Format(tstate, PyExc_ValueError,
                                   "not enough values to unpack "
@@ -3557,20 +3560,20 @@ _PyEval_UnpackIterableValue(PyThreadState *tstate, PyObject *v,
             }
             goto Error;
         }
-        *--sp = PyValue_FromObjectSteal(w);
+        *--sp = step.value;
         _PyValue_CheckTemp(*sp);
     }
 
     if (argcntafter == -1) {
         /* We better have exhausted the iterator now. */
-        w = PyIter_Next(it);
-        if (w == NULL) {
-            if (_PyErr_Occurred(tstate))
-                goto Error;
+        step = _PyValue_IterNext(it);
+        if (step.status == PYGEN_ERROR)
+            goto Error;
+        if (step.status == PYGEN_RETURN) {
             Py_DECREF(it);
             return 1;
         }
-        Py_DECREF(w);
+        PyValue_CLOSE(step.value);
 
         if (PyList_CheckExact(v) || PyTuple_CheckExact(v)
               || PyDict_CheckExact(v)) {
@@ -3588,7 +3591,7 @@ _PyEval_UnpackIterableValue(PyThreadState *tstate, PyObject *v,
         goto Error;
     }
 
-    l = PySequence_List(it);
+    l = _PyValue_SequenceList(PyValue_FromObjectBorrow(it));
     if (l == NULL)
         goto Error;
     *--sp = PyValue_FromObjectSteal(l);
@@ -3946,8 +3949,18 @@ get_globals_builtins(PyObject *globals)
 {
     PyObject *builtins = NULL;
     if (PyAnyDict_Check(globals)) {
-        if (PyDict_GetItemRef(globals, &_Py_ID(__builtins__), &builtins) < 0) {
+        PyValue builtins_v;
+        int found = PyDict_GetValue(
+            globals, _PyValue_FromObjectKnown(&_Py_ID(__builtins__)),
+            &builtins_v);
+        if (found < 0) {
             return NULL;
+        }
+        if (found > 0) {
+            builtins = _PyValue_AsObjectStealAt(builtins_v, BOX_SITE_DICT);
+            if (builtins == NULL) {
+                return NULL;
+            }
         }
     }
     else {
@@ -3964,12 +3977,12 @@ static int
 set_globals_builtins(PyObject *globals, PyObject *builtins)
 {
     if (PyDict_Check(globals)) {
-        if (PyDict_SetItem(globals, &_Py_ID(__builtins__), builtins) < 0) {
+        if (PyDict_SetValue(globals, _PyValue_FromObjectKnown(&_Py_ID(__builtins__)), PyValue_FromObjectBorrow(builtins)) < 0) {
             return -1;
         }
     }
     else {
-        if (PyObject_SetItem(globals, &_Py_ID(__builtins__), builtins) < 0) {
+        if (_PyValue_SetItem(PyValue_FromObjectBorrow(globals), _PyValue_FromObjectKnown(&_Py_ID(__builtins__)), PyValue_FromObjectBorrow(builtins)) < 0) {
             if (PyFrozenDict_Check(globals)) {
                 PyErr_SetString(PyExc_TypeError,
                                 "cannot assign __builtins__ to frozendict globals");
@@ -4157,7 +4170,7 @@ _PyEval_SliceIndexNotNone(PyObject *v, Py_ssize_t *pi)
         return 1;
     }
     if (_PyIndex_Check(v)) {
-        x = PyNumber_AsSsize_t(v, NULL);
+        x = _PyValue_AsSsize_t(PyValue_FromObjectBorrow(v), NULL);
         if (x == -1 && _PyErr_Occurred(tstate))
             return 0;
     }
@@ -4456,7 +4469,7 @@ check_lazy_import_compatibility(PyThreadState *tstate, PyObject *globals,
         goto error;
     }
 
-    res = PySequence_Contains(lazy_modules, abs_name);
+    res = _PyValue_Contains(PyValue_FromObjectBorrow(lazy_modules), PyValue_FromObjectBorrow(abs_name));
 error:
     Py_XDECREF(abs_name);
     Py_XDECREF(lazy_modules);
@@ -4613,7 +4626,7 @@ _PyEval_ImportFrom(PyThreadState *tstate, PyObject *v, PyObject *name)
             goto done;
         }
         if (stdlib_modules && PyAnySet_Check(stdlib_modules)) {
-            is_possibly_shadowing_stdlib = PySet_Contains(stdlib_modules, mod_name_or_unknown);
+            is_possibly_shadowing_stdlib = PySet_ContainsValue(stdlib_modules, PyValue_FromObjectBorrow(mod_name_or_unknown));
             if (is_possibly_shadowing_stdlib < 0) {
                 Py_DECREF(stdlib_modules);
                 goto done;
@@ -4847,7 +4860,7 @@ _PyEval_FormatExcCheckArg(PyThreadState *tstate, PyObject *exc,
             if (((PyNameErrorObject*)exc)->name == NULL) {
                 // We do not care if this fails because we are going to restore the
                 // NameError anyway.
-                (void)PyObject_SetAttr(exc, &_Py_ID(name), obj);
+                (void)_PyValue_SetAttr(PyValue_FromObjectBorrow(exc), &_Py_ID(name), PyValue_FromObjectBorrow(obj));
             }
         }
         PyErr_SetRaisedException(exc);
@@ -5071,10 +5084,17 @@ _PyEval_LoadName(PyThreadState *tstate, _PyInterpreterFrame *frame, PyObject *na
         goto found;
     }
     namespace = frame->f_globals;
-    if (PyDict_GetItemRef(namespace, name, &value) < 0) {
+    PyValue value_v;
+    int global_found = PyDict_GetValue(
+        namespace, PyValue_FromObjectBorrow(name), &value_v);
+    if (global_found < 0) {
         return NULL;
     }
-    if (value != NULL) {
+    if (global_found > 0) {
+        value = _PyValue_AsObjectStealAt(value_v, BOX_SITE_DICT);
+        if (value == NULL) {
+            return NULL;
+        }
         goto found;
     }
     namespace = frame->f_builtins;

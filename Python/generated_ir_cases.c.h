@@ -5958,9 +5958,10 @@
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
-                PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
                 PyInterpreterState *interp = tstate->interp;
-                if (callable_o != interp->callable_cache.isinstance) {
+                if (!PyValue_IsObject(callable)
+                    || PyValue_AsKnownObjectBorrow(callable)
+                    != interp->callable_cache.isinstance) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -6426,9 +6427,10 @@
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
-                PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
                 PyInterpreterState *interp = tstate->interp;
-                if (callable_o != interp->callable_cache.len) {
+                if (!PyValue_IsObject(callable)
+                    || PyValue_AsKnownObjectBorrow(callable)
+                    != interp->callable_cache.len) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -6505,9 +6507,10 @@
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
-                PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
                 PyInterpreterState *interp = tstate->interp;
-                if (callable_o != interp->callable_cache.list_append) {
+                if (!PyValue_IsObject(callable)
+                    || PyValue_AsKnownObjectBorrow(callable)
+                    != interp->callable_cache.list_append) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -7464,15 +7467,13 @@
         TARGET(CALL_TUPLE_1) {
             int opcode = CALL_TUPLE_1;
             (void)(opcode);
+            _PyValueTemps *const value_temps = NULL;
+            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(CALL_TUPLE_1);
-            PyObject *value_boxes[18];
-            _PyValueTemps value_owners;
-            value_owners = (_PyValueTemps){value_boxes, 0, 18};
-            _PyValueTemps *value_temps = &value_owners;
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             int oparg = (int)IR_C(ir_word);
@@ -7486,7 +7487,6 @@
             PyValue res;
             PyValue a;
             PyValue value;
-            PyObject *ir_obj_arg = NULL;
             // _GUARD_NOS_NULL
             {
                 null = window[1];
@@ -7514,20 +7514,9 @@
             // _CALL_TUPLE_1
             {
                 arg = window[2];
-                if (Py_UNLIKELY(PyValue_IsInlineAt(&window[2]))) {
-                    ir_obj_arg = _PyValueTemps_Box(value_temps, arg);
-                    if (ir_obj_arg == NULL) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(CALL_TUPLE_1);
-                }
-                else {
-                    ir_obj_arg = PyValue_AsKnownObjectBorrow(arg);
-                }
-                PyObject *arg_o = ir_obj_arg;
                 assert(oparg == 1);
                 STAT_INC(CALL, hit);
-                PyObject *res_o = PySequence_Tuple(arg_o);
+                PyObject *res_o = _PyValue_SequenceTuple(arg);
                 if (res_o == NULL) {
                     JUMP_TO_LABEL(error);
                 }
@@ -7551,7 +7540,7 @@
             }
             IR_MOVE_TO_DST_OR_DISCARD(IR_A(ir_word), window[0]);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -9505,7 +9494,7 @@
                 res = PyValue_FromObjectSteal(res_o);
             }
             else if (!PyUnicode_CheckExact(PyValue_AsKnownObjectBorrow(value))) {
-                PyObject *res_o = PyObject_Format(PyValue_AsKnownObjectBorrow(value), NULL);
+                PyObject *res_o = _PyValue_Format(value, PyValue_NULL);
                 ir_own_B = IR_CONSUME_INPUT(IR_B(ir_word), value);
                 PyValue_XCLOSE(ir_own_B);
                 if (res_o == NULL) {
@@ -9524,15 +9513,13 @@
         TARGET(FORMAT_WITH_SPEC) {
             int opcode = FORMAT_WITH_SPEC;
             (void)(opcode);
+            _PyValueTemps *const value_temps = NULL;
+            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(FORMAT_WITH_SPEC);
-            PyObject *value_boxes[5];
-            _PyValueTemps value_owners;
-            value_owners = (_PyValueTemps){value_boxes, 0, 5};
-            _PyValueTemps *value_temps = &value_owners;
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             PyValueBorrow value;
@@ -9542,31 +9529,9 @@
             (void)ir_own_B;
             PyValue ir_own_C = PyValue_NULL;
             (void)ir_own_C;
-            PyObject *ir_obj_fmt_spec = NULL;
-            PyObject *ir_obj_value = NULL;
             fmt_spec = IR_VIEW(IR_C(ir_word));
             value = IR_VIEW(IR_B(ir_word));
-            if (Py_UNLIKELY(PyValue_IsInline(value))) {
-                ir_obj_value = _PyValueTemps_Box(value_temps, value);
-                if (ir_obj_value == NULL) {
-                    JUMP_TO_LABEL(error);
-                }
-                BOX_STAT_INC(FORMAT_WITH_SPEC);
-            }
-            else {
-                ir_obj_value = PyValue_AsKnownObjectBorrow(value);
-            }
-            if (Py_UNLIKELY(PyValue_IsInline(fmt_spec))) {
-                ir_obj_fmt_spec = _PyValueTemps_Box(value_temps, fmt_spec);
-                if (ir_obj_fmt_spec == NULL) {
-                    JUMP_TO_LABEL(error);
-                }
-                BOX_STAT_INC(FORMAT_WITH_SPEC);
-            }
-            else {
-                ir_obj_fmt_spec = PyValue_AsKnownObjectBorrow(fmt_spec);
-            }
-            PyObject *res_o = PyObject_Format(ir_obj_value, ir_obj_fmt_spec);
+            PyObject *res_o = _PyValue_Format(value, fmt_spec);
             ir_own_C = IR_CONSUME_INPUT(IR_C(ir_word), fmt_spec);
             PyValue_XCLOSE(ir_own_C);
             ir_own_B = IR_CONSUME_INPUT(IR_B(ir_word), value);
@@ -9577,7 +9542,7 @@
             res = PyValue_FromObjectSteal(res_o);
             IR_STORE_DST(IR_A(ir_word), res);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -16399,8 +16364,9 @@
                 if (ann_dict == NULL) {
                     JUMP_TO_LABEL(error);
                 }
-                err = PyObject_SetItem(LOCALS(), &_Py_ID(__annotations__),
-                                       ann_dict);
+                err = _PyValue_SetItem(PyValue_FromObjectBorrow(LOCALS()),
+                                       PyValue_FromObjectBorrow(&_Py_ID(__annotations__)),
+                                       PyValue_FromObjectBorrow(ann_dict));
                 Py_DECREF(ann_dict);
                 if (err) {
                     JUMP_TO_LABEL(error);
@@ -17192,7 +17158,7 @@
             int err;
             if (PyValue_IsNull(v)) {
                 ir_own_A = IR_CONSUME_INPUT(IR_A(ir_word), v);
-                err = PyDict_Pop(GLOBALS(), name, NULL);
+                err = PyDict_PopValue(GLOBALS(), PyValue_FromObjectBorrow(name), NULL);
                 if (err == 0) {
                     err = -1;
                     _PyEval_FormatExcCheckArg(tstate, PyExc_NameError,

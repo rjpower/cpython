@@ -982,7 +982,7 @@ format_missing(PyObject *missing, PyObject *fields)
     // Iterate all AST node fields in order so that the missing positional
     // arguments are rendered in the order in which __init__ expects them.
     for (Py_ssize_t i = 0; i < num_fields; i++) {
-        PyObject *name = PySequence_GetItem(fields, i);
+        PyObject *name = _PyValue_AsObjectResultAt(_PyValue_SequenceGetItem(PyValue_FromObjectBorrow(fields), i), BOX_SITE_SEQUENCE);
         if (name == NULL) {
             goto error;
         }
@@ -1051,7 +1051,7 @@ ast_type_init(PyObject *self, PyObject *args, PyObject *kw)
     PyObject *name = NULL, *type = NULL, *empty = NULL, *name_str = NULL;
     PyObject *const *positional = NULL;
 
-    fields = PyObject_GetAttr((PyObject*)Py_TYPE(self), state->_fields);
+    fields = _PyValue_AsObjectResultAt(_PyValue_GetAttr(_PyValue_FromObjectKnown((PyObject*)Py_TYPE(self)), state->_fields), BOX_SITE_ATTRIBUTE);
     if (fields == NULL) {
         goto cleanup;
     }
@@ -1080,12 +1080,12 @@ ast_type_init(PyObject *self, PyObject *args, PyObject *kw)
         goto cleanup;
     }
     for (i = 0; i < nargs; i++) {
-        name = PySequence_GetItem(fields, i);
+        name = _PyValue_AsObjectResultAt(_PyValue_SequenceGetItem(PyValue_FromObjectBorrow(fields), i), BOX_SITE_SEQUENCE);
         if (name == NULL) {
             res = -1;
             goto cleanup;
         }
-        res = PyObject_SetAttr(self, name, positional[i]);
+        res = _PyValue_SetAttr(_PyValue_FromObjectKnown(self), name, PyValue_FromObjectBorrow(positional[i]));
         if (res < 0) {
             res = -1;
             goto cleanup;
@@ -1132,7 +1132,7 @@ ast_type_init(PyObject *self, PyObject *args, PyObject *kw)
                 Py_CLEAR(key);
                 continue;
             }
-            int contains = PySequence_Contains(fields, key);
+            int contains = _PyValue_Contains(PyValue_FromObjectBorrow(fields), PyValue_FromObjectBorrow(key));
             if (contains < 0) {
                 res = -1;
                 goto cleanup;
@@ -1154,13 +1154,13 @@ ast_type_init(PyObject *self, PyObject *args, PyObject *kw)
             else {
                 // Lazily initialize "attributes"
                 if (attributes == NULL) {
-                    attributes = PyObject_GetAttr((PyObject*)Py_TYPE(self), state->_attributes);
+                    attributes = _PyValue_AsObjectResultAt(_PyValue_GetAttr(_PyValue_FromObjectKnown((PyObject*)Py_TYPE(self)), state->_attributes), BOX_SITE_ATTRIBUTE);
                     if (attributes == NULL) {
                         res = -1;
                         goto cleanup;
                     }
                 }
-                contains = PySequence_Contains(attributes, key);
+                contains = _PyValue_Contains(PyValue_FromObjectBorrow(attributes), PyValue_FromObjectBorrow(key));
                 if (contains < 0) {
                     res = -1;
                     goto cleanup;
@@ -1173,7 +1173,7 @@ ast_type_init(PyObject *self, PyObject *args, PyObject *kw)
                     goto cleanup;
                 }
             }
-            res = PyObject_SetAttr(self, key, value);
+            res = _PyValue_SetAttr(_PyValue_FromObjectKnown(self), key, PyValue_FromObjectBorrow(value));
             if (res < 0) {
                 res = -1;
                 goto cleanup;
@@ -1199,7 +1199,7 @@ ast_type_init(PyObject *self, PyObject *args, PyObject *kw)
             // that are not passed in simply do not exist on the instance.
             goto cleanup;
         }
-        remaining_list = PySequence_List(remaining_fields);
+        remaining_list = _PyValue_SequenceList(PyValue_FromObjectBorrow(remaining_fields));
         if (remaining_list == NULL) {
             res = -1;
             goto cleanup;
@@ -1247,7 +1247,7 @@ ast_type_init(PyObject *self, PyObject *args, PyObject *kw)
                     res = -1;
                     goto cleanup;
                 }
-                res = PyObject_SetAttr(self, name, empty);
+                res = _PyValue_SetAttr(_PyValue_FromObjectKnown(self), name, PyValue_FromObjectBorrow(empty));
                 if (res < 0) {
                     res = -1;
                     goto cleanup;
@@ -1256,7 +1256,7 @@ ast_type_init(PyObject *self, PyObject *args, PyObject *kw)
             }
             else if (type == state->expr_context_type) {
                 // special case for expr_context: default to Load()
-                res = PyObject_SetAttr(self, name, state->Load_singleton);
+                res = _PyValue_SetAttr(_PyValue_FromObjectKnown(self), name, PyValue_FromObjectBorrow(state->Load_singleton));
                 if (res < 0) {
                     res = -1;
                     goto cleanup;
@@ -1344,7 +1344,7 @@ ast_type_reduce(PyObject *self, PyObject *unused)
                 goto cleanup;
             }
             for (Py_ssize_t i = 0; i < numfields; i++) {
-                PyObject *name = PySequence_GetItem(fields, i);
+                PyObject *name = _PyValue_AsObjectResultAt(_PyValue_SequenceGetItem(PyValue_FromObjectBorrow(fields), i), BOX_SITE_SEQUENCE);
                 if (!name) {
                     goto cleanup;
                 }
@@ -1414,7 +1414,7 @@ ast_type_replace_update_payload(PyObject *payload,
         return -1;
     }
     for (Py_ssize_t i = 0; i < n; i++) {
-        PyObject *key = PySequence_GetItem(keys, i);
+        PyObject *key = _PyValue_AsObjectResultAt(_PyValue_SequenceGetItem(PyValue_FromObjectBorrow(keys), i), BOX_SITE_SEQUENCE);
         if (key == NULL) {
             return -1;
         }
@@ -1544,7 +1544,7 @@ ast_repr_list(PyObject *list, int depth)
         return NULL;
     }
     else if (length == 0) {
-        return PyObject_Repr(list);
+        return _PyValue_Repr(PyValue_FromObjectBorrow(list));
     }
 
     PyObject *items[2] = {NULL, NULL};
@@ -1553,12 +1553,12 @@ ast_repr_list(PyObject *list, int depth)
         goto error;
     }
 
-    items[0] = PySequence_GetItem(list, 0);
+    items[0] = _PyValue_AsObjectResultAt(_PyValue_SequenceGetItem(PyValue_FromObjectBorrow(list), 0), BOX_SITE_SEQUENCE);
     if (!items[0]) {
         goto error;
     }
     if (length > 1) {
-        items[1] = PySequence_GetItem(list, length - 1);
+        items[1] = _PyValue_AsObjectResultAt(_PyValue_SequenceGetItem(PyValue_FromObjectBorrow(list), length - 1), BOX_SITE_SEQUENCE);
         if (!items[1]) {
             goto error;
         }
@@ -1624,7 +1624,7 @@ ast_repr_max_depth(AST_object *self, int depth)
         return NULL;
     }
 
-    PyObject *fields = PyObject_GetAttr((PyObject *)Py_TYPE(self), state->_fields);
+    PyObject *fields = _PyValue_AsObjectResultAt(_PyValue_GetAttr(_PyValue_FromObjectKnown((PyObject *)Py_TYPE(self)), state->_fields), BOX_SITE_ATTRIBUTE);
     if (!fields) {
         return NULL;
     }
@@ -1668,12 +1668,12 @@ ast_repr_max_depth(AST_object *self, int depth)
     }
 
     for (Py_ssize_t i = 0; i < numfields; i++) {
-        PyObject *name = PySequence_GetItem(fields, i);
+        PyObject *name = _PyValue_AsObjectResultAt(_PyValue_SequenceGetItem(PyValue_FromObjectBorrow(fields), i), BOX_SITE_SEQUENCE);
         if (!name) {
             goto error;
         }
 
-        PyObject *value = PyObject_GetAttr((PyObject *)self, name);
+        PyObject *value = _PyValue_AsObjectResultAt(_PyValue_GetAttr(_PyValue_FromObjectKnown((PyObject *)self), name), BOX_SITE_ATTRIBUTE);
         if (!value) {
             Py_DECREF(name);
             goto error;
@@ -1687,7 +1687,7 @@ ast_repr_max_depth(AST_object *self, int depth)
             value_repr = ast_repr_max_depth((AST_object*)value, depth - 1);
         }
         else {
-            value_repr = PyObject_Repr(value);
+            value_repr = _PyValue_Repr(PyValue_FromObjectBorrow(value));
         }
 
         Py_DECREF(value);
@@ -1811,7 +1811,7 @@ add_attributes(struct ast_state *state, PyObject *type, const char * const *attr
         }
         PyTuple_SET_VALUE(l, i, PyValue_PrepareOwned(s));
     }
-    result = PyObject_SetAttr(type, state->_attributes, l);
+    result = _PyValue_SetAttr(_PyValue_FromObjectKnown(type), state->_attributes, PyValue_FromObjectBorrow(l));
     Py_DECREF(l);
     return result;
 }
@@ -2024,7 +2024,7 @@ static int add_ast_fields(struct ast_state *state)
     def emit_defaults(self, name, fields, depth):
         for field in fields:
             if field.opt:
-                self.emit('if (PyObject_SetAttr(state->%s_type, state->%s, Py_None) == -1)' %
+                self.emit('if (_PyValue_SetAttr(_PyValue_FromObjectKnown(state->%s_type), state->%s, PyValue_None) == -1)' %
                             (name, field.name), depth)
                 self.emit("return -1;", depth+1)
 
@@ -2174,7 +2174,7 @@ class ObjVisitor(PickleVisitor):
         for a in sum.attributes:
             self.emit("value = ast2obj_%s(state, o->%s);" % (a.type, a.name), 1)
             self.emit("if (!value) goto failed;", 1)
-            self.emit('if (PyObject_SetAttr(result, state->%s, value) < 0)' % a.name, 1)
+            self.emit('if (_PyValue_SetAttr(_PyValue_FromObjectKnown(result), state->%s, PyValue_FromObjectBorrow(value)) < 0)' % a.name, 1)
             self.emit('goto failed;', 2)
             self.emit('Py_DECREF(value);', 1)
         self.func_end()
@@ -2200,7 +2200,7 @@ class ObjVisitor(PickleVisitor):
         for a in prod.attributes:
             self.emit("value = ast2obj_%s(state, o->%s);" % (a.type, a.name), 1)
             self.emit("if (!value) goto failed;", 1)
-            self.emit("if (PyObject_SetAttr(result, state->%s, value) < 0)" % a.name, 1)
+            self.emit("if (_PyValue_SetAttr(_PyValue_FromObjectKnown(result), state->%s, PyValue_FromObjectBorrow(value)) < 0)" % a.name, 1)
             self.emit('goto failed;', 2)
             self.emit('Py_DECREF(value);', 1)
         self.func_end()
@@ -2223,7 +2223,7 @@ class ObjVisitor(PickleVisitor):
             value = "o->v.%s.%s" % (name, field.name)
         self.set(field, value, depth)
         emit("if (!value) goto failed;", 0)
-        emit("if (PyObject_SetAttr(result, state->%s, value) == -1)" % field.name, 0)
+        emit("if (_PyValue_SetAttr(_PyValue_FromObjectKnown(result), state->%s, PyValue_FromObjectBorrow(value)) == -1)" % field.name, 0)
         emit("goto failed;", 1)
         emit("Py_DECREF(value);", 0)
 
@@ -2404,11 +2404,6 @@ def generate_module_def(mod, metadata, f, internal_h):
     generate_ast_state(module_state, internal_h)
 
     print(textwrap.dedent("""
-        /* Defer line of the value-API waves (value-api-v2a0.md, section 1.5):
-           the callers of the protocol marks in this unit are converted by W2's
-           caller batches, which remove this line. */
-        #define Py_VALUE_DEFER_MARKS 1
-
         #include "Python.h"
         #include "pycore_ast.h"
         #include "pycore_ast_state.h"     // struct ast_state

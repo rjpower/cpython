@@ -1,8 +1,3 @@
-/* Defer line of the value-API waves (value-api-v2a0.md, section 1.5): the
-   callers of the protocol marks in this unit are converted by W2's caller
-   batches, which remove this line. */
-#define Py_VALUE_DEFER_MARKS 1
-
 #include "Python.h"
 #include "errcode.h"
 #include "pycore_runtime.h"       // _Py_ID()
@@ -194,13 +189,13 @@ _PyTokenizer_raise_init_error(PyObject *filename)
     PyObject *tback;
     PyErr_Fetch(&type, &value, &tback);
     if (PyErr_GivenExceptionMatches(value, PyExc_SyntaxError)) {
-        if (PyObject_SetAttr(value, &_Py_ID(filename), filename)) {
+        if (_PyValue_SetAttr(PyValue_FromObjectBorrow(value), &_Py_ID(filename), PyValue_FromObjectBorrow(filename))) {
             goto error;
         }
         PyErr_Restore(type, value, tback);
         return;
     }
-    errstr = PyObject_Str(value);
+    errstr = _PyValue_Str(PyValue_FromObjectBorrow(value));
     if (!errstr) {
         goto error;
     }

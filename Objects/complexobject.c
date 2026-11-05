@@ -4,11 +4,6 @@
 
 /* Submitted by Jim Hugunin */
 
-/* Defer line of the value-API waves (value-api-v2a0.md, section 1.5): the
-   callers of the protocol marks in this unit are converted by W2's caller
-   batches, which remove this line. */
-#define Py_VALUE_DEFER_MARKS 1
-
 #include "Python.h"
 #include "pycore_call.h"          // _PyObject_CallNoArgs()
 #include "pycore_complexobject.h" // _PyComplex_FormatAdvancedWriter()
@@ -20,6 +15,7 @@
 #include "pycore_pymath.h"        // _Py_ADJUST_ERANGE2()
 #include "pycore_value_api.h"     // _PyValue_AsObjectAt()
 #include "pycore_value_ops.h"     // _PyValue_Float()
+#include "pycore_value_slots.h"   // _Py_VALUE_THUNK_BINARY()
 
 
 #define _PyComplexObject_CAST(op)   ((PyComplexObject *)(op))
@@ -677,34 +673,6 @@ complex_hash(PyObject *op)
     return (Py_hash_t)combined;
 }
 
-/* This macro may return! */
-#define TO_COMPLEX(obj, c)                      \
-    if (PyComplex_Check(obj))                   \
-        c = ((PyComplexObject *)(obj))->cval;   \
-    else if (real_to_complex(&(obj), &(c)) < 0) \
-        return (obj)
-
-static int
-real_to_double(PyObject **pobj, double *dbl)
-{
-    PyObject *obj = *pobj;
-
-    if (PyFloat_Check(obj)) {
-        *dbl = PyFloat_AS_DOUBLE(obj);
-    }
-    else if (_Py_convert_int_to_double(pobj, dbl) < 0) {
-        return -1;
-    }
-    return 0;
-}
-
-static int
-real_to_complex(PyObject **pobj, Py_complex *pc)
-{
-    pc->imag = 0.0;
-    return real_to_double(pobj, &(pc->real));
-}
-
 /* Complex arithmetic rules implement special mixed-mode case where combining
    a pure-real (float or int) value and a complex value is performed directly
    without first coercing the real value to a complex value.
@@ -720,60 +688,117 @@ real_to_complex(PyObject **pobj, Py_complex *pc)
    See C11's Annex G, sections G.5.1 and G.5.2.
  */
 
-#define COMPLEX_BINOP(NAME, FUNC)                           \
-    static PyObject *                                       \
-    complex_##NAME(PyObject *v, PyObject *w)                \
-    {                                                       \
-        Py_complex a;                                       \
-        errno = 0;                                          \
-        if (PyComplex_Check(w)) {                           \
-            Py_complex b = ((PyComplexObject *)w)->cval;    \
-            if (PyComplex_Check(v)) {                       \
-                a = ((PyComplexObject *)v)->cval;           \
-                a = _Py_c_##FUNC(a, b);                     \
-            }                                               \
-            else if (real_to_double(&v, &a.real) < 0) {     \
-                return v;                                   \
-            }                                               \
-            else {                                          \
-                a = _Py_rc_##FUNC(a.real, b);               \
-            }                                               \
-        }                                                   \
-        else if (!PyComplex_Check(v)) {                     \
-            Py_RETURN_NOTIMPLEMENTED;                       \
-        }                                                   \
-        else {                                              \
-            a = ((PyComplexObject *)v)->cval;               \
-            double b;                                       \
-            if (real_to_double(&w, &b) < 0) {               \
-                return w;                                   \
-            }                                               \
-            a = _Py_cr_##FUNC(a, b);                        \
-        }                                                   \
-        if (errno == EDOM) {                                \
-            PyErr_SetString(PyExc_ZeroDivisionError,        \
-                            "division by zero");            \
-            return NULL;                                    \
-        }                                                   \
-        return PyComplex_FromCComplex(a);                   \
-   }
+/* The real operand of a mixed-mode operation, converted as
+   _Py_convert_int_to_double() does for objects. Returns 0 with *dbl set, 1 for an
+   operand that is not a real number (the caller returns NotImplemented), or
+   -1 with an exception set. */
+static int
+complex_real_operand(PyValueBorrow v, double *dbl)
+{
+    if (PyValue_IsInlineFloat(v)) {
+        *dbl = PyValue_InlineFloat(v);
+        return 0;
+    }
+    if (PyValue_IsInlineInt(v)) {
+        *dbl = (double)PyValue_InlineInt64(v);
+        return 0;
+    }
+    PyObject *obj = PyValue_AsKnownObjectBorrow(v);
+    if (PyFloat_Check(obj)) {
+        *dbl = PyFloat_AS_DOUBLE(obj);
+        return 0;
+    }
+    if (PyLong_Check(obj)) {
+        *dbl = PyLong_AsDouble(obj);
+        return (*dbl == -1.0 && PyErr_Occurred()) ? -1 : 0;
+    }
+    return 1;
+}
+
+static bool
+complex_is_complex(PyValueBorrow v)
+{
+    return PyValue_IsObject(v) && PyComplex_Check(PyValue_AsKnownObjectBorrow(v));
+}
+
+static Py_complex
+complex_cval(PyValueBorrow v)
+{
+    return ((PyComplexObject *)PyValue_AsKnownObjectBorrow(v))->cval;
+}
+
+#define COMPLEX_BINOP(NAME, FUNC)                                   \
+    static PyValue                                                  \
+    complex_##NAME##_value(PyValueBorrow v, PyValueBorrow w)        \
+    {                                                               \
+        Py_complex a;                                               \
+        errno = 0;                                                  \
+        if (complex_is_complex(w)) {                                \
+            Py_complex b = complex_cval(w);                         \
+            if (complex_is_complex(v)) {                            \
+                a = _Py_c_##FUNC(complex_cval(v), b);               \
+            }                                                       \
+            else {                                                  \
+                double real;                                        \
+                int rc = complex_real_operand(v, &real);            \
+                if (rc != 0) {                                      \
+                    return rc < 0 ? PyValue_NULL : PyValue_NotImplemented; \
+                }                                                   \
+                a = _Py_rc_##FUNC(real, b);                         \
+            }                                                       \
+        }                                                           \
+        else if (!complex_is_complex(v)) {                          \
+            return PyValue_NotImplemented;                          \
+        }                                                           \
+        else {                                                      \
+            double b;                                               \
+            int rc = complex_real_operand(w, &b);                   \
+            if (rc != 0) {                                          \
+                return rc < 0 ? PyValue_NULL : PyValue_NotImplemented; \
+            }                                                       \
+            a = _Py_cr_##FUNC(complex_cval(v), b);                  \
+        }                                                           \
+        if (errno == EDOM) {                                        \
+            PyErr_SetString(PyExc_ZeroDivisionError,                \
+                            "division by zero");                    \
+            return PyValue_NULL;                                    \
+        }                                                           \
+        return PyValue_FromObjectSteal(PyComplex_FromCComplex(a));  \
+   }                                                                \
+   _Py_VALUE_THUNK_BINARY(complex_##NAME, complex_##NAME##_value)
 
 COMPLEX_BINOP(add, sum)
 COMPLEX_BINOP(mul, prod)
 COMPLEX_BINOP(sub, diff)
 COMPLEX_BINOP(div, quot)
 
-static PyObject *
-complex_pow(PyObject *v, PyObject *w, PyObject *z)
+static int
+complex_any_operand(PyValueBorrow v, Py_complex *c)
+{
+    if (complex_is_complex(v)) {
+        *c = complex_cval(v);
+        return 0;
+    }
+    c->imag = 0.0;
+    return complex_real_operand(v, &c->real);
+}
+
+static PyValue
+complex_pow_value(PyValueBorrow v, PyValueBorrow w, PyValueBorrow z)
 {
     Py_complex p;
     Py_complex a, b;
-    TO_COMPLEX(v, a);
-    TO_COMPLEX(w, b);
+    int rc = complex_any_operand(v, &a);
+    if (rc == 0) {
+        rc = complex_any_operand(w, &b);
+    }
+    if (rc != 0) {
+        return rc < 0 ? PyValue_NULL : PyValue_NotImplemented;
+    }
 
-    if (z != Py_None) {
+    if (!PyValue_Is(z, PyValue_None)) {
         PyErr_SetString(PyExc_ValueError, "complex modulo");
-        return NULL;
+        return PyValue_NULL;
     }
     errno = 0;
     // Check whether the exponent has a small integer value, and if so use
@@ -793,114 +818,103 @@ complex_pow(PyObject *v, PyObject *w, PyObject *z)
     if (errno == EDOM) {
         PyErr_SetString(PyExc_ZeroDivisionError,
                         "zero to a negative or complex power");
-        return NULL;
+        return PyValue_NULL;
     }
     else if (errno == ERANGE) {
         PyErr_SetString(PyExc_OverflowError,
                         "complex exponentiation");
-        return NULL;
+        return PyValue_NULL;
     }
-    return PyComplex_FromCComplex(p);
+    return PyValue_FromObjectSteal(PyComplex_FromCComplex(p));
 }
+_Py_VALUE_THUNK_TERNARY(complex_pow, complex_pow_value)
 
-static PyObject *
-complex_neg(PyObject *op)
+static PyValue
+complex_neg_value(PyValueBorrow op)
 {
-    PyComplexObject *v = _PyComplexObject_CAST(op);
-    Py_complex neg;
-    neg.real = -v->cval.real;
-    neg.imag = -v->cval.imag;
-    return PyComplex_FromCComplex(neg);
+    Py_complex neg = complex_cval(op);
+    neg.real = -neg.real;
+    neg.imag = -neg.imag;
+    return PyValue_FromObjectSteal(PyComplex_FromCComplex(neg));
 }
+_Py_VALUE_THUNK_UNARY(complex_neg, complex_neg_value)
 
-static PyObject *
-complex_pos(PyObject *op)
+static PyValue
+complex_pos_value(PyValueBorrow op)
 {
-    PyComplexObject *v = _PyComplexObject_CAST(op);
+    PyObject *v = PyValue_AsKnownObjectBorrow(op);
     if (PyComplex_CheckExact(v)) {
-        return Py_NewRef(v);
+        return PyValue_FromObjectSteal(Py_NewRef(v));
     }
-    return PyComplex_FromCComplex(v->cval);
+    return PyValue_FromObjectSteal(PyComplex_FromCComplex(complex_cval(op)));
 }
+_Py_VALUE_THUNK_UNARY(complex_pos, complex_pos_value)
 
-static PyObject *
-complex_abs(PyObject *op)
+static PyValue
+complex_abs_value(PyValueBorrow op)
 {
-    PyComplexObject *v = _PyComplexObject_CAST(op);
     double result;
 
     errno = 0;
-    result = _Py_c_abs(v->cval);
+    result = _Py_c_abs(complex_cval(op));
     if (errno == ERANGE) {
         PyErr_SetString(PyExc_OverflowError,
                         "absolute value too large");
-        return NULL;
+        return PyValue_NULL;
     }
-    return PyFloat_FromDouble(result);
+    return PyValue_FromDouble(result);
 }
+_Py_VALUE_THUNK_UNARY(complex_abs, complex_abs_value)
 
 static int
-complex_bool(PyObject *op)
+complex_bool_value(PyValueBorrow op)
 {
-    PyComplexObject *v = _PyComplexObject_CAST(op);
-    return v->cval.real != 0.0 || v->cval.imag != 0.0;
+    Py_complex c = complex_cval(op);
+    return c.real != 0.0 || c.imag != 0.0;
 }
+_Py_VALUE_THUNK_INQUIRY(complex_bool, complex_bool_value)
 
-static PyObject *
-complex_richcompare(PyObject *v, PyObject *w, int op)
+static PyValue
+complex_richcompare_value(PyValueBorrow v, PyValueBorrow w, int op)
 {
-    PyObject *res;
     Py_complex i;
     int equal;
 
     if (op != Py_EQ && op != Py_NE) {
-        goto Unimplemented;
+        return PyValue_NotImplemented;
     }
 
-    assert(PyComplex_Check(v));
-    TO_COMPLEX(v, i);
+    assert(complex_is_complex(v));
+    i = complex_cval(v);
 
-    if (PyLong_Check(w)) {
+    if (PyValue_IsInlineInt(w) ||
+        (PyValue_IsObject(w) && PyLong_Check(PyValue_AsKnownObjectBorrow(w)))) {
         /* Check for 0.0 imaginary part first to avoid the rich
          * comparison when possible.
          */
         if (i.imag == 0.0) {
-            PyObject *j, *sub_res;
-            j = PyFloat_FromDouble(i.real);
-            if (j == NULL)
-                return NULL;
-
-            sub_res = PyObject_RichCompare(j, w, op);
-            Py_DECREF(j);
-            return sub_res;
+            return _PyValue_RichCompare(PyValue_FromDouble(i.real), w, op);
         }
-        else {
-            equal = 0;
-        }
+        equal = 0;
     }
-    else if (PyFloat_Check(w)) {
-        equal = (i.real == PyFloat_AsDouble(w) && i.imag == 0.0);
+    else if (PyValue_IsInlineFloat(w)) {
+        equal = (i.real == PyValue_InlineFloat(w) && i.imag == 0.0);
     }
-    else if (PyComplex_Check(w)) {
-        Py_complex j;
-
-        TO_COMPLEX(w, j);
+    else if (PyFloat_Check(PyValue_AsKnownObjectBorrow(w))) {
+        equal = (i.real == PyFloat_AS_DOUBLE(PyValue_AsKnownObjectBorrow(w))
+                 && i.imag == 0.0);
+    }
+    else if (complex_is_complex(w)) {
+        Py_complex j = complex_cval(w);
         equal = (i.real == j.real && i.imag == j.imag);
     }
     else {
-        goto Unimplemented;
+        return PyValue_NotImplemented;
     }
 
-    if (equal == (op == Py_EQ))
-         res = Py_True;
-    else
-         res = Py_False;
-
-    return Py_NewRef(res);
-
-Unimplemented:
-    Py_RETURN_NOTIMPLEMENTED;
+    return PyValue_FromBool(equal == (op == Py_EQ));
 }
+_Py_VALUE_THUNK_RICHCMP(complex_richcompare, complex_richcompare_value)
 
 /*[clinic input]
 @permit_long_summary
@@ -1491,4 +1505,16 @@ PyTypeObject PyComplex_Type = {
     actual_complex_new,                         /* tp_new */
     PyObject_Free,                              /* tp_free */
     .tp_version_tag = _Py_TYPE_VERSION_COMPLEX,
+    .tp_value = {
+        .richcompare = _Py_VALUE_SLOT_INIT(richcompare, complex_richcompare_value),
+        .nb_add = _Py_VALUE_SLOT_INIT(nb_add, complex_add_value),
+        .nb_subtract = _Py_VALUE_SLOT_INIT(nb_subtract, complex_sub_value),
+        .nb_multiply = _Py_VALUE_SLOT_INIT(nb_multiply, complex_mul_value),
+        .nb_true_divide = _Py_VALUE_SLOT_INIT(nb_true_divide, complex_div_value),
+        .nb_power = _Py_VALUE_SLOT_INIT(nb_power, complex_pow_value),
+        .nb_negative = _Py_VALUE_SLOT_INIT(nb_negative, complex_neg_value),
+        .nb_positive = _Py_VALUE_SLOT_INIT(nb_positive, complex_pos_value),
+        .nb_absolute = _Py_VALUE_SLOT_INIT(nb_absolute, complex_abs_value),
+        .nb_bool = _Py_VALUE_SLOT_INIT(nb_bool, complex_bool_value),
+    },
 };

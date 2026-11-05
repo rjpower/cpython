@@ -6,16 +6,12 @@
    slots here call none of them (value-api-v2a1a.md, D12). */
 #define Py_VALUE_MARK_NUMBERS 1
 
-/* Defer line of the value-API waves (value-api-v2a0.md, section 1.5): the
-   callers of the protocol marks in this unit are converted by W2's caller
-   batches, which remove this line. */
-#define Py_VALUE_DEFER_MARKS 1
-
 #include "Python.h"
 #include "opcode.h"               // NB_ADD
 #include "pycore_bitutils.h"      // _Py_popcount32()
 #include "pycore_initconfig.h"    // _PyStatus_OK()
 #include "pycore_call.h"          // _PyObject_MakeTpCall
+#include "pycore_value_call.h"    // _PyValue_VectorcallThunk()
 #include "pycore_descrobject.h"   // _Py_VALUE_GETTER()
 #include "pycore_freelist.h"      // _Py_FREELIST_FREE, _Py_FREELIST_POP
 #include "pycore_long.h"          // _Py_SmallInts
@@ -6569,34 +6565,28 @@ int_is_integer_impl(PyValueBorrow self)
     return PyValue_True;
 }
 
-static PyObject *
-long_vectorcall(PyObject *type, PyObject * const*args,
-                 size_t nargsf, PyObject *kwnames)
+static PyValue
+long_vectorcall(PyThreadState *tstate, PyObject *type, const PyValue *args,
+                size_t nargsf, PyObject *kwnames)
 {
     Py_ssize_t nargs = PyVectorcall_NARGS(nargsf);
     if (kwnames != NULL) {
-        PyThreadState *tstate = PyThreadState_GET();
-        return _PyObject_MakeTpCall(tstate, type, args, nargs, kwnames);
+        return _PyValue_TpCallAdapter(tstate, type, args, nargsf, kwnames);
     }
     switch (nargs) {
         case 0:
-            return _PyLong_GetZero();
+            return PyValue_FromInt64(0);
         case 1:
-            return PyNumber_Long(args[0]);
+            return _PyValue_Long(PyValue_Borrow(args[0]));
         case 2:
-        {
-            PyValue res = long_new_impl(_PyType_CAST(type),
-                                        PyValue_FromObjectBorrow(args[0]),
-                                        PyValue_FromObjectBorrow(args[1]));
-            PyObject *obj = PyValue_IsNull(res)
-                ? NULL : _PyValue_AsObjectAt(res, BOX_SITE_CALL);
-            PyValue_XCLOSE(res);
-            return obj;
-        }
+            return long_new_impl(_PyType_CAST(type),
+                                 PyValue_Borrow(args[0]),
+                                 PyValue_Borrow(args[1]));
         default:
-            return PyErr_Format(PyExc_TypeError,
-                                "int expected at most 2 arguments, got %zd",
-                                nargs);
+            PyErr_Format(PyExc_TypeError,
+                         "int expected at most 2 arguments, got %zd",
+                         nargs);
+            return PyValue_NULL;
     }
 }
 
@@ -7434,7 +7424,8 @@ PyTypeObject PyLong_Type = {
     0,                                          /* tp_alloc */
     long_new,                                   /* tp_new */
     PyObject_Free,                              /* tp_free */
-    .tp_vectorcall = long_vectorcall,
+    .tp_vectorcall = _PyValue_VectorcallThunk,
+    .tp_value_vectorcall = (_Py_valuefunc)long_vectorcall,
     .tp_version_tag = _Py_TYPE_VERSION_INT,
     .tp_value = {
         .nb_add = _Py_VALUE_SLOT_INIT(nb_add, _PyLong_ValueAdd),

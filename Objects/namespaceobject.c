@@ -1,10 +1,5 @@
 // namespace object implementation
 
-/* Defer line of the value-API waves (value-api-v2a0.md, section 1.5): the
-   callers of the protocol marks in this unit are converted by W2's caller
-   batches, which remove this line. */
-#define Py_VALUE_DEFER_MARKS 1
-
 #include "Python.h"
 #include "pycore_dict.h"          // PyDict_GetValue()
 #include "pycore_list.h"          // PyList_AppendValue()
@@ -12,7 +7,9 @@
 #include "pycore_namespace.h"     // _PyNamespace_Type
 #include "pycore_tuple.h"         // _PyTuple_PackValues()
 #include "pycore_value.h"         // PyValue_FromObjectBorrow()
+#include "pycore_value_slots.h"  // _Py_VALUE_NOTIMPL_RICHCMP()
 #include "pycore_value_api.h"     // _PyValue_FromObjectKnown()
+#include "pycore_value_ops.h"     // _PyValue_RichCompare()
 
 /*[clinic input]
 value_emission
@@ -139,7 +136,7 @@ namespace_repr(PyObject *ns)
     if (keys == NULL)
         goto error;
 
-    keys_iter = PyObject_GetIter(keys);
+    keys_iter = _PyValue_GetIter(PyValue_FromObjectBorrow(keys));
     if (keys_iter == NULL)
         goto error;
 
@@ -230,8 +227,11 @@ namespace_richcompare(PyObject *self, PyObject *other, int op)
         PyObject_TypeCheck(self, &_PyNamespace_Type) &&
         PyObject_TypeCheck(other, &_PyNamespace_Type)
     ) {
-        return PyObject_RichCompare(((_PyNamespaceObject *)self)->ns_dict,
-                                   ((_PyNamespaceObject *)other)->ns_dict, op);
+        PyValue cmp = _PyValue_RichCompare(
+            PyValue_FromObjectBorrow(((_PyNamespaceObject *)self)->ns_dict),
+            PyValue_FromObjectBorrow(((_PyNamespaceObject *)other)->ns_dict), op);
+        return PyValue_IsNull(cmp) ? NULL
+            : _PyValue_AsObjectStealAt(cmp, BOX_SITE_COMPARE);
     }
     Py_RETURN_NOTIMPLEMENTED;
 }
@@ -305,6 +305,8 @@ PyDoc_STRVAR(namespace_doc,
 --\n\n\
 A simple attribute-based namespace.");
 
+_Py_VALUE_NOTIMPL_RICHCMP(namespace_richcompare_value, namespace_richcompare)
+
 PyTypeObject _PyNamespace_Type = {
     PyVarObject_HEAD_INIT(&PyType_Type, 0)
     "types.SimpleNamespace",                    /* tp_name */
@@ -346,6 +348,9 @@ PyTypeObject _PyNamespace_Type = {
     PyType_GenericAlloc,                        /* tp_alloc */
     namespace_new,                              /* tp_new */
     PyObject_GC_Del,                            /* tp_free */
+    .tp_value = {
+        .richcompare = _Py_VALUE_SLOT_INIT(richcompare, namespace_richcompare_value),
+    },
 };
 
 

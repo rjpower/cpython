@@ -31,11 +31,6 @@
    the found and not-found case.
 */
 
-/* Defer line of the value-API waves (value-api-v2a0.md, section 1.5): the
-   callers of the protocol marks in this unit are converted by W2's caller
-   batches, which remove this line. */
-#define Py_VALUE_DEFER_MARKS 1
-
 #include "Python.h"
 #include "pycore_ceval.h"               // _PyEval_GetBuiltin()
 #include "pycore_critical_section.h"    // Py_BEGIN_CRITICAL_SECTION, Py_END_CRITICAL_SECTION
@@ -46,6 +41,7 @@
 #include "pycore_pyerrors.h"            // _PyErr_SetKeyError()
 #include "pycore_setobject.h"           // _PySet_NextEntry() definition
 #include "pycore_tuple.h"         // _PyTuple_PackValues()
+#include "pycore_value_call.h"    // _PyValue_VectorcallThunk()
 #include "pycore_value_api.h"     // _PyValue_AsObjectAt()
 #include "pycore_value_slots.h"   // _PyValue_THUNK_EXIT()
 #include "pycore_weakref.h"             // FT_CLEAR_WEAKREFS()
@@ -876,7 +872,7 @@ set_repr_impl(PySetObject *so)
     }
 
     /* repr(keys)[1:-1] */
-    listrepr = PyObject_Repr(keys);
+    listrepr = _PyValue_Repr(PyValue_FromObjectBorrow(keys));
     Py_DECREF(keys);
     if (listrepr == NULL)
         goto done;
@@ -1191,7 +1187,7 @@ setiter_reduce(PyObject *op, PyObject *Py_UNUSED(ignored))
     Py_XINCREF(tmp.si_set);
 
     /* iterate the temporary into a list */
-    PyObject *list = PySequence_List((PyObject*)&tmp);
+    PyObject *list = _PyValue_SequenceList(PyValue_FromObjectBorrow((PyObject*)&tmp));
     Py_XDECREF(tmp.si_set);
     if (list == NULL) {
         return NULL;
@@ -1349,23 +1345,26 @@ set_update_iterable_lock_held(PySetObject *so, PyObject *other)
 {
     _Py_CRITICAL_SECTION_ASSERT_OBJECT_LOCKED(so);
 
-    PyObject *it = PyObject_GetIter(other);
+    PyObject *it = _PyValue_GetIter(PyValue_FromObjectBorrow(other));
     if (it == NULL) {
         return -1;
     }
 
-    PyObject *key;
-    while ((key = PyIter_Next(it)) != NULL) {
-        if (set_add_key(so, key)) {
-            Py_XDECREF(it);
-            Py_XDECREF(key);
+    for (;;) {
+        _PyStatusValue step = _PyValue_IterNext(it);
+        if (step.status == PYGEN_ERROR) {
+            Py_DECREF(it);
             return -1;
         }
-        Py_XDECREF(key);
+        if (step.status == PYGEN_RETURN) {
+            break;
+        }
+        if (_PySet_AddValueTakeRef(so, step.value)) {
+            Py_DECREF(it);
+            return -1;
+        }
     }
     Py_DECREF(it);
-    if (PyErr_Occurred())
-        return -1;
     return 0;
 }
 
@@ -1597,21 +1596,30 @@ frozenset_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
     return make_new_frozenset(type, iterable);
 }
 
-static PyObject *
-frozenset_vectorcall(PyObject *type, PyObject * const*args,
-                     size_t nargsf, PyObject *kwnames)
+static PyValue
+frozenset_vectorcall(PyThreadState *tstate, PyObject *type,
+                     const PyValue *args, size_t nargsf, PyObject *kwnames)
 {
     if (!_PyArg_NoKwnames("frozenset", kwnames)) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     Py_ssize_t nargs = PyVectorcall_NARGS(nargsf);
     if (!_PyArg_CheckPositional("frozenset", nargs, 0, 1)) {
-        return NULL;
+        return PyValue_NULL;
     }
 
-    PyObject *iterable = (nargs ? args[0] : NULL);
-    return make_new_frozenset(_PyType_CAST(type), iterable);
+    // An inline value is not iterable: the object only carries its type.
+    PyObject *iterable = NULL;
+    if (nargs) {
+        iterable = _PyValue_AsObjectAt(PyValue_Borrow(args[0]), BOX_SITE_CALL);
+        if (iterable == NULL) {
+            return PyValue_NULL;
+        }
+    }
+    PyObject *result = make_new_frozenset(_PyType_CAST(type), iterable);
+    Py_XDECREF(iterable);
+    return _PyValue_FromObjectResult(result);
 }
 
 static PyObject *
@@ -1929,14 +1937,14 @@ set_intersection(PySetObject *so, PyObject *other)
         return (PyObject *)result;
     }
 
-    it = PyObject_GetIter(other);
+    it = _PyValue_GetIter(PyValue_FromObjectBorrow(other));
     if (it == NULL) {
         Py_XDECREF((PyObject *)result);
         return NULL;
     }
 
     while ((key = PyIter_Next(it)) != NULL) {
-        hash = PyObject_Hash(key);
+        hash = _PyValue_Hash(PyValue_FromObjectBorrow(key));
         if (hash == -1)
             goto error;
         rv = set_contains_entry(so, PyValue_FromObjectBorrow(key), hash);
@@ -2095,7 +2103,7 @@ static PyValue
 set_isdisjoint_impl(PySetObject *so, PyValueBorrow other)
 /*[clinic end generated code: output=ee8e952ae94c3994 input=32f8dcab5e0fc7d6]*/
 {
-    PyObject *key, *it;
+    PyObject *it;
     int rv;
 
     if (PyValue_Is(PyValue_FromObjectBorrow(so), other)) {
@@ -2133,21 +2141,27 @@ set_isdisjoint_impl(PySetObject *so, PyValueBorrow other)
     if (it == NULL)
         return PyValue_NULL;
 
-    while ((key = PyIter_Next(it)) != NULL) {
-        rv = set_contains_key(so, key);
-        Py_XDECREF(key);
+    for (;;) {
+        _PyStatusValue step = _PyValue_IterNext(it);
+        if (step.status == PYGEN_ERROR) {
+            Py_DECREF(it);
+            return PyValue_NULL;
+        }
+        if (step.status == PYGEN_RETURN) {
+            break;
+        }
+        rv = set_contains_value(so, step.value);
+        PyValue_CLOSE(step.value);
         if (rv < 0) {
-            Py_XDECREF(it);
+            Py_DECREF(it);
             return PyValue_NULL;
         }
         if (rv) {
-            Py_XDECREF(it);
+            Py_DECREF(it);
             return PyValue_False;
         }
     }
     Py_DECREF(it);
-    if (PyErr_Occurred())
-        return PyValue_NULL;
     return PyValue_True;
 }
 
@@ -2188,22 +2202,28 @@ set_difference_update_internal(PySetObject *so, PyObject *other)
 
         Py_XDECREF(other);
     } else {
-        PyObject *key, *it;
-        it = PyObject_GetIter(other);
+        PyObject *it;
+        it = _PyValue_GetIter(PyValue_FromObjectBorrow(other));
         if (it == NULL)
             return -1;
 
-        while ((key = PyIter_Next(it)) != NULL) {
-            if (set_discard_key(so, key) < 0) {
-                Py_XDECREF(it);
-                Py_XDECREF(key);
+        for (;;) {
+            _PyStatusValue step = _PyValue_IterNext(it);
+            if (step.status == PYGEN_ERROR) {
+                Py_DECREF(it);
                 return -1;
             }
-            Py_XDECREF(key);
+            if (step.status == PYGEN_RETURN) {
+                break;
+            }
+            int rv = set_discard_value(so, step.value);
+            PyValue_CLOSE(step.value);
+            if (rv < 0) {
+                Py_DECREF(it);
+                return -1;
+            }
         }
         Py_DECREF(it);
-        if (PyErr_Occurred())
-            return -1;
     }
     /* If more than 1/4th are dummies, then resize them away. */
     if ((size_t)(so->fill - so->used) <= (size_t)so->mask / 4)
@@ -2684,26 +2704,31 @@ set_issuperset_impl(PySetObject *so, PyValueBorrow other)
             PyValue_FromObjectBorrow(so));
     }
 
-    PyObject *key, *it = _PyValue_GetIter(other);
+    PyObject *it = _PyValue_GetIter(other);
     if (it == NULL) {
         return PyValue_NULL;
     }
-    while ((key = PyIter_Next(it)) != NULL) {
-        int rv = set_contains_key(so, key);
-        Py_XDECREF(key);
+    for (;;) {
+        _PyStatusValue step = _PyValue_IterNext(it);
+        if (step.status == PYGEN_ERROR) {
+            Py_DECREF(it);
+            return PyValue_NULL;
+        }
+        if (step.status == PYGEN_RETURN) {
+            break;
+        }
+        int rv = set_contains_value(so, step.value);
+        PyValue_CLOSE(step.value);
         if (rv < 0) {
-            Py_XDECREF(it);
+            Py_DECREF(it);
             return PyValue_NULL;
         }
         if (!rv) {
-            Py_XDECREF(it);
+            Py_DECREF(it);
             return PyValue_False;
         }
     }
     Py_DECREF(it);
-    if (PyErr_Occurred()) {
-        return PyValue_NULL;
-    }
     return PyValue_True;
 }
 
@@ -2750,7 +2775,7 @@ set_richcompare(PyObject *self, PyObject *w, int op)
         r1 = set_richcompare((PyObject*)v, w, Py_EQ);
         if (r1 == NULL)
             return NULL;
-        r2 = PyObject_IsTrue(r1);
+        r2 = _PyValue_IsTrue(PyValue_FromObjectBorrow(r1));
         Py_XDECREF(r1);
         if (r2 < 0)
             return NULL;
@@ -2825,11 +2850,12 @@ _PySet_Contains(PySetObject *so, PyObject *key)
 }
 
 static int
-set_contains(PyObject *self, PyObject *key)
+set_contains_slot(PyObject *self, PyValueBorrow key)
 {
     PySetObject *so = _PySet_CAST(self);
-    return _PySet_Contains(so, key);
+    return set_contains_borrowed(so, key);
 }
+_Py_VALUE_THUNK_CONTAINS(set_contains, set_contains_slot)
 
 /*[clinic input]
 @coexist
@@ -2979,7 +3005,7 @@ set___reduce___impl(PySetObject *so)
     PyObject *keys=NULL, *args=NULL, *result=NULL, *state=NULL;
     int status;
 
-    keys = PySequence_List((PyObject *)so);
+    keys = _PyValue_SequenceList(_PyValue_FromObjectKnown((PyObject *)so));
     if (keys == NULL)
         goto done;
     args = _PyTuple_PackValues(1, (PyValueBorrow[]){PyValue_FromObjectBorrow(keys)});
@@ -3050,26 +3076,31 @@ set_init(PyObject *so, PyObject *args, PyObject *kwds)
     return set_update_internal(self, iterable);
 }
 
-static PyObject*
-set_vectorcall(PyObject *type, PyObject * const*args,
+static PyValue
+set_vectorcall(PyThreadState *tstate, PyObject *type, const PyValue *args,
                size_t nargsf, PyObject *kwnames)
 {
     assert(PyType_Check(type));
 
     if (!_PyArg_NoKwnames("set", kwnames)) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     Py_ssize_t nargs = PyVectorcall_NARGS(nargsf);
     if (!_PyArg_CheckPositional("set", nargs, 0, 1)) {
-        return NULL;
+        return PyValue_NULL;
     }
 
+    PyObject *iterable = NULL;
     if (nargs) {
-        return make_new_set(_PyType_CAST(type), args[0]);
+        iterable = _PyValue_AsObjectAt(PyValue_Borrow(args[0]), BOX_SITE_CALL);
+        if (iterable == NULL) {
+            return PyValue_NULL;
+        }
     }
-
-    return make_new_set(_PyType_CAST(type), NULL);
+    PyObject *result = make_new_set(_PyType_CAST(type), iterable);
+    Py_XDECREF(iterable);
+    return _PyValue_FromObjectResult(result);
 }
 
 static PySequenceMethods set_as_sequence = {
@@ -3149,6 +3180,24 @@ PyDoc_STRVAR(set_doc,
 \n\
 Build an unordered collection of unique elements.");
 
+_Py_VALUE_NOTIMPL_BINARY(set_and_value, set_and)
+
+_Py_VALUE_NOTIMPL_BINARY(set_iand_value, set_iand)
+
+_Py_VALUE_NOTIMPL_BINARY(set_ior_value, set_ior)
+
+_Py_VALUE_NOTIMPL_BINARY(set_isub_value, set_isub)
+
+_Py_VALUE_NOTIMPL_BINARY(set_ixor_value, set_ixor)
+
+_Py_VALUE_NOTIMPL_BINARY(set_or_value, set_or)
+
+_Py_VALUE_NOTIMPL_BINARY(set_sub_value, set_sub)
+
+_Py_VALUE_NOTIMPL_BINARY(set_xor_value, set_xor)
+
+_Py_VALUE_NOTIMPL_RICHCMP(set_richcompare_value, set_richcompare)
+
 PyTypeObject PySet_Type = {
     PyVarObject_HEAD_INIT(&PyType_Type, 0)
     "set",                              /* tp_name */
@@ -3192,8 +3241,21 @@ PyTypeObject PySet_Type = {
     _PyType_AllocNoTrack,               /* tp_alloc */
     set_new,                            /* tp_new */
     PyObject_GC_Del,                    /* tp_free */
-    .tp_vectorcall = set_vectorcall,
+    .tp_vectorcall = _PyValue_VectorcallThunk,
+    .tp_value_vectorcall = (_Py_valuefunc)set_vectorcall,
     .tp_version_tag = _Py_TYPE_VERSION_SET,
+    .tp_value = {
+        .contains = _Py_VALUE_SLOT_INIT(contains, set_contains_slot),
+        .richcompare = _Py_VALUE_SLOT_INIT(richcompare, set_richcompare_value),
+        .nb_subtract = _Py_VALUE_SLOT_INIT(nb_subtract, set_sub_value),
+        .nb_and = _Py_VALUE_SLOT_INIT(nb_and, set_and_value),
+        .nb_xor = _Py_VALUE_SLOT_INIT(nb_xor, set_xor_value),
+        .nb_or = _Py_VALUE_SLOT_INIT(nb_or, set_or_value),
+        .nb_inplace_subtract = _Py_VALUE_SLOT_INIT(nb_inplace_subtract, set_isub_value),
+        .nb_inplace_and = _Py_VALUE_SLOT_INIT(nb_inplace_and, set_iand_value),
+        .nb_inplace_xor = _Py_VALUE_SLOT_INIT(nb_inplace_xor, set_ixor_value),
+        .nb_inplace_or = _Py_VALUE_SLOT_INIT(nb_inplace_or, set_ior_value),
+    },
 };
 
 /* frozenset object ********************************************************/
@@ -3284,8 +3346,17 @@ PyTypeObject PyFrozenSet_Type = {
     _PyType_AllocNoTrack,               /* tp_alloc */
     frozenset_new,                      /* tp_new */
     PyObject_GC_Del,                    /* tp_free */
-    .tp_vectorcall = frozenset_vectorcall,
+    .tp_vectorcall = _PyValue_VectorcallThunk,
+    .tp_value_vectorcall = (_Py_valuefunc)frozenset_vectorcall,
     .tp_version_tag = _Py_TYPE_VERSION_FROZEN_SET,
+    .tp_value = {
+        .contains = _Py_VALUE_SLOT_INIT(contains, set_contains_slot),
+        .richcompare = _Py_VALUE_SLOT_INIT(richcompare, set_richcompare_value),
+        .nb_subtract = _Py_VALUE_SLOT_INIT(nb_subtract, set_sub_value),
+        .nb_and = _Py_VALUE_SLOT_INIT(nb_and, set_and_value),
+        .nb_xor = _Py_VALUE_SLOT_INIT(nb_xor, set_xor_value),
+        .nb_or = _Py_VALUE_SLOT_INIT(nb_or, set_or_value),
+    },
 };
 
 

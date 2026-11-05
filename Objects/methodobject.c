@@ -1,11 +1,6 @@
 
 /* Method object implementation */
 
-/* Defer line of the value-API waves (value-api-v2a0.md, section 1.5): the
-   callers of the protocol marks in this unit are converted by W2's caller
-   batches, which remove this line. */
-#define Py_VALUE_DEFER_MARKS 1
-
 #include "Python.h"
 #include "pycore_borrow.h"        // _PyBorrowScope_Enter()
 #include "pycore_call.h"          // _Py_CheckFunctionResult()
@@ -16,8 +11,10 @@
 #include "pycore_pyerrors.h"
 #include "pycore_pystate.h"       // _PyThreadState_GET()
 #include "pycore_value.h"         // PyValue_Is()
+#include "pycore_value_slots.h"  // _Py_VALUE_NOTIMPL_RICHCMP()
 #include "pycore_value_api.h"     // _PyValue_AsObjectFor()
 #include "pycore_value_call.h"    // METH_VALUE
+#include "pycore_value_ops.h"     // _PyValue_GetAttr()
 #include "pycore_weakref.h"       // FT_CLEAR_WEAKREFS()
 
 
@@ -364,7 +361,10 @@ meth_get__qualname__(PyObject *self, void *closure)
         type = (PyObject *)PyValue_TYPE(m->m_self);
     }
 
-    PyObject *type_qualname = PyObject_GetAttr(type, &_Py_ID(__qualname__));
+    PyValue type_qualname_v = _PyValue_GetAttr(PyValue_FromObjectBorrow(type),
+                                               &_Py_ID(__qualname__));
+    PyObject *type_qualname = PyValue_IsNull(type_qualname_v) ? NULL
+        : _PyValue_AsObjectStealAt(type_qualname_v, BOX_SITE_ATTRIBUTE);
     if (type_qualname == NULL)
         return NULL;
 
@@ -475,6 +475,8 @@ meth_hash(PyObject *self)
 }
 
 
+_Py_VALUE_NOTIMPL_RICHCMP(meth_richcompare_value, meth_richcompare)
+
 PyTypeObject PyCFunction_Type = {
     PyVarObject_HEAD_INIT(&PyType_Type, 0)
     "builtin_function_or_method",
@@ -510,6 +512,9 @@ PyTypeObject PyCFunction_Type = {
     0,                                          /* tp_base */
     0,                                          /* tp_dict */
     .tp_value_vectorcall_offset = offsetof(PyCFunctionObject, m_value_vectorcall),
+    .tp_value = {
+        .richcompare = _Py_VALUE_SLOT_INIT(richcompare, meth_richcompare_value),
+    },
 };
 
 PyTypeObject PyCMethod_Type = {

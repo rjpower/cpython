@@ -1,10 +1,5 @@
 /* enumerate object */
 
-/* Defer line of the value-API waves (value-api-v2a0.md, section 1.5): the
-   callers of the protocol marks in this unit are converted by W2's caller
-   batches, which remove this line. */
-#define Py_VALUE_DEFER_MARKS 1
-
 #include "Python.h"
 #include "pycore_call.h"          // _PyObject_CallNoArgs()
 #include "pycore_long.h"          // _PyLong_GetOne()
@@ -144,7 +139,10 @@ increment_longindex_lock_held(enumobject *en)
     // We hold one reference to "next_index" (a.k.a. the old value of
     // en->en_longindex); we'll either return it or keep it in en->en_longindex
     PyObject *next_index = en->en_longindex;
-    PyObject *stepped_up = PyNumber_Add(next_index, en->one);
+    PyValue stepped_up_v = _PyValue_Add(PyValue_FromObjectBorrow(next_index),
+                                        PyValue_FromObjectBorrow(en->one));
+    PyObject *stepped_up = PyValue_IsNull(stepped_up_v) ? NULL
+        : _PyValue_AsObjectStealAt(stepped_up_v, BOX_SITE_FIELD);
     if (stepped_up == NULL) {
         return NULL;
     }
@@ -432,18 +430,17 @@ reversed_traverse(PyObject *op, visitproc visit, void *arg)
     return 0;
 }
 
-static PyObject *
-reversed_next(PyObject *op)
+static _PyStatusValue
+reversed_next_value(PyObject *op)
 {
     reversedobject *ro = _reversedobject_CAST(op);
-    PyObject *item;
     Py_ssize_t index = FT_ATOMIC_LOAD_SSIZE_RELAXED(ro->index);
 
     if (index >= 0) {
-        item = PySequence_GetItem(ro->seq, index);
-        if (item != NULL) {
+        PyValue item = _PyValue_SequenceGetItem(_Py_VALUE_ARG(ro->seq), index);
+        if (!PyValue_IsNull(item)) {
             FT_ATOMIC_STORE_SSIZE_RELAXED(ro->index, index - 1);
-            return item;
+            return (_PyStatusValue){PYGEN_NEXT, item};
         }
         if (PyErr_ExceptionMatches(PyExc_IndexError) ||
             PyErr_ExceptionMatches(PyExc_StopIteration))
@@ -453,8 +450,12 @@ reversed_next(PyObject *op)
 #ifndef Py_GIL_DISABLED
     Py_CLEAR(ro->seq);
 #endif
-    return NULL;
+    /* Any error other than the end of the sequence propagates. */
+    return (_PyStatusValue){PyErr_Occurred() ? PYGEN_ERROR : PYGEN_RETURN,
+                            PyValue_NULL};
 }
+
+_Py_VALUE_THUNK_ITERNEXT(reversed_next, reversed_next_value)
 
 static PyObject *
 reversed_len(PyObject *op, PyObject *Py_UNUSED(ignored))
@@ -565,4 +566,5 @@ PyTypeObject PyReversed_Type = {
     PyObject_GC_Del,                /* tp_free */
     .tp_vectorcall = _PyValue_VectorcallThunk,
     .tp_value_vectorcall = (_Py_valuefunc)reversed_vectorcall,
+    .tp_value = { .iternext = _Py_VALUE_SLOT_INIT(iternext, reversed_next_value) },
 };

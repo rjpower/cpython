@@ -954,10 +954,6 @@ _PyType_LookupValueAndVersion(PyTypeObject *type, PyObject *name, PyValue *out);
 extern int _PyObject_GetMethodValue(PyThreadState *ts, PyValue *self,
     PyObject *name, PyValue *method, PyObject *obj_view);
 
-// Like PyObject_GetAttr but returns a PyValue. For types, this can
-// return a deferred reference to reduce reference count contention.
-PyAPI_FUNC(PyValue) _PyObject_GetAttrValue(PyObject *obj, PyObject *name);
-
 // Cache the provided init method in the specialization cache of type if the
 // provided type version matches the current version of the type.
 //

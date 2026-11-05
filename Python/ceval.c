@@ -913,67 +913,24 @@ value_store_subscript(PyValue container, PyValue key, PyValue value,
     return PyObject_SetItem(obj, key_obj, value_obj);
 }
 
-/* 0: stored; -1: the store raised; -2: a box failed before anything ran,
- * so the caller restores its inputs.  Borrows both values. */
-static int
-value_store_attribute(PyValue owner, PyValue value, PyObject *name,
-                      _PyValueTemps *temps)
+/* IMPORT_NAME's level as a C int, PyLong_AsInt() of it: -1 with an exception
+ * set on error.  The compiler's level is an inline int. */
+static inline int
+value_import_level(PyValue level)
 {
-    PyObject *object = _PyValueTemps_Object(temps, owner);
-    if (object == NULL) {
-        return -2;
-    }
-    PyObject *object_value = PyValue_IsNull(value) ? NULL :
-        _PyValueTemps_Object(temps, value);
-    if (!PyValue_IsNull(value) && object_value == NULL) {
-        return -2;
-    }
-    return PyObject_SetAttr(object, name, object_value) < 0 ? -1 : 0;
-}
-
-/* Move owner back into its slot if that is a temporary, and return it if
- * not moved (PyValue_NULL if moved). */
-static PyValue
-value_operation_restore1(PyThreadState *tstate, _PyInterpreterFrame *frame,
-                         PyValue owner, int slot)
-{
-    if (!value_frame_is_current(tstate, frame) || slot < 0 ||
-        slot >= _PyFrame_NumSlots(frame) ||
-        (slot >= _PyFrame_GetCode(frame)->co_nlocalsplus &&
-         !PyValue_IsNull(_PyFrame_Slots(frame)[slot]))) {
-        value_revalidation_error("attribute operation changed its input home");
-        return owner;
-    }
-    if (slot >= _PyFrame_GetCode(frame)->co_nlocalsplus) {
-        _PyFrame_Slots(frame)[slot] = owner;
-        _PyValue_CheckTemp(_PyFrame_Slots(frame)[slot]);
-        return PyValue_NULL;
-    }
-    return owner;
-}
-
-/* The attribute name of object, owner's object, which the caller boxed
- * first: {attr, self}, where self is the owner when method found a method.
- * On error first is PyValue_NULL and the partial results are closed.  Out
- * of line: _PyObject_GetMethodValue writes through pointers to its two
- * results, which must not be the handler's locals (R-a, R-c). */
-static Py_NO_INLINE _PyValuePair
-value_load_attribute(PyThreadState *tstate, PyValue owner, PyObject *object,
-                     PyObject *name, int method)
-{
-    _PyValuePair loaded = {PyValue_NULL, PyValue_NULL};
-    if (method) {
-        loaded.second = PyValue_DUP(owner);
-        if (_PyObject_GetMethodValue(tstate, &loaded.second, name,
-                                     &loaded.first, object) < 0) {
-            PyValue_XCLOSE(loaded.first);
-            PyValue_XCLOSE(loaded.second);
-            return (_PyValuePair){PyValue_NULL, PyValue_NULL};
+    if (PyValue_IsInlineInt(level)) {
+        int64_t i = PyValue_InlineInt64(level);
+        if (INT_MIN <= i && i <= INT_MAX) {
+            return (int)i;
         }
-        return loaded;
     }
-    loaded.first = _PyObject_GetAttrValue(object, name);
-    return loaded;
+    PyObject *level_o = PyValue_AsObject(level);
+    if (level_o == NULL) {
+        return -1;
+    }
+    int ilevel = PyLong_AsInt(level_o);
+    Py_DECREF(level_o);
+    return ilevel;
 }
 
 /* container[key] for BINARY_OP's NB_SUBSCR: an exact dict, and an exact list
@@ -1306,29 +1263,16 @@ _Py_BuildMap_ValueSteal(
     return res;
 }
 
-/* Out of line because _PySuper_Lookup writes through a pointer to
- * method_found: the local lives in this frame, not in the handler's. */
-static Py_NO_INLINE _PyStatusObject
-super_lookup(PyTypeObject *cls, PyObject *self, PyObject *name)
-{
-    int method_found = 0;
-    PyObject *attr = _PySuper_Lookup(cls, self, name,
-        Py_TYPE(self)->tp_getattro == PyObject_GenericGetAttr ?
-        &method_found : NULL);
-    _PyStatusObject result = {method_found, attr};
-    return result;
-}
-
 /* Out of line: the vectorcall's argument array is a local, which would be
  * the handler's (spec 3.5, R-c).  super(class, self), or super() when nargs
  * is 0. */
-static Py_NO_INLINE PyObject *
-super_call(PyObject *global_super, PyObject *class, PyObject *self, int nargs)
+static Py_NO_INLINE PyValue
+super_call(PyObject *global_super, PyObject *class, PyValue self, int nargs)
 {
-    // scope to tell MSVC that stack is not escaping
-    PyObject *stack[] = {class, self};
-    PyObject *super = PyObject_Vectorcall(global_super, stack, nargs, NULL);
-    _PyGC_CLEAR_ARRAY(stack);
+    PyValue stack[] = {PyValue_DUP(PyValue_FromObjectBorrow(class)), self};
+    PyValue super = _PyValue_Vectorcall(PyValue_FromObjectBorrow(global_super),
+                                        stack, nargs, NULL);
+    PyValue_CLOSE(stack[0]);
     return super;
 }
 
@@ -4623,7 +4567,7 @@ _PyEval_IsInstanceValue(PyValue inst_st, PyValue cls_st)
 PyObject *
 _PyEval_ImportName(PyThreadState *tstate, PyObject *builtins,
             PyObject *globals, PyObject *locals, PyObject *name,
-            PyObject *fromlist, PyObject *level)
+            PyObject *fromlist, int level)
 {
     PyObject *import_func;
     if (PyMapping_GetOptionalItem(builtins, &_Py_ID(__import__),
@@ -4644,7 +4588,7 @@ _PyEval_ImportName(PyThreadState *tstate, PyObject *builtins,
 PyObject *
 _PyEval_ImportNameWithImport(PyThreadState *tstate, PyObject *import_func,
                              PyObject *globals, PyObject *locals,
-                             PyObject *name, PyObject *fromlist, PyObject *level)
+                             PyObject *name, PyObject *fromlist, int level)
 {
     if (locals == NULL) {
         locals = Py_None;
@@ -4652,26 +4596,27 @@ _PyEval_ImportNameWithImport(PyThreadState *tstate, PyObject *import_func,
 
     /* Fast path for not overloaded __import__. */
     if (_PyImport_IsDefaultImportFunc(tstate->interp, import_func)) {
-        int ilevel = PyLong_AsInt(level);
-        if (ilevel == -1 && _PyErr_Occurred(tstate)) {
-            return NULL;
-        }
         return PyImport_ImportModuleLevelObject(
                         name,
                         globals,
                         locals,
                         fromlist,
-                        ilevel);
+                        level);
     }
 
-    PyObject *args[5] = {name, globals, locals, fromlist, level};
+    PyObject *level_o = PyLong_FromLong(level);
+    if (level_o == NULL) {
+        return NULL;
+    }
+    PyObject *args[5] = {name, globals, locals, fromlist, level_o};
     PyObject *res = PyObject_Vectorcall(import_func, args, 5, NULL);
+    Py_DECREF(level_o);
     return res;
 }
 
 static int
 check_lazy_import_compatibility(PyThreadState *tstate, PyObject *globals,
-                               PyObject *name, PyObject *level)
+                               PyObject *name, int level)
 {
      // Check if this module should be imported lazily due to
      // the compatibility mode support via __lazy_modules__.
@@ -4690,12 +4635,7 @@ check_lazy_import_compatibility(PyThreadState *tstate, PyObject *globals,
         return 0;
     }
 
-    int ilevel = PyLong_AsInt(level);
-    if (ilevel == -1 && _PyErr_Occurred(tstate)) {
-        goto error;
-    }
-
-    abs_name = _PyImport_GetAbsName(tstate, name, globals, ilevel);
+    abs_name = _PyImport_GetAbsName(tstate, name, globals, level);
     if (abs_name == NULL) {
         goto error;
     }
@@ -4717,7 +4657,7 @@ is_lazy_import_module_level(void)
 PyObject *
 _PyEval_LazyImportName(PyThreadState *tstate, PyObject *builtins,
                        PyObject *globals, PyObject *locals, PyObject *name,
-                       PyObject *fromlist, PyObject *level, int lazy)
+                       PyObject *fromlist, int level, int lazy)
 {
     PyObject *res = NULL;
     // Check if global policy overrides the local syntax
@@ -4767,19 +4707,19 @@ _PyEval_LazyImportName(PyThreadState *tstate, PyObject *builtins,
     }
 
     if (_PyImport_IsDefaultLazyImportFunc(tstate->interp, lazy_import_func)) {
-        int ilevel = PyLong_AsInt(level);
-        if (ilevel == -1 && PyErr_Occurred()) {
-            goto error;
-        }
-
         res = _PyImport_LazyImportModuleLevelObject(
-            tstate, name, builtins, globals, locals, fromlist, ilevel
+            tstate, name, builtins, globals, locals, fromlist, level
         );
         goto error;
     }
 
-    PyObject *args[5] = {name, globals, locals, fromlist, level};
+    PyObject *level_o = PyLong_FromLong(level);
+    if (level_o == NULL) {
+        goto error;
+    }
+    PyObject *args[5] = {name, globals, locals, fromlist, level_o};
     res = PyObject_Vectorcall(lazy_import_func, args, 5, NULL);
+    Py_DECREF(level_o);
 error:
     Py_XDECREF(lazy_import_func);
     return res;

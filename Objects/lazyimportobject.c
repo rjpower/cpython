@@ -506,7 +506,7 @@ lazy_import_resolve_impl(PyThreadState *tstate, PyObject *lazy_import,
     }
     obj = _PyEval_ImportNameWithImport(
         tstate, import_func, globals, globals,
-        name, fromlist, _PyLong_GetZero()
+        name, fromlist, 0
     );
     if (obj != NULL && name != root->lz_from) {
         FT_ATOMIC_STORE_INT_RELAXED(root->lz_active, 1);
@@ -520,7 +520,7 @@ lazy_import_resolve_impl(PyThreadState *tstate, PyObject *lazy_import,
             Py_DECREF(obj);
             obj = _PyEval_ImportNameWithImport(
                 tstate, import_func, globals, globals,
-                root->lz_from, fromlist, _PyLong_GetZero());
+                root->lz_from, fromlist, 0);
         }
     }
     if (obj != NULL && name == root->lz_from &&

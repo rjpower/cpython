@@ -1451,12 +1451,6 @@ PyObject_GetAttr(PyObject *v, PyObject *name)
     return _PyValue_THUNK_EXIT((_PyValue_GetAttr)(_Py_VALUE_ARG(v), name), BOX_SITE_ATTRIBUTE);
 }
 
-PyValue
-_PyObject_GetAttrValue(PyObject *v, PyObject *name)
-{
-    return (_PyValue_GetAttr)(_Py_VALUE_ARG(v), name);
-}
-
 _PyStatusValue
 (_PyValue_GetOptionalAttr)(PyValueBorrow v, PyObject *name)
 {

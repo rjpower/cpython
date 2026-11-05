@@ -1385,22 +1385,53 @@ dummy_func(
 
         macro(CALL_INTRINSIC_1) = _CALL_INTRINSIC_1 + POP_TOP;
 
-        op(_CALL_INTRINSIC_2, (value2_st, value1_st -- res, vs1, vs2)) {
+        inline_ok op(_CALL_INTRINSIC_2, (value2_st, value1_st -- res, vs1, vs2)) {
             assert(oparg <= MAX_INTRINSIC_2);
-            PyObject *value1 = PyValue_AsKnownObjectBorrow(value1_st);
-            PyObject *value2 = PyValue_AsKnownObjectBorrow(value2_st);
-
-            PyObject *res_o = _PyIntrinsics_BinaryFunctions[oparg].func(tstate, value2, value1);
-
-            if (res_o == NULL) {
-                ERROR_NO_POP();
-            }
-
-            res = PyValue_FromObjectSteal(res_o);
-
-            vs1 = value1_st;
-            vs2 = value2_st;
+            // Taken first: the calls below can run code that rebinds a local
+            PyValue first = TAKE(value1_st);
+            PyValue second = TAKE(value2_st);
             INPUTS_DEAD();
+            if (oparg == INTRINSIC_GETATTR) {
+                // The owner is a value; the name is a str
+                assert(PyValue_IsObject(first));
+                res = _PyValue_GetAttr(second, PyValue_AsKnownObjectBorrow(first));
+                if (PyValue_IsNull(res)) {
+                    value_operation_close3(first, second, PyValue_NULL);
+                    IR_ABORT_VALUE_READER();
+                }
+            }
+            else if (oparg == INTRINSIC_SETATTR) {
+                // second is the value, NULL for a deletion; first is the
+                // tuple (owner, name)
+                PyObject *target = PyValue_AsKnownObjectBorrow(first);
+                assert(PyTuple_CheckExact(target) && PyTuple_GET_SIZE(target) == 2);
+                PyValue owner = PyTuple_GetValue(target, 0);
+                PyValue attr_name = PyTuple_GetValue(target, 1);
+                assert(PyValue_IsObject(attr_name));
+                int err = _PyValue_SetAttr(owner, PyValue_AsKnownObjectBorrow(attr_name),
+                                           second);
+                PyValue_CLOSE(owner);
+                PyValue_CLOSE(attr_name);
+                if (err < 0) {
+                    value_operation_close3(first, second, PyValue_NULL);
+                    IR_ABORT_VALUE_READER();
+                }
+                res = PyValue_None;
+            }
+            else {
+                PyObject *value1 = _PyValueTemps_Object(value_temps, first);
+                PyObject *value2 = value1 == NULL ? NULL :
+                    _PyValueTemps_Object(value_temps, second);
+                PyObject *res_o = value2 == NULL ? NULL :
+                    _PyIntrinsics_BinaryFunctions[oparg].func(tstate, value2, value1);
+                if (res_o == NULL) {
+                    value_operation_close3(first, second, PyValue_NULL);
+                    IR_ABORT_VALUE_READER();
+                }
+                res = PyValue_FromObjectSteal(res_o);
+            }
+            vs1 = first;
+            vs2 = second;
         }
 
         macro(CALL_INTRINSIC_2) = _CALL_INTRINSIC_2 + POP_TOP + POP_TOP;
@@ -1983,10 +2014,7 @@ dummy_func(
             PyValue receiver = TAKE(owner);
             INPUTS_DEAD();
             SYNC_SP();
-            int err = value_store_attribute(receiver, held_value, name, value_temps);
-            if (err == -2) {
-                IR_RESTORE_VALUE_INPUTS(held_value, receiver);
-            }
+            int err = _PyValue_SetAttr(receiver, name, held_value);
             value_operation_close3(receiver, held_value, PyValue_NULL);
             IR_FINISH_VALUE_OPERATION();
             ERROR_IF(err);
@@ -2504,7 +2532,6 @@ dummy_func(
         tier1 op(_LOAD_SUPER_ATTR, (global_super_st, class_st, self_st -- attr)) {
             PyObject *global_super = PyValue_AsKnownObjectBorrow(global_super_st);
             PyObject *class = PyValue_AsKnownObjectBorrow(class_st);
-            PyObject *self = PyValue_AsKnownObjectBorrow(self_st);
 
             if (opcode == INSTRUMENTED_LOAD_SUPER_ATTR) {
                 PyObject *arg = oparg & 2 ? class : &_PyInstrumentation_MISSING;
@@ -2518,10 +2545,10 @@ dummy_func(
             }
             // we make no attempt to optimize here; specializations should
             // handle any case whose performance we care about
-            PyObject *super = super_call(global_super, class, self, oparg & 2);
+            PyValue super = super_call(global_super, class, self_st, oparg & 2);
             if (opcode == INSTRUMENTED_LOAD_SUPER_ATTR) {
                 PyObject *arg = oparg & 2 ? class : &_PyInstrumentation_MISSING;
-                if (super == NULL) {
+                if (PyValue_IsNull(super)) {
                     _Py_call_instrumentation_exc2(
                         tstate, PY_MONITORING_EVENT_C_RAISE,
                         frame, this_instr, global_super, arg);
@@ -2531,17 +2558,16 @@ dummy_func(
                         tstate, PY_MONITORING_EVENT_C_RETURN,
                         frame, this_instr, global_super, arg);
                     if (err < 0) {
-                        Py_CLEAR(super);
+                        PyValue_CLEAR(super);
                     }
                 }
             }
             DECREF_INPUTS();
-            ERROR_IF(super == NULL);
+            ERROR_IF(PyValue_IsNull(super));
             PyObject *name = GETITEM(FRAME_CO_NAMES, oparg >> 2);
-            PyObject *attr_o = PyObject_GetAttr(super, name);
-            Py_DECREF(super);
-            ERROR_IF(attr_o == NULL);
-            attr = PyValue_FromObjectSteal(attr_o);
+            attr = _PyValue_GetAttr(super, name);
+            PyValue_CLOSE(super);
+            ERROR_IF(PyValue_IsNull(attr));
         }
 
         macro(LOAD_SUPER_ATTR) =
@@ -2557,16 +2583,12 @@ dummy_func(
             assert(!(oparg & 1));
             EXIT_IF(global_super != (PyObject *)&PySuper_Type);
             EXIT_IF(!PyType_Check(class));
-            PyObject *self = _PyValueTemps_Object(value_temps, self_st);
-            if (self == NULL) {
-                ERROR_NO_POP();
-            }
             STAT_INC(LOAD_SUPER_ATTR, hit);
             PyObject *name = GETITEM(FRAME_CO_NAMES, oparg >> 2);
-            PyObject *attr = _PySuper_Lookup((PyTypeObject *)class, self, name, NULL);
+            _PyStatusValue found = _PySuper_LookupValue((PyTypeObject *)class, self_st, name, 0);
             DECREF_INPUTS();
-            ERROR_IF(attr == NULL);
-            attr_st = PyValue_FromObjectSteal(attr);
+            ERROR_IF(found.status < 0);
+            attr_st = found.value;
         }
 
         macro(LOAD_SUPER_ATTR_METHOD) =
@@ -2584,14 +2606,15 @@ dummy_func(
 
         op(_LOAD_SUPER_ATTR_METHOD, (global_super_st, class_st, self_st -- attr, self_or_null)) {
             PyObject *class = PyValue_AsKnownObjectBorrow(class_st);
-            PyObject *self = PyValue_AsKnownObjectBorrow(self_st);
 
             STAT_INC(LOAD_SUPER_ATTR, hit);
             PyObject *name = GETITEM(FRAME_CO_NAMES, oparg >> 2);
             PyTypeObject *cls = (PyTypeObject *)class;
-            _PyStatusObject found = super_lookup(cls, self, name);
-            PyObject *attr_o = found.object;
-            if (attr_o == NULL) {
+            // Only a type with the generic getattro can have a method
+            // returned unbound
+            _PyStatusValue found = _PySuper_LookupValue(cls, self_st, name,
+                PyValue_TYPE(self_st)->tp_getattro == PyObject_GenericGetAttr);
+            if (found.status < 0) {
                 ERROR_NO_POP();
             }
             if (found.status) {
@@ -2603,7 +2626,7 @@ dummy_func(
             }
             DECREF_INPUTS();
 
-            attr = PyValue_FromObjectSteal(attr_o);
+            attr = found.value;
         }
 
         family(LOAD_ATTR, INLINE_CACHE_ENTRIES_LOAD_ATTR) = {
@@ -2643,15 +2666,18 @@ dummy_func(
             PyValue receiver = TAKE(owner);
             INPUTS_DEAD();
             SYNC_SP();
-            PyObject *object = _PyValueTemps_Object(value_temps, receiver);
-            if (object == NULL) {
-                IR_RESTORE_ATTR_INPUT(receiver);
-                value_operation_close3(receiver, PyValue_NULL, PyValue_NULL);
-                IR_ABORT_VALUE_READER();
+            PyValue pending = PyValue_NULL;
+            PyValue pending_self = PyValue_NULL;
+            if (method) {
+                _PyStatusValue found = _PyValue_GetMethod(receiver, name);
+                pending = found.value;
+                if (found.status > 0) {
+                    pending_self = PyValue_DUP(receiver);
+                }
             }
-            _PyValuePair loaded = value_load_attribute(tstate, receiver, object, name, method);
-            PyValue pending = loaded.first;
-            PyValue pending_self = loaded.second;
+            else {
+                pending = _PyValue_GetAttr(receiver, name);
+            }
             if (PyValue_IsNull(pending)) {
                 value_operation_close3(receiver, PyValue_NULL, PyValue_NULL);
                 IR_ABORT_VALUE_READER();
@@ -3404,19 +3430,24 @@ dummy_func(
         inst(IMPORT_NAME, (level, fromlist -- res)) {
             PyObject *name = GETITEM(FRAME_CO_NAMES, oparg >> 2);
             PyObject *res_o;
+            // The level is an inline int: read it without a box
+            int ilevel = value_import_level(level);
+            if (ilevel == -1 && _PyErr_Occurred(tstate)) {
+                DECREF_INPUTS();
+                ERROR_IF(true);
+            }
             if (!(oparg & 0x02)) {
                 res_o = _PyEval_LazyImportName(tstate, BUILTINS(), GLOBALS(),
                                 LOCALS(), name,
                                 PyValue_AsKnownObjectBorrow(fromlist),
-                                PyValue_AsKnownObjectBorrow(level),
-                                oparg & 0x01);
+                                ilevel, oparg & 0x01);
 
             }
             else {
                 res_o = _PyEval_ImportName(tstate, BUILTINS(), GLOBALS(),
                                 LOCALS(), name,
                                 PyValue_AsKnownObjectBorrow(fromlist),
-                                PyValue_AsKnownObjectBorrow(level));
+                                ilevel);
             }
             DECREF_INPUTS();
             ERROR_IF(res_o == NULL);

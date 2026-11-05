@@ -813,5 +813,35 @@ class PythonClassSlotTests(unittest.TestCase):
                 self.assertEqual(boxes(loop_of(call), N), N * inline_args)
 
 
+def import_loop(n):
+    for i in range(n):
+        import os
+        from os import path
+
+
+def get_attr_loop(n, a):
+    for i in range(n):
+        a.real
+        a.imag
+
+
+class AttributeAndImportTests(unittest.TestCase):
+    def test_results(self):
+        self.assertIsNone(import_loop(3))
+        for a in (3, 2.5, True):
+            self.assertIsNone(get_attr_loop(3, a))
+
+    @unittest.skipUnless(STATS, "needs a Py_STATS build")
+    def test_import_makes_no_box(self):
+        # The level of IMPORT_NAME is an inline int
+        self.assertEqual(boxes(import_loop, N), 0)
+
+    @unittest.skipUnless(STATS, "needs a Py_STATS build")
+    def test_attributes_of_inline_values_make_no_box(self):
+        for a in (3, 2.5, True):
+            with self.subTest(operand=a):
+                self.assertEqual(boxes(get_attr_loop, N, a), 0)
+
+
 if __name__ == "__main__":
     unittest.main()

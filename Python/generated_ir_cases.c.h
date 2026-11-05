@@ -5843,65 +5843,76 @@
             PyValueBorrow value2_st;
             PyValueBorrow value1_st;
             PyValue res;
-            PyValueBorrow vs1;
-            PyValueBorrow vs2;
-            PyValueBorrow value;
+            PyValue vs1;
+            PyValue vs2;
+            PyValue value;
             PyValue ir_own_B = PyValue_NULL;
             (void)ir_own_B;
             PyValue ir_own_C = PyValue_NULL;
             (void)ir_own_C;
-            PyObject *ir_obj_value1_st = NULL;
-            PyObject *ir_obj_value2_st = NULL;
             // _CALL_INTRINSIC_2
             {
                 value1_st = IR_VIEW(IR_C(ir_word));
                 value2_st = IR_VIEW(IR_B(ir_word));
-                if (Py_UNLIKELY(PyValue_IsInline(value2_st))) {
-                    ir_obj_value2_st = _PyValueTemps_Box(value_temps, value2_st);
-                    if (ir_obj_value2_st == NULL) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(CALL_INTRINSIC_2);
-                }
-                else {
-                    ir_obj_value2_st = PyValue_AsKnownObjectBorrow(value2_st);
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(value1_st))) {
-                    ir_obj_value1_st = _PyValueTemps_Box(value_temps, value1_st);
-                    if (ir_obj_value1_st == NULL) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(CALL_INTRINSIC_2);
-                }
-                else {
-                    ir_obj_value1_st = PyValue_AsKnownObjectBorrow(value1_st);
-                }
                 assert(oparg <= MAX_INTRINSIC_2);
-                PyObject *value1 = ir_obj_value1_st;
-                PyObject *value2 = ir_obj_value2_st;
-                PyObject *res_o = _PyIntrinsics_BinaryFunctions[oparg].func(tstate, value2, value1);
-                if (res_o == NULL) {
-                    JUMP_TO_LABEL(error);
+                ir_own_C = IR_CONSUME_INPUT(IR_C(ir_word), value1_st);
+                PyValue first = IR_TAKE(value1_st, ir_own_C);
+                ir_own_B = IR_CONSUME_INPUT(IR_B(ir_word), value2_st);
+                PyValue second = IR_TAKE(value2_st, ir_own_B);
+                if (oparg == INTRINSIC_GETATTR) {
+                    assert(PyValue_IsObject(first));
+                    res = _PyValue_GetAttr(second, PyValue_AsKnownObjectBorrow(first));
+                    if (PyValue_IsNull(res)) {
+                        IR_STORE_TEMP_DST(IR_A(ir_word), res);
+                        value_operation_close3(first, second, PyValue_NULL);
+                        (void)value_operation_finish(tstate, frame, this_instr, value_temps);
+                        JUMP_TO_LABEL(error);
+                    }
                 }
-                res = PyValue_FromObjectSteal(res_o);
-                vs1 = value1_st;
-                vs2 = value2_st;
-                ir_own_B = IR_CONSUME_INPUT(IR_B(ir_word), vs2);
-                ir_own_C = IR_CONSUME_INPUT(IR_C(ir_word), vs1);
+                else if (oparg == INTRINSIC_SETATTR) {
+                    PyObject *target = PyValue_AsKnownObjectBorrow(first);
+                    assert(PyTuple_CheckExact(target) && PyTuple_GET_SIZE(target) == 2);
+                    PyValue owner = PyTuple_GetValue(target, 0);
+                    PyValue attr_name = PyTuple_GetValue(target, 1);
+                    assert(PyValue_IsObject(attr_name));
+                    int err = _PyValue_SetAttr(owner, PyValue_AsKnownObjectBorrow(attr_name),
+                        second);
+                    PyValue_CLOSE(owner);
+                    PyValue_CLOSE(attr_name);
+                    if (err < 0) {
+                        value_operation_close3(first, second, PyValue_NULL);
+                        (void)value_operation_finish(tstate, frame, this_instr, value_temps);
+                        JUMP_TO_LABEL(error);
+                    }
+                    res = PyValue_None;
+                }
+                else {
+                    PyObject *value1 = _PyValueTemps_Object(value_temps, first);
+                    PyObject *value2 = value1 == NULL ? NULL :
+                    _PyValueTemps_Object(value_temps, second);
+                    PyObject *res_o = value2 == NULL ? NULL :
+                    _PyIntrinsics_BinaryFunctions[oparg].func(tstate, value2, value1);
+                    if (res_o == NULL) {
+                        value_operation_close3(first, second, PyValue_NULL);
+                        (void)value_operation_finish(tstate, frame, this_instr, value_temps);
+                        JUMP_TO_LABEL(error);
+                    }
+                    res = PyValue_FromObjectSteal(res_o);
+                }
+                vs1 = first;
+                vs2 = second;
             }
             // _POP_TOP
             {
                 value = vs2;
-                (void)value;
                 IR_STORE_TEMP_DST(IR_A(ir_word), res);
-                PyValue_XCLOSE(ir_own_B);
+                PyValue_XCLOSE(value);
             }
             // _POP_TOP
             {
                 value = vs1;
-                (void)value;
                 IR_STORE_TEMP_DST(IR_A(ir_word), res);
-                PyValue_XCLOSE(ir_own_C);
+                PyValue_XCLOSE(value);
             }
             IR_STORE_DST(IR_A(ir_word), res);
             if (!PyValue_IsNull(ir_displaced) &&
@@ -10467,19 +10478,8 @@
             PyValue fromlist;
             PyValue res;
             PyObject *ir_obj_fromlist = NULL;
-            PyObject *ir_obj_level = NULL;
             fromlist = window[1];
             level = window[0];
-            if (Py_UNLIKELY(PyValue_IsInlineAt(&window[0]))) {
-                ir_obj_level = _PyValueTemps_Box(value_temps, level);
-                if (ir_obj_level == NULL) {
-                    JUMP_TO_LABEL(error);
-                }
-                BOX_STAT_INC(IMPORT_NAME);
-            }
-            else {
-                ir_obj_level = PyValue_AsKnownObjectBorrow(level);
-            }
             if (Py_UNLIKELY(PyValue_IsInlineAt(&window[1]))) {
                 ir_obj_fromlist = _PyValueTemps_Box(value_temps, fromlist);
                 if (ir_obj_fromlist == NULL) {
@@ -10492,18 +10492,31 @@
             }
             PyObject *name = GETITEM(FRAME_CO_NAMES, oparg >> 2);
             PyObject *res_o;
+            int ilevel = value_import_level(level);
+            if (ilevel == -1 && _PyErr_Occurred(tstate)) {
+                PyValue tmp = fromlist;
+                fromlist = PyValue_NULL;
+                IR_PUBLISH_TEMP(window[1], fromlist);
+                PyValue_CLOSE(tmp);
+                tmp = level;
+                level = PyValue_NULL;
+                IR_PUBLISH_TEMP(window[0], level);
+                PyValue_CLOSE(tmp);
+                window[0] = PyValue_NULL;
+                window[1] = PyValue_NULL;
+                JUMP_TO_LABEL(error);
+            }
             if (!(oparg & 0x02)) {
                 res_o = _PyEval_LazyImportName(tstate, BUILTINS(), GLOBALS(),
                     LOCALS(), name,
                     ir_obj_fromlist,
-                    ir_obj_level,
-                    oparg & 0x01);
+                    ilevel, oparg & 0x01);
             }
             else {
                 res_o = _PyEval_ImportName(tstate, BUILTINS(), GLOBALS(),
                     LOCALS(), name,
                     ir_obj_fromlist,
-                    ir_obj_level);
+                    ilevel);
             }
             PyValue tmp = fromlist;
             fromlist = PyValue_NULL;
@@ -11369,7 +11382,6 @@
             PyValue *null;
             PyObject *ir_obj_class_st = NULL;
             PyObject *ir_obj_global_super_st = NULL;
-            PyObject *ir_obj_self_st = NULL;
             // _LOAD_SUPER_ATTR
             {
                 self_st = window[2];
@@ -11395,19 +11407,8 @@
                 else {
                     ir_obj_class_st = PyValue_AsKnownObjectBorrow(class_st);
                 }
-                if (Py_UNLIKELY(PyValue_IsInlineAt(&window[2]))) {
-                    ir_obj_self_st = _PyValueTemps_Box(value_temps, self_st);
-                    if (ir_obj_self_st == NULL) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(INSTRUMENTED_LOAD_SUPER_ATTR);
-                }
-                else {
-                    ir_obj_self_st = PyValue_AsKnownObjectBorrow(self_st);
-                }
                 PyObject *global_super = ir_obj_global_super_st;
                 PyObject *class = ir_obj_class_st;
-                PyObject *self = ir_obj_self_st;
                 if (opcode == INSTRUMENTED_LOAD_SUPER_ATTR) {
                     PyObject *arg = oparg & 2 ? class : &_PyInstrumentation_MISSING;
                     int err = _Py_call_instrumentation_2args(
@@ -11432,10 +11433,10 @@
                         JUMP_TO_LABEL(error);
                     }
                 }
-                PyObject *super = super_call(global_super, class, self, oparg & 2);
+                PyValue super = super_call(global_super, class, self_st, oparg & 2);
                 if (opcode == INSTRUMENTED_LOAD_SUPER_ATTR) {
                     PyObject *arg = oparg & 2 ? class : &_PyInstrumentation_MISSING;
-                    if (super == NULL) {
+                    if (PyValue_IsNull(super)) {
                         _Py_call_instrumentation_exc2(
                             tstate, PY_MONITORING_EVENT_C_RAISE,
                             frame, this_instr, global_super, arg);
@@ -11445,7 +11446,7 @@
                             tstate, PY_MONITORING_EVENT_C_RETURN,
                             frame, this_instr, global_super, arg);
                         if (err < 0) {
-                            Py_CLEAR(super);
+                            PyValue_CLEAR(super);
                         }
                     }
                 }
@@ -11464,16 +11465,16 @@
                 window[0] = PyValue_NULL;
                 window[1] = PyValue_NULL;
                 window[2] = PyValue_NULL;
-                if (super == NULL) {
+                if (PyValue_IsNull(super)) {
                     JUMP_TO_LABEL(error);
                 }
                 PyObject *name = GETITEM(FRAME_CO_NAMES, oparg >> 2);
-                PyObject *attr_o = PyObject_GetAttr(super, name);
-                Py_DECREF(super);
-                if (attr_o == NULL) {
+                attr = _PyValue_GetAttr(super, name);
+                IR_PUBLISH_TEMP(window[0], attr);
+                PyValue_CLOSE(super);
+                if (PyValue_IsNull(attr)) {
                     JUMP_TO_LABEL(error);
                 }
-                attr = PyValue_FromObjectSteal(attr_o);
             }
             // _PUSH_NULL_CONDITIONAL
             {
@@ -11482,7 +11483,6 @@
                     null[0] = PyValue_NULL;
                 }
             }
-            IR_PUBLISH_TEMP(window[0], attr);
             IR_MOVE_TO_DST(IR_A(ir_word), window[0]);
             if (!PyValue_IsNull(ir_displaced) &&
                 finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
@@ -12287,15 +12287,13 @@
         TARGET(LOAD_ATTR) {
             int opcode = LOAD_ATTR;
             (void)(opcode);
+            _PyValueTemps *const value_temps = NULL;
+            (void)value_temps;
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(LOAD_ATTR);
             _PyIRWord* this_instr = next_instr - 1;
             (void)this_instr;
-            PyObject *value_boxes[7];
-            _PyValueTemps value_owners;
-            value_owners = (_PyValueTemps){value_boxes, 0, 7};
-            _PyValueTemps *value_temps = &value_owners;
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_C(ir_word));
@@ -12326,22 +12324,24 @@
                 int method = oparg & 1;
                 ir_own_B = IR_CONSUME_INPUT(IR_B(ir_word), owner);
                 PyValue receiver = IR_TAKE(owner, ir_own_B);
-                PyObject *object = _PyValueTemps_Object(value_temps, receiver);
-                if (object == NULL) {
-                    receiver = value_operation_restore1(tstate, frame, receiver, IR_B(ir_word));
-                    value_operation_close3(receiver, PyValue_NULL, PyValue_NULL);
-                    (void)value_operation_finish(tstate, frame, this_instr, value_temps);
-                    JUMP_TO_LABEL(error);
+                PyValue pending = PyValue_NULL;
+                PyValue pending_self = PyValue_NULL;
+                if (method) {
+                    _PyStatusValue found = _PyValue_GetMethod(receiver, name);
+                    pending = found.value;
+                    if (found.status > 0) {
+                        pending_self = PyValue_DUP(receiver);
+                    }
                 }
-                _PyValuePair loaded = value_load_attribute(tstate, receiver, object, name, method);
-                PyValue pending = loaded.first;
-                PyValue pending_self = loaded.second;
+                else {
+                    pending = _PyValue_GetAttr(receiver, name);
+                }
                 if (PyValue_IsNull(pending)) {
                     value_operation_close3(receiver, PyValue_NULL, PyValue_NULL);
-                    (void)value_operation_finish(tstate, frame, this_instr, value_temps);
+                    (void)value_operation_finish(tstate, frame, this_instr, NULL);
                     JUMP_TO_LABEL(error);
                 }
-                pending = value_attribute_complete(tstate, frame, this_instr, value_temps, IR_A(ir_word), pending, pending_self, receiver, method);
+                pending = value_attribute_complete(tstate, frame, this_instr, NULL, IR_A(ir_word), pending, pending_self, receiver, method);
                 if (PyValue_IsNull(pending)) {
                     JUMP_TO_LABEL(error);
                 }
@@ -12354,7 +12354,7 @@
                 IR_STORE_DST(IR_A(ir_word), attr);
             }
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -14297,7 +14297,6 @@
             PyValue *null;
             PyObject *ir_obj_class_st = NULL;
             PyObject *ir_obj_global_super_st = NULL;
-            PyObject *ir_obj_self_st = NULL;
             // _SPECIALIZE_LOAD_SUPER_ATTR
             {
                 class_st = window[1];
@@ -14337,19 +14336,8 @@
                 else {
                     ir_obj_class_st = PyValue_AsKnownObjectBorrow(class_st);
                 }
-                if (Py_UNLIKELY(PyValue_IsInlineAt(&window[2]))) {
-                    ir_obj_self_st = _PyValueTemps_Box(value_temps, self_st);
-                    if (ir_obj_self_st == NULL) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(LOAD_SUPER_ATTR);
-                }
-                else {
-                    ir_obj_self_st = PyValue_AsKnownObjectBorrow(self_st);
-                }
                 PyObject *global_super = ir_obj_global_super_st;
                 PyObject *class = ir_obj_class_st;
-                PyObject *self = ir_obj_self_st;
                 if (opcode == INSTRUMENTED_LOAD_SUPER_ATTR) {
                     PyObject *arg = oparg & 2 ? class : &_PyInstrumentation_MISSING;
                     int err = _Py_call_instrumentation_2args(
@@ -14374,10 +14362,10 @@
                         JUMP_TO_LABEL(error);
                     }
                 }
-                PyObject *super = super_call(global_super, class, self, oparg & 2);
+                PyValue super = super_call(global_super, class, self_st, oparg & 2);
                 if (opcode == INSTRUMENTED_LOAD_SUPER_ATTR) {
                     PyObject *arg = oparg & 2 ? class : &_PyInstrumentation_MISSING;
-                    if (super == NULL) {
+                    if (PyValue_IsNull(super)) {
                         _Py_call_instrumentation_exc2(
                             tstate, PY_MONITORING_EVENT_C_RAISE,
                             frame, this_instr, global_super, arg);
@@ -14387,7 +14375,7 @@
                             tstate, PY_MONITORING_EVENT_C_RETURN,
                             frame, this_instr, global_super, arg);
                         if (err < 0) {
-                            Py_CLEAR(super);
+                            PyValue_CLEAR(super);
                         }
                     }
                 }
@@ -14406,16 +14394,16 @@
                 window[0] = PyValue_NULL;
                 window[1] = PyValue_NULL;
                 window[2] = PyValue_NULL;
-                if (super == NULL) {
+                if (PyValue_IsNull(super)) {
                     JUMP_TO_LABEL(error);
                 }
                 PyObject *name = GETITEM(FRAME_CO_NAMES, oparg >> 2);
-                PyObject *attr_o = PyObject_GetAttr(super, name);
-                Py_DECREF(super);
-                if (attr_o == NULL) {
+                attr = _PyValue_GetAttr(super, name);
+                IR_PUBLISH_TEMP(window[0], attr);
+                PyValue_CLOSE(super);
+                if (PyValue_IsNull(attr)) {
                     JUMP_TO_LABEL(error);
                 }
-                attr = PyValue_FromObjectSteal(attr_o);
             }
             // _PUSH_NULL_CONDITIONAL
             {
@@ -14424,7 +14412,6 @@
                     null[0] = PyValue_NULL;
                 }
             }
-            IR_PUBLISH_TEMP(window[0], attr);
             IR_MOVE_TO_DST(IR_A(ir_word), window[0]);
             if (!PyValue_IsNull(ir_displaced) &&
                 finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
@@ -14437,15 +14424,13 @@
         TARGET(LOAD_SUPER_ATTR_ATTR) {
             int opcode = LOAD_SUPER_ATTR_ATTR;
             (void)(opcode);
+            _PyValueTemps *const value_temps = NULL;
+            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(LOAD_SUPER_ATTR_ATTR);
-            PyObject *value_boxes[6];
-            _PyValueTemps value_owners;
-            value_owners = (_PyValueTemps){value_boxes, 0, 6};
-            _PyValueTemps *value_temps = &value_owners;
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             int oparg = (int)IR_D(ir_word);
@@ -14477,13 +14462,9 @@
                 assert(_PyOpcode_Deopt[opcode] == (LOAD_SUPER_ATTR));
                 JUMP_TO_PREDICTED(LOAD_SUPER_ATTR);
             }
-            PyObject *self = _PyValueTemps_Object(value_temps, self_st);
-            if (self == NULL) {
-                JUMP_TO_LABEL(error);
-            }
             STAT_INC(LOAD_SUPER_ATTR, hit);
             PyObject *name = GETITEM(FRAME_CO_NAMES, oparg >> 2);
-            PyObject *attr = _PySuper_Lookup((PyTypeObject *)class, self, name, NULL);
+            _PyStatusValue found = _PySuper_LookupValue((PyTypeObject *)class, self_st, name, 0);
             PyValue tmp = self_st;
             self_st = PyValue_NULL;
             IR_PUBLISH_TEMP(window[2], self_st);
@@ -14499,14 +14480,14 @@
             window[0] = PyValue_NULL;
             window[1] = PyValue_NULL;
             window[2] = PyValue_NULL;
-            if (attr == NULL) {
+            if (found.status < 0) {
                 JUMP_TO_LABEL(error);
             }
-            attr_st = PyValue_FromObjectSteal(attr);
+            attr_st = found.value;
             IR_PUBLISH_TEMP(window[0], attr_st);
             IR_MOVE_TO_DST(IR_A(ir_word), window[0]);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -14516,15 +14497,13 @@
         TARGET(LOAD_SUPER_ATTR_METHOD) {
             int opcode = LOAD_SUPER_ATTR_METHOD;
             (void)(opcode);
+            _PyValueTemps *const value_temps = NULL;
+            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(LOAD_SUPER_ATTR_METHOD);
-            PyObject *value_boxes[13];
-            _PyValueTemps value_owners;
-            value_owners = (_PyValueTemps){value_boxes, 0, 13};
-            _PyValueTemps *value_temps = &value_owners;
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             int oparg = (int)IR_D(ir_word);
@@ -14537,7 +14516,6 @@
             PyValue self_st;
             PyValue attr;
             PyValue self_or_null;
-            PyObject *ir_obj_self_st = NULL;
             // _GUARD_LOAD_SUPER_ATTR_METHOD
             {
                 class_st = window[1];
@@ -14569,24 +14547,13 @@
             // _LOAD_SUPER_ATTR_METHOD
             {
                 self_st = window[2];
-                if (Py_UNLIKELY(PyValue_IsInlineAt(&window[2]))) {
-                    ir_obj_self_st = _PyValueTemps_Box(value_temps, self_st);
-                    if (ir_obj_self_st == NULL) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(LOAD_SUPER_ATTR_METHOD);
-                }
-                else {
-                    ir_obj_self_st = PyValue_AsKnownObjectBorrow(self_st);
-                }
                 PyObject *class = PyValue_AsKnownObjectBorrow(class_st);
-                PyObject *self = ir_obj_self_st;
                 STAT_INC(LOAD_SUPER_ATTR, hit);
                 PyObject *name = GETITEM(FRAME_CO_NAMES, oparg >> 2);
                 PyTypeObject *cls = (PyTypeObject *)class;
-                _PyStatusObject found = super_lookup(cls, self, name);
-                PyObject *attr_o = found.object;
-                if (attr_o == NULL) {
+                _PyStatusValue found = _PySuper_LookupValue(cls, self_st, name,
+                    PyValue_TYPE(self_st)->tp_getattro == PyObject_GenericGetAttr);
+                if (found.status < 0) {
                     JUMP_TO_LABEL(error);
                 }
                 if (found.status) {
@@ -14607,12 +14574,12 @@
                 _PyValue_CLOSE_POINTER(tmp);
                 window[0] = PyValue_NULL;
                 window[1] = PyValue_NULL;
-                attr = PyValue_FromObjectSteal(attr_o);
+                attr = found.value;
             }
             IR_PUBLISH_TEMP(window[0], attr);
             IR_PUBLISH_TEMP(window[1], self_or_null);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -16731,15 +16698,13 @@
         TARGET(STORE_ATTR) {
             int opcode = STORE_ATTR;
             (void)(opcode);
+            _PyValueTemps *const value_temps = NULL;
+            (void)value_temps;
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(STORE_ATTR);
             _PyIRWord* this_instr = next_instr - 1;
             (void)this_instr;
-            PyObject *value_boxes[8];
-            _PyValueTemps value_owners;
-            value_owners = (_PyValueTemps){value_boxes, 0, 8};
-            _PyValueTemps *value_temps = &value_owners;
             _PyFb_STORE_ATTR *fb = (_PyFb_STORE_ATTR *)IR_FB(IR_C(ir_word));
             int oparg = (int)IR_D(ir_word);
             (void)oparg;
@@ -16774,17 +16739,10 @@
                 PyValue held_value = IR_TAKE(v, ir_own_B);
                 ir_own_A = IR_CONSUME_INPUT(IR_A(ir_word), owner);
                 PyValue receiver = IR_TAKE(owner, ir_own_A);
-                int err = value_store_attribute(receiver, held_value, name, value_temps);
-                if (err == -2) {
-                    {
-                        _PyValuePair ir_rest = value_operation_restore2(tstate, frame, held_value, receiver, IR_B(ir_word), IR_A(ir_word));
-                        held_value = ir_rest.first;
-                        receiver = ir_rest.second;
-                    }
-                }
+                int err = _PyValue_SetAttr(receiver, name, held_value);
                 value_operation_close3(receiver, held_value, PyValue_NULL);
                 {
-                    int operation_failed = value_operation_finish(tstate, frame, this_instr, value_temps);
+                    int operation_failed = value_operation_finish(tstate, frame, this_instr, NULL);
                     if (operation_failed < 0) {
                         JUMP_TO_LABEL(error);
                     }

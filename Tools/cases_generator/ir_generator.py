@@ -568,6 +568,9 @@ INPLACE_READERS = {
     "_PyValue_Contains", "_PyValue_Invert", "_PyValue_IsTrue",
     "_PyValue_Negative", "_PyValue_Positive", "_PyValue_RichCompare",
     "_PyValue_Str", "_PyValue_Repr", "_PyValue_ASCII",
+    # Attribute dispatchers and helpers (I4)
+    "_PyValue_GetAttr", "_PyValue_SetAttr", "_PyValue_GetMethod",
+    "_PySuper_LookupValue", "value_import_level", "super_call",
     # Value-form container calls: they only read their key argument
     "PyDict_ContainsValue", "PySet_ContainsValue", "PyDict_DelValue",
     "_PyValue_RichCompareObject",
@@ -2227,7 +2230,6 @@ class IREmitter(Emitter):
         self._replacers["IR_RESTORE_VALUE_INPUTS"] = self.restore_value_inputs
         self._replacers["IR_COMPLETE_VALUE_READER"] = self.complete_value_reader
         self._replacers["IR_ABORT_VALUE_READER"] = self.abort_value_reader
-        self._replacers["IR_RESTORE_ATTR_INPUT"] = self.restore_attr_input
         self._replacers["IR_COMPLETE_ATTR_READER"] = self.complete_attr_reader
         self._replacers["IR_PREPARE_CALL_METHOD"] = self.prepare_call
         self._replacers["IR_PREPARE_CALL_TUPLE"] = self.prepare_call
@@ -2379,15 +2381,6 @@ class IREmitter(Emitter):
         helper that restores or completes it (R-b)"""
         fmt = self.format_of(inst)
         return FIELD_VARS[fmt.input_field(index)]
-
-    def restore_attr_input(self, tkn, tkn_iter, uop, storage, inst):
-        assert inst is not None
-        (owner,) = self.macro_args(tkn, tkn_iter, 1)
-        assert self.format_of(inst).n_inputs >= 1
-        self.out.start_line()
-        self.emit(f"{owner} = value_operation_restore1(tstate, frame, {owner}, "
-                  f"{self.input_slot(inst, 0)});\n")
-        return True
 
     def complete_attr_reader(self, tkn, tkn_iter, uop, storage, inst):
         assert inst is not None

@@ -185,10 +185,15 @@ def is_value_function(f: Function, codegen: CodeGen) -> bool:
     """Whether the function is emitted in its value form.
 
     Accessors and slot functions keep their object signatures, which
-    PyGetSetDef and the slot typedefs fix.
+    PyGetSetDef and the slot typedefs fix.  So do the few functions with
+    legacy optional groups (curses addch, ssl read, gc.set_threshold,
+    syslog.syslog), whose group parser has no value form, and the functions
+    with a converter that declares has_value_form = False.
     """
     return (codegen.value_emission
-            and f.kind is not SLOT and f.kind not in ACCESSORS)
+            and f.kind is not SLOT and f.kind not in ACCESSORS
+            and not any(p.group for p in f.parameters.values())
+            and all(p.converter.has_value_form for p in f.parameters.values()))
 
 
 def value_static_type(f: Function) -> str | None:
@@ -451,6 +456,9 @@ class ParseArgsCodeGen:
             # The parameters are rendered from copies.
             for p in [*func.parameters.values(), *func.render_parameters]:
                 p.converter.set_value_emission()
+        elif codegen.value_emission:
+            for p in [*func.parameters.values(), *func.render_parameters]:
+                p.converter.object_in_value_unit = True
 
         if self.func.critical_section:
             self.codegen.add_include('pycore_critical_section.h',

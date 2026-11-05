@@ -56,15 +56,20 @@ raised for division by zero and mod by zero.
 #  define Py_BUILD_CORE_MODULE 1
 #endif
 
+#define Py_VALUE_CORE 1
 #include "Python.h"
 #include "pycore_abstract.h"      // _PyNumber_Index()
 #include "pycore_bitutils.h"      // _Py_bit_length()
 #include "pycore_call.h"          // _PyObject_CallNoArgs()
 #include "pycore_import.h"        // _PyImport_SetModuleString()
 #include "pycore_long.h"          // _PyLong_GetZero()
+#include "pycore_long_value.h"    // _PyValue_AsDouble()
 #include "pycore_moduleobject.h"  // _PyModule_GetState()
 #include "pycore_object.h"        // _PyObject_LookupSpecial()
 #include "pycore_pymath.h"        // _PY_SHORT_FLOAT_REPR
+#include "pycore_value.h"          // PyValue_FromDouble()
+#include "pycore_value_ops.h"      // _PyValue_GetIter()
+#include "pycore_value_slots.h"// _PyValue_FromObjectResult()
 /* For DBL_EPSILON in _math.h */
 #include <float.h>
 /* For _Py_log1p with workarounds for buggy handling of zeros. */
@@ -72,6 +77,11 @@ raised for division by zero and mod by zero.
 #include <stdbool.h>
 
 #include "clinic/mathmodule.c.h"
+
+/*[clinic input]
+value_emission
+[clinic start generated code]*/
+/*[clinic end generated code: output=da39a3ee5e6b4b0d input=eb7b17088bfd7215]*/
 
 /*[clinic input]
 module math
@@ -1153,29 +1163,34 @@ Return the ceiling of x as an Integral.
 This is the smallest integer >= x.
 [clinic start generated code]*/
 
-static PyObject *
-math_ceil(PyObject *module, PyObject *number)
-/*[clinic end generated code: output=6c3b8a78bc201c67 input=2725352806399cab]*/
+static PyValue
+math_ceil_impl(PyObject *module, PyValueBorrow number)
+/*[clinic end generated code: output=112b1beba9dd62f1 input=2725352806399cab]*/
 {
     double x;
 
-    if (PyFloat_CheckExact(number)) {
-        x = PyFloat_AS_DOUBLE(number);
+    if (PyValue_TYPE(number) == &PyFloat_Type) {
+        x = _PyValue_AsDouble(number);
     }
     else {
-        PyObject *result = _PyObject_MaybeCallSpecialNoArgs(number, &_Py_ID(__ceil__));
+        PyObject *numo = _PyValue_AsObjectAt(number, BOX_SITE_PARSER);
+        if (numo == NULL) {
+            return PyValue_NULL;
+        }
+        PyObject *result = _PyObject_MaybeCallSpecialNoArgs(numo, &_Py_ID(__ceil__));
+        Py_DECREF(numo);
         if (result != NULL) {
-            return result;
+            return _PyValue_FromObjectResult(result);
         }
         else if (PyErr_Occurred()) {
-            return NULL;
+            return PyValue_NULL;
         }
-        x = PyFloat_AsDouble(number);
+        x = _PyValue_AsDouble(number);
         if (x == -1.0 && PyErr_Occurred()) {
-            return NULL;
+            return PyValue_NULL;
         }
     }
-    return PyLong_FromDouble(ceil(x));
+    return _PyValue_FromDoubleIntegral(ceil(x));
 }
 
 FUNC2(copysign, copysign,
@@ -1226,29 +1241,34 @@ Return the floor of x as an Integral.
 This is the largest integer <= x.
 [clinic start generated code]*/
 
-static PyObject *
-math_floor(PyObject *module, PyObject *number)
-/*[clinic end generated code: output=c6a65c4884884b8a input=63af6b5d7ebcc3d6]*/
+static PyValue
+math_floor_impl(PyObject *module, PyValueBorrow number)
+/*[clinic end generated code: output=a317b9698c24a0ac input=63af6b5d7ebcc3d6]*/
 {
     double x;
 
-    if (PyFloat_CheckExact(number)) {
-        x = PyFloat_AS_DOUBLE(number);
+    if (PyValue_TYPE(number) == &PyFloat_Type) {
+        x = _PyValue_AsDouble(number);
     }
     else {
-        PyObject *result = _PyObject_MaybeCallSpecialNoArgs(number, &_Py_ID(__floor__));
+        PyObject *numo = _PyValue_AsObjectAt(number, BOX_SITE_PARSER);
+        if (numo == NULL) {
+            return PyValue_NULL;
+        }
+        PyObject *result = _PyObject_MaybeCallSpecialNoArgs(numo, &_Py_ID(__floor__));
+        Py_DECREF(numo);
         if (result != NULL) {
-            return result;
+            return _PyValue_FromObjectResult(result);
         }
         else if (PyErr_Occurred()) {
-            return NULL;
+            return PyValue_NULL;
         }
-        x = PyFloat_AsDouble(number);
+        x = _PyValue_AsDouble(number);
         if (x == -1.0 && PyErr_Occurred()) {
-            return NULL;
+            return PyValue_NULL;
         }
     }
-    return PyLong_FromDouble(floor(x));
+    return _PyValue_FromDoubleIntegral(floor(x));
 }
 
 /*[clinic input]
@@ -1314,11 +1334,11 @@ math.signbit
 Return True if the sign of x is negative and False otherwise.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 math_signbit_impl(PyObject *module, double x)
-/*[clinic end generated code: output=20c5f20156a9b871 input=3d3493fbcb5bdb3e]*/
+/*[clinic end generated code: output=306fda6e743fe625 input=3d3493fbcb5bdb3e]*/
 {
-    return PyBool_FromLong(signbit(x));
+    return PyValue_FromBool(signbit(x));
 }
 
 FUNC1D(sin, sin, 0,
@@ -1455,19 +1475,20 @@ Return an accurate floating-point sum of values in the iterable seq.
 Assumes IEEE-754 floating-point arithmetic.
 [clinic start generated code]*/
 
-static PyObject *
-math_fsum(PyObject *module, PyObject *seq)
-/*[clinic end generated code: output=ba5c672b87fe34fc input=4506244ded6057dc]*/
+static PyValue
+math_fsum_impl(PyObject *module, PyValueBorrow seq)
+/*[clinic end generated code: output=f3788c6f85431c86 input=4506244ded6057dc]*/
 {
-    PyObject *item, *iter, *sum = NULL;
+    PyObject *item, *iter;
+    PyValue sum = PyValue_NULL;
     Py_ssize_t i, j, n = 0, m = NUM_PARTIALS;
     double x, y, t, ps[NUM_PARTIALS], *p = ps;
     double xsave, special_sum = 0.0, inf_sum = 0.0;
     double hi, yr, lo = 0.0;
 
-    iter = PyObject_GetIter(seq);
+    iter = _PyValue_GetIter(seq);
     if (iter == NULL)
-        return NULL;
+        return PyValue_NULL;
 
     for(;;) {           /* for x in iterable */
         assert(0 <= n && n <= m);
@@ -1527,7 +1548,7 @@ math_fsum(PyObject *module, PyObject *seq)
             PyErr_SetString(PyExc_ValueError,
                             "-inf + inf in fsum");
         else
-            sum = PyFloat_FromDouble(special_sum);
+            sum = PyValue_FromDouble(special_sum);
         goto _fsum_error;
     }
 
@@ -1560,7 +1581,7 @@ math_fsum(PyObject *module, PyObject *seq)
                 hi = x;
         }
     }
-    sum = PyFloat_FromDouble(hi);
+    sum = PyValue_FromDouble(hi);
 
   _fsum_error:
     Py_DECREF(iter);
@@ -1587,24 +1608,29 @@ Truncates the Real x to the nearest Integral toward 0.
 Uses the __trunc__ magic method.
 [clinic start generated code]*/
 
-static PyObject *
-math_trunc(PyObject *module, PyObject *x)
-/*[clinic end generated code: output=34b9697b707e1031 input=2168b34e0a09134d]*/
+static PyValue
+math_trunc_impl(PyObject *module, PyValueBorrow x)
+/*[clinic end generated code: output=fc8e33be50852166 input=2168b34e0a09134d]*/
 {
-    if (PyFloat_CheckExact(x)) {
-        return PyFloat_Type.tp_as_number->nb_int(x);
+    if (PyValue_TYPE(x) == &PyFloat_Type) {
+        return _PyValue_FromDoubleIntegral(_PyValue_AsDouble(x));
     }
 
-    PyObject *result = _PyObject_MaybeCallSpecialNoArgs(x, &_Py_ID(__trunc__));
+    PyObject *xo = _PyValue_AsObjectAt(x, BOX_SITE_PARSER);
+    if (xo == NULL) {
+        return PyValue_NULL;
+    }
+    PyObject *result = _PyObject_MaybeCallSpecialNoArgs(xo, &_Py_ID(__trunc__));
+    Py_DECREF(xo);
     if (result != NULL) {
-        return result;
+        return _PyValue_FromObjectResult(result);
     }
     else if (!PyErr_Occurred()) {
         PyErr_Format(PyExc_TypeError,
             "type %.100s doesn't define __trunc__ method",
-            Py_TYPE(x)->tp_name);
+            PyValue_TYPE(x)->tp_name);
     }
-    return NULL;
+    return PyValue_NULL;
 }
 
 
@@ -1621,9 +1647,9 @@ If x is a finite nonzero number, then m is a float with
 x == m * 2**e exactly.  Else, return (x, 0).
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 math_frexp_impl(PyObject *module, double x)
-/*[clinic end generated code: output=03e30d252a15ad4a input=215cf8ea28a0959b]*/
+/*[clinic end generated code: output=9363a506b93c4295 input=215cf8ea28a0959b]*/
 {
     int i;
     /* deal with special cases directly, to sidestep platform
@@ -1634,7 +1660,7 @@ math_frexp_impl(PyObject *module, double x)
     else {
         x = frexp(x, &i);
     }
-    return Py_BuildValue("(di)", x, i);
+    return _PyValue_FromObjectResult(Py_BuildValue("(di)", x, i));
 }
 
 
@@ -1650,27 +1676,27 @@ Return x * (2**i).
 This is essentially the inverse of frexp().
 [clinic start generated code]*/
 
-static PyObject *
-math_ldexp_impl(PyObject *module, double x, PyObject *i)
-/*[clinic end generated code: output=b6892f3c2df9cc6a input=17d5970c1a40a8c1]*/
+static PyValue
+math_ldexp_impl(PyObject *module, double x, PyValueBorrow i)
+/*[clinic end generated code: output=e78ad5d7de0fae22 input=17d5970c1a40a8c1]*/
 {
     double r;
     long exp;
     int overflow;
 
-    if (PyLong_Check(i)) {
+    if (PyType_IsSubtype(PyValue_TYPE(i), &PyLong_Type)) {
         /* on overflow, replace exponent with either LONG_MAX
            or LONG_MIN, depending on the sign. */
-        exp = PyLong_AsLongAndOverflow(i, &overflow);
+        exp = _PyValue_AsLongAndOverflow(i, &overflow);
         if (exp == -1 && PyErr_Occurred())
-            return NULL;
+            return PyValue_NULL;
         if (overflow)
             exp = overflow < 0 ? LONG_MIN : LONG_MAX;
     }
     else {
         PyErr_SetString(PyExc_TypeError,
                         "Expected an int as second argument to ldexp.");
-        return NULL;
+        return PyValue_NULL;
     }
 
     if (x == 0. || !isfinite(x)) {
@@ -1714,8 +1740,8 @@ math_ldexp_impl(PyObject *module, double x, PyObject *i)
     }
 
     if (errno && is_error(r, 1))
-        return NULL;
-    return PyFloat_FromDouble(r);
+        return PyValue_NULL;
+    return PyValue_FromDouble(r);
 }
 
 
@@ -1730,21 +1756,21 @@ Return the fractional and integer parts of x.
 Both results carry the sign of x and are floats.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 math_modf_impl(PyObject *module, double x)
-/*[clinic end generated code: output=90cee0260014c3c0 input=b4cfb6786afd9035]*/
+/*[clinic end generated code: output=7bf98eebe56782fe input=b4cfb6786afd9035]*/
 {
     double y;
     /* some platforms don't do the right thing for NaNs and
        infinities, so we take care of special cases directly. */
     if (isinf(x))
-        return Py_BuildValue("(dd)", copysign(0., x), x);
+        return _PyValue_FromObjectResult(Py_BuildValue("(dd)", copysign(0., x), x));
     else if (isnan(x))
-        return Py_BuildValue("(dd)", x, x);
+        return _PyValue_FromObjectResult(Py_BuildValue("(dd)", x, x));
 
     errno = 0;
     x = modf(x, &y);
-    return Py_BuildValue("(dd)", x, y);
+    return _PyValue_FromObjectResult(Py_BuildValue("(dd)", x, y));
 }
 
 
@@ -1806,7 +1832,8 @@ loghelper(PyObject* arg, double (*func)(double))
            to compute the log anyway.  Clear the exception, convert to
            integer and continue. */
         PyErr_Clear();
-        arg = _PyNumber_Index(arg);
+        PyValue arg_v = _PyValue_Index(PyValue_FromObjectBorrow(arg));
+        arg = PyValue_IsNull(arg_v) ? NULL : _PyValue_AsObjectStealAt(arg_v, BOX_SITE_NUMBER);
         if (arg == NULL) {
             return NULL;
         }
@@ -1838,7 +1865,9 @@ math_log(PyObject *module, PyObject * const *args, Py_ssize_t nargs)
         return NULL;
     }
 
-    ans = PyNumber_TrueDivide(num, den);
+    PyValue ans_v = _PyValue_TrueDivide(PyValue_FromObjectBorrow(num),
+                            PyValue_FromObjectBorrow(den));
+    ans = PyValue_IsNull(ans_v) ? NULL : _PyValue_AsObjectStealAt(ans_v, BOX_SITE_NUMBER);
     Py_DECREF(num);
     Py_DECREF(den);
     return ans;
@@ -1858,11 +1887,17 @@ math.log2
 Return the base 2 logarithm of x.
 [clinic start generated code]*/
 
-static PyObject *
-math_log2(PyObject *module, PyObject *x)
-/*[clinic end generated code: output=5425899a4d5d6acb input=08321262bae4f39b]*/
+static PyValue
+math_log2_impl(PyObject *module, PyValueBorrow x)
+/*[clinic end generated code: output=72c989805e917cc5 input=08321262bae4f39b]*/
 {
-    return loghelper(x, m_log2);
+    PyObject *xo = _PyValue_AsObjectAt(x, BOX_SITE_PARSER);
+    if (xo == NULL) {
+        return PyValue_NULL;
+    }
+    PyObject *res = loghelper(xo, m_log2);
+    Py_DECREF(xo);
+    return _PyValue_FromObjectResult(res);
 }
 
 
@@ -1875,11 +1910,17 @@ math.log10
 Return the base 10 logarithm of x.
 [clinic start generated code]*/
 
-static PyObject *
-math_log10(PyObject *module, PyObject *x)
-/*[clinic end generated code: output=be72a64617df9c6f input=b2469d02c6469e53]*/
+static PyValue
+math_log10_impl(PyObject *module, PyValueBorrow x)
+/*[clinic end generated code: output=c623cc450bf05b4a input=b2469d02c6469e53]*/
 {
-    return loghelper(x, m_log10);
+    PyObject *xo = _PyValue_AsObjectAt(x, BOX_SITE_PARSER);
+    if (xo == NULL) {
+        return PyValue_NULL;
+    }
+    PyObject *res = loghelper(xo, m_log10);
+    Py_DECREF(xo);
+    return _PyValue_FromObjectResult(res);
 }
 
 
@@ -1896,15 +1937,15 @@ Fused multiply-add operation.
 Compute (x * y) + z with a single round.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 math_fma_impl(PyObject *module, double x, double y, double z)
-/*[clinic end generated code: output=4fc8626dbc278d17 input=e3ad1f4a4c89626e]*/
+/*[clinic end generated code: output=ccdb12a8aba0744f input=e3ad1f4a4c89626e]*/
 {
     double r = fma(x, y, z);
 
     /* Fast path: if we got a finite result, we're done. */
     if (isfinite(r)) {
-        return PyFloat_FromDouble(r);
+        return PyValue_FromDouble(r);
     }
 
     /* Non-finite result. Raise an exception if appropriate, else return r. */
@@ -1912,16 +1953,16 @@ math_fma_impl(PyObject *module, double x, double y, double z)
         if (!isnan(x) && !isnan(y) && !isnan(z)) {
             /* NaN result from non-NaN inputs. */
             PyErr_SetString(PyExc_ValueError, "invalid operation in fma");
-            return NULL;
+            return PyValue_NULL;
         }
     }
     else if (isfinite(x) && isfinite(y) && isfinite(z)) {
         /* Infinite result from finite inputs. */
         PyErr_SetString(PyExc_OverflowError, "overflow in fma");
-        return NULL;
+        return PyValue_NULL;
     }
 
-    return PyFloat_FromDouble(r);
+    return PyValue_FromDouble(r);
 }
 
 
@@ -1937,14 +1978,14 @@ Return fmod(x, y), according to platform C.
 x % y may differ.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 math_fmod_impl(PyObject *module, double x, double y)
-/*[clinic end generated code: output=7559d794343a27b5 input=4f84caa8cfc26a03]*/
+/*[clinic end generated code: output=1f70a4ea344b6c19 input=4f84caa8cfc26a03]*/
 {
     double r;
     /* fmod(x, +/-Inf) returns x for finite x. */
     if (isinf(y) && isfinite(x))
-        return PyFloat_FromDouble(x);
+        return PyValue_FromDouble(x);
     errno = 0;
     r = fmod(x, y);
 #ifdef _MSC_VER
@@ -1963,9 +2004,9 @@ math_fmod_impl(PyObject *module, double x, double y)
             errno = 0;
     }
     if (errno && is_error(r, 1))
-        return NULL;
+        return PyValue_NULL;
     else
-        return PyFloat_FromDouble(r);
+        return PyValue_FromDouble(r);
 }
 
 /*
@@ -2140,11 +2181,11 @@ Roughly equivalent to:
     sqrt(sum((px - qx) ** 2.0 for px, qx in zip(p, q)))
 [clinic start generated code]*/
 
-static PyObject *
-math_dist_impl(PyObject *module, PyObject *p, PyObject *q)
-/*[clinic end generated code: output=56bd9538d06bbcfe input=74e85e1b6092e68e]*/
+static PyValue
+math_dist_impl(PyObject *module, PyValueBorrow p, PyValueBorrow q)
+/*[clinic end generated code: output=9670be2ed6d50357 input=74e85e1b6092e68e]*/
 {
-    PyObject *item;
+    PyObject *item, *pt, *qt;
     double max = 0.0;
     double x, px, qx, result;
     Py_ssize_t i, m, n;
@@ -2152,26 +2193,32 @@ math_dist_impl(PyObject *module, PyObject *p, PyObject *q)
     double diffs_on_stack[NUM_STACK_ELEMS];
     double *diffs = diffs_on_stack;
 
-    if (!PyTuple_Check(p)) {
-        p = PySequence_Tuple(p);
-        if (p == NULL) {
-            return NULL;
+    if (PyValue_IsObject(p) && PyTuple_Check(PyValue_AsKnownObjectBorrow(p))) {
+        pt = PyValue_AsKnownObjectBorrow(p);
+    }
+    else {
+        pt = _PyValue_SequenceTuple(p);
+        if (pt == NULL) {
+            return PyValue_NULL;
         }
         p_allocated = 1;
     }
-    if (!PyTuple_Check(q)) {
-        q = PySequence_Tuple(q);
-        if (q == NULL) {
+    if (PyValue_IsObject(q) && PyTuple_Check(PyValue_AsKnownObjectBorrow(q))) {
+        qt = PyValue_AsKnownObjectBorrow(q);
+    }
+    else {
+        qt = _PyValue_SequenceTuple(q);
+        if (qt == NULL) {
             if (p_allocated) {
-                Py_DECREF(p);
+                Py_DECREF(pt);
             }
-            return NULL;
+            return PyValue_NULL;
         }
         q_allocated = 1;
     }
 
-    m = PyTuple_GET_SIZE(p);
-    n = PyTuple_GET_SIZE(q);
+    m = PyTuple_GET_SIZE(pt);
+    n = PyTuple_GET_SIZE(qt);
     if (m != n) {
         PyErr_SetString(PyExc_ValueError,
                         "both points must have the same number of dimensions");
@@ -2185,13 +2232,23 @@ math_dist_impl(PyObject *module, PyObject *p, PyObject *q)
         }
     }
     for (i=0 ; i<n ; i++) {
-        item = PyTuple_GetItemRef(p, i);
+        PyValue item_value = PyTuple_GetValue(pt, i);
+        if (PyValue_IsNull(item_value)) {
+            goto error_exit;
+        }
+        item = _PyValue_AsObjectAt(item_value, BOX_SITE_TUPLE);
+        PyValue_CLOSE(item_value);
         if (item == NULL) {
             goto error_exit;
         }
         ASSIGN_DOUBLE(px, item, error_with_item);
         Py_DECREF(item);
-        item = PyTuple_GetItemRef(q, i);
+        item_value = PyTuple_GetValue(qt, i);
+        if (PyValue_IsNull(item_value)) {
+            goto error_exit;
+        }
+        item = _PyValue_AsObjectAt(item_value, BOX_SITE_TUPLE);
+        PyValue_CLOSE(item_value);
         if (item == NULL) {
             goto error_exit;
         }
@@ -2209,12 +2266,12 @@ math_dist_impl(PyObject *module, PyObject *p, PyObject *q)
         PyMem_Free(diffs);
     }
     if (p_allocated) {
-        Py_DECREF(p);
+        Py_DECREF(pt);
     }
     if (q_allocated) {
-        Py_DECREF(q);
+        Py_DECREF(qt);
     }
-    return PyFloat_FromDouble(result);
+    return PyValue_FromDouble(result);
 
   error_with_item:
     Py_DECREF(item);
@@ -2223,12 +2280,12 @@ math_dist_impl(PyObject *module, PyObject *p, PyObject *q)
         PyMem_Free(diffs);
     }
     if (p_allocated) {
-        Py_DECREF(p);
+        Py_DECREF(pt);
     }
     if (q_allocated) {
-        Py_DECREF(q);
+        Py_DECREF(qt);
     }
-    return NULL;
+    return PyValue_NULL;
 }
 
 /*[clinic input]
@@ -2250,13 +2307,12 @@ For example, the hypotenuse of a 3/4/5 right triangle is:
     5.0
 [clinic start generated code]*/
 
-static PyObject *
-math_hypot_impl(PyObject *module, PyObject * const *args,
+static PyValue
+math_hypot_impl(PyObject *module, const PyValue *args,
                 Py_ssize_t args_length)
-/*[clinic end generated code: output=c9de404e24370068 input=1bceaf7d4fdcd9c2]*/
+/*[clinic end generated code: output=e0658e327b454530 input=1bceaf7d4fdcd9c2]*/
 {
     Py_ssize_t i;
-    PyObject *item;
     double max = 0.0;
     double x, result;
     int found_nan = 0;
@@ -2266,12 +2322,15 @@ math_hypot_impl(PyObject *module, PyObject * const *args,
     if (args_length > NUM_STACK_ELEMS) {
         coordinates = (double *) PyMem_Malloc(args_length * sizeof(double));
         if (coordinates == NULL) {
-            return PyErr_NoMemory();
+            return _PyValue_FromObjectResult(PyErr_NoMemory());
         }
     }
     for (i = 0; i < args_length; i++) {
-        item = args[i];
-        ASSIGN_DOUBLE(x, item, error_exit);
+        // As ASSIGN_DOUBLE(): exact floats and ints convert directly.
+        x = _PyValue_AsDouble(PyValue_Borrow(args[i]));
+        if (x == -1.0 && PyErr_Occurred()) {
+            goto error_exit;
+        }
         x = fabs(x);
         coordinates[i] = x;
         found_nan |= isnan(x);
@@ -2283,13 +2342,13 @@ math_hypot_impl(PyObject *module, PyObject * const *args,
     if (coordinates != coord_on_stack) {
         PyMem_Free(coordinates);
     }
-    return PyFloat_FromDouble(result);
+    return PyValue_FromDouble(result);
 
   error_exit:
     if (coordinates != coord_on_stack) {
         PyMem_Free(coordinates);
     }
-    return NULL;
+    return PyValue_NULL;
 }
 
 #undef NUM_STACK_ELEMS
@@ -2322,9 +2381,9 @@ For float and mixed int/float inputs, the intermediate products
 and sums are computed with extended precision.
 [clinic start generated code]*/
 
-static PyObject *
-math_sumprod_impl(PyObject *module, PyObject *p, PyObject *q)
-/*[clinic end generated code: output=6722dbfe60664554 input=a2880317828c61d2]*/
+static PyValue
+math_sumprod_impl(PyObject *module, PyValueBorrow p, PyValueBorrow q)
+/*[clinic end generated code: output=3a22f57df4a48d49 input=a2880317828c61d2]*/
 {
     PyObject *p_i = NULL, *q_i = NULL, *term_i = NULL, *new_total = NULL;
     PyObject *p_it, *q_it, *total;
@@ -2335,20 +2394,20 @@ math_sumprod_impl(PyObject *module, PyObject *p, PyObject *q)
     long int_total = 0;
     TripleLength flt_total = tl_zero;
 
-    p_it = PyObject_GetIter(p);
+    p_it = _PyValue_GetIter(p);
     if (p_it == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
-    q_it = PyObject_GetIter(q);
+    q_it = _PyValue_GetIter(q);
     if (q_it == NULL) {
         Py_DECREF(p_it);
-        return NULL;
+        return PyValue_NULL;
     }
     total = PyLong_FromLong(0);
     if (total == NULL) {
         Py_DECREF(p_it);
         Py_DECREF(q_it);
-        return NULL;
+        return PyValue_NULL;
     }
     p_next = *Py_TYPE(p_it)->tp_iternext;
     q_next = *Py_TYPE(q_it)->tp_iternext;
@@ -2426,7 +2485,8 @@ math_sumprod_impl(PyObject *module, PyObject *p, PyObject *q)
                 if (term_i == NULL) {
                     goto err_exit;
                 }
-                new_total = PyNumber_Add(total, term_i);
+                PyValue new_total_v = _PyValue_Add(PyValue_FromObjectBorrow(total), PyValue_FromObjectBorrow(term_i));
+                new_total = PyValue_IsNull(new_total_v) ? NULL : _PyValue_AsObjectStealAt(new_total_v, BOX_SITE_NUMBER);
                 if (new_total == NULL) {
                     goto err_exit;
                 }
@@ -2486,7 +2546,8 @@ math_sumprod_impl(PyObject *module, PyObject *p, PyObject *q)
                 if (term_i == NULL) {
                     goto err_exit;
                 }
-                new_total = PyNumber_Add(total, term_i);
+                PyValue new_total_v2 = _PyValue_Add(PyValue_FromObjectBorrow(total), PyValue_FromObjectBorrow(term_i));
+                new_total = PyValue_IsNull(new_total_v2) ? NULL : _PyValue_AsObjectStealAt(new_total_v2, BOX_SITE_NUMBER);
                 if (new_total == NULL) {
                     goto err_exit;
                 }
@@ -2503,11 +2564,13 @@ math_sumprod_impl(PyObject *module, PyObject *p, PyObject *q)
         if (finished) {
             goto normal_exit;
         }
-        term_i = PyNumber_Multiply(p_i, q_i);
+        PyValue term_i_v = _PyValue_Multiply(PyValue_FromObjectBorrow(p_i), PyValue_FromObjectBorrow(q_i));
+        term_i = PyValue_IsNull(term_i_v) ? NULL : _PyValue_AsObjectStealAt(term_i_v, BOX_SITE_NUMBER);
         if (term_i == NULL) {
             goto err_exit;
         }
-        new_total = PyNumber_Add(total, term_i);
+        PyValue new_total_v3 = _PyValue_Add(PyValue_FromObjectBorrow(total), PyValue_FromObjectBorrow(term_i));
+        new_total = PyValue_IsNull(new_total_v3) ? NULL : _PyValue_AsObjectStealAt(new_total_v3, BOX_SITE_NUMBER);
         if (new_total == NULL) {
             goto err_exit;
         }
@@ -2521,7 +2584,7 @@ math_sumprod_impl(PyObject *module, PyObject *p, PyObject *q)
  normal_exit:
     Py_DECREF(p_it);
     Py_DECREF(q_it);
-    return total;
+    return _PyValue_FromObjectResult(total);
 
  err_exit:
     Py_DECREF(p_it);
@@ -2531,7 +2594,7 @@ math_sumprod_impl(PyObject *module, PyObject *p, PyObject *q)
     Py_XDECREF(q_i);
     Py_XDECREF(term_i);
     Py_XDECREF(new_total);
-    return NULL;
+    return PyValue_NULL;
 }
 
 
@@ -2551,9 +2614,9 @@ math.pow
 Return x**y (x to the power of y).
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 math_pow_impl(PyObject *module, double x, double y)
-/*[clinic end generated code: output=fff93e65abccd6b0 input=c26f1f6075088bfd]*/
+/*[clinic end generated code: output=fd76877cd2c58019 input=c26f1f6075088bfd]*/
 {
     double r;
     int odd_y;
@@ -2614,9 +2677,9 @@ math_pow_impl(PyObject *module, double x, double y)
     }
 
     if (errno && is_error(r, 1))
-        return NULL;
+        return PyValue_NULL;
     else
-        return PyFloat_FromDouble(r);
+        return PyValue_FromDouble(r);
 }
 
 
@@ -2632,11 +2695,11 @@ math.degrees
 Convert angle x from radians to degrees.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 math_degrees_impl(PyObject *module, double x)
-/*[clinic end generated code: output=7fea78b294acd12f input=81e016555d6e3660]*/
+/*[clinic end generated code: output=1f1a63be08773dc0 input=81e016555d6e3660]*/
 {
-    return PyFloat_FromDouble(x * radToDeg);
+    return PyValue_FromDouble(x * radToDeg);
 }
 
 
@@ -2649,11 +2712,11 @@ math.radians
 Convert angle x from degrees to radians.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 math_radians_impl(PyObject *module, double x)
-/*[clinic end generated code: output=34daa47caf9b1590 input=91626fc489fe3d63]*/
+/*[clinic end generated code: output=b94a1308334655d3 input=91626fc489fe3d63]*/
 {
-    return PyFloat_FromDouble(x * degToRad);
+    return PyValue_FromDouble(x * degToRad);
 }
 
 
@@ -2666,11 +2729,11 @@ math.isfinite
 Return True if x is neither an infinity nor a NaN, and False otherwise.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 math_isfinite_impl(PyObject *module, double x)
-/*[clinic end generated code: output=8ba1f396440c9901 input=46967d254812e54a]*/
+/*[clinic end generated code: output=fde538b5c8e97f69 input=46967d254812e54a]*/
 {
-    return PyBool_FromLong((long)isfinite(x));
+    return PyValue_FromBool((long)isfinite(x));
 }
 
 
@@ -2683,11 +2746,11 @@ math.isnormal
 Return True if x is normal, and False otherwise.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 math_isnormal_impl(PyObject *module, double x)
-/*[clinic end generated code: output=c7b302b5b89c3541 input=fdaa00c58aa7bc17]*/
+/*[clinic end generated code: output=e4517d2aaefc8468 input=fdaa00c58aa7bc17]*/
 {
-    return PyBool_FromLong(isnormal(x));
+    return PyValue_FromBool(isnormal(x));
 }
 
 
@@ -2700,14 +2763,14 @@ math.issubnormal
 Return True if x is subnormal, and False otherwise.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 math_issubnormal_impl(PyObject *module, double x)
-/*[clinic end generated code: output=4e76ac98ddcae761 input=9a20aba7107d0d95]*/
+/*[clinic end generated code: output=bddeb916a8d77de2 input=9a20aba7107d0d95]*/
 {
 #if !defined(_MSC_VER) && defined(_Py_STDC_VERSION) && _Py_STDC_VERSION >= 202311L
     return PyBool_FromLong(issubnormal(x));
 #else
-    return PyBool_FromLong(isfinite(x) && x && !isnormal(x));
+    return PyValue_FromBool(isfinite(x) && x && !isnormal(x));
 #endif
 }
 
@@ -2721,11 +2784,11 @@ math.isnan
 Return True if x is a NaN (not a number), and False otherwise.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 math_isnan_impl(PyObject *module, double x)
-/*[clinic end generated code: output=f537b4d6df878c3e input=935891e66083f46a]*/
+/*[clinic end generated code: output=c87a34399c601cdf input=935891e66083f46a]*/
 {
-    return PyBool_FromLong((long)isnan(x));
+    return PyValue_FromBool((long)isnan(x));
 }
 
 
@@ -2739,11 +2802,11 @@ math.isinf
 Return True if x is a positive or negative infinity, and False otherwise.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 math_isinf_impl(PyObject *module, double x)
-/*[clinic end generated code: output=9f00cbec4de7b06b input=8584152a71a3aea9]*/
+/*[clinic end generated code: output=60ce08b2e0db08c5 input=8584152a71a3aea9]*/
 {
-    return PyBool_FromLong((long)isinf(x));
+    return PyValue_FromBool((long)isinf(x));
 }
 
 
@@ -2882,22 +2945,28 @@ intended specifically for use with numeric values and may reject
 non-numeric types.
 [clinic start generated code]*/
 
-static PyObject *
-math_prod_impl(PyObject *module, PyObject *iterable, PyObject *start)
-/*[clinic end generated code: output=36153bedac74a198 input=4c5ab0682782ed54]*/
+static PyValue
+math_prod_impl(PyObject *module, PyValueBorrow iterable, PyValueBorrow start)
+/*[clinic end generated code: output=acc63d17cbd9c27f input=4c5ab0682782ed54]*/
 {
-    PyObject *result = start;
+    PyObject *result;
     PyObject *temp, *item, *iter;
 
-    iter = PyObject_GetIter(iterable);
+    iter = _PyValue_GetIter(iterable);
     if (iter == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
 
-    if (result == NULL) {
-        result = _PyLong_GetOne();
+    if (PyValue_IsNull(start)) {
+        result = Py_NewRef(_PyLong_GetOne());
     }
-    Py_INCREF(result);
+    else {
+        result = _PyValue_AsObjectAt(start, BOX_SITE_PARSER);
+        if (result == NULL) {
+            Py_DECREF(iter);
+            return PyValue_NULL;
+        }
+    }
 #ifndef SLOW_PROD
     /* Fast paths for integers keeping temporary products in C.
      * Assumes all inputs are the same type.
@@ -2917,9 +2986,9 @@ math_prod_impl(PyObject *module, PyObject *iterable, PyObject *start)
             if (item == NULL) {
                 Py_DECREF(iter);
                 if (PyErr_Occurred()) {
-                    return NULL;
+                    return PyValue_NULL;
                 }
-                return PyLong_FromLong(i_result);
+                return PyValue_FromInt64(i_result);
             }
             if (PyLong_CheckExact(item)) {
                 long b = PyLong_AsLongAndOverflow(item, &overflow);
@@ -2936,15 +3005,16 @@ math_prod_impl(PyObject *module, PyObject *iterable, PyObject *start)
             if (result == NULL) {
                 Py_DECREF(item);
                 Py_DECREF(iter);
-                return NULL;
+                return PyValue_NULL;
             }
-            temp = PyNumber_Multiply(result, item);
+            PyValue temp_v = _PyValue_Multiply(PyValue_FromObjectBorrow(result), PyValue_FromObjectBorrow(item));
+            temp = PyValue_IsNull(temp_v) ? NULL : _PyValue_AsObjectStealAt(temp_v, BOX_SITE_NUMBER);
             Py_DECREF(result);
             Py_DECREF(item);
             result = temp;
             if (result == NULL) {
                 Py_DECREF(iter);
-                return NULL;
+                return PyValue_NULL;
             }
         }
     }
@@ -2961,9 +3031,9 @@ math_prod_impl(PyObject *module, PyObject *iterable, PyObject *start)
             if (item == NULL) {
                 Py_DECREF(iter);
                 if (PyErr_Occurred()) {
-                    return NULL;
+                    return PyValue_NULL;
                 }
-                return PyFloat_FromDouble(f_result);
+                return PyValue_FromDouble(f_result);
             }
             if (PyFloat_CheckExact(item)) {
                 f_result *= PyFloat_AS_DOUBLE(item);
@@ -2984,15 +3054,16 @@ math_prod_impl(PyObject *module, PyObject *iterable, PyObject *start)
             if (result == NULL) {
                 Py_DECREF(item);
                 Py_DECREF(iter);
-                return NULL;
+                return PyValue_NULL;
             }
-            temp = PyNumber_Multiply(result, item);
+            PyValue temp_v2 = _PyValue_Multiply(PyValue_FromObjectBorrow(result), PyValue_FromObjectBorrow(item));
+            temp = PyValue_IsNull(temp_v2) ? NULL : _PyValue_AsObjectStealAt(temp_v2, BOX_SITE_NUMBER);
             Py_DECREF(result);
             Py_DECREF(item);
             result = temp;
             if (result == NULL) {
                 Py_DECREF(iter);
-                return NULL;
+                return PyValue_NULL;
             }
         }
     }
@@ -3008,7 +3079,8 @@ math_prod_impl(PyObject *module, PyObject *iterable, PyObject *start)
             }
             break;
         }
-        temp = PyNumber_Multiply(result, item);
+        PyValue temp_v3 = _PyValue_Multiply(PyValue_FromObjectBorrow(result), PyValue_FromObjectBorrow(item));
+        temp = PyValue_IsNull(temp_v3) ? NULL : _PyValue_AsObjectStealAt(temp_v3, BOX_SITE_NUMBER);
         Py_DECREF(result);
         Py_DECREF(item);
         result = temp;
@@ -3016,7 +3088,7 @@ math_prod_impl(PyObject *module, PyObject *iterable, PyObject *start)
             break;
     }
     Py_DECREF(iter);
-    return result;
+    return _PyValue_FromObjectResult(result);
 }
 
 
@@ -3038,9 +3110,10 @@ Raises a TypeError, if x or y is not a double, or if steps is not
 an integer.  Raises ValueError if steps is negative.
 [clinic start generated code]*/
 
-static PyObject *
-math_nextafter_impl(PyObject *module, double x, double y, PyObject *steps)
-/*[clinic end generated code: output=cc6511f02afc099e input=3a9151e6b1e9f346]*/
+static PyValue
+math_nextafter_impl(PyObject *module, double x, double y,
+                    PyValueBorrow steps)
+/*[clinic end generated code: output=e798a06908024c61 input=3a9151e6b1e9f346]*/
 {
 #if defined(_AIX)
     if (x == y) {
@@ -3055,27 +3128,35 @@ math_nextafter_impl(PyObject *module, double x, double y, PyObject *steps)
         return PyFloat_FromDouble(y);
     }
 #endif
-    if (steps == Py_None) {
+    if (PyValue_IsNone(steps)) {
         // fast path: we default to one step.
-        return PyFloat_FromDouble(nextafter(x, y));
+        return PyValue_FromDouble(nextafter(x, y));
     }
-    steps = PyNumber_Index(steps);
-    if (steps == NULL) {
-        return NULL;
+    PyValue steps_index_v = _PyValue_Index(steps);
+    PyObject *steps_index = PyValue_IsNull(steps_index_v) ? NULL : _PyValue_AsObjectStealAt(steps_index_v, BOX_SITE_NUMBER);
+    if (steps_index == NULL) {
+        return PyValue_NULL;
     }
-    assert(PyLong_CheckExact(steps));
-    if (_PyLong_IsNegative((PyLongObject *)steps)) {
+    /* PyNumber_Index() returned an exact int, copying a subclass instance. */
+    if (!PyLong_CheckExact(steps_index)) {
+        Py_SETREF(steps_index, _PyLong_Copy((PyLongObject *)steps_index));
+        if (steps_index == NULL) {
+            return PyValue_NULL;
+        }
+    }
+    assert(PyLong_CheckExact(steps_index));
+    if (_PyLong_IsNegative((PyLongObject *)steps_index)) {
         PyErr_SetString(PyExc_ValueError,
                         "steps must be a non-negative integer");
-        Py_DECREF(steps);
-        return NULL;
+        Py_DECREF(steps_index);
+        return PyValue_NULL;
     }
 
-    unsigned long long usteps_ull = PyLong_AsUnsignedLongLong(steps);
+    unsigned long long usteps_ull = PyLong_AsUnsignedLongLong(steps_index);
     // Conveniently, uint64_t and double have the same number of bits
     // on all the platforms we care about.
     // So if an overflow occurs, we can just use UINT64_MAX.
-    Py_DECREF(steps);
+    Py_DECREF(steps_index);
     if (usteps_ull >= UINT64_MAX) {
         // This branch includes the case where an error occurred, since
         // (unsigned long long)(-1) = ULLONG_MAX >= UINT64_MAX. Note that
@@ -3086,7 +3167,7 @@ math_nextafter_impl(PyObject *module, double x, double y, PyObject *steps)
                 PyErr_Clear();
             }
             else {
-                return NULL;
+                return PyValue_NULL;
             }
         }
         usteps_ull = UINT64_MAX;
@@ -3095,13 +3176,13 @@ math_nextafter_impl(PyObject *module, double x, double y, PyObject *steps)
     uint64_t usteps = (uint64_t)usteps_ull;
 
     if (usteps == 0) {
-        return PyFloat_FromDouble(x);
+        return PyValue_FromDouble(x);
     }
     if (isnan(x)) {
-        return PyFloat_FromDouble(x);
+        return PyValue_FromDouble(x);
     }
     if (isnan(y)) {
-        return PyFloat_FromDouble(y);
+        return PyValue_FromDouble(y);
     }
 
     // We assume that double and uint64_t have the same endianness.
@@ -3111,7 +3192,7 @@ math_nextafter_impl(PyObject *module, double x, double y, PyObject *steps)
     union pun {double f; uint64_t i;};
     union pun ux = {x}, uy = {y};
     if (ux.i == uy.i) {
-        return PyFloat_FromDouble(x);
+        return PyValue_FromDouble(x);
     }
 
     const uint64_t sign_bit = 1ULL<<63;
@@ -3124,30 +3205,30 @@ math_nextafter_impl(PyObject *module, double x, double y, PyObject *steps)
         // NOTE: ax + ay can never overflow, because their most significant bit
         // ain't set.
         if (ax + ay <= usteps) {
-            return PyFloat_FromDouble(uy.f);
+            return PyValue_FromDouble(uy.f);
         // This comparison has to use <, because <= would get +0.0 vs -0.0
         // wrong.
         } else if (ax < usteps) {
             union pun result = {.i = (uy.i & sign_bit) | (usteps - ax)};
-            return PyFloat_FromDouble(result.f);
+            return PyValue_FromDouble(result.f);
         } else {
             ux.i -= usteps;
-            return PyFloat_FromDouble(ux.f);
+            return PyValue_FromDouble(ux.f);
         }
     // same sign
     } else if (ax > ay) {
         if (ax - ay >= usteps) {
             ux.i -= usteps;
-            return PyFloat_FromDouble(ux.f);
+            return PyValue_FromDouble(ux.f);
         } else {
-            return PyFloat_FromDouble(uy.f);
+            return PyValue_FromDouble(uy.f);
         }
     } else {
         if (ay - ax >= usteps) {
             ux.i += usteps;
-            return PyFloat_FromDouble(ux.f);
+            return PyValue_FromDouble(ux.f);
         } else {
-            return PyFloat_FromDouble(uy.f);
+            return PyValue_FromDouble(uy.f);
         }
     }
 }

@@ -2,15 +2,21 @@
 preserve
 [clinic start generated code]*/
 
+#ifndef Py_VALUE_CORE
+#  error "value-emission Clinic output requires Py_VALUE_CORE"
+#endif
+
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 #  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
 #  include "pycore_value.h"       // _PyValue_STATIC_IMMORTAL()
 #endif
-#include "pycore_abstract.h"      // _Py_convert_optional_to_ssize_t()
-#include "pycore_borrow.h"        // _PyBorrow_TupleItems()
-#include "pycore_modsupport.h"    // _PyArg_UnpackKeywords()
+#include "pycore_long_value.h"    // _PyValue_AsInt()
+#include "pycore_modsupport.h"    // _PyArg_UnpackKeywordsValue()
+#include "pycore_tuple.h"         // _PyTuple_ITEMS()
 #include "pycore_unicodeobject.h" // _PyUnicode_AsUTF8NoNUL()
+#include "pycore_value_call.h"    // METH_VALUE
+#include "pycore_value_ops.h"     // _PyValue_IsTrue()
 
 PyDoc_STRVAR(_io_FileIO__dealloc_warn__doc__,
 "_dealloc_warn($self, source, /)\n"
@@ -18,17 +24,19 @@ PyDoc_STRVAR(_io_FileIO__dealloc_warn__doc__,
 "\n");
 
 #define _IO_FILEIO__DEALLOC_WARN_METHODDEF    \
-    {"_dealloc_warn", (PyCFunction)_io_FileIO__dealloc_warn, METH_O, _io_FileIO__dealloc_warn__doc__},
+    {"_dealloc_warn", _PyCFunction_CAST(_io_FileIO__dealloc_warn), METH_VALUE|METH_O, _io_FileIO__dealloc_warn__doc__},
 
-static PyObject *
-_io_FileIO__dealloc_warn_impl(fileio *self, PyObject *source);
+static PyValue
+_io_FileIO__dealloc_warn_impl(fileio *self, PyValueBorrow source);
 
-static PyObject *
-_io_FileIO__dealloc_warn(PyObject *self, PyObject *source)
+static PyValue
+_io_FileIO__dealloc_warn(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow source;
 
-    return_value = _io_FileIO__dealloc_warn_impl((fileio *)self, source);
+    source = PyValue_Borrow(args[0]);
+    return_value = _io_FileIO__dealloc_warn_impl((fileio *)PyValue_AsKnownObjectBorrow(self), source);
 
     return return_value;
 }
@@ -43,19 +51,24 @@ PyDoc_STRVAR(_io_FileIO_close__doc__,
 "may be called more than once without error.");
 
 #define _IO_FILEIO_CLOSE_METHODDEF    \
-    {"close", _PyCFunction_CAST(_io_FileIO_close), METH_METHOD|METH_FASTCALL|METH_KEYWORDS, _io_FileIO_close__doc__},
+    {"close", _PyCFunction_CAST(_io_FileIO_close), METH_VALUE|METH_METHOD, _io_FileIO_close__doc__},
 
-static PyObject *
+static PyValue
 _io_FileIO_close_impl(fileio *self, PyTypeObject *cls);
 
-static PyObject *
-_io_FileIO_close(PyObject *self, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_io_FileIO_close(PyValueBorrow self, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
+    PyValue return_value = PyValue_NULL;
+
     if (nargs || (kwnames && PyTuple_GET_SIZE(kwnames))) {
         PyErr_SetString(PyExc_TypeError, "close() takes no arguments");
-        return NULL;
+        goto exit;
     }
-    return _io_FileIO_close_impl((fileio *)self, cls);
+    return_value = _io_FileIO_close_impl((fileio *)PyValue_AsKnownObjectBorrow(self), cls);
+
+exit:
+    return return_value;
 }
 
 PyDoc_STRVAR(_io_FileIO___init____doc__,
@@ -80,11 +93,11 @@ PyDoc_STRVAR(_io_FileIO___init____doc__,
 "functionality similar to passing None).");
 
 static int
-_io_FileIO___init___impl(fileio *self, PyObject *nameobj, const char *mode,
-                         int closefd, PyObject *opener);
+_io_FileIO___init___impl(fileio *self, PyValueBorrow nameobj,
+                         const char *mode, int closefd, PyValueBorrow opener);
 
 static int
-_io_FileIO___init__(PyObject *self, PyObject *args, PyObject *kwargs)
+_io_FileIO___init___value(PyObject *self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
     int return_value = -1;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
@@ -114,56 +127,62 @@ _io_FileIO___init__(PyObject *self, PyObject *args, PyObject *kwargs)
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[4];
-    PyObject * const *fastargs;
-    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
-    Py_ssize_t noptargs = nargs + (kwargs ? PyDict_GET_SIZE(kwargs) : 0) - 1;
-    PyObject *nameobj;
+    Py_ssize_t _idx[4];
+    PyValueBorrow nameobj;
     const char *mode = "r";
     int closefd = 1;
-    PyObject *opener = Py_None;
+    PyValueBorrow opener = PyValue_Borrow(PyValue_None);
 
-    PyObject *const *_args_items = _PyBorrow_TupleItems(args, Py_MIN(nargs, 4));
-    if (_args_items == NULL) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 1, /*maxpos*/ 4, /*minkw*/ 0, /*varpos*/ 0, _idx, 4)) {
         goto exit;
     }
-    fastargs = _PyArg_UnpackKeywords(_args_items, nargs, kwargs, NULL, &_parser,
-            /*minpos*/ 1, /*maxpos*/ 4, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!fastargs) {
-        goto exit;
-    }
-    nameobj = fastargs[0];
-    if (!noptargs) {
-        goto skip_optional_pos;
-    }
-    if (fastargs[1]) {
-        if (!PyUnicode_Check(fastargs[1])) {
-            _PyArg_BadArgument("FileIO", "argument 'mode'", "str", fastargs[1]);
+    nameobj = PyValue_Borrow(args[_idx[0]]);
+    if (_idx[1] >= 0) {
+        if (!PyValue_IsObject(PyValue_Borrow(args[_idx[1]]))) {
+            _PyArg_BadArgumentValue("FileIO", "argument 'mode'", "str", PyValue_Borrow(args[_idx[1]]));
             goto exit;
         }
-        mode = _PyUnicode_AsUTF8NoNUL(fastargs[1]);
+        if (!PyUnicode_Check(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[1]])))) {
+            _PyArg_BadArgument("FileIO", "argument 'mode'", "str", PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[1]])));
+            goto exit;
+        }
+        mode = _PyUnicode_AsUTF8NoNUL(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[1]])));
         if (mode == NULL) {
             goto exit;
         }
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
     }
-    if (fastargs[2]) {
-        closefd = PyObject_IsTrue(fastargs[2]);
+    if (_idx[2] >= 0) {
+        closefd = _PyValue_IsTrue(PyValue_Borrow(args[_idx[2]]));
         if (closefd < 0) {
             goto exit;
         }
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
     }
-    opener = fastargs[3];
-skip_optional_pos:
+    if (_idx[3] >= 0) {
+        opener = PyValue_Borrow(args[_idx[3]]);
+    }
     return_value = _io_FileIO___init___impl((fileio *)self, nameobj, mode, closefd, opener);
 
 exit:
     return return_value;
+}
+
+static int
+_io_FileIO___init__(PyObject *self, PyObject *args, PyObject *kwargs)
+{
+    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
+    if (kwargs == NULL || PyDict_GET_SIZE(kwargs) == 0) {
+        return _io_FileIO___init___value(self, _PyTuple_ITEMS(args), nargs, NULL);
+    }
+    PyObject *kwnames;
+    PyValue *window = _PyValue_StackUnpackDict(_PyThreadState_GET(),
+        _PyTuple_ITEMS(args), nargs, kwargs, &kwnames);
+    if (window == NULL) {
+        return -1;
+    }
+    int result = _io_FileIO___init___value(self, window, nargs, kwnames);
+    _PyValue_StackUnpackDict_Free(window, nargs, kwnames);
+    return result;
 }
 
 PyDoc_STRVAR(_io_FileIO_fileno__doc__,
@@ -173,15 +192,19 @@ PyDoc_STRVAR(_io_FileIO_fileno__doc__,
 "Return the underlying file descriptor (an integer).");
 
 #define _IO_FILEIO_FILENO_METHODDEF    \
-    {"fileno", (PyCFunction)_io_FileIO_fileno, METH_NOARGS, _io_FileIO_fileno__doc__},
+    {"fileno", _PyCFunction_CAST(_io_FileIO_fileno), METH_VALUE|METH_NOARGS, _io_FileIO_fileno__doc__},
 
-static PyObject *
+static PyValue
 _io_FileIO_fileno_impl(fileio *self);
 
-static PyObject *
-_io_FileIO_fileno(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+_io_FileIO_fileno(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _io_FileIO_fileno_impl((fileio *)self);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _io_FileIO_fileno_impl((fileio *)PyValue_AsKnownObjectBorrow(self));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(_io_FileIO_readable__doc__,
@@ -191,15 +214,19 @@ PyDoc_STRVAR(_io_FileIO_readable__doc__,
 "True if file was opened in a read mode.");
 
 #define _IO_FILEIO_READABLE_METHODDEF    \
-    {"readable", (PyCFunction)_io_FileIO_readable, METH_NOARGS, _io_FileIO_readable__doc__},
+    {"readable", _PyCFunction_CAST(_io_FileIO_readable), METH_VALUE|METH_NOARGS, _io_FileIO_readable__doc__},
 
-static PyObject *
+static PyValue
 _io_FileIO_readable_impl(fileio *self);
 
-static PyObject *
-_io_FileIO_readable(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+_io_FileIO_readable(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _io_FileIO_readable_impl((fileio *)self);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _io_FileIO_readable_impl((fileio *)PyValue_AsKnownObjectBorrow(self));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(_io_FileIO_writable__doc__,
@@ -209,15 +236,19 @@ PyDoc_STRVAR(_io_FileIO_writable__doc__,
 "True if file was opened in a write mode.");
 
 #define _IO_FILEIO_WRITABLE_METHODDEF    \
-    {"writable", (PyCFunction)_io_FileIO_writable, METH_NOARGS, _io_FileIO_writable__doc__},
+    {"writable", _PyCFunction_CAST(_io_FileIO_writable), METH_VALUE|METH_NOARGS, _io_FileIO_writable__doc__},
 
-static PyObject *
+static PyValue
 _io_FileIO_writable_impl(fileio *self);
 
-static PyObject *
-_io_FileIO_writable(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+_io_FileIO_writable(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _io_FileIO_writable_impl((fileio *)self);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _io_FileIO_writable_impl((fileio *)PyValue_AsKnownObjectBorrow(self));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(_io_FileIO_seekable__doc__,
@@ -227,15 +258,19 @@ PyDoc_STRVAR(_io_FileIO_seekable__doc__,
 "True if file supports random-access.");
 
 #define _IO_FILEIO_SEEKABLE_METHODDEF    \
-    {"seekable", (PyCFunction)_io_FileIO_seekable, METH_NOARGS, _io_FileIO_seekable__doc__},
+    {"seekable", _PyCFunction_CAST(_io_FileIO_seekable), METH_VALUE|METH_NOARGS, _io_FileIO_seekable__doc__},
 
-static PyObject *
+static PyValue
 _io_FileIO_seekable_impl(fileio *self);
 
-static PyObject *
-_io_FileIO_seekable(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+_io_FileIO_seekable(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _io_FileIO_seekable_impl((fileio *)self);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _io_FileIO_seekable_impl((fileio *)PyValue_AsKnownObjectBorrow(self));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(_io_FileIO_readinto__doc__,
@@ -245,15 +280,15 @@ PyDoc_STRVAR(_io_FileIO_readinto__doc__,
 "Same as RawIOBase.readinto().");
 
 #define _IO_FILEIO_READINTO_METHODDEF    \
-    {"readinto", _PyCFunction_CAST(_io_FileIO_readinto), METH_METHOD|METH_FASTCALL|METH_KEYWORDS, _io_FileIO_readinto__doc__},
+    {"readinto", _PyCFunction_CAST(_io_FileIO_readinto), METH_VALUE|METH_METHOD, _io_FileIO_readinto__doc__},
 
-static PyObject *
+static PyValue
 _io_FileIO_readinto_impl(fileio *self, PyTypeObject *cls, Py_buffer *buffer);
 
-static PyObject *
-_io_FileIO_readinto(PyObject *self, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_io_FileIO_readinto(PyValueBorrow self, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     Py_buffer buffer = {NULL, NULL};
 
     if (!_PyArg_NoKwnames("readinto", kwnames)) {
@@ -262,11 +297,15 @@ _io_FileIO_readinto(PyObject *self, PyTypeObject *cls, PyObject *const *args, Py
     if (!_PyArg_CheckPositional("readinto", nargs, 1, 1)) {
         goto exit;
     }
-    if (PyObject_GetBuffer(args[0], &buffer, PyBUF_WRITABLE) < 0) {
-        _PyArg_BadArgument("readinto", "argument 1", "read-write bytes-like object", args[0]);
+    if (!PyValue_IsObject(PyValue_Borrow(args[0]))) {
+        _PyArg_BadArgumentValue("readinto", "argument 1", "read-write bytes-like object", PyValue_Borrow(args[0]));
         goto exit;
     }
-    return_value = _io_FileIO_readinto_impl((fileio *)self, cls, &buffer);
+    if (PyObject_GetBuffer(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])), &buffer, PyBUF_WRITABLE) < 0) {
+        _PyArg_BadArgument("readinto", "argument 1", "read-write bytes-like object", PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])));
+        goto exit;
+    }
+    return_value = _io_FileIO_readinto_impl((fileio *)PyValue_AsKnownObjectBorrow(self), cls, &buffer);
 
 exit:
     /* Cleanup for buffer */
@@ -292,19 +331,24 @@ PyDoc_STRVAR(_io_FileIO_readall__doc__,
 "are read) returns None.");
 
 #define _IO_FILEIO_READALL_METHODDEF    \
-    {"readall", _PyCFunction_CAST(_io_FileIO_readall), METH_METHOD|METH_FASTCALL|METH_KEYWORDS, _io_FileIO_readall__doc__},
+    {"readall", _PyCFunction_CAST(_io_FileIO_readall), METH_VALUE|METH_METHOD, _io_FileIO_readall__doc__},
 
-static PyObject *
+static PyValue
 _io_FileIO_readall_impl(fileio *self, PyTypeObject *cls);
 
-static PyObject *
-_io_FileIO_readall(PyObject *self, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_io_FileIO_readall(PyValueBorrow self, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
+    PyValue return_value = PyValue_NULL;
+
     if (nargs || (kwnames && PyTuple_GET_SIZE(kwnames))) {
         PyErr_SetString(PyExc_TypeError, "readall() takes no arguments");
-        return NULL;
+        goto exit;
     }
-    return _io_FileIO_readall_impl((fileio *)self, cls);
+    return_value = _io_FileIO_readall_impl((fileio *)PyValue_AsKnownObjectBorrow(self), cls);
+
+exit:
+    return return_value;
 }
 
 PyDoc_STRVAR(_io_FileIO_read__doc__,
@@ -323,15 +367,15 @@ PyDoc_STRVAR(_io_FileIO_read__doc__,
 "an empty bytes object at EOF.");
 
 #define _IO_FILEIO_READ_METHODDEF    \
-    {"read", _PyCFunction_CAST(_io_FileIO_read), METH_METHOD|METH_FASTCALL|METH_KEYWORDS, _io_FileIO_read__doc__},
+    {"read", _PyCFunction_CAST(_io_FileIO_read), METH_VALUE|METH_METHOD, _io_FileIO_read__doc__},
 
-static PyObject *
+static PyValue
 _io_FileIO_read_impl(fileio *self, PyTypeObject *cls, Py_ssize_t size);
 
-static PyObject *
-_io_FileIO_read(PyObject *self, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_io_FileIO_read(PyValueBorrow self, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     Py_ssize_t size = -1;
 
     if (!_PyArg_NoKwnames("read", kwnames)) {
@@ -343,11 +387,11 @@ _io_FileIO_read(PyObject *self, PyTypeObject *cls, PyObject *const *args, Py_ssi
     if (nargs < 1) {
         goto skip_optional;
     }
-    if (!_Py_convert_optional_to_ssize_t(args[0], &size)) {
+    if (!_Py_convert_optional_to_ssize_t_value(PyValue_Borrow(args[0]), &size)) {
         goto exit;
     }
 skip_optional:
-    return_value = _io_FileIO_read_impl((fileio *)self, cls, size);
+    return_value = _io_FileIO_read_impl((fileio *)PyValue_AsKnownObjectBorrow(self), cls, size);
 
 exit:
     return return_value;
@@ -364,15 +408,15 @@ PyDoc_STRVAR(_io_FileIO_write__doc__,
 "mode, returns None if the write would block.");
 
 #define _IO_FILEIO_WRITE_METHODDEF    \
-    {"write", _PyCFunction_CAST(_io_FileIO_write), METH_METHOD|METH_FASTCALL|METH_KEYWORDS, _io_FileIO_write__doc__},
+    {"write", _PyCFunction_CAST(_io_FileIO_write), METH_VALUE|METH_METHOD, _io_FileIO_write__doc__},
 
-static PyObject *
+static PyValue
 _io_FileIO_write_impl(fileio *self, PyTypeObject *cls, Py_buffer *b);
 
-static PyObject *
-_io_FileIO_write(PyObject *self, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_io_FileIO_write(PyValueBorrow self, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     Py_buffer b = {NULL, NULL};
 
     if (!_PyArg_NoKwnames("write", kwnames)) {
@@ -381,10 +425,14 @@ _io_FileIO_write(PyObject *self, PyTypeObject *cls, PyObject *const *args, Py_ss
     if (!_PyArg_CheckPositional("write", nargs, 1, 1)) {
         goto exit;
     }
-    if (PyObject_GetBuffer(args[0], &b, PyBUF_SIMPLE) != 0) {
+    if (!PyValue_IsObject(PyValue_Borrow(args[0]))) {
+        PyErr_Format(PyExc_TypeError, "a bytes-like object is required, not '%.100s'", PyValue_TYPE(PyValue_Borrow(args[0]))->tp_name);
         goto exit;
     }
-    return_value = _io_FileIO_write_impl((fileio *)self, cls, &b);
+    if (PyObject_GetBuffer(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])), &b, PyBUF_SIMPLE) != 0) {
+        goto exit;
+    }
+    return_value = _io_FileIO_write_impl((fileio *)PyValue_AsKnownObjectBorrow(self), cls, &b);
 
 exit:
     /* Cleanup for b */
@@ -411,31 +459,34 @@ PyDoc_STRVAR(_io_FileIO_seek__doc__,
 "Note that not all file objects are seekable.");
 
 #define _IO_FILEIO_SEEK_METHODDEF    \
-    {"seek", _PyCFunction_CAST(_io_FileIO_seek), METH_FASTCALL, _io_FileIO_seek__doc__},
+    {"seek", _PyCFunction_CAST(_io_FileIO_seek), METH_VALUE, _io_FileIO_seek__doc__},
 
-static PyObject *
-_io_FileIO_seek_impl(fileio *self, PyObject *pos, int whence);
+static PyValue
+_io_FileIO_seek_impl(fileio *self, PyValueBorrow pos, int whence);
 
-static PyObject *
-_io_FileIO_seek(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_io_FileIO_seek(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
-    PyObject *pos;
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow pos;
     int whence = 0;
 
+    if (!_PyArg_NoKwnamesValue("FileIO.seek()", kwnames)) {
+        goto exit;
+    }
     if (!_PyArg_CheckPositional("seek", nargs, 1, 2)) {
         goto exit;
     }
-    pos = args[0];
+    pos = PyValue_Borrow(args[0]);
     if (nargs < 2) {
         goto skip_optional;
     }
-    whence = PyLong_AsInt(args[1]);
+    whence = _PyValue_AsInt(PyValue_Borrow(args[1]));
     if (whence == -1 && PyErr_Occurred()) {
         goto exit;
     }
 skip_optional:
-    return_value = _io_FileIO_seek_impl((fileio *)self, pos, whence);
+    return_value = _io_FileIO_seek_impl((fileio *)PyValue_AsKnownObjectBorrow(self), pos, whence);
 
 exit:
     return return_value;
@@ -450,15 +501,19 @@ PyDoc_STRVAR(_io_FileIO_tell__doc__,
 "Can raise OSError for non seekable files.");
 
 #define _IO_FILEIO_TELL_METHODDEF    \
-    {"tell", (PyCFunction)_io_FileIO_tell, METH_NOARGS, _io_FileIO_tell__doc__},
+    {"tell", _PyCFunction_CAST(_io_FileIO_tell), METH_VALUE|METH_NOARGS, _io_FileIO_tell__doc__},
 
-static PyObject *
+static PyValue
 _io_FileIO_tell_impl(fileio *self);
 
-static PyObject *
-_io_FileIO_tell(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+_io_FileIO_tell(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _io_FileIO_tell_impl((fileio *)self);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _io_FileIO_tell_impl((fileio *)PyValue_AsKnownObjectBorrow(self));
+
+    return return_value;
 }
 
 #if defined(HAVE_FTRUNCATE)
@@ -473,16 +528,17 @@ PyDoc_STRVAR(_io_FileIO_truncate__doc__,
 "The current file position is changed to the value of size.");
 
 #define _IO_FILEIO_TRUNCATE_METHODDEF    \
-    {"truncate", _PyCFunction_CAST(_io_FileIO_truncate), METH_METHOD|METH_FASTCALL|METH_KEYWORDS, _io_FileIO_truncate__doc__},
+    {"truncate", _PyCFunction_CAST(_io_FileIO_truncate), METH_VALUE|METH_METHOD, _io_FileIO_truncate__doc__},
 
-static PyObject *
-_io_FileIO_truncate_impl(fileio *self, PyTypeObject *cls, PyObject *posobj);
+static PyValue
+_io_FileIO_truncate_impl(fileio *self, PyTypeObject *cls,
+                         PyValueBorrow posobj);
 
-static PyObject *
-_io_FileIO_truncate(PyObject *self, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_io_FileIO_truncate(PyValueBorrow self, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
-    PyObject *posobj = Py_None;
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow posobj = PyValue_Borrow(PyValue_None);
 
     if (!_PyArg_NoKwnames("truncate", kwnames)) {
         goto exit;
@@ -493,9 +549,9 @@ _io_FileIO_truncate(PyObject *self, PyTypeObject *cls, PyObject *const *args, Py
     if (nargs < 1) {
         goto skip_optional;
     }
-    posobj = args[0];
+    posobj = PyValue_Borrow(args[0]);
 skip_optional:
-    return_value = _io_FileIO_truncate_impl((fileio *)self, cls, posobj);
+    return_value = _io_FileIO_truncate_impl((fileio *)PyValue_AsKnownObjectBorrow(self), cls, posobj);
 
 exit:
     return return_value;
@@ -510,15 +566,19 @@ PyDoc_STRVAR(_io_FileIO_isatty__doc__,
 "True if the file is connected to a TTY device.");
 
 #define _IO_FILEIO_ISATTY_METHODDEF    \
-    {"isatty", (PyCFunction)_io_FileIO_isatty, METH_NOARGS, _io_FileIO_isatty__doc__},
+    {"isatty", _PyCFunction_CAST(_io_FileIO_isatty), METH_VALUE|METH_NOARGS, _io_FileIO_isatty__doc__},
 
-static PyObject *
+static PyValue
 _io_FileIO_isatty_impl(fileio *self);
 
-static PyObject *
-_io_FileIO_isatty(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+_io_FileIO_isatty(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _io_FileIO_isatty_impl((fileio *)self);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _io_FileIO_isatty_impl((fileio *)PyValue_AsKnownObjectBorrow(self));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(_io_FileIO__isatty_open_only__doc__,
@@ -527,15 +587,19 @@ PyDoc_STRVAR(_io_FileIO__isatty_open_only__doc__,
 "\n");
 
 #define _IO_FILEIO__ISATTY_OPEN_ONLY_METHODDEF    \
-    {"_isatty_open_only", (PyCFunction)_io_FileIO__isatty_open_only, METH_NOARGS, _io_FileIO__isatty_open_only__doc__},
+    {"_isatty_open_only", _PyCFunction_CAST(_io_FileIO__isatty_open_only), METH_VALUE|METH_NOARGS, _io_FileIO__isatty_open_only__doc__},
 
-static PyObject *
+static PyValue
 _io_FileIO__isatty_open_only_impl(fileio *self);
 
-static PyObject *
-_io_FileIO__isatty_open_only(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+_io_FileIO__isatty_open_only(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _io_FileIO__isatty_open_only_impl((fileio *)self);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _io_FileIO__isatty_open_only_impl((fileio *)PyValue_AsKnownObjectBorrow(self));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(_io_FileIO_closed__doc__,
@@ -627,4 +691,4 @@ exit:
 
 #define _IO_FILEIO__BLKSIZE_GETSETDEF {"_blksize", (getter)_io_FileIO__blksize_get, (setter)NULL, _io_FileIO__blksize__doc__},
 
-/*[clinic end generated code: output=5683e5073a42b858 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=60718b3a78e3f86c input=a9049054013a1b77]*/

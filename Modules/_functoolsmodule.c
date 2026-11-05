@@ -1,3 +1,7 @@
+#ifndef Py_BUILD_CORE_BUILTIN
+#  define Py_BUILD_CORE_MODULE 1
+#endif
+#define Py_VALUE_CORE 1
 #include "Python.h"
 #include "pycore_call.h"          // _PyObject_CallNoArgs()
 #include "pycore_dict.h"          // _PyDict_Pop_KnownHash()
@@ -7,6 +11,7 @@
 #include "pycore_pyatomic_ft_wrappers.h"
 #include "pycore_pystate.h"       // _PyThreadState_GET()
 #include "pycore_tuple.h"         // _PyTuple_Recycle()
+#include "pycore_value_slots.h"// _PyValue_FromObjectResult()
 #include "pycore_weakref.h"       // FT_CLEAR_WEAKREFS()
 #include "pycore_value.h"         // PyValue
 #include "pycore_value_api.h"     // _PyValue_AsObjectAt()
@@ -15,6 +20,11 @@
 
 
 #include "clinic/_functoolsmodule.c.h"
+/*[clinic input]
+value_emission
+[clinic start generated code]*/
+/*[clinic end generated code: output=da39a3ee5e6b4b0d input=eb7b17088bfd7215]*/
+
 /*[clinic input]
 module _functools
 class _functools._lru_cache_wrapper "PyObject *" "&lru_cache_type_spec"
@@ -140,6 +150,7 @@ typedef struct {
     PyObject *placeholder; /* Placeholder for positional arguments */
     Py_ssize_t phcount;    /* Number of placeholders */
     vectorcallfunc vectorcall;
+    _Py_vectorcallvaluefunc value_vectorcall;
 } partialobject;
 
 // cast a PyObject pointer PTR to a partialobject pointer (no type checks)
@@ -174,18 +185,20 @@ partial_new(PyTypeObject *type, PyObject *args, PyObject *kw)
                         "type 'partial' takes at least one argument");
         return NULL;
     }
-    func = PyTuple_GetItemRef(args, 0);
-    if (func == NULL) {
+    PyValue func_value = PyTuple_GetValue(args, 0);
+    if (PyValue_IsNull(func_value)) {
         return NULL;
     }
-    if (!PyCallable_Check(func)) {
-        Py_DECREF(func);
+    /* A callable is never an inline scalar, and args keeps it alive. */
+    if (!(PyValue_IsObject(func_value)
+          && PyCallable_Check(PyValue_AsKnownObjectBorrow(func_value)))) {
+        PyValue_CLOSE(func_value);
         PyErr_SetString(PyExc_TypeError,
                         "the first argument must be callable");
         return NULL;
     }
-    /* A callable is never an inline scalar, and args keeps it alive. */
-    Py_DECREF(func);
+    func = PyValue_AsKnownObjectBorrow(func_value);
+    PyValue_CLOSE(func_value);
 
     _functools_state *state = get_functools_state_by_type(type);
     if (state == NULL) {
@@ -205,12 +218,13 @@ partial_new(PyTypeObject *type, PyObject *args, PyObject *kw)
 
     /* keyword Placeholder prohibition */
     if (kw != NULL) {
-        PyObject *val;
+        PyValue val;
         Py_ssize_t pos = 0;
         int status;
-        while ((status = PyDict_NextEntryRef(kw, &pos, NULL, &val)) > 0) {
-            int is_phold = (val == phold);
-            Py_DECREF(val);
+        while ((status = PyDict_NextValue(kw, &pos, NULL, &val)) > 0) {
+            int is_phold = (PyValue_IsObject(val)
+                            && PyValue_AsKnownObjectBorrow(val) == phold);
+            PyValue_CLOSE(val);
             if (is_phold) {
                 PyErr_SetString(PyExc_TypeError,
                                 "Placeholder cannot be passed as a keyword argument");
@@ -270,7 +284,7 @@ partial_new(PyTypeObject *type, PyObject *args, PyObject *kw)
         if (new_nargs > pto_phcount) {
             tot_nargs += new_nargs - pto_phcount;
         }
-        PyObject *item;
+        PyValue item;
         PyObject *tot_args = PyTuple_New(tot_nargs);
         if (tot_args == NULL) {
             Py_DECREF(new_args);
@@ -279,25 +293,27 @@ partial_new(PyTypeObject *type, PyObject *args, PyObject *kw)
         }
         for (Py_ssize_t i = 0, j = 0; i < tot_nargs; i++) {
             if (i < npargs) {
-                item = PyTuple_GetItemRef(pto_args, i);
-                if (item != NULL && j < new_nargs && item == phold) {
-                    Py_DECREF(item);
-                    item = PyTuple_GetItemRef(new_args, j);
+                item = PyTuple_GetValue(pto_args, i);
+                if (!PyValue_IsNull(item) && j < new_nargs
+                    && PyValue_IsObject(item)
+                    && PyValue_AsKnownObjectBorrow(item) == phold) {
+                    PyValue_CLOSE(item);
+                    item = PyTuple_GetValue(new_args, j);
                     j++;
                     pto_phcount--;
                 }
             }
             else {
-                item = PyTuple_GetItemRef(new_args, j);
+                item = PyTuple_GetValue(new_args, j);
                 j++;
             }
-            if (item == NULL) {
+            if (PyValue_IsNull(item)) {
                 Py_DECREF(tot_args);
                 Py_DECREF(new_args);
                 Py_DECREF(pto);
                 return NULL;
             }
-            PyTuple_SET_ITEM(tot_args, i, item);
+            PyTuple_SET_VALUE(tot_args, i, item);
         }
         pto->args = tot_args;
         pto->phcount = pto_phcount + phcount;
@@ -308,7 +324,8 @@ partial_new(PyTypeObject *type, PyObject *args, PyObject *kw)
         pto->phcount = phcount;
     }
     else {
-        pto->args = PySequence_Concat(pto_args, new_args);
+        PyValue item_v = _PyValue_SequenceConcat(PyValue_FromObjectBorrow(pto_args), PyValue_FromObjectBorrow(new_args));
+        pto->args = PyValue_IsNull(item_v) ? NULL : _PyValue_AsObjectStealAt(item_v, BOX_SITE_TUPLE);
         pto->phcount = pto_phcount + phcount;
         Py_DECREF(new_args);
         if (pto->args == NULL) {
@@ -391,12 +408,14 @@ partial_descr_get(PyObject *self, PyObject *obj, PyObject *type)
     return PyMethod_New(self, obj);
 }
 
-static PyObject *
-partial_vectorcall(PyObject *self, PyObject *const *args,
-                   size_t nargsf, PyObject *kwnames)
+/* The call of a partial: the value vectorcall, which the object vectorcall
+ * reaches through _PyValue_VectorcallThunk. The stack holds an owner of each
+ * argument, and the callee gets the words without a box. */
+static PyValue
+partial_vectorcall(PyThreadState *tstate, PyObject *self,
+                   const PyValue *args, size_t nargsf, PyObject *kwnames)
 {
-    partialobject *pto = partialobject_CAST(self);;
-    PyThreadState *tstate = _PyThreadState_GET();
+    partialobject *pto = partialobject_CAST(self);
     Py_ssize_t nargs = PyVectorcall_NARGS(nargsf);
 
     /* Placeholder check */
@@ -405,10 +424,10 @@ partial_vectorcall(PyObject *self, PyObject *const *args,
         PyErr_Format(PyExc_TypeError,
                      "missing positional arguments in 'partial' call; "
                      "expected at least %zd, got %zd", pto_phcount, nargs);
-        return NULL;
+        return PyValue_NULL;
     }
 
-    PyObject *result = NULL;
+    PyValue result = PyValue_NULL;
     PyObject *partial_function = Py_NewRef(pto->fn);
     PyObject *partial_args = Py_NewRef(pto->args);
     PyObject *partial_keywords = Py_NewRef(pto->kw);
@@ -422,17 +441,9 @@ partial_vectorcall(PyObject *self, PyObject *const *args,
         /* Use PY_VECTORCALL_ARGUMENTS_OFFSET to prepend a single
          * positional argument. */
         if (pto_nargs == 1 && (nargsf & PY_VECTORCALL_ARGUMENTS_OFFSET)) {
-            PyObject *first = PyTuple_GetItemRef(partial_args, 0);
-            if (first == NULL) {
-                goto done;
-            }
-            PyObject **newargs = (PyObject **)args - 1;
-            PyObject *tmp = newargs[0];
-            newargs[0] = first;
-            result = _PyObject_VectorcallTstate(tstate, partial_function, newargs,
-                                                nargs + 1, kwnames);
-            newargs[0] = tmp;
-            Py_DECREF(first);
+            result = _PyValue_VectorcallPrepend(
+                tstate, PyValue_FromObjectBorrow(partial_function),
+                PyTuple_GET_VALUE(partial_args, 0), args, nargsf, kwnames);
             goto done;
         }
     }
@@ -450,8 +461,8 @@ partial_vectorcall(PyObject *self, PyObject *const *args,
      * This case might have keyword arguments
      *  furthermore, it might use extra stack space for temporary key storage
      *  thus, double small_stack size is used, which is 10 * 8 = 80 bytes */
-    PyObject *small_stack[_PY_FASTCALL_SMALL_STACK * 2];
-    PyObject **tmp_stack, **stack;
+    PyValue small_stack[_PY_FASTCALL_SMALL_STACK * 2];
+    PyValue *tmp_stack, *stack;
     Py_ssize_t init_stack_size = tot_nargskw;
     if (pto_nkwds) {
         // If pto_nkwds, allocate additional space for temporary new keys
@@ -461,7 +472,7 @@ partial_vectorcall(PyObject *self, PyObject *const *args,
         stack = small_stack;
     }
     else {
-        stack = PyMem_Malloc(init_stack_size * sizeof(PyObject *));
+        stack = PyMem_Malloc(init_stack_size * sizeof(PyValue));
         if (stack == NULL) {
             PyErr_NoMemory();
             goto done;
@@ -472,7 +483,7 @@ partial_vectorcall(PyObject *self, PyObject *const *args,
      * move into tot_kwnames, nstack also covers their temporary slots. */
     Py_ssize_t nstack = init_stack_size;
     for (Py_ssize_t i = 0; i < nstack; i++) {
-        stack[i] = NULL;
+        stack[i] = PyValue_NULL;
     }
 
     /* Copy keywords to stack */
@@ -481,28 +492,26 @@ partial_vectorcall(PyObject *self, PyObject *const *args,
         if (nkwds) {
             /* if !pto_nkwds & nkwds, then simply append kw */
             for (Py_ssize_t i = 0; i < nkwds; i++) {
-                stack[tot_nargs + i] = Py_NewRef(args[nargs + i]);
+                stack[tot_nargs + i] = PyValue_DUP(PyValue_Borrow(args[nargs + i]));
             }
         }
     }
     else {
         /* stack is now         [<positionals>, <pto_kwds>, <kwds>, <kwds_keys>]
          * Will resize later to [<positionals>, <merged_kwds>] */
-        PyObject *key, *val;
 
         /* Merge kw to pto_kw or add to tail (if not duplicate) */
         Py_ssize_t n_tail = 0;
         for (Py_ssize_t i = 0; i < nkwds; ++i) {
-            /* A key may be an inline scalar; the callee rejects non-str. */
-            key = PyTuple_GetItemRef(kwnames, i);
-            if (key == NULL) {
+            PyValue key = PyTuple_GetValue(kwnames, i);
+            if (PyValue_IsNull(key)) {
                 Py_XDECREF(pto_kw_merged);
                 goto clean_stack;
             }
-            val = args[nargs + i];
-            int contains = PyDict_Contains(partial_keywords, key);
+            PyValueBorrow val = PyValue_Borrow(args[nargs + i]);
+            int contains = PyDict_ContainsValue(partial_keywords, key);
             if (contains < 0) {
-                Py_DECREF(key);
+                PyValue_CLOSE(key);
                 Py_XDECREF(pto_kw_merged);
                 goto clean_stack;
             }
@@ -510,12 +519,12 @@ partial_vectorcall(PyObject *self, PyObject *const *args,
                 if (pto_kw_merged == NULL) {
                     pto_kw_merged = PyDict_Copy(partial_keywords);
                     if (pto_kw_merged == NULL) {
-                        Py_DECREF(key);
+                        PyValue_CLOSE(key);
                         goto clean_stack;
                     }
                 }
-                int err = PyDict_SetItem(pto_kw_merged, key, val);
-                Py_DECREF(key);
+                int err = PyDict_SetValue(pto_kw_merged, key, val);
+                PyValue_CLOSE(key);
                 if (err < 0) {
                     Py_DECREF(pto_kw_merged);
                     goto clean_stack;
@@ -523,7 +532,7 @@ partial_vectorcall(PyObject *self, PyObject *const *args,
             }
             else {
                 /* Copy keyword tail to stack */
-                stack[tot_nargs + pto_nkwds + n_tail] = Py_NewRef(val);
+                stack[tot_nargs + pto_nkwds + n_tail] = PyValue_DUP(val);
                 stack[tot_nargskw + n_tail] = key;
                 n_tail++;
             }
@@ -538,9 +547,9 @@ partial_vectorcall(PyObject *self, PyObject *const *args,
         }
         for (Py_ssize_t i = 0; i < n_tail; ++i) {
             /* The tuple takes over the owned key. */
-            key = stack[tot_nargskw + i];
-            stack[tot_nargskw + i] = NULL;
-            PyTuple_SET_ITEM(tot_kwnames, pto_nkwds + i, key);
+            PyTuple_SET_VALUE(tot_kwnames, pto_nkwds + i,
+                              stack[tot_nargskw + i]);
+            stack[tot_nargskw + i] = PyValue_NULL;
         }
         nstack = tot_nargskw - n_merges;
 
@@ -550,10 +559,11 @@ partial_vectorcall(PyObject *self, PyObject *const *args,
         PyObject *keyword_dict = n_merges ? pto_kw_merged : partial_keywords;
         int status;
         Py_BEGIN_CRITICAL_SECTION(keyword_dict);
-        while ((status = PyDict_NextEntryRef(keyword_dict, &pos, &key, &val)) > 0) {
+        PyValue key_value, val_value;
+        while ((status = PyDict_NextValue(keyword_dict, &pos, &key_value, &val_value)) > 0) {
             assert(i < pto_nkwds);
-            PyTuple_SET_ITEM(tot_kwnames, i, key);
-            stack[tot_nargs + i] = val;
+            PyTuple_SET_VALUE(tot_kwnames, i, key_value);
+            stack[tot_nargs + i] = val_value;
             i++;
         }
         Py_END_CRITICAL_SECTION();
@@ -568,7 +578,7 @@ partial_vectorcall(PyObject *self, PyObject *const *args,
          * NOTE: This whole block can be removed without breaking anything */
         Py_ssize_t noveralloc = n_merges + nkwds;
         if (stack != small_stack && noveralloc > 6 && noveralloc > init_stack_size / 10) {
-            tmp_stack = PyMem_Realloc(stack, (tot_nargskw - n_merges) * sizeof(PyObject *));
+            tmp_stack = PyMem_Realloc(stack, (tot_nargskw - n_merges) * sizeof(PyValue));
             if (tmp_stack == NULL) {
                 Py_DECREF(tot_kwnames);
                 PyErr_NoMemory();
@@ -582,13 +592,15 @@ partial_vectorcall(PyObject *self, PyObject *const *args,
     if (pto_phcount) {
         Py_ssize_t j = 0;       // New args index
         for (Py_ssize_t i = 0; i < pto_nargs; i++) {
-            PyObject *item = PyTuple_GetItemRef(partial_args, i);
-            if (item == NULL) {
+            PyValue item = PyTuple_GetValue(partial_args, i);
+            if (PyValue_IsNull(item)) {
                 goto clean_kwnames;
             }
-            if (item == pto->placeholder) {
-                Py_DECREF(item);
-                item = Py_NewRef(args[j]);
+            if (PyValue_IsObject(item)
+                && PyValue_AsKnownObjectBorrow(item) == pto->placeholder)
+            {
+                PyValue_CLOSE(item);
+                item = PyValue_DUP(PyValue_Borrow(args[j]));
                 j += 1;
             }
             stack[i] = item;
@@ -597,24 +609,25 @@ partial_vectorcall(PyObject *self, PyObject *const *args,
         /* Add remaining args from new_args */
         if (nargs > pto_phcount) {
             for (Py_ssize_t i = j; i < nargs; i++) {
-                stack[pto_nargs + i - j] = Py_NewRef(args[i]);
+                stack[pto_nargs + i - j] = PyValue_DUP(PyValue_Borrow(args[i]));
             }
         }
     }
     else {
         for (Py_ssize_t i = 0; i < pto_nargs; i++) {
-            stack[i] = PyTuple_GetItemRef(partial_args, i);
-            if (stack[i] == NULL) {
+            stack[i] = PyTuple_GetValue(partial_args, i);
+            if (PyValue_IsNull(stack[i])) {
                 goto clean_kwnames;
             }
         }
         for (Py_ssize_t i = 0; i < nargs; i++) {
-            stack[pto_nargs + i] = Py_NewRef(args[i]);
+            stack[pto_nargs + i] = PyValue_DUP(PyValue_Borrow(args[i]));
         }
     }
 
-    result = _PyObject_VectorcallTstate(tstate, partial_function, stack,
-                                        tot_nargs, tot_kwnames);
+    result = _PyValue_VectorcallTstate(tstate,
+                                       PyValue_FromObjectBorrow(partial_function),
+                                       stack, tot_nargs, tot_kwnames);
 
  clean_kwnames:
     if (pto_nkwds) {
@@ -623,7 +636,7 @@ partial_vectorcall(PyObject *self, PyObject *const *args,
 
  clean_stack:
     for (Py_ssize_t i = 0; i < nstack; i++) {
-        Py_XDECREF(stack[i]);
+        PyValue_XCLOSE(stack[i]);
     }
     if (stack != small_stack) {
         PyMem_Free(stack);
@@ -643,12 +656,14 @@ partial_setvectorcall(partialobject *pto)
     if (PyVectorcall_Function(pto->fn) == NULL) {
         /* Don't use vectorcall if the underlying function doesn't support it */
         pto->vectorcall = NULL;
+        pto->value_vectorcall = NULL;
     }
     /* We could have a special case if there are no arguments,
      * but that is unlikely (why use partial without arguments?),
      * so we don't optimize that */
     else {
-        pto->vectorcall = partial_vectorcall;
+        pto->value_vectorcall = partial_vectorcall;
+        pto->vectorcall = _PyValue_VectorcallThunk;
     }
 }
 
@@ -706,37 +721,39 @@ partial_call(PyObject *self, PyObject *args, PyObject *kwargs)
             return NULL;
         }
         PyObject *pto_args = pto->args;
-        PyObject *item;
+        PyValue item;
         Py_ssize_t j = 0;   // New args index
         for (Py_ssize_t i = 0; i < pto_nargs; i++) {
-            item = PyTuple_GetItemRef(pto_args, i);
-            if (item != NULL && item == pto->placeholder) {
-                Py_DECREF(item);
-                item = PyTuple_GetItemRef(args, j);
+            item = PyTuple_GetValue(pto_args, i);
+            if (!PyValue_IsNull(item) && PyValue_IsObject(item)
+                && PyValue_AsKnownObjectBorrow(item) == pto->placeholder) {
+                PyValue_CLOSE(item);
+                item = PyTuple_GetValue(args, j);
                 j += 1;
             }
-            if (item == NULL) {
+            if (PyValue_IsNull(item)) {
                 Py_DECREF(tot_args);
                 Py_XDECREF(tot_kw);
                 return NULL;
             }
-            PyTuple_SET_ITEM(tot_args, i, item);
+            PyTuple_SET_VALUE(tot_args, i, item);
         }
         assert(j == pto_phcount);
         for (Py_ssize_t i = pto_nargs; i < tot_nargs; i++) {
-            item = PyTuple_GetItemRef(args, j);
-            if (item == NULL) {
+            item = PyTuple_GetValue(args, j);
+            if (PyValue_IsNull(item)) {
                 Py_DECREF(tot_args);
                 Py_XDECREF(tot_kw);
                 return NULL;
             }
-            PyTuple_SET_ITEM(tot_args, i, item);
+            PyTuple_SET_VALUE(tot_args, i, item);
             j += 1;
         }
     }
     else {
         /* Note: tupleconcat() is optimized for empty tuples */
-        tot_args = PySequence_Concat(pto->args, args);
+        PyValue tot_args_v = _PyValue_SequenceConcat(PyValue_FromObjectBorrow(pto->args), PyValue_FromObjectBorrow(args));
+        tot_args = PyValue_IsNull(tot_args_v) ? NULL : _PyValue_AsObjectStealAt(tot_args_v, BOX_SITE_TUPLE);
         if (tot_args == NULL) {
             Py_XDECREF(tot_kw);
             return NULL;
@@ -768,6 +785,8 @@ static PyMemberDef partial_memberlist[] = {
      offsetof(partialobject, dict), Py_READONLY},
     {"__vectorcalloffset__", Py_T_PYSSIZET,
      offsetof(partialobject, vectorcall), Py_READONLY},
+    {"__valuevectorcalloffset__", Py_T_PYSSIZET,
+     offsetof(partialobject, value_vectorcall), Py_READONLY},
     {NULL}  /* Sentinel */
 };
 
@@ -809,7 +828,8 @@ partial_repr(PyObject *self)
     /* Pack positional arguments */
     n = PyTuple_GET_SIZE(args);
     for (i = 0; i < n; i++) {
-        PyObject *arg = PyTuple_GetItemRef(args, i);
+        PyValue arg_v = PyTuple_GetValue(args, i);
+        PyObject *arg = PyValue_IsNull(arg_v) ? NULL : _PyValue_AsObjectStealAt(arg_v, BOX_SITE_TUPLE);
         if (arg == NULL) {
             goto done;
         }
@@ -823,7 +843,20 @@ partial_repr(PyObject *self)
     int error = 0;
     i = 0;
     Py_BEGIN_CRITICAL_SECTION(kw);
-    while ((status = PyDict_NextEntryRef(kw, &i, &key, &value)) > 0) {
+    PyValue key_value, value_value;
+    while ((status = PyDict_NextValue(kw, &i, &key_value, &value_value)) > 0) {
+        key = _PyValue_AsObjectStealAt(key_value, BOX_SITE_DICT);
+        if (key == NULL) {
+            PyValue_CLOSE(value_value);
+            error = 1;
+            break;
+        }
+        value = _PyValue_AsObjectStealAt(value_value, BOX_SITE_DICT);
+        if (value == NULL) {
+            Py_DECREF(key);
+            error = 1;
+            break;
+        }
         /* The owned entry keeps key.__str__ from deleting the value. */
         Py_SETREF(arglist, PyUnicode_FromFormat("%U, %S=%R", arglist,
                                                 key, value));
@@ -921,7 +954,7 @@ partial_setstate(PyObject *self, PyObject *state)
     }
 
     if(!PyTuple_CheckExact(fnargs))
-        fnargs = PySequence_Tuple(fnargs);
+        fnargs = _PyValue_SequenceTuple(PyValue_FromObjectBorrow(fnargs));
     else
         Py_INCREF(fnargs);
     if (fnargs == NULL)
@@ -1138,9 +1171,9 @@ _functools.cmp_to_key
 Convert a cmp= function into a key= function.
 [clinic start generated code]*/
 
-static PyObject *
-_functools_cmp_to_key_impl(PyObject *module, PyObject *mycmp)
-/*[clinic end generated code: output=71eaad0f4fc81f33 input=d1b76f231c0dfeb3]*/
+static PyValue
+_functools_cmp_to_key_impl(PyObject *module, PyValueBorrow mycmp)
+/*[clinic end generated code: output=d092282b48ca1dd8 input=d1b76f231c0dfeb3]*/
 {
     keyobject *object;
     _functools_state *state;
@@ -1148,11 +1181,16 @@ _functools_cmp_to_key_impl(PyObject *module, PyObject *mycmp)
     state = get_functools_state(module);
     object = PyObject_GC_New(keyobject, state->keyobject_type);
     if (!object)
-        return NULL;
-    object->cmp = Py_NewRef(mycmp);
+        return PyValue_NULL;
+    object->cmp = _PyValue_AsObjectAt(mycmp, BOX_SITE_FIELD);
+    if (object->cmp == NULL) {
+        object->object = PyValue_NULL;
+        Py_DECREF(object);
+        return PyValue_NULL;
+    }
     object->object = PyValue_NULL;
     PyObject_GC_Track(object);
-    return (PyObject *)object;
+    return _PyValue_FromObjectResult((PyObject *)object);
 }
 
 /* reduce (used to be a builtin) ********************************************/
@@ -1176,23 +1214,35 @@ For example, reduce(lambda x, y: x+y, [1, 2, 3, 4, 5])
 calculates ((((1 + 2) + 3) + 4) + 5).
 [clinic start generated code]*/
 
-static PyObject *
-_functools_reduce_impl(PyObject *module, PyObject *func, PyObject *seq,
-                       PyObject *result)
-/*[clinic end generated code: output=30d898fe1267c79d input=ff4d5c73100e72e8]*/
+static PyValue
+_functools_reduce_impl(PyObject *module, PyValueBorrow func,
+                       PyValueBorrow seq, PyValueBorrow result)
+/*[clinic end generated code: output=ebf743b9789c138f input=ff4d5c73100e72e8]*/
 {
     PyObject *args, *it;
+    PyObject *res = NULL;
+    PyObject *func_o;
 
-    if (result != NULL)
-        Py_INCREF(result);
+    if (!PyValue_IsNull(result)) {
+        res = _PyValue_AsObjectAt(result, BOX_SITE_PARSER);
+        if (res == NULL)
+            return PyValue_NULL;
+    }
 
-    it = PyObject_GetIter(seq);
+    it = _PyValue_GetIter(seq);
     if (it == NULL) {
         if (PyErr_ExceptionMatches(PyExc_TypeError))
             PyErr_SetString(PyExc_TypeError,
                             "reduce() arg 2 must support iteration");
-        Py_XDECREF(result);
-        return NULL;
+        Py_XDECREF(res);
+        return PyValue_NULL;
+    }
+
+    func_o = _PyValue_AsObjectAt(func, BOX_SITE_PARSER);
+    if (func_o == NULL) {
+        Py_XDECREF(res);
+        Py_DECREF(it);
+        return PyValue_NULL;
     }
 
     if ((args = PyTuple_New(2)) == NULL)
@@ -1214,18 +1264,18 @@ _functools_reduce_impl(PyObject *module, PyObject *func, PyObject *seq,
             break;
         }
 
-        if (result == NULL)
-            result = op2;
+        if (res == NULL)
+            res = op2;
         else {
             /* Update the args tuple in-place */
             assert(Py_REFCNT(args) == 1);
             /* PyTuple_SetItem steals both references, even on failure. */
-            int err = PyTuple_SetItem(args, 0, result);
-            result = NULL;
-            if (PyTuple_SetItem(args, 1, op2) < 0 || err < 0) {
+            int err = PyTuple_SetValue(args, 0, PyValue_PrepareOwned(res));
+            res = NULL;
+            if (PyTuple_SetValue(args, 1, PyValue_PrepareOwned(op2)) < 0 || err < 0) {
                 goto Fail;
             }
-            if ((result = PyObject_Call(func, args, NULL)) == NULL) {
+            if ((res = PyObject_Call(func_o, args, NULL)) == NULL) {
                 goto Fail;
             }
             // bpo-42536: The GC may have untracked this args tuple. Since we're
@@ -1236,18 +1286,20 @@ _functools_reduce_impl(PyObject *module, PyObject *func, PyObject *seq,
 
     Py_DECREF(args);
 
-    if (result == NULL)
+    if (res == NULL)
         PyErr_SetString(PyExc_TypeError,
                         "reduce() of empty iterable with no initial value");
 
     Py_DECREF(it);
-    return result;
+    Py_DECREF(func_o);
+    return _PyValue_FromObjectResult(res);
 
 Fail:
     Py_XDECREF(args);
-    Py_XDECREF(result);
+    Py_XDECREF(res);
     Py_DECREF(it);
-    return NULL;
+    Py_DECREF(func_o);
+    return PyValue_NULL;
 }
 
 /* lru_cache object **********************************************************/
@@ -1382,7 +1434,7 @@ lru_cache_make_key(PyObject *kwd_mark, PyObject *args,
         PyTuple_SET_VALUE(key, key_pos++, PyTuple_GetValue(args, pos));
     }
     if (kwds_size) {
-        PyTuple_SET_ITEM(key, key_pos++, Py_NewRef(kwd_mark));
+        PyTuple_SET_VALUE(key, key_pos++, PyValue_DUP(PyValue_FromObjectBorrow(kwd_mark)));
         for (pos = 0; _PyDict_NextValue(kwds, &pos, &keyword, &value, NULL) > 0;) {
             PyTuple_SET_VALUE(key, key_pos++, keyword);
             PyTuple_SET_VALUE(key, key_pos++, value);
@@ -1392,13 +1444,13 @@ lru_cache_make_key(PyObject *kwd_mark, PyObject *args,
     if (typed) {
         for (pos = 0; pos < PyTuple_GET_SIZE(args); ++pos) {
             PyObject *item = (PyObject *)PyValue_TYPE(PyTuple_GET_VALUE(args, pos));
-            PyTuple_SET_ITEM(key, key_pos++, Py_NewRef(item));
+            PyTuple_SET_VALUE(key, key_pos++, PyValue_DUP(PyValue_FromObjectBorrow(item)));
         }
         if (kwds_size) {
             for (pos = 0; _PyDict_NextValue(kwds, &pos, NULL, &value, NULL) > 0;) {
                 PyObject *item = Py_NewRef((PyObject *)PyValue_TYPE(value));
                 PyValue_CLOSE(value);
-                PyTuple_SET_ITEM(key, key_pos++, item);
+                PyTuple_SET_VALUE(key, key_pos++, PyValue_PrepareOwned(item));
             }
         }
     }
@@ -1426,16 +1478,17 @@ infinite_lru_cache_wrapper(lru_cache_object *self, PyObject *args, PyObject *kwd
     PyObject *key = lru_cache_make_key(self->kwd_mark, args, kwds, self->typed);
     if (!key)
         return NULL;
-    hash = PyObject_Hash(key);
+    hash = _PyValue_Hash(PyValue_FromObjectBorrow(key));
     if (hash == -1) {
         Py_DECREF(key);
         return NULL;
     }
-    int res = _PyDict_GetItemRef_KnownHash((PyDictObject *)self->cache, key, hash, &result);
+    PyValue cached = PyValue_NULL;
+    int res = _PyDict_GetValue_KnownHash(self->cache, PyValue_FromObjectBorrow(key), hash, &cached);
     if (res > 0) {
         FT_ATOMIC_ADD_SSIZE(self->hits, 1);
         Py_DECREF(key);
-        return result;
+        return _PyValue_AsObjectStealAt(cached, BOX_SITE_DICT);
     }
     if (res < 0) {
         Py_DECREF(key);
@@ -1447,7 +1500,7 @@ infinite_lru_cache_wrapper(lru_cache_object *self, PyObject *args, PyObject *kwd
         Py_DECREF(key);
         return NULL;
     }
-    if (_PyDict_SetItem_KnownHash(self->cache, key, result, hash) < 0) {
+    if (_PyDict_SetValue_KnownHash(self->cache, PyValue_FromObjectBorrow(key), PyValue_FromObjectBorrow(result), hash) < 0) {
         Py_DECREF(result);
         Py_DECREF(key);
         return NULL;
@@ -1526,7 +1579,7 @@ bounded_lru_cache_get_lock_held(lru_cache_object *self, PyObject *args, PyObject
     PyObject *key_ = *key = lru_cache_make_key(self->kwd_mark, args, kwds, self->typed);
     if (!key_)
         return -1;
-    Py_hash_t hash_ = *hash = PyObject_Hash(key_);
+    Py_hash_t hash_ = *hash = _PyValue_Hash(PyValue_FromObjectBorrow(key_));
     if (hash_ == -1) {
         Py_DECREF(key_);  /* dead reference left in *key, is not used */
         return -1;
@@ -1786,7 +1839,7 @@ lru_cache_new(PyTypeObject *type, PyObject *args, PyObject *kw)
         /* use this only to initialize lru_cache_object attribute maxsize */
         maxsize = -1;
     } else if (PyIndex_Check(maxsize_O)) {
-        maxsize = PyNumber_AsSsize_t(maxsize_O, PyExc_OverflowError);
+        maxsize = _PyValue_AsSsize_t(PyValue_FromObjectBorrow(maxsize_O), PyExc_OverflowError);
         if (maxsize == -1 && PyErr_Occurred())
             return NULL;
         if (maxsize < 0) {
@@ -1901,23 +1954,23 @@ _functools._lru_cache_wrapper.cache_info
 Report cache statistics
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _functools__lru_cache_wrapper_cache_info_impl(PyObject *self)
-/*[clinic end generated code: output=cc796a0b06dbd717 input=00e1acb31aa21ecc]*/
+/*[clinic end generated code: output=bf8475911506cbbb input=00e1acb31aa21ecc]*/
 {
     lru_cache_object *_self = (lru_cache_object *) self;
     if (_self->maxsize == -1) {
-        return PyObject_CallFunction(_self->cache_info_type, "nnOn",
+        return _PyValue_FromObjectResult(PyObject_CallFunction(_self->cache_info_type, "nnOn",
                                      FT_ATOMIC_LOAD_SSIZE_RELAXED(_self->hits),
                                      FT_ATOMIC_LOAD_SSIZE_RELAXED(_self->misses),
                                      Py_None,
-                                     PyDict_GET_SIZE(_self->cache));
+                                     PyDict_GET_SIZE(_self->cache)));
     }
-    return PyObject_CallFunction(_self->cache_info_type, "nnnn",
+    return _PyValue_FromObjectResult(PyObject_CallFunction(_self->cache_info_type, "nnnn",
                                  FT_ATOMIC_LOAD_SSIZE_RELAXED(_self->hits),
                                  FT_ATOMIC_LOAD_SSIZE_RELAXED(_self->misses),
                                  _self->maxsize,
-                                 PyDict_GET_SIZE(_self->cache));
+                                 PyDict_GET_SIZE(_self->cache)));
 }
 
 /*[clinic input]
@@ -1927,9 +1980,9 @@ _functools._lru_cache_wrapper.cache_clear
 Clear the cache and cache statistics
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _functools__lru_cache_wrapper_cache_clear_impl(PyObject *self)
-/*[clinic end generated code: output=58423b35efc3e381 input=dfa33acbecf8b4b2]*/
+/*[clinic end generated code: output=facc0f2908d017c1 input=dfa33acbecf8b4b2]*/
 {
     lru_cache_object *_self = (lru_cache_object *) self;
     lru_list_elem *list = lru_cache_unlink_list(_self);
@@ -1943,7 +1996,7 @@ _functools__lru_cache_wrapper_cache_clear_impl(PyObject *self)
         PyDict_Clear(_self->cache);
     }
     lru_cache_clear_list(list);
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 static PyObject *
@@ -1958,11 +2011,11 @@ _functools._lru_cache_wrapper.__copy__
 Return a copy of the wrapper, which is the wrapper itself.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _functools__lru_cache_wrapper___copy___impl(PyObject *self)
-/*[clinic end generated code: output=d681851615d57391 input=41d000bde05efb2b]*/
+/*[clinic end generated code: output=e8d611a05268693b input=41d000bde05efb2b]*/
 {
-    return Py_NewRef(self);
+    return PyValue_DUP(PyValue_FromObjectBorrow(self));
 }
 
 /*[clinic input]
@@ -1974,11 +2027,12 @@ _functools._lru_cache_wrapper.__deepcopy__
 Return a deep copy of the wrapper, which is the wrapper itself.
 [clinic start generated code]*/
 
-static PyObject *
-_functools__lru_cache_wrapper___deepcopy__(PyObject *self, PyObject *memo)
-/*[clinic end generated code: output=3445cd9d96273c9e input=84f706565f55ce46]*/
+static PyValue
+_functools__lru_cache_wrapper___deepcopy___impl(PyObject *self,
+                                                PyValueBorrow memo)
+/*[clinic end generated code: output=08961a6c156a91e3 input=84f706565f55ce46]*/
 {
-    return Py_NewRef(self);
+    return PyValue_DUP(PyValue_FromObjectBorrow(self));
 }
 
 static int

@@ -7,12 +7,20 @@
     Mostly written by Amaury Forgeot d'Arc
 */
 
+#ifndef Py_BUILD_CORE_BUILTIN
+#  define Py_BUILD_CORE_MODULE 1
+#endif
+#define Py_VALUE_CORE 1
 #include "Python.h"
 #include "pycore_abstract.h"      // _PyNumber_Index()
 #include "pycore_interp.h"        // _PyInterpreterState_GetConfig()
 #include "pycore_long.h"          // _PyLong_IsNegative()
+#include "pycore_long_value.h"    // _PyValue_AsLong()
 #include "pycore_pyerrors.h"      // _PyErr_ChainExceptions1()
 #include "pycore_pystate.h"       // _PyInterpreterState_GET()
+#include "pycore_value.h"         // PyValue_FromObjectBorrow()
+#include "pycore_value_ops.h"     // _PyValue_IsTrue()
+#include "pycore_value_slots.h"// _PyValue_FromObjectResult()
 
 #include "_iomodule.h"
 
@@ -67,6 +75,11 @@ PyDoc_STRVAR(module_doc,
 /*
  * The main open() function
  */
+/*[clinic input]
+value_emission
+[clinic start generated code]*/
+/*[clinic end generated code: output=da39a3ee5e6b4b0d input=eb7b17088bfd7215]*/
+
 /*[clinic input]
 module _io
 
@@ -196,11 +209,11 @@ opened in a text mode, and for bytes a BytesIO can be used like a file
 opened in a binary mode.
 [clinic start generated code]*/
 
-static PyObject *
-_io_open_impl(PyObject *module, PyObject *file, const char *mode,
+static PyValue
+_io_open_impl(PyObject *module, PyValueBorrow file, const char *mode,
               int buffering, const char *encoding, const char *errors,
-              const char *newline, int closefd, PyObject *opener)
-/*[clinic end generated code: output=aefafc4ce2b46dc0 input=b3cefa70bef404b3]*/
+              const char *newline, int closefd, PyValueBorrow opener)
+/*[clinic end generated code: output=546f006a1a67b0a8 input=b3cefa70bef404b3]*/
 {
     size_t i;
 
@@ -212,21 +225,27 @@ _io_open_impl(PyObject *module, PyObject *file, const char *mode,
 
     PyObject *raw, *modeobj = NULL, *buffer, *wrapper, *result = NULL, *path_or_fd = NULL;
 
-    is_number = PyNumber_Check(file);
+    /* An inline int or float is a number. */
+    is_number = (!PyValue_IsObject(file)
+                 || PyNumber_Check(PyValue_AsKnownObjectBorrow(file)));
 
     if (is_number) {
-        path_or_fd = Py_NewRef(file);
-    } else {
-        path_or_fd = PyOS_FSPath(file);
+        path_or_fd = _PyValue_AsObjectAt(file, BOX_SITE_PARSER);
         if (path_or_fd == NULL) {
-            return NULL;
+            return PyValue_NULL;
+        }
+    } else {
+        path_or_fd = PyOS_FSPath(PyValue_AsKnownObjectBorrow(file));
+        if (path_or_fd == NULL) {
+            return PyValue_NULL;
         }
     }
 
     if (!is_number &&
         !PyUnicode_Check(path_or_fd) &&
         !PyBytes_Check(path_or_fd)) {
-        PyErr_Format(PyExc_TypeError, "invalid file: %R", file);
+        PyErr_Format(PyExc_TypeError, "invalid file: %R",
+                     PyValue_AsKnownObjectBorrow(file));
         goto error;
     }
 
@@ -328,10 +347,15 @@ _io_open_impl(PyObject *module, PyObject *file, const char *mode,
             encoding = "utf-8";
         }
 #endif
+        PyObject *opener_obj = _PyValue_AsObjectAt(opener, BOX_SITE_PARSER);
+        if (opener_obj == NULL) {
+            goto error;
+        }
         raw = PyObject_CallFunction(RawIO_class, "OsOO",
                                     path_or_fd, rawmode,
                                     closefd ? Py_True : Py_False,
-                                    opener);
+                                    opener_obj);
+        Py_DECREF(opener_obj);
     }
 
     if (raw == NULL)
@@ -349,7 +373,7 @@ _io_open_impl(PyObject *module, PyObject *file, const char *mode,
         PyObject *res = PyObject_CallMethodNoArgs(raw, &_Py_ID(_isatty_open_only));
         if (res == NULL)
             goto error;
-        isatty = PyObject_IsTrue(res);
+        isatty = _PyValue_IsTrue(PyValue_FromObjectBorrow(res));
         Py_DECREF(res);
         if (isatty < 0)
             goto error;
@@ -363,12 +387,12 @@ _io_open_impl(PyObject *module, PyObject *file, const char *mode,
         line_buffering = 0;
 
     if (buffering < 0) {
-        PyObject *blksize_obj;
-        blksize_obj = PyObject_GetAttr(raw, &_Py_ID(_blksize));
-        if (blksize_obj == NULL)
+        PyValue blksize_obj;
+        blksize_obj = _PyValue_GetAttr(PyValue_FromObjectBorrow(raw), &_Py_ID(_blksize));
+        if (PyValue_IsNull(blksize_obj))
             goto error;
-        buffering = PyLong_AsLong(blksize_obj);
-        Py_DECREF(blksize_obj);
+        buffering = _PyValue_AsLong(blksize_obj);
+        PyValue_CLOSE(blksize_obj);
         if (buffering == -1 && PyErr_Occurred())
             goto error;
         buffering = Py_MAX(Py_MIN(buffering, 8192 * 1024), DEFAULT_BUFFER_SIZE);
@@ -388,7 +412,7 @@ _io_open_impl(PyObject *module, PyObject *file, const char *mode,
         }
 
         Py_DECREF(modeobj);
-        return result;
+        return _PyValue_FromObjectResult(result);
     }
 
     /* wraps into a buffered file */
@@ -421,7 +445,7 @@ _io_open_impl(PyObject *module, PyObject *file, const char *mode,
     /* if binary, returns the buffered file */
     if (binary) {
         Py_DECREF(modeobj);
-        return result;
+        return _PyValue_FromObjectResult(result);
     }
 
     /* wraps into a TextIOWrapper */
@@ -435,10 +459,10 @@ _io_open_impl(PyObject *module, PyObject *file, const char *mode,
     result = wrapper;
     Py_DECREF(buffer);
 
-    if (PyObject_SetAttr(wrapper, &_Py_ID(mode), modeobj) < 0)
+    if (_PyValue_SetAttr(PyValue_FromObjectBorrow(wrapper), &_Py_ID(mode), PyValue_FromObjectBorrow(modeobj)) < 0)
         goto error;
     Py_DECREF(modeobj);
-    return result;
+    return _PyValue_FromObjectResult(result);
 
   error:
     if (result != NULL) {
@@ -450,7 +474,7 @@ _io_open_impl(PyObject *module, PyObject *file, const char *mode,
     }
     Py_XDECREF(path_or_fd);
     Py_XDECREF(modeobj);
-    return NULL;
+    return PyValue_NULL;
 }
 
 
@@ -473,28 +497,29 @@ This can be used in APIs with an encoding=None parameter.
 However, please consider using encoding="utf-8" for new APIs.
 [clinic start generated code]*/
 
-static PyObject *
-_io_text_encoding_impl(PyObject *module, PyObject *encoding, int stacklevel)
-/*[clinic end generated code: output=91b2cfea6934cc0c input=4999aa8b3d90f3d4]*/
+static PyValue
+_io_text_encoding_impl(PyObject *module, PyValueBorrow encoding,
+                       int stacklevel)
+/*[clinic end generated code: output=51a7d6f1b553ecf1 input=4999aa8b3d90f3d4]*/
 {
-    if (encoding == NULL || encoding == Py_None) {
+    if (PyValue_IsNull(encoding) || PyValue_IsNone(encoding)) {
         PyInterpreterState *interp = _PyInterpreterState_GET();
         if (_PyInterpreterState_GetConfig(interp)->warn_default_encoding) {
             if (PyErr_WarnEx(PyExc_EncodingWarning,
                              "'encoding' argument not specified", stacklevel)) {
-                return NULL;
+                return PyValue_NULL;
             }
         }
         const PyPreConfig *preconfig = &_PyRuntime.preconfig;
         if (preconfig->utf8_mode) {
             _Py_DECLARE_STR(utf_8, "utf-8");
-            encoding = &_Py_STR(utf_8);
+            encoding = _PyValue_FromObjectKnown(&_Py_STR(utf_8));
         }
         else {
-            encoding = &_Py_ID(locale);
+            encoding = _PyValue_FromObjectKnown(&_Py_ID(locale));
         }
     }
-    return Py_NewRef(encoding);
+    return PyValue_DUP(encoding);
 }
 
 
@@ -510,11 +535,11 @@ interchangeable with calling open(path, 'rb').
 
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _io_open_code_impl(PyObject *module, PyObject *path)
-/*[clinic end generated code: output=2fe4ecbd6f3d6844 input=2803c35aeb63c719]*/
+/*[clinic end generated code: output=c2ee6d19e89f3ce3 input=2803c35aeb63c719]*/
 {
-    return PyFile_OpenCodeObject(path);
+    return _PyValue_FromObjectResult(PyFile_OpenCodeObject(path));
 }
 
 /*
@@ -526,7 +551,10 @@ PyNumber_AsOff_t(PyObject *item, PyObject *err)
 {
     Py_off_t result;
     PyObject *runerr;
-    PyObject *value = _PyNumber_Index(item);
+    PyValue index = _PyValue_Index(PyValue_FromObjectBorrow(item));
+    if (PyValue_IsNull(index))
+        return -1;
+    PyObject *value = _PyValue_AsObjectStealAt(index, BOX_SITE_NUMBER);
     if (value == NULL)
         return -1;
 

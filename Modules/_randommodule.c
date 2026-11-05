@@ -70,11 +70,14 @@
 #  define Py_BUILD_CORE_MODULE 1
 #endif
 
+#define Py_VALUE_CORE 1
 #include "Python.h"
 #include "pycore_long.h"          // _PyLong_NumBits()
 #include "pycore_modsupport.h"    // _PyArg_NoKeywords()
 #include "pycore_moduleobject.h"  // _PyModule_GetState()
 #include "pycore_pylifecycle.h"   // _PyOS_URandomNonblock()
+#include "pycore_value_ops.h"     // _PyValue_Hash()
+#include "pycore_value_slots.h"// _PyValue_FromObjectResult()
 
 #ifdef HAVE_UNISTD_H
 #  include <unistd.h>             // getpid()
@@ -120,6 +123,11 @@ typedef struct {
 #define RandomObject_CAST(op)   ((RandomObject *)(op))
 
 #include "clinic/_randommodule.c.h"
+
+/*[clinic input]
+value_emission
+[clinic start generated code]*/
+/*[clinic end generated code: output=da39a3ee5e6b4b0d input=eb7b17088bfd7215]*/
 
 /*[clinic input]
 module _random
@@ -184,12 +192,12 @@ _random.Random.random
 random() -> x in the interval [0, 1).
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _random_Random_random_impl(RandomObject *self)
-/*[clinic end generated code: output=117ff99ee53d755c input=26492e52d26e8b7b]*/
+/*[clinic end generated code: output=f88f157245a17a32 input=26492e52d26e8b7b]*/
 {
     uint32_t a=genrand_uint32(self)>>5, b=genrand_uint32(self)>>6;
-    return PyFloat_FromDouble((a*67108864.0+b)*(1.0/9007199254740992.0));
+    return PyValue_FromDouble((a*67108864.0+b)*(1.0/9007199254740992.0));
 }
 
 /* initializes mt[N] with a seed */
@@ -291,16 +299,17 @@ random_seed_time_pid(RandomObject *self)
 }
 
 static int
-random_seed(RandomObject *self, PyObject *arg)
+random_seed(RandomObject *self, PyValueBorrow arg_value)
 {
     int result = -1;  /* guilty until proved innocent */
+    PyObject *arg = NULL;
     PyObject *n = NULL;
     uint32_t *key = NULL;
     int64_t bits;
     size_t keyused;
     int res;
 
-    if (arg == NULL || arg == Py_None) {
+    if (PyValue_IsNull(arg_value) || PyValue_IsNone(arg_value)) {
        if (random_seed_urandom(self) < 0) {
             PyErr_Clear();
 
@@ -317,8 +326,15 @@ random_seed(RandomObject *self, PyObject *arg)
      * So: if the arg is a PyLong, use its absolute value.
      * Otherwise use its hash value, cast to unsigned.
      */
+    arg = _PyValue_AsObjectAt(arg_value, BOX_SITE_PARSER);
+    if (arg == NULL) {
+        return -1;
+    }
     if (PyLong_CheckExact(arg)) {
-        n = PyNumber_Absolute(arg);
+        PyValue abs_value = _PyValue_Absolute(PyValue_FromObjectBorrow(arg));
+        n = PyValue_IsNull(abs_value)
+            ? NULL
+            : _PyValue_AsObjectStealAt(abs_value, BOX_SITE_NUMBER);
     } else if (PyLong_Check(arg)) {
         /* Calling int.__abs__() prevents calling arg.__abs__(), which might
            return an invalid value. See issue #31478. */
@@ -326,7 +342,7 @@ random_seed(RandomObject *self, PyObject *arg)
         n = PyObject_CallOneArg(state->Long___abs__, arg);
     }
     else {
-        Py_hash_t hash = PyObject_Hash(arg);
+        Py_hash_t hash = _PyValue_Hash(PyValue_FromObjectBorrow(arg));
         if (hash == -1)
             goto Done;
         n = PyLong_FromSize_t((size_t)hash);
@@ -373,6 +389,7 @@ random_seed(RandomObject *self, PyObject *arg)
     result = 0;
 
 Done:
+    Py_DECREF(arg);
     Py_XDECREF(n);
     PyMem_Free(key);
     return result;
@@ -392,14 +409,14 @@ Defaults to use urandom and falls back to a combination
 of the current time and the process identifier.
 [clinic start generated code]*/
 
-static PyObject *
-_random_Random_seed_impl(RandomObject *self, PyObject *n)
-/*[clinic end generated code: output=0fad1e16ba883681 input=46d01d2ba938c7b1]*/
+static PyValue
+_random_Random_seed_impl(RandomObject *self, PyValueBorrow n)
+/*[clinic end generated code: output=f8a8db508d98c5ce input=46d01d2ba938c7b1]*/
 {
     if (random_seed(self, n) < 0) {
-        return NULL;
+        return PyValue_NULL;
     }
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 /*[clinic input]
@@ -411,9 +428,9 @@ _random.Random.getstate
 getstate() -> tuple containing the current state.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _random_Random_getstate_impl(RandomObject *self)
-/*[clinic end generated code: output=bf6cef0c092c7180 input=b6621f31eb639694]*/
+/*[clinic end generated code: output=87fe97ea1ec7d48d input=b6621f31eb639694]*/
 {
     PyObject *state;
     PyObject *element;
@@ -421,22 +438,22 @@ _random_Random_getstate_impl(RandomObject *self)
 
     state = PyTuple_New(N+1);
     if (state == NULL)
-        return NULL;
+        return PyValue_NULL;
     for (i=0; i<N ; i++) {
         element = PyLong_FromUnsignedLong(self->state[i]);
         if (element == NULL)
             goto Fail;
-        PyTuple_SET_ITEM(state, i, element);
+        PyTuple_SET_VALUE(state, i, PyValue_PrepareOwned(element));
     }
     element = PyLong_FromLong((long)(self->index));
     if (element == NULL)
         goto Fail;
-    PyTuple_SET_ITEM(state, i, element);
-    return state;
+    PyTuple_SET_VALUE(state, i, PyValue_PrepareOwned(element));
+    return _PyValue_FromObjectResult(state);
 
 Fail:
     Py_DECREF(state);
-    return NULL;
+    return PyValue_NULL;
 }
 
 
@@ -451,55 +468,64 @@ _random.Random.setstate
 setstate(state) -> None.  Restores generator state.
 [clinic start generated code]*/
 
-static PyObject *
-_random_Random_setstate_impl(RandomObject *self, PyObject *state)
-/*[clinic end generated code: output=babfc2c2eac6b027 input=358e898ec07469b7]*/
+static PyValue
+_random_Random_setstate_impl(RandomObject *self, PyValueBorrow state)
+/*[clinic end generated code: output=27cac432a44fb46c input=358e898ec07469b7]*/
 {
     int i;
     unsigned long element;
     long index;
     uint32_t new_state[N];
 
-    if (!PyTuple_Check(state)) {
+    if (!(PyValue_IsObject(state) && PyTuple_Check(PyValue_AsKnownObjectBorrow(state)))) {
         PyErr_SetString(PyExc_TypeError,
             "state vector must be a tuple");
-        return NULL;
+        return PyValue_NULL;
     }
-    if (PyTuple_Size(state) != N+1) {
+    PyObject *state_obj = PyValue_AsKnownObjectBorrow(state);
+    if (PyTuple_Size(state_obj) != N+1) {
         PyErr_SetString(PyExc_ValueError,
             "state vector is the wrong size");
-        return NULL;
+        return PyValue_NULL;
     }
 
     for (i=0; i<N ; i++) {
-        PyObject *item = PyTuple_GetItemRef(state, i);
+        PyValue item_value = PyTuple_GetValue(state_obj, i);
+        if (PyValue_IsNull(item_value)) {
+            return PyValue_NULL;
+        }
+        PyObject *item = _PyValue_AsObjectStealAt(item_value, BOX_SITE_TUPLE);
         if (item == NULL) {
-            return NULL;
+            return PyValue_NULL;
         }
         element = PyLong_AsUnsignedLong(item);
         Py_DECREF(item);
         if (element == (unsigned long)-1 && PyErr_Occurred())
-            return NULL;
+            return PyValue_NULL;
         new_state[i] = (uint32_t)element;
     }
 
-    PyObject *index_obj = PyTuple_GetItemRef(state, i);
+    PyValue index_value = PyTuple_GetValue(state_obj, i);
+    if (PyValue_IsNull(index_value)) {
+        return PyValue_NULL;
+    }
+    PyObject *index_obj = _PyValue_AsObjectStealAt(index_value, BOX_SITE_TUPLE);
     if (index_obj == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
     index = PyLong_AsLong(index_obj);
     Py_DECREF(index_obj);
     if (index == -1 && PyErr_Occurred())
-        return NULL;
+        return PyValue_NULL;
     if (index < 0 || index > N) {
         PyErr_SetString(PyExc_ValueError, "invalid state");
-        return NULL;
+        return PyValue_NULL;
     }
     self->index = (int)index;
     for (i = 0; i < N; i++)
         self->state[i] = new_state[i];
 
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 /*[clinic input]
@@ -513,9 +539,9 @@ _random.Random.getrandbits
 getrandbits(k) -> x.  Generates an int with k random bits.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _random_Random_getrandbits_impl(RandomObject *self, uint64_t k)
-/*[clinic end generated code: output=c30ef8435f3433cf input=64226ac13bb4d2a3]*/
+/*[clinic end generated code: output=8904ffa261702fdf input=64226ac13bb4d2a3]*/
 {
     Py_ssize_t i, words;
     uint32_t r;
@@ -523,20 +549,20 @@ _random_Random_getrandbits_impl(RandomObject *self, uint64_t k)
     PyObject *result;
 
     if (k == 0)
-        return PyLong_FromLong(0);
+        return PyValue_FromInt64(0);
 
     if (k <= 32)  /* Fast path */
-        return PyLong_FromUnsignedLong(genrand_uint32(self) >> (32 - k));
+        return PyValue_FromInt64(genrand_uint32(self) >> (32 - k));
 
     if ((k - 1u) / 32u + 1u > PY_SSIZE_T_MAX / 4u) {
         PyErr_NoMemory();
-        return NULL;
+        return PyValue_NULL;
     }
     words = (Py_ssize_t)((k - 1u) / 32u + 1u);
     wordarray = (uint32_t *)PyMem_Malloc(words * 4);
     if (wordarray == NULL) {
         PyErr_NoMemory();
-        return NULL;
+        return PyValue_NULL;
     }
 
     /* Fill-out bits of long integer, by 32-bit words, from least significant
@@ -556,7 +582,7 @@ _random_Random_getrandbits_impl(RandomObject *self, uint64_t k)
     result = _PyLong_FromByteArray((unsigned char *)wordarray, words * 4,
                                    PY_LITTLE_ENDIAN, 0 /* unsigned */);
     PyMem_Free(wordarray);
-    return result;
+    return _PyValue_FromObjectResult(result);
 }
 
 /*[clinic input]
@@ -569,8 +595,8 @@ _random.Random.__init__ as random_init
 [clinic start generated code]*/
 
 static int
-random_init_impl(RandomObject *self, PyObject *seed)
-/*[clinic end generated code: output=260734a3739c394f input=e516bf32e8a05e28]*/
+random_init_impl(RandomObject *self, PyValueBorrow seed)
+/*[clinic end generated code: output=ea82026a25015919 input=e516bf32e8a05e28]*/
 {
     return random_seed(self, seed);
 }

@@ -6393,21 +6393,36 @@ class ValueEmissionTests(unittest.TestCase):
         self.assertIn('METH_VALUE|METH_NOARGS, ', generated)
         self.assertNotIn('_PyArg_CheckArityValue', generated)
 
-    def test_refused_converter_without_value_form(self):
-        self.refused("""
+    def test_converter_without_value_form_stays_object(self):
+        # An encoded str has no value form: the function keeps its object
+        # signature and flags.
+        generated = self.generate("""
             m.f
-                a: short
+                a: str(encoding="utf-8")
                 /
-        """, "the 'short' converter of parameter 'a'")
+        """)
+        self.assertNotIn('METH_VALUE', generated)
+        self.assertIn('METH_O', generated)
 
-    def test_refused_optional_groups(self):
-        self.refused("""
+    def test_optional_groups_stay_object(self):
+        generated = self.generate("""
             m.f
                 [
                 a: int
                 ]
                 /
-        """, "optional groups")
+        """)
+        self.assertNotIn('METH_VALUE', generated)
+
+    def test_object_function_converts_numbers_through_values(self):
+        # An accessor of a value file cannot call the object-form numeric
+        # conversions, which the unit marks unavailable.
+        generated = self.generate("""
+            @setter
+            m.T.attr
+                value: bool(accept={int})
+        """, preamble='module m\nclass m.T "TestObj *" "&TestType"')
+        self.assertNotIn('PyObject_IsTrue(', generated)
 
     def test_refused_deprecated_parameters(self):
         self.refused("""

@@ -179,6 +179,13 @@ class CConverter(metaclass=CConverterAutoRegister):
     # are rendered; parse_value_arg() then converts a PyValueBorrow.
     value_emission: bool = False
 
+    # True for the converters of an object-form function (an accessor, a slot
+    # or a function whose converter has no value form) of a value_emission
+    # file.  The unit marks the object forms of the numeric conversions
+    # unavailable, so these converters take their argument as a borrowed
+    # value and use the value twins.
+    object_in_value_unit: bool = False
+
     # True if no inline value (an exact int or float) is a valid argument:
     # parse_value_arg() then tests the tag, reports an inline value with
     # value_inline_error(), and converts the object as parse_arg() does.
@@ -192,6 +199,10 @@ class CConverter(metaclass=CConverterAutoRegister):
     # it is int f(PyValueBorrow, void *).  False for the built-in converter
     # functions that take an object and have no value form yet.
     value_converter_function: bool = True
+    # False: the converter has no value form, and a function that uses it
+    # stays in its object form (cold, never-inline arguments: buffers and
+    # encoded strings).
+    has_value_form: bool = True
 
     # keep in sync with self_converter.__init__!
     def __init__(self,

@@ -1,8 +1,15 @@
+#ifndef Py_BUILD_CORE_BUILTIN
+#  define Py_BUILD_CORE_MODULE 1
+#endif
+#define Py_VALUE_CORE 1
 #include "Python.h"
 #include "pycore_call.h"              // _PyObject_CallNoArgs()
 #include "pycore_ceval.h"             // _PyEval_GetBuiltin()
 #include "pycore_critical_section.h"  // Py_BEGIN_CRITICAL_SECTION()
+#include "pycore_dict.h"              // PyDict_GetValue()
+#include "pycore_list.h"          // PyList_AppendValue()
 #include "pycore_long.h"              // _PyLong_GetZero()
+#include "pycore_long_value.h"        // _PyValue_AsLong()
 #include "pycore_moduleobject.h"      // _PyModule_GetState()
 #include "pycore_value.h"              // PyValue_CLOSE()
 #include "pycore_value_api.h"          // _PyValue_AsObjectAt()
@@ -82,6 +89,11 @@ typedef struct accumulateobject accumulateobject;
 typedef struct ziplongestobject ziplongestobject;
 
 /*[clinic input]
+value_emission
+[clinic start generated code]*/
+/*[clinic end generated code: output=da39a3ee5e6b4b0d input=eb7b17088bfd7215]*/
+
+/*[clinic input]
 module itertools
 class itertools.groupby "groupbyobject *" "clinic_state()->groupby_type"
 class itertools._grouper "_grouperobject *" "clinic_state()->_grouper_type"
@@ -152,10 +164,10 @@ than n.
 
 [clinic start generated code]*/
 
-static PyObject *
-batched_new_impl(PyTypeObject *type, PyObject *iterable, Py_ssize_t n,
+static PyValue
+batched_new_impl(PyTypeObject *type, PyValueBorrow iterable, Py_ssize_t n,
                  int strict)
-/*[clinic end generated code: output=c6de11b061529d3e input=b31d8be8e8577a34]*/
+/*[clinic end generated code: output=e9434456a581eb9e input=b31d8be8e8577a34]*/
 {
     PyObject *it;
     batchedobject *bo;
@@ -166,23 +178,23 @@ batched_new_impl(PyTypeObject *type, PyObject *iterable, Py_ssize_t n,
            never throw-away input data.
         */
         PyErr_SetString(PyExc_ValueError, "n must be at least one");
-        return NULL;
+        return PyValue_NULL;
     }
-    it = PyObject_GetIter(iterable);
+    it = _PyValue_GetIter(iterable);
     if (it == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     /* create batchedobject structure */
     bo = (batchedobject *)type->tp_alloc(type, 0);
     if (bo == NULL) {
         Py_DECREF(it);
-        return NULL;
+        return PyValue_NULL;
     }
     bo->batch_size = n;
     bo->it = it;
     bo->strict = (bool) strict;
-    return (PyObject *)bo;
+    return _PyValue_FromObjectResult((PyObject *)bo);
 }
 
 static void
@@ -311,30 +323,30 @@ Return an iterator of overlapping pairs taken from the input iterator.
 
 [clinic start generated code]*/
 
-static PyObject *
-pairwise_new_impl(PyTypeObject *type, PyObject *iterable)
-/*[clinic end generated code: output=9f0267062d384456 input=6e7c3cddb431a8d6]*/
+static PyValue
+pairwise_new_impl(PyTypeObject *type, PyValueBorrow iterable)
+/*[clinic end generated code: output=f4397a5342119b45 input=6e7c3cddb431a8d6]*/
 {
     PyObject *it;
     pairwiseobject *po;
 
-    it = PyObject_GetIter(iterable);
+    it = _PyValue_GetIter(iterable);
     if (it == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
     po = (pairwiseobject *)type->tp_alloc(type, 0);
     if (po == NULL) {
         Py_DECREF(it);
-        return NULL;
+        return PyValue_NULL;
     }
     po->it = it;
     po->old = PyValue_NULL;
-    po->result = _PyTuple_FromPairSteal(Py_None, Py_None);
+    po->result = _PyTuple_FromPairTakeValue(PyValue_PrepareOwned(Py_None), PyValue_PrepareOwned(Py_None));
     if (po->result == NULL) {
         Py_DECREF(po);
-        return NULL;
+        return PyValue_NULL;
     }
-    return (PyObject *)po;
+    return _PyValue_FromObjectResult((PyObject *)po);
 }
 
 static void
@@ -485,26 +497,31 @@ itertools.groupby.__new__
 make an iterator that returns consecutive keys and groups from the iterable
 [clinic start generated code]*/
 
-static PyObject *
-itertools_groupby_impl(PyTypeObject *type, PyObject *it, PyObject *keyfunc)
-/*[clinic end generated code: output=cbb1ae3a90fd4141 input=9f89fe625b20ef1a]*/
+static PyValue
+itertools_groupby_impl(PyTypeObject *type, PyValueBorrow it,
+                       PyValueBorrow keyfunc)
+/*[clinic end generated code: output=c5896f52daed8928 input=9f89fe625b20ef1a]*/
 {
     groupbyobject *gbo;
 
     gbo = (groupbyobject *)type->tp_alloc(type, 0);
     if (gbo == NULL)
-        return NULL;
+        return PyValue_NULL;
     gbo->tgtkey = PyValue_NULL;
     gbo->currkey = PyValue_NULL;
     gbo->currvalue = PyValue_NULL;
-    gbo->keyfunc = Py_NewRef(keyfunc);
-    gbo->it = PyObject_GetIter(it);
+    gbo->keyfunc = _PyValue_AsObjectAt(keyfunc, BOX_SITE_FIELD);
+    if (gbo->keyfunc == NULL) {
+        Py_DECREF(gbo);
+        return PyValue_NULL;
+    }
+    gbo->it = _PyValue_GetIter(it);
     if (gbo->it == NULL) {
         Py_DECREF(gbo);
-        return NULL;
+        return PyValue_NULL;
     }
     gbo->state = find_state_by_type(type);
-    return (PyObject *)gbo;
+    return _PyValue_FromObjectResult((PyObject *)gbo);
 }
 
 static void
@@ -655,13 +672,13 @@ itertools._grouper.__new__
     /
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 itertools__grouper_impl(PyTypeObject *type, PyObject *parent,
-                        PyObject *tgtkey)
-/*[clinic end generated code: output=462efb1cdebb5914 input=afe05eb477118f12]*/
+                        PyValueBorrow tgtkey)
+/*[clinic end generated code: output=bc293e045a6457b6 input=afe05eb477118f12]*/
 {
-    return _grouper_create(groupbyobject_CAST(parent),
-                           PyValue_FromObjectBorrow(tgtkey));
+    return _PyValue_FromObjectResult(
+        _grouper_create(groupbyobject_CAST(parent), tgtkey));
 }
 
 static PyObject *
@@ -933,10 +950,10 @@ itertools.teedataobject.__new__
 Data container common to multiple tee objects.
 [clinic start generated code]*/
 
-static PyObject *
-itertools_teedataobject_impl(PyTypeObject *type, PyObject *it,
-                             PyObject *values, PyObject *next)
-/*[clinic end generated code: output=3343ceb07e08df5e input=be60f2fabd2b72ba]*/
+static PyValue
+itertools_teedataobject_impl(PyTypeObject *type, PyValueBorrow it,
+                             PyObject *values, PyValueBorrow next)
+/*[clinic end generated code: output=fc1e303029fde78a input=be60f2fabd2b72ba]*/
 {
     teedataobject *tdo;
     Py_ssize_t i, len;
@@ -944,9 +961,13 @@ itertools_teedataobject_impl(PyTypeObject *type, PyObject *it,
     itertools_state *state = get_module_state_by_cls(type);
     assert(type == state->teedataobject_type);
 
-    tdo = (teedataobject *)teedataobject_newinternal(state, it);
+    PyObject *it_obj = _PyValue_AsObjectAt(it, BOX_SITE_PARSER);
+    if (it_obj == NULL)
+        return PyValue_NULL;
+    tdo = (teedataobject *)teedataobject_newinternal(state, it_obj);
+    Py_DECREF(it_obj);
     if (!tdo)
-        return NULL;
+        return PyValue_NULL;
 
     len = PyList_GET_SIZE(values);
     if (len > LINKCELLS)
@@ -955,7 +976,7 @@ itertools_teedataobject_impl(PyTypeObject *type, PyObject *it,
         PyValue value = PyList_GetValue(values, i);
         if (PyValue_IsNull(value)) {
             Py_DECREF(tdo);
-            return NULL;
+            return PyValue_NULL;
         }
         tdo->values[i] = value;
         _PyValue_CheckHome(tdo->values[i]);
@@ -964,22 +985,22 @@ itertools_teedataobject_impl(PyTypeObject *type, PyObject *it,
     }
 
     if (len == LINKCELLS) {
-        if (next != Py_None) {
-            if (!Py_IS_TYPE(next, state->teedataobject_type))
+        if (!PyValue_IsNone(next)) {
+            if (PyValue_TYPE(next) != state->teedataobject_type)
                 goto err;
             assert(tdo->nextlink == NULL);
-            tdo->nextlink = Py_NewRef(next);
+            tdo->nextlink = Py_NewRef(PyValue_AsKnownObjectBorrow(next));
         }
     } else {
-        if (next != Py_None)
+        if (!PyValue_IsNone(next))
             goto err; /* shouldn't have a next if we are not full */
     }
-    return (PyObject*)tdo;
+    return _PyValue_FromObjectResult((PyObject*)tdo);
 
 err:
     Py_XDECREF(tdo);
     PyErr_SetString(PyExc_ValueError, "Invalid arguments");
-    return NULL;
+    return PyValue_NULL;
 }
 
 static PyType_Slot teedataobject_slots[] = {
@@ -1107,12 +1128,12 @@ tee_copy(PyObject *op, PyObject *Py_UNUSED(ignored))
 PyDoc_STRVAR(teecopy_doc, "Returns an independent iterator.");
 
 static PyObject *
-tee_fromiterable(itertools_state *state, PyObject *iterable)
+tee_fromiterable(itertools_state *state, PyValueBorrow iterable)
 {
     teeobject *to;
     PyObject *it;
 
-    it = PyObject_GetIter(iterable);
+    it = _PyValue_GetIter(iterable);
     if (it == NULL)
         return NULL;
     if (PyObject_TypeCheck(it, state->tee_type)) {
@@ -1148,12 +1169,12 @@ itertools._tee.__new__
 Iterator wrapped to make it copyable.
 [clinic start generated code]*/
 
-static PyObject *
-itertools__tee_impl(PyTypeObject *type, PyObject *iterable)
-/*[clinic end generated code: output=b02d3fd26c810c3f input=adc0779d2afe37a2]*/
+static PyValue
+itertools__tee_impl(PyTypeObject *type, PyValueBorrow iterable)
+/*[clinic end generated code: output=1fe98874e71a3759 input=adc0779d2afe37a2]*/
 {
     itertools_state *state = get_module_state_by_cls(type);
-    return tee_fromiterable(state, iterable);
+    return _PyValue_FromObjectResult(tee_fromiterable(state, iterable));
 }
 
 static int
@@ -1217,42 +1238,42 @@ itertools.tee
 Returns a tuple of n independent iterators.
 [clinic start generated code]*/
 
-static PyObject *
-itertools_tee_impl(PyObject *module, PyObject *iterable, Py_ssize_t n)
-/*[clinic end generated code: output=1c64519cd859c2f0 input=0f72d78e655f45cb]*/
+static PyValue
+itertools_tee_impl(PyObject *module, PyValueBorrow iterable, Py_ssize_t n)
+/*[clinic end generated code: output=925ade1e99f3aafc input=0f72d78e655f45cb]*/
 {
     Py_ssize_t i;
     PyObject *it, *to, *result;
 
     result = PyTuple_New(n);
     if (result == NULL)
-        return NULL;
+        return PyValue_NULL;
     if (n == 0)
-        return result;
-    it = PyObject_GetIter(iterable);
+        return _PyValue_FromObjectResult(result);
+    it = _PyValue_GetIter(iterable);
     if (it == NULL) {
         Py_DECREF(result);
-        return NULL;
+        return PyValue_NULL;
     }
 
     itertools_state *state = get_module_state(module);
-    to = tee_fromiterable(state, it);
+    to = tee_fromiterable(state, PyValue_FromObjectBorrow(it));
     Py_DECREF(it);
     if (to == NULL) {
         Py_DECREF(result);
-        return NULL;
+        return PyValue_NULL;
     }
 
-    PyTuple_SET_ITEM(result, 0, to);
+    PyTuple_SET_VALUE(result, 0, PyValue_PrepareOwned(to));
     for (i = 1; i < n; i++) {
         to = tee_copy(to, NULL);
         if (to == NULL) {
             Py_DECREF(result);
-            return NULL;
+            return PyValue_NULL;
         }
-        PyTuple_SET_ITEM(result, i, to);
+        PyTuple_SET_VALUE(result, i, PyValue_PrepareOwned(to));
     }
-    return result;
+    return _PyValue_FromObjectResult(result);
 }
 
 
@@ -1276,23 +1297,23 @@ itertools.cycle.__new__
 Return elements from the iterable until it is exhausted. Then repeat the sequence indefinitely.
 [clinic start generated code]*/
 
-static PyObject *
-itertools_cycle_impl(PyTypeObject *type, PyObject *iterable)
-/*[clinic end generated code: output=f60e5ec17a45b35c input=ead392f4aac7afd8]*/
+static PyValue
+itertools_cycle_impl(PyTypeObject *type, PyValueBorrow iterable)
+/*[clinic end generated code: output=9f4281f0801e78ac input=ead392f4aac7afd8]*/
 {
     PyObject *it;
     PyObject *saved;
     cycleobject *lz;
 
     /* Get iterator. */
-    it = PyObject_GetIter(iterable);
+    it = _PyValue_GetIter(iterable);
     if (it == NULL)
-        return NULL;
+        return PyValue_NULL;
 
     saved = PyList_New(0);
     if (saved == NULL) {
         Py_DECREF(it);
-        return NULL;
+        return PyValue_NULL;
     }
 
     /* create cycleobject structure */
@@ -1300,13 +1321,13 @@ itertools_cycle_impl(PyTypeObject *type, PyObject *iterable)
     if (lz == NULL) {
         Py_DECREF(it);
         Py_DECREF(saved);
-        return NULL;
+        return PyValue_NULL;
     }
     lz->it = it;
     lz->saved = saved;
     lz->index = -1;
 
-    return (PyObject *)lz;
+    return _PyValue_FromObjectResult((PyObject *)lz);
 }
 
 static void
@@ -1342,7 +1363,7 @@ cycle_next(PyObject *op)
     if (index < 0) {
         item = PyIter_Next(lz->it);
         if (item != NULL) {
-            if (PyList_Append(lz->saved, item)) {
+            if (PyList_AppendValue(lz->saved, PyValue_FromObjectBorrow(item))) {
                 Py_DECREF(item);
                 return NULL;
             }
@@ -1359,8 +1380,13 @@ cycle_next(PyObject *op)
     }
     if (PyList_GET_SIZE(lz->saved) == 0)
         return NULL;
-    item = PyList_GetItemRef(lz->saved, index);
-    assert(item);
+    PyValue saved_item = PyList_GetValue(lz->saved, index);
+    assert(!PyValue_IsNull(saved_item));
+    item = _PyValue_AsObjectAt(saved_item, BOX_SITE_LIST);
+    PyValue_CLOSE(saved_item);
+    if (item == NULL) {
+        return NULL;
+    }
     index++;
     if (index >= PyList_GET_SIZE(lz->saved)) {
         index = 0;
@@ -1412,29 +1438,34 @@ Drop items from the iterable while predicate(item) is true.
 Afterwards, return every element until the iterable is exhausted.
 [clinic start generated code]*/
 
-static PyObject *
-itertools_dropwhile_impl(PyTypeObject *type, PyObject *func, PyObject *seq)
-/*[clinic end generated code: output=92f9d0d89af149e4 input=d39737147c9f0a26]*/
+static PyValue
+itertools_dropwhile_impl(PyTypeObject *type, PyValueBorrow func,
+                         PyValueBorrow seq)
+/*[clinic end generated code: output=f62eacfceb14c30a input=d39737147c9f0a26]*/
 {
     PyObject *it;
     dropwhileobject *lz;
 
     /* Get iterator. */
-    it = PyObject_GetIter(seq);
+    it = _PyValue_GetIter(seq);
     if (it == NULL)
-        return NULL;
+        return PyValue_NULL;
 
     /* create dropwhileobject structure */
     lz = (dropwhileobject *)type->tp_alloc(type, 0);
     if (lz == NULL) {
         Py_DECREF(it);
-        return NULL;
+        return PyValue_NULL;
     }
-    lz->func = Py_NewRef(func);
     lz->it = it;
+    lz->func = _PyValue_AsObjectAt(func, BOX_SITE_FIELD);
+    if (lz->func == NULL) {
+        Py_DECREF(lz);
+        return PyValue_NULL;
+    }
     lz->start = 0;
 
-    return (PyObject *)lz;
+    return _PyValue_FromObjectResult((PyObject *)lz);
 }
 
 static void
@@ -1481,7 +1512,7 @@ dropwhile_next(PyObject *op)
             Py_DECREF(item);
             return NULL;
         }
-        ok = PyObject_IsTrue(good);
+        ok = _PyValue_IsTrue(PyValue_FromObjectBorrow(good));
         Py_DECREF(good);
         if (ok == 0) {
             lz->start = 1;
@@ -1535,29 +1566,34 @@ itertools.takewhile.__new__
 Return successive entries from an iterable as long as the predicate evaluates to true for each entry.
 [clinic start generated code]*/
 
-static PyObject *
-itertools_takewhile_impl(PyTypeObject *type, PyObject *func, PyObject *seq)
-/*[clinic end generated code: output=bb179ea7864e2ef6 input=61e42255dd0a7657]*/
+static PyValue
+itertools_takewhile_impl(PyTypeObject *type, PyValueBorrow func,
+                         PyValueBorrow seq)
+/*[clinic end generated code: output=5ba96188c8bc1dca input=61e42255dd0a7657]*/
 {
     PyObject *it;
     takewhileobject *lz;
 
     /* Get iterator. */
-    it = PyObject_GetIter(seq);
+    it = _PyValue_GetIter(seq);
     if (it == NULL)
-        return NULL;
+        return PyValue_NULL;
 
     /* create takewhileobject structure */
     lz = (takewhileobject *)type->tp_alloc(type, 0);
     if (lz == NULL) {
         Py_DECREF(it);
-        return NULL;
+        return PyValue_NULL;
     }
-    lz->func = Py_NewRef(func);
     lz->it = it;
+    lz->func = _PyValue_AsObjectAt(func, BOX_SITE_FIELD);
+    if (lz->func == NULL) {
+        Py_DECREF(lz);
+        return PyValue_NULL;
+    }
     lz->stop = 0;
 
-    return (PyObject *)lz;
+    return _PyValue_FromObjectResult((PyObject *)lz);
 }
 
 static void
@@ -1602,7 +1638,7 @@ takewhile_next(PyObject *op)
         Py_DECREF(item);
         return NULL;
     }
-    ok = PyObject_IsTrue(good);
+    ok = _PyValue_IsTrue(PyValue_FromObjectBorrow(good));
     Py_DECREF(good);
     if (ok > 0)
         return item;
@@ -1667,7 +1703,7 @@ islice_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
     numargs = PyTuple_Size(args);
     if (numargs == 2) {
         if (a1 != Py_None) {
-            stop = PyNumber_AsSsize_t(a1, PyExc_OverflowError);
+            stop = _PyValue_AsSsize_t(PyValue_FromObjectBorrow(a1), PyExc_OverflowError);
             if (stop == -1) {
                 if (PyErr_Occurred())
                     PyErr_Clear();
@@ -1679,11 +1715,11 @@ islice_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
         }
     } else {
         if (a1 != Py_None)
-            start = PyNumber_AsSsize_t(a1, PyExc_OverflowError);
+            start = _PyValue_AsSsize_t(PyValue_FromObjectBorrow(a1), PyExc_OverflowError);
         if (start == -1 && PyErr_Occurred())
             PyErr_Clear();
         if (a2 != Py_None) {
-            stop = PyNumber_AsSsize_t(a2, PyExc_OverflowError);
+            stop = _PyValue_AsSsize_t(PyValue_FromObjectBorrow(a2), PyExc_OverflowError);
             if (stop == -1) {
                 if (PyErr_Occurred())
                     PyErr_Clear();
@@ -1703,7 +1739,7 @@ islice_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
 
     if (a3 != NULL) {
         if (a3 != Py_None)
-            step = PyNumber_AsSsize_t(a3, PyExc_OverflowError);
+            step = _PyValue_AsSsize_t(PyValue_FromObjectBorrow(a3), PyExc_OverflowError);
         if (step == -1 && PyErr_Occurred())
             PyErr_Clear();
     }
@@ -1714,7 +1750,7 @@ islice_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
     }
 
     /* Get iterator. */
-    it = PyObject_GetIter(seq);
+    it = _PyValue_GetIter(PyValue_FromObjectBorrow(seq));
     if (it == NULL)
         return NULL;
 
@@ -1845,28 +1881,33 @@ itertools.starmap.__new__
 Return an iterator whose values are returned from the function evaluated with an argument tuple taken from the given sequence.
 [clinic start generated code]*/
 
-static PyObject *
-itertools_starmap_impl(PyTypeObject *type, PyObject *func, PyObject *seq)
-/*[clinic end generated code: output=79eeb81d452c6e8d input=8c9068da0692d6d2]*/
+static PyValue
+itertools_starmap_impl(PyTypeObject *type, PyValueBorrow func,
+                       PyValueBorrow seq)
+/*[clinic end generated code: output=1276b3f4a949de1e input=8c9068da0692d6d2]*/
 {
     PyObject *it;
     starmapobject *lz;
 
     /* Get iterator. */
-    it = PyObject_GetIter(seq);
+    it = _PyValue_GetIter(seq);
     if (it == NULL)
-        return NULL;
+        return PyValue_NULL;
 
     /* create starmapobject structure */
     lz = (starmapobject *)type->tp_alloc(type, 0);
     if (lz == NULL) {
         Py_DECREF(it);
-        return NULL;
+        return PyValue_NULL;
     }
-    lz->func = Py_NewRef(func);
     lz->it = it;
+    lz->func = _PyValue_AsObjectAt(func, BOX_SITE_FIELD);
+    if (lz->func == NULL) {
+        Py_DECREF(lz);
+        return PyValue_NULL;
+    }
 
-    return (PyObject *)lz;
+    return _PyValue_FromObjectResult((PyObject *)lz);
 }
 
 static void
@@ -1903,7 +1944,7 @@ starmap_next(PyObject *op)
     if (args == NULL)
         return NULL;
     if (!PyTuple_CheckExact(args)) {
-        PyObject *newargs = PySequence_Tuple(args);
+        PyObject *newargs = _PyValue_SequenceTuple(PyValue_FromObjectBorrow(args));
         Py_DECREF(args);
         if (newargs == NULL)
             return NULL;
@@ -1972,7 +2013,7 @@ chain_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
         !_PyArg_NoKeywords("chain", kwds))
         return NULL;
 
-    source = PyObject_GetIter(args);
+    source = _PyValue_GetIter(PyValue_FromObjectBorrow(args));
     if (source == NULL)
         return NULL;
 
@@ -1988,17 +2029,17 @@ itertools.chain.from_iterable
 Alternative chain() constructor taking a single iterable argument that evaluates lazily.
 [clinic start generated code]*/
 
-static PyObject *
-itertools_chain_from_iterable_impl(PyTypeObject *type, PyObject *arg)
-/*[clinic end generated code: output=3d7ea7d46b9e43f5 input=a9bf8227221c75b3]*/
+static PyValue
+itertools_chain_from_iterable_impl(PyTypeObject *type, PyValueBorrow arg)
+/*[clinic end generated code: output=ac9818d0cf63ae8e input=a9bf8227221c75b3]*/
 {
     PyObject *source;
 
-    source = PyObject_GetIter(arg);
+    source = _PyValue_GetIter(arg);
     if (source == NULL)
-        return NULL;
+        return PyValue_NULL;
 
-    return chain_new_internal(type, source);
+    return _PyValue_FromObjectResult(chain_new_internal(type, source));
 }
 
 static void
@@ -2045,7 +2086,7 @@ chain_next_impl(chainobject *self)
                 Py_CLEAR(lz->source);
                 return NULL;            /* no more input sources */
             }
-            lz->active = PyObject_GetIter(iterable);
+            lz->active = _PyValue_GetIter(PyValue_FromObjectBorrow(iterable));
             Py_DECREF(iterable);
             if (lz->active == NULL) {
                 Py_CLEAR(lz->source);
@@ -2171,20 +2212,20 @@ product_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
         goto error;
 
     for (i=0; i < nargs ; ++i) {
-        PyObject *item = PyTuple_GetItemRef(args, i);
-        if (item == NULL)
+        PyValue item = PyTuple_GetValue(args, i);
+        if (PyValue_IsNull(item))
             goto error;
-        PyObject *pool = PySequence_Tuple(item);
-        Py_DECREF(item);
+        PyObject *pool = _PyValue_SequenceTuple(PyValue_Borrow(item));
+        PyValue_CLOSE(item);
         if (pool == NULL)
             goto error;
-        PyTuple_SET_ITEM(pools, i, pool);
+        PyTuple_SET_VALUE(pools, i, PyValue_PrepareOwned(pool));
         indices[i] = 0;
     }
     for ( ; i < npools; ++i) {
         PyObject *pool = _PyTuple_GET_OBJECT(pools, i - nargs);
         Py_INCREF(pool);
-        PyTuple_SET_ITEM(pools, i, pool);
+        PyTuple_SET_VALUE(pools, i, PyValue_PrepareOwned(pool));
         indices[i] = 0;
     }
 
@@ -2396,10 +2437,10 @@ Return successive r-length combinations of elements in the iterable.
 combinations(range(4), 3) --> (0,1,2), (0,1,3), (0,2,3), (1,2,3)
 [clinic start generated code]*/
 
-static PyObject *
-itertools_combinations_impl(PyTypeObject *type, PyObject *iterable,
+static PyValue
+itertools_combinations_impl(PyTypeObject *type, PyValueBorrow iterable,
                             Py_ssize_t r)
-/*[clinic end generated code: output=87a689b39c40039c input=a32f07a15cfa4676]*/
+/*[clinic end generated code: output=cdbe4eca2dfb4cc9 input=a32f07a15cfa4676]*/
 {
     combinationsobject *co;
     Py_ssize_t n;
@@ -2407,7 +2448,7 @@ itertools_combinations_impl(PyTypeObject *type, PyObject *iterable,
     Py_ssize_t *indices = NULL;
     Py_ssize_t i;
 
-    pool = PySequence_Tuple(iterable);
+    pool = _PyValue_SequenceTuple(iterable);
     if (pool == NULL)
         goto error;
     n = PyTuple_GET_SIZE(pool);
@@ -2432,13 +2473,13 @@ itertools_combinations_impl(PyTypeObject *type, PyObject *iterable,
     co->r = r;
     co->stopped = r > n ? 1 : 0;
 
-    return (PyObject *)co;
+    return _PyValue_FromObjectResult((PyObject *)co);
 
 error:
     if (indices != NULL)
         PyMem_Free(indices);
     Py_XDECREF(pool);
-    return NULL;
+    return PyValue_NULL;
 }
 
 static void
@@ -2641,11 +2682,11 @@ Return successive r-length combinations of elements in the iterable allowing ind
 combinations_with_replacement('ABC', 2) --> ('A','A'), ('A','B'), ('A','C'), ('B','B'), ('B','C'), ('C','C')
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 itertools_combinations_with_replacement_impl(PyTypeObject *type,
-                                             PyObject *iterable,
+                                             PyValueBorrow iterable,
                                              Py_ssize_t r)
-/*[clinic end generated code: output=48b26856d4e659ca input=828696750169e84f]*/
+/*[clinic end generated code: output=9b90c15cd54286fd input=828696750169e84f]*/
 {
     cwrobject *co;
     Py_ssize_t n;
@@ -2653,7 +2694,7 @@ itertools_combinations_with_replacement_impl(PyTypeObject *type,
     Py_ssize_t *indices = NULL;
     Py_ssize_t i;
 
-    pool = PySequence_Tuple(iterable);
+    pool = _PyValue_SequenceTuple(iterable);
     if (pool == NULL)
         goto error;
     n = PyTuple_GET_SIZE(pool);
@@ -2678,13 +2719,13 @@ itertools_combinations_with_replacement_impl(PyTypeObject *type,
     co->r = r;
     co->stopped = !n && r;
 
-    return (PyObject *)co;
+    return _PyValue_FromObjectResult((PyObject *)co);
 
 error:
     if (indices != NULL)
         PyMem_Free(indices);
     Py_XDECREF(pool);
-    return NULL;
+    return PyValue_NULL;
 }
 
 static void
@@ -2870,6 +2911,20 @@ struct permutationsobject {
 
 #define permutationsobject_CAST(op) ((permutationsobject *)(op))
 
+/* An inline int or float is an int or float: PyLong_Check() on a value. */
+static int
+value_is_long(PyValueBorrow v)
+{
+    return PyType_IsSubtype(PyValue_TYPE(v), &PyLong_Type);
+}
+
+/* PyNumber_Check() on a value; an inline int or float is a number. */
+static int
+value_is_number(PyValueBorrow v)
+{
+    return !PyValue_IsObject(v) || PyNumber_Check(PyValue_AsKnownObjectBorrow(v));
+}
+
 /*[clinic input]
 @classmethod
 itertools.permutations.__new__
@@ -2880,10 +2935,10 @@ Return successive r-length permutations of elements in the iterable.
 permutations(range(3), 2) --> (0,1), (0,2), (1,0), (1,2), (2,0), (2,1)
 [clinic start generated code]*/
 
-static PyObject *
-itertools_permutations_impl(PyTypeObject *type, PyObject *iterable,
-                            PyObject *robj)
-/*[clinic end generated code: output=296a72fa76d620ea input=57d0170a4ac0ec7a]*/
+static PyValue
+itertools_permutations_impl(PyTypeObject *type, PyValueBorrow iterable,
+                            PyValueBorrow robj)
+/*[clinic end generated code: output=3304a138ec86c42a input=57d0170a4ac0ec7a]*/
 {
     permutationsobject *po;
     Py_ssize_t n;
@@ -2893,18 +2948,18 @@ itertools_permutations_impl(PyTypeObject *type, PyObject *iterable,
     Py_ssize_t *cycles = NULL;
     Py_ssize_t i;
 
-    pool = PySequence_Tuple(iterable);
+    pool = _PyValue_SequenceTuple(iterable);
     if (pool == NULL)
         goto error;
     n = PyTuple_GET_SIZE(pool);
 
     r = n;
-    if (robj != Py_None) {
-        if (!PyLong_Check(robj)) {
+    if (!PyValue_IsNone(robj)) {
+        if (!value_is_long(robj)) {
             PyErr_SetString(PyExc_TypeError, "Expected int as r");
             goto error;
         }
-        r = PyLong_AsSsize_t(robj);
+        r = _PyValue_IntAsSsize_t(robj);
         if (r == -1 && PyErr_Occurred())
             goto error;
     }
@@ -2937,7 +2992,7 @@ itertools_permutations_impl(PyTypeObject *type, PyObject *iterable,
     po->r = r;
     po->stopped = r > n ? 1 : 0;
 
-    return (PyObject *)po;
+    return _PyValue_FromObjectResult((PyObject *)po);
 
 error:
     if (indices != NULL)
@@ -2945,7 +3000,7 @@ error:
     if (cycles != NULL)
         PyMem_Free(cycles);
     Py_XDECREF(pool);
-    return NULL;
+    return PyValue_NULL;
 }
 
 static void
@@ -3127,37 +3182,41 @@ itertools.accumulate.__new__
 Return series of accumulated sums (or other binary function results).
 [clinic start generated code]*/
 
-static PyObject *
-itertools_accumulate_impl(PyTypeObject *type, PyObject *iterable,
-                          PyObject *binop, PyObject *initial)
-/*[clinic end generated code: output=66da2650627128f8 input=c4ce20ac59bf7ffd]*/
+static PyValue
+itertools_accumulate_impl(PyTypeObject *type, PyValueBorrow iterable,
+                          PyValueBorrow binop, PyValueBorrow initial)
+/*[clinic end generated code: output=00d4c4113673c5bb input=c4ce20ac59bf7ffd]*/
 {
     PyObject *it;
     accumulateobject *lz;
 
     /* Get iterator. */
-    it = PyObject_GetIter(iterable);
+    it = _PyValue_GetIter(iterable);
     if (it == NULL)
-        return NULL;
+        return PyValue_NULL;
 
     /* create accumulateobject structure */
     lz = (accumulateobject *)type->tp_alloc(type, 0);
     if (lz == NULL) {
         Py_DECREF(it);
-        return NULL;
+        return PyValue_NULL;
     }
 
-    if (binop != Py_None) {
-        lz->binop = Py_XNewRef(binop);
-    }
     lz->total = PyValue_NULL;
     lz->it = it;
-    if (initial != Py_None) {
-        lz->initial = PyValue_DUP(PyValue_FromObjectBorrow(initial));
+    if (!PyValue_IsNone(binop)) {
+        lz->binop = _PyValue_AsObjectAt(binop, BOX_SITE_FIELD);
+        if (lz->binop == NULL) {
+            Py_DECREF(lz);
+            return PyValue_NULL;
+        }
+    }
+    if (!PyValue_IsNone(initial)) {
+        lz->initial = PyValue_DUP(initial);
         _PyValue_CheckHome(lz->initial);
     }
     lz->state = find_state_by_type(type);
-    return (PyObject *)lz;
+    return _PyValue_FromObjectResult((PyObject *)lz);
 }
 
 static void
@@ -3307,17 +3366,18 @@ Forms a shorter iterator from selected data elements using the selectors
 to choose the data elements.
 [clinic start generated code]*/
 
-static PyObject *
-itertools_compress_impl(PyTypeObject *type, PyObject *seq1, PyObject *seq2)
-/*[clinic end generated code: output=7e67157212ed09e0 input=32ca4347dbc46749]*/
+static PyValue
+itertools_compress_impl(PyTypeObject *type, PyValueBorrow seq1,
+                        PyValueBorrow seq2)
+/*[clinic end generated code: output=57acfa9c20754d14 input=32ca4347dbc46749]*/
 {
     PyObject *data=NULL, *selectors=NULL;
     compressobject *lz;
 
-    data = PyObject_GetIter(seq1);
+    data = _PyValue_GetIter(seq1);
     if (data == NULL)
         goto fail;
-    selectors = PyObject_GetIter(seq2);
+    selectors = _PyValue_GetIter(seq2);
     if (selectors == NULL)
         goto fail;
 
@@ -3327,12 +3387,12 @@ itertools_compress_impl(PyTypeObject *type, PyObject *seq1, PyObject *seq2)
         goto fail;
     lz->data = data;
     lz->selectors = selectors;
-    return (PyObject *)lz;
+    return _PyValue_FromObjectResult((PyObject *)lz);
 
 fail:
     Py_XDECREF(data);
     Py_XDECREF(selectors);
-    return NULL;
+    return PyValue_NULL;
 }
 
 static void
@@ -3384,7 +3444,7 @@ compress_next(PyObject *op)
             return NULL;
         }
 
-        ok = PyObject_IsTrue(selector);
+        ok = _PyValue_IsTrue(PyValue_FromObjectBorrow(selector));
         Py_DECREF(selector);
         if (ok > 0)
             return datum;
@@ -3436,28 +3496,33 @@ Return those items of iterable for which function(item) is false.
 If function is None, return the items that are false.
 [clinic start generated code]*/
 
-static PyObject *
-itertools_filterfalse_impl(PyTypeObject *type, PyObject *func, PyObject *seq)
-/*[clinic end generated code: output=55f87eab9fc0484e input=2d684a2c66f99cde]*/
+static PyValue
+itertools_filterfalse_impl(PyTypeObject *type, PyValueBorrow func,
+                           PyValueBorrow seq)
+/*[clinic end generated code: output=76280d19eca73e55 input=2d684a2c66f99cde]*/
 {
     PyObject *it;
     filterfalseobject *lz;
 
     /* Get iterator. */
-    it = PyObject_GetIter(seq);
+    it = _PyValue_GetIter(seq);
     if (it == NULL)
-        return NULL;
+        return PyValue_NULL;
 
     /* create filterfalseobject structure */
     lz = (filterfalseobject *)type->tp_alloc(type, 0);
     if (lz == NULL) {
         Py_DECREF(it);
-        return NULL;
+        return PyValue_NULL;
     }
-    lz->func = Py_NewRef(func);
     lz->it = it;
+    lz->func = _PyValue_AsObjectAt(func, BOX_SITE_FIELD);
+    if (lz->func == NULL) {
+        Py_DECREF(lz);
+        return PyValue_NULL;
+    }
 
-    return (PyObject *)lz;
+    return _PyValue_FromObjectResult((PyObject *)lz);
 }
 
 static void
@@ -3498,7 +3563,7 @@ filterfalse_next(PyObject *op)
             return NULL;
 
         if (lz->func == Py_None || lz->func == (PyObject *)&PyBool_Type) {
-            ok = PyObject_IsTrue(item);
+            ok = _PyValue_IsTrue(PyValue_FromObjectBorrow(item));
         } else {
             PyObject *good;
             good = PyObject_CallOneArg(lz->func, item);
@@ -3506,7 +3571,7 @@ filterfalse_next(PyObject *op)
                 Py_DECREF(item);
                 return NULL;
             }
-            ok = PyObject_IsTrue(good);
+            ok = _PyValue_IsTrue(PyValue_FromObjectBorrow(good));
             Py_DECREF(good);
         }
         if (ok == 0)
@@ -3577,34 +3642,34 @@ Equivalent to:
             x += step
 [clinic start generated code]*/
 
-static PyObject *
-itertools_count_impl(PyTypeObject *type, PyObject *long_cnt,
-                     PyObject *long_step)
-/*[clinic end generated code: output=09a9250aebd00b1c input=91e4b12c0e88b9f4]*/
+static PyValue
+itertools_count_impl(PyTypeObject *type, PyValueBorrow long_cnt,
+                     PyValueBorrow long_step)
+/*[clinic end generated code: output=5f203ac605ad72fd input=91e4b12c0e88b9f4]*/
 {
     countobject *lz;
     int fast_mode;
     Py_ssize_t cnt = 0;
     long step;
 
-    if ((long_cnt != NULL && !PyNumber_Check(long_cnt)) ||
-        (long_step != NULL && !PyNumber_Check(long_step))) {
+    if ((!PyValue_IsNull(long_cnt) && !value_is_number(long_cnt)) ||
+        (!PyValue_IsNull(long_step) && !value_is_number(long_step))) {
                     PyErr_SetString(PyExc_TypeError, "a number is required");
-                    return NULL;
+                    return PyValue_NULL;
     }
 
-    fast_mode = (long_cnt == NULL || PyLong_Check(long_cnt)) &&
-                (long_step == NULL || PyLong_Check(long_step));
+    fast_mode = (PyValue_IsNull(long_cnt) || value_is_long(long_cnt)) &&
+                (PyValue_IsNull(long_step) || value_is_long(long_step));
 
-    if (fast_mode && long_cnt != NULL) {
-        cnt = PyLong_AsSsize_t(long_cnt);
+    if (fast_mode && !PyValue_IsNull(long_cnt)) {
+        cnt = _PyValue_IntAsSsize_t(long_cnt);
         if (cnt == -1 && PyErr_Occurred()) {
             PyErr_Clear();
             fast_mode = 0;
         }
     }
-    if (fast_mode && long_step != NULL) {
-        step = PyLong_AsLong(long_step);
+    if (fast_mode && !PyValue_IsNull(long_step)) {
+        step = _PyValue_AsLong(long_step);
         if (step != 1) {
             fast_mode = 0;
             if (step == -1 && PyErr_Occurred())
@@ -3616,35 +3681,35 @@ itertools_count_impl(PyTypeObject *type, PyObject *long_cnt,
     if (fast_mode) {
         cnt_value = PyValue_FromInt64(cnt);
         if (PyValue_IsNull(cnt_value)) {
-            return NULL;
+            return PyValue_NULL;
         }
     }
-    else if (long_cnt == NULL) {
+    else if (PyValue_IsNull(long_cnt)) {
         /* If not specified, start defaults to 0 */
         cnt_value = PyValue_FromInlineInt(0);
     }
     else {
-        cnt_value = PyValue_DUP(PyValue_FromObjectBorrow(long_cnt));
+        cnt_value = PyValue_DUP(long_cnt);
     }
 
     /* If not specified, step defaults to 1 */
-    PyValue step_value = long_step == NULL
+    PyValue step_value = PyValue_IsNull(long_step)
         ? PyValue_FromInlineInt(1)
-        : PyValue_DUP(PyValue_FromObjectBorrow(long_step));
+        : PyValue_DUP(long_step);
 
     /* create countobject structure */
     lz = (countobject *)type->tp_alloc(type, 0);
     if (lz == NULL) {
         PyValue_CLOSE(cnt_value);
         PyValue_CLOSE(step_value);
-        return NULL;
+        return PyValue_NULL;
     }
     lz->cnt = cnt_value;
     lz->step = step_value;
     _PyValue_CheckHome(lz->cnt);
     _PyValue_CheckHome(lz->step);
 
-    return (PyObject *)lz;
+    return _PyValue_FromObjectResult((PyObject *)lz);
 }
 
 static void
@@ -3944,28 +4009,26 @@ zip_longest_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
     Py_ssize_t i;
     PyObject *ittuple;  /* tuple of iterators */
     PyObject *result;
-    PyObject *fillvalue = NULL;
     Py_ssize_t tuplesize;
-    PyValue fill;
+    PyValue fill = PyValue_NULL;
 
     if (kwds != NULL && PyDict_CheckExact(kwds) && PyDict_GET_SIZE(kwds) > 0) {
         if (PyDict_GET_SIZE(kwds) == 1) {
-            if (PyDict_GetItemRef(kwds, &_Py_ID(fillvalue), &fillvalue) < 0) {
+            if (PyDict_GetValue(kwds,
+                                PyValue_FromObjectBorrow(&_Py_ID(fillvalue)),
+                                &fill) < 0) {
                 return NULL;
             }
         }
-        if (fillvalue == NULL) {
+        if (PyValue_IsNull(fill)) {
             PyErr_SetString(PyExc_TypeError,
                 "zip_longest() got an unexpected keyword argument");
             return NULL;
         }
     }
     else {
-        fillvalue = Py_NewRef(Py_None);
+        fill = PyValue_None;
     }
-
-    /* The home takes over the reference to fillvalue. */
-    fill = PyValue_PrepareOwned(fillvalue);
 
     /* args must be a tuple */
     assert(PyTuple_Check(args));
@@ -3978,20 +4041,20 @@ zip_longest_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
         return NULL;
     }
     for (i=0; i < tuplesize; i++) {
-        PyObject *item = PyTuple_GetItemRef(args, i);
-        if (item == NULL) {
+        PyValue item = PyTuple_GetValue(args, i);
+        if (PyValue_IsNull(item)) {
             Py_DECREF(ittuple);
             PyValue_CLOSE(fill);
             return NULL;
         }
-        PyObject *it = PyObject_GetIter(item);
-        Py_DECREF(item);
+        PyObject *it = _PyValue_GetIter(PyValue_Borrow(item));
+        PyValue_CLOSE(item);
         if (it == NULL) {
             Py_DECREF(ittuple);
             PyValue_CLOSE(fill);
             return NULL;
         }
-        PyTuple_SET_ITEM(ittuple, i, it);
+        PyTuple_SET_VALUE(ittuple, i, PyValue_PrepareOwned(it));
     }
 
     /* create a result holder */
@@ -4003,7 +4066,7 @@ zip_longest_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
     }
     for (i=0 ; i < tuplesize ; i++) {
         Py_INCREF(Py_None);
-        PyTuple_SET_ITEM(result, i, Py_None);
+        PyTuple_SET_VALUE(result, i, PyValue_PrepareOwned(_PyObject_CAST(Py_None)));
     }
 
     /* create ziplongestobject structure */

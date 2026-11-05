@@ -8,16 +8,28 @@
 */
 
 
+#ifndef Py_BUILD_CORE_BUILTIN
+#  define Py_BUILD_CORE_MODULE 1
+#endif
+#define Py_VALUE_CORE 1
 #include "Python.h"
 #include "pycore_call.h"          // _PyObject_CallMethod()
 #include "pycore_fileutils.h"           // _PyFile_Flush
+#include "pycore_list.h"          // PyList_AppendValue()
 #include "pycore_long.h"          // _PyLong_GetOne()
 #include "pycore_object.h"        // _PyType_HasFeature()
 #include "pycore_pyerrors.h"      // _PyErr_ChainExceptions1()
+#include "pycore_value_ops.h"     // _PyValue_GetIter()
+#include "pycore_value_slots.h"// _PyValue_FromObjectResult()
 #include "pycore_weakref.h"       // FT_CLEAR_WEAKREFS()
 
 #include <stddef.h>               // offsetof()
 #include "_iomodule.h"
+
+/*[clinic input]
+value_emission
+[clinic start generated code]*/
+/*[clinic end generated code: output=da39a3ee5e6b4b0d input=eb7b17088bfd7215]*/
 
 /*[clinic input]
 module _io
@@ -115,13 +127,13 @@ whence.  Values for whence are:
 Return the new absolute position.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _io__IOBase_seek_impl(PyObject *self, PyTypeObject *cls,
                       int Py_UNUSED(offset), int Py_UNUSED(whence))
-/*[clinic end generated code: output=8bd74ea6538ded53 input=22eaf07a7a0ee289]*/
+/*[clinic end generated code: output=1f7c4404e717bc4c input=22eaf07a7a0ee289]*/
 {
     _PyIO_State *state = get_io_state_by_cls(cls);
-    return iobase_unsupported(state, "seek");
+    return _PyValue_FromObjectResult(iobase_unsupported(state, "seek"));
 }
 
 /*[clinic input]
@@ -130,11 +142,11 @@ _io._IOBase.tell
 Return current stream position.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _io__IOBase_tell_impl(PyObject *self)
-/*[clinic end generated code: output=89a1c0807935abe2 input=04e615fec128801f]*/
+/*[clinic end generated code: output=ff9e0221fe9eb8d7 input=04e615fec128801f]*/
 {
-    return _PyObject_CallMethod(self, &_Py_ID(seek), "ii", 0, 1);
+    return _PyValue_FromObjectResult(_PyObject_CallMethod(self, &_Py_ID(seek), "ii", 0, 1));
 }
 
 /*[clinic input]
@@ -149,13 +161,13 @@ File pointer is left unchanged.  Size defaults to the current IO
 position as reported by tell().  Return the new size.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _io__IOBase_truncate_impl(PyObject *self, PyTypeObject *cls,
-                          PyObject *Py_UNUSED(size))
-/*[clinic end generated code: output=2013179bff1fe8ef input=5b3b6ab3c7abd806]*/
+                          PyValueBorrow Py_UNUSED(size))
+/*[clinic end generated code: output=9a6b50f4f409e393 input=5b3b6ab3c7abd806]*/
 {
     _PyIO_State *state = get_io_state_by_cls(cls);
-    return iobase_unsupported(state, "truncate");
+    return _PyValue_FromObjectResult(iobase_unsupported(state, "truncate"));
 }
 
 /* Flush and close methods */
@@ -168,20 +180,20 @@ Flush write buffers, if applicable.
 This is not implemented for read-only and non-blocking streams.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _io__IOBase_flush_impl(PyObject *self)
-/*[clinic end generated code: output=7cef4b4d54656a3b input=773be121abe270aa]*/
+/*[clinic end generated code: output=279c8f3573a657d6 input=773be121abe270aa]*/
 {
     /* XXX Should this return the number of bytes written??? */
     int closed = iobase_is_closed(self);
 
     if (!closed) {
-        Py_RETURN_NONE;
+        return PyValue_None;
     }
     if (closed > 0) {
         PyErr_SetString(PyExc_ValueError, "I/O operation on closed file.");
     }
-    return NULL;
+    return PyValue_NULL;
 }
 
 /*[clinic input]
@@ -207,7 +219,7 @@ iobase_check_closed(PyObject *self)
        in most cases! */
     closed = PyObject_GetOptionalAttr(self, &_Py_ID(closed), &res);
     if (closed > 0) {
-        closed = PyObject_IsTrue(res);
+        closed = _PyValue_IsTrue(PyValue_FromObjectBorrow(res));
         Py_DECREF(res);
         if (closed > 0) {
             PyErr_SetString(PyExc_ValueError, "I/O operation on closed file.");
@@ -233,47 +245,47 @@ _PyIOBase_check_closed(PyObject *self, PyObject *args)
 _io._IOBase._checkClosed
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _io__IOBase__checkClosed_impl(PyObject *self)
-/*[clinic end generated code: output=8fb8412185623f1a input=8d18d2e67b2270bb]*/
+/*[clinic end generated code: output=84492e51d26d86b5 input=8d18d2e67b2270bb]*/
 {
-    return _PyIOBase_check_closed(self, NULL);
+    return _PyValue_FromObjectResult(_PyIOBase_check_closed(self, NULL));
 }
 
 /*[clinic input]
 _io._IOBase._checkSeekable
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _io__IOBase__checkSeekable_impl(PyObject *self)
-/*[clinic end generated code: output=10f09b515a9f4c4f input=479853eded776b0e]*/
+/*[clinic end generated code: output=862036fdcc21467d input=479853eded776b0e]*/
 {
     _PyIO_State *state = find_io_state_by_def(Py_TYPE(self));
-    return _PyIOBase_check_seekable(state, self, NULL);
+    return _PyValue_FromObjectResult(_PyIOBase_check_seekable(state, self, NULL));
 }
 
 /*[clinic input]
 _io._IOBase._checkReadable
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _io__IOBase__checkReadable_impl(PyObject *self)
-/*[clinic end generated code: output=33ccab8a7c4550fb input=63fbf50b36772323]*/
+/*[clinic end generated code: output=7f7b978559ce2ca7 input=63fbf50b36772323]*/
 {
     _PyIO_State *state = find_io_state_by_def(Py_TYPE(self));
-    return _PyIOBase_check_readable(state, self, NULL);
+    return _PyValue_FromObjectResult(_PyIOBase_check_readable(state, self, NULL));
 }
 
 /*[clinic input]
 _io._IOBase._checkWritable
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _io__IOBase__checkWritable_impl(PyObject *self)
-/*[clinic end generated code: output=8cfc6b4b2469d2a3 input=2758c7291cf5911e]*/
+/*[clinic end generated code: output=628a91552c2516fd input=2758c7291cf5911e]*/
 {
     _PyIO_State *state = find_io_state_by_def(Py_TYPE(self));
-    return _PyIOBase_check_writable(state, self, NULL);
+    return _PyValue_FromObjectResult(_PyIOBase_check_writable(state, self, NULL));
 }
 
 PyObject *
@@ -296,28 +308,28 @@ Flush and close the IO object.
 This method has no effect if the file is already closed.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _io__IOBase_close_impl(PyObject *self)
-/*[clinic end generated code: output=63c6a6f57d783d6d input=f4494d5c31dbc6b7]*/
+/*[clinic end generated code: output=f467e834b6602bb1 input=f4494d5c31dbc6b7]*/
 {
     int rc1, rc2, closed = iobase_is_closed(self);
 
     if (closed < 0) {
-        return NULL;
+        return PyValue_NULL;
     }
     if (closed) {
-        Py_RETURN_NONE;
+        return PyValue_None;
     }
 
     rc1 = _PyFile_Flush(self);
     PyObject *exc = PyErr_GetRaisedException();
-    rc2 = PyObject_SetAttr(self, &_Py_ID(__IOBase_closed), Py_True);
+    rc2 = _PyValue_SetAttr(PyValue_FromObjectBorrow(self), &_Py_ID(__IOBase_closed), _PyValue_FromObjectKnown(Py_True));
     _PyErr_ChainExceptions1(exc);
     if (rc1 < 0 || rc2 < 0) {
-        return NULL;
+        return PyValue_NULL;
     }
 
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 /* Finalization and garbage collection support */
@@ -338,7 +350,7 @@ iobase_finalize(PyObject *self)
         closed = -1;
     }
     else {
-        closed = PyObject_IsTrue(res);
+        closed = _PyValue_IsTrue(PyValue_FromObjectBorrow(res));
         Py_DECREF(res);
         if (closed == -1)
             PyErr_Clear();
@@ -346,7 +358,7 @@ iobase_finalize(PyObject *self)
     if (closed == 0) {
         /* Signal close() that it was called as part of the object
            finalization process. */
-        if (PyObject_SetAttr(self, &_Py_ID(_finalizing), Py_True))
+        if (_PyValue_SetAttr(PyValue_FromObjectBorrow(self), &_Py_ID(_finalizing), _PyValue_FromObjectKnown(Py_True)))
             PyErr_Clear();
         res = PyObject_CallMethodNoArgs((PyObject *)self, &_Py_ID(close));
         if (res == NULL) {
@@ -433,11 +445,11 @@ If False, seek(), tell() and truncate() will raise OSError.
 This method may need to do a test seek().
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _io__IOBase_seekable_impl(PyObject *self)
-/*[clinic end generated code: output=4c24c67f5f32a43d input=b976622f7fdf3063]*/
+/*[clinic end generated code: output=a61422d31ed56892 input=b976622f7fdf3063]*/
 {
-    Py_RETURN_FALSE;
+    return PyValue_False;
 }
 
 PyObject *
@@ -465,11 +477,11 @@ Return whether object was opened for reading.
 If False, read() will raise OSError.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _io__IOBase_readable_impl(PyObject *self)
-/*[clinic end generated code: output=e48089250686388b input=285b3b866a0ec35f]*/
+/*[clinic end generated code: output=3eb775441d405ab1 input=285b3b866a0ec35f]*/
 {
-    Py_RETURN_FALSE;
+    return PyValue_False;
 }
 
 /* May be called with any object */
@@ -498,11 +510,11 @@ Return whether object was opened for writing.
 If False, write() will raise OSError.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _io__IOBase_writable_impl(PyObject *self)
-/*[clinic end generated code: output=406001d0985be14f input=9dcac18a013a05b5]*/
+/*[clinic end generated code: output=66a16f2dac10c73c input=9dcac18a013a05b5]*/
 {
-    Py_RETURN_FALSE;
+    return PyValue_False;
 }
 
 /* May be called with any object */
@@ -531,14 +543,14 @@ _io._IOBase.__enter__
 Context management protocol.  Returns the stream itself.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _io__IOBase___enter___impl(PyObject *self)
-/*[clinic end generated code: output=d1e8e5b58bde3680 input=92e2d5e34ee714e5]*/
+/*[clinic end generated code: output=4ecacf61386aff8c input=92e2d5e34ee714e5]*/
 {
     if (iobase_check_closed(self))
-        return NULL;
+        return PyValue_NULL;
 
-    return Py_NewRef(self);
+    return PyValue_DUP(PyValue_FromObjectBorrow(self));
 }
 
 /*[clinic input]
@@ -548,11 +560,11 @@ _io._IOBase.__exit__
 Context management protocol.  Calls close().
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _io__IOBase___exit___impl(PyObject *self, PyObject *args)
-/*[clinic end generated code: output=452f3e33a34e2c5c input=fd3f46a32773a170]*/
+/*[clinic end generated code: output=870a35980d0af266 input=fd3f46a32773a170]*/
 {
-    return PyObject_CallMethodNoArgs(self, &_Py_ID(close));
+    return _PyValue_FromObjectResult(PyObject_CallMethodNoArgs(self, &_Py_ID(close)));
 }
 
 /* Lower-level APIs */
@@ -569,12 +581,12 @@ Return underlying file descriptor if one exists.
 Raise OSError if the IO object does not use a file descriptor.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _io__IOBase_fileno_impl(PyObject *self, PyTypeObject *cls)
-/*[clinic end generated code: output=7caaa32a6f4ada3d input=1927c8bea5c85099]*/
+/*[clinic end generated code: output=635ab9009095a055 input=1927c8bea5c85099]*/
 {
     _PyIO_State *state = get_io_state_by_cls(cls);
-    return iobase_unsupported(state, "fileno");
+    return _PyValue_FromObjectResult(iobase_unsupported(state, "fileno"));
 }
 
 /*[clinic input]
@@ -585,13 +597,13 @@ Return whether this is an 'interactive' stream.
 Return False if it can't be determined.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _io__IOBase_isatty_impl(PyObject *self)
-/*[clinic end generated code: output=60cab77cede41cdd input=9ef76530d368458b]*/
+/*[clinic end generated code: output=92b03f81c8af9371 input=9ef76530d368458b]*/
 {
     if (iobase_check_closed(self))
-        return NULL;
-    Py_RETURN_FALSE;
+        return PyValue_NULL;
+    return PyValue_False;
 }
 
 /* Readline(s) and writelines */
@@ -610,22 +622,22 @@ files, the newlines argument to open can be used to select the line
 terminator(s) recognized.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _io__IOBase_readline_impl(PyObject *self, Py_ssize_t limit)
-/*[clinic end generated code: output=4479f79b58187840 input=d0c596794e877bff]*/
+/*[clinic end generated code: output=b9c739dd7841a57d input=d0c596794e877bff]*/
 {
     /* For backwards compatibility, a (slowish) readline(). */
 
     PyObject *peek;
 
     if (PyObject_GetOptionalAttr(self, &_Py_ID(peek), &peek) < 0) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     PyBytesWriter *writer = PyBytesWriter_Create(0);
     if (writer == NULL) {
         Py_XDECREF(peek);
-        return NULL;
+        return PyValue_NULL;
     }
 
     while (limit < 0 || PyBytesWriter_GetSize(writer) < limit) {
@@ -710,11 +722,11 @@ _io__IOBase_readline_impl(PyObject *self, Py_ssize_t limit)
     }
 
     Py_XDECREF(peek);
-    return PyBytesWriter_Finish(writer);
+    return _PyValue_FromObjectResult(PyBytesWriter_Finish(writer));
   fail:
     Py_XDECREF(peek);
     PyBytesWriter_Discard(writer);
-    return NULL;
+    return PyValue_NULL;
 }
 
 static PyObject *
@@ -734,7 +746,7 @@ iobase_iternext(PyObject *self)
     if (line == NULL)
         return NULL;
 
-    if (PyObject_Size(line) <= 0) {
+    if (_PyValue_Size(PyValue_FromObjectBorrow(line)) <= 0) {
         /* Error or empty */
         Py_DECREF(line);
         return NULL;
@@ -755,16 +767,16 @@ lines will be read if the total size (in bytes/characters) of all
 lines so far exceeds hint.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _io__IOBase_readlines_impl(PyObject *self, Py_ssize_t hint)
-/*[clinic end generated code: output=2f50421677fa3dea input=9400c786ea9dc416]*/
+/*[clinic end generated code: output=49b779aa2212584a input=9400c786ea9dc416]*/
 {
     Py_ssize_t length = 0;
     PyObject *result, *it = NULL;
 
     result = PyList_New(0);
     if (result == NULL)
-        return NULL;
+        return PyValue_NULL;
 
     if (hint <= 0) {
         /* XXX special-casing this made sense in the Python version in order
@@ -776,10 +788,10 @@ _io__IOBase_readlines_impl(PyObject *self, Py_ssize_t hint)
             goto error;
         }
         Py_DECREF(ret);
-        return result;
+        return _PyValue_FromObjectResult(result);
     }
 
-    it = PyObject_GetIter(self);
+    it = _PyValue_GetIter(PyValue_FromObjectBorrow(self));
     if (it == NULL) {
         goto error;
     }
@@ -795,11 +807,11 @@ _io__IOBase_readlines_impl(PyObject *self, Py_ssize_t hint)
                 break; /* StopIteration raised */
         }
 
-        if (PyList_Append(result, line) < 0) {
+        if (PyList_AppendValue(result, PyValue_FromObjectBorrow(line)) < 0) {
             Py_DECREF(line);
             goto error;
         }
-        line_length = PyObject_Size(line);
+        line_length = _PyValue_Size(PyValue_FromObjectBorrow(line));
         Py_DECREF(line);
         if (line_length < 0) {
             goto error;
@@ -810,12 +822,12 @@ _io__IOBase_readlines_impl(PyObject *self, Py_ssize_t hint)
     }
 
     Py_DECREF(it);
-    return result;
+    return _PyValue_FromObjectResult(result);
 
  error:
     Py_XDECREF(it);
     Py_DECREF(result);
-    return NULL;
+    return PyValue_NULL;
 }
 
 /*[clinic input]
@@ -829,25 +841,25 @@ Line separators are not added, so it is usual for each of the
 lines provided to have a line separator at the end.
 [clinic start generated code]*/
 
-static PyObject *
-_io__IOBase_writelines(PyObject *self, PyObject *lines)
-/*[clinic end generated code: output=976eb0a9b60a6628 input=cac3fc8864183359]*/
+static PyValue
+_io__IOBase_writelines_impl(PyObject *self, PyValueBorrow lines)
+/*[clinic end generated code: output=ceee45e81f50d5d6 input=cac3fc8864183359]*/
 {
     PyObject *iter, *res;
 
     if (iobase_check_closed(self))
-        return NULL;
+        return PyValue_NULL;
 
-    iter = PyObject_GetIter(lines);
+    iter = _PyValue_GetIter(lines);
     if (iter == NULL)
-        return NULL;
+        return PyValue_NULL;
 
     while (1) {
         PyObject *line = PyIter_Next(iter);
         if (line == NULL) {
             if (PyErr_Occurred()) {
                 Py_DECREF(iter);
-                return NULL;
+                return PyValue_NULL;
             }
             else
                 break; /* Stop Iteration */
@@ -860,12 +872,12 @@ _io__IOBase_writelines(PyObject *self, PyObject *lines)
         Py_DECREF(line);
         if (res == NULL) {
             Py_DECREF(iter);
-            return NULL;
+            return PyValue_NULL;
         }
         Py_DECREF(res);
     }
     Py_DECREF(iter);
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 #define clinic_state() (find_io_state_by_def(Py_TYPE(self)))
@@ -960,19 +972,19 @@ _io._RawIOBase.read
     /
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _io__RawIOBase_read_impl(PyObject *self, Py_ssize_t n)
-/*[clinic end generated code: output=6cdeb731e3c9f13c input=b6d0dcf6417d1374]*/
+/*[clinic end generated code: output=c0d89006bbde7cbf input=b6d0dcf6417d1374]*/
 {
     PyObject *b, *res;
 
     if (n < 0) {
-        return PyObject_CallMethodNoArgs(self, &_Py_ID(readall));
+        return _PyValue_FromObjectResult(PyObject_CallMethodNoArgs(self, &_Py_ID(readall)));
     }
 
     b = PyByteArray_FromStringAndSize(NULL, n);
     if (b == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     res = PyObject_CallMethodObjArgs(self, &_Py_ID(readinto), b, NULL);
@@ -980,7 +992,7 @@ _io__RawIOBase_read_impl(PyObject *self, Py_ssize_t n)
         goto cleanup;
     }
 
-    Py_ssize_t bytes_filled = PyNumber_AsSsize_t(res, PyExc_ValueError);
+    Py_ssize_t bytes_filled = _PyValue_AsSsize_t(PyValue_FromObjectBorrow(res), PyExc_ValueError);
     Py_CLEAR(res);
     if (bytes_filled == -1 && PyErr_Occurred()) {
         goto cleanup;
@@ -998,7 +1010,7 @@ _io__RawIOBase_read_impl(PyObject *self, Py_ssize_t n)
 
 cleanup:
     Py_DECREF(b);
-    return res;
+    return _PyValue_FromObjectResult(res);
 }
 
 
@@ -1008,13 +1020,13 @@ _io._RawIOBase.readall
 Read until EOF, using multiple read() call.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _io__RawIOBase_readall_impl(PyObject *self)
-/*[clinic end generated code: output=1987b9ce929425a0 input=688874141213622a]*/
+/*[clinic end generated code: output=21186701e3cbe68e input=688874141213622a]*/
 {
     PyBytesWriter *writer = PyBytesWriter_Create(0);
     if (writer == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     while (1) {
@@ -1027,12 +1039,12 @@ _io__RawIOBase_readall_impl(PyObject *self)
                 continue;
             }
             PyBytesWriter_Discard(writer);
-            return NULL;
+            return PyValue_NULL;
         }
         if (data == Py_None) {
             if (PyBytesWriter_GetSize(writer) == 0) {
                 PyBytesWriter_Discard(writer);
-                return data;
+                return _PyValue_FromObjectResult(data);
             }
             Py_DECREF(data);
             break;
@@ -1041,7 +1053,7 @@ _io__RawIOBase_readall_impl(PyObject *self)
             Py_DECREF(data);
             PyErr_SetString(PyExc_TypeError, "read() should return bytes");
             PyBytesWriter_Discard(writer);
-            return NULL;
+            return PyValue_NULL;
         }
         if (PyBytes_GET_SIZE(data) == 0) {
             /* EOF */
@@ -1053,11 +1065,11 @@ _io__RawIOBase_readall_impl(PyObject *self)
                                      PyBytes_GET_SIZE(data)) < 0) {
             Py_DECREF(data);
             PyBytesWriter_Discard(writer);
-            return NULL;
+            return PyValue_NULL;
         }
         Py_DECREF(data);
     }
-    return PyBytesWriter_Finish(writer);
+    return _PyValue_FromObjectResult(PyBytesWriter_Finish(writer));
 }
 
 /*[clinic input]
@@ -1066,12 +1078,12 @@ _io._RawIOBase.readinto
     /
 [clinic start generated code]*/
 
-static PyObject *
-_io__RawIOBase_readinto(PyObject *self, PyObject *buffer)
-/*[clinic end generated code: output=081b8cdfaf3a40ff input=99d4bea2acd659c8]*/
+static PyValue
+_io__RawIOBase_readinto_impl(PyObject *self, PyValueBorrow buffer)
+/*[clinic end generated code: output=e3e43395ae318f66 input=99d4bea2acd659c8]*/
 {
     PyErr_SetNone(PyExc_NotImplementedError);
-    return NULL;
+    return PyValue_NULL;
 }
 
 /*[clinic input]
@@ -1080,12 +1092,12 @@ _io._RawIOBase.write
     /
 [clinic start generated code]*/
 
-static PyObject *
-_io__RawIOBase_write(PyObject *self, PyObject *buffer)
-/*[clinic end generated code: output=7add3f2c8715c3a8 input=e6a1534adb876fe2]*/
+static PyValue
+_io__RawIOBase_write_impl(PyObject *self, PyValueBorrow buffer)
+/*[clinic end generated code: output=449cf325dc418386 input=e6a1534adb876fe2]*/
 {
     PyErr_SetNone(PyExc_NotImplementedError);
-    return NULL;
+    return PyValue_NULL;
 }
 
 static PyMethodDef rawiobase_methods[] = {

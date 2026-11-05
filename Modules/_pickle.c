@@ -8,6 +8,7 @@
 #  define Py_BUILD_CORE_MODULE 1
 #endif
 
+#define Py_VALUE_CORE 1
 #include "Python.h"
 #include "pycore_bytesobject.h"   // _PyBytesWriter
 #include "pycore_ceval.h"         // _Py_EnterRecursiveCall()
@@ -15,25 +16,32 @@
 #include "pycore_dict.h"          // _PyDict_SetItem_Take2()
 #include "pycore_list.h"          // PyList_AppendValue()
 #include "pycore_long.h"          // _PyLong_AsByteArray()
+#include "pycore_long_value.h"    // _PyValue_AsLong()
 #include "pycore_methodobject.h"  // _PyCFunction_GET_SELF_VALUE()
 #include "pycore_moduleobject.h"  // _PyModule_GetState()
 #include "pycore_object.h"        // _PyNone_Type
 #include "pycore_pyerrors.h"      // _PyErr_FormatNote
 #include "pycore_pystate.h"       // _PyThreadState_GET()
 #include "pycore_runtime.h"       // _Py_ID()
-#include "pycore_setobject.h"     // _PySet_NextEntryRef()
+#include "pycore_setobject.h"     // _PySet_NextValue()
 #include "pycore_symtable.h"      // _Py_Mangle()
 #include "pycore_sysmodule.h"     // _PySys_GetSizeOf()
 #include "pycore_tuple.h"         // _PyTuple_FromPair
 #include "pycore_unicodeobject.h" // _PyUnicode_EqualToASCIIString()
 #include "pycore_value_api.h"     // _PyValue_AsObjectAt()
 #include "pycore_value_ops.h"     // _PyValue_SetItem()
+#include "pycore_value_slots.h"// _PyValue_FromObjectResult()
 
 #include <stdlib.h>               // strtol()
 
 
 PyDoc_STRVAR(pickle_module_doc,
 "Optimized C implementation for the Python pickle module.");
+
+/*[clinic input]
+value_emission
+[clinic start generated code]*/
+/*[clinic end generated code: output=da39a3ee5e6b4b0d input=eb7b17088bfd7215]*/
 
 /*[clinic input]
 module _pickle
@@ -1250,15 +1258,16 @@ error:
 }
 
 static int
-_Pickler_SetProtocol(PicklerObject *self, PyObject *protocol, int fix_imports)
+_Pickler_SetProtocol(PicklerObject *self, PyValueBorrow protocol,
+                     int fix_imports)
 {
     long proto;
 
-    if (protocol == Py_None) {
+    if (PyValue_IsNone(protocol)) {
         proto = DEFAULT_PROTOCOL;
     }
     else {
-        proto = PyLong_AsLong(protocol);
+        proto = _PyValue_AsLong(protocol);
         if (proto < 0) {
             if (proto == -1 && PyErr_Occurred())
                 return -1;
@@ -1279,10 +1288,16 @@ _Pickler_SetProtocol(PicklerObject *self, PyObject *protocol, int fix_imports)
 /* Returns -1 (with an exception set) on failure, 0 on success. This may
    be called once on a freshly created Pickler. */
 static int
-_Pickler_SetOutputStream(PicklerObject *self, PyObject *file)
+_Pickler_SetOutputStream(PicklerObject *self, PyValueBorrow file)
 {
-    assert(file != NULL);
-    if (PyObject_GetOptionalAttr(file, &_Py_ID(write), &self->write) < 0) {
+    assert(!PyValue_IsNull(file));
+    PyObject *file_obj = _PyValue_AsObjectAt(file, BOX_SITE_PARSER);
+    if (file_obj == NULL) {
+        return -1;
+    }
+    int rc = PyObject_GetOptionalAttr(file_obj, &_Py_ID(write), &self->write);
+    Py_DECREF(file_obj);
+    if (rc < 0) {
         return -1;
     }
     if (self->write == NULL) {
@@ -1295,19 +1310,21 @@ _Pickler_SetOutputStream(PicklerObject *self, PyObject *file)
 }
 
 static int
-_Pickler_SetBufferCallback(PicklerObject *self, PyObject *buffer_callback)
+_Pickler_SetBufferCallback(PicklerObject *self, PyValueBorrow buffer_callback)
 {
-    if (buffer_callback == Py_None) {
-        buffer_callback = NULL;
+    if (PyValue_IsNull(buffer_callback) || PyValue_IsNone(buffer_callback)) {
+        self->buffer_callback = NULL;
+        return 0;
     }
-    if (buffer_callback != NULL && self->proto < 5) {
+    if (self->proto < 5) {
         PyErr_SetString(PyExc_ValueError,
                         "buffer_callback needs protocol >= 5");
         return -1;
     }
 
-    self->buffer_callback = Py_XNewRef(buffer_callback);
-    return 0;
+    self->buffer_callback = _PyValue_AsObjectAt(buffer_callback,
+                                                BOX_SITE_FIELD);
+    return self->buffer_callback == NULL ? -1 : 0;
 }
 
 /* Returns the size of the input on success, -1 on failure. This takes its
@@ -1746,7 +1763,12 @@ _Unpickler_MemoGet(PickleState *st, UnpicklerObject *self, size_t idx)
             return PyValue_NULL;
         }
         if (idx < self->memo_size) {
-            (void)PyDict_Pop(self->memo_dict, key, &value);
+            PyValue value_v;
+            int rc_dict = PyDict_PopValue(self->memo_dict, PyValue_FromObjectBorrow(key), &value_v);
+            value = NULL;
+            if (rc_dict > 0 && (value = _PyValue_AsObjectStealAt(value_v, BOX_SITE_DICT)) == NULL) {
+                rc_dict = -1;
+            }
             Py_DECREF(key);
             if (value == NULL) {
                 if (PyErr_Occurred()) {
@@ -1762,7 +1784,12 @@ _Unpickler_MemoGet(PickleState *st, UnpicklerObject *self, size_t idx)
             }
         }
         else {
-            (void)PyDict_GetItemRef(self->memo_dict, key, &value);
+            PyValue value_v;
+            int rc_dict = PyDict_GetValue(self->memo_dict, PyValue_FromObjectBorrow(key), &value_v);
+            value = NULL;
+            if (rc_dict > 0 && (value = _PyValue_AsObjectStealAt(value_v, BOX_SITE_DICT)) == NULL) {
+                rc_dict = -1;
+            }
             Py_DECREF(key);
             if (value != NULL) {
                 return PyValue_PrepareOwned(value);
@@ -1909,8 +1936,12 @@ error:
 /* Returns -1 (with an exception set) on failure, 0 on success. This may
    be called once on a freshly created Unpickler. */
 static int
-_Unpickler_SetInputStream(UnpicklerObject *self, PyObject *file)
+_Unpickler_SetInputStream(UnpicklerObject *self, PyValueBorrow file_value)
 {
+    PyObject *file = _PyValue_AsObjectAt(file_value, BOX_SITE_PARSER);
+    if (file == NULL) {
+        return -1;
+    }
     /* Optional file methods */
     if (PyObject_GetOptionalAttr(file, &_Py_ID(peek), &self->peek) < 0) {
         goto error;
@@ -1929,9 +1960,11 @@ _Unpickler_SetInputStream(UnpicklerObject *self, PyObject *file)
                         "file must have 'read' and 'readline' attributes");
         goto error;
     }
+    Py_DECREF(file);
     return 0;
 
 error:
+    Py_DECREF(file);
     Py_CLEAR(self->read);
     Py_CLEAR(self->readinto);
     Py_CLEAR(self->readline);
@@ -1963,13 +1996,13 @@ _Unpickler_SetInputEncoding(UnpicklerObject *self,
 /* Returns -1 (with an exception set) on failure, 0 on success. This may
    be called once on a freshly created Unpickler. */
 static int
-_Unpickler_SetBuffers(UnpicklerObject *self, PyObject *buffers)
+_Unpickler_SetBuffers(UnpicklerObject *self, PyValueBorrow buffers)
 {
-    if (buffers == NULL || buffers == Py_None) {
+    if (PyValue_IsNull(buffers) || PyValue_IsNone(buffers)) {
         self->buffers = NULL;
     }
     else {
-        self->buffers = PyObject_GetIter(buffers);
+        self->buffers = _PyValue_GetIter(buffers);
         if (self->buffers == NULL) {
             return -1;
         }
@@ -2100,12 +2133,14 @@ mangle_dotted_path(PyObject *dotted_path)
     int rc = 0;
     Py_ssize_t n = PyList_GET_SIZE(dotted_path);
     for (Py_ssize_t i = n-1; i > 0; i--) {
-        PyObject *subpath = PyList_GetItemRef(dotted_path, i);
+        PyValue subpath_v = PyList_GetValue(dotted_path, i);
+        PyObject *subpath = PyValue_IsNull(subpath_v) ? NULL : _PyValue_AsObjectStealAt(subpath_v, BOX_SITE_LIST);
         if (subpath == NULL) {
             return -1;
         }
         if (_Py_IsPrivateName(subpath)) {
-            PyObject *parent = PyList_GetItemRef(dotted_path, i-1);
+            PyValue parent_v = PyList_GetValue(dotted_path, i-1);
+            PyObject *parent = PyValue_IsNull(parent_v) ? NULL : _PyValue_AsObjectStealAt(parent_v, BOX_SITE_LIST);
             if (parent == NULL) {
                 Py_DECREF(subpath);
                 return -1;
@@ -2119,7 +2154,7 @@ mangle_dotted_path(PyObject *dotted_path)
             if (mangled != subpath) {
                 rc = 1;
             }
-            if (PyList_SetItem(dotted_path, i, mangled) < 0) {
+            if (PyList_SetValue(dotted_path, i, PyValue_PrepareOwned(mangled)) < 0) {
                 Py_DECREF(subpath);
                 return -1;
             }
@@ -2136,7 +2171,8 @@ check_dotted_path(PickleState *st, PyObject *obj, PyObject *dotted_path)
     n = PyList_GET_SIZE(dotted_path);
     assert(n >= 1);
     for (i = 0; i < n; i++) {
-        PyObject *subpath = PyList_GetItemRef(dotted_path, i);
+        PyValue subpath_v2 = PyList_GetValue(dotted_path, i);
+        PyObject *subpath = PyValue_IsNull(subpath_v2) ? NULL : _PyValue_AsObjectStealAt(subpath_v2, BOX_SITE_LIST);
         if (subpath == NULL) {
             return -1;
         }
@@ -2160,14 +2196,16 @@ getattribute(PyObject *obj, PyObject *names, int raises)
     Py_INCREF(obj);
     n = PyList_GET_SIZE(names);
     for (i = 0; i < n; i++) {
-        PyObject *name = PyList_GetItemRef(names, i);
+        PyValue name_v = PyList_GetValue(names, i);
+        PyObject *name = PyValue_IsNull(name_v) ? NULL : _PyValue_AsObjectStealAt(name_v, BOX_SITE_LIST);
         if (name == NULL) {
             Py_DECREF(obj);
             return NULL;
         }
         PyObject *parent = obj;
         if (raises) {
-            obj = PyObject_GetAttr(parent, name);
+            PyValue obj_v = _PyValue_GetAttr(PyValue_FromObjectBorrow(parent), name);
+            obj = PyValue_IsNull(obj_v) ? NULL : _PyValue_AsObjectStealAt(obj_v, BOX_SITE_ATTRIBUTE);
         }
         else {
             (void)PyObject_GetOptionalAttr(parent, name, &obj);
@@ -2238,7 +2276,15 @@ whichmodule(PickleState *st, PyObject *global, PyObject *global_name, PyObject *
             i = 0;
             Py_BEGIN_CRITICAL_SECTION(modules);
             int rc;
-            while ((rc = PyDict_NextEntryRef(modules, &i, &module_name, &module)) > 0) {
+            PyValue module_name_v, module_v;
+            while ((rc = PyDict_NextValue(modules, &i, &module_name_v, &module_v)) > 0) {
+                module_name = _PyValue_AsObjectStealAt(module_name_v, BOX_SITE_DICT);
+                module = _PyValue_AsObjectStealAt(module_v, BOX_SITE_DICT);
+                if (module_name == NULL || module == NULL) {
+                    Py_CLEAR(module_name); Py_CLEAR(module);
+                    rc = -1;
+                    break;
+                }
                 if (_checkmodule(module_name, module, global, dotted_path) == 0) {
                     Py_DECREF(module);
                     found_name = module_name;
@@ -2265,13 +2311,18 @@ whichmodule(PickleState *st, PyObject *global, PyObject *global_name, PyObject *
             }
         }
         else {
-            PyObject *iterator = PyObject_GetIter(modules);
+            PyObject *iterator = _PyValue_GetIter(PyValue_FromObjectBorrow(modules));
             if (iterator == NULL) {
                 Py_DECREF(modules);
                 return NULL;
             }
             while ((module_name = PyIter_Next(iterator))) {
-                module = PyObject_GetItem(modules, module_name);
+                PyValue module_value = _PyValue_GetItem(
+                    PyValue_FromObjectBorrow(modules),
+                    PyValue_FromObjectBorrow(module_name));
+                module = PyValue_IsNull(module_value)
+                    ? NULL
+                    : _PyValue_AsObjectStealAt(module_value, BOX_SITE_SEQUENCE);
                 if (module == NULL) {
                     Py_DECREF(module_name);
                     Py_DECREF(iterator);
@@ -2376,7 +2427,7 @@ fast_save_enter(PicklerObject *self, PyObject *obj)
             self->fast_nesting = -1;
             return 0;
         }
-        int r = PyDict_Contains(self->fast_memo, key);
+        int r = PyDict_ContainsValue(self->fast_memo, PyValue_FromObjectBorrow(key));
         if (r > 0) {
             PyErr_Format(PyExc_ValueError,
                          "fast mode: can't pickle cyclic objects "
@@ -2384,7 +2435,7 @@ fast_save_enter(PicklerObject *self, PyObject *obj)
                          Py_TYPE(obj)->tp_name, obj);
         }
         else if (r == 0) {
-            r = PyDict_SetItem(self->fast_memo, key, Py_None);
+            r = PyDict_SetValue(self->fast_memo, PyValue_FromObjectBorrow(key), _PyValue_FromObjectKnown(Py_None));
         }
         Py_DECREF(key);
         if (r != 0) {
@@ -2402,7 +2453,7 @@ fast_save_leave(PicklerObject *self, PyObject *obj)
         PyObject *key = PyLong_FromVoidPtr(obj);
         if (key == NULL)
             return 0;
-        if (PyDict_DelItem(self->fast_memo, key) < 0) {
+        if (PyDict_DelValue(self->fast_memo, PyValue_FromObjectBorrow(key)) < 0) {
             Py_DECREF(key);
             return 0;
         }
@@ -2585,7 +2636,7 @@ save_long(PicklerObject *self, PyObject *obj)
            the number of digits), in both directions.  We add a trailing 'L'
            to the repr, for compatibility with Python 2.x. */
 
-        repr = PyObject_Repr(obj);
+        repr = _PyValue_Repr(PyValue_FromObjectBorrow(obj));
         if (repr == NULL)
             goto error;
 
@@ -2910,7 +2961,7 @@ save_picklebuffer(PickleState *st, PicklerObject *self, PyObject *obj)
         if (ret == NULL) {
             goto error;
         }
-        in_band = PyObject_IsTrue(ret);
+        in_band = _PyValue_IsTrue(PyValue_FromObjectBorrow(ret));
         Py_DECREF(ret);
         if (in_band == -1) {
             goto error;
@@ -3120,7 +3171,8 @@ store_tuple_elements(PickleState *state, PicklerObject *self, PyObject *t,
     assert(PyTuple_Size(t) == len);
 
     for (i = 0; i < len; i++) {
-        PyObject *element = PyTuple_GetItemRef(t, i);
+        PyValue element_v = PyTuple_GetValue(t, i);
+        PyObject *element = PyValue_IsNull(element_v) ? NULL : _PyValue_AsObjectStealAt(element_v, BOX_SITE_TUPLE);
 
         if (element == NULL)
             return -1;
@@ -3389,7 +3441,8 @@ batch_list_exact(PickleState *state, PicklerObject *self, PyObject *obj)
     total = 0;
     do {
         if (list_size - total == 1) {
-            item = PyList_GetItemRef(obj, total);
+            PyValue item_v = PyList_GetValue(obj, total);
+            item = PyValue_IsNull(item_v) ? NULL : _PyValue_AsObjectStealAt(item_v, BOX_SITE_LIST);
             if (item == NULL) {
                 _PyErr_FormatNote("when serializing %T item %zd", obj, total);
                 return -1;
@@ -3408,7 +3461,8 @@ batch_list_exact(PickleState *state, PicklerObject *self, PyObject *obj)
         if (_Pickler_Write(self, &mark_op, 1) < 0)
             return -1;
         while (total < PyList_GET_SIZE(obj)) {
-            item = PyList_GetItemRef(obj, total);
+            PyValue item_v2 = PyList_GetValue(obj, total);
+            item = PyValue_IsNull(item_v2) ? NULL : _PyValue_AsObjectStealAt(item_v2, BOX_SITE_LIST);
             if (item == NULL) {
                 _PyErr_FormatNote("when serializing %T item %zd", obj, total);
                 return -1;
@@ -3476,7 +3530,7 @@ save_list(PickleState *state, PicklerObject *self, PyObject *obj)
             status = batch_list_exact(state, self, obj);
             _Py_LeaveRecursiveCall();
         } else {
-            PyObject *iter = PyObject_GetIter(obj);
+            PyObject *iter = _PyValue_GetIter(PyValue_FromObjectBorrow(obj));
             if (iter == NULL)
                 goto error;
 
@@ -3507,8 +3561,10 @@ save_dict_item(PickleState *state, PicklerObject *self, PyObject *pair,
                PyObject *origobj)
 {
     int ret = -1;
-    PyObject *key = PyTuple_GetItemRef(pair, 0);
-    PyObject *value = PyTuple_GetItemRef(pair, 1);
+    PyValue key_v = PyTuple_GetValue(pair, 0);
+    PyObject *key = PyValue_IsNull(key_v) ? NULL : _PyValue_AsObjectStealAt(key_v, BOX_SITE_TUPLE);
+    PyValue value_v = PyTuple_GetValue(pair, 1);
+    PyObject *value = PyValue_IsNull(value_v) ? NULL : _PyValue_AsObjectStealAt(value_v, BOX_SITE_TUPLE);
 
     if (key == NULL || value == NULL) {
         goto done;
@@ -3684,7 +3740,18 @@ batch_dict_exact_impl(PickleState *state, PicklerObject *self, PyObject *obj)
     Py_ssize_t total = 0;
     do {
         if (dict_size - total == 1) {
-            rc = PyDict_NextEntryRef(obj, &ppos, &key, &value);
+            PyValue key_v, value_v;
+            rc = PyDict_NextValue(obj, &ppos, &key_v, &value_v);
+            key = NULL;
+            value = NULL;
+            if (rc > 0) {
+                key = _PyValue_AsObjectStealAt(key_v, BOX_SITE_DICT);
+                value = _PyValue_AsObjectStealAt(value_v, BOX_SITE_DICT);
+                if (key == NULL || value == NULL) {
+                    Py_CLEAR(key); Py_CLEAR(value);
+                    rc = -1;
+                }
+            }
             if (rc < 0) {
                 return -1;
             }
@@ -3711,7 +3778,15 @@ batch_dict_exact_impl(PickleState *state, PicklerObject *self, PyObject *obj)
         i = 0;
         if (_Pickler_Write(self, &mark_op, 1) < 0)
             return -1;
-        while ((rc = PyDict_NextEntryRef(obj, &ppos, &key, &value)) > 0) {
+        PyValue key_v, value_v;
+        while ((rc = PyDict_NextValue(obj, &ppos, &key_v, &value_v)) > 0) {
+            key = _PyValue_AsObjectStealAt(key_v, BOX_SITE_DICT);
+            value = _PyValue_AsObjectStealAt(value_v, BOX_SITE_DICT);
+            if (key == NULL || value == NULL) {
+                Py_CLEAR(key); Py_CLEAR(value);
+                rc = -1;
+                break;
+            }
             if (save(state, self, key, 0) < 0) {
                 goto error;
             }
@@ -3745,7 +3820,7 @@ error:
 }
 
 /* gh-146452: Wrap the dict iteration in a critical section to prevent
-   concurrent mutation from invalidating PyDict_NextEntryRef() iteration state. */
+   concurrent mutation from invalidating PyDict_NextValue() iteration state. */
 static int
 batch_dict_exact(PickleState *state, PicklerObject *self, PyObject *obj)
 {
@@ -3798,7 +3873,7 @@ save_dict(PickleState *state, PicklerObject *self, PyObject *obj)
             items = PyObject_CallMethodNoArgs(obj, &_Py_ID(items));
             if (items == NULL)
                 goto error;
-            iter = PyObject_GetIter(items);
+            iter = _PyValue_GetIter(PyValue_FromObjectBorrow(items));
             Py_DECREF(items);
             if (iter == NULL)
                 goto error;
@@ -3840,7 +3915,7 @@ save_set(PickleState *state, PicklerObject *self, PyObject *obj)
         PyObject *reduce_value;
         int status;
 
-        items = PySequence_List(obj);
+        items = _PyValue_SequenceList(PyValue_FromObjectBorrow(obj));
         if (items == NULL) {
             return -1;
         }
@@ -3874,7 +3949,13 @@ save_set(PickleState *state, PicklerObject *self, PyObject *obj)
 
         int err = 0, rc;
         Py_BEGIN_CRITICAL_SECTION(obj);
-        while ((rc = _PySet_NextEntryRef(obj, &ppos, &item, &hash)) > 0) {
+        PyValue item_v;
+        while ((rc = _PySet_NextValue(obj, &ppos, &item_v, &hash)) > 0) {
+            item = _PyValue_AsObjectStealAt(item_v, BOX_SITE_SET);
+            if (item == NULL) {
+                rc = -1;
+                break;
+            }
             err = save(state, self, item, 0);
             Py_CLEAR(item);
             if (err < 0) {
@@ -3915,7 +3996,7 @@ save_frozenset_impl(PickleState *state, PicklerObject *self, PyObject *obj)
         PyObject *reduce_value;
         int status;
 
-        items = PySequence_List(obj);
+        items = _PyValue_SequenceList(PyValue_FromObjectBorrow(obj));
         if (items == NULL) {
             return -1;
         }
@@ -3934,7 +4015,7 @@ save_frozenset_impl(PickleState *state, PicklerObject *self, PyObject *obj)
     if (_Pickler_Write(self, &mark_op, 1) < 0)
         return -1;
 
-    iter = PyObject_GetIter(obj);
+    iter = _PyValue_GetIter(PyValue_FromObjectBorrow(obj));
     if (iter == NULL) {
         return -1;
     }
@@ -4000,10 +4081,15 @@ fix_imports(PickleState *st, PyObject **module_name, PyObject **global_name)
     PyObject *item;
     int rc;
 
-    key = _PyTuple_FromPair(*module_name, *global_name);
+    key = _PyTuple_PackValues(2, (PyValueBorrow[]){PyValue_FromObjectBorrow(*module_name), PyValue_FromObjectBorrow(*global_name)});
     if (key == NULL)
         return -1;
-    rc = PyDict_GetItemRef(st->name_mapping_3to2, key, &item);
+    PyValue item_v;
+    rc = PyDict_GetValue(st->name_mapping_3to2, PyValue_FromObjectBorrow(key), &item_v);
+    item = NULL;
+    if (rc > 0 && (item = _PyValue_AsObjectStealAt(item_v, BOX_SITE_DICT)) == NULL) {
+        rc = -1;
+    }
     Py_DECREF(key);
     if (rc > 0) {
         PyObject *fixed_module_name = NULL;
@@ -4016,8 +4102,10 @@ fix_imports(PickleState *st, PyObject **module_name, PyObject **global_name)
                          Py_TYPE(item)->tp_name);
             goto error;
         }
-        fixed_module_name = PyTuple_GetItemRef(item, 0);
-        fixed_global_name = PyTuple_GetItemRef(item, 1);
+        PyValue fixed_module_name_v = PyTuple_GetValue(item, 0);
+        fixed_module_name = PyValue_IsNull(fixed_module_name_v) ? NULL : _PyValue_AsObjectStealAt(fixed_module_name_v, BOX_SITE_TUPLE);
+        PyValue fixed_global_name_v = PyTuple_GetValue(item, 1);
+        fixed_global_name = PyValue_IsNull(fixed_global_name_v) ? NULL : _PyValue_AsObjectStealAt(fixed_global_name_v, BOX_SITE_TUPLE);
         if (fixed_module_name == NULL || fixed_global_name == NULL) {
             goto error;
         }
@@ -4046,7 +4134,11 @@ fix_imports(PickleState *st, PyObject **module_name, PyObject **global_name)
         return -1;
     }
 
-    rc = PyDict_GetItemRef(st->import_mapping_3to2, *module_name, &item);
+    rc = PyDict_GetValue(st->import_mapping_3to2, PyValue_FromObjectBorrow(*module_name), &item_v);
+    item = NULL;
+    if (rc > 0 && (item = _PyValue_AsObjectStealAt(item_v, BOX_SITE_DICT)) == NULL) {
+        rc = -1;
+    }
     if (rc > 0) {
         if (!PyUnicode_Check(item)) {
             PyErr_Format(PyExc_RuntimeError,
@@ -4083,7 +4175,8 @@ save_global(PickleState *st, PicklerObject *self, PyObject *obj,
         if (PyObject_GetOptionalAttr(obj, &_Py_ID(__qualname__), &global_name) < 0)
             goto error;
         if (global_name == NULL) {
-            global_name = PyObject_GetAttr(obj, &_Py_ID(__name__));
+            PyValue global_name_v = _PyValue_GetAttr(PyValue_FromObjectBorrow(obj), &_Py_ID(__name__));
+            global_name = PyValue_IsNull(global_name_v) ? NULL : _PyValue_AsObjectStealAt(global_name_v, BOX_SITE_ATTRIBUTE);
             if (global_name == NULL)
                 goto error;
         }
@@ -4115,11 +4208,17 @@ save_global(PickleState *st, PicklerObject *self, PyObject *obj,
         char pdata[5];
         Py_ssize_t n;
 
-        extension_key = _PyTuple_FromPair(module_name, global_name);
+        extension_key = _PyTuple_PackValues(2, (PyValueBorrow[]){PyValue_FromObjectBorrow(module_name), PyValue_FromObjectBorrow(global_name)});
         if (extension_key == NULL) {
             goto error;
         }
-        if (PyDict_GetItemRef(st->extension_registry, extension_key, &code_obj) < 0) {
+        PyValue code_obj_v;
+        int rc_dict = PyDict_GetValue(st->extension_registry, PyValue_FromObjectBorrow(extension_key), &code_obj_v);
+        code_obj = NULL;
+        if (rc_dict > 0 && (code_obj = _PyValue_AsObjectStealAt(code_obj_v, BOX_SITE_DICT)) == NULL) {
+            rc_dict = -1;
+        }
+        if (rc_dict < 0) {
             Py_DECREF(extension_key);
             goto error;
         }
@@ -4190,7 +4289,10 @@ save_global(PickleState *st, PicklerObject *self, PyObject *obj,
             Py_ssize_t i;
             if (dotted_path) {
                 if (PyList_GET_SIZE(dotted_path) > 1) {
-                    Py_SETREF(global_name, PyList_GetItemRef(dotted_path, 0));
+                    PyValue first_v = PyList_GetValue(dotted_path, 0);
+                    Py_SETREF(global_name,
+                              PyValue_IsNull(first_v) ? NULL
+                              : _PyValue_AsObjectStealAt(first_v, BOX_SITE_LIST));
                     if (global_name == NULL) {
                         goto error;
                     }
@@ -4274,7 +4376,8 @@ save_global(PickleState *st, PicklerObject *self, PyObject *obj,
 
             if (dotted_path) {
                 for (i = 1; i < PyList_GET_SIZE(dotted_path); i++) {
-                    PyObject *subpath = PyList_GetItemRef(dotted_path, i);
+                    PyValue subpath_v3 = PyList_GetValue(dotted_path, i);
+                    PyObject *subpath = PyValue_IsNull(subpath_v3) ? NULL : _PyValue_AsObjectStealAt(subpath_v3, BOX_SITE_LIST);
                     if (subpath == NULL) {
                         goto error;
                     }
@@ -4358,7 +4461,7 @@ save_pers(PickleState *state, PicklerObject *self, PyObject *obj)
         else {
             PyObject *pid_str;
 
-            pid_str = PyObject_Str(pid);
+            pid_str = _PyValue_Str(PyValue_FromObjectBorrow(pid));
             if (pid_str == NULL)
                 goto error;
 
@@ -4508,9 +4611,12 @@ save_reduce_impl(PickleState *st, PicklerObject *self, PyObject *args,
             return -1;
         }
 
-        cls = PyTuple_GetItemRef(argtup, 0);
-        args = PyTuple_GetItemRef(argtup, 1);
-        kwargs = PyTuple_GetItemRef(argtup, 2);
+        PyValue cls_v = PyTuple_GetValue(argtup, 0);
+        cls = PyValue_IsNull(cls_v) ? NULL : _PyValue_AsObjectStealAt(cls_v, BOX_SITE_TUPLE);
+        PyValue args_v = PyTuple_GetValue(argtup, 1);
+        args = PyValue_IsNull(args_v) ? NULL : _PyValue_AsObjectStealAt(args_v, BOX_SITE_TUPLE);
+        PyValue kwargs_v = PyTuple_GetValue(argtup, 2);
+        kwargs = PyValue_IsNull(kwargs_v) ? NULL : _PyValue_AsObjectStealAt(kwargs_v, BOX_SITE_TUPLE);
         if (cls == NULL || args == NULL || kwargs == NULL) {
             goto newobj_ex_error;
         }
@@ -4557,20 +4663,22 @@ save_reduce_impl(PickleState *st, PicklerObject *self, PyObject *args,
             if (newargs == NULL)
                 goto newobj_ex_error;
 
-            cls_new = PyObject_GetAttr(cls, &_Py_ID(__new__));
+            PyValue cls_new_v = _PyValue_GetAttr(PyValue_FromObjectBorrow(cls), &_Py_ID(__new__));
+            cls_new = PyValue_IsNull(cls_new_v) ? NULL : _PyValue_AsObjectStealAt(cls_new_v, BOX_SITE_ATTRIBUTE);
             if (cls_new == NULL) {
                 Py_DECREF(newargs);
                 goto newobj_ex_error;
             }
-            PyTuple_SET_ITEM(newargs, 0, cls_new);
-            PyTuple_SET_ITEM(newargs, 1, Py_NewRef(cls));
+            PyTuple_SET_VALUE(newargs, 0, PyValue_PrepareOwned(cls_new));
+            PyTuple_SET_VALUE(newargs, 1, PyValue_DUP(PyValue_FromObjectBorrow(cls)));
             for (i = 0; i < PyTuple_GET_SIZE(args); i++) {
-                PyObject *item = PyTuple_GetItemRef(args, i);
+                PyValue item_v3 = PyTuple_GetValue(args, i);
+                PyObject *item = PyValue_IsNull(item_v3) ? NULL : _PyValue_AsObjectStealAt(item_v3, BOX_SITE_TUPLE);
                 if (item == NULL) {
                     Py_DECREF(newargs);
                     goto newobj_ex_error;
                 }
-                PyTuple_SET_ITEM(newargs, i + 2, item);
+                PyTuple_SET_VALUE(newargs, i + 2, PyValue_PrepareOwned(item));
             }
 
             callable = PyObject_Call(st->partial, newargs, kwargs);
@@ -4624,7 +4732,8 @@ save_reduce_impl(PickleState *st, PicklerObject *self, PyObject *args,
             return -1;
         }
 
-        cls = PyTuple_GetItemRef(argtup, 0);
+        PyValue cls_v2 = PyTuple_GetValue(argtup, 0);
+        cls = PyValue_IsNull(cls_v2) ? NULL : _PyValue_AsObjectStealAt(cls_v2, BOX_SITE_TUPLE);
         if (cls == NULL) {
             return -1;
         }
@@ -4915,14 +5024,14 @@ weak_only_type_names(PicklerObject *self)
             PyObject *tname = PyType_GetFullyQualifiedName(Py_TYPE(key));
             if (tname == NULL)
                 goto error;
-            int r = PySet_Add(names, tname);
+            int r = PySet_AddValue(names, PyValue_FromObjectBorrow(tname));
             Py_DECREF(tname);
             if (r < 0)
                 goto error;
         }
     }
 
-    PyObject *lst = PySequence_List(names);
+    PyObject *lst = _PyValue_SequenceList(PyValue_FromObjectBorrow(names));
     Py_CLEAR(names);
     if (lst == NULL)
         return NULL;
@@ -5082,8 +5191,15 @@ save_object(PickleState *st, PicklerObject *self, PyObject *obj, int pers_save,
      * __reduce_ex__ method, or the object's __reduce__ method.
      */
     if (self->dispatch_table == NULL) {
-        if (PyDict_GetItemRef(st->dispatch_table, (PyObject *)type,
-                              &reduce_func) < 0) {
+        PyValue reduce_func_v;
+        int rc_dict = PyDict_GetValue(st->dispatch_table,
+                                      PyValue_FromObjectBorrow((PyObject *)type),
+                                      &reduce_func_v);
+        reduce_func = NULL;
+        if (rc_dict > 0 && (reduce_func = _PyValue_AsObjectStealAt(reduce_func_v, BOX_SITE_DICT)) == NULL) {
+            rc_dict = -1;
+        }
+        if (rc_dict < 0) {
             goto error;
         }
     }
@@ -5210,14 +5326,20 @@ pickler_get_optional_attr(PicklerObject *self, PyObject *name,
 }
 
 static int
-dump(PickleState *state, PicklerObject *self, PyObject *obj)
+dump(PickleState *state, PicklerObject *self, PyValueBorrow obj_value)
 {
     const char stop_op = STOP;
     int status = -1;
     PyObject *tmp;
 
+    PyObject *obj = _PyValue_AsObjectAt(obj_value, BOX_SITE_PARSER);
+    if (obj == NULL) {
+        return -1;
+    }
+
     /* Cache the persistent_id method. */
-    tmp = PyObject_GetAttr((PyObject *)self, &_Py_ID(persistent_id));
+    PyValue tmp_v = _PyValue_GetAttr(PyValue_FromObjectBorrow((PyObject *)self), &_Py_ID(persistent_id));
+    tmp = PyValue_IsNull(tmp_v) ? NULL : _PyValue_AsObjectStealAt(tmp_v, BOX_SITE_ATTRIBUTE);
     if (tmp == NULL) {
         goto error;
     }
@@ -5282,6 +5404,7 @@ dump(PickleState *state, PicklerObject *self, PyObject *obj)
      * be garbage-collected as long as the Pickler itself is not collected. */
     Py_CLEAR(self->persistent_id);
     Py_CLEAR(self->reducer_override);
+    Py_DECREF(obj);
     return status;
 }
 
@@ -5297,15 +5420,15 @@ pickled by reference and not by value.  This method is useful when
 re-using picklers.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _pickle_Pickler_clear_memo_impl(PicklerObject *self)
-/*[clinic end generated code: output=8665c8658aaa094b input=01bdad52f3d93e56]*/
+/*[clinic end generated code: output=796816cc04c00367 input=01bdad52f3d93e56]*/
 {
     if (self->memo)
         PyMemoTable_Clear(self->memo);
     self->weak_only_count = 0;
 
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 /*[clinic input]
@@ -5319,10 +5442,10 @@ _pickle.Pickler.dump
 Write a pickled representation of the given object to the open file.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _pickle_Pickler_dump_impl(PicklerObject *self, PyTypeObject *cls,
-                          PyObject *obj)
-/*[clinic end generated code: output=952cf7f68b1445bb input=f949d84151983594]*/
+                          PyValueBorrow obj)
+/*[clinic end generated code: output=8e26e7a4d22da6cf input=f949d84151983594]*/
 {
     PickleState *st = _Pickle_GetStateByClass(cls);
     /* Check whether the Pickler was initialized correctly (issue3664).
@@ -5332,9 +5455,9 @@ _pickle_Pickler_dump_impl(PicklerObject *self, PyTypeObject *cls,
         PyErr_Format(st->PicklingError,
                      "Pickler.__init__() was not called by %s.__init__()",
                      Py_TYPE(self)->tp_name);
-        return NULL;
+        return PyValue_NULL;
     }
-    BEGIN_USING_PICKLER(self, NULL);
+    BEGIN_USING_PICKLER(self, PyValue_NULL);
 
     if (_Pickler_ClearBuffer(self) < 0) {
         goto error;
@@ -5346,11 +5469,11 @@ _pickle_Pickler_dump_impl(PicklerObject *self, PyTypeObject *cls,
         goto error;
     }
     END_USING_PICKLER(self);
-    Py_RETURN_NONE;
+    return PyValue_None;
 
 error:
     END_USING_PICKLER(self);
-    return NULL;
+    return PyValue_NULL;
 }
 
 /*[clinic input]
@@ -5489,10 +5612,10 @@ is None or smaller than 5.
 [clinic start generated code]*/
 
 static int
-_pickle_Pickler___init___impl(PicklerObject *self, PyObject *file,
-                              PyObject *protocol, int fix_imports,
-                              PyObject *buffer_callback)
-/*[clinic end generated code: output=0abedc50590d259b input=cddc50f66b770002]*/
+_pickle_Pickler___init___impl(PicklerObject *self, PyValueBorrow file,
+                              PyValueBorrow protocol, int fix_imports,
+                              PyValueBorrow buffer_callback)
+/*[clinic end generated code: output=d36a8fa52e66ef21 input=cddc50f66b770002]*/
 {
     BEGIN_USING_PICKLER(self, -1);
     /* In case of multiple __init__() calls, clear previous content. */
@@ -5561,13 +5684,13 @@ _pickle.PicklerMemoProxy.clear
 Remove all items from memo.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _pickle_PicklerMemoProxy_clear_impl(PicklerMemoProxyObject *self)
-/*[clinic end generated code: output=5fb9370d48ae8b05 input=ccc186dacd0f1405]*/
+/*[clinic end generated code: output=a3b05ea23fe8120b input=ccc186dacd0f1405]*/
 {
     if (self->pickler->memo)
         PyMemoTable_Clear(self->pickler->memo);
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 /*[clinic input]
@@ -5576,14 +5699,14 @@ _pickle.PicklerMemoProxy.copy
 Copy the memo to a new object.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _pickle_PicklerMemoProxy_copy_impl(PicklerMemoProxyObject *self)
-/*[clinic end generated code: output=bb83a919d29225ef input=b73043485ac30b36]*/
+/*[clinic end generated code: output=fa8541ecf99a8e46 input=b73043485ac30b36]*/
 {
     PyMemoTable *memo;
     PyObject *new_memo = PyDict_New();
     if (new_memo == NULL)
-        return NULL;
+        return PyValue_NULL;
 
     memo = self->pickler->memo;
     for (size_t i = 0; i < memo->mt_allocated; ++i) {
@@ -5601,16 +5724,16 @@ _pickle_PicklerMemoProxy_copy_impl(PicklerMemoProxyObject *self)
                 Py_DECREF(key);
                 goto error;
             }
-            status = _PyDict_SetItem_Take2((PyDictObject *)new_memo, key, value);
+            status = _PyDict_SetValue_Take2((PyDictObject *)new_memo, PyValue_PrepareOwned(key), PyValue_PrepareOwned(value));
             if (status < 0)
                 goto error;
         }
     }
-    return new_memo;
+    return _PyValue_FromObjectResult(new_memo);
 
   error:
     Py_XDECREF(new_memo);
-    return NULL;
+    return PyValue_NULL;
 }
 
 /*[clinic input]
@@ -5619,23 +5742,25 @@ _pickle.PicklerMemoProxy.__reduce__
 Implement pickle support.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _pickle_PicklerMemoProxy___reduce___impl(PicklerMemoProxyObject *self)
-/*[clinic end generated code: output=bebba1168863ab1d input=2f7c540e24b7aae4]*/
+/*[clinic end generated code: output=96b0aec852900d0b input=2f7c540e24b7aae4]*/
 {
     PyObject *dict_args;
-    PyObject *contents = _pickle_PicklerMemoProxy_copy_impl(self);
-    if (contents == NULL)
-        return NULL;
+    PyValue contents_value = _pickle_PicklerMemoProxy_copy_impl(self);
+    if (PyValue_IsNull(contents_value))
+        return PyValue_NULL;
+    /* A new dict. */
+    PyObject *contents = PyValue_AsKnownObjectSteal(contents_value);
 
     dict_args = PyTuple_New(1);
     if (dict_args == NULL) {
         Py_DECREF(contents);
-        return NULL;
+        return PyValue_NULL;
     }
-    PyTuple_SET_ITEM(dict_args, 0, contents);
+    PyTuple_SET_VALUE(dict_args, 0, PyValue_PrepareOwned(contents));
 
-    return _PyTuple_FromPairSteal(Py_NewRef(&PyDict_Type), dict_args);
+    return _PyValue_FromObjectResult(_PyTuple_FromPairTakeValue(PyValue_DUP(_PyValue_FromObjectKnown(_PyObject_CAST(&PyDict_Type))), PyValue_PrepareOwned(dict_args)));
 }
 
 static PyMethodDef picklerproxy_methods[] = {
@@ -5742,7 +5867,14 @@ Pickler_set_memo(PyObject *op, PyObject *obj, void *Py_UNUSED(closure))
             return -1;
 
         int rc;
-        while ((rc = PyDict_NextEntryRef(obj, &i, NULL, &value)) > 0) {
+        PyValue value_v;
+        while ((rc = PyDict_NextValue(obj, &i, NULL, &value_v)) > 0) {
+            value = _PyValue_AsObjectStealAt(value_v, BOX_SITE_DICT);
+            if (value == NULL) {
+                Py_CLEAR(value);
+                rc = -1;
+                break;
+            }
             Py_ssize_t memo_id;
             PyObject *memo_id_obj = NULL, *memo_obj = NULL;
 
@@ -5752,8 +5884,10 @@ Pickler_set_memo(PyObject *op, PyObject *obj, void *Py_UNUSED(closure))
                 Py_DECREF(value);
                 goto error;
             }
-            memo_id_obj = PyTuple_GetItemRef(value, 0);
-            memo_obj = PyTuple_GetItemRef(value, 1);
+            PyValue memo_id_obj_v = PyTuple_GetValue(value, 0);
+            memo_id_obj = PyValue_IsNull(memo_id_obj_v) ? NULL : _PyValue_AsObjectStealAt(memo_id_obj_v, BOX_SITE_TUPLE);
+            PyValue memo_obj_v = PyTuple_GetValue(value, 1);
+            memo_obj = PyValue_IsNull(memo_obj_v) ? NULL : _PyValue_AsObjectStealAt(memo_obj_v, BOX_SITE_TUPLE);
             Py_DECREF(value);
             if (memo_id_obj == NULL || memo_obj == NULL) {
                 Py_XDECREF(memo_id_obj);
@@ -7043,7 +7177,12 @@ load_extension(PickleState *st, UnpicklerObject *self, int nbytes)
     py_code = PyLong_FromLong(code);
     if (py_code == NULL)
         return -1;
-    int rc = PyDict_GetItemRef(st->extension_cache, py_code, &obj);
+    PyValue obj_v;
+    int rc = PyDict_GetValue(st->extension_cache, PyValue_FromObjectBorrow(py_code), &obj_v);
+    obj = NULL;
+    if (rc > 0 && (obj = _PyValue_AsObjectStealAt(obj_v, BOX_SITE_DICT)) == NULL) {
+        rc = -1;
+    }
     if (rc < 0) {
         Py_DECREF(py_code);
         return -1;
@@ -7056,7 +7195,12 @@ load_extension(PickleState *st, UnpicklerObject *self, int nbytes)
     }
 
     /* Look up the (module_name, class_name) pair. */
-    rc = PyDict_GetItemRef(st->inverted_registry, py_code, &pair);
+    PyValue pair_v;
+    rc = PyDict_GetValue(st->inverted_registry, PyValue_FromObjectBorrow(py_code), &pair_v);
+    pair = NULL;
+    if (rc > 0 && (pair = _PyValue_AsObjectStealAt(pair_v, BOX_SITE_DICT)) == NULL) {
+        rc = -1;
+    }
     if (rc <= 0) {
         Py_DECREF(py_code);
         if (rc == 0) {
@@ -7072,8 +7216,10 @@ load_extension(PickleState *st, UnpicklerObject *self, int nbytes)
         goto error;
     }
 
-    module_name = PyTuple_GetItemRef(pair, 0);
-    class_name = PyTuple_GetItemRef(pair, 1);
+    PyValue module_name_v = PyTuple_GetValue(pair, 0);
+    module_name = PyValue_IsNull(module_name_v) ? NULL : _PyValue_AsObjectStealAt(module_name_v, BOX_SITE_TUPLE);
+    PyValue class_name_v = PyTuple_GetValue(pair, 1);
+    class_name = PyValue_IsNull(class_name_v) ? NULL : _PyValue_AsObjectStealAt(class_name_v, BOX_SITE_TUPLE);
     Py_DECREF(pair);
     pair = NULL;
     if (module_name == NULL || class_name == NULL) {
@@ -7097,7 +7243,7 @@ load_extension(PickleState *st, UnpicklerObject *self, int nbytes)
         return -1;
     }
     /* Cache code -> obj. */
-    code = PyDict_SetItem(st->extension_cache, py_code, obj);
+    code = PyDict_SetValue(st->extension_cache, PyValue_FromObjectBorrow(py_code), PyValue_FromObjectBorrow(obj));
     Py_DECREF(py_code);
     if (code < 0) {
         Py_DECREF(obj);
@@ -7264,7 +7410,8 @@ do_append(PickleState *state, UnpicklerObject *self, Py_ssize_t x)
             /* Even if the PEP 307 requires extend() and append() methods,
                fall back on append() if the object has no extend() method
                for backward compatibility. */
-            append_func = PyObject_GetAttr(list, &_Py_ID(append));
+            PyValue append_func_v = _PyValue_GetAttr(PyValue_FromObjectBorrow(list), &_Py_ID(append));
+            append_func = PyValue_IsNull(append_func_v) ? NULL : _PyValue_AsObjectStealAt(append_func_v, BOX_SITE_ATTRIBUTE);
             if (append_func == NULL) {
                 Py_DECREF(list);
                 return -1;
@@ -7396,7 +7543,8 @@ load_additems(PickleState *state, UnpicklerObject *self)
     else {
         PyObject *add_func;
 
-        add_func = PyObject_GetAttr(set, &_Py_ID(add));
+        PyValue add_func_v = _PyValue_GetAttr(PyValue_FromObjectBorrow(set), &_Py_ID(add));
+        add_func = PyValue_IsNull(add_func_v) ? NULL : _PyValue_AsObjectStealAt(add_func_v, BOX_SITE_ATTRIBUTE);
         Py_DECREF(set);
         if (add_func == NULL)
             return -1;
@@ -7470,8 +7618,10 @@ load_build(PickleState *st, UnpicklerObject *self)
     if (PyTuple_Check(state) && PyTuple_GET_SIZE(state) == 2) {
         PyObject *tmp = state;
 
-        state = PyTuple_GetItemRef(tmp, 0);
-        slotstate = PyTuple_GetItemRef(tmp, 1);
+        PyValue state_v = PyTuple_GetValue(tmp, 0);
+        state = PyValue_IsNull(state_v) ? NULL : _PyValue_AsObjectStealAt(state_v, BOX_SITE_TUPLE);
+        PyValue slotstate_v = PyTuple_GetValue(tmp, 1);
+        slotstate = PyValue_IsNull(slotstate_v) ? NULL : _PyValue_AsObjectStealAt(slotstate_v, BOX_SITE_TUPLE);
         Py_DECREF(tmp);
         if (state == NULL || slotstate == NULL) {
             Py_XDECREF(state);
@@ -7493,20 +7643,29 @@ load_build(PickleState *st, UnpicklerObject *self)
             PyErr_SetString(st->UnpicklingError, "state is not a dictionary");
             goto error;
         }
-        dict = PyObject_GetAttr(inst, &_Py_ID(__dict__));
+        PyValue dict_v = _PyValue_GetAttr(PyValue_FromObjectBorrow(inst), &_Py_ID(__dict__));
+        dict = PyValue_IsNull(dict_v) ? NULL : _PyValue_AsObjectStealAt(dict_v, BOX_SITE_ATTRIBUTE);
         if (dict == NULL)
             goto error;
 
         i = 0;
         int rc;
-        while ((rc = PyDict_NextEntryRef(state, &i, &d_key, &d_value)) > 0) {
+        PyValue d_key_v, d_value_v;
+        while ((rc = PyDict_NextValue(state, &i, &d_key_v, &d_value_v)) > 0) {
+            d_key = _PyValue_AsObjectStealAt(d_key_v, BOX_SITE_DICT);
+            d_value = _PyValue_AsObjectStealAt(d_value_v, BOX_SITE_DICT);
+            if (d_key == NULL || d_value == NULL) {
+                Py_CLEAR(d_key); Py_CLEAR(d_value);
+                rc = -1;
+                break;
+            }
             /* normally the keys for instance attributes are
                interned.  we should try to do that here. */
             if (PyUnicode_CheckExact(d_key)) {
                 PyInterpreterState *interp = _PyInterpreterState_GET();
                 _PyUnicode_InternMortal(interp, &d_key);
             }
-            int err = PyObject_SetItem(dict, d_key, d_value);
+            int err = _PyValue_SetItem(PyValue_FromObjectBorrow(dict), PyValue_FromObjectBorrow(d_key), PyValue_FromObjectBorrow(d_value));
             Py_DECREF(d_key);
             Py_DECREF(d_value);
             if (err < 0) {
@@ -7532,8 +7691,16 @@ load_build(PickleState *st, UnpicklerObject *self)
         }
         i = 0;
         int rc;
-        while ((rc = PyDict_NextEntryRef(slotstate, &i, &d_key, &d_value)) > 0) {
-            int err = PyObject_SetAttr(inst, d_key, d_value);
+        PyValue d_key_v, d_value_v;
+        while ((rc = PyDict_NextValue(slotstate, &i, &d_key_v, &d_value_v)) > 0) {
+            d_key = _PyValue_AsObjectStealAt(d_key_v, BOX_SITE_DICT);
+            d_value = _PyValue_AsObjectStealAt(d_value_v, BOX_SITE_DICT);
+            if (d_key == NULL || d_value == NULL) {
+                Py_CLEAR(d_key); Py_CLEAR(d_value);
+                rc = -1;
+                break;
+            }
+            int err = _PyValue_SetAttr(PyValue_FromObjectBorrow(inst), d_key, PyValue_FromObjectBorrow(d_value));
             Py_DECREF(d_key);
             Py_DECREF(d_value);
             if (err < 0)
@@ -7684,7 +7851,8 @@ load(PickleState *st, UnpicklerObject *self)
         Pdata_clear(self->stack, 0);
 
     /* Cache the persistent_load method. */
-    tmp = PyObject_GetAttr((PyObject *)self, &_Py_ID(persistent_load));
+    PyValue tmp_v2 = _PyValue_GetAttr(PyValue_FromObjectBorrow((PyObject *)self), &_Py_ID(persistent_load));
+    tmp = PyValue_IsNull(tmp_v2) ? NULL : _PyValue_AsObjectStealAt(tmp_v2, BOX_SITE_ATTRIBUTE);
     if (tmp == NULL) {
         goto error;
     }
@@ -7821,16 +7989,16 @@ _pickle.Unpickler.persistent_load
 
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _pickle_Unpickler_persistent_load_impl(UnpicklerObject *self,
-                                       PyTypeObject *cls, PyObject *pid)
-/*[clinic end generated code: output=9f4706f1330cb14d input=2f9554fae051276e]*/
+                                       PyTypeObject *cls, PyValueBorrow pid)
+/*[clinic end generated code: output=4653422867b7bf84 input=2f9554fae051276e]*/
 {
     PickleState *st = _Pickle_GetStateByClass(cls);
     PyErr_SetString(st->UnpicklingError,
                     "A load persistent id instruction was encountered, "
                     "but no persistent_load function was specified.");
-    return NULL;
+    return PyValue_NULL;
 }
 
 /*[clinic input]
@@ -7846,9 +8014,9 @@ in the constructor, and return the reconstituted object hierarchy
 specified therein.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _pickle_Unpickler_load_impl(UnpicklerObject *self, PyTypeObject *cls)
-/*[clinic end generated code: output=cc88168f608e3007 input=f5d2f87e61d5f07f]*/
+/*[clinic end generated code: output=9fb8d6ffcf52e707 input=f5d2f87e61d5f07f]*/
 {
     PickleState *st = _Pickle_GetStateByClass(cls);
 
@@ -7860,12 +8028,12 @@ _pickle_Unpickler_load_impl(UnpicklerObject *self, PyTypeObject *cls)
         PyErr_Format(st->UnpicklingError,
                      "Unpickler.__init__() was not called by %s.__init__()",
                      Py_TYPE(self)->tp_name);
-        return NULL;
+        return PyValue_NULL;
     }
-    BEGIN_USING_UNPICKLER(self, NULL);
+    BEGIN_USING_UNPICKLER(self, PyValue_NULL);
     PyObject *res = load(st, self);
     END_USING_UNPICKLER(self);
-    return res;
+    return _PyValue_FromObjectResult(res);
 }
 
 /* The name of find_class() is misleading. In newer pickle protocols, this
@@ -7891,20 +8059,33 @@ This method is called whenever a class or a function object is
 needed.  Both arguments passed are str objects.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _pickle_Unpickler_find_class_impl(UnpicklerObject *self, PyTypeObject *cls,
-                                  PyObject *module_name,
-                                  PyObject *global_name)
-/*[clinic end generated code: output=99577948abb0be81 input=9577745719219fc7]*/
+                                  PyValueBorrow module_name,
+                                  PyValueBorrow global_name)
+/*[clinic end generated code: output=80db7365be2e704e input=9577745719219fc7]*/
 {
     PyObject *global = NULL;
     PyObject *module;
     PyObject *fixed_module = NULL;
     PyObject *fixed_global = NULL;
+    /* The names as objects: owned boxes of the parameters, which mname and
+       gname alias until a mapping replaces them. */
+    PyObject *mbox = _PyValue_AsObjectAt(module_name, BOX_SITE_PARSER);
+    if (mbox == NULL) {
+        return PyValue_NULL;
+    }
+    PyObject *gbox = _PyValue_AsObjectAt(global_name, BOX_SITE_PARSER);
+    if (gbox == NULL) {
+        Py_DECREF(mbox);
+        return PyValue_NULL;
+    }
+    PyObject *mname = mbox;
+    PyObject *gname = gbox;
 
     if (PySys_Audit("pickle.find_class", "OO",
-                    module_name, global_name) < 0) {
-        return NULL;
+                    mname, gname) < 0) {
+        goto done;
     }
 
     /* Try to map the old names used in Python 2.x to the new ones used in
@@ -7918,10 +8099,15 @@ _pickle_Unpickler_find_class_impl(UnpicklerObject *self, PyTypeObject *cls,
 
         /* Check if the global (i.e., a function or a class) was renamed
            or moved to another module. */
-        key = _PyTuple_FromPair(module_name, global_name);
+        key = _PyTuple_PackValues(2, (PyValueBorrow[]){PyValue_FromObjectBorrow(mname), PyValue_FromObjectBorrow(gname)});
         if (key == NULL)
-            return NULL;
-        rc = PyDict_GetItemRef(st->name_mapping_2to3, key, &item);
+            goto done;
+        PyValue item_v;
+        rc = PyDict_GetValue(st->name_mapping_2to3, PyValue_FromObjectBorrow(key), &item_v);
+        item = NULL;
+        if (rc > 0 && (item = _PyValue_AsObjectStealAt(item_v, BOX_SITE_DICT)) == NULL) {
+            rc = -1;
+        }
         Py_DECREF(key);
         if (rc > 0) {
             if (!PyTuple_Check(item) || PyTuple_GET_SIZE(item) != 2) {
@@ -7929,45 +8115,51 @@ _pickle_Unpickler_find_class_impl(UnpicklerObject *self, PyTypeObject *cls,
                              "_compat_pickle.NAME_MAPPING values should be "
                              "2-tuples, not %.200s", Py_TYPE(item)->tp_name);
                 Py_DECREF(item);
-                return NULL;
+                goto done;
             }
-            fixed_module = PyTuple_GetItemRef(item, 0);
-            fixed_global = PyTuple_GetItemRef(item, 1);
+            PyValue fixed_module_v = PyTuple_GetValue(item, 0);
+            fixed_module = PyValue_IsNull(fixed_module_v) ? NULL : _PyValue_AsObjectStealAt(fixed_module_v, BOX_SITE_TUPLE);
+            PyValue fixed_global_v = PyTuple_GetValue(item, 1);
+            fixed_global = PyValue_IsNull(fixed_global_v) ? NULL : _PyValue_AsObjectStealAt(fixed_global_v, BOX_SITE_TUPLE);
             Py_DECREF(item);
             if (fixed_module == NULL || fixed_global == NULL) {
                 goto done;
             }
-            module_name = fixed_module;
-            global_name = fixed_global;
-            if (!PyUnicode_Check(module_name) ||
-                !PyUnicode_Check(global_name)) {
+            mname = fixed_module;
+            gname = fixed_global;
+            if (!PyUnicode_Check(mname) || !PyUnicode_Check(gname)) {
                 PyErr_Format(PyExc_RuntimeError,
                              "_compat_pickle.NAME_MAPPING values should be "
                              "pairs of str, not (%.200s, %.200s)",
-                             Py_TYPE(module_name)->tp_name,
-                             Py_TYPE(global_name)->tp_name);
+                             Py_TYPE(mname)->tp_name,
+                             Py_TYPE(gname)->tp_name);
                 goto done;
             }
         }
         else if (rc < 0) {
-            return NULL;
+            goto done;
         }
         else {
             /* Check if the module was renamed. */
-            rc = PyDict_GetItemRef(st->import_mapping_2to3, module_name, &item);
+            PyValue item_v;
+            rc = PyDict_GetValue(st->import_mapping_2to3, PyValue_FromObjectBorrow(mname), &item_v);
+            item = NULL;
+            if (rc > 0 && (item = _PyValue_AsObjectStealAt(item_v, BOX_SITE_DICT)) == NULL) {
+                rc = -1;
+            }
             if (rc > 0) {
                 if (!PyUnicode_Check(item)) {
                     PyErr_Format(PyExc_RuntimeError,
                                 "_compat_pickle.IMPORT_MAPPING values should be "
                                 "strings, not %.200s", Py_TYPE(item)->tp_name);
                     Py_DECREF(item);
-                    return NULL;
+                    goto done;
                 }
                 fixed_module = item;
-                module_name = fixed_module;
+                mname = fixed_module;
             }
             else if (rc < 0) {
-                return NULL;
+                goto done;
             }
         }
     }
@@ -7976,12 +8168,12 @@ _pickle_Unpickler_find_class_impl(UnpicklerObject *self, PyTypeObject *cls,
      * we don't use PyImport_GetModule here, because it can return partially-
      * initialised modules, which then cause the getattribute to fail.
      */
-    module = PyImport_Import(module_name);
+    module = PyImport_Import(mname);
     if (module == NULL) {
         goto done;
     }
     if (self->proto >= 4) {
-        PyObject *dotted_path = get_dotted_path(global_name);
+        PyObject *dotted_path = get_dotted_path(gname);
         if (dotted_path == NULL) {
             Py_DECREF(module);
             goto done;
@@ -7992,19 +8184,22 @@ _pickle_Unpickler_find_class_impl(UnpicklerObject *self, PyTypeObject *cls,
             PyObject *exc = PyErr_GetRaisedException();
             PyErr_Format(PyExc_AttributeError,
                          "Can't resolve path %R on module %R",
-                         global_name, module_name);
+                         gname, mname);
             _PyErr_ChainExceptions1(exc);
         }
         Py_DECREF(dotted_path);
     }
     else {
-        global = PyObject_GetAttr(module, global_name);
+        PyValue global_v = _PyValue_GetAttr(PyValue_FromObjectBorrow(module), gname);
+        global = PyValue_IsNull(global_v) ? NULL : _PyValue_AsObjectStealAt(global_v, BOX_SITE_ATTRIBUTE);
     }
     Py_DECREF(module);
 done:
     Py_XDECREF(fixed_module);
     Py_XDECREF(fixed_global);
-    return global;
+    Py_DECREF(mbox);
+    Py_DECREF(gbox);
+    return _PyValue_FromObjectResult(global);
 }
 
 /*[clinic input]
@@ -8140,10 +8335,10 @@ string instances as bytes objects.
 [clinic start generated code]*/
 
 static int
-_pickle_Unpickler___init___impl(UnpicklerObject *self, PyObject *file,
+_pickle_Unpickler___init___impl(UnpicklerObject *self, PyValueBorrow file,
                                 int fix_imports, const char *encoding,
-                                const char *errors, PyObject *buffers)
-/*[clinic end generated code: output=09f0192649ea3f85 input=ca4c1faea9553121]*/
+                                const char *errors, PyValueBorrow buffers)
+/*[clinic end generated code: output=63ad1f3d92d64271 input=ca4c1faea9553121]*/
 {
     BEGIN_USING_UNPICKLER(self, -1);
     /* In case of multiple __init__() calls, clear previous content. */
@@ -8202,21 +8397,21 @@ _pickle.UnpicklerMemoProxy.clear
 Remove all items from memo.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _pickle_UnpicklerMemoProxy_clear_impl(UnpicklerMemoProxyObject *self)
-/*[clinic end generated code: output=d20cd43f4ba1fb1f input=b1df7c52e7afd9bd]*/
+/*[clinic end generated code: output=1387bb3f7bb60337 input=b1df7c52e7afd9bd]*/
 {
     UnpicklerObject *unpickler = self->unpickler;
     PyValue *memo = _Unpickler_NewMemo(unpickler->memo_size);
     if (memo == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
     PyObject *memo_dict = unpickler->memo_dict;
     unpickler->memo_dict = NULL;
     unpickler->memo_len = 0;
     _Unpickler_MemoCleanup(unpickler, memo);
     Py_XDECREF(memo_dict);
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 /*[clinic input]
@@ -8225,14 +8420,14 @@ _pickle.UnpicklerMemoProxy.copy
 Copy the memo to a new object.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _pickle_UnpicklerMemoProxy_copy_impl(UnpicklerMemoProxyObject *self)
-/*[clinic end generated code: output=e12af7e9bc1e4c77 input=97769247ce032c1d]*/
+/*[clinic end generated code: output=bc78bfcfe1de0573 input=97769247ce032c1d]*/
 {
     size_t i;
     PyObject *new_memo = PyDict_New();
     if (new_memo == NULL)
-        return NULL;
+        return PyValue_NULL;
 
     /* Sparse keys live in memo_dict; the array wins for any duplicate. */
     if (self->unpickler->memo_dict != NULL
@@ -8254,11 +8449,11 @@ _pickle_UnpicklerMemoProxy_copy_impl(UnpicklerMemoProxyObject *self)
         if (status < 0)
             goto error;
     }
-    return new_memo;
+    return _PyValue_FromObjectResult(new_memo);
 
 error:
     Py_DECREF(new_memo);
-    return NULL;
+    return PyValue_NULL;
 }
 
 /*[clinic input]
@@ -8267,23 +8462,25 @@ _pickle.UnpicklerMemoProxy.__reduce__
 Implement pickling support.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _pickle_UnpicklerMemoProxy___reduce___impl(UnpicklerMemoProxyObject *self)
-/*[clinic end generated code: output=6da34ac048d94cca input=6920862413407199]*/
+/*[clinic end generated code: output=5f34bacac8215006 input=6920862413407199]*/
 {
     PyObject *constructor_args;
-    PyObject *contents = _pickle_UnpicklerMemoProxy_copy_impl(self);
-    if (contents == NULL)
-        return NULL;
+    PyValue contents_value = _pickle_UnpicklerMemoProxy_copy_impl(self);
+    if (PyValue_IsNull(contents_value))
+        return PyValue_NULL;
+    /* A new dict. */
+    PyObject *contents = PyValue_AsKnownObjectSteal(contents_value);
 
     constructor_args = PyTuple_New(1);
     if (constructor_args == NULL) {
         Py_DECREF(contents);
-        return NULL;
+        return PyValue_NULL;
     }
-    PyTuple_SET_ITEM(constructor_args, 0, contents);
+    PyTuple_SET_VALUE(constructor_args, 0, PyValue_PrepareOwned(contents));
 
-    return _PyTuple_FromPairSteal(Py_NewRef(&PyDict_Type), constructor_args);
+    return _PyValue_FromObjectResult(_PyTuple_FromPairTakeValue(PyValue_DUP(_PyValue_FromObjectKnown(_PyObject_CAST(&PyDict_Type))), PyValue_PrepareOwned(constructor_args)));
 }
 
 static PyMethodDef unpicklerproxy_methods[] = {
@@ -8420,7 +8617,15 @@ Unpickler_set_memo(PyObject *op, PyObject *obj, void *Py_UNUSED(closure))
         Py_CLEAR(self->memo_dict);
 
         int rc;
-        while ((rc = PyDict_NextEntryRef(obj, &i, &key, &value)) > 0) {
+        PyValue key_v, value_v;
+        while ((rc = PyDict_NextValue(obj, &i, &key_v, &value_v)) > 0) {
+            key = _PyValue_AsObjectStealAt(key_v, BOX_SITE_DICT);
+            value = _PyValue_AsObjectStealAt(value_v, BOX_SITE_DICT);
+            if (key == NULL || value == NULL) {
+                Py_CLEAR(key); Py_CLEAR(value);
+                rc = -1;
+                break;
+            }
             Py_ssize_t idx;
             if (!PyLong_Check(key)) {
                 PyErr_SetString(PyExc_TypeError,
@@ -8563,17 +8768,17 @@ into *file* as part of the pickle stream.  It is an error if
 
 [clinic start generated code]*/
 
-static PyObject *
-_pickle_dump_impl(PyObject *module, PyObject *obj, PyObject *file,
-                  PyObject *protocol, int fix_imports,
-                  PyObject *buffer_callback)
-/*[clinic end generated code: output=706186dba996490c input=b89ce8d0e911fd46]*/
+static PyValue
+_pickle_dump_impl(PyObject *module, PyValueBorrow obj, PyValueBorrow file,
+                  PyValueBorrow protocol, int fix_imports,
+                  PyValueBorrow buffer_callback)
+/*[clinic end generated code: output=b813bb801a9515e7 input=b89ce8d0e911fd46]*/
 {
     PickleState *state = _Pickle_GetState(module);
     PicklerObject *pickler = _Pickler_New(state);
 
     if (pickler == NULL)
-        return NULL;
+        return PyValue_NULL;
 
     if (_Pickler_SetProtocol(pickler, protocol, fix_imports) < 0)
         goto error;
@@ -8591,11 +8796,11 @@ _pickle_dump_impl(PyObject *module, PyObject *obj, PyObject *file,
         goto error;
 
     Py_DECREF(pickler);
-    Py_RETURN_NONE;
+    return PyValue_None;
 
   error:
     Py_XDECREF(pickler);
-    return NULL;
+    return PyValue_NULL;
 }
 
 /*[clinic input]
@@ -8629,17 +8834,18 @@ into *file* as part of the pickle stream.  It is an error if
 
 [clinic start generated code]*/
 
-static PyObject *
-_pickle_dumps_impl(PyObject *module, PyObject *obj, PyObject *protocol,
-                   int fix_imports, PyObject *buffer_callback)
-/*[clinic end generated code: output=fbab0093a5580fdf input=139fc546886c63ac]*/
+static PyValue
+_pickle_dumps_impl(PyObject *module, PyValueBorrow obj,
+                   PyValueBorrow protocol, int fix_imports,
+                   PyValueBorrow buffer_callback)
+/*[clinic end generated code: output=a80d94befcf3ccdd input=139fc546886c63ac]*/
 {
     PyObject *result;
     PickleState *state = _Pickle_GetState(module);
     PicklerObject *pickler = _Pickler_New(state);
 
     if (pickler == NULL)
-        return NULL;
+        return PyValue_NULL;
 
     if (_Pickler_SetProtocol(pickler, protocol, fix_imports) < 0)
         goto error;
@@ -8652,11 +8858,11 @@ _pickle_dumps_impl(PyObject *module, PyObject *obj, PyObject *protocol,
 
     result = _Pickler_GetString(pickler);
     Py_DECREF(pickler);
-    return result;
+    return _PyValue_FromObjectResult(result);
 
   error:
     Py_XDECREF(pickler);
-    return NULL;
+    return PyValue_NULL;
 }
 
 /*[clinic input]
@@ -8695,17 +8901,17 @@ respectively.  The *encoding* can be 'bytes' to read these 8-bit
 string instances as bytes objects.
 [clinic start generated code]*/
 
-static PyObject *
-_pickle_load_impl(PyObject *module, PyObject *file, int fix_imports,
+static PyValue
+_pickle_load_impl(PyObject *module, PyValueBorrow file, int fix_imports,
                   const char *encoding, const char *errors,
-                  PyObject *buffers)
-/*[clinic end generated code: output=250452d141c23e76 input=46c7c31c92f4f371]*/
+                  PyValueBorrow buffers)
+/*[clinic end generated code: output=b100e21ea6925659 input=46c7c31c92f4f371]*/
 {
     PyObject *result;
     UnpicklerObject *unpickler = _Unpickler_New(module);
 
     if (unpickler == NULL)
-        return NULL;
+        return PyValue_NULL;
 
     if (_Unpickler_SetInputStream(unpickler, file) < 0)
         goto error;
@@ -8721,11 +8927,11 @@ _pickle_load_impl(PyObject *module, PyObject *file, int fix_imports,
     PickleState *state = _Pickle_GetState(module);
     result = load(state, unpickler);
     Py_DECREF(unpickler);
-    return result;
+    return _PyValue_FromObjectResult(result);
 
   error:
     Py_XDECREF(unpickler);
-    return NULL;
+    return PyValue_NULL;
 }
 
 /*[clinic input]
@@ -8756,19 +8962,25 @@ respectively.  The *encoding* can be 'bytes' to read these 8-bit
 string instances as bytes objects.
 [clinic start generated code]*/
 
-static PyObject *
-_pickle_loads_impl(PyObject *module, PyObject *data, int fix_imports,
+static PyValue
+_pickle_loads_impl(PyObject *module, PyValueBorrow data, int fix_imports,
                    const char *encoding, const char *errors,
-                   PyObject *buffers)
-/*[clinic end generated code: output=82ac1e6b588e6d02 input=b3615540d0535087]*/
+                   PyValueBorrow buffers)
+/*[clinic end generated code: output=dcc3d289007c680a input=b3615540d0535087]*/
 {
     PyObject *result;
     UnpicklerObject *unpickler = _Unpickler_New(module);
 
     if (unpickler == NULL)
-        return NULL;
+        return PyValue_NULL;
 
-    if (_Unpickler_SetStringInput(unpickler, data) < 0)
+    PyObject *data_obj = _PyValue_AsObjectAt(data, BOX_SITE_PARSER);
+    if (data_obj == NULL)
+        goto error;
+    /* The buffer takes its own reference to the data. */
+    Py_ssize_t input_size = _Unpickler_SetStringInput(unpickler, data_obj);
+    Py_DECREF(data_obj);
+    if (input_size < 0)
         goto error;
 
     if (_Unpickler_SetInputEncoding(unpickler, encoding, errors) < 0)
@@ -8782,11 +8994,11 @@ _pickle_loads_impl(PyObject *module, PyObject *data, int fix_imports,
     PickleState *state = _Pickle_GetState(module);
     result = load(state, unpickler);
     Py_DECREF(unpickler);
-    return result;
+    return _PyValue_FromObjectResult(result);
 
   error:
     Py_XDECREF(unpickler);
-    return NULL;
+    return PyValue_NULL;
 }
 
 static struct PyMethodDef pickle_methods[] = {

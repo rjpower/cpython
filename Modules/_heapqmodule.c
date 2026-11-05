@@ -10,11 +10,20 @@ annotated by François Pinard, and converted to C by Raymond Hettinger.
 #  define Py_BUILD_CORE_MODULE 1
 #endif
 
+#define Py_VALUE_CORE 1
 #include "Python.h"
 #include "pycore_list.h"          // _PyList_ITEMS(), _PyList_AppendTakeRef()
+#include "pycore_value.h"         // PyValue_DUP(), _PyValue_AsObjectAt()
+#include "pycore_value_ops.h"     // _PyValue_RichCompareBool()
+#include "pycore_value_slots.h"// _PyValue_FromObjectResult()
 
 #include "clinic/_heapqmodule.c.h"
 
+
+/*[clinic input]
+value_emission
+[clinic start generated code]*/
+/*[clinic end generated code: output=da39a3ee5e6b4b0d input=eb7b17088bfd7215]*/
 
 /*[clinic input]
 module _heapq
@@ -24,7 +33,7 @@ module _heapq
 static int
 siftdown(PyListObject *heap, Py_ssize_t startpos, Py_ssize_t pos)
 {
-    PyObject *newitem, *parent;
+    PyValue newitem, parent;
     PyValue *arr, tmp;
     Py_ssize_t parentpos, size;
     int cmp;
@@ -40,18 +49,18 @@ siftdown(PyListObject *heap, Py_ssize_t startpos, Py_ssize_t pos)
        a place newitem fits. */
     while (pos > startpos) {
         parentpos = (pos - 1) >> 1;
-        newitem = _PyList_GetItemRef(heap, pos);
-        if (newitem == NULL) {
+        newitem = _PyList_GetValue(heap, pos);
+        if (PyValue_IsNull(newitem)) {
             return -1;
         }
-        parent = _PyList_GetItemRef(heap, parentpos);
-        if (parent == NULL) {
-            Py_DECREF(newitem);
+        parent = _PyList_GetValue(heap, parentpos);
+        if (PyValue_IsNull(parent)) {
+            PyValue_CLOSE(newitem);
             return -1;
         }
-        cmp = PyObject_RichCompareBool(newitem, parent, Py_LT);
-        Py_DECREF(parent);
-        Py_DECREF(newitem);
+        cmp = _PyValue_RichCompareBool(newitem, parent, Py_LT);
+        PyValue_CLOSE(parent);
+        PyValue_CLOSE(newitem);
         if (cmp < 0)
             return -1;
         if (size != PyList_GET_SIZE(heap)) {
@@ -75,7 +84,7 @@ static int
 siftup(PyListObject *heap, Py_ssize_t pos)
 {
     Py_ssize_t startpos, endpos, childpos, limit;
-    PyObject *a, *b;
+    PyValue a, b;
     PyValue *arr, tmp;
     int cmp;
 
@@ -93,18 +102,18 @@ siftup(PyListObject *heap, Py_ssize_t pos)
         /* Set childpos to index of smaller child.   */
         childpos = 2*pos + 1;    /* leftmost child position  */
         if (childpos + 1 < endpos) {
-            a = _PyList_GetItemRef(heap, childpos);
-            if (a == NULL) {
+            a = _PyList_GetValue(heap, childpos);
+            if (PyValue_IsNull(a)) {
                 return -1;
             }
-            b = _PyList_GetItemRef(heap, childpos + 1);
-            if (b == NULL) {
-                Py_DECREF(a);
+            b = _PyList_GetValue(heap, childpos + 1);
+            if (PyValue_IsNull(b)) {
+                PyValue_CLOSE(a);
                 return -1;
             }
-            cmp = PyObject_RichCompareBool(a, b, Py_LT);
-            Py_DECREF(a);
-            Py_DECREF(b);
+            cmp = _PyValue_RichCompareBool(a, b, Py_LT);
+            PyValue_CLOSE(a);
+            PyValue_CLOSE(b);
             if (cmp < 0)
                 return -1;
             childpos += ((unsigned)cmp ^ 1);   /* increment when cmp==0 */
@@ -136,65 +145,69 @@ _heapq.heappush
 Push item onto heap, maintaining the heap invariant.
 [clinic start generated code]*/
 
-static PyObject *
-_heapq_heappush_impl(PyObject *module, PyObject *heap, PyObject *item)
-/*[clinic end generated code: output=912c094f47663935 input=f7a4f03ef8d52e67]*/
+static PyValue
+_heapq_heappush_impl(PyObject *module, PyObject *heap, PyValueBorrow item)
+/*[clinic end generated code: output=bafac896ba37412f input=f7a4f03ef8d52e67]*/
 {
-    if (item == NULL) {
+    if (PyValue_IsNull(item)) {
         PyErr_BadInternalCall();
-        return NULL;
+        return PyValue_NULL;
     }
 
     // In a free-threaded build, the heap is locked at this point.
     // Therefore, calling _PyList_AppendTakeRef() is safe and no overhead.
-    if (_PyList_AppendTakeRef((PyListObject *)heap, Py_NewRef(item))) {
-        return NULL;
+    PyObject *item_obj = _PyValue_AsObjectAt(item, BOX_SITE_FIELD);
+    if (item_obj == NULL) {
+        return PyValue_NULL;
+    }
+    if (_PyList_AppendTakeValue((PyListObject *)heap, PyValue_PrepareOwned(item_obj))) {
+        return PyValue_NULL;
     }
 
     if (siftdown((PyListObject *)heap, 0, PyList_GET_SIZE(heap)-1)) {
-        return NULL;
+        return PyValue_NULL;
     }
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
-static PyObject *
+static PyValue
 heappop_internal(PyObject *heap, int siftup_func(PyListObject *, Py_ssize_t))
 {
-    PyObject *lastelt, *returnitem;
+    PyValue lastelt, returnitem;
     Py_ssize_t n;
 
     /* raises IndexError if the heap is empty */
     n = PyList_GET_SIZE(heap);
     if (n == 0) {
         PyErr_SetString(PyExc_IndexError, "index out of range");
-        return NULL;
+        return PyValue_NULL;
     }
 
-    lastelt = PyList_GetItemRef(heap, n-1);
-    if (lastelt == NULL) {
-        return NULL;
+    lastelt = PyList_GetValue(heap, n-1);
+    if (PyValue_IsNull(lastelt)) {
+        return PyValue_NULL;
     }
     if (PyList_SetSlice(heap, n-1, n, NULL)) {
-        Py_DECREF(lastelt);
-        return NULL;
+        PyValue_CLOSE(lastelt);
+        return PyValue_NULL;
     }
     n--;
 
     if (!n)
         return lastelt;
-    returnitem = PyList_GetItemRef(heap, 0);
-    if (returnitem == NULL) {
-        Py_DECREF(lastelt);
-        return NULL;
+    returnitem = PyList_GetValue(heap, 0);
+    if (PyValue_IsNull(returnitem)) {
+        PyValue_CLOSE(lastelt);
+        return PyValue_NULL;
     }
-    if (PyList_SetItem(heap, 0, lastelt) < 0) {
-        Py_DECREF(returnitem);
-        return NULL;
+    if (PyList_SetValue(heap, 0, lastelt) < 0) {
+        PyValue_CLOSE(returnitem);
+        return PyValue_NULL;
     }
     PyListObject *list = _PyList_CAST(heap);
     if (siftup_func(list, 0)) {
-        Py_DECREF(returnitem);
-        return NULL;
+        PyValue_CLOSE(returnitem);
+        return PyValue_NULL;
     }
     return returnitem;
 }
@@ -209,35 +222,40 @@ _heapq.heappop
 Pop the smallest item off the heap, maintaining the heap invariant.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _heapq_heappop_impl(PyObject *module, PyObject *heap)
-/*[clinic end generated code: output=96dfe82d37d9af76 input=ed396461b153dd51]*/
+/*[clinic end generated code: output=cefba0fdb3004d63 input=ed396461b153dd51]*/
 {
     return heappop_internal(heap, siftup);
 }
 
-static PyObject *
-heapreplace_internal(PyObject *heap, PyObject *item, int siftup_func(PyListObject *, Py_ssize_t))
+static PyValue
+heapreplace_internal(PyObject *heap, PyValueBorrow item, int siftup_func(PyListObject *, Py_ssize_t))
 {
-    PyObject *returnitem;
+    PyValue returnitem;
 
     if (PyList_GET_SIZE(heap) == 0) {
         PyErr_SetString(PyExc_IndexError, "index out of range");
-        return NULL;
+        return PyValue_NULL;
     }
 
-    returnitem = PyList_GetItemRef(heap, 0);
-    if (returnitem == NULL) {
-        return NULL;
+    returnitem = PyList_GetValue(heap, 0);
+    if (PyValue_IsNull(returnitem)) {
+        return PyValue_NULL;
     }
-    if (PyList_SetItem(heap, 0, Py_NewRef(item)) < 0) {
-        Py_DECREF(returnitem);
-        return NULL;
+    PyObject *item_obj = _PyValue_AsObjectAt(item, BOX_SITE_FIELD);
+    if (item_obj == NULL) {
+        PyValue_CLOSE(returnitem);
+        return PyValue_NULL;
+    }
+    if (PyList_SetValue(heap, 0, PyValue_PrepareOwned(item_obj)) < 0) {
+        PyValue_CLOSE(returnitem);
+        return PyValue_NULL;
     }
     PyListObject *list = _PyList_CAST(heap);
     if (siftup_func(list, 0)) {
-        Py_DECREF(returnitem);
-        return NULL;
+        PyValue_CLOSE(returnitem);
+        return PyValue_NULL;
     }
     return returnitem;
 }
@@ -262,9 +280,9 @@ this routine unless written as part of a conditional replacement:
         item = heapreplace(heap, item)
 [clinic start generated code]*/
 
-static PyObject *
-_heapq_heapreplace_impl(PyObject *module, PyObject *heap, PyObject *item)
-/*[clinic end generated code: output=82ea55be8fbe24b4 input=9be1678b817ef1a9]*/
+static PyValue
+_heapq_heapreplace_impl(PyObject *module, PyObject *heap, PyValueBorrow item)
+/*[clinic end generated code: output=d58b4cf96e1328d8 input=9be1678b817ef1a9]*/
 {
     return heapreplace_internal(heap, item, siftup);
 }
@@ -284,46 +302,51 @@ The combined action runs more efficiently than heappush() followed by
 a separate call to heappop().
 [clinic start generated code]*/
 
-static PyObject *
-_heapq_heappushpop_impl(PyObject *module, PyObject *heap, PyObject *item)
-/*[clinic end generated code: output=67231dc98ed5774f input=491178a1c7d417ba]*/
+static PyValue
+_heapq_heappushpop_impl(PyObject *module, PyObject *heap, PyValueBorrow item)
+/*[clinic end generated code: output=762bf3b5060db94b input=491178a1c7d417ba]*/
 {
-    PyObject *returnitem;
+    PyValue returnitem;
     int cmp;
 
     if (PyList_GET_SIZE(heap) == 0) {
-        return Py_NewRef(item);
+        return PyValue_DUP(item);
     }
 
-    PyObject* top = PyList_GetItemRef(heap, 0);
-    if (top == NULL) {
-        return NULL;
+    PyValue top = PyList_GetValue(heap, 0);
+    if (PyValue_IsNull(top)) {
+        return PyValue_NULL;
     }
-    cmp = PyObject_RichCompareBool(top, item, Py_LT);
-    Py_DECREF(top);
+    cmp = _PyValue_RichCompareBool(top, item, Py_LT);
+    PyValue_CLOSE(top);
     if (cmp < 0)
-        return NULL;
+        return PyValue_NULL;
     if (cmp == 0) {
-        return Py_NewRef(item);
+        return PyValue_DUP(item);
     }
 
     if (PyList_GET_SIZE(heap) == 0) {
         PyErr_SetString(PyExc_IndexError, "index out of range");
-        return NULL;
+        return PyValue_NULL;
     }
 
-    returnitem = PyList_GetItemRef(heap, 0);
-    if (returnitem == NULL) {
-        return NULL;
+    returnitem = PyList_GetValue(heap, 0);
+    if (PyValue_IsNull(returnitem)) {
+        return PyValue_NULL;
     }
-    if (PyList_SetItem(heap, 0, Py_NewRef(item)) < 0) {
-        Py_DECREF(returnitem);
-        return NULL;
+    PyObject *item_obj = _PyValue_AsObjectAt(item, BOX_SITE_FIELD);
+    if (item_obj == NULL) {
+        PyValue_CLOSE(returnitem);
+        return PyValue_NULL;
+    }
+    if (PyList_SetValue(heap, 0, PyValue_PrepareOwned(item_obj)) < 0) {
+        PyValue_CLOSE(returnitem);
+        return PyValue_NULL;
     }
     PyListObject *list = _PyList_CAST(heap);
     if (siftup(list, 0)) {
-        Py_DECREF(returnitem);
-        return NULL;
+        PyValue_CLOSE(returnitem);
+        return PyValue_NULL;
     }
     return returnitem;
 }
@@ -429,17 +452,17 @@ _heapq.heapify
 Transform list into a heap, in-place, in O(len(heap)) time.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _heapq_heapify_impl(PyObject *module, PyObject *heap)
-/*[clinic end generated code: output=e63a636fcf83d6d0 input=aaaaa028b9b6af08]*/
+/*[clinic end generated code: output=79531fbc3c47e865 input=aaaaa028b9b6af08]*/
 {
-    return heapify_internal(heap, siftup);
+    return _PyValue_FromObjectResult(heapify_internal(heap, siftup));
 }
 
 static int
 siftdown_max(PyListObject *heap, Py_ssize_t startpos, Py_ssize_t pos)
 {
-    PyObject *newitem, *parent;
+    PyValue newitem, parent;
     PyValue *arr, tmp;
     Py_ssize_t parentpos, size;
     int cmp;
@@ -455,18 +478,18 @@ siftdown_max(PyListObject *heap, Py_ssize_t startpos, Py_ssize_t pos)
        a place newitem fits. */
     while (pos > startpos) {
         parentpos = (pos - 1) >> 1;
-        newitem = _PyList_GetItemRef(heap, pos);
-        if (newitem == NULL) {
+        newitem = _PyList_GetValue(heap, pos);
+        if (PyValue_IsNull(newitem)) {
             return -1;
         }
-        parent = _PyList_GetItemRef(heap, parentpos);
-        if (parent == NULL) {
-            Py_DECREF(newitem);
+        parent = _PyList_GetValue(heap, parentpos);
+        if (PyValue_IsNull(parent)) {
+            PyValue_CLOSE(newitem);
             return -1;
         }
-        cmp = PyObject_RichCompareBool(parent, newitem, Py_LT);
-        Py_DECREF(parent);
-        Py_DECREF(newitem);
+        cmp = _PyValue_RichCompareBool(parent, newitem, Py_LT);
+        PyValue_CLOSE(parent);
+        PyValue_CLOSE(newitem);
         if (cmp < 0)
             return -1;
         if (size != PyList_GET_SIZE(heap)) {
@@ -490,7 +513,7 @@ static int
 siftup_max(PyListObject *heap, Py_ssize_t pos)
 {
     Py_ssize_t startpos, endpos, childpos, limit;
-    PyObject *a, *b;
+    PyValue a, b;
     PyValue *arr, tmp;
     int cmp;
 
@@ -508,18 +531,18 @@ siftup_max(PyListObject *heap, Py_ssize_t pos)
         /* Set childpos to index of larger child.   */
         childpos = 2*pos + 1;    /* leftmost child position  */
         if (childpos + 1 < endpos) {
-            a = _PyList_GetItemRef(heap, childpos + 1);
-            if (a == NULL) {
+            a = _PyList_GetValue(heap, childpos + 1);
+            if (PyValue_IsNull(a)) {
                 return -1;
             }
-            b = _PyList_GetItemRef(heap, childpos);
-            if (b == NULL) {
-                Py_DECREF(a);
+            b = _PyList_GetValue(heap, childpos);
+            if (PyValue_IsNull(b)) {
+                PyValue_CLOSE(a);
                 return -1;
             }
-            cmp = PyObject_RichCompareBool(a, b, Py_LT);
-            Py_DECREF(a);
-            Py_DECREF(b);
+            cmp = _PyValue_RichCompareBool(a, b, Py_LT);
+            PyValue_CLOSE(a);
+            PyValue_CLOSE(b);
             if (cmp < 0)
                 return -1;
             childpos += ((unsigned)cmp ^ 1);   /* increment when cmp==0 */
@@ -551,26 +574,31 @@ _heapq.heappush_max
 Push item onto max heap, maintaining the heap invariant.
 [clinic start generated code]*/
 
-static PyObject *
-_heapq_heappush_max_impl(PyObject *module, PyObject *heap, PyObject *item)
-/*[clinic end generated code: output=c869d5f9deb08277 input=c437e3d1ff8dcb70]*/
+static PyValue
+_heapq_heappush_max_impl(PyObject *module, PyObject *heap,
+                         PyValueBorrow item)
+/*[clinic end generated code: output=b55cb7e03fde7082 input=c437e3d1ff8dcb70]*/
 {
-    if (item == NULL) {
+    if (PyValue_IsNull(item)) {
         PyErr_BadInternalCall();
-        return NULL;
+        return PyValue_NULL;
     }
 
     // In a free-threaded build, the heap is locked at this point.
     // Therefore, calling _PyList_AppendTakeRef() is safe and no overhead.
-    if (_PyList_AppendTakeRef((PyListObject *)heap, Py_NewRef(item))) {
-        return NULL;
+    PyObject *item_obj = _PyValue_AsObjectAt(item, BOX_SITE_FIELD);
+    if (item_obj == NULL) {
+        return PyValue_NULL;
+    }
+    if (_PyList_AppendTakeValue((PyListObject *)heap, PyValue_PrepareOwned(item_obj))) {
+        return PyValue_NULL;
     }
 
     if (siftdown_max((PyListObject *)heap, 0, PyList_GET_SIZE(heap)-1)) {
-        return NULL;
+        return PyValue_NULL;
     }
 
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 /*[clinic input]
@@ -583,9 +611,9 @@ _heapq.heappop_max
 Maxheap variant of heappop.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _heapq_heappop_max_impl(PyObject *module, PyObject *heap)
-/*[clinic end generated code: output=2f051195ab404b77 input=5d70c997798aec64]*/
+/*[clinic end generated code: output=99dde6569882b820 input=5d70c997798aec64]*/
 {
     return heappop_internal(heap, siftup_max);
 }
@@ -601,9 +629,10 @@ _heapq.heapreplace_max
 Maxheap variant of heapreplace.
 [clinic start generated code]*/
 
-static PyObject *
-_heapq_heapreplace_max_impl(PyObject *module, PyObject *heap, PyObject *item)
-/*[clinic end generated code: output=8770778b5a9cbe9b input=fe70175356e4a649]*/
+static PyValue
+_heapq_heapreplace_max_impl(PyObject *module, PyObject *heap,
+                            PyValueBorrow item)
+/*[clinic end generated code: output=87d621d73aa90aa2 input=fe70175356e4a649]*/
 {
     return heapreplace_internal(heap, item, siftup_max);
 }
@@ -618,11 +647,11 @@ _heapq.heapify_max
 Maxheap variant of heapify.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _heapq_heapify_max_impl(PyObject *module, PyObject *heap)
-/*[clinic end generated code: output=8401af3856529807 input=4eee63231e7d1573]*/
+/*[clinic end generated code: output=d80c6b07a6ebb047 input=4eee63231e7d1573]*/
 {
-    return heapify_internal(heap, siftup_max);
+    return _PyValue_FromObjectResult(heapify_internal(heap, siftup_max));
 }
 
 /*[clinic input]
@@ -639,47 +668,53 @@ The combined action runs more efficiently than heappush_max()
 followed by a separate call to heappop_max().
 [clinic start generated code]*/
 
-static PyObject *
-_heapq_heappushpop_max_impl(PyObject *module, PyObject *heap, PyObject *item)
-/*[clinic end generated code: output=ff0019f0941aca0d input=52030929667a4c08]*/
+static PyValue
+_heapq_heappushpop_max_impl(PyObject *module, PyObject *heap,
+                            PyValueBorrow item)
+/*[clinic end generated code: output=700050104b417678 input=52030929667a4c08]*/
 {
-    PyObject *returnitem;
+    PyValue returnitem;
     int cmp;
 
     if (PyList_GET_SIZE(heap) == 0) {
-        return Py_NewRef(item);
+        return PyValue_DUP(item);
     }
 
-    PyObject *top = PyList_GetItemRef(heap, 0);
-    if (top == NULL) {
-        return NULL;
+    PyValue top = PyList_GetValue(heap, 0);
+    if (PyValue_IsNull(top)) {
+        return PyValue_NULL;
     }
-    cmp = PyObject_RichCompareBool(item, top, Py_LT);
-    Py_DECREF(top);
+    cmp = _PyValue_RichCompareBool(item, top, Py_LT);
+    PyValue_CLOSE(top);
     if (cmp < 0) {
-        return NULL;
+        return PyValue_NULL;
     }
     if (cmp == 0) {
-        return Py_NewRef(item);
+        return PyValue_DUP(item);
     }
 
     if (PyList_GET_SIZE(heap) == 0) {
         PyErr_SetString(PyExc_IndexError, "index out of range");
-        return NULL;
+        return PyValue_NULL;
     }
 
-    returnitem = PyList_GetItemRef(heap, 0);
-    if (returnitem == NULL) {
-        return NULL;
+    returnitem = PyList_GetValue(heap, 0);
+    if (PyValue_IsNull(returnitem)) {
+        return PyValue_NULL;
     }
-    if (PyList_SetItem(heap, 0, Py_NewRef(item)) < 0) {
-        Py_DECREF(returnitem);
-        return NULL;
+    PyObject *item_obj = _PyValue_AsObjectAt(item, BOX_SITE_FIELD);
+    if (item_obj == NULL) {
+        PyValue_CLOSE(returnitem);
+        return PyValue_NULL;
+    }
+    if (PyList_SetValue(heap, 0, PyValue_PrepareOwned(item_obj)) < 0) {
+        PyValue_CLOSE(returnitem);
+        return PyValue_NULL;
     }
     PyListObject *list = _PyList_CAST(heap);
     if (siftup_max(list, 0) < 0) {
-        Py_DECREF(returnitem);
-        return NULL;
+        PyValue_CLOSE(returnitem);
+        return PyValue_NULL;
     }
     return returnitem;
 }

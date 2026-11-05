@@ -2,15 +2,22 @@
 preserve
 [clinic start generated code]*/
 
+#ifndef Py_VALUE_CORE
+#  error "value-emission Clinic output requires Py_VALUE_CORE"
+#endif
+
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 #  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
 #  include "pycore_value.h"       // _PyValue_STATIC_IMMORTAL()
 #endif
-#include "pycore_abstract.h"      // _PyNumber_Index()
-#include "pycore_borrow.h"        // _PyBorrow_TupleItems()
 #include "pycore_critical_section.h"// Py_BEGIN_CRITICAL_SECTION()
-#include "pycore_modsupport.h"    // _PyArg_UnpackKeywords()
+#include "pycore_long_value.h"    // _PyValue_IntAsSsize_t()
+#include "pycore_modsupport.h"    // _PyArg_UnpackKeywordsValue()
+#include "pycore_tuple.h"         // _PyTuple_ITEMS()
+#include "pycore_value_call.h"    // METH_VALUE
+#include "pycore_value_ops.h"     // _PyValue_Index()
+#include "pycore_value_slots.h"   // _PyValue_THUNK_EXIT()
 
 PyDoc_STRVAR(batched_new__doc__,
 "batched(iterable, n, *, strict=False)\n"
@@ -33,14 +40,14 @@ PyDoc_STRVAR(batched_new__doc__,
 "If \"strict\" is True, raises a ValueError if the final batch is shorter\n"
 "than n.");
 
-static PyObject *
-batched_new_impl(PyTypeObject *type, PyObject *iterable, Py_ssize_t n,
+static PyValue
+batched_new_impl(PyTypeObject *type, PyValueBorrow iterable, Py_ssize_t n,
                  int strict);
 
-static PyObject *
-batched_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
+static PyValue
+batched_new_value(PyTypeObject *type, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 3
@@ -68,48 +75,56 @@ batched_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[3];
-    PyObject * const *fastargs;
-    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
-    Py_ssize_t noptargs = nargs + (kwargs ? PyDict_GET_SIZE(kwargs) : 0) - 2;
-    PyObject *iterable;
+    Py_ssize_t _idx[3];
+    PyValueBorrow iterable;
     Py_ssize_t n;
     int strict = 0;
 
-    PyObject *const *_args_items = _PyBorrow_TupleItems(args, Py_MIN(nargs, 2));
-    if (_args_items == NULL) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 2, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, _idx, 3)) {
         goto exit;
     }
-    fastargs = _PyArg_UnpackKeywords(_args_items, nargs, kwargs, NULL, &_parser,
-            /*minpos*/ 2, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!fastargs) {
-        goto exit;
-    }
-    iterable = fastargs[0];
+    iterable = PyValue_Borrow(args[_idx[0]]);
     {
         Py_ssize_t ival = -1;
-        PyObject *iobj = _PyNumber_Index(fastargs[1]);
-        if (iobj != NULL) {
-            ival = PyLong_AsSsize_t(iobj);
-            Py_DECREF(iobj);
+        PyValue iobj = _PyValue_Index(PyValue_Borrow(args[_idx[1]]));
+        if (!PyValue_IsNull(iobj)) {
+            ival = _PyValue_IntAsSsize_t(PyValue_Borrow(iobj));
+            PyValue_CLOSE(iobj);
         }
         if (ival == -1 && PyErr_Occurred()) {
             goto exit;
         }
         n = ival;
     }
-    if (!noptargs) {
-        goto skip_optional_kwonly;
+    if (_idx[2] >= 0) {
+        strict = _PyValue_IsTrue(PyValue_Borrow(args[_idx[2]]));
+        if (strict < 0) {
+            goto exit;
+        }
     }
-    strict = PyObject_IsTrue(fastargs[2]);
-    if (strict < 0) {
-        goto exit;
-    }
-skip_optional_kwonly:
     return_value = batched_new_impl(type, iterable, n, strict);
 
 exit:
     return return_value;
+}
+
+Py_VALUE_ENTRY static PyObject *
+batched_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
+{
+    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
+    if (kwargs == NULL || PyDict_GET_SIZE(kwargs) == 0) {
+        return _PyValue_THUNK_EXIT(batched_new_value(type, _PyTuple_ITEMS(args), nargs, NULL), BOX_SITE_CALL);
+    }
+    PyObject *kwnames;
+    PyValue *window = _PyValue_StackUnpackDict(_PyThreadState_GET(),
+        _PyTuple_ITEMS(args), nargs, kwargs, &kwnames);
+    if (window == NULL) {
+        return NULL;
+    }
+    PyValue result = batched_new_value(type, window, nargs, kwnames);
+    _PyValue_StackUnpackDict_Free(window, nargs, kwnames);
+    return _PyValue_THUNK_EXIT(result, BOX_SITE_CALL);
 }
 
 PyDoc_STRVAR(pairwise_new__doc__,
@@ -120,32 +135,46 @@ PyDoc_STRVAR(pairwise_new__doc__,
 "\n"
 "    s -> (s0,s1), (s1,s2), (s2, s3), ...");
 
-static PyObject *
-pairwise_new_impl(PyTypeObject *type, PyObject *iterable);
+static PyValue
+pairwise_new_impl(PyTypeObject *type, PyValueBorrow iterable);
 
-static PyObject *
-pairwise_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
+static PyValue
+pairwise_new_value(PyTypeObject *type, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyTypeObject *base_tp = clinic_state()->pairwise_type;
-    PyObject *iterable;
+    PyValueBorrow iterable;
 
     if ((type == base_tp || type->tp_init == base_tp->tp_init) &&
-        !_PyArg_NoKeywords("pairwise", kwargs)) {
+        !_PyArg_NoKwnames("pairwise", kwnames)) {
         goto exit;
     }
-    if (!_PyArg_CheckPositional("pairwise", PyTuple_GET_SIZE(args), 1, 1)) {
+    if (!_PyArg_CheckPositional("pairwise", nargs, 1, 1)) {
         goto exit;
     }
-    PyObject *const *_args_items = _PyBorrow_TupleItems(args, PyTuple_GET_SIZE(args));
-    if (_args_items == NULL) {
-        goto exit;
-    }
-    iterable = _args_items[0];
+    iterable = PyValue_Borrow(args[0]);
     return_value = pairwise_new_impl(type, iterable);
 
 exit:
     return return_value;
+}
+
+Py_VALUE_ENTRY static PyObject *
+pairwise_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
+{
+    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
+    if (kwargs == NULL || PyDict_GET_SIZE(kwargs) == 0) {
+        return _PyValue_THUNK_EXIT(pairwise_new_value(type, _PyTuple_ITEMS(args), nargs, NULL), BOX_SITE_CALL);
+    }
+    PyObject *kwnames;
+    PyValue *window = _PyValue_StackUnpackDict(_PyThreadState_GET(),
+        _PyTuple_ITEMS(args), nargs, kwargs, &kwnames);
+    if (window == NULL) {
+        return NULL;
+    }
+    PyValue result = pairwise_new_value(type, window, nargs, kwnames);
+    _PyValue_StackUnpackDict_Free(window, nargs, kwnames);
+    return _PyValue_THUNK_EXIT(result, BOX_SITE_CALL);
 }
 
 PyDoc_STRVAR(itertools_groupby__doc__,
@@ -161,13 +190,14 @@ PyDoc_STRVAR(itertools_groupby__doc__,
 "    If the key function is not specified or is None, the element itself\n"
 "    is used for grouping.");
 
-static PyObject *
-itertools_groupby_impl(PyTypeObject *type, PyObject *it, PyObject *keyfunc);
+static PyValue
+itertools_groupby_impl(PyTypeObject *type, PyValueBorrow it,
+                       PyValueBorrow keyfunc);
 
-static PyObject *
-itertools_groupby(PyTypeObject *type, PyObject *args, PyObject *kwargs)
+static PyValue
+itertools_groupby_value(PyTypeObject *type, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 2
@@ -195,67 +225,89 @@ itertools_groupby(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[2];
-    PyObject * const *fastargs;
-    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
-    Py_ssize_t noptargs = nargs + (kwargs ? PyDict_GET_SIZE(kwargs) : 0) - 1;
-    PyObject *it;
-    PyObject *keyfunc = Py_None;
+    Py_ssize_t _idx[2];
+    PyValueBorrow it;
+    PyValueBorrow keyfunc = PyValue_Borrow(PyValue_None);
 
-    PyObject *const *_args_items = _PyBorrow_TupleItems(args, Py_MIN(nargs, 2));
-    if (_args_items == NULL) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 1, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, _idx, 2)) {
         goto exit;
     }
-    fastargs = _PyArg_UnpackKeywords(_args_items, nargs, kwargs, NULL, &_parser,
-            /*minpos*/ 1, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!fastargs) {
-        goto exit;
+    it = PyValue_Borrow(args[_idx[0]]);
+    if (_idx[1] >= 0) {
+        keyfunc = PyValue_Borrow(args[_idx[1]]);
     }
-    it = fastargs[0];
-    if (!noptargs) {
-        goto skip_optional_pos;
-    }
-    keyfunc = fastargs[1];
-skip_optional_pos:
     return_value = itertools_groupby_impl(type, it, keyfunc);
 
 exit:
     return return_value;
 }
 
-static PyObject *
-itertools__grouper_impl(PyTypeObject *type, PyObject *parent,
-                        PyObject *tgtkey);
-
-static PyObject *
-itertools__grouper(PyTypeObject *type, PyObject *args, PyObject *kwargs)
+Py_VALUE_ENTRY static PyObject *
+itertools_groupby(PyTypeObject *type, PyObject *args, PyObject *kwargs)
 {
-    PyObject *return_value = NULL;
+    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
+    if (kwargs == NULL || PyDict_GET_SIZE(kwargs) == 0) {
+        return _PyValue_THUNK_EXIT(itertools_groupby_value(type, _PyTuple_ITEMS(args), nargs, NULL), BOX_SITE_CALL);
+    }
+    PyObject *kwnames;
+    PyValue *window = _PyValue_StackUnpackDict(_PyThreadState_GET(),
+        _PyTuple_ITEMS(args), nargs, kwargs, &kwnames);
+    if (window == NULL) {
+        return NULL;
+    }
+    PyValue result = itertools_groupby_value(type, window, nargs, kwnames);
+    _PyValue_StackUnpackDict_Free(window, nargs, kwnames);
+    return _PyValue_THUNK_EXIT(result, BOX_SITE_CALL);
+}
+
+static PyValue
+itertools__grouper_impl(PyTypeObject *type, PyObject *parent,
+                        PyValueBorrow tgtkey);
+
+static PyValue
+itertools__grouper_value(PyTypeObject *type, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+{
+    PyValue return_value = PyValue_NULL;
     PyTypeObject *base_tp = clinic_state()->_grouper_type;
     PyObject *parent;
-    PyObject *tgtkey;
+    PyValueBorrow tgtkey;
 
     if ((type == base_tp || type->tp_init == base_tp->tp_init) &&
-        !_PyArg_NoKeywords("_grouper", kwargs)) {
+        !_PyArg_NoKwnames("_grouper", kwnames)) {
         goto exit;
     }
-    if (!_PyArg_CheckPositional("_grouper", PyTuple_GET_SIZE(args), 2, 2)) {
+    if (!_PyArg_CheckPositional("_grouper", nargs, 2, 2)) {
         goto exit;
     }
-    PyObject *const *_args_items = _PyBorrow_TupleItems(args, PyTuple_GET_SIZE(args));
-    if (_args_items == NULL) {
+    if (!PyType_IsSubtype(PyValue_TYPE(PyValue_Borrow(args[0])), clinic_state_by_cls()->groupby_type)) {
+        _PyArg_BadArgumentValue("_grouper", "argument 1", (clinic_state_by_cls()->groupby_type)->tp_name, PyValue_Borrow(args[0]));
         goto exit;
     }
-    if (!PyObject_TypeCheck(_args_items[0], clinic_state_by_cls()->groupby_type)) {
-        _PyArg_BadArgument("_grouper", "argument 1", (clinic_state_by_cls()->groupby_type)->tp_name, _args_items[0]);
-        goto exit;
-    }
-    parent = _args_items[0];
-    tgtkey = _args_items[1];
+    parent = PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0]));
+    tgtkey = PyValue_Borrow(args[1]);
     return_value = itertools__grouper_impl(type, parent, tgtkey);
 
 exit:
     return return_value;
+}
+
+Py_VALUE_ENTRY static PyObject *
+itertools__grouper(PyTypeObject *type, PyObject *args, PyObject *kwargs)
+{
+    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
+    if (kwargs == NULL || PyDict_GET_SIZE(kwargs) == 0) {
+        return _PyValue_THUNK_EXIT(itertools__grouper_value(type, _PyTuple_ITEMS(args), nargs, NULL), BOX_SITE_CALL);
+    }
+    PyObject *kwnames;
+    PyValue *window = _PyValue_StackUnpackDict(_PyThreadState_GET(),
+        _PyTuple_ITEMS(args), nargs, kwargs, &kwnames);
+    if (window == NULL) {
+        return NULL;
+    }
+    PyValue result = itertools__grouper_value(type, window, nargs, kwnames);
+    _PyValue_StackUnpackDict_Free(window, nargs, kwnames);
+    return _PyValue_THUNK_EXIT(result, BOX_SITE_CALL);
 }
 
 PyDoc_STRVAR(itertools_teedataobject__doc__,
@@ -264,41 +316,55 @@ PyDoc_STRVAR(itertools_teedataobject__doc__,
 "\n"
 "Data container common to multiple tee objects.");
 
-static PyObject *
-itertools_teedataobject_impl(PyTypeObject *type, PyObject *it,
-                             PyObject *values, PyObject *next);
+static PyValue
+itertools_teedataobject_impl(PyTypeObject *type, PyValueBorrow it,
+                             PyObject *values, PyValueBorrow next);
 
-static PyObject *
-itertools_teedataobject(PyTypeObject *type, PyObject *args, PyObject *kwargs)
+static PyValue
+itertools_teedataobject_value(PyTypeObject *type, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyTypeObject *base_tp = clinic_state()->teedataobject_type;
-    PyObject *it;
+    PyValueBorrow it;
     PyObject *values;
-    PyObject *next;
+    PyValueBorrow next;
 
     if ((type == base_tp || type->tp_init == base_tp->tp_init) &&
-        !_PyArg_NoKeywords("teedataobject", kwargs)) {
+        !_PyArg_NoKwnames("teedataobject", kwnames)) {
         goto exit;
     }
-    if (!_PyArg_CheckPositional("teedataobject", PyTuple_GET_SIZE(args), 3, 3)) {
+    if (!_PyArg_CheckPositional("teedataobject", nargs, 3, 3)) {
         goto exit;
     }
-    PyObject *const *_args_items = _PyBorrow_TupleItems(args, PyTuple_GET_SIZE(args));
-    if (_args_items == NULL) {
+    it = PyValue_Borrow(args[0]);
+    if (!PyType_IsSubtype(PyValue_TYPE(PyValue_Borrow(args[1])), &PyList_Type)) {
+        _PyArg_BadArgumentValue("teedataobject", "argument 2", "list", PyValue_Borrow(args[1]));
         goto exit;
     }
-    it = _args_items[0];
-    if (!PyList_Check(_args_items[1])) {
-        _PyArg_BadArgument("teedataobject", "argument 2", "list", _args_items[1]);
-        goto exit;
-    }
-    values = _args_items[1];
-    next = _args_items[2];
+    values = PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[1]));
+    next = PyValue_Borrow(args[2]);
     return_value = itertools_teedataobject_impl(type, it, values, next);
 
 exit:
     return return_value;
+}
+
+Py_VALUE_ENTRY static PyObject *
+itertools_teedataobject(PyTypeObject *type, PyObject *args, PyObject *kwargs)
+{
+    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
+    if (kwargs == NULL || PyDict_GET_SIZE(kwargs) == 0) {
+        return _PyValue_THUNK_EXIT(itertools_teedataobject_value(type, _PyTuple_ITEMS(args), nargs, NULL), BOX_SITE_CALL);
+    }
+    PyObject *kwnames;
+    PyValue *window = _PyValue_StackUnpackDict(_PyThreadState_GET(),
+        _PyTuple_ITEMS(args), nargs, kwargs, &kwnames);
+    if (window == NULL) {
+        return NULL;
+    }
+    PyValue result = itertools_teedataobject_value(type, window, nargs, kwnames);
+    _PyValue_StackUnpackDict_Free(window, nargs, kwnames);
+    return _PyValue_THUNK_EXIT(result, BOX_SITE_CALL);
 }
 
 PyDoc_STRVAR(itertools__tee__doc__,
@@ -307,32 +373,46 @@ PyDoc_STRVAR(itertools__tee__doc__,
 "\n"
 "Iterator wrapped to make it copyable.");
 
-static PyObject *
-itertools__tee_impl(PyTypeObject *type, PyObject *iterable);
+static PyValue
+itertools__tee_impl(PyTypeObject *type, PyValueBorrow iterable);
 
-static PyObject *
-itertools__tee(PyTypeObject *type, PyObject *args, PyObject *kwargs)
+static PyValue
+itertools__tee_value(PyTypeObject *type, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyTypeObject *base_tp = clinic_state()->tee_type;
-    PyObject *iterable;
+    PyValueBorrow iterable;
 
     if ((type == base_tp || type->tp_init == base_tp->tp_init) &&
-        !_PyArg_NoKeywords("_tee", kwargs)) {
+        !_PyArg_NoKwnames("_tee", kwnames)) {
         goto exit;
     }
-    if (!_PyArg_CheckPositional("_tee", PyTuple_GET_SIZE(args), 1, 1)) {
+    if (!_PyArg_CheckPositional("_tee", nargs, 1, 1)) {
         goto exit;
     }
-    PyObject *const *_args_items = _PyBorrow_TupleItems(args, PyTuple_GET_SIZE(args));
-    if (_args_items == NULL) {
-        goto exit;
-    }
-    iterable = _args_items[0];
+    iterable = PyValue_Borrow(args[0]);
     return_value = itertools__tee_impl(type, iterable);
 
 exit:
     return return_value;
+}
+
+Py_VALUE_ENTRY static PyObject *
+itertools__tee(PyTypeObject *type, PyObject *args, PyObject *kwargs)
+{
+    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
+    if (kwargs == NULL || PyDict_GET_SIZE(kwargs) == 0) {
+        return _PyValue_THUNK_EXIT(itertools__tee_value(type, _PyTuple_ITEMS(args), nargs, NULL), BOX_SITE_CALL);
+    }
+    PyObject *kwnames;
+    PyValue *window = _PyValue_StackUnpackDict(_PyThreadState_GET(),
+        _PyTuple_ITEMS(args), nargs, kwargs, &kwnames);
+    if (window == NULL) {
+        return NULL;
+    }
+    PyValue result = itertools__tee_value(type, window, nargs, kwnames);
+    _PyValue_StackUnpackDict_Free(window, nargs, kwnames);
+    return _PyValue_THUNK_EXIT(result, BOX_SITE_CALL);
 }
 
 PyDoc_STRVAR(itertools_tee__doc__,
@@ -342,31 +422,34 @@ PyDoc_STRVAR(itertools_tee__doc__,
 "Returns a tuple of n independent iterators.");
 
 #define ITERTOOLS_TEE_METHODDEF    \
-    {"tee", _PyCFunction_CAST(itertools_tee), METH_FASTCALL, itertools_tee__doc__},
+    {"tee", _PyCFunction_CAST(itertools_tee), METH_VALUE, itertools_tee__doc__},
 
-static PyObject *
-itertools_tee_impl(PyObject *module, PyObject *iterable, Py_ssize_t n);
+static PyValue
+itertools_tee_impl(PyObject *module, PyValueBorrow iterable, Py_ssize_t n);
 
-static PyObject *
-itertools_tee(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+itertools_tee(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
-    PyObject *iterable;
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow iterable;
     Py_ssize_t n = 2;
 
+    if (!_PyArg_NoKwnamesValue("itertools.tee()", kwnames)) {
+        goto exit;
+    }
     if (!_PyArg_CheckPositional("tee", nargs, 1, 2)) {
         goto exit;
     }
-    iterable = args[0];
+    iterable = PyValue_Borrow(args[0]);
     if (nargs < 2) {
         goto skip_optional;
     }
     {
         Py_ssize_t ival = -1;
-        PyObject *iobj = _PyNumber_Index(args[1]);
-        if (iobj != NULL) {
-            ival = PyLong_AsSsize_t(iobj);
-            Py_DECREF(iobj);
+        PyValue iobj = _PyValue_Index(PyValue_Borrow(args[1]));
+        if (!PyValue_IsNull(iobj)) {
+            ival = _PyValue_IntAsSsize_t(PyValue_Borrow(iobj));
+            PyValue_CLOSE(iobj);
         }
         if (ival == -1 && PyErr_Occurred()) {
             goto exit;
@@ -379,7 +462,7 @@ itertools_tee(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
         }
     }
 skip_optional:
-    return_value = itertools_tee_impl(module, iterable, n);
+    return_value = itertools_tee_impl(PyValue_AsKnownObjectBorrow(module), iterable, n);
 
 exit:
     return return_value;
@@ -391,32 +474,46 @@ PyDoc_STRVAR(itertools_cycle__doc__,
 "\n"
 "Return elements from the iterable until it is exhausted. Then repeat the sequence indefinitely.");
 
-static PyObject *
-itertools_cycle_impl(PyTypeObject *type, PyObject *iterable);
+static PyValue
+itertools_cycle_impl(PyTypeObject *type, PyValueBorrow iterable);
 
-static PyObject *
-itertools_cycle(PyTypeObject *type, PyObject *args, PyObject *kwargs)
+static PyValue
+itertools_cycle_value(PyTypeObject *type, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyTypeObject *base_tp = clinic_state()->cycle_type;
-    PyObject *iterable;
+    PyValueBorrow iterable;
 
     if ((type == base_tp || type->tp_init == base_tp->tp_init) &&
-        !_PyArg_NoKeywords("cycle", kwargs)) {
+        !_PyArg_NoKwnames("cycle", kwnames)) {
         goto exit;
     }
-    if (!_PyArg_CheckPositional("cycle", PyTuple_GET_SIZE(args), 1, 1)) {
+    if (!_PyArg_CheckPositional("cycle", nargs, 1, 1)) {
         goto exit;
     }
-    PyObject *const *_args_items = _PyBorrow_TupleItems(args, PyTuple_GET_SIZE(args));
-    if (_args_items == NULL) {
-        goto exit;
-    }
-    iterable = _args_items[0];
+    iterable = PyValue_Borrow(args[0]);
     return_value = itertools_cycle_impl(type, iterable);
 
 exit:
     return return_value;
+}
+
+Py_VALUE_ENTRY static PyObject *
+itertools_cycle(PyTypeObject *type, PyObject *args, PyObject *kwargs)
+{
+    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
+    if (kwargs == NULL || PyDict_GET_SIZE(kwargs) == 0) {
+        return _PyValue_THUNK_EXIT(itertools_cycle_value(type, _PyTuple_ITEMS(args), nargs, NULL), BOX_SITE_CALL);
+    }
+    PyObject *kwnames;
+    PyValue *window = _PyValue_StackUnpackDict(_PyThreadState_GET(),
+        _PyTuple_ITEMS(args), nargs, kwargs, &kwnames);
+    if (window == NULL) {
+        return NULL;
+    }
+    PyValue result = itertools_cycle_value(type, window, nargs, kwnames);
+    _PyValue_StackUnpackDict_Free(window, nargs, kwnames);
+    return _PyValue_THUNK_EXIT(result, BOX_SITE_CALL);
 }
 
 PyDoc_STRVAR(itertools_dropwhile__doc__,
@@ -427,34 +524,49 @@ PyDoc_STRVAR(itertools_dropwhile__doc__,
 "\n"
 "Afterwards, return every element until the iterable is exhausted.");
 
-static PyObject *
-itertools_dropwhile_impl(PyTypeObject *type, PyObject *func, PyObject *seq);
+static PyValue
+itertools_dropwhile_impl(PyTypeObject *type, PyValueBorrow func,
+                         PyValueBorrow seq);
 
-static PyObject *
-itertools_dropwhile(PyTypeObject *type, PyObject *args, PyObject *kwargs)
+static PyValue
+itertools_dropwhile_value(PyTypeObject *type, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyTypeObject *base_tp = clinic_state()->dropwhile_type;
-    PyObject *func;
-    PyObject *seq;
+    PyValueBorrow func;
+    PyValueBorrow seq;
 
     if ((type == base_tp || type->tp_init == base_tp->tp_init) &&
-        !_PyArg_NoKeywords("dropwhile", kwargs)) {
+        !_PyArg_NoKwnames("dropwhile", kwnames)) {
         goto exit;
     }
-    if (!_PyArg_CheckPositional("dropwhile", PyTuple_GET_SIZE(args), 2, 2)) {
+    if (!_PyArg_CheckPositional("dropwhile", nargs, 2, 2)) {
         goto exit;
     }
-    PyObject *const *_args_items = _PyBorrow_TupleItems(args, PyTuple_GET_SIZE(args));
-    if (_args_items == NULL) {
-        goto exit;
-    }
-    func = _args_items[0];
-    seq = _args_items[1];
+    func = PyValue_Borrow(args[0]);
+    seq = PyValue_Borrow(args[1]);
     return_value = itertools_dropwhile_impl(type, func, seq);
 
 exit:
     return return_value;
+}
+
+Py_VALUE_ENTRY static PyObject *
+itertools_dropwhile(PyTypeObject *type, PyObject *args, PyObject *kwargs)
+{
+    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
+    if (kwargs == NULL || PyDict_GET_SIZE(kwargs) == 0) {
+        return _PyValue_THUNK_EXIT(itertools_dropwhile_value(type, _PyTuple_ITEMS(args), nargs, NULL), BOX_SITE_CALL);
+    }
+    PyObject *kwnames;
+    PyValue *window = _PyValue_StackUnpackDict(_PyThreadState_GET(),
+        _PyTuple_ITEMS(args), nargs, kwargs, &kwnames);
+    if (window == NULL) {
+        return NULL;
+    }
+    PyValue result = itertools_dropwhile_value(type, window, nargs, kwnames);
+    _PyValue_StackUnpackDict_Free(window, nargs, kwnames);
+    return _PyValue_THUNK_EXIT(result, BOX_SITE_CALL);
 }
 
 PyDoc_STRVAR(itertools_takewhile__doc__,
@@ -463,34 +575,49 @@ PyDoc_STRVAR(itertools_takewhile__doc__,
 "\n"
 "Return successive entries from an iterable as long as the predicate evaluates to true for each entry.");
 
-static PyObject *
-itertools_takewhile_impl(PyTypeObject *type, PyObject *func, PyObject *seq);
+static PyValue
+itertools_takewhile_impl(PyTypeObject *type, PyValueBorrow func,
+                         PyValueBorrow seq);
 
-static PyObject *
-itertools_takewhile(PyTypeObject *type, PyObject *args, PyObject *kwargs)
+static PyValue
+itertools_takewhile_value(PyTypeObject *type, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyTypeObject *base_tp = clinic_state()->takewhile_type;
-    PyObject *func;
-    PyObject *seq;
+    PyValueBorrow func;
+    PyValueBorrow seq;
 
     if ((type == base_tp || type->tp_init == base_tp->tp_init) &&
-        !_PyArg_NoKeywords("takewhile", kwargs)) {
+        !_PyArg_NoKwnames("takewhile", kwnames)) {
         goto exit;
     }
-    if (!_PyArg_CheckPositional("takewhile", PyTuple_GET_SIZE(args), 2, 2)) {
+    if (!_PyArg_CheckPositional("takewhile", nargs, 2, 2)) {
         goto exit;
     }
-    PyObject *const *_args_items = _PyBorrow_TupleItems(args, PyTuple_GET_SIZE(args));
-    if (_args_items == NULL) {
-        goto exit;
-    }
-    func = _args_items[0];
-    seq = _args_items[1];
+    func = PyValue_Borrow(args[0]);
+    seq = PyValue_Borrow(args[1]);
     return_value = itertools_takewhile_impl(type, func, seq);
 
 exit:
     return return_value;
+}
+
+Py_VALUE_ENTRY static PyObject *
+itertools_takewhile(PyTypeObject *type, PyObject *args, PyObject *kwargs)
+{
+    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
+    if (kwargs == NULL || PyDict_GET_SIZE(kwargs) == 0) {
+        return _PyValue_THUNK_EXIT(itertools_takewhile_value(type, _PyTuple_ITEMS(args), nargs, NULL), BOX_SITE_CALL);
+    }
+    PyObject *kwnames;
+    PyValue *window = _PyValue_StackUnpackDict(_PyThreadState_GET(),
+        _PyTuple_ITEMS(args), nargs, kwargs, &kwnames);
+    if (window == NULL) {
+        return NULL;
+    }
+    PyValue result = itertools_takewhile_value(type, window, nargs, kwnames);
+    _PyValue_StackUnpackDict_Free(window, nargs, kwnames);
+    return _PyValue_THUNK_EXIT(result, BOX_SITE_CALL);
 }
 
 PyDoc_STRVAR(itertools_starmap__doc__,
@@ -499,34 +626,49 @@ PyDoc_STRVAR(itertools_starmap__doc__,
 "\n"
 "Return an iterator whose values are returned from the function evaluated with an argument tuple taken from the given sequence.");
 
-static PyObject *
-itertools_starmap_impl(PyTypeObject *type, PyObject *func, PyObject *seq);
+static PyValue
+itertools_starmap_impl(PyTypeObject *type, PyValueBorrow func,
+                       PyValueBorrow seq);
 
-static PyObject *
-itertools_starmap(PyTypeObject *type, PyObject *args, PyObject *kwargs)
+static PyValue
+itertools_starmap_value(PyTypeObject *type, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyTypeObject *base_tp = clinic_state()->starmap_type;
-    PyObject *func;
-    PyObject *seq;
+    PyValueBorrow func;
+    PyValueBorrow seq;
 
     if ((type == base_tp || type->tp_init == base_tp->tp_init) &&
-        !_PyArg_NoKeywords("starmap", kwargs)) {
+        !_PyArg_NoKwnames("starmap", kwnames)) {
         goto exit;
     }
-    if (!_PyArg_CheckPositional("starmap", PyTuple_GET_SIZE(args), 2, 2)) {
+    if (!_PyArg_CheckPositional("starmap", nargs, 2, 2)) {
         goto exit;
     }
-    PyObject *const *_args_items = _PyBorrow_TupleItems(args, PyTuple_GET_SIZE(args));
-    if (_args_items == NULL) {
-        goto exit;
-    }
-    func = _args_items[0];
-    seq = _args_items[1];
+    func = PyValue_Borrow(args[0]);
+    seq = PyValue_Borrow(args[1]);
     return_value = itertools_starmap_impl(type, func, seq);
 
 exit:
     return return_value;
+}
+
+Py_VALUE_ENTRY static PyObject *
+itertools_starmap(PyTypeObject *type, PyObject *args, PyObject *kwargs)
+{
+    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
+    if (kwargs == NULL || PyDict_GET_SIZE(kwargs) == 0) {
+        return _PyValue_THUNK_EXIT(itertools_starmap_value(type, _PyTuple_ITEMS(args), nargs, NULL), BOX_SITE_CALL);
+    }
+    PyObject *kwnames;
+    PyValue *window = _PyValue_StackUnpackDict(_PyThreadState_GET(),
+        _PyTuple_ITEMS(args), nargs, kwargs, &kwnames);
+    if (window == NULL) {
+        return NULL;
+    }
+    PyValue result = itertools_starmap_value(type, window, nargs, kwnames);
+    _PyValue_StackUnpackDict_Free(window, nargs, kwnames);
+    return _PyValue_THUNK_EXIT(result, BOX_SITE_CALL);
 }
 
 PyDoc_STRVAR(itertools_chain_from_iterable__doc__,
@@ -536,17 +678,19 @@ PyDoc_STRVAR(itertools_chain_from_iterable__doc__,
 "Alternative chain() constructor taking a single iterable argument that evaluates lazily.");
 
 #define ITERTOOLS_CHAIN_FROM_ITERABLE_METHODDEF    \
-    {"from_iterable", (PyCFunction)itertools_chain_from_iterable, METH_O|METH_CLASS, itertools_chain_from_iterable__doc__},
+    {"from_iterable", _PyCFunction_CAST(itertools_chain_from_iterable), METH_VALUE|METH_O|METH_CLASS, itertools_chain_from_iterable__doc__},
 
-static PyObject *
-itertools_chain_from_iterable_impl(PyTypeObject *type, PyObject *arg);
+static PyValue
+itertools_chain_from_iterable_impl(PyTypeObject *type, PyValueBorrow arg);
 
-static PyObject *
-itertools_chain_from_iterable(PyObject *type, PyObject *arg)
+static PyValue
+itertools_chain_from_iterable(PyValueBorrow type, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow arg;
 
-    return_value = itertools_chain_from_iterable_impl((PyTypeObject *)type, arg);
+    arg = PyValue_Borrow(args[0]);
+    return_value = itertools_chain_from_iterable_impl((PyTypeObject *)PyValue_AsKnownObjectBorrow(type), arg);
 
     return return_value;
 }
@@ -589,14 +733,14 @@ PyDoc_STRVAR(itertools_combinations__doc__,
 "\n"
 "combinations(range(4), 3) --> (0,1,2), (0,1,3), (0,2,3), (1,2,3)");
 
-static PyObject *
-itertools_combinations_impl(PyTypeObject *type, PyObject *iterable,
+static PyValue
+itertools_combinations_impl(PyTypeObject *type, PyValueBorrow iterable,
                             Py_ssize_t r);
 
-static PyObject *
-itertools_combinations(PyTypeObject *type, PyObject *args, PyObject *kwargs)
+static PyValue
+itertools_combinations_value(PyTypeObject *type, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 2
@@ -624,28 +768,21 @@ itertools_combinations(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[2];
-    PyObject * const *fastargs;
-    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
-    PyObject *iterable;
+    Py_ssize_t _idx[2];
+    PyValueBorrow iterable;
     Py_ssize_t r;
 
-    PyObject *const *_args_items = _PyBorrow_TupleItems(args, Py_MIN(nargs, 2));
-    if (_args_items == NULL) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 2, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, _idx, 2)) {
         goto exit;
     }
-    fastargs = _PyArg_UnpackKeywords(_args_items, nargs, kwargs, NULL, &_parser,
-            /*minpos*/ 2, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!fastargs) {
-        goto exit;
-    }
-    iterable = fastargs[0];
+    iterable = PyValue_Borrow(args[_idx[0]]);
     {
         Py_ssize_t ival = -1;
-        PyObject *iobj = _PyNumber_Index(fastargs[1]);
-        if (iobj != NULL) {
-            ival = PyLong_AsSsize_t(iobj);
-            Py_DECREF(iobj);
+        PyValue iobj = _PyValue_Index(PyValue_Borrow(args[_idx[1]]));
+        if (!PyValue_IsNull(iobj)) {
+            ival = _PyValue_IntAsSsize_t(PyValue_Borrow(iobj));
+            PyValue_CLOSE(iobj);
         }
         if (ival == -1 && PyErr_Occurred()) {
             goto exit;
@@ -661,6 +798,24 @@ itertools_combinations(PyTypeObject *type, PyObject *args, PyObject *kwargs)
 
 exit:
     return return_value;
+}
+
+Py_VALUE_ENTRY static PyObject *
+itertools_combinations(PyTypeObject *type, PyObject *args, PyObject *kwargs)
+{
+    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
+    if (kwargs == NULL || PyDict_GET_SIZE(kwargs) == 0) {
+        return _PyValue_THUNK_EXIT(itertools_combinations_value(type, _PyTuple_ITEMS(args), nargs, NULL), BOX_SITE_CALL);
+    }
+    PyObject *kwnames;
+    PyValue *window = _PyValue_StackUnpackDict(_PyThreadState_GET(),
+        _PyTuple_ITEMS(args), nargs, kwargs, &kwnames);
+    if (window == NULL) {
+        return NULL;
+    }
+    PyValue result = itertools_combinations_value(type, window, nargs, kwnames);
+    _PyValue_StackUnpackDict_Free(window, nargs, kwnames);
+    return _PyValue_THUNK_EXIT(result, BOX_SITE_CALL);
 }
 
 static PyObject *
@@ -686,15 +841,15 @@ PyDoc_STRVAR(itertools_combinations_with_replacement__doc__,
 "\n"
 "combinations_with_replacement(\'ABC\', 2) --> (\'A\',\'A\'), (\'A\',\'B\'), (\'A\',\'C\'), (\'B\',\'B\'), (\'B\',\'C\'), (\'C\',\'C\')");
 
-static PyObject *
+static PyValue
 itertools_combinations_with_replacement_impl(PyTypeObject *type,
-                                             PyObject *iterable,
+                                             PyValueBorrow iterable,
                                              Py_ssize_t r);
 
-static PyObject *
-itertools_combinations_with_replacement(PyTypeObject *type, PyObject *args, PyObject *kwargs)
+static PyValue
+itertools_combinations_with_replacement_value(PyTypeObject *type, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 2
@@ -722,28 +877,21 @@ itertools_combinations_with_replacement(PyTypeObject *type, PyObject *args, PyOb
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[2];
-    PyObject * const *fastargs;
-    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
-    PyObject *iterable;
+    Py_ssize_t _idx[2];
+    PyValueBorrow iterable;
     Py_ssize_t r;
 
-    PyObject *const *_args_items = _PyBorrow_TupleItems(args, Py_MIN(nargs, 2));
-    if (_args_items == NULL) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 2, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, _idx, 2)) {
         goto exit;
     }
-    fastargs = _PyArg_UnpackKeywords(_args_items, nargs, kwargs, NULL, &_parser,
-            /*minpos*/ 2, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!fastargs) {
-        goto exit;
-    }
-    iterable = fastargs[0];
+    iterable = PyValue_Borrow(args[_idx[0]]);
     {
         Py_ssize_t ival = -1;
-        PyObject *iobj = _PyNumber_Index(fastargs[1]);
-        if (iobj != NULL) {
-            ival = PyLong_AsSsize_t(iobj);
-            Py_DECREF(iobj);
+        PyValue iobj = _PyValue_Index(PyValue_Borrow(args[_idx[1]]));
+        if (!PyValue_IsNull(iobj)) {
+            ival = _PyValue_IntAsSsize_t(PyValue_Borrow(iobj));
+            PyValue_CLOSE(iobj);
         }
         if (ival == -1 && PyErr_Occurred()) {
             goto exit;
@@ -759,6 +907,24 @@ itertools_combinations_with_replacement(PyTypeObject *type, PyObject *args, PyOb
 
 exit:
     return return_value;
+}
+
+Py_VALUE_ENTRY static PyObject *
+itertools_combinations_with_replacement(PyTypeObject *type, PyObject *args, PyObject *kwargs)
+{
+    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
+    if (kwargs == NULL || PyDict_GET_SIZE(kwargs) == 0) {
+        return _PyValue_THUNK_EXIT(itertools_combinations_with_replacement_value(type, _PyTuple_ITEMS(args), nargs, NULL), BOX_SITE_CALL);
+    }
+    PyObject *kwnames;
+    PyValue *window = _PyValue_StackUnpackDict(_PyThreadState_GET(),
+        _PyTuple_ITEMS(args), nargs, kwargs, &kwnames);
+    if (window == NULL) {
+        return NULL;
+    }
+    PyValue result = itertools_combinations_with_replacement_value(type, window, nargs, kwnames);
+    _PyValue_StackUnpackDict_Free(window, nargs, kwnames);
+    return _PyValue_THUNK_EXIT(result, BOX_SITE_CALL);
 }
 
 static PyObject *
@@ -784,14 +950,14 @@ PyDoc_STRVAR(itertools_permutations__doc__,
 "\n"
 "permutations(range(3), 2) --> (0,1), (0,2), (1,0), (1,2), (2,0), (2,1)");
 
-static PyObject *
-itertools_permutations_impl(PyTypeObject *type, PyObject *iterable,
-                            PyObject *robj);
+static PyValue
+itertools_permutations_impl(PyTypeObject *type, PyValueBorrow iterable,
+                            PyValueBorrow robj);
 
-static PyObject *
-itertools_permutations(PyTypeObject *type, PyObject *args, PyObject *kwargs)
+static PyValue
+itertools_permutations_value(PyTypeObject *type, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 2
@@ -819,32 +985,40 @@ itertools_permutations(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[2];
-    PyObject * const *fastargs;
-    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
-    Py_ssize_t noptargs = nargs + (kwargs ? PyDict_GET_SIZE(kwargs) : 0) - 1;
-    PyObject *iterable;
-    PyObject *robj = Py_None;
+    Py_ssize_t _idx[2];
+    PyValueBorrow iterable;
+    PyValueBorrow robj = PyValue_Borrow(PyValue_None);
 
-    PyObject *const *_args_items = _PyBorrow_TupleItems(args, Py_MIN(nargs, 2));
-    if (_args_items == NULL) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 1, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, _idx, 2)) {
         goto exit;
     }
-    fastargs = _PyArg_UnpackKeywords(_args_items, nargs, kwargs, NULL, &_parser,
-            /*minpos*/ 1, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!fastargs) {
-        goto exit;
+    iterable = PyValue_Borrow(args[_idx[0]]);
+    if (_idx[1] >= 0) {
+        robj = PyValue_Borrow(args[_idx[1]]);
     }
-    iterable = fastargs[0];
-    if (!noptargs) {
-        goto skip_optional_pos;
-    }
-    robj = fastargs[1];
-skip_optional_pos:
     return_value = itertools_permutations_impl(type, iterable, robj);
 
 exit:
     return return_value;
+}
+
+Py_VALUE_ENTRY static PyObject *
+itertools_permutations(PyTypeObject *type, PyObject *args, PyObject *kwargs)
+{
+    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
+    if (kwargs == NULL || PyDict_GET_SIZE(kwargs) == 0) {
+        return _PyValue_THUNK_EXIT(itertools_permutations_value(type, _PyTuple_ITEMS(args), nargs, NULL), BOX_SITE_CALL);
+    }
+    PyObject *kwnames;
+    PyValue *window = _PyValue_StackUnpackDict(_PyThreadState_GET(),
+        _PyTuple_ITEMS(args), nargs, kwargs, &kwnames);
+    if (window == NULL) {
+        return NULL;
+    }
+    PyValue result = itertools_permutations_value(type, window, nargs, kwnames);
+    _PyValue_StackUnpackDict_Free(window, nargs, kwnames);
+    return _PyValue_THUNK_EXIT(result, BOX_SITE_CALL);
 }
 
 static PyObject *
@@ -868,14 +1042,14 @@ PyDoc_STRVAR(itertools_accumulate__doc__,
 "\n"
 "Return series of accumulated sums (or other binary function results).");
 
-static PyObject *
-itertools_accumulate_impl(PyTypeObject *type, PyObject *iterable,
-                          PyObject *binop, PyObject *initial);
+static PyValue
+itertools_accumulate_impl(PyTypeObject *type, PyValueBorrow iterable,
+                          PyValueBorrow binop, PyValueBorrow initial);
 
-static PyObject *
-itertools_accumulate(PyTypeObject *type, PyObject *args, PyObject *kwargs)
+static PyValue
+itertools_accumulate_value(PyTypeObject *type, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 3
@@ -903,43 +1077,44 @@ itertools_accumulate(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[3];
-    PyObject * const *fastargs;
-    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
-    Py_ssize_t noptargs = nargs + (kwargs ? PyDict_GET_SIZE(kwargs) : 0) - 1;
-    PyObject *iterable;
-    PyObject *binop = Py_None;
-    PyObject *initial = Py_None;
+    Py_ssize_t _idx[3];
+    PyValueBorrow iterable;
+    PyValueBorrow binop = PyValue_Borrow(PyValue_None);
+    PyValueBorrow initial = PyValue_Borrow(PyValue_None);
 
-    PyObject *const *_args_items = _PyBorrow_TupleItems(args, Py_MIN(nargs, 2));
-    if (_args_items == NULL) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 1, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, _idx, 3)) {
         goto exit;
     }
-    fastargs = _PyArg_UnpackKeywords(_args_items, nargs, kwargs, NULL, &_parser,
-            /*minpos*/ 1, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!fastargs) {
-        goto exit;
+    iterable = PyValue_Borrow(args[_idx[0]]);
+    if (_idx[1] >= 0) {
+        binop = PyValue_Borrow(args[_idx[1]]);
     }
-    iterable = fastargs[0];
-    if (!noptargs) {
-        goto skip_optional_pos;
+    if (_idx[2] >= 0) {
+        initial = PyValue_Borrow(args[_idx[2]]);
     }
-    if (fastargs[1]) {
-        binop = fastargs[1];
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
-    }
-skip_optional_pos:
-    if (!noptargs) {
-        goto skip_optional_kwonly;
-    }
-    initial = fastargs[2];
-skip_optional_kwonly:
     return_value = itertools_accumulate_impl(type, iterable, binop, initial);
 
 exit:
     return return_value;
+}
+
+Py_VALUE_ENTRY static PyObject *
+itertools_accumulate(PyTypeObject *type, PyObject *args, PyObject *kwargs)
+{
+    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
+    if (kwargs == NULL || PyDict_GET_SIZE(kwargs) == 0) {
+        return _PyValue_THUNK_EXIT(itertools_accumulate_value(type, _PyTuple_ITEMS(args), nargs, NULL), BOX_SITE_CALL);
+    }
+    PyObject *kwnames;
+    PyValue *window = _PyValue_StackUnpackDict(_PyThreadState_GET(),
+        _PyTuple_ITEMS(args), nargs, kwargs, &kwnames);
+    if (window == NULL) {
+        return NULL;
+    }
+    PyValue result = itertools_accumulate_value(type, window, nargs, kwnames);
+    _PyValue_StackUnpackDict_Free(window, nargs, kwnames);
+    return _PyValue_THUNK_EXIT(result, BOX_SITE_CALL);
 }
 
 static PyObject *
@@ -966,13 +1141,14 @@ PyDoc_STRVAR(itertools_compress__doc__,
 "Forms a shorter iterator from selected data elements using the selectors\n"
 "to choose the data elements.");
 
-static PyObject *
-itertools_compress_impl(PyTypeObject *type, PyObject *seq1, PyObject *seq2);
+static PyValue
+itertools_compress_impl(PyTypeObject *type, PyValueBorrow seq1,
+                        PyValueBorrow seq2);
 
-static PyObject *
-itertools_compress(PyTypeObject *type, PyObject *args, PyObject *kwargs)
+static PyValue
+itertools_compress_value(PyTypeObject *type, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 2
@@ -1000,27 +1176,38 @@ itertools_compress(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[2];
-    PyObject * const *fastargs;
-    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
-    PyObject *seq1;
-    PyObject *seq2;
+    Py_ssize_t _idx[2];
+    PyValueBorrow seq1;
+    PyValueBorrow seq2;
 
-    PyObject *const *_args_items = _PyBorrow_TupleItems(args, Py_MIN(nargs, 2));
-    if (_args_items == NULL) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 2, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, _idx, 2)) {
         goto exit;
     }
-    fastargs = _PyArg_UnpackKeywords(_args_items, nargs, kwargs, NULL, &_parser,
-            /*minpos*/ 2, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!fastargs) {
-        goto exit;
-    }
-    seq1 = fastargs[0];
-    seq2 = fastargs[1];
+    seq1 = PyValue_Borrow(args[_idx[0]]);
+    seq2 = PyValue_Borrow(args[_idx[1]]);
     return_value = itertools_compress_impl(type, seq1, seq2);
 
 exit:
     return return_value;
+}
+
+Py_VALUE_ENTRY static PyObject *
+itertools_compress(PyTypeObject *type, PyObject *args, PyObject *kwargs)
+{
+    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
+    if (kwargs == NULL || PyDict_GET_SIZE(kwargs) == 0) {
+        return _PyValue_THUNK_EXIT(itertools_compress_value(type, _PyTuple_ITEMS(args), nargs, NULL), BOX_SITE_CALL);
+    }
+    PyObject *kwnames;
+    PyValue *window = _PyValue_StackUnpackDict(_PyThreadState_GET(),
+        _PyTuple_ITEMS(args), nargs, kwargs, &kwnames);
+    if (window == NULL) {
+        return NULL;
+    }
+    PyValue result = itertools_compress_value(type, window, nargs, kwnames);
+    _PyValue_StackUnpackDict_Free(window, nargs, kwnames);
+    return _PyValue_THUNK_EXIT(result, BOX_SITE_CALL);
 }
 
 PyDoc_STRVAR(itertools_filterfalse__doc__,
@@ -1031,34 +1218,49 @@ PyDoc_STRVAR(itertools_filterfalse__doc__,
 "\n"
 "If function is None, return the items that are false.");
 
-static PyObject *
-itertools_filterfalse_impl(PyTypeObject *type, PyObject *func, PyObject *seq);
+static PyValue
+itertools_filterfalse_impl(PyTypeObject *type, PyValueBorrow func,
+                           PyValueBorrow seq);
 
-static PyObject *
-itertools_filterfalse(PyTypeObject *type, PyObject *args, PyObject *kwargs)
+static PyValue
+itertools_filterfalse_value(PyTypeObject *type, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyTypeObject *base_tp = clinic_state()->filterfalse_type;
-    PyObject *func;
-    PyObject *seq;
+    PyValueBorrow func;
+    PyValueBorrow seq;
 
     if ((type == base_tp || type->tp_init == base_tp->tp_init) &&
-        !_PyArg_NoKeywords("filterfalse", kwargs)) {
+        !_PyArg_NoKwnames("filterfalse", kwnames)) {
         goto exit;
     }
-    if (!_PyArg_CheckPositional("filterfalse", PyTuple_GET_SIZE(args), 2, 2)) {
+    if (!_PyArg_CheckPositional("filterfalse", nargs, 2, 2)) {
         goto exit;
     }
-    PyObject *const *_args_items = _PyBorrow_TupleItems(args, PyTuple_GET_SIZE(args));
-    if (_args_items == NULL) {
-        goto exit;
-    }
-    func = _args_items[0];
-    seq = _args_items[1];
+    func = PyValue_Borrow(args[0]);
+    seq = PyValue_Borrow(args[1]);
     return_value = itertools_filterfalse_impl(type, func, seq);
 
 exit:
     return return_value;
+}
+
+Py_VALUE_ENTRY static PyObject *
+itertools_filterfalse(PyTypeObject *type, PyObject *args, PyObject *kwargs)
+{
+    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
+    if (kwargs == NULL || PyDict_GET_SIZE(kwargs) == 0) {
+        return _PyValue_THUNK_EXIT(itertools_filterfalse_value(type, _PyTuple_ITEMS(args), nargs, NULL), BOX_SITE_CALL);
+    }
+    PyObject *kwnames;
+    PyValue *window = _PyValue_StackUnpackDict(_PyThreadState_GET(),
+        _PyTuple_ITEMS(args), nargs, kwargs, &kwnames);
+    if (window == NULL) {
+        return NULL;
+    }
+    PyValue result = itertools_filterfalse_value(type, window, nargs, kwnames);
+    _PyValue_StackUnpackDict_Free(window, nargs, kwnames);
+    return _PyValue_THUNK_EXIT(result, BOX_SITE_CALL);
 }
 
 PyDoc_STRVAR(itertools_count__doc__,
@@ -1074,14 +1276,14 @@ PyDoc_STRVAR(itertools_count__doc__,
 "            yield x\n"
 "            x += step");
 
-static PyObject *
-itertools_count_impl(PyTypeObject *type, PyObject *long_cnt,
-                     PyObject *long_step);
+static PyValue
+itertools_count_impl(PyTypeObject *type, PyValueBorrow long_cnt,
+                     PyValueBorrow long_step);
 
-static PyObject *
-itertools_count(PyTypeObject *type, PyObject *args, PyObject *kwargs)
+static PyValue
+itertools_count_value(PyTypeObject *type, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 2
@@ -1109,37 +1311,42 @@ itertools_count(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[2];
-    PyObject * const *fastargs;
-    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
-    Py_ssize_t noptargs = nargs + (kwargs ? PyDict_GET_SIZE(kwargs) : 0) - 0;
-    PyObject *long_cnt = NULL;
-    PyObject *long_step = NULL;
+    Py_ssize_t _idx[2];
+    PyValueBorrow long_cnt = PyValue_Borrow(PyValue_NULL);
+    PyValueBorrow long_step = PyValue_Borrow(PyValue_NULL);
 
-    PyObject *const *_args_items = _PyBorrow_TupleItems(args, Py_MIN(nargs, 2));
-    if (_args_items == NULL) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 0, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, _idx, 2)) {
         goto exit;
     }
-    fastargs = _PyArg_UnpackKeywords(_args_items, nargs, kwargs, NULL, &_parser,
-            /*minpos*/ 0, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!fastargs) {
-        goto exit;
+    if (_idx[0] >= 0) {
+        long_cnt = PyValue_Borrow(args[_idx[0]]);
     }
-    if (!noptargs) {
-        goto skip_optional_pos;
+    if (_idx[1] >= 0) {
+        long_step = PyValue_Borrow(args[_idx[1]]);
     }
-    if (fastargs[0]) {
-        long_cnt = fastargs[0];
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
-    }
-    long_step = fastargs[1];
-skip_optional_pos:
     return_value = itertools_count_impl(type, long_cnt, long_step);
 
 exit:
     return return_value;
+}
+
+Py_VALUE_ENTRY static PyObject *
+itertools_count(PyTypeObject *type, PyObject *args, PyObject *kwargs)
+{
+    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
+    if (kwargs == NULL || PyDict_GET_SIZE(kwargs) == 0) {
+        return _PyValue_THUNK_EXIT(itertools_count_value(type, _PyTuple_ITEMS(args), nargs, NULL), BOX_SITE_CALL);
+    }
+    PyObject *kwnames;
+    PyValue *window = _PyValue_StackUnpackDict(_PyThreadState_GET(),
+        _PyTuple_ITEMS(args), nargs, kwargs, &kwnames);
+    if (window == NULL) {
+        return NULL;
+    }
+    PyValue result = itertools_count_value(type, window, nargs, kwnames);
+    _PyValue_StackUnpackDict_Free(window, nargs, kwnames);
+    return _PyValue_THUNK_EXIT(result, BOX_SITE_CALL);
 }
 
 static PyObject *
@@ -1156,4 +1363,4 @@ zip_longest_next(PyObject *self)
 
     return return_value;
 }
-/*[clinic end generated code: output=16a973d890de7312 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=1c806fb727c32938 input=a9049054013a1b77]*/

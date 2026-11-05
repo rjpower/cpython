@@ -2,9 +2,15 @@
 preserve
 [clinic start generated code]*/
 
-#include "pycore_abstract.h"      // _PyNumber_Index()
-#include "pycore_modsupport.h"    // _PyArg_CheckPositional()
+#ifndef Py_VALUE_CORE
+#  error "value-emission Clinic output requires Py_VALUE_CORE"
+#endif
+
+#include "pycore_long_value.h"    // _PyValue_IntAsSsize_t()
+#include "pycore_modsupport.h"    // _PyArg_NoKwnamesValue()
 #include "pycore_unicodeobject.h" // _PyUnicode_AsUTF8NoNUL()
+#include "pycore_value_call.h"    // METH_VALUE
+#include "pycore_value_ops.h"     // _PyValue_Index()
 
 PyDoc_STRVAR(array_array_clear__doc__,
 "clear($self, /)\n"
@@ -13,15 +19,19 @@ PyDoc_STRVAR(array_array_clear__doc__,
 "Remove all items from the array.");
 
 #define ARRAY_ARRAY_CLEAR_METHODDEF    \
-    {"clear", (PyCFunction)array_array_clear, METH_NOARGS, array_array_clear__doc__},
+    {"clear", _PyCFunction_CAST(array_array_clear), METH_VALUE|METH_NOARGS, array_array_clear__doc__},
 
-static PyObject *
+static PyValue
 array_array_clear_impl(arrayobject *self);
 
-static PyObject *
-array_array_clear(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+array_array_clear(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return array_array_clear_impl((arrayobject *)self);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = array_array_clear_impl((arrayobject *)PyValue_AsKnownObjectBorrow(self));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(array_array___copy____doc__,
@@ -31,15 +41,19 @@ PyDoc_STRVAR(array_array___copy____doc__,
 "Return a copy of the array.");
 
 #define ARRAY_ARRAY___COPY___METHODDEF    \
-    {"__copy__", (PyCFunction)array_array___copy__, METH_NOARGS, array_array___copy____doc__},
+    {"__copy__", _PyCFunction_CAST(array_array___copy__), METH_VALUE|METH_NOARGS, array_array___copy____doc__},
 
-static PyObject *
+static PyValue
 array_array___copy___impl(arrayobject *self);
 
-static PyObject *
-array_array___copy__(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+array_array___copy__(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return array_array___copy___impl((arrayobject *)self);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = array_array___copy___impl((arrayobject *)PyValue_AsKnownObjectBorrow(self));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(array_array___deepcopy____doc__,
@@ -49,17 +63,19 @@ PyDoc_STRVAR(array_array___deepcopy____doc__,
 "Return a copy of the array.");
 
 #define ARRAY_ARRAY___DEEPCOPY___METHODDEF    \
-    {"__deepcopy__", (PyCFunction)array_array___deepcopy__, METH_O, array_array___deepcopy____doc__},
+    {"__deepcopy__", _PyCFunction_CAST(array_array___deepcopy__), METH_VALUE|METH_O, array_array___deepcopy____doc__},
 
-static PyObject *
-array_array___deepcopy___impl(arrayobject *self, PyObject *unused);
+static PyValue
+array_array___deepcopy___impl(arrayobject *self, PyValueBorrow unused);
 
-static PyObject *
-array_array___deepcopy__(PyObject *self, PyObject *unused)
+static PyValue
+array_array___deepcopy__(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow unused;
 
-    return_value = array_array___deepcopy___impl((arrayobject *)self, unused);
+    unused = PyValue_Borrow(args[0]);
+    return_value = array_array___deepcopy___impl((arrayobject *)PyValue_AsKnownObjectBorrow(self), unused);
 
     return return_value;
 }
@@ -71,17 +87,19 @@ PyDoc_STRVAR(array_array_count__doc__,
 "Return number of occurrences of v in the array.");
 
 #define ARRAY_ARRAY_COUNT_METHODDEF    \
-    {"count", (PyCFunction)array_array_count, METH_O, array_array_count__doc__},
+    {"count", _PyCFunction_CAST(array_array_count), METH_VALUE|METH_O, array_array_count__doc__},
 
-static PyObject *
-array_array_count_impl(arrayobject *self, PyObject *v);
+static PyValue
+array_array_count_impl(arrayobject *self, PyValueBorrow v);
 
-static PyObject *
-array_array_count(PyObject *self, PyObject *v)
+static PyValue
+array_array_count(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow v;
 
-    return_value = array_array_count_impl((arrayobject *)self, v);
+    v = PyValue_Borrow(args[0]);
+    return_value = array_array_count_impl((arrayobject *)PyValue_AsKnownObjectBorrow(self), v);
 
     return return_value;
 }
@@ -95,38 +113,41 @@ PyDoc_STRVAR(array_array_index__doc__,
 "Raise ValueError if the value is not present.");
 
 #define ARRAY_ARRAY_INDEX_METHODDEF    \
-    {"index", _PyCFunction_CAST(array_array_index), METH_FASTCALL, array_array_index__doc__},
+    {"index", _PyCFunction_CAST(array_array_index), METH_VALUE, array_array_index__doc__},
 
-static PyObject *
-array_array_index_impl(arrayobject *self, PyObject *v, Py_ssize_t start,
+static PyValue
+array_array_index_impl(arrayobject *self, PyValueBorrow v, Py_ssize_t start,
                        Py_ssize_t stop);
 
-static PyObject *
-array_array_index(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+array_array_index(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
-    PyObject *v;
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow v;
     Py_ssize_t start = 0;
     Py_ssize_t stop = PY_SSIZE_T_MAX;
 
+    if (!_PyArg_NoKwnamesValue("array.index()", kwnames)) {
+        goto exit;
+    }
     if (!_PyArg_CheckPositional("index", nargs, 1, 3)) {
         goto exit;
     }
-    v = args[0];
+    v = PyValue_Borrow(args[0]);
     if (nargs < 2) {
         goto skip_optional;
     }
-    if (!_PyEval_SliceIndexNotNone(args[1], &start)) {
+    if (!_PyArg_SliceIndexNotNoneValue(PyValue_Borrow(args[1]), &start)) {
         goto exit;
     }
     if (nargs < 3) {
         goto skip_optional;
     }
-    if (!_PyEval_SliceIndexNotNone(args[2], &stop)) {
+    if (!_PyArg_SliceIndexNotNoneValue(PyValue_Borrow(args[2]), &stop)) {
         goto exit;
     }
 skip_optional:
-    return_value = array_array_index_impl((arrayobject *)self, v, start, stop);
+    return_value = array_array_index_impl((arrayobject *)PyValue_AsKnownObjectBorrow(self), v, start, stop);
 
 exit:
     return return_value;
@@ -139,17 +160,19 @@ PyDoc_STRVAR(array_array_remove__doc__,
 "Remove the first occurrence of v in the array.");
 
 #define ARRAY_ARRAY_REMOVE_METHODDEF    \
-    {"remove", (PyCFunction)array_array_remove, METH_O, array_array_remove__doc__},
+    {"remove", _PyCFunction_CAST(array_array_remove), METH_VALUE|METH_O, array_array_remove__doc__},
 
-static PyObject *
-array_array_remove_impl(arrayobject *self, PyObject *v);
+static PyValue
+array_array_remove_impl(arrayobject *self, PyValueBorrow v);
 
-static PyObject *
-array_array_remove(PyObject *self, PyObject *v)
+static PyValue
+array_array_remove(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow v;
 
-    return_value = array_array_remove_impl((arrayobject *)self, v);
+    v = PyValue_Borrow(args[0]);
+    return_value = array_array_remove_impl((arrayobject *)PyValue_AsKnownObjectBorrow(self), v);
 
     return return_value;
 }
@@ -163,17 +186,20 @@ PyDoc_STRVAR(array_array_pop__doc__,
 "i defaults to -1.");
 
 #define ARRAY_ARRAY_POP_METHODDEF    \
-    {"pop", _PyCFunction_CAST(array_array_pop), METH_FASTCALL, array_array_pop__doc__},
+    {"pop", _PyCFunction_CAST(array_array_pop), METH_VALUE, array_array_pop__doc__},
 
-static PyObject *
+static PyValue
 array_array_pop_impl(arrayobject *self, Py_ssize_t i);
 
-static PyObject *
-array_array_pop(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+array_array_pop(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     Py_ssize_t i = -1;
 
+    if (!_PyArg_NoKwnamesValue("array.pop()", kwnames)) {
+        goto exit;
+    }
     if (!_PyArg_CheckPositional("pop", nargs, 0, 1)) {
         goto exit;
     }
@@ -182,10 +208,10 @@ array_array_pop(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
     }
     {
         Py_ssize_t ival = -1;
-        PyObject *iobj = _PyNumber_Index(args[0]);
-        if (iobj != NULL) {
-            ival = PyLong_AsSsize_t(iobj);
-            Py_DECREF(iobj);
+        PyValue iobj = _PyValue_Index(PyValue_Borrow(args[0]));
+        if (!PyValue_IsNull(iobj)) {
+            ival = _PyValue_IntAsSsize_t(PyValue_Borrow(iobj));
+            PyValue_CLOSE(iobj);
         }
         if (ival == -1 && PyErr_Occurred()) {
             goto exit;
@@ -193,7 +219,7 @@ array_array_pop(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
         i = ival;
     }
 skip_optional:
-    return_value = array_array_pop_impl((arrayobject *)self, i);
+    return_value = array_array_pop_impl((arrayobject *)PyValue_AsKnownObjectBorrow(self), i);
 
 exit:
     return return_value;
@@ -206,16 +232,17 @@ PyDoc_STRVAR(array_array_extend__doc__,
 "Append items to the end of the array.");
 
 #define ARRAY_ARRAY_EXTEND_METHODDEF    \
-    {"extend", _PyCFunction_CAST(array_array_extend), METH_METHOD|METH_FASTCALL|METH_KEYWORDS, array_array_extend__doc__},
+    {"extend", _PyCFunction_CAST(array_array_extend), METH_VALUE|METH_METHOD, array_array_extend__doc__},
 
-static PyObject *
-array_array_extend_impl(arrayobject *self, PyTypeObject *cls, PyObject *bb);
+static PyValue
+array_array_extend_impl(arrayobject *self, PyTypeObject *cls,
+                        PyValueBorrow bb);
 
-static PyObject *
-array_array_extend(PyObject *self, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+array_array_extend(PyValueBorrow self, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
-    PyObject *bb;
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow bb;
 
     if (!_PyArg_NoKwnames("extend", kwnames)) {
         goto exit;
@@ -223,8 +250,8 @@ array_array_extend(PyObject *self, PyTypeObject *cls, PyObject *const *args, Py_
     if (!_PyArg_CheckPositional("extend", nargs, 1, 1)) {
         goto exit;
     }
-    bb = args[0];
-    return_value = array_array_extend_impl((arrayobject *)self, cls, bb);
+    bb = PyValue_Borrow(args[0]);
+    return_value = array_array_extend_impl((arrayobject *)PyValue_AsKnownObjectBorrow(self), cls, bb);
 
 exit:
     return return_value;
@@ -237,35 +264,38 @@ PyDoc_STRVAR(array_array_insert__doc__,
 "Insert a new item v into the array before position i.");
 
 #define ARRAY_ARRAY_INSERT_METHODDEF    \
-    {"insert", _PyCFunction_CAST(array_array_insert), METH_FASTCALL, array_array_insert__doc__},
+    {"insert", _PyCFunction_CAST(array_array_insert), METH_VALUE, array_array_insert__doc__},
 
-static PyObject *
-array_array_insert_impl(arrayobject *self, Py_ssize_t i, PyObject *v);
+static PyValue
+array_array_insert_impl(arrayobject *self, Py_ssize_t i, PyValueBorrow v);
 
-static PyObject *
-array_array_insert(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+array_array_insert(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     Py_ssize_t i;
-    PyObject *v;
+    PyValueBorrow v;
 
+    if (!_PyArg_NoKwnamesValue("array.insert()", kwnames)) {
+        goto exit;
+    }
     if (!_PyArg_CheckPositional("insert", nargs, 2, 2)) {
         goto exit;
     }
     {
         Py_ssize_t ival = -1;
-        PyObject *iobj = _PyNumber_Index(args[0]);
-        if (iobj != NULL) {
-            ival = PyLong_AsSsize_t(iobj);
-            Py_DECREF(iobj);
+        PyValue iobj = _PyValue_Index(PyValue_Borrow(args[0]));
+        if (!PyValue_IsNull(iobj)) {
+            ival = _PyValue_IntAsSsize_t(PyValue_Borrow(iobj));
+            PyValue_CLOSE(iobj);
         }
         if (ival == -1 && PyErr_Occurred()) {
             goto exit;
         }
         i = ival;
     }
-    v = args[1];
-    return_value = array_array_insert_impl((arrayobject *)self, i, v);
+    v = PyValue_Borrow(args[1]);
+    return_value = array_array_insert_impl((arrayobject *)PyValue_AsKnownObjectBorrow(self), i, v);
 
 exit:
     return return_value;
@@ -281,15 +311,19 @@ PyDoc_STRVAR(array_array_buffer_info__doc__,
 "calculate the buffer length in bytes.");
 
 #define ARRAY_ARRAY_BUFFER_INFO_METHODDEF    \
-    {"buffer_info", (PyCFunction)array_array_buffer_info, METH_NOARGS, array_array_buffer_info__doc__},
+    {"buffer_info", _PyCFunction_CAST(array_array_buffer_info), METH_VALUE|METH_NOARGS, array_array_buffer_info__doc__},
 
-static PyObject *
+static PyValue
 array_array_buffer_info_impl(arrayobject *self);
 
-static PyObject *
-array_array_buffer_info(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+array_array_buffer_info(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return array_array_buffer_info_impl((arrayobject *)self);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = array_array_buffer_info_impl((arrayobject *)PyValue_AsKnownObjectBorrow(self));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(array_array_append__doc__,
@@ -299,17 +333,19 @@ PyDoc_STRVAR(array_array_append__doc__,
 "Append new value v to the end of the array.");
 
 #define ARRAY_ARRAY_APPEND_METHODDEF    \
-    {"append", (PyCFunction)array_array_append, METH_O, array_array_append__doc__},
+    {"append", _PyCFunction_CAST(array_array_append), METH_VALUE|METH_O, array_array_append__doc__},
 
-static PyObject *
-array_array_append_impl(arrayobject *self, PyObject *v);
+static PyValue
+array_array_append_impl(arrayobject *self, PyValueBorrow v);
 
-static PyObject *
-array_array_append(PyObject *self, PyObject *v)
+static PyValue
+array_array_append(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow v;
 
-    return_value = array_array_append_impl((arrayobject *)self, v);
+    v = PyValue_Borrow(args[0]);
+    return_value = array_array_append_impl((arrayobject *)PyValue_AsKnownObjectBorrow(self), v);
 
     return return_value;
 }
@@ -325,15 +361,19 @@ PyDoc_STRVAR(array_array_byteswap__doc__,
 "components (the real part, followed by imaginary part) is preserved.");
 
 #define ARRAY_ARRAY_BYTESWAP_METHODDEF    \
-    {"byteswap", (PyCFunction)array_array_byteswap, METH_NOARGS, array_array_byteswap__doc__},
+    {"byteswap", _PyCFunction_CAST(array_array_byteswap), METH_VALUE|METH_NOARGS, array_array_byteswap__doc__},
 
-static PyObject *
+static PyValue
 array_array_byteswap_impl(arrayobject *self);
 
-static PyObject *
-array_array_byteswap(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+array_array_byteswap(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return array_array_byteswap_impl((arrayobject *)self);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = array_array_byteswap_impl((arrayobject *)PyValue_AsKnownObjectBorrow(self));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(array_array_reverse__doc__,
@@ -343,15 +383,19 @@ PyDoc_STRVAR(array_array_reverse__doc__,
 "Reverse the order of the items in the array.");
 
 #define ARRAY_ARRAY_REVERSE_METHODDEF    \
-    {"reverse", (PyCFunction)array_array_reverse, METH_NOARGS, array_array_reverse__doc__},
+    {"reverse", _PyCFunction_CAST(array_array_reverse), METH_VALUE|METH_NOARGS, array_array_reverse__doc__},
 
-static PyObject *
+static PyValue
 array_array_reverse_impl(arrayobject *self);
 
-static PyObject *
-array_array_reverse(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+array_array_reverse(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return array_array_reverse_impl((arrayobject *)self);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = array_array_reverse_impl((arrayobject *)PyValue_AsKnownObjectBorrow(self));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(array_array_fromfile__doc__,
@@ -361,17 +405,17 @@ PyDoc_STRVAR(array_array_fromfile__doc__,
 "Read n objects from the file object f and append them to the end of the array.");
 
 #define ARRAY_ARRAY_FROMFILE_METHODDEF    \
-    {"fromfile", _PyCFunction_CAST(array_array_fromfile), METH_METHOD|METH_FASTCALL|METH_KEYWORDS, array_array_fromfile__doc__},
+    {"fromfile", _PyCFunction_CAST(array_array_fromfile), METH_VALUE|METH_METHOD, array_array_fromfile__doc__},
 
-static PyObject *
-array_array_fromfile_impl(arrayobject *self, PyTypeObject *cls, PyObject *f,
-                          Py_ssize_t n);
+static PyValue
+array_array_fromfile_impl(arrayobject *self, PyTypeObject *cls,
+                          PyValueBorrow f, Py_ssize_t n);
 
-static PyObject *
-array_array_fromfile(PyObject *self, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+array_array_fromfile(PyValueBorrow self, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
-    PyObject *f;
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow f;
     Py_ssize_t n;
 
     if (!_PyArg_NoKwnames("fromfile", kwnames)) {
@@ -380,13 +424,13 @@ array_array_fromfile(PyObject *self, PyTypeObject *cls, PyObject *const *args, P
     if (!_PyArg_CheckPositional("fromfile", nargs, 2, 2)) {
         goto exit;
     }
-    f = args[0];
+    f = PyValue_Borrow(args[0]);
     {
         Py_ssize_t ival = -1;
-        PyObject *iobj = _PyNumber_Index(args[1]);
-        if (iobj != NULL) {
-            ival = PyLong_AsSsize_t(iobj);
-            Py_DECREF(iobj);
+        PyValue iobj = _PyValue_Index(PyValue_Borrow(args[1]));
+        if (!PyValue_IsNull(iobj)) {
+            ival = _PyValue_IntAsSsize_t(PyValue_Borrow(iobj));
+            PyValue_CLOSE(iobj);
         }
         if (ival == -1 && PyErr_Occurred()) {
             goto exit;
@@ -398,7 +442,7 @@ array_array_fromfile(PyObject *self, PyTypeObject *cls, PyObject *const *args, P
             goto exit;
         }
     }
-    return_value = array_array_fromfile_impl((arrayobject *)self, cls, f, n);
+    return_value = array_array_fromfile_impl((arrayobject *)PyValue_AsKnownObjectBorrow(self), cls, f, n);
 
 exit:
     return return_value;
@@ -411,16 +455,17 @@ PyDoc_STRVAR(array_array_tofile__doc__,
 "Write all items (as machine values) to the file object f.");
 
 #define ARRAY_ARRAY_TOFILE_METHODDEF    \
-    {"tofile", _PyCFunction_CAST(array_array_tofile), METH_METHOD|METH_FASTCALL|METH_KEYWORDS, array_array_tofile__doc__},
+    {"tofile", _PyCFunction_CAST(array_array_tofile), METH_VALUE|METH_METHOD, array_array_tofile__doc__},
 
-static PyObject *
-array_array_tofile_impl(arrayobject *self, PyTypeObject *cls, PyObject *f);
+static PyValue
+array_array_tofile_impl(arrayobject *self, PyTypeObject *cls,
+                        PyValueBorrow f);
 
-static PyObject *
-array_array_tofile(PyObject *self, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+array_array_tofile(PyValueBorrow self, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
-    PyObject *f;
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow f;
 
     if (!_PyArg_NoKwnames("tofile", kwnames)) {
         goto exit;
@@ -428,8 +473,8 @@ array_array_tofile(PyObject *self, PyTypeObject *cls, PyObject *const *args, Py_
     if (!_PyArg_CheckPositional("tofile", nargs, 1, 1)) {
         goto exit;
     }
-    f = args[0];
-    return_value = array_array_tofile_impl((arrayobject *)self, cls, f);
+    f = PyValue_Borrow(args[0]);
+    return_value = array_array_tofile_impl((arrayobject *)PyValue_AsKnownObjectBorrow(self), cls, f);
 
 exit:
     return return_value;
@@ -442,17 +487,19 @@ PyDoc_STRVAR(array_array_fromlist__doc__,
 "Append items to array from list.");
 
 #define ARRAY_ARRAY_FROMLIST_METHODDEF    \
-    {"fromlist", (PyCFunction)array_array_fromlist, METH_O, array_array_fromlist__doc__},
+    {"fromlist", _PyCFunction_CAST(array_array_fromlist), METH_VALUE|METH_O, array_array_fromlist__doc__},
 
-static PyObject *
-array_array_fromlist_impl(arrayobject *self, PyObject *list);
+static PyValue
+array_array_fromlist_impl(arrayobject *self, PyValueBorrow list);
 
-static PyObject *
-array_array_fromlist(PyObject *self, PyObject *list)
+static PyValue
+array_array_fromlist(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow list;
 
-    return_value = array_array_fromlist_impl((arrayobject *)self, list);
+    list = PyValue_Borrow(args[0]);
+    return_value = array_array_fromlist_impl((arrayobject *)PyValue_AsKnownObjectBorrow(self), list);
 
     return return_value;
 }
@@ -464,15 +511,19 @@ PyDoc_STRVAR(array_array_tolist__doc__,
 "Convert array to an ordinary list with the same items.");
 
 #define ARRAY_ARRAY_TOLIST_METHODDEF    \
-    {"tolist", (PyCFunction)array_array_tolist, METH_NOARGS, array_array_tolist__doc__},
+    {"tolist", _PyCFunction_CAST(array_array_tolist), METH_VALUE|METH_NOARGS, array_array_tolist__doc__},
 
-static PyObject *
+static PyValue
 array_array_tolist_impl(arrayobject *self);
 
-static PyObject *
-array_array_tolist(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+array_array_tolist(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return array_array_tolist_impl((arrayobject *)self);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = array_array_tolist_impl((arrayobject *)PyValue_AsKnownObjectBorrow(self));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(array_array_frombytes__doc__,
@@ -482,21 +533,25 @@ PyDoc_STRVAR(array_array_frombytes__doc__,
 "Appends items from the string, interpreting it as an array of machine values, as if it had been read from a file using the fromfile() method.");
 
 #define ARRAY_ARRAY_FROMBYTES_METHODDEF    \
-    {"frombytes", (PyCFunction)array_array_frombytes, METH_O, array_array_frombytes__doc__},
+    {"frombytes", _PyCFunction_CAST(array_array_frombytes), METH_VALUE|METH_O, array_array_frombytes__doc__},
 
-static PyObject *
+static PyValue
 array_array_frombytes_impl(arrayobject *self, Py_buffer *buffer);
 
-static PyObject *
-array_array_frombytes(PyObject *self, PyObject *arg)
+static PyValue
+array_array_frombytes(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     Py_buffer buffer = {NULL, NULL};
 
-    if (PyObject_GetBuffer(arg, &buffer, PyBUF_SIMPLE) != 0) {
+    if (!PyValue_IsObject(PyValue_Borrow(args[0]))) {
+        PyErr_Format(PyExc_TypeError, "a bytes-like object is required, not '%.100s'", PyValue_TYPE(PyValue_Borrow(args[0]))->tp_name);
         goto exit;
     }
-    return_value = array_array_frombytes_impl((arrayobject *)self, &buffer);
+    if (PyObject_GetBuffer(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])), &buffer, PyBUF_SIMPLE) != 0) {
+        goto exit;
+    }
+    return_value = array_array_frombytes_impl((arrayobject *)PyValue_AsKnownObjectBorrow(self), &buffer);
 
 exit:
     /* Cleanup for buffer */
@@ -514,15 +569,19 @@ PyDoc_STRVAR(array_array_tobytes__doc__,
 "Convert the array to an array of machine values and return the bytes representation.");
 
 #define ARRAY_ARRAY_TOBYTES_METHODDEF    \
-    {"tobytes", (PyCFunction)array_array_tobytes, METH_NOARGS, array_array_tobytes__doc__},
+    {"tobytes", _PyCFunction_CAST(array_array_tobytes), METH_VALUE|METH_NOARGS, array_array_tobytes__doc__},
 
-static PyObject *
+static PyValue
 array_array_tobytes_impl(arrayobject *self);
 
-static PyObject *
-array_array_tobytes(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+array_array_tobytes(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return array_array_tobytes_impl((arrayobject *)self);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = array_array_tobytes_impl((arrayobject *)PyValue_AsKnownObjectBorrow(self));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(array_array_fromunicode__doc__,
@@ -536,23 +595,27 @@ PyDoc_STRVAR(array_array_fromunicode__doc__,
 "data to an array of some other type.");
 
 #define ARRAY_ARRAY_FROMUNICODE_METHODDEF    \
-    {"fromunicode", (PyCFunction)array_array_fromunicode, METH_O, array_array_fromunicode__doc__},
+    {"fromunicode", _PyCFunction_CAST(array_array_fromunicode), METH_VALUE|METH_O, array_array_fromunicode__doc__},
 
-static PyObject *
+static PyValue
 array_array_fromunicode_impl(arrayobject *self, PyObject *ustr);
 
-static PyObject *
-array_array_fromunicode(PyObject *self, PyObject *arg)
+static PyValue
+array_array_fromunicode(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *ustr;
 
-    if (!PyUnicode_Check(arg)) {
-        _PyArg_BadArgument("fromunicode", "argument", "str", arg);
+    if (!PyValue_IsObject(PyValue_Borrow(args[0]))) {
+        _PyArg_BadArgumentValue("fromunicode", "argument", "str", PyValue_Borrow(args[0]));
         goto exit;
     }
-    ustr = arg;
-    return_value = array_array_fromunicode_impl((arrayobject *)self, ustr);
+    if (!PyUnicode_Check(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])))) {
+        _PyArg_BadArgument("fromunicode", "argument", "str", PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])));
+        goto exit;
+    }
+    ustr = PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0]));
+    return_value = array_array_fromunicode_impl((arrayobject *)PyValue_AsKnownObjectBorrow(self), ustr);
 
 exit:
     return return_value;
@@ -570,15 +633,19 @@ PyDoc_STRVAR(array_array_tounicode__doc__,
 "some other type.");
 
 #define ARRAY_ARRAY_TOUNICODE_METHODDEF    \
-    {"tounicode", (PyCFunction)array_array_tounicode, METH_NOARGS, array_array_tounicode__doc__},
+    {"tounicode", _PyCFunction_CAST(array_array_tounicode), METH_VALUE|METH_NOARGS, array_array_tounicode__doc__},
 
-static PyObject *
+static PyValue
 array_array_tounicode_impl(arrayobject *self);
 
-static PyObject *
-array_array_tounicode(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+array_array_tounicode(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return array_array_tounicode_impl((arrayobject *)self);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = array_array_tounicode_impl((arrayobject *)PyValue_AsKnownObjectBorrow(self));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(array_array___sizeof____doc__,
@@ -588,15 +655,19 @@ PyDoc_STRVAR(array_array___sizeof____doc__,
 "Size of the array in memory, in bytes.");
 
 #define ARRAY_ARRAY___SIZEOF___METHODDEF    \
-    {"__sizeof__", (PyCFunction)array_array___sizeof__, METH_NOARGS, array_array___sizeof____doc__},
+    {"__sizeof__", _PyCFunction_CAST(array_array___sizeof__), METH_VALUE|METH_NOARGS, array_array___sizeof____doc__},
 
-static PyObject *
+static PyValue
 array_array___sizeof___impl(arrayobject *self);
 
-static PyObject *
-array_array___sizeof__(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+array_array___sizeof__(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return array_array___sizeof___impl((arrayobject *)self);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = array_array___sizeof___impl((arrayobject *)PyValue_AsKnownObjectBorrow(self));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(array__array_reconstructor__doc__,
@@ -607,41 +678,52 @@ PyDoc_STRVAR(array__array_reconstructor__doc__,
 "Internal. Used for pickling support.");
 
 #define ARRAY__ARRAY_RECONSTRUCTOR_METHODDEF    \
-    {"_array_reconstructor", _PyCFunction_CAST(array__array_reconstructor), METH_FASTCALL, array__array_reconstructor__doc__},
+    {"_array_reconstructor", _PyCFunction_CAST(array__array_reconstructor), METH_VALUE, array__array_reconstructor__doc__},
 
-static PyObject *
+static PyValue
 array__array_reconstructor_impl(PyObject *module, PyTypeObject *arraytype,
                                 const char *typecode,
                                 enum machine_format_code mformat_code,
-                                PyObject *items);
+                                PyValueBorrow items);
 
-static PyObject *
-array__array_reconstructor(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+array__array_reconstructor(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyTypeObject *arraytype;
     const char *typecode;
     enum machine_format_code mformat_code;
-    PyObject *items;
+    PyValueBorrow items;
 
+    if (!_PyArg_NoKwnamesValue("array._array_reconstructor()", kwnames)) {
+        goto exit;
+    }
     if (!_PyArg_CheckPositional("_array_reconstructor", nargs, 4, 4)) {
         goto exit;
     }
-    arraytype = (PyTypeObject *)args[0];
-    if (!PyUnicode_Check(args[1])) {
-        _PyArg_BadArgument("_array_reconstructor", "argument 2", "str", args[1]);
+    if (!PyType_IsSubtype(PyValue_TYPE(PyValue_Borrow(args[0])), &PyType_Type)) {
+        _PyArg_BadArgumentValue("_array_reconstructor", "argument 1", (&PyType_Type)->tp_name, PyValue_Borrow(args[0]));
         goto exit;
     }
-    typecode = _PyUnicode_AsUTF8NoNUL(args[1]);
+    arraytype = (PyTypeObject *)PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0]));
+    if (!PyValue_IsObject(PyValue_Borrow(args[1]))) {
+        _PyArg_BadArgumentValue("_array_reconstructor", "argument 2", "str", PyValue_Borrow(args[1]));
+        goto exit;
+    }
+    if (!PyUnicode_Check(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[1])))) {
+        _PyArg_BadArgument("_array_reconstructor", "argument 2", "str", PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[1])));
+        goto exit;
+    }
+    typecode = _PyUnicode_AsUTF8NoNUL(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[1])));
     if (typecode == NULL) {
         goto exit;
     }
-    mformat_code = PyLong_AsInt(args[2]);
+    mformat_code = _PyValue_AsInt(PyValue_Borrow(args[2]));
     if (mformat_code == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    items = args[3];
-    return_value = array__array_reconstructor_impl(module, arraytype, typecode, mformat_code, items);
+    items = PyValue_Borrow(args[3]);
+    return_value = array__array_reconstructor_impl(PyValue_AsKnownObjectBorrow(module), arraytype, typecode, mformat_code, items);
 
 exit:
     return return_value;
@@ -654,17 +736,17 @@ PyDoc_STRVAR(array_array___reduce_ex____doc__,
 "Return state information for pickling.");
 
 #define ARRAY_ARRAY___REDUCE_EX___METHODDEF    \
-    {"__reduce_ex__", _PyCFunction_CAST(array_array___reduce_ex__), METH_METHOD|METH_FASTCALL|METH_KEYWORDS, array_array___reduce_ex____doc__},
+    {"__reduce_ex__", _PyCFunction_CAST(array_array___reduce_ex__), METH_VALUE|METH_METHOD, array_array___reduce_ex____doc__},
 
-static PyObject *
+static PyValue
 array_array___reduce_ex___impl(arrayobject *self, PyTypeObject *cls,
-                               PyObject *value);
+                               PyValueBorrow value);
 
-static PyObject *
-array_array___reduce_ex__(PyObject *self, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+array_array___reduce_ex__(PyValueBorrow self, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
-    PyObject *value;
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow value;
 
     if (!_PyArg_NoKwnames("__reduce_ex__", kwnames)) {
         goto exit;
@@ -672,8 +754,8 @@ array_array___reduce_ex__(PyObject *self, PyTypeObject *cls, PyObject *const *ar
     if (!_PyArg_CheckPositional("__reduce_ex__", nargs, 1, 1)) {
         goto exit;
     }
-    value = args[0];
-    return_value = array_array___reduce_ex___impl((arrayobject *)self, cls, value);
+    value = PyValue_Borrow(args[0]);
+    return_value = array_array___reduce_ex___impl((arrayobject *)PyValue_AsKnownObjectBorrow(self), cls, value);
 
 exit:
     return return_value;
@@ -686,19 +768,24 @@ PyDoc_STRVAR(array_arrayiterator___reduce____doc__,
 "Return state information for pickling.");
 
 #define ARRAY_ARRAYITERATOR___REDUCE___METHODDEF    \
-    {"__reduce__", _PyCFunction_CAST(array_arrayiterator___reduce__), METH_METHOD|METH_FASTCALL|METH_KEYWORDS, array_arrayiterator___reduce____doc__},
+    {"__reduce__", _PyCFunction_CAST(array_arrayiterator___reduce__), METH_VALUE|METH_METHOD, array_arrayiterator___reduce____doc__},
 
-static PyObject *
+static PyValue
 array_arrayiterator___reduce___impl(arrayiterobject *self, PyTypeObject *cls);
 
-static PyObject *
-array_arrayiterator___reduce__(PyObject *self, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+array_arrayiterator___reduce__(PyValueBorrow self, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
+    PyValue return_value = PyValue_NULL;
+
     if (nargs || (kwnames && PyTuple_GET_SIZE(kwnames))) {
         PyErr_SetString(PyExc_TypeError, "__reduce__() takes no arguments");
-        return NULL;
+        goto exit;
     }
-    return array_arrayiterator___reduce___impl((arrayiterobject *)self, cls);
+    return_value = array_arrayiterator___reduce___impl((arrayiterobject *)PyValue_AsKnownObjectBorrow(self), cls);
+
+exit:
+    return return_value;
 }
 
 PyDoc_STRVAR(array_arrayiterator___setstate____doc__,
@@ -708,18 +795,21 @@ PyDoc_STRVAR(array_arrayiterator___setstate____doc__,
 "Set state information for unpickling.");
 
 #define ARRAY_ARRAYITERATOR___SETSTATE___METHODDEF    \
-    {"__setstate__", (PyCFunction)array_arrayiterator___setstate__, METH_O, array_arrayiterator___setstate____doc__},
+    {"__setstate__", _PyCFunction_CAST(array_arrayiterator___setstate__), METH_VALUE|METH_O, array_arrayiterator___setstate____doc__},
 
-static PyObject *
-array_arrayiterator___setstate___impl(arrayiterobject *self, PyObject *state);
+static PyValue
+array_arrayiterator___setstate___impl(arrayiterobject *self,
+                                      PyValueBorrow state);
 
-static PyObject *
-array_arrayiterator___setstate__(PyObject *self, PyObject *state)
+static PyValue
+array_arrayiterator___setstate__(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow state;
 
-    return_value = array_arrayiterator___setstate___impl((arrayiterobject *)self, state);
+    state = PyValue_Borrow(args[0]);
+    return_value = array_arrayiterator___setstate___impl((arrayiterobject *)PyValue_AsKnownObjectBorrow(self), state);
 
     return return_value;
 }
-/*[clinic end generated code: output=172a9af0316afc14 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=7b5d1531618788b3 input=a9049054013a1b77]*/

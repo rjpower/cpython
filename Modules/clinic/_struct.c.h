@@ -2,14 +2,21 @@
 preserve
 [clinic start generated code]*/
 
+#ifndef Py_VALUE_CORE
+#  error "value-emission Clinic output requires Py_VALUE_CORE"
+#endif
+
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 #  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
 #  include "pycore_value.h"       // _PyValue_STATIC_IMMORTAL()
 #endif
-#include "pycore_abstract.h"      // _PyNumber_Index()
-#include "pycore_borrow.h"        // _PyBorrow_TupleItems()
-#include "pycore_modsupport.h"    // _PyArg_UnpackKeywords()
+#include "pycore_long_value.h"    // _PyValue_IntAsSsize_t()
+#include "pycore_modsupport.h"    // _PyArg_UnpackKeywordsValue()
+#include "pycore_tuple.h"         // _PyTuple_ITEMS()
+#include "pycore_value_call.h"    // METH_VALUE
+#include "pycore_value_ops.h"     // _PyValue_Index()
+#include "pycore_value_slots.h"   // _PyValue_THUNK_EXIT()
 
 PyDoc_STRVAR(Struct__doc__,
 "Struct(format)\n"
@@ -20,13 +27,13 @@ PyDoc_STRVAR(Struct__doc__,
 "Return a new Struct object which writes and reads binary data according\n"
 "to the format string.  See help(struct) for more on format strings.");
 
-static PyObject *
-Struct_impl(PyTypeObject *type, PyObject *format);
+static PyValue
+Struct_impl(PyTypeObject *type, PyValueBorrow format);
 
-static PyObject *
-Struct(PyTypeObject *type, PyObject *args, PyObject *kwargs)
+static PyValue
+Struct_value(PyTypeObject *type, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
@@ -54,25 +61,36 @@ Struct(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[1];
-    PyObject * const *fastargs;
-    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
-    PyObject *format;
+    Py_ssize_t _idx[1];
+    PyValueBorrow format;
 
-    PyObject *const *_args_items = _PyBorrow_TupleItems(args, Py_MIN(nargs, 1));
-    if (_args_items == NULL) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, _idx, 1)) {
         goto exit;
     }
-    fastargs = _PyArg_UnpackKeywords(_args_items, nargs, kwargs, NULL, &_parser,
-            /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!fastargs) {
-        goto exit;
-    }
-    format = fastargs[0];
+    format = PyValue_Borrow(args[_idx[0]]);
     return_value = Struct_impl(type, format);
 
 exit:
     return return_value;
+}
+
+Py_VALUE_ENTRY static PyObject *
+Struct(PyTypeObject *type, PyObject *args, PyObject *kwargs)
+{
+    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
+    if (kwargs == NULL || PyDict_GET_SIZE(kwargs) == 0) {
+        return _PyValue_THUNK_EXIT(Struct_value(type, _PyTuple_ITEMS(args), nargs, NULL), BOX_SITE_CALL);
+    }
+    PyObject *kwnames;
+    PyValue *window = _PyValue_StackUnpackDict(_PyThreadState_GET(),
+        _PyTuple_ITEMS(args), nargs, kwargs, &kwnames);
+    if (window == NULL) {
+        return NULL;
+    }
+    PyValue result = Struct_value(type, window, nargs, kwnames);
+    _PyValue_StackUnpackDict_Free(window, nargs, kwnames);
+    return _PyValue_THUNK_EXIT(result, BOX_SITE_CALL);
 }
 
 PyDoc_STRVAR(Struct___init____doc__,
@@ -85,10 +103,10 @@ PyDoc_STRVAR(Struct___init____doc__,
 "to the format string.  See help(struct) for more on format strings.");
 
 static int
-Struct___init___impl(PyStructObject *self, PyObject *format);
+Struct___init___impl(PyStructObject *self, PyValueBorrow format);
 
 static int
-Struct___init__(PyObject *self, PyObject *args, PyObject *kwargs)
+Struct___init___value(PyObject *self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
     int return_value = -1;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
@@ -118,25 +136,36 @@ Struct___init__(PyObject *self, PyObject *args, PyObject *kwargs)
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[1];
-    PyObject * const *fastargs;
-    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
-    PyObject *format;
+    Py_ssize_t _idx[1];
+    PyValueBorrow format;
 
-    PyObject *const *_args_items = _PyBorrow_TupleItems(args, Py_MIN(nargs, 1));
-    if (_args_items == NULL) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, _idx, 1)) {
         goto exit;
     }
-    fastargs = _PyArg_UnpackKeywords(_args_items, nargs, kwargs, NULL, &_parser,
-            /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!fastargs) {
-        goto exit;
-    }
-    format = fastargs[0];
+    format = PyValue_Borrow(args[_idx[0]]);
     return_value = Struct___init___impl((PyStructObject *)self, format);
 
 exit:
     return return_value;
+}
+
+static int
+Struct___init__(PyObject *self, PyObject *args, PyObject *kwargs)
+{
+    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
+    if (kwargs == NULL || PyDict_GET_SIZE(kwargs) == 0) {
+        return Struct___init___value(self, _PyTuple_ITEMS(args), nargs, NULL);
+    }
+    PyObject *kwnames;
+    PyValue *window = _PyValue_StackUnpackDict(_PyThreadState_GET(),
+        _PyTuple_ITEMS(args), nargs, kwargs, &kwnames);
+    if (window == NULL) {
+        return -1;
+    }
+    int result = Struct___init___value(self, window, nargs, kwnames);
+    _PyValue_StackUnpackDict_Free(window, nargs, kwnames);
+    return result;
 }
 
 PyDoc_STRVAR(Struct_unpack__doc__,
@@ -150,21 +179,25 @@ PyDoc_STRVAR(Struct_unpack__doc__,
 "format strings.");
 
 #define STRUCT_UNPACK_METHODDEF    \
-    {"unpack", (PyCFunction)Struct_unpack, METH_O, Struct_unpack__doc__},
+    {"unpack", _PyCFunction_CAST(Struct_unpack), METH_VALUE|METH_O, Struct_unpack__doc__},
 
-static PyObject *
+static PyValue
 Struct_unpack_impl(PyStructObject *self, Py_buffer *buffer);
 
-static PyObject *
-Struct_unpack(PyObject *self, PyObject *arg)
+static PyValue
+Struct_unpack(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     Py_buffer buffer = {NULL, NULL};
 
-    if (PyObject_GetBuffer(arg, &buffer, PyBUF_SIMPLE) != 0) {
+    if (!PyValue_IsObject(PyValue_Borrow(args[0]))) {
+        PyErr_Format(PyExc_TypeError, "a bytes-like object is required, not '%.100s'", PyValue_TYPE(PyValue_Borrow(args[0]))->tp_name);
         goto exit;
     }
-    return_value = Struct_unpack_impl((PyStructObject *)self, &buffer);
+    if (PyObject_GetBuffer(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])), &buffer, PyBUF_SIMPLE) != 0) {
+        goto exit;
+    }
+    return_value = Struct_unpack_impl((PyStructObject *)PyValue_AsKnownObjectBorrow(self), &buffer);
 
 exit:
     /* Cleanup for buffer */
@@ -187,16 +220,16 @@ PyDoc_STRVAR(Struct_unpack_from__doc__,
 "the buffer.  See help(struct) for more on format strings.");
 
 #define STRUCT_UNPACK_FROM_METHODDEF    \
-    {"unpack_from", _PyCFunction_CAST(Struct_unpack_from), METH_FASTCALL|METH_KEYWORDS, Struct_unpack_from__doc__},
+    {"unpack_from", _PyCFunction_CAST(Struct_unpack_from), METH_VALUE, Struct_unpack_from__doc__},
 
-static PyObject *
+static PyValue
 Struct_unpack_from_impl(PyStructObject *self, Py_buffer *buffer,
                         Py_ssize_t offset);
 
-static PyObject *
-Struct_unpack_from(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+Struct_unpack_from(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 2
@@ -224,36 +257,36 @@ Struct_unpack_from(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyOb
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[2];
-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 1;
+    Py_ssize_t _idx[2];
     Py_buffer buffer = {NULL, NULL};
     Py_ssize_t offset = 0;
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 1, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 1, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, _idx, 2)) {
         goto exit;
     }
-    if (PyObject_GetBuffer(args[0], &buffer, PyBUF_SIMPLE) != 0) {
+    if (!PyValue_IsObject(PyValue_Borrow(args[_idx[0]]))) {
+        PyErr_Format(PyExc_TypeError, "a bytes-like object is required, not '%.100s'", PyValue_TYPE(PyValue_Borrow(args[_idx[0]]))->tp_name);
         goto exit;
     }
-    if (!noptargs) {
-        goto skip_optional_pos;
+    if (PyObject_GetBuffer(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[0]])), &buffer, PyBUF_SIMPLE) != 0) {
+        goto exit;
     }
-    {
-        Py_ssize_t ival = -1;
-        PyObject *iobj = _PyNumber_Index(args[1]);
-        if (iobj != NULL) {
-            ival = PyLong_AsSsize_t(iobj);
-            Py_DECREF(iobj);
+    if (_idx[1] >= 0) {
+        {
+            Py_ssize_t ival = -1;
+            PyValue iobj = _PyValue_Index(PyValue_Borrow(args[_idx[1]]));
+            if (!PyValue_IsNull(iobj)) {
+                ival = _PyValue_IntAsSsize_t(PyValue_Borrow(iobj));
+                PyValue_CLOSE(iobj);
+            }
+            if (ival == -1 && PyErr_Occurred()) {
+                goto exit;
+            }
+            offset = ival;
         }
-        if (ival == -1 && PyErr_Occurred()) {
-            goto exit;
-        }
-        offset = ival;
     }
-skip_optional_pos:
-    return_value = Struct_unpack_from_impl((PyStructObject *)self, &buffer, offset);
+    return_value = Struct_unpack_from_impl((PyStructObject *)PyValue_AsKnownObjectBorrow(self), &buffer, offset);
 
 exit:
     /* Cleanup for buffer */
@@ -275,17 +308,19 @@ PyDoc_STRVAR(Struct_iter_unpack__doc__,
 "a multiple of the struct size.");
 
 #define STRUCT_ITER_UNPACK_METHODDEF    \
-    {"iter_unpack", (PyCFunction)Struct_iter_unpack, METH_O, Struct_iter_unpack__doc__},
+    {"iter_unpack", _PyCFunction_CAST(Struct_iter_unpack), METH_VALUE|METH_O, Struct_iter_unpack__doc__},
 
-static PyObject *
-Struct_iter_unpack_impl(PyStructObject *self, PyObject *buffer);
+static PyValue
+Struct_iter_unpack_impl(PyStructObject *self, PyValueBorrow buffer);
 
-static PyObject *
-Struct_iter_unpack(PyObject *self, PyObject *buffer)
+static PyValue
+Struct_iter_unpack(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow buffer;
 
-    return_value = Struct_iter_unpack_impl((PyStructObject *)self, buffer);
+    buffer = PyValue_Borrow(args[0]);
+    return_value = Struct_iter_unpack_impl((PyStructObject *)PyValue_AsKnownObjectBorrow(self), buffer);
 
     return return_value;
 }
@@ -301,23 +336,27 @@ PyDoc_STRVAR(Struct_pack__doc__,
 "format strings.");
 
 #define STRUCT_PACK_METHODDEF    \
-    {"pack", _PyCFunction_CAST(Struct_pack), METH_FASTCALL, Struct_pack__doc__},
+    {"pack", _PyCFunction_CAST(Struct_pack), METH_VALUE, Struct_pack__doc__},
 
-static PyObject *
-Struct_pack_impl(PyStructObject *self, PyObject * const *values,
+static PyValue
+Struct_pack_impl(PyStructObject *self, const PyValue *values,
                  Py_ssize_t values_length);
 
-static PyObject *
-Struct_pack(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+Struct_pack(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
-    PyObject * const *values;
+    PyValue return_value = PyValue_NULL;
+    const PyValue *values;
     Py_ssize_t values_length;
 
+    if (!_PyArg_NoKwnamesValue("Struct.pack()", kwnames)) {
+        goto exit;
+    }
     values = args;
     values_length = nargs;
-    return_value = Struct_pack_impl((PyStructObject *)self, values, values_length);
+    return_value = Struct_pack_impl((PyStructObject *)PyValue_AsKnownObjectBorrow(self), values, values_length);
 
+exit:
     return return_value;
 }
 
@@ -334,35 +373,42 @@ PyDoc_STRVAR(Struct_pack_into__doc__,
 "more on format strings.");
 
 #define STRUCT_PACK_INTO_METHODDEF    \
-    {"pack_into", _PyCFunction_CAST(Struct_pack_into), METH_FASTCALL, Struct_pack_into__doc__},
+    {"pack_into", _PyCFunction_CAST(Struct_pack_into), METH_VALUE, Struct_pack_into__doc__},
 
-static PyObject *
+static PyValue
 Struct_pack_into_impl(PyStructObject *self, Py_buffer *buffer,
-                      Py_ssize_t offset, PyObject * const *values,
+                      Py_ssize_t offset, const PyValue *values,
                       Py_ssize_t values_length);
 
-static PyObject *
-Struct_pack_into(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+Struct_pack_into(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     Py_buffer buffer = {NULL, NULL};
     Py_ssize_t offset;
-    PyObject * const *values;
+    const PyValue *values;
     Py_ssize_t values_length;
 
+    if (!_PyArg_NoKwnamesValue("Struct.pack_into()", kwnames)) {
+        goto exit;
+    }
     if (!_PyArg_CheckPositional("pack_into", nargs, 2, PY_SSIZE_T_MAX)) {
         goto exit;
     }
-    if (PyObject_GetBuffer(args[0], &buffer, PyBUF_WRITABLE) < 0) {
-        _PyArg_BadArgument("pack_into", "argument 1", "read-write bytes-like object", args[0]);
+    if (!PyValue_IsObject(PyValue_Borrow(args[0]))) {
+        _PyArg_BadArgumentValue("pack_into", "argument 1", "read-write bytes-like object", PyValue_Borrow(args[0]));
+        goto exit;
+    }
+    if (PyObject_GetBuffer(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])), &buffer, PyBUF_WRITABLE) < 0) {
+        _PyArg_BadArgument("pack_into", "argument 1", "read-write bytes-like object", PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])));
         goto exit;
     }
     {
         Py_ssize_t ival = -1;
-        PyObject *iobj = _PyNumber_Index(args[1]);
-        if (iobj != NULL) {
-            ival = PyLong_AsSsize_t(iobj);
-            Py_DECREF(iobj);
+        PyValue iobj = _PyValue_Index(PyValue_Borrow(args[1]));
+        if (!PyValue_IsNull(iobj)) {
+            ival = _PyValue_IntAsSsize_t(PyValue_Borrow(iobj));
+            PyValue_CLOSE(iobj);
         }
         if (ival == -1 && PyErr_Occurred()) {
             goto exit;
@@ -371,7 +417,7 @@ Struct_pack_into(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
     }
     values = args + 2;
     values_length = nargs - 2;
-    return_value = Struct_pack_into_impl((PyStructObject *)self, &buffer, offset, values, values_length);
+    return_value = Struct_pack_into_impl((PyStructObject *)PyValue_AsKnownObjectBorrow(self), &buffer, offset, values, values_length);
 
 exit:
     /* Cleanup for buffer */
@@ -388,15 +434,19 @@ PyDoc_STRVAR(Struct___sizeof____doc__,
 "\n");
 
 #define STRUCT___SIZEOF___METHODDEF    \
-    {"__sizeof__", (PyCFunction)Struct___sizeof__, METH_NOARGS, Struct___sizeof____doc__},
+    {"__sizeof__", _PyCFunction_CAST(Struct___sizeof__), METH_VALUE|METH_NOARGS, Struct___sizeof____doc__},
 
-static PyObject *
+static PyValue
 Struct___sizeof___impl(PyStructObject *self);
 
-static PyObject *
-Struct___sizeof__(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+Struct___sizeof__(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return Struct___sizeof___impl((PyStructObject *)self);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = Struct___sizeof___impl((PyStructObject *)PyValue_AsKnownObjectBorrow(self));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(_clearcache__doc__,
@@ -406,15 +456,19 @@ PyDoc_STRVAR(_clearcache__doc__,
 "Clear the internal cache.");
 
 #define _CLEARCACHE_METHODDEF    \
-    {"_clearcache", (PyCFunction)_clearcache, METH_NOARGS, _clearcache__doc__},
+    {"_clearcache", _PyCFunction_CAST(_clearcache), METH_VALUE|METH_NOARGS, _clearcache__doc__},
 
-static PyObject *
+static PyValue
 _clearcache_impl(PyObject *module);
 
-static PyObject *
-_clearcache(PyObject *module, PyObject *Py_UNUSED(ignored))
+static PyValue
+_clearcache(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _clearcache_impl(module);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _clearcache_impl(PyValue_AsKnownObjectBorrow(module));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(calcsize__doc__,
@@ -424,26 +478,26 @@ PyDoc_STRVAR(calcsize__doc__,
 "Return size in bytes of the struct described by the format string.");
 
 #define CALCSIZE_METHODDEF    \
-    {"calcsize", (PyCFunction)calcsize, METH_O, calcsize__doc__},
+    {"calcsize", _PyCFunction_CAST(calcsize), METH_VALUE|METH_O, calcsize__doc__},
 
 static Py_ssize_t
 calcsize_impl(PyObject *module, PyStructObject *s_object);
 
-static PyObject *
-calcsize(PyObject *module, PyObject *arg)
+static PyValue
+calcsize(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyStructObject *s_object = NULL;
     Py_ssize_t _return_value;
 
-    if (!cache_struct_converter(module, arg, &s_object)) {
+    if (!cache_struct_converter(module, PyValue_Borrow(args[0]), &s_object)) {
         goto exit;
     }
-    _return_value = calcsize_impl(module, s_object);
+    _return_value = calcsize_impl(PyValue_AsKnownObjectBorrow(module), s_object);
     if ((_return_value == -1) && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = PyLong_FromSsize_t(_return_value);
+    return_value = PyValue_FromInt64((int64_t)_return_value);
 
 exit:
     /* Cleanup for s_object */
@@ -462,29 +516,32 @@ PyDoc_STRVAR(pack__doc__,
 "to the format string.  See help(struct) for more on format strings.");
 
 #define PACK_METHODDEF    \
-    {"pack", _PyCFunction_CAST(pack), METH_FASTCALL, pack__doc__},
+    {"pack", _PyCFunction_CAST(pack), METH_VALUE, pack__doc__},
 
-static PyObject *
-pack_impl(PyObject *module, PyStructObject *s_object,
-          PyObject * const *values, Py_ssize_t values_length);
+static PyValue
+pack_impl(PyObject *module, PyStructObject *s_object, const PyValue *values,
+          Py_ssize_t values_length);
 
-static PyObject *
-pack(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+pack(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyStructObject *s_object = NULL;
-    PyObject * const *values;
+    const PyValue *values;
     Py_ssize_t values_length;
 
+    if (!_PyArg_NoKwnamesValue("pack()", kwnames)) {
+        goto exit;
+    }
     if (!_PyArg_CheckPositional("pack", nargs, 1, PY_SSIZE_T_MAX)) {
         goto exit;
     }
-    if (!cache_struct_converter(module, args[0], &s_object)) {
+    if (!cache_struct_converter(module, PyValue_Borrow(args[0]), &s_object)) {
         goto exit;
     }
     values = args + 1;
     values_length = nargs - 1;
-    return_value = pack_impl(module, s_object, values, values_length);
+    return_value = pack_impl(PyValue_AsKnownObjectBorrow(module), s_object, values, values_length);
 
 exit:
     /* Cleanup for s_object */
@@ -505,39 +562,46 @@ PyDoc_STRVAR(pack_into__doc__,
 "the buffer.  See help(struct) for more on format strings.");
 
 #define PACK_INTO_METHODDEF    \
-    {"pack_into", _PyCFunction_CAST(pack_into), METH_FASTCALL, pack_into__doc__},
+    {"pack_into", _PyCFunction_CAST(pack_into), METH_VALUE, pack_into__doc__},
 
-static PyObject *
+static PyValue
 pack_into_impl(PyObject *module, PyStructObject *s_object, Py_buffer *buffer,
-               Py_ssize_t offset, PyObject * const *values,
+               Py_ssize_t offset, const PyValue *values,
                Py_ssize_t values_length);
 
-static PyObject *
-pack_into(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+pack_into(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyStructObject *s_object = NULL;
     Py_buffer buffer = {NULL, NULL};
     Py_ssize_t offset;
-    PyObject * const *values;
+    const PyValue *values;
     Py_ssize_t values_length;
 
+    if (!_PyArg_NoKwnamesValue("pack_into()", kwnames)) {
+        goto exit;
+    }
     if (!_PyArg_CheckPositional("pack_into", nargs, 3, PY_SSIZE_T_MAX)) {
         goto exit;
     }
-    if (!cache_struct_converter(module, args[0], &s_object)) {
+    if (!cache_struct_converter(module, PyValue_Borrow(args[0]), &s_object)) {
         goto exit;
     }
-    if (PyObject_GetBuffer(args[1], &buffer, PyBUF_WRITABLE) < 0) {
-        _PyArg_BadArgument("pack_into", "argument 2", "read-write bytes-like object", args[1]);
+    if (!PyValue_IsObject(PyValue_Borrow(args[1]))) {
+        _PyArg_BadArgumentValue("pack_into", "argument 2", "read-write bytes-like object", PyValue_Borrow(args[1]));
+        goto exit;
+    }
+    if (PyObject_GetBuffer(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[1])), &buffer, PyBUF_WRITABLE) < 0) {
+        _PyArg_BadArgument("pack_into", "argument 2", "read-write bytes-like object", PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[1])));
         goto exit;
     }
     {
         Py_ssize_t ival = -1;
-        PyObject *iobj = _PyNumber_Index(args[2]);
-        if (iobj != NULL) {
-            ival = PyLong_AsSsize_t(iobj);
-            Py_DECREF(iobj);
+        PyValue iobj = _PyValue_Index(PyValue_Borrow(args[2]));
+        if (!PyValue_IsNull(iobj)) {
+            ival = _PyValue_IntAsSsize_t(PyValue_Borrow(iobj));
+            PyValue_CLOSE(iobj);
         }
         if (ival == -1 && PyErr_Occurred()) {
             goto exit;
@@ -546,7 +610,7 @@ pack_into(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
     }
     values = args + 3;
     values_length = nargs - 3;
-    return_value = pack_into_impl(module, s_object, &buffer, offset, values, values_length);
+    return_value = pack_into_impl(PyValue_AsKnownObjectBorrow(module), s_object, &buffer, offset, values, values_length);
 
 exit:
     /* Cleanup for s_object */
@@ -569,28 +633,35 @@ PyDoc_STRVAR(unpack__doc__,
 "for more on format strings.");
 
 #define UNPACK_METHODDEF    \
-    {"unpack", _PyCFunction_CAST(unpack), METH_FASTCALL, unpack__doc__},
+    {"unpack", _PyCFunction_CAST(unpack), METH_VALUE, unpack__doc__},
 
-static PyObject *
+static PyValue
 unpack_impl(PyObject *module, PyStructObject *s_object, Py_buffer *buffer);
 
-static PyObject *
-unpack(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+unpack(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyStructObject *s_object = NULL;
     Py_buffer buffer = {NULL, NULL};
 
+    if (!_PyArg_NoKwnamesValue("unpack()", kwnames)) {
+        goto exit;
+    }
     if (!_PyArg_CheckPositional("unpack", nargs, 2, 2)) {
         goto exit;
     }
-    if (!cache_struct_converter(module, args[0], &s_object)) {
+    if (!cache_struct_converter(module, PyValue_Borrow(args[0]), &s_object)) {
         goto exit;
     }
-    if (PyObject_GetBuffer(args[1], &buffer, PyBUF_SIMPLE) != 0) {
+    if (!PyValue_IsObject(PyValue_Borrow(args[1]))) {
+        PyErr_Format(PyExc_TypeError, "a bytes-like object is required, not '%.100s'", PyValue_TYPE(PyValue_Borrow(args[1]))->tp_name);
         goto exit;
     }
-    return_value = unpack_impl(module, s_object, &buffer);
+    if (PyObject_GetBuffer(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[1])), &buffer, PyBUF_SIMPLE) != 0) {
+        goto exit;
+    }
+    return_value = unpack_impl(PyValue_AsKnownObjectBorrow(module), s_object, &buffer);
 
 exit:
     /* Cleanup for s_object */
@@ -614,16 +685,16 @@ PyDoc_STRVAR(unpack_from__doc__,
 "help(struct) for more on format strings.");
 
 #define UNPACK_FROM_METHODDEF    \
-    {"unpack_from", _PyCFunction_CAST(unpack_from), METH_FASTCALL|METH_KEYWORDS, unpack_from__doc__},
+    {"unpack_from", _PyCFunction_CAST(unpack_from), METH_VALUE, unpack_from__doc__},
 
-static PyObject *
+static PyValue
 unpack_from_impl(PyObject *module, PyStructObject *s_object,
                  Py_buffer *buffer, Py_ssize_t offset);
 
-static PyObject *
-unpack_from(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+unpack_from(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 2
@@ -651,40 +722,40 @@ unpack_from(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject 
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[3];
-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 2;
+    Py_ssize_t _idx[3];
     PyStructObject *s_object = NULL;
     Py_buffer buffer = {NULL, NULL};
     Py_ssize_t offset = 0;
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 2, /*maxpos*/ 3, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 2, /*maxpos*/ 3, /*minkw*/ 0, /*varpos*/ 0, _idx, 3)) {
         goto exit;
     }
-    if (!cache_struct_converter(module, args[0], &s_object)) {
+    if (!cache_struct_converter(module, PyValue_Borrow(args[_idx[0]]), &s_object)) {
         goto exit;
     }
-    if (PyObject_GetBuffer(args[1], &buffer, PyBUF_SIMPLE) != 0) {
+    if (!PyValue_IsObject(PyValue_Borrow(args[_idx[1]]))) {
+        PyErr_Format(PyExc_TypeError, "a bytes-like object is required, not '%.100s'", PyValue_TYPE(PyValue_Borrow(args[_idx[1]]))->tp_name);
         goto exit;
     }
-    if (!noptargs) {
-        goto skip_optional_pos;
+    if (PyObject_GetBuffer(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[1]])), &buffer, PyBUF_SIMPLE) != 0) {
+        goto exit;
     }
-    {
-        Py_ssize_t ival = -1;
-        PyObject *iobj = _PyNumber_Index(args[2]);
-        if (iobj != NULL) {
-            ival = PyLong_AsSsize_t(iobj);
-            Py_DECREF(iobj);
+    if (_idx[2] >= 0) {
+        {
+            Py_ssize_t ival = -1;
+            PyValue iobj = _PyValue_Index(PyValue_Borrow(args[_idx[2]]));
+            if (!PyValue_IsNull(iobj)) {
+                ival = _PyValue_IntAsSsize_t(PyValue_Borrow(iobj));
+                PyValue_CLOSE(iobj);
+            }
+            if (ival == -1 && PyErr_Occurred()) {
+                goto exit;
+            }
+            offset = ival;
         }
-        if (ival == -1 && PyErr_Occurred()) {
-            goto exit;
-        }
-        offset = ival;
     }
-skip_optional_pos:
-    return_value = unpack_from_impl(module, s_object, &buffer, offset);
+    return_value = unpack_from_impl(PyValue_AsKnownObjectBorrow(module), s_object, &buffer, offset);
 
 exit:
     /* Cleanup for s_object */
@@ -708,27 +779,30 @@ PyDoc_STRVAR(iter_unpack__doc__,
 "a multiple of calcsize(format).");
 
 #define ITER_UNPACK_METHODDEF    \
-    {"iter_unpack", _PyCFunction_CAST(iter_unpack), METH_FASTCALL, iter_unpack__doc__},
+    {"iter_unpack", _PyCFunction_CAST(iter_unpack), METH_VALUE, iter_unpack__doc__},
 
-static PyObject *
+static PyValue
 iter_unpack_impl(PyObject *module, PyStructObject *s_object,
-                 PyObject *buffer);
+                 PyValueBorrow buffer);
 
-static PyObject *
-iter_unpack(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+iter_unpack(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyStructObject *s_object = NULL;
-    PyObject *buffer;
+    PyValueBorrow buffer;
 
+    if (!_PyArg_NoKwnamesValue("iter_unpack()", kwnames)) {
+        goto exit;
+    }
     if (!_PyArg_CheckPositional("iter_unpack", nargs, 2, 2)) {
         goto exit;
     }
-    if (!cache_struct_converter(module, args[0], &s_object)) {
+    if (!cache_struct_converter(module, PyValue_Borrow(args[0]), &s_object)) {
         goto exit;
     }
-    buffer = args[1];
-    return_value = iter_unpack_impl(module, s_object, buffer);
+    buffer = PyValue_Borrow(args[1]);
+    return_value = iter_unpack_impl(PyValue_AsKnownObjectBorrow(module), s_object, buffer);
 
 exit:
     /* Cleanup for s_object */
@@ -736,4 +810,4 @@ exit:
 
     return return_value;
 }
-/*[clinic end generated code: output=54c026bb6e3c9a39 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=74d1192a5639567f input=a9049054013a1b77]*/

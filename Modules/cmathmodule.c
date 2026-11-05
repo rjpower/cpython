@@ -6,9 +6,11 @@
 #  define Py_BUILD_CORE_MODULE 1
 #endif
 
+#define Py_VALUE_CORE 1
 #include "Python.h"
 #include "pycore_complexobject.h" // _Py_c_neg()
 #include "pycore_pymath.h"        // _PY_SHORT_FLOAT_REPR
+#include "pycore_value_slots.h"// _PyValue_FromObjectResult()
 /* we need DBL_MAX, DBL_MIN, DBL_EPSILON, DBL_MANT_DIG and FLT_RADIX from
    float.h.  We assume that FLT_RADIX is either 2 or 16. */
 #include <float.h>
@@ -17,6 +19,11 @@
 #include "_math.h"
 
 #include "clinic/cmathmodule.c.h"
+/*[clinic input]
+value_emission
+[clinic start generated code]*/
+/*[clinic end generated code: output=da39a3ee5e6b4b0d input=eb7b17088bfd7215]*/
+
 /*[clinic input]
 module cmath
 [clinic start generated code]*/
@@ -43,11 +50,12 @@ else if (errno == ERANGE) {
     goto exit;
 }
 else {
-    return_value = PyComplex_FromCComplex(_return_value);
+    return_value = %s;
 }
-""".strip())
+""".strip() % ("_PyValue_FromObjectResult(PyComplex_FromCComplex(_return_value))"
+               if data.value_emission else "PyComplex_FromCComplex(_return_value)"))
 [python start generated code]*/
-/*[python end generated code: output=da39a3ee5e6b4b0d input=8b27adb674c08321]*/
+/*[python end generated code: output=da39a3ee5e6b4b0d input=14f2dea3334820db]*/
 
 #if (FLT_RADIX != 2 && FLT_RADIX != 16)
 #error "Modules/cmathmodule.c expects FLT_RADIX to be 2 or 16"
@@ -952,25 +960,30 @@ If the base is not specified, returns the natural logarithm (base e)
 of z.
 [clinic start generated code]*/
 
-static PyObject *
-cmath_log_impl(PyObject *module, Py_complex x, PyObject *y_obj)
-/*[clinic end generated code: output=4effdb7d258e0d94 input=eb25de0757baf4a0]*/
+static PyValue
+cmath_log_impl(PyObject *module, Py_complex x, PyValueBorrow y_obj)
+/*[clinic end generated code: output=e5cd9e2307f2ccb2 input=eb25de0757baf4a0]*/
 {
     Py_complex y;
 
     errno = 0;
     x = c_log(x);
-    if (y_obj != NULL) {
-        y = PyComplex_AsCComplex(y_obj);
+    if (!PyValue_IsNull(y_obj)) {
+        PyObject *y_boxed = _PyValue_AsObjectAt(y_obj, BOX_SITE_PARSER);
+        if (y_boxed == NULL) {
+            return PyValue_NULL;
+        }
+        y = PyComplex_AsCComplex(y_boxed);
+        Py_DECREF(y_boxed);
         if (PyErr_Occurred()) {
-            return NULL;
+            return PyValue_NULL;
         }
         y = c_log(y);
         x = _Py_c_quot(x, y);
     }
     if (errno != 0)
-        return math_error();
-    return PyComplex_FromCComplex(x);
+        return _PyValue_FromObjectResult(math_error());
+    return _PyValue_FromObjectResult(PyComplex_FromCComplex(x));
 }
 
 
@@ -998,18 +1011,18 @@ cmath.phase
 Return argument, also known as the phase angle, of a complex.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 cmath_phase_impl(PyObject *module, Py_complex z)
-/*[clinic end generated code: output=50725086a7bfd253 input=5cf75228ba94b69d]*/
+/*[clinic end generated code: output=aa6472ad1c2be313 input=5cf75228ba94b69d]*/
 {
     double phi;
 
     errno = 0;
     phi = atan2(z.imag, z.real); /* should not cause any exception */
     if (errno != 0)
-        return math_error();
+        return _PyValue_FromObjectResult(math_error());
     else
-        return PyFloat_FromDouble(phi);
+        return PyValue_FromDouble(phi);
 }
 
 /*[clinic input]
@@ -1023,9 +1036,9 @@ Convert a complex from rectangular coordinates to polar coordinates.
 r is the distance from 0 and phi the phase angle.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 cmath_polar_impl(PyObject *module, Py_complex z)
-/*[clinic end generated code: output=d0a8147c41dbb654 input=26c353574fd1a861]*/
+/*[clinic end generated code: output=5c0778b3412d1f94 input=26c353574fd1a861]*/
 {
     double r, phi;
 
@@ -1033,9 +1046,9 @@ cmath_polar_impl(PyObject *module, Py_complex z)
     errno = 0;
     r = _Py_c_abs(z); /* sets errno to ERANGE on overflow */
     if (errno != 0)
-        return math_error();
+        return _PyValue_FromObjectResult(math_error());
     else
-        return Py_BuildValue("dd", r, phi);
+        return _PyValue_FromObjectResult(Py_BuildValue("dd", r, phi));
 }
 
 /*
@@ -1125,11 +1138,11 @@ cmath.isfinite = cmath.polar
 Return True if both the real and imaginary parts of z are finite, else False.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 cmath_isfinite_impl(PyObject *module, Py_complex z)
-/*[clinic end generated code: output=ac76611e2c774a36 input=e224f5c36d94f5da]*/
+/*[clinic end generated code: output=508226779399b68b input=e224f5c36d94f5da]*/
 {
-    return PyBool_FromLong(isfinite(z.real) && isfinite(z.imag));
+    return PyValue_FromBool(isfinite(z.real) && isfinite(z.imag));
 }
 
 /*[clinic input]
@@ -1138,11 +1151,11 @@ cmath.isnan = cmath.polar
 Checks if the real or imaginary part of z not a number (NaN).
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 cmath_isnan_impl(PyObject *module, Py_complex z)
-/*[clinic end generated code: output=e7abf6e0b28beab7 input=71799f5d284c9baf]*/
+/*[clinic end generated code: output=5fc4652d6c3fabfe input=71799f5d284c9baf]*/
 {
-    return PyBool_FromLong(isnan(z.real) || isnan(z.imag));
+    return PyValue_FromBool(isnan(z.real) || isnan(z.imag));
 }
 
 /*[clinic input]
@@ -1151,11 +1164,11 @@ cmath.isinf = cmath.polar
 Checks if the real or imaginary part of z is infinite.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 cmath_isinf_impl(PyObject *module, Py_complex z)
-/*[clinic end generated code: output=502a75a79c773469 input=363df155c7181329]*/
+/*[clinic end generated code: output=6355c2e2279c24c9 input=363df155c7181329]*/
 {
-    return PyBool_FromLong(isinf(z.real) || isinf(z.imag));
+    return PyValue_FromBool(isinf(z.real) || isinf(z.imag));
 }
 
 /*[clinic input]

@@ -1039,6 +1039,9 @@ THUNK_FILES = (
     # The legacy trace handlers and the branch handler of sys.monitoring
     # are value-vectorcall types of their own.
     "Python/instrumentation.c", "Python/legacy_tracing.c",
+    # functools.partial is a value-vectorcall type: its instances store the
+    # value call beside the object thunk.
+    "Modules/_functoolsmodule.c",
 )
 FUNCTION_VECTORCALL_FILES = (
     "Objects/call.c", "Objects/funcobject.c", "Python/bytecodes.c",

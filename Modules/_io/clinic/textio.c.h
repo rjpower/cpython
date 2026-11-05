@@ -2,16 +2,22 @@
 preserve
 [clinic start generated code]*/
 
+#ifndef Py_VALUE_CORE
+#  error "value-emission Clinic output requires Py_VALUE_CORE"
+#endif
+
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 #  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
 #  include "pycore_value.h"       // _PyValue_STATIC_IMMORTAL()
 #endif
-#include "pycore_abstract.h"      // _Py_convert_optional_to_ssize_t()
-#include "pycore_borrow.h"        // _PyBorrow_TupleItems()
 #include "pycore_critical_section.h"// Py_BEGIN_CRITICAL_SECTION()
-#include "pycore_modsupport.h"    // _PyArg_CheckPositional()
+#include "pycore_long_value.h"    // _PyValue_AsInt()
+#include "pycore_modsupport.h"    // _PyArg_NoKwnames()
+#include "pycore_tuple.h"         // _PyTuple_ITEMS()
 #include "pycore_unicodeobject.h" // _PyUnicode_AsUTF8NoNUL()
+#include "pycore_value_call.h"    // METH_VALUE
+#include "pycore_value_ops.h"     // _PyValue_IsTrue()
 
 PyDoc_STRVAR(_io__TextIOBase_detach__doc__,
 "detach($self, /)\n"
@@ -23,19 +29,24 @@ PyDoc_STRVAR(_io__TextIOBase_detach__doc__,
 "an unusable state.");
 
 #define _IO__TEXTIOBASE_DETACH_METHODDEF    \
-    {"detach", _PyCFunction_CAST(_io__TextIOBase_detach), METH_METHOD|METH_FASTCALL|METH_KEYWORDS, _io__TextIOBase_detach__doc__},
+    {"detach", _PyCFunction_CAST(_io__TextIOBase_detach), METH_VALUE|METH_METHOD, _io__TextIOBase_detach__doc__},
 
-static PyObject *
+static PyValue
 _io__TextIOBase_detach_impl(PyObject *self, PyTypeObject *cls);
 
-static PyObject *
-_io__TextIOBase_detach(PyObject *self, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_io__TextIOBase_detach(PyValueBorrow self, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
+    PyValue return_value = PyValue_NULL;
+
     if (nargs || (kwnames && PyTuple_GET_SIZE(kwnames))) {
         PyErr_SetString(PyExc_TypeError, "detach() takes no arguments");
-        return NULL;
+        goto exit;
     }
-    return _io__TextIOBase_detach_impl(self, cls);
+    return_value = _io__TextIOBase_detach_impl(PyValue_AsKnownObjectBorrow(self), cls);
+
+exit:
+    return return_value;
 }
 
 PyDoc_STRVAR(_io__TextIOBase_read__doc__,
@@ -48,16 +59,16 @@ PyDoc_STRVAR(_io__TextIOBase_read__doc__,
 "EOF.  If size is negative or omitted, read until EOF.");
 
 #define _IO__TEXTIOBASE_READ_METHODDEF    \
-    {"read", _PyCFunction_CAST(_io__TextIOBase_read), METH_METHOD|METH_FASTCALL|METH_KEYWORDS, _io__TextIOBase_read__doc__},
+    {"read", _PyCFunction_CAST(_io__TextIOBase_read), METH_VALUE|METH_METHOD, _io__TextIOBase_read__doc__},
 
-static PyObject *
+static PyValue
 _io__TextIOBase_read_impl(PyObject *self, PyTypeObject *cls,
                           int Py_UNUSED(size));
 
-static PyObject *
-_io__TextIOBase_read(PyObject *self, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_io__TextIOBase_read(PyValueBorrow self, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int size = -1;
 
     if (!_PyArg_NoKwnames("read", kwnames)) {
@@ -69,12 +80,12 @@ _io__TextIOBase_read(PyObject *self, PyTypeObject *cls, PyObject *const *args, P
     if (nargs < 1) {
         goto skip_optional;
     }
-    size = PyLong_AsInt(args[0]);
+    size = _PyValue_AsInt(PyValue_Borrow(args[0]));
     if (size == -1 && PyErr_Occurred()) {
         goto exit;
     }
 skip_optional:
-    return_value = _io__TextIOBase_read_impl(self, cls, size);
+    return_value = _io__TextIOBase_read_impl(PyValue_AsKnownObjectBorrow(self), cls, size);
 
 exit:
     return return_value;
@@ -90,16 +101,16 @@ PyDoc_STRVAR(_io__TextIOBase_readline__doc__,
 "If size is specified, at most size characters will be read.");
 
 #define _IO__TEXTIOBASE_READLINE_METHODDEF    \
-    {"readline", _PyCFunction_CAST(_io__TextIOBase_readline), METH_METHOD|METH_FASTCALL|METH_KEYWORDS, _io__TextIOBase_readline__doc__},
+    {"readline", _PyCFunction_CAST(_io__TextIOBase_readline), METH_VALUE|METH_METHOD, _io__TextIOBase_readline__doc__},
 
-static PyObject *
+static PyValue
 _io__TextIOBase_readline_impl(PyObject *self, PyTypeObject *cls,
                               int Py_UNUSED(size));
 
-static PyObject *
-_io__TextIOBase_readline(PyObject *self, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_io__TextIOBase_readline(PyValueBorrow self, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int size = -1;
 
     if (!_PyArg_NoKwnames("readline", kwnames)) {
@@ -111,12 +122,12 @@ _io__TextIOBase_readline(PyObject *self, PyTypeObject *cls, PyObject *const *arg
     if (nargs < 1) {
         goto skip_optional;
     }
-    size = PyLong_AsInt(args[0]);
+    size = _PyValue_AsInt(PyValue_Borrow(args[0]));
     if (size == -1 && PyErr_Occurred()) {
         goto exit;
     }
 skip_optional:
-    return_value = _io__TextIOBase_readline_impl(self, cls, size);
+    return_value = _io__TextIOBase_readline_impl(PyValue_AsKnownObjectBorrow(self), cls, size);
 
 exit:
     return return_value;
@@ -132,16 +143,16 @@ PyDoc_STRVAR(_io__TextIOBase_write__doc__,
 "(which is always equal to the length of the string).");
 
 #define _IO__TEXTIOBASE_WRITE_METHODDEF    \
-    {"write", _PyCFunction_CAST(_io__TextIOBase_write), METH_METHOD|METH_FASTCALL|METH_KEYWORDS, _io__TextIOBase_write__doc__},
+    {"write", _PyCFunction_CAST(_io__TextIOBase_write), METH_VALUE|METH_METHOD, _io__TextIOBase_write__doc__},
 
-static PyObject *
+static PyValue
 _io__TextIOBase_write_impl(PyObject *self, PyTypeObject *cls,
                            const char *Py_UNUSED(s));
 
-static PyObject *
-_io__TextIOBase_write(PyObject *self, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_io__TextIOBase_write(PyValueBorrow self, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     const char *s;
 
     if (!_PyArg_NoKwnames("write", kwnames)) {
@@ -150,15 +161,19 @@ _io__TextIOBase_write(PyObject *self, PyTypeObject *cls, PyObject *const *args, 
     if (!_PyArg_CheckPositional("write", nargs, 1, 1)) {
         goto exit;
     }
-    if (!PyUnicode_Check(args[0])) {
-        _PyArg_BadArgument("write", "argument 1", "str", args[0]);
+    if (!PyValue_IsObject(PyValue_Borrow(args[0]))) {
+        _PyArg_BadArgumentValue("write", "argument 1", "str", PyValue_Borrow(args[0]));
         goto exit;
     }
-    s = _PyUnicode_AsUTF8NoNUL(args[0]);
+    if (!PyUnicode_Check(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])))) {
+        _PyArg_BadArgument("write", "argument 1", "str", PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])));
+        goto exit;
+    }
+    s = _PyUnicode_AsUTF8NoNUL(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])));
     if (s == NULL) {
         goto exit;
     }
-    return_value = _io__TextIOBase_write_impl(self, cls, s);
+    return_value = _io__TextIOBase_write_impl(PyValue_AsKnownObjectBorrow(self), cls, s);
 
 exit:
     return return_value;
@@ -223,11 +238,12 @@ PyDoc_STRVAR(_io_IncrementalNewlineDecoder___init____doc__,
 
 static int
 _io_IncrementalNewlineDecoder___init___impl(nldecoder_object *self,
-                                            PyObject *decoder, int translate,
-                                            PyObject *errors);
+                                            PyValueBorrow decoder,
+                                            int translate,
+                                            PyValueBorrow errors);
 
 static int
-_io_IncrementalNewlineDecoder___init__(PyObject *self, PyObject *args, PyObject *kwargs)
+_io_IncrementalNewlineDecoder___init___value(PyObject *self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
     int return_value = -1;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
@@ -257,37 +273,45 @@ _io_IncrementalNewlineDecoder___init__(PyObject *self, PyObject *args, PyObject 
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[3];
-    PyObject * const *fastargs;
-    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
-    Py_ssize_t noptargs = nargs + (kwargs ? PyDict_GET_SIZE(kwargs) : 0) - 2;
-    PyObject *decoder;
+    Py_ssize_t _idx[3];
+    PyValueBorrow decoder;
     int translate;
-    PyObject *errors = NULL;
+    PyValueBorrow errors = PyValue_Borrow(PyValue_NULL);
 
-    PyObject *const *_args_items = _PyBorrow_TupleItems(args, Py_MIN(nargs, 3));
-    if (_args_items == NULL) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 2, /*maxpos*/ 3, /*minkw*/ 0, /*varpos*/ 0, _idx, 3)) {
         goto exit;
     }
-    fastargs = _PyArg_UnpackKeywords(_args_items, nargs, kwargs, NULL, &_parser,
-            /*minpos*/ 2, /*maxpos*/ 3, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!fastargs) {
-        goto exit;
-    }
-    decoder = fastargs[0];
-    translate = PyObject_IsTrue(fastargs[1]);
+    decoder = PyValue_Borrow(args[_idx[0]]);
+    translate = _PyValue_IsTrue(PyValue_Borrow(args[_idx[1]]));
     if (translate < 0) {
         goto exit;
     }
-    if (!noptargs) {
-        goto skip_optional_pos;
+    if (_idx[2] >= 0) {
+        errors = PyValue_Borrow(args[_idx[2]]);
     }
-    errors = fastargs[2];
-skip_optional_pos:
     return_value = _io_IncrementalNewlineDecoder___init___impl((nldecoder_object *)self, decoder, translate, errors);
 
 exit:
     return return_value;
+}
+
+static int
+_io_IncrementalNewlineDecoder___init__(PyObject *self, PyObject *args, PyObject *kwargs)
+{
+    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
+    if (kwargs == NULL || PyDict_GET_SIZE(kwargs) == 0) {
+        return _io_IncrementalNewlineDecoder___init___value(self, _PyTuple_ITEMS(args), nargs, NULL);
+    }
+    PyObject *kwnames;
+    PyValue *window = _PyValue_StackUnpackDict(_PyThreadState_GET(),
+        _PyTuple_ITEMS(args), nargs, kwargs, &kwnames);
+    if (window == NULL) {
+        return -1;
+    }
+    int result = _io_IncrementalNewlineDecoder___init___value(self, window, nargs, kwnames);
+    _PyValue_StackUnpackDict_Free(window, nargs, kwnames);
+    return result;
 }
 
 PyDoc_STRVAR(_io_IncrementalNewlineDecoder_decode__doc__,
@@ -296,16 +320,16 @@ PyDoc_STRVAR(_io_IncrementalNewlineDecoder_decode__doc__,
 "\n");
 
 #define _IO_INCREMENTALNEWLINEDECODER_DECODE_METHODDEF    \
-    {"decode", _PyCFunction_CAST(_io_IncrementalNewlineDecoder_decode), METH_FASTCALL|METH_KEYWORDS, _io_IncrementalNewlineDecoder_decode__doc__},
+    {"decode", _PyCFunction_CAST(_io_IncrementalNewlineDecoder_decode), METH_VALUE, _io_IncrementalNewlineDecoder_decode__doc__},
 
-static PyObject *
+static PyValue
 _io_IncrementalNewlineDecoder_decode_impl(nldecoder_object *self,
-                                          PyObject *input, int final);
+                                          PyValueBorrow input, int final);
 
-static PyObject *
-_io_IncrementalNewlineDecoder_decode(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_io_IncrementalNewlineDecoder_decode(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 2
@@ -333,27 +357,23 @@ _io_IncrementalNewlineDecoder_decode(PyObject *self, PyObject *const *args, Py_s
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[2];
-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 1;
-    PyObject *input;
+    Py_ssize_t _idx[2];
+    PyValueBorrow input;
     int final = 0;
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 1, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 1, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, _idx, 2)) {
         goto exit;
     }
-    input = args[0];
-    if (!noptargs) {
-        goto skip_optional_pos;
+    input = PyValue_Borrow(args[_idx[0]]);
+    if (_idx[1] >= 0) {
+        final = _PyValue_IsTrue(PyValue_Borrow(args[_idx[1]]));
+        if (final < 0) {
+            goto exit;
+        }
     }
-    final = PyObject_IsTrue(args[1]);
-    if (final < 0) {
-        goto exit;
-    }
-skip_optional_pos:
-    Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = _io_IncrementalNewlineDecoder_decode_impl((nldecoder_object *)self, input, final);
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(self));
+    return_value = _io_IncrementalNewlineDecoder_decode_impl((nldecoder_object *)PyValue_AsKnownObjectBorrow(self), input, final);
     Py_END_CRITICAL_SECTION();
 
 exit:
@@ -366,18 +386,18 @@ PyDoc_STRVAR(_io_IncrementalNewlineDecoder_getstate__doc__,
 "\n");
 
 #define _IO_INCREMENTALNEWLINEDECODER_GETSTATE_METHODDEF    \
-    {"getstate", (PyCFunction)_io_IncrementalNewlineDecoder_getstate, METH_NOARGS, _io_IncrementalNewlineDecoder_getstate__doc__},
+    {"getstate", _PyCFunction_CAST(_io_IncrementalNewlineDecoder_getstate), METH_VALUE|METH_NOARGS, _io_IncrementalNewlineDecoder_getstate__doc__},
 
-static PyObject *
+static PyValue
 _io_IncrementalNewlineDecoder_getstate_impl(nldecoder_object *self);
 
-static PyObject *
-_io_IncrementalNewlineDecoder_getstate(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+_io_IncrementalNewlineDecoder_getstate(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
 
-    Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = _io_IncrementalNewlineDecoder_getstate_impl((nldecoder_object *)self);
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(self));
+    return_value = _io_IncrementalNewlineDecoder_getstate_impl((nldecoder_object *)PyValue_AsKnownObjectBorrow(self));
     Py_END_CRITICAL_SECTION();
 
     return return_value;
@@ -389,19 +409,21 @@ PyDoc_STRVAR(_io_IncrementalNewlineDecoder_setstate__doc__,
 "\n");
 
 #define _IO_INCREMENTALNEWLINEDECODER_SETSTATE_METHODDEF    \
-    {"setstate", (PyCFunction)_io_IncrementalNewlineDecoder_setstate, METH_O, _io_IncrementalNewlineDecoder_setstate__doc__},
+    {"setstate", _PyCFunction_CAST(_io_IncrementalNewlineDecoder_setstate), METH_VALUE|METH_O, _io_IncrementalNewlineDecoder_setstate__doc__},
 
-static PyObject *
+static PyValue
 _io_IncrementalNewlineDecoder_setstate_impl(nldecoder_object *self,
-                                            PyObject *state);
+                                            PyValueBorrow state);
 
-static PyObject *
-_io_IncrementalNewlineDecoder_setstate(PyObject *self, PyObject *state)
+static PyValue
+_io_IncrementalNewlineDecoder_setstate(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow state;
 
-    Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = _io_IncrementalNewlineDecoder_setstate_impl((nldecoder_object *)self, state);
+    state = PyValue_Borrow(args[0]);
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(self));
+    return_value = _io_IncrementalNewlineDecoder_setstate_impl((nldecoder_object *)PyValue_AsKnownObjectBorrow(self), state);
     Py_END_CRITICAL_SECTION();
 
     return return_value;
@@ -413,18 +435,18 @@ PyDoc_STRVAR(_io_IncrementalNewlineDecoder_reset__doc__,
 "\n");
 
 #define _IO_INCREMENTALNEWLINEDECODER_RESET_METHODDEF    \
-    {"reset", (PyCFunction)_io_IncrementalNewlineDecoder_reset, METH_NOARGS, _io_IncrementalNewlineDecoder_reset__doc__},
+    {"reset", _PyCFunction_CAST(_io_IncrementalNewlineDecoder_reset), METH_VALUE|METH_NOARGS, _io_IncrementalNewlineDecoder_reset__doc__},
 
-static PyObject *
+static PyValue
 _io_IncrementalNewlineDecoder_reset_impl(nldecoder_object *self);
 
-static PyObject *
-_io_IncrementalNewlineDecoder_reset(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+_io_IncrementalNewlineDecoder_reset(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
 
-    Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = _io_IncrementalNewlineDecoder_reset_impl((nldecoder_object *)self);
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(self));
+    return_value = _io_IncrementalNewlineDecoder_reset_impl((nldecoder_object *)PyValue_AsKnownObjectBorrow(self));
     Py_END_CRITICAL_SECTION();
 
     return return_value;
@@ -474,13 +496,13 @@ PyDoc_STRVAR(_io_TextIOWrapper___init____doc__,
 "write contains a newline character.");
 
 static int
-_io_TextIOWrapper___init___impl(textio *self, PyObject *buffer,
-                                const char *encoding, PyObject *errors,
+_io_TextIOWrapper___init___impl(textio *self, PyValueBorrow buffer,
+                                const char *encoding, PyValueBorrow errors,
                                 const char *newline, int line_buffering,
                                 int write_through);
 
 static int
-_io_TextIOWrapper___init__(PyObject *self, PyObject *args, PyObject *kwargs)
+_io_TextIOWrapper___init___value(PyObject *self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
     int return_value = -1;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
@@ -510,92 +532,96 @@ _io_TextIOWrapper___init__(PyObject *self, PyObject *args, PyObject *kwargs)
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[6];
-    PyObject * const *fastargs;
-    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
-    Py_ssize_t noptargs = nargs + (kwargs ? PyDict_GET_SIZE(kwargs) : 0) - 1;
-    PyObject *buffer;
+    Py_ssize_t _idx[6];
+    PyValueBorrow buffer;
     const char *encoding = NULL;
-    PyObject *errors = Py_None;
+    PyValueBorrow errors = PyValue_Borrow(PyValue_None);
     const char *newline = NULL;
     int line_buffering = 0;
     int write_through = 0;
 
-    PyObject *const *_args_items = _PyBorrow_TupleItems(args, Py_MIN(nargs, 6));
-    if (_args_items == NULL) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 1, /*maxpos*/ 6, /*minkw*/ 0, /*varpos*/ 0, _idx, 6)) {
         goto exit;
     }
-    fastargs = _PyArg_UnpackKeywords(_args_items, nargs, kwargs, NULL, &_parser,
-            /*minpos*/ 1, /*maxpos*/ 6, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!fastargs) {
-        goto exit;
-    }
-    buffer = fastargs[0];
-    if (!noptargs) {
-        goto skip_optional_pos;
-    }
-    if (fastargs[1]) {
-        if (fastargs[1] == Py_None) {
+    buffer = PyValue_Borrow(args[_idx[0]]);
+    if (_idx[1] >= 0) {
+        if (!PyValue_IsObject(PyValue_Borrow(args[_idx[1]]))) {
+            _PyArg_BadArgumentValue("TextIOWrapper", "argument 'encoding'", "str or None", PyValue_Borrow(args[_idx[1]]));
+            goto exit;
+        }
+        if (PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[1]])) == Py_None) {
             encoding = NULL;
         }
-        else if (PyUnicode_Check(fastargs[1])) {
-            encoding = _PyUnicode_AsUTF8NoNUL(fastargs[1]);
+        else if (PyUnicode_Check(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[1]])))) {
+            encoding = _PyUnicode_AsUTF8NoNUL(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[1]])));
             if (encoding == NULL) {
                 goto exit;
             }
         }
         else {
-            _PyArg_BadArgument("TextIOWrapper", "argument 'encoding'", "str or None", fastargs[1]);
+            _PyArg_BadArgument("TextIOWrapper", "argument 'encoding'", "str or None", PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[1]])));
             goto exit;
         }
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
     }
-    if (fastargs[2]) {
-        errors = fastargs[2];
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
+    if (_idx[2] >= 0) {
+        errors = PyValue_Borrow(args[_idx[2]]);
     }
-    if (fastargs[3]) {
-        if (fastargs[3] == Py_None) {
+    if (_idx[3] >= 0) {
+        if (!PyValue_IsObject(PyValue_Borrow(args[_idx[3]]))) {
+            _PyArg_BadArgumentValue("TextIOWrapper", "argument 'newline'", "str or None", PyValue_Borrow(args[_idx[3]]));
+            goto exit;
+        }
+        if (PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[3]])) == Py_None) {
             newline = NULL;
         }
-        else if (PyUnicode_Check(fastargs[3])) {
-            newline = _PyUnicode_AsUTF8NoNUL(fastargs[3]);
+        else if (PyUnicode_Check(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[3]])))) {
+            newline = _PyUnicode_AsUTF8NoNUL(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[3]])));
             if (newline == NULL) {
                 goto exit;
             }
         }
         else {
-            _PyArg_BadArgument("TextIOWrapper", "argument 'newline'", "str or None", fastargs[3]);
+            _PyArg_BadArgument("TextIOWrapper", "argument 'newline'", "str or None", PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[3]])));
             goto exit;
         }
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
     }
-    if (fastargs[4]) {
-        line_buffering = PyObject_IsTrue(fastargs[4]);
+    if (_idx[4] >= 0) {
+        line_buffering = _PyValue_IsTrue(PyValue_Borrow(args[_idx[4]]));
         if (line_buffering < 0) {
             goto exit;
         }
-        if (!--noptargs) {
-            goto skip_optional_pos;
+    }
+    if (_idx[5] >= 0) {
+        write_through = _PyValue_IsTrue(PyValue_Borrow(args[_idx[5]]));
+        if (write_through < 0) {
+            goto exit;
         }
     }
-    write_through = PyObject_IsTrue(fastargs[5]);
-    if (write_through < 0) {
-        goto exit;
-    }
-skip_optional_pos:
-    Py_BEGIN_CRITICAL_SECTION(self);
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(self));
     return_value = _io_TextIOWrapper___init___impl((textio *)self, buffer, encoding, errors, newline, line_buffering, write_through);
     Py_END_CRITICAL_SECTION();
 
 exit:
     return return_value;
+}
+
+static int
+_io_TextIOWrapper___init__(PyObject *self, PyObject *args, PyObject *kwargs)
+{
+    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
+    if (kwargs == NULL || PyDict_GET_SIZE(kwargs) == 0) {
+        return _io_TextIOWrapper___init___value(self, _PyTuple_ITEMS(args), nargs, NULL);
+    }
+    PyObject *kwnames;
+    PyValue *window = _PyValue_StackUnpackDict(_PyThreadState_GET(),
+        _PyTuple_ITEMS(args), nargs, kwargs, &kwnames);
+    if (window == NULL) {
+        return -1;
+    }
+    int result = _io_TextIOWrapper___init___value(self, window, nargs, kwnames);
+    _PyValue_StackUnpackDict_Free(window, nargs, kwnames);
+    return result;
 }
 
 PyDoc_STRVAR(_io_TextIOWrapper_reconfigure__doc__,
@@ -608,18 +634,19 @@ PyDoc_STRVAR(_io_TextIOWrapper_reconfigure__doc__,
 "This also does an implicit stream flush.");
 
 #define _IO_TEXTIOWRAPPER_RECONFIGURE_METHODDEF    \
-    {"reconfigure", _PyCFunction_CAST(_io_TextIOWrapper_reconfigure), METH_FASTCALL|METH_KEYWORDS, _io_TextIOWrapper_reconfigure__doc__},
+    {"reconfigure", _PyCFunction_CAST(_io_TextIOWrapper_reconfigure), METH_VALUE, _io_TextIOWrapper_reconfigure__doc__},
 
-static PyObject *
-_io_TextIOWrapper_reconfigure_impl(textio *self, PyObject *encoding,
-                                   PyObject *errors, PyObject *newline_obj,
-                                   PyObject *line_buffering_obj,
-                                   PyObject *write_through_obj);
+static PyValue
+_io_TextIOWrapper_reconfigure_impl(textio *self, PyValueBorrow encoding,
+                                   PyValueBorrow errors,
+                                   PyValueBorrow newline_obj,
+                                   PyValueBorrow line_buffering_obj,
+                                   PyValueBorrow write_through_obj);
 
-static PyObject *
-_io_TextIOWrapper_reconfigure(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_io_TextIOWrapper_reconfigure(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 5
@@ -647,50 +674,34 @@ _io_TextIOWrapper_reconfigure(PyObject *self, PyObject *const *args, Py_ssize_t 
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[5];
-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 0;
-    PyObject *encoding = Py_None;
-    PyObject *errors = Py_None;
-    PyObject *newline_obj = NULL;
-    PyObject *line_buffering_obj = Py_None;
-    PyObject *write_through_obj = Py_None;
+    Py_ssize_t _idx[5];
+    PyValueBorrow encoding = PyValue_Borrow(PyValue_None);
+    PyValueBorrow errors = PyValue_Borrow(PyValue_None);
+    PyValueBorrow newline_obj = PyValue_Borrow(PyValue_NULL);
+    PyValueBorrow line_buffering_obj = PyValue_Borrow(PyValue_None);
+    PyValueBorrow write_through_obj = PyValue_Borrow(PyValue_None);
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 0, /*maxpos*/ 0, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 0, /*maxpos*/ 0, /*minkw*/ 0, /*varpos*/ 0, _idx, 5)) {
         goto exit;
     }
-    if (!noptargs) {
-        goto skip_optional_kwonly;
+    if (_idx[0] >= 0) {
+        encoding = PyValue_Borrow(args[_idx[0]]);
     }
-    if (args[0]) {
-        encoding = args[0];
-        if (!--noptargs) {
-            goto skip_optional_kwonly;
-        }
+    if (_idx[1] >= 0) {
+        errors = PyValue_Borrow(args[_idx[1]]);
     }
-    if (args[1]) {
-        errors = args[1];
-        if (!--noptargs) {
-            goto skip_optional_kwonly;
-        }
+    if (_idx[2] >= 0) {
+        newline_obj = PyValue_Borrow(args[_idx[2]]);
     }
-    if (args[2]) {
-        newline_obj = args[2];
-        if (!--noptargs) {
-            goto skip_optional_kwonly;
-        }
+    if (_idx[3] >= 0) {
+        line_buffering_obj = PyValue_Borrow(args[_idx[3]]);
     }
-    if (args[3]) {
-        line_buffering_obj = args[3];
-        if (!--noptargs) {
-            goto skip_optional_kwonly;
-        }
+    if (_idx[4] >= 0) {
+        write_through_obj = PyValue_Borrow(args[_idx[4]]);
     }
-    write_through_obj = args[4];
-skip_optional_kwonly:
-    Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = _io_TextIOWrapper_reconfigure_impl((textio *)self, encoding, errors, newline_obj, line_buffering_obj, write_through_obj);
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(self));
+    return_value = _io_TextIOWrapper_reconfigure_impl((textio *)PyValue_AsKnownObjectBorrow(self), encoding, errors, newline_obj, line_buffering_obj, write_through_obj);
     Py_END_CRITICAL_SECTION();
 
 exit:
@@ -703,18 +714,18 @@ PyDoc_STRVAR(_io_TextIOWrapper_detach__doc__,
 "\n");
 
 #define _IO_TEXTIOWRAPPER_DETACH_METHODDEF    \
-    {"detach", (PyCFunction)_io_TextIOWrapper_detach, METH_NOARGS, _io_TextIOWrapper_detach__doc__},
+    {"detach", _PyCFunction_CAST(_io_TextIOWrapper_detach), METH_VALUE|METH_NOARGS, _io_TextIOWrapper_detach__doc__},
 
-static PyObject *
+static PyValue
 _io_TextIOWrapper_detach_impl(textio *self);
 
-static PyObject *
-_io_TextIOWrapper_detach(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+_io_TextIOWrapper_detach(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
 
-    Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = _io_TextIOWrapper_detach_impl((textio *)self);
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(self));
+    return_value = _io_TextIOWrapper_detach_impl((textio *)PyValue_AsKnownObjectBorrow(self));
     Py_END_CRITICAL_SECTION();
 
     return return_value;
@@ -726,24 +737,28 @@ PyDoc_STRVAR(_io_TextIOWrapper_write__doc__,
 "\n");
 
 #define _IO_TEXTIOWRAPPER_WRITE_METHODDEF    \
-    {"write", (PyCFunction)_io_TextIOWrapper_write, METH_O, _io_TextIOWrapper_write__doc__},
+    {"write", _PyCFunction_CAST(_io_TextIOWrapper_write), METH_VALUE|METH_O, _io_TextIOWrapper_write__doc__},
 
-static PyObject *
+static PyValue
 _io_TextIOWrapper_write_impl(textio *self, PyObject *text);
 
-static PyObject *
-_io_TextIOWrapper_write(PyObject *self, PyObject *arg)
+static PyValue
+_io_TextIOWrapper_write(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *text;
 
-    if (!PyUnicode_Check(arg)) {
-        _PyArg_BadArgument("write", "argument", "str", arg);
+    if (!PyValue_IsObject(PyValue_Borrow(args[0]))) {
+        _PyArg_BadArgumentValue("write", "argument", "str", PyValue_Borrow(args[0]));
         goto exit;
     }
-    text = arg;
-    Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = _io_TextIOWrapper_write_impl((textio *)self, text);
+    if (!PyUnicode_Check(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])))) {
+        _PyArg_BadArgument("write", "argument", "str", PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])));
+        goto exit;
+    }
+    text = PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0]));
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(self));
+    return_value = _io_TextIOWrapper_write_impl((textio *)PyValue_AsKnownObjectBorrow(self), text);
     Py_END_CRITICAL_SECTION();
 
 exit:
@@ -756,29 +771,32 @@ PyDoc_STRVAR(_io_TextIOWrapper_read__doc__,
 "\n");
 
 #define _IO_TEXTIOWRAPPER_READ_METHODDEF    \
-    {"read", _PyCFunction_CAST(_io_TextIOWrapper_read), METH_FASTCALL, _io_TextIOWrapper_read__doc__},
+    {"read", _PyCFunction_CAST(_io_TextIOWrapper_read), METH_VALUE, _io_TextIOWrapper_read__doc__},
 
-static PyObject *
+static PyValue
 _io_TextIOWrapper_read_impl(textio *self, Py_ssize_t n);
 
-static PyObject *
-_io_TextIOWrapper_read(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_io_TextIOWrapper_read(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     Py_ssize_t n = -1;
 
+    if (!_PyArg_NoKwnamesValue("TextIOWrapper.read()", kwnames)) {
+        goto exit;
+    }
     if (!_PyArg_CheckPositional("read", nargs, 0, 1)) {
         goto exit;
     }
     if (nargs < 1) {
         goto skip_optional;
     }
-    if (!_Py_convert_optional_to_ssize_t(args[0], &n)) {
+    if (!_Py_convert_optional_to_ssize_t_value(PyValue_Borrow(args[0]), &n)) {
         goto exit;
     }
 skip_optional:
-    Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = _io_TextIOWrapper_read_impl((textio *)self, n);
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(self));
+    return_value = _io_TextIOWrapper_read_impl((textio *)PyValue_AsKnownObjectBorrow(self), n);
     Py_END_CRITICAL_SECTION();
 
 exit:
@@ -791,17 +809,20 @@ PyDoc_STRVAR(_io_TextIOWrapper_readline__doc__,
 "\n");
 
 #define _IO_TEXTIOWRAPPER_READLINE_METHODDEF    \
-    {"readline", _PyCFunction_CAST(_io_TextIOWrapper_readline), METH_FASTCALL, _io_TextIOWrapper_readline__doc__},
+    {"readline", _PyCFunction_CAST(_io_TextIOWrapper_readline), METH_VALUE, _io_TextIOWrapper_readline__doc__},
 
-static PyObject *
+static PyValue
 _io_TextIOWrapper_readline_impl(textio *self, Py_ssize_t size);
 
-static PyObject *
-_io_TextIOWrapper_readline(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_io_TextIOWrapper_readline(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     Py_ssize_t size = -1;
 
+    if (!_PyArg_NoKwnamesValue("TextIOWrapper.readline()", kwnames)) {
+        goto exit;
+    }
     if (!_PyArg_CheckPositional("readline", nargs, 0, 1)) {
         goto exit;
     }
@@ -810,10 +831,10 @@ _io_TextIOWrapper_readline(PyObject *self, PyObject *const *args, Py_ssize_t nar
     }
     {
         Py_ssize_t ival = -1;
-        PyObject *iobj = _PyNumber_Index(args[0]);
-        if (iobj != NULL) {
-            ival = PyLong_AsSsize_t(iobj);
-            Py_DECREF(iobj);
+        PyValue iobj = _PyValue_Index(PyValue_Borrow(args[0]));
+        if (!PyValue_IsNull(iobj)) {
+            ival = _PyValue_IntAsSsize_t(PyValue_Borrow(iobj));
+            PyValue_CLOSE(iobj);
         }
         if (ival == -1 && PyErr_Occurred()) {
             goto exit;
@@ -821,8 +842,8 @@ _io_TextIOWrapper_readline(PyObject *self, PyObject *const *args, Py_ssize_t nar
         size = ival;
     }
 skip_optional:
-    Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = _io_TextIOWrapper_readline_impl((textio *)self, size);
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(self));
+    return_value = _io_TextIOWrapper_readline_impl((textio *)PyValue_AsKnownObjectBorrow(self), size);
     Py_END_CRITICAL_SECTION();
 
 exit:
@@ -853,32 +874,36 @@ PyDoc_STRVAR(_io_TextIOWrapper_seek__doc__,
 "and may raise exceptions.");
 
 #define _IO_TEXTIOWRAPPER_SEEK_METHODDEF    \
-    {"seek", _PyCFunction_CAST(_io_TextIOWrapper_seek), METH_FASTCALL, _io_TextIOWrapper_seek__doc__},
+    {"seek", _PyCFunction_CAST(_io_TextIOWrapper_seek), METH_VALUE, _io_TextIOWrapper_seek__doc__},
 
-static PyObject *
-_io_TextIOWrapper_seek_impl(textio *self, PyObject *cookieObj, int whence);
+static PyValue
+_io_TextIOWrapper_seek_impl(textio *self, PyValueBorrow cookieObj,
+                            int whence);
 
-static PyObject *
-_io_TextIOWrapper_seek(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_io_TextIOWrapper_seek(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
-    PyObject *cookieObj;
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow cookieObj;
     int whence = 0;
 
+    if (!_PyArg_NoKwnamesValue("TextIOWrapper.seek()", kwnames)) {
+        goto exit;
+    }
     if (!_PyArg_CheckPositional("seek", nargs, 1, 2)) {
         goto exit;
     }
-    cookieObj = args[0];
+    cookieObj = PyValue_Borrow(args[0]);
     if (nargs < 2) {
         goto skip_optional;
     }
-    whence = PyLong_AsInt(args[1]);
+    whence = _PyValue_AsInt(PyValue_Borrow(args[1]));
     if (whence == -1 && PyErr_Occurred()) {
         goto exit;
     }
 skip_optional:
-    Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = _io_TextIOWrapper_seek_impl((textio *)self, cookieObj, whence);
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(self));
+    return_value = _io_TextIOWrapper_seek_impl((textio *)PyValue_AsKnownObjectBorrow(self), cookieObj, whence);
     Py_END_CRITICAL_SECTION();
 
 exit:
@@ -895,18 +920,18 @@ PyDoc_STRVAR(_io_TextIOWrapper_tell__doc__,
 "restore a previous stream position.");
 
 #define _IO_TEXTIOWRAPPER_TELL_METHODDEF    \
-    {"tell", (PyCFunction)_io_TextIOWrapper_tell, METH_NOARGS, _io_TextIOWrapper_tell__doc__},
+    {"tell", _PyCFunction_CAST(_io_TextIOWrapper_tell), METH_VALUE|METH_NOARGS, _io_TextIOWrapper_tell__doc__},
 
-static PyObject *
+static PyValue
 _io_TextIOWrapper_tell_impl(textio *self);
 
-static PyObject *
-_io_TextIOWrapper_tell(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+_io_TextIOWrapper_tell(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
 
-    Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = _io_TextIOWrapper_tell_impl((textio *)self);
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(self));
+    return_value = _io_TextIOWrapper_tell_impl((textio *)PyValue_AsKnownObjectBorrow(self));
     Py_END_CRITICAL_SECTION();
 
     return return_value;
@@ -918,27 +943,30 @@ PyDoc_STRVAR(_io_TextIOWrapper_truncate__doc__,
 "\n");
 
 #define _IO_TEXTIOWRAPPER_TRUNCATE_METHODDEF    \
-    {"truncate", _PyCFunction_CAST(_io_TextIOWrapper_truncate), METH_FASTCALL, _io_TextIOWrapper_truncate__doc__},
+    {"truncate", _PyCFunction_CAST(_io_TextIOWrapper_truncate), METH_VALUE, _io_TextIOWrapper_truncate__doc__},
 
-static PyObject *
-_io_TextIOWrapper_truncate_impl(textio *self, PyObject *pos);
+static PyValue
+_io_TextIOWrapper_truncate_impl(textio *self, PyValueBorrow pos);
 
-static PyObject *
-_io_TextIOWrapper_truncate(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_io_TextIOWrapper_truncate(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
-    PyObject *pos = Py_None;
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow pos = PyValue_Borrow(PyValue_None);
 
+    if (!_PyArg_NoKwnamesValue("TextIOWrapper.truncate()", kwnames)) {
+        goto exit;
+    }
     if (!_PyArg_CheckPositional("truncate", nargs, 0, 1)) {
         goto exit;
     }
     if (nargs < 1) {
         goto skip_optional;
     }
-    pos = args[0];
+    pos = PyValue_Borrow(args[0]);
 skip_optional:
-    Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = _io_TextIOWrapper_truncate_impl((textio *)self, pos);
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(self));
+    return_value = _io_TextIOWrapper_truncate_impl((textio *)PyValue_AsKnownObjectBorrow(self), pos);
     Py_END_CRITICAL_SECTION();
 
 exit:
@@ -951,18 +979,18 @@ PyDoc_STRVAR(_io_TextIOWrapper_fileno__doc__,
 "\n");
 
 #define _IO_TEXTIOWRAPPER_FILENO_METHODDEF    \
-    {"fileno", (PyCFunction)_io_TextIOWrapper_fileno, METH_NOARGS, _io_TextIOWrapper_fileno__doc__},
+    {"fileno", _PyCFunction_CAST(_io_TextIOWrapper_fileno), METH_VALUE|METH_NOARGS, _io_TextIOWrapper_fileno__doc__},
 
-static PyObject *
+static PyValue
 _io_TextIOWrapper_fileno_impl(textio *self);
 
-static PyObject *
-_io_TextIOWrapper_fileno(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+_io_TextIOWrapper_fileno(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
 
-    Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = _io_TextIOWrapper_fileno_impl((textio *)self);
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(self));
+    return_value = _io_TextIOWrapper_fileno_impl((textio *)PyValue_AsKnownObjectBorrow(self));
     Py_END_CRITICAL_SECTION();
 
     return return_value;
@@ -974,18 +1002,18 @@ PyDoc_STRVAR(_io_TextIOWrapper_seekable__doc__,
 "\n");
 
 #define _IO_TEXTIOWRAPPER_SEEKABLE_METHODDEF    \
-    {"seekable", (PyCFunction)_io_TextIOWrapper_seekable, METH_NOARGS, _io_TextIOWrapper_seekable__doc__},
+    {"seekable", _PyCFunction_CAST(_io_TextIOWrapper_seekable), METH_VALUE|METH_NOARGS, _io_TextIOWrapper_seekable__doc__},
 
-static PyObject *
+static PyValue
 _io_TextIOWrapper_seekable_impl(textio *self);
 
-static PyObject *
-_io_TextIOWrapper_seekable(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+_io_TextIOWrapper_seekable(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
 
-    Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = _io_TextIOWrapper_seekable_impl((textio *)self);
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(self));
+    return_value = _io_TextIOWrapper_seekable_impl((textio *)PyValue_AsKnownObjectBorrow(self));
     Py_END_CRITICAL_SECTION();
 
     return return_value;
@@ -997,18 +1025,18 @@ PyDoc_STRVAR(_io_TextIOWrapper_readable__doc__,
 "\n");
 
 #define _IO_TEXTIOWRAPPER_READABLE_METHODDEF    \
-    {"readable", (PyCFunction)_io_TextIOWrapper_readable, METH_NOARGS, _io_TextIOWrapper_readable__doc__},
+    {"readable", _PyCFunction_CAST(_io_TextIOWrapper_readable), METH_VALUE|METH_NOARGS, _io_TextIOWrapper_readable__doc__},
 
-static PyObject *
+static PyValue
 _io_TextIOWrapper_readable_impl(textio *self);
 
-static PyObject *
-_io_TextIOWrapper_readable(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+_io_TextIOWrapper_readable(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
 
-    Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = _io_TextIOWrapper_readable_impl((textio *)self);
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(self));
+    return_value = _io_TextIOWrapper_readable_impl((textio *)PyValue_AsKnownObjectBorrow(self));
     Py_END_CRITICAL_SECTION();
 
     return return_value;
@@ -1020,18 +1048,18 @@ PyDoc_STRVAR(_io_TextIOWrapper_writable__doc__,
 "\n");
 
 #define _IO_TEXTIOWRAPPER_WRITABLE_METHODDEF    \
-    {"writable", (PyCFunction)_io_TextIOWrapper_writable, METH_NOARGS, _io_TextIOWrapper_writable__doc__},
+    {"writable", _PyCFunction_CAST(_io_TextIOWrapper_writable), METH_VALUE|METH_NOARGS, _io_TextIOWrapper_writable__doc__},
 
-static PyObject *
+static PyValue
 _io_TextIOWrapper_writable_impl(textio *self);
 
-static PyObject *
-_io_TextIOWrapper_writable(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+_io_TextIOWrapper_writable(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
 
-    Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = _io_TextIOWrapper_writable_impl((textio *)self);
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(self));
+    return_value = _io_TextIOWrapper_writable_impl((textio *)PyValue_AsKnownObjectBorrow(self));
     Py_END_CRITICAL_SECTION();
 
     return return_value;
@@ -1043,18 +1071,18 @@ PyDoc_STRVAR(_io_TextIOWrapper_isatty__doc__,
 "\n");
 
 #define _IO_TEXTIOWRAPPER_ISATTY_METHODDEF    \
-    {"isatty", (PyCFunction)_io_TextIOWrapper_isatty, METH_NOARGS, _io_TextIOWrapper_isatty__doc__},
+    {"isatty", _PyCFunction_CAST(_io_TextIOWrapper_isatty), METH_VALUE|METH_NOARGS, _io_TextIOWrapper_isatty__doc__},
 
-static PyObject *
+static PyValue
 _io_TextIOWrapper_isatty_impl(textio *self);
 
-static PyObject *
-_io_TextIOWrapper_isatty(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+_io_TextIOWrapper_isatty(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
 
-    Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = _io_TextIOWrapper_isatty_impl((textio *)self);
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(self));
+    return_value = _io_TextIOWrapper_isatty_impl((textio *)PyValue_AsKnownObjectBorrow(self));
     Py_END_CRITICAL_SECTION();
 
     return return_value;
@@ -1066,18 +1094,18 @@ PyDoc_STRVAR(_io_TextIOWrapper_flush__doc__,
 "\n");
 
 #define _IO_TEXTIOWRAPPER_FLUSH_METHODDEF    \
-    {"flush", (PyCFunction)_io_TextIOWrapper_flush, METH_NOARGS, _io_TextIOWrapper_flush__doc__},
+    {"flush", _PyCFunction_CAST(_io_TextIOWrapper_flush), METH_VALUE|METH_NOARGS, _io_TextIOWrapper_flush__doc__},
 
-static PyObject *
+static PyValue
 _io_TextIOWrapper_flush_impl(textio *self);
 
-static PyObject *
-_io_TextIOWrapper_flush(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+_io_TextIOWrapper_flush(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
 
-    Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = _io_TextIOWrapper_flush_impl((textio *)self);
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(self));
+    return_value = _io_TextIOWrapper_flush_impl((textio *)PyValue_AsKnownObjectBorrow(self));
     Py_END_CRITICAL_SECTION();
 
     return return_value;
@@ -1089,18 +1117,18 @@ PyDoc_STRVAR(_io_TextIOWrapper_close__doc__,
 "\n");
 
 #define _IO_TEXTIOWRAPPER_CLOSE_METHODDEF    \
-    {"close", (PyCFunction)_io_TextIOWrapper_close, METH_NOARGS, _io_TextIOWrapper_close__doc__},
+    {"close", _PyCFunction_CAST(_io_TextIOWrapper_close), METH_VALUE|METH_NOARGS, _io_TextIOWrapper_close__doc__},
 
-static PyObject *
+static PyValue
 _io_TextIOWrapper_close_impl(textio *self);
 
-static PyObject *
-_io_TextIOWrapper_close(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+_io_TextIOWrapper_close(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
 
-    Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = _io_TextIOWrapper_close_impl((textio *)self);
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(self));
+    return_value = _io_TextIOWrapper_close_impl((textio *)PyValue_AsKnownObjectBorrow(self));
     Py_END_CRITICAL_SECTION();
 
     return return_value;
@@ -1219,10 +1247,10 @@ _io_TextIOWrapper__CHUNK_SIZE_set(PyObject *self, PyObject *arg, void *Py_UNUSED
     }
     {
         Py_ssize_t ival = -1;
-        PyObject *iobj = _PyNumber_Index(arg);
-        if (iobj != NULL) {
-            ival = PyLong_AsSsize_t(iobj);
-            Py_DECREF(iobj);
+        PyValue iobj = _PyValue_Index(PyValue_FromObjectBorrow(arg));
+        if (!PyValue_IsNull(iobj)) {
+            ival = _PyValue_IntAsSsize_t(PyValue_Borrow(iobj));
+            PyValue_CLOSE(iobj);
         }
         if (ival == -1 && PyErr_Occurred()) {
             goto exit;
@@ -1271,4 +1299,4 @@ _io_TextIOWrapper_buffer_get(PyObject *self, void *Py_UNUSED(context))
 
 #define _IO_TEXTIOWRAPPER_BUFFER_GETSETDEF {"buffer", (getter)_io_TextIOWrapper_buffer_get, (setter)NULL, NULL},
 
-/*[clinic end generated code: output=9c53b16d4754f6b1 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=1e9725511fb7c6c4 input=a9049054013a1b77]*/

@@ -7,8 +7,17 @@ Converted to C by Dmitry Vasiliev (dima at hlabs.spb.ru).
 #  define Py_BUILD_CORE_MODULE 1
 #endif
 
+#define Py_VALUE_CORE 1
 #include "Python.h"
 #include "pycore_call.h"          // _PyObject_CallMethod()
+#include "pycore_list.h"          // PyList_InsertValue()
+#include "pycore_value.h"         // PyValue
+#include "pycore_value_ops.h"     // _PyValue_IsTrue()
+
+/*[clinic input]
+value_emission
+[clinic start generated code]*/
+/*[clinic end generated code: output=da39a3ee5e6b4b0d input=eb7b17088bfd7215]*/
 
 /*[clinic input]
 module _bisect
@@ -47,6 +56,24 @@ get_sq_item(PyObject *s)
     }
     PyErr_Format(PyExc_TypeError, msg, tp->tp_name);
     return NULL;
+}
+
+/* Box the three arguments of a bisect call for the object-form search below.
+   On failure, any box made is released and an exception is set. */
+static int
+bisect_box_args(PyValueBorrow a, PyValueBorrow x, PyValueBorrow key,
+                PyObject **a_obj, PyObject **x_obj, PyObject **key_obj)
+{
+    *a_obj = _PyValue_AsObjectAt(a, BOX_SITE_PARSER);
+    *x_obj = _PyValue_AsObjectAt(x, BOX_SITE_PARSER);
+    *key_obj = _PyValue_AsObjectAt(key, BOX_SITE_PARSER);
+    if (*a_obj == NULL || *x_obj == NULL || *key_obj == NULL) {
+        Py_CLEAR(*a_obj);
+        Py_CLEAR(*x_obj);
+        Py_CLEAR(*key_obj);
+        return -1;
+    }
+    return 0;
 }
 
 static inline Py_ssize_t
@@ -116,16 +143,16 @@ internal_bisect_right(PyObject *list, PyObject *item, Py_ssize_t lo, Py_ssize_t 
             if (res_obj == Py_NotImplemented) {
                 Py_DECREF(res_obj);
                 compare = NULL;
-                res = PyObject_RichCompareBool(item, litem, Py_LT);
+                res = _PyValue_RichCompareBool(PyValue_FromObjectBorrow(item), PyValue_FromObjectBorrow(litem), Py_LT);
             }
             else {
-                res = PyObject_IsTrue(res_obj);
+                res = _PyValue_IsTrue(PyValue_FromObjectBorrow(res_obj));
                 Py_DECREF(res_obj);
             }
         }
         else {
             // A default path for comparing arbitrary objects
-            res = PyObject_RichCompareBool(item, litem, Py_LT);
+            res = _PyValue_RichCompareBool(PyValue_FromObjectBorrow(item), PyValue_FromObjectBorrow(litem), Py_LT);
         }
         if (res < 0) {
             goto error;
@@ -142,6 +169,21 @@ error:
     Py_LeaveRecursiveCall();
     Py_XDECREF(litem);
     return -1;
+}
+
+static Py_ssize_t
+bisect_right_values(PyValueBorrow a, PyValueBorrow x, Py_ssize_t lo,
+                    Py_ssize_t hi, PyValueBorrow key)
+{
+    PyObject *a_obj, *x_obj, *key_obj;
+    if (bisect_box_args(a, x, key, &a_obj, &x_obj, &key_obj) < 0) {
+        return -1;
+    }
+    Py_ssize_t index = internal_bisect_right(a_obj, x_obj, lo, hi, key_obj);
+    Py_DECREF(a_obj);
+    Py_DECREF(x_obj);
+    Py_DECREF(key_obj);
+    return index;
 }
 
 /*[clinic input]
@@ -167,11 +209,11 @@ A custom key function can be supplied to customize the sort order.
 [clinic start generated code]*/
 
 static Py_ssize_t
-_bisect_bisect_right_impl(PyObject *module, PyObject *a, PyObject *x,
-                          Py_ssize_t lo, Py_ssize_t hi, PyObject *key)
-/*[clinic end generated code: output=3a4bc09cc7c8a73d input=27717afe1a61bfaa]*/
+_bisect_bisect_right_impl(PyObject *module, PyValueBorrow a, PyValueBorrow x,
+                          Py_ssize_t lo, Py_ssize_t hi, PyValueBorrow key)
+/*[clinic end generated code: output=1897cf145fc23ae2 input=27717afe1a61bfaa]*/
 {
-    return internal_bisect_right(a, x, lo, hi, key);
+    return bisect_right_values(a, x, lo, hi, key);
 }
 
 /*[clinic input]
@@ -194,39 +236,52 @@ slice of a to be searched.
 A custom key function can be supplied to customize the sort order.
 [clinic start generated code]*/
 
-static PyObject *
-_bisect_insort_right_impl(PyObject *module, PyObject *a, PyObject *x,
-                          Py_ssize_t lo, Py_ssize_t hi, PyObject *key)
-/*[clinic end generated code: output=ac3bf26d07aedda2 input=f2caa8abec0763e8]*/
+static PyValue
+_bisect_insort_right_impl(PyObject *module, PyValueBorrow a, PyValueBorrow x,
+                          Py_ssize_t lo, Py_ssize_t hi, PyValueBorrow key)
+/*[clinic end generated code: output=a9d02209327ccd11 input=f2caa8abec0763e8]*/
 {
     PyObject *result, *key_x;
+    PyObject *a_obj, *x_obj, *key_obj;
     Py_ssize_t index;
 
-    if (key == Py_None) {
-        index = internal_bisect_right(a, x, lo, hi, key);
+    if (bisect_box_args(a, x, key, &a_obj, &x_obj, &key_obj) < 0) {
+        return PyValue_NULL;
+    }
+    if (PyValue_IsNone(key)) {
+        index = internal_bisect_right(a_obj, x_obj, lo, hi, key_obj);
     } else {
-        key_x = PyObject_CallOneArg(key, x);
+        key_x = PyObject_CallOneArg(key_obj, x_obj);
         if (key_x == NULL) {
-            return NULL;
+            goto error;
         }
-        index = internal_bisect_right(a, key_x, lo, hi, key);
+        index = internal_bisect_right(a_obj, key_x, lo, hi, key_obj);
         Py_DECREF(key_x);
     }
     if (index < 0)
-        return NULL;
-    if (PyList_CheckExact(a)) {
-        if (PyList_Insert(a, index, x) < 0)
-            return NULL;
+        goto error;
+    if (PyList_CheckExact(a_obj)) {
+        if (PyList_InsertValue(a_obj, index, PyValue_FromObjectBorrow(x_obj)) < 0)
+            goto error;
     }
     else {
         bisect_state *state = get_bisect_state(module);
-        result = _PyObject_CallMethod(a, state->str_insert, "nO", index, x);
+        result = _PyObject_CallMethod(a_obj, state->str_insert, "nO", index, x_obj);
         if (result == NULL)
-            return NULL;
+            goto error;
         Py_DECREF(result);
     }
 
-    Py_RETURN_NONE;
+    Py_DECREF(a_obj);
+    Py_DECREF(x_obj);
+    Py_DECREF(key_obj);
+    return PyValue_None;
+
+error:
+    Py_DECREF(a_obj);
+    Py_DECREF(x_obj);
+    Py_DECREF(key_obj);
+    return PyValue_NULL;
 }
 
 static inline Py_ssize_t
@@ -296,16 +351,16 @@ internal_bisect_left(PyObject *list, PyObject *item, Py_ssize_t lo, Py_ssize_t h
             if (res_obj == Py_NotImplemented) {
                 Py_DECREF(res_obj);
                 compare = NULL;
-                res = PyObject_RichCompareBool(litem, item, Py_LT);
+                res = _PyValue_RichCompareBool(PyValue_FromObjectBorrow(litem), PyValue_FromObjectBorrow(item), Py_LT);
             }
             else {
-                res = PyObject_IsTrue(res_obj);
+                res = _PyValue_IsTrue(PyValue_FromObjectBorrow(res_obj));
                 Py_DECREF(res_obj);
             }
         }
         else {
             // A default path for comparing arbitrary objects
-            res = PyObject_RichCompareBool(litem, item, Py_LT);
+            res = _PyValue_RichCompareBool(PyValue_FromObjectBorrow(litem), PyValue_FromObjectBorrow(item), Py_LT);
         }
         if (res < 0) {
             goto error;
@@ -324,6 +379,21 @@ error:
     return -1;
 }
 
+
+static Py_ssize_t
+bisect_left_values(PyValueBorrow a, PyValueBorrow x, Py_ssize_t lo,
+                    Py_ssize_t hi, PyValueBorrow key)
+{
+    PyObject *a_obj, *x_obj, *key_obj;
+    if (bisect_box_args(a, x, key, &a_obj, &x_obj, &key_obj) < 0) {
+        return -1;
+    }
+    Py_ssize_t index = internal_bisect_left(a_obj, x_obj, lo, hi, key_obj);
+    Py_DECREF(a_obj);
+    Py_DECREF(x_obj);
+    Py_DECREF(key_obj);
+    return index;
+}
 
 /*[clinic input]
 _bisect.bisect_left -> Py_ssize_t
@@ -348,11 +418,11 @@ A custom key function can be supplied to customize the sort order.
 [clinic start generated code]*/
 
 static Py_ssize_t
-_bisect_bisect_left_impl(PyObject *module, PyObject *a, PyObject *x,
-                         Py_ssize_t lo, Py_ssize_t hi, PyObject *key)
-/*[clinic end generated code: output=70749d6e5cae9284 input=259fedbe35e882e1]*/
+_bisect_bisect_left_impl(PyObject *module, PyValueBorrow a, PyValueBorrow x,
+                         Py_ssize_t lo, Py_ssize_t hi, PyValueBorrow key)
+/*[clinic end generated code: output=e6a0f7022af64621 input=259fedbe35e882e1]*/
 {
-    return internal_bisect_left(a, x, lo, hi, key);
+    return bisect_left_values(a, x, lo, hi, key);
 }
 
 
@@ -376,38 +446,52 @@ slice of a to be searched.
 A custom key function can be supplied to customize the sort order.
 [clinic start generated code]*/
 
-static PyObject *
-_bisect_insort_left_impl(PyObject *module, PyObject *a, PyObject *x,
-                         Py_ssize_t lo, Py_ssize_t hi, PyObject *key)
-/*[clinic end generated code: output=b1d33e5e7ffff11e input=ff85a79826e22f31]*/
+static PyValue
+_bisect_insort_left_impl(PyObject *module, PyValueBorrow a, PyValueBorrow x,
+                         Py_ssize_t lo, Py_ssize_t hi, PyValueBorrow key)
+/*[clinic end generated code: output=bc0e9b70159ecab2 input=ff85a79826e22f31]*/
 {
     PyObject *result, *key_x;
+    PyObject *a_obj, *x_obj, *key_obj;
     Py_ssize_t index;
 
-    if (key == Py_None) {
-        index = internal_bisect_left(a, x, lo, hi, key);
+    if (bisect_box_args(a, x, key, &a_obj, &x_obj, &key_obj) < 0) {
+        return PyValue_NULL;
+    }
+    if (PyValue_IsNone(key)) {
+        index = internal_bisect_left(a_obj, x_obj, lo, hi, key_obj);
     } else {
-        key_x = PyObject_CallOneArg(key, x);
+        key_x = PyObject_CallOneArg(key_obj, x_obj);
         if (key_x == NULL) {
-            return NULL;
+            goto error;
         }
-        index = internal_bisect_left(a, key_x, lo, hi, key);
+        index = internal_bisect_left(a_obj, key_x, lo, hi, key_obj);
         Py_DECREF(key_x);
     }
     if (index < 0)
-        return NULL;
-    if (PyList_CheckExact(a)) {
-        if (PyList_Insert(a, index, x) < 0)
-            return NULL;
-    } else {
+        goto error;
+    if (PyList_CheckExact(a_obj)) {
+        if (PyList_InsertValue(a_obj, index, PyValue_FromObjectBorrow(x_obj)) < 0)
+            goto error;
+    }
+    else {
         bisect_state *state = get_bisect_state(module);
-        result = _PyObject_CallMethod(a, state->str_insert, "nO", index, x);
+        result = _PyObject_CallMethod(a_obj, state->str_insert, "nO", index, x_obj);
         if (result == NULL)
-            return NULL;
+            goto error;
         Py_DECREF(result);
     }
 
-    Py_RETURN_NONE;
+    Py_DECREF(a_obj);
+    Py_DECREF(x_obj);
+    Py_DECREF(key_obj);
+    return PyValue_None;
+
+error:
+    Py_DECREF(a_obj);
+    Py_DECREF(x_obj);
+    Py_DECREF(key_obj);
+    return PyValue_NULL;
 }
 
 static PyMethodDef bisect_methods[] = {

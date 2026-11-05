@@ -1,9 +1,14 @@
+#ifndef Py_BUILD_CORE_BUILTIN
+#  define Py_BUILD_CORE_MODULE 1
+#endif
+#define Py_VALUE_CORE 1
 #include "Python.h"
 #include "pycore_call.h"          // _PyObject_CallNoArgs()
 #include "pycore_dict.h"          // _PyDict_GetItem_KnownHash()
 #include "pycore_long.h"          // _PyLong_GetZero()
 #include "pycore_moduleobject.h"  // _PyModule_GetState()
 #include "pycore_pyatomic_ft_wrappers.h"
+#include "pycore_tuple.h"         // _PyTuple_PackValues()
 #include "pycore_typeobject.h"    // _PyType_GetModuleState()
 #include "pycore_value_api.h"     // _PyValue_AsObjectAt()
 #include "pycore_value_slots.h"   // _Py_VALUE_THUNK_ITERNEXT()
@@ -46,6 +51,11 @@ find_module_state_by_def(PyTypeObject *type)
     assert(mod != NULL);
     return get_module_state(mod);
 }
+
+/*[clinic input]
+value_emission
+[clinic start generated code]*/
+/*[clinic end generated code: output=da39a3ee5e6b4b0d input=eb7b17088bfd7215]*/
 
 /*[clinic input]
 module _collections
@@ -236,18 +246,6 @@ deque_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
     return (PyObject *)deque;
 }
 
-/* Value homes. A live slot of a block holds the canonical form of an item
-   and owns it; the slots outside [left, right] are unset. An object exit
-   consumes the owner and boxes an inline value at its site. */
-static PyObject *
-deque_value_object(PyValue item)
-{
-    if (PyValue_IsNull(item)) {
-        return NULL;
-    }
-    return _PyValue_AsObjectStealAt(item, BOX_SITE_FIELD);
-}
-
 /* Remove the rightmost or leftmost item and return its owner, or
    PyValue_NULL with IndexError set if the deque is empty. */
 static PyValue
@@ -330,11 +328,11 @@ _collections.deque.pop as deque_pop
 Remove and return the rightmost element.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 deque_pop_impl(dequeobject *deque)
-/*[clinic end generated code: output=2e5f7890c4251f07 input=55c5b6a8ad51d72f]*/
+/*[clinic end generated code: output=69fdfef3ca11c75e input=55c5b6a8ad51d72f]*/
 {
-    return deque_value_object(deque_pop_value(deque));
+    return deque_pop_value(deque);
 }
 
 /*[clinic input]
@@ -346,11 +344,11 @@ _collections.deque.popleft as deque_popleft
 Remove and return the leftmost element.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 deque_popleft_impl(dequeobject *deque)
-/*[clinic end generated code: output=62b154897097ff68 input=1571ce88fe3053de]*/
+/*[clinic end generated code: output=b10cfea5491fbe75 input=1571ce88fe3053de]*/
 {
-    return deque_value_object(deque_popleft_value(deque));
+    return deque_popleft_value(deque);
 }
 
 /* The deque's size limit is d.maxlen.  The limit can be zero or positive.
@@ -407,14 +405,14 @@ _collections.deque.append as deque_append
 Add an element to the right side of the deque.
 [clinic start generated code]*/
 
-static PyObject *
-deque_append_impl(dequeobject *deque, PyObject *item)
-/*[clinic end generated code: output=9c7bcb8b599c6362 input=b0eeeb09b9f5cf18]*/
+static PyValue
+deque_append_impl(dequeobject *deque, PyValueBorrow item)
+/*[clinic end generated code: output=28b9dfcb019ebb74 input=b0eeeb09b9f5cf18]*/
 {
-    PyValue owned = PyValue_DUP(PyValue_FromObjectBorrow(item));
+    PyValue owned = PyValue_DUP(item);
     if (deque_append_lock_held(deque, owned, deque->maxlen) < 0)
-        return NULL;
-    Py_RETURN_NONE;
+        return PyValue_NULL;
+    return PyValue_None;
 }
 
 static inline int
@@ -458,14 +456,14 @@ _collections.deque.appendleft as deque_appendleft
 Add an element to the left side of the deque.
 [clinic start generated code]*/
 
-static PyObject *
-deque_appendleft_impl(dequeobject *deque, PyObject *item)
-/*[clinic end generated code: output=9a192edbcd0f20db input=236c2fbceaf08e14]*/
+static PyValue
+deque_appendleft_impl(dequeobject *deque, PyValueBorrow item)
+/*[clinic end generated code: output=5b11a92e17d3d452 input=236c2fbceaf08e14]*/
 {
-    PyValue owned = PyValue_DUP(PyValue_FromObjectBorrow(item));
+    PyValue owned = PyValue_DUP(item);
     if (deque_appendleft_lock_held(deque, owned, deque->maxlen) < 0)
-        return NULL;
-    Py_RETURN_NONE;
+        return PyValue_NULL;
+    return PyValue_None;
 }
 
 static PyObject*
@@ -509,31 +507,31 @@ _collections.deque.extend as deque_extend
 Extend the right side of the deque with elements from the iterable.
 [clinic start generated code]*/
 
-static PyObject *
-deque_extend_impl(dequeobject *deque, PyObject *iterable)
-/*[clinic end generated code: output=8b5ffa57ce82d980 input=85861954127c81da]*/
+static PyValue
+deque_extend_impl(dequeobject *deque, PyValueBorrow iterable)
+/*[clinic end generated code: output=3e5bc2e11098cba2 input=85861954127c81da]*/
 {
     PyObject *it, *item;
     PyObject *(*iternext)(PyObject *);
     Py_ssize_t maxlen = deque->maxlen;
 
     /* Handle case where id(deque) == id(iterable) */
-    if ((PyObject *)deque == iterable) {
-        PyObject *result;
-        PyObject *s = PySequence_List(iterable);
+    if (PyValue_Is(PyValue_FromObjectBorrow(deque), iterable)) {
+        PyValue result;
+        PyObject *s = _PyValue_SequenceList(PyValue_FromObjectBorrow((PyObject *)deque));
         if (s == NULL)
-            return NULL;
-        result = deque_extend((PyObject*)deque, s);
+            return PyValue_NULL;
+        result = deque_extend_impl(deque, PyValue_FromObjectBorrow(s));
         Py_DECREF(s);
         return result;
     }
 
-    it = PyObject_GetIter(iterable);
+    it = _PyValue_GetIter(iterable);
     if (it == NULL)
-        return NULL;
+        return PyValue_NULL;
 
     if (maxlen == 0)
-        return consume_iterator(it);
+        return _PyValue_FromObjectResult(consume_iterator(it));
 
     /* Space saving heuristic.  Start filling from the left */
     if (Py_SIZE(deque) == 0) {
@@ -548,10 +546,10 @@ deque_extend_impl(dequeobject *deque, PyObject *iterable)
         if (deque_append_lock_held(deque, PyValue_PrepareOwned(item),
                                    maxlen) == -1) {
             Py_DECREF(it);
-            return NULL;
+            return PyValue_NULL;
         }
     }
-    return finalize_iterator(it);
+    return _PyValue_FromObjectResult(finalize_iterator(it));
 }
 
 /*[clinic input]
@@ -565,31 +563,31 @@ _collections.deque.extendleft as deque_extendleft
 Extend the left side of the deque with elements from the iterable.
 [clinic start generated code]*/
 
-static PyObject *
-deque_extendleft_impl(dequeobject *deque, PyObject *iterable)
-/*[clinic end generated code: output=ba44191aa8e35a26 input=640dabd086115689]*/
+static PyValue
+deque_extendleft_impl(dequeobject *deque, PyValueBorrow iterable)
+/*[clinic end generated code: output=79f1231dfee29e1e input=640dabd086115689]*/
 {
     PyObject *it, *item;
     PyObject *(*iternext)(PyObject *);
     Py_ssize_t maxlen = deque->maxlen;
 
     /* Handle case where id(deque) == id(iterable) */
-    if ((PyObject *)deque == iterable) {
-        PyObject *result;
-        PyObject *s = PySequence_List(iterable);
+    if (PyValue_Is(PyValue_FromObjectBorrow(deque), iterable)) {
+        PyValue result;
+        PyObject *s = _PyValue_SequenceList(PyValue_FromObjectBorrow((PyObject *)deque));
         if (s == NULL)
-            return NULL;
-        result = deque_extendleft_impl(deque, s);
+            return PyValue_NULL;
+        result = deque_extendleft_impl(deque, PyValue_FromObjectBorrow(s));
         Py_DECREF(s);
         return result;
     }
 
-    it = PyObject_GetIter(iterable);
+    it = _PyValue_GetIter(iterable);
     if (it == NULL)
-        return NULL;
+        return PyValue_NULL;
 
     if (maxlen == 0)
-        return consume_iterator(it);
+        return _PyValue_FromObjectResult(consume_iterator(it));
 
     /* Space saving heuristic.  Start filling from the right */
     if (Py_SIZE(deque) == 0) {
@@ -604,24 +602,26 @@ deque_extendleft_impl(dequeobject *deque, PyObject *iterable)
         if (deque_appendleft_lock_held(deque, PyValue_PrepareOwned(item),
                                        maxlen) == -1) {
             Py_DECREF(it);
-            return NULL;
+            return PyValue_NULL;
         }
     }
-    return finalize_iterator(it);
+    return _PyValue_FromObjectResult(finalize_iterator(it));
 }
 
 static PyObject *
 deque_inplace_concat(PyObject *self, PyObject *other)
 {
     dequeobject *deque = dequeobject_CAST(self);
-    PyObject *result;
+    PyValue result;
 
     // deque_extend is thread-safe
-    result = deque_extend((PyObject*)deque, other);
-    if (result == NULL)
-        return result;
+    Py_BEGIN_CRITICAL_SECTION(deque);
+    result = deque_extend_impl(deque, PyValue_FromObjectBorrow(other));
+    Py_END_CRITICAL_SECTION();
+    if (PyValue_IsNull(result))
+        return NULL;
     Py_INCREF(deque);
-    Py_DECREF(result);
+    PyValue_CLOSE(result);
     return (PyObject *)deque;
 }
 
@@ -634,9 +634,9 @@ _collections.deque.copy as deque_copy
 Return a shallow copy of a deque.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 deque_copy_impl(dequeobject *deque)
-/*[clinic end generated code: output=6409b3d1ad2898b5 input=51d2ed1a23bab5e2]*/
+/*[clinic end generated code: output=c0d3f48f394420af input=51d2ed1a23bab5e2]*/
 {
     PyObject *result;
     dequeobject *old_deque = deque;
@@ -647,7 +647,7 @@ deque_copy_impl(dequeobject *deque)
 
         new_deque = (dequeobject *)deque_new(state->deque_type, NULL, NULL);
         if (new_deque == NULL)
-            return NULL;
+            return PyValue_NULL;
         new_deque->maxlen = old_deque->maxlen;
 
         /* Copy elements directly by walking the block structure.
@@ -669,7 +669,7 @@ deque_copy_impl(dequeobject *deque)
                 if (deque_append_lock_held(new_deque, item,
                                            new_deque->maxlen) < 0) {
                     Py_DECREF(new_deque);
-                    return NULL;
+                    return PyValue_NULL;
                 }
                 index++;
                 if (index == BLOCKLEN) {
@@ -678,7 +678,7 @@ deque_copy_impl(dequeobject *deque)
                 }
             }
         }
-        return (PyObject *)new_deque;
+        return _PyValue_FromObjectResult((PyObject *)new_deque);
     }
     if (old_deque->maxlen < 0)
         result = PyObject_CallOneArg((PyObject *)(Py_TYPE(deque)),
@@ -691,9 +691,9 @@ deque_copy_impl(dequeobject *deque)
                      "%.200s() must return a deque, not %.200s",
                      Py_TYPE(deque)->tp_name, Py_TYPE(result)->tp_name);
         Py_DECREF(result);
-        return NULL;
+        return PyValue_NULL;
     }
-    return result;
+    return _PyValue_FromObjectResult(result);
 }
 
 /*[clinic input]
@@ -703,9 +703,9 @@ _collections.deque.__copy__ as deque___copy__ = _collections.deque.copy
 Return a shallow copy of a deque.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 deque___copy___impl(dequeobject *deque)
-/*[clinic end generated code: output=7c5821504342bf23 input=f5464036f9686a55]*/
+/*[clinic end generated code: output=a2cf806c73ae0c95 input=f5464036f9686a55]*/
 {
     return deque_copy_impl(deque);
 }
@@ -723,7 +723,8 @@ static PyObject *
 deque_concat_impl(dequeobject *deque, PyObject *other)
 /*[clinic end generated code: output=fa6c28f7752f0b28 input=1816c51a4c6c4f05]*/
 {
-    PyObject *new_deque, *result;
+    PyObject *new_deque;
+    PyValue copy, result;
     int rv;
 
     collections_state *state = find_module_state_by_def(Py_TYPE(deque));
@@ -737,18 +738,20 @@ deque_concat_impl(dequeobject *deque, PyObject *other)
         return NULL;
     }
 
-    new_deque = deque_copy_impl(deque);
-    if (new_deque == NULL)
+    copy = deque_copy_impl(deque);
+    if (PyValue_IsNull(copy))
         return NULL;
+    new_deque = PyValue_AsKnownObjectSteal(copy);
 
     // It's safe to not acquire the per-object lock for new_deque; it's
     // invisible to other threads.
-    result = deque_extend_impl((dequeobject *)new_deque, other);
-    if (result == NULL) {
+    result = deque_extend_impl((dequeobject *)new_deque,
+                               PyValue_FromObjectBorrow(other));
+    if (PyValue_IsNull(result)) {
         Py_DECREF(new_deque);
         return NULL;
     }
-    Py_DECREF(result);
+    PyValue_CLOSE(result);
     return new_deque;
 }
 
@@ -846,12 +849,12 @@ _collections.deque.clear as deque_clearmethod
 Remove all elements from the deque.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 deque_clearmethod_impl(dequeobject *deque)
-/*[clinic end generated code: output=79b2513e097615c1 input=3a22e9605d20c5e9]*/
+/*[clinic end generated code: output=1d7a93640fa05e7d input=3a22e9605d20c5e9]*/
 {
     (void)deque_clear((PyObject *)deque);
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 /*[clinic input]
@@ -869,7 +872,7 @@ deque_inplace_repeat_impl(dequeobject *deque, Py_ssize_t n)
 {
     Py_ssize_t i, m, size;
     PyObject *seq;
-    PyObject *rv;
+    PyValue rv;
 
     size = Py_SIZE(deque);
     if (size == 0 || n == 1) {
@@ -920,7 +923,7 @@ deque_inplace_repeat_impl(dequeobject *deque, Py_ssize_t n)
         return PyErr_NoMemory();
     }
 
-    seq = PySequence_List((PyObject *)deque);
+    seq = _PyValue_SequenceList(PyValue_FromObjectBorrow((PyObject *)deque));
     if (seq == NULL)
         return seq;
 
@@ -929,12 +932,12 @@ deque_inplace_repeat_impl(dequeobject *deque, Py_ssize_t n)
         n = (deque->maxlen + size - 1) / size;
 
     for (i = 0 ; i < n-1 ; i++) {
-        rv = deque_extend_impl(deque, seq);
-        if (rv == NULL) {
+        rv = deque_extend_impl(deque, PyValue_FromObjectBorrow(seq));
+        if (PyValue_IsNull(rv)) {
             Py_DECREF(seq);
             return NULL;
         }
-        Py_DECREF(rv);
+        PyValue_CLOSE(rv);
     }
     Py_INCREF(deque);
     Py_DECREF(seq);
@@ -946,13 +949,15 @@ deque_repeat(PyObject *self, Py_ssize_t n)
 {
     dequeobject *deque = dequeobject_CAST(self);
     dequeobject *new_deque;
+    PyValue copy;
     PyObject *rv;
 
     Py_BEGIN_CRITICAL_SECTION(deque);
-    new_deque = (dequeobject *)deque_copy_impl(deque);
+    copy = deque_copy_impl(deque);
     Py_END_CRITICAL_SECTION();
-    if (new_deque == NULL)
+    if (PyValue_IsNull(copy))
         return NULL;
+    new_deque = (dequeobject *)PyValue_AsKnownObjectSteal(copy);
     // It's safe to not acquire the per-object lock for new_deque; it's
     // invisible to other threads.
     rv = deque_inplace_repeat_impl(new_deque, n);
@@ -1121,13 +1126,13 @@ _collections.deque.rotate as deque_rotate
 Rotate the deque n steps to the right.  If n is negative, rotates left.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 deque_rotate_impl(dequeobject *deque, Py_ssize_t n)
-/*[clinic end generated code: output=96c2402a371eb15d input=3543c3b2297de8f1]*/
+/*[clinic end generated code: output=0f072e8001f387c1 input=3543c3b2297de8f1]*/
 {
     if (!_deque_rotate(deque, n))
-        Py_RETURN_NONE;
-    return NULL;
+        return PyValue_None;
+    return PyValue_NULL;
 }
 
 /*[clinic input]
@@ -1139,9 +1144,9 @@ _collections.deque.reverse as deque_reverse
 Reverse *IN PLACE*.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 deque_reverse_impl(dequeobject *deque)
-/*[clinic end generated code: output=bdeebc2cf8c1f064 input=26f4167fd623027f]*/
+/*[clinic end generated code: output=f2438e2fda8a6a36 input=26f4167fd623027f]*/
 {
     block *leftblock = deque->leftblock;
     block *rightblock = deque->rightblock;
@@ -1175,7 +1180,7 @@ deque_reverse_impl(dequeobject *deque)
             rightindex = BLOCKLEN - 1;
         }
     }
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 /*[clinic input]
@@ -1189,9 +1194,9 @@ _collections.deque.count as deque_count
 Return number of occurrences of value.
 [clinic start generated code]*/
 
-static PyObject *
-deque_count_impl(dequeobject *deque, PyObject *v)
-/*[clinic end generated code: output=2ca26c49b6ab0400 input=4ef67ef2b34dc1fc]*/
+static PyValue
+deque_count_impl(dequeobject *deque, PyValueBorrow v)
+/*[clinic end generated code: output=7cbeb230d23b52dc input=4ef67ef2b34dc1fc]*/
 {
     block *b = deque->leftblock;
     Py_ssize_t index = deque->leftindex;
@@ -1199,7 +1204,7 @@ deque_count_impl(dequeobject *deque, PyObject *v)
     Py_ssize_t count = 0;
     size_t start_state = deque->state;
     PyValue item;
-    PyValueBorrow query = PyValue_FromObjectBorrow(v);
+    PyValueBorrow query = v;
     int cmp;
 
     while (--n >= 0) {
@@ -1208,13 +1213,13 @@ deque_count_impl(dequeobject *deque, PyObject *v)
         cmp = _PyValue_RichCompareBool(item, query, Py_EQ);
         PyValue_CLOSE(item);
         if (cmp < 0)
-            return NULL;
+            return PyValue_NULL;
         count += cmp;
 
         if (start_state != deque->state) {
             PyErr_SetString(PyExc_RuntimeError,
                             "deque mutated during iteration");
-            return NULL;
+            return PyValue_NULL;
         }
 
         /* Advance left block/index pair */
@@ -1224,7 +1229,7 @@ deque_count_impl(dequeobject *deque, PyObject *v)
             index = 0;
         }
     }
-    return PyLong_FromSsize_t(count);
+    return PyValue_FromInt64(count);
 }
 
 /*[clinic input]
@@ -1283,8 +1288,8 @@ _collections.deque.index as deque_index
 
     deque: dequeobject
     value as v: object
-    start: object(converter='_PyEval_SliceIndexNotNone', type='Py_ssize_t', c_default='0') = NULL
-    stop: object(converter='_PyEval_SliceIndexNotNone', type='Py_ssize_t', c_default='PY_SSIZE_T_MAX') = NULL
+    start: slice_index(accept={int}) = 0
+    stop: slice_index(accept={int}, c_default="PY_SSIZE_T_MAX") = sys.maxsize
     /
 
 Return first index of value.
@@ -1292,14 +1297,14 @@ Return first index of value.
 Raises ValueError if the value is not present.
 [clinic start generated code]*/
 
-static PyObject *
-deque_index_impl(dequeobject *deque, PyObject *v, Py_ssize_t start,
+static PyValue
+deque_index_impl(dequeobject *deque, PyValueBorrow v, Py_ssize_t start,
                  Py_ssize_t stop)
-/*[clinic end generated code: output=df45132753175ef9 input=1c3b19632cf3484f]*/
+/*[clinic end generated code: output=966981167a4cacfd input=0d8a06e09bbd8aa8]*/
 {
     Py_ssize_t i, n;
     PyValue item;
-    PyValueBorrow query = PyValue_FromObjectBorrow(v);
+    PyValueBorrow query = v;
     block *b = deque->leftblock;
     Py_ssize_t index = deque->leftindex;
     size_t start_state = deque->state;
@@ -1340,13 +1345,13 @@ deque_index_impl(dequeobject *deque, PyObject *v, Py_ssize_t start,
         cmp = _PyValue_RichCompareBool(item, query, Py_EQ);
         PyValue_CLOSE(item);
         if (cmp > 0)
-            return PyLong_FromSsize_t(stop - n - 1);
+            return PyValue_FromInt64(stop - n - 1);
         if (cmp < 0)
-            return NULL;
+            return PyValue_NULL;
         if (start_state != deque->state) {
             PyErr_SetString(PyExc_RuntimeError,
                             "deque mutated during iteration");
-            return NULL;
+            return PyValue_NULL;
         }
         index++;
         if (index == BLOCKLEN) {
@@ -1355,7 +1360,7 @@ deque_index_impl(dequeobject *deque, PyObject *v, Py_ssize_t start,
         }
     }
     PyErr_SetString(PyExc_ValueError, "deque.index(x): x not in deque");
-    return NULL;
+    return PyValue_NULL;
 }
 
 /* insert(), remove(), and delitem() are implemented in terms of
@@ -1378,33 +1383,33 @@ _collections.deque.insert as deque_insert
 Insert value before index.
 [clinic start generated code]*/
 
-static PyObject *
-deque_insert_impl(dequeobject *deque, Py_ssize_t index, PyObject *value)
-/*[clinic end generated code: output=ef4d2c15d5532b80 input=dbee706586cc9cde]*/
+static PyValue
+deque_insert_impl(dequeobject *deque, Py_ssize_t index, PyValueBorrow value)
+/*[clinic end generated code: output=e2f5085663684dab input=dbee706586cc9cde]*/
 {
     Py_ssize_t n = Py_SIZE(deque);
-    PyObject *rv;
+    PyValue rv;
 
     if (deque->maxlen == Py_SIZE(deque)) {
         PyErr_SetString(PyExc_IndexError, "deque already at its maximum size");
-        return NULL;
+        return PyValue_NULL;
     }
     if (index >= n)
         return deque_append_impl(deque, value);
     if (index <= -n || index == 0)
         return deque_appendleft_impl(deque, value);
     if (_deque_rotate(deque, -index))
-        return NULL;
+        return PyValue_NULL;
     if (index < 0)
         rv = deque_append_impl(deque, value);
     else
         rv = deque_appendleft_impl(deque, value);
-    if (rv == NULL)
-        return NULL;
-    Py_DECREF(rv);
+    if (PyValue_IsNull(rv))
+        return PyValue_NULL;
+    PyValue_CLOSE(rv);
     if (_deque_rotate(deque, index))
-        return NULL;
-    Py_RETURN_NONE;
+        return PyValue_NULL;
+    return PyValue_None;
 }
 
 static int
@@ -1464,7 +1469,8 @@ static PyObject *
 deque_item_impl(dequeobject *deque, Py_ssize_t i)
 /*[clinic end generated code: output=52e62af1427d61ef input=89f14f06b29122a1]*/
 {
-    return deque_value_object(deque_get_value(deque, i));
+    PyValue item_v = deque_get_value(deque, i);
+    return PyValue_IsNull(item_v) ? NULL : _PyValue_AsObjectStealAt(item_v, BOX_SITE_FIELD);
 }
 
 /* The value sq_item row: the item's owner, or PyValue_NULL with IndexError. */
@@ -1505,12 +1511,12 @@ _collections.deque.remove as deque_remove
 Remove first occurrence of value.
 [clinic start generated code]*/
 
-static PyObject *
-deque_remove_impl(dequeobject *deque, PyObject *value)
-/*[clinic end generated code: output=54cff28b8ef78c5b input=60eb3f8aa4de532a]*/
+static PyValue
+deque_remove_impl(dequeobject *deque, PyValueBorrow value)
+/*[clinic end generated code: output=be20f38fe02242e2 input=60eb3f8aa4de532a]*/
 {
     PyValue item;
-    PyValueBorrow query = PyValue_FromObjectBorrow(value);
+    PyValueBorrow query = value;
     block *b = deque->leftblock;
     Py_ssize_t i, n = Py_SIZE(deque), index = deque->leftindex;
     size_t start_state = deque->state;
@@ -1521,12 +1527,12 @@ deque_remove_impl(dequeobject *deque, PyObject *value)
         cmp = _PyValue_RichCompareBool(item, query, Py_EQ);
         PyValue_CLOSE(item);
         if (cmp < 0) {
-            return NULL;
+            return PyValue_NULL;
         }
         if (start_state != deque->state) {
             PyErr_SetString(PyExc_IndexError,
                             "deque mutated during iteration");
-            return NULL;
+            return PyValue_NULL;
         }
         if (cmp > 0) {
             break;
@@ -1539,13 +1545,13 @@ deque_remove_impl(dequeobject *deque, PyObject *value)
     }
     if (i == n) {
         PyErr_SetString(PyExc_ValueError, "deque.remove(x): x not in deque");
-        return NULL;
+        return PyValue_NULL;
     }
     rv = deque_del_item(deque, i);
     if (rv == -1) {
-        return NULL;
+        return PyValue_NULL;
     }
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 /*[clinic input]
@@ -1650,30 +1656,30 @@ _collections.deque.__reduce__ as deque___reduce__
 Return state information for pickling.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 deque___reduce___impl(dequeobject *deque)
-/*[clinic end generated code: output=cb85d9e0b7d2c5ad input=991a933a5bc7a526]*/
+/*[clinic end generated code: output=d9e1a925be15407e input=991a933a5bc7a526]*/
 {
     PyObject *state, *it;
 
     state = _PyObject_GetState((PyObject *)deque);
     if (state == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
 
-    it = PyObject_GetIter((PyObject *)deque);
+    it = _PyValue_GetIter(PyValue_FromObjectBorrow((PyObject *)deque));
     if (it == NULL) {
         Py_DECREF(state);
-        return NULL;
+        return PyValue_NULL;
     }
 
     // It's safe to access deque->maxlen here without holding the per object
     // lock for deque; deque->maxlen is only assigned during construction.
     if (deque->maxlen < 0) {
-        return Py_BuildValue("O()NN", Py_TYPE(deque), state, it);
+        return _PyValue_FromObjectResult(Py_BuildValue("O()NN", Py_TYPE(deque), state, it));
     }
     else {
-        return Py_BuildValue("O(()n)NN", Py_TYPE(deque), deque->maxlen, state, it);
+        return _PyValue_FromObjectResult(Py_BuildValue("O(()n)NN", Py_TYPE(deque), deque->maxlen, state, it));
     }
 }
 
@@ -1692,7 +1698,7 @@ deque_repr(PyObject *deque)
         return PyUnicode_FromString("[...]");
     }
 
-    aslist = PySequence_List(deque);
+    aslist = _PyValue_SequenceList(PyValue_FromObjectBorrow(deque));
     if (aslist == NULL) {
         Py_ReprLeave(deque);
         return NULL;
@@ -1740,10 +1746,10 @@ deque_richcompare(PyObject *v, PyObject *w, int op)
     }
 
     /* Search for the first index where items are different */
-    it1 = PyObject_GetIter(v);
+    it1 = _PyValue_GetIter(PyValue_FromObjectBorrow(v));
     if (it1 == NULL)
         goto done;
-    it2 = PyObject_GetIter(w);
+    it2 = _PyValue_GetIter(PyValue_FromObjectBorrow(w));
     if (it2 == NULL)
         goto done;
     for (;;) {
@@ -1753,9 +1759,9 @@ deque_richcompare(PyObject *v, PyObject *w, int op)
         y = PyIter_Next(it2);
         if (x == NULL || y == NULL)
             break;
-        b = PyObject_RichCompareBool(x, y, Py_EQ);
+        b = _PyValue_RichCompareBool(PyValue_FromObjectBorrow(x), PyValue_FromObjectBorrow(y), Py_EQ);
         if (b == 0) {
-            cmp = PyObject_RichCompareBool(x, y, op);
+            cmp = _PyValue_RichCompareBool(PyValue_FromObjectBorrow(x), PyValue_FromObjectBorrow(y), op);
             Py_DECREF(x);
             Py_DECREF(y);
             goto done;
@@ -1802,12 +1808,17 @@ A list-like sequence optimized for data accesses near its endpoints.
 [clinic start generated code]*/
 
 static int
-deque_init_impl(dequeobject *deque, PyObject *iterable, PyObject *maxlenobj)
-/*[clinic end generated code: output=7084a39d71218dcd input=2b9e37af1fd73143]*/
+deque_init_impl(dequeobject *deque, PyValueBorrow iterable,
+                PyValueBorrow maxlenobj)
+/*[clinic end generated code: output=fd58e6cddf35d080 input=2b9e37af1fd73143]*/
 {
     Py_ssize_t maxlen = -1;
-    if (maxlenobj != NULL && maxlenobj != Py_None) {
-        maxlen = PyLong_AsSsize_t(maxlenobj);
+    if (!PyValue_IsNull(maxlenobj) && !PyValue_IsNone(maxlenobj)) {
+        PyObject *maxlen_obj = _PyValue_AsObjectAt(maxlenobj, BOX_SITE_PARSER);
+        if (maxlen_obj == NULL)
+            return -1;
+        maxlen = PyLong_AsSsize_t(maxlen_obj);
+        Py_DECREF(maxlen_obj);
         if (maxlen == -1 && PyErr_Occurred())
             return -1;
         if (maxlen < 0) {
@@ -1818,11 +1829,11 @@ deque_init_impl(dequeobject *deque, PyObject *iterable, PyObject *maxlenobj)
     deque->maxlen = maxlen;
     if (Py_SIZE(deque) > 0)
         (void)deque_clear((PyObject *)deque);
-    if (iterable != NULL) {
-        PyObject *rv = deque_extend_impl(deque, iterable);
-        if (rv == NULL)
+    if (!PyValue_IsNull(iterable)) {
+        PyValue rv = deque_extend_impl(deque, iterable);
+        if (PyValue_IsNull(rv))
             return -1;
-        Py_DECREF(rv);
+        PyValue_CLOSE(rv);
     }
     return 0;
 }
@@ -1836,9 +1847,9 @@ _collections.deque.__sizeof__ as deque___sizeof__
 Return the size of the deque in memory, in bytes.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 deque___sizeof___impl(dequeobject *deque)
-/*[clinic end generated code: output=4d36e9fb4f30bbaf input=762312f2d4813535]*/
+/*[clinic end generated code: output=892c612cff606cd8 input=762312f2d4813535]*/
 {
     size_t res = _PyObject_SIZE(Py_TYPE(deque));
     size_t blocks;
@@ -1846,7 +1857,7 @@ deque___sizeof___impl(dequeobject *deque)
     assert(((size_t)deque->leftindex + (size_t)Py_SIZE(deque) - 1) ==
            ((blocks - 1) * BLOCKLEN + (size_t)deque->rightindex));
     res += blocks * sizeof(block);
-    return PyLong_FromSize_t(res);
+    return _PyValue_FromObjectResult(PyLong_FromSize_t(res));
 }
 
 static PyObject *
@@ -1868,11 +1879,11 @@ _collections.deque.__reversed__ as deque___reversed__
 Return a reverse iterator over the deque.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 deque___reversed___impl(dequeobject *deque)
-/*[clinic end generated code: output=3e7e7e715883cf2e input=3d494c25a6fe5c7e]*/
+/*[clinic end generated code: output=f0c5e7dc3db37c3e input=3d494c25a6fe5c7e]*/
 {
-    return deque_reviter(deque);
+    return _PyValue_FromObjectResult(deque_reviter(deque));
 }
 
 /* deque object ********************************************************/
@@ -2297,7 +2308,7 @@ defdict_missing(PyObject *op, PyObject *key)
     if (factory == NULL || factory == Py_None) {
         /* XXX Call dict.__missing__(key) */
         PyObject *tup;
-        tup = PyTuple_Pack(1, key);
+        tup = _PyTuple_PackValues(1, (PyValueBorrow[]){PyValue_FromObjectBorrow(key)});
         if (!tup) return NULL;
         PyErr_SetObject(PyExc_KeyError, tup);
         Py_DECREF(tup);
@@ -2306,11 +2317,17 @@ defdict_missing(PyObject *op, PyObject *key)
     value = _PyObject_CallNoArgs(factory);
     if (value == NULL)
         return value;
-    PyObject *result = NULL;
-    (void)PyDict_SetDefaultRef(op, key, value, &result);
-    // 'result' is NULL, or a strong reference to 'value' or 'op[key]'
+    PyValue result = PyValue_NULL;
+    (void)_PyDict_SetDefaultValue(op, PyValue_FromObjectBorrow(key),
+                                 PyValue_FromObjectBorrow(value), &result);
+    // 'result' is NULL, or an owner of 'value' or 'op[key]'
     Py_DECREF(value);
-    return result;
+    if (PyValue_IsNull(result)) {
+        return NULL;
+    }
+    PyObject *result_obj = _PyValue_AsObjectAt(result, BOX_SITE_DICT);
+    PyValue_CLOSE(result);
+    return result_obj;
 }
 
 static inline PyObject*
@@ -2367,7 +2384,7 @@ defdict_reduce(PyObject *op, PyObject *Py_UNUSED(dummy))
     if (dd->default_factory == NULL || dd->default_factory == Py_None)
         args = PyTuple_New(0);
     else
-        args = PyTuple_Pack(1, dd->default_factory);
+        args = _PyTuple_PackValues(1, (PyValueBorrow[]){PyValue_FromObjectBorrow(dd->default_factory)});
     if (args == NULL)
         return NULL;
     items = PyObject_CallMethodNoArgs(op, &_Py_ID(items));
@@ -2375,14 +2392,13 @@ defdict_reduce(PyObject *op, PyObject *Py_UNUSED(dummy))
         Py_DECREF(args);
         return NULL;
     }
-    iter = PyObject_GetIter(items);
+    iter = _PyValue_GetIter(PyValue_FromObjectBorrow(items));
     if (iter == NULL) {
         Py_DECREF(items);
         Py_DECREF(args);
         return NULL;
     }
-    result = PyTuple_Pack(5, Py_TYPE(dd), args,
-                          Py_None, Py_None, iter);
+    result = _PyTuple_PackValues(5, (PyValueBorrow[]){_PyValue_FromObjectKnown(_PyObject_CAST(Py_TYPE(dd))), PyValue_FromObjectBorrow(args), _PyValue_FromObjectKnown(Py_None), _PyValue_FromObjectKnown(Py_None), PyValue_FromObjectBorrow(iter)});
     Py_DECREF(iter);
     Py_DECREF(items);
     Py_DECREF(args);
@@ -2451,7 +2467,7 @@ defdict_repr(PyObject *op)
             defrepr = PyUnicode_FromString("...");
         }
         else {
-            defrepr = PyObject_Repr(dd->default_factory);
+            defrepr = _PyValue_Repr(PyValue_FromObjectBorrow(dd->default_factory));
             Py_ReprLeave(dd->default_factory);
         }
     }
@@ -2531,7 +2547,12 @@ defdict_init(PyObject *self, PyObject *args, PyObject *kwds)
     else {
         Py_ssize_t n = PyTuple_GET_SIZE(args);
         if (n > 0) {
-            newdefault = PyTuple_GetItemRef(args, 0);
+            PyValue first = PyTuple_GetValue(args, 0);
+            if (PyValue_IsNull(first)) {
+                return -1;
+            }
+            newdefault = _PyValue_AsObjectAt(first, BOX_SITE_FIELD);
+            PyValue_CLOSE(first);
             if (newdefault == NULL) {
                 return -1;
             }
@@ -2605,37 +2626,40 @@ _collections._count_elements
 Count elements in the iterable, updating the mapping
 [clinic start generated code]*/
 
-static PyObject *
-_collections__count_elements_impl(PyObject *module, PyObject *mapping,
-                                  PyObject *iterable)
-/*[clinic end generated code: output=7e0c1789636b3d8f input=e79fad04534a0b45]*/
+static PyValue
+_collections__count_elements_impl(PyObject *module, PyValueBorrow mapping,
+                                  PyValueBorrow iterable)
+/*[clinic end generated code: output=c439da44c6cd8bea input=e79fad04534a0b45]*/
 {
     PyObject *it, *oldval;
     PyObject *newval = NULL;
     PyObject *key = NULL;
     PyObject *bound_get = NULL;
+    PyObject *mapping_obj = NULL;  // the mapping as an object, borrowed or boxed
+    PyObject *mapping_boxed = NULL;  // the new reference to release, if any
     PyObject *mapping_get;
     PyObject *dict_get;
     PyObject *mapping_setitem;
     PyObject *dict_setitem;
     PyObject *one = _PyLong_GetOne();  // borrowed reference
 
-    it = PyObject_GetIter(iterable);
+    it = _PyValue_GetIter(iterable);
     if (it == NULL)
-        return NULL;
+        return PyValue_NULL;
 
     /* Only take the fast path when get() and __setitem__()
      * have not been overridden.
      */
-    mapping_get = _PyType_LookupRef(Py_TYPE(mapping), &_Py_ID(get));
+    mapping_get = _PyType_LookupRef(PyValue_TYPE(mapping), &_Py_ID(get));
     dict_get = _PyType_LookupRef(&PyDict_Type, &_Py_ID(get));
-    mapping_setitem = _PyType_LookupRef(Py_TYPE(mapping), &_Py_ID(__setitem__));
+    mapping_setitem = _PyType_LookupRef(PyValue_TYPE(mapping), &_Py_ID(__setitem__));
     dict_setitem = _PyType_LookupRef(&PyDict_Type, &_Py_ID(__setitem__));
 
     if (mapping_get != NULL && mapping_get == dict_get &&
         mapping_setitem != NULL && mapping_setitem == dict_setitem &&
-        PyDict_Check(mapping))
+        (PyValue_IsObject(mapping) && PyDict_Check(PyValue_AsKnownObjectBorrow(mapping))))
     {
+        mapping_obj = PyValue_AsKnownObjectBorrow(mapping);
         while (1) {
             /* Fast path advantages:
                    1. Eliminate double hashing
@@ -2658,28 +2682,38 @@ _collections__count_elements_impl(PyObject *module, PyObject *mapping,
                 goto done;
             }
 
-            int found = _PyDict_GetItemRef_KnownHash(
-                (PyDictObject *)mapping, key, hash, &oldval);
+            PyValue oldv;
+            int found = _PyDict_GetValue_KnownHash(
+                mapping_obj, PyValue_FromObjectBorrow(key), hash, &oldv);
             if (found < 0) {
                 goto done;
             }
             if (found == 0) {
-                if (_PyDict_SetItem_KnownHash(mapping, key, one, hash) < 0)
+                if (_PyDict_SetValue_KnownHash(mapping_obj, PyValue_FromObjectBorrow(key), PyValue_FromObjectBorrow(one), hash) < 0)
                     goto done;
             } else {
-                newval = PyNumber_Add(oldval, one);
-                Py_DECREF(oldval);
-                if (newval == NULL)
+                PyValue newv = _PyValue_Add(oldv, PyValue_FromObjectBorrow(one));
+                PyValue_CLOSE(oldv);
+                if (PyValue_IsNull(newv))
                     goto done;
-                if (_PyDict_SetItem_KnownHash(mapping, key, newval, hash) < 0)
+                int set_res = _PyDict_SetValue_KnownHash(mapping_obj, PyValue_FromObjectBorrow(key), newv, hash);
+                PyValue_CLOSE(newv);
+                if (set_res < 0)
                     goto done;
-                Py_CLEAR(newval);
             }
             Py_DECREF(key);
         }
     }
     else {
-        bound_get = PyObject_GetAttr(mapping, &_Py_ID(get));
+        mapping_boxed = _PyValue_AsObjectAt(mapping, BOX_SITE_PARSER);
+        if (mapping_boxed == NULL)
+            goto done;
+        mapping_obj = mapping_boxed;
+        PyValue bound_get_v = _PyValue_GetAttr(mapping, &_Py_ID(get));
+        if (PyValue_IsNull(bound_get_v))
+            goto done;
+        bound_get = _PyValue_AsObjectAt(bound_get_v, BOX_SITE_ATTRIBUTE);
+        PyValue_CLOSE(bound_get_v);
         if (bound_get == NULL)
             goto done;
 
@@ -2694,12 +2728,20 @@ _collections__count_elements_impl(PyObject *module, PyObject *mapping,
             if (oldval == zero) {
                 newval = Py_NewRef(one);
             } else {
-                newval = PyNumber_Add(oldval, one);
+                PyValue sum = _PyValue_Add(PyValue_FromObjectBorrow(oldval),
+                                           PyValue_FromObjectBorrow(one));
+                if (PyValue_IsNull(sum)) {
+                    newval = NULL;
+                }
+                else {
+                    newval = _PyValue_AsObjectAt(sum, BOX_SITE_NUMBER);
+                    PyValue_CLOSE(sum);
+                }
             }
             Py_DECREF(oldval);
             if (newval == NULL)
                 break;
-            if (PyObject_SetItem(mapping, key, newval) < 0)
+            if (_PyValue_SetItem(PyValue_FromObjectBorrow(mapping_obj), PyValue_FromObjectBorrow(key), PyValue_FromObjectBorrow(newval)) < 0)
                 break;
             Py_CLEAR(newval);
             Py_DECREF(key);
@@ -2715,9 +2757,10 @@ done:
     Py_XDECREF(key);
     Py_XDECREF(newval);
     Py_XDECREF(bound_get);
+    Py_XDECREF(mapping_boxed);
     if (PyErr_Occurred())
-        return NULL;
-    Py_RETURN_NONE;
+        return PyValue_NULL;
+    return PyValue_None;
 }
 
 /* Helper function for namedtuple() ************************************/
@@ -2739,18 +2782,23 @@ _tuplegetter.__new__ as tuplegetter_new
     /
 [clinic start generated code]*/
 
-static PyObject *
-tuplegetter_new_impl(PyTypeObject *type, Py_ssize_t index, PyObject *doc)
-/*[clinic end generated code: output=014be444ad80263f input=87c576a5bdbc0bbb]*/
+static PyValue
+tuplegetter_new_impl(PyTypeObject *type, Py_ssize_t index, PyValueBorrow doc)
+/*[clinic end generated code: output=31e061093b1d8b19 input=87c576a5bdbc0bbb]*/
 {
     _tuplegetterobject* self;
+    PyObject *doc_obj = _PyValue_AsObjectAt(doc, BOX_SITE_FIELD);
+    if (doc_obj == NULL) {
+        return PyValue_NULL;
+    }
     self = (_tuplegetterobject *)type->tp_alloc(type, 0);
     if (self == NULL) {
-        return NULL;
+        Py_DECREF(doc_obj);
+        return PyValue_NULL;
     }
     self->index = index;
-    self->doc = Py_NewRef(doc);
-    return (PyObject *)self;
+    self->doc = doc_obj;
+    return _PyValue_FromObjectResult((PyObject *)self);
 }
 
 static PyObject *
@@ -2779,7 +2827,12 @@ tuplegetter_descr_get(PyObject *self, PyObject *obj, PyObject *type)
         return NULL;
     }
 
-    result = PyTuple_GetItemRef(obj, index);
+    PyValue item = PyTuple_GetValue(obj, index);
+    if (PyValue_IsNull(item)) {
+        return NULL;
+    }
+    result = _PyValue_AsObjectAt(item, BOX_SITE_TUPLE);
+    PyValue_CLOSE(item);
     return result;
 }
 

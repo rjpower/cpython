@@ -2,13 +2,19 @@
 preserve
 [clinic start generated code]*/
 
+#ifndef Py_VALUE_CORE
+#  error "value-emission Clinic output requires Py_VALUE_CORE"
+#endif
+
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 #  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
 #  include "pycore_value.h"       // _PyValue_STATIC_IMMORTAL()
 #endif
-#include "pycore_abstract.h"      // _PyNumber_Index()
-#include "pycore_modsupport.h"    // _PyArg_UnpackKeywords()
+#include "pycore_long_value.h"    // _PyValue_IntAsSsize_t()
+#include "pycore_modsupport.h"    // _PyArg_UnpackKeywordsValue()
+#include "pycore_value_call.h"    // METH_VALUE
+#include "pycore_value_ops.h"     // _PyValue_Index()
 
 PyDoc_STRVAR(_bisect_bisect_right__doc__,
 "bisect_right($module, /, a, x, lo=0, hi=None, *, key=None)\n"
@@ -26,16 +32,16 @@ PyDoc_STRVAR(_bisect_bisect_right__doc__,
 "A custom key function can be supplied to customize the sort order.");
 
 #define _BISECT_BISECT_RIGHT_METHODDEF    \
-    {"bisect_right", _PyCFunction_CAST(_bisect_bisect_right), METH_FASTCALL|METH_KEYWORDS, _bisect_bisect_right__doc__},
+    {"bisect_right", _PyCFunction_CAST(_bisect_bisect_right), METH_VALUE, _bisect_bisect_right__doc__},
 
 static Py_ssize_t
-_bisect_bisect_right_impl(PyObject *module, PyObject *a, PyObject *x,
-                          Py_ssize_t lo, Py_ssize_t hi, PyObject *key);
+_bisect_bisect_right_impl(PyObject *module, PyValueBorrow a, PyValueBorrow x,
+                          Py_ssize_t lo, Py_ssize_t hi, PyValueBorrow key);
 
-static PyObject *
-_bisect_bisect_right(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_bisect_bisect_right(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 5
@@ -63,32 +69,27 @@ _bisect_bisect_right(PyObject *module, PyObject *const *args, Py_ssize_t nargs, 
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[5];
-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 2;
-    PyObject *a;
-    PyObject *x;
+    Py_ssize_t _idx[5];
+    PyValueBorrow a;
+    PyValueBorrow x;
     Py_ssize_t lo = 0;
     Py_ssize_t hi = -1;
-    PyObject *key = Py_None;
+    PyValueBorrow key = PyValue_Borrow(PyValue_None);
     Py_ssize_t _return_value;
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 2, /*maxpos*/ 4, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 2, /*maxpos*/ 4, /*minkw*/ 0, /*varpos*/ 0, _idx, 5)) {
         goto exit;
     }
-    a = args[0];
-    x = args[1];
-    if (!noptargs) {
-        goto skip_optional_pos;
-    }
-    if (args[2]) {
+    a = PyValue_Borrow(args[_idx[0]]);
+    x = PyValue_Borrow(args[_idx[1]]);
+    if (_idx[2] >= 0) {
         {
             Py_ssize_t ival = -1;
-            PyObject *iobj = _PyNumber_Index(args[2]);
-            if (iobj != NULL) {
-                ival = PyLong_AsSsize_t(iobj);
-                Py_DECREF(iobj);
+            PyValue iobj = _PyValue_Index(PyValue_Borrow(args[_idx[2]]));
+            if (!PyValue_IsNull(iobj)) {
+                ival = _PyValue_IntAsSsize_t(PyValue_Borrow(iobj));
+                PyValue_CLOSE(iobj);
             }
             if (ival == -1 && PyErr_Occurred()) {
                 goto exit;
@@ -100,29 +101,20 @@ _bisect_bisect_right(PyObject *module, PyObject *const *args, Py_ssize_t nargs, 
                 goto exit;
             }
         }
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
     }
-    if (args[3]) {
-        if (!_Py_convert_optional_to_ssize_t(args[3], &hi)) {
+    if (_idx[3] >= 0) {
+        if (!_Py_convert_optional_to_ssize_t_value(PyValue_Borrow(args[_idx[3]]), &hi)) {
             goto exit;
         }
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
     }
-skip_optional_pos:
-    if (!noptargs) {
-        goto skip_optional_kwonly;
+    if (_idx[4] >= 0) {
+        key = PyValue_Borrow(args[_idx[4]]);
     }
-    key = args[4];
-skip_optional_kwonly:
-    _return_value = _bisect_bisect_right_impl(module, a, x, lo, hi, key);
+    _return_value = _bisect_bisect_right_impl(PyValue_AsKnownObjectBorrow(module), a, x, lo, hi, key);
     if ((_return_value == -1) && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = PyLong_FromSsize_t(_return_value);
+    return_value = PyValue_FromInt64((int64_t)_return_value);
 
 exit:
     return return_value;
@@ -142,16 +134,16 @@ PyDoc_STRVAR(_bisect_insort_right__doc__,
 "A custom key function can be supplied to customize the sort order.");
 
 #define _BISECT_INSORT_RIGHT_METHODDEF    \
-    {"insort_right", _PyCFunction_CAST(_bisect_insort_right), METH_FASTCALL|METH_KEYWORDS, _bisect_insort_right__doc__},
+    {"insort_right", _PyCFunction_CAST(_bisect_insort_right), METH_VALUE, _bisect_insort_right__doc__},
 
-static PyObject *
-_bisect_insort_right_impl(PyObject *module, PyObject *a, PyObject *x,
-                          Py_ssize_t lo, Py_ssize_t hi, PyObject *key);
+static PyValue
+_bisect_insort_right_impl(PyObject *module, PyValueBorrow a, PyValueBorrow x,
+                          Py_ssize_t lo, Py_ssize_t hi, PyValueBorrow key);
 
-static PyObject *
-_bisect_insort_right(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_bisect_insort_right(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 5
@@ -179,31 +171,26 @@ _bisect_insort_right(PyObject *module, PyObject *const *args, Py_ssize_t nargs, 
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[5];
-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 2;
-    PyObject *a;
-    PyObject *x;
+    Py_ssize_t _idx[5];
+    PyValueBorrow a;
+    PyValueBorrow x;
     Py_ssize_t lo = 0;
     Py_ssize_t hi = -1;
-    PyObject *key = Py_None;
+    PyValueBorrow key = PyValue_Borrow(PyValue_None);
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 2, /*maxpos*/ 4, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 2, /*maxpos*/ 4, /*minkw*/ 0, /*varpos*/ 0, _idx, 5)) {
         goto exit;
     }
-    a = args[0];
-    x = args[1];
-    if (!noptargs) {
-        goto skip_optional_pos;
-    }
-    if (args[2]) {
+    a = PyValue_Borrow(args[_idx[0]]);
+    x = PyValue_Borrow(args[_idx[1]]);
+    if (_idx[2] >= 0) {
         {
             Py_ssize_t ival = -1;
-            PyObject *iobj = _PyNumber_Index(args[2]);
-            if (iobj != NULL) {
-                ival = PyLong_AsSsize_t(iobj);
-                Py_DECREF(iobj);
+            PyValue iobj = _PyValue_Index(PyValue_Borrow(args[_idx[2]]));
+            if (!PyValue_IsNull(iobj)) {
+                ival = _PyValue_IntAsSsize_t(PyValue_Borrow(iobj));
+                PyValue_CLOSE(iobj);
             }
             if (ival == -1 && PyErr_Occurred()) {
                 goto exit;
@@ -215,25 +202,16 @@ _bisect_insort_right(PyObject *module, PyObject *const *args, Py_ssize_t nargs, 
                 goto exit;
             }
         }
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
     }
-    if (args[3]) {
-        if (!_Py_convert_optional_to_ssize_t(args[3], &hi)) {
+    if (_idx[3] >= 0) {
+        if (!_Py_convert_optional_to_ssize_t_value(PyValue_Borrow(args[_idx[3]]), &hi)) {
             goto exit;
         }
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
     }
-skip_optional_pos:
-    if (!noptargs) {
-        goto skip_optional_kwonly;
+    if (_idx[4] >= 0) {
+        key = PyValue_Borrow(args[_idx[4]]);
     }
-    key = args[4];
-skip_optional_kwonly:
-    return_value = _bisect_insort_right_impl(module, a, x, lo, hi, key);
+    return_value = _bisect_insort_right_impl(PyValue_AsKnownObjectBorrow(module), a, x, lo, hi, key);
 
 exit:
     return return_value;
@@ -255,16 +233,16 @@ PyDoc_STRVAR(_bisect_bisect_left__doc__,
 "A custom key function can be supplied to customize the sort order.");
 
 #define _BISECT_BISECT_LEFT_METHODDEF    \
-    {"bisect_left", _PyCFunction_CAST(_bisect_bisect_left), METH_FASTCALL|METH_KEYWORDS, _bisect_bisect_left__doc__},
+    {"bisect_left", _PyCFunction_CAST(_bisect_bisect_left), METH_VALUE, _bisect_bisect_left__doc__},
 
 static Py_ssize_t
-_bisect_bisect_left_impl(PyObject *module, PyObject *a, PyObject *x,
-                         Py_ssize_t lo, Py_ssize_t hi, PyObject *key);
+_bisect_bisect_left_impl(PyObject *module, PyValueBorrow a, PyValueBorrow x,
+                         Py_ssize_t lo, Py_ssize_t hi, PyValueBorrow key);
 
-static PyObject *
-_bisect_bisect_left(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_bisect_bisect_left(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 5
@@ -292,32 +270,27 @@ _bisect_bisect_left(PyObject *module, PyObject *const *args, Py_ssize_t nargs, P
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[5];
-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 2;
-    PyObject *a;
-    PyObject *x;
+    Py_ssize_t _idx[5];
+    PyValueBorrow a;
+    PyValueBorrow x;
     Py_ssize_t lo = 0;
     Py_ssize_t hi = -1;
-    PyObject *key = Py_None;
+    PyValueBorrow key = PyValue_Borrow(PyValue_None);
     Py_ssize_t _return_value;
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 2, /*maxpos*/ 4, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 2, /*maxpos*/ 4, /*minkw*/ 0, /*varpos*/ 0, _idx, 5)) {
         goto exit;
     }
-    a = args[0];
-    x = args[1];
-    if (!noptargs) {
-        goto skip_optional_pos;
-    }
-    if (args[2]) {
+    a = PyValue_Borrow(args[_idx[0]]);
+    x = PyValue_Borrow(args[_idx[1]]);
+    if (_idx[2] >= 0) {
         {
             Py_ssize_t ival = -1;
-            PyObject *iobj = _PyNumber_Index(args[2]);
-            if (iobj != NULL) {
-                ival = PyLong_AsSsize_t(iobj);
-                Py_DECREF(iobj);
+            PyValue iobj = _PyValue_Index(PyValue_Borrow(args[_idx[2]]));
+            if (!PyValue_IsNull(iobj)) {
+                ival = _PyValue_IntAsSsize_t(PyValue_Borrow(iobj));
+                PyValue_CLOSE(iobj);
             }
             if (ival == -1 && PyErr_Occurred()) {
                 goto exit;
@@ -329,29 +302,20 @@ _bisect_bisect_left(PyObject *module, PyObject *const *args, Py_ssize_t nargs, P
                 goto exit;
             }
         }
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
     }
-    if (args[3]) {
-        if (!_Py_convert_optional_to_ssize_t(args[3], &hi)) {
+    if (_idx[3] >= 0) {
+        if (!_Py_convert_optional_to_ssize_t_value(PyValue_Borrow(args[_idx[3]]), &hi)) {
             goto exit;
         }
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
     }
-skip_optional_pos:
-    if (!noptargs) {
-        goto skip_optional_kwonly;
+    if (_idx[4] >= 0) {
+        key = PyValue_Borrow(args[_idx[4]]);
     }
-    key = args[4];
-skip_optional_kwonly:
-    _return_value = _bisect_bisect_left_impl(module, a, x, lo, hi, key);
+    _return_value = _bisect_bisect_left_impl(PyValue_AsKnownObjectBorrow(module), a, x, lo, hi, key);
     if ((_return_value == -1) && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = PyLong_FromSsize_t(_return_value);
+    return_value = PyValue_FromInt64((int64_t)_return_value);
 
 exit:
     return return_value;
@@ -371,16 +335,16 @@ PyDoc_STRVAR(_bisect_insort_left__doc__,
 "A custom key function can be supplied to customize the sort order.");
 
 #define _BISECT_INSORT_LEFT_METHODDEF    \
-    {"insort_left", _PyCFunction_CAST(_bisect_insort_left), METH_FASTCALL|METH_KEYWORDS, _bisect_insort_left__doc__},
+    {"insort_left", _PyCFunction_CAST(_bisect_insort_left), METH_VALUE, _bisect_insort_left__doc__},
 
-static PyObject *
-_bisect_insort_left_impl(PyObject *module, PyObject *a, PyObject *x,
-                         Py_ssize_t lo, Py_ssize_t hi, PyObject *key);
+static PyValue
+_bisect_insort_left_impl(PyObject *module, PyValueBorrow a, PyValueBorrow x,
+                         Py_ssize_t lo, Py_ssize_t hi, PyValueBorrow key);
 
-static PyObject *
-_bisect_insort_left(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_bisect_insort_left(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 5
@@ -408,31 +372,26 @@ _bisect_insort_left(PyObject *module, PyObject *const *args, Py_ssize_t nargs, P
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[5];
-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 2;
-    PyObject *a;
-    PyObject *x;
+    Py_ssize_t _idx[5];
+    PyValueBorrow a;
+    PyValueBorrow x;
     Py_ssize_t lo = 0;
     Py_ssize_t hi = -1;
-    PyObject *key = Py_None;
+    PyValueBorrow key = PyValue_Borrow(PyValue_None);
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 2, /*maxpos*/ 4, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 2, /*maxpos*/ 4, /*minkw*/ 0, /*varpos*/ 0, _idx, 5)) {
         goto exit;
     }
-    a = args[0];
-    x = args[1];
-    if (!noptargs) {
-        goto skip_optional_pos;
-    }
-    if (args[2]) {
+    a = PyValue_Borrow(args[_idx[0]]);
+    x = PyValue_Borrow(args[_idx[1]]);
+    if (_idx[2] >= 0) {
         {
             Py_ssize_t ival = -1;
-            PyObject *iobj = _PyNumber_Index(args[2]);
-            if (iobj != NULL) {
-                ival = PyLong_AsSsize_t(iobj);
-                Py_DECREF(iobj);
+            PyValue iobj = _PyValue_Index(PyValue_Borrow(args[_idx[2]]));
+            if (!PyValue_IsNull(iobj)) {
+                ival = _PyValue_IntAsSsize_t(PyValue_Borrow(iobj));
+                PyValue_CLOSE(iobj);
             }
             if (ival == -1 && PyErr_Occurred()) {
                 goto exit;
@@ -444,27 +403,18 @@ _bisect_insort_left(PyObject *module, PyObject *const *args, Py_ssize_t nargs, P
                 goto exit;
             }
         }
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
     }
-    if (args[3]) {
-        if (!_Py_convert_optional_to_ssize_t(args[3], &hi)) {
+    if (_idx[3] >= 0) {
+        if (!_Py_convert_optional_to_ssize_t_value(PyValue_Borrow(args[_idx[3]]), &hi)) {
             goto exit;
         }
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
     }
-skip_optional_pos:
-    if (!noptargs) {
-        goto skip_optional_kwonly;
+    if (_idx[4] >= 0) {
+        key = PyValue_Borrow(args[_idx[4]]);
     }
-    key = args[4];
-skip_optional_kwonly:
-    return_value = _bisect_insort_left_impl(module, a, x, lo, hi, key);
+    return_value = _bisect_insort_left_impl(PyValue_AsKnownObjectBorrow(module), a, x, lo, hi, key);
 
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=ba20d04003f3ca31 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=4a64c77906099392 input=a9049054013a1b77]*/

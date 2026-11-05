@@ -4,12 +4,22 @@
 #  define Py_BUILD_CORE_MODULE 1
 #endif
 
+#define Py_VALUE_CORE 1
 #include "Python.h"
 #include "pycore_abstract.h"      // _PyNumber_Index()
 #include "pycore_bitutils.h"      // _Py_bit_length()
 #include "pycore_long.h"          // _PyLong_GetZero()
+#include "pycore_long_value.h"    // _PyValue_AsLongLongAndOverflow()
+#include "pycore_value.h"         // PyValue_TYPE()
+#include "pycore_value_ops.h"     // _PyValue_RichCompareBool()
+#include "pycore_value_slots.h"// _PyValue_FromObjectResult()
 
 #include "clinic/mathintegermodule.c.h"
+
+/*[clinic input]
+value_emission
+[clinic start generated code]*/
+/*[clinic end generated code: output=da39a3ee5e6b4b0d input=eb7b17088bfd7215]*/
 
 /*[clinic input]
 module math
@@ -26,36 +36,59 @@ math.integer.gcd
 Greatest Common Divisor.
 [clinic start generated code]*/
 
-static PyObject *
-math_integer_gcd_impl(PyObject *module, PyObject * const *args,
+static PyValue
+math_integer_gcd_impl(PyObject *module, const PyValue *args,
                       Py_ssize_t args_length)
-/*[clinic end generated code: output=8e9c5bab06bea203 input=a90cde2ac5281551]*/
+/*[clinic end generated code: output=3674efabfd574c6a input=a90cde2ac5281551]*/
 {
     // Fast-path for the common case: gcd(int, int)
-    if (args_length == 2 && PyLong_CheckExact(args[0]) && PyLong_CheckExact(args[1]))
+    if (args_length == 2 && PyValue_TYPE(PyValue_Borrow(args[0])) == &PyLong_Type
+        && PyValue_TYPE(PyValue_Borrow(args[1])) == &PyLong_Type)
     {
-        return _PyLong_GCD(args[0], args[1]);
+        PyObject *a = _PyValue_AsObjectAt(PyValue_Borrow(args[0]), BOX_SITE_PARSER);
+        if (a == NULL) {
+            return PyValue_NULL;
+        }
+        PyObject *b = _PyValue_AsObjectAt(PyValue_Borrow(args[1]), BOX_SITE_PARSER);
+        if (b == NULL) {
+            Py_DECREF(a);
+            return PyValue_NULL;
+        }
+        PyObject *g = _PyLong_GCD(a, b);
+        Py_DECREF(a);
+        Py_DECREF(b);
+        return _PyValue_FromObjectResult(g);
     }
 
     if (args_length == 0) {
-        return PyLong_FromLong(0);
+        return PyValue_FromInt64(0);
     }
 
-    PyObject *res = PyNumber_Index(args[0]);
+    PyValue res_v = _PyValue_Index(PyValue_Borrow(args[0]));
+
+    PyObject *res = PyValue_IsNull(res_v) ? NULL : _PyValue_AsObjectStealAt(res_v, BOX_SITE_NUMBER);
+
+    if (res != NULL && !PyLong_CheckExact(res)) {
+
+        Py_SETREF(res, _PyLong_Copy((PyLongObject *)res));
+
+    }
     if (res == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
     if (args_length == 1) {
-        Py_SETREF(res, PyNumber_Absolute(res));
-        return res;
+        PyValue item_v8 = _PyValue_Absolute(PyValue_FromObjectBorrow(res));
+        Py_SETREF(res, (PyValue_IsNull(item_v8) ? NULL : _PyValue_AsObjectStealAt(item_v8, BOX_SITE_NUMBER)));
+        return _PyValue_FromObjectResult(res);
     }
 
     PyObject *one = _PyLong_GetOne();  // borrowed ref
     for (Py_ssize_t i = 1; i < args_length; i++) {
-        PyObject *x = _PyNumber_Index(args[i]);
+        PyValue x_v = _PyValue_Index(PyValue_Borrow(args[i]));
+        PyObject *x = PyValue_IsNull(x_v) ? NULL : _PyValue_AsObjectStealAt(x_v, BOX_SITE_NUMBER);
         if (x == NULL) {
             Py_DECREF(res);
-            return NULL;
+            return PyValue_NULL;
         }
         if (res == one) {
             /* Fast path: just check arguments.
@@ -66,10 +99,10 @@ math_integer_gcd_impl(PyObject *module, PyObject * const *args,
         Py_SETREF(res, _PyLong_GCD(res, x));
         Py_DECREF(x);
         if (res == NULL) {
-            return NULL;
+            return PyValue_NULL;
         }
     }
-    return res;
+    return _PyValue_FromObjectResult(res);
 }
 
 
@@ -85,17 +118,20 @@ long_lcm(PyObject *a, PyObject *b)
     if (g == NULL) {
         return NULL;
     }
-    f = PyNumber_FloorDivide(a, g);
+    PyValue f_v = _PyValue_FloorDivide(PyValue_FromObjectBorrow(a), PyValue_FromObjectBorrow(g));
+    f = PyValue_IsNull(f_v) ? NULL : _PyValue_AsObjectStealAt(f_v, BOX_SITE_NUMBER);
     Py_DECREF(g);
     if (f == NULL) {
         return NULL;
     }
-    m = PyNumber_Multiply(f, b);
+    PyValue m_v = _PyValue_Multiply(PyValue_FromObjectBorrow(f), PyValue_FromObjectBorrow(b));
+    m = PyValue_IsNull(m_v) ? NULL : _PyValue_AsObjectStealAt(m_v, BOX_SITE_NUMBER);
     Py_DECREF(f);
     if (m == NULL) {
         return NULL;
     }
-    ab = PyNumber_Absolute(m);
+    PyValue ab_v = _PyValue_Absolute(PyValue_FromObjectBorrow(m));
+    ab = PyValue_IsNull(ab_v) ? NULL : _PyValue_AsObjectStealAt(ab_v, BOX_SITE_NUMBER);
     Py_DECREF(m);
     return ab;
 }
@@ -109,32 +145,41 @@ math.integer.lcm
 Least Common Multiple.
 [clinic start generated code]*/
 
-static PyObject *
-math_integer_lcm_impl(PyObject *module, PyObject * const *args,
+static PyValue
+math_integer_lcm_impl(PyObject *module, const PyValue *args,
                       Py_ssize_t args_length)
-/*[clinic end generated code: output=3e88889b866ccc28 input=261bddc85a136bdf]*/
+/*[clinic end generated code: output=71be139b5cebe723 input=261bddc85a136bdf]*/
 {
     PyObject *res, *x;
     Py_ssize_t i;
 
     if (args_length == 0) {
-        return PyLong_FromLong(1);
+        return PyValue_FromInt64(1);
     }
-    res = PyNumber_Index(args[0]);
+    PyValue res_v = _PyValue_Index(PyValue_Borrow(args[0]));
+    res = PyValue_IsNull(res_v) ? NULL : _PyValue_AsObjectStealAt(res_v, BOX_SITE_NUMBER);
+    if (res != NULL && !PyLong_CheckExact(res)) {
+        Py_SETREF(res, _PyLong_Copy((PyLongObject *)res));
+    }
     if (res == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
     if (args_length == 1) {
-        Py_SETREF(res, PyNumber_Absolute(res));
-        return res;
+        PyValue item_v9 = _PyValue_Absolute(PyValue_FromObjectBorrow(res));
+        Py_SETREF(res, (PyValue_IsNull(item_v9) ? NULL : _PyValue_AsObjectStealAt(item_v9, BOX_SITE_NUMBER)));
+        return _PyValue_FromObjectResult(res);
     }
 
     PyObject *zero = _PyLong_GetZero();  // borrowed ref
     for (i = 1; i < args_length; i++) {
-        x = PyNumber_Index(args[i]);
+        PyValue x_v = _PyValue_Index(PyValue_Borrow(args[i]));
+        x = PyValue_IsNull(x_v) ? NULL : _PyValue_AsObjectStealAt(x_v, BOX_SITE_NUMBER);
+        if (x != NULL && !PyLong_CheckExact(x)) {
+            Py_SETREF(x, _PyLong_Copy((PyLongObject *)x));
+        }
         if (x == NULL) {
             Py_DECREF(res);
-            return NULL;
+            return PyValue_NULL;
         }
         if (res == zero) {
             /* Fast path: just check arguments.
@@ -145,10 +190,10 @@ math_integer_lcm_impl(PyObject *module, PyObject * const *args,
         Py_SETREF(res, long_lcm(res, x));
         Py_DECREF(x);
         if (res == NULL) {
-            return NULL;
+            return PyValue_NULL;
         }
     }
-    return res;
+    return _PyValue_FromObjectResult(res);
 }
 
 
@@ -340,28 +385,30 @@ _approximate_isqrt(uint64_t n)
     return (u << 15) + (uint32_t)((n >> 17) / u);
 }
 
+
 /*[clinic input]
 math.integer.isqrt
 
-    n: object
+    n as n_arg: object
     /
 
 Return the integer part of the square root of the input.
 [clinic start generated code]*/
 
-static PyObject *
-math_integer_isqrt(PyObject *module, PyObject *n)
-/*[clinic end generated code: output=551031e41a0f5d9e input=921ddd9853133d8d]*/
+static PyValue
+math_integer_isqrt_impl(PyObject *module, PyValueBorrow n_arg)
+/*[clinic end generated code: output=2f89724c90bc7b8c input=645b73e0bee4a753]*/
 {
     int a_too_large, c_bit_length;
     int64_t c, d;
     uint64_t m;
     uint32_t u;
-    PyObject *a = NULL, *b;
+    PyObject *a = NULL, *b, *n;
 
-    n = _PyNumber_Index(n);
+    PyValue n_v = _PyValue_Index(n_arg);
+    n = PyValue_IsNull(n_v) ? NULL : _PyValue_AsObjectStealAt(n_v, BOX_SITE_NUMBER);
     if (n == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     if (_PyLong_IsNegative((PyLongObject *)n)) {
@@ -372,7 +419,7 @@ math_integer_isqrt(PyObject *module, PyObject *n)
     }
     if (_PyLong_IsZero((PyLongObject *)n)) {
         Py_DECREF(n);
-        return PyLong_FromLong(0);
+        return PyValue_FromInt64(0);
     }
 
     /* c = (n.bit_length() - 1) // 2 */
@@ -388,11 +435,11 @@ math_integer_isqrt(PyObject *module, PyObject *n)
         m = (uint64_t)PyLong_AsUnsignedLongLong(n);
         Py_DECREF(n);
         if (m == (uint64_t)(-1) && PyErr_Occurred()) {
-            return NULL;
+            return PyValue_NULL;
         }
         u = _approximate_isqrt(m << 2*shift) >> shift;
         u -= (uint64_t)u * u > m;
-        return PyLong_FromUnsignedLong(u);
+        return PyValue_FromInt64(u);
     }
 
     /* Slow path: n >= 2**64. We perform the first five iterations in C integer
@@ -432,7 +479,8 @@ math_integer_isqrt(PyObject *module, PyObject *n)
         if (q == NULL) {
             goto error;
         }
-        Py_SETREF(q, PyNumber_FloorDivide(q, a));
+        PyValue q_v = _PyValue_FloorDivide(PyValue_FromObjectBorrow(q), PyValue_FromObjectBorrow(a));
+        Py_SETREF(q, (PyValue_IsNull(q_v) ? NULL : _PyValue_AsObjectStealAt(q_v, BOX_SITE_NUMBER)));
         if (q == NULL) {
             goto error;
         }
@@ -443,7 +491,8 @@ math_integer_isqrt(PyObject *module, PyObject *n)
             Py_DECREF(q);
             goto error;
         }
-        Py_SETREF(a, PyNumber_Add(a, q));
+        PyValue a_v = _PyValue_Add(PyValue_FromObjectBorrow(a), PyValue_FromObjectBorrow(q));
+        Py_SETREF(a, (PyValue_IsNull(a_v) ? NULL : _PyValue_AsObjectStealAt(a_v, BOX_SITE_NUMBER)));
         Py_DECREF(q);
         if (a == NULL) {
             goto error;
@@ -455,7 +504,8 @@ math_integer_isqrt(PyObject *module, PyObject *n)
 
     /* a_too_large = n < a * a.  Compare by value: n can be an instance
        of an int subclass with an overridden __lt__ method. */
-    b = PyNumber_Multiply(a, a);
+    PyValue b_v = _PyValue_Multiply(PyValue_FromObjectBorrow(a), PyValue_FromObjectBorrow(a));
+    b = PyValue_IsNull(b_v) ? NULL : _PyValue_AsObjectStealAt(b_v, BOX_SITE_NUMBER);
     if (b == NULL) {
         goto error;
     }
@@ -469,15 +519,16 @@ math_integer_isqrt(PyObject *module, PyObject *n)
     Py_DECREF(cmp);
 
     if (a_too_large) {
-        Py_SETREF(a, PyNumber_Subtract(a, _PyLong_GetOne()));
+        PyValue item_v12 = _PyValue_Subtract(PyValue_FromObjectBorrow(a), PyValue_FromObjectBorrow(_PyLong_GetOne()));
+        Py_SETREF(a, (PyValue_IsNull(item_v12) ? NULL : _PyValue_AsObjectStealAt(item_v12, BOX_SITE_NUMBER)));
     }
     Py_DECREF(n);
-    return a;
+    return _PyValue_FromObjectResult(a);
 
   error:
     Py_XDECREF(a);
     Py_DECREF(n);
-    return NULL;
+    return PyValue_NULL;
 }
 
 
@@ -605,7 +656,8 @@ factorial_partial_product(unsigned long start, unsigned long stop,
     right = factorial_partial_product(midpoint, stop, max_bits);
     if (right == NULL)
         goto error;
-    result = PyNumber_Multiply(left, right);
+    PyValue result_v = _PyValue_Multiply(PyValue_FromObjectBorrow(left), PyValue_FromObjectBorrow(right));
+    result = PyValue_IsNull(result_v) ? NULL : _PyValue_AsObjectStealAt(result_v, BOX_SITE_NUMBER);
 
   error:
     Py_XDECREF(left);
@@ -642,7 +694,8 @@ factorial_odd_part(unsigned long n)
         /* inner *= partial */
         if (partial == NULL)
             goto error;
-        tmp = PyNumber_Multiply(inner, partial);
+        PyValue tmp_v = _PyValue_Multiply(PyValue_FromObjectBorrow(inner), PyValue_FromObjectBorrow(partial));
+        tmp = PyValue_IsNull(tmp_v) ? NULL : _PyValue_AsObjectStealAt(tmp_v, BOX_SITE_NUMBER);
         Py_DECREF(partial);
         if (tmp == NULL)
             goto error;
@@ -651,7 +704,8 @@ factorial_odd_part(unsigned long n)
            n/2**i], giving the inner product in the formula above. */
 
         /* outer *= inner; */
-        tmp = PyNumber_Multiply(outer, inner);
+        PyValue tmp_v2 = _PyValue_Multiply(PyValue_FromObjectBorrow(outer), PyValue_FromObjectBorrow(inner));
+        tmp = PyValue_IsNull(tmp_v2) ? NULL : _PyValue_AsObjectStealAt(tmp_v2, BOX_SITE_NUMBER);
         if (tmp == NULL)
             goto error;
         Py_SETREF(outer, tmp);
@@ -687,43 +741,43 @@ math.integer.factorial
 Find n!.
 [clinic start generated code]*/
 
-static PyObject *
-math_integer_factorial(PyObject *module, PyObject *arg)
-/*[clinic end generated code: output=131c23fd48650414 input=742f4dfa490a1b07]*/
+static PyValue
+math_integer_factorial_impl(PyObject *module, PyValueBorrow arg)
+/*[clinic end generated code: output=0b4150edd900e6ea input=742f4dfa490a1b07]*/
 {
     long x, two_valuation;
     int overflow;
     PyObject *result, *odd_part;
 
-    x = PyLong_AsLongAndOverflow(arg, &overflow);
+    x = _PyValue_AsLongAndOverflow(arg, &overflow);
     if (x == -1 && PyErr_Occurred()) {
-        return NULL;
+        return PyValue_NULL;
     }
     else if (overflow == 1) {
         PyErr_Format(PyExc_OverflowError,
                      "factorial() argument should not exceed %ld",
                      LONG_MAX);
-        return NULL;
+        return PyValue_NULL;
     }
     else if (overflow == -1 || x < 0) {
         PyErr_SetString(PyExc_ValueError,
                         "factorial() not defined for negative values");
-        return NULL;
+        return PyValue_NULL;
     }
 
     /* use lookup table if x is small */
     if (x < (long)Py_ARRAY_LENGTH(SmallFactorials))
-        return PyLong_FromUnsignedLong(SmallFactorials[x]);
+        return PyValue_FromInt64(SmallFactorials[x]);
 
     /* else express in the form odd_part * 2**two_valuation, and compute as
        odd_part << two_valuation. */
     odd_part = factorial_odd_part(x);
     if (odd_part == NULL)
-        return NULL;
+        return PyValue_NULL;
     two_valuation = x - count_set_bits(x);
     result = _PyLong_Lshift(odd_part, two_valuation);
     Py_DECREF(odd_part);
-    return result;
+    return _PyValue_FromObjectResult(result);
 }
 
 
@@ -948,14 +1002,16 @@ perm_comb_small(unsigned long long n, unsigned long long k, int iscomb)
     if (b == NULL) {
         goto error;
     }
-    Py_SETREF(a, PyNumber_Multiply(a, b));
+    PyValue item_v13 = _PyValue_Multiply(PyValue_FromObjectBorrow(a), PyValue_FromObjectBorrow(b));
+    Py_SETREF(a, (PyValue_IsNull(item_v13) ? NULL : _PyValue_AsObjectStealAt(item_v13, BOX_SITE_NUMBER)));
     Py_DECREF(b);
     if (iscomb && a != NULL) {
         b = perm_comb_small(k, j, 1);
         if (b == NULL) {
             goto error;
         }
-        Py_SETREF(a, PyNumber_FloorDivide(a, b));
+        PyValue item_v14 = _PyValue_FloorDivide(PyValue_FromObjectBorrow(a), PyValue_FromObjectBorrow(b));
+        Py_SETREF(a, (PyValue_IsNull(item_v14) ? NULL : _PyValue_AsObjectStealAt(item_v14, BOX_SITE_NUMBER)));
         Py_DECREF(b);
     }
     return a;
@@ -991,7 +1047,8 @@ perm_comb(PyObject *n, unsigned long long k, int iscomb)
     if (t == NULL) {
         goto error;
     }
-    n = PyNumber_Subtract(n, t);
+    PyValue n_v2 = _PyValue_Subtract(PyValue_FromObjectBorrow(n), PyValue_FromObjectBorrow(t));
+    n = PyValue_IsNull(n_v2) ? NULL : _PyValue_AsObjectStealAt(n_v2, BOX_SITE_NUMBER);
     Py_DECREF(t);
     if (n == NULL) {
         goto error;
@@ -1001,14 +1058,16 @@ perm_comb(PyObject *n, unsigned long long k, int iscomb)
     if (b == NULL) {
         goto error;
     }
-    Py_SETREF(a, PyNumber_Multiply(a, b));
+    PyValue item_v15 = _PyValue_Multiply(PyValue_FromObjectBorrow(a), PyValue_FromObjectBorrow(b));
+    Py_SETREF(a, (PyValue_IsNull(item_v15) ? NULL : _PyValue_AsObjectStealAt(item_v15, BOX_SITE_NUMBER)));
     Py_DECREF(b);
     if (iscomb && a != NULL) {
         b = perm_comb_small(k, j, 1);
         if (b == NULL) {
             goto error;
         }
-        Py_SETREF(a, PyNumber_FloorDivide(a, b));
+        PyValue item_v16 = _PyValue_FloorDivide(PyValue_FromObjectBorrow(a), PyValue_FromObjectBorrow(b));
+        Py_SETREF(a, (PyValue_IsNull(item_v16) ? NULL : _PyValue_AsObjectStealAt(item_v16, BOX_SITE_NUMBER)));
         Py_DECREF(b);
     }
     return a;
@@ -1022,8 +1081,8 @@ error:
 @permit_long_summary
 math.integer.perm
 
-    n: object
-    k: object = None
+    n as n_arg: object
+    k as k_arg: object = None
     /
 
 Number of ways to choose k items from n items without repetition and with order.
@@ -1037,25 +1096,34 @@ and the function returns n!.
 Raises ValueError if either of the arguments are negative.
 [clinic start generated code]*/
 
-static PyObject *
-math_integer_perm_impl(PyObject *module, PyObject *n, PyObject *k)
-/*[clinic end generated code: output=9f9b96cd73a94de4 input=fd627e5a09dd5116]*/
+static PyValue
+math_integer_perm_impl(PyObject *module, PyValueBorrow n_arg,
+                       PyValueBorrow k_arg)
+/*[clinic end generated code: output=dbd112e6e5741fb4 input=6f143a0f878b4359]*/
 {
-    PyObject *result = NULL;
+    PyObject *result = NULL, *n, *k;
     int overflow, cmp;
     long long ki, ni;
 
-    if (k == Py_None) {
-        return math_integer_factorial(module, n);
+    if (PyValue_IsNone(k_arg)) {
+        return math_integer_factorial_impl(module, n_arg);
     }
-    n = PyNumber_Index(n);
+    PyValue n_v = _PyValue_Index(n_arg);
+    n = PyValue_IsNull(n_v) ? NULL : _PyValue_AsObjectStealAt(n_v, BOX_SITE_NUMBER);
+    if (n != NULL && !PyLong_CheckExact(n)) {
+        Py_SETREF(n, _PyLong_Copy((PyLongObject *)n));
+    }
     if (n == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
-    k = PyNumber_Index(k);
+    PyValue k_v = _PyValue_Index(k_arg);
+    k = PyValue_IsNull(k_v) ? NULL : _PyValue_AsObjectStealAt(k_v, BOX_SITE_NUMBER);
+    if (k != NULL && !PyLong_CheckExact(k)) {
+        Py_SETREF(k, _PyLong_Copy((PyLongObject *)k));
+    }
     if (k == NULL) {
         Py_DECREF(n);
-        return NULL;
+        return PyValue_NULL;
     }
     assert(PyLong_CheckExact(n) && PyLong_CheckExact(k));
 
@@ -1070,11 +1138,12 @@ math_integer_perm_impl(PyObject *module, PyObject *n, PyObject *k)
         goto error;
     }
 
-    cmp = PyObject_RichCompareBool(n, k, Py_LT);
+    cmp = _PyValue_RichCompareBool(PyValue_FromObjectBorrow(n), PyValue_FromObjectBorrow(k), Py_LT);
     if (cmp != 0) {
         if (cmp > 0) {
-            result = PyLong_FromLong(0);
-            goto done;
+            Py_DECREF(n);
+            Py_DECREF(k);
+            return PyValue_FromInt64(0);
         }
         goto error;
     }
@@ -1103,20 +1172,20 @@ math_integer_perm_impl(PyObject *module, PyObject *n, PyObject *k)
 done:
     Py_DECREF(n);
     Py_DECREF(k);
-    return result;
+    return _PyValue_FromObjectResult(result);
 
 error:
     Py_DECREF(n);
     Py_DECREF(k);
-    return NULL;
+    return PyValue_NULL;
 }
 
 /*[clinic input]
 @permit_long_summary
 math.integer.comb
 
-    n: object
-    k: object
+    n as n_arg: object
+    k as k_arg: object
     /
 
 Number of ways to choose k items from n items without repetition and without order.
@@ -1131,22 +1200,35 @@ expression (1 + x)**n.
 Raises ValueError if either of the arguments are negative.
 [clinic start generated code]*/
 
-static PyObject *
-math_integer_comb_impl(PyObject *module, PyObject *n, PyObject *k)
-/*[clinic end generated code: output=c2c9cdfe0d5dd43f input=8cc12726b682c4a5]*/
+static PyValue
+math_integer_comb_impl(PyObject *module, PyValueBorrow n_arg,
+                       PyValueBorrow k_arg)
+/*[clinic end generated code: output=24ae3d3ec5bb6cfc input=c344548db943e7d1]*/
 {
-    PyObject *result = NULL, *temp;
+    PyObject *result = NULL, *temp, *n, *k;
     int overflow, cmp;
     long long ki, ni;
 
-    n = PyNumber_Index(n);
-    if (n == NULL) {
-        return NULL;
+    PyValue n_v = _PyValue_Index(n_arg);
+
+    n = PyValue_IsNull(n_v) ? NULL : _PyValue_AsObjectStealAt(n_v, BOX_SITE_NUMBER);
+
+    if (n != NULL && !PyLong_CheckExact(n)) {
+
+        Py_SETREF(n, _PyLong_Copy((PyLongObject *)n));
+
     }
-    k = PyNumber_Index(k);
+    if (n == NULL) {
+        return PyValue_NULL;
+    }
+    PyValue k_v = _PyValue_Index(k_arg);
+    k = PyValue_IsNull(k_v) ? NULL : _PyValue_AsObjectStealAt(k_v, BOX_SITE_NUMBER);
+    if (k != NULL && !PyLong_CheckExact(k)) {
+        Py_SETREF(k, _PyLong_Copy((PyLongObject *)k));
+    }
     if (k == NULL) {
         Py_DECREF(n);
-        return NULL;
+        return PyValue_NULL;
     }
     assert(PyLong_CheckExact(n) && PyLong_CheckExact(k));
 
@@ -1168,8 +1250,9 @@ math_integer_comb_impl(PyObject *module, PyObject *n, PyObject *k)
         ki = PyLong_AsLongLongAndOverflow(k, &overflow);
         assert(overflow >= 0 && !PyErr_Occurred());
         if (overflow || ki > ni) {
-            result = PyLong_FromLong(0);
-            goto done;
+            Py_DECREF(n);
+            Py_DECREF(k);
+            return PyValue_FromInt64(0);
         }
         assert(ki >= 0);
 
@@ -1183,17 +1266,19 @@ math_integer_comb_impl(PyObject *module, PyObject *n, PyObject *k)
     }
     else {
         /* k = min(k, n - k) */
-        temp = PyNumber_Subtract(n, k);
+        PyValue temp_v = _PyValue_Subtract(PyValue_FromObjectBorrow(n), PyValue_FromObjectBorrow(k));
+        temp = PyValue_IsNull(temp_v) ? NULL : _PyValue_AsObjectStealAt(temp_v, BOX_SITE_NUMBER);
         if (temp == NULL) {
             goto error;
         }
         assert(PyLong_Check(temp));
         if (_PyLong_IsNegative((PyLongObject *)temp)) {
             Py_DECREF(temp);
-            result = PyLong_FromLong(0);
-            goto done;
+            Py_DECREF(n);
+            Py_DECREF(k);
+            return PyValue_FromInt64(0);
         }
-        cmp = PyObject_RichCompareBool(temp, k, Py_LT);
+        cmp = _PyValue_RichCompareBool(PyValue_FromObjectBorrow(temp), PyValue_FromObjectBorrow(k), Py_LT);
         if (cmp > 0) {
             Py_SETREF(k, temp);
         }
@@ -1220,12 +1305,12 @@ math_integer_comb_impl(PyObject *module, PyObject *n, PyObject *k)
 done:
     Py_DECREF(n);
     Py_DECREF(k);
-    return result;
+    return _PyValue_FromObjectResult(result);
 
 error:
     Py_DECREF(n);
     Py_DECREF(k);
-    return NULL;
+    return PyValue_NULL;
 }
 
 

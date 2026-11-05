@@ -2,15 +2,22 @@
 preserve
 [clinic start generated code]*/
 
+#ifndef Py_VALUE_CORE
+#  error "value-emission Clinic output requires Py_VALUE_CORE"
+#endif
+
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 #  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
 #  include "pycore_value.h"       // _PyValue_STATIC_IMMORTAL()
 #endif
-#include "pycore_abstract.h"      // _PyNumber_Index()
-#include "pycore_borrow.h"        // _PyBorrow_TupleItems()
 #include "pycore_critical_section.h"// Py_BEGIN_CRITICAL_SECTION()
-#include "pycore_modsupport.h"    // _PyArg_CheckPositional()
+#include "pycore_long_value.h"    // _PyValue_IntAsSsize_t()
+#include "pycore_modsupport.h"    // _PyArg_NoKwnamesValue()
+#include "pycore_tuple.h"         // _PyTuple_ITEMS()
+#include "pycore_value_call.h"    // METH_VALUE
+#include "pycore_value_ops.h"     // _PyValue_Index()
+#include "pycore_value_slots.h"   // _PyValue_THUNK_EXIT()
 
 PyDoc_STRVAR(deque_pop__doc__,
 "pop($self, /)\n"
@@ -19,18 +26,18 @@ PyDoc_STRVAR(deque_pop__doc__,
 "Remove and return the rightmost element.");
 
 #define DEQUE_POP_METHODDEF    \
-    {"pop", (PyCFunction)deque_pop, METH_NOARGS, deque_pop__doc__},
+    {"pop", _PyCFunction_CAST(deque_pop), METH_VALUE|METH_NOARGS, deque_pop__doc__},
 
-static PyObject *
+static PyValue
 deque_pop_impl(dequeobject *deque);
 
-static PyObject *
-deque_pop(PyObject *deque, PyObject *Py_UNUSED(ignored))
+static PyValue
+deque_pop(PyValueBorrow deque, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
 
-    Py_BEGIN_CRITICAL_SECTION(deque);
-    return_value = deque_pop_impl((dequeobject *)deque);
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(deque));
+    return_value = deque_pop_impl((dequeobject *)PyValue_AsKnownObjectBorrow(deque));
     Py_END_CRITICAL_SECTION();
 
     return return_value;
@@ -43,18 +50,18 @@ PyDoc_STRVAR(deque_popleft__doc__,
 "Remove and return the leftmost element.");
 
 #define DEQUE_POPLEFT_METHODDEF    \
-    {"popleft", (PyCFunction)deque_popleft, METH_NOARGS, deque_popleft__doc__},
+    {"popleft", _PyCFunction_CAST(deque_popleft), METH_VALUE|METH_NOARGS, deque_popleft__doc__},
 
-static PyObject *
+static PyValue
 deque_popleft_impl(dequeobject *deque);
 
-static PyObject *
-deque_popleft(PyObject *deque, PyObject *Py_UNUSED(ignored))
+static PyValue
+deque_popleft(PyValueBorrow deque, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
 
-    Py_BEGIN_CRITICAL_SECTION(deque);
-    return_value = deque_popleft_impl((dequeobject *)deque);
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(deque));
+    return_value = deque_popleft_impl((dequeobject *)PyValue_AsKnownObjectBorrow(deque));
     Py_END_CRITICAL_SECTION();
 
     return return_value;
@@ -67,18 +74,20 @@ PyDoc_STRVAR(deque_append__doc__,
 "Add an element to the right side of the deque.");
 
 #define DEQUE_APPEND_METHODDEF    \
-    {"append", (PyCFunction)deque_append, METH_O, deque_append__doc__},
+    {"append", _PyCFunction_CAST(deque_append), METH_VALUE|METH_O, deque_append__doc__},
 
-static PyObject *
-deque_append_impl(dequeobject *deque, PyObject *item);
+static PyValue
+deque_append_impl(dequeobject *deque, PyValueBorrow item);
 
-static PyObject *
-deque_append(PyObject *deque, PyObject *item)
+static PyValue
+deque_append(PyValueBorrow deque, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow item;
 
-    Py_BEGIN_CRITICAL_SECTION(deque);
-    return_value = deque_append_impl((dequeobject *)deque, item);
+    item = PyValue_Borrow(args[0]);
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(deque));
+    return_value = deque_append_impl((dequeobject *)PyValue_AsKnownObjectBorrow(deque), item);
     Py_END_CRITICAL_SECTION();
 
     return return_value;
@@ -91,18 +100,20 @@ PyDoc_STRVAR(deque_appendleft__doc__,
 "Add an element to the left side of the deque.");
 
 #define DEQUE_APPENDLEFT_METHODDEF    \
-    {"appendleft", (PyCFunction)deque_appendleft, METH_O, deque_appendleft__doc__},
+    {"appendleft", _PyCFunction_CAST(deque_appendleft), METH_VALUE|METH_O, deque_appendleft__doc__},
 
-static PyObject *
-deque_appendleft_impl(dequeobject *deque, PyObject *item);
+static PyValue
+deque_appendleft_impl(dequeobject *deque, PyValueBorrow item);
 
-static PyObject *
-deque_appendleft(PyObject *deque, PyObject *item)
+static PyValue
+deque_appendleft(PyValueBorrow deque, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow item;
 
-    Py_BEGIN_CRITICAL_SECTION(deque);
-    return_value = deque_appendleft_impl((dequeobject *)deque, item);
+    item = PyValue_Borrow(args[0]);
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(deque));
+    return_value = deque_appendleft_impl((dequeobject *)PyValue_AsKnownObjectBorrow(deque), item);
     Py_END_CRITICAL_SECTION();
 
     return return_value;
@@ -115,18 +126,20 @@ PyDoc_STRVAR(deque_extend__doc__,
 "Extend the right side of the deque with elements from the iterable.");
 
 #define DEQUE_EXTEND_METHODDEF    \
-    {"extend", (PyCFunction)deque_extend, METH_O, deque_extend__doc__},
+    {"extend", _PyCFunction_CAST(deque_extend), METH_VALUE|METH_O, deque_extend__doc__},
 
-static PyObject *
-deque_extend_impl(dequeobject *deque, PyObject *iterable);
+static PyValue
+deque_extend_impl(dequeobject *deque, PyValueBorrow iterable);
 
-static PyObject *
-deque_extend(PyObject *deque, PyObject *iterable)
+static PyValue
+deque_extend(PyValueBorrow deque, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow iterable;
 
-    Py_BEGIN_CRITICAL_SECTION(deque);
-    return_value = deque_extend_impl((dequeobject *)deque, iterable);
+    iterable = PyValue_Borrow(args[0]);
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(deque));
+    return_value = deque_extend_impl((dequeobject *)PyValue_AsKnownObjectBorrow(deque), iterable);
     Py_END_CRITICAL_SECTION();
 
     return return_value;
@@ -139,18 +152,20 @@ PyDoc_STRVAR(deque_extendleft__doc__,
 "Extend the left side of the deque with elements from the iterable.");
 
 #define DEQUE_EXTENDLEFT_METHODDEF    \
-    {"extendleft", (PyCFunction)deque_extendleft, METH_O, deque_extendleft__doc__},
+    {"extendleft", _PyCFunction_CAST(deque_extendleft), METH_VALUE|METH_O, deque_extendleft__doc__},
 
-static PyObject *
-deque_extendleft_impl(dequeobject *deque, PyObject *iterable);
+static PyValue
+deque_extendleft_impl(dequeobject *deque, PyValueBorrow iterable);
 
-static PyObject *
-deque_extendleft(PyObject *deque, PyObject *iterable)
+static PyValue
+deque_extendleft(PyValueBorrow deque, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow iterable;
 
-    Py_BEGIN_CRITICAL_SECTION(deque);
-    return_value = deque_extendleft_impl((dequeobject *)deque, iterable);
+    iterable = PyValue_Borrow(args[0]);
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(deque));
+    return_value = deque_extendleft_impl((dequeobject *)PyValue_AsKnownObjectBorrow(deque), iterable);
     Py_END_CRITICAL_SECTION();
 
     return return_value;
@@ -163,18 +178,18 @@ PyDoc_STRVAR(deque_copy__doc__,
 "Return a shallow copy of a deque.");
 
 #define DEQUE_COPY_METHODDEF    \
-    {"copy", (PyCFunction)deque_copy, METH_NOARGS, deque_copy__doc__},
+    {"copy", _PyCFunction_CAST(deque_copy), METH_VALUE|METH_NOARGS, deque_copy__doc__},
 
-static PyObject *
+static PyValue
 deque_copy_impl(dequeobject *deque);
 
-static PyObject *
-deque_copy(PyObject *deque, PyObject *Py_UNUSED(ignored))
+static PyValue
+deque_copy(PyValueBorrow deque, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
 
-    Py_BEGIN_CRITICAL_SECTION(deque);
-    return_value = deque_copy_impl((dequeobject *)deque);
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(deque));
+    return_value = deque_copy_impl((dequeobject *)PyValue_AsKnownObjectBorrow(deque));
     Py_END_CRITICAL_SECTION();
 
     return return_value;
@@ -187,18 +202,18 @@ PyDoc_STRVAR(deque___copy____doc__,
 "Return a shallow copy of a deque.");
 
 #define DEQUE___COPY___METHODDEF    \
-    {"__copy__", (PyCFunction)deque___copy__, METH_NOARGS, deque___copy____doc__},
+    {"__copy__", _PyCFunction_CAST(deque___copy__), METH_VALUE|METH_NOARGS, deque___copy____doc__},
 
-static PyObject *
+static PyValue
 deque___copy___impl(dequeobject *deque);
 
-static PyObject *
-deque___copy__(PyObject *deque, PyObject *Py_UNUSED(ignored))
+static PyValue
+deque___copy__(PyValueBorrow deque, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
 
-    Py_BEGIN_CRITICAL_SECTION(deque);
-    return_value = deque___copy___impl((dequeobject *)deque);
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(deque));
+    return_value = deque___copy___impl((dequeobject *)PyValue_AsKnownObjectBorrow(deque));
     Py_END_CRITICAL_SECTION();
 
     return return_value;
@@ -226,18 +241,18 @@ PyDoc_STRVAR(deque_clearmethod__doc__,
 "Remove all elements from the deque.");
 
 #define DEQUE_CLEARMETHOD_METHODDEF    \
-    {"clear", (PyCFunction)deque_clearmethod, METH_NOARGS, deque_clearmethod__doc__},
+    {"clear", _PyCFunction_CAST(deque_clearmethod), METH_VALUE|METH_NOARGS, deque_clearmethod__doc__},
 
-static PyObject *
+static PyValue
 deque_clearmethod_impl(dequeobject *deque);
 
-static PyObject *
-deque_clearmethod(PyObject *deque, PyObject *Py_UNUSED(ignored))
+static PyValue
+deque_clearmethod(PyValueBorrow deque, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
 
-    Py_BEGIN_CRITICAL_SECTION(deque);
-    return_value = deque_clearmethod_impl((dequeobject *)deque);
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(deque));
+    return_value = deque_clearmethod_impl((dequeobject *)PyValue_AsKnownObjectBorrow(deque));
     Py_END_CRITICAL_SECTION();
 
     return return_value;
@@ -265,17 +280,20 @@ PyDoc_STRVAR(deque_rotate__doc__,
 "Rotate the deque n steps to the right.  If n is negative, rotates left.");
 
 #define DEQUE_ROTATE_METHODDEF    \
-    {"rotate", _PyCFunction_CAST(deque_rotate), METH_FASTCALL, deque_rotate__doc__},
+    {"rotate", _PyCFunction_CAST(deque_rotate), METH_VALUE, deque_rotate__doc__},
 
-static PyObject *
+static PyValue
 deque_rotate_impl(dequeobject *deque, Py_ssize_t n);
 
-static PyObject *
-deque_rotate(PyObject *deque, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+deque_rotate(PyValueBorrow deque, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     Py_ssize_t n = 1;
 
+    if (!_PyArg_NoKwnamesValue("deque.rotate()", kwnames)) {
+        goto exit;
+    }
     if (!_PyArg_CheckPositional("rotate", nargs, 0, 1)) {
         goto exit;
     }
@@ -284,10 +302,10 @@ deque_rotate(PyObject *deque, PyObject *const *args, Py_ssize_t nargs)
     }
     {
         Py_ssize_t ival = -1;
-        PyObject *iobj = _PyNumber_Index(args[0]);
-        if (iobj != NULL) {
-            ival = PyLong_AsSsize_t(iobj);
-            Py_DECREF(iobj);
+        PyValue iobj = _PyValue_Index(PyValue_Borrow(args[0]));
+        if (!PyValue_IsNull(iobj)) {
+            ival = _PyValue_IntAsSsize_t(PyValue_Borrow(iobj));
+            PyValue_CLOSE(iobj);
         }
         if (ival == -1 && PyErr_Occurred()) {
             goto exit;
@@ -295,8 +313,8 @@ deque_rotate(PyObject *deque, PyObject *const *args, Py_ssize_t nargs)
         n = ival;
     }
 skip_optional:
-    Py_BEGIN_CRITICAL_SECTION(deque);
-    return_value = deque_rotate_impl((dequeobject *)deque, n);
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(deque));
+    return_value = deque_rotate_impl((dequeobject *)PyValue_AsKnownObjectBorrow(deque), n);
     Py_END_CRITICAL_SECTION();
 
 exit:
@@ -310,18 +328,18 @@ PyDoc_STRVAR(deque_reverse__doc__,
 "Reverse *IN PLACE*.");
 
 #define DEQUE_REVERSE_METHODDEF    \
-    {"reverse", (PyCFunction)deque_reverse, METH_NOARGS, deque_reverse__doc__},
+    {"reverse", _PyCFunction_CAST(deque_reverse), METH_VALUE|METH_NOARGS, deque_reverse__doc__},
 
-static PyObject *
+static PyValue
 deque_reverse_impl(dequeobject *deque);
 
-static PyObject *
-deque_reverse(PyObject *deque, PyObject *Py_UNUSED(ignored))
+static PyValue
+deque_reverse(PyValueBorrow deque, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
 
-    Py_BEGIN_CRITICAL_SECTION(deque);
-    return_value = deque_reverse_impl((dequeobject *)deque);
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(deque));
+    return_value = deque_reverse_impl((dequeobject *)PyValue_AsKnownObjectBorrow(deque));
     Py_END_CRITICAL_SECTION();
 
     return return_value;
@@ -334,18 +352,20 @@ PyDoc_STRVAR(deque_count__doc__,
 "Return number of occurrences of value.");
 
 #define DEQUE_COUNT_METHODDEF    \
-    {"count", (PyCFunction)deque_count, METH_O, deque_count__doc__},
+    {"count", _PyCFunction_CAST(deque_count), METH_VALUE|METH_O, deque_count__doc__},
 
-static PyObject *
-deque_count_impl(dequeobject *deque, PyObject *v);
+static PyValue
+deque_count_impl(dequeobject *deque, PyValueBorrow v);
 
-static PyObject *
-deque_count(PyObject *deque, PyObject *v)
+static PyValue
+deque_count(PyValueBorrow deque, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow v;
 
-    Py_BEGIN_CRITICAL_SECTION(deque);
-    return_value = deque_count_impl((dequeobject *)deque, v);
+    v = PyValue_Borrow(args[0]);
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(deque));
+    return_value = deque_count_impl((dequeobject *)PyValue_AsKnownObjectBorrow(deque), v);
     Py_END_CRITICAL_SECTION();
 
     return return_value;
@@ -375,39 +395,42 @@ PyDoc_STRVAR(deque_index__doc__,
 "Raises ValueError if the value is not present.");
 
 #define DEQUE_INDEX_METHODDEF    \
-    {"index", _PyCFunction_CAST(deque_index), METH_FASTCALL, deque_index__doc__},
+    {"index", _PyCFunction_CAST(deque_index), METH_VALUE, deque_index__doc__},
 
-static PyObject *
-deque_index_impl(dequeobject *deque, PyObject *v, Py_ssize_t start,
+static PyValue
+deque_index_impl(dequeobject *deque, PyValueBorrow v, Py_ssize_t start,
                  Py_ssize_t stop);
 
-static PyObject *
-deque_index(PyObject *deque, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+deque_index(PyValueBorrow deque, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
-    PyObject *v;
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow v;
     Py_ssize_t start = 0;
     Py_ssize_t stop = PY_SSIZE_T_MAX;
 
+    if (!_PyArg_NoKwnamesValue("deque.index()", kwnames)) {
+        goto exit;
+    }
     if (!_PyArg_CheckPositional("index", nargs, 1, 3)) {
         goto exit;
     }
-    v = args[0];
+    v = PyValue_Borrow(args[0]);
     if (nargs < 2) {
         goto skip_optional;
     }
-    if (!_PyEval_SliceIndexNotNone(args[1], &start)) {
+    if (!_PyArg_SliceIndexNotNoneValue(PyValue_Borrow(args[1]), &start)) {
         goto exit;
     }
     if (nargs < 3) {
         goto skip_optional;
     }
-    if (!_PyEval_SliceIndexNotNone(args[2], &stop)) {
+    if (!_PyArg_SliceIndexNotNoneValue(PyValue_Borrow(args[2]), &stop)) {
         goto exit;
     }
 skip_optional:
-    Py_BEGIN_CRITICAL_SECTION(deque);
-    return_value = deque_index_impl((dequeobject *)deque, v, start, stop);
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(deque));
+    return_value = deque_index_impl((dequeobject *)PyValue_AsKnownObjectBorrow(deque), v, start, stop);
     Py_END_CRITICAL_SECTION();
 
 exit:
@@ -421,36 +444,39 @@ PyDoc_STRVAR(deque_insert__doc__,
 "Insert value before index.");
 
 #define DEQUE_INSERT_METHODDEF    \
-    {"insert", _PyCFunction_CAST(deque_insert), METH_FASTCALL, deque_insert__doc__},
+    {"insert", _PyCFunction_CAST(deque_insert), METH_VALUE, deque_insert__doc__},
 
-static PyObject *
-deque_insert_impl(dequeobject *deque, Py_ssize_t index, PyObject *value);
+static PyValue
+deque_insert_impl(dequeobject *deque, Py_ssize_t index, PyValueBorrow value);
 
-static PyObject *
-deque_insert(PyObject *deque, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+deque_insert(PyValueBorrow deque, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     Py_ssize_t index;
-    PyObject *value;
+    PyValueBorrow value;
 
+    if (!_PyArg_NoKwnamesValue("deque.insert()", kwnames)) {
+        goto exit;
+    }
     if (!_PyArg_CheckPositional("insert", nargs, 2, 2)) {
         goto exit;
     }
     {
         Py_ssize_t ival = -1;
-        PyObject *iobj = _PyNumber_Index(args[0]);
-        if (iobj != NULL) {
-            ival = PyLong_AsSsize_t(iobj);
-            Py_DECREF(iobj);
+        PyValue iobj = _PyValue_Index(PyValue_Borrow(args[0]));
+        if (!PyValue_IsNull(iobj)) {
+            ival = _PyValue_IntAsSsize_t(PyValue_Borrow(iobj));
+            PyValue_CLOSE(iobj);
         }
         if (ival == -1 && PyErr_Occurred()) {
             goto exit;
         }
         index = ival;
     }
-    value = args[1];
-    Py_BEGIN_CRITICAL_SECTION(deque);
-    return_value = deque_insert_impl((dequeobject *)deque, index, value);
+    value = PyValue_Borrow(args[1]);
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(deque));
+    return_value = deque_insert_impl((dequeobject *)PyValue_AsKnownObjectBorrow(deque), index, value);
     Py_END_CRITICAL_SECTION();
 
 exit:
@@ -479,18 +505,20 @@ PyDoc_STRVAR(deque_remove__doc__,
 "Remove first occurrence of value.");
 
 #define DEQUE_REMOVE_METHODDEF    \
-    {"remove", (PyCFunction)deque_remove, METH_O, deque_remove__doc__},
+    {"remove", _PyCFunction_CAST(deque_remove), METH_VALUE|METH_O, deque_remove__doc__},
 
-static PyObject *
-deque_remove_impl(dequeobject *deque, PyObject *value);
+static PyValue
+deque_remove_impl(dequeobject *deque, PyValueBorrow value);
 
-static PyObject *
-deque_remove(PyObject *deque, PyObject *value)
+static PyValue
+deque_remove(PyValueBorrow deque, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow value;
 
-    Py_BEGIN_CRITICAL_SECTION(deque);
-    return_value = deque_remove_impl((dequeobject *)deque, value);
+    value = PyValue_Borrow(args[0]);
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(deque));
+    return_value = deque_remove_impl((dequeobject *)PyValue_AsKnownObjectBorrow(deque), value);
     Py_END_CRITICAL_SECTION();
 
     return return_value;
@@ -518,15 +546,19 @@ PyDoc_STRVAR(deque___reduce____doc__,
 "Return state information for pickling.");
 
 #define DEQUE___REDUCE___METHODDEF    \
-    {"__reduce__", (PyCFunction)deque___reduce__, METH_NOARGS, deque___reduce____doc__},
+    {"__reduce__", _PyCFunction_CAST(deque___reduce__), METH_VALUE|METH_NOARGS, deque___reduce____doc__},
 
-static PyObject *
+static PyValue
 deque___reduce___impl(dequeobject *deque);
 
-static PyObject *
-deque___reduce__(PyObject *deque, PyObject *Py_UNUSED(ignored))
+static PyValue
+deque___reduce__(PyValueBorrow deque, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return deque___reduce___impl((dequeobject *)deque);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = deque___reduce___impl((dequeobject *)PyValue_AsKnownObjectBorrow(deque));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(deque_init__doc__,
@@ -536,10 +568,11 @@ PyDoc_STRVAR(deque_init__doc__,
 "A list-like sequence optimized for data accesses near its endpoints.");
 
 static int
-deque_init_impl(dequeobject *deque, PyObject *iterable, PyObject *maxlenobj);
+deque_init_impl(dequeobject *deque, PyValueBorrow iterable,
+                PyValueBorrow maxlenobj);
 
 static int
-deque_init(PyObject *deque, PyObject *args, PyObject *kwargs)
+deque_init_value(PyObject *deque, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
     int return_value = -1;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
@@ -569,39 +602,44 @@ deque_init(PyObject *deque, PyObject *args, PyObject *kwargs)
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[2];
-    PyObject * const *fastargs;
-    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
-    Py_ssize_t noptargs = nargs + (kwargs ? PyDict_GET_SIZE(kwargs) : 0) - 0;
-    PyObject *iterable = NULL;
-    PyObject *maxlenobj = NULL;
+    Py_ssize_t _idx[2];
+    PyValueBorrow iterable = PyValue_Borrow(PyValue_NULL);
+    PyValueBorrow maxlenobj = PyValue_Borrow(PyValue_NULL);
 
-    PyObject *const *_args_items = _PyBorrow_TupleItems(args, Py_MIN(nargs, 2));
-    if (_args_items == NULL) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 0, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, _idx, 2)) {
         goto exit;
     }
-    fastargs = _PyArg_UnpackKeywords(_args_items, nargs, kwargs, NULL, &_parser,
-            /*minpos*/ 0, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!fastargs) {
-        goto exit;
+    if (_idx[0] >= 0) {
+        iterable = PyValue_Borrow(args[_idx[0]]);
     }
-    if (!noptargs) {
-        goto skip_optional_pos;
+    if (_idx[1] >= 0) {
+        maxlenobj = PyValue_Borrow(args[_idx[1]]);
     }
-    if (fastargs[0]) {
-        iterable = fastargs[0];
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
-    }
-    maxlenobj = fastargs[1];
-skip_optional_pos:
-    Py_BEGIN_CRITICAL_SECTION(deque);
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(deque));
     return_value = deque_init_impl((dequeobject *)deque, iterable, maxlenobj);
     Py_END_CRITICAL_SECTION();
 
 exit:
     return return_value;
+}
+
+static int
+deque_init(PyObject *deque, PyObject *args, PyObject *kwargs)
+{
+    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
+    if (kwargs == NULL || PyDict_GET_SIZE(kwargs) == 0) {
+        return deque_init_value(deque, _PyTuple_ITEMS(args), nargs, NULL);
+    }
+    PyObject *kwnames;
+    PyValue *window = _PyValue_StackUnpackDict(_PyThreadState_GET(),
+        _PyTuple_ITEMS(args), nargs, kwargs, &kwnames);
+    if (window == NULL) {
+        return -1;
+    }
+    int result = deque_init_value(deque, window, nargs, kwnames);
+    _PyValue_StackUnpackDict_Free(window, nargs, kwnames);
+    return result;
 }
 
 PyDoc_STRVAR(deque___sizeof____doc__,
@@ -611,18 +649,18 @@ PyDoc_STRVAR(deque___sizeof____doc__,
 "Return the size of the deque in memory, in bytes.");
 
 #define DEQUE___SIZEOF___METHODDEF    \
-    {"__sizeof__", (PyCFunction)deque___sizeof__, METH_NOARGS, deque___sizeof____doc__},
+    {"__sizeof__", _PyCFunction_CAST(deque___sizeof__), METH_VALUE|METH_NOARGS, deque___sizeof____doc__},
 
-static PyObject *
+static PyValue
 deque___sizeof___impl(dequeobject *deque);
 
-static PyObject *
-deque___sizeof__(PyObject *deque, PyObject *Py_UNUSED(ignored))
+static PyValue
+deque___sizeof__(PyValueBorrow deque, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
 
-    Py_BEGIN_CRITICAL_SECTION(deque);
-    return_value = deque___sizeof___impl((dequeobject *)deque);
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(deque));
+    return_value = deque___sizeof___impl((dequeobject *)PyValue_AsKnownObjectBorrow(deque));
     Py_END_CRITICAL_SECTION();
 
     return return_value;
@@ -635,15 +673,19 @@ PyDoc_STRVAR(deque___reversed____doc__,
 "Return a reverse iterator over the deque.");
 
 #define DEQUE___REVERSED___METHODDEF    \
-    {"__reversed__", (PyCFunction)deque___reversed__, METH_NOARGS, deque___reversed____doc__},
+    {"__reversed__", _PyCFunction_CAST(deque___reversed__), METH_VALUE|METH_NOARGS, deque___reversed____doc__},
 
-static PyObject *
+static PyValue
 deque___reversed___impl(dequeobject *deque);
 
-static PyObject *
-deque___reversed__(PyObject *deque, PyObject *Py_UNUSED(ignored))
+static PyValue
+deque___reversed__(PyValueBorrow deque, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return deque___reversed___impl((dequeobject *)deque);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = deque___reversed___impl((dequeobject *)PyValue_AsKnownObjectBorrow(deque));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(_collections__count_elements__doc__,
@@ -653,68 +695,85 @@ PyDoc_STRVAR(_collections__count_elements__doc__,
 "Count elements in the iterable, updating the mapping");
 
 #define _COLLECTIONS__COUNT_ELEMENTS_METHODDEF    \
-    {"_count_elements", _PyCFunction_CAST(_collections__count_elements), METH_FASTCALL, _collections__count_elements__doc__},
+    {"_count_elements", _PyCFunction_CAST(_collections__count_elements), METH_VALUE, _collections__count_elements__doc__},
 
-static PyObject *
-_collections__count_elements_impl(PyObject *module, PyObject *mapping,
-                                  PyObject *iterable);
+static PyValue
+_collections__count_elements_impl(PyObject *module, PyValueBorrow mapping,
+                                  PyValueBorrow iterable);
 
-static PyObject *
-_collections__count_elements(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_collections__count_elements(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
-    PyObject *mapping;
-    PyObject *iterable;
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow mapping;
+    PyValueBorrow iterable;
 
+    if (!_PyArg_NoKwnamesValue("_collections._count_elements()", kwnames)) {
+        goto exit;
+    }
     if (!_PyArg_CheckPositional("_count_elements", nargs, 2, 2)) {
         goto exit;
     }
-    mapping = args[0];
-    iterable = args[1];
-    return_value = _collections__count_elements_impl(module, mapping, iterable);
+    mapping = PyValue_Borrow(args[0]);
+    iterable = PyValue_Borrow(args[1]);
+    return_value = _collections__count_elements_impl(PyValue_AsKnownObjectBorrow(module), mapping, iterable);
 
 exit:
     return return_value;
 }
 
-static PyObject *
-tuplegetter_new_impl(PyTypeObject *type, Py_ssize_t index, PyObject *doc);
+static PyValue
+tuplegetter_new_impl(PyTypeObject *type, Py_ssize_t index, PyValueBorrow doc);
 
-static PyObject *
-tuplegetter_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
+static PyValue
+tuplegetter_new_value(PyTypeObject *type, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyTypeObject *base_tp = clinic_state()->tuplegetter_type;
     Py_ssize_t index;
-    PyObject *doc;
+    PyValueBorrow doc;
 
     if ((type == base_tp || type->tp_init == base_tp->tp_init) &&
-        !_PyArg_NoKeywords("_tuplegetter", kwargs)) {
+        !_PyArg_NoKwnames("_tuplegetter", kwnames)) {
         goto exit;
     }
-    if (!_PyArg_CheckPositional("_tuplegetter", PyTuple_GET_SIZE(args), 2, 2)) {
-        goto exit;
-    }
-    PyObject *const *_args_items = _PyBorrow_TupleItems(args, PyTuple_GET_SIZE(args));
-    if (_args_items == NULL) {
+    if (!_PyArg_CheckPositional("_tuplegetter", nargs, 2, 2)) {
         goto exit;
     }
     {
         Py_ssize_t ival = -1;
-        PyObject *iobj = _PyNumber_Index(_args_items[0]);
-        if (iobj != NULL) {
-            ival = PyLong_AsSsize_t(iobj);
-            Py_DECREF(iobj);
+        PyValue iobj = _PyValue_Index(PyValue_Borrow(args[0]));
+        if (!PyValue_IsNull(iobj)) {
+            ival = _PyValue_IntAsSsize_t(PyValue_Borrow(iobj));
+            PyValue_CLOSE(iobj);
         }
         if (ival == -1 && PyErr_Occurred()) {
             goto exit;
         }
         index = ival;
     }
-    doc = _args_items[1];
+    doc = PyValue_Borrow(args[1]);
     return_value = tuplegetter_new_impl(type, index, doc);
 
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=d68ba57eb548fddb input=a9049054013a1b77]*/
+
+Py_VALUE_ENTRY static PyObject *
+tuplegetter_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
+{
+    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
+    if (kwargs == NULL || PyDict_GET_SIZE(kwargs) == 0) {
+        return _PyValue_THUNK_EXIT(tuplegetter_new_value(type, _PyTuple_ITEMS(args), nargs, NULL), BOX_SITE_CALL);
+    }
+    PyObject *kwnames;
+    PyValue *window = _PyValue_StackUnpackDict(_PyThreadState_GET(),
+        _PyTuple_ITEMS(args), nargs, kwargs, &kwnames);
+    if (window == NULL) {
+        return NULL;
+    }
+    PyValue result = tuplegetter_new_value(type, window, nargs, kwnames);
+    _PyValue_StackUnpackDict_Free(window, nargs, kwnames);
+    return _PyValue_THUNK_EXIT(result, BOX_SITE_CALL);
+}
+/*[clinic end generated code: output=ae83ad7ee1a888cb input=a9049054013a1b77]*/

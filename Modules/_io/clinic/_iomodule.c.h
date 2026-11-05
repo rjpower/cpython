@@ -2,13 +2,20 @@
 preserve
 [clinic start generated code]*/
 
+#ifndef Py_VALUE_CORE
+#  error "value-emission Clinic output requires Py_VALUE_CORE"
+#endif
+
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 #  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
 #  include "pycore_value.h"       // _PyValue_STATIC_IMMORTAL()
 #endif
-#include "pycore_modsupport.h"    // _PyArg_UnpackKeywords()
+#include "pycore_long_value.h"    // _PyValue_AsInt()
+#include "pycore_modsupport.h"    // _PyArg_UnpackKeywordsValue()
 #include "pycore_unicodeobject.h" // _PyUnicode_AsUTF8NoNUL()
+#include "pycore_value_call.h"    // METH_VALUE
+#include "pycore_value_ops.h"     // _PyValue_IsTrue()
 
 PyDoc_STRVAR(_io_open__doc__,
 "open($module, /, file, mode=\'r\', buffering=-1, encoding=None,\n"
@@ -131,17 +138,17 @@ PyDoc_STRVAR(_io_open__doc__,
 "opened in a binary mode.");
 
 #define _IO_OPEN_METHODDEF    \
-    {"open", _PyCFunction_CAST(_io_open), METH_FASTCALL|METH_KEYWORDS, _io_open__doc__},
+    {"open", _PyCFunction_CAST(_io_open), METH_VALUE, _io_open__doc__},
 
-static PyObject *
-_io_open_impl(PyObject *module, PyObject *file, const char *mode,
+static PyValue
+_io_open_impl(PyObject *module, PyValueBorrow file, const char *mode,
               int buffering, const char *encoding, const char *errors,
-              const char *newline, int closefd, PyObject *opener);
+              const char *newline, int closefd, PyValueBorrow opener);
 
-static PyObject *
-_io_open(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_io_open(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 8
@@ -169,114 +176,108 @@ _io_open(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kw
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[8];
-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 1;
-    PyObject *file;
+    Py_ssize_t _idx[8];
+    PyValueBorrow file;
     const char *mode = "r";
     int buffering = -1;
     const char *encoding = NULL;
     const char *errors = NULL;
     const char *newline = NULL;
     int closefd = 1;
-    PyObject *opener = Py_None;
+    PyValueBorrow opener = PyValue_Borrow(PyValue_None);
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 1, /*maxpos*/ 8, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 1, /*maxpos*/ 8, /*minkw*/ 0, /*varpos*/ 0, _idx, 8)) {
         goto exit;
     }
-    file = args[0];
-    if (!noptargs) {
-        goto skip_optional_pos;
-    }
-    if (args[1]) {
-        if (!PyUnicode_Check(args[1])) {
-            _PyArg_BadArgument("open", "argument 'mode'", "str", args[1]);
+    file = PyValue_Borrow(args[_idx[0]]);
+    if (_idx[1] >= 0) {
+        if (!PyValue_IsObject(PyValue_Borrow(args[_idx[1]]))) {
+            _PyArg_BadArgumentValue("open", "argument 'mode'", "str", PyValue_Borrow(args[_idx[1]]));
             goto exit;
         }
-        mode = _PyUnicode_AsUTF8NoNUL(args[1]);
+        if (!PyUnicode_Check(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[1]])))) {
+            _PyArg_BadArgument("open", "argument 'mode'", "str", PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[1]])));
+            goto exit;
+        }
+        mode = _PyUnicode_AsUTF8NoNUL(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[1]])));
         if (mode == NULL) {
             goto exit;
         }
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
     }
-    if (args[2]) {
-        buffering = PyLong_AsInt(args[2]);
+    if (_idx[2] >= 0) {
+        buffering = _PyValue_AsInt(PyValue_Borrow(args[_idx[2]]));
         if (buffering == -1 && PyErr_Occurred()) {
             goto exit;
         }
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
     }
-    if (args[3]) {
-        if (args[3] == Py_None) {
+    if (_idx[3] >= 0) {
+        if (!PyValue_IsObject(PyValue_Borrow(args[_idx[3]]))) {
+            _PyArg_BadArgumentValue("open", "argument 'encoding'", "str or None", PyValue_Borrow(args[_idx[3]]));
+            goto exit;
+        }
+        if (PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[3]])) == Py_None) {
             encoding = NULL;
         }
-        else if (PyUnicode_Check(args[3])) {
-            encoding = _PyUnicode_AsUTF8NoNUL(args[3]);
+        else if (PyUnicode_Check(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[3]])))) {
+            encoding = _PyUnicode_AsUTF8NoNUL(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[3]])));
             if (encoding == NULL) {
                 goto exit;
             }
         }
         else {
-            _PyArg_BadArgument("open", "argument 'encoding'", "str or None", args[3]);
+            _PyArg_BadArgument("open", "argument 'encoding'", "str or None", PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[3]])));
             goto exit;
         }
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
     }
-    if (args[4]) {
-        if (args[4] == Py_None) {
+    if (_idx[4] >= 0) {
+        if (!PyValue_IsObject(PyValue_Borrow(args[_idx[4]]))) {
+            _PyArg_BadArgumentValue("open", "argument 'errors'", "str or None", PyValue_Borrow(args[_idx[4]]));
+            goto exit;
+        }
+        if (PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[4]])) == Py_None) {
             errors = NULL;
         }
-        else if (PyUnicode_Check(args[4])) {
-            errors = _PyUnicode_AsUTF8NoNUL(args[4]);
+        else if (PyUnicode_Check(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[4]])))) {
+            errors = _PyUnicode_AsUTF8NoNUL(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[4]])));
             if (errors == NULL) {
                 goto exit;
             }
         }
         else {
-            _PyArg_BadArgument("open", "argument 'errors'", "str or None", args[4]);
+            _PyArg_BadArgument("open", "argument 'errors'", "str or None", PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[4]])));
             goto exit;
         }
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
     }
-    if (args[5]) {
-        if (args[5] == Py_None) {
+    if (_idx[5] >= 0) {
+        if (!PyValue_IsObject(PyValue_Borrow(args[_idx[5]]))) {
+            _PyArg_BadArgumentValue("open", "argument 'newline'", "str or None", PyValue_Borrow(args[_idx[5]]));
+            goto exit;
+        }
+        if (PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[5]])) == Py_None) {
             newline = NULL;
         }
-        else if (PyUnicode_Check(args[5])) {
-            newline = _PyUnicode_AsUTF8NoNUL(args[5]);
+        else if (PyUnicode_Check(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[5]])))) {
+            newline = _PyUnicode_AsUTF8NoNUL(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[5]])));
             if (newline == NULL) {
                 goto exit;
             }
         }
         else {
-            _PyArg_BadArgument("open", "argument 'newline'", "str or None", args[5]);
+            _PyArg_BadArgument("open", "argument 'newline'", "str or None", PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[5]])));
             goto exit;
         }
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
     }
-    if (args[6]) {
-        closefd = PyObject_IsTrue(args[6]);
+    if (_idx[6] >= 0) {
+        closefd = _PyValue_IsTrue(PyValue_Borrow(args[_idx[6]]));
         if (closefd < 0) {
             goto exit;
         }
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
     }
-    opener = args[7];
-skip_optional_pos:
-    return_value = _io_open_impl(module, file, mode, buffering, encoding, errors, newline, closefd, opener);
+    if (_idx[7] >= 0) {
+        opener = PyValue_Borrow(args[_idx[7]]);
+    }
+    return_value = _io_open_impl(PyValue_AsKnownObjectBorrow(module), file, mode, buffering, encoding, errors, newline, closefd, opener);
 
 exit:
     return return_value;
@@ -299,31 +300,35 @@ PyDoc_STRVAR(_io_text_encoding__doc__,
 "However, please consider using encoding=\"utf-8\" for new APIs.");
 
 #define _IO_TEXT_ENCODING_METHODDEF    \
-    {"text_encoding", _PyCFunction_CAST(_io_text_encoding), METH_FASTCALL, _io_text_encoding__doc__},
+    {"text_encoding", _PyCFunction_CAST(_io_text_encoding), METH_VALUE, _io_text_encoding__doc__},
 
-static PyObject *
-_io_text_encoding_impl(PyObject *module, PyObject *encoding, int stacklevel);
+static PyValue
+_io_text_encoding_impl(PyObject *module, PyValueBorrow encoding,
+                       int stacklevel);
 
-static PyObject *
-_io_text_encoding(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_io_text_encoding(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
-    PyObject *encoding;
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow encoding;
     int stacklevel = 2;
 
+    if (!_PyArg_NoKwnamesValue("_io.text_encoding()", kwnames)) {
+        goto exit;
+    }
     if (!_PyArg_CheckPositional("text_encoding", nargs, 1, 2)) {
         goto exit;
     }
-    encoding = args[0];
+    encoding = PyValue_Borrow(args[0]);
     if (nargs < 2) {
         goto skip_optional;
     }
-    stacklevel = PyLong_AsInt(args[1]);
+    stacklevel = _PyValue_AsInt(PyValue_Borrow(args[1]));
     if (stacklevel == -1 && PyErr_Occurred()) {
         goto exit;
     }
 skip_optional:
-    return_value = _io_text_encoding_impl(module, encoding, stacklevel);
+    return_value = _io_text_encoding_impl(PyValue_AsKnownObjectBorrow(module), encoding, stacklevel);
 
 exit:
     return return_value;
@@ -339,15 +344,15 @@ PyDoc_STRVAR(_io_open_code__doc__,
 "interchangeable with calling open(path, \'rb\').");
 
 #define _IO_OPEN_CODE_METHODDEF    \
-    {"open_code", _PyCFunction_CAST(_io_open_code), METH_FASTCALL|METH_KEYWORDS, _io_open_code__doc__},
+    {"open_code", _PyCFunction_CAST(_io_open_code), METH_VALUE, _io_open_code__doc__},
 
-static PyObject *
+static PyValue
 _io_open_code_impl(PyObject *module, PyObject *path);
 
-static PyObject *
-_io_open_code(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_io_open_code(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
@@ -375,22 +380,25 @@ _io_open_code(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObjec
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[1];
+    Py_ssize_t _idx[1];
     PyObject *path;
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, _idx, 1)) {
         goto exit;
     }
-    if (!PyUnicode_Check(args[0])) {
-        _PyArg_BadArgument("open_code", "argument 'path'", "str", args[0]);
+    if (!PyValue_IsObject(PyValue_Borrow(args[_idx[0]]))) {
+        _PyArg_BadArgumentValue("open_code", "argument 'path'", "str", PyValue_Borrow(args[_idx[0]]));
         goto exit;
     }
-    path = args[0];
-    return_value = _io_open_code_impl(module, path);
+    if (!PyUnicode_Check(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[0]])))) {
+        _PyArg_BadArgument("open_code", "argument 'path'", "str", PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[0]])));
+        goto exit;
+    }
+    path = PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[0]]));
+    return_value = _io_open_code_impl(PyValue_AsKnownObjectBorrow(module), path);
 
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=1da72d9f317edbc6 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=ddbf6e46971ae828 input=a9049054013a1b77]*/

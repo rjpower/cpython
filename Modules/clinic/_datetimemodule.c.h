@@ -2,14 +2,21 @@
 preserve
 [clinic start generated code]*/
 
+#ifndef Py_VALUE_CORE
+#  error "value-emission Clinic output requires Py_VALUE_CORE"
+#endif
+
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 #  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
 #  include "pycore_value.h"       // _PyValue_STATIC_IMMORTAL()
 #endif
-#include "pycore_borrow.h"        // _PyBorrow_TupleItems()
-#include "pycore_modsupport.h"    // _PyArg_UnpackKeywords()
+#include "pycore_long_value.h"    // _PyValue_AsInt()
+#include "pycore_modsupport.h"    // _PyArg_UnpackKeywordsValue()
+#include "pycore_tuple.h"         // _PyTuple_ITEMS()
 #include "pycore_unicodeobject.h" // _PyUnicode_AsUTF8NoNUL()
+#include "pycore_value_call.h"    // METH_VALUE
+#include "pycore_value_slots.h"   // _PyValue_THUNK_EXIT()
 
 PyDoc_STRVAR(delta_new__doc__,
 "timedelta(days=0, seconds=0, microseconds=0, milliseconds=0, minutes=0,\n"
@@ -21,15 +28,16 @@ PyDoc_STRVAR(delta_new__doc__,
 "All arguments are optional and default to 0.\n"
 "Arguments may be integers or floats, and may be positive or negative.");
 
-static PyObject *
-delta_new_impl(PyTypeObject *type, PyObject *days, PyObject *seconds,
-               PyObject *microseconds, PyObject *milliseconds,
-               PyObject *minutes, PyObject *hours, PyObject *weeks);
+static PyValue
+delta_new_impl(PyTypeObject *type, PyValueBorrow days, PyValueBorrow seconds,
+               PyValueBorrow microseconds, PyValueBorrow milliseconds,
+               PyValueBorrow minutes, PyValueBorrow hours,
+               PyValueBorrow weeks);
 
-static PyObject *
-delta_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
+static PyValue
+delta_new_value(PyTypeObject *type, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 7
@@ -57,72 +65,62 @@ delta_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[7];
-    PyObject * const *fastargs;
-    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
-    Py_ssize_t noptargs = nargs + (kwargs ? PyDict_GET_SIZE(kwargs) : 0) - 0;
-    PyObject *days = NULL;
-    PyObject *seconds = NULL;
-    PyObject *microseconds = NULL;
-    PyObject *milliseconds = NULL;
-    PyObject *minutes = NULL;
-    PyObject *hours = NULL;
-    PyObject *weeks = NULL;
+    Py_ssize_t _idx[7];
+    PyValueBorrow days = PyValue_Borrow(PyValue_NULL);
+    PyValueBorrow seconds = PyValue_Borrow(PyValue_NULL);
+    PyValueBorrow microseconds = PyValue_Borrow(PyValue_NULL);
+    PyValueBorrow milliseconds = PyValue_Borrow(PyValue_NULL);
+    PyValueBorrow minutes = PyValue_Borrow(PyValue_NULL);
+    PyValueBorrow hours = PyValue_Borrow(PyValue_NULL);
+    PyValueBorrow weeks = PyValue_Borrow(PyValue_NULL);
 
-    PyObject *const *_args_items = _PyBorrow_TupleItems(args, Py_MIN(nargs, 7));
-    if (_args_items == NULL) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 0, /*maxpos*/ 7, /*minkw*/ 0, /*varpos*/ 0, _idx, 7)) {
         goto exit;
     }
-    fastargs = _PyArg_UnpackKeywords(_args_items, nargs, kwargs, NULL, &_parser,
-            /*minpos*/ 0, /*maxpos*/ 7, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!fastargs) {
-        goto exit;
+    if (_idx[0] >= 0) {
+        days = PyValue_Borrow(args[_idx[0]]);
     }
-    if (!noptargs) {
-        goto skip_optional_pos;
+    if (_idx[1] >= 0) {
+        seconds = PyValue_Borrow(args[_idx[1]]);
     }
-    if (fastargs[0]) {
-        days = fastargs[0];
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
+    if (_idx[2] >= 0) {
+        microseconds = PyValue_Borrow(args[_idx[2]]);
     }
-    if (fastargs[1]) {
-        seconds = fastargs[1];
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
+    if (_idx[3] >= 0) {
+        milliseconds = PyValue_Borrow(args[_idx[3]]);
     }
-    if (fastargs[2]) {
-        microseconds = fastargs[2];
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
+    if (_idx[4] >= 0) {
+        minutes = PyValue_Borrow(args[_idx[4]]);
     }
-    if (fastargs[3]) {
-        milliseconds = fastargs[3];
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
+    if (_idx[5] >= 0) {
+        hours = PyValue_Borrow(args[_idx[5]]);
     }
-    if (fastargs[4]) {
-        minutes = fastargs[4];
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
+    if (_idx[6] >= 0) {
+        weeks = PyValue_Borrow(args[_idx[6]]);
     }
-    if (fastargs[5]) {
-        hours = fastargs[5];
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
-    }
-    weeks = fastargs[6];
-skip_optional_pos:
     return_value = delta_new_impl(type, days, seconds, microseconds, milliseconds, minutes, hours, weeks);
 
 exit:
     return return_value;
+}
+
+Py_VALUE_ENTRY static PyObject *
+delta_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
+{
+    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
+    if (kwargs == NULL || PyDict_GET_SIZE(kwargs) == 0) {
+        return _PyValue_THUNK_EXIT(delta_new_value(type, _PyTuple_ITEMS(args), nargs, NULL), BOX_SITE_CALL);
+    }
+    PyObject *kwnames;
+    PyValue *window = _PyValue_StackUnpackDict(_PyThreadState_GET(),
+        _PyTuple_ITEMS(args), nargs, kwargs, &kwnames);
+    if (window == NULL) {
+        return NULL;
+    }
+    PyValue result = delta_new_value(type, window, nargs, kwnames);
+    _PyValue_StackUnpackDict_Free(window, nargs, kwnames);
+    return _PyValue_THUNK_EXIT(result, BOX_SITE_CALL);
 }
 
 PyDoc_STRVAR(datetime_date__doc__,
@@ -131,13 +129,13 @@ PyDoc_STRVAR(datetime_date__doc__,
 "\n"
 "Concrete date type.");
 
-static PyObject *
+static PyValue
 datetime_date_impl(PyTypeObject *type, int year, int month, int day);
 
-static PyObject *
-datetime_date(PyTypeObject *type, PyObject *args, PyObject *kwargs)
+static PyValue
+datetime_date_value(PyTypeObject *type, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 3
@@ -165,31 +163,24 @@ datetime_date(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[3];
-    PyObject * const *fastargs;
-    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
+    Py_ssize_t _idx[3];
     int year;
     int month;
     int day;
 
-    PyObject *const *_args_items = _PyBorrow_TupleItems(args, Py_MIN(nargs, 3));
-    if (_args_items == NULL) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 3, /*maxpos*/ 3, /*minkw*/ 0, /*varpos*/ 0, _idx, 3)) {
         goto exit;
     }
-    fastargs = _PyArg_UnpackKeywords(_args_items, nargs, kwargs, NULL, &_parser,
-            /*minpos*/ 3, /*maxpos*/ 3, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!fastargs) {
-        goto exit;
-    }
-    year = PyLong_AsInt(fastargs[0]);
+    year = _PyValue_AsInt(PyValue_Borrow(args[_idx[0]]));
     if (year == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    month = PyLong_AsInt(fastargs[1]);
+    month = _PyValue_AsInt(PyValue_Borrow(args[_idx[1]]));
     if (month == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    day = PyLong_AsInt(fastargs[2]);
+    day = _PyValue_AsInt(PyValue_Borrow(args[_idx[2]]));
     if (day == -1 && PyErr_Occurred()) {
         goto exit;
     }
@@ -197,6 +188,24 @@ datetime_date(PyTypeObject *type, PyObject *args, PyObject *kwargs)
 
 exit:
     return return_value;
+}
+
+Py_VALUE_ENTRY static PyObject *
+datetime_date(PyTypeObject *type, PyObject *args, PyObject *kwargs)
+{
+    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
+    if (kwargs == NULL || PyDict_GET_SIZE(kwargs) == 0) {
+        return _PyValue_THUNK_EXIT(datetime_date_value(type, _PyTuple_ITEMS(args), nargs, NULL), BOX_SITE_CALL);
+    }
+    PyObject *kwnames;
+    PyValue *window = _PyValue_StackUnpackDict(_PyThreadState_GET(),
+        _PyTuple_ITEMS(args), nargs, kwargs, &kwnames);
+    if (window == NULL) {
+        return NULL;
+    }
+    PyValue result = datetime_date_value(type, window, nargs, kwnames);
+    _PyValue_StackUnpackDict_Free(window, nargs, kwnames);
+    return _PyValue_THUNK_EXIT(result, BOX_SITE_CALL);
 }
 
 PyDoc_STRVAR(datetime_date_today__doc__,
@@ -208,15 +217,19 @@ PyDoc_STRVAR(datetime_date_today__doc__,
 "Equivalent to fromtimestamp(time.time()).");
 
 #define DATETIME_DATE_TODAY_METHODDEF    \
-    {"today", (PyCFunction)datetime_date_today, METH_NOARGS|METH_CLASS, datetime_date_today__doc__},
+    {"today", _PyCFunction_CAST(datetime_date_today), METH_VALUE|METH_NOARGS|METH_CLASS, datetime_date_today__doc__},
 
-static PyObject *
+static PyValue
 datetime_date_today_impl(PyTypeObject *type);
 
-static PyObject *
-datetime_date_today(PyObject *type, PyObject *Py_UNUSED(ignored))
+static PyValue
+datetime_date_today(PyValueBorrow type, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return datetime_date_today_impl((PyTypeObject *)type);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = datetime_date_today_impl((PyTypeObject *)PyValue_AsKnownObjectBorrow(type));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(datetime_date_fromtimestamp__doc__,
@@ -229,17 +242,19 @@ PyDoc_STRVAR(datetime_date_fromtimestamp__doc__,
 "interpreted as local time.");
 
 #define DATETIME_DATE_FROMTIMESTAMP_METHODDEF    \
-    {"fromtimestamp", (PyCFunction)datetime_date_fromtimestamp, METH_O|METH_CLASS, datetime_date_fromtimestamp__doc__},
+    {"fromtimestamp", _PyCFunction_CAST(datetime_date_fromtimestamp), METH_VALUE|METH_O|METH_CLASS, datetime_date_fromtimestamp__doc__},
 
-static PyObject *
-datetime_date_fromtimestamp_impl(PyTypeObject *type, PyObject *timestamp);
+static PyValue
+datetime_date_fromtimestamp_impl(PyTypeObject *type, PyValueBorrow timestamp);
 
-static PyObject *
-datetime_date_fromtimestamp(PyObject *type, PyObject *timestamp)
+static PyValue
+datetime_date_fromtimestamp(PyValueBorrow type, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow timestamp;
 
-    return_value = datetime_date_fromtimestamp_impl((PyTypeObject *)type, timestamp);
+    timestamp = PyValue_Borrow(args[0]);
+    return_value = datetime_date_fromtimestamp_impl((PyTypeObject *)PyValue_AsKnownObjectBorrow(type), timestamp);
 
     return return_value;
 }
@@ -254,22 +269,22 @@ PyDoc_STRVAR(datetime_date_fromordinal__doc__,
 "non-zero in the result.");
 
 #define DATETIME_DATE_FROMORDINAL_METHODDEF    \
-    {"fromordinal", (PyCFunction)datetime_date_fromordinal, METH_O|METH_CLASS, datetime_date_fromordinal__doc__},
+    {"fromordinal", _PyCFunction_CAST(datetime_date_fromordinal), METH_VALUE|METH_O|METH_CLASS, datetime_date_fromordinal__doc__},
 
-static PyObject *
+static PyValue
 datetime_date_fromordinal_impl(PyTypeObject *type, int ordinal);
 
-static PyObject *
-datetime_date_fromordinal(PyObject *type, PyObject *arg)
+static PyValue
+datetime_date_fromordinal(PyValueBorrow type, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int ordinal;
 
-    ordinal = PyLong_AsInt(arg);
+    ordinal = _PyValue_AsInt(PyValue_Borrow(args[0]));
     if (ordinal == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = datetime_date_fromordinal_impl((PyTypeObject *)type, ordinal);
+    return_value = datetime_date_fromordinal_impl((PyTypeObject *)PyValue_AsKnownObjectBorrow(type), ordinal);
 
 exit:
     return return_value;
@@ -282,23 +297,27 @@ PyDoc_STRVAR(datetime_date_fromisoformat__doc__,
 "Construct a date from a string in ISO 8601 format.");
 
 #define DATETIME_DATE_FROMISOFORMAT_METHODDEF    \
-    {"fromisoformat", (PyCFunction)datetime_date_fromisoformat, METH_O|METH_CLASS, datetime_date_fromisoformat__doc__},
+    {"fromisoformat", _PyCFunction_CAST(datetime_date_fromisoformat), METH_VALUE|METH_O|METH_CLASS, datetime_date_fromisoformat__doc__},
 
-static PyObject *
+static PyValue
 datetime_date_fromisoformat_impl(PyTypeObject *type, PyObject *string);
 
-static PyObject *
-datetime_date_fromisoformat(PyObject *type, PyObject *arg)
+static PyValue
+datetime_date_fromisoformat(PyValueBorrow type, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *string;
 
-    if (!PyUnicode_Check(arg)) {
-        _PyArg_BadArgument("fromisoformat", "argument", "str", arg);
+    if (!PyValue_IsObject(PyValue_Borrow(args[0]))) {
+        _PyArg_BadArgumentValue("fromisoformat", "argument", "str", PyValue_Borrow(args[0]));
         goto exit;
     }
-    string = arg;
-    return_value = datetime_date_fromisoformat_impl((PyTypeObject *)type, string);
+    if (!PyUnicode_Check(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])))) {
+        _PyArg_BadArgument("fromisoformat", "argument", "str", PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])));
+        goto exit;
+    }
+    string = PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0]));
+    return_value = datetime_date_fromisoformat_impl((PyTypeObject *)PyValue_AsKnownObjectBorrow(type), string);
 
 exit:
     return return_value;
@@ -313,16 +332,16 @@ PyDoc_STRVAR(datetime_date_fromisocalendar__doc__,
 "This is the inverse of the date.isocalendar() function.");
 
 #define DATETIME_DATE_FROMISOCALENDAR_METHODDEF    \
-    {"fromisocalendar", _PyCFunction_CAST(datetime_date_fromisocalendar), METH_FASTCALL|METH_KEYWORDS|METH_CLASS, datetime_date_fromisocalendar__doc__},
+    {"fromisocalendar", _PyCFunction_CAST(datetime_date_fromisocalendar), METH_VALUE|METH_CLASS, datetime_date_fromisocalendar__doc__},
 
-static PyObject *
+static PyValue
 datetime_date_fromisocalendar_impl(PyTypeObject *type, int year, int week,
                                    int day);
 
-static PyObject *
-datetime_date_fromisocalendar(PyObject *type, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+datetime_date_fromisocalendar(PyValueBorrow type, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 3
@@ -350,29 +369,28 @@ datetime_date_fromisocalendar(PyObject *type, PyObject *const *args, Py_ssize_t 
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[3];
+    Py_ssize_t _idx[3];
     int year;
     int week;
     int day;
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 3, /*maxpos*/ 3, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 3, /*maxpos*/ 3, /*minkw*/ 0, /*varpos*/ 0, _idx, 3)) {
         goto exit;
     }
-    year = PyLong_AsInt(args[0]);
+    year = _PyValue_AsInt(PyValue_Borrow(args[_idx[0]]));
     if (year == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    week = PyLong_AsInt(args[1]);
+    week = _PyValue_AsInt(PyValue_Borrow(args[_idx[1]]));
     if (week == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    day = PyLong_AsInt(args[2]);
+    day = _PyValue_AsInt(PyValue_Borrow(args[_idx[2]]));
     if (day == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = datetime_date_fromisocalendar_impl((PyTypeObject *)type, year, week, day);
+    return_value = datetime_date_fromisocalendar_impl((PyTypeObject *)PyValue_AsKnownObjectBorrow(type), year, week, day);
 
 exit:
     return return_value;
@@ -388,33 +406,44 @@ PyDoc_STRVAR(datetime_date_strptime__doc__,
 "    https://docs.python.org/3/library/datetime.html#format-codes");
 
 #define DATETIME_DATE_STRPTIME_METHODDEF    \
-    {"strptime", _PyCFunction_CAST(datetime_date_strptime), METH_FASTCALL|METH_CLASS, datetime_date_strptime__doc__},
+    {"strptime", _PyCFunction_CAST(datetime_date_strptime), METH_VALUE|METH_CLASS, datetime_date_strptime__doc__},
 
-static PyObject *
+static PyValue
 datetime_date_strptime_impl(PyTypeObject *type, PyObject *string,
                             PyObject *format);
 
-static PyObject *
-datetime_date_strptime(PyObject *type, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+datetime_date_strptime(PyValueBorrow type, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *string;
     PyObject *format;
 
+    if (!_PyArg_NoKwnamesValue("date.strptime()", kwnames)) {
+        goto exit;
+    }
     if (!_PyArg_CheckPositional("strptime", nargs, 2, 2)) {
         goto exit;
     }
-    if (!PyUnicode_Check(args[0])) {
-        _PyArg_BadArgument("strptime", "argument 1", "str", args[0]);
+    if (!PyValue_IsObject(PyValue_Borrow(args[0]))) {
+        _PyArg_BadArgumentValue("strptime", "argument 1", "str", PyValue_Borrow(args[0]));
         goto exit;
     }
-    string = args[0];
-    if (!PyUnicode_Check(args[1])) {
-        _PyArg_BadArgument("strptime", "argument 2", "str", args[1]);
+    if (!PyUnicode_Check(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])))) {
+        _PyArg_BadArgument("strptime", "argument 1", "str", PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])));
         goto exit;
     }
-    format = args[1];
-    return_value = datetime_date_strptime_impl((PyTypeObject *)type, string, format);
+    string = PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0]));
+    if (!PyValue_IsObject(PyValue_Borrow(args[1]))) {
+        _PyArg_BadArgumentValue("strptime", "argument 2", "str", PyValue_Borrow(args[1]));
+        goto exit;
+    }
+    if (!PyUnicode_Check(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[1])))) {
+        _PyArg_BadArgument("strptime", "argument 2", "str", PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[1])));
+        goto exit;
+    }
+    format = PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[1]));
+    return_value = datetime_date_strptime_impl((PyTypeObject *)PyValue_AsKnownObjectBorrow(type), string, format);
 
 exit:
     return return_value;
@@ -432,15 +461,15 @@ PyDoc_STRVAR(datetime_date_strftime__doc__,
 "    https://docs.python.org/3/library/datetime.html#format-codes");
 
 #define DATETIME_DATE_STRFTIME_METHODDEF    \
-    {"strftime", _PyCFunction_CAST(datetime_date_strftime), METH_FASTCALL|METH_KEYWORDS, datetime_date_strftime__doc__},
+    {"strftime", _PyCFunction_CAST(datetime_date_strftime), METH_VALUE, datetime_date_strftime__doc__},
 
-static PyObject *
+static PyValue
 datetime_date_strftime_impl(PyObject *self, PyObject *format);
 
-static PyObject *
-datetime_date_strftime(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+datetime_date_strftime(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
@@ -468,20 +497,23 @@ datetime_date_strftime(PyObject *self, PyObject *const *args, Py_ssize_t nargs, 
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[1];
+    Py_ssize_t _idx[1];
     PyObject *format;
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, _idx, 1)) {
         goto exit;
     }
-    if (!PyUnicode_Check(args[0])) {
-        _PyArg_BadArgument("strftime", "argument 'format'", "str", args[0]);
+    if (!PyValue_IsObject(PyValue_Borrow(args[_idx[0]]))) {
+        _PyArg_BadArgumentValue("strftime", "argument 'format'", "str", PyValue_Borrow(args[_idx[0]]));
         goto exit;
     }
-    format = args[0];
-    return_value = datetime_date_strftime_impl(self, format);
+    if (!PyUnicode_Check(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[0]])))) {
+        _PyArg_BadArgument("strftime", "argument 'format'", "str", PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[0]])));
+        goto exit;
+    }
+    format = PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[0]]));
+    return_value = datetime_date_strftime_impl(PyValue_AsKnownObjectBorrow(self), format);
 
 exit:
     return return_value;
@@ -494,36 +526,40 @@ PyDoc_STRVAR(datetime_date___format____doc__,
 "Formats self with strftime.");
 
 #define DATETIME_DATE___FORMAT___METHODDEF    \
-    {"__format__", (PyCFunction)datetime_date___format__, METH_O, datetime_date___format____doc__},
+    {"__format__", _PyCFunction_CAST(datetime_date___format__), METH_VALUE|METH_O, datetime_date___format____doc__},
 
-static PyObject *
+static PyValue
 datetime_date___format___impl(PyObject *self, PyObject *format);
 
-static PyObject *
-datetime_date___format__(PyObject *self, PyObject *arg)
+static PyValue
+datetime_date___format__(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *format;
 
-    if (!PyUnicode_Check(arg)) {
-        _PyArg_BadArgument("__format__", "argument", "str", arg);
+    if (!PyValue_IsObject(PyValue_Borrow(args[0]))) {
+        _PyArg_BadArgumentValue("__format__", "argument", "str", PyValue_Borrow(args[0]));
         goto exit;
     }
-    format = arg;
-    return_value = datetime_date___format___impl(self, format);
+    if (!PyUnicode_Check(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])))) {
+        _PyArg_BadArgument("__format__", "argument", "str", PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])));
+        goto exit;
+    }
+    format = PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0]));
+    return_value = datetime_date___format___impl(PyValue_AsKnownObjectBorrow(self), format);
 
 exit:
     return return_value;
 }
 
-static PyObject *
+static PyValue
 iso_calendar_date_new_impl(PyTypeObject *type, int year, int week,
                            int weekday);
 
-static PyObject *
-iso_calendar_date_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
+static PyValue
+iso_calendar_date_new_value(PyTypeObject *type, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 3
@@ -551,31 +587,24 @@ iso_calendar_date_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[3];
-    PyObject * const *fastargs;
-    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
+    Py_ssize_t _idx[3];
     int year;
     int week;
     int weekday;
 
-    PyObject *const *_args_items = _PyBorrow_TupleItems(args, Py_MIN(nargs, 3));
-    if (_args_items == NULL) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 3, /*maxpos*/ 3, /*minkw*/ 0, /*varpos*/ 0, _idx, 3)) {
         goto exit;
     }
-    fastargs = _PyArg_UnpackKeywords(_args_items, nargs, kwargs, NULL, &_parser,
-            /*minpos*/ 3, /*maxpos*/ 3, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!fastargs) {
-        goto exit;
-    }
-    year = PyLong_AsInt(fastargs[0]);
+    year = _PyValue_AsInt(PyValue_Borrow(args[_idx[0]]));
     if (year == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    week = PyLong_AsInt(fastargs[1]);
+    week = _PyValue_AsInt(PyValue_Borrow(args[_idx[1]]));
     if (week == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    weekday = PyLong_AsInt(fastargs[2]);
+    weekday = _PyValue_AsInt(PyValue_Borrow(args[_idx[2]]));
     if (weekday == -1 && PyErr_Occurred()) {
         goto exit;
     }
@@ -585,6 +614,24 @@ exit:
     return return_value;
 }
 
+Py_VALUE_ENTRY static PyObject *
+iso_calendar_date_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
+{
+    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
+    if (kwargs == NULL || PyDict_GET_SIZE(kwargs) == 0) {
+        return _PyValue_THUNK_EXIT(iso_calendar_date_new_value(type, _PyTuple_ITEMS(args), nargs, NULL), BOX_SITE_CALL);
+    }
+    PyObject *kwnames;
+    PyValue *window = _PyValue_StackUnpackDict(_PyThreadState_GET(),
+        _PyTuple_ITEMS(args), nargs, kwargs, &kwnames);
+    if (window == NULL) {
+        return NULL;
+    }
+    PyValue result = iso_calendar_date_new_value(type, window, nargs, kwnames);
+    _PyValue_StackUnpackDict_Free(window, nargs, kwnames);
+    return _PyValue_THUNK_EXIT(result, BOX_SITE_CALL);
+}
+
 PyDoc_STRVAR(datetime_date_replace__doc__,
 "replace($self, /, year=unchanged, month=unchanged, day=unchanged)\n"
 "--\n"
@@ -592,16 +639,16 @@ PyDoc_STRVAR(datetime_date_replace__doc__,
 "Return date with new specified fields.");
 
 #define DATETIME_DATE_REPLACE_METHODDEF    \
-    {"replace", _PyCFunction_CAST(datetime_date_replace), METH_FASTCALL|METH_KEYWORDS, datetime_date_replace__doc__},
+    {"replace", _PyCFunction_CAST(datetime_date_replace), METH_VALUE, datetime_date_replace__doc__},
 
-static PyObject *
+static PyValue
 datetime_date_replace_impl(PyDateTime_Date *self, int year, int month,
                            int day);
 
-static PyObject *
-datetime_date_replace(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+datetime_date_replace(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 3
@@ -629,44 +676,34 @@ datetime_date_replace(PyObject *self, PyObject *const *args, Py_ssize_t nargs, P
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[3];
-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 0;
-    int year = GET_YEAR(self);
-    int month = GET_MONTH(self);
-    int day = GET_DAY(self);
+    Py_ssize_t _idx[3];
+    int year = GET_YEAR(PyValue_AsKnownObjectBorrow(self));
+    int month = GET_MONTH(PyValue_AsKnownObjectBorrow(self));
+    int day = GET_DAY(PyValue_AsKnownObjectBorrow(self));
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 0, /*maxpos*/ 3, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 0, /*maxpos*/ 3, /*minkw*/ 0, /*varpos*/ 0, _idx, 3)) {
         goto exit;
     }
-    if (!noptargs) {
-        goto skip_optional_pos;
-    }
-    if (args[0]) {
-        year = PyLong_AsInt(args[0]);
+    if (_idx[0] >= 0) {
+        year = _PyValue_AsInt(PyValue_Borrow(args[_idx[0]]));
         if (year == -1 && PyErr_Occurred()) {
             goto exit;
         }
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
     }
-    if (args[1]) {
-        month = PyLong_AsInt(args[1]);
+    if (_idx[1] >= 0) {
+        month = _PyValue_AsInt(PyValue_Borrow(args[_idx[1]]));
         if (month == -1 && PyErr_Occurred()) {
             goto exit;
         }
-        if (!--noptargs) {
-            goto skip_optional_pos;
+    }
+    if (_idx[2] >= 0) {
+        day = _PyValue_AsInt(PyValue_Borrow(args[_idx[2]]));
+        if (day == -1 && PyErr_Occurred()) {
+            goto exit;
         }
     }
-    day = PyLong_AsInt(args[2]);
-    if (day == -1 && PyErr_Occurred()) {
-        goto exit;
-    }
-skip_optional_pos:
-    return_value = datetime_date_replace_impl((PyDateTime_Date *)self, year, month, day);
+    return_value = datetime_date_replace_impl((PyDateTime_Date *)PyValue_AsKnownObjectBorrow(self), year, month, day);
 
 exit:
     return return_value;
@@ -678,13 +715,13 @@ PyDoc_STRVAR(timezone_new__doc__,
 "\n"
 "Fixed offset from UTC implementation of tzinfo.");
 
-static PyObject *
+static PyValue
 timezone_new_impl(PyTypeObject *type, PyObject *offset, PyObject *name);
 
-static PyObject *
-timezone_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
+static PyValue
+timezone_new_value(PyTypeObject *type, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 2
@@ -712,40 +749,52 @@ timezone_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[2];
-    PyObject * const *fastargs;
-    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
-    Py_ssize_t noptargs = nargs + (kwargs ? PyDict_GET_SIZE(kwargs) : 0) - 1;
+    Py_ssize_t _idx[2];
     PyObject *offset;
     PyObject *name = NULL;
 
-    PyObject *const *_args_items = _PyBorrow_TupleItems(args, Py_MIN(nargs, 2));
-    if (_args_items == NULL) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 1, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, _idx, 2)) {
         goto exit;
     }
-    fastargs = _PyArg_UnpackKeywords(_args_items, nargs, kwargs, NULL, &_parser,
-            /*minpos*/ 1, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!fastargs) {
+    if (!PyType_IsSubtype(PyValue_TYPE(PyValue_Borrow(args[_idx[0]])), DELTA_TYPE(NO_STATE))) {
+        _PyArg_BadArgumentValue("timezone", "argument 'offset'", (DELTA_TYPE(NO_STATE))->tp_name, PyValue_Borrow(args[_idx[0]]));
         goto exit;
     }
-    if (!PyObject_TypeCheck(fastargs[0], DELTA_TYPE(NO_STATE))) {
-        _PyArg_BadArgument("timezone", "argument 'offset'", (DELTA_TYPE(NO_STATE))->tp_name, fastargs[0]);
-        goto exit;
+    offset = PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[0]]));
+    if (_idx[1] >= 0) {
+        if (!PyValue_IsObject(PyValue_Borrow(args[_idx[1]]))) {
+            _PyArg_BadArgumentValue("timezone", "argument 'name'", "str", PyValue_Borrow(args[_idx[1]]));
+            goto exit;
+        }
+        if (!PyUnicode_Check(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[1]])))) {
+            _PyArg_BadArgument("timezone", "argument 'name'", "str", PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[1]])));
+            goto exit;
+        }
+        name = PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[1]]));
     }
-    offset = fastargs[0];
-    if (!noptargs) {
-        goto skip_optional_pos;
-    }
-    if (!PyUnicode_Check(fastargs[1])) {
-        _PyArg_BadArgument("timezone", "argument 'name'", "str", fastargs[1]);
-        goto exit;
-    }
-    name = fastargs[1];
-skip_optional_pos:
     return_value = timezone_new_impl(type, offset, name);
 
 exit:
     return return_value;
+}
+
+Py_VALUE_ENTRY static PyObject *
+timezone_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
+{
+    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
+    if (kwargs == NULL || PyDict_GET_SIZE(kwargs) == 0) {
+        return _PyValue_THUNK_EXIT(timezone_new_value(type, _PyTuple_ITEMS(args), nargs, NULL), BOX_SITE_CALL);
+    }
+    PyObject *kwnames;
+    PyValue *window = _PyValue_StackUnpackDict(_PyThreadState_GET(),
+        _PyTuple_ITEMS(args), nargs, kwargs, &kwnames);
+    if (window == NULL) {
+        return NULL;
+    }
+    PyValue result = timezone_new_value(type, window, nargs, kwnames);
+    _PyValue_StackUnpackDict_Free(window, nargs, kwnames);
+    return _PyValue_THUNK_EXIT(result, BOX_SITE_CALL);
 }
 
 PyDoc_STRVAR(datetime_time__doc__,
@@ -757,14 +806,14 @@ PyDoc_STRVAR(datetime_time__doc__,
 "All arguments are optional. tzinfo may be None, or an instance of\n"
 "a tzinfo subclass. The remaining arguments may be ints.");
 
-static PyObject *
+static PyValue
 datetime_time_impl(PyTypeObject *type, int hour, int minute, int second,
-                   int microsecond, PyObject *tzinfo, int fold);
+                   int microsecond, PyValueBorrow tzinfo, int fold);
 
-static PyObject *
-datetime_time(PyTypeObject *type, PyObject *args, PyObject *kwargs)
+static PyValue
+datetime_time_value(PyTypeObject *type, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 6
@@ -792,84 +841,73 @@ datetime_time(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[6];
-    PyObject * const *fastargs;
-    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
-    Py_ssize_t noptargs = nargs + (kwargs ? PyDict_GET_SIZE(kwargs) : 0) - 0;
+    Py_ssize_t _idx[6];
     int hour = 0;
     int minute = 0;
     int second = 0;
     int microsecond = 0;
-    PyObject *tzinfo = Py_None;
+    PyValueBorrow tzinfo = PyValue_Borrow(PyValue_None);
     int fold = 0;
 
-    PyObject *const *_args_items = _PyBorrow_TupleItems(args, Py_MIN(nargs, 5));
-    if (_args_items == NULL) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 0, /*maxpos*/ 5, /*minkw*/ 0, /*varpos*/ 0, _idx, 6)) {
         goto exit;
     }
-    fastargs = _PyArg_UnpackKeywords(_args_items, nargs, kwargs, NULL, &_parser,
-            /*minpos*/ 0, /*maxpos*/ 5, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!fastargs) {
-        goto exit;
-    }
-    if (!noptargs) {
-        goto skip_optional_pos;
-    }
-    if (fastargs[0]) {
-        hour = PyLong_AsInt(fastargs[0]);
+    if (_idx[0] >= 0) {
+        hour = _PyValue_AsInt(PyValue_Borrow(args[_idx[0]]));
         if (hour == -1 && PyErr_Occurred()) {
             goto exit;
         }
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
     }
-    if (fastargs[1]) {
-        minute = PyLong_AsInt(fastargs[1]);
+    if (_idx[1] >= 0) {
+        minute = _PyValue_AsInt(PyValue_Borrow(args[_idx[1]]));
         if (minute == -1 && PyErr_Occurred()) {
             goto exit;
         }
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
     }
-    if (fastargs[2]) {
-        second = PyLong_AsInt(fastargs[2]);
+    if (_idx[2] >= 0) {
+        second = _PyValue_AsInt(PyValue_Borrow(args[_idx[2]]));
         if (second == -1 && PyErr_Occurred()) {
             goto exit;
         }
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
     }
-    if (fastargs[3]) {
-        microsecond = PyLong_AsInt(fastargs[3]);
+    if (_idx[3] >= 0) {
+        microsecond = _PyValue_AsInt(PyValue_Borrow(args[_idx[3]]));
         if (microsecond == -1 && PyErr_Occurred()) {
             goto exit;
         }
-        if (!--noptargs) {
-            goto skip_optional_pos;
+    }
+    if (_idx[4] >= 0) {
+        tzinfo = PyValue_Borrow(args[_idx[4]]);
+    }
+    if (_idx[5] >= 0) {
+        fold = _PyValue_AsInt(PyValue_Borrow(args[_idx[5]]));
+        if (fold == -1 && PyErr_Occurred()) {
+            goto exit;
         }
     }
-    if (fastargs[4]) {
-        tzinfo = fastargs[4];
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
-    }
-skip_optional_pos:
-    if (!noptargs) {
-        goto skip_optional_kwonly;
-    }
-    fold = PyLong_AsInt(fastargs[5]);
-    if (fold == -1 && PyErr_Occurred()) {
-        goto exit;
-    }
-skip_optional_kwonly:
     return_value = datetime_time_impl(type, hour, minute, second, microsecond, tzinfo, fold);
 
 exit:
     return return_value;
+}
+
+Py_VALUE_ENTRY static PyObject *
+datetime_time(PyTypeObject *type, PyObject *args, PyObject *kwargs)
+{
+    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
+    if (kwargs == NULL || PyDict_GET_SIZE(kwargs) == 0) {
+        return _PyValue_THUNK_EXIT(datetime_time_value(type, _PyTuple_ITEMS(args), nargs, NULL), BOX_SITE_CALL);
+    }
+    PyObject *kwnames;
+    PyValue *window = _PyValue_StackUnpackDict(_PyThreadState_GET(),
+        _PyTuple_ITEMS(args), nargs, kwargs, &kwnames);
+    if (window == NULL) {
+        return NULL;
+    }
+    PyValue result = datetime_time_value(type, window, nargs, kwnames);
+    _PyValue_StackUnpackDict_Free(window, nargs, kwnames);
+    return _PyValue_THUNK_EXIT(result, BOX_SITE_CALL);
 }
 
 PyDoc_STRVAR(datetime_time_strptime__doc__,
@@ -882,33 +920,44 @@ PyDoc_STRVAR(datetime_time_strptime__doc__,
 "    https://docs.python.org/3/library/datetime.html#format-codes");
 
 #define DATETIME_TIME_STRPTIME_METHODDEF    \
-    {"strptime", _PyCFunction_CAST(datetime_time_strptime), METH_FASTCALL|METH_CLASS, datetime_time_strptime__doc__},
+    {"strptime", _PyCFunction_CAST(datetime_time_strptime), METH_VALUE|METH_CLASS, datetime_time_strptime__doc__},
 
-static PyObject *
+static PyValue
 datetime_time_strptime_impl(PyTypeObject *type, PyObject *string,
                             PyObject *format);
 
-static PyObject *
-datetime_time_strptime(PyObject *type, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+datetime_time_strptime(PyValueBorrow type, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *string;
     PyObject *format;
 
+    if (!_PyArg_NoKwnamesValue("time.strptime()", kwnames)) {
+        goto exit;
+    }
     if (!_PyArg_CheckPositional("strptime", nargs, 2, 2)) {
         goto exit;
     }
-    if (!PyUnicode_Check(args[0])) {
-        _PyArg_BadArgument("strptime", "argument 1", "str", args[0]);
+    if (!PyValue_IsObject(PyValue_Borrow(args[0]))) {
+        _PyArg_BadArgumentValue("strptime", "argument 1", "str", PyValue_Borrow(args[0]));
         goto exit;
     }
-    string = args[0];
-    if (!PyUnicode_Check(args[1])) {
-        _PyArg_BadArgument("strptime", "argument 2", "str", args[1]);
+    if (!PyUnicode_Check(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])))) {
+        _PyArg_BadArgument("strptime", "argument 1", "str", PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])));
         goto exit;
     }
-    format = args[1];
-    return_value = datetime_time_strptime_impl((PyTypeObject *)type, string, format);
+    string = PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0]));
+    if (!PyValue_IsObject(PyValue_Borrow(args[1]))) {
+        _PyArg_BadArgumentValue("strptime", "argument 2", "str", PyValue_Borrow(args[1]));
+        goto exit;
+    }
+    if (!PyUnicode_Check(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[1])))) {
+        _PyArg_BadArgument("strptime", "argument 2", "str", PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[1])));
+        goto exit;
+    }
+    format = PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[1]));
+    return_value = datetime_time_strptime_impl((PyTypeObject *)PyValue_AsKnownObjectBorrow(type), string, format);
 
 exit:
     return return_value;
@@ -928,15 +977,15 @@ PyDoc_STRVAR(datetime_time_isoformat__doc__,
 "\'minutes\', \'seconds\', \'milliseconds\' and \'microseconds\'.");
 
 #define DATETIME_TIME_ISOFORMAT_METHODDEF    \
-    {"isoformat", _PyCFunction_CAST(datetime_time_isoformat), METH_FASTCALL|METH_KEYWORDS, datetime_time_isoformat__doc__},
+    {"isoformat", _PyCFunction_CAST(datetime_time_isoformat), METH_VALUE, datetime_time_isoformat__doc__},
 
-static PyObject *
+static PyValue
 datetime_time_isoformat_impl(PyDateTime_Time *self, const char *timespec);
 
-static PyObject *
-datetime_time_isoformat(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+datetime_time_isoformat(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
@@ -964,28 +1013,28 @@ datetime_time_isoformat(PyObject *self, PyObject *const *args, Py_ssize_t nargs,
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[1];
-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 0;
+    Py_ssize_t _idx[1];
     const char *timespec = NULL;
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 0, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 0, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, _idx, 1)) {
         goto exit;
     }
-    if (!noptargs) {
-        goto skip_optional_pos;
+    if (_idx[0] >= 0) {
+        if (!PyValue_IsObject(PyValue_Borrow(args[_idx[0]]))) {
+            _PyArg_BadArgumentValue("isoformat", "argument 'timespec'", "str", PyValue_Borrow(args[_idx[0]]));
+            goto exit;
+        }
+        if (!PyUnicode_Check(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[0]])))) {
+            _PyArg_BadArgument("isoformat", "argument 'timespec'", "str", PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[0]])));
+            goto exit;
+        }
+        timespec = _PyUnicode_AsUTF8NoNUL(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[0]])));
+        if (timespec == NULL) {
+            goto exit;
+        }
     }
-    if (!PyUnicode_Check(args[0])) {
-        _PyArg_BadArgument("isoformat", "argument 'timespec'", "str", args[0]);
-        goto exit;
-    }
-    timespec = _PyUnicode_AsUTF8NoNUL(args[0]);
-    if (timespec == NULL) {
-        goto exit;
-    }
-skip_optional_pos:
-    return_value = datetime_time_isoformat_impl((PyDateTime_Time *)self, timespec);
+    return_value = datetime_time_isoformat_impl((PyDateTime_Time *)PyValue_AsKnownObjectBorrow(self), timespec);
 
 exit:
     return return_value;
@@ -1004,15 +1053,15 @@ PyDoc_STRVAR(datetime_time_strftime__doc__,
 "    https://docs.python.org/3/library/datetime.html#format-codes");
 
 #define DATETIME_TIME_STRFTIME_METHODDEF    \
-    {"strftime", _PyCFunction_CAST(datetime_time_strftime), METH_FASTCALL|METH_KEYWORDS, datetime_time_strftime__doc__},
+    {"strftime", _PyCFunction_CAST(datetime_time_strftime), METH_VALUE, datetime_time_strftime__doc__},
 
-static PyObject *
+static PyValue
 datetime_time_strftime_impl(PyDateTime_Time *self, PyObject *format);
 
-static PyObject *
-datetime_time_strftime(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+datetime_time_strftime(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
@@ -1040,20 +1089,23 @@ datetime_time_strftime(PyObject *self, PyObject *const *args, Py_ssize_t nargs, 
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[1];
+    Py_ssize_t _idx[1];
     PyObject *format;
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, _idx, 1)) {
         goto exit;
     }
-    if (!PyUnicode_Check(args[0])) {
-        _PyArg_BadArgument("strftime", "argument 'format'", "str", args[0]);
+    if (!PyValue_IsObject(PyValue_Borrow(args[_idx[0]]))) {
+        _PyArg_BadArgumentValue("strftime", "argument 'format'", "str", PyValue_Borrow(args[_idx[0]]));
         goto exit;
     }
-    format = args[0];
-    return_value = datetime_time_strftime_impl((PyDateTime_Time *)self, format);
+    if (!PyUnicode_Check(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[0]])))) {
+        _PyArg_BadArgument("strftime", "argument 'format'", "str", PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[0]])));
+        goto exit;
+    }
+    format = PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[0]]));
+    return_value = datetime_time_strftime_impl((PyDateTime_Time *)PyValue_AsKnownObjectBorrow(self), format);
 
 exit:
     return return_value;
@@ -1066,23 +1118,27 @@ PyDoc_STRVAR(datetime_time___format____doc__,
 "Formats self with strftime.");
 
 #define DATETIME_TIME___FORMAT___METHODDEF    \
-    {"__format__", (PyCFunction)datetime_time___format__, METH_O, datetime_time___format____doc__},
+    {"__format__", _PyCFunction_CAST(datetime_time___format__), METH_VALUE|METH_O, datetime_time___format____doc__},
 
-static PyObject *
+static PyValue
 datetime_time___format___impl(PyObject *self, PyObject *format);
 
-static PyObject *
-datetime_time___format__(PyObject *self, PyObject *arg)
+static PyValue
+datetime_time___format__(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *format;
 
-    if (!PyUnicode_Check(arg)) {
-        _PyArg_BadArgument("__format__", "argument", "str", arg);
+    if (!PyValue_IsObject(PyValue_Borrow(args[0]))) {
+        _PyArg_BadArgumentValue("__format__", "argument", "str", PyValue_Borrow(args[0]));
         goto exit;
     }
-    format = arg;
-    return_value = datetime_time___format___impl(self, format);
+    if (!PyUnicode_Check(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])))) {
+        _PyArg_BadArgument("__format__", "argument", "str", PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])));
+        goto exit;
+    }
+    format = PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0]));
+    return_value = datetime_time___format___impl(PyValue_AsKnownObjectBorrow(self), format);
 
 exit:
     return return_value;
@@ -1096,17 +1152,17 @@ PyDoc_STRVAR(datetime_time_replace__doc__,
 "Return time with new specified fields.");
 
 #define DATETIME_TIME_REPLACE_METHODDEF    \
-    {"replace", _PyCFunction_CAST(datetime_time_replace), METH_FASTCALL|METH_KEYWORDS, datetime_time_replace__doc__},
+    {"replace", _PyCFunction_CAST(datetime_time_replace), METH_VALUE, datetime_time_replace__doc__},
 
-static PyObject *
+static PyValue
 datetime_time_replace_impl(PyDateTime_Time *self, int hour, int minute,
-                           int second, int microsecond, PyObject *tzinfo,
+                           int second, int microsecond, PyValueBorrow tzinfo,
                            int fold);
 
-static PyObject *
-datetime_time_replace(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+datetime_time_replace(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 6
@@ -1134,75 +1190,52 @@ datetime_time_replace(PyObject *self, PyObject *const *args, Py_ssize_t nargs, P
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[6];
-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 0;
-    int hour = TIME_GET_HOUR(self);
-    int minute = TIME_GET_MINUTE(self);
-    int second = TIME_GET_SECOND(self);
-    int microsecond = TIME_GET_MICROSECOND(self);
-    PyObject *tzinfo = HASTZINFO(self) ? ((PyDateTime_Time *)self)->tzinfo : Py_None;
-    int fold = TIME_GET_FOLD(self);
+    Py_ssize_t _idx[6];
+    int hour = TIME_GET_HOUR(PyValue_AsKnownObjectBorrow(self));
+    int minute = TIME_GET_MINUTE(PyValue_AsKnownObjectBorrow(self));
+    int second = TIME_GET_SECOND(PyValue_AsKnownObjectBorrow(self));
+    int microsecond = TIME_GET_MICROSECOND(PyValue_AsKnownObjectBorrow(self));
+    PyValueBorrow tzinfo = PyValue_FromObjectBorrow(HASTZINFO(PyValue_AsKnownObjectBorrow(self)) ? ((PyDateTime_Time *)PyValue_AsKnownObjectBorrow(self))->tzinfo : Py_None);
+    int fold = TIME_GET_FOLD(PyValue_AsKnownObjectBorrow(self));
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 0, /*maxpos*/ 5, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 0, /*maxpos*/ 5, /*minkw*/ 0, /*varpos*/ 0, _idx, 6)) {
         goto exit;
     }
-    if (!noptargs) {
-        goto skip_optional_pos;
-    }
-    if (args[0]) {
-        hour = PyLong_AsInt(args[0]);
+    if (_idx[0] >= 0) {
+        hour = _PyValue_AsInt(PyValue_Borrow(args[_idx[0]]));
         if (hour == -1 && PyErr_Occurred()) {
             goto exit;
         }
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
     }
-    if (args[1]) {
-        minute = PyLong_AsInt(args[1]);
+    if (_idx[1] >= 0) {
+        minute = _PyValue_AsInt(PyValue_Borrow(args[_idx[1]]));
         if (minute == -1 && PyErr_Occurred()) {
             goto exit;
         }
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
     }
-    if (args[2]) {
-        second = PyLong_AsInt(args[2]);
+    if (_idx[2] >= 0) {
+        second = _PyValue_AsInt(PyValue_Borrow(args[_idx[2]]));
         if (second == -1 && PyErr_Occurred()) {
             goto exit;
         }
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
     }
-    if (args[3]) {
-        microsecond = PyLong_AsInt(args[3]);
+    if (_idx[3] >= 0) {
+        microsecond = _PyValue_AsInt(PyValue_Borrow(args[_idx[3]]));
         if (microsecond == -1 && PyErr_Occurred()) {
             goto exit;
         }
-        if (!--noptargs) {
-            goto skip_optional_pos;
+    }
+    if (_idx[4] >= 0) {
+        tzinfo = PyValue_Borrow(args[_idx[4]]);
+    }
+    if (_idx[5] >= 0) {
+        fold = _PyValue_AsInt(PyValue_Borrow(args[_idx[5]]));
+        if (fold == -1 && PyErr_Occurred()) {
+            goto exit;
         }
     }
-    if (args[4]) {
-        tzinfo = args[4];
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
-    }
-skip_optional_pos:
-    if (!noptargs) {
-        goto skip_optional_kwonly;
-    }
-    fold = PyLong_AsInt(args[5]);
-    if (fold == -1 && PyErr_Occurred()) {
-        goto exit;
-    }
-skip_optional_kwonly:
-    return_value = datetime_time_replace_impl((PyDateTime_Time *)self, hour, minute, second, microsecond, tzinfo, fold);
+    return_value = datetime_time_replace_impl((PyDateTime_Time *)PyValue_AsKnownObjectBorrow(self), hour, minute, second, microsecond, tzinfo, fold);
 
 exit:
     return return_value;
@@ -1215,23 +1248,27 @@ PyDoc_STRVAR(datetime_time_fromisoformat__doc__,
 "Construct a time from a string in ISO 8601 format.");
 
 #define DATETIME_TIME_FROMISOFORMAT_METHODDEF    \
-    {"fromisoformat", (PyCFunction)datetime_time_fromisoformat, METH_O|METH_CLASS, datetime_time_fromisoformat__doc__},
+    {"fromisoformat", _PyCFunction_CAST(datetime_time_fromisoformat), METH_VALUE|METH_O|METH_CLASS, datetime_time_fromisoformat__doc__},
 
-static PyObject *
+static PyValue
 datetime_time_fromisoformat_impl(PyTypeObject *type, PyObject *string);
 
-static PyObject *
-datetime_time_fromisoformat(PyObject *type, PyObject *arg)
+static PyValue
+datetime_time_fromisoformat(PyValueBorrow type, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *string;
 
-    if (!PyUnicode_Check(arg)) {
-        _PyArg_BadArgument("fromisoformat", "argument", "str", arg);
+    if (!PyValue_IsObject(PyValue_Borrow(args[0]))) {
+        _PyArg_BadArgumentValue("fromisoformat", "argument", "str", PyValue_Borrow(args[0]));
         goto exit;
     }
-    string = arg;
-    return_value = datetime_time_fromisoformat_impl((PyTypeObject *)type, string);
+    if (!PyUnicode_Check(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])))) {
+        _PyArg_BadArgument("fromisoformat", "argument", "str", PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])));
+        goto exit;
+    }
+    string = PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0]));
+    return_value = datetime_time_fromisoformat_impl((PyTypeObject *)PyValue_AsKnownObjectBorrow(type), string);
 
 exit:
     return return_value;
@@ -1243,22 +1280,22 @@ PyDoc_STRVAR(datetime_time___reduce_ex____doc__,
 "\n");
 
 #define DATETIME_TIME___REDUCE_EX___METHODDEF    \
-    {"__reduce_ex__", (PyCFunction)datetime_time___reduce_ex__, METH_O, datetime_time___reduce_ex____doc__},
+    {"__reduce_ex__", _PyCFunction_CAST(datetime_time___reduce_ex__), METH_VALUE|METH_O, datetime_time___reduce_ex____doc__},
 
-static PyObject *
+static PyValue
 datetime_time___reduce_ex___impl(PyDateTime_Time *self, int proto);
 
-static PyObject *
-datetime_time___reduce_ex__(PyObject *self, PyObject *arg)
+static PyValue
+datetime_time___reduce_ex__(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int proto;
 
-    proto = PyLong_AsInt(arg);
+    proto = _PyValue_AsInt(PyValue_Borrow(args[0]));
     if (proto == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = datetime_time___reduce_ex___impl((PyDateTime_Time *)self, proto);
+    return_value = datetime_time___reduce_ex___impl((PyDateTime_Time *)PyValue_AsKnownObjectBorrow(self), proto);
 
 exit:
     return return_value;
@@ -1270,15 +1307,19 @@ PyDoc_STRVAR(datetime_time___reduce____doc__,
 "\n");
 
 #define DATETIME_TIME___REDUCE___METHODDEF    \
-    {"__reduce__", (PyCFunction)datetime_time___reduce__, METH_NOARGS, datetime_time___reduce____doc__},
+    {"__reduce__", _PyCFunction_CAST(datetime_time___reduce__), METH_VALUE|METH_NOARGS, datetime_time___reduce____doc__},
 
-static PyObject *
+static PyValue
 datetime_time___reduce___impl(PyDateTime_Time *self);
 
-static PyObject *
-datetime_time___reduce__(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+datetime_time___reduce__(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return datetime_time___reduce___impl((PyDateTime_Time *)self);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = datetime_time___reduce___impl((PyDateTime_Time *)PyValue_AsKnownObjectBorrow(self));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(datetime_datetime__doc__,
@@ -1291,15 +1332,15 @@ PyDoc_STRVAR(datetime_datetime__doc__,
 "The year, month and day arguments are required. tzinfo may be None, or\n"
 "an instance of a tzinfo subclass. The remaining arguments may be ints.");
 
-static PyObject *
+static PyValue
 datetime_datetime_impl(PyTypeObject *type, int year, int month, int day,
                        int hour, int minute, int second, int microsecond,
-                       PyObject *tzinfo, int fold);
+                       PyValueBorrow tzinfo, int fold);
 
-static PyObject *
-datetime_datetime(PyTypeObject *type, PyObject *args, PyObject *kwargs)
+static PyValue
+datetime_datetime_value(PyTypeObject *type, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 9
@@ -1327,10 +1368,7 @@ datetime_datetime(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[9];
-    PyObject * const *fastargs;
-    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
-    Py_ssize_t noptargs = nargs + (kwargs ? PyDict_GET_SIZE(kwargs) : 0) - 3;
+    Py_ssize_t _idx[9];
     int year;
     int month;
     int day;
@@ -1338,88 +1376,80 @@ datetime_datetime(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     int minute = 0;
     int second = 0;
     int microsecond = 0;
-    PyObject *tzinfo = Py_None;
+    PyValueBorrow tzinfo = PyValue_Borrow(PyValue_None);
     int fold = 0;
 
-    PyObject *const *_args_items = _PyBorrow_TupleItems(args, Py_MIN(nargs, 8));
-    if (_args_items == NULL) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 3, /*maxpos*/ 8, /*minkw*/ 0, /*varpos*/ 0, _idx, 9)) {
         goto exit;
     }
-    fastargs = _PyArg_UnpackKeywords(_args_items, nargs, kwargs, NULL, &_parser,
-            /*minpos*/ 3, /*maxpos*/ 8, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!fastargs) {
-        goto exit;
-    }
-    year = PyLong_AsInt(fastargs[0]);
+    year = _PyValue_AsInt(PyValue_Borrow(args[_idx[0]]));
     if (year == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    month = PyLong_AsInt(fastargs[1]);
+    month = _PyValue_AsInt(PyValue_Borrow(args[_idx[1]]));
     if (month == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    day = PyLong_AsInt(fastargs[2]);
+    day = _PyValue_AsInt(PyValue_Borrow(args[_idx[2]]));
     if (day == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    if (!noptargs) {
-        goto skip_optional_pos;
-    }
-    if (fastargs[3]) {
-        hour = PyLong_AsInt(fastargs[3]);
+    if (_idx[3] >= 0) {
+        hour = _PyValue_AsInt(PyValue_Borrow(args[_idx[3]]));
         if (hour == -1 && PyErr_Occurred()) {
             goto exit;
         }
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
     }
-    if (fastargs[4]) {
-        minute = PyLong_AsInt(fastargs[4]);
+    if (_idx[4] >= 0) {
+        minute = _PyValue_AsInt(PyValue_Borrow(args[_idx[4]]));
         if (minute == -1 && PyErr_Occurred()) {
             goto exit;
         }
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
     }
-    if (fastargs[5]) {
-        second = PyLong_AsInt(fastargs[5]);
+    if (_idx[5] >= 0) {
+        second = _PyValue_AsInt(PyValue_Borrow(args[_idx[5]]));
         if (second == -1 && PyErr_Occurred()) {
             goto exit;
         }
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
     }
-    if (fastargs[6]) {
-        microsecond = PyLong_AsInt(fastargs[6]);
+    if (_idx[6] >= 0) {
+        microsecond = _PyValue_AsInt(PyValue_Borrow(args[_idx[6]]));
         if (microsecond == -1 && PyErr_Occurred()) {
             goto exit;
         }
-        if (!--noptargs) {
-            goto skip_optional_pos;
+    }
+    if (_idx[7] >= 0) {
+        tzinfo = PyValue_Borrow(args[_idx[7]]);
+    }
+    if (_idx[8] >= 0) {
+        fold = _PyValue_AsInt(PyValue_Borrow(args[_idx[8]]));
+        if (fold == -1 && PyErr_Occurred()) {
+            goto exit;
         }
     }
-    if (fastargs[7]) {
-        tzinfo = fastargs[7];
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
-    }
-skip_optional_pos:
-    if (!noptargs) {
-        goto skip_optional_kwonly;
-    }
-    fold = PyLong_AsInt(fastargs[8]);
-    if (fold == -1 && PyErr_Occurred()) {
-        goto exit;
-    }
-skip_optional_kwonly:
     return_value = datetime_datetime_impl(type, year, month, day, hour, minute, second, microsecond, tzinfo, fold);
 
 exit:
     return return_value;
+}
+
+Py_VALUE_ENTRY static PyObject *
+datetime_datetime(PyTypeObject *type, PyObject *args, PyObject *kwargs)
+{
+    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
+    if (kwargs == NULL || PyDict_GET_SIZE(kwargs) == 0) {
+        return _PyValue_THUNK_EXIT(datetime_datetime_value(type, _PyTuple_ITEMS(args), nargs, NULL), BOX_SITE_CALL);
+    }
+    PyObject *kwnames;
+    PyValue *window = _PyValue_StackUnpackDict(_PyThreadState_GET(),
+        _PyTuple_ITEMS(args), nargs, kwargs, &kwnames);
+    if (window == NULL) {
+        return NULL;
+    }
+    PyValue result = datetime_datetime_value(type, window, nargs, kwnames);
+    _PyValue_StackUnpackDict_Free(window, nargs, kwnames);
+    return _PyValue_THUNK_EXIT(result, BOX_SITE_CALL);
 }
 
 PyDoc_STRVAR(datetime_datetime_now__doc__,
@@ -1434,15 +1464,15 @@ PyDoc_STRVAR(datetime_datetime_now__doc__,
 "If no tz is specified, uses local timezone.");
 
 #define DATETIME_DATETIME_NOW_METHODDEF    \
-    {"now", _PyCFunction_CAST(datetime_datetime_now), METH_FASTCALL|METH_KEYWORDS|METH_CLASS, datetime_datetime_now__doc__},
+    {"now", _PyCFunction_CAST(datetime_datetime_now), METH_VALUE|METH_CLASS, datetime_datetime_now__doc__},
 
-static PyObject *
-datetime_datetime_now_impl(PyTypeObject *type, PyObject *tz);
+static PyValue
+datetime_datetime_now_impl(PyTypeObject *type, PyValueBorrow tz);
 
-static PyObject *
-datetime_datetime_now(PyObject *type, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+datetime_datetime_now(PyValueBorrow type, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
@@ -1470,21 +1500,17 @@ datetime_datetime_now(PyObject *type, PyObject *const *args, Py_ssize_t nargs, P
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[1];
-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 0;
-    PyObject *tz = Py_None;
+    Py_ssize_t _idx[1];
+    PyValueBorrow tz = PyValue_Borrow(PyValue_None);
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 0, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 0, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, _idx, 1)) {
         goto exit;
     }
-    if (!noptargs) {
-        goto skip_optional_pos;
+    if (_idx[0] >= 0) {
+        tz = PyValue_Borrow(args[_idx[0]]);
     }
-    tz = args[0];
-skip_optional_pos:
-    return_value = datetime_datetime_now_impl((PyTypeObject *)type, tz);
+    return_value = datetime_datetime_now_impl((PyTypeObject *)PyValue_AsKnownObjectBorrow(type), tz);
 
 exit:
     return return_value;
@@ -1497,15 +1523,19 @@ PyDoc_STRVAR(datetime_datetime_utcnow__doc__,
 "Return a new datetime representing UTC day and time.");
 
 #define DATETIME_DATETIME_UTCNOW_METHODDEF    \
-    {"utcnow", (PyCFunction)datetime_datetime_utcnow, METH_NOARGS|METH_CLASS, datetime_datetime_utcnow__doc__},
+    {"utcnow", _PyCFunction_CAST(datetime_datetime_utcnow), METH_VALUE|METH_NOARGS|METH_CLASS, datetime_datetime_utcnow__doc__},
 
-static PyObject *
+static PyValue
 datetime_datetime_utcnow_impl(PyTypeObject *type);
 
-static PyObject *
-datetime_datetime_utcnow(PyObject *type, PyObject *Py_UNUSED(ignored))
+static PyValue
+datetime_datetime_utcnow(PyValueBorrow type, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return datetime_datetime_utcnow_impl((PyTypeObject *)type);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = datetime_datetime_utcnow_impl((PyTypeObject *)PyValue_AsKnownObjectBorrow(type));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(datetime_datetime_fromtimestamp__doc__,
@@ -1518,16 +1548,17 @@ PyDoc_STRVAR(datetime_datetime_fromtimestamp__doc__,
 "interpreted as local time.");
 
 #define DATETIME_DATETIME_FROMTIMESTAMP_METHODDEF    \
-    {"fromtimestamp", _PyCFunction_CAST(datetime_datetime_fromtimestamp), METH_FASTCALL|METH_KEYWORDS|METH_CLASS, datetime_datetime_fromtimestamp__doc__},
+    {"fromtimestamp", _PyCFunction_CAST(datetime_datetime_fromtimestamp), METH_VALUE|METH_CLASS, datetime_datetime_fromtimestamp__doc__},
 
-static PyObject *
-datetime_datetime_fromtimestamp_impl(PyTypeObject *type, PyObject *timestamp,
-                                     PyObject *tzinfo);
+static PyValue
+datetime_datetime_fromtimestamp_impl(PyTypeObject *type,
+                                     PyValueBorrow timestamp,
+                                     PyValueBorrow tzinfo);
 
-static PyObject *
-datetime_datetime_fromtimestamp(PyObject *type, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+datetime_datetime_fromtimestamp(PyValueBorrow type, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 2
@@ -1555,23 +1586,19 @@ datetime_datetime_fromtimestamp(PyObject *type, PyObject *const *args, Py_ssize_
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[2];
-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 1;
-    PyObject *timestamp;
-    PyObject *tzinfo = Py_None;
+    Py_ssize_t _idx[2];
+    PyValueBorrow timestamp;
+    PyValueBorrow tzinfo = PyValue_Borrow(PyValue_None);
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 1, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 1, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, _idx, 2)) {
         goto exit;
     }
-    timestamp = args[0];
-    if (!noptargs) {
-        goto skip_optional_pos;
+    timestamp = PyValue_Borrow(args[_idx[0]]);
+    if (_idx[1] >= 0) {
+        tzinfo = PyValue_Borrow(args[_idx[1]]);
     }
-    tzinfo = args[1];
-skip_optional_pos:
-    return_value = datetime_datetime_fromtimestamp_impl((PyTypeObject *)type, timestamp, tzinfo);
+    return_value = datetime_datetime_fromtimestamp_impl((PyTypeObject *)PyValue_AsKnownObjectBorrow(type), timestamp, tzinfo);
 
 exit:
     return return_value;
@@ -1584,18 +1611,20 @@ PyDoc_STRVAR(datetime_datetime_utcfromtimestamp__doc__,
 "Create a naive UTC datetime from a POSIX timestamp.");
 
 #define DATETIME_DATETIME_UTCFROMTIMESTAMP_METHODDEF    \
-    {"utcfromtimestamp", (PyCFunction)datetime_datetime_utcfromtimestamp, METH_O|METH_CLASS, datetime_datetime_utcfromtimestamp__doc__},
+    {"utcfromtimestamp", _PyCFunction_CAST(datetime_datetime_utcfromtimestamp), METH_VALUE|METH_O|METH_CLASS, datetime_datetime_utcfromtimestamp__doc__},
 
-static PyObject *
+static PyValue
 datetime_datetime_utcfromtimestamp_impl(PyTypeObject *type,
-                                        PyObject *timestamp);
+                                        PyValueBorrow timestamp);
 
-static PyObject *
-datetime_datetime_utcfromtimestamp(PyObject *type, PyObject *timestamp)
+static PyValue
+datetime_datetime_utcfromtimestamp(PyValueBorrow type, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow timestamp;
 
-    return_value = datetime_datetime_utcfromtimestamp_impl((PyTypeObject *)type, timestamp);
+    timestamp = PyValue_Borrow(args[0]);
+    return_value = datetime_datetime_utcfromtimestamp_impl((PyTypeObject *)PyValue_AsKnownObjectBorrow(type), timestamp);
 
     return return_value;
 }
@@ -1610,33 +1639,44 @@ PyDoc_STRVAR(datetime_datetime_strptime__doc__,
 "    https://docs.python.org/3/library/datetime.html#format-codes");
 
 #define DATETIME_DATETIME_STRPTIME_METHODDEF    \
-    {"strptime", _PyCFunction_CAST(datetime_datetime_strptime), METH_FASTCALL|METH_CLASS, datetime_datetime_strptime__doc__},
+    {"strptime", _PyCFunction_CAST(datetime_datetime_strptime), METH_VALUE|METH_CLASS, datetime_datetime_strptime__doc__},
 
-static PyObject *
+static PyValue
 datetime_datetime_strptime_impl(PyTypeObject *type, PyObject *string,
                                 PyObject *format);
 
-static PyObject *
-datetime_datetime_strptime(PyObject *type, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+datetime_datetime_strptime(PyValueBorrow type, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *string;
     PyObject *format;
 
+    if (!_PyArg_NoKwnamesValue("datetime.strptime()", kwnames)) {
+        goto exit;
+    }
     if (!_PyArg_CheckPositional("strptime", nargs, 2, 2)) {
         goto exit;
     }
-    if (!PyUnicode_Check(args[0])) {
-        _PyArg_BadArgument("strptime", "argument 1", "str", args[0]);
+    if (!PyValue_IsObject(PyValue_Borrow(args[0]))) {
+        _PyArg_BadArgumentValue("strptime", "argument 1", "str", PyValue_Borrow(args[0]));
         goto exit;
     }
-    string = args[0];
-    if (!PyUnicode_Check(args[1])) {
-        _PyArg_BadArgument("strptime", "argument 2", "str", args[1]);
+    if (!PyUnicode_Check(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])))) {
+        _PyArg_BadArgument("strptime", "argument 1", "str", PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])));
         goto exit;
     }
-    format = args[1];
-    return_value = datetime_datetime_strptime_impl((PyTypeObject *)type, string, format);
+    string = PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0]));
+    if (!PyValue_IsObject(PyValue_Borrow(args[1]))) {
+        _PyArg_BadArgumentValue("strptime", "argument 2", "str", PyValue_Borrow(args[1]));
+        goto exit;
+    }
+    if (!PyUnicode_Check(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[1])))) {
+        _PyArg_BadArgument("strptime", "argument 2", "str", PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[1])));
+        goto exit;
+    }
+    format = PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[1]));
+    return_value = datetime_datetime_strptime_impl((PyTypeObject *)PyValue_AsKnownObjectBorrow(type), string, format);
 
 exit:
     return return_value;
@@ -1649,16 +1689,16 @@ PyDoc_STRVAR(datetime_datetime_combine__doc__,
 "Construct a datetime from a given date and a given time.");
 
 #define DATETIME_DATETIME_COMBINE_METHODDEF    \
-    {"combine", _PyCFunction_CAST(datetime_datetime_combine), METH_FASTCALL|METH_KEYWORDS|METH_CLASS, datetime_datetime_combine__doc__},
+    {"combine", _PyCFunction_CAST(datetime_datetime_combine), METH_VALUE|METH_CLASS, datetime_datetime_combine__doc__},
 
-static PyObject *
+static PyValue
 datetime_datetime_combine_impl(PyTypeObject *type, PyObject *date,
-                               PyObject *time, PyObject *tzinfo);
+                               PyObject *time, PyValueBorrow tzinfo);
 
-static PyObject *
-datetime_datetime_combine(PyObject *type, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+datetime_datetime_combine(PyValueBorrow type, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 3
@@ -1686,33 +1726,29 @@ datetime_datetime_combine(PyObject *type, PyObject *const *args, Py_ssize_t narg
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[3];
-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 2;
+    Py_ssize_t _idx[3];
     PyObject *date;
     PyObject *time;
-    PyObject *tzinfo = NULL;
+    PyValueBorrow tzinfo = PyValue_Borrow(PyValue_NULL);
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 2, /*maxpos*/ 3, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 2, /*maxpos*/ 3, /*minkw*/ 0, /*varpos*/ 0, _idx, 3)) {
         goto exit;
     }
-    if (!PyObject_TypeCheck(args[0], DATE_TYPE(NO_STATE))) {
-        _PyArg_BadArgument("combine", "argument 'date'", (DATE_TYPE(NO_STATE))->tp_name, args[0]);
+    if (!PyType_IsSubtype(PyValue_TYPE(PyValue_Borrow(args[_idx[0]])), DATE_TYPE(NO_STATE))) {
+        _PyArg_BadArgumentValue("combine", "argument 'date'", (DATE_TYPE(NO_STATE))->tp_name, PyValue_Borrow(args[_idx[0]]));
         goto exit;
     }
-    date = args[0];
-    if (!PyObject_TypeCheck(args[1], TIME_TYPE(NO_STATE))) {
-        _PyArg_BadArgument("combine", "argument 'time'", (TIME_TYPE(NO_STATE))->tp_name, args[1]);
+    date = PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[0]]));
+    if (!PyType_IsSubtype(PyValue_TYPE(PyValue_Borrow(args[_idx[1]])), TIME_TYPE(NO_STATE))) {
+        _PyArg_BadArgumentValue("combine", "argument 'time'", (TIME_TYPE(NO_STATE))->tp_name, PyValue_Borrow(args[_idx[1]]));
         goto exit;
     }
-    time = args[1];
-    if (!noptargs) {
-        goto skip_optional_pos;
+    time = PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[1]]));
+    if (_idx[2] >= 0) {
+        tzinfo = PyValue_Borrow(args[_idx[2]]);
     }
-    tzinfo = args[2];
-skip_optional_pos:
-    return_value = datetime_datetime_combine_impl((PyTypeObject *)type, date, time, tzinfo);
+    return_value = datetime_datetime_combine_impl((PyTypeObject *)PyValue_AsKnownObjectBorrow(type), date, time, tzinfo);
 
 exit:
     return return_value;
@@ -1725,23 +1761,27 @@ PyDoc_STRVAR(datetime_datetime_fromisoformat__doc__,
 "Construct a date from a string in ISO 8601 format.");
 
 #define DATETIME_DATETIME_FROMISOFORMAT_METHODDEF    \
-    {"fromisoformat", (PyCFunction)datetime_datetime_fromisoformat, METH_O|METH_CLASS, datetime_datetime_fromisoformat__doc__},
+    {"fromisoformat", _PyCFunction_CAST(datetime_datetime_fromisoformat), METH_VALUE|METH_O|METH_CLASS, datetime_datetime_fromisoformat__doc__},
 
-static PyObject *
+static PyValue
 datetime_datetime_fromisoformat_impl(PyTypeObject *type, PyObject *string);
 
-static PyObject *
-datetime_datetime_fromisoformat(PyObject *type, PyObject *arg)
+static PyValue
+datetime_datetime_fromisoformat(PyValueBorrow type, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *string;
 
-    if (!PyUnicode_Check(arg)) {
-        _PyArg_BadArgument("fromisoformat", "argument", "str", arg);
+    if (!PyValue_IsObject(PyValue_Borrow(args[0]))) {
+        _PyArg_BadArgumentValue("fromisoformat", "argument", "str", PyValue_Borrow(args[0]));
         goto exit;
     }
-    string = arg;
-    return_value = datetime_datetime_fromisoformat_impl((PyTypeObject *)type, string);
+    if (!PyUnicode_Check(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])))) {
+        _PyArg_BadArgument("fromisoformat", "argument", "str", PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])));
+        goto exit;
+    }
+    string = PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0]));
+    return_value = datetime_datetime_fromisoformat_impl((PyTypeObject *)PyValue_AsKnownObjectBorrow(type), string);
 
 exit:
     return return_value;
@@ -1767,16 +1807,16 @@ PyDoc_STRVAR(datetime_datetime_isoformat__doc__,
 "\'minutes\', \'seconds\', \'milliseconds\' and \'microseconds\'.");
 
 #define DATETIME_DATETIME_ISOFORMAT_METHODDEF    \
-    {"isoformat", _PyCFunction_CAST(datetime_datetime_isoformat), METH_FASTCALL|METH_KEYWORDS, datetime_datetime_isoformat__doc__},
+    {"isoformat", _PyCFunction_CAST(datetime_datetime_isoformat), METH_VALUE, datetime_datetime_isoformat__doc__},
 
-static PyObject *
+static PyValue
 datetime_datetime_isoformat_impl(PyDateTime_DateTime *self, int sep,
                                  const char *timespec);
 
-static PyObject *
-datetime_datetime_isoformat(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+datetime_datetime_isoformat(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 2
@@ -1804,46 +1844,47 @@ datetime_datetime_isoformat(PyObject *self, PyObject *const *args, Py_ssize_t na
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[2];
-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 0;
+    Py_ssize_t _idx[2];
     int sep = 'T';
     const char *timespec = NULL;
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 0, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 0, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, _idx, 2)) {
         goto exit;
     }
-    if (!noptargs) {
-        goto skip_optional_pos;
-    }
-    if (args[0]) {
-        if (!PyUnicode_Check(args[0])) {
-            _PyArg_BadArgument("isoformat", "argument 'sep'", "a unicode character", args[0]);
+    if (_idx[0] >= 0) {
+        if (!PyValue_IsObject(PyValue_Borrow(args[_idx[0]]))) {
+            _PyArg_BadArgumentValue("isoformat", "argument 'sep'", "a unicode character", PyValue_Borrow(args[_idx[0]]));
             goto exit;
         }
-        if (PyUnicode_GET_LENGTH(args[0]) != 1) {
+        if (!PyUnicode_Check(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[0]])))) {
+            _PyArg_BadArgument("isoformat", "argument 'sep'", "a unicode character", PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[0]])));
+            goto exit;
+        }
+        if (PyUnicode_GET_LENGTH(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[0]]))) != 1) {
             PyErr_Format(PyExc_TypeError,
                 "isoformat(): argument 'sep' must be a unicode character, "
                 "not a string of length %zd",
-                PyUnicode_GET_LENGTH(args[0]));
+                PyUnicode_GET_LENGTH(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[0]]))));
             goto exit;
         }
-        sep = PyUnicode_READ_CHAR(args[0], 0);
-        if (!--noptargs) {
-            goto skip_optional_pos;
+        sep = PyUnicode_READ_CHAR(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[0]])), 0);
+    }
+    if (_idx[1] >= 0) {
+        if (!PyValue_IsObject(PyValue_Borrow(args[_idx[1]]))) {
+            _PyArg_BadArgumentValue("isoformat", "argument 'timespec'", "str", PyValue_Borrow(args[_idx[1]]));
+            goto exit;
+        }
+        if (!PyUnicode_Check(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[1]])))) {
+            _PyArg_BadArgument("isoformat", "argument 'timespec'", "str", PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[1]])));
+            goto exit;
+        }
+        timespec = _PyUnicode_AsUTF8NoNUL(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[1]])));
+        if (timespec == NULL) {
+            goto exit;
         }
     }
-    if (!PyUnicode_Check(args[1])) {
-        _PyArg_BadArgument("isoformat", "argument 'timespec'", "str", args[1]);
-        goto exit;
-    }
-    timespec = _PyUnicode_AsUTF8NoNUL(args[1]);
-    if (timespec == NULL) {
-        goto exit;
-    }
-skip_optional_pos:
-    return_value = datetime_datetime_isoformat_impl((PyDateTime_DateTime *)self, sep, timespec);
+    return_value = datetime_datetime_isoformat_impl((PyDateTime_DateTime *)PyValue_AsKnownObjectBorrow(self), sep, timespec);
 
 exit:
     return return_value;
@@ -1858,18 +1899,18 @@ PyDoc_STRVAR(datetime_datetime_replace__doc__,
 "Return datetime with new specified fields.");
 
 #define DATETIME_DATETIME_REPLACE_METHODDEF    \
-    {"replace", _PyCFunction_CAST(datetime_datetime_replace), METH_FASTCALL|METH_KEYWORDS, datetime_datetime_replace__doc__},
+    {"replace", _PyCFunction_CAST(datetime_datetime_replace), METH_VALUE, datetime_datetime_replace__doc__},
 
-static PyObject *
+static PyValue
 datetime_datetime_replace_impl(PyDateTime_DateTime *self, int year,
                                int month, int day, int hour, int minute,
-                               int second, int microsecond, PyObject *tzinfo,
-                               int fold);
+                               int second, int microsecond,
+                               PyValueBorrow tzinfo, int fold);
 
-static PyObject *
-datetime_datetime_replace(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+datetime_datetime_replace(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 9
@@ -1897,105 +1938,73 @@ datetime_datetime_replace(PyObject *self, PyObject *const *args, Py_ssize_t narg
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[9];
-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 0;
-    int year = GET_YEAR(self);
-    int month = GET_MONTH(self);
-    int day = GET_DAY(self);
-    int hour = DATE_GET_HOUR(self);
-    int minute = DATE_GET_MINUTE(self);
-    int second = DATE_GET_SECOND(self);
-    int microsecond = DATE_GET_MICROSECOND(self);
-    PyObject *tzinfo = HASTZINFO(self) ? ((PyDateTime_DateTime *)self)->tzinfo : Py_None;
-    int fold = DATE_GET_FOLD(self);
+    Py_ssize_t _idx[9];
+    int year = GET_YEAR(PyValue_AsKnownObjectBorrow(self));
+    int month = GET_MONTH(PyValue_AsKnownObjectBorrow(self));
+    int day = GET_DAY(PyValue_AsKnownObjectBorrow(self));
+    int hour = DATE_GET_HOUR(PyValue_AsKnownObjectBorrow(self));
+    int minute = DATE_GET_MINUTE(PyValue_AsKnownObjectBorrow(self));
+    int second = DATE_GET_SECOND(PyValue_AsKnownObjectBorrow(self));
+    int microsecond = DATE_GET_MICROSECOND(PyValue_AsKnownObjectBorrow(self));
+    PyValueBorrow tzinfo = PyValue_FromObjectBorrow(HASTZINFO(PyValue_AsKnownObjectBorrow(self)) ? ((PyDateTime_DateTime *)PyValue_AsKnownObjectBorrow(self))->tzinfo : Py_None);
+    int fold = DATE_GET_FOLD(PyValue_AsKnownObjectBorrow(self));
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 0, /*maxpos*/ 8, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 0, /*maxpos*/ 8, /*minkw*/ 0, /*varpos*/ 0, _idx, 9)) {
         goto exit;
     }
-    if (!noptargs) {
-        goto skip_optional_pos;
-    }
-    if (args[0]) {
-        year = PyLong_AsInt(args[0]);
+    if (_idx[0] >= 0) {
+        year = _PyValue_AsInt(PyValue_Borrow(args[_idx[0]]));
         if (year == -1 && PyErr_Occurred()) {
             goto exit;
         }
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
     }
-    if (args[1]) {
-        month = PyLong_AsInt(args[1]);
+    if (_idx[1] >= 0) {
+        month = _PyValue_AsInt(PyValue_Borrow(args[_idx[1]]));
         if (month == -1 && PyErr_Occurred()) {
             goto exit;
         }
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
     }
-    if (args[2]) {
-        day = PyLong_AsInt(args[2]);
+    if (_idx[2] >= 0) {
+        day = _PyValue_AsInt(PyValue_Borrow(args[_idx[2]]));
         if (day == -1 && PyErr_Occurred()) {
             goto exit;
         }
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
     }
-    if (args[3]) {
-        hour = PyLong_AsInt(args[3]);
+    if (_idx[3] >= 0) {
+        hour = _PyValue_AsInt(PyValue_Borrow(args[_idx[3]]));
         if (hour == -1 && PyErr_Occurred()) {
             goto exit;
         }
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
     }
-    if (args[4]) {
-        minute = PyLong_AsInt(args[4]);
+    if (_idx[4] >= 0) {
+        minute = _PyValue_AsInt(PyValue_Borrow(args[_idx[4]]));
         if (minute == -1 && PyErr_Occurred()) {
             goto exit;
         }
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
     }
-    if (args[5]) {
-        second = PyLong_AsInt(args[5]);
+    if (_idx[5] >= 0) {
+        second = _PyValue_AsInt(PyValue_Borrow(args[_idx[5]]));
         if (second == -1 && PyErr_Occurred()) {
             goto exit;
         }
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
     }
-    if (args[6]) {
-        microsecond = PyLong_AsInt(args[6]);
+    if (_idx[6] >= 0) {
+        microsecond = _PyValue_AsInt(PyValue_Borrow(args[_idx[6]]));
         if (microsecond == -1 && PyErr_Occurred()) {
             goto exit;
         }
-        if (!--noptargs) {
-            goto skip_optional_pos;
+    }
+    if (_idx[7] >= 0) {
+        tzinfo = PyValue_Borrow(args[_idx[7]]);
+    }
+    if (_idx[8] >= 0) {
+        fold = _PyValue_AsInt(PyValue_Borrow(args[_idx[8]]));
+        if (fold == -1 && PyErr_Occurred()) {
+            goto exit;
         }
     }
-    if (args[7]) {
-        tzinfo = args[7];
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
-    }
-skip_optional_pos:
-    if (!noptargs) {
-        goto skip_optional_kwonly;
-    }
-    fold = PyLong_AsInt(args[8]);
-    if (fold == -1 && PyErr_Occurred()) {
-        goto exit;
-    }
-skip_optional_kwonly:
-    return_value = datetime_datetime_replace_impl((PyDateTime_DateTime *)self, year, month, day, hour, minute, second, microsecond, tzinfo, fold);
+    return_value = datetime_datetime_replace_impl((PyDateTime_DateTime *)PyValue_AsKnownObjectBorrow(self), year, month, day, hour, minute, second, microsecond, tzinfo, fold);
 
 exit:
     return return_value;
@@ -2008,16 +2017,16 @@ PyDoc_STRVAR(datetime_datetime_astimezone__doc__,
 "Convert to local time in new timezone tz.");
 
 #define DATETIME_DATETIME_ASTIMEZONE_METHODDEF    \
-    {"astimezone", _PyCFunction_CAST(datetime_datetime_astimezone), METH_FASTCALL|METH_KEYWORDS, datetime_datetime_astimezone__doc__},
+    {"astimezone", _PyCFunction_CAST(datetime_datetime_astimezone), METH_VALUE, datetime_datetime_astimezone__doc__},
 
-static PyObject *
+static PyValue
 datetime_datetime_astimezone_impl(PyDateTime_DateTime *self,
-                                  PyObject *tzinfo);
+                                  PyValueBorrow tzinfo);
 
-static PyObject *
-datetime_datetime_astimezone(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+datetime_datetime_astimezone(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
@@ -2045,21 +2054,17 @@ datetime_datetime_astimezone(PyObject *self, PyObject *const *args, Py_ssize_t n
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[1];
-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 0;
-    PyObject *tzinfo = Py_None;
+    Py_ssize_t _idx[1];
+    PyValueBorrow tzinfo = PyValue_Borrow(PyValue_None);
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 0, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 0, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, _idx, 1)) {
         goto exit;
     }
-    if (!noptargs) {
-        goto skip_optional_pos;
+    if (_idx[0] >= 0) {
+        tzinfo = PyValue_Borrow(args[_idx[0]]);
     }
-    tzinfo = args[0];
-skip_optional_pos:
-    return_value = datetime_datetime_astimezone_impl((PyDateTime_DateTime *)self, tzinfo);
+    return_value = datetime_datetime_astimezone_impl((PyDateTime_DateTime *)PyValue_AsKnownObjectBorrow(self), tzinfo);
 
 exit:
     return return_value;
@@ -2071,22 +2076,22 @@ PyDoc_STRVAR(datetime_datetime___reduce_ex____doc__,
 "\n");
 
 #define DATETIME_DATETIME___REDUCE_EX___METHODDEF    \
-    {"__reduce_ex__", (PyCFunction)datetime_datetime___reduce_ex__, METH_O, datetime_datetime___reduce_ex____doc__},
+    {"__reduce_ex__", _PyCFunction_CAST(datetime_datetime___reduce_ex__), METH_VALUE|METH_O, datetime_datetime___reduce_ex____doc__},
 
-static PyObject *
+static PyValue
 datetime_datetime___reduce_ex___impl(PyDateTime_DateTime *self, int proto);
 
-static PyObject *
-datetime_datetime___reduce_ex__(PyObject *self, PyObject *arg)
+static PyValue
+datetime_datetime___reduce_ex__(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int proto;
 
-    proto = PyLong_AsInt(arg);
+    proto = _PyValue_AsInt(PyValue_Borrow(args[0]));
     if (proto == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = datetime_datetime___reduce_ex___impl((PyDateTime_DateTime *)self, proto);
+    return_value = datetime_datetime___reduce_ex___impl((PyDateTime_DateTime *)PyValue_AsKnownObjectBorrow(self), proto);
 
 exit:
     return return_value;
@@ -2098,14 +2103,18 @@ PyDoc_STRVAR(datetime_datetime___reduce____doc__,
 "\n");
 
 #define DATETIME_DATETIME___REDUCE___METHODDEF    \
-    {"__reduce__", (PyCFunction)datetime_datetime___reduce__, METH_NOARGS, datetime_datetime___reduce____doc__},
+    {"__reduce__", _PyCFunction_CAST(datetime_datetime___reduce__), METH_VALUE|METH_NOARGS, datetime_datetime___reduce____doc__},
 
-static PyObject *
+static PyValue
 datetime_datetime___reduce___impl(PyDateTime_DateTime *self);
 
-static PyObject *
-datetime_datetime___reduce__(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+datetime_datetime___reduce__(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return datetime_datetime___reduce___impl((PyDateTime_DateTime *)self);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = datetime_datetime___reduce___impl((PyDateTime_DateTime *)PyValue_AsKnownObjectBorrow(self));
+
+    return return_value;
 }
-/*[clinic end generated code: output=c0390b4c9e52d5a4 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=da08fee5cad32aa1 input=a9049054013a1b77]*/

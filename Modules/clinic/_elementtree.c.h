@@ -2,15 +2,21 @@
 preserve
 [clinic start generated code]*/
 
+#ifndef Py_VALUE_CORE
+#  error "value-emission Clinic output requires Py_VALUE_CORE"
+#endif
+
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 #  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
 #  include "pycore_value.h"       // _PyValue_STATIC_IMMORTAL()
 #endif
-#include "pycore_abstract.h"      // _PyNumber_Index()
-#include "pycore_borrow.h"        // _PyBorrow_TupleItems()
+#include "pycore_long_value.h"    // _PyValue_IntAsSsize_t()
 #include "pycore_modsupport.h"    // _PyArg_CheckPositional()
+#include "pycore_tuple.h"         // _PyTuple_ITEMS()
 #include "pycore_unicodeobject.h" // _PyUnicode_AsUTF8NoNUL()
+#include "pycore_value_call.h"    // METH_VALUE
+#include "pycore_value_ops.h"     // _PyValue_Index()
 
 PyDoc_STRVAR(_elementtree_SubElement__doc__,
 "SubElement($module, parent, tag, attrib={}, /, **extra)\n"
@@ -19,54 +25,46 @@ PyDoc_STRVAR(_elementtree_SubElement__doc__,
 "Create a new subelement of the parent element.");
 
 #define _ELEMENTTREE_SUBELEMENT_METHODDEF    \
-    {"SubElement", _PyCFunction_CAST(_elementtree_SubElement), METH_VARARGS|METH_KEYWORDS, _elementtree_SubElement__doc__},
+    {"SubElement", _PyCFunction_CAST(_elementtree_SubElement), METH_VALUE, _elementtree_SubElement__doc__},
 
-static PyObject *
+static PyValue
 _elementtree_SubElement_impl(PyObject *module, PyObject *parent,
-                             PyObject *tag, PyObject *attrib,
+                             PyValueBorrow tag, PyObject *attrib,
                              PyObject *extra);
 
-static PyObject *
-_elementtree_SubElement(PyObject *module, PyObject *args, PyObject *kwargs)
+static PyValue
+_elementtree_SubElement(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *parent;
-    PyObject *tag;
+    PyValueBorrow tag;
     PyObject *attrib = NULL;
     PyObject *extra = NULL;
 
-    if (!_PyArg_CheckPositional("SubElement", PyTuple_GET_SIZE(args), 2, 3)) {
+    if (!_PyArg_CheckPositional("SubElement", nargs, 2, 3)) {
         goto exit;
     }
-    PyObject *const *_args_items = _PyBorrow_TupleItems(args, PyTuple_GET_SIZE(args));
-    if (_args_items == NULL) {
+    if (!PyType_IsSubtype(PyValue_TYPE(PyValue_Borrow(args[0])), get_elementtree_state(module)->Element_Type)) {
+        _PyArg_BadArgumentValue("SubElement", "argument 1", (get_elementtree_state(module)->Element_Type)->tp_name, PyValue_Borrow(args[0]));
         goto exit;
     }
-    if (!PyObject_TypeCheck(_args_items[0], get_elementtree_state(module)->Element_Type)) {
-        _PyArg_BadArgument("SubElement", "argument 1", (get_elementtree_state(module)->Element_Type)->tp_name, _args_items[0]);
-        goto exit;
-    }
-    parent = _args_items[0];
-    tag = _args_items[1];
-    if (PyTuple_GET_SIZE(args) < 3) {
+    parent = PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0]));
+    tag = PyValue_Borrow(args[1]);
+    if (nargs < 3) {
         goto skip_optional;
     }
-    if (!PyDict_Check(_args_items[2])) {
-        _PyArg_BadArgument("SubElement", "argument 3", "dict", _args_items[2]);
+    if (!PyType_IsSubtype(PyValue_TYPE(PyValue_Borrow(args[2])), &PyDict_Type)) {
+        _PyArg_BadArgumentValue("SubElement", "argument 3", "dict", PyValue_Borrow(args[2]));
         goto exit;
     }
-    attrib = _args_items[2];
+    attrib = PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[2]));
 skip_optional:
-    if (kwargs == NULL) {
-        extra = PyDict_New();
-        if (extra == NULL) {
-            goto exit;
-        }
+    extra = kwnames == NULL ? PyDict_New()
+        : _PyValue_StackAsDict(args + nargs, kwnames);
+    if (extra == NULL) {
+        goto exit;
     }
-    else {
-        extra = Py_NewRef(kwargs);
-    }
-    return_value = _elementtree_SubElement_impl(module, parent, tag, attrib, extra);
+    return_value = _elementtree_SubElement_impl(PyValue_AsKnownObjectBorrow(module), parent, tag, attrib, extra);
 
 exit:
     /* Cleanup for extra */
@@ -86,16 +84,16 @@ PyDoc_STRVAR(_elementtree_Element_append__doc__,
 "subelement), but before the end tag for this element.");
 
 #define _ELEMENTTREE_ELEMENT_APPEND_METHODDEF    \
-    {"append", _PyCFunction_CAST(_elementtree_Element_append), METH_METHOD|METH_FASTCALL|METH_KEYWORDS, _elementtree_Element_append__doc__},
+    {"append", _PyCFunction_CAST(_elementtree_Element_append), METH_VALUE|METH_METHOD, _elementtree_Element_append__doc__},
 
-static PyObject *
+static PyValue
 _elementtree_Element_append_impl(ElementObject *self, PyTypeObject *cls,
                                  PyObject *subelement);
 
-static PyObject *
-_elementtree_Element_append(PyObject *self, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_elementtree_Element_append(PyValueBorrow self, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *subelement;
 
     if (!_PyArg_NoKwnames("append", kwnames)) {
@@ -104,12 +102,12 @@ _elementtree_Element_append(PyObject *self, PyTypeObject *cls, PyObject *const *
     if (!_PyArg_CheckPositional("append", nargs, 1, 1)) {
         goto exit;
     }
-    if (!PyObject_TypeCheck(args[0], clinic_state()->Element_Type)) {
-        _PyArg_BadArgument("append", "argument 1", (clinic_state()->Element_Type)->tp_name, args[0]);
+    if (!PyType_IsSubtype(PyValue_TYPE(PyValue_Borrow(args[0])), clinic_state()->Element_Type)) {
+        _PyArg_BadArgumentValue("append", "argument 1", (clinic_state()->Element_Type)->tp_name, PyValue_Borrow(args[0]));
         goto exit;
     }
-    subelement = args[0];
-    return_value = _elementtree_Element_append_impl((ElementObject *)self, cls, subelement);
+    subelement = PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0]));
+    return_value = _elementtree_Element_append_impl((ElementObject *)PyValue_AsKnownObjectBorrow(self), cls, subelement);
 
 exit:
     return return_value;
@@ -125,15 +123,19 @@ PyDoc_STRVAR(_elementtree_Element_clear__doc__,
 "sets the text and tail attributes to None.");
 
 #define _ELEMENTTREE_ELEMENT_CLEAR_METHODDEF    \
-    {"clear", (PyCFunction)_elementtree_Element_clear, METH_NOARGS, _elementtree_Element_clear__doc__},
+    {"clear", _PyCFunction_CAST(_elementtree_Element_clear), METH_VALUE|METH_NOARGS, _elementtree_Element_clear__doc__},
 
-static PyObject *
+static PyValue
 _elementtree_Element_clear_impl(ElementObject *self);
 
-static PyObject *
-_elementtree_Element_clear(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+_elementtree_Element_clear(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _elementtree_Element_clear_impl((ElementObject *)self);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _elementtree_Element_clear_impl((ElementObject *)PyValue_AsKnownObjectBorrow(self));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(_elementtree_Element___copy____doc__,
@@ -142,19 +144,24 @@ PyDoc_STRVAR(_elementtree_Element___copy____doc__,
 "\n");
 
 #define _ELEMENTTREE_ELEMENT___COPY___METHODDEF    \
-    {"__copy__", _PyCFunction_CAST(_elementtree_Element___copy__), METH_METHOD|METH_FASTCALL|METH_KEYWORDS, _elementtree_Element___copy____doc__},
+    {"__copy__", _PyCFunction_CAST(_elementtree_Element___copy__), METH_VALUE|METH_METHOD, _elementtree_Element___copy____doc__},
 
-static PyObject *
+static PyValue
 _elementtree_Element___copy___impl(ElementObject *self, PyTypeObject *cls);
 
-static PyObject *
-_elementtree_Element___copy__(PyObject *self, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_elementtree_Element___copy__(PyValueBorrow self, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
+    PyValue return_value = PyValue_NULL;
+
     if (nargs || (kwnames && PyTuple_GET_SIZE(kwnames))) {
         PyErr_SetString(PyExc_TypeError, "__copy__() takes no arguments");
-        return NULL;
+        goto exit;
     }
-    return _elementtree_Element___copy___impl((ElementObject *)self, cls);
+    return_value = _elementtree_Element___copy___impl((ElementObject *)PyValue_AsKnownObjectBorrow(self), cls);
+
+exit:
+    return return_value;
 }
 
 PyDoc_STRVAR(_elementtree_Element___deepcopy____doc__,
@@ -163,23 +170,23 @@ PyDoc_STRVAR(_elementtree_Element___deepcopy____doc__,
 "\n");
 
 #define _ELEMENTTREE_ELEMENT___DEEPCOPY___METHODDEF    \
-    {"__deepcopy__", (PyCFunction)_elementtree_Element___deepcopy__, METH_O, _elementtree_Element___deepcopy____doc__},
+    {"__deepcopy__", _PyCFunction_CAST(_elementtree_Element___deepcopy__), METH_VALUE|METH_O, _elementtree_Element___deepcopy____doc__},
 
-static PyObject *
+static PyValue
 _elementtree_Element___deepcopy___impl(ElementObject *self, PyObject *memo);
 
-static PyObject *
-_elementtree_Element___deepcopy__(PyObject *self, PyObject *arg)
+static PyValue
+_elementtree_Element___deepcopy__(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *memo;
 
-    if (!PyDict_Check(arg)) {
-        _PyArg_BadArgument("__deepcopy__", "argument", "dict", arg);
+    if (!PyType_IsSubtype(PyValue_TYPE(PyValue_Borrow(args[0])), &PyDict_Type)) {
+        _PyArg_BadArgumentValue("__deepcopy__", "argument", "dict", PyValue_Borrow(args[0]));
         goto exit;
     }
-    memo = arg;
-    return_value = _elementtree_Element___deepcopy___impl((ElementObject *)self, memo);
+    memo = PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0]));
+    return_value = _elementtree_Element___deepcopy___impl((ElementObject *)PyValue_AsKnownObjectBorrow(self), memo);
 
 exit:
     return return_value;
@@ -191,22 +198,24 @@ PyDoc_STRVAR(_elementtree_Element___sizeof____doc__,
 "\n");
 
 #define _ELEMENTTREE_ELEMENT___SIZEOF___METHODDEF    \
-    {"__sizeof__", (PyCFunction)_elementtree_Element___sizeof__, METH_NOARGS, _elementtree_Element___sizeof____doc__},
+    {"__sizeof__", _PyCFunction_CAST(_elementtree_Element___sizeof__), METH_VALUE|METH_NOARGS, _elementtree_Element___sizeof____doc__},
 
 static size_t
 _elementtree_Element___sizeof___impl(ElementObject *self);
 
-static PyObject *
-_elementtree_Element___sizeof__(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+_elementtree_Element___sizeof__(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     size_t _return_value;
 
-    _return_value = _elementtree_Element___sizeof___impl((ElementObject *)self);
+    _return_value = _elementtree_Element___sizeof___impl((ElementObject *)PyValue_AsKnownObjectBorrow(self));
     if ((_return_value == (size_t)-1) && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = PyLong_FromSize_t(_return_value);
+    return_value = (uint64_t)_return_value <= INT64_MAX
+        ? PyValue_FromInt64((int64_t)_return_value)
+        : _PyValue_FromObjectResult(PyLong_FromUnsignedLongLong((unsigned long long)_return_value));
 
 exit:
     return return_value;
@@ -218,15 +227,19 @@ PyDoc_STRVAR(_elementtree_Element___getstate____doc__,
 "\n");
 
 #define _ELEMENTTREE_ELEMENT___GETSTATE___METHODDEF    \
-    {"__getstate__", (PyCFunction)_elementtree_Element___getstate__, METH_NOARGS, _elementtree_Element___getstate____doc__},
+    {"__getstate__", _PyCFunction_CAST(_elementtree_Element___getstate__), METH_VALUE|METH_NOARGS, _elementtree_Element___getstate____doc__},
 
-static PyObject *
+static PyValue
 _elementtree_Element___getstate___impl(ElementObject *self);
 
-static PyObject *
-_elementtree_Element___getstate__(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+_elementtree_Element___getstate__(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _elementtree_Element___getstate___impl((ElementObject *)self);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _elementtree_Element___getstate___impl((ElementObject *)PyValue_AsKnownObjectBorrow(self));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(_elementtree_Element___setstate____doc__,
@@ -235,17 +248,18 @@ PyDoc_STRVAR(_elementtree_Element___setstate____doc__,
 "\n");
 
 #define _ELEMENTTREE_ELEMENT___SETSTATE___METHODDEF    \
-    {"__setstate__", _PyCFunction_CAST(_elementtree_Element___setstate__), METH_METHOD|METH_FASTCALL|METH_KEYWORDS, _elementtree_Element___setstate____doc__},
+    {"__setstate__", _PyCFunction_CAST(_elementtree_Element___setstate__), METH_VALUE|METH_METHOD, _elementtree_Element___setstate____doc__},
 
-static PyObject *
+static PyValue
 _elementtree_Element___setstate___impl(ElementObject *self,
-                                       PyTypeObject *cls, PyObject *state);
+                                       PyTypeObject *cls,
+                                       PyValueBorrow state);
 
-static PyObject *
-_elementtree_Element___setstate__(PyObject *self, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_elementtree_Element___setstate__(PyValueBorrow self, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
-    PyObject *state;
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow state;
 
     if (!_PyArg_NoKwnames("__setstate__", kwnames)) {
         goto exit;
@@ -253,8 +267,8 @@ _elementtree_Element___setstate__(PyObject *self, PyTypeObject *cls, PyObject *c
     if (!_PyArg_CheckPositional("__setstate__", nargs, 1, 1)) {
         goto exit;
     }
-    state = args[0];
-    return_value = _elementtree_Element___setstate___impl((ElementObject *)self, cls, state);
+    state = PyValue_Borrow(args[0]);
+    return_value = _elementtree_Element___setstate___impl((ElementObject *)PyValue_AsKnownObjectBorrow(self), cls, state);
 
 exit:
     return return_value;
@@ -269,17 +283,17 @@ PyDoc_STRVAR(_elementtree_Element_extend__doc__,
 "*elements* is a sequence with zero or more elements.");
 
 #define _ELEMENTTREE_ELEMENT_EXTEND_METHODDEF    \
-    {"extend", _PyCFunction_CAST(_elementtree_Element_extend), METH_METHOD|METH_FASTCALL|METH_KEYWORDS, _elementtree_Element_extend__doc__},
+    {"extend", _PyCFunction_CAST(_elementtree_Element_extend), METH_VALUE|METH_METHOD, _elementtree_Element_extend__doc__},
 
-static PyObject *
+static PyValue
 _elementtree_Element_extend_impl(ElementObject *self, PyTypeObject *cls,
-                                 PyObject *elements);
+                                 PyValueBorrow elements);
 
-static PyObject *
-_elementtree_Element_extend(PyObject *self, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_elementtree_Element_extend(PyValueBorrow self, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
-    PyObject *elements;
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow elements;
 
     if (!_PyArg_NoKwnames("extend", kwnames)) {
         goto exit;
@@ -287,8 +301,8 @@ _elementtree_Element_extend(PyObject *self, PyTypeObject *cls, PyObject *const *
     if (!_PyArg_CheckPositional("extend", nargs, 1, 1)) {
         goto exit;
     }
-    elements = args[0];
-    return_value = _elementtree_Element_extend_impl((ElementObject *)self, cls, elements);
+    elements = PyValue_Borrow(args[0]);
+    return_value = _elementtree_Element_extend_impl((ElementObject *)PyValue_AsKnownObjectBorrow(self), cls, elements);
 
 exit:
     return return_value;
@@ -307,16 +321,16 @@ PyDoc_STRVAR(_elementtree_Element_find__doc__,
 "Return the first matching element, or None if no element was found.");
 
 #define _ELEMENTTREE_ELEMENT_FIND_METHODDEF    \
-    {"find", _PyCFunction_CAST(_elementtree_Element_find), METH_METHOD|METH_FASTCALL|METH_KEYWORDS, _elementtree_Element_find__doc__},
+    {"find", _PyCFunction_CAST(_elementtree_Element_find), METH_VALUE|METH_METHOD, _elementtree_Element_find__doc__},
 
-static PyObject *
+static PyValue
 _elementtree_Element_find_impl(ElementObject *self, PyTypeObject *cls,
-                               PyObject *path, PyObject *namespaces);
+                               PyValueBorrow path, PyValueBorrow namespaces);
 
-static PyObject *
-_elementtree_Element_find(PyObject *self, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_elementtree_Element_find(PyValueBorrow self, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 2
@@ -344,23 +358,19 @@ _elementtree_Element_find(PyObject *self, PyTypeObject *cls, PyObject *const *ar
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[2];
-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 1;
-    PyObject *path;
-    PyObject *namespaces = Py_None;
+    Py_ssize_t _idx[2];
+    PyValueBorrow path;
+    PyValueBorrow namespaces = PyValue_Borrow(PyValue_None);
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 1, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 1, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, _idx, 2)) {
         goto exit;
     }
-    path = args[0];
-    if (!noptargs) {
-        goto skip_optional_pos;
+    path = PyValue_Borrow(args[_idx[0]]);
+    if (_idx[1] >= 0) {
+        namespaces = PyValue_Borrow(args[_idx[1]]);
     }
-    namespaces = args[1];
-skip_optional_pos:
-    return_value = _elementtree_Element_find_impl((ElementObject *)self, cls, path, namespaces);
+    return_value = _elementtree_Element_find_impl((ElementObject *)PyValue_AsKnownObjectBorrow(self), cls, path, namespaces);
 
 exit:
     return return_value;
@@ -382,17 +392,18 @@ PyDoc_STRVAR(_elementtree_Element_findtext__doc__,
 "content, the empty string is returned.");
 
 #define _ELEMENTTREE_ELEMENT_FINDTEXT_METHODDEF    \
-    {"findtext", _PyCFunction_CAST(_elementtree_Element_findtext), METH_METHOD|METH_FASTCALL|METH_KEYWORDS, _elementtree_Element_findtext__doc__},
+    {"findtext", _PyCFunction_CAST(_elementtree_Element_findtext), METH_VALUE|METH_METHOD, _elementtree_Element_findtext__doc__},
 
-static PyObject *
+static PyValue
 _elementtree_Element_findtext_impl(ElementObject *self, PyTypeObject *cls,
-                                   PyObject *path, PyObject *default_value,
-                                   PyObject *namespaces);
+                                   PyValueBorrow path,
+                                   PyValueBorrow default_value,
+                                   PyValueBorrow namespaces);
 
-static PyObject *
-_elementtree_Element_findtext(PyObject *self, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_elementtree_Element_findtext(PyValueBorrow self, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 3
@@ -420,30 +431,23 @@ _elementtree_Element_findtext(PyObject *self, PyTypeObject *cls, PyObject *const
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[3];
-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 1;
-    PyObject *path;
-    PyObject *default_value = Py_None;
-    PyObject *namespaces = Py_None;
+    Py_ssize_t _idx[3];
+    PyValueBorrow path;
+    PyValueBorrow default_value = PyValue_Borrow(PyValue_None);
+    PyValueBorrow namespaces = PyValue_Borrow(PyValue_None);
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 1, /*maxpos*/ 3, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 1, /*maxpos*/ 3, /*minkw*/ 0, /*varpos*/ 0, _idx, 3)) {
         goto exit;
     }
-    path = args[0];
-    if (!noptargs) {
-        goto skip_optional_pos;
+    path = PyValue_Borrow(args[_idx[0]]);
+    if (_idx[1] >= 0) {
+        default_value = PyValue_Borrow(args[_idx[1]]);
     }
-    if (args[1]) {
-        default_value = args[1];
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
+    if (_idx[2] >= 0) {
+        namespaces = PyValue_Borrow(args[_idx[2]]);
     }
-    namespaces = args[2];
-skip_optional_pos:
-    return_value = _elementtree_Element_findtext_impl((ElementObject *)self, cls, path, default_value, namespaces);
+    return_value = _elementtree_Element_findtext_impl((ElementObject *)PyValue_AsKnownObjectBorrow(self), cls, path, default_value, namespaces);
 
 exit:
     return return_value;
@@ -462,16 +466,17 @@ PyDoc_STRVAR(_elementtree_Element_findall__doc__,
 "Returns list containing all matching elements in document order.");
 
 #define _ELEMENTTREE_ELEMENT_FINDALL_METHODDEF    \
-    {"findall", _PyCFunction_CAST(_elementtree_Element_findall), METH_METHOD|METH_FASTCALL|METH_KEYWORDS, _elementtree_Element_findall__doc__},
+    {"findall", _PyCFunction_CAST(_elementtree_Element_findall), METH_VALUE|METH_METHOD, _elementtree_Element_findall__doc__},
 
-static PyObject *
+static PyValue
 _elementtree_Element_findall_impl(ElementObject *self, PyTypeObject *cls,
-                                  PyObject *path, PyObject *namespaces);
+                                  PyValueBorrow path,
+                                  PyValueBorrow namespaces);
 
-static PyObject *
-_elementtree_Element_findall(PyObject *self, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_elementtree_Element_findall(PyValueBorrow self, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 2
@@ -499,23 +504,19 @@ _elementtree_Element_findall(PyObject *self, PyTypeObject *cls, PyObject *const 
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[2];
-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 1;
-    PyObject *path;
-    PyObject *namespaces = Py_None;
+    Py_ssize_t _idx[2];
+    PyValueBorrow path;
+    PyValueBorrow namespaces = PyValue_Borrow(PyValue_None);
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 1, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 1, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, _idx, 2)) {
         goto exit;
     }
-    path = args[0];
-    if (!noptargs) {
-        goto skip_optional_pos;
+    path = PyValue_Borrow(args[_idx[0]]);
+    if (_idx[1] >= 0) {
+        namespaces = PyValue_Borrow(args[_idx[1]]);
     }
-    namespaces = args[1];
-skip_optional_pos:
-    return_value = _elementtree_Element_findall_impl((ElementObject *)self, cls, path, namespaces);
+    return_value = _elementtree_Element_findall_impl((ElementObject *)PyValue_AsKnownObjectBorrow(self), cls, path, namespaces);
 
 exit:
     return return_value;
@@ -534,16 +535,17 @@ PyDoc_STRVAR(_elementtree_Element_iterfind__doc__,
 "Return an iterable yielding all matching elements in document order.");
 
 #define _ELEMENTTREE_ELEMENT_ITERFIND_METHODDEF    \
-    {"iterfind", _PyCFunction_CAST(_elementtree_Element_iterfind), METH_METHOD|METH_FASTCALL|METH_KEYWORDS, _elementtree_Element_iterfind__doc__},
+    {"iterfind", _PyCFunction_CAST(_elementtree_Element_iterfind), METH_VALUE|METH_METHOD, _elementtree_Element_iterfind__doc__},
 
-static PyObject *
+static PyValue
 _elementtree_Element_iterfind_impl(ElementObject *self, PyTypeObject *cls,
-                                   PyObject *path, PyObject *namespaces);
+                                   PyValueBorrow path,
+                                   PyValueBorrow namespaces);
 
-static PyObject *
-_elementtree_Element_iterfind(PyObject *self, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_elementtree_Element_iterfind(PyValueBorrow self, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 2
@@ -571,23 +573,19 @@ _elementtree_Element_iterfind(PyObject *self, PyTypeObject *cls, PyObject *const
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[2];
-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 1;
-    PyObject *path;
-    PyObject *namespaces = Py_None;
+    Py_ssize_t _idx[2];
+    PyValueBorrow path;
+    PyValueBorrow namespaces = PyValue_Borrow(PyValue_None);
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 1, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 1, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, _idx, 2)) {
         goto exit;
     }
-    path = args[0];
-    if (!noptargs) {
-        goto skip_optional_pos;
+    path = PyValue_Borrow(args[_idx[0]]);
+    if (_idx[1] >= 0) {
+        namespaces = PyValue_Borrow(args[_idx[1]]);
     }
-    namespaces = args[1];
-skip_optional_pos:
-    return_value = _elementtree_Element_iterfind_impl((ElementObject *)self, cls, path, namespaces);
+    return_value = _elementtree_Element_iterfind_impl((ElementObject *)PyValue_AsKnownObjectBorrow(self), cls, path, namespaces);
 
 exit:
     return return_value;
@@ -607,16 +605,16 @@ PyDoc_STRVAR(_elementtree_Element_get__doc__,
 "attribute was not found.");
 
 #define _ELEMENTTREE_ELEMENT_GET_METHODDEF    \
-    {"get", _PyCFunction_CAST(_elementtree_Element_get), METH_FASTCALL|METH_KEYWORDS, _elementtree_Element_get__doc__},
+    {"get", _PyCFunction_CAST(_elementtree_Element_get), METH_VALUE, _elementtree_Element_get__doc__},
 
-static PyObject *
-_elementtree_Element_get_impl(ElementObject *self, PyObject *key,
-                              PyObject *default_value);
+static PyValue
+_elementtree_Element_get_impl(ElementObject *self, PyValueBorrow key,
+                              PyValueBorrow default_value);
 
-static PyObject *
-_elementtree_Element_get(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_elementtree_Element_get(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 2
@@ -644,23 +642,19 @@ _elementtree_Element_get(PyObject *self, PyObject *const *args, Py_ssize_t nargs
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[2];
-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 1;
-    PyObject *key;
-    PyObject *default_value = Py_None;
+    Py_ssize_t _idx[2];
+    PyValueBorrow key;
+    PyValueBorrow default_value = PyValue_Borrow(PyValue_None);
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 1, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 1, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, _idx, 2)) {
         goto exit;
     }
-    key = args[0];
-    if (!noptargs) {
-        goto skip_optional_pos;
+    key = PyValue_Borrow(args[_idx[0]]);
+    if (_idx[1] >= 0) {
+        default_value = PyValue_Borrow(args[_idx[1]]);
     }
-    default_value = args[1];
-skip_optional_pos:
-    return_value = _elementtree_Element_get_impl((ElementObject *)self, key, default_value);
+    return_value = _elementtree_Element_get_impl((ElementObject *)PyValue_AsKnownObjectBorrow(self), key, default_value);
 
 exit:
     return return_value;
@@ -684,16 +678,16 @@ PyDoc_STRVAR(_elementtree_Element_iter__doc__,
 "Return an iterator containing all the matching elements.");
 
 #define _ELEMENTTREE_ELEMENT_ITER_METHODDEF    \
-    {"iter", _PyCFunction_CAST(_elementtree_Element_iter), METH_METHOD|METH_FASTCALL|METH_KEYWORDS, _elementtree_Element_iter__doc__},
+    {"iter", _PyCFunction_CAST(_elementtree_Element_iter), METH_VALUE|METH_METHOD, _elementtree_Element_iter__doc__},
 
-static PyObject *
+static PyValue
 _elementtree_Element_iter_impl(ElementObject *self, PyTypeObject *cls,
-                               PyObject *tag);
+                               PyValueBorrow tag);
 
-static PyObject *
-_elementtree_Element_iter(PyObject *self, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_elementtree_Element_iter(PyValueBorrow self, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
@@ -721,21 +715,17 @@ _elementtree_Element_iter(PyObject *self, PyTypeObject *cls, PyObject *const *ar
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[1];
-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 0;
-    PyObject *tag = Py_None;
+    Py_ssize_t _idx[1];
+    PyValueBorrow tag = PyValue_Borrow(PyValue_None);
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 0, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 0, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, _idx, 1)) {
         goto exit;
     }
-    if (!noptargs) {
-        goto skip_optional_pos;
+    if (_idx[0] >= 0) {
+        tag = PyValue_Borrow(args[_idx[0]]);
     }
-    tag = args[0];
-skip_optional_pos:
-    return_value = _elementtree_Element_iter_impl((ElementObject *)self, cls, tag);
+    return_value = _elementtree_Element_iter_impl((ElementObject *)PyValue_AsKnownObjectBorrow(self), cls, tag);
 
 exit:
     return return_value;
@@ -751,19 +741,24 @@ PyDoc_STRVAR(_elementtree_Element_itertext__doc__,
 "order, returning all inner text.");
 
 #define _ELEMENTTREE_ELEMENT_ITERTEXT_METHODDEF    \
-    {"itertext", _PyCFunction_CAST(_elementtree_Element_itertext), METH_METHOD|METH_FASTCALL|METH_KEYWORDS, _elementtree_Element_itertext__doc__},
+    {"itertext", _PyCFunction_CAST(_elementtree_Element_itertext), METH_VALUE|METH_METHOD, _elementtree_Element_itertext__doc__},
 
-static PyObject *
+static PyValue
 _elementtree_Element_itertext_impl(ElementObject *self, PyTypeObject *cls);
 
-static PyObject *
-_elementtree_Element_itertext(PyObject *self, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_elementtree_Element_itertext(PyValueBorrow self, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
+    PyValue return_value = PyValue_NULL;
+
     if (nargs || (kwnames && PyTuple_GET_SIZE(kwnames))) {
         PyErr_SetString(PyExc_TypeError, "itertext() takes no arguments");
-        return NULL;
+        goto exit;
     }
-    return _elementtree_Element_itertext_impl((ElementObject *)self, cls);
+    return_value = _elementtree_Element_itertext_impl((ElementObject *)PyValue_AsKnownObjectBorrow(self), cls);
+
+exit:
+    return return_value;
 }
 
 PyDoc_STRVAR(_elementtree_Element_insert__doc__,
@@ -773,40 +768,43 @@ PyDoc_STRVAR(_elementtree_Element_insert__doc__,
 "Insert *subelement* at position *index*.");
 
 #define _ELEMENTTREE_ELEMENT_INSERT_METHODDEF    \
-    {"insert", _PyCFunction_CAST(_elementtree_Element_insert), METH_FASTCALL, _elementtree_Element_insert__doc__},
+    {"insert", _PyCFunction_CAST(_elementtree_Element_insert), METH_VALUE, _elementtree_Element_insert__doc__},
 
-static PyObject *
+static PyValue
 _elementtree_Element_insert_impl(ElementObject *self, Py_ssize_t index,
                                  PyObject *subelement);
 
-static PyObject *
-_elementtree_Element_insert(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_elementtree_Element_insert(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     Py_ssize_t index;
     PyObject *subelement;
 
+    if (!_PyArg_NoKwnamesValue("Element.insert()", kwnames)) {
+        goto exit;
+    }
     if (!_PyArg_CheckPositional("insert", nargs, 2, 2)) {
         goto exit;
     }
     {
         Py_ssize_t ival = -1;
-        PyObject *iobj = _PyNumber_Index(args[0]);
-        if (iobj != NULL) {
-            ival = PyLong_AsSsize_t(iobj);
-            Py_DECREF(iobj);
+        PyValue iobj = _PyValue_Index(PyValue_Borrow(args[0]));
+        if (!PyValue_IsNull(iobj)) {
+            ival = _PyValue_IntAsSsize_t(PyValue_Borrow(iobj));
+            PyValue_CLOSE(iobj);
         }
         if (ival == -1 && PyErr_Occurred()) {
             goto exit;
         }
         index = ival;
     }
-    if (!PyObject_TypeCheck(args[1], clinic_state()->Element_Type)) {
-        _PyArg_BadArgument("insert", "argument 2", (clinic_state()->Element_Type)->tp_name, args[1]);
+    if (!PyType_IsSubtype(PyValue_TYPE(PyValue_Borrow(args[1])), clinic_state()->Element_Type)) {
+        _PyArg_BadArgumentValue("insert", "argument 2", (clinic_state()->Element_Type)->tp_name, PyValue_Borrow(args[1]));
         goto exit;
     }
-    subelement = args[1];
-    return_value = _elementtree_Element_insert_impl((ElementObject *)self, index, subelement);
+    subelement = PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[1]));
+    return_value = _elementtree_Element_insert_impl((ElementObject *)PyValue_AsKnownObjectBorrow(self), index, subelement);
 
 exit:
     return return_value;
@@ -821,15 +819,19 @@ PyDoc_STRVAR(_elementtree_Element_items__doc__,
 "Equivalent to attrib.items().");
 
 #define _ELEMENTTREE_ELEMENT_ITEMS_METHODDEF    \
-    {"items", (PyCFunction)_elementtree_Element_items, METH_NOARGS, _elementtree_Element_items__doc__},
+    {"items", _PyCFunction_CAST(_elementtree_Element_items), METH_VALUE|METH_NOARGS, _elementtree_Element_items__doc__},
 
-static PyObject *
+static PyValue
 _elementtree_Element_items_impl(ElementObject *self);
 
-static PyObject *
-_elementtree_Element_items(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+_elementtree_Element_items(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _elementtree_Element_items_impl((ElementObject *)self);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _elementtree_Element_items_impl((ElementObject *)PyValue_AsKnownObjectBorrow(self));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(_elementtree_Element_keys__doc__,
@@ -841,15 +843,19 @@ PyDoc_STRVAR(_elementtree_Element_keys__doc__,
 "Equivalent to attrib.keys()");
 
 #define _ELEMENTTREE_ELEMENT_KEYS_METHODDEF    \
-    {"keys", (PyCFunction)_elementtree_Element_keys, METH_NOARGS, _elementtree_Element_keys__doc__},
+    {"keys", _PyCFunction_CAST(_elementtree_Element_keys), METH_VALUE|METH_NOARGS, _elementtree_Element_keys__doc__},
 
-static PyObject *
+static PyValue
 _elementtree_Element_keys_impl(ElementObject *self);
 
-static PyObject *
-_elementtree_Element_keys(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+_elementtree_Element_keys(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _elementtree_Element_keys_impl((ElementObject *)self);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _elementtree_Element_keys_impl((ElementObject *)PyValue_AsKnownObjectBorrow(self));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(_elementtree_Element_makeelement__doc__,
@@ -865,17 +871,17 @@ PyDoc_STRVAR(_elementtree_Element_makeelement__doc__,
 "instead.");
 
 #define _ELEMENTTREE_ELEMENT_MAKEELEMENT_METHODDEF    \
-    {"makeelement", _PyCFunction_CAST(_elementtree_Element_makeelement), METH_METHOD|METH_FASTCALL|METH_KEYWORDS, _elementtree_Element_makeelement__doc__},
+    {"makeelement", _PyCFunction_CAST(_elementtree_Element_makeelement), METH_VALUE|METH_METHOD, _elementtree_Element_makeelement__doc__},
 
-static PyObject *
+static PyValue
 _elementtree_Element_makeelement_impl(ElementObject *self, PyTypeObject *cls,
-                                      PyObject *tag, PyObject *attrib);
+                                      PyValueBorrow tag, PyObject *attrib);
 
-static PyObject *
-_elementtree_Element_makeelement(PyObject *self, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_elementtree_Element_makeelement(PyValueBorrow self, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
-    PyObject *tag;
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow tag;
     PyObject *attrib;
 
     if (!_PyArg_NoKwnames("makeelement", kwnames)) {
@@ -884,13 +890,13 @@ _elementtree_Element_makeelement(PyObject *self, PyTypeObject *cls, PyObject *co
     if (!_PyArg_CheckPositional("makeelement", nargs, 2, 2)) {
         goto exit;
     }
-    tag = args[0];
-    if (!PyDict_Check(args[1])) {
-        _PyArg_BadArgument("makeelement", "argument 2", "dict", args[1]);
+    tag = PyValue_Borrow(args[0]);
+    if (!PyType_IsSubtype(PyValue_TYPE(PyValue_Borrow(args[1])), &PyDict_Type)) {
+        _PyArg_BadArgumentValue("makeelement", "argument 2", "dict", PyValue_Borrow(args[1]));
         goto exit;
     }
-    attrib = args[1];
-    return_value = _elementtree_Element_makeelement_impl((ElementObject *)self, cls, tag, attrib);
+    attrib = PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[1]));
+    return_value = _elementtree_Element_makeelement_impl((ElementObject *)PyValue_AsKnownObjectBorrow(self), cls, tag, attrib);
 
 exit:
     return return_value;
@@ -911,23 +917,23 @@ PyDoc_STRVAR(_elementtree_Element_remove__doc__,
 "ValueError is raised if a matching element could not be found.");
 
 #define _ELEMENTTREE_ELEMENT_REMOVE_METHODDEF    \
-    {"remove", (PyCFunction)_elementtree_Element_remove, METH_O, _elementtree_Element_remove__doc__},
+    {"remove", _PyCFunction_CAST(_elementtree_Element_remove), METH_VALUE|METH_O, _elementtree_Element_remove__doc__},
 
-static PyObject *
+static PyValue
 _elementtree_Element_remove_impl(ElementObject *self, PyObject *subelement);
 
-static PyObject *
-_elementtree_Element_remove(PyObject *self, PyObject *arg)
+static PyValue
+_elementtree_Element_remove(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *subelement;
 
-    if (!PyObject_TypeCheck(arg, clinic_state()->Element_Type)) {
-        _PyArg_BadArgument("remove", "argument", (clinic_state()->Element_Type)->tp_name, arg);
+    if (!PyType_IsSubtype(PyValue_TYPE(PyValue_Borrow(args[0])), clinic_state()->Element_Type)) {
+        _PyArg_BadArgumentValue("remove", "argument", (clinic_state()->Element_Type)->tp_name, PyValue_Borrow(args[0]));
         goto exit;
     }
-    subelement = arg;
-    return_value = _elementtree_Element_remove_impl((ElementObject *)self, subelement);
+    subelement = PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0]));
+    return_value = _elementtree_Element_remove_impl((ElementObject *)PyValue_AsKnownObjectBorrow(self), subelement);
 
 exit:
     return return_value;
@@ -944,25 +950,28 @@ PyDoc_STRVAR(_elementtree_Element_set__doc__,
 "and *value* is the attribute value to set it to.");
 
 #define _ELEMENTTREE_ELEMENT_SET_METHODDEF    \
-    {"set", _PyCFunction_CAST(_elementtree_Element_set), METH_FASTCALL, _elementtree_Element_set__doc__},
+    {"set", _PyCFunction_CAST(_elementtree_Element_set), METH_VALUE, _elementtree_Element_set__doc__},
 
-static PyObject *
-_elementtree_Element_set_impl(ElementObject *self, PyObject *key,
-                              PyObject *value);
+static PyValue
+_elementtree_Element_set_impl(ElementObject *self, PyValueBorrow key,
+                              PyValueBorrow value);
 
-static PyObject *
-_elementtree_Element_set(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_elementtree_Element_set(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
-    PyObject *key;
-    PyObject *value;
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow key;
+    PyValueBorrow value;
 
+    if (!_PyArg_NoKwnamesValue("Element.set()", kwnames)) {
+        goto exit;
+    }
     if (!_PyArg_CheckPositional("set", nargs, 2, 2)) {
         goto exit;
     }
-    key = args[0];
-    value = args[1];
-    return_value = _elementtree_Element_set_impl((ElementObject *)self, key, value);
+    key = PyValue_Borrow(args[0]);
+    value = PyValue_Borrow(args[1]);
+    return_value = _elementtree_Element_set_impl((ElementObject *)PyValue_AsKnownObjectBorrow(self), key, value);
 
 exit:
     return return_value;
@@ -994,13 +1003,13 @@ PyDoc_STRVAR(_elementtree_TreeBuilder___init____doc__,
 
 static int
 _elementtree_TreeBuilder___init___impl(TreeBuilderObject *self,
-                                       PyObject *element_factory,
-                                       PyObject *comment_factory,
-                                       PyObject *pi_factory,
+                                       PyValueBorrow element_factory,
+                                       PyValueBorrow comment_factory,
+                                       PyValueBorrow pi_factory,
                                        int insert_comments, int insert_pis);
 
 static int
-_elementtree_TreeBuilder___init__(PyObject *self, PyObject *args, PyObject *kwargs)
+_elementtree_TreeBuilder___init___value(PyObject *self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
     int return_value = -1;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
@@ -1030,68 +1039,60 @@ _elementtree_TreeBuilder___init__(PyObject *self, PyObject *args, PyObject *kwar
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[5];
-    PyObject * const *fastargs;
-    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
-    Py_ssize_t noptargs = nargs + (kwargs ? PyDict_GET_SIZE(kwargs) : 0) - 0;
-    PyObject *element_factory = Py_None;
-    PyObject *comment_factory = Py_None;
-    PyObject *pi_factory = Py_None;
+    Py_ssize_t _idx[5];
+    PyValueBorrow element_factory = PyValue_Borrow(PyValue_None);
+    PyValueBorrow comment_factory = PyValue_Borrow(PyValue_None);
+    PyValueBorrow pi_factory = PyValue_Borrow(PyValue_None);
     int insert_comments = 0;
     int insert_pis = 0;
 
-    PyObject *const *_args_items = _PyBorrow_TupleItems(args, Py_MIN(nargs, 1));
-    if (_args_items == NULL) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 0, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, _idx, 5)) {
         goto exit;
     }
-    fastargs = _PyArg_UnpackKeywords(_args_items, nargs, kwargs, NULL, &_parser,
-            /*minpos*/ 0, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!fastargs) {
-        goto exit;
+    if (_idx[0] >= 0) {
+        element_factory = PyValue_Borrow(args[_idx[0]]);
     }
-    if (!noptargs) {
-        goto skip_optional_pos;
+    if (_idx[1] >= 0) {
+        comment_factory = PyValue_Borrow(args[_idx[1]]);
     }
-    if (fastargs[0]) {
-        element_factory = fastargs[0];
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
+    if (_idx[2] >= 0) {
+        pi_factory = PyValue_Borrow(args[_idx[2]]);
     }
-skip_optional_pos:
-    if (!noptargs) {
-        goto skip_optional_kwonly;
-    }
-    if (fastargs[1]) {
-        comment_factory = fastargs[1];
-        if (!--noptargs) {
-            goto skip_optional_kwonly;
-        }
-    }
-    if (fastargs[2]) {
-        pi_factory = fastargs[2];
-        if (!--noptargs) {
-            goto skip_optional_kwonly;
-        }
-    }
-    if (fastargs[3]) {
-        insert_comments = PyObject_IsTrue(fastargs[3]);
+    if (_idx[3] >= 0) {
+        insert_comments = _PyValue_IsTrue(PyValue_Borrow(args[_idx[3]]));
         if (insert_comments < 0) {
             goto exit;
         }
-        if (!--noptargs) {
-            goto skip_optional_kwonly;
+    }
+    if (_idx[4] >= 0) {
+        insert_pis = _PyValue_IsTrue(PyValue_Borrow(args[_idx[4]]));
+        if (insert_pis < 0) {
+            goto exit;
         }
     }
-    insert_pis = PyObject_IsTrue(fastargs[4]);
-    if (insert_pis < 0) {
-        goto exit;
-    }
-skip_optional_kwonly:
     return_value = _elementtree_TreeBuilder___init___impl((TreeBuilderObject *)self, element_factory, comment_factory, pi_factory, insert_comments, insert_pis);
 
 exit:
     return return_value;
+}
+
+static int
+_elementtree_TreeBuilder___init__(PyObject *self, PyObject *args, PyObject *kwargs)
+{
+    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
+    if (kwargs == NULL || PyDict_GET_SIZE(kwargs) == 0) {
+        return _elementtree_TreeBuilder___init___value(self, _PyTuple_ITEMS(args), nargs, NULL);
+    }
+    PyObject *kwnames;
+    PyValue *window = _PyValue_StackUnpackDict(_PyThreadState_GET(),
+        _PyTuple_ITEMS(args), nargs, kwargs, &kwnames);
+    if (window == NULL) {
+        return -1;
+    }
+    int result = _elementtree_TreeBuilder___init___value(self, window, nargs, kwnames);
+    _PyValue_StackUnpackDict_Free(window, nargs, kwnames);
+    return result;
 }
 
 PyDoc_STRVAR(_elementtree__set_factories__doc__,
@@ -1103,25 +1104,29 @@ PyDoc_STRVAR(_elementtree__set_factories__doc__,
 "For internal use only.");
 
 #define _ELEMENTTREE__SET_FACTORIES_METHODDEF    \
-    {"_set_factories", _PyCFunction_CAST(_elementtree__set_factories), METH_FASTCALL, _elementtree__set_factories__doc__},
+    {"_set_factories", _PyCFunction_CAST(_elementtree__set_factories), METH_VALUE, _elementtree__set_factories__doc__},
 
-static PyObject *
-_elementtree__set_factories_impl(PyObject *module, PyObject *comment_factory,
-                                 PyObject *pi_factory);
+static PyValue
+_elementtree__set_factories_impl(PyObject *module,
+                                 PyValueBorrow comment_factory,
+                                 PyValueBorrow pi_factory);
 
-static PyObject *
-_elementtree__set_factories(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_elementtree__set_factories(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
-    PyObject *comment_factory;
-    PyObject *pi_factory;
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow comment_factory;
+    PyValueBorrow pi_factory;
 
+    if (!_PyArg_NoKwnamesValue("_elementtree._set_factories()", kwnames)) {
+        goto exit;
+    }
     if (!_PyArg_CheckPositional("_set_factories", nargs, 2, 2)) {
         goto exit;
     }
-    comment_factory = args[0];
-    pi_factory = args[1];
-    return_value = _elementtree__set_factories_impl(module, comment_factory, pi_factory);
+    comment_factory = PyValue_Borrow(args[0]);
+    pi_factory = PyValue_Borrow(args[1]);
+    return_value = _elementtree__set_factories_impl(PyValue_AsKnownObjectBorrow(module), comment_factory, pi_factory);
 
 exit:
     return return_value;
@@ -1134,17 +1139,20 @@ PyDoc_STRVAR(_elementtree_TreeBuilder_data__doc__,
 "Add text to current element.");
 
 #define _ELEMENTTREE_TREEBUILDER_DATA_METHODDEF    \
-    {"data", (PyCFunction)_elementtree_TreeBuilder_data, METH_O, _elementtree_TreeBuilder_data__doc__},
+    {"data", _PyCFunction_CAST(_elementtree_TreeBuilder_data), METH_VALUE|METH_O, _elementtree_TreeBuilder_data__doc__},
 
-static PyObject *
-_elementtree_TreeBuilder_data_impl(TreeBuilderObject *self, PyObject *data);
+static PyValue
+_elementtree_TreeBuilder_data_impl(TreeBuilderObject *self,
+                                   PyValueBorrow data);
 
-static PyObject *
-_elementtree_TreeBuilder_data(PyObject *self, PyObject *data)
+static PyValue
+_elementtree_TreeBuilder_data(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow data;
 
-    return_value = _elementtree_TreeBuilder_data_impl((TreeBuilderObject *)self, data);
+    data = PyValue_Borrow(args[0]);
+    return_value = _elementtree_TreeBuilder_data_impl((TreeBuilderObject *)PyValue_AsKnownObjectBorrow(self), data);
 
     return return_value;
 }
@@ -1158,17 +1166,19 @@ PyDoc_STRVAR(_elementtree_TreeBuilder_end__doc__,
 "*tag* is the element name.");
 
 #define _ELEMENTTREE_TREEBUILDER_END_METHODDEF    \
-    {"end", (PyCFunction)_elementtree_TreeBuilder_end, METH_O, _elementtree_TreeBuilder_end__doc__},
+    {"end", _PyCFunction_CAST(_elementtree_TreeBuilder_end), METH_VALUE|METH_O, _elementtree_TreeBuilder_end__doc__},
 
-static PyObject *
-_elementtree_TreeBuilder_end_impl(TreeBuilderObject *self, PyObject *tag);
+static PyValue
+_elementtree_TreeBuilder_end_impl(TreeBuilderObject *self, PyValueBorrow tag);
 
-static PyObject *
-_elementtree_TreeBuilder_end(PyObject *self, PyObject *tag)
+static PyValue
+_elementtree_TreeBuilder_end(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow tag;
 
-    return_value = _elementtree_TreeBuilder_end_impl((TreeBuilderObject *)self, tag);
+    tag = PyValue_Borrow(args[0]);
+    return_value = _elementtree_TreeBuilder_end_impl((TreeBuilderObject *)PyValue_AsKnownObjectBorrow(self), tag);
 
     return return_value;
 }
@@ -1182,18 +1192,20 @@ PyDoc_STRVAR(_elementtree_TreeBuilder_comment__doc__,
 "*text* is the text of the comment.");
 
 #define _ELEMENTTREE_TREEBUILDER_COMMENT_METHODDEF    \
-    {"comment", (PyCFunction)_elementtree_TreeBuilder_comment, METH_O, _elementtree_TreeBuilder_comment__doc__},
+    {"comment", _PyCFunction_CAST(_elementtree_TreeBuilder_comment), METH_VALUE|METH_O, _elementtree_TreeBuilder_comment__doc__},
 
-static PyObject *
+static PyValue
 _elementtree_TreeBuilder_comment_impl(TreeBuilderObject *self,
-                                      PyObject *text);
+                                      PyValueBorrow text);
 
-static PyObject *
-_elementtree_TreeBuilder_comment(PyObject *self, PyObject *text)
+static PyValue
+_elementtree_TreeBuilder_comment(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow text;
 
-    return_value = _elementtree_TreeBuilder_comment_impl((TreeBuilderObject *)self, text);
+    text = PyValue_Borrow(args[0]);
+    return_value = _elementtree_TreeBuilder_comment_impl((TreeBuilderObject *)PyValue_AsKnownObjectBorrow(self), text);
 
     return return_value;
 }
@@ -1208,29 +1220,32 @@ PyDoc_STRVAR(_elementtree_TreeBuilder_pi__doc__,
 "the data of the processing instruction, or \'\'.");
 
 #define _ELEMENTTREE_TREEBUILDER_PI_METHODDEF    \
-    {"pi", _PyCFunction_CAST(_elementtree_TreeBuilder_pi), METH_FASTCALL, _elementtree_TreeBuilder_pi__doc__},
+    {"pi", _PyCFunction_CAST(_elementtree_TreeBuilder_pi), METH_VALUE, _elementtree_TreeBuilder_pi__doc__},
 
-static PyObject *
-_elementtree_TreeBuilder_pi_impl(TreeBuilderObject *self, PyObject *target,
-                                 PyObject *text);
+static PyValue
+_elementtree_TreeBuilder_pi_impl(TreeBuilderObject *self,
+                                 PyValueBorrow target, PyValueBorrow text);
 
-static PyObject *
-_elementtree_TreeBuilder_pi(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_elementtree_TreeBuilder_pi(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
-    PyObject *target;
-    PyObject *text = Py_None;
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow target;
+    PyValueBorrow text = PyValue_Borrow(PyValue_None);
 
+    if (!_PyArg_NoKwnamesValue("TreeBuilder.pi()", kwnames)) {
+        goto exit;
+    }
     if (!_PyArg_CheckPositional("pi", nargs, 1, 2)) {
         goto exit;
     }
-    target = args[0];
+    target = PyValue_Borrow(args[0]);
     if (nargs < 2) {
         goto skip_optional;
     }
-    text = args[1];
+    text = PyValue_Borrow(args[1]);
 skip_optional:
-    return_value = _elementtree_TreeBuilder_pi_impl((TreeBuilderObject *)self, target, text);
+    return_value = _elementtree_TreeBuilder_pi_impl((TreeBuilderObject *)PyValue_AsKnownObjectBorrow(self), target, text);
 
 exit:
     return return_value;
@@ -1243,15 +1258,19 @@ PyDoc_STRVAR(_elementtree_TreeBuilder_close__doc__,
 "Flush builder buffers and return toplevel document Element.");
 
 #define _ELEMENTTREE_TREEBUILDER_CLOSE_METHODDEF    \
-    {"close", (PyCFunction)_elementtree_TreeBuilder_close, METH_NOARGS, _elementtree_TreeBuilder_close__doc__},
+    {"close", _PyCFunction_CAST(_elementtree_TreeBuilder_close), METH_VALUE|METH_NOARGS, _elementtree_TreeBuilder_close__doc__},
 
-static PyObject *
+static PyValue
 _elementtree_TreeBuilder_close_impl(TreeBuilderObject *self);
 
-static PyObject *
-_elementtree_TreeBuilder_close(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+_elementtree_TreeBuilder_close(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _elementtree_TreeBuilder_close_impl((TreeBuilderObject *)self);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _elementtree_TreeBuilder_close_impl((TreeBuilderObject *)PyValue_AsKnownObjectBorrow(self));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(_elementtree_TreeBuilder_start__doc__,
@@ -1264,29 +1283,32 @@ PyDoc_STRVAR(_elementtree_TreeBuilder_start__doc__,
 "attributes.");
 
 #define _ELEMENTTREE_TREEBUILDER_START_METHODDEF    \
-    {"start", _PyCFunction_CAST(_elementtree_TreeBuilder_start), METH_FASTCALL, _elementtree_TreeBuilder_start__doc__},
+    {"start", _PyCFunction_CAST(_elementtree_TreeBuilder_start), METH_VALUE, _elementtree_TreeBuilder_start__doc__},
 
-static PyObject *
-_elementtree_TreeBuilder_start_impl(TreeBuilderObject *self, PyObject *tag,
-                                    PyObject *attrs);
+static PyValue
+_elementtree_TreeBuilder_start_impl(TreeBuilderObject *self,
+                                    PyValueBorrow tag, PyObject *attrs);
 
-static PyObject *
-_elementtree_TreeBuilder_start(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_elementtree_TreeBuilder_start(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
-    PyObject *tag;
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow tag;
     PyObject *attrs;
 
+    if (!_PyArg_NoKwnamesValue("TreeBuilder.start()", kwnames)) {
+        goto exit;
+    }
     if (!_PyArg_CheckPositional("start", nargs, 2, 2)) {
         goto exit;
     }
-    tag = args[0];
-    if (!PyDict_Check(args[1])) {
-        _PyArg_BadArgument("start", "argument 2", "dict", args[1]);
+    tag = PyValue_Borrow(args[0]);
+    if (!PyType_IsSubtype(PyValue_TYPE(PyValue_Borrow(args[1])), &PyDict_Type)) {
+        _PyArg_BadArgumentValue("start", "argument 2", "dict", PyValue_Borrow(args[1]));
         goto exit;
     }
-    attrs = args[1];
-    return_value = _elementtree_TreeBuilder_start_impl((TreeBuilderObject *)self, tag, attrs);
+    attrs = PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[1]));
+    return_value = _elementtree_TreeBuilder_start_impl((TreeBuilderObject *)PyValue_AsKnownObjectBorrow(self), tag, attrs);
 
 exit:
     return return_value;
@@ -1304,11 +1326,12 @@ PyDoc_STRVAR(_elementtree_XMLParser___init____doc__,
 "file: http://www.iana.org/assignments/character-sets");
 
 static int
-_elementtree_XMLParser___init___impl(XMLParserObject *self, PyObject *target,
+_elementtree_XMLParser___init___impl(XMLParserObject *self,
+                                     PyValueBorrow target,
                                      const char *encoding);
 
 static int
-_elementtree_XMLParser___init__(PyObject *self, PyObject *args, PyObject *kwargs)
+_elementtree_XMLParser___init___value(PyObject *self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
     int return_value = -1;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
@@ -1338,46 +1361,58 @@ _elementtree_XMLParser___init__(PyObject *self, PyObject *args, PyObject *kwargs
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[2];
-    PyObject * const *fastargs;
-    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
-    Py_ssize_t noptargs = nargs + (kwargs ? PyDict_GET_SIZE(kwargs) : 0) - 0;
-    PyObject *target = Py_None;
+    Py_ssize_t _idx[2];
+    PyValueBorrow target = PyValue_Borrow(PyValue_None);
     const char *encoding = NULL;
 
-    PyObject *const _args_items[1] = {NULL};
-    fastargs = _PyArg_UnpackKeywords(_args_items, nargs, kwargs, NULL, &_parser,
-            /*minpos*/ 0, /*maxpos*/ 0, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!fastargs) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 0, /*maxpos*/ 0, /*minkw*/ 0, /*varpos*/ 0, _idx, 2)) {
         goto exit;
     }
-    if (!noptargs) {
-        goto skip_optional_kwonly;
+    if (_idx[0] >= 0) {
+        target = PyValue_Borrow(args[_idx[0]]);
     }
-    if (fastargs[0]) {
-        target = fastargs[0];
-        if (!--noptargs) {
-            goto skip_optional_kwonly;
+    if (_idx[1] >= 0) {
+        if (!PyValue_IsObject(PyValue_Borrow(args[_idx[1]]))) {
+            _PyArg_BadArgumentValue("XMLParser", "argument 'encoding'", "str or None", PyValue_Borrow(args[_idx[1]]));
+            goto exit;
         }
-    }
-    if (fastargs[1] == Py_None) {
-        encoding = NULL;
-    }
-    else if (PyUnicode_Check(fastargs[1])) {
-        encoding = _PyUnicode_AsUTF8NoNUL(fastargs[1]);
-        if (encoding == NULL) {
+        if (PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[1]])) == Py_None) {
+            encoding = NULL;
+        }
+        else if (PyUnicode_Check(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[1]])))) {
+            encoding = _PyUnicode_AsUTF8NoNUL(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[1]])));
+            if (encoding == NULL) {
+                goto exit;
+            }
+        }
+        else {
+            _PyArg_BadArgument("XMLParser", "argument 'encoding'", "str or None", PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[1]])));
             goto exit;
         }
     }
-    else {
-        _PyArg_BadArgument("XMLParser", "argument 'encoding'", "str or None", fastargs[1]);
-        goto exit;
-    }
-skip_optional_kwonly:
     return_value = _elementtree_XMLParser___init___impl((XMLParserObject *)self, target, encoding);
 
 exit:
     return return_value;
+}
+
+static int
+_elementtree_XMLParser___init__(PyObject *self, PyObject *args, PyObject *kwargs)
+{
+    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
+    if (kwargs == NULL || PyDict_GET_SIZE(kwargs) == 0) {
+        return _elementtree_XMLParser___init___value(self, _PyTuple_ITEMS(args), nargs, NULL);
+    }
+    PyObject *kwnames;
+    PyValue *window = _PyValue_StackUnpackDict(_PyThreadState_GET(),
+        _PyTuple_ITEMS(args), nargs, kwargs, &kwnames);
+    if (window == NULL) {
+        return -1;
+    }
+    int result = _elementtree_XMLParser___init___value(self, window, nargs, kwnames);
+    _PyValue_StackUnpackDict_Free(window, nargs, kwnames);
+    return result;
 }
 
 PyDoc_STRVAR(_elementtree_XMLParser_close__doc__,
@@ -1387,15 +1422,19 @@ PyDoc_STRVAR(_elementtree_XMLParser_close__doc__,
 "Finish feeding data to parser and return element structure.");
 
 #define _ELEMENTTREE_XMLPARSER_CLOSE_METHODDEF    \
-    {"close", (PyCFunction)_elementtree_XMLParser_close, METH_NOARGS, _elementtree_XMLParser_close__doc__},
+    {"close", _PyCFunction_CAST(_elementtree_XMLParser_close), METH_VALUE|METH_NOARGS, _elementtree_XMLParser_close__doc__},
 
-static PyObject *
+static PyValue
 _elementtree_XMLParser_close_impl(XMLParserObject *self);
 
-static PyObject *
-_elementtree_XMLParser_close(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+_elementtree_XMLParser_close(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _elementtree_XMLParser_close_impl((XMLParserObject *)self);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _elementtree_XMLParser_close_impl((XMLParserObject *)PyValue_AsKnownObjectBorrow(self));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(_elementtree_XMLParser_flush__doc__,
@@ -1404,15 +1443,19 @@ PyDoc_STRVAR(_elementtree_XMLParser_flush__doc__,
 "\n");
 
 #define _ELEMENTTREE_XMLPARSER_FLUSH_METHODDEF    \
-    {"flush", (PyCFunction)_elementtree_XMLParser_flush, METH_NOARGS, _elementtree_XMLParser_flush__doc__},
+    {"flush", _PyCFunction_CAST(_elementtree_XMLParser_flush), METH_VALUE|METH_NOARGS, _elementtree_XMLParser_flush__doc__},
 
-static PyObject *
+static PyValue
 _elementtree_XMLParser_flush_impl(XMLParserObject *self);
 
-static PyObject *
-_elementtree_XMLParser_flush(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+_elementtree_XMLParser_flush(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _elementtree_XMLParser_flush_impl((XMLParserObject *)self);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _elementtree_XMLParser_flush_impl((XMLParserObject *)PyValue_AsKnownObjectBorrow(self));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(_elementtree_XMLParser_feed__doc__,
@@ -1422,17 +1465,19 @@ PyDoc_STRVAR(_elementtree_XMLParser_feed__doc__,
 "Feed encoded data to parser.");
 
 #define _ELEMENTTREE_XMLPARSER_FEED_METHODDEF    \
-    {"feed", (PyCFunction)_elementtree_XMLParser_feed, METH_O, _elementtree_XMLParser_feed__doc__},
+    {"feed", _PyCFunction_CAST(_elementtree_XMLParser_feed), METH_VALUE|METH_O, _elementtree_XMLParser_feed__doc__},
 
-static PyObject *
-_elementtree_XMLParser_feed_impl(XMLParserObject *self, PyObject *data);
+static PyValue
+_elementtree_XMLParser_feed_impl(XMLParserObject *self, PyValueBorrow data);
 
-static PyObject *
-_elementtree_XMLParser_feed(PyObject *self, PyObject *data)
+static PyValue
+_elementtree_XMLParser_feed(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow data;
 
-    return_value = _elementtree_XMLParser_feed_impl((XMLParserObject *)self, data);
+    data = PyValue_Borrow(args[0]);
+    return_value = _elementtree_XMLParser_feed_impl((XMLParserObject *)PyValue_AsKnownObjectBorrow(self), data);
 
     return return_value;
 }
@@ -1443,18 +1488,20 @@ PyDoc_STRVAR(_elementtree_XMLParser__parse_whole__doc__,
 "\n");
 
 #define _ELEMENTTREE_XMLPARSER__PARSE_WHOLE_METHODDEF    \
-    {"_parse_whole", (PyCFunction)_elementtree_XMLParser__parse_whole, METH_O, _elementtree_XMLParser__parse_whole__doc__},
+    {"_parse_whole", _PyCFunction_CAST(_elementtree_XMLParser__parse_whole), METH_VALUE|METH_O, _elementtree_XMLParser__parse_whole__doc__},
 
-static PyObject *
+static PyValue
 _elementtree_XMLParser__parse_whole_impl(XMLParserObject *self,
-                                         PyObject *file);
+                                         PyValueBorrow file);
 
-static PyObject *
-_elementtree_XMLParser__parse_whole(PyObject *self, PyObject *file)
+static PyValue
+_elementtree_XMLParser__parse_whole(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow file;
 
-    return_value = _elementtree_XMLParser__parse_whole_impl((XMLParserObject *)self, file);
+    file = PyValue_Borrow(args[0]);
+    return_value = _elementtree_XMLParser__parse_whole_impl((XMLParserObject *)PyValue_AsKnownObjectBorrow(self), file);
 
     return return_value;
 }
@@ -1465,32 +1512,35 @@ PyDoc_STRVAR(_elementtree_XMLParser__setevents__doc__,
 "\n");
 
 #define _ELEMENTTREE_XMLPARSER__SETEVENTS_METHODDEF    \
-    {"_setevents", _PyCFunction_CAST(_elementtree_XMLParser__setevents), METH_FASTCALL, _elementtree_XMLParser__setevents__doc__},
+    {"_setevents", _PyCFunction_CAST(_elementtree_XMLParser__setevents), METH_VALUE, _elementtree_XMLParser__setevents__doc__},
 
-static PyObject *
+static PyValue
 _elementtree_XMLParser__setevents_impl(XMLParserObject *self,
-                                       PyObject *events_queue,
-                                       PyObject *events_to_report);
+                                       PyValueBorrow events_queue,
+                                       PyValueBorrow events_to_report);
 
-static PyObject *
-_elementtree_XMLParser__setevents(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_elementtree_XMLParser__setevents(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
-    PyObject *events_queue;
-    PyObject *events_to_report = Py_None;
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow events_queue;
+    PyValueBorrow events_to_report = PyValue_Borrow(PyValue_None);
 
+    if (!_PyArg_NoKwnamesValue("XMLParser._setevents()", kwnames)) {
+        goto exit;
+    }
     if (!_PyArg_CheckPositional("_setevents", nargs, 1, 2)) {
         goto exit;
     }
-    events_queue = args[0];
+    events_queue = PyValue_Borrow(args[0]);
     if (nargs < 2) {
         goto skip_optional;
     }
-    events_to_report = args[1];
+    events_to_report = PyValue_Borrow(args[1]);
 skip_optional:
-    return_value = _elementtree_XMLParser__setevents_impl((XMLParserObject *)self, events_queue, events_to_report);
+    return_value = _elementtree_XMLParser__setevents_impl((XMLParserObject *)PyValue_AsKnownObjectBorrow(self), events_queue, events_to_report);
 
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=0faff5bc62812706 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=b2a6d6261db2106b input=a9049054013a1b77]*/

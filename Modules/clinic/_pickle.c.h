@@ -2,14 +2,20 @@
 preserve
 [clinic start generated code]*/
 
+#ifndef Py_VALUE_CORE
+#  error "value-emission Clinic output requires Py_VALUE_CORE"
+#endif
+
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 #  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
 #  include "pycore_value.h"       // _PyValue_STATIC_IMMORTAL()
 #endif
-#include "pycore_borrow.h"        // _PyBorrow_TupleItems()
-#include "pycore_modsupport.h"    // _PyArg_CheckPositional()
+#include "pycore_modsupport.h"    // _PyArg_NoKwnames()
+#include "pycore_tuple.h"         // _PyTuple_ITEMS()
 #include "pycore_unicodeobject.h" // _PyUnicode_AsUTF8NoNUL()
+#include "pycore_value_call.h"    // METH_VALUE
+#include "pycore_value_ops.h"     // _PyValue_IsTrue()
 
 PyDoc_STRVAR(_pickle_Pickler_clear_memo__doc__,
 "clear_memo($self, /)\n"
@@ -23,15 +29,19 @@ PyDoc_STRVAR(_pickle_Pickler_clear_memo__doc__,
 "re-using picklers.");
 
 #define _PICKLE_PICKLER_CLEAR_MEMO_METHODDEF    \
-    {"clear_memo", (PyCFunction)_pickle_Pickler_clear_memo, METH_NOARGS, _pickle_Pickler_clear_memo__doc__},
+    {"clear_memo", _PyCFunction_CAST(_pickle_Pickler_clear_memo), METH_VALUE|METH_NOARGS, _pickle_Pickler_clear_memo__doc__},
 
-static PyObject *
+static PyValue
 _pickle_Pickler_clear_memo_impl(PicklerObject *self);
 
-static PyObject *
-_pickle_Pickler_clear_memo(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+_pickle_Pickler_clear_memo(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _pickle_Pickler_clear_memo_impl((PicklerObject *)self);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _pickle_Pickler_clear_memo_impl((PicklerObject *)PyValue_AsKnownObjectBorrow(self));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(_pickle_Pickler_dump__doc__,
@@ -41,17 +51,17 @@ PyDoc_STRVAR(_pickle_Pickler_dump__doc__,
 "Write a pickled representation of the given object to the open file.");
 
 #define _PICKLE_PICKLER_DUMP_METHODDEF    \
-    {"dump", _PyCFunction_CAST(_pickle_Pickler_dump), METH_METHOD|METH_FASTCALL|METH_KEYWORDS, _pickle_Pickler_dump__doc__},
+    {"dump", _PyCFunction_CAST(_pickle_Pickler_dump), METH_VALUE|METH_METHOD, _pickle_Pickler_dump__doc__},
 
-static PyObject *
+static PyValue
 _pickle_Pickler_dump_impl(PicklerObject *self, PyTypeObject *cls,
-                          PyObject *obj);
+                          PyValueBorrow obj);
 
-static PyObject *
-_pickle_Pickler_dump(PyObject *self, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_pickle_Pickler_dump(PyValueBorrow self, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
-    PyObject *obj;
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow obj;
 
     if (!_PyArg_NoKwnames("dump", kwnames)) {
         goto exit;
@@ -59,8 +69,8 @@ _pickle_Pickler_dump(PyObject *self, PyTypeObject *cls, PyObject *const *args, P
     if (!_PyArg_CheckPositional("dump", nargs, 1, 1)) {
         goto exit;
     }
-    obj = args[0];
-    return_value = _pickle_Pickler_dump_impl((PicklerObject *)self, cls, obj);
+    obj = PyValue_Borrow(args[0]);
+    return_value = _pickle_Pickler_dump_impl((PicklerObject *)PyValue_AsKnownObjectBorrow(self), cls, obj);
 
 exit:
     return return_value;
@@ -73,22 +83,24 @@ PyDoc_STRVAR(_pickle_Pickler___sizeof____doc__,
 "Returns size in memory, in bytes.");
 
 #define _PICKLE_PICKLER___SIZEOF___METHODDEF    \
-    {"__sizeof__", (PyCFunction)_pickle_Pickler___sizeof__, METH_NOARGS, _pickle_Pickler___sizeof____doc__},
+    {"__sizeof__", _PyCFunction_CAST(_pickle_Pickler___sizeof__), METH_VALUE|METH_NOARGS, _pickle_Pickler___sizeof____doc__},
 
 static size_t
 _pickle_Pickler___sizeof___impl(PicklerObject *self);
 
-static PyObject *
-_pickle_Pickler___sizeof__(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+_pickle_Pickler___sizeof__(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     size_t _return_value;
 
-    _return_value = _pickle_Pickler___sizeof___impl((PicklerObject *)self);
+    _return_value = _pickle_Pickler___sizeof___impl((PicklerObject *)PyValue_AsKnownObjectBorrow(self));
     if ((_return_value == (size_t)-1) && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = PyLong_FromSize_t(_return_value);
+    return_value = (uint64_t)_return_value <= INT64_MAX
+        ? PyValue_FromInt64((int64_t)_return_value)
+        : _PyValue_FromObjectResult(PyLong_FromUnsignedLongLong((unsigned long long)_return_value));
 
 exit:
     return return_value;
@@ -130,12 +142,12 @@ PyDoc_STRVAR(_pickle_Pickler___init____doc__,
 "is None or smaller than 5.");
 
 static int
-_pickle_Pickler___init___impl(PicklerObject *self, PyObject *file,
-                              PyObject *protocol, int fix_imports,
-                              PyObject *buffer_callback);
+_pickle_Pickler___init___impl(PicklerObject *self, PyValueBorrow file,
+                              PyValueBorrow protocol, int fix_imports,
+                              PyValueBorrow buffer_callback);
 
 static int
-_pickle_Pickler___init__(PyObject *self, PyObject *args, PyObject *kwargs)
+_pickle_Pickler___init___value(PyObject *self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
     int return_value = -1;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
@@ -165,49 +177,51 @@ _pickle_Pickler___init__(PyObject *self, PyObject *args, PyObject *kwargs)
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[4];
-    PyObject * const *fastargs;
-    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
-    Py_ssize_t noptargs = nargs + (kwargs ? PyDict_GET_SIZE(kwargs) : 0) - 1;
-    PyObject *file;
-    PyObject *protocol = Py_None;
+    Py_ssize_t _idx[4];
+    PyValueBorrow file;
+    PyValueBorrow protocol = PyValue_Borrow(PyValue_None);
     int fix_imports = 1;
-    PyObject *buffer_callback = Py_None;
+    PyValueBorrow buffer_callback = PyValue_Borrow(PyValue_None);
 
-    PyObject *const *_args_items = _PyBorrow_TupleItems(args, Py_MIN(nargs, 4));
-    if (_args_items == NULL) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 1, /*maxpos*/ 4, /*minkw*/ 0, /*varpos*/ 0, _idx, 4)) {
         goto exit;
     }
-    fastargs = _PyArg_UnpackKeywords(_args_items, nargs, kwargs, NULL, &_parser,
-            /*minpos*/ 1, /*maxpos*/ 4, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!fastargs) {
-        goto exit;
+    file = PyValue_Borrow(args[_idx[0]]);
+    if (_idx[1] >= 0) {
+        protocol = PyValue_Borrow(args[_idx[1]]);
     }
-    file = fastargs[0];
-    if (!noptargs) {
-        goto skip_optional_pos;
-    }
-    if (fastargs[1]) {
-        protocol = fastargs[1];
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
-    }
-    if (fastargs[2]) {
-        fix_imports = PyObject_IsTrue(fastargs[2]);
+    if (_idx[2] >= 0) {
+        fix_imports = _PyValue_IsTrue(PyValue_Borrow(args[_idx[2]]));
         if (fix_imports < 0) {
             goto exit;
         }
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
     }
-    buffer_callback = fastargs[3];
-skip_optional_pos:
+    if (_idx[3] >= 0) {
+        buffer_callback = PyValue_Borrow(args[_idx[3]]);
+    }
     return_value = _pickle_Pickler___init___impl((PicklerObject *)self, file, protocol, fix_imports, buffer_callback);
 
 exit:
     return return_value;
+}
+
+static int
+_pickle_Pickler___init__(PyObject *self, PyObject *args, PyObject *kwargs)
+{
+    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
+    if (kwargs == NULL || PyDict_GET_SIZE(kwargs) == 0) {
+        return _pickle_Pickler___init___value(self, _PyTuple_ITEMS(args), nargs, NULL);
+    }
+    PyObject *kwnames;
+    PyValue *window = _PyValue_StackUnpackDict(_PyThreadState_GET(),
+        _PyTuple_ITEMS(args), nargs, kwargs, &kwnames);
+    if (window == NULL) {
+        return -1;
+    }
+    int result = _pickle_Pickler___init___value(self, window, nargs, kwnames);
+    _PyValue_StackUnpackDict_Free(window, nargs, kwnames);
+    return result;
 }
 
 PyDoc_STRVAR(_pickle_PicklerMemoProxy_clear__doc__,
@@ -217,15 +231,19 @@ PyDoc_STRVAR(_pickle_PicklerMemoProxy_clear__doc__,
 "Remove all items from memo.");
 
 #define _PICKLE_PICKLERMEMOPROXY_CLEAR_METHODDEF    \
-    {"clear", (PyCFunction)_pickle_PicklerMemoProxy_clear, METH_NOARGS, _pickle_PicklerMemoProxy_clear__doc__},
+    {"clear", _PyCFunction_CAST(_pickle_PicklerMemoProxy_clear), METH_VALUE|METH_NOARGS, _pickle_PicklerMemoProxy_clear__doc__},
 
-static PyObject *
+static PyValue
 _pickle_PicklerMemoProxy_clear_impl(PicklerMemoProxyObject *self);
 
-static PyObject *
-_pickle_PicklerMemoProxy_clear(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+_pickle_PicklerMemoProxy_clear(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _pickle_PicklerMemoProxy_clear_impl((PicklerMemoProxyObject *)self);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _pickle_PicklerMemoProxy_clear_impl((PicklerMemoProxyObject *)PyValue_AsKnownObjectBorrow(self));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(_pickle_PicklerMemoProxy_copy__doc__,
@@ -235,15 +253,19 @@ PyDoc_STRVAR(_pickle_PicklerMemoProxy_copy__doc__,
 "Copy the memo to a new object.");
 
 #define _PICKLE_PICKLERMEMOPROXY_COPY_METHODDEF    \
-    {"copy", (PyCFunction)_pickle_PicklerMemoProxy_copy, METH_NOARGS, _pickle_PicklerMemoProxy_copy__doc__},
+    {"copy", _PyCFunction_CAST(_pickle_PicklerMemoProxy_copy), METH_VALUE|METH_NOARGS, _pickle_PicklerMemoProxy_copy__doc__},
 
-static PyObject *
+static PyValue
 _pickle_PicklerMemoProxy_copy_impl(PicklerMemoProxyObject *self);
 
-static PyObject *
-_pickle_PicklerMemoProxy_copy(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+_pickle_PicklerMemoProxy_copy(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _pickle_PicklerMemoProxy_copy_impl((PicklerMemoProxyObject *)self);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _pickle_PicklerMemoProxy_copy_impl((PicklerMemoProxyObject *)PyValue_AsKnownObjectBorrow(self));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(_pickle_PicklerMemoProxy___reduce____doc__,
@@ -253,15 +275,19 @@ PyDoc_STRVAR(_pickle_PicklerMemoProxy___reduce____doc__,
 "Implement pickle support.");
 
 #define _PICKLE_PICKLERMEMOPROXY___REDUCE___METHODDEF    \
-    {"__reduce__", (PyCFunction)_pickle_PicklerMemoProxy___reduce__, METH_NOARGS, _pickle_PicklerMemoProxy___reduce____doc__},
+    {"__reduce__", _PyCFunction_CAST(_pickle_PicklerMemoProxy___reduce__), METH_VALUE|METH_NOARGS, _pickle_PicklerMemoProxy___reduce____doc__},
 
-static PyObject *
+static PyValue
 _pickle_PicklerMemoProxy___reduce___impl(PicklerMemoProxyObject *self);
 
-static PyObject *
-_pickle_PicklerMemoProxy___reduce__(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+_pickle_PicklerMemoProxy___reduce__(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _pickle_PicklerMemoProxy___reduce___impl((PicklerMemoProxyObject *)self);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _pickle_PicklerMemoProxy___reduce___impl((PicklerMemoProxyObject *)PyValue_AsKnownObjectBorrow(self));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(_pickle_Unpickler_persistent_load__doc__,
@@ -270,17 +296,17 @@ PyDoc_STRVAR(_pickle_Unpickler_persistent_load__doc__,
 "\n");
 
 #define _PICKLE_UNPICKLER_PERSISTENT_LOAD_METHODDEF    \
-    {"persistent_load", _PyCFunction_CAST(_pickle_Unpickler_persistent_load), METH_METHOD|METH_FASTCALL|METH_KEYWORDS, _pickle_Unpickler_persistent_load__doc__},
+    {"persistent_load", _PyCFunction_CAST(_pickle_Unpickler_persistent_load), METH_VALUE|METH_METHOD, _pickle_Unpickler_persistent_load__doc__},
 
-static PyObject *
+static PyValue
 _pickle_Unpickler_persistent_load_impl(UnpicklerObject *self,
-                                       PyTypeObject *cls, PyObject *pid);
+                                       PyTypeObject *cls, PyValueBorrow pid);
 
-static PyObject *
-_pickle_Unpickler_persistent_load(PyObject *self, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_pickle_Unpickler_persistent_load(PyValueBorrow self, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
-    PyObject *pid;
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow pid;
 
     if (!_PyArg_NoKwnames("persistent_load", kwnames)) {
         goto exit;
@@ -288,8 +314,8 @@ _pickle_Unpickler_persistent_load(PyObject *self, PyTypeObject *cls, PyObject *c
     if (!_PyArg_CheckPositional("persistent_load", nargs, 1, 1)) {
         goto exit;
     }
-    pid = args[0];
-    return_value = _pickle_Unpickler_persistent_load_impl((UnpicklerObject *)self, cls, pid);
+    pid = PyValue_Borrow(args[0]);
+    return_value = _pickle_Unpickler_persistent_load_impl((UnpicklerObject *)PyValue_AsKnownObjectBorrow(self), cls, pid);
 
 exit:
     return return_value;
@@ -306,19 +332,24 @@ PyDoc_STRVAR(_pickle_Unpickler_load__doc__,
 "specified therein.");
 
 #define _PICKLE_UNPICKLER_LOAD_METHODDEF    \
-    {"load", _PyCFunction_CAST(_pickle_Unpickler_load), METH_METHOD|METH_FASTCALL|METH_KEYWORDS, _pickle_Unpickler_load__doc__},
+    {"load", _PyCFunction_CAST(_pickle_Unpickler_load), METH_VALUE|METH_METHOD, _pickle_Unpickler_load__doc__},
 
-static PyObject *
+static PyValue
 _pickle_Unpickler_load_impl(UnpicklerObject *self, PyTypeObject *cls);
 
-static PyObject *
-_pickle_Unpickler_load(PyObject *self, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_pickle_Unpickler_load(PyValueBorrow self, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
+    PyValue return_value = PyValue_NULL;
+
     if (nargs || (kwnames && PyTuple_GET_SIZE(kwnames))) {
         PyErr_SetString(PyExc_TypeError, "load() takes no arguments");
-        return NULL;
+        goto exit;
     }
-    return _pickle_Unpickler_load_impl((UnpicklerObject *)self, cls);
+    return_value = _pickle_Unpickler_load_impl((UnpicklerObject *)PyValue_AsKnownObjectBorrow(self), cls);
+
+exit:
+    return return_value;
 }
 
 PyDoc_STRVAR(_pickle_Unpickler_find_class__doc__,
@@ -335,19 +366,19 @@ PyDoc_STRVAR(_pickle_Unpickler_find_class__doc__,
 "needed.  Both arguments passed are str objects.");
 
 #define _PICKLE_UNPICKLER_FIND_CLASS_METHODDEF    \
-    {"find_class", _PyCFunction_CAST(_pickle_Unpickler_find_class), METH_METHOD|METH_FASTCALL|METH_KEYWORDS, _pickle_Unpickler_find_class__doc__},
+    {"find_class", _PyCFunction_CAST(_pickle_Unpickler_find_class), METH_VALUE|METH_METHOD, _pickle_Unpickler_find_class__doc__},
 
-static PyObject *
+static PyValue
 _pickle_Unpickler_find_class_impl(UnpicklerObject *self, PyTypeObject *cls,
-                                  PyObject *module_name,
-                                  PyObject *global_name);
+                                  PyValueBorrow module_name,
+                                  PyValueBorrow global_name);
 
-static PyObject *
-_pickle_Unpickler_find_class(PyObject *self, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_pickle_Unpickler_find_class(PyValueBorrow self, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
-    PyObject *module_name;
-    PyObject *global_name;
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow module_name;
+    PyValueBorrow global_name;
 
     if (!_PyArg_NoKwnames("find_class", kwnames)) {
         goto exit;
@@ -355,9 +386,9 @@ _pickle_Unpickler_find_class(PyObject *self, PyTypeObject *cls, PyObject *const 
     if (!_PyArg_CheckPositional("find_class", nargs, 2, 2)) {
         goto exit;
     }
-    module_name = args[0];
-    global_name = args[1];
-    return_value = _pickle_Unpickler_find_class_impl((UnpicklerObject *)self, cls, module_name, global_name);
+    module_name = PyValue_Borrow(args[0]);
+    global_name = PyValue_Borrow(args[1]);
+    return_value = _pickle_Unpickler_find_class_impl((UnpicklerObject *)PyValue_AsKnownObjectBorrow(self), cls, module_name, global_name);
 
 exit:
     return return_value;
@@ -370,22 +401,24 @@ PyDoc_STRVAR(_pickle_Unpickler___sizeof____doc__,
 "Returns size in memory, in bytes.");
 
 #define _PICKLE_UNPICKLER___SIZEOF___METHODDEF    \
-    {"__sizeof__", (PyCFunction)_pickle_Unpickler___sizeof__, METH_NOARGS, _pickle_Unpickler___sizeof____doc__},
+    {"__sizeof__", _PyCFunction_CAST(_pickle_Unpickler___sizeof__), METH_VALUE|METH_NOARGS, _pickle_Unpickler___sizeof____doc__},
 
 static size_t
 _pickle_Unpickler___sizeof___impl(UnpicklerObject *self);
 
-static PyObject *
-_pickle_Unpickler___sizeof__(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+_pickle_Unpickler___sizeof__(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     size_t _return_value;
 
-    _return_value = _pickle_Unpickler___sizeof___impl((UnpicklerObject *)self);
+    _return_value = _pickle_Unpickler___sizeof___impl((UnpicklerObject *)PyValue_AsKnownObjectBorrow(self));
     if ((_return_value == (size_t)-1) && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = PyLong_FromSize_t(_return_value);
+    return_value = (uint64_t)_return_value <= INT64_MAX
+        ? PyValue_FromInt64((int64_t)_return_value)
+        : _PyValue_FromObjectResult(PyLong_FromUnsignedLongLong((unsigned long long)_return_value));
 
 exit:
     return return_value;
@@ -418,12 +451,12 @@ PyDoc_STRVAR(_pickle_Unpickler___init____doc__,
 "string instances as bytes objects.");
 
 static int
-_pickle_Unpickler___init___impl(UnpicklerObject *self, PyObject *file,
+_pickle_Unpickler___init___impl(UnpicklerObject *self, PyValueBorrow file,
                                 int fix_imports, const char *encoding,
-                                const char *errors, PyObject *buffers);
+                                const char *errors, PyValueBorrow buffers);
 
 static int
-_pickle_Unpickler___init__(PyObject *self, PyObject *args, PyObject *kwargs)
+_pickle_Unpickler___init___value(PyObject *self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
     int return_value = -1;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
@@ -453,70 +486,77 @@ _pickle_Unpickler___init__(PyObject *self, PyObject *args, PyObject *kwargs)
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[5];
-    PyObject * const *fastargs;
-    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
-    Py_ssize_t noptargs = nargs + (kwargs ? PyDict_GET_SIZE(kwargs) : 0) - 1;
-    PyObject *file;
+    Py_ssize_t _idx[5];
+    PyValueBorrow file;
     int fix_imports = 1;
     const char *encoding = "ASCII";
     const char *errors = "strict";
-    PyObject *buffers = NULL;
+    PyValueBorrow buffers = PyValue_Borrow(PyValue_NULL);
 
-    PyObject *const *_args_items = _PyBorrow_TupleItems(args, Py_MIN(nargs, 1));
-    if (_args_items == NULL) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, _idx, 5)) {
         goto exit;
     }
-    fastargs = _PyArg_UnpackKeywords(_args_items, nargs, kwargs, NULL, &_parser,
-            /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!fastargs) {
-        goto exit;
-    }
-    file = fastargs[0];
-    if (!noptargs) {
-        goto skip_optional_kwonly;
-    }
-    if (fastargs[1]) {
-        fix_imports = PyObject_IsTrue(fastargs[1]);
+    file = PyValue_Borrow(args[_idx[0]]);
+    if (_idx[1] >= 0) {
+        fix_imports = _PyValue_IsTrue(PyValue_Borrow(args[_idx[1]]));
         if (fix_imports < 0) {
             goto exit;
         }
-        if (!--noptargs) {
-            goto skip_optional_kwonly;
-        }
     }
-    if (fastargs[2]) {
-        if (!PyUnicode_Check(fastargs[2])) {
-            _PyArg_BadArgument("Unpickler", "argument 'encoding'", "str", fastargs[2]);
+    if (_idx[2] >= 0) {
+        if (!PyValue_IsObject(PyValue_Borrow(args[_idx[2]]))) {
+            _PyArg_BadArgumentValue("Unpickler", "argument 'encoding'", "str", PyValue_Borrow(args[_idx[2]]));
             goto exit;
         }
-        encoding = _PyUnicode_AsUTF8NoNUL(fastargs[2]);
+        if (!PyUnicode_Check(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[2]])))) {
+            _PyArg_BadArgument("Unpickler", "argument 'encoding'", "str", PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[2]])));
+            goto exit;
+        }
+        encoding = _PyUnicode_AsUTF8NoNUL(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[2]])));
         if (encoding == NULL) {
             goto exit;
         }
-        if (!--noptargs) {
-            goto skip_optional_kwonly;
-        }
     }
-    if (fastargs[3]) {
-        if (!PyUnicode_Check(fastargs[3])) {
-            _PyArg_BadArgument("Unpickler", "argument 'errors'", "str", fastargs[3]);
+    if (_idx[3] >= 0) {
+        if (!PyValue_IsObject(PyValue_Borrow(args[_idx[3]]))) {
+            _PyArg_BadArgumentValue("Unpickler", "argument 'errors'", "str", PyValue_Borrow(args[_idx[3]]));
             goto exit;
         }
-        errors = _PyUnicode_AsUTF8NoNUL(fastargs[3]);
+        if (!PyUnicode_Check(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[3]])))) {
+            _PyArg_BadArgument("Unpickler", "argument 'errors'", "str", PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[3]])));
+            goto exit;
+        }
+        errors = _PyUnicode_AsUTF8NoNUL(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[3]])));
         if (errors == NULL) {
             goto exit;
         }
-        if (!--noptargs) {
-            goto skip_optional_kwonly;
-        }
     }
-    buffers = fastargs[4];
-skip_optional_kwonly:
+    if (_idx[4] >= 0) {
+        buffers = PyValue_Borrow(args[_idx[4]]);
+    }
     return_value = _pickle_Unpickler___init___impl((UnpicklerObject *)self, file, fix_imports, encoding, errors, buffers);
 
 exit:
     return return_value;
+}
+
+static int
+_pickle_Unpickler___init__(PyObject *self, PyObject *args, PyObject *kwargs)
+{
+    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
+    if (kwargs == NULL || PyDict_GET_SIZE(kwargs) == 0) {
+        return _pickle_Unpickler___init___value(self, _PyTuple_ITEMS(args), nargs, NULL);
+    }
+    PyObject *kwnames;
+    PyValue *window = _PyValue_StackUnpackDict(_PyThreadState_GET(),
+        _PyTuple_ITEMS(args), nargs, kwargs, &kwnames);
+    if (window == NULL) {
+        return -1;
+    }
+    int result = _pickle_Unpickler___init___value(self, window, nargs, kwnames);
+    _PyValue_StackUnpackDict_Free(window, nargs, kwnames);
+    return result;
 }
 
 PyDoc_STRVAR(_pickle_UnpicklerMemoProxy_clear__doc__,
@@ -526,15 +566,19 @@ PyDoc_STRVAR(_pickle_UnpicklerMemoProxy_clear__doc__,
 "Remove all items from memo.");
 
 #define _PICKLE_UNPICKLERMEMOPROXY_CLEAR_METHODDEF    \
-    {"clear", (PyCFunction)_pickle_UnpicklerMemoProxy_clear, METH_NOARGS, _pickle_UnpicklerMemoProxy_clear__doc__},
+    {"clear", _PyCFunction_CAST(_pickle_UnpicklerMemoProxy_clear), METH_VALUE|METH_NOARGS, _pickle_UnpicklerMemoProxy_clear__doc__},
 
-static PyObject *
+static PyValue
 _pickle_UnpicklerMemoProxy_clear_impl(UnpicklerMemoProxyObject *self);
 
-static PyObject *
-_pickle_UnpicklerMemoProxy_clear(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+_pickle_UnpicklerMemoProxy_clear(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _pickle_UnpicklerMemoProxy_clear_impl((UnpicklerMemoProxyObject *)self);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _pickle_UnpicklerMemoProxy_clear_impl((UnpicklerMemoProxyObject *)PyValue_AsKnownObjectBorrow(self));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(_pickle_UnpicklerMemoProxy_copy__doc__,
@@ -544,15 +588,19 @@ PyDoc_STRVAR(_pickle_UnpicklerMemoProxy_copy__doc__,
 "Copy the memo to a new object.");
 
 #define _PICKLE_UNPICKLERMEMOPROXY_COPY_METHODDEF    \
-    {"copy", (PyCFunction)_pickle_UnpicklerMemoProxy_copy, METH_NOARGS, _pickle_UnpicklerMemoProxy_copy__doc__},
+    {"copy", _PyCFunction_CAST(_pickle_UnpicklerMemoProxy_copy), METH_VALUE|METH_NOARGS, _pickle_UnpicklerMemoProxy_copy__doc__},
 
-static PyObject *
+static PyValue
 _pickle_UnpicklerMemoProxy_copy_impl(UnpicklerMemoProxyObject *self);
 
-static PyObject *
-_pickle_UnpicklerMemoProxy_copy(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+_pickle_UnpicklerMemoProxy_copy(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _pickle_UnpicklerMemoProxy_copy_impl((UnpicklerMemoProxyObject *)self);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _pickle_UnpicklerMemoProxy_copy_impl((UnpicklerMemoProxyObject *)PyValue_AsKnownObjectBorrow(self));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(_pickle_UnpicklerMemoProxy___reduce____doc__,
@@ -562,15 +610,19 @@ PyDoc_STRVAR(_pickle_UnpicklerMemoProxy___reduce____doc__,
 "Implement pickling support.");
 
 #define _PICKLE_UNPICKLERMEMOPROXY___REDUCE___METHODDEF    \
-    {"__reduce__", (PyCFunction)_pickle_UnpicklerMemoProxy___reduce__, METH_NOARGS, _pickle_UnpicklerMemoProxy___reduce____doc__},
+    {"__reduce__", _PyCFunction_CAST(_pickle_UnpicklerMemoProxy___reduce__), METH_VALUE|METH_NOARGS, _pickle_UnpicklerMemoProxy___reduce____doc__},
 
-static PyObject *
+static PyValue
 _pickle_UnpicklerMemoProxy___reduce___impl(UnpicklerMemoProxyObject *self);
 
-static PyObject *
-_pickle_UnpicklerMemoProxy___reduce__(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+_pickle_UnpicklerMemoProxy___reduce__(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _pickle_UnpicklerMemoProxy___reduce___impl((UnpicklerMemoProxyObject *)self);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _pickle_UnpicklerMemoProxy___reduce___impl((UnpicklerMemoProxyObject *)PyValue_AsKnownObjectBorrow(self));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(_pickle_dump__doc__,
@@ -606,17 +658,17 @@ PyDoc_STRVAR(_pickle_dump__doc__,
 "*buffer_callback* is not None and *protocol* is None or smaller than 5.");
 
 #define _PICKLE_DUMP_METHODDEF    \
-    {"dump", _PyCFunction_CAST(_pickle_dump), METH_FASTCALL|METH_KEYWORDS, _pickle_dump__doc__},
+    {"dump", _PyCFunction_CAST(_pickle_dump), METH_VALUE, _pickle_dump__doc__},
 
-static PyObject *
-_pickle_dump_impl(PyObject *module, PyObject *obj, PyObject *file,
-                  PyObject *protocol, int fix_imports,
-                  PyObject *buffer_callback);
+static PyValue
+_pickle_dump_impl(PyObject *module, PyValueBorrow obj, PyValueBorrow file,
+                  PyValueBorrow protocol, int fix_imports,
+                  PyValueBorrow buffer_callback);
 
-static PyObject *
-_pickle_dump(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_pickle_dump(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 5
@@ -644,46 +696,32 @@ _pickle_dump(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[5];
-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 2;
-    PyObject *obj;
-    PyObject *file;
-    PyObject *protocol = Py_None;
+    Py_ssize_t _idx[5];
+    PyValueBorrow obj;
+    PyValueBorrow file;
+    PyValueBorrow protocol = PyValue_Borrow(PyValue_None);
     int fix_imports = 1;
-    PyObject *buffer_callback = Py_None;
+    PyValueBorrow buffer_callback = PyValue_Borrow(PyValue_None);
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 2, /*maxpos*/ 3, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 2, /*maxpos*/ 3, /*minkw*/ 0, /*varpos*/ 0, _idx, 5)) {
         goto exit;
     }
-    obj = args[0];
-    file = args[1];
-    if (!noptargs) {
-        goto skip_optional_pos;
+    obj = PyValue_Borrow(args[_idx[0]]);
+    file = PyValue_Borrow(args[_idx[1]]);
+    if (_idx[2] >= 0) {
+        protocol = PyValue_Borrow(args[_idx[2]]);
     }
-    if (args[2]) {
-        protocol = args[2];
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
-    }
-skip_optional_pos:
-    if (!noptargs) {
-        goto skip_optional_kwonly;
-    }
-    if (args[3]) {
-        fix_imports = PyObject_IsTrue(args[3]);
+    if (_idx[3] >= 0) {
+        fix_imports = _PyValue_IsTrue(PyValue_Borrow(args[_idx[3]]));
         if (fix_imports < 0) {
             goto exit;
         }
-        if (!--noptargs) {
-            goto skip_optional_kwonly;
-        }
     }
-    buffer_callback = args[4];
-skip_optional_kwonly:
-    return_value = _pickle_dump_impl(module, obj, file, protocol, fix_imports, buffer_callback);
+    if (_idx[4] >= 0) {
+        buffer_callback = PyValue_Borrow(args[_idx[4]]);
+    }
+    return_value = _pickle_dump_impl(PyValue_AsKnownObjectBorrow(module), obj, file, protocol, fix_imports, buffer_callback);
 
 exit:
     return return_value;
@@ -714,16 +752,17 @@ PyDoc_STRVAR(_pickle_dumps__doc__,
 "*buffer_callback* is not None and *protocol* is None or smaller than 5.");
 
 #define _PICKLE_DUMPS_METHODDEF    \
-    {"dumps", _PyCFunction_CAST(_pickle_dumps), METH_FASTCALL|METH_KEYWORDS, _pickle_dumps__doc__},
+    {"dumps", _PyCFunction_CAST(_pickle_dumps), METH_VALUE, _pickle_dumps__doc__},
 
-static PyObject *
-_pickle_dumps_impl(PyObject *module, PyObject *obj, PyObject *protocol,
-                   int fix_imports, PyObject *buffer_callback);
+static PyValue
+_pickle_dumps_impl(PyObject *module, PyValueBorrow obj,
+                   PyValueBorrow protocol, int fix_imports,
+                   PyValueBorrow buffer_callback);
 
-static PyObject *
-_pickle_dumps(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_pickle_dumps(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 4
@@ -751,44 +790,30 @@ _pickle_dumps(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObjec
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[4];
-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 1;
-    PyObject *obj;
-    PyObject *protocol = Py_None;
+    Py_ssize_t _idx[4];
+    PyValueBorrow obj;
+    PyValueBorrow protocol = PyValue_Borrow(PyValue_None);
     int fix_imports = 1;
-    PyObject *buffer_callback = Py_None;
+    PyValueBorrow buffer_callback = PyValue_Borrow(PyValue_None);
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 1, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 1, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, _idx, 4)) {
         goto exit;
     }
-    obj = args[0];
-    if (!noptargs) {
-        goto skip_optional_pos;
+    obj = PyValue_Borrow(args[_idx[0]]);
+    if (_idx[1] >= 0) {
+        protocol = PyValue_Borrow(args[_idx[1]]);
     }
-    if (args[1]) {
-        protocol = args[1];
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
-    }
-skip_optional_pos:
-    if (!noptargs) {
-        goto skip_optional_kwonly;
-    }
-    if (args[2]) {
-        fix_imports = PyObject_IsTrue(args[2]);
+    if (_idx[2] >= 0) {
+        fix_imports = _PyValue_IsTrue(PyValue_Borrow(args[_idx[2]]));
         if (fix_imports < 0) {
             goto exit;
         }
-        if (!--noptargs) {
-            goto skip_optional_kwonly;
-        }
     }
-    buffer_callback = args[3];
-skip_optional_kwonly:
-    return_value = _pickle_dumps_impl(module, obj, protocol, fix_imports, buffer_callback);
+    if (_idx[3] >= 0) {
+        buffer_callback = PyValue_Borrow(args[_idx[3]]);
+    }
+    return_value = _pickle_dumps_impl(PyValue_AsKnownObjectBorrow(module), obj, protocol, fix_imports, buffer_callback);
 
 exit:
     return return_value;
@@ -824,17 +849,17 @@ PyDoc_STRVAR(_pickle_load__doc__,
 "string instances as bytes objects.");
 
 #define _PICKLE_LOAD_METHODDEF    \
-    {"load", _PyCFunction_CAST(_pickle_load), METH_FASTCALL|METH_KEYWORDS, _pickle_load__doc__},
+    {"load", _PyCFunction_CAST(_pickle_load), METH_VALUE, _pickle_load__doc__},
 
-static PyObject *
-_pickle_load_impl(PyObject *module, PyObject *file, int fix_imports,
+static PyValue
+_pickle_load_impl(PyObject *module, PyValueBorrow file, int fix_imports,
                   const char *encoding, const char *errors,
-                  PyObject *buffers);
+                  PyValueBorrow buffers);
 
-static PyObject *
-_pickle_load(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_pickle_load(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 5
@@ -862,61 +887,56 @@ _pickle_load(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[5];
-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 1;
-    PyObject *file;
+    Py_ssize_t _idx[5];
+    PyValueBorrow file;
     int fix_imports = 1;
     const char *encoding = "ASCII";
     const char *errors = "strict";
-    PyObject *buffers = NULL;
+    PyValueBorrow buffers = PyValue_Borrow(PyValue_NULL);
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, _idx, 5)) {
         goto exit;
     }
-    file = args[0];
-    if (!noptargs) {
-        goto skip_optional_kwonly;
-    }
-    if (args[1]) {
-        fix_imports = PyObject_IsTrue(args[1]);
+    file = PyValue_Borrow(args[_idx[0]]);
+    if (_idx[1] >= 0) {
+        fix_imports = _PyValue_IsTrue(PyValue_Borrow(args[_idx[1]]));
         if (fix_imports < 0) {
             goto exit;
         }
-        if (!--noptargs) {
-            goto skip_optional_kwonly;
-        }
     }
-    if (args[2]) {
-        if (!PyUnicode_Check(args[2])) {
-            _PyArg_BadArgument("load", "argument 'encoding'", "str", args[2]);
+    if (_idx[2] >= 0) {
+        if (!PyValue_IsObject(PyValue_Borrow(args[_idx[2]]))) {
+            _PyArg_BadArgumentValue("load", "argument 'encoding'", "str", PyValue_Borrow(args[_idx[2]]));
             goto exit;
         }
-        encoding = _PyUnicode_AsUTF8NoNUL(args[2]);
+        if (!PyUnicode_Check(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[2]])))) {
+            _PyArg_BadArgument("load", "argument 'encoding'", "str", PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[2]])));
+            goto exit;
+        }
+        encoding = _PyUnicode_AsUTF8NoNUL(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[2]])));
         if (encoding == NULL) {
             goto exit;
         }
-        if (!--noptargs) {
-            goto skip_optional_kwonly;
-        }
     }
-    if (args[3]) {
-        if (!PyUnicode_Check(args[3])) {
-            _PyArg_BadArgument("load", "argument 'errors'", "str", args[3]);
+    if (_idx[3] >= 0) {
+        if (!PyValue_IsObject(PyValue_Borrow(args[_idx[3]]))) {
+            _PyArg_BadArgumentValue("load", "argument 'errors'", "str", PyValue_Borrow(args[_idx[3]]));
             goto exit;
         }
-        errors = _PyUnicode_AsUTF8NoNUL(args[3]);
+        if (!PyUnicode_Check(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[3]])))) {
+            _PyArg_BadArgument("load", "argument 'errors'", "str", PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[3]])));
+            goto exit;
+        }
+        errors = _PyUnicode_AsUTF8NoNUL(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[3]])));
         if (errors == NULL) {
             goto exit;
         }
-        if (!--noptargs) {
-            goto skip_optional_kwonly;
-        }
     }
-    buffers = args[4];
-skip_optional_kwonly:
-    return_value = _pickle_load_impl(module, file, fix_imports, encoding, errors, buffers);
+    if (_idx[4] >= 0) {
+        buffers = PyValue_Borrow(args[_idx[4]]);
+    }
+    return_value = _pickle_load_impl(PyValue_AsKnownObjectBorrow(module), file, fix_imports, encoding, errors, buffers);
 
 exit:
     return return_value;
@@ -943,17 +963,17 @@ PyDoc_STRVAR(_pickle_loads__doc__,
 "string instances as bytes objects.");
 
 #define _PICKLE_LOADS_METHODDEF    \
-    {"loads", _PyCFunction_CAST(_pickle_loads), METH_FASTCALL|METH_KEYWORDS, _pickle_loads__doc__},
+    {"loads", _PyCFunction_CAST(_pickle_loads), METH_VALUE, _pickle_loads__doc__},
 
-static PyObject *
-_pickle_loads_impl(PyObject *module, PyObject *data, int fix_imports,
+static PyValue
+_pickle_loads_impl(PyObject *module, PyValueBorrow data, int fix_imports,
                    const char *encoding, const char *errors,
-                   PyObject *buffers);
+                   PyValueBorrow buffers);
 
-static PyObject *
-_pickle_loads(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_pickle_loads(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 4
@@ -981,63 +1001,58 @@ _pickle_loads(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObjec
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[5];
-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 1;
-    PyObject *data;
+    Py_ssize_t _idx[5];
+    PyValueBorrow data;
     int fix_imports = 1;
     const char *encoding = "ASCII";
     const char *errors = "strict";
-    PyObject *buffers = NULL;
+    PyValueBorrow buffers = PyValue_Borrow(PyValue_NULL);
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, _idx, 5)) {
         goto exit;
     }
-    data = args[0];
-    if (!noptargs) {
-        goto skip_optional_kwonly;
-    }
-    if (args[1]) {
-        fix_imports = PyObject_IsTrue(args[1]);
+    data = PyValue_Borrow(args[_idx[0]]);
+    if (_idx[1] >= 0) {
+        fix_imports = _PyValue_IsTrue(PyValue_Borrow(args[_idx[1]]));
         if (fix_imports < 0) {
             goto exit;
         }
-        if (!--noptargs) {
-            goto skip_optional_kwonly;
-        }
     }
-    if (args[2]) {
-        if (!PyUnicode_Check(args[2])) {
-            _PyArg_BadArgument("loads", "argument 'encoding'", "str", args[2]);
+    if (_idx[2] >= 0) {
+        if (!PyValue_IsObject(PyValue_Borrow(args[_idx[2]]))) {
+            _PyArg_BadArgumentValue("loads", "argument 'encoding'", "str", PyValue_Borrow(args[_idx[2]]));
             goto exit;
         }
-        encoding = _PyUnicode_AsUTF8NoNUL(args[2]);
+        if (!PyUnicode_Check(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[2]])))) {
+            _PyArg_BadArgument("loads", "argument 'encoding'", "str", PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[2]])));
+            goto exit;
+        }
+        encoding = _PyUnicode_AsUTF8NoNUL(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[2]])));
         if (encoding == NULL) {
             goto exit;
         }
-        if (!--noptargs) {
-            goto skip_optional_kwonly;
-        }
     }
-    if (args[3]) {
-        if (!PyUnicode_Check(args[3])) {
-            _PyArg_BadArgument("loads", "argument 'errors'", "str", args[3]);
+    if (_idx[3] >= 0) {
+        if (!PyValue_IsObject(PyValue_Borrow(args[_idx[3]]))) {
+            _PyArg_BadArgumentValue("loads", "argument 'errors'", "str", PyValue_Borrow(args[_idx[3]]));
             goto exit;
         }
-        errors = _PyUnicode_AsUTF8NoNUL(args[3]);
+        if (!PyUnicode_Check(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[3]])))) {
+            _PyArg_BadArgument("loads", "argument 'errors'", "str", PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[3]])));
+            goto exit;
+        }
+        errors = _PyUnicode_AsUTF8NoNUL(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[3]])));
         if (errors == NULL) {
             goto exit;
         }
-        if (!--noptargs) {
-            goto skip_optional_kwonly;
-        }
     }
-    buffers = args[4];
-skip_optional_kwonly:
-    return_value = _pickle_loads_impl(module, data, fix_imports, encoding, errors, buffers);
+    if (_idx[4] >= 0) {
+        buffers = PyValue_Borrow(args[_idx[4]]);
+    }
+    return_value = _pickle_loads_impl(PyValue_AsKnownObjectBorrow(module), data, fix_imports, encoding, errors, buffers);
 
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=419aa17adbc2f5b3 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=8035a726060e41d5 input=a9049054013a1b77]*/

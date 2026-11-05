@@ -2,8 +2,13 @@
 preserve
 [clinic start generated code]*/
 
+#ifndef Py_VALUE_CORE
+#  error "value-emission Clinic output requires Py_VALUE_CORE"
+#endif
+
 #include "pycore_critical_section.h"// Py_BEGIN_CRITICAL_SECTION()
-#include "pycore_modsupport.h"    // _PyArg_CheckPositional()
+#include "pycore_modsupport.h"    // _PyArg_NoKwnamesValue()
+#include "pycore_value_call.h"    // METH_VALUE
 
 PyDoc_STRVAR(_heapq_heappush__doc__,
 "heappush($module, heap, item, /)\n"
@@ -12,29 +17,32 @@ PyDoc_STRVAR(_heapq_heappush__doc__,
 "Push item onto heap, maintaining the heap invariant.");
 
 #define _HEAPQ_HEAPPUSH_METHODDEF    \
-    {"heappush", _PyCFunction_CAST(_heapq_heappush), METH_FASTCALL, _heapq_heappush__doc__},
+    {"heappush", _PyCFunction_CAST(_heapq_heappush), METH_VALUE, _heapq_heappush__doc__},
 
-static PyObject *
-_heapq_heappush_impl(PyObject *module, PyObject *heap, PyObject *item);
+static PyValue
+_heapq_heappush_impl(PyObject *module, PyObject *heap, PyValueBorrow item);
 
-static PyObject *
-_heapq_heappush(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_heapq_heappush(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *heap;
-    PyObject *item;
+    PyValueBorrow item;
 
+    if (!_PyArg_NoKwnamesValue("_heapq.heappush()", kwnames)) {
+        goto exit;
+    }
     if (!_PyArg_CheckPositional("heappush", nargs, 2, 2)) {
         goto exit;
     }
-    if (!PyList_Check(args[0])) {
-        _PyArg_BadArgument("heappush", "argument 1", "list", args[0]);
+    if (!PyType_IsSubtype(PyValue_TYPE(PyValue_Borrow(args[0])), &PyList_Type)) {
+        _PyArg_BadArgumentValue("heappush", "argument 1", "list", PyValue_Borrow(args[0]));
         goto exit;
     }
-    heap = args[0];
-    item = args[1];
-    Py_BEGIN_CRITICAL_SECTION(heap);
-    return_value = _heapq_heappush_impl(module, heap, item);
+    heap = PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0]));
+    item = PyValue_Borrow(args[1]);
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(heap));
+    return_value = _heapq_heappush_impl(PyValue_AsKnownObjectBorrow(module), heap, item);
     Py_END_CRITICAL_SECTION();
 
 exit:
@@ -48,24 +56,24 @@ PyDoc_STRVAR(_heapq_heappop__doc__,
 "Pop the smallest item off the heap, maintaining the heap invariant.");
 
 #define _HEAPQ_HEAPPOP_METHODDEF    \
-    {"heappop", (PyCFunction)_heapq_heappop, METH_O, _heapq_heappop__doc__},
+    {"heappop", _PyCFunction_CAST(_heapq_heappop), METH_VALUE|METH_O, _heapq_heappop__doc__},
 
-static PyObject *
+static PyValue
 _heapq_heappop_impl(PyObject *module, PyObject *heap);
 
-static PyObject *
-_heapq_heappop(PyObject *module, PyObject *arg)
+static PyValue
+_heapq_heappop(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *heap;
 
-    if (!PyList_Check(arg)) {
-        _PyArg_BadArgument("heappop", "argument", "list", arg);
+    if (!PyType_IsSubtype(PyValue_TYPE(PyValue_Borrow(args[0])), &PyList_Type)) {
+        _PyArg_BadArgumentValue("heappop", "argument", "list", PyValue_Borrow(args[0]));
         goto exit;
     }
-    heap = arg;
-    Py_BEGIN_CRITICAL_SECTION(heap);
-    return_value = _heapq_heappop_impl(module, heap);
+    heap = PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0]));
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(heap));
+    return_value = _heapq_heappop_impl(PyValue_AsKnownObjectBorrow(module), heap);
     Py_END_CRITICAL_SECTION();
 
 exit:
@@ -87,29 +95,32 @@ PyDoc_STRVAR(_heapq_heapreplace__doc__,
 "        item = heapreplace(heap, item)");
 
 #define _HEAPQ_HEAPREPLACE_METHODDEF    \
-    {"heapreplace", _PyCFunction_CAST(_heapq_heapreplace), METH_FASTCALL, _heapq_heapreplace__doc__},
+    {"heapreplace", _PyCFunction_CAST(_heapq_heapreplace), METH_VALUE, _heapq_heapreplace__doc__},
 
-static PyObject *
-_heapq_heapreplace_impl(PyObject *module, PyObject *heap, PyObject *item);
+static PyValue
+_heapq_heapreplace_impl(PyObject *module, PyObject *heap, PyValueBorrow item);
 
-static PyObject *
-_heapq_heapreplace(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_heapq_heapreplace(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *heap;
-    PyObject *item;
+    PyValueBorrow item;
 
+    if (!_PyArg_NoKwnamesValue("_heapq.heapreplace()", kwnames)) {
+        goto exit;
+    }
     if (!_PyArg_CheckPositional("heapreplace", nargs, 2, 2)) {
         goto exit;
     }
-    if (!PyList_Check(args[0])) {
-        _PyArg_BadArgument("heapreplace", "argument 1", "list", args[0]);
+    if (!PyType_IsSubtype(PyValue_TYPE(PyValue_Borrow(args[0])), &PyList_Type)) {
+        _PyArg_BadArgumentValue("heapreplace", "argument 1", "list", PyValue_Borrow(args[0]));
         goto exit;
     }
-    heap = args[0];
-    item = args[1];
-    Py_BEGIN_CRITICAL_SECTION(heap);
-    return_value = _heapq_heapreplace_impl(module, heap, item);
+    heap = PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0]));
+    item = PyValue_Borrow(args[1]);
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(heap));
+    return_value = _heapq_heapreplace_impl(PyValue_AsKnownObjectBorrow(module), heap, item);
     Py_END_CRITICAL_SECTION();
 
 exit:
@@ -126,29 +137,32 @@ PyDoc_STRVAR(_heapq_heappushpop__doc__,
 "a separate call to heappop().");
 
 #define _HEAPQ_HEAPPUSHPOP_METHODDEF    \
-    {"heappushpop", _PyCFunction_CAST(_heapq_heappushpop), METH_FASTCALL, _heapq_heappushpop__doc__},
+    {"heappushpop", _PyCFunction_CAST(_heapq_heappushpop), METH_VALUE, _heapq_heappushpop__doc__},
 
-static PyObject *
-_heapq_heappushpop_impl(PyObject *module, PyObject *heap, PyObject *item);
+static PyValue
+_heapq_heappushpop_impl(PyObject *module, PyObject *heap, PyValueBorrow item);
 
-static PyObject *
-_heapq_heappushpop(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_heapq_heappushpop(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *heap;
-    PyObject *item;
+    PyValueBorrow item;
 
+    if (!_PyArg_NoKwnamesValue("_heapq.heappushpop()", kwnames)) {
+        goto exit;
+    }
     if (!_PyArg_CheckPositional("heappushpop", nargs, 2, 2)) {
         goto exit;
     }
-    if (!PyList_Check(args[0])) {
-        _PyArg_BadArgument("heappushpop", "argument 1", "list", args[0]);
+    if (!PyType_IsSubtype(PyValue_TYPE(PyValue_Borrow(args[0])), &PyList_Type)) {
+        _PyArg_BadArgumentValue("heappushpop", "argument 1", "list", PyValue_Borrow(args[0]));
         goto exit;
     }
-    heap = args[0];
-    item = args[1];
-    Py_BEGIN_CRITICAL_SECTION(heap);
-    return_value = _heapq_heappushpop_impl(module, heap, item);
+    heap = PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0]));
+    item = PyValue_Borrow(args[1]);
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(heap));
+    return_value = _heapq_heappushpop_impl(PyValue_AsKnownObjectBorrow(module), heap, item);
     Py_END_CRITICAL_SECTION();
 
 exit:
@@ -162,24 +176,24 @@ PyDoc_STRVAR(_heapq_heapify__doc__,
 "Transform list into a heap, in-place, in O(len(heap)) time.");
 
 #define _HEAPQ_HEAPIFY_METHODDEF    \
-    {"heapify", (PyCFunction)_heapq_heapify, METH_O, _heapq_heapify__doc__},
+    {"heapify", _PyCFunction_CAST(_heapq_heapify), METH_VALUE|METH_O, _heapq_heapify__doc__},
 
-static PyObject *
+static PyValue
 _heapq_heapify_impl(PyObject *module, PyObject *heap);
 
-static PyObject *
-_heapq_heapify(PyObject *module, PyObject *arg)
+static PyValue
+_heapq_heapify(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *heap;
 
-    if (!PyList_Check(arg)) {
-        _PyArg_BadArgument("heapify", "argument", "list", arg);
+    if (!PyType_IsSubtype(PyValue_TYPE(PyValue_Borrow(args[0])), &PyList_Type)) {
+        _PyArg_BadArgumentValue("heapify", "argument", "list", PyValue_Borrow(args[0]));
         goto exit;
     }
-    heap = arg;
-    Py_BEGIN_CRITICAL_SECTION(heap);
-    return_value = _heapq_heapify_impl(module, heap);
+    heap = PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0]));
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(heap));
+    return_value = _heapq_heapify_impl(PyValue_AsKnownObjectBorrow(module), heap);
     Py_END_CRITICAL_SECTION();
 
 exit:
@@ -193,29 +207,33 @@ PyDoc_STRVAR(_heapq_heappush_max__doc__,
 "Push item onto max heap, maintaining the heap invariant.");
 
 #define _HEAPQ_HEAPPUSH_MAX_METHODDEF    \
-    {"heappush_max", _PyCFunction_CAST(_heapq_heappush_max), METH_FASTCALL, _heapq_heappush_max__doc__},
+    {"heappush_max", _PyCFunction_CAST(_heapq_heappush_max), METH_VALUE, _heapq_heappush_max__doc__},
 
-static PyObject *
-_heapq_heappush_max_impl(PyObject *module, PyObject *heap, PyObject *item);
+static PyValue
+_heapq_heappush_max_impl(PyObject *module, PyObject *heap,
+                         PyValueBorrow item);
 
-static PyObject *
-_heapq_heappush_max(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_heapq_heappush_max(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *heap;
-    PyObject *item;
+    PyValueBorrow item;
 
+    if (!_PyArg_NoKwnamesValue("_heapq.heappush_max()", kwnames)) {
+        goto exit;
+    }
     if (!_PyArg_CheckPositional("heappush_max", nargs, 2, 2)) {
         goto exit;
     }
-    if (!PyList_Check(args[0])) {
-        _PyArg_BadArgument("heappush_max", "argument 1", "list", args[0]);
+    if (!PyType_IsSubtype(PyValue_TYPE(PyValue_Borrow(args[0])), &PyList_Type)) {
+        _PyArg_BadArgumentValue("heappush_max", "argument 1", "list", PyValue_Borrow(args[0]));
         goto exit;
     }
-    heap = args[0];
-    item = args[1];
-    Py_BEGIN_CRITICAL_SECTION(heap);
-    return_value = _heapq_heappush_max_impl(module, heap, item);
+    heap = PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0]));
+    item = PyValue_Borrow(args[1]);
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(heap));
+    return_value = _heapq_heappush_max_impl(PyValue_AsKnownObjectBorrow(module), heap, item);
     Py_END_CRITICAL_SECTION();
 
 exit:
@@ -229,24 +247,24 @@ PyDoc_STRVAR(_heapq_heappop_max__doc__,
 "Maxheap variant of heappop.");
 
 #define _HEAPQ_HEAPPOP_MAX_METHODDEF    \
-    {"heappop_max", (PyCFunction)_heapq_heappop_max, METH_O, _heapq_heappop_max__doc__},
+    {"heappop_max", _PyCFunction_CAST(_heapq_heappop_max), METH_VALUE|METH_O, _heapq_heappop_max__doc__},
 
-static PyObject *
+static PyValue
 _heapq_heappop_max_impl(PyObject *module, PyObject *heap);
 
-static PyObject *
-_heapq_heappop_max(PyObject *module, PyObject *arg)
+static PyValue
+_heapq_heappop_max(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *heap;
 
-    if (!PyList_Check(arg)) {
-        _PyArg_BadArgument("heappop_max", "argument", "list", arg);
+    if (!PyType_IsSubtype(PyValue_TYPE(PyValue_Borrow(args[0])), &PyList_Type)) {
+        _PyArg_BadArgumentValue("heappop_max", "argument", "list", PyValue_Borrow(args[0]));
         goto exit;
     }
-    heap = arg;
-    Py_BEGIN_CRITICAL_SECTION(heap);
-    return_value = _heapq_heappop_max_impl(module, heap);
+    heap = PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0]));
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(heap));
+    return_value = _heapq_heappop_max_impl(PyValue_AsKnownObjectBorrow(module), heap);
     Py_END_CRITICAL_SECTION();
 
 exit:
@@ -260,29 +278,33 @@ PyDoc_STRVAR(_heapq_heapreplace_max__doc__,
 "Maxheap variant of heapreplace.");
 
 #define _HEAPQ_HEAPREPLACE_MAX_METHODDEF    \
-    {"heapreplace_max", _PyCFunction_CAST(_heapq_heapreplace_max), METH_FASTCALL, _heapq_heapreplace_max__doc__},
+    {"heapreplace_max", _PyCFunction_CAST(_heapq_heapreplace_max), METH_VALUE, _heapq_heapreplace_max__doc__},
 
-static PyObject *
-_heapq_heapreplace_max_impl(PyObject *module, PyObject *heap, PyObject *item);
+static PyValue
+_heapq_heapreplace_max_impl(PyObject *module, PyObject *heap,
+                            PyValueBorrow item);
 
-static PyObject *
-_heapq_heapreplace_max(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_heapq_heapreplace_max(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *heap;
-    PyObject *item;
+    PyValueBorrow item;
 
+    if (!_PyArg_NoKwnamesValue("_heapq.heapreplace_max()", kwnames)) {
+        goto exit;
+    }
     if (!_PyArg_CheckPositional("heapreplace_max", nargs, 2, 2)) {
         goto exit;
     }
-    if (!PyList_Check(args[0])) {
-        _PyArg_BadArgument("heapreplace_max", "argument 1", "list", args[0]);
+    if (!PyType_IsSubtype(PyValue_TYPE(PyValue_Borrow(args[0])), &PyList_Type)) {
+        _PyArg_BadArgumentValue("heapreplace_max", "argument 1", "list", PyValue_Borrow(args[0]));
         goto exit;
     }
-    heap = args[0];
-    item = args[1];
-    Py_BEGIN_CRITICAL_SECTION(heap);
-    return_value = _heapq_heapreplace_max_impl(module, heap, item);
+    heap = PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0]));
+    item = PyValue_Borrow(args[1]);
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(heap));
+    return_value = _heapq_heapreplace_max_impl(PyValue_AsKnownObjectBorrow(module), heap, item);
     Py_END_CRITICAL_SECTION();
 
 exit:
@@ -296,24 +318,24 @@ PyDoc_STRVAR(_heapq_heapify_max__doc__,
 "Maxheap variant of heapify.");
 
 #define _HEAPQ_HEAPIFY_MAX_METHODDEF    \
-    {"heapify_max", (PyCFunction)_heapq_heapify_max, METH_O, _heapq_heapify_max__doc__},
+    {"heapify_max", _PyCFunction_CAST(_heapq_heapify_max), METH_VALUE|METH_O, _heapq_heapify_max__doc__},
 
-static PyObject *
+static PyValue
 _heapq_heapify_max_impl(PyObject *module, PyObject *heap);
 
-static PyObject *
-_heapq_heapify_max(PyObject *module, PyObject *arg)
+static PyValue
+_heapq_heapify_max(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *heap;
 
-    if (!PyList_Check(arg)) {
-        _PyArg_BadArgument("heapify_max", "argument", "list", arg);
+    if (!PyType_IsSubtype(PyValue_TYPE(PyValue_Borrow(args[0])), &PyList_Type)) {
+        _PyArg_BadArgumentValue("heapify_max", "argument", "list", PyValue_Borrow(args[0]));
         goto exit;
     }
-    heap = arg;
-    Py_BEGIN_CRITICAL_SECTION(heap);
-    return_value = _heapq_heapify_max_impl(module, heap);
+    heap = PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0]));
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(heap));
+    return_value = _heapq_heapify_max_impl(PyValue_AsKnownObjectBorrow(module), heap);
     Py_END_CRITICAL_SECTION();
 
 exit:
@@ -330,32 +352,36 @@ PyDoc_STRVAR(_heapq_heappushpop_max__doc__,
 "followed by a separate call to heappop_max().");
 
 #define _HEAPQ_HEAPPUSHPOP_MAX_METHODDEF    \
-    {"heappushpop_max", _PyCFunction_CAST(_heapq_heappushpop_max), METH_FASTCALL, _heapq_heappushpop_max__doc__},
+    {"heappushpop_max", _PyCFunction_CAST(_heapq_heappushpop_max), METH_VALUE, _heapq_heappushpop_max__doc__},
 
-static PyObject *
-_heapq_heappushpop_max_impl(PyObject *module, PyObject *heap, PyObject *item);
+static PyValue
+_heapq_heappushpop_max_impl(PyObject *module, PyObject *heap,
+                            PyValueBorrow item);
 
-static PyObject *
-_heapq_heappushpop_max(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_heapq_heappushpop_max(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *heap;
-    PyObject *item;
+    PyValueBorrow item;
 
+    if (!_PyArg_NoKwnamesValue("_heapq.heappushpop_max()", kwnames)) {
+        goto exit;
+    }
     if (!_PyArg_CheckPositional("heappushpop_max", nargs, 2, 2)) {
         goto exit;
     }
-    if (!PyList_Check(args[0])) {
-        _PyArg_BadArgument("heappushpop_max", "argument 1", "list", args[0]);
+    if (!PyType_IsSubtype(PyValue_TYPE(PyValue_Borrow(args[0])), &PyList_Type)) {
+        _PyArg_BadArgumentValue("heappushpop_max", "argument 1", "list", PyValue_Borrow(args[0]));
         goto exit;
     }
-    heap = args[0];
-    item = args[1];
-    Py_BEGIN_CRITICAL_SECTION(heap);
-    return_value = _heapq_heappushpop_max_impl(module, heap, item);
+    heap = PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0]));
+    item = PyValue_Borrow(args[1]);
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(heap));
+    return_value = _heapq_heappushpop_max_impl(PyValue_AsKnownObjectBorrow(module), heap, item);
     Py_END_CRITICAL_SECTION();
 
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=21e4f248ef6e83d6 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=0433571e07dc44ab input=a9049054013a1b77]*/

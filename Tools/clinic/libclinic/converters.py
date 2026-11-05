@@ -85,6 +85,54 @@ class BaseUnsignedIntConverter(CConverter):
             type=self.type)
 
 
+    def parse_value_arg(self, argname: str, displayname: str) -> str | None:
+        # The native-bytes extraction of parse_arg, reading the value.
+        self.add_include('pycore_long_value.h', '_PyValue_AsNativeBytes()')
+        flags = ("Py_ASNATIVEBYTES_NATIVE_ENDIAN |\n"
+                 "                        Py_ASNATIVEBYTES_ALLOW_INDEX |\n"
+                 "                        Py_ASNATIVEBYTES_UNSIGNED_BUFFER")
+        if not self.bitwise:
+            flags = flags.replace(
+                "Py_ASNATIVEBYTES_UNSIGNED_BUFFER",
+                "Py_ASNATIVEBYTES_REJECT_NEGATIVE |\n"
+                "                        Py_ASNATIVEBYTES_UNSIGNED_BUFFER")
+        too_big = ('PyErr_SetString(PyExc_OverflowError,\n'
+                   '                                "Python int too large for C {type}");\n'
+                   '                    goto exit;')
+        if self.bitwise:
+            too_big = ('if (PyErr_WarnEx(PyExc_DeprecationWarning,\n'
+                       '                        "integer value out of range", 1) < 0)\n'
+                       '                    {{{{\n'
+                       '                        goto exit;\n'
+                       '                    }}}}')
+        index_check = ''
+        if self.bitwise and self.format_unit in ('k', 'K'):
+            index_check = self.format_code("""
+                if (PyValue_TYPE({argname})->tp_as_number == NULL ||
+                    PyValue_TYPE({argname})->tp_as_number->nb_index == NULL)
+                {{{{
+                    {bad_argument}
+                    goto exit;
+                }}}}
+                """,
+                argname=argname,
+                bad_argument=self.bad_argument_value(displayname, 'int'))
+        return index_check + self.format_code("""
+            {{{{
+                Py_ssize_t _bytes = _PyValue_AsNativeBytes({argname}, &{paramname}, sizeof({type}),
+                        %s);
+                if (_bytes < 0) {{{{
+                    goto exit;
+                }}}}
+                if ((size_t)_bytes > sizeof({type})) {{{{
+                    %s
+                }}}}
+            }}}}
+            """ % (flags, too_big),
+            argname=argname,
+            type=self.type)
+
+
 class uint8_converter(BaseUnsignedIntConverter):
     type = "uint8_t"
     converter = '_PyLong_UInt8_Converter'
@@ -129,6 +177,9 @@ class bool_converter(CConverter):
                 """,
                 argname=argname)
         elif self.format_unit == 'p':
+            if self.object_in_value_unit:
+                return self.parse_value_arg(
+                    f'PyValue_FromObjectBorrow({argname})', displayname)
             return self.format_code("""
                 {paramname} = PyObject_IsTrue({argname});
                 if ({paramname} < 0) {{{{
@@ -166,6 +217,42 @@ def int_value_code(converter: CConverter, argname: str, extract: str) -> str:
         argname=argname, extract=extract)
 
 
+def boxed_value_code(conv: CConverter, argname: str, body: str,
+                     **kwargs: str) -> str:
+    """Box the value once for a callee that takes only a PyObject *.
+
+    body is a format string that sees {obj}, the new reference, and
+    {paramname}; it may not use "goto exit" for errors but must set the
+    variable {ok} to 0 or 1.  The reference is released before any exit.
+    Used for cold converters that have no value form (uid_t, fildes, ...).
+    """
+    conv.add_include('pycore_value.h', '_PyValue_AsObjectAt()')
+    return conv.format_code("""
+        {{{{
+            PyObject *_obj = _PyValue_AsObjectAt({argname}, BOX_SITE_PARSER);
+            if (_obj == NULL) {{{{
+                goto exit;
+            }}}}
+            int _ok;
+        """ + body + """
+            Py_DECREF(_obj);
+            if (!_ok) {{{{
+                goto exit;
+            }}}}
+        }}}}
+        """,
+        argname=argname, obj='_obj', ok='_ok', **kwargs)
+
+
+def value_subst(code: str) -> str:
+    """The value twin of object-form code that calls the int extractors."""
+    for old, new in (('PyLong_AsLongLong(', '_PyValue_AsLongLong('),
+                     ('PyLong_AsLong(', '_PyValue_AsLong('),
+                     ('PyLong_AsNativeBytes(', '_PyValue_AsNativeBytes(')):
+        code = code.replace(old, new)
+    return code
+
+
 class defining_class_converter(CConverter):
     """
     A special-case converter:
@@ -188,6 +275,9 @@ class defining_class_converter(CConverter):
 
 
 class char_converter(CConverter):
+    # bytes or bytearray of length 1: no inline value is one.
+    value_object_only = True
+    value_expected = 'a byte string of length 1'
     type = 'char'
     default_type = bytes
     format_unit = 'c'
@@ -284,6 +374,13 @@ class unsigned_char_converter(BaseUnsignedIntConverter):
         return super().parse_arg(argname, displayname, limited_capi=limited_capi)
 
 
+    def parse_value_arg(self, argname: str, displayname: str) -> str | None:
+        if self.format_unit == 'b':
+            self.add_include('pycore_long_value.h', '_PyValue_AsLong()')
+            return value_subst(self.parse_arg(argname, displayname, limited_capi=False))
+        return super().parse_value_arg(argname, displayname)
+
+
 class byte_converter(unsigned_char_converter):
     pass
 
@@ -319,6 +416,13 @@ class short_converter(CConverter):
                 """,
                 argname=argname)
         return super().parse_arg(argname, displayname, limited_capi=limited_capi)
+
+
+    def parse_value_arg(self, argname: str, displayname: str) -> str | None:
+        if self.format_unit == 'h':
+            self.add_include('pycore_long_value.h', '_PyValue_AsLong()')
+            return value_subst(self.parse_arg(argname, displayname, limited_capi=False))
+        return None
 
 
 class unsigned_short_converter(BaseUnsignedIntConverter):
@@ -461,6 +565,13 @@ class long_long_converter(CConverter):
         return super().parse_arg(argname, displayname, limited_capi=limited_capi)
 
 
+    def parse_value_arg(self, argname: str, displayname: str) -> str | None:
+        if self.format_unit == 'L':
+            self.add_include('pycore_long_value.h', '_PyValue_AsLongLong()')
+            return value_subst(self.parse_arg(argname, displayname, limited_capi=False))
+        return None
+
+
 class unsigned_long_long_converter(BaseUnsignedIntConverter):
     type = 'unsigned long long'
 
@@ -511,6 +622,9 @@ class Py_ssize_t_converter(CConverter):
                 argname=argname,
             )
         if self.format_unit == 'n':
+            if self.object_in_value_unit:
+                return self.parse_value_arg(
+                    f'PyValue_FromObjectBorrow({argname})', displayname)
             if limited_capi:
                 PyNumber_Index = 'PyNumber_Index'
             else:
@@ -700,16 +814,58 @@ class fildes_converter(CConverter):
             argname=argname)
 
 
+    def parse_value_arg(self, argname: str, displayname: str) -> str | None:
+        # An inline int is the descriptor; any other value is boxed for
+        # PyObject_AsFileDescriptor(), which may call fileno().
+        self.add_include('pycore_long_value.h', '_PyValue_AsInt()')
+        return self.format_code("""
+            if (PyValue_IsInlineInt({argname})) {{{{
+                {paramname} = _PyValue_AsInt({argname});
+                if ({paramname} == -1 && PyErr_Occurred()) {{{{
+                    goto exit;
+                }}}}
+                if ({paramname} < 0) {{{{
+                    PyErr_Format(PyExc_ValueError,
+                                 "file descriptor cannot be a negative integer (%i)",
+                                 {paramname});
+                    goto exit;
+                }}}}
+            }}}}
+            else {{{{
+                PyObject *_obj = _PyValue_AsObjectAt({argname}, BOX_SITE_PARSER);
+                if (_obj == NULL) {{{{
+                    goto exit;
+                }}}}
+                {paramname} = PyObject_AsFileDescriptor(_obj);
+                Py_DECREF(_obj);
+                if ({paramname} < 0) {{{{
+                    goto exit;
+                }}}}
+            }}}}
+            """,
+            argname=argname)
+
+
 class gid_t_converter(CConverter):
     value_converter_function = False
     type = 'gid_t'
     converter = '_Py_Gid_Converter'
+
+    def parse_value_arg(self, argname: str, displayname: str) -> str | None:
+        return boxed_value_code(self, argname, """
+            _ok = {converter}({obj}, &{paramname});
+            """, converter=self.converter)
 
 
 class uid_t_converter(CConverter):
     value_converter_function = False
     type = 'uid_t'
     converter = '_Py_Uid_Converter'
+
+    def parse_value_arg(self, argname: str, displayname: str) -> str | None:
+        return boxed_value_code(self, argname, """
+            _ok = {converter}({obj}, &{paramname});
+            """, converter=self.converter)
 
 
 class pid_t_converter(CConverter):
@@ -726,10 +882,42 @@ class pid_t_converter(CConverter):
             argname=argname)
 
 
+    def parse_value_arg(self, argname: str, displayname: str) -> str | None:
+        # PyLong_AsPid(): the extractor of pid_t's width.
+        self.add_include('pycore_long_value.h', '_PyValue_AsLong()')
+        return self.format_code("""
+            #if !defined(SIZEOF_PID_T) || SIZEOF_PID_T == SIZEOF_INT
+            {paramname} = _PyValue_AsInt({argname});
+            #elif SIZEOF_PID_T == SIZEOF_LONG
+            {paramname} = _PyValue_AsLong({argname});
+            #else
+            {paramname} = _PyValue_AsLongLong({argname});
+            #endif
+            if ({paramname} == (pid_t)(-1) && PyErr_Occurred()) {{{{
+                goto exit;
+            }}}}
+            """,
+            argname=argname)
+
+
 class Py_off_t_converter(CConverter):
     value_converter_function = False
     type = 'Py_off_t'
     converter = '_Py_Off_t_Converter'
+
+    def parse_value_arg(self, argname: str, displayname: str) -> str | None:
+        self.add_include('pycore_long_value.h', '_PyValue_AsLongLong()')
+        return self.format_code("""
+            #ifdef HAVE_LARGEFILE_SUPPORT
+            {paramname} = _PyValue_AsLongLong({argname});
+            #else
+            {paramname} = _PyValue_AsLong({argname});
+            #endif
+            if (PyErr_Occurred()) {{{{
+                goto exit;
+            }}}}
+            """,
+            argname=argname)
 
     def use_converter(self) -> None:
         self.add_include('pycore_fileutils.h', '_Py_Off_t_Converter()')
@@ -750,6 +938,17 @@ class HANDLE_converter(CConverter):
     def parse_arg(self, argname: str, displayname: str, *, limited_capi: bool) -> str | None:
         return self.format_code("""
             {paramname} = PyLong_AsVoidPtr({argname});
+            if (!{paramname} && PyErr_Occurred()) {{{{
+                goto exit;
+            }}}}
+            """,
+            argname=argname)
+
+
+    def parse_value_arg(self, argname: str, displayname: str) -> str | None:
+        self.add_include('pycore_long_value.h', '_PyValue_IntAsVoidPtr()')
+        return self.format_code("""
+            {paramname} = _PyValue_IntAsVoidPtr({argname});
             if (!{paramname} && PyErr_Occurred()) {{{{
                 goto exit;
             }}}}
@@ -788,6 +987,19 @@ class float_converter(CConverter):
                     """,
                     argname=argname)
         return super().parse_arg(argname, displayname, limited_capi=limited_capi)
+
+
+    def parse_value_arg(self, argname: str, displayname: str) -> str | None:
+        if self.format_unit != 'f':
+            return None
+        self.add_include('pycore_long_value.h', '_PyValue_AsDouble()')
+        return self.format_code("""
+            {paramname} = (float) _PyValue_AsDouble({argname});
+            if ({paramname} == -1.0 && PyErr_Occurred()) {{{{
+                goto exit;
+            }}}}
+            """,
+            argname=argname)
 
 
 class double_converter(CConverter):
@@ -854,6 +1066,26 @@ class Py_complex_converter(CConverter):
         return super().parse_arg(argname, displayname, limited_capi=limited_capi)
 
 
+    def parse_value_arg(self, argname: str, displayname: str) -> str | None:
+        if self.format_unit != 'D':
+            return None
+        # An inline int or float is the real part.
+        self.add_include('pycore_long_value.h', '_PyValue_AsDouble()')
+        return self.format_code("""
+            if (PyValue_IsObject({argname})) {{{{
+                {paramname} = PyComplex_AsCComplex(PyValue_AsKnownObjectBorrow({argname}));
+            }}}}
+            else {{{{
+                {paramname}.real = _PyValue_AsDouble({argname});
+                {paramname}.imag = 0.0;
+            }}}}
+            if (PyErr_Occurred()) {{{{
+                goto exit;
+            }}}}
+            """,
+            argname=argname)
+
+
 class object_converter(CConverter):
     type = 'PyObject *'
     format_unit = 'O'
@@ -917,6 +1149,10 @@ class str_converter(CConverter):
     @property
     def value_expected(self) -> str:  # type: ignore[override]
         return 'str or None' if self.format_unit == 'z' else 'str'
+
+    @property
+    def has_value_form(self) -> bool:  # type: ignore[override]
+        return self.format_unit in ('s', 'z')
     c_ignored_default = 'NULL'
 
     def converter_init(
@@ -1174,6 +1410,7 @@ class unicode_fs_decoded_converter(_unicode_fs_converter_base):
 @add_legacy_c_converter('Z#', accept={str, NoneType}, zeroes=True)
 class Py_UNICODE_converter(CConverter):
     value_converter_function = False
+    value_object_only = True
     type = 'const wchar_t *'
     default_type = (str, NullType, NoneType)
     c_ignored_default = 'NULL'
@@ -1184,6 +1421,7 @@ class Py_UNICODE_converter(CConverter):
             zeroes: bool = False
     ) -> None:
         format_unit = 'Z' if accept=={str, NoneType} else 'u'
+        self.value_expected = 'str or None' if accept == {str, NoneType} else 'str'
         if zeroes:
             format_unit += '#'
             self.length = True

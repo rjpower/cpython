@@ -57,7 +57,7 @@ costs, then the qualified baseline.
 
 ## Position
 
-- Runtime branch `boil/pyvalue-rc-universal`, HEAD `e8cb83c42be`.
+- Runtime branch `boil/pyvalue-rc-universal`, HEAD `15859d9a592`.
 - Landed 2026-11-03: native boundary P3 (`56ff66a596b`, `643c69c7244`,
   `6d39221996d`) and P4 (`2558376b321`, post-review fixes `fdd7fed3216`);
   representation steps 1 (`f129780a9a7`), 2 (`f7dfc5b961f`), 3 (`dbce7b1260d`,
@@ -171,6 +171,21 @@ costs, then the qualified baseline.
   converted. Post-review: one must-fix (the invariant check never saw a
   Python class's final slots) fixed before landing. Suite (V2a-0's T_1):
   run=51,636, failures=2; targeted on both shared builds 4,742, failures=2.
+- Landed 2026-11-04 (continued): value API M4b (`ca5b20c64d9`): slice bounds
+  are value homes, `PySliceObject` is internal, `_PySlice_FromValues`; the
+  readers use inline ints directly. Post-review: no must-fix; three missing
+  regression tests added. A `Py_STATS` build fix after A5b-2
+  (`d568bea0c45`).
+- Landed 2026-11-04 (continued): register IR v2 A3 step 1 (`7b33e876eb3`,
+  `c51200c5a1c`, `e7a1322e93a`, `15859d9a592`): the fork's JIT hooks out and
+  its source deleted (user decision; history keeps it); tail calls are the
+  only backend (`preserve_none` on Clang, `no_callee_saved_registers` on
+  GCC, recorded as `PY_TAIL_CALL_CC`); `--with-computed-gotos` and
+  `--disable-gil` are gone; an activation record per eval loop; two helper
+  fixes take the canary functions from 200 to 133. Suites at `15859d9a592`,
+  gcc debug and release: run=51,627, failures=2 (the known `test_capi`
+  pair; 60 JIT tests deleted). The agent's clang-21 release suite:
+  run=51,586, failures=2.
 - Suites at `faddfd1454d`, debug and release alike: run=51,615, failures=2
   (38 more skipped than at `a6002e5854b`: the JIT tests),
   both in test_capi (test_is_unique_temporary, test_unicode.test_new): a local
@@ -183,22 +198,16 @@ costs, then the qualified baseline.
 
 Running now, in parallel (briefs in `build/pyjit-link-wave1/`):
 
-1. Register IR v2 A5b, the typed borrow, in bulk style
-   (`A5B-RESUME2-BRIEF.md`): A5b-2 is fixing its post-review findings
-   (`review-irv2-a5b-2.md`: three fail-open generator rules, made
-   fail-closed); A5b-3 is scripted down to 201 compile errors in 45 files
-   for a parallel Sonnet fan-out.
-2. Value API V2a-0, value slots with no type converted (`V2A0-IMPL-BRIEF.md`,
-   two increments, about 7 h).
-3. Value API M4, value fields with slices first (`M4-IMPL-BRIEF.md`, two
-   increments, about 4 h).
+1. Register IR v2 A5b-3, the typed borrow's heap side: the Sonnet fan-out
+   fixed 186 of 194 sites in 3.6 minutes; the lead is moving onto
+   `15859d9a592`, then lints, tests and `A5b-3 ready`.
+2. Register IR v2 A3 step 2 (`A3-STEP2-BRIEF.md`): no addressable locals in
+   handlers by construction; generator plus up to four Sonnet workers.
+3. Value API V2a-0 part 2 (`V2A0-IMPL-BRIEF.md`): slotdef value data,
+   dispatchers, adapter, thunks.
 
-Next: A3 step 1 (`A3-STEP1-BRIEF.md`: JIT source and hooks deleted, one
-tail-call backend, the convention, two helper fixes) starts when A5b-2
-lands and runs beside A5b-3; A3 step 2 (G9) after A5b-3. Then the value-API
-mechanism steps and waves on the
-[plan](design/proposals/value-api-v2a0.md) (revision 3: about 225 agent-h,
-the R27 gate at about T21 of wall clock from V2a-0's start).
+Next: the measurement after A3 step 2; then V2a-1a, M1b, M2, M3 and the
+value-API waves on the [plan](design/proposals/value-api-v2a0.md).
 
 ## Design decisions
 

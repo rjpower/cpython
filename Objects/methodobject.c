@@ -42,6 +42,9 @@ static PyObject * cfunction_call(
 static PyValue cfunction_value_vectorcall(
     PyThreadState *tstate, PyObject *func, const PyValue *args, size_t nargsf,
     PyObject *kwnames);
+static PyValue cfunction_value_vectorcall_KEYWORDS(
+    PyThreadState *tstate, PyObject *func, const PyValue *args, size_t nargsf,
+    PyObject *kwnames);
 static PyValue cfunction_value_vectorcall_METHOD(
     PyThreadState *tstate, PyObject *func, const PyValue *args, size_t nargsf,
     PyObject *kwnames);
@@ -105,7 +108,11 @@ PyObject *
             value_vectorcall = cfunction_value_vectorcall;
             vectorcall = _PyValue_VectorcallThunk;
             break;
-        case METH_VALUE | METH_METHOD:
+        case METH_VALUE | METH_KEYWORDS:
+            value_vectorcall = cfunction_value_vectorcall_KEYWORDS;
+            vectorcall = _PyValue_VectorcallThunk;
+            break;
+        case METH_VALUE | METH_METHOD | METH_KEYWORDS:
             value_vectorcall = cfunction_value_vectorcall_METHOD;
             vectorcall = _PyValue_VectorcallThunk;
             break;
@@ -816,11 +823,13 @@ cfunction_call(PyObject *func, PyObject *args, PyObject *kwargs)
     return _Py_CheckFunctionResult(tstate, func, result, NULL);
 }
 
-/* The value vectorcalls of METH_VALUE functions. */
-static PyValue
-cfunction_value_vectorcall(PyThreadState *tstate, PyObject *func,
-                           const PyValue *args, size_t nargsf,
-                           PyObject *kwnames)
+/* The value vectorcalls of METH_VALUE functions.  METH_VALUE takes positional
+ * arguments only, as METH_FASTCALL does: the vectorcall rejects keywords with
+ * the message of cfunction_vectorcall_FASTCALL and calls ml_meth with no
+ * kwnames.  METH_VALUE | METH_KEYWORDS passes kwnames to ml_meth. */
+static inline PyValue
+cfunction_value_call(PyThreadState *tstate, PyObject *func,
+                     const PyValue *args, size_t nargsf, PyObject *kwnames)
 {
     Py_ssize_t nargs = PyVectorcall_NARGS(nargsf);
     _PyCFunctionValue meth = (_PyCFunctionValue)(void(*)(void))
@@ -832,6 +841,25 @@ cfunction_value_vectorcall(PyThreadState *tstate, PyObject *func,
                           kwnames);
     _Py_LeaveRecursiveCallTstate(tstate);
     return result;
+}
+
+static PyValue
+cfunction_value_vectorcall(PyThreadState *tstate, PyObject *func,
+                           const PyValue *args, size_t nargsf,
+                           PyObject *kwnames)
+{
+    if (cfunction_check_kwargs(tstate, func, kwnames)) {
+        return PyValue_NULL;
+    }
+    return cfunction_value_call(tstate, func, args, nargsf, NULL);
+}
+
+static PyValue
+cfunction_value_vectorcall_KEYWORDS(PyThreadState *tstate, PyObject *func,
+                                    const PyValue *args, size_t nargsf,
+                                    PyObject *kwnames)
+{
+    return cfunction_value_call(tstate, func, args, nargsf, kwnames);
 }
 
 static PyValue
@@ -876,7 +904,7 @@ cfunction_value_vectorcall_checked(PyThreadState *tstate, PyObject *func,
         }
         return PyValue_NULL;
     }
-    return cfunction_value_vectorcall(tstate, func, args, nargsf, kwnames);
+    return cfunction_value_call(tstate, func, args, nargsf, kwnames);
 }
 
 static PyValue

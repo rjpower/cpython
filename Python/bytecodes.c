@@ -4628,8 +4628,8 @@ dummy_func(
             EXIT_IF(!PyCFunction_CheckExact(callable_o));
             int flags = PyCFunction_GET_FLAGS(callable_o) & _Py_METH_CALL_FLAGS;
             /* A METH_VALUE function (alone or with METH_NOARGS or METH_O)
-               reaches the same value vectorcall: it takes no keyword flag,
-               and CALL passes no keywords. */
+               reaches the same value vectorcall, as METH_FASTCALL does.
+               With METH_KEYWORDS it takes the _WITH_KEYWORDS handler. */
             EXIT_IF(flags != METH_FASTCALL
                     && (flags & ~(METH_NOARGS | METH_O)) != METH_VALUE);
         }
@@ -4665,8 +4665,9 @@ dummy_func(
         op(_GUARD_CALLABLE_BUILTIN_FAST_WITH_KEYWORDS, (callable, unused, unused[oparg] -- callable, unused, unused[oparg])) {
             PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
             EXIT_IF(!PyCFunction_CheckExact(callable_o));
-            EXIT_IF((PyCFunction_GET_FLAGS(callable_o) &
-                     _Py_METH_CALL_FLAGS) != (METH_FASTCALL | METH_KEYWORDS));
+            int flags = PyCFunction_GET_FLAGS(callable_o) & _Py_METH_CALL_FLAGS;
+            EXIT_IF(flags != (METH_FASTCALL | METH_KEYWORDS)
+                    && flags != (METH_VALUE | METH_KEYWORDS));
         }
 
         op(_CALL_BUILTIN_FAST_WITH_KEYWORDS, (callable, self_or_null, args[oparg] -- callable, self_or_null, args[oparg])) {
@@ -4870,8 +4871,9 @@ dummy_func(
             PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
             PyMethodDescrObject *method = (PyMethodDescrObject *)callable_o;
             EXIT_IF(!Py_IS_TYPE(method, &PyMethodDescr_Type));
-            EXIT_IF((method->d_method->ml_flags & _Py_METH_CALL_FLAGS) !=
-                    (METH_FASTCALL | METH_KEYWORDS));
+            int flags = method->d_method->ml_flags & _Py_METH_CALL_FLAGS;
+            EXIT_IF(flags != (METH_FASTCALL | METH_KEYWORDS)
+                    && flags != (METH_VALUE | METH_KEYWORDS));
             int total_args = oparg;
             PyValue *arguments = args;
             if (!PyValue_IsNull(self_or_null)) {

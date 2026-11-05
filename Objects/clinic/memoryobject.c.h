@@ -98,7 +98,7 @@ PyDoc_STRVAR(memoryview__from_flags__doc__,
 "Create a new memoryview object which references the given object.");
 
 #define MEMORYVIEW__FROM_FLAGS_METHODDEF    \
-    {"_from_flags", _PyCFunction_CAST(memoryview__from_flags), METH_VALUE|METH_CLASS, memoryview__from_flags__doc__},
+    {"_from_flags", _PyCFunction_CAST(memoryview__from_flags), METH_VALUE|METH_KEYWORDS|METH_CLASS, memoryview__from_flags__doc__},
 
 static PyValue
 memoryview__from_flags_impl(PyTypeObject *type, PyValueBorrow object,
@@ -196,14 +196,10 @@ memoryview___exit__(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, P
     const PyValue *exc_info;
     Py_ssize_t exc_info_length;
 
-    if (!_PyArg_NoKwnamesValueMethod(&PyMemoryView_Type, "__exit__", kwnames)) {
-        goto exit;
-    }
     exc_info = args;
     exc_info_length = nargs;
     return_value = memoryview___exit___impl((PyMemoryViewObject *)PyValue_AsKnownObjectBorrow(self), exc_info, exc_info_length);
 
-exit:
     return return_value;
 }
 
@@ -218,7 +214,7 @@ PyDoc_STRVAR(memoryview_cast__doc__,
 "for Fortran-contiguous (column-major).");
 
 #define MEMORYVIEW_CAST_METHODDEF    \
-    {"cast", _PyCFunction_CAST(memoryview_cast), METH_VALUE, memoryview_cast__doc__},
+    {"cast", _PyCFunction_CAST(memoryview_cast), METH_VALUE|METH_KEYWORDS, memoryview_cast__doc__},
 
 static PyValue
 memoryview_cast_impl(PyMemoryViewObject *self, PyObject *format,
@@ -358,7 +354,7 @@ PyDoc_STRVAR(memoryview_tobytes__doc__,
 "is the same as order=\'C\'.");
 
 #define MEMORYVIEW_TOBYTES_METHODDEF    \
-    {"tobytes", _PyCFunction_CAST(memoryview_tobytes), METH_VALUE, memoryview_tobytes__doc__},
+    {"tobytes", _PyCFunction_CAST(memoryview_tobytes), METH_VALUE|METH_KEYWORDS, memoryview_tobytes__doc__},
 
 static PyValue
 memoryview_tobytes_impl(PyMemoryViewObject *self, const char *order);
@@ -450,7 +446,7 @@ PyDoc_STRVAR(memoryview_hex__doc__,
 "\'b901:ef\'");
 
 #define MEMORYVIEW_HEX_METHODDEF    \
-    {"hex", _PyCFunction_CAST(memoryview_hex), METH_VALUE, memoryview_hex__doc__},
+    {"hex", _PyCFunction_CAST(memoryview_hex), METH_VALUE|METH_KEYWORDS, memoryview_hex__doc__},
 
 static PyValue
 memoryview_hex_impl(PyMemoryViewObject *self, PyValueBorrow sep,
@@ -565,9 +561,6 @@ memoryview_index(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyOb
     Py_ssize_t start = 0;
     Py_ssize_t stop = PY_SSIZE_T_MAX;
 
-    if (!_PyArg_NoKwnamesValueMethod(&PyMemoryView_Type, "index", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("index", nargs, 1, 3)) {
         goto exit;
     }
@@ -590,4 +583,4 @@ skip_optional:
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=ffdbd8c6d8280b4a input=a9049054013a1b77]*/
+/*[clinic end generated code: output=8b09316a8c454b86 input=a9049054013a1b77]*/

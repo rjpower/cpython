@@ -13,7 +13,7 @@ preserve
 #endif
 #include "pycore_critical_section.h"// Py_BEGIN_CRITICAL_SECTION()
 #include "pycore_long_value.h"    // _PyValue_IntAsSsize_t()
-#include "pycore_modsupport.h"    // _PyArg_NoKwnamesValue()
+#include "pycore_modsupport.h"    // _PyArg_CheckPositional()
 #include "pycore_tuple.h"         // _PyTuple_ITEMS()
 #include "pycore_value_call.h"    // METH_VALUE
 #include "pycore_value_ops.h"     // _PyValue_Index()
@@ -87,9 +87,6 @@ _io_StringIO_read(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyO
     PyValue return_value = PyValue_NULL;
     Py_ssize_t size = -1;
 
-    if (!_PyArg_NoKwnamesValue("StringIO.read()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("read", nargs, 0, 1)) {
         goto exit;
     }
@@ -128,9 +125,6 @@ _io_StringIO_readline(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs,
     PyValue return_value = PyValue_NULL;
     Py_ssize_t size = -1;
 
-    if (!_PyArg_NoKwnamesValue("StringIO.readline()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("readline", nargs, 0, 1)) {
         goto exit;
     }
@@ -186,9 +180,6 @@ _io_StringIO_truncate(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs,
     PyValue return_value = PyValue_NULL;
     PyValueBorrow pos = PyValue_Borrow(PyValue_None);
 
-    if (!_PyArg_NoKwnamesValue("StringIO.truncate()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("truncate", nargs, 0, 1)) {
         goto exit;
     }
@@ -231,9 +222,6 @@ _io_StringIO_seek(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyO
     Py_ssize_t pos;
     int whence = 0;
 
-    if (!_PyArg_NoKwnamesValue("StringIO.seek()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("seek", nargs, 1, 2)) {
         goto exit;
     }
@@ -587,4 +575,4 @@ _io_StringIO_newlines_get(PyObject *self, void *Py_UNUSED(context))
 
 #define _IO_STRINGIO_NEWLINES_GETSETDEF {"newlines", (getter)_io_StringIO_newlines_get, (setter)NULL, NULL},
 
-/*[clinic end generated code: output=d4aca7644462a4dc input=a9049054013a1b77]*/
+/*[clinic end generated code: output=d79bdc9b93c96002 input=a9049054013a1b77]*/

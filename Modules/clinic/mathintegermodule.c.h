@@ -6,7 +6,7 @@ preserve
 #  error "value-emission Clinic output requires Py_VALUE_CORE"
 #endif
 
-#include "pycore_modsupport.h"    // _PyArg_NoKwnamesValue()
+#include "pycore_modsupport.h"    // _PyArg_CheckPositional()
 #include "pycore_value_call.h"    // METH_VALUE
 
 PyDoc_STRVAR(math_integer_gcd__doc__,
@@ -29,14 +29,10 @@ math_integer_gcd(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, Py
     const PyValue *__clinic_args;
     Py_ssize_t args_length;
 
-    if (!_PyArg_NoKwnamesValue("math.math.integer.gcd()", kwnames)) {
-        goto exit;
-    }
     __clinic_args = args;
     args_length = nargs;
     return_value = math_integer_gcd_impl(PyValue_AsKnownObjectBorrow(module), __clinic_args, args_length);
 
-exit:
     return return_value;
 }
 
@@ -60,14 +56,10 @@ math_integer_lcm(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, Py
     const PyValue *__clinic_args;
     Py_ssize_t args_length;
 
-    if (!_PyArg_NoKwnamesValue("math.math.integer.lcm()", kwnames)) {
-        goto exit;
-    }
     __clinic_args = args;
     args_length = nargs;
     return_value = math_integer_lcm_impl(PyValue_AsKnownObjectBorrow(module), __clinic_args, args_length);
 
-exit:
     return return_value;
 }
 
@@ -147,9 +139,6 @@ math_integer_perm(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, P
     PyValueBorrow n_arg;
     PyValueBorrow k_arg = PyValue_Borrow(PyValue_None);
 
-    if (!_PyArg_NoKwnamesValue("math.math.integer.perm()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("perm", nargs, 1, 2)) {
         goto exit;
     }
@@ -194,9 +183,6 @@ math_integer_comb(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, P
     PyValueBorrow n_arg;
     PyValueBorrow k_arg;
 
-    if (!_PyArg_NoKwnamesValue("math.math.integer.comb()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("comb", nargs, 2, 2)) {
         goto exit;
     }
@@ -207,4 +193,4 @@ math_integer_comb(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, P
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=b3497dfe47b01d6b input=a9049054013a1b77]*/
+/*[clinic end generated code: output=8a0d9e1d6f518634 input=a9049054013a1b77]*/

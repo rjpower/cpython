@@ -12,7 +12,7 @@ preserve
 #  include "pycore_value.h"       // _PyValue_STATIC_IMMORTAL()
 #endif
 #include "pycore_long_value.h"    // _PyValue_AsInt()
-#include "pycore_modsupport.h"    // _PyArg_NoKwnamesValue()
+#include "pycore_modsupport.h"    // _PyArg_CheckPositional()
 #include "pycore_value_call.h"    // METH_VALUE
 #include "pycore_value_ops.h"     // _PyValue_IsTrue()
 
@@ -115,9 +115,6 @@ _imp__fix_co_filename(PyValueBorrow module, const PyValue *args, Py_ssize_t narg
     PyCodeObject *code;
     PyObject *path;
 
-    if (!_PyArg_NoKwnamesValue("_imp._fix_co_filename()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("_fix_co_filename", nargs, 2, 2)) {
         goto exit;
     }
@@ -235,7 +232,7 @@ PyDoc_STRVAR(_imp_find_frozen__doc__,
 "                the module\'s current name)");
 
 #define _IMP_FIND_FROZEN_METHODDEF    \
-    {"find_frozen", _PyCFunction_CAST(_imp_find_frozen), METH_VALUE, _imp_find_frozen__doc__},
+    {"find_frozen", _PyCFunction_CAST(_imp_find_frozen), METH_VALUE|METH_KEYWORDS, _imp_find_frozen__doc__},
 
 static PyValue
 _imp_find_frozen_impl(PyObject *module, PyObject *name, int withdata);
@@ -320,9 +317,6 @@ _imp_get_frozen_object(PyValueBorrow module, const PyValue *args, Py_ssize_t nar
     PyObject *name;
     PyValueBorrow dataobj = PyValue_Borrow(PyValue_None);
 
-    if (!_PyArg_NoKwnamesValue("_imp.get_frozen_object()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("get_frozen_object", nargs, 1, 2)) {
         goto exit;
     }
@@ -551,9 +545,6 @@ _imp_create_dynamic(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs,
     PyValueBorrow spec;
     PyValueBorrow file = PyValue_Borrow(PyValue_NULL);
 
-    if (!_PyArg_NoKwnamesValue("_imp.create_dynamic()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("create_dynamic", nargs, 1, 2)) {
         goto exit;
     }
@@ -641,7 +632,7 @@ PyDoc_STRVAR(_imp_source_hash__doc__,
 "\n");
 
 #define _IMP_SOURCE_HASH_METHODDEF    \
-    {"source_hash", _PyCFunction_CAST(_imp_source_hash), METH_VALUE, _imp_source_hash__doc__},
+    {"source_hash", _PyCFunction_CAST(_imp_source_hash), METH_VALUE|METH_KEYWORDS, _imp_source_hash__doc__},
 
 static PyValue
 _imp_source_hash_impl(PyObject *module, long key, Py_buffer *source);
@@ -727,9 +718,6 @@ _imp__set_lazy_attributes(PyValueBorrow module, const PyValue *args, Py_ssize_t 
     PyValueBorrow modobj;
     PyObject *name;
 
-    if (!_PyArg_NoKwnamesValue("_imp._set_lazy_attributes()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("_set_lazy_attributes", nargs, 2, 2)) {
         goto exit;
     }
@@ -756,4 +744,4 @@ exit:
 #ifndef _IMP_EXEC_DYNAMIC_METHODDEF
     #define _IMP_EXEC_DYNAMIC_METHODDEF
 #endif /* !defined(_IMP_EXEC_DYNAMIC_METHODDEF) */
-/*[clinic end generated code: output=c1ba05c1eb4862e7 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=5cc75a87bb7ff89a input=a9049054013a1b77]*/

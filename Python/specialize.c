@@ -2098,7 +2098,8 @@ specialize_method_descriptor(PyMethodDescrObject *descr, PyValue self_or_null,
         case METH_VALUE:
         case METH_VALUE | METH_NOARGS:
         case METH_VALUE | METH_O: {
-            /* The vectorcall or the callee checks the arity. list.append(x)
+            /* The vectorcall checks the keywords and the callee or the
+               vectorcall the arity. list.append(x)
                is the only method with a handler of its own. */
             PyInterpreterState *interp = _PyInterpreterState_GET();
             if ((PyObject *)descr == interp->callable_cache.list_append
@@ -2117,7 +2118,8 @@ specialize_method_descriptor(PyMethodDescrObject *descr, PyValue self_or_null,
             specialize(instr, CALL_METHOD_DESCRIPTOR_FAST);
             return 0;
         }
-        case METH_FASTCALL | METH_KEYWORDS: {
+        case METH_FASTCALL | METH_KEYWORDS:
+        case METH_VALUE | METH_KEYWORDS: {
             specialize(instr, CALL_METHOD_DESCRIPTOR_FAST_WITH_KEYWORDS);
             return 0;
         }
@@ -2233,7 +2235,8 @@ specialize_c_call(PyObject *callable, _PyInstr *instr, int nargs)
             specialize(instr, CALL_BUILTIN_FAST);
             return 0;
         }
-        case METH_FASTCALL | METH_KEYWORDS: {
+        case METH_FASTCALL | METH_KEYWORDS:
+        case METH_VALUE | METH_KEYWORDS: {
             specialize(instr, CALL_BUILTIN_FAST_WITH_KEYWORDS);
             return 0;
         }

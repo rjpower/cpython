@@ -40,7 +40,7 @@ PyDoc_STRVAR(builtin___import____doc__,
 "current module.");
 
 #define BUILTIN___IMPORT___METHODDEF    \
-    {"__import__", _PyCFunction_CAST(builtin___import__), METH_VALUE, builtin___import____doc__},
+    {"__import__", _PyCFunction_CAST(builtin___import__), METH_VALUE|METH_KEYWORDS, builtin___import____doc__},
 
 static PyValue
 builtin___import___impl(PyObject *module, PyValueBorrow name,
@@ -122,7 +122,7 @@ PyDoc_STRVAR(builtin___lazy_import____doc__,
 "which indicates the module to be lazily imported.");
 
 #define BUILTIN___LAZY_IMPORT___METHODDEF    \
-    {"__lazy_import__", _PyCFunction_CAST(builtin___lazy_import__), METH_VALUE, builtin___lazy_import____doc__},
+    {"__lazy_import__", _PyCFunction_CAST(builtin___lazy_import__), METH_VALUE|METH_KEYWORDS, builtin___lazy_import____doc__},
 
 static PyValue
 builtin___lazy_import___impl(PyObject *module, PyValueBorrow name,
@@ -379,9 +379,6 @@ builtin_format(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyOb
     PyValueBorrow value;
     PyObject *format_spec = NULL;
 
-    if (!_PyArg_NoKwnamesValue("format()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("format", nargs, 1, 2)) {
         goto exit;
     }
@@ -450,7 +447,7 @@ PyDoc_STRVAR(builtin_compile__doc__,
 "compilation, in addition to any features explicitly specified.");
 
 #define BUILTIN_COMPILE_METHODDEF    \
-    {"compile", _PyCFunction_CAST(builtin_compile), METH_VALUE, builtin_compile__doc__},
+    {"compile", _PyCFunction_CAST(builtin_compile), METH_VALUE|METH_KEYWORDS, builtin_compile__doc__},
 
 static PyValue
 builtin_compile_impl(PyObject *module, PyValueBorrow source,
@@ -588,9 +585,6 @@ builtin_dir(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObjec
     PyValue return_value = PyValue_NULL;
     PyValueBorrow arg = PyValue_Borrow(PyValue_NULL);
 
-    if (!_PyArg_NoKwnamesValue("dir()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("dir", nargs, 0, 1)) {
         goto exit;
     }
@@ -624,9 +618,6 @@ builtin_divmod(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyOb
     PyValueBorrow x;
     PyValueBorrow y;
 
-    if (!_PyArg_NoKwnamesValue("divmod()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("divmod", nargs, 2, 2)) {
         goto exit;
     }
@@ -651,7 +642,7 @@ PyDoc_STRVAR(builtin_eval__doc__,
 "If only globals is given, locals defaults to it.");
 
 #define BUILTIN_EVAL_METHODDEF    \
-    {"eval", _PyCFunction_CAST(builtin_eval), METH_VALUE, builtin_eval__doc__},
+    {"eval", _PyCFunction_CAST(builtin_eval), METH_VALUE|METH_KEYWORDS, builtin_eval__doc__},
 
 static PyValue
 builtin_eval_impl(PyObject *module, PyValueBorrow source,
@@ -725,7 +716,7 @@ PyDoc_STRVAR(builtin_exec__doc__,
 "when source is a code object requiring exactly that many cellvars.");
 
 #define BUILTIN_EXEC_METHODDEF    \
-    {"exec", _PyCFunction_CAST(builtin_exec), METH_VALUE, builtin_exec__doc__},
+    {"exec", _PyCFunction_CAST(builtin_exec), METH_VALUE|METH_KEYWORDS, builtin_exec__doc__},
 
 static PyValue
 builtin_exec_impl(PyObject *module, PyValueBorrow source,
@@ -835,9 +826,6 @@ builtin_hasattr(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyO
     PyValueBorrow obj;
     PyValueBorrow name;
 
-    if (!_PyArg_NoKwnamesValue("hasattr()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("hasattr", nargs, 2, 2)) {
         goto exit;
     }
@@ -900,9 +888,6 @@ builtin_setattr(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyO
     PyValueBorrow name;
     PyValueBorrow value;
 
-    if (!_PyArg_NoKwnamesValue("setattr()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("setattr", nargs, 3, 3)) {
         goto exit;
     }
@@ -936,9 +921,6 @@ builtin_delattr(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyO
     PyValueBorrow obj;
     PyValueBorrow name;
 
-    if (!_PyArg_NoKwnamesValue("delattr()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("delattr", nargs, 2, 2)) {
         goto exit;
     }
@@ -1017,7 +999,7 @@ PyDoc_STRVAR(builtin_iter__doc__,
 "the stop value or raises the specified exception.");
 
 #define BUILTIN_ITER_METHODDEF    \
-    {"iter", _PyCFunction_CAST(builtin_iter), METH_VALUE, builtin_iter__doc__},
+    {"iter", _PyCFunction_CAST(builtin_iter), METH_VALUE|METH_KEYWORDS, builtin_iter__doc__},
 
 static PyValue
 builtin_iter_impl(PyObject *module, PyValueBorrow object,
@@ -1194,7 +1176,7 @@ PyDoc_STRVAR(builtin_pow__doc__,
 "when invoked using the three argument form.");
 
 #define BUILTIN_POW_METHODDEF    \
-    {"pow", _PyCFunction_CAST(builtin_pow), METH_VALUE, builtin_pow__doc__},
+    {"pow", _PyCFunction_CAST(builtin_pow), METH_VALUE|METH_KEYWORDS, builtin_pow__doc__},
 
 static PyValue
 builtin_pow_impl(PyObject *module, PyValueBorrow base, PyValueBorrow exp,
@@ -1267,7 +1249,7 @@ PyDoc_STRVAR(builtin_print__doc__,
 "    whether to forcibly flush the stream.");
 
 #define BUILTIN_PRINT_METHODDEF    \
-    {"print", _PyCFunction_CAST(builtin_print), METH_VALUE, builtin_print__doc__},
+    {"print", _PyCFunction_CAST(builtin_print), METH_VALUE|METH_KEYWORDS, builtin_print__doc__},
 
 static PyValue
 builtin_print_impl(PyObject *module, const PyValue *objects,
@@ -1365,9 +1347,6 @@ builtin_input(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObj
     PyValue return_value = PyValue_NULL;
     PyValueBorrow prompt = PyValue_Borrow(PyValue_NULL);
 
-    if (!_PyArg_NoKwnamesValue("input()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("input", nargs, 0, 1)) {
         goto exit;
     }
@@ -1419,7 +1398,7 @@ PyDoc_STRVAR(builtin_round__doc__,
 "may be negative.");
 
 #define BUILTIN_ROUND_METHODDEF    \
-    {"round", _PyCFunction_CAST(builtin_round), METH_VALUE, builtin_round__doc__},
+    {"round", _PyCFunction_CAST(builtin_round), METH_VALUE|METH_KEYWORDS, builtin_round__doc__},
 
 static PyValue
 builtin_round_impl(PyObject *module, PyValueBorrow number,
@@ -1495,9 +1474,6 @@ builtin_vars(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObje
     PyValue return_value = PyValue_NULL;
     PyValueBorrow v = PyValue_Borrow(PyValue_NULL);
 
-    if (!_PyArg_NoKwnamesValue("vars()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("vars", nargs, 0, 1)) {
         goto exit;
     }
@@ -1523,7 +1499,7 @@ PyDoc_STRVAR(builtin_sum__doc__,
 "may reject non-numeric types.");
 
 #define BUILTIN_SUM_METHODDEF    \
-    {"sum", _PyCFunction_CAST(builtin_sum), METH_VALUE, builtin_sum__doc__},
+    {"sum", _PyCFunction_CAST(builtin_sum), METH_VALUE|METH_KEYWORDS, builtin_sum__doc__},
 
 static PyValue
 builtin_sum_impl(PyObject *module, PyValueBorrow iterable,
@@ -1602,9 +1578,6 @@ builtin_isinstance(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, 
     PyValueBorrow obj;
     PyValueBorrow class_or_tuple;
 
-    if (!_PyArg_NoKwnamesValue("isinstance()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("isinstance", nargs, 2, 2)) {
         goto exit;
     }
@@ -1640,9 +1613,6 @@ builtin_issubclass(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, 
     PyValueBorrow cls;
     PyValueBorrow class_or_tuple;
 
-    if (!_PyArg_NoKwnamesValue("issubclass()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("issubclass", nargs, 2, 2)) {
         goto exit;
     }
@@ -1653,4 +1623,4 @@ builtin_issubclass(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, 
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=94598f06ec1ea778 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=4cf1853fdcd10600 input=a9049054013a1b77]*/

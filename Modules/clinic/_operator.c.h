@@ -7,7 +7,7 @@ preserve
 #endif
 
 #include "pycore_long_value.h"    // _PyValue_IntAsSsize_t()
-#include "pycore_modsupport.h"    // _PyArg_NoKwnamesValue()
+#include "pycore_modsupport.h"    // _PyArg_CheckPositional()
 #include "pycore_value_call.h"    // METH_VALUE
 #include "pycore_value_ops.h"     // _PyValue_Index()
 
@@ -60,9 +60,6 @@ _operator_add(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObj
     PyValueBorrow a;
     PyValueBorrow b;
 
-    if (!_PyArg_NoKwnamesValue("_operator.add()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("add", nargs, 2, 2)) {
         goto exit;
     }
@@ -93,9 +90,6 @@ _operator_sub(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObj
     PyValueBorrow a;
     PyValueBorrow b;
 
-    if (!_PyArg_NoKwnamesValue("_operator.sub()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("sub", nargs, 2, 2)) {
         goto exit;
     }
@@ -126,9 +120,6 @@ _operator_mul(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObj
     PyValueBorrow a;
     PyValueBorrow b;
 
-    if (!_PyArg_NoKwnamesValue("_operator.mul()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("mul", nargs, 2, 2)) {
         goto exit;
     }
@@ -159,9 +150,6 @@ _operator_matmul(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, Py
     PyValueBorrow a;
     PyValueBorrow b;
 
-    if (!_PyArg_NoKwnamesValue("_operator.matmul()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("matmul", nargs, 2, 2)) {
         goto exit;
     }
@@ -192,9 +180,6 @@ _operator_floordiv(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, 
     PyValueBorrow a;
     PyValueBorrow b;
 
-    if (!_PyArg_NoKwnamesValue("_operator.floordiv()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("floordiv", nargs, 2, 2)) {
         goto exit;
     }
@@ -225,9 +210,6 @@ _operator_truediv(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, P
     PyValueBorrow a;
     PyValueBorrow b;
 
-    if (!_PyArg_NoKwnamesValue("_operator.truediv()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("truediv", nargs, 2, 2)) {
         goto exit;
     }
@@ -258,9 +240,6 @@ _operator_mod(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObj
     PyValueBorrow a;
     PyValueBorrow b;
 
-    if (!_PyArg_NoKwnamesValue("_operator.mod()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("mod", nargs, 2, 2)) {
         goto exit;
     }
@@ -411,9 +390,6 @@ _operator_lshift(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, Py
     PyValueBorrow a;
     PyValueBorrow b;
 
-    if (!_PyArg_NoKwnamesValue("_operator.lshift()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("lshift", nargs, 2, 2)) {
         goto exit;
     }
@@ -444,9 +420,6 @@ _operator_rshift(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, Py
     PyValueBorrow a;
     PyValueBorrow b;
 
-    if (!_PyArg_NoKwnamesValue("_operator.rshift()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("rshift", nargs, 2, 2)) {
         goto exit;
     }
@@ -507,9 +480,6 @@ _operator_and_(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyOb
     PyValueBorrow a;
     PyValueBorrow b;
 
-    if (!_PyArg_NoKwnamesValue("_operator.and_()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("and_", nargs, 2, 2)) {
         goto exit;
     }
@@ -540,9 +510,6 @@ _operator_xor(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObj
     PyValueBorrow a;
     PyValueBorrow b;
 
-    if (!_PyArg_NoKwnamesValue("_operator.xor()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("xor", nargs, 2, 2)) {
         goto exit;
     }
@@ -573,9 +540,6 @@ _operator_or_(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObj
     PyValueBorrow a;
     PyValueBorrow b;
 
-    if (!_PyArg_NoKwnamesValue("_operator.or_()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("or_", nargs, 2, 2)) {
         goto exit;
     }
@@ -606,9 +570,6 @@ _operator_iadd(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyOb
     PyValueBorrow a;
     PyValueBorrow b;
 
-    if (!_PyArg_NoKwnamesValue("_operator.iadd()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("iadd", nargs, 2, 2)) {
         goto exit;
     }
@@ -639,9 +600,6 @@ _operator_isub(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyOb
     PyValueBorrow a;
     PyValueBorrow b;
 
-    if (!_PyArg_NoKwnamesValue("_operator.isub()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("isub", nargs, 2, 2)) {
         goto exit;
     }
@@ -672,9 +630,6 @@ _operator_imul(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyOb
     PyValueBorrow a;
     PyValueBorrow b;
 
-    if (!_PyArg_NoKwnamesValue("_operator.imul()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("imul", nargs, 2, 2)) {
         goto exit;
     }
@@ -705,9 +660,6 @@ _operator_imatmul(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, P
     PyValueBorrow a;
     PyValueBorrow b;
 
-    if (!_PyArg_NoKwnamesValue("_operator.imatmul()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("imatmul", nargs, 2, 2)) {
         goto exit;
     }
@@ -738,9 +690,6 @@ _operator_ifloordiv(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs,
     PyValueBorrow a;
     PyValueBorrow b;
 
-    if (!_PyArg_NoKwnamesValue("_operator.ifloordiv()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("ifloordiv", nargs, 2, 2)) {
         goto exit;
     }
@@ -771,9 +720,6 @@ _operator_itruediv(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, 
     PyValueBorrow a;
     PyValueBorrow b;
 
-    if (!_PyArg_NoKwnamesValue("_operator.itruediv()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("itruediv", nargs, 2, 2)) {
         goto exit;
     }
@@ -804,9 +750,6 @@ _operator_imod(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyOb
     PyValueBorrow a;
     PyValueBorrow b;
 
-    if (!_PyArg_NoKwnamesValue("_operator.imod()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("imod", nargs, 2, 2)) {
         goto exit;
     }
@@ -837,9 +780,6 @@ _operator_ilshift(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, P
     PyValueBorrow a;
     PyValueBorrow b;
 
-    if (!_PyArg_NoKwnamesValue("_operator.ilshift()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("ilshift", nargs, 2, 2)) {
         goto exit;
     }
@@ -870,9 +810,6 @@ _operator_irshift(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, P
     PyValueBorrow a;
     PyValueBorrow b;
 
-    if (!_PyArg_NoKwnamesValue("_operator.irshift()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("irshift", nargs, 2, 2)) {
         goto exit;
     }
@@ -903,9 +840,6 @@ _operator_iand(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyOb
     PyValueBorrow a;
     PyValueBorrow b;
 
-    if (!_PyArg_NoKwnamesValue("_operator.iand()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("iand", nargs, 2, 2)) {
         goto exit;
     }
@@ -936,9 +870,6 @@ _operator_ixor(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyOb
     PyValueBorrow a;
     PyValueBorrow b;
 
-    if (!_PyArg_NoKwnamesValue("_operator.ixor()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("ixor", nargs, 2, 2)) {
         goto exit;
     }
@@ -969,9 +900,6 @@ _operator_ior(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObj
     PyValueBorrow a;
     PyValueBorrow b;
 
-    if (!_PyArg_NoKwnamesValue("_operator.ior()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("ior", nargs, 2, 2)) {
         goto exit;
     }
@@ -1002,9 +930,6 @@ _operator_concat(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, Py
     PyValueBorrow a;
     PyValueBorrow b;
 
-    if (!_PyArg_NoKwnamesValue("_operator.concat()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("concat", nargs, 2, 2)) {
         goto exit;
     }
@@ -1035,9 +960,6 @@ _operator_iconcat(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, P
     PyValueBorrow a;
     PyValueBorrow b;
 
-    if (!_PyArg_NoKwnamesValue("_operator.iconcat()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("iconcat", nargs, 2, 2)) {
         goto exit;
     }
@@ -1069,9 +991,6 @@ _operator_contains(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, 
     PyValueBorrow b;
     int _return_value;
 
-    if (!_PyArg_NoKwnamesValue("_operator.contains()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("contains", nargs, 2, 2)) {
         goto exit;
     }
@@ -1107,9 +1026,6 @@ _operator_indexOf(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, P
     PyValueBorrow b;
     Py_ssize_t _return_value;
 
-    if (!_PyArg_NoKwnamesValue("_operator.indexOf()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("indexOf", nargs, 2, 2)) {
         goto exit;
     }
@@ -1145,9 +1061,6 @@ _operator_countOf(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, P
     PyValueBorrow b;
     Py_ssize_t _return_value;
 
-    if (!_PyArg_NoKwnamesValue("_operator.countOf()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("countOf", nargs, 2, 2)) {
         goto exit;
     }
@@ -1182,9 +1095,6 @@ _operator_getitem(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, P
     PyValueBorrow a;
     PyValueBorrow b;
 
-    if (!_PyArg_NoKwnamesValue("_operator.getitem()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("getitem", nargs, 2, 2)) {
         goto exit;
     }
@@ -1217,9 +1127,6 @@ _operator_setitem(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, P
     PyValueBorrow b;
     PyValueBorrow c;
 
-    if (!_PyArg_NoKwnamesValue("_operator.setitem()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("setitem", nargs, 3, 3)) {
         goto exit;
     }
@@ -1251,9 +1158,6 @@ _operator_delitem(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, P
     PyValueBorrow a;
     PyValueBorrow b;
 
-    if (!_PyArg_NoKwnamesValue("_operator.delitem()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("delitem", nargs, 2, 2)) {
         goto exit;
     }
@@ -1284,9 +1188,6 @@ _operator_eq(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObje
     PyValueBorrow a;
     PyValueBorrow b;
 
-    if (!_PyArg_NoKwnamesValue("_operator.eq()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("eq", nargs, 2, 2)) {
         goto exit;
     }
@@ -1317,9 +1218,6 @@ _operator_ne(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObje
     PyValueBorrow a;
     PyValueBorrow b;
 
-    if (!_PyArg_NoKwnamesValue("_operator.ne()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("ne", nargs, 2, 2)) {
         goto exit;
     }
@@ -1350,9 +1248,6 @@ _operator_lt(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObje
     PyValueBorrow a;
     PyValueBorrow b;
 
-    if (!_PyArg_NoKwnamesValue("_operator.lt()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("lt", nargs, 2, 2)) {
         goto exit;
     }
@@ -1383,9 +1278,6 @@ _operator_le(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObje
     PyValueBorrow a;
     PyValueBorrow b;
 
-    if (!_PyArg_NoKwnamesValue("_operator.le()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("le", nargs, 2, 2)) {
         goto exit;
     }
@@ -1416,9 +1308,6 @@ _operator_gt(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObje
     PyValueBorrow a;
     PyValueBorrow b;
 
-    if (!_PyArg_NoKwnamesValue("_operator.gt()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("gt", nargs, 2, 2)) {
         goto exit;
     }
@@ -1449,9 +1338,6 @@ _operator_ge(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObje
     PyValueBorrow a;
     PyValueBorrow b;
 
-    if (!_PyArg_NoKwnamesValue("_operator.ge()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("ge", nargs, 2, 2)) {
         goto exit;
     }
@@ -1482,9 +1368,6 @@ _operator_pow(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObj
     PyValueBorrow a;
     PyValueBorrow b;
 
-    if (!_PyArg_NoKwnamesValue("_operator.pow()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("pow", nargs, 2, 2)) {
         goto exit;
     }
@@ -1515,9 +1398,6 @@ _operator_ipow(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyOb
     PyValueBorrow a;
     PyValueBorrow b;
 
-    if (!_PyArg_NoKwnamesValue("_operator.ipow()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("ipow", nargs, 2, 2)) {
         goto exit;
     }
@@ -1572,9 +1452,6 @@ _operator_is_(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObj
     PyValueBorrow a;
     PyValueBorrow b;
 
-    if (!_PyArg_NoKwnamesValue("_operator.is_()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("is_", nargs, 2, 2)) {
         goto exit;
     }
@@ -1605,9 +1482,6 @@ _operator_is_not(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, Py
     PyValueBorrow a;
     PyValueBorrow b;
 
-    if (!_PyArg_NoKwnamesValue("_operator.is_not()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("is_not", nargs, 2, 2)) {
         goto exit;
     }
@@ -1694,9 +1568,6 @@ _operator_length_hint(PyValueBorrow module, const PyValue *args, Py_ssize_t narg
     Py_ssize_t default_value = 0;
     Py_ssize_t _return_value;
 
-    if (!_PyArg_NoKwnamesValue("_operator.length_hint()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("length_hint", nargs, 1, 2)) {
         goto exit;
     }
@@ -1757,9 +1628,6 @@ _operator__compare_digest(PyValueBorrow module, const PyValue *args, Py_ssize_t 
     PyValueBorrow a;
     PyValueBorrow b;
 
-    if (!_PyArg_NoKwnamesValue("_operator._compare_digest()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("_compare_digest", nargs, 2, 2)) {
         goto exit;
     }
@@ -1770,4 +1638,4 @@ _operator__compare_digest(PyValueBorrow module, const PyValue *args, Py_ssize_t 
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=d0bbec4ef51bf25f input=a9049054013a1b77]*/
+/*[clinic end generated code: output=01a6cd90f308ce44 input=a9049054013a1b77]*/

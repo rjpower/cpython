@@ -108,19 +108,6 @@ PyAPI_FUNC(void) _PyArg_BadArgumentValue(
     const char *expected,
     PyValueBorrow arg);
 
-// Reject keyword arguments with the message of the convention a METH_VALUE
-// function replaces: funcstr is its _PyObject_FunctionStr() ("list.clear()").
-PyAPI_FUNC(int) _PyArg_NoKwnamesValue(const char *funcstr, PyObject *kwnames);
-#define _PyArg_NoKwnamesValue(funcstr, kwnames) \
-    ((kwnames) == NULL || _PyArg_NoKwnamesValue((funcstr), (kwnames)))
-
-// The same check for a method of the static type tp, named as its
-// descriptor's __qualname__ shows it ("TypeVar.__reduce__()").
-PyAPI_FUNC(int) _PyArg_NoKwnamesValueMethod(PyTypeObject *tp, const char *name,
-                                            PyObject *kwnames);
-#define _PyArg_NoKwnamesValueMethod(tp, name, kwnames) \
-    ((kwnames) == NULL || _PyArg_NoKwnamesValueMethod((tp), (name), (kwnames)))
-
 // _PyEval_SliceIndex() and _PyEval_SliceIndexNotNone() of a value: the
 // slice_index converter.
 // Py_ssize_t(accept={int, NoneType}): the value twins of

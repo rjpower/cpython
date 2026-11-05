@@ -23,7 +23,7 @@ PyDoc_STRVAR(OrderedDict_fromkeys__doc__,
 "Create a new ordered dictionary with keys from iterable and values set to value.");
 
 #define ORDEREDDICT_FROMKEYS_METHODDEF    \
-    {"fromkeys", _PyCFunction_CAST(OrderedDict_fromkeys), METH_VALUE|METH_CLASS, OrderedDict_fromkeys__doc__},
+    {"fromkeys", _PyCFunction_CAST(OrderedDict_fromkeys), METH_VALUE|METH_KEYWORDS|METH_CLASS, OrderedDict_fromkeys__doc__},
 
 static PyValue
 OrderedDict_fromkeys_impl(PyTypeObject *type, PyValueBorrow seq,
@@ -138,7 +138,7 @@ PyDoc_STRVAR(OrderedDict_setdefault__doc__,
 "Return the value for key if key is in the dictionary, else default.");
 
 #define ORDEREDDICT_SETDEFAULT_METHODDEF    \
-    {"setdefault", _PyCFunction_CAST(OrderedDict_setdefault), METH_VALUE, OrderedDict_setdefault__doc__},
+    {"setdefault", _PyCFunction_CAST(OrderedDict_setdefault), METH_VALUE|METH_KEYWORDS, OrderedDict_setdefault__doc__},
 
 static PyValue
 OrderedDict_setdefault_impl(PyODictObject *self, PyValueBorrow key,
@@ -205,7 +205,7 @@ PyDoc_STRVAR(OrderedDict_pop__doc__,
 "raise a KeyError.");
 
 #define ORDEREDDICT_POP_METHODDEF    \
-    {"pop", _PyCFunction_CAST(OrderedDict_pop), METH_VALUE, OrderedDict_pop__doc__},
+    {"pop", _PyCFunction_CAST(OrderedDict_pop), METH_VALUE|METH_KEYWORDS, OrderedDict_pop__doc__},
 
 static PyValue
 OrderedDict_pop_impl(PyODictObject *self, PyValueBorrow key,
@@ -272,7 +272,7 @@ PyDoc_STRVAR(OrderedDict_popitem__doc__,
 "false.");
 
 #define ORDEREDDICT_POPITEM_METHODDEF    \
-    {"popitem", _PyCFunction_CAST(OrderedDict_popitem), METH_VALUE, OrderedDict_popitem__doc__},
+    {"popitem", _PyCFunction_CAST(OrderedDict_popitem), METH_VALUE|METH_KEYWORDS, OrderedDict_popitem__doc__},
 
 static PyValue
 OrderedDict_popitem_impl(PyODictObject *self, int last);
@@ -386,7 +386,7 @@ PyDoc_STRVAR(OrderedDict_move_to_end__doc__,
 "Raise KeyError if the element does not exist.");
 
 #define ORDEREDDICT_MOVE_TO_END_METHODDEF    \
-    {"move_to_end", _PyCFunction_CAST(OrderedDict_move_to_end), METH_VALUE, OrderedDict_move_to_end__doc__},
+    {"move_to_end", _PyCFunction_CAST(OrderedDict_move_to_end), METH_VALUE|METH_KEYWORDS, OrderedDict_move_to_end__doc__},
 
 static PyValue
 OrderedDict_move_to_end_impl(PyODictObject *self, PyValueBorrow key,
@@ -460,4 +460,4 @@ odictiter_iternext(PyObject *self)
 
     return return_value;
 }
-/*[clinic end generated code: output=031bf732d100b7e6 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=7a0f909e9d049113 input=a9049054013a1b77]*/

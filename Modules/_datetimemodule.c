@@ -4206,7 +4206,7 @@ static PyMethodDef date_methods[] = {
 
     DATETIME_DATE_REPLACE_METHODDEF
 
-    {"__replace__", _PyCFunction_CAST(datetime_date_replace), METH_VALUE,
+    {"__replace__", _PyCFunction_CAST(datetime_date_replace), METH_VALUE|METH_KEYWORDS,
      PyDoc_STR("__replace__($self, /, **changes)\n--\n\nThe same as replace().")},
 
     {"__reduce__", date_reduce, METH_NOARGS,
@@ -5585,7 +5585,7 @@ static PyMethodDef time_methods[] = {
 
     DATETIME_TIME_REPLACE_METHODDEF
 
-    {"__replace__", _PyCFunction_CAST(datetime_time_replace), METH_VALUE,
+    {"__replace__", _PyCFunction_CAST(datetime_time_replace), METH_VALUE|METH_KEYWORDS,
      PyDoc_STR("__replace__($self, /, **changes)\n--\n\nThe same as replace().")},
 
     DATETIME_TIME___REDUCE_EX___METHODDEF
@@ -7646,7 +7646,7 @@ static PyMethodDef datetime_methods[] = {
 
     DATETIME_DATETIME_REPLACE_METHODDEF
 
-    {"__replace__", _PyCFunction_CAST(datetime_datetime_replace), METH_VALUE,
+    {"__replace__", _PyCFunction_CAST(datetime_datetime_replace), METH_VALUE|METH_KEYWORDS,
      PyDoc_STR("__replace__($self, /, **changes)\n--\n\nThe same as replace().")},
 
     DATETIME_DATETIME_ASTIMEZONE_METHODDEF

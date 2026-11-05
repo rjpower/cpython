@@ -217,7 +217,7 @@ PyDoc_STRVAR(code_replace__doc__,
 "Return a copy of the code object with new values for the specified fields.");
 
 #define CODE_REPLACE_METHODDEF    \
-    {"replace", _PyCFunction_CAST(code_replace), METH_VALUE, code_replace__doc__},
+    {"replace", _PyCFunction_CAST(code_replace), METH_VALUE|METH_KEYWORDS, code_replace__doc__},
 
 static PyValue
 code_replace_impl(PyCodeObject *self, int co_argcount,
@@ -449,7 +449,7 @@ PyDoc_STRVAR(code__varname_from_oparg__doc__,
 "away.");
 
 #define CODE__VARNAME_FROM_OPARG_METHODDEF    \
-    {"_varname_from_oparg", _PyCFunction_CAST(code__varname_from_oparg), METH_VALUE, code__varname_from_oparg__doc__},
+    {"_varname_from_oparg", _PyCFunction_CAST(code__varname_from_oparg), METH_VALUE|METH_KEYWORDS, code__varname_from_oparg__doc__},
 
 static PyValue
 code__varname_from_oparg_impl(PyCodeObject *self, int oparg);
@@ -501,4 +501,4 @@ code__varname_from_oparg(PyValueBorrow self, const PyValue *args, Py_ssize_t nar
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=7ecac540fff0569d input=a9049054013a1b77]*/
+/*[clinic end generated code: output=858b0ce91348a348 input=a9049054013a1b77]*/

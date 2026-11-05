@@ -176,9 +176,6 @@ typevar_typing_prepare_subst(PyValueBorrow self, const PyValue *args, Py_ssize_t
     PyValueBorrow alias;
     PyValueBorrow __clinic_args;
 
-    if (!_PyArg_NoKwnamesValue("TypeVar.__typing_prepare_subst__()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("__typing_prepare_subst__", nargs, 2, 2)) {
         goto exit;
     }
@@ -526,9 +523,6 @@ paramspec_typing_prepare_subst(PyValueBorrow self, const PyValue *args, Py_ssize
     PyValueBorrow alias;
     PyValueBorrow __clinic_args;
 
-    if (!_PyArg_NoKwnamesValue("ParamSpec.__typing_prepare_subst__()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("__typing_prepare_subst__", nargs, 2, 2)) {
         goto exit;
     }
@@ -733,9 +727,6 @@ typevartuple_typing_prepare_subst(PyValueBorrow self, const PyValue *args, Py_ss
     PyValueBorrow alias;
     PyValueBorrow __clinic_args;
 
-    if (!_PyArg_NoKwnamesValue("TypeVarTuple.__typing_prepare_subst__()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("__typing_prepare_subst__", nargs, 2, 2)) {
         goto exit;
     }
@@ -896,4 +887,4 @@ typealias_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     _PyValue_StackUnpackDict_Free(window, nargs, kwnames);
     return _PyValue_THUNK_EXIT(result, BOX_SITE_CALL);
 }
-/*[clinic end generated code: output=2cf8cf4d8bd4101f input=a9049054013a1b77]*/
+/*[clinic end generated code: output=06b3ff00a59559c6 input=a9049054013a1b77]*/

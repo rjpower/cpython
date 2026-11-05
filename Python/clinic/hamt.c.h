@@ -6,7 +6,7 @@ preserve
 #  error "value-emission Clinic output requires Py_VALUE_CORE"
 #endif
 
-#include "pycore_modsupport.h"    // _PyArg_NoKwnamesValue()
+#include "pycore_modsupport.h"    // _PyArg_CheckPositional()
 #include "pycore_value_call.h"    // METH_VALUE
 
 PyDoc_STRVAR(hamt_set__doc__,
@@ -28,9 +28,6 @@ hamt_set(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kw
     PyValueBorrow key;
     PyValueBorrow val;
 
-    if (!_PyArg_NoKwnamesValueMethod(&_PyHamt_Type, "set", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("set", nargs, 2, 2)) {
         goto exit;
     }
@@ -61,9 +58,6 @@ hamt_get(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kw
     PyValueBorrow key;
     PyValueBorrow def = PyValue_Borrow(PyValue_None);
 
-    if (!_PyArg_NoKwnamesValueMethod(&_PyHamt_Type, "get", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("get", nargs, 1, 2)) {
         goto exit;
     }
@@ -78,4 +72,4 @@ skip_optional:
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=b2b1beefa345f1f0 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=3b1ab8d292e19169 input=a9049054013a1b77]*/

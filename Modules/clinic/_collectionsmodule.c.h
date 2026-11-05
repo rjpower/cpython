@@ -13,7 +13,7 @@ preserve
 #endif
 #include "pycore_critical_section.h"// Py_BEGIN_CRITICAL_SECTION()
 #include "pycore_long_value.h"    // _PyValue_IntAsSsize_t()
-#include "pycore_modsupport.h"    // _PyArg_NoKwnamesValue()
+#include "pycore_modsupport.h"    // _PyArg_CheckPositional()
 #include "pycore_tuple.h"         // _PyTuple_ITEMS()
 #include "pycore_value_call.h"    // METH_VALUE
 #include "pycore_value_ops.h"     // _PyValue_Index()
@@ -291,9 +291,6 @@ deque_rotate(PyValueBorrow deque, const PyValue *args, Py_ssize_t nargs, PyObjec
     PyValue return_value = PyValue_NULL;
     Py_ssize_t n = 1;
 
-    if (!_PyArg_NoKwnamesValue("deque.rotate()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("rotate", nargs, 0, 1)) {
         goto exit;
     }
@@ -409,9 +406,6 @@ deque_index(PyValueBorrow deque, const PyValue *args, Py_ssize_t nargs, PyObject
     Py_ssize_t start = 0;
     Py_ssize_t stop = PY_SSIZE_T_MAX;
 
-    if (!_PyArg_NoKwnamesValue("deque.index()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("index", nargs, 1, 3)) {
         goto exit;
     }
@@ -456,9 +450,6 @@ deque_insert(PyValueBorrow deque, const PyValue *args, Py_ssize_t nargs, PyObjec
     Py_ssize_t index;
     PyValueBorrow value;
 
-    if (!_PyArg_NoKwnamesValue("deque.insert()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("insert", nargs, 2, 2)) {
         goto exit;
     }
@@ -708,9 +699,6 @@ _collections__count_elements(PyValueBorrow module, const PyValue *args, Py_ssize
     PyValueBorrow mapping;
     PyValueBorrow iterable;
 
-    if (!_PyArg_NoKwnamesValue("_collections._count_elements()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("_count_elements", nargs, 2, 2)) {
         goto exit;
     }
@@ -776,4 +764,4 @@ tuplegetter_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     _PyValue_StackUnpackDict_Free(window, nargs, kwnames);
     return _PyValue_THUNK_EXIT(result, BOX_SITE_CALL);
 }
-/*[clinic end generated code: output=ae83ad7ee1a888cb input=a9049054013a1b77]*/
+/*[clinic end generated code: output=aaac4c61e8e1f0d2 input=a9049054013a1b77]*/

@@ -6,7 +6,7 @@ preserve
 #  error "value-emission Clinic output requires Py_VALUE_CORE"
 #endif
 
-#include "pycore_modsupport.h"    // _PyArg_NoKwnamesValue()
+#include "pycore_modsupport.h"    // _PyArg_CheckPositional()
 #include "pycore_tuple.h"         // _PyTuple_ITEMS()
 #include "pycore_unicodeobject.h" // _PyUnicode_AsUTF8NoNUL()
 #include "pycore_value_call.h"    // METH_VALUE
@@ -120,9 +120,6 @@ float___round__(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObj
     PyValue return_value = PyValue_NULL;
     PyValueBorrow o_ndigits = PyValue_Borrow(PyValue_None);
 
-    if (!_PyArg_NoKwnamesValueMethod(&PyFloat_Type, "__round__", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("__round__", nargs, 0, 1)) {
         goto exit;
     }
@@ -433,4 +430,4 @@ float___format__(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyOb
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=07225286e2b679ee input=a9049054013a1b77]*/
+/*[clinic end generated code: output=c84d317d15f0ec06 input=a9049054013a1b77]*/

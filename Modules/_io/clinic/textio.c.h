@@ -29,7 +29,7 @@ PyDoc_STRVAR(_io__TextIOBase_detach__doc__,
 "an unusable state.");
 
 #define _IO__TEXTIOBASE_DETACH_METHODDEF    \
-    {"detach", _PyCFunction_CAST(_io__TextIOBase_detach), METH_VALUE|METH_METHOD, _io__TextIOBase_detach__doc__},
+    {"detach", _PyCFunction_CAST(_io__TextIOBase_detach), METH_VALUE|METH_METHOD|METH_KEYWORDS, _io__TextIOBase_detach__doc__},
 
 static PyValue
 _io__TextIOBase_detach_impl(PyObject *self, PyTypeObject *cls);
@@ -59,7 +59,7 @@ PyDoc_STRVAR(_io__TextIOBase_read__doc__,
 "EOF.  If size is negative or omitted, read until EOF.");
 
 #define _IO__TEXTIOBASE_READ_METHODDEF    \
-    {"read", _PyCFunction_CAST(_io__TextIOBase_read), METH_VALUE|METH_METHOD, _io__TextIOBase_read__doc__},
+    {"read", _PyCFunction_CAST(_io__TextIOBase_read), METH_VALUE|METH_METHOD|METH_KEYWORDS, _io__TextIOBase_read__doc__},
 
 static PyValue
 _io__TextIOBase_read_impl(PyObject *self, PyTypeObject *cls,
@@ -101,7 +101,7 @@ PyDoc_STRVAR(_io__TextIOBase_readline__doc__,
 "If size is specified, at most size characters will be read.");
 
 #define _IO__TEXTIOBASE_READLINE_METHODDEF    \
-    {"readline", _PyCFunction_CAST(_io__TextIOBase_readline), METH_VALUE|METH_METHOD, _io__TextIOBase_readline__doc__},
+    {"readline", _PyCFunction_CAST(_io__TextIOBase_readline), METH_VALUE|METH_METHOD|METH_KEYWORDS, _io__TextIOBase_readline__doc__},
 
 static PyValue
 _io__TextIOBase_readline_impl(PyObject *self, PyTypeObject *cls,
@@ -143,7 +143,7 @@ PyDoc_STRVAR(_io__TextIOBase_write__doc__,
 "(which is always equal to the length of the string).");
 
 #define _IO__TEXTIOBASE_WRITE_METHODDEF    \
-    {"write", _PyCFunction_CAST(_io__TextIOBase_write), METH_VALUE|METH_METHOD, _io__TextIOBase_write__doc__},
+    {"write", _PyCFunction_CAST(_io__TextIOBase_write), METH_VALUE|METH_METHOD|METH_KEYWORDS, _io__TextIOBase_write__doc__},
 
 static PyValue
 _io__TextIOBase_write_impl(PyObject *self, PyTypeObject *cls,
@@ -320,7 +320,7 @@ PyDoc_STRVAR(_io_IncrementalNewlineDecoder_decode__doc__,
 "\n");
 
 #define _IO_INCREMENTALNEWLINEDECODER_DECODE_METHODDEF    \
-    {"decode", _PyCFunction_CAST(_io_IncrementalNewlineDecoder_decode), METH_VALUE, _io_IncrementalNewlineDecoder_decode__doc__},
+    {"decode", _PyCFunction_CAST(_io_IncrementalNewlineDecoder_decode), METH_VALUE|METH_KEYWORDS, _io_IncrementalNewlineDecoder_decode__doc__},
 
 static PyValue
 _io_IncrementalNewlineDecoder_decode_impl(nldecoder_object *self,
@@ -634,7 +634,7 @@ PyDoc_STRVAR(_io_TextIOWrapper_reconfigure__doc__,
 "This also does an implicit stream flush.");
 
 #define _IO_TEXTIOWRAPPER_RECONFIGURE_METHODDEF    \
-    {"reconfigure", _PyCFunction_CAST(_io_TextIOWrapper_reconfigure), METH_VALUE, _io_TextIOWrapper_reconfigure__doc__},
+    {"reconfigure", _PyCFunction_CAST(_io_TextIOWrapper_reconfigure), METH_VALUE|METH_KEYWORDS, _io_TextIOWrapper_reconfigure__doc__},
 
 static PyValue
 _io_TextIOWrapper_reconfigure_impl(textio *self, PyValueBorrow encoding,
@@ -782,9 +782,6 @@ _io_TextIOWrapper_read(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs
     PyValue return_value = PyValue_NULL;
     Py_ssize_t n = -1;
 
-    if (!_PyArg_NoKwnamesValue("TextIOWrapper.read()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("read", nargs, 0, 1)) {
         goto exit;
     }
@@ -820,9 +817,6 @@ _io_TextIOWrapper_readline(PyValueBorrow self, const PyValue *args, Py_ssize_t n
     PyValue return_value = PyValue_NULL;
     Py_ssize_t size = -1;
 
-    if (!_PyArg_NoKwnamesValue("TextIOWrapper.readline()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("readline", nargs, 0, 1)) {
         goto exit;
     }
@@ -887,9 +881,6 @@ _io_TextIOWrapper_seek(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs
     PyValueBorrow cookieObj;
     int whence = 0;
 
-    if (!_PyArg_NoKwnamesValue("TextIOWrapper.seek()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("seek", nargs, 1, 2)) {
         goto exit;
     }
@@ -954,9 +945,6 @@ _io_TextIOWrapper_truncate(PyValueBorrow self, const PyValue *args, Py_ssize_t n
     PyValue return_value = PyValue_NULL;
     PyValueBorrow pos = PyValue_Borrow(PyValue_None);
 
-    if (!_PyArg_NoKwnamesValue("TextIOWrapper.truncate()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("truncate", nargs, 0, 1)) {
         goto exit;
     }
@@ -1299,4 +1287,4 @@ _io_TextIOWrapper_buffer_get(PyObject *self, void *Py_UNUSED(context))
 
 #define _IO_TEXTIOWRAPPER_BUFFER_GETSETDEF {"buffer", (getter)_io_TextIOWrapper_buffer_get, (setter)NULL, NULL},
 
-/*[clinic end generated code: output=1e9725511fb7c6c4 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=d8193f9b9ff00665 input=a9049054013a1b77]*/

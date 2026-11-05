@@ -36,7 +36,7 @@ PyDoc_STRVAR(marshal_dump__doc__,
 "to the file. The object will not be properly read back by load().");
 
 #define MARSHAL_DUMP_METHODDEF    \
-    {"dump", _PyCFunction_CAST(marshal_dump), METH_VALUE, marshal_dump__doc__},
+    {"dump", _PyCFunction_CAST(marshal_dump), METH_VALUE|METH_KEYWORDS, marshal_dump__doc__},
 
 static PyValue
 marshal_dump_impl(PyObject *module, PyValueBorrow value, PyValueBorrow file,
@@ -122,7 +122,7 @@ PyDoc_STRVAR(marshal_load__doc__,
 "dump(), load() will substitute None for the unmarshallable type.");
 
 #define MARSHAL_LOAD_METHODDEF    \
-    {"load", _PyCFunction_CAST(marshal_load), METH_VALUE, marshal_load__doc__},
+    {"load", _PyCFunction_CAST(marshal_load), METH_VALUE|METH_KEYWORDS, marshal_load__doc__},
 
 static PyValue
 marshal_load_impl(PyObject *module, PyValueBorrow file, int allow_code);
@@ -196,7 +196,7 @@ PyDoc_STRVAR(marshal_dumps__doc__,
 "has) an unsupported type.");
 
 #define MARSHAL_DUMPS_METHODDEF    \
-    {"dumps", _PyCFunction_CAST(marshal_dumps), METH_VALUE, marshal_dumps__doc__},
+    {"dumps", _PyCFunction_CAST(marshal_dumps), METH_VALUE|METH_KEYWORDS, marshal_dumps__doc__},
 
 static PyValue
 marshal_dumps_impl(PyObject *module, PyValueBorrow value, int version,
@@ -274,7 +274,7 @@ PyDoc_STRVAR(marshal_loads__doc__,
 "Extra bytes in the input are ignored.");
 
 #define MARSHAL_LOADS_METHODDEF    \
-    {"loads", _PyCFunction_CAST(marshal_loads), METH_VALUE, marshal_loads__doc__},
+    {"loads", _PyCFunction_CAST(marshal_loads), METH_VALUE|METH_KEYWORDS, marshal_loads__doc__},
 
 static PyValue
 marshal_loads_impl(PyObject *module, Py_buffer *bytes, int allow_code);
@@ -341,4 +341,4 @@ exit:
 
     return return_value;
 }
-/*[clinic end generated code: output=0baabb2b5c15452e input=a9049054013a1b77]*/
+/*[clinic end generated code: output=ba99b8c50384fe25 input=a9049054013a1b77]*/

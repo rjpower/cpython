@@ -7,7 +7,7 @@ preserve
 #endif
 
 #include "pycore_long_value.h"    // _PyValue_AsInt()
-#include "pycore_modsupport.h"    // _PyArg_NoKwnamesValue()
+#include "pycore_modsupport.h"    // _PyArg_CheckPositional()
 #include "pycore_value_call.h"    // METH_VALUE
 
 PyDoc_STRVAR(monitoring_use_tool_id__doc__,
@@ -29,9 +29,6 @@ monitoring_use_tool_id(PyValueBorrow module, const PyValue *args, Py_ssize_t nar
     int tool_id;
     PyValueBorrow name;
 
-    if (!_PyArg_NoKwnamesValue("monitoring.use_tool_id()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("use_tool_id", nargs, 2, 2)) {
         goto exit;
     }
@@ -147,9 +144,6 @@ monitoring_register_callback(PyValueBorrow module, const PyValue *args, Py_ssize
     int event;
     PyValueBorrow func;
 
-    if (!_PyArg_NoKwnamesValue("monitoring.register_callback()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("register_callback", nargs, 3, 3)) {
         goto exit;
     }
@@ -218,9 +212,6 @@ monitoring_set_events(PyValueBorrow module, const PyValue *args, Py_ssize_t narg
     int tool_id;
     int event_set;
 
-    if (!_PyArg_NoKwnamesValue("monitoring.set_events()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("set_events", nargs, 2, 2)) {
         goto exit;
     }
@@ -258,9 +249,6 @@ monitoring_get_local_events(PyValueBorrow module, const PyValue *args, Py_ssize_
     PyValueBorrow code;
     int _return_value;
 
-    if (!_PyArg_NoKwnamesValue("monitoring.get_local_events()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("get_local_events", nargs, 2, 2)) {
         goto exit;
     }
@@ -299,9 +287,6 @@ monitoring_set_local_events(PyValueBorrow module, const PyValue *args, Py_ssize_
     PyValueBorrow code;
     int event_set;
 
-    if (!_PyArg_NoKwnamesValue("monitoring.set_local_events()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("set_local_events", nargs, 3, 3)) {
         goto exit;
     }
@@ -361,4 +346,4 @@ monitoring__all_events(PyValueBorrow module, const PyValue *args, Py_ssize_t nar
 
     return return_value;
 }
-/*[clinic end generated code: output=1c87ef01c6b96fda input=a9049054013a1b77]*/
+/*[clinic end generated code: output=1f65c3837e02d3af input=a9049054013a1b77]*/

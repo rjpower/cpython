@@ -25,7 +25,7 @@ PyDoc_STRVAR(_functools_cmp_to_key__doc__,
 "    Function that compares two objects.");
 
 #define _FUNCTOOLS_CMP_TO_KEY_METHODDEF    \
-    {"cmp_to_key", _PyCFunction_CAST(_functools_cmp_to_key), METH_VALUE, _functools_cmp_to_key__doc__},
+    {"cmp_to_key", _PyCFunction_CAST(_functools_cmp_to_key), METH_VALUE|METH_KEYWORDS, _functools_cmp_to_key__doc__},
 
 static PyValue
 _functools_cmp_to_key_impl(PyObject *module, PyValueBorrow mycmp);
@@ -90,7 +90,7 @@ PyDoc_STRVAR(_functools_reduce__doc__,
 "calculates ((((1 + 2) + 3) + 4) + 5).");
 
 #define _FUNCTOOLS_REDUCE_METHODDEF    \
-    {"reduce", _PyCFunction_CAST(_functools_reduce), METH_VALUE, _functools_reduce__doc__},
+    {"reduce", _PyCFunction_CAST(_functools_reduce), METH_VALUE|METH_KEYWORDS, _functools_reduce__doc__},
 
 static PyValue
 _functools_reduce_impl(PyObject *module, PyValueBorrow func,
@@ -241,4 +241,4 @@ _functools__lru_cache_wrapper___deepcopy__(PyValueBorrow self, const PyValue *ar
 
     return return_value;
 }
-/*[clinic end generated code: output=9fd8ee0c02276835 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=239861ce205c6823 input=a9049054013a1b77]*/

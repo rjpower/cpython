@@ -25,7 +25,7 @@ PyDoc_STRVAR(_elementtree_SubElement__doc__,
 "Create a new subelement of the parent element.");
 
 #define _ELEMENTTREE_SUBELEMENT_METHODDEF    \
-    {"SubElement", _PyCFunction_CAST(_elementtree_SubElement), METH_VALUE, _elementtree_SubElement__doc__},
+    {"SubElement", _PyCFunction_CAST(_elementtree_SubElement), METH_VALUE|METH_KEYWORDS, _elementtree_SubElement__doc__},
 
 static PyValue
 _elementtree_SubElement_impl(PyObject *module, PyObject *parent,
@@ -84,7 +84,7 @@ PyDoc_STRVAR(_elementtree_Element_append__doc__,
 "subelement), but before the end tag for this element.");
 
 #define _ELEMENTTREE_ELEMENT_APPEND_METHODDEF    \
-    {"append", _PyCFunction_CAST(_elementtree_Element_append), METH_VALUE|METH_METHOD, _elementtree_Element_append__doc__},
+    {"append", _PyCFunction_CAST(_elementtree_Element_append), METH_VALUE|METH_METHOD|METH_KEYWORDS, _elementtree_Element_append__doc__},
 
 static PyValue
 _elementtree_Element_append_impl(ElementObject *self, PyTypeObject *cls,
@@ -144,7 +144,7 @@ PyDoc_STRVAR(_elementtree_Element___copy____doc__,
 "\n");
 
 #define _ELEMENTTREE_ELEMENT___COPY___METHODDEF    \
-    {"__copy__", _PyCFunction_CAST(_elementtree_Element___copy__), METH_VALUE|METH_METHOD, _elementtree_Element___copy____doc__},
+    {"__copy__", _PyCFunction_CAST(_elementtree_Element___copy__), METH_VALUE|METH_METHOD|METH_KEYWORDS, _elementtree_Element___copy____doc__},
 
 static PyValue
 _elementtree_Element___copy___impl(ElementObject *self, PyTypeObject *cls);
@@ -248,7 +248,7 @@ PyDoc_STRVAR(_elementtree_Element___setstate____doc__,
 "\n");
 
 #define _ELEMENTTREE_ELEMENT___SETSTATE___METHODDEF    \
-    {"__setstate__", _PyCFunction_CAST(_elementtree_Element___setstate__), METH_VALUE|METH_METHOD, _elementtree_Element___setstate____doc__},
+    {"__setstate__", _PyCFunction_CAST(_elementtree_Element___setstate__), METH_VALUE|METH_METHOD|METH_KEYWORDS, _elementtree_Element___setstate____doc__},
 
 static PyValue
 _elementtree_Element___setstate___impl(ElementObject *self,
@@ -283,7 +283,7 @@ PyDoc_STRVAR(_elementtree_Element_extend__doc__,
 "*elements* is a sequence with zero or more elements.");
 
 #define _ELEMENTTREE_ELEMENT_EXTEND_METHODDEF    \
-    {"extend", _PyCFunction_CAST(_elementtree_Element_extend), METH_VALUE|METH_METHOD, _elementtree_Element_extend__doc__},
+    {"extend", _PyCFunction_CAST(_elementtree_Element_extend), METH_VALUE|METH_METHOD|METH_KEYWORDS, _elementtree_Element_extend__doc__},
 
 static PyValue
 _elementtree_Element_extend_impl(ElementObject *self, PyTypeObject *cls,
@@ -321,7 +321,7 @@ PyDoc_STRVAR(_elementtree_Element_find__doc__,
 "Return the first matching element, or None if no element was found.");
 
 #define _ELEMENTTREE_ELEMENT_FIND_METHODDEF    \
-    {"find", _PyCFunction_CAST(_elementtree_Element_find), METH_VALUE|METH_METHOD, _elementtree_Element_find__doc__},
+    {"find", _PyCFunction_CAST(_elementtree_Element_find), METH_VALUE|METH_METHOD|METH_KEYWORDS, _elementtree_Element_find__doc__},
 
 static PyValue
 _elementtree_Element_find_impl(ElementObject *self, PyTypeObject *cls,
@@ -392,7 +392,7 @@ PyDoc_STRVAR(_elementtree_Element_findtext__doc__,
 "content, the empty string is returned.");
 
 #define _ELEMENTTREE_ELEMENT_FINDTEXT_METHODDEF    \
-    {"findtext", _PyCFunction_CAST(_elementtree_Element_findtext), METH_VALUE|METH_METHOD, _elementtree_Element_findtext__doc__},
+    {"findtext", _PyCFunction_CAST(_elementtree_Element_findtext), METH_VALUE|METH_METHOD|METH_KEYWORDS, _elementtree_Element_findtext__doc__},
 
 static PyValue
 _elementtree_Element_findtext_impl(ElementObject *self, PyTypeObject *cls,
@@ -466,7 +466,7 @@ PyDoc_STRVAR(_elementtree_Element_findall__doc__,
 "Returns list containing all matching elements in document order.");
 
 #define _ELEMENTTREE_ELEMENT_FINDALL_METHODDEF    \
-    {"findall", _PyCFunction_CAST(_elementtree_Element_findall), METH_VALUE|METH_METHOD, _elementtree_Element_findall__doc__},
+    {"findall", _PyCFunction_CAST(_elementtree_Element_findall), METH_VALUE|METH_METHOD|METH_KEYWORDS, _elementtree_Element_findall__doc__},
 
 static PyValue
 _elementtree_Element_findall_impl(ElementObject *self, PyTypeObject *cls,
@@ -535,7 +535,7 @@ PyDoc_STRVAR(_elementtree_Element_iterfind__doc__,
 "Return an iterable yielding all matching elements in document order.");
 
 #define _ELEMENTTREE_ELEMENT_ITERFIND_METHODDEF    \
-    {"iterfind", _PyCFunction_CAST(_elementtree_Element_iterfind), METH_VALUE|METH_METHOD, _elementtree_Element_iterfind__doc__},
+    {"iterfind", _PyCFunction_CAST(_elementtree_Element_iterfind), METH_VALUE|METH_METHOD|METH_KEYWORDS, _elementtree_Element_iterfind__doc__},
 
 static PyValue
 _elementtree_Element_iterfind_impl(ElementObject *self, PyTypeObject *cls,
@@ -605,7 +605,7 @@ PyDoc_STRVAR(_elementtree_Element_get__doc__,
 "attribute was not found.");
 
 #define _ELEMENTTREE_ELEMENT_GET_METHODDEF    \
-    {"get", _PyCFunction_CAST(_elementtree_Element_get), METH_VALUE, _elementtree_Element_get__doc__},
+    {"get", _PyCFunction_CAST(_elementtree_Element_get), METH_VALUE|METH_KEYWORDS, _elementtree_Element_get__doc__},
 
 static PyValue
 _elementtree_Element_get_impl(ElementObject *self, PyValueBorrow key,
@@ -678,7 +678,7 @@ PyDoc_STRVAR(_elementtree_Element_iter__doc__,
 "Return an iterator containing all the matching elements.");
 
 #define _ELEMENTTREE_ELEMENT_ITER_METHODDEF    \
-    {"iter", _PyCFunction_CAST(_elementtree_Element_iter), METH_VALUE|METH_METHOD, _elementtree_Element_iter__doc__},
+    {"iter", _PyCFunction_CAST(_elementtree_Element_iter), METH_VALUE|METH_METHOD|METH_KEYWORDS, _elementtree_Element_iter__doc__},
 
 static PyValue
 _elementtree_Element_iter_impl(ElementObject *self, PyTypeObject *cls,
@@ -741,7 +741,7 @@ PyDoc_STRVAR(_elementtree_Element_itertext__doc__,
 "order, returning all inner text.");
 
 #define _ELEMENTTREE_ELEMENT_ITERTEXT_METHODDEF    \
-    {"itertext", _PyCFunction_CAST(_elementtree_Element_itertext), METH_VALUE|METH_METHOD, _elementtree_Element_itertext__doc__},
+    {"itertext", _PyCFunction_CAST(_elementtree_Element_itertext), METH_VALUE|METH_METHOD|METH_KEYWORDS, _elementtree_Element_itertext__doc__},
 
 static PyValue
 _elementtree_Element_itertext_impl(ElementObject *self, PyTypeObject *cls);
@@ -781,9 +781,6 @@ _elementtree_Element_insert(PyValueBorrow self, const PyValue *args, Py_ssize_t 
     Py_ssize_t index;
     PyObject *subelement;
 
-    if (!_PyArg_NoKwnamesValue("Element.insert()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("insert", nargs, 2, 2)) {
         goto exit;
     }
@@ -871,7 +868,7 @@ PyDoc_STRVAR(_elementtree_Element_makeelement__doc__,
 "instead.");
 
 #define _ELEMENTTREE_ELEMENT_MAKEELEMENT_METHODDEF    \
-    {"makeelement", _PyCFunction_CAST(_elementtree_Element_makeelement), METH_VALUE|METH_METHOD, _elementtree_Element_makeelement__doc__},
+    {"makeelement", _PyCFunction_CAST(_elementtree_Element_makeelement), METH_VALUE|METH_METHOD|METH_KEYWORDS, _elementtree_Element_makeelement__doc__},
 
 static PyValue
 _elementtree_Element_makeelement_impl(ElementObject *self, PyTypeObject *cls,
@@ -963,9 +960,6 @@ _elementtree_Element_set(PyValueBorrow self, const PyValue *args, Py_ssize_t nar
     PyValueBorrow key;
     PyValueBorrow value;
 
-    if (!_PyArg_NoKwnamesValue("Element.set()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("set", nargs, 2, 2)) {
         goto exit;
     }
@@ -1118,9 +1112,6 @@ _elementtree__set_factories(PyValueBorrow module, const PyValue *args, Py_ssize_
     PyValueBorrow comment_factory;
     PyValueBorrow pi_factory;
 
-    if (!_PyArg_NoKwnamesValue("_elementtree._set_factories()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("_set_factories", nargs, 2, 2)) {
         goto exit;
     }
@@ -1233,9 +1224,6 @@ _elementtree_TreeBuilder_pi(PyValueBorrow self, const PyValue *args, Py_ssize_t 
     PyValueBorrow target;
     PyValueBorrow text = PyValue_Borrow(PyValue_None);
 
-    if (!_PyArg_NoKwnamesValue("TreeBuilder.pi()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("pi", nargs, 1, 2)) {
         goto exit;
     }
@@ -1296,9 +1284,6 @@ _elementtree_TreeBuilder_start(PyValueBorrow self, const PyValue *args, Py_ssize
     PyValueBorrow tag;
     PyObject *attrs;
 
-    if (!_PyArg_NoKwnamesValue("TreeBuilder.start()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("start", nargs, 2, 2)) {
         goto exit;
     }
@@ -1526,9 +1511,6 @@ _elementtree_XMLParser__setevents(PyValueBorrow self, const PyValue *args, Py_ss
     PyValueBorrow events_queue;
     PyValueBorrow events_to_report = PyValue_Borrow(PyValue_None);
 
-    if (!_PyArg_NoKwnamesValue("XMLParser._setevents()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("_setevents", nargs, 1, 2)) {
         goto exit;
     }
@@ -1543,4 +1525,4 @@ skip_optional:
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=b2a6d6261db2106b input=a9049054013a1b77]*/
+/*[clinic end generated code: output=6b176355c1fb3c4b input=a9049054013a1b77]*/

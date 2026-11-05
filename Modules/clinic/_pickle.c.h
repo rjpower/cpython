@@ -51,7 +51,7 @@ PyDoc_STRVAR(_pickle_Pickler_dump__doc__,
 "Write a pickled representation of the given object to the open file.");
 
 #define _PICKLE_PICKLER_DUMP_METHODDEF    \
-    {"dump", _PyCFunction_CAST(_pickle_Pickler_dump), METH_VALUE|METH_METHOD, _pickle_Pickler_dump__doc__},
+    {"dump", _PyCFunction_CAST(_pickle_Pickler_dump), METH_VALUE|METH_METHOD|METH_KEYWORDS, _pickle_Pickler_dump__doc__},
 
 static PyValue
 _pickle_Pickler_dump_impl(PicklerObject *self, PyTypeObject *cls,
@@ -296,7 +296,7 @@ PyDoc_STRVAR(_pickle_Unpickler_persistent_load__doc__,
 "\n");
 
 #define _PICKLE_UNPICKLER_PERSISTENT_LOAD_METHODDEF    \
-    {"persistent_load", _PyCFunction_CAST(_pickle_Unpickler_persistent_load), METH_VALUE|METH_METHOD, _pickle_Unpickler_persistent_load__doc__},
+    {"persistent_load", _PyCFunction_CAST(_pickle_Unpickler_persistent_load), METH_VALUE|METH_METHOD|METH_KEYWORDS, _pickle_Unpickler_persistent_load__doc__},
 
 static PyValue
 _pickle_Unpickler_persistent_load_impl(UnpicklerObject *self,
@@ -332,7 +332,7 @@ PyDoc_STRVAR(_pickle_Unpickler_load__doc__,
 "specified therein.");
 
 #define _PICKLE_UNPICKLER_LOAD_METHODDEF    \
-    {"load", _PyCFunction_CAST(_pickle_Unpickler_load), METH_VALUE|METH_METHOD, _pickle_Unpickler_load__doc__},
+    {"load", _PyCFunction_CAST(_pickle_Unpickler_load), METH_VALUE|METH_METHOD|METH_KEYWORDS, _pickle_Unpickler_load__doc__},
 
 static PyValue
 _pickle_Unpickler_load_impl(UnpicklerObject *self, PyTypeObject *cls);
@@ -366,7 +366,7 @@ PyDoc_STRVAR(_pickle_Unpickler_find_class__doc__,
 "needed.  Both arguments passed are str objects.");
 
 #define _PICKLE_UNPICKLER_FIND_CLASS_METHODDEF    \
-    {"find_class", _PyCFunction_CAST(_pickle_Unpickler_find_class), METH_VALUE|METH_METHOD, _pickle_Unpickler_find_class__doc__},
+    {"find_class", _PyCFunction_CAST(_pickle_Unpickler_find_class), METH_VALUE|METH_METHOD|METH_KEYWORDS, _pickle_Unpickler_find_class__doc__},
 
 static PyValue
 _pickle_Unpickler_find_class_impl(UnpicklerObject *self, PyTypeObject *cls,
@@ -658,7 +658,7 @@ PyDoc_STRVAR(_pickle_dump__doc__,
 "*buffer_callback* is not None and *protocol* is None or smaller than 5.");
 
 #define _PICKLE_DUMP_METHODDEF    \
-    {"dump", _PyCFunction_CAST(_pickle_dump), METH_VALUE, _pickle_dump__doc__},
+    {"dump", _PyCFunction_CAST(_pickle_dump), METH_VALUE|METH_KEYWORDS, _pickle_dump__doc__},
 
 static PyValue
 _pickle_dump_impl(PyObject *module, PyValueBorrow obj, PyValueBorrow file,
@@ -752,7 +752,7 @@ PyDoc_STRVAR(_pickle_dumps__doc__,
 "*buffer_callback* is not None and *protocol* is None or smaller than 5.");
 
 #define _PICKLE_DUMPS_METHODDEF    \
-    {"dumps", _PyCFunction_CAST(_pickle_dumps), METH_VALUE, _pickle_dumps__doc__},
+    {"dumps", _PyCFunction_CAST(_pickle_dumps), METH_VALUE|METH_KEYWORDS, _pickle_dumps__doc__},
 
 static PyValue
 _pickle_dumps_impl(PyObject *module, PyValueBorrow obj,
@@ -849,7 +849,7 @@ PyDoc_STRVAR(_pickle_load__doc__,
 "string instances as bytes objects.");
 
 #define _PICKLE_LOAD_METHODDEF    \
-    {"load", _PyCFunction_CAST(_pickle_load), METH_VALUE, _pickle_load__doc__},
+    {"load", _PyCFunction_CAST(_pickle_load), METH_VALUE|METH_KEYWORDS, _pickle_load__doc__},
 
 static PyValue
 _pickle_load_impl(PyObject *module, PyValueBorrow file, int fix_imports,
@@ -963,7 +963,7 @@ PyDoc_STRVAR(_pickle_loads__doc__,
 "string instances as bytes objects.");
 
 #define _PICKLE_LOADS_METHODDEF    \
-    {"loads", _PyCFunction_CAST(_pickle_loads), METH_VALUE, _pickle_loads__doc__},
+    {"loads", _PyCFunction_CAST(_pickle_loads), METH_VALUE|METH_KEYWORDS, _pickle_loads__doc__},
 
 static PyValue
 _pickle_loads_impl(PyObject *module, PyValueBorrow data, int fix_imports,
@@ -1055,4 +1055,4 @@ _pickle_loads(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObj
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=8035a726060e41d5 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=0cf3f9535020b2ba input=a9049054013a1b77]*/

@@ -13,7 +13,7 @@ preserve
 #endif
 #include "pycore_critical_section.h"// Py_BEGIN_CRITICAL_SECTION()
 #include "pycore_long_value.h"    // _PyValue_IntAsSsize_t()
-#include "pycore_modsupport.h"    // _PyArg_NoKwnamesValue()
+#include "pycore_modsupport.h"    // _PyArg_CheckPositional()
 #include "pycore_tuple.h"         // _PyTuple_ITEMS()
 #include "pycore_value_call.h"    // METH_VALUE
 #include "pycore_value_ops.h"     // _PyValue_Index()
@@ -97,9 +97,6 @@ list_insert(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject 
     Py_ssize_t index;
     PyValueBorrow object;
 
-    if (!_PyArg_NoKwnamesValueMethod(&PyList_Type, "insert", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("insert", nargs, 2, 2)) {
         goto exit;
     }
@@ -242,9 +239,6 @@ list_pop(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kw
     PyValue return_value = PyValue_NULL;
     Py_ssize_t index = -1;
 
-    if (!_PyArg_NoKwnamesValueMethod(&PyList_Type, "pop", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("pop", nargs, 0, 1)) {
         goto exit;
     }
@@ -287,7 +281,7 @@ PyDoc_STRVAR(list_sort__doc__,
 "The reverse flag can be set to sort in descending order.");
 
 #define LIST_SORT_METHODDEF    \
-    {"sort", _PyCFunction_CAST(list_sort), METH_VALUE, list_sort__doc__},
+    {"sort", _PyCFunction_CAST(list_sort), METH_VALUE|METH_KEYWORDS, list_sort__doc__},
 
 static PyValue
 list_sort_impl(PyListObject *self, PyValueBorrow keyfunc, int reverse);
@@ -395,9 +389,6 @@ list_index(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *
     Py_ssize_t start = 0;
     Py_ssize_t stop = PY_SSIZE_T_MAX;
 
-    if (!_PyArg_NoKwnamesValueMethod(&PyList_Type, "index", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("index", nargs, 1, 3)) {
         goto exit;
     }
@@ -572,4 +563,4 @@ list___reversed__(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyO
 
     return return_value;
 }
-/*[clinic end generated code: output=126234ec0b98a2f0 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=c945538307cb82a2 input=a9049054013a1b77]*/

@@ -1687,6 +1687,23 @@ class DictTest(unittest.TestCase):
             d.pop(key)
         with check_unhashable_key():
             d.get(key)
+        with check_unhashable_key():
+            (key, 1) in d.items()
+        with check_unhashable_key():
+            collections.defaultdict(int).__missing__(key)
+
+        # A mapping that is not a dict merges key by key.
+        class Mapping:
+            def keys(self):
+                return [key]
+
+            def __getitem__(self, k):
+                return 1
+
+        with check_unhashable_key():
+            d.update(Mapping())
+        with check_unhashable_key():
+            (lambda **kw: kw)(**Mapping())
 
         # Only TypeError exception is overridden,
         # other exceptions are left unchanged.

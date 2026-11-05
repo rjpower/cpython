@@ -8,7 +8,7 @@ preserve
 
 #include "pycore_critical_section.h"// Py_BEGIN_CRITICAL_SECTION()
 #include "pycore_long_value.h"    // _PyValue_AsNativeBytes()
-#include "pycore_modsupport.h"    // _PyArg_NoKwnamesValue()
+#include "pycore_modsupport.h"    // _PyArg_CheckPositional()
 #include "pycore_tuple.h"         // _PyTuple_ITEMS()
 #include "pycore_value_call.h"    // METH_VALUE
 
@@ -57,9 +57,6 @@ _random_Random_seed(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, P
     PyValue return_value = PyValue_NULL;
     PyValueBorrow n = PyValue_Borrow(PyValue_None);
 
-    if (!_PyArg_NoKwnamesValue("Random.seed()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("seed", nargs, 0, 1)) {
         goto exit;
     }
@@ -215,4 +212,4 @@ random_init(PyObject *self, PyObject *args, PyObject *kwargs)
     _PyValue_StackUnpackDict_Free(window, nargs, kwnames);
     return result;
 }
-/*[clinic end generated code: output=802a691f680a3386 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=010b6669c686f1d3 input=a9049054013a1b77]*/

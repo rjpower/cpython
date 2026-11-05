@@ -7,7 +7,7 @@ preserve
 #endif
 
 #include "pycore_critical_section.h"// Py_BEGIN_CRITICAL_SECTION()
-#include "pycore_modsupport.h"    // _PyArg_NoKwnamesValue()
+#include "pycore_modsupport.h"    // _PyArg_CheckPositional()
 #include "pycore_value_call.h"    // METH_VALUE
 
 PyDoc_STRVAR(_heapq_heappush__doc__,
@@ -29,9 +29,6 @@ _heapq_heappush(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyO
     PyObject *heap;
     PyValueBorrow item;
 
-    if (!_PyArg_NoKwnamesValue("_heapq.heappush()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("heappush", nargs, 2, 2)) {
         goto exit;
     }
@@ -107,9 +104,6 @@ _heapq_heapreplace(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, 
     PyObject *heap;
     PyValueBorrow item;
 
-    if (!_PyArg_NoKwnamesValue("_heapq.heapreplace()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("heapreplace", nargs, 2, 2)) {
         goto exit;
     }
@@ -149,9 +143,6 @@ _heapq_heappushpop(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, 
     PyObject *heap;
     PyValueBorrow item;
 
-    if (!_PyArg_NoKwnamesValue("_heapq.heappushpop()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("heappushpop", nargs, 2, 2)) {
         goto exit;
     }
@@ -220,9 +211,6 @@ _heapq_heappush_max(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs,
     PyObject *heap;
     PyValueBorrow item;
 
-    if (!_PyArg_NoKwnamesValue("_heapq.heappush_max()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("heappush_max", nargs, 2, 2)) {
         goto exit;
     }
@@ -291,9 +279,6 @@ _heapq_heapreplace_max(PyValueBorrow module, const PyValue *args, Py_ssize_t nar
     PyObject *heap;
     PyValueBorrow item;
 
-    if (!_PyArg_NoKwnamesValue("_heapq.heapreplace_max()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("heapreplace_max", nargs, 2, 2)) {
         goto exit;
     }
@@ -365,9 +350,6 @@ _heapq_heappushpop_max(PyValueBorrow module, const PyValue *args, Py_ssize_t nar
     PyObject *heap;
     PyValueBorrow item;
 
-    if (!_PyArg_NoKwnamesValue("_heapq.heappushpop_max()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("heappushpop_max", nargs, 2, 2)) {
         goto exit;
     }
@@ -384,4 +366,4 @@ _heapq_heappushpop_max(PyValueBorrow module, const PyValue *args, Py_ssize_t nar
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=0433571e07dc44ab input=a9049054013a1b77]*/
+/*[clinic end generated code: output=0e9f37efb53f89f5 input=a9049054013a1b77]*/

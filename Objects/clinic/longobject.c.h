@@ -164,9 +164,6 @@ int___round__(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObjec
     PyValue return_value = PyValue_NULL;
     PyValueBorrow o_ndigits = PyValue_Borrow(PyValue_None);
 
-    if (!_PyArg_NoKwnamesValueMethod(&PyLong_Type, "__round__", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("__round__", nargs, 0, 1)) {
         goto exit;
     }
@@ -319,7 +316,7 @@ PyDoc_STRVAR(int_to_bytes__doc__,
 "    an OverflowError is raised.");
 
 #define INT_TO_BYTES_METHODDEF    \
-    {"to_bytes", _PyCFunction_CAST(int_to_bytes), METH_VALUE, int_to_bytes__doc__},
+    {"to_bytes", _PyCFunction_CAST(int_to_bytes), METH_VALUE|METH_KEYWORDS, int_to_bytes__doc__},
 
 static PyValue
 int_to_bytes_impl(PyValueBorrow self, Py_ssize_t length, PyObject *byteorder,
@@ -430,7 +427,7 @@ PyDoc_STRVAR(int_from_bytes__doc__,
 "    integer.");
 
 #define INT_FROM_BYTES_METHODDEF    \
-    {"from_bytes", _PyCFunction_CAST(int_from_bytes), METH_VALUE|METH_CLASS, int_from_bytes__doc__},
+    {"from_bytes", _PyCFunction_CAST(int_from_bytes), METH_VALUE|METH_KEYWORDS|METH_CLASS, int_from_bytes__doc__},
 
 static PyValue
 int_from_bytes_impl(PyTypeObject *type, PyValueBorrow bytes_obj,
@@ -521,4 +518,4 @@ int_is_integer(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObje
 
     return return_value;
 }
-/*[clinic end generated code: output=af77cde67210caf8 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=6a15e07f546bcab6 input=a9049054013a1b77]*/

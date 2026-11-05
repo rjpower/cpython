@@ -6057,7 +6057,7 @@ class ValueEmissionTests(unittest.TestCase):
                 cls: defining_class
                 /
         """)
-        self.assertIn('METH_VALUE|METH_METHOD', generated)
+        self.assertIn('METH_VALUE|METH_METHOD|METH_KEYWORDS', generated)
         self.assertIn(
             'm_T_f(PyValueBorrow self, PyTypeObject *cls, const PyValue *args, '
             'Py_ssize_t nargs, PyObject *kwnames)', generated)
@@ -6126,9 +6126,21 @@ class ValueEmissionTests(unittest.TestCase):
                 b: object = None
                 /
         """)
-        self.assertIn('_PyArg_NoKwnamesValue("m.f()", kwnames)', generated)
+        # METH_VALUE is positional only: its vectorcall rejects keywords.
+        self.assertIn('METH_VALUE, m_f__doc__}', generated)
+        self.assertNotIn('kwnames)', generated.replace(
+            'PyObject *kwnames)', ''))
         self.assertIn('_PyArg_CheckPositional("f", nargs, 1, 2)', generated)
         self.assertNotIn('_PyArg_CheckArityValue', generated)
+
+    def test_keyword_parameters_are_meth_keywords(self):
+        generated = self.generate("""
+            m.f
+                a: object
+                b: object = None
+        """)
+        self.assertIn('METH_VALUE|METH_KEYWORDS, m_f__doc__}', generated)
+        self.assertNotIn('NoKwnames', generated)
 
     def test_arity_method_uses_class_name(self):
         generated = self.generate("""

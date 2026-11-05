@@ -11,7 +11,7 @@ preserve
 #  include "pycore_value.h"       // _PyValue_STATIC_IMMORTAL()
 #endif
 #include "pycore_long_value.h"    // _PyValue_AsInt()
-#include "pycore_modsupport.h"    // _PyArg_NoKwnamesValue()
+#include "pycore_modsupport.h"    // _PyArg_CheckPositional()
 #include "pycore_runtime.h"       // _Py_SINGLETON()
 #include "pycore_tuple.h"         // _PyTuple_FromValueArray()
 #include "pycore_unicodeobject.h" // _PyUnicode_AsUTF8NoNUL()
@@ -60,9 +60,6 @@ objects_converter(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, P
     PyValueBorrow a;
     PyValueBorrow b = PyValue_Borrow(PyValue_None);
 
-    if (!_PyArg_NoKwnamesValue("_testclinic_value.objects_converter()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("objects_converter", nargs, 1, 2)) {
         goto exit;
     }
@@ -96,9 +93,6 @@ int_converter(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObj
     int a = 12;
     int b = 34;
 
-    if (!_PyArg_NoKwnamesValue("_testclinic_value.int_converter()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("int_converter", nargs, 0, 2)) {
         goto exit;
     }
@@ -140,9 +134,6 @@ long_converter(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyOb
     PyValue return_value = PyValue_NULL;
     long a = 12;
 
-    if (!_PyArg_NoKwnamesValue("_testclinic_value.long_converter()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("long_converter", nargs, 0, 1)) {
         goto exit;
     }
@@ -181,9 +172,6 @@ py_ssize_t_converter(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs
     Py_ssize_t c = 78;
     Py_ssize_t d = 90;
 
-    if (!_PyArg_NoKwnamesValue("_testclinic_value.py_ssize_t_converter()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("py_ssize_t_converter", nargs, 0, 4)) {
         goto exit;
     }
@@ -261,9 +249,6 @@ slice_index_converter(PyValueBorrow module, const PyValue *args, Py_ssize_t narg
     Py_ssize_t b = 34;
     Py_ssize_t c = 56;
 
-    if (!_PyArg_NoKwnamesValue("_testclinic_value.slice_index_converter()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("slice_index_converter", nargs, 0, 3)) {
         goto exit;
     }
@@ -310,9 +295,6 @@ bool_converter(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyOb
     int a = 1;
     int b = 1;
 
-    if (!_PyArg_NoKwnamesValue("_testclinic_value.bool_converter()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("bool_converter", nargs, 0, 2)) {
         goto exit;
     }
@@ -354,9 +336,6 @@ double_converter(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, Py
     PyValue return_value = PyValue_NULL;
     double a = 12.5;
 
-    if (!_PyArg_NoKwnamesValue("_testclinic_value.double_converter()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("double_converter", nargs, 0, 1)) {
         goto exit;
     }
@@ -423,9 +402,6 @@ str_converter(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObj
     PyValue return_value = PyValue_NULL;
     const char *a = "a";
 
-    if (!_PyArg_NoKwnamesValue("_testclinic_value.str_converter()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("str_converter", nargs, 0, 1)) {
         goto exit;
     }
@@ -745,7 +721,7 @@ PyDoc_STRVAR(keywords__doc__,
 "\n");
 
 #define KEYWORDS_METHODDEF    \
-    {"keywords", _PyCFunction_CAST(keywords), METH_VALUE, keywords__doc__},
+    {"keywords", _PyCFunction_CAST(keywords), METH_VALUE|METH_KEYWORDS, keywords__doc__},
 
 static PyValue
 keywords_impl(PyObject *module, PyValueBorrow a, PyValueBorrow b);
@@ -803,7 +779,7 @@ PyDoc_STRVAR(keywords_kwonly__doc__,
 "\n");
 
 #define KEYWORDS_KWONLY_METHODDEF    \
-    {"keywords_kwonly", _PyCFunction_CAST(keywords_kwonly), METH_VALUE, keywords_kwonly__doc__},
+    {"keywords_kwonly", _PyCFunction_CAST(keywords_kwonly), METH_VALUE|METH_KEYWORDS, keywords_kwonly__doc__},
 
 static PyValue
 keywords_kwonly_impl(PyObject *module, PyValueBorrow a, PyValueBorrow b);
@@ -861,7 +837,7 @@ PyDoc_STRVAR(keywords_opt__doc__,
 "\n");
 
 #define KEYWORDS_OPT_METHODDEF    \
-    {"keywords_opt", _PyCFunction_CAST(keywords_opt), METH_VALUE, keywords_opt__doc__},
+    {"keywords_opt", _PyCFunction_CAST(keywords_opt), METH_VALUE|METH_KEYWORDS, keywords_opt__doc__},
 
 static PyValue
 keywords_opt_impl(PyObject *module, PyValueBorrow a, PyValueBorrow b,
@@ -926,7 +902,7 @@ PyDoc_STRVAR(posonly_keywords__doc__,
 "\n");
 
 #define POSONLY_KEYWORDS_METHODDEF    \
-    {"posonly_keywords", _PyCFunction_CAST(posonly_keywords), METH_VALUE, posonly_keywords__doc__},
+    {"posonly_keywords", _PyCFunction_CAST(posonly_keywords), METH_VALUE|METH_KEYWORDS, posonly_keywords__doc__},
 
 static PyValue
 posonly_keywords_impl(PyObject *module, PyValueBorrow a, PyValueBorrow b);
@@ -995,9 +971,6 @@ varpos(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kw
     PyValue return_value = PyValue_NULL;
     PyObject *__clinic_args = NULL;
 
-    if (!_PyArg_NoKwnamesValue("_testclinic_value.varpos()", kwnames)) {
-        goto exit;
-    }
     __clinic_args = _PyTuple_FromValueArray(args, nargs);
     if (__clinic_args == NULL) {
         goto exit;
@@ -1030,14 +1003,10 @@ varpos_array(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObje
     const PyValue *__clinic_args;
     Py_ssize_t args_length;
 
-    if (!_PyArg_NoKwnamesValue("_testclinic_value.varpos_array()", kwnames)) {
-        goto exit;
-    }
     __clinic_args = args;
     args_length = nargs;
     return_value = varpos_array_impl(PyValue_AsKnownObjectBorrow(module), __clinic_args, args_length);
 
-exit:
     return return_value;
 }
 
@@ -1047,7 +1016,7 @@ PyDoc_STRVAR(kwds_with_pos_only__doc__,
 "\n");
 
 #define KWDS_WITH_POS_ONLY_METHODDEF    \
-    {"kwds_with_pos_only", _PyCFunction_CAST(kwds_with_pos_only), METH_VALUE, kwds_with_pos_only__doc__},
+    {"kwds_with_pos_only", _PyCFunction_CAST(kwds_with_pos_only), METH_VALUE|METH_KEYWORDS, kwds_with_pos_only__doc__},
 
 static PyValue
 kwds_with_pos_only_impl(PyObject *module, PyValueBorrow a, PyValueBorrow b,
@@ -1282,7 +1251,7 @@ PyDoc_STRVAR(_testclinic_value_Probe_where__doc__,
 "\n");
 
 #define _TESTCLINIC_VALUE_PROBE_WHERE_METHODDEF    \
-    {"where", _PyCFunction_CAST(_testclinic_value_Probe_where), METH_VALUE|METH_METHOD, _testclinic_value_Probe_where__doc__},
+    {"where", _PyCFunction_CAST(_testclinic_value_Probe_where), METH_VALUE|METH_METHOD|METH_KEYWORDS, _testclinic_value_Probe_where__doc__},
 
 static PyValue
 _testclinic_value_Probe_where_impl(PyObject *self, PyTypeObject *cls);
@@ -1301,4 +1270,4 @@ _testclinic_value_Probe_where(PyValueBorrow self, PyTypeObject *cls, const PyVal
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=5697ab7b16fa9427 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=4a4bd7cee70de884 input=a9049054013a1b77]*/

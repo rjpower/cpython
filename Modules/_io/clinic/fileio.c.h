@@ -51,7 +51,7 @@ PyDoc_STRVAR(_io_FileIO_close__doc__,
 "may be called more than once without error.");
 
 #define _IO_FILEIO_CLOSE_METHODDEF    \
-    {"close", _PyCFunction_CAST(_io_FileIO_close), METH_VALUE|METH_METHOD, _io_FileIO_close__doc__},
+    {"close", _PyCFunction_CAST(_io_FileIO_close), METH_VALUE|METH_METHOD|METH_KEYWORDS, _io_FileIO_close__doc__},
 
 static PyValue
 _io_FileIO_close_impl(fileio *self, PyTypeObject *cls);
@@ -280,7 +280,7 @@ PyDoc_STRVAR(_io_FileIO_readinto__doc__,
 "Same as RawIOBase.readinto().");
 
 #define _IO_FILEIO_READINTO_METHODDEF    \
-    {"readinto", _PyCFunction_CAST(_io_FileIO_readinto), METH_VALUE|METH_METHOD, _io_FileIO_readinto__doc__},
+    {"readinto", _PyCFunction_CAST(_io_FileIO_readinto), METH_VALUE|METH_METHOD|METH_KEYWORDS, _io_FileIO_readinto__doc__},
 
 static PyValue
 _io_FileIO_readinto_impl(fileio *self, PyTypeObject *cls, Py_buffer *buffer);
@@ -331,7 +331,7 @@ PyDoc_STRVAR(_io_FileIO_readall__doc__,
 "are read) returns None.");
 
 #define _IO_FILEIO_READALL_METHODDEF    \
-    {"readall", _PyCFunction_CAST(_io_FileIO_readall), METH_VALUE|METH_METHOD, _io_FileIO_readall__doc__},
+    {"readall", _PyCFunction_CAST(_io_FileIO_readall), METH_VALUE|METH_METHOD|METH_KEYWORDS, _io_FileIO_readall__doc__},
 
 static PyValue
 _io_FileIO_readall_impl(fileio *self, PyTypeObject *cls);
@@ -367,7 +367,7 @@ PyDoc_STRVAR(_io_FileIO_read__doc__,
 "an empty bytes object at EOF.");
 
 #define _IO_FILEIO_READ_METHODDEF    \
-    {"read", _PyCFunction_CAST(_io_FileIO_read), METH_VALUE|METH_METHOD, _io_FileIO_read__doc__},
+    {"read", _PyCFunction_CAST(_io_FileIO_read), METH_VALUE|METH_METHOD|METH_KEYWORDS, _io_FileIO_read__doc__},
 
 static PyValue
 _io_FileIO_read_impl(fileio *self, PyTypeObject *cls, Py_ssize_t size);
@@ -408,7 +408,7 @@ PyDoc_STRVAR(_io_FileIO_write__doc__,
 "mode, returns None if the write would block.");
 
 #define _IO_FILEIO_WRITE_METHODDEF    \
-    {"write", _PyCFunction_CAST(_io_FileIO_write), METH_VALUE|METH_METHOD, _io_FileIO_write__doc__},
+    {"write", _PyCFunction_CAST(_io_FileIO_write), METH_VALUE|METH_METHOD|METH_KEYWORDS, _io_FileIO_write__doc__},
 
 static PyValue
 _io_FileIO_write_impl(fileio *self, PyTypeObject *cls, Py_buffer *b);
@@ -471,9 +471,6 @@ _io_FileIO_seek(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObj
     PyValueBorrow pos;
     int whence = 0;
 
-    if (!_PyArg_NoKwnamesValue("FileIO.seek()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("seek", nargs, 1, 2)) {
         goto exit;
     }
@@ -528,7 +525,7 @@ PyDoc_STRVAR(_io_FileIO_truncate__doc__,
 "The current file position is changed to the value of size.");
 
 #define _IO_FILEIO_TRUNCATE_METHODDEF    \
-    {"truncate", _PyCFunction_CAST(_io_FileIO_truncate), METH_VALUE|METH_METHOD, _io_FileIO_truncate__doc__},
+    {"truncate", _PyCFunction_CAST(_io_FileIO_truncate), METH_VALUE|METH_METHOD|METH_KEYWORDS, _io_FileIO_truncate__doc__},
 
 static PyValue
 _io_FileIO_truncate_impl(fileio *self, PyTypeObject *cls,
@@ -691,4 +688,4 @@ exit:
 
 #define _IO_FILEIO__BLKSIZE_GETSETDEF {"_blksize", (getter)_io_FileIO__blksize_get, (setter)NULL, _io_FileIO__blksize__doc__},
 
-/*[clinic end generated code: output=60718b3a78e3f86c input=a9049054013a1b77]*/
+/*[clinic end generated code: output=439c83b2215e44dc input=a9049054013a1b77]*/

@@ -7,7 +7,7 @@ preserve
 #endif
 
 #include "pycore_long_value.h"    // _PyValue_IntAsSsize_t()
-#include "pycore_modsupport.h"    // _PyArg_NoKwnamesValue()
+#include "pycore_modsupport.h"    // _PyArg_CheckPositional()
 #include "pycore_value_call.h"    // METH_VALUE
 #include "pycore_value_ops.h"     // _PyValue_Index()
 
@@ -40,9 +40,6 @@ py_scanstring(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObj
     Py_ssize_t end;
     int strict = 1;
 
-    if (!_PyArg_NoKwnamesValue("_json.scanstring()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("scanstring", nargs, 2, 3)) {
         goto exit;
     }
@@ -146,4 +143,4 @@ py_encode_basestring(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=8b68448143ece6c9 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=52f548b00763fd97 input=a9049054013a1b77]*/

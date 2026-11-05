@@ -220,7 +220,7 @@ PyDoc_STRVAR(Struct_unpack_from__doc__,
 "the buffer.  See help(struct) for more on format strings.");
 
 #define STRUCT_UNPACK_FROM_METHODDEF    \
-    {"unpack_from", _PyCFunction_CAST(Struct_unpack_from), METH_VALUE, Struct_unpack_from__doc__},
+    {"unpack_from", _PyCFunction_CAST(Struct_unpack_from), METH_VALUE|METH_KEYWORDS, Struct_unpack_from__doc__},
 
 static PyValue
 Struct_unpack_from_impl(PyStructObject *self, Py_buffer *buffer,
@@ -349,14 +349,10 @@ Struct_pack(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject 
     const PyValue *values;
     Py_ssize_t values_length;
 
-    if (!_PyArg_NoKwnamesValue("Struct.pack()", kwnames)) {
-        goto exit;
-    }
     values = args;
     values_length = nargs;
     return_value = Struct_pack_impl((PyStructObject *)PyValue_AsKnownObjectBorrow(self), values, values_length);
 
-exit:
     return return_value;
 }
 
@@ -389,9 +385,6 @@ Struct_pack_into(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyOb
     const PyValue *values;
     Py_ssize_t values_length;
 
-    if (!_PyArg_NoKwnamesValue("Struct.pack_into()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("pack_into", nargs, 2, PY_SSIZE_T_MAX)) {
         goto exit;
     }
@@ -530,9 +523,6 @@ pack(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwna
     const PyValue *values;
     Py_ssize_t values_length;
 
-    if (!_PyArg_NoKwnamesValue("pack()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("pack", nargs, 1, PY_SSIZE_T_MAX)) {
         goto exit;
     }
@@ -579,9 +569,6 @@ pack_into(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject 
     const PyValue *values;
     Py_ssize_t values_length;
 
-    if (!_PyArg_NoKwnamesValue("pack_into()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("pack_into", nargs, 3, PY_SSIZE_T_MAX)) {
         goto exit;
     }
@@ -645,9 +632,6 @@ unpack(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kw
     PyStructObject *s_object = NULL;
     Py_buffer buffer = {NULL, NULL};
 
-    if (!_PyArg_NoKwnamesValue("unpack()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("unpack", nargs, 2, 2)) {
         goto exit;
     }
@@ -685,7 +669,7 @@ PyDoc_STRVAR(unpack_from__doc__,
 "help(struct) for more on format strings.");
 
 #define UNPACK_FROM_METHODDEF    \
-    {"unpack_from", _PyCFunction_CAST(unpack_from), METH_VALUE, unpack_from__doc__},
+    {"unpack_from", _PyCFunction_CAST(unpack_from), METH_VALUE|METH_KEYWORDS, unpack_from__doc__},
 
 static PyValue
 unpack_from_impl(PyObject *module, PyStructObject *s_object,
@@ -792,9 +776,6 @@ iter_unpack(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObjec
     PyStructObject *s_object = NULL;
     PyValueBorrow buffer;
 
-    if (!_PyArg_NoKwnamesValue("iter_unpack()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("iter_unpack", nargs, 2, 2)) {
         goto exit;
     }
@@ -810,4 +791,4 @@ exit:
 
     return return_value;
 }
-/*[clinic end generated code: output=74d1192a5639567f input=a9049054013a1b77]*/
+/*[clinic end generated code: output=e4ecb60c0138321f input=a9049054013a1b77]*/

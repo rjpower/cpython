@@ -22,6 +22,7 @@ vc_self = _testinternalcapi.vc_self
 vc_method = _testinternalcapi.vc_method
 make_int_method = _testinternalcapi.make_int_method
 bad_flags = _testinternalcapi.bad_flags
+meth_flags = _testinternalcapi.meth_flags
 value_vectorcall_is_set = _testinternalcapi.value_vectorcall_is_set
 object_vectorcall_is_thunk = _testinternalcapi.object_vectorcall_is_thunk
 call_value = _testinternalcapi.call_value
@@ -31,6 +32,8 @@ vc_call_first = _testinternalcapi.vc_call_first
 vectorcall_offsets = _testinternalcapi.vectorcall_offsets
 VCall = _testinternalcapi.VCall
 VCallBase = _testinternalcapi.VCallBase
+
+METH_VALUE = 0x0400
 
 # The METH_* flags that cannot be combined with METH_VALUE.
 METH_VARARGS = 0x0001
@@ -202,6 +205,126 @@ class MethodDescriptorMessageTests(unittest.TestCase):
                     f()
 
 
+def function_str(func):
+    """_PyObject_FunctionStr(): "math.gcd()", "list.append()"."""
+    module = getattr(func, '__module__', None)
+    name = func.__qualname__
+    if module is not None and module != 'builtins':
+        name = f'{module}.{name}'
+    return f'{name}()'
+
+
+class KeywordMessageTests(unittest.TestCase):
+    """METH_VALUE takes positional arguments only, as METH_FASTCALL does: the
+    vectorcall rejects keywords with the message of the callable it was
+    given, and METH_VALUE | METH_KEYWORDS callees receive them."""
+
+    def check_rejects(self, func, *args):
+        expected = f'{function_str(func)} takes no keyword arguments'
+        with self.assertRaises(TypeError) as cm:
+            func(*args, bogus=1)
+        self.assertEqual(str(cm.exception), expected)
+
+    def test_flags(self):
+        self.assertEqual(meth_flags(vc_noargs), METH_VALUE)
+        self.assertEqual(meth_flags(vc_args), METH_VALUE | METH_KEYWORDS)
+        self.assertEqual(meth_flags(vc_call_first), METH_VALUE | METH_KEYWORDS)
+        self.assertEqual(meth_flags([].append), METH_VALUE | METH_O)
+        self.assertEqual(meth_flags(list.sort), METH_VALUE | METH_KEYWORDS)
+
+    def test_function(self):
+        self.assertEqual(vc_args(1, a=2), (1, (1,), {'a': 2}))
+        for func in (vc_noargs, vc_one, vc_self):
+            with self.subTest(func=func):
+                self.check_rejects(func)
+        self.check_rejects(vc_one, 1)
+
+    def test_reviewer_reproducers(self):
+        import _io
+        import _struct
+        import math
+        import struct
+        funcs = [math.gcd, math.lcm, math.comb, math.perm,
+                 struct.pack, struct.pack_into, struct.unpack,
+                 struct.iter_unpack, _struct.pack]
+        for func in funcs:
+            with self.subTest(func=func):
+                self.check_rejects(func)
+        self.assertEqual(function_str(math.gcd), 'math.integer.gcd()')
+        self.assertEqual(function_str(struct.pack), '_struct.pack()')
+        # A bound method names type(self), a descriptor its defining class.
+        for cls in (_io.StringIO, _io.BytesIO, _io._RawIOBase,
+                    _io._BufferedIOBase, _io._TextIOBase):
+            for name in ('readlines', '__exit__', 'readline'):
+                if cls is _io._TextIOBase and name == 'readline':
+                    continue  # defined by _TextIOBase itself, not METH_VALUE
+                with self.subTest(cls=cls, name=name):
+                    self.check_rejects(getattr(cls(), name))
+                    self.check_rejects(getattr(_io._IOBase, name), cls())
+        with self.assertRaisesRegex(
+                TypeError, r"^StringIO\.readlines\(\) takes no keyword "
+                           r"arguments$"):
+            _io.StringIO().readlines.__call__(bogus=1)
+        with self.assertRaisesRegex(
+                TypeError, r"^_IOBase\.readlines\(\) takes no keyword "
+                           r"arguments$"):
+            _io.StringIO().readlines(bogus=1)
+
+    def positional_only(self, func):
+        flags = meth_flags(func)
+        return flags & ~METH_O & ~METH_NOARGS == METH_VALUE
+
+    def test_stdlib_sweep(self):
+        # Every positional-only METH_VALUE callable of these modules and
+        # types names itself in the message.
+        import _io
+        import _struct
+        import array
+        import collections
+        import itertools
+        import math
+        import operator
+        import cmath
+        import _bisect
+        import _heapq
+        import _functools
+        modules = [math, cmath, _struct, operator, itertools, array, _bisect,
+                   _heapq, _functools, _io]
+        instances = {
+            str: '', bytes: b'', bytearray: bytearray(), list: [], dict: {},
+            set: set(), frozenset: frozenset(), tuple: (), int: 0,
+            float: 0.5, complex: 1j, range: range(3), memoryview: memoryview(b''),
+            _io.StringIO: _io.StringIO(), _io.BytesIO: _io.BytesIO(),
+            _io._IOBase: _io._IOBase(), _io._RawIOBase: _io._RawIOBase(),
+            _io._BufferedIOBase: _io._BufferedIOBase(),
+            _io._TextIOBase: _io._TextIOBase(),
+            _struct.Struct: _struct.Struct('i'),
+            array.array: array.array('i'),
+            collections.deque: collections.deque(),
+        }
+        checked = 0
+        for module in modules:
+            for name, func in vars(module).items():
+                if not callable(func) or isinstance(func, type):
+                    continue
+                if type(func) is not type(len) or not self.positional_only(func):
+                    continue
+                with self.subTest(func=func):
+                    self.check_rejects(func)
+                checked += 1
+        for cls, obj in instances.items():
+            for name, descr in vars(cls).items():
+                if type(descr) is not type(str.lower):
+                    continue
+                if not self.positional_only(descr):
+                    continue
+                with self.subTest(descr=descr):
+                    self.check_rejects(descr, obj)
+                    self.check_rejects(getattr(obj, name))
+                checked += 1
+        self.assertGreater(checked, 300)
+
+
 class ProfilerNameTests(unittest.TestCase):
     def test_static_builtin_method_name(self):
         # A METH_STATIC builtin has a self (the type): _lsprof names it as a
@@ -357,10 +480,18 @@ class ValueBuiltinTests(unittest.TestCase):
                            ('METH_NOARGS | METH_O', METH_NOARGS | METH_O),
                            ('METH_NOARGS | METH_METHOD',
                             METH_NOARGS | METH_METHOD),
-                           ('METH_O | METH_METHOD', METH_O | METH_METHOD)):
+                           ('METH_O | METH_METHOD', METH_O | METH_METHOD),
+                           ('METH_METHOD without METH_KEYWORDS', METH_METHOD),
+                           ('METH_NOARGS | METH_KEYWORDS',
+                            METH_NOARGS | METH_KEYWORDS),
+                           ('METH_O | METH_KEYWORDS',
+                            METH_O | METH_KEYWORDS)):
             with self.subTest(flag=name):
                 for exc in bad_flags(flag):
                     self.assertIsInstance(exc, SystemError)
+
+    def test_keyword_flags(self):
+        self.assertEqual(bad_flags(METH_KEYWORDS), (None, None))
 
     def test_fixed_arity_flags(self):
         for name, flag in (('METH_O', METH_O), ('METH_NOARGS', METH_NOARGS)):

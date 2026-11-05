@@ -93,7 +93,7 @@ PyDoc_STRVAR(structseq___replace____doc__,
 "Return a copy with new values for the specified fields.");
 
 #define STRUCTSEQ___REPLACE___METHODDEF    \
-    {"__replace__", _PyCFunction_CAST(structseq___replace__), METH_VALUE, structseq___replace____doc__},
+    {"__replace__", _PyCFunction_CAST(structseq___replace__), METH_VALUE|METH_KEYWORDS, structseq___replace____doc__},
 
 static PyValue
 structseq___replace___impl(PyStructSequence *self, PyObject *changes);
@@ -120,4 +120,4 @@ exit:
 
     return return_value;
 }
-/*[clinic end generated code: output=927d6664d68d15fd input=a9049054013a1b77]*/
+/*[clinic end generated code: output=f30ebea20feca89c input=a9049054013a1b77]*/

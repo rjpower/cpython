@@ -12,7 +12,7 @@ preserve
 #  include "pycore_value.h"       // _PyValue_STATIC_IMMORTAL()
 #endif
 #include "pycore_long_value.h"    // _PyValue_AsDouble()
-#include "pycore_modsupport.h"    // _PyArg_NoKwnamesValue()
+#include "pycore_modsupport.h"    // _PyArg_CheckPositional()
 #include "pycore_value_call.h"    // METH_VALUE
 
 PyDoc_STRVAR(cmath_acos__doc__,
@@ -757,9 +757,6 @@ cmath_log(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject 
     Py_complex x;
     PyValueBorrow y_obj = PyValue_Borrow(PyValue_NULL);
 
-    if (!_PyArg_NoKwnamesValue("cmath.log()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("log", nargs, 1, 2)) {
         goto exit;
     }
@@ -874,9 +871,6 @@ cmath_rect(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject
     double phi;
     Py_complex _return_value;
 
-    if (!_PyArg_NoKwnamesValue("cmath.rect()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("rect", nargs, 2, 2)) {
         goto exit;
     }
@@ -1030,7 +1024,7 @@ PyDoc_STRVAR(cmath_isclose__doc__,
 "to themselves.");
 
 #define CMATH_ISCLOSE_METHODDEF    \
-    {"isclose", _PyCFunction_CAST(cmath_isclose), METH_VALUE, cmath_isclose__doc__},
+    {"isclose", _PyCFunction_CAST(cmath_isclose), METH_VALUE|METH_KEYWORDS, cmath_isclose__doc__},
 
 static int
 cmath_isclose_impl(PyObject *module, Py_complex a, Py_complex b,
@@ -1119,4 +1113,4 @@ cmath_isclose(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObj
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=53ba5adf965bc917 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=f693e8b0799a19d8 input=a9049054013a1b77]*/

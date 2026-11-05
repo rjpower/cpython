@@ -104,7 +104,7 @@ PyDoc_STRVAR(_io__BufferedIOBase_detach__doc__,
 "state.");
 
 #define _IO__BUFFEREDIOBASE_DETACH_METHODDEF    \
-    {"detach", _PyCFunction_CAST(_io__BufferedIOBase_detach), METH_VALUE|METH_METHOD, _io__BufferedIOBase_detach__doc__},
+    {"detach", _PyCFunction_CAST(_io__BufferedIOBase_detach), METH_VALUE|METH_METHOD|METH_KEYWORDS, _io__BufferedIOBase_detach__doc__},
 
 static PyValue
 _io__BufferedIOBase_detach_impl(PyObject *self, PyTypeObject *cls);
@@ -146,7 +146,7 @@ PyDoc_STRVAR(_io__BufferedIOBase_read__doc__,
 "mode and no data is available at the moment.");
 
 #define _IO__BUFFEREDIOBASE_READ_METHODDEF    \
-    {"read", _PyCFunction_CAST(_io__BufferedIOBase_read), METH_VALUE|METH_METHOD, _io__BufferedIOBase_read__doc__},
+    {"read", _PyCFunction_CAST(_io__BufferedIOBase_read), METH_VALUE|METH_METHOD|METH_KEYWORDS, _io__BufferedIOBase_read__doc__},
 
 static PyValue
 _io__BufferedIOBase_read_impl(PyObject *self, PyTypeObject *cls,
@@ -188,7 +188,7 @@ PyDoc_STRVAR(_io__BufferedIOBase_read1__doc__,
 "A short result does not imply that EOF is imminent.");
 
 #define _IO__BUFFEREDIOBASE_READ1_METHODDEF    \
-    {"read1", _PyCFunction_CAST(_io__BufferedIOBase_read1), METH_VALUE|METH_METHOD, _io__BufferedIOBase_read1__doc__},
+    {"read1", _PyCFunction_CAST(_io__BufferedIOBase_read1), METH_VALUE|METH_METHOD|METH_KEYWORDS, _io__BufferedIOBase_read1__doc__},
 
 static PyValue
 _io__BufferedIOBase_read1_impl(PyObject *self, PyTypeObject *cls,
@@ -233,7 +233,7 @@ PyDoc_STRVAR(_io__BufferedIOBase_write__doc__,
 "underlying raw stream cannot accept more data at the moment.");
 
 #define _IO__BUFFEREDIOBASE_WRITE_METHODDEF    \
-    {"write", _PyCFunction_CAST(_io__BufferedIOBase_write), METH_VALUE|METH_METHOD, _io__BufferedIOBase_write__doc__},
+    {"write", _PyCFunction_CAST(_io__BufferedIOBase_write), METH_VALUE|METH_METHOD|METH_KEYWORDS, _io__BufferedIOBase_write__doc__},
 
 static PyValue
 _io__BufferedIOBase_write_impl(PyObject *self, PyTypeObject *cls,
@@ -573,9 +573,6 @@ _io__Buffered_peek(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, Py
     PyValue return_value = PyValue_NULL;
     Py_ssize_t size = 0;
 
-    if (!_PyArg_NoKwnamesValue("_Buffered.peek()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("peek", nargs, 0, 1)) {
         goto exit;
     }
@@ -620,9 +617,6 @@ _io__Buffered_read(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, Py
     PyValue return_value = PyValue_NULL;
     Py_ssize_t n = -1;
 
-    if (!_PyArg_NoKwnamesValue("_Buffered.read()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("read", nargs, 0, 1)) {
         goto exit;
     }
@@ -658,9 +652,6 @@ _io__Buffered_read1(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, P
     PyValue return_value = PyValue_NULL;
     Py_ssize_t n = -1;
 
-    if (!_PyArg_NoKwnamesValue("_Buffered.read1()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("read1", nargs, 0, 1)) {
         goto exit;
     }
@@ -781,9 +772,6 @@ _io__Buffered_readline(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs
     PyValue return_value = PyValue_NULL;
     Py_ssize_t size = -1;
 
-    if (!_PyArg_NoKwnamesValue("_Buffered.readline()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("readline", nargs, 0, 1)) {
         goto exit;
     }
@@ -843,9 +831,6 @@ _io__Buffered_seek(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, Py
     PyValueBorrow targetobj;
     int whence = 0;
 
-    if (!_PyArg_NoKwnamesValue("_Buffered.seek()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("seek", nargs, 1, 2)) {
         goto exit;
     }
@@ -872,7 +857,7 @@ PyDoc_STRVAR(_io__Buffered_truncate__doc__,
 "\n");
 
 #define _IO__BUFFERED_TRUNCATE_METHODDEF    \
-    {"truncate", _PyCFunction_CAST(_io__Buffered_truncate), METH_VALUE|METH_METHOD, _io__Buffered_truncate__doc__},
+    {"truncate", _PyCFunction_CAST(_io__Buffered_truncate), METH_VALUE|METH_METHOD|METH_KEYWORDS, _io__Buffered_truncate__doc__},
 
 static PyValue
 _io__Buffered_truncate_impl(buffered *self, PyTypeObject *cls,
@@ -1215,9 +1200,6 @@ _io_BufferedRWPair_read(PyValueBorrow self, const PyValue *args, Py_ssize_t narg
     PyValue return_value = PyValue_NULL;
     PyValueBorrow size = PyValue_Borrow(PyValue_NULL);
 
-    if (!_PyArg_NoKwnamesValue("BufferedRWPair.read()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("read", nargs, 0, 1)) {
         goto exit;
     }
@@ -1249,9 +1231,6 @@ _io_BufferedRWPair_peek(PyValueBorrow self, const PyValue *args, Py_ssize_t narg
     PyValue return_value = PyValue_NULL;
     PyValueBorrow size = PyValue_Borrow(PyValue_NULL);
 
-    if (!_PyArg_NoKwnamesValue("BufferedRWPair.peek()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("peek", nargs, 0, 1)) {
         goto exit;
     }
@@ -1283,9 +1262,6 @@ _io_BufferedRWPair_read1(PyValueBorrow self, const PyValue *args, Py_ssize_t nar
     PyValue return_value = PyValue_NULL;
     PyValueBorrow size = PyValue_Borrow(PyValue_NULL);
 
-    if (!_PyArg_NoKwnamesValue("BufferedRWPair.read1()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("read1", nargs, 0, 1)) {
         goto exit;
     }
@@ -1582,4 +1558,4 @@ _io_BufferedRandom___init__(PyObject *self, PyObject *args, PyObject *kwargs)
 
 #define _IO_BUFFEREDRWPAIR_CLOSED_GETSETDEF {"closed", (getter)_io_BufferedRWPair_closed_get, (setter)NULL, NULL},
 
-/*[clinic end generated code: output=9441d9756ffbf820 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=599644cee6576f3b input=a9049054013a1b77]*/

@@ -71,7 +71,7 @@ PyDoc_STRVAR(InstructionSequenceType_use_label__doc__,
 "Place label at current location.");
 
 #define INSTRUCTIONSEQUENCETYPE_USE_LABEL_METHODDEF    \
-    {"use_label", _PyCFunction_CAST(InstructionSequenceType_use_label), METH_VALUE, InstructionSequenceType_use_label__doc__},
+    {"use_label", _PyCFunction_CAST(InstructionSequenceType_use_label), METH_VALUE|METH_KEYWORDS, InstructionSequenceType_use_label__doc__},
 
 static PyValue
 InstructionSequenceType_use_label_impl(_PyInstructionSequence *self,
@@ -133,7 +133,7 @@ PyDoc_STRVAR(InstructionSequenceType_addop__doc__,
 "Append an instruction.");
 
 #define INSTRUCTIONSEQUENCETYPE_ADDOP_METHODDEF    \
-    {"addop", _PyCFunction_CAST(InstructionSequenceType_addop), METH_VALUE, InstructionSequenceType_addop__doc__},
+    {"addop", _PyCFunction_CAST(InstructionSequenceType_addop), METH_VALUE|METH_KEYWORDS, InstructionSequenceType_addop__doc__},
 
 static PyValue
 InstructionSequenceType_addop_impl(_PyInstructionSequence *self, int opcode,
@@ -248,7 +248,7 @@ PyDoc_STRVAR(InstructionSequenceType_add_nested__doc__,
 "Add a nested sequence.");
 
 #define INSTRUCTIONSEQUENCETYPE_ADD_NESTED_METHODDEF    \
-    {"add_nested", _PyCFunction_CAST(InstructionSequenceType_add_nested), METH_VALUE, InstructionSequenceType_add_nested__doc__},
+    {"add_nested", _PyCFunction_CAST(InstructionSequenceType_add_nested), METH_VALUE|METH_KEYWORDS, InstructionSequenceType_add_nested__doc__},
 
 static PyValue
 InstructionSequenceType_add_nested_impl(_PyInstructionSequence *self,
@@ -342,4 +342,4 @@ InstructionSequenceType_get_instructions(PyValueBorrow self, const PyValue *args
 
     return return_value;
 }
-/*[clinic end generated code: output=aed7a05146bf87db input=a9049054013a1b77]*/
+/*[clinic end generated code: output=e54dd62d4b848e40 input=a9049054013a1b77]*/

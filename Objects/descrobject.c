@@ -585,8 +585,25 @@ method_check_value_args(PyObject *func, const PyValue *args, Py_ssize_t nargs)
     return descr_check_value((PyDescrObject *)func, PyValue_Borrow(args[0]));
 }
 
-/* METH_VALUE: the callee checks its own arity and keywords, except for the
-   fixed-arity forms below. */
+/* METH_VALUE takes positional arguments only, as METH_FASTCALL does: the
+   vectorcall rejects keywords with the message of method_vectorcall_FASTCALL
+   and calls ml_meth with no kwnames.  METH_VALUE | METH_KEYWORDS passes kwnames
+   to ml_meth, which checks its own arity.  The fixed-arity forms are below. */
+static int
+method_check_value_kwnames(PyObject *func, PyObject *kwnames)
+{
+    if (kwnames && PyTuple_GET_SIZE(kwnames)) {
+        PyObject *funcstr = _PyObject_FunctionStr(func);
+        if (funcstr != NULL) {
+            PyErr_Format(PyExc_TypeError,
+                         "%U takes no keyword arguments", funcstr);
+            Py_DECREF(funcstr);
+        }
+        return -1;
+    }
+    return 0;
+}
+
 /* The call of a checked method: args[0] is a valid self. */
 static inline PyValue
 method_value_invoke(PyThreadState *tstate, PyObject *func,
@@ -606,6 +623,21 @@ static PyValue
 method_value_vectorcall_descr(PyThreadState *tstate, PyObject *func,
                               const PyValue *args, size_t nargsf,
                               PyObject *kwnames)
+{
+    Py_ssize_t nargs = PyVectorcall_NARGS(nargsf);
+    if (method_check_value_args(func, args, nargs) < 0) {
+        return PyValue_NULL;
+    }
+    if (method_check_value_kwnames(func, kwnames) < 0) {
+        return PyValue_NULL;
+    }
+    return method_value_invoke(tstate, func, args, nargs, NULL);
+}
+
+static PyValue
+method_value_vectorcall_descr_KEYWORDS(PyThreadState *tstate, PyObject *func,
+                                       const PyValue *args, size_t nargsf,
+                                       PyObject *kwnames)
 {
     Py_ssize_t nargs = PyVectorcall_NARGS(nargsf);
     if (method_check_value_args(func, args, nargs) < 0) {
@@ -647,13 +679,7 @@ method_value_vectorcall_descr_checked(PyThreadState *tstate, PyObject *func,
     if (method_check_value_args(func, args, nargs) < 0) {
         return PyValue_NULL;
     }
-    if (kwnames && PyTuple_GET_SIZE(kwnames)) {
-        PyObject *funcstr = _PyObject_FunctionStr(func);
-        if (funcstr != NULL) {
-            PyErr_Format(PyExc_TypeError,
-                         "%U takes no keyword arguments", funcstr);
-            Py_DECREF(funcstr);
-        }
+    if (method_check_value_kwnames(func, kwnames) < 0) {
         return PyValue_NULL;
     }
     if (nargs != expected + 1) {
@@ -1233,7 +1259,11 @@ PyDescr_NewMethod(PyTypeObject *type, PyMethodDef *method)
             value_vectorcall = method_value_vectorcall_descr;
             vectorcall = _PyValue_VectorcallThunk;
             break;
-        case METH_VALUE | METH_METHOD:
+        case METH_VALUE | METH_KEYWORDS:
+            value_vectorcall = method_value_vectorcall_descr_KEYWORDS;
+            vectorcall = _PyValue_VectorcallThunk;
+            break;
+        case METH_VALUE | METH_METHOD | METH_KEYWORDS:
             value_vectorcall = method_value_vectorcall_descr_METHOD;
             vectorcall = _PyValue_VectorcallThunk;
             break;

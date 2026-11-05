@@ -7,7 +7,7 @@ preserve
 #endif
 
 #include "pycore_long_value.h"    // _PyValue_IntAsSsize_t()
-#include "pycore_modsupport.h"    // _PyArg_NoKwnamesValue()
+#include "pycore_modsupport.h"    // _PyArg_CheckPositional()
 #include "pycore_unicodeobject.h" // _PyUnicode_AsUTF8NoNUL()
 #include "pycore_value_call.h"    // METH_VALUE
 #include "pycore_value_ops.h"     // _PyValue_Index()
@@ -127,9 +127,6 @@ array_array_index(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyO
     Py_ssize_t start = 0;
     Py_ssize_t stop = PY_SSIZE_T_MAX;
 
-    if (!_PyArg_NoKwnamesValue("array.index()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("index", nargs, 1, 3)) {
         goto exit;
     }
@@ -197,9 +194,6 @@ array_array_pop(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObj
     PyValue return_value = PyValue_NULL;
     Py_ssize_t i = -1;
 
-    if (!_PyArg_NoKwnamesValue("array.pop()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("pop", nargs, 0, 1)) {
         goto exit;
     }
@@ -232,7 +226,7 @@ PyDoc_STRVAR(array_array_extend__doc__,
 "Append items to the end of the array.");
 
 #define ARRAY_ARRAY_EXTEND_METHODDEF    \
-    {"extend", _PyCFunction_CAST(array_array_extend), METH_VALUE|METH_METHOD, array_array_extend__doc__},
+    {"extend", _PyCFunction_CAST(array_array_extend), METH_VALUE|METH_METHOD|METH_KEYWORDS, array_array_extend__doc__},
 
 static PyValue
 array_array_extend_impl(arrayobject *self, PyTypeObject *cls,
@@ -276,9 +270,6 @@ array_array_insert(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, Py
     Py_ssize_t i;
     PyValueBorrow v;
 
-    if (!_PyArg_NoKwnamesValue("array.insert()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("insert", nargs, 2, 2)) {
         goto exit;
     }
@@ -405,7 +396,7 @@ PyDoc_STRVAR(array_array_fromfile__doc__,
 "Read n objects from the file object f and append them to the end of the array.");
 
 #define ARRAY_ARRAY_FROMFILE_METHODDEF    \
-    {"fromfile", _PyCFunction_CAST(array_array_fromfile), METH_VALUE|METH_METHOD, array_array_fromfile__doc__},
+    {"fromfile", _PyCFunction_CAST(array_array_fromfile), METH_VALUE|METH_METHOD|METH_KEYWORDS, array_array_fromfile__doc__},
 
 static PyValue
 array_array_fromfile_impl(arrayobject *self, PyTypeObject *cls,
@@ -455,7 +446,7 @@ PyDoc_STRVAR(array_array_tofile__doc__,
 "Write all items (as machine values) to the file object f.");
 
 #define ARRAY_ARRAY_TOFILE_METHODDEF    \
-    {"tofile", _PyCFunction_CAST(array_array_tofile), METH_VALUE|METH_METHOD, array_array_tofile__doc__},
+    {"tofile", _PyCFunction_CAST(array_array_tofile), METH_VALUE|METH_METHOD|METH_KEYWORDS, array_array_tofile__doc__},
 
 static PyValue
 array_array_tofile_impl(arrayobject *self, PyTypeObject *cls,
@@ -695,9 +686,6 @@ array__array_reconstructor(PyValueBorrow module, const PyValue *args, Py_ssize_t
     enum machine_format_code mformat_code;
     PyValueBorrow items;
 
-    if (!_PyArg_NoKwnamesValue("array._array_reconstructor()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("_array_reconstructor", nargs, 4, 4)) {
         goto exit;
     }
@@ -736,7 +724,7 @@ PyDoc_STRVAR(array_array___reduce_ex____doc__,
 "Return state information for pickling.");
 
 #define ARRAY_ARRAY___REDUCE_EX___METHODDEF    \
-    {"__reduce_ex__", _PyCFunction_CAST(array_array___reduce_ex__), METH_VALUE|METH_METHOD, array_array___reduce_ex____doc__},
+    {"__reduce_ex__", _PyCFunction_CAST(array_array___reduce_ex__), METH_VALUE|METH_METHOD|METH_KEYWORDS, array_array___reduce_ex____doc__},
 
 static PyValue
 array_array___reduce_ex___impl(arrayobject *self, PyTypeObject *cls,
@@ -768,7 +756,7 @@ PyDoc_STRVAR(array_arrayiterator___reduce____doc__,
 "Return state information for pickling.");
 
 #define ARRAY_ARRAYITERATOR___REDUCE___METHODDEF    \
-    {"__reduce__", _PyCFunction_CAST(array_arrayiterator___reduce__), METH_VALUE|METH_METHOD, array_arrayiterator___reduce____doc__},
+    {"__reduce__", _PyCFunction_CAST(array_arrayiterator___reduce__), METH_VALUE|METH_METHOD|METH_KEYWORDS, array_arrayiterator___reduce____doc__},
 
 static PyValue
 array_arrayiterator___reduce___impl(arrayiterobject *self, PyTypeObject *cls);
@@ -812,4 +800,4 @@ array_arrayiterator___setstate__(PyValueBorrow self, const PyValue *args, Py_ssi
 
     return return_value;
 }
-/*[clinic end generated code: output=7b5d1531618788b3 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=5c27cb4defee7a4e input=a9049054013a1b77]*/

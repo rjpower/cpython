@@ -188,9 +188,6 @@ m_p_none_cdefault(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, P
     PyValue return_value = PyValue_NULL;
     PyValueBorrow a = PyValue_Borrow(PyValue_NULL);
 
-    if (!_PyArg_NoKwnamesValue("m.p_none_cdefault()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("p_none_cdefault", nargs, 0, 1)) {
         goto exit;
     }
@@ -207,7 +204,7 @@ exit:
 
 static PyValue
 m_p_none_cdefault_impl(PyObject *module, PyValueBorrow a)
-/*[clinic end generated code: output=342b61f275709e55 input=4d2090a33a64e235]*/
+/*[clinic end generated code: output=407c4752484619a7 input=4d2090a33a64e235]*/
 
 
 /*[clinic input]
@@ -233,9 +230,6 @@ m_p_none(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *
     PyValue return_value = PyValue_NULL;
     PyValueBorrow a = PyValue_Borrow(PyValue_None);
 
-    if (!_PyArg_NoKwnamesValue("m.p_none()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("p_none", nargs, 0, 1)) {
         goto exit;
     }
@@ -252,7 +246,7 @@ exit:
 
 static PyValue
 m_p_none_impl(PyObject *module, PyValueBorrow a)
-/*[clinic end generated code: output=ed845fdb092aa9a5 input=71be72d79bb7ea47]*/
+/*[clinic end generated code: output=70c75e46ed39786c input=71be72d79bb7ea47]*/
 
 
 /*[clinic input]
@@ -453,9 +447,6 @@ m_p_ssize_t_or_none(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs,
     Py_ssize_t a = -1;
     Py_ssize_t b = -1;
 
-    if (!_PyArg_NoKwnamesValue("m.p_ssize_t_or_none()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("p_ssize_t_or_none", nargs, 0, 2)) {
         goto exit;
     }
@@ -480,7 +471,7 @@ exit:
 
 static PyValue
 m_p_ssize_t_or_none_impl(PyObject *module, Py_ssize_t a, Py_ssize_t b)
-/*[clinic end generated code: output=bbce0846e55b260c input=fe756f866b641af5]*/
+/*[clinic end generated code: output=8ed4c7f36492442a input=fe756f866b641af5]*/
 
 
 /*[clinic input]
@@ -1081,9 +1072,6 @@ m_p_varpos_tuple(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, Py
     PyValueBorrow a;
     PyObject *__clinic_args = NULL;
 
-    if (!_PyArg_NoKwnamesValue("m.p_varpos_tuple()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("p_varpos_tuple", nargs, 1, PY_SSIZE_T_MAX)) {
         goto exit;
     }
@@ -1104,7 +1092,7 @@ exit:
 
 static PyValue
 m_p_varpos_tuple_impl(PyObject *module, PyValueBorrow a, PyObject *args)
-/*[clinic end generated code: output=a5a093a36d0dd05c input=72ab422ef81e1d41]*/
+/*[clinic end generated code: output=a7272daf37c83024 input=72ab422ef81e1d41]*/
 
 
 /*[clinic input]
@@ -1134,9 +1122,6 @@ m_p_varpos_array(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, Py
     const PyValue *__clinic_args;
     Py_ssize_t args_length;
 
-    if (!_PyArg_NoKwnamesValue("m.p_varpos_array()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("p_varpos_array", nargs, 1, PY_SSIZE_T_MAX)) {
         goto exit;
     }
@@ -1152,7 +1137,7 @@ exit:
 static PyValue
 m_p_varpos_array_impl(PyObject *module, PyValueBorrow a, const PyValue *args,
                       Py_ssize_t args_length)
-/*[clinic end generated code: output=ebdd97b497064491 input=d1461250cc862dad]*/
+/*[clinic end generated code: output=04331c9d0c2378e0 input=d1461250cc862dad]*/
 
 
 /*[clinic input]
@@ -1169,7 +1154,7 @@ PyDoc_STRVAR(m_p_varkw__doc__,
 "\n");
 
 #define M_P_VARKW_METHODDEF    \
-    {"p_varkw", _PyCFunction_CAST(m_p_varkw), METH_VALUE, m_p_varkw__doc__},
+    {"p_varkw", _PyCFunction_CAST(m_p_varkw), METH_VALUE|METH_KEYWORDS, m_p_varkw__doc__},
 
 static PyValue
 m_p_varkw_impl(PyObject *module, PyValueBorrow a, PyValueBorrow b,
@@ -1205,7 +1190,7 @@ exit:
 static PyValue
 m_p_varkw_impl(PyObject *module, PyValueBorrow a, PyValueBorrow b,
                PyObject *kwargs)
-/*[clinic end generated code: output=a89c9779e348c5b8 input=480a6d4d37c82c03]*/
+/*[clinic end generated code: output=a98e10fba7b84d6c input=480a6d4d37c82c03]*/
 
 
 /*[clinic input]
@@ -1363,9 +1348,6 @@ m_s_posonly_opt(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyO
     int b = 1;
     int c = 2;
 
-    if (!_PyArg_NoKwnamesValue("m.s_posonly_opt()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("s_posonly_opt", nargs, 1, 3)) {
         goto exit;
     }
@@ -1393,7 +1375,7 @@ exit:
 
 static PyValue
 m_s_posonly_opt_impl(PyObject *module, PyValueBorrow a, int b, int c)
-/*[clinic end generated code: output=f09c6e96f9efe03b input=fd78c67aac8d15f2]*/
+/*[clinic end generated code: output=4729106ac7199049 input=fd78c67aac8d15f2]*/
 
 
 /*[clinic input]
@@ -1408,7 +1390,7 @@ PyDoc_STRVAR(m_s_poskw__doc__,
 "\n");
 
 #define M_S_POSKW_METHODDEF    \
-    {"s_poskw", _PyCFunction_CAST(m_s_poskw), METH_VALUE, m_s_poskw__doc__},
+    {"s_poskw", _PyCFunction_CAST(m_s_poskw), METH_VALUE|METH_KEYWORDS, m_s_poskw__doc__},
 
 static PyValue
 m_s_poskw_impl(PyObject *module, PyValueBorrow a, int b);
@@ -1467,7 +1449,7 @@ exit:
 
 static PyValue
 m_s_poskw_impl(PyObject *module, PyValueBorrow a, int b)
-/*[clinic end generated code: output=2e04b822e139fcf3 input=49d8b606dc56d590]*/
+/*[clinic end generated code: output=dcb5d676718bb535 input=49d8b606dc56d590]*/
 
 
 /*[clinic input]
@@ -1484,7 +1466,7 @@ PyDoc_STRVAR(m_s_kwonly__doc__,
 "\n");
 
 #define M_S_KWONLY_METHODDEF    \
-    {"s_kwonly", _PyCFunction_CAST(m_s_kwonly), METH_VALUE, m_s_kwonly__doc__},
+    {"s_kwonly", _PyCFunction_CAST(m_s_kwonly), METH_VALUE|METH_KEYWORDS, m_s_kwonly__doc__},
 
 static PyValue
 m_s_kwonly_impl(PyObject *module, PyValueBorrow a, int b, double c);
@@ -1548,7 +1530,7 @@ exit:
 
 static PyValue
 m_s_kwonly_impl(PyObject *module, PyValueBorrow a, int b, double c)
-/*[clinic end generated code: output=bc5f7a94f7586182 input=147c74ba84cb07e9]*/
+/*[clinic end generated code: output=7f582523bb49da4a input=147c74ba84cb07e9]*/
 
 
 /*[clinic input]
@@ -1563,7 +1545,7 @@ PyDoc_STRVAR(m_T_s_defcls__doc__,
 "\n");
 
 #define M_T_S_DEFCLS_METHODDEF    \
-    {"s_defcls", _PyCFunction_CAST(m_T_s_defcls), METH_VALUE|METH_METHOD, m_T_s_defcls__doc__},
+    {"s_defcls", _PyCFunction_CAST(m_T_s_defcls), METH_VALUE|METH_METHOD|METH_KEYWORDS, m_T_s_defcls__doc__},
 
 static PyValue
 m_T_s_defcls_impl(TestObj *self, PyTypeObject *cls);
@@ -1585,7 +1567,7 @@ exit:
 
 static PyValue
 m_T_s_defcls_impl(TestObj *self, PyTypeObject *cls)
-/*[clinic end generated code: output=06953a96fb119032 input=77ef50d9149f350a]*/
+/*[clinic end generated code: output=ffb1c6a8b10dd9d3 input=77ef50d9149f350a]*/
 
 
 /*[clinic input]
@@ -1602,7 +1584,7 @@ PyDoc_STRVAR(m_T_s_defcls_params__doc__,
 "\n");
 
 #define M_T_S_DEFCLS_PARAMS_METHODDEF    \
-    {"s_defcls_params", _PyCFunction_CAST(m_T_s_defcls_params), METH_VALUE|METH_METHOD, m_T_s_defcls_params__doc__},
+    {"s_defcls_params", _PyCFunction_CAST(m_T_s_defcls_params), METH_VALUE|METH_METHOD|METH_KEYWORDS, m_T_s_defcls_params__doc__},
 
 static PyValue
 m_T_s_defcls_params_impl(TestObj *self, PyTypeObject *cls, PyValueBorrow a,
@@ -1639,7 +1621,7 @@ exit:
 static PyValue
 m_T_s_defcls_params_impl(TestObj *self, PyTypeObject *cls, PyValueBorrow a,
                          int b)
-/*[clinic end generated code: output=8ad931f76dc29e49 input=7389fc7e85e31303]*/
+/*[clinic end generated code: output=8b88249c394db99b input=7389fc7e85e31303]*/
 
 
 /*[clinic input]
@@ -1656,7 +1638,7 @@ PyDoc_STRVAR(m_T_s_defcls_kw__doc__,
 "\n");
 
 #define M_T_S_DEFCLS_KW_METHODDEF    \
-    {"s_defcls_kw", _PyCFunction_CAST(m_T_s_defcls_kw), METH_VALUE|METH_METHOD, m_T_s_defcls_kw__doc__},
+    {"s_defcls_kw", _PyCFunction_CAST(m_T_s_defcls_kw), METH_VALUE|METH_METHOD|METH_KEYWORDS, m_T_s_defcls_kw__doc__},
 
 static PyValue
 m_T_s_defcls_kw_impl(TestObj *self, PyTypeObject *cls, PyValueBorrow a,
@@ -1717,7 +1699,7 @@ exit:
 static PyValue
 m_T_s_defcls_kw_impl(TestObj *self, PyTypeObject *cls, PyValueBorrow a,
                      int b)
-/*[clinic end generated code: output=00cbb1ecdfb1b936 input=8b3627fe49809aba]*/
+/*[clinic end generated code: output=547492b352799b21 input=8b3627fe49809aba]*/
 
 
 /*[clinic input]
@@ -1781,9 +1763,6 @@ m_T_s_staticmethod(PyValueBorrow null, const PyValue *args, Py_ssize_t nargs, Py
     PyValueBorrow a;
     int b = 1;
 
-    if (!_PyArg_NoKwnamesValue("T.s_staticmethod()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("s_staticmethod", nargs, 1, 2)) {
         goto exit;
     }
@@ -1804,7 +1783,7 @@ exit:
 
 static PyValue
 m_T_s_staticmethod_impl(PyValueBorrow a, int b)
-/*[clinic end generated code: output=072497a39398317e input=1aada2343f8e92c9]*/
+/*[clinic end generated code: output=f3d535a035dfc1fa input=1aada2343f8e92c9]*/
 
 
 /*[clinic input]
@@ -1995,7 +1974,7 @@ PyDoc_STRVAR(m_s_example__doc__,
 "\n");
 
 #define M_S_EXAMPLE_METHODDEF    \
-    {"s_example", _PyCFunction_CAST(m_s_example), METH_VALUE, m_s_example__doc__},
+    {"s_example", _PyCFunction_CAST(m_s_example), METH_VALUE|METH_KEYWORDS, m_s_example__doc__},
 
 static PyValue
 m_s_example_impl(PyObject *module, PyValueBorrow x, int n, double scale);
@@ -2061,7 +2040,7 @@ exit:
 
 static PyValue
 m_s_example_impl(PyObject *module, PyValueBorrow x, int n, double scale)
-/*[clinic end generated code: output=77a8dd4a48eb7a12 input=cf765b68a8f39d2f]*/
+/*[clinic end generated code: output=cee20dbc667104be input=cf765b68a8f39d2f]*/
 
 
 /*[clinic input]

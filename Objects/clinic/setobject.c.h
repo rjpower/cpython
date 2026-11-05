@@ -7,7 +7,6 @@ preserve
 #endif
 
 #include "pycore_critical_section.h"// Py_BEGIN_CRITICAL_SECTION()
-#include "pycore_modsupport.h"    // _PyArg_NoKwnamesValue()
 #include "pycore_value_call.h"    // METH_VALUE
 
 static PyObject *
@@ -71,14 +70,10 @@ set_update(PyValueBorrow so, const PyValue *args, Py_ssize_t nargs, PyObject *kw
     const PyValue *others;
     Py_ssize_t others_length;
 
-    if (!_PyArg_NoKwnamesValueMethod(&PySet_Type, "update", kwnames)) {
-        goto exit;
-    }
     others = args;
     others_length = nargs;
     return_value = set_update_impl((PySetObject *)PyValue_AsKnownObjectBorrow(so), others, others_length);
 
-exit:
     return return_value;
 }
 
@@ -174,14 +169,10 @@ set_union(PyValueBorrow so, const PyValue *args, Py_ssize_t nargs, PyObject *kwn
     const PyValue *others;
     Py_ssize_t others_length;
 
-    if (!_PyArg_NoKwnamesValueMethod(&PySet_Type, "union", kwnames)) {
-        goto exit;
-    }
     others = args;
     others_length = nargs;
     return_value = set_union_impl((PySetObject *)PyValue_AsKnownObjectBorrow(so), others, others_length);
 
-exit:
     return return_value;
 }
 
@@ -205,14 +196,10 @@ set_intersection_multi(PyValueBorrow so, const PyValue *args, Py_ssize_t nargs, 
     const PyValue *others;
     Py_ssize_t others_length;
 
-    if (!_PyArg_NoKwnamesValueMethod(&PySet_Type, "intersection", kwnames)) {
-        goto exit;
-    }
     others = args;
     others_length = nargs;
     return_value = set_intersection_multi_impl((PySetObject *)PyValue_AsKnownObjectBorrow(so), others, others_length);
 
-exit:
     return return_value;
 }
 
@@ -236,14 +223,10 @@ set_intersection_update_multi(PyValueBorrow so, const PyValue *args, Py_ssize_t 
     const PyValue *others;
     Py_ssize_t others_length;
 
-    if (!_PyArg_NoKwnamesValueMethod(&PySet_Type, "intersection_update", kwnames)) {
-        goto exit;
-    }
     others = args;
     others_length = nargs;
     return_value = set_intersection_update_multi_impl((PySetObject *)PyValue_AsKnownObjectBorrow(so), others, others_length);
 
-exit:
     return return_value;
 }
 
@@ -293,14 +276,10 @@ set_difference_update(PyValueBorrow so, const PyValue *args, Py_ssize_t nargs, P
     const PyValue *others;
     Py_ssize_t others_length;
 
-    if (!_PyArg_NoKwnamesValueMethod(&PySet_Type, "difference_update", kwnames)) {
-        goto exit;
-    }
     others = args;
     others_length = nargs;
     return_value = set_difference_update_impl((PySetObject *)PyValue_AsKnownObjectBorrow(so), others, others_length);
 
-exit:
     return return_value;
 }
 
@@ -324,14 +303,10 @@ set_difference_multi(PyValueBorrow so, const PyValue *args, Py_ssize_t nargs, Py
     const PyValue *others;
     Py_ssize_t others_length;
 
-    if (!_PyArg_NoKwnamesValueMethod(&PySet_Type, "difference", kwnames)) {
-        goto exit;
-    }
     others = args;
     others_length = nargs;
     return_value = set_difference_multi_impl((PySetObject *)PyValue_AsKnownObjectBorrow(so), others, others_length);
 
-exit:
     return return_value;
 }
 
@@ -617,4 +592,4 @@ set___sizeof__(PyValueBorrow so, const PyValue *args, Py_ssize_t nargs, PyObject
 
     return return_value;
 }
-/*[clinic end generated code: output=69976d8cc62dae23 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=946a2e30483266a3 input=a9049054013a1b77]*/

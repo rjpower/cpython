@@ -6,7 +6,7 @@ preserve
 #  error "value-emission Clinic output requires Py_VALUE_CORE"
 #endif
 
-#include "pycore_modsupport.h"    // _PyArg_NoKwnamesValue()
+#include "pycore_modsupport.h"    // _PyArg_CheckPositional()
 #include "pycore_value_call.h"    // METH_VALUE
 
 PyDoc_STRVAR(_contextvars_Context_get__doc__,
@@ -32,9 +32,6 @@ _contextvars_Context_get(PyValueBorrow self, const PyValue *args, Py_ssize_t nar
     PyValueBorrow key;
     PyValueBorrow default_value = PyValue_Borrow(PyValue_None);
 
-    if (!_PyArg_NoKwnamesValueMethod(&PyContext_Type, "get", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("get", nargs, 1, 2)) {
         goto exit;
     }
@@ -167,9 +164,6 @@ _contextvars_ContextVar_get(PyValueBorrow self, const PyValue *args, Py_ssize_t 
     PyValue return_value = PyValue_NULL;
     PyValueBorrow default_value = PyValue_Borrow(PyValue_NULL);
 
-    if (!_PyArg_NoKwnamesValueMethod(&PyContextVar_Type, "get", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("get", nargs, 0, 1)) {
         goto exit;
     }
@@ -284,9 +278,6 @@ token_exit(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *
     PyValueBorrow val;
     PyValueBorrow tb;
 
-    if (!_PyArg_NoKwnamesValueMethod(&PyContextToken_Type, "__exit__", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("__exit__", nargs, 3, 3)) {
         goto exit;
     }
@@ -298,4 +289,4 @@ token_exit(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=0ac27faa8eb137f3 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=917a66deb851762a input=a9049054013a1b77]*/

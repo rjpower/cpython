@@ -79,7 +79,7 @@ PyDoc_STRVAR(warnings_warn__doc__,
 "    during stacklevel computations for stack frame attribution.");
 
 #define WARNINGS_WARN_METHODDEF    \
-    {"warn", _PyCFunction_CAST(warnings_warn), METH_VALUE, warnings_warn__doc__},
+    {"warn", _PyCFunction_CAST(warnings_warn), METH_VALUE|METH_KEYWORDS, warnings_warn__doc__},
 
 static PyValue
 warnings_warn_impl(PyObject *module, PyValueBorrow message,
@@ -171,7 +171,7 @@ PyDoc_STRVAR(warnings_warn_explicit__doc__,
 "Issue a warning, or maybe ignore it or raise an exception.");
 
 #define WARNINGS_WARN_EXPLICIT_METHODDEF    \
-    {"warn_explicit", _PyCFunction_CAST(warnings_warn_explicit), METH_VALUE, warnings_warn_explicit__doc__},
+    {"warn_explicit", _PyCFunction_CAST(warnings_warn_explicit), METH_VALUE|METH_KEYWORDS, warnings_warn_explicit__doc__},
 
 static PyValue
 warnings_warn_explicit_impl(PyObject *module, PyValueBorrow message,
@@ -279,4 +279,4 @@ warnings_filters_mutated_lock_held(PyValueBorrow module, const PyValue *args, Py
 
     return return_value;
 }
-/*[clinic end generated code: output=a99e727f480b37b1 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=6e09b5ef5c509046 input=a9049054013a1b77]*/

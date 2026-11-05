@@ -6,7 +6,7 @@ preserve
 #  error "value-emission Clinic output requires Py_VALUE_CORE"
 #endif
 
-#include "pycore_modsupport.h"    // _PyArg_NoKwnamesValue()
+#include "pycore_modsupport.h"    // _PyArg_CheckPositional()
 #include "pycore_tuple.h"         // _PyTuple_ITEMS()
 #include "pycore_value_call.h"    // METH_VALUE
 #include "pycore_value_slots.h"   // _PyValue_THUNK_EXIT()
@@ -34,9 +34,6 @@ tuple_index(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject 
     Py_ssize_t start = 0;
     Py_ssize_t stop = PY_SSIZE_T_MAX;
 
-    if (!_PyArg_NoKwnamesValueMethod(&PyTuple_Type, "index", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("index", nargs, 1, 3)) {
         goto exit;
     }
@@ -173,4 +170,4 @@ tuple___getnewargs__(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, 
 
     return return_value;
 }
-/*[clinic end generated code: output=8bc3f238c6c6fc38 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=e7197dbedb3be362 input=a9049054013a1b77]*/

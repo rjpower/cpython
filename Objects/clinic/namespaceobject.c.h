@@ -16,7 +16,7 @@ PyDoc_STRVAR(namespace___replace____doc__,
 "Return a copy with the specified attributes replaced.");
 
 #define NAMESPACE___REPLACE___METHODDEF    \
-    {"__replace__", _PyCFunction_CAST(namespace___replace__), METH_VALUE, namespace___replace____doc__},
+    {"__replace__", _PyCFunction_CAST(namespace___replace__), METH_VALUE|METH_KEYWORDS, namespace___replace____doc__},
 
 static PyValue
 namespace___replace___impl(_PyNamespaceObject *self, PyObject *changes);
@@ -43,4 +43,4 @@ exit:
 
     return return_value;
 }
-/*[clinic end generated code: output=419ec90992eca007 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=731349243f42e3e0 input=a9049054013a1b77]*/

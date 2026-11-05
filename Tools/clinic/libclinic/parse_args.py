@@ -1,5 +1,4 @@
 from __future__ import annotations
-import re
 from typing import TYPE_CHECKING, Final, Literal
 
 import libclinic
@@ -194,63 +193,6 @@ def is_value_function(f: Function, codegen: CodeGen) -> bool:
             and f.kind is not SLOT and f.kind not in ACCESSORS
             and not any(p.group for p in f.parameters.values())
             and all(p.converter.has_value_form for p in f.parameters.values()))
-
-
-def value_static_type(f: Function) -> str | None:
-    """The static type object of a method of a top-level class, or None.
-
-    The runtime __qualname__ of such a method uses the type's own name, which
-    the Clinic class name does not give ("TypeVar", not "typevar"), so the
-    generated code reads it from the type.
-    """
-    cls = f.cls
-    if cls is None or cls.cls is not None or f.kind.new_or_init:
-        return None
-    if re.fullmatch(r'&\w*_?Type', cls.type_object) is None:
-        return None
-    return cls.type_object
-
-
-def heap_type_name(cls: Class) -> str | None:
-    """The runtime name of a class whose type object is not a C name.
-
-    A class line whose type object is "heap_type:TypeVar" has no static type
-    to read the name from (a heap type made from a spec), so the line gives
-    the name that its methods' __qualname__ shows.
-    """
-    prefix = 'heap_type:'
-    if cls.type_object.startswith(prefix):
-        return cls.type_object[len(prefix):]
-    return None
-
-
-def value_funcstr(f: Function) -> str:
-    """The name of the function as _PyObject_FunctionStr() shows it.
-
-    The arity messages of METH_NOARGS and METH_O, and the keyword message
-    of METH_FASTCALL, use it: "list.clear()", "math.sin()", "len()".
-    """
-    names = [f.name]
-    if f.cls is not None:
-        parent: Class | None = f.cls
-        while isinstance(parent, Class):
-            names.append(heap_type_name(parent) or parent.name)
-            parent = parent.cls
-    else:
-        module = f.module
-        while isinstance(module, Module):
-            names.append(module.name)
-            module = module.module
-        if len(names) == 1:
-            # A function declared outside any module ("abs as builtin_abs")
-            # belongs to the file's module, if it declares exactly one;
-            # otherwise it is shown by its bare name.
-            modules = list(module.modules)
-            if len(modules) == 1:
-                names.append(modules[0])
-        if names[-1] == 'builtins':
-            names.pop()
-    return '.'.join(reversed(names)) + '()'
 
 
 DOCSTRING_PROTOTYPE_VAR: Final[str] = libclinic.normalize_snippet("""
@@ -2070,34 +2012,22 @@ class ParseArgsCodeGen:
         return code
 
     def _value_no_kwnames(self) -> str:
-        """Reject keywords as the convention the function replaces does.
+        """Reject keywords in a function that no vectorcall guards.
 
-        METH_FASTCALL's message names the function as METH_O's does; a
-        METH_METHOD function and a slot report them under their own name.
+        A METH_VALUE function in a method table takes positional arguments
+        only, and its vectorcall rejects keywords as METH_FASTCALL's does.
+        A METH_METHOD function takes METH_KEYWORDS, and a slot gets its
+        keywords from the wrapper, as in upstream's output: both report them
+        under their own name.
         """
-        if self.requires_defining_class or self.is_new_or_init():
-            self.codegen.add_include('pycore_modsupport.h',
-                                     '_PyArg_NoKwnames()')
-            check = '!_PyArg_NoKwnames("{name}", kwnames)'
-            if self.is_new_or_init():
-                check = '{self_type_check}' + check
-            return libclinic.normalize_snippet(f"""
-                if ({check}) {{{{
-                    goto exit;
-                }}}}
-                """, indent=4)
-        self.codegen.add_include('pycore_modsupport.h',
-                                 '_PyArg_NoKwnamesValue()')
-        static_type = value_static_type(self.func)
-        if static_type is not None:
-            return libclinic.normalize_snippet(f"""
-                if (!_PyArg_NoKwnamesValueMethod({static_type}, "{self.func.name}", kwnames)) {{{{
-                    goto exit;
-                }}}}
-                """, indent=4)
-        funcstr = value_funcstr(self.func)
+        if not (self.requires_defining_class or self.is_new_or_init()):
+            return ''
+        self.codegen.add_include('pycore_modsupport.h', '_PyArg_NoKwnames()')
+        check = '!_PyArg_NoKwnames("{name}", kwnames)'
+        if self.is_new_or_init():
+            check = '{self_type_check}' + check
         return libclinic.normalize_snippet(f"""
-            if (!_PyArg_NoKwnamesValue("{funcstr}", kwnames)) {{{{
+            if ({check}) {{{{
                 goto exit;
             }}}}
             """, indent=4)
@@ -2139,8 +2069,9 @@ class ParseArgsCodeGen:
     def parse_value(self) -> None:
         """Generate the value parser (D14, D15).
 
-        A method-table function is METH_VALUE (with METH_METHOD when it
-        takes defining_class); __new__ and __init__ parse in a body
+        A method-table function is METH_VALUE, positional only (with
+        METH_KEYWORDS when it takes keyword parameters or **kwargs, and
+        always with METH_METHOD when it takes defining_class); __new__ and __init__ parse in a body
         function, {c_basename}_value(), which their slot wrapper and value
         vectorcall call.
         """
@@ -2166,7 +2097,7 @@ class ParseArgsCodeGen:
             self.return_value_declaration = (
                 "PyValue {parser_retval} = PyValue_NULL;")
             if self.requires_defining_class:
-                self.flags = "METH_VALUE|METH_METHOD"
+                self.flags = "METH_VALUE|METH_METHOD|METH_KEYWORDS"
                 self.parser_prototype = VALUE_PARSER_PROTOTYPE_DEF_CLASS
             else:
                 self.flags = "METH_VALUE"
@@ -2198,6 +2129,8 @@ class ParseArgsCodeGen:
             # positional-only.
             if keywords:
                 self._value_unsupported("keyword parameters with **kwargs")
+            if not self.requires_defining_class:
+                self.flags += "|METH_KEYWORDS"
             parser_code.extend(self._check_positional('nargs'))
             parser_code.extend(self._value_parse_positional())
         elif self.use_meth_o():
@@ -2209,10 +2142,14 @@ class ParseArgsCodeGen:
                                       meth_o=True),
                 indent=4))
         elif not keywords:
-            parser_code.append(self._value_no_kwnames())
+            no_kwnames = self._value_no_kwnames()
+            if no_kwnames:
+                parser_code.append(no_kwnames)
             parser_code.extend(self._check_positional('nargs'))
             parser_code.extend(self._value_parse_positional())
         else:
+            if not self.requires_defining_class:
+                self.flags += "|METH_KEYWORDS"
             parser_code.extend(self._value_parse_keywords())
         parser_code.extend(self._value_parse_varargs())
         self.parser_body(*parser_code)

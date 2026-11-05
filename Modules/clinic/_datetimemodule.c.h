@@ -332,7 +332,7 @@ PyDoc_STRVAR(datetime_date_fromisocalendar__doc__,
 "This is the inverse of the date.isocalendar() function.");
 
 #define DATETIME_DATE_FROMISOCALENDAR_METHODDEF    \
-    {"fromisocalendar", _PyCFunction_CAST(datetime_date_fromisocalendar), METH_VALUE|METH_CLASS, datetime_date_fromisocalendar__doc__},
+    {"fromisocalendar", _PyCFunction_CAST(datetime_date_fromisocalendar), METH_VALUE|METH_KEYWORDS|METH_CLASS, datetime_date_fromisocalendar__doc__},
 
 static PyValue
 datetime_date_fromisocalendar_impl(PyTypeObject *type, int year, int week,
@@ -419,9 +419,6 @@ datetime_date_strptime(PyValueBorrow type, const PyValue *args, Py_ssize_t nargs
     PyObject *string;
     PyObject *format;
 
-    if (!_PyArg_NoKwnamesValue("date.strptime()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("strptime", nargs, 2, 2)) {
         goto exit;
     }
@@ -461,7 +458,7 @@ PyDoc_STRVAR(datetime_date_strftime__doc__,
 "    https://docs.python.org/3/library/datetime.html#format-codes");
 
 #define DATETIME_DATE_STRFTIME_METHODDEF    \
-    {"strftime", _PyCFunction_CAST(datetime_date_strftime), METH_VALUE, datetime_date_strftime__doc__},
+    {"strftime", _PyCFunction_CAST(datetime_date_strftime), METH_VALUE|METH_KEYWORDS, datetime_date_strftime__doc__},
 
 static PyValue
 datetime_date_strftime_impl(PyObject *self, PyObject *format);
@@ -639,7 +636,7 @@ PyDoc_STRVAR(datetime_date_replace__doc__,
 "Return date with new specified fields.");
 
 #define DATETIME_DATE_REPLACE_METHODDEF    \
-    {"replace", _PyCFunction_CAST(datetime_date_replace), METH_VALUE, datetime_date_replace__doc__},
+    {"replace", _PyCFunction_CAST(datetime_date_replace), METH_VALUE|METH_KEYWORDS, datetime_date_replace__doc__},
 
 static PyValue
 datetime_date_replace_impl(PyDateTime_Date *self, int year, int month,
@@ -933,9 +930,6 @@ datetime_time_strptime(PyValueBorrow type, const PyValue *args, Py_ssize_t nargs
     PyObject *string;
     PyObject *format;
 
-    if (!_PyArg_NoKwnamesValue("time.strptime()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("strptime", nargs, 2, 2)) {
         goto exit;
     }
@@ -977,7 +971,7 @@ PyDoc_STRVAR(datetime_time_isoformat__doc__,
 "\'minutes\', \'seconds\', \'milliseconds\' and \'microseconds\'.");
 
 #define DATETIME_TIME_ISOFORMAT_METHODDEF    \
-    {"isoformat", _PyCFunction_CAST(datetime_time_isoformat), METH_VALUE, datetime_time_isoformat__doc__},
+    {"isoformat", _PyCFunction_CAST(datetime_time_isoformat), METH_VALUE|METH_KEYWORDS, datetime_time_isoformat__doc__},
 
 static PyValue
 datetime_time_isoformat_impl(PyDateTime_Time *self, const char *timespec);
@@ -1053,7 +1047,7 @@ PyDoc_STRVAR(datetime_time_strftime__doc__,
 "    https://docs.python.org/3/library/datetime.html#format-codes");
 
 #define DATETIME_TIME_STRFTIME_METHODDEF    \
-    {"strftime", _PyCFunction_CAST(datetime_time_strftime), METH_VALUE, datetime_time_strftime__doc__},
+    {"strftime", _PyCFunction_CAST(datetime_time_strftime), METH_VALUE|METH_KEYWORDS, datetime_time_strftime__doc__},
 
 static PyValue
 datetime_time_strftime_impl(PyDateTime_Time *self, PyObject *format);
@@ -1152,7 +1146,7 @@ PyDoc_STRVAR(datetime_time_replace__doc__,
 "Return time with new specified fields.");
 
 #define DATETIME_TIME_REPLACE_METHODDEF    \
-    {"replace", _PyCFunction_CAST(datetime_time_replace), METH_VALUE, datetime_time_replace__doc__},
+    {"replace", _PyCFunction_CAST(datetime_time_replace), METH_VALUE|METH_KEYWORDS, datetime_time_replace__doc__},
 
 static PyValue
 datetime_time_replace_impl(PyDateTime_Time *self, int hour, int minute,
@@ -1464,7 +1458,7 @@ PyDoc_STRVAR(datetime_datetime_now__doc__,
 "If no tz is specified, uses local timezone.");
 
 #define DATETIME_DATETIME_NOW_METHODDEF    \
-    {"now", _PyCFunction_CAST(datetime_datetime_now), METH_VALUE|METH_CLASS, datetime_datetime_now__doc__},
+    {"now", _PyCFunction_CAST(datetime_datetime_now), METH_VALUE|METH_KEYWORDS|METH_CLASS, datetime_datetime_now__doc__},
 
 static PyValue
 datetime_datetime_now_impl(PyTypeObject *type, PyValueBorrow tz);
@@ -1548,7 +1542,7 @@ PyDoc_STRVAR(datetime_datetime_fromtimestamp__doc__,
 "interpreted as local time.");
 
 #define DATETIME_DATETIME_FROMTIMESTAMP_METHODDEF    \
-    {"fromtimestamp", _PyCFunction_CAST(datetime_datetime_fromtimestamp), METH_VALUE|METH_CLASS, datetime_datetime_fromtimestamp__doc__},
+    {"fromtimestamp", _PyCFunction_CAST(datetime_datetime_fromtimestamp), METH_VALUE|METH_KEYWORDS|METH_CLASS, datetime_datetime_fromtimestamp__doc__},
 
 static PyValue
 datetime_datetime_fromtimestamp_impl(PyTypeObject *type,
@@ -1652,9 +1646,6 @@ datetime_datetime_strptime(PyValueBorrow type, const PyValue *args, Py_ssize_t n
     PyObject *string;
     PyObject *format;
 
-    if (!_PyArg_NoKwnamesValue("datetime.strptime()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("strptime", nargs, 2, 2)) {
         goto exit;
     }
@@ -1689,7 +1680,7 @@ PyDoc_STRVAR(datetime_datetime_combine__doc__,
 "Construct a datetime from a given date and a given time.");
 
 #define DATETIME_DATETIME_COMBINE_METHODDEF    \
-    {"combine", _PyCFunction_CAST(datetime_datetime_combine), METH_VALUE|METH_CLASS, datetime_datetime_combine__doc__},
+    {"combine", _PyCFunction_CAST(datetime_datetime_combine), METH_VALUE|METH_KEYWORDS|METH_CLASS, datetime_datetime_combine__doc__},
 
 static PyValue
 datetime_datetime_combine_impl(PyTypeObject *type, PyObject *date,
@@ -1807,7 +1798,7 @@ PyDoc_STRVAR(datetime_datetime_isoformat__doc__,
 "\'minutes\', \'seconds\', \'milliseconds\' and \'microseconds\'.");
 
 #define DATETIME_DATETIME_ISOFORMAT_METHODDEF    \
-    {"isoformat", _PyCFunction_CAST(datetime_datetime_isoformat), METH_VALUE, datetime_datetime_isoformat__doc__},
+    {"isoformat", _PyCFunction_CAST(datetime_datetime_isoformat), METH_VALUE|METH_KEYWORDS, datetime_datetime_isoformat__doc__},
 
 static PyValue
 datetime_datetime_isoformat_impl(PyDateTime_DateTime *self, int sep,
@@ -1899,7 +1890,7 @@ PyDoc_STRVAR(datetime_datetime_replace__doc__,
 "Return datetime with new specified fields.");
 
 #define DATETIME_DATETIME_REPLACE_METHODDEF    \
-    {"replace", _PyCFunction_CAST(datetime_datetime_replace), METH_VALUE, datetime_datetime_replace__doc__},
+    {"replace", _PyCFunction_CAST(datetime_datetime_replace), METH_VALUE|METH_KEYWORDS, datetime_datetime_replace__doc__},
 
 static PyValue
 datetime_datetime_replace_impl(PyDateTime_DateTime *self, int year,
@@ -2017,7 +2008,7 @@ PyDoc_STRVAR(datetime_datetime_astimezone__doc__,
 "Convert to local time in new timezone tz.");
 
 #define DATETIME_DATETIME_ASTIMEZONE_METHODDEF    \
-    {"astimezone", _PyCFunction_CAST(datetime_datetime_astimezone), METH_VALUE, datetime_datetime_astimezone__doc__},
+    {"astimezone", _PyCFunction_CAST(datetime_datetime_astimezone), METH_VALUE|METH_KEYWORDS, datetime_datetime_astimezone__doc__},
 
 static PyValue
 datetime_datetime_astimezone_impl(PyDateTime_DateTime *self,
@@ -2117,4 +2108,4 @@ datetime_datetime___reduce__(PyValueBorrow self, const PyValue *args, Py_ssize_t
 
     return return_value;
 }
-/*[clinic end generated code: output=da08fee5cad32aa1 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=b41911cccc3e0354 input=a9049054013a1b77]*/

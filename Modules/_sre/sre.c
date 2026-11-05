@@ -3539,7 +3539,7 @@ static PyMethodDef pattern_methods[] = {
     /* "match" reuses the prefixmatch Clinic-generated parser and impl
      * to avoid duplicating the argument parsing boilerplate code. */
     {"match", _PyCFunction_CAST(_sre_SRE_Pattern_prefixmatch),
-     METH_VALUE|METH_METHOD,
+     METH_VALUE|METH_METHOD|METH_KEYWORDS,
      _sre_SRE_Pattern_prefixmatch__doc__},
     _SRE_SRE_PATTERN_FULLMATCH_METHODDEF
     _SRE_SRE_PATTERN_SEARCH_METHODDEF
@@ -3671,7 +3671,7 @@ static PyMethodDef scanner_methods[] = {
     /* "match" reuses the prefixmatch Clinic-generated parser and impl
      * to avoid duplicating the argument parsing boilerplate code. */
     {"match", _PyCFunction_CAST(_sre_SRE_Scanner_prefixmatch),
-     METH_VALUE|METH_METHOD,
+     METH_VALUE|METH_METHOD|METH_KEYWORDS,
      _sre_SRE_Scanner_prefixmatch__doc__},
     _SRE_SRE_SCANNER_SEARCH_METHODDEF
     {NULL, NULL}

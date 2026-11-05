@@ -25,7 +25,7 @@ PyDoc_STRVAR(sys_addaudithook__doc__,
 "Adds a new audit hook callback.");
 
 #define SYS_ADDAUDITHOOK_METHODDEF    \
-    {"addaudithook", _PyCFunction_CAST(sys_addaudithook), METH_VALUE, sys_addaudithook__doc__},
+    {"addaudithook", _PyCFunction_CAST(sys_addaudithook), METH_VALUE|METH_KEYWORDS, sys_addaudithook__doc__},
 
 static PyValue
 sys_addaudithook_impl(PyObject *module, PyValueBorrow hook);
@@ -94,9 +94,6 @@ sys_audit(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject 
     const char *event;
     PyObject *__clinic_args = NULL;
 
-    if (!_PyArg_NoKwnamesValue("sys.audit()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("audit", nargs, 1, PY_SSIZE_T_MAX)) {
         goto exit;
     }
@@ -171,9 +168,6 @@ sys_excepthook(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyOb
     PyValueBorrow value;
     PyValueBorrow traceback;
 
-    if (!_PyArg_NoKwnamesValue("sys.excepthook()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("excepthook", nargs, 3, 3)) {
         goto exit;
     }
@@ -292,9 +286,6 @@ sys_exit(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *
     PyValue return_value = PyValue_NULL;
     PyValueBorrow status = PyValue_Borrow(PyValue_None);
 
-    if (!_PyArg_NoKwnamesValue("sys.exit()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("exit", nargs, 0, 1)) {
         goto exit;
     }
@@ -745,7 +736,7 @@ PyDoc_STRVAR(sys_set_coroutine_origin_tracking_depth__doc__,
 "Set a depth of 0 to disable.");
 
 #define SYS_SET_COROUTINE_ORIGIN_TRACKING_DEPTH_METHODDEF    \
-    {"set_coroutine_origin_tracking_depth", _PyCFunction_CAST(sys_set_coroutine_origin_tracking_depth), METH_VALUE, sys_set_coroutine_origin_tracking_depth__doc__},
+    {"set_coroutine_origin_tracking_depth", _PyCFunction_CAST(sys_set_coroutine_origin_tracking_depth), METH_VALUE|METH_KEYWORDS, sys_set_coroutine_origin_tracking_depth__doc__},
 
 static PyValue
 sys_set_coroutine_origin_tracking_depth_impl(PyObject *module, int depth);
@@ -834,7 +825,7 @@ PyDoc_STRVAR(sys_set_asyncgen_hooks__doc__,
 "Set a finalizer for async generators objects.");
 
 #define SYS_SET_ASYNCGEN_HOOKS_METHODDEF    \
-    {"set_asyncgen_hooks", _PyCFunction_CAST(sys_set_asyncgen_hooks), METH_VALUE, sys_set_asyncgen_hooks__doc__},
+    {"set_asyncgen_hooks", _PyCFunction_CAST(sys_set_asyncgen_hooks), METH_VALUE|METH_KEYWORDS, sys_set_asyncgen_hooks__doc__},
 
 static PyValue
 sys_set_asyncgen_hooks_impl(PyObject *module, PyValueBorrow firstiter,
@@ -1105,7 +1096,7 @@ PyDoc_STRVAR(sys_set_int_max_str_digits__doc__,
 "Set the maximum string digits limit for non-binary int<->str conversions.");
 
 #define SYS_SET_INT_MAX_STR_DIGITS_METHODDEF    \
-    {"set_int_max_str_digits", _PyCFunction_CAST(sys_set_int_max_str_digits), METH_VALUE, sys_set_int_max_str_digits__doc__},
+    {"set_int_max_str_digits", _PyCFunction_CAST(sys_set_int_max_str_digits), METH_VALUE|METH_KEYWORDS, sys_set_int_max_str_digits__doc__},
 
 static PyValue
 sys_set_int_max_str_digits_impl(PyObject *module, int maxdigits);
@@ -1165,7 +1156,7 @@ PyDoc_STRVAR(sys_getsizeof__doc__,
 "Return the size of object in bytes.");
 
 #define SYS_GETSIZEOF_METHODDEF    \
-    {"getsizeof", _PyCFunction_CAST(sys_getsizeof), METH_VALUE, sys_getsizeof__doc__},
+    {"getsizeof", _PyCFunction_CAST(sys_getsizeof), METH_VALUE|METH_KEYWORDS, sys_getsizeof__doc__},
 
 static PyValue
 sys_getsizeof_impl(PyObject *module, PyValueBorrow o, PyValueBorrow dflt);
@@ -1319,7 +1310,7 @@ PyDoc_STRVAR(sys_getunicodeinternedsize__doc__,
 "Return the number of elements of the unicode interned dictionary");
 
 #define SYS_GETUNICODEINTERNEDSIZE_METHODDEF    \
-    {"getunicodeinternedsize", _PyCFunction_CAST(sys_getunicodeinternedsize), METH_VALUE, sys_getunicodeinternedsize__doc__},
+    {"getunicodeinternedsize", _PyCFunction_CAST(sys_getunicodeinternedsize), METH_VALUE|METH_KEYWORDS, sys_getunicodeinternedsize__doc__},
 
 static Py_ssize_t
 sys_getunicodeinternedsize_impl(PyObject *module, int _only_immortal);
@@ -1405,9 +1396,6 @@ sys__getframe(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObj
     PyValue return_value = PyValue_NULL;
     int depth = 0;
 
-    if (!_PyArg_NoKwnamesValue("sys._getframe()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("_getframe", nargs, 0, 1)) {
         goto exit;
     }
@@ -1497,9 +1485,6 @@ sys_call_tracing(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, Py
     PyValueBorrow func;
     PyObject *funcargs;
 
-    if (!_PyArg_NoKwnamesValue("sys.call_tracing()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("call_tracing", nargs, 2, 2)) {
         goto exit;
     }
@@ -1873,7 +1858,7 @@ PyDoc_STRVAR(sys_remote_exec__doc__,
 "         the Python code to be executed.");
 
 #define SYS_REMOTE_EXEC_METHODDEF    \
-    {"remote_exec", _PyCFunction_CAST(sys_remote_exec), METH_VALUE, sys_remote_exec__doc__},
+    {"remote_exec", _PyCFunction_CAST(sys_remote_exec), METH_VALUE|METH_KEYWORDS, sys_remote_exec__doc__},
 
 static PyValue
 sys_remote_exec_impl(PyObject *module, int pid, PyValueBorrow script);
@@ -1941,7 +1926,7 @@ PyDoc_STRVAR(sys__getframemodulename__doc__,
 "If no frame, module, or name can be found, returns None.");
 
 #define SYS__GETFRAMEMODULENAME_METHODDEF    \
-    {"_getframemodulename", _PyCFunction_CAST(sys__getframemodulename), METH_VALUE, sys__getframemodulename__doc__},
+    {"_getframemodulename", _PyCFunction_CAST(sys__getframemodulename), METH_VALUE|METH_KEYWORDS, sys__getframemodulename__doc__},
 
 static PyValue
 sys__getframemodulename_impl(PyObject *module, int depth);
@@ -2089,7 +2074,7 @@ PyDoc_STRVAR(sys_set_lazy_imports_filter__doc__,
 "Pass None to clear the filter.");
 
 #define SYS_SET_LAZY_IMPORTS_FILTER_METHODDEF    \
-    {"set_lazy_imports_filter", _PyCFunction_CAST(sys_set_lazy_imports_filter), METH_VALUE, sys_set_lazy_imports_filter__doc__},
+    {"set_lazy_imports_filter", _PyCFunction_CAST(sys_set_lazy_imports_filter), METH_VALUE|METH_KEYWORDS, sys_set_lazy_imports_filter__doc__},
 
 static PyValue
 sys_set_lazy_imports_filter_impl(PyObject *module, PyValueBorrow filter);
@@ -2178,7 +2163,7 @@ PyDoc_STRVAR(sys_set_lazy_imports__doc__,
 "provided to sys.set_lazy_imports_filter");
 
 #define SYS_SET_LAZY_IMPORTS_METHODDEF    \
-    {"set_lazy_imports", _PyCFunction_CAST(sys_set_lazy_imports), METH_VALUE, sys_set_lazy_imports__doc__},
+    {"set_lazy_imports", _PyCFunction_CAST(sys_set_lazy_imports), METH_VALUE|METH_KEYWORDS, sys_set_lazy_imports__doc__},
 
 static PyValue
 sys_set_lazy_imports_impl(PyObject *module, PyValueBorrow mode);
@@ -2376,4 +2361,4 @@ exit:
 #ifndef SYS_GETANDROIDAPILEVEL_METHODDEF
     #define SYS_GETANDROIDAPILEVEL_METHODDEF
 #endif /* !defined(SYS_GETANDROIDAPILEVEL_METHODDEF) */
-/*[clinic end generated code: output=93f085c1b1e158d7 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=c6af722b73705d6f input=a9049054013a1b77]*/

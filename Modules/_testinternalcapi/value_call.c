@@ -19,7 +19,8 @@
 #include <string.h>               // memcpy(), strlen()
 
 
-/* METH_VALUE functions */
+/* METH_VALUE functions.  METH_VALUE is positional only: the vectorcall rejects
+ * keywords, so vc_noargs, vc_one and vc_int_method never see kwnames. */
 
 /* (nargs, positional values, keyword dict or None) */
 static PyValue
@@ -49,11 +50,6 @@ static PyValue
 vc_noargs(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs,
           PyObject *kwnames)
 {
-    if (kwnames != NULL) {
-        PyErr_SetString(PyExc_TypeError,
-                        "vc_noargs() takes no keyword arguments");
-        return PyValue_NULL;
-    }
     if (nargs != 0) {
         PyErr_Format(PyExc_TypeError,
                      "%s() takes no arguments (%zd given)",
@@ -67,11 +63,6 @@ static PyValue
 vc_one(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs,
        PyObject *kwnames)
 {
-    if (kwnames != NULL) {
-        PyErr_SetString(PyExc_TypeError,
-                        "vc_one() takes no keyword arguments");
-        return PyValue_NULL;
-    }
     if (nargs != 1) {
         PyErr_Format(PyExc_TypeError,
                      "%s() takes exactly one argument (%zd given)",
@@ -127,11 +118,7 @@ static PyValue
 vc_int_method(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs,
               PyObject *kwnames)
 {
-    if (kwnames != NULL) {
-        PyErr_SetString(PyExc_TypeError,
-                        "int method takes no keyword arguments");
-        return PyValue_NULL;
-    }
+    assert(kwnames == NULL);
     int inline_self = PyValue_IsInline(self);
     PyObject *items = PyTuple_New(nargs + 1);
     if (items == NULL) {
@@ -159,7 +146,8 @@ vc_int_method(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs,
 #define VALUE_CAST(f) ((PyCFunction)(void (*)(void))(f))
 
 static PyMethodDef vc_method_def = {
-    "vc_method", VALUE_CAST(vc_method), METH_VALUE | METH_METHOD, NULL,
+    "vc_method", VALUE_CAST(vc_method),
+    METH_VALUE | METH_METHOD | METH_KEYWORDS, NULL,
 };
 
 static PyMethodDef int_method_def = {
@@ -191,6 +179,24 @@ make_int_method(PyObject *Py_UNUSED(module), PyObject *name)
     *def = int_method_def;
     def->ml_name = copy;
     return PyDescr_NewMethod(&PyLong_Type, def);
+}
+
+
+/* meth_flags(callable): the ml_flags of a built-in function or a method
+ * descriptor */
+
+static PyObject *
+meth_flags(PyObject *Py_UNUSED(module), PyObject *arg)
+{
+    if (PyCFunction_Check(arg)) {
+        return PyLong_FromLong(PyCFunction_GET_FLAGS(arg));
+    }
+    if (Py_IS_TYPE(arg, &PyMethodDescr_Type)) {
+        return PyLong_FromLong(((PyMethodDescrObject *)arg)->d_method->ml_flags);
+    }
+    PyErr_SetString(PyExc_TypeError,
+                    "expected a built-in function or a method descriptor");
+    return NULL;
 }
 
 
@@ -404,13 +410,14 @@ static PyType_Spec vcall_base_spec = {
 
 
 static PyMethodDef methods[] = {
-    {"vc_args", VALUE_CAST(vc_args), METH_VALUE, NULL},
+    {"vc_args", VALUE_CAST(vc_args), METH_VALUE | METH_KEYWORDS, NULL},
     {"vc_noargs", VALUE_CAST(vc_noargs), METH_VALUE, NULL},
     {"vc_one", VALUE_CAST(vc_one), METH_VALUE, NULL},
     {"vc_self", VALUE_CAST(vc_self), METH_VALUE, NULL},
-    {"vc_call_first", VALUE_CAST(vc_call_first), METH_VALUE, NULL},
+    {"vc_call_first", VALUE_CAST(vc_call_first), METH_VALUE | METH_KEYWORDS, NULL},
     {"make_int_method", make_int_method, METH_O},
     {"bad_flags", bad_flags, METH_O},
+    {"meth_flags", meth_flags, METH_O},
     {"value_vectorcall_is_set", value_vectorcall_is_set, METH_O},
     {"object_vectorcall_is_thunk", object_vectorcall_is_thunk, METH_O},
     {"call_value", _PyCFunction_CAST(call_value),

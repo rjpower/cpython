@@ -13,7 +13,7 @@ preserve
 #endif
 #include "pycore_critical_section.h"// Py_BEGIN_CRITICAL_SECTION()
 #include "pycore_long_value.h"    // _PyValue_IntAsSsize_t()
-#include "pycore_modsupport.h"    // _PyArg_NoKwnamesValue()
+#include "pycore_modsupport.h"    // _PyArg_CheckPositional()
 #include "pycore_tuple.h"         // _PyTuple_ITEMS()
 #include "pycore_value_call.h"    // METH_VALUE
 #include "pycore_value_ops.h"     // _PyValue_Index()
@@ -145,7 +145,7 @@ PyDoc_STRVAR(_io_BytesIO_getbuffer__doc__,
 "Get a read-write view over the contents of the BytesIO object.");
 
 #define _IO_BYTESIO_GETBUFFER_METHODDEF    \
-    {"getbuffer", _PyCFunction_CAST(_io_BytesIO_getbuffer), METH_VALUE|METH_METHOD, _io_BytesIO_getbuffer__doc__},
+    {"getbuffer", _PyCFunction_CAST(_io_BytesIO_getbuffer), METH_VALUE|METH_METHOD|METH_KEYWORDS, _io_BytesIO_getbuffer__doc__},
 
 static PyValue
 _io_BytesIO_getbuffer_impl(bytesio *self, PyTypeObject *cls);
@@ -262,9 +262,6 @@ _io_BytesIO_read(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyOb
     PyValue return_value = PyValue_NULL;
     Py_ssize_t size = -1;
 
-    if (!_PyArg_NoKwnamesValue("BytesIO.read()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("read", nargs, 0, 1)) {
         goto exit;
     }
@@ -304,9 +301,6 @@ _io_BytesIO_read1(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyO
     PyValue return_value = PyValue_NULL;
     Py_ssize_t size = -1;
 
-    if (!_PyArg_NoKwnamesValue("BytesIO.read1()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("read1", nargs, 0, 1)) {
         goto exit;
     }
@@ -345,9 +339,6 @@ _io_BytesIO_peek(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyOb
     PyValue return_value = PyValue_NULL;
     Py_ssize_t size = 0;
 
-    if (!_PyArg_NoKwnamesValue("BytesIO.peek()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("peek", nargs, 0, 1)) {
         goto exit;
     }
@@ -397,9 +388,6 @@ _io_BytesIO_readline(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, 
     PyValue return_value = PyValue_NULL;
     Py_ssize_t size = -1;
 
-    if (!_PyArg_NoKwnamesValue("BytesIO.readline()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("readline", nargs, 0, 1)) {
         goto exit;
     }
@@ -440,9 +428,6 @@ _io_BytesIO_readlines(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs,
     PyValue return_value = PyValue_NULL;
     PyValueBorrow arg = PyValue_Borrow(PyValue_None);
 
-    if (!_PyArg_NoKwnamesValue("BytesIO.readlines()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("readlines", nargs, 0, 1)) {
         goto exit;
     }
@@ -522,9 +507,6 @@ _io_BytesIO_truncate(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, 
     PyValue return_value = PyValue_NULL;
     PyValueBorrow size = PyValue_Borrow(PyValue_None);
 
-    if (!_PyArg_NoKwnamesValue("BytesIO.truncate()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("truncate", nargs, 0, 1)) {
         goto exit;
     }
@@ -581,9 +563,6 @@ _io_BytesIO_seek(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyOb
     Py_ssize_t pos;
     int whence = 0;
 
-    if (!_PyArg_NoKwnamesValue("BytesIO.seek()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("seek", nargs, 1, 2)) {
         goto exit;
     }
@@ -846,4 +825,4 @@ _io_BytesIO___sizeof__(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs
 }
 #define _IO_BYTESIO_CLOSED_GETSETDEF {"closed", (getter)_io_BytesIO_closed_get, (setter)NULL, _io_BytesIO_closed__doc__},
 
-/*[clinic end generated code: output=767d46b77af1ba78 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=b7ca754fc7d59bd2 input=a9049054013a1b77]*/

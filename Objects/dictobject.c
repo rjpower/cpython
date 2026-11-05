@@ -4161,6 +4161,9 @@ dict_merge(PyObject *a, PyObject *b, int override, PyObject **dupkey)
         int skip = 0;
         if (override != 1) {
             hash = _PyValue_Hash(query);
+            if (hash == -1 && PyValue_IsObject(query)) {
+                dict_unhashable_type(a, key);
+            }
             int present = hash == -1 ? -1 :
                 _PyDict_GetValue_KnownHash(a, query, hash, &found);
             PyValue_XCLOSE(found);
@@ -4188,6 +4191,9 @@ dict_merge(PyObject *a, PyObject *b, int override, PyObject **dupkey)
                     hash = _PyValue_Hash(query);
                 }
                 if (hash == -1) {
+                    if (override == 1 && PyValue_IsObject(query)) {
+                        dict_unhashable_type(a, key);
+                    }
                     status = -1;
                 }
                 else if (override == 1) {
@@ -4625,6 +4631,10 @@ int
     int status = -1;
     if (hash != -1) {
         status = dict_setdefault_value_lock_held((PyDictObject *)op, key, value, hash, result);
+    }
+    else if (PyValue_IsObject(key)) {
+        // Only an object can fail to hash.
+        dict_unhashable_type(op, PyValue_AsKnownObjectBorrow(key));
     }
     PyValue_XCLOSE(value);
     PyValue_XCLOSE(key);
@@ -6549,6 +6559,9 @@ dictitems_contains(PyObject *self, PyObject *obj)
         if (result == 1) {
             result = _PyValue_RichCompareBool(found, value, Py_EQ);
         }
+    }
+    else if (PyValue_IsObject(key)) {
+        dict_unhashable_type(dict, PyValue_AsKnownObjectBorrow(key));
     }
     PyValue_XCLOSE(found);
     PyValue_XCLOSE(key);

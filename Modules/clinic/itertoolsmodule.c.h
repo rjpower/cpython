@@ -434,9 +434,6 @@ itertools_tee(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObj
     PyValueBorrow iterable;
     Py_ssize_t n = 2;
 
-    if (!_PyArg_NoKwnamesValue("itertools.tee()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("tee", nargs, 1, 2)) {
         goto exit;
     }
@@ -1363,4 +1360,4 @@ zip_longest_next(PyObject *self)
 
     return return_value;
 }
-/*[clinic end generated code: output=1c806fb727c32938 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=84454aff60fe0907 input=a9049054013a1b77]*/

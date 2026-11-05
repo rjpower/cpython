@@ -108,9 +108,6 @@ property___set_name__(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs,
     PyValueBorrow owner;
     PyValueBorrow name;
 
-    if (!_PyArg_NoKwnamesValueMethod(&PyProperty_Type, "__set_name__", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("__set_name__", nargs, 2, 2)) {
         goto exit;
     }
@@ -239,4 +236,4 @@ property_init(PyObject *self, PyObject *args, PyObject *kwargs)
     _PyValue_StackUnpackDict_Free(window, nargs, kwnames);
     return result;
 }
-/*[clinic end generated code: output=3a24ea0d0ab853be input=a9049054013a1b77]*/
+/*[clinic end generated code: output=42555d11c35bb61f input=a9049054013a1b77]*/

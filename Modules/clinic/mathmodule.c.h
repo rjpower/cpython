@@ -12,7 +12,7 @@ preserve
 #  include "pycore_value.h"       // _PyValue_STATIC_IMMORTAL()
 #endif
 #include "pycore_long_value.h"    // _PyValue_AsDouble()
-#include "pycore_modsupport.h"    // _PyArg_NoKwnamesValue()
+#include "pycore_modsupport.h"    // _PyArg_CheckPositional()
 #include "pycore_value_call.h"    // METH_VALUE
 
 PyDoc_STRVAR(math_ceil__doc__,
@@ -87,9 +87,6 @@ math_fmax(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject 
     double y;
     double _return_value;
 
-    if (!_PyArg_NoKwnamesValue("math.fmax()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("fmax", nargs, 2, 2)) {
         goto exit;
     }
@@ -131,9 +128,6 @@ math_fmin(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject 
     double y;
     double _return_value;
 
-    if (!_PyArg_NoKwnamesValue("math.fmin()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("fmin", nargs, 2, 2)) {
         goto exit;
     }
@@ -288,9 +282,6 @@ math_ldexp(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject
     double x;
     PyValueBorrow i;
 
-    if (!_PyArg_NoKwnamesValue("math.ldexp()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("ldexp", nargs, 2, 2)) {
         goto exit;
     }
@@ -405,9 +396,6 @@ math_fma(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *
     double y;
     double z;
 
-    if (!_PyArg_NoKwnamesValue("math.fma()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("fma", nargs, 3, 3)) {
         goto exit;
     }
@@ -450,9 +438,6 @@ math_fmod(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject 
     double x;
     double y;
 
-    if (!_PyArg_NoKwnamesValue("math.fmod()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("fmod", nargs, 2, 2)) {
         goto exit;
     }
@@ -495,9 +480,6 @@ math_dist(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject 
     PyValueBorrow p;
     PyValueBorrow q;
 
-    if (!_PyArg_NoKwnamesValue("math.dist()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("dist", nargs, 2, 2)) {
         goto exit;
     }
@@ -540,14 +522,10 @@ math_hypot(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject
     const PyValue *__clinic_args;
     Py_ssize_t args_length;
 
-    if (!_PyArg_NoKwnamesValue("math.hypot()", kwnames)) {
-        goto exit;
-    }
     __clinic_args = args;
     args_length = nargs;
     return_value = math_hypot_impl(PyValue_AsKnownObjectBorrow(module), __clinic_args, args_length);
 
-exit:
     return return_value;
 }
 
@@ -577,9 +555,6 @@ math_sumprod(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObje
     PyValueBorrow p;
     PyValueBorrow q;
 
-    if (!_PyArg_NoKwnamesValue("math.sumprod()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("sumprod", nargs, 2, 2)) {
         goto exit;
     }
@@ -610,9 +585,6 @@ math_pow(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *
     double x;
     double y;
 
-    if (!_PyArg_NoKwnamesValue("math.pow()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("pow", nargs, 2, 2)) {
         goto exit;
     }
@@ -849,7 +821,7 @@ PyDoc_STRVAR(math_isclose__doc__,
 "only close to themselves.");
 
 #define MATH_ISCLOSE_METHODDEF    \
-    {"isclose", _PyCFunction_CAST(math_isclose), METH_VALUE, math_isclose__doc__},
+    {"isclose", _PyCFunction_CAST(math_isclose), METH_VALUE|METH_KEYWORDS, math_isclose__doc__},
 
 static int
 math_isclose_impl(PyObject *module, double a, double b, double rel_tol,
@@ -940,7 +912,7 @@ PyDoc_STRVAR(math_prod__doc__,
 "non-numeric types.");
 
 #define MATH_PROD_METHODDEF    \
-    {"prod", _PyCFunction_CAST(math_prod), METH_VALUE, math_prod__doc__},
+    {"prod", _PyCFunction_CAST(math_prod), METH_VALUE|METH_KEYWORDS, math_prod__doc__},
 
 static PyValue
 math_prod_impl(PyObject *module, PyValueBorrow iterable, PyValueBorrow start);
@@ -1006,7 +978,7 @@ PyDoc_STRVAR(math_nextafter__doc__,
 "an integer.  Raises ValueError if steps is negative.");
 
 #define MATH_NEXTAFTER_METHODDEF    \
-    {"nextafter", _PyCFunction_CAST(math_nextafter), METH_VALUE, math_nextafter__doc__},
+    {"nextafter", _PyCFunction_CAST(math_nextafter), METH_VALUE|METH_KEYWORDS, math_nextafter__doc__},
 
 static PyValue
 math_nextafter_impl(PyObject *module, double x, double y,
@@ -1101,4 +1073,4 @@ math_ulp(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=c6e60a588288e21f input=a9049054013a1b77]*/
+/*[clinic end generated code: output=547b861c60437fb6 input=a9049054013a1b77]*/

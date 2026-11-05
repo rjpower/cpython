@@ -12,7 +12,7 @@ preserve
 #  include "pycore_value.h"       // _PyValue_STATIC_IMMORTAL()
 #endif
 #include "pycore_long_value.h"    // _PyValue_IntAsSsize_t()
-#include "pycore_modsupport.h"    // _PyArg_NoKwnamesValue()
+#include "pycore_modsupport.h"    // _PyArg_CheckPositional()
 #include "pycore_tuple.h"         // _PyTuple_ITEMS()
 #include "pycore_unicodeobject.h" // _PyUnicode_AsUTF8NoNUL()
 #include "pycore_value_call.h"    // METH_VALUE
@@ -135,9 +135,6 @@ unicode_center(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObje
     Py_ssize_t width;
     Py_UCS4 fillchar = ' ';
 
-    if (!_PyArg_NoKwnamesValueMethod(&PyUnicode_Type, "center", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("center", nargs, 1, 2)) {
         goto exit;
     }
@@ -191,9 +188,6 @@ unicode_count(PyValueBorrow str, const PyValue *args, Py_ssize_t nargs, PyObject
     Py_ssize_t end = PY_SSIZE_T_MAX;
     Py_ssize_t _return_value;
 
-    if (!_PyArg_NoKwnamesValueMethod(&PyUnicode_Type, "count", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("count", nargs, 1, 3)) {
         goto exit;
     }
@@ -245,7 +239,7 @@ PyDoc_STRVAR(unicode_encode__doc__,
 "    codecs.register_error that can handle UnicodeEncodeErrors.");
 
 #define UNICODE_ENCODE_METHODDEF    \
-    {"encode", _PyCFunction_CAST(unicode_encode), METH_VALUE, unicode_encode__doc__},
+    {"encode", _PyCFunction_CAST(unicode_encode), METH_VALUE|METH_KEYWORDS, unicode_encode__doc__},
 
 static PyValue
 unicode_encode_impl(PyObject *self, const char *encoding, const char *errors);
@@ -332,7 +326,7 @@ PyDoc_STRVAR(unicode_expandtabs__doc__,
 "If tabsize is not given, a tab size of 8 characters is assumed.");
 
 #define UNICODE_EXPANDTABS_METHODDEF    \
-    {"expandtabs", _PyCFunction_CAST(unicode_expandtabs), METH_VALUE, unicode_expandtabs__doc__},
+    {"expandtabs", _PyCFunction_CAST(unicode_expandtabs), METH_VALUE|METH_KEYWORDS, unicode_expandtabs__doc__},
 
 static PyValue
 unicode_expandtabs_impl(PyObject *self, int tabsize);
@@ -412,9 +406,6 @@ unicode_find(PyValueBorrow str, const PyValue *args, Py_ssize_t nargs, PyObject 
     Py_ssize_t end = PY_SSIZE_T_MAX;
     Py_ssize_t _return_value;
 
-    if (!_PyArg_NoKwnamesValueMethod(&PyUnicode_Type, "find", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("find", nargs, 1, 3)) {
         goto exit;
     }
@@ -475,9 +466,6 @@ unicode_index(PyValueBorrow str, const PyValue *args, Py_ssize_t nargs, PyObject
     Py_ssize_t end = PY_SSIZE_T_MAX;
     Py_ssize_t _return_value;
 
-    if (!_PyArg_NoKwnamesValueMethod(&PyUnicode_Type, "index", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("index", nargs, 1, 3)) {
         goto exit;
     }
@@ -863,9 +851,6 @@ unicode_ljust(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObjec
     Py_ssize_t width;
     Py_UCS4 fillchar = ' ';
 
-    if (!_PyArg_NoKwnamesValueMethod(&PyUnicode_Type, "ljust", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("ljust", nargs, 1, 2)) {
         goto exit;
     }
@@ -936,9 +921,6 @@ unicode_strip(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObjec
     PyValue return_value = PyValue_NULL;
     PyValueBorrow chars = PyValue_Borrow(PyValue_None);
 
-    if (!_PyArg_NoKwnamesValueMethod(&PyUnicode_Type, "strip", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("strip", nargs, 0, 1)) {
         goto exit;
     }
@@ -973,9 +955,6 @@ unicode_lstrip(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObje
     PyValue return_value = PyValue_NULL;
     PyValueBorrow chars = PyValue_Borrow(PyValue_None);
 
-    if (!_PyArg_NoKwnamesValueMethod(&PyUnicode_Type, "lstrip", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("lstrip", nargs, 0, 1)) {
         goto exit;
     }
@@ -1010,9 +989,6 @@ unicode_rstrip(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObje
     PyValue return_value = PyValue_NULL;
     PyValueBorrow chars = PyValue_Borrow(PyValue_None);
 
-    if (!_PyArg_NoKwnamesValueMethod(&PyUnicode_Type, "rstrip", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("rstrip", nargs, 0, 1)) {
         goto exit;
     }
@@ -1041,7 +1017,7 @@ PyDoc_STRVAR(unicode_replace__doc__,
 "If count is not specified or -1, then all occurrences are replaced.");
 
 #define UNICODE_REPLACE_METHODDEF    \
-    {"replace", _PyCFunction_CAST(unicode_replace), METH_VALUE, unicode_replace__doc__},
+    {"replace", _PyCFunction_CAST(unicode_replace), METH_VALUE|METH_KEYWORDS, unicode_replace__doc__},
 
 static PyValue
 unicode_replace_impl(PyObject *self, PyObject *old, PyObject *new,
@@ -1224,9 +1200,6 @@ unicode_rfind(PyValueBorrow str, const PyValue *args, Py_ssize_t nargs, PyObject
     Py_ssize_t end = PY_SSIZE_T_MAX;
     Py_ssize_t _return_value;
 
-    if (!_PyArg_NoKwnamesValueMethod(&PyUnicode_Type, "rfind", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("rfind", nargs, 1, 3)) {
         goto exit;
     }
@@ -1287,9 +1260,6 @@ unicode_rindex(PyValueBorrow str, const PyValue *args, Py_ssize_t nargs, PyObjec
     Py_ssize_t end = PY_SSIZE_T_MAX;
     Py_ssize_t _return_value;
 
-    if (!_PyArg_NoKwnamesValueMethod(&PyUnicode_Type, "rindex", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("rindex", nargs, 1, 3)) {
         goto exit;
     }
@@ -1347,9 +1317,6 @@ unicode_rjust(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObjec
     Py_ssize_t width;
     Py_UCS4 fillchar = ' ';
 
-    if (!_PyArg_NoKwnamesValueMethod(&PyUnicode_Type, "rjust", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("rjust", nargs, 1, 2)) {
         goto exit;
     }
@@ -1401,7 +1368,7 @@ PyDoc_STRVAR(unicode_split__doc__,
 "punctuation, consider using the regular expression module.");
 
 #define UNICODE_SPLIT_METHODDEF    \
-    {"split", _PyCFunction_CAST(unicode_split), METH_VALUE, unicode_split__doc__},
+    {"split", _PyCFunction_CAST(unicode_split), METH_VALUE|METH_KEYWORDS, unicode_split__doc__},
 
 static PyValue
 unicode_split_impl(PyObject *self, PyValueBorrow sep, Py_ssize_t maxsplit);
@@ -1550,7 +1517,7 @@ PyDoc_STRVAR(unicode_rsplit__doc__,
 "Splitting starts at the end of the string and works to the front.");
 
 #define UNICODE_RSPLIT_METHODDEF    \
-    {"rsplit", _PyCFunction_CAST(unicode_rsplit), METH_VALUE, unicode_rsplit__doc__},
+    {"rsplit", _PyCFunction_CAST(unicode_rsplit), METH_VALUE|METH_KEYWORDS, unicode_rsplit__doc__},
 
 static PyValue
 unicode_rsplit_impl(PyObject *self, PyValueBorrow sep, Py_ssize_t maxsplit);
@@ -1627,7 +1594,7 @@ PyDoc_STRVAR(unicode_splitlines__doc__,
 "is given and true.");
 
 #define UNICODE_SPLITLINES_METHODDEF    \
-    {"splitlines", _PyCFunction_CAST(unicode_splitlines), METH_VALUE, unicode_splitlines__doc__},
+    {"splitlines", _PyCFunction_CAST(unicode_splitlines), METH_VALUE|METH_KEYWORDS, unicode_splitlines__doc__},
 
 static PyValue
 unicode_splitlines_impl(PyObject *self, int keepends);
@@ -1733,9 +1700,6 @@ unicode_maketrans(PyValueBorrow null, const PyValue *args, Py_ssize_t nargs, PyO
     PyObject *y = NULL;
     PyObject *z = NULL;
 
-    if (!_PyArg_NoKwnamesValueMethod(&PyUnicode_Type, "maketrans", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("maketrans", nargs, 1, 3)) {
         goto exit;
     }
@@ -1892,9 +1856,6 @@ unicode_startswith(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, Py
     Py_ssize_t start = 0;
     Py_ssize_t end = PY_SSIZE_T_MAX;
 
-    if (!_PyArg_NoKwnamesValueMethod(&PyUnicode_Type, "startswith", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("startswith", nargs, 1, 3)) {
         goto exit;
     }
@@ -1946,9 +1907,6 @@ unicode_endswith(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyOb
     Py_ssize_t start = 0;
     Py_ssize_t end = PY_SSIZE_T_MAX;
 
-    if (!_PyArg_NoKwnamesValueMethod(&PyUnicode_Type, "endswith", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("endswith", nargs, 1, 3)) {
         goto exit;
     }
@@ -2125,4 +2083,4 @@ unicode_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     _PyValue_StackUnpackDict_Free(window, nargs, kwnames);
     return _PyValue_THUNK_EXIT(result, BOX_SITE_CALL);
 }
-/*[clinic end generated code: output=7df2f63d25ecaa9a input=a9049054013a1b77]*/
+/*[clinic end generated code: output=76b1cc120d3ba576 input=a9049054013a1b77]*/

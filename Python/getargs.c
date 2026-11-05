@@ -2893,38 +2893,6 @@ _PyArg_BadArgumentValue(const char *fname, const char *displayname,
                  PyValue_IsNone(arg) ? "None" : PyValue_TYPE(arg)->tp_name);
 }
 
-#undef _PyArg_NoKwnamesValue
-
-int
-_PyArg_NoKwnamesValue(const char *funcstr, PyObject *kwnames)
-{
-    assert(kwnames == NULL || PyTuple_Check(kwnames));
-    if (kwnames == NULL || PyTuple_GET_SIZE(kwnames) == 0) {
-        return 1;
-    }
-    PyErr_Format(PyExc_TypeError, "%.200s takes no keyword arguments",
-                 funcstr);
-    return 0;
-}
-
-#undef _PyArg_NoKwnamesValueMethod
-
-/* "<type>.<name>()", where <type> is the type's own name. */
-static void
-method_funcstr(char *buf, size_t size, PyTypeObject *tp, const char *name)
-{
-    PyOS_snprintf(buf, size, "%.100s.%.100s()", _PyType_Name(tp), name);
-}
-
-int
-_PyArg_NoKwnamesValueMethod(PyTypeObject *tp, const char *name,
-                            PyObject *kwnames)
-{
-    char funcstr[256];
-    method_funcstr(funcstr, sizeof(funcstr), tp, name);
-    return _PyArg_NoKwnamesValue(funcstr, kwnames);
-}
-
 int
 _Py_convert_optional_to_ssize_t_value(PyValueBorrow v, void *result)
 {

@@ -56,7 +56,7 @@ PyDoc_STRVAR(bytes_split__doc__,
 "    -1 (the default value) means no limit.");
 
 #define BYTES_SPLIT_METHODDEF    \
-    {"split", _PyCFunction_CAST(bytes_split), METH_VALUE, bytes_split__doc__},
+    {"split", _PyCFunction_CAST(bytes_split), METH_VALUE|METH_KEYWORDS, bytes_split__doc__},
 
 static PyValue
 bytes_split_impl(PyBytesObject *self, PyValueBorrow sep, Py_ssize_t maxsplit);
@@ -228,7 +228,7 @@ PyDoc_STRVAR(bytes_rsplit__doc__,
 "the front.");
 
 #define BYTES_RSPLIT_METHODDEF    \
-    {"rsplit", _PyCFunction_CAST(bytes_rsplit), METH_VALUE, bytes_rsplit__doc__},
+    {"rsplit", _PyCFunction_CAST(bytes_rsplit), METH_VALUE|METH_KEYWORDS, bytes_rsplit__doc__},
 
 static PyValue
 bytes_rsplit_impl(PyBytesObject *self, PyValueBorrow sep,
@@ -354,9 +354,6 @@ bytes_find(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *
     Py_ssize_t start = 0;
     Py_ssize_t end = PY_SSIZE_T_MAX;
 
-    if (!_PyArg_NoKwnamesValueMethod(&PyBytes_Type, "find", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("find", nargs, 1, 3)) {
         goto exit;
     }
@@ -408,9 +405,6 @@ bytes_index(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject 
     Py_ssize_t start = 0;
     Py_ssize_t end = PY_SSIZE_T_MAX;
 
-    if (!_PyArg_NoKwnamesValueMethod(&PyBytes_Type, "index", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("index", nargs, 1, 3)) {
         goto exit;
     }
@@ -462,9 +456,6 @@ bytes_rfind(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject 
     Py_ssize_t start = 0;
     Py_ssize_t end = PY_SSIZE_T_MAX;
 
-    if (!_PyArg_NoKwnamesValueMethod(&PyBytes_Type, "rfind", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("rfind", nargs, 1, 3)) {
         goto exit;
     }
@@ -516,9 +507,6 @@ bytes_rindex(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject
     Py_ssize_t start = 0;
     Py_ssize_t end = PY_SSIZE_T_MAX;
 
-    if (!_PyArg_NoKwnamesValueMethod(&PyBytes_Type, "rindex", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("rindex", nargs, 1, 3)) {
         goto exit;
     }
@@ -563,9 +551,6 @@ bytes_strip(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject 
     PyValue return_value = PyValue_NULL;
     PyValueBorrow bytes = PyValue_Borrow(PyValue_None);
 
-    if (!_PyArg_NoKwnamesValueMethod(&PyBytes_Type, "strip", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("strip", nargs, 0, 1)) {
         goto exit;
     }
@@ -600,9 +585,6 @@ bytes_lstrip(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject
     PyValue return_value = PyValue_NULL;
     PyValueBorrow bytes = PyValue_Borrow(PyValue_None);
 
-    if (!_PyArg_NoKwnamesValueMethod(&PyBytes_Type, "lstrip", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("lstrip", nargs, 0, 1)) {
         goto exit;
     }
@@ -637,9 +619,6 @@ bytes_rstrip(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject
     PyValue return_value = PyValue_NULL;
     PyValueBorrow bytes = PyValue_Borrow(PyValue_None);
 
-    if (!_PyArg_NoKwnamesValueMethod(&PyBytes_Type, "rstrip", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("rstrip", nargs, 0, 1)) {
         goto exit;
     }
@@ -680,9 +659,6 @@ bytes_count(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject 
     Py_ssize_t start = 0;
     Py_ssize_t end = PY_SSIZE_T_MAX;
 
-    if (!_PyArg_NoKwnamesValueMethod(&PyBytes_Type, "count", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("count", nargs, 1, 3)) {
         goto exit;
     }
@@ -720,7 +696,7 @@ PyDoc_STRVAR(bytes_translate__doc__,
 "translation table.");
 
 #define BYTES_TRANSLATE_METHODDEF    \
-    {"translate", _PyCFunction_CAST(bytes_translate), METH_VALUE, bytes_translate__doc__},
+    {"translate", _PyCFunction_CAST(bytes_translate), METH_VALUE|METH_KEYWORDS, bytes_translate__doc__},
 
 static PyValue
 bytes_translate_impl(PyBytesObject *self, PyValueBorrow table,
@@ -799,9 +775,6 @@ bytes_maketrans(PyValueBorrow null, const PyValue *args, Py_ssize_t nargs, PyObj
     Py_buffer frm = {NULL, NULL};
     Py_buffer to = {NULL, NULL};
 
-    if (!_PyArg_NoKwnamesValueMethod(&PyBytes_Type, "maketrans", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("maketrans", nargs, 2, 2)) {
         goto exit;
     }
@@ -848,7 +821,7 @@ PyDoc_STRVAR(bytes_replace__doc__,
 "If count is not specified or -1, then all occurrences are replaced.");
 
 #define BYTES_REPLACE_METHODDEF    \
-    {"replace", _PyCFunction_CAST(bytes_replace), METH_VALUE, bytes_replace__doc__},
+    {"replace", _PyCFunction_CAST(bytes_replace), METH_VALUE|METH_KEYWORDS, bytes_replace__doc__},
 
 static PyValue
 bytes_replace_impl(PyBytesObject *self, Py_buffer *old, Py_buffer *new,
@@ -1045,9 +1018,6 @@ bytes_startswith(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyOb
     Py_ssize_t start = 0;
     Py_ssize_t end = PY_SSIZE_T_MAX;
 
-    if (!_PyArg_NoKwnamesValueMethod(&PyBytes_Type, "startswith", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("startswith", nargs, 1, 3)) {
         goto exit;
     }
@@ -1099,9 +1069,6 @@ bytes_endswith(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObje
     Py_ssize_t start = 0;
     Py_ssize_t end = PY_SSIZE_T_MAX;
 
-    if (!_PyArg_NoKwnamesValueMethod(&PyBytes_Type, "endswith", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("endswith", nargs, 1, 3)) {
         goto exit;
     }
@@ -1141,7 +1108,7 @@ PyDoc_STRVAR(bytes_decode__doc__,
 "    codecs.register_error that can handle UnicodeDecodeErrors.");
 
 #define BYTES_DECODE_METHODDEF    \
-    {"decode", _PyCFunction_CAST(bytes_decode), METH_VALUE, bytes_decode__doc__},
+    {"decode", _PyCFunction_CAST(bytes_decode), METH_VALUE|METH_KEYWORDS, bytes_decode__doc__},
 
 static PyValue
 bytes_decode_impl(PyBytesObject *self, const char *encoding,
@@ -1230,7 +1197,7 @@ PyDoc_STRVAR(bytes_splitlines__doc__,
 "is given and true.");
 
 #define BYTES_SPLITLINES_METHODDEF    \
-    {"splitlines", _PyCFunction_CAST(bytes_splitlines), METH_VALUE, bytes_splitlines__doc__},
+    {"splitlines", _PyCFunction_CAST(bytes_splitlines), METH_VALUE|METH_KEYWORDS, bytes_splitlines__doc__},
 
 static PyValue
 bytes_splitlines_impl(PyBytesObject *self, int keepends);
@@ -1336,7 +1303,7 @@ PyDoc_STRVAR(bytes_hex__doc__,
 "\'b901:ef\'");
 
 #define BYTES_HEX_METHODDEF    \
-    {"hex", _PyCFunction_CAST(bytes_hex), METH_VALUE, bytes_hex__doc__},
+    {"hex", _PyCFunction_CAST(bytes_hex), METH_VALUE|METH_KEYWORDS, bytes_hex__doc__},
 
 static PyValue
 bytes_hex_impl(PyBytesObject *self, PyValueBorrow sep,
@@ -1514,4 +1481,4 @@ bytes_vectorcall(PyThreadState *tstate, PyObject *type, const PyValue *args,
     Py_ssize_t nargs = PyVectorcall_NARGS(nargsf);
     return bytes_new_value(_PyType_CAST(type), args, nargs, kwnames);
 }
-/*[clinic end generated code: output=9984901600c7a796 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=254aea0e3c75e565 input=a9049054013a1b77]*/

@@ -7,7 +7,7 @@ preserve
 #endif
 
 #include "pycore_critical_section.h"// Py_BEGIN_CRITICAL_SECTION()
-#include "pycore_modsupport.h"    // _PyArg_NoKwnamesValue()
+#include "pycore_modsupport.h"    // _PyArg_CheckPositional()
 #include "pycore_value_call.h"    // METH_VALUE
 
 static PyObject *
@@ -45,9 +45,6 @@ dict_fromkeys(PyValueBorrow type, const PyValue *args, Py_ssize_t nargs, PyObjec
     PyValueBorrow iterable;
     PyValueBorrow value = PyValue_Borrow(PyValue_None);
 
-    if (!_PyArg_NoKwnamesValueMethod(&PyDict_Type, "fromkeys", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("fromkeys", nargs, 1, 2)) {
         goto exit;
     }
@@ -129,9 +126,6 @@ dict_get(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kw
     PyValueBorrow key;
     PyValueBorrow default_value = PyValue_Borrow(PyValue_None);
 
-    if (!_PyArg_NoKwnamesValueMethod(&PyDict_Type, "get", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("get", nargs, 1, 2)) {
         goto exit;
     }
@@ -169,9 +163,6 @@ dict_setdefault(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObj
     PyValueBorrow key;
     PyValueBorrow default_value = PyValue_Borrow(PyValue_None);
 
-    if (!_PyArg_NoKwnamesValueMethod(&PyDict_Type, "setdefault", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("setdefault", nargs, 1, 2)) {
         goto exit;
     }
@@ -234,9 +225,6 @@ dict_pop(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kw
     PyValueBorrow key;
     PyValueBorrow default_value = PyValue_Borrow(PyValue_NULL);
 
-    if (!_PyArg_NoKwnamesValueMethod(&PyDict_Type, "pop", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("pop", nargs, 1, 2)) {
         goto exit;
     }
@@ -410,4 +398,4 @@ frozendict_copy(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObj
 
     return return_value;
 }
-/*[clinic end generated code: output=b5978c8e401704dc input=a9049054013a1b77]*/
+/*[clinic end generated code: output=aad8596025577616 input=a9049054013a1b77]*/

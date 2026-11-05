@@ -138,7 +138,7 @@ PyDoc_STRVAR(_io_open__doc__,
 "opened in a binary mode.");
 
 #define _IO_OPEN_METHODDEF    \
-    {"open", _PyCFunction_CAST(_io_open), METH_VALUE, _io_open__doc__},
+    {"open", _PyCFunction_CAST(_io_open), METH_VALUE|METH_KEYWORDS, _io_open__doc__},
 
 static PyValue
 _io_open_impl(PyObject *module, PyValueBorrow file, const char *mode,
@@ -313,9 +313,6 @@ _io_text_encoding(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, P
     PyValueBorrow encoding;
     int stacklevel = 2;
 
-    if (!_PyArg_NoKwnamesValue("_io.text_encoding()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("text_encoding", nargs, 1, 2)) {
         goto exit;
     }
@@ -344,7 +341,7 @@ PyDoc_STRVAR(_io_open_code__doc__,
 "interchangeable with calling open(path, \'rb\').");
 
 #define _IO_OPEN_CODE_METHODDEF    \
-    {"open_code", _PyCFunction_CAST(_io_open_code), METH_VALUE, _io_open_code__doc__},
+    {"open_code", _PyCFunction_CAST(_io_open_code), METH_VALUE|METH_KEYWORDS, _io_open_code__doc__},
 
 static PyValue
 _io_open_code_impl(PyObject *module, PyObject *path);
@@ -401,4 +398,4 @@ _io_open_code(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObj
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=ddbf6e46971ae828 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=0b20c5e9b88ebb8f input=a9049054013a1b77]*/

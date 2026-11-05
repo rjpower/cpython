@@ -35,7 +35,7 @@ PyDoc_STRVAR(_io__IOBase_seek__doc__,
 "Return the new absolute position.");
 
 #define _IO__IOBASE_SEEK_METHODDEF    \
-    {"seek", _PyCFunction_CAST(_io__IOBase_seek), METH_VALUE|METH_METHOD, _io__IOBase_seek__doc__},
+    {"seek", _PyCFunction_CAST(_io__IOBase_seek), METH_VALUE|METH_METHOD|METH_KEYWORDS, _io__IOBase_seek__doc__},
 
 static PyValue
 _io__IOBase_seek_impl(PyObject *self, PyTypeObject *cls,
@@ -104,7 +104,7 @@ PyDoc_STRVAR(_io__IOBase_truncate__doc__,
 "position as reported by tell().  Return the new size.");
 
 #define _IO__IOBASE_TRUNCATE_METHODDEF    \
-    {"truncate", _PyCFunction_CAST(_io__IOBase_truncate), METH_VALUE|METH_METHOD, _io__IOBase_truncate__doc__},
+    {"truncate", _PyCFunction_CAST(_io__IOBase_truncate), METH_VALUE|METH_METHOD|METH_KEYWORDS, _io__IOBase_truncate__doc__},
 
 static PyValue
 _io__IOBase_truncate_impl(PyObject *self, PyTypeObject *cls,
@@ -400,9 +400,6 @@ _io__IOBase___exit__(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, 
     PyValue return_value = PyValue_NULL;
     PyObject *__clinic_args = NULL;
 
-    if (!_PyArg_NoKwnamesValue("_IOBase.__exit__()", kwnames)) {
-        goto exit;
-    }
     __clinic_args = _PyTuple_FromValueArray(args, nargs);
     if (__clinic_args == NULL) {
         goto exit;
@@ -425,7 +422,7 @@ PyDoc_STRVAR(_io__IOBase_fileno__doc__,
 "Raise OSError if the IO object does not use a file descriptor.");
 
 #define _IO__IOBASE_FILENO_METHODDEF    \
-    {"fileno", _PyCFunction_CAST(_io__IOBase_fileno), METH_VALUE|METH_METHOD, _io__IOBase_fileno__doc__},
+    {"fileno", _PyCFunction_CAST(_io__IOBase_fileno), METH_VALUE|METH_METHOD|METH_KEYWORDS, _io__IOBase_fileno__doc__},
 
 static PyValue
 _io__IOBase_fileno_impl(PyObject *self, PyTypeObject *cls);
@@ -493,9 +490,6 @@ _io__IOBase_readline(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, 
     PyValue return_value = PyValue_NULL;
     Py_ssize_t limit = -1;
 
-    if (!_PyArg_NoKwnamesValue("_IOBase.readline()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("readline", nargs, 0, 1)) {
         goto exit;
     }
@@ -534,9 +528,6 @@ _io__IOBase_readlines(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs,
     PyValue return_value = PyValue_NULL;
     Py_ssize_t hint = -1;
 
-    if (!_PyArg_NoKwnamesValue("_IOBase.readlines()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("readlines", nargs, 0, 1)) {
         goto exit;
     }
@@ -597,9 +588,6 @@ _io__RawIOBase_read(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, P
     PyValue return_value = PyValue_NULL;
     Py_ssize_t n = -1;
 
-    if (!_PyArg_NoKwnamesValue("_RawIOBase.read()", kwnames)) {
-        goto exit;
-    }
     if (!_PyArg_CheckPositional("read", nargs, 0, 1)) {
         goto exit;
     }
@@ -694,4 +682,4 @@ _io__RawIOBase_write(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, 
 }
 #define _IO__IOBASE_CLOSED_GETSETDEF {"closed", (getter)_io__IOBase_closed_get, (setter)NULL, _io__IOBase_closed__doc__},
 
-/*[clinic end generated code: output=0af1c7c60365476f input=a9049054013a1b77]*/
+/*[clinic end generated code: output=dbb39a05bed716ce input=a9049054013a1b77]*/

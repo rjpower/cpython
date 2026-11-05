@@ -242,7 +242,13 @@ Invariants (the proposal's §2.2):
 * L1: a `PyValueBorrow` lives only in a C local. That includes a record on
   the C stack that lives for one handler activation. Heap fields, arrays,
   globals, statics and A3a's activation record are homes and hold owned
-  values only.
+  values only. Call-scratch arrays, written only by the `_PyValue_Window*`
+  primitives, are not homes: they hold copied words for one call and no
+  traversal reads them (exception recorded by
+  [the M3 proposal](proposals/value-api-m3.md) D2, D5 and §1.1). The
+  `check_value_api.py` rule `window-read` limits how the callee reads such
+  a window: every `args[i]` is an operand of `PyValue_Borrow`, `PyValue_DUP`
+  or a window primitive.
 
 Readers take `PyValueBorrow`, and a same-name macro converts an owner at the
 call. Stores, closes and steals take `PyValue` only. `DUP`/`XDUP` is the one

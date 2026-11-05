@@ -6,7 +6,13 @@ plans the route to R27, "no box inside the core"
 ([value-api.md](../value-api.md) §1.1), as small reviewed mechanism steps and
 compiler-driven bulk waves, and specifies the first mechanism step, V2a-0.
 Revision 3 redoes the estimates as arithmetic and the timeline on A3
-revision 3 (§1.4, §1.6, §1.7).
+revision 3 (§1.4, §1.6, §1.7). Revision 4 folds in the accepted step
+proposals [value-api-m3.md](value-api-m3.md),
+[value-api-v2a1a.md](value-api-v2a1a.md),
+[value-api-m1b-m2.md](value-api-m1b-m2.md) and
+[value-api-g.md](value-api-g.md): their estimates and landing times (§1.4,
+§1.6, §1.7), the `tp_call` pair and the writes after ready (§4.3, §4.4) and
+the gate's classifier (§3.2).
 
 Base: shared runtime HEAD `faddfd1454d` (`build/worktrees/pyvalue-rc-universal`).
 The fork's JIT is out of the build there, so its 7 JIT-helper box calls are
@@ -90,7 +96,7 @@ Static inventory at HEAD:
 | Attribute, import | `LOAD_SPECIAL`, `LOAD_SUPER_ATTR*` (12), `SET_FUNCTION_ATTRIBUTE`, `LOAD_FROM_DICT_OR_*`, `IMPORT_*` (10) | `value_load_attribute`, `value_store_attribute` (3); `object.c`, `typeobject.c`, `dictobject.c` attribute reads (10) | M2, I4, W2 |
 | Calls | `CALL_METHOD_DESCRIPTOR_*` (5), `EXIT_INIT_CHECK`, `MAKE_FUNCTION`, `WITH_EXCEPT_START` (5) | `VALUES_TO_PYOBJECTS` (8), `call_transaction_*` (6), `call.c` (11), `native_scope.c`, `borrow.c`, `getargs.c` (5), `_PyStack_UnpackDict`, `initialize_locals` | M3, I5, W2 |
 | Exceptions | `CHECK_EG_MATCH`, `CHECK_EXC_MATCH`, `CLEANUP_THROW`, `POP_EXCEPT`, `PUSH_EXC_INFO`, `RAISE_VARARGS`, `RERAISE` (10) | `dict_value_keyerror`, `value_binary_operation`'s `KeyError` | I1 (typed), W2 (payloads) |
-| Monitoring | `INSTRUMENTED_RETURN_VALUE`, `_YIELD_VALUE` (2) | – | M3, I5 |
+| Monitoring | `INSTRUMENTED_RETURN_VALUE`, `_YIELD_VALUE` (2) | – | I5 (D13 of value-api-m3.md moved there whole) |
 | Containers (thunk exits) | – | `PyList_GetItemRef`, `PyTuple_GetItemRef`, cells, struct sequences, `_PyDict_NextEntryRefKnownHash` (about 16) | W1 |
 | Frames, compiler | – | frame locals (2), `super()` (1); compiler constants (6) | W2; W5 |
 
@@ -153,13 +159,13 @@ order of the top five families is unchanged.
 | Step | Content | Main files | Needs | Agent-h | Sonnet worker part, beside the lead (h) |
 |---|---|---|---|---:|---|
 | **M1a = V2a-0** | Slot machinery with no type converted; box kinds (§4) | `object.h`, `descrobject.h`, `typeobject.c`, `descrobject.c`, `abstract.c`, `object.c`, `value_ops.c`, `pystats.h`, `check_value_api.py`, `configure.ac`, new `pycore_value_slots.h` | V1 | 11 | 3.5: the two test modules and `test_value_slots.py`; the 53 slot-table rows; `slotdef_values[]` data; the 12 value wrappers; the 43 three-line thunks; the `test_sys` format |
-| **V2a-1a** | i, ii: value slots of `int`, `float`, `bool`, `NoneType` (number, compare, hash, bool, index, int, float, repr, str); `PyValue_FromInt64`, `FromSsize_t`, `FromDouble`, `_PyValue_As*`; `value_ops.c`'s inline arms move into the int and float slots. iii, after M3: value `slot_*` functions for Python classes (`SLOT1BINFULL` and the rest), which call dunders through the value vectorcall; the round-trip identity test (value-api.md §1.3) | `longobject.c`, `floatobject.c`, `boolobject.c`, `object.c`, `typeobject.c`, `value_ops.c` | M1a; iii also M3 | 8 | 2: `bool` and `NoneType` slots, the `PyValue_From*` constructors, tests |
-| **M1b** | Subscript, item, `ass_*`, contains, `iternext` and send dispatchers and adapters, under R11 and R16; three-state `_PyValue_IterNext`; `next()` and `PyIter_Send`; `_PyValue_NextNotImplemented`; value `slot_tp_iternext`, `slot_sq_item` | `abstract.c`, `bltinmodule.c` (`next`), `genobject.c`, `typeobject.c` | M1a | 6 | 1.5: thunks, `next()`, tests |
-| **M2** | `getattro`, `setattro`, `descr_get`, `descr_set` dispatch with value receivers; value sides of the generic attribute pair; getset value getters (value-api.md open question 2); the 20 identity tests move to the value side | `object.c`, `typeobject.c`, `descrobject.c`, `dictobject.c` (instance reads) | M1a | 6 | 1.5: moving the 20 identity tests; getset tests |
+| **V2a-1a** | i, ii: value slots of `int`, `float`, `bool`, `NoneType` (number, compare, hash, bool, index, int, float, repr, str); `PyValue_FromInt64`, `FromSsize_t`, `FromDouble`, `_PyValue_As*`; digit spans and `_PyLongOut` kernels; `value_ops.c`'s inline arms move into the int and float slots (value-api-v2a1a.md). iii, after M3: value `slot_*` functions for Python classes (`SLOT1BINFULL` and the rest), which call dunders through the value vectorcall; the round-trip identity test (value-api.md §1.3) | `longobject.c`, `floatobject.c`, `boolobject.c`, `object.c`, `typeobject.c`, `value_ops.c` | M1a; iii also M3 | 15.5 for i–ii, lands near T14; iii 2.5 more (value-api-v2a1a.md §8, §9) | 9.75: the other nine span kernels, int's and float's other value functions and thunks, the extractor macro, tests |
+| **M1b** | Subscript, item, `ass_*`, contains, `iternext` and send dispatchers and adapters, under R11 and R16; three-outcome results return `_PyStatusValue` by value (B4); `_PyValue_IterNext`, `_PyValue_Send`; `next()` and `PyIter_Send`; `_PyValue_NextNotImplemented`; value `slot_tp_iternext`, `slot_sq_item`; diffs a–e (value-api-m1b-m2.md) | `abstract.c`, `bltinmodule.c` (`next`), `genobject.c`, `typeobject.c` | M1a; the d diffs follow V2a-1a-iii, the e diffs M3a's wrapper reshape | 11.15 | 5.2: thunks, wrappers, iterator slots, `next()`, tests |
+| **M2** | `getattro`, `setattro`, `descr_get`, `descr_set` dispatch with value receivers; value sides of the generic attribute pair; getset value getters (value-api.md open question 2, settled: `d_value` in `PyGetSetDescrObject`); the 22 identity tests move to the value side (value-api-m1b-m2.md) | `object.c`, `typeobject.c`, `descrobject.c`, `dictobject.c` (instance reads) | M1a; `super` also M4a | 9.2 | 3.2: moving the 22 identity tests; thin forms, getters, getset tests |
 | **M4** | a: value field support (traverse, clear, dealloc, `_Py_T_VALUE` members, `__reduce__`, home-checker hooks). b: `PySliceObject` moves to internal `pycore_slice.h` (Q3, decided); `start/stop/step` become value homes; `_PySlice_FromValues`; `PySlice_Unpack` and `GetIndicesEx` read words. The `BUILD_SLICE` handler change is I2 | `structmember.c`, `sliceobject.c`, `Include/cpython/sliceobject.h`, `rangeobject.c`, `codeobject.c`, `compile.c`, `marshal.c`, `Modules/_ctypes/_ctypes.c` | V1 (not M1a) | 7 | 1.5: the five struct users after the move (`rangeobject.c`, `codeobject.c`, `compile.c`, `marshal.c`, `_ctypes.c`); tests |
-| **M3a** | Per-instance value vectorcall, `tp_value_vectorcall_offset`, `tp_value_vectorcall`, the `Py_TPFLAGS_HAVE_VECTORCALL` test, `PyFunction_SetVectorcall`, prepend and the offset rule, `METH_VALUE`, `_PyValue_Vectorcall`, `im_self`/`m_self`/wrapper `self` homes, monitoring arguments | `call.c`, `methodobject.c`, `funcobject.c`, `classobject.c`, `descrobject.c` | V2a-0b, M4a | 6 | 1: monitoring-argument plumbing, tests |
-| **M3b** | Value emission in Argument Clinic (generator only; return converters emit value forms); `METH_VALUE`'s declaration agreed with M3a up front | `Tools/clinic/` | V1 | 4 | 1.5: `clinic.test.c` expectations and `test_clinic` cases |
-| **G** | Gate owners (§3): owner tables, the stats-build configuration, the `Py_VALUE_COMPAT`-body rule, `BOX_SITE_TEST`, `box_cached`, ctypes' foreign exits, `check_r27.py`, the bench report | `pystats.h`, `pystats.c`, `pyvalue.c`, `getargs.c`, `check_value_api.py`, `summarize_stats.py`, new `Tools/build/check_r27.py`, `pyjit/bench/run.py` | M1a | 5 | 2.5: `check_r27.py`, `summarize_stats.py` tables, the bench report |
+| **M3a** | Per-instance value vectorcall, `tp_value_vectorcall_offset`, `tp_value_vectorcall`, the `Py_TPFLAGS_HAVE_VECTORCALL` test, `PyFunction_SetVectorcall`, prepend and the offset rule, `METH_VALUE` alone, `_PyValue_Vectorcall` and `_PyValue_VectorcallTstate` (`tstate` first), `_PyValue_InstanceVectorcall` for the `tp_call` pair, `im_self`/`m_self`/wrapper `self` homes (the borrowed `self` getters go), the value wrapper shape of §1.11. Monitoring and tracing are not here: they move to I5 (D13) | `call.c`, `methodobject.c`, `funcobject.c`, `classobject.c`, `descrobject.c` | V2a-0b, M4a; lands after A3 step 2, about T9.5 | 14.3 (5.6 h wall; value-api-m3.md §5) | 8.7: `classobject.c`, `methodobject.c`, `descrobject.c`, the wrapper reshape, moved-field users, `pyvalue.c` primitives and the `window-read` rule, tests |
+| **M3b** | Value emission in Argument Clinic (generator only; return converters emit value forms); `METH_VALUE`'s declaration agreed with M3a up front | `Tools/clinic/` | V1; lands with the later of M3a and V2a-1a-ii | 7.4 (value-api-m3.md §5) | 2.8: `clinic.test.c` expectations, `_testclinic_value.c` and `test_clinic` cases |
+| **G** | Gate owners (§3): owner tables in `PyInterpreterState`, the stats-build configuration, `Py_VALUE_ENTRY` and `Py_VALUE_COMPAT` as one mark in two strengths, the `Py_VALUE_COMPAT`-body rule, the `boundary-site` rule, `BOX_SITE_TEST`, `box_cached`, ctypes' foreign exits, `check_r27.py` (classes from DWARF by build-id), `-X pystats_dir`, the bench report (value-api-g.md) | `pystats.h`, `pystats.c`, `pyvalue.c`, `getargs.c`, `configure.ac`, `check_value_api.py`, `summarize_stats.py`, new `Tools/build/check_r27.py`, `pyjit/bench/run.py` | M1a; starts after A5b-3 and V2a-0 part 2 | 10.0 (5.5 h wall) | 4.75: `check_r27.py`, the second lint pass, `summarize_stats.py` tables, the bench report |
 
 Interpreter steps, after A3a lands. Each converts a disjoint handler family and starts when A3a and its mechanism have landed; they integrate in the order I2, I1, I5, I4, I3, regenerating at each, so I3–I5 rebase over I1's generator rule. Sonnet workers take none of it: every hunk is in `bytecodes.c` or the generator.
 
@@ -167,9 +173,9 @@ Interpreter steps, after A3a lands. Each converts a disjoint handler family and 
 |---|---|---|---:|
 | **I1 = V2a-1b** | Generic `BINARY_OP`, unary ops, `COMPARE_OP`, `TO_BOOL`, `CONTAINS_OP`, formatting and `CALL_STR_1` call the dispatchers; `value_binary_operation` and `_PyValue_Truth` go; the generator rule of §1.3 row 3; `PyValue_Box` deleted (R8, R22); `ceval.c`'s deferred container calls | A3a, M1a; lands after V2a-1a i–ii | 6 |
 | **I2** | `BUILD_SLICE`, `BINARY_SLICE`, `STORE_SLICE` with value slices; integrated first | A3a, M4 | 2 |
-| **I3** | Generic subscript, `STORE_SUBSCR`, `DELETE_SUBSCR`, `FOR_ITER`, `SEND`, unpacking, merges, `MATCH_*`, `INTERPRETER_EXIT` | A3a, M1b | 6 |
-| **I4** | `LOAD_ATTR`, `STORE_ATTR` generic paths, `LOAD_SPECIAL`, `LOAD_SUPER_ATTR*`, imports | A3a, M2 | 4 |
-| **I5 = V3b** | Call handlers use the value vectorcall; `VALUES_TO_PYOBJECTS` and the seven `_Value` call helpers deleted; call transactions; monitoring | A3a, M3 | 6 |
+| **I3** | Generic subscript, `STORE_SUBSCR`, `DELETE_SUBSCR`, `FOR_ITER`, `SEND`, unpacking, merges, `MATCH_*`, `INTERPRETER_EXIT`; calls the `_PyStatusValue` dispatchers directly and deletes `PySendResultPair`, `_PyIter_Send` and A3's interim `value_for_iter_next`, `value_mapping_get_optional_item`, `value_async_gen_send` | A3a, M1b | 6 |
+| **I4** | `LOAD_ATTR`, `STORE_ATTR` generic paths, `LOAD_SPECIAL`, `LOAD_SUPER_ATTR*`, imports; deletes A3's interim `super_lookup`; with M3a, the last to touch it deletes `_PyObject_GetMethodValue` | A3a, M2 | 4 |
+| **I5 = V3b** | Call handlers use the value vectorcall (`_PyValue_VectorcallTstate` inside `call_transaction_run_*`); `VALUES_TO_PYOBJECTS` and the seven `_Value` call helpers deleted; call transactions; monitoring and tracing (D13: one value trace function per thread, `PyEval_SetTrace` and `PyEval_SetProfile` through a boxing adapter); `CALL_LEN`, `CALL_ISINSTANCE`, `CALL_LIST_APPEND` kept. W2 integrates after it | A3a, M3 | 9 (6 + 3.0 for D13, value-api-m3.md §5) |
 
 ### 1.5 The wave protocol
 
@@ -273,8 +279,8 @@ becomes W1's pilot batch.
 | Wave | Scope | Uses forms that exist | Waits for | Script; batches × workers | Agent-h | Wall | Collisions |
 |---|---|---|---|---|---:|---:|---|
 | **W1a** renames | A5b-4: 154 renames, 35 rewrites, 8 generator strings, 104 regenerated sites (`$B/a5b/rename.py`) | all | A5b-3 | script only; 1 agent | 1 | 0.5 | Must follow A5b-3 (renames assume no tagged mortals) and precede A3a's branch point |
-| **W1b** containers | Core list 129, tuple 295, dict 350, set 67, cell and struct sequence 31: 872 calls, about 100 files. W1-0 by hand first: `PyList_AppendValue`, `PyList_InsertValue`, `PyList_SET_VALUE`, `PyTuple_SET_VALUE`, a non-variadic `PyTuple_Pack` replacement, `PyDict_SetValueString`, `DelValueString`, `PyStructSequence_SetValue` | `PyList_GetValue`, `PyTuple_GetValue`/`SetValue`, `PyDict_Get/Set/Del/Contains/PopValue`, `PySet_*Value`, `PyCell_*Value`, `_PyList_AppendTakeValue`, the entry and exit primitives | – | M1 for consumers (450 sites); W1-0 by 2 agents; 8 workers | 17 | 5.5 | After A5b-3 (heap setters in `dictobject.c`, `listobject.c`, `tupleobject.c`, `setobject.c`, `structseq.c`, `cellobject.c`). The files of V2a-0 and M4 (`typeobject.c` 102 calls, `abstract.c`, `object.c`, `descrobject.c`, `sliceobject.c`, M4's users) form the last batch, after those steps land. The `ceval.c` unit is excluded |
-| **W2** core wave (review 1 merged W2 and W3) | Core Clinic regenerated with value emission first (435 functions, 258 polymorphic parameters; this also unblocks W4); other core `METH_*` to `METH_VALUE`; `tp_call` 10, `tp_vectorcall` 20. Types: number and compare slots of about 25 core types besides V2a-1a's (about 200 entries: about 140 by script class N, about 60 with value semantics: `complex`, `str`/`bytes`/`bytearray` `%`); `sq_concat` and `sq_inplace_concat` of `list`, `tuple`, `str`, `bytes`, `bytearray`; subscript, item, `ass_*`, contains 52; `iternext` 37 (container iterators wrap `_Py*Iter_NextValue`); send 4; attribute 30 specific plus 85 by pair table; §7.4 fields (about 25 in 12 files). No typed unary repr, str or hash sides (finding 6). Callers: number 129, compare/hash/bool 119, repr 69, sequence/mapping 241, iteration 102, attribute 274, extraction 192, error payloads 68, call 283, construction 414, `PyObject_IsTrue` 43, `_PyNumber_Index` 25, `PyArg_*` 45 to Clinic: about 2,000 calls in about 95 files | W1 forms; V2a-1a; M3's forms | M1a, M1b, M2, M3, M4, V2a-1a i–ii, W1b | Clinic regeneration; pair table and class N; callers M1, M3, R; 14 workers | 48 | 6 | `typeobject.c` (A5b-3's 2 sites landed); `ceval.c` deferred until I1–I5 |
+| **W1b** containers | Core list 129, tuple 295, dict 350, set 67, cell and struct sequence 31: 872 calls, about 100 files. W1-0 by hand first: `PyList_AppendValue`, `PyList_InsertValue`, `PyList_SET_VALUE`, `PyTuple_SET_VALUE`, a non-variadic `PyTuple_Pack` replacement, `PyDict_SetValueString`, `DelValueString`, `PyStructSequence_SetValue`. A script class converts the existing out-parameter value functions (`PyDict_GetValue`, `_PyDict_GetValue_KnownHash`, `_PyDict_LoadGlobalValue`, `_PyDict_LookupIndexAndOwnedValue`, `_PyType_LookupValueAndVersion`, about 15 sites) to returned pairs (value-api-m1b-m2.md B4) | `PyList_GetValue`, `PyTuple_GetValue`/`SetValue`, `PyDict_Get/Set/Del/Contains/PopValue`, `PySet_*Value`, `PyCell_*Value`, `_PyList_AppendTakeValue`, the entry and exit primitives | – | M1 for consumers (450 sites); W1-0 by 2 agents; 8 workers | 17 | 5.5 | After A5b-3 (heap setters in `dictobject.c`, `listobject.c`, `tupleobject.c`, `setobject.c`, `structseq.c`, `cellobject.c`). The files of V2a-0 and M4 (`typeobject.c` 102 calls, `abstract.c`, `object.c`, `descrobject.c`, `sliceobject.c`, M4's users) form the last batch, after those steps land. `longobject.c`, `floatobject.c`, `boolobject.c` and `unicodeobject.c` leave W1b for W2 (value-api-v2a1a.md §7). The `ceval.c` unit is excluded |
+| **W2** core wave (review 1 merged W2 and W3) | Core Clinic regenerated with value emission first, file by file, including the `_impl` return converters (459 functions, 258 polymorphic parameters, 24 with typed return converters; value-api-m3.md; this also unblocks W4); other core `METH_*` to `METH_VALUE`; `tp_call` 10, `tp_vectorcall` 20. Types: number and compare slots of about 25 core types besides V2a-1a's (about 200 entries: about 140 by script class N, about 60 with value semantics: `complex`, `str`/`bytes`/`bytearray` `%`); `sq_concat` and `sq_inplace_concat` of `list`, `tuple`, `str`, `bytes`, `bytearray`; subscript, item, `ass_*`, contains 52; `iternext` 37 (container iterators wrap `_Py*Iter_NextValue`); send 4; attribute 30 specific plus 85 by pair table; §7.4 fields (about 25 in 12 files; `PyStopIterationObject.value` becomes a home, `StopIteration_init` reading `PyTuple_GetValue`). No typed unary repr, str or hash sides (finding 6). Callers: number 129, compare/hash/bool 119, repr 69, sequence/mapping 241, iteration 102, attribute 274, extraction 192, error payloads 68, call 283, construction 414, `PyObject_IsTrue` 43, `_PyNumber_Index` 25, `PyArg_*` 45 to Clinic: about 2,000 calls in about 95 files | W1 forms; V2a-1a; M3's forms | M1a, M1b, M2, M3, M4, V2a-1a i–ii, W1b; integrates after I5 (a dependency: builtins W2 converts would otherwise fall to `CALL_NON_PY_GENERAL` and box each inline result) | Clinic regeneration; pair table and class N; callers M1, M3, R; 14 workers | 49.2 | 6 | `typeobject.c` (A5b-3's 2 sites landed); `ceval.c` deferred until I1–I5 |
 | **W4-0** module homes | 24 fields, 5 of them arrays, in 9 modules: `_collections` `deque` `data[BLOCKLEN]`, with value forms as W1-0 gives `list`; `itertools` 12 (`groupby` `tgtkey`, `currkey`, `currvalue`; `_grouper` `tgtkey`; `tee` `values[LINKCELLS]`; `count` `long_cnt`, `long_step`; `repeat` `element`; `accumulate` `total`, `initial`; `zip_longest` `fillvalue`; `pairwise` `old`); `_pickle` `Pdata.data`, the unpickler `memo`; `_functools` `lru_list_elem` `key` and `result`, `cmp_to_key` `obj`; `_operator` `itemgetter.item`; `_asyncio` future result; `_queue` `RingBuf.items`; `_sqlite` `lastrowid`; `_elementtree` `text`, `tail` (cold). §7.4's member regex over `Modules/` finds 50 object members, two of them homes; the rest come from the struct definitions of §7.4's candidates | M4a's field support; W1-0's `list` forms as the pattern | M4a, W1-0 | a lead (`deque`) and 3 workers | 16 | 5 | none (`Modules/`); W4 batches these 9 files last |
 | **W4** Modules | Linux build: 116 files and 3,541 calls. Excluded: the compat test modules (`_testcapi*`, `_testlimitedcapi*`, `xx*`, `_testbuffer`, `_testmultiphase`, `_testsinglephase`, `_testimportmultiple`, `_ctypes_test`), which stay object-form; `_testinternalcapi*` (318 calls, test code under `BOX_SITE_TEST`); `_xxtestfuzz`; and the Windows- and macOS-only `_winapi.c`, `overlapped.c`, `_scproxy.c` (66 calls), which the script sweeps from the ownership table and a non-Linux build checks later. 2,111 Clinic functions, 726 polymorphic; 54 static types and about 1,487 spec slot entries, with value sides only where an operand or result can be inline. Each unit gains `Py_VALUE_CORE`. W4a: the accelerators in kernel box order (`array`, `math`, `_pickle`, `_json`, `_elementtree`, `_functools`, `_operator`, `itertools`, `_collections`, `_struct`, `_datetime`, `_sre`, `_io`, `_random`, `_bisect`, `_heapq`); W4b: the rest, with the six limited-API modules ported (under 2 h) | all core forms | M3 (and W2's core Clinic regeneration), V2a-1a i–ii, W1-0, M1b, M2; W4-0 for its 9 files | Clinic regeneration, then M1, R and N; 18 workers | 54 | 6 | none: `Modules/` is outside A3a; shares W2's builder |
 | **W5** remnant and close (V7) | `Parser/` and the compiler (C6): `flowgraph.c` 15 number calls, `compile.c`, `codegen.c`, `Python-ast.c` through `Parser/asdl_c.py` (103 format calls); deferred units; every object function with a value form marked; the paths only the suite run finds (finding 8); measure the `PyValue_AsKnownObject*` release check; run the gate | all | W2, W4, I3–I5 | one agent plus 4 workers for the suite-only tail | 12 | 3 | none |
@@ -291,12 +297,12 @@ workers at once.
 |---|---|---|---|---:|---|---:|
 | W1a | – | – | script 1 | 1 | – | 0.5 |
 | W1b | (872 − 450 scripted) / 40 = 10.6 | – | W1-0 3 + builder 1.5 + cleanup 1.5 = 6 | 17 | 8 × 1.3 h | 5.5 |
-| W2 | 2,000 × 0.30–0.45 / 40 = 15–22.5 | 60 value-semantics / 10 + 163 wrappers / 15 + 25 fields / 5 = 22 | pilot and Clinic 1.5 + builder 3 + cleanup 3 = 7.5 | 48 (44.5–52) | 14 × 2.6–3.2 h | 6 |
+| W2 | 2,000 × 0.30–0.45 / 40 = 15–22.5 | 60 value-semantics / 10 + 163 wrappers / 15 + 25 fields / 5 = 22 | pilot and Clinic 1.5 + builder 3 + cleanup 3 = 7.5 | 49.2 (45.7–53.2) | 14 × 2.6–3.2 h | 6 |
 | W4-0 | – | 19 fields / 5 = 4 + 4 arrays × 1.5 = 6 + `deque` 5 | review 1 | 16 | 3 × 3.3 h, lead 5 h on `deque` | 5 |
 | W4 | 3,541 × 0.30–0.45 / 40 = 26.6–39.8 | about 200 entries crossing an inline value, 60 by script, 140 / 12 = 11.7 | limited-API ports 2 + pilot and Clinic 1.5 + builder 3 + cleanup 3 = 9.5 | 54 (48–61) | 18 × 2.1–2.9 h | 6 |
 | W5 | about 150 `Parser/` and compiler calls × 0.45 / 40 = 1.7 | – | marking audit 1 + suite-only tail 6 (4 workers) + gate runs 2 + release check 1 | 12 | 4 × 1.5 h | 3 |
 
-W2's slot column is the difference from a callers-only estimate of 30–35
+Revision 4 moves W2 by +8.9 h for the `_impl` returns that M3 regenerates (value-api-m3.md §5) and by −7.75 h for the thin forms, iterator slots, getters, generator-family functions, R16 slots and attribute sides that M1b and M2 now write (value-api-m1b-m2.md §4: 5.25 h at W2's rates and 2.5 h of tests): net +1.15 h, in the callers and slots columns. W2's slot column is the difference from a callers-only estimate of 30–35
 hours: 163 slot functions besides the 60 with value semantics (subscript,
 item, `ass_*` and contains 52, `iternext` 37, send 4, attribute 30, call 30,
 `sq_concat` 10) and 25 §7.4 fields. W4's slot count comes from its spec
@@ -313,10 +319,12 @@ passes, whose suites need the same 16 CPUs. Past about 32 workers the gain
 is small: the pilot, two or three rounds and the cleanup take about 3 hours
 whatever the count, while the worker phase is already under 3.
 
-Totals: mechanism steps 53 agent-hours (M1a 11, V2a-1a 8, M1b 6, M2 6, M4 7,
-M3a 6, M3b 4, G 5), of which Sonnet workers take 15; interpreter steps 24;
-waves 148 (W1 18, W2 48, W4-0 16, W4 54, W5 12); about 225 in all (revision 2:
-357).
+Totals: mechanism steps about 88 agent-hours (M1a 11, V2a-1a 15.5 + 2.5 for
+iii, M1b 11.15, M2 9.2, M4 7, M3a 14.3, M3b 7.4, G 10), of which Sonnet
+workers take about 39; interpreter steps 27 (I5 gains 3.0); waves 149 (W1 18,
+W2 49.2, W4-0 16, W4 54, W5 12); about 264 in all (revision 3: 225;
+revision 2: 357). The mechanism steps' growth comes from their accepted
+proposals' unit-level estimates, replacing revision 3's ratios.
 
 ### 1.7 Order with A5b-3 and A3
 
@@ -327,13 +335,15 @@ flowchart LR
     A5 & A31 --> W1a["W1a renames"] --> A32["A3 step 2, G9 (A3a at T8)"]
     V0a["V2a-0a, 0b"] --> V0["V2a-0c, 0d"]
     M4a["M4a field support"] --> M4b["M4b slices"]
-    V0a & M4a --> M3a["M3a value vectorcall"]
+    V0a & M4a & A32 --> M3a["M3a value vectorcall"]
     M3a & M3b["M3b Clinic emission"] --> M3["M3 landed"]
     V0 --> V1a["V2a-1a i-ii"] & M1b["M1b sequence, iteration"] & M2["M2 attributes"] & G["G gate owners"]
     M3 & V1a --> V1c["V2a-1a-iii"]
     W1a --> W1b["W1b containers"]
     M4a & W1b --> W40["W4-0 module homes"]
     V1a & M1b & M2 & M3 & M4b & W1b --> W2["W2 core wave"]
+    I5 -. lands before .-> W2
+    V1a -. integrates before .-> M1b -. before .-> M2
     V1a & M1b & M2 & M3 & W40 --> W4["W4 Modules"]
     A32 & V0 --> I1["I1 number, compare"]
     V1a -. lands after .-> I1
@@ -352,21 +362,21 @@ A5b-2 lands at about T1 and A5b-3 at about T3; A3 lands in two steps, about
 |---|---|---|
 | T0–T7 | V2a-0: lead, second agent and Sonnet parts (0a, 0b by T3.5); M4 (M4a by T2.5, M4b by T7); M3b (T0–T4) | §2 |
 | T1–T8 | A3 step 1 beside A5b-3 (T1–T3); W1a (T3–T3.5); A3 step 2 (G9) branches from W1a, or reruns `rename.py` at its rebase; A3a in at T8 | V2a-0 and M4 touch no handler |
-| T3.5–T10 | M3a, landing with M3b at T10; W1b (T3.5–T9: W1-0 by T5, 8 workers, the V2a-0 and M4 files last) | W1b excludes the `ceval.c` unit |
+| T3.5–T9.5 | M3a (5.6 h wall, after A3 step 2 at T8), landing with M3b at about T9.5; W1b (T3.5–T9: W1-0 by T5, 8 workers, the V2a-0 and M4 files last) | W1b excludes the `ceval.c` unit |
 | T5–T10 | W4-0 | `Modules/` |
-| T7–T12 | V2a-1a i–ii, M1b, M2, G in parallel with their Sonnet parts, integrated on `typeobject.c` in the order V2a-1a, M1b, M2; V2a-1a-iii (T10–T12.5) | disjoint files otherwise |
-| T8–T18 | I2 (T8–T10), I1 (T8–T14), I5 (T10–T16), I4 (T12–T16), I3 (T12–T18), integrated in that order | one agent per handler family |
-| T12–T18 | W2 (14 workers) and W4 (18 workers) on one builder | `ceval.c` deferred; `Modules/` |
+| T7–T14 | V2a-1a i–ii (lands near T14), M1b (4 h), M2 (3.5 h), G (5.5 h) in parallel with their Sonnet parts, integrated on `typeobject.c` (and `abstract.c`, `object.c`) in the order V2a-1a, M1b, M2; V2a-1a-iii (2.5 h) after M3 and V2a-1a i–ii | disjoint files otherwise |
+| T8–T18 | I2 (T8–T10), I1 (T8–T15, after V2a-1a i–ii), I5 (T9.5–T15.5), I4 (T12–T16), I3 (T12–T18), integrated in that order | one agent per handler family |
+| T12–T18 | W2 (14 workers; its pilot and core Clinic regeneration start at T12, the rest after V2a-1a i–ii, and it integrates after I5) and W4 (18 workers) on one builder | `ceval.c` deferred; `Modules/` |
 | T18–T21 | W5 and the gate | – |
 
 The R27 gate is reachable at about **T21** (revision 2: T32). The critical
 path is V2a-0 (T0–T7), then M1b and M2 with the `typeobject.c` integration
-(T7–T12), then W2 and I3 (T12–T18), then W5 (T18–T21). A3 is off it: A3a at
+(T7–T14, behind V2a-1a i–ii), then W2 and I3 (T12–T18), then W5 (T18–T21). A3 is off it: A3a at
 T8 leaves I1 4 hours of slack, and I3 waits for M1b anyway. A 1-hour slip in
 V2a-0, M1b or a wave's cleanup moves the gate by an hour; a slip in A3 of up
 to 4 hours does not. Kernel box shares fall in this order: slices (24%) at
-I2, about T10; `BINARY_OP` and compare (15%) at I1, about T14; calls and
-`list.pop` (37%) at I5 and W2/W4, about T16–T18; iteration, stores and
+I2, about T10; `BINARY_OP` and compare (15%) at I1, about T15; calls and
+`list.pop` (37%) at I5 (about T15.5) and W2/W4, about T18; iteration, stores and
 generator returns (13%) at I3 and W2, about T18.
 
 **§9's order should change** in four ways:
@@ -410,10 +420,10 @@ code address the boundary crosses into (review 1, finding 2).
 | Part | Design | Step |
 |---|---|---|
 | Kind | The box primitives take the kind as an argument, as they take the site: CORE, THUNK, SLOT_ADAPTER, CALL_ADAPTER, counted in `box_kind[4]` beside the family classes. `_PyValue_THUNK_EXIT` passes THUNK, the slot adapter SLOT_ADAPTER, the call adapter CALL_ADAPTER, the `At` forms CORE. No thread state, so an extension's nested boxes keep their own kind | M1a |
-| Compatibility bodies | A box inside a `Py_VALUE_COMPAT` function (`PyTuple_GetItemRef`, `PyList_GetItemRef`, …) uses a THUNK primitive; `check_value_api.py` checks this. `getargs.c`'s `BOX_SITE_PARSER` boxes (`:388`, `:600`, `:1780`, `:2438`) and `_PyBorrow_Keep` (`:1867`, `:1990`, `:2471`) are THUNK | M1a rule; G sites |
+| Compatibility bodies | A box inside a `Py_VALUE_COMPAT` function (`PyTuple_GetItemRef`, `PyList_GetItemRef`, …) uses a THUNK primitive; `check_value_api.py` checks this. One mark in two strengths: `Py_VALUE_ENTRY` on a declaration, empty outside stats builds; `Py_VALUE_COMPAT(R)` is `Py_VALUE_ENTRY` plus `unavailable` in value-native units (value-api-g.md §1.3). `getargs.c`'s `BOX_SITE_PARSER` boxes (`:388`, `:600`, `:1780`, `:2438`) and `_PyBorrow_Keep` (`:1867`, `:1990`, `:2471`) are THUNK | M1a rule; G sites |
 | Owner (stats builds) | Slot adapter: the object-slot function it calls. Call adapter: `ml_meth` or the vectorcall pointer. Thunk: `__builtin_return_address(0)`, taken by `_PyValue_THUNK_EXIT` in the thunk. `getargs.c`: the `PyArg_*` entry's return address, passed down to its box calls. Per-kind tables reuse the checkpoint patch's (`$B/checkpoint-box-callers.diff`) | G |
-| Gate build | Thunks `Py_NO_INLINE` under `Py_STATS`; `-fno-optimize-sibling-calls`; no LTO. Every extension the suite loads is in-tree | G |
-| Classifier | `Tools/build/check_r27.py`: `dladdr` gives the shared object and offset, `addr2line` the source file, `check_value_api.py`'s `unit_kind` core or compatibility. An address outside libpython and the in-tree `.so` files is external; an unresolved address inside them counts as core | G |
+| Gate build | Thunks `Py_NO_INLINE` under `Py_STATS`; `-fno-optimize-sibling-calls`; no LTO. configure refuses `--enable-shared`, `--disable-gil` and `--with-lto` with `--enable-pystats`. Every extension the suite loads is in-tree. Isolated children (`-E`, `-I`) count through `-X pystats` and `-X pystats_dir`; leftover `.run` markers fail the gate (value-api-g.md §1.5) | G |
+| Classifier | `Tools/build/check_r27.py`: the dump names each object by GNU build-id; the classes come from the DWARF compile units of that object, not its path. An object is in-tree if any of its compile units lies under `$SRC`, wherever it was loaded from; `check_value_api.py`'s `unit_kind` gives core, compatibility or test. An address in no object is unresolved, which is debt (value-api-g.md §1.4, §1.8) | G |
 | Foreign exits | ctypes' `py_object` conversions (`py_object(1000)`, `pythonapi` arguments) box through the call-adapter primitive with the owner `_Py_BOX_OWNER_FOREIGN` | G |
 | Test boxes | `BOX_SITE_TEST` for `_testinternalcapi`'s encoding tests; `check_value_api.py` allows it only in `Modules/_testinternalcapi*`; the gate ignores it | G |
 | Cached small ints | Counted as boxes: the conversion is a core path using an object form, whether or not it allocates. A `box_cached` total reports them separately (Q5) | G |
@@ -539,7 +549,9 @@ signature (`_Py_VALUE_SLOT_TYPE_<field>`). Consumers:
 | `PyObject_GenericHash` | `_PyValue_GenericHash(PyValueBorrow)` | V2a-0 |
 | `PyObject_GenericGetAttr`, `PyObject_GenericSetAttr` | `_PyObject_GenericGetAttrValue`, `_PyObject_GenericSetAttrValue` | M2 |
 | `_PyObject_NextNotImplemented` | `_PyValue_NextNotImplemented` | M1b |
-| `PyVectorcall_Call` (`tp_call`) | the instance's value vectorcall | M3 |
+| `PyVectorcall_Call` (`tp_call`) | `_PyValue_InstanceVectorcall` (value-api-m3.md) | M3 |
+
+The pair tables live in `Objects/value_pairs.c` (A8 of value-api-m1b-m2.md), which defines `Py_VALUE_PAIR_TABLE` so that the marks expand to nothing there.
 
 `PyBaseObject_Type.tp_hash` is `PyObject_GenericHash`, so nearly every type
 inherits a value hash, which exercises the pass across V2a-0's suite run.
@@ -564,9 +576,12 @@ other non-zero value field must form, with the type's object slot, the same
 pair as some base in the MRO, or a pair of the pair table or the `slot_*`
 table. Failure is `_PyObject_ASSERT_FAILED_MSG` naming the type and the row.
 
-**Writes after ready** (finding 9). Nothing in the tree writes an object
-slot after `PyType_Ready` (`structseq.c:606` runs before it). Cython does,
-but ports wait until after 10b, so recomputation is a ports item. Debug
+**Writes after ready** (finding 9). Two writers set an object slot after
+`PyType_Ready`: the getattr hook, and `slot_tp_descr_get` when `__get__` is
+gone (`structseq.c:606` runs before ready). Both go through
+`_PyType_WriteSlotPair`, the only writer after ready, which stores both
+fields together; `check_value_api.py` rejects other writes (A7 of
+value-api-m1b-m2.md). Cython writes slots too, but ports wait until after 10b, so recomputation is a ports item. Debug
 dispatchers assert the pair on each value-slot call.
 
 ### 4.5 Slotdefs, wrappers and `update_one_slot`
@@ -740,7 +755,7 @@ gate for this project (AGENTS.md).
 
 | # | Risk or question | Recommendation |
 |---|---|---|
-| Q8 | V2a-0 alone makes C callers of `PyNumber_*` on exact ints box twice | V2a-1a i–ii follow at T7–T13; record, do not gate |
+| Q8 | V2a-0 alone makes C callers of `PyNumber_*` on exact ints box twice | V2a-1a i–ii follow at T7–T14; record, do not gate |
 | Q9 | The hot-field set of D1 is chosen from the dispatch paths, not measured | Record per-field dispatch counts in the stats run after V2a-1a; reorder only on evidence, as a layout change with the SOABI bump |
 | Q10 | The internal spec-id range | From 256, with a second lookup table in `slots_generated.c`; settle at V2a-0b's review |
 | Q11 | Platform-only modules (`_winapi.c`, `overlapped.c`, `_scproxy.c`, 66 calls) are outside a Linux compiler sweep | Script edits from the ownership table; the gate states Linux; a non-Linux build checks them when one exists |
@@ -749,7 +764,7 @@ gate for this project (AGENTS.md).
 | R3 | One builder serves 32 workers at the T12–T18 peak; rounds take 10–15 minutes | `-ferror-limit=0`; batches sized for one 1–2 h round; a second builder takes `Modules/` if rounds stretch (§1.6) |
 | R4 | A3 slips | Up to 4 hours costs nothing (§1.7); beyond that the gate slips with A3 hour for hour |
 | R5 | `unavailable` on a function named in a static initialiser or compared by address is an error | Core types name value forms and get generic object sides from the pair table (C7); the 20 identity tests move in M2, before W2 marks the attribute family |
-| R6 | Owner attribution needs symbols and debug lines for every shared object | The gate build keeps `-g`; an unresolved address inside libpython or an in-tree `.so` counts as core |
+| R6 | Owner attribution needs symbols and debug lines for every shared object | The gate build keeps `-g`; an address in no object is unresolved and counts as debt, and classes come from the DWARF compile units found by build-id (value-api-g.md §1.8) |
 | R7 | The estimates assume 40 call sites or 5–15 slots per worker-hour | Each wave's first batch is a pilot; resize the rest from it |
 | R8 | I3, I4 and I5 edit `bytecodes.c` and the generator in parallel | Disjoint handler families; integrate in order, regenerating at each |
 

@@ -403,6 +403,21 @@ that needs memory:
   construction for new code. The object check (canaries outside the
   box-area list, GCC warnings other than `value_owners`) catches what the
   lint cannot see, such as a helper that stops inlining.
+- **Interim wrappers and the three-outcome type.** The reshaping wrappers
+  in `ceval.c` that R-a and R-c add over out-parameter runtime functions are
+  interim: `value_for_iter_next`, `value_mapping_get_optional_item`,
+  `value_async_gen_send` and `super_lookup` are deleted by I3 and I4, which
+  call the dispatchers directly
+  ([value-api-m1b-m2.md](value-api-m1b-m2.md) §5; `value_get_iter` and
+  `value_load_global` also, per its review 2). The `{status, value}` pair of
+  R-a is `_PyStatusValue`, defined in `pycore_value.h`, not `ceval.c`, in the
+  fold before step 2 lands, so that M1b-a does not delete a `ceval.c`
+  typedef; `_PyForIter_VirtualIteratorNext` returns it.
+- **Calls.** I5 calls `_PyValue_VectorcallTstate` inside
+  `call_transaction_run_*`; the value vectorcall returns one word. I5 owns
+  monitoring and tracing (value-api-m3.md §1.8) and keeps `CALL_LEN`,
+  `CALL_ISINSTANCE` and `CALL_LIST_APPEND`. M3a edits four lines of the
+  `ceval.c` unit, written on step 2's tree (value-api-m3.md §4).
 - **Hot paths.** R-c moves work to a C call, and under GCC each C call on a
   hot path costs 7 to 11 instructions of register moves (§2.2). R-c is
   therefore used only where the handler already calls out (calls, native

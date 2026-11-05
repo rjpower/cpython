@@ -30,7 +30,7 @@ Related pages: [PyValue representation](pyvalue.md) (encoding, D1–D8),
 | VA4 | Owned boxing (`PyValue_AsObject`) and borrowed boxing through the borrow stack. Small ints box to the cached immortals | Accepted. Holds as built (`_PyValue_BoxInlineValue` calls `PyLong_FromLong`). Slot adapters box into C locals, not the stack (C4) |
 | VA5 | A value slot table on every type; `PyType_Ready` fills the missing side; pairs inherit together; `slot_*` functions are native value slots | Accepted with changes: value slots are inline fields (R2); `len` and `iter` need no value slot, `repr`, `str` and `send` do (C2); the extension adapter lives in the dispatcher, and core object thunks are generated per type (C3, §2.2) |
 | VA6 | Value vectorcall, a value builtin convention, value-form Clinic output; object-form natives are reached through the borrow stack | Accepted, with a per-instance value vectorcall (R7, §3) |
-| VA7 | Arguments borrowed, results owned. Error: `PyValue_NULL`. Absence: three-state `int` with an out parameter | Accepted. `PyValue_NULL` chosen; `PyValue_ERROR` has two producers and is deleted (§1.4) |
+| VA7 | Arguments borrowed, results owned. Error: `PyValue_NULL`. Absence: three-state `int` with an out parameter | Accepted. `PyValue_NULL` chosen; `PyValue_ERROR` has two producers and is deleted (§1.4). Amended by [value-api-m1b-m2.md](proposals/value-api-m1b-m2.md) (B4): a three-outcome result is `_PyStatusValue {int status; PyValue value;}` returned by value, with no out-parameter for a result; pointers remain for arrays and in-out state |
 | VA8 | `_PyValue_<Op>` for generic operations; `Py<Type>_<Op>Value` for containers | Accepted with the rule stated exactly and 14 renames (§1.5). The suffix collides with the dict sense of "value" (C9) |
 | VA9 | Object functions with a value form are marked compatibility-only; a call from a value-native unit is a build error | Accepted with `__attribute__((unavailable))` and no fallback (C7, R12), plus the variadic check of R4 (§4) |
 | VA10 | `Objects/`, `Python/`, `Parser/` are value-native at the end; hot `Modules/` are ported by box count; polymorphic fields become `PyValue` | Accepted with a corrected field list (C5) and `Parser/` scheduled last (C6) |
@@ -46,7 +46,7 @@ Related pages: [PyValue representation](pyvalue.md) (encoding, D1–D8),
 | R8 | `PyValue_Box` is deleted in V2a; D2 removes the non-canonical form | Coordinator, 2026-11-03, after review 1. §1.3 |
 | R9 | Round-trip identity is permanent compatibility behaviour | Coordinator, 2026-11-03, after review 1. §1.3 |
 | R10 | `pyvalue.h` and `PyTuple_GET_VALUE` move to `Include/internal` in V1. External code gets no `PyValue` until a public value API is designed | Coordinator, 2026-11-03, after review 1. §5.2; pyvalue.md D6. Open question 2 closed |
-| R11 | The value `iternext` uses the `am_send` contract. RETURN is only for iterators that end without raising (core iterators, generators), with the return value or `PyValue_NULL` in `*out`. ERROR covers every raised exception, `StopIteration` and subclasses included, left as raised. The adapters for an extension `tp_iternext` and for `slot_tp_iternext` map NULL with no exception to RETURN with `PyValue_NULL` and NULL with any exception to ERROR. Generic consumers treat ERROR with `StopIteration` as the end and clear it; `next()` passes ERROR through and raises a fresh `StopIteration(v)` only on RETURN; `_PyValue_Send`/`PyIter_Send` turn ERROR with `StopIteration` into RETURN with its value. A core type's object thunk raises `StopIteration(v)` only for a non-NULL `v`. Python behaviour is unchanged. Open question 5 closed | Coordinator, 2026-11-03, after review 1 (replacing revision 2's pending-exception end; refined so that `next()` keeps upstream behaviour). §1.4, §2.1, §2.5, V2b |
+| R11 | The value `iternext` uses the `am_send` contract, returned as `_PyStatusValue` (value-api-m1b-m2.md B4). RETURN is only for iterators that end without raising (core iterators, generators), with the return value or `PyValue_NULL` in `value`. ERROR covers every raised exception, `StopIteration` and subclasses included, left as raised. The adapters for an extension `tp_iternext` and for `slot_tp_iternext` map NULL with no exception to RETURN with `PyValue_NULL` and NULL with any exception to ERROR. Generic consumers treat ERROR with `StopIteration` as the end and clear it; `next()` passes ERROR through and raises a fresh `StopIteration(v)` only on RETURN; `_PyValue_Send`/`PyIter_Send` turn ERROR with `StopIteration` into RETURN with its value. A core type's object thunk raises `StopIteration(v)` only for a non-NULL `v`. Python behaviour is unchanged. Open question 5 closed | Coordinator, 2026-11-03, after review 1 (replacing revision 2's pending-exception end; refined so that `next()` keeps upstream behaviour). §1.4, §2.1, §2.5, V2b |
 | R12 | Review I1–I8 enter the specification and the rollout | Coordinator, 2026-11-03, after review 1. §2.4 (I1), §7.7 (I2), §3 (I3), §9 (I4), §1.3 (I5), §6.2 (I6), §4 (I7), §1.3 (I8) |
 | R13 | The inventory is recounted at `379e92cded9` | Coordinator, 2026-11-03, after review 1. §7 |
 | R14 | Review 2 must-fix 1. The value pass runs once, after `type_ready_inherit_as_structs`, under an invariant that `PyType_Ready` asserts in debug builds: a value slot is non-zero only beside its paired object function. Any MRO base with an equal object slot supplies the value slot | Coordinator, 2026-11-03, after review 2. §2.3 |
@@ -134,7 +134,7 @@ spelling is decided with the public value API (VA11).
 **C10 (VA7). Today a NULL `PyValue` result has four meanings:** error
 (`PyTuple_GetValue`), empty cell or error (`PyCell_GetValue`), exhaustion or
 error (`_PyDictIter_NextValue`), out of range with no exception
-(`_PyList_GetValue`). §1.4 makes NULL mean error only.
+(`_PyList_GetValue`). §1.4 makes NULL mean error only. The three-outcome results return `_PyStatusValue` by value (value-api-m1b-m2.md B4).
 
 **C11 (VA11). Boxing at the compatibility boundary is permanent.**
 JavaScriptCore passes value bits through its C API with no boxing because
@@ -176,7 +176,7 @@ measure that debt per site class at each step. V7 gates on zero.
 
 | Position | Type | Example |
 |---|---|---|
-| Every Python operand of a generic operation: operands, receivers, keys, items, attribute values, callables, call arguments, both arguments of `isinstance` | `PyValue` | `_PyValue_Add(PyValue, PyValue)`, `_PyValue_Len(PyValue)`, `_PyValue_GetItem(PyValue, PyValue)`, `_PyValue_SetAttr(PyValue, PyObject *name, PyValue)`, `_PyValue_Vectorcall(PyValue, const PyValue *, size_t, PyObject *)` |
+| Every Python operand of a generic operation: operands, receivers, keys, items, attribute values, callables, call arguments, both arguments of `isinstance` | `PyValue` | `_PyValue_Add(PyValue, PyValue)`, `_PyValue_Size(PyValue)`, `_PyValue_GetItem(PyValue, PyValue)`, `_PyValue_SetAttr(PyValue, PyObject *name, PyValue)`, `_PyValue_Vectorcall(PyValue, const PyValue *, size_t, PyObject *)` |
 | A result that can be any object | `PyValue` | `_PyValue_GetAttr(…) -> PyValue` |
 | A result of a known type | typed pointer | `_PyValue_Repr(PyValue) -> PyObject *` (a str), `_PyValue_GetIter(PyValue) -> PyObject *` |
 | Receiver of a concrete-type API, after the caller's type check | typed pointer | `PyDict_SetValue(PyObject *dict, PyValue key, PyValue value)` |
@@ -245,14 +245,19 @@ a `_testcapi` test that pins the round trips above, so a change is deliberate.
 * **Error.** A `PyValue` result signals an error with `PyValue_NULL` and an
   exception set. After D5, `PyValue_NULL` is 0, so the test is one compare,
   and a thunk passes NULL through unchanged.
-* **Absence and exhaustion.** Use `int f(…, PyValue *out)`: 1 found (`*out`
-  owned), 0 absent or exhausted (`*out` is `PyValue_NULL`, no exception), -1
-  error. This matches `PyDict_GetItemRef` and `PyIter_NextItem`. A NULL
+* **Absence and exhaustion.** Use `_PyStatusValue f(…)`, returned by value
+  in two registers (value-api-m1b-m2.md B4): status 1 found (`value`
+  owned), 0 absent or exhausted (`value` is `PyValue_NULL`, no exception), -1
+  error. The status values equal `PYGEN_NEXT` (1), `PYGEN_RETURN` (0) and
+  `PYGEN_ERROR` (-1), and `pycore_value.h` asserts it. No value function takes an out-parameter for
+  its result; pointers remain for arrays and in-out state. The object API's
+  own signatures (`PyIter_Send`, `PyMapping_GetOptionalItem`) keep theirs,
+  through the thunk exit. This matches `PyDict_GetItemRef` and `PyIter_NextItem`. A NULL
   result never means "absent", and core code never raises an exception to
   signal an outcome.
 * **Iteration and send.** The value `iternext` and `send` slots return
-  `PySendResult`: `PYGEN_NEXT` with the item in `*out`; `PYGEN_RETURN` when
-  the iterator ends without raising, with the return value in `*out`
+  `_PyStatusValue`: `PYGEN_NEXT` with the item in `value`; `PYGEN_RETURN` when
+  the iterator ends without raising, with the return value in `value`
   (`PyValue_NULL` when there is none); `PYGEN_ERROR` for every raised
   exception, `StopIteration` included, left exactly as raised. Generic
   consumers treat a raised `StopIteration` as the end, as upstream does; `next()`
@@ -276,8 +281,12 @@ a `_testcapi` test that pins the round trips above, so a change is deliberate.
 
 1. **Generic operations:** `_PyValue_<Op>`, where `<Op>` is the object-form
    name after `PyObject_`, `PyNumber_`, `PySequence_`, `PyMapping_` or
-   `PyIter_` (`_PyValue_Add`, `_PyValue_GetAttr`, `_PyValue_Len`,
-   `_PyValue_Vectorcall`). The underscore stays until a public value API exists.
+   `PyIter_` (`_PyValue_Add`, `_PyValue_GetAttr`, `_PyValue_Size`,
+   `_PyValue_Vectorcall`). When two object families give the same `<Op>`,
+   the `PyObject_` form takes the bare name (`_PyValue_GetItem`,
+   `_PyValue_SequenceGetItem`); `PyObject_Length` is a second thunk name for
+   `_PyValue_Size` (value-api-m1b-m2.md B5, §1.5). The underscore stays until
+   a public value API exists.
 2. **Concrete types:** the object-form name with `Item`, `ItemRef` or
    `EntryRef` replaced by `Value`, else with `Value` appended
    (`PyList_GetItemRef` → `PyList_GetValue`, `PySet_Add` → `PySet_AddValue`,
@@ -395,8 +404,8 @@ typedef struct {
     int (*ass_subscript)(PyObject *self, PyValue key, PyValue value);
     int (*ass_item)(PyObject *self, Py_ssize_t i, PyValue value);
     int (*contains)(PyObject *self, PyValue item);
-    PySendResult (*iternext)(PyObject *self, PyValue *out);  /* am_send contract */
-    PySendResult (*send)(PyObject *self, PyValue arg, PyValue *out);
+    _PyStatusValue (*iternext)(PyObject *self);   /* am_send contract */
+    _PyStatusValue (*send)(PyObject *self, PyValue arg);
     vectorcallvaluefunc call;                     /* type-level fallback, §3 */
 } PyValueSlots;
 
@@ -422,8 +431,8 @@ otherwise it is `PyObject *` (§1.2). The fields are inline, so:
   for type objects change in V2a-0.
 
 **`iternext` contract (R11).** The value `iternext` follows `am_send`. It
-returns `PYGEN_NEXT` with the item in `*out`; `PYGEN_RETURN` when the iterator
-ends without raising, with the return value in `*out` (`PyValue_NULL` when
+returns `_PyStatusValue`: `PYGEN_NEXT` with the item in `value`; `PYGEN_RETURN` when the iterator
+ends without raising, with the return value in `value` (`PyValue_NULL` when
 there is none); or `PYGEN_ERROR` for every raised exception, `StopIteration`
 and its subclasses included, left exactly as raised. RETURN comes only from
 core iterators (exhaustion, `PyValue_NULL`) and from generators and the
@@ -469,11 +478,14 @@ Pair table (generic functions; the object pointer keeps its identity, so
 | `PyObject_HashNotImplemented` | `_PyValue_HashNotImplemented` | 9 |
 | `PyObject_GenericHash` | `_PyValue_GenericHash` | 2 |
 | `_PyObject_NextNotImplemented` | `_PyValue_NextNotImplemented` | 0 (installed by `update_one_slot` for `__next__ = None`) |
-| `PyVectorcall_Call` (`tp_call`) | the instance's value vectorcall (§3) | 6 |
+| `PyVectorcall_Call` (`tp_call`) | `_PyValue_InstanceVectorcall` (§3; value-api-m3.md) | 6 |
 
-The core makes 20 identity tests on these pointers (`Objects/object.c` 6,
-`Objects/typeobject.c` 7, `Python/specialize.c` 4, `Python/bytecodes.c` 2,
-`Python/ceval.c` 1); V2c moves them to the value side.
+The core makes 22 identity tests on these pointers at HEAD (an earlier count
+said 20); [value-api-m1b-m2.md](proposals/value-api-m1b-m2.md) §2.6 lists them by file. M2 moves 10 to the
+value side, M1b 1 and I4 1; 10 stay. The rule: a presence test reads the
+object slot and does not move; only an identity test of a pair-table
+function moves, and tests naming a `slot_*` thunk or comparing two types'
+slots stay.
 
 ### 2.3 Inheritance
 
@@ -539,7 +551,7 @@ the object slot, releases the boxes and converts the result with
 `PyValue_FromObjectSteal`. For `iternext` (an extension `tp_iternext` or a
 Python `__next__`) it maps NULL with no exception to RETURN with
 `PyValue_NULL`, and NULL with any exception, `StopIteration` included, to
-ERROR with the exception untouched (§2.1). Where the upstream function compares slot pointers,
+ERROR with the exception untouched (§2.1), returning `_PyStatusValue`. Where the upstream function compares slot pointers,
 the port compares the chosen function (the value pointer if non-zero, else the
 object pointer), so two extension types never merge and an `int` subclass that
 inherits the pair deduplicates against `int` as upstream. The functions below
@@ -569,14 +581,22 @@ check of §4 finds new ones.
 ## 3. Calls (VA6, R7, review I3)
 
 * **Value vectorcall per instance.** `typedef PyValue (*vectorcallvaluefunc)
-  (PyObject *callable, const PyValue *args, size_t nargsf, PyObject *kwnames);`
-  The callable is a pointer because the operation has tested the tag (§1.2).
+  (PyThreadState *tstate, PyObject *callable, const PyValue *args, size_t
+  nargsf, PyObject *kwnames);` (value-api-m3.md D1: one signature for every
+  core callable, `tp_value.call` and the interpreter). The callable is a
+  pointer because the operation has tested the tag (§1.2). `args` is a window
+  of `PyValue` words that the caller keeps valid for the call. The callee
+  borrows each element and never closes or stores one without `PyValue_DUP`
+  (D2). The result is one owned word; `PyValue_NULL` with an exception is the
+  only error (D3).
   A type with `tp_value_vectorcall_offset` stores the function in each
   instance, as PEP 590 does with `tp_vectorcall_offset`; `tp_value.call` is
   the type-level fallback. Core callables set it: Python functions (they
   initialise a frame from the values, as Python-to-Python calls do), bound
   methods, builtins (chosen by `METH_*` flags), method descriptors and
-  classmethod descriptors.
+  classmethod descriptors. The method-wrapper, wrapper-descriptor and
+  classmethod-descriptor calls are type-level `tp_value.call` entries, not
+  per-instance fields (value-api-m3.md §1.3).
 * **Type objects (R20).** Calling a type constructs an instance. `type` sets
   `tp_value_vectorcall_offset` to `offsetof(PyTypeObject,
   tp_value_vectorcall)`, so each type object holds its own constructor's value
@@ -604,15 +624,24 @@ check of §4 finds new ones.
   flag cleared, restore. `args[-1]` is an argument position for the duration
   of the call, not a home, so D4 ("no home holds a borrow") holds. Without the flag, copy `self`, the arguments and the
   keyword values into a stack array of `_PY_FASTCALL_SMALL_STACK` values, or a
-  heap array when larger.
-* **Builtins.** A new flag `METH_VALUE`, used with `METH_FASTCALL |
-  METH_KEYWORDS` (and `METH_METHOD`): `PyValue (*)(PyValue self, const PyValue
-  *args, Py_ssize_t nargs, PyObject *kwnames)`. `self` is a value because
+  heap array when larger. With the flag, M3 writes `PyValue_DUP(self)` into
+  `args[-1]` and closes it before restoring the saved word, because
+  `args[-1]` can be a frame slot (value-api-m3.md D5). The borrowed getters
+  of `self` (`PyMethod_GET_SELF`, `PyCFunction_GET_SELF` and kin) are
+  deleted; `PyMethod_GetSelfRef` and `PyCFunction_GetSelfRef` replace them
+  (D10).
+* **Builtins.** A new flag `METH_VALUE`, valid alone, not with `METH_FASTCALL |
+  METH_KEYWORDS` (D9: it carries no `METH_FASTCALL`, `METH_O` or `METH_NOARGS`
+  bit, so code that tests those bits never calls a value function with
+  object arguments; it combines with `METH_METHOD`, `METH_CLASS`,
+  `METH_STATIC` and `METH_COEXIST`): `PyValue (*)(PyValue self, const PyValue
+  *args, Py_ssize_t nargs, PyObject *kwnames)` in this sketch; the shipped
+  signatures are in value-api-m3.md §1.5. `self` is a value because
   methods of `int` and `float` receive inline receivers.
 * **Object-form natives.** A builtin without `METH_VALUE`, an extension
   `tp_call`, or an extension type's vectorcall is reached through
   `_PyBorrow_ValueVector` inside a borrow scope (native-boundary P4). This
-  replaces `VALUES_TO_PYOBJECTS` (10 uses). Each core value vectorcall keeps
+  replaces `VALUES_TO_PYOBJECTS` (8 uses at `15859d9a592`, all in `Python/ceval.c`). Each core value vectorcall keeps
   an object-form vectorcall thunk, because `PyVectorcall_Function` exposes the
   pointer and Cython calls it directly.
 * **Argument Clinic.** A file-level directive selects value emission. The
@@ -620,13 +649,17 @@ check of §4 finds new ones.
   emission `object` parameters become borrowed `PyValue`; `int`, `Py_ssize_t`,
   `double` and `bool` converters read the inline word directly;
   `object(subclass_of=…)` and the str, bytes and buffer converters test the
-  tag and then work as today. 181 of 435 core Clinic functions take a
-  polymorphic parameter (§7.6). The 53 calls to `_PyNumber_Index` and
+  tag and then work as today. 181 of 459 core Clinic functions take a
+  polymorphic parameter (§7.6; the converter table is value-api-m3.md §2.2). The 53 calls to `_PyNumber_Index` and
   `PyObject_IsTrue` in core Clinic headers go with value emission, so those
   two functions are marked after it (R6).
 * **Monitoring.** `_Py_call_instrumentation_arg`, `_2args` and `_exc2`
   (`Include/internal/pycore_instruments.h:56–65`) take `PyValue` arguments;
   the callbacks they reach are object-form and go through the call adapter.
+  This work belongs to I5, not M3a: all its callers are interpreter
+  handlers, I5 stores one value trace function per thread, and
+  `PyEval_SetTrace` and `PyEval_SetProfile` install a boxing adapter
+  (value-api-m3.md D13, §1.8).
 
 ## 4. Enforcement (VA9, R4, review I7)
 
@@ -878,7 +911,7 @@ each, `Python/pyvalue.c` and `Python/borrow.c` 5 each, and 16 more files.
 Generated code adds 118 (`generated_ir_cases.c.h` 111,
 `generated_jit_helpers.c.h` 7). By function: `PyValue_AsObject` 61,
 `_PyValueTemps_Object` 28, `_PyBorrow_TupleItems` 13,
-`PyValue_AsPyObjectNewBoxed` 11, `VALUES_TO_PYOBJECTS` 10,
+`PyValue_AsPyObjectNewBoxed` 11, `VALUES_TO_PYOBJECTS` 8 (10 before the call transactions replaced two helpers; value-api-m3.md),
 `_PyBorrow_ValueVector` 4, `PyValue_Box` 2, others 2. The owning object
 getters box too: core calls `PyTuple_GetItemRef` 115 times,
 `PyDict_GetItemRef` 77 and `PyList_GetItemRef` 34 (§7.1).
@@ -891,8 +924,13 @@ counts parameters whose converter is `object` without `subclass_of`, plus
 
 | Scope | Functions | With a polymorphic parameter | Parameters | Polymorphic |
 |---|---|---|---|---|
-| `Objects/`, `Python/`, `Parser/` | 435 | 181 | 501 | 258 |
+| `Objects/`, `Python/`, `Parser/` | 459 | 181 | 515 | 258 |
 | `Modules/` | 2111 | 726 | 3087 | 1191 |
+
+The core row counts 459 functions: 435 with the default return converter and
+24 with a typed one (`-> int`, `-> Py_ssize_t`, `-> bool`, `-> double`), which
+the earlier script skipped; the converter table is value-api-m3.md §2.2. The
+polymorphic columns are unchanged.
 
 Top core files: `bltinmodule.c` 34 functions, `bytearrayobject.c` 18,
 `sysmodule.c` 16, `bytesobject.c` 12, `typevarobject.c` 12,
@@ -916,9 +954,9 @@ agrees with the scripts to within 2 where both were run.
 | Error payloads: `PyErr_SetObject`/`_PyErr_SetObject` 56, `_PyErr_SetKeyError` 10, `_PyGen_SetStopIterationValue` 5 | 71 | 43 | `_PyErr_SetValue(type, PyValue)`, `_PyErr_SetKeyErrorValue`; the exception object boxes at creation until V5 makes `StopIteration.value` a home | V2b |
 | Handwritten `PyArg_Parse*`/`PyArg_UnpackTuple` (`UnpackTuple` 24, `ParseTuple` 14, `ParseTupleAndKeywords` 7) | 45 | 698 | Core sites convert to Clinic with value emission; then `PyArg_*` are marked | V3a |
 | Format calls (13 formatting functions) | 1136; 267 need a value conversion (`%R %S %A %T %N`), 387 take any object; `Python-ast.c` 107 and 103 more | 1025; 238 need a value conversion | value conversions (§4) | V1 conversions and check; sweep with each family |
-| Getset getters that return numbers (`int.real`, `float.imag`, `long_get_real`) | — | — | `PyGetSetDef` gains a value getter; `int.real` returns its inline receiver | V2c |
+| Getset getters that return numbers (`int.real`, `float.imag`, `long_get_real`) | — | — | A typed `d_value` record in `PyGetSetDescrObject` (record macros, shared thunk, SOABI bump under D15; value-api-m1b-m2.md §2.3); `int.real` returns its inline receiver | M2 |
 | Bound objects from `descr_get` (`PyMethod_New` 4, `method_get`, method-wrapper) | 4 | 3 | `self` stored as a value (§3) | V3a |
-| Monitoring (`_Py_call_instrumentation_arg`, `_2args`, `_exc2`) | 3 functions | — | `PyValue` arguments (§3) | V3a |
+| Monitoring (`_Py_call_instrumentation_arg`, `_2args`, `_exc2`) | 3 functions | — | `PyValue` arguments (§3) | I5 (V3b) |
 | JIT helpers (`generated_jit_helpers.c.h`: 6 object calls, 5 `PyValue_Box`) | 11 | — | generator emits value calls | each family's packet |
 | V5 field support: `tp_traverse` (`_Py_VISIT_VALUE`), `tp_clear`, `tp_dealloc`, `_Py_T_VALUE` members, `__reduce__`, the home checker | per field | — | per field | V5 |
 
@@ -991,7 +1029,7 @@ flowchart LR
 | **V2a-1** | Value slots (number, compare, hash, bool, repr, str) on `int`, `float`, `bool`, `NoneType`, `str`, `tuple`; value `slot_*` for Python classes; interpreter generic `BINARY_OP`, `COMPARE_OP`, `TO_BOOL` call dispatchers; rewrite `value_ops.c`; `PyValue_FromInt64`/`FromSsize_t`/`FromDouble` and `_PyValue_As*` (§7.7); the cases generator emits owned `PyValue_AsObject` locals for unconverted families, then `PyValue_Box` is deleted (R22); round-trip identity test (§1.3) | V2a-0; representation steps 7, 8 and 9a (int slots written once for int51) | The six types box nothing on the number kernels' generic paths | V2a-0 list, `test_long`, `test_float`, `test_int`, `test_math`, `test_fstring`, `test_str`, `test_tuple`; a `_testinternalcapi` check that each extension subtype's `tp_value.nb_add` equals `PyLong_Type`'s where §2.3 says it inherits | ≈8 |
 | **V2a-2** | Value slots for number, compare, hash, bool and repr on the remaining core static types | V2a-1 | The §2.3 invariant holds for every core type | V2a-1 list, `test_complex`, `test_decimal`, `test_fractions`, `test_set`, `test_range` | ≈5 |
 | **V2b** | Value slots `subscript`, `item`, `ass_*`, `contains`, `iternext` (send contract, §2.1), `send`; the `iternext` adapters and object thunks; wrapping iterators pass the inner RETURN (R16); generic `FOR_ITER` emits the RAISE event on RETURN with a value; three-state `_PyValue_IterNext`; `next()` and `PyIter_Send`; the four `*Iter_NextValue` helpers become slots; error-payload value forms (§7.7) | V2a-2 | `FOR_ITER` generic path boxes nothing for core iterators | `test_iter`, `test_itertools`, `test_generators`, `test_yield_from`, `test_coroutines`, `test_asyncgen`, `test_builtin`, `test_dict`, `test_list`, `test_contains`, `test_exceptions`, `test_capi.test_abstract`; `next(map(str, g()))`, and the same through `filter`, `zip` and `enumerate`, with `g` returning 5 gives `.value == 5`; a `test_monitoring` case for `for` over a generator that returns a value; new `_testcapi` cases: an extension `tp_iternext` that sets `StopIteration(v)`, one that returns NULL with nothing pending, and one that raises another error, each through `for`, `next()` and `yield from`; a Python `__next__` raising `StopIteration(v)` through `next()`, `for` and `yield from`; a `StopIteration` subclass with arguments raised by `__next__` reaches the caller of `next()` with its type, arguments and traceback intact; a core generator's object `tp_iternext` called from C for `return None` and `return 5` | ≈8 |
-| **V2c** | `getattro`, `setattro`, `descr_get`, `descr_set` with value receivers; generic attribute pair; getset value getters; the 20 identity tests | V2b | `(5).real` boxes nothing | `test_descr`, `test_class`, `test_property`, `test_builtin`, `test_capi.test_object`, `test_opcache` | ≈6 |
+| **V2c** | `getattro`, `setattro`, `descr_get`, `descr_set` with value receivers; generic attribute pair; getset value getters; the 22 identity tests | V2b | `(5).real` boxes nothing | `test_descr`, `test_class`, `test_property`, `test_builtin`, `test_capi.test_object`, `test_opcache` | ≈6 |
 | **V3a** | Per-instance value vectorcall, `tp_value_vectorcall_offset` and `tp_value_vectorcall`; the `Py_TPFLAGS_HAVE_VECTORCALL` test; `PyFunction_SetVectorcall`; the offset rule and prepend (§3); `im_self`, `m_self`, wrapper `self` homes; `METH_VALUE`; Clinic value emission and regeneration of core Clinic output; core `PyArg_Parse*` sites to Clinic; monitoring arguments; the call adapter on the borrow stack | V2c; native-boundary P4. Not IR v2 | Clinic headers call no thunk | `test_call`, `test_clinic`, `test_monitoring`, `test_sys_settrace`, `test_descr`, `test_inspect`, `test_functools`; a Python metaclass overriding `__call__`; a `PyFunction_SetVectorcall` replacement that runs | ≈10 |
 | **V3b** | Interpreter call handlers use the value vectorcall; delete `VALUES_TO_PYOBJECTS` and the seven `_Value` call helpers | V3a; IR v2 (call handler shapes, IR-D1 G4) | Call handlers box nothing for core callables | `test_call`, `test_generated_cases`, `test_monitoring`, `test_optimizer` | ≈6 |
 | **V4** | Container value forms primary; renames of §1.5; object getters and setters become thunks; the sweep tool below, with its ownership table and first-hour M/J measurement. **Heap homes adopt `PyValueField`** (A5b, in implementation, leaves the field type to V4): a load returns a `PyValueBorrow` and a store takes a `PyValue`, which closes the copy-of-home gap ([proposal](proposals/register-ir-v2-a5b.md) §2.3). Rule 3 drops the `Borrowed` suffix | V2b | M/J split reported; container value forms complete | `test_list`, `test_tuple`, `test_dict`, `test_set`, `test_structseq`, `test_capi.test_list`, `.test_dict`, `.test_tuple`, `.test_set` | ≈6 |
@@ -1051,9 +1089,10 @@ Dependencies on other plans:
 
 1. **Public names (C9).** Decide the public spelling with the HPy backend:
    keep `Py<Type>_<Op>Value`, or take an HPy-style prefix.
-2. **Getset value getters.** A new field in `PyGetSetDef` changes a public
-   struct; a flag with a union keeps its size. V2c chooses and records the
-   choice here.
+2. **Getset value getters.** Settled by value-api-m1b-m2.md (§2.3): record
+   macros, a shared thunk, and a typed `d_value` field appended to
+   `PyGetSetDescrObject`, set once at creation, with a SOABI bump under D15.
+   `PyGetSetDef` is unchanged.
 
 Closed in revision 2: typed entry cost (R3), `pyvalue.h` visibility (R10),
 `StopIteration.value` (R11, §2.1), extension subtypes' value storage (R2,

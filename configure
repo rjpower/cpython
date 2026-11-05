@@ -29093,7 +29093,7 @@ printf %s "checking ABIFLAGS... " >&6; }
 printf "%s\n" "$ABIFLAGS" >&6; }
 { printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking SOABI" >&5
 printf %s "checking SOABI... " >&6; }
-SOABI='boilvalrc1-'`echo $VERSION | tr -d .`${ABIFLAGS}${SOABI_PLATFORM:+-$SOABI_PLATFORM}
+SOABI='boilvalrc2-'`echo $VERSION | tr -d .`${ABIFLAGS}${SOABI_PLATFORM:+-$SOABI_PLATFORM}
 { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: $SOABI" >&5
 printf "%s\n" "$SOABI" >&6; }
 
@@ -29102,7 +29102,7 @@ printf "%s\n" "$SOABI" >&6; }
 if test "$Py_DEBUG" = 'true'; then
   # Similar to SOABI but remove "d" flag from ABIFLAGS
 
-  ALT_SOABI='boilvalrc1-'`echo $VERSION | tr -d .``echo $ABIFLAGS | tr -d d`${SOABI_PLATFORM:+-$SOABI_PLATFORM}
+  ALT_SOABI='boilvalrc2-'`echo $VERSION | tr -d .``echo $ABIFLAGS | tr -d d`${SOABI_PLATFORM:+-$SOABI_PLATFORM}
 
 printf "%s\n" "#define ALT_SOABI \"${ALT_SOABI}\"" >>confdefs.h
 

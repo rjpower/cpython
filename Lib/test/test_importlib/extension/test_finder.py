@@ -69,7 +69,7 @@ class FinderTests(abc.FinderTests):
             # This fork's compiler/object ABI requires rebuilt extensions.
             # Generic upstream stable-ABI and untagged names are excluded.
             self.assertTrue(suffixes)
-            self.assertTrue(all(suffix.startswith('.boilvalrc1-')
+            self.assertTrue(all(suffix.startswith('.boilvalrc2-')
                                 for suffix in suffixes), suffixes)
 
 

@@ -57,10 +57,10 @@ class ReferenceCountingRuntimeTests(unittest.TestCase):
                          (int(3716).to_bytes(2, 'little'),
                           int(3729).to_bytes(2, 'little')))
         if sys.platform.startswith('linux'):
-            self.assertTrue(sysconfig.get_config_var('SOABI').startswith('boilvalrc1-'))
+            self.assertTrue(sysconfig.get_config_var('SOABI').startswith('boilvalrc2-'))
             suffixes = importlib.machinery.EXTENSION_SUFFIXES
             self.assertTrue(suffixes)
-            self.assertTrue(all(suffix.startswith('.boilvalrc1-') for suffix in suffixes),
+            self.assertTrue(all(suffix.startswith('.boilvalrc2-') for suffix in suffixes),
                             suffixes)
 
 

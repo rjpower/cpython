@@ -2,23 +2,36 @@
 
 /* XXX The functional organization of this file is terrible */
 
+/* The int extractors are compatibility thunks of their value rows; the value
+   slots here call none of them (value-api-v2a1a.md, D12). */
+#define Py_VALUE_MARK_NUMBERS 1
+
 #include "Python.h"
+#include "opcode.h"               // NB_ADD
 #include "pycore_bitutils.h"      // _Py_popcount32()
 #include "pycore_initconfig.h"    // _PyStatus_OK()
 #include "pycore_call.h"          // _PyObject_MakeTpCall
 #include "pycore_freelist.h"      // _Py_FREELIST_FREE, _Py_FREELIST_POP
 #include "pycore_long.h"          // _Py_SmallInts
+#include "pycore_long_value.h"    // _PyLong_ValueAdd()
 #include "pycore_object.h"        // _PyObject_Init()
 #include "pycore_runtime.h"       // _PY_NSMALLPOSINTS
 #include "pycore_structseq.h"     // _PyStructSequence_FiniBuiltin()
 #include "pycore_tuple.h"         // _PyTuple_FromPairSteal
 #include "pycore_unicodeobject.h" // _PyUnicode_Equal()
 #include "pycore_value_api.h"     // _PyValue_AsObjectAt()
+#include "pycore_value_ops.h"     // _PyValue_RichCompare()
+#include "pycore_value_slots.h"   // _Py_VALUE_THUNK_BINARY()
 
 #include <float.h>                // DBL_MANT_DIG
 #include <stddef.h>               // offsetof
 
+/* The Clinic parsers stay object-form until M3b regenerates the class int
+   lines with value readers. int.to_bytes's length is their one extractor
+   call: it reads the row, as Py_VALUE_MARK_NUMBERS requires in this unit. */
+#define PyLong_AsSsize_t(op) _PyValue_IntAsSsize_t(PyValue_FromObjectBorrow(op))
 #include "clinic/longobject.c.h"
+#undef PyLong_AsSsize_t
 /*[clinic input]
 class int "PyObject *" "&PyLong_Type"
 [clinic start generated code]*/
@@ -36,8 +49,30 @@ class int "PyObject *" "&PyLong_Type"
 #define WITH_PYLONG_MODULE 1
 
 // Forward declarations
+/* The span kernels (value-api-v2a1a.md, section 1.2). Each returns 0, or -1
+   with an exception set and its out abandoned. */
+static int long_mul_spans(_PyLongSpan a, _PyLongSpan b, _PyLongOut *out);
+static int long_divrem_spans(_PyLongSpan a, _PyLongSpan b,
+                             _PyLongOut *q, _PyLongOut *r);
+static int long_lshift_spans(_PyLongSpan a, Py_ssize_t wordshift,
+                             digit remshift, _PyLongOut *out);
+static int long_rshift_spans(_PyLongSpan a, Py_ssize_t wordshift,
+                             digit remshift, _PyLongOut *out);
+static int long_bitwise(_PyLongSpan a, char op, _PyLongSpan b,
+                        _PyLongOut *out);
+static double _PyLong_SpanTrueDivide(_PyLongSpan a, _PyLongSpan b);
+static int long_to_decimal_string_internal(_PyLongSpan a, PyObject **str,
+                                           _PyUnicodeWriter *writer,
+                                           PyBytesWriter *bytes_writer,
+                                           char **bytes_str);
+static int long_to_decimal_writer_span(_PyUnicodeWriter *writer,
+                                       _PyLongSpan a);
+static Py_ssize_t long_compare(_PyLongSpan a, _PyLongSpan b);
+static PyLongObject *long_pow_spans(_PyLongSpan a, _PyLongSpan b,
+                                    const _PyLongSpan *c);
+static PyValue _PyLong_WordPowMod(_PyLongSpan a, _PyLongSpan b, int64_t c);
 static PyLongObject* long_neg(PyLongObject *v);
-static PyLongObject *x_divrem(PyLongObject *, PyLongObject *, PyLongObject **);
+static int x_divrem(_PyLongSpan, _PyLongSpan, _PyLongOut *, _PyLongOut *);
 static PyObject* long_long(PyObject *v);
 static PyObject* long_lshift_int64(PyLongObject *a, int64_t shiftby);
 
@@ -323,6 +358,146 @@ _PyLong_FromSTwoDigits(stwodigits x)
 }
 
 
+/* The value layer of the digit kernels (value-api-v2a1a.md, section 1.2). */
+
+// The value of a normalised span of at most _PyLong_WORD_DIGITS digits.
+static inline int64_t
+word_of_span(_PyLongSpan a)
+{
+    assert(a.n <= _PyLong_WORD_DIGITS);
+    int64_t m = a.n == 0 ? 0 : (int64_t)a.d[0];
+    if (a.n == 2) {
+        m |= (int64_t)a.d[1] << PyLong_SHIFT;
+    }
+    return a.neg ? -m : m;
+}
+
+digit *
+_PyLong_OutReserveHeap(_PyLongOut *out, Py_ssize_t bound)
+{
+    out->heap = long_alloc(bound);
+    out->d = out->heap == NULL ? NULL : out->heap->long_value.ob_digit;
+    return out->d;
+}
+
+PyValue
+_PyLong_OutValue(_PyLongOut *out)
+{
+    _PyLongSpan r = _PyLong_OutSpan(out);
+    if (r.n <= _PyLong_WORD_DIGITS) {
+        int64_t v = word_of_span(r);
+        if (_PyValue_IntFitsInline(v)) {
+            /* A reserved heap result is a working allocation sized by the
+               kernel's bound, as upstream's; the value needs none. */
+            _PyLong_OutAbandon(out);
+            return PyValue_FromInlineInt(v);
+        }
+        if (out->heap == NULL) {
+            // A too-large int (R27): 2**50 <= |v| < 2**60.
+            return _PyValue_BoxInt64(v);
+        }
+    }
+    assert(out->heap != NULL);
+    PyLongObject *z = out->heap;
+    out->heap = NULL;
+    _PyLong_SetSignAndDigitCount(z, r.neg ? -1 : 1, r.n);
+    return _PyValue_PointerSteal((PyObject *)z);
+}
+
+PyLongObject *
+_PyLong_OutObject(_PyLongOut *out)
+{
+    _PyLongSpan r = _PyLong_OutSpan(out);
+    if (out->heap == NULL) {
+        return _PyLong_FromSTwoDigits(word_of_span(r));
+    }
+    PyLongObject *z = out->heap;
+    out->heap = NULL;
+    if (r.n == 0) {
+        Py_DECREF(z);
+        return (PyLongObject *)_PyLong_GetZero();
+    }
+    _PyLong_SetSignAndDigitCount(z, r.neg ? -1 : 1, r.n);
+    return maybe_small_long(z);
+}
+
+int64_t
+_PyLong_SpanAsInt64AndOverflow(_PyLongSpan a, int *overflow)
+{
+    *overflow = 0;
+    uint64_t x = 0;
+    for (Py_ssize_t i = a.n; --i >= 0;) {
+        uint64_t prev = x;
+        x = (x << PyLong_SHIFT) | a.d[i];
+        if ((x >> PyLong_SHIFT) != prev) {
+            goto overflow;
+        }
+    }
+    if (x <= (uint64_t)INT64_MAX) {
+        return a.neg ? -(int64_t)x : (int64_t)x;
+    }
+    if (a.neg && x == (uint64_t)INT64_MAX + 1) {
+        return INT64_MIN;
+    }
+  overflow:
+    *overflow = a.neg ? -1 : 1;
+    return -1;
+}
+
+/* The overflow paths of the word kernels and of the typed handlers
+   (bytecodes.c): span kernels over the words, no heap operand. */
+PyValue
+_PyValue_MultiplyInt64(int64_t a, int64_t b)
+{
+    assert(-_PyLong_WORD_LIMIT < a && a < _PyLong_WORD_LIMIT);
+    assert(-_PyLong_WORD_LIMIT < b && b < _PyLong_WORD_LIMIT);
+    int64_t product;
+    if (!__builtin_mul_overflow(a, b, &product)) {
+        return PyValue_FromInt64(product);
+    }
+    digit ba[_PyLong_WORD_DIGITS], bb[_PyLong_WORD_DIGITS];
+    _PyLongOut out;
+    if (long_mul_spans(_PyLong_SpanOfWord(a, ba), _PyLong_SpanOfWord(b, bb),
+                       &out) < 0) {
+        return PyValue_NULL;
+    }
+    return _PyLong_OutValue(&out);
+}
+
+PyValue
+_PyValue_LshiftInt64(int64_t value, int64_t shift)
+{
+    assert(value != 0 && shift >= 0);
+    assert(-_PyLong_WORD_LIMIT < value && value < _PyLong_WORD_LIMIT);
+#if PY_SSIZE_T_MAX <= INT64_MAX / PyLong_SHIFT
+    /* Keep wordshift <= MAX_LONG_DIGITS, so that the result's size cannot
+       overflow Py_ssize_t (long_lshift_int64()). */
+    if (shift > (int64_t)MAX_LONG_DIGITS * PyLong_SHIFT) {
+        PyErr_SetString(PyExc_OverflowError, "too many digits in integer");
+        return PyValue_NULL;
+    }
+#endif
+    digit buf[_PyLong_WORD_DIGITS];
+    _PyLongOut out;
+    if (long_lshift_spans(_PyLong_SpanOfWord(value, buf),
+                          (Py_ssize_t)(shift / PyLong_SHIFT),
+                          (digit)(shift % PyLong_SHIFT), &out) < 0) {
+        return PyValue_NULL;
+    }
+    return _PyLong_OutValue(&out);
+}
+
+PyValue
+_PyValue_FromDoubleIntegralSlow(double value)
+{
+    PyObject *op = PyLong_FromDouble(value);
+    if (op == NULL) {
+        return PyValue_NULL;
+    }
+    return PyValue_FromObjectSteal(op);
+}
+
+
 /* If a freshly-allocated int is already shared, it must
    be a small integer, so negating it must go to PyLong_FromLong */
 Py_LOCAL_INLINE(void)
@@ -493,382 +668,313 @@ PyLong_FromDouble(double dval)
     return (PyObject *)v;
 }
 
-/* Checking for overflow in PyLong_AsLong is a PITA since C doesn't define
- * anything about what happens when a signed integer operation overflows,
- * and some compilers think they're doing you a favor by being "clever"
- * then.  The bit pattern for the largest positive signed long is
- * (unsigned long)LONG_MAX, and for the smallest negative signed long
- * it is abs(LONG_MIN), which we could write -(unsigned long)LONG_MIN.
- * However, some other compilers warn about applying unary minus to an
- * unsigned operand.  Hence the weird "0-".
+/* Extractor rows (value-api-v2a1a.md, section 2.4). Each int extractor is a
+ * value function with the object function's contract and message text; the
+ * object function is its thunk. A row reads an inline int directly, a heap
+ * int through a span kernel and, where the object function accepts
+ * __index__, any other value through _PyValue_Index().
+ *
+ * The span kernels read a magnitude into a 64-bit word and range-check it
+ * against the C type, so the messages and the order of the checks are those
+ * of the digit loops that they replace.
  */
-#define PY_ABS_LONG_MIN         (0-(unsigned long)LONG_MIN)
-#define PY_ABS_SSIZE_T_MIN      (0-(size_t)PY_SSIZE_T_MIN)
 
-static inline unsigned long
-unroll_digits_ulong(PyLongObject *v, Py_ssize_t *iptr)
-{
-    assert(ULONG_MAX >= ((1UL << PyLong_SHIFT) - 1));
-
-    Py_ssize_t i = *iptr;
-    assert(i >= 2);
-
-    /* unroll 1 digit */
-    --i;
-    digit *digits = v->long_value.ob_digit;
-    unsigned long x = digits[i];
-
-#if (ULONG_MAX >> PyLong_SHIFT) >= ((1UL << PyLong_SHIFT) - 1)
-    /* unroll another digit */
-    x <<= PyLong_SHIFT;
-    --i;
-    x |= digits[i];
-#endif
-
-    *iptr = i;
-    return x;
+// NAME's row for an int that is an inline word or a span; ERR is the error
+// return; PRE runs first; PARAMS and ARGS are an extra parameter and its
+// use, or empty; INDEX says whether __index__ is accepted.
+#define _Py_VALUE_INT_EXTRACTOR(NAME, CTYPE, ERR, PRE, PARAMS, ARGS, INDEX, \
+                                FROM_WORD, FROM_SPAN) \
+CTYPE \
+(NAME)(PyValueBorrow v PARAMS) \
+{ \
+    PRE \
+    if (PyValue_IsNull(v)) { \
+        PyErr_BadInternalCall(); \
+        return ERR; \
+    } \
+    if (PyValue_IsInlineInt(v)) { \
+        return FROM_WORD(PyValue_InlineInt64(v) ARGS); \
+    } \
+    if (PyValue_LongCheck(v)) { \
+        PyLongObject *op = (PyLongObject *)PyValue_AsKnownObjectBorrow(v); \
+        return FROM_SPAN(_PyLong_SpanOf(op) ARGS); \
+    } \
+    if (!(INDEX)) { \
+        PyErr_SetString(PyExc_TypeError, "an integer is required"); \
+        return ERR; \
+    } \
+    PyValue ix = _PyValue_Index(v); \
+    if (PyValue_IsNull(ix)) { \
+        return ERR; \
+    } \
+    CTYPE result = (NAME)(PyValue_Borrow(ix) ARGS); \
+    PyValue_CLOSE(ix); \
+    return result; \
 }
 
-static inline size_t
-unroll_digits_size_t(PyLongObject *v, Py_ssize_t *iptr)
+#define _Py_VALUE_NO_PARAMS
+#define _Py_VALUE_OVERFLOW_PARAMS , int *overflow
+#define _Py_VALUE_OVERFLOW_ARGS , overflow
+
+/* x if it lies in [min, max], else -1; *overflow is 0, or -1 or 1 for a value
+   below or above the range. already is the overflow that a span reader found
+   (the value is then not x). */
+static int64_t
+signed_in_range(int64_t x, int already, int64_t min, int64_t max,
+                int *overflow)
 {
-    assert(SIZE_MAX >= ((1UL << PyLong_SHIFT) - 1));
-
-    Py_ssize_t i = *iptr;
-    assert(i >= 2);
-
-    /* unroll 1 digit */
-    --i;
-    digit *digits = v->long_value.ob_digit;
-    size_t x = digits[i];
-
-#if (SIZE_MAX >> PyLong_SHIFT) >= ((1 << PyLong_SHIFT) - 1)
-    /* unroll another digit */
-    x <<= PyLong_SHIFT;
-    --i;
-    x |= digits[i];
-#endif
-
-    *iptr = i;
-    return x;
+    if (already == 0) {
+        if (x < min) {
+            already = -1;
+        }
+        else if (x > max) {
+            already = 1;
+        }
+    }
+    *overflow = already;
+    return already ? -1 : x;
 }
 
-/* Get a C long int from an int object or any object that has an __index__
-   method.
+static int64_t
+span_in_range(_PyLongSpan a, int64_t min, int64_t max, int *overflow)
+{
+    int already;
+    int64_t x = _PyLong_SpanAsInt64AndOverflow(a, &already);
+    return signed_in_range(x, already, min, max, overflow);
+}
 
-   On overflow, return -1 and set *overflow to 1 or -1 depending on the sign of
-   the result.  Otherwise *overflow is 0.
+/* The magnitude of a, if it fits 64 bits. */
+static bool
+span_magnitude(_PyLongSpan a, uint64_t *magnitude)
+{
+    uint64_t x = 0;
+    for (Py_ssize_t i = a.n; --i >= 0;) {
+        if (x > (UINT64_MAX >> PyLong_SHIFT)) {
+            return false;
+        }
+        x = (x << PyLong_SHIFT) | a.d[i];
+    }
+    *magnitude = x;
+    return true;
+}
 
-   For other errors (e.g., TypeError), return -1 and set an error condition.
-   In this case *overflow will be 0.
-*/
+/* The low 64 bits of a in two's complement: a mask row wraps. */
+static uint64_t
+span_wrapped(_PyLongSpan a)
+{
+    uint64_t x = 0;
+    for (Py_ssize_t i = a.n; --i >= 0;) {
+        x = (x << PyLong_SHIFT) | a.d[i];
+    }
+    return a.neg ? 0 - x : x;
+}
+
+/* The word and span kernels of a signed row that raises OverflowError. */
+#define _Py_VALUE_SIGNED_KERNELS(NAME, CTYPE, MIN, MAX, MESSAGE) \
+static CTYPE \
+NAME##_from_word(int64_t x) \
+{ \
+    int overflow; \
+    int64_t r = signed_in_range(x, 0, MIN, MAX, &overflow); \
+    if (overflow) { \
+        PyErr_SetString(PyExc_OverflowError, MESSAGE); \
+        return -1; \
+    } \
+    return (CTYPE)r; \
+} \
+static CTYPE \
+NAME##_from_span(_PyLongSpan a) \
+{ \
+    int overflow; \
+    int64_t r = span_in_range(a, MIN, MAX, &overflow); \
+    if (overflow) { \
+        PyErr_SetString(PyExc_OverflowError, MESSAGE); \
+        return -1; \
+    } \
+    return (CTYPE)r; \
+}
+
+/* The kernels of a row that reports overflow through *overflow. */
+#define _Py_VALUE_OVERFLOW_KERNELS(NAME, CTYPE, MIN, MAX) \
+static CTYPE \
+NAME##_from_word(int64_t x, int *overflow) \
+{ \
+    return (CTYPE)signed_in_range(x, 0, MIN, MAX, overflow); \
+} \
+static CTYPE \
+NAME##_from_span(_PyLongSpan a, int *overflow) \
+{ \
+    return (CTYPE)span_in_range(a, MIN, MAX, overflow); \
+}
+
+/* The kernels of an unsigned row: a negative value and a value above MAX
+   raise OverflowError with their own messages. */
+#define _Py_VALUE_UNSIGNED_KERNELS(NAME, CTYPE, MAX, NEGATIVE, TOO_BIG) \
+static CTYPE \
+NAME##_from_word(int64_t x) \
+{ \
+    if (x < 0) { \
+        PyErr_SetString(PyExc_OverflowError, NEGATIVE); \
+        return (CTYPE)-1; \
+    } \
+    if ((uint64_t)x > (MAX)) { \
+        PyErr_SetString(PyExc_OverflowError, TOO_BIG); \
+        return (CTYPE)-1; \
+    } \
+    return (CTYPE)x; \
+} \
+static CTYPE \
+NAME##_from_span(_PyLongSpan a) \
+{ \
+    if (a.neg) { \
+        PyErr_SetString(PyExc_OverflowError, NEGATIVE); \
+        return (CTYPE)-1; \
+    } \
+    uint64_t x; \
+    if (!span_magnitude(a, &x) || x > (MAX)) { \
+        PyErr_SetString(PyExc_OverflowError, TOO_BIG); \
+        return (CTYPE)-1; \
+    } \
+    return (CTYPE)x; \
+}
+
+#define _Py_VALUE_MASK_KERNELS(NAME, CTYPE) \
+static CTYPE \
+NAME##_from_word(int64_t x) \
+{ \
+    return (CTYPE)x; \
+} \
+static CTYPE \
+NAME##_from_span(_PyLongSpan a) \
+{ \
+    return (CTYPE)span_wrapped(a); \
+}
+
+/* "Python int too large to convert to C int": checked as a long upstream. */
+_Py_VALUE_SIGNED_KERNELS(as_int, int, INT_MIN, INT_MAX,
+                         "Python int too large to convert to C int")
+_Py_VALUE_SIGNED_KERNELS(as_long, long, LONG_MIN, LONG_MAX,
+                         "Python int too large to convert to C long")
+// _PyLong_AsByteArray()'s text.
+_Py_VALUE_SIGNED_KERNELS(as_long_long, long long, LLONG_MIN, LLONG_MAX,
+                         "int too big to convert")
+_Py_VALUE_SIGNED_KERNELS(as_ssize_t, Py_ssize_t, PY_SSIZE_T_MIN,
+                         PY_SSIZE_T_MAX,
+                         "Python int too large to convert to C ssize_t")
+_Py_VALUE_OVERFLOW_KERNELS(as_long_overflow, long, LONG_MIN, LONG_MAX)
+_Py_VALUE_OVERFLOW_KERNELS(as_long_long_overflow, long long, LLONG_MIN,
+                           LLONG_MAX)
+_Py_VALUE_UNSIGNED_KERNELS(as_unsigned_long, unsigned long, ULONG_MAX,
+                           "can't convert negative value to unsigned int",
+                           "Python int too large to convert to C unsigned long")
+_Py_VALUE_UNSIGNED_KERNELS(as_size_t, size_t, SIZE_MAX,
+                           "can't convert negative value to size_t",
+                           "Python int too large to convert to C size_t")
+// _PyLong_AsByteArray()'s texts.
+_Py_VALUE_UNSIGNED_KERNELS(as_unsigned_long_long, unsigned long long,
+                           ULLONG_MAX,
+                           "can't convert negative int to unsigned",
+                           "int too big to convert")
+_Py_VALUE_MASK_KERNELS(as_unsigned_long_mask, unsigned long)
+_Py_VALUE_MASK_KERNELS(as_unsigned_long_long_mask, unsigned long long)
+
+static double
+as_double_from_word(int64_t x)
+{
+    return (double)x;  // an inline int has at most 51 bits
+}
+
+#define as_double_from_span _PyLong_SpanAsDouble
+
+_Py_VALUE_INT_EXTRACTOR(_PyValue_AsInt, int, -1, , _Py_VALUE_NO_PARAMS,
+                        _Py_VALUE_NO_PARAMS, true, as_int_from_word,
+                        as_int_from_span)
+_Py_VALUE_INT_EXTRACTOR(_PyValue_AsLong, long, -1, , _Py_VALUE_NO_PARAMS,
+                        _Py_VALUE_NO_PARAMS, true, as_long_from_word,
+                        as_long_from_span)
+_Py_VALUE_INT_EXTRACTOR(_PyValue_AsLongLong, long long, -1, ,
+                        _Py_VALUE_NO_PARAMS, _Py_VALUE_NO_PARAMS, true,
+                        as_long_long_from_word, as_long_long_from_span)
+_Py_VALUE_INT_EXTRACTOR(_PyValue_AsLongAndOverflow, long, -1, *overflow = 0;,
+                        _Py_VALUE_OVERFLOW_PARAMS, _Py_VALUE_OVERFLOW_ARGS,
+                        true, as_long_overflow_from_word,
+                        as_long_overflow_from_span)
+_Py_VALUE_INT_EXTRACTOR(_PyValue_AsLongLongAndOverflow, long long, -1,
+                        *overflow = 0;, _Py_VALUE_OVERFLOW_PARAMS,
+                        _Py_VALUE_OVERFLOW_ARGS, true,
+                        as_long_long_overflow_from_word,
+                        as_long_long_overflow_from_span)
+_Py_VALUE_INT_EXTRACTOR(_PyValue_IntAsUnsignedLong, unsigned long,
+                        (unsigned long)-1, , _Py_VALUE_NO_PARAMS,
+                        _Py_VALUE_NO_PARAMS, false, as_unsigned_long_from_word,
+                        as_unsigned_long_from_span)
+_Py_VALUE_INT_EXTRACTOR(_PyValue_IntAsUnsignedLongLong, unsigned long long,
+                        (unsigned long long)-1, , _Py_VALUE_NO_PARAMS,
+                        _Py_VALUE_NO_PARAMS, false,
+                        as_unsigned_long_long_from_word,
+                        as_unsigned_long_long_from_span)
+_Py_VALUE_INT_EXTRACTOR(_PyValue_AsUnsignedLongMask, unsigned long,
+                        (unsigned long)-1, , _Py_VALUE_NO_PARAMS,
+                        _Py_VALUE_NO_PARAMS, true,
+                        as_unsigned_long_mask_from_word,
+                        as_unsigned_long_mask_from_span)
+_Py_VALUE_INT_EXTRACTOR(_PyValue_AsUnsignedLongLongMask, unsigned long long,
+                        (unsigned long long)-1, , _Py_VALUE_NO_PARAMS,
+                        _Py_VALUE_NO_PARAMS, true,
+                        as_unsigned_long_long_mask_from_word,
+                        as_unsigned_long_long_mask_from_span)
+_Py_VALUE_INT_EXTRACTOR(_PyValue_IntAsSsize_t, Py_ssize_t, -1, ,
+                        _Py_VALUE_NO_PARAMS, _Py_VALUE_NO_PARAMS, false,
+                        as_ssize_t_from_word, as_ssize_t_from_span)
+_Py_VALUE_INT_EXTRACTOR(_PyValue_IntAsSize_t, size_t, (size_t)-1, ,
+                        _Py_VALUE_NO_PARAMS, _Py_VALUE_NO_PARAMS, false,
+                        as_size_t_from_word, as_size_t_from_span)
+_Py_VALUE_INT_EXTRACTOR(_PyValue_IntAsDouble, double, -1.0, ,
+                        _Py_VALUE_NO_PARAMS, _Py_VALUE_NO_PARAMS, false,
+                        as_double_from_word, as_double_from_span)
+
+/* The object extractors: thunks of the rows. */
+
 long
 PyLong_AsLongAndOverflow(PyObject *vv, int *overflow)
 {
-    /* This version originally by Tim Peters */
-    PyLongObject *v;
-    long res;
-    Py_ssize_t i;
-    int sign;
-    int do_decref = 0; /* if PyNumber_Index was called */
-
-    *overflow = 0;
-    if (vv == NULL) {
-        PyErr_BadInternalCall();
-        return -1;
-    }
-
-    if (PyLong_Check(vv)) {
-        v = (PyLongObject *)vv;
-    }
-    else {
-        v = (PyLongObject *)_PyNumber_Index(vv);
-        if (v == NULL)
-            return -1;
-        do_decref = 1;
-    }
-    if (_PyLong_IsCompact(v)) {
-#if SIZEOF_LONG < SIZEOF_SIZE_T
-        Py_ssize_t tmp = _PyLong_CompactValue(v);
-        if (tmp < LONG_MIN) {
-            *overflow = -1;
-            res = -1;
-        }
-        else if (tmp > LONG_MAX) {
-            *overflow = 1;
-            res = -1;
-        }
-        else {
-            res = (long)tmp;
-        }
-#else
-        res = _PyLong_CompactValue(v);
-#endif
-    }
-    else {
-        res = -1;
-        i = _PyLong_DigitCount(v);
-        sign = _PyLong_NonCompactSign(v);
-
-        unsigned long x = unroll_digits_ulong(v, &i);
-        while (--i >= 0) {
-            if (x > (ULONG_MAX >> PyLong_SHIFT)) {
-                *overflow = sign;
-                goto exit;
-            }
-            x = (x << PyLong_SHIFT) | v->long_value.ob_digit[i];
-        }
-        /* Haven't lost any bits, but casting to long requires extra
-        * care (see comment above).
-        */
-        if (x <= (unsigned long)LONG_MAX) {
-            res = (long)x * sign;
-        }
-        else if (sign < 0 && x == PY_ABS_LONG_MIN) {
-            res = LONG_MIN;
-        }
-        else {
-            *overflow = sign;
-            /* res is already set to -1 */
-        }
-    }
-  exit:
-    if (do_decref) {
-        Py_DECREF(v);
-    }
-    return res;
+    return _PyValue_AsLongAndOverflow(_Py_VALUE_ARG(vv), overflow);
 }
-
-/* Get a C long int from an int object or any object that has an __index__
-   method.  Return -1 and set an error if overflow occurs. */
 
 long
 PyLong_AsLong(PyObject *obj)
 {
-    int overflow;
-    long result = PyLong_AsLongAndOverflow(obj, &overflow);
-    if (overflow) {
-        /* XXX: could be cute and give a different
-           message for overflow == -1 */
-        PyErr_SetString(PyExc_OverflowError,
-                        "Python int too large to convert to C long");
-    }
-    return result;
+    return _PyValue_AsLong(_Py_VALUE_ARG(obj));
 }
-
-/* Get a C int from an int object or any object that has an __index__
-   method.  Return -1 and set an error if overflow occurs. */
 
 int
 PyLong_AsInt(PyObject *obj)
 {
-    int overflow;
-    long result = PyLong_AsLongAndOverflow(obj, &overflow);
-    if (overflow || result > INT_MAX || result < INT_MIN) {
-        /* XXX: could be cute and give a different
-           message for overflow == -1 */
-        PyErr_SetString(PyExc_OverflowError,
-                        "Python int too large to convert to C int");
-        return -1;
-    }
-    return (int)result;
+    return _PyValue_AsInt(_Py_VALUE_ARG(obj));
 }
-
-/* Get a Py_ssize_t from an int object.
-   Returns -1 and sets an error condition if overflow occurs. */
 
 Py_ssize_t
-PyLong_AsSsize_t(PyObject *vv) {
-    PyLongObject *v;
-    Py_ssize_t i;
-    int sign;
-
-    if (vv == NULL) {
-        PyErr_BadInternalCall();
-        return -1;
-    }
-    if (!PyLong_Check(vv)) {
-        PyErr_SetString(PyExc_TypeError, "an integer is required");
-        return -1;
-    }
-
-    v = (PyLongObject *)vv;
-    if (_PyLong_IsCompact(v)) {
-        return _PyLong_CompactValue(v);
-    }
-    i = _PyLong_DigitCount(v);
-    sign = _PyLong_NonCompactSign(v);
-
-    size_t x = unroll_digits_size_t(v, &i);
-    while (--i >= 0) {
-        if (x > (SIZE_MAX >> PyLong_SHIFT)) {
-            goto overflow;
-        }
-        x = (x << PyLong_SHIFT) | v->long_value.ob_digit[i];
-    }
-    /* Haven't lost any bits, but casting to a signed type requires
-     * extra care (see comment above).
-     */
-    if (x <= (size_t)PY_SSIZE_T_MAX) {
-        return (Py_ssize_t)x * sign;
-    }
-    else if (sign < 0 && x == PY_ABS_SSIZE_T_MIN) {
-        return PY_SSIZE_T_MIN;
-    }
-    /* else overflow */
-
-  overflow:
-    PyErr_SetString(PyExc_OverflowError,
-                    "Python int too large to convert to C ssize_t");
-    return -1;
+PyLong_AsSsize_t(PyObject *vv)
+{
+    return _PyValue_IntAsSsize_t(_Py_VALUE_ARG(vv));
 }
-
-/* Get a C unsigned long int from an int object.
-   Returns -1 and sets an error condition if overflow occurs. */
 
 unsigned long
 PyLong_AsUnsignedLong(PyObject *vv)
 {
-    PyLongObject *v;
-    Py_ssize_t i;
-
-    if (vv == NULL) {
-        PyErr_BadInternalCall();
-        return (unsigned long)-1;
-    }
-    if (!PyLong_Check(vv)) {
-        PyErr_SetString(PyExc_TypeError, "an integer is required");
-        return (unsigned long)-1;
-    }
-
-    v = (PyLongObject *)vv;
-    if (_PyLong_IsNonNegativeCompact(v)) {
-#if SIZEOF_LONG < SIZEOF_SIZE_T
-        size_t tmp = (size_t)_PyLong_CompactValue(v);
-        unsigned long res = (unsigned long)tmp;
-        if (res != tmp) {
-            goto overflow;
-        }
-        return res;
-#else
-        return (unsigned long)(size_t)_PyLong_CompactValue(v);
-#endif
-    }
-    if (_PyLong_IsNegative(v)) {
-        PyErr_SetString(PyExc_OverflowError,
-                        "can't convert negative value to unsigned int");
-        return (unsigned long) -1;
-    }
-    i = _PyLong_DigitCount(v);
-
-    unsigned long x = unroll_digits_ulong(v, &i);
-    while (--i >= 0) {
-        if (x > (ULONG_MAX >> PyLong_SHIFT)) {
-            goto overflow;
-        }
-        x = (x << PyLong_SHIFT) | v->long_value.ob_digit[i];
-    }
-    return x;
-overflow:
-    PyErr_SetString(PyExc_OverflowError,
-                    "Python int too large to convert "
-                    "to C unsigned long");
-    return (unsigned long) -1;
+    return _PyValue_IntAsUnsignedLong(_Py_VALUE_ARG(vv));
 }
-
-/* Get a C size_t from an int object. Returns (size_t)-1 and sets
-   an error condition if overflow occurs. */
 
 size_t
 PyLong_AsSize_t(PyObject *vv)
 {
-    PyLongObject *v;
-    Py_ssize_t i;
-
-    if (vv == NULL) {
-        PyErr_BadInternalCall();
-        return (size_t) -1;
-    }
-    if (!PyLong_Check(vv)) {
-        PyErr_SetString(PyExc_TypeError, "an integer is required");
-        return (size_t)-1;
-    }
-
-    v = (PyLongObject *)vv;
-    if (_PyLong_IsNonNegativeCompact(v)) {
-        return (size_t)_PyLong_CompactValue(v);
-    }
-    if (_PyLong_IsNegative(v)) {
-        PyErr_SetString(PyExc_OverflowError,
-                   "can't convert negative value to size_t");
-        return (size_t) -1;
-    }
-    i = _PyLong_DigitCount(v);
-
-    size_t x = unroll_digits_size_t(v, &i);
-    while (--i >= 0) {
-            if (x > (SIZE_MAX >> PyLong_SHIFT)) {
-                PyErr_SetString(PyExc_OverflowError,
-                    "Python int too large to convert to C size_t");
-                return (size_t) -1;
-            }
-            x = (x << PyLong_SHIFT) | v->long_value.ob_digit[i];
-        }
-    return x;
-}
-
-/* Get a C unsigned long int from an int object, ignoring the high bits.
-   Returns -1 and sets an error condition if an error occurs. */
-
-static unsigned long
-_PyLong_AsUnsignedLongMask(PyObject *vv)
-{
-    PyLongObject *v;
-    Py_ssize_t i;
-
-    if (vv == NULL || !PyLong_Check(vv)) {
-        PyErr_BadInternalCall();
-        return (unsigned long) -1;
-    }
-    v = (PyLongObject *)vv;
-    if (_PyLong_IsCompact(v)) {
-#if SIZEOF_LONG < SIZEOF_SIZE_T
-        return (unsigned long)(size_t)_PyLong_CompactValue(v);
-#else
-        return (unsigned long)(long)_PyLong_CompactValue(v);
-#endif
-    }
-    i = _PyLong_DigitCount(v);
-    int sign = _PyLong_NonCompactSign(v);
-    unsigned long x = unroll_digits_ulong(v, &i);
-    while (--i >= 0) {
-        x = (x << PyLong_SHIFT) | v->long_value.ob_digit[i];
-    }
-    return x * sign;
+    return _PyValue_IntAsSize_t(_Py_VALUE_ARG(vv));
 }
 
 unsigned long
 PyLong_AsUnsignedLongMask(PyObject *op)
 {
-    PyLongObject *lo;
-    unsigned long val;
-
-    if (op == NULL) {
-        PyErr_BadInternalCall();
-        return (unsigned long)-1;
-    }
-
-    if (PyLong_Check(op)) {
-        return _PyLong_AsUnsignedLongMask(op);
-    }
-
-    lo = (PyLongObject *)_PyNumber_Index(op);
-    if (lo == NULL)
-        return (unsigned long)-1;
-
-    val = _PyLong_AsUnsignedLongMask((PyObject *)lo);
-    Py_DECREF(lo);
-    return val;
+    return _PyValue_AsUnsignedLongMask(_Py_VALUE_ARG(op));
 }
 
 int
@@ -946,19 +1052,15 @@ bit_length_digit(digit x)
 }
 
 int64_t
-_PyLong_NumBits(PyObject *vv)
+_PyLong_SpanNumBits(_PyLongSpan a)
 {
-    PyLongObject *v = (PyLongObject *)vv;
     int64_t result = 0;
-    Py_ssize_t ndigits;
+    Py_ssize_t ndigits = a.n;
     int msd_bits;
 
-    assert(v != NULL);
-    assert(PyLong_Check(v));
-    ndigits = _PyLong_DigitCount(v);
-    assert(ndigits == 0 || v->long_value.ob_digit[ndigits - 1] != 0);
+    assert(ndigits == 0 || a.d[ndigits - 1] != 0);
     if (ndigits > 0) {
-        digit msd = v->long_value.ob_digit[ndigits - 1];
+        digit msd = a.d[ndigits - 1];
 #if SIZEOF_SIZE_T == 8
         assert(ndigits <= INT64_MAX / PyLong_SHIFT);
 #endif
@@ -967,6 +1069,16 @@ _PyLong_NumBits(PyObject *vv)
         result += msd_bits;
     }
     return result;
+}
+
+int64_t
+_PyLong_NumBits(PyObject *vv)
+{
+    PyLongObject *v = (PyLongObject *)vv;
+
+    assert(v != NULL);
+    assert(PyLong_Check(v));
+    return _PyLong_SpanNumBits(_PyLong_SpanOf(v));
 }
 
 PyObject *
@@ -1078,13 +1190,14 @@ _PyLong_FromByteArray(const unsigned char* bytes, size_t n,
     return (PyObject *)maybe_small_long(long_normalize(v));
 }
 
-int
-_PyLong_AsByteArray(PyLongObject* v,
-                    unsigned char* bytes, size_t n,
-                    int little_endian, int is_signed,
-                    int with_exceptions)
+/* _PyLong_AsByteArray() over a span. */
+static int
+span_as_byte_array(_PyLongSpan a,
+                   unsigned char* bytes, size_t n,
+                   int little_endian, int is_signed,
+                   int with_exceptions)
 {
-    Py_ssize_t i;               /* index into v->long_value.ob_digit */
+    Py_ssize_t i;               /* index into a.d */
     Py_ssize_t ndigits;         /* number of digits */
     twodigits accum;            /* sliding register */
     unsigned int accumbits;     /* # bits in accum */
@@ -1094,10 +1207,8 @@ _PyLong_AsByteArray(PyLongObject* v,
     unsigned char* p;           /* pointer to next byte in bytes */
     int pincr;                  /* direction to move p */
 
-    assert(v != NULL && PyLong_Check(v));
-
-    ndigits = _PyLong_DigitCount(v);
-    if (_PyLong_IsNegative(v)) {
+    ndigits = a.n;
+    if (a.neg) {
         if (!is_signed) {
             if (with_exceptions) {
                 PyErr_SetString(PyExc_OverflowError,
@@ -1129,13 +1240,13 @@ _PyLong_AsByteArray(PyLongObject* v,
        you account for that if you are changing this algorithm to return without
        doing that.
        */
-    assert(ndigits == 0 || v->long_value.ob_digit[ndigits - 1] != 0);
+    assert(ndigits == 0 || a.d[ndigits - 1] != 0);
     j = 0;
     accum = 0;
     accumbits = 0;
     carry = do_twos_comp ? 1 : 0;
     for (i = 0; i < ndigits; ++i) {
-        digit thisdigit = v->long_value.ob_digit[i];
+        digit thisdigit = a.d[i];
         if (do_twos_comp) {
             thisdigit = (thisdigit ^ PyLong_MASK) + carry;
             carry = thisdigit >> PyLong_SHIFT;
@@ -1226,6 +1337,17 @@ _PyLong_AsByteArray(PyLongObject* v,
 
 }
 
+int
+_PyLong_AsByteArray(PyLongObject* v,
+                    unsigned char* bytes, size_t n,
+                    int little_endian, int is_signed,
+                    int with_exceptions)
+{
+    assert(v != NULL && PyLong_Check(v));
+    return span_as_byte_array(_PyLong_SpanOf(v), bytes, n, little_endian,
+                              is_signed, with_exceptions);
+}
+
 // Refactored out for readability, not reuse
 static inline int
 _fits_in_n_bits(Py_ssize_t v, Py_ssize_t n)
@@ -1252,53 +1374,29 @@ _resolve_endianness(int *endianness)
 }
 
 Py_ssize_t
-PyLong_AsNativeBytes(PyObject* vv, void* buffer, Py_ssize_t n, int flags)
+_PyLong_SpanAsNativeBytes(_PyLongSpan a, void *buffer, Py_ssize_t n, int flags)
 {
-    PyLongObject *v;
     union {
         Py_ssize_t v;
         unsigned char b[sizeof(Py_ssize_t)];
     } cv;
-    int do_decref = 0;
     Py_ssize_t res = 0;
-
-    if (vv == NULL || n < 0) {
-        PyErr_BadInternalCall();
-        return -1;
-    }
 
     int little_endian = flags;
     if (_resolve_endianness(&little_endian) < 0) {
         return -1;
     }
 
-    if (PyLong_Check(vv)) {
-        v = (PyLongObject *)vv;
-    }
-    else if (flags != -1 && (flags & Py_ASNATIVEBYTES_ALLOW_INDEX)) {
-        v = (PyLongObject *)_PyNumber_Index(vv);
-        if (v == NULL) {
-            return -1;
-        }
-        do_decref = 1;
-    }
-    else {
-        PyErr_Format(PyExc_TypeError, "expect int, got %T", vv);
-        return -1;
-    }
-
     if ((flags != -1 && (flags & Py_ASNATIVEBYTES_REJECT_NEGATIVE))
-        && _PyLong_IsNegative(v)) {
+        && a.neg) {
         PyErr_SetString(PyExc_ValueError, "Cannot convert negative int");
-        if (do_decref) {
-            Py_DECREF(v);
-        }
         return -1;
     }
 
-    if (_PyLong_IsCompact(v)) {
+    if (a.n <= 1) {
         res = 0;
-        cv.v = _PyLong_CompactValue(v);
+        cv.v = a.n == 0 ? 0 : (a.neg ? -(Py_ssize_t)a.d[0]
+                                      : (Py_ssize_t)a.d[0]);
         /* Most paths result in res = sizeof(compact value). Only the case
          * where 0 < n < sizeof(compact value) do we need to check and adjust
          * our return value. */
@@ -1376,12 +1474,12 @@ PyLong_AsNativeBytes(PyObject* vv, void* buffer, Py_ssize_t n, int flags)
     }
     else {
         if (n > 0) {
-            _PyLong_AsByteArray(v, buffer, (size_t)n, little_endian, 1, 0);
+            span_as_byte_array(a, buffer, (size_t)n, little_endian, 1, 0);
         }
 
         /* Calculates the number of bits required for the *absolute* value
          * of v. This does not take sign into account, only magnitude. */
-        int64_t nb = _PyLong_NumBits((PyObject *)v);
+        int64_t nb = _PyLong_SpanNumBits(a);
         assert(nb >= 0);
         /* Normally this would be ((nb - 1) / 8) + 1 to avoid rounding up
          * multiples of 8 to the next byte, but we add an implied bit for
@@ -1393,7 +1491,7 @@ PyLong_AsNativeBytes(PyObject* vv, void* buffer, Py_ssize_t n, int flags)
          * actually fits.
          */
         if (n > 0 && res == n + 1 && nb % 8 == 0) {
-            if (_PyLong_IsNegative(v)) {
+            if (a.neg) {
                 /* Values of 0x80...00 from negative values that use every
                  * available bit in the buffer do not require an additional
                  * bit to store the sign. */
@@ -1428,11 +1526,41 @@ PyLong_AsNativeBytes(PyObject* vv, void* buffer, Py_ssize_t n, int flags)
         }
     }
 
-    if (do_decref) {
-        Py_DECREF(v);
+    return res;
+}
+
+Py_ssize_t
+(_PyValue_AsNativeBytes)(PyValueBorrow v, void *buffer, Py_ssize_t n,
+                         int flags)
+{
+    if (PyValue_IsNull(v) || n < 0) {
+        PyErr_BadInternalCall();
+        return -1;
     }
 
-    return res;
+    if (PyValue_IsInlineInt(v) || PyValue_LongCheck(v)) {
+        digit buf[_PyLong_WORD_DIGITS];
+        return _PyLong_SpanAsNativeBytes(_PyLong_SpanOfValue(v, buf), buffer,
+                                         n, flags);
+    }
+    if (flags == -1 || !(flags & Py_ASNATIVEBYTES_ALLOW_INDEX)) {
+        PyErr_Format(PyExc_TypeError, "expect int, got %N", PyValue_TYPE(v));
+        return -1;
+    }
+    PyValue index = _PyValue_Index(v);
+    if (PyValue_IsNull(index)) {
+        return -1;
+    }
+    Py_ssize_t result = (_PyValue_AsNativeBytes)(PyValue_Borrow(index),
+                                                 buffer, n, flags);
+    PyValue_CLOSE(index);
+    return result;
+}
+
+Py_ssize_t
+PyLong_AsNativeBytes(PyObject* vv, void* buffer, Py_ssize_t n, int flags)
+{
+    return _PyValue_AsNativeBytes(_Py_VALUE_ARG(vv), buffer, n, flags);
 }
 
 
@@ -1495,16 +1623,25 @@ PyLong_FromVoidPtr(void *p)
 /* Get a C pointer from an int object. */
 
 void *
-PyLong_AsVoidPtr(PyObject *vv)
+(_PyValue_IntAsVoidPtr)(PyValueBorrow v)
 {
+    if (PyValue_IsNull(v)) {
+        PyErr_BadInternalCall();
+        return NULL;
+    }
+    bool negative = PyValue_IsInlineInt(v)
+        ? PyValue_InlineInt64(v) < 0
+        : (PyValue_LongCheck(v)
+           && _PyLong_IsNegative(
+                  (PyLongObject *)PyValue_AsKnownObjectBorrow(v)));
 #if SIZEOF_VOID_P <= SIZEOF_LONG
     long x;
 
-    if (PyLong_Check(vv) && _PyLong_IsNegative((PyLongObject *)vv)) {
-        x = PyLong_AsLong(vv);
+    if (negative) {
+        x = _PyValue_AsLong(v);
     }
     else {
-        x = PyLong_AsUnsignedLong(vv);
+        x = _PyValue_IntAsUnsignedLong(v);
     }
 #else
 
@@ -1513,11 +1650,11 @@ PyLong_AsVoidPtr(PyObject *vv)
 #endif
     long long x;
 
-    if (PyLong_Check(vv) && _PyLong_IsNegative((PyLongObject *)vv)) {
-        x = PyLong_AsLongLong(vv);
+    if (negative) {
+        x = _PyValue_AsLongLong(v);
     }
     else {
-        x = PyLong_AsUnsignedLongLong(vv);
+        x = _PyValue_IntAsUnsignedLongLong(v);
     }
 
 #endif /* SIZEOF_VOID_P <= SIZEOF_LONG */
@@ -1527,11 +1664,15 @@ PyLong_AsVoidPtr(PyObject *vv)
     return (void *)x;
 }
 
+void *
+PyLong_AsVoidPtr(PyObject *vv)
+{
+    return _PyValue_IntAsVoidPtr(_Py_VALUE_ARG(vv));
+}
+
 /* Initial long long support by Chris Herborth (chrish@qnx.com), later
  * rewritten to use the newer PyLong_{As,From}ByteArray API.
  */
-
-#define PY_ABS_LLONG_MIN (0-(unsigned long long)LLONG_MIN)
 
 /* Create a new int object from a C long long int. */
 
@@ -1549,244 +1690,36 @@ PyLong_FromSsize_t(Py_ssize_t ival)
     PYLONG_FROM_INT(size_t, Py_ssize_t, ival);
 }
 
-/* Get a C long long int from an int object or any object that has an
-   __index__ method.  Return -1 and set an error if overflow occurs. */
-
 long long
 PyLong_AsLongLong(PyObject *vv)
 {
-    PyLongObject *v;
-    long long bytes;
-    int res;
-    int do_decref = 0; /* if PyNumber_Index was called */
-
-    if (vv == NULL) {
-        PyErr_BadInternalCall();
-        return -1;
-    }
-
-    if (PyLong_Check(vv)) {
-        v = (PyLongObject *)vv;
-    }
-    else {
-        v = (PyLongObject *)_PyNumber_Index(vv);
-        if (v == NULL)
-            return -1;
-        do_decref = 1;
-    }
-
-    if (_PyLong_IsCompact(v)) {
-        res = 0;
-        bytes = _PyLong_CompactValue(v);
-    }
-    else {
-        res = _PyLong_AsByteArray((PyLongObject *)v, (unsigned char *)&bytes,
-                                  SIZEOF_LONG_LONG, PY_LITTLE_ENDIAN, 1, 1);
-    }
-    if (do_decref) {
-        Py_DECREF(v);
-    }
-
-    /* Plan 9 can't handle long long in ? : expressions */
-    if (res < 0)
-        return (long long)-1;
-    else
-        return bytes;
+    return _PyValue_AsLongLong(_Py_VALUE_ARG(vv));
 }
-
-/* Get a C unsigned long long int from an int object.
-   Return -1 and set an error if overflow occurs. */
 
 unsigned long long
 PyLong_AsUnsignedLongLong(PyObject *vv)
 {
-    PyLongObject *v;
-    unsigned long long bytes;
-    int res;
-
-    if (vv == NULL) {
-        PyErr_BadInternalCall();
-        return (unsigned long long)-1;
-    }
-    if (!PyLong_Check(vv)) {
-        PyErr_SetString(PyExc_TypeError, "an integer is required");
-        return (unsigned long long)-1;
-    }
-
-    v = (PyLongObject*)vv;
-    if (_PyLong_IsNonNegativeCompact(v)) {
-        res = 0;
-#if SIZEOF_LONG_LONG < SIZEOF_SIZE_T
-        size_t tmp = (size_t)_PyLong_CompactValue(v);
-        bytes = (unsigned long long)tmp;
-        if (bytes != tmp) {
-            PyErr_SetString(PyExc_OverflowError,
-                            "Python int too large to convert "
-                            "to C unsigned long long");
-            res = -1;
-        }
-#else
-        bytes = (unsigned long long)(size_t)_PyLong_CompactValue(v);
-#endif
-    }
-    else {
-        res = _PyLong_AsByteArray((PyLongObject *)vv, (unsigned char *)&bytes,
-                              SIZEOF_LONG_LONG, PY_LITTLE_ENDIAN, 0, 1);
-    }
-
-    /* Plan 9 can't handle long long in ? : expressions */
-    if (res < 0)
-        return (unsigned long long)res;
-    else
-        return bytes;
-}
-
-/* Get a C unsigned long int from an int object, ignoring the high bits.
-   Returns -1 and sets an error condition if an error occurs. */
-
-static unsigned long long
-_PyLong_AsUnsignedLongLongMask(PyObject *vv)
-{
-    PyLongObject *v;
-    Py_ssize_t i;
-    int sign;
-
-    if (vv == NULL || !PyLong_Check(vv)) {
-        PyErr_BadInternalCall();
-        return (unsigned long long) -1;
-    }
-    v = (PyLongObject *)vv;
-    if (_PyLong_IsCompact(v)) {
-#if SIZEOF_LONG_LONG < SIZEOF_SIZE_T
-        return (unsigned long long)(size_t)_PyLong_CompactValue(v);
-#else
-        return (unsigned long long)(long long)_PyLong_CompactValue(v);
-#endif
-    }
-    i = _PyLong_DigitCount(v);
-    sign = _PyLong_NonCompactSign(v);
-    unsigned long long x = unroll_digits_ulong(v, &i);
-    while (--i >= 0) {
-        x = (x << PyLong_SHIFT) | v->long_value.ob_digit[i];
-    }
-    return x * sign;
+    return _PyValue_IntAsUnsignedLongLong(_Py_VALUE_ARG(vv));
 }
 
 unsigned long long
 PyLong_AsUnsignedLongLongMask(PyObject *op)
 {
-    PyLongObject *lo;
-    unsigned long long val;
-
-    if (op == NULL) {
-        PyErr_BadInternalCall();
-        return (unsigned long long)-1;
-    }
-
-    if (PyLong_Check(op)) {
-        return _PyLong_AsUnsignedLongLongMask(op);
-    }
-
-    lo = (PyLongObject *)_PyNumber_Index(op);
-    if (lo == NULL)
-        return (unsigned long long)-1;
-
-    val = _PyLong_AsUnsignedLongLongMask((PyObject *)lo);
-    Py_DECREF(lo);
-    return val;
+    return _PyValue_AsUnsignedLongLongMask(_Py_VALUE_ARG(op));
 }
-
-/* Get a C long long int from an int object or any object that has an
-   __index__ method.
-
-   On overflow, return -1 and set *overflow to 1 or -1 depending on the sign of
-   the result.  Otherwise *overflow is 0.
-
-   For other errors (e.g., TypeError), return -1 and set an error condition.
-   In this case *overflow will be 0.
-*/
 
 long long
 PyLong_AsLongLongAndOverflow(PyObject *vv, int *overflow)
 {
-    /* This version by Tim Peters */
-    PyLongObject *v;
-    long long res;
-    Py_ssize_t i;
-    int sign;
-    int do_decref = 0; /* if PyNumber_Index was called */
-
-    *overflow = 0;
-    if (vv == NULL) {
-        PyErr_BadInternalCall();
-        return -1;
-    }
-
-    if (PyLong_Check(vv)) {
-        v = (PyLongObject *)vv;
-    }
-    else {
-        v = (PyLongObject *)_PyNumber_Index(vv);
-        if (v == NULL)
-            return -1;
-        do_decref = 1;
-    }
-    if (_PyLong_IsCompact(v)) {
-#if SIZEOF_LONG_LONG < SIZEOF_SIZE_T
-        Py_ssize_t tmp = _PyLong_CompactValue(v);
-        if (tmp < LLONG_MIN) {
-            *overflow = -1;
-            res = -1;
-        }
-        else if (tmp > LLONG_MAX) {
-            *overflow = 1;
-            res = -1;
-        }
-        else {
-            res = (long long)tmp;
-        }
-#else
-        res = _PyLong_CompactValue(v);
-#endif
-    }
-    else {
-        i = _PyLong_DigitCount(v);
-        sign = _PyLong_NonCompactSign(v);
-        unsigned long long x = unroll_digits_ulong(v, &i);
-        while (--i >= 0) {
-            if (x > ULLONG_MAX >> PyLong_SHIFT) {
-                *overflow = sign;
-                res = -1;
-                goto exit;
-            }
-            x = (x << PyLong_SHIFT) + v->long_value.ob_digit[i];
-        }
-        /* Haven't lost any bits, but casting to long requires extra
-         * care (see comment above).
-         */
-        if (x <= (unsigned long long)LLONG_MAX) {
-            res = (long long)x * sign;
-        }
-        else if (sign < 0 && x == PY_ABS_LLONG_MIN) {
-            res = LLONG_MIN;
-        }
-        else {
-            *overflow = sign;
-            res = -1;
-        }
-    }
-  exit:
-    if (do_decref) {
-        Py_DECREF(v);
-    }
-    return res;
+    return _PyValue_AsLongLongAndOverflow(_Py_VALUE_ARG(vv), overflow);
 }
 
 #define UNSIGNED_INT_CONVERTER(NAME, TYPE)                          \
 int                                                                 \
 _PyLong_##NAME##_Converter(PyObject *obj, void *ptr)                \
 {                                                                   \
-    Py_ssize_t bytes = PyLong_AsNativeBytes(obj, ptr, sizeof(TYPE), \
+    Py_ssize_t bytes = _PyValue_AsNativeBytes(                      \
+            _Py_VALUE_ARG(obj), ptr, sizeof(TYPE),                  \
             Py_ASNATIVEBYTES_NATIVE_ENDIAN |                        \
             Py_ASNATIVEBYTES_ALLOW_INDEX |                          \
             Py_ASNATIVEBYTES_REJECT_NEGATIVE |                      \
@@ -1824,7 +1757,7 @@ UNSIGNED_INT_CONVERTER(UInt64, uint64_t)
  * x[m-1], and the remaining carry (0 or 1) is returned.
  */
 static digit
-v_iadd(digit *x, Py_ssize_t m, digit *y, Py_ssize_t n)
+v_iadd(digit *x, Py_ssize_t m, const digit *y, Py_ssize_t n)
 {
     Py_ssize_t i;
     digit carry = 0;
@@ -1850,7 +1783,7 @@ v_iadd(digit *x, Py_ssize_t m, digit *y, Py_ssize_t n)
  * far as x[m-1], and the remaining borrow (0 or 1) is returned.
  */
 static digit
-v_isub(digit *x, Py_ssize_t m, digit *y, Py_ssize_t n)
+v_isub(digit *x, Py_ssize_t m, const digit *y, Py_ssize_t n)
 {
     Py_ssize_t i;
     digit borrow = 0;
@@ -1875,7 +1808,7 @@ v_isub(digit *x, Py_ssize_t m, digit *y, Py_ssize_t n)
  * result in z[0:m], and return the d bits shifted out of the top.
  */
 static digit
-v_lshift(digit *z, digit *a, Py_ssize_t m, int d)
+v_lshift(digit *z, const digit *a, Py_ssize_t m, int d)
 {
     Py_ssize_t i;
     digit carry = 0;
@@ -1893,7 +1826,7 @@ v_lshift(digit *z, digit *a, Py_ssize_t m, int d)
  * result in z[0:m], and return the d bits shifted out of the bottom.
  */
 static digit
-v_rshift(digit *z, digit *a, Py_ssize_t m, int d)
+v_rshift(digit *z, const digit *a, Py_ssize_t m, int d)
 {
     Py_ssize_t i;
     digit carry = 0;
@@ -1930,7 +1863,7 @@ v_rshift(digit *z, digit *a, Py_ssize_t m, int d)
      python -m timeit -s 'x = 10**1000; r=x//10; assert r == 10**999, r' 'x//17'
 */
 static digit
-inplace_divrem1(digit *pout, digit *pin, Py_ssize_t size, digit n)
+inplace_divrem1(digit *pout, const digit *pin, Py_ssize_t size, digit n)
 {
     digit remainder = 0;
 
@@ -1951,25 +1884,23 @@ inplace_divrem1(digit *pout, digit *pin, Py_ssize_t size, digit n)
    (as function result) and the remainder (through *prem).
    The sign of a is ignored; n should not be zero. */
 
-static PyLongObject *
-divrem1(PyLongObject *a, digit n, digit *prem)
+static int
+divrem1(_PyLongSpan a, digit n, _PyLongOut *q, digit *prem)
 {
-    const Py_ssize_t size = _PyLong_DigitCount(a);
-    PyLongObject *z;
-
     assert(n > 0 && n <= PyLong_MASK);
-    z = long_alloc(size);
-    if (z == NULL)
-        return NULL;
-    *prem = inplace_divrem1(z->long_value.ob_digit, a->long_value.ob_digit, size, n);
-    return long_normalize(z);
+    digit *z = _PyLong_OutReserve(q, a.n);
+    if (z == NULL) {
+        return -1;
+    }
+    *prem = inplace_divrem1(z, a.d, a.n, n);
+    return 0;
 }
 
 /* Remainder of long pin, w/ size digits, by non-zero digit n,
    returning the remainder. pin points at the LSD. */
 
 static digit
-inplace_rem1(digit *pin, Py_ssize_t size, digit n)
+inplace_rem1(const digit *pin, Py_ssize_t size, digit n)
 {
     twodigits rem = 0;
 
@@ -1983,15 +1914,11 @@ inplace_rem1(digit *pin, Py_ssize_t size, digit n)
    the remainder as the result of the function. The sign of a is
    ignored; n should not be zero. */
 
-static PyLongObject *
-rem1(PyLongObject *a, digit n)
+static digit
+rem1(_PyLongSpan a, digit n)
 {
-    const Py_ssize_t size = _PyLong_DigitCount(a);
-
     assert(n > 0 && n <= PyLong_MASK);
-    return (PyLongObject *)PyLong_FromLong(
-        (long)inplace_rem1(a->long_value.ob_digit, size, n)
-    );
+    return inplace_rem1(a.d, a.n, n);
 }
 
 #ifdef WITH_PYLONG_MODULE
@@ -2057,40 +1984,14 @@ success:
 }
 #endif /* WITH_PYLONG_MODULE */
 
-/* Convert an integer to a base 10 string.  Returns a new non-shared
-   string.  (Return value is non-shared so that callers can modify the
-   returned value if necessary.) */
+/* quick and dirty pre-check for overflowing the decimal digit limit,
+   based on the inequality 10/3 >= log2(10)
 
+   explanation in https://github.com/python/cpython/pull/96537
+*/
 static int
-long_to_decimal_string_internal(PyObject *aa,
-                                PyObject **p_output,
-                                _PyUnicodeWriter *writer,
-                                PyBytesWriter *bytes_writer,
-                                char **bytes_str)
+long_decimal_digits_precheck(Py_ssize_t size_a)
 {
-    PyLongObject *scratch, *a;
-    PyObject *str = NULL;
-    Py_ssize_t size, strlen, size_a, i, j;
-    digit *pout, *pin, rem, tenpow;
-    int negative;
-    int d;
-
-    // writer or bytes_writer can be used, but not both at the same time.
-    assert(writer == NULL || bytes_writer == NULL);
-
-    a = (PyLongObject *)aa;
-    if (a == NULL || !PyLong_Check(a)) {
-        PyErr_BadInternalCall();
-        return -1;
-    }
-    size_a = _PyLong_DigitCount(a);
-    negative = _PyLong_IsNegative(a);
-
-    /* quick and dirty pre-check for overflowing the decimal digit limit,
-       based on the inequality 10/3 >= log2(10)
-
-       explanation in https://github.com/python/cpython/pull/96537
-    */
     if (size_a >= 10 * _PY_LONG_MAX_STR_DIGITS_THRESHOLD
                   / (3 * PyLong_SHIFT) + 2) {
         PyInterpreterState *interp = _PyInterpreterState_GET();
@@ -2102,17 +2003,38 @@ long_to_decimal_string_internal(PyObject *aa,
             return -1;
         }
     }
+    return 0;
+}
 
-#if WITH_PYLONG_MODULE
-    if (size_a > 1000) {
-        /* Switch to _pylong.int_to_decimal_string(). */
-        return pylong_int_to_decimal_string(aa,
-                                         p_output,
-                                         writer,
-                                         bytes_writer,
-                                         bytes_str);
+/* Convert an integer to a base 10 string.  Returns a new non-shared
+   string.  (Return value is non-shared so that callers can modify the
+   returned value if necessary.) */
+
+static int
+long_to_decimal_string_internal(_PyLongSpan a,
+                                PyObject **p_output,
+                                _PyUnicodeWriter *writer,
+                                PyBytesWriter *bytes_writer,
+                                char **bytes_str)
+{
+    digit *scratch;
+    PyObject *str = NULL;
+    Py_ssize_t size, strlen, size_a, i, j;
+    digit *pout;
+    const digit *pin;
+    digit rem, tenpow;
+    int negative;
+    int d;
+
+    // writer or bytes_writer can be used, but not both at the same time.
+    assert(writer == NULL || bytes_writer == NULL);
+
+    size_a = a.n;
+    negative = a.neg;
+
+    if (long_decimal_digits_precheck(size_a) < 0) {
+        return -1;
     }
-#endif
 
     /* quick and dirty upper bound for the number of digits
        required to express a in base _PyLong_DECIMAL_BASE:
@@ -2132,15 +2054,17 @@ long_to_decimal_string_internal(PyObject *aa,
         (10 * PyLong_SHIFT - 33 * _PyLong_DECIMAL_SHIFT);
     assert(size_a < PY_SSIZE_T_MAX/2);
     size = 1 + size_a + size_a / d;
-    scratch = long_alloc(size);
-    if (scratch == NULL)
+    scratch = PyMem_Malloc(size * sizeof(digit));
+    if (scratch == NULL) {
+        PyErr_NoMemory();
         return -1;
+    }
 
     /* convert array of base _PyLong_BASE digits in pin to an array of
        base _PyLong_DECIMAL_BASE digits in pout, following Knuth (TAOCP,
        Volume 2 (3rd edn), section 4.4, Method 1b). */
-    pin = a->long_value.ob_digit;
-    pout = scratch->long_value.ob_digit;
+    pin = a.d;
+    pout = scratch;
     size = 0;
     for (i = size_a; --i >= 0; ) {
         digit hi = pin[i];
@@ -2156,7 +2080,7 @@ long_to_decimal_string_internal(PyObject *aa,
         }
         /* check for keyboard interrupt */
         SIGCHECK({
-                Py_DECREF(scratch);
+                PyMem_Free(scratch);
                 return -1;
             });
     }
@@ -2178,7 +2102,7 @@ long_to_decimal_string_internal(PyObject *aa,
         int max_str_digits = _Py_atomic_load_int(&interp->long_state.max_str_digits);
         Py_ssize_t strlen_nosign = strlen - negative;
         if ((max_str_digits > 0) && (strlen_nosign > max_str_digits)) {
-            Py_DECREF(scratch);
+            PyMem_Free(scratch);
             PyErr_Format(PyExc_ValueError, _MAX_STR_DIGITS_ERROR_FMT_TO_STR,
                          max_str_digits);
             return -1;
@@ -2186,7 +2110,7 @@ long_to_decimal_string_internal(PyObject *aa,
     }
     if (writer) {
         if (_PyUnicodeWriter_Prepare(writer, strlen, 127) == -1) {
-            Py_DECREF(scratch);
+            PyMem_Free(scratch);
             return -1;
         }
         assert(_PyUnicodeWriter_CanWrite(writer));
@@ -2195,14 +2119,14 @@ long_to_decimal_string_internal(PyObject *aa,
         *bytes_str = PyBytesWriter_GrowAndUpdatePointer(bytes_writer, strlen,
                                                         *bytes_str);
         if (*bytes_str == NULL) {
-            Py_DECREF(scratch);
+            PyMem_Free(scratch);
             return -1;
         }
     }
     else {
         str = PyUnicode_New(strlen, 127);
         if (str == NULL) {
-            Py_DECREF(scratch);
+            PyMem_Free(scratch);
             return -1;
         }
     }
@@ -2272,7 +2196,7 @@ long_to_decimal_string_internal(PyObject *aa,
 #undef WRITE_DIGITS
 #undef WRITE_UNICODE_DIGITS
 
-    _Py_DECREF_INT(scratch);
+    PyMem_Free(scratch);
     if (writer) {
         writer->pos += strlen;
     }
@@ -2286,11 +2210,51 @@ long_to_decimal_string_internal(PyObject *aa,
     return 0;
 }
 
+/* The kernel into a writer, for the repr of an int held inline: a span from
+   a word never needs the _pylong switch. */
+static int
+long_to_decimal_writer_span(_PyUnicodeWriter *writer, _PyLongSpan a)
+{
+    return long_to_decimal_string_internal(a, NULL, writer, NULL, NULL);
+}
+
+/* The object entry of the kernel: the checks of an object argument and the
+   switch to _pylong.int_to_decimal_string(), which needs the object. */
+static int
+long_to_decimal_string_internal_obj(PyObject *aa,
+                                    PyObject **p_output,
+                                    _PyUnicodeWriter *writer,
+                                    PyBytesWriter *bytes_writer,
+                                    char **bytes_str)
+{
+    PyLongObject *a = (PyLongObject *)aa;
+    if (a == NULL || !PyLong_Check(a)) {
+        PyErr_BadInternalCall();
+        return -1;
+    }
+#if WITH_PYLONG_MODULE
+    Py_ssize_t size_a = _PyLong_DigitCount(a);
+    if (size_a > 1000) {
+        if (long_decimal_digits_precheck(size_a) < 0) {
+            return -1;
+        }
+        /* Switch to _pylong.int_to_decimal_string(). */
+        return pylong_int_to_decimal_string(aa,
+                                         p_output,
+                                         writer,
+                                         bytes_writer,
+                                         bytes_str);
+    }
+#endif
+    return long_to_decimal_string_internal(_PyLong_SpanOf(a), p_output,
+                                           writer, bytes_writer, bytes_str);
+}
+
 static PyObject *
 long_to_decimal_string(PyObject *aa)
 {
     PyObject *v;
-    if (long_to_decimal_string_internal(aa, &v, NULL, NULL, NULL) == -1)
+    if (long_to_decimal_string_internal_obj(aa, &v, NULL, NULL, NULL) == -1)
         return NULL;
     return v;
 }
@@ -2475,7 +2439,7 @@ _PyLong_Format(PyObject *obj, int base)
     PyObject *str;
     int err;
     if (base == 10)
-        err = long_to_decimal_string_internal(obj, &str, NULL, NULL, NULL);
+        err = long_to_decimal_string_internal_obj(obj, &str, NULL, NULL, NULL);
     else
         err = long_format_binary(obj, base, 1, &str, NULL, NULL, NULL);
     if (err == -1)
@@ -2489,8 +2453,8 @@ _PyLong_FormatWriter(_PyUnicodeWriter *writer,
                      int base, int alternate)
 {
     if (base == 10)
-        return long_to_decimal_string_internal(obj, NULL, writer,
-                                               NULL, NULL);
+        return long_to_decimal_string_internal_obj(obj, NULL, writer,
+                                                   NULL, NULL);
     else
         return long_format_binary(obj, base, alternate, NULL, writer,
                                   NULL, NULL);
@@ -2505,8 +2469,8 @@ _PyLong_FormatBytesWriter(PyBytesWriter *writer, char *str,
     int res;
     str2 = str;
     if (base == 10)
-        res = long_to_decimal_string_internal(obj, NULL, NULL,
-                                              writer, &str2);
+        res = long_to_decimal_string_internal_obj(obj, NULL, NULL,
+                                                  writer, &str2);
     else
         res = long_format_binary(obj, base, alternate, NULL, NULL,
                                  writer, &str2);
@@ -3181,6 +3145,48 @@ PyLong_FromUnicodeObject(PyObject *u, int base)
     return NULL;
 }
 
+/* Int division with remainder over spans: truncating, the quotient has the
+   sign of a*b and the remainder the sign of a, so a = b*q + r.  b.n > 0 and
+   not |a| < |b|: the caller handles that quick case.  q or r may be NULL. */
+
+static int
+long_divrem_spans(_PyLongSpan a, _PyLongSpan b, _PyLongOut *q, _PyLongOut *r)
+{
+    _PyLongOut qtmp, rtmp;
+    assert(b.n > 0);
+    assert(!(a.n < b.n || (a.n == b.n && a.d[a.n-1] < b.d[b.n-1])));
+    if (q == NULL) {
+        q = &qtmp;
+    }
+    if (r == NULL) {
+        r = &rtmp;
+    }
+    if (b.n == 1) {
+        digit rem = 0;
+        if (divrem1(a, b.d[0], q, &rem) < 0) {
+            return -1;
+        }
+        digit *rd = _PyLong_OutReserve(r, 1);
+        if (rd == NULL) {
+            _PyLong_OutAbandon(q);
+            return -1;
+        }
+        rd[0] = rem;
+    }
+    else if (x_divrem(a, b, q, r) < 0) {
+        return -1;
+    }
+    q->neg = a.neg != b.neg;
+    r->neg = a.neg;
+    if (q == &qtmp) {
+        _PyLong_OutAbandon(q);
+    }
+    if (r == &rtmp) {
+        _PyLong_OutAbandon(r);
+    }
+    return 0;
+}
+
 /* Int division with remainder, top-level routine */
 
 static int
@@ -3188,7 +3194,6 @@ long_divrem(PyLongObject *a, PyLongObject *b,
             PyLongObject **pdiv, PyLongObject **prem)
 {
     Py_ssize_t size_a = _PyLong_DigitCount(a), size_b = _PyLong_DigitCount(b);
-    PyLongObject *z;
 
     if (size_b == 0) {
         PyErr_SetString(PyExc_ZeroDivisionError, "division by zero");
@@ -3205,43 +3210,20 @@ long_divrem(PyLongObject *a, PyLongObject *b,
         *pdiv = (PyLongObject*)_PyLong_GetZero();
         return 0;
     }
-    if (size_b == 1) {
-        digit rem = 0;
-        z = divrem1(a, b->long_value.ob_digit[0], &rem);
-        if (z == NULL)
-            return -1;
-        *prem = (PyLongObject *) PyLong_FromLong((long)rem);
-        if (*prem == NULL) {
-            Py_DECREF(z);
-            return -1;
-        }
+    _PyLongOut q, r;
+    if (long_divrem_spans(_PyLong_SpanOf(a), _PyLong_SpanOf(b), &q, &r) < 0) {
+        return -1;
     }
-    else {
-        z = x_divrem(a, b, prem);
-        *prem = maybe_small_long(*prem);
-        if (z == NULL)
-            return -1;
+    *prem = _PyLong_OutObject(&r);
+    if (*prem == NULL) {
+        _PyLong_OutAbandon(&q);
+        return -1;
     }
-    /* Set the signs.
-       The quotient z has the sign of a*b;
-       the remainder r has the sign of a,
-       so a = b*z + r. */
-    if ((_PyLong_IsNegative(a)) != (_PyLong_IsNegative(b))) {
-        _PyLong_Negate(&z);
-        if (z == NULL) {
-            Py_CLEAR(*prem);
-            return -1;
-        }
+    *pdiv = _PyLong_OutObject(&q);
+    if (*pdiv == NULL) {
+        Py_CLEAR(*prem);
+        return -1;
     }
-    if (_PyLong_IsNegative(a) && !_PyLong_IsZero(*prem)) {
-        _PyLong_Negate(prem);
-        if (*prem == NULL) {
-            Py_DECREF(z);
-            Py_CLEAR(*prem);
-            return -1;
-        }
-    }
-    *pdiv = maybe_small_long(z);
     return 0;
 }
 
@@ -3264,42 +3246,31 @@ long_rem(PyLongObject *a, PyLongObject *b, PyLongObject **prem)
         *prem = (PyLongObject *)long_long((PyObject *)a);
         return -(*prem == NULL);
     }
-    if (size_b == 1) {
-        *prem = rem1(a, b->long_value.ob_digit[0]);
-        if (*prem == NULL)
-            return -1;
+    _PyLongOut r;
+    if (long_divrem_spans(_PyLong_SpanOf(a), _PyLong_SpanOf(b),
+                          NULL, &r) < 0) {
+        return -1;
     }
-    else {
-        /* Slow path using divrem. */
-        Py_XDECREF(x_divrem(a, b, prem));
-        *prem = maybe_small_long(*prem);
-        if (*prem == NULL)
-            return -1;
-    }
-    /* Set the sign. */
-    if (_PyLong_IsNegative(a) && !_PyLong_IsZero(*prem)) {
-        _PyLong_Negate(prem);
-        if (*prem == NULL) {
-            Py_CLEAR(*prem);
-            return -1;
-        }
-    }
-    return 0;
+    *prem = _PyLong_OutObject(&r);
+    return -(*prem == NULL);
 }
 
 /* Unsigned int division with remainder -- the algorithm.  The arguments v1
-   and w1 should satisfy 2 <= _PyLong_DigitCount(w1) <= _PyLong_DigitCount(v1). */
+   and w1 should satisfy 2 <= w1.n <= v1.n.  The quotient goes to q and the
+   remainder to r; the normalised copies of the operands are scratch
+   digits owned here. */
 
-static PyLongObject *
-x_divrem(PyLongObject *v1, PyLongObject *w1, PyLongObject **prem)
+static int
+x_divrem(_PyLongSpan v1, _PyLongSpan w1, _PyLongOut *q_out, _PyLongOut *r_out)
 {
-    PyLongObject *v, *w, *a;
     Py_ssize_t i, k, size_v, size_w;
     int d;
     digit wm1, wm2, carry, q, r, vtop, *v0, *vk, *w0, *ak;
     twodigits vv;
     sdigit zhi;
     stwodigits z;
+    digit scratch_small[64];
+    digit *scratch;
 
     /* We follow Knuth [The Art of Computer Programming, Vol. 2 (3rd
        edn.), section 4.3.1, Algorithm D], except that we don't explicitly
@@ -3307,59 +3278,54 @@ x_divrem(PyLongObject *v1, PyLongObject *w1, PyLongObject **prem)
        digit is >= PyLong_BASE: the max value for q is PyLong_BASE+1, and
        that won't overflow a digit. */
 
-    /* allocate space; w will also be used to hold the final remainder */
-    size_v = _PyLong_DigitCount(v1);
-    size_w = _PyLong_DigitCount(w1);
+    /* allocate space for the normalised copies of v1 and w1 */
+    size_v = v1.n;
+    size_w = w1.n;
     assert(size_v >= size_w && size_w >= 2); /* Assert checks by div() */
-    v = long_alloc(size_v+1);
-    if (v == NULL) {
-        *prem = NULL;
-        return NULL;
+    if (size_v + 1 + size_w <= (Py_ssize_t)Py_ARRAY_LENGTH(scratch_small)) {
+        scratch = scratch_small;
     }
-    w = long_alloc(size_w);
-    if (w == NULL) {
-        Py_DECREF(v);
-        *prem = NULL;
-        return NULL;
+    else {
+        scratch = PyMem_Malloc((size_v + 1 + size_w) * sizeof(digit));
+        if (scratch == NULL) {
+            PyErr_NoMemory();
+            return -1;
+        }
     }
+    v0 = scratch;
+    w0 = scratch + size_v + 1;
 
     /* normalize: shift w1 left so that its top digit is >= PyLong_BASE/2.
-       shift v1 left by the same amount.  Results go into w and v. */
-    d = PyLong_SHIFT - bit_length_digit(w1->long_value.ob_digit[size_w-1]);
-    carry = v_lshift(w->long_value.ob_digit, w1->long_value.ob_digit, size_w, d);
+       shift v1 left by the same amount.  Results go into w0 and v0. */
+    d = PyLong_SHIFT - bit_length_digit(w1.d[size_w-1]);
+    carry = v_lshift(w0, w1.d, size_w, d);
     assert(carry == 0);
-    carry = v_lshift(v->long_value.ob_digit, v1->long_value.ob_digit, size_v, d);
-    if (carry != 0 || v->long_value.ob_digit[size_v-1] >= w->long_value.ob_digit[size_w-1]) {
-        v->long_value.ob_digit[size_v] = carry;
+    carry = v_lshift(v0, v1.d, size_v, d);
+    if (carry != 0 || v0[size_v-1] >= w0[size_w-1]) {
+        v0[size_v] = carry;
         size_v++;
     }
 
-    /* Now v->long_value.ob_digit[size_v-1] < w->long_value.ob_digit[size_w-1], so quotient has
+    /* Now v0[size_v-1] < w0[size_w-1], so quotient has
        at most (and usually exactly) k = size_v - size_w digits. */
     k = size_v - size_w;
     assert(k >= 0);
-    a = long_alloc(k);
-    if (a == NULL) {
-        Py_DECREF(w);
-        Py_DECREF(v);
-        *prem = NULL;
-        return NULL;
+    ak = _PyLong_OutReserve(q_out, k);
+    if (ak == NULL) {
+        goto fail_scratch;
     }
-    a->long_value.ob_digit[0] = 0;
-    v0 = v->long_value.ob_digit;
-    w0 = w->long_value.ob_digit;
+    if (k > 0) {
+        ak[0] = 0;
+    }
     wm1 = w0[size_w-1];
     wm2 = w0[size_w-2];
-    for (vk = v0+k, ak = a->long_value.ob_digit + k; vk-- > v0;) {
+    for (vk = v0+k, ak += k; vk-- > v0;) {
         /* inner loop: divide vk[0:size_w+1] by w0[0:size_w], giving
            single-digit quotient q, remainder in vk[0:size_w]. */
 
         SIGCHECK({
-                Py_DECREF(a);
-                Py_DECREF(w);
-                Py_DECREF(v);
-                *prem = NULL;
-                return NULL;
+                _PyLong_OutAbandon(q_out);
+                goto fail_scratch;
             });
 
         /* estimate quotient digit q; may overestimate by 1 (rare) */
@@ -3413,13 +3379,24 @@ x_divrem(PyLongObject *v1, PyLongObject *w1, PyLongObject **prem)
         *--ak = q;
     }
 
-    /* unshift remainder; we reuse w to store the result */
-    carry = v_rshift(w0, v0, size_w, d);
+    /* unshift remainder into r */
+    digit *rd = _PyLong_OutReserve(r_out, size_w);
+    if (rd == NULL) {
+        _PyLong_OutAbandon(q_out);
+        goto fail_scratch;
+    }
+    carry = v_rshift(rd, v0, size_w, d);
     assert(carry==0);
-    Py_DECREF(v);
+    if (scratch != scratch_small) {
+        PyMem_Free(scratch);
+    }
+    return 0;
 
-    *prem = long_normalize(w);
-    return long_normalize(a);
+  fail_scratch:
+    if (scratch != scratch_small) {
+        PyMem_Free(scratch);
+    }
+    return -1;
 }
 
 /* For a nonzero PyLong a, express a in the form x * 2**e, with 0.5 <=
@@ -3435,7 +3412,7 @@ x_divrem(PyLongObject *v1, PyLongObject *w1, PyLongObject **prem)
 #endif
 
 double
-_PyLong_Frexp(PyLongObject *a, int64_t *e)
+_PyLong_SpanFrexp(_PyLongSpan a, int64_t *e)
 {
     Py_ssize_t a_size, shift_digits, x_size;
     int shift_bits;
@@ -3449,13 +3426,13 @@ _PyLong_Frexp(PyLongObject *a, int64_t *e)
        multiple of 4, rounding ties to a multiple of 8. */
     static const int half_even_correction[8] = {0, -1, -2, 1, 0, -1, 2, 1};
 
-    a_size = _PyLong_DigitCount(a);
+    a_size = a.n;
     if (a_size == 0) {
         /* Special case for 0: significand 0.0, exponent 0. */
         *e = 0;
         return 0.0;
     }
-    a_bits = _PyLong_NumBits((PyObject *)a);
+    a_bits = _PyLong_SpanNumBits(a);
 
     /* Shift the first DBL_MANT_DIG + 2 bits of a into x_digits[0:x_size]
        (shifting left if a_bits <= DBL_MANT_DIG + 2).
@@ -3486,7 +3463,7 @@ _PyLong_Frexp(PyLongObject *a, int64_t *e)
         shift_digits = (DBL_MANT_DIG + 2 - (Py_ssize_t)a_bits) / PyLong_SHIFT;
         shift_bits = (DBL_MANT_DIG + 2 - (int)a_bits) % PyLong_SHIFT;
         x_size = shift_digits;
-        rem = v_lshift(x_digits + x_size, a->long_value.ob_digit, a_size,
+        rem = v_lshift(x_digits + x_size, a.d, a_size,
                        shift_bits);
         x_size += a_size;
         x_digits[x_size++] = rem;
@@ -3494,7 +3471,7 @@ _PyLong_Frexp(PyLongObject *a, int64_t *e)
     else {
         shift_digits = (Py_ssize_t)((a_bits - DBL_MANT_DIG - 2) / PyLong_SHIFT);
         shift_bits = (int)((a_bits - DBL_MANT_DIG - 2) % PyLong_SHIFT);
-        rem = v_rshift(x_digits, a->long_value.ob_digit + shift_digits,
+        rem = v_rshift(x_digits, a.d + shift_digits,
                        a_size - shift_digits, shift_bits);
         x_size = a_size - shift_digits;
         /* For correct rounding below, we need the least significant
@@ -3505,7 +3482,7 @@ _PyLong_Frexp(PyLongObject *a, int64_t *e)
             x_digits[0] |= 1;
         else
             while (shift_digits > 0)
-                if (a->long_value.ob_digit[--shift_digits]) {
+                if (a.d[--shift_digits]) {
                     x_digits[0] |= 1;
                     break;
                 }
@@ -3527,34 +3504,33 @@ _PyLong_Frexp(PyLongObject *a, int64_t *e)
     }
 
     *e = a_bits;
-    return _PyLong_IsNegative(a) ? -dx : dx;
+    return a.neg ? -dx : dx;
 }
 
-/* Get a C double from an int object.  Rounds to the nearest double,
-   using the round-half-to-even rule in the case of a tie. */
+double
+_PyLong_Frexp(PyLongObject *a, int64_t *e)
+{
+    return _PyLong_SpanFrexp(_PyLong_SpanOf(a), e);
+}
+
+/* PyLong_AsDouble()'s digit path over a span.  Rounds to the nearest
+   double, using the round-half-to-even rule in the case of a tie. */
 
 double
-PyLong_AsDouble(PyObject *v)
+_PyLong_SpanAsDouble(_PyLongSpan a)
 {
     int64_t exponent;
     double x;
 
-    if (v == NULL) {
-        PyErr_BadInternalCall();
-        return -1.0;
-    }
-    if (!PyLong_Check(v)) {
-        PyErr_SetString(PyExc_TypeError, "an integer is required");
-        return -1.0;
-    }
-    if (_PyLong_IsCompact((PyLongObject *)v)) {
+    if (a.n <= 1) {
         /* Fast path; single digit long (31 bits) will cast safely
            to double.  This improves performance of FP/long operations
            by 20%.
         */
-        return (double)medium_value((PyLongObject *)v);
+        double d = a.n == 0 ? 0.0 : (double)a.d[0];
+        return a.neg ? -d : d;
     }
-    x = _PyLong_Frexp((PyLongObject *)v, &exponent);
+    x = _PyLong_SpanFrexp(a, &exponent);
     assert(exponent >= 0);
     assert(!PyErr_Occurred());
     if (exponent > DBL_MAX_EXP) {
@@ -3565,6 +3541,86 @@ PyLong_AsDouble(PyObject *v)
     return ldexp(x, (int)exponent);
 }
 
+/* The hash of a span: long_hash()'s loop, the compact case included. */
+
+Py_hash_t
+_PyLong_SpanHash(_PyLongSpan a)
+{
+    Py_uhash_t x;
+    Py_ssize_t i = a.n;
+
+    if (i <= 1) {
+        x = (Py_uhash_t)(i == 0 ? 0 : a.neg ? -(Py_ssize_t)a.d[0]
+                                             : (Py_ssize_t)a.d[0]);
+        if (x == (Py_uhash_t)-1) {
+            x = (Py_uhash_t)-2;
+        }
+        return x;
+    }
+    int sign = a.neg ? -1 : 1;
+
+    // unroll first digit
+    Py_BUILD_ASSERT(PyHASH_BITS > PyLong_SHIFT);
+    --i;
+    x = a.d[i];
+    assert(x < PyHASH_MODULUS);
+
+#if PyHASH_BITS >= 2 * PyLong_SHIFT
+    // unroll second digit
+    assert(i >= 1);
+    --i;
+    x <<= PyLong_SHIFT;
+    x += a.d[i];
+    assert(x < PyHASH_MODULUS);
+#endif
+
+    while (--i >= 0) {
+        /* Here x is a quantity in the range [0, PyHASH_MODULUS); we
+           want to compute x * 2**PyLong_SHIFT + a.d[i] modulo
+           PyHASH_MODULUS.
+
+           The computation of x * 2**PyLong_SHIFT % PyHASH_MODULUS
+           amounts to a rotation of the bits of x.  To see this, write
+
+             x * 2**PyLong_SHIFT = y * 2**PyHASH_BITS + z
+
+           where y = x >> (PyHASH_BITS - PyLong_SHIFT) gives the top
+           PyLong_SHIFT bits of x (those that are shifted out of the
+           original PyHASH_BITS bits, and z = (x << PyLong_SHIFT) &
+           PyHASH_MODULUS gives the bottom PyHASH_BITS - PyLong_SHIFT
+           bits of x, shifted up.  Then since 2**PyHASH_BITS is
+           congruent to 1 modulo PyHASH_MODULUS, y*2**PyHASH_BITS is
+           congruent to y modulo PyHASH_MODULUS.  So
+
+             x * 2**PyLong_SHIFT = y + z (mod PyHASH_MODULUS).
+
+           The right-hand side is just the result of rotating the
+           PyHASH_BITS bits of x left by PyLong_SHIFT places; since
+           not all PyHASH_BITS bits of x are 1s, the same is true
+           after rotation, so 0 <= y+z < PyHASH_MODULUS and y + z is
+           the reduction of x*2**PyLong_SHIFT modulo
+           PyHASH_MODULUS. */
+        x = ((x << PyLong_SHIFT) & PyHASH_MODULUS) |
+            (x >> (PyHASH_BITS - PyLong_SHIFT));
+        x += a.d[i];
+        if (x >= PyHASH_MODULUS)
+            x -= PyHASH_MODULUS;
+    }
+    x = x * sign;
+    if (x == (Py_uhash_t)-1)
+        x = (Py_uhash_t)-2;
+    return (Py_hash_t)x;
+}
+
+/* Get a C double from an int object.  Rounds to the nearest double,
+   using the round-half-to-even rule in the case of a tie. */
+
+double
+PyLong_AsDouble(PyObject *v)
+{
+    return _PyValue_IntAsDouble(_Py_VALUE_ARG(v));
+}
+
 /* Methods */
 
 /* if a < b, return a negative number
@@ -3572,36 +3628,21 @@ PyLong_AsDouble(PyObject *v)
    if a > b, return a positive number */
 
 static Py_ssize_t
-long_compare(PyLongObject *a, PyLongObject *b)
+long_compare(_PyLongSpan a, _PyLongSpan b)
 {
-    if (_PyLong_BothAreCompact(a, b)) {
-        return _PyLong_CompactValue(a) - _PyLong_CompactValue(b);
-    }
-    Py_ssize_t sign = _PyLong_SignedDigitCount(a) - _PyLong_SignedDigitCount(b);
+    Py_ssize_t sign = (a.neg ? -a.n : a.n) - (b.neg ? -b.n : b.n);
     if (sign == 0) {
-        Py_ssize_t i = _PyLong_DigitCount(a);
+        Py_ssize_t i = a.n;
         sdigit diff = 0;
         while (--i >= 0) {
-            diff = (sdigit) a->long_value.ob_digit[i] - (sdigit) b->long_value.ob_digit[i];
+            diff = (sdigit) a.d[i] - (sdigit) b.d[i];
             if (diff) {
                 break;
             }
         }
-        sign = _PyLong_IsNegative(a) ? -diff : diff;
+        sign = a.neg ? -diff : diff;
     }
     return sign;
-}
-
-static PyObject *
-long_richcompare(PyObject *self, PyObject *other, int op)
-{
-    Py_ssize_t result;
-    CHECK_BINOP(self, other);
-    if (self == other)
-        result = 0;
-    else
-        result = long_compare((PyLongObject*)self, (PyLongObject*)other);
-    Py_RETURN_RICHCOMPARE(result, 0, op);
 }
 
 void
@@ -3640,167 +3681,134 @@ long_dealloc(PyObject *self)
     Py_TYPE(self)->tp_free(self);
 }
 
-static Py_hash_t
-long_hash(PyObject *obj)
-{
-    PyLongObject *v = (PyLongObject *)obj;
-    Py_uhash_t x;
-    Py_ssize_t i;
-    int sign;
-
-    if (_PyLong_IsCompact(v)) {
-        x = (Py_uhash_t)_PyLong_CompactValue(v);
-        if (x == (Py_uhash_t)-1) {
-            x = (Py_uhash_t)-2;
-        }
-        return x;
-    }
-    i = _PyLong_DigitCount(v);
-    sign = _PyLong_NonCompactSign(v);
-
-    // unroll first digit
-    Py_BUILD_ASSERT(PyHASH_BITS > PyLong_SHIFT);
-    assert(i >= 1);
-    --i;
-    x = v->long_value.ob_digit[i];
-    assert(x < PyHASH_MODULUS);
-
-#if PyHASH_BITS >= 2 * PyLong_SHIFT
-    // unroll second digit
-    assert(i >= 1);
-    --i;
-    x <<= PyLong_SHIFT;
-    x += v->long_value.ob_digit[i];
-    assert(x < PyHASH_MODULUS);
-#endif
-
-    while (--i >= 0) {
-        /* Here x is a quantity in the range [0, PyHASH_MODULUS); we
-           want to compute x * 2**PyLong_SHIFT + v->long_value.ob_digit[i] modulo
-           PyHASH_MODULUS.
-
-           The computation of x * 2**PyLong_SHIFT % PyHASH_MODULUS
-           amounts to a rotation of the bits of x.  To see this, write
-
-             x * 2**PyLong_SHIFT = y * 2**PyHASH_BITS + z
-
-           where y = x >> (PyHASH_BITS - PyLong_SHIFT) gives the top
-           PyLong_SHIFT bits of x (those that are shifted out of the
-           original PyHASH_BITS bits, and z = (x << PyLong_SHIFT) &
-           PyHASH_MODULUS gives the bottom PyHASH_BITS - PyLong_SHIFT
-           bits of x, shifted up.  Then since 2**PyHASH_BITS is
-           congruent to 1 modulo PyHASH_MODULUS, y*2**PyHASH_BITS is
-           congruent to y modulo PyHASH_MODULUS.  So
-
-             x * 2**PyLong_SHIFT = y + z (mod PyHASH_MODULUS).
-
-           The right-hand side is just the result of rotating the
-           PyHASH_BITS bits of x left by PyLong_SHIFT places; since
-           not all PyHASH_BITS bits of x are 1s, the same is true
-           after rotation, so 0 <= y+z < PyHASH_MODULUS and y + z is
-           the reduction of x*2**PyLong_SHIFT modulo
-           PyHASH_MODULUS. */
-        x = ((x << PyLong_SHIFT) & PyHASH_MODULUS) |
-            (x >> (PyHASH_BITS - PyLong_SHIFT));
-        x += v->long_value.ob_digit[i];
-        if (x >= PyHASH_MODULUS)
-            x -= PyHASH_MODULUS;
-    }
-    x = x * sign;
-    if (x == (Py_uhash_t)-1)
-        x = (Py_uhash_t)-2;
-    return (Py_hash_t)x;
-}
-
-
 /* Add the absolute values of two integers. */
 
-static PyLongObject *
-x_add(PyLongObject *a, PyLongObject *b)
+static int
+x_add(_PyLongSpan a, _PyLongSpan b, _PyLongOut *out)
 {
-    Py_ssize_t size_a = _PyLong_DigitCount(a), size_b = _PyLong_DigitCount(b);
-    PyLongObject *z;
     Py_ssize_t i;
     digit carry = 0;
 
     /* Ensure a is the larger of the two: */
-    if (size_a < size_b) {
-        { PyLongObject *temp = a; a = b; b = temp; }
-        { Py_ssize_t size_temp = size_a;
-            size_a = size_b;
-            size_b = size_temp; }
+    if (a.n < b.n) {
+        _PyLongSpan temp = a;
+        a = b;
+        b = temp;
     }
-    z = long_alloc(size_a+1);
-    if (z == NULL)
-        return NULL;
-    for (i = 0; i < size_b; ++i) {
-        carry += a->long_value.ob_digit[i] + b->long_value.ob_digit[i];
-        z->long_value.ob_digit[i] = carry & PyLong_MASK;
+    digit *z = _PyLong_OutReserve(out, a.n + 1);
+    if (z == NULL) {
+        return -1;
+    }
+    for (i = 0; i < b.n; ++i) {
+        carry += a.d[i] + b.d[i];
+        z[i] = carry & PyLong_MASK;
         carry >>= PyLong_SHIFT;
     }
-    for (; i < size_a; ++i) {
-        carry += a->long_value.ob_digit[i];
-        z->long_value.ob_digit[i] = carry & PyLong_MASK;
+    for (; i < a.n; ++i) {
+        carry += a.d[i];
+        z[i] = carry & PyLong_MASK;
         carry >>= PyLong_SHIFT;
     }
-    z->long_value.ob_digit[i] = carry;
-    return long_normalize(z);
+    z[i] = carry;
+    return 0;
 }
 
-/* Subtract the absolute values of two integers. */
+/* Subtract the absolute values of two integers: out->neg is set when
+   |a| < |b|. The result is reserved after the scan for the highest digit
+   where a and b differ, so its size is exact. */
 
-static PyLongObject *
-x_sub(PyLongObject *a, PyLongObject *b)
+static int
+x_sub(_PyLongSpan a, _PyLongSpan b, _PyLongOut *out)
 {
-    Py_ssize_t size_a = _PyLong_DigitCount(a), size_b = _PyLong_DigitCount(b);
-    PyLongObject *z;
     Py_ssize_t i;
-    int sign = 1;
+    int neg = 0;
     digit borrow = 0;
 
     /* Ensure a is the larger of the two: */
-    if (size_a < size_b) {
-        sign = -1;
-        { PyLongObject *temp = a; a = b; b = temp; }
-        { Py_ssize_t size_temp = size_a;
-            size_a = size_b;
-            size_b = size_temp; }
+    if (a.n < b.n) {
+        neg = 1;
+        _PyLongSpan temp = a;
+        a = b;
+        b = temp;
     }
-    else if (size_a == size_b) {
+    else if (a.n == b.n) {
         /* Find highest digit where a and b differ: */
-        i = size_a;
-        while (--i >= 0 && a->long_value.ob_digit[i] == b->long_value.ob_digit[i])
+        i = a.n;
+        while (--i >= 0 && a.d[i] == b.d[i])
             ;
-        if (i < 0)
-            return (PyLongObject *)PyLong_FromLong(0);
-        if (a->long_value.ob_digit[i] < b->long_value.ob_digit[i]) {
-            sign = -1;
-            { PyLongObject *temp = a; a = b; b = temp; }
+        if (i < 0) {
+            _PyLong_OutReserve(out, 0);
+            return 0;
         }
-        size_a = size_b = i+1;
+        if (a.d[i] < b.d[i]) {
+            neg = 1;
+            _PyLongSpan temp = a;
+            a = b;
+            b = temp;
+        }
+        a.n = b.n = i + 1;
     }
-    z = long_alloc(size_a);
-    if (z == NULL)
-        return NULL;
-    for (i = 0; i < size_b; ++i) {
+    digit *z = _PyLong_OutReserve(out, a.n);
+    if (z == NULL) {
+        return -1;
+    }
+    for (i = 0; i < b.n; ++i) {
         /* The following assumes unsigned arithmetic
            works module 2**N for some N>PyLong_SHIFT. */
-        borrow = a->long_value.ob_digit[i] - b->long_value.ob_digit[i] - borrow;
-        z->long_value.ob_digit[i] = borrow & PyLong_MASK;
+        borrow = a.d[i] - b.d[i] - borrow;
+        z[i] = borrow & PyLong_MASK;
         borrow >>= PyLong_SHIFT;
         borrow &= 1; /* Keep only one sign bit */
     }
-    for (; i < size_a; ++i) {
-        borrow = a->long_value.ob_digit[i] - borrow;
-        z->long_value.ob_digit[i] = borrow & PyLong_MASK;
+    for (; i < a.n; ++i) {
+        borrow = a.d[i] - borrow;
+        z[i] = borrow & PyLong_MASK;
         borrow >>= PyLong_SHIFT;
         borrow &= 1; /* Keep only one sign bit */
     }
     assert(borrow == 0);
-    if (sign < 0) {
-        _PyLong_FlipSign(z);
+    out->neg = neg;
+    return 0;
+}
+
+/* a + b and a - b, signed. */
+
+static int
+long_add_spans(_PyLongSpan a, _PyLongSpan b, _PyLongOut *out)
+{
+    if (a.neg) {
+        if (b.neg) {
+            if (x_add(a, b, out) < 0) {
+                return -1;
+            }
+            out->neg = 1;
+            return 0;
+        }
+        return x_sub(b, a, out);
     }
-    return maybe_small_long(long_normalize(z));
+    if (b.neg) {
+        return x_sub(a, b, out);
+    }
+    return x_add(a, b, out);
+}
+
+static int
+long_sub_spans(_PyLongSpan a, _PyLongSpan b, _PyLongOut *out)
+{
+    if (a.neg) {
+        if (b.neg) {
+            return x_sub(b, a, out);
+        }
+        if (x_add(a, b, out) < 0) {
+            return -1;
+        }
+        out->neg = 1;
+        return 0;
+    }
+    if (b.neg) {
+        return x_add(a, b, out);
+    }
+    return x_sub(a, b, out);
 }
 
 static PyLongObject *
@@ -3810,39 +3818,12 @@ long_add(PyLongObject *a, PyLongObject *b)
         stwodigits z = medium_value(a) + medium_value(b);
         return _PyLong_FromSTwoDigits(z);
     }
-
-    PyLongObject *z;
-    if (_PyLong_IsNegative(a)) {
-        if (_PyLong_IsNegative(b)) {
-            z = x_add(a, b);
-            if (z != NULL) {
-                /* x_add received at least one multiple-digit int,
-                   and thus z must be a multiple-digit int.
-                   That also means z is not an element of
-                   small_ints, so negating it in-place is safe. */
-                assert(Py_REFCNT(z) == 1);
-                _PyLong_FlipSign(z);
-            }
-        }
-        else
-            z = x_sub(b, a);
+    _PyLongOut out;
+    if (long_add_spans(_PyLong_SpanOf(a), _PyLong_SpanOf(b), &out) < 0) {
+        return NULL;
     }
-    else {
-        if (_PyLong_IsNegative(b))
-            z = x_sub(a, b);
-        else
-            z = x_add(a, b);
-    }
-    return z;
+    return _PyLong_OutObject(&out);
 }
-
-static PyObject *
-long_add_method(PyObject *a, PyObject *b)
-{
-    CHECK_BINOP(a, b);
-    return (PyObject*)long_add((PyLongObject*)a, (PyLongObject*)b);
-}
-
 
 static PyLongObject *
 long_sub(PyLongObject *a, PyLongObject *b)
@@ -3850,70 +3831,54 @@ long_sub(PyLongObject *a, PyLongObject *b)
     if (_PyLong_BothAreCompact(a, b)) {
         return _PyLong_FromSTwoDigits(medium_value(a) - medium_value(b));
     }
-
-    PyLongObject *z;
-    if (_PyLong_IsNegative(a)) {
-        if (_PyLong_IsNegative(b)) {
-            z = x_sub(b, a);
-        }
-        else {
-            z = x_add(a, b);
-            if (z != NULL) {
-                assert(_PyLong_IsZero(z) || Py_REFCNT(z) == 1);
-                _PyLong_FlipSign(z);
-            }
-        }
+    _PyLongOut out;
+    if (long_sub_spans(_PyLong_SpanOf(a), _PyLong_SpanOf(b), &out) < 0) {
+        return NULL;
     }
-    else {
-        if (_PyLong_IsNegative(b))
-            z = x_add(a, b);
-        else
-            z = x_sub(a, b);
-    }
-    return z;
+    return _PyLong_OutObject(&out);
 }
 
-static PyObject *
-long_sub_method(PyObject *a, PyObject *b)
+
+// True if a and b are the same digits, so that a * b is a square.
+static inline int
+span_is_same(_PyLongSpan a, _PyLongSpan b)
 {
-    CHECK_BINOP(a, b);
-    return (PyObject*)long_sub((PyLongObject*)a, (PyLongObject*)b);
+    return a.d == b.d && a.n == b.n;
 }
-
 
 /* Grade school multiplication, ignoring the signs.
- * Returns the absolute value of the product, or NULL if error.
+ * Writes the absolute value of the product to out; 0, or -1 on error.
  */
-static PyLongObject *
-x_mul(PyLongObject *a, PyLongObject *b)
+static int
+x_mul(_PyLongSpan a, _PyLongSpan b, _PyLongOut *out)
 {
-    PyLongObject *z;
-    Py_ssize_t size_a = _PyLong_DigitCount(a);
-    Py_ssize_t size_b = _PyLong_DigitCount(b);
+    Py_ssize_t size_a = a.n;
+    Py_ssize_t size_b = b.n;
     Py_ssize_t i;
 
-    z = long_alloc(size_a + size_b);
-    if (z == NULL)
-        return NULL;
+    digit *z = _PyLong_OutReserve(out, size_a + size_b);
+    if (z == NULL) {
+        return -1;
+    }
 
-    memset(z->long_value.ob_digit, 0, _PyLong_DigitCount(z) * sizeof(digit));
-    if (a == b) {
+    memset(z, 0, (size_a + size_b) * sizeof(digit));
+    if (span_is_same(a, b)) {
         /* Efficient squaring per HAC, Algorithm 14.16:
          * https://cacr.uwaterloo.ca/hac/about/chap14.pdf
          * Gives slightly less than a 2x speedup when a == b,
          * via exploiting that each entry in the multiplication
          * pyramid appears twice (except for the size_a squares).
          */
-        digit *paend = a->long_value.ob_digit + size_a;
+        const digit *paend = a.d + size_a;
         for (i = 0; i < size_a; ++i) {
             twodigits carry;
-            twodigits f = a->long_value.ob_digit[i];
-            digit *pz = z->long_value.ob_digit + (i << 1);
-            digit *pa = a->long_value.ob_digit + i + 1;
+            twodigits f = a.d[i];
+            digit *pz = z + (i << 1);
+            const digit *pa = a.d + i + 1;
 
             SIGCHECK({
-                    Py_DECREF(z);
-                    return NULL;
+                    _PyLong_OutAbandon(out);
+                    return -1;
                 });
 
             carry = *pz + f * f;
@@ -3958,14 +3923,14 @@ x_mul(PyLongObject *a, PyLongObject *b)
     else {      /* a is not the same as b -- gradeschool int mult */
         for (i = 0; i < size_a; ++i) {
             twodigits carry = 0;
-            twodigits f = a->long_value.ob_digit[i];
-            digit *pz = z->long_value.ob_digit + i;
-            digit *pb = b->long_value.ob_digit;
-            digit *pbend = b->long_value.ob_digit + size_b;
+            twodigits f = a.d[i];
+            digit *pz = z + i;
+            const digit *pb = b.d;
+            const digit *pbend = b.d + size_b;
 
             SIGCHECK({
-                    Py_DECREF(z);
-                    return NULL;
+                    _PyLong_OutAbandon(out);
+                    return -1;
                 });
 
             while (pb < pbend) {
@@ -3979,61 +3944,50 @@ x_mul(PyLongObject *a, PyLongObject *b)
             assert((carry >> PyLong_SHIFT) == 0);
         }
     }
-    return long_normalize(z);
-}
-
-/* A helper for Karatsuba multiplication (k_mul).
-   Takes an int "n" and an integer "size" representing the place to
-   split, and sets low and high such that abs(n) == (high << size) + low,
-   viewing the shift as being by digits.  The sign bit is ignored, and
-   the return values are >= 0.
-   Returns 0 on success, -1 on failure.
-*/
-static int
-kmul_split(PyLongObject *n,
-           Py_ssize_t size,
-           PyLongObject **high,
-           PyLongObject **low)
-{
-    PyLongObject *hi, *lo;
-    Py_ssize_t size_lo, size_hi;
-    const Py_ssize_t size_n = _PyLong_DigitCount(n);
-
-    size_lo = Py_MIN(size_n, size);
-    size_hi = size_n - size_lo;
-
-    if ((hi = long_alloc(size_hi)) == NULL)
-        return -1;
-    if ((lo = long_alloc(size_lo)) == NULL) {
-        Py_DECREF(hi);
-        return -1;
-    }
-
-    memcpy(lo->long_value.ob_digit, n->long_value.ob_digit, size_lo * sizeof(digit));
-    memcpy(hi->long_value.ob_digit, n->long_value.ob_digit + size_lo, size_hi * sizeof(digit));
-
-    *high = long_normalize(hi);
-    *low = long_normalize(lo);
     return 0;
 }
 
-static PyLongObject *k_lopsided_mul(PyLongObject *a, PyLongObject *b);
+/* A helper for Karatsuba multiplication (k_mul).
+   Takes a span "n" and an integer "size" representing the place to
+   split, and sets low and high such that abs(n) == (high << size) + low,
+   viewing the shift as being by digits.  The sign bit is ignored, and
+   the return values are >= 0.  Both are sub-spans of n: no digits are
+   copied, and leading zero digits of the low part are dropped.
+*/
+static void
+kmul_split(_PyLongSpan n,
+           Py_ssize_t size,
+           _PyLongSpan *high,
+           _PyLongSpan *low)
+{
+    Py_ssize_t size_lo = Py_MIN(n.n, size);
+    Py_ssize_t size_hi = n.n - size_lo;
 
-/* Karatsuba multiplication.  Ignores the input signs, and returns the
- * absolute value of the product (or NULL if error).
+    while (size_lo > 0 && n.d[size_lo - 1] == 0) {
+        size_lo--;
+    }
+    low->d = n.d;
+    low->n = size_lo;
+    low->neg = 0;
+    // n is normalised, so is the high part.
+    high->d = n.d + Py_MIN(n.n, size);
+    high->n = size_hi;
+    high->neg = 0;
+}
+
+static int k_lopsided_mul(_PyLongSpan a, _PyLongSpan b, _PyLongOut *out);
+
+/* Karatsuba multiplication.  Ignores the input signs, and writes the
+ * absolute value of the product to out (0, or -1 on error).
  * See Knuth Vol. 2 Chapter 4.3.3 (Pp. 294-295).
  */
-static PyLongObject *
-k_mul(PyLongObject *a, PyLongObject *b)
+static int
+k_mul(_PyLongSpan a, _PyLongSpan b, _PyLongOut *out)
 {
-    Py_ssize_t asize = _PyLong_DigitCount(a);
-    Py_ssize_t bsize = _PyLong_DigitCount(b);
-    PyLongObject *ah = NULL;
-    PyLongObject *al = NULL;
-    PyLongObject *bh = NULL;
-    PyLongObject *bl = NULL;
-    PyLongObject *ret = NULL;
-    PyLongObject *t1, *t2, *t3;
+    Py_ssize_t asize = a.n;
+    Py_ssize_t bsize = b.n;
+    _PyLongSpan ah, al, bh, bl;
+    _PyLongOut t1, t2, t3;
     Py_ssize_t shift;           /* the number of digits we split off */
     Py_ssize_t i;
 
@@ -4049,9 +4003,9 @@ k_mul(PyLongObject *a, PyLongObject *b)
      * is largest.
      */
     if (asize > bsize) {
-        t1 = a;
+        _PyLongSpan tmp = a;
         a = b;
-        b = t1;
+        b = tmp;
 
         i = asize;
         asize = bsize;
@@ -4059,12 +4013,14 @@ k_mul(PyLongObject *a, PyLongObject *b)
     }
 
     /* Use gradeschool math when either number is too small. */
-    i = a == b ? KARATSUBA_SQUARE_CUTOFF : KARATSUBA_CUTOFF;
+    i = span_is_same(a, b) ? KARATSUBA_SQUARE_CUTOFF : KARATSUBA_CUTOFF;
     if (asize <= i) {
-        if (asize == 0)
-            return (PyLongObject *)PyLong_FromLong(0);
-        else
-            return x_mul(a, b);
+        if (asize == 0) {
+            return _PyLong_OutReserve(out, 0) == NULL ? -1 : 0;
+        }
+        else {
+            return x_mul(a, b, out);
+        }
     }
 
     /* If a is small compared to b, splitting on b gives a degenerate
@@ -4074,18 +4030,20 @@ k_mul(PyLongObject *a, PyLongObject *b)
      * leads to a sequence of balanced calls to k_mul.
      */
     if (2 * asize <= bsize)
-        return k_lopsided_mul(a, b);
+        return k_lopsided_mul(a, b, out);
 
     /* Split a & b into hi & lo pieces. */
     shift = bsize >> 1;
-    if (kmul_split(a, shift, &ah, &al) < 0) goto fail;
-    assert(_PyLong_IsPositive(ah));        /* the split isn't degenerate */
+    kmul_split(a, shift, &ah, &al);
+    assert(ah.n > 0);        /* the split isn't degenerate */
 
-    if (a == b) {
-        bh = (PyLongObject*)Py_NewRef(ah);
-        bl = (PyLongObject*)Py_NewRef(al);
+    if (span_is_same(a, b)) {
+        bh = ah;
+        bl = al;
     }
-    else if (kmul_split(b, shift, &bh, &bl) < 0) goto fail;
+    else {
+        kmul_split(b, shift, &bh, &bl);
+    }
 
     /* The plan:
      * 1. Allocate result space (asize + bsize digits:  that's always
@@ -4104,84 +4062,87 @@ k_mul(PyLongObject *a, PyLongObject *b)
      */
 
     /* 1. Allocate result space. */
-    ret = long_alloc(asize + bsize);
-    if (ret == NULL) goto fail;
+    digit *ret = _PyLong_OutReserve(out, asize + bsize);
+    if (ret == NULL) {
+        return -1;
+    }
+    const Py_ssize_t ret_size = asize + bsize;
 
     /* 2. t1 <- ah*bh, and copy into high digits of result. */
-    if ((t1 = k_mul(ah, bh)) == NULL) goto fail;
-    assert(!_PyLong_IsNegative(t1));
-    assert(2*shift + _PyLong_DigitCount(t1) <= _PyLong_DigitCount(ret));
-    memcpy(ret->long_value.ob_digit + 2*shift, t1->long_value.ob_digit,
-           _PyLong_DigitCount(t1) * sizeof(digit));
-
-    /* Zero-out the digits higher than the ah*bh copy. */
-    i = _PyLong_DigitCount(ret) - 2*shift - _PyLong_DigitCount(t1);
-    if (i)
-        memset(ret->long_value.ob_digit + 2*shift + _PyLong_DigitCount(t1), 0,
-               i * sizeof(digit));
-
-    /* 3. t2 <- al*bl, and copy into the low digits. */
-    if ((t2 = k_mul(al, bl)) == NULL) {
-        Py_DECREF(t1);
+    if (k_mul(ah, bh, &t1) < 0) {
         goto fail;
     }
-    assert(!_PyLong_IsNegative(t2));
-    assert(_PyLong_DigitCount(t2) <= 2*shift); /* no overlap with high digits */
-    memcpy(ret->long_value.ob_digit, t2->long_value.ob_digit, _PyLong_DigitCount(t2) * sizeof(digit));
+    _PyLongSpan t1s = _PyLong_OutSpan(&t1);
+    assert(2*shift + t1s.n <= ret_size);
+    memcpy(ret + 2*shift, t1s.d, t1s.n * sizeof(digit));
+
+    /* Zero-out the digits higher than the ah*bh copy. */
+    i = ret_size - 2*shift - t1s.n;
+    if (i)
+        memset(ret + 2*shift + t1s.n, 0, i * sizeof(digit));
+
+    /* 3. t2 <- al*bl, and copy into the low digits. */
+    if (k_mul(al, bl, &t2) < 0) {
+        _PyLong_OutAbandon(&t1);
+        goto fail;
+    }
+    _PyLongSpan t2s = _PyLong_OutSpan(&t2);
+    assert(t2s.n <= 2*shift); /* no overlap with high digits */
+    memcpy(ret, t2s.d, t2s.n * sizeof(digit));
 
     /* Zero out remaining digits. */
-    i = 2*shift - _PyLong_DigitCount(t2);          /* number of uninitialized digits */
+    i = 2*shift - t2s.n;          /* number of uninitialized digits */
     if (i)
-        memset(ret->long_value.ob_digit + _PyLong_DigitCount(t2), 0, i * sizeof(digit));
+        memset(ret + t2s.n, 0, i * sizeof(digit));
 
     /* 4 & 5. Subtract ah*bh (t1) and al*bl (t2).  We do al*bl first
      * because it's fresher in cache.
      */
-    i = _PyLong_DigitCount(ret) - shift;  /* # digits after shift */
-    (void)v_isub(ret->long_value.ob_digit + shift, i, t2->long_value.ob_digit, _PyLong_DigitCount(t2));
-    _Py_DECREF_INT(t2);
+    i = ret_size - shift;  /* # digits after shift */
+    (void)v_isub(ret + shift, i, t2s.d, t2s.n);
+    _PyLong_OutAbandon(&t2);
 
-    (void)v_isub(ret->long_value.ob_digit + shift, i, t1->long_value.ob_digit, _PyLong_DigitCount(t1));
-    _Py_DECREF_INT(t1);
+    (void)v_isub(ret + shift, i, t1s.d, t1s.n);
+    _PyLong_OutAbandon(&t1);
 
     /* 6. t3 <- (ah+al)(bh+bl), and add into result. */
-    if ((t1 = x_add(ah, al)) == NULL) goto fail;
-    _Py_DECREF_INT(ah);
-    _Py_DECREF_INT(al);
-    ah = al = NULL;
-
-    if (a == b) {
-        t2 = (PyLongObject*)Py_NewRef(t1);
-    }
-    else if ((t2 = x_add(bh, bl)) == NULL) {
-        Py_DECREF(t1);
+    if (x_add(ah, al, &t1) < 0) {
         goto fail;
     }
-    _Py_DECREF_INT(bh);
-    _Py_DECREF_INT(bl);
-    bh = bl = NULL;
+    t1s = _PyLong_OutSpan(&t1);
 
-    t3 = k_mul(t1, t2);
-    _Py_DECREF_INT(t1);
-    _Py_DECREF_INT(t2);
-    if (t3 == NULL) goto fail;
-    assert(!_PyLong_IsNegative(t3));
+    if (span_is_same(a, b)) {
+        t2s = t1s;
+    }
+    else {
+        if (x_add(bh, bl, &t2) < 0) {
+            _PyLong_OutAbandon(&t1);
+            goto fail;
+        }
+        t2s = _PyLong_OutSpan(&t2);
+    }
+
+    int status = k_mul(t1s, t2s, &t3);
+    _PyLong_OutAbandon(&t1);
+    if (!span_is_same(a, b)) {
+        _PyLong_OutAbandon(&t2);
+    }
+    if (status < 0) {
+        goto fail;
+    }
+    _PyLongSpan t3s = _PyLong_OutSpan(&t3);
 
     /* Add t3.  It's not obvious why we can't run out of room here.
      * See the (*) comment after this function.
      */
-    (void)v_iadd(ret->long_value.ob_digit + shift, i, t3->long_value.ob_digit, _PyLong_DigitCount(t3));
-    _Py_DECREF_INT(t3);
+    (void)v_iadd(ret + shift, i, t3s.d, t3s.n);
+    _PyLong_OutAbandon(&t3);
 
-    return long_normalize(ret);
+    return 0;
 
   fail:
-    Py_XDECREF(ret);
-    Py_XDECREF(ah);
-    Py_XDECREF(al);
-    Py_XDECREF(bh);
-    Py_XDECREF(bl);
-    return NULL;
+    _PyLong_OutAbandon(out);
+    return -1;
 }
 
 /* (*) Why adding t3 can't "run out of room" above.
@@ -4237,61 +4198,65 @@ ah*bh and al*bl too.
  * at a time, then move on, never backtracking except for the helpful
  * single-width slice overlap between successive partial sums).
  */
-static PyLongObject *
-k_lopsided_mul(PyLongObject *a, PyLongObject *b)
+static int
+k_lopsided_mul(_PyLongSpan a, _PyLongSpan b, _PyLongOut *out)
 {
-    const Py_ssize_t asize = _PyLong_DigitCount(a);
-    Py_ssize_t bsize = _PyLong_DigitCount(b);
+    const Py_ssize_t asize = a.n;
+    Py_ssize_t bsize = b.n;
     Py_ssize_t nbdone;          /* # of b digits already multiplied */
-    PyLongObject *ret;
-    PyLongObject *bslice = NULL;
 
     assert(asize > KARATSUBA_CUTOFF);
     assert(2 * asize <= bsize);
 
     /* Allocate result space, and zero it out. */
-    ret = long_alloc(asize + bsize);
-    if (ret == NULL)
-        return NULL;
-    memset(ret->long_value.ob_digit, 0, _PyLong_DigitCount(ret) * sizeof(digit));
-
-    /* Successive slices of b are copied into bslice. */
-    bslice = long_alloc(asize);
-    if (bslice == NULL)
-        goto fail;
+    digit *ret = _PyLong_OutReserve(out, asize + bsize);
+    if (ret == NULL) {
+        return -1;
+    }
+    const Py_ssize_t ret_size = asize + bsize;
+    memset(ret, 0, ret_size * sizeof(digit));
 
     nbdone = 0;
     while (bsize > 0) {
-        PyLongObject *product;
+        _PyLongOut product;
         const Py_ssize_t nbtouse = Py_MIN(bsize, asize);
 
-        /* Multiply the next slice of b by a. */
-        memcpy(bslice->long_value.ob_digit, b->long_value.ob_digit + nbdone,
-               nbtouse * sizeof(digit));
-        assert(nbtouse >= 0);
-        _PyLong_SetSignAndDigitCount(bslice, 1, nbtouse);
-        product = k_mul(a, bslice);
-        if (product == NULL)
-            goto fail;
+        /* Multiply the next slice of b (a sub-span, without its leading
+           zero digits) by a. */
+        Py_ssize_t nslice = nbtouse;
+        while (nslice > 0 && b.d[nbdone + nslice - 1] == 0) {
+            nslice--;
+        }
+        _PyLongSpan bslice = {b.d + nbdone, nslice, 0};
+        if (k_mul(a, bslice, &product) < 0) {
+            _PyLong_OutAbandon(out);
+            return -1;
+        }
 
         /* Add into result. */
-        (void)v_iadd(ret->long_value.ob_digit + nbdone, _PyLong_DigitCount(ret) - nbdone,
-                     product->long_value.ob_digit, _PyLong_DigitCount(product));
-        _Py_DECREF_INT(product);
+        _PyLongSpan ps = _PyLong_OutSpan(&product);
+        (void)v_iadd(ret + nbdone, ret_size - nbdone, ps.d, ps.n);
+        _PyLong_OutAbandon(&product);
 
         bsize -= nbtouse;
         nbdone += nbtouse;
     }
 
-    _Py_DECREF_INT(bslice);
-    return long_normalize(ret);
-
-  fail:
-    Py_DECREF(ret);
-    Py_XDECREF(bslice);
-    return NULL;
+    return 0;
 }
 
+/* Signed product of two spans, by Karatsuba (k_mul). */
+static int
+long_mul_spans(_PyLongSpan a, _PyLongSpan b, _PyLongOut *out)
+{
+    if (k_mul(a, b, out) < 0) {
+        return -1;
+    }
+    /* Negative if exactly one of the inputs is negative; a zero result
+       is normalised to positive by the consumers. */
+    out->neg = a.neg != b.neg;
+    return 0;
+}
 
 static PyLongObject*
 long_mul(PyLongObject *a, PyLongObject *b)
@@ -4302,19 +4267,11 @@ long_mul(PyLongObject *a, PyLongObject *b)
         return _PyLong_FromSTwoDigits(v);
     }
 
-    PyLongObject *z = k_mul(a, b);
-    /* Negate if exactly one of the inputs is negative. */
-    if (!_PyLong_SameSign(a, b) && z) {
-        _PyLong_Negate(&z);
+    _PyLongOut out;
+    if (long_mul_spans(_PyLong_SpanOf(a), _PyLong_SpanOf(b), &out) < 0) {
+        return NULL;
     }
-    return z;
-}
-
-static PyObject *
-long_mul_method(PyObject *a, PyObject *b)
-{
-    CHECK_BINOP(a, b);
-    return (PyObject*)long_mul((PyLongObject*)a, (PyLongObject*)b);
+    return _PyLong_OutObject(&out);
 }
 
 /* Fast modulo division for single-digit longs. */
@@ -4542,39 +4499,22 @@ l_mod(PyLongObject *v, PyLongObject *w, PyLongObject **pmod)
     return 0;
 }
 
-static PyObject *
-long_div(PyObject *a, PyObject *b)
-{
-    PyLongObject *div;
-
-    CHECK_BINOP(a, b);
-
-    if (_PyLong_DigitCount((PyLongObject*)a) == 1 && _PyLong_DigitCount((PyLongObject*)b) == 1) {
-        return fast_floor_div((PyLongObject*)a, (PyLongObject*)b);
-    }
-
-    if (l_divmod((PyLongObject*)a, (PyLongObject*)b, &div, NULL) < 0)
-        div = NULL;
-    return (PyObject *)div;
-}
-
-/* PyLong/PyLong -> float, with correctly rounded result. */
-
 #define MANT_DIG_DIGITS (DBL_MANT_DIG / PyLong_SHIFT)
 #define MANT_DIG_BITS (DBL_MANT_DIG % PyLong_SHIFT)
 
-static PyObject *
-long_true_divide(PyObject *v, PyObject *w)
+/* a / b for spans, correctly rounded: the digit path of long_true_divide().
+   Returns -1.0 with an exception set (ZeroDivisionError, OverflowError);
+   a caller must test PyErr_Occurred() for a result of -1.0. */
+static double
+_PyLong_SpanTrueDivide(_PyLongSpan a, _PyLongSpan b)
 {
-    PyLongObject *a, *b, *x;
     Py_ssize_t a_size, b_size, shift, extra_bits, diff, x_size, x_bits;
     digit mask, low;
     int inexact, negate, a_is_small, b_is_small;
     double dx, result;
-
-    CHECK_BINOP(v, w);
-    a = (PyLongObject *)v;
-    b = (PyLongObject *)w;
+    digit *x = NULL;            // scratch digits of the shifted a
+    _PyLongOut q;
+    int have_q = 0;
 
     /*
        Method in a nutshell:
@@ -4664,9 +4604,9 @@ long_true_divide(PyObject *v, PyObject *w)
     */
 
     /* Reduce to case where a and b are both positive. */
-    a_size = _PyLong_DigitCount(a);
-    b_size = _PyLong_DigitCount(b);
-    negate = (_PyLong_IsNegative(a)) != (_PyLong_IsNegative(b));
+    a_size = a.n;
+    b_size = b.n;
+    negate = a.neg != b.neg;
     if (b_size == 0) {
         PyErr_SetString(PyExc_ZeroDivisionError,
                         "division by zero");
@@ -4681,18 +4621,18 @@ long_true_divide(PyObject *v, PyObject *w)
        the x87 FPU set to 64-bit precision. */
     a_is_small = a_size <= MANT_DIG_DIGITS ||
         (a_size == MANT_DIG_DIGITS+1 &&
-         a->long_value.ob_digit[MANT_DIG_DIGITS] >> MANT_DIG_BITS == 0);
+         a.d[MANT_DIG_DIGITS] >> MANT_DIG_BITS == 0);
     b_is_small = b_size <= MANT_DIG_DIGITS ||
         (b_size == MANT_DIG_DIGITS+1 &&
-         b->long_value.ob_digit[MANT_DIG_DIGITS] >> MANT_DIG_BITS == 0);
+         b.d[MANT_DIG_DIGITS] >> MANT_DIG_BITS == 0);
     if (a_is_small && b_is_small) {
         double da, db;
-        da = a->long_value.ob_digit[--a_size];
+        da = a.d[--a_size];
         while (a_size > 0)
-            da = da * PyLong_BASE + a->long_value.ob_digit[--a_size];
-        db = b->long_value.ob_digit[--b_size];
+            da = da * PyLong_BASE + a.d[--a_size];
+        db = b.d[--b_size];
         while (b_size > 0)
-            db = db * PyLong_BASE + b->long_value.ob_digit[--b_size];
+            db = db * PyLong_BASE + b.d[--b_size];
         result = da / db;
         goto success;
     }
@@ -4706,8 +4646,8 @@ long_true_divide(PyObject *v, PyObject *w)
         /* Extreme underflow */
         goto underflow_or_zero;
     /* Next line is now safe from overflowing a Py_ssize_t */
-    diff = diff * PyLong_SHIFT + bit_length_digit(a->long_value.ob_digit[a_size - 1]) -
-        bit_length_digit(b->long_value.ob_digit[b_size - 1]);
+    diff = diff * PyLong_SHIFT + bit_length_digit(a.d[a_size - 1]) -
+        bit_length_digit(b.d[b_size - 1]);
     /* Now diff = a_bits - b_bits. */
     if (diff > DBL_MAX_EXP)
         goto overflow;
@@ -4732,57 +4672,70 @@ long_true_divide(PyObject *v, PyObject *w)
                             "intermediate overflow during division");
             goto error;
         }
-        x = long_alloc(a_size + shift_digits + 1);
-        if (x == NULL)
+        x = PyMem_Malloc((a_size + shift_digits + 1) * sizeof(digit));
+        if (x == NULL) {
+            PyErr_NoMemory();
             goto error;
+        }
         for (i = 0; i < shift_digits; i++)
-            x->long_value.ob_digit[i] = 0;
-        rem = v_lshift(x->long_value.ob_digit + shift_digits, a->long_value.ob_digit,
-                       a_size, -shift % PyLong_SHIFT);
-        x->long_value.ob_digit[a_size + shift_digits] = rem;
+            x[i] = 0;
+        rem = v_lshift(x + shift_digits, a.d, a_size, -shift % PyLong_SHIFT);
+        x[a_size + shift_digits] = rem;
+        x_size = a_size + shift_digits + 1;
     }
     else {
         Py_ssize_t shift_digits = shift / PyLong_SHIFT;
         digit rem;
         /* x = a >> shift */
         assert(a_size >= shift_digits);
-        x = long_alloc(a_size - shift_digits);
-        if (x == NULL)
+        x = PyMem_Malloc((a_size - shift_digits + 1) * sizeof(digit));
+        if (x == NULL) {
+            PyErr_NoMemory();
             goto error;
-        rem = v_rshift(x->long_value.ob_digit, a->long_value.ob_digit + shift_digits,
-                       a_size - shift_digits, shift % PyLong_SHIFT);
+        }
+        rem = v_rshift(x, a.d + shift_digits, a_size - shift_digits,
+                       shift % PyLong_SHIFT);
+        x_size = a_size - shift_digits;
         /* set inexact if any of the bits shifted out is nonzero */
         if (rem)
             inexact = 1;
         while (!inexact && shift_digits > 0)
-            if (a->long_value.ob_digit[--shift_digits])
+            if (a.d[--shift_digits])
                 inexact = 1;
     }
-    long_normalize(x);
-    x_size = _PyLong_SignedDigitCount(x);
+    while (x_size > 0 && x[x_size - 1] == 0) {
+        x_size--;
+    }
 
-    /* x //= b. If the remainder is nonzero, set inexact.  We own the only
-       reference to x, so it's safe to modify it in-place. */
+    /* x //= b. If the remainder is nonzero, set inexact.  We own x, so it
+       is safe to modify it in-place. */
     if (b_size == 1) {
-        digit rem = inplace_divrem1(x->long_value.ob_digit, x->long_value.ob_digit, x_size,
-                              b->long_value.ob_digit[0]);
-        long_normalize(x);
+        digit rem = inplace_divrem1(x, x, x_size, b.d[0]);
+        while (x_size > 0 && x[x_size - 1] == 0) {
+            x_size--;
+        }
         if (rem)
             inexact = 1;
     }
     else {
-        PyLongObject *div, *rem;
-        div = x_divrem(x, b, &rem);
-        Py_SETREF(x, div);
-        if (x == NULL)
+        _PyLongOut r;
+        _PyLongSpan xs = {x, x_size, 0};
+        if (x_divrem(xs, b, &q, &r) < 0) {
             goto error;
-        if (!_PyLong_IsZero(rem))
+        }
+        have_q = 1;
+        _PyLongSpan rs = _PyLong_OutSpan(&r);
+        if (rs.n != 0)
             inexact = 1;
-        Py_DECREF(rem);
+        _PyLong_OutAbandon(&r);
+        _PyLongSpan qs = _PyLong_OutSpan(&q);
+        // The rounding below modifies the quotient's digits, as x's.
+        PyMem_Free(x);
+        x = q.d;
+        x_size = qs.n;
     }
-    x_size = _PyLong_DigitCount(x);
     assert(x_size > 0); /* result of division is never zero */
-    x_bits = (x_size-1)*PyLong_SHIFT+bit_length_digit(x->long_value.ob_digit[x_size-1]);
+    x_bits = (x_size-1)*PyLong_SHIFT+bit_length_digit(x[x_size-1]);
 
     /* The number of extra bits that have to be rounded away. */
     extra_bits = Py_MAX(x_bits, DBL_MIN_EXP - shift) - DBL_MANT_DIG;
@@ -4790,16 +4743,22 @@ long_true_divide(PyObject *v, PyObject *w)
 
     /* Round by directly modifying the low digit of x. */
     mask = (digit)1 << (extra_bits - 1);
-    low = x->long_value.ob_digit[0] | inexact;
+    low = x[0] | inexact;
     if ((low & mask) && (low & (3U*mask-1U)))
         low += mask;
-    x->long_value.ob_digit[0] = low & ~(2U*mask-1U);
+    x[0] = low & ~(2U*mask-1U);
 
     /* Convert x to a double dx; the conversion is exact. */
-    dx = x->long_value.ob_digit[--x_size];
+    dx = x[--x_size];
     while (x_size > 0)
-        dx = dx * PyLong_BASE + x->long_value.ob_digit[--x_size];
-    Py_DECREF(x);
+        dx = dx * PyLong_BASE + x[--x_size];
+    if (have_q) {
+        _PyLong_OutAbandon(&q);
+    }
+    else {
+        PyMem_Free(x);
+    }
+    x = NULL;
 
     /* Check whether ldexp result will overflow a double. */
     if (shift + x_bits >= DBL_MAX_EXP &&
@@ -4808,42 +4767,28 @@ long_true_divide(PyObject *v, PyObject *w)
     result = ldexp(dx, (int)shift);
 
   success:
-    return PyFloat_FromDouble(negate ? -result : result);
+    return negate ? -result : result;
 
   underflow_or_zero:
-    return PyFloat_FromDouble(negate ? -0.0 : 0.0);
+    return negate ? -0.0 : 0.0;
 
   overflow:
     PyErr_SetString(PyExc_OverflowError,
                     "integer division result too large for a float");
   error:
-    return NULL;
-}
-
-static PyObject *
-long_mod(PyObject *a, PyObject *b)
-{
-    PyLongObject *mod;
-
-    CHECK_BINOP(a, b);
-
-    if (l_mod((PyLongObject*)a, (PyLongObject*)b, &mod) < 0)
-        mod = NULL;
-    return (PyObject *)mod;
-}
-
-static PyObject *
-long_divmod(PyObject *a, PyObject *b)
-{
-    PyLongObject *div, *mod;
-    CHECK_BINOP(a, b);
-
-    if (l_divmod((PyLongObject*)a, (PyLongObject*)b, &div, &mod) < 0) {
-        return NULL;
+    if (have_q) {
+        _PyLong_OutAbandon(&q);
     }
-    return _PyTuple_FromPairTakeValue(PyValue_PrepareOwned((PyObject *)div), PyValue_PrepareOwned((PyObject *)mod));
+    else {
+        PyMem_Free(x);
+    }
+    return -1.0;
 }
 
+/* PyLong/PyLong -> float, with correctly rounded result. */
+
+#define MANT_DIG_DIGITS (DBL_MANT_DIG / PyLong_SHIFT)
+#define MANT_DIG_BITS (DBL_MANT_DIG % PyLong_SHIFT)
 
 /* Compute an inverse to a modulo n, or raise ValueError if a is not
    invertible modulo n. Assumes n is positive. The inverse returned
@@ -4865,27 +4810,81 @@ long_divmod(PyObject *a, PyObject *b)
             raise ValueError("Not invertible")
 */
 
+/* A span with the object that owns its digits, or NULL while the span is an
+   input.  The loop variables of long_invmod() and the base of long_pow_spans()
+   are such pairs, so no input is copied. */
+typedef struct {
+    _PyLongSpan s;
+    PyLongObject *o;
+} _PyLongSpanOwner;
+
 static PyLongObject *
-long_invmod(PyLongObject *a, PyLongObject *n)
+long_invmod(_PyLongSpan a_span, _PyLongSpan n_span)
 {
     /* Should only ever be called for positive n */
-    assert(_PyLong_IsPositive(n));
+    assert(n_span.n > 0 && !n_span.neg);
 
-    Py_INCREF(a);
+    _PyLongSpanOwner a = {a_span, NULL};
+    _PyLongSpanOwner n = {n_span, NULL};
     PyLongObject *b = (PyLongObject *)Py_NewRef(_PyLong_GetOne());
     PyLongObject *c = (PyLongObject *)Py_NewRef(_PyLong_GetZero());
-    Py_INCREF(n);
 
-    /* references now owned: a, b, c, n */
-    while (!_PyLong_IsZero(n)) {
-        PyLongObject *q, *r, *s, *t;
+    /* references now owned: a.o, b, c, n.o (the last two spans may be
+       inputs, with a NULL owner) */
+    while (n.s.n != 0) {
+        PyLongObject *q, *t, *s;
+        _PyLongSpanOwner r;
+        PyLongObject *old_a = a.o;
 
-        if (l_divmod(a, n, &q, &r) == -1) {
-            goto Error;
+        /* q, r = divmod(a, n), floor division as l_divmod() */
+        if (a.s.n < n.s.n ||
+            (a.s.n == n.s.n && a.s.d[a.s.n-1] < n.s.d[n.s.n-1])) {
+            /* |a| < |n|: q = 0 and r = a, which moves to n. */
+            q = (PyLongObject *)Py_NewRef(_PyLong_GetZero());
+            r = a;
+            a.o = NULL;
+            old_a = NULL;
         }
-        Py_SETREF(a, n);
+        else {
+            _PyLongOut qo, ro;
+            if (long_divrem_spans(a.s, n.s, &qo, &ro) < 0) {
+                goto Error;
+            }
+            r.o = _PyLong_OutObject(&ro);
+            if (r.o == NULL) {
+                _PyLong_OutAbandon(&qo);
+                goto Error;
+            }
+            q = _PyLong_OutObject(&qo);
+            if (q == NULL) {
+                Py_DECREF(r.o);
+                goto Error;
+            }
+            r.s = _PyLong_SpanOf(r.o);
+        }
+        if ((r.s.neg && !n.s.neg) || (r.s.n != 0 && !r.s.neg && n.s.neg)) {
+            _PyLongOut sum;
+            PyLongObject *temp;
+            if (long_add_spans(r.s, n.s, &sum) < 0) {
+                goto ErrorQR;
+            }
+            temp = _PyLong_OutObject(&sum);
+            if (temp == NULL) {
+                goto ErrorQR;
+            }
+            Py_XDECREF(r.o);
+            r.o = temp;
+            r.s = _PyLong_SpanOf(temp);
+            temp = long_sub(q, (PyLongObject *)_PyLong_GetOne());
+            if (temp == NULL) {
+                goto ErrorQR;
+            }
+            Py_SETREF(q, temp);
+        }
+        Py_XDECREF(old_a);
+        a = n;
         n = r;
-        t = (PyLongObject *)long_mul(q, c);
+        t = long_mul(q, c);
         Py_DECREF(q);
         if (t == NULL) {
             goto Error;
@@ -4897,14 +4896,20 @@ long_invmod(PyLongObject *a, PyLongObject *n)
         }
         Py_SETREF(b, c);
         c = s;
+        continue;
+
+      ErrorQR:
+        Py_DECREF(q);
+        Py_XDECREF(r.o);
+        goto Error;
     }
-    /* references now owned: a, b, c, n */
+    /* references now owned: a.o, b, c, n.o */
 
     Py_DECREF(c);
-    Py_DECREF(n);
-    if (long_compare(a, (PyLongObject *)_PyLong_GetOne())) {
+    Py_XDECREF(n.o);
+    if (long_compare(a.s, _PyLong_SpanOf((PyLongObject *)_PyLong_GetOne()))) {
         /* a != 1; we don't have an inverse. */
-        Py_DECREF(a);
+        Py_XDECREF(a.o);
         Py_DECREF(b);
         PyErr_SetString(PyExc_ValueError,
                         "base is not invertible for the given modulus");
@@ -4912,24 +4917,82 @@ long_invmod(PyLongObject *a, PyLongObject *n)
     }
     else {
         /* a == 1; b gives an inverse modulo n */
-        Py_DECREF(a);
+        Py_XDECREF(a.o);
         return b;
     }
 
   Error:
-    Py_DECREF(a);
+    Py_XDECREF(a.o);
     Py_DECREF(b);
     Py_DECREF(c);
-    Py_DECREF(n);
+    Py_XDECREF(n.o);
     return NULL;
 }
 
-
-/* pow(v, w, x) */
-static PyObject *
-long_pow(PyObject *v, PyObject *w, PyObject *x)
+/* The floor modulus a % c of a span by a positive span c, as a new int.  For
+   use when a is negative or longer than c, so that the result is computed
+   (never a copy of the input a). */
+static PyLongObject *
+long_floormod_spans(_PyLongSpan a, _PyLongSpan c)
 {
-    PyLongObject *a, *b, *c; /* a,b,c = v,w,x */
+    _PyLongOut out;
+    assert(c.n > 0 && !c.neg);
+    if (a.n < c.n || (a.n == c.n && a.d[a.n-1] < c.d[c.n-1])) {
+        /* |a| < |c|: only a negative a is reduced, to a + c. */
+        assert(a.neg);
+        if (long_add_spans(a, c, &out) < 0) {
+            return NULL;
+        }
+        return _PyLong_OutObject(&out);
+    }
+    if (long_divrem_spans(a, c, NULL, &out) < 0) {
+        return NULL;
+    }
+    _PyLongSpan r = _PyLong_OutSpan(&out);
+    if (r.neg) {
+        /* The remainder has the sign of a: add c to get the floor modulus. */
+        _PyLongOut sum;
+        int status = long_add_spans(r, c, &sum);
+        _PyLong_OutAbandon(&out);
+        if (status < 0) {
+            return NULL;
+        }
+        return _PyLong_OutObject(&sum);
+    }
+    return _PyLong_OutObject(&out);
+}
+
+/* x = x % c for a computed non-negative x and a positive span c. */
+static int
+long_pow_reduce(PyLongObject **x, _PyLongSpan c)
+{
+    _PyLongSpan xs = _PyLong_SpanOf(*x);
+    if (xs.n < c.n || (xs.n == c.n && xs.d[xs.n-1] < c.d[c.n-1])) {
+        /* |x| < |c|: already reduced. */
+        return 0;
+    }
+    _PyLongOut r;
+    if (long_divrem_spans(xs, c, NULL, &r) < 0) {
+        return -1;
+    }
+    PyLongObject *temp = _PyLong_OutObject(&r);
+    if (temp == NULL) {
+        return -1;
+    }
+    Py_SETREF(*x, temp);
+    return 0;
+}
+
+
+/* pow(v, w, x) of int spans.  The modulus c is NULL or a span of three
+   digits or more (shorter ones go through _PyLong_WordPowMod()); the caller
+   has handled a zero modulus and a negative exponent without one.  Returns
+   a new exact int. */
+static PyLongObject *
+long_pow_spans(_PyLongSpan a_in, _PyLongSpan b, const _PyLongSpan *cp)
+{
+    _PyLongSpanOwner a = {a_in, NULL};  /* the base, owned if computed */
+    _PyLongSpan c = {NULL, 0, 0};       /* the modulus, if cp is set */
     int negativeOutput = 0;  /* if x<0 return negative output */
 
     PyLongObject *z = NULL;  /* accumulated result */
@@ -4939,7 +5002,7 @@ long_pow(PyObject *v, PyObject *w, PyObject *x)
 
     /* k-ary values.  If the exponent is large enough, table is
      * precomputed so that table[i] == a**(2*i+1) % c for i in
-     * range(EXP_TABLE_LEN).
+     * range(EXP_TABLE_LEN); table[0] stays NULL because it is the span a.
      * Note: this is uninitialized stack trash: don't pay to set it to known
      * values unless it's needed. Instead ensure that num_table_entries is
      * set to the number of entries actually filled whenever a branch to the
@@ -4948,78 +5011,37 @@ long_pow(PyObject *v, PyObject *w, PyObject *x)
     PyLongObject *table[EXP_TABLE_LEN];
     Py_ssize_t num_table_entries = 0;
 
-    /* a, b, c = v, w, x */
-    CHECK_BINOP(v, w);
-    a = (PyLongObject*)Py_NewRef(v);
-    b = (PyLongObject*)Py_NewRef(w);
-    if (PyLong_Check(x)) {
-        c = (PyLongObject *)Py_NewRef(x);
-    }
-    else if (x == Py_None)
-        c = NULL;
-    else {
-        Py_DECREF(a);
-        Py_DECREF(b);
-        Py_RETURN_NOTIMPLEMENTED;
-    }
+    assert(!b.neg || cp != NULL);
 
-    if (_PyLong_IsNegative(b) && c == NULL) {
-        /* if exponent is negative and there's no modulus:
-               return a float.  This works because we know
-               that this calls float_pow() which converts its
-               arguments to double. */
-        Py_DECREF(a);
-        Py_DECREF(b);
-        return PyFloat_Type.tp_as_number->nb_power(v, w, x);
-    }
-
-    if (c) {
-        /* if modulus == 0:
-               raise ValueError() */
-        if (_PyLong_IsZero(c)) {
-            PyErr_SetString(PyExc_ValueError,
-                            "pow() 3rd argument cannot be 0");
-            goto Error;
-        }
+    if (cp != NULL) {
+        c = *cp;
+        assert(c.n > 0);
 
         /* if modulus < 0:
                negativeOutput = True
                modulus = -modulus */
-        if (_PyLong_IsNegative(c)) {
+        if (c.neg) {
             negativeOutput = 1;
-            temp = (PyLongObject *)_PyLong_Copy(c);
-            if (temp == NULL)
-                goto Error;
-            Py_SETREF(c, temp);
-            temp = NULL;
-            _PyLong_Negate(&c);
-            if (c == NULL)
-                goto Error;
+            c.neg = 0;
         }
 
         /* if modulus == 1:
                return 0 */
-        if (_PyLong_IsNonNegativeCompact(c) && (c->long_value.ob_digit[0] == 1)) {
+        if (c.n == 1 && c.d[0] == 1) {
             z = (PyLongObject *)PyLong_FromLong(0L);
             goto Done;
         }
 
         /* if exponent is negative, negate the exponent and
            replace the base with a modular inverse */
-        if (_PyLong_IsNegative(b)) {
-            temp = (PyLongObject *)_PyLong_Copy(b);
-            if (temp == NULL)
-                goto Error;
-            Py_SETREF(b, temp);
-            temp = NULL;
-            _PyLong_Negate(&b);
-            if (b == NULL)
-                goto Error;
+        if (b.neg) {
+            b.neg = 0;
 
-            temp = long_invmod(a, c);
+            temp = long_invmod(a.s, c);
             if (temp == NULL)
                 goto Error;
-            Py_SETREF(a, temp);
+            a.o = temp;
+            a.s = _PyLong_SpanOf(temp);
             temp = NULL;
         }
 
@@ -5030,12 +5052,14 @@ long_pow(PyObject *v, PyObject *w, PyObject *x)
               while the "large exponent" case multiplies directly by base 31
               times.  It can be unboundedly faster to multiply by
               base % modulus instead.
-           We could _always_ do this reduction, but l_mod() isn't cheap,
+           We could _always_ do this reduction, but the division isn't cheap,
            so we only do it when it buys something. */
-        if (_PyLong_IsNegative(a) || _PyLong_DigitCount(a) > _PyLong_DigitCount(c)) {
-            if (l_mod(a, c, &temp) < 0)
+        if (a.s.neg || a.s.n > c.n) {
+            temp = long_floormod_spans(a.s, c);
+            if (temp == NULL)
                 goto Error;
-            Py_SETREF(a, temp);
+            Py_XSETREF(a.o, temp);
+            a.s = _PyLong_SpanOf(temp);
             temp = NULL;
         }
     }
@@ -5047,25 +5071,27 @@ long_pow(PyObject *v, PyObject *w, PyObject *x)
     if (z == NULL)
         goto Error;
 
+#define SP(OBJ) _PyLong_SpanOf(OBJ)
+
     /* Perform a modular reduction, X = X % c, but leave X alone if c
      * is NULL.
      */
 #define REDUCE(X)                                       \
     do {                                                \
-        if (c != NULL) {                                \
-            if (l_mod(X, c, &temp) < 0)                 \
+        if (cp != NULL) {                               \
+            if (long_pow_reduce(&X, c) < 0)             \
                 goto Error;                             \
-            Py_XDECREF(X);                              \
-            X = temp;                                   \
-            temp = NULL;                                \
         }                                               \
     } while(0)
 
-    /* Multiply two values, then reduce the result:
+    /* Multiply two spans, then reduce the result:
        result = X*Y % c.  If c is NULL, skip the mod. */
 #define MULT(X, Y, result)                      \
     do {                                        \
-        temp = (PyLongObject *)long_mul(X, Y);  \
+        _PyLongOut mult_out;                    \
+        if (long_mul_spans(X, Y, &mult_out) < 0) \
+            goto Error;                         \
+        temp = _PyLong_OutObject(&mult_out);    \
         if (temp == NULL)                       \
             goto Error;                         \
         Py_XDECREF(result);                     \
@@ -5074,15 +5100,15 @@ long_pow(PyObject *v, PyObject *w, PyObject *x)
         REDUCE(result);                         \
     } while(0)
 
-    i = _PyLong_SignedDigitCount(b);
-    digit bi = i ? b->long_value.ob_digit[i-1] : 0;
+    i = b.n;
+    digit bi = i ? b.d[i-1] : 0;
     digit bit;
     if (i <= 1 && bi <= 3) {
         /* aim for minimal overhead */
         if (bi >= 2) {
-            MULT(a, a, z);
+            MULT(a.s, a.s, z);
             if (bi == 3) {
-                MULT(z, a, z);
+                MULT(SP(z), a.s, z);
             }
         }
         else if (bi == 1) {
@@ -5090,7 +5116,7 @@ long_pow(PyObject *v, PyObject *w, PyObject *x)
              * subclass, makes the result an int (e.g., pow(False, 1) returns
              * 0 instead of False), and potentially reduces `a` by the modulus.
              */
-            MULT(a, z, z);
+            MULT(a.s, SP(z), z);
         }
         /* else bi is 0, and z==1 is correct */
     }
@@ -5102,7 +5128,8 @@ long_pow(PyObject *v, PyObject *w, PyObject *x)
          * because we're primarily trying to cut overhead for small powers.
          */
         assert(bi);  /* else there is no significant bit */
-        Py_SETREF(z, (PyLongObject*)Py_NewRef(a));
+        /* z = a, as the product a * 1: a may be an input span. */
+        MULT(a.s, SP(z), z);
         for (bit = 2; ; bit <<= 1) {
             if (bit > bi) { /* found the first bit */
                 assert((bi & bit) == 0);
@@ -5113,15 +5140,15 @@ long_pow(PyObject *v, PyObject *w, PyObject *x)
         }
         for (--i, bit >>= 1;;) {
             for (; bit != 0; bit >>= 1) {
-                MULT(z, z, z);
+                MULT(SP(z), SP(z), z);
                 if (bi & bit) {
-                    MULT(z, a, z);
+                    MULT(SP(z), a.s, z);
                 }
             }
             if (--i < 0) {
                 break;
             }
-            bi = b->long_value.ob_digit[i];
+            bi = b.d[i];
             bit = (digit)1 << (PyLong_SHIFT-1);
         }
     }
@@ -5129,13 +5156,14 @@ long_pow(PyObject *v, PyObject *w, PyObject *x)
         /* Left-to-right k-ary sliding window exponentiation
          * (Handbook of Applied Cryptography (HAC) Algorithm 14.85)
          */
-        table[0] = (PyLongObject*)Py_NewRef(a);
+#define TABLE_SPAN(K) ((K) == 0 ? a.s : SP(table[K]))
+        table[0] = NULL;
         num_table_entries = 1;
-        MULT(a, a, a2);
+        MULT(a.s, a.s, a2);
         /* table[i] == a**(2*i + 1) % c */
         for (i = 1; i < EXP_TABLE_LEN; ++i) {
             table[i] = NULL; /* must set to known value for MULT */
-            MULT(table[i-1], a2, table[i]);
+            MULT(TABLE_SPAN(i-1), SP(a2), table[i]);
             ++num_table_entries; /* incremented iff MULT succeeded */
         }
         Py_CLEAR(a2);
@@ -5157,17 +5185,17 @@ long_pow(PyObject *v, PyObject *w, PyObject *x)
             assert(ntz < blen); \
             blen -= ntz; \
             do { \
-                MULT(z, z, z); \
+                MULT(SP(z), SP(z), z); \
             } while (--blen); \
-            MULT(z, table[pending >> 1], z); \
+            MULT(SP(z), TABLE_SPAN(pending >> 1), z); \
             while (ntz-- > 0) \
-                MULT(z, z, z); \
+                MULT(SP(z), SP(z), z); \
             assert(blen == 0); \
             pending = 0; \
         } while(0)
 
-        for (i = _PyLong_SignedDigitCount(b) - 1; i >= 0; --i) {
-            const digit bi = b->long_value.ob_digit[i];
+        for (i = b.n - 1; i >= 0; --i) {
+            const digit bi = b.d[i];
             for (j = PyLong_SHIFT - 1; j >= 0; --j) {
                 const int bit = (bi >> j) & 1;
                 pending = (pending << 1) | bit;
@@ -5177,15 +5205,20 @@ long_pow(PyObject *v, PyObject *w, PyObject *x)
                         ABSORB_PENDING;
                 }
                 else /* absorb strings of 0 bits */
-                    MULT(z, z, z);
+                    MULT(SP(z), SP(z), z);
             }
         }
         if (pending)
             ABSORB_PENDING;
+#undef ABSORB_PENDING
+#undef TABLE_SPAN
     }
 
     if (negativeOutput && !_PyLong_IsZero(z)) {
-        temp = long_sub(z, c);
+        _PyLongOut diff;
+        if (long_sub_spans(SP(z), c, &diff) < 0)
+            goto Error;
+        temp = _PyLong_OutObject(&diff);
         if (temp == NULL)
             goto Error;
         Py_SETREF(z, temp);
@@ -5198,31 +5231,96 @@ long_pow(PyObject *v, PyObject *w, PyObject *x)
     /* fall through */
   Done:
     for (i = 0; i < num_table_entries; ++i)
-        Py_DECREF(table[i]);
-    Py_DECREF(a);
-    Py_DECREF(b);
-    Py_XDECREF(c);
+        Py_XDECREF(table[i]);
+    Py_XDECREF(a.o);
     Py_XDECREF(a2);
     Py_XDECREF(temp);
-    return (PyObject *)z;
+#undef MULT
+#undef REDUCE
+#undef SP
+    return z;
 }
 
-static PyObject *
-long_invert(PyObject *self)
+/* pow(a, b, c) for 0 < |c| < 2**60: the whole computation in words, with
+   128-bit products.  A zero modulus is the caller's. */
+static PyValue
+_PyLong_WordPowMod(_PyLongSpan a, _PyLongSpan b, int64_t c)
 {
-    PyLongObject *v = _PyLong_CAST(self);
+    int negativeOutput = 0;  /* if c<0 return negative output */
+    uint64_t base;
 
-    /* Implement ~x as -(x+1) */
-    if (_PyLong_IsCompact(v))
-        return (PyObject*)_PyLong_FromSTwoDigits(~medium_value(v));
+    assert(c != 0 && -((int64_t)1 << 60) < c && c < ((int64_t)1 << 60));
+    if (c < 0) {
+        negativeOutput = 1;
+        c = -c;
+    }
 
-    PyLongObject *x = long_add(v, (PyLongObject *)_PyLong_GetOne());
-    if (x == NULL)
-        return NULL;
-    _PyLong_Negate(&x);
-    /* No need for maybe_small_long here, since any small longs
-       will have been caught in the _PyLong_IsCompact() fast path. */
-    return (PyObject *)x;
+    /* if modulus == 1:
+           return 0 */
+    if (c == 1) {
+        return PyValue_FromInt64(0);
+    }
+
+    /* base = a % c, the floor modulus, as a word */
+    digit cbuf[_PyLong_WORD_DIGITS];
+    _PyLongSpan cs = _PyLong_SpanOfWord(c, cbuf);
+    uint64_t rem;
+    if (cs.n == 1) {
+        rem = rem1(a, cs.d[0]);
+    }
+    else if (a.n < cs.n || (a.n == cs.n && a.d[a.n-1] < cs.d[cs.n-1])) {
+        rem = (uint64_t)word_of_span((_PyLongSpan){a.d, a.n, 0});
+    }
+    else {
+        _PyLongOut r;
+        if (long_divrem_spans(a, cs, NULL, &r) < 0) {
+            return PyValue_NULL;
+        }
+        /* The remainder has a's sign; take its magnitude. */
+        _PyLongSpan rs = _PyLong_OutSpan(&r);
+        rem = (uint64_t)word_of_span((_PyLongSpan){rs.d, rs.n, 0});
+        _PyLong_OutAbandon(&r);
+    }
+    if (a.neg && rem != 0) {
+        rem = (uint64_t)c - rem;
+    }
+    base = rem;
+
+    /* if exponent is negative, negate the exponent and
+       replace the base with a modular inverse (extended Euclid) */
+    if (b.neg) {
+        int64_t t = 0, newt = 1;
+        int64_t r = c, newr = (int64_t)base;
+        while (newr != 0) {
+            int64_t q = r / newr;
+            int64_t tmp = t - q * newt;
+            t = newt;
+            newt = tmp;
+            tmp = r - q * newr;
+            r = newr;
+            newr = tmp;
+        }
+        if (r != 1) {
+            PyErr_SetString(PyExc_ValueError,
+                            "base is not invertible for the given modulus");
+            return PyValue_NULL;
+        }
+        base = (uint64_t)(t < 0 ? t + c : t);
+    }
+
+    /* Left-to-right binary exponentiation (HAC Algorithm 14.79) */
+    uint64_t z = 1;
+    for (Py_ssize_t i = b.n - 1; i >= 0; --i) {
+        for (int j = PyLong_SHIFT - 1; j >= 0; --j) {
+            z = (uint64_t)((unsigned __int128)z * z % (uint64_t)c);
+            if ((b.d[i] >> j) & 1) {
+                z = (uint64_t)((unsigned __int128)z * base % (uint64_t)c);
+            }
+        }
+    }
+
+    return PyValue_FromInt64(negativeOutput && z ? (int64_t)z - c
+                                                 : (int64_t)z);
 }
 
 static PyLongObject *
@@ -5239,12 +5337,6 @@ long_neg(PyLongObject *v)
     return z;
 }
 
-static PyObject *
-long_neg_method(PyObject *v)
-{
-    return (PyObject*)long_neg(_PyLong_CAST(v));
-}
-
 static PyLongObject*
 long_abs(PyLongObject *v)
 {
@@ -5254,26 +5346,15 @@ long_abs(PyLongObject *v)
         return (PyLongObject*)long_long((PyObject *)v);
 }
 
-static PyObject *
-long_abs_method(PyObject *v)
-{
-    return (PyObject*)long_abs(_PyLong_CAST(v));
-}
+/* Inner function for both long_rshift and _PyLong_Rshift, shifting a span
+   right by PyLong_SHIFT*wordshift + remshift bits, rounding toward negative
+   infinity.  wordshift should be nonnegative, and the shift not zero: the
+   caller returns a itself for a zero shift. */
 
 static int
-long_bool(PyObject *v)
+long_rshift_spans(_PyLongSpan a, Py_ssize_t wordshift, digit remshift,
+                  _PyLongOut *out)
 {
-    return !_PyLong_IsZero(_PyLong_CAST(v));
-}
-
-/* Inner function for both long_rshift and _PyLong_Rshift, shifting an
-   integer right by PyLong_SHIFT*wordshift + remshift bits.
-   wordshift should be nonnegative. */
-
-static PyObject *
-long_rshift1(PyLongObject *a, Py_ssize_t wordshift, digit remshift)
-{
-    PyLongObject *z = NULL;
     Py_ssize_t newsize, hishift, size_a;
     twodigits accum;
     int a_negative;
@@ -5281,29 +5362,16 @@ long_rshift1(PyLongObject *a, Py_ssize_t wordshift, digit remshift)
     /* Total number of bits shifted must be nonnegative. */
     assert(wordshift >= 0);
     assert(remshift < PyLong_SHIFT);
+    assert(wordshift != 0 || remshift != 0);
 
-    /* Fast path for small a. */
-    if (_PyLong_IsCompact(a)) {
-        stwodigits m, x;
-        digit shift;
-        m = medium_value(a);
-        shift = wordshift == 0 ? remshift : PyLong_SHIFT;
-        x = m < 0 ? ~(~m >> shift) : m >> shift;
-        return (PyObject*)_PyLong_FromSTwoDigits(x);
-    }
-
-    a_negative = _PyLong_IsNegative(a);
-    size_a = _PyLong_DigitCount(a);
+    a_negative = a.neg;
+    size_a = a.n;
 
     if (a_negative) {
         /* For negative 'a', adjust so that 0 < remshift <= PyLong_SHIFT,
            while keeping PyLong_SHIFT*wordshift + remshift the same. This
            ensures that 'newsize' is computed correctly below. */
         if (remshift == 0) {
-            if (wordshift == 0) {
-                /* Can only happen if the original shift was 0. */
-                return long_long((PyObject *)a);
-            }
             remshift = PyLong_SHIFT;
             --wordshift;
         }
@@ -5313,15 +5381,24 @@ long_rshift1(PyLongObject *a, Py_ssize_t wordshift, digit remshift)
     newsize = size_a - wordshift;
     if (newsize <= 0) {
         /* Shifting all the bits of 'a' out gives either -1 or 0. */
-        return PyLong_FromLong(-a_negative);
+        digit *z = _PyLong_OutReserve(out, a_negative);
+        if (z == NULL) {
+            return -1;
+        }
+        if (a_negative) {
+            z[0] = 1;
+            out->neg = 1;
+        }
+        return 0;
     }
-    z = long_alloc(newsize);
+    digit *z = _PyLong_OutReserve(out, newsize);
     if (z == NULL) {
-        return NULL;
+        return -1;
     }
+    out->neg = a_negative;
     hishift = PyLong_SHIFT - remshift;
 
-    accum = a->long_value.ob_digit[wordshift];
+    accum = a.d[wordshift];
     if (a_negative) {
         /*
             For a positive integer a and nonnegative shift, we have:
@@ -5334,55 +5411,22 @@ long_rshift1(PyLongObject *a, Py_ssize_t wordshift, digit remshift)
             significant `wordshift` digits of `a` is nonzero. Digit `wordshift`
             of `2**shift - 1` has value `PyLong_MASK >> hishift`.
         */
-        _PyLong_SetSignAndDigitCount(z, -1, newsize);
-
         digit sticky = 0;
         for (Py_ssize_t j = 0; j < wordshift; j++) {
-            sticky |= a->long_value.ob_digit[j];
+            sticky |= a.d[j];
         }
         accum += (PyLong_MASK >> hishift) + (digit)(sticky != 0);
     }
 
     accum >>= remshift;
     for (Py_ssize_t i = 0, j = wordshift + 1; j < size_a; i++, j++) {
-        accum += (twodigits)a->long_value.ob_digit[j] << hishift;
-        z->long_value.ob_digit[i] = (digit)(accum & PyLong_MASK);
+        accum += (twodigits)a.d[j] << hishift;
+        z[i] = (digit)(accum & PyLong_MASK);
         accum >>= PyLong_SHIFT;
     }
     assert(accum <= PyLong_MASK);
-    z->long_value.ob_digit[newsize - 1] = (digit)accum;
-
-    z = maybe_small_long(long_normalize(z));
-    return (PyObject *)z;
-}
-
-static PyObject *
-long_rshift(PyObject *a, PyObject *b)
-{
-    int64_t shiftby;
-
-    CHECK_BINOP(a, b);
-
-    if (_PyLong_IsNegative((PyLongObject *)b)) {
-        PyErr_SetString(PyExc_ValueError, "negative shift count");
-        return NULL;
-    }
-    if (_PyLong_IsZero((PyLongObject *)a)) {
-        return PyLong_FromLong(0);
-    }
-    if (PyLong_AsInt64(b, &shiftby) < 0) {
-        if (!PyErr_ExceptionMatches(PyExc_OverflowError)) {
-            return NULL;
-        }
-        PyErr_Clear();
-        if (_PyLong_IsNegative((PyLongObject *)a)) {
-            return PyLong_FromLong(-1);
-        }
-        else {
-            return PyLong_FromLong(0);
-        }
-    }
-    return _PyLong_Rshift(a, shiftby);
+    z[newsize - 1] = (digit)accum;
+    return 0;
 }
 
 /* Return a >> shiftby. */
@@ -5409,76 +5453,58 @@ _PyLong_Rshift(PyObject *a, int64_t shiftby)
 #endif
     wordshift = (Py_ssize_t)(shiftby / PyLong_SHIFT);
     remshift = (digit)(shiftby % PyLong_SHIFT);
-    return long_rshift1((PyLongObject *)a, wordshift, remshift);
+
+    /* Fast path for small a. */
+    PyLongObject *la = (PyLongObject *)a;
+    if (_PyLong_IsCompact(la)) {
+        stwodigits m, x;
+        digit shift;
+        m = medium_value(la);
+        shift = wordshift == 0 ? remshift : PyLong_SHIFT;
+        x = m < 0 ? ~(~m >> shift) : m >> shift;
+        return (PyObject*)_PyLong_FromSTwoDigits(x);
+    }
+    if (shiftby == 0) {
+        return long_long(a);
+    }
+
+    _PyLongOut out;
+    if (long_rshift_spans(_PyLong_SpanOf(la), wordshift, remshift, &out) < 0) {
+        return NULL;
+    }
+    return (PyObject *)_PyLong_OutObject(&out);
 }
 
-static PyObject *
-long_lshift1(PyLongObject *a, Py_ssize_t wordshift, digit remshift)
+static int
+long_lshift_spans(_PyLongSpan a, Py_ssize_t wordshift, digit remshift,
+                  _PyLongOut *out)
 {
-    PyLongObject *z = NULL;
     Py_ssize_t oldsize, newsize, i, j;
     twodigits accum;
 
-    if (wordshift == 0 && _PyLong_IsCompact(a)) {
-        stwodigits m = medium_value(a);
-        // bypass undefined shift operator behavior
-        stwodigits x = m < 0 ? -(-m << remshift) : m << remshift;
-        return (PyObject*)_PyLong_FromSTwoDigits(x);
-    }
-
-    oldsize = _PyLong_DigitCount(a);
+    oldsize = a.n;
     newsize = oldsize + wordshift;
     if (remshift)
         ++newsize;
-    z = long_alloc(newsize);
+    digit *z = _PyLong_OutReserve(out, newsize);
     if (z == NULL)
-        return NULL;
-    if (_PyLong_IsNegative(a)) {
-        assert(Py_REFCNT(z) == 1);
-        _PyLong_FlipSign(z);
-    }
+        return -1;
+    out->neg = a.neg;
     for (i = 0; i < wordshift; i++)
-        z->long_value.ob_digit[i] = 0;
+        z[i] = 0;
     accum = 0;
     for (j = 0; j < oldsize; i++, j++) {
-        accum |= (twodigits)a->long_value.ob_digit[j] << remshift;
-        z->long_value.ob_digit[i] = (digit)(accum & PyLong_MASK);
+        accum |= (twodigits)a.d[j] << remshift;
+        z[i] = (digit)(accum & PyLong_MASK);
         accum >>= PyLong_SHIFT;
     }
     if (remshift)
-        z->long_value.ob_digit[newsize-1] = (digit)accum;
+        z[newsize-1] = (digit)accum;
     else
         assert(!accum);
-    z = long_normalize(z);
-    return (PyObject *) maybe_small_long(z);
+    return 0;
 }
 
-
-static PyObject *
-long_lshift_method(PyObject *aa, PyObject *bb)
-{
-    CHECK_BINOP(aa, bb);
-    PyLongObject *a = (PyLongObject*)aa;
-    PyLongObject *b = (PyLongObject*)bb;
-
-    if (_PyLong_IsNegative(b)) {
-        PyErr_SetString(PyExc_ValueError, "negative shift count");
-        return NULL;
-    }
-    if (_PyLong_IsZero(a)) {
-        return PyLong_FromLong(0);
-    }
-
-    int64_t shiftby;
-    if (PyLong_AsInt64(bb, &shiftby) < 0) {
-        if (PyErr_ExceptionMatches(PyExc_OverflowError)) {
-            PyErr_SetString(PyExc_OverflowError,
-                            "too many digits in integer");
-        }
-        return NULL;
-    }
-    return long_lshift_int64(a, shiftby);
-}
 
 /* Return a << shiftby. */
 static PyObject *
@@ -5491,7 +5517,7 @@ long_lshift_int64(PyLongObject *a, int64_t shiftby)
     }
 #if PY_SSIZE_T_MAX <= INT64_MAX / PyLong_SHIFT
     /* Keep wordshift <= MAX_LONG_DIGITS, so that oldsize + wordshift
-       cannot overflow Py_ssize_t in long_lshift1(). */
+       cannot overflow Py_ssize_t in long_lshift_spans(). */
     if (shiftby > (int64_t)MAX_LONG_DIGITS * PyLong_SHIFT) {
         PyErr_SetString(PyExc_OverflowError,
                         "too many digits in integer");
@@ -5500,7 +5526,22 @@ long_lshift_int64(PyLongObject *a, int64_t shiftby)
 #endif
     Py_ssize_t wordshift = (Py_ssize_t)(shiftby / PyLong_SHIFT);
     digit remshift = (digit)(shiftby % PyLong_SHIFT);
-    return long_lshift1(a, wordshift, remshift);
+
+    if (wordshift == 0 && _PyLong_IsCompact(a)) {
+        stwodigits m = medium_value(a);
+        // bypass undefined shift operator behavior
+        stwodigits x = m < 0 ? -(-m << remshift) : m << remshift;
+        return (PyObject*)_PyLong_FromSTwoDigits(x);
+    }
+    if (shiftby == 0) {
+        return long_long((PyObject *)a);
+    }
+
+    _PyLongOut out;
+    if (long_lshift_spans(_PyLong_SpanOf(a), wordshift, remshift, &out) < 0) {
+        return NULL;
+    }
+    return (PyObject *)_PyLong_OutObject(&out);
 }
 
 PyObject *
@@ -5515,7 +5556,7 @@ _PyLong_Lshift(PyObject *a, int64_t shiftby)
    be entirely zero.  a and z may point to the same digit vector. */
 
 static void
-v_complement(digit *z, digit *a, Py_ssize_t m)
+v_complement(digit *z, const digit *a, Py_ssize_t m)
 {
     Py_ssize_t i;
     digit carry = 1;
@@ -5529,53 +5570,65 @@ v_complement(digit *z, digit *a, Py_ssize_t m)
 
 /* Bitwise and/xor/or operations */
 
-static PyObject *
-long_bitwise(PyLongObject *a,
+static int
+long_bitwise(_PyLongSpan a,
              char op,  /* '&', '|', '^' */
-             PyLongObject *b)
+             _PyLongSpan b,
+             _PyLongOut *out)
 {
     int nega, negb, negz;
     Py_ssize_t size_a, size_b, size_z, i;
-    PyLongObject *z;
+    _PyLongSpan tmp;
 
-    PyLongObject *new_a = NULL;
-    PyLongObject *new_b = NULL;
+    /* Scratch digits for the two's complement of negative operands: small
+       operands use the stack. */
+    digit scratch_small[32];
+    digit *scratch = NULL;
+    const digit *ad, *bd;
 
     /* Bitwise operations for negative numbers operate as though
        on a two's complement representation.  So convert arguments
        from sign-magnitude to two's complement, and convert the
        result back to sign-magnitude at the end. */
 
-    size_a = _PyLong_DigitCount(a);
-    size_b = _PyLong_DigitCount(b);
+    size_a = a.n;
+    size_b = b.n;
     /* Swap a and b if necessary to ensure size_a >= size_b. */
     if (size_a < size_b) {
-        z = a; a = b; b = z;
+        tmp = a; a = b; b = tmp;
         size_z = size_a; size_a = size_b; size_b = size_z;
     }
 
-    /* If a is negative, replace it by its two's complement. */
-    nega = _PyLong_IsNegative(a);
-    if (nega) {
-        z = long_alloc(size_a);
-        if (z == NULL)
-            return NULL;
-        v_complement(z->long_value.ob_digit, a->long_value.ob_digit, size_a);
-        new_a = z; // reference to decrement instead of a itself
-        a = z;
-    }
-
-    /* Same for b. */
-    negb = _PyLong_IsNegative(b);
-    if (negb) {
-        z = long_alloc(size_b);
-        if (z == NULL) {
-            Py_XDECREF(new_a);
-            return NULL;
+    nega = a.neg;
+    negb = b.neg;
+    ad = a.d;
+    bd = b.d;
+    if (nega || negb) {
+        Py_ssize_t need = (nega ? size_a : 0) + (negb ? size_b : 0);
+        if (need <= (Py_ssize_t)Py_ARRAY_LENGTH(scratch_small)) {
+            scratch = scratch_small;
         }
-        v_complement(z->long_value.ob_digit, b->long_value.ob_digit, size_b);
-        new_b = z; // reference to decrement instead of b itself
-        b = z;
+        else {
+            scratch = PyMem_Malloc(need * sizeof(digit));
+            if (scratch == NULL) {
+                PyErr_NoMemory();
+                return -1;
+            }
+        }
+        digit *p = scratch;
+
+        /* If a is negative, replace it by its two's complement. */
+        if (nega) {
+            v_complement(p, a.d, size_a);
+            ad = p;
+            p += size_a;
+        }
+
+        /* Same for b. */
+        if (negb) {
+            v_complement(p, b.d, size_b);
+            bd = p;
+        }
     }
 
     /* JRH: The original logic here was to allocate the result value (z)
@@ -5602,34 +5655,29 @@ long_bitwise(PyLongObject *a,
         Py_UNREACHABLE();
     }
 
-    if ((size_z + negz) == 0) {
-        Py_XDECREF(new_a);
-        Py_XDECREF(new_b);
-        return get_small_int(0);
-    }
-
     /* We allow an extra digit if z is negative, to make sure that
        the final two's complement of z doesn't overflow. */
-    z = long_alloc(size_z + negz);
+    digit *z = _PyLong_OutReserve(out, size_z + negz);
     if (z == NULL) {
-        Py_XDECREF(new_a);
-        Py_XDECREF(new_b);
-        return NULL;
+        goto fail;
+    }
+    if ((size_z + negz) == 0) {
+        goto done;
     }
 
     /* Compute digits for overlap of a and b. */
     switch(op) {
     case '&':
         for (i = 0; i < size_b; ++i)
-            z->long_value.ob_digit[i] = a->long_value.ob_digit[i] & b->long_value.ob_digit[i];
+            z[i] = ad[i] & bd[i];
         break;
     case '|':
         for (i = 0; i < size_b; ++i)
-            z->long_value.ob_digit[i] = a->long_value.ob_digit[i] | b->long_value.ob_digit[i];
+            z[i] = ad[i] | bd[i];
         break;
     case '^':
         for (i = 0; i < size_b; ++i)
-            z->long_value.ob_digit[i] = a->long_value.ob_digit[i] ^ b->long_value.ob_digit[i];
+            z[i] = ad[i] ^ bd[i];
         break;
     default:
         Py_UNREACHABLE();
@@ -5638,57 +5686,28 @@ long_bitwise(PyLongObject *a,
     /* Copy any remaining digits of a, inverting if necessary. */
     if (op == '^' && negb)
         for (; i < size_z; ++i)
-            z->long_value.ob_digit[i] = a->long_value.ob_digit[i] ^ PyLong_MASK;
+            z[i] = ad[i] ^ PyLong_MASK;
     else if (i < size_z)
-        memcpy(&z->long_value.ob_digit[i], &a->long_value.ob_digit[i],
-               (size_z-i)*sizeof(digit));
+        memcpy(&z[i], &ad[i], (size_z-i)*sizeof(digit));
 
     /* Complement result if negative. */
     if (negz) {
-        _PyLong_FlipSign(z);
-        z->long_value.ob_digit[size_z] = PyLong_MASK;
-        v_complement(z->long_value.ob_digit, z->long_value.ob_digit, size_z+1);
+        out->neg = 1;
+        z[size_z] = PyLong_MASK;
+        v_complement(z, z, size_z+1);
     }
 
-    Py_XDECREF(new_a);
-    Py_XDECREF(new_b);
-    return (PyObject *)maybe_small_long(long_normalize(z));
-}
-
-static PyObject *
-long_and(PyObject *a, PyObject *b)
-{
-    CHECK_BINOP(a, b);
-    PyLongObject *x = (PyLongObject*)a;
-    PyLongObject *y = (PyLongObject*)b;
-    if (_PyLong_IsCompact(x) && _PyLong_IsCompact(y)) {
-        return (PyObject*)_PyLong_FromSTwoDigits(medium_value(x) & medium_value(y));
+  done:
+    if (scratch != scratch_small) {
+        PyMem_Free(scratch);
     }
-    return long_bitwise(x, '&', y);
-}
+    return 0;
 
-static PyObject *
-long_xor(PyObject *a, PyObject *b)
-{
-    CHECK_BINOP(a, b);
-    PyLongObject *x = (PyLongObject*)a;
-    PyLongObject *y = (PyLongObject*)b;
-    if (_PyLong_IsCompact(x) && _PyLong_IsCompact(y)) {
-        return (PyObject*)_PyLong_FromSTwoDigits(medium_value(x) ^ medium_value(y));
+  fail:
+    if (scratch != scratch_small) {
+        PyMem_Free(scratch);
     }
-    return long_bitwise(x, '^', y);
-}
-
-static PyObject *
-long_or(PyObject *a, PyObject *b)
-{
-    CHECK_BINOP(a, b);
-    PyLongObject *x = (PyLongObject*)a;
-    PyLongObject *y = (PyLongObject*)b;
-    if (_PyLong_IsCompact(x) && _PyLong_IsCompact(y)) {
-        return (PyObject*)_PyLong_FromSTwoDigits(medium_value(x) | medium_value(y));
-    }
-    return long_bitwise(x, '|', y);
+    return -1;
 }
 
 static PyObject *
@@ -5728,7 +5747,7 @@ _PyLong_GCD(PyObject *aarg, PyObject *barg)
         Py_DECREF(a);
         return NULL;
     }
-    if (long_compare(a, b) < 0) {
+    if (long_compare(_PyLong_SpanOf(a), _PyLong_SpanOf(b)) < 0) {
         r = a;
         a = b;
         b = r;
@@ -5871,18 +5890,12 @@ _PyLong_GCD(PyObject *aarg, PyObject *barg)
 simple:
     assert(Py_REFCNT(a) > 0);
     assert(Py_REFCNT(b) > 0);
-/* Issue #24999: use two shifts instead of ">> 2*PyLong_SHIFT" to avoid
-   undefined behaviour when LONG_MAX type is smaller than 60 bits */
-#if LONG_MAX >> PyLong_SHIFT >> PyLong_SHIFT
-    /* a fits into a long, so b must too */
-    x = PyLong_AsLong((PyObject *)a);
-    y = PyLong_AsLong((PyObject *)b);
-#elif LLONG_MAX >> PyLong_SHIFT >> PyLong_SHIFT
-    x = PyLong_AsLongLong((PyObject *)a);
-    y = PyLong_AsLongLong((PyObject *)b);
-#else
-# error "_PyLong_GCD"
-#endif
+    /* a has at most two digits and |b| <= |a|: both are words. */
+    int overflow;
+    x = _PyLong_SpanAsInt64AndOverflow(_PyLong_SpanOf(a), &overflow);
+    assert(!overflow);
+    y = _PyLong_SpanAsInt64AndOverflow(_PyLong_SpanOf(b), &overflow);
+    assert(!overflow);
     x = Py_ABS(x);
     y = Py_ABS(y);
     Py_DECREF(a);
@@ -5908,16 +5921,6 @@ error:
     Py_XDECREF(c);
     Py_XDECREF(d);
     return NULL;
-}
-
-static PyObject *
-long_float(PyObject *v)
-{
-    double result;
-    result = PyLong_AsDouble(v);
-    if (result == -1.0 && PyErr_Occurred())
-        return NULL;
-    return PyFloat_FromDouble(result);
 }
 
 static PyObject *
@@ -6120,7 +6123,8 @@ _PyLong_DivmodNear(PyObject *a, PyObject *b)
         if (twice_rem == NULL)
             goto error;
     }
-    cmp = long_compare((PyLongObject *)twice_rem, (PyLongObject *)b);
+    cmp = long_compare(_PyLong_SpanOf((PyLongObject *)twice_rem),
+                       _PyLong_SpanOf((PyLongObject *)b));
     Py_DECREF(twice_rem);
 
     quo_is_odd = (quo->long_value.ob_digit[0] & 1) != 0;
@@ -6206,7 +6210,9 @@ int___round___impl(PyObject *self, PyObject *o_ndigits)
         return NULL;
     }
 
-    temp = long_pow(result, ndigits, Py_None);
+    temp = (PyObject *)long_pow_spans(_PyLong_SpanOf((PyLongObject *)result),
+                                      _PyLong_SpanOf((PyLongObject *)ndigits),
+                                      NULL);
     Py_DECREF(ndigits);
     Py_SETREF(result, temp);
     if (result == NULL)
@@ -6578,6 +6584,708 @@ iteral.\n\
 >>> int('0b100', base=0)\n\
 4");
 
+/* int's value slots (value-api-v2a1a.md, section 2.1).
+
+   Each binary slot returns NotImplemented unless both operands are ints, as
+   CHECK_BINOP; then takes the word path if both have a word
+   (_PyLong_WordOperands()), else its span path, which reads the operands as
+   spans (_PyLong_SpanOfValue()) and builds the result with _PyLong_OutValue().
+   An inline operand on the span path meets a heap int of at least 2**60, so
+   compare, floor division, remainder and shift counts are decided by sign
+   and size. Only an object path keeps the _pylong switches: two heap
+   operands go through the object helpers (l_divmod()), whose results
+   become values. The object slots of PyLong_Type are thunks of these
+   functions. */
+
+#define CHECK_BINOP_VALUE(v, w)                                        \
+    do {                                                               \
+        if (!PyValue_LongCheck(v) || !PyValue_LongCheck(w)) {          \
+            return PyValue_NotImplemented;                             \
+        }                                                              \
+    } while (0)
+
+/* The span of value v: digits in the caller's buffer named after v. */
+#define SPAN_OF_VALUE(v) _PyLong_SpanOfValue(v, v##_digits)
+
+// The value of an out that a kernel filled, or PyValue_NULL on its failure.
+static inline PyValue
+out_value(int status, _PyLongOut *out)
+{
+    return status < 0 ? PyValue_NULL : _PyLong_OutValue(out);
+}
+
+static PyValue
+long_add_span_path(PyValueBorrow v, PyValueBorrow w)
+{
+    digit v_digits[_PyLong_WORD_DIGITS], w_digits[_PyLong_WORD_DIGITS];
+    _PyLongOut out;
+    return out_value(long_add_spans(SPAN_OF_VALUE(v), SPAN_OF_VALUE(w), &out),
+                     &out);
+}
+
+PyValue
+_PyLong_ValueAdd(PyValueBorrow v, PyValueBorrow w)
+{
+    CHECK_BINOP_VALUE(v, w);
+    int64_t a, b;
+    if (_PyLong_WordOperands(v, w, &a, &b)) {
+        return _PyLong_WordAdd(a, b);
+    }
+    return long_add_span_path(v, w);
+}
+
+/* An exact int of the value of v, an int value: v itself unless it is an
+   instance of a subclass (or a bool), whose value is copied, as
+   long_long(). */
+static PyValue
+long_exact_value(PyValueBorrow v)
+{
+    if (PyValue_LongCheckExact(v)) {
+        return PyValue_DUP(v);
+    }
+    int64_t a;
+    if (_PyLong_WordOf(v, &a)) {
+        return PyValue_FromInt64(a);
+    }
+    PyObject *copy = _PyLong_Copy(
+        (PyLongObject *)PyValue_AsKnownObjectBorrow(v));
+    return _PyValue_FromObjectResult(copy);
+}
+
+/* v // w and v % w for two int values off the word path, rounded toward
+   minus infinity: either result pointer may be NULL. Returns 0, or -1 with
+   an exception set and no result. */
+static int
+long_floordivmod_span_path(PyValueBorrow v, PyValueBorrow w,
+                           PyValue *pdiv, PyValue *pmod)
+{
+    if (!PyValue_IsInline(v) && !PyValue_IsInline(w)) {
+        /* Two heap ints: the object helper, which holds the _pylong
+           switch. */
+        PyLongObject *div, *mod;
+        if (l_divmod((PyLongObject *)PyValue_AsKnownObjectBorrow(v),
+                     (PyLongObject *)PyValue_AsKnownObjectBorrow(w),
+                     pdiv != NULL ? &div : NULL,
+                     pmod != NULL ? &mod : NULL) < 0) {
+            return -1;
+        }
+        if (pdiv != NULL) {
+            *pdiv = PyValue_FromObjectSteal((PyObject *)div);
+        }
+        if (pmod != NULL) {
+            *pmod = PyValue_FromObjectSteal((PyObject *)mod);
+        }
+        return 0;
+    }
+    digit v_digits[_PyLong_WORD_DIGITS], w_digits[_PyLong_WORD_DIGITS];
+    _PyLongSpan a = SPAN_OF_VALUE(v), b = SPAN_OF_VALUE(w);
+    if (b.n == 0) {
+        PyErr_SetString(PyExc_ZeroDivisionError, "division by zero");
+        return -1;
+    }
+    if (a.n < b.n || (a.n == b.n && a.d[a.n - 1] < b.d[b.n - 1])) {
+        /* |a| < |b|: the quotient is 0 and the remainder a, or, if the
+           signs differ, -1 and a + b. */
+        bool exact = a.n == 0 || a.neg == b.neg;
+        if (pmod != NULL) {
+            PyValue mod;
+            if (exact) {
+                mod = long_exact_value(v);
+            }
+            else {
+                _PyLongOut out;
+                mod = out_value(long_add_spans(a, b, &out), &out);
+            }
+            if (PyValue_IsNull(mod)) {
+                return -1;
+            }
+            *pmod = mod;
+        }
+        if (pdiv != NULL) {
+            *pdiv = PyValue_FromInt64(exact ? 0 : -1);
+        }
+        return 0;
+    }
+    /* The outs stay where the kernels filled them: a result of at most two
+       digits lives in its out's small buffer, so an out is never copied. */
+    _PyLongOut q, r, q1, r1;
+    _PyLongOut *qo = &q, *ro = &r;
+    if (long_divrem_spans(a, b, &q, &r) < 0) {
+        return -1;
+    }
+    _PyLongSpan rs = _PyLong_OutSpan(&r);
+    if (rs.n != 0 && rs.neg != b.neg) {
+        /* Floor: q - 1 and r + b. */
+        digit one_digit = 1;
+        _PyLongSpan one = {&one_digit, 1, 0};
+        if (long_sub_spans(_PyLong_OutSpan(&q), one, &q1) < 0) {
+            _PyLong_OutAbandon(&q);
+            _PyLong_OutAbandon(&r);
+            return -1;
+        }
+        _PyLong_OutAbandon(&q);
+        qo = &q1;
+        if (long_add_spans(rs, b, &r1) < 0) {
+            _PyLong_OutAbandon(qo);
+            _PyLong_OutAbandon(&r);
+            return -1;
+        }
+        _PyLong_OutAbandon(&r);
+        ro = &r1;
+    }
+    PyValue div = PyValue_NULL;
+    if (pdiv != NULL) {
+        div = _PyLong_OutValue(qo);
+        if (PyValue_IsNull(div)) {
+            _PyLong_OutAbandon(ro);
+            return -1;
+        }
+    }
+    else {
+        _PyLong_OutAbandon(qo);
+    }
+    if (pmod != NULL) {
+        PyValue mod = _PyLong_OutValue(ro);
+        if (PyValue_IsNull(mod)) {
+            PyValue_XCLOSE(div);
+            return -1;
+        }
+        *pmod = mod;
+    }
+    else {
+        _PyLong_OutAbandon(ro);
+    }
+    if (pdiv != NULL) {
+        *pdiv = div;
+    }
+    return 0;
+}
+
+static PyValue
+long_floordiv_span_path(PyValueBorrow v, PyValueBorrow w)
+{
+    PyValue div;
+    if (long_floordivmod_span_path(v, w, &div, NULL) < 0) {
+        return PyValue_NULL;
+    }
+    return div;
+}
+
+PyValue
+_PyLong_ValueFloorDivide(PyValueBorrow v, PyValueBorrow w)
+{
+    CHECK_BINOP_VALUE(v, w);
+    int64_t a, b;
+    if (_PyLong_WordOperands(v, w, &a, &b)) {
+        return _PyLong_WordFloorDivide(a, b);
+    }
+    return long_floordiv_span_path(v, w);
+}
+
+PyValue
+_PyLong_ValueRichCompareSlow(PyValueBorrow v, PyValueBorrow w, int op)
+{
+    CHECK_BINOP_VALUE(v, w);
+    int64_t a, b;
+    if (_PyLong_WordOperands(v, w, &a, &b)) {
+        return _PyLong_CompareResult(_PyLong_WordCompare(a, b), op);
+    }
+    digit v_digits[_PyLong_WORD_DIGITS], w_digits[_PyLong_WORD_DIGITS];
+    return _PyLong_CompareResult(
+        long_compare(SPAN_OF_VALUE(v), SPAN_OF_VALUE(w)), op);
+}
+
+/* v ** w for two int values, w >= 0, off the word path (or after a word
+   product overflowed). */
+static PyValue
+long_pow_span_path(PyValueBorrow v, PyValueBorrow w)
+{
+    digit v_digits[_PyLong_WORD_DIGITS], w_digits[_PyLong_WORD_DIGITS];
+    PyLongObject *z = long_pow_spans(SPAN_OF_VALUE(v), SPAN_OF_VALUE(w),
+                                     NULL);
+    return _PyValue_FromObjectResult((PyObject *)z);
+}
+
+PyValue
+_PyLong_ValuePower(PyValueBorrow v, PyValueBorrow w, PyValueBorrow z)
+{
+    CHECK_BINOP_VALUE(v, w);
+    bool modular;
+    if (PyValue_IsNone(z)) {
+        modular = false;
+    }
+    else if (PyValue_LongCheck(z)) {
+        modular = true;
+    }
+    else {
+        return PyValue_NotImplemented;
+    }
+    digit v_digits[_PyLong_WORD_DIGITS], w_digits[_PyLong_WORD_DIGITS];
+    _PyLongSpan b = SPAN_OF_VALUE(w);
+    if (!modular) {
+        if (b.neg) {
+            /* A negative exponent and no modulus: a float, by float's
+               slot, which converts its arguments to double. */
+            return _PyFloat_ValuePower(v, w, z);
+        }
+        int64_t x, y, result;
+        if (_PyLong_WordOperands(v, w, &x, &y)
+            && _PyLong_WordPower(x, y, &result))
+        {
+            return PyValue_FromInt64(result);
+        }
+        return long_pow_span_path(v, w);
+    }
+    digit z_digits[_PyLong_WORD_DIGITS];
+    _PyLongSpan c = SPAN_OF_VALUE(z);
+    if (c.n == 0) {
+        PyErr_SetString(PyExc_ValueError, "pow() 3rd argument cannot be 0");
+        return PyValue_NULL;
+    }
+    _PyLongSpan a = SPAN_OF_VALUE(v);
+    if (c.n <= _PyLong_WORD_DIGITS) {
+        return _PyLong_WordPowMod(a, b, word_of_span(c));
+    }
+    return _PyValue_FromObjectResult((PyObject *)long_pow_spans(a, b, &c));
+}
+
+static PyValue
+long_sub_span_path(PyValueBorrow v, PyValueBorrow w)
+{
+    digit v_digits[_PyLong_WORD_DIGITS], w_digits[_PyLong_WORD_DIGITS];
+    _PyLongOut out;
+    return out_value(long_sub_spans(SPAN_OF_VALUE(v), SPAN_OF_VALUE(w), &out),
+                     &out);
+}
+
+PyValue
+_PyLong_ValueSubtract(PyValueBorrow v, PyValueBorrow w)
+{
+    CHECK_BINOP_VALUE(v, w);
+    int64_t a, b;
+    if (_PyLong_WordOperands(v, w, &a, &b)) {
+        return _PyLong_WordSubtract(a, b);
+    }
+    return long_sub_span_path(v, w);
+}
+
+static PyValue
+long_mul_span_path(PyValueBorrow v, PyValueBorrow w)
+{
+    digit v_digits[_PyLong_WORD_DIGITS], w_digits[_PyLong_WORD_DIGITS];
+    _PyLongOut out;
+    return out_value(long_mul_spans(SPAN_OF_VALUE(v), SPAN_OF_VALUE(w), &out),
+                     &out);
+}
+
+PyValue
+_PyLong_ValueMultiply(PyValueBorrow v, PyValueBorrow w)
+{
+    CHECK_BINOP_VALUE(v, w);
+    int64_t a, b;
+    if (_PyLong_WordOperands(v, w, &a, &b)) {
+        return _PyLong_WordMultiply(a, b);
+    }
+    return long_mul_span_path(v, w);
+}
+
+static PyValue
+long_mod_span_path(PyValueBorrow v, PyValueBorrow w)
+{
+    PyValue mod;
+    if (long_floordivmod_span_path(v, w, NULL, &mod) < 0) {
+        return PyValue_NULL;
+    }
+    return mod;
+}
+
+PyValue
+_PyLong_ValueRemainder(PyValueBorrow v, PyValueBorrow w)
+{
+    CHECK_BINOP_VALUE(v, w);
+    int64_t a, b;
+    if (_PyLong_WordOperands(v, w, &a, &b)) {
+        return _PyLong_WordRemainder(a, b);
+    }
+    return long_mod_span_path(v, w);
+}
+
+PyValue
+_PyLong_ValueDivmod(PyValueBorrow v, PyValueBorrow w)
+{
+    CHECK_BINOP_VALUE(v, w);
+    PyValue items[2];
+    int64_t a, b;
+    if (_PyLong_WordOperands(v, w, &a, &b)) {
+        items[0] = _PyLong_WordFloorDivide(a, b);
+        if (PyValue_IsNull(items[0])) {
+            return PyValue_NULL;
+        }
+        items[1] = _PyLong_WordRemainder(a, b);
+        if (PyValue_IsNull(items[1])) {
+            PyValue_CLOSE(items[0]);
+            return PyValue_NULL;
+        }
+    }
+    else if (long_floordivmod_span_path(v, w, &items[0], &items[1]) < 0) {
+        return PyValue_NULL;
+    }
+    PyObject *tuple = _PyTuple_FromValueStealOnSuccess(items, 2);
+    if (tuple == NULL) {
+        PyValue_CLOSE(items[0]);
+        PyValue_CLOSE(items[1]);
+        return PyValue_NULL;
+    }
+    return _PyValue_FromObjectResult(tuple);
+}
+
+// Operands up to 2**53 are exact as doubles, as long_true_divide's fast path.
+#define TRUE_DIVIDE_EXACT_LIMIT ((int64_t)1 << DBL_MANT_DIG)
+
+static PyValue
+long_true_divide_span_path(PyValueBorrow v, PyValueBorrow w)
+{
+    digit v_digits[_PyLong_WORD_DIGITS], w_digits[_PyLong_WORD_DIGITS];
+    double result = _PyLong_SpanTrueDivide(SPAN_OF_VALUE(v),
+                                           SPAN_OF_VALUE(w));
+    if (result == -1.0 && PyErr_Occurred()) {
+        return PyValue_NULL;
+    }
+    return PyValue_FromDouble(result);
+}
+
+PyValue
+_PyLong_ValueTrueDivide(PyValueBorrow v, PyValueBorrow w)
+{
+    CHECK_BINOP_VALUE(v, w);
+    int64_t a, b;
+    if (_PyLong_WordOperands(v, w, &a, &b)
+        && a >= -TRUE_DIVIDE_EXACT_LIMIT && a <= TRUE_DIVIDE_EXACT_LIMIT
+        && b >= -TRUE_DIVIDE_EXACT_LIMIT && b <= TRUE_DIVIDE_EXACT_LIMIT)
+    {
+        if (b == 0) {
+            PyErr_SetString(PyExc_ZeroDivisionError, "division by zero");
+            return PyValue_NULL;
+        }
+        return PyValue_FromDouble((double)a / (double)b);
+    }
+    return long_true_divide_span_path(v, w);
+}
+
+/* v << w with the checks of long_lshift_method() and long_lshift_int64()
+   in their order, for any two int values. */
+static PyValue
+long_lshift_span_path(PyValueBorrow v, PyValueBorrow w)
+{
+    digit v_digits[_PyLong_WORD_DIGITS], w_digits[_PyLong_WORD_DIGITS];
+    _PyLongSpan a = SPAN_OF_VALUE(v), b = SPAN_OF_VALUE(w);
+    if (b.neg) {
+        PyErr_SetString(PyExc_ValueError, "negative shift count");
+        return PyValue_NULL;
+    }
+    if (a.n == 0) {
+        return PyValue_FromInt64(0);
+    }
+    /* The count must fit an int64, as PyLong_AsInt64() in
+       long_lshift_method(); larger counts reach the size check below and
+       fail as upstream does (MemoryError from the allocation). */
+    if (b.n > 3 || (b.n == 3 && (b.d[2] >> (63 - 2 * PyLong_SHIFT)) != 0)) {
+        PyErr_SetString(PyExc_OverflowError, "too many digits in integer");
+        return PyValue_NULL;
+    }
+    int64_t shiftby = 0;
+    for (Py_ssize_t i = b.n; i > 0; i--) {
+        shiftby = (int64_t)(((uint64_t)shiftby << PyLong_SHIFT) | b.d[i-1]);
+    }
+#if PY_SSIZE_T_MAX <= INT64_MAX / PyLong_SHIFT
+    /* Keep wordshift <= MAX_LONG_DIGITS, so that the result's size cannot
+       overflow Py_ssize_t. */
+    if (shiftby > (int64_t)MAX_LONG_DIGITS * PyLong_SHIFT) {
+        PyErr_SetString(PyExc_OverflowError, "too many digits in integer");
+        return PyValue_NULL;
+    }
+#endif
+    _PyLongOut out;
+    return out_value(long_lshift_spans(a, (Py_ssize_t)(shiftby / PyLong_SHIFT),
+                                       (digit)(shiftby % PyLong_SHIFT), &out),
+                     &out);
+}
+
+PyValue
+_PyLong_ValueLshift(PyValueBorrow v, PyValueBorrow w)
+{
+    CHECK_BINOP_VALUE(v, w);
+    int64_t a, n;
+    if (_PyLong_WordOf(v, &a) && _PyLong_WordOf(w, &n)) {
+        if (n < 0) {
+            PyErr_SetString(PyExc_ValueError, "negative shift count");
+            return PyValue_NULL;
+        }
+        return _PyLong_WordLshift(a, n);
+    }
+    return long_lshift_span_path(v, w);
+}
+
+/* v >> w with the checks of long_rshift() and _PyLong_Rshift() in their
+   order, for any two int values. */
+static PyValue
+long_rshift_span_path(PyValueBorrow v, PyValueBorrow w)
+{
+    digit v_digits[_PyLong_WORD_DIGITS], w_digits[_PyLong_WORD_DIGITS];
+    _PyLongSpan a = SPAN_OF_VALUE(v), b = SPAN_OF_VALUE(w);
+    if (b.neg) {
+        PyErr_SetString(PyExc_ValueError, "negative shift count");
+        return PyValue_NULL;
+    }
+    if (a.n == 0) {
+        return PyValue_FromInt64(0);
+    }
+    if (b.n > _PyLong_WORD_DIGITS) {
+        /* A count of 2**60 or more shifts every bit out. */
+        return PyValue_FromInt64(-a.neg);
+    }
+    int64_t shiftby = word_of_span(b);
+    if (shiftby == 0) {
+        return long_exact_value(v);
+    }
+#if PY_SSIZE_T_MAX <= INT64_MAX / PyLong_SHIFT
+    if (shiftby > (int64_t)PY_SSIZE_T_MAX * PyLong_SHIFT) {
+        return PyValue_FromInt64(-a.neg);
+    }
+#endif
+    _PyLongOut out;
+    return out_value(long_rshift_spans(a, (Py_ssize_t)(shiftby / PyLong_SHIFT),
+                                       (digit)(shiftby % PyLong_SHIFT), &out),
+                     &out);
+}
+
+PyValue
+_PyLong_ValueRshift(PyValueBorrow v, PyValueBorrow w)
+{
+    CHECK_BINOP_VALUE(v, w);
+    int64_t a, n;
+    if (_PyLong_WordOf(v, &a) && _PyLong_WordOf(w, &n)) {
+        if (n < 0) {
+            PyErr_SetString(PyExc_ValueError, "negative shift count");
+            return PyValue_NULL;
+        }
+        return _PyLong_WordRshift(a, n);
+    }
+    return long_rshift_span_path(v, w);
+}
+
+static PyValue
+long_bitwise_span_path(PyValueBorrow v, char op, PyValueBorrow w)
+{
+    digit v_digits[_PyLong_WORD_DIGITS], w_digits[_PyLong_WORD_DIGITS];
+    _PyLongOut out;
+    return out_value(long_bitwise(SPAN_OF_VALUE(v), op, SPAN_OF_VALUE(w),
+                                  &out),
+                     &out);
+}
+
+PyValue
+_PyLong_ValueAnd(PyValueBorrow v, PyValueBorrow w)
+{
+    CHECK_BINOP_VALUE(v, w);
+    int64_t a, b;
+    if (_PyLong_WordOperands(v, w, &a, &b)) {
+        return _PyLong_WordAnd(a, b);
+    }
+    return long_bitwise_span_path(v, '&', w);
+}
+
+PyValue
+_PyLong_ValueXor(PyValueBorrow v, PyValueBorrow w)
+{
+    CHECK_BINOP_VALUE(v, w);
+    int64_t a, b;
+    if (_PyLong_WordOperands(v, w, &a, &b)) {
+        return _PyLong_WordXor(a, b);
+    }
+    return long_bitwise_span_path(v, '^', w);
+}
+
+PyValue
+_PyLong_ValueOr(PyValueBorrow v, PyValueBorrow w)
+{
+    CHECK_BINOP_VALUE(v, w);
+    int64_t a, b;
+    if (_PyLong_WordOperands(v, w, &a, &b)) {
+        return _PyLong_WordOr(a, b);
+    }
+    return long_bitwise_span_path(v, '|', w);
+}
+
+/* The unary slots take an int by construction (they are int's), so they do
+   not check their operand. A heap int off the word path is at least 2**60
+   in magnitude. */
+
+PyValue
+_PyLong_ValueNegative(PyValueBorrow v)
+{
+    int64_t a;
+    if (_PyLong_WordOf(v, &a)) {
+        return _PyLong_WordNegative(a);
+    }
+    return _PyValue_FromObjectResult(
+        (PyObject *)long_neg((PyLongObject *)PyValue_AsKnownObjectBorrow(v)));
+}
+
+PyValue
+_PyLong_ValueAbsolute(PyValueBorrow v)
+{
+    int64_t a;
+    if (_PyLong_WordOf(v, &a)) {
+        return _PyLong_WordAbsolute(a);
+    }
+    return _PyValue_FromObjectResult(
+        (PyObject *)long_abs((PyLongObject *)PyValue_AsKnownObjectBorrow(v)));
+}
+
+PyValue
+_PyLong_ValueInvert(PyValueBorrow v)
+{
+    int64_t a;
+    if (_PyLong_WordOf(v, &a)) {
+        return _PyLong_WordInvert(a);
+    }
+    /* ~x as -(x+1), as upstream. x is not a word, so x+1 is not zero and
+       the flipped sign is valid. */
+    digit v_digits[_PyLong_WORD_DIGITS];
+    digit one_digit = 1;
+    _PyLongSpan one = {&one_digit, 1, 0};
+    _PyLongOut out;
+    if (long_add_spans(SPAN_OF_VALUE(v), one, &out) < 0) {
+        return PyValue_NULL;
+    }
+    out.neg = !out.neg;
+    return _PyLong_OutValue(&out);
+}
+
+PyValue
+_PyLong_ValueFloat(PyValueBorrow v)
+{
+    if (PyValue_IsInlineInt(v)) {
+        return PyValue_FromDouble((double)PyValue_InlineInt64(v));
+    }
+    digit v_digits[_PyLong_WORD_DIGITS];
+    double result = _PyLong_SpanAsDouble(SPAN_OF_VALUE(v));
+    if (result == -1.0 && PyErr_Occurred()) {
+        return PyValue_NULL;
+    }
+    return PyValue_FromDouble(result);
+}
+
+PyValue
+_PyLong_ValueLong(PyValueBorrow v)
+{
+    return long_exact_value(v);
+}
+
+int
+_PyLong_ValueBool(PyValueBorrow v)
+{
+    if (PyValue_IsInlineInt(v)) {
+        return PyValue_InlineInt64(v) != 0;
+    }
+    return !_PyLong_IsZero((PyLongObject *)PyValue_AsKnownObjectBorrow(v));
+}
+
+PyObject *
+_PyLong_ValueRepr(PyValueBorrow v)
+{
+    if (PyValue_IsInlineInt(v)) {
+        /* At most 16 digits: neither the _pylong switch nor the
+           int_max_str_digits limit can apply. */
+        digit v_digits[_PyLong_WORD_DIGITS];
+        PyObject *str;
+        if (long_to_decimal_string_internal(SPAN_OF_VALUE(v), &str, NULL,
+                                            NULL, NULL) < 0) {
+            return NULL;
+        }
+        return str;
+    }
+    return long_to_decimal_string(PyValue_AsKnownObjectBorrow(v));
+}
+
+int
+_PyLong_WriteDecimal(_PyUnicodeWriter *writer, PyValueBorrow v)
+{
+    if (PyValue_IsInlineInt(v)) {
+        digit v_digits[_PyLong_WORD_DIGITS];
+        return long_to_decimal_writer_span(writer, SPAN_OF_VALUE(v));
+    }
+    return _PyLong_FormatWriter(writer, PyValue_AsKnownObjectBorrow(v), 10, 0);
+}
+
+PyValue
+_PyLong_SpanPathBinary(int op, PyValueBorrow v, PyValueBorrow w)
+{
+    if (!PyValue_LongCheck(v) || !PyValue_LongCheck(w)) {
+        PyErr_SetString(PyExc_TypeError, "int span path needs two ints");
+        return PyValue_NULL;
+    }
+    switch (op) {
+        case NB_ADD:
+            return long_add_span_path(v, w);
+        case NB_SUBTRACT:
+            return long_sub_span_path(v, w);
+        case NB_MULTIPLY:
+            return long_mul_span_path(v, w);
+        case NB_FLOOR_DIVIDE:
+            return long_floordiv_span_path(v, w);
+        case NB_REMAINDER:
+            return long_mod_span_path(v, w);
+        case NB_TRUE_DIVIDE:
+            return long_true_divide_span_path(v, w);
+        case NB_LSHIFT:
+            return long_lshift_span_path(v, w);
+        case NB_RSHIFT:
+            return long_rshift_span_path(v, w);
+        case NB_AND:
+            return long_bitwise_span_path(v, '&', w);
+        case NB_OR:
+            return long_bitwise_span_path(v, '|', w);
+        case NB_XOR:
+            return long_bitwise_span_path(v, '^', w);
+        case NB_POWER: {
+            digit w_digits[_PyLong_WORD_DIGITS];
+            if (SPAN_OF_VALUE(w).neg) {
+                return _PyFloat_ValuePower(v, w, PyValue_Borrow(PyValue_None));
+            }
+            return long_pow_span_path(v, w);
+        }
+        default:
+            PyErr_SetString(PyExc_ValueError, "not an int binary operator");
+            return PyValue_NULL;
+    }
+}
+
+/* Thunks: the object slots of PyLong_Type. */
+_Py_VALUE_THUNK_BINARY(long_add_method, _PyLong_ValueAdd)
+_Py_VALUE_THUNK_BINARY(long_sub_method, _PyLong_ValueSubtract)
+_Py_VALUE_THUNK_BINARY(long_mul_method, _PyLong_ValueMultiply)
+_Py_VALUE_THUNK_BINARY(long_mod, _PyLong_ValueRemainder)
+_Py_VALUE_THUNK_BINARY(long_divmod, _PyLong_ValueDivmod)
+_Py_VALUE_THUNK_BINARY(long_div, _PyLong_ValueFloorDivide)
+_Py_VALUE_THUNK_BINARY(long_true_divide, _PyLong_ValueTrueDivide)
+_Py_VALUE_THUNK_BINARY(long_lshift_method, _PyLong_ValueLshift)
+_Py_VALUE_THUNK_BINARY(long_rshift, _PyLong_ValueRshift)
+_Py_VALUE_THUNK_BINARY(long_and, _PyLong_ValueAnd)
+_Py_VALUE_THUNK_BINARY(long_xor, _PyLong_ValueXor)
+_Py_VALUE_THUNK_BINARY(long_or, _PyLong_ValueOr)
+_Py_VALUE_THUNK_TERNARY(long_pow, _PyLong_ValuePower)
+_Py_VALUE_THUNK_UNARY(long_neg_method, _PyLong_ValueNegative)
+_Py_VALUE_THUNK_UNARY(long_abs_method, _PyLong_ValueAbsolute)
+_Py_VALUE_THUNK_UNARY(long_invert, _PyLong_ValueInvert)
+_Py_VALUE_THUNK_UNARY(long_float, _PyLong_ValueFloat)
+_Py_VALUE_THUNK_UNARY(long_long_slot, _PyLong_ValueLong)
+_Py_VALUE_THUNK_INQUIRY(long_bool, _PyLong_ValueBool)
+_Py_VALUE_THUNK_RICHCMP(long_richcompare, _PyLong_ValueRichCompare)
+_Py_VALUE_THUNK_HASH(long_hash, _PyLong_ValueHash)
+_Py_VALUE_THUNK_REPR(long_repr, _PyLong_ValueRepr)
+
 static PyNumberMethods long_as_number = {
     long_add_method,            /*nb_add*/
     long_sub_method,            /*nb_subtract*/
@@ -6586,7 +7294,7 @@ static PyNumberMethods long_as_number = {
     long_divmod,                /*nb_divmod*/
     long_pow,                   /*nb_power*/
     long_neg_method,            /*nb_negative*/
-    long_long,                  /*tp_positive*/
+    long_long_slot,             /*tp_positive*/
     long_abs_method,            /*tp_absolute*/
     long_bool,                  /*tp_bool*/
     long_invert,                /*nb_invert*/
@@ -6595,7 +7303,7 @@ static PyNumberMethods long_as_number = {
     long_and,                   /*nb_and*/
     long_xor,                   /*nb_xor*/
     long_or,                    /*nb_or*/
-    long_long,                  /*nb_int*/
+    long_long_slot,             /*nb_int*/
     0,                          /*nb_reserved*/
     long_float,                 /*nb_float*/
     0,                          /* nb_inplace_add */
@@ -6612,7 +7320,7 @@ static PyNumberMethods long_as_number = {
     long_true_divide,           /* nb_true_divide */
     0,                          /* nb_inplace_floor_divide */
     0,                          /* nb_inplace_true_divide */
-    long_long,                  /* nb_index */
+    long_long_slot,             /* nb_index */
 };
 
 PyTypeObject PyLong_Type = {
@@ -6625,7 +7333,7 @@ PyTypeObject PyLong_Type = {
     0,                                          /* tp_getattr */
     0,                                          /* tp_setattr */
     0,                                          /* tp_as_async */
-    long_to_decimal_string,                     /* tp_repr */
+    long_repr,                                  /* tp_repr */
     &long_as_number,                            /* tp_as_number */
     0,                                          /* tp_as_sequence */
     0,                                          /* tp_as_mapping */
@@ -6659,6 +7367,36 @@ PyTypeObject PyLong_Type = {
     PyObject_Free,                              /* tp_free */
     .tp_vectorcall = long_vectorcall,
     .tp_version_tag = _Py_TYPE_VERSION_INT,
+    .tp_value = {
+        .nb_add = _Py_VALUE_SLOT_INIT(nb_add, _PyLong_ValueAdd),
+        .nb_subtract = _Py_VALUE_SLOT_INIT(nb_subtract, _PyLong_ValueSubtract),
+        .nb_multiply = _Py_VALUE_SLOT_INIT(nb_multiply, _PyLong_ValueMultiply),
+        .nb_remainder = _Py_VALUE_SLOT_INIT(nb_remainder,
+                                            _PyLong_ValueRemainder),
+        .nb_divmod = _Py_VALUE_SLOT_INIT(nb_divmod, _PyLong_ValueDivmod),
+        .nb_power = _Py_VALUE_SLOT_INIT(nb_power, _PyLong_ValuePower),
+        .nb_negative = _Py_VALUE_SLOT_INIT(nb_negative, _PyLong_ValueNegative),
+        .nb_positive = _Py_VALUE_SLOT_INIT(nb_positive, _PyLong_ValueLong),
+        .nb_absolute = _Py_VALUE_SLOT_INIT(nb_absolute, _PyLong_ValueAbsolute),
+        .nb_bool = _Py_VALUE_SLOT_INIT(nb_bool, _PyLong_ValueBool),
+        .nb_invert = _Py_VALUE_SLOT_INIT(nb_invert, _PyLong_ValueInvert),
+        .nb_lshift = _Py_VALUE_SLOT_INIT(nb_lshift, _PyLong_ValueLshift),
+        .nb_rshift = _Py_VALUE_SLOT_INIT(nb_rshift, _PyLong_ValueRshift),
+        .nb_and = _Py_VALUE_SLOT_INIT(nb_and, _PyLong_ValueAnd),
+        .nb_xor = _Py_VALUE_SLOT_INIT(nb_xor, _PyLong_ValueXor),
+        .nb_or = _Py_VALUE_SLOT_INIT(nb_or, _PyLong_ValueOr),
+        .nb_int = _Py_VALUE_SLOT_INIT(nb_int, _PyLong_ValueLong),
+        .nb_float = _Py_VALUE_SLOT_INIT(nb_float, _PyLong_ValueFloat),
+        .nb_floor_divide = _Py_VALUE_SLOT_INIT(nb_floor_divide,
+                                               _PyLong_ValueFloorDivide),
+        .nb_true_divide = _Py_VALUE_SLOT_INIT(nb_true_divide,
+                                              _PyLong_ValueTrueDivide),
+        .nb_index = _Py_VALUE_SLOT_INIT(nb_index, _PyLong_ValueLong),
+        .richcompare = _Py_VALUE_SLOT_INIT(richcompare,
+                                           _PyLong_ValueRichCompare),
+        .hash = _Py_VALUE_SLOT_INIT(hash, _PyLong_ValueHash),
+        .repr = _Py_VALUE_SLOT_INIT(repr, _PyLong_ValueRepr),
+    },
 };
 
 static PyTypeObject Int_InfoType;
@@ -6768,12 +7506,12 @@ PyObject* PyLong_FromUInt64(uint64_t value)
     PYLONG_FROM_UINT(uint64_t, value);
 }
 
-#define LONG_TO_INT(type, obj, result) \
+#define LONG_TO_INT(type, v, result) \
     do { \
         type value; \
         int flags = (Py_ASNATIVEBYTES_NATIVE_ENDIAN \
                      | Py_ASNATIVEBYTES_ALLOW_INDEX); \
-        Py_ssize_t bytes = PyLong_AsNativeBytes(obj, &value, sizeof(value), flags); \
+        Py_ssize_t bytes = _PyValue_AsNativeBytes(v, &value, sizeof(value), flags); \
         if (bytes < 0) { \
             return -1; \
         } \
@@ -6786,24 +7524,34 @@ PyObject* PyLong_FromUInt64(uint64_t value)
         return 0; \
     } while (0)
 
+int (_PyValue_AsInt32)(PyValueBorrow v, int32_t *result)
+{
+    LONG_TO_INT(int32_t, v, result);
+}
+
 int PyLong_AsInt32(PyObject *obj, int32_t *result)
 {
-    LONG_TO_INT(int32_t, obj, result);
+    return _PyValue_AsInt32(_Py_VALUE_ARG(obj), result);
+}
+
+int (_PyValue_AsInt64)(PyValueBorrow v, int64_t *result)
+{
+    LONG_TO_INT(int64_t, v, result);
 }
 
 int PyLong_AsInt64(PyObject *obj, int64_t *result)
 {
-    LONG_TO_INT(int64_t, obj, result);
+    return _PyValue_AsInt64(_Py_VALUE_ARG(obj), result);
 }
 
-#define LONG_TO_UINT(type, obj, result) \
+#define LONG_TO_UINT(type, v, result) \
     do { \
         type value; \
         int flags = (Py_ASNATIVEBYTES_NATIVE_ENDIAN \
                      | Py_ASNATIVEBYTES_UNSIGNED_BUFFER \
                      | Py_ASNATIVEBYTES_REJECT_NEGATIVE \
                      | Py_ASNATIVEBYTES_ALLOW_INDEX); \
-        Py_ssize_t bytes = PyLong_AsNativeBytes(obj, &value, sizeof(value), flags); \
+        Py_ssize_t bytes = _PyValue_AsNativeBytes(v, &value, sizeof(value), flags); \
         if (bytes < 0) { \
             return -1; \
         } \
@@ -6816,14 +7564,24 @@ int PyLong_AsInt64(PyObject *obj, int64_t *result)
         return 0; \
     } while (0)
 
+int (_PyValue_AsUInt32)(PyValueBorrow v, uint32_t *result)
+{
+    LONG_TO_UINT(uint32_t, v, result);
+}
+
 int PyLong_AsUInt32(PyObject *obj, uint32_t *result)
 {
-    LONG_TO_UINT(uint32_t, obj, result);
+    return _PyValue_AsUInt32(_Py_VALUE_ARG(obj), result);
+}
+
+int (_PyValue_AsUInt64)(PyValueBorrow v, uint64_t *result)
+{
+    LONG_TO_UINT(uint64_t, v, result);
 }
 
 int PyLong_AsUInt64(PyObject *obj, uint64_t *result)
 {
-    LONG_TO_UINT(uint64_t, obj, result);
+    return _PyValue_AsUInt64(_Py_VALUE_ARG(obj), result);
 }
 
 
@@ -6853,15 +7611,8 @@ PyLong_Export(PyObject *obj, PyLongExport *export_long)
 
     // Fast-path: try to convert to a int64_t
     int overflow;
-#if SIZEOF_LONG == 8
-    long value = PyLong_AsLongAndOverflow(obj, &overflow);
-#else
-    // Windows has 32-bit long, so use 64-bit long long instead
-    long long value = PyLong_AsLongLongAndOverflow(obj, &overflow);
-#endif
-    Py_BUILD_ASSERT(sizeof(value) == sizeof(int64_t));
-    // the function cannot fail since obj is a PyLongObject
-    assert(!(value == -1 && PyErr_Occurred()));
+    int64_t value = _PyLong_SpanAsInt64AndOverflow(
+        _PyLong_SpanOf((PyLongObject *)obj), &overflow);
 
     if (!overflow) {
         export_long->value = value;

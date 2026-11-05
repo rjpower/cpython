@@ -19,14 +19,21 @@ PyAPI_FUNC(PyObject *) PyLong_FromSize_t(size_t);
 PyAPI_FUNC(PyObject *) PyLong_FromSsize_t(Py_ssize_t);
 PyAPI_FUNC(PyObject *) PyLong_FromDouble(double);
 
+Py_VALUE_COMPAT_NUMBERS(_PyValue_AsLong)
 PyAPI_FUNC(long) PyLong_AsLong(PyObject *);
+Py_VALUE_COMPAT_NUMBERS(_PyValue_AsLongAndOverflow)
 PyAPI_FUNC(long) PyLong_AsLongAndOverflow(PyObject *, int *);
+Py_VALUE_COMPAT_NUMBERS(_PyValue_IntAsSsize_t)
 PyAPI_FUNC(Py_ssize_t) PyLong_AsSsize_t(PyObject *);
+Py_VALUE_COMPAT_NUMBERS(_PyValue_IntAsSize_t)
 PyAPI_FUNC(size_t) PyLong_AsSize_t(PyObject *);
+Py_VALUE_COMPAT_NUMBERS(_PyValue_IntAsUnsignedLong)
 PyAPI_FUNC(unsigned long) PyLong_AsUnsignedLong(PyObject *);
+Py_VALUE_COMPAT_NUMBERS(_PyValue_AsUnsignedLongMask)
 PyAPI_FUNC(unsigned long) PyLong_AsUnsignedLongMask(PyObject *);
 
 #if !defined(Py_LIMITED_API) || Py_LIMITED_API+0 >= 0x030d0000
+Py_VALUE_COMPAT_NUMBERS(_PyValue_AsInt)
 PyAPI_FUNC(int) PyLong_AsInt(PyObject *);
 #endif
 
@@ -36,9 +43,13 @@ PyAPI_FUNC(PyObject*) PyLong_FromUInt32(uint32_t value);
 PyAPI_FUNC(PyObject*) PyLong_FromInt64(int64_t value);
 PyAPI_FUNC(PyObject*) PyLong_FromUInt64(uint64_t value);
 
+Py_VALUE_COMPAT_NUMBERS(_PyValue_AsInt32)
 PyAPI_FUNC(int) PyLong_AsInt32(PyObject *obj, int32_t *value);
+Py_VALUE_COMPAT_NUMBERS(_PyValue_AsUInt32)
 PyAPI_FUNC(int) PyLong_AsUInt32(PyObject *obj, uint32_t *value);
+Py_VALUE_COMPAT_NUMBERS(_PyValue_AsInt64)
 PyAPI_FUNC(int) PyLong_AsInt64(PyObject *obj, int64_t *value);
+Py_VALUE_COMPAT_NUMBERS(_PyValue_AsUInt64)
 PyAPI_FUNC(int) PyLong_AsUInt64(PyObject *obj, uint64_t *value);
 
 #define Py_ASNATIVEBYTES_DEFAULTS -1
@@ -76,6 +87,7 @@ PyAPI_FUNC(int) PyLong_AsUInt64(PyObject *obj, uint64_t *value);
    may be larger than necessary - this function is not an accurate way to
    calculate the bit length of an integer object.
    */
+Py_VALUE_COMPAT_NUMBERS(_PyValue_AsNativeBytes)
 PyAPI_FUNC(Py_ssize_t) PyLong_AsNativeBytes(PyObject* v, void* buffer,
     Py_ssize_t n_bytes, int flags);
 
@@ -147,15 +159,21 @@ PyLong_AsPid(PyObject *obj)
 #  error "void* different in size from int, long and long long"
 #endif /* SIZEOF_VOID_P */
 
+Py_VALUE_COMPAT_NUMBERS(_PyValue_IntAsDouble)
 PyAPI_FUNC(double) PyLong_AsDouble(PyObject *);
 PyAPI_FUNC(PyObject *) PyLong_FromVoidPtr(void *);
+Py_VALUE_COMPAT_NUMBERS(_PyValue_IntAsVoidPtr)
 PyAPI_FUNC(void *) PyLong_AsVoidPtr(PyObject *);
 
 PyAPI_FUNC(PyObject *) PyLong_FromLongLong(long long);
 PyAPI_FUNC(PyObject *) PyLong_FromUnsignedLongLong(unsigned long long);
+Py_VALUE_COMPAT_NUMBERS(_PyValue_AsLongLong)
 PyAPI_FUNC(long long) PyLong_AsLongLong(PyObject *);
+Py_VALUE_COMPAT_NUMBERS(_PyValue_IntAsUnsignedLongLong)
 PyAPI_FUNC(unsigned long long) PyLong_AsUnsignedLongLong(PyObject *);
+Py_VALUE_COMPAT_NUMBERS(_PyValue_AsUnsignedLongLongMask)
 PyAPI_FUNC(unsigned long long) PyLong_AsUnsignedLongLongMask(PyObject *);
+Py_VALUE_COMPAT_NUMBERS(_PyValue_AsLongLongAndOverflow)
 PyAPI_FUNC(long long) PyLong_AsLongLongAndOverflow(PyObject *, int *);
 
 PyAPI_FUNC(PyObject *) PyLong_FromString(const char *, char **, int);

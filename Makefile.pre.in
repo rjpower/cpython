@@ -1435,6 +1435,7 @@ PYTHON_HEADERS= \
 		$(srcdir)/Include/internal/pycore_llist.h \
 		$(srcdir)/Include/internal/pycore_lock.h \
 		$(srcdir)/Include/internal/pycore_long.h \
+		$(srcdir)/Include/internal/pycore_long_value.h \
 		$(srcdir)/Include/internal/pycore_memoryobject.h \
 		$(srcdir)/Include/internal/pycore_methodobject.h \
 		$(srcdir)/Include/internal/pycore_mimalloc.h \

@@ -1077,12 +1077,13 @@ PyValue_FromInt64(int64_t value)
     return _PyValue_BoxInt64(value);
 }
 
-// a * b for inline ints a and b whose product leaves the inline range, as
-// a new int, or PyValue_NULL with an exception set.
+// a * b for words a and b (|a|, |b| < 2**60), as a value, or PyValue_NULL
+// with an exception set. The overflow path of int multiplication, through
+// the span kernels (Objects/longobject.c).
 PyAPI_FUNC(PyValue) _PyValue_MultiplyInt64(int64_t a, int64_t b);
 
-// value << shift, for a nonzero value and a shift that leaves int64, or
-// PyValue_NULL with an exception set.
+// value << shift, for a nonzero word and a shift >= 0, as a value, or
+// PyValue_NULL with an exception set (Objects/longobject.c).
 PyAPI_FUNC(PyValue) _PyValue_LshiftInt64(int64_t value, int64_t shift);
 
 /* Are a and b operands of specialized float arithmetic: two inline floats,
@@ -1148,6 +1149,46 @@ PyValue_FromDouble(double value)
         return ref;
     }
     return _PyValue_BoxDouble(value);
+}
+
+// A new int for an unsigned value above INT64_MAX, or PyValue_NULL with an
+// exception set.
+PyAPI_FUNC(PyValue) _PyValue_BoxUInt64(uint64_t value);
+
+/* The canonical value of a uint64 (PyLong_FromSize_t(),
+   PyLong_FromUnsignedLong() and the other unsigned constructors): inline
+   if it fits, else a new int; PyValue_NULL with an exception set. */
+static inline PyValue
+PyValue_FromUInt64(uint64_t value)
+{
+    if (value <= (uint64_t)INT64_MAX) {
+        return PyValue_FromInt64((int64_t)value);
+    }
+    return _PyValue_BoxUInt64(value);
+}
+
+/* True or False. C converts any scalar argument to bool as != 0, so
+   PyValue_FromBool(flags & (1L << 40)) is True. */
+static inline PyValue
+PyValue_FromBool(bool value)
+{
+    return value ? PyValue_True : PyValue_False;
+}
+
+/* The int of an integral double (PyLong_FromDouble() in value contexts):
+   inline if it fits, else a new int; ValueError for a NaN, OverflowError
+   for an infinity, as PyLong_FromDouble(). */
+PyAPI_FUNC(PyValue) _PyValue_FromDoubleIntegralSlow(double value);
+
+static inline PyValue
+_PyValue_FromDoubleIntegral(double value)
+{
+    /* The range test is false for a NaN. Every double in the inline range
+       converts to int64 exactly once truncated. */
+    if (value >= (double)Py_INT_MIN && value <= (double)Py_INT_MAX) {
+        return PyValue_FromInlineInt((int64_t)value);
+    }
+    return _PyValue_FromDoubleIntegralSlow(value);
 }
 
 /* A new reference to the object that ref holds, a new box if ref holds an

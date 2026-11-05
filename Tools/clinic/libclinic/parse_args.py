@@ -2237,9 +2237,13 @@ class ParseArgsCodeGen:
                                      '_PyValue_THUNK_EXIT()')
             result_type, exit = 'PyValue', '_PyValue_THUNK_EXIT'
             error = 'NULL'
+            # The tp_new wrapper is a compatibility entry: the thunk exit
+            # owner is its caller.
+            self.parser_prototype = ('Py_VALUE_ENTRY '
+                                     + PARSER_PROTOTYPE_KEYWORD)
         call = '{c_basename}_value({self_name}, %s, nargs, %s)'
         if exit:
-            call = f'{exit}({call})'
+            call = f'{exit}({call}, BOX_SITE_CALL)'
         self.parser_definition = '\n'.join([
             self.parser_prototype,
             '{{',
@@ -2255,7 +2259,8 @@ class ParseArgsCodeGen:
             '    }}',
             f'    {result_type} result = {{c_basename}}_value({{self_name}}, window, nargs, kwnames);',
             '    _PyValue_StackUnpackDict_Free(window, nargs, kwnames);',
-            f'    return {exit}(result);' if exit else '    return result;',
+            f'    return {exit}(result, BOX_SITE_CALL);' if exit
+            else '    return result;',
             '}}',
         ])
 

@@ -266,7 +266,7 @@ tp_setattro       __setattr__      ..._GenericSetAttr  (disabled)
 tp_doc            __doc__          (literal)           dictionary_doc
 tp_traverse       -                -                   dict_traverse
 tp_clear          -                -                   dict_tp_clear
-tp_richcompare    __eq__           object_richcompare  dict_richcompare
+tp_richcompare    __eq__           _Py_BaseObject_RichCompare  dict_richcompare
                   __ne__
 tp_weaklistoffset (__weakref__)    -                   -
 tp_iter           __iter__         -                   dict_iter

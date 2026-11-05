@@ -8,6 +8,7 @@
 
 #include "parts.h"
 
+#include "pycore_long_value.h"    // _PyLong_SpanPathBinary()
 #include "pycore_value.h"         // PyValue
 #include "pycore_value_ops.h"     // _PyValue_GenericHash()
 #include "pycore_value_slots.h"   // _Py_VALUE_SLOT_TABLE
@@ -1699,6 +1700,285 @@ value_functions(PyObject *Py_UNUSED(module), PyObject *Py_UNUSED(args))
     return dict;
 }
 
+/* Int and float value functions (V2a-1a) */
+
+/* int_span_path(op, a, b): the span path of the binary operator op (an NB_*
+ * code) on two ints, the oracle of the word paths. */
+static PyObject *
+int_span_path(PyObject *Py_UNUSED(module), PyObject *args)
+{
+    int op;
+    PyObject *a, *b;
+    if (!PyArg_ParseTuple(args, "iOO:int_span_path", &op, &a, &b)) {
+        return NULL;
+    }
+    if (!PyLong_Check(a) || !PyLong_Check(b)) {
+        PyErr_SetString(PyExc_TypeError, "expected two ints");
+        return NULL;
+    }
+    return value_result(_PyLong_SpanPathBinary(
+        op, PyValue_FromObjectBorrow(a), PyValue_FromObjectBorrow(b)));
+}
+
+/* The result of an extractor as a Python object: an int or float, or NULL
+ * with the exception that the extractor set. A C result equal to the error
+ * value needs PyErr_Occurred() to tell an error from a result. */
+#define EXTRACT_RESULT(EXPR, MAKE, ERRVALUE) \
+    do { \
+        __typeof__(EXPR) result_ = (EXPR); \
+        if (result_ == (ERRVALUE) && PyErr_Occurred()) { \
+            return NULL; \
+        } \
+        return MAKE(result_); \
+    } while (0)
+
+#define EXTRACT_STATUS(CALL, TYPE, MAKE) \
+    do { \
+        TYPE result_; \
+        if ((CALL) < 0) { \
+            return NULL; \
+        } \
+        return MAKE(result_); \
+    } while (0)
+
+#define EXTRACT_OVERFLOW(CALL, MAKE) \
+    do { \
+        int overflow_ = 0; \
+        __typeof__(CALL) result_ = (CALL); \
+        if (result_ == -1 && PyErr_Occurred()) { \
+            return NULL; \
+        } \
+        return Py_BuildValue("(Ni)", MAKE(result_), overflow_); \
+    } while (0)
+
+static PyObject *
+make_uint32(uint32_t x)
+{
+    return PyLong_FromUnsignedLong(x);
+}
+
+static PyObject *
+make_voidptr(void *p)
+{
+    return PyLong_FromVoidPtr(p);
+}
+
+/* value_extract(name, obj): the extractor row of the value API named name
+ * (AsInt, AsLong, ...), called on obj as a borrowed value. The result is the
+ * C result as a Python int or float; an AndOverflow row gives (value,
+ * overflow). object_extract() does the same with the object function. */
+static PyObject *
+value_extract(PyObject *Py_UNUSED(module), PyObject *args)
+{
+    const char *name;
+    PyObject *obj;
+    if (!PyArg_ParseTuple(args, "sO:value_extract", &name, &obj)) {
+        return NULL;
+    }
+    PyValueBorrow v = PyValue_Borrow(PyValue_FromObjectBorrow(obj));
+#define IS(N) (strcmp(name, N) == 0)
+    if (IS("AsInt")) {
+        EXTRACT_RESULT(_PyValue_AsInt(v), PyLong_FromLong, -1);
+    }
+    if (IS("AsLong")) {
+        EXTRACT_RESULT(_PyValue_AsLong(v), PyLong_FromLong, -1);
+    }
+    if (IS("AsLongLong")) {
+        EXTRACT_RESULT(_PyValue_AsLongLong(v), PyLong_FromLongLong, -1);
+    }
+    if (IS("AsLongAndOverflow")) {
+        EXTRACT_OVERFLOW(_PyValue_AsLongAndOverflow(v, &overflow_),
+                         PyLong_FromLong);
+    }
+    if (IS("AsLongLongAndOverflow")) {
+        EXTRACT_OVERFLOW(_PyValue_AsLongLongAndOverflow(v, &overflow_),
+                         PyLong_FromLongLong);
+    }
+    if (IS("AsInt32")) {
+        EXTRACT_STATUS(_PyValue_AsInt32(v, &result_), int32_t, PyLong_FromLong);
+    }
+    if (IS("AsInt64")) {
+        EXTRACT_STATUS(_PyValue_AsInt64(v, &result_), int64_t,
+                       PyLong_FromLongLong);
+    }
+    if (IS("AsUInt32")) {
+        EXTRACT_STATUS(_PyValue_AsUInt32(v, &result_), uint32_t, make_uint32);
+    }
+    if (IS("AsUInt64")) {
+        EXTRACT_STATUS(_PyValue_AsUInt64(v, &result_), uint64_t,
+                       PyLong_FromUnsignedLongLong);
+    }
+    if (IS("IntAsUnsignedLong")) {
+        EXTRACT_RESULT(_PyValue_IntAsUnsignedLong(v), PyLong_FromUnsignedLong,
+                       (unsigned long)-1);
+    }
+    if (IS("IntAsUnsignedLongLong")) {
+        EXTRACT_RESULT(_PyValue_IntAsUnsignedLongLong(v),
+                       PyLong_FromUnsignedLongLong, (unsigned long long)-1);
+    }
+    if (IS("AsUnsignedLongMask")) {
+        EXTRACT_RESULT(_PyValue_AsUnsignedLongMask(v), PyLong_FromUnsignedLong,
+                       (unsigned long)-1);
+    }
+    if (IS("AsUnsignedLongLongMask")) {
+        EXTRACT_RESULT(_PyValue_AsUnsignedLongLongMask(v),
+                       PyLong_FromUnsignedLongLong, (unsigned long long)-1);
+    }
+    if (IS("IntAsSsize_t")) {
+        EXTRACT_RESULT(_PyValue_IntAsSsize_t(v), PyLong_FromSsize_t, -1);
+    }
+    if (IS("IntAsSize_t")) {
+        EXTRACT_RESULT(_PyValue_IntAsSize_t(v), PyLong_FromSize_t,
+                       (size_t)-1);
+    }
+    if (IS("IntAsDouble")) {
+        EXTRACT_RESULT(_PyValue_IntAsDouble(v), PyFloat_FromDouble, -1.0);
+    }
+    if (IS("IntAsVoidPtr")) {
+        EXTRACT_RESULT(_PyValue_IntAsVoidPtr(v), make_voidptr, NULL);
+    }
+    if (IS("AsDouble")) {
+        EXTRACT_RESULT(_PyValue_AsDouble(v), PyFloat_FromDouble, -1.0);
+    }
+    PyErr_Format(PyExc_ValueError, "unknown extractor %s", name);
+    return NULL;
+}
+
+static PyObject *
+object_extract(PyObject *Py_UNUSED(module), PyObject *args)
+{
+    const char *name;
+    PyObject *obj;
+    if (!PyArg_ParseTuple(args, "sO:object_extract", &name, &obj)) {
+        return NULL;
+    }
+    if (IS("AsInt")) {
+        EXTRACT_RESULT(PyLong_AsInt(obj), PyLong_FromLong, -1);
+    }
+    if (IS("AsLong")) {
+        EXTRACT_RESULT(PyLong_AsLong(obj), PyLong_FromLong, -1);
+    }
+    if (IS("AsLongLong")) {
+        EXTRACT_RESULT(PyLong_AsLongLong(obj), PyLong_FromLongLong, -1);
+    }
+    if (IS("AsLongAndOverflow")) {
+        EXTRACT_OVERFLOW(PyLong_AsLongAndOverflow(obj, &overflow_),
+                         PyLong_FromLong);
+    }
+    if (IS("AsLongLongAndOverflow")) {
+        EXTRACT_OVERFLOW(PyLong_AsLongLongAndOverflow(obj, &overflow_),
+                         PyLong_FromLongLong);
+    }
+    if (IS("AsInt32")) {
+        EXTRACT_STATUS(PyLong_AsInt32(obj, &result_), int32_t,
+                       PyLong_FromLong);
+    }
+    if (IS("AsInt64")) {
+        EXTRACT_STATUS(PyLong_AsInt64(obj, &result_), int64_t,
+                       PyLong_FromLongLong);
+    }
+    if (IS("AsUInt32")) {
+        EXTRACT_STATUS(PyLong_AsUInt32(obj, &result_), uint32_t, make_uint32);
+    }
+    if (IS("AsUInt64")) {
+        EXTRACT_STATUS(PyLong_AsUInt64(obj, &result_), uint64_t,
+                       PyLong_FromUnsignedLongLong);
+    }
+    if (IS("IntAsUnsignedLong")) {
+        EXTRACT_RESULT(PyLong_AsUnsignedLong(obj), PyLong_FromUnsignedLong,
+                       (unsigned long)-1);
+    }
+    if (IS("IntAsUnsignedLongLong")) {
+        EXTRACT_RESULT(PyLong_AsUnsignedLongLong(obj),
+                       PyLong_FromUnsignedLongLong, (unsigned long long)-1);
+    }
+    if (IS("AsUnsignedLongMask")) {
+        EXTRACT_RESULT(PyLong_AsUnsignedLongMask(obj), PyLong_FromUnsignedLong,
+                       (unsigned long)-1);
+    }
+    if (IS("AsUnsignedLongLongMask")) {
+        EXTRACT_RESULT(PyLong_AsUnsignedLongLongMask(obj),
+                       PyLong_FromUnsignedLongLong, (unsigned long long)-1);
+    }
+    if (IS("IntAsSsize_t")) {
+        EXTRACT_RESULT(PyLong_AsSsize_t(obj), PyLong_FromSsize_t, -1);
+    }
+    if (IS("IntAsSize_t")) {
+        EXTRACT_RESULT(PyLong_AsSize_t(obj), PyLong_FromSize_t, (size_t)-1);
+    }
+    if (IS("IntAsDouble")) {
+        EXTRACT_RESULT(PyLong_AsDouble(obj), PyFloat_FromDouble, -1.0);
+    }
+    if (IS("IntAsVoidPtr")) {
+        EXTRACT_RESULT(PyLong_AsVoidPtr(obj), make_voidptr, NULL);
+    }
+    if (IS("AsDouble")) {
+        EXTRACT_RESULT(PyFloat_AsDouble(obj), PyFloat_FromDouble, -1.0);
+    }
+#undef IS
+    PyErr_Format(PyExc_ValueError, "unknown extractor %s", name);
+    return NULL;
+}
+
+/* value_construct(kind, x): the constructor kind (Int64, UInt64, Double,
+ * Bool, DoubleIntegral) applied to x. Returns (object, is_inline). */
+static PyObject *
+value_construct(PyObject *Py_UNUSED(module), PyObject *args)
+{
+    const char *kind;
+    PyObject *x;
+    if (!PyArg_ParseTuple(args, "sO:value_construct", &kind, &x)) {
+        return NULL;
+    }
+    PyValue result;
+    if (strcmp(kind, "Int64") == 0) {
+        int64_t n = PyLong_AsLongLong(x);
+        if (n == -1 && PyErr_Occurred()) {
+            return NULL;
+        }
+        result = PyValue_FromInt64(n);
+    }
+    else if (strcmp(kind, "UInt64") == 0) {
+        uint64_t n = PyLong_AsUnsignedLongLong(x);
+        if (n == (uint64_t)-1 && PyErr_Occurred()) {
+            return NULL;
+        }
+        result = PyValue_FromUInt64(n);
+    }
+    else if (strcmp(kind, "Double") == 0
+             || strcmp(kind, "DoubleIntegral") == 0)
+    {
+        double d = PyFloat_AsDouble(x);
+        if (d == -1.0 && PyErr_Occurred()) {
+            return NULL;
+        }
+        result = (kind[6] == 'I' ? _PyValue_FromDoubleIntegral(d)
+                                 : PyValue_FromDouble(d));
+    }
+    else if (strcmp(kind, "Bool") == 0) {
+        // A C long, so that 1 << 40 tests the whole argument, not an int.
+        long n = PyLong_AsLong(x);
+        if (n == -1 && PyErr_Occurred()) {
+            return NULL;
+        }
+        result = PyValue_FromBool(n);
+    }
+    else {
+        PyErr_Format(PyExc_ValueError, "unknown constructor %s", kind);
+        return NULL;
+    }
+    if (PyValue_IsNull(result)) {
+        return NULL;
+    }
+    int is_inline = PyValue_IsInline(result);
+    PyObject *obj = value_result(result);
+    if (obj == NULL) {
+        return NULL;
+    }
+    return Py_BuildValue("(Ni)", obj, is_inline);
+}
+
+
 static PyMethodDef methods[] = {
     {"set_value_slots_log", set_value_slots_log, METH_O},
     {"value_slot_names", value_slot_names, METH_NOARGS},
@@ -1709,6 +1989,10 @@ static PyMethodDef methods[] = {
     {"call_value_slot", _PyCFunction_CAST(call_value_slot), METH_FASTCALL},
     {"value_dispatch", _PyCFunction_CAST(value_dispatch), METH_FASTCALL},
     {"make_invalid_value_type", make_invalid_value_type, METH_O},
+    {"int_span_path", int_span_path, METH_VARARGS},
+    {"value_extract", value_extract, METH_VARARGS},
+    {"object_extract", object_extract, METH_VARARGS},
+    {"value_construct", value_construct, METH_VARARGS},
     {NULL},
 };
 

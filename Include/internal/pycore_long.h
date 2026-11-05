@@ -342,6 +342,125 @@ _PyLong_CheckExactAndCompact(PyObject *op)
     return PyLong_CheckExact(op) && _PyLong_IsCompact((const PyLongObject *)op);
 }
 
+
+/* Digit spans and results (pyjit/design/proposals/value-api-v2a1a.md,
+ * section 1.2).
+ *
+ * The digit kernels of Objects/longobject.c read their operands as spans:
+ * the magnitude digits of an int, least significant first, and its sign. A
+ * heap int presents its own digits; an int held inline in a value presents
+ * its word, split into _PyLong_WORD_DIGITS digits in a local buffer
+ * (_PyLong_SpanOfWord(); _PyLong_SpanOfValue() in pycore_long_value.h). A
+ * span is not an object, so no inline int ever becomes one.
+ *
+ * Kernels build their results in a _PyLongOut. An out holds computed
+ * results only, never a copy of an input: there is no function that copies
+ * a span into an out. */
+
+/* The digits of a word: |v| < 2**60. */
+#define _PyLong_WORD_DIGITS 2
+static_assert(PyLong_SHIFT * _PyLong_WORD_DIGITS == 60,
+              "a word is two 30-bit digits");
+
+typedef struct {
+    const digit *d;     // magnitude, least significant first; d[n-1] != 0
+    Py_ssize_t n;       // digit count, 0 for zero
+    int neg;            // 1 if negative; never for zero
+} _PyLongSpan;
+
+// The span of op, any instance of int or a subclass.
+static inline _PyLongSpan
+_PyLong_SpanOf(const PyLongObject *op)
+{
+    _PyLongSpan span = {op->long_value.ob_digit, _PyLong_DigitCount(op),
+                        _PyLong_IsNegative(op)};
+    return span;
+}
+
+// The span of v, |v| < 2**60, with its digits in buf.
+static inline _PyLongSpan
+_PyLong_SpanOfWord(int64_t v, digit buf[_PyLong_WORD_DIGITS])
+{
+    uint64_t m = v < 0 ? 0 - (uint64_t)v : (uint64_t)v;
+    assert(m >> (PyLong_SHIFT * _PyLong_WORD_DIGITS) == 0);
+    buf[0] = (digit)(m & PyLong_MASK);
+    buf[1] = (digit)(m >> PyLong_SHIFT);
+    _PyLongSpan span = {buf, buf[1] ? 2 : (buf[0] ? 1 : 0), v < 0};
+    return span;
+}
+
+/* A result under construction. A kernel reserves its size bound in digits
+ * (_PyLong_OutReserve()), writes the magnitude to d, and sets n (the digits
+ * written, perhaps with leading zeros) and neg. The value layer consumes it
+ * with _PyLong_OutValue() or _PyLong_OutObject() (pycore_long_value.h),
+ * which normalise; error paths release it with _PyLong_OutAbandon(). */
+typedef struct {
+    digit small[_PyLong_WORD_DIGITS];
+    PyLongObject *heap;     // a reserved heap result, or NULL
+    digit *d;               // small, or the digits of heap
+    Py_ssize_t n;
+    int neg;
+} _PyLongOut;
+
+// The heap case of _PyLong_OutReserve(): a new int of bound digits.
+PyAPI_FUNC(digit *) _PyLong_OutReserveHeap(_PyLongOut *out, Py_ssize_t bound);
+
+/* Reserve bound digits for a result: small if bound <= _PyLong_WORD_DIGITS,
+   else a new heap int of bound digits (a result allocation, sized as
+   upstream's). NULL with MemoryError. */
+static inline digit *
+_PyLong_OutReserve(_PyLongOut *out, Py_ssize_t bound)
+{
+    assert(bound >= 0);
+    out->n = bound;
+    out->neg = 0;
+    if (bound <= _PyLong_WORD_DIGITS) {
+        out->heap = NULL;
+        out->d = out->small;
+        return out->d;
+    }
+    return _PyLong_OutReserveHeap(out, bound);
+}
+
+static inline void
+_PyLong_OutAbandon(_PyLongOut *out)
+{
+    if (out->heap != NULL) {
+        Py_DECREF(out->heap);
+        out->heap = NULL;
+    }
+}
+
+// The normalised result as a span, valid until the out is consumed.
+static inline _PyLongSpan
+_PyLong_OutSpan(_PyLongOut *out)
+{
+    Py_ssize_t n = out->n;
+    while (n > 0 && out->d[n - 1] == 0) {
+        n--;
+    }
+    out->n = n;
+    _PyLongSpan span = {out->d, n, n != 0 && out->neg};
+    return span;
+}
+
+/* Span readers: the digit loops of the object readers, which become their
+   wrappers. */
+// The value of a, or -1 with *overflow set to the sign of a. Never raises.
+PyAPI_FUNC(int64_t) _PyLong_SpanAsInt64AndOverflow(_PyLongSpan a,
+                                                   int *overflow);
+// PyLong_AsDouble()'s digit path: -1.0 with OverflowError.
+PyAPI_FUNC(double) _PyLong_SpanAsDouble(_PyLongSpan a);
+// _PyLong_Frexp() of a span.
+PyAPI_FUNC(double) _PyLong_SpanFrexp(_PyLongSpan a, int64_t *e);
+// _PyLong_NumBits() of a span: -1 with OverflowError.
+PyAPI_FUNC(int64_t) _PyLong_SpanNumBits(_PyLongSpan a);
+// The hash of a, as long_hash().
+PyAPI_FUNC(Py_hash_t) _PyLong_SpanHash(_PyLongSpan a);
+// PyLong_AsNativeBytes() of a span.
+PyAPI_FUNC(Py_ssize_t) _PyLong_SpanAsNativeBytes(_PyLongSpan a, void *buffer,
+                                                 Py_ssize_t n, int flags);
+
 #ifdef __cplusplus
 }
 #endif

@@ -89,7 +89,10 @@ Py_BUILD_CORE_MODULE, or one that defines Py_VALUE_CORE (Include/pyport.h).
   pass): value-api-g.md, section 1.7; see BOX_TEXT_RULES.
 
 The functions that Py_VALUE_COMPAT marks need no other rule here: calling
-one from a value-native unit is a compile error.
+one from a value-native unit is a compile error. The int and float
+extractors (PyLong_AsLong, PyFloat_AsDouble, ...) carry
+Py_VALUE_COMPAT_NUMBERS instead, which marks them only in a unit that defines
+Py_VALUE_MARK_NUMBERS, until wave W2 marks them everywhere.
 
 The script reads compile_commands.json, which intercept-build records while
 the units compile, and runs clang-query over every value-native unit, then
@@ -2083,12 +2086,18 @@ def self_test(clang_query, template, compiler, cxx, jobs):
         # unit does not compile; from a module unit it does.
         flags = compile_flags(template)
         call = "void f(void) { _PyValue_CompatProbe(); }\n"
-        for name, prefix, should_fail in (
-                ("unavailable_core", "", True),
+        # The int and float extractors are marked only in a unit that opts
+        # in with Py_VALUE_MARK_NUMBERS.
+        numbers_call = "long f(void) { return PyLong_AsLong(0); }\n"
+        numbers_mark = "#define Py_VALUE_MARK_NUMBERS 1\n"
+        for name, prefix, body, should_fail in (
+                ("unavailable_core", "", call, True),
                 ("unavailable_module", "#define Py_BUILD_CORE_MODULE 1\n",
-                 False)):
+                 call, False),
+                ("unavailable_numbers", numbers_mark, numbers_call, True),
+                ("available_numbers", "", numbers_call, False)):
             path = Path(tmp, f"{name}.c")
-            path.write_text(prefix + SELF_TEST_HEADER + call)
+            path.write_text(prefix + SELF_TEST_HEADER + body)
             proc = subprocess.run(
                 [*shlex.split(compiler), *flags, "-fsyntax-only", str(path)],
                 cwd=template["directory"], capture_output=True, text=True)

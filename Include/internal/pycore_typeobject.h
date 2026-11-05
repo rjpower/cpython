@@ -146,7 +146,7 @@ extern PyObject* _Py_type_getattro(PyObject *type, PyObject *name);
 extern PyValue _Py_type_getattro_value(PyTypeObject *type, PyObject *name,
                                               int *suppress_missing_attribute);
 
-extern PyObject* _Py_BaseObject_RichCompare(PyObject* self, PyObject* other, int op);
+Py_VALUE_ENTRY extern PyObject* _Py_BaseObject_RichCompare(PyObject* self, PyObject* other, int op);
 
 extern PyObject* _Py_slot_tp_getattro(PyObject *self, PyObject *name);
 extern PyObject* _Py_slot_tp_getattr_hook(PyObject *self, PyObject *name);

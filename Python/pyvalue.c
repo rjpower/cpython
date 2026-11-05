@@ -1,3 +1,7 @@
+/* The int and float object extractors are compatibility thunks of their
+   value rows; this unit calls none of them (value-api-v2a1a.md, D12). */
+#define Py_VALUE_MARK_NUMBERS 1
+
 #include "Python.h"
 
 #include "pycore_dict.h"          // PyDict_SetValue(), _PyDict_NextBorrowed()
@@ -133,9 +137,11 @@ _PyObject_ValueIdentity(PyObject *op)
         if (_PyLong_IsCompact((PyLongObject *)op)) {
             return _PyValue_IntBits(_PyLong_CompactValue((PyLongObject *)op));
         }
-        // Exact ints do not raise here.
+        /* The entry primitive calls only typed kernels: the span reader,
+           which never raises. */
         int overflow;
-        long long value = PyLong_AsLongLongAndOverflow(op, &overflow);
+        int64_t value = _PyLong_SpanAsInt64AndOverflow(
+            _PyLong_SpanOf((PyLongObject *)op), &overflow);
         if (!overflow && _PyValue_IntFitsInline(value)) {
             return _PyValue_IntBits(value);
         }
@@ -157,48 +163,15 @@ _PyValue_BoxInt64(int64_t value)
     return _PyValue_PointerSteal(op);
 }
 
-/* The operands are exact ints in the inline range, so the multiplication
-   runs no Python; only the allocation can fail. */
 PyValue
-_PyValue_MultiplyInt64(int64_t a, int64_t b)
+_PyValue_BoxUInt64(uint64_t value)
 {
-    assert(_PyValue_IntFitsInline(a) && _PyValue_IntFitsInline(b));
-    int64_t product;
-    if (!__builtin_mul_overflow(a, b, &product)) {
-        return PyValue_FromInt64(product);
-    }
-    PyObject *x = PyLong_FromLongLong(a);
-    if (x == NULL) {
-        return PyValue_NULL;
-    }
-    PyObject *y = PyLong_FromLongLong(b);
-    if (y == NULL) {
-        Py_DECREF(x);
-        return PyValue_NULL;
-    }
-    PyObject *res = PyNumber_Multiply(x, y);
-    Py_DECREF(y);
-    Py_DECREF(x);
-    if (res == NULL) {
-        return PyValue_NULL;
-    }
-    return PyValue_FromObjectSteal(res);
-}
-
-PyValue
-_PyValue_LshiftInt64(int64_t value, int64_t shift)
-{
-    assert(value != 0 && shift >= 0);
-    PyObject *op = PyLong_FromLongLong(value);
+    assert(value > (uint64_t)INT64_MAX);
+    PyObject *op = PyLong_FromUnsignedLongLong(value);
     if (op == NULL) {
         return PyValue_NULL;
     }
-    PyObject *res = _PyLong_Lshift(op, shift);
-    Py_DECREF(op);
-    if (res == NULL) {
-        return PyValue_NULL;
-    }
-    return PyValue_FromObjectSteal(res);
+    return _PyValue_PointerSteal(op);
 }
 
 PyValue

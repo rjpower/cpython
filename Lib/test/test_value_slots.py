@@ -5,6 +5,10 @@ tp_value field, the pairing invariant and inheritance in PyType_Ready) and
 section 4.8 (the test types).
 """
 
+import builtins
+import itertools
+import math
+import opcode
 import operator
 import re
 import sys
@@ -32,6 +36,10 @@ Split = _testinternalcapi.Split
 SplitSeq = _testinternalcapi.SplitSeq
 wrapper_pair = _testinternalcapi.wrapper_pair
 value_dispatch = _testinternalcapi.value_dispatch
+int_span_path = _testinternalcapi.int_span_path
+value_extract = _testinternalcapi.value_extract
+object_extract = _testinternalcapi.object_extract
+value_construct = _testinternalcapi.value_construct
 ObjAdd = _testcapi.ObjAdd
 ObjIndex = _testcapi.ObjIndex
 ObjNotImpl = _testcapi.ObjNotImpl
@@ -42,6 +50,29 @@ VINT_FIELDS = ('nb_add', 'nb_multiply', 'richcompare', 'hash', 'repr',
 
 def slots(t):
     return {name: value_slot(t, name) for name in value_slot_names()}
+
+
+INT_ROWS = (
+    'nb_add', 'nb_subtract', 'nb_multiply', 'nb_remainder', 'nb_divmod',
+    'nb_power', 'nb_negative', 'nb_positive', 'nb_absolute', 'nb_bool',
+    'nb_invert', 'nb_lshift', 'nb_rshift', 'nb_and', 'nb_xor', 'nb_or',
+    'nb_int', 'nb_float', 'nb_floor_divide', 'nb_true_divide', 'nb_index',
+    'richcompare', 'hash', 'repr')
+FLOAT_ROWS = (
+    'nb_add', 'nb_subtract', 'nb_multiply', 'nb_remainder', 'nb_divmod',
+    'nb_power', 'nb_negative', 'nb_positive', 'nb_absolute', 'nb_bool',
+    'nb_int', 'nb_float', 'nb_floor_divide', 'nb_true_divide', 'richcompare',
+    'hash', 'repr')
+BOOL_OWN_ROWS = ('nb_and', 'nb_or', 'nb_xor', 'nb_invert')
+
+
+def int_slots(t):
+    return {name: value_slot(t, name) for name in INT_ROWS}
+
+
+def set_rows(t):
+    """The names of the value slots of t that are set."""
+    return {name for name in value_slot_names() if value_slot(t, name)}
 
 
 def vint_slots(t):
@@ -127,12 +158,32 @@ class VIntTests(unittest.TestCase):
 
 
 class IntSubtypeTests(unittest.TestCase):
-    def test_no_value_slots_yet(self):
-        for t in (int, _testcapi.IntSubNothing, _testcapi.IntSubRepr,
-                  _testcapi.IntSubAdd):
+    def test_static_subtypes(self):
+        # V2a-1a: int has value slots. A static extension subtype that
+        # overrides nothing inherits all of them; one that overrides an object
+        # slot loses that row only.
+        expected = int_slots(int)
+        self.assertEqual(int_slots(_testcapi.IntSubNothing), expected)
+
+        got = int_slots(_testcapi.IntSubRepr)
+        self.assertEqual(got.pop('repr'), 0)
+        expected_no_repr = dict(expected)
+        del expected_no_repr['repr']
+        self.assertEqual(got, expected_no_repr)
+
+        got = int_slots(_testcapi.IntSubAdd)
+        self.assertEqual(got.pop('nb_add'), 0)
+        expected_no_add = dict(expected)
+        del expected_no_add['nb_add']
+        self.assertEqual(got, expected_no_add)
+
+    def test_static_subtype_object_slots(self):
+        for t in (_testcapi.IntSubNothing, _testcapi.IntSubRepr):
             with self.subTest(t=t):
-                self.assertEqual(value_slot(t, 'nb_add'), 0)
-                self.assertEqual(value_slot(t, 'repr'), 0)
+                self.assertEqual(object_slot(t, 'nb_add'),
+                                 object_slot(int, 'nb_add'))
+        self.assertNotEqual(object_slot(_testcapi.IntSubAdd, 'nb_add'),
+                            object_slot(int, 'nb_add'))
 
 
 class PairTableTests(unittest.TestCase):
@@ -252,9 +303,13 @@ class ThunkTests(unittest.TestCase):
         with self.assertRaises(TypeError):
             VInt(2) + 'x'
 
+    def test_int_value_slot(self):
+        self.assertEqual(call_value_slot(int, 'nb_add', 1, 2), 3)
+        self.assertIs(call_value_slot(int, 'nb_add', 1, 2.5), NotImplemented)
+
     def test_no_value_slot(self):
         with self.assertRaises(LookupError):
-            call_value_slot(int, 'nb_add', 1, 2)
+            call_value_slot(int, 'nb_matrix_multiply', 1, 2)
 
     def test_unary_ternary_inquiry_concat(self):
         log = []
@@ -461,8 +516,11 @@ class WrapperPairTests(unittest.TestCase):
         self.assertEqual(wrapper_pair(VInt.__add__)[1],
                          value_slot(VInt, 'nb_add'))
 
-    def test_int_has_no_value_side(self):
-        self.assertEqual(wrapper_pair(int.__add__)[1], 0)
+    def test_int_pair(self):
+        self.assertEqual(wrapper_pair(int.__add__),
+                         (object_slot(int, 'nb_add'),
+                          value_slot(int, 'nb_add')))
+        self.assertNotEqual(wrapper_pair(int.__add__)[1], 0)
 
     def test_pair_table(self):
         functions = _testinternalcapi.value_functions()
@@ -1000,6 +1058,531 @@ class DispatcherTests(unittest.TestCase):
             value_dispatch('Nothing', 1)
         with self.assertRaises(TypeError):
             value_dispatch('Add', 1)
+
+
+# V2a-1a: value slots of int, float, bool, object and str
+
+EDGE = sorted({0, 1, -1, 2**29, -2**29, 2**30, -2**30, 2**50 - 1, -2**50,
+               2**50, -2**50 - 1, 2**51, -2**51, 2**59, -2**59, 2**60,
+               -2**60, 2**62, -2**62, 2**63, -2**63, 2**64, -2**64,
+               2**200, -2**200})
+
+NB_CODES = {symbol: code
+            for code, (name, symbol) in enumerate(opcode._nb_ops)}
+
+SWEEP_OPS = (
+    ('+', operator.add), ('-', operator.sub), ('*', operator.mul),
+    ('//', operator.floordiv), ('%', operator.mod),
+    ('/', operator.truediv), ('<<', operator.lshift),
+    ('>>', operator.rshift), ('&', operator.and_), ('|', operator.or_),
+    ('^', operator.xor), ('**', operator.pow),
+)
+
+
+class I(int):
+    pass
+
+
+def modular_inverse(a, m):
+    """The inverse of a modulo m > 0 by the extended Euclid algorithm."""
+    r0, r1 = m, a % m
+    t0, t1 = 0, 1
+    while r1:
+        q = r0 // r1
+        r0, r1 = r1, r0 - q * r1
+        t0, t1 = t1, t0 - q * t1
+    if r0 != 1:
+        raise ValueError("base is not invertible for the given modulus")
+    return t0 % m
+
+
+def reference_pow(a, b, c):
+    """pow(a, b, c) by square and multiply, with upstream's sign rules."""
+    if c == 0:
+        raise ValueError("pow() 3rd argument cannot be 0")
+    m = abs(c)
+    if b < 0:
+        a = modular_inverse(a, m)
+        b = -b
+    a %= m
+    result = 1 % m
+    while b:
+        if b & 1:
+            result = result * a % m
+        a = a * a % m
+        b >>= 1
+    if c < 0 and result:
+        result += c
+    return result
+
+
+def reference_decimal(n):
+    digits = []
+    m = abs(n)
+    while m:
+        m, d = divmod(m, 10)
+        digits.append('0123456789'[d])
+    return ('-' if n < 0 else '') + (''.join(reversed(digits)) or '0')
+
+
+def reference_hash(n):
+    h = abs(n) % (2**61 - 1)
+    if n < 0:
+        h = -h
+    return -2 if h == -1 else h
+
+
+def outcome(function, *args):
+    try:
+        return ('value', function(*args))
+    except Exception as exc:
+        return ('error', type(exc))
+
+
+class IntValueRowsTests(unittest.TestCase):
+    def test_int_rows(self):
+        # str is object's, inherited.
+        self.assertEqual(len(INT_ROWS), 24)
+        self.assertEqual(set_rows(int), set(INT_ROWS) | {'str'})
+        for name in INT_ROWS:
+            with self.subTest(row=name):
+                self.assertNotEqual(object_slot(int, name), 0)
+
+    def test_float_rows(self):
+        self.assertEqual(len(FLOAT_ROWS), 17)
+        self.assertEqual(set_rows(float), set(FLOAT_ROWS) | {'str'})
+        for name in FLOAT_ROWS:
+            with self.subTest(row=name):
+                self.assertNotEqual(object_slot(float, name), 0)
+
+    def test_bool_rows(self):
+        # bool has its own four rows and inherits int's others, but not
+        # repr: bool_repr has no value side. str is object's.
+        self.assertEqual(set_rows(bool), set(INT_ROWS) - {'repr'} | {'str'})
+        self.assertEqual(value_slot(bool, 'repr'), 0)
+        for name in INT_ROWS:
+            if name == 'repr':
+                continue
+            with self.subTest(row=name):
+                if name in BOOL_OWN_ROWS:
+                    self.assertNotEqual(value_slot(bool, name),
+                                        value_slot(int, name))
+                else:
+                    self.assertEqual(value_slot(bool, name),
+                                     value_slot(int, name))
+
+    def test_object_rows(self):
+        # hash predates V2a-1a; richcompare and str are its.
+        self.assertEqual(set_rows(object), {'hash', 'richcompare', 'str'})
+
+    def test_none_and_sentinel_inherit_richcompare(self):
+        types = [type(None)]
+        sentinel = getattr(builtins, 'sentinel', None)
+        if sentinel is not None:
+            types.append(sentinel)
+        for t in types:
+            with self.subTest(type=t):
+                self.assertEqual(value_slot(t, 'richcompare'),
+                                 value_slot(object, 'richcompare'))
+                self.assertEqual(object_slot(t, 'richcompare'),
+                                 object_slot(object, 'richcompare'))
+
+    def test_str_rows(self):
+        self.assertEqual(set_rows(str), {'richcompare'})
+
+    def test_python_subclass_inherits(self):
+        self.assertEqual(int_slots(I), int_slots(int))
+
+
+class IntParityTests(unittest.TestCase):
+    """The operators (the value slots) against the span path."""
+
+    def test_sweep(self):
+        for symbol, op in SWEEP_OPS:
+            code = NB_CODES[symbol]
+            for a, b in itertools.product(EDGE, repeat=2):
+                if symbol == '<<' and b > 10_000:
+                    continue
+                if symbol == '**' and abs(b) > 64 and a not in (0, 1, -1):
+                    continue
+                with self.subTest(op=symbol, a=a, b=b):
+                    got = outcome(op, a, b)
+                    expected = outcome(int_span_path, code, a, b)
+                    self.assertEqual(got, expected)
+                    if got[0] == 'value' and symbol != '/':
+                        if isinstance(got[1], int):
+                            self.assertIs(type(got[1]), int)
+
+    def test_subclass_operands(self):
+        for symbol, op in SWEEP_OPS:
+            if symbol in ('<<', '**', '/'):
+                continue
+            with self.subTest(op=symbol):
+                result = op(I(2**40), 3)
+                self.assertIs(type(result), int)
+                self.assertEqual(result, op(2**40, 3))
+
+    def test_upstream_values(self):
+        big = 2**70
+        self.assertEqual(divmod(5, big), (0, 5))
+        self.assertEqual(-5 % big, big - 5)
+        self.assertEqual(pow(5, 1, big), 5)
+        r = I(2**40) // 3
+        self.assertIs(type(r), int)
+        self.assertEqual(r, 366503875925)
+        one = big - (big - 1)
+        self.assertEqual(one, 1)
+
+    def test_range_edges(self):
+        minus_one = -1
+        low = -2**50
+        self.assertEqual(low // minus_one, 2**50)
+        self.assertEqual(-low, 2**50)
+        self.assertEqual(abs(low), 2**50)
+        self.assertEqual(operator.neg(low), 2**50)
+        self.assertEqual(1 << 1000, 2**1000)
+        self.assertEqual((1 << 1000).bit_length(), 1001)
+        self.assertEqual(minus_one >> 100, -1)
+        self.assertEqual(1 >> 100, 0)
+
+    def test_errors(self):
+        for x in (0, 1, 2**50, 2**70):
+            with self.subTest(x=x):
+                with self.assertRaisesRegex(ValueError,
+                                            'negative shift count'):
+                    x << -1
+                with self.assertRaisesRegex(ValueError,
+                                            'negative shift count'):
+                    x >> -1
+                with self.assertRaisesRegex(ZeroDivisionError,
+                                            'division by zero'):
+                    x // 0
+                with self.assertRaisesRegex(ZeroDivisionError,
+                                            'division by zero'):
+                    x % 0
+                with self.assertRaisesRegex(ZeroDivisionError,
+                                            'division by zero'):
+                    divmod(x, 0)
+        with self.assertRaises(ZeroDivisionError):
+            pow(0, -1)
+        with self.assertRaisesRegex(ValueError,
+                                    r'pow\(\) 3rd argument cannot be 0'):
+            pow(2, 3, 0)
+        with self.assertRaisesRegex(ValueError,
+                                    'base is not invertible for the given '
+                                    'modulus'):
+            pow(2, -1, 4)
+        with self.assertRaises(OverflowError):
+            5 << 2**70
+
+    def test_modular_pow(self):
+        self.assertEqual(pow(3, -1, 7), 5)
+        self.assertEqual(pow(3, 5, -7), -2)
+        self.assertEqual(pow(-3, 5, 7), 2)
+        cases = [
+            (3, 5, -7), (-3, 5, 7), (10**30, 10**20, 97),
+            (3, 10**5, 2**61 - 1), (3, -1, 2**70),
+            (2**70 + 1, -1, 2**65 + 5), (3, 5, 1), (0, 0, 7), (5, 0, 1),
+            (2**64, 2**64, 2**59 + 1), (-2**64, 3, -(2**70)),
+            (7, 10**18, 2**60 - 93), (7, 1000, 2**120 + 5),
+        ]
+        for a, b, c in cases:
+            with self.subTest(a=a, b=b, c=c):
+                self.assertEqual(pow(a, b, c), reference_pow(a, b, c))
+        inverse = pow(2**70 + 1, -1, 2**65 + 5)
+        self.assertEqual((inverse * (2**70 + 1)) % (2**65 + 5), 1)
+        inverse = pow(3, -1, 2**70)
+        self.assertEqual((inverse * 3) % 2**70, 1)
+
+    def test_modular_pow_negative_base_wide_modulus(self):
+        # A modulus of 31 to 60 bits with |a| as wide as the modulus or wider:
+        # the remainder of the division has a's sign.
+        self.assertEqual(pow(-2**50, 1, 2**31 + 1), 524288)
+        self.assertEqual(pow(-2**31 - 5, 1, 2**31 + 1), 2147483645)
+        bases = [1, 2**30 - 1, 2**31 + 5, 2**50, 2**60 - 1, 2**61 + 7,
+                 2**90 + 12345]
+        moduli = [2**30 + 1, 2**31 + 1, 2**45 + 9, 2**59 + 3, 2**60 - 93]
+        for a in bases:
+            for c in moduli:
+                for sign_a, sign_c in itertools.product((1, -1), repeat=2):
+                    for e in (1, 2, 5):
+                        with self.subTest(a=sign_a * a, e=e, c=sign_c * c):
+                            self.assertEqual(pow(sign_a * a, e, sign_c * c),
+                                             reference_pow(sign_a * a, e,
+                                                           sign_c * c))
+
+    def test_lshift_huge_count(self):
+        # A count that fits int64 but not the allocation fails as upstream.
+        for n in (2**60, 2**61 + 5, 2**62):
+            with self.subTest(n=n):
+                with self.assertRaises(MemoryError):
+                    1 << n
+        for n in (2**63, 2**64, 2**90):
+            with self.subTest(n=n):
+                with self.assertRaises(OverflowError):
+                    1 << n
+
+    def test_bool(self):
+        t = True
+        five = 5
+        self.assertEqual(t + five, 6)
+        self.assertEqual(five & t, 1)
+        self.assertIs(type(five & t), int)
+        self.assertIs(t & t, True)
+        self.assertIs(t | False, True)
+        self.assertIs(t ^ t, False)
+        with self.assertWarns(DeprecationWarning):
+            self.assertEqual(operator.invert(t), -2)
+        self.assertTrue(t == 1)
+        self.assertEqual(hash(t), 1)
+        three = I(3)
+        self.assertIs(type(three + 1), int)
+        self.assertIs(type(1 + three), int)
+
+
+class MixedTests(unittest.TestCase):
+    def test_int_float(self):
+        one = 1
+        big = 2**60
+        self.assertEqual(one + 2.5, 3.5)
+        self.assertEqual(big + 2.5, float(big) + 2.5)
+        with self.assertRaises(OverflowError):
+            10**400 + 1.0
+        two53 = 2**53
+        self.assertFalse(two53 + 1 == float(two53))
+        self.assertTrue(two53 == float(two53))
+        self.assertTrue(two53 + 1 > float(two53))
+        self.assertFalse(1000 < float('nan'))
+        self.assertFalse(1000 > float('nan'))
+        self.assertFalse(1000 == float('nan'))
+        self.assertTrue(1000 != float('nan'))
+
+    def test_reflected_compare(self):
+        log = []
+
+        class J(int):
+            def __lt__(self, other):
+                log.append('lt')
+                return int.__lt__(self, other)
+
+            def __gt__(self, other):
+                log.append('gt')
+                return int.__gt__(self, other)
+
+        two53 = 2**53
+        value = J(two53 + 1)
+        # J.__lt__ runs first and gives NotImplemented; float's reflected
+        # comparison then compares int(2.0**53) with the J itself, so J's
+        # reflected __lt__ runs again, as upstream.
+        self.assertFalse(value < float(two53))
+        self.assertEqual(log, ['lt', 'lt'])
+        log.clear()
+        # float's compare runs first and reaches J's reflected __lt__ the
+        # same way.
+        self.assertFalse(float(two53) > value)
+        self.assertEqual(log, ['lt'])
+
+    def test_reflected_arithmetic(self):
+        class F(float):
+            def __radd__(self, other):
+                return 'radd'
+
+        self.assertEqual(1 + F(2.0), 'radd')
+        self.assertEqual(2**60 + F(2.0), 'radd')
+
+    def test_sorting_and_search(self):
+        self.assertEqual(sorted([3, 1.5, 2]), [1.5, 2, 3])
+        self.assertEqual([1, 2.5].index(2.5), 1)
+        self.assertEqual(sorted([2**60, 1.5, -3, 2**50]),
+                         [-3, 1.5, 2**50, 2**60])
+
+
+class HashReprTests(unittest.TestCase):
+    def test_int_hash(self):
+        for x in EDGE:
+            with self.subTest(x=x):
+                self.assertEqual(hash(x), reference_hash(x))
+                self.assertEqual(hash(I(x)), reference_hash(x))
+
+    def test_hash_identities(self):
+        self.assertEqual(hash(3), hash(3.0))
+        self.assertEqual(hash(2**60), hash(float(2**60)))
+        self.assertEqual(hash(-1), -2)
+        self.assertEqual(hash(-2), -2)
+        self.assertEqual(hash(2.5), hash(2.5))
+        self.assertEqual(hash(-1.0), -2)
+        self.assertEqual(hash(float('inf')), sys.hash_info.inf)
+
+    def test_nan_hash_is_per_object(self):
+        nans = [float('nan') for _ in range(4)]
+        self.assertEqual(hash(nans[0]), hash(nans[0]))
+        self.assertEqual(len({hash(n) for n in nans}), len(nans))
+
+    def test_int_repr(self):
+        for x in EDGE:
+            with self.subTest(x=x):
+                text = reference_decimal(x)
+                self.assertEqual(repr(x), text)
+                self.assertEqual(str(x), text)
+                self.assertEqual(format(x), text)
+                self.assertEqual('%d' % x, text)
+                self.assertEqual(repr(I(x)), text)
+        self.assertEqual(repr(True), 'True')
+
+    def test_float_repr(self):
+        for x, text in ((1.0, '1.0'), (-0.0, '-0.0'), (1e16, '1e+16'),
+                        (float('nan'), 'nan'), (float('inf'), 'inf'),
+                        (-float('inf'), '-inf'), (2.5, '2.5'),
+                        (0.1, '0.1'), (1e-7, '1e-07'), (123456.0, '123456.0')):
+            with self.subTest(x=x):
+                self.assertEqual(repr(x), text)
+                self.assertEqual(str(x), text)
+
+    def test_container_repr(self):
+        self.assertEqual(repr([1000, 2000]), '[1000, 2000]')
+        self.assertEqual(repr(EDGE), '[' + ', '.join(
+            reference_decimal(x) for x in EDGE) + ']')
+        self.assertEqual(
+            repr([1.0, -0.0, 1e16, float('nan'), float('inf'), 2.5]),
+            '[1.0, -0.0, 1e+16, nan, inf, 2.5]')
+        self.assertEqual(repr((1, 2.5, 2**60, None)),
+                         '(1, 2.5, 1152921504606846976, None)')
+        self.assertEqual(repr({1000: 2.5}), '{1000: 2.5}')
+
+
+EXTRACT_NAMES = (
+    'AsInt', 'AsLong', 'AsLongLong', 'AsLongAndOverflow',
+    'AsLongLongAndOverflow', 'AsInt32', 'AsInt64', 'AsUInt32', 'AsUInt64',
+    'IntAsUnsignedLong', 'IntAsUnsignedLongLong', 'AsUnsignedLongMask',
+    'AsUnsignedLongLongMask', 'IntAsSsize_t', 'IntAsSize_t', 'IntAsDouble',
+    'IntAsVoidPtr', 'AsDouble')
+
+
+class HasIndex:
+    def __index__(self):
+        return 42
+
+
+class HasFloat:
+    def __float__(self):
+        return 2.5
+
+
+def extract_outcome(function, name, obj):
+    try:
+        return ('value', function(name, obj))
+    except Exception as exc:
+        return ('error', type(exc), str(exc))
+
+
+class ExtractorTests(unittest.TestCase):
+    VALUES = (
+        [0, 1, -1, 2**31, -2**31 - 1, 2**50 - 1]
+        + [2**50, 2**63 - 1, 2**63, 2**64, -2**63, -2**63 - 1, 2**64 - 1,
+           2**100]
+        + [1.5, HasIndex(), HasFloat(), 'a', True, I(7), None])
+
+    def test_parity(self):
+        for name in EXTRACT_NAMES:
+            for value in self.VALUES:
+                with self.subTest(row=name, value=value):
+                    self.assertEqual(
+                        extract_outcome(value_extract, name, value),
+                        extract_outcome(object_extract, name, value))
+
+    def test_inline_values(self):
+        self.assertEqual(value_extract('AsLong', 2**50 - 1), 2**50 - 1)
+        self.assertEqual(value_extract('AsLongAndOverflow', 2**63),
+                         (-1, 1))
+        self.assertEqual(value_extract('AsLongAndOverflow', -2**63 - 1),
+                         (-1, -1))
+        self.assertEqual(value_extract('AsDouble', 1.5), 1.5)
+        self.assertEqual(value_extract('AsDouble', HasIndex()), 42.0)
+        self.assertEqual(value_extract('AsDouble', HasFloat()), 2.5)
+
+    def test_unknown_name(self):
+        with self.assertRaises(ValueError):
+            value_extract('Nothing', 1)
+        with self.assertRaises(ValueError):
+            object_extract('Nothing', 1)
+
+
+class ConstructorTests(unittest.TestCase):
+    def test_int64(self):
+        for x, inline in ((0, True), (-2**50, True), (2**50 - 1, True),
+                          (2**50, False), (-2**50 - 1, False),
+                          (2**51, False), (-2**51, False),
+                          (2**63 - 1, False), (-2**63, False)):
+            with self.subTest(x=x):
+                result, is_inline = value_construct('Int64', x)
+                self.assertEqual(result, x)
+                self.assertIs(type(result), int)
+                self.assertIs(bool(is_inline), inline)
+
+    def test_uint64(self):
+        for x, inline in ((0, True), (5, True), (2**50 - 1, True),
+                          (2**50, False), (2**63, False), (2**64 - 1, False)):
+            with self.subTest(x=x):
+                result, is_inline = value_construct('UInt64', x)
+                self.assertEqual(result, x)
+                self.assertIs(type(result), int)
+                self.assertIs(bool(is_inline), inline)
+
+    def test_double(self):
+        result, is_inline = value_construct('Double', float('nan'))
+        self.assertTrue(math.isnan(result))
+        self.assertFalse(is_inline)
+        for x in (1.5, -0.0, float('inf'), 1e300):
+            with self.subTest(x=x):
+                result, is_inline = value_construct('Double', x)
+                self.assertEqual(result, x)
+                self.assertEqual(math.copysign(1.0, result),
+                                 math.copysign(1.0, x))
+                self.assertTrue(is_inline)
+
+    def test_bool(self):
+        # The argument is a C long: 1 << 40 must not be cut to an int.
+        result, is_inline = value_construct('Bool', 1 << 40)
+        self.assertIs(result, True)
+        self.assertFalse(is_inline)
+        result, is_inline = value_construct('Bool', 0)
+        self.assertIs(result, False)
+        self.assertFalse(is_inline)
+
+    def test_double_integral(self):
+        result, is_inline = value_construct('DoubleIntegral', 3.0)
+        self.assertEqual(result, 3)
+        self.assertIs(type(result), int)
+        self.assertTrue(is_inline)
+        result, is_inline = value_construct('DoubleIntegral', 2.0**60)
+        self.assertEqual(result, 2**60)
+        self.assertFalse(is_inline)
+        result, is_inline = value_construct('DoubleIntegral', -2.0**50)
+        self.assertEqual(result, -2**50)
+        self.assertTrue(is_inline)
+        with self.assertRaises(OverflowError):
+            value_construct('DoubleIntegral', float('inf'))
+        with self.assertRaises(ValueError):
+            value_construct('DoubleIntegral', float('nan'))
+
+    def test_unknown_kind(self):
+        with self.assertRaises(ValueError):
+            value_construct('Nothing', 1)
+
+
+class ObjectCompareTests(unittest.TestCase):
+    def test_object_eq_ne(self):
+        a = 1000
+        self.assertIs(object.__eq__(a, 1000), True)
+        self.assertIs(object.__eq__(a, 'a'), NotImplemented)
+        self.assertIs(object.__ne__(a, 'a'), NotImplemented)
+        self.assertIs(object.__ne__(a, 1000), False)
+
+    def test_none_compare(self):
+        five = 5
+        self.assertIs(None == five, False)
+        self.assertIs(None != five, True)
+        self.assertIs(None == None, True)
 
 
 if __name__ == '__main__':

@@ -8059,65 +8059,67 @@ object_repr(PyObject *self)
     return rtn;
 }
 
-static PyObject *
-object_str(PyObject *self)
-{
-    unaryfunc f;
+/* object's value sides (value-api-v2a1a.md, D6 and D7). NoneType and the
+   sentinel type name _Py_BaseObject_RichCompare() too, so the inheritance
+   pass gives them object's value side. */
 
-    f = Py_TYPE(self)->tp_repr;
-    if (f == NULL)
+PyObject *
+_PyObject_ValueStr(PyValueBorrow v)
+{
+    PyTypeObject *tp = PyValue_TYPE(v);
+    reprfunc f = tp->tp_repr;
+    if (f == NULL) {
         f = object_repr;
-    return f(self);
+    }
+    return _PyValue_CallRepr(tp, f, _Py_VALUE_SLOT_INDEX_repr, v);
 }
 
-static PyObject *
-object_richcompare(PyObject *self, PyObject *other, int op)
-{
-    PyObject *res;
+_Py_VALUE_THUNK_REPR(object_str, _PyObject_ValueStr)
 
+PyValue
+_PyObject_ValueRichCompare(PyValueBorrow v, PyValueBorrow w, int op)
+{
     switch (op) {
 
     case Py_EQ:
         /* Return NotImplemented instead of False, so if two
            objects are compared, both get a chance at the
            comparison.  See issue #1393. */
-        res = Py_NewRef(_PyObject_IsSame(self, other) ? Py_True : Py_NotImplemented);
-        break;
+        return PyValue_Is(v, w) ? PyValue_True : PyValue_NotImplemented;
 
-    case Py_NE:
+    case Py_NE: {
         /* By default, __ne__() delegates to __eq__() and inverts the result,
            unless the latter returns NotImplemented. */
-        if (Py_TYPE(self)->tp_richcompare == NULL) {
-            res = Py_NewRef(Py_NotImplemented);
-            break;
+        PyTypeObject *tp = PyValue_TYPE(v);
+        if (tp->tp_richcompare == NULL) {
+            return PyValue_NotImplemented;
         }
-        res = (*Py_TYPE(self)->tp_richcompare)(self, other, Py_EQ);
-        if (res != NULL && res != Py_NotImplemented) {
-            int ok = PyObject_IsTrue(res);
-            Py_DECREF(res);
-            if (ok < 0)
-                res = NULL;
-            else {
-                if (ok)
-                    res = Py_NewRef(Py_False);
-                else
-                    res = Py_NewRef(Py_True);
-            }
+        PyValue res = _PyValue_CallRichCompare(tp, tp->tp_richcompare,
+                                               v, w, Py_EQ);
+        if (PyValue_IsNull(res) || PyValue_Is(res, PyValue_NotImplemented)) {
+            return res;
         }
-        break;
-
-    default:
-        res = Py_NewRef(Py_NotImplemented);
-        break;
+        int ok = (_PyValue_IsTrue)(PyValue_Borrow(res));
+        PyValue_CLOSE(res);
+        if (ok < 0) {
+            return PyValue_NULL;
+        }
+        return ok ? PyValue_False : PyValue_True;
     }
 
-    return res;
+    default:
+        return PyValue_NotImplemented;
+    }
 }
 
-PyObject*
-_Py_BaseObject_RichCompare(PyObject* self, PyObject* other, int op)
+/* object's compare slot, the thunk of its value side, written out because
+   NoneType and the sentinel type name it from other files (the thunk
+   macros define static functions). */
+Py_VALUE_ENTRY PyObject *
+_Py_BaseObject_RichCompare(PyObject *self, PyObject *other, int op)
 {
-    return object_richcompare(self, other, op);
+    return _PyValue_THUNK_EXIT(_PyObject_ValueRichCompare(
+        _Py_VALUE_ARG(self), _Py_VALUE_ARG(other), op), BOX_SITE_COMPARE);
 }
 
 static PyObject *
@@ -9190,7 +9192,7 @@ PyTypeObject PyBaseObject_Type = {
     object_doc,                                 /* tp_doc */
     0,                                          /* tp_traverse */
     0,                                          /* tp_clear */
-    object_richcompare,                         /* tp_richcompare */
+    _Py_BaseObject_RichCompare,                 /* tp_richcompare */
     0,                                          /* tp_weaklistoffset */
     0,                                          /* tp_iter */
     0,                                          /* tp_iternext */
@@ -9206,6 +9208,11 @@ PyTypeObject PyBaseObject_Type = {
     PyType_GenericAlloc,                        /* tp_alloc */
     object_new,                                 /* tp_new */
     PyObject_Free,                              /* tp_free */
+    .tp_value = {
+        .richcompare = _Py_VALUE_SLOT_INIT(richcompare,
+                                           _PyObject_ValueRichCompare),
+        .str = _Py_VALUE_SLOT_INIT(str, _PyObject_ValueStr),
+    },
 };
 
 
@@ -13426,6 +13433,14 @@ check_ready_value_row(PyTypeObject *type, int row)
 {
     _Py_valuefunc value = *value_slot_field(type, row);
     if (value == NULL) {
+        return;
+    }
+    /* A static builtin type that finalization has cleared has no MRO or
+       dict left to check against, but an object dump at exit still calls
+       its slots (int's repr, for one). */
+    if ((type->tp_flags & _Py_TPFLAGS_STATIC_BUILTIN)
+        && !managed_static_type_index_is_set(type))
+    {
         return;
     }
     void *object = value_slot_object(type, row);

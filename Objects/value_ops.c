@@ -3,6 +3,8 @@
 #define Py_VALUE_ADAPTER 1
 
 #include "Python.h"
+#include "pycore_long_value.h"    // _PyLong_ValueHash()
+#include "pycore_object.h"        // _Py_SwappedOp
 #include "pycore_typeobject.h"    // _PyType_IsReady()
 #include "pycore_value_ops.h"
 #include "pycore_value_slots.h"   // _PyType_VALUE_FIELD_AT()
@@ -10,26 +12,17 @@
 /* As upstream's PyObject_RichCompare() and PyObject_Repr(), these entry
    points take their status from the operation and leave any other pending
    exception alone. Releases need no save (the release contract in
-   pycore_value.h).
+   pycore_value.h). Their callers own the operands (the dispatcher contract
+   in pycore_value_ops.h).
 
-   The mixed paths call the dispatchers (pyjit/design/proposals/
-   value-api-v2a0.md, section 4.6) after their inline arms, which V2a-1a
-   moves into the value slots of int and float. Their callers read the
-   operands from containers, so each keeps an owner of an object operand
-   across the dispatch, which can run Python code that removes it, as
-   upstream's callers do with Py_INCREF(). An inline operand owns nothing. */
-
-static inline PyObject *
-hold(PyValueBorrow value)
-{
-    if (PyValue_IsNull(value) || PyValue_IsInline(value)) {
-        return NULL;
-    }
-    return Py_NewRef(PyValue_AsKnownObjectBorrow(value));
-}
+   Rule R-inline (pyjit/design/proposals/value-api-v2a1a.md, D13): an inline
+   value's type is int or float, fixed by the encoding, so a dispatcher may
+   call that type's value function directly for an inline operand, through
+   the static inline definition that the type's tp_value also stores. No
+   other inline arm exists here. */
 
 /* The port of PyObject_Hash(), whose value is an object: an inline value is
-   an exact int or float, which _PyValue_Hash()'s arms hash. */
+   an exact int or float, which _PyValue_Hash() hashes by R-inline. */
 static Py_hash_t
 hash_object_value(PyValueBorrow value)
 {
@@ -64,40 +57,26 @@ Py_hash_t
 (_PyValue_Hash)(PyValueBorrow value)
 {
     if (PyValue_IsInlineInt(value)) {
-        /* As long_hash(): |value| < 2**50 < _PyHASH_MODULUS, so the hash is
-           the value. */
-        Py_hash_t hash = PyValue_InlineInt64(value);
-        return hash == -1 ? -2 : hash;
+        return _PyLong_ValueHash(value);
     }
     if (PyValue_IsInlineFloat(value)) {
-        /* Inline floats exclude NaN, the only case using the object identity. */
-        return _Py_HashDouble(Py_None, PyValue_InlineFloat(value));
+        return _PyFloat_ValueHash(value);
     }
-    PyObject *owner = hold(value);
-    Py_hash_t hash = hash_object_value(value);
-    Py_XDECREF(owner);
-    return hash;
+    return hash_object_value(value);
 }
 
-static int
-compare_inline(PyValueBorrow left, PyValueBorrow right, int op)
+// The full dispatch and the truth of its result: kept out of line, so that
+// the inline paths of _PyValue_RichCompareBool() need no frame.
+static Py_NO_INLINE int
+richcompare_bool_dispatch(PyValueBorrow left, PyValueBorrow right, int op)
 {
-    /* Every int51 is represented exactly by a double, whose significand has
-       53 bits. No boxed subclass or NaN enters this path, so ordinary C
-       comparisons preserve dispatch. */
-    double a = PyValue_IsInlineInt(left)
-               ? (double)PyValue_InlineInt64(left) : PyValue_InlineFloat(left);
-    double b = PyValue_IsInlineInt(right)
-               ? (double)PyValue_InlineInt64(right) : PyValue_InlineFloat(right);
-    switch (op) {
-        case Py_LT: return a < b;
-        case Py_LE: return a <= b;
-        case Py_EQ: return a == b;
-        case Py_NE: return a != b;
-        case Py_GT: return a > b;
-        case Py_GE: return a >= b;
-        default: Py_UNREACHABLE();
+    PyValue res = (_PyValue_RichCompare)(left, right, op);
+    if (PyValue_IsNull(res)) {
+        return -1;
     }
+    int ok = (_PyValue_IsTrue)(PyValue_Borrow(res));
+    PyValue_CLOSE(res);
+    return ok;
 }
 
 int
@@ -108,29 +87,32 @@ int
         return op == Py_EQ;
     }
     if (PyValue_IsInline(left) && PyValue_IsInline(right)) {
-        return compare_inline(left, right, op);
+        /* R-inline: two inline values are exact ints or non-NaN floats.
+           int's and float's compares, in the full dispatch order (int's
+           gives NotImplemented for a float, then float's reflected one
+           decides), come to comparing the words, or the doubles: an inline
+           int has at most 51 bits, so it is exact as a double. Neither runs
+           Python code, so no recursion guard is needed. */
+        if (PyValue_BothInlineInt(left, right)) {
+            return _PyLong_CompareOp(
+                _PyLong_WordCompare(PyValue_InlineInt64(left),
+                                    PyValue_InlineInt64(right)), op);
+        }
+        /* Set by the call, which holds for the operands tested above; the
+           initialisers quiet -Wmaybe-uninitialized in release builds. */
+        double a = 0.0, b = 0.0;
+        bool floats = PyValue_FloatOperandValues(left, right, &a, &b);
+        assert(floats);
+        (void)floats;
+        return _PyFloat_CompareOp(a, b, op);
     }
-    PyObject *owner_left = hold(left);
-    PyObject *owner_right = hold(right);
-    PyValue res = (_PyValue_RichCompare)(left, right, op);
-    int ok = PyValue_IsNull(res) ? -1 : (_PyValue_IsTrue)(PyValue_Borrow(res));
-    PyValue_XCLOSE(res);
-    Py_XDECREF(owner_right);
-    Py_XDECREF(owner_left);
-    return ok;
+    return richcompare_bool_dispatch(left, right, op);
 }
 
 PyObject *
 (_PyValue_RichCompareObject)(PyValueBorrow left, PyValueBorrow right, int op)
 {
-    if (PyValue_IsInline(left) && PyValue_IsInline(right)) {
-        return PyBool_FromLong(compare_inline(left, right, op));
-    }
-    PyObject *owner_left = hold(left);
-    PyObject *owner_right = hold(right);
     PyValue res = (_PyValue_RichCompare)(left, right, op);
-    Py_XDECREF(owner_right);
-    Py_XDECREF(owner_left);
     if (PyValue_IsNull(res)) {
         return NULL;
     }
@@ -145,9 +127,24 @@ PyObject *
 int
 (_PyValue_WriteRepr)(PyUnicodeWriter *writer, PyValueBorrow value)
 {
-    PyObject *owner = hold(value);
-    PyObject *repr = (_PyValue_Repr)(value);
-    Py_XDECREF(owner);
+    /* R-inline for an inline int or float, and upstream's arms
+       (PyUnicodeWriter_WriteRepr()) for None and a heap exact int. */
+    if (PyValue_IsInlineInt(value)) {
+        return _PyLong_WriteDecimal((_PyUnicodeWriter *)writer, value);
+    }
+    PyObject *repr;
+    if (PyValue_IsInlineFloat(value)) {
+        repr = _PyFloat_ValueRepr(value);
+    }
+    else if (PyValue_IsNone(value)) {
+        return PyUnicodeWriter_WriteASCII(writer, "None", 4);
+    }
+    else if (PyValue_LongCheckExact(value)) {
+        return _PyLong_WriteDecimal((_PyUnicodeWriter *)writer, value);
+    }
+    else {
+        repr = (_PyValue_Repr)(value);
+    }
     if (repr == NULL) {
         return -1;
     }

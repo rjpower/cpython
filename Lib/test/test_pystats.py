@@ -100,6 +100,11 @@ def run_test_code_stats(
     return stats
 
 
+def box_kinds(stats):
+    return {kind: int(stats[f'Boxing by kind ({kind})'])
+            for kind in ('core', 'thunk', 'slot adapter', 'call adapter')}
+
+
 def run_test_code(
     test_code,
     args=[],
@@ -264,16 +269,15 @@ class TestPyStats(unittest.TestCase):
         code = """
         import operator
         def func_start():
-            # int has no value slots yet: PyNumber_Add() makes its operands
-            # inline, the adapter boxes them for int's nb_add, and the thunk
-            # boxes the inline result.
+            # int's value slots are in place (V2a-1a): PyNumber_Add() makes
+            # its operands inline, the adapter boxes them for the object-form
+            # operator.add(), which reaches int's nb_add thunk with objects,
+            # and the thunk boxes the inline result.
             operator.add(1000, 2000)
         """
         stats = run_test_code_stats(code, args=['-X', 'pystats'])
-        kinds = {kind: int(stats[f'Boxing by kind ({kind})'])
-                 for kind in ('core', 'thunk', 'slot adapter',
-                              'call adapter')}
-        self.assertGreaterEqual(kinds['slot adapter'], 2)
+        kinds = box_kinds(stats)
+        self.assertGreaterEqual(kinds['call adapter'], 2)
         self.assertGreaterEqual(kinds['thunk'], 1)
         # A call adapter boxes under its own site class, which also holds
         # the THUNK boxes of the parsers' tuple views.
@@ -282,6 +286,40 @@ class TestPyStats(unittest.TestCase):
         self.assertEqual(sum(kinds.values()),
                          int(stats['Object inline int boxes'])
                          + int(stats['Object inline float boxes']))
+
+    def test_box_kinds_v2a1a(self):
+        """The boxes by kind of pyjit/design/proposals/value-api-v2a1a.md,
+        section 3, V2a-1a column, with x = 1000. Each statement runs in its
+        own process, warmed up first so that the specialised instructions
+        are in place.
+        """
+        # Collection stops right after the statement, so that the template's
+        # threads add nothing; the dump at exit still has the counts.
+        for statement, expected in (
+            # int's and str's value sides return NotImplemented; the C box is
+            # the generic COMPARE_OP handler's.
+            ("x == 'a'", {'core': 1, 'slot adapter': 0, 'thunk': 0,
+                          'call adapter': 0}),
+            ("'a' in [x, 2000, 'a']", {'core': 0, 'slot adapter': 0,
+                                       'thunk': 0, 'call adapter': 0}),
+            ("repr([x, 2000])", {'core': 0, 'slot adapter': 0, 'thunk': 0,
+                                 'call adapter': 0}),
+            ("operator.add(x, 2000)", {'core': 0, 'slot adapter': 0,
+                                       'thunk': 1, 'call adapter': 2}),
+        ):
+            with self.subTest(statement=statement):
+                code = f"""
+                import operator
+                def func_start():
+                    x = 1000
+                    for _ in range(100):
+                        {statement}
+                    sys._stats_clear()
+                    {statement}
+                    sys._stats_off()
+                """
+                stats = run_test_code_stats(code, args=['-X', 'pystats'])
+                self.assertEqual(box_kinds(stats), expected)
 
 
 if __name__ == "__main__":

@@ -2548,12 +2548,12 @@ exit:
     return return_value;
 }
 
-static PyObject *
+Py_VALUE_ENTRY static PyObject *
 m_T(PyTypeObject *type, PyObject *args, PyObject *kwargs)
 {
     Py_ssize_t nargs = PyTuple_GET_SIZE(args);
     if (kwargs == NULL || PyDict_GET_SIZE(kwargs) == 0) {
-        return _PyValue_THUNK_EXIT(m_T_value(type, _PyTuple_ITEMS(args), nargs, NULL));
+        return _PyValue_THUNK_EXIT(m_T_value(type, _PyTuple_ITEMS(args), nargs, NULL), BOX_SITE_CALL);
     }
     PyObject *kwnames;
     PyValue *window = _PyValue_StackUnpackDict(_PyThreadState_GET(),
@@ -2563,12 +2563,12 @@ m_T(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     }
     PyValue result = m_T_value(type, window, nargs, kwnames);
     _PyValue_StackUnpackDict_Free(window, nargs, kwnames);
-    return _PyValue_THUNK_EXIT(result);
+    return _PyValue_THUNK_EXIT(result, BOX_SITE_CALL);
 }
 
 static PyValue
 m_T_impl(PyTypeObject *type, PyValueBorrow a, int b)
-/*[clinic end generated code: output=f3bcfffec06f57ee input=91d1134cda3ca13d]*/
+/*[clinic end generated code: output=8a8c3a9920734d96 input=91d1134cda3ca13d]*/
 
 
 /*[clinic input]
@@ -2698,12 +2698,12 @@ exit:
     return return_value;
 }
 
-static PyObject *
+Py_VALUE_ENTRY static PyObject *
 m_I(PyTypeObject *type, PyObject *args, PyObject *kwargs)
 {
     Py_ssize_t nargs = PyTuple_GET_SIZE(args);
     if (kwargs == NULL || PyDict_GET_SIZE(kwargs) == 0) {
-        return _PyValue_THUNK_EXIT(m_I_value(type, _PyTuple_ITEMS(args), nargs, NULL));
+        return _PyValue_THUNK_EXIT(m_I_value(type, _PyTuple_ITEMS(args), nargs, NULL), BOX_SITE_CALL);
     }
     PyObject *kwnames;
     PyValue *window = _PyValue_StackUnpackDict(_PyThreadState_GET(),
@@ -2713,12 +2713,12 @@ m_I(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     }
     PyValue result = m_I_value(type, window, nargs, kwnames);
     _PyValue_StackUnpackDict_Free(window, nargs, kwnames);
-    return _PyValue_THUNK_EXIT(result);
+    return _PyValue_THUNK_EXIT(result, BOX_SITE_CALL);
 }
 
 static PyValue
 m_I_impl(PyTypeObject *type, PyValueBorrow a, int b)
-/*[clinic end generated code: output=951f44434d6196ed input=a4f6a99526d5c926]*/
+/*[clinic end generated code: output=93745e7e887c863a input=a4f6a99526d5c926]*/
 
 
 /*[clinic input]
@@ -2814,12 +2814,12 @@ exit:
     return return_value;
 }
 
-static PyObject *
+Py_VALUE_ENTRY static PyObject *
 m_V(PyTypeObject *type, PyObject *args, PyObject *kwargs)
 {
     Py_ssize_t nargs = PyTuple_GET_SIZE(args);
     if (kwargs == NULL || PyDict_GET_SIZE(kwargs) == 0) {
-        return _PyValue_THUNK_EXIT(m_V_value(type, _PyTuple_ITEMS(args), nargs, NULL));
+        return _PyValue_THUNK_EXIT(m_V_value(type, _PyTuple_ITEMS(args), nargs, NULL), BOX_SITE_CALL);
     }
     PyObject *kwnames;
     PyValue *window = _PyValue_StackUnpackDict(_PyThreadState_GET(),
@@ -2829,7 +2829,7 @@ m_V(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     }
     PyValue result = m_V_value(type, window, nargs, kwnames);
     _PyValue_StackUnpackDict_Free(window, nargs, kwnames);
-    return _PyValue_THUNK_EXIT(result);
+    return _PyValue_THUNK_EXIT(result, BOX_SITE_CALL);
 }
 
 static PyValue
@@ -2846,7 +2846,7 @@ m_V_vectorcall(PyThreadState *tstate, PyObject *type, const PyValue *args,
 
 static PyValue
 m_V_impl(PyTypeObject *type)
-/*[clinic end generated code: output=c06dd945599afb59 input=57eb51daa4458d1b]*/
+/*[clinic end generated code: output=0b020979cd1a690a input=57eb51daa4458d1b]*/
 
 
 /*[clinic input]

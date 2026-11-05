@@ -25,8 +25,11 @@
 #include "pycore_tuple.h"         // _PyTuple_FromArraySteal()
 #include "pycore_unionobject.h"   // _PyUnion_Check()
 #include "pycore_value_api.h"     // _PyValue_AsObjectAt()
+#include "pycore_long_value.h"    // _PyValue_IntAsDouble()
 #include "pycore_value_ops.h"     // _PyValue_Add()
 #include "pycore_value_slots.h"   // _PyValue_THUNK_EXIT()
+
+#include "opcode.h"               // NB_ADD
 
 #include <stddef.h>               // offsetof()
 
@@ -1662,6 +1665,52 @@ _PyNumber_InPlacePowerNoMod(PyObject *lhs, PyObject *rhs)
     return PyNumber_InPlacePower(lhs, rhs, Py_None);
 }
 
+/* The value dispatchers by BINARY_OP's oparg (D14). */
+
+static PyValue
+value_power_no_mod(PyValueBorrow v, PyValueBorrow w)
+{
+    return (_PyValue_Power)(v, w, PyValue_Borrow(PyValue_None));
+}
+
+static PyValue
+value_inplace_power_no_mod(PyValueBorrow v, PyValueBorrow w)
+{
+    return (_PyValue_InPlacePower)(v, w, PyValue_Borrow(PyValue_None));
+}
+
+const _PyValue_binaryop _PyValue_BinaryOps[] = {
+    [NB_ADD] = (_PyValue_Add),
+    [NB_AND] = (_PyValue_And),
+    [NB_FLOOR_DIVIDE] = (_PyValue_FloorDivide),
+    [NB_LSHIFT] = (_PyValue_Lshift),
+    [NB_MATRIX_MULTIPLY] = (_PyValue_MatrixMultiply),
+    [NB_MULTIPLY] = (_PyValue_Multiply),
+    [NB_REMAINDER] = (_PyValue_Remainder),
+    [NB_OR] = (_PyValue_Or),
+    [NB_POWER] = value_power_no_mod,
+    [NB_RSHIFT] = (_PyValue_Rshift),
+    [NB_SUBTRACT] = (_PyValue_Subtract),
+    [NB_TRUE_DIVIDE] = (_PyValue_TrueDivide),
+    [NB_XOR] = (_PyValue_Xor),
+    [NB_INPLACE_ADD] = (_PyValue_InPlaceAdd),
+    [NB_INPLACE_AND] = (_PyValue_InPlaceAnd),
+    [NB_INPLACE_FLOOR_DIVIDE] = (_PyValue_InPlaceFloorDivide),
+    [NB_INPLACE_LSHIFT] = (_PyValue_InPlaceLshift),
+    [NB_INPLACE_MATRIX_MULTIPLY] = (_PyValue_InPlaceMatrixMultiply),
+    [NB_INPLACE_MULTIPLY] = (_PyValue_InPlaceMultiply),
+    [NB_INPLACE_REMAINDER] = (_PyValue_InPlaceRemainder),
+    [NB_INPLACE_OR] = (_PyValue_InPlaceOr),
+    [NB_INPLACE_POWER] = value_inplace_power_no_mod,
+    [NB_INPLACE_RSHIFT] = (_PyValue_InPlaceRshift),
+    [NB_INPLACE_SUBTRACT] = (_PyValue_InPlaceSubtract),
+    [NB_INPLACE_TRUE_DIVIDE] = (_PyValue_InPlaceTrueDivide),
+    [NB_INPLACE_XOR] = (_PyValue_InPlaceXor),
+    [NB_SUBSCR] = NULL,
+};
+static_assert(Py_ARRAY_LENGTH(_PyValue_BinaryOps) == NB_SUBSCR + 1,
+              "one dispatcher per BINARY_OP oparg");
+
 
 /* Unary operators and functions */
 
@@ -1807,10 +1856,9 @@ Py_ssize_t
     if (PyValue_IsInlineInt(value)) {
         return (Py_ssize_t)PyValue_InlineInt64(value);
     }
-    PyObject *obj = PyValue_AsKnownObjectBorrow(value);
 
-    /* We're done if PyLong_AsSsize_t() returns without error. */
-    result = PyLong_AsSsize_t(obj);
+    /* We're done if _PyValue_IntAsSsize_t() returns without error. */
+    result = _PyValue_IntAsSsize_t(value);
     if (result != -1)
         goto finish;
 
@@ -1829,6 +1877,7 @@ Py_ssize_t
     /* If no error-handling desired then the default clipping
        is sufficient. */
     if (!err) {
+        PyObject *obj = PyValue_AsKnownObjectBorrow(value);
         assert(PyLong_Check(obj));
         /* Whether or not it is less than or equal to
            zero is determined by the sign of ob_size
@@ -2003,7 +2052,7 @@ PyValue
         // A strict subclass of float is an object.
         double val = PyFloat_AS_DOUBLE(PyValue_AsKnownObjectBorrow(res));
         PyValue_CLOSE(res);
-        return _PyValue_FromObjectResult(PyFloat_FromDouble(val));
+        return PyValue_FromDouble(val);
     }
 
     if (m && m->nb_index) {
@@ -2011,26 +2060,19 @@ PyValue
         if (PyValue_IsNull(res)) {
             return PyValue_NULL;
         }
-        double val;
-        if (PyValue_IsInlineInt(res)) {
-            val = (double)PyValue_InlineInt64(res);
-        }
-        else {
-            val = PyLong_AsDouble(PyValue_AsKnownObjectBorrow(res));
-        }
+        double val = _PyValue_IntAsDouble(res);
         PyValue_CLOSE(res);
         if (val == -1.0 && PyErr_Occurred()) {
             return PyValue_NULL;
         }
-        return _PyValue_FromObjectResult(PyFloat_FromDouble(val));
+        return PyValue_FromDouble(val);
     }
 
     // Every inline value is an int or a float, which have nb_float.
     PyObject *obj = PyValue_AsKnownObjectBorrow(o);
     /* A float subclass with nb_float == NULL */
     if (PyFloat_Check(obj)) {
-        return _PyValue_FromObjectResult(
-            PyFloat_FromDouble(PyFloat_AS_DOUBLE(obj)));
+        return PyValue_FromDouble(PyFloat_AS_DOUBLE(obj));
     }
     return _PyValue_FromObjectResult(PyFloat_FromString(obj));
 }

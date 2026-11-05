@@ -1,5 +1,9 @@
 /* Float object implementation */
 
+// float's value slots call int's and float's value functions, never an
+// extractor thunk (D12).
+#define Py_VALUE_MARK_NUMBERS 1
+
 /* XXX There should be overflow checks here, but it's hard to check
    for any kind of float exception without losing portability. */
 
@@ -11,11 +15,14 @@
 #include "pycore_freelist.h"      // _Py_FREELIST_FREE(), _Py_FREELIST_POP()
 #include "pycore_initconfig.h"    // _PyStatus_OK()
 #include "pycore_long.h"          // _PyLong_GetOne()
+#include "pycore_long_value.h"    // _PyFloat_ValueAdd()
 #include "pycore_modsupport.h"    // _PyArg_NoKwnames()
 #include "pycore_object.h"        // _PyObject_Init(), _PyDebugAllocatorStats()
 #include "pycore_pymath.h"        // _PY_SHORT_FLOAT_REPR
 #include "pycore_pystate.h"       // _PyInterpreterState_GET()
 #include "pycore_value.h"      // PyValue_AsKnownObjectBorrow()
+#include "pycore_value_ops.h"     // _PyValue_RichCompareBool()
+#include "pycore_value_slots.h"   // _Py_VALUE_THUNK_BINARY()
 #include "pycore_structseq.h"     // _PyStructSequence_FiniBuiltin()
 #include "pycore_tuple.h"         // _PyTuple_FromPair
 
@@ -244,62 +251,92 @@ float_dealloc(PyObject *op)
         Py_TYPE(op)->tp_free(op);
 }
 
+/* The double of v, a float value (an inline float, or a heap float: a NaN or
+   a subclass instance). */
+static inline double
+float_known(PyValueBorrow v)
+{
+    if (PyValue_IsInlineFloat(v)) {
+        return PyValue_InlineFloat(v);
+    }
+    return PyFloat_AS_DOUBLE(PyValue_AsKnownObjectBorrow(v));
+}
+
 double
 PyFloat_AsDouble(PyObject *op)
 {
-    PyNumberMethods *nb;
-    PyObject *res;
-    double val;
+    return _PyValue_AsDouble(_Py_VALUE_ARG(op));
+}
 
-    if (op == NULL) {
+double
+(_PyValue_AsDouble)(PyValueBorrow v)
+{
+    if (PyValue_IsNull(v)) {
         PyErr_BadArgument();
         return -1;
     }
 
+    if (PyValue_IsInlineFloat(v)) {
+        return PyValue_InlineFloat(v);
+    }
+    if (PyValue_IsInlineInt(v)) {
+        return (double)PyValue_InlineInt64(v);
+    }
+
+    PyObject *op = PyValue_AsKnownObjectBorrow(v);
     if (PyFloat_Check(op)) {
         return PyFloat_AS_DOUBLE(op);
     }
 
-    nb = Py_TYPE(op)->tp_as_number;
-    if (nb == NULL || nb->nb_float == NULL) {
+    PyTypeObject *tp = Py_TYPE(op);
+    PyNumberMethods *nb = tp->tp_as_number;
+    _Py_unaryvaluefunc float_slot = _PyType_VALUE_SLOT(tp, nb_float);
+    if (float_slot == NULL && (nb == NULL || nb->nb_float == NULL)) {
         if (nb && nb->nb_index) {
-            PyObject *res = _PyNumber_Index(op);
-            if (!res) {
+            PyValue index = _PyValue_Index(v);
+            if (PyValue_IsNull(index)) {
                 return -1;
             }
-            double val = PyLong_AsDouble(res);
-            Py_DECREF(res);
+            double val = _PyValue_IntAsDouble(index);
+            PyValue_CLOSE(index);
             return val;
         }
         PyErr_Format(PyExc_TypeError, "must be real number, not %.50s",
-                     Py_TYPE(op)->tp_name);
+                     tp->tp_name);
         return -1;
     }
 
-    res = (*nb->nb_float) (op);
-    if (res == NULL) {
+    PyValue res;
+    if (float_slot != NULL) {
+        res = float_slot(v);
+    }
+    else {
+        res = _PyValue_FromObjectResult(nb->nb_float(op));
+    }
+    if (PyValue_IsNull(res)) {
         return -1;
     }
-    if (!PyFloat_CheckExact(res)) {
-        if (!PyFloat_Check(res)) {
-            PyErr_Format(PyExc_TypeError,
-                         "%T.__float__() must return a float, not %T",
-                         op, res);
-            Py_DECREF(res);
-            return -1;
-        }
+    if (!PyValue_FloatCheck(res)) {
+        PyErr_Format(PyExc_TypeError,
+                     "%N.__float__() must return a float, not %N",
+                     tp, PyValue_TYPE(res));
+        PyValue_CLOSE(res);
+        return -1;
+    }
+    if (!PyValue_IsInlineFloat(res)
+        && !PyFloat_CheckExact(PyValue_AsKnownObjectBorrow(res))) {
         if (PyErr_WarnFormat(PyExc_DeprecationWarning, 1,
-                "%T.__float__() must return a float, not %T.  "
+                "%N.__float__() must return a float, not %N.  "
                 "The ability to return an instance of a strict subclass of float "
                 "is deprecated, and may be removed in a future version of Python.",
-                op, res)) {
-            Py_DECREF(res);
+                tp, PyValue_TYPE(res))) {
+            PyValue_CLOSE(res);
             return -1;
         }
     }
 
-    val = PyFloat_AS_DOUBLE(res);
-    Py_DECREF(res);
+    double val = float_known(PyValue_Borrow(res));
+    PyValue_CLOSE(res);
     return val;
 }
 
@@ -323,7 +360,7 @@ _Py_convert_int_to_double(PyObject **v, double *dbl)
     PyObject *obj = *v;
 
     if (PyLong_Check(obj)) {
-        *dbl = PyLong_AsDouble(obj);
+        *dbl = _PyLong_SpanAsDouble(_PyLong_SpanOf((PyLongObject *)obj));
         if (*dbl == -1.0 && PyErr_Occurred()) {
             *v = NULL;
             return -1;
@@ -337,22 +374,74 @@ _Py_convert_int_to_double(PyObject **v, double *dbl)
 }
 
 static PyObject *
-float_repr(PyObject *op)
+float_repr_double(double x)
 {
-    PyFloatObject *v = _PyFloat_CAST(op);
-    PyObject *result;
-    char *buf;
-
-    buf = PyOS_double_to_string(PyFloat_AS_DOUBLE(v),
-                                'r', 0,
-                                Py_DTSF_ADD_DOT_0,
-                                NULL);
-    if (!buf)
+    char *buf = PyOS_double_to_string(x, 'r', 0, Py_DTSF_ADD_DOT_0, NULL);
+    if (!buf) {
         return PyErr_NoMemory();
-    result = _PyUnicode_FromASCII(buf, strlen(buf));
+    }
+    PyObject *result = _PyUnicode_FromASCII(buf, strlen(buf));
     PyMem_Free(buf);
     return result;
 }
+
+PyObject *
+_PyFloat_ValueRepr(PyValueBorrow v)
+{
+    return float_repr_double(float_known(v));
+}
+_Py_VALUE_THUNK_REPR(float_repr, _PyFloat_ValueRepr)
+
+/* 1: *d is the operand as a double (an inline float or int, a heap float, a
+   heap int through its span); 0: not a float or an int (the caller returns
+   NotImplemented); -1: an exception (an int too large for a float). */
+static int
+float_operand(PyValueBorrow v, double *d)
+{
+    if (PyValue_IsInlineFloat(v)) {
+        *d = PyValue_InlineFloat(v);
+        return 1;
+    }
+    if (PyValue_IsInlineInt(v)) {
+        *d = (double)PyValue_InlineInt64(v);
+        return 1;
+    }
+    PyObject *op = PyValue_AsKnownObjectBorrow(v);
+    if (PyFloat_Check(op)) {
+        *d = PyFloat_AS_DOUBLE(op);
+        return 1;
+    }
+    if (PyLong_Check(op)) {
+        double x = _PyLong_SpanAsDouble(_PyLong_SpanOf((PyLongObject *)op));
+        if (x == -1.0 && PyErr_Occurred()) {
+            return -1;
+        }
+        *d = x;
+        return 1;
+    }
+    return 0;
+}
+
+#define FLOAT_OPERAND(v, d)                         \
+    do {                                            \
+        int operand_status_ = float_operand(v, &d); \
+        if (operand_status_ == 0) {                 \
+            return PyValue_NotImplemented;          \
+        }                                           \
+        if (operand_status_ < 0) {                  \
+            return PyValue_NULL;                    \
+        }                                           \
+    } while (0)
+
+/* Two inline operands take the first test; v is converted before w, as
+   CONVERT_TO_DOUBLE, so an error of v wins over a w that is not a number. */
+#define FLOAT_OPERANDS(v, w, a, b)                          \
+    do {                                                    \
+        if (!PyValue_FloatOperandValues(v, w, &a, &b)) {    \
+            FLOAT_OPERAND(v, a);                            \
+            FLOAT_OPERAND(w, b);                            \
+        }                                                   \
+    } while (0)
 
 /* Comparison is pretty much a nightmare.  When comparing float to float,
  * we do it as straightforwardly (and long-windedly) as conceivable, so
@@ -369,23 +458,26 @@ float_repr(PyObject *op)
  * coercion to double.  So this part is painful too.
  */
 
-static PyObject*
-float_richcompare(PyObject *v, PyObject *w, int op)
+/* The cases that _PyFloat_ValueRichCompare() does not take: a heap float
+   (a NaN or a subclass instance), a heap int, or a w that is not a number.
+   The two inline cases of that function give the same results. */
+PyValue
+_PyFloat_ValueRichCompareSlow(PyValueBorrow v, PyValueBorrow w, int op)
 {
     double i, j;
     int r = 0;
 
-    assert(PyFloat_Check(v));
-    i = PyFloat_AS_DOUBLE(v);
+    assert(PyValue_FloatCheck(v));
+    i = float_known(v);
 
     /* Switch on the type of w.  Set i and j to doubles to be compared,
      * and op to the richcomp to use.
      */
-    if (PyFloat_Check(w))
-        j = PyFloat_AS_DOUBLE(w);
+    if (PyValue_FloatCheck(w))
+        j = float_known(w);
 
     else if (!isfinite(i)) {
-        if (PyLong_Check(w))
+        if (PyValue_LongCheck(w))
             /* If i is an infinity, its magnitude exceeds any
              * finite integer, so it doesn't matter which int we
              * compare i with.  If i is a NaN, similarly.
@@ -395,12 +487,13 @@ float_richcompare(PyObject *v, PyObject *w, int op)
             goto Unimplemented;
     }
 
-    else if (PyLong_Check(w)) {
+    else if (PyValue_LongCheck(w)) {
         int vsign = i == 0.0 ? 0 : i < 0.0 ? -1 : 1;
-        int wsign;
+        digit w_digits[_PyLong_WORD_DIGITS];
+        _PyLongSpan wspan = _PyLong_SpanOfValue(w, w_digits);
+        int wsign = wspan.neg ? -1 : wspan.n > 0 ? 1 : 0;
         int exponent;
 
-        (void)PyLong_GetSign(w, &wsign);
         if (vsign != wsign) {
             /* Magnitudes are irrelevant -- the signs alone
              * determine the outcome.
@@ -411,7 +504,7 @@ float_richcompare(PyObject *v, PyObject *w, int op)
         }
         /* The signs are the same. */
         /* Convert w to a double if it fits.  In particular, 0 fits. */
-        int64_t nbits64 = _PyLong_NumBits(w);
+        int64_t nbits64 = _PyLong_SpanNumBits(wspan);
         assert(nbits64 >= 0);
         assert(!PyErr_Occurred());
         if (nbits64 > DBL_MAX_EXP) {
@@ -428,7 +521,7 @@ float_richcompare(PyObject *v, PyObject *w, int op)
         }
         int nbits = (int)nbits64;
         if (nbits <= 48) {
-            j = PyLong_AsDouble(w);
+            j = _PyLong_SpanAsDouble(wspan);
             /* It's impossible that <= 48 bits overflowed. */
             assert(j != -1.0 || ! PyErr_Occurred());
             goto Compare;
@@ -457,17 +550,16 @@ float_richcompare(PyObject *v, PyObject *w, int op)
         {
             double fracpart;
             double intpart;
-            PyObject *result = NULL;
-            PyObject *vv = NULL;
+            PyValue result = PyValue_NULL;
 
             fracpart = modf(i, &intpart);
             if (fracpart != 0.0) {
                 switch (op) {
                     /* Non-integer float never equals to an int. */
                     case Py_EQ:
-                        Py_RETURN_FALSE;
+                        return PyValue_False;
                     case Py_NE:
-                        Py_RETURN_TRUE;
+                        return PyValue_True;
                     /* For non-integer float, v <= w <=> v < w.
                      * If v > 0: trunc(v) < v < trunc(v) + 1
                      *   v < w => trunc(v) < w
@@ -488,16 +580,16 @@ float_richcompare(PyObject *v, PyObject *w, int op)
                 }
             }
 
-            vv = PyLong_FromDouble(intpart);
-            if (vv == NULL)
-                goto Error;
+            PyValue vv = _PyValue_FromDoubleIntegral(intpart);
+            if (PyValue_IsNull(vv))
+                return PyValue_NULL;
 
-            r = PyObject_RichCompareBool(vv, w, op);
-            if (r < 0)
-                goto Error;
-            result = PyBool_FromLong(r);
-         Error:
-            Py_XDECREF(vv);
+            /* w itself, so that an int subclass still gets its reflected
+               method. */
+            r = _PyValue_RichCompareBool(vv, w, op);
+            if (r >= 0)
+                result = PyValue_FromBool(r);
+            PyValue_CLOSE(vv);
             return result;
         }
     } /* else if (PyLong_Check(w)) */
@@ -526,75 +618,72 @@ float_richcompare(PyObject *v, PyObject *w, int op)
         r = i > j;
         break;
     }
-    return PyBool_FromLong(r);
+    return PyValue_FromBool(r);
 
  Unimplemented:
-    Py_RETURN_NOTIMPLEMENTED;
+    return PyValue_NotImplemented;
 }
 
-static Py_hash_t
-float_hash(PyObject *op)
+_Py_VALUE_THUNK_RICHCMP(float_richcompare, _PyFloat_ValueRichCompare)
+
+Py_hash_t
+_PyFloat_HashObject(PyObject *op)
 {
     PyFloatObject *v = _PyFloat_CAST(op);
     return _Py_HashDouble(op, v->ob_fval);
 }
+_Py_VALUE_THUNK_HASH(float_hash, _PyFloat_ValueHash)
 
-static PyObject *
-float_add(PyObject *v, PyObject *w)
+PyValue
+_PyFloat_ValueAdd(PyValueBorrow v, PyValueBorrow w)
 {
-    double a,b;
-    CONVERT_TO_DOUBLE(v, a);
-    CONVERT_TO_DOUBLE(w, b);
-    a = a + b;
-    return PyFloat_FromDouble(a);
+    double a, b;
+    FLOAT_OPERANDS(v, w, a, b);
+    return PyValue_FromDouble(a + b);
 }
+_Py_VALUE_THUNK_BINARY(float_add, _PyFloat_ValueAdd)
 
-static PyObject *
-float_sub(PyObject *v, PyObject *w)
+PyValue
+_PyFloat_ValueSubtract(PyValueBorrow v, PyValueBorrow w)
 {
-    double a,b;
-    CONVERT_TO_DOUBLE(v, a);
-    CONVERT_TO_DOUBLE(w, b);
-    a = a - b;
-    return PyFloat_FromDouble(a);
+    double a, b;
+    FLOAT_OPERANDS(v, w, a, b);
+    return PyValue_FromDouble(a - b);
 }
+_Py_VALUE_THUNK_BINARY(float_sub, _PyFloat_ValueSubtract)
 
-static PyObject *
-float_mul(PyObject *v, PyObject *w)
+PyValue
+_PyFloat_ValueMultiply(PyValueBorrow v, PyValueBorrow w)
 {
-    double a,b;
-    CONVERT_TO_DOUBLE(v, a);
-    CONVERT_TO_DOUBLE(w, b);
-    a = a * b;
-    return PyFloat_FromDouble(a);
+    double a, b;
+    FLOAT_OPERANDS(v, w, a, b);
+    return PyValue_FromDouble(a * b);
 }
+_Py_VALUE_THUNK_BINARY(float_mul, _PyFloat_ValueMultiply)
 
-static PyObject *
-float_div(PyObject *v, PyObject *w)
+PyValue
+_PyFloat_ValueTrueDivide(PyValueBorrow v, PyValueBorrow w)
 {
-    double a,b;
-    CONVERT_TO_DOUBLE(v, a);
-    CONVERT_TO_DOUBLE(w, b);
+    double a, b;
+    FLOAT_OPERANDS(v, w, a, b);
     if (b == 0.0) {
         PyErr_SetString(PyExc_ZeroDivisionError,
                         "division by zero");
-        return NULL;
+        return PyValue_NULL;
     }
-    a = a / b;
-    return PyFloat_FromDouble(a);
+    return PyValue_FromDouble(a / b);
 }
+_Py_VALUE_THUNK_BINARY(float_div, _PyFloat_ValueTrueDivide)
 
-static PyObject *
-float_rem(PyObject *v, PyObject *w)
+/* The double kernels of %, divmod and //: 0, or -1 with ZeroDivisionError. */
+static int
+float_rem_double(double vx, double wx, double *result)
 {
-    double vx, wx;
     double mod;
-    CONVERT_TO_DOUBLE(v, vx);
-    CONVERT_TO_DOUBLE(w, wx);
     if (wx == 0.0) {
         PyErr_SetString(PyExc_ZeroDivisionError,
                         "division by zero");
-        return NULL;
+        return -1;
     }
     mod = fmod(vx, wx);
     if (mod) {
@@ -609,8 +698,21 @@ float_rem(PyObject *v, PyObject *w)
            it has the same sign as the denominator. */
         mod = copysign(0.0, wx);
     }
-    return PyFloat_FromDouble(mod);
+    *result = mod;
+    return 0;
 }
+
+PyValue
+_PyFloat_ValueRemainder(PyValueBorrow v, PyValueBorrow w)
+{
+    double vx, wx, mod;
+    FLOAT_OPERANDS(v, w, vx, wx);
+    if (float_rem_double(vx, wx, &mod) < 0) {
+        return PyValue_NULL;
+    }
+    return PyValue_FromDouble(mod);
+}
+_Py_VALUE_THUNK_BINARY(float_rem, _PyFloat_ValueRemainder)
 
 static void
 _float_div_mod(double vx, double wx, double *floordiv, double *mod)
@@ -650,64 +752,75 @@ _float_div_mod(double vx, double wx, double *floordiv, double *mod)
     }
 }
 
-static PyObject *
-float_divmod(PyObject *v, PyObject *w)
+static int
+float_divmod_double(double vx, double wx, double *floordiv, double *mod)
 {
-    double vx, wx;
-    double mod, floordiv;
-    CONVERT_TO_DOUBLE(v, vx);
-    CONVERT_TO_DOUBLE(w, wx);
     if (wx == 0.0) {
         PyErr_SetString(PyExc_ZeroDivisionError, "division by zero");
-        return NULL;
+        return -1;
     }
-    _float_div_mod(vx, wx, &floordiv, &mod);
-    return Py_BuildValue("(dd)", floordiv, mod);
+    _float_div_mod(vx, wx, floordiv, mod);
+    return 0;
 }
 
-static PyObject *
-float_floor_div(PyObject *v, PyObject *w)
+PyValue
+_PyFloat_ValueDivmod(PyValueBorrow v, PyValueBorrow w)
 {
     double vx, wx;
     double mod, floordiv;
-    CONVERT_TO_DOUBLE(v, vx);
-    CONVERT_TO_DOUBLE(w, wx);
-    if (wx == 0.0) {
-        PyErr_SetString(PyExc_ZeroDivisionError, "division by zero");
-        return NULL;
+    FLOAT_OPERANDS(v, w, vx, wx);
+    if (float_divmod_double(vx, wx, &floordiv, &mod) < 0) {
+        return PyValue_NULL;
     }
-    _float_div_mod(vx, wx, &floordiv, &mod);
-    return PyFloat_FromDouble(floordiv);
+    /* The pair holds objects, as Py_BuildValue("(dd)") gave. */
+    PyObject *q = PyFloat_FromDouble(floordiv);
+    PyObject *r = PyFloat_FromDouble(mod);
+    if (q == NULL || r == NULL) {
+        Py_XDECREF(q);
+        Py_XDECREF(r);
+        return PyValue_NULL;
+    }
+    return _PyValue_FromObjectResult(_PyTuple_FromPairTakeValue(
+        PyValue_PrepareOwned(q), PyValue_PrepareOwned(r)));
 }
+_Py_VALUE_THUNK_BINARY(float_divmod, _PyFloat_ValueDivmod)
+
+PyValue
+_PyFloat_ValueFloorDivide(PyValueBorrow v, PyValueBorrow w)
+{
+    double vx, wx;
+    double mod, floordiv;
+    FLOAT_OPERANDS(v, w, vx, wx);
+    if (float_divmod_double(vx, wx, &floordiv, &mod) < 0) {
+        return PyValue_NULL;
+    }
+    return PyValue_FromDouble(floordiv);
+}
+_Py_VALUE_THUNK_BINARY(float_floor_div, _PyFloat_ValueFloorDivide)
 
 /* determine whether x is an odd integer or not;  assumes that
    x is not an infinity or nan. */
 #define DOUBLE_IS_ODD_INTEGER(x) (fmod(fabs(x), 2.0) == 1.0)
 
-static PyObject *
-float_pow(PyObject *v, PyObject *w, PyObject *z)
+#define POW_RESULT(x) do { *result = (x); return 1; } while (0)
+
+/* The double kernel of **: 1 with *result set; 0 if iv is negative and iw
+   is not integral (the result is complex); -1 with an exception. */
+static int
+float_pow_double(double iv, double iw, double *result)
 {
-    double iv, iw, ix;
+    double ix;
     int negate_result = 0;
-
-    if ((PyObject *)z != Py_None) {
-        PyErr_SetString(PyExc_TypeError, "pow() 3rd argument not "
-            "allowed unless all arguments are integers");
-        return NULL;
-    }
-
-    CONVERT_TO_DOUBLE(v, iv);
-    CONVERT_TO_DOUBLE(w, iw);
 
     /* Sort out special cases here instead of relying on pow() */
     if (iw == 0) {              /* v**0 is 1, even 0**0 */
-        return PyFloat_FromDouble(1.0);
+        POW_RESULT(1.0);
     }
     if (isnan(iv)) {        /* nan**w = nan, unless w == 0 */
-        return PyFloat_FromDouble(iv);
+        POW_RESULT(iv);
     }
     if (isnan(iw)) {        /* v**nan = nan, unless v == 1; 1**nan = 1 */
-        return PyFloat_FromDouble(iv == 1.0 ? 1.0 : iw);
+        POW_RESULT(iv == 1.0 ? 1.0 : iw);
     }
     if (isinf(iw)) {
         /* v**inf is: 0.0 if abs(v) < 1; 1.0 if abs(v) == 1; inf if
@@ -718,11 +831,11 @@ float_pow(PyObject *v, PyObject *w, PyObject *z)
          */
         iv = fabs(iv);
         if (iv == 1.0)
-            return PyFloat_FromDouble(1.0);
+            POW_RESULT(1.0);
         else if ((iw > 0.0) == (iv > 1.0))
-            return PyFloat_FromDouble(fabs(iw)); /* return inf */
+            POW_RESULT(fabs(iw)); /* return inf */
         else
-            return PyFloat_FromDouble(0.0);
+            POW_RESULT(0.0);
     }
     if (isinf(iv)) {
         /* (+-inf)**w is: inf for w positive, 0 for w negative; in
@@ -731,10 +844,9 @@ float_pow(PyObject *v, PyObject *w, PyObject *z)
          */
         int iw_is_odd = DOUBLE_IS_ODD_INTEGER(iw);
         if (iw > 0.0)
-            return PyFloat_FromDouble(iw_is_odd ? iv : fabs(iv));
+            POW_RESULT(iw_is_odd ? iv : fabs(iv));
         else
-            return PyFloat_FromDouble(iw_is_odd ?
-                                      copysign(0.0, iv) : 0.0);
+            POW_RESULT(iw_is_odd ? copysign(0.0, iv) : 0.0);
     }
     if (iv == 0.0) {  /* 0**w is: 0 for w positive, 1 for w zero
                          (already dealt with above), and an error
@@ -743,10 +855,10 @@ float_pow(PyObject *v, PyObject *w, PyObject *z)
         if (iw < 0.0) {
             PyErr_SetString(PyExc_ZeroDivisionError,
                             "zero to a negative power");
-            return NULL;
+            return -1;
         }
         /* use correct sign if iw is odd */
-        return PyFloat_FromDouble(iw_is_odd ? iv : 0.0);
+        POW_RESULT(iw_is_odd ? iv : 0.0);
     }
 
     if (iv < 0.0) {
@@ -757,7 +869,7 @@ float_pow(PyObject *v, PyObject *w, PyObject *z)
             /* Negative numbers raised to fractional powers
              * become complex.
              */
-            return PyComplex_Type.tp_as_number->nb_power(v, w, z);
+            return 0;
         }
         /* iw is an exact integer, albeit perhaps a very large
          * one.  Replace iv by its absolute value and remember
@@ -779,7 +891,7 @@ float_pow(PyObject *v, PyObject *w, PyObject *z)
          * happen to be representable in a *C* integer.  That's a
          * bug.
          */
-        return PyFloat_FromDouble(negate_result ? -1.0 : 1.0);
+        POW_RESULT(negate_result ? -1.0 : 1.0);
     }
 
     /* Now iv and iw are finite, iw is nonzero, and iv is
@@ -798,33 +910,95 @@ float_pow(PyObject *v, PyObject *w, PyObject *z)
          */
         PyErr_SetFromErrno(errno == ERANGE ? PyExc_OverflowError :
                              PyExc_ValueError);
-        return NULL;
+        return -1;
     }
-    return PyFloat_FromDouble(ix);
+    POW_RESULT(ix);
 }
 
+#undef POW_RESULT
 #undef DOUBLE_IS_ODD_INTEGER
 
-static PyObject *
-float_neg(PyObject *op)
+PyValue
+_PyFloat_ValuePower(PyValueBorrow v, PyValueBorrow w, PyValueBorrow z)
 {
-    PyFloatObject *v = _PyFloat_CAST(op);
-    return PyFloat_FromDouble(-v->ob_fval);
-}
+    double iv, iw, ix;
 
-static PyObject *
-float_abs(PyObject *op)
-{
-    PyFloatObject *v = _PyFloat_CAST(op);
-    return PyFloat_FromDouble(fabs(v->ob_fval));
-}
+    if (!PyValue_IsNone(z)) {
+        PyErr_SetString(PyExc_TypeError, "pow() 3rd argument not "
+            "allowed unless all arguments are integers");
+        return PyValue_NULL;
+    }
 
-static int
-float_bool(PyObject *op)
-{
-    PyFloatObject *v = _PyFloat_CAST(op);
-    return v->ob_fval != 0.0;
+    FLOAT_OPERAND(v, iv);
+    FLOAT_OPERAND(w, iw);
+
+    int status = float_pow_double(iv, iw, &ix);
+    if (status < 0) {
+        return PyValue_NULL;
+    }
+    if (status > 0) {
+        return PyValue_FromDouble(ix);
+    }
+
+    /* A negative base and a fractional exponent: complex's own slot, which
+       takes objects (there is no value slot of complex yet), so the
+       operands are boxed here, as core boxes of site class NUMBER, and
+       released after the call. */
+    PyObject *vo = _PyValue_AsObjectAt(v, BOX_SITE_NUMBER);
+    if (vo == NULL) {
+        return PyValue_NULL;
+    }
+    PyObject *wo = _PyValue_AsObjectAt(w, BOX_SITE_NUMBER);
+    if (wo == NULL) {
+        Py_DECREF(vo);
+        return PyValue_NULL;
+    }
+    PyObject *result = PyComplex_Type.tp_as_number->nb_power(
+        vo, wo, PyValue_AsKnownObjectBorrow(z));
+    Py_DECREF(wo);
+    Py_DECREF(vo);
+    return _PyValue_FromObjectResult(result);
 }
+_Py_VALUE_THUNK_TERNARY(float_pow, _PyFloat_ValuePower)
+
+PyValue
+_PyFloat_ValueNegative(PyValueBorrow v)
+{
+    return PyValue_FromDouble(-float_known(v));
+}
+_Py_VALUE_THUNK_UNARY(float_neg, _PyFloat_ValueNegative)
+
+PyValue
+_PyFloat_ValueAbsolute(PyValueBorrow v)
+{
+    return PyValue_FromDouble(fabs(float_known(v)));
+}
+_Py_VALUE_THUNK_UNARY(float_abs, _PyFloat_ValueAbsolute)
+
+int
+_PyFloat_ValueBool(PyValueBorrow v)
+{
+    return float_known(v) != 0.0;
+}
+_Py_VALUE_THUNK_INQUIRY(float_bool, _PyFloat_ValueBool)
+
+PyValue
+_PyFloat_ValueFloat(PyValueBorrow v)
+{
+    if (PyValue_IsInlineFloat(v)
+        || PyFloat_CheckExact(PyValue_AsKnownObjectBorrow(v))) {
+        return PyValue_DUP(v);
+    }
+    return PyValue_FromDouble(float_known(v));
+}
+_Py_VALUE_THUNK_UNARY(float_float, _PyFloat_ValueFloat)
+
+PyValue
+_PyFloat_ValueInt(PyValueBorrow v)
+{
+    return _PyValue_FromDoubleIntegral(float_known(v));
+}
+_Py_VALUE_THUNK_UNARY(float_int, _PyFloat_ValueInt)
 
 /*[clinic input]
 float.is_integer
@@ -836,7 +1010,7 @@ static PyObject *
 float_is_integer_impl(PyObject *self)
 /*[clinic end generated code: output=7112acf95a4d31ea input=311810d3f777e10d]*/
 {
-    double x = PyFloat_AsDouble(self);
+    double x = PyFloat_AS_DOUBLE(self);
     PyObject *o;
 
     if (x == -1.0 && PyErr_Occurred())
@@ -1033,7 +1207,7 @@ float___round___impl(PyObject *self, PyObject *o_ndigits)
     double x, rounded;
     Py_ssize_t ndigits;
 
-    x = PyFloat_AsDouble(self);
+    x = PyFloat_AS_DOUBLE(self);
     if (o_ndigits == Py_None) {
         /* single-argument round or with None ndigits:
          * round to nearest integer */
@@ -1071,8 +1245,11 @@ float___round___impl(PyObject *self, PyObject *o_ndigits)
 #undef NDIGITS_MIN
 }
 
+/* self as an exact float; an object helper beside the value slot
+   _PyFloat_ValueFloat() (which would convert an exact float to an inline
+   value and back). */
 static PyObject *
-float_float(PyObject *v)
+float_exact(PyObject *v)
 {
     if (PyFloat_CheckExact(v)) {
         return Py_NewRef(v);
@@ -1092,7 +1269,7 @@ static PyObject *
 float_conjugate_impl(PyObject *self)
 /*[clinic end generated code: output=8ca292c2479194af input=82ba6f37a9ff91dd]*/
 {
-    return float_float(self);
+    return float_exact(self);
 }
 
 /* turn ASCII hex characters into integer values and vice versa */
@@ -1169,7 +1346,7 @@ float_hex_impl(PyObject *self)
     CONVERT_TO_DOUBLE(self, x);
 
     if (isnan(x) || isinf(x))
-        return float_repr(self);
+        return float_repr_double(x);
 
     if (x == 0.0) {
         if (copysign(1.0, x) == -1.0)
@@ -1635,7 +1812,7 @@ float_from_number_impl(PyTypeObject *type, PyObject *number)
         Py_INCREF(number);
         return number;
     }
-    double x = PyFloat_AsDouble(number);
+    double x = _PyValue_AsDouble(PyValue_FromObjectBorrow(number));
     if (x == -1.0 && PyErr_Occurred()) {
         return NULL;
     }
@@ -1693,7 +1870,7 @@ float___getformat___impl(PyTypeObject *type, const char *typestr)
 static PyObject *
 float_getreal(PyObject *v, void *Py_UNUSED(closure))
 {
-    return float_float(v);
+    return float_exact(v);
 }
 
 static PyObject *
@@ -1777,7 +1954,7 @@ static PyNumberMethods float_as_number = {
     0,                  /* nb_and */
     0,                  /* nb_xor */
     0,                  /* nb_or */
-    float___trunc___impl, /* nb_int */
+    float_int,          /* nb_int */
     0,                  /* nb_reserved */
     float_float,        /* nb_float */
     0,                  /* nb_inplace_add */
@@ -1838,6 +2015,33 @@ PyTypeObject PyFloat_Type = {
     float_new,                                  /* tp_new */
     .tp_vectorcall = float_vectorcall,
     .tp_version_tag = _Py_TYPE_VERSION_FLOAT,
+    .tp_value = {
+        .nb_add = _Py_VALUE_SLOT_INIT(nb_add, _PyFloat_ValueAdd),
+        .nb_subtract = _Py_VALUE_SLOT_INIT(nb_subtract,
+                                           _PyFloat_ValueSubtract),
+        .nb_multiply = _Py_VALUE_SLOT_INIT(nb_multiply,
+                                           _PyFloat_ValueMultiply),
+        .nb_remainder = _Py_VALUE_SLOT_INIT(nb_remainder,
+                                            _PyFloat_ValueRemainder),
+        .nb_divmod = _Py_VALUE_SLOT_INIT(nb_divmod, _PyFloat_ValueDivmod),
+        .nb_power = _Py_VALUE_SLOT_INIT(nb_power, _PyFloat_ValuePower),
+        .nb_negative = _Py_VALUE_SLOT_INIT(nb_negative,
+                                           _PyFloat_ValueNegative),
+        .nb_positive = _Py_VALUE_SLOT_INIT(nb_positive, _PyFloat_ValueFloat),
+        .nb_absolute = _Py_VALUE_SLOT_INIT(nb_absolute,
+                                           _PyFloat_ValueAbsolute),
+        .nb_bool = _Py_VALUE_SLOT_INIT(nb_bool, _PyFloat_ValueBool),
+        .nb_int = _Py_VALUE_SLOT_INIT(nb_int, _PyFloat_ValueInt),
+        .nb_float = _Py_VALUE_SLOT_INIT(nb_float, _PyFloat_ValueFloat),
+        .nb_floor_divide = _Py_VALUE_SLOT_INIT(nb_floor_divide,
+                                               _PyFloat_ValueFloorDivide),
+        .nb_true_divide = _Py_VALUE_SLOT_INIT(nb_true_divide,
+                                              _PyFloat_ValueTrueDivide),
+        .richcompare = _Py_VALUE_SLOT_INIT(richcompare,
+                                           _PyFloat_ValueRichCompare),
+        .hash = _Py_VALUE_SLOT_INIT(hash, _PyFloat_ValueHash),
+        .repr = _Py_VALUE_SLOT_INIT(repr, _PyFloat_ValueRepr),
+    },
 };
 
 PyStatus

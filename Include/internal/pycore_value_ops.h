@@ -14,11 +14,16 @@ extern "C" {
    4.6). Each is the port of an object protocol function, which is now its
    thunk: it calls a type's value slot, or its object slot through the
    adapter when the value slot is 0, with the same arguments in the same
-   order. The operands are borrows that stay valid for the whole call, the
-   Python code that a slot runs included: the caller holds the owners. A
-   PyValue result is an owner, or PyValue_NULL with an exception set. Each
-   has a same-name macro that applies PyValue_Borrow(). Exported for the
-   shared in-tree modules (W4). */
+   order. A PyValue result is an owner, or PyValue_NULL with an exception
+   set. Each has a same-name macro that applies PyValue_Borrow(). Exported
+   for the shared in-tree modules (W4).
+
+   The dispatcher contract: the operands are borrows that stay valid for the
+   whole call, the Python code that a slot runs included, because the
+   caller holds an owner of each. A caller that read an operand from a
+   container takes its own owner first (PyValue_DUP), as upstream's callers
+   Py_INCREF() an item before PyObject_RichCompare(); the dispatchers take
+   none. */
 
 #define _PyValue_BINARY_DISPATCHERS(X) \
     X(Add) X(Subtract) X(Multiply) X(Remainder) X(Divmod) X(Lshift) \
@@ -85,6 +90,12 @@ _PyValue_INPLACE_DISPATCHERS(_PyValue_DECLARE_INPLACE)
 #define _PyValue_InPlaceMatrixMultiply(V, W) \
     (_PyValue_InPlaceMatrixMultiply)(PyValue_Borrow(V), PyValue_Borrow(W))
 
+/* The binary dispatchers by BINARY_OP's oparg (NB_ADD ... NB_INPLACE_XOR;
+   NB_POWER and NB_INPLACE_POWER with a None modulus), for I1's generic
+   BINARY_OP handler; NB_SUBSCR is 0 (D14). */
+typedef PyValue (*_PyValue_binaryop)(PyValueBorrow, PyValueBorrow);
+PyAPI_DATA(const _PyValue_binaryop) _PyValue_BinaryOps[];
+
 // v ** w, or pow(v, w, z); z is None for two operands.
 PyAPI_FUNC(PyValue) _PyValue_Power(PyValueBorrow v, PyValueBorrow w,
                                    PyValueBorrow z);
@@ -117,9 +128,8 @@ PyAPI_FUNC(Py_ssize_t) _PyValue_AsSsize_t(PyValueBorrow v, PyObject *exc);
 #define _PyValue_Float(V) (_PyValue_Float)(PyValue_Borrow(V))
 #define _PyValue_AsSsize_t(V, E) (_PyValue_AsSsize_t)(PyValue_Borrow(V), E)
 
-/* PyObject_RichCompare() and PyObject_RichCompareBool(); the latter keeps
-   value_ops.c's inline arm ahead of the dispatch and its owners of the
-   operands, which its callers in the containers rely on. */
+/* PyObject_RichCompare() and PyObject_RichCompareBool(); the latter
+   compares two inline values by R-inline (value_ops.c). */
 PyAPI_FUNC(PyValue) _PyValue_RichCompare(PyValueBorrow v, PyValueBorrow w,
                                          int op);
 PyAPI_FUNC(int) _PyValue_RichCompareBool(PyValueBorrow v, PyValueBorrow w,
@@ -129,14 +139,30 @@ PyAPI_FUNC(int) _PyValue_RichCompareBool(PyValueBorrow v, PyValueBorrow w,
 #define _PyValue_RichCompareBool(V, W, OP) \
     (_PyValue_RichCompareBool)(PyValue_Borrow(V), PyValue_Borrow(W), OP)
 
+/* The compare and repr pairs of type t (object.c): the value slot of the
+   row if it is set, else the object slot through the adapter. object's own
+   value sides call them for the receiver's type (typeobject.c). */
+extern PyValue _PyValue_CallRichCompare(PyTypeObject *t, richcmpfunc slot,
+                                        PyValueBorrow v, PyValueBorrow w,
+                                        int op);
+extern PyObject *_PyValue_CallRepr(PyTypeObject *t, reprfunc slot, int row,
+                                   PyValueBorrow v);
+
+/* object's value sides (typeobject.c), which NoneType and the sentinel type
+   inherit: upstream's object_richcompare() (== is identity, else
+   NotImplemented; != inverts the receiver type's ==) and object_str() (the
+   type's repr). Their object sides are _Py_BaseObject_RichCompare() and
+   object_str(). */
+PyAPI_FUNC(PyValue) _PyObject_ValueRichCompare(PyValueBorrow v,
+                                               PyValueBorrow w, int op);
+PyAPI_FUNC(PyObject *) _PyObject_ValueStr(PyValueBorrow v);
+
 PyAPI_FUNC(int) _PyValue_IsTrue(PyValueBorrow v);
 PyAPI_FUNC(int) _PyValue_Not(PyValueBorrow v);
 #define _PyValue_IsTrue(V) (_PyValue_IsTrue)(PyValue_Borrow(V))
 #define _PyValue_Not(V) (_PyValue_Not)(PyValue_Borrow(V))
 
-/* PyObject_Hash(), after value_ops.c's inline arms, with an owner of the
-   operand in case __hash__ removes it from the container that it was read
-   from. */
+/* PyObject_Hash(); an inline value is hashed by R-inline (value_ops.c). */
 PyAPI_FUNC(Py_hash_t) _PyValue_Hash(PyValueBorrow v);
 #define _PyValue_Hash(V) (_PyValue_Hash)(PyValue_Borrow(V))
 
@@ -147,9 +173,8 @@ PyAPI_FUNC(PyObject *) _PyValue_ASCII(PyValueBorrow v);
 #define _PyValue_Str(V) (_PyValue_Str)(PyValue_Borrow(V))
 #define _PyValue_ASCII(V) (_PyValue_ASCII)(PyValue_Borrow(V))
 
-/* Mixed paths of the containers. Borrowed inputs are retained across
-   callback-capable object bridges. */
-/* An owning object result, including arbitrary Python comparison results. */
+/* Paths of the containers. An owning object result, including arbitrary
+   Python comparison results. */
 extern PyObject *_PyValue_RichCompareObject(PyValueBorrow left, PyValueBorrow right, int op);
 #define _PyValue_RichCompareObject(V0, V1, V2) \
     (_PyValue_RichCompareObject)(PyValue_Borrow(V0), PyValue_Borrow(V1), V2)

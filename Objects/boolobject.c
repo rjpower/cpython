@@ -1,10 +1,15 @@
 /* Boolean type, a subtype of int */
 
+// bool's value slots call int's value functions, never an int thunk (D12).
+#define Py_VALUE_MARK_NUMBERS 1
+
 #include "Python.h"
 #include "pycore_long.h"          // FALSE_TAG TRUE_TAG
+#include "pycore_long_value.h"    // _PyLong_ValueAnd()
 #include "pycore_modsupport.h"    // _PyArg_NoKwnames()
 #include "pycore_object.h"        // _Py_FatalRefcountError()
 #include "pycore_runtime.h"       // _Py_ID()
+#include "pycore_value_slots.h"   // _Py_VALUE_THUNK_BINARY()
 
 #include <stddef.h>
 
@@ -67,8 +72,8 @@ bool_vectorcall(PyObject *type, PyObject * const*args,
 
 /* Arithmetic operations redefined to return bool if both args are bool. */
 
-static PyObject *
-bool_invert(PyObject *v)
+static PyValue
+_PyBool_ValueInvert(PyValueBorrow v)
 {
     if (PyErr_WarnEx(PyExc_DeprecationWarning,
                      "Bitwise inversion '~' on bool is deprecated and will be removed in "
@@ -78,34 +83,42 @@ bool_invert(PyObject *v)
                      "~int(x) if you really want the bitwise inversion of the "
                      "underlying int.",
                      1) < 0) {
-        return NULL;
+        return PyValue_NULL;
     }
-    return PyLong_Type.tp_as_number->nb_invert(v);
+    return _PyLong_ValueInvert(v);
 }
 
-static PyObject *
-bool_and(PyObject *a, PyObject *b)
+static PyValue
+_PyBool_ValueAnd(PyValueBorrow a, PyValueBorrow b)
 {
-    if (!PyBool_Check(a) || !PyBool_Check(b))
-        return PyLong_Type.tp_as_number->nb_and(a, b);
-    return PyBool_FromLong((a == Py_True) & (b == Py_True));
+    if (!PyValue_BoolCheck(a) || !PyValue_BoolCheck(b)) {
+        return _PyLong_ValueAnd(a, b);
+    }
+    return PyValue_FromBool(PyValue_IsTrue(a) && PyValue_IsTrue(b));
 }
 
-static PyObject *
-bool_or(PyObject *a, PyObject *b)
+static PyValue
+_PyBool_ValueOr(PyValueBorrow a, PyValueBorrow b)
 {
-    if (!PyBool_Check(a) || !PyBool_Check(b))
-        return PyLong_Type.tp_as_number->nb_or(a, b);
-    return PyBool_FromLong((a == Py_True) | (b == Py_True));
+    if (!PyValue_BoolCheck(a) || !PyValue_BoolCheck(b)) {
+        return _PyLong_ValueOr(a, b);
+    }
+    return PyValue_FromBool(PyValue_IsTrue(a) || PyValue_IsTrue(b));
 }
 
-static PyObject *
-bool_xor(PyObject *a, PyObject *b)
+static PyValue
+_PyBool_ValueXor(PyValueBorrow a, PyValueBorrow b)
 {
-    if (!PyBool_Check(a) || !PyBool_Check(b))
-        return PyLong_Type.tp_as_number->nb_xor(a, b);
-    return PyBool_FromLong((a == Py_True) ^ (b == Py_True));
+    if (!PyValue_BoolCheck(a) || !PyValue_BoolCheck(b)) {
+        return _PyLong_ValueXor(a, b);
+    }
+    return PyValue_FromBool(PyValue_IsTrue(a) != PyValue_IsTrue(b));
 }
+
+_Py_VALUE_THUNK_UNARY(bool_invert, _PyBool_ValueInvert)
+_Py_VALUE_THUNK_BINARY(bool_and, _PyBool_ValueAnd)
+_Py_VALUE_THUNK_BINARY(bool_or, _PyBool_ValueOr)
+_Py_VALUE_THUNK_BINARY(bool_xor, _PyBool_ValueXor)
 
 /* Doc string */
 
@@ -208,6 +221,12 @@ PyTypeObject PyBool_Type = {
     0,                                          /* tp_alloc */
     bool_new,                                   /* tp_new */
     .tp_vectorcall = bool_vectorcall,
+    .tp_value = {
+        .nb_invert = _Py_VALUE_SLOT_INIT(nb_invert, _PyBool_ValueInvert),
+        .nb_and = _Py_VALUE_SLOT_INIT(nb_and, _PyBool_ValueAnd),
+        .nb_xor = _Py_VALUE_SLOT_INIT(nb_xor, _PyBool_ValueXor),
+        .nb_or = _Py_VALUE_SLOT_INIT(nb_or, _PyBool_ValueOr),
+    },
 };
 
 /* The objects representing bool values False and True */

@@ -64,6 +64,7 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #include "pycore_unicodeobject.h" // struct _Py_unicode_state
 #include "pycore_unicodeobject_generated.h"  // _PyUnicode_InitStaticStrings()
 #include "pycore_value_api.h"     // _PyValue_AsObjectAt()
+#include "pycore_value_slots.h"   // _Py_VALUE_NOTIMPL_RICHCMP()
 
 #include "stringlib/eq.h"         // unicode_eq()
 #include <stddef.h>               // ptrdiff_t
@@ -14667,6 +14668,9 @@ errors defaults to 'strict'.");
 
 static PyObject *unicode_iter(PyObject *seq);
 
+// str compares only with str: an inline operand is not one.
+_Py_VALUE_NOTIMPL_RICHCMP(unicode_value_richcompare, PyUnicode_RichCompare)
+
 PyTypeObject PyUnicode_Type = {
     PyVarObject_HEAD_INIT(&PyType_Type, 0)
     "str",                        /* tp_name */
@@ -14713,6 +14717,10 @@ PyTypeObject PyUnicode_Type = {
     .tp_version_tag = _Py_TYPE_VERSION_STR,
     .tp_vectorcall = unicode_vectorcall,
     ._tp_iteritem = unicode_iteritem,
+    .tp_value = {
+        .richcompare = _Py_VALUE_SLOT_INIT(richcompare,
+                                           unicode_value_richcompare),
+    },
 };
 
 /* Initialize the Unicode implementation */

@@ -773,8 +773,8 @@ PyObject_Dump(PyObject* op)
    of a row if it is set, else the object slot through the adapter, and the
    object function is its thunk. */
 
-static PyObject *
-call_repr(PyTypeObject *t, reprfunc slot, int row, PyValueBorrow v)
+PyObject *
+_PyValue_CallRepr(PyTypeObject *t, reprfunc slot, int row, PyValueBorrow v)
 {
     _Py_reprvaluefunc f = (_Py_reprvaluefunc)_PyType_VALUE_FIELD_AT(t, row);
     if (f != NULL) {
@@ -820,7 +820,7 @@ PyObject *
                                      " while getting the repr of an object")) {
         return NULL;
     }
-    res = call_repr(tp, tp->tp_repr, _Py_VALUE_SLOT_INDEX_repr, v);
+    res = _PyValue_CallRepr(tp, tp->tp_repr, _Py_VALUE_SLOT_INDEX_repr, v);
     _Py_LeaveRecursiveCallTstate(tstate);
 
     if (res == NULL) {
@@ -869,7 +869,7 @@ PyObject *
     if (_Py_EnterRecursiveCallTstate(tstate, " while getting the str of an object")) {
         return NULL;
     }
-    res = call_repr(tp, tp->tp_str, _Py_VALUE_SLOT_INDEX_str, v);
+    res = _PyValue_CallRepr(tp, tp->tp_str, _Py_VALUE_SLOT_INDEX_str, v);
     _Py_LeaveRecursiveCallTstate(tstate);
 
     if (res == NULL) {
@@ -1104,9 +1104,9 @@ static const char * const opstrings[] = {"<", "<=", "==", "!=", ">", ">="};
    do_richcompare(); value_ops.c's _PyValue_RichCompareBool() returns its
    truth. */
 
-static PyValue
-call_richcompare(PyTypeObject *t, richcmpfunc slot,
-                 PyValueBorrow v, PyValueBorrow w, int op)
+PyValue
+_PyValue_CallRichCompare(PyTypeObject *t, richcmpfunc slot,
+                         PyValueBorrow v, PyValueBorrow w, int op)
 {
     int row = _Py_VALUE_SLOT_INDEX_richcompare;
     _Py_richcmpvaluefunc f =
@@ -1146,19 +1146,19 @@ do_richcompare(PyThreadState *tstate, PyValueBorrow v, PyValueBorrow w,
         PyType_IsSubtype(tw, tv) &&
         (f = tw->tp_richcompare) != NULL) {
         checked_reverse_op = 1;
-        res = call_richcompare(tw, f, w, v, _Py_SwappedOp[op]);
+        res = _PyValue_CallRichCompare(tw, f, w, v, _Py_SwappedOp[op]);
         if (!PyValue_Is(res, PyValue_NotImplemented))
             return res;
         PyValue_CLOSE(res);
     }
     if ((f = tv->tp_richcompare) != NULL) {
-        res = call_richcompare(tv, f, v, w, op);
+        res = _PyValue_CallRichCompare(tv, f, v, w, op);
         if (!PyValue_Is(res, PyValue_NotImplemented))
             return res;
         PyValue_CLOSE(res);
     }
     if (!checked_reverse_op && (f = tw->tp_richcompare) != NULL) {
-        res = call_richcompare(tw, f, w, v, _Py_SwappedOp[op]);
+        res = _PyValue_CallRichCompare(tw, f, w, v, _Py_SwappedOp[op]);
         if (!PyValue_Is(res, PyValue_NotImplemented))
             return res;
         PyValue_CLOSE(res);

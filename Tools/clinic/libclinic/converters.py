@@ -156,7 +156,7 @@ class bool_converter(CConverter):
 def int_value_code(converter: CConverter, argname: str, extract: str) -> str:
     """Convert with a V2a-1a extractor: an inline int is read directly,
     any other value goes through __index__, as PyLong_AsInt() does."""
-    converter.add_include('pycore_long.h', f'{extract}()')
+    converter.add_include('pycore_long_value.h', f'{extract}()')
     return converter.format_code("""
         {paramname} = {extract}({argname});
         if ({paramname} == -1 && PyErr_Occurred()) {{{{
@@ -577,7 +577,7 @@ class Py_ssize_t_converter(CConverter):
         # As the object form: __index__, then PyLong_AsSsize_t()'s range
         # check and message.  An inline int needs neither call's work.
         self.add_include('pycore_value_ops.h', '_PyValue_Index()')
-        self.add_include('pycore_long.h', '_PyValue_IntAsSsize_t()')
+        self.add_include('pycore_long_value.h', '_PyValue_IntAsSsize_t()')
         return self.format_code("""
             {{{{
                 Py_ssize_t ival = -1;
@@ -826,7 +826,7 @@ class double_converter(CConverter):
         if self.format_unit != 'd':
             return None
         # An inline float or int is read directly.
-        self.add_include('pycore_long.h', '_PyValue_AsDouble()')
+        self.add_include('pycore_long_value.h', '_PyValue_AsDouble()')
         return self.format_code("""
             {paramname} = _PyValue_AsDouble({argname});
             if ({paramname} == -1.0 && PyErr_Occurred()) {{{{

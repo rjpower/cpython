@@ -10,7 +10,7 @@ preserve
 #  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_value.h"       // _PyValue_STATIC_IMMORTAL()
 #endif
-#include "pycore_long.h"          // _PyValue_AsInt()
+#include "pycore_long_value.h"    // _PyValue_AsInt()
 #include "pycore_modsupport.h"    // _PyArg_CheckArityValue()
 #include "pycore_runtime.h"       // _Py_SINGLETON()
 #include "pycore_tuple.h"         // _PyTuple_FromValueArray()
@@ -1168,12 +1168,12 @@ exit:
     return return_value;
 }
 
-static PyObject *
+Py_VALUE_ENTRY static PyObject *
 _testclinic_value_Pair(PyTypeObject *type, PyObject *args, PyObject *kwargs)
 {
     Py_ssize_t nargs = PyTuple_GET_SIZE(args);
     if (kwargs == NULL || PyDict_GET_SIZE(kwargs) == 0) {
-        return _PyValue_THUNK_EXIT(_testclinic_value_Pair_value(type, _PyTuple_ITEMS(args), nargs, NULL));
+        return _PyValue_THUNK_EXIT(_testclinic_value_Pair_value(type, _PyTuple_ITEMS(args), nargs, NULL), BOX_SITE_CALL);
     }
     PyObject *kwnames;
     PyValue *window = _PyValue_StackUnpackDict(_PyThreadState_GET(),
@@ -1183,7 +1183,7 @@ _testclinic_value_Pair(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     }
     PyValue result = _testclinic_value_Pair_value(type, window, nargs, kwnames);
     _PyValue_StackUnpackDict_Free(window, nargs, kwnames);
-    return _PyValue_THUNK_EXIT(result);
+    return _PyValue_THUNK_EXIT(result, BOX_SITE_CALL);
 }
 
 static PyValue
@@ -1214,7 +1214,7 @@ _testclinic_value_Pair_get(PyValueBorrow self, const PyValue *args, Py_ssize_t n
 {
     PyValue return_value = PyValue_NULL;
 
-    if (!_PyArg_CheckArityValue("Pair.get()", nargs, kwnames, 0)) {
+    if (!_PyArg_CheckArityValueMethod(&Pair_Type, "get", nargs, kwnames, 0)) {
         goto exit;
     }
     return_value = _testclinic_value_Pair_get_impl((PairObject *)PyValue_AsKnownObjectBorrow(self));
@@ -1340,4 +1340,4 @@ _testclinic_value_Probe_where(PyValueBorrow self, PyTypeObject *cls, const PyVal
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=5339dcd19aa1d229 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=9bb35f21f2a59f80 input=a9049054013a1b77]*/

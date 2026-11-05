@@ -329,7 +329,6 @@ RELEASES = {
     "IR_FINISH_VALUE_OPERATION", "IR_ABORT_VALUE_READER",
     "IR_COMPLETE_VALUE_READER", "IR_COMPLETE_ATTR_READER",
     "_PyFrame_ClearTemporaries", "_PyEval_FrameClearAndPop", "_PyErr_Clear",
-    "JIT_RETIRE_PENDING",
 }
 NOT_RELEASES = {
     # A release whose destructor, that of an exact type, runs no Python
@@ -1020,12 +1019,6 @@ def all_instructions(analysis: Analysis) -> dict[str, Instruction]:
     return {**analysis.instructions, **analysis.ir_only}
 
 
-EXEC_ONLY = {"CALL_JIT_WARM": "CALL", "JUMP_BACKWARD_JIT_WARM": "JUMP_BACKWARD", "RESUME_JIT": "RESUME"}
-
-def exec_only(analysis: Analysis) -> dict[str, str]:
-    # Small generator fixtures need not define the production entry families.
-    return EXEC_ONLY if all(base in analysis.instructions for base in EXEC_ONLY.values()) else {}
-
 NOFB_SUFFIX = "_NOFB"
 
 
@@ -1052,8 +1045,6 @@ def handler_ids(analysis: Analysis) -> dict[str, int]:
              + [name + NOFB_SUFFIX for name in nofb_bases(analysis)])
     for i, name in enumerate(names):
         ids[name] = first_ir_only_handler(analysis) + i
-    for name in exec_only(analysis):
-        ids[name] = max(ids.values()) + 1
     return ids
 
 
@@ -1066,8 +1057,6 @@ def handler_instructions(analysis: Analysis) -> dict[str, Instruction]:
         result[name] = insts[BINARY_OP_FAMILY]
     for name in nofb_bases(analysis):
         result[name + NOFB_SUFFIX] = insts[name]
-    for name, base in exec_only(analysis).items():
-        result[name] = insts[base]
     return result
 
 
@@ -1659,8 +1648,6 @@ def compute_formats(analysis: Analysis) -> dict[str, IRFormat]:
     formats = base_formats(analysis)
     for name in nofb_bases(analysis):
         formats[name + NOFB_SUFFIX] = nofb_format(formats[name])
-    for name, base in exec_only(analysis).items():
-        formats[name] = replace(formats[base])
     return formats
 
 
@@ -2219,8 +2206,6 @@ class IREmitter(Emitter):
     "Emits handler bodies for the register IR"
 
     instruction_macros = IR_INSTRUCTION_MACROS
-    helper = False
-
     def __init__(self, out: CWriter, analysis: Analysis,
                  formats: dict[str, IRFormat]):
         super().__init__(out, analysis.labels)
@@ -2345,8 +2330,7 @@ class IREmitter(Emitter):
         self.emit(f"int retire_failed = retire_published_values(tstate, frame, next_instr, {self.temps}, &{first.text}, {second_ptr}, {failure_result});\n")
         self.emit("if (retire_failed < 0) { JUMP_TO_LABEL(error); }\n")
         self.emit("this_instr = frame->instr_ptr;\n")
-        if not self.helper:
-            self.emit("ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);\n")
+        self.emit("ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);\n")
         self.emit("slots = _PyFrame_Slots(frame);\n")
         if self.format_of(inst).window:
             base = FIELD_VARS[self.format_of(inst).field_of(ROLE_BASE)]
@@ -2438,13 +2422,7 @@ class IREmitter(Emitter):
         return True
 
     def reader_error(self):
-        if self.helper:
-            self.emit("ctx->frame = frame; ctx->next_instr = next_instr;\n")
-            self.emit("ctx->raising_instr = frame->instr_ptr;\n")
-            self.emit("ctx->phase = _PyJIT_ERROR_LOG_PENDING;\n")
-            self.emit("return _PyJIT_RAISE;\n")
-        else:
-            self.emit("JUMP_TO_LABEL(error);\n")
+        self.emit("JUMP_TO_LABEL(error);\n")
 
     def release_displaced(self):
         """Release the local value that IR_STORE_DST or IR_MOVE_TO_DST
@@ -2453,15 +2431,13 @@ class IREmitter(Emitter):
         self.emit("if (!PyValue_IsNull(ir_displaced) &&\n")
         self.emit("    finish_displaced_local(tstate, frame, next_instr, "
                   f"{self.temps}, ir_displaced) < 0) {{\n")
-        if not self.helper:
-            self.emit("next_instr = frame->instr_ptr + 1;\n")
+        self.emit("next_instr = frame->instr_ptr + 1;\n")
         self.reader_error()
         self.emit("}\n")
 
     def reader_reload(self):
         self.emit("this_instr = frame->instr_ptr;\n")
-        if not self.helper:
-            self.emit("ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);\n")
+        self.emit("ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);\n")
         self.emit("slots = _PyFrame_Slots(frame);\n")
 
     def call_reload(self, inst):
@@ -2516,22 +2492,13 @@ class IREmitter(Emitter):
         self.reader_error()
         self.emit("}\n")
         self.emit("if (call_child != NULL) {\n")
-        if self.helper:
-            self.emit("ctx->frame = call_child; ctx->next_instr = call_child->instr_ptr;\n")
-            self.emit("ctx->phase = _PyJIT_ENTER_PREPARED;\n")
-            self.emit("return _PyJIT_ENTER_FRAME;\n")
-        else:
-            self.emit("DISPATCH_INLINED(call_child);\n")
+        self.emit("DISPATCH_INLINED(call_child);\n")
         self.emit("}\n")
         # Both result and callback-current destination are already published.
-        # No stack flush, delayed move from window[0], or helper JIT_FINISH
-        # may consume stale C inputs after this point.
-        if self.helper:
-            self.emit("ctx->frame = frame; ctx->next_instr = next_instr;\n")
-            self.emit("ctx->phase = jit_phase; return jit_action;\n")
-        else:
-            self.emit("slots = _PyFrame_Slots(frame);\n")
-            self.emit("DISPATCH();\n")
+        # No stack flush or delayed move from window[0] may consume stale C
+        # inputs after this point.
+        self.emit("slots = _PyFrame_Slots(frame);\n")
+        self.emit("DISPATCH();\n")
 
     def invoke_call(self, tkn, tkn_iter, uop, storage, inst):
         assert next(tkn_iter).kind == "LPAREN"
@@ -2585,19 +2552,10 @@ class IREmitter(Emitter):
         self.emit("{\n")
         self.emit(f"int operation_failed = value_operation_finish(&{state.text}, next_instr, {self.temps});\n")
         self.emit("if (operation_failed < 0) {\n")
-        if self.helper:
-            # The current word was refreshed without decoding an old pointer.
-            # Avoid JIT_FINISH's subtraction from its pre-operation this_instr.
-            self.emit("ctx->frame = frame; ctx->next_instr = next_instr;\n")
-            self.emit("ctx->raising_instr = frame->instr_ptr;\n")
-            self.emit("ctx->phase = _PyJIT_ERROR_LOG_PENDING;\n")
-            self.emit("return _PyJIT_RAISE;\n")
-        else:
-            self.emit("JUMP_TO_LABEL(error);\n")
+        self.emit("JUMP_TO_LABEL(error);\n")
         self.emit("}\n")
         self.emit("this_instr = frame->instr_ptr;\n")
-        if not self.helper:
-            self.emit("ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);\n")
+        self.emit("ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);\n")
         self.emit("slots = _PyFrame_Slots(frame);\n")
         if self.format_of(inst).window:
             base = FIELD_VARS[self.format_of(inst).field_of(ROLE_BASE)]
@@ -3500,12 +3458,6 @@ def write_uop(
         raise analysis_error(
             f"OWNER() gave '{emitter.pending_owner.text}', which no "
             f"IR_RETIRE_PUBLISHED of {uop.name} retires", emitter.pending_owner)
-    if (emitter.helper and uop.name.startswith("_SPECIALIZE_") and
-            any(t.text == "DISPATCH_SAME_OPARG" for t in uop.body.tokens())):
-        emitter.out.start_line()
-        emitter.emit("#if ENABLE_SPECIALIZATION\n")
-        emitter.emit(f"jit_after{uop.name}:;\n")
-        emitter.emit("#endif\n")
     if braces:
         emitter.out.start_line()
         emitter.emit("}\n")
@@ -3537,13 +3489,6 @@ def slot_layout(inst: Instruction, fmt: IRFormat, mode: str | None) -> SlotLayou
     return SlotLayout(False, PointerOffset.zero(), in_fields, borrowable,
                       dst=fmt.field_of(ROLE_DST), dst_offset=fmt.dst_offset,
                       store_dst=mode == STORE_RESULT)
-
-
-def skipped_part(name: str, part: Part) -> bool:
-    """Whether the handler of name leaves part of its instruction out: the
-    warm-up form of CALL counts calls for the JIT and does not specialise"""
-    return (name == "CALL_JIT_WARM" and isinstance(part, Uop)
-            and part.name == "_SPECIALIZE_CALL")
 
 
 def polls_at_end(name: str, inst: Instruction) -> bool:
@@ -3617,39 +3562,21 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
     operation = None
     emitter.has_record = record
     nofb = name == inst.name + NOFB_SUFFIX
-    if name != inst.name and not nofb and name not in EXEC_ONLY:
+    if name != inst.name and not nofb:
         operation = "NB_" + name.removeprefix(BINARY_OP_FAMILY + "_")
-    helper = emitter.helper
     transaction = uses_call_transaction(inst)
     emitter.call_finished = False
     emitter.call_fallback_used = False
     emitter.call_fallback = f"call_transaction_fallback_{name}"
-    is_target = inst.is_target and name == inst.name and not helper
+    is_target = inst.is_target and name == inst.name
     out.emit("\n")
-    if helper:
-        out.emit(f"static _PyJitAction jit_helper_{name}(_PyJitContext *ctx, const _PyJitDecodedOp *op) {{\n")
-        out.emit("PyThreadState *tstate = ctx->tstate;\n")
-        out.emit("_PyInterpreterFrame *frame = ctx->frame;\n")
-        out.emit("_PyIRWord *next_instr = ctx->next_instr;\n")
-        out.emit("PyValue *slots = _PyFrame_Slots(frame);\n")
-        out.emit("(void)tstate; (void)slots;\n")
-        out.emit(f"int opcode = {name}; (void)opcode;\n")
-        out.emit("assert(next_instr == op->instruction);\n")
-        action = ("_PyJIT_RETURN" if name == "RETURN_VALUE" else
-                  "_PyJIT_BRANCH" if fmt.jumps or fmt.forward else "_PyJIT_CONTINUE")
-        phase = "_PyJIT_RETURN_COMPLETED" if name == "RETURN_VALUE" else "_PyJIT_AFTER"
-        out.emit(f"const _PyJitAction jit_action = {action};\n")
-        out.emit(f"const _PyJitPhase jit_phase = {phase};\n")
-        if name == "RAISE_VARARGS":
-            out.emit("(void)jit_action; (void)jit_phase;\n")
-    else:
-        out.emit(f"TARGET({name}) {{\n")
+    out.emit(f"TARGET({name}) {{\n")
     bridge_bound = value_bridge_bound(name, inst)
     out.emit(f"#if _Py_TAIL_CALL_INTERP\n")
     out.emit(f"int opcode = {name};\n")
     out.emit(f"(void)(opcode);\n")
     out.emit("_PyInterpreterFrame *frame = tstate->current_frame;\n")
-    if not record and not helper:
+    if not record:
         # A tail-called handler is a function of its own
         out.emit("_PyValueTemps *const value_temps = NULL;\n")
         out.emit("(void)value_temps;\n")
@@ -3657,7 +3584,7 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
     if inst.properties.needs_prev:
         out.emit(f"_PyIRWord* const prev_instr = frame->instr_ptr;\n")
     if not is_target:
-        qualifier = "" if transaction or inst.name == "BINARY_OP" or name in ("CALL", "CALL_JIT_WARM", "CALL_KW", "INSTRUMENTED_CALL", "INSTRUMENTED_CALL_KW", "CALL_NON_PY_GENERAL", "CALL_KW_NON_PY", "CALL_BUILTIN_O", "LOAD_ATTR_SLOT", "STORE_ATTR_SLOT",
+        qualifier = "" if transaction or inst.name == "BINARY_OP" or name in ("CALL", "CALL_KW", "INSTRUMENTED_CALL", "INSTRUMENTED_CALL_KW", "CALL_NON_PY_GENERAL", "CALL_KW_NON_PY", "CALL_BUILTIN_O", "LOAD_ATTR_SLOT", "STORE_ATTR_SLOT",
                                    "BUILD_MAP", "STORE_SUBSCR", "STORE_SUBSCR_DICT",
                                    "STORE_ATTR_WITH_HINT", "BINARY_OP_SUBSCR_DICT", "LOAD_GLOBAL", "LOAD_GLOBAL_NOFB",
                                    "LOAD_ATTR", "LOAD_ATTR_NOFB", "STORE_ATTR", "STORE_ATTR_NOFB",
@@ -3672,19 +3599,10 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
     out.emit(f"INSTRUCTION_STATS({inst.name});\n")
     if is_target:
         out.emit(f"IR_PREDICTED({name});\n")
-        qualifier = "" if transaction or inst.name == "BINARY_OP" or name in ("CALL", "CALL_JIT_WARM", "CALL_KW", "STORE_SUBSCR", "LOAD_GLOBAL", "LOAD_GLOBAL_NOFB", "LOAD_ATTR", "LOAD_ATTR_NOFB", "STORE_ATTR", "STORE_ATTR_NOFB") else "const "
+        qualifier = "" if transaction or inst.name == "BINARY_OP" or name in ("CALL", "CALL_KW", "STORE_SUBSCR", "LOAD_GLOBAL", "LOAD_GLOBAL_NOFB", "LOAD_ATTR", "LOAD_ATTR_NOFB", "STORE_ATTR", "STORE_ATTR_NOFB") else "const "
         out.emit(f"_PyIRWord* {qualifier}this_instr = next_instr - 1;\n")
         out.emit("(void)this_instr;\n")
-    if not record:
-        # No record: the eval function's value_temps is NULL, and a helper,
-        # a function of its own, declares its own
-        if helper:
-            out.emit("_PyValueTemps *const value_temps = NULL;\n")
-            out.emit("(void)value_temps;\n")
-    elif helper:
-        out.emit(f"PyObject *value_boxes[{bridge_bound}];\n")
-        out.emit("_PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};\n")
-    else:
+    if record:
         # The eval function declares one array for all handlers. A tail-called
         # handler is its own function, so it keeps its own.
         out.emit("#if _Py_TAIL_CALL_INTERP\n")
@@ -3701,9 +3619,8 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
         out.emit("(void)ir_displaced;\n")
     use_fb = fmt.fb != LOC_NONE and (
         uses_feedback(inst) or reads_fb_arg(inst, fmt, operation))
-    emitter.call_has_feedback = (use_fb and name != "CALL_JIT_WARM"
-                                 or nofb and uses_feedback(inst))
-    if use_fb and name != "CALL_JIT_WARM":
+    emitter.call_has_feedback = use_fb or nofb and uses_feedback(inst)
+    if use_fb:
         out.emit(f"{feedback_type(fmt)} *fb = ({feedback_type(fmt)} *)"
                  f"IR_FB({field_expr(fmt.fb)});\n")
     elif nofb and uses_feedback(inst):
@@ -3749,17 +3666,6 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
         inputs, _ = external_io(inst)
         count = " + ".join(f"({item.size or '1'})" for item in inputs)
         out.emit(f"_PyValue_RecheckWindow(window, {count});\n")
-    if name in ("CALL", "CALL_JIT_WARM", "CALL_KW"):
-        out.emit("if (JIT_CALL_NEEDS_PREPARE(this_instr)) {\n")
-        out.emit("call.effects = 1;\n")
-        out.emit("int jit_prepare = JIT_PREPARE_CALL(this_instr, window[0]);\n")
-        out.emit("if (call_transaction_refresh(&call, next_instr) < 0 || jit_prepare < 0) {\n")
-        emitter.reader_error()
-        out.emit("}\n")
-        emitter.call_reload(inst)
-        # JIT preparation may allocate/observe. A decline continues this
-        # same logical call; retrying the handler would replay those effects.
-        out.emit("}\n")
     if inst.properties.uses_opcode:
         out.emit(f"opcode = {name};\n")
     mode = store_mode(inst, external_io(inst)[1]) if fmt.store_dst else None
@@ -3781,8 +3687,6 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
     insert_braces = len([p for p in inst.parts if isinstance(p, Uop)]) > 1
     reachable = True
     for part in inst.parts:
-        if skipped_part(name, part):
-            continue
         try:
             reachable, stack = write_uop(part, emitter, stack, inst, insert_braces)
         except SyntaxError as ex:
@@ -3802,10 +3706,6 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
             out.emit(f"{stack.dst_stores[-1]};\n")
         if fmt.store_dst:
             emitter.release_displaced()
-        if name in ("RETURN_VALUE", "RETURN_GENERATOR") and not helper:
-            out.emit("JIT_MAYBE_RESUME(1);\n")
-        if name in ("RESUME_JIT", "JUMP_BACKWARD_JIT_WARM") and not helper:
-            out.emit("JIT_SITE_ENTRY(this_instr);\n")
         out.emit("DISPATCH();\n")
     if transaction and emitter.call_fallback_used:
         out.emit(f"{emitter.call_fallback}:;\n")
@@ -4113,7 +4013,7 @@ def handler_effects(name: str, inst: Instruction, fmt: IRFormat,
     pushes_frame = p.switches_frame and not p.returns and not suspends
     specializes = fmt.fb != LOC_NONE and any(
         isinstance(part, Uop) and "specializing" in part.annotations
-        and not skipped_part(name, part) for part in inst.parts)
+        for part in inst.parts)
     allocates = (not p.infallible or p.escapes or boxes or pushes_frame
                  or any(CONSTRUCTOR.search(t) for t in tokens))
     effects = []
@@ -4206,7 +4106,7 @@ def function_proto(name: str, prefix: str = "_TAIL_CALL_") -> str:
 
 def num_handlers(analysis: Analysis) -> int:
     return (first_ir_only_handler(analysis) + len(analysis.ir_only)
-            + len(binary_op_handlers(analysis)) + len(nofb_bases(analysis)) + len(exec_only(analysis)))
+            + len(binary_op_handlers(analysis)) + len(nofb_bases(analysis)))
 
 
 def generate_ir_targets(filenames: list[str], analysis: Analysis,

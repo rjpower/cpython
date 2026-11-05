@@ -500,10 +500,8 @@ class AnalyzerTests(unittest.TestCase):
                 self.assertEqual(boxes(decl + code), expected)
 
     def generated(self):
-        "The generated handlers and JIT helpers: (text, bodies by name) each"
+        "The generated handlers: the text and the bodies by name"
         if type(self)._generated is None:
-            with test_tools.imports_under_tool("cases_generator"):
-                import jit_helpers_generator
             source = os.path.join(test_tools.basepath, "Python", "bytecodes.c")
             gen = self.ir_generator
             out = io.StringIO()
@@ -513,49 +511,39 @@ class AnalyzerTests(unittest.TestCase):
             text = text.split(gen.INSTRUCTION_END_MARKER)[0]
             handlers = dict(re.findall(
                 r"\bTARGET\((\w+)\) \{(.*?)(?=\bTARGET\(\w+\) \{|\Z)", text, re.S))
-            out = io.StringIO()
-            jit_helpers_generator.generate([source], out)
-            jit = out.getvalue()
-            text = jit.split("#undef JIT_FINISH")[0]
-            helpers = dict(re.findall(
-                r"static _PyJitAction jit_helper_(\w+)\((.*?)(?=static _PyJitAction|\Z)",
-                text, re.S))
-            type(self)._generated = (cases, handlers), (jit, helpers)
+            type(self)._generated = cases, handlers
         return type(self)._generated
 
     def test_value_record(self):
         # A handler sets up a value record, value_temps, only if the
         # contract says it boxes (BOXES, IR v2 step A1).  Elsewhere
         # value_temps is a NULL constant, so its dispatch finishes no
-        # bridges; the generated JIT helpers follow the same rule.
-        (_, handlers), (_, helpers) = self.generated()
+        # bridges.
+        _, handlers = self.generated()
         self.assertEqual(handlers.keys(), self.insts.keys())
-        self.assertTrue(helpers)
         record = "_PyValueTemps *value_temps = &value_owners;"
         null = "_PyValueTemps *const value_temps = NULL;"
-        for kind, bodies in (("handler", handlers), ("helper", helpers)):
-            for name, body in bodies.items():
-                boxes = bool(CONTRACT[self.ids[name]].effects & _opcode.IR_BOXES)
-                with self.subTest(kind=kind, handler=name):
-                    self.assertEqual(record in body, boxes)
-                    if not boxes:
-                        self.assertNotIn("value_owners", body)
-                        self.assertNotIn("value_boxes", body)
-                        uses = {line.strip() for line in body.splitlines()
-                                if re.search(r"\bvalue_temps\b", line)}
-                        self.assertIn(null, uses)
-                        self.assertLessEqual(uses, {null, "(void)value_temps;"})
+        for name, body in handlers.items():
+            boxes = bool(CONTRACT[self.ids[name]].effects & _opcode.IR_BOXES)
+            with self.subTest(handler=name):
+                self.assertEqual(record in body, boxes)
+                if not boxes:
+                    self.assertNotIn("value_owners", body)
+                    self.assertNotIn("value_boxes", body)
+                    uses = {line.strip() for line in body.splitlines()
+                            if re.search(r"\bvalue_temps\b", line)}
+                    self.assertIn(null, uses)
+                    self.assertLessEqual(uses, {null, "(void)value_temps;"})
 
     def test_next_instr_by_value(self):
-        # No handler, helper or dispatch macro takes the address of
+        # No handler or dispatch macro takes the address of
         # next_instr (IR v2 step A2): the executing copy is fixed for the
         # code object's life, so no helper rebases the PC.
-        (cases, _), (jit, _) = self.generated()
+        cases, _ = self.generated()
         path = os.path.join(test_tools.basepath, "Python", "ceval_macros.h")
         with open(path) as f:
             macros = f.read()
         for name, text in (("generated_ir_cases.c.h", cases),
-                           ("generated_jit_helpers.c.h", jit),
                            ("ceval_macros.h", macros)):
             with self.subTest(name):
                 lines = [line.strip() for line in text.splitlines()

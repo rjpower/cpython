@@ -22,7 +22,6 @@ Data members:
 #include "pycore_import.h"        // _PyImport_SetDLOpenFlags()
 #include "pycore_initconfig.h"    // _PyStatus_EXCEPTION()
 #include "pycore_interpframe.h"   // _PyFrame_GetFirstComplete()
-#include "pycore_jit.h"           // _PyJIT_BASELINE_SUPPORTED
 #include "pycore_long.h"          // _PY_LONG_MAX_STR_DIGITS_THRESHOLD
 #include "pycore_modsupport.h"    // _PyModule_CreateInitialized()
 #include "pycore_namespace.h"     // _PyNamespace_New()
@@ -4247,7 +4246,7 @@ static int
 _jit_is_available_impl(PyObject *module)
 /*[clinic end generated code: output=6849a9cd2ff4aac9 input=d009d751ae64c9ef]*/
 {
-    return _PyJIT_BASELINE_SUPPORTED;
+    return 0;
 }
 
 /*[clinic input]
@@ -4260,7 +4259,7 @@ static int
 _jit_is_enabled_impl(PyObject *module)
 /*[clinic end generated code: output=55865f8de993fe42 input=0524151e857f4f3a]*/
 {
-    return _PyJIT_BASELINE_SUPPORTED && _PyJit_NaturalAdmissionEnabled();
+    return 0;
 }
 
 /*[clinic input]

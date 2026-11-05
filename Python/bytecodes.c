@@ -1477,11 +1477,6 @@ dummy_func(
             assert(frame == &entry.frame);
 #endif
             LLTRACE_RESUME_FRAME();
-            if (result == NULL) {
-                JIT_FREE_FLOW();
-                return NULL;
-            }
-            JIT_FREE_FLOW_RESULT(result);
             return result;
         }
 
@@ -1505,7 +1500,6 @@ dummy_func(
             _PyInterpreterFrame *dying = frame;
             int generator_return = dying->owner == FRAME_OWNED_BY_GENERATOR;
             frame = tstate->current_frame = dying->previous;
-            JIT_LEAVE_FRAME(dying);
             _PyEval_FrameClearAndPop(tstate, dying);
             RELOAD_STACK();
             // A frame resumes at the word after the one that made the call,
@@ -4188,7 +4182,7 @@ dummy_func(
 
         specializing op(_SPECIALIZE_CALL, (callable, self_or_null, unused[oparg] -- callable, self_or_null, unused[oparg])) {
             #if ENABLE_SPECIALIZATION
-            if (IR_HANDLER(*this_instr) != CALL_JIT_WARM) {
+            {
                 _PyFbHeader *feedback = FB_COUNTER();
                 if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
                     /* The specialisation is an effect of the call
@@ -5318,7 +5312,6 @@ dummy_func(
             _Py_LeaveRecursiveCallPy(tstate);
             _PyInterpreterFrame *prev = frame->previous;
             _PyThreadState_UpdateLastProfiledFrame(tstate, frame, prev);
-            JIT_LEAVE_FRAME(frame);
             _PyThreadState_PopFrame(tstate, frame);
             frame = tstate->current_frame = prev;
             LOAD_IP(1);
@@ -5630,7 +5623,6 @@ dummy_func(
 
         spilled label(exception_unwind) {
             /* We can't use frame->instr_ptr here, as RERAISE may have set it */
-            JIT_RETIRE_PENDING(frame);
             int offset = CURRENT_OFFSET();
             int exc_slot, handler, lasti;
             int handled = get_exception_handler(_PyFrame_GetCode(frame), offset, &exc_slot, &handler, &lasti);
@@ -5691,7 +5683,6 @@ dummy_func(
             // GH-99729: We need to unlink the frame *before* clearing it:
             _PyInterpreterFrame *dying = frame;
             frame = tstate->current_frame = dying->previous;
-            JIT_LEAVE_FRAME(dying);
             _PyEval_FrameClearAndPop(tstate, dying);
             if (frame->owner == FRAME_OWNED_BY_INTERPRETER) {
                 /* Restore previous frame and exit */
@@ -5699,7 +5690,6 @@ dummy_func(
 #if !_Py_TAIL_CALL_INTERP
                 assert(frame == &entry.frame);
 #endif
-                JIT_FREE_FLOW();
                 return NULL;
             }
             // The caller's instr_ptr is the word that pushed the frame, and
@@ -5734,7 +5724,6 @@ dummy_func(
 #if _Py_TAIL_CALL_INTERP
             int opcode;
 #endif
-            JIT_MAYBE_RESUME(0);
             DISPATCH();
         }
 

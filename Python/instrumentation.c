@@ -1,5 +1,4 @@
 #include "Python.h"
-#include "pycore_jit.h"
 #include "pycore_bitutils.h"      // _Py_popcount32()
 #include "pycore_call.h"          // _PyObject_VectorcallTstate()
 #include "pycore_ceval.h"         // _PY_EVAL_EVENTS_BITS
@@ -1868,20 +1867,6 @@ force_instrument_lock_held(PyCodeObject *code, PyInterpreterState *interp)
     if (exec == NULL) {
         return -1;
     }
-    int had_error = PyErr_Occurred() != NULL;
-    _PyJit_DetachExec(exec);
-    /* Retiring inactive metadata may invoke a custom PyMem hook. Do not
-     * rewrite an execution array replaced by that callback. */
-    if (code->_co_exec != exec) {
-        if (!PyErr_Occurred()) {
-            PyErr_SetString(PyExc_RuntimeError,
-                            "code execution changed during JIT invalidation");
-        }
-        return -1;
-    }
-    if (!had_error && PyErr_Occurred()) {
-        return -1;
-    }
     if (update_instrumentation_data(code, interp)) {
         return -1;
     }
@@ -1983,7 +1968,6 @@ force_instrument_lock_held(PyCodeObject *code, PyInterpreterState *interp)
     }
 
 done:
-    _PyJit_SeedBackedges(code, code->_co_exec);
     FT_ATOMIC_STORE_UINTPTR_RELEASE(code->_co_instrumentation_version,
                                     global_version(interp));
 

@@ -460,14 +460,6 @@ _PyCode_Validate(struct _PyCodeConstructor *con)
         PyErr_SetString(PyExc_ValueError, "code: co_code is malformed");
         return -1;
     }
-    for (Py_ssize_t i = 0; i < PyBytes_GET_SIZE(con->code) / (Py_ssize_t)sizeof(_PyIRWord); i++) {
-        _PyIRWord word;
-        memcpy(&word, PyBytes_AS_STRING(con->code) + i * sizeof(word), sizeof(word));
-        if (IR_HANDLER(word) >= CALL_JIT_WARM && IR_HANDLER(word) <= RESUME_JIT) {
-            PyErr_SetString(PyExc_ValueError, "code: execution-only JIT handler");
-            return -1;
-        }
-    }
     if (con->fbinit != NULL
         && (!PyBytes_Check(con->fbinit)
             || PyBytes_GET_SIZE(con->fbinit) % sizeof(uint32_t) != 0

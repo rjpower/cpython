@@ -19,7 +19,6 @@
 #include "pycore_critical_section.h" // Py_BEGIN_CRITICAL_SECTION()
 #include "pycore_interpframe.h"     // _PyFrame_GetCode()
 #include "pycore_ir.h"
-#include "pycore_jit.h"
 #include "pycore_opcode_metadata.h" // _PyOpcode_Deopt
 #include "pycore_pyatomic_ft_wrappers.h"
 #include "pycore_pystate.h"         // _PyInterpreterState_GET()
@@ -272,7 +271,6 @@ make_exec(PyCodeObject *co)
         .nlocalsplus = (uint32_t)co->co_nlocalsplus,
     };
     memcpy(words, _PyCode_WORDS(co), words_size);
-    _PyJit_SeedBackedges(co, exec);
     if (fb_size == 0) {
         return exec;
     }
@@ -339,7 +337,6 @@ _PyCode_ClearExec(PyCodeObject *co)
         return;
     }
     co->_co_exec = NULL;
-    _PyJit_ClearExec(exec);
     if (exec->feedback != NULL) {
         _PyFb_Clear(exec->feedback);
     }
@@ -354,7 +351,6 @@ _PyCode_ExecSizeOf(PyCodeObject *co)
         return 0;
     }
     size_t res = sizeof(_PyCodeExec) + exec->nwords * sizeof(_PyIRWord);
-    res += _PyJit_ExecSizeOf(exec);
     _PyFbBlock *feedback = exec->feedback;
     if (feedback != NULL) {
         res += feedback->size;

@@ -2475,18 +2475,9 @@ this is invalid python code
 class TestSysJIT(unittest.TestCase):
 
     def test_available(self):
-        _testinternalcapi = import_helper.import_module("_testinternalcapi")
-        self.assertIs(sys._jit.is_available(),
-                      _testinternalcapi.JIT_BASELINE_SUPPORTED)
+        self.assertIs(sys._jit.is_available(), False)
 
     def test_enabled(self):
-        _testinternalcapi = import_helper.import_module("_testinternalcapi")
-        # Natural admission is off by default.
-        self.assertIs(sys._jit.is_enabled(), False)
-        previous = _testinternalcapi.jit_method_natural(True)
-        self.addCleanup(_testinternalcapi.jit_method_natural, previous)
-        self.assertIs(sys._jit.is_enabled(), sys._jit.is_available())
-        _testinternalcapi.jit_method_natural(False)
         self.assertIs(sys._jit.is_enabled(), False)
 
     def test_active(self):

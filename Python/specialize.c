@@ -1,5 +1,4 @@
 #include "Python.h"
-#include "pycore_jit.h"
 
 #include "opcode.h"
 
@@ -2226,20 +2225,6 @@ _Py_Specialize_Call(PyValue callable_st, PyValue self_or_null_st, _PyInstr *inst
     if (fail) {
         unspecialize(instr);
     }
-#if _PyJIT_BASELINE_SUPPORTED
-    else if (_PyJit_AutoEligible(callable)) {
-        _PyInterpreterFrame *frame = current_frame();
-        PyCodeObject *code = _PyFrame_GetCode(frame);
-        int index = _PyCode_InstrFbIndex(code, _PyFrame_InstrOffset(frame, instr));
-        if (index > 0 && index < code->co_nfeedback) {
-            _PyFbHeader *header = _PyIR_InstrFeedback(code, _PyFrame_Exec(frame), instr);
-            if (header != NULL && header->kind == FB_CALL) {
-                header->hits = 0;
-                _PyIR_SetHandler(instr, CALL_JIT_WARM);
-            }
-        }
-    }
-#endif
 }
 
 Py_NO_INLINE void

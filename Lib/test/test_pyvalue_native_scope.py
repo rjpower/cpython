@@ -13,12 +13,6 @@ from test.support import import_helper
 _testinternalcapi = import_helper.import_module("_testinternalcapi")
 
 
-def setUpModule():
-    # Hot-call and backedge method admission is off by default.
-    previous = _testinternalcapi.jit_method_natural(True)
-    unittest.addModuleCleanup(_testinternalcapi.jit_method_natural, previous)
-
-
 def executing_handlers(function):
     return [word[0] for word in
             _testinternalcapi.get_ir(function.__code__, True)]
@@ -647,14 +641,6 @@ class CallPeriodicCheckStoreOrderTests(unittest.TestCase):
                 self.check_site(site, handler)
             finally:
                 monitoring.set_local_events(tool, site.__code__, 0)
-
-    def test_jit_warm_handler(self):
-        # Warmed on an eligible Python callee, the site runs CALL's generic
-        # path under CALL_JIT_WARM until the callee compiles.
-        self.warm(positional_site, python_callee)
-        if 'CALL_JIT_WARM' not in executing_handlers(positional_site):
-            self.skipTest('needs the baseline JIT')
-        self.check_site(positional_site, 'CALL_JIT_WARM')
 
 
 if __name__ == "__main__":

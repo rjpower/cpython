@@ -4772,18 +4772,6 @@
             (void)window;
             _PyCallTransaction call = call_transaction_begin(tstate, frame, next_instr, IR_FIELD_B(this_instr), (1) + (1) + (oparg), IR_FIELD_A(this_instr), oparg, CALL_TRANSACTION_VECTOR, 0, 1);
             uint32_t call_feedback = IR_FIELD_D(this_instr);
-            if (JIT_CALL_NEEDS_PREPARE(this_instr)) {
-                call.effects = 1;
-                int jit_prepare = JIT_PREPARE_CALL(this_instr, window[0]);
-                if (call_transaction_refresh(&call, next_instr) < 0 || jit_prepare < 0) {
-                    JUMP_TO_LABEL(error);
-                }
-                this_instr = frame->instr_ptr;
-                ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
-                slots = _PyFrame_Slots(frame);
-                window = slots + call.base;
-                fb = (_PyFb_CALL *)(frame->ir_feedback + call_feedback * FB_STRIDE);
-            }
             PyValue callable;
             PyValue self_or_null;
             // _SPECIALIZE_CALL
@@ -4791,7 +4779,7 @@
                 self_or_null = window[1];
                 callable = window[0];
                 #if ENABLE_SPECIALIZATION
-                if (IR_HANDLER(*this_instr) != CALL_JIT_WARM) {
+                {
                     _PyFbHeader *feedback = ((_PyFbHeader *)fb);
                     if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
                         call.effects = 1;
@@ -6231,67 +6219,6 @@
             DISPATCH();
         }
 
-        TARGET(CALL_JIT_WARM) {
-            #if _Py_TAIL_CALL_INTERP
-            int opcode = CALL_JIT_WARM;
-            (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
-            #endif
-            _PyIRWord* this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            next_instr += 1;
-            INSTRUCTION_STATS(CALL);
-            PyValue ir_displaced = PyValue_NULL;
-            (void)ir_displaced;
-            int oparg = (int)IR_FIELD_C(this_instr);
-            (void)oparg;
-            PyValue *window = &IR_SLOT(IR_FIELD_B(this_instr));
-            (void)window;
-            _PyCallTransaction call = call_transaction_begin(tstate, frame, next_instr, IR_FIELD_B(this_instr), (1) + (1) + (oparg), IR_FIELD_A(this_instr), oparg, CALL_TRANSACTION_VECTOR, 0, 1);
-            if (JIT_CALL_NEEDS_PREPARE(this_instr)) {
-                call.effects = 1;
-                int jit_prepare = JIT_PREPARE_CALL(this_instr, window[0]);
-                if (call_transaction_refresh(&call, next_instr) < 0 || jit_prepare < 0) {
-                    JUMP_TO_LABEL(error);
-                }
-                this_instr = frame->instr_ptr;
-                ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
-                slots = _PyFrame_Slots(frame);
-                window = slots + call.base;
-            }
-            PyValue callable;
-            PyValue self_or_null;
-            // _MAYBE_EXPAND_METHOD
-            {
-                self_or_null = window[1];
-                callable = window[0];
-                if (call_transaction_expand_method(&call, next_instr) < 0) {
-                    JUMP_TO_LABEL(error);
-                }
-                this_instr = frame->instr_ptr;
-                ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
-                slots = _PyFrame_Slots(frame);
-                window = slots + call.base;
-                callable = window[0];
-                self_or_null = window[1];
-            }
-            // _DO_CALL
-            {
-                _PyInterpreterFrame *call_child;
-                if (call_transaction_invoke(&call, next_instr, &call_child) < 0) {
-                    JUMP_TO_LABEL(error);
-                }
-                if (call_child != NULL) {
-                    DISPATCH_INLINED(call_child);
-                }
-                slots = _PyFrame_Slots(frame);
-                DISPATCH();
-            }
-        }
-
         TARGET(CALL_KW) {
             #if _Py_TAIL_CALL_INTERP
             int opcode = CALL_KW;
@@ -6315,18 +6242,6 @@
             (void)window;
             _PyCallTransaction call = call_transaction_begin(tstate, frame, next_instr, IR_FIELD_B(this_instr), (1) + (1) + (oparg) + (1), IR_FIELD_A(this_instr), oparg, CALL_TRANSACTION_KEYWORDS, 0, 0);
             uint32_t call_feedback = IR_FIELD_D(this_instr);
-            if (JIT_CALL_NEEDS_PREPARE(this_instr)) {
-                call.effects = 1;
-                int jit_prepare = JIT_PREPARE_CALL(this_instr, window[0]);
-                if (call_transaction_refresh(&call, next_instr) < 0 || jit_prepare < 0) {
-                    JUMP_TO_LABEL(error);
-                }
-                this_instr = frame->instr_ptr;
-                ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
-                slots = _PyFrame_Slots(frame);
-                window = slots + call.base;
-                fb = (_PyFb_CALL_KW *)(frame->ir_feedback + call_feedback * FB_STRIDE);
-            }
             PyValue callable;
             PyValue self_or_null;
             // _SPECIALIZE_CALL_KW
@@ -12000,7 +11915,6 @@
                 _PyInterpreterFrame *dying = frame;
                 int generator_return = dying->owner == FRAME_OWNED_BY_GENERATOR;
                 frame = tstate->current_frame = dying->previous;
-                JIT_LEAVE_FRAME(dying);
                 _PyEval_FrameClearAndPop(tstate, dying);
                 slots = _PyFrame_Slots(frame);
                 if (generator_return) {
@@ -12143,11 +12057,6 @@
             assert(frame == &entry.frame);
             #endif
             LLTRACE_RESUME_FRAME();
-            if (result == NULL) {
-                JIT_FREE_FLOW();
-                return NULL;
-            }
-            JIT_FREE_FLOW_RESULT(result);
             return result;
         }
 
@@ -12257,37 +12166,6 @@
                 assert(JUMP_TARGET(oparg) < next_instr);
                 JUMPTO(oparg);
             }
-            DISPATCH();
-        }
-
-        TARGET(JUMP_BACKWARD_JIT_WARM) {
-            #if _Py_TAIL_CALL_INTERP
-            int opcode = JUMP_BACKWARD_JIT_WARM;
-            (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
-            #endif
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            next_instr += 1;
-            INSTRUCTION_STATS(JUMP_BACKWARD);
-            int oparg = (int)IR_FIELD_CD(this_instr);
-            (void)oparg;
-            // _CHECK_PERIODIC
-            {
-                int err = check_periodics(tstate);
-                if (err != 0) {
-                    JUMP_TO_LABEL(error);
-                }
-            }
-            // _JUMP_BACKWARD_NO_INTERRUPT
-            {
-                assert(JUMP_TARGET(oparg) < next_instr);
-                JUMPTO(oparg);
-            }
-            JIT_SITE_ENTRY(this_instr);
             DISPATCH();
         }
 
@@ -17123,55 +17001,6 @@
             DISPATCH();
         }
 
-        TARGET(RESUME_JIT) {
-            #if _Py_TAIL_CALL_INTERP
-            int opcode = RESUME_JIT;
-            (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
-            #endif
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            next_instr += 1;
-            INSTRUCTION_STATS(RESUME);
-            int oparg = (int)IR_FIELD_A(this_instr);
-            (void)oparg;
-            // _MAYBE_INSTRUMENT
-            {
-                #ifdef Py_GIL_DISABLED
-
-                int check_instrumentation = 1;
-                #else
-                int check_instrumentation = (tstate->tracing == 0);
-                #endif
-                if (check_instrumentation) {
-                    uintptr_t global_version = _Py_atomic_load_uintptr_relaxed(&tstate->eval_breaker) & ~_PY_EVAL_EVENTS_MASK;
-                    uintptr_t code_version = FT_ATOMIC_LOAD_UINTPTR_ACQUIRE(_PyFrame_GetCode(frame)->_co_instrumentation_version);
-                    if (code_version != global_version) {
-                        int err = _Py_Instrument(_PyFrame_GetCode(frame), tstate->interp);
-                        if (err) {
-                            JUMP_TO_LABEL(error);
-                        }
-                        next_instr = this_instr;
-                        DISPATCH();
-                    }
-                }
-            }
-            // _CHECK_PERIODIC_IF_NOT_YIELD_FROM
-            {
-                if ((oparg & RESUME_OPARG_LOCATION_MASK) < RESUME_AFTER_YIELD_FROM) {
-                    int err = check_periodics(tstate);
-                    if (err != 0) {
-                        JUMP_TO_LABEL(error);
-                    }
-                }
-            }
-            JIT_SITE_ENTRY(this_instr);
-            DISPATCH();
-        }
-
         TARGET(RETURN_GENERATOR) {
             #if _Py_TAIL_CALL_INTERP
             int opcode = RETURN_GENERATOR;
@@ -17204,7 +17033,6 @@
             _Py_LeaveRecursiveCallPy(tstate);
             _PyInterpreterFrame *prev = frame->previous;
             _PyThreadState_UpdateLastProfiledFrame(tstate, frame, prev);
-            JIT_LEAVE_FRAME(frame);
             _PyThreadState_PopFrame(tstate, frame);
             frame = tstate->current_frame = prev;
             LOAD_IP(1);
@@ -17212,7 +17040,6 @@
             res = PyValue_FromPyObjectSteal((PyObject *)gen);
             LLTRACE_RESUME_FRAME();
             IR_STORE_RETURN(res);
-            JIT_MAYBE_RESUME(1);
             DISPATCH();
         }
 
@@ -17252,7 +17079,6 @@
                 _PyInterpreterFrame *dying = frame;
                 int generator_return = dying->owner == FRAME_OWNED_BY_GENERATOR;
                 frame = tstate->current_frame = dying->previous;
-                JIT_LEAVE_FRAME(dying);
                 _PyEval_FrameClearAndPop(tstate, dying);
                 slots = _PyFrame_Slots(frame);
                 if (generator_return) {
@@ -17265,7 +17091,6 @@
                 LLTRACE_RESUME_FRAME();
             }
             IR_STORE_RETURN(res);
-            JIT_MAYBE_RESUME(1);
             DISPATCH();
         }
 
@@ -19980,7 +19805,6 @@ JUMP_TO_LABEL(error);
         {
             TAIL_CALL_LOAD_FRAME();
             {
-                JIT_RETIRE_PENDING(frame);
                 int offset = _PyFrame_InstrOffset(frame, next_instr - 1);
                 int exc_slot, handler, lasti;
                 int handled = get_exception_handler(_PyFrame_GetCode(frame), offset, &exc_slot, &handler, &lasti);
@@ -20035,14 +19859,12 @@ JUMP_TO_LABEL(error);
                 assert(frame->owner != FRAME_OWNED_BY_INTERPRETER);
                 _PyInterpreterFrame *dying = frame;
                 frame = tstate->current_frame = dying->previous;
-                JIT_LEAVE_FRAME(dying);
                 _PyEval_FrameClearAndPop(tstate, dying);
                 if (frame->owner == FRAME_OWNED_BY_INTERPRETER) {
                     tstate->current_frame = frame->previous;
                     #if !_Py_TAIL_CALL_INTERP
                     assert(frame == &entry.frame);
                     #endif
-                    JIT_FREE_FLOW();
                     return NULL;
                 }
                 next_instr = frame->instr_ptr + 1;slots = _PyFrame_Slots(frame);
@@ -20072,7 +19894,6 @@ JUMP_TO_LABEL(error);
                 #if _Py_TAIL_CALL_INTERP
                 int opcode;
                 #endif
-                JIT_MAYBE_RESUME(0);
                 DISPATCH();
             }}
 

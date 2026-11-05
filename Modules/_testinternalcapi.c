@@ -29,8 +29,6 @@
 #include "pycore_initconfig.h"    // _Py_GetConfigsAsDict()
 #include "pycore_instruction_sequence.h"  // _PyInstructionSequence_New()
 #include "pycore_interpframe.h"   // _PyFrame_GetFunction()
-#include "pycore_jit.h"
-#include "pycore_jit_ir.h"
 #include "pycore_lock.h"          // PyEvent_WaitTimed()
 #include "pycore_list.h"          // _PyList_SetItemTakeValue()
 #include "pycore_object.h"        // _PyObject_IsFreed()
@@ -3867,67 +3865,6 @@ gc_verify_with_pymem_array(PyObject *self, PyObject *factory)
 }
 
 static PyObject *
-jit_method_step_call(PyObject *module, PyObject *args)
-{
-    PyObject *function, *arguments;
-    Py_ssize_t limit = 10000;
-    if (!PyArg_ParseTuple(args, "OO|n:jit_method_step_call", &function, &arguments, &limit)) {
-        return NULL;
-    }
-    return _PyJit_TestCall(function, arguments, limit);
-}
-
-static PyObject *
-jit_method_compile(PyObject *module, PyObject *function)
-{
-    if (!PyFunction_Check(function)) {
-        PyErr_SetString(PyExc_TypeError, "expected a Python function");
-        return NULL;
-    }
-    int result = _PyJit_CompileCode((PyCodeObject *)PyFunction_GET_CODE(function));
-    if (result < 0) {
-        return NULL;
-    }
-    return PyBool_FromLong(result);
-}
-
-static PyObject *
-jit_method_natural(PyObject *module, PyObject *enabled)
-{
-    int value = PyObject_IsTrue(enabled);
-    if (value < 0) {
-        return NULL;
-    }
-    return PyBool_FromLong(_PyJit_SetNaturalAdmission(value));
-}
-
-static PyObject *
-jit_method_info(PyObject *module, PyObject *function)
-{
-    if (!PyFunction_Check(function)) {
-        PyErr_SetString(PyExc_TypeError, "expected a Python function");
-        return NULL;
-    }
-    return _PyJit_CodeInfo((PyCodeObject *)PyFunction_GET_CODE(function));
-}
-
-static PyObject *
-jit_method_cold_call(PyObject *module, PyObject *args)
-{
-    PyObject *function, *arguments, *callback;
-    int site, fail;
-    if (!PyArg_ParseTuple(args, "OOOii:jit_method_cold_call", &function, &arguments, &callback, &site, &fail))
-        return NULL;
-    return _PyJit_TestColdCall(function, arguments, callback, site, fail);
-}
-
-static PyObject *
-jit_method_record_index(PyObject *module, PyObject *unused)
-{
-    return _PyJit_TestRecordIndex();
-}
-
-static PyObject *
 common_constant_storage(PyObject *module, PyObject *Py_UNUSED(args))
 {
     PyInterpreterState *interp = _PyInterpreterState_GET();
@@ -4267,12 +4204,6 @@ static PyMethodDef module_functions[] = {
     {"pyvalue_err_format", pyvalue_err_format, METH_VARARGS, NULL},
     {"pyvalue_as_object_index", pyvalue_as_object_index, METH_NOARGS, NULL},
     {"pyvalue_as_known_object_inline", pyvalue_as_known_object_inline, METH_O, NULL},
-    {"jit_method_record_index", jit_method_record_index, METH_NOARGS, NULL},
-    {"jit_method_cold_call", jit_method_cold_call, METH_VARARGS, NULL},
-    {"jit_method_compile", jit_method_compile, METH_O, NULL},
-    {"jit_method_info", jit_method_info, METH_O, NULL},
-    {"jit_method_natural", jit_method_natural, METH_O, NULL},
-    {"jit_method_step_call", jit_method_step_call, METH_VARARGS, NULL},
     {"get_configs", get_configs, METH_NOARGS},
     {"gc_verify", gc_verify, METH_NOARGS},
     {"gc_verify_holes", gc_verify_holes, METH_NOARGS},
@@ -4480,11 +4411,6 @@ module_exec(PyObject *module)
 
     if (PyModule_Add(module, "SIZEOF_TIME_T",
                         PyLong_FromSsize_t(sizeof(time_t))) < 0) {
-        return 1;
-    }
-
-    if (PyModule_Add(module, "JIT_BASELINE_SUPPORTED",
-                     PyBool_FromLong(_PyJIT_BASELINE_SUPPORTED)) < 0) {
         return 1;
     }
 

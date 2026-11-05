@@ -745,7 +745,7 @@ native_scope_call_state(PyObject *Py_UNUSED(module), PyObject *code_object)
         case CALL_KW_BOUND_METHOD: case CALL_KW_NON_PY:
             count = argc + 3;
             break;
-        case CALL: case CALL_JIT_WARM: case INSTRUMENTED_CALL:
+        case CALL: case INSTRUMENTED_CALL:
         case CALL_PY_GENERAL: case CALL_BOUND_METHOD_GENERAL:
         case CALL_NON_PY_GENERAL:
             count = argc + 2;

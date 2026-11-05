@@ -81,7 +81,7 @@ typedef struct {
     uint8_t state;                  // _PyFbState
     _Py_BackoffCounter counter;     // warmup, cooldown and backoff
     uint16_t misses;                // reserved: the counter holds them, see above
-    uint16_t hits;                  // CALL_JIT_WARM eligible-site heat; independent of counter
+    uint16_t hits;                  // reserved: call-site heat for the JIT stage
     union {
         uint32_t arg;               // the oparg, for IR formats that keep it here
         uint16_t history;           // BRANCH entries of the IR: see FB_BRANCH()

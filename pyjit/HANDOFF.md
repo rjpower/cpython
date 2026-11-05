@@ -24,6 +24,15 @@ and backend. The stage pages distinguish selected designs from working code.
 - Ports use idiomatic upstream CPython ownership code.
 - Model roles, review and commit rules are in [PROCESS](PROCESS.md). The
   coordinator owns integration and shared builds.
+- Model policy (from 2026-11-04): every agent launch sets its model and
+  effort. Opus runs at high effort, only for critical design work and subtle
+  failure debugging, and is never fanned out. Sonnet at medium effort, or
+  Haiku, does porting, finishing, reviews and doc syncs. In the W1 pilot,
+  Haiku's mechanical batch matched Sonnet's site for site.
+- Finishers run the full suite only through the coordinator's landing run,
+  `tools/integrate.sh`. Each release-compiles its own tree, because release
+  builds compile `#ifndef Py_DEBUG` code that debug builds skip; two landings
+  broke on this.
 
 ## Locations
 
@@ -31,7 +40,7 @@ and backend. The stage pages distinguish selected designs from working code.
 | --- | --- |
 | Documentation root (canonical `pyjit/`) | `/home/power/code/cpython/.worktrees/python-jit`, branch `weaver/python-jit` |
 | Runtime tree (nested worktree) | `/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/pyvalue-rc-universal` |
-| Runtime branch / HEAD | `boil/pyvalue-rc-universal`, `f7d374b1f92` (see STATUS.md, Position) |
+| Runtime branch / HEAD | `boil/pyvalue-rc-universal`, `b9d3e3a3c9b` (see STATUS.md, Position) |
 | Shared builds at HEAD | `build/pyvalue-rc-repr-debug`, `build/pyvalue-rc-repr-release` (under the `python-boil-the-ocean` worktree) |
 | Older debug build | `build/pyvalue-rc-debug-20261102-v1` |
 | Triage debug builds | `build/pyvalue-rc-bringup-debug`, `build/pyvalue-rc-triage-rt-debug` |
@@ -61,8 +70,9 @@ and shapes. Read the build directories for the exact commands.
 The runtime tree has no held modifications. Debug and release builds link and
 run. All 67 shared modules whose third-party headers exist build; the decimal,
 tkinter, ssl, sqlite and zstd headers are not installed on this host. Suites
-at `f7d374b1f92`, debug and release: run=51,681, failures=2 (test_capi
-test_is_unique_temporary and test_unicode.test_new, open for IR v2 B5). The
+at `b9d3e3a3c9b`, gcc debug and release: run=51,810, failures=0
+(`make check-value-api`: 169 units, 0 failing findings, 5 deferred; the
+two test_capi failures were fixed in `c6fb9beb79f`). The
 fork's JIT source is deleted (A3 step 1; history keeps it) until the JIT
 stage. Tail calls are the only interpreter backend; `--with-computed-gotos`
 no longer exists, and `PY_TAIL_CALL_CC` in sysconfig names the convention.
@@ -82,18 +92,29 @@ so pystats dispatch counts do not see it. A `pybuilddir.txt` of `none` makes a
 release build 5 to 12x slower; check it. `perf` is blocked
 (`perf_event_paranoid=4`); `tools/sampler/` has an LD_PRELOAD SIGPROF sampler.
 
-Running now, briefs in `build/pyjit-link-wave1/`: A5b phase 2, the typed
-borrow (`A5B-PHASE2-BRIEF.md`; proposal
-`pyjit/design/proposals/register-ir-v2-a5b.md`, revision 3). The author works
-in `build/worktrees/irv2-a5b` (base `5de7bd62ef9`, builds
-`build/irv2-a5b-{debug,release,clang-debug}`) and writes one increment per
-step (`irv2-a5b-N.diff`, progress `progress-irv2-a5b.txt`: "A5b-N ready",
-then "A5b-N final" after the post-review fixes). The coordinator
-post-reviews each increment, applies it to the shared tree with a 3-way
-apply and resolves clashes with `2f572ea0ea8` there. A5b-1 landed
-(`a6002e5854b`); A5b-2 (the generator) is in progress.
+In flight, briefs in `build/pyjit-link-wave1/`:
 
-Landed on the runtime branch, newest first:
+- G-1 (box primitives take `_PyBoxAt` in stats builds; stats builds use
+  `-fno-optimize-sibling-calls`): lands next. First R27 gate run:
+  `build/g-stats-runs/gate1`.
+- V2a-1a (int, float, bool, None value slots, digit-span kernels), after G-1.
+  Review fixes done; 1.4 million differential cases match upstream.
+- M1b and M2 (iteration and attribute dispatchers), after V2a-1a; being
+  rebased, with two merge must-fixes.
+- Then the rest of G (`check_r27.py`), W1's deferred batch-10, I1 to I5, W2,
+  W4, W5 and the R27 gate.
+- IR side: `design/proposals/register-ir-v2-b-numbering.md` (accepted) pins
+  handler numbers so the B steps develop in parallel; B-pin goes first.
+
+Landed since `f7d374b1f92`, newest first:
+
+- `b9d3e3a3c9b`: M3, value vectorcall, `METH_VALUE`, Clinic value emission.
+- `c66a6339ccf`: W1b, object forms of containers compatibility-only.
+- `763c8ececd5`: A5b-4, final ownership names.
+- `c6fb9beb79f`: the two test_capi failures fixed.
+- `0bf1b0486a5`: A3 step 2, handlers without addressable locals.
+
+Landed earlier on the runtime branch, newest first:
 
 - `a6002e5854b`: A5b-1, `PyValueBorrow` and the reader macros
   (`review-irv2-a5b-1.md`).
@@ -220,7 +241,7 @@ overwritten.
 2. Then A3a-A3c, the G2 experiment, B0b and the format steps B2-B7
    ([packet](design/proposals/register-ir-v2-packet.md)).
 3. Value API V1 follow-ups (`FOLLOWUPS.md`), then V2a-0 onwards.
-4. The two `test_capi` refcount failures: open for IR v2 B5 (call forms).
+4. Follow-ups in `build/pyjit-link-wave1/FOLLOWUPS.md`.
 
 Use the time metric; the instruction-count metric needs `perf_event_paranoid`
 lowered, which the user has not done. Do not present host controls, object files

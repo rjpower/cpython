@@ -1,6 +1,6 @@
 # Project status
 
-Status as of 2026-11-04 19:15 PST, from the coordinator fact sheet. Update this
+Status as of 2026-11-04 (PST), after the landings through `b9d3e3a3c9b`. Update this
 page at each landing.
 
 ## Outcome and next milestone
@@ -57,7 +57,7 @@ costs, then the qualified baseline.
 
 ## Position
 
-- Runtime branch `boil/pyvalue-rc-universal`, HEAD `f7d374b1f92`.
+- Runtime branch `boil/pyvalue-rc-universal`, HEAD `b9d3e3a3c9b`.
 - Landed 2026-11-03: native boundary P3 (`56ff66a596b`, `643c69c7244`,
   `6d39221996d`) and P4 (`2558376b321`, post-review fixes `fdd7fed3216`);
   representation steps 1 (`f129780a9a7`), 2 (`f7dfc5b961f`), 3 (`dbce7b1260d`,
@@ -152,14 +152,14 @@ costs, then the qualified baseline.
   `perf_jit_trampoline.c`. `sys._jit` now reports the fork's JIT
   (`is_available` is `_PyJIT_BASELINE_SUPPORTED`, so False for now), with three
   new tests. `regen-configure` reproduces the edited `configure`. Targeted
-  tests run=2,085, failures=2 (the known two); its own suites run=51,617,
+  tests run=2,085, failures=2 (the two `test_capi` failures, since fixed); its own suites run=51,617,
   failures=2.
 - Landed 2026-11-04 (continued): register IR v2 A5b-2 (`fc981364c56`): the
   generator gives each handler input one C type, a view or an owner, with
   `TAKE` and `OWNER` where a view becomes an owner; S3, S7 and the spend
   rules fail closed. Post-review found three fail-open rules (none fired on
   `bytecodes.c`); all 12 findings fixed before landing. Generated release
-  order unchanged. Suite (A5b's T_2 before the fixes, gcc debug): run=51,621, failures=2; the shared tree's full debug suite at `df1503353d7`: run=51,646, failures=2 (the known `test_capi` pair).
+  order unchanged. Suite (A5b's T_2 before the fixes, gcc debug): run=51,621, failures=2; the shared tree's full debug suite at `df1503353d7`: run=51,646, failures=2 (the two `test_capi` failures, since fixed in `c6fb9beb79f`).
 - Landed 2026-11-04 (continued): value API M4a (`df1503353d7`): the value
   field contract tested on a type with fields of each kind;
   `structseq.__reduce__` stores by value. Suite (M4's T_1): run=51,631,
@@ -183,8 +183,8 @@ costs, then the qualified baseline.
   GCC, recorded as `PY_TAIL_CALL_CC`); `--with-computed-gotos` and
   `--disable-gil` are gone; an activation record per eval loop; two helper
   fixes take the canary functions from 200 to 133. Suites at `15859d9a592`,
-  gcc debug and release: run=51,627, failures=2 (the known `test_capi`
-  pair; 60 JIT tests deleted). The agent's clang-21 release suite:
+  gcc debug and release: run=51,627, failures=2 (the two `test_capi`
+  failures, since fixed in `c6fb9beb79f`; 60 JIT tests deleted). The agent's clang-21 release suite:
   run=51,586, failures=2.
 - Landed 2026-11-04 (continued): register IR v2 A5b-3 (`c71a3ca6aa2`), the
   typed borrow's heap side: producers that lend a value return
@@ -199,7 +199,7 @@ costs, then the qualified baseline.
   holes, public getters returning a borrow, the home-copy retype), all in
   A5b-4. With it, `eab52a937a6` lets A3's activation record sit at the stack
   pointer (clang-21 debug aborted). Suites at `c71a3ca6aa2`, gcc debug and
-  release: run=51,630, failures=2 (the known pair).
+  release: run=51,630, failures=2 (the two `test_capi` failures, since fixed).
 - Landed 2026-11-04 (continued): value API V2a-0 part 2 (`f7d374b1f92`):
   slotdef value data and pairs, the value dispatchers and slot adapter, core
   object slots as thunks, box kinds in stats builds, the compat-body lint
@@ -208,31 +208,75 @@ costs, then the qualified baseline.
   helpers in the compat-body rule, the mixed-operand box record:
   `x == 'a'` boxes 1 before, 3 now, removed by V2a-1a; an
   `object.__hash__` test). Suites at `f7d374b1f92`, gcc debug and release:
-  run=51,681, failures=2 (the known pair). `make check-value-api`: 169
+  run=51,681, failures=2 (the two `test_capi` failures, since fixed). `make check-value-api`: 169
   units, 0 failing findings.
+- Landed 2026-11-04 (continued), since `f7d374b1f92`:
+  - `0bf1b0486a5`, A3 step 2: register-IR handlers have no addressable locals
+    (G9). Helper results return as two-word structs or `_PyStatusValue` in
+    registers; call transactions keep their record in an out-of-line entry's
+    frame. The generator's lint refuses an address taken of a handler local.
+    The box-area handlers are pinned at 97 and may only shrink.
+    `enter_handlers()` is a normal-ABI trampoline, the only non-tail call into
+    a handler. It works around a GCC 15.2 miscompile (values live across a
+    call into a `no_callee_saved_registers` function are reloaded from a
+    callee-saved register that was never set); reproducer
+    `build/pyjit-link-wave1/a3/gcc-ncsr-bug.c`, risk R13 in
+    [the A3 proposal](design/proposals/register-ir-v2-a3.md).
+  - `c6fb9beb79f`: the two long-standing test_capi failures
+    (test_is_unique_temporary, test_unicode.test_new) are fixed; they compare
+    `sys.getrefcount` with a fresh local, because the call window owns a copy.
+    Since then the suites have run with 0 failures.
+  - `763c8ececd5`, A5b-4: the ownership primitives take their final names,
+    `PyValue_DUP(PyValue_FromObjectBorrow(o))`, `PyValue_XDUP`,
+    `PyValue_XCLOSE` and `PyValue_FromObjectSteal`. Home copies are typed
+    `PyValueBorrow`, with 56 commented exceptions. `PyList_GET_VALUE` and
+    `PyStructSequence_GET_VALUE` are internal. The A5b-3 review's lint fixes
+    are in.
+  - `c66a6339ccf`, W1b: the list, tuple, dict, set, cell and struct-sequence
+    object forms are compatibility-only, so a core call to one is a compile
+    error. 1,064 sites in 86 files: 814 by script or generator, 234 by Haiku
+    and Sonnet workers. The 44 sites in abstract.c, descrobject.c, object.c
+    and typeobject.c are deferred. New tools: `value_sweep.py` and
+    `wave_files.py`.
+  - `b9d3e3a3c9b`, M3: the value vectorcall and `METH_VALUE` (0x0400), with
+    `im_self` and `m_self` as homes, and the `_Py_wrappervaluefunc` wrapper
+    shape. SOABI `boilvalrc3`. Argument Clinic emits value functions through a
+    `value_emission` directive, with getargs value helpers.
+    `_testclinic_value` is not yet built: it needs V2a-1a.
+  - Suites at `b9d3e3a3c9b`, gcc debug and release: run=51,810, failures=0.
+    `make check-value-api`: 169 units, 0 failing findings, 5 deferred.
+  - Follow-ups (`build/pyjit-link-wave1/FOLLOWUPS.md`): FOR_ITER's monitoring
+    events differ from upstream (I3); `await ag.athrow(StopIteration(5))`
+    aborts the debug build, pre-existing (I3); M3b message names (W2).
 - Suites at `faddfd1454d`, debug and release alike: run=51,615, failures=2
   (38 more skipped than at `a6002e5854b`: the JIT tests),
   both in test_capi (test_is_unique_temporary, test_unicode.test_new): a local
   passed to a call reads `sys.getrefcount` 2 against upstream's 1, because
-  the call window owns a copy; open for IR v2 B5 (register-ir.md G4). `make check-value-api`: 177 units, 0 findings.
+  the call window owns a copy. Fixed in `c6fb9beb79f` by comparing against a
+  fresh local. `make check-value-api`: 177 units, 0 findings.
 - All 67 shared modules whose third-party headers exist build. The decimal,
   tkinter, ssl, sqlite and zstd headers are not installed on this host.
 
 ## Active work packets
 
-Running now, in parallel (briefs in `build/pyjit-link-wave1/`):
+In flight (briefs in `build/pyjit-link-wave1/`):
 
-1. Register IR v2 A3 step 2 (`A3-STEP2-BRIEF.md`): no addressable locals in
-   handlers (G9), rebased onto A5b-3; post-review ready with should-fix (two
-   lint holes), being folded in; lands next.
-2. A5b-4 = W1a (`A5B4-BRIEF.md`): the §7 renames by script, plus the A5b-3
-   review fixes and the home-copy retype.
-3. Proposals in peer review: M3 (value vectorcall, `METH_VALUE`, Clinic
-   value emission), V2a-1a (int, float, bool, None value slots), M1b and M2
-   (sequence, iteration and attribute dispatchers), G (R27 gate owners).
+1. G-1 (box primitives take `_PyBoxAt` in stats builds; the kind becomes a
+   parameter; stats builds use `-fno-optimize-sibling-calls`): lands next. The
+   first full R27 gate run is in `build/g-stats-runs/gate1`.
+2. V2a-1a (int, float, bool, None value slots, digit-span kernels), after G-1.
+   Its review found a wrong `pow(negative, e, m)` residue for 31-to-60-bit
+   moduli and a shift error type, both fixed. 1.4 million differential cases
+   match upstream.
+3. M1b and M2 (iteration and attribute dispatchers), after V2a-1a. Being
+   rebased onto it, with two merge must-fixes from review.
+4. Then the rest of G (`check_r27.py`), W1's deferred batch-10, I1 to I5, W2,
+   W4, W5 and the R27 gate.
+5. IR side: [register-ir-v2-b-numbering.md](design/proposals/register-ir-v2-b-numbering.md)
+   (accepted) pins handler numbers, so the B steps develop in parallel. The
+   critical path is about 16.5 h, against 34.5 h sequential. B-pin goes first.
 
-Next: the measurement after A3 step 2; then the implementations of the four
-proposals and the value-API waves on the [plan](design/proposals/value-api-v2a0.md).
+Next: the measurement after A3 step 2, then the [plan](design/proposals/value-api-v2a0.md).
 
 ## Design decisions
 

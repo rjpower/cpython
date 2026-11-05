@@ -969,3 +969,76 @@ error:
     PyMem_Free(fold_slot);
     return ERROR;
 }
+
+
+/* Fusing a compare with the jump on its result.
+ *
+ * COMPARE_OP, CONTAINS_OP or IS_OP followed by POP_JUMP_IF_FALSE or _TRUE
+ * on its result can run as one word (the fused handlers of
+ * Python/bytecodes.c).  This pass only marks the compare: the CFG, its
+ * liveness and the verifier keep seeing the pair, and the assembler decides
+ * after it has placed the words whether the target is near enough.  The pair
+ * is left alone where
+ *
+ *   - the jump is not the next live op of the block, or does not read the
+ *     compare's only output, or that output is read again (the jump is not
+ *     its last reader);
+ *   - a store is folded into the compare (it has a local dst);
+ *   - the two are on different lines, or in different exception ranges: a
+ *     fused word has one location, the compare's;
+ *   - the compare is a COMPARE_OP whose result is not converted to a bool
+ *     (its oparg lacks 16): the jump would test an arbitrary object.
+ */
+int
+_PyRegPass_FuseJump(_PyRegCfg *cfg)
+{
+    _PyRegLiveness lv;
+    int have_liveness = 0;
+    for (int b = 0; b < cfg->nblocks; b++) {
+        _PyRegBlock *blk = &cfg->blocks[b];
+        if (!blk->reachable) {
+            continue;
+        }
+        for (int i = blk->start; i < blk->end; i++) {
+            _PyRegOp *cmp = &cfg->ops[i];
+            if (cmp->opcode != COMPARE_OP && cmp->opcode != CONTAINS_OP
+                && cmp->opcode != IS_OP)
+            {
+                continue;
+            }
+            if (cmp->opcode == COMPARE_OP && !(cmp->oparg & 16)) {
+                continue;
+            }
+            if (cmp->dst >= 0 || cmp->nread != 2 || cmp->npop != 2
+                || cmp->nout != 1)
+            {
+                continue;
+            }
+            _PyRegOp *jump = live_neighbour(cfg, blk->start, blk->end, i, 1);
+            if (jump == NULL
+                || (jump->opcode != POP_JUMP_IF_FALSE
+                    && jump->opcode != POP_JUMP_IF_TRUE)
+                || jump->nread != 1 || jump->npop != 1 || jump->nimplicit != 0
+                || jump->target < 0
+                || jump->loc.lineno != cmp->loc.lineno
+                || jump->except != cmp->except
+                || _PyReg_IN(cfg, jump)[0] != _PyReg_OUT(cfg, cmp)[0])
+            {
+                continue;
+            }
+            if (!have_liveness) {
+                if (_PyRegCfg_Liveness(cfg, &lv) < 0) {
+                    return -1;
+                }
+                have_liveness = 1;
+            }
+            if (lv.last[jump->in]) {
+                cmp->fuse = (int)(jump - cfg->ops);
+            }
+        }
+    }
+    if (have_liveness) {
+        _PyRegCfg_FreeLiveness(&lv);
+    }
+    return 0;
+}

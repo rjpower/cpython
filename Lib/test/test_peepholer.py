@@ -90,7 +90,9 @@ class TestTranforms(BytecodeTestCase):
                 del x
         self.assertNotInBytecode(unot, 'UNARY_NOT')
         self.assertNotInBytecode(unot, 'POP_JUMP_IF_FALSE')
-        self.assertInBytecode(unot, 'POP_JUMP_IF_TRUE')
+        # The jump is fused with the compare: "to L if true"
+        self.assertIn('COMPARE_OP_JUMP',
+                      [i.opname for i in dis.get_instructions(unot)])
         self.check_lnotab(unot)
 
     def test_unot_value(self):

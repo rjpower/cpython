@@ -3274,6 +3274,82 @@ dummy_func(
             INPUTS_DEAD();
         }
 
+        /* A compare and the conditional jump that tests it, in one word of
+         * the register IR (Python/assemble.c fuses the pair where both are on
+         * one line and the target is within IR_MAX_FORWARD).  The word is
+         * {lhs, rhs, fb, D}: D is the signed distance from the next word, and
+         * the arg of the entry holds the operation in bits 0 to 7 (the oparg
+         * of the compare) and IR_FUSED_IF_FALSE.  The history of the jump is
+         * in the entry's taken half-word.  There is no backward form, so the
+         * handlers never poll the eval breaker.  The handlers stand for the
+         * compare (their shadow, see ir_metadata_generator.py), and the
+         * specialisations are those of the compare, in families of their own. */
+        ir_only op(_JUMP_IF_COND, (cond -- )) {
+            assert(PyValue_BoolCheck(cond));
+            int flag = PyValue_IsTrue(cond) ^ IR_FUSED_IF_FALSE();
+            DEAD(cond);
+            RECORD_BRANCH_TAKEN(FB_TAKEN(), flag);
+            if (flag) {
+                JUMPBY(IR_FUSED_DISTANCE());
+            }
+        }
+
+        ir_only op(_INSTRUMENTED_JUMP_IF_COND, (cond -- )) {
+            assert(PyValue_BoolCheck(cond));
+            int flag = PyValue_IsTrue(cond) ^ IR_FUSED_IF_FALSE();
+            DEAD(cond);
+            RECORD_BRANCH_TAKEN(FB_TAKEN(), flag);
+            if (flag) {
+                INSTRUMENTED_JUMP(this_instr, next_instr + IR_FUSED_DISTANCE(), PY_MONITORING_EVENT_BRANCH_RIGHT);
+            }
+            else {
+                INSTRUMENTED_JUMP(this_instr, next_instr, PY_MONITORING_EVENT_BRANCH_LEFT);
+            }
+        }
+
+        family(COMPARE_OP_JUMP, INLINE_CACHE_ENTRIES_COMPARE_OP) = {
+            COMPARE_OP_JUMP_FLOAT,
+            COMPARE_OP_JUMP_INT,
+            COMPARE_OP_JUMP_STR,
+        };
+
+        macro(COMPARE_OP_JUMP) =
+            unused/1 + _SPECIALIZE_COMPARE_OP + _COMPARE_OP + _JUMP_IF_COND;
+
+        macro(COMPARE_OP_JUMP_FLOAT) =
+            _GUARD_TOS_FLOAT + _GUARD_NOS_FLOAT + unused/1 + _COMPARE_OP_FLOAT + _POP_TOP_FLOAT + _POP_TOP_FLOAT + _JUMP_IF_COND;
+
+        macro(COMPARE_OP_JUMP_INT) =
+            _GUARD_TOS_INT + _GUARD_NOS_INT + unused/1 + _COMPARE_OP_INT + _POP_TOP_INT + _POP_TOP_INT + _JUMP_IF_COND;
+
+        macro(COMPARE_OP_JUMP_STR) =
+            _GUARD_TOS_UNICODE + _GUARD_NOS_UNICODE + unused/1 + _COMPARE_OP_STR + _POP_TOP_UNICODE + _POP_TOP_UNICODE + _JUMP_IF_COND;
+
+        macro(INSTRUMENTED_COMPARE_OP_JUMP) =
+            unused/1 + _COMPARE_OP + _INSTRUMENTED_JUMP_IF_COND;
+
+        family(CONTAINS_OP_JUMP, INLINE_CACHE_ENTRIES_CONTAINS_OP) = {
+            CONTAINS_OP_JUMP_DICT,
+            CONTAINS_OP_JUMP_SET,
+        };
+
+        macro(CONTAINS_OP_JUMP) =
+            unused/1 + _SPECIALIZE_CONTAINS_OP + _CONTAINS_OP + POP_TOP + POP_TOP + _JUMP_IF_COND;
+
+        macro(CONTAINS_OP_JUMP_SET) =
+            _GUARD_TOS_ANY_SET + unused/1 + _CONTAINS_OP_SET + POP_TOP + POP_TOP + _JUMP_IF_COND;
+
+        macro(CONTAINS_OP_JUMP_DICT) =
+            _GUARD_TOS_ANY_DICT + unused/1 + _CONTAINS_OP_DICT + POP_TOP + POP_TOP + _JUMP_IF_COND;
+
+        macro(INSTRUMENTED_CONTAINS_OP_JUMP) =
+            unused/1 + _CONTAINS_OP + POP_TOP + POP_TOP + _INSTRUMENTED_JUMP_IF_COND;
+
+        macro(IS_OP_JUMP) = _IS_OP + POP_TOP + POP_TOP + _JUMP_IF_COND;
+
+        macro(INSTRUMENTED_IS_OP_JUMP) =
+            _IS_OP + POP_TOP + POP_TOP + _INSTRUMENTED_JUMP_IF_COND;
+
         inst(CHECK_EG_MATCH, (exc_value_st, match_type_st -- rest, match)) {
             PyObject *exc_value = PyValue_AsKnownObjectBorrow(exc_value_st);
             PyObject *match_type = PyValue_AsKnownObjectBorrow(match_type_st);

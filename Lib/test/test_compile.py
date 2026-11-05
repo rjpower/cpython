@@ -2746,12 +2746,9 @@ class TestSourcePositions(unittest.TestCase):
         # jump if c is false:
         self.assertOpcodeSourcePositionIs(compiled_code, 'POP_JUMP_IF_FALSE',
             line=2, end_line=2, column=15, end_column=16, occurrence=2)
-        # compare d and 0
-        self.assertOpcodeSourcePositionIs(compiled_code, 'COMPARE_OP',
+        # compare d and 0, and jump if the comparison is true: one fused word
+        self.assertOpcodeSourcePositionIs(compiled_code, 'COMPARE_OP_JUMP',
             line=4, end_line=4, column=8, end_column=13, occurrence=1)
-        # jump if comparison it True
-        self.assertOpcodeSourcePositionIs(compiled_code, 'POP_JUMP_IF_TRUE',
-            line=4, end_line=4, column=8, end_column=13, occurrence=2)
 
     @unittest.skipIf(sys.flags.optimize, "Assertions are disabled in optimized mode")
     def test_multiline_assert(self):

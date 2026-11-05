@@ -54,6 +54,8 @@ extern "C" {
 #define _PyReg_LOAD_FOLDED      1   // a load that its consumer reads in place
 #define _PyReg_STORE_FOLDED     2   // a store that its producer does
 #define _PyReg_JUMP_OUTPUT      4   // outputs only where it jumps
+#define _PyReg_FUSED            8   // set by the assembler: a compare that
+                                    // runs as one word with its fuse jump
 
 typedef struct _PyRegOp {
     int opcode;             // the stack instruction, or _PyReg_DEAD
@@ -71,6 +73,10 @@ typedef struct _PyRegOp {
     int flags;
     int reader;             // a folded load: the op that reads the local,
     int reader_k;           // and its input index
+    int fuse;               // a compare whose result only the conditional
+                            // jump at this op index reads, on the same line
+                            // (_PyRegPass_FuseJump); the assembler may fuse
+                            // the pair.  0: none.
     _Py_SourceLocation loc;
     int base;               // the slot of a window, set by compaction
     /* Set by the assembler */
@@ -198,6 +204,7 @@ int _PyRegPass_PopTop(_PyRegCfg *cfg);
 int _PyRegPass_TruthFold(_PyRegCfg *cfg);
 /* Returns the number of constant slots, or -1 */
 int _PyRegPass_ConstSlots(_PyRegCfg *cfg, PyObject *consts, int nfree);
+int _PyRegPass_FuseJump(_PyRegCfg *cfg);
 
 /* For tests only (_testinternalcapi.compile_without_copyprop_kill()): if
  * keep is set, copy propagation keeps a pending load across an op that may

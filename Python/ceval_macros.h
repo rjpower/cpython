@@ -368,6 +368,12 @@ static void dtrace_function_return(_PyInterpreterFrame *);
 #define RECORD_BRANCH_TAKEN(bitset, flag)
 #endif
 
+/* The sense and the distance of a fused compare-and-jump, from the arg of
+ * its entry and its word (Include/internal/pycore_ir.h) */
+#define IR_FUSED_IF_FALSE() \
+    ((int)(((_PyFbHeader *)fb)->arg >> 8) & 1)
+#define IR_FUSED_DISTANCE() IR_DS(ir_word)
+
 #define UNBOUNDLOCAL_ERROR_MSG \
     "cannot access local variable '%s' where it is not associated with a value"
 #define UNBOUNDFREE_ERROR_MSG \

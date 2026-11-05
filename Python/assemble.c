@@ -787,7 +787,9 @@ handler_oparg(_PyRegCfg *cfg, _PyRegOp *op)
         if (op->nwords > 1) {
             return 1;
         }
-        return jump_target(cfg, op) - (op->word + 1);
+        // A fused word jumps where the jump after the compare did
+        _PyRegOp *jump = (fmt->flags & _PyIR_FUSED) ? &cfg->ops[op->fuse] : op;
+        return jump_target(cfg, jump) - (op->word + 1);
     }
     return op->oparg;
 }
@@ -803,16 +805,57 @@ enum {
     FB_NCLASSES,
 };
 
-/* Whether the generic handler needs its entry for its operand: COMPARE_OP
- * and CONTAINS_OP.  BINARY_OP has a handler per operation, which runs at
- * entry 0. */
+/* Whether the handler needs its entry for its operand: COMPARE_OP and
+ * CONTAINS_OP, and the fused words, which keep the operation of their compare
+ * and the sense of their jump there.  BINARY_OP has a handler per operation,
+ * which runs at entry 0. */
 static int
 needs_entry(int handler)
 {
     const _PyIRFormat *fmt = _PyIR_FormatOf(handler);
-    return fmt->imm == _PyIR_LOC_FBARG
-           && !(handler >= _PyIR_BINARY_OP_FIRST
-                && handler <= _PyIR_BINARY_OP_FIRST + NB_OPARG_LAST);
+    return (fmt->imm == _PyIR_LOC_FBARG
+            && !(handler >= _PyIR_BINARY_OP_FIRST
+                 && handler <= _PyIR_BINARY_OP_FIRST + NB_OPARG_LAST))
+           || (fmt->flags & _PyIR_FUSED);
+}
+
+/* The arg of the entry of a fused word: the operation of the compare and
+ * the sense of the jump that follows. */
+static int
+fused_arg(_PyRegCfg *cfg, _PyRegOp *op)
+{
+    int arg = op->oparg & IR_FUSED_OP_MASK;
+    if (cfg->ops[op->fuse].opcode == POP_JUMP_IF_FALSE) {
+        arg |= _PyIR_FUSED_IF_FALSE;
+    }
+    return arg;
+}
+
+/* The generic handler of the fused pair that op starts */
+static int
+fused_handler(_PyRegOp *op)
+{
+    switch (op->opcode) {
+        case COMPARE_OP:
+            return COMPARE_OP_JUMP;
+        case CONTAINS_OP:
+            return CONTAINS_OP_JUMP;
+        default:
+            assert(op->opcode == IS_OP);
+            return IS_OP_JUMP;
+    }
+}
+
+/* Undo the fusion of the pair that op starts: the jump has a word and, in
+ * place_entries(), an entry of its own again. */
+static void
+unfuse(_PyRegCfg *cfg, _PyRegOp *op)
+{
+    assert(op->flags & _PyReg_FUSED);
+    op->flags &= ~_PyReg_FUSED;
+    op->handler = op->opcode;
+    cfg->ops[op->fuse].nwords = 1;
+    op->fuse = 0;
 }
 
 /* The CALL_INTRINSIC_2 intrinsic that does what a COMPARE_OP or
@@ -928,34 +971,17 @@ done:
     return res;
 }
 
-/* Choose the handlers and place the feedback entries, in the units of
- * pycore_ir.h: entry 0 is the header, the others follow in the order of
- * FB_CLASS_*, each in source order, as long as they end by IR_FB_UNITS_MAX.
- * Sites past that share entry 0, which never specialises and keeps no
- * operand; a COMPARE_OP or CONTAINS_OP among them becomes the intrinsic
- * call.  a_fbinit gets one word per entry, in unit order. */
+/* Choose the handlers.  A compare marked by _PyRegPass_FuseJump starts
+ * fused with its jump, which then has no word of its own; place_entries()
+ * unfuses the pairs whose compare gets no entry, and layout() those whose
+ * target is too far. */
 static int
-assign_handlers(struct assembler *a, _PyRegCfg *cfg, PyObject *consts,
-                int code_flags)
+choose_handlers(_PyRegCfg *cfg, PyObject *consts)
 {
-    int nsites = 0;
-    char *cls = PyMem_Calloc(cfg->nops + 1, 2);
-    if (cls == NULL) {
-        PyErr_NoMemory();
-        return ERROR;
-    }
-    char *in_loop = cls + cfg->nops + 1;
-    int res = ERROR;
-    // A module or class body runs once, and ranks no loops
-    if (code_flags & CO_OPTIMIZED) {
-        if (mark_loops(cfg, in_loop) < 0) {
-            goto done;
-        }
-    }
     for (int i = 0; i < cfg->nops; i++) {
         _PyRegOp *op = &cfg->ops[i];
         op->fb = -1;
-        cls[i] = -1;
+        op->flags &= ~_PyReg_FUSED;
         if (op->opcode == _PyReg_DEAD) {
             op->nwords = 0;
             continue;
@@ -964,9 +990,57 @@ assign_handlers(struct assembler *a, _PyRegCfg *cfg, PyObject *consts,
         assert(IS_VALID_OPCODE(op->opcode));
         op->handler = choose_handler(op, consts);
         if (op->handler < 0) {
-            goto done;
+            return ERROR;
         }
         op->nwords = 1;
+    }
+    for (int i = 0; i < cfg->nops; i++) {
+        _PyRegOp *op = &cfg->ops[i];
+        if (op->opcode != _PyReg_DEAD && op->fuse) {
+            op->flags |= _PyReg_FUSED;
+            op->handler = fused_handler(op);
+            cfg->ops[op->fuse].nwords = 0;
+        }
+    }
+    return SUCCESS;
+}
+
+/* Place the feedback entries, in the units of pycore_ir.h: entry 0 is the
+ * header, the others follow in the order of FB_CLASS_*, each in source
+ * order, as long as they end by IR_FB_UNITS_MAX.  Sites past that share
+ * entry 0, which never specialises and keeps no operand; a COMPARE_OP or
+ * CONTAINS_OP among them becomes the intrinsic call, and a fused pair among
+ * them is two words again, so a pair is fused only if its compare keeps an
+ * entry.  a_fbinit gets one word per entry, in unit order.
+ *
+ * It runs again after layout() unfused pairs by distance, which add entries
+ * of classes after the required one and so change none of the others. */
+static int
+place_entries(struct assembler *a, _PyRegCfg *cfg, int code_flags,
+              int after_layout)
+{
+    char *cls = PyMem_Calloc(cfg->nops + 1, 2);
+    if (cls == NULL) {
+        PyErr_NoMemory();
+        return ERROR;
+    }
+    char *in_loop = cls + cfg->nops + 1;
+    int res = ERROR;
+    Py_CLEAR(a->a_fbinit);
+    // A module or class body runs once, and ranks no loops
+    if (code_flags & CO_OPTIMIZED) {
+        if (mark_loops(cfg, in_loop) < 0) {
+            goto done;
+        }
+    }
+    int nsites = 0;
+    for (int i = 0; i < cfg->nops; i++) {
+        _PyRegOp *op = &cfg->ops[i];
+        op->fb = -1;
+        cls[i] = -1;
+        if (op->nwords == 0) {
+            continue;
+        }
         const _PyIRFormat *fmt = _PyIR_FormatOf(op->handler);
         if (fmt->fb == _PyIR_LOC_NONE) {
             continue;
@@ -977,7 +1051,8 @@ assign_handlers(struct assembler *a, _PyRegCfg *cfg, PyObject *consts,
                  : in_loop[i] ? FB_CLASS_LOOP : FB_CLASS_OTHER;
         nsites++;
     }
-    a->a_fbinit = PyBytes_FromStringAndSize(NULL, (nsites + 1) * sizeof(uint32_t));
+    // Room for the entries of the jumps that a fused pair may get back
+    a->a_fbinit = PyBytes_FromStringAndSize(NULL, (nsites + 1 + cfg->nops) * sizeof(uint32_t));
     if (a->a_fbinit == NULL) {
         goto done;
     }
@@ -994,7 +1069,10 @@ assign_handlers(struct assembler *a, _PyRegCfg *cfg, PyObject *consts,
             uint32_t size = fmt->fb_size >> IR_FB_UNIT_SHIFT;
             if (unit + size <= IR_FB_UNITS_MAX) {
                 int arg = 0;
-                if (fmt->imm == _PyIR_LOC_FBARG) {
+                if (op->flags & _PyReg_FUSED) {
+                    arg = fused_arg(cfg, op);
+                }
+                else if (fmt->imm == _PyIR_LOC_FBARG) {
                     arg = handler_oparg(cfg, op);
                     if (arg < 0 || arg > 0xFFFF) {
                         too_large("oparg", arg);
@@ -1004,15 +1082,24 @@ assign_handlers(struct assembler *a, _PyRegCfg *cfg, PyObject *consts,
                 fbinit[nfb++] = _PyIR_FBINIT(fmt->fb_kind, unit, arg);
                 op->fb = (int)unit;
                 unit += size;
+                continue;
             }
-            else if (c == FB_CLASS_REQUIRED) {
-                op->oparg = fallback_intrinsic(op->opcode, op->oparg);
-                op->opcode = CALL_INTRINSIC_2;
-                op->handler = CALL_INTRINSIC_2;
-            }
-            else {
+            if (c != FB_CLASS_REQUIRED) {
                 op->fb = 0;
+                continue;
             }
+            if (op->flags & _PyReg_FUSED) {
+                assert(!after_layout);
+                int jump = op->fuse;
+                unfuse(cfg, op);
+                cls[jump] = in_loop[jump] ? FB_CLASS_LOOP : FB_CLASS_OTHER;
+                if (op->opcode == IS_OP) {
+                    continue;
+                }
+            }
+            op->oparg = fallback_intrinsic(op->opcode, op->oparg);
+            op->opcode = CALL_INTRINSIC_2;
+            op->handler = CALL_INTRINSIC_2;
         }
     }
     // Entry 0 exists only with others
@@ -1049,12 +1136,22 @@ layout(struct assembler *a, _PyRegCfg *cfg)
             // Jump targets would not fit
             return too_large("word count", word);
         }
-        if (word <= _PyIR_MaxForward) {
-            return SUCCESS;
-        }
         int changed = 0;
         for (int i = 0; i < cfg->nops; i++) {
             _PyRegOp *op = &cfg->ops[i];
+            if (op->flags & _PyReg_FUSED) {
+                // Forward only, within the range of a 12-bit distance
+                int distance = jump_target(cfg, &cfg->ops[op->fuse])
+                               - (op->word + 1);
+                if (distance < 0 || distance > _PyIR_MaxForward) {
+                    unfuse(cfg, op);
+                    changed = 1;
+                }
+                continue;
+            }
+            if (word <= _PyIR_MaxForward) {
+                continue;
+            }
             if ((op->opcode != FOR_ITER && op->opcode != SEND) || op->nwords > 1) {
                 continue;
             }
@@ -1123,7 +1220,17 @@ encode(_PyRegCfg *cfg, _PyRegOp *op, int reachable, _PyIRWord *word)
     }
     else if (fmt->imm >= _PyIR_LOC_A && fmt->imm <= _PyIR_LOC_D) {
         int r = fmt->imm - _PyIR_LOC_A;
-        if (oparg < 0 || oparg > IR_FIELD_MAX) {
+        if (fmt->flags & _PyIR_FORWARD) {
+            // A signed distance
+            if (oparg < IR_MIN_DISTANCE || oparg > IR_MAX_FORWARD) {
+                if (reachable) {
+                    return too_large("distance", oparg);
+                }
+                oparg = 0;
+            }
+            fields[r] = (uint32_t)oparg & IR_FIELD_MAX;
+        }
+        else if (oparg < 0 || oparg > IR_FIELD_MAX) {
             if (reachable) {
                 return too_large("oparg", oparg);
             }
@@ -1152,8 +1259,20 @@ assemble_words(struct assembler *a, _PyRegCfg *cfg, PyObject *consts,
                      nlocalsplus + stacksize, IR_MAX_SLOTS);
         return ERROR;
     }
-    RETURN_IF_ERROR(assign_handlers(a, cfg, consts, code_flags));
+    RETURN_IF_ERROR(choose_handlers(cfg, consts));
+    RETURN_IF_ERROR(place_entries(a, cfg, code_flags, 0));
+    int nfused = 0;
+    for (int i = 0; i < cfg->nops; i++) {
+        nfused += (cfg->ops[i].flags & _PyReg_FUSED) != 0;
+    }
     RETURN_IF_ERROR(layout(a, cfg));
+    for (int i = 0; i < cfg->nops; i++) {
+        nfused -= (cfg->ops[i].flags & _PyReg_FUSED) != 0;
+    }
+    if (nfused != 0) {
+        // Pairs unfused by distance need entries for their jumps
+        RETURN_IF_ERROR(place_entries(a, cfg, code_flags, 1));
+    }
 
     a->a_bytecode = PyBytes_FromStringAndSize(NULL,
                                               a->a_nwords * sizeof(_PyIRWord));

@@ -60,6 +60,17 @@ _PyIRStaticExec _PyIR_InitCleanup = {
 /* Decoding */
 
 int
+_PyIR_EventOpcode(int handler)
+{
+    const _PyIRFormat *fmt = _PyIR_FormatOf(handler);
+    if (fmt->flags & _PyIR_FUSED) {
+        return fmt->twin == handler ? INSTRUMENTED_POP_JUMP_IF_FALSE
+                                    : POP_JUMP_IF_FALSE;
+    }
+    return _PyIR_BaseOpcode(handler);
+}
+
+int
 _PyIR_BaseOpcode(int handler)
 {
     if (handler == IR_JUMP) {
@@ -107,6 +118,9 @@ _PyIR_FieldOparg(_PyIRWord word)
         return 0;
     }
     assert(fmt->imm != _PyIR_LOC_FBARG);
+    if (fmt->flags & _PyIR_FORWARD) {
+        return IR_DS(word);
+    }
     return (int)read_field(word, fmt->imm);
 }
 
@@ -193,6 +207,9 @@ _PyCode_InstrOparg(PyCodeObject *co, int i)
             return (int)_PyIR_FBINIT_ARG(_PyCode_FBINIT(co)[i]);
         }
         default:
+            if (fmt->flags & _PyIR_FORWARD) {
+                return IR_DS(word);
+            }
             return (int)read_field(word, fmt->imm);
     }
 }
@@ -232,6 +249,19 @@ int
 _PyCode_HandlerFor(PyCodeObject *co, int i, int opcode)
 {
     int handler = _PyCode_InstrHandler(co, i);
+    const _PyIRFormat *fmt = _PyIR_FormatOf(handler);
+    if (fmt->flags & _PyIR_FUSED) {
+        // Instrumentation sees a fused word as a conditional jump
+        // (_PyIR_EventOpcode()): it goes back to the word's own handler
+        // and goes on to the twin.
+        if (opcode == POP_JUMP_IF_FALSE) {
+            return handler;
+        }
+        if (opcode == INSTRUMENTED_POP_JUMP_IF_FALSE) {
+            return fmt->twin;
+        }
+        return opcode;
+    }
     if (_PyIR_BaseOpcode(handler) == opcode) {
         return handler;
     }
@@ -314,6 +344,16 @@ make_exec(PyCodeObject *co)
         }
         else {
             h->arg = _PyIR_FBINIT_ARG(fbinit[i]);
+        }
+    }
+    // The entry of a fused word keeps the taken history of its jump, seeded
+    // as for a BRANCH entry
+    for (Py_ssize_t i = 0; i < nwords; i++) {
+        const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(words[i]));
+        if (fmt->flags & _PyIR_FUSED) {
+            int fb = (int)read_field(words[i], fmt->fb);
+            assert(fb >= IR_FB_FIRST_UNIT);
+            _PyIR_FbEntry(exec->entries, (uint32_t)fb)->taken = 0x5555;
         }
     }
     return exec;

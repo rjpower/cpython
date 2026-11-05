@@ -1522,6 +1522,7 @@ static const struct {
     {"store elimination", _PyRegPass_StoreElim},
     {"pop top", _PyRegPass_PopTop},
     {"truth folding", _PyRegPass_TruthFold},
+    {"jump fusion", _PyRegPass_FuseJump},
 };
 
 static int

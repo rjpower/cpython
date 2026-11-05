@@ -72,7 +72,7 @@ exec_words(PyCodeObject *code)
 static inline int
 base_opcode(PyCodeObject *code, int i)
 {
-    return _PyIR_BaseOpcode(_PyCode_InstrHandler(code, i));
+    return _PyIR_EventOpcode(_PyCode_InstrHandler(code, i));
 }
 
 /* The opcode that the word at index i of words, an executing copy, runs:
@@ -81,7 +81,7 @@ base_opcode(PyCodeObject *code, int i)
 static inline int
 word_opcode(_PyIRWord *words, int i)
 {
-    return _PyIR_BaseOpcode(IR_HANDLER(FT_ATOMIC_LOAD_UINT64_RELAXED(words[i])));
+    return _PyIR_EventOpcode(IR_HANDLER(FT_ATOMIC_LOAD_UINT64_RELAXED(words[i])));
 }
 
 /* Make the word at index i of the executing copy of code run opcode */

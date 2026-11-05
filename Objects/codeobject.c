@@ -951,9 +951,11 @@ fb_field_is_valid(const _PyIRFormat *fmt, int handler, uint32_t unit,
         return 0;
     }
     if (unit == 0) {
-        return !(fmt->imm == _PyIR_LOC_FBARG
-                 && !(handler >= _PyIR_BINARY_OP_FIRST
-                      && handler <= _PyIR_BINARY_OP_FIRST + NB_OPARG_LAST));
+        // A fused word keeps its operation in its entry too
+        return !((fmt->imm == _PyIR_LOC_FBARG
+                  && !(handler >= _PyIR_BINARY_OP_FIRST
+                       && handler <= _PyIR_BINARY_OP_FIRST + NB_OPARG_LAST))
+                 || (fmt->flags & _PyIR_FUSED));
     }
     int i = _PyIR_FbFind(table, nfb, unit);
     if (i < 0) {

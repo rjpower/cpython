@@ -1388,6 +1388,10 @@ def analyze_forest(
             for part in inst.parts:
                 if isinstance(part, Uop) and "ir_only" in part.annotations:
                     uops.pop(part.name if part.name in uops else name, None)
+    # The families of IR-only handlers have no opcodes: the opcode tables
+    # do not see them, though their members keep inst.family.
+    for name in [n for n in families if n in ir_only]:
+        del families[name]
     for uop in uops.values():
         uop.instruction_size = get_instruction_size_for_uop(instructions, uop)
     # Special case BINARY_OP_INPLACE_ADD_UNICODE

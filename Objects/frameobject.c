@@ -1504,6 +1504,20 @@ mark_stacks(PyCodeObject *code_obj, int len)
             for (int k = _PyCode_InstrFoldedInputs(code_obj, i); k > 0; k--) {
                 next_stack = push_value(next_stack, Object);
             }
+            if (_PyIR_FormatOf(_PyCode_InstrHandler(code_obj, i))->flags
+                & _PyIR_FUSED)
+            {
+                // A compare and the conditional jump on its result: both
+                // inputs are popped, on both paths
+                int64_t target_stack = pop_value(pop_value(next_stack));
+                j = _PyCode_InstrTarget(code_obj, i);
+                assert(j < len);
+                assert(stacks[j] == UNINITIALIZED || stacks[j] == target_stack);
+                stacks[j] = target_stack;
+                stacks[next_i] = target_stack;
+                i = next_i;
+                continue;
+            }
             switch (opcode) {
                 case POP_JUMP_IF_FALSE:
                 case POP_JUMP_IF_TRUE:

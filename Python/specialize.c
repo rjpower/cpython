@@ -339,6 +339,17 @@ load_counter(_PyFbHeader *h)
     return result;
 }
 
+/* Whether the word runs a specialisation: any handler but the generic one
+ * of the code object */
+static inline int
+instr_is_specialized(_PyInstr *instr)
+{
+    _PyInterpreterFrame *frame = current_frame();
+    int generic = _PyCode_GenericHandler(_PyFrame_GetCode(frame),
+                                         _PyFrame_InstrOffset(frame, instr));
+    return IR_HANDLER(FT_ATOMIC_LOAD_UINT64_RELAXED(*instr)) != generic;
+}
+
 /* Polymorphic feedback.
  *
  * An entry describes the newest specialisation of its site.  When a
@@ -442,9 +453,8 @@ fb_begin_ex(_PyInstr *instr, bool may_allocate)
     assert(h != NULL);
     // Entry 0 is a header and never specialises
     assert(!is_shared_entry(h));
-    uint8_t opcode = instr_opcode(instr);
-    if (h->state == FB_MONO && h->poly == 0 && _PyOpcode_Deopt[opcode] != opcode) {
-        fb_save_mono(instr, h, opcode, may_allocate);
+    if (h->state == FB_MONO && h->poly == 0 && instr_is_specialized(instr)) {
+        fb_save_mono(instr, h, IR_HANDLER(*instr), may_allocate);
     }
     // Constant sizes, so that the compiler inlines the stores
     switch (h->kind) {
@@ -548,11 +558,41 @@ fb_record(_PyInstr *instr, _PyFbHeader *h, int opcode)
     h->state = poly->handler[1] != 0 ? FB_POLY : FB_MONO;
 }
 
+/* The specialisation of a fused compare-and-jump that runs the compare's
+ * specialised_opcode, for the words whose handler is fused. */
+static inline int
+fused_form(int specialized_opcode)
+{
+    switch (specialized_opcode) {
+        case COMPARE_OP_FLOAT:
+            return COMPARE_OP_JUMP_FLOAT;
+        case COMPARE_OP_INT:
+            return COMPARE_OP_JUMP_INT;
+        case COMPARE_OP_STR:
+            return COMPARE_OP_JUMP_STR;
+        case CONTAINS_OP_DICT:
+            return CONTAINS_OP_JUMP_DICT;
+        case CONTAINS_OP_SET:
+            return CONTAINS_OP_JUMP_SET;
+        default:
+            Py_UNREACHABLE();
+    }
+}
+
+static inline int
+instr_is_fused(_PyInstr *instr)
+{
+    int handler = IR_HANDLER(FT_ATOMIC_LOAD_UINT64_RELAXED(*instr));
+    return (_PyIR_FormatOf(handler)->flags & _PyIR_FUSED) != 0;
+}
+
 static inline void
 specialize(_PyInstr *instr, uint8_t specialized_opcode)
 {
     assert(!PyErr_Occurred());
-    if (!set_opcode(instr, specialized_opcode)) {
+    int handler = instr_is_fused(instr) ? fused_form(specialized_opcode)
+                                        : specialized_opcode;
+    if (!set_opcode(instr, handler)) {
         STAT_INC(_PyOpcode_Deopt[specialized_opcode], failure);
         SPECIALIZATION_FAIL(_PyOpcode_Deopt[specialized_opcode],
                             SPEC_FAIL_OTHER);
@@ -566,7 +606,7 @@ specialize(_PyInstr *instr, uint8_t specialized_opcode)
     }
     assert(!is_shared_entry(h));
     set_counter(h, adaptive_counter_cooldown());
-    fb_record(instr, h, specialized_opcode);
+    fb_record(instr, h, handler);
 }
 
 static inline void

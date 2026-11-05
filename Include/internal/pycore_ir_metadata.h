@@ -43,6 +43,17 @@ extern "C" {
 #define BINARY_OP_INPLACE_TRUE_DIVIDE                  292
 #define BINARY_OP_INPLACE_XOR                          293
 #define BINARY_OP_SUBSCR                               294
+#define COMPARE_OP_JUMP                                303
+#define CONTAINS_OP_JUMP                               304
+#define IS_OP_JUMP                                     305
+#define COMPARE_OP_JUMP_FLOAT                          306
+#define COMPARE_OP_JUMP_INT                            307
+#define COMPARE_OP_JUMP_STR                            308
+#define CONTAINS_OP_JUMP_DICT                          309
+#define CONTAINS_OP_JUMP_SET                           310
+#define INSTRUMENTED_COMPARE_OP_JUMP                   311
+#define INSTRUMENTED_CONTAINS_OP_JUMP                  312
+#define INSTRUMENTED_IS_OP_JUMP                        313
 #define IR_NUM_HANDLERS                                319
 
 /* Numbers reserved by ir_numbers.txt for the steps that add handlers, inclusive; they stay holes until used */
@@ -85,9 +96,12 @@ typedef _PyFbCall _PyFb_CALL;
 typedef _PyFbCall _PyFb_CALL_FUNCTION_EX;
 typedef _PyFbCall _PyFb_CALL_KW;
 typedef _PyFbBinary _PyFb_COMPARE_OP;
+typedef _PyFbBinary _PyFb_COMPARE_OP_JUMP;
 typedef _PyFbBinary _PyFb_CONTAINS_OP;
+typedef _PyFbBinary _PyFb_CONTAINS_OP_JUMP;
 typedef _PyFbUnary _PyFb_FOR_ITER;
 typedef _PyFbUnary _PyFb_GET_ITER;
+typedef _PyFbUnary _PyFb_IS_OP_JUMP;
 typedef _PyFbAttr _PyFb_LOAD_ATTR;
 typedef _PyFbGlobal _PyFb_LOAD_GLOBAL;
 typedef _PyFbAttr _PyFb_LOAD_SUPER_ATTR;
@@ -380,6 +394,17 @@ const _PyIRFormat _PyIR_Formats[319] = {
     [BINARY_OP_INPLACE_TRUE_DIVIDE] = { .flags = _PyIR_VALID | _PyIR_STORE_DST | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_ALLOCATES | _PyIR_SPECIALIZES, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_IN0 + 0, _PyIR_ROLE_IN0 + 1, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_FBARG, .fb = _PyIR_LOC_D, .ninputs = 2, .dst = -2, .borrow_mask = 0x3, .fb_kind = FB_BINARY, .fb_size = sizeof(_PyFbBinary), .reads = { 2, _PyIR_EXT_FIXED }, .writes = { 1, _PyIR_EXT_FIXED }, .through = { 0, _PyIR_EXT_FIXED }, .shadow = BINARY_OP, .twin = 0, .events = 0 },
     [BINARY_OP_INPLACE_XOR] = { .flags = _PyIR_VALID | _PyIR_STORE_DST | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_ALLOCATES | _PyIR_SPECIALIZES, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_IN0 + 0, _PyIR_ROLE_IN0 + 1, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_FBARG, .fb = _PyIR_LOC_D, .ninputs = 2, .dst = -2, .borrow_mask = 0x3, .fb_kind = FB_BINARY, .fb_size = sizeof(_PyFbBinary), .reads = { 2, _PyIR_EXT_FIXED }, .writes = { 1, _PyIR_EXT_FIXED }, .through = { 0, _PyIR_EXT_FIXED }, .shadow = BINARY_OP, .twin = 0, .events = 0 },
     [BINARY_OP_SUBSCR] = { .flags = _PyIR_VALID | _PyIR_STORE_DST | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_ALLOCATES | _PyIR_SPECIALIZES, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_IN0 + 0, _PyIR_ROLE_IN0 + 1, _PyIR_ROLE_FB }, .imm = _PyIR_LOC_FBARG, .fb = _PyIR_LOC_D, .ninputs = 2, .dst = -2, .borrow_mask = 0x3, .fb_kind = FB_BINARY, .fb_size = sizeof(_PyFbBinary), .reads = { 2, _PyIR_EXT_FIXED }, .writes = { 1, _PyIR_EXT_FIXED }, .through = { 0, _PyIR_EXT_FIXED }, .shadow = BINARY_OP, .twin = 0, .events = 0 },
+    [COMPARE_OP_JUMP] = { .flags = _PyIR_VALID | _PyIR_FORWARD | _PyIR_RUNS_CODE | _PyIR_FUSED, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_ALLOCATES | _PyIR_SPECIALIZES, .roles = { _PyIR_ROLE_IN0 + 0, _PyIR_ROLE_IN0 + 1, _PyIR_ROLE_FB, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_D, .fb = _PyIR_LOC_C, .ninputs = 2, .dst = _PyIR_NO_DST, .borrow_mask = 0x3, .fb_kind = FB_BINARY, .fb_size = sizeof(_PyFbBinary), .reads = { 2, _PyIR_EXT_FIXED }, .writes = { 0, _PyIR_EXT_FIXED }, .through = { 0, _PyIR_EXT_FIXED }, .shadow = COMPARE_OP, .twin = INSTRUMENTED_COMPARE_OP_JUMP, .events = (1u << PY_MONITORING_EVENT_BRANCH_LEFT) | (1u << PY_MONITORING_EVENT_BRANCH_RIGHT) },
+    [CONTAINS_OP_JUMP] = { .flags = _PyIR_VALID | _PyIR_FORWARD | _PyIR_RUNS_CODE | _PyIR_FUSED, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_ALLOCATES | _PyIR_SPECIALIZES, .roles = { _PyIR_ROLE_IN0 + 0, _PyIR_ROLE_IN0 + 1, _PyIR_ROLE_FB, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_D, .fb = _PyIR_LOC_C, .ninputs = 2, .dst = _PyIR_NO_DST, .borrow_mask = 0x3, .fb_kind = FB_BINARY, .fb_size = sizeof(_PyFbBinary), .reads = { 2, _PyIR_EXT_FIXED }, .writes = { 0, _PyIR_EXT_FIXED }, .through = { 0, _PyIR_EXT_FIXED }, .shadow = CONTAINS_OP, .twin = INSTRUMENTED_CONTAINS_OP_JUMP, .events = (1u << PY_MONITORING_EVENT_BRANCH_LEFT) | (1u << PY_MONITORING_EVENT_BRANCH_RIGHT) },
+    [IS_OP_JUMP] = { .flags = _PyIR_VALID | _PyIR_FORWARD | _PyIR_RUNS_CODE | _PyIR_FUSED, .effects = _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_ALLOCATES, .roles = { _PyIR_ROLE_IN0 + 0, _PyIR_ROLE_IN0 + 1, _PyIR_ROLE_FB, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_D, .fb = _PyIR_LOC_C, .ninputs = 2, .dst = _PyIR_NO_DST, .borrow_mask = 0x3, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .reads = { 2, _PyIR_EXT_FIXED }, .writes = { 0, _PyIR_EXT_FIXED }, .through = { 0, _PyIR_EXT_FIXED }, .shadow = IS_OP, .twin = INSTRUMENTED_IS_OP_JUMP, .events = (1u << PY_MONITORING_EVENT_BRANCH_LEFT) | (1u << PY_MONITORING_EVENT_BRANCH_RIGHT) },
+    [COMPARE_OP_JUMP_FLOAT] = { .flags = _PyIR_VALID | _PyIR_FORWARD | _PyIR_RUNS_CODE | _PyIR_FUSED, .effects = _PyIR_DEOPTS, .roles = { _PyIR_ROLE_IN0 + 0, _PyIR_ROLE_IN0 + 1, _PyIR_ROLE_FB, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_D, .fb = _PyIR_LOC_C, .ninputs = 2, .dst = _PyIR_NO_DST, .borrow_mask = 0x3, .fb_kind = FB_BINARY, .fb_size = sizeof(_PyFbBinary), .reads = { 2, _PyIR_EXT_FIXED }, .writes = { 0, _PyIR_EXT_FIXED }, .through = { 0, _PyIR_EXT_FIXED }, .shadow = COMPARE_OP, .twin = INSTRUMENTED_COMPARE_OP_JUMP, .events = (1u << PY_MONITORING_EVENT_BRANCH_LEFT) | (1u << PY_MONITORING_EVENT_BRANCH_RIGHT) },
+    [COMPARE_OP_JUMP_INT] = { .flags = _PyIR_VALID | _PyIR_FORWARD | _PyIR_RUNS_CODE | _PyIR_FUSED, .effects = _PyIR_DEOPTS, .roles = { _PyIR_ROLE_IN0 + 0, _PyIR_ROLE_IN0 + 1, _PyIR_ROLE_FB, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_D, .fb = _PyIR_LOC_C, .ninputs = 2, .dst = _PyIR_NO_DST, .borrow_mask = 0x3, .fb_kind = FB_BINARY, .fb_size = sizeof(_PyFbBinary), .reads = { 2, _PyIR_EXT_FIXED }, .writes = { 0, _PyIR_EXT_FIXED }, .through = { 0, _PyIR_EXT_FIXED }, .shadow = COMPARE_OP, .twin = INSTRUMENTED_COMPARE_OP_JUMP, .events = (1u << PY_MONITORING_EVENT_BRANCH_LEFT) | (1u << PY_MONITORING_EVENT_BRANCH_RIGHT) },
+    [COMPARE_OP_JUMP_STR] = { .flags = _PyIR_VALID | _PyIR_FORWARD | _PyIR_RUNS_CODE | _PyIR_FUSED, .effects = _PyIR_DEOPTS, .roles = { _PyIR_ROLE_IN0 + 0, _PyIR_ROLE_IN0 + 1, _PyIR_ROLE_FB, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_D, .fb = _PyIR_LOC_C, .ninputs = 2, .dst = _PyIR_NO_DST, .borrow_mask = 0x3, .fb_kind = FB_BINARY, .fb_size = sizeof(_PyFbBinary), .reads = { 2, _PyIR_EXT_FIXED }, .writes = { 0, _PyIR_EXT_FIXED }, .through = { 0, _PyIR_EXT_FIXED }, .shadow = COMPARE_OP, .twin = INSTRUMENTED_COMPARE_OP_JUMP, .events = (1u << PY_MONITORING_EVENT_BRANCH_LEFT) | (1u << PY_MONITORING_EVENT_BRANCH_RIGHT) },
+    [CONTAINS_OP_JUMP_DICT] = { .flags = _PyIR_VALID | _PyIR_FORWARD | _PyIR_RUNS_CODE | _PyIR_FUSED, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS | _PyIR_ALLOCATES, .roles = { _PyIR_ROLE_IN0 + 0, _PyIR_ROLE_IN0 + 1, _PyIR_ROLE_FB, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_D, .fb = _PyIR_LOC_C, .ninputs = 2, .dst = _PyIR_NO_DST, .borrow_mask = 0x3, .fb_kind = FB_BINARY, .fb_size = sizeof(_PyFbBinary), .reads = { 2, _PyIR_EXT_FIXED }, .writes = { 0, _PyIR_EXT_FIXED }, .through = { 0, _PyIR_EXT_FIXED }, .shadow = CONTAINS_OP, .twin = INSTRUMENTED_CONTAINS_OP_JUMP, .events = (1u << PY_MONITORING_EVENT_BRANCH_LEFT) | (1u << PY_MONITORING_EVENT_BRANCH_RIGHT) },
+    [CONTAINS_OP_JUMP_SET] = { .flags = _PyIR_VALID | _PyIR_FORWARD | _PyIR_RUNS_CODE | _PyIR_FUSED, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS | _PyIR_ALLOCATES, .roles = { _PyIR_ROLE_IN0 + 0, _PyIR_ROLE_IN0 + 1, _PyIR_ROLE_FB, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_D, .fb = _PyIR_LOC_C, .ninputs = 2, .dst = _PyIR_NO_DST, .borrow_mask = 0x3, .fb_kind = FB_BINARY, .fb_size = sizeof(_PyFbBinary), .reads = { 2, _PyIR_EXT_FIXED }, .writes = { 0, _PyIR_EXT_FIXED }, .through = { 0, _PyIR_EXT_FIXED }, .shadow = CONTAINS_OP, .twin = INSTRUMENTED_CONTAINS_OP_JUMP, .events = (1u << PY_MONITORING_EVENT_BRANCH_LEFT) | (1u << PY_MONITORING_EVENT_BRANCH_RIGHT) },
+    [INSTRUMENTED_COMPARE_OP_JUMP] = { .flags = _PyIR_VALID | _PyIR_FORWARD | _PyIR_RUNS_CODE | _PyIR_FUSED, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_ALLOCATES, .roles = { _PyIR_ROLE_IN0 + 0, _PyIR_ROLE_IN0 + 1, _PyIR_ROLE_FB, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_D, .fb = _PyIR_LOC_C, .ninputs = 2, .dst = _PyIR_NO_DST, .borrow_mask = 0x3, .fb_kind = FB_BINARY, .fb_size = sizeof(_PyFbBinary), .reads = { 2, _PyIR_EXT_FIXED }, .writes = { 0, _PyIR_EXT_FIXED }, .through = { 0, _PyIR_EXT_FIXED }, .shadow = COMPARE_OP, .twin = INSTRUMENTED_COMPARE_OP_JUMP, .events = (1u << PY_MONITORING_EVENT_BRANCH_LEFT) | (1u << PY_MONITORING_EVENT_BRANCH_RIGHT) },
+    [INSTRUMENTED_CONTAINS_OP_JUMP] = { .flags = _PyIR_VALID | _PyIR_FORWARD | _PyIR_RUNS_CODE | _PyIR_FUSED, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_ALLOCATES, .roles = { _PyIR_ROLE_IN0 + 0, _PyIR_ROLE_IN0 + 1, _PyIR_ROLE_FB, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_D, .fb = _PyIR_LOC_C, .ninputs = 2, .dst = _PyIR_NO_DST, .borrow_mask = 0x3, .fb_kind = FB_BINARY, .fb_size = sizeof(_PyFbBinary), .reads = { 2, _PyIR_EXT_FIXED }, .writes = { 0, _PyIR_EXT_FIXED }, .through = { 0, _PyIR_EXT_FIXED }, .shadow = CONTAINS_OP, .twin = INSTRUMENTED_CONTAINS_OP_JUMP, .events = (1u << PY_MONITORING_EVENT_BRANCH_LEFT) | (1u << PY_MONITORING_EVENT_BRANCH_RIGHT) },
+    [INSTRUMENTED_IS_OP_JUMP] = { .flags = _PyIR_VALID | _PyIR_FORWARD | _PyIR_RUNS_CODE | _PyIR_FUSED, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_ALLOCATES, .roles = { _PyIR_ROLE_IN0 + 0, _PyIR_ROLE_IN0 + 1, _PyIR_ROLE_FB, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_D, .fb = _PyIR_LOC_C, .ninputs = 2, .dst = _PyIR_NO_DST, .borrow_mask = 0x3, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .reads = { 2, _PyIR_EXT_FIXED }, .writes = { 0, _PyIR_EXT_FIXED }, .through = { 0, _PyIR_EXT_FIXED }, .shadow = IS_OP, .twin = INSTRUMENTED_IS_OP_JUMP, .events = (1u << PY_MONITORING_EVENT_BRANCH_LEFT) | (1u << PY_MONITORING_EVENT_BRANCH_RIGHT) },
 };
 #endif
 
@@ -414,6 +439,17 @@ const char *const _PyIR_OnlyNames[52] = {
     [BINARY_OP_INPLACE_TRUE_DIVIDE - IR_FIRST_ONLY_HANDLER] = "BINARY_OP_INPLACE_TRUE_DIVIDE",
     [BINARY_OP_INPLACE_XOR - IR_FIRST_ONLY_HANDLER] = "BINARY_OP_INPLACE_XOR",
     [BINARY_OP_SUBSCR - IR_FIRST_ONLY_HANDLER] = "BINARY_OP_SUBSCR",
+    [COMPARE_OP_JUMP - IR_FIRST_ONLY_HANDLER] = "COMPARE_OP_JUMP",
+    [CONTAINS_OP_JUMP - IR_FIRST_ONLY_HANDLER] = "CONTAINS_OP_JUMP",
+    [IS_OP_JUMP - IR_FIRST_ONLY_HANDLER] = "IS_OP_JUMP",
+    [COMPARE_OP_JUMP_FLOAT - IR_FIRST_ONLY_HANDLER] = "COMPARE_OP_JUMP_FLOAT",
+    [COMPARE_OP_JUMP_INT - IR_FIRST_ONLY_HANDLER] = "COMPARE_OP_JUMP_INT",
+    [COMPARE_OP_JUMP_STR - IR_FIRST_ONLY_HANDLER] = "COMPARE_OP_JUMP_STR",
+    [CONTAINS_OP_JUMP_DICT - IR_FIRST_ONLY_HANDLER] = "CONTAINS_OP_JUMP_DICT",
+    [CONTAINS_OP_JUMP_SET - IR_FIRST_ONLY_HANDLER] = "CONTAINS_OP_JUMP_SET",
+    [INSTRUMENTED_COMPARE_OP_JUMP - IR_FIRST_ONLY_HANDLER] = "INSTRUMENTED_COMPARE_OP_JUMP",
+    [INSTRUMENTED_CONTAINS_OP_JUMP - IR_FIRST_ONLY_HANDLER] = "INSTRUMENTED_CONTAINS_OP_JUMP",
+    [INSTRUMENTED_IS_OP_JUMP - IR_FIRST_ONLY_HANDLER] = "INSTRUMENTED_IS_OP_JUMP",
 };
 #endif
 

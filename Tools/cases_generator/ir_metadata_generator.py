@@ -25,6 +25,7 @@ from generators_common import DEFAULT_INPUT, ROOT, write_header
 from cwriter import CWriter
 from ir_generator import (
     BINARY_OP_FAMILY,
+    FUSED_SHADOWS,
     first_ir_only_handler,
     Extent,
     HandlerContract,
@@ -48,6 +49,11 @@ def shadow_of(name: str, analysis: Analysis) -> str:
     of a BINARY_OP operation BINARY_OP."""
     if name in binary_op_handlers(analysis):
         return BINARY_OP_FAMILY
+    # The fused handlers, their specialisations and twins stand for the
+    # compare, whose operation they run
+    for fused, compare in FUSED_SHADOWS.items():
+        if name.startswith(fused) or name.startswith("INSTRUMENTED_" + fused):
+            return compare
     return name
 
 
@@ -72,7 +78,8 @@ def format_initializer(fmt: IRFormat, shadow: str,
             (fmt.store_dst, "_PyIR_STORE_DST"),
             (fmt.runs_code, "_PyIR_RUNS_CODE"),
             (fmt.jump_always, "_PyIR_JUMP_ALWAYS"),
-            (fmt.names_target, "_PyIR_NAMES_TARGET")):
+            (fmt.names_target, "_PyIR_NAMES_TARGET"),
+            (fmt.fused, "_PyIR_FUSED")):
         if present:
             flags.append(flag)
     dst = "_PyIR_NO_DST" if fmt.dst_offset is None else str(fmt.dst_offset)

@@ -168,6 +168,7 @@ OWNER_READS = set(VIEW_RELEASES) | VIEW_TAKES
 IR_INSTRUCTION_MACROS = {
     "FB_COUNTER": "((_PyFbHeader *)fb)",
     "FB_BRANCH": "((_PyFbHeader *)fb)->history",
+    "FB_TAKEN": "((_PyFbHeader *)fb)->taken",
     "FB_HEADER_OF": "_PyIR_FbHeaderOf(frame, {0}, {1})",
     "INSTR_OPCODE": "IR_HANDLER(*{0p})",
     "INSTR_OPARG": "_PyIR_Oparg(frame, {0})",
@@ -194,6 +195,13 @@ FIELD_LOCS = {"A": LOC_A, "B": LOC_B, "C": LOC_C, "D": LOC_D}
 # The families whose oparg is a forward distance in words, in D, rather than
 # an absolute target: the loops, whose bodies jump relative to the next word.
 FORWARD_JUMPS = ("FOR_ITER", "SEND")
+
+# The IR-only families that fuse a compare with the conditional jump after
+# it: the distance is in D, as for the loops, and the entry's arg holds the
+# operation and the sense of the jump.  The handlers stand for the compare.
+FUSED_JUMPS = ("COMPARE_OP_JUMP", "CONTAINS_OP_JUMP", "IS_OP_JUMP")
+FUSED_SHADOWS = {"COMPARE_OP_JUMP": "COMPARE_OP",
+                 "CONTAINS_OP_JUMP": "CONTAINS_OP", "IS_OP_JUMP": "IS_OP"}
 
 # Instructions whose oparg can need more than 12 bits although their bodies
 # name no constant or name table, see wide_oparg().
@@ -238,6 +246,7 @@ class IRFormat:
     fb: str                         # where the feedback index lives
     jumps: bool                     # the oparg is an absolute target
     forward: bool = False           # the oparg is a forward distance
+    fused: bool = False             # see FUSED_JUMPS
     no_fold: bool = False
     transparent: bool = False       # see is_transparent()
     store_dst: bool = False         # dst may name a local, see
@@ -394,7 +403,7 @@ def uses_feedback(inst: Instruction) -> bool:
         if any(cache.name != "unused" for cache in part.caches):
             return True
         for tkn in part.body.tokens():
-            if tkn.kind == "IDENTIFIER" and tkn.text in ("FB_COUNTER", "FB_BRANCH"):
+            if tkn.kind == "IDENTIFIER" and tkn.text in ("FB_COUNTER", "FB_BRANCH", "FB_TAKEN"):
                 return True
     return False
 
@@ -1014,8 +1023,8 @@ def group_name(inst: Instruction, analysis: Analysis) -> str:
         return inst.family.name
     for prefix in SHARED_FORMAT_PREFIXES:
         base = inst.name.removeprefix(prefix)
-        if base != inst.name and base in analysis.instructions:
-            return group_name(analysis.instructions[base], analysis)
+        if base != inst.name and base in all_instructions(analysis):
+            return group_name(all_instructions(analysis)[base], analysis)
     return inst.name
 
 
@@ -1201,7 +1210,8 @@ def compute_format(group: str, members: list[Instruction]) -> IRFormat:
     array_inputs = any(m.properties.window for m in members) or any(
         item.is_array() for m in members for item in io[m.name][0])
     jumps = any(m.properties.jumps for m in members)
-    forward = jumps and group in FORWARD_JUMPS
+    fused = group in FUSED_JUMPS
+    forward = jumps and (group in FORWARD_JUMPS or fused)
     has_fb = any(uses_feedback(m) for m in members)
     has_imm = any(m.properties.oparg for m in members)
     if not has_imm:
@@ -1286,6 +1296,7 @@ def compute_format(group: str, members: list[Instruction]) -> IRFormat:
         group=group, window=window, roles=roles, inputs=names,
         n_inputs=n_inputs, dst_offset=dst_offset, borrow_mask=borrow_mask,
         imm=imm, fb=fb, jumps=jumps and not forward, forward=forward,
+        fused=fused,
         no_fold=no_fold,
         store_dst=store_dst, runs_code=any(runs_code(m) for m in members),
         jump_always=jumps and jumps_always(head),
@@ -1322,6 +1333,10 @@ FEEDBACK_LAYOUTS = {
     "CALL": "_PyFbCall",
     "CALL_KW": "_PyFbCall",
     "CALL_FUNCTION_EX": "_PyFbCall",
+    "COMPARE_OP_JUMP": "_PyFbBinary",
+    "CONTAINS_OP_JUMP": "_PyFbBinary",
+    # No specialisation; the entry is as large as that of a branch
+    "IS_OP_JUMP": "_PyFbUnary",
 }
 LAYOUT_KINDS = {
     FB_HEADER: "FB_COUNTER",
@@ -3303,6 +3318,11 @@ class IREmitter(Emitter):
             self.emit(f"UPDATE_MISS_STATS({BINARY_OP_FAMILY});\n")
             self.emit(f"IR_DEOPT_BINARY_OP({field_expr(fmt.fb)});\n")
             return
+        if inst.family is not None and inst.family.name in FUSED_JUMPS:
+            # The head has no opcode: the miss counts for the compare
+            self.emit(f"UPDATE_MISS_STATS({FUSED_SHADOWS[inst.family.name]});\n")
+            self.emit(f"JUMP_TO_PREDICTED({self.jump_prefix}{inst.family.name});\n")
+            return
         if inst.family is not None:
             super().emit_jump_to_predicted(inst)
             return
@@ -3590,10 +3610,16 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
     if inst.properties.oparg:
         if operation is not None:
             out.emit(f"int oparg = {operation};\n")
+        elif fmt.fused:
+            # D is the distance; the arg of the entry holds the operation
+            out.emit("int oparg = (int)(((_PyFbHeader *)fb)->arg & IR_FUSED_OP_MASK);\n")
         elif fmt.imm == LOC_FBARG and is_specialization(inst):
             out.emit("int oparg = (int)((_PyFbHeader *)fb)->arg;\n")
         elif fmt.imm == LOC_FBARG:
             out.emit(f"int oparg = IR_FB_ARG(fb, {field_expr(fmt.fb)});\n")
+        elif fmt.forward and field_expr(fmt.imm).startswith("IR_D("):
+            # The distance has a sign, as _PyCode_InstrOparg() decodes it
+            out.emit("int oparg = IR_DS(ir_word);\n")
         else:
             out.emit(f"int oparg = (int){field_expr(fmt.imm)};\n")
         out.emit("(void)oparg;\n")
@@ -3989,7 +4015,10 @@ def handler_effects(name: str, inst: Instruction, fmt: IRFormat,
                  or any(CONSTRUCTOR.search(t) for t in tokens))
     effects = []
     for bit, present in (
-            ("_PyIR_RAISES", not p.infallible),
+            # INSTRUMENTED_JUMP() leaves for the error label when the
+            # callback raises, which the analysis does not see in a macro
+            ("_PyIR_RAISES", not p.infallible
+                             or fmt.fused and name.startswith("INSTRUMENTED_")),
             ("_PyIR_ESCAPES", p.escapes),
             ("_PyIR_RUNS_PYTHON", runs_code(inst)),
             ("_PyIR_DEOPTS", p.deopts or p.side_exit),

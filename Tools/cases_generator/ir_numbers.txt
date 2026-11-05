@@ -335,6 +335,17 @@ BINARY_OP_SUBSCR 294
 # adds no handler.  The number stays a hole.
 # range B4 302 303
 
-# Reserved for B6: 11 fused handlers and 5 spare.  Numbers not used stay holes
-# until a compaction.
+# B6: the fused compare-and-jump handlers; 314 to 318 stay holes.
+COMPARE_OP_JUMP 303
+CONTAINS_OP_JUMP 304
+IS_OP_JUMP 305
+COMPARE_OP_JUMP_FLOAT 306
+COMPARE_OP_JUMP_INT 307
+COMPARE_OP_JUMP_STR 308
+CONTAINS_OP_JUMP_DICT 309
+CONTAINS_OP_JUMP_SET 310
+INSTRUMENTED_COMPARE_OP_JUMP 311
+INSTRUMENTED_CONTAINS_OP_JUMP 312
+INSTRUMENTED_IS_OP_JUMP 313
+
 # range B6 303 319

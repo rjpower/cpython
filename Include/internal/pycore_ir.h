@@ -35,8 +35,9 @@ extern "C" {
  *     | fb   | an index into the feedback vector of the executing copy      |
  *     | imm  | the oparg: a count or a local in a 12-bit field, a constant  |
  *     |      | or name index in CD; for a jump the absolute word index of   |
- *     |      | its target in CD, and for FOR_ITER and SEND the distance in  |
- *     |      | words from the next word to the exit in D                    |
+ *     |      | its target in CD, and for FOR_ITER, SEND and the fused       |
+ *     |      | compare-and-jumps the signed distance in words from the next |
+ *     |      | word to the target in D                                      |
  *
  * Slots are numbered as in localsplus, so locals, cells, free variables and
  * temporaries share one numbering; the temporaries take the slots from
@@ -68,12 +69,14 @@ extern "C" {
 #define IR_CD_MAX       0xFFFFFF    // and of CD
 /* A frame has at most this many slots, so a slot field is 0 to 4094. */
 #define IR_MAX_SLOTS    IR_FIELD_MAX
-/* FOR_ITER and SEND reach at most this far; the assembler relaxes a loop
- * whose exit is further away (Python/assemble.c).  The distance is the
- * non-negative half of a signed 12-bit field, 2^11 - 1: register IR v2 step
- * B6 reads D of FOR_ITER and SEND as a signed distance, the same rule as the
- * fused compare-and-jump words, so the bound stays below the sign bit. */
+/* A target in a 12-bit field is a signed distance in words from the next
+ * word, -2048 to 2047.  FOR_ITER and SEND reach at most IR_MAX_FORWARD, the
+ * non-negative half (2^11 - 1), and the assembler relaxes a loop whose exit
+ * is further away.  The fused compare-and-jumps go forward only; the
+ * assembler leaves the pair unfused where the target is further
+ * (Python/assemble.c). */
 #define IR_MAX_FORWARD  2047
+#define IR_MIN_DISTANCE (-2048)
 
 #define IR_HANDLER(W)   ((int)((W) & 0xFFFF))
 #define IR_A(W)         ((uint32_t)((W) >> 16) & IR_FIELD_MAX)
@@ -81,6 +84,8 @@ extern "C" {
 #define IR_C(W)         ((uint32_t)((W) >> 40) & IR_FIELD_MAX)
 #define IR_D(W)         ((uint32_t)((W) >> 52))
 #define IR_CD(W)        ((uint32_t)((W) >> 40))
+/* D as a signed distance */
+#define IR_DS(W)        ((int)(IR_D(W) ^ 0x800) - 0x800)
 
 #define IR_WORD(H, A, B, C, D) \
     ((_PyIRWord)(uint16_t)(H) | (_PyIRWord)((A) & IR_FIELD_MAX) << 16 | \
@@ -141,7 +146,7 @@ enum {
 #define _PyIR_WINDOW        0x2     // window style
 #define _PyIR_JUMPS         0x4     // the oparg is the absolute target in
                                     // words, in CD
-#define _PyIR_FORWARD       0x8     // the oparg is a forward distance in
+#define _PyIR_FORWARD       0x8     // the oparg is a signed distance in
                                     // words from the next word, in D
 #define _PyIR_NO_FOLD       0x10    // an output may alias a borrowed input
 #define _PyIR_TRANSPARENT   0x20    // runs another handler on the same fields
@@ -155,6 +160,17 @@ enum {
 #define _PyIR_NAMES_TARGET  0x200   // the oparg names a word for monitoring
                                     // only, which control never reaches
                                     // (END_ASYNC_FOR names its END_SEND)
+#define _PyIR_FUSED         0x400   // a compare, containment or identity test
+                                    // fused with the conditional jump after
+                                    // it: FORWARD, with the operation in the
+                                    // arg of the entry (bits 0 to 7) and the
+                                    // sense of the jump (_PyIR_FUSED_IF_FALSE)
+
+/* The arg of the entry of a fused word: the operation of the compare (its
+ * oparg, or the invert bit of CONTAINS_OP and IS_OP) and the sense of the
+ * jump.  The first call seeds the taken history of its entry. */
+#define IR_FUSED_OP_MASK    0xFF
+#define _PyIR_FUSED_IF_FALSE 0x100  // jump where the condition is false
 
 /* _PyIRFormat.effects: what the handler itself may do, from the cases
  * generator's analysis of its instruction.  For a stack opcode they agree
@@ -367,6 +383,11 @@ _PyCode_InstrHandler(PyCodeObject *co, int i)
  * for LOAD_ATTR.  IR_JUMP, which has no stack instruction, is
  * JUMP_FORWARD. */
 PyAPI_FUNC(int) _PyIR_BaseOpcode(int handler);
+
+/* The opcode that sys.monitoring sees the word as: the base opcode, except
+ * for a fused compare-and-jump, which is a conditional jump
+ * (POP_JUMP_IF_FALSE, or INSTRUMENTED_ for its twin). */
+PyAPI_FUNC(int) _PyIR_EventOpcode(int handler);
 
 /* The handler that the executing copy of co starts with at index i: the
  * generic handler.

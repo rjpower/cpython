@@ -2059,6 +2059,24 @@ class TestCallTransactionMarkers(unittest.TestCase):
                          ir_generator.boxing_handlers(self.analysis, formats))
         self.assertLessEqual(len(box_area), 97)
 
+    def test_forward_distance_is_signed(self):
+        # A forward distance has 12 bits and a sign (register-ir-v2 section
+        # 4.3).  _PyCode_InstrOparg, dis and the generated handlers decode
+        # the same value, so a handler never reads the field as unsigned.
+        _, rest = self.interpreter.split(ir_generator.INSTRUCTION_START_MARKER)
+        bodies = dict(re.findall(
+            r"TARGET\((\w+)\) \{(.*?)(?=\n        TARGET\()", rest, re.S))
+        checked = 0
+        for name, body in bodies.items():
+            if name.startswith(("FOR_ITER", "SEND", "INSTRUMENTED_FOR_ITER",
+                                "INSTRUMENTED_SEND")):
+                with self.subTest(handler=name):
+                    self.assertNotIn("(int)IR_D(ir_word)", body)
+                    if "int oparg" in body:
+                        self.assertIn("int oparg = IR_DS(ir_word);", body)
+                        checked += 1
+        self.assertGreater(checked, 5)
+
     def test_generated_address_sites(self):
         # The check of the generated output sees an address in a
         # conditional, after a cast, in parentheses and in a comparison

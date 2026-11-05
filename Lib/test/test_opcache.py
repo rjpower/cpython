@@ -2529,6 +2529,7 @@ class TestFeedback(TestBase):
         "GET_ITER": "UNARY", "SEND": "UNARY",
         "BINARY_OP": "BINARY", "COMPARE_OP": "BINARY",
         "CONTAINS_OP": "BINARY", "STORE_SUBSCR": "BINARY",
+        "COMPARE_OP_JUMP": "BINARY", "CONTAINS_OP_JUMP": "BINARY",
         "LOAD_ATTR": "ATTR", "STORE_ATTR": "ATTR", "LOAD_SUPER_ATTR": "ATTR",
         "LOAD_GLOBAL": "GLOBAL",
         "CALL": "CALL", "CALL_KW": "CALL", "CALL_FUNCTION_EX": "CALL",
@@ -2549,6 +2550,7 @@ class TestFeedback(TestBase):
                         a, b = o
                 print(len(args), *args, **kw)
                 print(a, end=not not b)
+                both = (a < b, a in o)  # not followed by a jump
                 return super().m
 
         def g(it):

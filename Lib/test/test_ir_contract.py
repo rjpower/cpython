@@ -114,6 +114,12 @@ class ContractTests(unittest.TestCase):
             if (op >= opcode.MIN_INSTRUMENTED_OPCODE
                     or opcode.opname[h] in opcode._specialized_opmap):
                 continue
+            if row.flags & _opcode.IR_FUSED:
+                # The compare and the jump on its result: two inputs, no output
+                with self.subTest(handler=opcode.opname[h]):
+                    self.assertEqual((extent(row.reads, 0),
+                                      extent(row.writes, 0)), (2, 0))
+                continue
             for oparg in OPARGS:
                 if not _opcode.has_arg(op) and oparg:
                     continue
@@ -226,6 +232,17 @@ class ContractTests(unittest.TestCase):
                 if row.fb == _opcode.IR_LOC_NONE:
                     self.assertEqual((row.fb_kind, row.fb_size), (0, 0))
                     continue
+                if row.flags & _opcode.IR_FUSED:
+                    # The entry of a fused compare is that of the compare;
+                    # IS_OP has no entry apart from its fused form, which
+                    # has the size of the entry of a branch.
+                    if family == "IS_OP":
+                        self.assertEqual((kinds[row.fb_kind], row.fb_size),
+                                         FEEDBACK["TO_BOOL"])
+                    else:
+                        self.assertEqual((kinds[row.fb_kind], row.fb_size),
+                                         FEEDBACK[family])
+                    continue
                 self.assertIn(family, FEEDBACK)
                 self.assertEqual((kinds[row.fb_kind], row.fb_size),
                                  FEEDBACK[family])
@@ -255,6 +272,7 @@ class ContractTests(unittest.TestCase):
                     self.assertEqual(kind, CONTRACT[h].fb_kind,
                                      opcode.opname[h])
                     seen.add(dis._FEEDBACK_KINDS[kind])
+        # COUNTER is entry 0, which no word names
         self.assertEqual(seen, set(dis._FEEDBACK_KINDS) - {"COUNTER"})
 
     def test_monitoring(self):
@@ -438,8 +456,12 @@ class AnalyzerTests(unittest.TestCase):
             p = inst.properties
             effects = CONTRACT[self.ids[name]].effects
             with self.subTest(handler=name):
+                # The twin of a fused jump raises when a callback does,
+                # which the analysis does not see in INSTRUMENTED_JUMP()
+                fused_twin = (name.startswith("INSTRUMENTED_")
+                              and name.endswith("_JUMP"))
                 self.assertEqual(bool(effects & _opcode.IR_RAISES),
-                                 not p.infallible)
+                                 not p.infallible or fused_twin)
                 self.assertEqual(bool(effects & _opcode.IR_ESCAPES), p.escapes)
                 self.assertEqual(bool(effects & _opcode.IR_PURE), p.pure)
                 self.assertEqual(bool(effects & _opcode.IR_DEOPTS),
@@ -735,6 +757,10 @@ class SourceScanTests(unittest.TestCase):
                             eval(pushed[name], {"oparg": oparg}))
                 if min(expected) < 0:
                     continue
+                if opcode.opname[h].endswith(("OP_JUMP", "OP_JUMP_FLOAT", "OP_JUMP_INT", "OP_JUMP_STR", "OP_JUMP_SET", "OP_JUMP_DICT")):
+                    # A fused compare-and-jump consumes the operands
+                    # and the jump consumes the result: no write.
+                    expected = (expected[0], 0)
                 with self.subTest(handler=opcode.opname[h], oparg=oparg):
                     scanned = tuple(_scan_count(e, oparg)
                                     for e in scans.get(h, ()))

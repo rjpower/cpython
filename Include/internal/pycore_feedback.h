@@ -81,7 +81,11 @@ typedef struct {
     uint8_t kind;                   // _PyFbKind
     uint8_t state;                  // _PyFbState
     _Py_BackoffCounter counter;     // warmup, cooldown and backoff
-    uint16_t misses;                // reserved: the counter holds them, see above
+    union {
+        uint16_t misses;            // reserved: the counter holds them, see above
+        uint16_t taken;             // fused compare-and-jumps: the 16-bit taken
+                                    // history of the jump, newest in bit 0
+    };
     uint16_t hits;                  // reserved: call-site heat for the JIT stage
     union {
         uint32_t arg;               // the oparg, for IR formats that keep it here

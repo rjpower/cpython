@@ -1,6 +1,7 @@
 import builtins
 import errno
 import glob
+import hashlib
 import json
 import importlib.util
 from importlib._bootstrap_external import _get_sourcefile
@@ -13,6 +14,7 @@ from importlib.machinery import (
 )
 import marshal
 import os
+import pathlib
 import py_compile
 import random
 import re
@@ -3563,6 +3565,31 @@ class TestMagicNumber(unittest.TestCase):
         self.assertEqual(magic_number, 64404)
         self.assertEqual(sys.implementation.cache_tag,
                          f'cpython-valrc1-{sys.version_info.major}{sys.version_info.minor}')
+
+    # The digest of Tools/cases_generator/ir_numbers.txt at the magic number
+    # above.  A handler number is a fact of the .pyc format, so a change to the
+    # table needs a new magic number (Include/internal/pycore_magic_number.h),
+    # and this pair then follows.  Comments other than `# removed:` and
+    # `# range` do not count.
+    PINNED_MAGIC_AND_TABLE = (
+        64404,
+        '2076d4466f54218653de70b66b667d017b6c347fda8bfb6a4c7563fbd2f665db')
+
+    def test_handler_numbers_follow_magic_number(self):
+        table = (pathlib.Path(__file__).parents[3]
+                 / 'Tools' / 'cases_generator' / 'ir_numbers.txt')
+        if not table.is_file():
+            self.skipTest('the source tree is not available')
+        lines = [line.strip() for line in table.read_text().splitlines()
+                 if line.strip() and (not line.startswith('#')
+                                      or line.startswith(('# removed:', '# range ')))]
+        digest = hashlib.sha256('\n'.join(lines).encode()).hexdigest()
+        magic = _imp.pyc_magic_number_token & 0xFFFF
+        self.assertEqual(
+            (magic, digest), self.PINNED_MAGIC_AND_TABLE,
+            'ir_numbers.txt and the magic number must change together: bump '
+            'PYC_MAGIC_NUMBER when the table changes, then update '
+            'PINNED_MAGIC_AND_TABLE here')
 
 
 if __name__ == '__main__':

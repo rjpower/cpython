@@ -38,9 +38,33 @@ with test_tools.imports_under_tool("cases_generator"):
     from cwriter import CWriter
     import ir_generator
     import ir_metadata_generator
+    import ir_numbers
     import lexer
     import parser
     from stack import Local, Stack
+
+
+class SequentialNumbers(ir_numbers.NumberTable):
+    """Numbers the definitions of a test input in order of request, in place
+    of the pinned table, which lists only the handlers of Python/bytecodes.c"""
+
+    def __init__(self):
+        super().__init__(constants={
+            "HAVE_ARGUMENT": 40, "MIN_INSTRUMENTED_OPCODE": 233,
+            "IR_FIRST_ONLY_HANDLER": 0})
+        self.pseudos = {}
+
+    @property
+    def first_ir_only(self):
+        # The IR-only handlers follow the pseudo-instructions
+        return 1 + max(self.pseudos.values(), default=255)
+
+    def number(self, name, low, high, what):
+        if name not in self.numbers:
+            self.numbers[name] = self.next_free(low, 4096)
+        if what == "pseudo-instruction":
+            self.pseudos[name] = self.numbers[name]
+        return self.numbers[name]
 
 
 def handle_stderr():
@@ -100,7 +124,8 @@ class TestAnalysisErrors(unittest.TestCase):
             temp_input.write(input)
             temp_input.write(parser.END_MARKER)
         with handle_stderr():
-            analysis = analyzer.analyze_files([self.temp_input_filename])
+            analysis = analyzer.analyze_files(
+                [self.temp_input_filename], SequentialNumbers())
             ir_generator.generate_ir([self.temp_input_filename], analysis,
                                      io.StringIO(), False)
 
@@ -249,7 +274,8 @@ class TestIRCases(unittest.TestCase):
             temp_input.write(input)
             temp_input.write(parser.END_MARKER)
         with handle_stderr():
-            return analyzer.analyze_files([self.temp_input_filename])
+            return analyzer.analyze_files(
+                [self.temp_input_filename], SequentialNumbers())
 
     def formats(self, input: str):
         return ir_generator.compute_formats(self.analyze(input))

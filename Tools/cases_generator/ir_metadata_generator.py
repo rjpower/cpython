@@ -120,6 +120,13 @@ def generate_ir_metadata(
         for name in ir_only:
             out.emit(f"#define {name:<46} {ids[name]}\n")
         out.emit(f"#define {'IR_NUM_HANDLERS':<46} {n}\n\n")
+        ranges = analysis.numbers.ranges
+        if ranges:
+            out.emit("/* Numbers reserved by ir_numbers.txt for the steps that "
+                     "add handlers, inclusive; they stay holes until used */\n")
+            for step, (low, high) in ranges.items():
+                out.emit(f"/* {step}: {low} to {high - 1} */\n")
+            out.emit("\n")
         ops = binary_op_handlers(analysis)
         if ops:
             out.emit("/* The handler of BINARY_OP operation OP is "
@@ -160,9 +167,9 @@ def generate_ir_metadata(
         out.emit("};\n")
         out.emit("#endif\n\n")
 
-        out.emit(f"PyAPI_DATA(const char *const) _PyIR_OnlyNames[{len(ir_only)}];\n")
+        out.emit(f"PyAPI_DATA(const char *const) _PyIR_OnlyNames[{n - first}];\n")
         out.emit("#ifdef NEED_IR_METADATA\n")
-        out.emit(f"const char *const _PyIR_OnlyNames[{len(ir_only)}] = {{\n")
+        out.emit(f"const char *const _PyIR_OnlyNames[{n - first}] = {{\n")
         for name in ir_only:
             out.emit(f'[{name} - IR_FIRST_ONLY_HANDLER] = "{name}",\n')
         out.emit("};\n")

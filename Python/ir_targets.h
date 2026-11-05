@@ -2,7 +2,7 @@
 // from:
 //   Python/bytecodes.c
 // Do not edit!
-static py_tail_call_funcptr instruction_funcptr_handler_table[302];
+static py_tail_call_funcptr instruction_funcptr_handler_table[319];
 
 static PyObject *Py_PRESERVE_NONE_CC _TAIL_CALL_error(TAIL_CALL_PARAMS);
 static PyObject *Py_PRESERVE_NONE_CC _TAIL_CALL_exception_unwind(TAIL_CALL_PARAMS);
@@ -311,7 +311,7 @@ static PyObject *Py_PRESERVE_NONE_CC _TAIL_CALL_UNKNOWN_OPCODE(TAIL_CALL_PARAMS)
 JUMP_TO_LABEL(error);
 }
 
-static py_tail_call_funcptr instruction_funcptr_handler_table[302] = {
+static py_tail_call_funcptr instruction_funcptr_handler_table[319] = {
     [0] = _TAIL_CALL_CACHE,
     [1] = _TAIL_CALL_BINARY_SLICE,
     [2] = _TAIL_CALL_BUILD_TEMPLATE,
@@ -614,4 +614,21 @@ static py_tail_call_funcptr instruction_funcptr_handler_table[302] = {
     [299] = _TAIL_CALL_LOAD_GLOBAL_NOFB,
     [300] = _TAIL_CALL_LOAD_SUPER_ATTR_NOFB,
     [301] = _TAIL_CALL_STORE_ATTR_NOFB,
+    [302] = _TAIL_CALL_UNKNOWN_OPCODE,
+    [303] = _TAIL_CALL_UNKNOWN_OPCODE,
+    [304] = _TAIL_CALL_UNKNOWN_OPCODE,
+    [305] = _TAIL_CALL_UNKNOWN_OPCODE,
+    [306] = _TAIL_CALL_UNKNOWN_OPCODE,
+    [307] = _TAIL_CALL_UNKNOWN_OPCODE,
+    [308] = _TAIL_CALL_UNKNOWN_OPCODE,
+    [309] = _TAIL_CALL_UNKNOWN_OPCODE,
+    [310] = _TAIL_CALL_UNKNOWN_OPCODE,
+    [311] = _TAIL_CALL_UNKNOWN_OPCODE,
+    [312] = _TAIL_CALL_UNKNOWN_OPCODE,
+    [313] = _TAIL_CALL_UNKNOWN_OPCODE,
+    [314] = _TAIL_CALL_UNKNOWN_OPCODE,
+    [315] = _TAIL_CALL_UNKNOWN_OPCODE,
+    [316] = _TAIL_CALL_UNKNOWN_OPCODE,
+    [317] = _TAIL_CALL_UNKNOWN_OPCODE,
+    [318] = _TAIL_CALL_UNKNOWN_OPCODE,
 };

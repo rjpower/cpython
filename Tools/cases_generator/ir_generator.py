@@ -71,6 +71,7 @@ Invariants:
 """
 
 import argparse
+import ir_numbers
 import re
 from dataclasses import dataclass, replace
 
@@ -133,7 +134,7 @@ LABEL_END_MARKER = "/* END LABELS */"
 def first_ir_only_handler(analysis: Analysis) -> int:
     """The first handler of the IR only.  They follow the pseudo-instructions,
     so that a number names one opcode, pseudo-instruction or handler."""
-    return 1 + max((p.opcode for p in analysis.pseudos.values()), default=255)
+    return analysis.numbers.first_ir_only
 
 # The fields of the word, and the C expressions that read them in a handler
 # (Include/internal/pycore_ir.h), from ir_word, which every handler receives.
@@ -1038,14 +1039,16 @@ def nofb_bases(analysis: Analysis) -> list[str]:
 
 
 def handler_ids(analysis: Analysis) -> dict[str, int]:
-    """Handler index of each handler, by name.  BINARY_OP itself has none:
-    its operations do."""
+    """Handler index of each handler, by name, from the pinned table.
+    BINARY_OP itself has none: its operations do."""
     ids = {name: inst.opcode for name, inst in analysis.instructions.items()
            if name != BINARY_OP_FAMILY}
     names = (sorted(analysis.ir_only) + binary_op_handlers(analysis)
              + [name + NOFB_SUFFIX for name in nofb_bases(analysis)])
-    for i, name in enumerate(names):
-        ids[name] = first_ir_only_handler(analysis) + i
+    table = analysis.numbers
+    for name in names:
+        ids[name] = table.number(
+            name, table.first_ir_only, ir_numbers.IR_LIMIT, "IR-only handler")
     return ids
 
 
@@ -4273,8 +4276,8 @@ def function_proto(name: str, prefix: str = "_TAIL_CALL_") -> str:
 
 
 def num_handlers(analysis: Analysis) -> int:
-    return (first_ir_only_handler(analysis) + len(analysis.ir_only)
-            + len(binary_op_handlers(analysis)) + len(nofb_bases(analysis)))
+    "One past the highest pinned number, with the reserved ranges"
+    return analysis.numbers.num_handlers
 
 
 def generate_ir_targets(filenames: list[str], analysis: Analysis,

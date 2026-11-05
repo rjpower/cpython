@@ -90,7 +90,6 @@ SYMBOL_NAMES = (
     "PyCFunction_Call",
     "PyCFunction_GetFlags",
     "PyCFunction_GetFunction",
-    "PyCFunction_GetSelf",
     "PyCFunction_New",
     "PyCFunction_NewEx",
     "PyCFunction_Type",

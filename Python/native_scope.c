@@ -1,6 +1,7 @@
 #include "Python.h"
 
 #include "pycore_borrow.h"        // _PyBorrow_ValueVector()
+#include "pycore_methodobject.h"  // _PyCFunction_GET_SELF_VALUE()
 #include "pycore_native_scope.h"
 #include "pycore_tuple.h"
 #include "pycore_value_api.h"     // _PyValue_AsObjectAt()
@@ -108,7 +109,9 @@ begin_vector(_PyNativeScope *scope, PyThreadState *tstate,
     scope->callable = Py_NewRef(callable);
     scope->kwnames = Py_XNewRef(kwnames);
     if (cfunction) {
-        scope->receiver_object = Py_XNewRef(PyCFunction_GET_SELF(callable));
+        /* The bound self, which may be absent. _PyNativeScope_Objects()
+           boxes an inline one at the call adapter site. */
+        scope->receiver = PyValue_XDUP(_PyCFunction_GET_SELF_VALUE(callable));
         scope->defining_class = (PyTypeObject *)Py_XNewRef(
             (PyObject *)PyCFunction_GET_CLASS(callable));
     }

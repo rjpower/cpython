@@ -1,6 +1,6 @@
 #include "Python.h"
 
-#include "pycore_dict.h"          // PyDict_SetValue()
+#include "pycore_dict.h"          // PyDict_SetValue(), _PyDict_NextBorrowed()
 #include "pycore_long.h"          // _PyLong_IsCompact()
 #include "pycore_object.h"
 #include "pycore_initconfig.h"    // _Py_GetEnv()
@@ -410,3 +410,74 @@ _PyValue_HomeViolationSites(void)
     return PyDict_New();
 }
 #endif
+
+/* Call-scratch window primitives (pyjit/design/proposals/value-api-m3.md,
+   section 1.1). A window holds words with no count, so only this file
+   writes the bits of one (the dict primitive owns its words). */
+
+void
+_PyValue_WindowFromObjects(PyValue *dst, PyObject *const *src, Py_ssize_t n)
+{
+    for (Py_ssize_t i = 0; i < n; i++) {
+        dst[i].bits = PyValue_FromObjectBorrow(src[i]).bits;
+    }
+}
+
+void
+_PyValue_WindowCopy(PyValue *dst, const PyValue *src, Py_ssize_t n)
+{
+    memcpy(dst, src, n * sizeof(PyValue));
+}
+
+Py_ssize_t
+_PyValue_WindowFromDictValues(PyValue *dst, PyObject *dict, PyObject **kwnames)
+{
+    assert(PyDict_Check(dict));
+    *kwnames = NULL;
+    Py_ssize_t n = PyDict_GET_SIZE(dict);
+    PyObject *names = PyTuple_New(n);
+    if (names == NULL) {
+        return -1;
+    }
+    Py_ssize_t pos = 0;
+    PyValueBorrow key, value;
+    Py_ssize_t i = 0;
+    while (_PyDict_NextBorrowed(dict, &pos, &key, &value)) {
+        if (!PyValue_IsObject(key)
+            || !PyUnicode_Check(PyValue_AsKnownObjectBorrow(key)))
+        {
+            PyErr_SetString(PyExc_TypeError, "keywords must be strings");
+            goto error;
+        }
+        assert(i < n);
+        PyTuple_SET_VALUE(names, i, PyValue_DUP(key));
+        dst[i] = PyValue_DUP(value);
+        i++;
+    }
+    assert(i == n);
+    *kwnames = names;
+    return n;
+error:
+    while (i > 0) {
+        PyValue_CLOSE(dst[--i]);
+    }
+    Py_DECREF(names);
+    return -1;
+}
+
+Py_hash_t
+(_PyValue_IdentityHash)(PyValueBorrow v)
+{
+    void *identity;
+    if (PyValue_IsNull(v)) {
+        identity = NULL;
+    }
+    else if (PyValue_IsInline(v)) {
+        identity = (void *)v.bits;
+    }
+    else {
+        identity = (void *)_PyObject_ValueIdentity(
+            PyValue_AsKnownObjectBorrow(v));
+    }
+    return Py_HashPointer(identity);
+}

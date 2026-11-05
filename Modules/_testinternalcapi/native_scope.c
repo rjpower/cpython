@@ -5,6 +5,7 @@
 #include "pycore_tuple.h"
 #include "pycore_interpframe.h"
 #include "pycore_ir.h"
+#include "pycore_methodobject.h"  // PyCFunctionObject
 #include "pycore_modsupport.h"
 
 #include "clinic/native_scope.c.h"

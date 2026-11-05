@@ -4817,7 +4817,7 @@
                 assert(PyValue_IsNull(self_or_null));
                 PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
                 STAT_INC(CALL, hit);
-                self_or_null = PyValue_DUP(PyValue_FromObjectBorrow(((PyMethodObject *)callable_o)->im_self));
+                self_or_null = PyValue_DUP(((PyMethodObject *)callable_o)->im_self);
                 PyValue temp = callable;
                 callable = PyValue_DUP(PyValue_FromObjectBorrow(((PyMethodObject *)callable_o)->im_func));
                 IR_PUBLISH_TEMP(window[0], callable);

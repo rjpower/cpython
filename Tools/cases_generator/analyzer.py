@@ -559,7 +559,6 @@ NON_ESCAPING_FUNCTIONS = (
     "_PyShape_FindTransition",
     "PyCFunction_GET_FLAGS",
     "PyCFunction_GET_FUNCTION",
-    "PyCFunction_GET_SELF",
     "PyCell_GetRef",
     "PyCell_New",
     "PyCell_SwapTakeRef",

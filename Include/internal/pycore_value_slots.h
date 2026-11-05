@@ -50,8 +50,14 @@ typedef int (*_Py_containsvaluefunc)(PyObject *, PyValueBorrow);
 typedef PySendResult (*_Py_iternextvaluefunc)(PyObject *, PyValue *);
 typedef PySendResult (*_Py_sendvaluefunc)(PyObject *, PyValueBorrow,
                                           PyValue *);
-typedef PyValue (*_Py_vectorcallvaluefunc)(PyObject *, const PyValue *,
-                                           size_t, PyObject *);
+/* The value vectorcall (value-api-m3.md, section 1.1): args is a window of
+   words that the caller owns for the call; the callee borrows each one
+   (PyValue_Borrow(args[i])) and takes a count (PyValue_DUP) to keep one.
+   nargsf and kwnames are as PEP 590. The result is owned, or PyValue_NULL
+   with an exception set. */
+typedef PyValue (*_Py_vectorcallvaluefunc)(
+    PyThreadState *tstate, PyObject *callable,
+    const PyValue *args, size_t nargsf, PyObject *kwnames);
 /* sq_concat and sq_inplace_concat: the receiver is the sequence. */
 typedef PyValue (*_Py_concatvaluefunc)(PyObject *, PyValueBorrow);
 
@@ -108,7 +114,7 @@ typedef PyValue (*_Py_concatvaluefunc)(PyObject *, PyValueBorrow);
     X(ass_subscript, as_mapping.mp_ass_subscript, ASSSUBSCRIPT, NONE) \
     X(contains, as_sequence.sq_contains, CONTAINS, NONE) \
     X(iternext, ht_type.tp_iternext, ITERNEXT, NONE) \
-    X(call, ht_type.tp_call, VECTORCALL, NONE) \
+    X(call, ht_type.tp_call, VECTORCALL, CALL) \
     X(nb_power, as_number.nb_power, TERNARY, TERNARY) \
     X(nb_negative, as_number.nb_negative, UNARY, UNARY) \
     X(nb_positive, as_number.nb_positive, UNARY, UNARY) \
@@ -212,10 +218,23 @@ extern void _PyType_CheckValueRow(PyTypeObject *type, int row);
  * object slot has none. */
 extern Py_ssize_t _PyType_ValueSlotFromObjectOffset(Py_ssize_t offset);
 
+/* The value wrapper shape (value-api-m3.md, section 1.11; D17): self is a
+ * borrow whose owner the caller holds (a window word or the method-wrapper's
+ * self home) and is never boxed; args, nargs and kwnames are the D2 window,
+ * read under window-read; wrapped_value is the descriptor's d_wrapped_value,
+ * cast to the row's _Py_*valuefunc. The wrapper checks arity only, with
+ * check_num_args's message; wrapperdescr_value_raw_call makes the keyword
+ * check once. The result is owned, or PyValue_NULL with an exception set;
+ * a wrapper over a three-state slot turns "absent" into the exception. */
+typedef PyValue (*_Py_wrappervaluefunc)(
+    PyValueBorrow self, const PyValue *args, Py_ssize_t nargs,
+    PyObject *kwnames, void *wrapped_value);
+
 /* The value wrapper that a slot descriptor of base calls with its
  * d_wrapped_value, or NULL if base is not a slotdef or its row has none
- * (section 4.5). */
-extern wrapperfunc _PyType_ValueWrapper(const struct wrapperbase *base);
+ * (value-api-v2a0.md, section 4.5). */
+extern _Py_wrappervaluefunc _PyType_ValueWrapper(
+    const struct wrapperbase *base);
 
 #ifdef Py_DEBUG
 /* Check that every value slot of type pairs with its object slot

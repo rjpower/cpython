@@ -34,6 +34,16 @@ parsers: dict[str, Callable[[Clinic], Parser]] = {
 }
 
 
+# The first lines of a generated header in a value_emission file: its
+# functions take and return values, which only value-native units
+# (Include/pyport.h) may call.
+VALUE_EMISSION_GUARD = """
+#ifndef Py_VALUE_CORE
+#  error "value-emission Clinic output requires Py_VALUE_CORE"
+#endif
+"""
+
+
 class Clinic:
 
     presets_text = """
@@ -242,8 +252,11 @@ impl_definition block
                     block.input = 'preserve\n'
                     includes = self.codegen.get_includes()
 
+                    guard = (VALUE_EMISSION_GUARD
+                             if self.codegen.value_emission else '')
                     printer_2 = BlockPrinter(self.language)
-                    printer_2.print_block(block, header_includes=includes)
+                    printer_2.print_block(block, header_includes=includes,
+                                          header_guard=guard)
                     self.writer.write(destination.filename,
                                       printer_2.f.getvalue())
                     continue

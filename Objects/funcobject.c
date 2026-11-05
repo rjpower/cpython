@@ -1,6 +1,7 @@
 /* Function object implementation */
 
 #include "Python.h"
+#include "pycore_classobject.h"   // _PyMethod_NewValue()
 #include "pycore_code.h"          // _PyCode_VerifyStateless()
 #include "pycore_dict.h"          // _Py_INCREF_DICT()
 #include "pycore_function.h"      // _PyFunction_Vectorcall
@@ -151,6 +152,7 @@ _PyFunction_FromConstructor(PyFrameConstructor *constr)
     op->func_annotate = NULL;
     op->func_typeparams = NULL;
     op->vectorcall = _PyFunction_Vectorcall;
+    op->func_value_vectorcall = (_Py_valuefunc)_PyFunction_ValueVectorcall;
     op->func_version = FUNC_VERSION_UNSET;
     // NOTE: functions created via FrameConstructor do not use deferred
     // reference counting because they are typically not part of cycles
@@ -240,6 +242,7 @@ PyFunction_NewWithQualName(PyObject *code, PyObject *globals, PyObject *qualname
     op->func_annotate = NULL;
     op->func_typeparams = NULL;
     op->vectorcall = _PyFunction_Vectorcall;
+    op->func_value_vectorcall = (_Py_valuefunc)_PyFunction_ValueVectorcall;
     op->func_version = FUNC_VERSION_UNSET;
     if (((code_obj->co_flags & CO_NESTED) == 0) ||
         (code_obj->co_flags & CO_METHOD)) {
@@ -472,6 +475,10 @@ PyFunction_SetVectorcall(PyFunctionObject *func, vectorcallfunc vectorcall)
     _PyEval_StopTheWorld(interp);
     func_clear_version(interp, func);
     func->vectorcall = vectorcall;
+    /* The default restores the value form; any other function is reached
+       through the call adapter (value-api-m3.md, section 1.4). */
+    func->func_value_vectorcall = vectorcall == _PyFunction_Vectorcall
+        ? (_Py_valuefunc)_PyFunction_ValueVectorcall : NULL;
     _PyEval_StartTheWorld(interp);
 }
 
@@ -1286,7 +1293,7 @@ func_descr_get(PyObject *func, PyObject *obj, PyObject *type)
     if (obj == Py_None || obj == NULL) {
         return Py_NewRef(func);
     }
-    return PyMethod_New(func, obj);
+    return _PyMethod_NewValue(func, PyValue_FromObjectBorrow(obj));
 }
 
 PyTypeObject PyFunction_Type = {
@@ -1330,6 +1337,8 @@ PyTypeObject PyFunction_Type = {
     0,                                          /* tp_init */
     0,                                          /* tp_alloc */
     func_new,                                   /* tp_new */
+    .tp_value_vectorcall_offset = offsetof(PyFunctionObject,
+                                           func_value_vectorcall),
 };
 
 
@@ -1563,7 +1572,7 @@ cm_descr_get(PyObject *self, PyObject *obj, PyObject *type)
     classmethod *cm = (classmethod *)self;
     if (type == NULL)
         type = (PyObject *)(Py_TYPE(obj));
-    return PyMethod_New(cm->cm_callable, type);
+    return _PyMethod_NewValue(cm->cm_callable, PyValue_FromObjectBorrow(type));
 }
 
 static int

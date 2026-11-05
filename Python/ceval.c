@@ -1226,11 +1226,9 @@ _Py_BuiltinCallFast_Value(
     }
     PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
     PyCFunction cfunc = PyCFunction_GET_FUNCTION(callable_o);
-    res = _PyCFunctionFast_CAST(cfunc)(
-        PyCFunction_GET_SELF(callable_o),
-        args_o,
-        total_args
-    );
+    PyObject *self_o = _PyCFunction_SelfObject(callable_o);
+    res = self_o == NULL && PyErr_Occurred() ? NULL :
+        _PyCFunctionFast_CAST(cfunc)(self_o, args_o, total_args);
     VALUES_TO_PYOBJECTS_CLEANUP(args_o, res);
     assert((res != NULL) ^ (PyErr_Occurred() != NULL));
     return res;
@@ -1252,7 +1250,9 @@ _Py_BuiltinCallFastWithKeywords_Value(
     PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
     PyCFunctionFastWithKeywords cfunc =
         _PyCFunctionFastWithKeywords_CAST(PyCFunction_GET_FUNCTION(callable_o));
-    res = cfunc(PyCFunction_GET_SELF(callable_o), args_o, total_args, NULL);
+    PyObject *self_o = _PyCFunction_SelfObject(callable_o);
+    res = self_o == NULL && PyErr_Occurred() ? NULL :
+        cfunc(self_o, args_o, total_args, NULL);
     VALUES_TO_PYOBJECTS_CLEANUP(args_o, res);
     assert((res != NULL) ^ (PyErr_Occurred() != NULL));
     return res;
@@ -1803,9 +1803,8 @@ call_transaction_expand_method(PyThreadState *tstate, _PyInterpreterFrame *frame
         return 0;
     }
     PyMethodObject *method = (PyMethodObject *)PyValue_AsKnownObjectBorrow(homes[0]);
-    PyValue self = PyValue_DUP(PyValue_FromObjectBorrow(method->im_self));
+    PyValue self = PyValue_DUP(method->im_self);
     PyValue function = PyValue_DUP(PyValue_FromObjectBorrow(method->im_func));
-    // a move: replaced below
     PyValue obsolete = homes[0];
     /* Publish both final input homes before the obsolete wrapper can run
      * a destructor. No pointer into the old window crosses that release. */

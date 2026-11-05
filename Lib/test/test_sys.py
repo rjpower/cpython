@@ -1726,7 +1726,7 @@ class SizeofTest(unittest.TestCase):
         # buffer
         # XXX
         # builtin_function_or_method
-        check(len, size('5P'))
+        check(len, size('6P'))
         # bytearray
         samples = [b'', b'u'*100000]
         for sample in samples:
@@ -1757,7 +1757,7 @@ class SizeofTest(unittest.TestCase):
         # complex
         check(complex(0,1), size('2d'))
         # method_descriptor (descriptor object)
-        check(str.lower, size('3PPP'))
+        check(str.lower, size('3PPPP'))
         # classmethod_descriptor (descriptor object)
         # XXX
         # member_descriptor (descriptor object)
@@ -1830,7 +1830,7 @@ class SizeofTest(unittest.TestCase):
         check(x, size('3PiccPPPP' + INTERPRETER_FRAME + 'P'))
         # function
         def func(): pass
-        check(func, size('16Pi'))
+        check(func, size('17Pi'))
         class c():
             @staticmethod
             def foo():

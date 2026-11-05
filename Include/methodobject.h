@@ -62,7 +62,6 @@ typedef PyCFunctionFastWithKeywords _PyCFunctionFastWithKeywords;
     _Py_FUNC_CAST(PyCFunctionFastWithKeywords, func)
 
 PyAPI_FUNC(PyCFunction) PyCFunction_GetFunction(PyObject *);
-PyAPI_FUNC(PyObject *) PyCFunction_GetSelf(PyObject *);
 PyAPI_FUNC(int) PyCFunction_GetFlags(PyObject *);
 
 struct PyMethodDef {
@@ -132,6 +131,9 @@ PyAPI_FUNC(PyObject *) PyCMethod_New(PyMethodDef *, PyObject *,
 #if !defined(Py_LIMITED_API) || Py_LIMITED_API+0 >= 0x03090000
 #define METH_METHOD 0x0200
 #endif
+
+/* 0x0400 is reserved for the core's METH_VALUE call convention
+   (Include/internal/pycore_value_call.h). */
 
 
 #ifndef Py_LIMITED_API

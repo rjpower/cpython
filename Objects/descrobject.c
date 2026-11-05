@@ -6,7 +6,6 @@
 #define Py_VALUE_DEFER_MARKS 1
 
 #include "Python.h"
-#include "pycore_abstract.h"      // _PyObject_RealIsSubclass()
 #include "pycore_borrow.h"        // _PyBorrowScope_Enter()
 #include "pycore_call.h"          // _PyStack_AsDict()
 #include "pycore_ceval.h"         // _Py_EnterRecursiveCallTstate()
@@ -17,8 +16,9 @@
 #include "pycore_object.h"        // _PyObject_GC_UNTRACK()
 #include "pycore_object_deferred.h" // _PyObject_SetDeferredRefcount()
 #include "pycore_pystate.h"       // _PyThreadState_GET()
-#include "pycore_tuple.h"         // _PyTuple_ITEMS()
+#include "pycore_tuple.h"         // _PyTuple_ITEMS(), _PyTuple_FromValueArray()
 #include "pycore_value.h"         // _PyObject_IsSame()
+#include "pycore_value_call.h"    // _PyValue_VectorcallTstate()
 #include "pycore_value_slots.h"   // _PyType_ValueWrapper()
 
 
@@ -102,6 +102,23 @@ descr_check(PyDescrObject *descr, PyObject *obj)
     return 0;
 }
 
+/* descr_check() for a value receiver: no box for an inline one. */
+static int
+descr_check_value(PyDescrObject *descr, PyValueBorrow obj)
+{
+    PyTypeObject *tp = PyValue_TYPE(obj);
+    if (!PyType_IsSubtype(tp, descr->d_type)) {
+        PyErr_Format(PyExc_TypeError,
+                     "descriptor '%V' for '%.100s' objects "
+                     "doesn't apply to a '%.100s' object",
+                     descr_name((PyDescrObject *)descr), "?",
+                     descr->d_type->tp_name,
+                     tp->tp_name);
+        return -1;
+    }
+    return 0;
+}
+
 static PyObject *
 classmethod_get(PyObject *self, PyObject *obj, PyObject *type)
 {
@@ -142,7 +159,8 @@ classmethod_get(PyObject *self, PyObject *obj, PyObject *type)
     if (descr->d_method->ml_flags & METH_METHOD) {
         cls = descr->d_common.d_type;
     }
-    return PyCMethod_New(descr->d_method, type, NULL, cls);
+    return _PyCFunction_NewValue(descr->d_method,
+                                 PyValue_FromObjectBorrow(type), NULL, cls);
 }
 
 static PyObject *
@@ -157,7 +175,9 @@ method_get(PyObject *self, PyObject *obj, PyObject *type)
     }
     if (descr->d_method->ml_flags & METH_METHOD) {
         if (type == NULL || PyType_Check(type)) {
-            return PyCMethod_New(descr->d_method, obj, NULL, descr->d_common.d_type);
+            return _PyCFunction_NewValue(descr->d_method,
+                                         PyValue_FromObjectBorrow(obj), NULL,
+                                         descr->d_common.d_type);
         } else {
             PyErr_Format(PyExc_TypeError,
                         "descriptor '%V' needs a type, not '%s', as arg 2",
@@ -166,7 +186,8 @@ method_get(PyObject *self, PyObject *obj, PyObject *type)
             return NULL;
         }
     } else {
-        return PyCFunction_NewEx(descr->d_method, obj, NULL);
+        return _PyCFunction_NewValue(descr->d_method,
+                                     PyValue_FromObjectBorrow(obj), NULL, NULL);
     }
 }
 
@@ -221,7 +242,7 @@ wrapperdescr_get(PyObject *self, PyObject *obj, PyObject *type)
     if (descr_check((PyDescrObject *)descr, obj) < 0) {
         return NULL;
     }
-    return PyWrapper_New((PyObject *)descr, obj);
+    return _PyWrapper_NewValue((PyObject *)descr, PyValue_FromObjectBorrow(obj));
 }
 
 static int
@@ -503,6 +524,61 @@ method_vectorcall_O(
     return result;
 }
 
+static inline int
+method_check_value_args(PyObject *func, const PyValue *args, Py_ssize_t nargs)
+{
+    if (nargs < 1) {
+        PyObject *funcstr = _PyObject_FunctionStr(func);
+        if (funcstr != NULL) {
+            PyErr_Format(PyExc_TypeError,
+                         "unbound method %U needs an argument", funcstr);
+            Py_DECREF(funcstr);
+        }
+        return -1;
+    }
+    return descr_check_value((PyDescrObject *)func, PyValue_Borrow(args[0]));
+}
+
+/* METH_VALUE: the callee checks its own arity and keywords. */
+static PyValue
+method_value_vectorcall_descr(PyThreadState *tstate, PyObject *func,
+                              const PyValue *args, size_t nargsf,
+                              PyObject *kwnames)
+{
+    Py_ssize_t nargs = PyVectorcall_NARGS(nargsf);
+    if (method_check_value_args(func, args, nargs) < 0) {
+        return PyValue_NULL;
+    }
+    _PyCFunctionValue meth = (_PyCFunctionValue)method_enter_call(tstate, func);
+    if (meth == NULL) {
+        return PyValue_NULL;
+    }
+    PyValue result = meth(PyValue_Borrow(args[0]), args + 1, nargs - 1,
+                          kwnames);
+    _Py_LeaveRecursiveCallTstate(tstate);
+    return result;
+}
+
+static PyValue
+method_value_vectorcall_descr_METHOD(PyThreadState *tstate, PyObject *func,
+                                     const PyValue *args, size_t nargsf,
+                                     PyObject *kwnames)
+{
+    Py_ssize_t nargs = PyVectorcall_NARGS(nargsf);
+    if (method_check_value_args(func, args, nargs) < 0) {
+        return PyValue_NULL;
+    }
+    _PyCMethodValue meth = (_PyCMethodValue)method_enter_call(tstate, func);
+    if (meth == NULL) {
+        return PyValue_NULL;
+    }
+    PyValue result = meth(PyValue_Borrow(args[0]),
+                          ((PyMethodDescrObject *)func)->d_common.d_type,
+                          args + 1, nargs - 1, kwnames);
+    _Py_LeaveRecursiveCallTstate(tstate);
+    return result;
+}
+
 
 /* Instances of classmethod_descriptor are unlikely to be called directly.
    For one, the analogous class "classmethod" (for Python classes) is not
@@ -512,120 +588,132 @@ method_vectorcall_O(
    This is just an excuse to say that this doesn't need to be optimized:
    we implement this simply by calling __get__ and then calling the result.
 */
-static PyObject *
-classmethoddescr_call(PyObject *_descr, PyObject *args,
-                      PyObject *kwds)
+static PyValue
+classmethoddescr_value_call(PyThreadState *tstate, PyObject *callable,
+                            const PyValue *args, size_t nargsf,
+                            PyObject *kwnames)
 {
-    PyMethodDescrObject *descr = (PyMethodDescrObject *)_descr;
-    Py_ssize_t argc = PyTuple_GET_SIZE(args);
+    PyMethodDescrObject *descr = (PyMethodDescrObject *)callable;
+    Py_ssize_t argc = PyVectorcall_NARGS(nargsf);
     if (argc < 1) {
         PyErr_Format(PyExc_TypeError,
                      "descriptor '%V' of '%.100s' "
                      "object needs an argument",
                      descr_name((PyDescrObject *)descr), "?",
                      PyDescr_TYPE(descr)->tp_name);
-        return NULL;
+        return PyValue_NULL;
     }
-    PyThreadState *tstate = _PyThreadState_GET();
-    _PyBorrowMark mark = _PyBorrowScope_Enter(tstate);
-    PyObject *res = NULL;
-    PyObject *const *items = _PyBorrow_TupleItems(args, argc);
-    if (items == NULL) {
-        goto done;
+    PyValueBorrow first = PyValue_Borrow(args[0]);
+    if (PyValue_IsInline(first)) {
+        /* Not a type: the error classmethod_get gives, without a box. */
+        PyErr_Format(PyExc_TypeError,
+                     "descriptor '%V' for type '%.100s' "
+                     "needs a type, not a '%.100s' as arg 2",
+                     descr_name((PyDescrObject *)descr), "?",
+                     PyDescr_TYPE(descr)->tp_name,
+                     PyValue_TYPE(first)->tp_name);
+        return PyValue_NULL;
     }
-    PyObject *bound = classmethod_get((PyObject *)descr, NULL, items[0]);
+    PyObject *bound = classmethod_get((PyObject *)descr, NULL,
+                                      PyValue_AsKnownObjectBorrow(first));
     if (bound == NULL) {
-        goto done;
+        return PyValue_NULL;
     }
-    res = PyObject_VectorcallDict(bound, items + 1, argc - 1, kwds);
+    PyValue res = _PyValue_VectorcallTstate(
+        tstate, PyValue_FromObjectBorrow(bound), args + 1, argc - 1, kwnames);
     Py_DECREF(bound);
-done:
-    _PyBorrowScope_Exit(tstate, mark);
     return res;
 }
 
-Py_LOCAL_INLINE(PyObject *)
-wrapperdescr_raw_call(PyWrapperDescrObject *descr, PyObject *self,
-                      PyObject *args, PyObject *kwds)
+/* Calls the slot wrapper of descr on self (section 1.11). */
+static PyValue
+wrapperdescr_value_raw_call(PyWrapperDescrObject *descr, PyValueBorrow self,
+                            const PyValue *args, Py_ssize_t nargs,
+                            PyObject *kwnames)
 {
-    wrapperfunc wrapper = descr->d_base->wrapper;
     PyThreadState *tstate = _PyThreadState_GET();
-    PyObject *result;
+    int has_kw = kwnames != NULL && PyTuple_GET_SIZE(kwnames) != 0;
+    int keywords = (descr->d_base->flags & PyWrapperFlag_KEYWORDS) != 0;
 
-    if (descr->d_base->flags & PyWrapperFlag_KEYWORDS) {
-        wrapperfunc_kwds wk = _Py_FUNC_CAST(wrapperfunc_kwds, wrapper);
-        _PyBorrowMark mark = _PyBorrowScope_Enter(tstate);
-        result = (*wk)(self, args, descr->d_wrapped, kwds);
-        _PyBorrowScope_Exit(tstate, mark);
-        return result;
-    }
-
-    if (kwds != NULL && (!PyDict_Check(kwds) || PyDict_GET_SIZE(kwds) != 0)) {
+    if (!keywords && has_kw) {
         PyErr_Format(PyExc_TypeError,
                      "wrapper %s() takes no keyword arguments",
                      descr->d_base->name);
-        return NULL;
+        return PyValue_NULL;
     }
-    void *wrapped = descr->d_wrapped;
     if (descr->d_wrapped_value != NULL) {
-        /* A slot wrapper with a value side calls it through the value
-           wrapper of its slotdef (value-api-v2a0.md, section 4.5). */
-        wrapperfunc value_wrapper = _PyType_ValueWrapper(descr->d_base);
-        if (value_wrapper != NULL) {
-            wrapper = value_wrapper;
-            wrapped = descr->d_wrapped_value;
+        _Py_wrappervaluefunc vw = _PyType_ValueWrapper(descr->d_base);
+        if (vw != NULL) {
+            return vw(self, args, nargs, kwnames, descr->d_wrapped_value);
         }
     }
+
     _PyBorrowMark mark = _PyBorrowScope_Enter(tstate);
-    result = (*wrapper)(self, args, wrapped);
+    PyObject *res = NULL;
+    PyObject *obj = _PyValue_AdapterBox(self, BOX_SITE_CALL);
+    if (obj == NULL) {
+        goto exit_scope;
+    }
+    PyObject *argstuple = _PyTuple_FromValueArray(args, nargs);
+    if (argstuple == NULL) {
+        goto release;
+    }
+    if (keywords) {
+        PyObject *kwdict = NULL;
+        if (has_kw) {
+            kwdict = _PyValue_StackAsDict(args + nargs, kwnames);
+            if (kwdict == NULL) {
+                Py_DECREF(argstuple);
+                goto release;
+            }
+        }
+        wrapperfunc_kwds wk = _Py_FUNC_CAST(wrapperfunc_kwds,
+                                            descr->d_base->wrapper);
+        res = (*wk)(obj, argstuple, descr->d_wrapped, kwdict);
+        Py_XDECREF(kwdict);
+    }
+    else {
+        res = (*descr->d_base->wrapper)(obj, argstuple, descr->d_wrapped);
+    }
+    Py_DECREF(argstuple);
+release:
+    _PyValue_AdapterRelease(self, obj);
+exit_scope:
     _PyBorrowScope_Exit(tstate, mark);
-    return result;
+    res = _Py_CheckFunctionResult(tstate, (PyObject *)descr, res, NULL);
+    return _PyValue_FromObjectResult(res);
 }
 
-static PyObject *
-wrapperdescr_call(PyObject *_descr, PyObject *args, PyObject *kwds)
+static PyValue
+wrapperdescr_value_call(PyThreadState *tstate, PyObject *callable,
+                        const PyValue *args, size_t nargsf, PyObject *kwnames)
 {
-    PyWrapperDescrObject *descr = (PyWrapperDescrObject *)_descr;
-    Py_ssize_t argc;
-    PyObject *self, *result;
+    PyWrapperDescrObject *descr = (PyWrapperDescrObject *)callable;
+    Py_ssize_t nargs = PyVectorcall_NARGS(nargsf);
 
     /* Make sure that the first argument is acceptable as 'self' */
-    assert(PyTuple_Check(args));
-    argc = PyTuple_GET_SIZE(args);
-    if (argc < 1) {
+    if (nargs < 1) {
         PyErr_Format(PyExc_TypeError,
                      "descriptor '%V' of '%.100s' "
                      "object needs an argument",
                      descr_name((PyDescrObject *)descr), "?",
                      PyDescr_TYPE(descr)->tp_name);
-        return NULL;
+        return PyValue_NULL;
     }
-    self = PyTuple_GetItemRef(args, 0);
-    if (self == NULL) {
-        return NULL;
-    }
-    if (!_PyObject_RealIsSubclass((PyObject *)Py_TYPE(self),
-                                  (PyObject *)PyDescr_TYPE(descr))) {
+    PyValueBorrow self = PyValue_Borrow(args[0]);
+    PyTypeObject *tp = PyValue_TYPE(self);
+    if (!PyType_IsSubtype(tp, PyDescr_TYPE(descr))) {
         PyErr_Format(PyExc_TypeError,
                      "descriptor '%V' "
                      "requires a '%.100s' object "
                      "but received a '%.100s'",
                      descr_name((PyDescrObject *)descr), "?",
                      PyDescr_TYPE(descr)->tp_name,
-                     Py_TYPE(self)->tp_name);
-        Py_DECREF(self);
-        return NULL;
+                     tp->tp_name);
+        return PyValue_NULL;
     }
-
-    args = PyTuple_GetSlice(args, 1, argc);
-    if (args == NULL) {
-        Py_DECREF(self);
-        return NULL;
-    }
-    result = wrapperdescr_raw_call(descr, self, args, kwds);
-    Py_DECREF(args);
-    Py_DECREF(self);
-    return result;
+    return wrapperdescr_value_raw_call(descr, self, args + 1, nargs - 1,
+                                       kwnames);
 }
 
 
@@ -817,6 +905,8 @@ PyTypeObject PyMethodDescr_Type = {
     0,                                          /* tp_dict */
     method_get,                                 /* tp_descr_get */
     0,                                          /* tp_descr_set */
+    .tp_value_vectorcall_offset = offsetof(PyMethodDescrObject,
+                                           d_value_vectorcall),
 };
 
 /* This is for METH_CLASS in C, not for "f = classmethod(f)" in Python! */
@@ -835,7 +925,7 @@ PyTypeObject PyClassMethodDescr_Type = {
     0,                                          /* tp_as_sequence */
     0,                                          /* tp_as_mapping */
     0,                                          /* tp_hash */
-    classmethoddescr_call,                      /* tp_call */
+    _PyValue_TpCallThunk,                       /* tp_call */
     0,                                          /* tp_str */
     PyObject_GenericGetAttr,                    /* tp_getattro */
     0,                                          /* tp_setattro */
@@ -855,6 +945,7 @@ PyTypeObject PyClassMethodDescr_Type = {
     0,                                          /* tp_dict */
     classmethod_get,                            /* tp_descr_get */
     0,                                          /* tp_descr_set */
+    .tp_value.call = _Py_VALUE_SLOT_INIT(call, classmethoddescr_value_call),
 };
 
 PyTypeObject PyMemberDescr_Type = {
@@ -946,7 +1037,7 @@ PyTypeObject PyWrapperDescr_Type = {
     0,                                          /* tp_as_sequence */
     0,                                          /* tp_as_mapping */
     0,                                          /* tp_hash */
-    wrapperdescr_call,                          /* tp_call */
+    _PyValue_TpCallThunk,                       /* tp_call */
     0,                                          /* tp_str */
     PyObject_GenericGetAttr,                    /* tp_getattro */
     0,                                          /* tp_setattro */
@@ -967,6 +1058,7 @@ PyTypeObject PyWrapperDescr_Type = {
     0,                                          /* tp_dict */
     wrapperdescr_get,                           /* tp_descr_get */
     0,                                          /* tp_descr_set */
+    .tp_value.call = _Py_VALUE_SLOT_INIT(call, wrapperdescr_value_call),
 };
 
 static PyDescrObject *
@@ -994,6 +1086,7 @@ PyDescr_NewMethod(PyTypeObject *type, PyMethodDef *method)
 {
     /* Figure out correct vectorcall function to use */
     vectorcallfunc vectorcall;
+    _Py_vectorcallvaluefunc value_vectorcall = NULL;
     switch (method->ml_flags & _Py_METH_CALL_FLAGS)
     {
         case METH_VARARGS:
@@ -1017,6 +1110,14 @@ PyDescr_NewMethod(PyTypeObject *type, PyMethodDef *method)
         case METH_METHOD | METH_FASTCALL | METH_KEYWORDS:
             vectorcall = method_vectorcall_FASTCALL_KEYWORDS_METHOD;
             break;
+        case METH_VALUE:
+            value_vectorcall = method_value_vectorcall_descr;
+            vectorcall = _PyValue_VectorcallThunk;
+            break;
+        case METH_VALUE | METH_METHOD:
+            value_vectorcall = method_value_vectorcall_descr_METHOD;
+            vectorcall = _PyValue_VectorcallThunk;
+            break;
         default:
             PyErr_Format(PyExc_SystemError,
                          "%s() method: bad call flags", method->ml_name);
@@ -1030,6 +1131,7 @@ PyDescr_NewMethod(PyTypeObject *type, PyMethodDef *method)
     if (descr != NULL) {
         descr->d_method = method;
         descr->vectorcall = vectorcall;
+        descr->d_value_vectorcall = (_Py_valuefunc)value_vectorcall;
     }
     return (PyObject *)descr;
 }
@@ -1388,7 +1490,7 @@ mappingproxy_new_impl(PyTypeObject *type, PyObject *mapping)
 typedef struct {
     PyObject_HEAD
     PyWrapperDescrObject *descr;
-    PyObject *self;
+    PyValue self;
 } wrapperobject;
 
 #define Wrapper_Check(v) Py_IS_TYPE(v, &_PyMethodWrapper_Type)
@@ -1399,7 +1501,7 @@ wrapper_dealloc(PyObject *self)
     wrapperobject *wp = (wrapperobject *)self;
     PyObject_GC_UnTrack(wp);
     Py_XDECREF(wp->descr);
-    Py_XDECREF(wp->self);
+    PyValue_CLEAR(wp->self);
     PyObject_GC_Del(wp);
 }
 
@@ -1420,7 +1522,7 @@ wrapper_richcompare(PyObject *a, PyObject *b, int op)
 
     wa = (wrapperobject *)a;
     wb = (wrapperobject *)b;
-    eq = (wa->descr == wb->descr && _PyObject_IsSame(wa->self, wb->self));
+    eq = (wa->descr == wb->descr && PyValue_Is(wa->self, wb->self));
     if (eq == (op == Py_EQ)) {
         Py_RETURN_TRUE;
     }
@@ -1434,7 +1536,7 @@ wrapper_hash(PyObject *self)
 {
     wrapperobject *wp = (wrapperobject *)self;
     Py_hash_t x, y;
-    x = PyObject_GenericHash(wp->self);
+    x = _PyValue_IdentityHash(wp->self);
     y = Py_HashPointer(wp->descr);
     x = x ^ y;
     if (x == -1)
@@ -1446,18 +1548,31 @@ static PyObject *
 wrapper_repr(PyObject *self)
 {
     wrapperobject *wp = (wrapperobject *)self;
-    return PyUnicode_FromFormat("<method-wrapper '%s' of %s object at %p>",
-                               wp->descr->d_base->name,
-                               Py_TYPE(wp->self)->tp_name,
-                               wp->self);
+    PyObject *obj = PyValue_AsObject(wp->self);
+    if (obj == NULL) {
+        return NULL;
+    }
+    PyObject *res = PyUnicode_FromFormat(
+        "<method-wrapper '%s' of %s object at %p>",
+        wp->descr->d_base->name,
+        PyValue_TYPE(wp->self)->tp_name,
+        obj);
+    Py_DECREF(obj);
+    return res;
 }
 
 static PyObject *
 wrapper_reduce(PyObject *self, PyObject *Py_UNUSED(ignored))
 {
     wrapperobject *wp = (wrapperobject *)self;
-    return Py_BuildValue("N(OO)", _PyEval_GetBuiltin(&_Py_ID(getattr)),
-                         wp->self, PyDescr_NAME(wp->descr));
+    PyObject *obj = PyValue_AsObject(wp->self);
+    if (obj == NULL) {
+        return NULL;
+    }
+    PyObject *res = Py_BuildValue("N(OO)", _PyEval_GetBuiltin(&_Py_ID(getattr)),
+                                  obj, PyDescr_NAME(wp->descr));
+    Py_DECREF(obj);
+    return res;
 }
 
 static PyMethodDef wrapper_methods[] = {
@@ -1466,7 +1581,7 @@ static PyMethodDef wrapper_methods[] = {
 };
 
 static PyMemberDef wrapper_members[] = {
-    {"__self__", _Py_T_OBJECT, offsetof(wrapperobject, self), Py_READONLY},
+    {"__self__", _Py_T_VALUE, offsetof(wrapperobject, self), Py_READONLY},
     {0}
 };
 
@@ -1517,11 +1632,13 @@ static PyGetSetDef wrapper_getsets[] = {
     {0}
 };
 
-static PyObject *
-wrapper_call(PyObject *self, PyObject *args, PyObject *kwds)
+static PyValue
+wrapper_value_call(PyThreadState *tstate, PyObject *callable,
+                   const PyValue *args, size_t nargsf, PyObject *kwnames)
 {
-    wrapperobject *wp = (wrapperobject *)self;
-    return wrapperdescr_raw_call(wp->descr, wp->self, args, kwds);
+    wrapperobject *wp = (wrapperobject *)callable;
+    return wrapperdescr_value_raw_call(wp->descr, PyValue_Borrow(wp->self), args,
+                                       PyVectorcall_NARGS(nargsf), kwnames);
 }
 
 static int
@@ -1529,7 +1646,7 @@ wrapper_traverse(PyObject *self, visitproc visit, void *arg)
 {
     wrapperobject *wp = (wrapperobject *)self;
     Py_VISIT(wp->descr);
-    Py_VISIT(wp->self);
+    _Py_VISIT_VALUE(wp->self);
     return 0;
 }
 
@@ -1549,7 +1666,7 @@ PyTypeObject _PyMethodWrapper_Type = {
     0,                                          /* tp_as_sequence */
     0,                                          /* tp_as_mapping */
     wrapper_hash,                               /* tp_hash */
-    wrapper_call,                               /* tp_call */
+    _PyValue_TpCallThunk,                       /* tp_call */
     0,                                          /* tp_str */
     PyObject_GenericGetAttr,                    /* tp_getattro */
     0,                                          /* tp_setattro */
@@ -1569,23 +1686,29 @@ PyTypeObject _PyMethodWrapper_Type = {
     0,                                          /* tp_dict */
     0,                                          /* tp_descr_get */
     0,                                          /* tp_descr_set */
+    .tp_value.call = _Py_VALUE_SLOT_INIT(call, wrapper_value_call),
 };
 
 PyObject *
 PyWrapper_New(PyObject *d, PyObject *self)
+{
+    return _PyWrapper_NewValue(d, PyValue_FromObjectBorrow(self));
+}
+
+PyObject *
+(_PyWrapper_NewValue)(PyObject *d, PyValueBorrow self)
 {
     wrapperobject *wp;
     PyWrapperDescrObject *descr;
 
     assert(PyObject_TypeCheck(d, &PyWrapperDescr_Type));
     descr = (PyWrapperDescrObject *)d;
-    assert(_PyObject_RealIsSubclass((PyObject *)Py_TYPE(self),
-                                    (PyObject *)PyDescr_TYPE(descr)));
+    assert(PyType_IsSubtype(PyValue_TYPE(self), PyDescr_TYPE(descr)));
 
     wp = PyObject_GC_New(wrapperobject, &_PyMethodWrapper_Type);
     if (wp != NULL) {
         wp->descr = (PyWrapperDescrObject*)Py_NewRef(descr);
-        wp->self = Py_NewRef(self);
+        wp->self = PyValue_DUP(self);
         _PyObject_GC_TRACK(wp);
     }
     return (PyObject *)wp;

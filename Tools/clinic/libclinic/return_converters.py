@@ -109,10 +109,13 @@ class bool_return_converter(CReturnConverter):
     def render(self, function: Function, data: CRenderData) -> None:
         self.declare(data)
         self.err_occurred_if(f"{data.converter_retval} == -1", data)
+        if data.value_emission:
+            conversion = (f'{data.converter_retval} ? PyValue_True : '
+                          f'PyValue_False')
+        else:
+            conversion = f'PyBool_FromLong((long){data.converter_retval})'
         data.return_conversion.append(
-            f'{data.parser_retval} = '
-            f'PyBool_FromLong((long){data.converter_retval});\n'
-        )
+            f'{data.parser_retval} = {conversion};\n')
 
 
 class long_return_converter(CReturnConverter):
@@ -120,14 +123,27 @@ class long_return_converter(CReturnConverter):
     conversion_fn = 'PyLong_FromLong'
     cast = ''
     unsigned_cast = ''
+    # Value emission: whether the C type can exceed int64_t.
+    unsigned = False
 
     def render(self, function: Function, data: CRenderData) -> None:
         self.declare(data)
         self.err_occurred_if(f"{data.converter_retval} == {self.unsigned_cast}-1", data)
-        data.return_conversion.append(
-            f'{data.parser_retval} = '
-            f'{self.conversion_fn}({self.cast}{data.converter_retval});\n'
-        )
+        retval = data.converter_retval
+        if not data.value_emission:
+            conversion = f'{self.conversion_fn}({self.cast}{retval})'
+        elif not self.unsigned:
+            # PyValue_FromInt64() is inline when the int fits in 51 bits and a
+            # new int object otherwise.
+            conversion = f'PyValue_FromInt64((int64_t){retval})'
+        else:
+            # Only an int beyond int64_t is an object.
+            conversion = (
+                f'(uint64_t){retval} <= INT64_MAX\n'
+                f'    ? PyValue_FromInt64((int64_t){retval})\n'
+                f'    : _PyValue_FromObjectResult('
+                f'PyLong_FromUnsignedLongLong((unsigned long long){retval}))')
+        data.return_conversion.append(f'{data.parser_retval} = {conversion};\n')
 
 
 class int_return_converter(long_return_converter):
@@ -136,6 +152,7 @@ class int_return_converter(long_return_converter):
 
 
 class unsigned_long_return_converter(long_return_converter):
+    unsigned = True
     type = 'unsigned long'
     conversion_fn = 'PyLong_FromUnsignedLong'
     unsigned_cast = '(unsigned long)'
@@ -159,6 +176,7 @@ class Py_hash_t_return_converter(long_return_converter):
 
 
 class size_t_return_converter(long_return_converter):
+    unsigned = True
     type = 'size_t'
     conversion_fn = 'PyLong_FromSize_t'
     unsigned_cast = '(size_t)'
@@ -171,9 +189,10 @@ class double_return_converter(CReturnConverter):
     def render(self, function: Function, data: CRenderData) -> None:
         self.declare(data)
         self.err_occurred_if(f"{data.converter_retval} == -1.0", data)
+        fn = 'PyValue_FromDouble' if data.value_emission else 'PyFloat_FromDouble'
         data.return_conversion.append(
             f'{data.parser_retval} = '
-            f'PyFloat_FromDouble({self.cast}{data.converter_retval});\n'
+            f'{fn}({self.cast}{data.converter_retval});\n'
         )
 
 

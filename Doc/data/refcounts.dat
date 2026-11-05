@@ -1421,16 +1421,13 @@ PyMethod_Function:PyObject*:im:0:
 PyMethod_GET_FUNCTION:PyObject*::0:
 PyMethod_GET_FUNCTION:PyObject*:im:0:
 
-PyMethod_GET_SELF:PyObject*::0:
-PyMethod_GET_SELF:PyObject*:im:0:
-
 PyMethod_New:PyObject*::+1:
 PyMethod_New:PyObject*:func:0:
 PyMethod_New:PyObject*:self:0:
 PyMethod_New:PyObject*:class:0:
 
-PyMethod_Self:PyObject*::0:
-PyMethod_Self:PyObject*:im:0:
+PyMethod_GetSelfRef:PyObject*::+1:
+PyMethod_GetSelfRef:PyObject*:im:0:
 
 PyModule_AddFunctions:int:::
 PyModule_AddFunctions:PyObject*:module:0:

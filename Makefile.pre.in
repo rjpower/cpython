@@ -978,11 +978,12 @@ coverage-report: regen-token regen-frozen
 # Run "Argument Clinic" over all source files
 .PHONY: clinic
 clinic: check-clean-src
-	$(PYTHON_FOR_REGEN) $(srcdir)/Tools/clinic/clinic.py --force --make --exclude Lib/test/clinic.test.c --srcdir $(srcdir)
+	$(PYTHON_FOR_REGEN) $(srcdir)/Tools/clinic/clinic.py --force --make --exclude Lib/test/clinic.test.c --exclude Lib/test/clinic_value.test.c --srcdir $(srcdir)
 
 .PHONY: clinic-tests
-clinic-tests: check-clean-src $(srcdir)/Lib/test/clinic.test.c
+clinic-tests: check-clean-src $(srcdir)/Lib/test/clinic.test.c $(srcdir)/Lib/test/clinic_value.test.c
 	$(PYTHON_FOR_REGEN) $(srcdir)/Tools/clinic/clinic.py -f $(srcdir)/Lib/test/clinic.test.c
+	$(PYTHON_FOR_REGEN) $(srcdir)/Tools/clinic/clinic.py -f $(srcdir)/Lib/test/clinic_value.test.c
 
 # Check the value API rules of the value-native units (Py_VALUE_CORE):
 # Tools/build/check_value_api.py runs clang-query over the units in
@@ -1364,6 +1365,7 @@ PYTHON_HEADERS= \
 		$(srcdir)/Include/internal/pycore_cell.h \
 		$(srcdir)/Include/internal/pycore_ceval.h \
 		$(srcdir)/Include/internal/pycore_ceval_state.h \
+		$(srcdir)/Include/internal/pycore_classobject.h \
 		$(srcdir)/Include/internal/pycore_code.h \
 		$(srcdir)/Include/internal/pycore_codecs.h \
 		$(srcdir)/Include/internal/pycore_compile.h \
@@ -1421,6 +1423,7 @@ PYTHON_HEADERS= \
 		$(srcdir)/Include/internal/pycore_lock.h \
 		$(srcdir)/Include/internal/pycore_long.h \
 		$(srcdir)/Include/internal/pycore_memoryobject.h \
+		$(srcdir)/Include/internal/pycore_methodobject.h \
 		$(srcdir)/Include/internal/pycore_mimalloc.h \
 		$(srcdir)/Include/internal/pycore_mmap.h \
 		$(srcdir)/Include/internal/pycore_modsupport.h \
@@ -1469,6 +1472,7 @@ PYTHON_HEADERS= \
 		$(srcdir)/Include/internal/pycore_strhex.h \
 		$(srcdir)/Include/internal/pycore_value.h \
 		$(srcdir)/Include/internal/pycore_value_api.h \
+		$(srcdir)/Include/internal/pycore_value_call.h \
 		$(srcdir)/Include/internal/pycore_value_ops.h \
 		$(srcdir)/Include/internal/pycore_value_slots.h \
 		$(srcdir)/Include/internal/pycore_structs.h \

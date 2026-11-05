@@ -473,8 +473,6 @@
     added = '3.2'
 [function.PyCFunction_GetFunction]
     added = '3.2'
-[function.PyCFunction_GetSelf]
-    added = '3.2'
 [function.PyCFunction_NewEx]
     added = '3.2'
 [data.PyCFunction_Type]

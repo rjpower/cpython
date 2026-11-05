@@ -9,14 +9,17 @@ extern "C" {
 #endif
 
 #include "pycore_borrow.h"        // _PyBorrowScope_Enter()
+#include "pycore_classobject.h"   // PyMethod_GET_FUNCTION()
+#include "pycore_methodobject.h"  // PyCFunction_GET_FUNCTION()
 #include "pycore_code.h"          // EVAL_CALL_STAT_INC_IF_FUNCTION()
 #include "pycore_pystate.h"       // _PyThreadState_GET()
 #include "pycore_stats.h"
+#include "pycore_value_call.h"    // METH_VALUE
 
 /* Flags that determine the C calling convention. */
 #define _Py_METH_CALL_FLAGS \
     (METH_VARARGS | METH_FASTCALL | METH_NOARGS | METH_O | \
-     METH_KEYWORDS | METH_METHOD)
+     METH_KEYWORDS | METH_METHOD | METH_VALUE)
 
 /* Suggested size (number of positional arguments) for arrays of PyObject*
    allocated on a C stack to avoid allocating memory on the heap memory. Such

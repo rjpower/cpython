@@ -85,11 +85,7 @@ no longer available.
    Macro version of :c:func:`PyMethod_Function` which avoids error checking.
 
 
-.. c:function:: PyObject* PyMethod_Self(PyObject *meth)
+.. c:function:: PyObject* PyMethod_GetSelfRef(PyObject *meth)
 
-   Return the instance associated with the method *meth*.
-
-
-.. c:function:: PyObject* PyMethod_GET_SELF(PyObject *meth)
-
-   Macro version of :c:func:`PyMethod_Self` which avoids error checking.
+   Return a :term:`strong reference` to the instance associated with the
+   method *meth*, or ``NULL`` with an exception set on failure.

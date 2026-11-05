@@ -48,6 +48,14 @@ Py_BUILD_CORE_MODULE, or one that defines Py_VALUE_CORE (Include/pyport.h).
   value type: an inline accessor may only copy a word out of a field. No
   file-scope declaration other than a prototype or a typedef names one.
   Comments and string literals are skipped; macro bodies are read.
+* window-read: in a function that returns PyValue and takes a
+  `const PyValue *args` window (the value vectorcall shapes), an args[i]
+  that is not an operand of PyValue_Borrow(), PyValue_DUP() or a
+  _PyValue_Window*() primitive (value-api-m3.md, section 1.1). A text rule.
+* vectorcall-thunk: _PyValue_VectorcallThunk named outside the creators
+  and Objects/call.c, or _PyFunction_Vectorcall outside the files that
+  compare against it (THUNK_FILES, FUNCTION_VECTORCALL_FILES; section 1.7).
+  A text rule.
 * borrow-field: a field, global, static or array of type PyValueBorrow. A
   borrow lives only in C locals (pyjit/design/proposals/register-ir-v2-a5b.md,
   L1 and R2-S1).
@@ -809,6 +817,133 @@ def check_raw_bits_text(srcdir, checked_units=frozenset()):
     return findings
 
 
+
+# window-read (value-api-m3.md, section 1.1): in a function that takes a
+# call window, `const PyValue *args`, and returns PyValue (the shape of
+# _Py_vectorcallvaluefunc, _PyCFunctionValue, _PyCMethodValue and
+# _Py_wrappervaluefunc), every args[i] is the operand of one of these.
+WINDOW_READERS = frozenset({"PyValue_Borrow", "PyValue_DUP", "PyValue_XDUP"})
+WINDOW_PRIMITIVE = re.compile(r"_PyValue_Window\w*")
+WINDOW_FUNCTION = re.compile(
+    r"\bPyValue\s+\(?\s*\*?\s*\w+\s*\)?\s*\(((?:[^(){};]|\([^()]*\))*)\)\s*\{")
+WINDOW_PARAMETER = re.compile(r"\bconst\s+PyValue\s*\*\s*args\b")
+WINDOW_READ = re.compile(r"(?<![\w&])args\s*\[")
+
+
+def function_body_end(code, start):
+    """The offset after the brace that closes the one that opens at start."""
+    depth = 0
+    for i in range(start, len(code)):
+        if code[i] == "{":
+            depth += 1
+        elif code[i] == "}":
+            depth -= 1
+            if depth == 0:
+                return i + 1
+    return len(code)
+
+
+def enclosing_call(code, offset, floor):
+    """The name of the innermost call that contains offset (searching back
+    to floor), or None."""
+    depth = 0
+    for i in range(offset - 1, floor - 1, -1):
+        if code[i] in ")]":
+            depth += 1
+        elif code[i] in "([":
+            if depth:
+                depth -= 1
+            elif code[i] == "(":
+                m = re.search(r"(\w+)\s*$", code[floor:i])
+                return m[1] if m else None
+            else:
+                return None
+        elif code[i] in ";{}":
+            return None
+    return None
+
+
+def window_read_text(path, text):
+    """The window-read findings of the text of one C file."""
+    code = strip_c(text)
+    line_of = lines_of(code)
+    findings = []
+    for fn in WINDOW_FUNCTION.finditer(code):
+        if not WINDOW_PARAMETER.search(fn[1]):
+            continue
+        body = fn.end() - 1
+        end = function_body_end(code, body)
+        for read in WINDOW_READ.finditer(code, body, end):
+            name = enclosing_call(code, read.start(), body)
+            if name in WINDOW_READERS or (
+                    name and WINDOW_PRIMITIVE.fullmatch(name)):
+                continue
+            column = read.start() - code.rfind("\n", 0, read.start())
+            findings.append(Finding(
+                path, line_of(read.start()), column, "window-read",
+                "args[i] is read outside PyValue_Borrow(), PyValue_DUP() "
+                "and the _PyValue_Window*() primitives", True))
+    return findings
+
+
+# vectorcall-thunk (value-api-m3.md, section 1.7): only the creators store
+# the object thunk of a value vectorcall, and only the files that compare
+# against the function's own vectorcall name it. Paths as in ENCODING_FILES.
+THUNK_FILES = (
+    "Objects/call.c", "Objects/funcobject.c", "Objects/methodobject.c",
+    "Objects/classobject.c", "Objects/descrobject.c", "Objects/typeobject.c",
+    "Include/internal/pycore_value_call.h",
+    "Include/internal/pycore_methodobject.h",
+    "Include/internal/pycore_classobject.h",
+    # The test helpers: a spec type that stores the thunk, and an accessor
+    # that compares against both.
+    "Modules/_testinternalcapi/value_call.c",
+)
+FUNCTION_VECTORCALL_FILES = (
+    "Objects/call.c", "Objects/funcobject.c", "Python/bytecodes.c",
+    "Python/generated_", "Python/specialize.c", "Python/ceval.c",
+    "Python/perf_trampoline.c", "Include/internal/pycore_function.h",
+    "Include/cpython/funcobject.h", "Modules/_testinternalcapi/value_call.c",
+)
+THUNK_NAMES = (
+    (re.compile(r"\b_PyValue_VectorcallThunk\b"), THUNK_FILES),
+    (re.compile(r"\b_PyFunction_Vectorcall\b"), FUNCTION_VECTORCALL_FILES),
+)
+
+
+def path_listed(path, listed):
+    """Whether path is in listed; an entry ending in "_" is a prefix."""
+    return any(path == entry or entry.endswith("_") and path.startswith(entry)
+               for entry in listed)
+
+
+def vectorcall_thunk_text(path, text):
+    """The vectorcall-thunk findings of the text of one C file."""
+    code = strip_c(text)
+    line_of = lines_of(code)
+    findings = []
+    for pattern, listed in THUNK_NAMES:
+        if path_listed(path, listed):
+            continue
+        for m in pattern.finditer(code):
+            column = m.start() - code.rfind("\n", 0, m.start())
+            findings.append(Finding(
+                path, line_of(m.start()), column, "vectorcall-thunk",
+                f"{m[0]} is named outside the files that create or compare "
+                "against it; call _PyValue_VectorcallTstate()", True))
+    return findings
+
+
+def check_call_text(srcdir):
+    """The window-read and vectorcall-thunk findings of the tree's text."""
+    findings = []
+    for path in source_files(srcdir):
+        text = Path(srcdir, path).read_text(errors="replace")
+        findings.extend(window_read_text(path, text))
+        findings.extend(vectorcall_thunk_text(path, text))
+    return findings
+
+
 def encoding_names_defined(srcdir):
     """Failures for the ENCODING_NAMES that no value header defines."""
     text = "".join(Path(srcdir, h).read_text() for h in ENCODING_HEADERS)
@@ -1275,6 +1410,63 @@ spam(PyValueBorrow v)
 """, True, 1),
 }
 
+# The text of window-read and vectorcall-thunk: name -> (path, text, rule,
+# number of findings).
+CALL_TEXT_TESTS = {
+    "window_read_raw": ("Objects/spam.c", """
+        static PyValue
+        spam(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs,
+             PyObject *kwnames)
+        {
+            PyValue x = args[0];
+            return x;
+        }""", "window-read", 1),
+    "window_read_borrow": ("Objects/spam.c", """
+        static PyValue
+        spam(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs,
+             PyObject *kwnames)
+        {
+            PyValueBorrow x = PyValue_Borrow(args[0]);
+            PyValue y = PyValue_DUP(args[nargs - 1]);
+            _PyValue_WindowPut(&y, args[1]);
+            const PyValue *rest = &args[1];
+            return PyValue_DUP(x);
+        }""", "window-read", 0),
+    "window_read_nested": ("Objects/spam.c", """
+        static PyValue
+        spam(PyThreadState *tstate, PyObject *callable, const PyValue *args,
+             size_t nargsf, PyObject *kwnames)
+        {
+            return f(PyValue_Borrow(args[0]), g(args[1]));
+        }""", "window-read", 1),
+    "window_read_other_function": ("Objects/spam.c", """
+        static PyValue
+        spam(PyValue *args)
+        {
+            return args[0];
+        }
+        static int
+        eggs(const PyValue *args)
+        {
+            return PyValue_IsNull(args[0]);
+        }""", "window-read", 0),
+    "thunk_in_core": ("Objects/spam.c", """
+        void f(PyObject *o) { _PyValue_VectorcallThunk(o, NULL, 0, NULL); }
+        """, "vectorcall-thunk", 1),
+    "thunk_in_creator": ("Objects/methodobject.c", """
+        vectorcall = _PyValue_VectorcallThunk;
+        """, "vectorcall-thunk", 0),
+    "thunk_in_comment": ("Objects/spam.c", """
+        /* _PyValue_VectorcallThunk */ // _PyFunction_Vectorcall
+        """, "vectorcall-thunk", 0),
+    "function_vectorcall_in_core": ("Objects/spam.c", """
+        void f(void) { vectorcall = _PyFunction_Vectorcall; }
+        """, "vectorcall-thunk", 1),
+    "function_vectorcall_allowed": ("Python/generated_cases.c.h", """
+        if (func->vectorcall == _PyFunction_Vectorcall) { }
+        """, "vectorcall-thunk", 0),
+}
+
 # Public header texts -> number of public-value findings.
 PUBLIC_VALUE_TESTS = {
     "opaque_value_slots": ("""
@@ -1387,7 +1579,11 @@ def text_self_test():
              in RAW_BITS_TEXT_TESTS.items()]
     cases += [(name, "public-value", check_public_header(name, text), count)
               for name, (text, count) in PUBLIC_VALUE_TESTS.items()]
+    cases += [(name, rule, window_read_text(path, text)
+               + vectorcall_thunk_text(path, text), count)
+              for name, (path, text, rule, count) in CALL_TEXT_TESTS.items()]
     for name, rule, got, count in cases:
+        got = [f for f in got if f.rule == rule] if rule != "raw-bits" else got
         if len(got) != count:
             failures.append(f"self-test {name}: expected {count} {rule} "
                             f"findings, got {len(got)}: "
@@ -1669,7 +1865,8 @@ def main():
     checked = {display_path(entry["file"], entry["directory"])
                for entry, kind in entries.values()}
     text_findings = (check_raw_bits_text(SRCDIR, checked)
-                     + check_public_headers(SRCDIR))
+                     + check_public_headers(SRCDIR)
+                     + check_call_text(SRCDIR))
     if args.files:
         wanted = {os.path.normpath(os.path.abspath(f)) for f in args.files}
         entries = {p: e for p, e in entries.items() if p in wanted}

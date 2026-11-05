@@ -19,6 +19,7 @@ TypeSet = set[bltns.type[object]]
 
 
 class BaseUnsignedIntConverter(CConverter):
+    value_converter_function = False
     bitwise = False
     default_type = int
     c_ignored_default = '0'
@@ -136,6 +137,33 @@ class bool_converter(CConverter):
                 """,
                 argname=argname)
         return super().parse_arg(argname, displayname, limited_capi=limited_capi)
+
+    def parse_value_arg(self, argname: str, displayname: str) -> str | None:
+        if self.format_unit == 'i':
+            return int_value_code(self, argname, '_PyValue_AsInt')
+        assert self.format_unit == 'p'
+        self.add_include('pycore_value_ops.h', '_PyValue_IsTrue()')
+        # An inline int or float needs no call.
+        return self.format_code("""
+            {paramname} = _PyValue_IsTrue({argname});
+            if ({paramname} < 0) {{{{
+                goto exit;
+            }}}}
+            """,
+            argname=argname)
+
+
+def int_value_code(converter: CConverter, argname: str, extract: str) -> str:
+    """Convert with a V2a-1a extractor: an inline int is read directly,
+    any other value goes through __index__, as PyLong_AsInt() does."""
+    converter.add_include('pycore_long.h', f'{extract}()')
+    return converter.format_code("""
+        {paramname} = {extract}({argname});
+        if ({paramname} == -1 && PyErr_Occurred()) {{{{
+            goto exit;
+        }}}}
+        """,
+        argname=argname, extract=extract)
 
 
 class defining_class_converter(CConverter):
@@ -359,6 +387,16 @@ class int_converter(CConverter):
             )
         return super().parse_arg(argname, displayname, limited_capi=limited_capi)
 
+    def parse_value_arg(self, argname: str, displayname: str) -> str | None:
+        if self.format_unit == 'i':
+            return int_value_code(self, argname, '_PyValue_AsInt')
+        if self.format_unit == 'C':
+            # A one-character str: no inline value is one.
+            self.value_object_only = True
+            self.value_expected = 'a unicode character'
+            return super().parse_value_arg(argname, displayname)
+        return None
+
 
 class unsigned_int_converter(BaseUnsignedIntConverter):
     type = 'unsigned int'
@@ -387,6 +425,11 @@ class long_converter(CConverter):
                 """,
                 argname=argname)
         return super().parse_arg(argname, displayname, limited_capi=limited_capi)
+
+    def parse_value_arg(self, argname: str, displayname: str) -> str | None:
+        if self.format_unit == 'l':
+            return int_value_code(self, argname, '_PyValue_AsLong')
+        return None
 
 
 class unsigned_long_converter(BaseUnsignedIntConverter):
@@ -512,6 +555,45 @@ class Py_ssize_t_converter(CConverter):
             non_negative_check=non_negative_check,
         )
 
+    def parse_value_arg(self, argname: str, displayname: str) -> str | None:
+        if self.format_unit != 'n':
+            # accept={int, NoneType}: the value twin of the converter.
+            converter = f'{self.converter}_value'
+            self.add_include('pycore_modsupport.h', f'{converter}()')
+            return self.format_code("""
+                if (!{converter}({argname}, &{paramname})) {{{{
+                    goto exit;
+                }}}}
+                """,
+                argname=argname, converter=converter)
+        non_negative_check = ''
+        if not self.allow_negative:
+            non_negative_check = """
+                if ({paramname} < 0) {{{{
+                    PyErr_SetString(PyExc_ValueError,
+                                    "{paramname} cannot be negative");
+                    goto exit;
+                }}}}"""
+        # As the object form: __index__, then PyLong_AsSsize_t()'s range
+        # check and message.  An inline int needs neither call's work.
+        self.add_include('pycore_value_ops.h', '_PyValue_Index()')
+        self.add_include('pycore_long.h', '_PyValue_IntAsSsize_t()')
+        return self.format_code("""
+            {{{{
+                Py_ssize_t ival = -1;
+                PyValue iobj = _PyValue_Index({argname});
+                if (!PyValue_IsNull(iobj)) {{{{
+                    ival = _PyValue_IntAsSsize_t(PyValue_Borrow(iobj));
+                    PyValue_CLOSE(iobj);
+                }}}}
+                if (ival == -1 && PyErr_Occurred()) {{{{
+                    goto exit;
+                }}}}
+                {paramname} = ival;%s
+            }}}}
+            """ % non_negative_check,
+            argname=argname)
+
 
 class slice_index_converter(CConverter):
     type = 'Py_ssize_t'
@@ -520,10 +602,12 @@ class slice_index_converter(CConverter):
 
     def converter_init(self, *, accept: TypeSet = {int, NoneType}) -> None:
         if accept == {int}:
+            self.value_converter = '_PyArg_SliceIndexNotNoneValue'
             self.converter = '_PyEval_SliceIndexNotNone'
             self.default_type = int  # type: ignore[assignment]
             self.nullable = False
         elif accept == {int, NoneType}:
+            self.value_converter = '_PyArg_SliceIndexValue'
             self.converter = '_PyEval_SliceIndex'
             self.nullable = True
         else:
@@ -567,8 +651,21 @@ class slice_index_converter(CConverter):
                 """,
                 argname=argname)
 
+    def parse_value_arg(self, argname: str, displayname: str) -> str | None:
+        # _PyEval_SliceIndex() lives in ceval.c; its value forms are in
+        # getargs.c.
+        self.add_include('pycore_modsupport.h', f'{self.value_converter}()')
+        return self.format_code("""
+            if (!{converter}({argname}, &{paramname})) {{{{
+                goto exit;
+            }}}}
+            """,
+            argname=argname,
+            converter=self.value_converter)
+
 
 class size_t_converter(BaseUnsignedIntConverter):
+    value_converter_function = False
     type = 'size_t'
     converter = '_PyLong_Size_t_Converter'
 
@@ -585,6 +682,7 @@ class size_t_converter(BaseUnsignedIntConverter):
 
 
 class fildes_converter(CConverter):
+    value_converter_function = False
     type = 'int'
     converter = '_PyLong_FileDescriptor_Converter'
 
@@ -603,11 +701,13 @@ class fildes_converter(CConverter):
 
 
 class gid_t_converter(CConverter):
+    value_converter_function = False
     type = 'gid_t'
     converter = '_Py_Gid_Converter'
 
 
 class uid_t_converter(CConverter):
+    value_converter_function = False
     type = 'uid_t'
     converter = '_Py_Uid_Converter'
 
@@ -627,6 +727,7 @@ class pid_t_converter(CConverter):
 
 
 class Py_off_t_converter(CConverter):
+    value_converter_function = False
     type = 'Py_off_t'
     converter = '_Py_Off_t_Converter'
 
@@ -721,6 +822,19 @@ class double_converter(CConverter):
                     argname=argname)
         return super().parse_arg(argname, displayname, limited_capi=limited_capi)
 
+    def parse_value_arg(self, argname: str, displayname: str) -> str | None:
+        if self.format_unit != 'd':
+            return None
+        # An inline float or int is read directly.
+        self.add_include('pycore_long.h', '_PyValue_AsDouble()')
+        return self.format_code("""
+            {paramname} = _PyValue_AsDouble({argname});
+            if ({paramname} == -1.0 && PyErr_Occurred()) {{{{
+                goto exit;
+            }}}}
+            """,
+            argname=argname)
+
 
 class Py_complex_converter(CConverter):
     type = 'Py_complex'
@@ -798,6 +912,11 @@ class str_converter(CConverter):
     type = 'const char *'
     default_type = (str, bytes, NullType, NoneType)
     format_unit = 's'
+    value_object_only = True
+
+    @property
+    def value_expected(self) -> str:  # type: ignore[override]
+        return 'str or None' if self.format_unit == 'z' else 'str'
     c_ignored_default = 'NULL'
 
     def converter_init(
@@ -955,6 +1074,8 @@ del r
 class PyBytesObject_converter(CConverter):
     type = 'PyBytesObject *'
     format_unit = 'S'
+    value_object_only = True
+    value_expected = 'bytes'
     # accept = {bytes}
     c_ignored_default = 'NULL'
 
@@ -976,6 +1097,8 @@ class PyBytesObject_converter(CConverter):
 class PyByteArrayObject_converter(CConverter):
     type = 'PyByteArrayObject *'
     format_unit = 'Y'
+    value_object_only = True
+    value_expected = 'bytearray'
     # accept = {bytearray}
     c_ignored_default = 'NULL'
 
@@ -999,6 +1122,8 @@ class unicode_converter(CConverter):
     default_type = (str, NullType, NoneType)
     format_unit = 'U'
     c_ignored_default = 'NULL'
+    value_object_only = True
+    value_expected = 'str'
 
     def parse_arg(self, argname: str, displayname: str, *, limited_capi: bool) -> str | None:
         if self.format_unit == 'U':
@@ -1026,6 +1151,14 @@ class _unicode_fs_converter_base(CConverter):
     def cleanup(self) -> str:
         return f"Py_XDECREF({self.parser_name});"
 
+    # PyOS_FSPath()'s message for an int or a float.
+    value_object_only = True
+
+    def value_inline_error(self, displayname: str) -> str:
+        return ('PyErr_Format(PyExc_TypeError, "expected str, bytes or '
+                'os.PathLike object, not %.200s", '
+                'PyValue_TYPE({argname})->tp_name);')
+
 
 class unicode_fs_encoded_converter(_unicode_fs_converter_base):
     converter = 'PyUnicode_FSConverter'
@@ -1040,6 +1173,7 @@ class unicode_fs_decoded_converter(_unicode_fs_converter_base):
 @add_legacy_c_converter('Z', accept={str, NoneType})
 @add_legacy_c_converter('Z#', accept={str, NoneType}, zeroes=True)
 class Py_UNICODE_converter(CConverter):
+    value_converter_function = False
     type = 'const wchar_t *'
     default_type = (str, NullType, NoneType)
     c_ignored_default = 'NULL'
@@ -1146,6 +1280,17 @@ class Py_buffer_converter(CConverter):
     def cleanup(self) -> str:
         name = self.name
         return "".join(["if (", name, ".obj) {\n   PyBuffer_Release(&", name, ");\n}\n"])
+
+    # No int or float has a buffer.
+    value_object_only = True
+
+    def value_inline_error(self, displayname: str) -> str:
+        if self.format_unit == 'w*':
+            return self.bad_argument_value(displayname,
+                                           'read-write bytes-like object')
+        # PyObject_GetBuffer()'s message.
+        return ('PyErr_Format(PyExc_TypeError, "a bytes-like object is '
+                'required, not \'%.100s\'", PyValue_TYPE({argname})->tp_name);')
 
     def parse_arg(self, argname: str, displayname: str, *, limited_capi: bool) -> str | None:
         # PyBUF_SIMPLE guarantees that the format units of the buffers are C-contiguous.
@@ -1294,6 +1439,22 @@ class self_converter(CConverter):
 
         self._render_self(parameter, data)
 
+        if self.value_emission and not self.function.kind.new_or_init:
+            # A METH_VALUE parser receives self as a borrow.  A class whose
+            # instances can be inline declares its self type PyValueBorrow;
+            # every other self is an object.
+            assert data.impl_arguments == [self.name]
+            if self.type != 'PyValueBorrow':
+                cast = '' if self.type == 'PyObject *' else f'({self.type})'
+                data.impl_arguments[0] = (
+                    f'{cast}PyValue_AsKnownObjectBorrow({self.name})')
+            return
+        if self.value_emission and self.type == 'PyValueBorrow':
+            # __init__ of a class with a value self: the instance is an
+            # object, which the impl receives as a borrow.
+            data.impl_arguments[0] = f'PyValue_FromObjectBorrow({self.name})'
+            return
+
         if self.type != self.parser_type:
             # insert cast to impl_argument[0], aka self.
             # we know we're in the first slot in all the CRenderData lists,
@@ -1345,6 +1506,11 @@ class VarPosCConverter(CConverter):
 
     def parse_vararg(self, *, pos_only: int, min_pos: int, max_pos: int,
                      fastcall: bool, limited_capi: bool) -> str:
+        raise NotImplementedError
+
+    def parse_value_vararg(self, *, pos_only: int, min_pos: int,
+                           max_pos: int) -> str:
+        """Collect the window's arguments after max_pos."""
         raise NotImplementedError
 
 
@@ -1403,10 +1569,51 @@ class varpos_tuple_converter(VarPosCConverter):
             else:
                 return f"{paramname} = Py_NewRef(args);\n"
 
+    def parse_value_vararg(self, *, pos_only: int, min_pos: int,
+                           max_pos: int) -> str:
+        # Tuples store words: the tuple takes counts, no box.
+        self.add_include('pycore_tuple.h', '_PyTuple_FromValueArray()')
+        paramname = self.parser_name
+        if not max_pos:
+            return f"""
+                {paramname} = _PyTuple_FromValueArray(args, nargs);
+                if ({paramname} == NULL) {{{{
+                    goto exit;
+                }}}}
+                """
+        return f"""
+            {paramname} = _PyTuple_FromValueArray(args + {max_pos},
+                                                  Py_MAX(nargs - {max_pos}, 0));
+            if ({paramname} == NULL) {{{{
+                goto exit;
+            }}}}
+            """
+
 
 class varpos_array_converter(VarPosCConverter):
     type = 'PyObject * const *'
     length = True
+
+    def set_value_emission(self) -> None:
+        # The impl reads the caller's window.
+        self.value_emission = True
+        self.type = 'const PyValue *'
+
+    def parse_value_vararg(self, *, pos_only: int, min_pos: int,
+                           max_pos: int) -> str:
+        paramname = self.parser_name
+        start, size = 'args', 'nargs'
+        if max_pos:
+            if min(pos_only, min_pos) < max_pos:
+                start = f'nargs > {max_pos} ? args + {max_pos} : args'
+                size = f'Py_MAX(0, nargs - {max_pos})'
+            else:
+                start = f'args + {max_pos}'
+                size = f'nargs - {max_pos}'
+        return f"""
+            {paramname} = {start};
+            {self.length_name} = {size};
+            """
 
     def parse_vararg(self, *, pos_only: int, min_pos: int, max_pos: int,
                      fastcall: bool, limited_capi: bool) -> str:
@@ -1440,6 +1647,11 @@ class VarKeywordCConverter(CConverter):
     def parse_var_keyword(self) -> str:
         raise NotImplementedError
 
+    def parse_value_var_keyword(self) -> str:
+        """Collect the keyword arguments: kwnames and their values, which
+        follow the positional ones in the window."""
+        raise NotImplementedError
+
 
 class var_keyword_dict_converter(VarKeywordCConverter):
     type = 'PyObject *'
@@ -1459,5 +1671,16 @@ class var_keyword_dict_converter(VarKeywordCConverter):
             }}}}
             else {{{{
                 {param_name} = Py_NewRef(kwargs);
+            }}}}
+            """
+
+    def parse_value_var_keyword(self) -> str:
+        self.add_include('pycore_value_call.h', '_PyValue_StackAsDict()')
+        param_name = self.parser_name
+        return f"""
+            {param_name} = kwnames == NULL ? PyDict_New()
+                : _PyValue_StackAsDict(args + nargs, kwnames);
+            if ({param_name} == NULL) {{{{
+                goto exit;
             }}}}
             """

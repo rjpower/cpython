@@ -1,10 +1,11 @@
 from __future__ import annotations
+import re
 from typing import TYPE_CHECKING, Final, Literal
 
 import libclinic
 from libclinic import fail, warn, unspecified, Sentinels
 from libclinic.function import (
-    Function, Parameter, ParamTuple,
+    Class, Function, Module, Parameter, ParamTuple,
     count_required, group_to_variable_name, permute_optional_groups,
     GETTER, SETTER, SETTER_AND_DELETER, METHOD_INIT, METHOD_NEW, SLOT,
     ACCESSORS, SETTERS)
@@ -157,6 +158,83 @@ METH_O_PROTOTYPE: Final[str] = libclinic.normalize_snippet("""
     static PyObject *
     {c_basename}({self_type}{self_name}, {parser_parameters})
 """)
+# Value emission (the value_emission directive): every function of the file
+# is METH_VALUE (Include/internal/pycore_value_call.h).  __new__ and
+# __init__ keep their slot signatures and parse in a body function that
+# their value vectorcall shares.
+VALUE_PARSER_PROTOTYPE: Final[str] = libclinic.normalize_snippet("""
+    static PyValue
+    {c_basename}(PyValueBorrow {self_name}, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+""")
+VALUE_PARSER_PROTOTYPE_DEF_CLASS: Final[str] = libclinic.normalize_snippet("""
+    static PyValue
+    {c_basename}(PyValueBorrow {self_name}, PyTypeObject *{defining_class_name}, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+""")
+VALUE_PARSER_PROTOTYPE_BODY: Final[str] = libclinic.normalize_snippet("""
+    static {body_return_type}
+    {c_basename}_value({self_type}{self_name}, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+""")
+VALUE_PARSER_PROTOTYPE_VECTORCALL: Final[str] = libclinic.normalize_snippet("""
+    static PyValue
+    {vc_basename}(PyThreadState *tstate, PyObject *type, const PyValue *args,
+        size_t nargsf, PyObject *kwnames)
+""")
+
+
+def is_value_function(f: Function, codegen: CodeGen) -> bool:
+    """Whether the function is emitted in its value form.
+
+    Accessors and slot functions keep their object signatures, which
+    PyGetSetDef and the slot typedefs fix.
+    """
+    return (codegen.value_emission
+            and f.kind is not SLOT and f.kind not in ACCESSORS)
+
+
+def value_static_type(f: Function) -> str | None:
+    """The static type object of a method of a top-level class, or None.
+
+    The runtime __qualname__ of such a method uses the type's own name, which
+    the Clinic class name does not give ("TypeVar", not "typevar"), so the
+    generated code reads it from the type.
+    """
+    cls = f.cls
+    if cls is None or cls.cls is not None or f.kind.new_or_init:
+        return None
+    if re.fullmatch(r'&\w*_?Type', cls.type_object) is None:
+        return None
+    return cls.type_object
+
+
+def value_funcstr(f: Function) -> str:
+    """The name of the function as _PyObject_FunctionStr() shows it.
+
+    The arity messages of METH_NOARGS and METH_O, and the keyword message
+    of METH_FASTCALL, use it: "list.clear()", "math.sin()", "len()".
+    """
+    names = [f.name]
+    if f.cls is not None:
+        parent: Class | None = f.cls
+        while isinstance(parent, Class):
+            names.append(parent.name)
+            parent = parent.cls
+    else:
+        module = f.module
+        while isinstance(module, Module):
+            names.append(module.name)
+            module = module.module
+        if len(names) == 1:
+            # A function declared outside any module ("abs as builtin_abs")
+            # belongs to the file's module, if it declares exactly one;
+            # otherwise it is shown by its bare name.
+            modules = list(module.modules)
+            if len(modules) == 1:
+                names.append(modules[0])
+        if names[-1] == 'builtins':
+            names.pop()
+    return '.'.join(reversed(names)) + '()'
+
+
 DOCSTRING_PROTOTYPE_VAR: Final[str] = libclinic.normalize_snippet("""
     PyDoc_VAR({c_basename}__doc__);
 """)
@@ -354,6 +432,12 @@ class ParseArgsCodeGen:
                 break
 
         self.converters = [p.converter for p in self.parameters]
+
+        self.value = is_value_function(func, codegen)
+        if self.value:
+            # The parameters are rendered from copies.
+            for p in [*func.parameters.values(), *func.render_parameters]:
+                p.converter.set_value_emission()
 
         if self.func.critical_section:
             self.codegen.add_include('pycore_critical_section.h',
@@ -1899,6 +1983,311 @@ class ParseArgsCodeGen:
         else:
             self.parse_vectorcall_pos_or_kw()
 
+    # Value emission (pyjit/design/proposals/value-api-m3.md, section 2).
+
+    def _value_unsupported(self, what: str) -> None:
+        fail(f"{self.func.full_name}: value emission does not support {what}",
+             line_number=self.func.line_number)
+
+    def _value_parse_arg(self, i: int, p: Parameter, argname: str,
+                         *, meth_o: bool = False) -> str:
+        """The code converting the value argname of parameter p."""
+        if p.converter.alias_of is not None:
+            self._value_unsupported("parameter aliases")
+        if p.deprecated_until is not None:
+            self._value_unsupported("deprecated parameters")
+        # As METH_O, the sole argument is "argument", not "argument 1".
+        displayname = p.get_displayname(0 if meth_o else i + 1)
+        code = p.converter.parse_value_arg(argname, displayname)
+        if code is None:
+            self._value_unsupported(
+                f"the {p.converter.dsl_name()!r} converter "
+                f"of parameter {p.name!r}")
+        return code
+
+    def _value_parse_positional(self) -> list[str]:
+        """Parse the positional-only parameters from args[0..nargs).
+
+        The arity is checked before.
+        """
+        parser_code: list[str] = []
+        for i, p in enumerate(self.parameters):
+            code = self._value_parse_arg(i, p, f'PyValue_Borrow(args[{i}])')
+            if i >= self.min_pos:
+                # p and everything after it is optional.
+                parser_code.append(libclinic.normalize_snippet(f"""
+                    if (nargs < {i + 1}) {{{{
+                        goto skip_optional;
+                    }}}}
+                    """, indent=4))
+            parser_code.append(libclinic.normalize_snippet(code, indent=4))
+        if self.min_pos < len(self.parameters):
+            parser_code.append("skip_optional:")
+        return parser_code
+
+    def _value_parse_varargs(self) -> list[str]:
+        """Collect *args and **kwargs from the window."""
+        code: list[str] = []
+        if self.varpos:
+            c = self.varpos.converter
+            assert isinstance(c, libclinic.converters.VarPosCConverter)
+            code.append(libclinic.normalize_snippet(
+                c.parse_value_vararg(pos_only=self.pos_only,
+                                     min_pos=self.min_pos,
+                                     max_pos=self.max_pos), indent=4))
+            for include in c.get_includes():
+                self.codegen.add_include(include.filename, include.reason,
+                                         condition=include.condition)
+        if self.var_keyword:
+            c = self.var_keyword.converter
+            assert isinstance(c, libclinic.converters.VarKeywordCConverter)
+            code.append(libclinic.normalize_snippet(
+                c.parse_value_var_keyword(), indent=4))
+            for include in c.get_includes():
+                self.codegen.add_include(include.filename, include.reason,
+                                         condition=include.condition)
+        return code
+
+    def _value_check_arity(self, nargs: int) -> str:
+        """The check of a function shaped as METH_NOARGS or METH_O.
+
+        It reproduces the message of the convention it replaces.
+        """
+        self.codegen.add_include('pycore_modsupport.h',
+                                 '_PyArg_CheckArityValue()')
+        static_type = value_static_type(self.func)
+        if static_type is not None:
+            return libclinic.normalize_snippet(f"""
+                if (!_PyArg_CheckArityValueMethod({static_type}, "{self.func.name}", nargs, kwnames, {nargs})) {{{{
+                    goto exit;
+                }}}}
+                """, indent=4)
+        funcstr = value_funcstr(self.func)
+        return libclinic.normalize_snippet(f"""
+            if (!_PyArg_CheckArityValue("{funcstr}", nargs, kwnames, {nargs})) {{{{
+                goto exit;
+            }}}}
+            """, indent=4)
+
+    def _value_no_kwnames(self) -> str:
+        """Reject keywords as the convention the function replaces does.
+
+        METH_FASTCALL's message names the function as METH_O's does; a
+        METH_METHOD function and a slot report them under their own name.
+        """
+        if self.requires_defining_class or self.is_new_or_init():
+            self.codegen.add_include('pycore_modsupport.h',
+                                     '_PyArg_NoKwnames()')
+            check = '!_PyArg_NoKwnames("{name}", kwnames)'
+            if self.is_new_or_init():
+                check = '{self_type_check}' + check
+            return libclinic.normalize_snippet(f"""
+                if ({check}) {{{{
+                    goto exit;
+                }}}}
+                """, indent=4)
+        self.codegen.add_include('pycore_modsupport.h',
+                                 '_PyArg_NoKwnamesValue()')
+        static_type = value_static_type(self.func)
+        if static_type is not None:
+            return libclinic.normalize_snippet(f"""
+                if (!_PyArg_NoKwnamesValueMethod({static_type}, "{self.func.name}", kwnames)) {{{{
+                    goto exit;
+                }}}}
+                """, indent=4)
+        funcstr = value_funcstr(self.func)
+        return libclinic.normalize_snippet(f"""
+            if (!_PyArg_NoKwnamesValue("{funcstr}", kwnames)) {{{{
+                goto exit;
+            }}}}
+            """, indent=4)
+
+    def _value_parse_keywords(self) -> list[str]:
+        """The index parser: positional and keyword parameters.
+
+        _PyArg_UnpackKeywordsValue() fills an index into args per parameter,
+        -1 for an absent one; keyword values follow the positional ones in
+        the window (D15).
+        """
+        nindex = len(self.converters) or 1
+        self.declarations = declare_parser(self.func, codegen=self.codegen)
+        self.declarations += f"\nPy_ssize_t _idx[{nindex}];"
+        self.codegen.add_include('pycore_modsupport.h',
+                                 '_PyArg_UnpackKeywordsValue()')
+        varpos = 1 if self.varpos else 0
+        parser_code = [libclinic.normalize_snippet(f"""
+            if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+                    /*minpos*/ {self.min_pos}, /*maxpos*/ {self.max_pos}, /*minkw*/ {self.min_kw_only}, /*varpos*/ {varpos}, _idx, {nindex})) {{{{
+                goto exit;
+            }}}}
+            """, indent=4)]
+        for i, p in enumerate(self.parameters):
+            code = self._value_parse_arg(
+                i, p, f'PyValue_Borrow(args[_idx[{i}]])')
+            if not p.is_optional():
+                parser_code.append(libclinic.normalize_snippet(code, indent=4))
+                continue
+            parser_code.append(libclinic.normalize_snippet(f"""
+                if (_idx[{i}] >= 0) {{{{
+                """, indent=4))
+            parser_code.append(libclinic.normalize_snippet(code, indent=8))
+            parser_code.append(libclinic.normalize_snippet("""
+                }}
+                """, indent=4))
+        return parser_code
+
+    def parse_value(self) -> None:
+        """Generate the value parser (D14, D15).
+
+        A method-table function is METH_VALUE (with METH_METHOD when it
+        takes defining_class); __new__ and __init__ parse in a body
+        function, {c_basename}_value(), which their slot wrapper and value
+        vectorcall call.
+        """
+        if self.has_option_groups():
+            self._value_unsupported("optional groups")
+        # METH_VALUE, and through pycore_value.h the value words.
+        self.codegen.add_include('pycore_value_call.h', 'METH_VALUE')
+        keywords = any(not p.is_positional_only() for p in self.parameters)
+        if self.is_new_or_init():
+            if self.requires_defining_class:
+                raise ValueError("Slot methods cannot access their defining class.")
+            self.flags = ''
+            self.parser_prototype = VALUE_PARSER_PROTOTYPE_BODY.replace(
+                '{body_return_type}',
+                'int' if self.func.kind is METHOD_INIT else 'PyValue')
+            if not keywords:
+                # The keyword check reads base_tp.
+                self.declarations = '{base_type_ptr}'
+            self.return_value_declaration = (
+                "int {parser_retval} = -1;" if self.func.kind is METHOD_INIT
+                else "PyValue {parser_retval} = PyValue_NULL;")
+        else:
+            self.return_value_declaration = (
+                "PyValue {parser_retval} = PyValue_NULL;")
+            if self.requires_defining_class:
+                self.flags = "METH_VALUE|METH_METHOD"
+                self.parser_prototype = VALUE_PARSER_PROTOTYPE_DEF_CLASS
+            else:
+                self.flags = "METH_VALUE"
+                self.parser_prototype = VALUE_PARSER_PROTOTYPE
+
+        parser_code: list[str] = []
+        if not self.parameters and not self.varpos and not self.var_keyword:
+            if self.is_new_or_init():
+                self.codegen.add_include('pycore_modsupport.h',
+                                         '_PyArg_NoPositionalStack()')
+                parser_code.append(libclinic.normalize_snippet("""
+                    if ({self_type_check}!_PyArg_NoPositionalStack("{name}", nargs)) {{
+                        goto exit;
+                    }}
+                    """, indent=4))
+                parser_code.append(self._value_no_kwnames())
+            elif self.requires_defining_class:
+                parser_code.append(libclinic.normalize_snippet("""
+                    if (nargs || (kwnames && PyTuple_GET_SIZE(kwnames))) {{
+                        PyErr_SetString(PyExc_TypeError, "{name}() takes no arguments");
+                        goto exit;
+                    }}
+                    """, indent=4))
+            else:
+                parser_code.append(self._value_check_arity(0))
+        elif self.var_keyword is not None:
+            # **kwargs takes every keyword: the parameters before it are
+            # positional-only.
+            if keywords:
+                self._value_unsupported("keyword parameters with **kwargs")
+            parser_code.extend(self._check_positional('nargs'))
+            parser_code.extend(self._value_parse_positional())
+        elif self.use_meth_o():
+            parser_code.append(self._value_check_arity(1))
+            parser_code.append(libclinic.normalize_snippet(
+                self._value_parse_arg(0, self.parameters[0],
+                                      'PyValue_Borrow(args[0])',
+                                      meth_o=True),
+                indent=4))
+        elif not keywords:
+            parser_code.append(self._value_no_kwnames())
+            parser_code.extend(self._check_positional('nargs'))
+            parser_code.extend(self._value_parse_positional())
+        else:
+            parser_code.extend(self._value_parse_keywords())
+        parser_code.extend(self._value_parse_varargs())
+        self.parser_body(*parser_code)
+
+    def handle_value_new_or_init(self) -> None:
+        """The tp_new or tp_init wrapper of the value body.
+
+        The tuple's words are the window.  A non-empty keyword dict expands
+        into a call-scratch window, which also yields kwnames (D15); its
+        values are owners, so a converter that mutates the dict leaves them
+        valid.
+        """
+        self.methoddef_define = ''
+        self.parser_helper = self.parser_definition
+        self.parser_prototype = PARSER_PROTOTYPE_KEYWORD
+        self.codegen.add_include('pycore_tuple.h', '_PyTuple_ITEMS()')
+        self.codegen.add_include('pycore_value_call.h',
+                                 '_PyValue_StackUnpackDict()')
+        if self.func.kind is METHOD_INIT:
+            result_type, exit = 'int', ''
+            error = '-1'
+        else:
+            self.codegen.add_include('pycore_value_slots.h',
+                                     '_PyValue_THUNK_EXIT()')
+            result_type, exit = 'PyValue', '_PyValue_THUNK_EXIT'
+            error = 'NULL'
+        call = '{c_basename}_value({self_name}, %s, nargs, %s)'
+        if exit:
+            call = f'{exit}({call})'
+        self.parser_definition = '\n'.join([
+            self.parser_prototype,
+            '{{',
+            '    Py_ssize_t nargs = PyTuple_GET_SIZE(args);',
+            '    if (kwargs == NULL || PyDict_GET_SIZE(kwargs) == 0) {{',
+            '        return ' + call % ('_PyTuple_ITEMS(args)', 'NULL') + ';',
+            '    }}',
+            '    PyObject *kwnames;',
+            '    PyValue *window = _PyValue_StackUnpackDict(_PyThreadState_GET(),',
+            '        _PyTuple_ITEMS(args), nargs, kwargs, &kwnames);',
+            '    if (window == NULL) {{',
+            f'        return {error};',
+            '    }}',
+            f'    {result_type} result = {{c_basename}}_value({{self_name}}, window, nargs, kwnames);',
+            '    _PyValue_StackUnpackDict_Free(window, nargs, kwnames);',
+            f'    return {exit}(result);' if exit else '    return result;',
+            '}}',
+        ])
+
+    def value_vectorcall(self) -> None:
+        """The type's value vectorcall (D1), stored in tp_value_vectorcall.
+
+        It calls the value body with the caller's window.
+        """
+        prototype = VALUE_PARSER_PROTOTYPE_VECTORCALL.replace(
+            "{vc_basename}", self.func.c_basename_vectorcall)
+        lines = [prototype, '{{', *self._vectorcall_type_check(),
+                 '    Py_ssize_t nargs = PyVectorcall_NARGS(nargsf);']
+        if self.func.kind is METHOD_INIT:
+            self.codegen.add_include('pycore_runtime.h', '_Py_SINGLETON()')
+            lines.extend([
+                '    PyObject *self = _PyType_CAST(type)->tp_new(_PyType_CAST(type),',
+                '        (PyObject *)&_Py_SINGLETON(tuple_empty), NULL);',
+                '    if (self == NULL) {{',
+                '        return PyValue_NULL;',
+                '    }}',
+                '    if ({c_basename}_value(self, args, nargs, kwnames) != 0) {{',
+                '        Py_DECREF(self);',
+                '        return PyValue_NULL;',
+                '    }}',
+                '    return PyValue_FromObjectSteal(self);',
+            ])
+        else:
+            lines.append(
+                '    return {c_basename}_value(_PyType_CAST(type), args, nargs, kwnames);')
+        lines.append('}}')
+        self.vectorcall_definition = '\n'.join(lines)
+
     def parse_args(self, clang: CLanguage) -> dict[str, str]:
         self.select_prototypes()
         self.init_limited_capi()
@@ -1916,7 +2305,9 @@ class ParseArgsCodeGen:
         # previous call to parser_body. this is used for an awful hack.
         self.parser_body_fields: tuple[str, ...] = ()
 
-        if self.func.kind is SLOT:
+        if self.value:
+            self.parse_value()
+        elif self.func.kind is SLOT:
             self.parse_slot()
         elif self.func.kind in ACCESSORS:
             self.parse_accessor()
@@ -1936,13 +2327,17 @@ class ParseArgsCodeGen:
             self.parse_general(clang)
 
         self.copy_includes()
-        if self.is_new_or_init():
+        if self.value and self.is_new_or_init():
+            self.handle_value_new_or_init()
+        elif self.is_new_or_init():
             self.handle_new_or_init()
         self.process_methoddef(clang)
         self.finalize(clang)
 
         # Generate vectorcall function if requested
-        if self.func.vectorcall:
+        if self.func.vectorcall and self.value:
+            self.value_vectorcall()
+        elif self.func.vectorcall:
             self.parse_vectorcall()
 
         return self.create_template_dict()

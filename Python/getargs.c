@@ -14,6 +14,7 @@
 #include "pycore_pyerrors.h"      // _Py_CalculateSuggestions()
 #include "pycore_unicodeobject.h" // _PyUnicode_InternImmortal
 #include "pycore_value_api.h"     // _PyValue_AsObjectAt()
+#include "pycore_value_ops.h"     // _PyValue_AsSsize_t()
 
 /* Export Stable ABIs (abi only) */
 PyAPI_FUNC(int) _PyArg_Parse_SizeT(PyObject *, const char *, ...);
@@ -2834,6 +2835,335 @@ _PyArg_UnpackKeywords(PyObject *const *args, Py_ssize_t nargs,
     }
 
     return buf;
+}
+
+
+/* Value parsing: the helpers of value-emission Clinic output
+   (Include/internal/pycore_modsupport.h). */
+
+void
+_PyArg_BadArgumentValue(const char *fname, const char *displayname,
+                        const char *expected, PyValueBorrow arg)
+{
+    PyErr_Format(PyExc_TypeError,
+                 "%.200s() %.200s must be %.50s, not %.50s",
+                 fname, displayname, expected,
+                 PyValue_IsNone(arg) ? "None" : PyValue_TYPE(arg)->tp_name);
+}
+
+#undef _PyArg_NoKwnamesValue
+
+int
+_PyArg_NoKwnamesValue(const char *funcstr, PyObject *kwnames)
+{
+    assert(kwnames == NULL || PyTuple_Check(kwnames));
+    if (kwnames == NULL || PyTuple_GET_SIZE(kwnames) == 0) {
+        return 1;
+    }
+    PyErr_Format(PyExc_TypeError, "%.200s takes no keyword arguments",
+                 funcstr);
+    return 0;
+}
+
+#undef _PyArg_CheckArityValue
+
+int
+_PyArg_CheckArityValue(const char *funcstr, Py_ssize_t nargs,
+                       PyObject *kwnames, Py_ssize_t expected)
+{
+    assert(expected == 0 || expected == 1);
+    if (!_PyArg_NoKwnamesValue(funcstr, kwnames)) {
+        return 0;
+    }
+    if (nargs == expected) {
+        return 1;
+    }
+    if (expected == 0) {
+        PyErr_Format(PyExc_TypeError,
+                     "%.200s takes no arguments (%zd given)", funcstr, nargs);
+    }
+    else {
+        PyErr_Format(PyExc_TypeError,
+                     "%.200s takes exactly one argument (%zd given)",
+                     funcstr, nargs);
+    }
+    return 0;
+}
+
+#undef _PyArg_NoKwnamesValueMethod
+#undef _PyArg_CheckArityValueMethod
+
+/* "<type>.<name>()", where <type> is the type's own name. */
+static void
+method_funcstr(char *buf, size_t size, PyTypeObject *tp, const char *name)
+{
+    PyOS_snprintf(buf, size, "%.100s.%.100s()", _PyType_Name(tp), name);
+}
+
+int
+_PyArg_NoKwnamesValueMethod(PyTypeObject *tp, const char *name,
+                            PyObject *kwnames)
+{
+    char funcstr[256];
+    method_funcstr(funcstr, sizeof(funcstr), tp, name);
+    return _PyArg_NoKwnamesValue(funcstr, kwnames);
+}
+
+int
+_PyArg_CheckArityValueMethod(PyTypeObject *tp, const char *name,
+                             Py_ssize_t nargs, PyObject *kwnames,
+                             Py_ssize_t expected)
+{
+    char funcstr[256];
+    method_funcstr(funcstr, sizeof(funcstr), tp, name);
+    return _PyArg_CheckArityValue(funcstr, nargs, kwnames, expected);
+}
+
+int
+_Py_convert_optional_to_ssize_t_value(PyValueBorrow v, void *result)
+{
+    if (PyValue_IsNone(v)) {
+        return 1;
+    }
+    PyNumberMethods *nb = PyValue_TYPE(v)->tp_as_number;
+    if (!PyValue_IsInlineInt(v) && (nb == NULL || nb->nb_index == NULL)) {
+        PyErr_Format(PyExc_TypeError,
+                     "argument should be integer or None, not '%.200s'",
+                     PyValue_TYPE(v)->tp_name);
+        return 0;
+    }
+    Py_ssize_t limit = _PyValue_AsSsize_t(v, PyExc_OverflowError);
+    if (limit == -1 && PyErr_Occurred()) {
+        return 0;
+    }
+    *((Py_ssize_t *)result) = limit;
+    return 1;
+}
+
+int
+_Py_convert_optional_to_non_negative_ssize_t_value(PyValueBorrow v,
+                                                   void *result)
+{
+    if (!_Py_convert_optional_to_ssize_t_value(v, result)) {
+        return 0;
+    }
+    if (!PyValue_IsNone(v) && *((Py_ssize_t *)result) < 0) {
+        PyErr_SetString(PyExc_ValueError, "argument cannot be negative");
+        return 0;
+    }
+    return 1;
+}
+
+int
+_PyArg_SliceIndexValue(PyValueBorrow v, Py_ssize_t *pi)
+{
+    if (PyValue_IsNone(v)) {
+        return 1;
+    }
+    return _PyArg_SliceIndexNotNoneValue(v, pi);
+}
+
+int
+_PyArg_SliceIndexNotNoneValue(PyValueBorrow v, Py_ssize_t *pi)
+{
+    // An inline int fits: it has at most 51 bits.
+    if (PyValue_IsInlineInt(v)) {
+        *pi = (Py_ssize_t)PyValue_InlineInt64(v);
+        return 1;
+    }
+    PyNumberMethods *nb = PyValue_TYPE(v)->tp_as_number;
+    if (nb == NULL || nb->nb_index == NULL) {
+        PyErr_SetString(PyExc_TypeError,
+                        "slice indices must be integers or "
+                        "have an __index__ method");
+        return 0;
+    }
+    // Clipped to the range of Py_ssize_t, as _PyEval_SliceIndexNotNone().
+    Py_ssize_t x = _PyValue_AsSsize_t(v, NULL);
+    if (x == -1 && PyErr_Occurred()) {
+        return 0;
+    }
+    *pi = x;
+    return 1;
+}
+
+/* The position in kwnames of key, -1 if it is absent, or -2 with an
+   exception set: find_keyword() as an index. */
+static Py_ssize_t
+find_keyword_index(PyObject *kwnames, PyObject *key)
+{
+    Py_ssize_t nkwargs = PyTuple_GET_SIZE(kwnames);
+    for (Py_ssize_t i = 0; i < nkwargs; i++) {
+        PyValueBorrow name = PyTuple_GET_VALUE(kwnames, i);
+        if (!PyValue_IsObject(name) ||
+            !PyUnicode_Check(PyValue_AsKnownObjectBorrow(name))) {
+            PyErr_SetString(PyExc_TypeError, "keywords must be strings");
+            return -2;
+        }
+        /* kwname == key will normally find a match in since keyword keys
+           should be interned strings; if not retry below in a new loop. */
+        if (PyValue_AsKnownObjectBorrow(name) == key) {
+            return i;
+        }
+    }
+    for (Py_ssize_t i = 0; i < nkwargs; i++) {
+        PyObject *kwname = PyValue_AsKnownObjectBorrow(
+            PyTuple_GET_VALUE(kwnames, i));
+        if (_PyUnicode_Equal(kwname, key)) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+#undef _PyArg_UnpackKeywordsValue
+
+/* _PyArg_UnpackKeywords() with kwnames, giving indices into args.  Its
+   checks and messages are that function's. */
+int
+_PyArg_UnpackKeywordsValue(const PyValue *args, Py_ssize_t nargs,
+                           PyObject *kwnames, struct _PyArg_Parser *parser,
+                           int minpos, int maxpos, int minkw, int varpos,
+                           Py_ssize_t *index, int nindex)
+{
+    PyObject *kwtuple;
+    PyObject *keyword;
+    int i, posonly, minposonly, maxargs;
+    int reqlimit = minkw ? maxpos + minkw : minpos;
+    Py_ssize_t nkwargs;
+    /* The keyword values follow every positional argument, *args included. */
+    Py_ssize_t kwbase = nargs;
+
+    if (parser == NULL) {
+        PyErr_BadInternalCall();
+        return 0;
+    }
+    if (kwnames != NULL && !PyTuple_Check(kwnames)) {
+        PyErr_BadInternalCall();
+        return 0;
+    }
+    if (parser_init(parser) < 0) {
+        return 0;
+    }
+
+    kwtuple = parser->kwtuple;
+    posonly = parser->pos;
+    minposonly = Py_MIN(posonly, minpos);
+    maxargs = posonly + (int)PyTuple_GET_SIZE(kwtuple);
+    assert(maxargs <= nindex);
+
+    nkwargs = kwnames == NULL ? 0 : PyTuple_GET_SIZE(kwnames);
+    if (nkwargs == 0 && minkw == 0 && minpos <= nargs && (varpos || nargs <= maxpos)) {
+        /* Fast path. */
+        return _PyArg_IndexPositionalValue(nargs, maxpos, index, nindex);
+    }
+    if (!varpos && nargs + nkwargs > maxargs) {
+        /* Adding "keyword" (when nargs == 0) prevents producing wrong error
+           messages in some special cases (see bpo-31229). */
+        PyErr_Format(PyExc_TypeError,
+                     "%.200s%s takes at most %d %sargument%s (%zd given)",
+                     (parser->fname == NULL) ? "function" : parser->fname,
+                     (parser->fname == NULL) ? "" : "()",
+                     maxargs,
+                     (nargs == 0) ? "keyword " : "",
+                     (maxargs == 1) ? "" : "s",
+                     nargs + nkwargs);
+        return 0;
+    }
+    if (!varpos && nargs > maxpos) {
+        if (maxpos == 0) {
+            PyErr_Format(PyExc_TypeError,
+                         "%.200s%s takes no positional arguments",
+                         (parser->fname == NULL) ? "function" : parser->fname,
+                         (parser->fname == NULL) ? "" : "()");
+        }
+        else {
+            PyErr_Format(PyExc_TypeError,
+                         "%.200s%s takes %s %d positional argument%s (%zd given)",
+                         (parser->fname == NULL) ? "function" : parser->fname,
+                         (parser->fname == NULL) ? "" : "()",
+                         (minpos < maxpos) ? "at most" : "exactly",
+                         maxpos,
+                         (maxpos == 1) ? "" : "s",
+                         nargs);
+        }
+        return 0;
+    }
+    if (nargs < minposonly) {
+        PyErr_Format(PyExc_TypeError,
+                     "%.200s%s takes %s %d positional argument%s"
+                     " (%zd given)",
+                     (parser->fname == NULL) ? "function" : parser->fname,
+                     (parser->fname == NULL) ? "" : "()",
+                     (varpos || minposonly < maxpos) ? "at least" : "exactly",
+                     minposonly,
+                     minposonly == 1 ? "" : "s",
+                     nargs);
+        return 0;
+    }
+
+    if (varpos) {
+        nargs = Py_MIN(maxpos, nargs);
+    }
+    for (i = 0; i < nindex; i++) {
+        index[i] = i < nargs ? i : -1;
+    }
+
+    /* find keyword args using kwtuple to drive process */
+    for (i = Py_MAX((int)nargs, posonly); i < maxargs; i++) {
+        Py_ssize_t found = -1;
+        if (nkwargs) {
+            keyword = _PyTuple_GET_OBJECT(kwtuple, i - posonly);
+            found = find_keyword_index(kwnames, keyword);
+            if (found == -2) {
+                return 0;
+            }
+        }
+        else if (i >= reqlimit) {
+            break;
+        }
+
+        if (found >= 0) {
+            index[i] = kwbase + found;
+            --nkwargs;
+        }
+        else if (i < minpos || (maxpos <= i && i < reqlimit)) {
+            /* Less arguments than required */
+            keyword = _PyTuple_GET_OBJECT(kwtuple, i - posonly);
+            PyErr_Format(PyExc_TypeError,  "%.200s%s missing required "
+                         "argument '%U' (pos %d)",
+                         (parser->fname == NULL) ? "function" : parser->fname,
+                         (parser->fname == NULL) ? "" : "()",
+                         keyword, i+1);
+            return 0;
+        }
+    }
+
+    if (nkwargs > 0) {
+        /* make sure there are no arguments given by name and position */
+        for (i = posonly; i < nargs; i++) {
+            keyword = _PyTuple_GET_OBJECT(kwtuple, i - posonly);
+            Py_ssize_t found = find_keyword_index(kwnames, keyword);
+            if (found == -2) {
+                return 0;
+            }
+            if (found >= 0) {
+                /* arg present in tuple and in dict */
+                PyErr_Format(PyExc_TypeError,
+                             "argument for %.200s%s given by name ('%U') "
+                             "and position (%d)",
+                             (parser->fname == NULL) ? "function" : parser->fname,
+                             (parser->fname == NULL) ? "" : "()",
+                             keyword, i+1);
+                return 0;
+            }
+        }
+
+        error_unexpected_keyword_arg(NULL, kwnames, kwtuple, parser->fname);
+        return 0;
+    }
+
+    return 1;
 }
 
 

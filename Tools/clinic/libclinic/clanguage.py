@@ -16,7 +16,7 @@ from libclinic.function import (
     ACCESSORS, SETTERS)
 from libclinic.converters import self_converter
 from libclinic.parse_args import (
-    ParseArgsCodeGen,
+    ParseArgsCodeGen, is_value_function,
     GETSETDEF_PROTOTYPE_COMBINE, GETSETDEF_PROTOTYPE_DEFINE)
 if TYPE_CHECKING:
     from libclinic.app import Clinic
@@ -317,6 +317,7 @@ class CLanguage(Language):
 
         codegen = clinic.codegen
         data = CRenderData()
+        data.value_emission = is_value_function(f, codegen)
 
         assert f.parameters, "We should always have a 'self' at this point!"
         parameters = f.render_parameters
@@ -329,9 +330,12 @@ class CLanguage(Language):
         assert isinstance(f_self.converter, self_converter), "No self parameter in " + repr(f.full_name) + "!"
 
         if f.critical_section:
+            # A value parser's self is a borrow of the object it locks.
+            self_object = ('PyValue_AsKnownObjectBorrow({self_name})'
+                           if data.value_emission else '{self_name}')
             match len(f.target_critical_section):
                 case 0:
-                    lock = 'Py_BEGIN_CRITICAL_SECTION({self_name});'
+                    lock = f'Py_BEGIN_CRITICAL_SECTION({self_object});'
                     unlock = 'Py_END_CRITICAL_SECTION();'
                 case 1:
                     lock = 'Py_BEGIN_CRITICAL_SECTION({target_critical_section});'
@@ -404,7 +408,11 @@ class CLanguage(Language):
 
         template_dict['docstring'] = libclinic.docstring_for_c_string(f.docstring)
         template_dict['self_name'] = template_dict['self_type'] = template_dict['self_type_check'] = ''
-        template_dict['target_critical_section'] = ', '.join(f.target_critical_section)
+        targets = f.target_critical_section
+        if data.value_emission:
+            # The targets are borrowed value arguments; the lock takes objects.
+            targets = [f'PyValue_AsKnownObjectBorrow({t})' for t in targets]
+        template_dict['target_critical_section'] = ', '.join(targets)
         for converter in converters:
             converter.set_template_dict(template_dict)
 
@@ -412,13 +420,21 @@ class CLanguage(Language):
             f.return_converter.render(f, data)
         template_dict['impl_return_type'] = f.return_converter.type
         # tp_init returns int, a slot function returns what its slot
-        # declares, every other parser returns an object.
+        # declares, every other parser returns an object, or a value in
+        # value emission, whose default impl returns a value too.
         if f.kind is SLOT:
             assert f.slot is not None
             template_dict['return_type'] = f.slot.return_type
-        else:
+        elif f.kind is METHOD_INIT:
+            template_dict['return_type'] = 'int'
+        elif data.value_emission:
+            # tp_new's wrapper of the value body returns an object.
             template_dict['return_type'] = (
-                'int' if f.kind is METHOD_INIT else 'PyObject *')
+                'PyObject *' if f.kind is METHOD_NEW else 'PyValue')
+            if f.return_converter.type == 'PyObject *':
+                template_dict['impl_return_type'] = 'PyValue'
+        else:
+            template_dict['return_type'] = 'PyObject *'
 
         template_dict['declarations'] = libclinic.format_escape("\n".join(data.declarations))
         template_dict['initializers'] = "\n\n".join(data.initializers)

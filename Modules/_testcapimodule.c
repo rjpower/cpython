@@ -3930,6 +3930,9 @@ _testcapi_exec(PyObject *m)
     if (_PyTestCapi_Init_ValueSlots(m) < 0) {
         return -1;
     }
+    if (_PyTestCapi_Init_ValueCall(m) < 0) {
+        return -1;
+    }
     return 0;
 }
 

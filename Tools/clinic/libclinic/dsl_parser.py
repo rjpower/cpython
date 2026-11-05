@@ -267,6 +267,9 @@ class DSLParser:
 
     def __init__(self, clinic: Clinic) -> None:
         self.clinic = clinic
+        # Whether a function has been declared in the file: the
+        # value_emission directive must precede them all.
+        self.seen_function = False
 
         self.directives = {}
         for name in dir(self):
@@ -339,6 +342,23 @@ class DSLParser:
         c = Class(name, module, cls, typedef, type_object)
         parent.classes[name] = c
         self.block.signatures.append(c)
+
+    def directive_value_emission(self) -> None:
+        """Emit the value form of every function of the file.
+
+        The parsers take METH_VALUE's arguments, the impls of the default
+        return converter return PyValue, and object parameters are
+        PyValueBorrow (pyjit/design/proposals/value-api-m3.md, section 2).
+        A file is value-emission or not, as its unit is value-native or not.
+        """
+        codegen = self.clinic.codegen
+        if codegen.limited_capi:
+            fail("value_emission cannot be used with the limited C API")
+        if codegen.value_emission:
+            fail("value_emission given twice")
+        if self.seen_function:
+            fail("value_emission must precede the first function of the file")
+        codegen.value_emission = True
 
     def directive_set(self, name: str, value: str) -> None:
         if name not in ("line_prefix", "line_suffix"):
@@ -731,6 +751,7 @@ class DSLParser:
         self.function = function
         self.block.signatures.append(function)
         (cls or module).functions.append(function)
+        self.seen_function = True
         self.next(self.state_function_docstring)
 
     def state_modulename_name(self, line: str) -> None:
@@ -816,6 +837,7 @@ class DSLParser:
         self.block.signatures.append(func)
         self.function = func
         (func.cls or func.module).functions.append(func)
+        self.seen_function = True
 
     def add_accessor(self, func: Function) -> None:
         """Add an accessor to the attribute which it implements."""

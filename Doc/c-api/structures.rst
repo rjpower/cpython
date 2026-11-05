@@ -590,7 +590,7 @@ definition with the same method name.
    or type checking.
 
 
-.. c:function:: PyObject *PyCFunction_GetSelf(PyObject *func)
+.. c:function:: PyObject *PyCFunction_GetSelfRef(PyObject *func)
 
    Get the "self" object on *func*. This is the object that would be passed
    to the first argument of a :c:type:`PyCFunction`. For C function objects
@@ -600,14 +600,9 @@ definition with the same method name.
    If *func* is not a C function object, this fails with an exception.
    *func* must not be ``NULL``.
 
-   This function returns a :term:`borrowed reference` to the "self" object
-   on success, and ``NULL`` with an exception set on failure.
-
-
-.. c:function:: PyObject *PyCFunction_GET_SELF(PyObject *func)
-
-   This is the same as :c:func:`PyCFunction_GetSelf`, but without error or
-   type checking.
+   This function returns a :term:`strong reference` to the "self" object on
+   success, ``NULL`` without an exception set if *func* has no "self", and
+   ``NULL`` with an exception set on failure.
 
 
 .. c:function:: PyTypeObject *PyCFunction_GET_CLASS(PyObject *func)

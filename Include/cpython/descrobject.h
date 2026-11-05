@@ -39,6 +39,9 @@ typedef struct {
     PyDescr_COMMON;
     PyMethodDef *d_method;
     vectorcallfunc vectorcall;
+    /* The value vectorcall of a METH_VALUE method (opaque storage), else
+       NULL. */
+    _Py_valuefunc d_value_vectorcall;
 } PyMethodDescrObject;
 
 typedef struct {

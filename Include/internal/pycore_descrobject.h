@@ -34,6 +34,12 @@ extern PyObject *_PyDescr_NewWrapperPair(PyTypeObject *type,
 
 /* Value-field descriptors only. Get returns an independent owner; Set borrows
    its input and publishes a strong field before releasing the prior owner. */
+/* A new method-wrapper of the slot descriptor descr bound to self, which
+   it DUPs: the value form of PyWrapper_New() (value-api-m3.md, section
+   1.6). self's type must be a subtype of descr's. */
+extern PyObject *_PyWrapper_NewValue(PyObject *descr, PyValueBorrow self);
+#define _PyWrapper_NewValue(D, SELF) (_PyWrapper_NewValue)(D, PyValue_Borrow(SELF))
+
 extern PyValue _PyMember_GetValue(PyObject *, PyMemberDef *);
 extern int _PyMember_SetValue(PyObject *, PyMemberDef *, PyValueBorrow);
 #define _PyMember_SetValue(O, M, V) (_PyMember_SetValue)(O, M, PyValue_Borrow(V))

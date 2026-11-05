@@ -1192,6 +1192,45 @@ _PyThreadState_PopCValueSteal(PyThreadState *tstate, _PyCValue *ref)
         }                                                               \
     } while (0)
 
+/* Call-scratch windows (pyjit/design/proposals/value-api-m3.md, section
+ * 1.1). A call-scratch array is a C array of words that lives for one call
+ * and that no traversal reads; it is not a home (pyvalue.md L1), so it may
+ * hold words with no count. Only these primitives write one. */
+
+/* dst[i] = the canonical borrowed word of src[i], for i < n: an exact int
+   or float becomes inline, any other object its borrowed word. Boxes
+   nothing; the caller keeps src alive for the call. */
+PyAPI_FUNC(void) _PyValue_WindowFromObjects(PyValue *dst,
+                                            PyObject *const *src,
+                                            Py_ssize_t n);
+/* dst[i] = the word of src[i] (a window or tuple items), no count. */
+PyAPI_FUNC(void) _PyValue_WindowCopy(PyValue *dst, const PyValue *src,
+                                     Py_ssize_t n);
+/* For a dict: dst[i] = an owner (PyValue_DUP) of its i-th value, and
+   *kwnames = a new tuple of its keys, in order. The keys must be str
+   (else TypeError, as upstream's "keywords must be strings"). Returns the
+   number of words written, or -1 with an exception set and nothing
+   owned. The caller closes dst[0..n) after the call: the callee may mutate
+   a dict that other code shares. */
+PyAPI_FUNC(Py_ssize_t) _PyValue_WindowFromDictValues(PyValue *dst,
+                                                     PyObject *dict,
+                                                     PyObject **kwnames);
+/* *dst = the word of the borrow v, no count: one argument of a fixed-arity
+   call (_PyValue_CallOneArg). */
+static inline void
+_PyValue_WindowPut(PyValue *dst, PyValueBorrow v)
+{
+    dst->bits = v.bits;
+}
+#define _PyValue_WindowPut(DST, V) (_PyValue_WindowPut)(DST, PyValue_Borrow(V))
+
+/* The identity hash of v (value-api-m3.md, section 1.6): Py_HashPointer of
+   its identity, the word of an inline value and _PyObject_ValueIdentity()
+   of an object, so that it agrees with PyValue_Is() (a box of 5 and an
+   inline 5 hash equally). Never calls __hash__. */
+PyAPI_FUNC(Py_hash_t) _PyValue_IdentityHash(PyValueBorrow v);
+#define _PyValue_IdentityHash(V0) (_PyValue_IdentityHash)(PyValue_Borrow(V0))
+
 static inline void
 _PyValue_CloseStack(PyValue *arguments, int total_args)
 {

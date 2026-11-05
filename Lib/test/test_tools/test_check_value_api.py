@@ -88,6 +88,21 @@ class TextRuleTests(unittest.TestCase):
         # only; check_value_api.py decides the units with clang-query.
         self.assertEqual(check_value_api.check_raw_bits_text(self.srcdir), [])
 
+    def test_call_text_self_tests(self):
+        for name, (path, text, rule, count) in (
+                check_value_api.CALL_TEXT_TESTS.items()):
+            with self.subTest(unit=name):
+                findings = [f for f in
+                            check_value_api.window_read_text(path, text)
+                            + check_value_api.vectorcall_thunk_text(path, text)
+                            if f.rule == rule]
+                self.assertEqual(len(findings), count, findings)
+
+    def test_call_text(self):
+        # window-read and vectorcall-thunk (value-api-m3.md, sections 1.1
+        # and 1.7).
+        self.assertEqual(check_value_api.check_call_text(self.srcdir), [])
+
     def test_public_headers(self):
         self.assertEqual(check_value_api.check_public_headers(self.srcdir), [])
 

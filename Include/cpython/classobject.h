@@ -9,13 +9,9 @@
 extern "C" {
 #endif
 
-typedef struct {
-    PyObject_HEAD
-    PyObject *im_func;   /* The callable object implementing the method */
-    PyObject *im_self;   /* The instance it is bound to */
-    PyObject *im_weakreflist; /* List of weak references */
-    vectorcallfunc vectorcall;
-} PyMethodObject;
+// The layout of PyMethodObject is internal
+// (Include/internal/pycore_classobject.h): im_self is a value word.
+typedef struct PyMethodObject PyMethodObject;
 
 PyAPI_DATA(PyTypeObject) PyMethod_Type;
 
@@ -24,22 +20,20 @@ PyAPI_DATA(PyTypeObject) PyMethod_Type;
 PyAPI_FUNC(PyObject *) PyMethod_New(PyObject *, PyObject *);
 
 PyAPI_FUNC(PyObject *) PyMethod_Function(PyObject *);
-PyAPI_FUNC(PyObject *) PyMethod_Self(PyObject *);
+/* A new reference to the instance a method is bound to (a box of an inline
+   value). */
+PyAPI_FUNC(PyObject *) PyMethod_GetSelfRef(PyObject *);
 
 #define _PyMethod_CAST(meth) \
     (assert(PyMethod_Check(meth)), _Py_CAST(PyMethodObject*, meth))
 
-/* Static inline functions for direct access to these values.
-   Type checks are *not* done, so use with care. */
-static inline PyObject* PyMethod_GET_FUNCTION(PyObject *meth) {
-    return _PyMethod_CAST(meth)->im_func;
-}
+#ifndef Py_BUILD_CORE
+/* Direct access, with no type check; inline inside the core
+   (Include/internal/pycore_classobject.h). The borrowed PyMethod_GET_SELF
+   is gone: use PyMethod_GetSelfRef(). */
+PyAPI_FUNC(PyObject *) PyMethod_GET_FUNCTION(PyObject *meth);
 #define PyMethod_GET_FUNCTION(meth) PyMethod_GET_FUNCTION(_PyObject_CAST(meth))
-
-static inline PyObject* PyMethod_GET_SELF(PyObject *meth) {
-    return _PyMethod_CAST(meth)->im_self;
-}
-#define PyMethod_GET_SELF(meth) PyMethod_GET_SELF(_PyObject_CAST(meth))
+#endif
 
 typedef struct {
     PyObject_HEAD

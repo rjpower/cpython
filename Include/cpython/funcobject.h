@@ -44,6 +44,9 @@ typedef struct {
     PyObject *func_annotate;    /* Callable to fill the annotations dictionary */
     PyObject *func_typeparams;  /* Tuple of active type variables or NULL */
     vectorcallfunc vectorcall;
+    /* The value vectorcall (opaque storage): _PyFunction_ValueVectorcall
+       while vectorcall is _PyFunction_Vectorcall, else NULL. */
+    _Py_valuefunc func_value_vectorcall;
     /* Version number for use by specializer.
      * Can set to non-zero when we want to specialize.
      * Will be set to zero if any of these change:

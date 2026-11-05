@@ -3441,7 +3441,7 @@ set_vectorcall_nop(PyObject *self, PyObject *func)
         return NULL;
     }
 
-    ((PyFunctionObject*)func)->vectorcall = vectorcall_nop;
+    PyFunction_SetVectorcall((PyFunctionObject *)func, vectorcall_nop);
     Py_RETURN_NONE;
 }
 
@@ -4388,6 +4388,9 @@ module_exec(PyObject *module)
         return 1;
     }
     if (_PyTestInternalCapi_Init_ValueSlots(module) < 0) {
+        return 1;
+    }
+    if (_PyTestInternalCapi_Init_ValueCall(module) < 0) {
         return 1;
     }
 

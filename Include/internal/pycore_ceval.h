@@ -128,6 +128,12 @@ _PyEval_EvalFrame(PyThreadState *tstate, _PyInterpreterFrame *frame, int throwfl
     return result;
 }
 
+/* Run frame and return its result as a value (body in Objects/call.c).
+   Until I3 makes INTERPRETER_EXIT return the word, and permanently for a
+   frame run by a PEP 523 hook, it converts the object result by steal. */
+extern PyValue _PyEval_EvalFrameValue(PyThreadState *tstate,
+                                      _PyInterpreterFrame *frame);
+
 extern PyObject*
 _PyEval_Vector(PyThreadState *tstate,
             PyFunctionObject *func, PyObject *locals,

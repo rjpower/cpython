@@ -3894,6 +3894,66 @@ class ClinicExternalTest(TestCase):
 
         self.assertEqual(new_contents, orig_contents)
 
+    def test_external_value(self):
+        # Value-emission output (a file with the value_emission directive).
+        CLINIC_TEST = 'clinic_value.test.c'
+        source = support.findfile(CLINIC_TEST)
+        with open(source, encoding='utf-8') as f:
+            orig_contents = f.read()
+
+        self.addCleanup(unlink, TESTFN)
+        out = self.expect_success("-f", "-o", TESTFN, source)
+        self.assertEqual(out, "")
+
+        with open(TESTFN, encoding='utf-8') as f:
+            new_contents = f.read()
+
+        self.assertEqual(new_contents, orig_contents)
+
+    VALUE_GUARD = dedent("""\
+        #ifndef Py_VALUE_CORE
+        #  error "value-emission Clinic output requires Py_VALUE_CORE"
+        #endif
+    """)
+
+    def generate_file(self, code):
+        """Run Clinic on code in a temp dir; return the generated header."""
+        with os_helper.temp_dir() as tmp_dir:
+            fn = os.path.join(tmp_dir, "test.c")
+            with open(fn, "w", encoding="utf-8") as f:
+                f.write(code)
+            self.expect_success(fn)
+            with open(self.dest_file(fn), encoding="utf-8") as f:
+                return f.read()
+
+    def test_value_emission_header_guard(self):
+        generated = self.generate_file(dedent("""
+            /*[clinic input]
+            value_emission
+            [clinic start generated code]*/
+
+            /*[clinic input]
+            output everything file
+            module m
+            m.f
+            [clinic start generated code]*/
+        """))
+        # The guard follows the "preserve" header and precedes every include.
+        self.assertIn(self.VALUE_GUARD, generated)
+        self.assertLess(generated.index(self.VALUE_GUARD),
+                        generated.index('#include'))
+        self.assertIn("METH_VALUE", generated)
+
+    def test_no_header_guard_without_value_emission(self):
+        generated = self.generate_file(dedent("""
+            /*[clinic input]
+            output everything file
+            f
+            [clinic start generated code]*/
+        """))
+        self.assertNotIn("Py_VALUE_CORE", generated)
+        self.assertNotIn("METH_VALUE", generated)
+
     def test_no_change(self):
         # bpo-42398: Test that the destination file is left unchanged if the
         # content does not change. Moreover, check also that the file
@@ -5950,6 +6010,414 @@ class LimitedCAPIOutputTests(unittest.TestCase):
         err = ("the limited C API cannot parse positional parameters "
                "before *args from a tuple")
         _expect_failure(self, self.clinic.parse, block, err)
+
+
+class ValueEmissionTests(unittest.TestCase):
+    """Text of the value form: the file starts with value_emission."""
+
+    def setUp(self):
+        self.clinic = _make_clinic()
+
+    def generate(self, block, *, preamble='module m\nclass m.T "TestObj *" "TestType"'):
+        text = dedent("""
+            /*[clinic input]
+            output everything buffer
+            value_emission
+            [clinic start generated code]*/
+            /*[clinic input]
+            {preamble}
+            {block}
+            [clinic start generated code]*/
+            /*[clinic input]
+            dump buffer
+            [clinic start generated code]*/
+        """).format(preamble=preamble, block=dedent(block).strip('\n'))
+        # A fresh Clinic per call: value_emission may be given only once.
+        return _make_clinic().parse(text)
+
+    def test_function_is_meth_value(self):
+        generated = self.generate("""
+            m.f
+                a: object
+                /
+        """)
+        self.assertIn('_PyCFunction_CAST(m_f), METH_VALUE, m_f__doc__}', generated)
+        self.assertNotIn('METH_FASTCALL', generated)
+        self.assertNotIn('METH_O', generated)
+
+    def test_method_is_meth_value(self):
+        generated = self.generate("""
+            m.T.f
+        """)
+        self.assertIn('METH_VALUE, m_T_f__doc__}', generated)
+        self.assertNotIn('METH_VALUE|METH_METHOD', generated)
+
+    def test_defining_class_is_meth_value_method(self):
+        generated = self.generate("""
+            m.T.f
+                cls: defining_class
+                /
+        """)
+        self.assertIn('METH_VALUE|METH_METHOD', generated)
+        self.assertIn(
+            'm_T_f(PyValueBorrow self, PyTypeObject *cls, const PyValue *args, '
+            'Py_ssize_t nargs, PyObject *kwnames)', generated)
+
+    def test_parser_prototype(self):
+        generated = self.generate("""
+            m.f
+                a: object
+                /
+        """)
+        self.assertIn(
+            'static PyValue\n'
+            'm_f(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, '
+            'PyObject *kwnames)\n{', generated)
+        self.assertIn('PyValue return_value = PyValue_NULL;', generated)
+
+    def test_impl_returns_value(self):
+        generated = self.generate("""
+            m.f
+                a: object
+                /
+        """)
+        self.assertIn('static PyValue\nm_f_impl(PyObject *module, PyValueBorrow a);',
+                      generated)
+
+    def test_object_parameter_is_borrow(self):
+        generated = self.generate("""
+            m.f
+                a: object
+                b: int
+                /
+        """)
+        self.assertIn('PyValueBorrow a;', generated)
+        self.assertIn('a = PyValue_Borrow(args[0]);', generated)
+        self.assertIn('b = _PyValue_AsInt(PyValue_Borrow(args[1]));', generated)
+
+    def test_value_self(self):
+        generated = self.generate("""
+            m.I.f
+                a: object
+                /
+        """, preamble='module m\nclass m.I "PyValueBorrow" "&PyLong_Type"')
+        self.assertIn('m_I_f_impl(PyValueBorrow self, PyValueBorrow a);', generated)
+        self.assertIn('m_I_f_impl(self, a)', generated)
+
+    def test_arity_no_parameters(self):
+        generated = self.generate("""
+            m.f
+        """)
+        self.assertIn('_PyArg_CheckArityValue("m.f()", nargs, kwnames, 0)', generated)
+
+    def test_arity_one_object(self):
+        generated = self.generate("""
+            m.f
+                a: object
+                /
+        """)
+        self.assertIn('_PyArg_CheckArityValue("m.f()", nargs, kwnames, 1)', generated)
+
+    def test_arity_positional_only(self):
+        generated = self.generate("""
+            m.f
+                a: object
+                b: object = None
+                /
+        """)
+        self.assertIn('_PyArg_NoKwnamesValue("m.f()", kwnames)', generated)
+        self.assertIn('_PyArg_CheckPositional("f", nargs, 1, 2)', generated)
+        self.assertNotIn('_PyArg_CheckArityValue', generated)
+
+    def test_arity_method_uses_class_name(self):
+        generated = self.generate("""
+            m.T.f
+        """)
+        self.assertIn('_PyArg_CheckArityValue("T.f()", nargs, kwnames, 0)', generated)
+
+    def test_arity_builtins_module(self):
+        generated = self.generate("""
+            builtins.f
+                a: object
+                /
+        """, preamble='module builtins')
+        self.assertIn('_PyArg_CheckArityValue("f()", nargs, kwnames, 1)', generated)
+
+    def test_optional_ssize_t(self):
+        for args, converter in [
+            ('', '_Py_convert_optional_to_ssize_t_value'),
+            (', allow_negative=False',
+             '_Py_convert_optional_to_non_negative_ssize_t_value'),
+        ]:
+            with self.subTest(converter=converter):
+                generated = self.generate(f"""
+                    m.f
+                        a: Py_ssize_t(accept={{int, NoneType}}{args}) = -1
+                        /
+                """)
+                self.assertIn(
+                    f'if (!{converter}(PyValue_Borrow(args[0]), &a)) {{',
+                    generated)
+
+    def test_keyword_parameters_use_index_parser(self):
+        generated = self.generate("""
+            m.f
+                x: object
+                /
+                n: int = 1
+                *
+                scale: double = 1.0
+        """)
+        self.assertIn('Py_ssize_t _idx[3];', generated)
+        self.assertIn(
+            '_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,\n'
+            '            /*minpos*/ 1, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, '
+            '_idx, 3)', generated)
+        self.assertIn('x = PyValue_Borrow(args[_idx[0]]);', generated)
+        self.assertIn('n = _PyValue_AsInt(PyValue_Borrow(args[_idx[1]]));', generated)
+        self.assertIn('scale = _PyValue_AsDouble(PyValue_Borrow(args[_idx[2]]));',
+                      generated)
+
+    def test_varpos_tuple_and_array(self):
+        generated = self.generate("""
+            m.f
+                a: object
+                /
+                *args: tuple
+        """)
+        self.assertIn('_PyTuple_FromValueArray(args + 1,', generated)
+        generated = self.generate("""
+            m.f
+                a: object
+                /
+                *args: array
+        """)
+        self.assertIn('const PyValue *args,', generated)
+        self.assertIn('Py_ssize_t args_length', generated)
+        self.assertIn('__clinic_args = args + 1;', generated)
+
+    def test_var_keyword(self):
+        generated = self.generate("""
+            m.f
+                a: object
+                /
+                **kwargs: dict
+        """)
+        self.assertIn('_PyValue_StackAsDict(args + nargs, kwnames)', generated)
+
+    def test_typed_return_converters(self):
+        for ctype, call in [
+            ('bool', 'PyValue_True : PyValue_False'),
+            ('int', 'PyValue_FromInt64((int64_t)_return_value)'),
+            ('Py_ssize_t', 'PyValue_FromInt64((int64_t)_return_value)'),
+            ('long', 'PyValue_FromInt64((int64_t)_return_value)'),
+            ('double', 'PyValue_FromDouble(_return_value)'),
+            ('float', 'PyValue_FromDouble((double)_return_value)'),
+        ]:
+            with self.subTest(ctype=ctype):
+                generated = self.generate(f"""
+                    m.f -> {ctype}
+                """)
+                self.assertIn(call, generated)
+                self.assertIn('static PyValue\nm_f(PyValueBorrow module', generated)
+
+    def test_object_only_converter_tests_tag(self):
+        generated = self.generate("""
+            m.f
+                a: unicode
+                /
+        """)
+        tag = 'if (!PyValue_IsObject(PyValue_Borrow(args[0]))) {'
+        # As METH_O, the sole argument is "argument".
+        bad = '_PyArg_BadArgumentValue("f", "argument", "str", PyValue_Borrow(args[0]));'
+        self.assertIn(tag, generated)
+        self.assertIn(bad, generated)
+        self.assertLess(generated.index(tag), generated.index('PyUnicode_Check('))
+
+    def test_subclass_of(self):
+        generated = self.generate("""
+            m.f
+                a: object(subclass_of="&PyLong_Type")
+                /
+        """)
+        self.assertIn(
+            'PyType_IsSubtype(PyValue_TYPE(PyValue_Borrow(args[0])), &PyLong_Type)',
+            generated)
+        self.assertIn('PyValueBorrow a;', generated)
+
+    def test_object_converter_function(self):
+        generated = self.generate("""
+            m.f
+                a: object(converter="conv")
+                /
+        """)
+        self.assertIn('conv(PyValue_Borrow(args[0]), &a)', generated)
+
+    def test_new_and_init_bodies(self):
+        generated = self.generate("""
+            @classmethod
+            m.T.__new__
+                a: object
+                /
+        """)
+        self.assertIn(
+            'static PyValue\nm_T_value(PyTypeObject *type, const PyValue *args, '
+            'Py_ssize_t nargs, PyObject *kwnames)', generated)
+        self.assertIn('_PyValue_StackUnpackDict(', generated)
+        self.assertIn('_PyTuple_ITEMS(args), nargs, NULL', generated)
+        generated = self.generate("""
+            m.T.__init__
+                a: object
+                /
+        """)
+        self.assertIn(
+            'static int\nm_T___init___value(PyObject *self, const PyValue *args, '
+            'Py_ssize_t nargs, PyObject *kwnames)', generated)
+
+    def test_vectorcall_calls_body(self):
+        generated = self.generate("""
+            @vectorcall
+            @classmethod
+            m.T.__new__
+                a: object
+                /
+        """)
+        self.assertIn(
+            'static PyValue\nm_T_vectorcall(PyThreadState *tstate, PyObject *type, '
+            'const PyValue *args,\n    size_t nargsf, PyObject *kwnames)', generated)
+        self.assertIn('return m_T_value(_PyType_CAST(type), args, nargs, kwnames);',
+                      generated)
+
+    def test_getter_keeps_object_form(self):
+        generated = self.generate("""
+            @getter
+            m.T.prop -> int
+        """)
+        self.assertIn('static PyObject *\nm_T_prop_get(PyObject *self, void *', generated)
+        self.assertNotIn('PyValue', generated)
+
+    def test_setter_keeps_object_form(self):
+        generated = self.generate("""
+            @setter
+            m.T.prop
+        """)
+        self.assertIn('m_T_prop_set(PyObject *self, PyObject *arg, void *', generated)
+        self.assertNotIn('PyValue', generated)
+
+    def expect_failure(self, code, err, *, clinic=None):
+        clinic = clinic or self.clinic
+        _expect_failure(self, clinic.parse, dedent(code), err)
+
+    def test_refused_in_limited_capi(self):
+        self.expect_failure("""
+            /*[clinic input]
+            value_emission
+            [clinic start generated code]*/
+        """, "value_emission cannot be used with the limited C API",
+            clinic=_make_clinic(limited_capi=True))
+
+    def test_refused_after_function(self):
+        self.expect_failure("""
+            /*[clinic input]
+            module m
+            m.f
+            [clinic start generated code]*/
+            /*[clinic input]
+            value_emission
+            [clinic start generated code]*/
+        """, "value_emission must precede the first function of the file")
+
+    def test_refused_twice(self):
+        self.expect_failure("""
+            /*[clinic input]
+            value_emission
+            [clinic start generated code]*/
+            /*[clinic input]
+            value_emission
+            [clinic start generated code]*/
+        """, "value_emission given twice")
+
+    def refused(self, body, what):
+        self.expect_failure(f"""
+            /*[clinic input]
+            value_emission
+            [clinic start generated code]*/
+            /*[clinic input]
+            output everything buffer
+            module m
+            {indent(dedent(body), ' ' * 12).strip()}
+            [clinic start generated code]*/
+        """, f"m.f: value emission does not support {what}")
+
+    def test_function_without_module_is_named_bare(self):
+        # No module declared: the file is accepted, the name is the bare one.
+        generated = self.generate("""
+            f as m_f
+        """, preamble='')
+        self.assertIn('_PyArg_CheckArityValue("f()", nargs, kwnames, 0)', generated)
+
+    def test_arity_method_of_static_type(self):
+        # The runtime type name, not the Clinic class name.
+        generated = self.generate("""
+            m.T.meth
+        """, preamble='module m\nclass m.T "TestObj *" "&TestType"')
+        self.assertIn('_PyArg_CheckArityValueMethod(&TestType, "meth", nargs, kwnames, 0)',
+                      generated)
+
+    def test_critical_section_targets_are_objects(self):
+        generated = self.generate("""
+            @critical_section self a
+            m.T.meth
+                a: object
+                /
+        """)
+        self.assertIn('Py_BEGIN_CRITICAL_SECTION2(PyValue_AsKnownObjectBorrow(self), '
+                      'PyValue_AsKnownObjectBorrow(a));', generated)
+
+    def test_arity_function_outside_module(self):
+        # "abs as builtin_abs" in a file whose module is builtins.
+        generated = self.generate("""
+            f as m_f
+                a: object
+                /
+        """, preamble='module builtins')
+        self.assertIn('_PyArg_CheckArityValue("f()", nargs, kwnames, 1)', generated)
+        generated = self.generate("""
+            f as m_f
+        """)
+        self.assertIn('_PyArg_CheckArityValue("m.f()", nargs, kwnames, 0)', generated)
+
+    def test_refused_converter_without_value_form(self):
+        self.refused("""
+            m.f
+                a: short
+                /
+        """, "the 'short' converter of parameter 'a'")
+
+    def test_refused_optional_groups(self):
+        self.refused("""
+            m.f
+                [
+                a: int
+                ]
+                /
+        """, "optional groups")
+
+    def test_refused_deprecated_parameters(self):
+        self.refused("""
+            m.f
+                a: int = 0
+                [until 3.14] b: int = 0
+                /
+        """, "deprecated parameters")
+
+    def test_refused_aliases(self):
+        self.refused("""
+            m.f
+                a: int
+                *
+                b as a: int = 0
+        """, "parameter aliases")
 
 
 class TupleReceiverOutputTests(unittest.TestCase):

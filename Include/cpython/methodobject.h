@@ -2,28 +2,15 @@
 #  error "this header file must not be included directly"
 #endif
 
-// PyCFunctionObject structure
+// The layouts of PyCFunctionObject and PyCMethodObject are internal
+// (Include/internal/pycore_methodobject.h): self is a value word.
 
-typedef struct {
-    PyObject_HEAD
-    PyMethodDef *m_ml; /* Description of the C function to call */
-    PyObject    *m_self; /* Passed as 'self' arg to the C func, can be NULL */
-    PyObject    *m_module; /* The __module__ attribute, can be anything */
-    PyObject    *m_weakreflist; /* List of weak references */
-    vectorcallfunc vectorcall;
-} PyCFunctionObject;
+typedef struct PyCFunctionObject PyCFunctionObject;
+typedef struct PyCMethodObject PyCMethodObject;
 
 #define _PyCFunctionObject_CAST(func) \
     (assert(PyCFunction_Check(func)), \
      _Py_CAST(PyCFunctionObject*, (func)))
-
-
-// PyCMethodObject structure
-
-typedef struct {
-    PyCFunctionObject func;
-    PyTypeObject *mm_class; /* Class that defines this method */
-} PyCMethodObject;
 
 #define _PyCMethodObject_CAST(func) \
     (assert(PyCMethod_Check(func)), \
@@ -35,32 +22,21 @@ PyAPI_DATA(PyTypeObject) PyCMethod_Type;
 #define PyCMethod_Check(op) PyObject_TypeCheck((op), &PyCMethod_Type)
 
 
-/* Static inline functions for direct access to these values.
-   Type checks are *not* done, so use with care. */
-static inline PyCFunction PyCFunction_GET_FUNCTION(PyObject *func) {
-    return _PyCFunctionObject_CAST(func)->m_ml->ml_meth;
-}
-#define PyCFunction_GET_FUNCTION(func) PyCFunction_GET_FUNCTION(_PyObject_CAST(func))
+/* A new reference to the self of a builtin function or method (a box of an
+   inline value), or NULL with no exception set if it has none (a module
+   function's module is its self). */
+PyAPI_FUNC(PyObject *) PyCFunction_GetSelfRef(PyObject *func);
 
-static inline PyObject* PyCFunction_GET_SELF(PyObject *func_obj) {
-    PyCFunctionObject *func = _PyCFunctionObject_CAST(func_obj);
-    if (func->m_ml->ml_flags & METH_STATIC) {
-        return _Py_NULL;
-    }
-    return func->m_self;
-}
-#define PyCFunction_GET_SELF(func) PyCFunction_GET_SELF(_PyObject_CAST(func))
-
-static inline int PyCFunction_GET_FLAGS(PyObject *func) {
-    return _PyCFunctionObject_CAST(func)->m_ml->ml_flags;
-}
+#ifndef Py_BUILD_CORE
+/* Direct access, with no type checks. Inside the core these are inline
+   (Include/internal/pycore_methodobject.h). The borrowed PyCFunction_GET_SELF
+   is gone: an inline self has no object to lend; use
+   PyCFunction_GetSelfRef(). */
+PyAPI_FUNC(PyCFunction) PyCFunction_GET_FUNCTION(PyObject *func);
+#define PyCFunction_GET_FUNCTION(func) \
+    PyCFunction_GET_FUNCTION(_PyObject_CAST(func))
+PyAPI_FUNC(int) PyCFunction_GET_FLAGS(PyObject *func);
 #define PyCFunction_GET_FLAGS(func) PyCFunction_GET_FLAGS(_PyObject_CAST(func))
-
-static inline PyTypeObject* PyCFunction_GET_CLASS(PyObject *func_obj) {
-    PyCFunctionObject *func = _PyCFunctionObject_CAST(func_obj);
-    if (func->m_ml->ml_flags & METH_METHOD) {
-        return _PyCMethodObject_CAST(func)->mm_class;
-    }
-    return _Py_NULL;
-}
+PyAPI_FUNC(PyTypeObject *) PyCFunction_GET_CLASS(PyObject *func);
 #define PyCFunction_GET_CLASS(func) PyCFunction_GET_CLASS(_PyObject_CAST(func))
+#endif

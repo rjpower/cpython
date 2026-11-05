@@ -5,6 +5,7 @@
 #include "pycore_dict.h"          // _PyDict_NewPresized()
 #include "pycore_function.h"      // _PyFunction_Vectorcall() definition
 #include "pycore_list.h"          // PyList_GET_VALUE()
+#include "pycore_interpframe.h"   // _PyEvalFramePushAndInit()
 #include "pycore_modsupport.h"    // _Py_VaBuildStack()
 #include "pycore_object.h"        // _PyCFunctionWithKeywords_TrampolineCall()
 #include "pycore_pyerrors.h"      // _PyErr_Occurred()
@@ -12,6 +13,7 @@
 #include "pycore_tuple.h"         // _PyTuple_GET_OBJECT()
 #include "pycore_value.h"         // Owning object bridges and cleanup
 #include "pycore_value_api.h"     // _PyValue_AsObjectAt()
+#include "pycore_value_call.h"    // _PyValue_VectorcallTstate()
 
 
 static PyObject *
@@ -243,69 +245,6 @@ PyVectorcall_Function(PyObject *callable)
 }
 
 
-static PyObject *
-_PyVectorcall_Call(PyThreadState *tstate, PyObject *callable,
-                   PyObject *tuple, PyObject *kwargs, bool respect_flags)
-{
-    /* The tuple's items are lent to the callee as a borrow-stack run. */
-    _PyBorrowMark mark = _PyBorrowScope_Enter(tstate);
-    PyObject *const *stack = NULL;
-    PyObject *kwnames = NULL;
-    PyObject *result = NULL;
-    Py_ssize_t nargs = PyTuple_GET_SIZE(tuple);
-    PyObject *const *args = _PyBorrow_TupleItems(tuple, nargs);
-    if (args == NULL) {
-        goto done;
-    }
-    size_t nargsf = nargs;
-    if (kwargs != NULL && PyDict_GET_SIZE(kwargs) != 0) {
-        stack = _PyStack_UnpackDict(tstate, args, nargs, kwargs, &kwnames);
-        if (stack == NULL) {
-            goto done;
-        }
-        args = stack;
-        nargsf |= PY_VECTORCALL_ARGUMENTS_OFFSET;
-    }
-    vectorcallfunc func = NULL;
-    if (respect_flags) {
-        func = PyVectorcall_Function(callable);
-        if (func == NULL) {
-            /* Ordinary Call retains its original tuple/dict input contract. */
-            ternaryfunc call = Py_TYPE(callable)->tp_call;
-            if (call == NULL) {
-                object_is_not_callable(tstate, callable);
-                goto done;
-            }
-            if (_Py_EnterRecursiveCallTstate(tstate, " while calling a Python object") == 0) {
-                result = call(callable, tuple, kwargs);
-                _Py_LeaveRecursiveCallTstate(tstate);
-            }
-            goto done;
-        }
-    }
-    else {
-        /* Public PyVectorcall_Call intentionally ignores HAVE_VECTORCALL. */
-        Py_ssize_t offset = Py_TYPE(callable)->tp_vectorcall_offset;
-        if (offset > 0) {
-            memcpy(&func, (char *)callable + offset, sizeof(func));
-        }
-        if (func == NULL) {
-            _PyErr_Format(tstate, PyExc_TypeError,
-                          "'%.200s' object does not support vectorcall",
-                          Py_TYPE(callable)->tp_name);
-            goto done;
-        }
-    }
-    result = func(callable, args, nargsf, kwnames);
-done:
-    if (stack != NULL) {
-        _PyStack_UnpackDict_Free(stack, nargs, kwnames);
-    }
-    _PyBorrowScope_Exit(tstate, mark);
-    return _Py_CheckFunctionResult(tstate, callable, result, NULL);
-}
-
-
 PyObject *
 PyVectorcall_Call(PyObject *callable, PyObject *tuple, PyObject *kwargs)
 {
@@ -322,16 +261,26 @@ PyVectorcall_Call(PyObject *callable, PyObject *tuple, PyObject *kwargs)
     }
     assert(PyCallable_Check(callable));
 
-    vectorcallfunc func;
-    memcpy(&func, (char *) callable + offset, sizeof(func));
-    if (func == NULL) {
-        _PyErr_Format(tstate, PyExc_TypeError,
-                      "'%.200s' object does not support vectorcall",
-                      Py_TYPE(callable)->tp_name);
-        return NULL;
+    /* The tuple's words are the window (D11): no box on entry. */
+    Py_ssize_t nargs = PyTuple_GET_SIZE(tuple);
+    PyValue res;
+    if (kwargs == NULL || PyDict_GET_SIZE(kwargs) == 0) {
+        res = _PyValue_InstanceVectorcall(tstate, callable,
+                                          _PyTuple_ITEMS(tuple), nargs, NULL);
     }
-
-    return _PyVectorcall_Call(tstate, callable, tuple, kwargs, false);
+    else {
+        PyObject *kwnames;
+        PyValue *window = _PyValue_StackUnpackDict(
+            tstate, _PyTuple_ITEMS(tuple), nargs, kwargs, &kwnames);
+        if (window == NULL) {
+            return NULL;
+        }
+        res = _PyValue_InstanceVectorcall(
+            tstate, callable, window, nargs | PY_VECTORCALL_ARGUMENTS_OFFSET,
+            kwnames);
+        _PyValue_StackUnpackDict_Free(window, nargs, kwnames);
+    }
+    return _PyValue_THUNK_EXIT(res);
 }
 
 
@@ -349,9 +298,6 @@ PyObject *
 _PyObject_Call(PyThreadState *tstate, PyObject *callable,
                PyObject *args, PyObject *kwargs)
 {
-    ternaryfunc call;
-    PyObject *result;
-
     /* PyObject_Call() must not be called with an exception set,
        because it can clear it (directly or indirectly) and so the
        caller loses its exception */
@@ -359,29 +305,8 @@ _PyObject_Call(PyThreadState *tstate, PyObject *callable,
     assert(PyTuple_Check(args));
     assert(kwargs == NULL || PyDict_Check(kwargs));
     EVAL_CALL_STAT_INC_IF_FUNCTION(EVAL_CALL_API, callable);
-    vectorcallfunc vector_func = PyVectorcall_Function(callable);
-    if (vector_func != NULL) {
-        return _PyVectorcall_Call(tstate, callable, args, kwargs, true);
-    }
-    else {
-        call = Py_TYPE(callable)->tp_call;
-        if (call == NULL) {
-            object_is_not_callable(tstate, callable);
-            return NULL;
-        }
-
-        if (_Py_EnterRecursiveCallTstate(tstate, " while calling a Python object")) {
-            return NULL;
-        }
-
-        _PyBorrowMark mark = _PyBorrowScope_Enter(tstate);
-        result = (*call)(callable, args, kwargs);
-        _PyBorrowScope_Exit(tstate, mark);
-
-        _Py_LeaveRecursiveCallTstate(tstate);
-
-        return _Py_CheckFunctionResult(tstate, callable, result, NULL);
-    }
+    return _PyValue_THUNK_EXIT(
+        _PyValue_Call(tstate, PyValue_FromObjectBorrow(callable), args, kwargs));
 }
 
 PyObject *
@@ -416,24 +341,143 @@ PyObject_CallOneArg(PyObject *func, PyObject *arg)
 
 /* --- PyFunction call functions ---------------------------------- */
 
-PyObject *
-_PyFunction_Vectorcall(PyObject *func, PyObject* const* stack,
-                       size_t nargsf, PyObject *kwnames)
+PyValue
+_PyFunction_ValueVectorcall(PyThreadState *tstate, PyObject *func,
+                            const PyValue *args, size_t nargsf,
+                            PyObject *kwnames)
 {
     assert(PyFunction_Check(func));
     PyFunctionObject *f = (PyFunctionObject *)func;
     Py_ssize_t nargs = PyVectorcall_NARGS(nargsf);
     assert(nargs >= 0);
-    PyThreadState *tstate = _PyThreadState_GET();
-    assert(nargs == 0 || stack != NULL);
+    assert(nargs == 0 || args != NULL);
     EVAL_CALL_STAT_INC(EVAL_CALL_FUNCTION_VECTORCALL);
-    if (((PyCodeObject *)f->func_code)->co_flags & CO_OPTIMIZED) {
-        return _PyEval_Vector(tstate, f, NULL, stack, nargs, kwnames);
+    Py_ssize_t total = nargs + (kwnames == NULL ? 0 : PyTuple_GET_SIZE(kwnames));
+    /* _PyEvalFramePushAndInit consumes owners: DUP the window. */
+    PyValue small[8];
+    PyValue *owners = small;
+    if (total > (Py_ssize_t)Py_ARRAY_LENGTH(small)) {
+        owners = PyMem_Malloc(sizeof(PyValue) * (size_t)total);
+        if (owners == NULL) {
+            _PyErr_NoMemory(tstate);
+            return PyValue_NULL;
+        }
     }
-    else {
-        return _PyEval_Vector(tstate, f, f->func_globals, stack, nargs, kwnames);
+    for (Py_ssize_t i = 0; i < total; i++) {
+        owners[i] = PyValue_DUP(args[i]);
     }
+    PyObject *locals = NULL;
+    if (!(((PyCodeObject *)f->func_code)->co_flags & CO_OPTIMIZED)) {
+        locals = Py_NewRef(f->func_globals);
+    }
+    _PyInterpreterFrame *frame = _PyEvalFramePushAndInit(
+        tstate, PyValue_DUP(PyValue_FromObjectBorrow(func)), locals,
+        owners, nargs, kwnames, NULL);
+    if (owners != small) {
+        PyMem_Free(owners);
+    }
+    if (frame == NULL) {
+        return PyValue_NULL;
+    }
+    EVAL_CALL_STAT_INC(EVAL_CALL_VECTOR);
+    return _PyEval_EvalFrameValue(tstate, frame);
 }
+
+PyValue
+_PyEval_EvalFrameValue(PyThreadState *tstate, _PyInterpreterFrame *frame)
+{
+    /* INTERPRETER_EXIT boxes the result until I3 makes it return the word;
+       a PEP 523 hook returns an object, permanently. Steal it back. */
+    return _PyValue_FromObjectResult(_PyEval_EvalFrame(tstate, frame, 0));
+}
+
+/* The object vectorcall of a core callable with a value vectorcall (D8):
+   the object vector becomes a call-scratch window with a reserved slot
+   before it (an exact int or float inline, every other object its borrowed
+   word: no box), the instance's value vectorcall runs with the offset
+   flag, and an inline result is boxed on the way out (kind THUNK). Core
+   code never calls a thunk; the object call API and extensions do. */
+#ifdef Py_DEBUG
+void
+_PyValue_CheckInstanceInvariant(PyObject *callable)
+{
+    if (!PyFunction_Check(callable)) {
+        return;
+    }
+    PyFunctionObject *func = (PyFunctionObject *)callable;
+    assert((func->vectorcall == _PyFunction_Vectorcall)
+           == (func->func_value_vectorcall != NULL));
+}
+#endif
+
+static inline PyObject *
+value_vectorcall_thunk(PyObject *callable, PyObject *const *args,
+                       size_t nargsf, PyObject *kwnames)
+{
+    PyThreadState *tstate = _PyThreadState_GET();
+    PyTypeObject *tp = Py_TYPE(callable);
+    _PyValue_ASSERT_INSTANCE(callable);
+    _Py_vectorcallvaluefunc f = NULL;
+    if (tp->tp_value_vectorcall_offset != 0) {
+        memcpy(&f, (char *)callable + tp->tp_value_vectorcall_offset,
+               sizeof(f));
+    }
+    if (f == NULL) {
+        /* An extension cached the thunk before PyFunction_SetVectorcall()
+           replaced the value form (R1): call the object field. */
+        vectorcallfunc of = NULL;
+        if (tp->tp_vectorcall_offset > 0) {
+            memcpy(&of, (char *)callable + tp->tp_vectorcall_offset,
+                   sizeof(of));
+        }
+        if (of == NULL || of == _PyFunction_Vectorcall
+            || of == _PyValue_VectorcallThunk)
+        {
+            _PyErr_Format(tstate, PyExc_SystemError,
+                          "'%.200s' object has no value vectorcall",
+                          tp->tp_name);
+            return NULL;
+        }
+        return of(callable, args, nargsf, kwnames);
+    }
+    Py_ssize_t nargs = PyVectorcall_NARGS(nargsf);
+    Py_ssize_t total = nargs + (kwnames == NULL ? 0 : PyTuple_GET_SIZE(kwnames));
+    PyValue small[_PY_FASTCALL_SMALL_STACK + 1];
+    PyValue *buf = small;
+    if (total + 1 > (Py_ssize_t)Py_ARRAY_LENGTH(small)) {
+        if ((size_t)total > PY_SSIZE_T_MAX / sizeof(PyValue) - 1) {
+            _PyErr_NoMemory(tstate);
+            return NULL;
+        }
+        buf = PyMem_Malloc(((size_t)total + 1) * sizeof(PyValue));
+        if (buf == NULL) {
+            _PyErr_NoMemory(tstate);
+            return NULL;
+        }
+    }
+    buf[0] = PyValue_NULL;
+    _PyValue_WindowFromObjects(buf + 1, args, total);
+    PyValue res = f(tstate, callable, buf + 1,
+                    nargs | PY_VECTORCALL_ARGUMENTS_OFFSET, kwnames);
+    _PyValue_ASSERT_RESULT(tstate, res);
+    if (buf != small) {
+        PyMem_Free(buf);
+    }
+    return _PyValue_THUNK_EXIT(res);
+}
+
+#define _Py_VALUE_VECTORCALL_THUNK(NAME) \
+    PyObject * \
+    NAME(PyObject *callable, PyObject *const *args, size_t nargsf, \
+         PyObject *kwnames) \
+    { \
+        return value_vectorcall_thunk(callable, args, nargsf, kwnames); \
+    }
+
+/* The exported name stays: the interpreter's guard and
+   PyFunction_SetVectorcall() compare against it. */
+_Py_VALUE_VECTORCALL_THUNK(_PyFunction_Vectorcall)
+_Py_VALUE_VECTORCALL_THUNK(_PyValue_VectorcallThunk)
 
 /* --- More complex call functions -------------------------------- */
 
@@ -497,35 +541,51 @@ _PyObject_Call_Prepend(PyThreadState *tstate, PyObject *callable,
                        PyObject *obj, PyObject *args, PyObject *kwargs)
 {
     assert(PyTuple_Check(args));
-    _PyBorrowMark mark = _PyBorrowScope_Enter(tstate);
-    PyObject *small_stack[_PY_FASTCALL_SMALL_STACK];
-    PyObject **stack = small_stack;
-    PyObject *result = NULL;
+    /* A call-scratch window of obj and the tuple's words, with a reserved
+       slot before it (D11: no box on entry). */
     Py_ssize_t count = PyTuple_GET_SIZE(args);
-    PyObject *const *views = _PyBorrow_TupleItems(args, count);
-    if (views == NULL) {
-        goto done;
+    PyValue small[_PY_FASTCALL_SMALL_STACK + 1];
+    PyValue *buf = small;
+    if ((size_t)count > PY_SSIZE_T_MAX / sizeof(PyValue) - 2) {
+        _PyErr_NoMemory(tstate);
+        return NULL;
     }
-    if ((size_t)count > SIZE_MAX / sizeof(*stack) - 1) {
-        PyErr_NoMemory();
-        goto done;
-    }
-    if (count + 1 > (Py_ssize_t)Py_ARRAY_LENGTH(small_stack)) {
-        stack = PyMem_Malloc(((size_t)count + 1) * sizeof(*stack));
-        if (stack == NULL) {
-            PyErr_NoMemory();
-            goto done;
+    if (count + 2 > (Py_ssize_t)Py_ARRAY_LENGTH(small)) {
+        buf = PyMem_Malloc(((size_t)count + 2) * sizeof(PyValue));
+        if (buf == NULL) {
+            _PyErr_NoMemory(tstate);
+            return NULL;
         }
     }
-    stack[0] = obj;
-    memcpy(stack + 1, views, (size_t)count * sizeof(*stack));
-    result = _PyObject_VectorcallDictTstate(tstate, callable, stack, count + 1, kwargs);
-done:
-    if (stack != small_stack) {
-        PyMem_Free(stack);
+    buf[0] = PyValue_NULL;
+    PyValue *window = buf + 1;
+    _PyValue_WindowPut(&window[0], PyValue_FromObjectBorrow(obj));
+    _PyValue_WindowCopy(window + 1, _PyTuple_ITEMS(args), count);
+    PyValueBorrow c = PyValue_FromObjectBorrow(callable);
+    PyValue res;
+    if (kwargs == NULL || PyDict_GET_SIZE(kwargs) == 0) {
+        res = _PyValue_VectorcallTstate(
+            tstate, c, window, (count + 1) | PY_VECTORCALL_ARGUMENTS_OFFSET,
+            NULL);
     }
-    _PyBorrowScope_Exit(tstate, mark);
-    return result;
+    else {
+        PyObject *kwnames;
+        PyValue *kwwindow = _PyValue_StackUnpackDict(tstate, window, count + 1,
+                                                     kwargs, &kwnames);
+        if (kwwindow == NULL) {
+            res = PyValue_NULL;
+        }
+        else {
+            res = _PyValue_VectorcallTstate(
+                tstate, c, kwwindow,
+                (count + 1) | PY_VECTORCALL_ARGUMENTS_OFFSET, kwnames);
+            _PyValue_StackUnpackDict_Free(kwwindow, count + 1, kwnames);
+        }
+    }
+    if (buf != small) {
+        PyMem_Free(buf);
+    }
+    return _PyValue_THUNK_EXIT(res);
 }
 
 
@@ -1167,4 +1227,338 @@ Py_ssize_t
 PyVectorcall_NARGS(size_t n)
 {
     return _PyVectorcall_NARGS(n);
+}
+
+
+/* --- The value vectorcall (value-api-m3.md, step M3a) ------------ */
+
+PyValue
+(_PyValue_NotCallable)(PyThreadState *tstate, PyValueBorrow v)
+{
+    _PyErr_Format(tstate, PyExc_TypeError, "'%.200s' object is not callable",
+                  PyValue_TYPE(v)->tp_name);
+    return PyValue_NULL;
+}
+
+PyValue
+_PyValue_CallAdapter(PyThreadState *tstate, PyObject *callable,
+                     vectorcallfunc of, const PyValue *args, size_t nargsf,
+                     PyObject *kwnames)
+{
+    Py_ssize_t nargs = PyVectorcall_NARGS(nargsf);
+    Py_ssize_t total = nargs + (kwnames == NULL ? 0 : PyTuple_GET_SIZE(kwnames));
+    /* The vector lends each object word and boxes each inline one on the
+       borrow stack (kind CALL_ADAPTER); it has its own offset slot. */
+    _PyBorrowMark mark = _PyBorrowScope_Enter(tstate);
+    PyObject *res = NULL;
+    PyObject **vector = _PyBorrow_ValueVector(args, total);
+    if (vector != NULL) {
+        res = of(callable, vector, nargs | PY_VECTORCALL_ARGUMENTS_OFFSET,
+                 kwnames);
+    }
+    _PyBorrowScope_Exit(tstate, mark);
+    res = _Py_CheckFunctionResult(tstate, callable, res, NULL);
+    return _PyValue_FromObjectResult(res);
+}
+
+/* tp_call of callable with an argument tuple and a dict (or NULL), in a
+   borrow scope, with upstream's release result check. The caller holds
+   the recursion guard. */
+static PyValue
+value_tp_call(PyThreadState *tstate, PyObject *callable, ternaryfunc call,
+              PyObject *argstuple, PyObject *kwdict)
+{
+    _PyBorrowMark mark = _PyBorrowScope_Enter(tstate);
+    PyObject *res = _PyCFunctionWithKeywords_TrampolineCall(
+        (PyCFunctionWithKeywords)call, callable, argstuple, kwdict);
+    _PyBorrowScope_Exit(tstate, mark);
+    res = _Py_CheckFunctionResult(tstate, callable, res, NULL);
+    return _PyValue_FromObjectResult(res);
+}
+
+PyValue
+_PyValue_TpCallAdapter(PyThreadState *tstate, PyObject *callable,
+                       const PyValue *args, size_t nargsf, PyObject *kwnames)
+{
+    ternaryfunc call = Py_TYPE(callable)->tp_call;
+    if (call == NULL) {
+        object_is_not_callable(tstate, callable);
+        return PyValue_NULL;
+    }
+    Py_ssize_t nargs = PyVectorcall_NARGS(nargsf);
+    /* Tuples store words: no box. */
+    PyObject *argstuple = _PyTuple_FromValueArray(args, nargs);
+    if (argstuple == NULL) {
+        return PyValue_NULL;
+    }
+    PyObject *kwdict = NULL;
+    if (kwnames != NULL && PyTuple_GET_SIZE(kwnames) != 0) {
+        kwdict = _PyValue_StackAsDict(args + nargs, kwnames);
+        if (kwdict == NULL) {
+            Py_DECREF(argstuple);
+            return PyValue_NULL;
+        }
+    }
+    PyValue res = value_tp_call(tstate, callable, call, argstuple, kwdict);
+    Py_XDECREF(kwdict);
+    Py_DECREF(argstuple);
+    return res;
+}
+
+PyValue
+(_PyValue_VectorcallPrepend)(PyThreadState *tstate, PyValueBorrow callable,
+                             PyValueBorrow self, const PyValue *args,
+                             size_t nargsf, PyObject *kwnames)
+{
+    Py_ssize_t nargs = PyVectorcall_NARGS(nargsf);
+    PyValue res;
+    if (nargsf & PY_VECTORCALL_ARGUMENTS_OFFSET) {
+        /* args[-1] may be a frame slot, which the GC rechecks as a home:
+           it receives an owner (D5) and gets its word back after. */
+        PyValue *slot = (PyValue *)args - 1;
+        PyValue saved = *slot;
+        *slot = PyValue_DUP(self);
+        res = _PyValue_VectorcallTstate(tstate, callable, slot, nargs + 1,
+                                        kwnames);
+        PyValue_CLOSE(*slot);
+        *slot = saved;
+        return res;
+    }
+    /* A call-scratch copy that no traversal reads, with a reserved slot
+       before it so that a bound callee can prepend in place. */
+    Py_ssize_t total = nargs + (kwnames == NULL ? 0 : PyTuple_GET_SIZE(kwnames));
+    PyValue small[_PY_FASTCALL_SMALL_STACK + 2];
+    PyValue *buf = small;
+    if (total + 2 > (Py_ssize_t)Py_ARRAY_LENGTH(small)) {
+        if ((size_t)total > PY_SSIZE_T_MAX / sizeof(PyValue) - 2) {
+            _PyErr_NoMemory(tstate);
+            return PyValue_NULL;
+        }
+        buf = PyMem_Malloc(((size_t)total + 2) * sizeof(PyValue));
+        if (buf == NULL) {
+            _PyErr_NoMemory(tstate);
+            return PyValue_NULL;
+        }
+    }
+    buf[0] = PyValue_NULL;
+    PyValue *window = buf + 1;
+    _PyValue_WindowPut(&window[0], self);
+    if (total != 0) {
+        _PyValue_WindowCopy(window + 1, args, total);
+    }
+    res = _PyValue_VectorcallTstate(
+        tstate, callable, window, (nargs + 1) | PY_VECTORCALL_ARGUMENTS_OFFSET,
+        kwnames);
+    if (buf != small) {
+        PyMem_Free(buf);
+    }
+    return res;
+}
+
+/* Whether the dispatcher would call callable through tp_call: no
+   vectorcall of either form and no value call slot. */
+static inline int
+value_call_is_tp_call(PyObject *callable)
+{
+    PyTypeObject *tp = Py_TYPE(callable);
+    if (tp->tp_flags & Py_TPFLAGS_HAVE_VECTORCALL) {
+        _Py_vectorcallvaluefunc f = NULL;
+        if (tp->tp_value_vectorcall_offset != 0) {
+            memcpy(&f, (char *)callable + tp->tp_value_vectorcall_offset,
+                   sizeof(f));
+        }
+        vectorcallfunc of;
+        memcpy(&of, (char *)callable + tp->tp_vectorcall_offset, sizeof(of));
+        if (f != NULL || of != NULL) {
+            return 0;
+        }
+    }
+    return _PyType_VALUE_SLOT(tp, call) == NULL;
+}
+
+PyValue
+(_PyValue_Call)(PyThreadState *tstate, PyValueBorrow callable,
+                PyObject *args, PyObject *kwargs)
+{
+    assert(PyTuple_Check(args));
+    assert(kwargs == NULL || PyDict_Check(kwargs));
+    if (PyValue_IsObject(callable)) {
+        PyObject *c = PyValue_AsKnownObjectBorrow(callable);
+        if (value_call_is_tp_call(c)) {
+            /* Nothing to convert: tp_call gets the original tuple and
+               dict, under upstream's guard. */
+            ternaryfunc call = Py_TYPE(c)->tp_call;
+            if (call == NULL) {
+                object_is_not_callable(tstate, c);
+                return PyValue_NULL;
+            }
+            if (_Py_EnterRecursiveCallTstate(tstate,
+                                             " while calling a Python object")) {
+                return PyValue_NULL;
+            }
+            PyValue res = value_tp_call(tstate, c, call, args, kwargs);
+            _Py_LeaveRecursiveCallTstate(tstate);
+            return res;
+        }
+    }
+    /* The tuple's words are the window: no box, no copy. */
+    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
+    if (kwargs == NULL || PyDict_GET_SIZE(kwargs) == 0) {
+        return _PyValue_VectorcallTstate(tstate, callable, _PyTuple_ITEMS(args),
+                                         nargs, NULL);
+    }
+    PyObject *kwnames;
+    PyValue *window = _PyValue_StackUnpackDict(tstate, _PyTuple_ITEMS(args),
+                                               nargs, kwargs, &kwnames);
+    if (window == NULL) {
+        return PyValue_NULL;
+    }
+    PyValue res = _PyValue_VectorcallTstate(
+        tstate, callable, window, nargs | PY_VECTORCALL_ARGUMENTS_OFFSET,
+        kwnames);
+    _PyValue_StackUnpackDict_Free(window, nargs, kwnames);
+    return res;
+}
+
+PyValue
+(_PyValue_CallNoArgs)(PyThreadState *tstate, PyValueBorrow callable)
+{
+    PyValue buf[1] = {PyValue_NULL};
+    return _PyValue_VectorcallTstate(tstate, callable, buf + 1,
+                                     PY_VECTORCALL_ARGUMENTS_OFFSET, NULL);
+}
+
+PyValue
+(_PyValue_CallOneArg)(PyThreadState *tstate, PyValueBorrow callable,
+                      PyValueBorrow arg)
+{
+    PyValue buf[2] = {PyValue_NULL, PyValue_NULL};
+    _PyValue_WindowPut(&buf[1], arg);
+    return _PyValue_VectorcallTstate(tstate, callable, buf + 1,
+                                     1 | PY_VECTORCALL_ARGUMENTS_OFFSET, NULL);
+}
+
+PyValue *
+_PyValue_StackUnpackDict(PyThreadState *tstate, const PyValue *args,
+                         Py_ssize_t nargs, PyObject *kwargs,
+                         PyObject **p_kwnames)
+{
+    assert(nargs >= 0 && kwargs != NULL && PyDict_Check(kwargs));
+    *p_kwnames = NULL;
+    Py_ssize_t nkwargs = PyDict_GET_SIZE(kwargs);
+    if ((size_t)nargs > PY_SSIZE_T_MAX / sizeof(PyValue) - 1 - (size_t)nkwargs) {
+        _PyErr_NoMemory(tstate);
+        return NULL;
+    }
+    PyValue *buf = PyMem_Malloc((1 + (size_t)nargs + (size_t)nkwargs)
+                                * sizeof(PyValue));
+    if (buf == NULL) {
+        _PyErr_NoMemory(tstate);
+        return NULL;
+    }
+    buf[0] = PyValue_NULL;
+    PyValue *window = buf + 1;
+    if (nargs != 0) {
+        _PyValue_WindowCopy(window, args, nargs);
+    }
+    /* The dict's values are owners: the callee may mutate a dict that
+       other code shares. */
+    Py_ssize_t n = _PyValue_WindowFromDictValues(window + nargs, kwargs,
+                                                 p_kwnames);
+    if (n < 0) {
+        PyMem_Free(buf);
+        return NULL;
+    }
+    assert(n == nkwargs);
+    return window;
+}
+
+void
+_PyValue_StackUnpackDict_Free(PyValue *window, Py_ssize_t nargs,
+                              PyObject *kwnames)
+{
+    Py_ssize_t nkwargs = PyTuple_GET_SIZE(kwnames);
+    for (Py_ssize_t i = 0; i < nkwargs; i++) {
+        PyValue_CLOSE(window[nargs + i]);
+    }
+    PyMem_Free(window - 1);
+    Py_DECREF(kwnames);
+}
+
+PyObject *
+_PyValue_StackAsDict(const PyValue *values, PyObject *kwnames)
+{
+    assert(kwnames != NULL);
+    Py_ssize_t nkwargs = PyTuple_GET_SIZE(kwnames);
+    PyObject *dict = _PyDict_NewPresized(nkwargs);
+    if (dict == NULL) {
+        return NULL;
+    }
+    for (Py_ssize_t i = 0; i < nkwargs; i++) {
+        /* Vectorcall kwnames hold only str, which is never inline. */
+        if (_PyDict_SetValue_Take2((PyDictObject *)dict,
+                                   PyValue_DUP(PyTuple_GET_VALUE(kwnames, i)),
+                                   PyValue_DUP(values[i])) < 0)
+        {
+            Py_DECREF(dict);
+            return NULL;
+        }
+    }
+    return dict;
+}
+
+PyValue
+_PyValue_InstanceVectorcall(PyThreadState *tstate, PyObject *callable,
+                            const PyValue *args, size_t nargsf,
+                            PyObject *kwnames)
+{
+    PyTypeObject *tp = Py_TYPE(callable);
+    if (tp->tp_value_vectorcall_offset != 0) {
+        _Py_vectorcallvaluefunc f;
+        memcpy(&f, (char *)callable + tp->tp_value_vectorcall_offset,
+               sizeof(f));
+        if (f != NULL) {
+            PyValue res = f(tstate, callable, args, nargsf, kwnames);
+            _PyValue_ASSERT_RESULT(tstate, res);
+            return res;
+        }
+    }
+    vectorcallfunc of = NULL;
+    if (tp->tp_vectorcall_offset > 0) {
+        memcpy(&of, (char *)callable + tp->tp_vectorcall_offset, sizeof(of));
+    }
+    if (of == NULL) {
+        _PyErr_Format(tstate, PyExc_TypeError,
+                      "'%.200s' object does not support vectorcall",
+                      tp->tp_name);
+        return PyValue_NULL;
+    }
+    return _PyValue_CallAdapter(tstate, callable, of, args, nargsf, kwnames);
+}
+
+PyObject *
+_PyValue_TpCallThunk(PyObject *callable, PyObject *args, PyObject *kwargs)
+{
+    PyThreadState *tstate = _PyThreadState_GET();
+    _Py_vectorcallvaluefunc f = _PyType_VALUE_SLOT(Py_TYPE(callable), call);
+    assert(f != NULL);
+    assert(PyTuple_Check(args));
+    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
+    PyValue res;
+    if (kwargs == NULL || PyDict_GET_SIZE(kwargs) == 0) {
+        res = f(tstate, callable, _PyTuple_ITEMS(args), nargs, NULL);
+    }
+    else {
+        PyObject *kwnames;
+        PyValue *window = _PyValue_StackUnpackDict(
+            tstate, _PyTuple_ITEMS(args), nargs, kwargs, &kwnames);
+        if (window == NULL) {
+            return NULL;
+        }
+        res = f(tstate, callable, window,
+                nargs | PY_VECTORCALL_ARGUMENTS_OFFSET, kwnames);
+        _PyValue_StackUnpackDict_Free(window, nargs, kwnames);
+    }
+    _PyValue_ASSERT_RESULT(tstate, res);
+    return _PyValue_THUNK_EXIT(res);
 }

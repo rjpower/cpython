@@ -41,6 +41,7 @@
 #include "pycore_cell.h"          // PyCell_GetRef()
 #include "pycore_stats.h"
 #include "pycore_value_api.h"     // _PyValue_AsObjectAt()
+#include "pycore_value_call.h"    // _PyValue_VectorcallTstate()
 #include "pycore_value_ops.h"     // _PyValue_GenericHash()
 #include "pycore_value_slots.h"   // _Py_VALUE_SLOT_TABLE
 #include "opcode.h"               // MAKE_CELL
@@ -232,6 +233,10 @@ slot_tp_setattro(PyObject *self, PyObject *name, PyObject *value);
 
 static PyObject *
 slot_tp_call(PyObject *self, PyObject *args, PyObject *kwds);
+
+static PyValue
+slot_tp_call_value(PyThreadState *tstate, PyObject *self,
+                   const PyValue *args, size_t nargsf, PyObject *kwnames);
 
 static void **
 slotptr(PyTypeObject *type, int ioffset);
@@ -5619,21 +5624,27 @@ done:
 }
 
 
-static PyObject *
-type_vectorcall(PyObject *metatype, PyObject *const *args,
-                 size_t nargsf, PyObject *kwnames)
+static PyValue
+type_value_vectorcall(PyThreadState *tstate, PyObject *metatype,
+                      const PyValue *args, size_t nargsf, PyObject *kwnames)
 {
     Py_ssize_t nargs = PyVectorcall_NARGS(nargsf);
     if (nargs == 1 && metatype == (PyObject *)&PyType_Type){
         if (!_PyArg_NoKwnames("type", kwnames)) {
-            return NULL;
+            return PyValue_NULL;
         }
-        return Py_NewRef(Py_TYPE(args[0]));
+        return PyValue_DUP(PyValue_FromObjectBorrow(
+            (PyObject *)PyValue_TYPE(PyValue_Borrow(args[0]))));
     }
     /* In other (much less common) cases, fall back to
        more flexible calling conventions. */
-    PyThreadState *tstate = _PyThreadState_GET();
-    return _PyObject_MakeTpCall(tstate, metatype, args, nargs, kwnames);
+    if (_Py_EnterRecursiveCallTstate(tstate, " while calling a Python object")) {
+        return PyValue_NULL;
+    }
+    PyValue result = _PyValue_TpCallAdapter(tstate, metatype, args, nargsf,
+                                            kwnames);
+    _Py_LeaveRecursiveCallTstate(tstate);
+    return result;
 }
 
 /* Align up to the nearest multiple of alignof(max_align_t)
@@ -5773,6 +5784,7 @@ type_from_slots_or_spec(
     const PyMemberDef *weaklistoffset_member = NULL;
     const PyMemberDef *dictoffset_member = NULL;
     const PyMemberDef *vectorcalloffset_member = NULL;
+    const PyMemberDef *valuevectorcalloffset_member = NULL;
     Py_ssize_t basicsize = 0;
     Py_ssize_t extra_basicsize = 0;
     Py_ssize_t itemsize = 0;
@@ -5900,6 +5912,9 @@ type_from_slots_or_spec(
                 }
                 else if (strcmp(memb->name, "__vectorcalloffset__") == 0) {
                     vectorcalloffset_member = memb;
+                }
+                else if (strcmp(memb->name, "__valuevectorcalloffset__") == 0) {
+                    valuevectorcalloffset_member = memb;
                 }
             }
             break;
@@ -6116,6 +6131,12 @@ type_from_slots_or_spec(
                                   &vectorcalloffset) < 0) {
         goto finally;
     }
+    Py_ssize_t valuevectorcalloffset = 0;
+    if (special_offset_from_member(valuevectorcalloffset_member,
+                                   type_data_offset,
+                                   &valuevectorcalloffset) < 0) {
+        goto finally;
+    }
 
     /* Allocate the new type
      *
@@ -6217,6 +6238,7 @@ type_from_slots_or_spec(
     /* Set up offsets */
 
     type->tp_vectorcall_offset = vectorcalloffset;
+    type->tp_value_vectorcall_offset = valuevectorcalloffset;
     type->tp_weaklistoffset = weaklistoffset;
     type->tp_dictoffset = dictoffset;
 
@@ -7857,7 +7879,9 @@ PyTypeObject PyType_Type = {
     type_new,                                   /* tp_new */
     PyObject_GC_Del,                            /* tp_free */
     type_is_gc,                                 /* tp_is_gc */
-    .tp_vectorcall = type_vectorcall,
+    .tp_vectorcall = _PyValue_VectorcallThunk,
+    .tp_value_vectorcall_offset = offsetof(PyTypeObject, tp_value_vectorcall),
+    .tp_value_vectorcall = (_Py_valuefunc)type_value_vectorcall,
 };
 
 
@@ -8637,7 +8661,8 @@ object_getstate(PyObject *obj, int required)
         return NULL;
     }
     if (PyCFunction_Check(getstate) &&
-        PyCFunction_GET_SELF(getstate) == obj &&
+        PyValue_Is(_PyCFunction_GET_SELF_VALUE(getstate),
+                    PyValue_FromObjectBorrow(obj)) &&
         PyCFunction_GET_FUNCTION(getstate) == object___getstate__)
     {
         /* If __getstate__ is not overridden pass the required argument. */
@@ -9533,6 +9558,7 @@ inherit_slots(PyTypeObject *type, PyTypeObject *base)
          * If Py_TPFLAGS_HAVE_VECTORCALL is not inherited, then vectorcall
          * won't be used automatically. */
         COPYSLOT(tp_vectorcall_offset);
+        COPYSLOT(tp_value_vectorcall_offset);
 
         /* Inherit Py_TPFLAGS_HAVE_VECTORCALL if tp_call is not overridden */
         if (!type->tp_call &&
@@ -9928,6 +9954,7 @@ enum {
     VALUE_WRAPPER_RICHCMP,
     VALUE_WRAPPER_REPR,
     VALUE_WRAPPER_CONCAT,
+    VALUE_WRAPPER_CALL,
 };
 
 typedef struct {
@@ -9974,7 +10001,8 @@ static const value_slot_pair value_slot_pairs[] = {
     {_Py_VALUE_SLOT_INDEX_setattro, (void *)PyObject_GenericSetAttr, NULL},
     {_Py_VALUE_SLOT_INDEX_iternext, (void *)_PyObject_NextNotImplemented,
      NULL},
-    {_Py_VALUE_SLOT_INDEX_call, (void *)PyVectorcall_Call, NULL},
+    {_Py_VALUE_SLOT_INDEX_call, (void *)PyVectorcall_Call,
+     _Py_VALUE_SLOT_INIT(call, _PyValue_InstanceVectorcall)},
 };
 
 // The row whose object slot is at offset (as in slotdefs), or -1.
@@ -10387,6 +10415,15 @@ type_ready_post_checks(PyTypeObject *type)
                          type->tp_name);
             return -1;
         }
+    }
+    if (type->tp_value_vectorcall_offset != 0
+        && type->tp_vectorcall_offset == 0)
+    {
+        PyErr_Format(PyExc_SystemError,
+                     "type %s has a tp_value_vectorcall_offset "
+                     "but no tp_vectorcall_offset",
+                     type->tp_name);
+        return -1;
     }
     return 0;
 }
@@ -11428,166 +11465,153 @@ RICHCMP_WRAPPER(ge, Py_GE)
    that object wrapper does, passes borrows of self and the arguments, and
    returns the result as an object. */
 
-static PyObject *
-wrap_binaryvalue(PyObject *self, PyObject *args, void *wrapped, int reflected)
+static int
+check_num_args_value(Py_ssize_t nargs, int n)
+{
+    if (n == nargs) {
+        return 1;
+    }
+    PyErr_Format(
+        PyExc_TypeError,
+        "expected %d argument%s, got %zd", n, n == 1 ? "" : "s", nargs);
+    return 0;
+}
+
+static Py_ssize_t
+check_pow_args_value(Py_ssize_t nargs)
+{
+    // Returns the argument count on success or `-1` on error.
+    int min = 1;
+    int max = 2;
+    if (nargs >= min && nargs <= max) {
+        return nargs;
+    }
+    PyErr_Format(
+        PyExc_TypeError,
+        "expected %d or %d arguments, got %zd", min, max, nargs);
+    return -1;
+}
+
+static PyValue
+wrap_binaryvalue(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs,
+                 void *wrapped, int reflected)
 {
     _Py_binaryvaluefunc func = (_Py_binaryvaluefunc)wrapped;
-    PyObject *receiver = Py_NewRef(self);
-    PyObject *tuple = Py_NewRef(args);
-    PyObject *other = NULL;
-    PyObject *result = NULL;
 
-    if (!check_num_args(tuple, 1)) {
-        goto done;
+    if (!check_num_args_value(nargs, 1)) {
+        return PyValue_NULL;
     }
-    other = PyTuple_GetItemRef(tuple, 0);
-    if (other == NULL) {
-        goto done;
-    }
-    PyValueBorrow a = _Py_VALUE_ARG(receiver);
-    PyValueBorrow b = _Py_VALUE_ARG(other);
-    result = _PyValue_THUNK_EXIT(reflected ? func(b, a) : func(a, b));
-
-done:
-    Py_CLEAR(other);
-    Py_CLEAR(tuple);
-    Py_CLEAR(receiver);
-    return result;
+    PyValueBorrow other = PyValue_Borrow(args[0]);
+    return reflected ? func(other, self) : func(self, other);
 }
 
-static PyObject *
-wrap_binaryvalue_l(PyObject *self, PyObject *args, void *wrapped)
+static PyValue
+wrap_binaryvalue_l(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs,
+                   PyObject *kwnames, void *wrapped)
 {
-    return wrap_binaryvalue(self, args, wrapped, 0);
+    return wrap_binaryvalue(self, args, nargs, wrapped, 0);
 }
 
-static PyObject *
-wrap_binaryvalue_r(PyObject *self, PyObject *args, void *wrapped)
+static PyValue
+wrap_binaryvalue_r(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs,
+                   PyObject *kwnames, void *wrapped)
 {
-    return wrap_binaryvalue(self, args, wrapped, 1);
+    return wrap_binaryvalue(self, args, nargs, wrapped, 1);
 }
 
-static PyObject *
-wrap_ternaryvalue_impl(PyObject *self, PyObject *args, void *wrapped,
-                       int reflected)
+static PyValue
+wrap_ternaryvalue_impl(PyValueBorrow self, const PyValue *args,
+                       Py_ssize_t nargs, void *wrapped, int reflected)
 {
     _Py_ternaryvaluefunc func = (_Py_ternaryvaluefunc)wrapped;
-    PyObject *receiver = Py_NewRef(self);
-    PyObject *tuple = Py_NewRef(args);
-    PyObject *other = NULL;
-    PyObject *third = NULL;
-    PyObject *result = NULL;
 
-    Py_ssize_t size = check_pow_args(tuple);
+    Py_ssize_t size = check_pow_args_value(nargs);
     if (size == -1) {
-        goto done;
+        return PyValue_NULL;
     }
-    other = PyTuple_GetItemRef(tuple, 0);
-    if (other == NULL) {
-        goto done;
-    }
-    third = size == 2 ? PyTuple_GetItemRef(tuple, 1) : Py_NewRef(Py_None);
-    if (third == NULL) {
-        goto done;
-    }
-    PyValueBorrow a = _Py_VALUE_ARG(receiver);
-    PyValueBorrow b = _Py_VALUE_ARG(other);
-    PyValueBorrow c = _Py_VALUE_ARG(third);
-    result = _PyValue_THUNK_EXIT(reflected ? func(b, a, c) : func(a, b, c));
-
-done:
-    Py_CLEAR(third);
-    Py_CLEAR(other);
-    Py_CLEAR(tuple);
-    Py_CLEAR(receiver);
-    return result;
+    PyValueBorrow other = PyValue_Borrow(args[0]);
+    PyValueBorrow third = size == 2
+        ? PyValue_Borrow(args[1]) : PyValue_FromObjectBorrow(Py_None);
+    return reflected ? func(other, self, third) : func(self, other, third);
 }
 
-static PyObject *
-wrap_ternaryvalue(PyObject *self, PyObject *args, void *wrapped)
+static PyValue
+wrap_ternaryvalue(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs,
+                  PyObject *kwnames, void *wrapped)
 {
-    return wrap_ternaryvalue_impl(self, args, wrapped, 0);
+    return wrap_ternaryvalue_impl(self, args, nargs, wrapped, 0);
 }
 
-static PyObject *
-wrap_ternaryvalue_r(PyObject *self, PyObject *args, void *wrapped)
+static PyValue
+wrap_ternaryvalue_r(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs,
+                    PyObject *kwnames, void *wrapped)
 {
-    return wrap_ternaryvalue_impl(self, args, wrapped, 1);
+    return wrap_ternaryvalue_impl(self, args, nargs, wrapped, 1);
 }
 
-static PyObject *
-wrap_unaryvalue(PyObject *self, PyObject *args, void *wrapped)
+static PyValue
+wrap_unaryvalue(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs,
+                PyObject *kwnames, void *wrapped)
 {
     _Py_unaryvaluefunc func = (_Py_unaryvaluefunc)wrapped;
 
-    if (!check_num_args(args, 0)) {
-        return NULL;
+    if (!check_num_args_value(nargs, 0)) {
+        return PyValue_NULL;
     }
-    return _PyValue_THUNK_EXIT(func(_Py_VALUE_ARG(self)));
+    return func(self);
 }
 
-static PyObject *
-wrap_inquiryvalue(PyObject *self, PyObject *args, void *wrapped)
+static PyValue
+wrap_inquiryvalue(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs,
+                  PyObject *kwnames, void *wrapped)
 {
     _Py_inquiryvaluefunc func = (_Py_inquiryvaluefunc)wrapped;
 
-    if (!check_num_args(args, 0)) {
-        return NULL;
+    if (!check_num_args_value(nargs, 0)) {
+        return PyValue_NULL;
     }
-    int res = func(_Py_VALUE_ARG(self));
+    int res = func(self);
     if (res == -1 && PyErr_Occurred()) {
-        return NULL;
+        return PyValue_NULL;
     }
-    return PyBool_FromLong((long)res);
+    return res ? PyValue_True : PyValue_False;
 }
 
-static PyObject *
-wrap_hashvalue(PyObject *self, PyObject *args, void *wrapped)
+static PyValue
+wrap_hashvalue(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs,
+               PyObject *kwnames, void *wrapped)
 {
     _Py_hashvaluefunc func = (_Py_hashvaluefunc)wrapped;
 
-    if (!check_num_args(args, 0)) {
-        return NULL;
+    if (!check_num_args_value(nargs, 0)) {
+        return PyValue_NULL;
     }
-    Py_hash_t res = func(_Py_VALUE_ARG(self));
+    Py_hash_t res = func(self);
     if (res == -1 && PyErr_Occurred()) {
-        return NULL;
+        return PyValue_NULL;
     }
-    return PyLong_FromSsize_t(res);
+    return PyValue_FromInt64(res);
 }
 
-static PyObject *
-wrap_richcmpvalue(PyObject *self, PyObject *args, void *wrapped, int op)
+static PyValue
+wrap_richcmpvalue(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs,
+                  void *wrapped, int op)
 {
     _Py_richcmpvaluefunc func = (_Py_richcmpvaluefunc)wrapped;
-    PyObject *receiver = Py_NewRef(self);
-    PyObject *tuple = Py_NewRef(args);
-    PyObject *other = NULL;
-    PyObject *result = NULL;
 
-    if (!check_num_args(tuple, 1)) {
-        goto done;
+    if (!check_num_args_value(nargs, 1)) {
+        return PyValue_NULL;
     }
-    other = PyTuple_GetItemRef(tuple, 0);
-    if (other == NULL) {
-        goto done;
-    }
-    result = _PyValue_THUNK_EXIT(
-        func(_Py_VALUE_ARG(receiver), _Py_VALUE_ARG(other), op));
-
-done:
-    Py_CLEAR(other);
-    Py_CLEAR(tuple);
-    Py_CLEAR(receiver);
-    return result;
+    return func(self, PyValue_Borrow(args[0]), op);
 }
 
 #undef RICHCMP_VALUE_WRAPPER
 #define RICHCMP_VALUE_WRAPPER(NAME, OP) \
-static PyObject * \
-wrap_richcmpvalue_##NAME(PyObject *self, PyObject *args, void *wrapped) \
+static PyValue \
+wrap_richcmpvalue_##NAME(PyValueBorrow self, const PyValue *args, \
+                         Py_ssize_t nargs, PyObject *kwnames, void *wrapped) \
 { \
-    return wrap_richcmpvalue(self, args, wrapped, OP); \
+    return wrap_richcmpvalue(self, args, nargs, wrapped, OP); \
 }
 
 RICHCMP_VALUE_WRAPPER(lt, Py_LT)
@@ -11597,41 +11621,46 @@ RICHCMP_VALUE_WRAPPER(ne, Py_NE)
 RICHCMP_VALUE_WRAPPER(gt, Py_GT)
 RICHCMP_VALUE_WRAPPER(ge, Py_GE)
 
-static PyObject *
-wrap_reprvalue(PyObject *self, PyObject *args, void *wrapped)
+static PyValue
+wrap_reprvalue(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs,
+               PyObject *kwnames, void *wrapped)
 {
     _Py_reprvaluefunc func = (_Py_reprvaluefunc)wrapped;
 
-    if (!check_num_args(args, 0)) {
-        return NULL;
+    if (!check_num_args_value(nargs, 0)) {
+        return PyValue_NULL;
     }
-    return func(_Py_VALUE_ARG(self));
+    return _PyValue_FromObjectResult(func(self));
 }
 
 // sq_concat and sq_inplace_concat: the sequence stays an object.
-static PyObject *
-wrap_concatvalue(PyObject *self, PyObject *args, void *wrapped)
+static PyValue
+wrap_concatvalue(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs,
+                 PyObject *kwnames, void *wrapped)
 {
     _Py_concatvaluefunc func = (_Py_concatvaluefunc)wrapped;
-    PyObject *receiver = Py_NewRef(self);
-    PyObject *tuple = Py_NewRef(args);
-    PyObject *other = NULL;
-    PyObject *result = NULL;
 
-    if (!check_num_args(tuple, 1)) {
-        goto done;
+    if (!check_num_args_value(nargs, 1)) {
+        return PyValue_NULL;
     }
-    other = PyTuple_GetItemRef(tuple, 0);
-    if (other == NULL) {
-        goto done;
-    }
-    result = _PyValue_THUNK_EXIT(func(receiver, _Py_VALUE_ARG(other)));
+    return func(PyValue_AsKnownObjectBorrow(self), PyValue_Borrow(args[0]));
+}
 
-done:
-    Py_CLEAR(other);
-    Py_CLEAR(tuple);
-    Py_CLEAR(receiver);
-    return result;
+// __call__: the receiver is a callable object; wrapped is its value
+// vectorcall slot.
+static PyValue
+wrap_callvalue(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs,
+               PyObject *kwnames, void *wrapped)
+{
+    _Py_vectorcallvaluefunc func = (_Py_vectorcallvaluefunc)wrapped;
+
+    if (!PyValue_IsObject(self)) {
+        PyErr_Format(PyExc_TypeError, "'%.200s' object is not callable",
+                     PyValue_TYPE(self)->tp_name);
+        return PyValue_NULL;
+    }
+    return func(_PyThreadState_GET(), PyValue_AsKnownObjectBorrow(self),
+                args, nargs, kwnames);
 }
 
 static PyObject *
@@ -12316,6 +12345,29 @@ static PyObject *
 slot_tp_call(PyObject *self, PyObject *args, PyObject *kwds)
 {
     return call_method(self, &_Py_ID(__call__), args, kwds);
+}
+
+static PyValue
+slot_tp_call_value(PyThreadState *tstate, PyObject *self,
+                   const PyValue *args, size_t nargsf, PyObject *kwnames)
+{
+    PyObject *meth = NULL;
+    int unbound = lookup_method(self, &_Py_ID(__call__), &meth);
+    if (unbound < 0) {
+        return PyValue_NULL;
+    }
+    PyValue result;
+    if (unbound) {
+        result = _PyValue_VectorcallPrepend(
+            tstate, PyValue_FromObjectBorrow(meth),
+            PyValue_FromObjectBorrow(self), args, nargsf, kwnames);
+    }
+    else {
+        result = _PyValue_VectorcallTstate(
+            tstate, PyValue_FromObjectBorrow(meth), args, nargsf, kwnames);
+    }
+    Py_DECREF(meth);
+    return result;
 }
 
 /* There are two slot dispatch functions for tp_getattro.
@@ -13176,14 +13228,14 @@ static uint8_t slotdefs_dups[Py_ARRAY_LENGTH(slotdefs)][1 + MAX_EQUIV];
 typedef struct {
     int row;
     _Py_valuefunc function;
-    wrapperfunc wrapper;
+    _Py_wrappervaluefunc wrapper;
 } slotdef_value;
 
 static slotdef_value slotdef_values[Py_ARRAY_LENGTH(slotdefs)];
 static int slotdef_values_ready = 0;
 
 // The value wrapper for slotdef p, whose row has wrapper family family.
-static wrapperfunc
+static _Py_wrappervaluefunc
 slotdef_value_wrapper(const pytype_slotdef *p, int family)
 {
     wrapperfunc w = p->wrapper;
@@ -13237,6 +13289,9 @@ slotdef_value_wrapper(const pytype_slotdef *p, int family)
     case VALUE_WRAPPER_CONCAT:
         assert(w == wrap_binaryfunc);
         return wrap_concatvalue;
+    case VALUE_WRAPPER_CALL:
+        assert(w == _Py_FUNC_CAST(wrapperfunc, wrap_call));
+        return wrap_callvalue;
     default:
         assert(family == VALUE_WRAPPER_NONE);
         return NULL;
@@ -13252,14 +13307,15 @@ init_slotdef_values(void)
     for (pytype_slotdef *p = slotdefs; p->name; p++) {
         slotdef_value *v = &slotdef_values[p - slotdefs];
         v->row = value_slot_row_from_object_offset(p->offset);
-        v->function = NULL;
+        v->function = p->function == slot_tp_call
+            ? _Py_VALUE_SLOT_INIT(call, slot_tp_call_value) : NULL;
         v->wrapper = v->row < 0 ? NULL : slotdef_value_wrapper(
             p, value_slot_rows[v->row].wrapper);
     }
     slotdef_values_ready = 1;
 }
 
-wrapperfunc
+_Py_wrappervaluefunc
 _PyType_ValueWrapper(const struct wrapperbase *base)
 {
     uintptr_t start = (uintptr_t)slotdefs;

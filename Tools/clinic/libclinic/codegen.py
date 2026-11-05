@@ -70,6 +70,10 @@ class CRenderData:
         # The C statements required to clean up after the impl call.
         self.cleanup: list[str] = []
 
+        # Whether the function is emitted in its value form: the parser
+        # returns a PyValue.
+        self.value_emission = False
+
         # The C statements to generate critical sections (per-object locking).
         self.lock: list[str] = []
         self.unlock: list[str] = []
@@ -108,6 +112,7 @@ class BlockPrinter:
         block: Block,
         *,
         header_includes: list[Include] | None = None,
+        header_guard: str = '',
     ) -> None:
         input = block.input
         output = block.output
@@ -135,7 +140,7 @@ class BlockPrinter:
         write(self.language.stop_line.format(dsl_name=dsl_name))
         write("\n")
 
-        output = ''
+        output = header_guard
         if header_includes:
             # Emit optional "#include" directives for C headers
             output += '\n'
@@ -272,6 +277,9 @@ DestinationDict = dict[str, Destination]
 class CodeGen:
     def __init__(self, limited_capi: bool) -> None:
         self.limited_capi = limited_capi
+        # Set by the value_emission directive: the functions of the file
+        # take and return values (METH_VALUE).
+        self.value_emission = False
         self._ifndef_symbols: set[str] = set()
         # dict: include name => Include instance
         self._includes: dict[str, Include] = {}

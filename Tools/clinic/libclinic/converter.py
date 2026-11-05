@@ -173,6 +173,26 @@ class CConverter(metaclass=CConverterAutoRegister):
 
     broken_limited_capi: bool = False
 
+    # Value emission (the value_emission directive; pyjit/design/proposals/
+    # value-api-m3.md, section 2.2).  ParseArgsCodeGen switches the
+    # converters of a value function with set_value_emission() before they
+    # are rendered; parse_value_arg() then converts a PyValueBorrow.
+    value_emission: bool = False
+
+    # True if no inline value (an exact int or float) is a valid argument:
+    # parse_value_arg() then tests the tag, reports an inline value with
+    # value_inline_error(), and converts the object as parse_arg() does.
+    value_object_only: bool = False
+
+    # The 'expected' text of the error which reports an inline value
+    # argument of an object-only converter.
+    value_expected: str | None = None
+
+    # Whether the O& converter function takes the value: in value emission
+    # it is int f(PyValueBorrow, void *).  False for the built-in converter
+    # functions that take an object and have no value form yet.
+    value_converter_function: bool = True
+
     # keep in sync with self_converter.__init__!
     def __init__(self,
              # Positional args:
@@ -577,6 +597,107 @@ class CConverter(metaclass=CConverterAutoRegister):
                 argname=argname, cast=cast)
         return None
 
+    def set_value_emission(self) -> None:
+        """Switch to value emission: an object parameter is a borrow."""
+        if self.value_emission:
+            return
+        self.value_emission = True
+        if self.format_unit == 'O' and self.type == 'PyObject *':
+            self.type = 'PyValueBorrow'
+            self.c_default = value_default(self.c_default)
+        elif self.format_unit == 'O!' and self.subclass_of in INLINE_TYPES:
+            # Its instances can be inline: the parameter stays a value.
+            self.type = 'PyValueBorrow'
+            self.c_default = value_default(self.c_default)
+
+    def bad_argument_value(self, displayname: str, expected: str, *,
+                           expected_literal: bool = True) -> str:
+        """The statement which reports the value {argname} of a wrong type.
+
+        It gives upstream's message from the value's type, with no box.
+        """
+        assert '"' not in expected
+        if expected_literal:
+            expected = f'"{expected}"'
+        self.add_include('pycore_modsupport.h', '_PyArg_BadArgumentValue()')
+        return (f'_PyArg_BadArgumentValue("{{{{name}}}}", "{displayname}", '
+                f'{expected}, {{argname}});')
+
+    def value_inline_error(self, displayname: str) -> str:
+        """The statement which reports an inline value given to an
+        object-only converter."""
+        assert self.value_expected is not None, self
+        return self.bad_argument_value(displayname, self.value_expected)
+
+    def parse_value_arg(self, argname: str, displayname: str) -> str | None:
+        """Return the code converting argname, a PyValueBorrow expression.
+
+        Return None if the converter has no value form.
+        """
+        if self.value_object_only:
+            # The object's form, behind a tag test: no inline value is valid.
+            code = self.parse_arg(f'PyValue_AsKnownObjectBorrow({argname})',
+                                  displayname, limited_capi=False)
+            if code is None:
+                return None
+            check = self.format_code("""
+                if (!PyValue_IsObject({argname})) {{{{
+                    {inline_error}
+                    goto exit;
+                }}}}
+                """,
+                argname=argname,
+                inline_error=self.value_inline_error(displayname).format(
+                    argname=argname))
+            return '\n'.join([libclinic.normalize_snippet(check),
+                              libclinic.normalize_snippet(code)])
+        if self.format_unit == 'O&':
+            # The converter function takes the borrow: int f(PyValueBorrow, void *).
+            assert self.converter
+            if not self.value_converter_function:
+                return None
+            return self.format_code("""
+                if (!{converter}({argname}, &{paramname})) {{{{
+                    goto exit;
+                }}}}
+                """,
+                argname=argname,
+                converter=self.converter)
+        if self.format_unit == 'O!':
+            assert self.subclass_of
+            if self.subclass_of in type_checks:
+                _, typename = type_checks[self.subclass_of]
+                bad_argument = self.bad_argument_value(displayname, typename)
+            else:
+                bad_argument = self.bad_argument_value(
+                    displayname, '({subclass_of})->tp_name',
+                    expected_literal=False)
+            if self.type == 'PyValueBorrow':
+                assign = '{paramname} = {argname};'
+            else:
+                cast = '(%s)' % self.type if self.type != 'PyObject *' else ''
+                assign = ('{paramname} = %sPyValue_AsKnownObjectBorrow({argname});'
+                          % cast)
+            return self.format_code("""
+                if (!PyType_IsSubtype(PyValue_TYPE({argname}), {subclass_of})) {{{{
+                    {bad_argument}
+                    goto exit;
+                }}}}
+                %s
+                """ % assign,
+                argname=argname,
+                bad_argument=bad_argument,
+                subclass_of=self.subclass_of)
+        if self.format_unit == 'O':
+            if self.type != 'PyValueBorrow':
+                fail(f"value emission: an 'object' parameter of type "
+                     f"{self.type!r} needs subclass_of or a converter")
+            return self.format_code("""
+                {paramname} = {argname};
+                """,
+                argname=argname)
+        return None
+
     def set_template_dict(self, template_dict: TemplateDict) -> None:
         pass
 
@@ -594,6 +715,23 @@ class CConverter(metaclass=CConverterAutoRegister):
 
     def get_includes(self) -> list[Include]:
         return self._includes
+
+
+# The types whose exact instances can be inline values.
+INLINE_TYPES = frozenset({'&PyLong_Type', '&PyFloat_Type'})
+
+
+def value_default(c_default: str | None) -> str | None:
+    """The PyValueBorrow form of the C default of an object parameter."""
+    match c_default:
+        case None | '':
+            return c_default
+        case 'NULL':
+            return 'PyValue_Borrow(PyValue_NULL)'
+        case 'Py_None' | 'Py_True' | 'Py_False':
+            return f'PyValue_Borrow(PyValue_{c_default[3:]})'
+        case _:
+            return f'PyValue_FromObjectBorrow({c_default})'
 
 
 ConverterType = Callable[..., CConverter]

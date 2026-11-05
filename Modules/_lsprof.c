@@ -156,7 +156,7 @@ normalizeUserObj(PyObject *obj)
        __self__ is probably not a good idea. */
     fn = (PyCFunctionObject *)obj;
 
-    if (fn->m_self == NULL) {
+    if (PyValue_IsNull(fn->m_self)) {
         /* built-in function: look up the module name */
         PyObject *mod = fn->m_module;
         PyObject *modname = NULL;
@@ -186,12 +186,12 @@ normalizeUserObj(PyObject *obj)
         /* built-in method: try to return
             repr(getattr(type(__self__), __name__))
         */
-        PyObject *self = fn->m_self;
         PyObject *name = PyUnicode_FromString(fn->m_ml->ml_name);
         PyObject *modname = fn->m_module;
 
         if (name != NULL) {
-            PyObject *mo = _PyType_LookupRef(Py_TYPE(self), name);
+            PyObject *mo = _PyType_LookupRef(
+                PyValue_TYPE(fn->m_self), name);
             Py_DECREF(name);
             if (mo != NULL) {
                 PyObject *res = PyObject_Repr(mo);

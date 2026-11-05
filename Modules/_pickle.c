@@ -14,6 +14,7 @@
 #include "pycore_critical_section.h" // Py_BEGIN_CRITICAL_SECTION()
 #include "pycore_dict.h"          // _PyDict_SetItem_Take2()
 #include "pycore_long.h"          // _PyLong_AsByteArray()
+#include "pycore_methodobject.h"  // _PyCFunction_GET_SELF_VALUE()
 #include "pycore_moduleobject.h"  // _PyModule_GetState()
 #include "pycore_object.h"        // _PyNone_Type
 #include "pycore_pyerrors.h"      // _PyErr_FormatNote
@@ -5166,7 +5167,8 @@ dump(PickleState *state, PicklerObject *self, PyObject *obj)
         goto error;
     }
     if (PyCFunction_Check(tmp) &&
-        PyCFunction_GET_SELF(tmp) == (PyObject *)self &&
+        PyValue_Is(_PyCFunction_GET_SELF_VALUE(tmp),
+                   PyValue_FromObjectBorrow((PyObject *)self)) &&
         PyCFunction_GET_FUNCTION(tmp) == persistent_id)
     {
         Py_CLEAR(tmp);

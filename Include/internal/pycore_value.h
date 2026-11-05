@@ -1196,6 +1196,22 @@ PyValue_AsObject(PyValueBorrow ref _PyBox_AT_PARAM)
 #define _PyValue_AsObjectAt(V0, SITE) (PyValue_AsObject)(PyValue_Borrow(V0) \
         _PyBox_AT_ARG(_PyBox_CORE(SITE)))
 
+/* The object of an owner, which this consumes: the owner's count for a heap
+   object (no incref and decref pair), a new box for an inline value, or NULL
+   with an exception set if boxing fails. ref must be a language value, not
+   PyValue_NULL. A CORE box under site class SITE, as _PyValue_AsObjectAt(). */
+static inline PyObject *
+_PyValue_AsObjectSteal(PyValue ref _PyBox_AT_PARAM)
+{
+    assert(PyValue_IsLanguageValue(ref));
+    if (PyValue_IsInline(ref)) {
+        return (PyValue_AsObject)(PyValue_Borrow(ref) _PyBox_AT_ARG(at));
+    }
+    return PyValue_AsKnownObjectSteal(ref);
+}
+#define _PyValue_AsObjectStealAt(V0, SITE) \
+    (_PyValue_AsObjectSteal)(V0 _PyBox_AT_ARG(_PyBox_CORE(SITE)))
+
 /* PyValue_AsObject() of a boundary box, whose kind and owner at states: a
    thunk exit, an adapter or a foreign exit. In stats builds, a function of
    its own name, so that the lint can tell it from the CORE forms; it inlines

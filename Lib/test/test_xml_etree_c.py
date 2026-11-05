@@ -223,7 +223,7 @@ class TestAcceleratorImported(unittest.TestCase):
 @support.cpython_only
 class SizeofTest(unittest.TestCase):
     def setUp(self):
-        self.elementsize = support.calcobjsize('5P')
+        self.elementsize = support.calcobjsize('6P')
         # extra
         self.extra = struct.calcsize('PnnP4P')
 

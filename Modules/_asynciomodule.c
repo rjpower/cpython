@@ -38,7 +38,7 @@ typedef enum {
     PyObject *prefix##_callbacks;                                           \
     PyObject *prefix##_exception;                                           \
     PyObject *prefix##_exception_tb;                                        \
-    PyObject *prefix##_result;                                              \
+    PyValue prefix##_result;    /* optional value home */                                              \
     PyObject *prefix##_source_tb;                                           \
     PyObject *prefix##_cancel_msg;                                          \
     PyObject *prefix##_cancelled_exc;                                       \
@@ -646,8 +646,9 @@ future_set_result(asyncio_state *state, FutureObj *fut, PyObject *res)
         return NULL;
     }
 
-    assert(!fut->fut_result);
-    fut->fut_result = Py_NewRef(res);
+    assert(PyValue_IsNull(fut->fut_result));
+    fut->fut_result = PyValue_DUP(PyValue_FromObjectBorrow(res));
+    _PyValue_CheckHome(fut->fut_result);
     fut->fut_state = STATE_FINISHED;
 
     if (future_schedule_callbacks(state, fut) == -1) {
@@ -787,8 +788,8 @@ future_get_result(asyncio_state *state, FutureObj *fut, PyObject **result)
         return 1;
     }
 
-    *result = Py_NewRef(fut->fut_result);
-    return 0;
+    *result = _PyValue_AsObjectAt(fut->fut_result, BOX_SITE_FIELD);
+    return *result == NULL ? -1 : 0;
 }
 
 static PyObject *
@@ -922,7 +923,7 @@ FutureObj_clear(PyObject *op)
     Py_CLEAR(fut->fut_callback0);
     Py_CLEAR(fut->fut_context0);
     Py_CLEAR(fut->fut_callbacks);
-    Py_CLEAR(fut->fut_result);
+    PyValue_CLEAR(fut->fut_result);
     Py_CLEAR(fut->fut_exception);
     Py_CLEAR(fut->fut_exception_tb);
     Py_CLEAR(fut->fut_source_tb);
@@ -943,7 +944,7 @@ FutureObj_traverse(PyObject *op, visitproc visit, void *arg)
     Py_VISIT(fut->fut_callback0);
     Py_VISIT(fut->fut_context0);
     Py_VISIT(fut->fut_callbacks);
-    Py_VISIT(fut->fut_result);
+    _Py_VISIT_VALUE(fut->fut_result);
     Py_VISIT(fut->fut_exception);
     Py_VISIT(fut->fut_exception_tb);
     Py_VISIT(fut->fut_source_tb);
@@ -1532,10 +1533,10 @@ _asyncio_Future__result_get_impl(FutureObj *self)
 {
     asyncio_state *state = get_asyncio_state_by_def((PyObject *)self);
     ENSURE_FUTURE_ALIVE(state, self)
-    if (self->fut_result == NULL) {
+    if (PyValue_IsNull(self->fut_result)) {
         Py_RETURN_NONE;
     }
-    return Py_NewRef(self->fut_result);
+    return _PyValue_AsObjectAt(self->fut_result, BOX_SITE_FIELD);
 }
 
 /*[clinic input]
@@ -2439,7 +2440,7 @@ TaskObj_traverse(PyObject *op, visitproc visit, void *arg)
     Py_VISIT(fut->fut_callback0);
     Py_VISIT(fut->fut_context0);
     Py_VISIT(fut->fut_callbacks);
-    Py_VISIT(fut->fut_result);
+    _Py_VISIT_VALUE(fut->fut_result);
     Py_VISIT(fut->fut_exception);
     Py_VISIT(fut->fut_exception_tb);
     Py_VISIT(fut->fut_source_tb);

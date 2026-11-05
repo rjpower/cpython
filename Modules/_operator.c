@@ -4,6 +4,8 @@
 #include "pycore_moduleobject.h"  // _PyModule_GetState()
 #include "pycore_pystate.h"       // _PyInterpreterState_GET()
 #include "pycore_value.h"      // _PyObject_IsSame()
+#include "pycore_value_api.h"  // _PyValue_AsObjectAt()
+#include "pycore_value_ops.h"  // _PyValue_GetItem()
 #include "pycore_tuple.h"         // _PyTuple_ITEMS()
 #include "pycore_typeobject.h"    // _PyType_GetModuleState()
 #include "pycore_unicodeobject.h" // _PyUnicode_InternMortal()
@@ -1015,7 +1017,7 @@ static PyGetSetDef common_getset[] = {
 typedef struct {
     PyObject_HEAD
     Py_ssize_t nitems;
-    PyObject *item;
+    PyValue item;     // required home: the key, or a tuple of keys
     Py_ssize_t index; // -1 unless *item* is a single non-negative integer index
     vectorcallfunc vectorcall;
 } itemgetterobject;
@@ -1058,7 +1060,6 @@ itemgetter_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
         return NULL;
     }
 
-    ig->item = item;
     ig->nitems = nitems;
     ig->index = -1;
     if (PyLong_CheckExact(item)) {
@@ -1076,6 +1077,8 @@ itemgetter_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
         }
     }
 
+    ig->item = PyValue_PrepareOwned(item);
+    _PyValue_CheckHome(ig->item);
     ig->vectorcall = itemgetter_vectorcall;
     PyObject_GC_Track(ig);
     return (PyObject *)ig;
@@ -1085,7 +1088,7 @@ static int
 itemgetter_clear(PyObject *op)
 {
     itemgetterobject *ig = itemgetterobject_CAST(op);
-    Py_CLEAR(ig->item);
+    PyValue_CLEAR(ig->item);
     return 0;
 }
 
@@ -1104,7 +1107,7 @@ itemgetter_traverse(PyObject *op, visitproc visit, void *arg)
 {
     itemgetterobject *ig = itemgetterobject_CAST(op);
     Py_VISIT(Py_TYPE(ig));
-    Py_VISIT(ig->item);
+    _Py_VISIT_VALUE(ig->item);
     return 0;
 }
 
@@ -1152,30 +1155,31 @@ itemgetter_call_impl(itemgetterobject *ig, PyObject *obj)
         {
             return PyTuple_GetItemRef(obj, ig->index);
         }
-        return PyObject_GetItem(obj, ig->item);
+        PyValue found = _PyValue_GetItem(PyValue_FromObjectBorrow(obj),
+                                         ig->item);
+        if (PyValue_IsNull(found)) {
+            return NULL;
+        }
+        return _PyValue_AsObjectStealAt(found, BOX_SITE_SEQUENCE);
     }
 
-    assert(PyTuple_Check(ig->item));
-    assert(PyTuple_GET_SIZE(ig->item) == nitems);
+    PyObject *items = PyValue_AsKnownObjectBorrow(ig->item);
+    assert(PyTuple_Check(items));
+    assert(PyTuple_GET_SIZE(items) == nitems);
 
     result = PyTuple_New(nitems);
     if (result == NULL)
         return NULL;
 
     for (i=0 ; i < nitems ; i++) {
-        PyObject *item, *val;
-        item = PyTuple_GetItemRef(ig->item, i);
-        if (item == NULL) {
+        /* The key tuple is immutable and owned by ig, so the view is safe. */
+        PyValue val = _PyValue_GetItem(PyValue_FromObjectBorrow(obj),
+                                       PyTuple_GET_VALUE(items, i));
+        if (PyValue_IsNull(val)) {
             Py_DECREF(result);
             return NULL;
         }
-        val = PyObject_GetItem(obj, item);
-        Py_DECREF(item);
-        if (val == NULL) {
-            Py_DECREF(result);
-            return NULL;
-        }
-        PyTuple_SET_ITEM(result, i, val);
+        PyTuple_SET_VALUE(result, i, val);
     }
     return result;
 }
@@ -1195,7 +1199,13 @@ itemgetter_repr(PyObject *op)
     }
 
     reprfmt = ig->nitems == 1 ? "%s(%R)" : "%s%R";
-    repr = PyUnicode_FromFormat(reprfmt, Py_TYPE(ig)->tp_name, ig->item);
+    PyObject *item = _PyValue_AsObjectAt(ig->item, BOX_SITE_REPR);
+    if (item == NULL) {
+        Py_ReprLeave(op);
+        return NULL;
+    }
+    repr = PyUnicode_FromFormat(reprfmt, Py_TYPE(ig)->tp_name, item);
+    Py_DECREF(item);
     Py_ReprLeave(op);
     return repr;
 }
@@ -1204,9 +1214,17 @@ static PyObject *
 itemgetter_reduce(PyObject *op, PyObject *Py_UNUSED(dummy))
 {
     itemgetterobject *ig = itemgetterobject_CAST(op);
-    if (ig->nitems == 1)
-        return Py_BuildValue("O(O)", Py_TYPE(ig), ig->item);
-    return _PyTuple_FromPair((PyObject *)Py_TYPE(ig), ig->item);
+    PyObject *item = _PyValue_AsObjectAt(ig->item, BOX_SITE_FIELD);
+    if (item == NULL) {
+        return NULL;
+    }
+    PyObject *res;
+    if (ig->nitems == 1) {
+        res = Py_BuildValue("O(O)", Py_TYPE(ig), item);
+        Py_DECREF(item);
+        return res;
+    }
+    return _PyTuple_FromPairSteal(Py_NewRef(Py_TYPE(ig)), item);
 }
 
 PyDoc_STRVAR(reduce_doc, "Return state information for pickling");

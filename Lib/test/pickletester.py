@@ -5315,6 +5315,26 @@ class AbstractPicklerUnpicklerObjectTests:
         with self.assertRaises(pickle.UnpicklingError):
             unpickler.load()
 
+    def test_unpickler_memo_sparse_keys(self):
+        a, b, c = object(), [1], 'c'
+        memo = {0: a, 7: b, 1000: c}
+        data = b'(g0\ng7\ng1000\nt.'
+        unpickler = self.unpickler_class(io.BytesIO(data))
+        unpickler.memo = memo
+        self.assertEqual(unpickler.memo.copy(), memo)
+        copied = unpickler.memo.copy()
+        for key, value in memo.items():
+            self.assertIs(copied[key], value)
+        # Assigning one unpickler's memo to another keeps the sparse keys.
+        other = self.unpickler_class(io.BytesIO(data))
+        other.memo = unpickler.memo
+        self.assertEqual(other.memo.copy(), memo)
+        for u in unpickler, other:
+            result = u.load()
+            self.assertEqual(len(result), 3)
+            for got, want in zip(result, (a, b, c)):
+                self.assertIs(got, want)
+
     def test_priming_pickler_memo(self):
         # Verify that we can set the Pickler's memo attribute.
         data = ["abcdefg", "abcdefg", 44]

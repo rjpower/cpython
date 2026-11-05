@@ -9,6 +9,9 @@
 #include "pycore_tuple.h"         // _PyTuple_Recycle()
 #include "pycore_weakref.h"       // FT_CLEAR_WEAKREFS()
 #include "pycore_value.h"         // PyValue
+#include "pycore_value_api.h"     // _PyValue_AsObjectAt()
+#include "pycore_value_call.h"    // _PyValue_Vectorcall()
+#include "pycore_value_ops.h"     // _PyValue_RichCompare()
 
 
 #include "clinic/_functoolsmodule.c.h"
@@ -990,7 +993,7 @@ static PyType_Spec partial_type_spec = {
 typedef struct {
     PyObject_HEAD
     PyObject *cmp;
-    PyObject *object;
+    PyValue object;     /* optional: PyValue_NULL until the key is called */
 } keyobject;
 
 #define keyobject_CAST(op)  ((keyobject *)(op))
@@ -1000,7 +1003,7 @@ keyobject_clear(PyObject *op)
 {
     keyobject *ko = keyobject_CAST(op);
     Py_CLEAR(ko->cmp);
-    Py_CLEAR(ko->object);
+    PyValue_CLEAR(ko->object);
     return 0;
 }
 
@@ -1020,12 +1023,12 @@ keyobject_traverse(PyObject *op, visitproc visit, void *arg)
     keyobject *ko = keyobject_CAST(op);
     Py_VISIT(Py_TYPE(ko));
     Py_VISIT(ko->cmp);
-    Py_VISIT(ko->object);
+    _Py_VISIT_VALUE(ko->object);
     return 0;
 }
 
 static PyMemberDef keyobject_members[] = {
-    {"obj", _Py_T_OBJECT,
+    {"obj", _Py_T_VALUE,
      offsetof(keyobject, object), 0,
      PyDoc_STR("Value wrapped by a key function.")},
     {NULL}
@@ -1084,7 +1087,8 @@ keyobject_call(PyObject *self, PyObject *args, PyObject *kwds)
         return NULL;
     }
     result->cmp = Py_NewRef(ko->cmp);
-    result->object = Py_NewRef(object);
+    result->object = PyValue_DUP(PyValue_FromObjectBorrow(object));
+    _PyValue_CheckHome(result->object);
     PyObject_GC_Track(result);
     return (PyObject *)result;
 }
@@ -1102,9 +1106,7 @@ keyobject_richcompare(PyObject *self, PyObject *other, int op)
 
     PyObject *compare = lhs->cmp;
     assert(compare != NULL);
-    PyObject *x = lhs->object;
-    PyObject *y = rhs->object;
-    if (!x || !y){
+    if (PyValue_IsNull(lhs->object) || PyValue_IsNull(rhs->object)) {
         PyErr_Format(PyExc_AttributeError, "object");
         return NULL;
     }
@@ -1112,15 +1114,19 @@ keyobject_richcompare(PyObject *self, PyObject *other, int op)
     /* Call the user's comparison function and translate the 3-way
      * result into true or false (or error).
      */
-    PyObject* args[2] = {x, y};
-    PyObject *res = PyObject_Vectorcall(compare, args, 2, NULL);
-    if (res == NULL) {
+    const PyValue args[2] = {lhs->object, rhs->object};
+    PyValue res = _PyValue_Vectorcall(PyValue_FromObjectBorrow(compare), args,
+                                      2, NULL);
+    if (PyValue_IsNull(res)) {
         return NULL;
     }
 
-    PyObject *answer = PyObject_RichCompare(res, _PyLong_GetZero(), op);
-    Py_DECREF(res);
-    return answer;
+    PyValue answer = _PyValue_RichCompare(res, PyValue_FromInt64(0), op);
+    PyValue_CLOSE(res);
+    if (PyValue_IsNull(answer)) {
+        return NULL;
+    }
+    return _PyValue_AsObjectStealAt(answer, BOX_SITE_COMPARE);
 }
 
 /*[clinic input]
@@ -1144,7 +1150,7 @@ _functools_cmp_to_key_impl(PyObject *module, PyObject *mycmp)
     if (!object)
         return NULL;
     object->cmp = Py_NewRef(mycmp);
-    object->object = NULL;
+    object->object = PyValue_NULL;
     PyObject_GC_Track(object);
     return (PyObject *)object;
 }
@@ -1272,7 +1278,7 @@ typedef struct lru_list_elem {
     PyObject_HEAD
     struct lru_list_elem *prev, *next;  /* borrowed links */
     Py_hash_t hash;
-    PyObject *key, *result;
+    PyValue key, result;     /* required homes once the link is built */
 } lru_list_elem;
 
 #define lru_list_elem_CAST(op)  ((lru_list_elem *)(op))
@@ -1282,8 +1288,8 @@ lru_list_elem_dealloc(PyObject *op)
 {
     lru_list_elem *link = lru_list_elem_CAST(op);
     PyTypeObject *tp = Py_TYPE(link);
-    Py_XDECREF(link->key);
-    Py_XDECREF(link->result);
+    PyValue_XCLOSE(link->key);
+    PyValue_XCLOSE(link->result);
     tp->tp_free(link);
     Py_DECREF(tp);
 }
@@ -1294,8 +1300,8 @@ static int
 lru_list_elem_traverse(PyObject *op, visitproc visit, void *arg)
 {
     lru_list_elem *self = lru_list_elem_CAST(op);
-    Py_VISIT(self->key);
-    Py_VISIT(self->result);
+    _Py_VISIT_VALUE(self->key);
+    _Py_VISIT_VALUE(self->result);
     return 0;
 }
 
@@ -1530,11 +1536,14 @@ bounded_lru_cache_get_lock_held(lru_cache_object *self, PyObject *args, PyObject
     if (res > 0) {
         lru_cache_extract_link(link);
         lru_cache_append_link(self, link);
-        *result = link->result;
         FT_ATOMIC_ADD_SSIZE(self->hits, 1);
-        Py_INCREF(link->result);
+        /* An object exit: the cached result goes to the caller. */
+        *result = _PyValue_AsObjectAt(link->result, BOX_SITE_FIELD);
         Py_DECREF(link);
         Py_DECREF(key_);
+        if (*result == NULL) {
+            return -1;
+        }
         return 1;
     }
     if (res < 0) {
@@ -1595,8 +1604,10 @@ bounded_lru_cache_update_lock_held(lru_cache_object *self,
         }
 
         link->hash = hash;
-        link->key = key;
-        link->result = result;
+        link->key = PyValue_DUP(PyValue_FromObjectBorrow(key));
+        link->result = PyValue_DUP(PyValue_FromObjectBorrow(result));
+        _PyValue_CheckHome(link->key);
+        _PyValue_CheckHome(link->result);
         /* What is really needed here is a SetItem variant with a "no clobber"
            option.  If the __eq__ call triggers a reentrant call that adds
            this same key, then this setitem call will update the cache dict
@@ -1605,10 +1616,14 @@ bounded_lru_cache_update_lock_held(lru_cache_object *self,
         if (_PyDict_SetItem_KnownHash_LockHeld((PyDictObject *)self->cache, key,
                                                (PyObject *)link, hash) < 0) {
             Py_DECREF(link);
+            Py_DECREF(key);
+            Py_DECREF(result);
             return NULL;
         }
         lru_cache_append_link(self, link);
-        return Py_NewRef(result);
+        /* The link holds its own counts. */
+        Py_DECREF(key);
+        return result;
     }
     /* Since the cache is full, we need to evict an old key and add
        a new key.  Rather than free the old link and allocate a new
@@ -1622,7 +1637,8 @@ bounded_lru_cache_update_lock_held(lru_cache_object *self,
        make sense to reinsert the link, so we leave it out
        and the cache will no longer register as full.
     */
-    PyObject *oldkey, *oldresult, *popresult;
+    PyValue oldkey, oldresult;
+    PyObject *popresult;
 
     /* Extract the oldest item. */
     assert(self->root.next != &self->root);
@@ -1632,8 +1648,16 @@ bounded_lru_cache_update_lock_held(lru_cache_object *self,
        The cache dict holds one reference to the link.
        We created one other reference when the link was created.
        The linked list only has borrowed references. */
-    res = _PyDict_Pop_KnownHash((PyDictObject*)self->cache, link->key,
+    PyObject *linkkey = _PyValue_AsObjectAt(link->key, BOX_SITE_FIELD);
+    if (linkkey == NULL) {
+        lru_cache_prepend_link(self, link);
+        Py_DECREF(key);
+        Py_DECREF(result);
+        return NULL;
+    }
+    res = _PyDict_Pop_KnownHash((PyDictObject*)self->cache, linkkey,
                                 link->hash, &popresult);
+    Py_DECREF(linkkey);
     if (res < 0) {
         /* An error arose while trying to remove the oldest key (the one
            being evicted) from the cache.  We restore the link to its
@@ -1665,8 +1689,10 @@ bounded_lru_cache_update_lock_held(lru_cache_object *self,
     oldresult = link->result;
 
     link->hash = hash;
-    link->key = key;
-    link->result = result;
+    link->key = PyValue_DUP(PyValue_FromObjectBorrow(key));
+    link->result = PyValue_DUP(PyValue_FromObjectBorrow(result));
+    _PyValue_CheckHome(link->key);
+    _PyValue_CheckHome(link->result);
     /* Note:  The link is being added to the cache dict without the
        prev and next fields set to valid values.   We have to wait
        for successful insertion in the cache dict before adding the
@@ -1679,15 +1705,18 @@ bounded_lru_cache_update_lock_held(lru_cache_object *self,
            leave the cache short one link. */
         Py_DECREF(popresult);
         Py_DECREF(link);
-        Py_DECREF(oldkey);
-        Py_DECREF(oldresult);
+        PyValue_CLOSE(oldkey);
+        PyValue_CLOSE(oldresult);
+        Py_DECREF(key);
+        Py_DECREF(result);
         return NULL;
     }
     lru_cache_append_link(self, link);
-    Py_INCREF(result); /* for return */
+    /* The link holds its own counts; result is returned. */
+    Py_DECREF(key);
     Py_DECREF(popresult);
-    Py_DECREF(oldkey);
-    Py_DECREF(oldresult);
+    PyValue_CLOSE(oldkey);
+    PyValue_CLOSE(oldresult);
     return result;
 }
 
@@ -1964,8 +1993,8 @@ lru_cache_tp_traverse(PyObject *op, visitproc visit, void *arg)
            cycle collector needs its members visited here; the tracing
            mark needs the link itself. */
         Py_VISIT(link);
-        Py_VISIT(link->key);
-        Py_VISIT(link->result);
+        _Py_VISIT_VALUE(link->key);
+        _Py_VISIT_VALUE(link->result);
         Py_VISIT(Py_TYPE(link));
         link = next;
     }

@@ -7,6 +7,7 @@
 #include "pycore_moduleobject.h"  // _PyModule_GetState()
 #include "pycore_parking_lot.h"
 #include "pycore_time.h"          // _PyTime_FromSecondsObject()
+#include "pycore_value_api.h"     // _PyValue_AsObjectStealAt()
 #include "pycore_weakref.h"       // FT_CLEAR_WEAKREFS()
 
 #include <stdbool.h>
@@ -37,7 +38,9 @@ typedef struct {
     // Where to get the next item
     Py_ssize_t get_idx;
 
-    PyObject **items;
+    // Optional value homes: PyValue_NULL (zeroed memory) outside the
+    // occupied range [get_idx, get_idx + num_items).
+    PyValue *items;
 
     // Total number of items that may be stored
     Py_ssize_t items_cap;
@@ -53,7 +56,7 @@ RingBuf_Init(RingBuf *buf)
     buf->get_idx = 0;
     buf->items_cap = 0;
     buf->num_items = 0;
-    buf->items = PyMem_Calloc(INITIAL_RING_BUF_CAPACITY, sizeof(PyObject *));
+    buf->items = PyMem_Calloc(INITIAL_RING_BUF_CAPACITY, sizeof(PyValue));
     if (buf->items == NULL) {
         PyErr_NoMemory();
         return -1;
@@ -62,7 +65,7 @@ RingBuf_Init(RingBuf *buf)
     return 0;
 }
 
-static PyObject *
+static PyValue
 RingBuf_At(RingBuf *buf, Py_ssize_t idx)
 {
     assert(idx >= 0 && idx < buf->num_items);
@@ -72,7 +75,7 @@ RingBuf_At(RingBuf *buf, Py_ssize_t idx)
 static void
 RingBuf_Fini(RingBuf *buf)
 {
-    PyObject **items = buf->items;
+    PyValue *items = buf->items;
     Py_ssize_t num_items = buf->num_items;
     Py_ssize_t cap = buf->items_cap;
     Py_ssize_t idx = buf->get_idx;
@@ -82,7 +85,7 @@ RingBuf_Fini(RingBuf *buf)
     buf->num_items = 0;
     buf->items_cap = 0;
     for (Py_ssize_t n = num_items; n > 0; idx = (idx + 1) % cap, n--) {
-        Py_DECREF(items[idx]);
+        PyValue_CLOSE(items[idx]);
     }
     PyMem_Free(items);
 }
@@ -100,7 +103,7 @@ resize_ringbuf(RingBuf *buf, Py_ssize_t capacity)
     }
     assert(buf->num_items <= new_capacity);
 
-    PyObject **new_items = PyMem_Calloc(new_capacity, sizeof(PyObject *));
+    PyValue *new_items = PyMem_Calloc(new_capacity, sizeof(PyValue));
     if (new_items == NULL) {
         return -1;
     }
@@ -111,7 +114,7 @@ resize_ringbuf(RingBuf *buf, Py_ssize_t capacity)
         Py_MIN(buf->num_items, buf->items_cap - buf->get_idx);
     if (tail_size > 0) {
         memcpy(new_items, buf->items + buf->get_idx,
-               tail_size * sizeof(PyObject *));
+               tail_size * sizeof(PyValue));
     }
 
     // Copy the "head" of the old items array, if any. This corresponds to the
@@ -119,7 +122,7 @@ resize_ringbuf(RingBuf *buf, Py_ssize_t capacity)
     Py_ssize_t head_size = buf->num_items - tail_size;
     if (head_size > 0) {
         memcpy(new_items + tail_size, buf->items,
-               head_size * sizeof(PyObject *));
+               head_size * sizeof(PyValue));
     }
 
     PyMem_Free(buf->items);
@@ -131,8 +134,8 @@ resize_ringbuf(RingBuf *buf, Py_ssize_t capacity)
     return 0;
 }
 
-// Returns a strong reference from the head of the buffer.
-static PyObject *
+// Returns the owner of the item at the head of the buffer.
+static PyValue
 RingBuf_Get(RingBuf *buf)
 {
     assert(buf->num_items > 0);
@@ -147,8 +150,8 @@ RingBuf_Get(RingBuf *buf)
         (void)resize_ringbuf(buf, buf->items_cap / 2);
     }
 
-    PyObject *item = buf->items[buf->get_idx];
-    buf->items[buf->get_idx] = NULL;
+    PyValue item = buf->items[buf->get_idx];
+    buf->items[buf->get_idx] = PyValue_NULL;
     buf->get_idx = (buf->get_idx + 1) % buf->items_cap;
     buf->num_items--;
     return item;
@@ -167,7 +170,8 @@ RingBuf_Put(RingBuf *buf, PyObject *item)
             return -1;
         }
     }
-    buf->items[buf->put_idx] = Py_NewRef(item);
+    buf->items[buf->put_idx] = PyValue_DUP(PyValue_FromObjectBorrow(item));
+    _PyValue_CheckHome(buf->items[buf->put_idx]);
     buf->put_idx = (buf->put_idx + 1) % buf->items_cap;
     buf->num_items++;
     return 0;
@@ -232,7 +236,8 @@ simplequeue_traverse(PyObject *op, visitproc visit, void *arg)
     simplequeueobject *self = simplequeueobject_CAST(op);
     RingBuf *buf = &self->buf;
     for (Py_ssize_t i = 0, num_items = buf->num_items; i < num_items; i++) {
-        Py_VISIT(RingBuf_At(buf, i));
+        PyValue item = RingBuf_At(buf, i);
+        _Py_VISIT_VALUE(item);
     }
     Py_VISIT(Py_TYPE(self));
     return 0;
@@ -399,7 +404,8 @@ _queue_SimpleQueue_get_impl(simplequeueobject *self, PyTypeObject *cls,
 
     for (;;) {
         if (!RingBuf_IsEmpty(&self->buf)) {
-            return RingBuf_Get(&self->buf);
+            return _PyValue_AsObjectStealAt(RingBuf_Get(&self->buf),
+                                            BOX_SITE_FIELD);
         }
 
         if (!block) {

@@ -52,31 +52,43 @@
 #define LOCAL(type) static type
 #endif
 
-/* macros used to store 'join' flags in string object pointers.  note
-   that all use of text and tail as object pointers must be wrapped in
-   JOIN_OBJ.  see comments in the ElementObject definition for more
-   info. */
-#define JOIN_GET(p) ((uintptr_t) (p) & 1)
-#define JOIN_SET(p, flag) ((void*) ((uintptr_t) (JOIN_OBJ(p)) | (flag)))
-#define JOIN_OBJ(p) ((PyObject*) ((uintptr_t) (p) & ~(uintptr_t)1))
-
-/* Py_SETREF for a PyObject* that uses a join flag. */
-Py_LOCAL_INLINE(void)
-_set_joined_ptr(PyObject **p, PyObject *new_joined_ptr)
+/* text and tail are value homes (required: None when absent), each with a
+   "join" flag beside it in the element. The flag
+   distinguishes lists created by the tree builder from lists assigned to the
+   attribute by application code: the former are joined before being returned
+   to the user, the latter are left intact. */
+static inline void
+_joined_init(PyValue *p, unsigned char *joined)
 {
-    PyObject *tmp = JOIN_OBJ(*p);
-    *p = new_joined_ptr;
-    Py_DECREF(tmp);
+    *p = PyValue_None;
+    *joined = 0;
 }
 
-/* Py_CLEAR for a PyObject* that uses a join flag. Pass the pointer by
- * reference since this function sets it to NULL.
-*/
-static void _clear_joined_ptr(PyObject **p)
+/* Store new_obj (a strong reference, consumed) and the flag; release the
+   previous value. */
+static void
+_set_joined(PyValue *p, unsigned char *joined_p, PyObject *new_obj, int joined)
 {
-    if (*p) {
-        _set_joined_ptr(p, NULL);
-    }
+    PyValue old = *p;
+    *p = PyValue_PrepareOwned(new_obj);
+    *joined_p = (unsigned char)joined;
+    _PyValue_CheckHome(*p);
+    PyValue_XCLOSE(old);
+}
+
+/* PyValue_CLEAR for a joined value. */
+static void
+_clear_joined(PyValue *p, unsigned char *joined)
+{
+    *joined = 0;
+    PyValue_CLEAR(*p);
+}
+
+/* A new reference to the object, or NULL with an exception set. */
+static inline PyObject *
+_joined_object(PyValue p)
+{
+    return _PyValue_AsObjectAt(p, BOX_SITE_FIELD);
 }
 
 /* Per-module state; PEP 3121 */
@@ -249,17 +261,15 @@ typedef struct {
     /* element tag (a string). */
     PyObject* tag;
 
-    /* text before first child.  note that this is a tagged pointer;
-       use JOIN_OBJ to get the object pointer.  the join flag is used
-       to distinguish lists created by the tree builder from lists
-       assigned to the attribute by application code; the former
-       should be joined before being returned to the user, the latter
-       should be left intact. */
-    PyObject* text;
+    /* text before first child. */
+    PyValue text;
 
-    /* text after this element, in parent.  note that this is a tagged
-       pointer; use JOIN_OBJ to get the object pointer. */
-    PyObject* tail;
+    /* text after this element, in parent. */
+    PyValue tail;
+
+    /* The join flags of text and tail. */
+    unsigned char text_joined;
+    unsigned char tail_joined;
 
     ElementObjectExtra* extra;
 
@@ -343,8 +353,8 @@ create_new_element(elementtreestate *st, PyObject *tag, PyObject *attrib)
         return NULL;
     self->extra = NULL;
     self->tag = Py_NewRef(tag);
-    self->text = Py_NewRef(Py_None);
-    self->tail = Py_NewRef(Py_None);
+    _joined_init(&self->text, &self->text_joined);
+    _joined_init(&self->tail, &self->tail_joined);
     self->weakreflist = NULL;
 
     PyObject_GC_Track(self);
@@ -365,8 +375,8 @@ element_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
     ElementObject *e = (ElementObject *)type->tp_alloc(type, 0);
     if (e != NULL) {
         e->tag = Py_NewRef(Py_None);
-        e->text = Py_NewRef(Py_None);
-        e->tail = Py_NewRef(Py_None);
+        _joined_init(&e->text, &e->text_joined);
+        _joined_init(&e->tail, &e->tail_joined);
         e->extra = NULL;
         e->weakreflist = NULL;
     }
@@ -470,8 +480,8 @@ element_init(PyObject *self, PyObject *args, PyObject *kwds)
     /* Replace the objects already pointed to by tag, text and tail. */
     Py_XSETREF(self_elem->tag, Py_NewRef(tag));
 
-    _set_joined_ptr(&self_elem->text, Py_NewRef(Py_None));
-    _set_joined_ptr(&self_elem->tail, Py_NewRef(Py_None));
+    _set_joined(&self_elem->text, &self_elem->text_joined, Py_NewRef(Py_None), 0);
+    _set_joined(&self_elem->tail, &self_elem->tail_joined, Py_NewRef(Py_None), 0);
 
     return 0;
 }
@@ -583,20 +593,22 @@ element_get_text(ElementObject* self)
 {
     /* return new reference to text attribute */
 
-    PyObject *res = self->text;
-
-    if (JOIN_GET(res)) {
-        res = JOIN_OBJ(res);
-        if (PyList_CheckExact(res)) {
-            PyObject *tmp = list_join(res);
-            if (!tmp)
-                return NULL;
-            self->text = tmp;
-            Py_SETREF(res, tmp);
-        }
+    PyObject *res = _joined_object(self->text);
+    if (res == NULL) {
+        return NULL;
     }
 
-    return Py_NewRef(res);
+    if (self->text_joined && PyList_CheckExact(res)) {
+        PyObject *tmp = list_join(res);
+        Py_DECREF(res);
+        if (!tmp)
+            return NULL;
+        /* The joined string replaces the list; the flag is cleared. */
+        _set_joined(&self->text, &self->text_joined, Py_NewRef(tmp), 0);
+        res = tmp;
+    }
+
+    return res;
 }
 
 LOCAL(PyObject*)
@@ -604,20 +616,22 @@ element_get_tail(ElementObject* self)
 {
     /* return new reference to tail attribute */
 
-    PyObject *res = self->tail;
-
-    if (JOIN_GET(res)) {
-        res = JOIN_OBJ(res);
-        if (PyList_CheckExact(res)) {
-            PyObject *tmp = list_join(res);
-            if (!tmp)
-                return NULL;
-            self->tail = tmp;
-            Py_SETREF(res, tmp);
-        }
+    PyObject *res = _joined_object(self->tail);
+    if (res == NULL) {
+        return NULL;
     }
 
-    return Py_NewRef(res);
+    if (self->tail_joined && PyList_CheckExact(res)) {
+        PyObject *tmp = list_join(res);
+        Py_DECREF(res);
+        if (!tmp)
+            return NULL;
+        /* The joined string replaces the list; the flag is cleared. */
+        _set_joined(&self->tail, &self->tail_joined, Py_NewRef(tmp), 0);
+        res = tmp;
+    }
+
+    return res;
 }
 
 /*[clinic input]
@@ -680,8 +694,8 @@ element_gc_traverse(PyObject *op, visitproc visit, void *arg)
     ElementObject *self = _Element_CAST(op);
     Py_VISIT(Py_TYPE(self));
     Py_VISIT(self->tag);
-    Py_VISIT(JOIN_OBJ(self->text));
-    Py_VISIT(JOIN_OBJ(self->tail));
+    _Py_VISIT_VALUE(self->text);
+    _Py_VISIT_VALUE(self->tail);
 
     if (self->extra) {
         Py_ssize_t i;
@@ -698,8 +712,8 @@ element_gc_clear(PyObject *op)
 {
     ElementObject *self = _Element_CAST(op);
     Py_CLEAR(self->tag);
-    _clear_joined_ptr(&self->text);
-    _clear_joined_ptr(&self->tail);
+    _clear_joined(&self->text, &self->text_joined);
+    _clear_joined(&self->tail, &self->tail_joined);
 
     /* After dropping all references from extra, it's no longer valid anyway,
      * so fully deallocate it.
@@ -770,8 +784,8 @@ _elementtree_Element_clear_impl(ElementObject *self)
 {
     clear_extra(self);
 
-    _set_joined_ptr(&self->text, Py_NewRef(Py_None));
-    _set_joined_ptr(&self->tail, Py_NewRef(Py_None));
+    _set_joined(&self->text, &self->text_joined, Py_NewRef(Py_None), 0);
+    _set_joined(&self->tail, &self->tail_joined, Py_NewRef(Py_None), 0);
 
     Py_RETURN_NONE;
 }
@@ -797,11 +811,14 @@ _elementtree_Element___copy___impl(ElementObject *self, PyTypeObject *cls)
     if (!element)
         return NULL;
 
-    Py_INCREF(JOIN_OBJ(self->text));
-    _set_joined_ptr(&element->text, self->text);
+    /* The copy shares the value (a new count) and carries the flag. */
+    PyValue_XCLOSE(element->text);
+    element->text = PyValue_DUP(self->text);
+    element->text_joined = self->text_joined;
 
-    Py_INCREF(JOIN_OBJ(self->tail));
-    _set_joined_ptr(&element->tail, self->tail);
+    PyValue_XCLOSE(element->tail);
+    element->tail = PyValue_DUP(self->tail);
+    element->tail_joined = self->tail_joined;
 
     assert(!element->extra || !element->extra->length);
     if (self->extra) {
@@ -876,15 +893,23 @@ _elementtree_Element___deepcopy___impl(ElementObject *self, PyObject *memo)
         goto error;
     }
 
-    text = deepcopy(st, JOIN_OBJ(self->text), memo);
+    PyObject *text_obj = _joined_object(self->text);
+    if (!text_obj)
+        goto error;
+    text = deepcopy(st, text_obj, memo);
+    Py_DECREF(text_obj);
     if (!text)
         goto error;
-    _set_joined_ptr(&element->text, JOIN_SET(text, JOIN_GET(self->text)));
+    _set_joined(&element->text, &element->text_joined, text, self->text_joined);
 
-    tail = deepcopy(st, JOIN_OBJ(self->tail), memo);
+    PyObject *tail_obj = _joined_object(self->tail);
+    if (!tail_obj)
+        goto error;
+    tail = deepcopy(st, tail_obj, memo);
+    Py_DECREF(tail_obj);
     if (!tail)
         goto error;
-    _set_joined_ptr(&element->tail, JOIN_SET(tail, JOIN_GET(self->tail)));
+    _set_joined(&element->tail, &element->tail_joined, tail, self->tail_joined);
 
     assert(!element->extra || !element->extra->length);
     if (self->extra) {
@@ -1070,12 +1095,21 @@ _elementtree_Element___getstate___impl(ElementObject *self)
         }
     }
 
-    return Py_BuildValue("{sOsNsNsOsO}",
+    PyObject *text_obj = _joined_object(self->text);
+    PyObject *tail_obj = _joined_object(self->tail);
+    if (text_obj == NULL || tail_obj == NULL) {
+        Py_XDECREF(text_obj);
+        Py_XDECREF(tail_obj);
+        Py_DECREF(children);
+        Py_DECREF(attrib);
+        return NULL;
+    }
+    return Py_BuildValue("{sOsNsNsNsN}",
                          PICKLED_TAG, self->tag,
                          PICKLED_CHILDREN, children,
                          PICKLED_ATTRIB, attrib,
-                         PICKLED_TEXT, JOIN_OBJ(self->text),
-                         PICKLED_TAIL, JOIN_OBJ(self->tail));
+                         PICKLED_TEXT, text_obj,
+                         PICKLED_TAIL, tail_obj);
 }
 
 static PyObject *
@@ -1097,13 +1131,15 @@ element_setstate_from_attributes(elementtreestate *st,
 
     Py_XSETREF(self->tag, Py_NewRef(tag));
 
-    text = text ? JOIN_SET(text, PyList_CheckExact(text)) : Py_None;
-    Py_INCREF(JOIN_OBJ(text));
-    _set_joined_ptr(&self->text, text);
+    if (!text) {
+        text = Py_None;
+    }
+    _set_joined(&self->text, &self->text_joined, Py_NewRef(text), PyList_CheckExact(text));
 
-    tail = tail ? JOIN_SET(tail, PyList_CheckExact(tail)) : Py_None;
-    Py_INCREF(JOIN_OBJ(tail));
-    _set_joined_ptr(&self->tail, tail);
+    if (!tail) {
+        tail = Py_None;
+    }
+    _set_joined(&self->tail, &self->tail_joined, Py_NewRef(tail), PyList_CheckExact(tail));
 
     /* Handle ATTRIB and CHILDREN. */
     if (!children && !attrib) {
@@ -2228,7 +2264,7 @@ element_text_setter(PyObject *op, PyObject *value, void *closure)
 {
     _VALIDATE_ATTR_VALUE(value);
     ElementObject *self = _Element_CAST(op);
-    _set_joined_ptr(&self->text, Py_NewRef(value));
+    _set_joined(&self->text, &self->text_joined, Py_NewRef(value), 0);
     return 0;
 }
 
@@ -2237,7 +2273,7 @@ element_tail_setter(PyObject *op, PyObject *value, void *closure)
 {
     _VALIDATE_ATTR_VALUE(value);
     ElementObject *self = _Element_CAST(op);
-    _set_joined_ptr(&self->tail, Py_NewRef(value));
+    _set_joined(&self->tail, &self->tail_joined, Py_NewRef(value), 0);
     return 0;
 }
 
@@ -2735,19 +2771,22 @@ _elementtree__set_factories_impl(PyObject *module, PyObject *comment_factory,
 
 static int
 treebuilder_extend_element_text_or_tail(elementtreestate *st, PyObject *element,
-                                        PyObject **data, PyObject **dest,
+                                        PyObject **data, PyValue *dest,
+                                        unsigned char *dest_joined,
                                         PyObject *name)
 {
     /* Fast paths for the "almost always" cases. */
     if (Element_CheckExact(st, element)) {
-        PyObject *dest_obj = JOIN_OBJ(*dest);
-        if (dest_obj == Py_None) {
-            *dest = JOIN_SET(*data, PyList_CheckExact(*data));
+        if (PyValue_IsNone(*dest)) {
+            int joined = PyList_CheckExact(*data);
+            PyObject *moved = *data;
             *data = NULL;
-            Py_DECREF(dest_obj);
+            _set_joined(dest, dest_joined, moved, joined);
             return 0;
         }
-        else if (JOIN_GET(*dest)) {
+        else if (*dest_joined) {
+            /* A joined value is a list: an object, never inline. */
+            PyObject *dest_obj = PyValue_AsKnownObjectBorrow(*dest);
             if (PyList_SetSlice(dest_obj, PY_SSIZE_T_MAX, PY_SSIZE_T_MAX, *data) < 0) {
                 return -1;
             }
@@ -2799,13 +2838,15 @@ treebuilder_flush_data(TreeBuilderObject* self)
         PyObject *element = self->last;
         return treebuilder_extend_element_text_or_tail(
                 st, element, &self->data,
-                &((ElementObject *) element)->text, st->str_text);
+                &((ElementObject *) element)->text,
+                &((ElementObject *) element)->text_joined, st->str_text);
     }
     else {
         PyObject *element = self->last_for_tail;
         return treebuilder_extend_element_text_or_tail(
                 st, element, &self->data,
-                &((ElementObject *) element)->tail, st->str_tail);
+                &((ElementObject *) element)->tail,
+                &((ElementObject *) element)->tail_joined, st->str_tail);
     }
 }
 

@@ -1501,8 +1501,9 @@ class TestBasicOps(unittest.TestCase):
         values = [1, 1.5, None, "text", marker]
         partial = _tee_dataobject(iter(()), values, None)
         refs = gc.get_referents(partial)
-        self.assertTrue(any(type(ref) is int and ref == 1 for ref in refs))
-        self.assertTrue(any(type(ref) is float and ref == 1.5 for ref in refs))
+        # Inline ints and floats are values in the home, not referents.
+        self.assertFalse(any(type(ref) is int and ref == 1 for ref in refs))
+        self.assertFalse(any(type(ref) is float and ref == 1.5 for ref in refs))
         self.assertTrue(any(ref is None for ref in refs))
         self.assertTrue(any(ref is values[3] for ref in refs))
         self.assertTrue(any(ref is marker for ref in refs))

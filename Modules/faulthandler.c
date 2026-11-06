@@ -114,7 +114,6 @@ static const size_t faulthandler_nsignals = \
 static int
 faulthandler_get_fileno(PyValueBorrow file_in, PyObject **file_out)
 {
-    PyObject *result;
     PyObject *file;
 
     if (PyValue_IsNull(file_in) || PyValue_IsNone(file_in)) {
@@ -156,20 +155,21 @@ faulthandler_get_fileno(PyValueBorrow file_in, PyObject **file_out)
         }
     }
 
-    result = PyObject_CallMethodNoArgs(file, &_Py_ID(fileno));
-    if (result == NULL) {
+    PyValue result_value = _PyValue_CallMethodNoArgs(
+        PyValue_FromObjectBorrow(file), &_Py_ID(fileno));
+    if (PyValue_IsNull(result_value)) {
         Py_DECREF(file);
         return -1;
     }
 
     int fd;
-    if (PyLong_Check(result)) {
-        fd = _PyValue_AsInt(PyValue_FromObjectBorrow(result));
+    if (PyValue_LongCheck(result_value)) {
+        fd = _PyValue_AsInt(result_value);
     }
     else {
         fd = -1;
     }
-    Py_DECREF(result);
+    PyValue_CLOSE(result_value);
 
     if (fd < 0) {
         PyErr_SetString(PyExc_RuntimeError,

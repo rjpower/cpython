@@ -499,7 +499,7 @@ math_integer_isqrt_impl(PyObject *module, PyValueBorrow n_arg)
     if (b == NULL) {
         goto error;
     }
-    PyObject *cmp = _PyValue_AsObjectStealAt(
+    PyObject *cmp = _PyValue_AsObjectResultAt(
         _PyValue_CallRichCompare(&PyLong_Type, PyLong_Type.tp_richcompare,
                                  PyValue_FromObjectBorrow(n),
                                  PyValue_FromObjectBorrow(b), Py_LT),

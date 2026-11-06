@@ -196,6 +196,32 @@ class FoldTests(unittest.TestCase):
             self.assertEqual(folded.leftover_run, [])
             self.assertEqual([p.name for p in d.iterdir()], ["b.tmp"])
 
+    def test_invalid_owner_diagnostics_survive_fold_deletion(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp, "bad.txt")
+            rows = ["Stats process: pid=4 tag=test_probe",
+                    "Box owner (core, list) - at 0+0x1: 1",
+                    "Box owner (core, list) 0+0x2 at 0+0x3: 1"]
+            rows.extend(f"Box owner (thunk, list) - at 0+0x{i:x}: 1"
+                        for i in range(18))
+            path.write_text("\n".join(rows) + "\n")
+            folded = check_r27.Folded()
+            folded.fold_dir(tmp, delete=True)
+            summary = check_r27.resolve(folded, TableResolver({}), SRC)
+            self.assertFalse(path.exists())
+            self.assertEqual(summary["invalid_owner_count"], 19)
+            self.assertEqual(len(summary["invalid_owner_samples"]), 16)
+            self.assertEqual(summary["invalid_owner_samples"][0], {
+                "dump": "bad.txt", "tag": "test_probe", "kind": "core",
+                "site": "list", "owner": "0+0x2", "at": "0+0x3", "count": 1,
+            })
+            self.assertEqual(summary["invalid_owner_samples"][1]["kind"],
+                             "thunk")
+            self.assertEqual(summary["invalid_owner_samples"][1]["owner"],
+                             "-")
+            self.assertEqual(summary["accounting_errors"].count(
+                "invalid owner attribution"), 19)
+
     def test_markers(self):
         with tempfile.TemporaryDirectory() as tmp:
             d = Path(tmp)

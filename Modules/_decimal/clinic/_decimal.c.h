@@ -14,7 +14,9 @@ preserve
 #include "pycore_abstract.h"      // _PyNumber_Index()
 #include "pycore_borrow.h"        // _PyBorrow_TupleItems()
 #include "pycore_modsupport.h"    // _PyArg_UnpackKeywords()
+#include "pycore_tuple.h"         // _PyTuple_ITEMS()
 #include "pycore_value_call.h"    // METH_VALUE
+#include "pycore_value_slots.h"   // _PyValue_THUNK_EXIT()
 
 PyDoc_STRVAR(_decimal_Context_Etiny__doc__,
 "Etiny($self, /)\n"
@@ -900,14 +902,20 @@ PyDoc_STRVAR(dec_new__doc__,
 "no value is given, return Decimal(\'0\'). The context does not affect\n"
 "the conversion and is only passed to determine if the InvalidOperation\n"
 "trap is active.");
+#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
+#  error "@value_function Clinic output requires a core build"
+#endif
 
-static PyObject *
-dec_new_impl(PyTypeObject *type, PyObject *value, PyObject *context);
+static PyValue
+dec_new_impl(PyTypeObject *type, PyValueBorrow value, PyValueBorrow context);
+#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
+#  error "@value_function Clinic output requires a core build"
+#endif
 
-static PyObject *
-dec_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
+static PyValue
+dec_new_value(PyTypeObject *type, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 2
@@ -935,37 +943,60 @@ dec_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[2];
-    PyObject * const *fastargs;
-    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
-    Py_ssize_t noptargs = nargs + (kwargs ? PyDict_GET_SIZE(kwargs) : 0) - 0;
-    PyObject *value = NULL;
-    PyObject *context = Py_None;
+    Py_ssize_t _idx[2];
+    PyValueBorrow value = PyValue_Borrow(PyValue_NULL);
+    PyValueBorrow context = PyValue_Borrow(PyValue_None);
 
-    PyObject *const *_args_items = _PyBorrow_TupleItems(args, Py_MIN(nargs, 2));
-    if (_args_items == NULL) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 0, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, _idx, 2)) {
         goto exit;
     }
-    fastargs = _PyArg_UnpackKeywords(_args_items, nargs, kwargs, NULL, &_parser,
-            /*minpos*/ 0, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!fastargs) {
-        goto exit;
+    if (_idx[0] >= 0) {
+        value = PyValue_Borrow(args[_idx[0]]);
     }
-    if (!noptargs) {
-        goto skip_optional_pos;
+    if (_idx[1] >= 0) {
+        context = PyValue_Borrow(args[_idx[1]]);
     }
-    if (fastargs[0]) {
-        value = fastargs[0];
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
-    }
-    context = fastargs[1];
-skip_optional_pos:
     return_value = dec_new_impl(type, value, context);
 
 exit:
     return return_value;
+}
+#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
+#  error "@value_function Clinic output requires a core build"
+#endif
+
+Py_VALUE_ENTRY static PyObject *
+dec_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
+{
+    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
+    if (kwargs == NULL || PyDict_GET_SIZE(kwargs) == 0) {
+        return _PyValue_THUNK_EXIT(dec_new_value(type, _PyTuple_ITEMS(args), nargs, NULL), BOX_SITE_CALL);
+    }
+    PyObject *kwnames;
+    PyValue *window = _PyValue_StackUnpackDict(_PyThreadState_GET(),
+        _PyTuple_ITEMS(args), nargs, kwargs, &kwnames);
+    if (window == NULL) {
+        return NULL;
+    }
+    PyValue result = dec_new_value(type, window, nargs, kwnames);
+    _PyValue_StackUnpackDict_Free(window, nargs, kwnames);
+    return _PyValue_THUNK_EXIT(result, BOX_SITE_CALL);
+}
+#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
+#  error "@value_function Clinic output requires a core build"
+#endif
+
+static PyValue
+dec_vectorcall(PyThreadState *tstate, PyObject *type, const PyValue *args,
+    size_t nargsf, PyObject *kwnames)
+{
+    assert(_PyType_CAST(type)->tp_new == dec_new);
+    /* Make sure the type object is immutable: the generated
+     * vectorcall doesn't deal e.g. with users reassigning __init__. */
+    assert(PyType_HasFeature(_PyType_CAST(type), Py_TPFLAGS_IMMUTABLETYPE));
+    Py_ssize_t nargs = PyVectorcall_NARGS(nargsf);
+    return dec_new_value(_PyType_CAST(type), args, nargs, kwnames);
 }
 
 PyDoc_STRVAR(_decimal_Context_create_decimal__doc__,
@@ -976,18 +1007,27 @@ PyDoc_STRVAR(_decimal_Context_create_decimal__doc__,
 "\n"
 "Unlike the Decimal constructor, this function observes the context\n"
 "limits.");
+#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
+#  error "@value_function Clinic output requires a core build"
+#endif
 
 #define _DECIMAL_CONTEXT_CREATE_DECIMAL_METHODDEF    \
-    {"create_decimal", _PyCFunction_CAST(_decimal_Context_create_decimal), METH_FASTCALL, _decimal_Context_create_decimal__doc__},
+    {"create_decimal", _PyCFunction_CAST(_decimal_Context_create_decimal), METH_VALUE, _decimal_Context_create_decimal__doc__},
+#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
+#  error "@value_function Clinic output requires a core build"
+#endif
 
-static PyObject *
-_decimal_Context_create_decimal_impl(PyObject *context, PyObject *num);
+static PyValue
+_decimal_Context_create_decimal_impl(PyObject *context, PyValueBorrow num);
+#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
+#  error "@value_function Clinic output requires a core build"
+#endif
 
-static PyObject *
-_decimal_Context_create_decimal(PyObject *context, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_decimal_Context_create_decimal(PyValueBorrow context, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
-    PyObject *num = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow num = PyValue_Borrow(PyValue_NULL);
 
     if (!_PyArg_CheckPositional("create_decimal", nargs, 0, 1)) {
         goto exit;
@@ -995,9 +1035,9 @@ _decimal_Context_create_decimal(PyObject *context, PyObject *const *args, Py_ssi
     if (nargs < 1) {
         goto skip_optional;
     }
-    num = args[0];
+    num = PyValue_Borrow(args[0]);
 skip_optional:
-    return_value = _decimal_Context_create_decimal_impl(context, num);
+    return_value = _decimal_Context_create_decimal_impl(PyValue_AsKnownObjectBorrow(context), num);
 
 exit:
     return return_value;
@@ -1053,21 +1093,35 @@ PyDoc_STRVAR(_decimal_Decimal_as_integer_ratio__doc__,
 "\n"
 "The ratio is in lowest terms and with a positive denominator.\n"
 "Raise OverflowError on infinities and a ValueError on NaNs.");
+#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
+#  error "@value_function Clinic output requires a core build"
+#endif
 
 #define _DECIMAL_DECIMAL_AS_INTEGER_RATIO_METHODDEF    \
-    {"as_integer_ratio", _PyCFunction_CAST(_decimal_Decimal_as_integer_ratio), METH_METHOD|METH_FASTCALL|METH_KEYWORDS, _decimal_Decimal_as_integer_ratio__doc__},
+    {"as_integer_ratio", _PyCFunction_CAST(_decimal_Decimal_as_integer_ratio), METH_VALUE|METH_METHOD|METH_KEYWORDS, _decimal_Decimal_as_integer_ratio__doc__},
+#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
+#  error "@value_function Clinic output requires a core build"
+#endif
 
-static PyObject *
+static PyValue
 _decimal_Decimal_as_integer_ratio_impl(PyObject *self, PyTypeObject *cls);
+#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
+#  error "@value_function Clinic output requires a core build"
+#endif
 
-static PyObject *
-_decimal_Decimal_as_integer_ratio(PyObject *self, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_decimal_Decimal_as_integer_ratio(PyValueBorrow self, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
+    PyValue return_value = PyValue_NULL;
+
     if (nargs || (kwnames && PyTuple_GET_SIZE(kwnames))) {
         PyErr_SetString(PyExc_TypeError, "as_integer_ratio() takes no arguments");
-        return NULL;
+        goto exit;
     }
-    return _decimal_Decimal_as_integer_ratio_impl(self, cls);
+    return_value = _decimal_Decimal_as_integer_ratio_impl(PyValue_AsKnownObjectBorrow(self), cls);
+
+exit:
+    return return_value;
 }
 
 PyDoc_STRVAR(_decimal_Decimal_to_integral_value__doc__,
@@ -1309,19 +1363,28 @@ PyDoc_STRVAR(_decimal_Decimal___round____doc__,
 "--\n"
 "\n"
 "Return the Integral closest to self, rounding half toward even.");
+#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
+#  error "@value_function Clinic output requires a core build"
+#endif
 
 #define _DECIMAL_DECIMAL___ROUND___METHODDEF    \
-    {"__round__", _PyCFunction_CAST(_decimal_Decimal___round__), METH_METHOD|METH_FASTCALL|METH_KEYWORDS, _decimal_Decimal___round____doc__},
+    {"__round__", _PyCFunction_CAST(_decimal_Decimal___round__), METH_VALUE|METH_METHOD|METH_KEYWORDS, _decimal_Decimal___round____doc__},
+#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
+#  error "@value_function Clinic output requires a core build"
+#endif
 
-static PyObject *
+static PyValue
 _decimal_Decimal___round___impl(PyObject *self, PyTypeObject *cls,
-                                PyObject *ndigits);
+                                PyValueBorrow ndigits);
+#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
+#  error "@value_function Clinic output requires a core build"
+#endif
 
-static PyObject *
-_decimal_Decimal___round__(PyObject *self, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_decimal_Decimal___round__(PyValueBorrow self, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
-    PyObject *ndigits = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow ndigits = PyValue_Borrow(PyValue_NULL);
 
     if (!_PyArg_NoKwnames("__round__", kwnames)) {
         goto exit;
@@ -1332,9 +1395,9 @@ _decimal_Decimal___round__(PyObject *self, PyTypeObject *cls, PyObject *const *a
     if (nargs < 1) {
         goto skip_optional;
     }
-    ndigits = args[0];
+    ndigits = PyValue_Borrow(args[0]);
 skip_optional:
-    return_value = _decimal_Decimal___round___impl(self, cls, ndigits);
+    return_value = _decimal_Decimal___round___impl(PyValue_AsKnownObjectBorrow(self), cls, ndigits);
 
 exit:
     return return_value;
@@ -1345,21 +1408,35 @@ PyDoc_STRVAR(_decimal_Decimal_as_tuple__doc__,
 "--\n"
 "\n"
 "Return a tuple representation of the number.");
+#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
+#  error "@value_function Clinic output requires a core build"
+#endif
 
 #define _DECIMAL_DECIMAL_AS_TUPLE_METHODDEF    \
-    {"as_tuple", _PyCFunction_CAST(_decimal_Decimal_as_tuple), METH_METHOD|METH_FASTCALL|METH_KEYWORDS, _decimal_Decimal_as_tuple__doc__},
+    {"as_tuple", _PyCFunction_CAST(_decimal_Decimal_as_tuple), METH_VALUE|METH_METHOD|METH_KEYWORDS, _decimal_Decimal_as_tuple__doc__},
+#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
+#  error "@value_function Clinic output requires a core build"
+#endif
 
-static PyObject *
+static PyValue
 _decimal_Decimal_as_tuple_impl(PyObject *self, PyTypeObject *cls);
+#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
+#  error "@value_function Clinic output requires a core build"
+#endif
 
-static PyObject *
-_decimal_Decimal_as_tuple(PyObject *self, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_decimal_Decimal_as_tuple(PyValueBorrow self, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
+    PyValue return_value = PyValue_NULL;
+
     if (nargs || (kwnames && PyTuple_GET_SIZE(kwnames))) {
         PyErr_SetString(PyExc_TypeError, "as_tuple() takes no arguments");
-        return NULL;
+        goto exit;
     }
-    return _decimal_Decimal_as_tuple_impl(self, cls);
+    return_value = _decimal_Decimal_as_tuple_impl(PyValue_AsKnownObjectBorrow(self), cls);
+
+exit:
+    return return_value;
 }
 
 PyDoc_STRVAR(_decimal_Decimal_exp__doc__,
@@ -4256,21 +4333,35 @@ PyDoc_STRVAR(_decimal_Decimal___ceil____doc__,
 "--\n"
 "\n"
 "Return the ceiling as an Integral.");
+#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
+#  error "@value_function Clinic output requires a core build"
+#endif
 
 #define _DECIMAL_DECIMAL___CEIL___METHODDEF    \
-    {"__ceil__", _PyCFunction_CAST(_decimal_Decimal___ceil__), METH_METHOD|METH_FASTCALL|METH_KEYWORDS, _decimal_Decimal___ceil____doc__},
+    {"__ceil__", _PyCFunction_CAST(_decimal_Decimal___ceil__), METH_VALUE|METH_METHOD|METH_KEYWORDS, _decimal_Decimal___ceil____doc__},
+#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
+#  error "@value_function Clinic output requires a core build"
+#endif
 
-static PyObject *
+static PyValue
 _decimal_Decimal___ceil___impl(PyObject *self, PyTypeObject *cls);
+#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
+#  error "@value_function Clinic output requires a core build"
+#endif
 
-static PyObject *
-_decimal_Decimal___ceil__(PyObject *self, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_decimal_Decimal___ceil__(PyValueBorrow self, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
+    PyValue return_value = PyValue_NULL;
+
     if (nargs || (kwnames && PyTuple_GET_SIZE(kwnames))) {
         PyErr_SetString(PyExc_TypeError, "__ceil__() takes no arguments");
-        return NULL;
+        goto exit;
     }
-    return _decimal_Decimal___ceil___impl(self, cls);
+    return_value = _decimal_Decimal___ceil___impl(PyValue_AsKnownObjectBorrow(self), cls);
+
+exit:
+    return return_value;
 }
 
 PyDoc_STRVAR(_decimal_Decimal___complex____doc__,
@@ -4278,17 +4369,30 @@ PyDoc_STRVAR(_decimal_Decimal___complex____doc__,
 "--\n"
 "\n"
 "Convert this value to exact type complex.");
+#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
+#  error "@value_function Clinic output requires a core build"
+#endif
 
 #define _DECIMAL_DECIMAL___COMPLEX___METHODDEF    \
-    {"__complex__", (PyCFunction)_decimal_Decimal___complex__, METH_NOARGS, _decimal_Decimal___complex____doc__},
+    {"__complex__", _PyCFunction_CAST(_decimal_Decimal___complex__), METH_VALUE|METH_NOARGS, _decimal_Decimal___complex____doc__},
+#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
+#  error "@value_function Clinic output requires a core build"
+#endif
 
-static PyObject *
+static PyValue
 _decimal_Decimal___complex___impl(PyObject *self);
+#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
+#  error "@value_function Clinic output requires a core build"
+#endif
 
-static PyObject *
-_decimal_Decimal___complex__(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+_decimal_Decimal___complex__(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _decimal_Decimal___complex___impl(self);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _decimal_Decimal___complex___impl(PyValue_AsKnownObjectBorrow(self));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(_decimal_Decimal___copy____doc__,
@@ -4321,21 +4425,35 @@ PyDoc_STRVAR(_decimal_Decimal___floor____doc__,
 "--\n"
 "\n"
 "Return the floor as an Integral.");
+#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
+#  error "@value_function Clinic output requires a core build"
+#endif
 
 #define _DECIMAL_DECIMAL___FLOOR___METHODDEF    \
-    {"__floor__", _PyCFunction_CAST(_decimal_Decimal___floor__), METH_METHOD|METH_FASTCALL|METH_KEYWORDS, _decimal_Decimal___floor____doc__},
+    {"__floor__", _PyCFunction_CAST(_decimal_Decimal___floor__), METH_VALUE|METH_METHOD|METH_KEYWORDS, _decimal_Decimal___floor____doc__},
+#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
+#  error "@value_function Clinic output requires a core build"
+#endif
 
-static PyObject *
+static PyValue
 _decimal_Decimal___floor___impl(PyObject *self, PyTypeObject *cls);
+#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
+#  error "@value_function Clinic output requires a core build"
+#endif
 
-static PyObject *
-_decimal_Decimal___floor__(PyObject *self, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_decimal_Decimal___floor__(PyValueBorrow self, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
+    PyValue return_value = PyValue_NULL;
+
     if (nargs || (kwnames && PyTuple_GET_SIZE(kwnames))) {
         PyErr_SetString(PyExc_TypeError, "__floor__() takes no arguments");
-        return NULL;
+        goto exit;
     }
-    return _decimal_Decimal___floor___impl(self, cls);
+    return_value = _decimal_Decimal___floor___impl(PyValue_AsKnownObjectBorrow(self), cls);
+
+exit:
+    return return_value;
 }
 
 PyDoc_STRVAR(_decimal_Decimal___reduce____doc__,
@@ -4379,21 +4497,35 @@ PyDoc_STRVAR(_decimal_Decimal___trunc____doc__,
 "--\n"
 "\n"
 "Return the Integral closest to x between 0 and x.");
+#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
+#  error "@value_function Clinic output requires a core build"
+#endif
 
 #define _DECIMAL_DECIMAL___TRUNC___METHODDEF    \
-    {"__trunc__", _PyCFunction_CAST(_decimal_Decimal___trunc__), METH_METHOD|METH_FASTCALL|METH_KEYWORDS, _decimal_Decimal___trunc____doc__},
+    {"__trunc__", _PyCFunction_CAST(_decimal_Decimal___trunc__), METH_VALUE|METH_METHOD|METH_KEYWORDS, _decimal_Decimal___trunc____doc__},
+#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
+#  error "@value_function Clinic output requires a core build"
+#endif
 
-static PyObject *
+static PyValue
 _decimal_Decimal___trunc___impl(PyObject *self, PyTypeObject *cls);
+#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
+#  error "@value_function Clinic output requires a core build"
+#endif
 
-static PyObject *
-_decimal_Decimal___trunc__(PyObject *self, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_decimal_Decimal___trunc__(PyValueBorrow self, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
+    PyValue return_value = PyValue_NULL;
+
     if (nargs || (kwnames && PyTuple_GET_SIZE(kwnames))) {
         PyErr_SetString(PyExc_TypeError, "__trunc__() takes no arguments");
-        return NULL;
+        goto exit;
     }
-    return _decimal_Decimal___trunc___impl(self, cls);
+    return_value = _decimal_Decimal___trunc___impl(PyValue_AsKnownObjectBorrow(self), cls);
+
+exit:
+    return return_value;
 }
 
 PyDoc_STRVAR(_decimal_Context_abs__doc__,
@@ -7172,4 +7304,4 @@ exit:
 #ifndef _DECIMAL_CONTEXT_APPLY_METHODDEF
     #define _DECIMAL_CONTEXT_APPLY_METHODDEF
 #endif /* !defined(_DECIMAL_CONTEXT_APPLY_METHODDEF) */
-/*[clinic end generated code: output=b22bec900e02e442 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=3fdbf05cd4278dc6 input=a9049054013a1b77]*/

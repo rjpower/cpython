@@ -1093,6 +1093,8 @@ THUNK_FILES = (
     "Objects/enumobject.c", "Objects/boolobject.c", "Objects/longobject.c",
     "Objects/unicodeobject.c", "Objects/listobject.c", "Objects/setobject.c",
     "Objects/rangeobject.c",
+    # Decimal pairs its selective Clinic constructor with the object thunk.
+    "Modules/_decimal/_decimal.c",
     # BaseException stores its value vectorcall beside the object thunk.
     "Objects/exceptions.c",
     # The test helpers: a spec type that stores the thunk, and an accessor

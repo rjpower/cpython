@@ -67,6 +67,7 @@ KERNEL_NAMES = frozenset("""richards go nbody float spectral_norm raytrace
     pickle unpickle regex_compile logging_format logging_silent logging_simple
     xml_etree_generate xml_etree_iterparse xml_etree_parse xml_etree_process""".split())
 FOLD_PERIOD = 30  # seconds between folds of finished dumps in `suite`
+INVALID_OWNER_SAMPLE_LIMIT = 16
 
 # The shape `kernels` accepts: R.json is a list of entries (or a dict with
 # such a list under "results" or "entries"). An entry is a dict named by one
@@ -130,8 +131,10 @@ class Folded:
         self.leftover_run = []
         self.spawn = []
         self.accounting_errors = []
+        self.invalid_owner_count = 0
+        self.invalid_owner_samples = []
 
-    def add_text(self, text):
+    def add_text(self, text, source="<text>"):
         objects = {}  # dump-local index -> build-id
         owners = []
         tag = ""
@@ -167,6 +170,13 @@ class Folded:
                 (m["kind"] == "core" and (m["owner"] != "-" or m["at"] in ("-", "?"))) or
                 (m["kind"] != "core" and m["owner"] == "-")):
                 self.accounting_errors.append("invalid owner attribution")
+                self.invalid_owner_count += 1
+                if len(self.invalid_owner_samples) < INVALID_OWNER_SAMPLE_LIMIT:
+                    self.invalid_owner_samples.append({
+                        "dump": source, "tag": tag, "kind": m["kind"],
+                        "site": m["site"], "owner": m["owner"],
+                        "at": m["at"], "count": int(m["count"]),
+                    })
         for kind in KINDS:
             if kind not in totals or kind not in drops:
                 self.accounting_errors.append(f"missing {kind} accounting")
@@ -186,7 +196,7 @@ class Folded:
         """Fold the finished dumps; if delete, remove them and their .run."""
         for path in sorted(Path(directory).glob("*.txt")):
             try:
-                self.add_text(path.read_text(errors="replace"))
+                self.add_text(path.read_text(errors="replace"), path.name)
             except OSError as exc:
                 self.bad_dumps.append(f"{path.name}: {exc}")
                 continue
@@ -543,6 +553,8 @@ def resolve(folded, resolver, src, cdb=None):
         "box_cached": folded.box_cached, "kind_totals": folded.kind_totals,
         "site_totals": folded.site_totals, "rows": rows, "objects": objects,
         "stray_cus": sorted(strays), "accounting_errors": folded.accounting_errors,
+        "invalid_owner_count": folded.invalid_owner_count,
+        "invalid_owner_samples": folded.invalid_owner_samples,
     }
 
 

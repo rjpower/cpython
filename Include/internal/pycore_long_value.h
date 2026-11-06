@@ -279,6 +279,7 @@ _PyLong_CompareResult(Py_ssize_t cmp, int op)
 PyAPI_FUNC(PyValue) _PyLong_ValueAdd(PyValueBorrow v, PyValueBorrow w);
 PyAPI_FUNC(PyValue) _PyLong_ValueSubtract(PyValueBorrow v, PyValueBorrow w);
 PyAPI_FUNC(PyValue) _PyLong_ValueMultiply(PyValueBorrow v, PyValueBorrow w);
+PyAPI_FUNC(PyValue) _PyLong_ValueGCD(PyValueBorrow v, PyValueBorrow w);
 PyAPI_FUNC(PyValue) _PyLong_ValueRemainder(PyValueBorrow v, PyValueBorrow w);
 PyAPI_FUNC(PyValue) _PyLong_ValueDivmod(PyValueBorrow v, PyValueBorrow w);
 PyAPI_FUNC(PyValue) _PyLong_ValueFloorDivide(PyValueBorrow v,

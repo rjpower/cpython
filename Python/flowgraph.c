@@ -1358,6 +1358,33 @@ get_const_value(int opcode, int oparg, PyObject *co_consts)
     return Py_NewRef(constant);
 }
 
+static PyValue
+get_const_value_value(int opcode, int oparg, PyObject *co_consts)
+{
+    assert(loads_const(opcode));
+    if (opcode == LOAD_CONST) {
+        assert(PyList_Check(co_consts));
+        Py_ssize_t n = PyList_GET_SIZE(co_consts);
+        if (oparg < 0 || oparg >= n) {
+            PyErr_Format(PyExc_ValueError,
+                         "LOAD_CONST index %d is out of range for consts (len=%zd)",
+                         oparg, n);
+            return PyValue_NULL;
+        }
+        return PyList_GetValue(co_consts, oparg);
+    }
+    if (opcode == LOAD_SMALL_INT) {
+        return PyValue_FromInt64(oparg);
+    }
+    if (opcode == LOAD_COMMON_CONSTANT) {
+        assert(oparg < NUM_COMMON_CONSTANTS);
+        return PyValue_DUP(_PyInterpreterState_GET()->common_consts[oparg]);
+    }
+    PyErr_SetString(PyExc_SystemError,
+                    "Internal error: failed to get value of a constant");
+    return PyValue_NULL;
+}
+
 static void *
 const_index_key(PyValueBorrow value)
 {
@@ -1420,6 +1447,45 @@ add_const(PyObject *newconst, PyObject *consts, PyObject *const_cache,
     }
 
     Py_DECREF(newconst);
+    return (int)index;
+}
+
+/* Consumes newconst, including on failure. */
+static int
+add_const_value(PyValue newconst, PyObject *consts, PyObject *const_cache,
+                _Py_hashtable_t *consts_index)
+{
+    if (_PyCompile_ConstCacheMergeValue(const_cache, &newconst) < 0) {
+        PyValue_CLOSE(newconst);
+        return -1;
+    }
+
+    void *key = const_index_key(PyValue_Borrow(newconst));
+    _Py_hashtable_entry_t *entry = _Py_hashtable_get_entry(consts_index, key);
+    if (entry != NULL) {
+        PyValue_CLOSE(newconst);
+        return (int)(uintptr_t)entry->value;
+    }
+
+    Py_ssize_t index = PyList_GET_SIZE(consts);
+    if ((size_t)index >= (size_t)INT_MAX - 1) {
+        PyErr_SetString(PyExc_OverflowError, "too many constants");
+        PyValue_CLOSE(newconst);
+        return -1;
+    }
+    if (PyList_AppendValue(consts, PyValue_Borrow(newconst))) {
+        PyValue_CLOSE(newconst);
+        return -1;
+    }
+
+    if (_Py_hashtable_set(consts_index, key, (void *)(uintptr_t)index) < 0) {
+        PyList_SetSlice(consts, index, index + 1, NULL);
+        PyValue_CLOSE(newconst);
+        PyErr_NoMemory();
+        return -1;
+    }
+
+    PyValue_CLOSE(newconst);
     return (int)index;
 }
 
@@ -1558,6 +1624,44 @@ instr_make_load_const(cfg_instr *instr, PyObject *newconst,
         return SUCCESS;
     }
     int oparg = add_const(newconst, consts, const_cache, consts_index);
+    RETURN_IF_ERROR(oparg);
+    INSTR_SET_OP1(instr, LOAD_CONST, oparg);
+    return SUCCESS;
+}
+
+/* Consumes newconst, including when it can be encoded in the instruction. */
+static int
+instr_make_load_const_value(cfg_instr *instr, PyValue newconst,
+                            PyObject *consts, PyObject *const_cache,
+                            _Py_hashtable_t *consts_index)
+{
+    int res = 0;
+    if (PyValue_IsInlineInt(newconst)) {
+        int64_t val = PyValue_InlineInt64(newconst);
+        if (0 <= val && val <= 255 && _PY_IS_SMALL_INT(val)) {
+            INSTR_SET_OP1(instr, LOAD_SMALL_INT, (int)val);
+            PyValue_CLOSE(newconst);
+            return SUCCESS;
+        }
+        if (val == -1) {
+            INSTR_SET_OP1(instr, LOAD_COMMON_CONSTANT, CONSTANT_MINUS_ONE);
+            PyValue_CLOSE(newconst);
+            return SUCCESS;
+        }
+    }
+    else if (PyValue_IsObject(newconst)) {
+        PyObject *obj = PyValue_AsKnownObjectBorrow(newconst);
+        res = maybe_instr_make_load_smallint(instr, obj, consts, const_cache);
+        if (res == 0) {
+            res = maybe_instr_make_load_common_const(instr, obj);
+        }
+        if (res != 0) {
+            PyValue_CLOSE(newconst);
+            return res < 0 ? ERROR : SUCCESS;
+        }
+    }
+
+    int oparg = add_const_value(newconst, consts, const_cache, consts_index);
     RETURN_IF_ERROR(oparg);
     INSTR_SET_OP1(instr, LOAD_CONST, oparg);
     return SUCCESS;
@@ -2090,58 +2194,41 @@ fold_const_binop(basicblock *bb, int i, PyObject *consts,
     return instr_make_load_const(binop, newconst, consts, const_cache, consts_index);
 }
 
-static PyObject *
-eval_const_unaryop(PyObject *operand, int opcode, int oparg)
+static PyValue
+eval_const_unaryop_value(PyValueBorrow operand, int opcode, int oparg)
 {
-    assert(operand != NULL);
+    assert(!PyValue_IsNull(operand));
     assert(
         opcode == UNARY_NEGATIVE ||
         opcode == UNARY_INVERT ||
         opcode == UNARY_NOT ||
         (opcode == CALL_INTRINSIC_1 && oparg == INTRINSIC_UNARY_POSITIVE)
     );
-    PyObject *result;
     switch (opcode) {
         case UNARY_NEGATIVE:
-            {
-                PyValue rv = _PyValue_Negative(PyValue_FromObjectBorrow(operand));
-                result = PyValue_IsNull(rv) ? NULL
-                    : _PyValue_AsObjectStealAt(rv, BOX_SITE_COMPILER);
-                break;
-            }
+            return _PyValue_Negative(operand);
         case UNARY_INVERT:
             // XXX: This should be removed once the ~bool depreciation expires.
-            if (PyBool_Check(operand)) {
-                return NULL;
+            if (PyValue_IsObject(operand) &&
+                PyBool_Check(PyValue_AsKnownObjectBorrow(operand))) {
+                return PyValue_NULL;
             }
-            {
-                PyValue rv = _PyValue_Invert(PyValue_FromObjectBorrow(operand));
-                result = PyValue_IsNull(rv) ? NULL
-                    : _PyValue_AsObjectStealAt(rv, BOX_SITE_COMPILER);
-                break;
-            }
+            return _PyValue_Invert(operand);
         case UNARY_NOT: {
-            int r = _PyValue_IsTrue(PyValue_FromObjectBorrow(operand));
+            int r = _PyValue_IsTrue(operand);
             if (r < 0) {
-                return NULL;
+                return PyValue_NULL;
             }
-            result = PyBool_FromLong(!r);
-            break;
+            return r ? PyValue_False : PyValue_True;
         }
         case CALL_INTRINSIC_1:
             if (oparg != INTRINSIC_UNARY_POSITIVE) {
                 Py_UNREACHABLE();
             }
-            {
-                PyValue rv = _PyValue_Positive(PyValue_FromObjectBorrow(operand));
-                result = PyValue_IsNull(rv) ? NULL
-                    : _PyValue_AsObjectStealAt(rv, BOX_SITE_COMPILER);
-                break;
-            }
+            return _PyValue_Positive(operand);
         default:
             Py_UNREACHABLE();
     }
-    return result;
 }
 
 static int
@@ -2160,18 +2247,19 @@ fold_const_unaryop(basicblock *bb, int i, PyObject *consts,
     }
 
     assert(loads_const(operand_instr->i_opcode));
-    PyObject *operand = get_const_value(
+    PyValue operand = get_const_value_value(
         operand_instr->i_opcode,
         operand_instr->i_oparg,
         consts
     );
-    if (operand == NULL) {
+    if (PyValue_IsNull(operand)) {
         return ERROR;
     }
 
-    PyObject *newconst = eval_const_unaryop(operand, unaryop->i_opcode, unaryop->i_oparg);
-    Py_DECREF(operand);
-    if (newconst == NULL) {
+    PyValue newconst = eval_const_unaryop_value(
+        PyValue_Borrow(operand), unaryop->i_opcode, unaryop->i_oparg);
+    PyValue_CLOSE(operand);
+    if (PyValue_IsNull(newconst)) {
         if (PyErr_ExceptionMatches(PyExc_KeyboardInterrupt)) {
             return ERROR;
         }
@@ -2180,10 +2268,12 @@ fold_const_unaryop(basicblock *bb, int i, PyObject *consts,
     }
 
     if (unaryop->i_opcode == UNARY_NOT) {
-        assert(PyBool_Check(newconst));
+        assert(PyValue_IsObject(newconst) &&
+               PyBool_Check(PyValue_AsKnownObjectBorrow(newconst)));
     }
     nop_out(&operand_instr, UNARYOP_OPERAND_COUNT);
-    return instr_make_load_const(unaryop, newconst, consts, const_cache, consts_index);
+    return instr_make_load_const_value(unaryop, newconst, consts,
+                                       const_cache, consts_index);
 }
 
 #define VISITED (-1)

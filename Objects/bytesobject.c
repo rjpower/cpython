@@ -3199,16 +3199,12 @@ _PyBytes_FromSequence_lock_held(PyObject *x, PyObject **result)
     for (Py_ssize_t i = 0; i < size; i++) {
         PyValue ref = PyList_CheckExact(x) ? PyList_GetValue(x, i)
                                            : PyTuple_GetValue(x, i);
-        PyObject *item = PyValue_IsNull(ref) ? NULL
-            : _PyValue_AsObjectAt(ref, PyList_CheckExact(x)
-                                  ? BOX_SITE_LIST : BOX_SITE_TUPLE);
-        PyValue_XCLOSE(ref);
-        if (item == NULL) {
+        if (PyValue_IsNull(ref)) {
             PyBytesWriter_Discard(writer);
             return -1;
         }
-        Py_ssize_t value = _PyValue_IntAsSsize_t(PyValue_FromObjectBorrow(item));
-        Py_DECREF(item);
+        Py_ssize_t value = _PyValue_IntAsSsize_t(ref);
+        PyValue_CLOSE(ref);
         if (value == -1 && PyErr_Occurred()) {
             PyBytesWriter_Discard(writer);
             PyErr_Clear();
@@ -3246,20 +3242,22 @@ _PyBytes_FromIterator(PyObject *it, PyObject *x)
 
     /* Run the iterator to exhaustion */
     for (i = 0; ; i++) {
-        PyObject *item;
+        PyValue item;
         Py_ssize_t value;
 
         /* Get the next item */
-        item = PyIter_Next(it);
-        if (item == NULL) {
-            if (PyErr_Occurred())
+        _PyStatusValue next = _PyValue_IterNext(it);
+        item = next.value;
+        if (next.status != PYGEN_NEXT) {
+            PyValue_XCLOSE(item);
+            if (next.status < 0)
                 goto error;
             break;
         }
 
         /* Interpret it as an int (__index__) */
-        value = _PyValue_AsSsize_t(PyValue_FromObjectBorrow(item), NULL);
-        Py_DECREF(item);
+        value = _PyValue_AsSsize_t(item, NULL);
+        PyValue_CLOSE(item);
         if (value == -1 && PyErr_Occurred())
             goto error;
 

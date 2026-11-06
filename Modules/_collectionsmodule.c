@@ -12,6 +12,7 @@
 #include "pycore_tuple.h"         // _PyTuple_PackValues()
 #include "pycore_typeobject.h"    // _PyType_GetModuleState()
 #include "pycore_value_api.h"     // _PyValue_AsObjectAt()
+#include "pycore_value_call.h"    // _PyValue_Vectorcall()
 #include "pycore_value_slots.h"   // _Py_VALUE_THUNK_ITERNEXT()
 #include "pycore_slots.h"         // _Py_value_iternext
 #include "pycore_value_ops.h"     // _PyValue_RichCompareBool()
@@ -487,12 +488,13 @@ finalize_iterator(PyObject *it)
 static PyObject*
 consume_iterator(PyObject *it)
 {
-    PyObject *(*iternext)(PyObject *);
-    PyObject *item;
-
-    iternext = *Py_TYPE(it)->tp_iternext;
-    while ((item = iternext(it)) != NULL) {
-        Py_DECREF(item);
+    for (;;) {
+        _PyStatusValue step = _PyValue_IterStep(it);
+        if (step.status != PYGEN_NEXT) {
+            PyValue_XCLOSE(step.value);
+            break;
+        }
+        PyValue_CLOSE(step.value);
     }
     return finalize_iterator(it);
 }
@@ -512,8 +514,7 @@ static PyValue
 deque_extend_impl(dequeobject *deque, PyValueBorrow iterable)
 /*[clinic end generated code: output=3e5bc2e11098cba2 input=85861954127c81da]*/
 {
-    PyObject *it, *item;
-    PyObject *(*iternext)(PyObject *);
+    PyObject *it;
     Py_ssize_t maxlen = deque->maxlen;
 
     /* Handle case where id(deque) == id(iterable) */
@@ -542,10 +543,13 @@ deque_extend_impl(dequeobject *deque, PyValueBorrow iterable)
         deque->rightindex = 0;
     }
 
-    iternext = *Py_TYPE(it)->tp_iternext;
-    while ((item = iternext(it)) != NULL) {
-        if (deque_append_lock_held(deque, PyValue_PrepareOwned(item),
-                                   maxlen) == -1) {
+    for (;;) {
+        _PyStatusValue step = _PyValue_IterStep(it);
+        if (step.status != PYGEN_NEXT) {
+            PyValue_XCLOSE(step.value);
+            break;
+        }
+        if (deque_append_lock_held(deque, step.value, maxlen) < 0) {
             Py_DECREF(it);
             return PyValue_NULL;
         }
@@ -568,8 +572,7 @@ static PyValue
 deque_extendleft_impl(dequeobject *deque, PyValueBorrow iterable)
 /*[clinic end generated code: output=79f1231dfee29e1e input=640dabd086115689]*/
 {
-    PyObject *it, *item;
-    PyObject *(*iternext)(PyObject *);
+    PyObject *it;
     Py_ssize_t maxlen = deque->maxlen;
 
     /* Handle case where id(deque) == id(iterable) */
@@ -598,10 +601,13 @@ deque_extendleft_impl(dequeobject *deque, PyValueBorrow iterable)
         deque->rightindex = BLOCKLEN - 2;
     }
 
-    iternext = *Py_TYPE(it)->tp_iternext;
-    while ((item = iternext(it)) != NULL) {
-        if (deque_appendleft_lock_held(deque, PyValue_PrepareOwned(item),
-                                       maxlen) == -1) {
+    for (;;) {
+        _PyStatusValue step = _PyValue_IterStep(it);
+        if (step.status != PYGEN_NEXT) {
+            PyValue_XCLOSE(step.value);
+            break;
+        }
+        if (deque_appendleft_lock_held(deque, step.value, maxlen) < 0) {
             Py_DECREF(it);
             return PyValue_NULL;
         }
@@ -639,7 +645,6 @@ static PyValue
 deque_copy_impl(dequeobject *deque)
 /*[clinic end generated code: output=c0d3f48f394420af input=51d2ed1a23bab5e2]*/
 {
-    PyObject *result;
     dequeobject *old_deque = deque;
     collections_state *state = find_module_state_by_def(Py_TYPE(deque));
     if (Py_IS_TYPE(deque, state->deque_type)) {
@@ -681,20 +686,48 @@ deque_copy_impl(dequeobject *deque)
         }
         return _PyValue_FromObjectResult((PyObject *)new_deque);
     }
-    if (old_deque->maxlen < 0)
-        result = PyObject_CallOneArg((PyObject *)(Py_TYPE(deque)),
-                                     (PyObject *)deque);
-    else
-        result = PyObject_CallFunction((PyObject *)(Py_TYPE(deque)), "On",
-                                       deque, old_deque->maxlen, NULL);
-    if (result != NULL && !PyObject_TypeCheck(result, state->deque_type)) {
-        PyErr_Format(PyExc_TypeError,
-                     "%.200s() must return a deque, not %.200s",
-                     Py_TYPE(deque)->tp_name, Py_TYPE(result)->tp_name);
-        Py_DECREF(result);
-        return PyValue_NULL;
+    if (old_deque->maxlen < 0) {
+        PyValue result = _PyValue_CallOneArg(_PyThreadState_GET(),
+            PyValue_FromObjectBorrow((PyObject *)Py_TYPE(deque)),
+            PyValue_FromObjectBorrow((PyObject *)deque));
+        if (!PyValue_IsNull(result) &&
+            (!PyValue_IsObject(result) ||
+             !PyObject_TypeCheck(PyValue_AsKnownObjectBorrow(result),
+                                 state->deque_type))) {
+            PyErr_Format(PyExc_TypeError,
+                         "%.200s() must return a deque, not %.200s",
+                         Py_TYPE(deque)->tp_name,
+                         PyValue_TYPE(result)->tp_name);
+            PyValue_CLOSE(result);
+            return PyValue_NULL;
+        }
+        return result;
     }
-    return _PyValue_FromObjectResult(result);
+    else {
+        PyValue args[2] = {
+            PyValue_DUP(PyValue_FromObjectBorrow((PyObject *)deque)),
+            PyValue_FromInt64(old_deque->maxlen),
+        };
+        if (PyValue_IsNull(args[1])) {
+            PyValue_CLOSE(args[0]);
+            return PyValue_NULL;
+        }
+        PyValue result = _PyValue_Vectorcall(
+            PyValue_FromObjectBorrow((PyObject *)Py_TYPE(deque)), args, 2, NULL);
+        PyValue_CLOSE(args[0]);
+        PyValue_CLOSE(args[1]);
+        if (!PyValue_IsNull(result) &&
+            (!PyValue_IsObject(result) ||
+             !PyObject_TypeCheck(PyValue_AsKnownObjectBorrow(result),
+                                 state->deque_type))) {
+            PyErr_Format(PyExc_TypeError,
+                         "%.200s() must return a deque, not %.200s",
+                         Py_TYPE(deque)->tp_name, PyValue_TYPE(result)->tp_name);
+            PyValue_CLOSE(result);
+            return PyValue_NULL;
+        }
+        return result;
+    }
 }
 
 /*[clinic input]
@@ -1717,84 +1750,100 @@ deque_repr(PyObject *deque)
     return result;
 }
 
-static PyObject *
-deque_richcompare(PyObject *v, PyObject *w, int op)
+static PyValue
+deque_richcompare_value(PyValueBorrow v, PyValueBorrow w, int op)
 {
-    PyObject *it1=NULL, *it2=NULL, *x, *y;
+    PyObject *it1 = NULL, *it2 = NULL;
     Py_ssize_t vs, ws;
-    int b, cmp=-1;
+    int cmp = -1;
 
-    collections_state *state = find_module_state_by_def(Py_TYPE(v));
-    if (!PyObject_TypeCheck(v, state->deque_type) ||
-        !PyObject_TypeCheck(w, state->deque_type)) {
-        Py_RETURN_NOTIMPLEMENTED;
+    if (!PyValue_IsObject(v) || !PyValue_IsObject(w)) {
+        return PyValue_NotImplemented;
+    }
+    PyObject *v_obj = PyValue_AsKnownObjectBorrow(v);
+    PyObject *w_obj = PyValue_AsKnownObjectBorrow(w);
+    collections_state *state = find_module_state_by_def(Py_TYPE(v_obj));
+    if (!PyObject_TypeCheck(v_obj, state->deque_type) ||
+        !PyObject_TypeCheck(w_obj, state->deque_type)) {
+        return PyValue_NotImplemented;
     }
 
     /* Shortcuts */
-    vs = Py_SIZE(v);
-    ws = Py_SIZE(w);
+    vs = Py_SIZE(v_obj);
+    ws = Py_SIZE(w_obj);
     if (op == Py_EQ) {
-        if (v == w)
-            Py_RETURN_TRUE;
+        if (v_obj == w_obj)
+            return PyValue_True;
         if (vs != ws)
-            Py_RETURN_FALSE;
+            return PyValue_False;
     }
     if (op == Py_NE) {
-        if (v == w)
-            Py_RETURN_FALSE;
+        if (v_obj == w_obj)
+            return PyValue_False;
         if (vs != ws)
-            Py_RETURN_TRUE;
+            return PyValue_True;
     }
 
     /* Search for the first index where items are different */
-    it1 = _PyValue_GetIter(PyValue_FromObjectBorrow(v));
+    it1 = _PyValue_GetIter(v);
     if (it1 == NULL)
         goto done;
-    it2 = _PyValue_GetIter(PyValue_FromObjectBorrow(w));
+    it2 = _PyValue_GetIter(w);
     if (it2 == NULL)
         goto done;
+    int x_status;
+    int y_status;
     for (;;) {
-        x = PyIter_Next(it1);
-        if (x == NULL && PyErr_Occurred())
+        _PyStatusValue x = _PyValue_IterNext(it1);
+        x_status = x.status;
+        if (x.status < 0)
             goto done;
-        y = PyIter_Next(it2);
-        if (x == NULL || y == NULL)
-            break;
-        b = _PyValue_RichCompareBool(PyValue_FromObjectBorrow(x), PyValue_FromObjectBorrow(y), Py_EQ);
-        if (b == 0) {
-            cmp = _PyValue_RichCompareBool(PyValue_FromObjectBorrow(x), PyValue_FromObjectBorrow(y), op);
-            Py_DECREF(x);
-            Py_DECREF(y);
+        _PyStatusValue y = _PyValue_IterNext(it2);
+        y_status = y.status;
+        if (y.status < 0) {
+            PyValue_XCLOSE(x.value);
             goto done;
         }
-        Py_DECREF(x);
-        Py_DECREF(y);
+        if (x.status == 0 || y.status == 0) {
+            PyValue_XCLOSE(x.value);
+            PyValue_XCLOSE(y.value);
+            break;
+        }
+        int b = _PyValue_RichCompareBool(x.value, y.value, Py_EQ);
+        if (b == 0) {
+            cmp = _PyValue_RichCompareBool(x.value, y.value, op);
+            PyValue_CLOSE(x.value);
+            PyValue_CLOSE(y.value);
+            goto done;
+        }
+        PyValue_CLOSE(x.value);
+        PyValue_CLOSE(y.value);
         if (b < 0)
             goto done;
     }
-    /* We reached the end of one deque or both */
-    Py_XDECREF(x);
-    Py_XDECREF(y);
+    /* We reached the end of one deque or both. */
     if (PyErr_Occurred())
         goto done;
     switch (op) {
-    case Py_LT: cmp = y != NULL; break;  /* if w was longer */
-    case Py_LE: cmp = x == NULL; break;  /* if v was not longer */
-    case Py_EQ: cmp = x == y;    break;  /* if we reached the end of both */
-    case Py_NE: cmp = x != y;    break;  /* if one deque continues */
-    case Py_GT: cmp = x != NULL; break;  /* if v was longer */
-    case Py_GE: cmp = y == NULL; break;  /* if w was not longer */
+    case Py_LT: cmp = y_status != 0; break;  /* if w was longer */
+    case Py_LE: cmp = x_status == 0; break;  /* if v was not longer */
+    case Py_EQ: cmp = x_status == y_status; break;
+    case Py_NE: cmp = x_status != y_status; break;
+    case Py_GT: cmp = x_status != 0; break;  /* if v was longer */
+    case Py_GE: cmp = y_status == 0; break;  /* if w was not longer */
     }
 
 done:
     Py_XDECREF(it1);
     Py_XDECREF(it2);
     if (cmp == 1)
-        Py_RETURN_TRUE;
+        return PyValue_True;
     if (cmp == 0)
-        Py_RETURN_FALSE;
-    return NULL;
+        return PyValue_False;
+    return PyValue_NULL;
 }
+
+_Py_VALUE_THUNK_RICHCMP(deque_richcompare, deque_richcompare_value)
 
 /*[clinic input]
 @critical_section
@@ -1935,6 +1984,7 @@ static PyType_Slot deque_slots[] = {
     {Py_tp_traverse, deque_traverse},
     {Py_tp_clear, deque_clear},
     {Py_tp_richcompare, deque_richcompare},
+    {_Py_value_richcompare, deque_richcompare_value},
     {Py_tp_iter, deque_iter},
     {Py_tp_getset, deque_getset},
     {Py_tp_init, deque_init},
@@ -2634,35 +2684,35 @@ _collections__count_elements_impl(PyObject *module, PyValueBorrow mapping,
                                   PyValueBorrow iterable)
 /*[clinic end generated code: output=c439da44c6cd8bea input=e79fad04534a0b45]*/
 {
-    PyObject *it, *oldval;
-    PyObject *newval = NULL;
-    PyObject *key = NULL;
-    PyObject *bound_get = NULL;
-    PyObject *mapping_obj = NULL;  // the mapping as an object, borrowed or boxed
-    PyObject *mapping_boxed = NULL;  // the new reference to release, if any
-    PyObject *mapping_get;
-    PyObject *dict_get;
-    PyObject *mapping_setitem;
-    PyObject *dict_setitem;
-    PyObject *one = _PyLong_GetOne();  // borrowed reference
-
-    it = _PyValue_GetIter(iterable);
+    PyObject *it = _PyValue_GetIter(iterable);
     if (it == NULL)
         return PyValue_NULL;
 
     /* Only take the fast path when get() and __setitem__()
      * have not been overridden.
      */
-    mapping_get = _PyType_LookupRef(PyValue_TYPE(mapping), &_Py_ID(get));
-    dict_get = _PyType_LookupRef(&PyDict_Type, &_Py_ID(get));
-    mapping_setitem = _PyType_LookupRef(PyValue_TYPE(mapping), &_Py_ID(__setitem__));
-    dict_setitem = _PyType_LookupRef(&PyDict_Type, &_Py_ID(__setitem__));
+    _PyStatusValue mapping_get = _PyType_LookupValue(
+        PyValue_TYPE(mapping), &_Py_ID(get));
+    _PyStatusValue dict_get = _PyType_LookupValue(
+        &PyDict_Type, &_Py_ID(get));
+    _PyStatusValue mapping_setitem = _PyType_LookupValue(
+        PyValue_TYPE(mapping), &_Py_ID(__setitem__));
+    _PyStatusValue dict_setitem = _PyType_LookupValue(
+        &PyDict_Type, &_Py_ID(__setitem__));
+    bool fast = mapping_get.status == 1 && dict_get.status == 1 &&
+        mapping_setitem.status == 1 && dict_setitem.status == 1 &&
+        PyValue_Is(mapping_get.value, dict_get.value) &&
+        PyValue_Is(mapping_setitem.value, dict_setitem.value) &&
+        PyValue_IsObject(mapping) &&
+        PyDict_Check(PyValue_AsKnownObjectBorrow(mapping));
+    PyValue_XCLOSE(mapping_get.value);
+    PyValue_XCLOSE(dict_get.value);
+    PyValue_XCLOSE(mapping_setitem.value);
+    PyValue_XCLOSE(dict_setitem.value);
 
-    if (mapping_get != NULL && mapping_get == dict_get &&
-        mapping_setitem != NULL && mapping_setitem == dict_setitem &&
-        (PyValue_IsObject(mapping) && PyDict_Check(PyValue_AsKnownObjectBorrow(mapping))))
-    {
-        mapping_obj = PyValue_AsKnownObjectBorrow(mapping);
+    PyValue bound_get = PyValue_NULL;
+    if (fast) {
+        PyObject *mapping_obj = PyValue_AsKnownObjectBorrow(mapping);
         while (1) {
             /* Fast path advantages:
                    1. Eliminate double hashing
@@ -2674,96 +2724,120 @@ _collections__count_elements_impl(PyObject *module, PyValueBorrow mapping,
                    4. Avoid initial increment from zero
                       (reuse an existing one-object instead)
             */
-            Py_hash_t hash;
-
-            key = PyIter_Next(it);
-            if (key == NULL)
+            _PyStatusValue next = _PyValue_IterNext(it);
+            PyValue key = next.value;
+            if (next.status != PYGEN_NEXT) {
+                PyValue_XCLOSE(key);
+                if (next.status < 0)
+                    goto error;
                 break;
+            }
 
-            hash = _PyObject_HashDictKey(key);
+            Py_hash_t hash = -1;
+            if (PyValue_IsObject(key)) {
+                PyObject *key_obj = PyValue_AsKnownObjectBorrow(key);
+                if (PyUnicode_CheckExact(key_obj)) {
+                    hash = PyUnstable_Unicode_GET_CACHED_HASH(key_obj);
+                }
+            }
             if (hash == -1) {
-                goto done;
+                hash = _PyValue_Hash(key);
+            }
+            if (hash == -1) {
+                PyValue_CLOSE(key);
+                goto error;
             }
 
             PyValue oldv;
-            int found = _PyDict_GetValue_KnownHash(
-                mapping_obj, PyValue_FromObjectBorrow(key), hash, &oldv);
+            int found = _PyDict_GetValue_KnownHash(mapping_obj, key, hash, &oldv);
             if (found < 0) {
-                goto done;
+                PyValue_CLOSE(key);
+                goto error;
             }
             if (found == 0) {
-                if (_PyDict_SetValue_KnownHash(mapping_obj, PyValue_FromObjectBorrow(key), PyValue_FromObjectBorrow(one), hash) < 0)
-                    goto done;
+                if (_PyDict_SetValue_KnownHash(mapping_obj, key,
+                        PyValue_FromObjectBorrow(_PyLong_GetOne()), hash) < 0) {
+                    PyValue_CLOSE(key);
+                    goto error;
+                }
             } else {
-                PyValue newv = _PyValue_Add(oldv, PyValue_FromObjectBorrow(one));
+                PyValue newv = _PyValue_Add(oldv,
+                    PyValue_FromObjectBorrow(_PyLong_GetOne()));
                 PyValue_CLOSE(oldv);
-                if (PyValue_IsNull(newv))
-                    goto done;
-                int set_res = _PyDict_SetValue_KnownHash(mapping_obj, PyValue_FromObjectBorrow(key), newv, hash);
+                if (PyValue_IsNull(newv)) {
+                    PyValue_CLOSE(key);
+                    goto error;
+                }
+                int set_res = _PyDict_SetValue_KnownHash(mapping_obj, key,
+                                                         newv, hash);
                 PyValue_CLOSE(newv);
-                if (set_res < 0)
-                    goto done;
+                if (set_res < 0) {
+                    PyValue_CLOSE(key);
+                    goto error;
+                }
             }
-            Py_DECREF(key);
+            PyValue_CLOSE(key);
         }
     }
     else {
-        mapping_boxed = _PyValue_AsObjectAt(mapping, BOX_SITE_PARSER);
-        if (mapping_boxed == NULL)
-            goto done;
-        mapping_obj = mapping_boxed;
-        PyValue bound_get_v = _PyValue_GetAttr(mapping, &_Py_ID(get));
-        if (PyValue_IsNull(bound_get_v))
-            goto done;
-        bound_get = _PyValue_AsObjectAt(bound_get_v, BOX_SITE_ATTRIBUTE);
-        PyValue_CLOSE(bound_get_v);
-        if (bound_get == NULL)
-            goto done;
-
-        PyObject *zero = _PyLong_GetZero();  // borrowed reference
+        bound_get = _PyValue_GetAttr(mapping, &_Py_ID(get));
+        if (PyValue_IsNull(bound_get))
+            goto error;
+        PyValue zero = PyValue_DUP(PyValue_FromObjectBorrow(_PyLong_GetZero()));
+        PyValue one = PyValue_DUP(PyValue_FromObjectBorrow(_PyLong_GetOne()));
         while (1) {
-            key = PyIter_Next(it);
-            if (key == NULL)
-                break;
-            oldval = PyObject_CallFunctionObjArgs(bound_get, key, zero, NULL);
-            if (oldval == NULL)
-                break;
-            if (oldval == zero) {
-                newval = Py_NewRef(one);
-            } else {
-                PyValue sum = _PyValue_Add(PyValue_FromObjectBorrow(oldval),
-                                           PyValue_FromObjectBorrow(one));
-                if (PyValue_IsNull(sum)) {
-                    newval = NULL;
+            _PyStatusValue next = _PyValue_IterNext(it);
+            PyValue key = next.value;
+            if (next.status != PYGEN_NEXT) {
+                PyValue_XCLOSE(key);
+                if (next.status < 0) {
+                    PyValue_CLOSE(zero);
+                    PyValue_CLOSE(one);
+                    goto error;
                 }
-                else {
-                    newval = _PyValue_AsObjectAt(sum, BOX_SITE_NUMBER);
-                    PyValue_CLOSE(sum);
-                }
+                break;
             }
-            Py_DECREF(oldval);
-            if (newval == NULL)
-                break;
-            if (_PyValue_SetItem(PyValue_FromObjectBorrow(mapping_obj), PyValue_FromObjectBorrow(key), PyValue_FromObjectBorrow(newval)) < 0)
-                break;
-            Py_CLEAR(newval);
-            Py_DECREF(key);
+            PyValue args[2] = { key, zero };
+            PyValue oldval = _PyValue_Vectorcall(bound_get, args, 2, NULL);
+            if (PyValue_IsNull(oldval)) {
+                PyValue_CLOSE(key);
+                PyValue_CLOSE(zero);
+                PyValue_CLOSE(one);
+                goto error;
+            }
+            /* Inline zero boxes to the cached zero object at the old API
+               boundary, so preserve the default-argument identity test. */
+            bool is_default = PyValue_Is(oldval, zero);
+            PyValue newval = is_default
+                ? PyValue_DUP(one) : _PyValue_Add(oldval, one);
+            PyValue_CLOSE(oldval);
+            if (PyValue_IsNull(newval)) {
+                PyValue_CLOSE(key);
+                PyValue_CLOSE(zero);
+                PyValue_CLOSE(one);
+                goto error;
+            }
+            int set_result = _PyValue_SetItem(mapping, key, newval);
+            PyValue_CLOSE(newval);
+            PyValue_CLOSE(key);
+            if (set_result < 0) {
+                PyValue_CLOSE(zero);
+                PyValue_CLOSE(one);
+                goto error;
+            }
         }
+        PyValue_CLOSE(zero);
+        PyValue_CLOSE(one);
     }
 
-done:
-    Py_XDECREF(mapping_get);
-    Py_XDECREF(dict_get);
-    Py_XDECREF(mapping_setitem);
-    Py_XDECREF(dict_setitem);
     Py_DECREF(it);
-    Py_XDECREF(key);
-    Py_XDECREF(newval);
-    Py_XDECREF(bound_get);
-    Py_XDECREF(mapping_boxed);
-    if (PyErr_Occurred())
-        return PyValue_NULL;
+    PyValue_XCLOSE(bound_get);
     return PyValue_None;
+
+error:
+    Py_DECREF(it);
+    PyValue_XCLOSE(bound_get);
+    return PyValue_NULL;
 }
 
 /* Helper function for namedtuple() ************************************/

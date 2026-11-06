@@ -161,6 +161,7 @@ class Function:
     docstring_line_number: int | None = None
     vectorcall: bool = False
     value_function: bool = False
+    value_constructor: bool = False
     # The type slot which the function implements (kind is SLOT).
     slot: SlotSpec | None = None
 

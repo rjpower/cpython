@@ -1484,6 +1484,24 @@ _PyCompile_Metadata(compiler *c)
     return &c->u->u_metadata;
 }
 
+// Replace an owned value with its canonical constant, without recursion.
+int
+_PyCompile_ConstCacheMergeValue(PyObject *const_cache, PyValue *value)
+{
+    PyValue key = const_cache_insert(const_cache, *value, false);
+    if (PyValue_IsNull(key)) {
+        return ERROR;
+    }
+    PyValue replacement = constant_from_key(key);
+    PyValue_CLOSE(key);
+    if (PyValue_IsNull(replacement)) {
+        return ERROR;
+    }
+    PyValue_CLOSE(*value);
+    *value = replacement;
+    return SUCCESS;
+}
+
 // Merge *obj* with constant cache, without recursion.
 int
 _PyCompile_ConstCacheMergeOne(PyObject *const_cache, PyObject **obj)

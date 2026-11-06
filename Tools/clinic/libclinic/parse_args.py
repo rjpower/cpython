@@ -192,11 +192,15 @@ def is_value_function(f: Function, codegen: CodeGen) -> bool:
     eligible = (f.kind is not SLOT and f.kind not in ACCESSORS
                 and not any(p.group for p in f.parameters.values())
                 and all(p.converter.has_value_form for p in f.parameters.values()))
-    if f.value_function and (not eligible or f.kind.new_or_init or any(
-            (p.converter.alias_of is not None or p.deprecated_until is not None
-             or p.is_var_keyword()) for p in f.parameters.values())):
+    unsupported = (not eligible or any(
+        p.converter.alias_of is not None or p.deprecated_until is not None
+        or p.is_var_keyword() for p in f.parameters.values()))
+    if f.value_function and (unsupported or f.kind.new_or_init or f.value_constructor):
         fail("@value_function requires a supported value parser")
-    return (codegen.value_emission or f.value_function) and eligible
+    if f.value_constructor and (unsupported or f.kind is not METHOD_NEW
+                                or not f.vectorcall or f.value_function):
+        fail("@value_constructor requires a supported __new__ with @vectorcall")
+    return (codegen.value_emission or f.value_function or f.value_constructor) and eligible
 
 
 DOCSTRING_PROTOTYPE_VAR: Final[str] = libclinic.normalize_snippet("""

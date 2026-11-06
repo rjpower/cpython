@@ -199,6 +199,7 @@ int _PyCodegen_Module(struct _PyCompiler *c, _Py_SourceLocation loc, asdl_stmt_s
                       bool is_interactive);
 
 int _PyCompile_ConstCacheMergeOne(PyObject *const_cache, PyObject **obj);
+int _PyCompile_ConstCacheMergeValue(PyObject *const_cache, PyValue *value);
 
 PyCodeObject *_PyCompile_OptimizeAndAssemble(struct _PyCompiler *c, int addNone);
 

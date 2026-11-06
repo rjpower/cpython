@@ -6562,6 +6562,29 @@ class m.T "PyObject *" "&TestType"
         self.assertIn('_PyValue_AsInt', generated)
         self.assertIn('PyValue_AsKnownObjectBorrow', generated)
 
+    def test_value_constructor_pairs_entries_and_defaults(self):
+        generated = self.generate(["""@classmethod
+            @value_constructor
+            @vectorcall
+            m.T.__new__
+                value: object(c_default="NULL") = "0"
+                context: object = None""", "m.f\n    x: object\n    /"])
+        self.assertIn('m_T_value(PyTypeObject *type, const PyValue *args', generated)
+        self.assertIn('_PyValue_THUNK_EXIT(m_T_value(', generated)
+        self.assertIn('m_T_vectorcall(PyThreadState *tstate', generated)
+        self.assertIn('PyValue_Borrow(PyValue_NULL)', generated)
+        self.assertIn('PyValue_Borrow(PyValue_None)', generated)
+        self.assertIn('(PyCFunction)m_f, METH_O', generated)
+
+    def test_value_constructor_rejects_unsupported(self):
+        prefix = "/*[clinic input]\nmodule m\nclass m.T \"PyObject *\" \"&TestType\"\n[clinic start generated code]*/\n"
+        for body in ("@classmethod\n@value_constructor\nm.T.__new__",
+                     "@value_constructor\n@vectorcall\nm.f",
+                     "@classmethod\n@value_constructor\n@value_function\n@vectorcall\nm.T.__new__"):
+            text = prefix + "/*[clinic input]\n" + body + "\n[clinic start generated code]*/\n"
+            with self.assertRaises(ClinicError):
+                _make_clinic().parse(text)
+
     def test_multiple_file_destinations_rejected(self):
         text = """
             /*[clinic input]

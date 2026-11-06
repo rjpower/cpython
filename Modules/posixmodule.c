@@ -7606,7 +7606,7 @@ parse_arglist(PyObject* argv, Py_ssize_t *argc)
         return NULL;
     }
     for (i = 0; i < *argc; i++) {
-        PyObject* item = _PyValue_AsObjectStealAt(
+        PyObject* item = _PyValue_AsObjectResultAt(
             _PyValue_SequenceGetItem(PyValue_FromObjectBorrow(argv), i),
             BOX_SITE_SEQUENCE);
         if (item == NULL)

@@ -1744,6 +1744,8 @@ class TestIRCases(unittest.TestCase):
         ir_metadata_generator.generate_ir_metadata(
             [self.temp_input_filename], analysis, out)
         lines = [line.strip() for line in out.getvalue().splitlines()]
+        # The shared handler bound is emitted in opcode_ids.h, not metadata.
+        self.assertEqual(ir_generator.num_handlers(analysis), 258)
         # The oparg names the local that LOAD reads (_PyIR_ROLE_LOCAL_IN).
         # Only the twin runs Python itself; the format does, as the twin's.
         load = ("{ .flags = _PyIR_VALID | _PyIR_STORE_DST | _PyIR_RUNS_CODE, "
@@ -1761,7 +1763,6 @@ class TestIRCases(unittest.TestCase):
         for expected in [
             "#define IR_BACON                                       256",
             "#define IR_PASS                                        257",
-            "#define IR_NUM_HANDLERS                                258",
             f"[LOAD] = {load},",
             f"[INSTRUMENTED_LOAD] = {instrumented},",
             "[IR_PASS] = { .flags = _PyIR_VALID | _PyIR_TRANSPARENT, "
@@ -1942,7 +1943,7 @@ class TestIRCases(unittest.TestCase):
         generic = code[code.index("TARGET(BINARY_OP_SUBTRACT)"):]
         generic = generic[:generic.index("DISPATCH();")]
         self.assertIn("int oparg = NB_SUBTRACT;", generic)
-        self.assertIn("INSTRUCTION_STATS(BINARY_OP);", generic)
+        self.assertIn("INSTRUCTION_STATS(BINARY_OP_SUBTRACT);", generic)
         handler = code[code.index("TARGET(BINARY_OP_ADD_INT)"):]
         handler = handler[:handler.index("DISPATCH();")]
         self.assertIn("IR_DEOPT_BINARY_OP(IR_D(ir_word));", handler)

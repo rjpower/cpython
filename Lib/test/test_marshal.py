@@ -90,6 +90,23 @@ class IntTestCase(unittest.TestCase, HelperMixin):
                 self.assertEqual(marshal.loads(data), (expected, expected))
                 self.assertEqual(marshal.load(io.BytesIO(data)), (expected, expected))
 
+    def test_inline_tuple_scalar_wire(self):
+        # Versions 0-2 use a five-byte tuple prefix and no reference table.
+        values = (-2**40, -2**31, 2**31 - 1, 2**40, -0.0, 1.25)
+        for version in range(3):
+            for value in values:
+                with self.subTest(version=version, value=value):
+                    data = marshal.dumps((value,), version)
+                    stream = io.BytesIO(data)
+                    self.assertEqual(stream.read(5), b"(\x01\x00\x00\x00")
+                    self.assertEqual(stream.read(), marshal.dumps(value, version))
+                    self.assertEqual(marshal.loads(data), (value,))
+
+        # Inline integers have no object identity to enter in the ref table.
+        repeated = marshal.dumps((1, 1), 6)
+        self.assertTrue(repeated.endswith(b"i\x01\x00\x00\x00" * 2))
+        self.assertEqual(marshal.loads(repeated), (1, 1))
+
     def test_bool(self):
         for b in (True, False):
             self.helper(b)
@@ -1154,10 +1171,10 @@ class ReferenceTestCase(unittest.TestCase):
                          b'[\x04\0\0\0' + flagged(data_c) +
                          b'\xa9\x03' + flagged(data_a) + data_b + ref(2) +
                          ref(1) + ref(0))
-        # Small ints and interned strings are not special.
+        # Inline ints are written in full; interned strings retain references.
         self.assertEqual(dumps((1, 2, 1, 'a', 'a')),
-                         b')\x05\xe9\x01\0\0\0i\x02\0\0\0r\0\0\0\0'
-                         b'\xda\x01ar\x01\0\0\0')
+                         b')\x05i\x01\0\0\0i\x02\0\0\0i\x01\0\0\0'
+                         b'\xda\x01ar\0\0\0\0')
         # A recursive list refers to itself.
         lst = [a]
         lst.append(lst)

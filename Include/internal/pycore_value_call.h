@@ -78,7 +78,7 @@ PyAPI_FUNC(void) _PyValue_CheckInstanceInvariant(PyObject *callable);
 
 /* upstream's "'%.200s' object is not callable" for the type of v. Returns
  * PyValue_NULL. */
-extern PyValue _PyValue_NotCallable(PyThreadState *tstate, PyValueBorrow v);
+PyAPI_FUNC(PyValue) _PyValue_NotCallable(PyThreadState *tstate, PyValueBorrow v);
 #define _PyValue_NotCallable(T, V) (_PyValue_NotCallable)(T, PyValue_Borrow(V))
 
 /* The object vectorcall of an object-form native (value field NULL): boxes
@@ -86,7 +86,7 @@ extern PyValue _PyValue_NotCallable(PyThreadState *tstate, PyValueBorrow v);
  * stack (kind CALL_ADAPTER) inside a borrow scope, calls of, checks the
  * result as _Py_CheckFunctionResult and converts it with
  * PyValue_FromObjectSteal. */
-extern PyValue _PyValue_CallAdapter(
+PyAPI_FUNC(PyValue) _PyValue_CallAdapter(
     PyThreadState *tstate, PyObject *callable, vectorcallfunc of,
     const PyValue *args, size_t nargsf, PyObject *kwnames);
 
@@ -94,7 +94,7 @@ extern PyValue _PyValue_CallAdapter(
  * the argument tuple from the words (no box: tuples store words) and the
  * keyword dict, calls tp_call in a borrow scope, checks the result. Raises
  * upstream's "not callable" when tp_call is NULL. */
-extern PyValue _PyValue_TpCallAdapter(
+PyAPI_FUNC(PyValue) _PyValue_TpCallAdapter(
     PyThreadState *tstate, PyObject *callable,
     const PyValue *args, size_t nargsf, PyObject *kwnames);
 

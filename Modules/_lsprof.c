@@ -732,7 +732,7 @@ PyObject* get_cfunc_from_callable(PyObject* callable, PyObject* self_arg, PyObje
         if (self_arg == missing) {
             return NULL;
         }
-        PyObject *meth = _PyValue_AsObjectStealAt(
+        PyObject *meth = _PyValue_AsObjectResultAt(
             _PyValue_DescrGet(callable, PyValue_FromObjectBorrow(self_arg),
                               Py_TYPE(self_arg)),
             BOX_SITE_ATTRIBUTE);

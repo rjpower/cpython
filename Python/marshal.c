@@ -701,6 +701,61 @@ w_object(PyObject *v, WFILE *p)
     p->depth--;
 }
 
+/* Inline fields have no object identity to enter in the reference table. */
+static void
+w_value(PyValueBorrow v, WFILE *p)
+{
+    if (p->error) {
+        return;
+    }
+    assert(!PyValue_IsNull(v));
+    if (PyValue_IsObject(v)) {
+        w_object(PyValue_AsKnownObjectBorrow(v), p);
+        return;
+    }
+
+    p->depth++;
+    if (p->depth > MAX_MARSHAL_STACK_DEPTH) {
+        PyErr_SetString(PyExc_ValueError, "object too deeply nested to marshal");
+        p->error = true;
+    }
+    else if (PyValue_IsInlineInt(v)) {
+        int64_t x = PyValue_InlineInt64(v);
+        if (INT32_MIN <= x && x <= INT32_MAX) {
+            W_TYPE(TYPE_INT, p);
+            w_long((long)x, p);
+        }
+        else {
+            uint64_t magnitude = _Py_ABS_CAST(uint64_t, x);
+            uint64_t digit = magnitude;
+            long ndigits = 0;
+            do {
+                digit >>= PyLong_MARSHAL_SHIFT;
+                ndigits++;
+            } while (digit);
+            W_TYPE(TYPE_LONG, p);
+            w_long(x < 0 ? -ndigits : ndigits, p);
+            do {
+                w_short(magnitude & PyLong_MARSHAL_MASK, p);
+                magnitude >>= PyLong_MARSHAL_SHIFT;
+            } while (magnitude);
+        }
+    }
+    else {
+        assert(PyValue_IsInlineFloat(v));
+        double x = PyValue_InlineFloat(v);
+        if (p->version > 1) {
+            W_TYPE(TYPE_BINARY_FLOAT, p);
+            w_float_bin(x, p);
+        }
+        else {
+            W_TYPE(TYPE_FLOAT, p);
+            w_float_str(x, p);
+        }
+    }
+    p->depth--;
+}
+
 static void
 w_complex_object(PyObject *v, WFILE *p)
 {
@@ -800,14 +855,7 @@ w_complex_object(PyObject *v, WFILE *p)
             W_SIZE(n, p);
         }
         for (i = 0; i < n; i++) {
-            PyObject *item = _PyValue_AsObjectAt(PyTuple_GET_VALUE(v, i),
-                                                 BOX_SITE_TUPLE);
-            if (item == NULL) {
-                p->error = true;
-                break;
-            }
-            w_object(item, p);
-            Py_DECREF(item);
+            w_value(PyTuple_GET_VALUE(v, i), p);
             if (p->error) {
                 break;
             }
@@ -1073,13 +1121,7 @@ w_complex_object(PyObject *v, WFILE *p)
         // Each field is written as an object, as a tuple item is.
         PyValue *fields[3] = {&slice->start, &slice->stop, &slice->step};
         for (i = 0; i < 3 && !p->error; i++) {
-            PyObject *field = _PyValue_AsObjectAt(*fields[i], BOX_SITE_FIELD);
-            if (field == NULL) {
-                p->error = true;
-                break;
-            }
-            w_object(field, p);
-            Py_DECREF(field);
+            w_value(PyValue_Borrow(*fields[i]), p);
         }
         w_complete(v, p);
     }

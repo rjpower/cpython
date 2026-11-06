@@ -29,6 +29,34 @@ class MutateCmp:
 
 class TestBasic(unittest.TestCase):
 
+    def test_richcompare_returns_bool(self):
+        calls = []
+
+        class CompareResult:
+            def __bool__(self):
+                calls.append("bool")
+                return True
+
+        class Item:
+            def __eq__(self, other):
+                return False
+            def __lt__(self, other):
+                return CompareResult()
+
+        self.assertIs(deque([Item()]) < deque([Item()]), True)
+        self.assertEqual(calls, ["bool"])
+
+        class BadResult:
+            def __bool__(self):
+                raise RuntimeError("comparison truth conversion")
+
+        class BadItem(Item):
+            def __lt__(self, other):
+                return BadResult()
+
+        with self.assertRaisesRegex(RuntimeError, "comparison truth conversion"):
+            deque([BadItem()]) < deque([BadItem()])
+
     def test_basics(self):
         d = deque(range(-5125, -5000))
         d.__init__(range(200))

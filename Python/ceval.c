@@ -2745,12 +2745,8 @@ initialize_locals(PyThreadState *tstate, PyFunctionObject *func, PyCodeObject *c
                 goto kw_fail;
             }
 
-            PyObject *value = PyValue_AsObject(value_value);
-            if (value == NULL) {
-                goto kw_fail;
-            }
-            int err = PyDict_SetValue(kwdict, PyValue_FromObjectBorrow(keyword), PyValue_FromObjectBorrow(value));
-            Py_DECREF(value);
+            int err = PyDict_SetValue(kwdict, PyValue_FromObjectBorrow(keyword),
+                                      value_value);
             if (err == -1) {
                 goto kw_fail;
             }

@@ -36,6 +36,8 @@
 #include "pycore_value_call.h"    // _PyValue_CallMethodNoArgs()
 #include "pycore_value_ops.h"     // _PyValue_IsTrue()
 #include "pycore_object.h"        // _PyObject_VisitType()
+#include "pycore_slots.h"         // _Py_value_nb_int
+#include "pycore_value_slots.h"   // _Py_VALUE_THUNK_UNARY()
 #include "pycore_pystate.h"       // _PyThreadState_GET()
 #include "pycore_tuple.h"         // _PyTuple_FromPair
 #include "pycore_typeobject.h"
@@ -119,10 +121,6 @@ typedef struct {
     struct DecCondMap *signal_map;
     struct DecCondMap *cond_map;
 
-    /* External C-API functions */
-    binaryfunc _py_long_multiply;
-    binaryfunc _py_long_floor_divide;
-    ternaryfunc _py_long_power;
 } decimal_state;
 
 static inline decimal_state *
@@ -161,6 +159,21 @@ find_state_left_or_right(PyObject *left, PyObject *right)
 }
 
 static inline decimal_state *
+find_state_left_or_right_value(PyValueBorrow left, PyValueBorrow right)
+{
+    PyTypeObject *base;
+    if (PyType_GetBaseByToken(PyValue_TYPE(left), &dec_spec, &base) != 1) {
+        assert(!PyErr_Occurred());
+        PyType_GetBaseByToken(PyValue_TYPE(right), &dec_spec, &base);
+    }
+    assert(base != NULL);
+    void *state = _PyType_GetModuleState(base);
+    assert(state != NULL);
+    Py_DECREF(base);
+    return (decimal_state *)state;
+}
+
+static inline decimal_state *
 find_state_ternary(PyObject *left, PyObject *right, PyObject *modulus)
 {
     PyTypeObject *base;
@@ -178,6 +191,30 @@ find_state_ternary(PyObject *left, PyObject *right, PyObject *modulus)
     return (decimal_state *)state;
 }
 
+
+static inline decimal_state *
+find_state_ternary_value(PyValueBorrow left, PyValueBorrow right,
+                         PyValueBorrow modulus)
+{
+    PyTypeObject *base;
+    if (PyType_GetBaseByToken(PyValue_TYPE(left), &dec_spec, &base) != 1) {
+        assert(!PyErr_Occurred());
+        if (PyType_GetBaseByToken(PyValue_TYPE(right), &dec_spec, &base) != 1) {
+            assert(!PyErr_Occurred());
+            if (PyValue_IsNull(modulus)) {
+                base = NULL;
+            }
+            else {
+                PyType_GetBaseByToken(PyValue_TYPE(modulus), &dec_spec, &base);
+            }
+        }
+    }
+    assert(base != NULL);
+    void *state = _PyType_GetModuleState(base);
+    assert(state != NULL);
+    Py_DECREF(base);
+    return (decimal_state *)state;
+}
 
 #if !defined(MPD_VERSION_HEX) || MPD_VERSION_HEX < 0x02050000
   #error "libmpdec version >= 2.5.0 required"
@@ -2883,7 +2920,8 @@ sequence_as_tuple(PyObject *v, PyObject *ex, const char *mesg)
 static char *
 dectuple_as_str(PyObject *dectuple)
 {
-    PyObject *digits = NULL, *tmp = NULL;
+    PyObject *digits = NULL;
+    PyValue tmp = PyValue_NULL, next;
     char *decstring = NULL;
     char sign_special[6];
     char *cp;
@@ -2902,16 +2940,16 @@ dectuple_as_str(PyObject *dectuple)
     }
 
     /* sign */
-    tmp = PyTuple_GetItemRef(dectuple, 0);
-    if (tmp == NULL) {
+    tmp = PyTuple_GetValue(dectuple, 0);
+    if (PyValue_IsNull(tmp)) {
         goto error;
     }
-    if (!PyLong_Check(tmp)) {
+    if (!PyValue_LongCheck(tmp)) {
         PyErr_SetString(PyExc_ValueError,
             "sign must be an integer with the value 0 or 1");
         goto error;
     }
-    sign = PyLong_AsLong(tmp);
+    sign = _PyValue_AsLong(tmp);
     if (sign == -1 && PyErr_Occurred()) {
         goto error;
     }
@@ -2924,20 +2962,22 @@ dectuple_as_str(PyObject *dectuple)
     sign_special[1] = '\0';
 
     /* exponent or encoding for a special number */
-    Py_SETREF(tmp, PyTuple_GetItemRef(dectuple, 2));
-    if (tmp == NULL) {
+    next = PyTuple_GetValue(dectuple, 2);
+    PyValue_XCLOSE(tmp);
+    tmp = next;
+    if (PyValue_IsNull(tmp)) {
         goto error;
     }
-    if (PyUnicode_Check(tmp)) {
+    if (PyValue_IsObject(tmp) && PyUnicode_Check(PyValue_AsKnownObjectBorrow(tmp))) {
         /* special */
-        if (PyUnicode_CompareWithASCIIString(tmp, "F") == 0) {
+        if (PyUnicode_CompareWithASCIIString(PyValue_AsKnownObjectBorrow(tmp), "F") == 0) {
             strcat(sign_special, "Inf");
             is_infinite = 1;
         }
-        else if (PyUnicode_CompareWithASCIIString(tmp, "n") == 0) {
+        else if (PyUnicode_CompareWithASCIIString(PyValue_AsKnownObjectBorrow(tmp), "n") == 0) {
             strcat(sign_special, "NaN");
         }
-        else if (PyUnicode_CompareWithASCIIString(tmp, "N") == 0) {
+        else if (PyUnicode_CompareWithASCIIString(PyValue_AsKnownObjectBorrow(tmp), "N") == 0) {
             strcat(sign_special, "sNaN");
         }
         else {
@@ -2949,23 +2989,29 @@ dectuple_as_str(PyObject *dectuple)
     }
     else {
         /* exponent */
-        if (!PyLong_Check(tmp)) {
+        if (!PyValue_LongCheck(tmp)) {
             PyErr_SetString(PyExc_ValueError,
                 "exponent must be an integer");
             goto error;
         }
-        exp = PyLong_AsSsize_t(tmp);
+        exp = _PyValue_IntAsSsize_t(tmp);
         if (exp == -1 && PyErr_Occurred()) {
             goto error;
         }
     }
 
     /* coefficient */
-    Py_SETREF(tmp, PyTuple_GetItemRef(dectuple, 1));
-    if (tmp == NULL) {
+    next = PyTuple_GetValue(dectuple, 1);
+    PyValue_XCLOSE(tmp);
+    tmp = next;
+    if (PyValue_IsNull(tmp)) {
         goto error;
     }
-    digits = sequence_as_tuple(tmp, PyExc_ValueError,
+    if (!PyValue_IsObject(tmp)) {
+        PyErr_SetString(PyExc_ValueError, "coefficient must be a tuple of digits");
+        goto error;
+    }
+    digits = sequence_as_tuple(PyValue_AsKnownObjectBorrow(tmp), PyExc_ValueError,
                                "coefficient must be a tuple of digits");
     if (digits == NULL) {
         goto error;
@@ -2993,16 +3039,18 @@ dectuple_as_str(PyObject *dectuple)
         *cp++ = '0';
     }
     for (i = 0; i < tsize; i++) {
-        Py_XSETREF(tmp, PyTuple_GetItemRef(digits, i));
-        if (tmp == NULL) {
+        next = PyTuple_GetValue(digits, i);
+        PyValue_XCLOSE(tmp);
+        tmp = next;
+        if (PyValue_IsNull(tmp)) {
             goto error;
         }
-        if (!PyLong_Check(tmp)) {
+        if (!PyValue_LongCheck(tmp)) {
             PyErr_SetString(PyExc_ValueError,
                 "coefficient must be a tuple of digits");
             goto error;
         }
-        l = PyLong_AsLong(tmp);
+        l = _PyValue_AsLong(tmp);
         if (l == -1 && PyErr_Occurred()) {
             goto error;
         }
@@ -3031,13 +3079,13 @@ dectuple_as_str(PyObject *dectuple)
         }
     }
 
-    Py_XDECREF(tmp);
+    PyValue_XCLOSE(tmp);
     Py_XDECREF(digits);
     return decstring;
 
 
 error:
-    Py_XDECREF(tmp);
+    PyValue_XCLOSE(tmp);
     Py_XDECREF(digits);
     if (decstring) PyMem_Free(decstring);
     return NULL;
@@ -3329,34 +3377,35 @@ dec_apply(PyObject *v, PyObject *context)
    an exact conversion. If the result does not meet the restrictions
    for an mpd_t, fail with InvalidOperation. */
 static PyObject *
-PyDecType_FromObjectExact(PyTypeObject *type, PyObject *v, PyObject *context)
+PyDecType_FromObjectExact(PyTypeObject *type, PyValueBorrow v, PyObject *context)
 {
     decimal_state *state = get_module_state_from_ctx(context);
-    if (v == NULL) {
+    if (PyValue_IsNull(v)) {
         return PyDecType_FromSsizeExact(type, 0, context);
     }
-    else if (PyDec_Check(state, v)) {
-        return PyDecType_FromDecimalExact(type, v, context);
+    PyObject *obj = PyValue_IsObject(v) ? PyValue_AsKnownObjectBorrow(v) : NULL;
+    if (obj != NULL && PyDec_Check(state, obj)) {
+        return PyDecType_FromDecimalExact(type, obj, context);
     }
-    else if (PyUnicode_Check(v)) {
-        return PyDecType_FromUnicodeExactWS(type, v, context);
+    else if (obj != NULL && PyUnicode_Check(obj)) {
+        return PyDecType_FromUnicodeExactWS(type, obj, context);
     }
-    else if (PyLong_Check(v)) {
-        return PyDecType_FromLongExact(type, PyValue_FromObjectBorrow(v), context);
+    else if (PyValue_LongCheck(v)) {
+        return PyDecType_FromLongExact(type, v, context);
     }
-    else if (PyTuple_Check(v) || PyList_Check(v)) {
-        return PyDecType_FromSequenceExact(type, v, context);
+    else if (obj != NULL && (PyTuple_Check(obj) || PyList_Check(obj))) {
+        return PyDecType_FromSequenceExact(type, obj, context);
     }
-    else if (PyFloat_Check(v)) {
+    else if (PyValue_FloatCheck(v)) {
         if (dec_addstatus(context, MPD_Float_operation)) {
             return NULL;
         }
-        return PyDecType_FromFloatExact(type, PyValue_FromObjectBorrow(v), context);
+        return PyDecType_FromFloatExact(type, v, context);
     }
     else {
         PyErr_Format(PyExc_TypeError,
             "conversion from %s to Decimal is not supported",
-            Py_TYPE(v)->tp_name);
+            PyValue_TYPE(v)->tp_name);
         return NULL;
     }
 }
@@ -3364,16 +3413,17 @@ PyDecType_FromObjectExact(PyTypeObject *type, PyObject *v, PyObject *context)
 /* The context is used during conversion. This function is the
    equivalent of context.create_decimal(). */
 static PyObject *
-PyDec_FromObject(PyObject *v, PyObject *context)
+PyDec_FromObject(PyValueBorrow v, PyObject *context)
 {
     decimal_state *state = get_module_state_from_ctx(context);
-    if (v == NULL) {
+    if (PyValue_IsNull(v)) {
         return PyDec_FromSsize(state, 0, context);
     }
-    else if (PyDec_Check(state, v)) {
+    PyObject *obj = PyValue_IsObject(v) ? PyValue_AsKnownObjectBorrow(v) : NULL;
+    if (obj != NULL && PyDec_Check(state, obj)) {
         mpd_context_t *ctx = CTX(context);
-        if (mpd_isnan(MPD(v)) &&
-            MPD(v)->digits > ctx->prec - ctx->clamp) {
+        if (mpd_isnan(MPD(obj)) &&
+            MPD(obj)->digits > ctx->prec - ctx->clamp) {
             /* Special case: too many NaN payload digits */
             PyObject *result;
             if (dec_addstatus(context, MPD_Conversion_syntax)) {
@@ -3386,33 +3436,35 @@ PyDec_FromObject(PyObject *v, PyObject *context)
             mpd_setspecial(MPD(result), MPD_POS, MPD_NAN);
             return result;
         }
-        return dec_apply(v, context);
+        return dec_apply(obj, context);
     }
-    else if (PyUnicode_Check(v)) {
-        return PyDec_FromUnicode(state, v, context);
+    else if (obj != NULL && PyUnicode_Check(obj)) {
+        return PyDec_FromUnicode(state, obj, context);
     }
-    else if (PyLong_Check(v)) {
-        return PyDec_FromLong(state, v, context);
+    else if (PyValue_LongCheck(v)) {
+        return PyDecType_FromLong(state->PyDec_Type, v, context);
     }
-    else if (PyTuple_Check(v) || PyList_Check(v)) {
-        return PyDec_FromSequence(state, v, context);
+    else if (obj != NULL && (PyTuple_Check(obj) || PyList_Check(obj))) {
+        return PyDec_FromSequence(state, obj, context);
     }
-    else if (PyFloat_Check(v)) {
+    else if (PyValue_FloatCheck(v)) {
         if (dec_addstatus(context, MPD_Float_operation)) {
             return NULL;
         }
-        return PyDec_FromFloat(state, v, context);
+        return PyDecType_FromFloat(state->PyDec_Type, v, context);
     }
     else {
         PyErr_Format(PyExc_TypeError,
             "conversion from %s to Decimal is not supported",
-            Py_TYPE(v)->tp_name);
+            PyValue_TYPE(v)->tp_name);
         return NULL;
     }
 }
 
 /*[clinic input]
 @classmethod
+@value_constructor
+@vectorcall
 _decimal.Decimal.__new__ as dec_new
 
     value: object(c_default="NULL") = "0"
@@ -3425,18 +3477,28 @@ no value is given, return Decimal('0'). The context does not affect
 the conversion and is only passed to determine if the InvalidOperation
 trap is active.
 [clinic start generated code]*/
+#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
+#  error "@value_function Clinic output requires a core build"
+#endif
 
-static PyObject *
-dec_new_impl(PyTypeObject *type, PyObject *value, PyObject *context)
-/*[clinic end generated code: output=35f48a40c65625ba input=5f8a0892d3fcef80]*/
+static PyValue
+dec_new_impl(PyTypeObject *type, PyValueBorrow value, PyValueBorrow context)
+/*[clinic end generated code: output=2dd80335430a0d8f input=c9d3a1e065fba5ee]*/
 {
     decimal_state *state = get_module_state_by_def(type);
-    CONTEXT_CHECK_VA(state, context);
-
-    return PyDecType_FromObjectExact(type, value, context);
+    PyObject *ctx = optional_context_value(state, context);
+    if (ctx == NULL) {
+        return PyValue_NULL;
+    }
+    PyObject *result = PyDecType_FromObjectExact(type, value, ctx);
+    if (result == NULL) {
+        return PyValue_NULL;
+    }
+    return PyValue_FromObjectSteal(result);
 }
 
 /*[clinic input]
+@value_function
 _decimal.Context.create_decimal
 
     self as context: self
@@ -3448,12 +3510,19 @@ Create a new Decimal instance from num, using self as the context.
 Unlike the Decimal constructor, this function observes the context
 limits.
 [clinic start generated code]*/
+#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
+#  error "@value_function Clinic output requires a core build"
+#endif
 
-static PyObject *
-_decimal_Context_create_decimal_impl(PyObject *context, PyObject *num)
-/*[clinic end generated code: output=85e08ae02f3b34da input=d2c4946cf7804fbe]*/
+static PyValue
+_decimal_Context_create_decimal_impl(PyObject *context, PyValueBorrow num)
+/*[clinic end generated code: output=62236d6d69fa65aa input=236dd0a2f2d0bbef]*/
 {
-    return PyDec_FromObject(num, context);
+    PyObject *result = PyDec_FromObject(num, context);
+    if (result == NULL) {
+        return PyValue_NULL;
+    }
+    return PyValue_FromObjectSteal(result);
 }
 
 
@@ -3513,6 +3582,19 @@ convert_op_value(PyObject **conv, PyValueBorrow v, PyObject *context)
                  "conversion from %s to Decimal is not supported",
                  PyValue_TYPE(v)->tp_name);
     return 0;
+}
+
+/* 1: converted, 0: unsupported, -1: exception. */
+static int
+convert_op_slot(PyObject **result, PyValueBorrow value, PyObject *context)
+{
+    decimal_state *state = get_module_state_from_ctx(context);
+    if (!PyValue_LongCheck(value) &&
+        !(PyValue_IsObject(value) &&
+          PyDec_Check(state, PyValue_AsKnownObjectBorrow(value)))) {
+        return 0;
+    }
+    return convert_op_value(result, value, context) ? 1 : -1;
 }
 
 /* Return NotImplemented for unsupported types. */
@@ -4060,10 +4142,10 @@ finish:
     return result;
 }
 
-/* Return a PyLongObject from a PyDecObject, using the specified rounding
- * mode. The context precision is not observed. */
-static PyObject *
-dec_as_long(PyObject *dec, PyObject *context, int round)
+/* Return an owned integer value from a PyDecObject using the specified
+ * rounding mode. The context precision is not observed. */
+static PyValue
+dec_as_long_value(PyObject *dec, PyObject *context, int round)
 {
     if (mpd_isspecial(MPD(dec))) {
         if (mpd_isnan(MPD(dec))) {
@@ -4074,14 +4156,14 @@ dec_as_long(PyObject *dec, PyObject *context, int round)
             PyErr_SetString(PyExc_OverflowError,
                 "cannot convert Infinity to integer");
         }
-        return NULL;
+        return PyValue_NULL;
     }
 
     mpd_t *x = mpd_qnew();
 
     if (x == NULL) {
         PyErr_NoMemory();
-        return NULL;
+        return PyValue_NULL;
     }
 
     mpd_context_t workctx = *CTX(context);
@@ -4091,7 +4173,7 @@ dec_as_long(PyObject *dec, PyObject *context, int round)
     mpd_qround_to_int(x, MPD(dec), &workctx, &status);
     if (dec_addstatus(context, status)) {
         mpd_del(x);
-        return NULL;
+        return PyValue_NULL;
     }
 
     status = 0;
@@ -4099,7 +4181,7 @@ dec_as_long(PyObject *dec, PyObject *context, int round)
 
     if (!status) {
         mpd_del(x);
-        return PyLong_FromInt64(val);
+        return PyValue_FromInt64(val);
     }
     assert(!mpd_iszero(x));
 
@@ -4131,7 +4213,7 @@ dec_as_long(PyObject *dec, PyObject *context, int round)
         PyErr_NoMemory();
         mpd_del(x);
         mpd_free(tmp_digits);
-        return NULL;
+        return PyValue_NULL;
     }
 
     void *digits;
@@ -4140,15 +4222,20 @@ dec_as_long(PyObject *dec, PyObject *context, int round)
     mpd_del(x);
     if (writer == NULL) {
         mpd_free(tmp_digits);
-        return NULL;
+        return PyValue_NULL;
     }
     memcpy(digits, tmp_digits, layout->digit_size*n);
     mpd_free(tmp_digits);
-    return PyLongWriter_Finish(writer);
+    PyObject *result = PyLongWriter_Finish(writer);
+    if (result == NULL) {
+        return PyValue_NULL;
+    }
+    return PyValue_FromObjectSteal(result);
 }
 
 /*[clinic input]
 @permit_long_summary
+@value_function
 _decimal.Decimal.as_integer_ratio
 
     cls: defining_class
@@ -4158,107 +4245,112 @@ Return a pair of integers whose ratio is exactly equal to the original.
 The ratio is in lowest terms and with a positive denominator.
 Raise OverflowError on infinities and a ValueError on NaNs.
 [clinic start generated code]*/
+#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
+#  error "@value_function Clinic output requires a core build"
+#endif
 
-static PyObject *
+static PyValue
 _decimal_Decimal_as_integer_ratio_impl(PyObject *self, PyTypeObject *cls)
-/*[clinic end generated code: output=eb49c512701f844b input=136f1dc585ca8d80]*/
+/*[clinic end generated code: output=72c6b9f93c18cb63 input=d4a93f345bc247cb]*/
 {
-    PyObject *numerator = NULL;
-    PyObject *denominator = NULL;
-    PyObject *exponent = NULL;
+    PyValue numerator = PyValue_NULL;
+    PyValue denominator = PyValue_NULL;
+    PyValue exponent = PyValue_NULL;
+    PyValue divisor = PyValue_NULL;
     PyObject *tmp;
     mpd_ssize_t exp;
-    PyObject *context;
     uint32_t status = 0;
 
     if (mpd_isspecial(MPD(self))) {
         if (mpd_isnan(MPD(self))) {
-            PyErr_SetString(PyExc_ValueError,
-                "cannot convert NaN to integer ratio");
+            PyErr_SetString(PyExc_ValueError, "cannot convert NaN to integer ratio");
         }
         else {
-            PyErr_SetString(PyExc_OverflowError,
-                "cannot convert Infinity to integer ratio");
+            PyErr_SetString(PyExc_OverflowError, "cannot convert Infinity to integer ratio");
         }
-        return NULL;
+        return PyValue_NULL;
     }
-
     decimal_state *state = PyType_GetModuleState(cls);
-    CURRENT_CONTEXT(state, context);
-
+    PyObject *context = optional_context_value(state, PyValue_Borrow(PyValue_None));
+    if (context == NULL) {
+        return PyValue_NULL;
+    }
     tmp = dec_alloc(state);
     if (tmp == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
-
     if (!mpd_qcopy(MPD(tmp), MPD(self), &status)) {
         Py_DECREF(tmp);
         PyErr_NoMemory();
-        return NULL;
+        return PyValue_NULL;
     }
-
     exp = mpd_iszero(MPD(tmp)) ? 0 : MPD(tmp)->exp;
     MPD(tmp)->exp = 0;
-
-    /* context and rounding are unused here: the conversion is exact */
-    numerator = dec_as_long(tmp, context, MPD_ROUND_FLOOR);
+    numerator = dec_as_long_value(tmp, context, MPD_ROUND_FLOOR);
     Py_DECREF(tmp);
-    if (numerator == NULL) {
+    if (PyValue_IsNull(numerator)) {
         goto error;
     }
-
-    exponent = PyLong_FromSsize_t(exp < 0 ? -exp : exp);
-    if (exponent == NULL) {
+    exponent = PyValue_FromInt64(exp < 0 ? -exp : exp);
+    if (PyValue_IsNull(exponent)) {
         goto error;
     }
-
-    tmp = PyLong_FromLong(10);
-    if (tmp == NULL) {
+    PyValue power = _PyLong_ValuePower(PyValue_Borrow(PyValue_FromInt64(10)),
+                                        PyValue_Borrow(exponent),
+                                        PyValue_Borrow(PyValue_None));
+    PyValue_CLOSE(exponent);
+    exponent = power;
+    if (PyValue_IsNull(exponent)) {
         goto error;
     }
-
-    Py_SETREF(exponent, state->_py_long_power(tmp, exponent, Py_None));
-    Py_DECREF(tmp);
-    if (exponent == NULL) {
-        goto error;
-    }
-
     if (exp >= 0) {
-        Py_SETREF(numerator, state->_py_long_multiply(numerator, exponent));
-        Py_CLEAR(exponent);
-        if (numerator == NULL) {
+        PyValue product = _PyLong_ValueMultiply(PyValue_Borrow(numerator),
+                                                  PyValue_Borrow(exponent));
+        PyValue_CLOSE(numerator);
+        numerator = product;
+        PyValue_CLOSE(exponent);
+        exponent = PyValue_NULL;
+        if (PyValue_IsNull(numerator)) {
             goto error;
         }
-        denominator = PyLong_FromLong(1);
-        if (denominator == NULL) {
-            goto error;
-        }
+        denominator = PyValue_FromInt64(1);
     }
     else {
         denominator = exponent;
-        exponent = NULL;
-        tmp = _PyLong_GCD(numerator, denominator);
-        if (tmp == NULL) {
+        exponent = PyValue_NULL;
+        divisor = _PyLong_ValueGCD(PyValue_Borrow(numerator), PyValue_Borrow(denominator));
+        if (PyValue_IsNull(divisor)) {
             goto error;
         }
-        Py_SETREF(numerator, state->_py_long_floor_divide(numerator, tmp));
-        if (numerator == NULL) {
-            Py_DECREF(tmp);
+        PyValue quotient = _PyLong_ValueFloorDivide(PyValue_Borrow(numerator),
+                                                     PyValue_Borrow(divisor));
+        PyValue_CLOSE(numerator);
+        numerator = quotient;
+        if (PyValue_IsNull(numerator)) {
             goto error;
         }
-        Py_SETREF(denominator, state->_py_long_floor_divide(denominator, tmp));
-        Py_DECREF(tmp);
-        if (denominator == NULL) {
+        quotient = _PyLong_ValueFloorDivide(PyValue_Borrow(denominator),
+                                             PyValue_Borrow(divisor));
+        PyValue_CLOSE(denominator);
+        denominator = quotient;
+        PyValue_CLOSE(divisor);
+        divisor = PyValue_NULL;
+        if (PyValue_IsNull(denominator)) {
             goto error;
         }
     }
-    return _PyTuple_FromPairSteal(numerator, denominator);
+    PyObject *result = _PyTuple_FromPairTakeValue(numerator, denominator);
+    if (result == NULL) {
+        return PyValue_NULL;
+    }
+    return PyValue_FromObjectSteal(result);
 
 error:
-    Py_XDECREF(exponent);
-    Py_XDECREF(denominator);
-    Py_XDECREF(numerator);
-    return NULL;
+    PyValue_XCLOSE(divisor);
+    PyValue_XCLOSE(exponent);
+    PyValue_XCLOSE(denominator);
+    PyValue_XCLOSE(numerator);
+    return PyValue_NULL;
 }
 
 /*[clinic input]
@@ -4401,39 +4493,51 @@ _decimal_Decimal_to_integral_exact_impl(PyObject *self, PyTypeObject *cls,
     return PyValue_FromObjectSteal(result);
 }
 
-static PyObject *
-PyDec_AsFloat(PyObject *dec)
+/* Decimal's own string form is ASCII and has no whitespace or underscores. */
+static PyValue
+PyDec_AsFloatValue(PyValueBorrow value)
 {
-    PyObject *f, *s;
-
+    PyObject *dec = PyValue_AsKnownObjectBorrow(value);
+    PyObject *s;
     if (mpd_isnan(MPD(dec))) {
         if (mpd_issnan(MPD(dec))) {
             PyErr_SetString(PyExc_ValueError,
                 "cannot convert signaling NaN to float");
-            return NULL;
+            return PyValue_NULL;
         }
-        if (mpd_isnegative(MPD(dec))) {
-            s = PyUnicode_FromString("-nan");
-        }
-        else {
-            s = PyUnicode_FromString("nan");
-        }
+        s = PyUnicode_FromString(mpd_isnegative(MPD(dec)) ? "-nan" : "nan");
     }
     else {
         s = dec_str(dec);
     }
-
     if (s == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
-
-    f = PyFloat_FromString(s);
+    Py_ssize_t len;
+    const char *start = PyUnicode_AsUTF8AndSize(s, &len);
+    if (start == NULL) {
+        Py_DECREF(s);
+        return PyValue_NULL;
+    }
+    char *end;
+    double result = PyOS_string_to_double(start, &end, NULL);
+    if (end != start + len) {
+        PyErr_Format(PyExc_ValueError, "could not convert string to float: %R", s);
+        Py_DECREF(s);
+        return PyValue_NULL;
+    }
+    if (result == -1.0 && PyErr_Occurred()) {
+        Py_DECREF(s);
+        return PyValue_NULL;
+    }
     Py_DECREF(s);
-
-    return f;
+    return PyValue_FromDouble(result);
 }
 
+_Py_VALUE_THUNK_UNARY(PyDec_AsFloat, PyDec_AsFloatValue)
+
 /*[clinic input]
+@value_function
 _decimal.Decimal.__round__
 
     cls: defining_class
@@ -4442,68 +4546,77 @@ _decimal.Decimal.__round__
 
 Return the Integral closest to self, rounding half toward even.
 [clinic start generated code]*/
+#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
+#  error "@value_function Clinic output requires a core build"
+#endif
 
-static PyObject *
+static PyValue
 _decimal_Decimal___round___impl(PyObject *self, PyTypeObject *cls,
-                                PyObject *ndigits)
-/*[clinic end generated code: output=790c2c6bd57890e6 input=d69e7178a58a66b1]*/
+                                PyValueBorrow ndigits)
+/*[clinic end generated code: output=b2dc8c8c9183bfa7 input=8745399a85a36c78]*/
 {
     PyObject *result;
     uint32_t status = 0;
     PyObject *context;
     decimal_state *state = PyType_GetModuleState(cls);
-    CURRENT_CONTEXT(state, context);
-    if (ndigits) {
+    context = optional_context_value(state, PyValue_Borrow(PyValue_None));
+    if (context == NULL) {
+        return PyValue_NULL;
+    }
+    if (!PyValue_IsNull(ndigits)) {
         mpd_uint_t dq[1] = {1};
         mpd_t q = {MPD_STATIC|MPD_CONST_DATA,0,1,1,1,dq};
         mpd_ssize_t y;
 
-        if (!PyLong_Check(ndigits)) {
+        if (!PyValue_LongCheck(ndigits)) {
             PyErr_SetString(PyExc_TypeError,
                 "optional arg must be an integer");
-            return NULL;
+            return PyValue_NULL;
         }
 
-        y = PyLong_AsSsize_t(ndigits);
+        y = _PyValue_IntAsSsize_t(ndigits);
         if (y == -1 && PyErr_Occurred()) {
-            return NULL;
+            return PyValue_NULL;
         }
         result = dec_alloc(state);
         if (result == NULL) {
-            return NULL;
+            return PyValue_NULL;
         }
 
         q.exp = (y == MPD_SSIZE_MIN) ? MPD_SSIZE_MAX : -y;
         mpd_qquantize(MPD(result), MPD(self), &q, CTX(context), &status);
         if (dec_addstatus(context, status)) {
             Py_DECREF(result);
-            return NULL;
+            return PyValue_NULL;
         }
 
-        return result;
+        return PyValue_FromObjectSteal(result);
     }
     else {
-        return dec_as_long(self, context, MPD_ROUND_HALF_EVEN);
+        return dec_as_long_value(self, context, MPD_ROUND_HALF_EVEN);
     }
 }
 
 /*[clinic input]
+@value_function
 _decimal.Decimal.as_tuple
 
     cls: defining_class
 
 Return a tuple representation of the number.
 [clinic start generated code]*/
+#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
+#  error "@value_function Clinic output requires a core build"
+#endif
 
-static PyObject *
+static PyValue
 _decimal_Decimal_as_tuple_impl(PyObject *self, PyTypeObject *cls)
-/*[clinic end generated code: output=d68b967becee8ab9 input=bfa86d640224d9f5]*/
+/*[clinic end generated code: output=8c65719cd8579832 input=cd81be0738c8b3c2]*/
 {
-    PyObject *result = NULL;
-    PyObject *sign = NULL;
+    PyValue result = PyValue_NULL;
+    PyValue sign = PyValue_NULL;
     PyObject *coeff = NULL;
-    PyObject *expt = NULL;
-    PyObject *tmp = NULL;
+    PyValue expt = PyValue_NULL;
     mpd_t *x = NULL;
     char *intstring = NULL;
     Py_ssize_t intlen, i;
@@ -4515,30 +4628,33 @@ _decimal_Decimal_as_tuple_impl(PyObject *self, PyTypeObject *cls)
         goto out;
     }
 
-    sign = PyLong_FromUnsignedLong(mpd_sign(MPD(self)));
-    if (sign == NULL) {
-        goto out;
-    }
+    sign = PyValue_FromInlineInt(mpd_sign(MPD(self)));
 
     if (mpd_isinfinite(x)) {
-        expt = PyUnicode_FromString("F");
-        if (expt == NULL) {
+        PyObject *marker = PyUnicode_FromString("F");
+        if (marker == NULL) {
             goto out;
         }
+        expt = PyValue_FromObjectSteal(marker);
         /* decimal.py has non-compliant infinity payloads. */
-        coeff = Py_BuildValue("(i)", 0);
+        coeff = _PyTuple_PackValues(1, (PyValueBorrow[]){
+            PyValue_Borrow(PyValue_FromInlineInt(0))});
         if (coeff == NULL) {
             goto out;
         }
     }
     else {
         if (mpd_isnan(x)) {
-            expt = PyUnicode_FromString(mpd_isqnan(x)?"n":"N");
+            PyObject *marker = PyUnicode_FromString(mpd_isqnan(x)?"n":"N");
+            if (marker == NULL) {
+                goto out;
+            }
+            expt = PyValue_FromObjectSteal(marker);
         }
         else {
-            expt = PyLong_FromSsize_t(MPD(self)->exp);
+            expt = PyValue_FromInt64(MPD(self)->exp);
         }
-        if (expt == NULL) {
+        if (PyValue_IsNull(expt)) {
             goto out;
         }
 
@@ -4562,11 +4678,8 @@ _decimal_Decimal_as_tuple_impl(PyObject *self, PyTypeObject *cls)
             }
 
             for (i = 0; i < intlen; i++) {
-                tmp = PyLong_FromLong(intstring[i]-'0');
-                if (tmp == NULL) {
-                    goto out;
-                }
-                PyTuple_SET_ITEM(coeff, i, tmp);
+                PyTuple_SET_VALUE(coeff, i,
+                                  PyValue_FromInlineInt(intstring[i]-'0'));
             }
         }
         else {
@@ -4578,15 +4691,17 @@ _decimal_Decimal_as_tuple_impl(PyObject *self, PyTypeObject *cls)
     }
 
     decimal_state *state = PyType_GetModuleState(cls);
-    result = PyObject_CallFunctionObjArgs((PyObject *)state->DecimalTuple,
-                                          sign, coeff, expt, NULL);
+    PyValue args[3] = {sign, PyValue_DUP(PyValue_FromObjectBorrow(coeff)), expt};
+    result = _PyValue_Vectorcall(PyValue_FromObjectBorrow(state->DecimalTuple),
+                                 args, 3, NULL);
+    PyValue_CLOSE(args[1]);
 
 out:
     if (x) mpd_del(x);
     if (intstring) mpd_free(intstring);
-    Py_XDECREF(sign);
+    PyValue_XCLOSE(sign);
     Py_XDECREF(coeff);
-    Py_XDECREF(expt);
+    PyValue_XCLOSE(expt);
     return result;
 }
 
@@ -4597,58 +4712,65 @@ out:
 
 /* Unary number method that uses the default module context. */
 #define Dec_UnaryNumberMethod(MPDFUNC) \
-static PyObject *                                           \
-nm_##MPDFUNC(PyObject *self)                                \
-{                                                           \
-    PyObject *result;                                       \
-    PyObject *context;                                      \
-    uint32_t status = 0;                                    \
-                                                            \
-    decimal_state *state = get_module_state_by_def(Py_TYPE(self));   \
-    CURRENT_CONTEXT(state, context);                        \
-    if ((result = dec_alloc(state)) == NULL) {              \
-        return NULL;                                        \
-    }                                                       \
-                                                            \
-    MPDFUNC(MPD(result), MPD(self), CTX(context), &status); \
-    if (dec_addstatus(context, status)) {                   \
-        Py_DECREF(result);                                  \
-        return NULL;                                        \
-    }                                                       \
-                                                            \
-    return result;                                          \
-}
+static PyValue                                                                    \
+nm_##MPDFUNC##_value(PyValueBorrow value)                                         \
+{                                                                                 \
+    PyObject *self = PyValue_AsKnownObjectBorrow(value);                          \
+    uint32_t status = 0;                                                          \
+    decimal_state *state = get_module_state_by_def(Py_TYPE(self));                \
+    PyObject *context = optional_context_value(state, PyValue_Borrow(PyValue_None));\
+    if (context == NULL) {                                                        \
+        return PyValue_NULL;                                                      \
+    }                                                                             \
+    PyObject *result = dec_alloc(state);                                          \
+    if (result == NULL) {                                                         \
+        return PyValue_NULL;                                                      \
+    }                                                                             \
+    MPDFUNC(MPD(result), MPD(self), CTX(context), &status);                       \
+    if (dec_addstatus(context, status)) {                                         \
+        Py_DECREF(result);                                                        \
+        return PyValue_NULL;                                                      \
+    }                                                                             \
+    return PyValue_FromObjectSteal(result);                                       \
+}                                                                                 \
+_Py_VALUE_THUNK_UNARY(nm_##MPDFUNC, nm_##MPDFUNC##_value)
 
 /* Binary number method that uses default module context. */
 #define Dec_BinaryNumberMethod(MPDFUNC) \
-static PyObject *                                                \
-nm_##MPDFUNC(PyObject *self, PyObject *other)                    \
-{                                                                \
-    PyObject *a, *b;                                             \
-    PyObject *result;                                            \
-    PyObject *context;                                           \
-    uint32_t status = 0;                                         \
-                                                                 \
-    decimal_state *state = find_state_left_or_right(self, other); \
-    CURRENT_CONTEXT(state, context) ;                            \
-    CONVERT_BINOP(&a, &b, self, other, context);                 \
-                                                                 \
-    if ((result = dec_alloc(state)) == NULL) {                   \
-        Py_DECREF(a);                                            \
-        Py_DECREF(b);                                            \
-        return NULL;                                             \
-    }                                                            \
-                                                                 \
-    MPDFUNC(MPD(result), MPD(a), MPD(b), CTX(context), &status); \
-    Py_DECREF(a);                                                \
-    Py_DECREF(b);                                                \
-    if (dec_addstatus(context, status)) {                        \
-        Py_DECREF(result);                                       \
-        return NULL;                                             \
-    }                                                            \
-                                                                 \
-    return result;                                               \
-}
+static PyValue                                                                    \
+nm_##MPDFUNC##_value(PyValueBorrow self, PyValueBorrow other)                     \
+{                                                                                 \
+    PyObject *a, *b, *result;                                                     \
+    uint32_t status = 0;                                                          \
+    decimal_state *state = find_state_left_or_right_value(self, other);           \
+    PyObject *context = optional_context_value(state, PyValue_Borrow(PyValue_None));\
+    if (context == NULL) {                                                        \
+        return PyValue_NULL;                                                      \
+    }                                                                             \
+    int converted = convert_op_slot(&a, self, context);                           \
+    if (converted <= 0) {                                                         \
+        return converted < 0 ? PyValue_NULL : PyValue_NotImplemented;             \
+    }                                                                             \
+    converted = convert_op_slot(&b, other, context);                              \
+    if (converted <= 0) {                                                         \
+        Py_DECREF(a);                                                             \
+        return converted < 0 ? PyValue_NULL : PyValue_NotImplemented;             \
+    }                                                                             \
+    if ((result = dec_alloc(state)) == NULL) {                                    \
+        Py_DECREF(a);                                                             \
+        Py_DECREF(b);                                                             \
+        return PyValue_NULL;                                                      \
+    }                                                                             \
+    MPDFUNC(MPD(result), MPD(a), MPD(b), CTX(context), &status);                  \
+    Py_DECREF(a);                                                                 \
+    Py_DECREF(b);                                                                 \
+    if (dec_addstatus(context, status)) {                                         \
+        Py_DECREF(result);                                                        \
+        return PyValue_NULL;                                                      \
+    }                                                                             \
+    return PyValue_FromObjectSteal(result);                                       \
+}                                                                                 \
+_Py_VALUE_THUNK_BINARY(nm_##MPDFUNC, nm_##MPDFUNC##_value)
 
 /* Boolean function without a context arg.
    Argument Clinic provides PyObject *self
@@ -4842,105 +4964,129 @@ Dec_BinaryNumberMethod(mpd_qdiv)
 Dec_BinaryNumberMethod(mpd_qrem)
 Dec_BinaryNumberMethod(mpd_qdivint)
 
-static PyObject *
-nm_dec_as_long(PyObject *dec)
+static PyValue
+nm_dec_as_long_value(PyValueBorrow value)
 {
-    PyObject *context;
+    PyObject *dec = PyValue_AsKnownObjectBorrow(value);
     decimal_state *state = get_module_state_by_def(Py_TYPE(dec));
-    CURRENT_CONTEXT(state, context);
-    return dec_as_long(dec, context, MPD_ROUND_DOWN);
+    PyObject *context = optional_context_value(state, PyValue_Borrow(PyValue_None));
+    if (context == NULL) {
+        return PyValue_NULL;
+    }
+    return dec_as_long_value(dec, context, MPD_ROUND_DOWN);
 }
+
+_Py_VALUE_THUNK_UNARY(nm_dec_as_long, nm_dec_as_long_value)
 
 static int
-nm_nonzero(PyObject *v)
+nm_nonzero_value(PyValueBorrow value)
 {
-    return !mpd_iszero(MPD(v));
+    return !mpd_iszero(MPD(PyValue_AsKnownObjectBorrow(value)));
 }
 
-static PyObject *
-nm_mpd_qdivmod(PyObject *v, PyObject *w)
+_Py_VALUE_THUNK_INQUIRY(nm_nonzero, nm_nonzero_value)
+
+static PyValue
+nm_mpd_qdivmod_value(PyValueBorrow left, PyValueBorrow right)
 {
-    PyObject *a, *b;
-    PyObject *q, *r;
-    PyObject *context;
+    PyObject *a, *b, *q, *r;
     uint32_t status = 0;
-
-    decimal_state *state = find_state_left_or_right(v, w);
-    CURRENT_CONTEXT(state, context);
-    CONVERT_BINOP(&a, &b, v, w, context);
-
+    decimal_state *state = find_state_left_or_right_value(left, right);
+    PyObject *context = optional_context_value(state, PyValue_Borrow(PyValue_None));
+    if (context == NULL) {
+        return PyValue_NULL;
+    }
+    int converted = convert_op_slot(&a, left, context);
+    if (converted <= 0) {
+        return converted < 0 ? PyValue_NULL : PyValue_NotImplemented;
+    }
+    converted = convert_op_slot(&b, right, context);
+    if (converted <= 0) {
+        Py_DECREF(a);
+        return converted < 0 ? PyValue_NULL : PyValue_NotImplemented;
+    }
     q = dec_alloc(state);
     if (q == NULL) {
         Py_DECREF(a);
         Py_DECREF(b);
-        return NULL;
+        return PyValue_NULL;
     }
     r = dec_alloc(state);
     if (r == NULL) {
         Py_DECREF(a);
         Py_DECREF(b);
         Py_DECREF(q);
-        return NULL;
+        return PyValue_NULL;
     }
-
     mpd_qdivmod(MPD(q), MPD(r), MPD(a), MPD(b), CTX(context), &status);
     Py_DECREF(a);
     Py_DECREF(b);
     if (dec_addstatus(context, status)) {
         Py_DECREF(r);
         Py_DECREF(q);
-        return NULL;
+        return PyValue_NULL;
     }
-
-    return _PyTuple_FromPairSteal(q, r);
+    PyObject *result = _PyTuple_FromPairTakeValue(PyValue_FromObjectSteal(q),
+                                                   PyValue_FromObjectSteal(r));
+    if (result == NULL) {
+        return PyValue_NULL;
+    }
+    return PyValue_FromObjectSteal(result);
 }
 
-static PyObject *
-nm_mpd_qpow(PyObject *base, PyObject *exp, PyObject *mod)
+_Py_VALUE_THUNK_BINARY(nm_mpd_qdivmod, nm_mpd_qdivmod_value)
+
+static PyValue
+nm_mpd_qpow_value(PyValueBorrow base, PyValueBorrow exp, PyValueBorrow mod)
 {
-    PyObject *a, *b, *c = NULL;
-    PyObject *result;
-    PyObject *context;
+    PyObject *a, *b, *c = NULL, *result;
     uint32_t status = 0;
-
-    decimal_state *state = find_state_ternary(base, exp, mod);
-    CURRENT_CONTEXT(state, context);
-    CONVERT_BINOP(&a, &b, base, exp, context);
-
-    if (mod != Py_None) {
-        if (!convert_op(NOT_IMPL, &c, mod, context)) {
+    decimal_state *state = find_state_ternary_value(base, exp, mod);
+    PyObject *context = optional_context_value(state, PyValue_Borrow(PyValue_None));
+    if (context == NULL) {
+        return PyValue_NULL;
+    }
+    int converted = convert_op_slot(&a, base, context);
+    if (converted <= 0) {
+        return converted < 0 ? PyValue_NULL : PyValue_NotImplemented;
+    }
+    converted = convert_op_slot(&b, exp, context);
+    if (converted <= 0) {
+        Py_DECREF(a);
+        return converted < 0 ? PyValue_NULL : PyValue_NotImplemented;
+    }
+    if (!PyValue_IsNull(mod) && !PyValue_IsNone(mod)) {
+        converted = convert_op_slot(&c, mod, context);
+        if (converted <= 0) {
             Py_DECREF(a);
             Py_DECREF(b);
-            return c;
+            return converted < 0 ? PyValue_NULL : PyValue_NotImplemented;
         }
     }
-
     result = dec_alloc(state);
     if (result == NULL) {
         Py_DECREF(a);
         Py_DECREF(b);
         Py_XDECREF(c);
-        return NULL;
+        return PyValue_NULL;
     }
-
     if (c == NULL) {
-        mpd_qpow(MPD(result), MPD(a), MPD(b),
-                 CTX(context), &status);
+        mpd_qpow(MPD(result), MPD(a), MPD(b), CTX(context), &status);
     }
     else {
-        mpd_qpowmod(MPD(result), MPD(a), MPD(b), MPD(c),
-                    CTX(context), &status);
+        mpd_qpowmod(MPD(result), MPD(a), MPD(b), MPD(c), CTX(context), &status);
         Py_DECREF(c);
     }
     Py_DECREF(a);
     Py_DECREF(b);
     if (dec_addstatus(context, status)) {
         Py_DECREF(result);
-        return NULL;
+        return PyValue_NULL;
     }
-
-    return result;
+    return PyValue_FromObjectSteal(result);
 }
+
+_Py_VALUE_THUNK_TERNARY(nm_mpd_qpow, nm_mpd_qpow_value)
 
 
 /******************************************************************************/
@@ -6171,49 +6317,59 @@ dec_richcompare(PyObject *v, PyObject *w, int op)
 }
 
 /*[clinic input]
+@value_function
 _decimal.Decimal.__ceil__
 
     cls: defining_class
 
 Return the ceiling as an Integral.
 [clinic start generated code]*/
+#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
+#  error "@value_function Clinic output requires a core build"
+#endif
 
-static PyObject *
+static PyValue
 _decimal_Decimal___ceil___impl(PyObject *self, PyTypeObject *cls)
-/*[clinic end generated code: output=d986ebf9aadbf9fe input=a8e0b87897706816]*/
+/*[clinic end generated code: output=5154d32a8c8949a3 input=e78e6e404c1c70b2]*/
 {
     PyObject *context;
 
     decimal_state *state = PyType_GetModuleState(cls);
-    CURRENT_CONTEXT(state, context);
-    return dec_as_long(self, context, MPD_ROUND_CEILING);
+    context = optional_context_value(state, PyValue_Borrow(PyValue_None));
+    if (context == NULL) {
+        return PyValue_NULL;
+    }
+    return dec_as_long_value(self, context, MPD_ROUND_CEILING);
 }
 
 /*[clinic input]
+@value_function
 _decimal.Decimal.__complex__
 
 Convert this value to exact type complex.
 [clinic start generated code]*/
+#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
+#  error "@value_function Clinic output requires a core build"
+#endif
 
-static PyObject *
+static PyValue
 _decimal_Decimal___complex___impl(PyObject *self)
-/*[clinic end generated code: output=c9b5b4a9fdebc912 input=6b11c6f20af7061a]*/
+/*[clinic end generated code: output=a2f4c127690eacca input=35da284cd3bc0673]*/
 {
-    PyObject *f;
-    double x;
-
-    f = PyDec_AsFloat(self);
-    if (f == NULL) {
-        return NULL;
+    PyValue f = PyDec_AsFloatValue(PyValue_FromObjectBorrow(self));
+    if (PyValue_IsNull(f)) {
+        return PyValue_NULL;
     }
-
-    x = PyFloat_AsDouble(f);
-    Py_DECREF(f);
+    double x = _PyValue_AsDouble(f);
+    PyValue_CLOSE(f);
     if (x == -1.0 && PyErr_Occurred()) {
-        return NULL;
+        return PyValue_NULL;
     }
-
-    return PyComplex_FromDoubles(x, 0);
+    PyObject *result = PyComplex_FromDoubles(x, 0);
+    if (result == NULL) {
+        return PyValue_NULL;
+    }
+    return PyValue_FromObjectSteal(result);
 }
 
 /*[clinic input]
@@ -6244,20 +6400,27 @@ _decimal_Decimal___deepcopy__(PyObject *self, PyObject *memo)
 }
 
 /*[clinic input]
+@value_function
 _decimal.Decimal.__floor__ = _decimal.Decimal.__ceil__
 
 Return the floor as an Integral.
 [clinic start generated code]*/
+#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
+#  error "@value_function Clinic output requires a core build"
+#endif
 
-static PyObject *
+static PyValue
 _decimal_Decimal___floor___impl(PyObject *self, PyTypeObject *cls)
-/*[clinic end generated code: output=e239a2f7f6514c12 input=dcc37aeceb0efb8d]*/
+/*[clinic end generated code: output=7e695ea386013103 input=2420576e43545f9d]*/
 {
     PyObject *context;
 
     decimal_state *state = PyType_GetModuleState(cls);
-    CURRENT_CONTEXT(state, context);
-    return dec_as_long(self, context, MPD_ROUND_FLOOR);
+    context = optional_context_value(state, PyValue_Borrow(PyValue_None));
+    if (context == NULL) {
+        return PyValue_NULL;
+    }
+    return dec_as_long_value(self, context, MPD_ROUND_FLOOR);
 }
 
 /* Always uses the module context */
@@ -6432,20 +6595,27 @@ _decimal_Decimal___sizeof___impl(PyObject *v)
 }
 
 /*[clinic input]
+@value_function
 _decimal.Decimal.__trunc__ = _decimal.Decimal.__ceil__
 
 Return the Integral closest to x between 0 and x.
 [clinic start generated code]*/
+#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
+#  error "@value_function Clinic output requires a core build"
+#endif
 
-static PyObject *
+static PyValue
 _decimal_Decimal___trunc___impl(PyObject *self, PyTypeObject *cls)
-/*[clinic end generated code: output=7b3decc4b636ce32 input=9b3a3a85f63b0515]*/
+/*[clinic end generated code: output=231d76dc35552d06 input=24cceab002f00ebd]*/
 {
     PyObject *context;
 
     decimal_state *state = PyType_GetModuleState(cls);
-    CURRENT_CONTEXT(state, context);
-    return dec_as_long(self, context, MPD_ROUND_DOWN);
+    context = optional_context_value(state, PyValue_Borrow(PyValue_None));
+    if (context == NULL) {
+        return PyValue_NULL;
+    }
+    return dec_as_long_value(self, context, MPD_ROUND_DOWN);
 }
 
 /* real and imag */
@@ -6587,19 +6757,33 @@ static PyType_Slot dec_slots[] = {
 
     // Number protocol
     {Py_nb_add, nm_mpd_qadd},
+    {_Py_value_nb_add, nm_mpd_qadd_value},
     {Py_nb_subtract, nm_mpd_qsub},
+    {_Py_value_nb_subtract, nm_mpd_qsub_value},
     {Py_nb_multiply, nm_mpd_qmul},
+    {_Py_value_nb_multiply, nm_mpd_qmul_value},
     {Py_nb_remainder, nm_mpd_qrem},
+    {_Py_value_nb_remainder, nm_mpd_qrem_value},
     {Py_nb_divmod, nm_mpd_qdivmod},
+    {_Py_value_nb_divmod, nm_mpd_qdivmod_value},
     {Py_nb_power, nm_mpd_qpow},
+    {_Py_value_nb_power, nm_mpd_qpow_value},
     {Py_nb_negative, nm_mpd_qminus},
+    {_Py_value_nb_negative, nm_mpd_qminus_value},
     {Py_nb_positive, nm_mpd_qplus},
+    {_Py_value_nb_positive, nm_mpd_qplus_value},
     {Py_nb_absolute, nm_mpd_qabs},
+    {_Py_value_nb_absolute, nm_mpd_qabs_value},
     {Py_nb_bool, nm_nonzero},
+    {_Py_value_nb_bool, nm_nonzero_value},
     {Py_nb_int, nm_dec_as_long},
+    {_Py_value_nb_int, nm_dec_as_long_value},
     {Py_nb_float, PyDec_AsFloat},
+    {_Py_value_nb_float, PyDec_AsFloatValue},
     {Py_nb_floor_divide, nm_mpd_qdivint},
+    {_Py_value_nb_floor_divide, nm_mpd_qdivint_value},
     {Py_nb_true_divide, nm_mpd_qdiv},
+    {_Py_value_nb_true_divide, nm_mpd_qdiv_value},
     {0, NULL},
 };
 
@@ -7308,7 +7492,8 @@ _decimal_Context_divmod_impl(PyObject *context, PyValueBorrow x,
         return PyValue_NULL;
     }
 
-    PyObject *result = _PyTuple_FromPairSteal(q, r);
+    PyObject *result = _PyTuple_FromPairTakeValue(
+        PyValue_FromObjectSteal(q), PyValue_FromObjectSteal(r));
     if (result == NULL) {
         return PyValue_NULL;
     }
@@ -8483,15 +8668,15 @@ make_libmpdec_version_info(PyTypeObject *type, int major, int minor, int micro)
     }
 
 #define SetItem(VALUE) \
-    PyStructSequence_SET_ITEM(version, pos++, VALUE); \
+    PyStructSequence_SET_VALUE(version, pos++, PyValue_FromInlineInt(VALUE)); \
     if (PyErr_Occurred()) { \
         Py_DECREF(version); \
         return NULL; \
     }
 
-    SetItem(PyLong_FromLong(major))
-    SetItem(PyLong_FromLong(minor))
-    SetItem(PyLong_FromLong(micro))
+    SetItem(major)
+    SetItem(minor)
+    SetItem(micro)
 #undef SetItem
 
     return version;
@@ -8582,12 +8767,6 @@ _decimal_exec(PyObject *m)
 
     decimal_state *state = get_module_state(m);
 
-    /* Init external C-API functions */
-    state->_py_long_multiply = PyLong_Type.tp_as_number->nb_multiply;
-    state->_py_long_floor_divide = PyLong_Type.tp_as_number->nb_floor_divide;
-    state->_py_long_power = PyLong_Type.tp_as_number->nb_power;
-
-
     /* Init types */
 #define CREATE_TYPE(mod, tp, spec) do {                               \
     tp = (PyTypeObject *)PyType_FromMetaclass(NULL, mod, spec, NULL); \
@@ -8595,6 +8774,8 @@ _decimal_exec(PyObject *m)
 } while (0)
 
     CREATE_TYPE(m, state->PyDec_Type, &dec_spec);
+    state->PyDec_Type->tp_vectorcall = _PyValue_VectorcallThunk;
+    state->PyDec_Type->tp_value_vectorcall = (_Py_valuefunc)dec_vectorcall;
     CREATE_TYPE(m, state->PyDecContext_Type, &context_spec);
     CREATE_TYPE(m, state->PyDecContextManager_Type, &ctxmanager_spec);
     CREATE_TYPE(m, state->PyDecSignalDictMixin_Type, &signaldict_spec);
@@ -8602,9 +8783,9 @@ _decimal_exec(PyObject *m)
 #undef CREATE_TYPE
 
     ASSIGN_PTR(obj, PyUnicode_FromString("decimal"));
-    CHECK_INT(PyDict_SetItemString(state->PyDec_Type->tp_dict, "__module__", obj));
-    CHECK_INT(PyDict_SetItemString(state->PyDecContext_Type->tp_dict,
-                                   "__module__", obj));
+    CHECK_INT(PyDict_SetValueString(state->PyDec_Type->tp_dict, "__module__", PyValue_FromObjectBorrow(obj)));
+    CHECK_INT(PyDict_SetValueString(state->PyDecContext_Type->tp_dict,
+                                    "__module__", PyValue_FromObjectBorrow(obj)));
     Py_CLEAR(obj);
 
 
@@ -8633,7 +8814,7 @@ _decimal_exec(PyObject *m)
     }
     ASSIGN_PTR(state->DecimalTuple, (PyTypeObject *)obj);
     ASSIGN_PTR(obj, PyUnicode_FromString("decimal"));
-    CHECK_INT(PyDict_SetItemString(state->DecimalTuple->tp_dict, "__module__", obj));
+    CHECK_INT(PyDict_SetValueString(state->DecimalTuple->tp_dict, "__module__", PyValue_FromObjectBorrow(obj)));
     Py_CLEAR(obj);
 
     /* MutableMapping */
@@ -8679,23 +8860,29 @@ _decimal_exec(PyObject *m)
 
         switch (cm->flag) {
         case MPD_Float_operation:
-            base = _PyTuple_FromPair(state->DecimalException, PyExc_TypeError);
+            base = _PyTuple_PackValues(2, (PyValueBorrow[]){
+                PyValue_FromObjectBorrow(state->DecimalException),
+                PyValue_FromObjectBorrow(PyExc_TypeError)});
             break;
         case MPD_Division_by_zero:
-            base = _PyTuple_FromPair(state->DecimalException,
-                                     PyExc_ZeroDivisionError);
+            base = _PyTuple_PackValues(2, (PyValueBorrow[]){
+                PyValue_FromObjectBorrow(state->DecimalException),
+                PyValue_FromObjectBorrow(PyExc_ZeroDivisionError)});
             break;
         case MPD_Overflow:
-            base = _PyTuple_FromPair(state->signal_map[INEXACT].ex,
-                                     state->signal_map[ROUNDED].ex);
+            base = _PyTuple_PackValues(2, (PyValueBorrow[]){
+                PyValue_FromObjectBorrow(state->signal_map[INEXACT].ex),
+                PyValue_FromObjectBorrow(state->signal_map[ROUNDED].ex)});
             break;
         case MPD_Underflow:
-            base = PyTuple_Pack(3, state->signal_map[INEXACT].ex,
-                                   state->signal_map[ROUNDED].ex,
-                                   state->signal_map[SUBNORMAL].ex);
+            base = _PyTuple_PackValues(3, (PyValueBorrow[]){
+                PyValue_FromObjectBorrow(state->signal_map[INEXACT].ex),
+                PyValue_FromObjectBorrow(state->signal_map[ROUNDED].ex),
+                PyValue_FromObjectBorrow(state->signal_map[SUBNORMAL].ex)});
             break;
         default:
-            base = PyTuple_Pack(1, state->DecimalException);
+            base = _PyTuple_PackValues(1, (PyValueBorrow[]){
+                PyValue_FromObjectBorrow(state->DecimalException)});
             break;
         }
 
@@ -8710,7 +8897,8 @@ _decimal_exec(PyObject *m)
         CHECK_INT(PyModule_AddObjectRef(m, cm->name, cm->ex));
 
         /* add to signal tuple */
-        PyTuple_SET_ITEM(state->SignalTuple, i, Py_NewRef(cm->ex));
+        PyTuple_SET_VALUE(state->SignalTuple, i,
+                          PyValue_DUP(PyValue_FromObjectBorrow(cm->ex)));
     }
 
     /*
@@ -8726,10 +8914,13 @@ _decimal_exec(PyObject *m)
     for (cm = state->cond_map+1; cm->name != NULL; cm++) {
         PyObject *base;
         if (cm->flag == MPD_Division_undefined) {
-            base = _PyTuple_FromPair(state->signal_map[0].ex, PyExc_ZeroDivisionError);
+            base = _PyTuple_PackValues(2, (PyValueBorrow[]){
+                PyValue_FromObjectBorrow(state->signal_map[0].ex),
+                PyValue_FromObjectBorrow(PyExc_ZeroDivisionError)});
         }
         else {
-            base = PyTuple_Pack(1, state->signal_map[0].ex);
+            base = _PyTuple_PackValues(1, (PyValueBorrow[]){
+                PyValue_FromObjectBorrow(state->signal_map[0].ex)});
         }
         if (base == NULL) {
             goto error; /* GCOV_NOT_REACHED */

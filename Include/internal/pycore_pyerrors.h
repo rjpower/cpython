@@ -14,6 +14,29 @@ typedef struct {
 } PyStopIterationObject;
 
 
+typedef struct {
+    PyException_HEAD
+    PyValue code;
+} PySystemExitObject;
+
+
+typedef struct {
+    PyException_HEAD
+    PyValue myerrno;
+    PyValue strerror;
+    PyValue filename;
+    PyValue filename2;
+#ifdef MS_WINDOWS
+    PyValue winerror;
+#endif
+    Py_ssize_t written;
+} PyOSErrorObject;
+typedef PyOSErrorObject PyEnvironmentErrorObject;
+#ifdef MS_WINDOWS
+typedef PyOSErrorObject PyWindowsErrorObject;
+#endif
+
+
 /* Error handling definitions */
 
 PyAPI_FUNC(_PyErr_StackItem*) _PyErr_GetTopmostException(PyThreadState *tstate);
@@ -111,6 +134,12 @@ PyAPI_FUNC(int) _PyErr_ExceptionMatches(
     PyObject *exc);
 
 PyAPI_FUNC(void) _PyErr_SetRaisedException(PyThreadState *tstate, PyObject *exc);
+
+/* Set an exception from a borrowed value, without boxing inline arguments. */
+PyAPI_FUNC(void) _PyErr_SetObjectValue(PyThreadState *tstate,
+                                      PyObject *type, PyValueBorrow value);
+#define _PyErr_SetObjectValue(T, E, V) \
+    (_PyErr_SetObjectValue)(T, E, PyValue_Borrow(V))
 
 extern void _PyErr_Restore(
     PyThreadState *tstate,

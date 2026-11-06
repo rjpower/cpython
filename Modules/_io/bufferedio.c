@@ -14,6 +14,7 @@
 #include "Python.h"
 #include "pycore_call.h"                // _PyObject_CallNoArgs()
 #include "pycore_fileutils.h"           // _PyFile_Flush
+#include "pycore_long_value.h"         // _PyValue_AsLongAndOverflow()
 #include "pycore_list.h"          // PyList_AppendValue()
 #include "pycore_object.h"              // _PyObject_GC_UNTRACK()
 #include "pycore_pyerrors.h"            // _Py_FatalErrorFormat()
@@ -905,11 +906,11 @@ _PyIO_trap_eintr(void)
     PyObject *exc = PyErr_GetRaisedException();
     PyOSErrorObject *env_err = (PyOSErrorObject *)exc;
     assert(env_err != NULL);
-    if (env_err->myerrno != NULL) {
+    if (!PyValue_IsNull(env_err->myerrno)) {
         assert(EINTR > 0 && EINTR < INT_MAX);
-        assert(PyLong_CheckExact(env_err->myerrno));
+        assert(PyValue_LongCheckExact(env_err->myerrno));
         int overflow;
-        int myerrno = PyLong_AsLongAndOverflow(env_err->myerrno, &overflow);
+        int myerrno = _PyValue_AsLongAndOverflow(env_err->myerrno, &overflow);
         PyErr_Clear();
         if (myerrno == EINTR) {
             Py_DECREF(exc);

@@ -210,6 +210,47 @@ class SysModuleTest(unittest.TestCase):
     def tearDown(self):
         test.support.reap_children()
 
+    @test.support.cpython_only
+    def test_inline_exception_normalization_result(self):
+        import _testinternalcapi
+
+        calls = []
+        class Other(Exception):
+            pass
+        class Factory(Exception):
+            def __new__(cls, value):
+                calls.append(value)
+                return Other(value)
+
+        with self.assertRaises(Other) as caught:
+            _testinternalcapi.set_inline_exception_value(Factory)
+        self.assertEqual(caught.exception.args, (42,))
+        self.assertEqual(calls, [42])
+
+    def test_exit_inline_float_output(self):
+        rc, out, err = assert_python_failure("-c", "import sys; sys.exit(1.25)")
+        self.assertEqual(rc, 1)
+        self.assertEqual(out, b"")
+        self.assertEqual(err, b"1.25\n")
+
+    def test_exit_value_home_and_context(self):
+        for value in (42, -1234, 1.25, None, (1, 2)):
+            with self.subTest(value=value):
+                try:
+                    raise ValueError("context")
+                except ValueError as context:
+                    with self.assertRaises(SystemExit) as caught:
+                        sys.exit(value)
+                    self.assertIs(caught.exception.__context__, context)
+                    self.assertEqual(caught.exception.code, value)
+        exc = SystemExit(42)
+        exc.__init__()
+        self.assertEqual(exc.code, 42)
+        exc.code = 1.25
+        self.assertEqual(exc.code, 1.25)
+        del exc.code
+        self.assertIsNone(exc.code)
+
     def test_exit(self):
         # call with two arguments
         self.assertRaises(TypeError, sys.exit, 42, 42)

@@ -9,6 +9,7 @@ import os
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from test.test_tools import imports_under_tool, skip_if_missing
 
@@ -314,6 +315,19 @@ class KernelTests(unittest.TestCase):
 
 
 class CompletenessTests(unittest.TestCase):
+    def test_suite_uses_requested_dump_directory(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp, "attempt")
+            args = check_r27.build_parser().parse_args([
+                "suite", "--build", tmp, "--dumps", str(directory),
+                "-o", str(Path(tmp, "summary.json"))])
+            with (patch.object(check_r27, "check_build_flags"),
+                  patch.object(check_r27, "run_suite", return_value=(None, 0)) as run,
+                  patch.object(check_r27, "collect", return_value=clean_summary()),
+                  patch.object(check_r27, "suite_gate", return_value=0)):
+                self.assertEqual(check_r27.cmd_suite(args), 0)
+            self.assertEqual(run.call_args.args[2], directory)
+
     def test_suite_rejects_stale_dumps(self):
         with tempfile.TemporaryDirectory() as tmp:
             directory = Path(tmp)

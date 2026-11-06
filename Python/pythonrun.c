@@ -18,6 +18,7 @@
 #include "pycore_fileutils.h"     // _PyFile_Flush
 #include "pycore_import.h"        // _PyImport_GetImportlibExternalLoader()
 #include "pycore_interp.h"        // PyInterpreterState.importlib
+#include "pycore_long_value.h"    // _PyValue_AsLongLong()
 #include "pycore_object.h"        // _PyDebug_PrintTotalRefs()
 #include "pycore_parser.h"        // _PyParser_ASTFromString()
 #include "pycore_pyerrors.h"      // _PyErr_GetRaisedException()
@@ -625,12 +626,12 @@ PyRun_SimpleStringFlags(const char *command, PyCompilerFlags *flags)
 }
 
 static int
-parse_exit_code(PyObject *code, int *exitcode_p)
+parse_exit_code(PyValueBorrow code, int *exitcode_p)
 {
-    if (PyLong_Check(code)) {
+    if (PyValue_LongCheck(code)) {
         // gh-125842: Use a long long to avoid an overflow error when `long`
         // is 32-bit. We still truncate the result to an int.
-        int exitcode = (int)PyLong_AsLongLong(code);
+        int exitcode = (int)_PyValue_AsLongLong(code);
         if (exitcode == -1 && PyErr_Occurred()) {
             // On overflow or other error, clear the exception and use -1
             // as the exit code to match historical Python behavior.
@@ -641,7 +642,7 @@ parse_exit_code(PyObject *code, int *exitcode_p)
         *exitcode_p = exitcode;
         return 1;
     }
-    else if (code == Py_None) {
+    else if (PyValue_IsNone(code)) {
         *exitcode_p = 0;
         return 1;
     }
@@ -674,20 +675,31 @@ _Py_HandleSystemExitAndKeyboardInterrupt(int *exitcode_p)
 
     PyValue code_v = _PyValue_GetAttr(PyValue_FromObjectBorrow(exc),
                                           &_Py_ID(code));
-    PyObject *code = PyValue_IsNull(code_v) ? NULL
-        : _PyValue_AsObjectStealAt(code_v, BOX_SITE_ATTRIBUTE);
-    if (code == NULL) {
+    if (PyValue_IsNull(code_v)) {
         // If the exception has no 'code' attribute, print the exception below
         PyErr_Clear();
     }
-    else if (parse_exit_code(code, exitcode_p)) {
-        Py_DECREF(code);
+    else if (parse_exit_code(PyValue_Borrow(code_v), exitcode_p)) {
+        PyValue_CLOSE(code_v);
         Py_CLEAR(exc);
         return 1;
     }
     else {
         // If code is not an int or None, print it below
-        Py_SETREF(exc, code);
+        PyObject *code;
+        if (PyValue_IsInline(code_v)) {
+            code = _PyValue_Str(code_v);
+            PyValue_CLOSE(code_v);
+        }
+        else {
+            code = PyValue_AsKnownObjectSteal(code_v);
+        }
+        if (code != NULL) {
+            Py_SETREF(exc, code);
+        }
+        else {
+            PyErr_Clear();
+        }
     }
 
     PyObject *sys_stderr;

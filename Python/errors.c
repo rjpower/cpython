@@ -16,6 +16,7 @@
 #include "pycore_tuple.h"         // PyTuple_GET_VALUE()
 #include "pycore_unicodeobject.h" // _PyUnicode_Equal()
 #include "pycore_value.h"         // PyValue_Is()
+#include "pycore_value_call.h"    // _PyValue_CallOneArg()
 #include "pycore_value_api.h"     // _PyValue_FromObjectKnown()
 
 #include "../Parser/tokenizer/tokenizer.h"
@@ -133,9 +134,9 @@ _PyErr_GetTopmostException(PyThreadState *tstate)
 }
 
 static PyObject *
-get_normalization_failure_note(PyThreadState *tstate, PyObject *exception, PyObject *value)
+get_normalization_failure_note(PyThreadState *tstate, PyObject *exception, PyValueBorrow value)
 {
-    PyObject *args = _PyValue_Repr(PyValue_FromObjectBorrow(value));
+    PyObject *args = _PyValue_Repr(value);
     if (args == NULL) {
         _PyErr_Clear(tstate);
         args = PyUnicode_FromFormat("<unknown>");
@@ -189,7 +190,7 @@ _PyErr_SetObject(PyThreadState *tstate, PyObject *exception, PyObject *value)
             PyObject *exc = _PyErr_GetRaisedException(tstate);
             assert(PyExceptionInstance_Check(exc));
 
-            PyObject *note = get_normalization_failure_note(tstate, exception, value);
+            PyObject *note = get_normalization_failure_note(tstate, exception, PyValue_FromObjectBorrow(value));
             Py_XDECREF(value);
             if (note != NULL) {
                 /* ignore errors in _PyException_AddNote - they will be overwritten below */
@@ -244,6 +245,50 @@ _PyErr_SetObject(PyThreadState *tstate, PyObject *exception, PyObject *value)
     if (PyExceptionInstance_Check(value))
         tb = PyException_GetTraceback(value);
     _PyErr_Restore(tstate, Py_NewRef(Py_TYPE(value)), value, tb);
+}
+
+void
+(_PyErr_SetObjectValue)(PyThreadState *tstate, PyObject *exception,
+                        PyValueBorrow value)
+{
+    if (!PyValue_IsInline(value)) {
+        PyObject *object = PyValue_IsNull(value)
+            ? NULL : PyValue_AsKnownObjectBorrow(value);
+        _PyErr_SetObject(tstate, exception, object);
+        return;
+    }
+    if (exception == NULL || !PyExceptionClass_Check(exception)) {
+        _PyErr_SetObject(tstate, exception, NULL);
+        return;
+    }
+    _PyErr_Clear(tstate);
+    PyValue result = _PyValue_CallOneArg(tstate,
+                                         PyValue_FromObjectBorrow(exception),
+                                         value);
+    if (!PyValue_IsNull(result) &&
+        (!PyValue_IsObject(result) ||
+         !PyExceptionInstance_Check(PyValue_AsKnownObjectBorrow(result)))) {
+        PyErr_Format(PyExc_TypeError,
+                     "calling %R should have returned an instance of "
+                     "BaseException, not %s",
+                     exception, PyValue_TYPE(result)->tp_name);
+        PyValue_CLOSE(result);
+        result = PyValue_NULL;
+    }
+    if (PyValue_IsNull(result)) {
+        PyObject *exc = _PyErr_GetRaisedException(tstate);
+        assert(PyExceptionInstance_Check(exc));
+        PyObject *note = get_normalization_failure_note(tstate, exception, value);
+        if (note != NULL) {
+            _PyException_AddNote(exc, note);
+            Py_DECREF(note);
+        }
+        _PyErr_SetRaisedException(tstate, exc);
+        return;
+    }
+    PyObject *exc = PyValue_AsKnownObjectSteal(result);
+    _PyErr_SetObject(tstate, (PyObject *)Py_TYPE(exc), exc);
+    Py_DECREF(exc);
 }
 
 void

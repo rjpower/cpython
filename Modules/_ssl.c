@@ -27,6 +27,7 @@
 
 #define Py_VALUE_CORE 1
 #include "Python.h"
+#include "pycore_pyerrors.h"      // PyOSErrorObject
 #include "pycore_critical_section.h" // Py_BEGIN_CRITICAL_SECTION()
 #include "pycore_dict.h"          // PyDict_SetValueString()
 #include "pycore_fileutils.h"     // _PyIsSelectable_fd()
@@ -485,8 +486,9 @@ static PyObject *
 SSLError_str(PyObject *op)
 {
     PyOSErrorObject *self = (PyOSErrorObject*)op;
-    if (self->strerror != NULL && PyUnicode_Check(self->strerror)) {
-        return Py_NewRef(self->strerror);
+    if (PyValue_IsObject(self->strerror) &&
+        PyUnicode_Check(PyValue_AsKnownObjectBorrow(self->strerror))) {
+        return Py_NewRef(PyValue_AsKnownObjectBorrow(self->strerror));
     }
     else
         return _PyValue_Str(PyValue_FromObjectBorrow(self->args));

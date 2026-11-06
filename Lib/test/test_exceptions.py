@@ -424,6 +424,38 @@ class ExceptionTests(unittest.TestCase):
         test_capi2()
         test_capi3()
 
+    def test_oserror_value_homes(self):
+        error = OSError(10001, 1.25, 42, None, -17)
+        self.assertEqual((error.errno, error.strerror, error.filename, error.filename2),
+                         (10001, 1.25, 42, -17))
+        self.assertEqual(str(error), "[Errno 10001] 1.25: 42 -> -17")
+        restored = pickle.loads(pickle.dumps(error))
+        self.assertEqual((restored.errno, restored.strerror, restored.filename,
+                          restored.filename2), (10001, 1.25, 42, -17))
+        del error.filename
+        self.assertIsNone(error.filename)
+        self.assertEqual(str(error), "[Errno 10001] 1.25")
+
+    def test_oserror_value_home_cycle(self):
+        class Node:
+            pass
+        node = Node()
+        error = OSError(10001, "message", node)
+        node.error = error
+        ref = weakref.ref(node)
+        del node, error
+        gc_collect()
+        self.assertIsNone(ref())
+
+    def test_oserror_format_holds_fields(self):
+        class ChangingErrno:
+            def __str__(self):
+                error.strerror = None
+                error.filename = None
+                return "custom"
+        error = OSError(ChangingErrno(), "message", "path")
+        self.assertEqual(str(error), "[Errno custom] message: 'path'")
+
     def test_WindowsError(self):
         try:
             WindowsError

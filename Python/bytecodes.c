@@ -2045,9 +2045,8 @@ dummy_func(
 
         inst(LOAD_NAME, (-- v)) {
             PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
-            PyObject *v_o = _PyEval_LoadName(tstate, frame, name);
-            ERROR_IF(v_o == NULL);
-            v = PyValue_FromObjectSteal(v_o);
+            v = _PyEval_LoadName(tstate, frame, name);
+            ERROR_IF(PyValue_IsNull(v));
         }
 
         family(LOAD_GLOBAL, INLINE_CACHE_ENTRIES_LOAD_GLOBAL) = {

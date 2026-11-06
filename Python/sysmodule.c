@@ -968,12 +968,7 @@ sys_exit_impl(PyObject *module, PyValueBorrow status)
 /*[clinic end generated code: output=1014e28c826b2c4b input=b86ca9497baa94f2]*/
 {
     /* Raise SystemExit so callers may catch it or clean up. */
-    PyObject *status_obj = _PyValue_AsObjectAt(status, BOX_SITE_PARSER);
-    if (status_obj == NULL) {
-        return PyValue_NULL;
-    }
-    PyErr_SetObject(PyExc_SystemExit, status_obj);
-    Py_DECREF(status_obj);
+    _PyErr_SetObjectValue(_PyThreadState_GET(), PyExc_SystemExit, status);
     return PyValue_NULL;
 }
 

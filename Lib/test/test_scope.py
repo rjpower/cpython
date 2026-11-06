@@ -7,6 +7,15 @@ from test.support import gc_collect
 
 class ScopeTests(unittest.TestCase):
 
+    def test_load_name_globals_dict_subclass(self):
+        class Globals(dict):
+            def __getitem__(self, key):
+                raise AssertionError("globals lookup called __getitem__")
+
+        namespace = {}
+        exec("y = x", Globals(x=17), namespace)
+        self.assertEqual(namespace["y"], 17)
+
     def testSimpleNesting(self):
 
         def make_adder(x):

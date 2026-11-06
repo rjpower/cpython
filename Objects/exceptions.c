@@ -845,14 +845,14 @@ SystemExit_init(PyObject *op, PyObject *args, PyObject *kwds)
     if (size == 0)
         return 0;
     if (size == 1) {
-        PyObject *code = _PyValue_AsObjectAt(PyTuple_GET_VALUE(args, 0), BOX_SITE_TUPLE);
-        if (code == NULL) {
-            return -1;
-        }
-        Py_XSETREF(self->code, code);
+        PyValue old = self->code;
+        self->code = PyValue_DUP(PyTuple_GET_VALUE(args, 0));
+        PyValue_XCLOSE(old);
     }
     else { /* size > 1 */
-        Py_XSETREF(self->code, Py_NewRef(args));
+        PyValue old = self->code;
+        self->code = PyValue_DUP(PyValue_FromObjectBorrow(args));
+        PyValue_XCLOSE(old);
     }
     return 0;
 }
@@ -861,7 +861,7 @@ static int
 SystemExit_clear(PyObject *op)
 {
     PySystemExitObject *self = PySystemExitObject_CAST(op);
-    Py_CLEAR(self->code);
+    PyValue_CLEAR(self->code);
     return BaseException_clear(op);
 }
 
@@ -877,12 +877,12 @@ static int
 SystemExit_traverse(PyObject *op, visitproc visit, void *arg)
 {
     PySystemExitObject *self = PySystemExitObject_CAST(op);
-    Py_VISIT(self->code);
+    _Py_VISIT_VALUE(self->code);
     return BaseException_traverse(op, visit, arg);
 }
 
 static PyMemberDef SystemExit_members[] = {
-    {"code", _Py_T_OBJECT, offsetof(PySystemExitObject, code), 0,
+    {"code", _Py_T_VALUE, offsetof(PySystemExitObject, code), 0,
         PyDoc_STR("exception code")},
     {NULL}  /* Sentinel */
 };
@@ -2159,122 +2159,109 @@ PyOSErrorObject_CAST(PyObject *self)
  * which allows passing in a second filename.)
  */
 
-/* This function doesn't cleanup on error, the caller should */
-static int
-oserror_parse_args(PyObject **p_args,
-                   PyObject **myerrno, PyObject **strerror,
-                   PyObject **filename, PyObject **filename2
-#ifdef MS_WINDOWS
-                   , PyObject **winerror
-#endif
-                  )
+typedef struct {
+    PyValue myerrno, strerror, filename, filename2, winerror;
+} OSErrorArgs;
+
+static void
+oserror_args_clear(OSErrorArgs *values)
 {
-    Py_ssize_t nargs;
-    PyObject *args = *p_args;
-#ifndef MS_WINDOWS
-    /*
-     * ignored on non-Windows platforms,
-     * but parsed so OSError has a consistent signature
-     */
-    PyObject *_winerror = NULL;
-    PyObject **winerror = &_winerror;
-#endif /* MS_WINDOWS */
-
-    nargs = PyTuple_GET_SIZE(args);
-
-    if (nargs >= 2 && nargs <= 5) {
-        if (!PyArg_UnpackTuple(args, "OSError", 2, 5,
-                               myerrno, strerror,
-                               filename, winerror, filename2))
-            return -1;
-#ifdef MS_WINDOWS
-        if (*winerror && PyLong_Check(*winerror)) {
-            long errcode, winerrcode;
-            PyObject *newargs;
-            Py_ssize_t i;
-
-            winerrcode = PyLong_AsLong(*winerror);
-            if (winerrcode == -1 && PyErr_Occurred())
-                return -1;
-            errcode = winerror_to_errno(winerrcode);
-            *myerrno = PyLong_FromLong(errcode);
-            if (!*myerrno)
-                return -1;
-            newargs = PyTuple_New(nargs);
-            if (!newargs)
-                return -1;
-            PyTuple_SET_ITEM(newargs, 0, *myerrno);
-            for (i = 1; i < nargs; i++) {
-                PyValue val_v = PyTuple_GetValue(args, i);
-                PyObject *val = PyValue_IsNull(val_v) ? NULL : _PyValue_AsObjectAt(val_v, BOX_SITE_TUPLE);
-                PyValue_XCLOSE(val_v);
-                if (val == NULL) {
-                    Py_DECREF(newargs);
-                    return -1;
-                }
-                PyTuple_SET_ITEM(newargs, i, val);
-            }
-            Py_DECREF(args);
-            args = *p_args = newargs;
-        }
-#endif /* MS_WINDOWS */
-    }
-
-    return 0;
+    PyValue_XCLOSE(values->myerrno);
+    PyValue_XCLOSE(values->strerror);
+    PyValue_XCLOSE(values->filename);
+    PyValue_XCLOSE(values->filename2);
+    PyValue_XCLOSE(values->winerror);
 }
 
 static int
-oserror_init(PyOSErrorObject *self, PyObject **p_args,
-             PyObject *myerrno, PyObject *strerror,
-             PyObject *filename, PyObject *filename2
-#ifdef MS_WINDOWS
-             , PyObject *winerror
-#endif
-             )
+oserror_parse_args(PyObject **p_args, OSErrorArgs *values)
 {
     PyObject *args = *p_args;
     Py_ssize_t nargs = PyTuple_GET_SIZE(args);
+    if (nargs < 2 || nargs > 5) {
+        return 0;
+    }
+    PyValue *fields[] = {&values->myerrno, &values->strerror,
+                         &values->filename, &values->winerror,
+                         &values->filename2};
+    for (Py_ssize_t i = 0; i < nargs; i++) {
+        *fields[i] = PyTuple_GetValue(args, i);
+        if (PyValue_IsNull(*fields[i])) {
+            return -1;
+        }
+    }
+#ifdef MS_WINDOWS
+    if (!PyValue_IsNull(values->winerror) && PyValue_LongCheck(values->winerror)) {
+        long winerrcode = _PyValue_AsLong(values->winerror);
+        if (winerrcode == -1 && PyErr_Occurred()) {
+            return -1;
+        }
+        PyValue error = PyValue_FromInt64(winerror_to_errno(winerrcode));
+        if (PyValue_IsNull(error)) {
+            return -1;
+        }
+        PyObject *newargs = PyTuple_New(nargs);
+        if (newargs == NULL) {
+            PyValue_CLOSE(error);
+            return -1;
+        }
+        PyTuple_SET_VALUE(newargs, 0, PyValue_DUP(error));
+        for (Py_ssize_t i = 1; i < nargs; i++) {
+            PyTuple_SET_VALUE(newargs, i, PyValue_DUP(*fields[i]));
+        }
+        PyValue_CLOSE(values->myerrno);
+        values->myerrno = error;
+        Py_SETREF(*p_args, newargs);
+    }
+#endif
+    return 0;
+}
 
-    /* self->filename will remain Py_None otherwise */
-    if (filename && filename != Py_None) {
-        if (Py_IS_TYPE(self, (PyTypeObject *) PyExc_BlockingIOError) &&
-            PyNumber_Check(filename)) {
-            /* BlockingIOError's 3rd argument can be the number of
-             * characters written.
-             */
-            self->written = _PyValue_AsSsize_t(PyValue_FromObjectBorrow(filename), PyExc_ValueError);
-            if (self->written == -1 && PyErr_Occurred())
+static void
+oserror_replace(PyValue *home, PyValueBorrow value)
+{
+    PyValue old = *home;
+    *home = PyValue_IsNull(value) ? PyValue_NULL : PyValue_DUP(value);
+    PyValue_XCLOSE(old);
+}
+
+static int
+oserror_init(PyOSErrorObject *self, PyObject **p_args, OSErrorArgs *values)
+{
+    PyObject *args = *p_args;
+    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
+    PyValue filename = values->filename;
+    if (!PyValue_IsNull(filename) && !PyValue_IsNone(filename)) {
+        int is_number = PyValue_IsInline(filename) ||
+            (PyValue_IsObject(filename) && PyNumber_Check(PyValue_AsKnownObjectBorrow(filename)));
+        if (Py_IS_TYPE(self, (PyTypeObject *)PyExc_BlockingIOError) && is_number) {
+            self->written = _PyValue_AsSsize_t(filename, PyExc_ValueError);
+            if (self->written == -1 && PyErr_Occurred()) {
                 return -1;
+            }
         }
         else {
-            Py_XSETREF(self->filename, Py_NewRef(filename));
-
-            if (filename2 && filename2 != Py_None) {
-                Py_XSETREF(self->filename2, Py_NewRef(filename2));
+            oserror_replace(&self->filename, PyValue_Borrow(filename));
+            if (!PyValue_IsNull(values->filename2) && !PyValue_IsNone(values->filename2)) {
+                oserror_replace(&self->filename2, PyValue_Borrow(values->filename2));
             }
-
             if (nargs >= 2 && nargs <= 5) {
-                /* filename, filename2, and winerror are removed from the args tuple
-                   (for compatibility purposes, see test_exceptions.py) */
                 PyObject *subslice = PyTuple_GetSlice(args, 0, 2);
-                if (!subslice)
+                if (subslice == NULL) {
                     return -1;
-
-                Py_DECREF(args);  /* replacing args */
-                *p_args = args = subslice;
+                }
+                Py_SETREF(*p_args, subslice);
+                args = *p_args;
             }
         }
     }
-    Py_XSETREF(self->myerrno, Py_XNewRef(myerrno));
-    Py_XSETREF(self->strerror, Py_XNewRef(strerror));
+    oserror_replace(&self->myerrno, PyValue_Borrow(values->myerrno));
+    oserror_replace(&self->strerror, PyValue_Borrow(values->strerror));
 #ifdef MS_WINDOWS
-    Py_XSETREF(self->winerror, Py_XNewRef(winerror));
+    oserror_replace(&self->winerror, PyValue_Borrow(values->winerror));
 #endif
-
-    /* Steals the reference to args */
     Py_XSETREF(self->args, args);
-    *p_args = args = NULL;
-
+    *p_args = NULL;
     return 0;
 }
 
@@ -2307,11 +2294,7 @@ static PyObject *
 OSError_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
 {
     PyOSErrorObject *self = NULL;
-    PyObject *myerrno = NULL, *strerror = NULL;
-    PyObject *filename = NULL, *filename2 = NULL;
-#ifdef MS_WINDOWS
-    PyObject *winerror = NULL;
-#endif
+    OSErrorArgs values = {0};
 
     Py_INCREF(args);
 
@@ -2319,20 +2302,15 @@ OSError_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
         if (!_PyArg_NoKeywords(type->tp_name, kwds))
             goto error;
 
-        if (oserror_parse_args(&args, &myerrno, &strerror,
-                               &filename, &filename2
-#ifdef MS_WINDOWS
-                               , &winerror
-#endif
-            ))
+        if (oserror_parse_args(&args, &values))
             goto error;
 
         struct _Py_exc_state *state = get_exc_state();
-        if (myerrno && PyLong_Check(myerrno) &&
+        if (!PyValue_IsNull(values.myerrno) && PyValue_LongCheck(values.myerrno) &&
             state->errnomap && (PyObject *) type == PyExc_OSError) {
             PyValue newtype_v;
             int rc = PyDict_GetValue(state->errnomap,
-                                     PyValue_FromObjectBorrow(myerrno), &newtype_v);
+                                     PyValue_Borrow(values.myerrno), &newtype_v);
             PyObject *newtype = NULL;
             if (rc > 0) {
                 newtype = _PyValue_AsObjectAt(newtype_v, BOX_SITE_DICT);
@@ -2361,11 +2339,7 @@ OSError_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
     self->written = -1;
 
     if (!oserror_use_init(type)) {
-        if (oserror_init(self, &args, myerrno, strerror, filename, filename2
-#ifdef MS_WINDOWS
-                         , winerror
-#endif
-            ))
+        if (oserror_init(self, &args, &values))
             goto error;
     }
     else {
@@ -2375,10 +2349,12 @@ OSError_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
     }
 
     Py_XDECREF(args);
+    oserror_args_clear(&values);
     return (PyObject *) self;
 
 error:
     Py_XDECREF(args);
+    oserror_args_clear(&values);
     Py_XDECREF(self);
     return NULL;
 }
@@ -2387,11 +2363,7 @@ static int
 OSError_init(PyObject *op, PyObject *args, PyObject *kwds)
 {
     PyOSErrorObject *self = PyOSErrorObject_CAST(op);
-    PyObject *myerrno = NULL, *strerror = NULL;
-    PyObject *filename = NULL, *filename2 = NULL;
-#ifdef MS_WINDOWS
-    PyObject *winerror = NULL;
-#endif
+    OSErrorArgs values = {0};
 
     if (!oserror_use_init(Py_TYPE(self)))
         /* Everything already done in OSError_new */
@@ -2401,23 +2373,17 @@ OSError_init(PyObject *op, PyObject *args, PyObject *kwds)
         return -1;
 
     Py_INCREF(args);
-    if (oserror_parse_args(&args, &myerrno, &strerror, &filename, &filename2
-#ifdef MS_WINDOWS
-                           , &winerror
-#endif
-        ))
+    if (oserror_parse_args(&args, &values))
         goto error;
 
-    if (oserror_init(self, &args, myerrno, strerror, filename, filename2
-#ifdef MS_WINDOWS
-                     , winerror
-#endif
-        ))
+    if (oserror_init(self, &args, &values))
         goto error;
 
+    oserror_args_clear(&values);
     return 0;
 
 error:
+    oserror_args_clear(&values);
     Py_DECREF(args);
     return -1;
 }
@@ -2426,12 +2392,12 @@ static int
 OSError_clear(PyObject *op)
 {
     PyOSErrorObject *self = PyOSErrorObject_CAST(op);
-    Py_CLEAR(self->myerrno);
-    Py_CLEAR(self->strerror);
-    Py_CLEAR(self->filename);
-    Py_CLEAR(self->filename2);
+    PyValue_CLEAR(self->myerrno);
+    PyValue_CLEAR(self->strerror);
+    PyValue_CLEAR(self->filename);
+    PyValue_CLEAR(self->filename2);
 #ifdef MS_WINDOWS
-    Py_CLEAR(self->winerror);
+    PyValue_CLEAR(self->winerror);
 #endif
     return BaseException_clear(op);
 }
@@ -2448,59 +2414,79 @@ static int
 OSError_traverse(PyObject *op, visitproc visit, void *arg)
 {
     PyOSErrorObject *self = PyOSErrorObject_CAST(op);
-    Py_VISIT(self->myerrno);
-    Py_VISIT(self->strerror);
-    Py_VISIT(self->filename);
-    Py_VISIT(self->filename2);
+    _Py_VISIT_VALUE(self->myerrno);
+    _Py_VISIT_VALUE(self->strerror);
+    _Py_VISIT_VALUE(self->filename);
+    _Py_VISIT_VALUE(self->filename2);
 #ifdef MS_WINDOWS
-    Py_VISIT(self->winerror);
+    _Py_VISIT_VALUE(self->winerror);
 #endif
     return BaseException_traverse(op, visit, arg);
+}
+
+static PyObject *
+oserror_format(PyValueBorrow error, PyValueBorrow message,
+               PyValueBorrow filename, PyValueBorrow filename2,
+               const char *prefix)
+{
+    PyValue error_owner = PyValue_XDUP(error);
+    PyValue message_owner = PyValue_XDUP(message);
+    PyValue file_owner = PyValue_XDUP(filename);
+    PyValue file2_owner = PyValue_XDUP(filename2);
+    PyObject *error_str = NULL, *message_str = NULL;
+    PyObject *file_repr = NULL, *file2_repr = NULL, *result = NULL;
+    if (PyValue_IsNull(file_owner)) {
+        PyValue_CLEAR(file2_owner);
+    }
+    error_str = _PyValue_Str(PyValue_IsNull(error_owner) ? PyValue_None : error_owner);
+    if (error_str == NULL) goto done;
+    message_str = _PyValue_Str(PyValue_IsNull(message_owner) ? PyValue_None : message_owner);
+    if (message_str == NULL) goto done;
+    if (!PyValue_IsNull(file_owner)) {
+        file_repr = _PyValue_Repr(file_owner);
+        if (file_repr == NULL) goto done;
+    }
+    if (!PyValue_IsNull(file2_owner)) {
+        file2_repr = _PyValue_Repr(file2_owner);
+        if (file2_repr == NULL) goto done;
+    }
+    if (file2_repr != NULL) {
+        result = PyUnicode_FromFormat("[%s %U] %U: %U -> %U", prefix, error_str, message_str, file_repr, file2_repr);
+    }
+    else if (file_repr != NULL) {
+        result = PyUnicode_FromFormat("[%s %U] %U: %U", prefix, error_str, message_str, file_repr);
+    }
+    else {
+        result = PyUnicode_FromFormat("[%s %U] %U", prefix, error_str, message_str);
+    }
+done:
+    Py_XDECREF(error_str);
+    Py_XDECREF(message_str);
+    Py_XDECREF(file_repr);
+    Py_XDECREF(file2_repr);
+    PyValue_XCLOSE(error_owner);
+    PyValue_XCLOSE(message_owner);
+    PyValue_XCLOSE(file_owner);
+    PyValue_XCLOSE(file2_owner);
+    return result;
 }
 
 static PyObject *
 OSError_str(PyObject *op)
 {
     PyOSErrorObject *self = PyOSErrorObject_CAST(op);
-#define OR_NONE(x) ((x)?(x):Py_None)
 #ifdef MS_WINDOWS
-    /* If available, winerror has the priority over myerrno */
-    if (self->winerror && self->filename) {
-        if (self->filename2) {
-            return PyUnicode_FromFormat("[WinError %S] %S: %R -> %R",
-                                        OR_NONE(self->winerror),
-                                        OR_NONE(self->strerror),
-                                        self->filename,
-                                        self->filename2);
-        } else {
-            return PyUnicode_FromFormat("[WinError %S] %S: %R",
-                                        OR_NONE(self->winerror),
-                                        OR_NONE(self->strerror),
-                                        self->filename);
-        }
+    if (!PyValue_IsNull(self->winerror) &&
+        (!PyValue_IsNull(self->filename) || !PyValue_IsNull(self->strerror))) {
+        return oserror_format(PyValue_Borrow(self->winerror), PyValue_Borrow(self->strerror),
+                              PyValue_Borrow(self->filename), PyValue_Borrow(self->filename2), "WinError");
     }
-    if (self->winerror && self->strerror)
-        return PyUnicode_FromFormat("[WinError %S] %S",
-                                    self->winerror ? self->winerror: Py_None,
-                                    self->strerror ? self->strerror: Py_None);
 #endif
-    if (self->filename) {
-        if (self->filename2) {
-            return PyUnicode_FromFormat("[Errno %S] %S: %R -> %R",
-                                        OR_NONE(self->myerrno),
-                                        OR_NONE(self->strerror),
-                                        self->filename,
-                                        self->filename2);
-        } else {
-            return PyUnicode_FromFormat("[Errno %S] %S: %R",
-                                        OR_NONE(self->myerrno),
-                                        OR_NONE(self->strerror),
-                                        self->filename);
-        }
+    if (!PyValue_IsNull(self->filename) ||
+        (!PyValue_IsNull(self->myerrno) && !PyValue_IsNull(self->strerror))) {
+        return oserror_format(PyValue_Borrow(self->myerrno), PyValue_Borrow(self->strerror),
+                              PyValue_Borrow(self->filename), PyValue_Borrow(self->filename2), "Errno");
     }
-    if (self->myerrno && self->strerror)
-        return PyUnicode_FromFormat("[Errno %S] %S",
-                                    self->myerrno, self->strerror);
     return BaseException_str(op);
 }
 
@@ -2513,32 +2499,17 @@ OSError_reduce(PyObject *op, PyObject *Py_UNUSED(ignored))
 
     /* self->args is only the first two real arguments if there was a
      * file name given to OSError. */
-    if (PyTuple_GET_SIZE(args) == 2 && self->filename) {
-        Py_ssize_t size = self->filename2 ? 5 : 3;
+    if (PyTuple_GET_SIZE(args) == 2 && !PyValue_IsNull(self->filename)) {
+        Py_ssize_t size = !PyValue_IsNull(self->filename2) ? 5 : 3;
         args = PyTuple_New(size);
         if (!args)
             return NULL;
 
-        PyValue errno_v = PyTuple_GetValue(self->args, 0);
-        PyObject *errno_obj = PyValue_IsNull(errno_v) ? NULL : _PyValue_AsObjectAt(errno_v, BOX_SITE_TUPLE);
-        PyValue_XCLOSE(errno_v);
-        if (errno_obj == NULL) {
-            Py_DECREF(args);
-            return NULL;
-        }
-        PyValue strerror_v = PyTuple_GetValue(self->args, 1);
-        PyObject *strerror_obj = PyValue_IsNull(strerror_v) ? NULL : _PyValue_AsObjectAt(strerror_v, BOX_SITE_TUPLE);
-        PyValue_XCLOSE(strerror_v);
-        if (strerror_obj == NULL) {
-            Py_DECREF(errno_obj);
-            Py_DECREF(args);
-            return NULL;
-        }
-        PyTuple_SET_VALUE(args, 0, PyValue_PrepareOwned(errno_obj));
-        PyTuple_SET_VALUE(args, 1, PyValue_PrepareOwned(strerror_obj));
-        PyTuple_SET_VALUE(args, 2, PyValue_DUP(PyValue_FromObjectBorrow(self->filename)));
+        PyTuple_SET_VALUE(args, 0, PyValue_DUP(PyTuple_GET_VALUE(self->args, 0)));
+        PyTuple_SET_VALUE(args, 1, PyValue_DUP(PyTuple_GET_VALUE(self->args, 1)));
+        PyTuple_SET_VALUE(args, 2, PyValue_DUP(self->filename));
 
-        if (self->filename2) {
+        if (!PyValue_IsNull(self->filename2)) {
             /*
              * This tuple is essentially used as OSError(*args).
              * So, to recreate filename2, we need to pass in
@@ -2547,7 +2518,7 @@ OSError_reduce(PyObject *op, PyObject *Py_UNUSED(ignored))
             PyTuple_SET_VALUE(args, 3, PyValue_DUP(_PyValue_FromObjectKnown(Py_None)));
 
             /* filename2 */
-            PyTuple_SET_VALUE(args, 4, PyValue_DUP(PyValue_FromObjectBorrow(self->filename2)));
+            PyTuple_SET_VALUE(args, 4, PyValue_DUP(self->filename2));
         }
     } else
         Py_INCREF(args);
@@ -2592,16 +2563,16 @@ OSError_written_set(PyObject *op, PyObject *arg, void *context)
 }
 
 static PyMemberDef OSError_members[] = {
-    {"errno", _Py_T_OBJECT, offsetof(PyOSErrorObject, myerrno), 0,
+    {"errno", _Py_T_VALUE, offsetof(PyOSErrorObject, myerrno), 0,
         PyDoc_STR("POSIX exception code")},
-    {"strerror", _Py_T_OBJECT, offsetof(PyOSErrorObject, strerror), 0,
+    {"strerror", _Py_T_VALUE, offsetof(PyOSErrorObject, strerror), 0,
         PyDoc_STR("exception strerror")},
-    {"filename", _Py_T_OBJECT, offsetof(PyOSErrorObject, filename), 0,
+    {"filename", _Py_T_VALUE, offsetof(PyOSErrorObject, filename), 0,
         PyDoc_STR("exception filename")},
-    {"filename2", _Py_T_OBJECT, offsetof(PyOSErrorObject, filename2), 0,
+    {"filename2", _Py_T_VALUE, offsetof(PyOSErrorObject, filename2), 0,
         PyDoc_STR("second exception filename")},
 #ifdef MS_WINDOWS
-    {"winerror", _Py_T_OBJECT, offsetof(PyOSErrorObject, winerror), 0,
+    {"winerror", _Py_T_VALUE, offsetof(PyOSErrorObject, winerror), 0,
         PyDoc_STR("Win32 exception code")},
 #endif
     {NULL}  /* Sentinel */

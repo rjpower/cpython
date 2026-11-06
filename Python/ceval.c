@@ -5041,51 +5041,41 @@ _PyEval_GetAwaitable(PyObject *iterable, int oparg)
     return iter;
 }
 
-PyObject *
+PyValue
 _PyEval_LoadName(PyThreadState *tstate, _PyInterpreterFrame *frame, PyObject *name)
 {
-    PyObject *value;
     PyObject *namespace = frame->f_locals;
     if (namespace == NULL) {
-        _PyErr_SetString(tstate, PyExc_SystemError,
-                            "no locals found");
-        return NULL;
+        _PyErr_SetString(tstate, PyExc_SystemError, "no locals found");
+        return PyValue_NULL;
     }
-    if (PyMapping_GetOptionalItem(namespace, name, &value) < 0) {
-        return NULL;
-    }
-    if (value != NULL) {
-        goto found;
+    _PyStatusValue found = value_load_from_dict(tstate, namespace, name);
+    if (found.status != 0) {
+        return found.value;
     }
     namespace = frame->f_globals;
-    PyValue value_v;
-    int global_found = PyDict_GetValue(
-        namespace, PyValue_FromObjectBorrow(name), &value_v);
-    if (global_found < 0) {
-        return NULL;
+    found.status = PyDict_GetValue(namespace, PyValue_FromObjectBorrow(name),
+                                   &found.value);
+    if (found.status < 0) {
+        return PyValue_NULL;
     }
-    if (global_found > 0) {
-        value = _PyValue_AsObjectStealAt(value_v, BOX_SITE_DICT);
-        if (value == NULL) {
-            return NULL;
+    if (found.status > 0) {
+        if (PyValue_IsObject(found.value) &&
+            PyLazyImport_CheckExact(PyValue_AsKnownObjectBorrow(found.value))) {
+            PyObject *reified = _PyLazyImport_Reify(
+                tstate, PyValue_AsKnownObjectBorrow(found.value), name, namespace);
+            PyValue_CLOSE(found.value);
+            return _PyValue_FromObjectResult(reified);
         }
-        goto found;
+        return found.value;
     }
     namespace = frame->f_builtins;
-    if (PyMapping_GetOptionalItem(namespace, name, &value) < 0) {
-        return NULL;
+    found = value_load_from_dict(tstate, namespace, name);
+    if (found.status != 0) {
+        return found.value;
     }
-    if (value == NULL) {
-        _PyEval_FormatExcCheckArg(
-                    tstate, PyExc_NameError,
-                            NAME_ERROR_MSG, name);
-        return NULL;
-    }
-found:
-    if (PyLazyImport_CheckExact(value)) {
-        Py_SETREF(value, _PyLazyImport_Reify(tstate, value, name, namespace));
-    }
-    return value;
+    _PyEval_FormatExcCheckArg(tstate, PyExc_NameError, NAME_ERROR_MSG, name);
+    return PyValue_NULL;
 }
 
 /* Out of line, as when it was exported. */

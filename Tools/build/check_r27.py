@@ -893,7 +893,7 @@ def cmd_suite(args):
     # Absolute: the workers run in other directories.
     build = Path(args.build).resolve()
     check_build_flags(build)
-    directory = build / "r27-dumps"
+    directory = Path(args.dumps).resolve() if args.dumps else build / "r27-dumps"
     folded, rc = run_suite(build, args.jobs, directory, args.regrtest)
     cdb = load_cdb(args.cdb) if args.cdb else None
     summary = collect(directory, args.src, cdb, folded=folded, delete=True,
@@ -1022,6 +1022,7 @@ def build_parser():
 
     sp = common(sub.add_parser("suite", help="run regrtest on a stats build"))
     sp.add_argument("--build", required=True)
+    sp.add_argument("--dumps", help="fresh stats directory for this attempt")
     sp.add_argument("-j", "--jobs", type=int, default=os.cpu_count() or 1)
     suite_options(sp)
     sp.add_argument("regrtest", nargs="*", help="regrtest arguments after --")

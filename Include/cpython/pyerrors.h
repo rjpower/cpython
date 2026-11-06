@@ -53,23 +53,6 @@ typedef struct {
 
 typedef struct {
     PyException_HEAD
-    PyObject *code;
-} PySystemExitObject;
-
-typedef struct {
-    PyException_HEAD
-    PyObject *myerrno;
-    PyObject *strerror;
-    PyObject *filename;
-    PyObject *filename2;
-#ifdef MS_WINDOWS
-    PyObject *winerror;
-#endif
-    Py_ssize_t written;   /* only for BlockingIOError, -1 otherwise */
-} PyOSErrorObject;
-
-typedef struct {
-    PyException_HEAD
     PyObject *name;
 } PyNameErrorObject;
 
@@ -78,12 +61,6 @@ typedef struct {
     PyObject *obj;
     PyObject *name;
 } PyAttributeErrorObject;
-
-/* Compatibility typedefs */
-typedef PyOSErrorObject PyEnvironmentErrorObject;
-#ifdef MS_WINDOWS
-typedef PyOSErrorObject PyWindowsErrorObject;
-#endif
 
 /* Context manipulation (PEP 3134) */
 

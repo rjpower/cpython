@@ -4207,7 +4207,16 @@ compile_without_copyprop_kill(PyObject *self, PyObject *args)
     return code;
 }
 
+static PyObject *
+set_inline_exception_value(PyObject *self, PyObject *exception)
+{
+    _PyErr_SetObjectValue(_PyThreadState_GET(), exception,
+                          PyValue_FromInlineInt(42));
+    return NULL;
+}
+
 static PyMethodDef module_functions[] = {
+    {"set_inline_exception_value", set_inline_exception_value, METH_O},
     {"compile_without_copyprop_kill", compile_without_copyprop_kill,
      METH_VARARGS, NULL},
     {"repr_guard_probe", repr_guard_probe, METH_O},

@@ -14003,11 +14003,10 @@
             (void)oparg;
             PyValue v;
             PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
-            PyObject *v_o = _PyEval_LoadName(tstate, frame, name);
-            if (v_o == NULL) {
+            v = _PyEval_LoadName(tstate, frame, name);
+            if (PyValue_IsNull(v)) {
                 JUMP_TO_LABEL(error);
             }
-            v = PyValue_FromObjectSteal(v_o);
             IR_STORE_DST(IR_A(ir_word), v);
             if (!PyValue_IsNull(ir_displaced) &&
                 finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {

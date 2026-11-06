@@ -1,0 +1,706 @@
+diff --git a/Lib/test/libregrtest/worker.py b/Lib/test/libregrtest/worker.py
+index f063d6d..7fa79f9 100644
+--- a/Lib/test/libregrtest/worker.py
++++ b/Lib/test/libregrtest/worker.py
+@@ -79,23 +79,42 @@ def _launch(event: str, args: tuple) -> _Launch | None:
+         case 'os.spawn':
+             _mode, executable, argv, env = args
+         case 'os.system':
+-            command = _text(args[0])
+-            return _Launch('opaque-shell', None, None, command, dict(os.environ))
++            command_arg = args[0]
++            command = (_text(command_arg)
++                       if type(command_arg) in (str, bytes)
++                       else 'opaque shell command shape')
++            return _Launch('opaque-shell', None, None, command, {})
+         case _:
+             return None
+ 
+-    if isinstance(argv, (str, bytes)):
++    if type(argv) in (str, bytes):
+         # Some platforms expose command strings directly. Never parse them as
+         # argv: a shell command does not identify the process it may start.
+-        return _Launch('opaque-shell', _text(executable) if executable else None,
+-                       None, _text(argv), dict(os.environ if env is None else env))
+-    if isinstance(argv, os.PathLike):
+-        argv = [_text(argv)]
++        executable_text = (_text(executable)
++                           if type(executable) in (str, bytes) else None)
++        return _Launch('opaque-shell', executable_text, None, _text(argv), {})
++    if type(argv) not in (list, tuple) or any(
++            type(arg) not in (str, bytes) for arg in argv):
++        return _Launch('opaque-shell', None, None,
++                       'opaque launch argument shape', {})
+     argv = [_text(arg) for arg in argv]
+     if executable is None:
+         executable = argv[0] if argv else None
++    if executable is not None and type(executable) not in (str, bytes):
++        return _Launch('structured', None, argv,
++                       'opaque executable argument shape', {})
+     executable = _text(executable) if executable is not None else None
+-    env = dict(os.environ if env is None else env)
++    if env is None:
++        env = dict(os.environ)
++    elif type(env) is dict:
++        if any(type(key) not in (str, bytes) or
++               type(value) not in (str, bytes) for key, value in env.items()):
++            return _Launch('structured', None, argv,
++                           'opaque environment values', {})
++        env = dict(env)
++    else:
++        return _Launch('structured', None, argv,
++                       'opaque environment mapping', {})
+     env = {_text(key): _text(value) for key, value in env.items()}
+     return _Launch('structured', executable, argv, command, env)
+ 
+@@ -111,9 +130,14 @@ def _classify_launch(launch: _Launch, products: list[str]):
+     if launch.shape != 'structured' or executable is None:
+         return None, launch.env, 'opaque shell command'
+ 
+-    executable_path = os.path.realpath(executable)
+-    if executable in products or executable_path in products:
+-        return launch.argv, launch.env, None
++    if os.path.isabs(executable):
++        executable_path = os.path.realpath(executable)
++        if executable in products or executable_path in products:
++            return launch.argv, launch.env, None
++    else:
++        # PATH and cwd can make any relative name an alias of this build.
++        # Until child-image receipts exist, do not silently claim otherwise.
++        return None, launch.env, 'ambiguous relative executable'
+ 
+     if os.path.basename(executable).lower() in _SHELL_NAMES:
+         return None, launch.env, 'opaque shell command'
+@@ -142,6 +166,8 @@ def _classify_launch(launch: _Launch, products: list[str]):
+     if index >= len(argv):
+         return None, launch.env, 'env command has no executable'
+     target = argv[index:]
++    if not os.path.isabs(target[0]):
++        return None, launch.env, 'ambiguous relative env target'
+     target_path = os.path.realpath(target[0])
+     if target[0] not in products and target_path not in products:
+         return None, launch.env, 'unresolved env target'
+@@ -193,7 +219,8 @@ def _write_record(path: str, record: dict[str, Any]) -> None:
+     line = (json.dumps(record) + '\n').encode()
+     fd = os.open(path, os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o644)
+     try:
+-        os.write(fd, line)
++        if os.write(fd, line) != len(line):
++            raise OSError("short write while recording pystats launch")
+     finally:
+         os.close(fd)
+ 
+diff --git a/Lib/test/test_tools/test_check_r27.py b/Lib/test/test_tools/test_check_r27.py
+index cf9f4f5..9429ca6 100644
+--- a/Lib/test/test_tools/test_check_r27.py
++++ b/Lib/test/test_tools/test_check_r27.py
+@@ -188,15 +188,17 @@ class FoldTests(unittest.TestCase):
+     def test_dir_ignores_tmp_and_deletes_when_asked(self):
+         with tempfile.TemporaryDirectory() as tmp:
+             d = Path(tmp)
+-            (d / "a.txt").write_text("Stats resets: 1\nStats process: pid=1 tag=t\n")
+-            (d / "a.run").write_text("pid: 1\n")
++            (d / "a.txt").write_text("Stats process: pid=1 tag=t\nStats resets: 1\n")
++            (d / "a.done").write_text(
++                'pid: 1\nppid: 0\ntag: t\nargv: ["python"]\n')
+             (d / "b.tmp").write_text("Stats resets: 9\n")
+             folded = check_r27.Folded()
+             folded.fold_dir(d, delete=True)
+             folded.read_markers(d)
+             self.assertEqual((folded.dumps, folded.resets), (1, 1))
+             self.assertEqual(folded.leftover_run, [])
+-            self.assertEqual([p.name for p in d.iterdir()], ["b.tmp"])
++            self.assertTrue(folded.identity_complete)
++            self.assertEqual({p.name for p in d.iterdir()}, {"a.done", "b.tmp"})
+ 
+     def test_invalid_owner_diagnostics_survive_fold_deletion(self):
+         with tempfile.TemporaryDirectory() as tmp:
+@@ -228,15 +230,134 @@ class FoldTests(unittest.TestCase):
+         with tempfile.TemporaryDirectory() as tmp:
+             d = Path(tmp)
+             (d / "x.run").write_text('pid: 4\nppid: 1\ntag: test_foo\nargv: ["python","-c","x"]\n')
+-            (d / "y.run").write_text("pid: 5\ntag: done\n")
+-            (d / "y.txt").write_text("")
++            (d / "y.done").write_text('pid: 5\nppid: 1\ntag: done\nargv: ["python"]\n')
++            (d / "y.txt").write_text("Stats process: pid=5 tag=done\n")
+             (d / "z.spawn").write_text("test_bar\tpython -m x\n")
+             folded = check_r27.Folded()
++            folded.fold_dir(d)
+             folded.read_markers(d)
+             self.assertEqual([(r["id"], r["tag"]) for r in folded.leftover_run],
+                              [("x", "test_foo")])
+             self.assertEqual(folded.spawn,
+                              [{"tag": "test_bar", "argv": "python -m x"}])
++            self.assertEqual(folded.leftover_run[0]["argv"],
++                             ["python", "-c", "x"])
++            self.assertTrue(folded.identity_complete)
++
++    def test_process_identity_pairing_and_retention(self):
++        with tempfile.TemporaryDirectory() as tmp:
++            d = Path(tmp)
++            (d / "a.txt").write_text("Stats process: pid=9 tag=probe\n")
++            (d / "a.done").write_text(
++                'pid: 9\nppid: 2\ntag: probe\n'
++                'argv: ["python", "\\u00ff"]\n')
++            folded = check_r27.Folded()
++            folded.fold_dir(d, delete=True)
++            folded.read_markers(d)
++            self.assertFalse((d / "a.txt").exists())
++            self.assertTrue((d / "a.done").exists())
++            self.assertTrue(folded.identity_complete)
++            self.assertEqual(folded.dump_identities,
++                             {"a": {"pid": 9, "tag": "probe"}})
++            self.assertEqual(folded.identity_records["a.done"],
++                             {"id": "a", "pid": 9, "ppid": 2,
++                              "tag": "probe", "argv": ["python", os.fsdecode(b"\xff")]})
++            coverage = check_r27.resolve(
++                folded, TableResolver({}), SRC)["identity_coverage"]
++            self.assertEqual(coverage["marker_samples"][0]["argv"],
++                             ["python", os.fsdecode(b"\xff")])
++
++    def test_process_identity_missing_or_orphan_done_fails_closed(self):
++        for files, expected in [
++            ({"a.txt": "Stats process: pid=9 tag=probe\n"}, "missing .done"),
++            ({"a.done": 'pid: 9\nppid: 2\ntag: probe\nargv: ["python"]\n'},
++             "orphan .done"),
++        ]:
++            with self.subTest(expected=expected), tempfile.TemporaryDirectory() as tmp:
++                d = Path(tmp)
++                for name, content in files.items():
++                    (d / name).write_text(content)
++                folded = check_r27.Folded()
++                folded.fold_dir(d)
++                folded.read_markers(d)
++                self.assertFalse(folded.identity_complete)
++                self.assertTrue(any(expected in error
++                                    for error in folded.accounting_errors))
++
++    def test_repeated_fold_of_same_stem_is_rejected(self):
++        with tempfile.TemporaryDirectory() as tmp:
++            d = Path(tmp)
++            (d / "a.txt").write_text("Stats process: pid=9 tag=probe\n")
++            (d / "a.done").write_text(
++                'pid: 9\nppid: 2\ntag: probe\nargv: ["python"]\n')
++            folded = check_r27.Folded()
++            folded.fold_dir(d)
++            folded.fold_dir(d)
++            folded.read_markers(d)
++            self.assertFalse(folded.identity_complete)
++            self.assertTrue(any("duplicate folded dump stem" in error
++                                for error in folded.accounting_errors))
++
++    def test_process_identity_mismatch_zero_and_run_with_dump_fail(self):
++        cases = [
++            ("mismatch", "a.done",
++             'pid: 10\nppid: 2\ntag: other\nargv: ["python"]\n',
++             ".done identity does not match"),
++            ("zero", "a.zero",
++             'pid: 9\nppid: 2\ntag: probe\nargv: ["python"]\n',
++             "zero-stats identity"),
++            ("run", "a.run",
++             'pid: 9\nppid: 2\ntag: probe\nargv: ["python"]\n',
++             "contradictory .run"),
++        ]
++        for name, marker, contents, expected in cases:
++            with self.subTest(name=name), tempfile.TemporaryDirectory() as tmp:
++                d = Path(tmp)
++                (d / "a.txt").write_text("Stats process: pid=9 tag=probe\n")
++                (d / marker).write_text(contents)
++                if marker != "a.done":
++                    (d / "a.done").write_text(
++                        'pid: 9\nppid: 2\ntag: probe\nargv: ["python"]\n')
++                folded = check_r27.Folded()
++                folded.fold_dir(d)
++                folded.read_markers(d)
++                self.assertFalse(folded.identity_complete)
++                self.assertTrue(any(expected in error
++                                    for error in folded.accounting_errors))
++
++    def test_process_identity_malformed_and_duplicate_fields_fail(self):
++        with tempfile.TemporaryDirectory() as tmp:
++            d = Path(tmp)
++            (d / "bad.txt").write_text("Stats process: pid=3 tag=t\n")
++            (d / "bad.done").write_text(
++                'pid: 3\npid: 3\nppid: 1\ntag: t\nargv: ["python"]\n')
++            (d / "empty.zero").write_text("")
++            folded = check_r27.Folded()
++            folded.fold_dir(d)
++            folded.read_markers(d)
++            self.assertFalse(folded.identity_complete)
++            self.assertTrue(any("malformed done identity" in error
++                                for error in folded.accounting_errors))
++            self.assertTrue(any("malformed zero identity" in error
++                                for error in folded.accounting_errors))
++
++    def test_gate_rejects_missing_identity_coverage(self):
++        summary = clean_summary()
++        del summary["identity_coverage"]
++        self.assertTrue(any("identity coverage" in error
++                            for error in check_r27.suite_violations(summary)))
++
++    def test_spawn_ledger_empty_and_invalid_utf8_fail_closed(self):
++        with tempfile.TemporaryDirectory() as tmp:
++            d = Path(tmp)
++            (d / "empty.spawn").write_bytes(b"")
++            (d / "invalid.spawn").write_bytes(bytes([0xff, 0x0a]))
++            folded = check_r27.Folded()
++            folded.read_markers(d)
++            self.assertTrue(any("empty spawn ledger" in error
++                                for error in folded.accounting_errors))
++            self.assertTrue(any("unreadable spawn ledger" in error
++                                for error in folded.accounting_errors))
+ 
+     def test_marker_argument_boundaries_and_malformed_record(self):
+         with tempfile.TemporaryDirectory() as tmp:
+@@ -253,6 +374,8 @@ class FoldTests(unittest.TestCase):
+                 'pid: 7\nppid: 1\ntag: test_foo\nargv: ["\\u20ac"]\n')
+             (d / "new.spawn").write_text(json.dumps({
+                 "tag": "test_foo", "pid": 4, "event": "subprocess.Popen",
++                "shape": "structured", "classification": "direct",
++                "executable": "/build/python", "command": None,
+                 "reason": "-E", "argv": ["python", "-E"],
+                 "counts": False}) + "\n")
+             (d / "bad.spawn").write_text(json.dumps({
+@@ -266,10 +389,11 @@ class FoldTests(unittest.TestCase):
+                              ["python", "-c", "a\nb", "a b"])
+             self.assertEqual(by_id["utf"]["argv"],
+                              ["é", os.fsdecode(b"\xff")])
+-            self.assertIn("malformed run argv in bad.run",
+-                          folded.accounting_errors)
+-            self.assertIn("malformed run argv in notbytes.run",
+-                          folded.accounting_errors)
++            self.assertTrue(any(error.startswith("malformed run identity bad.run:")
++                                for error in folded.accounting_errors))
++            self.assertTrue(any(error.startswith(
++                "malformed run identity notbytes.run:")
++                for error in folded.accounting_errors))
+             self.assertIn("incomplete spawn record in bad.spawn",
+                           folded.accounting_errors)
+             self.assertEqual(folded.spawn[0]["argv"], ["python", "-E"])
+@@ -280,11 +404,15 @@ class FoldTests(unittest.TestCase):
+             d = Path(tmp)
+             launches = [
+                 {"tag": "counted", "event": "subprocess.Popen",
+-                 "shape": "structured", "argv": ["python", "-c", "print('x y')"],
+-                 "counts": True},
++                 "shape": "structured", "classification": "direct",
++                 "executable": "/build/python",
++                 "argv": ["python", "-c", "print('x y')"],
++                 "counts": True, "reason": "" , "pid": 44},
+                 {"tag": "uncounted", "event": "subprocess.Popen",
+-                 "shape": "structured", "argv": ["python", "-E"],
+-                 "counts": False, "reason": "-E"},
++                 "shape": "structured", "classification": "direct",
++                 "executable": "/build/python",
++                 "argv": ["python", "-E"],
++                 "counts": False, "reason": "-E", "pid": 45},
+             ]
+             (d / "worker.spawn").write_text(
+                 "".join(json.dumps(item) + "\n" for item in launches))
+@@ -292,6 +420,7 @@ class FoldTests(unittest.TestCase):
+             folded.read_markers(d)
+             self.assertEqual(folded.counted_spawn, [launches[0]])
+             self.assertEqual(folded.spawn[0]["argv"], launches[1]["argv"])
++            self.assertEqual(folded.spawn[0]["pid"], 45)
+             self.assertEqual(folded.accounting_errors, [])
+ 
+     def test_spawn_and_audit_error_ledgers_fail_closed(self):
+@@ -299,7 +428,9 @@ class FoldTests(unittest.TestCase):
+             d = Path(tmp)
+             (d / "malformed.spawn").write_text("{not-json}\n")
+             (d / "opaque.spawn").write_text(json.dumps({
+-                "tag": "shell", "shape": "structured",
++                "tag": "shell", "pid": 7, "event": "subprocess.Popen",
++                "executable": "/bin/sh", "reason": "opaque shell command",
++                "command": None, "shape": "structured",
+                 "classification": "opaque-shell", "counts": None,
+                 "argv": ["sh", "-c", "python -c 'pass'"],
+             }) + "\n")
+@@ -307,6 +438,10 @@ class FoldTests(unittest.TestCase):
+                 "tag": "test", "shape": "structured", "counts": False,
+                 "argv": ["python"],
+             }))
++            (d / "incomplete-counted.spawn").write_text(json.dumps({
++                "tag": "counted", "shape": "structured", "counts": True,
++                "argv": ["python"],
++            }) + "\n")
+             (d / "empty.audit-error").write_text("")
+             folded = check_r27.Folded()
+             folded.read_markers(d)
+@@ -316,6 +451,8 @@ class FoldTests(unittest.TestCase):
+                                 for error in folded.accounting_errors))
+             self.assertTrue(any("truncated spawn ledger" in error
+                                 for error in folded.accounting_errors))
++            self.assertTrue(any("incomplete spawn record" in error
++                                for error in folded.accounting_errors))
+             self.assertEqual(len(folded.opaque_spawn), 1)
+             self.assertTrue(any("opaque shell launch" in error
+                                 for error in folded.accounting_errors))
+@@ -383,7 +520,7 @@ class WorkerLaunchTests(unittest.TestCase):
+             "subprocess.Popen", ("/usr/bin/env", ["env", "grep", "needle"], None, {}))
+         target, _, reason = worker._classify_launch(unknown_env, [python])
+         self.assertIsNone(target)
+-        self.assertEqual(reason, "unresolved env target")
++        self.assertEqual(reason, "ambiguous relative env target")
+ 
+     def test_shell_command_is_opaque(self):
+         launch = worker._launch("os.system", ("python -c 'print(1 2)'",))
+@@ -402,6 +539,32 @@ class WorkerLaunchTests(unittest.TestCase):
+         self.assertEqual(reason, "opaque shell command")
+         self.assertEqual(shell.argv[2], "/build/python -X pystats")
+ 
++        relative = worker._launch(
++            "subprocess.Popen", (None, ["python", "-c", "pass"], None, {}))
++        target, _, reason = worker._classify_launch(
++            relative, ["/build/python"])
++        self.assertIsNone(target)
++        self.assertEqual(reason, "ambiguous relative executable")
++        alias = worker._launch(
++            "subprocess.Popen", (None, ["myrunner", "-c", "pass"], None, {}))
++        target, _, reason = worker._classify_launch(alias, ["/build/python"])
++        self.assertIsNone(target)
++        self.assertEqual(reason, "ambiguous relative executable")
++
++    def test_custom_environment_mapping_is_not_iterated_by_audit(self):
++        class HostileEnv(dict):
++            def items(self):
++                raise AssertionError("audit hook must not call env mapping")
++
++        launch = worker._launch(
++            "subprocess.Popen",
++            ("/build/python", ["python", "-E"], None, HostileEnv()))
++        self.assertEqual(launch.shape, "structured")
++        self.assertEqual(launch.command, "opaque environment mapping")
++        target, _, reason = worker._classify_launch(launch, ["/build/python"])
++        self.assertIsNone(target)
++        self.assertEqual(reason, "opaque shell command")
++
+     def test_dual_ledger_failure_reaches_result(self):
+         with tempfile.TemporaryDirectory() as tmp:
+             with patch.object(worker, "_build_products", return_value=["/build/python"]):
+@@ -419,6 +582,13 @@ class WorkerLaunchTests(unittest.TestCase):
+             self.assertEqual(result.errors[0], ("test_case", "prior test error"))
+             self.assertIn("pystats audit capture failed", result.errors[-1][1])
+ 
++    def test_short_spawn_write_fails_closed(self):
++        with tempfile.TemporaryDirectory() as tmp:
++            with patch.object(worker.os, "write", return_value=1):
++                with self.assertRaises(OSError):
++                    worker._write_record(os.path.join(tmp, "worker.spawn"),
++                                         {"event": "test"})
++
+     def test_spawn_failure_records_error_ledger(self):
+         with tempfile.TemporaryDirectory() as tmp:
+             python = "/build/python"
+@@ -457,7 +627,8 @@ class WorkerLaunchTests(unittest.TestCase):
+ 
+ def clean_summary(**changes):
+     summary = {"dumps": 1, "accounting_errors": [], "rows": [], "drops": {"thunk": 0}, "leftover_run": [],
+-               "spawn": [], "resets_by_tag": {}, "bad_dumps": []}
++               "spawn": [], "resets_by_tag": {}, "bad_dumps": [],
++               "identity_coverage": {"complete": True}}
+     summary.update(changes)
+     return summary
+ 
+diff --git a/Tools/build/check_r27.py b/Tools/build/check_r27.py
+index 374100c..97997dc 100644
+--- a/Tools/build/check_r27.py
++++ b/Tools/build/check_r27.py
+@@ -13,10 +13,11 @@ Standard library only, plus readelf and addr2line (llvm-dwarfdump is the
+ fallback for objects without .debug_aranges).
+ 
+ Dump directory layout (written by Python/pystats.c): <rand>.txt (a finished
+-process), <rand>.run (a process that started and has not finished), <rand>.spawn
+-(one structured JSON line per uncounted launch), objects/<build-id> (copies
+-of objects that no build product explains). The run marker stores an escaped
+-JSON argv array. Anything else, including .tmp, is ignored.
++process), <rand>.done (its start-time identity), <rand>.zero (an explicit
++zero-stats outcome), <rand>.run (a process that has not finished), <rand>.spawn
++(structured launch events), objects/<build-id> (copies of objects that no build
++product explains). Completed dumps require a matching .done marker; .zero,
++orphan, malformed and contradictory identities are accounting failures.
+ 
+ Classification. A CORE box (owner "-") is classed by the box primitive's call
+ site (the "at" address); every other box by its owner. An address is
+@@ -97,7 +98,7 @@ OWNER_RE = re.compile(
+     r"(?P<owner>-|foreign|\?|\d+\+0x[0-9a-fA-F]+) "
+     r"at (?P<at>-|\?|\d+\+0x[0-9a-fA-F]+): (?P<count>\d+)\s*$")
+ ADDR_RE = re.compile(r"^(\d+)\+0x([0-9a-fA-F]+)$")
+-PROCESS_RE = re.compile(r"^Stats process: pid=(\d+) tag=(.*?)\s*$")
++PROCESS_RE = re.compile(r"^Stats process: pid=(\d+) tag=(.*)$")
+ DROPPED_RE = re.compile(r"^Box owners dropped \(([^()]+)\): (\d+)\s*$")
+ RESETS_RE = re.compile(r"^Stats resets: (\d+)\s*$")
+ CACHED_RE = re.compile(r"^Object box cached: (\d+)\s*$")
+@@ -133,6 +134,12 @@ class Folded:
+         self.spawn = []
+         self.counted_spawn = []
+         self.opaque_spawn = []
++        self.dump_identities = {}
++        self.folded_dump_stems = set()
++        self.identity_records = {}
++        self.identity_errors = []
++        self.identity_matched_count = 0
++        self.identity_required = False
+         self.accounting_errors = []
+         self.invalid_owner_count = 0
+         self.invalid_owner_samples = []
+@@ -196,53 +203,121 @@ class Folded:
+         self.dumps += 1
+ 
+     def fold_dir(self, directory, delete=False):
+-        """Fold the finished dumps; if delete, remove them and their .run."""
++        """Fold finished dumps, retaining their process identity by stem."""
++        self.identity_required = True
+         for path in sorted(Path(directory).glob("*.txt")):
+             try:
+-                self.add_text(path.read_text(errors="replace"), path.name)
++                text = path.read_text(errors="replace")
++                self.add_text(text, path.name)
+             except OSError as exc:
+                 self.bad_dumps.append(f"{path.name}: {exc}")
+                 continue
++            process_rows = [PROCESS_RE.match(line) for line in text.splitlines()
++                            if line.startswith("Stats process:")]
++            if path.stem in self.folded_dump_stems:
++                message = f"duplicate folded dump stem {path.stem}"
++                self.identity_errors.append(message)
++                self.accounting_errors.append(message)
++            elif len(process_rows) != 1 or process_rows[0] is None:
++                self.folded_dump_stems.add(path.stem)
++                message = f"dump {path.name} has missing or malformed process identity"
++                self.identity_errors.append(message)
++                self.accounting_errors.append(message)
++            else:
++                self.folded_dump_stems.add(path.stem)
++                match = process_rows[0]
++                pid = int(match[1])
++                if pid <= 0:
++                    message = f"dump {path.name} has invalid process pid"
++                    self.identity_errors.append(message)
++                    self.accounting_errors.append(message)
++                else:
++                    self.dump_identities[path.stem] = {"pid": pid, "tag": match[2]}
+             if delete:
+                 path.unlink(missing_ok=True)
+-                path.with_suffix(".run").unlink(missing_ok=True)
++
++    @staticmethod
++    def _read_identity(path):
++        """Parse one start-time marker without normalizing escaped argv bytes."""
++        fields = {}
++        for line in path.read_text(encoding="utf-8").splitlines():
++            key, sep, value = line.partition(": ")
++            if not sep or key not in {"pid", "ppid", "tag", "argv"} or key in fields:
++                raise ValueError("invalid or duplicate marker field")
++            fields[key] = value
++        if set(fields) != {"pid", "ppid", "tag", "argv"}:
++            raise ValueError("incomplete marker")
++        if not fields["pid"].isdigit() or int(fields["pid"]) <= 0:
++            raise ValueError("invalid marker pid")
++        if not fields["ppid"].isdigit():
++            raise ValueError("invalid marker ppid")
++        raw_argv = json.loads(fields["argv"])
++        if (not isinstance(raw_argv, list) or not raw_argv or
++            any(not isinstance(arg, str) for arg in raw_argv)):
++            raise ValueError("marker argv is not a nonempty string list")
++        argv = [os.fsdecode(arg.encode("latin-1")) for arg in raw_argv]
++        return {"id": path.stem, "pid": int(fields["pid"]),
++                "ppid": int(fields["ppid"]), "tag": fields["tag"],
++                "argv": argv}
+ 
+     def read_markers(self, directory):
+         """List .run files that no .txt replaced, and the .spawn lines."""
+         directory = Path(directory)
+         self.leftover_run = []
+-        for path in sorted(directory.glob("*.run")):
+-            if path.with_suffix(".txt").exists():
++        self.identity_records = {}
++        self.identity_matched_count = 0
++
++        def identity_error(message):
++            self.identity_errors.append(message)
++            self.accounting_errors.append(message)
++
++        sidecars = {}
++        for suffix in ("done", "zero", "run"):
++            for path in sorted(directory.glob(f"*.{suffix}")):
++                try:
++                    record = self._read_identity(path)
++                except (OSError, UnicodeError, ValueError) as exc:
++                    identity_error(
++                        f"malformed {suffix} identity {path.name}: {type(exc).__name__}")
++                    continue
++                sidecars.setdefault(path.stem, {})[suffix] = record
++                self.identity_records[path.name] = record
++                if suffix == "run":
++                    self.leftover_run.append(record)
++                elif suffix == "zero":
++                    identity_error(
++                        f"zero-stats identity {path.name} has no completed dump")
++
++        for stem, dump in self.dump_identities.items():
++            records = sidecars.get(stem, {})
++            done = records.get("done")
++            if done is None:
++                identity_error(f"missing .done identity for dump {stem}.txt")
+                 continue
+-            info = {"id": path.stem}
+-            for line in path.read_text(errors="replace").splitlines():
+-                key, sep, value = line.partition(": ")
+-                if sep:
+-                    info[key] = value
+-            try:
+-                raw_argv = json.loads(info["argv"])
+-                if (not isinstance(raw_argv, list) or not raw_argv or
+-                    any(not isinstance(arg, str) for arg in raw_argv)):
+-                    raise ValueError("run argv is not a string list")
+-                # The C marker escapes each raw byte as a JSON code point.
+-                # Reconstruct Python's filesystem strings, including
+-                # surrogateescape for invalid UTF-8 bytes.
+-                info["argv"] = [os.fsdecode(arg.encode("latin-1"))
+-                                for arg in raw_argv]
+-            except (KeyError, ValueError, UnicodeEncodeError):
+-                self.accounting_errors.append(
+-                    f"malformed run argv in {path.name}")
+-            self.leftover_run.append(info)
++            if "run" in records:
++                identity_error(f"contradictory .run and .txt identity for {stem}")
++            if "zero" in records:
++                identity_error(f"contradictory .zero and completed dump for {stem}")
++            if (done["pid"] != dump["pid"] or done["tag"] != dump["tag"]):
++                identity_error(f".done identity does not match dump {stem}.txt")
++            elif "run" not in records and "zero" not in records:
++                self.identity_matched_count += 1
++        for stem in sidecars:
++            if "done" in sidecars[stem] and stem not in self.dump_identities:
++                identity_error(f"orphan .done identity {stem}.done")
+         self.spawn = []
+         self.counted_spawn = []
+         self.opaque_spawn = []
+         for path in sorted(directory.glob("*.spawn")):
+             try:
+-                contents = path.read_text(errors="replace")
+-            except OSError as exc:
++                contents = path.read_bytes().decode("utf-8")
++            except (OSError, UnicodeError) as exc:
+                 self.accounting_errors.append(
+                     f"unreadable spawn ledger {path.name}: {type(exc).__name__}")
+                 continue
++            if not contents.strip():
++                self.accounting_errors.append(f"empty spawn ledger {path.name}")
++                continue
+             if contents and not contents.endswith("\n"):
+                 self.accounting_errors.append(
+                     f"truncated spawn ledger {path.name}")
+@@ -261,22 +336,42 @@ class Folded:
+                             f"malformed spawn record {path.name}")
+                         continue
+                     shape = launch.get("shape")
+-                    if (shape == "opaque-shell" or
+-                            launch.get("classification") == "opaque-shell"):
++                    classification = launch.get("classification")
++                    argv = launch.get("argv")
++                    counts = launch.get("counts")
++                    if (not isinstance(launch.get("tag"), str) or
++                        type(launch.get("pid")) is not int or launch["pid"] <= 0 or
++                        not isinstance(launch.get("event"), str) or
++                        not isinstance(launch.get("executable"), (str, type(None))) or
++                        not isinstance(launch.get("reason"), str) or
++                        not isinstance(launch.get("command"), (str, type(None))) or
++                        not isinstance(shape, str) or
++                        classification not in ("direct", "opaque-shell")):
++                        self.accounting_errors.append(
++                            f"incomplete spawn record in {path.name}")
++                        continue
++                    if classification == "opaque-shell":
++                        valid_argv = (argv is None if shape == "opaque-shell" else
++                                      isinstance(argv, list) and
++                                      all(isinstance(arg, str) for arg in argv))
++                        valid_command = (shape == "structured" or
++                                         isinstance(launch.get("command"), str))
++                        if counts is not None or not valid_argv or not valid_command:
++                            self.accounting_errors.append(
++                                f"incomplete opaque spawn record in {path.name}")
++                            continue
+                         self.opaque_spawn.append(launch)
+                         self.accounting_errors.append(
+                             f"opaque shell launch in {path.name}")
+                         continue
+-                    argv = launch.get("argv")
+-                    if shape != "structured":
++                    if (not isinstance(argv, list) or not argv or
++                        any(not isinstance(arg, str) for arg in argv) or
++                        shape != "structured" or classification != "direct" or
++                            not isinstance(launch.get("executable"), str) or
++                        not launch["executable"] or type(counts) is not bool):
+                         self.accounting_errors.append(
+-                            f"spawn record lacks structured provenance in {path.name}")
+-                    elif not isinstance(argv, list) or not all(
+-                            isinstance(arg, str) for arg in argv):
+-                        self.accounting_errors.append(
+-                            f"invalid structured argv in {path.name}")
++                            f"invalid structured spawn record in {path.name}")
+                         continue
+-                    counts = launch.get("counts")
+                     if counts is True:
+                         self.counted_spawn.append(launch)
+                         continue
+@@ -289,6 +384,7 @@ class Folded:
+                         "command": launch.get("command"),
+                         "reason": launch.get("reason", ""),
+                         "event": launch.get("event", ""),
++                        "pid": launch["pid"],
+                     })
+                     continue
+                 tag, _, argv = line.partition("\t")
+@@ -305,6 +401,17 @@ class Folded:
+                 self.accounting_errors.append(
+                     f"unreadable audit error ledger {path.name}: {type(exc).__name__}")
+ 
++        self.identity_complete = (
++            self.identity_required and not self.identity_errors and
++            not self.bad_dumps and self.dumps == len(self.dump_identities) and
++            self.identity_matched_count == len(self.dump_identities))
++
++        identity_kinds = ("done", "zero", "run")
++        for stem, records in sidecars.items():
++            if sum(kind in records for kind in identity_kinds) > 1:
++                identity_error(f"contradictory process identity sidecars for {stem}")
++                self.identity_complete = False
++
+ 
+ def add(table, key, n):
+     table[key] = table.get(key, 0) + n
+@@ -614,6 +721,22 @@ def resolve(folded, resolver, src, cdb=None):
+         "bad_dumps": folded.bad_dumps, "leftover_run": folded.leftover_run,
+         "spawn": folded.spawn, "counted_spawn": folded.counted_spawn,
+         "opaque_spawn": folded.opaque_spawn, "resets": folded.resets,
++        "identity_coverage": {
++            "complete": getattr(folded, "identity_complete", False),
++            "dumps": len(folded.dump_identities),
++            "markers": len(folded.identity_records),
++            "matched": folded.identity_matched_count,
++            "error_count": len(folded.identity_errors),
++            "errors": list(folded.identity_errors[:16]),
++            "samples": [
++                {"stem": stem, **identity}
++                for stem, identity in list(sorted(folded.dump_identities.items()))[:16]
++            ],
++            "marker_samples": [
++                {"file": name, **identity}
++                for name, identity in list(sorted(folded.identity_records.items()))[:16]
++            ],
++        },
+         "resets_by_tag": folded.resets_by_tag, "drops": folded.drops,
+         "box_cached": folded.box_cached, "kind_totals": folded.kind_totals,
+         "site_totals": folded.site_totals, "rows": rows, "objects": objects,
+@@ -705,6 +828,9 @@ def normalize_accounting_argv(argv, summary):
+ def suite_violations(summary, crashes=(), uncounted=(), accounting=None):
+     accounting = accounting or {"runs": {}, "spawns": {}}
+     out = []
++    identity_coverage = summary.get("identity_coverage")
++    if not isinstance(identity_coverage, dict) or identity_coverage.get("complete") is not True:
++        out.append("missing or incomplete process identity coverage")
+     if not summary.get("dumps"):
+         out.append("no stats dumps")
+     if "regrtest_returncode" in summary and summary["regrtest_returncode"] != 0:

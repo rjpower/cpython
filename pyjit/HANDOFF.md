@@ -1,14 +1,14 @@
 # Coordinator handoff
 
-Current runtime HEAD is `42696e9fcca` on `boil/pyvalue-rc-universal`.
-`66981c963be` passed three 117-module builds and 6,684 tests per profile;
-it fixes the earlier operator crash and carries format/I/O/constructor/dict/
-SQLite values. The latest regex/getattr landing passed 4,633 tests per profile
-and exact upstream differential probes; type assignment then passed 4,499
-tests per profile and upstream lifetime/slot-update probes. Next: coherent
-process-accounting producer/reader/benchmark changes and paired value
-construction. Do not land the new C
-sidecars without both readers. The latest raw census is 15/29 zero kernels,
+Current committed runtime HEAD is `1ab005e79b8` on `boil/pyvalue-rc-universal`.
+Finished identity and new/init providers have landed; the latest focused
+landing passes 4,541 tests per profile and all three 117-module builds. Its
+ordinary-class boxing probe still finds 100 boxes in 100 calls: the new value
+provider needs an actual metatype call-slot pair. That correction, direct init
+wrappers, float formatting, descriptor lookup and native child receipts are
+now in full merged validation (`10399`), including the matching suite and
+benchmark readers. Root alone changes shared source/builds. Do not run the
+benchmark counter reader against an unmatched protocol. The latest raw census is 15/29 zero kernels,
 all zero loop deltas, with an exact retained ELF and matching clean source.
 Matched-build preflight passes after the targeted build-info refresh; no
 timing has run. Ctypes/LRU approval holds and full R27 remain open.
@@ -47,7 +47,7 @@ and backend. The stage pages distinguish selected designs from working code.
 | --- | --- |
 | Documentation root (canonical `pyjit/`) | `/home/power/code/cpython/.worktrees/python-jit`, branch `weaver/python-jit` |
 | Runtime tree (nested worktree) | `/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/pyvalue-rc-universal` |
-| Runtime branch / latest commit | `boil/pyvalue-rc-universal`, `42696e9fcca` (2026-11-06) |
+| Runtime branch / latest commit | `boil/pyvalue-rc-universal`, `1ab005e79b8` (2026-11-06) |
 | Shared builds at HEAD | `build/pyvalue-rc-repr-debug`, `build/pyvalue-rc-repr-release` (under the `python-boil-the-ocean` worktree) |
 | Older debug build | `build/pyvalue-rc-debug-20261102-v1` |
 | Triage debug builds | `build/pyvalue-rc-bringup-debug`, `build/pyvalue-rc-triage-rt-debug` |
@@ -74,13 +74,18 @@ and shapes. Read the build directories for the exact commands.
 
 ## Source and build state
 
-Runtime HEAD is clean `42696e9fcca`; its three-file type-assignment landing
-passed all three 117-module builds, lint, 4,499 tests per profile and upstream
-differential probes. No shared build freeze remains from that landing. Only
-the coordinator changes shared source and builds. The previous full suites at
+Runtime HEAD is `1ab005e79b8`, with the reviewed constructor/formatter/native
+accounting batch applied under full validation `10399`. Keep source and shared
+builds frozen until it finishes. Workers have stopped code and build work.
+Only the coordinator changes shared source and builds. The previous full suites at
 `af82c03c4e5` each ran 54,311 tests
 and failed only the now-corrected operator call regression. Full qualification
 must repeat after the remaining coherent ports; focused passes are insufficient.
+
+The first batch attempt, `12246`, stopped before the suites because the stats
+shared module could not resolve two new helpers. The two `PyAPI_FUNC(void)`
+export declarations are reviewed and applied; the new attempt uses tag
+`checkpoint-constructor-float-identity-full-v2`, preserving the failed logs.
 
 The raw kernel evidence at `66981c963be` retains its exact stats executable.
 Later relinks must never be used to symbolize its old PCs. Ordinary commits

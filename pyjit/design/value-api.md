@@ -1,6 +1,6 @@
 # Value API: a value-native core with an object compatibility layer
 
-Status: revision 3, 2026-11-03, after [review 1](reviews/value-api-review-1.md),
+Historical design status: revision 3, 2026-11-03, after [review 1](reviews/value-api-review-1.md),
 [review 2](reviews/value-api-review-2.md) and the coordinator's decisions on
 them (R1–R13, R14–R25 below). It specifies the user's
 decision that `PyValue` is the internal API and `PyObject *` is the
@@ -8,7 +8,8 @@ compatibility API, and it is the source for the V packets in section 9.
 Accepted for implementation of V1 and V2a-0 (review 2's two must-fix items
 are R14 and R15); later packets take review 2's per-packet notes.
 
-Source tree: `build/worktrees/pyvalue-rc-universal` in the boil worktree
+Historical source snapshot for revision 3:
+`build/worktrees/pyvalue-rc-universal` in the boil worktree
 (`build/` is `/home/power/code/cpython/.worktrees/python-boil-the-ocean/build`),
 HEAD `379e92cded9`, recounted at 19:42–20:00 with ten files carrying other
 agents' uncommitted edits. Line numbers in `Objects/typeobject.c` move with
@@ -19,6 +20,65 @@ Related pages: [PyValue representation](pyvalue.md) (encoding, D1–D8),
 [native boundary](native-boundary.md) (borrow stack), [extension API](extension-api.md)
 (HPy direction), [representation packet](proposals/pyvalue-representation-packet.md),
 [register IR](register-ir.md) (IR v2, IR-D3).
+
+## Current implementation snapshot (2026-11-06)
+
+The committed runtime source is `build/worktrees/pyvalue-rc-universal` at
+`1ab005e79b88`. The revision-3 design and `379e92cded9` source inventory below
+are historical references; they do not describe every slot or caller in the
+current tree. In particular, the old claim that `tp_new` has no value slot is
+superseded. The committed `_PyValueSlots` table has 55 rows, including
+`new_` and `init_`, arranged as 16 hot and 39 cold fields. The phase-2 slot
+marks and four no-production-caller aliases (`PyIter_NextItem`,
+`PyMapping_GetOptionalItemString`, `_PyMapping_GetOptionalItem2`, and
+`_PyLong_GCD`) landed in `1ab005e79b88`; merged qualification `11580` passed
+4,541 tests in both release and debug. A focused ordinary-class `A()` probe
+still records 100 boxes for 100 calls because `PyType_Type.tp_value.call` is
+null and ordinary dispatch does not enter the value constructor helper. The
+landed providers are not constructor closure.
+
+### Construction slots
+
+The committed type-slot table pairs `tp_new` with `new_` and `tp_init` with
+`init_` (`Include/internal/pycore_value_slots.h`; the fields are at the end of
+`_PyValueSlots` in `Include/cpython/object.h`).
+Their signatures are:
+
+```c
+typedef PyValue (*_Py_newvaluefunc)(PyTypeObject *, const PyValue *,
+                                    Py_ssize_t, PyObject *);
+typedef int (*_Py_initvaluefunc)(PyValueBorrow, const PyValue *,
+                                 Py_ssize_t, PyObject *);
+```
+
+Both receive borrowed argument-window values and borrowed `kwnames`; the
+caller keeps the window alive through the call. `new_` receives the requested
+type and returns an owned `PyValue`, with `PyValue_NULL` plus an exception on
+failure. `init_` receives a borrowed instance and returns nonnegative on
+success or a negative status with an exception on failure. `type_call_value`
+uses a paired `new_` when present, otherwise calls the object `tp_new` and
+converts its result at that compatibility boundary. It initializes only a
+non-null result whose type is the requested type or a subtype; it selects
+`init_` from the result type, with the object `tp_init` fallback requiring an
+object-backed result. The helper checks each selected pair with
+`_PyType_CHECK_VALUE_ROW`; type readiness inherits value rows alongside equal
+object slots. The Python-defined `slot_tp_new` and `slot_tp_init` paths also
+have value implementations and object-entry adapters in `Objects/typeobject.c`.
+These providers and helper behavior do not establish ordinary `A()` dispatch:
+the missing `PyType_Type.tp_value.call` pair leaves those calls on the object
+adapter path until that pair is installed and tested.
+
+This covers construction through type calling; it does not close every direct
+slot-descriptor call. The table's `WRAPPER=NONE` means these rows do not use a
+generic slot-wrapper family; direct `__new__` already has the dedicated
+`tp_new_wrapper` `METH_VALUE` path. Direct `__init__` and `type.__call__`
+wrapper continuations remain proposed in
+[`direct-init-call-wrapper-proposal.md`](../issues/checkpoint-closure/direct-init-call-wrapper-proposal.md).
+Do not treat their existence in the type-call path as direct-wrapper closure.
+
+The revision-3 slot-update table below records its original plan. Its `tp_new`
+row is historical and superseded by this section; retain the other decisions
+as design history unless separately reconciled with current source.
 
 ## Decisions
 
@@ -561,7 +621,7 @@ check that compares each extension subtype's `tp_value.nb_add` with
 | `generic = *ptr` (keep the current slot) | Keeps both sides |
 | `__hash__ = None` | Both sides of the hash pair: `PyObject_HashNotImplemented` and its value form (the `update_one_slot` case and the `add_operators` test) |
 | `__next__ = None` | `_PyObject_NextNotImplemented` pair |
-| `tp_new` (`tp_new_wrapper`) | Unchanged: `tp_new` is not a value slot |
+| `tp_new` (`tp_new_wrapper`) | Historical revision-3 statement, superseded by the `new_` value slot in the current 55-row table above |
 | `__getattribute__`/`__getattr__` resolving to object's | Generic attribute pair, so the identity tests of §2.2 still hold |
 | `update_slot` (dunder assigned after creation, on the class or on a base with subclasses) and `fixup_slot_dispatchers` (creation) | Call `update_one_slot`, so they write pairs |
 | `__class__` assignment | Unchanged layout check; the value slots come with the new type |

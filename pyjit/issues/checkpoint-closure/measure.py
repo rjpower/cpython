@@ -393,7 +393,7 @@ def main(argv: list[str] | None = None) -> int:
     rows.append("| Geomean | | " + " | ".join(
         f"{math.exp(statistics.mean(map(math.log, ratios[label]))):.3f}"
         for label in ratios) + " | |")
-    if not status["eligible"]:
+    if (not unchanged or before["errors"] or after["errors"] or failure is not None):
         rows.insert(1, "**Not qualified:** identity/preflight or postflight failed.\n")
     (args.output / "summary.md").write_text("\n".join(rows) + "\n")
     return 0 if status["eligible"] or args.qualification == "diagnostic" else 1

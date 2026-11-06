@@ -224,3 +224,13 @@ that remote copy remains at revision 7. No alternate export was attempted.
   metaclasses, displaced-value finalizers and slot updates. Process-accounting
   producer/reader composition and paired construction remain in progress;
   full qualification and current timing remain outstanding.
+
+- 2026-11-06 — `84edb605d31` lands strict launch capture and completed-process
+  identity (4,276 tests/profile plus real paired-process probes).
+  `71016b30e45` lands direct value new: bounded 100-call int and float probes
+  each fall from 100 boxes to zero; true C entries pass. `1ab005e79b8` lands
+  init/constructor providers and four manual API aliases after 4,541 tests per
+  profile. A private ordinary-class probe still finds 100 boxes/100 calls;
+  actual metatype dispatch and direct wrappers are corrected in the next
+  reviewed composition. Full qualification `12246` now covers those changes,
+  float formatting, descriptor lookup and native child receipts together.

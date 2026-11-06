@@ -10,6 +10,7 @@ from pathlib import Path
 import sys
 import tempfile
 import unittest
+from types import SimpleNamespace
 from unittest import mock
 
 SOURCE = Path(__file__).resolve().parents[1] / "run.py"
@@ -64,8 +65,10 @@ def write_pair(command, raw, *, stem=STEM, pid=12345, ppid=None, tag="", argv=No
     done = directory / f"{stem}.done"
     if marker:
         byte_argv = [os.fsencode(arg).decode("latin-1") for arg in (command if argv is None else argv)]
-        done.write_text(f"pid: {pid}\nppid: {os.getpid() if ppid is None else ppid}\n"
-                        f"tag: {tag}\nargv: {json.dumps(byte_argv)}\n")
+        image = os.stat(command[0])
+        done.write_text(f"version: 2\npid: {pid}\nppid: {os.getpid() if ppid is None else ppid}\n"
+                        f"tag: {tag}\nargv: {json.dumps(byte_argv)}\n"
+                        f"image_dev: {image.st_dev}\nimage_ino: {image.st_ino}\n")
     return dump, done
 
 
@@ -74,7 +77,7 @@ class PystatsRecordsTest(unittest.TestCase):
         temporary = tempfile.TemporaryDirectory(prefix="boil-pystats-record-test-")
         self.addCleanup(temporary.cleanup)
         self.root = Path(temporary.name)
-        self.ctx = runner.Context(Path("/test/python"), self.root / "cache", self.root)
+        self.ctx = runner.Context(Path(sys.executable), self.root / "cache", self.root)
 
     def test_preserves_complete_samples_and_normalizes_union(self):
         for inner in (1, 1000):
@@ -133,6 +136,7 @@ class PystatsRecordsTest(unittest.TestCase):
 
         def run(command, what):
             created.extend(write_pair(command, raw))
+            return SimpleNamespace(pid=12345)
 
         with mock.patch.object(runner, "run_checked", side_effect=run):
             with self.assertRaisesRegex(runner.MeasurementError, "duplicate pystats key"):
@@ -165,6 +169,7 @@ class PystatsRecordsTest(unittest.TestCase):
             with self.subTest(name=name):
                 def run(command, what):
                     write_pair(command, raw)
+                    return SimpleNamespace(pid=12345)
 
                 with mock.patch.object(runner, "run_checked", side_effect=run):
                     if error is None:
@@ -180,8 +185,9 @@ class PystatsRecordsTest(unittest.TestCase):
                                 self.ctx, runner.Bench("sample", "kernels", 2), 2)
 
     def test_completed_pair_rejects_wrong_identity_and_extra_files(self):
-        cases = ("pid", "ppid", "tag", "argv", "stem", "run", "zero",
-                 "orphan", "extra", "empty", "bad_argv")
+        cases = ("pid", "ppid", "tag", "argv", "version", "image",
+                 "child_receipt", "stem", "run", "zero", "orphan",
+                 "extra", "empty", "bad_argv")
         for case in cases:
             with self.subTest(case=case):
                 def run(command, what):
@@ -197,6 +203,14 @@ class PystatsRecordsTest(unittest.TestCase):
                         done.write_bytes(done.read_bytes().replace(b"tag: \n", b"tag: other\n", 1))
                     elif case == "argv":
                         done.write_bytes(done.read_bytes().replace(b"argv: [", b'argv: ["extra",', 1))
+                    elif case == "version":
+                        done.write_bytes(done.read_bytes().replace(b"version: 2", b"version: 1", 1))
+                    elif case == "image":
+                        marker_lines = done.read_text().splitlines()
+                        marker_lines[-1] = "image_ino: 1"
+                        done.write_text("\n".join(marker_lines) + "\n")
+                    elif case == "child_receipt":
+                        (directory / (STEM + ".1.child")).write_text("{}")
                     elif case == "stem":
                         done.rename(directory / ("b" * 40 + ".done"))
                     elif case == "run":
@@ -211,6 +225,7 @@ class PystatsRecordsTest(unittest.TestCase):
                         done.write_bytes(b"")
                     elif case == "bad_argv":
                         done.write_bytes(done.read_bytes().replace(b"argv: [", b'argv: ["\\u0100",', 1))
+                    return SimpleNamespace(pid=12345)
 
                 with mock.patch.object(runner, "run_checked", side_effect=run):
                     with self.assertRaises(runner.MeasurementError):
@@ -218,11 +233,13 @@ class PystatsRecordsTest(unittest.TestCase):
 
     def test_marker_argv_decodes_filesystem_bytes(self):
         encoded = ["caf\u00c3\u00a9", "raw\u00ff"]
-        raw = ("pid: 12345\nppid: 1\ntag: \nargv: " + json.dumps(encoded) + "\n").encode()
-        pid, ppid, tag, argv = runner._marker_identity(raw)
+        raw = ("version: 2\npid: 12345\nppid: 1\ntag: \nargv: "
+               + json.dumps(encoded) + "\nimage_dev: 1\nimage_ino: 2\n").encode()
+        pid, ppid, tag, argv, image_dev, image_ino = runner._marker_identity(raw)
         self.assertEqual((pid, ppid, tag), (12345, 1, ""))
         self.assertEqual([os.fsencode(arg) for arg in argv],
                          [b"caf\xc3\xa9", b"raw\xff"])
+        self.assertEqual((image_dev, image_ino), (1, 2))
 
     def test_nonregular_and_unreadable_artifacts_are_journaled_before_failure(self):
         for case in ("symlink", "unreadable"):
@@ -239,6 +256,7 @@ class PystatsRecordsTest(unittest.TestCase):
                     if case == "symlink":
                         done.unlink()
                         done.symlink_to(dump)
+                    return SimpleNamespace(pid=12345)
 
                 def read(path):
                     if case == "unreadable" and path.suffix == ".done":
@@ -312,6 +330,7 @@ class PystatsRecordsTest(unittest.TestCase):
                         created[extra] = extra.read_bytes()
                     if case == "failed":
                         raise runner.MeasurementError("actual child failed")
+                    return SimpleNamespace(pid=12345)
 
                 with mock.patch.object(runner, "run_checked", side_effect=run):
                     with self.assertRaises(runner.MeasurementError):
@@ -346,8 +365,9 @@ class PystatsRecordsTest(unittest.TestCase):
             paths = write_pair(command, raw)
             originals.append([(path, path.read_bytes()) for path in paths])
             commands.append(command)
+            return SimpleNamespace(pid=12345)
 
-        with mock.patch.object(runner, "resolve_build", return_value=Path("/test/python")), \
+        with mock.patch.object(runner, "resolve_build", return_value=Path(sys.executable)), \
              mock.patch.object(runner, "select", return_value=[runner.Bench("sample", "kernels", 2)]), \
              mock.patch.object(runner, "build_info", return_value={"path": "/test/python", "label": "test"}), \
              mock.patch.object(runner, "check_pystats"), \

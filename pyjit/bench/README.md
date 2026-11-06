@@ -45,12 +45,16 @@ do not by themselves prove adjacent-word fusion opportunities or per-PC hotness.
 Box counts include cached-object reuse and do not establish fresh allocations
 or CPU cost. `raw_counters` preserves all parsed counters for warm-up, low and
 high, including handler identity/coverage metadata. Use `--pystats-records FILE`
-to retain each original UTF-8 dump, SHA-256, source path, command and loop count
-in an exclusive new JSONL file before parsing. That journal survives later
-parse/schema failure and scratch cleanup; successful run metadata binds its
-path, hash and dump count. A failed child or ambiguous dump selection leaves
-its original files in place and does not produce an attributable journal row.
-Neither representation supplies missing upstream counter coverage.
+to retain the original dump and completed-process marker as base64 bytes, with
+SHA-256, source paths, command and loop count, in an exclusive new JSONL file.
+Each invocation uses a private stats directory and requires one same-stem
+`.txt`/`.done` pair with matching pid, tag, parent pid and exact argv. The
+journal records the artifacts before validating identity and counters, so
+ambiguous, unreadable or invalid artifacts remain visible after scratch
+cleanup. Successful run metadata binds the journal path, hash and dump count.
+Neither representation supplies missing upstream counter coverage. The paired
+reader requires the matching runtime producer; it cannot read old one-file
+captures through the live measurement path.
 
 Children use fresh writable bytecode caches, remove inherited `PYTHON*` settings
 and set hash seed 0. Workload counts are fixed, not calibrated. Missing metric

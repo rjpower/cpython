@@ -1,7 +1,7 @@
 # PyValue and register-interpreter checkpoint closure
 
 Coordinator plan, 2026-11-05. This effort began at `e1229448be3`; the current
-committed runtime is `42696e9fcca` on `boil/pyvalue-rc-universal`. Canonical
+committed runtime is `1ab005e79b8` on `boil/pyvalue-rc-universal`. Canonical
 documentation is in this checkout. The live queue is the final section; earlier
 queues are historical records. The coordinator owns interfaces, assignments,
 commits, merged qualification and measurement.
@@ -427,7 +427,7 @@ review; do not bypass that hold. G2 remains deferred until after the qualified
 baseline measurement. Keep landed packets distinct from the three candidate
 packets above and do not claim checkpoint completion until all gates pass.
 
-## Live queue through runtime `42696e9fcca` (2026-11-06)
+## Historical queue through runtime `42696e9fcca` (2026-11-06)
 
 1. **Coordinator:** the 15-file operator slot
    correction, formatting/I/O, direct `__new__`, dict getitem and SQLite
@@ -478,3 +478,63 @@ Initial worker budgets are 15–20 minutes for proposals and 20–30 minutes for
 the first implementation packet. They trigger progress reports and scope cuts,
 not broad testing or unreviewed changes. The coordinator owns shared headers,
 source integration, full tests, measurement and the final checkpoint recap.
+
+## Live integration and measurement queue (2026-11-06)
+
+1. **Preserve the qualified increments.** Runtime `84edb605d31` lands finished
+   process identity and strict launch capture after three builds and 4,276
+   tests/profile; real exit, zero, repeated-dump, fork and argv-byte probes
+   pass. `71016b30e45` lands direct value new; bounded int/float calls each
+   fall from 100 boxes to zero for 100 calls, and true object C entries pass.
+   `1ab005e79b8` lands value init providers and four checked manual aliases,
+   with three builds and 4,541 tests/profile. Its ordinary-class call probe
+   still has 100 boxes/100 calls; do not infer closure from functional tests.
+2. **Integrate the exact reviewed composition.** The coordinator has applied
+   the actual type-call pair, captured direct-init wrapper, descriptor-get
+   lookup, float value writer and its manual alias, and native successful-child
+   receipts. The latter includes marker v2, strict roots/lineage/image checks,
+   suite fixtures, benchmark consumer and real probe together. All base and
+   additive packets stay frozen. Terra supplied constructor/descriptor ports;
+   Luna supplied float ports/docs; Sol supplied/reviewed accounting. The
+   coordinator owns the merged source and every shared build.
+3. **Run bulk qualification once at this integration point.** Execution
+   `10399`, tag `checkpoint-constructor-float-identity-full-v2`, follows 27 host
+   benchmark tests (passed, two skips), regeneration, lint, three expected
+   117-module builds, ABI/frozen-main checks, then complete release/debug
+   suites. No worker builds or new ports run during this phase. Retain and
+   diagnose failures; make bounded fixes, independently review, and rerun only
+   affected tests before broadening where the findings justify it.
+   The initial attempt `12246` stopped at the stats module roster because two
+   native helpers lacked exported declarations; its logs are retained. The
+   independently reviewed two-line export fix is in the new attempt.
+4. **Verify real producer and dispatch behavior.** After the stats link,
+   execute v2 identity probes, including configured stats-off fork failure and
+   late activation, actual spawn/Popen and repeated intervals. Run private
+   constructor and numeric-format probes with exact ELF retention. Require
+   zero core boxes for each claimed closed path, preserve nonzero direct/C
+   boundary cases separately, and repeat the private three-process benchmark
+   capture before all 29 raw kernels. No reclassification may hide a core box.
+5. **Repeat strict R27 on the composed source.** Retain the stats ELF before
+   the full stats suite, refresh the finite API/copied-slot census, and account
+   for every missing/zero/crashed process and external image. The latest old
+   census is still `af82`: 6,513 dumps, 14,211,307 debt boxes, no owner drops or
+   invalid owners, 545 unfinished markers and 423 predicted events. These are
+   historical failing evidence, not current counts or unique child counts.
+   Ctypes raw ownership and LRU implementation remain on explicit approval
+   hold after automatic review; no worker may bypass those holds.
+6. **Freeze and remeasure.** Commit the validated source and benchmark code,
+   refresh `Modules/getbuildinfo.o` in all three profiles and complete builds.
+   With all workers/builds/tests stopped, verify matched upstream/interim/
+   candidate identities and 116/116/117 module logs. Run the declared three
+   rotating kernel rounds with load limit four and a 45-minute window, then
+   the established eight-module/12-result pyperformance subset, warmed-page
+   RSS and separate profiling. If R27 remains open, label the measurement
+   diagnostic and ineligible for checkpoint admission; never label a passing
+   preflight as a performance result. Preserve every raw vector and spread.
+7. **Publish a bounded follow-up plan from evidence.** Distinguish functional
+   correctness, boxing/accounting admission and elapsed-time performance.
+   Rank remaining approval-held ownership work, long numeric formatting,
+   type lookup/attribute continuations and cached richcompare by the fresh
+   census. Then rank interpreter/G2, memory, serialization recovery and the
+   shared optimizing method/tracing JIT from the measured costs. State any
+   unfinished checkpoint requirement plainly in the recap.

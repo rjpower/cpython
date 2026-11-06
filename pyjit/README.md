@@ -5,11 +5,11 @@ interpreter, and a cohesive method and tracing JIT. Memory management uses
 reference counting with cyclic collection. Extensions are rebuilt and ported.
 
 **Current outcome:** the universal-value runtime links and runs. Runtime
-`42696e9fcca` follows the reviewed 15-file integration `66981c963be`, whose
-three builds and 6,684 tests per profile passed, including the operator crash
-regression. Regex/getattr passed 4,633 tests per profile; type assignment
-then passed 4,499 tests per profile and matching-upstream probes.
-Full functional requalification and R27 remain open;
+`1ab005e79b8` includes paired new/init providers and four checked API aliases;
+three builds and 4,541 tests per profile pass. An actual boxing probe found
+ordinary class dispatch still entering an object slot. Its correction is now
+in full merged qualification with float formatting, descriptor lookup and
+native child accounting. Full functional qualification and R27 remain open;
 there is no current performance measurement.
 **Next milestone:** close ownership/accounting debt, qualify one clean runtime,
 then measure it against matched upstream and interim controls with the JIT off.

@@ -1,0 +1,47 @@
+--- a/Objects/typeobject.c
++++ b/Objects/typeobject.c
+@@ -10237,6 +10237,7 @@
+     VALUE_WRAPPER_REPR,
+     VALUE_WRAPPER_CONCAT,
+     VALUE_WRAPPER_CALL,
++    VALUE_WRAPPER_INIT,
+     VALUE_WRAPPER_SUBSCRIPT,
+     VALUE_WRAPPER_ITEM,
+     VALUE_WRAPPER_ASSSUBSCRIPT,
+@@ -12457,6 +12458,15 @@
+ }
+ 
+ static PyValue
++wrap_initvalue(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs,
++               PyObject *kwnames, void *wrapped)
++{
++    _Py_initvaluefunc func = (_Py_initvaluefunc)wrapped;
++    int status = func(self, args, nargs, kwnames);
++    return status < 0 ? PyValue_NULL : PyValue_None;
++}
++
++static PyValue
+ tp_new_wrapper(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs,
+                PyObject *kwnames)
+ {
+@@ -14217,6 +14227,9 @@
+     case VALUE_WRAPPER_CALL:
+         assert(w == _Py_FUNC_CAST(wrapperfunc, wrap_call));
+         return wrap_callvalue;
++    case VALUE_WRAPPER_INIT:
++        assert(w == _Py_FUNC_CAST(wrapperfunc, wrap_init));
++        return wrap_initvalue;
+     case VALUE_WRAPPER_SUBSCRIPT:
+         assert(w == wrap_binaryfunc);
+         return wrap_subscriptvalue;
+--- a/Include/internal/pycore_value_slots.h
++++ b/Include/internal/pycore_value_slots.h
+@@ -164,7 +164,7 @@
+     X(sq_concat, as_sequence.sq_concat, CONCAT, CONCAT) \
+     X(sq_inplace_concat, as_sequence.sq_inplace_concat, CONCAT, CONCAT) \
+     X(new_, ht_type.tp_new, NEW, NONE) \
+-    X(init_, ht_type.tp_init, INIT, NONE)
++    X(init_, ht_type.tp_init, INIT, INIT)
+ 
+ /* _Py_VALUE_SLOT_INDEX_<field>: the row of a field. */
+ #define _Py_VALUE_SLOT_ENUM(FIELD, PATH, KIND, WRAPPER) \

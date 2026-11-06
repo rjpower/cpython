@@ -260,6 +260,18 @@ class MeasurementError(RuntimeError):
     """A measurement could not be made; nothing is guessed in its place."""
 
 
+class LaunchedMeasurementError(MeasurementError):
+    def __init__(self, message: str, pid: int):
+        super().__init__(message)
+        self.pid = pid
+
+
+class LaunchedProcess(subprocess.CompletedProcess):
+    def __init__(self, args, returncode, stdout, stderr, pid: int):
+        super().__init__(args, returncode, stdout, stderr)
+        self.pid = pid
+
+
 @dataclass
 class Context:
     python: Path
@@ -287,8 +299,14 @@ def check_result(proc: subprocess.CompletedProcess, cmd: list[str],
 
 
 def run_checked(cmd: list[str], what: str) -> subprocess.CompletedProcess:
-    proc = subprocess.run(cmd, check=False, capture_output=True, text=True, env=CHILD_ENV)
-    return check_result(proc, cmd, what)
+    with subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                          text=True, env=CHILD_ENV) as child:
+        stdout, stderr = child.communicate()
+    proc = LaunchedProcess(cmd, child.returncode, stdout, stderr, child.pid)
+    try:
+        return check_result(proc, cmd, what)
+    except MeasurementError as exc:
+        raise LaunchedMeasurementError(str(exc), child.pid) from exc
 
 
 def write_perf_record(ctx: Context, record: dict) -> None:
@@ -403,31 +421,39 @@ STATS_STEM = re.compile(r"[0-9a-f]{40}\Z")
 STATS_PROCESS = re.compile(r"Stats process: pid=([0-9]+) tag=(.*)\Z")
 
 
-def _marker_identity(raw: bytes) -> tuple[int, int, str, list[str]]:
+def _marker_identity(raw: bytes) -> tuple[int, int, str, list[str], int, int]:
     try:
         lines = raw.decode("utf-8").splitlines()
-        if len(lines) != 4:
-            raise ValueError("expected four marker lines")
-        prefixes = ("pid: ", "ppid: ", "tag: ", "argv: ")
+        if len(lines) != 7:
+            raise ValueError("expected seven marker lines")
+        prefixes = ("version: ", "pid: ", "ppid: ", "tag: ", "argv: ",
+                    "image_dev: ", "image_ino: ")
         if any(not line.startswith(prefix) for line, prefix in zip(lines, prefixes)):
             raise ValueError("invalid marker fields")
-        pid_text, ppid_text = (lines[0][5:], lines[1][6:])
+        if lines[0] != "version: 2":
+            raise ValueError("invalid marker version")
+        pid_text, ppid_text = (lines[1][5:], lines[2][6:])
         if not pid_text.isascii() or not pid_text.isdecimal() or not ppid_text.isascii() or not ppid_text.isdecimal():
             raise ValueError("invalid marker process id")
         pid, ppid = int(pid_text), int(ppid_text)
         if pid <= 0:
             raise ValueError("invalid marker process id")
-        encoded = json.loads(lines[3][6:])
+        encoded = json.loads(lines[4][6:])
         if not isinstance(encoded, list) or not encoded or any(not isinstance(arg, str) for arg in encoded):
             raise ValueError("invalid marker argv")
         argv = [os.fsdecode(arg.encode("latin-1")) for arg in encoded]
-        return pid, ppid, lines[2][5:], argv
+        image_dev, image_ino = lines[5][11:], lines[6][11:]
+        if (not image_dev.isascii() or not image_dev.isdecimal()
+            or not image_ino.isascii() or not image_ino.isdecimal()
+            or int(image_ino) == 0):
+            raise ValueError("invalid marker image identity")
+        return pid, ppid, lines[3][5:], argv, int(image_dev), int(image_ino)
     except (UnicodeError, ValueError, TypeError) as exc:
         raise MeasurementError(f"invalid pystats completion marker: {exc}") from exc
 
 
 def _record_pystats(ctx: Context, bench: Bench, loops: int, command: list[str],
-                    directory: Path, files: list[Path]) -> dict[Path, bytes]:
+                    directory: Path, files: list[Path], launch: dict) -> dict[Path, bytes]:
     artifacts = []
     contents = {}
     artifact_error = None
@@ -449,7 +475,8 @@ def _record_pystats(ctx: Context, bench: Bench, loops: int, command: list[str],
         artifacts.append(artifact)
     record = {"dump": ctx.pystats_dumps, "invocation": ctx.pystats_sequence,
               "benchmark": bench.name, "loops": loops, "command": command,
-              "directory": str(directory), "artifacts": artifacts}
+              "directory": str(directory), "root_launch": launch,
+              "artifacts": artifacts}
     if ctx.pystats_records is not None:
         with ctx.pystats_records.open("a") as stream:
             stream.write(json.dumps(record) + "\n")
@@ -467,12 +494,19 @@ def pystats_counts(ctx: Context, bench: Bench, loops: int) -> dict[str, int]:
     command = ctx.command(bench, "run", loops,
                           options=("-X", "pystats", "-X", f"pystats_dir={directory}"))
     child_error = None
+    image = os.stat(command[0])
+    launch = {"version": 1, "pid": None, "ppid": os.getpid(),
+              "argv": command, "image_dev": image.st_dev, "image_ino": image.st_ino}
     try:
-        run_checked(command, f"{bench.name} under pystats at {loops}")
-    except MeasurementError as exc:
+        proc = run_checked(command, f"{bench.name} under pystats at {loops}")
+        launch["pid"] = proc.pid
+    except LaunchedMeasurementError as exc:
+        launch["pid"] = exc.pid
+        child_error = exc
+    except (MeasurementError, OSError) as exc:
         child_error = exc
     files = sorted(directory.iterdir())
-    contents = _record_pystats(ctx, bench, loops, command, directory, files)
+    contents = _record_pystats(ctx, bench, loops, command, directory, files, launch)
     if child_error is not None:
         raise child_error
     if len(files) != 2 or any(path.is_symlink() or not path.is_file() for path in files):
@@ -485,8 +519,9 @@ def pystats_counts(ctx: Context, bench: Bench, loops: int) -> dict[str, int]:
     path, marker_path = by_suffix[".txt"], by_suffix[".done"]
     raw = contents[path]
     marker_raw = contents[marker_path]
-    pid, ppid, tag, argv = _marker_identity(marker_raw)
-    if ppid != os.getpid() or argv != command:
+    pid, ppid, tag, argv, image_dev, image_ino = _marker_identity(marker_raw)
+    if (pid != launch["pid"] or ppid != launch["ppid"] or argv != command
+        or image_dev != launch["image_dev"] or image_ino != launch["image_ino"]):
         raise MeasurementError(f"pystats completion marker does not identify {command}")
     try:
         text = raw.decode("utf-8")

@@ -5,7 +5,20 @@ instance fields and value-native C APIs. This page specifies the encoding as
 built, compares it with other dynamic-language runtimes, and lists the gaps
 we should close. It is the reference for value, container and C-boundary work.
 
-**Current rollout, 2026-11-05.** Runtime `d6eae4b1c1c` uses this value format
+**Current rollout, 2026-11-06.** The committed runtime is `1ab005e79b88` and
+has 55 value-slot rows, including `new_` and `init_` (16 hot, 39 cold).
+Phase-2 marks and four no-production-caller aliases (`PyIter_NextItem`,
+`PyMapping_GetOptionalItemString`, `_PyMapping_GetOptionalItem2`, and
+`_PyLong_GCD`) landed in `1ab005e79b88`; merged qualification `11580` passed
+4,541 tests in both release and debug. The runtime has value constructor
+providers, but ordinary `A()` still records 100 boxes for 100 calls because
+`PyType_Type.tp_value.call` is null. The type-call pair is required before
+general constructor dispatch can be called closed. Direct `__init__` and
+`type.__call__` descriptor wrappers are also not closed; see
+[value-api.md](value-api.md#construction-slots) and the
+[wrapper proposal](../issues/checkpoint-closure/direct-init-call-wrapper-proposal.md).
+
+**Historical rollout snapshot, 2026-11-05.** Runtime `d6eae4b1c1c` uses this value format
 and builds in debug, release and stats configurations. The source snapshot
 below specifies the representation; it does not certify the later runtime's
 full API migration. Numeric compatibility marks, the mechanical ownership
@@ -19,7 +32,7 @@ The [closure plan](../issues/checkpoint-closure/plan.md) records current source
 identities, reviews and checks. The R27 no-core-box rule in
 [value-api.md](value-api.md) remains the checkpoint requirement.
 
-Source of truth: the universal-value worktree
+Historical representation source snapshot: the universal-value worktree
 `build/worktrees/pyvalue-rc-universal` at `5de7bd62ef9` (2026-11-04), which
 contains the G1 fix `271f4e435e5`. Section 1 was read from source at that
 commit, not observed. Where this page and the code disagree, the code

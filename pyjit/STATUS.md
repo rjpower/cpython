@@ -1,19 +1,22 @@
 # Project status
 
-Live status, 2026-11-06: runtime HEAD is `42696e9fcca`. The 15-file
-formatting/I/O/constructor/dict/SQLite batch landed as `66981c963be` after
-three 117-module builds and 6,684 tests per profile, including the corrected
-operator direct-call regression and C object-call/lifetime probes. Regex
-subscription and builtin `getattr` then landed after 4,633 tests per profile
-and matching-upstream probes. Type assignment then passed 4,499 tests per
-profile and upstream lifetime/slot-update probes. Process identity/capture
-and paired value construction are the next integration queue.
+Live status, 2026-11-06: runtime HEAD is `1ab005e79b8`. Finished-process
+identity landed as `84edb605d31` (4,276 tests/profile), direct value new as
+`71016b30e45`, and paired init/constructor providers plus four API aliases
+as `1ab005e79b8` (4,541 tests/profile). All three profiles build 117 modules.
+Direct int/float new calls now have zero boxes in bounded actual probes, but
+ordinary class calls still had 100 boxes in 100 calls at the object type-call
+slot. The dispatch correction, direct initializer wrappers, float formatting,
+descriptor lookup and native child receipts are now applied together under
+full merged validation, execution `10399`. The first attempt stopped at the
+stats module check: two native accounting helpers needed exported declarations.
+The reviewed export fix is applied. Keep shared source/builds frozen.
 
 The exact-source raw [kernel capture](issues/checkpoint-closure/kernels-66981c963be.md)
 at `66981c963be` has 15/29 raw-zero kernels and all 29 zero loop deltas.
 The actual matched-build preflight now passes after refreshing build-info;
 preflight-only is explicitly ineligible as a measured result. No new timing
-exists. Full suite outcomes below predate the latest three integrations, so
+exists. Full suite outcomes below predate the latest integrations, so
 complete functional and strict R27 requalification remain necessary.
 
 The previous full qualification point at `af82c03c4e5` ran 54,311 tests

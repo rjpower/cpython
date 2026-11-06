@@ -1,0 +1,88 @@
+diff --git a/Objects/stringlib/unicode_format.h b/Objects/stringlib/unicode_format.h
+index d6e31f7e009..bd1a472c90f 100644
+--- a/Objects/stringlib/unicode_format.h
++++ b/Objects/stringlib/unicode_format.h
+@@ -520,8 +520,6 @@ render_field(PyValueBorrow fieldobj, SubString *format_spec, _PyUnicodeWriter *w
+         formatter = _PyUnicode_FormatAdvancedWriter;
+     else if (fieldobj_o != NULL && PyLong_CheckExact(fieldobj_o))
+         formatter = _PyLong_FormatAdvancedWriter;
+-    else if (fieldobj_o != NULL && PyFloat_CheckExact(fieldobj_o))
+-        formatter = _PyFloat_FormatAdvancedWriter;
+     else if (fieldobj_o != NULL && PyComplex_CheckExact(fieldobj_o))
+         formatter = _PyComplex_FormatAdvancedWriter;
+ 
+diff --git a/Objects/unicode_formatter.c b/Objects/unicode_formatter.c
+index 72ade93c82f..7087d51509d 100644
+--- a/Objects/unicode_formatter.c
++++ b/Objects/unicode_formatter.c
+@@ -385,7 +385,7 @@ typedef struct {
+   if failure, sets the exception
+ */
+ static int
+-parse_internal_render_format_spec(const char *type_name,
++parse_internal_render_format_spec(PyTypeObject *type,
+                                   PyObject *format_spec,
+                                   Py_ssize_t start, Py_ssize_t end,
+                                   InternalFormatSpec *format,
+@@ -550,7 +550,7 @@ parse_internal_render_format_spec(const char *type_name,
+         if (actual_format_spec != NULL) {
+             PyErr_Format(PyExc_ValueError,
+                 "Invalid format specifier '%U' for object of type '%.200s'",
+-                actual_format_spec, type_name);
++                actual_format_spec, type->tp_name);
+             Py_DECREF(actual_format_spec);
+         }
+         return 0;
+@@ -1815,7 +1815,7 @@ _PyUnicode_FormatAdvancedWriter(_PyUnicodeWriter *writer,
+     }
+ 
+     /* parse the format_spec */
+-    if (!parse_internal_render_format_spec(Py_TYPE(obj)->tp_name,
++    if (!parse_internal_render_format_spec(Py_TYPE(obj),
+                                            format_spec, start, end,
+                                            &format, 's', '<'))
+         return -1;
+@@ -1852,7 +1852,7 @@ _PyLong_FormatAdvancedWriter(_PyUnicodeWriter *writer,
+     }
+ 
+     /* parse the format_spec */
+-    if (!parse_internal_render_format_spec(Py_TYPE(obj)->tp_name,
++    if (!parse_internal_render_format_spec(Py_TYPE(obj),
+                                            format_spec, start, end,
+                                            &format, 'd', '>'))
+         goto done;
+@@ -1907,7 +1907,6 @@ _PyFloat_FormatAdvancedWriterValue(_PyUnicodeWriter *writer,
+                                    Py_ssize_t start, Py_ssize_t end)
+ {
+     InternalFormatSpec format;
+-    const char *type_name = PyValue_TYPE(value)->tp_name;
+ 
+     /* check for the special case of zero length format spec, make
+        it equivalent to str(obj) */
+@@ -1922,7 +1921,7 @@ _PyFloat_FormatAdvancedWriterValue(_PyUnicodeWriter *writer,
+     }
+ 
+     /* parse the format_spec */
+-    if (!parse_internal_render_format_spec(type_name,
++    if (!parse_internal_render_format_spec(PyValue_TYPE(value),
+                                            format_spec, start, end,
+                                            &format, '\0', '>'))
+         return -1;
+@@ -1943,7 +1942,7 @@ _PyFloat_FormatAdvancedWriterValue(_PyUnicodeWriter *writer,
+ 
+     default:
+         /* unknown */
+-        unknown_presentation_type(format.type, type_name);
++        unknown_presentation_type(format.type, PyValue_TYPE(value)->tp_name);
+         return -1;
+     }
+ }
+@@ -1972,7 +1971,7 @@ _PyComplex_FormatAdvancedWriter(_PyUnicodeWriter *writer,
+         return format_obj(obj, writer);
+ 
+     /* parse the format_spec */
+-    if (!parse_internal_render_format_spec(Py_TYPE(obj)->tp_name,
++    if (!parse_internal_render_format_spec(Py_TYPE(obj),
+                                            format_spec, start, end,
+                                            &format, '\0', '>'))
+         return -1;

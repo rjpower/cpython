@@ -12,7 +12,7 @@ the first revision, and review 2
 ([reviews/register-ir-review-2.md](reviews/register-ir-review-2.md)) the
 second.
 
-**Current implementation, 2026-11-06.** Runtime `42696e9fcca` builds and
+**Current implementation, 2026-11-06.** Runtime `1ab005e79b8` builds and
 executes the register interpreter in debug, release and stats configurations.
 The source baseline and comparative tables below are dated evidence; their
 statement that the tree does not link describes November 3, not the current

@@ -690,7 +690,7 @@ object-form callable type with a vectorcall, one with only `tp_call`, a
 | Prepend under GC: the bound method's callee runs `gc.collect()` inside a generator and inside a frame whose `f_locals` was read | no crash; debug-build GC assertions hold (D5) |
 | Keywords: `f(1, b=2)`, `o.m(1, b=2)`, a `METH_VALUE` method with keywords, `**{'b': 2}` through `PyObject_Call` | values bound by name; keyword values never boxed |
 | `METH_VALUE` method of an inline receiver: a method descriptor for `int` made by the test module (`PyDescr_NewMethod(&PyLong_Type, …)`), called as `d(5, 2.5)` and as `d.__get__(5)(2.5)` | `self` and the argument arrive inline; the bound object's `m_self` is inline; zero boxes on the call (stats build) |
-| `METH_VALUE` combined with `METH_O`, `METH_FASTCALL`, `METH_VARARGS` | `SystemError` at creation |
+| `METH_VALUE` combined with `METH_FASTCALL` or `METH_VARARGS` | `SystemError` at creation; `METH_VALUE` with `METH_O` is supported by the amended fixed-arity convention |
 | Arity messages of a `METH_VALUE` function compared with the same function as `METH_NOARGS` and `METH_O` | identical text |
 | `5()`, `(1.5)()` | `TypeError: 'int' object is not callable`, no box |
 | A value callable returning `PyValue_NULL` without an exception (debug build); an extension callable doing the same through each adapter (release build) | the assertion fires (a `test_capi` subprocess case); `SystemError` from the adapter, as `_Py_CheckFunctionResult` |

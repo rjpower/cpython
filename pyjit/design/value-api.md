@@ -680,10 +680,10 @@ producer and call site before the gate can claim closure.
   of `self` (`PyMethod_GET_SELF`, `PyCFunction_GET_SELF` and kin) are
   deleted; `PyMethod_GetSelfRef` and `PyCFunction_GetSelfRef` replace them
   (D10).
-* **Builtins.** A new flag `METH_VALUE` (D9: it carries no `METH_FASTCALL`,
-  `METH_O` or `METH_NOARGS` bit, so code that tests those bits never calls a
-  value function with object arguments). The final convention is in
-  `Include/internal/pycore_value_call.h`; the keyword flag splits it as
+* **Builtins.** A new flag `METH_VALUE` selects value arguments. Its
+  fixed-arity forms also use `METH_O` or `METH_NOARGS`; dispatch must test
+  `METH_VALUE` before treating either as an object-form convention. The final
+  convention is in `Include/internal/pycore_value_call.h`; the keyword flag splits it as
   `METH_FASTCALL` is split. `METH_VALUE` alone takes positional arguments:
   the vectorcall of the function or its method descriptor rejects keywords
   with upstream's message and calls `ml_meth` with `kwnames` NULL.

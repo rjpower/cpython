@@ -1,0 +1,5 @@
+# Paired benchmark Py_STATS consumer
+
+Apply `process-identity-benchmark-consumer.patch` with the stage-two C producer and R27 reader. The patch changes only `pyjit/bench/run.py` and its host-side stats-record tests. Each child gets a fresh private `pystats_dir`; the consumer accepts one same-stem `.txt`/`.done` pair, checks the recorded pid, ppid, tag, and byte-decoded argv against the actual command and dump, and rejects stray files. It journals every raw artifact with a SHA-256 digest before identity or counter parsing, so failed attempts remain available after the scratch directory is removed. Successful attempts delete only their verified pair.
+
+`uv run --no-project python -m unittest discover -s pyjit/bench/tests -p 'test_*.py'` passed: 26 tests, 2 skipped. `git diff --check` passed for both changed files. Host tests include valid and malformed pairs, identity mismatches, extra process files, a duplicate counter, and non-ASCII/invalid filesystem argv bytes. No real Py_STATS child was run because the producer and reader have not been integrated together; the integration probe remains required before benchmark measurement.

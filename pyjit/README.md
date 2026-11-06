@@ -4,10 +4,15 @@ We are rebuilding CPython around universal eight-byte PyValues, a register
 interpreter, and a cohesive method and tracing JIT. Memory management uses
 reference counting with cyclic collection. Extensions are rebuilt and ported.
 
-**Current outcome:** the universal-value runtime links and runs. The first
-checkpoint puts its kernels at 2.6x upstream time (JIT off); work now targets
-that gap.
-**Next milestone:** a qualified register-interpreter baseline, measured with JIT off.
+**Current outcome:** the universal-value runtime links and runs. Runtime
+`42696e9fcca` follows the reviewed 15-file integration `66981c963be`, whose
+three builds and 6,684 tests per profile passed, including the operator crash
+regression. Regex/getattr passed 4,633 tests per profile; type assignment
+then passed 4,499 tests per profile and matching-upstream probes.
+Full functional requalification and R27 remain open;
+there is no current performance measurement.
+**Next milestone:** close ownership/accounting debt, qualify one clean runtime,
+then measure it against matched upstream and interim controls with the JIT off.
 
 Start with [current status](STATUS.md) for progress and blockers, or the
 [stage map](ROADMAP.md) for the route to completion. A new coordinator should read

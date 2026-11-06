@@ -1,0 +1,11 @@
+--- a/Include/internal/pycore_moduleobject.h
++++ b/Include/internal/pycore_moduleobject.h
+@@ -2,8 +2,6 @@
+ #define Py_INTERNAL_MODULEOBJECT_H
+ 
+ #include <stdbool.h>
+-
+-#include "pycore_value.h"       // PyValueBorrow
+ 
+ #ifdef __cplusplus
+ extern "C" {

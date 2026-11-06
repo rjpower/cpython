@@ -194,3 +194,33 @@ The next struct/property/Unicode/inventory batch is in merged qualification.
 The local closure plan is updated. Updating the Loom plan copy was rejected by
 automatic approval review as an export of internal implementation details;
 that remote copy remains at revision 7. No alternate export was attempted.
+
+- 2026-11-05 — Landed: runtime `812cba08f4b` ports dictionary constructors
+  and `math.dist`; three 117-module builds, lint and 6,193 focused tests per
+  release/debug profile pass. The frozen `b9888ea3b40`-labelled raw capture has
+  15/29 startup-inclusive zero-box kernels and zero loop deltas on all 29;
+  its embedded build identity is predecessor-dirty `7baf96ed017`, documented
+  in [status](STATUS.md). A selected legacy attribute-owner probe reports zero
+  invalid owners in two dumps. R27 and full-suite qualification remain open;
+  no new performance result exists. See the live [closure queue](issues/checkpoint-closure/plan.md).
+
+- 2026-11-06 — `af82c03c4e5` integrates operator/factorial value continuations
+  and exact process-accounting rules; three builds and 5,768 tests/profile
+  pass. Full runs each exercised 54,311 tests and found the operator call-slot
+  crash, whose correction is under merged validation. The new full stats
+  [census](issues/checkpoint-closure/fullsuite-af82-census.md) records 14,211,307
+  debt boxes and zero invalid owners/drops; admission and timing remain open.
+
+- 2026-11-06 — `66981c963be` integrates the operator crash repair and value
+  continuations for formatting, I/O, direct construction, dictionary methods
+  and SQLite: three 117-module builds and 6,684 tests/profile pass. Then
+  `357baeea402` closes regex subscription/getattr with 4,633 tests/profile and
+  upstream differential probes. The exact-source raw census remains 15/29
+  zero kernels, all zero loop deltas; no elapsed-time result is claimed.
+
+- 2026-11-06 — `42696e9fcca` integrates owned value type assignment and its
+  lock-held dictionary helper: three 117-module builds, lint and 4,499 tests
+  per release/debug profile pass. Upstream differential probes cover
+  metaclasses, displaced-value finalizers and slot updates. Process-accounting
+  producer/reader composition and paired construction remain in progress;
+  full qualification and current timing remain outstanding.

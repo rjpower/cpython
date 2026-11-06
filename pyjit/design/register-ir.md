@@ -12,7 +12,7 @@ the first revision, and review 2
 ([reviews/register-ir-review-2.md](reviews/register-ir-review-2.md)) the
 second.
 
-**Current implementation, 2026-11-05.** Runtime `3f480256304` builds and
+**Current implementation, 2026-11-06.** Runtime `42696e9fcca` builds and
 executes the register interpreter in debug, release and stats configurations.
 The source baseline and comparative tables below are dated evidence; their
 statement that the tree does not link describes November 3, not the current
@@ -29,14 +29,15 @@ slots, reduced feedback storage, removed `NOT_TAKEN`/`PUSH_NULL` words,
 discarded call results, fused compare branches and consecutive unpack targets.
 The detailed commit and validation ledger is in [WORKLOG](../WORKLOG.md).
 
-Handler-domain instrumentation is qualified. Runtime `3f480256304` has the
+Handler-domain instrumentation is qualified. Runtime `812cba08f4b` has the
 H3 full-handler-domain producer and strict reader: the generated domain,
 dispatch entries and counter arrays agree. The latest captured candidate has
-nine of 29 kernels at zero boxes in every raw process, with zero loop deltas
-across all 29; the strict startup-inclusive gate still fails. See the
-[exact kernel census](../issues/checkpoint-closure/kernels-context-candidate.md)
-for its source identity, per-kernel counts and capture path. This supersedes
-the earlier eight-kernel cold-path capture. The startup-inclusive PyValue gate
+15 of 29 kernels at zero boxes in every raw process, with zero loop deltas
+across all 29; the strict startup-inclusive gate still fails. The capture named
+`kernels-b9888ea3b40` used the source later committed as `b9888ea3b40`, while
+its embedded version retained the predecessor dirty identity. See
+[status](../STATUS.md) for capture paths and the identity caveat. This supersedes
+the earlier eleven-kernel struct/property capture. The startup-inclusive PyValue gate
 remains open. The earlier `4fffee855c9` census predates H3 and remains
 historical evidence, not a measurement of this source identity. Historical
 instruction counts and other-VM comparisons below are likewise not new

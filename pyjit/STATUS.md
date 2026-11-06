@@ -1,45 +1,35 @@
 # Project status
 
-Live closure work, 2026-11-05: runtime HEAD is `3f480256304`. The latest
-25-file integration carries values through Decimal Context constructors,
-methods, getsets and slots; itertools, long ranges, math/bisect consumers and
-cold compiler folding. Decimal is now a value-native core unit. Full release
-and debug runs each exercised 54,301 tests. A new bisect fixture assumed the
-wrong C error text, and debug bisect could not import because its existing slot
-validator was hidden. Both were corrected; all 106 affected tests and compiler
-arithmetic probes pass on each profile. Debug now imports all 117 expected
-modules. The landing script now checks the module roster because `make` can
-return success after removing a failed extension.
+Live status, 2026-11-06: runtime HEAD is `42696e9fcca`. The 15-file
+formatting/I/O/constructor/dict/SQLite batch landed as `66981c963be` after
+three 117-module builds and 6,684 tests per profile, including the corrected
+operator direct-call regression and C object-call/lifetime probes. Regex
+subscription and builtin `getattr` then landed after 4,633 tests per profile
+and matching-upstream probes. Type assignment then passed 4,499 tests per
+profile and upstream lifetime/slot-update probes. Process identity/capture
+and paired value construction are the next integration queue.
 
-The next 14-file candidate integrates independently reviewed struct packing,
-property fields, Unicode value formatting and inventory-checker hardening.
-Merged regeneration/builds and focused qualification are running. Terra owns
-ctypes callbacks and constructor closure; Luna owns the remaining compiler and
-import continuations; Sol owns independent review and complete stats process
-accounting. The rejected ctypes keepalive-home patch exposed a real foreign
-pointer lifetime defect: canonicalizing its sole owner can release an object
-whose address is still stored in foreign memory. The replacement design must
-retain explicit raw FFI ownership without weakening canonical value homes.
+The exact-source raw [kernel capture](issues/checkpoint-closure/kernels-66981c963be.md)
+at `66981c963be` has 15/29 raw-zero kernels and all 29 zero loop deltas.
+The actual matched-build preflight now passes after refreshing build-info;
+preflight-only is explicitly ineligible as a measured result. No new timing
+exists. Full suite outcomes below predate the latest three integrations, so
+complete functional and strict R27 requalification remain necessary.
 
-The complete stats suite at preceding `6aec17eefeb` passed 54,290 tests, but
-R27 fails with 41,038,468 core/core-owned adapter boxes and incomplete process
-accounting. Its 41 invalid-owner rows were traced to deliberately failing
-Python allocators during stats reporting; the reporter repair is integrated
-and its low-memory probes pass. The current kernel capture has nine of 29
-kernels at zero boxes across every raw process; all 29 loop deltas are zero.
-See the [exact raw census](issues/checkpoint-closure/kernels-context-candidate.md).
-These are failing admission results, not a completed checkpoint.
+The previous full qualification point at `af82c03c4e5` ran 54,311 tests
+per profile and found the operator regression, now fixed by focused merged
+checks. Its [full stats census](issues/checkpoint-closure/fullsuite-af82-census.md)
+folded 6,513 dumps: 14,211,307 debt boxes, zero invalid owners/drops, 545
+unfinished markers, 423 predicted-uncounted audit events and one empty marker.
+Events are not unique children. These remain failing admission evidence;
+coverage differs from earlier captures, so no percentage gain is claimed.
 
-The coordinator owns integration, bulk qualification and performance. Matched
-upstream/interim controls now load the same development-library families.
-Current performance has not been measured; historical ratios below are not
-results for this source. G2 remains deferred until the qualified baseline.
-Execution, assignments and measurement sequence: [closure plan](issues/checkpoint-closure/plan.md).
+Ctypes and LRU ownership implementation remain pending explicit approval after
+automatic review. G2 remains deferred. Historical performance figures below
+are not results for the current runtime. The [closure plan](issues/checkpoint-closure/plan.md)
+contains the current ordered work and the measurement protocol.
 
-The takeover snapshot below was checked against `e1229448be3`, before these
-closure landings. Use the live paragraph above and closure plan for assignments.
-
-## Takeover snapshot, before closure work
+## Historical takeover snapshot, before closure work
 
 The runtime worktree is clean. W4b (`b2dc9b86392`), W2b (`e9aca5156b8`),
 W4c (`4840754ffa7`) and the UUID traversal fix (`e1229448be3`) have landed

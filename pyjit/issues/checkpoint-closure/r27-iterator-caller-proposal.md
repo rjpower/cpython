@@ -1,0 +1,17 @@
+# Iterator and SQLite caller continuation proposal
+
+Base: runtime `7baf96ed017`. Work is isolated from the W5 ctypes transaction.
+
+For `memoryview.count`, replace the object iterator result with `_PyValue_IterNext`. Preserve its error/end distinction, identity check before equality, and count semantics. Close the owned item after identity or rich comparison on every path.
+
+For the three `dict.fromkeys` fallback loops, consume `_PyValue_IterNext` results directly. Exact dictionaries pass the owned key and duplicated value to `setitem_take2_lock_held` under the existing dictionary critical section; frozen dictionaries use `_PyDict_SetValue_Take2`; subclass dispatch borrows the key for `_PyValue_SetItem` and closes it afterward. Iterator exhaustion and failures retain the existing result and cleanup behavior.
+
+SQLite is a separate, larger continuation. Both named and positional bind loops already obtain values but object-project them before `need_adapt`, `pysqlite_microprotocols_adapt`, and `bind_param`. The mapping optional-get call cannot be ported cleanly in isolation. A coherent port must retain registered adapters for exact inline types when `BaseTypeAdapted` is set, preserve adapter/conform callback ordering and None/TypeError fallback behavior, carry arbitrary adapter return values, keep SQLite integer overflow diagnostics and buffer lifetime, and avoid passing an inline value to object-only helpers. `_pysqlite_long_as_int64` has two other users and a narrow-platform byte-array branch, so any new value variant must preserve those paths. This continuation needs a separate reviewed recipe before implementation.
+
+## SQLite value continuation (proposed)
+
+Migrate `pysqlite_microprotocols_adapt` to accept borrowed object/protocol/nullable alternate values and return an owned value. Form the registry key from `PyValue_TYPE(obj)` and the borrowed protocol value. Call a found adapter through `_PyValue_CallOneArg`; otherwise get protocol `__adapt__`, then object `__conform__`, with the value-aware optional-attribute and call APIs. Match existing ordering and handling of None, TypeError and all other exceptions. If no adapter succeeds, duplicate the alternate when provided; a null alternate raises the original ProgrammingError. The sole third consumer, `_sqlite3.adapt`, already receives value arguments and can return this owned value directly.
+
+Make `need_adapt` and `bind_param` take borrowed values, and carry owners from both positional and named lookup through adaptation and binding. `BaseTypeAdapted` must still force registered adapters for exact inline int and float. Use value predicates and numeric extraction; only project after Unicode or buffer checks establish a concrete object, retaining its owner through buffer release and SQLite's transient copy. Preserve the existing ProgrammingError type names and SQLite/error chaining.
+
+Add `_pysqlite_value_as_int64` using `_PyValue_AsLongLongAndOverflow` and, in the existing narrow-long-long branch, `_PyLong_ValueAsByteArray`. Keep the object helper as a thin caller for the two existing connection users; preserve the current error text and platform branches. Test positional/named exact numeric values, bool and subclasses, default/registered adapters, object `__conform__`, protocol `__adapt__`, alternate omitted/None, adapter exceptions, out-of-range ints, text and buffer lifetimes. This is a proposal pending peer review.

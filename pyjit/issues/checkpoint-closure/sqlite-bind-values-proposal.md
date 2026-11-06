@@ -1,0 +1,25 @@
+# SQLite value-native binding and adaptation proposal
+
+Read-only proposal against runtime `af82c03c4e5`. Scope: `Modules/_sqlite/{cursor.c,microprotocols.c,microprotocols.h,module.c,util.c,util.h}`. The remaining `PyMapping_GetOptionalItemString` site cannot be closed by an isolated API rename: both named and positional lookup currently immediately feed object-only adaptation and binding and therefore project inline numeric values. This proposal is not implemented or approved.
+
+## Binding inputs and errors
+
+In `cursor.c`, retain the owned `PyValue` returned from tuple/list/sequence lookup. Named parameters call `_PyValue_MappingGetOptionalItemString`, consuming the owned result on `status == 1`; preserve `-1` propagation and the existing missing-binding `ProgrammingError` for status 0. The provider is the direct value body of the current object API and preserves mapping/dict-subclass lookup and KeyError suppression. Keep the existing sequence-vs-dict decision, argument count and named-placeholder checks, binding order, and SQLite error chaining.
+
+Change `need_adapt` to accept a borrowed value; `PyValue_TYPE` exact-type tests for int, float, str and bytearray reproduce the old checks, including exact NaN and subtype behavior. `BaseTypeAdapted` still forces adaptation for all inputs, including inline exact integers and floats. If adaptation is skipped, transfer the input owner to the binding continuation; otherwise hold it through adaptation, close it after the returned owner is obtained, and stop on a null result. Hold the adapted owner through `bind_param` and close it after binding, including error paths.
+
+Change `bind_param` to accept a borrow. Preserve its branch order: None; exact long; exact float; exact Unicode; long subclass/bool; float subclass; Unicode subclass; buffer; unsupported type. Use `PyValue_LongCheckExact`, `PyValue_TYPE` exact float, `PyValue_LongCheck`, and `PyValue_FloatCheck`. Only access `PyObject *` after `PyValue_IsObject` and a Unicode/buffer check, and keep the input owner alive through `PyUnicode_AsUTF8AndSize`, `PyObject_GetBuffer`, SQLite's `SQLITE_TRANSIENT` copy and `PyBuffer_Release`. Preserve int/float conversion error tests, SQLITE_ERROR, message type names via `PyValue_TYPE`, overflow and release order.
+
+## Adaptation protocol
+
+Replace the internal `pysqlite_microprotocols_adapt` contract with `PyValue` return and borrowed `obj`, `proto`, and nullable `alt` arguments. Its only three callers are the two cursor paths and `_sqlite3.adapt` in `module.c`, which already receives borrowed values and can return the result directly. No exported object wrapper is needed unless a fresh call-site audit finds another consumer.
+
+Construct the existing two-item registry key from `PyValue_TYPE(obj)` and the borrowed protocol. Keep the `_PyDict_GetValue` result as an owned value and call it with `_PyValue_CallOneArg`; even an invalid inline registered adapter must raise the same not-callable error. Then attempt protocol `__adapt__`, followed by object `__conform__`, with `_PyValue_GetOptionalAttr` and `_PyValue_CallOneArg`, retaining callable/argument owners across each callback. Preserve lookup errors, the fact that registered-adapter results are returned directly, the subsequent None-as-no-result behavior, and TypeError suppression only for the two protocol calls. A missing alternate is `PyValue_NULL` and raises the existing ProgrammingError; an explicitly supplied None or any other value is duplicated and returned. Preserve the fact that a protocol may itself be an arbitrary value, not necessarily the standard type.
+
+## Int64 helper and platform behavior
+
+Add `_pysqlite_value_as_int64(PyValueBorrow)` in `util.c`/`util.h`. It uses `_PyValue_AsLongLongAndOverflow` with the existing error and overflow checks; where `sizeof(long long) < sizeof(sqlite_int64)`, use `_PyLong_ValueAsByteArray` with the same byte order, signedness, buffer width, and `with_exceptions=0`. Preserve `SIZEOF_LONG_LONG > 8` checks and the exact final SQLite INTEGER OverflowError message. Keep `_pysqlite_long_as_int64(PyObject *)` as a thin internal adapter for its two current `connection.c` users; do not convert or hide their separate call-site debt in this packet.
+
+## Validation and risks
+
+Peer-review every owner and status path before implementation. Focused checks: SQLite adaptation and type tests, positional/named exact int/float/None/bool, large in-range and out-of-range integers, NaN, integer/float subclasses, registered exact-type adapters, dict-subclass `__getitem__`, protocol and `__conform__` callback ordering, callable exceptions/TypeError/None, `adapt` omitted versus explicit None alternate, mutable/reentrant buffer providers and errors. Confirm adapter-registry global state is restored in tests. Run minimal W5 release compile/module import and focused sqlite tests, then compare representative behavior/errors to upstream. The unusual narrow-long-long branch cannot be executed on the current 64-bit host; preserve it by source review and report the platform limitation. Root owns merged qualification and fresh raw attribution.

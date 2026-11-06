@@ -39,11 +39,9 @@ boxes
     instruction, handler entries/pairs and native boxing sites. The complete
     parsed counters from the warm-up and low/high processes are retained;
     normalized differences include startup/setup and are not hot-only counts.
-    Py_STATS writes each process's stats to a new
-    randomly named file in /tmp/py_stats, shared with other users of the
-    machine, so the runner takes the one file that appears during its
-    child's run and fails if there is not exactly one; it never clears the
-    directory. Use ``--pystats-records FILE`` to retain original dump text
+    Each child writes its stats and completion marker to a private directory.
+    The runner verifies the matching process identities and fails on extra
+    files. Use ``--pystats-records FILE`` to retain both original records
     before parsing, including dumps rejected by later schema checks.
     Boxing call sites: pyjit/tools/measure/box_audit.py -v.
 rss
@@ -73,12 +71,15 @@ interpreter under test is ``--build``.
 from __future__ import annotations
 
 import argparse
+import base64
 import datetime
 import hashlib
 import json
 import os
 import platform
+import re
 import shutil
+import stat
 import statistics
 import subprocess
 import sys
@@ -92,7 +93,6 @@ DRIVER = INTERNAL / "driver.py"
 REPO = HERE.parents[1]
 GROUPS = ("kernels", "micro", "memory")
 METRICS = ("instr", "time", "rss", "boxes")
-PYSTATS_DIR = Path("/tmp/py_stats")
 GNU_TIME = "/usr/bin/time"
 CHILD_ENV = {k: v for k, v in os.environ.items() if not k.startswith("PYTHON")}
 CHILD_ENV["PYTHONHASHSEED"] = "0"
@@ -269,6 +269,7 @@ class Context:
     perf_sequence: int = 0
     pystats_records: Path | None = None
     pystats_dumps: int = 0
+    pystats_sequence: int = 0
 
     def command(self, bench: Bench, mode: str, loops: int, runs: int = 1,
                 options: tuple[str, ...] = ()) -> list[str]:
@@ -398,27 +399,103 @@ BOX_TOTALS = ("Object inline int boxes", "Object inline float boxes",
               "Object inline array boxes")
 
 
-def pystats_counts(ctx: Context, bench: Bench, loops: int) -> dict[str, int]:
-    """Run the benchmark under -X pystats and return its counters by name."""
-    PYSTATS_DIR.mkdir(exist_ok=True)
-    before = set(PYSTATS_DIR.iterdir())
-    run_checked(ctx.command(bench, "run", loops, options=("-X", "pystats")),
-                f"{bench.name} under pystats at {loops}")
-    new = set(PYSTATS_DIR.iterdir()) - before
-    if len(new) != 1:
-        raise MeasurementError(f"{len(new)} new files in {PYSTATS_DIR} during {bench.name}; "
-                               "another process is writing stats, so none is attributable")
-    path = new.pop()
-    raw = path.read_bytes()
-    text = raw.decode("utf-8")
+STATS_STEM = re.compile(r"[0-9a-f]{40}\Z")
+STATS_PROCESS = re.compile(r"Stats process: pid=([0-9]+) tag=(.*)\Z")
+
+
+def _marker_identity(raw: bytes) -> tuple[int, int, str, list[str]]:
+    try:
+        lines = raw.decode("utf-8").splitlines()
+        if len(lines) != 4:
+            raise ValueError("expected four marker lines")
+        prefixes = ("pid: ", "ppid: ", "tag: ", "argv: ")
+        if any(not line.startswith(prefix) for line, prefix in zip(lines, prefixes)):
+            raise ValueError("invalid marker fields")
+        pid_text, ppid_text = (lines[0][5:], lines[1][6:])
+        if not pid_text.isascii() or not pid_text.isdecimal() or not ppid_text.isascii() or not ppid_text.isdecimal():
+            raise ValueError("invalid marker process id")
+        pid, ppid = int(pid_text), int(ppid_text)
+        if pid <= 0:
+            raise ValueError("invalid marker process id")
+        encoded = json.loads(lines[3][6:])
+        if not isinstance(encoded, list) or not encoded or any(not isinstance(arg, str) for arg in encoded):
+            raise ValueError("invalid marker argv")
+        argv = [os.fsdecode(arg.encode("latin-1")) for arg in encoded]
+        return pid, ppid, lines[2][5:], argv
+    except (UnicodeError, ValueError, TypeError) as exc:
+        raise MeasurementError(f"invalid pystats completion marker: {exc}") from exc
+
+
+def _record_pystats(ctx: Context, bench: Bench, loops: int, command: list[str],
+                    directory: Path, files: list[Path]) -> dict[Path, bytes]:
+    artifacts = []
+    contents = {}
+    artifact_error = None
+    for path in files:
+        artifact = {"path": str(path)}
+        try:
+            mode = path.lstat().st_mode
+            if not stat.S_ISREG(mode):
+                artifact["kind"] = "symlink" if stat.S_ISLNK(mode) else "nonregular"
+                artifact_error = f"nonregular pystats artifact: {path}"
+            else:
+                raw = path.read_bytes()
+                contents[path] = raw
+                artifact.update(kind="regular", raw_base64=base64.b64encode(raw).decode("ascii"),
+                                sha256=hashlib.sha256(raw).hexdigest())
+        except OSError as exc:
+            artifact["read_error"] = str(exc)
+            artifact_error = f"unreadable pystats artifact: {path}: {exc}"
+        artifacts.append(artifact)
+    record = {"dump": ctx.pystats_dumps, "invocation": ctx.pystats_sequence,
+              "benchmark": bench.name, "loops": loops, "command": command,
+              "directory": str(directory), "artifacts": artifacts}
     if ctx.pystats_records is not None:
-        record = {"dump": ctx.pystats_dumps, "benchmark": bench.name, "loops": loops,
-                  "command": ctx.command(bench, "run", loops, options=("-X", "pystats")),
-                  "source_path": str(path), "text": text,
-                  "sha256": hashlib.sha256(raw).hexdigest()}
         with ctx.pystats_records.open("a") as stream:
             stream.write(json.dumps(record) + "\n")
         ctx.pystats_dumps += 1
+    if artifact_error is not None:
+        raise MeasurementError(artifact_error)
+    return contents
+
+
+def pystats_counts(ctx: Context, bench: Bench, loops: int) -> dict[str, int]:
+    """Run the benchmark under -X pystats and return its counters by name."""
+    ctx.pystats_sequence += 1
+    directory = ctx.scratch / "pystats" / f"{ctx.pystats_sequence:06d}"
+    directory.mkdir(parents=True, exist_ok=False)
+    command = ctx.command(bench, "run", loops,
+                          options=("-X", "pystats", "-X", f"pystats_dir={directory}"))
+    child_error = None
+    try:
+        run_checked(command, f"{bench.name} under pystats at {loops}")
+    except MeasurementError as exc:
+        child_error = exc
+    files = sorted(directory.iterdir())
+    contents = _record_pystats(ctx, bench, loops, command, directory, files)
+    if child_error is not None:
+        raise child_error
+    if len(files) != 2 or any(path.is_symlink() or not path.is_file() for path in files):
+        raise MeasurementError(f"expected one completed pystats pair in {directory}; found {files}")
+    by_suffix = {path.suffix: path for path in files}
+    if (set(by_suffix) != {".txt", ".done"}
+            or files[0].stem != files[1].stem
+            or STATS_STEM.fullmatch(files[0].stem) is None):
+        raise MeasurementError(f"invalid pystats pair in {directory}: {files}")
+    path, marker_path = by_suffix[".txt"], by_suffix[".done"]
+    raw = contents[path]
+    marker_raw = contents[marker_path]
+    pid, ppid, tag, argv = _marker_identity(marker_raw)
+    if ppid != os.getpid() or argv != command:
+        raise MeasurementError(f"pystats completion marker does not identify {command}")
+    try:
+        text = raw.decode("utf-8")
+    except UnicodeError as exc:
+        raise MeasurementError(f"invalid pystats dump encoding: {path}") from exc
+    identities = [STATS_PROCESS.fullmatch(line) for line in text.splitlines()
+                  if line.startswith("Stats process")]
+    if len(identities) != 1 or identities[0] is None or int(identities[0][1]) != pid or identities[0][2] != tag:
+        raise MeasurementError(f"pystats dump and completion marker disagree: {path}")
     counts = {}
     for line in text.splitlines():
         key, sep, value = line.strip().rpartition(":")
@@ -436,6 +513,7 @@ def pystats_counts(ctx: Context, bench: Bench, loops: int) -> dict[str, int]:
                 raise MeasurementError(f"duplicate pystats key: {name}")
             counts[name] = count
     path.unlink()
+    marker_path.unlink()
     return counts
 
 

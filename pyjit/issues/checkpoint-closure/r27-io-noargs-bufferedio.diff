@@ -1,0 +1,80 @@
+--- a/Modules/_io/bufferedio.c
++++ b/Modules/_io/bufferedio.c
+@@ -20,6 +20,7 @@
+ #include "pycore_pyerrors.h"            // _Py_FatalErrorFormat()
+ #include "pycore_pylifecycle.h"         // _Py_IsInterpreterFinalizing()
+ #include "pycore_value.h"         // PyValue_FromObjectBorrow()
++#include "pycore_value_call.h"    // _PyValue_CallMethodNoArgs()
+ #include "pycore_value_ops.h"     // _PyValue_AsSsize_t()
+ #include "pycore_value_slots.h"// _PyValue_FromObjectResult()
+ #include "pycore_weakref.h"             // FT_CLEAR_WEAKREFS()
+@@ -526,6 +527,15 @@
+  */
+ 
+ /* Flush and close */
++static PyValue
++buffered_call_raw_noargs(buffered *self, PyObject *name)
++{
++    PyObject *raw = Py_NewRef(self->raw);
++    PyValue result = _PyValue_CallMethodNoArgs(PyValue_FromObjectBorrow(raw), name);
++    Py_DECREF(raw);
++    return result;
++}
++
+ /*[clinic input]
+ @critical_section
+ _io._Buffered.flush as _io__Buffered_simple_flush
+@@ -536,7 +546,7 @@
+ /*[clinic end generated code: output=efd733689ba378fa input=5248cb84a65f80bd]*/
+ {
+     CHECK_INITIALIZED(self, PyValue_NULL)
+-    return _PyValue_FromObjectResult(PyObject_CallMethodNoArgs(self->raw, &_Py_ID(flush)));
++    return buffered_call_raw_noargs(self, &_Py_ID(flush));
+ }
+ 
+ static int
+@@ -665,7 +675,7 @@
+ /*[clinic end generated code: output=613e51ab307f8f18 input=e3a4fc1d297b2fd3]*/
+ {
+     CHECK_INITIALIZED(self, PyValue_NULL)
+-    return _PyValue_FromObjectResult(PyObject_CallMethodNoArgs(self->raw, &_Py_ID(seekable)));
++    return buffered_call_raw_noargs(self, &_Py_ID(seekable));
+ }
+ 
+ /*[clinic input]
+@@ -678,7 +688,7 @@
+ /*[clinic end generated code: output=45a2e5de1a5508dd input=abe54107d59bca9a]*/
+ {
+     CHECK_INITIALIZED(self, PyValue_NULL)
+-    return _PyValue_FromObjectResult(PyObject_CallMethodNoArgs(self->raw, &_Py_ID(readable)));
++    return buffered_call_raw_noargs(self, &_Py_ID(readable));
+ }
+ 
+ /*[clinic input]
+@@ -691,7 +701,7 @@
+ /*[clinic end generated code: output=2eb3293641a33403 input=45eb76bf6a10e6f7]*/
+ {
+     CHECK_INITIALIZED(self, PyValue_NULL)
+-    return _PyValue_FromObjectResult(PyObject_CallMethodNoArgs(self->raw, &_Py_ID(writable)));
++    return buffered_call_raw_noargs(self, &_Py_ID(writable));
+ }
+ 
+ 
+@@ -737,7 +747,7 @@
+ /*[clinic end generated code: output=3af61947f8393103 input=1c4fead777bae20a]*/
+ {
+     CHECK_INITIALIZED(self, PyValue_NULL)
+-    return _PyValue_FromObjectResult(PyObject_CallMethodNoArgs(self->raw, &_Py_ID(fileno)));
++    return buffered_call_raw_noargs(self, &_Py_ID(fileno));
+ }
+ 
+ /*[clinic input]
+@@ -750,7 +760,7 @@
+ /*[clinic end generated code: output=eae0b181a704d591 input=e53d182d7e490e3a]*/
+ {
+     CHECK_INITIALIZED(self, PyValue_NULL)
+-    return _PyValue_FromObjectResult(PyObject_CallMethodNoArgs(self->raw, &_Py_ID(isatty)));
++    return buffered_call_raw_noargs(self, &_Py_ID(isatty));
+ }
+ 
+ /* Forward decls */

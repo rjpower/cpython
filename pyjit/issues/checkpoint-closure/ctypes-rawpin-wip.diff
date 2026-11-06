@@ -1,0 +1,369 @@
+diff --git a/Modules/_ctypes/_ctypes.c b/Modules/_ctypes/_ctypes.c
+index dfb849c204e..fdf6e6eeda1 100644
+--- a/Modules/_ctypes/_ctypes.c
++++ b/Modules/_ctypes/_ctypes.c
+@@ -1212,7 +1212,10 @@ _structunion_setattro(PyObject *self, PyObject *key, PyObject *value, int is_str
+         }
+     }
+ 
+-    return PyType_Type.tp_setattro(self, key, value);
++    return _PyValue_CallSetAttrBase(
++        &PyType_Type, PyType_Type.tp_setattro,
++        PyValue_FromObjectBorrow(self), key,
++        PyValue_FromObjectBorrow(value));
+ }
+ 
+ static int
+@@ -3085,6 +3088,176 @@ exit:;
+     return res;
+ }
+ 
++/* A foreign py_object slot stores a real PyObject pointer.  Keep its raw
++   owner separately from value dictionaries, which canonicalize numbers. */
++typedef struct {
++    PyObject_HEAD
++    PyObject *owner;
++} RawPin;
++
++static int
++rawpin_traverse(PyObject *op, visitproc visit, void *arg)
++{
++    Py_VISIT(((RawPin *)op)->owner);
++    return 0;
++}
++
++static int
++rawpin_clear(PyObject *op)
++{
++    Py_CLEAR(((RawPin *)op)->owner);
++    return 0;
++}
++
++static void
++rawpin_dealloc(PyObject *op)
++{
++    PyObject_GC_UnTrack(op);
++    rawpin_clear(op);
++    PyObject_GC_Del(op);
++}
++
++static PyTypeObject RawPin_Type = {
++    PyVarObject_HEAD_INIT(NULL, 0)
++    .tp_name = "_ctypes._RawPin",
++    .tp_basicsize = sizeof(RawPin),
++    .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC,
++    .tp_traverse = rawpin_traverse,
++    .tp_clear = rawpin_clear,
++    .tp_dealloc = rawpin_dealloc,
++};
++
++static PyObject *
++rawpin_anchor(CDataObject *dst)
++{
++    CDataObject *root = PyCData_GetContainer(dst);
++    if (root == NULL) {
++        return NULL;
++    }
++    if (root->b_raw_pins == NULL) {
++        PyObject *pins = PyDict_New();
++        if (pins == NULL) {
++            return NULL;
++        }
++        if (root->b_raw_pins == NULL) {
++            root->b_raw_pins = pins;
++        }
++        else {
++            Py_DECREF(pins);
++        }
++    }
++    return root->b_raw_pins;
++}
++
++static char *
++rawpin_address(CDataObject *dst, Py_ssize_t offset, int indirect)
++{
++    char *base = dst->b_ptr;
++    if (base == NULL) {
++        PyErr_SetString(PyExc_ValueError, "NULL pointer access");
++        return NULL;
++    }
++    if (indirect) {
++        base = *(char **)base;
++        if (base == NULL) {
++            PyErr_SetString(PyExc_ValueError, "NULL pointer access");
++            return NULL;
++        }
++    }
++    return base + offset;
++}
++
++static PyObject *
++rawpin_set(CDataObject *dst, SETFUNC setfunc, PyObject *value,
++           Py_ssize_t size, Py_ssize_t offset, int indirect)
++{
++    PyObject *pins = rawpin_anchor(dst);
++    if (pins == NULL) {
++        return NULL;
++    }
++    Py_INCREF(pins);
++    for (;;) {
++        char *addr = rawpin_address(dst, offset, indirect);
++        if (addr == NULL) {
++            Py_DECREF(pins);
++            return NULL;
++        }
++        PyObject *key = PyLong_FromVoidPtr(addr);
++        if (key == NULL) {
++            Py_DECREF(pins);
++            return NULL;
++        }
++        PyObject *item = NULL;
++        PyValue item_value;
++        int found = PyDict_GetValue(pins, PyValue_FromObjectBorrow(key),
++                                    &item_value);
++        if (found > 0) {
++            item = PyValue_AsKnownObjectSteal(item_value);
++        }
++        if (found < 0) {
++            Py_DECREF(key);
++            Py_DECREF(pins);
++            return NULL;
++        }
++        if (!found) {
++            RawPin *pin = PyObject_GC_New(RawPin, &RawPin_Type);
++            if (pin == NULL) {
++                Py_DECREF(key);
++                Py_DECREF(pins);
++                return NULL;
++            }
++            pin->owner = NULL;
++            PyObject_GC_Track(pin);
++            if (PyDict_SetValue(pins, PyValue_FromObjectBorrow(key),
++                                PyValue_FromObjectBorrow((PyObject *)pin)) < 0) {
++                Py_DECREF(pin);
++                Py_DECREF(key);
++                Py_DECREF(pins);
++                return NULL;
++            }
++            Py_DECREF(pin);
++            found = PyDict_GetValue(pins, PyValue_FromObjectBorrow(key),
++                                    &item_value);
++            if (found <= 0) {
++                Py_DECREF(key);
++                Py_DECREF(pins);
++                if (!PyErr_Occurred()) {
++                    PyErr_SetString(PyExc_RuntimeError, "raw pin disappeared");
++                }
++                return NULL;
++            }
++            item = PyValue_AsKnownObjectSteal(item_value);
++        }
++        Py_DECREF(key);
++        if (!Py_IS_TYPE(item, &RawPin_Type)) {
++            Py_DECREF(item);
++            Py_DECREF(pins);
++            PyErr_SetString(PyExc_RuntimeError, "invalid raw pin");
++            return NULL;
++        }
++        char *current = rawpin_address(dst, offset, indirect);
++        if (current == NULL) {
++            Py_DECREF(item);
++            Py_DECREF(pins);
++            return NULL;
++        }
++        if (current != addr) {
++            Py_DECREF(item);
++            continue;
++        }
++        PyObject *owner = Py_NewRef(value);
++        PyObject *result = setfunc(current, value, size);
++        assert(result != NULL); /* O_set cannot fail or call Python. */
++        RawPin *pin = (RawPin *)item;
++        PyObject *old = pin->owner;
++        pin->owner = owner;
++        Py_XDECREF(old);
++        Py_DECREF(item);
++        Py_DECREF(pins);
++        return result;
++    }
++}
++
+ static PyObject *
+ GetKeepedObjects(CDataObject *target)
+ {
+@@ -3195,6 +3368,7 @@ PyCData_traverse(PyObject *op, visitproc visit, void *arg)
+ {
+     CDataObject *self = _CDataObject_CAST(op);
+     Py_VISIT(self->b_objects);
++    Py_VISIT(self->b_raw_pins);
+     Py_VISIT((PyObject *)self->b_base);
+     PyTypeObject *type = Py_TYPE(self);
+     Py_VISIT(type);
+@@ -3206,6 +3380,7 @@ PyCData_clear(PyObject *op)
+ {
+     CDataObject *self = _CDataObject_CAST(op);
+     Py_CLEAR(self->b_objects);
++    Py_CLEAR(self->b_raw_pins);
+     if ((self->b_needsfree)
+         && _CDataObject_HasExternalBuffer(self))
+         PyMem_Free(self->b_ptr);
+@@ -3595,13 +3770,16 @@ PyCData_get(ctypes_state *st, PyObject *type, GETFUNC getfunc, PyObject *src,
+ static PyObject *
+ _PyCData_set(ctypes_state *st,
+            CDataObject *dst, PyObject *type, SETFUNC setfunc, PyObject *value,
+-           Py_ssize_t size, char *ptr)
++           Py_ssize_t size, char *ptr, Py_ssize_t offset, int indirect)
+ {
+     _Py_CRITICAL_SECTION_ASSERT_OBJECT_LOCKED(dst);
+     CDataObject *src;
+     int err;
+ 
+     if (setfunc) {
++        if (setfunc == _ctypes_get_fielddesc("O")->setfunc) {
++            return rawpin_set(dst, setfunc, value, size, offset, indirect);
++        }
+         PyObject *res;
+         res = setfunc(ptr, value, size);
+         return res;
+@@ -3612,6 +3790,9 @@ _PyCData_set(ctypes_state *st,
+             return NULL;
+         }
+         if (info && info->setfunc) {
++            if (info->setfunc == _ctypes_get_fielddesc("O")->setfunc) {
++                return rawpin_set(dst, info->setfunc, value, size, offset, indirect);
++            }
+             PyObject *res;
+             res = info->setfunc(ptr, value, size);
+             return res;
+@@ -3631,7 +3812,7 @@ _PyCData_set(ctypes_state *st,
+                 return NULL;
+             }
+             result = _PyCData_set(st, dst, type, setfunc, ob,
+-                                size, ptr);
++                                size, ptr, offset, indirect);
+             Py_DECREF(ob);
+             return result;
+         } else if (value == Py_None && PyCPointerTypeObject_Check(st, type)) {
+@@ -3714,7 +3895,8 @@ _PyCData_set(ctypes_state *st,
+ int
+ PyCData_set(ctypes_state *st,
+           PyObject *dst, PyObject *type, SETFUNC setfunc, PyObject *value,
+-          Py_ssize_t index, Py_ssize_t size, char *ptr)
++          Py_ssize_t index, Py_ssize_t size, char *ptr,
++          Py_ssize_t offset, int indirect)
+ {
+     _Py_CRITICAL_SECTION_ASSERT_OBJECT_LOCKED(dst);
+ 
+@@ -3728,7 +3910,7 @@ PyCData_set(ctypes_state *st,
+     }
+ 
+     result = _PyCData_set(st, mem, type, setfunc, value,
+-                        size, ptr);
++                        size, ptr, offset, indirect);
+     if (result == NULL)
+         return -1;
+ 
+@@ -3772,6 +3954,7 @@ generic_pycdata_new(ctypes_state *st,
+     obj->b_base = NULL;
+     obj->b_index = 0;
+     obj->b_objects = NULL;
++    obj->b_raw_pins = NULL;
+     obj->b_length = info->length;
+ 
+     if (-1 == PyCData_MallocBuffer(obj, info)) {
+@@ -5552,7 +5735,7 @@ Array_ass_item_impl(PyObject *myself, Py_ssize_t index, PyObject *value)
+     ptr = self->b_ptr + offset;
+ 
+     return PyCData_set(st, myself, stginfo->proto, stginfo->setfunc, value,
+-                       index, size, ptr);
++                       index, size, ptr, offset, 0);
+ }
+ 
+ /*[clinic input]
+@@ -5757,7 +5940,12 @@ _ctypes_Simple_value_set_impl(CDataObject *self, PyObject *value)
+     assert(info); /* Cannot be NULL for CDataObject instances */
+     assert(info->setfunc);
+ 
+-    result = info->setfunc(self->b_ptr, value, info->size);
++    if (info->setfunc == _ctypes_get_fielddesc("O")->setfunc) {
++        result = rawpin_set(self, info->setfunc, value, info->size, 0, 0);
++    }
++    else {
++        result = info->setfunc(self->b_ptr, value, info->size);
++    }
+     if (!result)
+         return -1;
+ 
+@@ -6001,7 +6189,7 @@ Pointer_ass_item_impl(PyObject *myself, Py_ssize_t index, PyObject *value)
+     offset = index * iteminfo->size;
+ 
+     return PyCData_set(st, myself, proto, stginfo->setfunc, value,
+-                       index, size, ((char *)deref + offset));
++                       index, size, ((char *)deref + offset), offset, 1);
+ }
+ 
+ static PyObject *
+@@ -6530,6 +6718,11 @@ cast_lock_held(void *ptr, PyObject *src, PyObject *ctype)
+         if (container == NULL)
+             goto failed;
+ 
++        PyObject *pins = rawpin_anchor(obj);
++        if (pins == NULL)
++            goto failed;
++        result->b_raw_pins = Py_NewRef(pins);
++
+         /* But we need a dictionary! */
+         if (obj->b_objects == Py_None) {
+             Py_DECREF(Py_None);
+@@ -6622,6 +6815,7 @@ _ctypes_add_types(PyObject *mod)
+ } while (0)
+ 
+     ctypes_state *st = get_module_state(mod);
++    TYPE_READY(&RawPin_Type);
+ 
+     /* Note:
+        ob_type is the metatype (the 'type'), defaults to PyType_Type,
+diff --git a/Modules/_ctypes/cfield.c b/Modules/_ctypes/cfield.c
+index c947d624613..5d623928d45 100644
+--- a/Modules/_ctypes/cfield.c
++++ b/Modules/_ctypes/cfield.c
+@@ -290,7 +290,8 @@ PyCField_set_lock_held(PyObject *op, PyObject *inst, PyObject *value)
+         return -1;
+     }
+     return PyCData_set(st, inst, self->proto, self->setfunc, value,
+-                       self->index, _pack_legacy_size(self), ptr);
++                       self->index, _pack_legacy_size(self), ptr,
++                       self->byte_offset, 0);
+ }
+ 
+ static int
+diff --git a/Modules/_ctypes/ctypes.h b/Modules/_ctypes/ctypes.h
+index 248559aa364..3987e6a6e77 100644
+--- a/Modules/_ctypes/ctypes.h
++++ b/Modules/_ctypes/ctypes.h
+@@ -189,6 +189,7 @@ struct tagCDataObject {
+     Py_ssize_t b_index;         /* index of this object into base's
+                                b_object list */
+     PyObject *b_objects;        /* dictionary of references we need to keep, or Py_None */
++    PyObject *b_raw_pins;       /* raw foreign PyObject pointer owners */
+     union value b_value;
+ };
+ 
+@@ -220,6 +221,7 @@ typedef struct {
+     Py_ssize_t b_index;         /* index of this object into base's
+                                    b_object list */
+     PyObject *b_objects;        /* list of references we need to keep */
++    PyObject *b_raw_pins;       /* raw foreign PyObject pointer owners */
+     union value b_value;
+     /* end of tagCDataObject, additional fields follow */
+ 
+@@ -526,7 +528,8 @@ PyCData_get(ctypes_state *st, PyObject *type, GETFUNC getfunc, PyObject *src,
+ extern int
+ PyCData_set(ctypes_state *st,
+           PyObject *dst, PyObject *type, SETFUNC setfunc, PyObject *value,
+-          Py_ssize_t index, Py_ssize_t size, char *ptr);
++          Py_ssize_t index, Py_ssize_t size, char *ptr,
++          Py_ssize_t offset, int indirect);
+ 
+ extern void _ctypes_extend_error(PyObject *exc_class, const char *fmt, ...);
+ 

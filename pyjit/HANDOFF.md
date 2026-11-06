@@ -1,91 +1,17 @@
 # Coordinator handoff
 
-Current integration pointer (2026-11-05): runtime `3f480256304`, documented in
-[status](STATUS.md) and the final section of the [closure plan](issues/checkpoint-closure/plan.md).
-The 25-file Context/iterator/math/compiler batch is committed. The next
-14-file struct/property/formatter/inventory candidate is under merged checks.
-Preserve original worker patches and additive corrections. Full stats is
-functionally clean at `6aec17eefeb`, but strict boxing/process gates still fail.
-The rejected ctypes `b_objects` home patch must not be applied: raw foreign
-pointers need a separate explicit ownership design. Performance remains pending.
-
-
-Active closure: committed runtime HEAD is `6aec17eefeb`. Its 28-file batch
-includes cold compiler/marshal/keyword paths, Decimal construction/slots,
-deque/bytes/fileno, null-aware object exits and accounting diagnostics.
-Three builds, lint and 6,291 focused tests per debug/release build pass.
-Full release/debug runs found fixture errors and a profiler null-exit abort;
-the fixes pass focused reruns. The final full suites remain required after
-remaining ports. Evidence: `cold-slots-iterators-fixtures-fixed`; failed
-attempts are retained. A fresh full stats census is now running under
-`suite-6aec17eefeb-census`; keep shared source/binaries frozen until it ends.
-Next reviewed queue: binary constant folding; six itertools producers with
-additive fixes; Decimal richcompare/Context/initializer/method and lifetime
-layers. Integrate the v2 lifetime test packet, not the rejected subprocess
-fixture. Math/bisect packets have further review fixes in progress.
-See the [closure plan](issues/checkpoint-closure/plan.md).
-W5 stays at its original base with preserved staged and dirty work. G2 stays
-deferred until the merged baseline measurement.
-
-The coordinator created one task-owned isolated worktree at
-`python-jit/build/checkpoint-bulk-20261105` and its Clang build alongside it
-(`checkpoint-bulk-build-20261105`). It starts at `98a26bb6218` and contains the
-48 reviewed processor-safe ownership rows and header marks. Its compiling
-snapshot `f65d64a3987` is now an ancestor of the runtime. Luna's later manual
-census marks 15 further APIs there and originally recorded 459 expected diagnostics.
-It has since been advanced to `e983958bede`, preserving the manual edits;
-the recoverable task stash is `e4cf1a9101556e1c296374457a1e6a1c32590589`.
-Six small module ports and CJK callbacks landed in `f81ebbd646d`, along with
-further Decimal method families; three builds, lint and 6,001 tests per
-debug/release build pass. Do not integrate
-all of those new marks until their callers are ported. Preserve this work
-while active, then remove only this task-created isolation after integration.
-
-The runtime's latest 12-file commit `4fffee855c9` in `startup-clinic-decimal` adds the four
-startup-box fixes, selective Clinic support and 65 Decimal macro-family
-methods. Its generator merge preserves `value_core` and mutates render copies
-only; 483 Clinic tests pass. Three builds, lint and 6,649 tests on each release
-and debug build pass. The startup cleanup must use XCLOSE after
-its successful path clears the owner; the initial double-close and subsequent
-null-close findings are preserved in separate review rounds. Windows zero-box
-behavior is not verified. Private Linux no-op startup reports zero boxes.
-Cold kernel warmup still boxes compiler constants, marshal tuple/slice fields
-and frame keyword values. The first all-29 attempt exposed a repeated metadata
-flag; a narrow parser repair retains strict duplicate-counter checks. A fresh
-full-suite stats census at `4fff` has finished: 54,270 tests, 31 failures in
-eight files and 6,326 dumps. The R27 gate fails with 50,463,865 attributed debt,
-plus accounting gaps; see the [census](issues/checkpoint-closure/fullsuite-4fff-census.md).
-Do not claim complete counts from a run with missing/crashed processes.
-Earlier failed attempts are retained.
-
-H3 is committed, rather than merely queued. Its exact crash probe confirms
-that handler 306 can no longer overrun a 256-entry counter array: both axes
-now span 319 handlers. The fresh 29-kernel count produced 87 valid raw records.
-Loop deltas are zero; startup-inclusive boxes still range from two to 1,175,
-so strict R27 fails. The candidate under qualification targets the attributed
-compiler, marshal and keyword sites, plus reviewed Decimal and iterator paths.
-A new count must use the rebuilt candidate; historical zero deltas are not
-admission evidence.
-
-Terra owns remaining Decimal manual methods, constructors and slots in W5.
-Luna owns the manual API ports in the isolated tree, with temporary three-file
-W5 copies for actual runtime validation. Sol reviews designs and source.
-Only the coordinator changes shared runtime/builds. Full suite accounting,
-indirect slot audit, complete inventory and final performance remain open.
-
-Takeover checked: 2026-11-05 PST. Read [STATUS](STATUS.md) for the verified
-runtime HEAD, unfinished worktrees and remaining gates. The historical snapshot
-below predates the closure landings described above. W2b, W4b, W4c and UUID
-are landed. Preserve the old worktrees; use the closure plan for the live queue
-and defer G2 until after baseline measurement.
-The old provider's worker progress does not establish that any worker remains
-active. The Loom `plan` artifact has also been reviewed during takeover.
-
-Read [STATUS](STATUS.md) for the
-project summary, [ROADMAP](ROADMAP.md) for stage outcomes, [GOAL](GOAL.md) for
-standing direction, and [PROCESS](PROCESS.md) before assigning work. This is a
-restart guide, not a claim that workers remain active. Recheck agents and
-processes before assigning work.
+Current runtime HEAD is `42696e9fcca` on `boil/pyvalue-rc-universal`.
+`66981c963be` passed three 117-module builds and 6,684 tests per profile;
+it fixes the earlier operator crash and carries format/I/O/constructor/dict/
+SQLite values. The latest regex/getattr landing passed 4,633 tests per profile
+and exact upstream differential probes; type assignment then passed 4,499
+tests per profile and upstream lifetime/slot-update probes. Next: coherent
+process-accounting producer/reader/benchmark changes and paired value
+construction. Do not land the new C
+sidecars without both readers. The latest raw census is 15/29 zero kernels,
+all zero loop deltas, with an exact retained ELF and matching clean source.
+Matched-build preflight passes after the targeted build-info refresh; no
+timing has run. Ctypes/LRU approval holds and full R27 remain open.
 
 ## Mission and selected design
 
@@ -121,7 +47,7 @@ and backend. The stage pages distinguish selected designs from working code.
 | --- | --- |
 | Documentation root (canonical `pyjit/`) | `/home/power/code/cpython/.worktrees/python-jit`, branch `weaver/python-jit` |
 | Runtime tree (nested worktree) | `/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/pyvalue-rc-universal` |
-| Runtime branch / HEAD | `boil/pyvalue-rc-universal`, `e1229448be3` (verified during takeover) |
+| Runtime branch / latest commit | `boil/pyvalue-rc-universal`, `42696e9fcca` (2026-11-06) |
 | Shared builds at HEAD | `build/pyvalue-rc-repr-debug`, `build/pyvalue-rc-repr-release` (under the `python-boil-the-ocean` worktree) |
 | Older debug build | `build/pyvalue-rc-debug-20261102-v1` |
 | Triage debug builds | `build/pyvalue-rc-bringup-debug`, `build/pyvalue-rc-triage-rt-debug` |
@@ -148,22 +74,43 @@ and shapes. Read the build directories for the exact commands.
 
 ## Source and build state
 
-The runtime tree has no held modifications. Debug and release builds link and
-run. W4c has since supplied a local development-header sysroot and repaired
-modules that earlier checks skipped, including sqlite, ssl, decimal and zstd;
-see `build/pyjit-link-wave1/devlibs.md` and `progress-w4c.txt` before configuring.
-Runtime HEAD is `e1229448be3`. Full merged suites last ran at the integration point
-`8eee8081ca0`, gcc debug and release: 52,178 tests each; the two failures were
-stale tests, fixed in `a1ecc0eb4f3`. Later landings ran their step tests and a
-smoke set on both builds (plus a stats-build compile since `71566e96043`),
-all passing with 0 lint findings; full suites run at integration points only. Magic number: 64410
-(B5b), set by the coordinator with
-`tools/bump_magic.py`. The
-fork's JIT source is deleted (A3 step 1; history keeps it) until the JIT
-stage. Tail calls are the only interpreter backend; `--with-computed-gotos`
-no longer exists, and `PY_TAIL_CALL_CC` in sysconfig names the convention.
+Runtime HEAD is clean `42696e9fcca`; its three-file type-assignment landing
+passed all three 117-module builds, lint, 4,499 tests per profile and upstream
+differential probes. No shared build freeze remains from that landing. Only
+the coordinator changes shared source and builds. The previous full suites at
+`af82c03c4e5` each ran 54,311 tests
+and failed only the now-corrected operator call regression. Full qualification
+must repeat after the remaining coherent ports; focused passes are insufficient.
 
-Checkpoint measurement
+The raw kernel evidence at `66981c963be` retains its exact stats executable.
+Later relinks must never be used to symbolize its old PCs. Ordinary commits
+leave stale executable version strings; refresh `Modules/getbuildinfo.o` and
+complete all builds after the final source commit. The existing helper target
+can be forced by an extra phony prerequisite without modifying source or the
+Makefile. Real matched preflight at `66981c963be` passed all checks, with
+preflight-only results correctly ineligible for measurement.
+
+Canonical `pyjit/bench/run.py` now has the reviewed private-directory paired
+`.txt`/`.done` consumer. Its C producer and R27 reader are not integrated yet;
+do not run new boxing captures until all three are coherent. The runtime
+still uses the older one-file producer. Preserve the frozen consumer v2 packet,
+producer patch, stage-one current-main patch and subsequent reader additions.
+Normal timing is a separate metric; no timing has run.
+
+The isolated bulk tree still contains deliberate unavailable API marks and
+cannot whole-build. Base new packets on copies of the actual current runtime;
+never copy its stale checker or test files over newer main guards. A successful
+host/Python-only fixture does not validate uncompiled C changes. W5 remains at
+its preserved historical base and original staged/dirty work; serialize shadow
+source/build/test/restore under the external common `w5-release.lock`.
+
+The matched controls are upstream `3a440b65695` and interim `eba351fee7d`.
+G2 remains deferred until qualification and measurement. Ctypes/LRU source
+implementation remains on the recorded explicit-approval hold. Canonical
+status and plan own current assignments; older records below are history.
+
+### Historical checkpoint measurement (not the current runtime)
+
 ([checkpoint](bench/results/checkpoint-20261103.md),
 [triage](bench/results/checkpoint-20261103-triage.md)): kernels take 2.6x
 upstream `3a440b6` (geomean, interleaved) with natural method-JIT admission off;
@@ -178,16 +125,8 @@ so pystats dispatch counts do not see it. A `pybuilddir.txt` of `none` makes a
 release build 5 to 12x slower; check it. `perf` is blocked
 (`perf_event_paranoid=4`); `tools/sampler/` has an LD_PRELOAD SIGPROF sampler.
 
-In flight, briefs in `build/pyjit-link-wave1/`:
-
-- W2b is running: core slots are done for list, tuple, dict, str and bytes;
-  callers are in progress. W4b (all other modules) is finishing.
-- G2 has A4 and B3 prototypes off-tree. Open question 9 is answered (a
-  fixed-dst rule removes 9 to 14% of class tests at no word cost); the
-  decision stays between A4 and B3.
-
-Landed since `b9d3e3a3c9b`: the table in [STATUS](STATUS.md) lists all 36.
-The newest, first:
+Historical bring-up records below are retained for provenance; they do not
+describe active packets or current performance. Landed since `b9d3e3a3c9b`:
 
 - `d63c129b95f`: `METH_VALUE` splits on `METH_KEYWORDS`; keyword check in the
   trampoline; dict unhashable-key messages.

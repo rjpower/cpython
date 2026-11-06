@@ -1,0 +1,64 @@
+--- a/Python/bltinmodule.c
++++ b/Python/bltinmodule.c
+@@ -1477,28 +1477,33 @@
+ 
+ 
+ /* AC: cannot convert yet, as needs PEP 457 group support in inspect */
+-static PyObject *
+-builtin_getattr(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
++static PyValue
++builtin_getattr(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs,
++                PyObject *kwnames)
+ {
+-    PyObject *v, *name, *result;
+-
+-    if (!_PyArg_CheckPositional("getattr", nargs, 2, 3))
+-        return NULL;
+-
+-    v = args[0];
+-    name = args[1];
+-    if (nargs > 2) {
+-        if (PyObject_GetOptionalAttr(v, name, &result) == 0) {
+-            PyObject *dflt = args[2];
+-            return Py_NewRef(dflt);
+-        }
++    if (!_PyArg_CheckPositional("getattr", nargs, 2, 3)) {
++        return PyValue_NULL;
+     }
+-    else {
+-        PyValue result_v = _PyValue_GetAttr(PyValue_FromObjectBorrow(v), name);
+-        result = PyValue_IsNull(result_v) ? NULL
+-            : _PyValue_AsObjectStealAt(result_v, BOX_SITE_ATTRIBUTE);
++    PyValueBorrow obj = PyValue_Borrow(args[0]);
++    PyValueBorrow name = PyValue_Borrow(args[1]);
++    if (!PyValue_IsObject(name)) {
++        PyErr_Format(PyExc_TypeError,
++                     "attribute name must be string, not '%.200s'",
++                     PyValue_TYPE(name)->tp_name);
++        return PyValue_NULL;
+     }
+-    return result;
++    PyObject *name_obj = PyValue_AsKnownObjectBorrow(name);
++    if (nargs == 2) {
++        return _PyValue_GetAttr(obj, name_obj);
++    }
++    _PyStatusValue result = _PyValue_GetOptionalAttr(obj, name_obj);
++    if (result.status < 0) {
++        return PyValue_NULL;
++    }
++    if (result.status == 0) {
++        return PyValue_DUP(PyValue_Borrow(args[2]));
++    }
++    return result.value;
+ }
+ 
+ PyDoc_STRVAR(getattr_doc,
+@@ -3859,7 +3864,7 @@
+     BUILTIN_EVAL_METHODDEF
+     BUILTIN_EXEC_METHODDEF
+     BUILTIN_FORMAT_METHODDEF
+-    {"getattr", _PyCFunction_CAST(builtin_getattr), METH_FASTCALL, getattr_doc},
++    {"getattr", _PyCFunction_CAST(builtin_getattr), METH_VALUE, getattr_doc},
+     BUILTIN_GLOBALS_METHODDEF
+     BUILTIN_HASATTR_METHODDEF
+     BUILTIN_HASH_METHODDEF

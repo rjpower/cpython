@@ -1,0 +1,223 @@
+--- a/Include/internal/pycore_moduleobject.h
++++ b/Include/internal/pycore_moduleobject.h
+@@ -2,6 +2,8 @@
+ #define Py_INTERNAL_MODULEOBJECT_H
+ 
+ #include <stdbool.h>
++
++#include "pycore_value.h"       // PyValueBorrow
+ 
+ #ifdef __cplusplus
+ extern "C" {
+@@ -15,6 +17,8 @@
+ extern void _PyModule_ClearDict(PyObject *);
+ extern int _PyModuleSpec_IsInitializing(PyObject *);
+ extern int _PyModuleSpec_GetFileOrigin(PyObject *, PyObject **);
++extern int _PyModuleSpec_IsInitializingValue(PyValueBorrow);
++extern int _PyModuleSpec_GetFileOriginValue(PyValueBorrow, PyValue *);
+ extern int _PyModule_IsPossiblyShadowing(PyObject *);
+ 
+ extern int _PyModule_IsExtension(PyObject *obj);
+--- a/Objects/moduleobject.c
++++ b/Objects/moduleobject.c
+@@ -1230,18 +1230,27 @@
+ /* Check if the "_initializing" attribute of the module spec is set to true.
+  */
+ int
++_PyModuleSpec_IsInitializingValue(PyValueBorrow spec)
++{
++    if (PyValue_IsNull(spec)) {
++        return 0;
++    }
++    _PyStatusValue value = _PyValue_GetOptionalAttr(spec, &_Py_ID(_initializing));
++    if (value.status > 0) {
++        int rc = _PyValue_IsTrue(value.value);
++        PyValue_CLOSE(value.value);
++        return rc;
++    }
++    return value.status;
++}
++
++int
+ _PyModuleSpec_IsInitializing(PyObject *spec)
+ {
+     if (spec == NULL) {
+         return 0;
+     }
+-    PyObject *value;
+-    int rc = PyObject_GetOptionalAttr(spec, &_Py_ID(_initializing), &value);
+-    if (rc > 0) {
+-        rc = _PyValue_IsTrue(PyValue_FromObjectBorrow(value));
+-        Py_DECREF(value);
+-    }
+-    return rc;
++    return _PyModuleSpec_IsInitializingValue(PyValue_FromObjectBorrow(spec));
+ }
+ 
+ /* Check if the submodule name is in the "_uninitialized_submodules" attribute
+@@ -1266,31 +1275,45 @@
+ int
+ _PyModuleSpec_GetFileOrigin(PyObject *spec, PyObject **p_origin)
+ {
+-    PyObject *has_location = NULL;
+-    int rc = PyObject_GetOptionalAttr(spec, &_Py_ID(has_location), &has_location);
+-    if (rc <= 0) {
+-        return rc;
++    PyValue origin = PyValue_NULL;
++    int status = _PyModuleSpec_GetFileOriginValue(
++        PyValue_FromObjectBorrow(spec), &origin);
++    if (status > 0) {
++        *p_origin = PyValue_AsKnownObjectSteal(origin);
++    }
++    return status;
++}
++
++int
++_PyModuleSpec_GetFileOriginValue(PyValueBorrow spec, PyValue *p_origin)
++{
++    *p_origin = PyValue_NULL;
++    _PyStatusValue has_location = _PyValue_GetOptionalAttr(
++        spec, &_Py_ID(has_location));
++    if (has_location.status <= 0) {
++        return has_location.status;
+     }
+     // If origin is not a location, or doesn't exist, or is not a str, we could consider falling
+     // back to module.__file__. But the cases in which module.__file__ is not __spec__.origin
+     // are cases in which we probably shouldn't be guessing.
+-    rc = _PyValue_IsTrue(PyValue_FromObjectBorrow(has_location));
+-    Py_DECREF(has_location);
++    int rc = _PyValue_IsTrue(has_location.value);
++    PyValue_CLOSE(has_location.value);
+     if (rc <= 0) {
+         return rc;
+     }
+     // has_location is true, so origin is a location
+-    PyObject *origin = NULL;
+-    rc = PyObject_GetOptionalAttr(spec, &_Py_ID(origin), &origin);
+-    if (rc <= 0) {
+-        return rc;
+-    }
+-    assert(origin != NULL);
+-    if (!PyUnicode_Check(origin)) {
+-        Py_DECREF(origin);
++    _PyStatusValue origin = _PyValue_GetOptionalAttr(spec, &_Py_ID(origin));
++    if (origin.status <= 0) {
++        return origin.status;
++    }
++    assert(!PyValue_IsNull(origin.value));
++    if (!PyValue_IsObject(origin.value) ||
++        !PyUnicode_Check(PyValue_AsKnownObjectBorrow(origin.value)))
++    {
++        PyValue_CLOSE(origin.value);
+         return 0;
+     }
+-    *p_origin = origin;
++    *p_origin = origin.value;
+     return 1;
+ }
+ 
+--- a/Python/ceval.c
++++ b/Python/ceval.c
+@@ -4530,10 +4530,12 @@
+ {
+     PyValue mod_name_value = PyValue_NULL;
+     PyValue spec_value = PyValue_NULL;
++    PyValue origin_value = PyValue_NULL;
+     PyObject *mod_name = NULL;
+     PyObject *mod_name_or_unknown = NULL;
+     PyObject *unknown_name = NULL;
+     PyObject *origin = NULL;
++    PyObject *module_origin = NULL;
+     PyObject *errmsg = NULL;
+ 
+     _PyStatusValue name_attr = _PyValue_GetOptionalAttr(
+@@ -4584,21 +4586,24 @@
+     if (spec_attr.status < 0) {
+         goto done;
+     }
+-    if (spec_attr.status > 0) {
++    int has_spec = spec_attr.status > 0;
++    if (has_spec) {
+         spec_value = spec_attr.value;
+     }
+-    PyObject *spec = PyValue_IsObject(spec_value)
+-        ? PyValue_AsKnownObjectBorrow(spec_value) : NULL;
+-
+-    if (spec == NULL) {
++    if (!has_spec) {
+         errmsg = PyUnicode_FromFormat(
+             "cannot import name %R from %R (unknown location)",
+             name, mod_name_or_unknown
+         );
+         goto done_with_errmsg;
+     }
+-    if (_PyModuleSpec_GetFileOrigin(spec, &origin) < 0) {
++    int origin_status = _PyModuleSpec_GetFileOriginValue(
++        PyValue_Borrow(spec_value), &origin_value);
++    if (origin_status < 0) {
+         goto done;
++    }
++    if (origin_status > 0) {
++        origin = PyValue_AsKnownObjectBorrow(origin_value);
+     }
+ 
+     int is_possibly_shadowing = _PyModule_IsPossiblyShadowing(origin);
+@@ -4625,8 +4630,10 @@
+     if (origin == NULL && PyValue_IsObject(v) &&
+         PyModule_Check(PyValue_AsKnownObjectBorrow(v)))
+     {
+-        origin = PyModule_GetFilenameObject(PyValue_AsKnownObjectBorrow(v));
+-        if (origin == NULL) {
++        module_origin = PyModule_GetFilenameObject(
++            PyValue_AsKnownObjectBorrow(v));
++        origin = module_origin;
++        if (module_origin == NULL) {
+             if (!PyErr_ExceptionMatches(PyExc_SystemError)) {
+                 goto done;
+             }
+@@ -4646,7 +4653,8 @@
+         );
+     }
+     else {
+-        int rc = _PyModuleSpec_IsInitializing(spec);
++        int rc = _PyModuleSpec_IsInitializingValue(
++            PyValue_Borrow(spec_value));
+         if (rc < 0) {
+             goto done;
+         }
+@@ -4699,7 +4707,8 @@
+     }
+ 
+ done:
+-    Py_XDECREF(origin);
++    Py_XDECREF(module_origin);
++    PyValue_XCLOSE(origin_value);
+     PyValue_XCLOSE(mod_name_value);
+     PyValue_XCLOSE(spec_value);
+     Py_XDECREF(unknown_name);
+--- a/Lib/test/test_import/__init__.py
++++ b/Lib/test/test_import/__init__.py
+@@ -399,6 +399,23 @@
+         with self.assertRaises(ImportError):
+             exec("from inline_import_source import value", namespace)
+ 
++    def test_from_import_inline_spec_value(self):
++        class ImportSource:
++            __name__ = "inline_spec_source"
++            __spec__ = 42
++
++            def __getattr__(self, name):
++                raise AttributeError(name)
++
++        namespace = {
++            "__builtins__": {"__import__": lambda *args: ImportSource()},
++        }
++        with self.assertRaisesRegex(
++                ImportError,
++                r"cannot import name 'value' from 'inline_spec_source' "
++                r"\(unknown location\)"):
++            exec("from inline_spec_source import value", namespace)
++
+     def test_from_import_missing_attribute_lookup_once(self):
+         lookups = []
+ 

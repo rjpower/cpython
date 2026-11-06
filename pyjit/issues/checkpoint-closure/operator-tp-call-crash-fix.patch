@@ -1,0 +1,27 @@
+diff --git a/Modules/_operator.c b/Modules/_operator.c
+--- a/Modules/_operator.c
++++ b/Modules/_operator.c
+@@ -1265,6 +1265,6 @@ static PyType_Slot itemgetter_type_slots[] = {
+     {Py_tp_doc, (void *)itemgetter_doc},
+     {Py_tp_dealloc, itemgetter_dealloc},
+-    {Py_tp_call, _PyValue_TpCallThunk},
++    {Py_tp_call, PyVectorcall_Call},
+     {Py_tp_traverse, itemgetter_traverse},
+     {Py_tp_clear, itemgetter_clear},
+     {Py_tp_methods, itemgetter_methods},
+@@ -1617,6 +1617,6 @@ static PyType_Slot attrgetter_type_slots[] = {
+     {Py_tp_doc, (void *)attrgetter_doc},
+     {Py_tp_dealloc, attrgetter_dealloc},
+-    {Py_tp_call, _PyValue_TpCallThunk},
++    {Py_tp_call, PyVectorcall_Call},
+     {Py_tp_traverse, attrgetter_traverse},
+     {Py_tp_clear, attrgetter_clear},
+     {Py_tp_methods, attrgetter_methods},
+@@ -1964,6 +1964,6 @@ static PyType_Slot methodcaller_type_slots[] = {
+     {Py_tp_doc, (void *)methodcaller_doc},
+     {Py_tp_dealloc, methodcaller_dealloc},
+-    {Py_tp_call, _PyValue_TpCallThunk},
++    {Py_tp_call, PyVectorcall_Call},
+     {Py_tp_traverse, methodcaller_traverse},
+     {Py_tp_clear, methodcaller_clear},
+     {Py_tp_methods, methodcaller_methods},

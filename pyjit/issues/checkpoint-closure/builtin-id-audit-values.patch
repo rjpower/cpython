@@ -1,0 +1,67 @@
+--- a/Python/bltinmodule.c
++++ b/Python/bltinmodule.c
+@@ -1602,19 +1602,18 @@
+         return PyValue_NULL;
+     }
+ 
+-    /* The audit event carries the id as an object: box it only when a hook
+-       will see the event. */
++    /* Keep the owned id rooted in the event tuple across audit callbacks. */
+     PyThreadState *tstate = _PyThreadState_GET();
+     if (!_PySys_AuditEnabled(tstate)) {
+         return id;
+     }
+-    PyObject *id_o = _PyValue_AsObjectAt(id, BOX_SITE_PARSER);
+-    if (id_o == NULL) {
++    PyObject *args = _PyTuple_FromValueArray(&id, 1);
++    if (args == NULL) {
+         PyValue_CLOSE(id);
+         return PyValue_NULL;
+     }
+-    int audit = PySys_Audit("builtins.id", "O", id_o);
+-    Py_DECREF(id_o);
++    int audit = PySys_AuditTuple("builtins.id", args);
++    Py_DECREF(args);
+     if (audit < 0) {
+         PyValue_CLOSE(id);
+         return PyValue_NULL;
+--- a/Lib/test/test_pystats.py
++++ b/Lib/test/test_pystats.py
+@@ -376,6 +376,37 @@
+         self.assertEqual(int(stats['Object inline int boxes']), 0)
+         self.assertEqual(int(stats['Object inline float boxes']), 0)
+ 
++    def test_id_audit_hook_does_not_box(self):
++        code = """
++        events = []
++        rejection = []
++        def hook(event, args):
++            if event == 'builtins.id':
++                events.append(args)
++                if rejection:
++                    raise RuntimeError('audit id')
++        sys.addaudithook(hook)
++        def func_start():
++            target = []
++            expected = id(target)
++            sys._stats_clear()
++            actual = id(target)
++            sys._stats_off()
++            assert actual == expected
++            assert events[-1] == (expected,)
++            rejection.append(None)
++            try:
++                id(target)
++            except RuntimeError as exc:
++                assert str(exc) == 'audit id'
++            else:
++                raise AssertionError('audit exception was lost')
++        """
++        stats = run_test_code_stats(code, args=['-X', 'pystats'])
++        self.assertEqual(int(stats['Boxing by kind (core)']), 0)
++        self.assertEqual(int(stats['Object inline int boxes']), 0)
++        self.assertEqual(int(stats['Object inline float boxes']), 0)
++
+     def test_box_kinds(self):
+         """Check the box count by kind (pyjit/design/proposals/
+         value-api-v2a0.md, section 4.7).

@@ -1,0 +1,35 @@
+--- a/Objects/memoryobject.c
++++ b/Objects/memoryobject.c
+@@ -3160,21 +3160,23 @@
+     }
+ 
+     Py_ssize_t count = 0;
+-    PyObject *item = NULL;
+-    while (PyIter_NextItem(iter, &item)) {
+-        if (item == NULL) {
++    for (;;) {
++        _PyStatusValue step = _PyValue_IterNext(iter);
++        if (step.status == PYGEN_ERROR) {
+             Py_DECREF(iter);
+             return PyValue_NULL;
+         }
+-        PyValueBorrow item_value = PyValue_FromObjectBorrow(item);
+-        if (PyValue_Is(item_value, value)) {
+-            Py_DECREF(item);
++        if (step.status == PYGEN_RETURN) {
++            break;
++        }
++        if (PyValue_Is(step.value, value)) {
++            PyValue_CLOSE(step.value);
+             count++;  // no overflow since count <= len(mv) <= PY_SSIZE_T_MAX
+             continue;
+         }
+-        int contained = _PyValue_RichCompareBool(item_value, value, Py_EQ);
+-        Py_DECREF(item);
+-        if (contained > 0) { // more likely than 'contained < 0'
++        int contained = _PyValue_RichCompareBool(step.value, value, Py_EQ);
++        PyValue_CLOSE(step.value);
++        if (contained > 0) {
+             count++;  // no overflow since count <= len(mv) <= PY_SSIZE_T_MAX
+         }
+         else if (contained < 0) {

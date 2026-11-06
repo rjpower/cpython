@@ -1,0 +1,24 @@
+--- a/Objects/dictobject.c
++++ b/Objects/dictobject.c
+@@ -5284,8 +5284,8 @@
+     }
+ 
+     if (nargs == 1 && kwnames == NULL
+-        && PyValue_IsObject(args[0])
+-        && PyFrozenDict_CheckExact(PyValue_AsKnownObjectBorrow(args[0]))
++        && PyValue_IsObject(PyValue_Borrow(args[0]))
++        && PyFrozenDict_CheckExact(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])))
+         && Py_Is((PyTypeObject*)type, &PyFrozenDict_Type))
+     {
+         // frozendict(frozendict) returns the same object unmodified
+--- a/Tools/build/check_value_api.py
++++ b/Tools/build/check_value_api.py
+@@ -1092,7 +1092,7 @@
+     "Objects/bytearrayobject.c", "Objects/floatobject.c",
+     "Objects/enumobject.c", "Objects/boolobject.c", "Objects/longobject.c",
+     "Objects/unicodeobject.c", "Objects/listobject.c", "Objects/setobject.c",
+-    "Objects/rangeobject.c",
++    "Objects/rangeobject.c", "Objects/dictobject.c",
+     # Decimal pairs its selective Clinic constructor with the object thunk.
+     "Modules/_decimal/_decimal.c",
+     # BaseException stores its value vectorcall beside the object thunk.

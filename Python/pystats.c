@@ -9,10 +9,16 @@
 #include "pycore_tstate.h"
 #include "pycore_initconfig.h"      // _PyStatus_OK()
 #include "pycore_pystate.h"         // _PyThreadState_GET()
+#include "pycore_pystats.h"          // _PyStats_ChildCreated()
 #include "pycore_runtime.h"         // NUM_GENERATIONS
 #include "osdefs.h"                 // MAXPATHLEN
 
 #include <stdlib.h> // rand()
+#ifndef MS_WINDOWS
+#  include <fcntl.h>
+#  include <sys/stat.h>
+#  include <unistd.h>
+#endif
 
 #ifdef Py_STATS
 
@@ -845,10 +851,146 @@ stats_random_stem(char *hex_name)
              (unsigned int)(uintptr_t)hex_name);
 }
 
+static uint64_t child_receipt_errors;
+
 #ifndef MS_WINDOWS
 // The run marker of this process: <stem>.run, replaced by its dump.
 static char run_stem[41];
 static pid_t run_pid;
+static uint64_t child_receipt_serial;
+static unsigned long long run_image_dev, run_image_ino;
+
+static int
+receipt_write(int fd, const char *text, size_t length)
+{
+    while (length != 0) {
+        ssize_t written = write(fd, text, length);
+        if (written < 0 && errno == EINTR) {
+            continue;
+        }
+        if (written <= 0) {
+            return -1;
+        }
+        text += written;
+        length -= (size_t)written;
+    }
+    return 0;
+}
+
+#define RECEIPT_TEXT(FD, S) receipt_write((FD), (S), strlen(S))
+
+void
+_PyStats_CopyIntervalStem(char out[41])
+{
+    /* A configured process remains accountable while collection is toggled
+       off. Only a process that never allocated stats is outside this gate. */
+    if (_PyInterpreterState_GET()->pystats_struct == NULL) {
+        out[0] = '\0';
+        return;
+    }
+    if (run_pid == getpid() && run_stem[0] != '\0') {
+        memcpy(out, run_stem, 41);
+    }
+    else {
+        out[0] = '\0';
+        child_receipt_errors++;
+    }
+}
+
+/* This path runs in the parent, after fork locks have been released. It uses
+   libc I/O only, so receipt failure cannot change the Python API result. */
+void
+_PyStats_ChildCreated(pid_t child, const char *source,
+                      const char *const *candidates, size_t candidate_count,
+                      const char parent_stem[41])
+{
+    int saved_errno = errno;
+    if (parent_stem[0] == '\0') {
+        errno = saved_errno;
+        return;
+    }
+    char dir[MAXPATHLEN + 1], path[MAXPATHLEN + 1], tmp[MAXPATHLEN + 1];
+    char item[512];
+    int fd = -1;
+    unsigned long long serial = ++child_receipt_serial;
+    if (child <= 0 || candidate_count > 4096) {
+        goto failed;
+    }
+    stats_dump_dir(_PyInterpreterState_GET(), dir, sizeof(dir));
+    int n = PyOS_snprintf(path, sizeof(path), "%s/%s.%llu.child", dir,
+                          parent_stem, serial);
+    int n2 = PyOS_snprintf(tmp, sizeof(tmp), "%s.tmp", path);
+    if (n <= 0 || (size_t)n >= sizeof(path) ||
+        n2 <= 0 || (size_t)n2 >= sizeof(tmp)) {
+        goto failed;
+    }
+    fd = open(tmp, O_WRONLY | O_CREAT | O_EXCL, 0600);
+    if (fd < 0) {
+        goto failed;
+    }
+    n = PyOS_snprintf(item, sizeof(item),
+        "{\"version\":1,\"parent_pid\":%d,\"child_pid\":%d,"
+        "\"parent_stem\":\"%s\",\"serial\":%llu,\"source\":\"%s\","
+        "\"parent_image_dev\":%llu,\"parent_image_ino\":%llu,"
+        "\"candidate_count\":%zu,\"candidates\":[",
+        (int)getpid(), (int)child, parent_stem, serial, source,
+        run_image_dev, run_image_ino, candidate_count);
+    if (n <= 0 || (size_t)n >= sizeof(item) ||
+        receipt_write(fd, item, (size_t)n) < 0) {
+        goto failed;
+    }
+    for (size_t i = 0; i < candidate_count; i++) {
+        if (candidates[i] == NULL ||
+            RECEIPT_TEXT(fd, i == 0 ? "\"" : ",\"") < 0) {
+            goto failed;
+        }
+        const unsigned char *p = (const unsigned char *)candidates[i];
+        for (; *p != '\0'; p++) {
+            char escaped[7];
+            size_t length;
+            if (*p == '"' || *p == '\\') {
+                escaped[0] = '\\'; escaped[1] = (char)*p; length = 2;
+            }
+            else if (*p < 0x20 || *p >= 0x7f) {
+                static const char hex[] = "0123456789abcdef";
+                escaped[0] = '\\'; escaped[1] = 'u';
+                escaped[2] = '0'; escaped[3] = '0';
+                escaped[4] = hex[*p >> 4]; escaped[5] = hex[*p & 15];
+                length = 6;
+            }
+            else {
+                escaped[0] = (char)*p; length = 1;
+            }
+            if (receipt_write(fd, escaped, length) < 0) {
+                goto failed;
+            }
+        }
+        if (RECEIPT_TEXT(fd, "\"") < 0) {
+            goto failed;
+        }
+    }
+    if (RECEIPT_TEXT(fd, "]}\n") < 0) {
+        goto failed;
+    }
+    if (close(fd) < 0) {
+        fd = -1;
+        goto failed;
+    }
+    fd = -1;
+    if (rename(tmp, path) < 0) {
+        goto failed;
+    }
+    errno = saved_errno;
+    return;
+failed:
+    child_receipt_errors++;
+    if (fd >= 0) {
+        (void)close(fd);
+    }
+    errno = saved_errno;
+}
+
+#undef RECEIPT_TEXT
 
 /* Keep argv boundaries and control bytes on one marker line. */
 static void
@@ -907,14 +1049,22 @@ run_marker_create(PyInterpreterState *interp)
         return;
     }
     const char *tag = getenv("PYTHON_PYSTATS_TAG");
-    fprintf(f, "pid: %d\nppid: %d\ntag: %s\nargv: ", (int)getpid(),
-            (int)getppid(), tag != NULL ? tag : "");
+    struct stat image;
+    int image_ok = stat("/proc/self/exe", &image) == 0;
+    run_image_dev = image_ok ? (unsigned long long)image.st_dev : 0;
+    run_image_ino = image_ok ? (unsigned long long)image.st_ino : 0;
+    if (!image_ok) {
+        child_receipt_errors++;
+    }
+    fprintf(f, "version: 2\npid: %d\nppid: %d\ntag: %s\nargv: ",
+            (int)getpid(), (int)getppid(), tag != NULL ? tag : "");
     FILE *cmd = fopen("/proc/self/cmdline", "r");
     if (cmd != NULL) {
         run_marker_argv(f, cmd);
         fclose(cmd);
     }
-    fputc('\n', f);
+    fprintf(f, "\nimage_dev: %llu\nimage_ino: %llu\n",
+            run_image_dev, run_image_ino);
     fclose(f);
     memcpy(run_stem, stem, sizeof(stem));
     run_pid = getpid();
@@ -1270,6 +1420,8 @@ _Py_PrintSpecializationStats(int to_file)
 #endif
             getenv("PYTHON_PYSTATS_TAG") != NULL
                 ? getenv("PYTHON_PYSTATS_TAG") : "");
+    fprintf(out, "Stats child receipt errors: %llu\n",
+            (unsigned long long)child_receipt_errors);
     print_stats(out, stats);
     print_box_owners(out, interp, dir);
     STATS_UNLOCK(interp);
@@ -1313,6 +1465,8 @@ _Py_StatsAfterFork(void)
     stats_resets = 0;
 #ifndef MS_WINDOWS
     run_stem[0] = '\0';
+    child_receipt_serial = 0;
+    child_receipt_errors = 0;
 #endif
     if (interp->pystats_enabled) {
         run_marker_create(interp);

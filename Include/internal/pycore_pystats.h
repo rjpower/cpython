@@ -26,6 +26,13 @@ extern void _PyStats_BoxOwner(uint8_t site, uint8_t kind,
 // Interpreter deletion and fork: the process accounting of section 1.4.
 extern void _PyStats_InterpFini(PyInterpreterState *interp);
 extern void _Py_StatsAfterFork(void);
+/* Linux stats only: snapshot the parent interval before after-fork hooks,
+   then publish one receipt after a successful native child creation. */
+PyAPI_FUNC(void) _PyStats_CopyIntervalStem(char out[41]);
+PyAPI_FUNC(void) _PyStats_ChildCreated(pid_t child, const char *source,
+                                  const char *const *candidates,
+                                  size_t candidate_count,
+                                  const char parent_stem[41]);
 #endif
 
 #ifdef __cplusplus

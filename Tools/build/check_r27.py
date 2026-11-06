@@ -42,6 +42,7 @@ import json
 import os
 import re
 import shutil
+import stat
 import subprocess
 import sys
 import tempfile
@@ -70,6 +71,21 @@ KERNEL_NAMES = frozenset("""richards go nbody float spectral_norm raytrace
     xml_etree_generate xml_etree_iterparse xml_etree_parse xml_etree_process""".split())
 FOLD_PERIOD = 30  # seconds between folds of finished dumps in `suite`
 INVALID_OWNER_SAMPLE_LIMIT = 16
+
+
+def strict_json_object(pairs):
+    result = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError(f"duplicate JSON field: {key}")
+        result[key] = value
+    return result
+
+
+def read_regular_text(path):
+    if not stat.S_ISREG(path.lstat().st_mode):
+        raise ValueError("metadata file is not regular")
+    return path.read_text(encoding="utf-8")
 
 # The shape `kernels` accepts: R.json is a list of entries (or a dict with
 # such a list under "results" or "entries"). An entry is a dict named by one
@@ -143,13 +159,15 @@ class Folded:
         self.accounting_errors = []
         self.invalid_owner_count = 0
         self.invalid_owner_samples = []
+        self.child_receipts = []
 
-    def add_text(self, text, source="<text>"):
+    def add_text(self, text, source="<text>", require_child_receipts=False):
         objects = {}  # dump-local index -> build-id
         owners = []
         tag = ""
         resets = 0
         totals, drops = {}, {}
+        receipt_errors = []
         for line in text.splitlines():
             if m := OBJECT_RE.match(line):
                 bid = m[3].lower()
@@ -159,6 +177,8 @@ class Folded:
                 owners.append(m)
             elif m := PROCESS_RE.match(line):
                 tag = m[2]
+            elif line.startswith("Stats child receipt errors:"):
+                receipt_errors.append(line.removeprefix("Stats child receipt errors: "))
             elif m := DROPPED_RE.match(line):
                 add(self.drops, m[1], int(m[2]))
                 add(drops, m[1], int(m[2]))
@@ -173,6 +193,11 @@ class Folded:
                 add(totals, m[1], int(m[2]))
             elif line.startswith("Box owner ("):
                 self.accounting_errors.append("malformed owner row")
+        if require_child_receipts:
+            if len(receipt_errors) != 1 or not receipt_errors[0].isdigit():
+                self.accounting_errors.append("missing or malformed child receipt error count")
+            elif int(receipt_errors[0]):
+                self.accounting_errors.append("native child receipt publication failed")
         counts = {}
         for m in owners:
             add(counts, m["kind"], int(m["count"]))
@@ -208,7 +233,7 @@ class Folded:
         for path in sorted(Path(directory).glob("*.txt")):
             try:
                 text = path.read_text(errors="replace")
-                self.add_text(text, path.name)
+                self.add_text(text, path.name, require_child_receipts=True)
             except OSError as exc:
                 self.bad_dumps.append(f"{path.name}: {exc}")
                 continue
@@ -240,12 +265,12 @@ class Folded:
     def _read_identity(path):
         """Parse one start-time marker without normalizing escaped argv bytes."""
         fields = {}
-        for line in path.read_text(encoding="utf-8").splitlines():
+        for line in read_regular_text(path).splitlines():
             key, sep, value = line.partition(": ")
-            if not sep or key not in {"pid", "ppid", "tag", "argv"} or key in fields:
+            if not sep or key not in {"version", "pid", "ppid", "tag", "argv", "image_dev", "image_ino"} or key in fields:
                 raise ValueError("invalid or duplicate marker field")
             fields[key] = value
-        if set(fields) != {"pid", "ppid", "tag", "argv"}:
+        if set(fields) != {"version", "pid", "ppid", "tag", "argv", "image_dev", "image_ino"} or fields["version"] != "2":
             raise ValueError("incomplete marker")
         if not fields["pid"].isdigit() or int(fields["pid"]) <= 0:
             raise ValueError("invalid marker pid")
@@ -256,9 +281,14 @@ class Folded:
             any(not isinstance(arg, str) for arg in raw_argv)):
             raise ValueError("marker argv is not a nonempty string list")
         argv = [os.fsdecode(arg.encode("latin-1")) for arg in raw_argv]
+        if (not fields["image_dev"].isdigit() or
+            not fields["image_ino"].isdigit() or
+            int(fields["image_ino"]) == 0):
+            raise ValueError("invalid marker image identity")
         return {"id": path.stem, "pid": int(fields["pid"]),
                 "ppid": int(fields["ppid"]), "tag": fields["tag"],
-                "argv": argv}
+                "argv": argv, "image_dev": int(fields["image_dev"]),
+                "image_ino": int(fields["image_ino"])}
 
     def read_markers(self, directory):
         """List .run files that no .txt replaced, and the .spawn lines."""
@@ -305,6 +335,122 @@ class Folded:
         for stem in sidecars:
             if "done" in sidecars[stem] and stem not in self.dump_identities:
                 identity_error(f"orphan .done identity {stem}.done")
+        roots_path = directory / "root-launch.json"
+        roots = []
+        try:
+            roots = json.loads(read_regular_text(roots_path),
+                               object_pairs_hook=strict_json_object) if (
+                                   sidecars or self.dump_identities or roots_path.exists()) else []
+            if not isinstance(roots, list):
+                raise ValueError("root launches must be a list")
+            for root in roots:
+                if (not isinstance(root, dict) or set(root) !=
+                    {"version", "pid", "ppid", "argv", "image_dev", "image_ino"}
+                    or type(root["version"]) is not int or root["version"] != 1
+                    or type(root["pid"]) is not int
+                    or root["pid"] <= 0 or type(root["ppid"]) is not int
+                    or root["ppid"] < 0
+                    or type(root["image_dev"]) is not int
+                    or root["image_dev"] < 0
+                    or type(root["image_ino"]) is not int
+                    or root["image_ino"] <= 0 or not isinstance(root["argv"], list)
+                    or not root["argv"] or any(not isinstance(a, str) for a in root["argv"])):
+                    raise ValueError("invalid root launch")
+        except (OSError, UnicodeError, ValueError) as exc:
+            identity_error(f"missing or malformed root launches: {type(exc).__name__}")
+            roots = []
+
+        self.child_receipts = []
+        for path in sorted(directory.glob("*.child")):
+            try:
+                parts = path.name.split(".")
+                if (len(parts) != 3 or not re.fullmatch(r"[0-9a-f]{40}", parts[0])
+                    or not parts[1].isdigit() or int(parts[1]) <= 0):
+                    raise ValueError("invalid receipt filename")
+                receipt = json.loads(read_regular_text(path),
+                                     object_pairs_hook=strict_json_object)
+                if (not isinstance(receipt, dict) or set(receipt) !=
+                    {"version", "parent_pid", "child_pid", "parent_stem", "serial",
+                     "source", "parent_image_dev", "parent_image_ino",
+                     "candidate_count", "candidates"}
+                    or type(receipt["version"]) is not int
+                    or receipt["version"] != 1
+                    or any(type(receipt[k]) is not int or receipt[k] <= 0
+                           for k in ("parent_pid", "child_pid", "serial", "parent_image_ino"))
+                    or type(receipt["parent_image_dev"]) is not int
+                    or receipt["parent_image_dev"] < 0
+                    or receipt["parent_stem"] != parts[0]
+                    or receipt["serial"] != int(parts[1])
+                    or receipt["source"] not in
+                        {"spawn", "spawnp", "fork", "fork1", "forkpty", "fork_exec"}
+                    or type(receipt["candidate_count"]) is not int
+                    or not isinstance(receipt["candidates"], list)
+                    or receipt["candidate_count"] != len(receipt["candidates"])
+                    or any(not isinstance(c, str) for c in receipt["candidates"])):
+                    raise ValueError("invalid receipt fields")
+                n = receipt["candidate_count"]
+                if (n != 0 if receipt["source"] in {"fork", "fork1", "forkpty"}
+                    else n != 1 if receipt["source"] in {"spawn", "spawnp"}
+                    else n < 1):
+                    raise ValueError("invalid receipt candidate count")
+                receipt["candidates"] = [os.fsdecode(c.encode("latin-1"))
+                                         for c in receipt["candidates"]]
+                self.child_receipts.append(receipt)
+            except (OSError, UnicodeError, ValueError, TypeError) as exc:
+                identity_error(f"malformed child receipt {path.name}: {type(exc).__name__}")
+        for path in directory.glob("*.child.tmp"):
+            identity_error(f"unfinished child receipt {path.name}")
+
+        by_pid = {}
+        for record in self.identity_records.values():
+            by_pid.setdefault(record["pid"], []).append(record)
+        admitted = set()
+        for root in roots:
+            pid = root["pid"]
+            if pid in admitted:
+                identity_error(f"duplicate root launch for pid {pid}")
+                continue
+            matches = by_pid.get(pid, [])
+            if not matches or not all(
+                r["ppid"] == root["ppid"] and r["argv"] == root["argv"]
+                and r["image_dev"] == root["image_dev"]
+                and r["image_ino"] == root["image_ino"] for r in matches):
+                identity_error(f"root launch does not match marker for pid {pid}")
+            admitted.add(pid)
+        child_pids = set()
+        for receipt in self.child_receipts:
+            parent = sidecars.get(receipt["parent_stem"], {}).get("done")
+            pid = receipt["child_pid"]
+            if pid in child_pids or pid in admitted:
+                identity_error(f"duplicate child receipt for pid {pid}")
+            child_pids.add(pid)
+            if (parent is None or parent["pid"] != receipt["parent_pid"]
+                or parent["image_dev"] != receipt["parent_image_dev"]
+                or parent["image_ino"] != receipt["parent_image_ino"]):
+                identity_error(f"unmatched parent interval for child pid {pid}")
+            matches = by_pid.get(pid, [])
+            if not matches or not all(r["ppid"] == receipt["parent_pid"]
+                                      for r in matches):
+                identity_error(f"native child receipt lacks matching child marker: {pid}")
+        for pid in by_pid.keys() - admitted - child_pids:
+            identity_error(f"process pid {pid} has no root launch or native receipt")
+        reachable = set(admitted)
+        for _ in range(len(self.child_receipts)):
+            prior = len(reachable)
+            reachable.update(r["child_pid"] for r in self.child_receipts
+                             if r["parent_pid"] in reachable)
+            if len(reachable) == prior:
+                break
+        for pid in by_pid.keys() - reachable:
+            identity_error(f"process pid {pid} is not reachable from a root launch")
+        images = {(r["image_dev"], r["image_ino"]) for r in roots}
+        if len(images) != 1 and by_pid:
+            identity_error("root launches have no single measured image")
+        elif images:
+            image = next(iter(images))
+            for records in by_pid.values():
+                if any((r["image_dev"], r["image_ino"]) != image for r in records):
+                    identity_error("child marker has an unmeasured executable image")
         self.spawn = []
         self.counted_spawn = []
         self.opaque_spawn = []
@@ -1207,6 +1353,11 @@ def run_suite(build, jobs, directory, regrtest_args):
            *regrtest_args]
     folded = Folded()
     proc = subprocess.Popen(cmd, env=env)
+    image = (build / "python").stat()
+    (directory / "root-launch.json").write_text(json.dumps([{
+        "version": 1, "pid": proc.pid, "ppid": os.getpid(), "argv": cmd,
+        "image_dev": image.st_dev, "image_ino": image.st_ino,
+    }]))
     while True:
         try:
             proc.wait(timeout=FOLD_PERIOD)

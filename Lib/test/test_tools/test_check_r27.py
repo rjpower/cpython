@@ -54,6 +54,20 @@ def fold(*texts):
     return folded
 
 
+def v2_marker(pid, ppid, tag, argv):
+    encoded = [os.fsencode(arg).decode("latin-1") for arg in argv]
+    return (f"version: 2\npid: {pid}\nppid: {ppid}\ntag: {tag}\n"
+            f"argv: {json.dumps(encoded)}\nimage_dev: 1\nimage_ino: 2\n")
+
+
+def write_roots(directory, *launches):
+    (directory / "root-launch.json").write_text(json.dumps([
+        {"version": 1, "pid": pid, "ppid": ppid, "argv": argv,
+         "image_dev": 1, "image_ino": 2}
+        for pid, ppid, argv in launches
+    ]))
+
+
 def classes(folded, resolver, cdb=None):
     summary = check_r27.resolve(folded, resolver, SRC, cdb)
     return summary, {(r["site"], r["via"]): r["class"] for r in summary["rows"]}
@@ -189,8 +203,8 @@ class FoldTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             d = Path(tmp)
             (d / "a.txt").write_text("Stats process: pid=1 tag=t\nStats resets: 1\n")
-            (d / "a.done").write_text(
-                'pid: 1\nppid: 0\ntag: t\nargv: ["python"]\n')
+            (d / "a.done").write_text(v2_marker(1, 0, "t", ["python"]))
+            write_roots(d, (1, 0, ["python"]))
             (d / "b.tmp").write_text("Stats resets: 9\n")
             folded = check_r27.Folded()
             folded.fold_dir(d, delete=True)
@@ -198,7 +212,8 @@ class FoldTests(unittest.TestCase):
             self.assertEqual((folded.dumps, folded.resets), (1, 1))
             self.assertEqual(folded.leftover_run, [])
             self.assertTrue(folded.identity_complete)
-            self.assertEqual({p.name for p in d.iterdir()}, {"a.done", "b.tmp"})
+            self.assertEqual({p.name for p in d.iterdir()},
+                             {"a.done", "b.tmp", "root-launch.json"})
 
     def test_invalid_owner_diagnostics_survive_fold_deletion(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -229,8 +244,9 @@ class FoldTests(unittest.TestCase):
     def test_markers(self):
         with tempfile.TemporaryDirectory() as tmp:
             d = Path(tmp)
-            (d / "x.run").write_text('pid: 4\nppid: 1\ntag: test_foo\nargv: ["python","-c","x"]\n')
-            (d / "y.done").write_text('pid: 5\nppid: 1\ntag: done\nargv: ["python"]\n')
+            (d / "x.run").write_text(v2_marker(4, 1, "test_foo", ["python", "-c", "x"]))
+            (d / "y.done").write_text(v2_marker(5, 1, "done", ["python"]))
+            write_roots(d, (4, 1, ["python", "-c", "x"]), (5, 1, ["python"]))
             (d / "y.txt").write_text("Stats process: pid=5 tag=done\n")
             (d / "z.spawn").write_text("test_bar\tpython -m x\n")
             folded = check_r27.Folded()
@@ -249,8 +265,8 @@ class FoldTests(unittest.TestCase):
             d = Path(tmp)
             (d / "a.txt").write_text("Stats process: pid=9 tag=probe\n")
             (d / "a.done").write_text(
-                'pid: 9\nppid: 2\ntag: probe\n'
-                'argv: ["python", "\\u00ff"]\n')
+                v2_marker(9, 2, "probe", ["python", os.fsdecode(b"\xff")]))
+            write_roots(d, (9, 2, ["python", os.fsdecode(b"\xff")]))
             folded = check_r27.Folded()
             folded.fold_dir(d, delete=True)
             folded.read_markers(d)
@@ -261,7 +277,8 @@ class FoldTests(unittest.TestCase):
                              {"a": {"pid": 9, "tag": "probe"}})
             self.assertEqual(folded.identity_records["a.done"],
                              {"id": "a", "pid": 9, "ppid": 2,
-                              "tag": "probe", "argv": ["python", os.fsdecode(b"\xff")]})
+                              "tag": "probe", "argv": ["python", os.fsdecode(b"\xff")],
+                              "image_dev": 1, "image_ino": 2})
             coverage = check_r27.resolve(
                 folded, TableResolver({}), SRC)["identity_coverage"]
             self.assertEqual(coverage["marker_samples"][0]["argv"],
@@ -270,7 +287,7 @@ class FoldTests(unittest.TestCase):
     def test_process_identity_missing_or_orphan_done_fails_closed(self):
         for files, expected in [
             ({"a.txt": "Stats process: pid=9 tag=probe\n"}, "missing .done"),
-            ({"a.done": 'pid: 9\nppid: 2\ntag: probe\nargv: ["python"]\n'},
+            ({"a.done": v2_marker(9, 2, "probe", ["python"])},
              "orphan .done"),
         ]:
             with self.subTest(expected=expected), tempfile.TemporaryDirectory() as tmp:
@@ -288,8 +305,7 @@ class FoldTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             d = Path(tmp)
             (d / "a.txt").write_text("Stats process: pid=9 tag=probe\n")
-            (d / "a.done").write_text(
-                'pid: 9\nppid: 2\ntag: probe\nargv: ["python"]\n')
+            (d / "a.done").write_text(v2_marker(9, 2, "probe", ["python"]))
             folded = check_r27.Folded()
             folded.fold_dir(d)
             folded.fold_dir(d)
@@ -301,13 +317,13 @@ class FoldTests(unittest.TestCase):
     def test_process_identity_mismatch_zero_and_run_with_dump_fail(self):
         cases = [
             ("mismatch", "a.done",
-             'pid: 10\nppid: 2\ntag: other\nargv: ["python"]\n',
+             v2_marker(10, 2, "other", ["python"]),
              ".done identity does not match"),
             ("zero", "a.zero",
-             'pid: 9\nppid: 2\ntag: probe\nargv: ["python"]\n',
+             v2_marker(9, 2, "probe", ["python"]),
              "zero-stats identity"),
             ("run", "a.run",
-             'pid: 9\nppid: 2\ntag: probe\nargv: ["python"]\n',
+             v2_marker(9, 2, "probe", ["python"]),
              "contradictory .run"),
         ]
         for name, marker, contents, expected in cases:
@@ -316,8 +332,7 @@ class FoldTests(unittest.TestCase):
                 (d / "a.txt").write_text("Stats process: pid=9 tag=probe\n")
                 (d / marker).write_text(contents)
                 if marker != "a.done":
-                    (d / "a.done").write_text(
-                        'pid: 9\nppid: 2\ntag: probe\nargv: ["python"]\n')
+                    (d / "a.done").write_text(v2_marker(9, 2, "probe", ["python"]))
                 folded = check_r27.Folded()
                 folded.fold_dir(d)
                 folded.read_markers(d)
@@ -363,13 +378,11 @@ class FoldTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             d = Path(tmp)
             (d / "ok.run").write_text(
-                'pid: 4\nppid: 1\ntag: test_foo\n'
-                'argv: ["python","-c","a\\u000ab","a b"]\n')
+                v2_marker(4, 1, "test_foo", ["python", "-c", "a\nb", "a b"]))
             (d / "bad.run").write_text(
                 'pid: 5\nppid: 1\ntag: test_foo\nargv: ["python","-c"\n')
             (d / "utf.run").write_text(
-                'pid: 6\nppid: 1\ntag: test_foo\n'
-                'argv: ["\\u00c3\\u00a9","\\u00ff"]\n')
+                v2_marker(6, 1, "test_foo", ["é", os.fsdecode(b"\xff")]))
             (d / "notbytes.run").write_text(
                 'pid: 7\nppid: 1\ntag: test_foo\nargv: ["\\u20ac"]\n')
             (d / "new.spawn").write_text(json.dumps({

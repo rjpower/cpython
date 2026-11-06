@@ -8245,6 +8245,13 @@ py_posix_spawn_objects(int use_posix_spawnp, PyObject *module, path_t *path,
 #ifdef _Py_MEMORY_SANITIZER
     __msan_unpoison(&pid, sizeof(pid));
 #endif
+#ifdef Py_STATS
+    char parent_stem[41];
+    _PyStats_CopyIntervalStem(parent_stem);
+    const char *candidate[] = {path->narrow};
+    _PyStats_ChildCreated(pid, use_posix_spawnp ? "spawnp" : "spawn",
+                          candidate, 1, parent_stem);
+#endif
     result = PyValue_FromInt64(pid);
 
 exit:
@@ -8905,6 +8912,12 @@ os_fork1_impl(PyObject *module)
     PyOS_BeforeFork();
     pid = fork1();
     int saved_errno = errno;
+#ifdef Py_STATS
+    char parent_stem[41] = {0};
+    if (pid > 0) {
+        _PyStats_CopyIntervalStem(parent_stem);
+    }
+#endif
     if (pid == 0) {
         /* child: this clobbers and resets the import lock. */
         PyOS_AfterFork_Child();
@@ -8913,6 +8926,11 @@ os_fork1_impl(PyObject *module)
         Py_ssize_t num_os_threads = get_number_of_os_threads();
         /* parent: release the import lock. */
         PyOS_AfterFork_Parent();
+#ifdef Py_STATS
+        if (pid > 0) {
+            _PyStats_ChildCreated(pid, "fork1", NULL, 0, parent_stem);
+        }
+#endif
         // After PyOS_AfterFork_Parent() starts the world to avoid deadlock.
         if (warn_about_fork_with_threads("fork1", num_os_threads) < 0) {
             return NULL;
@@ -8958,6 +8976,12 @@ os_fork_impl(PyObject *module)
     PyOS_BeforeFork();
     pid = fork();
     int saved_errno = errno;
+#ifdef Py_STATS
+    char parent_stem[41] = {0};
+    if (pid > 0) {
+        _PyStats_CopyIntervalStem(parent_stem);
+    }
+#endif
     if (pid == 0) {
         /* child: this clobbers and resets the import lock. */
         PyOS_AfterFork_Child();
@@ -8966,6 +8990,11 @@ os_fork_impl(PyObject *module)
         Py_ssize_t num_os_threads = get_number_of_os_threads();
         /* parent: release the import lock. */
         PyOS_AfterFork_Parent();
+#ifdef Py_STATS
+        if (pid > 0) {
+            _PyStats_ChildCreated(pid, "fork", NULL, 0, parent_stem);
+        }
+#endif
         // After PyOS_AfterFork_Parent() starts the world to avoid deadlock.
         if (warn_about_fork_with_threads("fork", num_os_threads) < 0)
             return PyValue_NULL;
@@ -9862,6 +9891,12 @@ os_forkpty_impl(PyObject *module)
     }
     PyOS_BeforeFork();
     pid = forkpty(&master_fd, NULL, NULL, NULL);
+#ifdef Py_STATS
+    char parent_stem[41] = {0};
+    if (pid > 0) {
+        _PyStats_CopyIntervalStem(parent_stem);
+    }
+#endif
     if (pid == 0) {
         /* child: this clobbers and resets the import lock. */
         PyOS_AfterFork_Child();
@@ -9870,6 +9905,11 @@ os_forkpty_impl(PyObject *module)
         Py_ssize_t num_os_threads = get_number_of_os_threads();
         /* parent: release the import lock. */
         PyOS_AfterFork_Parent();
+#ifdef Py_STATS
+        if (pid > 0) {
+            _PyStats_ChildCreated(pid, "forkpty", NULL, 0, parent_stem);
+        }
+#endif
         /* set O_CLOEXEC on master_fd */
         if (_Py_set_inheritable(master_fd, 0, NULL) < 0) {
             PyErr_FormatUnraisable("Exception ignored when setting master_fd "

@@ -9,6 +9,7 @@
 #include "pycore_interp.h"        // _PyInterpreterState_GetFinalizing()
 #include "pycore_long_value.h"    // _PyValue_AsLong()
 #include "pycore_pystate.h"       // _PyInterpreterState_GET()
+#include "pycore_pystats.h"       // _PyStats_ChildCreated()
 #include "pycore_signal.h"        // _Py_RestoreSignals()
 #include "pycore_value.h"      // _PyValue_AsObjectAt()
 #include "pycore_value_call.h" // _PyValue_Call()
@@ -1353,6 +1354,13 @@ subprocess_fork_exec_impl(PyObject *module, PyValueBorrow process_args,
                        c_fds_to_keep, fds_to_keep_len,
                        preexec_fn_obj, preexec_fn_args_tuple);
 
+#ifdef Py_STATS
+    char parent_stem[41] = {0};
+    if (pid > 0) {
+        _PyStats_CopyIntervalStem(parent_stem);
+    }
+#endif
+
     /* Parent (original) process */
     if (pid == (pid_t)-1) {
         /* Capture errno for the exception. */
@@ -1379,6 +1387,17 @@ subprocess_fork_exec_impl(PyObject *module, PyValueBorrow process_args,
 
     if (need_after_fork)
         PyOS_AfterFork_Parent();
+#ifdef Py_STATS
+    if (pid > 0) {
+        size_t candidate_count = 0;
+        while (exec_array[candidate_count] != NULL) {
+            candidate_count++;
+        }
+        _PyStats_ChildCreated(pid, "fork_exec",
+                              (const char *const *)exec_array,
+                              candidate_count, parent_stem);
+    }
+#endif
 
 cleanup:
     if (c_fds_to_keep != NULL) {

@@ -49,6 +49,7 @@ static const char copyright[] =
 #include "pycore_list.h"             // _PyList_AppendTakeRef()
 #include "pycore_long_value.h"       // _PyValue_IntAsSsize_t()
 #include "pycore_moduleobject.h"     // _PyModule_GetState()
+#include "pycore_slots.h"            // _Py_value_subscript
 #include "pycore_tuple.h"            // _PyTuple_FromPairSteal
 #include "pycore_unicodeobject.h"    // _PyUnicode_Copy
 #include "pycore_unicodectype.h"     // _PyUnicode_IsXidStart()
@@ -2660,21 +2661,14 @@ match_getindex(MatchObject* self, PyValueBorrow index)
         i = -1;
 
         if (self->pattern->groupindex) {
-            PyObject *key = _PyValue_AsObjectAt(index, BOX_SITE_PARSER);
-            if (key != NULL) {
-                PyValue value;
-                if (PyDict_GetValue(self->pattern->groupindex,
-                                    PyValue_FromObjectBorrow(key),
-                                    &value) > 0)
+            PyValue value;
+            if (PyDict_GetValue(self->pattern->groupindex, index, &value) > 0) {
+                if (PyValue_TYPE(value) == &PyLong_Type ||
+                    PyType_IsSubtype(PyValue_TYPE(value), &PyLong_Type))
                 {
-                    if (PyValue_TYPE(value) == &PyLong_Type ||
-                        PyType_IsSubtype(PyValue_TYPE(value), &PyLong_Type))
-                    {
-                        i = _PyValue_IntAsSsize_t(value);
-                    }
-                    PyValue_CLOSE(value);
+                    i = _PyValue_IntAsSsize_t(value);
                 }
-                Py_DECREF(key);
+                PyValue_CLOSE(value);
             }
         }
     }
@@ -2775,12 +2769,13 @@ _sre_SRE_Match_group_impl(MatchObject *self, const PyValue *args,
     return _PyValue_FromObjectResult(result);
 }
 
-static PyObject*
-match_getitem(PyObject *op, PyObject* name)
+static PyValue
+match_getitem_value(PyObject *op, PyValueBorrow name)
 {
     MatchObject *self = _MatchObject_CAST(op);
-    return match_getslice(self, PyValue_FromObjectBorrow(name), Py_None);
+    return _PyValue_FromObjectResult(match_getslice(self, name, Py_None));
 }
+_Py_VALUE_THUNK_SUBSCRIPT(match_getitem, match_getitem_value)
 
 /*[clinic input]
 _sre.SRE_Match.groups
@@ -3653,6 +3648,7 @@ static PyType_Slot match_slots[] = {
      * __getitem__.
      */
     {Py_mp_subscript, match_getitem},
+    {_Py_value_subscript, match_getitem_value},
 
     {0, NULL},
 };

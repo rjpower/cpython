@@ -10,16 +10,28 @@ census failed: 6,512 dumps contain 11,028,818 core/core-pending/unresolved
 boxes and incomplete process identity/accounting. The raw capture finished
 with 87 records across 29 kernels: 18/29 startup-inclusive raw-zero and all
 loop deltas zero, but strict kernel admission failed. See the [full census
-receipt](issues/checkpoint-closure/full-census-6a0e4c12c17.md). The matched-build
-preflight passed and is explicitly ineligible as a measurement.
+receipt](issues/checkpoint-closure/full-census-6a0e4c12c17.md). The matched
+diagnostic campaign is complete but does not qualify performance because R27
+fails. Candidate/baseline elapsed-time factors are 1.287/1.075 for 29-kernel
+geomeans and 1.096/0.913 for the 12-result pyperformance subset against
+upstream/interim (lower is better); peak-RSS factors are 1.259/1.062. See the
+[diagnostic report](bench/results/checkpoint-6a0e4c12c17.md).
+Its independent evidence review is recorded in
+[measurement-evidence-review-6a0e4c12c17.md](issues/checkpoint-closure/measurement-evidence-review-6a0e4c12c17.md).
 
 The earlier full-v2 outcome remains historical: each profile ran 54,347 tests
 with two AST failures, one opcache failure and a `test_tools` `sys.path`
 environment change. The 14 focused zero-box probes and targeted differentials
 are not substitutes for strict R27. Audit static-gate violations and process
-accounting gaps before changing marks or source. A diagnostic benchmark run is
-active, but it cannot qualify performance while R27 fails. No result is
-available yet.
+accounting gaps before changing marks or source. The pyperformance run reported
+precision warnings for 35/36 results; six kernel rows were noisy. The report
+makes no significance or causal-boxing claim. Finish P0–P4 before acting on
+the diagnostic P5 hypotheses. Prioritize steady-state throughput; RSS is a
+secondary measure. The source-level profile review and hardware-counter
+analysis are complete; they prioritize compiler convention, bounded
+attribute/accessor work, Python-call preparation and frame traffic without
+claiming a causal explanation. See the [source review](issues/checkpoint-closure/steady-state-source-review.md)
+and [diagnostic report](bench/results/checkpoint-6a0e4c12c17.md).
 
 The raw [kernel capture](issues/checkpoint-closure/kernels-66981c963be.md) at
 `66981c963be` recorded 15/29 raw-zero kernels and 29 zero loop deltas; it is

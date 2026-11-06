@@ -24,6 +24,18 @@ process accounting. See the [kernel receipt](../issues/checkpoint-closure/kernel
 and comparative tables below are dated evidence; their statement that the tree
 does not link describes November 3, not the current runtime.
 
+The matched JIT-off [performance report](../bench/results/checkpoint-6a0e4c12c17.md)
+finds candidate/upstream elapsed-time factors of 1.287 over 29 kernels and
+1.096 over the declared 12-result subset. This interpreter is not yet
+competitive overall. Hardware counters on three selected regressions show
+1.63–2.05 times upstream retired instructions, with comparable or lower CPI.
+Disassembly confirms real tail jumps; source-backed experiments target
+compiler/helper state traffic, attribute lookup, call preparation and frame
+homes. Register IR alone does not ensure fewer executed machine instructions.
+Keep interpreter homes distinct from typed optimizing SSA and hardware
+allocation; these measurements do not justify changing the encoding or
+closing the effects/liveness/OSR gaps documented below.
+
 The built word remains 64 bits: a 16-bit handler and four 12-bit fields
 (`Include/internal/pycore_ir.h:IR_HANDLER`). Slot class is tested against
 `nlocalsplus` at run time. G2 class-bit experiments are deferred; section 4's

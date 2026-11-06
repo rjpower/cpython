@@ -28,8 +28,8 @@ not qualify the overall runtime: the full R27 census still reports
 11,028,818 core/core-pending/unresolved boxes, and the kernel gate fails. The
 current [full census](../issues/checkpoint-closure/full-census-6a0e4c12c17.md)
 and [kernel receipt](../issues/checkpoint-closure/kernels-6a0e4c12c17.md)
-control current status. A diagnostic timing run is active; no result is
-available yet and it cannot qualify performance while R27 fails.
+control current status. The completed [diagnostic measurements](../bench/results/checkpoint-6a0e4c12c17.md)
+do not qualify performance while R27 fails.
 
 Implementation and review evidence: [initial patch](../issues/checkpoint-closure/w5-float-value-format.patch), [review fixes](../issues/checkpoint-closure/w5-float-value-format-review-fixes.patch), [validation receipt](../issues/checkpoint-closure/w5-float-value-format-receipt.md).
 

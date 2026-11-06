@@ -11,19 +11,27 @@ identity/accounting is incomplete. The raw kernel capture completed with 87
 records across 29 kernels: 18/29 are startup-inclusive raw-zero and all loop
 deltas are zero, but the strict kernel gate failed. See the [kernel receipt](issues/checkpoint-closure/kernels-6a0e4c12c17.md)
 and [full census receipt](issues/checkpoint-closure/full-census-6a0e4c12c17.md).
-The matched-build preflight passed but is ineligible as a measurement. A
-diagnostic timing run is active, with no result published; it cannot qualify
-performance while R27 fails.
+The matched diagnostic campaign is complete but does not qualify performance
+because R27 fails. Candidate/baseline elapsed-time factors are 1.287/1.075
+for 29-kernel geomeans, 1.096/0.913 for the 12-result pyperformance subset,
+and peak-RSS factors are 1.259/1.062 against upstream/interim (lower is
+better). See the [diagnostic report](bench/results/checkpoint-6a0e4c12c17.md).
 
 Keep the failed full-v2 results visible: both profiles ran 54,347 tests with
 two AST failures and one opcache failure, and `test_tools` changed `sys.path`.
 The targeted AST/call fixes and latest environment check passed. The earlier
 15/29 raw-zero capture at `66981c963be` remains historical, not a new
 qualification. Root owns the frozen source/builds. Audit static-gate and
-process-accounting gaps before changing marks or source. A diagnostic timing
-run is active and has no result published; it cannot qualify performance
-while R27 fails. Ctypes and LRU implementation remain on explicit approval
-hold; G2 is deferred.
+process-accounting gaps before changing marks or source. The pyperformance
+run reported precision warnings for 35/36 results; six kernel rows were
+noisy. The report makes no significance or causal-boxing claim. Ctypes and
+LRU implementation remain on explicit approval hold; G2 is deferred. The
+source-level profile review and hardware-counter analysis are complete and
+recommend bounded compiler, attribute/accessor, Python-call and frame-traffic
+experiments. They do not establish a single cause for the measured gaps. See
+the [source review](issues/checkpoint-closure/steady-state-source-review.md)
+and [counter evidence](bench/results/checkpoint-6a0e4c12c17.md); complete P0–P4
+before implementing P5.
 
 ## Mission and selected design
 
@@ -80,8 +88,10 @@ The current candidate SOABI is `boilvalrc3`. The qualified interim source is
 but boxed heap fields. Its ABI is `boilrc1`; restoration uses
 `boilvalrc1-316d-x86_64-linux-gnu`. Neither is a new native JIT tier.
 
-Restoration configuration is Linux x86-64, GIL, GCC, mimalloc, computed gotos
-and shapes. Read the build directories for the exact commands.
+The diagnostic comparison used Linux x86-64, GIL, GCC 15.2, mimalloc and `-O3`,
+without PGO or LTO. The fork enabled shapes and used register-IR tail-call
+handlers; upstream used computed-goto dispatch. The exact configurations are in the
+diagnostic report.
 
 ## Source and build state
 
@@ -100,8 +110,8 @@ pending check.
 
 The raw kernel evidence at `66981c963be` is historical and keeps its own ELF.
 The current `6a0e4c12c17` kernel and full-census receipts identify the exact
-retained executables. A diagnostic timing run is active, with no result yet;
-it cannot qualify performance while the R27 gate is open.
+retained executables. The final diagnostic results are recorded separately;
+they do not qualify performance while the R27 gate is open.
 
 The final AST type-call guard admits only the selected type-call pair when the
 class object's actual object and value vectorcall fields are both inactive.
@@ -294,10 +304,19 @@ overwritten.
    counts.
 3. Resolve the 11 raw-nonzero kernel rows in the current capture and rerun the
    strict startup-inclusive gate after accounting fixes.
-4. The diagnostic timing run is active; publish its results only as diagnostic
-   while R27 fails. Qualified kernel/pyperformance/RSS results require a clean
-   strict R27 pass and the exact matched builds. Use the one-minute load guard
-   (reject at load >= 4) and retain the full 1/5/15-minute tuple.
+4. The diagnostic timing campaign is complete, but R27 still fails. Candidate/
+   baseline factors are 1.287/1.075 for kernel geomeans, 1.096/0.913 for
+   pyperformance and 1.259/1.062 for peak RSS against upstream/interim; lower
+   is better. It used JIT-off GCC `-O3` without PGO/LTO and unchanged source.
+   Pyperformance warned on 35/36 results about one-percent precision; six
+   kernel rows were noisy. The completed source review and hardware counters
+   identify extra retired instructions in the selected regressions while CPI
+   is comparable or lower; cache counters are too noisy for attribution. The
+   bounded experiments are compiler convention, attribute/accessor work,
+   Python-call preparation and frame traffic. These findings do not establish
+   causal boxing cost or a single source of the elapsed gap.
+   Finish P0–P4 and pass R27 before qualified performance or checkpoint closure.
+   Keep the one-minute load guard (reject at load >= 4) and full 1/5/15 tuple.
 5. Write the checkpoint recap from qualified evidence. Ctypes and LRU
    implementation remain approval-held; G2 stays deferred. Serialization
    recovery and the cohesive method/tracing JIT follow the checkpoint.

@@ -483,7 +483,8 @@ source integration, full tests, measurement and the final checkpoint recap.
 
 The independently reviewed [follow-up queue](follow-up-6a0e4c12c17.md) gives
 packet boundaries, worker roles, focused checks and integration exits. Its
-performance section remains pending until the diagnostic collection finishes.
+performance section now records the completed diagnostic campaign; R27
+qualification and the checkpoint remain open.
 
 Runtime HEAD is `6a0e4c12c17` (constructor and format work), following
 `05286694774` (native child accounting). All five build-info objects match
@@ -495,10 +496,13 @@ profiles passed 54,351 tests with no failures (release: 2,531 skips; debug:
 is incomplete. The raw capture completed with 87 records over 29 kernels:
 18/29 startup-inclusive raw-zero and 29/29 loop deltas zero, but strict kernel
 admission failed. See the [kernel receipt](kernels-6a0e4c12c17.md) and [full
-census receipt](full-census-6a0e4c12c17.md). The matched-build preflight passed
-but is ineligible as a measurement. A diagnostic timing run is active and has
-no published result. Targeted differentials remain supporting evidence, not
-replacements for the full gates.
+census receipt](full-census-6a0e4c12c17.md). The matched diagnostic campaign
+is complete but does not qualify performance because R27 fails. Candidate/
+baseline elapsed-time factors are 1.287/1.075 for kernel geomeans, 1.096/0.913
+for the 12-result pyperformance subset, and 1.259/1.062 for peak RSS against
+upstream/interim; lower is better. See the [diagnostic report](../../bench/results/checkpoint-6a0e4c12c17.md).
+Targeted differentials remain supporting evidence, not replacements for the
+full gates.
 
 1. **Functional qualification is complete.** Both profiles passed 54,351 tests
    with no failures (release: 2,531 skips; debug: 2,469). The earlier full-v2
@@ -517,17 +521,25 @@ replacements for the full gates.
    implementation remain on explicit approval hold.
 3. **Source/build identity is confirmed.** All five build-info objects match
    their respective source HEADs, with 116/116/117 module rosters; the exact
-   retained executable IDs are recorded in the census and kernel receipts.
-   Keep the source and builds frozen through the active diagnostic run.
-4. **Complete diagnostics, then plan qualified measurements.** A diagnostic
-   run is active, but its results cannot qualify performance while R27 fails.
-   After functional and R27 gates pass, with workers stopped, run matched
-   upstream `3a440b65695`, interim `eba351fee7d` and candidate kernel rounds,
-   the reviewed pyperformance subset, warmed-page RSS and separate profiling.
-   Use a one-minute load guard: reject kernel or pyperformance timing samples
-   at load >= 4, and retain the full 1/5/15-minute load tuple in the journal.
-   No current elapsed timing exists; the 1.73x/1.83x ratios belong to
-   `5de7bd62ef9`.
-   Then write the checkpoint recap and rank follow-ups by measured bottlenecks.
-   G2 remains deferred; serialization recovery and the shared optimizing
-   method/tracing JIT follow the checkpoint.
+   retained executable IDs are recorded in the census, kernel and diagnostic
+   receipts.
+4. **Diagnostic measurement is complete; qualification remains open.** The
+   report used JIT-off GCC `-O3` builds without PGO/LTO and unchanged source.
+   Pyperformance warned on 35/36 results about one-percent precision; six
+   kernel rows were noisy. Profiles suggest attribute lookup, calls/frames,
+   iteration and dictionary work, but do not establish causal boxing cost or
+   total gain. Finish P0–P4 and pass R27 before a qualified performance claim.
+   P5 in the [follow-up queue](follow-up-6a0e4c12c17.md) contains
+   measurement-driven hypotheses, not fixes. Keep the one-minute load guard
+   (reject at load >= 4) and full 1/5/15-minute tuple for future campaigns.
+   Historical 1.73x/1.83x ratios refer to `5de7bd62ef9` only.
+   Prioritize steady-state throughput; RSS is secondary. The completed
+   [hardware evidence review](hardware-perf-review-6a0e4c12c17.md) accepts all
+   54 counter runs, 18 empty calibrations and six user-only DWARF captures.
+   The three selected regressions retire 1.63–2.05 times upstream instructions
+   with comparable or lower CPI. P5 now proposes matched Clang A3 R1/Q2,
+   bounded attribute/accessor work, Python-call preparation and frame traffic;
+   no optimization speedup has been measured yet.
+5. **Write the checkpoint recap from qualified evidence.** Ctypes and LRU
+   implementation remain approval-held; G2 stays deferred. Serialization
+   recovery and the shared optimizing method/tracing JIT follow the checkpoint.

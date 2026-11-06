@@ -54,18 +54,29 @@ silently discard effects or confuse a stored value kind with receiver behavior.
 
 The qualified interim images at `eba351fee7d` use register IR, NaN-boxed frame
 values and boxed heap/shape fields under RC. The universal PyValue runtime (branch `boil/pyvalue-rc-universal`) now
-links and runs in debug and release builds; the test suite is mostly passing and being
-triaged. There are no performance results for it yet. See [STATUS](../STATUS.md)
-for current numbers. JIT experiments contain partial implementation, but the
-interim images contain no new native tier.
+links in debug and release and passed 54,351 tests in each full profile. Its
+diagnostic comparison reports candidate/baseline elapsed-time factors of
+1.287/1.075 for the kernel geomean and 1.096/0.913 for the declared
+pyperformance subset against upstream/interim; peak-RSS factors are
+1.259/1.062. Lower is better. This is not a performance qualification:
+whole-source R27 and startup-inclusive kernel gates still fail. See the
+[diagnostic report](../bench/results/checkpoint-6a0e4c12c17.md) and
+[current status](../STATUS.md). The runtime still has no new native JIT tier.
+Follow-up prioritizes steady-state throughput; RSS is secondary. The completed
+[source review](../issues/checkpoint-closure/steady-state-source-review.md)
+and hardware counters identify bounded compiler, attribute/accessor,
+Python-call and frame-traffic experiments. On the three selected regressions,
+candidate retired instructions are 2.047x, 1.903x and 1.628x upstream, while
+CPI is comparable or lower; cache counters are noisy. This narrows the next
+experiments but does not prove causation or explain the aggregate gap.
 
 The target has one canonical core representation and one selected collector.
 Internal PyValue bits are private; opaque extension handles do not expose them.
 The HPy-compatible backend is still unimplemented. Existing object/JIT patterns
 may change when better designs are supported by evidence.
 
-The supported interim profile is Linux x86-64/GIL, GCC computed dispatch and
-private `boilrc1` ABI. Free-threaded/32-bit and global StackRef-ID debugging are
-unqualified. [RC integration](../issues/rc-integration/status.md) records exact
-limits. Earlier tracing/nursery proposals remain historical evidence, not the
-current architecture or active work.
+The supported interim profile is Linux x86-64/GIL, GCC register-IR tail-call
+dispatch and private `boilrc1` ABI. Free-threaded/32-bit and global StackRef-ID
+debugging are unqualified. [RC integration](../issues/rc-integration/status.md)
+records exact limits. Earlier tracing/nursery proposals remain historical
+evidence, not the current architecture or active work.

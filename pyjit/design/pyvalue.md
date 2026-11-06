@@ -8,7 +8,7 @@ we should close. It is the reference for value, container and C-boundary work.
 **Current rollout, 2026-11-06.** Runtime HEAD is `6a0e4c12c17`; it has the
 55-row value-slot table, including `new_` and `init_` (16 hot, 39 cold),
 type-call dispatch and direct initializer wrappers. Release and debug full
-suites both pass 54,351 tests with no failures. The current 14 focused
+suites both pass 54,351 tests with no failures. The integration cohort's 14 focused
 startup/hot-zero probes report zero boxes, but the full R27 census still fails
 with 11,028,818 core/core-pending/unresolved boxes and incomplete process
 accounting. The 6a kernel receipt records 18/29 startup-inclusive raw-zero

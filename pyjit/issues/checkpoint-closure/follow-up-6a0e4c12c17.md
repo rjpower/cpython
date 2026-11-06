@@ -35,6 +35,20 @@ before editing.
 | P2 | Port startup boxes with known value homes: `Objects/sliceobject.c:slice_new` argument parsing; `Modules/itertoolsmodule.c:repeat_new`; `Python/getargs.c` format `n`; `Objects/exceptions.c:UnicodeDecodeError_init`; `Objects/unicodeobject.c:unicode_decode_call_errorhandler_writer`. Keep argument values owned through integer/index conversion and callbacks; retain validation order, type checks, overflow text and cleanup. These sites contribute to logging, regex and XML raw rows; comprehension and JSON rows are attributed to `lru_cache_new`, which remains approval-held. | Terra, medium, constructor/parser ownership; Luna can take disjoint mechanical parser sites after interfaces are reviewed. Sol reviews the callback-heavy Unicode/error-handler conversion; root integrates shared parser/API changes. | `test_slice`, `test_itertools`, `Lib/test/test_capi/test_getargs.py`, `test_exceptions`, and `test_codecs`/multibyte codec tests as appropriate. Add focused inline int, subclass `__index__`, overflow, malformed callback tuple, Unicode/buffer and error-order cases where those semantics change. Exit when the targeted sites disappear from a fresh attributed capture, unrelated owners remain unchanged, and focused tests, release compile and post-review pass. Overall kernel zero is a coordinator gate, not a single-packet exit condition. |
 | P3 | Resolve `Python/ceval.c:native_call_builtin_o` in regex (9 boxes) to the actual `METH_O` callee before changing the ABI. Then port only that identified callee if a paired value entry preserves its semantics. Trace the logging shared `PyValue_AsObject` (one box per logging kernel) to an owner-bearing call site before porting; the shared boxing PC alone does not identify its caller. Review `Modules/_stat.c:stat_S_ISLNK` (two regex boxes) as a bounded paired-value method candidate, preserving `__index__` behavior. | Luna, medium, exact callee inventory and bounded module port; Sol reviews the selected ABI/dispatch change; root owns `ceval.c`, shared call conventions and integration. | First deliver a trace artifact naming exact callee and call route; no source edit before that. Then use `test_re`, the selected module's focused tests, and logging tests only where touched. Add custom `__index__`/error and dispatch-preservation cases. Exit when each raw box has a source-backed owner and an integrated kernel retest removes only the intended site. |
 | P4 | After P0–P3, obtain fresh owner-bearing traces for the largest remaining core-attributed census groups: `Objects/call.c` (2,284,628 boxes), `Python/bltinmodule.c` (743,952), `Modules/selectmodule.c` (403,727), `Modules/timemodule.c` (386,485), and math integer operations (370,203). These are census box counts, not elapsed-time costs. Identify the exact API/caller and signature before proposing a port; do not infer a module-wide migration from the totals. | Terra, medium, ownership-sensitive ports after exact trace; Luna, medium, source census and mechanical callers after review; Sol reviews call/result ownership; root owns shared headers and integration. | One file/caller cluster per proposal, with raw owner PCs, existing value API (if any), callback order and owner-close map. Choose focused tests only after the caller is identified (callables, builtins, select, time or math tests as appropriate). Exit packet-by-packet when targeted owners disappear and unrelated counts remain stable; only the coordinator reruns full gates. |
+| P5 | After P0–P4, prioritize steady-state throughput experiments. The completed source review and hardware counters identify extra retired instructions in the selected regressions: candidate/upstream instruction ratios are 2.047 for deltablue, 1.903 for logging_silent and 1.628 for comprehensions; CPI is comparable or lower, and cache counters are noisy. Investigate matched Clang A3 R1/Q2; bounded attribute/shape and list-accessor work; Python-call preparation; then frame liveness/retirement. These are hypotheses, not causal diagnoses. Startup RSS is secondary. Do not infer that boxing explains the gaps or rewrite IR speculatively. | Terra, medium, one ownership/effects-preserving experiment at a time; Luna can inventory exact sites and assemble focused tests; Sol reviews semantic/design changes; root owns profiles, merged comparison and prioritization. | The [source review](steady-state-source-review.md) and [counter report](../../bench/results/checkpoint-6a0e4c12c17.md) complete the initial attribution. After P0–P4, choose one bounded experiment, record a focused semantic test and source-level falsification check, then obtain post-review and a matched before/after diagnostic. No G2 restart. |
+
+File boundaries: for P0, the worker packet is limited to
+`Tools/build/check_r27.py`, its focused checker tests under
+`Lib/test/test_tools/`, and the specifically assigned fixture tests
+`Lib/test/test_pyvalue_box_sites.py`, `Lib/test/test_value_slots.py`, and
+`Lib/test/test_subprocess.py`; the coordinator owns `Python/pystats.c` and
+`pyjit/bench/run.py` changes. P1 owns a current caller inventory and focused
+checker fixtures in `Tools/build/check_value_api.py` and
+`Tools/build/value_ownership.toml`; each runtime header/caller pair must be
+assigned only after its actual production callers are reviewed. P2 and P3 own
+only the named function and its direct generated producer, if any. P4 owns no
+runtime source until a fresh trace names the exact function and the coordinator
+assigns its file.
 
 ### P0 evidence constraints
 
@@ -96,28 +110,45 @@ an IR encoding change. Preserve the accepted IR design and its open questions
 in [register-ir.md](../../design/register-ir.md); do not infer a reason to
 change the encoding from box counts alone.
 
-## Performance evidence: pending
+## Diagnostic performance evidence: complete, not qualified
 
-The matched-build preflight passed identity checks but is ineligible as a
-measurement. A diagnostic measurement run is active; no aggregate result is
-available yet. When it finishes, the coordinator may publish the result as
-diagnostic with its limits. Do not call the checkpoint complete or infer a
-current speedup from historical ratios. After the strict R27 gate passes,
-publish matched upstream/interim/candidate elapsed-time and RSS results, raw
-vectors, spread, host conditions and qualification status. Report time as
-baseline divided by candidate (`> 1` favors the candidate); reject samples at
-load `>= 4` and retain the full 1/5/15-minute load tuple.
+The matched campaign is complete, but R27 fails, so these are diagnostic
+results rather than a qualified performance checkpoint. Candidate/baseline
+means candidate divided by baseline; lower is better.
 
-| Comparison | Time ratio | RSS result | Status / evidence |
+| Metric | Candidate / upstream | Candidate / interim | Qualification |
 | --- | ---: | ---: | --- |
-| Candidate vs upstream `3a440b65695` | pending | pending | No aggregate result yet |
-| Candidate vs interim `eba351fee7d` | pending | pending | No aggregate result yet |
-| Kernel detail / spread | pending | pending | Fill from retained raw vectors |
+| 29-kernel elapsed-time geomean | 1.2867708613 | 1.0753300431 | Diagnostic only |
+| 12-result pyperformance elapsed-time geomean | 1.09643692 | 0.9130632923 | Diagnostic only |
+| 29-kernel peak-RSS geomean | 1.259197157 | 1.061970975 | Diagnostic only |
 
-Historical 1.73x kernel and 1.83x pyperformance ratios refer to runtime
-`5de7bd62ef9`, not this source. Keep them labeled historical. After qualified
-measurement, write a follow-up ranked by elapsed-time and RSS evidence, not
-boxing counts.
+The selected hardware-counter follow-up also completed: 54/54 positive counter
+runs and 18/18 empty-region calibrations are valid; six user-only DWARF
+captures report no lost samples. Source/build identities stayed unchanged. The independent
+[hardware review](hardware-perf-review-6a0e4c12c17.md) accepted the evidence;
+raw values and limits are in the [diagnostic report](../../bench/results/checkpoint-6a0e4c12c17.md).
+
+Steady-state throughput is the follow-up priority; RSS is secondary. Candidate
+startup RSS was 13,300 KiB (upstream 10,372; interim 12,036). Builds used
+JIT-off GCC 15.2 `-O3` and mimalloc, without PGO or LTO; upstream used
+computed-goto dispatch and the fork used register-IR tail-call handlers.
+Source identities were unchanged. The pyperformance run warned on 35/36 results that
+the samples did not establish one-percent precision at 95% certainty. Six
+kernel rows were noisy. Do not claim statistical significance or that sampled
+profile sites caused boxing or explain total runtime. The [full report](../../bench/results/checkpoint-6a0e4c12c17.md)
+contains the per-kernel and per-result tables, raw vectors, RSS details,
+commands, identities and limitations. Historical 1.73x kernel and 1.83x
+pyperformance ratios refer to runtime `5de7bd62ef9`, not this source.
+
+Completed source review and hardware counters prioritize matched compiler
+convention, bounded attribute/accessor work, Python-call preparation, and
+frame traffic. The three selected regressions retire 2.047x, 1.903x and 1.628x
+the upstream instructions, while CPI is comparable or lower; cache counters
+are too noisy to attribute. These findings do not establish the cause of the
+elapsed gaps. P5 records hypotheses for later experiments; first complete
+P0–P4 and pass R27. The checkpoint is not complete until the
+functional, static/API, accounting, startup-inclusive kernel and performance
+gates all have their required evidence.
 
 ## After checkpoint
 

@@ -254,3 +254,18 @@ that remote copy remains at revision 7. No alternate export was attempted.
 - 2026-11-06 — Synchronized live design and handoff summaries to the final 6a
   functional, census and kernel receipts. Diagnostic timing is active, with no
   result published; historical qualification failures remain documented.
+- 2026-11-06 — The matched JIT-off 6a diagnostic campaign completed: kernel,
+  pyperformance and peak-RSS candidate/baseline factors are recorded in the
+  report and follow-up queue. R27 remains failed; no qualified performance or
+  checkpoint claim follows from this diagnostic run.
+- 2026-11-06 — Follow-up priority is steady-state throughput, with RSS
+  secondary. The initial profile samples identify hypotheses only; the deeper
+  performance analysis remains pending a separate coordinator report.
+- 2026-11-06 — Completed the source-line review and selected hardware-counter
+  analysis for deltablue, logging_silent and comprehensions. The 54 counter
+  runs, 18 empty calibrations and six user-only DWARF captures passed evidence
+  review with unchanged identities and no lost samples. Candidate retired
+  instructions are 2.047x/1.903x/1.628x upstream; CPI is comparable or lower,
+  while cache counters are too noisy for attribution. The review proposes
+  matched Clang A3 R1/Q2, bounded attribute/accessor, Python-call and
+  frame-traffic experiments. R27 remains open; P0–P4 precede implementation.

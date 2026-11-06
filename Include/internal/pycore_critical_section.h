@@ -10,6 +10,7 @@
 #include <stdint.h>
 
 #ifdef __cplusplus
+Py_VALUE_COMPAT(_PyValue_SequenceFast)
 extern "C" {
 #endif
 

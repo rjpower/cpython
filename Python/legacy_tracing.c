@@ -7,6 +7,7 @@
 #include "pycore_ceval.h"         // export _PyEval_SetProfile()
 #include "pycore_frame.h"         // PyFrameObject members
 #include "pycore_interpframe.h"   // _PyFrame_GetCode()
+#include "pycore_long_value.h"    // _PyValue_AsInt()
 #include "pycore_tstate.h"        // _PyThreadStateImpl
 #include "pycore_tuple.h"         // _PyTuple_PackValues()
 #include "pycore_value_api.h"     // _PyBox_CALL_ADAPTER()
@@ -366,7 +367,7 @@ offset_from_word(PyValueBorrow word, int *out)
         *out = (int)PyValue_InlineInt64(word);
         return 0;
     }
-    int value = PyLong_AsInt(PyValue_AsKnownObjectBorrow(word));
+    int value = _PyValue_AsInt(word);
     if (value == -1 && PyErr_Occurred()) {
         return -1;
     }

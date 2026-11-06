@@ -163,7 +163,7 @@ faulthandler_get_fileno(PyValueBorrow file_in, PyObject **file_out)
 
     int fd;
     if (PyLong_Check(result)) {
-        fd = PyLong_AsInt(result);
+        fd = _PyValue_AsInt(PyValue_FromObjectBorrow(result));
     }
     else {
         fd = -1;

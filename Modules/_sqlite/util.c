@@ -28,6 +28,8 @@
 #define Py_VALUE_CORE 1
 #include "module.h"
 #include "pycore_long.h"          // _PyLong_AsByteArray()
+#include "pycore_long_value.h"    // _PyValue_AsLongLongAndOverflow()
+#include "pycore_value.h"         // PyValue_FromObjectBorrow()
 #include "connection.h"
 
 // Returns non-NULL if a new exception should be raised
@@ -164,7 +166,7 @@ sqlite_int64
 _pysqlite_long_as_int64(PyObject * py_val)
 {
     int overflow;
-    long long value = PyLong_AsLongLongAndOverflow(py_val, &overflow);
+    long long value = _PyValue_AsLongLongAndOverflow(PyValue_FromObjectBorrow(py_val), &overflow);
     if (value == -1 && PyErr_Occurred())
         return -1;
     if (!overflow) {

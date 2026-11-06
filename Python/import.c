@@ -258,7 +258,7 @@ _PyImport_SetModuleString(const char *name, PyObject *m)
 {
     PyThreadState *tstate = _PyThreadState_GET();
     PyObject *modules = get_modules_dict(tstate, true);
-    return PyMapping_SetItemString(modules, name, m);
+    return _PyValue_MappingSetItemString(PyValue_FromObjectBorrow(modules), name, PyValue_FromObjectBorrow(m));
 }
 
 static PyObject *

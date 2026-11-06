@@ -7,6 +7,7 @@
 #include "pycore_ir.h"                // IR_WORD()
 #include "pycore_list.h"              // PyList_GET_VALUE()
 #include "pycore_long.h"              // _PyLong_CheckExactAndCompact()
+#include "pycore_long_value.h"    // _PyValue_AsInt()
 #include "pycore_opcode_utils.h"    // IS_BACKWARDS_JUMP_OPCODE
 #include "pycore_opcode_metadata.h" // _PyOpcode_num_popped
 #include "pycore_regcfg.h"          // _PyRegCfg
@@ -401,7 +402,7 @@ dict_keys_inorder(PyObject *dict, Py_ssize_t offset)
         assert(PyUnicode_CheckExact(PyValue_AsKnownObjectBorrow(key)));
         assert(PyValue_LongCheckExact(value));
         Py_ssize_t i = PyValue_IsInlineInt(value) ? PyValue_InlineInt64(value) :
-                       PyLong_AsSsize_t(PyValue_AsKnownObjectBorrow(value));
+                       _PyValue_IntAsSsize_t(value);
         if (i == -1 && PyErr_Occurred()) {
             goto error;
         }
@@ -470,7 +471,7 @@ compute_localsplus_info(_PyCompile_CodeUnitMetadata *umd, int nlocalsplus,
             assert(PyValue_LongCheckExact(value));
             PyObject *k = PyValue_AsKnownObjectBorrow(key);
             int offset = PyValue_IsInlineInt(value) ? (int)PyValue_InlineInt64(value) :
-                         PyLong_AsInt(PyValue_AsKnownObjectBorrow(value));
+                         _PyValue_AsInt(value);
             if (offset == -1 && PyErr_Occurred()) {
                 goto error;
             }
@@ -531,7 +532,7 @@ compute_localsplus_info(_PyCompile_CodeUnitMetadata *umd, int nlocalsplus,
         }
 
         cellvar_offset = PyValue_IsInlineInt(value) ? (int)PyValue_InlineInt64(value) :
-                         PyLong_AsInt(PyValue_AsKnownObjectBorrow(value));
+                         _PyValue_AsInt(value);
         if (cellvar_offset == -1 && PyErr_Occurred()) {
             goto error;
         }
@@ -557,7 +558,7 @@ compute_localsplus_info(_PyCompile_CodeUnitMetadata *umd, int nlocalsplus,
         assert(PyValue_LongCheckExact(value));
         PyObject *k = PyValue_AsKnownObjectBorrow(key);
         int offset = PyValue_IsInlineInt(value) ? (int)PyValue_InlineInt64(value) :
-                     PyLong_AsInt(PyValue_AsKnownObjectBorrow(value));
+                     _PyValue_AsInt(value);
         if (offset == -1 && PyErr_Occurred()) {
             goto error;
         }

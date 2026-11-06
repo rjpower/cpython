@@ -255,19 +255,19 @@ gc_set_threshold(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
         PyErr_SetString(PyExc_TypeError, "gc.set_threshold requires 1 to 3 arguments");
         goto exit;
     }
-    threshold0 = PyLong_AsInt(args[0]);
+    threshold0 = _PyValue_AsInt(PyValue_FromObjectBorrow(args[0]));
     if (threshold0 == -1 && PyErr_Occurred()) {
         goto exit;
     }
     if (nargs >= 2) {
-        threshold1 = PyLong_AsInt(args[1]);
+        threshold1 = _PyValue_AsInt(PyValue_FromObjectBorrow(args[1]));
         if (threshold1 == -1 && PyErr_Occurred()) {
             goto exit;
         }
         group_right_1 = 1;
     }
     if (nargs >= 3) {
-        threshold2 = PyLong_AsInt(args[2]);
+        threshold2 = _PyValue_AsInt(PyValue_FromObjectBorrow(args[2]));
         if (threshold2 == -1 && PyErr_Occurred()) {
             goto exit;
         }

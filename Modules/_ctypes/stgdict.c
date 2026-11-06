@@ -11,6 +11,7 @@
 
 #include "pycore_call.h"          // _PyObject_CallNoArgs()
 #include "pycore_dict.h"          // _PyDict_SizeOf()
+#include "pycore_long_value.h"    // _PyValue_IntAsSsize_t()
 #include "pycore_tuple.h"         // _PyTuple_GET_OBJECT()
 #include "pycore_value.h"         // _PyValue_AsObjectStealAt()
 #include "pycore_value_ops.h"     // _PyValue_IsTrue()
@@ -96,7 +97,7 @@ MakeFields(PyObject *type, CFieldObject *descr,
     fields = PyObject_GetAttrString(descr->proto, "_fields_");
     if (fields == NULL)
         return -1;
-    fieldlist = PySequence_Fast(fields, "_fields_ must be a sequence");
+    fieldlist = _PyValue_SequenceFast(PyValue_FromObjectBorrow(fields), "_fields_ must be a sequence");
     Py_DECREF(fields);
     if (fieldlist == NULL)
         return -1;
@@ -195,7 +196,7 @@ MakeAnonFields(PyObject *type)
     if (anon == NULL) {
         return 0;
     }
-    anon_names = PySequence_Fast(anon, "_anonymous_ must be a sequence");
+    anon_names = _PyValue_SequenceFast(PyValue_FromObjectBorrow(anon), "_anonymous_ must be a sequence");
     Py_DECREF(anon);
     if (anon_names == NULL)
         return -1;
@@ -333,7 +334,7 @@ PyCStructUnionType_update_stginfo(PyObject *type, PyObject *fields, int isStruct
     if (!align_obj) {
         goto error;
     }
-    Py_ssize_t total_align = PyLong_AsSsize_t(align_obj);
+    Py_ssize_t total_align = _PyValue_IntAsSsize_t(PyValue_FromObjectBorrow(align_obj));
     Py_CLEAR(align_obj);
     if (total_align < 0) {
         if (!PyErr_Occurred()) {
@@ -348,7 +349,7 @@ PyCStructUnionType_update_stginfo(PyObject *type, PyObject *fields, int isStruct
     if (!size_obj) {
         goto error;
     }
-    Py_ssize_t total_size = PyLong_AsSsize_t(size_obj);
+    Py_ssize_t total_size = _PyValue_IntAsSsize_t(PyValue_FromObjectBorrow(size_obj));
     Py_CLEAR(size_obj);
     if (total_size < 0) {
         if (!PyErr_Occurred()) {

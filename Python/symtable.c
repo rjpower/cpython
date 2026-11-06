@@ -2,6 +2,7 @@
 #include "pycore_ast.h"           // stmt_ty
 #include "pycore_dict.h"          // _PyDict_NextValue()
 #include "pycore_list.h"          // PyList_GET_VALUE(), PyList_AppendValue()
+#include "pycore_long_value.h"    // _PyValue_AsLong()
 #include "pycore_parser.h"        // _PyParser_ASTFromString()
 #include "pycore_pystate.h"       // _PyThreadState_GET()
 #include "pycore_runtime.h"       // _Py_ID()
@@ -25,7 +26,7 @@ symtable_long(PyValue value)
 {
     assert(PyValue_LongCheckExact(value));
     return PyValue_IsInlineInt(value) ? PyValue_InlineInt64(value) :
-           PyLong_AsLong(PyValue_AsKnownObjectBorrow(value));
+           _PyValue_AsLong(value);
 }
 
 static int

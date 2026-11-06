@@ -493,7 +493,7 @@ PyComplex_RealAsDouble(PyObject *op)
             real = ((PyComplexObject *)newop)->cval.real;
             Py_DECREF(newop);
         } else if (!PyErr_Occurred()) {
-            real = PyFloat_AsDouble(op);
+            real = _PyValue_AsDouble(PyValue_FromObjectBorrow(op));
         }
     }
 
@@ -514,7 +514,7 @@ PyComplex_ImagAsDouble(PyObject *op)
             imag = ((PyComplexObject *)newop)->cval.imag;
             Py_DECREF(newop);
         } else if (!PyErr_Occurred()) {
-            PyFloat_AsDouble(op);
+            _PyValue_AsDouble(PyValue_FromObjectBorrow(op));
             if (!PyErr_Occurred()) {
                 imag = 0.0;
             }
@@ -588,7 +588,7 @@ PyComplex_AsCComplex(PyObject *op)
        real part of the result, and fill in the imaginary part as 0. */
     else {
         /* PyFloat_AsDouble will return -1 on failure */
-        cv.real = PyFloat_AsDouble(op);
+        cv.real = _PyValue_AsDouble(PyValue_FromObjectBorrow(op));
         return cv;
     }
 }
@@ -709,7 +709,7 @@ complex_real_operand(PyValueBorrow v, double *dbl)
         return 0;
     }
     if (PyLong_Check(obj)) {
-        *dbl = PyLong_AsDouble(obj);
+        *dbl = _PyValue_IntAsDouble(PyValue_FromObjectBorrow(obj));
         return (*dbl == -1.0 && PyErr_Occurred()) ? -1 : 0;
     }
     return 1;
@@ -1211,7 +1211,7 @@ actual_complex_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         /* The argument really is entirely real, and contributes
            nothing in the imaginary direction.
            Just treat it as a double. */
-        double r = PyFloat_AsDouble(arg);
+        double r = _PyValue_AsDouble(PyValue_FromObjectBorrow(arg));
         if (r != -1.0 || !PyErr_Occurred()) {
             res = complex_subtype_from_doubles(type, r, 0);
         }

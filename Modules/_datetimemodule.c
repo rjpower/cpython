@@ -13,6 +13,7 @@
 #include "Python.h"
 #include "pycore_dict.h"          // PyDict_SetValue()
 #include "pycore_long.h"          // _PyLong_GetOne()
+#include "pycore_long_value.h"    // _PyValue_AsDouble()
 #include "pycore_object.h"        // _PyObject_Init()
 #include "pycore_time.h"          // _PyTime_ObjectToTime_t()
 #include "pycore_tuple.h"         // _PyTuple_FromPair
@@ -2063,7 +2064,7 @@ wrap_strftime(PyObject *object, PyObject *format, PyObject *timetuple,
             if (item == NULL) {
                 goto Error;
             }
-            long year_long = PyLong_AsLong(item);
+            long year_long = _PyValue_AsLong(PyValue_FromObjectBorrow(item));
             Py_DECREF(item);
             if (year_long == -1 && PyErr_Occurred()) {
                 goto Error;
@@ -2085,7 +2086,7 @@ wrap_strftime(PyObject *object, PyObject *format, PyObject *timetuple,
                 if (year == NULL) {
                     goto Error;
                 }
-                year_long = PyLong_AsLong(year);
+                year_long = _PyValue_AsLong(PyValue_FromObjectBorrow(year));
                 Py_DECREF(year);
                 if (year_long == -1 && PyErr_Occurred()) {
                     goto Error;

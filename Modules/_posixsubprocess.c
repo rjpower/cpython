@@ -7,6 +7,7 @@
 #include "Python.h"
 #include "pycore_fileutils.h"     // _Py_set_inheritable_async_safe()
 #include "pycore_interp.h"        // _PyInterpreterState_GetFinalizing()
+#include "pycore_long_value.h"    // _PyValue_AsLong()
 #include "pycore_pystate.h"       // _PyInterpreterState_GET()
 #include "pycore_signal.h"        // _Py_RestoreSignals()
 #include "pycore_value.h"      // _PyValue_AsObjectAt()
@@ -151,7 +152,7 @@ _sanity_check_python_fd_sequence(PyObject *fd_sequence)
             Py_DECREF(py_fd);
             return 1;
         }
-        iter_fd = PyLong_AsLong(py_fd);
+        iter_fd = _PyValue_AsLong(PyValue_FromObjectBorrow(py_fd));
         Py_DECREF(py_fd);
         if (iter_fd < 0 || iter_fd <= prev_fd || iter_fd > INT_MAX) {
             /* Negative, overflow, unsorted, too big for a fd. */
@@ -206,7 +207,7 @@ _PySequence_BytesToCharpArray(PyObject* self)
     PyObject *item = NULL;
     Py_ssize_t size;
 
-    argc = PySequence_Size(self);
+    argc = _PyValue_SequenceSize(PyValue_FromObjectBorrow(self));
     if (argc == -1)
         return NULL;
 
@@ -291,7 +292,7 @@ convert_fds_to_keep_to_c(PyObject *py_fds_to_keep, int *c_fds_to_keep)
         if (fdobj == NULL) {
             return -1;
         }
-        long fd = PyLong_AsLong(fdobj);
+        long fd = _PyValue_AsLong(PyValue_FromObjectBorrow(fdobj));
         Py_DECREF(fdobj);
         if (fd == -1 && PyErr_Occurred()) {
             return -1;
@@ -1183,7 +1184,7 @@ subprocess_fork_exec_impl(PyObject *module, PyValueBorrow process_args,
             goto cleanup;
         }
         PyObject *extra_groups_list = PyValue_AsKnownObjectBorrow(extra_groups_packed);  /* a list, checked above */
-        extra_group_size = PySequence_Size(extra_groups_list);
+        extra_group_size = _PyValue_SequenceSize(PyValue_FromObjectBorrow(extra_groups_list));
 
         if (extra_group_size < 0)
             goto cleanup;

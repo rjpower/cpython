@@ -9,6 +9,7 @@
 
 #define Py_VALUE_CORE 1
 #include "multiprocessing.h"
+#include "pycore_long_value.h"    // _PyValue_AsDouble()
 #include "pycore_object.h"        // _PyObject_VisitType()
 #include "pycore_value.h"         // _PyValue_AsObjectAt()
 #include "pycore_value_slots.h"// _PyValue_FromObjectResult()
@@ -340,7 +341,7 @@ _multiprocessing_SemLock_acquire_impl(SemLockObject *self, int blocking,
         if (timeout_o == NULL) {
             return PyValue_NULL;
         }
-        double timeout = PyFloat_AsDouble(timeout_o);
+        double timeout = _PyValue_AsDouble(PyValue_FromObjectBorrow(timeout_o));
         Py_DECREF(timeout_o);
         if (PyErr_Occurred()) {
             return PyValue_NULL;

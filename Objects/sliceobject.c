@@ -17,6 +17,7 @@ this type and there is exactly one in existence.
 #include "pycore_abstract.h"      // _PyIndex_Check()
 #include "pycore_freelist.h"      // _Py_FREELIST_FREE(), _Py_FREELIST_POP()
 #include "pycore_long.h"          // _PyLong_GetZero()
+#include "pycore_long_value.h"    // _PyValue_AsLongLongAndOverflow()
 #include "pycore_modsupport.h"    // _PyArg_NoKeywords()
 #include "pycore_object.h"        // _PyObject_GC_TRACK()
 #include "pycore_sliceobject.h"   // PySliceObject
@@ -252,7 +253,7 @@ slice_long_field(PyValueBorrow field, Py_ssize_t *pi)
     if (!PyValue_LongCheck(field)) {
         return 0;
     }
-    *pi = PyLong_AsSsize_t(PyValue_AsKnownObjectBorrow(field));
+    *pi = _PyValue_IntAsSsize_t(field);
     return 1;
 }
 
@@ -507,7 +508,7 @@ inline_indices(PySliceObject *self, PyObject *length, Py_ssize_t *start,
         return 0;
     }
     int overflow;
-    long long ilength = PyLong_AsLongLongAndOverflow(length, &overflow);
+    long long ilength = _PyValue_AsLongLongAndOverflow(PyValue_FromObjectBorrow(length), &overflow);
     if (overflow) {
         return 0;
     }

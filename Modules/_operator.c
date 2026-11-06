@@ -4,6 +4,7 @@
 #define Py_VALUE_CORE 1
 #include "Python.h"
 #include "pycore_borrow.h"        // _PyBorrow_TupleItems()
+#include "pycore_long_value.h"    // _PyValue_IntAsSsize_t()
 #include "pycore_modsupport.h"    // _PyArg_NoKwnames()
 #include "pycore_moduleobject.h"  // _PyModule_GetState()
 #include "pycore_pystate.h"       // _PyInterpreterState_GET()
@@ -1095,7 +1096,7 @@ itemgetter_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
     ig->nitems = nitems;
     ig->index = -1;
     if (PyLong_CheckExact(item)) {
-        index = PyLong_AsSsize_t(item);
+        index = _PyValue_IntAsSsize_t(PyValue_FromObjectBorrow(item));
         if (index < 0) {
             /* If we get here, then either the index conversion failed
              * due to being out of range, or the index was a negative

@@ -297,7 +297,7 @@ _PyLong_AsMode_t(PyObject *op)
     mode_t mode;
 
     if (PyLong_Check(op)) {
-        value = PyLong_AsUnsignedLong(op);
+        value = _PyValue_IntAsUnsignedLong(PyValue_FromObjectBorrow(op));
     }
     else {
         PyValue index = _PyValue_IndexExact(PyValue_FromObjectBorrow(op));

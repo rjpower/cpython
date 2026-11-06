@@ -3009,7 +3009,7 @@ _io_TextIOWrapper_tell_impl(textio *self)
 #if defined(HAVE_LARGEFILE_SUPPORT)
         cookie.start_pos = PyLong_AsLongLong(posobj_o);
 #else
-        cookie.start_pos = PyLong_AsLong(posobj_o);
+        cookie.start_pos = _PyValue_AsLong(PyValue_FromObjectBorrow(posobj_o));
 #endif
     }
     else {

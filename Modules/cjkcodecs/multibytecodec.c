@@ -389,7 +389,7 @@ multibytecodec_encerror(const MultibyteCodec *codec,
         buf->outbuf += retstrsize;
     }
 
-    newpos = PyLong_AsSsize_t(posobj);
+    newpos = _PyValue_IntAsSsize_t(PyValue_FromObjectBorrow(posobj));
     if (newpos < 0 && !PyErr_Occurred())
         newpos += (Py_ssize_t)buf->inlen;
     if (newpos < 0 || newpos > buf->inlen) {
@@ -507,7 +507,7 @@ multibytecodec_decerror(const MultibyteCodec *codec,
     if (_PyUnicodeWriter_WriteStr(&buf->writer, retuni) < 0)
         goto errorexit;
 
-    newpos = PyLong_AsSsize_t(posobj);
+    newpos = _PyValue_IntAsSsize_t(PyValue_FromObjectBorrow(posobj));
     if (newpos < 0 && !PyErr_Occurred())
         newpos += (Py_ssize_t)(buf->inbuf_end - buf->inbuf_top);
     if (newpos < 0 || buf->inbuf_top + newpos > buf->inbuf_end) {
@@ -1889,7 +1889,7 @@ _multibytecodec_MultibyteStreamWriter_writelines_impl(MultibyteStreamWriterObjec
     PyObject *strobj;
     int i, r;
 
-    if (!(PyValue_IsObject(lines) && PySequence_Check(PyValue_AsKnownObjectBorrow(lines)))) {
+    if (!(PyValue_IsObject(lines) && _PyValue_SequenceCheck(lines))) {
         PyErr_SetString(PyExc_TypeError,
                         "arg must be a sequence object");
         return PyValue_NULL;
@@ -1898,7 +1898,7 @@ _multibytecodec_MultibyteStreamWriter_writelines_impl(MultibyteStreamWriterObjec
 
     module_state *state = PyType_GetModuleState(cls);
     assert(state != NULL);
-    for (i = 0; i < PySequence_Length(lines_obj); i++) {
+    for (i = 0; i < _PyValue_SequenceSize(PyValue_FromObjectBorrow(lines_obj)); i++) {
         /* length can be changed even within this loop */
         PyValue item = _PyValue_SequenceGetItem(lines, i);
         if (PyValue_IsNull(item))

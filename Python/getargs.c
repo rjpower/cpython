@@ -6,6 +6,7 @@
 #include "pycore_abstract.h"      // _PyNumber_Index()
 #include "pycore_borrow.h"        // _PyBorrow_TupleItems()
 #include "pycore_dict.h"          // _PyDict_HasOnlyStringKeys()
+#include "pycore_long_value.h"    // _PyValue_AsDouble()
 #include "pycore_modsupport.h"    // export _PyArg_NoKeywords()
 #include "pycore_pylifecycle.h"   // _PyArg_Fini
 #include "pycore_pystate.h"       // _Py_IsMainInterpreter()
@@ -593,7 +594,7 @@ converttuple(PyObject *arg, const char **p_format, va_list *p_va, int flags,
     if (istuple) {
         /* fallthrough */
     }
-    else if (!PySequence_Check(arg) ||
+    else if (!_PyValue_SequenceCheck(PyValue_FromObjectBorrow(arg)) ||
         PyUnicode_Check(arg) || PyBytes_Check(arg) || PyByteArray_Check(arg))
     {
         levels[0] = 0;
@@ -611,7 +612,7 @@ converttuple(PyObject *arg, const char **p_format, va_list *p_va, int flags,
                 return msgbuf;
             }
         }
-        len = PySequence_Size(arg);
+        len = _PyValue_SequenceSize(PyValue_FromObjectBorrow(arg));
         if (len != n) {
             levels[0] = 0;
             PyOS_snprintf(msgbuf, bufsize,
@@ -753,7 +754,7 @@ convertsimple(PyObject *arg, const char **p_format, va_list *p_va, int flags,
 
     case 'b': { /* unsigned byte -- very short int */
         unsigned char *p = va_arg(*p_va, unsigned char *);
-        long ival = PyLong_AsLong(arg);
+        long ival = _PyValue_AsLong(PyValue_FromObjectBorrow(arg));
         if (ival == -1 && PyErr_Occurred())
             RETURN_ERR_OCCURRED;
         else if (ival < 0) {
@@ -774,8 +775,7 @@ convertsimple(PyObject *arg, const char **p_format, va_list *p_va, int flags,
     case 'B': {/* byte sized bitfield - both signed and unsigned
                   values allowed */
         unsigned char *p = va_arg(*p_va, unsigned char *);
-        Py_ssize_t bytes = PyLong_AsNativeBytes(arg, p, sizeof(unsigned char),
-                Py_ASNATIVEBYTES_NATIVE_ENDIAN |
+        Py_ssize_t bytes = _PyValue_AsNativeBytes(PyValue_FromObjectBorrow(arg), p, sizeof(unsigned char), Py_ASNATIVEBYTES_NATIVE_ENDIAN |
                 Py_ASNATIVEBYTES_ALLOW_INDEX |
                 Py_ASNATIVEBYTES_UNSIGNED_BUFFER);
         if (bytes < 0) {
@@ -793,7 +793,7 @@ convertsimple(PyObject *arg, const char **p_format, va_list *p_va, int flags,
 
     case 'h': {/* signed short int */
         short *p = va_arg(*p_va, short *);
-        long ival = PyLong_AsLong(arg);
+        long ival = _PyValue_AsLong(PyValue_FromObjectBorrow(arg));
         if (ival == -1 && PyErr_Occurred())
             RETURN_ERR_OCCURRED;
         else if (ival < SHRT_MIN) {
@@ -814,8 +814,7 @@ convertsimple(PyObject *arg, const char **p_format, va_list *p_va, int flags,
     case 'H': { /* short int sized bitfield, both signed and
                    unsigned allowed */
         unsigned short *p = va_arg(*p_va, unsigned short *);
-        Py_ssize_t bytes = PyLong_AsNativeBytes(arg, p, sizeof(unsigned short),
-                Py_ASNATIVEBYTES_NATIVE_ENDIAN |
+        Py_ssize_t bytes = _PyValue_AsNativeBytes(PyValue_FromObjectBorrow(arg), p, sizeof(unsigned short), Py_ASNATIVEBYTES_NATIVE_ENDIAN |
                 Py_ASNATIVEBYTES_ALLOW_INDEX |
                 Py_ASNATIVEBYTES_UNSIGNED_BUFFER);
         if (bytes < 0) {
@@ -833,7 +832,7 @@ convertsimple(PyObject *arg, const char **p_format, va_list *p_va, int flags,
 
     case 'i': {/* signed int */
         int *p = va_arg(*p_va, int *);
-        long ival = PyLong_AsLong(arg);
+        long ival = _PyValue_AsLong(PyValue_FromObjectBorrow(arg));
         if (ival == -1 && PyErr_Occurred())
             RETURN_ERR_OCCURRED;
         else if (ival > INT_MAX) {
@@ -854,8 +853,7 @@ convertsimple(PyObject *arg, const char **p_format, va_list *p_va, int flags,
     case 'I': { /* int sized bitfield, both signed and
                    unsigned allowed */
         unsigned int *p = va_arg(*p_va, unsigned int *);
-        Py_ssize_t bytes = PyLong_AsNativeBytes(arg, p, sizeof(unsigned int),
-                Py_ASNATIVEBYTES_NATIVE_ENDIAN |
+        Py_ssize_t bytes = _PyValue_AsNativeBytes(PyValue_FromObjectBorrow(arg), p, sizeof(unsigned int), Py_ASNATIVEBYTES_NATIVE_ENDIAN |
                 Py_ASNATIVEBYTES_ALLOW_INDEX |
                 Py_ASNATIVEBYTES_UNSIGNED_BUFFER);
         if (bytes < 0) {
@@ -880,7 +878,7 @@ convertsimple(PyObject *arg, const char **p_format, va_list *p_va, int flags,
         iobj = PyValue_IsNull(iobj_v) ? NULL
             : _PyValue_AsObjectStealAt(iobj_v, BOX_SITE_PARSER);
         if (iobj != NULL) {
-            ival = PyLong_AsSsize_t(iobj);
+            ival = _PyValue_IntAsSsize_t(PyValue_FromObjectBorrow(iobj));
             Py_DECREF(iobj);
         }
         if (ival == -1 && PyErr_Occurred())
@@ -890,7 +888,7 @@ convertsimple(PyObject *arg, const char **p_format, va_list *p_va, int flags,
     }
     case 'l': {/* long int */
         long *p = va_arg(*p_va, long *);
-        long ival = PyLong_AsLong(arg);
+        long ival = _PyValue_AsLong(PyValue_FromObjectBorrow(arg));
         if (ival == -1 && PyErr_Occurred())
             RETURN_ERR_OCCURRED;
         else
@@ -903,8 +901,7 @@ convertsimple(PyObject *arg, const char **p_format, va_list *p_va, int flags,
         if (!PyIndex_Check(arg)) {
             return converterr("int", arg, msgbuf, bufsize);
         }
-        Py_ssize_t bytes = PyLong_AsNativeBytes(arg, p, sizeof(unsigned long),
-                Py_ASNATIVEBYTES_NATIVE_ENDIAN |
+        Py_ssize_t bytes = _PyValue_AsNativeBytes(PyValue_FromObjectBorrow(arg), p, sizeof(unsigned long), Py_ASNATIVEBYTES_NATIVE_ENDIAN |
                 Py_ASNATIVEBYTES_ALLOW_INDEX |
                 Py_ASNATIVEBYTES_UNSIGNED_BUFFER);
         if (bytes < 0) {
@@ -922,7 +919,7 @@ convertsimple(PyObject *arg, const char **p_format, va_list *p_va, int flags,
 
     case 'L': {/* long long */
         long long *p = va_arg( *p_va, long long * );
-        long long ival = PyLong_AsLongLong(arg);
+        long long ival = _PyValue_AsLongLong(PyValue_FromObjectBorrow(arg));
         if (ival == (long long)-1 && PyErr_Occurred())
             RETURN_ERR_OCCURRED;
         else
@@ -935,8 +932,7 @@ convertsimple(PyObject *arg, const char **p_format, va_list *p_va, int flags,
         if (!PyIndex_Check(arg)) {
             return converterr("int", arg, msgbuf, bufsize);
         }
-        Py_ssize_t bytes = PyLong_AsNativeBytes(arg, p, sizeof(unsigned long long),
-                Py_ASNATIVEBYTES_NATIVE_ENDIAN |
+        Py_ssize_t bytes = _PyValue_AsNativeBytes(PyValue_FromObjectBorrow(arg), p, sizeof(unsigned long long), Py_ASNATIVEBYTES_NATIVE_ENDIAN |
                 Py_ASNATIVEBYTES_ALLOW_INDEX |
                 Py_ASNATIVEBYTES_UNSIGNED_BUFFER);
         if (bytes < 0) {
@@ -954,7 +950,7 @@ convertsimple(PyObject *arg, const char **p_format, va_list *p_va, int flags,
 
     case 'f': {/* float */
         float *p = va_arg(*p_va, float *);
-        double dval = PyFloat_AsDouble(arg);
+        double dval = _PyValue_AsDouble(PyValue_FromObjectBorrow(arg));
         if (dval == -1.0 && PyErr_Occurred())
             RETURN_ERR_OCCURRED;
         else
@@ -964,7 +960,7 @@ convertsimple(PyObject *arg, const char **p_format, va_list *p_va, int flags,
 
     case 'd': {/* double */
         double *p = va_arg(*p_va, double *);
-        double dval = PyFloat_AsDouble(arg);
+        double dval = _PyValue_AsDouble(PyValue_FromObjectBorrow(arg));
         if (dval == -1.0 && PyErr_Occurred())
             RETURN_ERR_OCCURRED;
         else

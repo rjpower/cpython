@@ -12,6 +12,7 @@
 #define Py_VALUE_CORE 1
 #include "binary_io.h"
 #include "_remote_debugging.h"
+#include "pycore_long_value.h"    // _PyValue_AsLong()
 #include "pycore_opcode_utils.h"  // MAX_REAL_OPCODE
 #include "pycore_structseq.h"    // PyStructSequence_GET_VALUE()
 #include "pycore_value.h"         // PyValue_FromObjectBorrow()
@@ -45,7 +46,7 @@
 /* Helper macro: convert PyLong to int32, using default_val if conversion fails */
 #define PYLONG_TO_INT32_OR_DEFAULT(obj, var, default_val) \
     do { \
-        (var) = (int32_t)PyLong_AsLong(obj); \
+        (var) = (int32_t)_PyValue_AsLong(PyValue_FromObjectBorrow(obj)); \
         if (UNLIKELY(PyErr_Occurred() != NULL)) { \
             PyErr_Clear(); \
             (var) = (default_val); \
@@ -931,7 +932,7 @@ build_frame_stack(BinaryWriter *writer, PyObject *frame_list,
 
         /* Extract opcode (can be None) */
         if (opcode_obj != Py_None) {
-            long opcode_long = PyLong_AsLong(opcode_obj);
+            long opcode_long = _PyValue_AsLong(PyValue_FromObjectBorrow(opcode_obj));
             if (UNLIKELY(PyErr_Occurred() != NULL)) {
                 PyErr_Clear();
                 opcode = OPCODE_NONE;
@@ -995,7 +996,7 @@ process_thread_sample(BinaryWriter *writer, PyObject *thread_info,
     if (thread_id_obj == NULL) {
         return -1;
     }
-    uint64_t thread_id = PyLong_AsUnsignedLongLong(thread_id_obj);
+    uint64_t thread_id = _PyValue_IntAsUnsignedLongLong(PyValue_FromObjectBorrow(thread_id_obj));
     Py_DECREF(thread_id_obj);
     if (thread_id == (uint64_t)-1 && PyErr_Occurred()) {
         return -1;
@@ -1005,7 +1006,7 @@ process_thread_sample(BinaryWriter *writer, PyObject *thread_info,
     if (status_obj == NULL) {
         return -1;
     }
-    long status_long = PyLong_AsLong(status_obj);
+    long status_long = _PyValue_AsLong(PyValue_FromObjectBorrow(status_obj));
     Py_DECREF(status_obj);
     if (status_long == -1 && PyErr_Occurred()) {
         return -1;
@@ -1114,7 +1115,7 @@ binary_writer_write_sample(BinaryWriter *writer, PyObject *stack_frames, uint64_
             return -1;
         }
 
-        unsigned long long interp_id_long = PyLong_AsUnsignedLongLong(interp_id_obj);
+        unsigned long long interp_id_long = _PyValue_IntAsUnsignedLongLong(PyValue_FromObjectBorrow(interp_id_obj));
         Py_DECREF(interp_id_obj);
         if (interp_id_long == (unsigned long long)-1 && PyErr_Occurred()) {
             Py_DECREF(threads);

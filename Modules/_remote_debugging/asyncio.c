@@ -9,6 +9,7 @@
 #include "_remote_debugging.h"
 #include "debug_offsets_validation.h"
 #include "pycore_list.h"          // PyList_AppendValue()
+#include "pycore_long_value.h"    // _PyValue_IntAsVoidPtr()
 #include "pycore_pyvalue.h"       // PyValue_IsObject()
 #include "pycore_structseq.h"    // PyStructSequence_GET_VALUE()
 #include "pycore_value.h"         // PyValue
@@ -744,7 +745,7 @@ process_task_waiters(
                 Py_DECREF(waiters);
                 return -1;
             }
-            void *task_ptr = PyLong_AsVoidPtr(task_id);
+            void *task_ptr = _PyValue_IntAsVoidPtr(PyValue_FromObjectBorrow(task_id));
             Py_DECREF(task_id);
             if (task_ptr == NULL && PyErr_Occurred()) {
                 set_exception_cause(unwinder, PyExc_RuntimeError,

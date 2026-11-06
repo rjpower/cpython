@@ -273,7 +273,7 @@ gen_time(uuid_state *state, PyTime_t *time)
         return -1;
     }
 
-    int res = PyLong_AsInt64(ret, time);
+    int res = _PyValue_AsInt64(PyValue_FromObjectBorrow(ret), time);
     Py_DECREF(ret);
     return res;
 }
@@ -920,7 +920,7 @@ extract_field(
     }
 
     uint64_t value;
-    if (PyLong_AsUInt64(field, &value) < 0) {
+    if (_PyValue_AsUInt64(PyValue_FromObjectBorrow(field), &value) < 0) {
         goto fail;
     }
 
@@ -942,7 +942,7 @@ static int
 from_fields(uuidobject *self, PyObject *fields)
 {
     // Validate the length without replacing errors raised by __len__.
-    Py_ssize_t len = PySequence_Size(fields);
+    Py_ssize_t len = _PyValue_SequenceSize(PyValue_FromObjectBorrow(fields));
     if (len < 0) {
         return -1;
     }

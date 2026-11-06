@@ -222,7 +222,7 @@ builtin___build_class__(PyObject *self, PyObject *const *args, Py_ssize_t nargs,
     if (ns == NULL) {
         goto error;
     }
-    if (!PyMapping_Check(ns)) {
+    if (!_PyValue_MappingCheck(PyValue_FromObjectBorrow(ns))) {
         PyErr_Format(PyExc_TypeError,
                      "%.200s.__prepare__() must return a mapping, not %.200s",
                      isclass ? ((PyTypeObject *)meta)->tp_name : "<metaclass>",
@@ -234,7 +234,7 @@ builtin___build_class__(PyObject *self, PyObject *const *args, Py_ssize_t nargs,
     cell = _PyEval_Vector(tstate, (PyFunctionObject *)func, ns, NULL, 0, NULL);
     if (cell != NULL) {
         if (bases != orig_bases) {
-            if (PyMapping_SetItemString(ns, "__orig_bases__", orig_bases) < 0) {
+            if (_PyValue_MappingSetItemString(PyValue_FromObjectBorrow(ns), "__orig_bases__", PyValue_FromObjectBorrow(orig_bases)) < 0) {
                 goto error;
             }
         }
@@ -1179,7 +1179,7 @@ builtin_eval_impl(PyObject *module, PyValueBorrow source,
 
     if (!PyValue_IsNone(locals)
         && !(PyValue_IsObject(locals)
-             && PyMapping_Check(PyValue_AsKnownObjectBorrow(locals))))
+             && _PyValue_MappingCheck(locals)))
     {
         PyErr_SetString(PyExc_TypeError, "locals must be a mapping");
         return PyValue_NULL;
@@ -1189,7 +1189,7 @@ builtin_eval_impl(PyObject *module, PyValueBorrow source,
              && PyAnyDict_Check(PyValue_AsKnownObjectBorrow(globals))))
     {
         PyErr_SetString(PyExc_TypeError, (PyValue_IsObject(globals)
-                && PyMapping_Check(PyValue_AsKnownObjectBorrow(globals))) ?
+                && _PyValue_MappingCheck(globals)) ?
             "globals must be a real dict or a frozendict; "
             "try eval(expr, {}, mapping)"
             : "globals must be a dict or a frozendict");
@@ -1372,7 +1372,7 @@ builtin_exec_impl(PyObject *module, PyValueBorrow source,
                      globals_o);
         goto error;
     }
-    if (!PyMapping_Check(locals_o)) {
+    if (!_PyValue_MappingCheck(PyValue_FromObjectBorrow(locals_o))) {
         PyErr_Format(PyExc_TypeError,
             "locals must be a mapping or None, not %.100s",
             Py_TYPE(locals_o)->tp_name);
@@ -2731,7 +2731,7 @@ builtin_input_impl(PyObject *module, PyValueBorrow prompt)
         tty = 0;
     }
     else {
-        fd = PyLong_AsLong(tmp);
+        fd = _PyValue_AsLong(PyValue_FromObjectBorrow(tmp));
         Py_DECREF(tmp);
         if (fd < 0 && PyErr_Occurred()) {
             goto error;
@@ -2745,7 +2745,7 @@ builtin_input_impl(PyObject *module, PyValueBorrow prompt)
             tty = 0;
         }
         else {
-            fd = PyLong_AsLong(tmp);
+            fd = _PyValue_AsLong(PyValue_FromObjectBorrow(tmp));
             Py_DECREF(tmp);
             if (fd < 0 && PyErr_Occurred())
                 goto error;
@@ -3183,7 +3183,7 @@ sum_exact_int(PyValueBorrow v, int allow_bool, Py_ssize_t *out)
         return 1;
     }
     int overflow = 0;
-    Py_ssize_t b = PyLong_AsLongAndOverflow(o, &overflow);
+    Py_ssize_t b = _PyValue_AsLongAndOverflow(PyValue_FromObjectBorrow(o), &overflow);
     if (overflow != 0) {
         return 0;
     }
@@ -3230,7 +3230,7 @@ sum_int_as_double(PyValueBorrow v)
     if (PyValue_IsInlineInt(v)) {
         return (double)PyValue_InlineInt64(v);
     }
-    return PyLong_AsDouble(PyValue_AsKnownObjectBorrow(v));
+    return _PyValue_IntAsDouble(v);
 }
 
 /*[clinic input]

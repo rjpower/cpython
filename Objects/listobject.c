@@ -8,6 +8,7 @@
 #include "pycore_interp.h"        // PyInterpreterState.list
 #include "pycore_list.h"          // struct _Py_list_freelist, _PyListIterObject
 #include "pycore_long.h"          // _PyLong_DigitCount
+#include "pycore_long_value.h"    // _PyValue_IntAsSsize_t()
 #include "pycore_modsupport.h"    // _PyArg_NoKwnames()
 #include "pycore_object.h"        // _PyObject_GC_TRACK(), _PyDebugAllocatorStats()
 #include "pycore_pyatomic_ft_wrappers.h"
@@ -798,7 +799,7 @@ list_ass_slice_lock_held(PyListObject *a, Py_ssize_t ilow, Py_ssize_t ihigh, PyO
         n = 0;
     else {
         /* A tuple snapshot keeps the items while this list changes. */
-        v_as_SF = PySequence_Fast(v, "can only assign an iterable");
+        v_as_SF = _PyValue_SequenceFast(PyValue_FromObjectBorrow(v), "can only assign an iterable");
         if (v_as_SF != NULL && PyList_CheckExact(v_as_SF)) {
             Py_SETREF(v_as_SF, PyList_AsTuple(v_as_SF));
         }
@@ -1116,7 +1117,7 @@ list_extend_iter_lock_held(PyListObject *self, PyObject *iterable)
         return -1;
     }
     /* Guess a result list size. */
-    Py_ssize_t n = PyObject_LengthHint(iterable, 8);
+    Py_ssize_t n = _PyValue_LengthHint(PyValue_FromObjectBorrow(iterable), 8);
     if (n < 0) {
         Py_DECREF(it);
         return -1;
@@ -1175,7 +1176,7 @@ list_extend_iter_lock_held(PyListObject *self, PyObject *iterable)
 static int
 list_extend_lock_held(PyListObject *self, PyObject *iterable)
 {
-    PyObject *seq = PySequence_Fast(iterable, "argument must be iterable");
+    PyObject *seq = _PyValue_SequenceFast(PyValue_FromObjectBorrow(iterable), "argument must be iterable");
     if (!seq) {
         return -1;
     }
@@ -3425,7 +3426,7 @@ list_store_slice_lock_held(PyListObject *self, Py_ssize_t start, Py_ssize_t stop
         seq = list_slice_lock_held(self, 0, Py_SIZE(self));
     }
     else {
-        seq = PySequence_Fast(value, "must assign iterable to extended slice");
+        seq = _PyValue_SequenceFast(PyValue_FromObjectBorrow(value), "must assign iterable to extended slice");
     }
     if (seq == NULL) {
         return -1;
@@ -3555,7 +3556,7 @@ allocate_garbage:;
         }
         else {
             /* A tuple snapshot keeps the items while this list changes. */
-            seq = PySequence_Fast(value, "must assign iterable to extended slice");
+            seq = _PyValue_SequenceFast(PyValue_FromObjectBorrow(value), "must assign iterable to extended slice");
             if (seq != NULL && PyList_CheckExact(seq)) {
                 Py_SETREF(seq, PyList_AsTuple(seq));
             }
@@ -3905,7 +3906,7 @@ static PyObject *
 listiter_setstate(PyObject *self, PyObject *state)
 {
     _PyListIterObject *it = (_PyListIterObject *)self;
-    Py_ssize_t index = PyLong_AsSsize_t(state);
+    Py_ssize_t index = _PyValue_IntAsSsize_t(PyValue_FromObjectBorrow(state));
     if (index == -1 && PyErr_Occurred())
         return NULL;
     if (it->it_seq != NULL) {
@@ -4059,7 +4060,7 @@ static PyObject *
 listreviter_setstate(PyObject *self, PyObject *state)
 {
     listreviterobject *it = (listreviterobject *)self;
-    Py_ssize_t index = PyLong_AsSsize_t(state);
+    Py_ssize_t index = _PyValue_IntAsSsize_t(PyValue_FromObjectBorrow(state));
     if (index == -1 && PyErr_Occurred())
         return NULL;
     if (it->it_seq != NULL) {

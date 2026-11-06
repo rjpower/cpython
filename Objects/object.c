@@ -2297,7 +2297,7 @@ _dir_locals(void)
         return NULL;
     }
 
-    names = PyMapping_Keys(locals);
+    names = _PyValue_MappingKeys(PyValue_FromObjectBorrow(locals));
     Py_DECREF(locals);
     if (!names) {
         return NULL;

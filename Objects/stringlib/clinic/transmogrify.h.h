@@ -66,7 +66,7 @@ stringlib_expandtabs(PyObject *self, PyObject *const *args, Py_ssize_t nargs, Py
     if (!noptargs) {
         goto skip_optional_pos;
     }
-    tabsize = PyLong_AsInt(args[0]);
+    tabsize = _PyValue_AsInt(PyValue_FromObjectBorrow(args[0]));
     if (tabsize == -1 && PyErr_Occurred()) {
         goto exit;
     }

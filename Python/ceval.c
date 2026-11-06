@@ -1,9 +1,15 @@
 /* Execute compiled code */
 
 #include "ceval.h"
+#include "pycore_dict.h"          // PyDict_GetValue()
+#include "pycore_list.h"          // PyList_AppendValue()
 #include "pycore_long.h"
+#include "pycore_long_value.h"    // _PyValue_AsInt()
 #include "pycore_native_scope.h"
+#include "pycore_setobject.h"     // PySet_AddValue()
+#include "pycore_tuple.h"         // _PyTuple_PackValues()
 #include "pycore_value_call.h"    // _PyValue_VectorcallTstate()
+#include "pycore_value_ops.h"     // _PyValue_AsSsize_t()
 
 #ifdef HAVE_PTHREAD_NP_H
 #  include <pthread_np.h>         // pthread_attr_get_np()
@@ -878,7 +884,7 @@ value_import_level(PyValue level)
     if (level_o == NULL) {
         return -1;
     }
-    int ilevel = PyLong_AsInt(level_o);
+    int ilevel = _PyValue_AsInt(PyValue_FromObjectBorrow(level_o));
     Py_DECREF(level_o);
     return ilevel;
 }
@@ -3531,7 +3537,7 @@ _PyEval_UnpackIterableValue(PyThreadState *tstate, PyObject *v,
     it = _PyValue_GetIter(PyValue_FromObjectBorrow(v));
     if (it == NULL) {
         if (_PyErr_ExceptionMatches(tstate, PyExc_TypeError) &&
-            Py_TYPE(v)->tp_iter == NULL && !PySequence_Check(v))
+            Py_TYPE(v)->tp_iter == NULL && !_PyValue_SequenceCheck(PyValue_FromObjectBorrow(v)))
         {
             _PyErr_Format(tstate, PyExc_TypeError,
                           "cannot unpack non-iterable %.200s object",
@@ -3870,7 +3876,7 @@ PyEval_GetLocals(void)
         return ret;
     }
 
-    assert(PyMapping_Check(locals));
+    assert(_PyValue_MappingCheck(PyValue_FromObjectBorrow(locals)));
     assert(Py_REFCNT(locals) > 1);
     Py_DECREF(locals);
 
@@ -3907,7 +3913,7 @@ _PyEval_GetFrameLocals(void)
         return ret;
     }
 
-    assert(PyMapping_Check(locals));
+    assert(_PyValue_MappingCheck(PyValue_FromObjectBorrow(locals)));
     return locals;
 }
 
@@ -4769,7 +4775,7 @@ _PyEval_CheckExceptStarTypeValid(PyThreadState *tstate, PyObject* right)
 int
 _Py_Check_ArgsIterable(PyThreadState *tstate, PyObject *func, PyObject *args)
 {
-    if (Py_TYPE(args)->tp_iter == NULL && !PySequence_Check(args)) {
+    if (Py_TYPE(args)->tp_iter == NULL && !_PyValue_SequenceCheck(PyValue_FromObjectBorrow(args))) {
         _PyErr_Format(tstate, PyExc_TypeError,
                       "Value after * must be an iterable, not %.200s",
                       Py_TYPE(args)->tp_name);

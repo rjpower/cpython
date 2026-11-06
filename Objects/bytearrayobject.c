@@ -13,6 +13,7 @@
 #include "pycore_pyatomic_ft_wrappers.h"
 #include "pycore_value_call.h"     // _PyValue_VectorcallThunk()
 #include "pycore_value_api.h"     // _PyValue_AsObjectAt()
+#include "pycore_value_ops.h"     // _PyValue_AsSsize_t()
 #include "pycore_value_slots.h"   // _PyValue_FromObjectResult()
 #include "bytesobject.h"
 
@@ -3282,7 +3283,7 @@ bytearrayiter_reduce(PyObject *self, PyObject *Py_UNUSED(ignored))
 static PyObject *
 bytearrayiter_setstate(PyObject *self, PyObject *state)
 {
-    Py_ssize_t index = PyLong_AsSsize_t(state);
+    Py_ssize_t index = _PyValue_IntAsSsize_t(PyValue_FromObjectBorrow(state));
     if (index == -1 && PyErr_Occurred()) {
         return NULL;
     }

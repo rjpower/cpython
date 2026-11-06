@@ -32,6 +32,7 @@ Copyright (C) 1994 Steen Lumholt.
 #endif
 
 #include "pycore_long.h"          // _PyLong_IsNegative()
+#include "pycore_long_value.h"    // _PyValue_AsLongAndOverflow()
 #include "pycore_tuple.h"         // _PyTuple_PackValues()
 #include "pycore_unicodeobject.h" // _PyUnicode_AsUTF8String
 #include "pycore_value.h"         // PyValue
@@ -1146,7 +1147,7 @@ AsObj(PyObject *value)
         int overflow;
         long longValue;
         Tcl_WideInt wideValue;
-        longValue = PyLong_AsLongAndOverflow(value, &overflow);
+        longValue = _PyValue_AsLongAndOverflow(PyValue_FromObjectBorrow(value), &overflow);
         if (!overflow) {
             return Tcl_NewLongObj(longValue);
         }
@@ -3588,7 +3589,7 @@ _tkinter__flatten_impl(PyObject *module, PyValueBorrow item)
     if (item_obj == NULL) {
         return PyValue_NULL;
     }
-    context.maxsize = PySequence_Size(item_obj);
+    context.maxsize = _PyValue_SequenceSize(PyValue_FromObjectBorrow(item_obj));
     if (context.maxsize < 0) {
         Py_DECREF(item_obj);
         return PyValue_NULL;

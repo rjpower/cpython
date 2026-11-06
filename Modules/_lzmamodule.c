@@ -22,6 +22,7 @@
 #include "pycore_long.h"          // _PyLong_UInt32_Converter()
 // Blocks output buffer wrappers
 #include "pycore_blocks_output_buffer.h"
+#include "pycore_long_value.h"    // _PyValue_AsNativeBytes()
 #include "pycore_pyatomic_ft_wrappers.h" // FT_ATOMIC_STORE_*_RELAXED
 #include "pycore_value.h"         // _PyValue_AsObjectAt()
 #include "pycore_value_ops.h"     // _PyValue_SequenceGetItem()
@@ -220,7 +221,7 @@ PyLzma_Free(void *opaque, void *ptr)
 static int                                                          \
 FUNCNAME(PyObject *obj, void *ptr)                                  \
 {                                                                   \
-    Py_ssize_t bytes = PyLong_AsNativeBytes(obj, ptr, sizeof(TYPE), \
+    Py_ssize_t bytes = _PyValue_AsNativeBytes(PyValue_FromObjectBorrow(obj), ptr, sizeof(TYPE), \
             Py_ASNATIVEBYTES_NATIVE_ENDIAN |                        \
             Py_ASNATIVEBYTES_ALLOW_INDEX |                          \
             Py_ASNATIVEBYTES_REJECT_NEGATIVE |                      \
@@ -368,7 +369,7 @@ lzma_filter_converter(_lzma_state *state, PyObject *spec, void *ptr)
     lzma_filter *f = (lzma_filter *)ptr;
     PyObject *id_obj;
 
-    if (!PyMapping_Check(spec)) {
+    if (!_PyValue_MappingCheck(PyValue_FromObjectBorrow(spec))) {
         PyErr_SetString(PyExc_TypeError,
                         "Filter specifier must be a dict or dict-like object");
         return 0;
@@ -426,7 +427,7 @@ parse_filter_chain_spec(_lzma_state *state, lzma_filter filters[], PyObject *fil
 {
     Py_ssize_t i, num_filters;
 
-    num_filters = PySequence_Length(filterspecs);
+    num_filters = _PyValue_SequenceSize(PyValue_FromObjectBorrow(filterspecs));
     if (num_filters == -1) {
         return -1;
     }

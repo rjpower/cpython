@@ -17,6 +17,7 @@
 #include "pycore_ast.h"           // _PyAST_GetDocString()
 #define NEED_OPCODE_TABLES
 #include "pycore_list.h"          // PyList_AppendValue()
+#include "pycore_long_value.h"    // _PyValue_AsLong()
 #include "pycore_opcode_utils.h"
 #undef NEED_OPCODE_TABLES
 #include "pycore_c_array.h"       // _Py_c_array_t
@@ -871,7 +872,7 @@ codegen_deferred_annotations_body(compiler *c, location loc,
         if (ptr == NULL) {
             return ERROR;
         }
-        stmt_ty st = (stmt_ty)PyLong_AsVoidPtr(ptr);
+        stmt_ty st = (stmt_ty)_PyValue_IntAsVoidPtr(PyValue_FromObjectBorrow(ptr));
         Py_DECREF(ptr);
         if (st == NULL) {
             return ERROR;
@@ -886,7 +887,7 @@ codegen_deferred_annotations_body(compiler *c, location loc,
         PyValueBorrow cond_index = PyList_GET_VALUE(conditional_annotation_indices, i);
         assert(PyValue_LongCheckExact(cond_index));
         long idx = PyValue_IsInlineInt(cond_index) ? PyValue_InlineInt64(cond_index) :
-                   PyLong_AsLong(PyValue_AsKnownObjectBorrow(cond_index));
+                   _PyValue_AsLong(cond_index);
         if (idx == -1 && PyErr_Occurred()) {
             Py_DECREF(mangled);
             return ERROR;
@@ -5043,7 +5044,7 @@ codegen_push_inlined_comprehension_locals(compiler *c, location loc,
         assert(PyUnicode_CheckExact(PyValue_AsKnownObjectBorrow(key)));
         assert(PyValue_LongCheckExact(value));
         long symbol = PyValue_IsInlineInt(value) ? PyValue_InlineInt64(value) :
-                      PyLong_AsLong(PyValue_AsKnownObjectBorrow(value));
+                      _PyValue_AsLong(value);
         PyValue_CLOSE(value);
         value = PyValue_NULL;
         assert(symbol >= 0 || PyErr_Occurred());
@@ -6602,7 +6603,7 @@ codegen_pattern_or(compiler *c, pattern_ty p, pattern_context *pc)
             Py_ssize_t icontrol = nstores;
             while (icontrol--) {
                 PyObject *name = codegen_list_name(control, icontrol);
-                Py_ssize_t istores = PySequence_Index(pc->stores, name);
+                Py_ssize_t istores = _PyValue_SequenceIndex(PyValue_FromObjectBorrow(pc->stores), PyValue_FromObjectBorrow(name));
                 if (istores < 0) {
                     PyErr_Clear();
                     mismatch_index = i;

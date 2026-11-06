@@ -10,6 +10,7 @@
 #include "pycore_crossinterp.h"   // _PyXIData_t
 #include "pycore_interp.h"        // _PyInterpreterState_LookUpID()
 #include "pycore_list.h"          // PyList_InsertValue()
+#include "pycore_long_value.h"    // _PyValue_AsLongLong()
 #include "pycore_pystate.h"       // _PyInterpreterState_GetIDObject()
 #include "pycore_pyvalue.h"       // PyValue_PrepareOwned()
 #include "pycore_value.h"         // PyValue_FromObjectBorrow()
@@ -2327,7 +2328,7 @@ channel_id_converter(PyObject *arg, void *ptr)
         end = ((channelid *)arg)->end;
     }
     else if (PyIndex_Check(arg)) {
-        cid = PyLong_AsLongLong(arg);
+        cid = _PyValue_AsLongLong(PyValue_FromObjectBorrow(arg));
         if (cid == -1 && PyErr_Occurred()) {
             return 0;
         }
@@ -2533,7 +2534,7 @@ channelid_richcompare(PyObject *self, PyObject *other, int op)
     else if (PyLong_Check(other)) {
         /* Fast path */
         int overflow;
-        long long othercid = PyLong_AsLongLongAndOverflow(other, &overflow);
+        long long othercid = _PyValue_AsLongLongAndOverflow(PyValue_FromObjectBorrow(other), &overflow);
         if (othercid == -1 && PyErr_Occurred()) {
             goto done;
         }

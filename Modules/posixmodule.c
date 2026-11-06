@@ -960,7 +960,7 @@ _Py_Uid_Converter(PyObject *obj, uid_t *p)
      * in as a signed long and see if it works.
      */
 
-    result = PyLong_AsLongAndOverflow(index, &overflow);
+    result = _PyValue_AsLongAndOverflow(PyValue_FromObjectBorrow(index), &overflow);
 
     if (!overflow) {
         uid = (uid_t)result;
@@ -991,7 +991,7 @@ _Py_Uid_Converter(PyObject *obj, uid_t *p)
      * fits in an *unsigned* long, it may still be okay,
      * as uid_t may be unsigned long on this platform.
      */
-    uresult = PyLong_AsUnsignedLong(index);
+    uresult = _PyValue_IntAsUnsignedLong(PyValue_FromObjectBorrow(index));
     if (PyErr_Occurred()) {
         if (PyErr_ExceptionMatches(PyExc_OverflowError))
             goto overflow;
@@ -1067,7 +1067,7 @@ _Py_Gid_Converter(PyObject *obj, gid_t *p)
      * in as a signed long and see if it works.
      */
 
-    result = PyLong_AsLongAndOverflow(index, &overflow);
+    result = _PyValue_AsLongAndOverflow(PyValue_FromObjectBorrow(index), &overflow);
 
     if (!overflow) {
         gid = (gid_t)result;
@@ -1099,7 +1099,7 @@ _Py_Gid_Converter(PyObject *obj, gid_t *p)
      * fits in an *unsigned* long, it may still be okay,
      * as gid_t may be unsigned long on this platform.
      */
-    uresult = PyLong_AsUnsignedLong(index);
+    uresult = _PyValue_IntAsUnsignedLong(PyValue_FromObjectBorrow(index));
     if (PyErr_Occurred()) {
         if (PyErr_ExceptionMatches(PyExc_OverflowError))
             goto overflow;
@@ -1179,7 +1179,7 @@ _Py_Dev_Converter(PyValueBorrow arg, void *p)
 #ifdef NODEV
     if (_PyLong_IsNegative((PyLongObject *)obj)) {
         int overflow;
-        long long result = PyLong_AsLongLongAndOverflow(obj, &overflow);
+        long long result = _PyValue_AsLongLongAndOverflow(PyValue_FromObjectBorrow(obj), &overflow);
         if (result == -1 && PyErr_Occurred()) {
             Py_DECREF(obj);
             return 0;
@@ -1192,7 +1192,7 @@ _Py_Dev_Converter(PyValueBorrow arg, void *p)
     }
 #endif
 
-    unsigned long long result = PyLong_AsUnsignedLongLong(obj);
+    unsigned long long result = _PyValue_IntAsUnsignedLongLong(PyValue_FromObjectBorrow(obj));
     Py_DECREF(obj);
     if (result == (unsigned long long)-1 && PyErr_Occurred()) {
         return 0;
@@ -1813,7 +1813,7 @@ _Py_Sigset_Converter(PyValueBorrow obj, void *addr)
     }
 
     while ((item = PyIter_Next(iterator)) != NULL) {
-        signum = PyLong_AsLongAndOverflow(item, &overflow);
+        signum = _PyValue_AsLongAndOverflow(PyValue_FromObjectBorrow(item), &overflow);
         Py_DECREF(item);
         if (signum <= 0 || signum >= Py_NSIG) {
             if (overflow || signum != -1 || !PyErr_Occurred()) {
@@ -7184,7 +7184,7 @@ split_py_long_to_s_and_ns(PyObject *module, PyObject *py_long, time_t *s, long *
     PyObject *nsec = PyValue_IsNull(nsec_v) ? NULL : _PyValue_AsObjectStealAt(nsec_v, BOX_SITE_TUPLE);
     if (nsec == NULL)
         goto exit;
-    *ns = PyLong_AsLong(nsec);
+    *ns = _PyValue_AsLong(PyValue_FromObjectBorrow(nsec));
     Py_DECREF(nsec);
     if ((*ns == -1) && PyErr_Occurred())
         goto exit;
@@ -7496,7 +7496,7 @@ parse_envlist(PyObject* env, Py_ssize_t *envc_ptr)
     PyObject *key = NULL, *val = NULL, *key2 = NULL, *val2 = NULL;
     EXECV_CHAR **envlist;
 
-    i = PyMapping_Size(env);
+    i = _PyValue_MappingSize(PyValue_FromObjectBorrow(env));
     if (i < 0)
         return NULL;
     envlist = PyMem_NEW(EXECV_CHAR *, i + 1);
@@ -7505,10 +7505,10 @@ parse_envlist(PyObject* env, Py_ssize_t *envc_ptr)
         return NULL;
     }
     envc = 0;
-    keys = PyMapping_Keys(env);
+    keys = _PyValue_MappingKeys(PyValue_FromObjectBorrow(env));
     if (!keys)
         goto error;
-    vals = PyMapping_Values(env);
+    vals = _PyValue_MappingValues(PyValue_FromObjectBorrow(env));
     if (!vals)
         goto error;
     if (!PyList_Check(keys) || !PyList_Check(vals)) {
@@ -7661,7 +7661,7 @@ os_execv_impl(PyObject *module, path_t *path, PyValueBorrow argv)
                         "execv() arg 2 must be a tuple or list");
         return PyValue_NULL;
     }
-    argc = PySequence_Size(PyValue_AsKnownObjectBorrow(argv));
+    argc = _PyValue_SequenceSize(argv);
     if (argc < 1) {
         PyErr_SetString(PyExc_ValueError, "execv() arg 2 must not be empty");
         return PyValue_NULL;
@@ -7744,7 +7744,7 @@ os_execve_impl(PyObject *module, path_t *path, PyValueBorrow argv,
                         "execve: argv must be a tuple or list");
         goto fail_0;
     }
-    argc = PySequence_Size(PyValue_AsKnownObjectBorrow(argv));
+    argc = _PyValue_SequenceSize(argv);
     if (argc < 1) {
         PyErr_SetString(PyExc_ValueError, "execve: argv must not be empty");
         return PyValue_NULL;
@@ -7927,7 +7927,7 @@ parse_posix_spawn_flags(PyObject *module, const char *func_name, PyObject *setpg
             goto fail;
         }
         if (py_schedpolicy != Py_None) {
-            int schedpolicy = PyLong_AsInt(py_schedpolicy);
+            int schedpolicy = _PyValue_AsInt(PyValue_FromObjectBorrow(py_schedpolicy));
 
             if (schedpolicy == -1 && PyErr_Occurred()) {
                 goto fail;
@@ -7974,8 +7974,7 @@ parse_file_actions(PyObject *file_actions,
     PyObject *file_action = NULL;
     PyObject *tag_obj;
 
-    seq = PySequence_Fast(file_actions,
-                          "file_actions must be a sequence or None");
+    seq = _PyValue_SequenceFast(PyValue_FromObjectBorrow(file_actions), "file_actions must be a sequence or None");
     if (seq == NULL) {
         return -1;
     }
@@ -8008,7 +8007,7 @@ parse_file_actions(PyObject *file_actions,
         if (tag_item == NULL) {
             goto fail;
         }
-        long tag = PyLong_AsLong(tag_item);
+        long tag = _PyValue_AsLong(PyValue_FromObjectBorrow(tag_item));
         Py_DECREF(tag_item);
         if (tag == -1 && PyErr_Occurred()) {
             goto fail;
@@ -8139,14 +8138,14 @@ py_posix_spawn_objects(int use_posix_spawnp, PyObject *module, path_t *path,
                      "%s: argv must be a tuple or list", func_name);
         goto exit;
     }
-    argc = PySequence_Size(argv);
+    argc = _PyValue_SequenceSize(PyValue_FromObjectBorrow(argv));
     if (argc < 1) {
         PyErr_Format(PyExc_ValueError,
                      "%s: argv must not be empty", func_name);
         goto exit;
     }
 
-    if (!PyMapping_Check(env) && env != Py_None) {
+    if (!_PyValue_MappingCheck(PyValue_FromObjectBorrow(env)) && env != Py_None) {
         PyErr_Format(PyExc_TypeError,
                      "%s: environment must be a mapping object or None", func_name);
         goto exit;
@@ -8799,8 +8798,8 @@ warn_about_fork_with_threads(
         // Worst case if someone replaced threading._active or threading._limbo
         // with non-dicts, we get -1 from *Length() below and undercount.
         // Nobody should, but we're best effort so we clear errors and move on.
-        num_python_threads = (PyMapping_Length(threading_active)
-                              + PyMapping_Length(threading_limbo));
+        num_python_threads = (_PyValue_MappingSize(PyValue_FromObjectBorrow(threading_active))
+                              + _PyValue_MappingSize(PyValue_FromObjectBorrow(threading_limbo)));
         PyErr_Clear();
         Py_DECREF(threading_active);
         Py_DECREF(threading_limbo);
@@ -9117,7 +9116,7 @@ convert_sched_param(PyObject *module, PyValueBorrow param, struct sched_param *r
     if (priority_obj == NULL) {
         return 0;
     }
-    priority = PyLong_AsLong(priority_obj);
+    priority = _PyValue_AsLong(PyValue_FromObjectBorrow(priority_obj));
     Py_DECREF(priority_obj);
     if (priority == -1 && PyErr_Occurred())
         return 0;
@@ -9328,7 +9327,7 @@ os_sched_setaffinity_impl(PyObject *module, pid_t pid, PyValueBorrow mask)
             Py_DECREF(item);
             goto error;
         }
-        cpu = PyLong_AsLong(item);
+        cpu = _PyValue_AsLong(PyValue_FromObjectBorrow(item));
         Py_DECREF(item);
         if (cpu < 0) {
             if (!PyErr_Occurred())
@@ -16988,7 +16987,7 @@ DirEntry_test_mode(PyTypeObject *defining_class, DirEntry *self,
         if (!st_mode)
             goto error;
 
-        mode = PyLong_AsLong(st_mode);
+        mode = _PyValue_AsLong(PyValue_FromObjectBorrow(st_mode));
         if (mode == -1 && PyErr_Occurred())
             goto error;
         Py_CLEAR(st_mode);

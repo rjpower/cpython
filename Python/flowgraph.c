@@ -5,6 +5,7 @@
 #include "pycore_compile.h"
 #include "pycore_dict.h"          // _PyDict_NextValue()
 #include "pycore_intrinsics.h"
+#include "pycore_long_value.h"    // _PyValue_AsInt()
 #include "pycore_pymem.h"         // _PyMem_IsPtrFreed()
 #include "pycore_long.h"          // _PY_IS_SMALL_INT()
 #include "pycore_list.h"          // _PyList_SetItemTakeValue()
@@ -1476,7 +1477,7 @@ maybe_instr_make_load_smallint(cfg_instr *instr, PyObject *newconst,
 {
     if (PyLong_CheckExact(newconst)) {
         int overflow;
-        long val = PyLong_AsLongAndOverflow(newconst, &overflow);
+        long val = _PyValue_AsLongAndOverflow(PyValue_FromObjectBorrow(newconst), &overflow);
         if (val == -1 && PyErr_Occurred()) {
             return -1;
         }
@@ -1517,7 +1518,7 @@ maybe_instr_make_load_common_const(cfg_instr *instr, PyObject *newconst)
     }
     else if (PyLong_CheckExact(newconst)) {
         int overflow;
-        long val = PyLong_AsLongAndOverflow(newconst, &overflow);
+        long val = _PyValue_AsLongAndOverflow(PyValue_FromObjectBorrow(newconst), &overflow);
         if (val == -1 && PyErr_Occurred()) {
             return -1;
         }
@@ -1853,7 +1854,7 @@ const_folding_safe_multiply(PyObject *v, PyObject *w)
     else if (PyLong_Check(v) && PyTuple_Check(w)) {
         Py_ssize_t size = PyTuple_GET_SIZE(w);
         if (size) {
-            long n = PyLong_AsLong(v);
+            long n = _PyValue_AsLong(PyValue_FromObjectBorrow(v));
             if (n < 0 || n > MAX_COLLECTION_SIZE / size) {
                 return NULL;
             }
@@ -1867,7 +1868,7 @@ const_folding_safe_multiply(PyObject *v, PyObject *w)
         Py_ssize_t size = PyUnicode_Check(w) ? PyUnicode_GET_LENGTH(w) :
                                                PyBytes_GET_SIZE(w);
         if (size) {
-            long n = PyLong_AsLong(v);
+            long n = _PyValue_AsLong(PyValue_FromObjectBorrow(v));
             if (n < 0 || n > MAX_STR_SIZE / size) {
                 return NULL;
             }
@@ -1891,7 +1892,7 @@ const_folding_safe_power(PyObject *v, PyObject *w)
         !_PyLong_IsZero((PyLongObject *)v) && _PyLong_IsPositive((PyLongObject *)w)
     ) {
         int64_t vbits = _PyLong_NumBits(v);
-        size_t wbits = PyLong_AsSize_t(w);
+        size_t wbits = _PyValue_IntAsSize_t(PyValue_FromObjectBorrow(w));
         assert(vbits >= 0);
         if (wbits == (size_t)-1) {
             return NULL;
@@ -1914,7 +1915,7 @@ const_folding_safe_lshift(PyObject *v, PyObject *w)
         !_PyLong_IsZero((PyLongObject *)v) && !_PyLong_IsZero((PyLongObject *)w)
     ) {
         int64_t vbits = _PyLong_NumBits(v);
-        size_t wbits = PyLong_AsSize_t(w);
+        size_t wbits = _PyValue_IntAsSize_t(PyValue_FromObjectBorrow(w));
         assert(vbits >= 0);
         if (wbits == (size_t)-1) {
             return NULL;
@@ -4063,14 +4064,14 @@ build_cellfixedoffsets(_PyCompile_CodeUnitMetadata *umd)
 
         assert(PyValue_LongCheckExact(varindex));
         int argoffset = PyValue_IsInlineInt(varindex) ? (int)PyValue_InlineInt64(varindex) :
-                        PyLong_AsInt(PyValue_AsKnownObjectBorrow(varindex));
+                        _PyValue_AsInt(varindex);
         if (argoffset == -1 && PyErr_Occurred()) {
             goto error;
         }
 
         assert(PyValue_LongCheckExact(cellindex));
         int oldindex = PyValue_IsInlineInt(cellindex) ? (int)PyValue_InlineInt64(cellindex) :
-                       PyLong_AsInt(PyValue_AsKnownObjectBorrow(cellindex));
+                       _PyValue_AsInt(cellindex);
         if (oldindex == -1 && PyErr_Occurred()) {
             goto error;
         }

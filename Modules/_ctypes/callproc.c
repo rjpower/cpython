@@ -100,6 +100,7 @@ module _ctypes
 #include "pycore_ceval.h"         // _Py_EnterRecursiveCall()
 #include "pycore_dict.h"          // PyDict_SetValue()
 #include "pycore_list.h"          // PyList_AppendValue()
+#include "pycore_long_value.h"    // _PyValue_AsLong()
 #include "pycore_runtime.h"       // _PyRuntime
 #include "pycore_global_objects.h"// _Py_ID()
 #include "pycore_traceback.h"     // _PyTraceback_Add()
@@ -771,10 +772,10 @@ static int ConvParam(ctypes_state *st,
 
     if (PyLong_Check(obj)) {
         pa->ffi_type = &ffi_type_sint;
-        pa->value.i = (long)PyLong_AsUnsignedLong(obj);
+        pa->value.i = (long)_PyValue_IntAsUnsignedLong(PyValue_FromObjectBorrow(obj));
         if (pa->value.i == -1 && PyErr_Occurred()) {
             PyErr_Clear();
-            pa->value.i = PyLong_AsLong(obj);
+            pa->value.i = _PyValue_AsLong(PyValue_FromObjectBorrow(obj));
             if (pa->value.i == -1 && PyErr_Occurred()) {
                 PyErr_SetString(PyExc_OverflowError,
                                 "int too long to convert");
@@ -1453,7 +1454,7 @@ _parse_voidp(PyValueBorrow obj, void *arg)
     if (o == NULL) {
         return 0;
     }
-    *address = PyLong_AsVoidPtr(o);
+    *address = _PyValue_IntAsVoidPtr(PyValue_FromObjectBorrow(o));
     Py_DECREF(o);
     if (*address == NULL)
         return 0;
@@ -2058,7 +2059,7 @@ _parse_voidp_object(PyValueBorrow obj, void *arg)
     if (o == NULL) {
         return 0;
     }
-    *address = PyLong_AsVoidPtr(o);
+    *address = _PyValue_IntAsVoidPtr(PyValue_FromObjectBorrow(o));
     Py_DECREF(o);
     return *address != NULL;
 }

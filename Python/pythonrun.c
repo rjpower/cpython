@@ -18,6 +18,7 @@
 #include "pycore_fileutils.h"     // _PyFile_Flush
 #include "pycore_import.h"        // _PyImport_GetImportlibExternalLoader()
 #include "pycore_interp.h"        // PyInterpreterState.importlib
+#include "pycore_long_value.h"    // _PyValue_AsInt()
 #include "pycore_object.h"        // _PyDebug_PrintTotalRefs()
 #include "pycore_parser.h"        // _PyParser_ASTFromString()
 #include "pycore_pyerrors.h"      // _PyErr_GetRaisedException()
@@ -368,7 +369,7 @@ _PyRun_InteractiveOne(FILE *fp, PyObject *filename, PyCompilerFlags *flags)
                 Py_DECREF(xs);
                 goto error;
             }
-            int n = PyLong_AsInt(exc_lineno);
+            int n = _PyValue_AsInt(PyValue_FromObjectBorrow(exc_lineno));
             Py_DECREF(exc_lineno);
             if (n <= 0 || n > PyList_GET_SIZE(xs)) {
                 Py_DECREF(xs);
@@ -630,7 +631,7 @@ parse_exit_code(PyObject *code, int *exitcode_p)
     if (PyLong_Check(code)) {
         // gh-125842: Use a long long to avoid an overflow error when `long`
         // is 32-bit. We still truncate the result to an int.
-        int exitcode = (int)PyLong_AsLongLong(code);
+        int exitcode = (int)_PyValue_AsLongLong(PyValue_FromObjectBorrow(code));
         if (exitcode == -1 && PyErr_Occurred()) {
             // On overflow or other error, clear the exception and use -1
             // as the exit code to match historical Python behavior.

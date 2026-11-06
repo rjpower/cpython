@@ -1606,7 +1606,7 @@ mappingproxy_richcompare(PyObject *self, PyObject *w, int op)
 static int
 mappingproxy_check_mapping(PyObject *mapping)
 {
-    if (!PyMapping_Check(mapping)
+    if (!_PyValue_MappingCheck(PyValue_FromObjectBorrow(mapping))
         || PyList_Check(mapping)
         || PyTuple_Check(mapping)) {
         PyErr_Format(PyExc_TypeError,

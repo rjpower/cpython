@@ -12,6 +12,7 @@
 
 #include "Python.h"
 #include "pycore_abstract.h"      // _PyIndex_Check()
+#include "pycore_long_value.h"    // _PyValue_AsDouble()
 #include "pycore_memoryobject.h"  // _PyManagedBuffer_Type
 #include "pycore_object.h"        // _PyObject_GC_UNTRACK()
 #include "pycore_pyvalue.h"       // PyValue_PrepareOwned()
@@ -1439,7 +1440,7 @@ copy_shape(Py_ssize_t *shape, PyObject *seq, Py_ssize_t ndim,
                 "memoryview.cast(): elements of shape must be integers");
             return -1;
         }
-        x = PyLong_AsSsize_t(tmp);
+        x = _PyValue_IntAsSsize_t(PyValue_FromObjectBorrow(tmp));
         Py_DECREF(tmp);
         if (x == -1 && PyErr_Occurred()) {
             return -1;
@@ -1806,7 +1807,7 @@ pylong_as_lu(PyObject *item)
     if (tmp == NULL)
         return (unsigned long)-1;
 
-    lu = PyLong_AsUnsignedLong(tmp);
+    lu = _PyValue_IntAsUnsignedLong(PyValue_FromObjectBorrow(tmp));
     Py_DECREF(tmp);
     return lu;
 }
@@ -1838,7 +1839,7 @@ pylong_as_llu(PyObject *item)
     if (tmp == NULL)
         return (unsigned long long)-1;
 
-    llu = PyLong_AsUnsignedLongLong(tmp);
+    llu = _PyValue_IntAsUnsignedLongLong(PyValue_FromObjectBorrow(tmp));
     Py_DECREF(tmp);
     return llu;
 }
@@ -1855,7 +1856,7 @@ pylong_as_zd(PyObject *item)
     if (tmp == NULL)
         return -1;
 
-    zd = PyLong_AsSsize_t(tmp);
+    zd = _PyValue_IntAsSsize_t(PyValue_FromObjectBorrow(tmp));
     Py_DECREF(tmp);
     return zd;
 }
@@ -1872,7 +1873,7 @@ pylong_as_zu(PyObject *item)
     if (tmp == NULL)
         return (size_t)-1;
 
-    zu = PyLong_AsSize_t(tmp);
+    zu = _PyValue_IntAsSize_t(PyValue_FromObjectBorrow(tmp));
     Py_DECREF(tmp);
     return zu;
 }
@@ -2113,7 +2114,7 @@ pack_single_object(PyMemoryViewObject *self, char *ptr, PyObject *item,
 
     /* floats */
     case 'f': case 'd': case 'e':
-        d = PyFloat_AsDouble(item);
+        d = _PyValue_AsDouble(PyValue_FromObjectBorrow(item));
         if (d == -1.0 && PyErr_Occurred())
             goto err_occurred;
         CHECK_RELEASED_INT_AGAIN(self);
@@ -2184,7 +2185,7 @@ pack_single_object(PyMemoryViewObject *self, char *ptr, PyObject *item,
 
     /* pointer */
     case 'P':
-        p = PyLong_AsVoidPtr(item);
+        p = _PyValue_IntAsVoidPtr(PyValue_FromObjectBorrow(item));
         if (p == NULL && PyErr_Occurred())
             goto err_occurred;
         CHECK_RELEASED_INT_AGAIN(self);

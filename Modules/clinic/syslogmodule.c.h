@@ -126,7 +126,7 @@ syslog_syslog(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
         goto exit;
     }
     if (nargs >= 2) {
-        priority = PyLong_AsInt(args[0]);
+        priority = _PyValue_AsInt(PyValue_FromObjectBorrow(args[0]));
         if (priority == -1 && PyErr_Occurred()) {
             goto exit;
         }

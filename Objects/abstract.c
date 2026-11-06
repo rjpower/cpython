@@ -336,7 +336,7 @@ Py_ssize_t
         Py_DECREF(result);
         return -1;
     }
-    res = PyLong_AsSsize_t(result);
+    res = _PyValue_IntAsSsize_t(PyValue_FromObjectBorrow(result));
     Py_DECREF(result);
     if (res < 0 && PyErr_Occurred()) {
         return -1;
@@ -892,7 +892,7 @@ PyBuffer_SizeFromFormat(const char *format)
         goto done;
     }
 
-    itemsize = PyLong_AsSsize_t(res);
+    itemsize = _PyValue_IntAsSsize_t(PyValue_FromObjectBorrow(res));
     if (itemsize < 0) {
         goto done;
     }
@@ -3964,7 +3964,7 @@ PyObject *
 
     f = t->tp_iter;
     if (f == NULL) {
-        if (PySequence_Check(o))
+        if (_PyValue_SequenceCheck(PyValue_FromObjectBorrow(o)))
             return PySeqIter_New(o);
         return type_error("'%.200s' object is not iterable", o);
     }

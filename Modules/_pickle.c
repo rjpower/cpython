@@ -1427,7 +1427,7 @@ _Unpickler_ReadIntoFromFile(PickleState *state, UnpicklerObject *self, char *buf
     if (read_size_obj == NULL) {
         return -1;
     }
-    Py_ssize_t read_size = PyLong_AsSsize_t(read_size_obj);
+    Py_ssize_t read_size = _PyValue_IntAsSsize_t(PyValue_FromObjectBorrow(read_size_obj));
     Py_DECREF(read_size_obj);
 
     if (read_size < 0) {
@@ -2555,7 +2555,7 @@ save_long(PicklerObject *self, PyObject *obj)
     int overflow;
     int status = 0;
 
-    val= PyLong_AsLongAndOverflow(obj, &overflow);
+    val= _PyValue_AsLongAndOverflow(PyValue_FromObjectBorrow(obj), &overflow);
     if (!overflow && (sizeof(long) <= 4 ||
             (val <= 0x7fffffffL && val >= (-0x7fffffffL - 1))))
     {
@@ -5978,7 +5978,7 @@ Pickler_set_memo(PyObject *op, PyObject *obj, void *Py_UNUSED(closure))
                 Py_XDECREF(memo_obj);
                 goto error;
             }
-            memo_id = PyLong_AsSsize_t(memo_id_obj);
+            memo_id = _PyValue_IntAsSsize_t(PyValue_FromObjectBorrow(memo_id_obj));
             Py_DECREF(memo_id_obj);
             if (memo_id == -1 && PyErr_Occurred()) {
                 Py_DECREF(memo_obj);
@@ -7205,7 +7205,7 @@ load_get(PickleState *st, UnpicklerObject *self)
     key = PyLong_FromString(s, NULL, 10);
     if (key == NULL)
         return -1;
-    idx = PyLong_AsSsize_t(key);
+    idx = _PyValue_IntAsSsize_t(PyValue_FromObjectBorrow(key));
     Py_DECREF(key);
     if (idx == -1 && PyErr_Occurred()) {
         return -1;
@@ -7392,7 +7392,7 @@ load_put(PickleState *state, UnpicklerObject *self)
     key = PyLong_FromString(s, NULL, 10);
     if (key == NULL)
         return -1;
-    idx = PyLong_AsSsize_t(key);
+    idx = _PyValue_IntAsSsize_t(PyValue_FromObjectBorrow(key));
     Py_DECREF(key);
     if (idx < 0) {
         if (!PyErr_Occurred())
@@ -8760,7 +8760,7 @@ Unpickler_set_memo(PyObject *op, PyObject *obj, void *Py_UNUSED(closure))
                                 "memo key must be integers");
                 goto error_installed;
             }
-            idx = PyLong_AsSsize_t(key);
+            idx = _PyValue_IntAsSsize_t(PyValue_FromObjectBorrow(key));
             if (idx == -1 && PyErr_Occurred())
                 goto error_installed;
             if (idx < 0) {

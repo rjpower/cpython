@@ -8,6 +8,7 @@
 #define Py_VALUE_CORE 1
 #include "_remote_debugging.h"
 #include "pycore_list.h"          // PyList_GetValue()
+#include "pycore_long_value.h"    // _PyValue_IntAsUnsignedLongLong()
 #include "pycore_structseq.h"    // PyStructSequence_GET_VALUE()
 #include "pycore_value.h"         // PyValue_CLOSE()
 
@@ -139,7 +140,7 @@ frame_cache_invalidate_stale(RemoteUnwinderObject *unwinder, PyObject *result)
             PyObject *tid_obj = PyValue_IsNull(tid_obj_v) ? NULL : _PyValue_AsObjectStealAt(tid_obj_v, BOX_SITE_FIELD);
             Py_DECREF(thread_info);
             if (tid_obj) {
-                uint64_t tid = PyLong_AsUnsignedLongLong(tid_obj);
+                uint64_t tid = _PyValue_IntAsUnsignedLongLong(PyValue_FromObjectBorrow(tid_obj));
                 Py_DECREF(tid_obj);
                 if (!PyErr_Occurred()) {
                     seen_threads[num_seen++] = tid;

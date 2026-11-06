@@ -44,6 +44,7 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #include "pycore_borrow.h"        // _PyBorrowScope_Enter()
 #include "pycore_bytesobject.h"   // _PyBytes_RepeatBuffer()
 #include "pycore_ceval.h"         // _PyEval_GetBuiltin()
+#include "pycore_long_value.h"    // _PyValue_AsLong()
 #include "pycore_tuple.h"         // _PyTuple_PackValues()
 #include "pycore_value_call.h"    // _PyValue_VectorcallThunk()
 #include "pycore_value.h"
@@ -3106,13 +3107,13 @@ unicode_fromformat_arg(_PyUnicodeWriter *writer,
             if (obj == NULL) {
                 return NULL;
             }
-            ascii = PyObject_ASCII(obj);
+            ascii = _PyValue_ASCII(PyValue_FromObjectBorrow(obj));
             Py_DECREF(obj);
         }
         else {
             PyObject *obj = va_arg(*vargs, PyObject *);
             assert(obj);
-            ascii = PyObject_ASCII(obj);
+            ascii = _PyValue_ASCII(PyValue_FromObjectBorrow(obj));
         }
         if (!ascii)
             return NULL;
@@ -8929,7 +8930,7 @@ charmap_decode_mapping(const char *s,
         if (item == Py_None)
             goto Undefined;
         if (PyLong_Check(item)) {
-            long value = PyLong_AsLong(item);
+            long value = _PyValue_AsLong(PyValue_FromObjectBorrow(item));
             if (value == 0xFFFE)
                 goto Undefined;
             if (value < 0 || value > MAX_UNICODE) {
@@ -9243,7 +9244,7 @@ charmapencode_lookup(Py_UCS4 c, PyObject *mapping, unsigned char *replace)
     else if (x == Py_None)
         return x;
     else if (PyLong_Check(x)) {
-        long value = PyLong_AsLong(x);
+        long value = _PyValue_AsLong(PyValue_FromObjectBorrow(x));
         if (value < 0 || value > 255) {
             PyErr_SetString(PyExc_TypeError,
                             "character mapping must be in range(256)");
@@ -9729,7 +9730,7 @@ charmaptranslate_lookup(Py_UCS4 c, PyObject *mapping, PyObject **result, Py_UCS4
         return 0;
     }
     else if (PyLong_Check(x)) {
-        long value = PyLong_AsLong(x);
+        long value = _PyValue_AsLong(PyValue_FromObjectBorrow(x));
         if (value < 0 || value > MAX_UNICODE) {
             PyErr_Format(PyExc_ValueError,
                          "character mapping must be in range(0x%lx)",
@@ -10546,7 +10547,7 @@ PyUnicode_Join(PyObject *separator, PyObject *seq)
     Py_ssize_t seqlen;
     PyObject **items;
 
-    fseq = PySequence_Fast(seq, "can only join an iterable");
+    fseq = _PyValue_SequenceFast(PyValue_FromObjectBorrow(seq), "can only join an iterable");
     if (fseq == NULL) {
         return NULL;
     }
@@ -15429,7 +15430,7 @@ static PyObject *
 unicodeiter_setstate(PyObject *op, PyObject *state)
 {
     unicodeiterobject *it = (unicodeiterobject *)op;
-    Py_ssize_t index = PyLong_AsSsize_t(state);
+    Py_ssize_t index = _PyValue_IntAsSsize_t(PyValue_FromObjectBorrow(state));
     if (index == -1 && PyErr_Occurred())
         return NULL;
     if (it->it_seq != NULL) {

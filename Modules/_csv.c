@@ -268,7 +268,7 @@ _set_int(const char *name, int *target, PyObject *src, int dflt)
                          "\"%s\" must be an integer, not %T", name, src);
             return -1;
         }
-        value = PyLong_AsInt(src);
+        value = _PyValue_AsInt(PyValue_FromObjectBorrow(src));
         if (value == -1 && PyErr_Occurred()) {
             return -1;
         }

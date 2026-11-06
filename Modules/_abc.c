@@ -6,6 +6,7 @@
 #define Py_VALUE_CORE 1
 #include "Python.h"
 #include "pycore_dict.h"           // PyDict_PopValue()
+#include "pycore_long_value.h"    // _PyValue_AsLong()
 #include "pycore_moduleobject.h"  // _PyModule_GetState()
 #include "pycore_object.h"        // _PyType_GetSubclasses()
 #include "pycore_runtime.h"       // _Py_ID()
@@ -402,7 +403,7 @@ compute_abstract_methods(PyObject *self)
 
     // We can't use PyDict_Next(ns) even when ns is dict because
     // _PyObject_IsAbstract() can mutate ns.
-    items = PyMapping_Items(ns);
+    items = _PyValue_MappingItems(PyValue_FromObjectBorrow(ns));
     if (!items) {
         goto error;
     }
@@ -413,7 +414,7 @@ compute_abstract_methods(PyObject *self)
         if (!pair) {
             goto error;
         }
-        PyObject *it = PySequence_Fast(pair, "items() returned non-iterable");
+        PyObject *it = _PyValue_SequenceFast(PyValue_FromObjectBorrow(pair), "items() returned non-iterable");
         Py_DECREF(pair);
         if (!it) {
             goto error;
@@ -600,7 +601,7 @@ abc_abc_init_body(PyObject *module, PyObject *self)
                 PyValue_CLOSE(flags);
                 return PyValue_NULL;
             }
-            val = PyLong_AsLong(flags_obj);
+            val = _PyValue_AsLong(PyValue_FromObjectBorrow(flags_obj));
             Py_DECREF(flags_obj);
         }
         PyValue_CLOSE(flags);

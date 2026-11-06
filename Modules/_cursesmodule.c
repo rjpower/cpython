@@ -525,7 +525,7 @@ PyCurses_ConvertToChtype(PyCursesWindowObject *win, PyObject *obj, chtype *ch)
         }
     }
     else if (PyLong_CheckExact(obj)) {
-        value = PyLong_AsUnsignedLongLong(obj);
+        value = _PyValue_IntAsUnsignedLongLong(PyValue_FromObjectBorrow(obj));
         if (value == (unsigned long long)-1 && PyErr_Occurred())
             return 0;
     }
@@ -648,7 +648,7 @@ PyCurses_ConvertToCchar_t(PyCursesWindowObject *win, PyObject *obj,
         value = (unsigned char)PyBytes_AsString(obj)[0];
     }
     else if (PyLong_CheckExact(obj)) {
-        value = PyLong_AsUnsignedLongLong(obj);
+        value = _PyValue_IntAsUnsignedLongLong(PyValue_FromObjectBorrow(obj));
         if (value == (unsigned long long)-1 && PyErr_Occurred()) {
             return 0;
         }
@@ -1126,7 +1126,7 @@ attr_converter(PyValueBorrow arg, void *ptr)
     if (obj == NULL) {
         return 0;
     }
-    unsigned long long attr = PyLong_AsUnsignedLongLong(obj);
+    unsigned long long attr = _PyValue_IntAsUnsignedLongLong(PyValue_FromObjectBorrow(obj));
     Py_DECREF(obj);
     if (attr == (unsigned long long)-1 && PyErr_Occurred()) {
         return 0;
@@ -1538,8 +1538,7 @@ complexstr_new_impl(PyTypeObject *type, PyValueBorrow cells,
     if (cellsobj == NULL) {
         return PyValue_NULL;
     }
-    PyObject *seq = PySequence_Fast(cellsobj,
-                                    "complexstr() argument must be an iterable");
+    PyObject *seq = _PyValue_SequenceFast(PyValue_FromObjectBorrow(cellsobj), "complexstr() argument must be an iterable");
     Py_DECREF(cellsobj);
     if (seq == NULL) {
         return PyValue_NULL;
@@ -8706,7 +8705,7 @@ PyCurses_ConvertToWchar_t(PyObject *obj,
     else if (PyLong_CheckExact(obj)) {
         long value;
         int overflow;
-        value = PyLong_AsLongAndOverflow(obj, &overflow);
+        value = _PyValue_AsLongAndOverflow(PyValue_FromObjectBorrow(obj), &overflow);
         if (overflow) {
             PyErr_SetString(PyExc_OverflowError,
                             "int doesn't fit in long");

@@ -2,6 +2,7 @@
 
 #include "Python.h"
 #include "pycore_call.h"          // _PyObject_CallNoArgs()
+#include "pycore_long_value.h"    // _PyValue_AsInt()
 #include "pycore_runtime.h"       // _PyRuntime
 #include "pycore_unicodeobject.h" // _PyUnicode_AsUTF8String()
 #include "pycore_value_ops.h"     // _PyValue_Repr()
@@ -182,7 +183,7 @@ PyObject_AsFileDescriptor(PyObject *o)
                 return -1;
             }
         }
-        fd = PyLong_AsInt(o);
+        fd = _PyValue_AsInt(PyValue_FromObjectBorrow(o));
     }
     else if (PyObject_GetOptionalAttr(o, &_Py_ID(fileno), &meth) < 0) {
         return -1;
@@ -194,7 +195,7 @@ PyObject_AsFileDescriptor(PyObject *o)
             return -1;
 
         if (PyLong_Check(fno)) {
-            fd = PyLong_AsInt(fno);
+            fd = _PyValue_AsInt(PyValue_FromObjectBorrow(fno));
             Py_DECREF(fno);
         }
         else {
@@ -227,7 +228,7 @@ _Py_Off_t_Converter(PyObject *arg, void *addr)
 #ifdef HAVE_LARGEFILE_SUPPORT
     *((Py_off_t *)addr) = PyLong_AsLongLong(arg);
 #else
-    *((Py_off_t *)addr) = PyLong_AsLong(arg);
+    *((Py_off_t *)addr) = _PyValue_AsLong(PyValue_FromObjectBorrow(arg));
 #endif
     return PyErr_Occurred() ? 0 : 1;
 }

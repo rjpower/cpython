@@ -2439,7 +2439,7 @@ get_local_timestamp(PyObject *dt, int64_t *local_ts)
             return -1;
         }
 
-        ord = PyLong_AsLong(num);
+        ord = _PyValue_AsLong(PyValue_FromObjectBorrow(num));
         Py_DECREF(num);
         if (ord == -1 && PyErr_Occurred()) {
             return -1;
@@ -2449,7 +2449,7 @@ get_local_timestamp(PyObject *dt, int64_t *local_ts)
         if (num == NULL) {
             return -1;
         }
-        hour = PyLong_AsLong(num);
+        hour = _PyValue_AsLong(PyValue_FromObjectBorrow(num));
         Py_DECREF(num);
         if (hour == -1 && PyErr_Occurred()) {
             return -1;
@@ -2459,7 +2459,7 @@ get_local_timestamp(PyObject *dt, int64_t *local_ts)
         if (num == NULL) {
             return -1;
         }
-        minute = PyLong_AsLong(num);
+        minute = _PyValue_AsLong(PyValue_FromObjectBorrow(num));
         Py_DECREF(num);
         if (minute == -1 && PyErr_Occurred()) {
             return -1;
@@ -2469,7 +2469,7 @@ get_local_timestamp(PyObject *dt, int64_t *local_ts)
         if (num == NULL) {
             return -1;
         }
-        second = PyLong_AsLong(num);
+        second = _PyValue_AsLong(PyValue_FromObjectBorrow(num));
         Py_DECREF(num);
         if (second == -1 && PyErr_Occurred()) {
             return -1;

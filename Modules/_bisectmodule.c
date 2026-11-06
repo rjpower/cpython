@@ -85,7 +85,7 @@ internal_bisect_right(PyObject *list, PyObject *item, Py_ssize_t lo, Py_ssize_t 
     int res;
 
     if (hi == -1) {
-        hi = PySequence_Size(list);
+        hi = _PyValue_SequenceSize(PyValue_FromObjectBorrow(list));
         if (hi < 0)
             return -1;
     }
@@ -293,7 +293,7 @@ internal_bisect_left(PyObject *list, PyObject *item, Py_ssize_t lo, Py_ssize_t h
     int res;
 
     if (hi == -1) {
-        hi = PySequence_Size(list);
+        hi = _PyValue_SequenceSize(PyValue_FromObjectBorrow(list));
         if (hi < 0)
             return -1;
     }

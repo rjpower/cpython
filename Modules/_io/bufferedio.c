@@ -15,6 +15,7 @@
 #include "pycore_call.h"                // _PyObject_CallNoArgs()
 #include "pycore_fileutils.h"           // _PyFile_Flush
 #include "pycore_list.h"          // PyList_AppendValue()
+#include "pycore_long_value.h"    // _PyValue_AsLongAndOverflow()
 #include "pycore_object.h"              // _PyObject_GC_UNTRACK()
 #include "pycore_pyerrors.h"            // _Py_FatalErrorFormat()
 #include "pycore_pylifecycle.h"         // _Py_IsInterpreterFinalizing()
@@ -330,7 +331,7 @@ _enter_buffered_busy(buffered *self)
     }
     Py_END_ALLOW_THREADS
     if (relax_locking && st != PY_LOCK_ACQUIRED) {
-        PyObject *ascii = PyObject_ASCII((PyObject*)self);
+        PyObject *ascii = _PyValue_ASCII(PyValue_FromObjectBorrow((PyObject*)self));
         _Py_FatalErrorFormat(__func__,
             "could not acquire lock for %s at interpreter "
             "shutdown, possibly due to daemon threads",
@@ -909,7 +910,7 @@ _PyIO_trap_eintr(void)
         assert(EINTR > 0 && EINTR < INT_MAX);
         assert(PyLong_CheckExact(env_err->myerrno));
         int overflow;
-        int myerrno = PyLong_AsLongAndOverflow(env_err->myerrno, &overflow);
+        int myerrno = _PyValue_AsLongAndOverflow(PyValue_FromObjectBorrow(env_err->myerrno), &overflow);
         PyErr_Clear();
         if (myerrno == EINTR) {
             Py_DECREF(exc);

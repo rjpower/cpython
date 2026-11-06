@@ -4815,7 +4815,7 @@ PyConfig_GetInt(const char *name, int *value)
         return -1;
     }
 
-    int as_int = PyLong_AsInt(obj);
+    int as_int = _PyValue_AsInt(PyValue_FromObjectBorrow(obj));
     Py_DECREF(obj);
     if (as_int == -1 && PyErr_Occurred()) {
         PyErr_Format(PyExc_OverflowError,
@@ -4975,7 +4975,7 @@ PyConfig_Set(const char *name, PyObject *value)
             PyErr_Format(PyExc_TypeError, "expected int or bool, got %T", value);
             return -1;
         }
-        int_value = PyLong_AsInt(value);
+        int_value = _PyValue_AsInt(PyValue_FromObjectBorrow(value));
         if (int_value == -1 && PyErr_Occurred()) {
             return -1;
         }

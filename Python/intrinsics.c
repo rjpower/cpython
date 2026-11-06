@@ -59,7 +59,7 @@ import_all_from(PyThreadState *tstate, PyObject *locals, PyObject *v)
                     "from-import-* object has no __dict__ and no __all__");
             return -1;
         }
-        all = PyMapping_Keys(dict);
+        all = _PyValue_MappingKeys(PyValue_FromObjectBorrow(dict));
         Py_DECREF(dict);
         if (all == NULL)
             return -1;

@@ -12,6 +12,7 @@
 #include "gc_stats.h"
 #include "pycore_dict.h"          // PyDict_SetValueString()
 #include "pycore_list.h"          // PyList_AppendValue()
+#include "pycore_long_value.h"    // _PyValue_AsDouble()
 #include "pycore_value.h"         // _PyValue_AsObjectAt()
 #include "pycore_value_slots.h"   // _PyValue_FromObjectResult()
 
@@ -1896,7 +1897,7 @@ _remote_debugging_BinaryWriter_set_stats_impl(BinaryWriterObject *self,
         if (error_rate_obj == NULL) {
             return PyValue_NULL;
         }
-        error_rate_value = PyFloat_AsDouble(error_rate_obj);
+        error_rate_value = _PyValue_AsDouble(PyValue_FromObjectBorrow(error_rate_obj));
         Py_DECREF(error_rate_obj);
         if (error_rate_value == -1.0 && PyErr_Occurred()) {
             return PyValue_NULL;
@@ -1908,7 +1909,7 @@ _remote_debugging_BinaryWriter_set_stats_impl(BinaryWriterObject *self,
         if (missed_samples_obj == NULL) {
             return PyValue_NULL;
         }
-        missed_samples_value = PyFloat_AsDouble(missed_samples_obj);
+        missed_samples_value = _PyValue_AsDouble(PyValue_FromObjectBorrow(missed_samples_obj));
         Py_DECREF(missed_samples_obj);
         if (missed_samples_value == -1.0 && PyErr_Occurred()) {
             return PyValue_NULL;

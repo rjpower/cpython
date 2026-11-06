@@ -1300,7 +1300,7 @@ _ssl__SSLContext_verify_mode_set(PyObject *self, PyObject *arg, void *Py_UNUSED(
                      Py_TYPE(self)->tp_name);
         return -1;
     }
-    value = PyLong_AsInt(arg);
+    value = _PyValue_AsInt(PyValue_FromObjectBorrow(arg));
     if (value == -1 && PyErr_Occurred()) {
         goto exit;
     }
@@ -1354,8 +1354,7 @@ _ssl__SSLContext_verify_flags_set(PyObject *self, PyObject *arg, void *Py_UNUSED
         goto exit;
     }
     {
-        Py_ssize_t _bytes = PyLong_AsNativeBytes(arg, &value, sizeof(unsigned long),
-                Py_ASNATIVEBYTES_NATIVE_ENDIAN |
+        Py_ssize_t _bytes = _PyValue_AsNativeBytes(PyValue_FromObjectBorrow(arg), &value, sizeof(unsigned long), Py_ASNATIVEBYTES_NATIVE_ENDIAN |
                 Py_ASNATIVEBYTES_ALLOW_INDEX |
                 Py_ASNATIVEBYTES_UNSIGNED_BUFFER);
         if (_bytes < 0) {
@@ -1488,7 +1487,7 @@ _ssl__SSLContext_num_tickets_set(PyObject *self, PyObject *arg, void *Py_UNUSED(
                      Py_TYPE(self)->tp_name);
         return -1;
     }
-    value = PyLong_AsLong(arg);
+    value = _PyValue_AsLong(PyValue_FromObjectBorrow(arg));
     if (value == -1 && PyErr_Occurred()) {
         goto exit;
     }
@@ -1597,8 +1596,7 @@ _ssl__SSLContext__host_flags_set(PyObject *self, PyObject *arg, void *Py_UNUSED(
         return -1;
     }
     {
-        Py_ssize_t _bytes = PyLong_AsNativeBytes(arg, &value, sizeof(unsigned int),
-                Py_ASNATIVEBYTES_NATIVE_ENDIAN |
+        Py_ssize_t _bytes = _PyValue_AsNativeBytes(PyValue_FromObjectBorrow(arg), &value, sizeof(unsigned int), Py_ASNATIVEBYTES_NATIVE_ENDIAN |
                 Py_ASNATIVEBYTES_ALLOW_INDEX |
                 Py_ASNATIVEBYTES_UNSIGNED_BUFFER);
         if (_bytes < 0) {

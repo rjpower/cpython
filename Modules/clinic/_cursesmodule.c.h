@@ -265,11 +265,11 @@ _curses_window_addch(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
         goto exit;
     }
     if (nargs >= 3) {
-        y = PyLong_AsInt(args[0]);
+        y = _PyValue_AsInt(PyValue_FromObjectBorrow(args[0]));
         if (y == -1 && PyErr_Occurred()) {
             goto exit;
         }
-        x = PyLong_AsInt(args[1]);
+        x = _PyValue_AsInt(PyValue_FromObjectBorrow(args[1]));
         if (x == -1 && PyErr_Occurred()) {
             goto exit;
         }
@@ -332,11 +332,11 @@ _curses_window_addstr(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
         goto exit;
     }
     if (nargs >= 3) {
-        y = PyLong_AsInt(args[0]);
+        y = _PyValue_AsInt(PyValue_FromObjectBorrow(args[0]));
         if (y == -1 && PyErr_Occurred()) {
             goto exit;
         }
-        x = PyLong_AsInt(args[1]);
+        x = _PyValue_AsInt(PyValue_FromObjectBorrow(args[1]));
         if (x == -1 && PyErr_Occurred()) {
             goto exit;
         }
@@ -402,11 +402,11 @@ _curses_window_addnstr(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
         goto exit;
     }
     if (nargs >= 4) {
-        y = PyLong_AsInt(args[0]);
+        y = _PyValue_AsInt(PyValue_FromObjectBorrow(args[0]));
         if (y == -1 && PyErr_Occurred()) {
             goto exit;
         }
-        x = PyLong_AsInt(args[1]);
+        x = _PyValue_AsInt(PyValue_FromObjectBorrow(args[1]));
         if (x == -1 && PyErr_Occurred()) {
             goto exit;
         }
@@ -414,7 +414,7 @@ _curses_window_addnstr(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
         group_left_1 = 1;
     }
     str = args[offset];
-    n = PyLong_AsInt(args[offset + 1]);
+    n = _PyValue_AsInt(PyValue_FromObjectBorrow(args[offset + 1]));
     if (n == -1 && PyErr_Occurred()) {
         goto exit;
     }
@@ -962,18 +962,18 @@ _curses_window_chgat(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
         goto exit;
     }
     if (nargs >= 3) {
-        y = PyLong_AsInt(args[0]);
+        y = _PyValue_AsInt(PyValue_FromObjectBorrow(args[0]));
         if (y == -1 && PyErr_Occurred()) {
             goto exit;
         }
-        x = PyLong_AsInt(args[1]);
+        x = _PyValue_AsInt(PyValue_FromObjectBorrow(args[1]));
         if (x == -1 && PyErr_Occurred()) {
             goto exit;
         }
         group_left_1 = 1;
     }
     if (nargs == 2 || nargs == 4) {
-        n = PyLong_AsInt(args[nargs - 2]);
+        n = _PyValue_AsInt(PyValue_FromObjectBorrow(args[nargs - 2]));
         if (n == -1 && PyErr_Occurred()) {
             goto exit;
         }
@@ -1026,11 +1026,11 @@ _curses_window_delch(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
             goto exit;
     }
     if (nargs >= 2) {
-        y = PyLong_AsInt(args[0]);
+        y = _PyValue_AsInt(PyValue_FromObjectBorrow(args[0]));
         if (y == -1 && PyErr_Occurred()) {
             goto exit;
         }
-        x = PyLong_AsInt(args[1]);
+        x = _PyValue_AsInt(PyValue_FromObjectBorrow(args[1]));
         if (x == -1 && PyErr_Occurred()) {
             goto exit;
         }
@@ -1085,21 +1085,21 @@ _curses_window_derwin(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
             goto exit;
     }
     if (nargs >= 4) {
-        nlines = PyLong_AsInt(args[0]);
+        nlines = _PyValue_AsInt(PyValue_FromObjectBorrow(args[0]));
         if (nlines == -1 && PyErr_Occurred()) {
             goto exit;
         }
-        ncols = PyLong_AsInt(args[1]);
+        ncols = _PyValue_AsInt(PyValue_FromObjectBorrow(args[1]));
         if (ncols == -1 && PyErr_Occurred()) {
             goto exit;
         }
         group_left_1 = 1;
     }
-    begin_y = PyLong_AsInt(args[nargs - 2]);
+    begin_y = _PyValue_AsInt(PyValue_FromObjectBorrow(args[nargs - 2]));
     if (begin_y == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    begin_x = PyLong_AsInt(args[nargs - 1]);
+    begin_x = _PyValue_AsInt(PyValue_FromObjectBorrow(args[nargs - 1]));
     if (begin_x == -1 && PyErr_Occurred()) {
         goto exit;
     }
@@ -1336,11 +1336,11 @@ _curses_window_in_wch(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
             goto exit;
     }
     if (nargs >= 2) {
-        y = PyLong_AsInt(args[0]);
+        y = _PyValue_AsInt(PyValue_FromObjectBorrow(args[0]));
         if (y == -1 && PyErr_Occurred()) {
             goto exit;
         }
-        x = PyLong_AsInt(args[1]);
+        x = _PyValue_AsInt(PyValue_FromObjectBorrow(args[1]));
         if (x == -1 && PyErr_Occurred()) {
             goto exit;
         }
@@ -1419,11 +1419,11 @@ _curses_window_getch(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
             goto exit;
     }
     if (nargs >= 2) {
-        y = PyLong_AsInt(args[0]);
+        y = _PyValue_AsInt(PyValue_FromObjectBorrow(args[0]));
         if (y == -1 && PyErr_Occurred()) {
             goto exit;
         }
-        x = PyLong_AsInt(args[1]);
+        x = _PyValue_AsInt(PyValue_FromObjectBorrow(args[1]));
         if (x == -1 && PyErr_Occurred()) {
             goto exit;
         }
@@ -1473,11 +1473,11 @@ _curses_window_getkey(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
             goto exit;
     }
     if (nargs >= 2) {
-        y = PyLong_AsInt(args[0]);
+        y = _PyValue_AsInt(PyValue_FromObjectBorrow(args[0]));
         if (y == -1 && PyErr_Occurred()) {
             goto exit;
         }
-        x = PyLong_AsInt(args[1]);
+        x = _PyValue_AsInt(PyValue_FromObjectBorrow(args[1]));
         if (x == -1 && PyErr_Occurred()) {
             goto exit;
         }
@@ -1529,11 +1529,11 @@ _curses_window_get_wch(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
             goto exit;
     }
     if (nargs >= 2) {
-        y = PyLong_AsInt(args[0]);
+        y = _PyValue_AsInt(PyValue_FromObjectBorrow(args[0]));
         if (y == -1 && PyErr_Occurred()) {
             goto exit;
         }
-        x = PyLong_AsInt(args[1]);
+        x = _PyValue_AsInt(PyValue_FromObjectBorrow(args[1]));
         if (x == -1 && PyErr_Occurred()) {
             goto exit;
         }
@@ -1582,11 +1582,11 @@ _curses_window_getstr(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
         goto exit;
     }
     if (nargs >= 2) {
-        y = PyLong_AsInt(args[0]);
+        y = _PyValue_AsInt(PyValue_FromObjectBorrow(args[0]));
         if (y == -1 && PyErr_Occurred()) {
             goto exit;
         }
-        x = PyLong_AsInt(args[1]);
+        x = _PyValue_AsInt(PyValue_FromObjectBorrow(args[1]));
         if (x == -1 && PyErr_Occurred()) {
             goto exit;
         }
@@ -1647,11 +1647,11 @@ _curses_window_hline(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
         goto exit;
     }
     if (nargs >= 4) {
-        y = PyLong_AsInt(args[0]);
+        y = _PyValue_AsInt(PyValue_FromObjectBorrow(args[0]));
         if (y == -1 && PyErr_Occurred()) {
             goto exit;
         }
-        x = PyLong_AsInt(args[1]);
+        x = _PyValue_AsInt(PyValue_FromObjectBorrow(args[1]));
         if (x == -1 && PyErr_Occurred()) {
             goto exit;
         }
@@ -1659,7 +1659,7 @@ _curses_window_hline(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
         group_left_1 = 1;
     }
     ch = args[offset];
-    n = PyLong_AsInt(args[offset + 1]);
+    n = _PyValue_AsInt(PyValue_FromObjectBorrow(args[offset + 1]));
     if (n == -1 && PyErr_Occurred()) {
         goto exit;
     }
@@ -1716,11 +1716,11 @@ _curses_window_insch(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
         goto exit;
     }
     if (nargs >= 3) {
-        y = PyLong_AsInt(args[0]);
+        y = _PyValue_AsInt(PyValue_FromObjectBorrow(args[0]));
         if (y == -1 && PyErr_Occurred()) {
             goto exit;
         }
-        x = PyLong_AsInt(args[1]);
+        x = _PyValue_AsInt(PyValue_FromObjectBorrow(args[1]));
         if (x == -1 && PyErr_Occurred()) {
             goto exit;
         }
@@ -1776,11 +1776,11 @@ _curses_window_inch(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
             goto exit;
     }
     if (nargs >= 2) {
-        y = PyLong_AsInt(args[0]);
+        y = _PyValue_AsInt(PyValue_FromObjectBorrow(args[0]));
         if (y == -1 && PyErr_Occurred()) {
             goto exit;
         }
-        x = PyLong_AsInt(args[1]);
+        x = _PyValue_AsInt(PyValue_FromObjectBorrow(args[1]));
         if (x == -1 && PyErr_Occurred()) {
             goto exit;
         }
@@ -1830,11 +1830,11 @@ _curses_window_instr(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
         goto exit;
     }
     if (nargs >= 2) {
-        y = PyLong_AsInt(args[0]);
+        y = _PyValue_AsInt(PyValue_FromObjectBorrow(args[0]));
         if (y == -1 && PyErr_Occurred()) {
             goto exit;
         }
-        x = PyLong_AsInt(args[1]);
+        x = _PyValue_AsInt(PyValue_FromObjectBorrow(args[1]));
         if (x == -1 && PyErr_Occurred()) {
             goto exit;
         }
@@ -1889,11 +1889,11 @@ _curses_window_get_wstr(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
         goto exit;
     }
     if (nargs >= 2) {
-        y = PyLong_AsInt(args[0]);
+        y = _PyValue_AsInt(PyValue_FromObjectBorrow(args[0]));
         if (y == -1 && PyErr_Occurred()) {
             goto exit;
         }
-        x = PyLong_AsInt(args[1]);
+        x = _PyValue_AsInt(PyValue_FromObjectBorrow(args[1]));
         if (x == -1 && PyErr_Occurred()) {
             goto exit;
         }
@@ -1951,11 +1951,11 @@ _curses_window_in_wstr(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
         goto exit;
     }
     if (nargs >= 2) {
-        y = PyLong_AsInt(args[0]);
+        y = _PyValue_AsInt(PyValue_FromObjectBorrow(args[0]));
         if (y == -1 && PyErr_Occurred()) {
             goto exit;
         }
-        x = PyLong_AsInt(args[1]);
+        x = _PyValue_AsInt(PyValue_FromObjectBorrow(args[1]));
         if (x == -1 && PyErr_Occurred()) {
             goto exit;
         }
@@ -2013,11 +2013,11 @@ _curses_window_in_wchstr(PyObject *self, PyObject *const *args, Py_ssize_t nargs
         goto exit;
     }
     if (nargs >= 2) {
-        y = PyLong_AsInt(args[0]);
+        y = _PyValue_AsInt(PyValue_FromObjectBorrow(args[0]));
         if (y == -1 && PyErr_Occurred()) {
             goto exit;
         }
-        x = PyLong_AsInt(args[1]);
+        x = _PyValue_AsInt(PyValue_FromObjectBorrow(args[1]));
         if (x == -1 && PyErr_Occurred()) {
             goto exit;
         }
@@ -2079,11 +2079,11 @@ _curses_window_insstr(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
         goto exit;
     }
     if (nargs >= 3) {
-        y = PyLong_AsInt(args[0]);
+        y = _PyValue_AsInt(PyValue_FromObjectBorrow(args[0]));
         if (y == -1 && PyErr_Occurred()) {
             goto exit;
         }
-        x = PyLong_AsInt(args[1]);
+        x = _PyValue_AsInt(PyValue_FromObjectBorrow(args[1]));
         if (x == -1 && PyErr_Occurred()) {
             goto exit;
         }
@@ -2151,11 +2151,11 @@ _curses_window_insnstr(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
         goto exit;
     }
     if (nargs >= 4) {
-        y = PyLong_AsInt(args[0]);
+        y = _PyValue_AsInt(PyValue_FromObjectBorrow(args[0]));
         if (y == -1 && PyErr_Occurred()) {
             goto exit;
         }
-        x = PyLong_AsInt(args[1]);
+        x = _PyValue_AsInt(PyValue_FromObjectBorrow(args[1]));
         if (x == -1 && PyErr_Occurred()) {
             goto exit;
         }
@@ -2163,7 +2163,7 @@ _curses_window_insnstr(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
         group_left_1 = 1;
     }
     str = args[offset];
-    n = PyLong_AsInt(args[offset + 1]);
+    n = _PyValue_AsInt(PyValue_FromObjectBorrow(args[offset + 1]));
     if (n == -1 && PyErr_Occurred()) {
         goto exit;
     }
@@ -2253,27 +2253,27 @@ _curses_window_noutrefresh(PyObject *self, PyObject *const *args, Py_ssize_t nar
             goto exit;
     }
     if (nargs >= 6) {
-        pminrow = PyLong_AsInt(args[0]);
+        pminrow = _PyValue_AsInt(PyValue_FromObjectBorrow(args[0]));
         if (pminrow == -1 && PyErr_Occurred()) {
             goto exit;
         }
-        pmincol = PyLong_AsInt(args[1]);
+        pmincol = _PyValue_AsInt(PyValue_FromObjectBorrow(args[1]));
         if (pmincol == -1 && PyErr_Occurred()) {
             goto exit;
         }
-        sminrow = PyLong_AsInt(args[2]);
+        sminrow = _PyValue_AsInt(PyValue_FromObjectBorrow(args[2]));
         if (sminrow == -1 && PyErr_Occurred()) {
             goto exit;
         }
-        smincol = PyLong_AsInt(args[3]);
+        smincol = _PyValue_AsInt(PyValue_FromObjectBorrow(args[3]));
         if (smincol == -1 && PyErr_Occurred()) {
             goto exit;
         }
-        smaxrow = PyLong_AsInt(args[4]);
+        smaxrow = _PyValue_AsInt(PyValue_FromObjectBorrow(args[4]));
         if (smaxrow == -1 && PyErr_Occurred()) {
             goto exit;
         }
-        smaxcol = PyLong_AsInt(args[5]);
+        smaxcol = _PyValue_AsInt(PyValue_FromObjectBorrow(args[5]));
         if (smaxcol == -1 && PyErr_Occurred()) {
             goto exit;
         }
@@ -2367,19 +2367,19 @@ _curses_window_overlay(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
     }
     destwin = (PyCursesWindowObject *)args[0];
     if (nargs >= 7) {
-        sminrow = PyLong_AsInt(args[1]);
+        sminrow = _PyValue_AsInt(PyValue_FromObjectBorrow(args[1]));
         if (sminrow == -1 && PyErr_Occurred()) {
             goto exit;
         }
-        smincol = PyLong_AsInt(args[2]);
+        smincol = _PyValue_AsInt(PyValue_FromObjectBorrow(args[2]));
         if (smincol == -1 && PyErr_Occurred()) {
             goto exit;
         }
-        dminrow = PyLong_AsInt(args[3]);
+        dminrow = _PyValue_AsInt(PyValue_FromObjectBorrow(args[3]));
         if (dminrow == -1 && PyErr_Occurred()) {
             goto exit;
         }
-        dmincol = PyLong_AsInt(args[4]);
+        dmincol = _PyValue_AsInt(PyValue_FromObjectBorrow(args[4]));
         if (dmincol == -1 && PyErr_Occurred()) {
             goto exit;
         }
@@ -2387,7 +2387,7 @@ _curses_window_overlay(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
         if (dmaxrow == -1 && PyErr_Occurred()) {
             goto exit;
         }
-        dmaxcol = PyLong_AsInt(args[6]);
+        dmaxcol = _PyValue_AsInt(PyValue_FromObjectBorrow(args[6]));
         if (dmaxcol == -1 && PyErr_Occurred()) {
             goto exit;
         }
@@ -2451,27 +2451,27 @@ _curses_window_overwrite(PyObject *self, PyObject *const *args, Py_ssize_t nargs
     }
     destwin = (PyCursesWindowObject *)args[0];
     if (nargs >= 7) {
-        sminrow = PyLong_AsInt(args[1]);
+        sminrow = _PyValue_AsInt(PyValue_FromObjectBorrow(args[1]));
         if (sminrow == -1 && PyErr_Occurred()) {
             goto exit;
         }
-        smincol = PyLong_AsInt(args[2]);
+        smincol = _PyValue_AsInt(PyValue_FromObjectBorrow(args[2]));
         if (smincol == -1 && PyErr_Occurred()) {
             goto exit;
         }
-        dminrow = PyLong_AsInt(args[3]);
+        dminrow = _PyValue_AsInt(PyValue_FromObjectBorrow(args[3]));
         if (dminrow == -1 && PyErr_Occurred()) {
             goto exit;
         }
-        dmincol = PyLong_AsInt(args[4]);
+        dmincol = _PyValue_AsInt(PyValue_FromObjectBorrow(args[4]));
         if (dmincol == -1 && PyErr_Occurred()) {
             goto exit;
         }
-        dmaxrow = PyLong_AsInt(args[5]);
+        dmaxrow = _PyValue_AsInt(PyValue_FromObjectBorrow(args[5]));
         if (dmaxrow == -1 && PyErr_Occurred()) {
             goto exit;
         }
-        dmaxcol = PyLong_AsInt(args[6]);
+        dmaxcol = _PyValue_AsInt(PyValue_FromObjectBorrow(args[6]));
         if (dmaxcol == -1 && PyErr_Occurred()) {
             goto exit;
         }
@@ -2598,27 +2598,27 @@ _curses_window_refresh(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
             goto exit;
     }
     if (nargs >= 6) {
-        pminrow = PyLong_AsInt(args[0]);
+        pminrow = _PyValue_AsInt(PyValue_FromObjectBorrow(args[0]));
         if (pminrow == -1 && PyErr_Occurred()) {
             goto exit;
         }
-        pmincol = PyLong_AsInt(args[1]);
+        pmincol = _PyValue_AsInt(PyValue_FromObjectBorrow(args[1]));
         if (pmincol == -1 && PyErr_Occurred()) {
             goto exit;
         }
-        sminrow = PyLong_AsInt(args[2]);
+        sminrow = _PyValue_AsInt(PyValue_FromObjectBorrow(args[2]));
         if (sminrow == -1 && PyErr_Occurred()) {
             goto exit;
         }
-        smincol = PyLong_AsInt(args[3]);
+        smincol = _PyValue_AsInt(PyValue_FromObjectBorrow(args[3]));
         if (smincol == -1 && PyErr_Occurred()) {
             goto exit;
         }
-        smaxrow = PyLong_AsInt(args[4]);
+        smaxrow = _PyValue_AsInt(PyValue_FromObjectBorrow(args[4]));
         if (smaxrow == -1 && PyErr_Occurred()) {
             goto exit;
         }
-        smaxcol = PyLong_AsInt(args[5]);
+        smaxcol = _PyValue_AsInt(PyValue_FromObjectBorrow(args[5]));
         if (smaxcol == -1 && PyErr_Occurred()) {
             goto exit;
         }
@@ -2716,21 +2716,21 @@ _curses_window_subwin(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
             goto exit;
     }
     if (nargs >= 4) {
-        nlines = PyLong_AsInt(args[0]);
+        nlines = _PyValue_AsInt(PyValue_FromObjectBorrow(args[0]));
         if (nlines == -1 && PyErr_Occurred()) {
             goto exit;
         }
-        ncols = PyLong_AsInt(args[1]);
+        ncols = _PyValue_AsInt(PyValue_FromObjectBorrow(args[1]));
         if (ncols == -1 && PyErr_Occurred()) {
             goto exit;
         }
         group_left_1 = 1;
     }
-    begin_y = PyLong_AsInt(args[nargs - 2]);
+    begin_y = _PyValue_AsInt(PyValue_FromObjectBorrow(args[nargs - 2]));
     if (begin_y == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    begin_x = PyLong_AsInt(args[nargs - 1]);
+    begin_x = _PyValue_AsInt(PyValue_FromObjectBorrow(args[nargs - 1]));
     if (begin_x == -1 && PyErr_Occurred()) {
         goto exit;
     }
@@ -2769,7 +2769,7 @@ _curses_window_scroll(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
         goto exit;
     }
     if (nargs >= 1) {
-        lines = PyLong_AsInt(args[0]);
+        lines = _PyValue_AsInt(PyValue_FromObjectBorrow(args[0]));
         if (lines == -1 && PyErr_Occurred()) {
             goto exit;
         }
@@ -2809,11 +2809,11 @@ _curses_window_touchline(PyObject *self, PyObject *const *args, Py_ssize_t nargs
         PyErr_SetString(PyExc_TypeError, "_curses.window.touchline requires 2 to 3 arguments");
         goto exit;
     }
-    start = PyLong_AsInt(args[0]);
+    start = _PyValue_AsInt(PyValue_FromObjectBorrow(args[0]));
     if (start == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    count = PyLong_AsInt(args[1]);
+    count = _PyValue_AsInt(PyValue_FromObjectBorrow(args[1]));
     if (count == -1 && PyErr_Occurred()) {
         goto exit;
     }
@@ -2871,11 +2871,11 @@ _curses_window_vline(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
         goto exit;
     }
     if (nargs >= 4) {
-        y = PyLong_AsInt(args[0]);
+        y = _PyValue_AsInt(PyValue_FromObjectBorrow(args[0]));
         if (y == -1 && PyErr_Occurred()) {
             goto exit;
         }
-        x = PyLong_AsInt(args[1]);
+        x = _PyValue_AsInt(PyValue_FromObjectBorrow(args[1]));
         if (x == -1 && PyErr_Occurred()) {
             goto exit;
         }
@@ -2883,7 +2883,7 @@ _curses_window_vline(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
         group_left_1 = 1;
     }
     ch = args[offset];
-    n = PyLong_AsInt(args[offset + 1]);
+    n = _PyValue_AsInt(PyValue_FromObjectBorrow(args[offset + 1]));
     if (n == -1 && PyErr_Occurred()) {
         goto exit;
     }
@@ -5255,20 +5255,20 @@ _curses_newwin(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
             PyErr_SetString(PyExc_TypeError, "_curses.newwin requires 2 to 4 arguments");
             goto exit;
     }
-    nlines = PyLong_AsInt(args[0]);
+    nlines = _PyValue_AsInt(PyValue_FromObjectBorrow(args[0]));
     if (nlines == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    ncols = PyLong_AsInt(args[1]);
+    ncols = _PyValue_AsInt(PyValue_FromObjectBorrow(args[1]));
     if (ncols == -1 && PyErr_Occurred()) {
         goto exit;
     }
     if (nargs >= 4) {
-        begin_y = PyLong_AsInt(args[2]);
+        begin_y = _PyValue_AsInt(PyValue_FromObjectBorrow(args[2]));
         if (begin_y == -1 && PyErr_Occurred()) {
             goto exit;
         }
-        begin_x = PyLong_AsInt(args[3]);
+        begin_x = _PyValue_AsInt(PyValue_FromObjectBorrow(args[3]));
         if (begin_x == -1 && PyErr_Occurred()) {
             goto exit;
         }

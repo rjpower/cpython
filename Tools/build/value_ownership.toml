@@ -21,7 +21,7 @@
 #              count   the arity of a variadic object form (PyTuple_Pack),
 #                      an integer literal at the site; the remaining
 #                      arguments are "borrow"
-#   result   status  an int or void that carries no value
+#   result   status  an unchanged scalar or status result that carries no value
 #            object  a new reference to an object of a fixed type (a tuple,
 #                    a cell): unchanged
 #            new     a new reference to any value; the value form returns an
@@ -735,3 +735,403 @@ value = "_PyValue_SequenceList"
 family = "item"
 args = ["borrow"]
 result = "object"
+
+# Additional reviewed value-ownership rows for W5.
+# Append to Tools/build/value_ownership.toml only after the header-mark rollout.
+# This file deliberately has no r27_complete assertion.
+# `status` covers unchanged scalar results for the numeric extractors; update
+# the canonical table's result documentation before integrating those rows.
+
+[[row]]
+object = "PyObject_Format"
+value = "_PyValue_Format"
+family = "repr"
+args = ["borrow", "borrow"]
+result = "object"
+
+[[row]]
+object = "PyObject_ASCII"
+value = "_PyValue_ASCII"
+family = "repr"
+args = ["borrow"]
+result = "object"
+
+[[row]]
+object = "PyObject_DelItemString"
+value = "_PyValue_DelItemString"
+family = "item"
+args = ["borrow", "keep"]
+result = "status"
+
+[[row]]
+object = "PySequence_Check"
+value = "_PyValue_SequenceCheck"
+family = "item"
+args = ["borrow"]
+result = "status"
+
+[[row]]
+object = "PySequence_Size"
+value = "_PyValue_SequenceSize"
+family = "item"
+args = ["borrow"]
+result = "status"
+
+[[row]]
+object = "PySequence_Length"
+value = "_PyValue_SequenceSize"
+family = "item"
+args = ["borrow"]
+result = "status"
+
+[[row]]
+object = "PySequence_InPlaceConcat"
+value = "_PyValue_SequenceInPlaceConcat"
+family = "item"
+args = ["borrow", "borrow"]
+result = "new"
+
+[[row]]
+object = "PySequence_InPlaceRepeat"
+value = "_PyValue_SequenceInPlaceRepeat"
+family = "item"
+args = ["borrow", "keep"]
+result = "new"
+
+[[row]]
+object = "PySequence_SetItem"
+value = "_PyValue_SequenceSetItem"
+family = "item"
+args = ["borrow", "keep", "borrow"]
+result = "status"
+
+[[row]]
+object = "PySequence_DelItem"
+value = "_PyValue_SequenceDelItem"
+family = "item"
+args = ["borrow", "keep"]
+result = "status"
+
+[[row]]
+object = "PySequence_GetSlice"
+value = "_PyValue_SequenceGetSlice"
+family = "item"
+args = ["borrow", "keep", "keep"]
+result = "new"
+
+[[row]]
+object = "PySequence_SetSlice"
+value = "_PyValue_SequenceSetSlice"
+family = "item"
+args = ["borrow", "keep", "keep", "borrow"]
+result = "status"
+
+[[row]]
+object = "PySequence_DelSlice"
+value = "_PyValue_SequenceDelSlice"
+family = "item"
+args = ["borrow", "keep", "keep"]
+result = "status"
+
+[[row]]
+object = "PySequence_Fast"
+value = "_PyValue_SequenceFast"
+family = "item"
+args = ["borrow", "keep"]
+result = "object"
+
+[[row]]
+object = "PySequence_Count"
+value = "_PyValue_SequenceCount"
+family = "item"
+args = ["borrow", "borrow"]
+result = "status"
+
+[[row]]
+object = "PySequence_Index"
+value = "_PyValue_SequenceIndex"
+family = "item"
+args = ["borrow", "borrow"]
+result = "status"
+
+[[row]]
+object = "PyMapping_Check"
+value = "_PyValue_MappingCheck"
+family = "item"
+args = ["borrow"]
+result = "status"
+
+[[row]]
+object = "PyMapping_Size"
+value = "_PyValue_MappingSize"
+family = "item"
+args = ["borrow"]
+result = "status"
+
+[[row]]
+object = "PyMapping_Length"
+value = "_PyValue_MappingSize"
+family = "item"
+args = ["borrow"]
+result = "status"
+
+[[row]]
+object = "PyMapping_GetItemString"
+value = "_PyValue_MappingGetItemString"
+family = "item"
+args = ["borrow", "keep"]
+result = "new"
+
+[[row]]
+object = "PyMapping_SetItemString"
+value = "_PyValue_MappingSetItemString"
+family = "item"
+args = ["borrow", "keep", "borrow"]
+result = "status"
+
+[[row]]
+object = "PyMapping_HasKey"
+value = "_PyValue_MappingHasKey"
+family = "item"
+args = ["borrow", "borrow"]
+result = "status"
+
+[[row]]
+object = "PyMapping_HasKeyString"
+value = "_PyValue_MappingHasKeyString"
+family = "item"
+args = ["borrow", "keep"]
+result = "status"
+
+[[row]]
+object = "PyMapping_HasKeyWithError"
+value = "_PyValue_MappingHasKeyWithError"
+family = "item"
+args = ["borrow", "borrow"]
+result = "status"
+
+[[row]]
+object = "PyMapping_HasKeyStringWithError"
+value = "_PyValue_MappingHasKeyStringWithError"
+family = "item"
+args = ["borrow", "keep"]
+result = "status"
+
+[[row]]
+object = "PyMapping_Keys"
+value = "_PyValue_MappingKeys"
+family = "item"
+args = ["borrow"]
+result = "object"
+
+[[row]]
+object = "PyMapping_Items"
+value = "_PyValue_MappingItems"
+family = "item"
+args = ["borrow"]
+result = "object"
+
+[[row]]
+object = "PyMapping_Values"
+value = "_PyValue_MappingValues"
+family = "item"
+args = ["borrow"]
+result = "object"
+
+[[row]]
+object = "PyObject_LengthHint"
+value = "_PyValue_LengthHint"
+family = "item"
+args = ["borrow", "keep"]
+result = "status"
+
+[[row]]
+object = "PyLong_AsLong"
+value = "_PyValue_AsLong"
+family = "number"
+args = ["borrow"]
+result = "status"
+aliases = ["PyLong_AS_LONG"]
+
+[[row]]
+object = "PyLong_AsLongAndOverflow"
+value = "_PyValue_AsLongAndOverflow"
+family = "number"
+args = ["borrow", "keep"]
+result = "status"
+
+[[row]]
+object = "PyLong_AsSsize_t"
+value = "_PyValue_IntAsSsize_t"
+family = "number"
+args = ["borrow"]
+result = "status"
+
+[[row]]
+object = "PyLong_AsSize_t"
+value = "_PyValue_IntAsSize_t"
+family = "number"
+args = ["borrow"]
+result = "status"
+
+[[row]]
+object = "PyLong_AsUnsignedLong"
+value = "_PyValue_IntAsUnsignedLong"
+family = "number"
+args = ["borrow"]
+result = "status"
+
+[[row]]
+object = "PyLong_AsUnsignedLongMask"
+value = "_PyValue_AsUnsignedLongMask"
+family = "number"
+args = ["borrow"]
+result = "status"
+
+[[row]]
+object = "PyLong_AsInt"
+value = "_PyValue_AsInt"
+family = "number"
+args = ["borrow"]
+result = "status"
+
+[[row]]
+object = "PyLong_AsInt32"
+value = "_PyValue_AsInt32"
+family = "number"
+args = ["borrow", "keep"]
+result = "status"
+
+[[row]]
+object = "PyLong_AsUInt32"
+value = "_PyValue_AsUInt32"
+family = "number"
+args = ["borrow", "keep"]
+result = "status"
+
+[[row]]
+object = "PyLong_AsInt64"
+value = "_PyValue_AsInt64"
+family = "number"
+args = ["borrow", "keep"]
+result = "status"
+
+[[row]]
+object = "PyLong_AsUInt64"
+value = "_PyValue_AsUInt64"
+family = "number"
+args = ["borrow", "keep"]
+result = "status"
+
+[[row]]
+object = "PyLong_AsNativeBytes"
+value = "_PyValue_AsNativeBytes"
+family = "number"
+args = ["borrow", "keep", "keep", "keep"]
+result = "status"
+
+[[row]]
+object = "PyLong_AsDouble"
+value = "_PyValue_IntAsDouble"
+family = "number"
+args = ["borrow"]
+result = "status"
+
+[[row]]
+object = "PyLong_AsVoidPtr"
+value = "_PyValue_IntAsVoidPtr"
+family = "number"
+args = ["borrow"]
+result = "status"
+
+[[row]]
+object = "PyLong_AsLongLong"
+value = "_PyValue_AsLongLong"
+family = "number"
+args = ["borrow"]
+result = "status"
+
+[[row]]
+object = "PyLong_AsUnsignedLongLong"
+value = "_PyValue_IntAsUnsignedLongLong"
+family = "number"
+args = ["borrow"]
+result = "status"
+
+[[row]]
+object = "PyLong_AsUnsignedLongLongMask"
+value = "_PyValue_AsUnsignedLongLongMask"
+family = "number"
+args = ["borrow"]
+result = "status"
+
+[[row]]
+object = "PyLong_AsLongLongAndOverflow"
+value = "_PyValue_AsLongLongAndOverflow"
+family = "number"
+args = ["borrow", "keep"]
+result = "status"
+
+[[row]]
+object = "PyFloat_AsDouble"
+value = "_PyValue_AsDouble"
+family = "number"
+args = ["borrow"]
+result = "status"
+
+# Manual twin inventory: deliberately ignored by value_sweep.load_table.
+# The R27 static inventory checker must validate marks for these as well.
+
+[[manual]]
+object = "PyObject_GetOptionalAttr"
+value = "_PyValue_GetOptionalAttr"
+family = "attr"
+reason = "PyObject ** output and int status become _PyStatusValue; transfer/close owned result by status"
+
+[[manual]]
+object = "_PyObject_LookupSpecial"
+value = "_PyValue_LookupSpecial"
+family = "attr"
+reason = "owned PyObject * or NULL becomes _PyStatusValue; preserve missing-without-error distinction"
+
+[[manual]]
+object = "PyMapping_GetOptionalItem"
+value = "_PyValue_GetOptionalItem"
+family = "item"
+reason = "PyObject ** output and int status become _PyStatusValue; preserve missing KeyError clearing"
+
+[[manual]]
+object = "PyIter_Next"
+value = "_PyValue_IterNext"
+family = "item"
+reason = "owned PyObject * or NULL becomes _PyStatusValue with NEXT/RETURN/ERROR; preserve exception clearing"
+
+[[manual]]
+object = "PyIter_Send"
+value = "_PyValue_Send"
+family = "item"
+reason = "PySendResult plus PyObject ** output becomes _PyStatusValue; preserve yielded versus returned value"
+
+[[manual]]
+object = "PyObject_Call"
+value = "_PyValue_Call"
+family = "call"
+reason = "value twin adds PyThreadState * first parameter and returns owned PyValue"
+
+[[manual]]
+object = "PyObject_CallOneArg"
+value = "_PyValue_CallOneArg"
+family = "call"
+reason = "value twin adds PyThreadState * first parameter and returns owned PyValue"
+
+[[manual]]
+object = "PyObject_Vectorcall"
+value = "_PyValue_Vectorcall"
+family = "call"
+reason = "PyObject *const * argument window becomes const PyValue *; explicit value window lifetime required"
+
+[[manual]]
+object = "PyObject_CallNoArgs"
+value = "_PyValue_CallNoArgs"
+family = "call"
+reason = "value twin adds PyThreadState * first parameter and returns owned PyValue"

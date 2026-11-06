@@ -33,6 +33,7 @@
 
 #include "pycore_dict.h"          // PyDict_GetValue()
 #include "pycore_list.h"          // PyList_AppendValue()
+#include "pycore_long_value.h"    // _PyValue_AsDouble()
 #include "pycore_pyerrors.h"      // _PyErr_FormatFromCause()
 #include "pycore_tuple.h"         // PyTuple_GetValue()
 #include "pycore_value.h"         // PyValue
@@ -617,7 +618,7 @@ bind_param(pysqlite_state *state, pysqlite_Statement *self, int pos,
             break;
         }
         case TYPE_FLOAT: {
-            double value = PyFloat_AsDouble(parameter);
+            double value = _PyValue_AsDouble(PyValue_FromObjectBorrow(parameter));
             rc = (value == -1 && PyErr_Occurred())
                 ? SQLITE_ERROR
                 : sqlite3_bind_double(self->st, pos, value);
@@ -693,14 +694,14 @@ bind_parameters(pysqlite_state *state, pysqlite_Statement *self,
     num_params_needed = sqlite3_bind_parameter_count(self->st);
     Py_END_ALLOW_THREADS
 
-    if (PyTuple_CheckExact(parameters) || PyList_CheckExact(parameters) || (!PyDict_Check(parameters) && PySequence_Check(parameters))) {
+    if (PyTuple_CheckExact(parameters) || PyList_CheckExact(parameters) || (!PyDict_Check(parameters) && _PyValue_SequenceCheck(PyValue_FromObjectBorrow(parameters)))) {
         /* parameters passed as sequence */
         if (PyTuple_CheckExact(parameters)) {
             num_params = PyTuple_GET_SIZE(parameters);
         } else if (PyList_CheckExact(parameters)) {
             num_params = PyList_GET_SIZE(parameters);
         } else {
-            num_params = PySequence_Size(parameters);
+            num_params = _PyValue_SequenceSize(PyValue_FromObjectBorrow(parameters));
             if (num_params == -1) {
                 return;
             }

@@ -3775,7 +3775,7 @@ count_step_is_one(PyValueBorrow step)
     if (!PyValue_LongCheck(step)) {
         return 0;
     }
-    long v = PyLong_AsLong(PyValue_AsKnownObjectBorrow(step));
+    long v = _PyValue_AsLong(step);
     if (v == -1 && PyErr_Occurred()) {
         PyErr_Clear();
     }

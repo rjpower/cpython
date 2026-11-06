@@ -25,6 +25,7 @@ Data members:
 #include "pycore_interpframe.h"   // _PyFrame_GetFirstComplete()
 #include "pycore_list.h"          // PyList_AppendValue()
 #include "pycore_long.h"          // _PY_LONG_MAX_STR_DIGITS_THRESHOLD
+#include "pycore_long_value.h"    // _PyValue_IntAsSsize_t()
 #include "pycore_modsupport.h"    // _PyModule_CreateInitialized()
 #include "pycore_namespace.h"     // _PyNamespace_New()
 #include "pycore_object.h"        // _PyObject_DebugTypeStats()
@@ -2057,7 +2058,7 @@ _PySys_GetSizeOf(PyObject *o)
     if (res == NULL)
         return (size_t)-1;
 
-    size = PyLong_AsSsize_t(res);
+    size = _PyValue_IntAsSsize_t(PyValue_FromObjectBorrow(res));
     Py_DECREF(res);
     if (size == -1 && _PyErr_Occurred(tstate))
         return (size_t)-1;

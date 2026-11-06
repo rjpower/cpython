@@ -1052,7 +1052,7 @@ CDataType_in_dll_impl(PyObject *type, PyTypeObject *cls, PyValueBorrow dll,
         Py_DECREF(obj);
         return PyValue_NULL;
     }
-    handle = (void *)PyLong_AsVoidPtr(obj);
+    handle = (void *)_PyValue_IntAsVoidPtr(PyValue_FromObjectBorrow(obj));
     Py_DECREF(obj);
     if (PyErr_Occurred()) {
         PyErr_SetString(PyExc_ValueError,
@@ -1805,7 +1805,7 @@ PyCArrayType_init(PyObject *self, PyObject *args, PyObject *kwds)
         goto error;
     }
 
-    length = PyLong_AsSsize_t(length_attr);
+    length = _PyValue_IntAsSsize_t(PyValue_FromObjectBorrow(length_attr));
     Py_DECREF(length_attr);
     if (length == -1 && PyErr_Occurred()) {
         if (PyErr_ExceptionMatches(PyExc_OverflowError)) {
@@ -2913,7 +2913,7 @@ make_funcptrtype_dict(ctypes_state *st, PyObject *attrdict, StgInfo *stginfo)
         Py_XDECREF(ob);
         return -1;
     }
-    stginfo->flags = PyLong_AsUnsignedLongMask(ob) | TYPEFLAG_ISPOINTER;
+    stginfo->flags = _PyValue_AsUnsignedLongMask(PyValue_FromObjectBorrow(ob)) | TYPEFLAG_ISPOINTER;
     Py_DECREF(ob);
 
     /* _argtypes_ is optional... */
@@ -4253,7 +4253,7 @@ PyCFuncPtr_FromDll(PyTypeObject *type, PyObject *args, PyObject *kwds)
         Py_DECREF(obj);
         return NULL;
     }
-    handle = (void *)PyLong_AsVoidPtr(obj);
+    handle = (void *)_PyValue_IntAsVoidPtr(PyValue_FromObjectBorrow(obj));
     Py_DECREF(obj);
     if (PyErr_Occurred()) {
         PyErr_SetString(PyExc_ValueError,
@@ -4395,7 +4395,7 @@ PyCFuncPtr_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
     int arg0_is_long = PyLong_Check(arg0);
     void *ptr = NULL;
     if (1 == PyTuple_GET_SIZE(args) && arg0_is_long) {
-        ptr = PyLong_AsVoidPtr(arg0);
+        ptr = _PyValue_IntAsVoidPtr(PyValue_FromObjectBorrow(arg0));
     }
     Py_DECREF(arg0);
 
@@ -4630,7 +4630,7 @@ _build_callargs(ctypes_state *st, PyCFuncPtrObject *self, PyObject *argtypes,
         if (flagobj == NULL) {
             goto error;
         }
-        flag = PyLong_AsUnsignedLongMask(flagobj);
+        flag = _PyValue_AsUnsignedLongMask(PyValue_FromObjectBorrow(flagobj));
         Py_DECREF(flagobj);
         if (tsize > 1) {
             PyValue name_v2 = PyTuple_GetValue(item, 1);
@@ -5334,7 +5334,7 @@ Array_init(PyObject *self, PyObject *args, PyObject *kw)
         v = PyValue_IsNull(v_v5) ? NULL : _PyValue_AsObjectStealAt(v_v5, BOX_SITE_TUPLE);
         if (v == NULL)
             return -1;
-        int err = PySequence_SetItem(self, i, v);
+        int err = _PyValue_SequenceSetItem(PyValue_FromObjectBorrow(self), i, PyValue_FromObjectBorrow(v));
         Py_DECREF(v);
         if (err == -1)
             return -1;
@@ -5598,7 +5598,7 @@ Array_ass_subscript_impl(PyObject *myself, PyObject *item, PyObject *value)
             (step > 0 && start > stop))
             stop = start;
 
-        otherlen = PySequence_Length(value);
+        otherlen = _PyValue_SequenceSize(PyValue_FromObjectBorrow(value));
         if (otherlen != slicelen) {
             PyErr_SetString(PyExc_ValueError,
                 "Can only assign sequence of same size");

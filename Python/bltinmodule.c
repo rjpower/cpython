@@ -1602,19 +1602,18 @@ builtin_id_impl(PyModuleDef *self, PyValueBorrow v)
         return PyValue_NULL;
     }
 
-    /* The audit event carries the id as an object: box it only when a hook
-       will see the event. */
+    /* Keep the owned id rooted in the event tuple across audit callbacks. */
     PyThreadState *tstate = _PyThreadState_GET();
     if (!_PySys_AuditEnabled(tstate)) {
         return id;
     }
-    PyObject *id_o = _PyValue_AsObjectAt(id, BOX_SITE_PARSER);
-    if (id_o == NULL) {
+    PyObject *args = _PyTuple_FromValueArray(&id, 1);
+    if (args == NULL) {
         PyValue_CLOSE(id);
         return PyValue_NULL;
     }
-    int audit = PySys_Audit("builtins.id", "O", id_o);
-    Py_DECREF(id_o);
+    int audit = PySys_AuditTuple("builtins.id", args);
+    Py_DECREF(args);
     if (audit < 0) {
         PyValue_CLOSE(id);
         return PyValue_NULL;

@@ -1230,18 +1230,27 @@ module_repr(PyObject *self)
 /* Check if the "_initializing" attribute of the module spec is set to true.
  */
 int
+_PyModuleSpec_IsInitializingValue(PyValueBorrow spec)
+{
+    if (PyValue_IsNull(spec)) {
+        return 0;
+    }
+    _PyStatusValue value = _PyValue_GetOptionalAttr(spec, &_Py_ID(_initializing));
+    if (value.status > 0) {
+        int rc = _PyValue_IsTrue(value.value);
+        PyValue_CLOSE(value.value);
+        return rc;
+    }
+    return value.status;
+}
+
+int
 _PyModuleSpec_IsInitializing(PyObject *spec)
 {
     if (spec == NULL) {
         return 0;
     }
-    PyObject *value;
-    int rc = PyObject_GetOptionalAttr(spec, &_Py_ID(_initializing), &value);
-    if (rc > 0) {
-        rc = _PyValue_IsTrue(PyValue_FromObjectBorrow(value));
-        Py_DECREF(value);
-    }
-    return rc;
+    return _PyModuleSpec_IsInitializingValue(PyValue_FromObjectBorrow(spec));
 }
 
 /* Check if the submodule name is in the "_uninitialized_submodules" attribute
@@ -1266,31 +1275,45 @@ _PyModuleSpec_IsUninitializedSubmodule(PyObject *spec, PyObject *name)
 int
 _PyModuleSpec_GetFileOrigin(PyObject *spec, PyObject **p_origin)
 {
-    PyObject *has_location = NULL;
-    int rc = PyObject_GetOptionalAttr(spec, &_Py_ID(has_location), &has_location);
-    if (rc <= 0) {
-        return rc;
+    PyValue origin = PyValue_NULL;
+    int status = _PyModuleSpec_GetFileOriginValue(
+        PyValue_FromObjectBorrow(spec), &origin);
+    if (status > 0) {
+        *p_origin = PyValue_AsKnownObjectSteal(origin);
+    }
+    return status;
+}
+
+int
+_PyModuleSpec_GetFileOriginValue(PyValueBorrow spec, PyValue *p_origin)
+{
+    *p_origin = PyValue_NULL;
+    _PyStatusValue has_location = _PyValue_GetOptionalAttr(
+        spec, &_Py_ID(has_location));
+    if (has_location.status <= 0) {
+        return has_location.status;
     }
     // If origin is not a location, or doesn't exist, or is not a str, we could consider falling
     // back to module.__file__. But the cases in which module.__file__ is not __spec__.origin
     // are cases in which we probably shouldn't be guessing.
-    rc = _PyValue_IsTrue(PyValue_FromObjectBorrow(has_location));
-    Py_DECREF(has_location);
+    int rc = _PyValue_IsTrue(has_location.value);
+    PyValue_CLOSE(has_location.value);
     if (rc <= 0) {
         return rc;
     }
     // has_location is true, so origin is a location
-    PyObject *origin = NULL;
-    rc = PyObject_GetOptionalAttr(spec, &_Py_ID(origin), &origin);
-    if (rc <= 0) {
-        return rc;
+    _PyStatusValue origin = _PyValue_GetOptionalAttr(spec, &_Py_ID(origin));
+    if (origin.status <= 0) {
+        return origin.status;
     }
-    assert(origin != NULL);
-    if (!PyUnicode_Check(origin)) {
-        Py_DECREF(origin);
+    assert(!PyValue_IsNull(origin.value));
+    if (!PyValue_IsObject(origin.value) ||
+        !PyUnicode_Check(PyValue_AsKnownObjectBorrow(origin.value)))
+    {
+        PyValue_CLOSE(origin.value);
         return 0;
     }
-    *p_origin = origin;
+    *p_origin = origin.value;
     return 1;
 }
 

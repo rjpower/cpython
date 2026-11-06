@@ -53,6 +53,23 @@ _getbytevalue(PyValueBorrow arg, int *value)
     return 1;
 }
 
+static _PyStatusValue
+bytearray_iter_next_saved(PyObject *it, iternextfunc object_next,
+                          _Py_iternextvaluefunc value_next)
+{
+    if (value_next != NULL) {
+        return value_next(it);
+    }
+    PyObject *item = object_next(it);
+    if (item != NULL) {
+        return (_PyStatusValue){PYGEN_NEXT, PyValue_FromObjectSteal(item)};
+    }
+    if (!PyErr_Occurred()) {
+        return (_PyStatusValue){PYGEN_RETURN, PyValue_NULL};
+    }
+    return (_PyStatusValue){PYGEN_ERROR, PyValue_NULL};
+}
+
 static inline void
 bytearray_write_trailing_null_byte(PyByteArrayObject *self)
 {
@@ -1055,7 +1072,8 @@ bytearray___init___impl(PyByteArrayObject *self, PyValueBorrow arg,
 {
     Py_ssize_t count;
     PyObject *it;
-    PyObject *(*iternext)(PyObject *);
+    iternextfunc iternext;
+    _Py_iternextvaluefunc iternext_value;
 
     /* Disallow any __init__ call if the object is not resizable (has exports)
        to make the handling of non-null `source` init values simpler. */
@@ -1220,27 +1238,39 @@ slowpath:
         }
         return -1;
     }
-    iternext = *Py_TYPE(it)->tp_iternext;
+    PyTypeObject *it_type = Py_TYPE(it);
+    /* Preserve the original cached-slot behavior across iterator callbacks. */
+    iternext = it_type->tp_iternext;
+    iternext_value = _PyType_VALUE_SLOT(it_type, iternext);
+    if (iternext_value != NULL) {
+        _PyType_CHECK_VALUE_ROW(it_type, _Py_VALUE_SLOT_INDEX_iternext);
+    }
 
     /* Run the iterator to exhaustion */
     for (;;) {
-        PyObject *item;
+        PyValue item;
+        _PyStatusValue step;
         int rc, value;
 
         /* Get the next item */
-        item = iternext(it);
-        if (item == NULL) {
-            if (PyErr_Occurred()) {
-                if (!PyErr_ExceptionMatches(PyExc_StopIteration))
-                    goto error;
-                PyErr_Clear();
-            }
+        step = bytearray_iter_next_saved(it, iternext, iternext_value);
+        if (step.status == PYGEN_RETURN) {
+            PyValue_XCLOSE(step.value);
             break;
         }
+        if (step.status == PYGEN_ERROR) {
+            if (!PyErr_ExceptionMatches(PyExc_StopIteration)) {
+                goto error;
+            }
+            PyErr_Clear();
+            break;
+        }
+        assert(step.status == PYGEN_NEXT);
+        item = step.value;
 
         /* Interpret it as an int (__index__) */
-        rc = _getbytevalue(PyValue_FromObjectBorrow(item), &value);
-        Py_DECREF(item);
+        rc = _getbytevalue(PyValue_Borrow(item), &value);
+        PyValue_CLOSE(item);
         if (!rc)
             goto error;
 

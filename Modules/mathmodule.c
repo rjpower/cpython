@@ -2404,6 +2404,46 @@ long_add_would_overflow(long a, long b)
     return (a > 0) ? (b > LONG_MAX - a) : (b < LONG_MIN - a);
 }
 
+static bool
+math_sumprod_float_exact(PyValueBorrow value)
+{
+    return PyValue_IsInlineFloat(value) ||
+        (PyValue_IsObject(value) &&
+         PyFloat_CheckExact(PyValue_AsKnownObjectBorrow(value)));
+}
+
+static double
+math_sumprod_as_float(PyValueBorrow value)
+{
+    return PyValue_IsInlineFloat(value)
+        ? PyValue_InlineFloat(value)
+        : PyFloat_AS_DOUBLE(PyValue_AsKnownObjectBorrow(value));
+}
+
+static bool
+math_sumprod_bool(PyValueBorrow value)
+{
+    return PyValue_IsObject(value) &&
+        PyBool_Check(PyValue_AsKnownObjectBorrow(value));
+}
+
+static _PyStatusValue
+math_sumprod_iter_step(PyObject *iter, iternextfunc object_next,
+                       _Py_iternextvaluefunc value_next)
+{
+    if (value_next != NULL) {
+        return value_next(iter);
+    }
+    PyObject *item = object_next(iter);
+    if (item != NULL) {
+        return (_PyStatusValue){PYGEN_NEXT, PyValue_FromObjectSteal(item)};
+    }
+    if (!PyErr_Occurred()) {
+        return (_PyStatusValue){PYGEN_RETURN, PyValue_NULL};
+    }
+    return (_PyStatusValue){PYGEN_ERROR, PyValue_NULL};
+}
+
 /*[clinic input]
 math.sumprod
 
@@ -2425,9 +2465,12 @@ static PyValue
 math_sumprod_impl(PyObject *module, PyValueBorrow p, PyValueBorrow q)
 /*[clinic end generated code: output=3a22f57df4a48d49 input=a2880317828c61d2]*/
 {
-    PyObject *p_i = NULL, *q_i = NULL, *term_i = NULL, *new_total = NULL;
-    PyObject *p_it, *q_it, *total;
+    PyValue p_i = PyValue_NULL, q_i = PyValue_NULL;
+    PyValue term_i = PyValue_NULL, new_total = PyValue_NULL;
+    PyObject *p_it, *q_it;
+    PyValue total;
     iternextfunc p_next, q_next;
+    _Py_iternextvaluefunc p_next_value, q_next_value;
     bool p_stopped = false, q_stopped = false;
     bool int_path_enabled = true, int_total_in_use = false;
     bool flt_path_enabled = true, flt_total_in_use = false;
@@ -2443,45 +2486,70 @@ math_sumprod_impl(PyObject *module, PyValueBorrow p, PyValueBorrow q)
         Py_DECREF(p_it);
         return PyValue_NULL;
     }
-    total = PyLong_FromLong(0);
-    if (total == NULL) {
+    total = PyValue_FromInt64(0);
+    if (PyValue_IsNull(total)) {
         Py_DECREF(p_it);
         Py_DECREF(q_it);
         return PyValue_NULL;
     }
-    p_next = *Py_TYPE(p_it)->tp_iternext;
-    q_next = *Py_TYPE(q_it)->tp_iternext;
+    /* Capture both rows to preserve the original cached-slot behavior. */
+    PyTypeObject *p_type = Py_TYPE(p_it);
+    PyTypeObject *q_type = Py_TYPE(q_it);
+    p_next = p_type->tp_iternext;
+    q_next = q_type->tp_iternext;
+    p_next_value = _PyType_VALUE_SLOT(p_type, iternext);
+    q_next_value = _PyType_VALUE_SLOT(q_type, iternext);
+    if (p_next_value != NULL) {
+        _PyType_CHECK_VALUE_ROW(p_type, _Py_VALUE_SLOT_INDEX_iternext);
+    }
+    if (q_next_value != NULL) {
+        _PyType_CHECK_VALUE_ROW(q_type, _Py_VALUE_SLOT_INDEX_iternext);
+    }
     while (1) {
         bool finished;
 
-        assert (p_i == NULL);
-        assert (q_i == NULL);
-        assert (term_i == NULL);
-        assert (new_total == NULL);
+        assert (PyValue_IsNull(p_i));
+        assert (PyValue_IsNull(q_i));
+        assert (PyValue_IsNull(term_i));
+        assert (PyValue_IsNull(new_total));
 
         assert (p_it != NULL);
         assert (q_it != NULL);
-        assert (total != NULL);
+        assert (!PyValue_IsNull(total));
 
-        p_i = p_next(p_it);
-        if (p_i == NULL) {
-            if (PyErr_Occurred()) {
-                if (!PyErr_ExceptionMatches(PyExc_StopIteration)) {
-                    goto err_exit;
-                }
-                PyErr_Clear();
-            }
+        _PyStatusValue p_step = math_sumprod_iter_step(
+            p_it, p_next, p_next_value);
+        if (p_step.status == PYGEN_NEXT) {
+            p_i = p_step.value;
+        }
+        else if (p_step.status == PYGEN_RETURN) {
+            PyValue_XCLOSE(p_step.value);
             p_stopped = true;
         }
-        q_i = q_next(q_it);
-        if (q_i == NULL) {
-            if (PyErr_Occurred()) {
-                if (!PyErr_ExceptionMatches(PyExc_StopIteration)) {
-                    goto err_exit;
-                }
-                PyErr_Clear();
-            }
+        else if (p_step.status == PYGEN_ERROR &&
+                 PyErr_ExceptionMatches(PyExc_StopIteration)) {
+            PyErr_Clear();
+            p_stopped = true;
+        }
+        else {
+            goto err_exit;
+        }
+        _PyStatusValue q_step = math_sumprod_iter_step(
+            q_it, q_next, q_next_value);
+        if (q_step.status == PYGEN_NEXT) {
+            q_i = q_step.value;
+        }
+        else if (q_step.status == PYGEN_RETURN) {
+            PyValue_XCLOSE(q_step.value);
             q_stopped = true;
+        }
+        else if (q_step.status == PYGEN_ERROR &&
+                 PyErr_ExceptionMatches(PyExc_StopIteration)) {
+            PyErr_Clear();
+            q_stopped = true;
+        }
+        else {
+            goto err_exit;
         }
         if (p_stopped != q_stopped) {
             PyErr_Format(PyExc_ValueError, "Inputs are not the same length");
@@ -2491,15 +2559,16 @@ math_sumprod_impl(PyObject *module, PyValueBorrow p, PyValueBorrow q)
 
         if (int_path_enabled) {
 
-            if (!finished && PyLong_CheckExact(p_i) & PyLong_CheckExact(q_i)) {
+            if (!finished && PyValue_LongCheckExact(p_i) &&
+                PyValue_LongCheckExact(q_i)) {
                 int overflow;
                 long int_p, int_q, int_prod;
 
-                int_p = _PyValue_AsLongAndOverflow(PyValue_FromObjectBorrow(p_i), &overflow);
+                int_p = _PyValue_AsLongAndOverflow(p_i, &overflow);
                 if (overflow) {
                     goto finalize_int_path;
                 }
-                int_q = _PyValue_AsLongAndOverflow(PyValue_FromObjectBorrow(q_i), &overflow);
+                int_q = _PyValue_AsLongAndOverflow(q_i, &overflow);
                 if (overflow) {
                     goto finalize_int_path;
                 }
@@ -2512,8 +2581,8 @@ math_sumprod_impl(PyObject *module, PyValueBorrow p, PyValueBorrow q)
                 }
                 int_total += int_prod;
                 int_total_in_use = true;
-                Py_CLEAR(p_i);
-                Py_CLEAR(q_i);
+                PyValue_CLEAR(p_i);
+                PyValue_CLEAR(q_i);
                 continue;
             }
 
@@ -2521,18 +2590,19 @@ math_sumprod_impl(PyObject *module, PyValueBorrow p, PyValueBorrow q)
             // We're finished, overflowed, or have a non-int
             int_path_enabled = false;
             if (int_total_in_use) {
-                term_i = PyLong_FromLong(int_total);
-                if (term_i == NULL) {
+                term_i = PyValue_FromInt64(int_total);
+                if (PyValue_IsNull(term_i)) {
                     goto err_exit;
                 }
-                PyValue new_total_v = _PyValue_Add(PyValue_FromObjectBorrow(total), PyValue_FromObjectBorrow(term_i));
-                new_total = PyValue_IsNull(new_total_v) ? NULL : _PyValue_AsObjectStealAt(new_total_v, BOX_SITE_NUMBER);
-                if (new_total == NULL) {
+                new_total = _PyValue_Add(total, term_i);
+                if (PyValue_IsNull(new_total)) {
                     goto err_exit;
                 }
-                Py_SETREF(total, new_total);
-                new_total = NULL;
-                Py_CLEAR(term_i);
+                PyValue old_total = total;
+                total = new_total;
+                new_total = PyValue_NULL;
+                PyValue_CLOSE(old_total);
+                PyValue_CLEAR(term_i);
                 int_total = 0;   // An ounce of prevention, ...
                 int_total_in_use = false;
             }
@@ -2542,25 +2612,29 @@ math_sumprod_impl(PyObject *module, PyValueBorrow p, PyValueBorrow q)
 
             if (!finished) {
                 double flt_p, flt_q;
-                bool p_type_float = PyFloat_CheckExact(p_i);
-                bool q_type_float = PyFloat_CheckExact(q_i);
+                bool p_type_float = math_sumprod_float_exact(PyValue_Borrow(p_i));
+                bool q_type_float = math_sumprod_float_exact(PyValue_Borrow(q_i));
                 if (p_type_float && q_type_float) {
-                    flt_p = PyFloat_AS_DOUBLE(p_i);
-                    flt_q = PyFloat_AS_DOUBLE(q_i);
-                } else if (p_type_float && (PyLong_CheckExact(q_i) || PyBool_Check(q_i))) {
+                    flt_p = math_sumprod_as_float(PyValue_Borrow(p_i));
+                    flt_q = math_sumprod_as_float(PyValue_Borrow(q_i));
+                } else if (p_type_float &&
+                           (PyValue_LongCheckExact(q_i) ||
+                            math_sumprod_bool(PyValue_Borrow(q_i)))) {
                     /* We care about float/int pairs and int/float pairs because
                        they arise naturally in several use cases such as price
                        times quantity, measurements with integer weights, or
                        data selected by a vector of bools. */
-                    flt_p = PyFloat_AS_DOUBLE(p_i);
-                    flt_q = _PyValue_IntAsDouble(PyValue_FromObjectBorrow(q_i));
+                    flt_p = math_sumprod_as_float(PyValue_Borrow(p_i));
+                    flt_q = _PyValue_IntAsDouble(PyValue_Borrow(q_i));
                     if (flt_q == -1.0 && PyErr_Occurred()) {
                         PyErr_Clear();
                         goto finalize_flt_path;
                     }
-                } else if (q_type_float && (PyLong_CheckExact(p_i) || PyBool_Check(p_i))) {
-                    flt_q = PyFloat_AS_DOUBLE(q_i);
-                    flt_p = _PyValue_IntAsDouble(PyValue_FromObjectBorrow(p_i));
+                } else if (q_type_float &&
+                           (PyValue_LongCheckExact(p_i) ||
+                            math_sumprod_bool(PyValue_Borrow(p_i)))) {
+                    flt_q = math_sumprod_as_float(PyValue_Borrow(q_i));
+                    flt_p = _PyValue_IntAsDouble(PyValue_Borrow(p_i));
                     if (flt_p == -1.0 && PyErr_Occurred()) {
                         PyErr_Clear();
                         goto finalize_flt_path;
@@ -2572,8 +2646,8 @@ math_sumprod_impl(PyObject *module, PyValueBorrow p, PyValueBorrow q)
                 if (isfinite(new_flt_total.hi)) {
                     flt_total = new_flt_total;
                     flt_total_in_use = true;
-                    Py_CLEAR(p_i);
-                    Py_CLEAR(q_i);
+                    PyValue_CLEAR(p_i);
+                    PyValue_CLEAR(q_i);
                     continue;
                 }
             }
@@ -2582,18 +2656,19 @@ math_sumprod_impl(PyObject *module, PyValueBorrow p, PyValueBorrow q)
             // We're finished, overflowed, have a non-float, or got a non-finite value
             flt_path_enabled = false;
             if (flt_total_in_use) {
-                term_i = PyFloat_FromDouble(tl_to_d(flt_total));
-                if (term_i == NULL) {
+                term_i = PyValue_FromDouble(tl_to_d(flt_total));
+                if (PyValue_IsNull(term_i)) {
                     goto err_exit;
                 }
-                PyValue new_total_v2 = _PyValue_Add(PyValue_FromObjectBorrow(total), PyValue_FromObjectBorrow(term_i));
-                new_total = PyValue_IsNull(new_total_v2) ? NULL : _PyValue_AsObjectStealAt(new_total_v2, BOX_SITE_NUMBER);
-                if (new_total == NULL) {
+                new_total = _PyValue_Add(total, term_i);
+                if (PyValue_IsNull(new_total)) {
                     goto err_exit;
                 }
-                Py_SETREF(total, new_total);
-                new_total = NULL;
-                Py_CLEAR(term_i);
+                PyValue old_total = total;
+                total = new_total;
+                new_total = PyValue_NULL;
+                PyValue_CLOSE(old_total);
+                PyValue_CLEAR(term_i);
                 flt_total = tl_zero;
                 flt_total_in_use = false;
             }
@@ -2604,36 +2679,36 @@ math_sumprod_impl(PyObject *module, PyValueBorrow p, PyValueBorrow q)
         if (finished) {
             goto normal_exit;
         }
-        PyValue term_i_v = _PyValue_Multiply(PyValue_FromObjectBorrow(p_i), PyValue_FromObjectBorrow(q_i));
-        term_i = PyValue_IsNull(term_i_v) ? NULL : _PyValue_AsObjectStealAt(term_i_v, BOX_SITE_NUMBER);
-        if (term_i == NULL) {
+        term_i = _PyValue_Multiply(p_i, q_i);
+        if (PyValue_IsNull(term_i)) {
             goto err_exit;
         }
-        PyValue new_total_v3 = _PyValue_Add(PyValue_FromObjectBorrow(total), PyValue_FromObjectBorrow(term_i));
-        new_total = PyValue_IsNull(new_total_v3) ? NULL : _PyValue_AsObjectStealAt(new_total_v3, BOX_SITE_NUMBER);
-        if (new_total == NULL) {
+        new_total = _PyValue_Add(total, term_i);
+        if (PyValue_IsNull(new_total)) {
             goto err_exit;
         }
-        Py_SETREF(total, new_total);
-        new_total = NULL;
-        Py_CLEAR(p_i);
-        Py_CLEAR(q_i);
-        Py_CLEAR(term_i);
+        PyValue old_total = total;
+        total = new_total;
+        new_total = PyValue_NULL;
+        PyValue_CLOSE(old_total);
+        PyValue_CLEAR(p_i);
+        PyValue_CLEAR(q_i);
+        PyValue_CLEAR(term_i);
     }
 
  normal_exit:
     Py_DECREF(p_it);
     Py_DECREF(q_it);
-    return _PyValue_FromObjectResult(total);
+    return total;
 
  err_exit:
     Py_DECREF(p_it);
     Py_DECREF(q_it);
-    Py_DECREF(total);
-    Py_XDECREF(p_i);
-    Py_XDECREF(q_i);
-    Py_XDECREF(term_i);
-    Py_XDECREF(new_total);
+    PyValue_XCLOSE(total);
+    PyValue_XCLOSE(p_i);
+    PyValue_XCLOSE(q_i);
+    PyValue_XCLOSE(term_i);
+    PyValue_XCLOSE(new_total);
     return PyValue_NULL;
 }
 

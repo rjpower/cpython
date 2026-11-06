@@ -1415,7 +1415,9 @@ call_getattro(PyTypeObject *tp, PyValueBorrow v, PyObject *name)
                      tp->tp_name, name);
         return PyValue_NULL;
     }
-    PyObject *self = _PyValue_AdapterBox(v, BOX_SITE_ATTRIBUTE, tp->tp_getattro);
+    PyObject *self = tp->tp_getattro != NULL
+        ? _PyValue_AdapterBox(v, BOX_SITE_ATTRIBUTE, tp->tp_getattro)
+        : _PyValue_AdapterBox(v, BOX_SITE_ATTRIBUTE, tp->tp_getattr);
     if (self == NULL) {
         return PyValue_NULL;
     }
@@ -1582,14 +1584,18 @@ int
     }
     if (tp->tp_setattro != NULL || tp->tp_setattr != NULL) {
         // The adapter: an inline receiver or value is boxed for the call.
-        PyObject *self = _PyValue_AdapterBox(v, BOX_SITE_ATTRIBUTE, tp->tp_setattro);
+        PyObject *self = tp->tp_setattro != NULL
+            ? _PyValue_AdapterBox(v, BOX_SITE_ATTRIBUTE, tp->tp_setattro)
+            : _PyValue_AdapterBox(v, BOX_SITE_ATTRIBUTE, tp->tp_setattr);
         PyObject *w = NULL;
         err = -1;
         if (self == NULL) {
             goto adapted;
         }
         if (!PyValue_IsNull(value)) {
-            w = _PyValue_AdapterBox(value, BOX_SITE_ATTRIBUTE, tp->tp_setattro);
+            w = tp->tp_setattro != NULL
+                ? _PyValue_AdapterBox(value, BOX_SITE_ATTRIBUTE, tp->tp_setattro)
+                : _PyValue_AdapterBox(value, BOX_SITE_ATTRIBUTE, tp->tp_setattr);
             if (w == NULL) {
                 _PyValue_AdapterRelease(v, self);
                 goto adapted;

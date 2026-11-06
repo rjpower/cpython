@@ -383,6 +383,97 @@ class ImportTests(unittest.TestCase):
         with self.assertRaises(ImportError):
             from importlib import something_that_should_not_exist_anywhere
 
+    def test_from_import_inline_attribute_value(self):
+        module = ModuleType("inline_import_source")
+        module.value = 42
+        namespace = {
+            "__builtins__": {"__import__": lambda *args: module},
+        }
+        exec("from inline_import_source import value", namespace)
+        self.assertEqual(namespace["value"], 42)
+
+    def test_from_import_inline_source_value(self):
+        namespace = {
+            "__builtins__": {"__import__": lambda *args: 17},
+        }
+        with self.assertRaises(ImportError):
+            exec("from inline_import_source import value", namespace)
+
+    def test_from_import_inline_spec_value(self):
+        class ImportSource:
+            __name__ = "inline_spec_source"
+            __spec__ = 42
+
+            def __getattr__(self, name):
+                raise AttributeError(name)
+
+        namespace = {
+            "__builtins__": {"__import__": lambda *args: ImportSource()},
+        }
+        with self.assertRaisesRegex(
+                ImportError,
+                r"cannot import name 'value' from 'inline_spec_source' "
+                r"\(unknown location\)"):
+            exec("from inline_spec_source import value", namespace)
+
+    def test_from_import_error_cleanup_order(self):
+        events = []
+
+        class EphemeralName(str):
+            def __del__(self):
+                events.append("name")
+
+        class BadTruth:
+            def __bool__(self):
+                return 42
+
+        class EphemeralSpec:
+            @property
+            def has_location(self):
+                return BadTruth()
+
+            def __del__(self):
+                events.append("spec")
+
+        class ImportSource:
+            def __getattribute__(self, name):
+                if name == "__name__":
+                    return EphemeralName("cleanup_order_source")
+                if name == "__spec__":
+                    return EphemeralSpec()
+                if name == "missing":
+                    raise AttributeError(name)
+                return object.__getattribute__(self, name)
+
+        namespace = {
+            "__builtins__": {"__import__": lambda *args: ImportSource()},
+        }
+        with self.assertRaisesRegex(TypeError, "must return a bool"):
+            exec("from cleanup_order_source import missing", namespace)
+        self.assertEqual(events, ["spec", "name"])
+
+    def test_from_import_missing_attribute_lookup_once(self):
+        lookups = []
+
+        class ImportSource:
+            def __getattribute__(self, name):
+                if name == "value":
+                    lookups.append(name)
+                    raise AttributeError(name)
+                if name == "__name__":
+                    return "custom_import_source"
+                if name == "__spec__":
+                    return None
+                return object.__getattribute__(self, name)
+
+        source = ImportSource()
+        namespace = {
+            "__builtins__": {"__import__": lambda *args: source},
+        }
+        with self.assertRaises(ImportError):
+            exec("from custom_import_source import value", namespace)
+        self.assertEqual(lookups, ["value"])
+
     def test_from_import_missing_attr_has_name_and_path(self):
         with CleanImport('os'):
             import os

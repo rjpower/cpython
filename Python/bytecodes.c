@@ -3417,18 +3417,18 @@ dummy_func(
 
         inst(IMPORT_FROM, (from -- from, res)) {
             PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
-            PyObject *res_o;
-            if (PyLazyImport_CheckExact(PyValue_AsKnownObjectBorrow(from))) {
-                res_o = _PyEval_LazyImportFrom(
+            if (PyValue_IsObject(from) &&
+                PyLazyImport_CheckExact(PyValue_AsKnownObjectBorrow(from)))
+            {
+                PyObject *res_o = _PyEval_LazyImportFrom(
                     tstate, frame, PyValue_AsKnownObjectBorrow(from), name);
+                ERROR_IF(res_o == NULL);
+                res = PyValue_FromObjectSteal(res_o);
             }
             else {
-                res_o = _PyEval_ImportFrom(
-                    tstate, PyValue_AsKnownObjectBorrow(from), name);
+                res = _PyEval_ImportFromValue(tstate, PyValue_Borrow(from), name);
+                ERROR_IF(PyValue_IsNull(res));
             }
-
-            ERROR_IF(res_o == NULL);
-            res = PyValue_FromObjectSteal(res_o);
         }
 
         tier1 inst(JUMP_FORWARD, (--)) {

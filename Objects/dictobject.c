@@ -134,6 +134,7 @@ As a consequence of this, split keys have a maximum size of 16.
 #include "pycore_tuple.h"         // _PyTuple_Recycle()
 #include "pycore_unicodeobject.h" // _PyUnicode_InternImmortal()
 #include "pycore_value_api.h"     // _PyValue_AsObjectAt()
+#include "pycore_value_call.h"    // _PyValue_CallOneArg()
 #include "pycore_value_slots.h"   // _PyValue_THUNK_EXIT()
 
 #include "stringlib/eq.h"                // unicode_eq()
@@ -3467,14 +3468,13 @@ _PyDict_FromKeys(PyObject *cls, PyObject *iterable, PyObject *value)
 
         Py_BEGIN_CRITICAL_SECTION(d);
         while (1) {
-            PyObject *key;
-            status = PyIter_NextItem(it, &key);
-            if (status <= 0) {
+            _PyStatusValue step = _PyValue_IterNext(it);
+            if (step.status != PYGEN_NEXT) {
+                status = step.status == PYGEN_ERROR ? -1 : 0;
                 break;
             }
-
-            status = setitem_lock_held((PyDictObject *)d, key, value);
-            Py_DECREF(key);
+            status = setitem_take2_lock_held((PyDictObject *)d, step.value,
+                                            PyValue_DUP(PyValue_FromObjectBorrow(value)));
             if (status < 0) {
                 break;
             }
@@ -3487,17 +3487,15 @@ _PyDict_FromKeys(PyObject *cls, PyObject *iterable, PyObject *value)
     }
     else if (PyFrozenDict_Check(d)) {
         while (1) {
-            PyObject *key;
-            int status = PyIter_NextItem(it, &key);
-            if (status < 0) {
+            _PyStatusValue step = _PyValue_IterNext(it);
+            if (step.status == PYGEN_ERROR) {
                 goto Fail;
             }
-            if (status == 0) {
+            if (step.status == PYGEN_RETURN) {
                 break;
             }
-
-            // setitem_take2_lock_held consumes a reference to key
-            status = _PyDict_SetValue_Take2((PyDictObject *)d, PyValue_PrepareOwned(key), PyValue_DUP(PyValue_FromObjectBorrow(value)));
+            int status = _PyDict_SetValue_Take2((PyDictObject *)d, step.value,
+                                               PyValue_DUP(PyValue_FromObjectBorrow(value)));
             if (status < 0) {
                 goto Fail;
             }
@@ -3505,22 +3503,20 @@ _PyDict_FromKeys(PyObject *cls, PyObject *iterable, PyObject *value)
     }
     else {
         while (1) {
-            PyObject *key;
-            int status = PyIter_NextItem(it, &key);
-            if (status < 0) {
+            _PyStatusValue step = _PyValue_IterNext(it);
+            if (step.status == PYGEN_ERROR) {
                 goto Fail;
             }
-            if (status == 0) {
+            if (step.status == PYGEN_RETURN) {
                 break;
             }
-
-            status = _PyValue_SetItem(PyValue_FromObjectBorrow(d), PyValue_FromObjectBorrow(key), PyValue_FromObjectBorrow(value));
-            Py_DECREF(key);
+            int status = _PyValue_SetItem(PyValue_FromObjectBorrow(d), step.value,
+                                          PyValue_FromObjectBorrow(value));
+            PyValue_CLOSE(step.value);
             if (status < 0) {
                 goto Fail;
             }
         }
-
     }
 
     assert(!PyErr_Occurred());
@@ -3693,15 +3689,10 @@ dict_subscript_value(PyObject *self, PyValueBorrow key)
     if (!PyAnyDict_CheckExact(self)) {
         PyObject *missing = _PyObject_LookupSpecial(self, &_Py_ID(__missing__));
         if (missing != NULL) {
-            PyObject *key_object = _PyValue_AsObjectAt(key, BOX_SITE_DICT);
-            if (key_object == NULL) {
-                Py_DECREF(missing);
-                return PyValue_NULL;
-            }
-            PyObject *result = PyObject_CallOneArg(missing, key_object);
+            PyValue result = _PyValue_CallOneArg(
+                _PyThreadState_GET(), PyValue_FromObjectBorrow(missing), key);
             Py_DECREF(missing);
-            Py_DECREF(key_object);
-            return _PyValue_FromObjectResult(result);
+            return result;
         }
         if (PyErr_Occurred()) {
             return PyValue_NULL;

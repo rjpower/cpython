@@ -376,6 +376,37 @@ class TestPyStats(unittest.TestCase):
         self.assertEqual(int(stats['Object inline int boxes']), 0)
         self.assertEqual(int(stats['Object inline float boxes']), 0)
 
+    def test_id_audit_hook_does_not_box(self):
+        code = """
+        events = []
+        rejection = []
+        def hook(event, args):
+            if event == 'builtins.id':
+                events.append(args)
+                if rejection:
+                    raise RuntimeError('audit id')
+        sys.addaudithook(hook)
+        def func_start():
+            target = []
+            expected = id(target)
+            sys._stats_clear()
+            actual = id(target)
+            sys._stats_off()
+            assert actual == expected
+            assert events[-1] == (expected,)
+            rejection.append(None)
+            try:
+                id(target)
+            except RuntimeError as exc:
+                assert str(exc) == 'audit id'
+            else:
+                raise AssertionError('audit exception was lost')
+        """
+        stats = run_test_code_stats(code, args=['-X', 'pystats'])
+        self.assertEqual(int(stats['Boxing by kind (core)']), 0)
+        self.assertEqual(int(stats['Object inline int boxes']), 0)
+        self.assertEqual(int(stats['Object inline float boxes']), 0)
+
     def test_box_kinds(self):
         """Check the box count by kind (pyjit/design/proposals/
         value-api-v2a0.md, section 4.7).

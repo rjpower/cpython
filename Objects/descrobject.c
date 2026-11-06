@@ -1973,6 +1973,9 @@ property_doc_set(PyValueBorrow self, PyValueBorrow value, void *closure)
 }
 
 PyDoc_STRVAR(getter_doc,
+             "getter($self, object, /)\n"
+             "--\n"
+             "\n"
              "Descriptor to obtain a copy of the property with a different getter.");
 
 static PyValue
@@ -1988,6 +1991,9 @@ property_getter(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs,
 
 
 PyDoc_STRVAR(setter_doc,
+             "setter($self, object, /)\n"
+             "--\n"
+             "\n"
              "Descriptor to obtain a copy of the property with a different setter.");
 
 static PyValue
@@ -2003,6 +2009,9 @@ property_setter(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs,
 
 
 PyDoc_STRVAR(deleter_doc,
+             "deleter($self, object, /)\n"
+             "--\n"
+             "\n"
              "Descriptor to obtain a copy of the property with a different deleter.");
 
 static PyValue

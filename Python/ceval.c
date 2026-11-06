@@ -4525,65 +4525,85 @@ error:
     return res;
 }
 
-PyObject *
-_PyEval_ImportFrom(PyThreadState *tstate, PyObject *v, PyObject *name)
+static PyValue
+_eval_import_from_miss(PyThreadState *tstate, PyValueBorrow v, PyObject *name)
 {
-    PyObject *x;
-    PyObject *fullmodname, *mod_name, *origin, *mod_name_or_unknown, *errmsg, *spec;
+    PyValue mod_name_value = PyValue_NULL;
+    PyValue spec_value = PyValue_NULL;
+    PyValue origin_value = PyValue_NULL;
+    PyObject *mod_name = NULL;
+    PyObject *mod_name_or_unknown = NULL;
+    PyObject *unknown_name = NULL;
+    PyObject *origin = NULL;
+    PyObject *module_origin = NULL;
+    PyObject *errmsg = NULL;
 
-    if (PyObject_GetOptionalAttr(v, name, &x) != 0) {
-        return x;
+    _PyStatusValue name_attr = _PyValue_GetOptionalAttr(
+        v, &_Py_ID(__name__));
+    if (name_attr.status < 0) {
+        return PyValue_NULL;
     }
-    /* Issue #17636: in case this failed because of a circular relative
-       import, try to fallback on reading the module directly from
-       sys.modules. */
-    if (PyObject_GetOptionalAttr(v, &_Py_ID(__name__), &mod_name) < 0) {
-        return NULL;
+    if (name_attr.status > 0 && PyValue_IsObject(name_attr.value) &&
+        PyUnicode_Check(PyValue_AsKnownObjectBorrow(name_attr.value)))
+    {
+        mod_name_value = name_attr.value;
+        mod_name = PyValue_AsKnownObjectBorrow(mod_name_value);
     }
-    if (mod_name == NULL || !PyUnicode_Check(mod_name)) {
-        Py_CLEAR(mod_name);
+    else {
+        PyValue_XCLOSE(name_attr.value);
         goto error;
     }
-    fullmodname = PyUnicode_FromFormat("%U.%U", mod_name, name);
+
+    PyObject *fullmodname = PyUnicode_FromFormat("%U.%U", mod_name, name);
     if (fullmodname == NULL) {
-        Py_DECREF(mod_name);
-        return NULL;
+        goto done;
     }
-    x = PyImport_GetModule(fullmodname);
+    PyObject *x = PyImport_GetModule(fullmodname);
     Py_DECREF(fullmodname);
     if (x == NULL && !_PyErr_Occurred(tstate)) {
         goto error;
     }
-    Py_DECREF(mod_name);
-    return x;
+    PyValue_CLOSE(mod_name_value);
+    if (x == NULL) {
+        return PyValue_NULL;
+    }
+    return PyValue_FromObjectSteal(x);
 
- error:
+error:
     if (mod_name == NULL) {
-        mod_name_or_unknown = PyUnicode_FromString("<unknown module name>");
-        if (mod_name_or_unknown == NULL) {
-            return NULL;
+        unknown_name = PyUnicode_FromString("<unknown module name>");
+        if (unknown_name == NULL) {
+            goto done;
         }
-    } else {
+        mod_name_or_unknown = unknown_name;
+    }
+    else {
         mod_name_or_unknown = mod_name;
     }
-    // mod_name is no longer an owned reference
-    assert(mod_name_or_unknown);
-    assert(mod_name == NULL || mod_name == mod_name_or_unknown);
 
-    origin = NULL;
-    if (PyObject_GetOptionalAttr(v, &_Py_ID(__spec__), &spec) < 0) {
-        Py_DECREF(mod_name_or_unknown);
-        return NULL;
+    _PyStatusValue spec_attr = _PyValue_GetOptionalAttr(
+        v, &_Py_ID(__spec__));
+    if (spec_attr.status < 0) {
+        goto done;
     }
-    if (spec == NULL) {
+    int has_spec = spec_attr.status > 0;
+    if (has_spec) {
+        spec_value = spec_attr.value;
+    }
+    if (!has_spec) {
         errmsg = PyUnicode_FromFormat(
             "cannot import name %R from %R (unknown location)",
             name, mod_name_or_unknown
         );
         goto done_with_errmsg;
     }
-    if (_PyModuleSpec_GetFileOrigin(spec, &origin) < 0) {
+    int origin_status = _PyModuleSpec_GetFileOriginValue(
+        PyValue_Borrow(spec_value), &origin_value);
+    if (origin_status < 0) {
         goto done;
+    }
+    if (origin_status > 0) {
+        origin = PyValue_AsKnownObjectBorrow(origin_value);
     }
 
     int is_possibly_shadowing = _PyModule_IsPossiblyShadowing(origin);
@@ -4597,24 +4617,26 @@ _PyEval_ImportFrom(PyThreadState *tstate, PyObject *v, PyObject *name)
             goto done;
         }
         if (stdlib_modules && PyAnySet_Check(stdlib_modules)) {
-            is_possibly_shadowing_stdlib = PySet_ContainsValue(stdlib_modules, PyValue_FromObjectBorrow(mod_name_or_unknown));
+            is_possibly_shadowing_stdlib = PySet_ContainsValue(
+                stdlib_modules, PyValue_FromObjectBorrow(mod_name_or_unknown));
             if (is_possibly_shadowing_stdlib < 0) {
-                Py_DECREF(stdlib_modules);
+                Py_XDECREF(stdlib_modules);
                 goto done;
             }
         }
         Py_XDECREF(stdlib_modules);
     }
 
-    if (origin == NULL && PyModule_Check(v)) {
-        // Fall back to __file__ for diagnostics if we don't have
-        // an origin that is a location
-        origin = PyModule_GetFilenameObject(v);
-        if (origin == NULL) {
+    if (origin == NULL && PyValue_IsObject(v) &&
+        PyModule_Check(PyValue_AsKnownObjectBorrow(v)))
+    {
+        module_origin = PyModule_GetFilenameObject(
+            PyValue_AsKnownObjectBorrow(v));
+        origin = module_origin;
+        if (module_origin == NULL) {
             if (!PyErr_ExceptionMatches(PyExc_SystemError)) {
                 goto done;
             }
-            // PyModule_GetFilenameObject raised "module filename missing"
             _PyErr_Clear(tstate);
         }
         assert(origin == NULL || PyUnicode_Check(origin));
@@ -4631,15 +4653,14 @@ _PyEval_ImportFrom(PyThreadState *tstate, PyObject *v, PyObject *name)
         );
     }
     else {
-        int rc = _PyModuleSpec_IsInitializing(spec);
+        int rc = _PyModuleSpec_IsInitializingValue(
+            PyValue_Borrow(spec_value));
         if (rc < 0) {
             goto done;
         }
         else if (rc > 0) {
             if (is_possibly_shadowing) {
                 assert(origin);
-                // For non-stdlib modules, only mention the possibility of
-                // shadowing if the module is being initialized.
                 errmsg = PyUnicode_FromFormat(
                     "cannot import name %R from %R "
                     "(consider renaming %R if it has the same name "
@@ -4681,16 +4702,41 @@ _PyEval_ImportFrom(PyThreadState *tstate, PyObject *v, PyObject *name)
 
 done_with_errmsg:
     if (errmsg != NULL) {
-        /* NULL checks for mod_name and origin done by _PyErr_SetImportErrorWithNameFrom */
         _PyErr_SetImportErrorWithNameFrom(errmsg, mod_name, origin, name);
         Py_DECREF(errmsg);
     }
 
 done:
-    Py_XDECREF(origin);
-    Py_XDECREF(spec);
-    Py_DECREF(mod_name_or_unknown);
-    return NULL;
+    Py_XDECREF(module_origin);
+    PyValue_XCLOSE(origin_value);
+    PyValue_XCLOSE(spec_value);
+    PyValue_XCLOSE(mod_name_value);
+    Py_XDECREF(unknown_name);
+    return PyValue_NULL;
+}
+
+PyValue
+_PyEval_ImportFromValue(PyThreadState *tstate, PyValueBorrow v, PyObject *name)
+{
+    _PyStatusValue attr = _PyValue_GetOptionalAttr(v, name);
+    if (attr.status > 0) {
+        return attr.value;
+    }
+    if (attr.status < 0) {
+        return PyValue_NULL;
+    }
+    return _eval_import_from_miss(tstate, v, name);
+}
+
+PyObject *
+_PyEval_ImportFrom(PyThreadState *tstate, PyObject *v, PyObject *name)
+{
+    PyValue result = _PyEval_ImportFromValue(
+        tstate, PyValue_FromObjectBorrow(v), name);
+    if (PyValue_IsNull(result)) {
+        return NULL;
+    }
+    return _PyValue_AsObjectStealAt(result, BOX_SITE_ATTRIBUTE);
 }
 
 #define CANNOT_CATCH_MSG "catching classes that do not inherit from "\

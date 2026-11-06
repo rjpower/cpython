@@ -10325,19 +10325,22 @@
                 ir_obj_from = PyValue_AsKnownObjectBorrow(from);
             }
             PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
-            PyObject *res_o;
-            if (PyLazyImport_CheckExact(ir_obj_from)) {
-                res_o = _PyEval_LazyImportFrom(
+            if (PyValue_IsObject(from) &&
+                PyLazyImport_CheckExact(ir_obj_from))
+            {
+                PyObject *res_o = _PyEval_LazyImportFrom(
                     tstate, frame, ir_obj_from, name);
+                if (res_o == NULL) {
+                    JUMP_TO_LABEL(error);
+                }
+                res = PyValue_FromObjectSteal(res_o);
             }
             else {
-                res_o = _PyEval_ImportFrom(
-                    tstate, ir_obj_from, name);
+                res = _PyEval_ImportFromValue(tstate, PyValue_Borrow(from), name);
+                if (PyValue_IsNull(res)) {
+                    JUMP_TO_LABEL(error);
+                }
             }
-            if (res_o == NULL) {
-                JUMP_TO_LABEL(error);
-            }
-            res = PyValue_FromObjectSteal(res_o);
             IR_STORE_DST(IR_A(ir_word), res);
             if (!PyValue_IsNull(ir_displaced) &&
                 finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {

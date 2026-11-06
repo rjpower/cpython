@@ -2700,16 +2700,33 @@ PyValue
         return PyValue_NULL;
     }
     PyObject *s = PyValue_AsKnownObjectBorrow(v);
-    PyMappingMethods *mp = Py_TYPE(s)->tp_as_mapping;
-    if (mp && mp->mp_subscript) {
+    PyTypeObject *type = Py_TYPE(s);
+    PyMappingMethods *mp = type->tp_as_mapping;
+    binaryfunc object_subscript = mp ? mp->mp_subscript : NULL;
+    _Py_subscriptvaluefunc value_subscript =
+        _PyType_VALUE_SLOT(type, subscript);
+    if (object_subscript != NULL) {
+        if (value_subscript != NULL) {
+            _PyType_CHECK_VALUE_ROW(type, _Py_VALUE_SLOT_INDEX_subscript);
+        }
         PyObject *slice = _PySlice_FromIndices(i1, i2);
         if (!slice) {
             return PyValue_NULL;
         }
-        PyObject *res = mp->mp_subscript(s, slice);
-        assert(_Py_CheckSlotResult(s, "__getitem__", res != NULL));
+        PyValue res;
+        if (value_subscript != NULL) {
+            res = value_subscript(s, PyValue_FromObjectBorrow(slice));
+            assert(_Py_CheckSlotResult(s, "__getitem__",
+                                       !PyValue_IsNull(res)));
+        }
+        else {
+            PyObject *object_result = object_subscript(s, slice);
+            assert(_Py_CheckSlotResult(s, "__getitem__",
+                                       object_result != NULL));
+            res = _PyValue_FromObjectResult(object_result);
+        }
         Py_DECREF(slice);
-        return _PyValue_FromObjectResult(res);
+        return res;
     }
 
     type_error("'%.200s' object is unsliceable", s);

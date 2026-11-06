@@ -2878,40 +2878,35 @@ tuplegetter_new_impl(PyTypeObject *type, Py_ssize_t index, PyValueBorrow doc)
     return _PyValue_FromObjectResult((PyObject *)self);
 }
 
-static PyObject *
-tuplegetter_descr_get(PyObject *self, PyObject *obj, PyObject *type)
+static PyValue
+tuplegetter_descr_get_value(PyObject *self, PyValueBorrow obj, PyObject *type)
 {
     Py_ssize_t index = tuplegetterobject_CAST(self)->index;
-    PyObject *result;
 
-    if (obj == NULL) {
-        return Py_NewRef(self);
+    if (PyValue_IsNull(obj) || PyValue_IsNone(obj)) {
+        return PyValue_DUP(PyValue_FromObjectBorrow(self));
     }
-    if (!PyTuple_Check(obj)) {
-        if (obj == Py_None) {
-            return Py_NewRef(self);
-        }
+    if (!PyValue_IsObject(obj) ||
+        !PyTuple_Check(PyValue_AsKnownObjectBorrow(obj)))
+    {
         PyErr_Format(PyExc_TypeError,
                      "descriptor for index '%zd' for tuple subclasses "
                      "doesn't apply to '%s' object",
                      index,
-                     Py_TYPE(obj)->tp_name);
-        return NULL;
+                     PyValue_TYPE(obj)->tp_name);
+        return PyValue_NULL;
     }
 
-    if (!valid_index(index, PyTuple_GET_SIZE(obj))) {
+    PyObject *tuple = PyValue_AsKnownObjectBorrow(obj);
+    if (!valid_index(index, PyTuple_GET_SIZE(tuple))) {
         PyErr_SetString(PyExc_IndexError, "tuple index out of range");
-        return NULL;
+        return PyValue_NULL;
     }
 
-    PyValue item = PyTuple_GetValue(obj, index);
-    if (PyValue_IsNull(item)) {
-        return NULL;
-    }
-    result = _PyValue_AsObjectAt(item, BOX_SITE_TUPLE);
-    PyValue_CLOSE(item);
-    return result;
+    return PyTuple_GetValue(tuple, index);
 }
+
+_Py_VALUE_THUNK_DESCRGET(tuplegetter_descr_get, tuplegetter_descr_get_value)
 
 static int
 tuplegetter_descr_set(PyObject *self, PyObject *obj, PyObject *value)
@@ -2987,6 +2982,7 @@ static PyType_Slot tuplegetter_slots[] = {
     {Py_tp_methods, tuplegetter_methods},
     {Py_tp_members, tuplegetter_members},
     {Py_tp_descr_get, tuplegetter_descr_get},
+    {_Py_value_descr_get, tuplegetter_descr_get_value},
     {Py_tp_descr_set, tuplegetter_descr_set},
     {Py_tp_new, tuplegetter_new},
     {0, NULL},

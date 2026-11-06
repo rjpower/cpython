@@ -316,6 +316,17 @@ codegen_addop_load_const(compiler *c, location loc, PyObject *o)
     return SUCCESS;
 }
 
+static int
+codegen_addop_load_const_value(compiler *c, location loc, PyValueBorrow value)
+{
+    Py_ssize_t arg = _PyCompile_AddConstValue(c, value);
+    if (arg < 0) {
+        return ERROR;
+    }
+    ADDOP_I(c, loc, LOAD_CONST, arg);
+    return SUCCESS;
+}
+
 #define ADDOP_LOAD_CONST(C, LOC, O) \
     RETURN_IF_ERROR(codegen_addop_load_const((C), (LOC), (O)))
 
@@ -865,15 +876,13 @@ codegen_deferred_annotations_body(compiler *c, location loc,
     ADDOP_I(c, loc, BUILD_MAP, 0); // stack now contains <annos>
 
     for (Py_ssize_t i = 0; i < annotations_len; i++) {
-        /* PyLong_AsVoidPtr is the native boundary for recorded AST pointers. */
+        /* Recorded AST pointer values stay tagged in the constants list. */
         PyValue ptr_v = PyList_GetValue(deferred_anno, i);
-        PyObject *ptr = PyValue_IsNull(ptr_v) ? NULL : _PyValue_AsObjectAt(ptr_v, BOX_SITE_LIST);
-        PyValue_XCLOSE(ptr_v);
-        if (ptr == NULL) {
+        if (PyValue_IsNull(ptr_v)) {
             return ERROR;
         }
-        stmt_ty st = (stmt_ty)_PyValue_IntAsVoidPtr(PyValue_FromObjectBorrow(ptr));
-        Py_DECREF(ptr);
+        stmt_ty st = (stmt_ty)_PyValue_IntAsVoidPtr(ptr_v);
+        PyValue_CLOSE(ptr_v);
         if (st == NULL) {
             return ERROR;
         }
@@ -895,8 +904,8 @@ codegen_deferred_annotations_body(compiler *c, location loc,
         NEW_JUMP_TARGET_LABEL(c, not_set);
 
         if (idx != -1) {
-            int ret = codegen_addop_load_const_new(
-                c, LOC(st), _PyValue_AsObjectAt(cond_index, BOX_SITE_COMPILER));
+            int ret = codegen_addop_load_const_value(
+                c, LOC(st), cond_index);
             if (ret < 0) {
                 Py_DECREF(mangled);
                 return ERROR;

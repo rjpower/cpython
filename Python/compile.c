@@ -566,6 +566,19 @@ _PyCompile_AddConst(compiler *c, PyObject *o)
     return arg;
 }
 
+Py_ssize_t
+_PyCompile_AddConstValue(compiler *c, PyValueBorrow value)
+{
+    PyValue key = const_cache_insert(c->c_const_cache, value, true);
+    if (PyValue_IsNull(key)) {
+        return ERROR;
+    }
+
+    Py_ssize_t arg = dict_add_value(c->u->u_metadata.u_consts, key);
+    PyValue_CLOSE(key);
+    return arg;
+}
+
 static PyObject *
 list2dict(PyObject *list)
 {

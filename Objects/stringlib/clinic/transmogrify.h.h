@@ -2,11 +2,16 @@
 preserve
 [clinic start generated code]*/
 
+#ifndef Py_VALUE_CORE
+#  error "value-emission Clinic output requires Py_VALUE_CORE"
+#endif
+
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 #  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
 #  include "pycore_value.h"       // _PyValue_STATIC_IMMORTAL()
 #endif
+#include "pycore_long_value.h"    // _PyValue_AsInt()
 #include "pycore_modsupport.h"    // _PyArg_UnpackKeywords()
 
 PyDoc_STRVAR(stringlib_expandtabs__doc__,
@@ -288,4 +293,4 @@ stringlib_zfill(PyObject *self, PyObject *arg)
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=99d3422c56b4ef0a input=a9049054013a1b77]*/
+/*[clinic end generated code: output=b3e8d7c991018f50 input=a9049054013a1b77]*/

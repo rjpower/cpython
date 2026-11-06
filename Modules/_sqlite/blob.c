@@ -538,7 +538,7 @@ ass_subscript_index(pysqlite_Blob *self, PyObject *item, PyObject *value)
         return -1;
     }
 
-    long val = PyLong_AsLong(value);
+    long val = _PyValue_AsLong(PyValue_FromObjectBorrow(value));
     if (val == -1 && PyErr_Occurred()) {
         PyErr_Clear();
         val = -1;

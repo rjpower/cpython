@@ -487,7 +487,7 @@ class PickleVisitor(EmitVisitor):
 
 class Obj2ModPrototypeVisitor(PickleVisitor):
     def visitProduct(self, prod, name):
-        code = "static int obj2ast_%s(struct ast_state *state, PyObject* obj, %s* out, const char* field, PyArena* arena);"
+        code = "static int obj2ast_%s(struct ast_state *state, PyValueBorrow obj, %s* out, const char* field, PyArena* arena);"
         self.emit(code % (name, get_c_type(name)), 0)
 
     visitSum = visitProduct
@@ -504,7 +504,7 @@ class Obj2ModVisitor(PickleVisitor):
     def recursive_call(self, node, level, failed_item=None):
         self.emit('if (_Py_EnterRecursiveCall(" while traversing \'%s\' node")) {' % node, level, reflow=False)
         if failed_item is not None:
-            self.emit("Py_DECREF(%s);" % failed_item, level + 1)
+            self.emit("PyValue_CLOSE(%s);" % failed_item, level + 1)
         self.emit('goto failed;', level + 1)
         self.emit('}', level)
         yield
@@ -513,7 +513,7 @@ class Obj2ModVisitor(PickleVisitor):
     def funcHeader(self, name):
         ctype = get_c_type(name)
         self.emit("int", 0)
-        self.emit("obj2ast_%s(struct ast_state *state, PyObject* obj, %s* out, const char* field, PyArena* arena)" % (name, ctype), 0)
+        self.emit("obj2ast_%s(struct ast_state *state, PyValueBorrow obj, %s* out, const char* field, PyArena* arena)" % (name, ctype), 0)
         self.emit("{", 0)
         self.emit("int isinstance;", 1)
         self.emit("", 0)
@@ -522,11 +522,14 @@ class Obj2ModVisitor(PickleVisitor):
         self.emit("", 0)
         # there's really nothing more we can do if this fails ...
         error = "expected some sort of %s, but got %%R" % name
-        format = "PyErr_Format(PyExc_TypeError, \"%s\", obj);"
+        self.emit("PyObject *obj_obj = _PyValue_AsObjectAt(obj, BOX_SITE_PARSER);", 1)
+        self.emit("if (obj_obj == NULL) return -1;", 1)
+        format = "PyErr_Format(PyExc_TypeError, \"%s\", obj_obj);"
         self.emit(format % error, 1, reflow=False)
+        self.emit("Py_DECREF(obj_obj);", 1)
         if add_label:
             self.emit("failed:", 1)
-            self.emit("Py_XDECREF(tmp);", 1)
+            self.emit("PyValue_XCLOSE(tmp);", 1)
         self.emit("return -1;", 1)
         self.emit("}", 0)
         self.emit("", 0)
@@ -534,9 +537,9 @@ class Obj2ModVisitor(PickleVisitor):
     def simpleSum(self, sum, name):
         self.funcHeader(name)
         for t in sum.types:
-            line = ("isinstance = PyObject_IsInstance(obj, "
-                    "state->%s_type);")
-            self.emit(line % (t.name,), 1)
+            line = ("isinstance = _PyValue_IsInstance(obj, "
+                    "PyValue_FromObjectBorrow(state->%s_type));")
+            self.emit(line % (t.name,), 1, reflow=False)
             self.emit("if (isinstance == -1) {", 1)
             self.emit("return -1;", 2)
             self.emit("}", 1)
@@ -551,25 +554,28 @@ class Obj2ModVisitor(PickleVisitor):
 
     def typeCheck(self, name):
         self.emit("tp = state->%s_type;" % name, 1)
-        self.emit("isinstance = PyObject_IsInstance(obj, tp);", 1)
+        self.emit("isinstance = _PyValue_IsInstance(obj, PyValue_FromObjectBorrow(tp));", 1, reflow=False)
         self.emit("if (isinstance == -1) {", 1)
         self.emit("return 1;", 2)
         self.emit("}", 1)
         self.emit("if (!isinstance && field != NULL) {", 1)
         error = "field '%%s' was expecting node of type '%s', got '%%T'" % name
-        self.emit("PyErr_Format(PyExc_TypeError, \"%s\", field, obj);" % error, 2, reflow=False)
+        self.emit("PyObject *obj_obj = _PyValue_AsObjectAt(obj, BOX_SITE_PARSER);", 2)
+        self.emit("if (obj_obj == NULL) return 1;", 2)
+        self.emit("PyErr_Format(PyExc_TypeError, \"%s\", field, obj_obj);" % error, 2, reflow=False)
+        self.emit("Py_DECREF(obj_obj);", 2)
         self.emit("return 1;", 2)
         self.emit("}", 1)
 
     def complexSum(self, sum, name):
         self.funcHeader(name)
-        self.emit("PyObject *tmp = NULL;", 1)
+        self.emit("PyValue tmp = PyValue_NULL;", 1)
         self.emit("PyObject *tp;", 1)
         for a in sum.attributes:
             self.visitAttributeDeclaration(a, name, sum=sum)
         self.emit("", 0)
         # XXX: should we only do this for 'expr'?
-        self.emit("if (obj == Py_None) {", 1)
+        self.emit("if (PyValue_IsNone(obj)) {", 1)
         self.emit("*out = NULL;", 2)
         self.emit("return 0;", 2)
         self.emit("}", 1)
@@ -578,7 +584,7 @@ class Obj2ModVisitor(PickleVisitor):
             self.visitField(a, name, sum=sum, depth=1)
         for t in sum.types:
             self.emit("tp = state->%s_type;" % (t.name,), 1)
-            self.emit("isinstance = PyObject_IsInstance(obj, tp);", 1)
+            self.emit("isinstance = _PyValue_IsInstance(obj, PyValue_FromObjectBorrow(tp));", 1, reflow=False)
             self.emit("if (isinstance == -1) {", 1)
             self.emit("return -1;", 2)
             self.emit("}", 1)
@@ -608,9 +614,9 @@ class Obj2ModVisitor(PickleVisitor):
     def visitProduct(self, prod, name):
         ctype = get_c_type(name)
         self.emit("int", 0)
-        self.emit("obj2ast_%s(struct ast_state *state, PyObject* obj, %s* out, const char* field, PyArena* arena)" % (name, ctype), 0)
+        self.emit("obj2ast_%s(struct ast_state *state, PyValueBorrow obj, %s* out, const char* field, PyArena* arena)" % (name, ctype), 0)
         self.emit("{", 0)
-        self.emit("PyObject* tmp = NULL;", 1)
+        self.emit("PyValue tmp = PyValue_NULL;", 1)
         for f in prod.fields:
             self.visitFieldDeclaration(f, name, prod=prod, depth=1)
         for a in prod.attributes:
@@ -626,7 +632,7 @@ class Obj2ModVisitor(PickleVisitor):
         self.emit("if (*out == NULL) goto failed;", 1)
         self.emit("return 0;", 1)
         self.emit("failed:", 0)
-        self.emit("Py_XDECREF(tmp);", 1)
+        self.emit("PyValue_XCLOSE(tmp);", 1)
         self.emit("return -1;", 1)
         self.emit("}", 0)
         self.emit("", 0)
@@ -651,28 +657,32 @@ class Obj2ModVisitor(PickleVisitor):
 
     def visitField(self, field, name, sum=None, prod=None, depth=0):
         ctype = get_c_type(field.type)
-        line = "if (PyObject_GetOptionalAttr(obj, state->%s, &tmp) < 0) {"
-        self.emit(line % field.name, depth)
+        status_name = "optional_" + field.name
+        self.emit("_PyStatusValue %s = _PyValue_GetOptionalAttr(obj, state->%s);" % (status_name, field.name), depth, reflow=False)
+        self.emit("if (%s.status < 0) {" % status_name, depth)
         self.emit("return -1;", depth+1)
         self.emit("}", depth)
+        self.emit("tmp = %s.value;" % status_name, depth)
         if field.seq:
-            self.emit("if (tmp == NULL) {", depth)
-            self.emit("tmp = PyList_New(0);", depth+1)
-            self.emit("if (tmp == NULL) {", depth+1)
+            self.emit("if (%s.status == 0) {" % status_name, depth)
+            self.emit("PyObject *empty = PyList_New(0);", depth+1)
+            self.emit("if (empty == NULL) {", depth+1)
             self.emit("return -1;", depth+2)
             self.emit("}", depth+1)
+            self.emit("tmp = PyValue_FromObjectSteal(empty);", depth+1)
             self.emit("}", depth)
             self.emit("{", depth)
         else:
             if not field.opt:
-                self.emit("if (tmp == NULL) {", depth)
+                self.emit("if (%s.status == 0) {" % status_name, depth)
                 message = "required field \\\"%s\\\" missing from %s" % (field.name, name)
                 format = "PyErr_SetString(PyExc_TypeError, \"%s\");"
                 self.emit(format % message, depth+1, reflow=False)
                 self.emit("return -1;", depth+1)
             else:
-                self.emit("if (tmp == NULL || tmp == Py_None) {", depth)
-                self.emit("Py_CLEAR(tmp);", depth+1)
+                self.emit("if (%s.status == 0 || PyValue_IsNone(tmp)) {" % status_name, depth)
+                self.emit("PyValue_XCLOSE(tmp);", depth+1)
+                self.emit("tmp = PyValue_NULL;", depth+1)
                 if self.isNumeric(field):
                     if field.name in self.attribute_special_defaults:
                         self.emit(
@@ -692,14 +702,18 @@ class Obj2ModVisitor(PickleVisitor):
         if field.seq:
             self.emit("Py_ssize_t len;", depth+1)
             self.emit("Py_ssize_t i;", depth+1)
-            self.emit("if (!PyList_Check(tmp)) {", depth+1)
+            self.emit("if (!PyValue_IsPointerSpace(tmp) || !PyList_Check(PyValue_AsKnownObjectBorrow(tmp))) {", depth+1, reflow=False)
+            self.emit("PyObject *value = _PyValue_AsObjectAt(tmp, BOX_SITE_PARSER);", depth+2)
+            self.emit("if (value == NULL) goto failed;", depth+2)
             self.emit("PyErr_Format(PyExc_TypeError, \"%s field \\\"%s\\\" must "
-                      "be a list, not a %%T\", tmp);" %
+                      "be a list, not a %%T\", value);" %
                       (name, field.name),
                       depth+2, reflow=False)
+            self.emit("Py_DECREF(value);", depth+2)
             self.emit("goto failed;", depth+2)
             self.emit("}", depth+1)
-            self.emit("len = PyList_GET_SIZE(tmp);", depth+1)
+            self.emit("PyObject *list = PyValue_AsKnownObjectBorrow(tmp);", depth+1)
+            self.emit("len = PyList_GET_SIZE(list);", depth+1)
             if self.isSimpleType(field):
                 self.emit("%s = _Py_asdl_int_seq_new(len, arena);" % field.name, depth+1)
             else:
@@ -707,18 +721,14 @@ class Obj2ModVisitor(PickleVisitor):
             self.emit("if (%s == NULL) goto failed;" % field.name, depth+1)
             self.emit("for (i = 0; i < len; i++) {", depth+1)
             self.emit("%s val;" % ctype, depth+2)
-            self.emit("PyValue item = PyList_GetValue(tmp, i);", depth+2)
-            self.emit("PyObject *tmp2 = PyValue_IsNull(item) ? NULL : "
-                      "_PyValue_AsObjectAt(item, BOX_SITE_LIST);", depth+2,
-                      reflow=False)
-            self.emit("PyValue_XCLOSE(item);", depth+2)
-            self.emit("if (tmp2 == NULL) goto failed;", depth+2)
-            with self.recursive_call(name, depth+2, failed_item="tmp2"):
-                self.emit("res = obj2ast_%s(state, tmp2, &val, \"%s\", arena);" %
+            self.emit("PyValue item = PyList_GetValue(list, i);", depth+2)
+            self.emit("if (PyValue_IsNull(item)) goto failed;", depth+2)
+            with self.recursive_call(name, depth+2, failed_item="item"):
+                self.emit("res = obj2ast_%s(state, PyValue_Borrow(item), &val, \"%s\", arena);" %
                           (field.type, field.name), depth+2, reflow=False)
-            self.emit("Py_DECREF(tmp2);", depth+2)
+            self.emit("PyValue_CLOSE(item);", depth+2)
             self.emit("if (res != 0) goto failed;", depth+2)
-            self.emit("if (len != PyList_GET_SIZE(tmp)) {", depth+2)
+            self.emit("if (len != PyList_GET_SIZE(list)) {", depth+2)
             self.emit("PyErr_SetString(PyExc_RuntimeError, \"%s field \\\"%s\\\" "
                       "changed size during iteration\");" %
                       (name, field.name),
@@ -729,11 +739,12 @@ class Obj2ModVisitor(PickleVisitor):
             self.emit("}", depth+1)
         else:
             with self.recursive_call(name, depth+1):
-                self.emit("res = obj2ast_%s(state, tmp, &%s, \"%s\", arena);" %
+                self.emit("res = obj2ast_%s(state, PyValue_Borrow(tmp), &%s, \"%s\", arena);" %
                           (field.type, field.name, field.name), depth+1)
             self.emit("if (res != 0) goto failed;", depth+1)
 
-        self.emit("Py_CLEAR(tmp);", depth+1)
+        self.emit("PyValue_XCLOSE(tmp);", depth+1)
+        self.emit("tmp = PyValue_NULL;", depth+1)
         self.emit("}", depth)
 
 
@@ -970,7 +981,7 @@ static PyObject *
 format_missing(PyObject *missing, PyObject *fields)
 {
     Py_ssize_t num_fields, num_total, num_left;
-    num_fields = PySequence_Size(fields);
+    num_fields = _PyValue_SequenceSize(PyValue_FromObjectBorrow(fields));
     if (num_fields == -1) {
         return NULL;
     }
@@ -1056,7 +1067,7 @@ ast_type_init(PyObject *self, PyObject *args, PyObject *kw)
         goto cleanup;
     }
 
-    numfields = PySequence_Size(fields);
+    numfields = _PyValue_SequenceSize(PyValue_FromObjectBorrow(fields));
     if (numfields < 0) {
         goto cleanup;
     }
@@ -1334,7 +1345,7 @@ ast_type_reduce(PyObject *self, PyObject *unused)
             goto cleanup;
         }
         if (fields) {
-            Py_ssize_t numfields = PySequence_Size(fields);
+            Py_ssize_t numfields = _PyValue_SequenceSize(PyValue_FromObjectBorrow(fields));
             if (numfields == -1) {
                 Py_DECREF(dict);
                 goto cleanup;
@@ -1409,7 +1420,7 @@ ast_type_replace_update_payload(PyObject *payload,
     if (keys == NULL) {
         return 0;
     }
-    Py_ssize_t n = PySequence_Size(keys);
+    Py_ssize_t n = _PyValue_SequenceSize(PyValue_FromObjectBorrow(keys));
     if (n == -1) {
         return -1;
     }
@@ -1539,7 +1550,7 @@ ast_repr_list(PyObject *list, int depth)
         return NULL;
     }
 
-    Py_ssize_t length = PySequence_Size(list);
+    Py_ssize_t length = _PyValue_SequenceSize(PyValue_FromObjectBorrow(list));
     if (length < 0) {
         return NULL;
     }
@@ -1629,7 +1640,7 @@ ast_repr_max_depth(AST_object *self, int depth)
         return NULL;
     }
 
-    Py_ssize_t numfields = PySequence_Size(fields);
+    Py_ssize_t numfields = _PyValue_SequenceSize(PyValue_FromObjectBorrow(fields));
     if (numfields < 0) {
         Py_DECREF(fields);
         return NULL;
@@ -1856,18 +1867,22 @@ static PyObject* ast2obj_int(struct ast_state *Py_UNUSED(state), long b)
 
 /* Conversion Python -> AST */
 
-static int obj2ast_object(struct ast_state *Py_UNUSED(state), PyObject* obj,
+static int obj2ast_object(struct ast_state *Py_UNUSED(state), PyValueBorrow obj,
                           PyObject** out,
                           const char* Py_UNUSED(field), PyArena* arena)
 {
-    if (obj == Py_None)
-        obj = NULL;
-    if (obj) {
-        if (_PyArena_AddPyObject(arena, obj) < 0) {
+    if (!PyValue_IsNone(obj)) {
+        PyObject *object = _PyValue_AsObjectAt(obj, BOX_SITE_PARSER);
+        if (object == NULL) {
             *out = NULL;
             return -1;
         }
-        *out = Py_NewRef(obj);
+        if (_PyArena_AddPyObject(arena, object) < 0) {
+            Py_DECREF(object);
+            *out = NULL;
+            return -1;
+        }
+        *out = object;
     }
     else {
         *out = NULL;
@@ -1875,45 +1890,73 @@ static int obj2ast_object(struct ast_state *Py_UNUSED(state), PyObject* obj,
     return 0;
 }
 
-static int obj2ast_constant(struct ast_state *Py_UNUSED(state), PyObject* obj,
+static int obj2ast_constant(struct ast_state *Py_UNUSED(state), PyValueBorrow obj,
                             PyObject** out,
                             const char* Py_UNUSED(field), PyArena* arena)
 {
-    if (_PyArena_AddPyObject(arena, obj) < 0) {
+    PyObject *object = _PyValue_AsObjectAt(obj, BOX_SITE_PARSER);
+    if (object == NULL) {
         *out = NULL;
         return -1;
     }
-    *out = Py_NewRef(obj);
+    if (_PyArena_AddPyObject(arena, object) < 0) {
+        Py_DECREF(object);
+        *out = NULL;
+        return -1;
+    }
+    *out = object;
     return 0;
 }
 
-static int obj2ast_identifier(struct ast_state *state, PyObject* obj, PyObject** out, const char* field, PyArena* arena)
+static int obj2ast_identifier(struct ast_state *state, PyValueBorrow obj, PyObject** out, const char* field, PyArena* arena)
 {
-    if (!PyUnicode_CheckExact(obj) && obj != Py_None) {
-        PyErr_Format(PyExc_TypeError, "field '%s' was expecting a string object, got %T", field, obj);
+    PyObject *object = PyValue_IsPointerSpace(obj) ? PyValue_AsKnownObjectBorrow(obj) : NULL;
+    if (!(object != NULL && PyUnicode_CheckExact(object)) && !PyValue_IsNone(obj)) {
+        object = _PyValue_AsObjectAt(obj, BOX_SITE_PARSER);
+        if (object == NULL) return -1;
+        PyErr_Format(PyExc_TypeError, "field '%s' was expecting a string object, got %T", field, object);
+        Py_DECREF(object);
         return -1;
     }
     return obj2ast_object(state, obj, out, field, arena);
 }
 
-static int obj2ast_string(struct ast_state *state, PyObject* obj, PyObject** out, const char* field, PyArena* arena)
+static int obj2ast_string(struct ast_state *state, PyValueBorrow obj, PyObject** out, const char* field, PyArena* arena)
 {
-    if (!PyUnicode_CheckExact(obj) && !PyBytes_CheckExact(obj)) {
-        PyErr_Format(PyExc_TypeError, "field '%s' was expecting a string or bytes object, got %T", field, obj);
+    PyObject *object = PyValue_IsPointerSpace(obj) ? PyValue_AsKnownObjectBorrow(obj) : NULL;
+    if (!(object != NULL && (PyUnicode_CheckExact(object) || PyBytes_CheckExact(object)))) {
+        object = _PyValue_AsObjectAt(obj, BOX_SITE_PARSER);
+        if (object == NULL) return -1;
+        PyErr_Format(PyExc_TypeError, "field '%s' was expecting a string or bytes object, got %T", field, object);
+        Py_DECREF(object);
         return -1;
     }
     return obj2ast_object(state, obj, out, field, arena);
 }
 
-static int obj2ast_int(struct ast_state* Py_UNUSED(state), PyObject* obj, int* out, const char* field, PyArena* arena)
+static int obj2ast_int(struct ast_state* Py_UNUSED(state), PyValueBorrow obj, int* out, const char* field, PyArena* arena)
 {
     int i;
-    if (!PyLong_Check(obj)) {
-        PyErr_Format(PyExc_ValueError, "field \\"%s\\" got an invalid integer value: %R", field, obj);
+    PyObject *object = PyValue_IsPointerSpace(obj) ? PyValue_AsKnownObjectBorrow(obj) : NULL;
+    if (!PyValue_IsInlineInt(obj) && !(object != NULL && PyLong_Check(object))) {
+        object = _PyValue_AsObjectAt(obj, BOX_SITE_PARSER);
+        if (object == NULL) return -1;
+        PyErr_Format(PyExc_ValueError, "field \\"%s\\" got an invalid integer value: %R", field, object);
+        Py_DECREF(object);
         return -1;
     }
 
-    i = PyLong_AsInt(obj);
+    if (PyValue_IsInlineInt(obj)) {
+        int64_t value = PyValue_InlineInt64(obj);
+        if (value < INT_MIN || value > INT_MAX) {
+            PyErr_SetString(PyExc_OverflowError,
+                            "Python int too large to convert to C int");
+            return -1;
+        }
+        *out = (int)value;
+        return 0;
+    }
+    i = _PyValue_AsInt(obj);
     if (i == -1 && PyErr_Occurred())
         return -1;
     *out = i;
@@ -2314,7 +2357,7 @@ mod_ty PyAST_obj2mod(PyObject* ast, PyArena* arena, int mode)
     }
 
     mod_ty res = NULL;
-    if (obj2ast_mod(state, ast, &res, NULL, arena) != 0)
+    if (obj2ast_mod(state, PyValue_FromObjectBorrow(ast), &res, NULL, arena) != 0)
         return NULL;
     else
         return res;
@@ -2412,6 +2455,7 @@ def generate_module_def(mod, metadata, f, internal_h):
         #include "pycore_dict.h"          // PyDict_GetValue()
         #include "pycore_list.h"          // PyList_AppendValue()
         #include "pycore_lock.h"          // _PyOnceFlag
+        #include "pycore_long_value.h"    // _PyValue_AsInt()
         #include "pycore_modsupport.h"    // _PyArg_NoPositional()
         #include "pycore_pystate.h"       // _PyInterpreterState_GET()
         #include "pycore_runtime.h"       // _Py_ID()

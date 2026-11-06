@@ -1416,12 +1416,7 @@ _io__Buffered_seek_impl(buffered *self, PyValueBorrow targetobj, int whence)
         return PyValue_NULL;
     }
 
-    PyObject *target_obj = _PyValue_AsObjectAt(targetobj, BOX_SITE_PARSER);
-    if (target_obj == NULL) {
-        return PyValue_NULL;
-    }
-    target = PyNumber_AsOff_t(target_obj, PyExc_ValueError);
-    Py_DECREF(target_obj);
+    target = _PyNumber_AsOffValue(targetobj, PyExc_ValueError);
     if (target == -1 && PyErr_Occurred())
         return PyValue_NULL;
 

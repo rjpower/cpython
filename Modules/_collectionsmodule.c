@@ -2564,7 +2564,7 @@ defdict_init(PyObject *self, PyObject *args, PyObject *kwds)
                 return -1;
             }
         }
-        newargs = PySequence_GetSlice(args, 1, n);
+        newargs = PyTuple_GetSlice(args, 1, n);
     }
     if (newargs == NULL) {
         Py_XDECREF(newdefault);

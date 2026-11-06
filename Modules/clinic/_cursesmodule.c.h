@@ -11,7 +11,6 @@ preserve
 #  include "pycore_runtime.h"     // _Py_ID()
 #  include "pycore_value.h"       // _PyValue_STATIC_IMMORTAL()
 #endif
-#include "pycore_long.h"          // _PyLong_UnsignedInt_Converter()
 #include "pycore_long_value.h"    // _PyValue_AsInt()
 #include "pycore_modsupport.h"    // _PyArg_UnpackKeywordsValue()
 #include "pycore_tuple.h"         // _PyTuple_ITEMS()
@@ -1596,8 +1595,20 @@ _curses_window_getstr(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
     if (nargs <= offset) {
         goto skip_optional;
     }
-    if (!_PyLong_UnsignedInt_Converter(args[offset], &n)) {
-        goto exit;
+    {
+        Py_ssize_t _bytes = _PyValue_AsNativeBytes(PyValue_FromObjectBorrow(args[offset]), &n, sizeof(unsigned int),
+                Py_ASNATIVEBYTES_NATIVE_ENDIAN |
+                Py_ASNATIVEBYTES_ALLOW_INDEX |
+                Py_ASNATIVEBYTES_REJECT_NEGATIVE |
+                Py_ASNATIVEBYTES_UNSIGNED_BUFFER);
+        if (_bytes < 0) {
+            goto exit;
+        }
+        if ((size_t)_bytes > sizeof(unsigned int)) {
+            PyErr_SetString(PyExc_OverflowError,
+                        "Python int too large for C unsigned int");
+            goto exit;
+        }
     }
 skip_optional:
     return_value = _curses_window_getstr_impl((PyCursesWindowObject *)self, group_left_1, y, x, n);
@@ -1841,8 +1852,20 @@ _curses_window_instr(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
         group_right_1 = 1;
     }
     if (nargs == 1 || nargs == 3) {
-        if (!_PyLong_UnsignedInt_Converter(args[nargs - 1], &n)) {
-            goto exit;
+        {
+            Py_ssize_t _bytes = _PyValue_AsNativeBytes(PyValue_FromObjectBorrow(args[nargs - 1]), &n, sizeof(unsigned int),
+                    Py_ASNATIVEBYTES_NATIVE_ENDIAN |
+                    Py_ASNATIVEBYTES_ALLOW_INDEX |
+                    Py_ASNATIVEBYTES_REJECT_NEGATIVE |
+                    Py_ASNATIVEBYTES_UNSIGNED_BUFFER);
+            if (_bytes < 0) {
+                goto exit;
+            }
+            if ((size_t)_bytes > sizeof(unsigned int)) {
+                PyErr_SetString(PyExc_OverflowError,
+                            "Python int too large for C unsigned int");
+                goto exit;
+            }
         }
         group_right_2 = 1;
     }
@@ -1903,8 +1926,20 @@ _curses_window_get_wstr(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
     if (nargs <= offset) {
         goto skip_optional;
     }
-    if (!_PyLong_UnsignedInt_Converter(args[offset], &n)) {
-        goto exit;
+    {
+        Py_ssize_t _bytes = _PyValue_AsNativeBytes(PyValue_FromObjectBorrow(args[offset]), &n, sizeof(unsigned int),
+                Py_ASNATIVEBYTES_NATIVE_ENDIAN |
+                Py_ASNATIVEBYTES_ALLOW_INDEX |
+                Py_ASNATIVEBYTES_REJECT_NEGATIVE |
+                Py_ASNATIVEBYTES_UNSIGNED_BUFFER);
+        if (_bytes < 0) {
+            goto exit;
+        }
+        if ((size_t)_bytes > sizeof(unsigned int)) {
+            PyErr_SetString(PyExc_OverflowError,
+                        "Python int too large for C unsigned int");
+            goto exit;
+        }
     }
 skip_optional:
     return_value = _curses_window_get_wstr_impl((PyCursesWindowObject *)self, group_left_1, y, x, n);
@@ -1962,8 +1997,20 @@ _curses_window_in_wstr(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
         group_right_1 = 1;
     }
     if (nargs == 1 || nargs == 3) {
-        if (!_PyLong_UnsignedInt_Converter(args[nargs - 1], &n)) {
-            goto exit;
+        {
+            Py_ssize_t _bytes = _PyValue_AsNativeBytes(PyValue_FromObjectBorrow(args[nargs - 1]), &n, sizeof(unsigned int),
+                    Py_ASNATIVEBYTES_NATIVE_ENDIAN |
+                    Py_ASNATIVEBYTES_ALLOW_INDEX |
+                    Py_ASNATIVEBYTES_REJECT_NEGATIVE |
+                    Py_ASNATIVEBYTES_UNSIGNED_BUFFER);
+            if (_bytes < 0) {
+                goto exit;
+            }
+            if ((size_t)_bytes > sizeof(unsigned int)) {
+                PyErr_SetString(PyExc_OverflowError,
+                            "Python int too large for C unsigned int");
+                goto exit;
+            }
         }
         group_right_2 = 1;
     }
@@ -2024,8 +2071,20 @@ _curses_window_in_wchstr(PyObject *self, PyObject *const *args, Py_ssize_t nargs
         group_right_1 = 1;
     }
     if (nargs == 1 || nargs == 3) {
-        if (!_PyLong_UnsignedInt_Converter(args[nargs - 1], &n)) {
-            goto exit;
+        {
+            Py_ssize_t _bytes = _PyValue_AsNativeBytes(PyValue_FromObjectBorrow(args[nargs - 1]), &n, sizeof(unsigned int),
+                    Py_ASNATIVEBYTES_NATIVE_ENDIAN |
+                    Py_ASNATIVEBYTES_ALLOW_INDEX |
+                    Py_ASNATIVEBYTES_REJECT_NEGATIVE |
+                    Py_ASNATIVEBYTES_UNSIGNED_BUFFER);
+            if (_bytes < 0) {
+                goto exit;
+            }
+            if ((size_t)_bytes > sizeof(unsigned int)) {
+                PyErr_SetString(PyExc_OverflowError,
+                            "Python int too large for C unsigned int");
+                goto exit;
+            }
         }
         group_right_2 = 1;
     }
@@ -2383,7 +2442,7 @@ _curses_window_overlay(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
         if (dmincol == -1 && PyErr_Occurred()) {
             goto exit;
         }
-        dmaxrow = PyLong_AsInt(args[5]);
+        dmaxrow = _PyValue_AsInt(PyValue_FromObjectBorrow(args[5]));
         if (dmaxrow == -1 && PyErr_Occurred()) {
             goto exit;
         }
@@ -7171,4 +7230,4 @@ _curses_has_extended_color_support(PyValueBorrow module, const PyValue *args, Py
 #ifndef _CURSES_ASSUME_DEFAULT_COLORS_METHODDEF
     #define _CURSES_ASSUME_DEFAULT_COLORS_METHODDEF
 #endif /* !defined(_CURSES_ASSUME_DEFAULT_COLORS_METHODDEF) */
-/*[clinic end generated code: output=0f24b7d1948f74d4 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=569929b1c691a5fb input=a9049054013a1b77]*/

@@ -1,3 +1,4 @@
+#include "pycore_long_value.h"    // _PyValue_IntAsSsize_t()
 #include "pycore_weakref.h"       // _PyWeakref_GET_REF()
 
 

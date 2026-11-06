@@ -96,6 +96,7 @@ extern int _PyIO_trap_eintr(void);
 #ifdef MS_WINDOWS
 
 # define PyLong_AsOff_t     PyLong_AsLongLong
+# define _PyValue_AsOff_t  _PyValue_AsLongLong
 # define PyLong_FromOff_t   PyLong_FromLongLong
 # define PY_OFF_T_MAX       LLONG_MAX
 # define PY_OFF_T_MIN       LLONG_MIN
@@ -107,6 +108,7 @@ extern int _PyIO_trap_eintr(void);
 /* Other platforms use off_t */
 #if (SIZEOF_OFF_T == SIZEOF_SIZE_T)
 # define PyLong_AsOff_t     PyLong_AsSsize_t
+# define _PyValue_AsOff_t  _PyValue_IntAsSsize_t
 # define PyLong_FromOff_t   PyLong_FromSsize_t
 # define PY_OFF_T_MAX       PY_SSIZE_T_MAX
 # define PY_OFF_T_MIN       PY_SSIZE_T_MIN
@@ -114,6 +116,7 @@ extern int _PyIO_trap_eintr(void);
 # define PY_PRIdOFF         "zd"
 #elif (SIZEOF_OFF_T == SIZEOF_LONG_LONG)
 # define PyLong_AsOff_t     PyLong_AsLongLong
+# define _PyValue_AsOff_t  _PyValue_AsLongLong
 # define PyLong_FromOff_t   PyLong_FromLongLong
 # define PY_OFF_T_MAX       LLONG_MAX
 # define PY_OFF_T_MIN       LLONG_MIN
@@ -121,6 +124,7 @@ extern int _PyIO_trap_eintr(void);
 # define PY_PRIdOFF         "lld"
 #elif (SIZEOF_OFF_T == SIZEOF_LONG)
 # define PyLong_AsOff_t     PyLong_AsLong
+# define _PyValue_AsOff_t  _PyValue_AsLong
 # define PyLong_FromOff_t   PyLong_FromLong
 # define PY_OFF_T_MAX       LONG_MAX
 # define PY_OFF_T_MIN       LONG_MIN

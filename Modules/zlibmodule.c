@@ -9,6 +9,7 @@
 
 #define Py_VALUE_CORE 1
 #include "Python.h"
+#include "pycore_long_value.h" // _PyValue_AsLong()
 #include "pycore_pyatomic_ft_wrappers.h" // FT_ATOMIC_STORE_CHAR_RELAXED
 
 #include "zlib.h"
@@ -20,11 +21,11 @@
 #endif
 
 #if (SIZEOF_OFF_T == SIZEOF_SIZE_T)
-#  define convert_to_z_off_t  PyLong_AsSsize_t
+#  define convert_to_z_off_t  _PyValue_IntAsSsize_t
 #elif (SIZEOF_OFF_T == SIZEOF_LONG_LONG)
-#  define convert_to_z_off_t  PyLong_AsLongLong
+#  define convert_to_z_off_t  _PyValue_AsLongLong
 #elif (SIZEOF_OFF_T == SIZEOF_LONG)
-#  define convert_to_z_off_t  PyLong_AsLong
+#  define convert_to_z_off_t  _PyValue_AsLong
 #else
 #  error off_t does not match either size_t, long, or long long!
 #endif
@@ -1975,16 +1976,11 @@ zlib_adler32_combine_impl(PyObject *module, unsigned int adler1,
                           unsigned int adler2, PyValueBorrow len2)
 /*[clinic end generated code: output=5fd6b65c2c657bef input=51bb045c95130c6f]*/
 {
-    PyObject *len2_obj = _PyValue_AsObjectAt(len2, BOX_SITE_PARSER);
-    if (len2_obj == NULL) {
-        return (unsigned int)-1;
-    }
 #if defined(Z_WANT64)
-    z_off64_t len = convert_to_z_off_t(len2_obj);
+    z_off64_t len = convert_to_z_off_t(len2);
 #else
-    z_off_t len = convert_to_z_off_t(len2_obj);
+    z_off_t len = convert_to_z_off_t(len2);
 #endif
-    Py_DECREF(len2_obj);
     if (len < 0) {
         if (!PyErr_Occurred()) {
             PyErr_SetString(PyExc_ValueError, "len2 must be non-negative");
@@ -2068,16 +2064,11 @@ zlib_crc32_combine_impl(PyObject *module, unsigned int crc1,
                         unsigned int crc2, PyValueBorrow len2)
 /*[clinic end generated code: output=12149cad5184d1b6 input=9c8a065d9040dc66]*/
 {
-    PyObject *len2_obj = _PyValue_AsObjectAt(len2, BOX_SITE_PARSER);
-    if (len2_obj == NULL) {
-        return (unsigned int)-1;
-    }
 #if defined(Z_WANT64)
-    z_off64_t len = convert_to_z_off_t(len2_obj);
+    z_off64_t len = convert_to_z_off_t(len2);
 #else
-    z_off_t len = convert_to_z_off_t(len2_obj);
+    z_off_t len = convert_to_z_off_t(len2);
 #endif
-    Py_DECREF(len2_obj);
     if (len < 0) {
         if (!PyErr_Occurred()) {
             PyErr_SetString(PyExc_ValueError, "len2 must be non-negative");

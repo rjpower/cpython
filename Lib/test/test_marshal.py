@@ -75,6 +75,21 @@ class IntTestCase(unittest.TestCase, HelperMixin):
         got = marshal.loads(b'I\xf7\xe6\xd5\xc4\xb3\xa2\x91\x80')
         self.assertEqual(got, -0x7f6e5d4c3b2a1909)
 
+    def test_inline_reference_payloads(self):
+        # The first occurrence owns a reference-table slot; the second is
+        # decoded through TYPE_REF and must retain the same language value.
+        payloads = (
+            (b")\x02\xe9\x2a\x00\x00\x00r\x00\x00\x00\x00", 42),
+            (b")\x02\xec\x03\x00\x00\x00\x00\x00\x00\x00\x00\x04"
+             b"r\x00\x00\x00\x00", 1 << 40),
+            (b")\x02\xe7" + struct.pack("<d", 1.25) +
+             b"r\x00\x00\x00\x00", 1.25),
+        )
+        for data, expected in payloads:
+            with self.subTest(expected=expected):
+                self.assertEqual(marshal.loads(data), (expected, expected))
+                self.assertEqual(marshal.load(io.BytesIO(data)), (expected, expected))
+
     def test_bool(self):
         for b in (True, False):
             self.helper(b)

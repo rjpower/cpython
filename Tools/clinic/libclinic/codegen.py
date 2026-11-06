@@ -280,6 +280,7 @@ class CodeGen:
         # Set by the value_emission directive: the functions of the file
         # take and return values (METH_VALUE).
         self.value_emission = False
+        self.value_core = False
         self._ifndef_symbols: set[str] = set()
         # dict: include name => Include instance
         self._includes: dict[str, Include] = {}

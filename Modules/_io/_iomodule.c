@@ -567,7 +567,7 @@ Py_off_t
     PyObject *value = PyValue_AsKnownObjectSteal(index);
 
     /* We're done if PyLong_AsSsize_t() returns without error. */
-    result = PyLong_AsOff_t(value);
+    result = _PyValue_AsOff_t(PyValue_FromObjectBorrow(value));
     if (result != -1 || !(runerr = PyErr_Occurred()))
         goto finish;
 

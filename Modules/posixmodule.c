@@ -7840,7 +7840,15 @@ parse_posix_spawn_flags(PyObject *module, const char *func_name, PyObject *setpg
     }
 
     if (setpgroup && setpgroup != Py_None) {
-        pid_t pgid = PyLong_AsPid(setpgroup);
+#if !defined(SIZEOF_PID_T) || SIZEOF_PID_T == SIZEOF_INT
+        pid_t pgid = _PyValue_AsInt(PyValue_FromObjectBorrow(setpgroup));
+#elif SIZEOF_PID_T == SIZEOF_LONG
+        pid_t pgid = _PyValue_AsLong(PyValue_FromObjectBorrow(setpgroup));
+#elif defined(SIZEOF_LONG_LONG) && SIZEOF_PID_T == SIZEOF_LONG_LONG
+        pid_t pgid = _PyValue_AsLongLong(PyValue_FromObjectBorrow(setpgroup));
+#else
+#  error "unsupported pid_t size"
+#endif
         if (pgid == (pid_t)-1 && PyErr_Occurred()) {
             goto fail;
         }

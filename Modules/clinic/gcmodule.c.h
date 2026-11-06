@@ -614,4 +614,4 @@ gc_get_freeze_count(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs,
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=dda9a8678dbe1423 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=d91b05b2a13c70e0 input=a9049054013a1b77]*/

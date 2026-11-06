@@ -31,9 +31,10 @@ class width_converter(CConverter):
 /*[python end generated code: output=da39a3ee5e6b4b0d input=5ebb21e0fc00412b]*/
 
 /*[clinic input]
+value_core
 class B "PyObject *" "&PyType_Type"
 [clinic start generated code]*/
-/*[clinic end generated code: output=da39a3ee5e6b4b0d input=2935558188d97c76]*/
+/*[clinic end generated code: output=da39a3ee5e6b4b0d input=c1d3f057f9ddec70]*/
 
 #include "clinic/transmogrify.h.h"
 

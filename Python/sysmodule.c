@@ -4177,8 +4177,14 @@ _PySys_InitCore(PyThreadState *tstate, PyObject *sysdict)
 
     /* stdin/stdout/stderr are set in pylifecycle.c */
 
-#define COPY_SYS_ATTR(tokey, fromkey) \
-        SET_SYS(tokey, PyMapping_GetItemString(sysdict, fromkey))
+#define COPY_SYS_ATTR(tokey, fromkey) do {                       \
+        PyValue value = _PyValue_MappingGetItemString(           \
+            PyValue_FromObjectBorrow(sysdict), fromkey);         \
+        if (PyValue_IsNull(value)) goto err_occurred;            \
+        int rc = PyDict_SetValueString(sysdict, tokey, value);   \
+        PyValue_CLOSE(value);                                    \
+        if (rc < 0) goto err_occurred;                           \
+    } while (0)
 
     COPY_SYS_ATTR("__displayhook__", "displayhook");
     COPY_SYS_ATTR("__excepthook__", "excepthook");

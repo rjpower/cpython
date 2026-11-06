@@ -270,4 +270,4 @@ syslog_LOG_UPTO(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyO
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=c24ebb2cc001eff5 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=4429d85c01235618 input=a9049054013a1b77]*/

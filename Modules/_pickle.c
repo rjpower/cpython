@@ -4239,7 +4239,6 @@ save_global(PickleState *st, PicklerObject *self, PyObject *obj,
          * so generate an EXT opcode.
          */
         PyObject *extension_key;
-        PyObject *code_obj;      /* extension code as Python object */
         long code;               /* extension code as C value */
         char pdata[5];
         Py_ssize_t n;
@@ -4250,23 +4249,15 @@ save_global(PickleState *st, PicklerObject *self, PyObject *obj,
         }
         PyValue code_obj_v;
         int rc_dict = PyDict_GetValue(st->extension_registry, PyValue_FromObjectBorrow(extension_key), &code_obj_v);
-        code_obj = NULL;
-        if (rc_dict > 0 && (code_obj = _PyValue_AsObjectStealAt(code_obj_v, BOX_SITE_DICT)) == NULL) {
-            rc_dict = -1;
-        }
+        Py_DECREF(extension_key);
         if (rc_dict < 0) {
-            Py_DECREF(extension_key);
             goto error;
         }
-        Py_DECREF(extension_key);
-        if (code_obj == NULL) {
-            /* The object is not registered in the extension registry.
-               This is the most likely code path. */
+        if (rc_dict == 0) {
             goto gen_global;
         }
-
-        code = PyLong_AsLong(code_obj);
-        Py_DECREF(code_obj);
+        code = _PyValue_AsLong(code_obj_v);
+        PyValue_CLOSE(code_obj_v);
         if (code <= 0 || code > 0x7fffffffL) {
             /* Should never happen in normal circumstances, since the type and
                the value of the code are checked in copyreg.add_extension(). */

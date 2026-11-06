@@ -12131,7 +12131,7 @@
                 if (none_val == NULL) {
                     int matches = _PyErr_ExceptionMatches(tstate, PyExc_TypeError);
                     if (matches &&
-                        (Py_TYPE(iterable)->tp_iter == NULL && !PySequence_Check(iterable)))
+                        (Py_TYPE(iterable)->tp_iter == NULL && !_PyValue_SequenceCheck(PyValue_FromObjectBorrow(iterable))))
                     {
                         _PyErr_Clear(tstate);
                         _PyErr_Format(tstate, PyExc_TypeError,

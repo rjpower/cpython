@@ -6035,6 +6035,32 @@ class ValueEmissionTests(unittest.TestCase):
         # A fresh Clinic per call: value_emission may be given only once.
         return _make_clinic().parse(text)
 
+    def test_value_core_keeps_object_signature(self):
+        generated = _make_clinic().parse(dedent("""
+            /*[clinic input]
+            output everything buffer
+            value_core
+            module m
+            m.f
+                n: int
+                /
+            [clinic start generated code]*/
+            /*[clinic input]
+            dump buffer
+            [clinic start generated code]*/
+        """))
+        self.assertIn("METH_O", generated)
+        self.assertNotIn("METH_VALUE", generated)
+        self.assertIn("_PyValue_AsInt(PyValue_FromObjectBorrow(", generated)
+
+    def test_value_core_refused_for_limited_api(self):
+        self.expect_failure("""
+            /*[clinic input]
+            value_core
+            [clinic start generated code]*/
+        """, "value_core requires an ordinary value-native core unit",
+            clinic=_make_clinic(limited_capi=True))
+
     def test_function_is_meth_value(self):
         generated = self.generate("""
             m.f

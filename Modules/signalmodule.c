@@ -1657,12 +1657,15 @@ signal_get_set_handlers(signal_state_t *state, PyObject *mod_dict)
     // Install Python SIGINT handler which raises KeyboardInterrupt
     PyObject* sigint_func = get_handler(SIGINT);
     if (sigint_func == state->default_handler) {
-        PyObject *int_handler = PyMapping_GetItemString(mod_dict,
-                                                        "default_int_handler");
-        if (!int_handler) {
+        PyValue handler = _PyValue_MappingGetItemString(
+            PyValue_FromObjectBorrow(mod_dict), "default_int_handler");
+        if (PyValue_IsNull(handler)) {
             return -1;
         }
-
+        PyObject *int_handler = _PyValue_AsObjectStealAt(handler, BOX_SITE_FIELD);
+        if (int_handler == NULL) {
+            return -1;
+        }
         set_handler(SIGINT, int_handler);
         Py_DECREF(sigint_func);
         PyOS_setsig(SIGINT, signal_handler);

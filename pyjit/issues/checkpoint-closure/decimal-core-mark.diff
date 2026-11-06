@@ -1,0 +1,10 @@
+--- a/Modules/_decimal/_decimal.c
++++ b/Modules/_decimal/_decimal.c
+@@ -29,6 +29,7 @@
+ #  define Py_BUILD_CORE_MODULE 1
+ #endif
+ 
++#define Py_VALUE_CORE 1
+ #include <Python.h>
+ #include "pycore_descrobject.h" // _Py_VALUE_GETSET()
+ #include "pycore_dict.h"          // PyDict_GetValue()

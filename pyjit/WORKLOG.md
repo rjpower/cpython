@@ -178,3 +178,19 @@ verbatim; new checkpoint transcripts do not belong here.
 
 - 2026-11-05 — Landed `d6eae4b1c1c`: complete generated handler-domain stats, strict per-dump metadata and calibrated pystats fixtures. Three builds, lint and 4,640 tests per debug/release build pass; the allocator-debug handler-306 overrun reproducer is fixed. All 29 kernels produce valid coverage, with zero loop deltas but two to 1,175 startup boxes; R27 remains open. The reviewed 21-file cold-path/Decimal/iterator batch is in full qualification.
 - 2026-11-05 — Landed `6aec17eefeb`: 28-file cold-path, Decimal and iterator batch with null-aware exits and retained owner diagnostics. Three builds/lint and 6,291 focused tests per profile pass after full-suite findings (fixture mismatches and profiler abort) were repaired. Raw predecessor count has eight strict-zero kernels; final R27/full qualification remains open. Replacement upstream/interim controls now include development-header-dependent modules; no new performance result yet.
+
+### 2026-11-05 — Context, iterator and numeric integration
+
+Committed runtime `3f480256304`: 25 files, including the complete Decimal core
+mark and reviewed constructor/context/slot ownership, six itertools producers,
+long-range value homes, numeric/bisect consumers, cold binary folding and
+allocator-independent stats owner metadata. Full release/debug each ran 54,301
+tests. Corrected the new negative-lo test assertion and exported the existing
+debug paired-slot validator; the focused 106 tests and arithmetic probes pass
+on both profiles. Debug module roster is 117 with zero missing/import failures.
+Landing now checks that roster explicitly. Raw kernel capture has nine fully
+zero kernels; all 29 loop deltas are zero and the strict gate still fails.
+The next struct/property/Unicode/inventory batch is in merged qualification.
+The local closure plan is updated. Updating the Loom plan copy was rejected by
+automatic approval review as an export of internal implementation details;
+that remote copy remains at revision 7. No alternate export was attempted.

@@ -1,0 +1,48 @@
+--- a/Objects/descrobject.c
++++ b/Objects/descrobject.c
+@@ -1954,6 +1954,15 @@
+ }
+ 
+ static int
++property_member_readonly_set(PyValueBorrow Py_UNUSED(self),
++                             PyValueBorrow Py_UNUSED(value),
++                             void *Py_UNUSED(closure))
++{
++    PyErr_SetString(PyExc_AttributeError, "readonly attribute");
++    return -1;
++}
++
++static int
+ property_doc_set(PyValueBorrow self, PyValueBorrow value, void *closure)
+ {
+     propertyobject *prop = (propertyobject *)PyValue_AsKnownObjectBorrow(self);
+@@ -2471,11 +2480,14 @@
+ }
+ 
+ static PyGetSetDef property_getsetlist[] = {
+-    _Py_VALUE_GETTER("fget", property_member_get, NULL,
++    _Py_VALUE_GETSET("fget", property_member_get,
++                     property_member_readonly_set, NULL,
+                      (void *)offsetof(propertyobject, prop_get)),
+-    _Py_VALUE_GETTER("fset", property_member_get, NULL,
++    _Py_VALUE_GETSET("fset", property_member_get,
++                     property_member_readonly_set, NULL,
+                      (void *)offsetof(propertyobject, prop_set)),
+-    _Py_VALUE_GETTER("fdel", property_member_get, NULL,
++    _Py_VALUE_GETSET("fdel", property_member_get,
++                     property_member_readonly_set, NULL,
+                      (void *)offsetof(propertyobject, prop_del)),
+     _Py_VALUE_GETSET("__doc__", property_member_get, property_doc_set, NULL,
+                      (void *)offsetof(propertyobject, prop_doc)),
+--- a/Lib/test/test_descr.py
++++ b/Lib/test/test_descr.py
+@@ -2600,6 +2600,9 @@
+                 self.fail("expected AttributeError from trying to set readonly %r "
+                           "attr on a property" % attr)
+ 
++            with self.assertRaisesRegex(AttributeError, "readonly attribute"):
++                delattr(raw, attr)
++
+         raw.__doc__ = 42
+         self.assertEqual(raw.__doc__, 42)
+ 

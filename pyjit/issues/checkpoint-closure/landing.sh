@@ -33,6 +33,12 @@ run_stage regen make -C "$debug" -j6 -s regen-ast clinic regen-cases
 run_stage lint make -C "$debug" check-value-api
 for variant in debug release stats; do
     run_stage "$variant-build" make -C "$runtime_build/pyvalue-rc-repr-$variant" -j6 -s
+    if ! rg -q '^Checked 117 modules .*0 missing, 0 failed on import\)$' \
+            "$logs/$variant-build.log"; then
+        tail -20 "$logs/$variant-build.log"
+        printf '%s: module roster failed\n' "$variant"
+        exit 1
+    fi
 done
 run_stage limited-abi make -C "$debug" -j6 -s regen-limited-abi
 run_stage frozenmain uv run --no-project --python /usr/bin/python3 -- \
@@ -49,11 +55,17 @@ if [[ ${PYJIT_LANDING_FULL:-0} != 1 ]]; then
         test_coroutines test_asyncio.test_tasks test_asyncio.test_futures \
         "$@" | sort -u)
 fi
+tests_failed=0
 for variant in release debug; do
     build=$runtime_build/pyvalue-rc-repr-$variant
-    run_stage "$variant-tests" uv run --no-project --python /usr/bin/python3 -- \
-        "$build/python" -m test -j6 "${tests[@]}"
-    rg '^(Total tests:|Result:)' "$logs/$variant-tests.log"
+    if ! run_stage "$variant-tests" uv run --no-project --python /usr/bin/python3 -- \
+            "$build/python" -m test -j6 "${tests[@]}"; then
+        tests_failed=1
+    fi
+    rg '^(Total tests:|Result:)' "$logs/$variant-tests.log" || true
 done
+if (( tests_failed )); then
+    exit 1
+fi
 git -C "$source_tree" diff --check
 printf 'Landing check passed. Source changes remain for coordinator commit.\n'

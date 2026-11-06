@@ -1,0 +1,88 @@
+--- a/Modules/_decimal/_decimal.c
++++ b/Modules/_decimal/_decimal.c
+@@ -839,41 +839,50 @@
+             n[6], b[6], n[7], b[7], n[8], b[8]);
+ }
+ 
+-static PyObject *
+-signaldict_richcompare(PyObject *v, PyObject *w, int op)
++static PyValue
++signaldict_richcompare_value(PyValueBorrow left, PyValueBorrow right, int op)
+ {
+-    PyObject *res = Py_NotImplemented;
+-
++    PyObject *v = PyValue_AsKnownObjectBorrow(left);
+     decimal_state *state = get_module_state_by_def(Py_TYPE(v));
+     assert(PyDecSignalDict_Check(state, v));
+-
+-    if ((SdFlagAddr(v) == NULL) || (SdFlagAddr(w) == NULL)) {
+-        return value_error_ptr(INVALID_SIGNALDICT_ERROR_MSG);
++    if (SdFlagAddr(v) == NULL) {
++        (void)value_error_ptr(INVALID_SIGNALDICT_ERROR_MSG);
++        return PyValue_NULL;
+     }
+-
+-    if (op == Py_EQ || op == Py_NE) {
+-        if (PyDecSignalDict_Check(state, w)) {
+-            res = (SdFlags(v)==SdFlags(w)) ^ (op==Py_NE) ? Py_True : Py_False;
+-        }
+-        else if (PyAnyDict_Check(w)) {
+-            uint32_t flags = dict_as_flags(state, w);
+-            if (flags & DEC_ERRORS) {
+-                if (flags & DEC_INVALID_SIGNALS) {
+-                    /* non-comparable: Py_NotImplemented */
+-                    PyErr_Clear();
+-                }
+-                else {
+-                    return NULL;
+-                }
+-            }
+-            else {
+-                res = (SdFlags(v)==flags) ^ (op==Py_NE) ? Py_True : Py_False;
++    PyObject *w = PyValue_IsObject(right) ? PyValue_AsKnownObjectBorrow(right) : NULL;
++    int signal_dict = w != NULL && PyDecSignalDict_Check(state, w);
++    if (signal_dict && SdFlagAddr(w) == NULL) {
++        (void)value_error_ptr(INVALID_SIGNALDICT_ERROR_MSG);
++        return PyValue_NULL;
++    }
++    if (op != Py_EQ && op != Py_NE) {
++        return PyValue_NotImplemented;
++    }
++    uint32_t flags;
++    if (signal_dict) {
++        flags = SdFlags(w);
++    }
++    else if (w != NULL && PyAnyDict_Check(w)) {
++        flags = dict_as_flags(state, w);
++        if (flags & DEC_ERRORS) {
++            if (flags & DEC_INVALID_SIGNALS) {
++                PyErr_Clear();
++                return PyValue_NotImplemented;
+             }
++            return PyValue_NULL;
++        }
++        if (SdFlagAddr(v) == NULL) {
++            (void)value_error_ptr(INVALID_SIGNALDICT_ERROR_MSG);
++            return PyValue_NULL;
+         }
+     }
+-
+-    return Py_NewRef(res);
++    else {
++        return PyValue_NotImplemented;
++    }
++    int equal = (SdFlags(v) == flags) ^ (op == Py_NE);
++    return equal ? PyValue_True : PyValue_False;
+ }
++_Py_VALUE_THUNK_RICHCMP(signaldict_richcompare, signaldict_richcompare_value)
+ 
+ static PyObject *
+ signaldict_copy(PyObject *self, PyObject *Py_UNUSED(dummy))
+@@ -899,6 +908,7 @@
+     {Py_tp_hash, PyObject_HashNotImplemented},
+     {Py_tp_getattro, PyObject_GenericGetAttr},
+     {Py_tp_richcompare, signaldict_richcompare},
++    {_Py_value_richcompare, signaldict_richcompare_value},
+     {Py_tp_iter, signaldict_iter},
+     {Py_tp_methods, signaldict_methods},
+     {Py_tp_init, signaldict_init},

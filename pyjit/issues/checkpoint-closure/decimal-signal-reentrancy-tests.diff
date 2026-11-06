@@ -1,0 +1,25 @@
+--- a/Lib/test/test_decimal.py
++++ b/Lib/test/test_decimal.py
+@@ -6169,6 +6169,22 @@
+ 
+ @unittest.skipUnless(C, "requires the C decimal module")
+ class CContextLifetimeTests(unittest.TestCase):
++    def test_signal_dict_truth_callback_destroys_context(self):
++        import _decimal
++        import gc
++
++        holder = [_decimal.Context()]
++        flags = holder[0].flags
++
++        class Truth:
++            def __bool__(self):
++                holder.clear()
++                gc.collect()
++                return True
++
++        with self.assertRaisesRegex(ValueError, "invalid signal dict"):
++            flags[_decimal.Inexact] = Truth()
++
+     def test_signal_dict_comparisons(self):
+         import _decimal
+         import gc

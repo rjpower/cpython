@@ -2,6 +2,7 @@
 
 Coordinator plan, 2026-11-05. Runtime starts at `e1229448be3` on
 `boil/pyvalue-rc-universal`; canonical documentation is in this checkout.
+The active closure sequence is in the final section; earlier queues are historical records.
 This packet resumes the existing work rather than replacing it. The coordinator
 owns interfaces, assignments, commits, merged qualification and measurement.
 
@@ -287,7 +288,7 @@ the Loom plan artifact. Stop at the checkpoint recap requested by the user.
   projection. Complete static/suite gates and all fresh kernel raw counters
   remain required; `_decimal`, manual API ports and suite tail are open.
 
-## Live integration queue after H3
+## Historical integration queue after H3
 
 - **Committed:** `d6eae4b1c1c` fixes full handler-domain instrumentation,
   strict reader metadata and calibrated counter fixtures. Three builds and
@@ -320,7 +321,7 @@ the Loom plan artifact. Stop at the checkpoint recap requested by the user.
   explanatory profile breakdown. Rank the next plan from that evidence;
   historical 1.73x/1.83x ratios do not describe this candidate.
 
-## Current handoff at 6aec17eefeb
+## Historical handoff at 6aec17eefeb
 
 The 28-file cold-path/Decimal/iterator increment is committed. Full release
 and debug runs exercised 54,289 and 53,808 tests, finding fixture mismatches
@@ -347,3 +348,14 @@ Eight kernels in the predecessor capture are zero in every raw process; all
 `upstream-release-devlibs-3a440b6` and `interim-release-devlibs-eba351` now
 load C Decimal/SSL/SQLite and preserve the old builds. They are the planned
 measurement controls; final freeze must verify actual stdlib/module imports.
+
+## Active closure sequence after the second full integration run
+
+1. **Coordinator:** freeze the 38-packet Context/iterator/math candidate, retain both full-suite results (54,301 tests per profile), and correct the new bisect test's error-message assumption. Debug also exposed `_bisect` failing import because the slot-row validator was not exported. Export that existing debug contract, enforce the expected 117-module roster in the landing script, then rebuild and rerun bisect/value-call plus the compiler arithmetic probe. Land only after independent review and all affected checks pass.
+2. **Coordinator:** integrate reviewed struct packing/provider, the value Unicode formatter after source review, property fields plus additive review corrections, and static inventory hardening plus its comment-stripping correction. Regenerate affected products, build all profiles, and run the corresponding narrow tests plus the integration smoke set. Property has syntax checks only until this merged runtime run.
+3. **Terra medium, Sol design review:** fix ctypes foreign-pointer keepalive ownership, then migrate private scalar/field callbacks, constructors and consumers. The preparatory `b_objects` conversion is rejected: canonicalizing the sole raw owner can invalidate a pointer in foreign memory. Preserve its artifact. Solve raw FFI ownership, GC, sharing, replacement and allocation-failure semantics before admitting inline internal keepalive tokens. Normal mutable constructor dispatch is required; the existing value-preserving type-call tuple can carry inline arguments to a ported initializer.
+4. **Luna medium:** after property, port cold `get_const_value`, deferred annotations and import attribute continuations from the latest raw-kernel PCs; return bounded proposals and minimal checks. Continue the manual API and indirect-slot census from actual compiler results rather than historical counts. Sol reviews ownership changes; the coordinator owns shared headers and integration.
+5. **Coordinator and Sol:** after these coherent closures, run a new full stats census, resolve invalid-owner rows using the reviewed allocator-independent reporter fix, and finish finite child/fork/intentional-exit accounting. Rank the remaining core, core-owned thunk and adapter tail. Complete the API/provider inventory and indirect-slot audit before setting completion metadata. Current full stats at committed `6aec17eefeb` passes 54,290 functional tests but records 41,038,468 debt boxes; this is failing admission evidence.
+6. **Coordinator:** repeat complete release/debug qualification and strict raw all-29 kernel/full-suite gates on the final clean source. The current candidate has nine raw-zero kernels and all 29 zero loop deltas; [the exact census](kernels-context-candidate.md) remains a failing gate. Do not count core-owned adapters as acceptable boundaries.
+7. **Coordinator:** stop worker builds, verify the matched controls' source/compiler/options and actual standard-library/C extension imports, warm all binaries, then run three rotating interleaved U/I/C kernel timing rounds, memory measurements and the established pyperformance subset. Retain spread and host conditions, and profile the measured gap. Publish per-kernel ratios, aggregate time/RSS and limitations against upstream `3a440b65695` and interim `eba351fee7d`. Historical 1.73x/1.83x results do not apply to this source.
+8. **Coordinator:** make the evidence-driven follow-up plan: interpreter cost and IR encoding choices (including deferred G2), remaining throughput/memory issues, serialization recovery, then method/tracing JIT. Keep accepted design, implementation status and deferred alternatives separate. Preserve old worktrees and sealed evidence throughout.

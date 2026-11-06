@@ -1,0 +1,164 @@
+diff --git a/Objects/unicodeobject.c b/Objects/unicodeobject.c
+--- a/Objects/unicodeobject.c
++++ b/Objects/unicodeobject.c
+@@ -2726,16 +2726,6 @@
+    the argument is a PyValueBorrow: the caller passes PyValue_Borrow(v). */
+ #define F_VALUE 6
+ 
+-/* A new reference to the object for the value argument of %vR, %vS or
+-   %vA, boxing an inline value. */
+-static PyObject *
+-unicode_fromformat_value_object(va_list *vargs)
+-{
+-    PyValueBorrow value = va_arg(*vargs, PyValueBorrow);
+-    assert(!PyValue_IsNull(value));
+-    return _PyValue_AsObjectAt(value, BOX_SITE_REPR);
+-}
+-
+ static const char*
+ unicode_fromformat_arg(_PyUnicodeWriter *writer,
+                        const char *f, va_list *vargs)
+@@ -3051,12 +3041,11 @@
+     {
+         PyObject *str;
+         if (sizemod == F_VALUE) {
+-            PyObject *obj = unicode_fromformat_value_object(vargs);
+-            if (obj == NULL) {
+-                return NULL;
+-            }
+-            str = _PyValue_Str(PyValue_FromObjectBorrow(obj));
+-            Py_DECREF(obj);
++            PyValueBorrow value = va_arg(*vargs, PyValueBorrow);
++            assert(!PyValue_IsNull(value));
++            PyValue owned = PyValue_DUP(value);
++            str = _PyValue_Str(owned);
++            PyValue_CLOSE(owned);
+         }
+         else {
+             PyObject *obj = va_arg(*vargs, PyObject *);
+@@ -3077,12 +3066,11 @@
+     {
+         PyObject *repr;
+         if (sizemod == F_VALUE) {
+-            PyObject *obj = unicode_fromformat_value_object(vargs);
+-            if (obj == NULL) {
+-                return NULL;
+-            }
+-            repr = _PyValue_Repr(PyValue_FromObjectBorrow(obj));
+-            Py_DECREF(obj);
++            PyValueBorrow value = va_arg(*vargs, PyValueBorrow);
++            assert(!PyValue_IsNull(value));
++            PyValue owned = PyValue_DUP(value);
++            repr = _PyValue_Repr(owned);
++            PyValue_CLOSE(owned);
+         }
+         else {
+             PyObject *obj = va_arg(*vargs, PyObject *);
+@@ -3103,12 +3091,11 @@
+     {
+         PyObject *ascii;
+         if (sizemod == F_VALUE) {
+-            PyObject *obj = unicode_fromformat_value_object(vargs);
+-            if (obj == NULL) {
+-                return NULL;
+-            }
+-            ascii = _PyValue_ASCII(PyValue_FromObjectBorrow(obj));
+-            Py_DECREF(obj);
++            PyValueBorrow value = va_arg(*vargs, PyValueBorrow);
++            assert(!PyValue_IsNull(value));
++            PyValue owned = PyValue_DUP(value);
++            ascii = _PyValue_ASCII(owned);
++            PyValue_CLOSE(owned);
+         }
+         else {
+             PyObject *obj = va_arg(*vargs, PyObject *);
+diff --git a/Modules/_testinternalcapi.c b/Modules/_testinternalcapi.c
+--- a/Modules/_testinternalcapi.c
++++ b/Modules/_testinternalcapi.c
+@@ -3351,6 +3351,27 @@
+     return PyUnicode_FromFormat(format, value, other);
+ }
+ 
++static PyObject *
++pyvalue_format_inline(PyObject *self, PyObject *Py_UNUSED(args))
++{
++    return PyUnicode_FromFormat(
++        "%vR|%vS|%vA",
++        PyValue_Borrow(PyValue_FromInt64(1000)),
++        PyValue_Borrow(PyValue_FromDouble(-0.0)),
++        PyValue_Borrow(PyValue_FromInt64(1000)));
++}
++
++static PyObject *
++pyvalue_format_list_item(PyObject *self, PyObject *list)
++{
++    if (!PyList_CheckExact(list) || PyList_GET_SIZE(list) != 1) {
++        PyErr_SetString(PyExc_TypeError, "expected a one-item list");
++        return NULL;
++    }
++    PyValueBorrow value = PyList_GET_VALUE(list, 0);
++    return PyUnicode_FromFormat("%vR", value);
++}
++
+ /* PyErr_Format(exception, format, value) for the canonical value of obj. */
+ static PyObject *
+ pyvalue_err_format(PyObject *self, PyObject *args)
+@@ -4233,6 +4254,8 @@
+     {"pyvalue_from_object_known", pyvalue_from_object_known, METH_O, NULL},
+     {"pyvalue_entry_null", pyvalue_entry_null, METH_NOARGS, NULL},
+     {"pyvalue_format", pyvalue_format, METH_VARARGS, NULL},
++    {"pyvalue_format_inline", pyvalue_format_inline, METH_NOARGS, NULL},
++    {"pyvalue_format_list_item", pyvalue_format_list_item, METH_O, NULL},
+     {"pyvalue_err_format", pyvalue_err_format, METH_VARARGS, NULL},
+     {"pyvalue_as_object_index", pyvalue_as_object_index, METH_NOARGS, NULL},
+     {"pyvalue_as_known_object_inline", pyvalue_as_known_object_inline, METH_O, NULL},
+diff --git a/Lib/test/test_pyvalue_api.py b/Lib/test/test_pyvalue_api.py
+--- a/Lib/test/test_pyvalue_api.py
++++ b/Lib/test/test_pyvalue_api.py
+@@ -130,6 +130,23 @@
+         with self.assertRaisesRegex(ZeroDivisionError, "repr"):
+             self.format("%vR", BadRepr())
+ 
++    def test_inline_format_without_object_projection(self):
++        self.assertEqual(_testinternalcapi.pyvalue_format_inline(),
++                         "1000|-0.0|1000")
++
++    def test_repr_can_replace_the_borrowed_field(self):
++        items = []
++
++        class ReplacesItem:
++            def __repr__(self):
++                items.clear()
++                return "replaced"
++
++        items.append(ReplacesItem())
++        self.assertEqual(_testinternalcapi.pyvalue_format_list_item(items),
++                         "replaced")
++        self.assertEqual(items, [])
++
+     def test_invalid(self):
+         for fmt in ("%vd", "%vs", "%vU", "%vc", "%lvR", "%vlR", "%vV"):
+             with self.subTest(fmt=fmt):
+diff --git a/Lib/test/test_pystats.py b/Lib/test/test_pystats.py
+--- a/Lib/test/test_pystats.py
++++ b/Lib/test/test_pystats.py
+@@ -363,6 +363,19 @@
+                          int(stats['Object inline int boxes'])
+                          + int(stats['Object inline float boxes']))
+ 
++    def test_inline_value_format_does_not_box(self):
++        code = """
++        import _testinternalcapi
++        def func_start():
++            sys._stats_clear()
++            assert _testinternalcapi.pyvalue_format_inline() == '1000|-0.0|1000'
++            sys._stats_off()
++        """
++        stats = run_test_code_stats(code, args=['-X', 'pystats'])
++        self.assertEqual(int(stats['Boxing by site (repr)']), 0)
++        self.assertEqual(int(stats['Object inline int boxes']), 0)
++        self.assertEqual(int(stats['Object inline float boxes']), 0)
++
+     def test_box_kinds(self):
+         """Check the box count by kind (pyjit/design/proposals/
+         value-api-v2a0.md, section 4.7).

@@ -1,40 +1,40 @@
 # Project status
 
-Live closure work, 2026-11-05: required W4b review fixes landed as
-`f84d73164fa`; debug/release/stats builds, lint and 4,202 focused/smoke tests
-per debug/release build passed. W5's reviewed kernel, gate and first startup
-batch landed as `98a26bb6218`, with three builds, lint and 8,826 focused tests
-per debug/release build passing. The marshal/AST/I/O batch landed as
-`4b2a6926d2a`, with three builds, lint and 5,937 tests per build passing.
-The startup/exception batch landed as `58db4324fec`, with three builds, lint
-and 5,561 tests per debug/release build passing. The reviewed 139-file mechanical,
-direct-slot and first Decimal batch landed as `e983958bede`, with three builds,
-lint and 9,511 tests per debug/release build passing. `4fffee855c9` adds startup
-fixes, selective Clinic value methods and 65 Decimal macro-family methods,
-with three builds, lint and 6,649 tests per build passing. Current runtime HEAD
-is `6aec17eefeb`: cold compiler/marshal/keyword, Decimal and iterator ports,
-following H3 at `d6eae4b1c1c`. Three builds, lint and 6,291 focused tests per
-debug/release build pass after full-suite findings were corrected.
-Linux no-op startup records zero boxes. Cold kernel compilation still boxes
-constants, marshal fields and keyword values; zero loop deltas do not pass R27.
-A fresh full-suite stats census at `4fff` ran 54,270 tests with 31 failures
-in eight files; the R27 gate fails with boxing and accounting debt. Its
-[triage report](issues/checkpoint-closure/fullsuite-4fff-census.md) distinguishes
-the totals and limitations. H3 instrumentation repairs the diagnosed
-256-entry stats array overrun. A fresh 87-dump run covers all 29 kernels:
-loop deltas are zero, but raw warmup boxes range from two to 1,175.
-The 28-file batch is committed. Full release/debug runs reported 54,289 and
-53,808 tests respectively. Fixture mismatches and a debug profiler null-exit
-abort were fixed; affected tests pass on both builds. Full final qualification
-is still required after the remaining ports. The new full stats census is
-running at this integration point with invalid-owner samples retained.
-Its predecessor candidate counted eight kernels at zero across all three raw
-processes; 21 retain startup/setup boxes. See the [kernel table](issues/checkpoint-closure/kernels-cold-candidate.md).
-Terra owns remaining Decimal methods/constructors/slots; Luna owns manual APIs;
-Sol owns important debugging and review. `_decimal`, manual API
-ports, the full-suite box tail and final qualification/measurement remain.
-G2 is deferred until after the merged baseline measurement.
-Execution and assignments: [closure plan](issues/checkpoint-closure/plan.md).
+Live closure work, 2026-11-05: runtime HEAD is `3f480256304`. The latest
+25-file integration carries values through Decimal Context constructors,
+methods, getsets and slots; itertools, long ranges, math/bisect consumers and
+cold compiler folding. Decimal is now a value-native core unit. Full release
+and debug runs each exercised 54,301 tests. A new bisect fixture assumed the
+wrong C error text, and debug bisect could not import because its existing slot
+validator was hidden. Both were corrected; all 106 affected tests and compiler
+arithmetic probes pass on each profile. Debug now imports all 117 expected
+modules. The landing script now checks the module roster because `make` can
+return success after removing a failed extension.
+
+The next 14-file candidate integrates independently reviewed struct packing,
+property fields, Unicode value formatting and inventory-checker hardening.
+Merged regeneration/builds and focused qualification are running. Terra owns
+ctypes callbacks and constructor closure; Luna owns the remaining compiler and
+import continuations; Sol owns independent review and complete stats process
+accounting. The rejected ctypes keepalive-home patch exposed a real foreign
+pointer lifetime defect: canonicalizing its sole owner can release an object
+whose address is still stored in foreign memory. The replacement design must
+retain explicit raw FFI ownership without weakening canonical value homes.
+
+The complete stats suite at preceding `6aec17eefeb` passed 54,290 tests, but
+R27 fails with 41,038,468 core/core-owned adapter boxes and incomplete process
+accounting. Its 41 invalid-owner rows were traced to deliberately failing
+Python allocators during stats reporting; the reporter repair is integrated
+and its low-memory probes pass. The current kernel capture has nine of 29
+kernels at zero boxes across every raw process; all 29 loop deltas are zero.
+See the [exact raw census](issues/checkpoint-closure/kernels-context-candidate.md).
+These are failing admission results, not a completed checkpoint.
+
+The coordinator owns integration, bulk qualification and performance. Matched
+upstream/interim controls now load the same development-library families.
+Current performance has not been measured; historical ratios below are not
+results for this source. G2 remains deferred until the qualified baseline.
+Execution, assignments and measurement sequence: [closure plan](issues/checkpoint-closure/plan.md).
 
 The takeover snapshot below was checked against `e1229448be3`, before these
 closure landings. Use the live paragraph above and closure plan for assignments.

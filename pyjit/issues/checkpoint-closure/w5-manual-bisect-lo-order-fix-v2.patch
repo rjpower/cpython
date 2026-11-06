@@ -1,0 +1,37 @@
+--- a/Modules/_bisectmodule.c
++++ b/Modules/_bisectmodule.c
+@@ -201,6 +201,10 @@
+ bisect_right_values(PyValueBorrow a, PyValueBorrow x, Py_ssize_t lo,
+                     Py_ssize_t hi, PyValueBorrow key)
+ {
++    if (lo < 0) {
++        PyErr_SetString(PyExc_ValueError, "lo must be non-negative");
++        return -1;
++    }
+     PyObject *a_obj;
+     if (PyValue_IsObject(a)) {
+         a_obj = PyValue_AsKnownObjectBorrow(a);
+@@ -445,6 +449,10 @@
+ bisect_left_values(PyValueBorrow a, PyValueBorrow x, Py_ssize_t lo,
+                     Py_ssize_t hi, PyValueBorrow key)
+ {
++    if (lo < 0) {
++        PyErr_SetString(PyExc_ValueError, "lo must be non-negative");
++        return -1;
++    }
+     PyObject *a_obj;
+     if (PyValue_IsObject(a)) {
+         a_obj = PyValue_AsKnownObjectBorrow(a);
+--- a/Lib/test/test_bisect.py
++++ b/Lib/test/test_bisect.py
+@@ -123,6 +123,10 @@
+         mod = self.module
+         self.assertRaises(ValueError, mod.bisect_left, [1, 2, 3], 5, -1, 3)
+         self.assertRaises(ValueError, mod.bisect_right, [1, 2, 3], 5, -1, 3)
++        for func in (mod.bisect_left, mod.bisect_right):
++            for args in ((1, 5, -1), (1, 5, -1, 0)):
++                with self.assertRaisesRegex(ValueError, "lo must be non-negative"):
++                    func(*args)
+         self.assertRaises(ValueError, mod.insort_left, [1, 2, 3], 5, -1, 3)
+         self.assertRaises(ValueError, mod.insort_right, [1, 2, 3], 5, -1, 3)
+ 

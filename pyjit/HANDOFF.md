@@ -1,5 +1,15 @@
 # Coordinator handoff
 
+Current integration pointer (2026-11-05): runtime `3f480256304`, documented in
+[status](STATUS.md) and the final section of the [closure plan](issues/checkpoint-closure/plan.md).
+The 25-file Context/iterator/math/compiler batch is committed. The next
+14-file struct/property/formatter/inventory candidate is under merged checks.
+Preserve original worker patches and additive corrections. Full stats is
+functionally clean at `6aec17eefeb`, but strict boxing/process gates still fail.
+The rejected ctypes `b_objects` home patch must not be applied: raw foreign
+pointers need a separate explicit ownership design. Performance remains pending.
+
+
 Active closure: committed runtime HEAD is `6aec17eefeb`. Its 28-file batch
 includes cold compiler/marshal/keyword paths, Decimal construction/slots,
 deque/bytes/fileno, null-aware object exits and accounting diagnostics.

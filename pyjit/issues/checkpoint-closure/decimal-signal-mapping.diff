@@ -1,0 +1,87 @@
+--- a/Modules/_decimal/_decimal.c
++++ b/Modules/_decimal/_decimal.c
+@@ -755,57 +755,51 @@
+     return PyTuple_Type.tp_iter(state->SignalTuple);
+ }
+ 
+-static PyObject *
+-signaldict_getitem(PyObject *self, PyObject *key)
++static PyValue
++signaldict_getitem_value(PyObject *self, PyValueBorrow key)
+ {
+-    uint32_t flag;
+     if (SdFlagAddr(self) == NULL) {
+-        return value_error_ptr(INVALID_SIGNALDICT_ERROR_MSG);
++        (void)value_error_ptr(INVALID_SIGNALDICT_ERROR_MSG);
++        return PyValue_NULL;
+     }
+     decimal_state *state = get_module_state_by_def(Py_TYPE(self));
+-
+-    flag = exception_as_flag(state, key);
++    PyObject *key_object = PyValue_IsObject(key) ? PyValue_AsKnownObjectBorrow(key) : NULL;
++    uint32_t flag = exception_as_flag(state, key_object);
+     if (flag & DEC_ERRORS) {
+-        return NULL;
++        return PyValue_NULL;
+     }
+-
+-    return SdFlags(self)&flag ? incr_true() : incr_false();
++    return SdFlags(self) & flag ? PyValue_True : PyValue_False;
+ }
++_Py_VALUE_THUNK_SUBSCRIPT(signaldict_getitem, signaldict_getitem_value)
+ 
+ static int
+-signaldict_setitem(PyObject *self, PyObject *key, PyObject *value)
++signaldict_setitem_value(PyObject *self, PyValueBorrow key, PyValueBorrow value)
+ {
+-    uint32_t flag;
+-    int x;
+-
+     if (SdFlagAddr(self) == NULL) {
+         return value_error_int(INVALID_SIGNALDICT_ERROR_MSG);
+     }
+-
+-    if (value == NULL) {
++    if (PyValue_IsNull(value)) {
+         return value_error_int("signal keys cannot be deleted");
+     }
+-
+     decimal_state *state = get_module_state_by_def(Py_TYPE(self));
+-    flag = exception_as_flag(state, key);
++    PyObject *key_object = PyValue_IsObject(key) ? PyValue_AsKnownObjectBorrow(key) : NULL;
++    uint32_t flag = exception_as_flag(state, key_object);
+     if (flag & DEC_ERRORS) {
+         return -1;
+     }
+-
+-    x = _PyValue_IsTrue(PyValue_FromObjectBorrow(value));
+-    if (x < 0) {
++    int truth = _PyValue_IsTrue(value);
++    if (truth < 0) {
+         return -1;
+     }
+-
+-    if (x == 1) {
++    if (truth) {
+         SdFlags(self) |= flag;
+     }
+     else {
+         SdFlags(self) &= ~flag;
+     }
+-
+     return 0;
+ }
++_Py_VALUE_THUNK_ASSSUBSCRIPT(signaldict_setitem, signaldict_setitem_value)
+ 
+ static void
+ signaldict_dealloc(PyObject *self)
+@@ -911,7 +905,9 @@
+     // Mapping protocol
+     {Py_mp_length, signaldict_len},
+     {Py_mp_subscript, signaldict_getitem},
++    {_Py_value_subscript, signaldict_getitem_value},
+     {Py_mp_ass_subscript, signaldict_setitem},
++    {_Py_value_ass_subscript, signaldict_setitem_value},
+     {0, NULL},
+ };
+ 

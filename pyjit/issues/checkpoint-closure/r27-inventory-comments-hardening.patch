@@ -1,0 +1,45 @@
+diff --git a/Tools/build/check_r27.py b/Tools/build/check_r27.py
+--- a/Tools/build/check_r27.py
++++ b/Tools/build/check_r27.py
+@@ -756,7 +756,8 @@
+         out.append("ownership inventory is empty")
+     if not check_value_api.MARKED_SLOT_FAMILIES:
+         out.append("direct object-slot calls are not enforced by value API lint")
+-    headers = [(p, p.read_text(errors="replace")) for p in (src / "Include").rglob("*.h")]
++    headers = [(p, check_value_api.strip_c(p.read_text(errors="replace")))
++               for p in (src / "Include").rglob("*.h")]
+     if not headers:
+         out.append("no headers found for ownership inventory")
+     seen = set()
+diff --git a/Lib/test/test_tools/test_check_r27.py b/Lib/test/test_tools/test_check_r27.py
+--- a/Lib/test/test_tools/test_check_r27.py
++++ b/Lib/test/test_tools/test_check_r27.py
+@@ -465,6 +465,10 @@
+                 "PyAPI_FUNC(int) PyValue_Foo(void);\n", ""))
+             out, _ = check_r27.static_violations(cdb, root, inventory)
+             self.assertEqual(out, ["PyFoo: value provider PyValue_Foo declaration missing"])
++            header.write_text(header.read_text() +
++                              "/* PyAPI_FUNC(int) PyValue_Foo(void); */\n")
++            out, _ = check_r27.static_violations(cdb, root, inventory)
++            self.assertEqual(out, ["PyFoo: value provider PyValue_Foo declaration missing"])
+ 
+             inventory.write_text('r27_complete=true\n[row]\n'
+                                  'object="PyFoo"\nvalue="PyValue_Foo"\n')
+@@ -496,6 +500,17 @@
+             without_declaration = text.replace("PyAPI_FUNC(PyValue)", "")
+             self.assertFalse(check_r27.value_provider_declared(
+                 "_PyValue_Add", [(header, without_declaration)]))
++            for commented in (
++                text.replace("X(Add)", "/* X(Add) */"),
++                text.replace("#define _PyValue_DECLARE_BINARY(NAME)",
++                             "/* #define _PyValue_DECLARE_BINARY(NAME)")
++                    .replace("PyValueBorrow a);", "PyValueBorrow a); */"),
++                text.replace("_PyValue_BINARY_DISPATCHERS(_PyValue_DECLARE_BINARY)\n",
++                             "/* _PyValue_BINARY_DISPATCHERS(_PyValue_DECLARE_BINARY) */\n"),
++            ):
++                code = check_r27.check_value_api.strip_c(commented)
++                self.assertFalse(check_r27.value_provider_declared(
++                    "_PyValue_Add", [(header, code)]))
+ 
+ 
+ class ReportTests(unittest.TestCase):

@@ -1,0 +1,13 @@
+--- a/Modules/_decimal/_decimal.c
++++ b/Modules/_decimal/_decimal.c
+@@ -1418,9 +1418,8 @@
+         return -1;
+     }
+ 
+-    PyValueBorrow values[] = {traps, status};
+     for (int i = 0; i < 2; i++) {
+-        PyValueBorrow value = values[i];
++        PyValueBorrow value = i == 0 ? traps : status;
+         if (PyValue_IsNull(value)) {
+             continue;
+         }

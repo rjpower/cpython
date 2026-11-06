@@ -1,0 +1,36 @@
+--- a/Lib/test/support/script_helper.py
++++ b/Lib/test/support/script_helper.py
+@@ -47,8 +47,9 @@ def interpreter_requires_environment():
+ 
+         # Try running an interpreter with -E to see if it works or not.
+         try:
+-            subprocess.check_call([sys.executable, '-E',
+-                                   '-c', 'import sys; sys.exit(0)'])
++            subprocess.check_call([sys.executable, '-E',
++                                   *_pystats_options(True),
++                                   '-c', 'import sys; sys.exit(0)'])
+         except subprocess.CalledProcessError:
+             __cached_interp_requires_environment = True
+         else:
+--- a/Lib/test/test_script_helper.py
++++ b/Lib/test/test_script_helper.py
+@@ -112,6 +112,19 @@ class TestScriptHelperEnvironment(unittest.TestCase):
+             self.assertEqual(sys.executable, check_call_command[0])
+             self.assertIn('-E', check_call_command)
+ 
++    @mock.patch('subprocess.check_call')
++    def test_environment_probe_counts_in_stats_run(self, mock_check_call):
++        stats_flags = ['-X', 'pystats', '-X', 'pystats_dir=/tmp/stats']
++        with (mock.patch.dict(os.environ),
++              mock.patch.object(script_helper, '_pystats_options',
++                                return_value=stats_flags) as mock_options):
++            os.environ.pop('PYTHONHOME', None)
++            self.assertFalse(script_helper.interpreter_requires_environment())
++        mock_options.assert_called_once_with(True)
++        self.assertEqual(mock_check_call.call_args.args[0],
++                         [sys.executable, '-E', *stats_flags,
++                          '-c', 'import sys; sys.exit(0)'])
++
+     @mock.patch('subprocess.check_call')
+     def test_interpreter_requires_environment_with_pythonhome(self, mock_check_call):
+         with mock.patch.dict(os.environ):

@@ -1,0 +1,34 @@
+--- a/Lib/test/test_decimal.py
++++ b/Lib/test/test_decimal.py
+@@ -6169,6 +6169,31 @@
+ 
+ @unittest.skipUnless(C, "requires the C decimal module")
+ class CContextLifetimeTests(unittest.TestCase):
++    def test_signal_dict_comparisons(self):
++        import _decimal
++        import gc
++
++        context = _decimal.Context()
++        flags = context.flags
++        matching = dict(flags)
++        self.assertEqual(flags, matching)
++        self.assertEqual(matching, flags)
++        self.assertNotEqual(flags, {})
++        malformed = matching.copy()
++        malformed.pop(next(iter(malformed)))
++        self.assertNotEqual(flags, malformed)
++        for other in (1, 1.5):
++            self.assertNotEqual(flags, other)
++            self.assertNotEqual(other, flags)
++            with self.assertRaises(TypeError):
++                flags < other
++        invalid = _decimal.Context().flags
++        gc.collect()
++        with self.assertRaisesRegex(ValueError, "invalid signal dict"):
++            invalid == flags
++        with self.assertRaisesRegex(ValueError, "invalid signal dict"):
++            flags == invalid
++
+     def test_reentrant_current_context_replacement(self):
+         import _decimal
+         import _pydecimal

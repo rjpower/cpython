@@ -1,0 +1,34 @@
+--- a/Lib/test/test_struct.py
++++ b/Lib/test/test_struct.py
+@@ -523,6 +523,31 @@
+         with self.assertRaises(OverflowError):
+             pack_into(writable_buf, -2**1000, test_string)
+ 
++    def test_value_pack_overflow_writes_and_callbacks(self):
++        for fmt, partial in ((">Q", b"\x00" * 7 + b"\x05"),
++                             ("<Q", b"\x05" + b"\x00" * 7)):
++            native = "<" if sys.byteorder == "little" else ">"
++            expected = b"\x00" * 8 if fmt[0] == native else partial
++            with self.subTest(fmt=fmt):
++                buffer = bytearray(b"X" * 10)
++                with self.assertRaises(struct.error):
++                    struct.pack_into(fmt, buffer, 1, 2**80 + 5)
++                self.assertEqual(buffer, b"X" + expected + b"X")
++
++        calls = []
++        class Number:
++            def __complex__(self):
++                calls.append("complex")
++                return 3 + 4j
++            def __float__(self):
++                calls.append("float")
++                return 9.0
++        self.assertEqual(struct.unpack(">Zd", struct.pack(">Zd", Number())),
++                         (3 + 4j,))
++        self.assertEqual(calls, ["complex"])
++        self.assertEqual(struct.pack(">Zd", -0.0),
++                         struct.pack(">dd", -0.0, 0.0))
++
+     def test_pack_into(self):
+         s = struct.Struct('21s')
+         self._test_pack_into(s.pack_into)

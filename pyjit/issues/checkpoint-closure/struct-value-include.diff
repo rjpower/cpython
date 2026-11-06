@@ -1,0 +1,11 @@
+--- a/Modules/_struct.c
++++ b/Modules/_struct.c
+@@ -13,7 +13,7 @@
+ #include "pycore_bytesobject.h"   // _PyBytesWriter
+ #include "pycore_dict.h"          // PyDict_SetValue()
+ #include "pycore_lock.h"          // _PyOnceFlag_CallOnce()
+-#include "pycore_long.h"          // _PyLong_AsByteArray()
++#include "pycore_long_value.h"    // _PyLong_ValueAsByteArray()
+ #include "pycore_moduleobject.h"  // _PyModule_GetState()
+ #include "pycore_value.h"         // PyValue_AsKnownObjectBorrow()
+ #include "pycore_value_ops.h"     // _PyValue_IsTrue()

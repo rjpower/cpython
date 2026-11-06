@@ -32,6 +32,7 @@
 #include "pycore_dict.h"          // PyDict_SetValue()
 #include "pycore_tuple.h"         // _PyTuple_PackValues()
 #include "pycore_value.h"         // PyValue
+#include "pycore_value_call.h"    // _PyValue_CallOneArg()
 
 #include "cursor.h"
 #include "microprotocols.h"
@@ -81,85 +82,70 @@ pysqlite_microprotocols_add(pysqlite_state *state, PyTypeObject *type,
 
 /* pysqlite_microprotocols_adapt - adapt an object to the built-in protocol */
 
-PyObject *
-pysqlite_microprotocols_adapt(pysqlite_state *state, PyObject *obj,
-                              PyObject *proto, PyObject *alt)
+PyValue
+pysqlite_microprotocols_adapt(pysqlite_state *state, PyValueBorrow obj,
+                              PyValueBorrow proto, PyValueBorrow alt)
 {
-    PyObject *adapter, *key, *adapted;
-
-    /* we don't check for exact type conformance as specified in PEP 246
-       because the PrepareProtocolType type is abstract and there is no
-       way to get a quotable object to be its instance */
-
-    /* look for an adapter in the registry */
-    key = _PyTuple_PackValues(
-        2, (PyValueBorrow[]){PyValue_FromObjectBorrow((PyObject *)Py_TYPE(obj)),
-                             PyValue_FromObjectBorrow(proto)});
-    if (!key) {
-        return NULL;
+    PyObject *key = _PyTuple_PackValues(
+        2, (PyValueBorrow[]){PyValue_FromObjectBorrow((PyObject *)PyValue_TYPE(obj)),
+                             proto});
+    if (key == NULL) {
+        return PyValue_NULL;
     }
-    PyValue adapter_v;
-    if (PyDict_GetValue(state->psyco_adapters, PyValue_FromObjectBorrow(key),
-                        &adapter_v) < 0) {
-        Py_DECREF(key);
-        return NULL;
-    }
+    PyValue adapter;
+    int found = PyDict_GetValue(state->psyco_adapters,
+                                PyValue_FromObjectBorrow(key), &adapter);
     Py_DECREF(key);
-    adapter = NULL;
-    if (!PyValue_IsNull(adapter_v)) {
-        adapter = _PyValue_AsObjectStealAt(adapter_v, BOX_SITE_DICT);
-        if (adapter == NULL) {
-            return NULL;
-        }
+    if (found < 0) {
+        return PyValue_NULL;
     }
-    if (adapter) {
-        adapted = PyObject_CallOneArg(adapter, obj);
-        Py_DECREF(adapter);
-        return adapted;
+    if (found) {
+        PyValue result = _PyValue_CallOneArg(_PyThreadState_GET(),
+                                             PyValue_Borrow(adapter), obj);
+        PyValue_CLOSE(adapter);
+        return result;
     }
 
-    /* try to have the protocol adapt this object */
-    if (PyObject_GetOptionalAttr(proto, state->str___adapt__, &adapter) < 0) {
-        return NULL;
+    _PyStatusValue attr = _PyValue_GetOptionalAttr(proto, state->str___adapt__);
+    if (attr.status < 0) {
+        return PyValue_NULL;
     }
-    if (adapter) {
-        adapted = PyObject_CallOneArg(adapter, obj);
-        Py_DECREF(adapter);
-
-        if (adapted == Py_None) {
-            Py_DECREF(adapted);
+    if (attr.status) {
+        PyValue result = _PyValue_CallOneArg(_PyThreadState_GET(),
+                                             PyValue_Borrow(attr.value), obj);
+        PyValue_CLOSE(attr.value);
+        if (PyValue_IsNone(result)) {
+            PyValue_CLOSE(result);
         }
-        else if (adapted || !PyErr_ExceptionMatches(PyExc_TypeError)) {
-            return adapted;
+        else if (!PyValue_IsNull(result) || !PyErr_ExceptionMatches(PyExc_TypeError)) {
+            return result;
         }
         else {
             PyErr_Clear();
         }
     }
 
-    /* and finally try to have the object adapt itself */
-    if (PyObject_GetOptionalAttr(obj, state->str___conform__, &adapter) < 0) {
-        return NULL;
+    attr = _PyValue_GetOptionalAttr(obj, state->str___conform__);
+    if (attr.status < 0) {
+        return PyValue_NULL;
     }
-    if (adapter) {
-        adapted = PyObject_CallOneArg(adapter, proto);
-        Py_DECREF(adapter);
-
-        if (adapted == Py_None) {
-            Py_DECREF(adapted);
+    if (attr.status) {
+        PyValue result = _PyValue_CallOneArg(_PyThreadState_GET(),
+                                             PyValue_Borrow(attr.value), proto);
+        PyValue_CLOSE(attr.value);
+        if (PyValue_IsNone(result)) {
+            PyValue_CLOSE(result);
         }
-        else if (adapted || !PyErr_ExceptionMatches(PyExc_TypeError)) {
-            return adapted;
+        else if (!PyValue_IsNull(result) || !PyErr_ExceptionMatches(PyExc_TypeError)) {
+            return result;
         }
         else {
             PyErr_Clear();
         }
     }
-
-    if (alt) {
-        return Py_NewRef(alt);
+    if (!PyValue_IsNull(alt)) {
+        return PyValue_DUP(alt);
     }
-    /* else set the right exception and return NULL */
     PyErr_SetString(state->ProgrammingError, "can't adapt");
-    return NULL;
+    return PyValue_NULL;
 }

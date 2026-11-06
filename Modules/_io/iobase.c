@@ -20,6 +20,7 @@
 #include "pycore_object.h"        // _PyType_HasFeature()
 #include "pycore_pyerrors.h"      // _PyErr_ChainExceptions1()
 #include "pycore_value_ops.h"     // _PyValue_GetIter()
+#include "pycore_value_call.h"    // _PyValue_CallMethodNoArgs()
 #include "pycore_value_slots.h"// _PyValue_FromObjectResult()
 #include "pycore_weakref.h"       // FT_CLEAR_WEAKREFS()
 
@@ -564,7 +565,7 @@ static PyValue
 _io__IOBase___exit___impl(PyObject *self, PyObject *args)
 /*[clinic end generated code: output=870a35980d0af266 input=fd3f46a32773a170]*/
 {
-    return _PyValue_FromObjectResult(PyObject_CallMethodNoArgs(self, &_Py_ID(close)));
+    return _PyValue_CallMethodNoArgs(PyValue_FromObjectBorrow(self), &_Py_ID(close));
 }
 
 /* Lower-level APIs */
@@ -979,7 +980,7 @@ _io__RawIOBase_read_impl(PyObject *self, Py_ssize_t n)
     PyObject *b, *res;
 
     if (n < 0) {
-        return _PyValue_FromObjectResult(PyObject_CallMethodNoArgs(self, &_Py_ID(readall)));
+        return _PyValue_CallMethodNoArgs(PyValue_FromObjectBorrow(self), &_Py_ID(readall));
     }
 
     b = PyByteArray_FromStringAndSize(NULL, n);

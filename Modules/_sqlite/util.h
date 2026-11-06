@@ -34,6 +34,7 @@
 int set_error_from_db(pysqlite_state *state, sqlite3 *db);
 void set_error_from_code(pysqlite_state *state, int code);
 
-sqlite_int64 _pysqlite_long_as_int64(PyObject * value);
+sqlite_int64 _pysqlite_value_as_int64(PyValueBorrow value);
+sqlite_int64 _pysqlite_long_as_int64(PyObject *value);
 
 #endif

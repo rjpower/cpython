@@ -23,6 +23,7 @@
 #include "pycore_pystate.h"       // _PyInterpreterState_GET()
 #include "pycore_unicodeobject.h" // _PyUnicode_AsASCIIString()
 #include "pycore_value.h"        // PyValue_AsKnownObjectBorrow()
+#include "pycore_value_call.h"    // _PyValue_CallMethodNoArgs()
 #include "pycore_value_ops.h"     // _PyValue_IsTrue()
 #include "pycore_value_slots.h"// _PyValue_FromObjectResult()
 #include "pycore_weakref.h"       // FT_CLEAR_WEAKREFS()
@@ -663,10 +664,14 @@ _io_IncrementalNewlineDecoder_reset_impl(nldecoder_object *self)
 
     self->seennl = 0;
     self->pendingcr = 0;
-    if (self->decoder != Py_None)
-        return _PyValue_FromObjectResult(PyObject_CallMethodNoArgs(self->decoder, &_Py_ID(reset)));
-    else
+    if (self->decoder == Py_None) {
         return PyValue_None;
+    }
+    PyObject *decoder = Py_NewRef(self->decoder);
+    PyValue result = _PyValue_CallMethodNoArgs(PyValue_FromObjectBorrow(decoder),
+                                               &_Py_ID(reset));
+    Py_DECREF(decoder);
+    return result;
 }
 
 /*[clinic input]

@@ -163,10 +163,10 @@ set_error_from_db(pysqlite_state *state, sqlite3 *db)
 #endif
 
 sqlite_int64
-_pysqlite_long_as_int64(PyObject * py_val)
+_pysqlite_value_as_int64(PyValueBorrow py_val)
 {
     int overflow;
-    long long value = _PyValue_AsLongLongAndOverflow(PyValue_FromObjectBorrow(py_val), &overflow);
+    long long value = _PyValue_AsLongLongAndOverflow(py_val, &overflow);
     if (value == -1 && PyErr_Occurred())
         return -1;
     if (!overflow) {
@@ -177,7 +177,7 @@ _pysqlite_long_as_int64(PyObject * py_val)
     }
     else if (sizeof(value) < sizeof(sqlite_int64)) {
         sqlite_int64 int64val;
-        if (_PyLong_AsByteArray((PyLongObject *)py_val,
+        if (_PyLong_ValueAsByteArray(py_val,
                                 (unsigned char *)&int64val, sizeof(int64val),
                                 IS_LITTLE_ENDIAN, 1 /* signed */, 0) >= 0) {
             return int64val;
@@ -186,4 +186,11 @@ _pysqlite_long_as_int64(PyObject * py_val)
     PyErr_SetString(PyExc_OverflowError,
                     "Python int too large to convert to SQLite INTEGER");
     return -1;
+}
+
+
+sqlite_int64
+_pysqlite_long_as_int64(PyObject *value)
+{
+    return _pysqlite_value_as_int64(PyValue_FromObjectBorrow(value));
 }

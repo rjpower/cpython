@@ -244,30 +244,7 @@ pysqlite_adapt_impl(PyObject *module, PyValueBorrow obj, PyValueBorrow proto,
 /*[clinic end generated code: output=1ed477114c16cc7e input=a53dc9993e81e15f]*/
 {
     pysqlite_state *state = pysqlite_get_state(module);
-    PyObject *obj_obj = _PyValue_AsObjectAt(obj, BOX_SITE_PARSER);
-    if (obj_obj == NULL) {
-        return PyValue_NULL;
-    }
-    PyObject *proto_obj = _PyValue_AsObjectAt(proto, BOX_SITE_PARSER);
-    if (proto_obj == NULL) {
-        Py_DECREF(obj_obj);
-        return PyValue_NULL;
-    }
-    PyObject *alt_obj = NULL;
-    if (!PyValue_IsNull(alt)) {
-        alt_obj = _PyValue_AsObjectAt(alt, BOX_SITE_PARSER);
-        if (alt_obj == NULL) {
-            Py_DECREF(obj_obj);
-            Py_DECREF(proto_obj);
-            return PyValue_NULL;
-        }
-    }
-    PyObject *adapted = pysqlite_microprotocols_adapt(state, obj_obj,
-                                                      proto_obj, alt_obj);
-    Py_DECREF(obj_obj);
-    Py_DECREF(proto_obj);
-    Py_XDECREF(alt_obj);
-    return _PyValue_FromObjectResult(adapted);
+    return pysqlite_microprotocols_adapt(state, obj, proto, alt);
 }
 
 static int converters_init(PyObject* module)

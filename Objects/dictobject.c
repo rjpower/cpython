@@ -3702,6 +3702,14 @@ dict_subscript_value(PyObject *self, PyValueBorrow key)
     return PyValue_NULL;
 }
 
+static PyValue
+dict_getitem_value(PyValueBorrow self, const PyValue *args,
+                   Py_ssize_t Py_UNUSED(nargs), PyObject *Py_UNUSED(kwnames))
+{
+    return dict_subscript_value(PyValue_AsKnownObjectBorrow(self),
+                                PyValue_Borrow(args[0]));
+}
+
 Py_VALUE_ENTRY PyObject *
 _PyDict_Subscript(PyObject *self, PyObject *key)
 {
@@ -5102,7 +5110,8 @@ In either case, this is followed by: for k in F:  D[k] = F[k]");
 
 static PyMethodDef mapp_methods[] = {
     DICT___CONTAINS___METHODDEF
-    {"__getitem__",     _PyDict_Subscript,                 METH_O | METH_COEXIST,
+    {"__getitem__",     _PyCFunction_CAST(dict_getitem_value),
+                        METH_VALUE | METH_O | METH_COEXIST,
      getitem__doc__},
     DICT___SIZEOF___METHODDEF
     DICT_GET_METHODDEF
@@ -7837,7 +7846,8 @@ static PyMappingMethods frozendict_as_mapping = {
 
 static PyMethodDef frozendict_methods[] = {
     DICT___CONTAINS___METHODDEF
-    {"__getitem__", _PyDict_Subscript, METH_O | METH_COEXIST, getitem__doc__},
+    {"__getitem__", _PyCFunction_CAST(dict_getitem_value),
+     METH_VALUE | METH_O | METH_COEXIST, getitem__doc__},
     DICT___SIZEOF___METHODDEF
     DICT_GET_METHODDEF
     DICT_KEYS_METHODDEF

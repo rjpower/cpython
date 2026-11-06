@@ -2052,6 +2052,39 @@ class ClassPropertiesAndMethods(unittest.TestCase):
         self.assertEqual(b.foo, 3)
         self.assertEqual(b.__class__, D)
 
+    def test_new_method_value_wrapper(self):
+        self.assertEqual(int.__new__(int, 17), 17)
+        large = 1 << 100
+        self.assertEqual(int.__new__(int, large), large)
+        self.assertEqual(int.__new__(int, "11", base=2), 3)
+        with self.assertRaises(TypeError):
+            int.__new__(int, "11", 2, base=2)
+
+        with self.assertRaisesRegex(TypeError, r"X is not a type object \(int\)"):
+            int.__new__(5)
+        with self.assertRaisesRegex(TypeError, "not a subtype"):
+            int.__new__(list, 1)
+        with self.assertRaisesRegex(TypeError, "is not safe"):
+            object.__new__(dict)
+
+        class MutableInt(int):
+            pass
+
+        MutableInt.marker = "changed after creation"
+        self.assertEqual(int.__new__(MutableInt, 7), 7)
+
+        init_calls = []
+
+        class MutableList(list):
+            def __init__(self, *args, **kwargs):
+                init_calls.append((args, kwargs))
+
+        MutableList.marker = 1
+        obj = list.__new__(MutableList, [1, 2])
+        self.assertIs(type(obj), MutableList)
+        self.assertEqual(obj, [])
+        self.assertEqual(init_calls, [])
+
     @unittest.expectedFailure
     def test_bad_new(self):
         self.assertRaises(TypeError, object.__new__)

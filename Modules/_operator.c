@@ -1265,7 +1265,7 @@ After g = itemgetter(2, 5, 3), the call g(r) returns (r[2], r[5], r[3])");
 static PyType_Slot itemgetter_type_slots[] = {
     {Py_tp_doc, (void *)itemgetter_doc},
     {Py_tp_dealloc, itemgetter_dealloc},
-    {Py_tp_call, _PyValue_TpCallThunk},
+    {Py_tp_call, PyVectorcall_Call},
     {Py_tp_traverse, itemgetter_traverse},
     {Py_tp_clear, itemgetter_clear},
     {Py_tp_methods, itemgetter_methods},
@@ -1617,7 +1617,7 @@ After h = attrgetter('name.first', 'name.last'), the call h(r) returns\n\
 static PyType_Slot attrgetter_type_slots[] = {
     {Py_tp_doc, (void *)attrgetter_doc},
     {Py_tp_dealloc, attrgetter_dealloc},
-    {Py_tp_call, _PyValue_TpCallThunk},
+    {Py_tp_call, PyVectorcall_Call},
     {Py_tp_traverse, attrgetter_traverse},
     {Py_tp_clear, attrgetter_clear},
     {Py_tp_methods, attrgetter_methods},
@@ -1964,7 +1964,7 @@ r.name('date', foo=1).");
 static PyType_Slot methodcaller_type_slots[] = {
     {Py_tp_doc, (void *)methodcaller_doc},
     {Py_tp_dealloc, methodcaller_dealloc},
-    {Py_tp_call, _PyValue_TpCallThunk},
+    {Py_tp_call, PyVectorcall_Call},
     {Py_tp_traverse, methodcaller_traverse},
     {Py_tp_clear, methodcaller_clear},
     {Py_tp_methods, methodcaller_methods},

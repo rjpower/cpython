@@ -579,31 +579,31 @@ stmt_step(sqlite3_stmt *statement)
 
 static int
 bind_param(pysqlite_state *state, pysqlite_Statement *self, int pos,
-           PyObject *parameter)
+           PyValueBorrow parameter)
 {
     int rc = SQLITE_OK;
     const char *string;
     Py_ssize_t buflen;
     parameter_type paramtype;
 
-    if (parameter == Py_None) {
+    if (PyValue_IsNone(parameter)) {
         rc = sqlite3_bind_null(self->st, pos);
         goto final;
     }
 
-    if (PyLong_CheckExact(parameter)) {
+    if (PyValue_LongCheckExact(parameter)) {
         paramtype = TYPE_LONG;
-    } else if (PyFloat_CheckExact(parameter)) {
+    } else if (PyValue_TYPE(parameter) == &PyFloat_Type) {
         paramtype = TYPE_FLOAT;
-    } else if (PyUnicode_CheckExact(parameter)) {
+    } else if (PyValue_TYPE(parameter) == &PyUnicode_Type) {
         paramtype = TYPE_UNICODE;
-    } else if (PyLong_Check(parameter)) {
+    } else if (PyValue_LongCheck(parameter)) {
         paramtype = TYPE_LONG;
-    } else if (PyFloat_Check(parameter)) {
+    } else if (PyValue_FloatCheck(parameter)) {
         paramtype = TYPE_FLOAT;
-    } else if (PyUnicode_Check(parameter)) {
+    } else if (PyValue_IsObject(parameter) && PyUnicode_Check(PyValue_AsKnownObjectBorrow(parameter))) {
         paramtype = TYPE_UNICODE;
-    } else if (PyObject_CheckBuffer(parameter)) {
+    } else if (PyValue_IsObject(parameter) && PyObject_CheckBuffer(PyValue_AsKnownObjectBorrow(parameter))) {
         paramtype = TYPE_BUFFER;
     } else {
         paramtype = TYPE_UNKNOWN;
@@ -611,21 +611,21 @@ bind_param(pysqlite_state *state, pysqlite_Statement *self, int pos,
 
     switch (paramtype) {
         case TYPE_LONG: {
-            sqlite_int64 value = _pysqlite_long_as_int64(parameter);
+            sqlite_int64 value = _pysqlite_value_as_int64(parameter);
             rc = (value == -1 && PyErr_Occurred())
                 ? SQLITE_ERROR
                 : sqlite3_bind_int64(self->st, pos, value);
             break;
         }
         case TYPE_FLOAT: {
-            double value = _PyValue_AsDouble(PyValue_FromObjectBorrow(parameter));
+            double value = _PyValue_AsDouble(parameter);
             rc = (value == -1 && PyErr_Occurred())
                 ? SQLITE_ERROR
                 : sqlite3_bind_double(self->st, pos, value);
             break;
         }
         case TYPE_UNICODE:
-            string = PyUnicode_AsUTF8AndSize(parameter, &buflen);
+            string = PyUnicode_AsUTF8AndSize(PyValue_AsKnownObjectBorrow(parameter), &buflen);
             if (string == NULL) {
                 return SQLITE_ERROR;
             }
@@ -638,7 +638,7 @@ bind_param(pysqlite_state *state, pysqlite_Statement *self, int pos,
             break;
         case TYPE_BUFFER: {
             Py_buffer view;
-            if (PyObject_GetBuffer(parameter, &view, PyBUF_SIMPLE) != 0) {
+            if (PyObject_GetBuffer(PyValue_AsKnownObjectBorrow(parameter), &view, PyBUF_SIMPLE) != 0) {
                 return SQLITE_ERROR;
             }
             if (view.len > INT_MAX) {
@@ -654,7 +654,7 @@ bind_param(pysqlite_state *state, pysqlite_Statement *self, int pos,
         case TYPE_UNKNOWN:
             PyErr_Format(state->ProgrammingError,
                     "Error binding parameter %d: type '%s' is not supported",
-                    pos, Py_TYPE(parameter)->tp_name);
+                    pos, PyValue_TYPE(parameter)->tp_name);
             rc = SQLITE_ERROR;
     }
 
@@ -664,14 +664,14 @@ final:
 
 /* returns 0 if the object is one of Python's internal ones that don't need to be adapted */
 static inline int
-need_adapt(pysqlite_state *state, PyObject *obj)
+need_adapt(pysqlite_state *state, PyValueBorrow obj)
 {
     if (state->BaseTypeAdapted) {
         return 1;
     }
 
-    if (PyLong_CheckExact(obj) || PyFloat_CheckExact(obj)
-          || PyUnicode_CheckExact(obj) || PyByteArray_CheckExact(obj)) {
+    if (PyValue_LongCheckExact(obj) || PyValue_TYPE(obj) == &PyFloat_Type
+          || PyValue_TYPE(obj) == &PyUnicode_Type || PyValue_TYPE(obj) == &PyByteArray_Type) {
         return 0;
     } else {
         return 1;
@@ -682,8 +682,8 @@ static void
 bind_parameters(pysqlite_state *state, pysqlite_Statement *self,
                 PyObject *parameters)
 {
-    PyObject* current_param;
-    PyObject* adapted;
+    PyValue current_param;
+    PyValue adapted;
     const char* binding_name;
     int i;
     int rc;
@@ -736,26 +736,22 @@ bind_parameters(pysqlite_state *state, pysqlite_Statement *self,
             if (PyValue_IsNull(param_v)) {
                 return;
             }
-            current_param = _PyValue_AsObjectStealAt(param_v, BOX_SITE_SEQUENCE);
-            if (!current_param) {
-                return;
-            }
-
-            if (!need_adapt(state, current_param)) {
+            current_param = param_v;
+            if (!need_adapt(state, PyValue_Borrow(current_param))) {
                 adapted = current_param;
             } else {
-                PyObject *protocol = (PyObject *)state->PrepareProtocolType;
-                adapted = pysqlite_microprotocols_adapt(state, current_param,
-                                                        protocol,
-                                                        current_param);
-                Py_DECREF(current_param);
-                if (!adapted) {
+                PyValueBorrow protocol = PyValue_FromObjectBorrow(
+                    (PyObject *)state->PrepareProtocolType);
+                adapted = pysqlite_microprotocols_adapt(
+                    state, PyValue_Borrow(current_param), protocol,
+                    PyValue_Borrow(current_param));
+                PyValue_CLOSE(current_param);
+                if (PyValue_IsNull(adapted)) {
                     return;
                 }
             }
-
-            rc = bind_param(state, self, i + 1, adapted);
-            Py_DECREF(adapted);
+            rc = bind_param(state, self, i + 1, PyValue_Borrow(adapted));
+            PyValue_CLOSE(adapted);
 
             if (rc != SQLITE_OK) {
                 PyObject *exc = PyErr_GetRaisedException();
@@ -779,35 +775,33 @@ bind_parameters(pysqlite_state *state, pysqlite_Statement *self,
             }
 
             binding_name++; /* skip first char (the colon) */
-            PyObject *current_param = NULL;
-            int found = PyMapping_GetOptionalItemString(parameters,
-                                                        binding_name,
-                                                        &current_param);
-            if (found == -1) {
+            _PyStatusValue found = _PyValue_MappingGetOptionalItemString(
+                PyValue_FromObjectBorrow(parameters), binding_name);
+            if (found.status < 0) {
                 return;
             }
-            else if (found == 0) {
+            if (found.status == 0) {
                 PyErr_Format(state->ProgrammingError,
                              "You did not supply a value for binding "
                              "parameter :%s.", binding_name);
                 return;
             }
-
-            if (!need_adapt(state, current_param)) {
+            current_param = found.value;
+            if (!need_adapt(state, PyValue_Borrow(current_param))) {
                 adapted = current_param;
             } else {
-                PyObject *protocol = (PyObject *)state->PrepareProtocolType;
-                adapted = pysqlite_microprotocols_adapt(state, current_param,
-                                                        protocol,
-                                                        current_param);
-                Py_DECREF(current_param);
-                if (!adapted) {
+                PyValueBorrow protocol = PyValue_FromObjectBorrow(
+                    (PyObject *)state->PrepareProtocolType);
+                adapted = pysqlite_microprotocols_adapt(
+                    state, PyValue_Borrow(current_param), protocol,
+                    PyValue_Borrow(current_param));
+                PyValue_CLOSE(current_param);
+                if (PyValue_IsNull(adapted)) {
                     return;
                 }
             }
-
-            rc = bind_param(state, self, i, adapted);
-            Py_DECREF(adapted);
+            rc = bind_param(state, self, i, PyValue_Borrow(adapted));
+            PyValue_CLOSE(adapted);
 
             if (rc != SQLITE_OK) {
                 PyObject *exc = PyErr_GetRaisedException();

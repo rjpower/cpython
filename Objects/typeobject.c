@@ -12353,34 +12353,36 @@ wrap_init(PyObject *self, PyObject *args, void *wrapped, PyObject *kwds)
     Py_RETURN_NONE;
 }
 
-static PyObject *
-tp_new_wrapper(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+tp_new_wrapper(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs,
+               PyObject *kwnames)
 {
     PyTypeObject *staticbase;
-    PyObject *arg0, *res;
-
-    if (self == NULL || !PyType_Check(self)) {
+    if (!PyValue_IsObject(self) ||
+        !PyType_Check(PyValue_AsKnownObjectBorrow(self))) {
         PyErr_Format(PyExc_SystemError,
                      "__new__() called with non-type 'self'");
-        return NULL;
+        return PyValue_NULL;
     }
-    PyTypeObject *type = (PyTypeObject *)self;
+    PyTypeObject *type = (PyTypeObject *)PyValue_AsKnownObjectBorrow(self);
 
     if (nargs < 1) {
         PyErr_Format(PyExc_TypeError,
                      "%s.__new__(): not enough arguments",
                      type->tp_name);
-        return NULL;
+        return PyValue_NULL;
     }
-    arg0 = args[0];
-    if (!PyType_Check(arg0)) {
+    PyValueBorrow subtype_value = PyValue_Borrow(args[0]);
+    PyTypeObject *subtype;
+    if (!PyValue_IsObject(subtype_value) ||
+        !PyType_Check(PyValue_AsKnownObjectBorrow(subtype_value))) {
         PyErr_Format(PyExc_TypeError,
                      "%s.__new__(X): X is not a type object (%s)",
                      type->tp_name,
-                     Py_TYPE(arg0)->tp_name);
-        return NULL;
+                     PyValue_TYPE(subtype_value)->tp_name);
+        return PyValue_NULL;
     }
-    PyTypeObject *subtype = (PyTypeObject *)arg0;
+    subtype = (PyTypeObject *)PyValue_AsKnownObjectBorrow(subtype_value);
 
     if (!PyType_IsSubtype(subtype, type)) {
         PyErr_Format(PyExc_TypeError,
@@ -12389,7 +12391,7 @@ tp_new_wrapper(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject
                      subtype->tp_name,
                      subtype->tp_name,
                      type->tp_name);
-        return NULL;
+        return PyValue_NULL;
     }
 
     /* Check that the use doesn't do something silly and unsafe like
@@ -12404,36 +12406,41 @@ tp_new_wrapper(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject
         if (staticbase->tp_new == NULL) {
             PyErr_Format(PyExc_TypeError,
                          "cannot create '%s' instances", subtype->tp_name);
-            return NULL;
+            return PyValue_NULL;
         }
         PyErr_Format(PyExc_TypeError,
                      "%s.__new__(%s) is not safe, use %s.__new__()",
                      type->tp_name,
                      subtype->tp_name,
                      staticbase->tp_name);
-        return NULL;
+        return PyValue_NULL;
     }
 
-    PyObject *args_tuple = PyTuple_FromArray(args + 1, nargs - 1);
+    PyObject *args_tuple = _PyTuple_FromValueArray(args + 1, nargs - 1);
     if (args_tuple == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
     PyObject *kwds = NULL;
     if (kwnames != NULL) {
-        kwds = _PyStack_AsDict(args + nargs, kwnames);
+        kwds = _PyValue_StackAsDict(args + nargs, kwnames);
         if (kwds == NULL) {
             Py_DECREF(args_tuple);
-            return NULL;
+            return PyValue_NULL;
         }
     }
-    res = type->tp_new(subtype, args_tuple, kwds);
+
+    PyThreadState *tstate = _PyThreadState_GET();
+    _PyBorrowMark mark = _PyBorrowScope_Enter(tstate);
+    PyObject *res = type->tp_new(subtype, args_tuple, kwds);
     Py_DECREF(args_tuple);
     Py_XDECREF(kwds);
-    return res;
+    _PyBorrowScope_Exit(tstate, mark);
+    res = _Py_CheckFunctionResult(tstate, (PyObject *)type, res, NULL);
+    return _PyValue_FromObjectResult(res);
 }
 
 static struct PyMethodDef tp_new_methoddef[] = {
-    {"__new__", _PyCFunction_CAST(tp_new_wrapper), METH_FASTCALL|METH_KEYWORDS,
+    {"__new__", _PyCFunction_CAST(tp_new_wrapper), METH_VALUE|METH_KEYWORDS,
      PyDoc_STR("__new__($type, *args, **kwargs)\n--\n\n"
                "Create and return a new object.  "
                "See help(type) for accurate signature.")},

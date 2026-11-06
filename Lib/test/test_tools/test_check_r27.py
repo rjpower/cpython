@@ -211,7 +211,7 @@ class FoldTests(unittest.TestCase):
 
 
 def clean_summary(**changes):
-    summary = {"rows": [], "drops": {"thunk": 0}, "leftover_run": [],
+    summary = {"dumps": 1, "accounting_errors": [], "rows": [], "drops": {"thunk": 0}, "leftover_run": [],
                "spawn": [], "resets_by_tag": {}, "bad_dumps": []}
     summary.update(changes)
     return summary
@@ -270,25 +270,103 @@ class GateTests(unittest.TestCase):
 
 
 class KernelTests(unittest.TestCase):
-    def entry(self, **counters):
-        return {"name": "k", "raw_counters": {
-            "warmup": {"Boxing by site (list)": 0, "Other": 5}, "low": counters}}
+    def entries(self):
+        return [{"name": name, "raw_counters": {
+                    process: {key: 0 for key in check_r27.REQUIRED_BOX_COUNTERS}
+                    for process in check_r27.KERNEL_PROCESSES}}
+                for name in sorted(check_r27.KERNEL_NAMES)]
 
     def test_zero_passes(self):
-        data = [self.entry(**{"Object inline int boxes": 0})]
-        self.assertEqual(check_r27.kernel_violations(data), [])
+        self.assertEqual(check_r27.kernel_violations(self.entries()), [])
+
+    def test_missing_duplicate_and_empty(self):
+        for entries in ([], self.entries()[:-1], self.entries() + self.entries()[:1]):
+            with self.subTest(entries=len(entries)):
+                self.assertTrue(check_r27.kernel_violations(entries))
+        for processes in ({}, {"run": {}}, {"run": {"Other": 1}}):
+            entries = self.entries()
+            entries[0]["raw_counters"] = processes
+            self.assertTrue(check_r27.kernel_violations(entries))
+
+    def test_missing_required_process_and_counter(self):
+        entries = self.entries()
+        del entries[0]["raw_counters"]["warmup"]
+        self.assertTrue(check_r27.kernel_violations(entries))
+        entries = self.entries()
+        del entries[0]["raw_counters"]["low"]["Boxing by kind (thunk)"]
+        self.assertTrue(check_r27.kernel_violations(entries))
 
     def test_nonzero_in_any_process_fails(self):
-        data = {"results": [self.entry(**{"Box owner (thunk, list) 0+0x1 at -": 2})]}
-        out = check_r27.kernel_violations(data)
-        self.assertEqual(len(out), 1)
-        self.assertIn("kernel k, process low", out[0])
+        entries = self.entries()
+        entries[0]["raw_counters"]["warmup"]["Boxing by kind (thunk)"] = 2
+        self.assertTrue(check_r27.kernel_violations(entries))
+
+    def test_run_py_nested_results(self):
+        entries = self.entries()
+        boxes = {e["name"]: {"raw_counters": e["raw_counters"]} for e in entries}
+        self.assertEqual(check_r27.kernel_violations({"results": {"boxes": boxes}}), [])
+        boxes[entries[0]["name"]]["raw_counters"]["warmup"]["Boxing by kind (core)"] = 1
+        self.assertTrue(check_r27.kernel_violations({"results": {"boxes": boxes}}))
 
     def test_bad_shape_is_an_error(self):
         with self.assertRaises(SystemExit):
             check_r27.kernel_violations({"x": 1})
-        with self.assertRaises(SystemExit):
-            check_r27.kernel_violations([{"name": "k"}])
+
+
+class CompletenessTests(unittest.TestCase):
+    def test_suite_rejects_stale_dumps(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            (directory / "old.txt").write_text("old stats")
+            with self.assertRaises(SystemExit):
+                check_r27.run_suite(directory, 1, directory, [])
+
+    def test_failed_run_and_no_dumps_fail(self):
+        for changes in ({"dumps": 0}, {"regrtest_returncode": 2},
+                        {"accounting_errors": ["missing owner"]}):
+            self.assertTrue(check_r27.suite_violations(clean_summary(**changes)))
+
+    def test_narrow_compat_test_exemptions(self):
+        paths = ("Modules/_testclinic.c", "Modules/_testinternalcapi.c",
+                 "Modules/_testinternalcapi/interpreter.c", "Modules/_xxtestfuzz/fuzzer.c")
+        for path in paths:
+            with self.subTest(path=path):
+                self.assertTrue(check_r27.is_compat_test_unit(path))
+                self.assertIn(check_r27.unit_class(unit(path), SRC)[0],
+                              ("test", "compat-test"))
+        for path in ("Modules/_testclinic_value.c", "Modules/_decimal/_decimal.c"):
+            self.assertFalse(check_r27.is_compat_test_unit(path))
+
+    def test_missing_owner_is_detected(self):
+        totals = "".join(f"Boxing by kind ({k}): {int(k == 'core')}\n"
+                         f"Box owners dropped ({k}): 0\n" for k in check_r27.KINDS)
+        summary, _ = classes(fold(totals), TableResolver({}))
+        self.assertTrue(check_r27.suite_violations(summary))
+        self.assertIn("core total does not match owners and drops", summary["accounting_errors"])
+
+    def test_static_inventory_and_deferral(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "Include").mkdir()
+            (root / "Modules").mkdir()
+            header = root / "Include/a.h"
+            header.write_text("PyAPI_FUNC(int) PyFoo(void);\n")
+            source = root / "Modules/a.c"
+            source.write_text("#define Py_BUILD_CORE_MODULE\n#define Py_VALUE_DEFER_MARKS\n")
+            inventory = root / "inventory.toml"
+            inventory.write_text('r27_complete=true\n[[row]]\nobject="PyFoo"\nvalue="PyValue_Foo"\n')
+            cdb = root / "cdb.json"
+            cdb.write_text(json.dumps([{"directory": tmp, "file": str(source),
+                                       "arguments": ["cc", "-c", str(source)]}]))
+            out, _ = check_r27.static_violations(cdb, root, inventory)
+            self.assertTrue(any("lacks Py_VALUE_COMPAT" in x for x in out), out)
+            self.assertTrue(any("deferred" in x for x in out), out)
+            self.assertTrue(any("not value-native" in x for x in out), out)
+            header.write_text("Py_VALUE_COMPAT(PyValue_Foo)\nPyAPI_FUNC(int) PyFoo(void);\n")
+            source.write_text("#define Py_BUILD_CORE_MODULE\n#define Py_VALUE_CORE\n")
+            out, _ = check_r27.static_violations(cdb, root, inventory)
+            self.assertEqual(len(out), 1)
+            self.assertIn("object-slot calls", out[0])
 
 
 class ReportTests(unittest.TestCase):

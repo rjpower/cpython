@@ -18,6 +18,7 @@
 #include "pycore_pyerrors.h"      // struct _PyErr_SetRaisedException
 #include "pycore_setobject.h"     // PySet_AddValue()
 #include "pycore_tuple.h"         // _PyTuple_FromPair
+#include "pycore_value_call.h"    // _PyValue_VectorcallThunk()
 #include "pycore_value.h"         // PyValue_IsNone()
 #include "pycore_value_ops.h"     // _PyValue_Str()
 #include "pycore_unicodeobject.h" // _PyUnicode_Equal()
@@ -101,19 +102,20 @@ BaseException_init(PyObject *op, PyObject *args, PyObject *kwds)
 }
 
 
-static PyObject *
-BaseException_vectorcall(PyObject *type_obj, PyObject * const*args,
-                         size_t nargsf, PyObject *kwnames)
+static PyValue
+BaseException_vectorcall(PyThreadState *tstate, PyObject *type_obj,
+                         const PyValue *args, size_t nargsf,
+                         PyObject *kwnames)
 {
     PyTypeObject *type = _PyType_CAST(type_obj);
     if (!_PyArg_NoKwnames(type->tp_name, kwnames)) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     PyBaseExceptionObject *self;
     self = (PyBaseExceptionObject *)type->tp_alloc(type, 0);
     if (!self) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     // The dict is created on the fly in PyObject_GenericSetAttr()
@@ -124,13 +126,13 @@ BaseException_vectorcall(PyObject *type_obj, PyObject * const*args,
     self->context = NULL;
     self->suppress_context = 0;
 
-    self->args = PyTuple_FromArray(args, PyVectorcall_NARGS(nargsf));
+    self->args = _PyTuple_FromValueArray(args, PyVectorcall_NARGS(nargsf));
     if (!self->args) {
         Py_DECREF(self);
-        return NULL;
+        return PyValue_NULL;
     }
 
-    return (PyObject *)self;
+    return PyValue_FromObjectSteal((PyObject *)self);
 }
 
 
@@ -667,7 +669,8 @@ static PyTypeObject _PyExc_BaseException = {
     BaseException_init,         /* tp_init */
     0,                          /* tp_alloc */
     BaseException_new,          /* tp_new */
-    .tp_vectorcall = BaseException_vectorcall,
+    .tp_vectorcall = _PyValue_VectorcallThunk,
+    .tp_value_vectorcall = (_Py_valuefunc)BaseException_vectorcall,
 };
 /* the CPython API expects exceptions to be (PyObject *) - both a hold-over
 from the previous implementation and also allowing Python objects to be used
@@ -756,7 +759,7 @@ SimpleExtendsException(PyExc_Exception, StopAsyncIteration,
  */
 
 static PyMemberDef StopIteration_members[] = {
-    {"value", _Py_T_OBJECT, offsetof(PyStopIterationObject, value), 0,
+    {"value", _Py_T_VALUE, offsetof(PyStopIterationObject, value), 0,
         PyDoc_STR("generator return value")},
     {NULL}  /* Sentinel */
 };
@@ -772,22 +775,14 @@ static int
 StopIteration_init(PyObject *op, PyObject *args, PyObject *kwds)
 {
     Py_ssize_t size = PyTuple_GET_SIZE(args);
-    PyObject *value;
 
     if (BaseException_init(op, args, kwds) == -1)
         return -1;
     PyStopIterationObject *self = PyStopIterationObject_CAST(op);
-    Py_CLEAR(self->value);
-    if (size > 0) {
-        value = _PyValue_AsObjectAt(PyTuple_GET_VALUE(args, 0), BOX_SITE_TUPLE);
-        if (value == NULL) {
-            return -1;
-        }
-    }
-    else {
-        value = Py_NewRef(Py_None);
-    }
-    self->value = value;
+    PyValue previous = self->value;
+    self->value = size > 0 ? PyValue_DUP(PyTuple_GET_VALUE(args, 0))
+                           : PyValue_None;
+    PyValue_XCLOSE(previous);
     return 0;
 }
 
@@ -795,7 +790,7 @@ static int
 StopIteration_clear(PyObject *op)
 {
     PyStopIterationObject *self = PyStopIterationObject_CAST(op);
-    Py_CLEAR(self->value);
+    PyValue_CLEAR(self->value);
     return BaseException_clear(op);
 }
 
@@ -811,7 +806,7 @@ static int
 StopIteration_traverse(PyObject *op, visitproc visit, void *arg)
 {
     PyStopIterationObject *self = PyStopIterationObject_CAST(op);
-    Py_VISIT(self->value);
+    _Py_VISIT_VALUE(self->value);
     return BaseException_traverse(op, visit, arg);
 }
 
@@ -4733,7 +4728,8 @@ _PyExc_InitTypes(PyInterpreterState *interp)
         if (exc->tp_new == BaseException_new
             && exc->tp_init == BaseException_init)
         {
-            exc->tp_vectorcall = BaseException_vectorcall;
+            exc->tp_vectorcall = _PyValue_VectorcallThunk;
+            exc->tp_value_vectorcall = (_Py_valuefunc)BaseException_vectorcall;
         }
     }
     return 0;

@@ -809,12 +809,12 @@ static Py_off_t
 _buffered_raw_tell(buffered *self)
 {
     Py_off_t n;
-    PyObject *res;
-    res = PyObject_CallMethodNoArgs(self->raw, &_Py_ID(tell));
-    if (res == NULL)
+    PyValue res = _PyValue_CallMethodNoArgs(
+        _PyValue_FromObjectKnown(self->raw), &_Py_ID(tell));
+    if (PyValue_IsNull(res))
         return -1;
-    n = PyNumber_AsOff_t(res, PyExc_ValueError);
-    Py_DECREF(res);
+    n = _PyNumber_AsOffValue(res, PyExc_ValueError);
+    PyValue_CLOSE(res);
     if (n < 0) {
         if (!PyErr_Occurred())
             PyErr_Format(PyExc_OSError,
@@ -829,25 +829,21 @@ _buffered_raw_tell(buffered *self)
 static Py_off_t
 _buffered_raw_seek(buffered *self, Py_off_t target, int whence)
 {
-    PyObject *res, *posobj, *whenceobj;
     Py_off_t n;
 
-    posobj = PyLong_FromOff_t(target);
-    if (posobj == NULL)
+    PyValue pos = PyValue_FromInt64(target);
+    if (PyValue_IsNull(pos))
         return -1;
-    whenceobj = PyLong_FromLong(whence);
-    if (whenceobj == NULL) {
-        Py_DECREF(posobj);
+    PyValue stack[3];
+    _PyValue_WindowPut(&stack[0], _PyValue_FromObjectKnown(self->raw));
+    _PyValue_WindowPut(&stack[1], pos);
+    _PyValue_WindowPut(&stack[2], PyValue_FromInt64(whence));
+    PyValue res = _PyValue_VectorcallMethod(&_Py_ID(seek), stack, 3, NULL);
+    PyValue_CLOSE(pos);
+    if (PyValue_IsNull(res))
         return -1;
-    }
-    res = PyObject_CallMethodObjArgs(self->raw, &_Py_ID(seek),
-                                     posobj, whenceobj, NULL);
-    Py_DECREF(posobj);
-    Py_DECREF(whenceobj);
-    if (res == NULL)
-        return -1;
-    n = PyNumber_AsOff_t(res, PyExc_ValueError);
-    Py_DECREF(res);
+    n = _PyNumber_AsOffValue(res, PyExc_ValueError);
+    PyValue_CLOSE(res);
     if (n < 0) {
         if (!PyErr_Occurred())
             PyErr_Format(PyExc_OSError,
@@ -1669,7 +1665,8 @@ static Py_ssize_t
 _bufferedreader_raw_read(buffered *self, char *start, Py_ssize_t len)
 {
     Py_buffer buf;
-    PyObject *memobj, *res;
+    PyObject *memobj;
+    PyValue res;
     Py_ssize_t n;
     /* NOTE: the buffer needn't be released as its object is NULL. */
     if (PyBuffer_FillInfo(&buf, NULL, start, len, 0, PyBUF_CONTIG) == -1)
@@ -1683,18 +1680,20 @@ _bufferedreader_raw_read(buffered *self, char *start, Py_ssize_t len)
        raised (see issue #10956).
     */
     do {
-        res = PyObject_CallMethodOneArg(self->raw, &_Py_ID(readinto), memobj);
-    } while (res == NULL && _PyIO_trap_eintr());
+        res = _PyValue_CallMethodOneArg(_PyValue_FromObjectKnown(self->raw),
+                                        &_Py_ID(readinto),
+                                        _PyValue_FromObjectKnown(memobj));
+    } while (PyValue_IsNull(res) && _PyIO_trap_eintr());
     Py_DECREF(memobj);
-    if (res == NULL)
+    if (PyValue_IsNull(res))
         return -1;
-    if (res == Py_None) {
+    if (PyValue_IsNone(res)) {
         /* Non-blocking stream would have blocked. Special return code! */
-        Py_DECREF(res);
+        PyValue_CLOSE(res);
         return -2;
     }
-    n = _PyValue_AsSsize_t(PyValue_FromObjectBorrow(res), PyExc_ValueError);
-    Py_DECREF(res);
+    n = _PyValue_AsSsize_t(res, PyExc_ValueError);
+    PyValue_CLOSE(res);
 
     if (n == -1 && PyErr_Occurred()) {
         _PyErr_FormatFromCause(
@@ -2027,7 +2026,8 @@ static Py_ssize_t
 _bufferedwriter_raw_write(buffered *self, char *start, Py_ssize_t len)
 {
     Py_buffer buf;
-    PyObject *memobj, *res;
+    PyObject *memobj;
+    PyValue res;
     Py_ssize_t n;
     int errnum;
     /* NOTE: the buffer needn't be released as its object is NULL. */
@@ -2043,22 +2043,24 @@ _bufferedwriter_raw_write(buffered *self, char *start, Py_ssize_t len)
     */
     do {
         errno = 0;
-        res = PyObject_CallMethodOneArg(self->raw, &_Py_ID(write), memobj);
+        res = _PyValue_CallMethodOneArg(_PyValue_FromObjectKnown(self->raw),
+                                        &_Py_ID(write),
+                                        _PyValue_FromObjectKnown(memobj));
         errnum = errno;
-    } while (res == NULL && _PyIO_trap_eintr());
+    } while (PyValue_IsNull(res) && _PyIO_trap_eintr());
     Py_DECREF(memobj);
-    if (res == NULL)
+    if (PyValue_IsNull(res))
         return -1;
-    if (res == Py_None) {
+    if (PyValue_IsNone(res)) {
         /* Non-blocking stream would have blocked. Special return code!
            Being paranoid we reset errno in case it is changed by code
            triggered by a decref.  errno is used by _set_BlockingIOError(). */
-        Py_DECREF(res);
+        PyValue_CLOSE(res);
         errno = errnum;
         return -2;
     }
-    n = _PyValue_AsSsize_t(PyValue_FromObjectBorrow(res), PyExc_ValueError);
-    Py_DECREF(res);
+    n = _PyValue_AsSsize_t(res, PyExc_ValueError);
+    PyValue_CLOSE(res);
     if (n < 0 || n > len) {
         PyErr_Format(PyExc_OSError,
                      "raw write() returned invalid length %zd "

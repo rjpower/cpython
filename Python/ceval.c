@@ -4242,21 +4242,6 @@ inline_slice_bounds(PyValueBorrow start, PyValueBorrow stop,
     return true;
 }
 
-/* Store in *box a new box if ref holds an inline value, else NULL. Return a
-   borrowed reference to the object ref holds or to the box, or NULL with an
-   exception set if boxing fails. */
-static PyObject *
-borrow_or_box(PyValueBorrow ref, PyObject **box)
-{
-    if (PyValue_IsInline(ref)) {
-        *box = PyValue_AsObject(ref);
-        return *box;
-    }
-    *box = NULL;
-    return PyValue_AsKnownObjectBorrow(ref);
-}
-#define borrow_or_box(V0, V1) (borrow_or_box)(PyValue_Borrow(V0), V1)
-
 /* The slice start:stop as a new object, with the bounds as they are (value
    fields, M4b): no box of an inline bound. NULL with an exception set. */
 static PyObject *
@@ -4379,18 +4364,7 @@ int
             }
         }
     }
-    PyObject *inst_box, *cls_box = NULL;
-    int res = -1;
-    PyObject *inst = borrow_or_box(inst_st, &inst_box);
-    if (inst != NULL) {
-        PyObject *cls = borrow_or_box(cls_st, &cls_box);
-        if (cls != NULL) {
-            res = PyObject_IsInstance(inst, cls);
-        }
-    }
-    Py_XDECREF(inst_box);
-    Py_XDECREF(cls_box);
-    return res;
+    return _PyValue_IsInstance(inst_st, cls_st);
 }
 
 PyObject *

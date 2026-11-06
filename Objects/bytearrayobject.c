@@ -120,7 +120,7 @@ bytearray_releasebuffer(PyObject *self, Py_buffer *view)
 }
 
 typedef PyObject* (*_ba_bytes_op)(const char *buf, Py_ssize_t len,
-                                  PyObject *sub, Py_ssize_t start,
+                                  PyValueBorrow sub, Py_ssize_t start,
                                   Py_ssize_t end);
 
 static PyValue
@@ -131,17 +131,10 @@ _bytearray_with_buffer(PyByteArrayObject *self, _ba_bytes_op op,
 
     _Py_CRITICAL_SECTION_ASSERT_OBJECT_LOCKED(self);
 
-    /* op takes an object: box an inline int (a byte value) argument. */
-    PyObject *sub_obj = _PyValue_AsObjectAt(sub, BOX_SITE_PARSER);
-    if (sub_obj == NULL) {
-        return PyValue_NULL;
-    }
-
     /* Increase exports to prevent bytearray storage from changing during op. */
     self->ob_exports++;
-    res = op(PyByteArray_AS_STRING(self), Py_SIZE(self), sub_obj, start, end);
+    res = op(PyByteArray_AS_STRING(self), Py_SIZE(self), sub, start, end);
     self->ob_exports--;
-    Py_DECREF(sub_obj);
     return _PyValue_FromObjectResult(res);
 }
 

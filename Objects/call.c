@@ -1052,6 +1052,62 @@ done:
 }
 
 
+/* The value form of PyObject_VectorcallMethod(): args is a window of words
+   that the caller keeps, args[0] the receiver and the rest the arguments, so
+   an inline operand reaches the method without a box. With the offset flag,
+   args[-1] may be used for a bound callee. The result is owned. */
+PyValue
+_PyValue_VectorcallMethod(PyObject *name, const PyValue *args, size_t nargsf,
+                          PyObject *kwnames)
+{
+    assert(name != NULL && args != NULL && PyVectorcall_NARGS(nargsf) >= 1);
+    PyThreadState *tstate = _PyThreadState_GET();
+    PyValue result = PyValue_NULL;
+    _PyCValue method;
+    _PyThreadState_PushCValue(tstate, &method);
+    _PyStatusValue found = _PyValue_GetMethod(PyValue_Borrow(args[0]), name);
+    if (found.status < 0) {
+        goto done;
+    }
+    method.ref = _PyValue_Publish(&found.value);
+    if (PyValue_IsObject(method.ref)) {
+        EVAL_CALL_STAT_INC_IF_FUNCTION(EVAL_CALL_METHOD,
+                                       PyValue_AsKnownObjectBorrow(method.ref));
+    }
+    if (found.status == 1) {
+        // An unbound method: the receiver is its first argument.
+        result = _PyValue_VectorcallTstate(
+            tstate, method.ref, args,
+            nargsf & ~PY_VECTORCALL_ARGUMENTS_OFFSET, kwnames);
+    }
+    else {
+        result = _PyValue_VectorcallTstate(tstate, method.ref, args + 1,
+                                           nargsf - 1, kwnames);
+    }
+done:
+    _PyThreadState_PopCValue(tstate, &method);
+    return result;
+}
+
+PyValue
+(_PyValue_CallMethodNoArgs)(PyValueBorrow self, PyObject *name)
+{
+    PyValue stack[1];
+    _PyValue_WindowPut(&stack[0], self);
+    return _PyValue_VectorcallMethod(name, stack, 1, NULL);
+}
+
+PyValue
+(_PyValue_CallMethodOneArg)(PyValueBorrow self, PyObject *name,
+                            PyValueBorrow arg)
+{
+    PyValue stack[2];
+    _PyValue_WindowPut(&stack[0], self);
+    _PyValue_WindowPut(&stack[1], arg);
+    return _PyValue_VectorcallMethod(name, stack, 2, NULL);
+}
+
+
 PyObject *
 PyObject_CallMethodObjArgs(PyObject *obj, PyObject *name, ...)
 {

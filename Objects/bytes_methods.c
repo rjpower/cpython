@@ -402,9 +402,31 @@ The other parameters are similar to those of
 stringlib_parse_args_finds().
 */
 
+/* The argument sub of find() and friends: a byte value (an int) sets *byte
+   and leaves *subobj NULL, a bytes-like object is left in *subobj. */
 Py_LOCAL_INLINE(int)
-parse_args_finds_byte(const char *function_name, PyObject **subobj, char *byte)
+parse_args_finds_byte(const char *function_name, PyValueBorrow sub,
+                      PyObject **subobj, char *byte)
 {
+    if (PyValue_IsInlineInt(sub)) {
+        int64_t ival = PyValue_InlineInt64(sub);
+        if (ival < 0 || ival > 255) {
+            PyErr_SetString(PyExc_ValueError,
+                            "byte must be in range(0, 256)");
+            return 0;
+        }
+        *subobj = NULL;
+        *byte = (char)ival;
+        return 1;
+    }
+    if (PyValue_IsInline(sub)) {
+        PyErr_Format(PyExc_TypeError,
+                     "argument should be integer or bytes-like object, "
+                     "not '%.200s'",
+                     PyValue_TYPE(sub)->tp_name);
+        return 0;
+    }
+    *subobj = PyValue_AsKnownObjectBorrow(sub);
     if (PyObject_CheckBuffer(*subobj)) {
         return 1;
     }
@@ -453,17 +475,18 @@ parse_args_finds_byte(const char *function_name, PyObject **subobj, char *byte)
 
 Py_LOCAL_INLINE(Py_ssize_t)
 find_internal(const char *str, Py_ssize_t len,
-              const char *function_name, PyObject *subobj,
+              const char *function_name, PyValueBorrow sub_value,
               Py_ssize_t start, Py_ssize_t end,
               int dir)
 {
+    PyObject *subobj;
     char byte;
     Py_buffer subbuf;
     const char *sub;
     Py_ssize_t sub_len;
     Py_ssize_t res;
 
-    if (!parse_args_finds_byte(function_name, &subobj, &byte)) {
+    if (!parse_args_finds_byte(function_name, sub_value, &subobj, &byte)) {
         return -2;
     }
 
@@ -512,7 +535,7 @@ find_internal(const char *str, Py_ssize_t len,
 }
 
 PyObject *
-_Py_bytes_find(const char *str, Py_ssize_t len, PyObject *sub,
+_Py_bytes_find(const char *str, Py_ssize_t len, PyValueBorrow sub,
                Py_ssize_t start, Py_ssize_t end)
 {
     Py_ssize_t result = find_internal(str, len, "find", sub, start, end, +1);
@@ -522,7 +545,7 @@ _Py_bytes_find(const char *str, Py_ssize_t len, PyObject *sub,
 }
 
 PyObject *
-_Py_bytes_index(const char *str, Py_ssize_t len, PyObject *sub,
+_Py_bytes_index(const char *str, Py_ssize_t len, PyValueBorrow sub,
                 Py_ssize_t start, Py_ssize_t end)
 {
     Py_ssize_t result = find_internal(str, len, "index", sub, start, end, +1);
@@ -537,7 +560,7 @@ _Py_bytes_index(const char *str, Py_ssize_t len, PyObject *sub,
 }
 
 PyObject *
-_Py_bytes_rfind(const char *str, Py_ssize_t len, PyObject *sub,
+_Py_bytes_rfind(const char *str, Py_ssize_t len, PyValueBorrow sub,
                 Py_ssize_t start, Py_ssize_t end)
 {
     Py_ssize_t result = find_internal(str, len, "rfind", sub, start, end, -1);
@@ -547,7 +570,7 @@ _Py_bytes_rfind(const char *str, Py_ssize_t len, PyObject *sub,
 }
 
 PyObject *
-_Py_bytes_rindex(const char *str, Py_ssize_t len, PyObject *sub,
+_Py_bytes_rindex(const char *str, Py_ssize_t len, PyValueBorrow sub,
                  Py_ssize_t start, Py_ssize_t end)
 {
     Py_ssize_t result = find_internal(str, len, "rindex", sub, start, end, -1);
@@ -562,9 +585,10 @@ _Py_bytes_rindex(const char *str, Py_ssize_t len, PyObject *sub,
 }
 
 PyObject *
-_Py_bytes_count(const char *str, Py_ssize_t len, PyObject *sub_obj,
+_Py_bytes_count(const char *str, Py_ssize_t len, PyValueBorrow sub_value,
                 Py_ssize_t start, Py_ssize_t end)
 {
+    PyObject *sub_obj;
     const char *sub;
     Py_ssize_t sub_len;
     char byte;
@@ -572,7 +596,7 @@ _Py_bytes_count(const char *str, Py_ssize_t len, PyObject *sub_obj,
     Py_buffer vsub;
     PyObject *count_obj;
 
-    if (!parse_args_finds_byte("count", &sub_obj, &byte)) {
+    if (!parse_args_finds_byte("count", sub_value, &sub_obj, &byte)) {
         return NULL;
     }
 
@@ -676,10 +700,18 @@ notfound:
 
 static PyObject *
 _Py_bytes_tailmatch(const char *str, Py_ssize_t len,
-                    const char *function_name, PyObject *subobj,
+                    const char *function_name, PyValueBorrow sub_value,
                     Py_ssize_t start, Py_ssize_t end,
                     int direction)
 {
+    if (PyValue_IsInline(sub_value)) {
+        PyErr_Format(PyExc_TypeError,
+                     "%s first arg must be bytes or a tuple of bytes, "
+                     "not %s",
+                     function_name, PyValue_TYPE(sub_value)->tp_name);
+        return NULL;
+    }
+    PyObject *subobj = PyValue_AsKnownObjectBorrow(sub_value);
     if (PyTuple_Check(subobj)) {
         Py_ssize_t count = PyTuple_GET_SIZE(subobj);
         for (Py_ssize_t i = 0; i < count; i++) {
@@ -721,14 +753,14 @@ _Py_bytes_tailmatch(const char *str, Py_ssize_t len,
 }
 
 PyObject *
-_Py_bytes_startswith(const char *str, Py_ssize_t len, PyObject *subobj,
+_Py_bytes_startswith(const char *str, Py_ssize_t len, PyValueBorrow subobj,
                      Py_ssize_t start, Py_ssize_t end)
 {
     return _Py_bytes_tailmatch(str, len, "startswith", subobj, start, end, -1);
 }
 
 PyObject *
-_Py_bytes_endswith(const char *str, Py_ssize_t len, PyObject *subobj,
+_Py_bytes_endswith(const char *str, Py_ssize_t len, PyValueBorrow subobj,
                    Py_ssize_t start, Py_ssize_t end)
 {
     return _Py_bytes_tailmatch(str, len, "endswith", subobj, start, end, +1);

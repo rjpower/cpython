@@ -4,6 +4,7 @@ import doctest
 import unittest
 import collections
 import weakref
+import _weakref
 import operator
 import contextlib
 import copy
@@ -113,6 +114,20 @@ def collect_in_thread(period=0.005):
 
 
 class ReferencesTestCase(TestBase):
+    def test_remove_dead_weakref_inline_key(self):
+        key = 123456789
+        obj = Object(key)
+        ref = weakref.ref(obj)
+        mapping = {key: ref}
+
+        _weakref._remove_dead_weakref(mapping, key)
+        self.assertIn(key, mapping)
+
+        del obj
+        gc.collect()
+        _weakref._remove_dead_weakref(mapping, key)
+        self.assertNotIn(key, mapping)
+
 
     def test_basic_ref(self):
         self.check_basic_ref(C)

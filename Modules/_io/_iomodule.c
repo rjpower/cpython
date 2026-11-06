@@ -549,14 +549,22 @@ _io_open_code_impl(PyObject *module, PyObject *path)
 Py_off_t
 PyNumber_AsOff_t(PyObject *item, PyObject *err)
 {
+    return _PyNumber_AsOffValue(PyValue_FromObjectBorrow(item), err);
+}
+
+Py_off_t
+(_PyNumber_AsOffValue)(PyValueBorrow item, PyObject *err)
+{
     Py_off_t result;
     PyObject *runerr;
-    PyValue index = _PyValue_Index(PyValue_FromObjectBorrow(item));
+    PyValue index = _PyValue_Index(item);
     if (PyValue_IsNull(index))
         return -1;
-    PyObject *value = _PyValue_AsObjectStealAt(index, BOX_SITE_NUMBER);
-    if (value == NULL)
-        return -1;
+    if (PyValue_IsInlineInt(index)) {
+        // The inline range fits any Py_off_t.
+        return (Py_off_t)PyValue_InlineInt64(index);
+    }
+    PyObject *value = PyValue_AsKnownObjectSteal(index);
 
     /* We're done if PyLong_AsSsize_t() returns without error. */
     result = PyLong_AsOff_t(value);
@@ -582,7 +590,7 @@ PyNumber_AsOff_t(PyObject *item, PyObject *err)
         /* Otherwise replace the error with caller's error object. */
         PyErr_Format(err,
                      "cannot fit '%.200s' into an offset-sized integer",
-                     Py_TYPE(item)->tp_name);
+                     PyValue_TYPE(item)->tp_name);
     }
 
  finish:

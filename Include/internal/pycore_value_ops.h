@@ -360,6 +360,12 @@ PyAPI_FUNC(_PyStatusValue) _PyValue_GetOptionalItem(PyValueBorrow o,
 #define _PyValue_GetOptionalItem(O, K) \
     (_PyValue_GetOptionalItem)(PyValue_Borrow(O), PyValue_Borrow(K))
 
+// PyObject_IsInstance(): an int or float inst is tested by its type, and
+// passed to a __instancecheck__ as a word.
+PyAPI_FUNC(int) _PyValue_IsInstance(PyValueBorrow inst, PyValueBorrow cls);
+#define _PyValue_IsInstance(I, C) \
+    (_PyValue_IsInstance)(PyValue_Borrow(I), PyValue_Borrow(C))
+
 // PySequence_Contains() and _PySequence_IterSearch().
 PyAPI_FUNC(int) _PyValue_Contains(PyValueBorrow seq, PyValueBorrow item);
 PyAPI_FUNC(Py_ssize_t) _PyValue_IterSearch(PyValueBorrow seq,

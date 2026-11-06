@@ -482,7 +482,8 @@ filter_search(PyInterpreterState *interp, PyObject *category,
     Py_BEGIN_CRITICAL_SECTION(filters);
     for (Py_ssize_t i = 0; i < PyList_GET_SIZE(filters); i++) {
         PyObject *tmp_item, *action = NULL, *msg = NULL, *cat = NULL;
-        PyObject *mod = NULL, *ln_obj = NULL;
+        PyObject *mod = NULL;
+        PyValueBorrow ln_value;
         Py_ssize_t ln;
         int is_subclass, good_msg, good_mod;
 
@@ -507,9 +508,8 @@ filter_search(PyInterpreterState *interp, PyObject *category,
         msg = _PyValue_AsObjectAt(PyTuple_GET_VALUE(tmp_item, 1), BOX_SITE_TUPLE);
         cat = _PyValue_AsObjectAt(PyTuple_GET_VALUE(tmp_item, 2), BOX_SITE_TUPLE);
         mod = _PyValue_AsObjectAt(PyTuple_GET_VALUE(tmp_item, 3), BOX_SITE_TUPLE);
-        ln_obj = _PyValue_AsObjectAt(PyTuple_GET_VALUE(tmp_item, 4), BOX_SITE_TUPLE);
-        if (action == NULL || msg == NULL || cat == NULL || mod == NULL
-            || ln_obj == NULL)
+        ln_value = PyTuple_GET_VALUE(tmp_item, 4);
+        if (action == NULL || msg == NULL || cat == NULL || mod == NULL)
         {
             goto error;
         }
@@ -536,7 +536,17 @@ filter_search(PyInterpreterState *interp, PyObject *category,
             goto error;
         }
 
-        ln = PyLong_AsSsize_t(ln_obj);
+        if (PyValue_IsInlineInt(ln_value)) {
+            ln = (Py_ssize_t)PyValue_InlineInt64(ln_value);
+        }
+        else if (PyValue_IsObject(ln_value)) {
+            ln = PyLong_AsSsize_t(PyValue_AsKnownObjectBorrow(ln_value));
+        }
+        else {
+            // An inline float: PyLong_AsSsize_t()'s TypeError.
+            PyErr_SetString(PyExc_TypeError, "an integer is required");
+            ln = -1;
+        }
         if (ln == -1 && PyErr_Occurred()) {
             goto error;
         }
@@ -549,7 +559,6 @@ filter_search(PyInterpreterState *interp, PyObject *category,
             Py_DECREF(msg);
             Py_DECREF(cat);
             Py_DECREF(mod);
-            Py_DECREF(ln_obj);
             result = true;
             break;
         }
@@ -559,7 +568,6 @@ filter_search(PyInterpreterState *interp, PyObject *category,
         Py_DECREF(msg);
         Py_DECREF(cat);
         Py_DECREF(mod);
-        Py_DECREF(ln_obj);
         continue;
 
 error:
@@ -568,7 +576,6 @@ error:
         Py_XDECREF(msg);
         Py_XDECREF(cat);
         Py_XDECREF(mod);
-        Py_XDECREF(ln_obj);
         result = false;
         break;
     }
@@ -653,30 +660,32 @@ already_warned(PyInterpreterState *interp, PyObject *registry, PyObject *key,
                         &version_val) < 0) {
         return -1;
     }
-    PyObject *version_obj = NULL;
+    bool should_update_version = true;
     if (!PyValue_IsNull(version_val)) {
-        version_obj = _PyValue_AsObjectAt(version_val, BOX_SITE_DICT);
-        PyValue_CLOSE(version_val);
-        if (version_obj == NULL) {
-            return -1;
+        if (PyValue_IsInlineInt(version_val)) {
+            should_update_version =
+                PyValue_InlineInt64(version_val) != st->filters_version;
         }
+        else if (PyValue_IsObject(version_val)
+                 && PyLong_CheckExact(PyValue_AsKnownObjectBorrow(version_val)))
+        {
+            should_update_version = PyLong_AsLong(
+                PyValue_AsKnownObjectBorrow(version_val)) != st->filters_version;
+        }
+        PyValue_CLOSE(version_val);
     }
-    bool should_update_version = (
-        version_obj == NULL
-        || !PyLong_CheckExact(version_obj)
-        || PyLong_AsLong(version_obj) != st->filters_version
-    );
-    Py_XDECREF(version_obj);
     if (should_update_version) {
         PyDict_Clear(registry);
-        version_obj = PyLong_FromLong(st->filters_version);
-        if (version_obj == NULL)
+        PyValue version = PyValue_FromInt64(st->filters_version);
+        if (PyValue_IsNull(version))
             return -1;
-        if (PyDict_SetValue(registry, _PyValue_FromObjectKnown(&_Py_ID(version)), PyValue_FromObjectBorrow(version_obj)) < 0) {
-            Py_DECREF(version_obj);
+        int err = PyDict_SetValue(registry,
+                                  _PyValue_FromObjectKnown(&_Py_ID(version)),
+                                  version);
+        PyValue_CLOSE(version);
+        if (err < 0) {
             return -1;
         }
-        Py_DECREF(version_obj);
     }
     else {
         PyValue already_warned_val;

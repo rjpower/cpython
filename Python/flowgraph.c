@@ -2387,12 +2387,29 @@ basicblock_optimize_load_const(PyObject *const_cache, basicblock *bb,
     for (int i = 0; i < bb->b_iused; i++) {
         cfg_instr *inst = &bb->b_instr[i];
         if (inst->i_opcode == LOAD_CONST) {
-            PyObject *constant = get_const_value(inst->i_opcode, inst->i_oparg, consts);
-            if (constant == NULL) {
+            Py_ssize_t n = PyList_GET_SIZE(consts);
+            if (inst->i_oparg < 0 || inst->i_oparg >= n) {
+                PyErr_Format(PyExc_ValueError,
+                             "LOAD_CONST index %d is out of range for consts (len=%zd)",
+                             inst->i_oparg, n);
                 return ERROR;
             }
-            int res = maybe_instr_make_load_smallint(inst, constant, consts, const_cache);
-            Py_DECREF(constant);
+            PyValue constant = PyList_GetValue(consts, inst->i_oparg);
+            if (PyValue_IsNull(constant)) {
+                return ERROR;
+            }
+            int res = 0;
+            if (PyValue_IsInlineInt(constant)) {
+                int64_t val = PyValue_InlineInt64(constant);
+                if (0 <= val && val <= 255 && _PY_IS_SMALL_INT(val)) {
+                    INSTR_SET_OP1(inst, LOAD_SMALL_INT, (int)val);
+                }
+            }
+            else if (PyValue_IsObject(constant)) {
+                res = maybe_instr_make_load_smallint(
+                    inst, PyValue_AsKnownObjectBorrow(constant), consts, const_cache);
+            }
+            PyValue_CLOSE(constant);
             if (res < 0) {
                 return ERROR;
             }
@@ -2506,12 +2523,21 @@ basicblock_optimize_load_const(PyObject *const_cache, basicblock *bb,
             }
         }
         if (inst->i_opcode == LOAD_CONST) {
-            PyObject *constant = get_const_value(inst->i_opcode, inst->i_oparg, consts);
-            if (constant == NULL) {
+            PyValue constant = PyList_GetValue(consts, inst->i_oparg);
+            if (PyValue_IsNull(constant)) {
                 return ERROR;
             }
-            int res = maybe_instr_make_load_common_const(inst, constant);
-            Py_DECREF(constant);
+            int res = 0;
+            if (PyValue_IsInlineInt(constant)) {
+                if (PyValue_InlineInt64(constant) == -1) {
+                    INSTR_SET_OP1(inst, LOAD_COMMON_CONSTANT, CONSTANT_MINUS_ONE);
+                }
+            }
+            else if (PyValue_IsObject(constant)) {
+                res = maybe_instr_make_load_common_const(
+                    inst, PyValue_AsKnownObjectBorrow(constant));
+            }
+            PyValue_CLOSE(constant);
             if (res < 0) {
                 return ERROR;
             }

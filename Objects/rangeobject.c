@@ -501,10 +501,55 @@ range_item_value(PyObject *op, Py_ssize_t i)
 }
 _Py_VALUE_THUNK_ITEM(range_item, range_item_value)
 
+/* r[slice] for a compact range and a slice of inline ints and None, in
+   machine arithmetic (no int object is made). Returns 0 if the case does not
+   apply; otherwise 1, with the new range or NULL with an exception set in
+   *result. */
+static int
+compute_slice_compact(rangeobject *r, PySliceObject *slice, PyObject **result)
+{
+    int64_t start, step, length;
+    if (!range_compact(r, &start, &step, &length)) {
+        return 0;
+    }
+    PyValueBorrow lower = PyValue_Borrow(slice->start);
+    PyValueBorrow upper = PyValue_Borrow(slice->stop);
+    PyValueBorrow stride = PyValue_Borrow(slice->step);
+    if ((!PyValue_IsNone(lower) && !PyValue_IsInlineInt(lower)) ||
+        (!PyValue_IsNone(upper) && !PyValue_IsInlineInt(upper)) ||
+        (!PyValue_IsNone(stride) && !PyValue_IsInlineInt(stride))) {
+        return 0;
+    }
+    Py_ssize_t s, e, st;
+    if (PySlice_Unpack(_PyObject_CAST(slice), &s, &e, &st) < 0) {
+        *result = NULL;
+        return 1;
+    }
+    PySlice_AdjustIndices(length, &s, &e, st);
+    int64_t new_start = start + (int64_t)s * step;
+    int64_t new_stop = start + (int64_t)e * step;
+    int64_t new_step;
+    if (__builtin_mul_overflow(step, (int64_t)st, &new_step)
+        || !_PyValue_IntFitsInline(new_start)
+        || !_PyValue_IntFitsInline(new_stop)
+        || !_PyValue_IntFitsInline(new_step))
+    {
+        return 0;
+    }
+    *result = (PyObject *)make_range_object(
+        Py_TYPE(r), PyValue_FromInt64(new_start), PyValue_FromInt64(new_stop),
+        PyValue_FromInt64(new_step));
+    return 1;
+}
+
 static PyObject *
 compute_slice(rangeobject *r, PyObject *_slice)
 {
     PySliceObject *slice = (PySliceObject *) _slice;
+    PyObject *compact_result;
+    if (compute_slice_compact(r, slice, &compact_result)) {
+        return compact_result;
+    }
     PyObject *start = NULL, *stop = NULL, *step = NULL;
     PyValue substart = PyValue_NULL, substop = PyValue_NULL, substep = PyValue_NULL;
 

@@ -19,6 +19,9 @@ extern "C" {
 PyAPI_FUNC(int) _PyDict_DelItemIf(PyObject *mp, PyObject *key,
                                   int (*predicate)(PyObject *value, void *arg),
                                   void *arg);
+PyAPI_FUNC(int) _PyDict_DelItemIfValue(PyObject *mp, PyValueBorrow key,
+                                       int (*predicate)(PyObject *value, void *arg),
+                                       void *arg);
 
 // Atomically replace an existing value if it is expected (by identity).
 // Return 1 if replaced, 0 if absent or different, or -1 on error.

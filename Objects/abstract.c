@@ -2859,21 +2859,6 @@ PySequence_DelSlice(PyObject *s, Py_ssize_t i1, Py_ssize_t i2)
     return _PyValue_SequenceDelSlice(_Py_VALUE_ARG(s), i1, i2);
 }
 
-/* The next item of the iterator it as an object, for the object results of
-   PySequence_Tuple(): NULL at the end (nothing set) or with an exception. */
-static PyObject *
-sequence_iter_next(PyObject *it)
-{
-    _PyStatusValue r = _PyValue_IterNext(it);
-    if (r.status != PYGEN_NEXT) {
-        return NULL;
-    }
-    if (PyValue_IsInline(r.value)) {
-        return _PyValue_AsObjectAt(r.value, BOX_SITE_ITERATION);
-    }
-    return PyValue_AsKnownObjectSteal(r.value);
-}
-
 PyObject *
 (_PyValue_SequenceTuple)(PyValueBorrow v)
 {
@@ -2902,17 +2887,21 @@ PyObject *
         return NULL;
 
     Py_ssize_t n;
-    PyObject *buffer[8];
+    PyValue buffer[8];
     for (n = 0; n < 8; n++) {
-        PyObject *item = sequence_iter_next(it);
-        if (item == NULL) {
-            if (PyErr_Occurred()) {
+        _PyStatusValue item = _PyValue_IterNext(it);
+        if (item.status == PYGEN_ERROR) {
+            goto fail;
+        }
+        if (item.status != PYGEN_NEXT) {
+            PyObject *tuple = _PyTuple_FromValueStealOnSuccess(buffer, n);
+            if (tuple == NULL) {
                 goto fail;
             }
             Py_DECREF(it);
-            return _PyTuple_FromArraySteal(buffer, n);
+            return tuple;
         }
-        buffer[n] = item;
+        buffer[n] = item.value;
     }
     PyListObject *list = (PyListObject *)PyList_New(16);
     if (list == NULL) {
@@ -2921,19 +2910,19 @@ PyObject *
     assert(n == 8);
     Py_SET_SIZE(list, n);
     for (Py_ssize_t j = 0; j < n; j++) {
-        PyList_SET_VALUE(list, j, PyValue_PrepareOwned(buffer[j]));
+        PyList_SET_VALUE(list, j, buffer[j]);
     }
     for (;;) {
-        PyObject *item = sequence_iter_next(it);
-        if (item == NULL) {
-            if (PyErr_Occurred()) {
-                Py_DECREF(list);
-                Py_DECREF(it);
-                return NULL;
-            }
+        _PyStatusValue item = _PyValue_IterNext(it);
+        if (item.status == PYGEN_ERROR) {
+            Py_DECREF(list);
+            Py_DECREF(it);
+            return NULL;
+        }
+        if (item.status != PYGEN_NEXT) {
             break;
         }
-        if (_PyList_AppendTakeValue(list, PyValue_PrepareOwned(item)) < 0) {
+        if (_PyList_AppendTakeValue(list, item.value) < 0) {
             Py_DECREF(list);
             Py_DECREF(it);
             return NULL;
@@ -2947,7 +2936,7 @@ fail:
     Py_DECREF(it);
     while (n > 0) {
         n--;
-        Py_DECREF(buffer[n]);
+        PyValue_CLOSE(buffer[n]);
     }
     return NULL;
 }
@@ -3732,15 +3721,17 @@ object_isinstance(PyObject *inst, PyObject *cls)
     return retval;
 }
 
+/* Call the special method name of cls with the one argument arg, a value
+   that the callee receives without a box. Returns 1 with the owned result
+   in *res, 0 if cls has no such method, -1 with an exception set. */
 static int
 call_special_method(PyThreadState *tstate, PyObject *cls, PyObject *name,
-                    const char *where, PyObject *arg, PyObject **res)
+                    const char *where, PyValueBorrow arg, PyValue *res)
 {
-    *res = NULL;
+    *res = PyValue_NULL;
     _PyCValue cref;
     _PyThreadState_PushCValue(tstate, &cref);
     PyValue self = PyValue_DUP(PyValue_FromObjectBorrow(cls));
-    PyObject *method = NULL, *self_object = NULL;
     int found = _PyObject_LookupSpecialMethod(name, &cref.ref, &self);
     if (found <= 0) {
         goto done;
@@ -3749,42 +3740,62 @@ call_special_method(PyThreadState *tstate, PyObject *cls, PyObject *name,
         found = -1;
         goto done;
     }
-    method = _PyValue_AsObjectAt(cref.ref, BOX_SITE_CALL);
-    if (method != NULL) {
-        if (!PyValue_IsNull(self)) {
-            self_object = _PyValue_AsObjectAt(self, BOX_SITE_CALL);
-        }
-        if (PyValue_IsNull(self) || self_object != NULL) {
-            PyObject *args[2] = {self_object, arg};
-            /* A noncallable scalar is diagnosed by the normal call API. */
-            *res = self_object != NULL
-                ? PyObject_Vectorcall(method, args, 2, NULL)
-                : PyObject_Vectorcall(method, args + 1, 1, NULL);
-        }
+    PyValue stack[2];
+    Py_ssize_t n = 0;
+    if (!PyValue_IsNull(self)) {
+        _PyValue_WindowPut(&stack[n++], PyValue_Borrow(self));
     }
+    _PyValue_WindowPut(&stack[n++], arg);
+    /* A noncallable scalar is diagnosed by the normal call API. */
+    *res = _PyValue_VectorcallTstate(tstate, cref.ref, stack, n, NULL);
     _Py_LeaveRecursiveCallTstate(tstate);
-    if (*res == NULL) {
+    if (PyValue_IsNull(*res)) {
         found = -1;
     }
 done:
-    Py_CLEAR(self_object);
-    Py_CLEAR(method);
     PyValue_XCLOSE(self);
     _PyThreadState_PopCValue(tstate, &cref);
     return found;
 }
 
+/* isinstance() of an int or float, whose __class__ is its type. */
 static int
-object_recursive_isinstance(PyThreadState *tstate, PyObject *inst, PyObject *cls)
+object_isinstance_value(PyValueBorrow inst, PyObject *cls)
 {
+    if (!PyValue_IsInline(inst)) {
+        return object_isinstance(PyValue_AsKnownObjectBorrow(inst), cls);
+    }
+    PyTypeObject *tp = PyValue_TYPE(inst);
+    if (PyType_Check(cls)) {
+        return PyType_IsSubtype(tp, (PyTypeObject *)cls);
+    }
+    if (!check_class(cls,
+        "isinstance() arg 2 must be a type, a tuple of types, or a union"))
+        return -1;
+    return abstract_issubclass((PyObject *)tp, cls);
+}
+
+static int
+object_recursive_isinstance_value(PyThreadState *tstate, PyValueBorrow inst,
+                                  PyValueBorrow cls_value)
+{
+    if (PyValue_IsInline(cls_value)) {
+        // An int or float is no class: object_isinstance()'s check_class().
+        _PyErr_SetString(tstate, PyExc_TypeError,
+            "isinstance() arg 2 must be a type, a tuple of types, "
+            "or a union");
+        return -1;
+    }
+    PyObject *cls = PyValue_AsKnownObjectBorrow(cls_value);
+
     /* Quick test for an exact match */
-    if (Py_IS_TYPE(inst, (PyTypeObject *)cls)) {
+    if (PyValue_TYPE(inst) == (PyTypeObject *)cls) {
         return 1;
     }
 
     /* We know what type's __instancecheck__ does. */
     if (PyType_CheckExact(cls)) {
-        return object_isinstance(inst, cls);
+        return object_isinstance_value(inst, cls);
     }
 
     if (_PyUnion_Check(cls)) {
@@ -3800,14 +3811,8 @@ object_recursive_isinstance(PyThreadState *tstate, PyObject *inst, PyObject *cls
         Py_ssize_t n = PyTuple_GET_SIZE(cls);
         int r = 0;
         for (Py_ssize_t i = 0; i < n; ++i) {
-            PyObject *item = _PyValue_AsObjectAt(PyTuple_GET_VALUE(cls, i), BOX_SITE_TUPLE);
-            if (item == NULL) {
-                Py_CLEAR(item);
-                r = -1;
-                break;
-            }
-            r = object_recursive_isinstance(tstate, inst, item);
-            Py_DECREF(item);
+            PyValueBorrow item = PyTuple_GET_VALUE(cls, i);
+            r = object_recursive_isinstance_value(tstate, inst, item);
             if (r != 0) {
                 /* either found it, or got an error */
                 break;
@@ -3817,12 +3822,12 @@ object_recursive_isinstance(PyThreadState *tstate, PyObject *inst, PyObject *cls
         return r;
     }
 
-    PyObject *res;
+    PyValue res;
     int found = call_special_method(tstate, cls, &_Py_ID(__instancecheck__),
                                     " in __instancecheck__", inst, &res);
     if (found > 0) {
-        int ok = _PyValue_IsTrue(PyValue_FromObjectBorrow(res));
-        Py_DECREF(res);
+        int ok = _PyValue_IsTrue(res);
+        PyValue_CLOSE(res);
         return ok;
     }
     else if (found < 0) {
@@ -3830,15 +3835,21 @@ object_recursive_isinstance(PyThreadState *tstate, PyObject *inst, PyObject *cls
     }
 
     /* cls has no __instancecheck__() method */
-    return object_isinstance(inst, cls);
+    return object_isinstance_value(inst, cls);
 }
 
+int
+(_PyValue_IsInstance)(PyValueBorrow inst, PyValueBorrow cls)
+{
+    PyThreadState *tstate = _PyThreadState_GET();
+    return object_recursive_isinstance_value(tstate, inst, cls);
+}
 
 int
 PyObject_IsInstance(PyObject *inst, PyObject *cls)
 {
-    PyThreadState *tstate = _PyThreadState_GET();
-    return object_recursive_isinstance(tstate, inst, cls);
+    return _PyValue_IsInstance(PyValue_FromObjectBorrow(inst),
+                               PyValue_FromObjectBorrow(cls));
 }
 
 
@@ -3901,12 +3912,13 @@ object_issubclass(PyThreadState *tstate, PyObject *derived, PyObject *cls)
         return r;
     }
 
-    PyObject *res;
+    PyValue res;
     int found = call_special_method(tstate, cls, &_Py_ID(__subclasscheck__),
-                                    " in __subclasscheck__", derived, &res);
+                                    " in __subclasscheck__",
+                                    PyValue_FromObjectBorrow(derived), &res);
     if (found > 0) {
-        int ok = _PyValue_IsTrue(PyValue_FromObjectBorrow(res));
-        Py_DECREF(res);
+        int ok = _PyValue_IsTrue(res);
+        PyValue_CLOSE(res);
         return ok;
     }
     else if (found < 0) {

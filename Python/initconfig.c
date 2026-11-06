@@ -6,6 +6,7 @@
 #include "pycore_interp.h"        // _PyInterpreterState.runtime
 #include "pycore_list.h"          // PyList_AppendValue()
 #include "pycore_long.h"          // _PY_LONG_MAX_STR_DIGITS_THRESHOLD
+#include "pycore_long_value.h"    // _PyValue_AsInt()
 #include "pycore_pathconfig.h"    // _Py_path_config
 #include "pycore_pyerrors.h"      // _PyErr_GetRaisedException()
 #include "pycore_pylifecycle.h"   // _Py_PreInitializeFromConfig()
@@ -1428,12 +1429,12 @@ config_dict_invalid_value(const char *name)
 static int
 config_dict_get_int(PyObject *dict, const char *name, int *result)
 {
-    PyObject *item = config_dict_get(dict, name);
-    if (item == NULL) {
+    PyValue item = config_dict_get_value(dict, name);
+    if (PyValue_IsNull(item)) {
         return -1;
     }
-    int value = PyLong_AsInt(item);
-    Py_DECREF(item);
+    int value = _PyValue_AsInt(item);
+    PyValue_CLOSE(item);
     if (value == -1 && PyErr_Occurred()) {
         if (PyErr_ExceptionMatches(PyExc_TypeError)) {
             config_dict_invalid_type(name);
@@ -1451,12 +1452,12 @@ config_dict_get_int(PyObject *dict, const char *name, int *result)
 static int
 config_dict_get_ulong(PyObject *dict, const char *name, unsigned long *result)
 {
-    PyObject *item = config_dict_get(dict, name);
-    if (item == NULL) {
+    PyValue item = config_dict_get_value(dict, name);
+    if (PyValue_IsNull(item)) {
         return -1;
     }
-    unsigned long value = PyLong_AsUnsignedLong(item);
-    Py_DECREF(item);
+    unsigned long value = _PyValue_IntAsUnsignedLong(item);
+    PyValue_CLOSE(item);
     if (value == (unsigned long)-1 && PyErr_Occurred()) {
         if (PyErr_ExceptionMatches(PyExc_TypeError)) {
             config_dict_invalid_type(name);

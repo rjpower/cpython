@@ -7809,7 +7809,7 @@
             assert(exc_value && PyExceptionInstance_Check(exc_value));
             int matches = PyErr_GivenExceptionMatches(exc_value, PyExc_StopIteration);
             if (matches) {
-                value = PyValue_DUP(PyValue_FromObjectBorrow(((PyStopIterationObject *)exc_value)->value));
+                value = PyValue_DUP(((PyStopIterationObject *)exc_value)->value);
                 PyValue tmp = sub_iter;
                 sub_iter = value;
                 IR_PUBLISH_TEMP(window[0], sub_iter);

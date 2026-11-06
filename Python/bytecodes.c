@@ -1835,7 +1835,7 @@ dummy_func(
             assert(exc_value && PyExceptionInstance_Check(exc_value));
             int matches = PyErr_GivenExceptionMatches(exc_value, PyExc_StopIteration);
             if (matches) {
-                value = PyValue_DUP(PyValue_FromObjectBorrow(((PyStopIterationObject *)exc_value)->value));
+                value = PyValue_DUP(((PyStopIterationObject *)exc_value)->value);
                 DECREF_INPUTS();
                 null_out = null_in;
                 none = PyValue_None;

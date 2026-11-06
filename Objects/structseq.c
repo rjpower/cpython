@@ -10,6 +10,7 @@
 #include "Python.h"
 #include "pycore_dict.h"          // PyDict_SetValue()
 #include "pycore_initconfig.h"    // _PyStatus_OK()
+#include "pycore_long_value.h"    // _PyValue_IntAsSsize_t()
 #include "pycore_list.h"          // PyList_GET_VALUE()
 #include "pycore_modsupport.h"    // _PyArg_NoPositional()
 #include "pycore_object.h"        // _PyObject_GC_TRACK()
@@ -45,13 +46,8 @@ get_type_attr_as_size(PyTypeObject *tp, PyObject *name)
                      name, tp->tp_name);
         return -1;
     }
-    PyObject *v = _PyValue_AsObjectAt(value, BOX_SITE_DICT);
+    Py_ssize_t size = _PyValue_IntAsSsize_t(value);
     PyValue_CLOSE(value);
-    if (v == NULL) {
-        return -1;
-    }
-    Py_ssize_t size = PyLong_AsSsize_t(v);
-    Py_DECREF(v);
     return size;
 }
 

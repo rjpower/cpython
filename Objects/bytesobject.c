@@ -1964,22 +1964,15 @@ _getbuffer_value(PyValueBorrow v, Py_buffer *view, int flags)
 }
 
 typedef PyObject* (*_bytes_sub_op)(const char *str, Py_ssize_t len,
-                                   PyObject *sub, Py_ssize_t start,
+                                   PyValueBorrow sub, Py_ssize_t start,
                                    Py_ssize_t end);
 
-/* Call op with a value argument. An inline int (a byte value for find and
-   friends) is boxed because op takes an object. */
 static PyValue
 _bytes_with_sub(PyBytesObject *self, _bytes_sub_op op, PyValueBorrow sub,
                 Py_ssize_t start, Py_ssize_t end)
 {
-    PyObject *sub_obj = _PyValue_AsObjectAt(sub, BOX_SITE_PARSER);
-    if (sub_obj == NULL) {
-        return PyValue_NULL;
-    }
     PyObject *res = op(PyBytes_AS_STRING(self), PyBytes_GET_SIZE(self),
-                       sub_obj, start, end);
-    Py_DECREF(sub_obj);
+                       sub, start, end);
     return _PyValue_FromObjectResult(res);
 }
 

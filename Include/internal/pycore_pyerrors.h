@@ -8,6 +8,11 @@ extern "C" {
 #  error "this header requires Py_BUILD_CORE define"
 #endif
 
+typedef struct {
+    PyException_HEAD
+    PyValue value;  /* the generator's return value; PyValue_NULL is None */
+} PyStopIterationObject;
+
 
 /* Error handling definitions */
 

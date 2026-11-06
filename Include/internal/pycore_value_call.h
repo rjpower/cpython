@@ -188,8 +188,7 @@ PyAPI_FUNC(PyValue) _PyValue_Call(PyThreadState *tstate,
 #define _PyValue_Call(T, C, A, K) (_PyValue_Call)(T, PyValue_Borrow(C), A, K)
 
 /* The fixed-arity forms. Each reserves args[-1] for a bound callee. The
- * method forms (_PyValue_VectorcallMethod, _PyValue_CallMethodOneArg) come
- * with W2's first batch, once M2's value method lookup exists. */
+ * method forms follow. */
 extern PyValue _PyValue_CallNoArgs(PyThreadState *tstate,
                                    PyValueBorrow callable);
 // Export for '_testinternalcapi' shared extension.
@@ -197,6 +196,22 @@ PyAPI_FUNC(PyValue) _PyValue_CallOneArg(PyThreadState *tstate,
                                         PyValueBorrow callable,
                                         PyValueBorrow arg);
 #define _PyValue_CallNoArgs(T, C) (_PyValue_CallNoArgs)(T, PyValue_Borrow(C))
+
+/* The method forms: PyObject_VectorcallMethod() over a window of words
+ * (args[0] is the receiver), PyObject_CallMethodNoArgs() and
+ * PyObject_CallMethodOneArg(). */
+// Export for built-in and shared extensions with value-native method calls.
+PyAPI_FUNC(PyValue) _PyValue_VectorcallMethod(
+    PyObject *name, const PyValue *args, size_t nargsf, PyObject *kwnames);
+PyAPI_FUNC(PyValue) _PyValue_CallMethodNoArgs(PyValueBorrow self,
+                                              PyObject *name);
+PyAPI_FUNC(PyValue) _PyValue_CallMethodOneArg(PyValueBorrow self,
+                                              PyObject *name,
+                                              PyValueBorrow arg);
+#define _PyValue_CallMethodNoArgs(S, N) \
+    (_PyValue_CallMethodNoArgs)(PyValue_Borrow(S), N)
+#define _PyValue_CallMethodOneArg(S, N, A) \
+    (_PyValue_CallMethodOneArg)(PyValue_Borrow(S), N, PyValue_Borrow(A))
 #define _PyValue_CallOneArg(T, C, A) \
     (_PyValue_CallOneArg)(T, PyValue_Borrow(C), PyValue_Borrow(A))
 
@@ -231,8 +246,10 @@ extern PyValue _PyValue_InstanceVectorcall(
 /* The object tp_call of a type whose tp_value.call is set (the pair row of
  * section 1.2): the tuple's words are the window, the dict expands as in
  * _PyValue_Call(), and the result leaves through _PyValue_THUNK_EXIT(). */
-extern PyObject *_PyValue_TpCallThunk(PyObject *callable, PyObject *args,
-                                      PyObject *kwargs);
+// Export for shared extensions whose types set a value call.
+PyAPI_FUNC(PyObject *) _PyValue_TpCallThunk(PyObject *callable,
+                                            PyObject *args,
+                                            PyObject *kwargs);
 
 /* The object vectorcall of every core callable with a value vectorcall
  * field other than a Python function (D8): converts the object vector into

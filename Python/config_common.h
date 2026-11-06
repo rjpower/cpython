@@ -23,6 +23,21 @@ _config_dict_get(PyObject *dict, const char *name, PyObject **p_item)
 }
 
 
+static inline PyValue
+config_dict_get_value(PyObject *dict, const char *name)
+{
+    PyValue item;
+    int rc = PyDict_GetValueString(dict, name, &item);
+    if (rc <= 0) {
+        if (rc == 0) {
+            PyErr_Format(PyExc_ValueError, "missing config key: %s", name);
+        }
+        return PyValue_NULL;
+    }
+    return item;
+}
+
+
 static PyObject*
 config_dict_get(PyObject *dict, const char *name)
 {

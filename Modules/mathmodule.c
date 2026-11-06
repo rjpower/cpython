@@ -941,14 +941,24 @@ is_error(double x, int raise_edom)
    care about right now.
 */
 
-static PyObject *
-math_1(PyObject *arg, double (*func) (double), int can_overflow,
+/* The double of a float or int argument: floats are read in line. */
+static inline double
+value_as_double(PyValueBorrow arg)
+{
+    if (PyValue_IsInlineFloat(arg)) {
+        return PyValue_InlineFloat(arg);
+    }
+    return _PyValue_AsDouble(arg);
+}
+
+static PyValue
+math_1(PyValueBorrow arg, double (*func) (double), int can_overflow,
        const char *err_msg)
 {
     double x, r;
-    x = PyFloat_AsDouble(arg);
+    x = value_as_double(arg);
     if (x == -1.0 && PyErr_Occurred())
-        return NULL;
+        return PyValue_NULL;
     errno = 0;
     r = (*func)(x);
     if (isnan(r) && !isnan(x))
@@ -959,13 +969,13 @@ math_1(PyObject *arg, double (*func) (double), int can_overflow,
                             "math range error"); /* overflow */
         else
             goto domain_err; /* singularity */
-        return NULL;
+        return PyValue_NULL;
     }
     if (isfinite(r) && errno && is_error(r, 1))
         /* this branch unnecessary on most platforms */
-        return NULL;
+        return PyValue_NULL;
 
-    return PyFloat_FromDouble(r);
+    return PyValue_FromDouble(r);
 
 domain_err:
     if (err_msg) {
@@ -978,20 +988,20 @@ domain_err:
 	else {
 		PyErr_SetString(PyExc_ValueError, "math domain error");
 	}
-    return NULL;
+    return PyValue_NULL;
 }
 
 /* variant of math_1, to be used when the function being wrapped is known to
    set errno properly (that is, errno = EDOM for invalid or divide-by-zero,
    errno = ERANGE for overflow). */
 
-static PyObject *
-math_1a(PyObject *arg, double (*func) (double), const char *err_msg)
+static PyValue
+math_1a(PyValueBorrow arg, double (*func) (double), const char *err_msg)
 {
     double x, r;
-    x = PyFloat_AsDouble(arg);
+    x = value_as_double(arg);
     if (x == -1.0 && PyErr_Occurred())
-        return NULL;
+        return PyValue_NULL;
     errno = 0;
     r = (*func)(x);
     if (errno && is_error(r, err_msg ? 0 : 1)) {
@@ -1003,9 +1013,9 @@ math_1a(PyObject *arg, double (*func) (double), const char *err_msg)
                 PyMem_Free(buf);
             }
         }
-        return NULL;
+        return PyValue_NULL;
     }
-    return PyFloat_FromDouble(r);
+    return PyValue_FromDouble(r);
 }
 
 /*
@@ -1035,20 +1045,20 @@ math_1a(PyObject *arg, double (*func) (double), const char *err_msg)
    OverflowError.
 */
 
-static PyObject *
-math_2(PyObject *const *args, Py_ssize_t nargs,
+static PyValue
+math_2(const PyValue *args, Py_ssize_t nargs,
        double (*func) (double, double), const char *funcname)
 {
     double x, y, r;
     if (!_PyArg_CheckPositional(funcname, nargs, 2, 2))
-        return NULL;
-    x = PyFloat_AsDouble(args[0]);
+        return PyValue_NULL;
+    x = value_as_double(PyValue_Borrow(args[0]));
     if (x == -1.0 && PyErr_Occurred()) {
-        return NULL;
+        return PyValue_NULL;
     }
-    y = PyFloat_AsDouble(args[1]);
+    y = value_as_double(PyValue_Borrow(args[1]));
     if (y == -1.0 && PyErr_Occurred()) {
-        return NULL;
+        return PyValue_NULL;
     }
     errno = 0;
     r = (*func)(x, y);
@@ -1065,37 +1075,42 @@ math_2(PyObject *const *args, Py_ssize_t nargs,
             errno = 0;
     }
     if (errno && is_error(r, 1))
-        return NULL;
+        return PyValue_NULL;
     else
-        return PyFloat_FromDouble(r);
+        return PyValue_FromDouble(r);
 }
 
-#define FUNC1(funcname, func, can_overflow, docstring)                  \
-    static PyObject * math_##funcname(PyObject *self, PyObject *args) { \
-        return math_1(args, func, can_overflow, NULL);                  \
+#define FUNC1(funcname, func, can_overflow, docstring) \
+    static PyValue math_##funcname(PyValueBorrow self, const PyValue *args, \
+                                   Py_ssize_t nargs, PyObject *kwnames) { \
+        return math_1(PyValue_Borrow(args[0]), func, can_overflow, NULL); \
     }\
     PyDoc_STRVAR(math_##funcname##_doc, docstring);
 
-#define FUNC1D(funcname, func, can_overflow, docstring, err_msg)        \
-    static PyObject * math_##funcname(PyObject *self, PyObject *args) { \
-        return math_1(args, func, can_overflow, err_msg);               \
+#define FUNC1D(funcname, func, can_overflow, docstring, err_msg) \
+    static PyValue math_##funcname(PyValueBorrow self, const PyValue *args, \
+                                   Py_ssize_t nargs, PyObject *kwnames) { \
+        return math_1(PyValue_Borrow(args[0]), func, can_overflow, err_msg); \
     }\
     PyDoc_STRVAR(math_##funcname##_doc, docstring);
 
-#define FUNC1A(funcname, func, docstring)                               \
-    static PyObject * math_##funcname(PyObject *self, PyObject *args) { \
-        return math_1a(args, func, NULL);                               \
+#define FUNC1A(funcname, func, docstring) \
+    static PyValue math_##funcname(PyValueBorrow self, const PyValue *args, \
+                                   Py_ssize_t nargs, PyObject *kwnames) { \
+        return math_1a(PyValue_Borrow(args[0]), func, NULL); \
     }\
     PyDoc_STRVAR(math_##funcname##_doc, docstring);
 
-#define FUNC1AD(funcname, func, docstring, err_msg)                     \
-    static PyObject * math_##funcname(PyObject *self, PyObject *args) { \
-        return math_1a(args, func, err_msg);                            \
+#define FUNC1AD(funcname, func, docstring, err_msg) \
+    static PyValue math_##funcname(PyValueBorrow self, const PyValue *args, \
+                                   Py_ssize_t nargs, PyObject *kwnames) { \
+        return math_1a(PyValue_Borrow(args[0]), func, err_msg); \
     }\
     PyDoc_STRVAR(math_##funcname##_doc, docstring);
 
 #define FUNC2(funcname, func, docstring) \
-    static PyObject * math_##funcname(PyObject *self, PyObject *const *args, Py_ssize_t nargs) { \
+    static PyValue math_##funcname(PyValueBorrow self, const PyValue *args, \
+                                   Py_ssize_t nargs, PyObject *kwnames) { \
         return math_2(args, nargs, func, #funcname); \
     }\
     PyDoc_STRVAR(math_##funcname##_doc, docstring);
@@ -1783,28 +1798,39 @@ math_modf_impl(PyObject *module, double x)
    However, intermediate overflow is possible for an int if the number of bits
    in that int is larger than PY_SSIZE_T_MAX. */
 
-static PyObject*
-loghelper_int(PyObject* arg, double (*func)(double))
+static PyValue
+loghelper_int(PyValueBorrow arg, double (*func)(double))
 {
     /* If it is int, do it ourselves. */
     double x, result;
     int64_t e;
 
+    if (PyValue_IsInlineInt(arg)) {
+        int64_t n = PyValue_InlineInt64(arg);
+        if (n <= 0) {
+            PyErr_SetString(PyExc_ValueError,
+                            "expected a positive input");
+            return PyValue_NULL;
+        }
+        return PyValue_FromDouble(func((double)n));
+    }
+    PyObject *obj = PyValue_AsKnownObjectBorrow(arg);
+
     /* Negative or zero inputs give a ValueError. */
-    if (!_PyLong_IsPositive((PyLongObject *)arg)) {
+    if (!_PyLong_IsPositive((PyLongObject *)obj)) {
         PyErr_SetString(PyExc_ValueError,
                         "expected a positive input");
-        return NULL;
+        return PyValue_NULL;
     }
 
-    x = PyLong_AsDouble(arg);
+    x = _PyValue_AsDouble(arg);
     if (x == -1.0 && PyErr_Occurred()) {
         if (!PyErr_ExceptionMatches(PyExc_OverflowError))
-            return NULL;
+            return PyValue_NULL;
         /* Here the conversion to double overflowed, but it's possible
            to compute the log anyway.  Clear the exception and continue. */
         PyErr_Clear();
-        x = _PyLong_Frexp((PyLongObject *)arg, &e);
+        x = _PyLong_Frexp((PyLongObject *)obj, &e);
         assert(!PyErr_Occurred());
         /* Value is ~= x * 2**e, so the log ~= log(x) + log(2) * e. */
         result = fma(func(2.0), (double)e, func(x));
@@ -1812,33 +1838,34 @@ loghelper_int(PyObject* arg, double (*func)(double))
     else
         /* Successfully converted x to a double. */
         result = func(x);
-    return PyFloat_FromDouble(result);
+    return PyValue_FromDouble(result);
 }
 
-static PyObject*
-loghelper(PyObject* arg, double (*func)(double))
+static PyValue
+loghelper(PyValueBorrow arg, double (*func)(double))
 {
     /* If it is int, do it ourselves. */
-    if (PyLong_Check(arg)) {
+    if (PyValue_IsInlineInt(arg) ||
+        (PyValue_IsObject(arg) &&
+         PyLong_Check(PyValue_AsKnownObjectBorrow(arg)))) {
         return loghelper_int(arg, func);
     }
     /* Else let libm handle it by itself. */
-    PyObject *res = math_1(arg, func, 0, "expected a positive input, got %s");
-    if (res == NULL &&
+    PyValue res = math_1(arg, func, 0, "expected a positive input, got %s");
+    if (PyValue_IsNull(res) &&
         PyErr_ExceptionMatches(PyExc_OverflowError) &&
-        PyIndex_Check(arg))
+        PyIndex_Check(PyValue_AsKnownObjectBorrow(arg)))
     {
         /* Here the conversion to double overflowed, but it's possible
            to compute the log anyway.  Clear the exception, convert to
            integer and continue. */
         PyErr_Clear();
-        PyValue arg_v = _PyValue_Index(PyValue_FromObjectBorrow(arg));
-        arg = PyValue_IsNull(arg_v) ? NULL : _PyValue_AsObjectStealAt(arg_v, BOX_SITE_NUMBER);
-        if (arg == NULL) {
-            return NULL;
+        PyValue index = _PyValue_Index(arg);
+        if (PyValue_IsNull(index)) {
+            return PyValue_NULL;
         }
-        res = loghelper_int(arg, func);
-        Py_DECREF(arg);
+        res = loghelper_int(PyValue_Borrow(index), func);
+        PyValue_CLOSE(index);
     }
     return res;
 }
@@ -1846,30 +1873,27 @@ loghelper(PyObject* arg, double (*func)(double))
 
 /* AC: cannot convert yet, see gh-102839 and gh-89381, waiting
    for support of multiple signatures */
-static PyObject *
-math_log(PyObject *module, PyObject * const *args, Py_ssize_t nargs)
+static PyValue
+math_log(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs,
+         PyObject *kwnames)
 {
-    PyObject *num, *den;
-    PyObject *ans;
-
     if (!_PyArg_CheckPositional("log", nargs, 1, 2))
-        return NULL;
+        return PyValue_NULL;
 
-    num = loghelper(args[0], m_log);
-    if (num == NULL || nargs == 1)
+    PyValue num = loghelper(PyValue_Borrow(args[0]), m_log);
+    if (PyValue_IsNull(num) || nargs == 1)
         return num;
 
-    den = loghelper(args[1], m_log);
-    if (den == NULL) {
-        Py_DECREF(num);
-        return NULL;
+    PyValue den = loghelper(PyValue_Borrow(args[1]), m_log);
+    if (PyValue_IsNull(den)) {
+        PyValue_CLOSE(num);
+        return PyValue_NULL;
     }
 
-    PyValue ans_v = _PyValue_TrueDivide(PyValue_FromObjectBorrow(num),
-                            PyValue_FromObjectBorrow(den));
-    ans = PyValue_IsNull(ans_v) ? NULL : _PyValue_AsObjectStealAt(ans_v, BOX_SITE_NUMBER);
-    Py_DECREF(num);
-    Py_DECREF(den);
+    PyValue ans = _PyValue_TrueDivide(PyValue_Borrow(num),
+                                      PyValue_Borrow(den));
+    PyValue_CLOSE(num);
+    PyValue_CLOSE(den);
     return ans;
 }
 
@@ -1891,13 +1915,7 @@ static PyValue
 math_log2_impl(PyObject *module, PyValueBorrow x)
 /*[clinic end generated code: output=72c989805e917cc5 input=08321262bae4f39b]*/
 {
-    PyObject *xo = _PyValue_AsObjectAt(x, BOX_SITE_PARSER);
-    if (xo == NULL) {
-        return PyValue_NULL;
-    }
-    PyObject *res = loghelper(xo, m_log2);
-    Py_DECREF(xo);
-    return _PyValue_FromObjectResult(res);
+    return loghelper(x, m_log2);
 }
 
 
@@ -1914,13 +1932,7 @@ static PyValue
 math_log10_impl(PyObject *module, PyValueBorrow x)
 /*[clinic end generated code: output=c623cc450bf05b4a input=b2469d02c6469e53]*/
 {
-    PyObject *xo = _PyValue_AsObjectAt(x, BOX_SITE_PARSER);
-    if (xo == NULL) {
-        return PyValue_NULL;
-    }
-    PyObject *res = loghelper(xo, m_log10);
-    Py_DECREF(xo);
-    return _PyValue_FromObjectResult(res);
+    return loghelper(x, m_log10);
 }
 
 
@@ -3307,31 +3319,31 @@ math_exec(PyObject *module)
 }
 
 static PyMethodDef math_methods[] = {
-    {"acos",            math_acos,      METH_O,         math_acos_doc},
-    {"acosh",           math_acosh,     METH_O,         math_acosh_doc},
-    {"acospi",          math_acospi,    METH_O,         math_acospi_doc},
-    {"asin",            math_asin,      METH_O,         math_asin_doc},
-    {"asinh",           math_asinh,     METH_O,         math_asinh_doc},
-    {"asinpi",          math_asinpi,    METH_O,         math_asinpi_doc},
-    {"atan",            math_atan,      METH_O,         math_atan_doc},
-    {"atan2",           _PyCFunction_CAST(math_atan2),     METH_FASTCALL,  math_atan2_doc},
-    {"atanh",           math_atanh,     METH_O,         math_atanh_doc},
-    {"atan2pi",         _PyCFunction_CAST(math_atan2pi),   METH_FASTCALL,  math_atan2pi_doc},
-    {"atanpi",          math_atanpi,    METH_O,       math_atanpi_doc},
-    {"cbrt",            math_cbrt,      METH_O,         math_cbrt_doc},
+    {"acos",            _PyCFunction_CAST(math_acos),      METH_VALUE|METH_O,         math_acos_doc},
+    {"acosh",           _PyCFunction_CAST(math_acosh),     METH_VALUE|METH_O,         math_acosh_doc},
+    {"acospi",          _PyCFunction_CAST(math_acospi),    METH_VALUE|METH_O,         math_acospi_doc},
+    {"asin",            _PyCFunction_CAST(math_asin),      METH_VALUE|METH_O,         math_asin_doc},
+    {"asinh",           _PyCFunction_CAST(math_asinh),     METH_VALUE|METH_O,         math_asinh_doc},
+    {"asinpi",          _PyCFunction_CAST(math_asinpi),    METH_VALUE|METH_O,         math_asinpi_doc},
+    {"atan",            _PyCFunction_CAST(math_atan),      METH_VALUE|METH_O,         math_atan_doc},
+    {"atan2",           _PyCFunction_CAST(math_atan2),     METH_VALUE,  math_atan2_doc},
+    {"atanh",           _PyCFunction_CAST(math_atanh),     METH_VALUE|METH_O,         math_atanh_doc},
+    {"atan2pi",         _PyCFunction_CAST(math_atan2pi),   METH_VALUE,  math_atan2pi_doc},
+    {"atanpi",          _PyCFunction_CAST(math_atanpi),    METH_VALUE|METH_O,       math_atanpi_doc},
+    {"cbrt",            _PyCFunction_CAST(math_cbrt),      METH_VALUE|METH_O,         math_cbrt_doc},
     MATH_CEIL_METHODDEF
-    {"copysign",        _PyCFunction_CAST(math_copysign),  METH_FASTCALL,  math_copysign_doc},
-    {"cos",             math_cos,       METH_O,         math_cos_doc},
-    {"cosh",            math_cosh,      METH_O,         math_cosh_doc},
-    {"cospi",           math_cospi,     METH_O,         math_cospi_doc},
+    {"copysign",        _PyCFunction_CAST(math_copysign),  METH_VALUE,  math_copysign_doc},
+    {"cos",             _PyCFunction_CAST(math_cos),       METH_VALUE|METH_O,         math_cos_doc},
+    {"cosh",            _PyCFunction_CAST(math_cosh),      METH_VALUE|METH_O,         math_cosh_doc},
+    {"cospi",           _PyCFunction_CAST(math_cospi),     METH_VALUE|METH_O,         math_cospi_doc},
     MATH_DEGREES_METHODDEF
     MATH_DIST_METHODDEF
-    {"erf",             math_erf,       METH_O,         math_erf_doc},
-    {"erfc",            math_erfc,      METH_O,         math_erfc_doc},
-    {"exp",             math_exp,       METH_O,         math_exp_doc},
-    {"exp2",            math_exp2,      METH_O,         math_exp2_doc},
-    {"expm1",           math_expm1,     METH_O,         math_expm1_doc},
-    {"fabs",            math_fabs,      METH_O,         math_fabs_doc},
+    {"erf",             _PyCFunction_CAST(math_erf),       METH_VALUE|METH_O,         math_erf_doc},
+    {"erfc",            _PyCFunction_CAST(math_erfc),      METH_VALUE|METH_O,         math_erfc_doc},
+    {"exp",             _PyCFunction_CAST(math_exp),       METH_VALUE|METH_O,         math_exp_doc},
+    {"exp2",            _PyCFunction_CAST(math_exp2),      METH_VALUE|METH_O,         math_exp2_doc},
+    {"expm1",           _PyCFunction_CAST(math_expm1),     METH_VALUE|METH_O,         math_expm1_doc},
+    {"fabs",            _PyCFunction_CAST(math_fabs),      METH_VALUE|METH_O,         math_fabs_doc},
     MATH_FLOOR_METHODDEF
     MATH_FMA_METHODDEF
     MATH_FMAX_METHODDEF
@@ -3339,7 +3351,7 @@ static PyMethodDef math_methods[] = {
     MATH_FMIN_METHODDEF
     MATH_FREXP_METHODDEF
     MATH_FSUM_METHODDEF
-    {"gamma",           math_gamma,     METH_O,         math_gamma_doc},
+    {"gamma",           _PyCFunction_CAST(math_gamma),     METH_VALUE|METH_O,         math_gamma_doc},
     MATH_HYPOT_METHODDEF
     MATH_ISCLOSE_METHODDEF
     MATH_ISFINITE_METHODDEF
@@ -3348,23 +3360,23 @@ static PyMethodDef math_methods[] = {
     MATH_ISINF_METHODDEF
     MATH_ISNAN_METHODDEF
     MATH_LDEXP_METHODDEF
-    {"lgamma",          math_lgamma,    METH_O,         math_lgamma_doc},
-    {"log",             _PyCFunction_CAST(math_log),       METH_FASTCALL,  math_log_doc},
-    {"log1p",           math_log1p,     METH_O,         math_log1p_doc},
+    {"lgamma",          _PyCFunction_CAST(math_lgamma),    METH_VALUE|METH_O,         math_lgamma_doc},
+    {"log",             _PyCFunction_CAST(math_log),       METH_VALUE,  math_log_doc},
+    {"log1p",           _PyCFunction_CAST(math_log1p),     METH_VALUE|METH_O,         math_log1p_doc},
     MATH_LOG10_METHODDEF
     MATH_LOG2_METHODDEF
     MATH_MODF_METHODDEF
     MATH_POW_METHODDEF
     MATH_RADIANS_METHODDEF
-    {"remainder",       _PyCFunction_CAST(math_remainder), METH_FASTCALL,  math_remainder_doc},
+    {"remainder",       _PyCFunction_CAST(math_remainder), METH_VALUE,  math_remainder_doc},
     MATH_SIGNBIT_METHODDEF
-    {"sin",             math_sin,       METH_O,         math_sin_doc},
-    {"sinh",            math_sinh,      METH_O,         math_sinh_doc},
-    {"sinpi",           math_sinpi,     METH_O,         math_sinpi_doc},
-    {"sqrt",            math_sqrt,      METH_O,         math_sqrt_doc},
-    {"tan",             math_tan,       METH_O,         math_tan_doc},
-    {"tanh",            math_tanh,      METH_O,         math_tanh_doc},
-    {"tanpi",           math_tanpi,     METH_O,         math_tanpi_doc},
+    {"sin",             _PyCFunction_CAST(math_sin),       METH_VALUE|METH_O,         math_sin_doc},
+    {"sinh",            _PyCFunction_CAST(math_sinh),      METH_VALUE|METH_O,         math_sinh_doc},
+    {"sinpi",           _PyCFunction_CAST(math_sinpi),     METH_VALUE|METH_O,         math_sinpi_doc},
+    {"sqrt",            _PyCFunction_CAST(math_sqrt),      METH_VALUE|METH_O,         math_sqrt_doc},
+    {"tan",             _PyCFunction_CAST(math_tan),       METH_VALUE|METH_O,         math_tan_doc},
+    {"tanh",            _PyCFunction_CAST(math_tanh),      METH_VALUE|METH_O,         math_tanh_doc},
+    {"tanpi",           _PyCFunction_CAST(math_tanpi),     METH_VALUE|METH_O,         math_tanpi_doc},
     MATH_SUMPROD_METHODDEF
     MATH_TRUNC_METHODDEF
     MATH_PROD_METHODDEF

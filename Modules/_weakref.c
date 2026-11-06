@@ -3,7 +3,7 @@
 #endif
 #define Py_VALUE_CORE 1
 #include "Python.h"
-#include "pycore_dict.h"              // _PyDict_DelItemIf()
+#include "pycore_dict.h"              // _PyDict_DelItemIfValue()
 #include "pycore_list.h"          // PyList_AppendValue()
 #include "pycore_object.h"            // _PyObject_GET_WEAKREFS_LISTPTR()
 #include "pycore_value.h"            // PyValue_AsKnownObjectBorrow(), _PyValue_AsObjectAt()
@@ -74,12 +74,7 @@ _weakref__remove_dead_weakref_impl(PyObject *module, PyObject *dct,
                                    PyValueBorrow key)
 /*[clinic end generated code: output=d81fbf4809689aeb input=19fc91f257f96a1d]*/
 {
-    PyObject *keyobj = _PyValue_AsObjectAt(key, BOX_SITE_PARSER);
-    if (keyobj == NULL) {
-        return PyValue_NULL;
-    }
-    int res = _PyDict_DelItemIf(dct, keyobj, is_dead_weakref, NULL);
-    Py_DECREF(keyobj);
+    int res = _PyDict_DelItemIfValue(dct, key, is_dead_weakref, NULL);
     if (res < 0) {
         return PyValue_NULL;
     }

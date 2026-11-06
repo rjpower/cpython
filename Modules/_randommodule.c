@@ -298,6 +298,24 @@ random_seed_time_pid(RandomObject *self)
     return 0;
 }
 
+// Seed from an unsigned 64-bit number: the key is its 32-bit chunks from
+// the right, as for a PyLong of that size.
+static void
+init_by_uint64(RandomObject *self, uint64_t u)
+{
+    uint32_t key[2] = {(uint32_t)u, (uint32_t)(u >> 32)};
+    init_by_array(self, key, key[1] != 0 ? 2 : 1);
+}
+
+// Seed from the absolute value of an inline int.
+static int
+random_seed_inline(RandomObject *self, PyValueBorrow value)
+{
+    int64_t i = PyValue_InlineInt64(value);
+    init_by_uint64(self, i < 0 ? -(uint64_t)i : (uint64_t)i);
+    return 0;
+}
+
 static int
 random_seed(RandomObject *self, PyValueBorrow arg_value)
 {
@@ -326,15 +344,30 @@ random_seed(RandomObject *self, PyValueBorrow arg_value)
      * So: if the arg is a PyLong, use its absolute value.
      * Otherwise use its hash value, cast to unsigned.
      */
-    arg = _PyValue_AsObjectAt(arg_value, BOX_SITE_PARSER);
-    if (arg == NULL) {
-        return -1;
+    if (PyValue_IsInlineInt(arg_value)) {
+        return random_seed_inline(self, arg_value);
     }
+    if (PyValue_IsInline(arg_value)) {
+        /* An inline float hashes without an object. */
+        Py_hash_t hash = _PyValue_Hash(arg_value);
+        if (hash == -1) {
+            return -1;
+        }
+        init_by_uint64(self, (uint64_t)(size_t)hash);
+        return 0;
+    }
+    arg = PyValue_AsKnownObjectBorrow(arg_value);
+    Py_INCREF(arg);
     if (PyLong_CheckExact(arg)) {
         PyValue abs_value = _PyValue_Absolute(PyValue_FromObjectBorrow(arg));
-        n = PyValue_IsNull(abs_value)
-            ? NULL
-            : _PyValue_AsObjectStealAt(abs_value, BOX_SITE_NUMBER);
+        if (PyValue_IsNull(abs_value)) {
+            goto Done;
+        }
+        if (PyValue_IsInlineInt(abs_value)) {
+            Py_DECREF(arg);
+            return random_seed_inline(self, PyValue_Borrow(abs_value));
+        }
+        n = PyValue_AsKnownObjectSteal(abs_value);
     } else if (PyLong_Check(arg)) {
         /* Calling int.__abs__() prevents calling arg.__abs__(), which might
            return an invalid value. See issue #31478. */

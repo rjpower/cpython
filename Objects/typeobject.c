@@ -2586,13 +2586,12 @@ static int
 type___instancecheck___impl(PyTypeObject *self, PyValueBorrow instance)
 /*[clinic end generated code: output=ccdd7dc024cdf372 input=cdbfeaee82c01a0f]*/
 {
-    PyObject *instance_o = _PyValue_AsObjectAt(instance, BOX_SITE_PARSER);
-    if (instance_o == NULL) {
-        return -1;
+    if (PyValue_IsInline(instance)) {
+        // The __class__ of an int or float is its type.
+        return PyType_IsSubtype(PyValue_TYPE(instance), self);
     }
-    int res = _PyObject_RealIsInstance(instance_o, (PyObject *)self);
-    Py_DECREF(instance_o);
-    return res;
+    return _PyObject_RealIsInstance(PyValue_AsKnownObjectBorrow(instance),
+                                    (PyObject *)self);
 }
 
 /*[clinic input]
@@ -12585,31 +12584,33 @@ _Py_VALUE_THUNK_UNARY(FUNCNAME, FUNCNAME##_value)
 static Py_ssize_t
 slot_sq_length(PyObject *self)
 {
-    PyObject* stack[1] = {self};
-    PyObject *res = vectorcall_method(&_Py_ID(__len__), stack, 1);
-    Py_ssize_t len;
-
-    if (res == NULL)
+    PyValue stack[1];
+    _PyValue_WindowPut(&stack[0], _PyValue_FromObjectKnown(self));
+    PyValue res = vectorcall_method_value(&_Py_ID(__len__), stack, 1);
+    if (PyValue_IsNull(res)) {
         return -1;
+    }
 
-    PyObject *index = _PyValue_AsObjectResultAt(
-        _PyValue_Index(PyValue_FromObjectBorrow(res)), BOX_SITE_NUMBER);
-    Py_DECREF(res);
-    res = index;
-    if (res == NULL)
+    PyValue index = _PyValue_Index(PyValue_Borrow(res));
+    PyValue_CLOSE(res);
+    if (PyValue_IsNull(index)) {
         return -1;
+    }
 
-    assert(PyLong_Check(res));
-    if (_PyLong_IsNegative((PyLongObject *)res)) {
-        Py_DECREF(res);
+    PyValueBorrow n = PyValue_Borrow(index);
+    int negative = PyValue_IsInlineInt(n)
+        ? PyValue_InlineInt64(n) < 0
+        : _PyLong_IsNegative((PyLongObject *)PyValue_AsKnownObjectBorrow(n));
+    if (negative) {
+        PyValue_CLOSE(index);
         PyErr_SetString(PyExc_ValueError,
                         "__len__() should return >= 0");
         return -1;
     }
 
-    len = _PyValue_AsSsize_t(PyValue_FromObjectBorrow(res), PyExc_OverflowError);
+    Py_ssize_t len = _PyValue_AsSsize_t(n, PyExc_OverflowError);
     assert(len >= 0 || PyErr_ExceptionMatches(PyExc_OverflowError));
-    Py_DECREF(res);
+    PyValue_CLOSE(index);
     return len;
 }
 
@@ -14246,6 +14247,17 @@ value_pair_in_slot_descriptor(PyTypeObject *type, int row, void *object,
                 PyWrapperDescrObject *d = (PyWrapperDescrObject *)descr;
                 found = (d->d_wrapped == object
                          && (_Py_valuefunc)d->d_wrapped_value == value);
+                /* A name that two slotdefs share, as __getitem__ for
+                   sq_item and mp_subscript, has one descriptor, from the
+                   first slotdef in the table. The other row is
+                   not rewritten from it: PyType_Ready checked its pair,
+                   as for the static list. */
+                if (!found && (type->tp_flags & Py_TPFLAGS_HEAPTYPE)
+                    && slotdef_values[d->d_base - slotdefs].row != row
+                    && d->d_base->name_strobj == p->name_strobj)
+                {
+                    found = 1;
+                }
             }
         }
         PyValue_CLOSE(descr_ref);
@@ -14850,6 +14862,11 @@ type_new_set_names(PyTypeObject *type)
     int found;
     while ((found = PyDict_NextValue(names_to_set, &i, &key_value,
                                      &value_value)) > 0) {
+        if (PyValue_IsInline(value_value)) {
+            // An int or float has no __set_name__.
+            PyValue_CLOSE(key_value);
+            continue;
+        }
         key = _PyValue_AsObjectAt(key_value, BOX_SITE_DICT);
         value = (key != NULL)
             ? _PyValue_AsObjectAt(value_value, BOX_SITE_DICT) : NULL;

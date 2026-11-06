@@ -796,6 +796,8 @@ typedef struct {
 
 /* Forward declarations */
 static int save(PickleState *state, PicklerObject *, PyObject *, int);
+static int save_value(PickleState *state, PicklerObject *, PyValueBorrow, int);
+static void note_serializing_item(PyObject *container, PyValueBorrow key);
 static int save_object(PickleState *state, PicklerObject *, PyObject *,
                        int pers_save, int weak);
 static int save_reduce(PickleState *, PicklerObject *, PyObject *, PyObject *);
@@ -2475,6 +2477,75 @@ save_bool(PicklerObject *self, PyObject *obj)
     return 0;
 }
 
+/* Write an int that fits a signed 4-byte integer. */
+static int
+save_long_small(PicklerObject *self, long val)
+{
+    char pdata[32];
+    Py_ssize_t len = 0;
+
+    if (self->bin) {
+        pdata[1] = (unsigned char)(val & 0xff);
+        pdata[2] = (unsigned char)((val >> 8) & 0xff);
+        pdata[3] = (unsigned char)((val >> 16) & 0xff);
+        pdata[4] = (unsigned char)((val >> 24) & 0xff);
+
+        if ((pdata[4] != 0) || (pdata[3] != 0)) {
+            pdata[0] = BININT;
+            len = 5;
+        }
+        else if (pdata[2] != 0) {
+            pdata[0] = BININT2;
+            len = 3;
+        }
+        else {
+            pdata[0] = BININT1;
+            len = 2;
+        }
+    }
+    else {
+        sprintf(pdata, "%c%ld\n", INT,  val);
+        len = strlen(pdata);
+    }
+    return _Pickler_Write(self, pdata, len);
+}
+
+/* Write an inline int, as save_long() writes the same int as an object. */
+static int
+save_long_inline(PicklerObject *self, PyValueBorrow value)
+{
+    int64_t val = PyValue_InlineInt64(value);
+    if (val <= 0x7fffffffL && val >= (-0x7fffffffL - 1)) {
+        return save_long_small(self, (long)val);
+    }
+    if (self->proto >= 2) {
+        /* The fewest bytes that hold val as a signed little-endian number. */
+        unsigned char data[8];
+        int nbytes = 8;
+        while (nbytes > 1) {
+            int64_t shifted = val >> (8 * (nbytes - 1) - 1);
+            if (shifted != 0 && shifted != -1) {
+                break;
+            }
+            nbytes--;
+        }
+        for (int i = 0; i < nbytes; i++) {
+            data[i] = (unsigned char)((uint64_t)val >> (8 * i));
+        }
+        char header[2] = {LONG1, (char)nbytes};
+        if (_Pickler_Write(self, header, 2) < 0
+            || _Pickler_Write(self, (char *)data, nbytes) < 0)
+        {
+            return -1;
+        }
+        return 0;
+    }
+    char text[40];
+    int n = PyOS_snprintf(text, sizeof(text), "%c%lldL\n", LONG,
+                          (long long)val);
+    return _Pickler_Write(self, text, n);
+}
+
 static int
 save_long(PicklerObject *self, PyObject *obj)
 {
@@ -2641,11 +2712,17 @@ save_long(PicklerObject *self, PyObject *obj)
     return status;
 }
 
+static int save_double(PicklerObject *self, double x);
+
 static int
 save_float(PicklerObject *self, PyObject *obj)
 {
-    double x = PyFloat_AS_DOUBLE((PyFloatObject *)obj);
+    return save_double(self, PyFloat_AS_DOUBLE((PyFloatObject *)obj));
+}
 
+static int
+save_double(PicklerObject *self, double x)
+{
     if (self->bin) {
         char pdata[9];
         pdata[0] = BINFLOAT;
@@ -3153,17 +3230,16 @@ store_tuple_elements(PickleState *state, PicklerObject *self, PyObject *t,
     assert(PyTuple_Size(t) == len);
 
     for (i = 0; i < len; i++) {
-        PyValue element_v = PyTuple_GetValue(t, i);
-        PyObject *element = PyValue_IsNull(element_v) ? NULL : _PyValue_AsObjectStealAt(element_v, BOX_SITE_TUPLE);
+        PyValue element = PyTuple_GetValue(t, i);
 
-        if (element == NULL)
+        if (PyValue_IsNull(element))
             return -1;
-        if (save(state, self, element, 0) < 0) {
-            Py_DECREF(element);
+        if (save_value(state, self, PyValue_Borrow(element), 0) < 0) {
+            PyValue_CLOSE(element);
             _PyErr_FormatNote("when serializing %T item %zd", t, i);
             return -1;
         }
-        Py_DECREF(element);
+        PyValue_CLOSE(element);
     }
 
     return 0;
@@ -3406,7 +3482,6 @@ batch_list(PickleState *state, PicklerObject *self, PyObject *iter, PyObject *or
 static int
 batch_list_exact(PickleState *state, PicklerObject *self, PyObject *obj)
 {
-    PyObject *item = NULL;
     Py_ssize_t this_batch, total, list_size;
 
     const char append_op = APPEND;
@@ -3423,14 +3498,13 @@ batch_list_exact(PickleState *state, PicklerObject *self, PyObject *obj)
     total = 0;
     do {
         if (list_size - total == 1) {
-            PyValue item_v = PyList_GetValue(obj, total);
-            item = PyValue_IsNull(item_v) ? NULL : _PyValue_AsObjectStealAt(item_v, BOX_SITE_LIST);
-            if (item == NULL) {
+            PyValue item = PyList_GetValue(obj, total);
+            if (PyValue_IsNull(item)) {
                 _PyErr_FormatNote("when serializing %T item %zd", obj, total);
                 return -1;
             }
-            int err = save(state, self, item, 0);
-            Py_DECREF(item);
+            int err = save_value(state, self, PyValue_Borrow(item), 0);
+            PyValue_CLOSE(item);
             if (err < 0) {
                 _PyErr_FormatNote("when serializing %T item %zd", obj, total);
                 return -1;
@@ -3443,14 +3517,13 @@ batch_list_exact(PickleState *state, PicklerObject *self, PyObject *obj)
         if (_Pickler_Write(self, &mark_op, 1) < 0)
             return -1;
         while (total < PyList_GET_SIZE(obj)) {
-            PyValue item_v2 = PyList_GetValue(obj, total);
-            item = PyValue_IsNull(item_v2) ? NULL : _PyValue_AsObjectStealAt(item_v2, BOX_SITE_LIST);
-            if (item == NULL) {
+            PyValue item = PyList_GetValue(obj, total);
+            if (PyValue_IsNull(item)) {
                 _PyErr_FormatNote("when serializing %T item %zd", obj, total);
                 return -1;
             }
-            int err = save(state, self, item, 0);
-            Py_DECREF(item);
+            int err = save_value(state, self, PyValue_Borrow(item), 0);
+            PyValue_CLOSE(item);
             if (err < 0) {
                 _PyErr_FormatNote("when serializing %T item %zd", obj, total);
                 return -1;
@@ -3543,25 +3616,23 @@ save_dict_item(PickleState *state, PicklerObject *self, PyObject *pair,
                PyObject *origobj)
 {
     int ret = -1;
-    PyValue key_v = PyTuple_GetValue(pair, 0);
-    PyObject *key = PyValue_IsNull(key_v) ? NULL : _PyValue_AsObjectStealAt(key_v, BOX_SITE_TUPLE);
-    PyValue value_v = PyTuple_GetValue(pair, 1);
-    PyObject *value = PyValue_IsNull(value_v) ? NULL : _PyValue_AsObjectStealAt(value_v, BOX_SITE_TUPLE);
+    PyValue key = PyTuple_GetValue(pair, 0);
+    PyValue value = PyTuple_GetValue(pair, 1);
 
-    if (key == NULL || value == NULL) {
+    if (PyValue_IsNull(key) || PyValue_IsNull(value)) {
         goto done;
     }
-    if (save(state, self, key, 0) < 0) {
+    if (save_value(state, self, PyValue_Borrow(key), 0) < 0) {
         goto done;
     }
-    if (save(state, self, value, 0) < 0) {
-        _PyErr_FormatNote("when serializing %T item %R", origobj, key);
+    if (save_value(state, self, PyValue_Borrow(value), 0) < 0) {
+        note_serializing_item(origobj, PyValue_Borrow(key));
         goto done;
     }
     ret = 0;
 done:
-    Py_XDECREF(key);
-    Py_XDECREF(value);
+    PyValue_XCLOSE(key);
+    PyValue_XCLOSE(value);
     return ret;
 }
 
@@ -3704,7 +3775,7 @@ batch_dict(PickleState *state, PicklerObject *self, PyObject *iter, PyObject *or
 static int
 batch_dict_exact_impl(PickleState *state, PicklerObject *self, PyObject *obj)
 {
-    PyObject *key = NULL, *value = NULL;
+    PyValue key = PyValue_NULL, value = PyValue_NULL;
     int i, rc;
     Py_ssize_t dict_size, ppos = 0;
 
@@ -3722,18 +3793,7 @@ batch_dict_exact_impl(PickleState *state, PicklerObject *self, PyObject *obj)
     Py_ssize_t total = 0;
     do {
         if (dict_size - total == 1) {
-            PyValue key_v, value_v;
-            rc = PyDict_NextValue(obj, &ppos, &key_v, &value_v);
-            key = NULL;
-            value = NULL;
-            if (rc > 0) {
-                key = _PyValue_AsObjectStealAt(key_v, BOX_SITE_DICT);
-                value = _PyValue_AsObjectStealAt(value_v, BOX_SITE_DICT);
-                if (key == NULL || value == NULL) {
-                    Py_CLEAR(key); Py_CLEAR(value);
-                    rc = -1;
-                }
-            }
+            rc = PyDict_NextValue(obj, &ppos, &key, &value);
             if (rc < 0) {
                 return -1;
             }
@@ -3743,15 +3803,16 @@ batch_dict_exact_impl(PickleState *state, PicklerObject *self, PyObject *obj)
                     "dictionary keys changed during iteration");
                 return -1;
             }
-            if (save(state, self, key, 0) < 0) {
+            if (save_value(state, self, PyValue_Borrow(key), 0) < 0) {
                 goto error;
             }
-            if (save(state, self, value, 0) < 0) {
-                _PyErr_FormatNote("when serializing %T item %R", obj, key);
+            if (save_value(state, self, PyValue_Borrow(value), 0) < 0) {
+                note_serializing_item(obj, PyValue_Borrow(key));
                 goto error;
             }
-            Py_CLEAR(key);
-            Py_CLEAR(value);
+            PyValue_CLOSE(key);
+            PyValue_CLOSE(value);
+            key = value = PyValue_NULL;
             if (_Pickler_Write(self, &setitem_op, 1) < 0)
                 return -1;
             return 0;
@@ -3760,24 +3821,17 @@ batch_dict_exact_impl(PickleState *state, PicklerObject *self, PyObject *obj)
         i = 0;
         if (_Pickler_Write(self, &mark_op, 1) < 0)
             return -1;
-        PyValue key_v, value_v;
-        while ((rc = PyDict_NextValue(obj, &ppos, &key_v, &value_v)) > 0) {
-            key = _PyValue_AsObjectStealAt(key_v, BOX_SITE_DICT);
-            value = _PyValue_AsObjectStealAt(value_v, BOX_SITE_DICT);
-            if (key == NULL || value == NULL) {
-                Py_CLEAR(key); Py_CLEAR(value);
-                rc = -1;
-                break;
-            }
-            if (save(state, self, key, 0) < 0) {
+        while ((rc = PyDict_NextValue(obj, &ppos, &key, &value)) > 0) {
+            if (save_value(state, self, PyValue_Borrow(key), 0) < 0) {
                 goto error;
             }
-            if (save(state, self, value, 0) < 0) {
-                _PyErr_FormatNote("when serializing %T item %R", obj, key);
+            if (save_value(state, self, PyValue_Borrow(value), 0) < 0) {
+                note_serializing_item(obj, PyValue_Borrow(key));
                 goto error;
             }
-            Py_CLEAR(key);
-            Py_CLEAR(value);
+            PyValue_CLOSE(key);
+            PyValue_CLOSE(value);
+            key = value = PyValue_NULL;
             total++;
             if (++i == BATCHSIZE)
                 break;
@@ -3796,8 +3850,8 @@ batch_dict_exact_impl(PickleState *state, PicklerObject *self, PyObject *obj)
     } while (total < dict_size);
     return 0;
 error:
-    Py_XDECREF(key);
-    Py_XDECREF(value);
+    PyValue_XCLOSE(key);
+    PyValue_XCLOSE(value);
     return -1;
 }
 
@@ -4422,28 +4476,30 @@ save_type(PickleState *state, PicklerObject *self, PyObject *obj)
 }
 
 static int
-save_pers(PickleState *state, PicklerObject *self, PyObject *obj)
+save_pers(PickleState *state, PicklerObject *self, PyValueBorrow obj)
 {
-    PyObject *pid = NULL;
+    PyValue pid = PyValue_NULL;
     int status = 0;
 
     const char persid_op = PERSID;
     const char binpersid_op = BINPERSID;
 
-    pid = PyObject_CallOneArg(self->persistent_id, obj);
-    if (pid == NULL)
+    pid = _PyValue_CallOneArg(_PyThreadState_GET(),
+                              PyValue_FromObjectBorrow(self->persistent_id),
+                              obj);
+    if (PyValue_IsNull(pid))
         return -1;
 
-    if (pid != Py_None) {
+    if (!PyValue_IsNone(pid)) {
         if (self->bin) {
-            if (save(state, self, pid, 1) < 0 ||
+            if (save_value(state, self, PyValue_Borrow(pid), 1) < 0 ||
                 _Pickler_Write(self, &binpersid_op, 1) < 0)
                 goto error;
         }
         else {
             PyObject *pid_str;
 
-            pid_str = _PyValue_Str(PyValue_FromObjectBorrow(pid));
+            pid_str = _PyValue_Str(PyValue_Borrow(pid));
             if (pid_str == NULL)
                 goto error;
 
@@ -4473,7 +4529,7 @@ save_pers(PickleState *state, PicklerObject *self, PyObject *obj)
   error:
         status = -1;
     }
-    Py_XDECREF(pid);
+    PyValue_CLOSE(pid);
 
     return status;
 }
@@ -5058,7 +5114,7 @@ save_object(PickleState *st, PicklerObject *self, PyObject *obj, int pers_save,
              0   if it did nothing successfully;
              1   if a persistent id was saved.
          */
-        if ((status = save_pers(st, self, obj)) != 0)
+        if ((status = save_pers(st, self, PyValue_FromObjectBorrow(obj))) != 0)
             return status;
     }
 
@@ -5282,6 +5338,58 @@ save(PickleState *st, PicklerObject *self, PyObject *obj, int pers_save)
     return save_object(st, self, obj, pers_save, 0);
 }
 
+/* save() of a value: an inline int or float is written from its word, and
+   only an object goes to save_object(). */
+static int
+save_value(PickleState *st, PicklerObject *self, PyValueBorrow value,
+           int pers_save)
+{
+    if (!PyValue_IsInline(value)) {
+        return save_object(st, self, PyValue_AsKnownObjectBorrow(value),
+                           pers_save, 0);
+    }
+    int status;
+    if (_Pickler_OpcodeBoundary(self) < 0) {
+        return -1;
+    }
+    if (!pers_save && self->persistent_id) {
+        if ((status = save_pers(st, self, value)) != 0) {
+            return status;
+        }
+    }
+    if (PyValue_IsInlineInt(value)) {
+        return save_long_inline(self, value);
+    }
+    return save_double(self, PyValue_InlineFloat(value));
+}
+
+/* The note that names the item of container being serialized, for a key
+   that may be an inline value (its repr is its text, with no object). */
+static void
+note_serializing_item(PyObject *container, PyValueBorrow key)
+{
+    if (PyValue_IsInlineInt(key)) {
+        PyObject *text = PyUnicode_FromFormat(
+            "%lld", (long long)PyValue_InlineInt64(key));
+        if (text != NULL) {
+            _PyErr_FormatNote("when serializing %T item %U", container, text);
+            Py_DECREF(text);
+        }
+    }
+    else if (PyValue_IsInlineFloat(key)) {
+        char *buf = PyOS_double_to_string(PyValue_InlineFloat(key), 'r', 0,
+                                          Py_DTSF_ADD_DOT_0, NULL);
+        if (buf != NULL) {
+            _PyErr_FormatNote("when serializing %T item %s", container, buf);
+            PyMem_Free(buf);
+        }
+    }
+    else {
+        _PyErr_FormatNote("when serializing %T item %R", container,
+                          PyValue_AsKnownObjectBorrow(key));
+    }
+}
+
 static PyObject *
 persistent_id(PyObject *self, PyObject *obj)
 {
@@ -5313,11 +5421,6 @@ dump(PickleState *state, PicklerObject *self, PyValueBorrow obj_value)
     const char stop_op = STOP;
     int status = -1;
     PyObject *tmp;
-
-    PyObject *obj = _PyValue_AsObjectAt(obj_value, BOX_SITE_PARSER);
-    if (obj == NULL) {
-        return -1;
-    }
 
     /* Cache the persistent_id method. */
     PyValue tmp_v = _PyValue_GetAttr(PyValue_FromObjectBorrow((PyObject *)self), &_Py_ID(persistent_id));
@@ -5353,7 +5456,7 @@ dump(PickleState *state, PicklerObject *self, PyValueBorrow obj_value)
             self->framing = 1;
     }
 
-    if (save(state, self, obj, 0) < 0)
+    if (save_value(state, self, obj_value, 0) < 0)
         goto error;
 
     if (self->weak_only_count > 0) {
@@ -5386,7 +5489,6 @@ dump(PickleState *state, PicklerObject *self, PyValueBorrow obj_value)
      * be garbage-collected as long as the Pickler itself is not collected. */
     Py_CLEAR(self->persistent_id);
     Py_CLEAR(self->reducer_override);
-    Py_DECREF(obj);
     return status;
 }
 

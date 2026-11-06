@@ -859,18 +859,18 @@ int
 PyValue
 _PyGen_FetchStopIterationValue(void)
 {
-    PyObject *value = NULL;
+    PyValue value = PyValue_NULL;
     if (PyErr_ExceptionMatches(PyExc_StopIteration)) {
         PyObject *exc = PyErr_GetRaisedException();
-        value = Py_NewRef(((PyStopIterationObject *)exc)->value);
+        value = PyValue_XDUP(((PyStopIterationObject *)exc)->value);
         Py_DECREF(exc);
     } else if (PyErr_Occurred()) {
         return PyValue_NULL;
     }
-    if (value == NULL) {
+    if (PyValue_IsNull(value)) {
         return PyValue_None;
     }
-    return PyValue_FromObjectSteal(value);
+    return value;
 }
 
 static PyObject *

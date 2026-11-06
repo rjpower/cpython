@@ -70,11 +70,6 @@ typedef struct {
 
 typedef struct {
     PyException_HEAD
-    PyObject *value;
-} PyStopIterationObject;
-
-typedef struct {
-    PyException_HEAD
     PyObject *name;
 } PyNameErrorObject;
 

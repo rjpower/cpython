@@ -539,6 +539,12 @@ def unchecked_value_units(srcdir, checked):
 # (pyjit/design/proposals/value-api-g.md, section 1.8): fnmatch patterns over
 # source paths relative to the source directory. W4 shares the list.
 COMPAT_TEST_UNITS = (
+    # These units exercise object-form APIs; _testclinic_value.c covers the
+    # generated value convention separately.
+    "Modules/_testclinic.c",
+    "Modules/_testinternalcapi.c",
+    "Modules/_testinternalcapi/interpreter.c",
+    "Modules/_xxtestfuzz/fuzzer.c",
     "Modules/_testcapi*",
     "Modules/_testlimitedcapi*",
     "Modules/xx*",
@@ -1070,6 +1076,8 @@ THUNK_FILES = (
     "Objects/enumobject.c", "Objects/boolobject.c", "Objects/longobject.c",
     "Objects/unicodeobject.c", "Objects/listobject.c", "Objects/setobject.c",
     "Objects/rangeobject.c",
+    # BaseException stores its value vectorcall beside the object thunk.
+    "Objects/exceptions.c",
     # The test helpers: a spec type that stores the thunk, and an accessor
     # that compares against both.
     "Modules/_testinternalcapi/value_call.c",

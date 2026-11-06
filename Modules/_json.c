@@ -15,11 +15,14 @@
 #include "pycore_dict.h"          // _PyDict_SetItem_Take2()
 #include "pycore_list.h"          // _PyList_AppendTakeRef()
 #include "pycore_global_strings.h" // _Py_ID()
+#include "pycore_modsupport.h"    // _PyArg_UnpackKeywordsValue()
 #include "pycore_pyerrors.h"      // _PyErr_FormatNote
 #include "pycore_runtime.h"       // _PyRuntime
+#include "pycore_slots.h"         // _Py_value_call
 #include "pycore_tuple.h"         // _PyTuple_FromPair
 #include "pycore_unicodeobject.h" // _PyUnicode_CheckConsistency()
 #include "pycore_value.h"         // PyValue_AsKnownObjectBorrow()
+#include "pycore_value_call.h"    // _PyValue_CallOneArg()
 #include "pycore_value_ops.h"     // _PyValue_IsTrue()
 #include "pycore_value_slots.h"// _PyValue_FromObjectResult()
 
@@ -114,7 +117,7 @@ encoder_clear(PyObject *self);
 static int
 encoder_listencode_list(PyEncoderObject *s, PyUnicodeWriter *writer, PyObject *seq, Py_ssize_t indent_level, PyObject *indent_cache);
 static int
-encoder_listencode_obj(PyEncoderObject *s, PyUnicodeWriter *writer, PyObject *obj, Py_ssize_t indent_level, PyObject *indent_cache);
+encoder_listencode_obj(PyEncoderObject *s, PyUnicodeWriter *writer, PyValueBorrow obj, Py_ssize_t indent_level, PyObject *indent_cache);
 static int
 encoder_listencode_dict(PyEncoderObject *s, PyUnicodeWriter *writer, PyObject *dct, Py_ssize_t indent_level, PyObject *indent_cache);
 static PyObject *
@@ -126,7 +129,7 @@ _steal_accumulate(PyUnicodeWriter *writer, PyObject *stolen);
 static int
 encoder_write_string(PyEncoderObject *s, PyUnicodeWriter *writer, PyObject *obj);
 static PyObject *
-encoder_encode_float(PyEncoderObject *s, PyObject *obj);
+encoder_encode_float(PyEncoderObject *s, PyValueBorrow obj);
 
 #define S_CHAR(c) (c >= ' ' && c <= '~' && c != '\\' && c != '"')
 #define IS_WHITESPACE(c) (((c) == ' ') || ((c) == '\t') || ((c) == '\n') || ((c) == '\r'))
@@ -1214,35 +1217,71 @@ scan_once_unicode(PyScannerObject *s, PyObject *memo, PyObject *pystr, Py_ssize_
     return _match_number_unicode(s, pystr, idx, next_idx_ptr);
 }
 
-static PyObject *
-scanner_call(PyObject *self, PyObject *args, PyObject *kwds)
+/* The Py_ssize_t of a value argument, as __index__ gives it. */
+static int
+value_as_ssize_t(PyValueBorrow arg, Py_ssize_t *result)
+{
+    if (PyValue_IsInlineInt(arg)) {
+        *result = (Py_ssize_t)PyValue_InlineInt64(arg);
+        return 0;
+    }
+    PyValue iobj = _PyValue_Index(arg);
+    if (PyValue_IsNull(iobj)) {
+        return -1;
+    }
+    Py_ssize_t ival = _PyValue_IntAsSsize_t(PyValue_Borrow(iobj));
+    PyValue_CLOSE(iobj);
+    if (ival == -1 && PyErr_Occurred()) {
+        return -1;
+    }
+    *result = ival;
+    return 0;
+}
+
+static PyValue
+scanner_call(PyThreadState *tstate, PyObject *self, const PyValue *args,
+             size_t nargsf, PyObject *kwnames)
 {
     /* Python callable interface to scan_once_{str,unicode} */
     PyObject *pystr;
     PyObject *rval;
     Py_ssize_t idx;
     Py_ssize_t next_idx = -1;
-    static char *kwlist[] = {"string", "idx", NULL};
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "On:scan_once", kwlist, &pystr, &idx))
-        return NULL;
+    static const char * const _keywords[] = {"string", "idx", NULL};
+    static _PyArg_Parser _parser = {
+        .keywords = _keywords,
+        .fname = "scan_once",
+    };
+    Py_ssize_t _idx[2];
+    Py_ssize_t nargs = PyVectorcall_NARGS(nargsf);
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 2, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, _idx, 2)) {
+        return PyValue_NULL;
+    }
+    PyValueBorrow str_value = PyValue_Borrow(args[_idx[0]]);
+    if (value_as_ssize_t(PyValue_Borrow(args[_idx[1]]), &idx) < 0) {
+        return PyValue_NULL;
+    }
 
-    if (!PyUnicode_Check(pystr)) {
+    if (!PyValue_IsObject(str_value)
+        || !PyUnicode_Check(PyValue_AsKnownObjectBorrow(str_value))) {
         PyErr_Format(PyExc_TypeError,
                      "first argument must be a string, not %.80s",
-                     Py_TYPE(pystr)->tp_name);
-        return NULL;
+                     PyValue_TYPE(str_value)->tp_name);
+        return PyValue_NULL;
     }
+    pystr = PyValue_AsKnownObjectBorrow(str_value);
 
     PyObject *memo = PyDict_New();
     if (memo == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
     rval = scan_once_unicode(PyScannerObject_CAST(self),
                              memo, pystr, idx, &next_idx);
     Py_DECREF(memo);
     if (rval == NULL)
-        return NULL;
-    return _build_rval_index_tuple(rval, next_idx);
+        return PyValue_NULL;
+    return PyValue_FromObjectSteal(_build_rval_index_tuple(rval, next_idx));
 }
 
 static PyObject *
@@ -1301,7 +1340,8 @@ PyDoc_STRVAR(scanner_doc, "JSON scanner object");
 static PyType_Slot PyScannerType_slots[] = {
     {Py_tp_doc, (void *)scanner_doc},
     {Py_tp_dealloc, scanner_dealloc},
-    {Py_tp_call, scanner_call},
+    {Py_tp_call, _PyValue_TpCallThunk},
+    {_Py_value_call, scanner_call},
     {Py_tp_traverse, scanner_traverse},
     {Py_tp_clear, scanner_clear},
     {Py_tp_members, scanner_members},
@@ -1467,22 +1507,33 @@ write_newline_indent(PyUnicodeWriter *writer,
 }
 
 
-static PyObject *
-encoder_call(PyObject *op, PyObject *args, PyObject *kwds)
+static PyValue
+encoder_call(PyThreadState *tstate, PyObject *op, const PyValue *args,
+             size_t nargsf, PyObject *kwnames)
 {
     /* Python callable interface to encoder_listencode_obj */
-    static char *kwlist[] = {"obj", "_current_indent_level", NULL};
-    PyObject *obj;
+    static const char * const _keywords[] = {"obj", "_current_indent_level",
+                                             NULL};
+    static _PyArg_Parser _parser = {
+        .keywords = _keywords,
+        .fname = "_iterencode",
+    };
+    Py_ssize_t _idx[2];
+    Py_ssize_t nargs = PyVectorcall_NARGS(nargsf);
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 2, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, _idx, 2)) {
+        return PyValue_NULL;
+    }
+    PyValueBorrow obj = PyValue_Borrow(args[_idx[0]]);
     Py_ssize_t indent_level;
+    if (value_as_ssize_t(PyValue_Borrow(args[_idx[1]]), &indent_level) < 0) {
+        return PyValue_NULL;
+    }
     PyEncoderObject *self = PyEncoderObject_CAST(op);
-
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "On:_iterencode", kwlist,
-                                     &obj, &indent_level))
-        return NULL;
 
     PyUnicodeWriter *writer = PyUnicodeWriter_Create(0);
     if (writer == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     PyObject *indent_cache = NULL;
@@ -1490,24 +1541,24 @@ encoder_call(PyObject *op, PyObject *args, PyObject *kwds)
         indent_cache = create_indent_cache(self, indent_level);
         if (indent_cache == NULL) {
             PyUnicodeWriter_Discard(writer);
-            return NULL;
+            return PyValue_NULL;
         }
     }
     indent_level = 0;
     if (encoder_listencode_obj(self, writer, obj, indent_level, indent_cache)) {
         PyUnicodeWriter_Discard(writer);
         Py_XDECREF(indent_cache);
-        return NULL;
+        return PyValue_NULL;
     }
     Py_XDECREF(indent_cache);
 
     PyObject *str = PyUnicodeWriter_Finish(writer);
     if (str == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
     PyObject *result = _PyTuple_PackValues(1, (PyValueBorrow[]){PyValue_FromObjectBorrow(str)});
     Py_DECREF(str);
-    return result;
+    return PyValue_FromObjectSteal(result);
 }
 
 static PyObject *
@@ -1529,18 +1580,46 @@ _encoded_const(PyObject *obj)
     }
 }
 
+/* The text of a float's repr (float.__repr__ never depends on the subclass).
+   A non-finite value has the repr "inf", "-inf" or "nan". */
 static PyObject *
-encoder_encode_float(PyEncoderObject *s, PyObject *obj)
+float_repr_text(double d)
+{
+    char *buf = PyOS_double_to_string(d, 'r', 0, Py_DTSF_ADD_DOT_0, NULL);
+    if (buf == NULL) {
+        return PyErr_NoMemory();
+    }
+    PyObject *text = PyUnicode_FromString(buf);
+    PyMem_Free(buf);
+    return text;
+}
+
+static inline double
+value_float_as_double(PyValueBorrow obj)
+{
+    if (PyValue_IsInlineFloat(obj)) {
+        return PyValue_InlineFloat(obj);
+    }
+    return PyFloat_AS_DOUBLE(PyValue_AsKnownObjectBorrow(obj));
+}
+
+static PyObject *
+encoder_encode_float(PyEncoderObject *s, PyValueBorrow obj)
 {
     /* Return the JSON representation of a PyFloat. */
-    double i = PyFloat_AS_DOUBLE(obj);
+    double i = value_float_as_double(obj);
     if (!isfinite(i)) {
         if (!s->allow_nan) {
+            PyObject *text = float_repr_text(i);
+            if (text == NULL) {
+                return NULL;
+            }
             PyErr_Format(
                     PyExc_ValueError,
-                    "Out of range float values are not JSON compliant: %R",
-                    obj
+                    "Out of range float values are not JSON compliant: %U",
+                    text
                     );
+            Py_DECREF(text);
             return NULL;
         }
         if (i > 0) {
@@ -1553,7 +1632,7 @@ encoder_encode_float(PyEncoderObject *s, PyObject *obj)
             return PyUnicode_FromString("NaN");
         }
     }
-    return PyFloat_Type.tp_repr(obj);
+    return float_repr_text(i);
 }
 
 static int
@@ -1588,14 +1667,35 @@ _steal_accumulate(PyUnicodeWriter *writer, PyObject *stolen)
     return rval;
 }
 
+/* Write an inline int in decimal, as its repr. */
+static int
+write_inline_int(PyUnicodeWriter *writer, PyValueBorrow obj)
+{
+    char buf[24];
+    int n = PyOS_snprintf(buf, sizeof(buf), "%lld",
+                          (long long)PyValue_InlineInt64(obj));
+    return PyUnicodeWriter_WriteASCII(writer, buf, n);
+}
+
 static int
 encoder_listencode_obj(PyEncoderObject *s, PyUnicodeWriter *writer,
-                       PyObject *obj,
+                       PyValueBorrow obj_value,
                        Py_ssize_t indent_level, PyObject *indent_cache)
 {
     /* Encode Python object obj to a JSON term */
-    PyObject *newobj;
+    PyValue newobj;
     int rv;
+
+    if (PyValue_IsInlineInt(obj_value)) {
+        return write_inline_int(writer, obj_value);
+    }
+    if (PyValue_IsInlineFloat(obj_value)) {
+        PyObject *encoded = encoder_encode_float(s, obj_value);
+        if (encoded == NULL)
+            return -1;
+        return _steal_accumulate(writer, encoded);
+    }
+    PyObject *obj = PyValue_AsKnownObjectBorrow(obj_value);
 
     if (obj == Py_None) {
       return PyUnicodeWriter_WriteASCII(writer, "null", 4);
@@ -1620,7 +1720,7 @@ encoder_listencode_obj(PyEncoderObject *s, PyUnicodeWriter *writer,
         return _steal_accumulate(writer, encoded);
     }
     else if (PyFloat_Check(obj)) {
-        PyObject *encoded = encoder_encode_float(s, obj);
+        PyObject *encoded = encoder_encode_float(s, obj_value);
         if (encoded == NULL)
             return -1;
         return _steal_accumulate(writer, encoded);
@@ -1658,21 +1758,24 @@ encoder_listencode_obj(PyEncoderObject *s, PyUnicodeWriter *writer,
                 return -1;
             }
         }
-        newobj = PyObject_CallOneArg(s->defaultfn, obj);
-        if (newobj == NULL) {
+        newobj = _PyValue_CallOneArg(_PyThreadState_GET(),
+                                     PyValue_FromObjectBorrow(s->defaultfn),
+                                     obj_value);
+        if (PyValue_IsNull(newobj)) {
             Py_XDECREF(ident);
             return -1;
         }
 
         if (_Py_EnterRecursiveCall(" while encoding a JSON object")) {
-            Py_DECREF(newobj);
+            PyValue_CLOSE(newobj);
             Py_XDECREF(ident);
             return -1;
         }
-        rv = encoder_listencode_obj(s, writer, newobj, indent_level, indent_cache);
+        rv = encoder_listencode_obj(s, writer, PyValue_Borrow(newobj),
+                                    indent_level, indent_cache);
         _Py_LeaveRecursiveCall();
 
-        Py_DECREF(newobj);
+        PyValue_CLOSE(newobj);
         if (rv) {
             _PyErr_FormatNote("when serializing %T object", obj);
             Py_XDECREF(ident);
@@ -1691,18 +1794,28 @@ encoder_listencode_obj(PyEncoderObject *s, PyUnicodeWriter *writer,
 
 static int
 encoder_encode_key_value(PyEncoderObject *s, PyUnicodeWriter *writer, bool *first,
-                         PyObject *dct, PyObject *key, PyObject *value,
+                         PyObject *dct, PyValueBorrow key_value,
+                         PyValueBorrow value,
                          Py_ssize_t indent_level, PyObject *indent_cache,
                          PyObject *item_separator)
 {
     PyObject *keystr = NULL;
     int rv;
+    PyObject *key = NULL;  // the key as an object; NULL for an inline key
 
-    if (PyUnicode_Check(key)) {
+    if (PyValue_IsInlineInt(key_value)) {
+        keystr = PyUnicode_FromFormat(
+            "%lld", (long long)PyValue_InlineInt64(key_value));
+    }
+    else if (PyValue_IsInlineFloat(key_value)) {
+        keystr = encoder_encode_float(s, key_value);
+    }
+    else if ((key = PyValue_AsKnownObjectBorrow(key_value),
+              PyUnicode_Check(key))) {
         keystr = Py_NewRef(key);
     }
     else if (PyFloat_Check(key)) {
-        keystr = encoder_encode_float(s, key);
+        keystr = encoder_encode_float(s, key_value);
     }
     else if (key == Py_True || key == Py_False || key == Py_None) {
                     /* This must come before the PyLong_Check because
@@ -1752,7 +1865,20 @@ encoder_encode_key_value(PyEncoderObject *s, PyUnicodeWriter *writer, bool *firs
         return -1;
     }
     if (encoder_listencode_obj(s, writer, value, indent_level, indent_cache) < 0) {
-        _PyErr_FormatNote("when serializing %T item %R", dct, key);
+        if (key != NULL) {
+            _PyErr_FormatNote("when serializing %T item %R", dct, key);
+        }
+        else {
+            // An inline key: its repr is its text, with no object made.
+            PyObject *text = PyValue_IsInlineInt(key_value)
+                ? PyUnicode_FromFormat(
+                      "%lld", (long long)PyValue_InlineInt64(key_value))
+                : float_repr_text(PyValue_InlineFloat(key_value));
+            if (text != NULL) {
+                _PyErr_FormatNote("when serializing %T item %U", dct, text);
+                Py_DECREF(text);
+            }
+        }
         return -1;
     }
     return 0;
@@ -1765,7 +1891,6 @@ _encoder_iterate_mapping_lock_held(PyEncoderObject *s, PyUnicodeWriter *writer,
                             PyObject *separator)
 {
     _Py_CRITICAL_SECTION_ASSERT_OBJECT_LOCKED(items);
-    PyObject *key, *value;
     for (Py_ssize_t  i = 0; i < PyList_GET_SIZE(items); i++) {
         // gh-142831: encoder_encode_key_value() can invoke user code
         // that mutates the items list, so hold a strong reference.
@@ -1784,23 +1909,19 @@ _encoder_iterate_mapping_lock_held(PyEncoderObject *s, PyUnicodeWriter *writer,
 
         PyValue keyv = PyTuple_GetValue(item, 0);
         PyValue valuev = PyTuple_GetValue(item, 1);
-        key = PyValue_IsNull(keyv) ? NULL
-                                   : _PyValue_AsObjectAt(keyv, BOX_SITE_TUPLE);
-        value = PyValue_IsNull(valuev)
-                    ? NULL : _PyValue_AsObjectAt(valuev, BOX_SITE_TUPLE);
-        PyValue_XCLOSE(keyv);
-        PyValue_XCLOSE(valuev);
-        if (key == NULL || value == NULL) {
-            Py_XDECREF(key);
-            Py_XDECREF(value);
+        if (PyValue_IsNull(keyv) || PyValue_IsNull(valuev)) {
+            PyValue_XCLOSE(keyv);
+            PyValue_XCLOSE(valuev);
             PyValue_CLOSE(itemv);
             return -1;
         }
-        int rv = encoder_encode_key_value(s, writer, first, dct, key, value,
+        int rv = encoder_encode_key_value(s, writer, first, dct,
+                                          PyValue_Borrow(keyv),
+                                          PyValue_Borrow(valuev),
                                           indent_level, indent_cache,
                                           separator);
-        Py_DECREF(key);
-        Py_DECREF(value);
+        PyValue_CLOSE(keyv);
+        PyValue_CLOSE(valuev);
         PyValue_CLOSE(itemv);
         if (rv < 0) {
             return -1;
@@ -1822,20 +1943,13 @@ _encoder_iterate_dict_lock_held(PyEncoderObject *s, PyUnicodeWriter *writer,
     // gh-145244: encoder_encode_key_value() can invoke user code
     // that mutates the dict; the owning iterator snapshots each entry.
     while ((rc = PyDict_NextValue(dct, &pos, &keyv, &valuev)) > 0) {
-        PyObject *key = _PyValue_AsObjectAt(keyv, BOX_SITE_DICT);
-        PyObject *value = _PyValue_AsObjectAt(valuev, BOX_SITE_DICT);
-        PyValue_CLOSE(keyv);
-        PyValue_CLOSE(valuev);
-        if (key == NULL || value == NULL) {
-            Py_XDECREF(key);
-            Py_XDECREF(value);
-            return -1;
-        }
-        int rv = encoder_encode_key_value(s, writer, first, dct, key, value,
+        int rv = encoder_encode_key_value(s, writer, first, dct,
+                                          PyValue_Borrow(keyv),
+                                          PyValue_Borrow(valuev),
                                           indent_level, indent_cache,
                                           separator);
-        Py_DECREF(key);
-        Py_DECREF(value);
+        PyValue_CLOSE(keyv);
+        PyValue_CLOSE(valuev);
         if (rv < 0) {
             return -1;
         }
@@ -1949,23 +2063,19 @@ _encoder_iterate_fast_seq_lock_held(PyEncoderObject *s, PyUnicodeWriter *writer,
         if (PyValue_IsNull(objv)) {
             return -1;
         }
-        PyObject *obj = _PyValue_AsObjectAt(objv, BOX_SITE_FIELD);
-        PyValue_CLOSE(objv);
-        if (obj == NULL) {
-            return -1;
-        }
         if (i) {
             if (PyUnicodeWriter_WriteStr(writer, separator) < 0) {
-                Py_DECREF(obj);
+                PyValue_CLOSE(objv);
                 return -1;
             }
         }
-        if (encoder_listencode_obj(s, writer, obj, indent_level, indent_cache)) {
+        if (encoder_listencode_obj(s, writer, PyValue_Borrow(objv),
+                                   indent_level, indent_cache)) {
             _PyErr_FormatNote("when serializing %T item %zd", seq, i);
-            Py_DECREF(obj);
+            PyValue_CLOSE(objv);
             return -1;
         }
-        Py_DECREF(obj);
+        PyValue_CLOSE(objv);
     }
     return 0;
 }
@@ -2093,7 +2203,8 @@ PyDoc_STRVAR(encoder_doc, "Encoder(markers, default, encoder, indent, key_separa
 static PyType_Slot PyEncoderType_slots[] = {
     {Py_tp_doc, (void *)encoder_doc},
     {Py_tp_dealloc, encoder_dealloc},
-    {Py_tp_call, encoder_call},
+    {Py_tp_call, _PyValue_TpCallThunk},
+    {_Py_value_call, encoder_call},
     {Py_tp_traverse, encoder_traverse},
     {Py_tp_clear, encoder_clear},
     {Py_tp_members, encoder_members},

@@ -2669,11 +2669,11 @@ _PyDict_DelItem_KnownHash(PyObject *op, PyObject *key, Py_hash_t hash)
 }
 
 static int
-delitemif_lock_held(PyObject *op, PyObject *key,
+delitemif_lock_held(PyObject *op, PyValueBorrow key,
                     int (*predicate)(PyObject *value, void *arg), void *arg)
 {
     PyDictObject *mp = _PyAnyDict_CAST(op);
-    PyValue query = PyValue_DUP(PyValue_FromObjectBorrow(key));
+    PyValue query = PyValue_DUP(key);
     PyValue selected = PyValue_NULL, selected_key = PyValue_NULL;
     PyObject *object = NULL;
     int status = -1;
@@ -2741,9 +2741,9 @@ done:
  * which would release the per-dict mutex)
  */
 int
-_PyDict_DelItemIf(PyObject *op, PyObject *key,
-                  int (*predicate)(PyObject *value, void *arg),
-                  void *arg)
+_PyDict_DelItemIfValue(PyObject *op, PyValueBorrow key,
+                       int (*predicate)(PyObject *value, void *arg),
+                       void *arg)
 {
     assert(PyDict_Check(op));
     int res;
@@ -2751,6 +2751,15 @@ _PyDict_DelItemIf(PyObject *op, PyObject *key,
     res = delitemif_lock_held(op, key, predicate, arg);
     Py_END_CRITICAL_SECTION();
     return res;
+}
+
+int
+_PyDict_DelItemIf(PyObject *op, PyObject *key,
+                  int (*predicate)(PyObject *value, void *arg),
+                  void *arg)
+{
+    return _PyDict_DelItemIfValue(op, PyValue_FromObjectBorrow(key),
+                                  predicate, arg);
 }
 
 int

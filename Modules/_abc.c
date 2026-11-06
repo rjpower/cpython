@@ -435,14 +435,15 @@ compute_abstract_methods(PyObject *self)
         }
         PyValue value_v = PyList_CheckExact(it) ? PyList_GetValue(it, 1)
                                   : PyTuple_GetValue(it, 1);
-        PyObject *value = PyValue_IsNull(value_v) ? NULL : _PyValue_AsObjectStealAt(value_v, BOX_SITE_FIELD);
-        if (value == NULL) {
+        if (PyValue_IsNull(value_v)) {
             PyValue_CLOSE(key);
             Py_DECREF(it);
             goto error;
         }
-        int is_abstract = _PyObject_IsAbstract(value);
-        Py_DECREF(value);
+        // An int or float has no __isabstractmethod__.
+        int is_abstract = PyValue_IsInline(value_v)
+            ? 0 : _PyObject_IsAbstract(PyValue_AsKnownObjectBorrow(value_v));
+        PyValue_CLOSE(value_v);
         if (is_abstract < 0 ||
                 (is_abstract && PySet_AddValue(abstracts, key) < 0)) {
             Py_DECREF(it);

@@ -44,6 +44,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import tomllib
 from pathlib import Path
 
 import check_value_api
@@ -60,6 +61,11 @@ SITES = ("unattributed", "number", "compare", "repr", "sequence", "iteration",
          "attribute", "call", "list", "tuple", "dict", "set", "cell/structseq",
          "call adapter", "parser", "interpreter", "field", "frame", "compiler",
          "test")
+KERNEL_NAMES = frozenset("""richards go nbody float spectral_norm raytrace
+    deltablue chaos nqueens fannkuch generators comprehensions coroutines
+    unpack_sequence deepcopy deepcopy_reduce deepcopy_memo json_dumps json_loads
+    pickle unpickle regex_compile logging_format logging_silent logging_simple
+    xml_etree_generate xml_etree_iterparse xml_etree_parse xml_etree_process""".split())
 FOLD_PERIOD = 30  # seconds between folds of finished dumps in `suite`
 
 # The shape `kernels` accepts: R.json is a list of entries (or a dict with
@@ -71,6 +77,10 @@ FOLD_PERIOD = 30  # seconds between folds of finished dumps in `suite`
 KERNEL_NAME_KEYS = ("name", "kernel", "bench", "benchmark")
 KERNEL_PROCESS_KEYS = ("raw_counters", "processes")
 KERNEL_LIST_KEYS = ("results", "entries")
+KERNEL_PROCESSES = frozenset({"warmup", "low", "high"})
+REQUIRED_BOX_COUNTERS = frozenset(
+    [f"Boxing by kind ({kind})" for kind in KINDS] +
+    ["Object inline int boxes", "Object inline float boxes", "Object inline array boxes"])
 BOX_COUNTER_PREFIXES = (
     "Object inline int boxes", "Object inline float boxes",
     "Object inline array boxes", "Object boxes (", "Object box site[",
@@ -119,12 +129,14 @@ class Folded:
         self.site_totals = {}
         self.leftover_run = []
         self.spawn = []
+        self.accounting_errors = []
 
     def add_text(self, text):
         objects = {}  # dump-local index -> build-id
         owners = []
         tag = ""
         resets = 0
+        totals, drops = {}, {}
         for line in text.splitlines():
             if m := OBJECT_RE.match(line):
                 bid = m[3].lower()
@@ -136,6 +148,7 @@ class Folded:
                 tag = m[2]
             elif m := DROPPED_RE.match(line):
                 add(self.drops, m[1], int(m[2]))
+                add(drops, m[1], int(m[2]))
             elif m := RESETS_RE.match(line):
                 resets += int(m[1])
             elif m := CACHED_RE.match(line):
@@ -144,6 +157,21 @@ class Folded:
                 add(self.site_totals, m[1], int(m[2]))
             elif m := BY_KIND_RE.match(line):
                 add(self.kind_totals, m[1], int(m[2]))
+                add(totals, m[1], int(m[2]))
+            elif line.startswith("Box owner ("):
+                self.accounting_errors.append("malformed owner row")
+        counts = {}
+        for m in owners:
+            add(counts, m["kind"], int(m["count"]))
+            if (m["kind"] not in KINDS or
+                (m["kind"] == "core" and (m["owner"] != "-" or m["at"] in ("-", "?"))) or
+                (m["kind"] != "core" and m["owner"] == "-")):
+                self.accounting_errors.append("invalid owner attribution")
+        for kind in KINDS:
+            if kind not in totals or kind not in drops:
+                self.accounting_errors.append(f"missing {kind} accounting")
+            elif totals[kind] != counts.get(kind, 0) + drops[kind]:
+                self.accounting_errors.append(f"{kind} total does not match owners and drops")
         for m in owners:
             key = (m["kind"], m["site"],
                    map_address(m["owner"], objects),
@@ -514,7 +542,7 @@ def resolve(folded, resolver, src, cdb=None):
         "resets_by_tag": folded.resets_by_tag, "drops": folded.drops,
         "box_cached": folded.box_cached, "kind_totals": folded.kind_totals,
         "site_totals": folded.site_totals, "rows": rows, "objects": objects,
-        "stray_cus": sorted(strays),
+        "stray_cus": sorted(strays), "accounting_errors": folded.accounting_errors,
     }
 
 
@@ -535,6 +563,11 @@ def read_list(path):
 
 def suite_violations(summary, crashes=(), uncounted=()):
     out = []
+    if not summary.get("dumps"):
+        out.append("no stats dumps")
+    if "regrtest_returncode" in summary and summary["regrtest_returncode"] != 0:
+        out.append(f"regrtest exited {summary['regrtest_returncode']}")
+    out.extend(summary.get("accounting_errors", ["missing accounting evidence"]))
     if (n := debt_total(summary)):
         out.append(f"{n} boxes attributed to core, core-pending or unresolved")
     for kind, n in sorted(summary["drops"].items()):
@@ -559,6 +592,10 @@ def suite_violations(summary, crashes=(), uncounted=()):
 
 
 def kernel_entries(data):
+    if (isinstance(data, dict) and isinstance(data.get("results"), dict)
+            and isinstance(data["results"].get("boxes"), dict)):
+        return [{**entry, "name": name}
+                for name, entry in data["results"]["boxes"].items()]
     if isinstance(data, dict):
         for key in KERNEL_LIST_KEYS:
             if isinstance(data.get(key), list):
@@ -589,40 +626,93 @@ def box_counters(counters):
 
 def kernel_violations(data):
     out = []
+    names = set()
     for i, entry in enumerate(kernel_entries(data)):
         name, processes = kernel_processes(entry, i)
+        if name in names:
+            out.append(f"duplicate kernel {name}")
+        names.add(name)
+        for missing in sorted(KERNEL_PROCESSES - processes.keys()):
+            out.append(f"kernel {name}: missing process {missing}")
         for process, counters in processes.items():
+            if not isinstance(counters, dict) or not box_counters(counters):
+                out.append(f"kernel {name}, process {process}: no box counters")
+                continue
+            missing = REQUIRED_BOX_COUNTERS - counters.keys()
+            for key in sorted(missing):
+                out.append(f"kernel {name}, process {process}: missing {key}")
+            for key in REQUIRED_BOX_COUNTERS & counters.keys():
+                if not isinstance(counters[key], (int, float)) or isinstance(counters[key], bool):
+                    out.append(f"kernel {name}, process {process}: invalid {key}")
             for key, value in sorted(box_counters(counters).items()):
                 if value:
                     out.append(f"kernel {name}, process {process}: {key} = {value}")
+    for name in sorted(KERNEL_NAMES - names):
+        out.append(f"missing kernel {name}")
+    for name in sorted(names - KERNEL_NAMES):
+        out.append(f"unexpected kernel {name}")
     return out
 
 
 def static_violations(cdb_path, src, ownership=None):
-    """Part 1: every Modules/ unit with Py_BUILD_CORE_* is value-native."""
-    src = os.path.realpath(src)
+    """Check compiled unit markings and declarations in the ownership table."""
+    src = Path(src).resolve()
     out = []
-    notes = []
-    for entry in json.loads(Path(cdb_path).read_text()):
-        path = os.path.realpath(os.path.join(entry["directory"], entry["file"]))
+    entries = json.loads(Path(cdb_path).read_text())
+    if not entries:
+        out.append("empty compile database")
+    for entry in entries:
+        path = Path(entry["directory"], entry["file"]).resolve()
         rel = os.path.relpath(path, src).replace(os.sep, "/")
-        if not rel.startswith("Modules/") or is_compat_test_unit(rel):
+        if is_compat_test_unit(rel):
             continue
         names = check_value_api.defines(check_value_api.entry_arguments(entry))
         try:
-            names |= set(check_value_api.SOURCE_DEFINE.findall(
-                Path(path).read_text(errors="replace")))
+            text = path.read_text(errors="replace")
         except OSError:
-            pass
-        if any(n.startswith("Py_BUILD_CORE") for n in names) \
-                and unit_kind(entry) not in ("core", "adapter"):
+            out.append(f"{rel}: cannot read compiled source")
+            continue
+        names |= set(check_value_api.SOURCE_DEFINE.findall(text))
+        if (check_value_api.DEFER_LINE.search(text) or "Py_VALUE_DEFER_MARKS" in names):
+            out.append(f"{rel}: deferred compatibility marks")
+        if (rel.startswith("Modules/") and
+            any(n.startswith("Py_BUILD_CORE") for n in names) and
+            unit_kind(entry) not in ("core", "adapter")):
             out.append(f"{rel}: has Py_BUILD_CORE_* but is not value-native")
-    if ownership and Path(ownership).is_file():
-        notes.append(f"ownership table {ownership}: present, rows not checked "
-                     "(its format is not defined yet)")
-    else:
-        notes.append("ownership table absent: that part is skipped")
-    return out, notes
+    table = Path(ownership) if ownership else src / "Tools/build/value_ownership.toml"
+    try:
+        inventory = tomllib.loads(table.read_text())
+        rows = inventory["row"]
+        if inventory.get("r27_complete") is not True:
+            out.append("ownership inventory is not reviewed as complete for R27")
+    except (OSError, ValueError, KeyError) as exc:
+        out.append(f"ownership inventory unreadable: {exc}")
+        return out, []
+    if not rows:
+        out.append("ownership inventory is empty")
+    if not check_value_api.MARKED_SLOT_FAMILIES:
+        out.append("direct object-slot calls are not enforced by value API lint")
+    headers = [(p, p.read_text(errors="replace")) for p in (src / "Include").rglob("*.h")]
+    if not headers:
+        out.append("no headers found for ownership inventory")
+    for row in rows:
+        obj, value = row.get("object"), row.get("value")
+        if not isinstance(obj, str) or not isinstance(value, str):
+            out.append(f"invalid ownership row: {row!r}")
+            continue
+        pattern = re.compile(
+            rf"^([ \t]*)((?:(?:Py_VALUE_ENTRY|Py_VALUE_COMPAT\(\w+\))[ \t]+)?"
+            rf"(?:Py_DEPRECATED\([^)]*\)\s*)?(?:PyAPI_FUNC\([^)]*\)|extern\b[^;(]*?)"
+            rf"\s*\(?{re.escape(obj)}\)?\s*\()", re.M)
+        matches = [(p, text, m) for p, text in headers for m in pattern.finditer(text)]
+        if not matches:
+            out.append(f"{obj}: inventory declaration missing")
+        for path, text, m in matches:
+            mark = f"Py_VALUE_COMPAT({value})"
+            prev = text[:m.start()].splitlines()[-1:] or [""]
+            if mark not in m.group(2) and prev[0].strip() != mark:
+                out.append(f"{path.relative_to(src)}: {obj} lacks {mark}")
+    return out, []
 
 
 # ---------------------------------------------------------------------------
@@ -738,6 +828,8 @@ def collect(directory, src, cdb=None, folded=None, delete=False, cache_dir=None,
 
 def run_suite(build, jobs, directory, regrtest_args):
     """Run regrtest on a stats build, folding finished dumps as they appear."""
+    if directory.exists() and any(directory.iterdir()):
+        raise SystemExit(f"suite: stats directory is not empty: {directory}")
     directory.mkdir(parents=True, exist_ok=True)
     env = dict(os.environ, PYTHONSTATS="1", PYTHON_PYSTATS_DIR=str(directory))
     cmd = [str(build / "python"), "-X", "pystats", "-X",
@@ -826,6 +918,11 @@ def cmd_report(args):
 
 def cmd_static(args):
     violations, notes = static_violations(args.cdb, args.src, args.ownership)
+    if args.gate:
+        lint = subprocess.run([sys.executable, str(HERE / "check_value_api.py"),
+                               "--cdb", str(args.cdb)])
+        if lint.returncode:
+            violations.append(f"value API lint exited {lint.returncode}")
     for note in notes:
         print(f"static: {note}", file=sys.stderr)
     return finish(violations, args.gate, "static")

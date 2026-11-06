@@ -28,15 +28,15 @@ extern void _Py_bytes_title(char *result, const char *s, Py_ssize_t len);
 extern void _Py_bytes_capitalize(char *result, const char *s, Py_ssize_t len);
 extern void _Py_bytes_swapcase(char *result, const char *s, Py_ssize_t len);
 
-extern PyObject *_Py_bytes_find(const char *str, Py_ssize_t len, PyObject *sub,
+extern PyObject *_Py_bytes_find(const char *str, Py_ssize_t len, PyValueBorrow sub,
                                 Py_ssize_t start, Py_ssize_t end);
-extern PyObject *_Py_bytes_index(const char *str, Py_ssize_t len, PyObject *sub,
+extern PyObject *_Py_bytes_index(const char *str, Py_ssize_t len, PyValueBorrow sub,
                                  Py_ssize_t start, Py_ssize_t end);
-extern PyObject *_Py_bytes_rfind(const char *str, Py_ssize_t len, PyObject *sub,
+extern PyObject *_Py_bytes_rfind(const char *str, Py_ssize_t len, PyValueBorrow sub,
                                  Py_ssize_t start, Py_ssize_t end);
-extern PyObject *_Py_bytes_rindex(const char *str, Py_ssize_t len, PyObject *sub,
+extern PyObject *_Py_bytes_rindex(const char *str, Py_ssize_t len, PyValueBorrow sub,
                                  Py_ssize_t start, Py_ssize_t end);
-extern PyObject *_Py_bytes_count(const char *str, Py_ssize_t len, PyObject *sub,
+extern PyObject *_Py_bytes_count(const char *str, Py_ssize_t len, PyValueBorrow sub,
                                  Py_ssize_t start, Py_ssize_t end);
 extern int _Py_bytes_contains(const char *str, Py_ssize_t len, PyObject *arg);
 
@@ -66,10 +66,10 @@ _Py_bytes_contains_value(const char *str, Py_ssize_t len, PyValueBorrow arg)
     return res;
 }
 extern PyObject *_Py_bytes_startswith(const char *str, Py_ssize_t len,
-                                      PyObject *subobj, Py_ssize_t start,
+                                      PyValueBorrow subobj, Py_ssize_t start,
                                       Py_ssize_t end);
 extern PyObject *_Py_bytes_endswith(const char *str, Py_ssize_t len,
-                                    PyObject *subobj, Py_ssize_t start,
+                                    PyValueBorrow subobj, Py_ssize_t start,
                                     Py_ssize_t end);
 
 /* The maketrans() static method. */

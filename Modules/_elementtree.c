@@ -24,6 +24,7 @@
 #include "pycore_tuple.h"         // _PyTuple_FromPair
 #include "pycore_value.h"         // PyValue_AsKnownObjectBorrow()
 #include "pycore_value_ops.h"     // _PyValue_RichCompareBool()
+#include "pycore_slots.h"         // _Py_value_subscript
 #include "pycore_value_slots.h"   // _PyValue_FromObjectResult()
 #include "pycore_weakref.h"       // FT_CLEAR_WEAKREFS()
 
@@ -2079,7 +2080,7 @@ element_setitem(PyObject *op, Py_ssize_t index, PyObject* item)
 }
 
 static PyObject *
-element_subscr(PyObject *op, PyObject *item)
+element_subscr_object(PyObject *op, PyObject *item)
 {
     ElementObject *self = _Element_CAST(op);
 
@@ -2133,6 +2134,26 @@ element_subscr(PyObject *op, PyObject *item)
         return NULL;
     }
 }
+
+static PyValue
+element_subscr_value(PyObject *op, PyValueBorrow key)
+{
+    if (PyValue_IsInlineInt(key)) {
+        ElementObject *self = _Element_CAST(op);
+        Py_ssize_t i = (Py_ssize_t)PyValue_InlineInt64(key);
+        if (i < 0 && self->extra)
+            i += self->extra->length;
+        return _PyValue_FromObjectResult(element_getitem(op, i));
+    }
+    if (PyValue_IsInline(key)) {
+        PyErr_SetString(PyExc_TypeError, "element indices must be integers");
+        return PyValue_NULL;
+    }
+    return _PyValue_FromObjectResult(
+        element_subscr_object(op, PyValue_AsKnownObjectBorrow(key)));
+}
+
+_Py_VALUE_THUNK_SUBSCRIPT(element_subscr, element_subscr_value)
 
 static int
 element_ass_subscr(PyObject *op, PyObject *item, PyObject *value)
@@ -4813,6 +4834,7 @@ static PyType_Slot element_slots[] = {
     {Py_nb_bool, element_bool},
     {Py_mp_length, element_length},
     {Py_mp_subscript, element_subscr},
+    {_Py_value_subscript, element_subscr_value},
     {Py_mp_ass_subscript, element_ass_subscr},
     {0, NULL},
 };

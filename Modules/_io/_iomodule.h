@@ -133,6 +133,10 @@ extern int _PyIO_trap_eintr(void);
 #endif
 
 extern Py_off_t PyNumber_AsOff_t(PyObject *item, PyObject *err);
+// PyNumber_AsOff_t() of a value: an inline int is converted without a box.
+extern Py_off_t (_PyNumber_AsOffValue)(PyValueBorrow item, PyObject *err);
+#define _PyNumber_AsOffValue(I, E) \
+    (_PyNumber_AsOffValue)(PyValue_Borrow(I), E)
 
 /* Implementation details */
 

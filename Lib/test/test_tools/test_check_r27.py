@@ -391,7 +391,9 @@ class CompletenessTests(unittest.TestCase):
             header = root / "Include/a.h"
             header.write_text("Py_VALUE_COMPAT(PyValue_Foo)\n"
                               "PyAPI_FUNC(int) PyFoo(void);\n"
-                              "PyAPI_FUNC(int) PyBar(void);\n")
+                              "PyAPI_FUNC(int) PyBar(void);\n"
+                              "PyAPI_FUNC(int) PyValue_Foo(void);\n"
+                              "PyAPI_FUNC(int) PyValue_Bar(void);\n")
             source = root / "a.c"
             source.write_text("#define Py_VALUE_CORE\n")
             inventory = root / "inventory.toml"
@@ -416,7 +418,8 @@ class CompletenessTests(unittest.TestCase):
             (root / "Include").mkdir()
             (root / "Modules").mkdir()
             header = root / "Include/a.h"
-            header.write_text("PyAPI_FUNC(int) PyFoo(void);\n")
+            header.write_text("PyAPI_FUNC(int) PyFoo(void);\n"
+                              "PyAPI_FUNC(int) PyValue_Foo(void);\n")
             source = root / "Modules/a.c"
             source.write_text("#define Py_BUILD_CORE_MODULE\n#define Py_VALUE_DEFER_MARKS\n")
             inventory = root / "inventory.toml"
@@ -428,7 +431,9 @@ class CompletenessTests(unittest.TestCase):
             self.assertTrue(any("lacks Py_VALUE_COMPAT" in x for x in out), out)
             self.assertTrue(any("deferred" in x for x in out), out)
             self.assertTrue(any("not value-native" in x for x in out), out)
-            header.write_text("Py_VALUE_COMPAT(PyValue_Foo)\nPyAPI_FUNC(int) PyFoo(void);\n")
+            header.write_text("Py_VALUE_COMPAT(PyValue_Foo)\n"
+                              "PyAPI_FUNC(int) PyFoo(void);\n"
+                              "PyAPI_FUNC(int) PyValue_Foo(void);\n")
             source.write_text("#define Py_BUILD_CORE_MODULE\n#define Py_VALUE_CORE\n")
             out, _ = check_r27.static_violations(cdb, root, inventory)
             self.assertEqual(out, [])
@@ -436,6 +441,76 @@ class CompletenessTests(unittest.TestCase):
                 out, _ = check_r27.static_violations(cdb, root, inventory)
             self.assertEqual(len(out), 1)
             self.assertIn("object-slot calls", out[0])
+
+    def test_inventory_requires_declared_value_provider_and_valid_sections(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "Include").mkdir()
+            header = root / "Include/a.h"
+            header.write_text("Py_VALUE_COMPAT(PyValue_Foo)\n"
+                              "PyAPI_FUNC(int) PyFoo(void);\n"
+                              "PyAPI_FUNC(int) PyValue_Foo(void);\n")
+            source = root / "a.c"
+            source.write_text("#define Py_VALUE_CORE\n")
+            inventory = root / "inventory.toml"
+            table = ('r27_complete=true\n[[row]]\n'
+                     'object="PyFoo"\nvalue="PyValue_Foo"\n')
+            inventory.write_text(table)
+            cdb = root / "cdb.json"
+            cdb.write_text(json.dumps([{"directory": tmp, "file": str(source),
+                                       "arguments": ["cc", "-c", str(source)]}]))
+            self.assertEqual(check_r27.static_violations(cdb, root, inventory)[0], [])
+
+            header.write_text(header.read_text().replace(
+                "PyAPI_FUNC(int) PyValue_Foo(void);\n", ""))
+            out, _ = check_r27.static_violations(cdb, root, inventory)
+            self.assertEqual(out, ["PyFoo: value provider PyValue_Foo declaration missing"])
+            header.write_text(header.read_text() +
+                              "/* PyAPI_FUNC(int) PyValue_Foo(void); */\n")
+            out, _ = check_r27.static_violations(cdb, root, inventory)
+            self.assertEqual(out, ["PyFoo: value provider PyValue_Foo declaration missing"])
+
+            inventory.write_text('r27_complete=true\n[row]\n'
+                                 'object="PyFoo"\nvalue="PyValue_Foo"\n')
+            out, _ = check_r27.static_violations(cdb, root, inventory)
+            self.assertIn("ownership row section must be an array of tables", out)
+            inventory.write_text('r27_complete=true\n[manual]\n'
+                                 'object="PyFoo"\nvalue="PyValue_Foo"\n')
+            out, _ = check_r27.static_violations(cdb, root, inventory)
+            self.assertIn("ownership manual section must be an array of tables", out)
+            inventory.write_text(table.replace('object="PyFoo"',
+                                               'object="PyFoo;bad"'))
+            out, _ = check_r27.static_violations(cdb, root, inventory)
+            self.assertTrue(any("invalid ownership row" in item for item in out))
+
+    def test_generated_arithmetic_provider_requires_roster_and_declaration(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            header = Path(tmp, "pycore_value_ops.h")
+            text = ("#define _PyValue_BINARY_DISPATCHERS(X) X(Add)\n"
+                    "#define _PyValue_DECLARE_BINARY(NAME) \\\n"
+                    "    PyAPI_FUNC(PyValue) _PyValue_##NAME(PyValueBorrow a);\n"
+                    "_PyValue_BINARY_DISPATCHERS(_PyValue_DECLARE_BINARY)\n"
+                    "#define _PyValue_Add(A) (_PyValue_Add)(A)\n")
+            header.write_text(text)
+            self.assertTrue(check_r27.value_provider_declared(
+                "_PyValue_Add", [(header, text)]))
+            without_roster = text.replace("X(Add)", "X(Subtract)")
+            self.assertFalse(check_r27.value_provider_declared(
+                "_PyValue_Add", [(header, without_roster)]))
+            without_declaration = text.replace("PyAPI_FUNC(PyValue)", "")
+            self.assertFalse(check_r27.value_provider_declared(
+                "_PyValue_Add", [(header, without_declaration)]))
+            for commented in (
+                text.replace("X(Add)", "/* X(Add) */"),
+                text.replace("#define _PyValue_DECLARE_BINARY(NAME)",
+                             "/* #define _PyValue_DECLARE_BINARY(NAME)")
+                    .replace("PyValueBorrow a);", "PyValueBorrow a); */"),
+                text.replace("_PyValue_BINARY_DISPATCHERS(_PyValue_DECLARE_BINARY)\n",
+                             "/* _PyValue_BINARY_DISPATCHERS(_PyValue_DECLARE_BINARY) */\n"),
+            ):
+                code = check_r27.check_value_api.strip_c(commented)
+                self.assertFalse(check_r27.value_provider_declared(
+                    "_PyValue_Add", [(header, code)]))
 
 
 class ReportTests(unittest.TestCase):

@@ -78,6 +78,45 @@ class PropertyNewGetter(object):
         return 8
 
 class PropertyTests(unittest.TestCase):
+    def test_value_fields_and_reentrant_getter(self):
+        # Property fields can contain inline values without boxing them.
+        prop = property(7, 8, 9, 10)
+        self.assertEqual((prop.fget, prop.fset, prop.fdel, prop.__doc__),
+                         (7, 8, 9, 10))
+        prop.__name__ = 11
+        self.assertEqual(prop.__name__, 11)
+        self.assertEqual((prop.getter(None).fget, prop.setter(None).fset,
+                          prop.deleter(None).fdel), (7, 8, 9))
+
+        def named_getter(instance):
+            return None
+
+        prop = property(named_getter, doc="description")
+        prop.__name__ = "custom"
+        del prop.__name__
+        self.assertEqual(prop.__name__, "named_getter")
+        del prop.__doc__
+        self.assertIsNone(prop.__doc__)
+
+        calls = []
+        holder = {}
+
+        def getter(instance):
+            calls.append("old")
+            holder["prop"].__init__(lambda instance: "new")
+            return "old"
+
+        prop = property(getter)
+        holder["prop"] = prop
+
+        class C:
+            value = prop
+
+        instance = C()
+        self.assertEqual(instance.value, "old")
+        self.assertEqual(instance.value, "new")
+        self.assertEqual(calls, ["old"])
+
     def test_property_decorator_baseclass(self):
         # see #1620
         base = BaseClass()

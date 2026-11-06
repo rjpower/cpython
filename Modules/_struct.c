@@ -13,8 +13,7 @@
 #include "pycore_bytesobject.h"   // _PyBytesWriter
 #include "pycore_dict.h"          // PyDict_SetValue()
 #include "pycore_lock.h"          // _PyOnceFlag_CallOnce()
-#include "pycore_long.h"          // _PyLong_AsByteArray()
-#include "pycore_long_value.h"    // _PyValue_AsDouble()
+#include "pycore_long_value.h"    // _PyLong_ValueAsByteArray()
 #include "pycore_moduleobject.h"  // _PyModule_GetState()
 #include "pycore_value.h"         // PyValue_AsKnownObjectBorrow()
 #include "pycore_value_ops.h"     // _PyValue_IsTrue()
@@ -62,7 +61,7 @@ typedef struct _formatdef {
     Py_ssize_t alignment;
     PyObject* (*unpack)(_structmodulestate *, const char *,
                         const struct _formatdef *);
-    int (*pack)(_structmodulestate *, char *, PyObject *,
+    int (*pack)(_structmodulestate *, char *, PyValueBorrow,
                 const struct _formatdef *);
 } formatdef;
 
@@ -130,48 +129,28 @@ static int cache_struct_converter(PyValueBorrow, PyValueBorrow, PyStructObject *
 /* Helper for integer format codes: converts an arbitrary Python object to a
    PyLongObject if possible, otherwise fails.  Caller should decref. */
 
-static PyObject *
-get_pylong(_structmodulestate *state, PyObject *v)
+static PyValue
+get_pylong_value(_structmodulestate *state, PyValueBorrow value)
 {
-    assert(v != NULL);
-    if (!PyLong_Check(v)) {
-        /* Not an integer;  try to use __index__ to convert. */
-        if (PyIndex_Check(v)) {
-            PyValue index = _PyValue_Index(PyValue_FromObjectBorrow(v));
-            if (PyValue_IsNull(index))
-                return NULL;
-            v = _PyValue_AsObjectAt(index, BOX_SITE_NUMBER);
-            PyValue_CLOSE(index);
-            if (v == NULL)
-                return NULL;
-        }
-        else {
-            PyErr_SetString(state->StructError,
-                            "required argument is not an integer");
-            return NULL;
-        }
+    if (PyValue_LongCheck(value)) {
+        return PyValue_DUP(value);
     }
-    else
-        Py_INCREF(v);
-
-    assert(PyLong_Check(v));
-    return v;
+    if (!_PyValue_IndexCheck(value)) {
+        PyErr_SetString(state->StructError, "required argument is not an integer");
+        return PyValue_NULL;
+    }
+    return _PyValue_Index(value);
 }
 
-/* Helper routine to get a C long and raise the appropriate error if it isn't
-   one */
-
 static int
-get_long(_structmodulestate *state, PyObject *v, long *p)
+get_long(_structmodulestate *state, PyValueBorrow value, long *p)
 {
-    long x;
-
-    v = get_pylong(state, v);
-    if (v == NULL)
+    PyValue integer = get_pylong_value(state, value);
+    if (PyValue_IsNull(integer)) {
         return -1;
-    assert(PyLong_Check(v));
-    x = _PyValue_AsLong(PyValue_FromObjectBorrow(v));
-    Py_DECREF(v);
+    }
+    long x = _PyValue_AsLong(integer);
+    PyValue_CLOSE(integer);
     if (x == (long)-1 && PyErr_Occurred()) {
         return -1;
     }
@@ -179,20 +158,15 @@ get_long(_structmodulestate *state, PyObject *v, long *p)
     return 0;
 }
 
-
-/* Same, but handling unsigned long */
-
 static int
-get_ulong(_structmodulestate *state, PyObject *v, unsigned long *p)
+get_ulong(_structmodulestate *state, PyValueBorrow value, unsigned long *p)
 {
-    unsigned long x;
-
-    v = get_pylong(state, v);
-    if (v == NULL)
+    PyValue integer = get_pylong_value(state, value);
+    if (PyValue_IsNull(integer)) {
         return -1;
-    assert(PyLong_Check(v));
-    x = _PyValue_IntAsUnsignedLong(PyValue_FromObjectBorrow(v));
-    Py_DECREF(v);
+    }
+    unsigned long x = _PyValue_IntAsUnsignedLong(integer);
+    PyValue_CLOSE(integer);
     if (x == (unsigned long)-1 && PyErr_Occurred()) {
         return -1;
     }
@@ -200,19 +174,15 @@ get_ulong(_structmodulestate *state, PyObject *v, unsigned long *p)
     return 0;
 }
 
-/* Same, but handling native long long. */
-
 static int
-get_longlong(_structmodulestate *state, PyObject *v, long long *p)
+get_longlong(_structmodulestate *state, PyValueBorrow value, long long *p)
 {
-    long long x;
-
-    v = get_pylong(state, v);
-    if (v == NULL)
+    PyValue integer = get_pylong_value(state, value);
+    if (PyValue_IsNull(integer)) {
         return -1;
-    assert(PyLong_Check(v));
-    x = _PyValue_AsLongLong(PyValue_FromObjectBorrow(v));
-    Py_DECREF(v);
+    }
+    long long x = _PyValue_AsLongLong(integer);
+    PyValue_CLOSE(integer);
     if (x == (long long)-1 && PyErr_Occurred()) {
         return -1;
     }
@@ -220,19 +190,15 @@ get_longlong(_structmodulestate *state, PyObject *v, long long *p)
     return 0;
 }
 
-/* Same, but handling native unsigned long long. */
-
 static int
-get_ulonglong(_structmodulestate *state, PyObject *v, unsigned long long *p)
+get_ulonglong(_structmodulestate *state, PyValueBorrow value, unsigned long long *p)
 {
-    unsigned long long x;
-
-    v = get_pylong(state, v);
-    if (v == NULL)
+    PyValue integer = get_pylong_value(state, value);
+    if (PyValue_IsNull(integer)) {
         return -1;
-    assert(PyLong_Check(v));
-    x = _PyValue_IntAsUnsignedLongLong(PyValue_FromObjectBorrow(v));
-    Py_DECREF(v);
+    }
+    unsigned long long x = _PyValue_IntAsUnsignedLongLong(integer);
+    PyValue_CLOSE(integer);
     if (x == (unsigned long long)-1 && PyErr_Occurred()) {
         return -1;
     }
@@ -240,19 +206,15 @@ get_ulonglong(_structmodulestate *state, PyObject *v, unsigned long long *p)
     return 0;
 }
 
-/* Same, but handling Py_ssize_t */
-
 static int
-get_ssize_t(_structmodulestate *state, PyObject *v, Py_ssize_t *p)
+get_ssize_t(_structmodulestate *state, PyValueBorrow value, Py_ssize_t *p)
 {
-    Py_ssize_t x;
-
-    v = get_pylong(state, v);
-    if (v == NULL)
+    PyValue integer = get_pylong_value(state, value);
+    if (PyValue_IsNull(integer)) {
         return -1;
-    assert(PyLong_Check(v));
-    x = _PyValue_IntAsSsize_t(PyValue_FromObjectBorrow(v));
-    Py_DECREF(v);
+    }
+    Py_ssize_t x = _PyValue_IntAsSsize_t(integer);
+    PyValue_CLOSE(integer);
     if (x == (Py_ssize_t)-1 && PyErr_Occurred()) {
         return -1;
     }
@@ -260,19 +222,15 @@ get_ssize_t(_structmodulestate *state, PyObject *v, Py_ssize_t *p)
     return 0;
 }
 
-/* Same, but handling size_t */
-
 static int
-get_size_t(_structmodulestate *state, PyObject *v, size_t *p)
+get_size_t(_structmodulestate *state, PyValueBorrow value, size_t *p)
 {
-    size_t x;
-
-    v = get_pylong(state, v);
-    if (v == NULL)
+    PyValue integer = get_pylong_value(state, value);
+    if (PyValue_IsNull(integer)) {
         return -1;
-    assert(PyLong_Check(v));
-    x = _PyValue_IntAsSize_t(PyValue_FromObjectBorrow(v));
-    Py_DECREF(v);
+    }
+    size_t x = _PyValue_IntAsSize_t(integer);
+    PyValue_CLOSE(integer);
     if (x == (size_t)-1 && PyErr_Occurred()) {
         return -1;
     }
@@ -300,10 +258,10 @@ unpack_halffloat(const char *p,  /* start of 2-byte string */
 static int
 pack_halffloat(_structmodulestate *state,
                char *p,      /* start of 2-byte string */
-               PyObject *v,  /* value to pack */
+               PyValueBorrow v,  /* value to pack */
                int le)       /* true for little-endian, false for big-endian */
 {
-    double x = _PyValue_AsDouble(PyValue_FromObjectBorrow(v));
+    double x = _PyValue_AsDouble(v);
     if (x == -1.0 && PyErr_Occurred()) {
         PyErr_SetString(state->StructError,
                         "required argument is not a float");
@@ -547,7 +505,7 @@ nu_void_p(_structmodulestate *state, const char *p, const formatdef *f)
 }
 
 static int
-np_byte(_structmodulestate *state, char *p, PyObject *v, const formatdef *f)
+np_byte(_structmodulestate *state, char *p, PyValueBorrow v, const formatdef *f)
 {
     long x;
     if (get_long(state, v, &x) < 0) {
@@ -564,7 +522,7 @@ np_byte(_structmodulestate *state, char *p, PyObject *v, const formatdef *f)
 }
 
 static int
-np_ubyte(_structmodulestate *state, char *p, PyObject *v, const formatdef *f)
+np_ubyte(_structmodulestate *state, char *p, PyValueBorrow v, const formatdef *f)
 {
     long x;
     if (get_long(state, v, &x) < 0) {
@@ -581,19 +539,21 @@ np_ubyte(_structmodulestate *state, char *p, PyObject *v, const formatdef *f)
 }
 
 static int
-np_char(_structmodulestate *state, char *p, PyObject *v, const formatdef *f)
+np_char(_structmodulestate *state, char *p, PyValueBorrow v, const formatdef *f)
 {
-    if (!PyBytes_Check(v) || PyBytes_Size(v) != 1) {
+    if (!PyValue_IsObject(v) ||
+        !PyBytes_Check(PyValue_AsKnownObjectBorrow(v)) ||
+        PyBytes_Size(PyValue_AsKnownObjectBorrow(v)) != 1) {
         PyErr_SetString(state->StructError,
                         "char format requires a bytes object of length 1");
         return -1;
     }
-    *p = *PyBytes_AS_STRING(v);
+    *p = *PyBytes_AS_STRING(PyValue_AsKnownObjectBorrow(v));
     return 0;
 }
 
 static int
-np_short(_structmodulestate *state, char *p, PyObject *v, const formatdef *f)
+np_short(_structmodulestate *state, char *p, PyValueBorrow v, const formatdef *f)
 {
     long x;
     short y;
@@ -612,7 +572,7 @@ np_short(_structmodulestate *state, char *p, PyObject *v, const formatdef *f)
 }
 
 static int
-np_ushort(_structmodulestate *state, char *p, PyObject *v, const formatdef *f)
+np_ushort(_structmodulestate *state, char *p, PyValueBorrow v, const formatdef *f)
 {
     long x;
     unsigned short y;
@@ -631,7 +591,7 @@ np_ushort(_structmodulestate *state, char *p, PyObject *v, const formatdef *f)
 }
 
 static int
-np_int(_structmodulestate *state, char *p, PyObject *v, const formatdef *f)
+np_int(_structmodulestate *state, char *p, PyValueBorrow v, const formatdef *f)
 {
     long x;
     int y;
@@ -651,7 +611,7 @@ np_int(_structmodulestate *state, char *p, PyObject *v, const formatdef *f)
 }
 
 static int
-np_uint(_structmodulestate *state, char *p, PyObject *v, const formatdef *f)
+np_uint(_structmodulestate *state, char *p, PyValueBorrow v, const formatdef *f)
 {
     unsigned long x;
     unsigned int y;
@@ -671,7 +631,7 @@ np_uint(_structmodulestate *state, char *p, PyObject *v, const formatdef *f)
 }
 
 static int
-np_long(_structmodulestate *state, char *p, PyObject *v, const formatdef *f)
+np_long(_structmodulestate *state, char *p, PyValueBorrow v, const formatdef *f)
 {
     long x;
     if (get_long(state, v, &x) < 0) {
@@ -685,7 +645,7 @@ np_long(_structmodulestate *state, char *p, PyObject *v, const formatdef *f)
 }
 
 static int
-np_ulong(_structmodulestate *state, char *p, PyObject *v, const formatdef *f)
+np_ulong(_structmodulestate *state, char *p, PyValueBorrow v, const formatdef *f)
 {
     unsigned long x;
     if (get_ulong(state, v, &x) < 0) {
@@ -699,7 +659,7 @@ np_ulong(_structmodulestate *state, char *p, PyObject *v, const formatdef *f)
 }
 
 static int
-np_ssize_t(_structmodulestate *state, char *p, PyObject *v, const formatdef *f)
+np_ssize_t(_structmodulestate *state, char *p, PyValueBorrow v, const formatdef *f)
 {
     Py_ssize_t x;
     if (get_ssize_t(state, v, &x) < 0) {
@@ -713,7 +673,7 @@ np_ssize_t(_structmodulestate *state, char *p, PyObject *v, const formatdef *f)
 }
 
 static int
-np_size_t(_structmodulestate *state, char *p, PyObject *v, const formatdef *f)
+np_size_t(_structmodulestate *state, char *p, PyValueBorrow v, const formatdef *f)
 {
     size_t x;
     if (get_size_t(state, v, &x) < 0) {
@@ -727,7 +687,7 @@ np_size_t(_structmodulestate *state, char *p, PyObject *v, const formatdef *f)
 }
 
 static int
-np_longlong(_structmodulestate *state, char *p, PyObject *v, const formatdef *f)
+np_longlong(_structmodulestate *state, char *p, PyValueBorrow v, const formatdef *f)
 {
     long long x;
     if (get_longlong(state, v, &x) < 0) {
@@ -745,7 +705,7 @@ np_longlong(_structmodulestate *state, char *p, PyObject *v, const formatdef *f)
 }
 
 static int
-np_ulonglong(_structmodulestate *state, char *p, PyObject *v, const formatdef *f)
+np_ulonglong(_structmodulestate *state, char *p, PyValueBorrow v, const formatdef *f)
 {
     unsigned long long x;
     if (get_ulonglong(state, v, &x) < 0) {
@@ -763,11 +723,11 @@ np_ulonglong(_structmodulestate *state, char *p, PyObject *v, const formatdef *f
 
 
 static int
-np_bool(_structmodulestate *state, char *p, PyObject *v, const formatdef *f)
+np_bool(_structmodulestate *state, char *p, PyValueBorrow v, const formatdef *f)
 {
     int y;
     _Bool x;
-    y = _PyValue_IsTrue(PyValue_FromObjectBorrow(v));
+    y = _PyValue_IsTrue(v);
     if (y < 0)
         return -1;
     x = y;
@@ -776,7 +736,7 @@ np_bool(_structmodulestate *state, char *p, PyObject *v, const formatdef *f)
 }
 
 static int
-np_halffloat(_structmodulestate *state, char *p, PyObject *v, const formatdef *f)
+np_halffloat(_structmodulestate *state, char *p, PyValueBorrow v, const formatdef *f)
 {
 #if PY_LITTLE_ENDIAN
     return pack_halffloat(state, p, v, 1);
@@ -786,9 +746,9 @@ np_halffloat(_structmodulestate *state, char *p, PyObject *v, const formatdef *f
 }
 
 static int
-np_float(_structmodulestate *state, char *p, PyObject *v, const formatdef *f)
+np_float(_structmodulestate *state, char *p, PyValueBorrow v, const formatdef *f)
 {
-    double x = _PyValue_AsDouble(PyValue_FromObjectBorrow(v));
+    double x = _PyValue_AsDouble(v);
     if (x == -1 && PyErr_Occurred()) {
         PyErr_SetString(state->StructError,
                         "required argument is not a float");
@@ -798,9 +758,9 @@ np_float(_structmodulestate *state, char *p, PyObject *v, const formatdef *f)
 }
 
 static int
-np_double(_structmodulestate *state, char *p, PyObject *v, const formatdef *f)
+np_double(_structmodulestate *state, char *p, PyValueBorrow v, const formatdef *f)
 {
-    double x = _PyValue_AsDouble(PyValue_FromObjectBorrow(v));
+    double x = _PyValue_AsDouble(v);
     if (x == -1 && PyErr_Occurred()) {
         PyErr_SetString(state->StructError,
                         "required argument is not a float");
@@ -810,11 +770,20 @@ np_double(_structmodulestate *state, char *p, PyObject *v, const formatdef *f)
     return 0;
 }
 
+static Py_complex
+struct_as_complex(PyValueBorrow v)
+{
+    if (PyValue_IsObject(v)) {
+        return PyComplex_AsCComplex(PyValue_AsKnownObjectBorrow(v));
+    }
+    return (Py_complex){_PyValue_AsDouble(v), 0.0};
+}
+
 static int
-np_float_complex(_structmodulestate *state, char *p, PyObject *v,
+np_float_complex(_structmodulestate *state, char *p, PyValueBorrow v,
                  const formatdef *f)
 {
-    Py_complex c = PyComplex_AsCComplex(v);
+    Py_complex c = struct_as_complex(v);
     char tmp[8];
 
     if (c.real == -1 && PyErr_Occurred()) {
@@ -832,10 +801,10 @@ np_float_complex(_structmodulestate *state, char *p, PyObject *v,
 }
 
 static int
-np_double_complex(_structmodulestate *state, char *p, PyObject *v,
+np_double_complex(_structmodulestate *state, char *p, PyValueBorrow v,
                   const formatdef *f)
 {
-    Py_complex c = PyComplex_AsCComplex(v);
+    Py_complex c = struct_as_complex(v);
     double x[2] = {c.real, c.imag};
 
     if (c.real == -1 && PyErr_Occurred()) {
@@ -848,18 +817,17 @@ np_double_complex(_structmodulestate *state, char *p, PyObject *v,
 }
 
 static int
-np_void_p(_structmodulestate *state, char *p, PyObject *v, const formatdef *f)
+np_void_p(_structmodulestate *state, char *p, PyValueBorrow v, const formatdef *f)
 {
-    void *x;
-
-    v = get_pylong(state, v);
-    if (v == NULL)
+    PyValue integer = get_pylong_value(state, v);
+    if (PyValue_IsNull(integer)) {
         return -1;
-    assert(PyLong_Check(v));
-    x = _PyValue_IntAsVoidPtr(PyValue_FromObjectBorrow(v));
-    Py_DECREF(v);
-    if (x == NULL && PyErr_Occurred())
+    }
+    void *x = _PyValue_IntAsVoidPtr(integer);
+    PyValue_CLOSE(integer);
+    if (x == NULL && PyErr_Occurred()) {
         return -1;
+    }
     memcpy(p, &x, sizeof x);
     return 0;
 }
@@ -1026,7 +994,7 @@ bu_bool(_structmodulestate *state, const char *p, const formatdef *f)
 }
 
 static int
-bp_int(_structmodulestate *state, char *p, PyObject *v, const formatdef *f)
+bp_int(_structmodulestate *state, char *p, PyValueBorrow v, const formatdef *f)
 {
     long x;
     Py_ssize_t i;
@@ -1054,7 +1022,7 @@ bp_int(_structmodulestate *state, char *p, PyObject *v, const formatdef *f)
 }
 
 static int
-bp_uint(_structmodulestate *state, char *p, PyObject *v, const formatdef *f)
+bp_uint(_structmodulestate *state, char *p, PyValueBorrow v, const formatdef *f)
 {
     unsigned long x;
     Py_ssize_t i;
@@ -1080,19 +1048,19 @@ bp_uint(_structmodulestate *state, char *p, PyObject *v, const formatdef *f)
 }
 
 static int
-bp_longlong(_structmodulestate *state, char *p, PyObject *v, const formatdef *f)
+bp_longlong(_structmodulestate *state, char *p, PyValueBorrow v, const formatdef *f)
 {
     int res;
-    v = get_pylong(state, v);
-    if (v == NULL)
+    PyValue integer = get_pylong_value(state, v);
+    if (PyValue_IsNull(integer))
         return -1;
-    res = _PyLong_AsByteArray((PyLongObject *)v,
+    res = _PyLong_ValueAsByteArray(PyValue_Borrow(integer),
                               (unsigned char *)p,
                               8,
                               0, /* little_endian */
                               1, /* signed */
                               0  /* !with_exceptions */);
-    Py_DECREF(v);
+    PyValue_CLOSE(integer);
     if (res < 0) {
         PyErr_Format(state->StructError,
                      "'%s' format requires %lld <= number <= %lld",
@@ -1105,19 +1073,19 @@ bp_longlong(_structmodulestate *state, char *p, PyObject *v, const formatdef *f)
 }
 
 static int
-bp_ulonglong(_structmodulestate *state, char *p, PyObject *v, const formatdef *f)
+bp_ulonglong(_structmodulestate *state, char *p, PyValueBorrow v, const formatdef *f)
 {
     int res;
-    v = get_pylong(state, v);
-    if (v == NULL)
+    PyValue integer = get_pylong_value(state, v);
+    if (PyValue_IsNull(integer))
         return -1;
-    res = _PyLong_AsByteArray((PyLongObject *)v,
+    res = _PyLong_ValueAsByteArray(PyValue_Borrow(integer),
                               (unsigned char *)p,
                               8,
                               0, /* little_endian */
                               0, /* signed */
                               0  /* !with_exceptions */);
-    Py_DECREF(v);
+    PyValue_CLOSE(integer);
     if (res < 0) {
         PyErr_Format(state->StructError,
                      "'%s' format requires 0 <= number <= %llu",
@@ -1129,15 +1097,15 @@ bp_ulonglong(_structmodulestate *state, char *p, PyObject *v, const formatdef *f
 }
 
 static int
-bp_halffloat(_structmodulestate *state, char *p, PyObject *v, const formatdef *f)
+bp_halffloat(_structmodulestate *state, char *p, PyValueBorrow v, const formatdef *f)
 {
     return pack_halffloat(state, p, v, 0);
 }
 
 static int
-bp_float(_structmodulestate *state, char *p, PyObject *v, const formatdef *f)
+bp_float(_structmodulestate *state, char *p, PyValueBorrow v, const formatdef *f)
 {
-    double x = _PyValue_AsDouble(PyValue_FromObjectBorrow(v));
+    double x = _PyValue_AsDouble(v);
     if (x == -1 && PyErr_Occurred()) {
         PyErr_SetString(state->StructError,
                         "required argument is not a float");
@@ -1147,9 +1115,9 @@ bp_float(_structmodulestate *state, char *p, PyObject *v, const formatdef *f)
 }
 
 static int
-bp_double(_structmodulestate *state, char *p, PyObject *v, const formatdef *f)
+bp_double(_structmodulestate *state, char *p, PyValueBorrow v, const formatdef *f)
 {
-    double x = _PyValue_AsDouble(PyValue_FromObjectBorrow(v));
+    double x = _PyValue_AsDouble(v);
     if (x == -1 && PyErr_Occurred()) {
         PyErr_SetString(state->StructError,
                         "required argument is not a float");
@@ -1159,9 +1127,9 @@ bp_double(_structmodulestate *state, char *p, PyObject *v, const formatdef *f)
 }
 
 static int
-bp_float_complex(_structmodulestate *state, char *p, PyObject *v, const formatdef *f)
+bp_float_complex(_structmodulestate *state, char *p, PyValueBorrow v, const formatdef *f)
 {
-    Py_complex x = PyComplex_AsCComplex(v);
+    Py_complex x = struct_as_complex(v);
     char tmp[8];
 
     if (x.real == -1 && PyErr_Occurred()) {
@@ -1179,9 +1147,9 @@ bp_float_complex(_structmodulestate *state, char *p, PyObject *v, const formatde
 }
 
 static int
-bp_double_complex(_structmodulestate *state, char *p, PyObject *v, const formatdef *f)
+bp_double_complex(_structmodulestate *state, char *p, PyValueBorrow v, const formatdef *f)
 {
-    Py_complex x = PyComplex_AsCComplex(v);
+    Py_complex x = struct_as_complex(v);
     if (x.real == -1 && PyErr_Occurred()) {
         PyErr_SetString(state->StructError,
                         "required argument is not a complex");
@@ -1194,10 +1162,10 @@ bp_double_complex(_structmodulestate *state, char *p, PyObject *v, const formatd
 }
 
 static int
-bp_bool(_structmodulestate *state, char *p, PyObject *v, const formatdef *f)
+bp_bool(_structmodulestate *state, char *p, PyValueBorrow v, const formatdef *f)
 {
     int y;
-    y = _PyValue_IsTrue(PyValue_FromObjectBorrow(v));
+    y = _PyValue_IsTrue(v);
     if (y < 0)
         return -1;
     *p = (char)y;
@@ -1357,7 +1325,7 @@ lu_double_complex(_structmodulestate *state, const char *p, const formatdef *f)
 }
 
 static int
-lp_int(_structmodulestate *state, char *p, PyObject *v, const formatdef *f)
+lp_int(_structmodulestate *state, char *p, PyValueBorrow v, const formatdef *f)
 {
     long x;
     Py_ssize_t i;
@@ -1385,7 +1353,7 @@ lp_int(_structmodulestate *state, char *p, PyObject *v, const formatdef *f)
 }
 
 static int
-lp_uint(_structmodulestate *state, char *p, PyObject *v, const formatdef *f)
+lp_uint(_structmodulestate *state, char *p, PyValueBorrow v, const formatdef *f)
 {
     unsigned long x;
     Py_ssize_t i;
@@ -1411,19 +1379,19 @@ lp_uint(_structmodulestate *state, char *p, PyObject *v, const formatdef *f)
 }
 
 static int
-lp_longlong(_structmodulestate *state, char *p, PyObject *v, const formatdef *f)
+lp_longlong(_structmodulestate *state, char *p, PyValueBorrow v, const formatdef *f)
 {
     int res;
-    v = get_pylong(state, v);
-    if (v == NULL)
+    PyValue integer = get_pylong_value(state, v);
+    if (PyValue_IsNull(integer))
         return -1;
-    res = _PyLong_AsByteArray((PyLongObject*)v,
+    res = _PyLong_ValueAsByteArray(PyValue_Borrow(integer),
                               (unsigned char *)p,
                               8,
                               1, /* little_endian */
                               1, /* signed */
                               0  /* !with_exceptions */);
-    Py_DECREF(v);
+    PyValue_CLOSE(integer);
     if (res < 0) {
         PyErr_Format(state->StructError,
                      "'%s' format requires %lld <= number <= %lld",
@@ -1436,19 +1404,19 @@ lp_longlong(_structmodulestate *state, char *p, PyObject *v, const formatdef *f)
 }
 
 static int
-lp_ulonglong(_structmodulestate *state, char *p, PyObject *v, const formatdef *f)
+lp_ulonglong(_structmodulestate *state, char *p, PyValueBorrow v, const formatdef *f)
 {
     int res;
-    v = get_pylong(state, v);
-    if (v == NULL)
+    PyValue integer = get_pylong_value(state, v);
+    if (PyValue_IsNull(integer))
         return -1;
-    res = _PyLong_AsByteArray((PyLongObject*)v,
+    res = _PyLong_ValueAsByteArray(PyValue_Borrow(integer),
                               (unsigned char *)p,
                               8,
                               1, /* little_endian */
                               0, /* signed */
                               0  /* !with_exceptions */);
-    Py_DECREF(v);
+    PyValue_CLOSE(integer);
     if (res < 0) {
         PyErr_Format(state->StructError,
                      "'%s' format requires 0 <= number <= %llu",
@@ -1460,15 +1428,15 @@ lp_ulonglong(_structmodulestate *state, char *p, PyObject *v, const formatdef *f
 }
 
 static int
-lp_halffloat(_structmodulestate *state, char *p, PyObject *v, const formatdef *f)
+lp_halffloat(_structmodulestate *state, char *p, PyValueBorrow v, const formatdef *f)
 {
     return pack_halffloat(state, p, v, 1);
 }
 
 static int
-lp_float(_structmodulestate *state, char *p, PyObject *v, const formatdef *f)
+lp_float(_structmodulestate *state, char *p, PyValueBorrow v, const formatdef *f)
 {
-    double x = _PyValue_AsDouble(PyValue_FromObjectBorrow(v));
+    double x = _PyValue_AsDouble(v);
     if (x == -1 && PyErr_Occurred()) {
         PyErr_SetString(state->StructError,
                         "required argument is not a float");
@@ -1478,9 +1446,9 @@ lp_float(_structmodulestate *state, char *p, PyObject *v, const formatdef *f)
 }
 
 static int
-lp_double(_structmodulestate *state, char *p, PyObject *v, const formatdef *f)
+lp_double(_structmodulestate *state, char *p, PyValueBorrow v, const formatdef *f)
 {
-    double x = _PyValue_AsDouble(PyValue_FromObjectBorrow(v));
+    double x = _PyValue_AsDouble(v);
     if (x == -1 && PyErr_Occurred()) {
         PyErr_SetString(state->StructError,
                         "required argument is not a float");
@@ -1490,9 +1458,9 @@ lp_double(_structmodulestate *state, char *p, PyObject *v, const formatdef *f)
 }
 
 static int
-lp_float_complex(_structmodulestate *state, char *p, PyObject *v, const formatdef *f)
+lp_float_complex(_structmodulestate *state, char *p, PyValueBorrow v, const formatdef *f)
 {
-    Py_complex x = PyComplex_AsCComplex(v);
+    Py_complex x = struct_as_complex(v);
     char tmp[8];
 
     if (x.real == -1 && PyErr_Occurred()) {
@@ -1510,9 +1478,9 @@ lp_float_complex(_structmodulestate *state, char *p, PyObject *v, const formatde
 }
 
 static int
-lp_double_complex(_structmodulestate *state, char *p, PyObject *v, const formatdef *f)
+lp_double_complex(_structmodulestate *state, char *p, PyValueBorrow v, const formatdef *f)
 {
-    Py_complex x = PyComplex_AsCComplex(v);
+    Py_complex x = struct_as_complex(v);
     if (x.real == -1 && PyErr_Occurred()) {
         PyErr_SetString(state->StructError,
                         "required argument is not a complex");
@@ -2447,30 +2415,25 @@ s_pack_internal(PyStructObject *soself, const PyValue *args,
         char *res = buf + code->offset;
         Py_ssize_t j = code->repeat;
         while (j--) {
-            /* Struct codes need an object; an inline int or float is boxed
-               for the duration of this item. */
-            PyObject *v = _PyValue_AsObjectAt(args[i++], BOX_SITE_PARSER);
-            if (v == NULL) {
-                return -1;
-            }
+            PyValueBorrow v = PyValue_Borrow(args[i++]);
             if (strcmp(e->format, "s") == 0) {
                 Py_ssize_t n;
                 int isstring;
                 const void *p;
-                isstring = PyBytes_Check(v);
-                if (!isstring && !PyByteArray_Check(v)) {
+                PyObject *object = PyValue_IsObject(v) ? PyValue_AsKnownObjectBorrow(v) : NULL;
+                isstring = object != NULL && PyBytes_Check(object);
+                if (!isstring && (object == NULL || !PyByteArray_Check(object))) {
                     PyErr_SetString(state->StructError,
                                     "argument for 's' must be a bytes object");
-                    Py_DECREF(v);
                     return -1;
                 }
                 if (isstring) {
-                    n = PyBytes_GET_SIZE(v);
-                    p = PyBytes_AS_STRING(v);
+                    n = PyBytes_GET_SIZE(object);
+                    p = PyBytes_AS_STRING(object);
                 }
                 else {
-                    n = PyByteArray_GET_SIZE(v);
-                    p = PyByteArray_AS_STRING(v);
+                    n = PyByteArray_GET_SIZE(object);
+                    p = PyByteArray_AS_STRING(object);
                 }
                 if (n > code->size)
                     n = code->size;
@@ -2480,20 +2443,20 @@ s_pack_internal(PyStructObject *soself, const PyValue *args,
                 Py_ssize_t n;
                 int isstring;
                 const void *p;
-                isstring = PyBytes_Check(v);
-                if (!isstring && !PyByteArray_Check(v)) {
+                PyObject *object = PyValue_IsObject(v) ? PyValue_AsKnownObjectBorrow(v) : NULL;
+                isstring = object != NULL && PyBytes_Check(object);
+                if (!isstring && (object == NULL || !PyByteArray_Check(object))) {
                     PyErr_SetString(state->StructError,
                                     "argument for 'p' must be a bytes object");
-                    Py_DECREF(v);
                     return -1;
                 }
                 if (isstring) {
-                    n = PyBytes_GET_SIZE(v);
-                    p = PyBytes_AS_STRING(v);
+                    n = PyBytes_GET_SIZE(object);
+                    p = PyBytes_AS_STRING(object);
                 }
                 else {
-                    n = PyByteArray_GET_SIZE(v);
-                    p = PyByteArray_AS_STRING(v);
+                    n = PyByteArray_GET_SIZE(object);
+                    p = PyByteArray_AS_STRING(object);
                 }
                 if (code->size == 0) {
                     n = 0;
@@ -2510,14 +2473,12 @@ s_pack_internal(PyStructObject *soself, const PyValue *args,
                 }
             } else {
                 if (e->pack(state, res, v, e) < 0) {
-                    if (PyLong_Check(v) && PyErr_ExceptionMatches(PyExc_OverflowError))
+                    if (PyValue_LongCheck(v) && PyErr_ExceptionMatches(PyExc_OverflowError))
                         PyErr_SetString(state->StructError,
                                         "int too large to convert");
-                    Py_DECREF(v);
                     return -1;
                 }
             }
-            Py_DECREF(v);
             res += code->size;
         }
     }

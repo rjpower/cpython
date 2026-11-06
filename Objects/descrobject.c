@@ -14,6 +14,7 @@
 #include "pycore_tuple.h"         // _PyTuple_ITEMS(), _PyTuple_FromValueArray()
 #include "pycore_value.h"         // _PyObject_IsSame()
 #include "pycore_value_call.h"    // _PyValue_VectorcallTstate()
+#include "pycore_value_ops.h"     // _PyValue_GetOptionalAttr(), _PyValue_Repr()
 #include "pycore_value_slots.h"   // _PyType_ValueWrapper()
 
 
@@ -1941,45 +1942,78 @@ class property(object):
 
 */
 
-static PyObject * property_copy(PyObject *, PyObject *, PyObject *,
-                                  PyObject *);
+static PyValue property_copy(PyObject *, PyValueBorrow, PyValueBorrow,
+                             PyValueBorrow);
 
-static PyMemberDef property_members[] = {
-    {"fget", _Py_T_OBJECT, offsetof(propertyobject, prop_get), Py_READONLY},
-    {"fset", _Py_T_OBJECT, offsetof(propertyobject, prop_set), Py_READONLY},
-    {"fdel", _Py_T_OBJECT, offsetof(propertyobject, prop_del), Py_READONLY},
-    {"__doc__",  _Py_T_OBJECT, offsetof(propertyobject, prop_doc), 0},
-    {0}
-};
+static PyValue
+property_member_get(PyValueBorrow self, void *closure)
+{
+    propertyobject *prop = (propertyobject *)PyValue_AsKnownObjectBorrow(self);
+    PyValue field = *(PyValue *)((char *)prop + (uintptr_t)closure);
+    return PyValue_IsNull(field) ? PyValue_None : PyValue_DUP(field);
+}
 
+static int
+property_member_readonly_set(PyValueBorrow Py_UNUSED(self),
+                             PyValueBorrow Py_UNUSED(value),
+                             void *Py_UNUSED(closure))
+{
+    PyErr_SetString(PyExc_AttributeError, "readonly attribute");
+    return -1;
+}
+
+static int
+property_doc_set(PyValueBorrow self, PyValueBorrow value, void *closure)
+{
+    propertyobject *prop = (propertyobject *)PyValue_AsKnownObjectBorrow(self);
+    PyValue old = prop->prop_doc;
+    prop->prop_doc = PyValue_XDUP(value);
+    PyValue_XCLOSE(old);
+    return 0;
+}
 
 PyDoc_STRVAR(getter_doc,
              "Descriptor to obtain a copy of the property with a different getter.");
 
-static PyObject *
-property_getter(PyObject *self, PyObject *getter)
+static PyValue
+property_getter(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs,
+                PyObject *kwnames)
 {
-    return property_copy(self, getter, NULL, NULL);
+    assert(nargs == 1 && kwnames == NULL);
+    return property_copy(PyValue_AsKnownObjectBorrow(self),
+                         PyValue_Borrow(args[0]),
+                         PyValue_Borrow(PyValue_NULL),
+                         PyValue_Borrow(PyValue_NULL));
 }
 
 
 PyDoc_STRVAR(setter_doc,
              "Descriptor to obtain a copy of the property with a different setter.");
 
-static PyObject *
-property_setter(PyObject *self, PyObject *setter)
+static PyValue
+property_setter(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs,
+                PyObject *kwnames)
 {
-    return property_copy(self, NULL, setter, NULL);
+    assert(nargs == 1 && kwnames == NULL);
+    return property_copy(PyValue_AsKnownObjectBorrow(self),
+                         PyValue_Borrow(PyValue_NULL),
+                         PyValue_Borrow(args[0]),
+                         PyValue_Borrow(PyValue_NULL));
 }
 
 
 PyDoc_STRVAR(deleter_doc,
              "Descriptor to obtain a copy of the property with a different deleter.");
 
-static PyObject *
-property_deleter(PyObject *self, PyObject *deleter)
+static PyValue
+property_deleter(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs,
+                 PyObject *kwnames)
 {
-    return property_copy(self, NULL, NULL, deleter);
+    assert(nargs == 1 && kwnames == NULL);
+    return property_copy(PyValue_AsKnownObjectBorrow(self),
+                         PyValue_Borrow(PyValue_NULL),
+                         PyValue_Borrow(PyValue_NULL),
+                         PyValue_Borrow(args[0]));
 }
 
 
@@ -1998,19 +2032,17 @@ property___set_name___impl(propertyobject *self, PyValueBorrow owner,
                            PyValueBorrow name)
 /*[clinic end generated code: output=b236024393248986 input=0211b5b7ace099c5]*/
 {
-    PyObject *name_o = _PyValue_AsObjectAt(name, BOX_SITE_FIELD);
-    if (name_o == NULL) {
-        return PyValue_NULL;
-    }
-    Py_XSETREF(self->prop_name, name_o);
+    PyValue old = self->prop_name;
+    self->prop_name = PyValue_DUP(name);
+    PyValue_XCLOSE(old);
 
     return PyValue_None;
 }
 
 static PyMethodDef property_methods[] = {
-    {"getter", property_getter, METH_O, getter_doc},
-    {"setter", property_setter, METH_O, setter_doc},
-    {"deleter", property_deleter, METH_O, deleter_doc},
+    {"getter", _PyCFunction_CAST(property_getter), METH_VALUE | METH_O, getter_doc},
+    {"setter", _PyCFunction_CAST(property_setter), METH_VALUE | METH_O, setter_doc},
+    {"deleter", _PyCFunction_CAST(property_deleter), METH_VALUE | METH_O, deleter_doc},
     PROPERTY___SET_NAME___METHODDEF
     {0}
 };
@@ -2022,179 +2054,236 @@ property_dealloc(PyObject *self)
     propertyobject *gs = (propertyobject *)self;
 
     _PyObject_GC_UNTRACK(self);
-    Py_XDECREF(gs->prop_get);
-    Py_XDECREF(gs->prop_set);
-    Py_XDECREF(gs->prop_del);
-    Py_XDECREF(gs->prop_doc);
-    Py_XDECREF(gs->prop_name);
+    PyValue_XCLOSE(gs->prop_get);
+    PyValue_XCLOSE(gs->prop_set);
+    PyValue_XCLOSE(gs->prop_del);
+    PyValue_XCLOSE(gs->prop_doc);
+    PyValue_XCLOSE(gs->prop_name);
     Py_TYPE(self)->tp_free(self);
 }
 
 static int
-property_name(propertyobject *prop, PyObject **name)
+property_name(propertyobject *prop, PyValue *name)
 {
-    if (prop->prop_name != NULL) {
-        *name = Py_NewRef(prop->prop_name);
+    if (!PyValue_IsNull(prop->prop_name)) {
+        *name = PyValue_DUP(prop->prop_name);
         return 1;
     }
-    if (prop->prop_get == NULL) {
-        *name = NULL;
+    if (PyValue_IsNull(prop->prop_get)) {
+        *name = PyValue_NULL;
         return 0;
     }
-    return PyObject_GetOptionalAttr(prop->prop_get, &_Py_ID(__name__), name);
+    PyValue getter = PyValue_DUP(prop->prop_get);
+    _PyStatusValue result = _PyValue_GetOptionalAttr(
+        getter, &_Py_ID(__name__));
+    PyValue_CLOSE(getter);
+    *name = result.value;
+    return result.status;
 }
 
-static PyObject *
-property_descr_get(PyObject *self, PyObject *obj, PyObject *type)
+static void
+property_missing_error(propertyobject *prop, PyValueBorrow obj,
+                       const char *action)
 {
-    if (obj == NULL || obj == Py_None) {
-        return Py_NewRef(self);
+    PyValue name = PyValue_NULL;
+    int name_status = property_name(prop, &name);
+    if (name_status < 0) {
+        return;
     }
-
-    propertyobject *gs = (propertyobject *)self;
-    if (gs->prop_get == NULL) {
-        PyObject *propname;
-        if (property_name(gs, &propname) < 0) {
-            return NULL;
-        }
-        PyObject *qualname = PyType_GetQualName(Py_TYPE(obj));
-        if (propname != NULL && qualname != NULL) {
-            PyErr_Format(PyExc_AttributeError,
-                         "property %R of %R object has no getter",
-                         propname,
-                         qualname);
-        }
-        else if (qualname != NULL) {
-            PyErr_Format(PyExc_AttributeError,
-                         "property of %R object has no getter",
-                         qualname);
-        } else {
-            PyErr_SetString(PyExc_AttributeError,
-                            "property has no getter");
-        }
-        Py_XDECREF(propname);
-        Py_XDECREF(qualname);
-        return NULL;
+    PyObject *name_repr = name_status ? _PyValue_Repr(name) : NULL;
+    PyValue_XCLOSE(name);
+    if (name_status && name_repr == NULL) {
+        return;
     }
+    PyObject *qualname = PyValue_IsNull(obj) ? NULL :
+        PyType_GetQualName(PyValue_TYPE(obj));
+    if (!PyValue_IsNull(obj) && qualname == NULL) {
+        Py_XDECREF(name_repr);
+        return;
+    }
+    if (name_repr != NULL && qualname != NULL) {
+        PyErr_Format(PyExc_AttributeError, "property %U of %R object has no %s",
+                     name_repr, qualname, action);
+    }
+    else if (qualname != NULL) {
+        PyErr_Format(PyExc_AttributeError, "property of %R object has no %s",
+                     qualname, action);
+    }
+    else {
+        PyErr_Format(PyExc_AttributeError, "property has no %s", action);
+    }
+    Py_XDECREF(name_repr);
+    Py_XDECREF(qualname);
+}
 
-    return PyObject_CallOneArg(gs->prop_get, obj);
+static PyValue
+property_descr_get_value(PyObject *self, PyValueBorrow obj, PyObject *type)
+{
+    propertyobject *prop = (propertyobject *)self;
+    if (PyValue_IsNull(obj) || PyValue_IsNone(obj)) {
+        return PyValue_FromObjectSteal(Py_NewRef(self));
+    }
+    PyValue getter = PyValue_IsNull(prop->prop_get) ? PyValue_NULL :
+        PyValue_DUP(prop->prop_get);
+    if (PyValue_IsNull(getter)) {
+        property_missing_error(prop, obj, "getter");
+        return PyValue_NULL;
+    }
+    PyValue args[1] = {PyValue_DUP(obj)};
+    PyValue result = _PyValue_VectorcallTstate(_PyThreadState_GET(), getter,
+                                               args, 1, NULL);
+    PyValue_CLOSE(args[0]);
+    PyValue_CLOSE(getter);
+    return result;
 }
 
 static int
-property_descr_set(PyObject *self, PyObject *obj, PyObject *value)
+property_descr_set_value(PyObject *self, PyValueBorrow obj,
+                         PyValueBorrow value)
 {
-    propertyobject *gs = (propertyobject *)self;
-    PyObject *func, *res;
-
-    if (value == NULL) {
-        func = gs->prop_del;
-    }
-    else {
-        func = gs->prop_set;
-    }
-
-    if (func == NULL) {
-        PyObject *propname;
-        if (property_name(gs, &propname) < 0) {
-            return -1;
-        }
-        PyObject *qualname = NULL;
-        if (obj != NULL) {
-            qualname = PyType_GetQualName(Py_TYPE(obj));
-        }
-        if (propname != NULL && qualname != NULL) {
-            PyErr_Format(PyExc_AttributeError,
-                        value == NULL ?
-                        "property %R of %R object has no deleter" :
-                        "property %R of %R object has no setter",
-                        propname,
-                        qualname);
-        }
-        else if (qualname != NULL) {
-            PyErr_Format(PyExc_AttributeError,
-                            value == NULL ?
-                            "property of %R object has no deleter" :
-                            "property of %R object has no setter",
-                            qualname);
-        }
-        else {
-            PyErr_SetString(PyExc_AttributeError,
-                         value == NULL ?
-                         "property has no deleter" :
-                         "property has no setter");
-        }
-        Py_XDECREF(propname);
-        Py_XDECREF(qualname);
+    propertyobject *prop = (propertyobject *)self;
+    int deleting = PyValue_IsNull(value);
+    PyValue stored_func = deleting ? prop->prop_del : prop->prop_set;
+    PyValue func = PyValue_IsNull(stored_func) ? PyValue_NULL :
+        PyValue_DUP(stored_func);
+    if (PyValue_IsNull(func)) {
+        property_missing_error(prop, obj, deleting ? "deleter" : "setter");
         return -1;
     }
-
-    if (value == NULL) {
-        res = PyObject_CallOneArg(func, obj);
+    PyValue args[2] = {PyValue_IsNull(obj) ? PyValue_NULL : PyValue_DUP(obj),
+                       PyValue_NULL};
+    Py_ssize_t nargs = 1;
+    if (!deleting) {
+        args[1] = PyValue_DUP(value);
+        nargs = 2;
+        if (PyValue_IsObject(func)) {
+            EVAL_CALL_STAT_INC_IF_FUNCTION(EVAL_CALL_API,
+                                           PyValue_AsKnownObjectBorrow(func));
+        }
     }
-    else {
-        EVAL_CALL_STAT_INC_IF_FUNCTION(EVAL_CALL_API, func);
-        PyObject *args[] = { obj, value };
-        res = PyObject_Vectorcall(func, args, 2, NULL);
-    }
-
-    if (res == NULL) {
+    PyValue result = _PyValue_VectorcallTstate(_PyThreadState_GET(), func,
+                                               args, nargs, NULL);
+    PyValue_CLOSE(args[0]);
+    PyValue_XCLOSE(args[1]);
+    PyValue_CLOSE(func);
+    if (PyValue_IsNull(result)) {
         return -1;
     }
-
-    Py_DECREF(res);
+    PyValue_CLOSE(result);
     return 0;
 }
 
-static PyObject *
-property_copy(PyObject *old, PyObject *get, PyObject *set, PyObject *del)
+Py_VALUE_ENTRY static PyObject *
+property_descr_get(PyObject *self, PyObject *obj, PyObject *type)
 {
-    propertyobject *pold = (propertyobject *)old;
-    PyObject *new, *type, *doc;
-
-    type = PyObject_Type(old);
-    if (type == NULL)
-        return NULL;
-
-    if (get == NULL || get == Py_None) {
-        get = pold->prop_get ? pold->prop_get : Py_None;
-    }
-    if (set == NULL || set == Py_None) {
-        set = pold->prop_set ? pold->prop_set : Py_None;
-    }
-    if (del == NULL || del == Py_None) {
-        del = pold->prop_del ? pold->prop_del : Py_None;
-    }
-    if (pold->getter_doc && get != Py_None) {
-        /* make _init use __doc__ from getter */
-        doc = Py_None;
-    }
-    else {
-        doc = pold->prop_doc ? pold->prop_doc : Py_None;
-    }
-
-    new =  PyObject_CallFunctionObjArgs(type, get, set, del, doc, NULL);
-    Py_DECREF(type);
-    if (new == NULL)
-        return NULL;
-
-    if (PyObject_TypeCheck((new), &PyProperty_Type)) {
-        Py_XSETREF(((propertyobject *) new)->prop_name, Py_XNewRef(pold->prop_name));
-    }
-    return new;
+    PyValue value = obj == NULL ? PyValue_NULL :
+        PyValue_FromObjectSteal(Py_NewRef(obj));
+    PyValue result = property_descr_get_value(self, PyValue_Borrow(value),
+                                              type);
+    PyValue_XCLOSE(value);
+    return _PyValue_THUNK_EXIT(result, BOX_SITE_ATTRIBUTE);
 }
 
-/* The new reference that a property field stores for a constructor
-   argument: NULL for None (or a missing argument), else the argument's
-   object, boxed if it is an inline value. Returns -1 if boxing fails. */
-static int
-property_field_object(PyValueBorrow arg, PyObject **field)
+Py_VALUE_ENTRY static int
+property_descr_set(PyObject *self, PyObject *obj, PyObject *value)
 {
-    *field = NULL;
-    if (PyValue_IsNull(arg) || PyValue_IsNone(arg)) {
-        return 0;
+    PyValue obj_value = obj == NULL ? PyValue_NULL :
+        PyValue_FromObjectSteal(Py_NewRef(obj));
+    PyValue field_value = value == NULL ? PyValue_NULL :
+        PyValue_FromObjectSteal(Py_NewRef(value));
+    int result = property_descr_set_value(self, PyValue_Borrow(obj_value),
+                                          PyValue_Borrow(field_value));
+    PyValue_XCLOSE(obj_value);
+    PyValue_XCLOSE(field_value);
+    return result;
+}
+
+static PyValue
+property_copy(PyObject *old, PyValueBorrow get, PyValueBorrow set,
+              PyValueBorrow del)
+{
+    propertyobject *pold = (propertyobject *)old;
+    /* Keep all source fields alive across the subclass constructor callback. */
+    PyValue old_get = PyValue_IsNull(pold->prop_get) ? PyValue_NULL :
+        PyValue_DUP(pold->prop_get);
+    PyValue old_set = PyValue_IsNull(pold->prop_set) ? PyValue_NULL :
+        PyValue_DUP(pold->prop_set);
+    PyValue old_del = PyValue_IsNull(pold->prop_del) ? PyValue_NULL :
+        PyValue_DUP(pold->prop_del);
+    PyValue old_doc = PyValue_IsNull(pold->prop_doc) ? PyValue_NULL :
+        PyValue_DUP(pold->prop_doc);
+    PyValue old_name = PyValue_IsNull(pold->prop_name) ? PyValue_NULL :
+        PyValue_DUP(pold->prop_name);
+    int getter_doc = pold->getter_doc;
+    PyObject *type_obj = PyObject_Type(old);
+    if (type_obj == NULL) {
+        goto error;
     }
-    *field = _PyValue_AsObjectAt(arg, BOX_SITE_FIELD);
-    return *field == NULL ? -1 : 0;
+    PyValue type = PyValue_FromObjectSteal(type_obj);
+    PyValue args[4];
+    PyValue fields[3] = {old_get, old_set, old_del};
+    for (int i = 0; i < 3; i++) {
+        PyValueBorrow requested = i == 0 ? get : (i == 1 ? set : del);
+        if (!PyValue_IsNull(requested) && !PyValue_IsNone(requested)) {
+            args[i] = PyValue_DUP(requested);
+        }
+        else if (!PyValue_IsNull(fields[i])) {
+            args[i] = PyValue_DUP(fields[i]);
+        }
+        else {
+            args[i] = PyValue_None;
+        }
+    }
+    if (getter_doc && !PyValue_IsNone(args[0])) {
+        args[3] = PyValue_None;
+    }
+    else if (!PyValue_IsNull(old_doc)) {
+        args[3] = PyValue_DUP(old_doc);
+    }
+    else {
+        args[3] = PyValue_None;
+    }
+    PyValue result = _PyValue_VectorcallTstate(_PyThreadState_GET(), type,
+                                               args, 4, NULL);
+    for (int i = 0; i < 4; i++) {
+        PyValue_XCLOSE(args[i]);
+    }
+    PyValue_CLOSE(type);
+    if (!PyValue_IsNull(result) && PyValue_IsObject(result) &&
+        PyObject_TypeCheck(PyValue_AsKnownObjectBorrow(result),
+                           &PyProperty_Type))
+    {
+        propertyobject *new_prop = (propertyobject *)
+            PyValue_AsKnownObjectBorrow(result);
+        PyValue new_name = PyValue_IsNull(old_name) ? PyValue_NULL :
+            PyValue_DUP(old_name);
+        PyValue_XCLOSE(new_prop->prop_name);
+        new_prop->prop_name = new_name;
+    }
+    PyValue_XCLOSE(old_get);
+    PyValue_XCLOSE(old_set);
+    PyValue_XCLOSE(old_del);
+    PyValue_XCLOSE(old_doc);
+    PyValue_XCLOSE(old_name);
+    return result;
+error:
+    PyValue_XCLOSE(old_get);
+    PyValue_XCLOSE(old_set);
+    PyValue_XCLOSE(old_del);
+    PyValue_XCLOSE(old_doc);
+    PyValue_XCLOSE(old_name);
+    return PyValue_NULL;
+}
+
+/* A property field stores a language value; None and omitted arguments both
+   use the null-field sentinel. */
+static PyValue
+property_field_value(PyValueBorrow arg)
+{
+    if (PyValue_IsNull(arg) || PyValue_IsNone(arg)) {
+        return PyValue_NULL;
+    }
+    return PyValue_DUP(arg);
 }
 
 /*[clinic input]
@@ -2239,62 +2328,56 @@ property_init_impl(propertyobject *self, PyValueBorrow fget,
                    PyValueBorrow fset, PyValueBorrow fdel, PyValueBorrow doc)
 /*[clinic end generated code: output=602fb7cadd4bb99b input=dfb5dbbffc6932d5]*/
 {
-    PyObject *get = NULL, *set = NULL, *del = NULL;
-    if (property_field_object(fget, &get) < 0
-        || property_field_object(fset, &set) < 0
-        || property_field_object(fdel, &del) < 0)
-    {
-        Py_XDECREF(get);
-        Py_XDECREF(set);
-        Py_XDECREF(del);
-        return -1;
-    }
-
-    Py_XSETREF(self->prop_get, get);
-    Py_XSETREF(self->prop_set, set);
-    Py_XSETREF(self->prop_del, del);
-    Py_XSETREF(self->prop_doc, NULL);
-    Py_XSETREF(self->prop_name, NULL);
+    PyValue get = property_field_value(fget);
+    PyValue set = property_field_value(fset);
+    PyValue del = property_field_value(fdel);
+    PyValue getter_for_doc = PyValue_IsNull(get) ? PyValue_NULL :
+        PyValue_DUP(get);
+    PyValue old;
+    old = self->prop_get; self->prop_get = get; PyValue_XCLOSE(old);
+    old = self->prop_set; self->prop_set = set; PyValue_XCLOSE(old);
+    old = self->prop_del; self->prop_del = del; PyValue_XCLOSE(old);
+    old = self->prop_doc; self->prop_doc = PyValue_NULL; PyValue_XCLOSE(old);
+    old = self->prop_name; self->prop_name = PyValue_NULL; PyValue_XCLOSE(old);
 
     self->getter_doc = 0;
-    PyObject *prop_doc = NULL;
+    PyValue prop_doc = PyValue_NULL;
 
     if (!PyValue_IsNull(doc) && !PyValue_IsNone(doc)) {
-        prop_doc = _PyValue_AsObjectAt(doc, BOX_SITE_FIELD);
-        if (prop_doc == NULL) {
-            return -1;
-        }
+        prop_doc = PyValue_DUP(doc);
     }
     /* if no docstring given and the getter has one, use that one */
-    else if (get != NULL) {
-        int rc = PyObject_GetOptionalAttr(get, &_Py_ID(__doc__), &prop_doc);
-        if (rc < 0) {
-            return rc;
+    else if (!PyValue_IsNull(getter_for_doc)) {
+        _PyStatusValue attr = _PyValue_GetOptionalAttr(getter_for_doc,
+                                                       &_Py_ID(__doc__));
+        if (attr.status < 0) {
+            PyValue_CLOSE(getter_for_doc);
+            return -1;
         }
-        if (prop_doc == Py_None) {
-            prop_doc = NULL;
-            Py_DECREF(Py_None);
+        prop_doc = attr.value;
+        if (PyValue_IsNone(prop_doc)) {
+            PyValue_CLOSE(prop_doc);
+            prop_doc = PyValue_NULL;
         }
-        if (prop_doc != NULL){
+        if (!PyValue_IsNull(prop_doc)) {
             self->getter_doc = 1;
         }
     }
-
-    /* At this point `prop_doc` is either NULL or
-       a non-None object with incremented ref counter */
+    PyValue_XCLOSE(getter_for_doc);
 
     if (Py_IS_TYPE(self, &PyProperty_Type)) {
-        Py_XSETREF(self->prop_doc, prop_doc);
+        self->prop_doc = prop_doc;
     } else {
         /* If this is a property subclass, put __doc__ in the dict
            or designated slot of the subclass instance instead, otherwise
            it gets shadowed by __doc__ in the class's dict. */
 
-        if (prop_doc == NULL) {
-            prop_doc = Py_NewRef(Py_None);
+        if (PyValue_IsNull(prop_doc)) {
+            prop_doc = PyValue_None;
         }
-        int err = _PyValue_SetAttr(PyValue_FromObjectBorrow((PyObject *)self), &_Py_ID(__doc__), PyValue_FromObjectBorrow(prop_doc));
-        Py_DECREF(prop_doc);
+        int err = _PyValue_SetAttr(PyValue_FromObjectBorrow((PyObject *)self),
+                                   &_Py_ID(__doc__), prop_doc);
+        PyValue_XCLOSE(prop_doc);
         if (err < 0) {
             assert(PyErr_Occurred());
             if (!self->getter_doc &&
@@ -2318,64 +2401,100 @@ property_init_impl(propertyobject *self, PyValueBorrow fget,
     return 0;
 }
 
-static PyObject *
-property_get__name__(PyObject *op, void *Py_UNUSED(ignored))
+static PyValue
+property_get__name__(PyValueBorrow op, void *Py_UNUSED(ignored))
 {
-    propertyobject *prop = _propertyobject_CAST(op);
-    PyObject *name;
-    if (property_name(prop, &name) < 0) {
-        return NULL;
+    propertyobject *prop = _propertyobject_CAST(
+        PyValue_AsKnownObjectBorrow(op));
+    PyValue name = PyValue_NULL;
+    int status = property_name(prop, &name);
+    if (status < 0) {
+        return PyValue_NULL;
     }
-    if (name == NULL) {
+    if (status == 0) {
         PyErr_SetString(PyExc_AttributeError,
                         "'property' object has no attribute '__name__'");
+        return PyValue_NULL;
     }
     return name;
 }
 
 static int
-property_set__name__(PyObject *op, PyObject *value, void *Py_UNUSED(ignored))
+property_set__name__(PyValueBorrow op, PyValueBorrow value,
+                     void *Py_UNUSED(ignored))
 {
-    propertyobject *prop = _propertyobject_CAST(op);
-    Py_XSETREF(prop->prop_name, Py_XNewRef(value));
+    propertyobject *prop = _propertyobject_CAST(
+        PyValue_AsKnownObjectBorrow(op));
+    PyValue old = prop->prop_name;
+    prop->prop_name = PyValue_XDUP(value);
+    PyValue_XCLOSE(old);
     return 0;
 }
 
-static PyObject *
-property_get___isabstractmethod__(PyObject *op, void *closure)
+static PyValue
+property_get___isabstractmethod__(PyValueBorrow op, void *closure)
 {
-    propertyobject *prop = _propertyobject_CAST(op);
-    int res = _PyObject_IsAbstract(prop->prop_get);
-    if (res == -1) {
-        return NULL;
+    propertyobject *prop = _propertyobject_CAST(
+        PyValue_AsKnownObjectBorrow(op));
+    PyValue fields[3] = {
+        PyValue_IsNull(prop->prop_get) ? PyValue_NULL : PyValue_DUP(prop->prop_get),
+        PyValue_IsNull(prop->prop_set) ? PyValue_NULL : PyValue_DUP(prop->prop_set),
+        PyValue_IsNull(prop->prop_del) ? PyValue_NULL : PyValue_DUP(prop->prop_del),
+    };
+    for (int i = 0; i < 3; i++) {
+        if (PyValue_IsNull(fields[i]) || PyValue_IsNone(fields[i])) {
+            PyValue_XCLOSE(fields[i]);
+            fields[i] = PyValue_NULL;
+            continue;
+        }
+        _PyStatusValue attr = _PyValue_GetOptionalAttr(
+            fields[i], &_Py_ID(__isabstractmethod__));
+        if (attr.status < 0) {
+            goto error;
+        }
+        if (attr.status == 1) {
+            int truth = _PyValue_IsTrue(attr.value);
+            PyValue_CLOSE(attr.value);
+            if (truth < 0) {
+                goto error;
+            }
+            if (truth) {
+                PyValue_CLOSE(fields[i]);
+                fields[i] = PyValue_NULL;
+                for (int j = i + 1; j < 3; j++) {
+                    PyValue_XCLOSE(fields[j]);
+                    fields[j] = PyValue_NULL;
+                }
+                return PyValue_True;
+            }
+        }
+        PyValue_CLOSE(fields[i]);
+        fields[i] = PyValue_NULL;
     }
-    else if (res) {
-        Py_RETURN_TRUE;
+    return PyValue_False;
+error:
+    for (int i = 0; i < 3; i++) {
+        PyValue_XCLOSE(fields[i]);
     }
-
-    res = _PyObject_IsAbstract(prop->prop_set);
-    if (res == -1) {
-        return NULL;
-    }
-    else if (res) {
-        Py_RETURN_TRUE;
-    }
-
-    res = _PyObject_IsAbstract(prop->prop_del);
-    if (res == -1) {
-        return NULL;
-    }
-    else if (res) {
-        Py_RETURN_TRUE;
-    }
-    Py_RETURN_FALSE;
+    return PyValue_NULL;
 }
 
 static PyGetSetDef property_getsetlist[] = {
-    {"__name__", property_get__name__, property_set__name__, NULL, NULL},
-    {"__isabstractmethod__", property_get___isabstractmethod__, NULL,
-     NULL,
-     NULL},
+    _Py_VALUE_GETSET("fget", property_member_get,
+                     property_member_readonly_set, NULL,
+                     (void *)offsetof(propertyobject, prop_get)),
+    _Py_VALUE_GETSET("fset", property_member_get,
+                     property_member_readonly_set, NULL,
+                     (void *)offsetof(propertyobject, prop_set)),
+    _Py_VALUE_GETSET("fdel", property_member_get,
+                     property_member_readonly_set, NULL,
+                     (void *)offsetof(propertyobject, prop_del)),
+    _Py_VALUE_GETSET("__doc__", property_member_get, property_doc_set, NULL,
+                     (void *)offsetof(propertyobject, prop_doc)),
+    _Py_VALUE_GETSET("__name__", property_get__name__,
+                     property_set__name__, NULL, NULL),
+    _Py_VALUE_GETTER("__isabstractmethod__",
+                     property_get___isabstractmethod__, NULL, NULL),
     {NULL} /* Sentinel */
 };
 
@@ -2383,11 +2502,11 @@ static int
 property_traverse(PyObject *self, visitproc visit, void *arg)
 {
     propertyobject *pp = (propertyobject *)self;
-    Py_VISIT(pp->prop_get);
-    Py_VISIT(pp->prop_set);
-    Py_VISIT(pp->prop_del);
-    Py_VISIT(pp->prop_doc);
-    Py_VISIT(pp->prop_name);
+    _Py_VISIT_VALUE(pp->prop_get);
+    _Py_VISIT_VALUE(pp->prop_set);
+    _Py_VISIT_VALUE(pp->prop_del);
+    _Py_VISIT_VALUE(pp->prop_doc);
+    _Py_VISIT_VALUE(pp->prop_name);
     return 0;
 }
 
@@ -2395,11 +2514,11 @@ static int
 property_clear(PyObject *self)
 {
     propertyobject *pp = (propertyobject *)self;
-    Py_CLEAR(pp->prop_get);
-    Py_CLEAR(pp->prop_set);
-    Py_CLEAR(pp->prop_del);
-    Py_CLEAR(pp->prop_doc);
-    Py_CLEAR(pp->prop_name);
+    PyValue_CLEAR(pp->prop_get);
+    PyValue_CLEAR(pp->prop_set);
+    PyValue_CLEAR(pp->prop_del);
+    PyValue_CLEAR(pp->prop_doc);
+    PyValue_CLEAR(pp->prop_name);
     return 0;
 }
 
@@ -2482,7 +2601,7 @@ PyTypeObject PyProperty_Type = {
     0,                                          /* tp_iter */
     0,                                          /* tp_iternext */
     property_methods,                           /* tp_methods */
-    property_members,                           /* tp_members */
+    0,                                          /* tp_members */
     property_getsetlist,                        /* tp_getset */
     0,                                          /* tp_base */
     0,                                          /* tp_dict */
@@ -2493,4 +2612,10 @@ PyTypeObject PyProperty_Type = {
     PyType_GenericAlloc,                        /* tp_alloc */
     PyType_GenericNew,                          /* tp_new */
     PyObject_GC_Del,                            /* tp_free */
+    .tp_value = {
+        .descr_get = _Py_VALUE_SLOT_INIT(descr_get,
+                                         property_descr_get_value),
+        .descr_set = _Py_VALUE_SLOT_INIT(descr_set,
+                                         property_descr_set_value),
+    },
 };

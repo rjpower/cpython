@@ -1339,6 +1339,15 @@ span_as_byte_array(_PyLongSpan a,
 }
 
 int
+_PyLong_ValueAsByteArray(PyValueBorrow value, unsigned char *bytes, size_t n,
+                         int little_endian, int is_signed, int with_exceptions)
+{
+    digit digits[_PyLong_WORD_DIGITS];
+    return span_as_byte_array(_PyLong_SpanOfValue(value, digits), bytes, n,
+                              little_endian, is_signed, with_exceptions);
+}
+
+int
 _PyLong_AsByteArray(PyLongObject* v,
                     unsigned char* bytes, size_t n,
                     int little_endian, int is_signed,

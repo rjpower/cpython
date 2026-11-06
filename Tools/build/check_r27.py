@@ -666,6 +666,52 @@ def kernel_violations(data):
     return out
 
 
+def value_provider_declared(name, headers):
+    """Whether Include declares a callable value provider for an inventory row."""
+    escaped = re.escape(name)
+    direct = re.compile(
+        rf"(?m)^[ \t]*(?:PyAPI_FUNC\([^)]+\)|Py_LOCAL_INLINE\([^)]+\)|"
+        rf"static[ \t]+inline\b[^;{{}}]*?|extern\b[^;{{}}]*?)"
+        rf"\s+\(?{escaped}\)?\s*\(")
+    if any(direct.search(text) for _, text in headers):
+        return True
+
+    if name.startswith("_PyValue_InPlace"):
+        family = "INPLACE"
+        suffix = name[len("_PyValue_InPlace"):]
+        constructor = "_PyValue_InPlace##NAME"
+    elif name.startswith("_PyValue_"):
+        family = "BINARY"
+        suffix = name[len("_PyValue_"):]
+        constructor = "_PyValue_##NAME"
+    else:
+        return False
+    if re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", suffix) is None:
+        return False
+    header = next((text for path, text in headers
+                   if path.name == "pycore_value_ops.h"), "")
+    roster_name = f"_PyValue_{family}_DISPATCHERS"
+    declaration_name = f"_PyValue_DECLARE_{family}"
+
+    def macro_body(name):
+        lines = header.splitlines()
+        for i, line in enumerate(lines):
+            if line.startswith(f"#define {name}("):
+                body = [line]
+                while body[-1].rstrip().endswith("\\") and i + 1 < len(lines):
+                    i += 1
+                    body.append(lines[i])
+                return "\n".join(body)
+        return ""
+
+    roster = macro_body(roster_name)
+    declaration = macro_body(declaration_name)
+    return (f"X({suffix})" in roster
+            and "PyAPI_FUNC(PyValue)" in declaration
+            and constructor in declaration
+            and f"{roster_name}({declaration_name})" in header)
+
+
 def static_violations(cdb_path, src, ownership=None):
     """Check compiled unit markings and declarations in the ownership table."""
     src = Path(src).resolve()
@@ -694,7 +740,13 @@ def static_violations(cdb_path, src, ownership=None):
     table = Path(ownership) if ownership else src / "Tools/build/value_ownership.toml"
     try:
         inventory = tomllib.loads(table.read_text())
-        rows = inventory.get("row", []) + inventory.get("manual", [])
+        rows = []
+        for section in ("row", "manual"):
+            part = inventory.get(section, [])
+            if not isinstance(part, list):
+                out.append(f"ownership {section} section must be an array of tables")
+            else:
+                rows.extend(part)
         if inventory.get("r27_complete") is not True:
             out.append("ownership inventory is not reviewed as complete for R27")
     except (OSError, ValueError, KeyError) as exc:
@@ -704,7 +756,8 @@ def static_violations(cdb_path, src, ownership=None):
         out.append("ownership inventory is empty")
     if not check_value_api.MARKED_SLOT_FAMILIES:
         out.append("direct object-slot calls are not enforced by value API lint")
-    headers = [(p, p.read_text(errors="replace")) for p in (src / "Include").rglob("*.h")]
+    headers = [(p, check_value_api.strip_c(p.read_text(errors="replace")))
+               for p in (src / "Include").rglob("*.h")]
     if not headers:
         out.append("no headers found for ownership inventory")
     seen = set()
@@ -713,12 +766,17 @@ def static_violations(cdb_path, src, ownership=None):
             out.append(f"invalid ownership row: {row!r}")
             continue
         obj, value = row.get("object"), row.get("value")
-        if not isinstance(obj, str) or not isinstance(value, str):
+        if (not isinstance(obj, str) or
+            re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", obj) is None or
+            not isinstance(value, str) or
+            re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", value) is None):
             out.append(f"invalid ownership row: {row!r}")
             continue
         if obj in seen:
             out.append(f"duplicate ownership entry: {obj}")
         seen.add(obj)
+        if not value_provider_declared(value, headers):
+            out.append(f"{obj}: value provider {value} declaration missing")
         pattern = re.compile(
             rf"^([ \t]*)((?:(?:Py_VALUE_ENTRY|Py_VALUE_COMPAT\(\w+\))[ \t]+)?"
             rf"(?:Py_DEPRECATED\([^)]*\)\s*)?(?:PyAPI_FUNC\([^)]*\)|extern\b[^;(]*?)"

@@ -1141,16 +1141,17 @@ do_specialize_instance_load_attr(PyObject* owner, _PyInstr *instr, PyObject* nam
         case PROPERTY:
         {
             assert(Py_TYPE(descr) == &PyProperty_Type);
-            PyObject *fget = ((_PyPropertyObject *)descr)->prop_get;
-            if (fget == NULL) {
+            PyValue fget = ((_PyPropertyObject *)descr)->prop_get;
+            if (PyValue_IsNull(fget) || !PyValue_IsObject(fget)) {
                 SPECIALIZATION_FAIL(LOAD_ATTR, SPEC_FAIL_EXPECTED_ERROR);
                 return -1;
             }
-            if (!Py_IS_TYPE(fget, &PyFunction_Type)) {
+            PyObject *fget_obj = PyValue_AsKnownObjectBorrow(fget);
+            if (!Py_IS_TYPE(fget_obj, &PyFunction_Type)) {
                 SPECIALIZATION_FAIL(LOAD_ATTR, SPEC_FAIL_ATTR_PROPERTY_NOT_PY_FUNCTION);
                 return -1;
             }
-            if (!function_check_args(fget, 1, LOAD_ATTR)) {
+            if (!function_check_args(fget_obj, 1, LOAD_ATTR)) {
                 return -1;
             }
             if (oparg & 1) {
@@ -1163,19 +1164,19 @@ do_specialize_instance_load_attr(PyObject* owner, _PyInstr *instr, PyObject* nam
                 return -1;
             }
             #ifdef Py_GIL_DISABLED
-            if (!_PyObject_HasDeferredRefcount(fget)) {
+            if (!_PyObject_HasDeferredRefcount(fget_obj)) {
                 SPECIALIZATION_FAIL(LOAD_ATTR, SPEC_FAIL_ATTR_DESCR_NOT_DEFERRED);
                 return -1;
             }
             #endif
-            uint32_t func_version = function_get_version(fget, LOAD_ATTR);
+            uint32_t func_version = function_get_version(fget_obj, LOAD_ATTR);
             if (func_version == 0) {
                 return -1;
             }
             assert(tp_version != 0);
             fb->type_version = tp_version;
             fb->func_version = func_version;
-            fb->fget = fget;  /* borrowed */
+            fb->fget = fget_obj;  /* borrowed */
             specialize(instr, LOAD_ATTR_PROPERTY);
             return 0;
         }

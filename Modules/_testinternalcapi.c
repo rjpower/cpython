@@ -3351,6 +3351,27 @@ pyvalue_format(PyObject *self, PyObject *args)
     return PyUnicode_FromFormat(format, value, other);
 }
 
+static PyObject *
+pyvalue_format_inline(PyObject *self, PyObject *Py_UNUSED(args))
+{
+    return PyUnicode_FromFormat(
+        "%vR|%vS|%vA",
+        PyValue_Borrow(PyValue_FromInt64(1000)),
+        PyValue_Borrow(PyValue_FromDouble(-0.0)),
+        PyValue_Borrow(PyValue_FromInt64(1000)));
+}
+
+static PyObject *
+pyvalue_format_list_item(PyObject *self, PyObject *list)
+{
+    if (!PyList_CheckExact(list) || PyList_GET_SIZE(list) != 1) {
+        PyErr_SetString(PyExc_TypeError, "expected a one-item list");
+        return NULL;
+    }
+    PyValueBorrow value = PyList_GET_VALUE(list, 0);
+    return PyUnicode_FromFormat("%vR", value);
+}
+
 /* PyErr_Format(exception, format, value) for the canonical value of obj. */
 static PyObject *
 pyvalue_err_format(PyObject *self, PyObject *args)
@@ -4233,6 +4254,8 @@ static PyMethodDef module_functions[] = {
     {"pyvalue_from_object_known", pyvalue_from_object_known, METH_O, NULL},
     {"pyvalue_entry_null", pyvalue_entry_null, METH_NOARGS, NULL},
     {"pyvalue_format", pyvalue_format, METH_VARARGS, NULL},
+    {"pyvalue_format_inline", pyvalue_format_inline, METH_NOARGS, NULL},
+    {"pyvalue_format_list_item", pyvalue_format_list_item, METH_O, NULL},
     {"pyvalue_err_format", pyvalue_err_format, METH_VARARGS, NULL},
     {"pyvalue_as_object_index", pyvalue_as_object_index, METH_NOARGS, NULL},
     {"pyvalue_as_known_object_inline", pyvalue_as_known_object_inline, METH_O, NULL},

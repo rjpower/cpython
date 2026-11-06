@@ -443,6 +443,9 @@ PyAPI_FUNC(double) _PyValue_IntAsDouble(PyValueBorrow v);
 PyAPI_FUNC(Py_ssize_t) _PyValue_AsNativeBytes(PyValueBorrow v, void *buffer,
                                               Py_ssize_t n, int flags);
 PyAPI_FUNC(void *) _PyValue_IntAsVoidPtr(PyValueBorrow v);
+PyAPI_FUNC(int) _PyLong_ValueAsByteArray(PyValueBorrow value,
+    unsigned char *bytes, size_t n, int little_endian, int is_signed,
+    int with_exceptions);
 // PyFloat_AsDouble(): __float__, then __index__.
 PyAPI_FUNC(double) _PyValue_AsDouble(PyValueBorrow v);
 

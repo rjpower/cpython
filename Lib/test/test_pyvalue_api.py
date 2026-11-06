@@ -130,6 +130,23 @@ class ValueFormatTests(unittest.TestCase):
         with self.assertRaisesRegex(ZeroDivisionError, "repr"):
             self.format("%vR", BadRepr())
 
+    def test_inline_format_without_object_projection(self):
+        self.assertEqual(_testinternalcapi.pyvalue_format_inline(),
+                         "1000|-0.0|1000")
+
+    def test_repr_can_replace_the_borrowed_field(self):
+        items = []
+
+        class ReplacesItem:
+            def __repr__(self):
+                items.clear()
+                return "replaced"
+
+        items.append(ReplacesItem())
+        self.assertEqual(_testinternalcapi.pyvalue_format_list_item(items),
+                         "replaced")
+        self.assertEqual(items, [])
+
     def test_invalid(self):
         for fmt in ("%vd", "%vs", "%vU", "%vc", "%lvR", "%vlR", "%vV"):
             with self.subTest(fmt=fmt):

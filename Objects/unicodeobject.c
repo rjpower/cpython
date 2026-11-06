@@ -2726,16 +2726,6 @@ unicode_fromformat_write_wcstr(_PyUnicodeWriter *writer, const wchar_t *str,
    the argument is a PyValueBorrow: the caller passes PyValue_Borrow(v). */
 #define F_VALUE 6
 
-/* A new reference to the object for the value argument of %vR, %vS or
-   %vA, boxing an inline value. */
-static PyObject *
-unicode_fromformat_value_object(va_list *vargs)
-{
-    PyValueBorrow value = va_arg(*vargs, PyValueBorrow);
-    assert(!PyValue_IsNull(value));
-    return _PyValue_AsObjectAt(value, BOX_SITE_REPR);
-}
-
 static const char*
 unicode_fromformat_arg(_PyUnicodeWriter *writer,
                        const char *f, va_list *vargs)
@@ -3051,12 +3041,11 @@ unicode_fromformat_arg(_PyUnicodeWriter *writer,
     {
         PyObject *str;
         if (sizemod == F_VALUE) {
-            PyObject *obj = unicode_fromformat_value_object(vargs);
-            if (obj == NULL) {
-                return NULL;
-            }
-            str = _PyValue_Str(PyValue_FromObjectBorrow(obj));
-            Py_DECREF(obj);
+            PyValueBorrow value = va_arg(*vargs, PyValueBorrow);
+            assert(!PyValue_IsNull(value));
+            PyValue owned = PyValue_DUP(value);
+            str = _PyValue_Str(owned);
+            PyValue_CLOSE(owned);
         }
         else {
             PyObject *obj = va_arg(*vargs, PyObject *);
@@ -3077,12 +3066,11 @@ unicode_fromformat_arg(_PyUnicodeWriter *writer,
     {
         PyObject *repr;
         if (sizemod == F_VALUE) {
-            PyObject *obj = unicode_fromformat_value_object(vargs);
-            if (obj == NULL) {
-                return NULL;
-            }
-            repr = _PyValue_Repr(PyValue_FromObjectBorrow(obj));
-            Py_DECREF(obj);
+            PyValueBorrow value = va_arg(*vargs, PyValueBorrow);
+            assert(!PyValue_IsNull(value));
+            PyValue owned = PyValue_DUP(value);
+            repr = _PyValue_Repr(owned);
+            PyValue_CLOSE(owned);
         }
         else {
             PyObject *obj = va_arg(*vargs, PyObject *);
@@ -3103,12 +3091,11 @@ unicode_fromformat_arg(_PyUnicodeWriter *writer,
     {
         PyObject *ascii;
         if (sizemod == F_VALUE) {
-            PyObject *obj = unicode_fromformat_value_object(vargs);
-            if (obj == NULL) {
-                return NULL;
-            }
-            ascii = _PyValue_ASCII(PyValue_FromObjectBorrow(obj));
-            Py_DECREF(obj);
+            PyValueBorrow value = va_arg(*vargs, PyValueBorrow);
+            assert(!PyValue_IsNull(value));
+            PyValue owned = PyValue_DUP(value);
+            ascii = _PyValue_ASCII(owned);
+            PyValue_CLOSE(owned);
         }
         else {
             PyObject *obj = va_arg(*vargs, PyObject *);

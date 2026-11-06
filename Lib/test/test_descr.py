@@ -2600,6 +2600,9 @@ class ClassPropertiesAndMethods(unittest.TestCase):
                 self.fail("expected AttributeError from trying to set readonly %r "
                           "attr on a property" % attr)
 
+            with self.assertRaisesRegex(AttributeError, "readonly attribute"):
+                delattr(raw, attr)
+
         raw.__doc__ = 42
         self.assertEqual(raw.__doc__, 42)
 

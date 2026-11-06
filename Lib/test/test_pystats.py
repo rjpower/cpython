@@ -363,6 +363,19 @@ class TestPyStats(unittest.TestCase):
                          int(stats['Object inline int boxes'])
                          + int(stats['Object inline float boxes']))
 
+    def test_inline_value_format_does_not_box(self):
+        code = """
+        import _testinternalcapi
+        def func_start():
+            sys._stats_clear()
+            assert _testinternalcapi.pyvalue_format_inline() == '1000|-0.0|1000'
+            sys._stats_off()
+        """
+        stats = run_test_code_stats(code, args=['-X', 'pystats'])
+        self.assertEqual(int(stats['Boxing by site (repr)']), 0)
+        self.assertEqual(int(stats['Object inline int boxes']), 0)
+        self.assertEqual(int(stats['Object inline float boxes']), 0)
+
     def test_box_kinds(self):
         """Check the box count by kind (pyjit/design/proposals/
         value-api-v2a0.md, section 4.7).

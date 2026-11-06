@@ -10,11 +10,11 @@ extern "C" {
 
 typedef struct {
     PyObject_HEAD
-    PyObject *prop_get;
-    PyObject *prop_set;
-    PyObject *prop_del;
-    PyObject *prop_doc;
-    PyObject *prop_name;
+    PyValue prop_get;
+    PyValue prop_set;
+    PyValue prop_del;
+    PyValue prop_doc;
+    PyValue prop_name;
     int getter_doc;
 } propertyobject;
 

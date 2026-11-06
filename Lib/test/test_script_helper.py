@@ -113,6 +113,19 @@ class TestScriptHelperEnvironment(unittest.TestCase):
             self.assertIn('-E', check_call_command)
 
     @mock.patch('subprocess.check_call')
+    def test_environment_probe_counts_in_stats_run(self, mock_check_call):
+        stats_flags = ['-X', 'pystats', '-X', 'pystats_dir=/tmp/stats']
+        with (mock.patch.dict(os.environ),
+              mock.patch.object(script_helper, '_pystats_options',
+                                return_value=stats_flags) as mock_options):
+            os.environ.pop('PYTHONHOME', None)
+            self.assertFalse(script_helper.interpreter_requires_environment())
+        mock_options.assert_called_once_with(True)
+        self.assertEqual(mock_check_call.call_args.args[0],
+                         [sys.executable, '-E', *stats_flags,
+                          '-c', 'import sys; sys.exit(0)'])
+
+    @mock.patch('subprocess.check_call')
     def test_interpreter_requires_environment_with_pythonhome(self, mock_check_call):
         with mock.patch.dict(os.environ):
             os.environ['PYTHONHOME'] = 'MockedHome'

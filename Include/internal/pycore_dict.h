@@ -234,6 +234,7 @@ Py_VALUE_COMPAT(_PyDict_SetValue_Take2_KnownHash)
 PyAPI_FUNC(int) _PyDict_SetItem_Take2_KnownHash(PyDictObject *op, PyObject *key, PyObject *value, Py_hash_t hash);
 // Exported for external JIT support
 PyAPI_FUNC(int) _PyDict_SetItem_LockHeld(PyDictObject *dict, PyObject *name, PyObject *value);
+PyAPI_FUNC(int) _PyDict_SetValue_LockHeld(PyDictObject *dict, PyObject *name, PyValueBorrow value);
 // Export for '_asyncio' shared extension
 PyAPI_FUNC(int) _PyDict_SetItem_KnownHash_LockHeld(PyDictObject *mp, PyObject *key,
                                                    PyObject *value, Py_hash_t hash);

@@ -7268,23 +7268,23 @@ _Py_type_getattro(PyObject *type, PyObject *name)
 // the type versions.
 static int
 type_update_dict(PyTypeObject *type, PyDictObject *dict, PyObject *name,
-                 PyObject *value, PyObject **old_value)
+                 PyValueBorrow value, PyValue *old_value)
 {
     assert(_PyInterpreterState_GET()->types.mutation_depth != 0);
     // The caller has invalidated the type and releases *old_value only after
     // the update, so the old value's destructor cannot observe the cache in
     // an inconsistent state.
-    int found = _PyDict_GetItemRef_Unicode_LockHeld(dict, name, old_value);
+    int found = PyDict_GetValue((PyObject *)dict, PyValue_FromObjectBorrow(name), old_value);
     if (found < 0) {
         return -1;
     }
-    if (value == NULL && found == 0) {
+    if (PyValue_IsNull(value) && found == 0) {
         PyErr_Format(PyExc_AttributeError,
                      "type object '%.50s' has no attribute '%U'", type->tp_name, name);
         _PyObject_SetAttributeErrorContext((PyObject *)type, name);
         return -1;
     }
-    return _PyDict_SetItem_LockHeld(dict, name, value);
+    return _PyDict_SetValue_LockHeld(dict, name, value);
 }
 
 static int
@@ -7317,17 +7317,18 @@ update_slot_after_setattr(PyTypeObject *type, PyObject *name)
 }
 
 static int
-type_setattro(PyObject *self, PyObject *name, PyObject *value)
+type_setattro_value(PyValueBorrow self_value, PyObject *name, PyValueBorrow value_arg)
 {
+    PyObject *self = PyValue_AsKnownObjectBorrow(self_value);
     PyTypeObject *type = PyTypeObject_CAST(self);
     Py_INCREF(type);
-    Py_XINCREF(value);
+    PyValue value = PyValue_XDUP(value_arg);
     PyObject *original_name = Py_NewRef(name);
     name = NULL;
     PyObject *dict = NULL;
     PyObject *candidate = NULL;
-    PyObject *descr = NULL;
-    PyObject *old_value = NULL;
+    PyValue descr = PyValue_NULL;
+    PyValue old_value = PyValue_NULL;
     _PyTypeMutation scope = {0};
     int res = -1;
     if (type->tp_flags & Py_TPFLAGS_IMMUTABLETYPE) {
@@ -7361,24 +7362,25 @@ type_setattro(PyObject *self, PyObject *name, PyObject *value)
     // assigned to type objects.  This is important for `dataclass.__init__`,
     // which is generated dynamically, and for descriptor scaling on
     // free-threaded builds.
-    if (value != NULL && (PyFunction_Check(value) || Py_TYPE(value)->tp_descr_get != NULL))
+    if (!PyValue_IsNull(value) && PyValue_IsObject(value) &&
+        (PyFunction_Check(PyValue_AsKnownObjectBorrow(value)) ||
+         PyValue_TYPE(value)->tp_descr_get != NULL))
     {
-        PyUnstable_Object_EnableDeferredRefcount(value);
+        PyUnstable_Object_EnableDeferredRefcount(PyValue_AsKnownObjectBorrow(value));
     }
 #endif
 
-    descr = _PyType_LookupRef(metatype, name);
-    if (descr == NULL && PyErr_Occurred()) {
-        /* Boxing an inline class attribute failed. */
+    _PyStatusValue lookup = _PyType_LookupValue(metatype, name);
+    descr = lookup.value;
+    if (PyValue_IsNull(descr) && PyErr_Occurred()) {
         goto done;
     }
-    if (descr != NULL) {
-        descrsetfunc f = Py_TYPE(descr)->tp_descr_set;
-        if (f != NULL) {
-            // A direct descriptor's actual setter owns its mutation scope.
-            res = f(descr, self, value);
-            goto done;
-        }
+    if (!PyValue_IsNull(descr) && PyValue_TYPE(descr)->tp_descr_set != NULL) {
+        // A direct descriptor's actual setter owns its mutation scope.
+        assert(PyValue_IsObject(descr));
+        res = _PyValue_DescrSet(PyValue_AsKnownObjectBorrow(descr),
+                                self_value, value);
+        goto done;
     }
     if (_PyTypeMutation_Begin(&scope, type) < 0) {
         goto done;
@@ -7402,7 +7404,7 @@ type_setattro(PyObject *self, PyObject *name, PyObject *value)
         goto done;
     }
     BEGIN_TYPE_DICT_LOCK(dict);
-    res = type_update_dict(type, (PyDictObject *)dict, name, value, &old_value);
+    res = type_update_dict(type, (PyDictObject *)dict, name, PyValue_Borrow(value), &old_value);
     assert(_PyType_CheckConsistency(type));
     if (res == 0 && is_dunder_name(name) && has_slotdef(name)) {
         res = update_slot_after_setattr(type, name);
@@ -7412,17 +7414,18 @@ type_setattro(PyObject *self, PyObject *name, PyObject *value)
 done:
     Py_CLEAR(candidate);
     Py_CLEAR(dict);
-    Py_CLEAR(descr);
+    PyValue_XCLOSE(descr);
     // Keep admission closed through delayed retirement of the displaced value.
-    _PyObject_XDecRefDelayed(old_value);
+    PyValue_XCLOSE(old_value);
     Py_CLEAR(name);
     Py_CLEAR(original_name);
-    Py_CLEAR(value);
+    PyValue_XCLOSE(value);
     Py_DECREF(type);
     _PyTypeMutation_End(&scope);
     return res;
 }
 
+_Py_VALUE_THUNK_SETATTRO(type_setattro, type_setattro_value)
 
 static void
 type_dealloc_common(PyTypeObject *type)
@@ -7957,6 +7960,7 @@ PyTypeObject PyType_Type = {
     .tp_value_vectorcall = (_Py_valuefunc)type_value_vectorcall,
     .tp_value = {
         .getattro = _Py_VALUE_SLOT_INIT(getattro, _Py_type_getattro_value),
+        .setattro = _Py_VALUE_SLOT_INIT(setattro, type_setattro_value),
         .nb_or = _Py_VALUE_SLOT_INIT(nb_or, _Py_union_type_or_value),
     },
 };

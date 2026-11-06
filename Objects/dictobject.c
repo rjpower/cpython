@@ -7133,6 +7133,26 @@ _PyDict_SetItem_LockHeld(PyDictObject *dict, PyObject *name, PyObject *value)
     }
 }
 
+/* The caller holds the type dictionary lock and supplies an exact name. */
+int
+_PyDict_SetValue_LockHeld(PyDictObject *dict, PyObject *name,
+                          PyValueBorrow value)
+{
+    ASSERT_DICT_LOCKED(dict);
+    assert(PyDict_Check(dict));
+    assert(PyUnicode_CheckExact(name));
+    if (PyValue_IsNull(value)) {
+        Py_hash_t hash = _PyObject_HashDictKey(name);
+        if (hash == -1) {
+            dict_unhashable_type((PyObject *)dict, name);
+            return -1;
+        }
+        return delvalue_knownhash_lock_held(dict, PyValue_FromObjectBorrow(name), hash);
+    }
+    return setitem_take2_lock_held(dict, PyValue_DUP(PyValue_FromObjectBorrow(name)),
+                                    PyValue_DUP(value));
+}
+
 // Called with either the object's lock or the dict's lock held
 // depending on whether or not a dict has been materialized for
 // the object.

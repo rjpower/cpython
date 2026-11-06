@@ -1,0 +1,889 @@
+diff --git a/Tools/scripts/summarize_stats.py b/Tools/scripts/summarize_stats.py
+index 053bf63e1d5..a2807d74f01 100644
+--- a/Tools/scripts/summarize_stats.py
++++ b/Tools/scripts/summarize_stats.py
+@@ -44,7 +44,98 @@
+ SOURCE_DIR = Path(__file__).parents[2]
+ 
+ 
+-TOTAL = "specialization.hit", "specialization.miss", "execution_count"
++RECORDED_EVENTS = ("hit", "miss", "deferred", "deopt")
++
++HANDLER_SPECIALIZED = 1
++HANDLER_INSTRUMENTED = 2
++HANDLER_NOFB = 16
++HANDLER_METADATA = 64
++HANDLER_DISPATCH = 128
++HANDLER_ADAPTIVE = 512
++HANDLER_FACTS = {
++    "Handler entry coverage version": "_handler_entry_coverage_version",
++    "Handler entry dispatch mode": "_handler_entry_dispatch_mode",
++    "Handler domain count": "_handler_count",
++    "Handler metadata entries": "_handler_metadata_entries",
++}
++HANDLER_CONTRACT = (*HANDLER_FACTS.values(), "_handler_metadata")
++HANDLER_FIELDS = ("handler_id", "base_id", "handler_flags")
++OPCODE_FIELD = re.compile(r"opcode\[([^]]+)\]\.(.+)")
++
++
++def _unique_dict(pairs):
++    result = {}
++    for key, value in pairs:
++        if key in result:
++            raise ValueError(f"duplicate stats key: {key}")
++        result[key] = value
++    return result
++
++
++def handler_contract(data: RawData) -> dict:
++    return {key: data[key] for key in HANDLER_CONTRACT}
++
++
++def validate_handler_data(data: RawData) -> None:
++    """Validate producer facts before aggregating or rendering counters."""
++    if any(key not in data for key in HANDLER_CONTRACT):
++        raise ValueError("missing handler coverage/domain metadata")
++    for key in HANDLER_FACTS.values():
++        if type(data[key]) is not int:
++            raise ValueError(f"invalid handler fact: {key}")
++    if data["_handler_entry_coverage_version"] != 2:
++        raise ValueError("unsupported handler entry coverage version")
++    if data["_handler_entry_dispatch_mode"] not in (0, 1):
++        raise ValueError("unsupported handler entry dispatch mode")
++    count = data["_handler_count"]
++    metadata = data["_handler_metadata"]
++    if (not 0 < count <= 1 << 16 or not isinstance(metadata, dict)
++            or len(metadata) != data["_handler_metadata_entries"]):
++        raise ValueError("invalid handler domain/metadata entry count")
++    by_id = {}
++    for name, entry in metadata.items():
++        if (not isinstance(name, str) or not name or not isinstance(entry, dict)
++                or set(entry) != set(HANDLER_FIELDS)
++                or any(type(entry[field]) is not int for field in HANDLER_FIELDS)):
++            raise ValueError(f"incomplete handler facts: {name}")
++        identity, base, flags = (entry[field] for field in HANDLER_FIELDS)
++        if (not 0 <= identity < count or identity in by_id
++                or not 0 <= base < count or flags < 0 or flags & ~1023
++                or not flags & HANDLER_METADATA):
++            raise ValueError(f"invalid handler facts: {name}")
++        if flags & HANDLER_ADAPTIVE and (
++                not flags & HANDLER_DISPATCH
++                or flags & (HANDLER_SPECIALIZED | HANDLER_INSTRUMENTED
++                            | HANDLER_NOFB)):
++            raise ValueError(f"invalid adaptive handler: {name}")
++        by_id[identity] = name
++    for name, entry in metadata.items():
++        base = by_id.get(entry["base_id"])
++        if base is None or metadata[base]["base_id"] != entry["base_id"]:
++            raise ValueError(f"invalid canonical handler base: {name}")
++    if "CACHE" not in metadata or metadata["CACHE"]["handler_id"] != 0:
++        raise ValueError("missing CACHE-0 pair sentinel")
++
++    def dispatchable(name):
++        return (name in metadata
++                and metadata[name]["handler_flags"] & HANDLER_DISPATCH)
++
++    for key, value in data.items():
++        match = OPCODE_FIELD.fullmatch(key)
++        if match is None:
++            continue
++        name, field = match.groups()
++        if name not in metadata or type(value) is not int or value < 0:
++            raise ValueError(f"invalid handler counter: {key}")
++        if field in HANDLER_FIELDS:
++            raise ValueError("handler facts must be separate from counters")
++        if field == "execution_count" and not dispatchable(name):
++            raise ValueError(f"execution counter for nondispatch handler: {name}")
++        if field.startswith("pair_count"):
++            pair = re.fullmatch(r"pair_count\[([^]]+)\]", field)
++            if (pair is None or not dispatchable(pair[1])
++                    or not (dispatchable(name) or name == "CACHE")):
++                raise ValueError(f"invalid counted-entry pair: {key}")
+ 
+ 
+ def pretty(name: str) -> str:
+@@ -65,12 +156,7 @@ def get_defines(filepath: Path, prefix: str = "SPEC_FAIL"):
+                 defines[int(val.strip())].append(name.strip())
+         return defines
+ 
+-    import opcode
+-
+     return {
+-        "_specialized_instructions": [
+-            op for op in opcode._specialized_opmap.keys() if "__" not in op  # type: ignore
+-        ],
+         "_stats_defines": get_defines(
+             Path("Include") / "cpython" / "pystats.h", "EVAL_CALL"
+         ),
+@@ -98,8 +184,8 @@ def _split_address(text: str, objects: dict[int, str]) -> tuple[str, str]:
+     return objects.get(int(index), "?"), offset
+ 
+ 
+-def _load_dump(filename: Path, stats: collections.Counter[str]) -> None:
+-    """Add one dump to stats.
++def _load_dump(filename: Path, stats: collections.Counter[str]) -> dict:
++    """Validate and add one dump to stats, returning its metadata contract.
+ 
+     Plain "key: integer" lines are summed by key. The "Box object [i]" lines
+     name the objects of this dump only, so the "Box owner (" lines are folded
+@@ -107,8 +193,11 @@ def _load_dump(filename: Path, stats: collections.Counter[str]) -> None:
+     """
+     objects: dict[int, str] = {}
+     owners: list[tuple[re.Match, int]] = []
++    raw = {}
+     with open(filename) as fd:
+         for line in fd:
++            if line.startswith("Stats process:"):
++                continue
+             if m := BOX_OBJECT_RE.match(line.strip()):
+                 objects[int(m.group(1))] = os.path.basename(m.group(2))
+                 continue
+@@ -131,7 +220,26 @@ def _load_dump(filename: Path, stats: collections.Counter[str]) -> None:
+             if m := BOX_OWNER_RE.match(key.strip()):
+                 owners.append((m, count))
+             else:
+-                stats[key.strip()] += count
++                key = key.strip()
++                if key in raw:
++                    raise ValueError(f"duplicate stats key: {key}")
++                raw[key] = count
++    data = {}
++    for source, target in HANDLER_FACTS.items():
++        if source not in raw:
++            raise ValueError(f"missing producer fact: {source}")
++        data[target] = raw.pop(source)
++    metadata = collections.defaultdict(dict)
++    for key, value in raw.items():
++        match = OPCODE_FIELD.fullmatch(key)
++        if match is not None and match[2] in HANDLER_FIELDS:
++            metadata[match[1]][match[2]] = value
++        else:
++            data[key] = value
++    data["_handler_metadata"] = dict(metadata)
++    validate_handler_data(data)
++    stats.update({key: value for key, value in data.items()
++                  if key not in HANDLER_CONTRACT})
+     for m, count in owners:
+         owner, owner_off = _split_address(m["owner"], objects)
+         at, at_off = _split_address(m["at"], objects)
+@@ -139,12 +247,15 @@ def _load_dump(filename: Path, stats: collections.Counter[str]) -> None:
+         stats[
+             f"{BOX_BY_OWNER}{m['kind']}|{m['site']}|{owner}|{owner_off}|{at}|{at_off}"
+         ] += count
++    return handler_contract(data)
+ 
+ 
+ def load_raw_data(input: Path) -> RawData:
+     if input.is_file():
+         with open(input, "r") as fd:
+-            data = json.load(fd)
++            data = json.load(fd, object_pairs_hook=_unique_dict)
++
++        validate_handler_data(data)
+ 
+         data["_stats_defines"] = {int(k): v for k, v in data["_stats_defines"].items()}
+         data["_defines"] = {int(k): v for k, v in data["_defines"].items()}
+@@ -153,15 +264,23 @@ def load_raw_data(input: Path) -> RawData:
+ 
+     elif input.is_dir():
+         stats = collections.Counter[str]()
++        contract = None
+ 
+         for filename in sorted(input.iterdir()):
+             # The directory also holds .run, .spawn, build-ids and objects/.
+             if filename.suffix != ".txt" or not filename.is_file():
+                 continue
+-            _load_dump(filename, stats)
++            facts = _load_dump(filename, stats)
++            if contract is None:
++                contract = facts
++            elif contract != facts:
++                raise ValueError("handler metadata/coverage/mode differs within cohort")
+             stats["__nfiles__"] += 1
+ 
++        if contract is None:
++            raise ValueError("empty stats directory")
+         data = dict(stats)
++        data.update(contract)
+         data.update(_load_metadata_from_source())
+         return data
+ 
+@@ -170,6 +289,7 @@ def load_raw_data(input: Path) -> RawData:
+ 
+ 
+ def save_raw_data(data: RawData, json_output: TextIO):
++    validate_handler_data(data)
+     json.dump(data, json_output)
+ 
+ 
+@@ -237,10 +357,10 @@ class OpcodeStats:
+     instructions (with prefix "opcode").
+     """
+ 
+-    def __init__(self, data: dict[str, Any], defines, specialized_instructions):
++    def __init__(self, data: dict[str, Any], defines, metadata):
+         self._data = data
+         self._defines = defines
+-        self._specialized_instructions = specialized_instructions
++        self._metadata = metadata
+ 
+     def get_opcode_names(self) -> KeysView[str]:
+         return self._data.keys()
+@@ -257,16 +377,16 @@ def get_pair_counts(self) -> dict[tuple[str, str], int]:
+     def get_total_execution_count(self) -> int:
+         return sum(x.get("execution_count", 0) for x in self._data.values())
+ 
+-    def get_execution_counts(self) -> dict[str, tuple[int, int]]:
+-        counts = {}
+-        for name, opcode_stat in self._data.items():
+-            if "execution_count" in opcode_stat:
+-                count = opcode_stat["execution_count"]
+-                miss = 0
+-                if "specializable" not in opcode_stat:
+-                    miss = opcode_stat.get("specialization.miss", 0)
+-                counts[name] = (count, miss)
+-        return counts
++    def get_execution_counts(self) -> dict[str, int]:
++        return {name: entry["execution_count"] for name, entry in self._data.items()
++                if "execution_count" in entry}
++
++    def get_family_execution_counts(self) -> dict[str, int]:
++        names = {entry["handler_id"]: name for name, entry in self._metadata.items()}
++        counts = collections.Counter()
++        for name, count in self.get_execution_counts().items():
++            counts[names[self._metadata[name]["base_id"]]] += count
++        return dict(counts)
+ 
+     @functools.cache
+     def _get_pred_succ(
+@@ -294,33 +414,13 @@ def get_successors(self, opcode: str) -> collections.Counter[str]:
+         return self._get_pred_succ()[1][opcode]
+ 
+     def _get_stats_for_opcode(self, opcode: str) -> dict[str, int]:
+-        return self._data[opcode]
+-
+-    def get_specialization_total(self, opcode: str) -> int:
+-        family_stats = self._get_stats_for_opcode(opcode)
+-        return sum(family_stats.get(kind, 0) for kind in TOTAL)
++        return self._data.get(opcode, {})
+ 
+     def get_specialization_counts(self, opcode: str) -> dict[str, int]:
+         family_stats = self._get_stats_for_opcode(opcode)
+ 
+-        result = {}
+-        for key, value in sorted(family_stats.items()):
+-            if key.startswith("specialization."):
+-                label = key[len("specialization.") :]
+-                if label in ("success", "failure") or label.startswith("failure_kinds"):
+-                    continue
+-            elif key in (
+-                "execution_count",
+-                "specializable",
+-                # The instruction's boxes (BOX_STAT_INC), not an outcome.
+-                "boxes",
+-            ) or key.startswith("pair"):
+-                continue
+-            else:
+-                label = key
+-            result[label] = value
+-
+-        return result
++        return {event: family_stats.get("specialization." + event, 0)
++                for event in RECORDED_EVENTS}
+ 
+     def get_specialization_success_failure(self, opcode: str) -> dict[str, int]:
+         family_stats = self._get_stats_for_opcode(opcode)
+@@ -373,39 +473,33 @@ def key_to_index(key):
+         }
+ 
+     def is_specializable(self, opcode: str) -> bool:
+-        return "specializable" in self._get_stats_for_opcode(opcode)
+-
+-    def get_specialized_total_counts(self) -> tuple[int, int, int]:
+-        basic = 0
+-        specialized_hits = 0
+-        specialized_misses = 0
+-        not_specialized = 0
+-        for opcode, opcode_stat in self._data.items():
+-            if "execution_count" not in opcode_stat:
+-                continue
+-            count = opcode_stat["execution_count"]
+-            if "specializable" in opcode_stat:
+-                not_specialized += count
+-            elif opcode in self._specialized_instructions:
+-                miss = opcode_stat.get("specialization.miss", 0)
+-                specialized_hits += count - miss
+-                specialized_misses += miss
++        identity = self._metadata[opcode]["handler_id"]
++        return any(entry["base_id"] == identity
++                   and entry["handler_flags"] & HANDLER_ADAPTIVE
++                   for entry in self._metadata.values())
++
++    def get_entry_kind_counts(self) -> tuple[int, int, int]:
++        adaptive = specialized = other = 0
++        for name, count in self.get_execution_counts().items():
++            flags = self._metadata[name]["handler_flags"]
++            if flags & HANDLER_ADAPTIVE:
++                adaptive += count
++            elif flags & HANDLER_SPECIALIZED:
++                specialized += count
+             else:
+-                basic += count
+-        return basic, specialized_hits, specialized_misses, not_specialized
++                other += count
++        return adaptive, specialized, other
+ 
+     def get_deferred_counts(self) -> dict[str, int]:
+         return {
+             opcode: opcode_stat.get("specialization.deferred", 0)
+             for opcode, opcode_stat in self._data.items()
+-            if opcode != "RESUME"
+         }
+ 
+     def get_misses_counts(self) -> dict[str, int]:
+         return {
+             opcode: opcode_stat.get("specialization.miss", 0)
+             for opcode, opcode_stat in self._data.items()
+-            if not self.is_specializable(opcode)
+         }
+ 
+     def get_opcode_counts(self) -> dict[str, int]:
+@@ -419,6 +513,7 @@ def get_opcode_counts(self) -> dict[str, int]:
+ 
+ class Stats:
+     def __init__(self, data: RawData):
++        validate_handler_data(data)
+         self._data = data
+ 
+     def get(self, key: str) -> int:
+@@ -435,7 +530,7 @@ def get_opcode_stats(self, prefix: str) -> OpcodeStats:
+         return OpcodeStats(
+             opcode_stats,
+             self._data["_defines"],
+-            self._data["_specialized_instructions"],
++            self._data["_handler_metadata"],
+         )
+ 
+     def get_call_stats(self) -> dict[str, int]:
+@@ -687,21 +782,16 @@ def calc(stats: Stats) -> Rows:
+         total = opcode_stats.get_total_execution_count()
+         cumulative = 0
+         rows: Rows = []
+-        for opcode, (count, miss) in sorted(
++        for opcode, count in sorted(
+             counts.items(), key=itemgetter(1), reverse=True
+         ):
+             cumulative += count
+-            if miss:
+-                miss_val = Ratio(miss, count)
+-            else:
+-                miss_val = None
+             rows.append(
+                 (
+                     opcode,
+                     Count(count),
+                     Ratio(count, total),
+                     Ratio(cumulative, total),
+-                    miss_val,
+                 )
+             )
+         return rows
+@@ -710,20 +800,29 @@ def calc(stats: Stats) -> Rows:
+ 
+ 
+ def execution_count_section() -> Section:
++    def family_rows(stats: Stats) -> Rows:
++        opcodes = stats.get_opcode_stats("opcode")
++        total = opcodes.get_total_execution_count()
++        return [(name, Count(count), Ratio(count, total))
++                for name, count in sorted(opcodes.get_family_execution_counts().items(),
++                                          key=itemgetter(1), reverse=True)]
++
+     return Section(
+-        "Execution counts",
+-        "Execution counts for Tier 1 instructions.",
++        "Counted handler entries",
++        "Raw target entries and their producer-declared family totals.",
+         [
+             Table(
+-                ("Name", "Count:", "Self:", "Cumulative:", "Miss ratio:"),
++                ("Raw target", "Count:", "Self:", "Cumulative:"),
+                 calc_execution_count_table("opcode"),
+                 join_mode=JoinMode.CHANGE_ONE_COLUMN,
+-            )
++            ),
++            Table(("Family", "Count:", "Share:"), family_rows),
+         ],
+         doc="""
+-        The "miss ratio" column shows the percentage of times the instruction
+-        executed that it deoptimized. When this happens, the base unspecialized
+-        instruction is not counted.
++        Counters precede predicted labels. Normal predicted gotos bypass an
++        entry; tailcall predicted calls enter and count again. These are not
++        counts of every logical operation or instruction word. Semantic events
++        and boxes keep their original counter sites and are reported separately.
+         """,
+     )
+ 
+@@ -819,24 +918,16 @@ def iter_pre_succ_pairs_tables(base_stats: Stats, head_stats: Stats | None = Non
+ def specialization_section() -> Section:
+     def calc_specialization_table(opcode: str) -> RowCalculator:
+         def calc(stats: Stats) -> Rows:
+-            DOCS = {
+-                "deferred": 'Lists the number of "deferred" (i.e. not specialized) instructions executed.',
+-                "hit": "Specialized instructions that complete.",
+-                "miss": "Specialized instructions that deopt.",
+-                "deopt": "Specialized instructions that deopt.",
+-            }
+-
+             opcode_stats = stats.get_opcode_stats("opcode")
+-            total = opcode_stats.get_specialization_total(opcode)
+             specialization_counts = opcode_stats.get_specialization_counts(opcode)
+ 
+             return [
+                 (
+-                    Doc(label, DOCS[label]),
++                    label,
+                     Count(count),
+-                    Ratio(count, total),
+                 )
+                 for label, count in specialization_counts.items()
++                if count
+             ]
+ 
+         return calc
+@@ -880,29 +971,30 @@ def iter_specialization_tables(base_stats: Stats, head_stats: Stats | None = Non
+         names = opcode_base_stats.get_opcode_names()
+         if head_stats is not None:
+             opcode_head_stats = head_stats.get_opcode_stats("opcode")
+-            names &= opcode_head_stats.get_opcode_names()  # type: ignore
++            names |= opcode_head_stats.get_opcode_names()
+         else:
+             opcode_head_stats = None
+ 
+         for opcode in sorted(names):
+-            if not opcode_base_stats.is_specializable(opcode):
+-                continue
+-            if opcode_base_stats.get_specialization_total(opcode) == 0 and (
+-                opcode_head_stats is None
+-                or opcode_head_stats.get_specialization_total(opcode) == 0
+-            ):
++            participants = [opcode_base_stats]
++            if opcode_head_stats is not None:
++                participants.append(opcode_head_stats)
++            if not any(any(op.get_specialization_counts(opcode).values())
++                       or any(op.get_specialization_success_failure(opcode).values())
++                       or op.get_specialization_failure_total(opcode)
++                       for op in participants):
+                 continue
+             yield Section(
+                 opcode,
+-                f"specialization stats for {opcode} family",
++                f"Semantic events recorded at {opcode}",
+                 [
+                     Table(
+-                        ("Kind", "Count:", "Ratio:"),
++                        ("Recorded event", "Count:"),
+                         calc_specialization_table(opcode),
+                         JoinMode.CHANGE,
+                     ),
+                     Table(
+-                        ("Success", "Count:", "Ratio:"),
++                        ("Attempt outcome", "Count:", "Share:"),
+                         calc_specialization_success_failure_table(opcode),
+                         JoinMode.CHANGE,
+                     ),
+@@ -915,102 +1007,60 @@ def iter_specialization_tables(base_stats: Stats, head_stats: Stats | None = Non
+             )
+ 
+     return Section(
+-        "Specialization stats",
+-        "Specialization stats by family",
++        "Recorded specialization events",
++        "Original semantic counter keys; no inferred event-to-entry attribution.",
+         iter_specialization_tables,
+     )
+ 
+ 
+-def specialization_effectiveness_section() -> Section:
+-    def calc_specialization_effectiveness_table(stats: Stats) -> Rows:
++def counted_entry_kind_section() -> Section:
++    def calc_entry_kind_table(stats: Stats) -> Rows:
+         opcode_stats = stats.get_opcode_stats("opcode")
+         total = opcode_stats.get_total_execution_count()
+-
+-        (
+-            basic,
+-            specialized_hits,
+-            specialized_misses,
+-            not_specialized,
+-        ) = opcode_stats.get_specialized_total_counts()
+-
+-        return [
+-            (
+-                Doc(
+-                    "Basic",
+-                    "Instructions that are not and cannot be specialized, e.g. `LOAD_FAST`.",
+-                ),
+-                Count(basic),
+-                Ratio(basic, total),
+-            ),
+-            (
+-                Doc(
+-                    "Not specialized",
+-                    "Instructions that could be specialized but aren't, e.g. `LOAD_ATTR`, `BINARY_SLICE`.",
+-                ),
+-                Count(not_specialized),
+-                Ratio(not_specialized, total),
+-            ),
+-            (
+-                Doc(
+-                    "Specialized hits",
+-                    "Specialized instructions, e.g. `LOAD_ATTR_MODULE` that complete.",
+-                ),
+-                Count(specialized_hits),
+-                Ratio(specialized_hits, total),
+-            ),
+-            (
+-                Doc(
+-                    "Specialized misses",
+-                    "Specialized instructions, e.g. `LOAD_ATTR_MODULE` that deopt.",
+-                ),
+-                Count(specialized_misses),
+-                Ratio(specialized_misses, total),
+-            ),
+-        ]
++        if not total:
++            return []
++        counts = opcode_stats.get_entry_kind_counts()
++        assert sum(counts) == total
++        return [(name, Count(count), Ratio(count, total))
++                for name, count in zip(("Adaptive", "Specialized", "Other"), counts)]
+ 
+     def calc_deferred_by_table(stats: Stats) -> Rows:
+         opcode_stats = stats.get_opcode_stats("opcode")
+         deferred_counts = opcode_stats.get_deferred_counts()
+-        total = sum(deferred_counts.values())
+-        if total == 0:
+-            return []
+-
+         return [
+-            (name, Count(value), Ratio(value, total))
++            (name, Count(value))
+             for name, value in sorted(
+                 deferred_counts.items(), key=itemgetter(1), reverse=True
+             )[:10]
++            if value
+         ]
+ 
+     def calc_misses_by_table(stats: Stats) -> Rows:
+         opcode_stats = stats.get_opcode_stats("opcode")
+         misses_counts = opcode_stats.get_misses_counts()
+-        total = sum(misses_counts.values())
+-        if total == 0:
+-            return []
+-
+         return [
+-            (name, Count(value), Ratio(value, total))
++            (name, Count(value))
+             for name, value in sorted(
+                 misses_counts.items(), key=itemgetter(1), reverse=True
+             )[:10]
++            if value
+         ]
+ 
+     return Section(
+-        "Specialization effectiveness",
++        "Counted entries by target kind",
+         "",
+         [
+             Table(
+-                ("Instructions", "Count:", "Ratio:"),
+-                calc_specialization_effectiveness_table,
++                ("Target kind", "Count:", "Share:"),
++                calc_entry_kind_table,
+                 JoinMode.CHANGE,
+             ),
+             Section(
+                 "Deferred by instruction",
+-                "Breakdown of deferred (not specialized) instruction counts by family",
++                "Deferred events by their recorded semantic key",
+                 [
+                     Table(
+-                        ("Name", "Count:", "Ratio:"),
++                        ("Name", "Count:"),
+                         calc_deferred_by_table,
+                         JoinMode.CHANGE,
+                     )
+@@ -1018,10 +1068,10 @@ def calc_misses_by_table(stats: Stats) -> Rows:
+             ),
+             Section(
+                 "Misses by instruction",
+-                "Breakdown of misses (specialized deopts) instruction counts by family",
++                "Miss events by their recorded semantic key",
+                 [
+                     Table(
+-                        ("Name", "Count:", "Ratio:"),
++                        ("Name", "Count:"),
+                         calc_misses_by_table,
+                         JoinMode.CHANGE,
+                     )
+@@ -1029,8 +1079,10 @@ def calc_misses_by_table(stats: Stats) -> Rows:
+             ),
+         ],
+         doc="""
+-        All entries are execution counts. Should add up to the total number of
+-        Tier 1 instructions executed.
++        Adaptive, specialized and other raw entries partition the counted total.
++        A guard miss remains a specialized entry. Semantic event rows do not
++        partition executions: a guard can increment both member and family
++        miss counters, and reused truth uops retain TO_BOOL's recorded key.
+         """,
+     )
+ 
+@@ -1320,7 +1372,7 @@ def calc_rows(stats: Stats) -> Rows:
+     pair_count_section("opcode"),
+     pre_succ_pairs_section(),
+     specialization_section(),
+-    specialization_effectiveness_section(),
++    counted_entry_kind_section(),
+     call_stats_section(),
+     object_stats_section(),
+     box_stats_section(),
+@@ -1433,6 +1485,8 @@ def output_stats(inputs: list[Path], json_output=str | None):
+                 )
+             base_data = load_raw_data(Path(inputs[0]))
+             head_data = load_raw_data(Path(inputs[1]))
++            if handler_contract(base_data) != handler_contract(head_data):
++                raise ValueError("handler metadata/coverage/mode differs across cohorts")
+             base_stats = Stats(base_data)
+             head_stats = Stats(head_data)
+             output_markdown(sys.stdout, LAYOUT, base_stats, head_stats)
+diff --git a/Lib/test/test_tools/test_summarize_stats.py b/Lib/test/test_tools/test_summarize_stats.py
+new file mode 100644
+index 00000000000..1a03ce2fd65
+--- /dev/null
++++ b/Lib/test/test_tools/test_summarize_stats.py
+@@ -0,0 +1,222 @@
++"""Handler-entry reports use sampled metadata, never the host opcode table."""
++
++import copy
++import io
++import json
++from pathlib import Path
++import tempfile
++import unittest
++
++from test.test_tools import import_tool
++
++stats = import_tool("summarize_stats")
++
++
++def sample(counters=None):
++    metadata = {}
++    # Deliberately different from the reporting interpreter's opcode IDs.
++    entries = (
++        ("CACHE", 0, 0, 64),
++        ("LOAD_ATTR", 267, 267, 64 | 128 | 512),
++        ("LOAD_ATTR_INT", 268, 267, 64 | 128 | 1),
++        ("LOAD_ATTR_NOFB", 269, 267, 64 | 128 | 16),
++        ("TO_BOOL", 37, 37, 64 | 128 | 512),
++        ("POP_JUMP_IF_FALSE", 98, 98, 64 | 128 | 512),
++        ("POP_JUMP_IF_FALSE_INT", 147, 98, 64 | 128 | 1),
++        ("BINARY_OP", 10, 10, 64),
++        ("BINARY_OP_ADD", 300, 10, 64 | 128 | 512),
++        ("JUMP_FORWARD", 110, 110, 64 | 128),
++        ("IR_JUMP", 301, 110, 64 | 128 | 8),
++    )
++    for name, identity, base, flags in entries:
++        metadata[name] = dict(handler_id=identity, base_id=base, handler_flags=flags)
++    return {
++        "_handler_entry_coverage_version": 2,
++        "_handler_entry_dispatch_mode": 0,
++        "_handler_count": 302,
++        "_handler_metadata_entries": len(metadata),
++        "_handler_metadata": metadata,
++        "_defines": {}, "_stats_defines": {},
++        **(counters or {}),
++    }
++
++
++def raw_text(data):
++    lines = [f"{source} : {data[target]}" for source, target in stats.HANDLER_FACTS.items()]
++    for name, metadata in data["_handler_metadata"].items():
++        lines.extend(f"opcode[{name}].{key} : {value}" for key, value in metadata.items())
++    lines.extend(f"{key} : {value}" for key, value in data.items() if not key.startswith("_"))
++    return "\n".join(lines) + "\n"
++
++
++class HandlerEntryReportTests(unittest.TestCase):
++    def opcode_stats(self, counters):
++        return stats.Stats(sample(counters)).get_opcode_stats("opcode")
++
++    def test_family_entries_100_not_190(self):
++        opcodes = self.opcode_stats({
++            "opcode[LOAD_ATTR].execution_count": 10,
++            "opcode[LOAD_ATTR_INT].execution_count": 90,
++            "opcode[LOAD_ATTR].specialization.hit": 90,
++        })
++        self.assertEqual(opcodes.get_total_execution_count(), 100)
++        self.assertEqual(opcodes.get_family_execution_counts(), {"LOAD_ATTR": 100},
++                         "family_entries_100_not_190")
++        self.assertEqual(opcodes.get_entry_kind_counts(), (10, 90, 0))
++
++    def test_truth_hits_stay_at_recorded_key(self):
++        opcodes = self.opcode_stats({
++            "opcode[POP_JUMP_IF_FALSE].execution_count": 10,
++            "opcode[POP_JUMP_IF_FALSE_INT].execution_count": 90,
++            "opcode[TO_BOOL].specialization.hit": 90,
++        })
++        self.assertEqual(opcodes.get_family_execution_counts(), {"POP_JUMP_IF_FALSE": 100})
++        self.assertEqual(opcodes.get_specialization_counts("TO_BOOL")["hit"], 90)
++        self.assertEqual(opcodes.get_specialization_counts("POP_JUMP_IF_FALSE")["hit"], 0,
++                         "truth_hits_stay_at_recorded_key")
++
++    def test_guard_entry_remains_specialized(self):
++        opcodes = self.opcode_stats({
++            "opcode[LOAD_ATTR_INT].execution_count": 1,
++            "opcode[LOAD_ATTR_INT].specialization.miss": 1,
++            "opcode[LOAD_ATTR].specialization.miss": 1,
++        })
++        self.assertEqual(opcodes.get_entry_kind_counts(), (0, 1, 0),
++                         "guard_entry_remains_specialized")
++        self.assertEqual(opcodes.get_total_execution_count(), 1)
++        self.assertEqual(opcodes.get_misses_counts()["LOAD_ATTR"], 1)
++        self.assertEqual(opcodes.get_misses_counts()["LOAD_ATTR_INT"], 1)
++
++    def test_nofb_and_ir_entries(self):
++        opcodes = self.opcode_stats({
++            "opcode[LOAD_ATTR].execution_count": 6,
++            "opcode[LOAD_ATTR_INT].execution_count": 3,
++            "opcode[LOAD_ATTR_NOFB].execution_count": 1,
++            "opcode[IR_JUMP].execution_count": 2,
++            "opcode[CACHE].pair_count[IR_JUMP]": 1,
++        })
++        self.assertEqual(opcodes.get_entry_kind_counts(), (6, 3, 3))
++        self.assertEqual(opcodes.get_family_execution_counts(), {"LOAD_ATTR": 10, "JUMP_FORWARD": 2})
++        self.assertEqual(opcodes.get_pair_counts(), {("CACHE", "IR_JUMP"): 1})
++        self.assertTrue(opcodes.is_specializable("BINARY_OP"))
++        self.assertFalse(opcodes.is_specializable("LOAD_ATTR_NOFB"))
++
++    def test_events_whitelist_and_zero_entry_event_rendering(self):
++        data = sample({"opcode[TO_BOOL].specialization.hit": 90,
++                       "opcode[TO_BOOL].boxes": 7})
++        opcodes = stats.Stats(data).get_opcode_stats("opcode")
++        self.assertEqual(opcodes.get_specialization_counts("TO_BOOL"),
++                         dict(hit=90, miss=0, deferred=0, deopt=0))
++        out = io.StringIO()
++        stats.output_markdown(out, stats.specialization_section(), stats.Stats(data))
++        self.assertIn("TO_BOOL", out.getvalue())
++        self.assertIn(">90<", out.getvalue())
++        self.assertNotIn("boxes", out.getvalue())
++        self.assertNotIn("handler_flags", out.getvalue())
++        self.assertEqual(data["opcode[TO_BOOL].boxes"], 7)
++
++    def test_two_file_metadata_is_not_summed(self):
++        with tempfile.TemporaryDirectory() as directory:
++            root = Path(directory)
++            (root / "a.txt").write_text(
++                "Stats process: pid=1 tag=\n"
++                + raw_text(sample({"opcode[LOAD_ATTR].execution_count": 10}))
++            )
++            (root / "b.txt").write_text(raw_text(sample({"opcode[LOAD_ATTR_INT].execution_count": 90})))
++            data = stats.load_raw_data(root)
++        self.assertEqual(data["__nfiles__"], 2)
++        self.assertEqual(stats.handler_contract(data), stats.handler_contract(sample()))
++        self.assertEqual(stats.Stats(data).get_opcode_stats("opcode").get_total_execution_count(), 100)
++
++    def test_cohort_mode_conflict(self):
++        other = sample()
++        other["_handler_entry_dispatch_mode"] = 1
++        with tempfile.TemporaryDirectory() as directory:
++            root = Path(directory)
++            (root / "a.txt").write_text(raw_text(sample()))
++            (root / "b.txt").write_text(raw_text(other))
++            with self.assertRaisesRegex(ValueError, "differs within cohort"):
++                stats.load_raw_data(root)
++
++    def test_raw_missing_duplicate_and_incomplete_facts(self):
++        text = raw_text(sample())
++        variants = (text + "Handler entry coverage version : 2\n",
++                    text.replace("Handler entry dispatch mode : 0\n", ""),
++                    text.replace("opcode[LOAD_ATTR].base_id : 267\n", ""))
++        with tempfile.TemporaryDirectory() as directory:
++            path = Path(directory) / "stats"
++            for variant in variants:
++                with self.subTest(variant=variant):
++                    path.write_text(variant)
++                    with self.assertRaises(ValueError):
++                        stats._load_dump(path, stats.collections.Counter())
++
++    def test_json_roundtrip_and_duplicate_rejection(self):
++        data = sample({"opcode[BINARY_OP_ADD].execution_count": 11})
++        with tempfile.TemporaryDirectory() as directory:
++            path = Path(directory) / "stats.json"
++            with path.open("w") as output:
++                stats.save_raw_data(data, output)
++            self.assertEqual(stats.load_raw_data(path), data)
++            text = path.read_text().replace('"handler_id": 300',
++                                             '"handler_id": 300, "handler_id": 300')
++            path.write_text(text)
++            with self.assertRaisesRegex(ValueError, "duplicate"):
++                stats.load_raw_data(path)
++
++    def test_json_missing_or_corrupt_metadata(self):
++        missing_mode = sample()
++        del missing_mode["_handler_entry_dispatch_mode"]
++        corrupt = sample()
++        corrupt["_handler_metadata"]["BINARY_OP_ADD"]["handler_id"] = 500
++        with tempfile.TemporaryDirectory() as directory:
++            path = Path(directory) / "stats.json"
++            for data in (missing_mode, corrupt):
++                with self.subTest(data=data):
++                    path.write_text(json.dumps(data))
++                    with self.assertRaises(ValueError):
++                        stats.load_raw_data(path)
++
++    def test_complete_report_keeps_separate_domains(self):
++        data = sample({"opcode[LOAD_ATTR].execution_count": 10,
++                       "opcode[LOAD_ATTR_INT].execution_count": 90,
++                       "opcode[TO_BOOL].specialization.hit": 90,
++                       "opcode[LOAD_ATTR].specialization.success": 2,
++                       "opcode[LOAD_ATTR].specialization.failure": 1})
++        out = io.StringIO()
++        stats.output_markdown(out, stats.LAYOUT, stats.Stats(data))
++        report = out.getvalue()
++        self.assertIn("Counted handler entries", report)
++        self.assertIn("Recorded specialization events", report)
++        self.assertIn("Counted entries by target kind", report)
++        self.assertNotIn("Miss ratio", report)
++        self.assertNotIn("Specialized misses", report)
++
++    def test_invalid_metadata_and_execution_domains(self):
++        mutations = (
++            lambda data: data.update(_handler_entry_coverage_version=1),
++            lambda data: data["_handler_metadata"]["LOAD_ATTR"].update(base_id=299),
++            lambda data: data["_handler_metadata"]["LOAD_ATTR_INT"].update(handler_id=267),
++            lambda data: data["_handler_metadata"]["LOAD_ATTR_INT"].update(handler_flags=64 | 128 | 1 | 512),
++            lambda data: data.update({"opcode[BINARY_OP].execution_count": 1}),
++            lambda data: data.update({"opcode[CACHE].pair_count[BINARY_OP]": 1}),
++        )
++        for mutate in mutations:
++            data = copy.deepcopy(sample())
++            mutate(data)
++            with self.subTest(data=data), self.assertRaises(ValueError):
++                stats.validate_handler_data(data)
++
++    def test_comparison_rejects_mode_difference(self):
++        with tempfile.TemporaryDirectory() as directory:
++            paths = [Path(directory) / name for name in ("base.json", "head.json")]
++            for mode, path in enumerate(paths):
++                data = sample()
++                data["_handler_entry_dispatch_mode"] = mode
++                path.write_text(json.dumps(data))
++            with self.assertRaisesRegex(ValueError, "differs across cohorts"):
++                stats.output_stats(paths, None)
++
++
++if __name__ == "__main__":
++    unittest.main()

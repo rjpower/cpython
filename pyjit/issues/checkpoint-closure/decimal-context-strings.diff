@@ -1,0 +1,284 @@
+--- a/Modules/_decimal/_decimal.c
++++ b/Modules/_decimal/_decimal.c
+@@ -7607,87 +7607,115 @@
+ DecCtx_UnaryFunc(mpd_qinvert)
+ 
+ /*[clinic input]
++@value_function
+ _decimal.Context.number_class = _decimal.Context.is_normal
+ 
+ Return an indication of the class of x.
+ [clinic start generated code]*/
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
++static PyValue
+ _decimal_Context_number_class_impl(PyObject *context, PyTypeObject *cls,
+-                                   PyObject *x)
+-/*[clinic end generated code: output=c1592a23e25ba5ee input=1ead8462f1800e4e]*/
++                                   PyValueBorrow x)
++/*[clinic end generated code: output=57987194dee07760 input=c5b6fa47731d2fd5]*/
+ {
+     PyObject *a;
+     const char *cp;
+ 
+-    CONVERT_OP_RAISE(&a, x, context);
++    if (!convert_op_value(&a, x, context)) {
++        return PyValue_NULL;
++    }
+ 
+     cp = mpd_class(MPD(a), CTX(context));
+     Py_DECREF(a);
+ 
+-    return PyUnicode_FromString(cp);
++    PyObject *result = PyUnicode_FromString(cp);
++    if (result == NULL) {
++        return PyValue_NULL;
++    }
++    return PyValue_FromObjectSteal(result);
+ }
+ 
+ /*[clinic input]
++@value_function
+ _decimal.Context.to_sci_string = _decimal.Context.is_normal
+ 
+ Convert a number to a string using scientific notation.
+ [clinic start generated code]*/
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
++static PyValue
+ _decimal_Context_to_sci_string_impl(PyObject *context, PyTypeObject *cls,
+-                                    PyObject *x)
+-/*[clinic end generated code: output=092dcdef999d72da input=ed442677c66d342d]*/
++                                    PyValueBorrow x)
++/*[clinic end generated code: output=b9a029bc7b82050a input=d37807ef77428b50]*/
+ {
+     PyObject *result;
+     PyObject *a;
+     mpd_ssize_t size;
+     char *s;
+ 
+-    CONVERT_OP_RAISE(&a, x, context);
++    if (!convert_op_value(&a, x, context)) {
++        return PyValue_NULL;
++    }
+ 
+     size = mpd_to_sci_size(&s, MPD(a), CtxCaps(context));
+     Py_DECREF(a);
+     if (size < 0) {
+         PyErr_NoMemory();
+-        return NULL;
++        return PyValue_NULL;
+     }
+ 
+     result = unicode_fromascii(s, size);
+     mpd_free(s);
+ 
+-    return result;
++    if (result == NULL) {
++        return PyValue_NULL;
++    }
++    return PyValue_FromObjectSteal(result);
+ }
+ 
+ /*[clinic input]
++@value_function
+ _decimal.Context.to_eng_string = _decimal.Context.is_normal
+ 
+ Convert a number to a string, using engineering notation.
+ [clinic start generated code]*/
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
++static PyValue
+ _decimal_Context_to_eng_string_impl(PyObject *context, PyTypeObject *cls,
+-                                    PyObject *x)
+-/*[clinic end generated code: output=7fc53216c208f487 input=a574385e2e3e3bc0]*/
++                                    PyValueBorrow x)
++/*[clinic end generated code: output=d613ef22ef7ab574 input=f52c136538fdb978]*/
+ {
+     PyObject *result;
+     PyObject *a;
+     mpd_ssize_t size;
+     char *s;
+ 
+-    CONVERT_OP_RAISE(&a, x, context);
++    if (!convert_op_value(&a, x, context)) {
++        return PyValue_NULL;
++    }
+ 
+     size = mpd_to_eng_size(&s, MPD(a), CtxCaps(context));
+     Py_DECREF(a);
+     if (size < 0) {
+         PyErr_NoMemory();
+-        return NULL;
++        return PyValue_NULL;
+     }
+ 
+     result = unicode_fromascii(s, size);
+     mpd_free(s);
+ 
+-    return result;
++    if (result == NULL) {
++        return PyValue_NULL;
++    }
++    return PyValue_FromObjectSteal(result);
+ }
+ 
+ /* Functions with two decimal arguments */
+--- a/Modules/_decimal/clinic/_decimal.c.h
++++ b/Modules/_decimal/clinic/_decimal.c.h
+@@ -6296,19 +6296,28 @@
+ "--\n"
+ "\n"
+ "Return an indication of the class of x.");
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+ #define _DECIMAL_CONTEXT_NUMBER_CLASS_METHODDEF    \
+-    {"number_class", _PyCFunction_CAST(_decimal_Context_number_class), METH_METHOD|METH_FASTCALL|METH_KEYWORDS, _decimal_Context_number_class__doc__},
++    {"number_class", _PyCFunction_CAST(_decimal_Context_number_class), METH_VALUE|METH_METHOD|METH_KEYWORDS, _decimal_Context_number_class__doc__},
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
++static PyValue
+ _decimal_Context_number_class_impl(PyObject *context, PyTypeObject *cls,
+-                                   PyObject *x);
++                                   PyValueBorrow x);
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
+-_decimal_Context_number_class(PyObject *context, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
++static PyValue
++_decimal_Context_number_class(PyValueBorrow context, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+ {
+-    PyObject *return_value = NULL;
+-    PyObject *x;
++    PyValue return_value = PyValue_NULL;
++    PyValueBorrow x;
+ 
+     if (!_PyArg_NoKwnames("number_class", kwnames)) {
+         goto exit;
+@@ -6316,8 +6325,8 @@
+     if (!_PyArg_CheckPositional("number_class", nargs, 1, 1)) {
+         goto exit;
+     }
+-    x = args[0];
+-    return_value = _decimal_Context_number_class_impl(context, cls, x);
++    x = PyValue_Borrow(args[0]);
++    return_value = _decimal_Context_number_class_impl(PyValue_AsKnownObjectBorrow(context), cls, x);
+ 
+ exit:
+     return return_value;
+@@ -6328,19 +6337,28 @@
+ "--\n"
+ "\n"
+ "Convert a number to a string using scientific notation.");
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+ #define _DECIMAL_CONTEXT_TO_SCI_STRING_METHODDEF    \
+-    {"to_sci_string", _PyCFunction_CAST(_decimal_Context_to_sci_string), METH_METHOD|METH_FASTCALL|METH_KEYWORDS, _decimal_Context_to_sci_string__doc__},
++    {"to_sci_string", _PyCFunction_CAST(_decimal_Context_to_sci_string), METH_VALUE|METH_METHOD|METH_KEYWORDS, _decimal_Context_to_sci_string__doc__},
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
++static PyValue
+ _decimal_Context_to_sci_string_impl(PyObject *context, PyTypeObject *cls,
+-                                    PyObject *x);
++                                    PyValueBorrow x);
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
+-_decimal_Context_to_sci_string(PyObject *context, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
++static PyValue
++_decimal_Context_to_sci_string(PyValueBorrow context, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+ {
+-    PyObject *return_value = NULL;
+-    PyObject *x;
++    PyValue return_value = PyValue_NULL;
++    PyValueBorrow x;
+ 
+     if (!_PyArg_NoKwnames("to_sci_string", kwnames)) {
+         goto exit;
+@@ -6348,8 +6366,8 @@
+     if (!_PyArg_CheckPositional("to_sci_string", nargs, 1, 1)) {
+         goto exit;
+     }
+-    x = args[0];
+-    return_value = _decimal_Context_to_sci_string_impl(context, cls, x);
++    x = PyValue_Borrow(args[0]);
++    return_value = _decimal_Context_to_sci_string_impl(PyValue_AsKnownObjectBorrow(context), cls, x);
+ 
+ exit:
+     return return_value;
+@@ -6360,19 +6378,28 @@
+ "--\n"
+ "\n"
+ "Convert a number to a string, using engineering notation.");
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+ #define _DECIMAL_CONTEXT_TO_ENG_STRING_METHODDEF    \
+-    {"to_eng_string", _PyCFunction_CAST(_decimal_Context_to_eng_string), METH_METHOD|METH_FASTCALL|METH_KEYWORDS, _decimal_Context_to_eng_string__doc__},
++    {"to_eng_string", _PyCFunction_CAST(_decimal_Context_to_eng_string), METH_VALUE|METH_METHOD|METH_KEYWORDS, _decimal_Context_to_eng_string__doc__},
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
++static PyValue
+ _decimal_Context_to_eng_string_impl(PyObject *context, PyTypeObject *cls,
+-                                    PyObject *x);
++                                    PyValueBorrow x);
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
+-_decimal_Context_to_eng_string(PyObject *context, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
++static PyValue
++_decimal_Context_to_eng_string(PyValueBorrow context, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+ {
+-    PyObject *return_value = NULL;
+-    PyObject *x;
++    PyValue return_value = PyValue_NULL;
++    PyValueBorrow x;
+ 
+     if (!_PyArg_NoKwnames("to_eng_string", kwnames)) {
+         goto exit;
+@@ -6380,8 +6407,8 @@
+     if (!_PyArg_CheckPositional("to_eng_string", nargs, 1, 1)) {
+         goto exit;
+     }
+-    x = args[0];
+-    return_value = _decimal_Context_to_eng_string_impl(context, cls, x);
++    x = PyValue_Borrow(args[0]);
++    return_value = _decimal_Context_to_eng_string_impl(PyValue_AsKnownObjectBorrow(context), cls, x);
+ 
+ exit:
+     return return_value;
+@@ -6895,4 +6922,4 @@
+ #ifndef _DECIMAL_CONTEXT_APPLY_METHODDEF
+     #define _DECIMAL_CONTEXT_APPLY_METHODDEF
+ #endif /* !defined(_DECIMAL_CONTEXT_APPLY_METHODDEF) */
+-/*[clinic end generated code: output=85fc6c4f7534a335 input=a9049054013a1b77]*/
++/*[clinic end generated code: output=249497ac84a173e4 input=a9049054013a1b77]*/

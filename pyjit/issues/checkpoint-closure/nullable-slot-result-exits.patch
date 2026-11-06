@@ -1,0 +1,44 @@
+--- a/Modules/_lsprof.c
++++ b/Modules/_lsprof.c
+@@ -732,7 +732,7 @@
+         if (self_arg == missing) {
+             return NULL;
+         }
+-        PyObject *meth = _PyValue_AsObjectStealAt(
++        PyObject *meth = _PyValue_AsObjectResultAt(
+             _PyValue_DescrGet(callable, PyValue_FromObjectBorrow(self_arg),
+                               Py_TYPE(self_arg)),
+             BOX_SITE_ATTRIBUTE);
+--- a/Objects/odictobject.c
++++ b/Objects/odictobject.c
+@@ -1602,7 +1602,7 @@
+         PyObject *res, *cmp;
+         int eq;
+ 
+-        cmp = _PyValue_AsObjectStealAt(
++        cmp = _PyValue_AsObjectResultAt(
+             _PyValue_CallRichCompare(&PyDict_Type,
+                                      PyDict_Type.tp_richcompare,
+                                      PyValue_FromObjectBorrow(v),
+--- a/Modules/posixmodule.c
++++ b/Modules/posixmodule.c
+@@ -7606,7 +7606,7 @@
+         return NULL;
+     }
+     for (i = 0; i < *argc; i++) {
+-        PyObject* item = _PyValue_AsObjectStealAt(
++        PyObject* item = _PyValue_AsObjectResultAt(
+             _PyValue_SequenceGetItem(PyValue_FromObjectBorrow(argv), i),
+             BOX_SITE_SEQUENCE);
+         if (item == NULL)
+--- a/Modules/mathintegermodule.c
++++ b/Modules/mathintegermodule.c
+@@ -499,7 +499,7 @@
+     if (b == NULL) {
+         goto error;
+     }
+-    PyObject *cmp = _PyValue_AsObjectStealAt(
++    PyObject *cmp = _PyValue_AsObjectResultAt(
+         _PyValue_CallRichCompare(&PyLong_Type, PyLong_Type.tp_richcompare,
+                                  PyValue_FromObjectBorrow(n),
+                                  PyValue_FromObjectBorrow(b), Py_LT),

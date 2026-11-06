@@ -1,0 +1,148 @@
+diff --git a/Include/internal/pycore_dict.h b/Include/internal/pycore_dict.h
+index e24e056217c..8c63aec3373 100644
+--- a/Include/internal/pycore_dict.h
++++ b/Include/internal/pycore_dict.h
+@@ -19,6 +19,9 @@ extern "C" {
+ PyAPI_FUNC(int) _PyDict_DelItemIf(PyObject *mp, PyObject *key,
+                                   int (*predicate)(PyObject *value, void *arg),
+                                   void *arg);
++PyAPI_FUNC(int) _PyDict_DelItemIfValue(PyObject *mp, PyValueBorrow key,
++                                       int (*predicate)(PyObject *value, void *arg),
++                                       void *arg);
+ 
+ // Atomically replace an existing value if it is expected (by identity).
+ // Return 1 if replaced, 0 if absent or different, or -1 on error.
+diff --git a/Lib/test/test_weakref.py b/Lib/test/test_weakref.py
+index 6c7f09407b8..a59f3caa40a 100644
+--- a/Lib/test/test_weakref.py
++++ b/Lib/test/test_weakref.py
+@@ -4,6 +4,7 @@
+ import unittest
+ import collections
+ import weakref
++import _weakref
+ import operator
+ import contextlib
+ import copy
+@@ -113,6 +114,20 @@ def collect():
+ 
+ 
+ class ReferencesTestCase(TestBase):
++    def test_remove_dead_weakref_inline_key(self):
++        key = 123456789
++        obj = Object(key)
++        ref = weakref.ref(obj)
++        mapping = {key: ref}
++
++        _weakref._remove_dead_weakref(mapping, key)
++        self.assertIn(key, mapping)
++
++        del obj
++        gc.collect()
++        _weakref._remove_dead_weakref(mapping, key)
++        self.assertNotIn(key, mapping)
++
+ 
+     def test_basic_ref(self):
+         self.check_basic_ref(C)
+diff --git a/Modules/_weakref.c b/Modules/_weakref.c
+index fa966300b85..73ca4504a4b 100644
+--- a/Modules/_weakref.c
++++ b/Modules/_weakref.c
+@@ -3,7 +3,7 @@
+ #endif
+ #define Py_VALUE_CORE 1
+ #include "Python.h"
+-#include "pycore_dict.h"              // _PyDict_DelItemIf()
++#include "pycore_dict.h"              // _PyDict_DelItemIfValue()
+ #include "pycore_list.h"          // PyList_AppendValue()
+ #include "pycore_object.h"            // _PyObject_GET_WEAKREFS_LISTPTR()
+ #include "pycore_value.h"            // PyValue_AsKnownObjectBorrow(), _PyValue_AsObjectAt()
+@@ -74,12 +74,7 @@ _weakref__remove_dead_weakref_impl(PyObject *module, PyObject *dct,
+                                    PyValueBorrow key)
+ /*[clinic end generated code: output=d81fbf4809689aeb input=19fc91f257f96a1d]*/
+ {
+-    PyObject *keyobj = _PyValue_AsObjectAt(key, BOX_SITE_PARSER);
+-    if (keyobj == NULL) {
+-        return PyValue_NULL;
+-    }
+-    int res = _PyDict_DelItemIf(dct, keyobj, is_dead_weakref, NULL);
+-    Py_DECREF(keyobj);
++    int res = _PyDict_DelItemIfValue(dct, key, is_dead_weakref, NULL);
+     if (res < 0) {
+         return PyValue_NULL;
+     }
+diff --git a/Objects/dictobject.c b/Objects/dictobject.c
+index 68246857808..bdc52a8ba54 100644
+--- a/Objects/dictobject.c
++++ b/Objects/dictobject.c
+@@ -2669,11 +2669,11 @@ _PyDict_DelItem_KnownHash(PyObject *op, PyObject *key, Py_hash_t hash)
+ }
+ 
+ static int
+-delitemif_lock_held(PyObject *op, PyObject *key,
++delitemif_lock_held(PyObject *op, PyValueBorrow key,
+                     int (*predicate)(PyObject *value, void *arg), void *arg)
+ {
+     PyDictObject *mp = _PyAnyDict_CAST(op);
+-    PyValue query = PyValue_DUP(PyValue_FromObjectBorrow(key));
++    PyValue query = PyValue_DUP(key);
+     PyValue selected = PyValue_NULL, selected_key = PyValue_NULL;
+     PyObject *object = NULL;
+     int status = -1;
+@@ -2741,9 +2741,9 @@ delitemif_lock_held(PyObject *op, PyObject *key,
+  * which would release the per-dict mutex)
+  */
+ int
+-_PyDict_DelItemIf(PyObject *op, PyObject *key,
+-                  int (*predicate)(PyObject *value, void *arg),
+-                  void *arg)
++_PyDict_DelItemIfValue(PyObject *op, PyValueBorrow key,
++                       int (*predicate)(PyObject *value, void *arg),
++                       void *arg)
+ {
+     assert(PyDict_Check(op));
+     int res;
+@@ -2753,6 +2753,15 @@ _PyDict_DelItemIf(PyObject *op, PyObject *key,
+     return res;
+ }
+ 
++int
++_PyDict_DelItemIf(PyObject *op, PyObject *key,
++                  int (*predicate)(PyObject *value, void *arg),
++                  void *arg)
++{
++    return _PyDict_DelItemIfValue(op, PyValue_FromObjectBorrow(key),
++                                  predicate, arg);
++}
++
+ int
+ _PyDict_ReplaceItemIf(PyObject *op, PyObject *key,
+                       PyObject *expected, PyObject *replacement)
+diff --git a/Objects/structseq.c b/Objects/structseq.c
+index 2d9724da8d3..1d8a7c6ba91 100644
+--- a/Objects/structseq.c
++++ b/Objects/structseq.c
+@@ -10,6 +10,7 @@
+ #include "Python.h"
+ #include "pycore_dict.h"          // PyDict_SetValue()
+ #include "pycore_initconfig.h"    // _PyStatus_OK()
++#include "pycore_long_value.h"    // _PyValue_IntAsSsize_t()
+ #include "pycore_list.h"          // PyList_GET_VALUE()
+ #include "pycore_modsupport.h"    // _PyArg_NoPositional()
+ #include "pycore_object.h"        // _PyObject_GC_TRACK()
+@@ -45,13 +46,8 @@ get_type_attr_as_size(PyTypeObject *tp, PyObject *name)
+                      name, tp->tp_name);
+         return -1;
+     }
+-    PyObject *v = _PyValue_AsObjectAt(value, BOX_SITE_DICT);
++    Py_ssize_t size = _PyValue_IntAsSsize_t(value);
+     PyValue_CLOSE(value);
+-    if (v == NULL) {
+-        return -1;
+-    }
+-    Py_ssize_t size = PyLong_AsSsize_t(v);
+-    Py_DECREF(v);
+     return size;
+ }
+ 

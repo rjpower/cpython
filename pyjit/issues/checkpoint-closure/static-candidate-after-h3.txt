@@ -1,0 +1,378 @@
+self-test test_module_bits: 1 raw-bits finding(s), as expected
+self-test encoding_test_bits: 0 raw-bits finding(s), as expected
+self-test macro_bits: 1 raw-bits finding(s), as expected
+self-test public_macro_bits: 1 raw-bits finding(s), as expected
+self-test literal: 1 raw-bits finding(s), as expected
+self-test constants: 3 raw-bits finding(s), as expected
+self-test comments_and_strings: 0 raw-bits finding(s), as expected
+self-test unit_bits_left_to_clang_query: 0 raw-bits finding(s), as expected
+self-test unchecked_unit_bits: 1 raw-bits finding(s), as expected
+self-test value_header: 0 raw-bits finding(s), as expected
+self-test jit: 0 raw-bits finding(s), as expected
+self-test encoding_function: 1 raw-bits finding(s), as expected
+self-test test_site_outside: 1 box-text finding(s), as expected
+self-test test_site_in_test_module: 0 box-text finding(s), as expected
+self-test test_site_in_pystats: 0 box-text finding(s), as expected
+self-test test_site_in_comment: 0 box-text finding(s), as expected
+self-test test_site_in_lib_test: 0 box-text finding(s), as expected
+self-test foreign_outside: 1 box-text finding(s), as expected
+self-test foreign_in_ctypes: 0 box-text finding(s), as expected
+self-test foreign_in_value_boxes: 0 box-text finding(s), as expected
+self-test foreign_in_other_test_file: 1 box-text finding(s), as expected
+self-test for_form_outside: 1 box-text finding(s), as expected
+self-test borrow_for_outside: 2 box-text finding(s), as expected
+self-test adapter_box_outside: 1 box-text finding(s), as expected
+self-test for_form_in_call: 0 box-text finding(s), as expected
+self-test for_form_in_value_api: 0 box-text finding(s), as expected
+self-test kind_literal_outside: 1 box-text finding(s), as expected
+self-test kind_thunk_and_slot_outside: 2 box-text finding(s), as expected
+self-test kind_core_outside: 0 box-text finding(s), as expected
+self-test kind_in_borrow: 0 box-text finding(s), as expected
+self-test kind_in_comment: 0 box-text finding(s), as expected
+self-test kind_longer_name: 0 box-text finding(s), as expected
+self-test opaque_value_slots: 0 public-value finding(s), as expected
+self-test frozen_word_fields: 0 public-value finding(s), as expected
+self-test exported_value_functions: 0 public-value finding(s), as expected
+self-test typed_value_slot: 1 public-value finding(s), as expected
+self-test word_field: 1 public-value finding(s), as expected
+self-test inline_decoding: 1 public-value finding(s), as expected
+self-test inline_building: 1 public-value finding(s), as expected
+self-test alias_field: 1 public-value finding(s), as expected
+self-test alias_signature_field: 1 public-value finding(s), as expected
+self-test alias_of_alias_field: 1 public-value finding(s), as expected
+self-test integer_pun: 1 public-value finding(s), as expected
+self-test body_names_value: 1 public-value finding(s), as expected
+self-test comments_skipped: 0 public-value finding(s), as expected
+self-test extern_c_block: 0 public-value finding(s), as expected
+self-test callback_parameter: 0 public-value finding(s), as expected
+self-test file_scope_value: 3 public-value finding(s), as expected
+self-test window_read_raw: 1 window-read finding(s), as expected
+self-test window_read_borrow: 0 window-read finding(s), as expected
+self-test window_read_nested: 1 window-read finding(s), as expected
+self-test window_read_other_function: 0 window-read finding(s), as expected
+self-test thunk_in_core: 1 vectorcall-thunk finding(s), as expected
+self-test thunk_in_creator: 0 vectorcall-thunk finding(s), as expected
+self-test thunk_in_comment: 0 vectorcall-thunk finding(s), as expected
+self-test function_vectorcall_in_core: 1 vectorcall-thunk finding(s), as expected
+self-test function_vectorcall_allowed: 0 vectorcall-thunk finding(s), as expected
+self-test slot_write_after_ready: 2 slot-write finding(s), as expected
+self-test slot_write_construction: 0 slot-write finding(s), as expected
+self-test pair_table_data: 0 pair-table finding(s), as expected
+self-test pair_table_function: 1 pair-table finding(s), as expected
+self-test variadic_format: 1 variadic finding(s), as expected
+self-test variadic_pointer: 1 variadic finding(s), as expected
+self-test variadic_object_at_value_conversion: 1 variadic finding(s), as expected
+self-test variadic_owner_at_value_conversion: 1 variadic finding(s), as expected
+self-test variadic_borrow_format: 1 variadic finding(s), as expected
+self-test variadic_borrow_pointer: 1 variadic finding(s), as expected
+self-test value_conversions: 0 variadic finding(s), as expected
+self-test slot_read: 1 slot-read finding(s), as expected
+self-test slot_call_direct: 1 slot-call finding(s), as expected
+self-test slot_call_parenthesized: 1 slot-call finding(s), as expected
+self-test slot_call_cast: 1 slot-call finding(s), as expected
+self-test slot_read_comparison: 0 slot-call finding(s), as expected
+self-test slot_read_argument: 0 slot-call finding(s), as expected
+self-test slot_read_copy: 0 slot-call finding(s), as expected
+self-test raw_bits_access: 2 raw-bits finding(s), as expected
+self-test raw_bits_built: 2 raw-bits finding(s), as expected
+self-test raw_bits_casts: 4 raw-bits finding(s), as expected
+self-test raw_bits_allowed_function: 1 raw-bits finding(s), as expected
+self-test raw_bits_union: 1 raw-bits finding(s), as expected
+self-test raw_bits_union_array: 1 raw-bits finding(s), as expected
+self-test raw_bits_union_wrapped: 2 raw-bits finding(s), as expected
+self-test raw_bits_accessors: 0 raw-bits finding(s), as expected
+self-test macro_arg_cast: 1 raw-bits finding(s), as expected
+self-test macro_arg_bits: 1 raw-bits finding(s), as expected
+self-test macro_body: 0 raw-bits finding(s), as expected
+self-test macro_body_nested: 0 raw-bits finding(s), as expected
+self-test macro_body_member: 1 raw-bits finding(s), as expected
+self-test local_macro_arg_cast: 1 raw-bits finding(s), as expected
+self-test launder_word_from_bits: 1 raw-bits finding(s), as expected
+self-test launder_word_from_byte_object: 1 raw-bits finding(s), as expected
+self-test launder_bits_through_void: 1 raw-bits finding(s), as expected
+self-test launder_bits_through_char: 1 raw-bits finding(s), as expected
+self-test byte_offsets: 0 raw-bits finding(s), as expected
+self-test raw_bits_guarded_cast: 1 raw-bits finding(s), as expected
+self-test borrow_field: 4 borrow-field finding(s), as expected
+self-test home_copy: 4 home-copy finding(s), as expected
+self-test compat_body_box: 1 compat-body finding(s), as expected
+self-test compat_body_helper_box: 1 compat-body finding(s), as expected
+self-test compat_body_thunk_exit: 0 compat-body finding(s), as expected
+self-test compat_body_unmarked: 0 compat-body finding(s), as expected
+self-test entry_body_core_box: 1 compat-body finding(s), as expected
+self-test entry_body_adapter_box: 1 compat-body finding(s), as expected
+self-test entry_body_thunk: 0 compat-body finding(s), as expected
+self-test entry_body_unmarked_core_box: 0 compat-body finding(s), as expected
+self-test capture_in_unmarked: 1 compat-capture finding(s), as expected
+self-test capture_new_in_unmarked: 1 compat-capture finding(s), as expected
+self-test capture_return_address_in_unmarked: 1 compat-capture finding(s), as expected
+self-test capture_in_entry: 0 compat-capture finding(s), as expected
+self-test entry_calls_entry: 1 compat-capture finding(s), as expected
+self-test unmarked_calls_entry: 0 compat-capture finding(s), as expected
+self-test kind_literal_outside: 1 boundary-site finding(s), as expected
+self-test kind_core_outside: 0 boundary-site finding(s), as expected
+self-test kind_thunk_macro_outside: 0 boundary-site finding(s), as expected
+self-test unavailable_core: rejected, as expected
+self-test unavailable_module: compiled, as expected
+self-test unavailable_numbers: rejected, as expected
+self-test available_numbers_module: compiled, as expected
+self-test borrow_stored_to_owner: rejected, as expected
+self-test borrow_closed: rejected, as expected
+self-test bits_read: rejected, as expected
+self-test closer_as_reader: rejected, as expected
+self-test borrow_address_as_owner: rejected, as expected
+self-test borrow_cleared: rejected, as expected
+self-test borrow_stored_to_dst: rejected, as expected
+self-test borrow_element_stored: rejected, as expected
+self-test borrow_taken_by_dict: rejected, as expected
+self-test borrow_returned_as_owner: rejected, as expected
+self-test readers: compiled, as expected
+Include/internal/pycore_abstract.h:16:37: note: [slot-read] read of nb_index (number family)
+Include/internal/pycore_cell.h:28:5: note: [home-copy] a PyValue local copied from a home: a PyValueBorrow unless the home is stored afterwards
+Include/internal/pycore_interpframe.h:184:5: note: [home-copy] a PyValue local copied from a home: a PyValueBorrow unless the home is stored afterwards
+Include/internal/pycore_interpframe.h:202:9: note: [home-copy] a PyValue local copied from a home: a PyValueBorrow unless the home is stored afterwards
+Include/internal/pycore_slots_generated.h:267:27: note: [slot-read] read of mp_subscript (subscript family)
+Include/internal/pycore_slots_generated.h:270:27: note: [slot-read] read of nb_absolute (number family)
+Include/internal/pycore_slots_generated.h:273:27: note: [slot-read] read of nb_add (number family)
+Include/internal/pycore_slots_generated.h:276:27: note: [slot-read] read of nb_and (number family)
+Include/internal/pycore_slots_generated.h:279:27: note: [slot-read] read of nb_bool (number family)
+Include/internal/pycore_slots_generated.h:282:27: note: [slot-read] read of nb_divmod (number family)
+Include/internal/pycore_slots_generated.h:285:27: note: [slot-read] read of nb_float (number family)
+Include/internal/pycore_slots_generated.h:288:27: note: [slot-read] read of nb_floor_divide (number family)
+Include/internal/pycore_slots_generated.h:291:27: note: [slot-read] read of nb_index (number family)
+Include/internal/pycore_slots_generated.h:294:27: note: [slot-read] read of nb_inplace_add (number family)
+Include/internal/pycore_slots_generated.h:297:27: note: [slot-read] read of nb_inplace_and (number family)
+Include/internal/pycore_slots_generated.h:300:27: note: [slot-read] read of nb_inplace_floor_divide (number family)
+Include/internal/pycore_slots_generated.h:303:27: note: [slot-read] read of nb_inplace_lshift (number family)
+Include/internal/pycore_slots_generated.h:306:27: note: [slot-read] read of nb_inplace_multiply (number family)
+Include/internal/pycore_slots_generated.h:309:27: note: [slot-read] read of nb_inplace_or (number family)
+Include/internal/pycore_slots_generated.h:312:27: note: [slot-read] read of nb_inplace_power (number family)
+Include/internal/pycore_slots_generated.h:315:27: note: [slot-read] read of nb_inplace_remainder (number family)
+Include/internal/pycore_slots_generated.h:318:27: note: [slot-read] read of nb_inplace_rshift (number family)
+Include/internal/pycore_slots_generated.h:321:27: note: [slot-read] read of nb_inplace_subtract (number family)
+Include/internal/pycore_slots_generated.h:324:27: note: [slot-read] read of nb_inplace_true_divide (number family)
+Include/internal/pycore_slots_generated.h:327:27: note: [slot-read] read of nb_inplace_xor (number family)
+Include/internal/pycore_slots_generated.h:330:27: note: [slot-read] read of nb_int (number family)
+Include/internal/pycore_slots_generated.h:333:27: note: [slot-read] read of nb_invert (number family)
+Include/internal/pycore_slots_generated.h:336:27: note: [slot-read] read of nb_lshift (number family)
+Include/internal/pycore_slots_generated.h:339:27: note: [slot-read] read of nb_multiply (number family)
+Include/internal/pycore_slots_generated.h:342:27: note: [slot-read] read of nb_negative (number family)
+Include/internal/pycore_slots_generated.h:345:27: note: [slot-read] read of nb_or (number family)
+Include/internal/pycore_slots_generated.h:348:27: note: [slot-read] read of nb_positive (number family)
+Include/internal/pycore_slots_generated.h:351:27: note: [slot-read] read of nb_power (number family)
+Include/internal/pycore_slots_generated.h:354:27: note: [slot-read] read of nb_remainder (number family)
+Include/internal/pycore_slots_generated.h:357:27: note: [slot-read] read of nb_rshift (number family)
+Include/internal/pycore_slots_generated.h:360:27: note: [slot-read] read of nb_subtract (number family)
+Include/internal/pycore_slots_generated.h:363:27: note: [slot-read] read of nb_true_divide (number family)
+Include/internal/pycore_slots_generated.h:366:27: note: [slot-read] read of nb_xor (number family)
+Include/internal/pycore_slots_generated.h:369:27: note: [slot-read] read of sq_ass_item (subscript family)
+Include/internal/pycore_slots_generated.h:375:27: note: [slot-read] read of sq_contains (subscript family)
+Include/internal/pycore_slots_generated.h:384:27: note: [slot-read] read of sq_item (subscript family)
+Include/internal/pycore_slots_generated.h:398:27: note: [slot-read] read of tp_call (call family)
+Include/internal/pycore_slots_generated.h:406:27: note: [slot-read] read of tp_descr_get (descriptor family)
+Include/internal/pycore_slots_generated.h:408:27: note: [slot-read] read of tp_descr_set (descriptor family)
+Include/internal/pycore_slots_generated.h:414:27: note: [slot-read] read of tp_getattro (attribute family)
+Include/internal/pycore_slots_generated.h:416:27: note: [slot-read] read of tp_hash (hash family)
+Include/internal/pycore_slots_generated.h:424:27: note: [slot-read] read of tp_iternext (iteration family)
+Include/internal/pycore_slots_generated.h:430:27: note: [slot-read] read of tp_repr (repr family)
+Include/internal/pycore_slots_generated.h:432:27: note: [slot-read] read of tp_richcompare (compare family)
+Include/internal/pycore_slots_generated.h:436:27: note: [slot-read] read of tp_setattro (attribute family)
+Include/internal/pycore_slots_generated.h:438:27: note: [slot-read] read of tp_str (repr family)
+Include/internal/pycore_slots_generated.h:449:27: note: [slot-read] read of nb_matrix_multiply (number family)
+Include/internal/pycore_slots_generated.h:452:27: note: [slot-read] read of nb_inplace_matrix_multiply (number family)
+Include/internal/pycore_slots_generated.h:466:27: note: [slot-read] read of am_send (iteration family)
+Include/internal/pycore_slots_generated.h:480:27: note: [slot-read] read of mp_ass_subscript (subscript family)
+Include/internal/pycore_slots_generated.h:485:27: note: [slot-read] read of nb_add (number family)
+Include/internal/pycore_slots_generated.h:487:27: note: [slot-read] read of nb_subtract (number family)
+Include/internal/pycore_slots_generated.h:489:27: note: [slot-read] read of nb_multiply (number family)
+Include/internal/pycore_slots_generated.h:491:27: note: [slot-read] read of nb_true_divide (number family)
+Include/internal/pycore_slots_generated.h:493:27: note: [slot-read] read of nb_floor_divide (number family)
+Include/internal/pycore_slots_generated.h:495:27: note: [slot-read] read of nb_remainder (number family)
+Include/internal/pycore_slots_generated.h:501:27: note: [slot-read] read of nb_bool (number family)
+Include/internal/pycore_slots_generated.h:503:27: note: [slot-read] read of nb_index (number family)
+Include/internal/pycore_slots_generated.h:517:27: note: [slot-read] read of nb_power (number family)
+Include/internal/pycore_slots_generated.h:519:27: note: [slot-read] read of nb_negative (number family)
+Include/internal/pycore_slots_generated.h:521:27: note: [slot-read] read of nb_positive (number family)
+Include/internal/pycore_slots_generated.h:523:27: note: [slot-read] read of nb_absolute (number family)
+Include/internal/pycore_slots_generated.h:525:27: note: [slot-read] read of nb_invert (number family)
+Include/internal/pycore_slots_generated.h:527:27: note: [slot-read] read of nb_int (number family)
+Include/internal/pycore_slots_generated.h:529:27: note: [slot-read] read of nb_float (number family)
+Include/internal/pycore_slots_generated.h:531:27: note: [slot-read] read of nb_divmod (number family)
+Include/internal/pycore_slots_generated.h:533:27: note: [slot-read] read of nb_lshift (number family)
+Include/internal/pycore_slots_generated.h:535:27: note: [slot-read] read of nb_rshift (number family)
+Include/internal/pycore_slots_generated.h:537:27: note: [slot-read] read of nb_and (number family)
+Include/internal/pycore_slots_generated.h:539:27: note: [slot-read] read of nb_xor (number family)
+Include/internal/pycore_slots_generated.h:541:27: note: [slot-read] read of nb_or (number family)
+Include/internal/pycore_slots_generated.h:543:27: note: [slot-read] read of nb_matrix_multiply (number family)
+Include/internal/pycore_slots_generated.h:545:27: note: [slot-read] read of nb_inplace_add (number family)
+Include/internal/pycore_slots_generated.h:547:27: note: [slot-read] read of nb_inplace_subtract (number family)
+Include/internal/pycore_slots_generated.h:549:27: note: [slot-read] read of nb_inplace_multiply (number family)
+Include/internal/pycore_slots_generated.h:551:27: note: [slot-read] read of nb_inplace_remainder (number family)
+Include/internal/pycore_slots_generated.h:553:27: note: [slot-read] read of nb_inplace_power (number family)
+Include/internal/pycore_slots_generated.h:555:27: note: [slot-read] read of nb_inplace_lshift (number family)
+Include/internal/pycore_slots_generated.h:557:27: note: [slot-read] read of nb_inplace_rshift (number family)
+Include/internal/pycore_slots_generated.h:559:27: note: [slot-read] read of nb_inplace_and (number family)
+Include/internal/pycore_slots_generated.h:561:27: note: [slot-read] read of nb_inplace_xor (number family)
+Include/internal/pycore_slots_generated.h:563:27: note: [slot-read] read of nb_inplace_or (number family)
+Include/internal/pycore_slots_generated.h:565:27: note: [slot-read] read of nb_inplace_floor_divide (number family)
+Include/internal/pycore_slots_generated.h:567:27: note: [slot-read] read of nb_inplace_true_divide (number family)
+Include/internal/pycore_slots_generated.h:569:27: note: [slot-read] read of nb_inplace_matrix_multiply (number family)
+Include/internal/pycore_value.h:1292:5: note: [home-copy] a PyValue local copied from a home: a PyValueBorrow unless the home is stored afterwards
+Include/internal/pycore_value.h:1359:9: note: [home-copy] a PyValue local copied from a home: a PyValueBorrow unless the home is stored afterwards
+Modules/_bisectmodule.c:47:14: note: [slot-read] read of sq_item (subscript family)
+Modules/_bisectmodule.c:48:16: note: [slot-read] read of sq_item (subscript family)
+Modules/_bisectmodule.c:51:30: note: [slot-read] read of mp_subscript (subscript family)
+Modules/_bisectmodule.c:100:27: note: [slot-read] read of tp_richcompare (compare family)
+Modules/_bisectmodule.c:308:27: note: [slot-read] read of tp_richcompare (compare family)
+Modules/_collectionsmodule.c:923:9: note: [home-copy] a PyValue local copied from a home: a PyValueBorrow unless the home is stored afterwards
+Modules/_collectionsmodule.c:1632:5: note: [home-copy] a PyValue local copied from a home: a PyValueBorrow unless the home is stored afterwards
+Modules/_collectionsmodule.c:2505:48: note: [slot-read] read of tp_repr (repr family)
+Modules/_ctypes/_ctypes.c:1216:23: note: [slot-read] read of tp_setattro (attribute family)
+Modules/_ctypes/_ctypes.c:5317:23: note: [slot-read] read of mp_ass_subscript (subscript family)
+Modules/_ctypes/malloc_closure.c:5:1: note: [unchecked] a value-native source that is not a unit of the compile database (its extension module is not built on this host)
+Modules/_elementtree.c:78:5: note: [home-copy] a PyValue local copied from a home: a PyValueBorrow unless the home is stored afterwards
+Modules/_json.c:1719:17: note: [slot-read] read of tp_repr (repr family)
+Modules/_json.c:1829:50: note: [slot-read] read of tp_repr (repr family)
+Modules/_pickle.c:1738:9: note: [home-copy] a PyValue local copied from a home: a PyValueBorrow unless the home is stored afterwards
+Modules/_pickle.c:5398:9: note: [slot-read] read of tp_getattro (attribute family)
+Modules/_pickle.c:6609:9: note: [home-copy] a PyValue local copied from a home: a PyValueBorrow unless the home is stored afterwards
+Modules/_queuemodule.c:156:5: note: [home-copy] a PyValue local copied from a home: a PyValueBorrow unless the home is stored afterwards
+Modules/_sre/sre.c:2644:26: note: [slot-read] read of nb_index (number family)
+Modules/_testclinic_value.c:492:5: note: [home-copy] a PyValue local copied from a home: a PyValueBorrow unless the home is stored afterwards
+Modules/_testclinic_value.c:493:5: note: [home-copy] a PyValue local copied from a home: a PyValueBorrow unless the home is stored afterwards
+Modules/clinic/_cursesmodule.c.h:3724:13: note: [slot-read] read of nb_index (number family)
+Modules/clinic/_cursesmodule.c.h:5169:13: note: [slot-read] read of nb_index (number family)
+Modules/clinic/_ssl.c.h:1352:13: note: [slot-read] read of nb_index (number family)
+Modules/clinic/fcntlmodule.c.h:165:13: note: [slot-read] read of nb_index (number family)
+Modules/clinic/signalmodule.c.h:677:13: note: [slot-read] read of nb_index (number family)
+Modules/clinic/timemodule.c.h:261:13: note: [slot-read] read of nb_index (number family)
+Modules/itertoolsmodule.c:237:30: note: [slot-read] read of tp_iternext (iteration family)
+Modules/itertoolsmodule.c:392:9: note: [home-copy] a PyValue local copied from a home: a PyValueBorrow unless the home is stored afterwards
+Modules/itertoolsmodule.c:415:9: note: [home-copy] a PyValue local copied from a home: a PyValueBorrow unless the home is stored afterwards
+Modules/itertoolsmodule.c:416:9: note: [home-copy] a PyValue local copied from a home: a PyValueBorrow unless the home is stored afterwards
+Modules/itertoolsmodule.c:432:5: note: [home-copy] a PyValue local copied from a home: a PyValueBorrow unless the home is stored afterwards
+Modules/itertoolsmodule.c:579:5: note: [home-copy] a PyValue local copied from a home: a PyValueBorrow unless the home is stored afterwards
+Modules/itertoolsmodule.c:580:5: note: [home-copy] a PyValue local copied from a home: a PyValueBorrow unless the home is stored afterwards
+Modules/itertoolsmodule.c:623:5: note: [home-copy] a PyValue local copied from a home: a PyValueBorrow unless the home is stored afterwards
+Modules/itertoolsmodule.c:755:5: note: [home-copy] a PyValue local copied from a home: a PyValueBorrow unless the home is stored afterwards
+Modules/itertoolsmodule.c:1502:17: note: [slot-read] read of tp_iternext (iteration family)
+Modules/itertoolsmodule.c:1808:17: note: [slot-read] read of tp_iternext (iteration family)
+Modules/itertoolsmodule.c:3293:5: note: [home-copy] a PyValue local copied from a home: a PyValueBorrow unless the home is stored afterwards
+Modules/itertoolsmodule.c:3433:42: note: [slot-read] read of tp_iternext (iteration family)
+Modules/itertoolsmodule.c:3434:46: note: [slot-read] read of tp_iternext (iteration family)
+Modules/itertoolsmodule.c:3566:17: note: [slot-read] read of tp_iternext (iteration family)
+Modules/itertoolsmodule.c:3755:5: note: [home-copy] a PyValue local copied from a home: a PyValueBorrow unless the home is stored afterwards
+Modules/mathintegermodule.c:503:48: note: [slot-read] read of tp_richcompare (compare family)
+Modules/mathmodule.c:2424:15: note: [slot-read] read of tp_iternext (iteration family)
+Modules/mathmodule.c:2425:15: note: [slot-read] read of tp_iternext (iteration family)
+Modules/posixmodule.c:1230:26: note: [slot-read] read of nb_index (number family)
+Modules/socketmodule.c:7192:24: note: [slot-read] read of nb_index (number family)
+Objects/bytearrayobject.c:1129:27: note: [slot-read] read of nb_index (number family)
+Objects/bytearrayobject.c:1223:17: note: [slot-read] read of tp_iternext (iteration family)
+Objects/bytearrayobject.c:1714:17: note: [slot-read] read of nb_index (number family)
+Objects/bytesobject.c:734:41: note: [slot-read] read of mp_subscript (subscript family)
+Objects/bytesobject.c:3132:17: note: [slot-read] read of nb_index (number family)
+Objects/call.c:208:24: note: [slot-read] read of tp_call (call family)
+Objects/call.c:1359:24: note: [slot-read] read of tp_call (call family)
+Objects/call.c:1395:9: note: [home-copy] a PyValue local copied from a home: a PyValueBorrow unless the home is stored afterwards
+Objects/call.c:1466:32: note: [slot-read] read of tp_call (call family)
+Objects/codeobject.c:150:5: note: [home-copy] a PyValue local copied from a home: a PyValueBorrow unless the home is stored afterwards
+Objects/complexobject.c:1209:15: note: [slot-read] read of nb_float (number family)
+Objects/complexobject.c:1209:40: note: [slot-read] read of nb_index (number family)
+Objects/complexobject.c:1276:10: note: [slot-read] read of nb_float (number family)
+Objects/complexobject.c:1276:35: note: [slot-read] read of nb_index (number family)
+Objects/complexobject.c:1289:14: note: [slot-read] read of nb_float (number family)
+Objects/complexobject.c:1289:39: note: [slot-read] read of nb_index (number family)
+Objects/complexobject.c:1322:14: note: [slot-read] read of nb_float (number family)
+Objects/complexobject.c:1322:39: note: [slot-read] read of nb_index (number family)
+Objects/descrobject.c:1362:12: note: [slot-read] read of tp_descr_set (descriptor family)
+Objects/dictobject.c:451:17: note: [home-copy] a PyValue local copied from a home: a PyValueBorrow unless the home is stored afterwards
+Objects/dictobject.c:463:17: note: [home-copy] a PyValue local copied from a home: a PyValueBorrow unless the home is stored afterwards
+Objects/dictobject.c:465:17: note: [home-copy] a PyValue local copied from a home: a PyValueBorrow unless the home is stored afterwards
+Objects/dictobject.c:2862:13: note: [home-copy] a PyValue local copied from a home: a PyValueBorrow unless the home is stored afterwards
+Objects/dictobject.c:3575:17: note: [home-copy] a PyValue local copied from a home: a PyValueBorrow unless the home is stored afterwards
+Objects/dictobject.c:5633:9: note: [home-copy] a PyValue local copied from a home: a PyValueBorrow unless the home is stored afterwards
+Objects/dictobject.c:5635:9: note: [home-copy] a PyValue local copied from a home: a PyValueBorrow unless the home is stored afterwards
+Objects/dictobject.c:7167:9: note: [home-copy] a PyValue local copied from a home: a PyValueBorrow unless the home is stored afterwards
+Objects/enumobject.c:176:9: note: [home-copy] a PyValue local copied from a home: a PyValueBorrow unless the home is stored afterwards
+Objects/enumobject.c:178:9: note: [home-copy] a PyValue local copied from a home: a PyValueBorrow unless the home is stored afterwards
+Objects/enumobject.c:248:9: note: [home-copy] a PyValue local copied from a home: a PyValueBorrow unless the home is stored afterwards
+Objects/enumobject.c:250:9: note: [home-copy] a PyValue local copied from a home: a PyValueBorrow unless the home is stored afterwards
+Objects/exceptions.c:783:5: note: [home-copy] a PyValue local copied from a home: a PyValueBorrow unless the home is stored afterwards
+Objects/exceptions.c:849:9: note: [home-copy] a PyValue local copied from a home: a PyValueBorrow unless the home is stored afterwards
+Objects/exceptions.c:854:9: note: [home-copy] a PyValue local copied from a home: a PyValueBorrow unless the home is stored afterwards
+Objects/exceptions.c:2224:5: note: [home-copy] a PyValue local copied from a home: a PyValueBorrow unless the home is stored afterwards
+Objects/exceptions.c:2234:5: note: [home-copy] a PyValue local copied from a home: a PyValueBorrow unless the home is stored afterwards
+Objects/floatobject.c:300:37: note: [slot-read] read of nb_float (number family)
+Objects/floatobject.c:301:46: note: [slot-read] read of nb_float (number family)
+Objects/floatobject.c:302:19: note: [slot-read] read of nb_index (number family)
+Objects/floatobject.c:953:26: note: [slot-read] read of nb_power (number family)
+Objects/frameobject.c:2227:9: note: [home-copy] a PyValue local copied from a home: a PyValueBorrow unless the home is stored afterwards
+Objects/lazyimportobject.c:702:14: note: [slot-read] read of mp_ass_subscript (subscript family)
+Objects/listobject.c:331:5: note: [home-copy] a PyValue local copied from a home: a PyValueBorrow unless the home is stored afterwards
+Objects/listobject.c:716:13: note: [home-copy] a PyValue local copied from a home: a PyValueBorrow unless the home is stored afterwards
+Objects/listobject.c:967:5: note: [home-copy] a PyValue local copied from a home: a PyValueBorrow unless the home is stored afterwards
+Objects/listobject.c:1340:5: note: [home-copy] a PyValue local copied from a home: a PyValueBorrow unless the home is stored afterwards
+Objects/listobject.c:1358:9: note: [home-copy] a PyValue local copied from a home: a PyValueBorrow unless the home is stored afterwards
+Objects/listobject.c:2516:9: note: [slot-read] read of tp_richcompare (compare family)
+Objects/listobject.c:2799:44: note: [slot-read] read of tp_richcompare (compare family)
+Objects/moduleobject.c:1424:36: note: [slot-read] read of tp_descr_get (descriptor family)
+Objects/odictobject.c:1607:38: note: [slot-read] read of tp_richcompare (compare family)
+Objects/setobject.c:1013:5: note: [home-copy] a PyValue local copied from a home: a PyValueBorrow unless the home is stored afterwards
+Objects/structseq.c:169:9: note: [home-copy] a PyValue local copied from a home: a PyValueBorrow unless the home is stored afterwards
+Objects/tupleobject.c:166:5: note: [home-copy] a PyValue local copied from a home: a PyValueBorrow unless the home is stored afterwards
+Objects/tupleobject.c:184:5: note: [home-copy] a PyValue local copied from a home: a PyValueBorrow unless the home is stored afterwards
+Objects/tupleobject.c:763:9: note: [home-copy] a PyValue local copied from a home: a PyValueBorrow unless the home is stored afterwards
+Objects/tupleobject.c:775:13: note: [home-copy] a PyValue local copied from a home: a PyValueBorrow unless the home is stored afterwards
+Objects/typeobject.c:2938:13: note: [home-copy] a PyValue local copied from a home: a PyValueBorrow unless the home is stored afterwards
+Python/ceval.c:729:9: note: [home-copy] a PyValue local copied from a home: a PyValueBorrow unless the home is stored afterwards
+Python/ceval.c:1454:5: note: [home-copy] a PyValue local copied from a home: a PyValueBorrow unless the home is stored afterwards
+Python/ceval.c:1812:9: note: [home-copy] a PyValue local copied from a home: a PyValueBorrow unless the home is stored afterwards
+Python/ceval.c:1971:13: note: [home-copy] a PyValue local copied from a home: a PyValueBorrow unless the home is stored afterwards
+Python/ceval.c:1976:9: note: [home-copy] a PyValue local copied from a home: a PyValueBorrow unless the home is stored afterwards
+Python/ceval.c:2100:5: note: [home-copy] a PyValue local copied from a home: a PyValueBorrow unless the home is stored afterwards
+Python/ceval.c:2673:13: note: [home-copy] a PyValue local copied from a home: a PyValueBorrow unless the home is stored afterwards
+Python/ceval.c:3625:9: note: [home-copy] a PyValue local copied from a home: a PyValueBorrow unless the home is stored afterwards
+Python/ceval.c:5012:9: note: [home-copy] a PyValue local copied from a home: a PyValueBorrow unless the home is stored afterwards
+Python/ceval.c:5142:28: note: [slot-read] read of tp_descr_get (descriptor family)
+Python/ceval_macros.h:647:9: note: [home-copy] a PyValue local copied from a home: a PyValueBorrow unless the home is stored afterwards
+Python/compile.c:409:5: note: [home-copy] a PyValue local copied from a home: a PyValueBorrow unless the home is stored afterwards
+Python/frame.c:152:9: note: [home-copy] a PyValue local copied from a home: a PyValueBorrow unless the home is stored afterwards
+Python/generated_ir_cases.c.h:2931:21: note: [slot-read] read of mp_subscript (subscript family)
+Python/generated_ir_cases.c.h:4313:17: note: [home-copy] a PyValue local copied from a home: a PyValueBorrow unless the home is stored afterwards
+Python/generated_ir_cases.c.h:9136:13: note: [home-copy] a PyValue local copied from a home: a PyValueBorrow unless the home is stored afterwards
+Python/generated_ir_cases.c.h:14409:21: note: [slot-read] read of tp_getattro (attribute family)
+Python/generated_ir_cases.c.h:14459:13: note: [home-copy] a PyValue local copied from a home: a PyValueBorrow unless the home is stored afterwards
+Python/generated_ir_cases.c.h:16663:17: note: [home-copy] a PyValue local copied from a home: a PyValueBorrow unless the home is stored afterwards
+Python/generated_ir_cases.c.h:16764:17: note: [home-copy] a PyValue local copied from a home: a PyValueBorrow unless the home is stored afterwards
+Python/generated_ir_cases.c.h:16914:17: note: [home-copy] a PyValue local copied from a home: a PyValueBorrow unless the home is stored afterwards
+Python/generated_ir_cases.c.h:17017:17: note: [home-copy] a PyValue local copied from a home: a PyValueBorrow unless the home is stored afterwards
+Python/generated_ir_cases.c.h:17126:17: note: [home-copy] a PyValue local copied from a home: a PyValueBorrow unless the home is stored afterwards
+Python/generated_ir_cases.c.h:17351:21: note: [slot-read] read of mp_ass_subscript (subscript family)
+Python/generated_ir_cases.c.h:17364:24: note: [slot-read] read of mp_ass_subscript (subscript family)
+Python/generated_ir_cases.c.h:17464:17: note: [home-copy] a PyValue local copied from a home: a PyValueBorrow unless the home is stored afterwards
+Python/getargs.c:2896:51: note: [slot-read] read of nb_index (number family)
+Python/getargs.c:2942:23: note: [slot-read] read of nb_index (number family)
+Python/pystate.c:709:9: note: [home-copy] a PyValue local copied from a home: a PyValueBorrow unless the home is stored afterwards
+Python/specialize.c:763:9: note: [slot-read] read of tp_descr_set (descriptor family)
+Python/specialize.c:780:9: note: [slot-read] read of tp_descr_get (descriptor family)
+Python/specialize.c:815:25: note: [slot-read] read of tp_getattro (attribute family)
+Python/specialize.c:1581:17: note: [slot-read] read of tp_descr_get (descriptor family)
+Python/specialize.c:1581:49: note: [slot-read] read of tp_descr_set (descriptor family)
+Python/specialize.c:1977:9: note: [slot-read] read of mp_ass_subscript (subscript family)
+Python/specialize.c:2785:17: note: [slot-read] read of mp_subscript (subscript family)
+Python/specialize.c:3196:15: note: [slot-read] read of nb_bool (number family)
+Python/structmember.c:77:5: note: [home-copy] a PyValue local copied from a home: a PyValueBorrow unless the home is stored afterwards
+check_value_api: 305 value-native units; 0 failing findings; home-copy 78, slot-read 157, unchecked 1; 0 parse errors
+static: VIOLATION: Modules/_decimal/_decimal.c: has Py_BUILD_CORE_* but is not value-native
+static: VIOLATION: ownership inventory is not reviewed as complete for R27
+static: VIOLATION: Include/object.h: PyObject_GetOptionalAttr lacks Py_VALUE_COMPAT(_PyValue_GetOptionalAttr)
+static: VIOLATION: Include/internal/pycore_object.h: _PyObject_LookupSpecial lacks Py_VALUE_COMPAT(_PyValue_LookupSpecial)
+static: VIOLATION: Include/abstract.h: PyMapping_GetOptionalItem lacks Py_VALUE_COMPAT(_PyValue_GetOptionalItem)
+static: VIOLATION: Include/abstract.h: PyIter_Next lacks Py_VALUE_COMPAT(_PyValue_IterNext)
+static: VIOLATION: Include/abstract.h: PyIter_Send lacks Py_VALUE_COMPAT(_PyValue_Send)
+static: VIOLATION: Include/abstract.h: PyObject_Call lacks Py_VALUE_COMPAT(_PyValue_Call)
+static: VIOLATION: Include/internal/pycore_call.h: PyObject_Call lacks Py_VALUE_COMPAT(_PyValue_Call)
+static: VIOLATION: Include/cpython/abstract.h: PyObject_CallOneArg lacks Py_VALUE_COMPAT(_PyValue_CallOneArg)
+static: VIOLATION: Include/abstract.h: PyObject_Vectorcall lacks Py_VALUE_COMPAT(_PyValue_Vectorcall)
+static: VIOLATION: Include/abstract.h: PyObject_CallNoArgs lacks Py_VALUE_COMPAT(_PyValue_CallNoArgs)

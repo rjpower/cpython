@@ -1,0 +1,315 @@
+--- a/Tools/clinic/libclinic/function.py
++++ b/Tools/clinic/libclinic/function.py
+@@ -161,6 +161,7 @@
+     docstring_line_number: int | None = None
+     vectorcall: bool = False
+     value_function: bool = False
++    value_constructor: bool = False
+     # The type slot which the function implements (kind is SLOT).
+     slot: SlotSpec | None = None
+ 
+--- a/Tools/clinic/libclinic/dsl_parser.py
++++ b/Tools/clinic/libclinic/dsl_parser.py
+@@ -309,6 +309,7 @@
+         self.disable_fastcall = False
+         self.vectorcall: bool = False
+         self.value_function = False
++        self.value_constructor = False
+         self.slot = None
+         self.permit_long_summary = False
+         self.permit_long_docstring_body = False
+@@ -515,6 +516,13 @@
+             fail("@value_function cannot be used with the limited C API")
+         self.value_function = True
+ 
++    def at_value_constructor(self) -> None:
++        if self.value_constructor:
++            fail("Called @value_constructor twice!")
++        if self.clinic.codegen.limited_capi:
++            fail("@value_constructor cannot be used with the limited C API")
++        self.value_constructor = True
++
+     def at_coexist(self) -> None:
+         if self.coexist:
+             fail("Called @coexist twice!")
+@@ -740,6 +748,7 @@
+             "docstring_line_number": None,
+             "line_number": self.line_number,
+             "value_function": self.value_function,
++            "value_constructor": self.value_constructor,
+         }
+         if existing_function.kind is SLOT or self.slot is not None:
+             fail("Type slot methods cannot be cloned")
+@@ -819,6 +828,7 @@
+             line_number=self.line_number,
+             vectorcall=self.vectorcall,
+             value_function=self.value_function,
++            value_constructor=self.value_constructor,
+             slot=self.slot,
+         )
+         self.add_function(func)
+--- a/Tools/clinic/libclinic/parse_args.py
++++ b/Tools/clinic/libclinic/parse_args.py
+@@ -192,11 +192,15 @@
+     eligible = (f.kind is not SLOT and f.kind not in ACCESSORS
+                 and not any(p.group for p in f.parameters.values())
+                 and all(p.converter.has_value_form for p in f.parameters.values()))
+-    if f.value_function and (not eligible or f.kind.new_or_init or any(
+-            (p.converter.alias_of is not None or p.deprecated_until is not None
+-             or p.is_var_keyword()) for p in f.parameters.values())):
++    unsupported = (not eligible or any(
++        p.converter.alias_of is not None or p.deprecated_until is not None
++        or p.is_var_keyword() for p in f.parameters.values()))
++    if f.value_function and (unsupported or f.kind.new_or_init or f.value_constructor):
+         fail("@value_function requires a supported value parser")
+-    return (codegen.value_emission or f.value_function) and eligible
++    if f.value_constructor and (unsupported or f.kind is not METHOD_NEW
++                                or not f.vectorcall or f.value_function):
++        fail("@value_constructor requires a supported __new__ with @vectorcall")
++    return (codegen.value_emission or f.value_function or f.value_constructor) and eligible
+ 
+ 
+ DOCSTRING_PROTOTYPE_VAR: Final[str] = libclinic.normalize_snippet("""
+--- a/Tools/clinic/libclinic/clanguage.py
++++ b/Tools/clinic/libclinic/clanguage.py
+@@ -318,7 +318,7 @@
+         codegen = clinic.codegen
+         data = CRenderData()
+         data.value_emission = is_value_function(f, codegen)
+-        if f.value_function:
++        if f.value_function or f.value_constructor:
+             codegen.selective_value_used = True
+             codegen.add_include('pycore_value_call.h', 'METH_VALUE')
+ 
+@@ -520,7 +520,8 @@
+             if clinic.line_suffix:
+                 s = libclinic.suffix_all_lines(s, clinic.line_suffix)
+ 
+-            if f.value_function and s and ('PyValue' in s or 'METH_VALUE' in s):
++            if (f.value_function or f.value_constructor) and s and (
++                    'PyValue' in s or 'METH_VALUE' in s):
+                 s = ("#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)\n"
+                      '#  error "@value_function Clinic output requires a core build"\n'
+                      "#endif\n" + s)
+--- a/Lib/test/test_clinic.py
++++ b/Lib/test/test_clinic.py
+@@ -6521,6 +6521,29 @@
+         self.assertIn('_PyValue_AsInt', generated)
+         self.assertIn('PyValue_AsKnownObjectBorrow', generated)
+ 
++    def test_value_constructor_pairs_entries_and_defaults(self):
++        generated = self.generate(["""@classmethod
++            @value_constructor
++            @vectorcall
++            m.T.__new__
++                value: object(c_default="NULL") = "0"
++                context: object = None""", "m.f\n    x: object\n    /"])
++        self.assertIn('m_T_value(PyTypeObject *type, const PyValue *args', generated)
++        self.assertIn('_PyValue_THUNK_EXIT(m_T_value(', generated)
++        self.assertIn('m_T_vectorcall(PyThreadState *tstate', generated)
++        self.assertIn('PyValue_Borrow(PyValue_NULL)', generated)
++        self.assertIn('PyValue_Borrow(PyValue_None)', generated)
++        self.assertIn('(PyCFunction)m_f, METH_O', generated)
++
++    def test_value_constructor_rejects_unsupported(self):
++        prefix = "/*[clinic input]\nmodule m\nclass m.T \"PyObject *\" \"&TestType\"\n[clinic start generated code]*/\n"
++        for body in ("@classmethod\n@value_constructor\nm.T.__new__",
++                     "@value_constructor\n@vectorcall\nm.f",
++                     "@classmethod\n@value_constructor\n@value_function\n@vectorcall\nm.T.__new__"):
++            text = prefix + "/*[clinic input]\n" + body + "\n[clinic start generated code]*/\n"
++            with self.assertRaises(ClinicError):
++                _make_clinic().parse(text)
++
+     def test_multiple_file_destinations_rejected(self):
+         text = """
+             /*[clinic input]
+--- a/Modules/_decimal/_decimal.c
++++ b/Modules/_decimal/_decimal.c
+@@ -3417,6 +3417,8 @@
+ 
+ /*[clinic input]
+ @classmethod
++@value_constructor
++@vectorcall
+ _decimal.Decimal.__new__ as dec_new
+ 
+     value: object(c_default="NULL") = "0"
+@@ -3429,15 +3431,24 @@
+ the conversion and is only passed to determine if the InvalidOperation
+ trap is active.
+ [clinic start generated code]*/
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
+-dec_new_impl(PyTypeObject *type, PyObject *value, PyObject *context)
+-/*[clinic end generated code: output=35f48a40c65625ba input=5f8a0892d3fcef80]*/
++static PyValue
++dec_new_impl(PyTypeObject *type, PyValueBorrow value, PyValueBorrow context)
++/*[clinic end generated code: output=2dd80335430a0d8f input=c9d3a1e065fba5ee]*/
+ {
+     decimal_state *state = get_module_state_by_def(type);
+-    CONTEXT_CHECK_VA(state, context);
+-
+-    return PyDecType_FromObjectExact(type, PyValue_FromObjectBorrow(value), context);
++    PyObject *ctx = optional_context_value(state, context);
++    if (ctx == NULL) {
++        return PyValue_NULL;
++    }
++    PyObject *result = PyDecType_FromObjectExact(type, value, ctx);
++    if (result == NULL) {
++        return PyValue_NULL;
++    }
++    return PyValue_FromObjectSteal(result);
+ }
+ 
+ /*[clinic input]
+@@ -4072,8 +4083,8 @@
+     return result;
+ }
+ 
+-/* Return a PyLongObject from a PyDecObject, using the specified rounding
+- * mode. The context precision is not observed. */
++/* Return an owned integer value from a PyDecObject using the specified
++ * rounding mode. The context precision is not observed. */
+ static PyValue
+ dec_as_long_value(PyObject *dec, PyObject *context, int round)
+ {
+@@ -8652,6 +8663,8 @@
+ } while (0)
+ 
+     CREATE_TYPE(m, state->PyDec_Type, &dec_spec);
++    state->PyDec_Type->tp_vectorcall = _PyValue_VectorcallThunk;
++    state->PyDec_Type->tp_value_vectorcall = (_Py_valuefunc)dec_vectorcall;
+     CREATE_TYPE(m, state->PyDecContext_Type, &context_spec);
+     CREATE_TYPE(m, state->PyDecContextManager_Type, &ctxmanager_spec);
+     CREATE_TYPE(m, state->PyDecSignalDictMixin_Type, &signaldict_spec);
+--- a/Modules/_decimal/clinic/_decimal.c.h
++++ b/Modules/_decimal/clinic/_decimal.c.h
+@@ -14,7 +14,9 @@
+ #include "pycore_abstract.h"      // _PyNumber_Index()
+ #include "pycore_borrow.h"        // _PyBorrow_TupleItems()
+ #include "pycore_modsupport.h"    // _PyArg_UnpackKeywords()
++#include "pycore_tuple.h"         // _PyTuple_ITEMS()
+ #include "pycore_value_call.h"    // METH_VALUE
++#include "pycore_value_slots.h"   // _PyValue_THUNK_EXIT()
+ 
+ PyDoc_STRVAR(_decimal_Context_Etiny__doc__,
+ "Etiny($self, /)\n"
+@@ -900,14 +902,20 @@
+ "no value is given, return Decimal(\'0\'). The context does not affect\n"
+ "the conversion and is only passed to determine if the InvalidOperation\n"
+ "trap is active.");
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
+-dec_new_impl(PyTypeObject *type, PyObject *value, PyObject *context);
++static PyValue
++dec_new_impl(PyTypeObject *type, PyValueBorrow value, PyValueBorrow context);
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
+-dec_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
++static PyValue
++dec_new_value(PyTypeObject *type, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+ {
+-    PyObject *return_value = NULL;
++    PyValue return_value = PyValue_NULL;
+     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
+ 
+     #define NUM_KEYWORDS 2
+@@ -935,38 +943,61 @@
+         .kwtuple = KWTUPLE,
+     };
+     #undef KWTUPLE
+-    PyObject *argsbuf[2];
+-    PyObject * const *fastargs;
+-    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
+-    Py_ssize_t noptargs = nargs + (kwargs ? PyDict_GET_SIZE(kwargs) : 0) - 0;
+-    PyObject *value = NULL;
+-    PyObject *context = Py_None;
++    Py_ssize_t _idx[2];
++    PyValueBorrow value = PyValue_Borrow(PyValue_NULL);
++    PyValueBorrow context = PyValue_Borrow(PyValue_None);
+ 
+-    PyObject *const *_args_items = _PyBorrow_TupleItems(args, Py_MIN(nargs, 2));
+-    if (_args_items == NULL) {
+-        goto exit;
+-    }
+-    fastargs = _PyArg_UnpackKeywords(_args_items, nargs, kwargs, NULL, &_parser,
+-            /*minpos*/ 0, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
+-    if (!fastargs) {
++    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
++            /*minpos*/ 0, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, _idx, 2)) {
+         goto exit;
+     }
+-    if (!noptargs) {
+-        goto skip_optional_pos;
++    if (_idx[0] >= 0) {
++        value = PyValue_Borrow(args[_idx[0]]);
+     }
+-    if (fastargs[0]) {
+-        value = fastargs[0];
+-        if (!--noptargs) {
+-            goto skip_optional_pos;
+-        }
++    if (_idx[1] >= 0) {
++        context = PyValue_Borrow(args[_idx[1]]);
+     }
+-    context = fastargs[1];
+-skip_optional_pos:
+     return_value = dec_new_impl(type, value, context);
+ 
+ exit:
+     return return_value;
+ }
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
++
++Py_VALUE_ENTRY static PyObject *
++dec_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
++{
++    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
++    if (kwargs == NULL || PyDict_GET_SIZE(kwargs) == 0) {
++        return _PyValue_THUNK_EXIT(dec_new_value(type, _PyTuple_ITEMS(args), nargs, NULL), BOX_SITE_CALL);
++    }
++    PyObject *kwnames;
++    PyValue *window = _PyValue_StackUnpackDict(_PyThreadState_GET(),
++        _PyTuple_ITEMS(args), nargs, kwargs, &kwnames);
++    if (window == NULL) {
++        return NULL;
++    }
++    PyValue result = dec_new_value(type, window, nargs, kwnames);
++    _PyValue_StackUnpackDict_Free(window, nargs, kwnames);
++    return _PyValue_THUNK_EXIT(result, BOX_SITE_CALL);
++}
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
++
++static PyValue
++dec_vectorcall(PyThreadState *tstate, PyObject *type, const PyValue *args,
++    size_t nargsf, PyObject *kwnames)
++{
++    assert(_PyType_CAST(type)->tp_new == dec_new);
++    /* Make sure the type object is immutable: the generated
++     * vectorcall doesn't deal e.g. with users reassigning __init__. */
++    assert(PyType_HasFeature(_PyType_CAST(type), Py_TPFLAGS_IMMUTABLETYPE));
++    Py_ssize_t nargs = PyVectorcall_NARGS(nargsf);
++    return dec_new_value(_PyType_CAST(type), args, nargs, kwnames);
++}
+ 
+ PyDoc_STRVAR(_decimal_Context_create_decimal__doc__,
+ "create_decimal($self, num=\'0\', /)\n"
+@@ -7246,4 +7277,4 @@
+ #ifndef _DECIMAL_CONTEXT_APPLY_METHODDEF
+     #define _DECIMAL_CONTEXT_APPLY_METHODDEF
+ #endif /* !defined(_DECIMAL_CONTEXT_APPLY_METHODDEF) */
+-/*[clinic end generated code: output=377f64e518224754 input=a9049054013a1b77]*/
++/*[clinic end generated code: output=35b4eccf255ea6a6 input=a9049054013a1b77]*/

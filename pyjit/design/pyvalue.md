@@ -5,6 +5,20 @@ instance fields and value-native C APIs. This page specifies the encoding as
 built, compares it with other dynamic-language runtimes, and lists the gaps
 we should close. It is the reference for value, container and C-boundary work.
 
+**Current rollout, 2026-11-05.** Runtime `d6eae4b1c1c` uses this value format
+and builds in debug, release and stats configurations. The source snapshot
+below specifies the representation; it does not certify the later runtime's
+full API migration. Numeric compatibility marks, the mechanical ownership
+sweep, direct-slot ports and selective Clinic value methods have landed.
+Manual API callers, remaining Decimal methods/constructors/slots, indirect
+slot invocations and complete static/dynamic qualification remain open.
+Linux no-op startup is zero-box. The next reviewed candidate in full
+qualification has eight kernels with zero boxes across all raw processes;
+21 still have startup or setup boxes. Zero loop deltas alone do not pass R27.
+The [closure plan](../issues/checkpoint-closure/plan.md) records current source
+identities, reviews and checks. The R27 no-core-box rule in
+[value-api.md](value-api.md) remains the checkpoint requirement.
+
 Source of truth: the universal-value worktree
 `build/worktrees/pyvalue-rc-universal` at `5de7bd62ef9` (2026-11-04), which
 contains the G1 fix `271f4e435e5`. Section 1 was read from source at that
@@ -459,14 +473,16 @@ this list.
 | `sys.getrefcount(x)` | Reports the count of the box made for the call, not of a shared object. A local passed to a call reads one more than upstream, because `LOAD_FAST_BORROW` takes a count for the window | `Python/sysmodule.c:sys_getrefcount_impl` |
 | `id(x)` | Not an address for inline values (section 1.7). `ctypes.cast(id(x), py_object)` is not valid for them | `Python/bltinmodule.c:builtin_id_impl` |
 | `x is y` | True for equal computed int51 ints and equal-bit floats | section 1.7 |
+| `marshal` bytes for repeated inline scalars | Writes each scalar in full; upstream may use a `TYPE_REF` for a shared boxed object | `Python/marshal.c:w_value` |
 
-`marshal` and `.pyc` output need no change. A fresh box has refcount 1 and is
-never marked `FLAG_REF`, and `w_ref` no longer depends on that shortcut, so
-output is deterministic (`Python/marshal.c:w_ref`). A repeated inline int is
-therefore written in full each time, not as a back-reference. For an int51
+The marshal reader accepts the same scalar wire types. The writer bypasses
+`w_ref` for inline scalars, which have no object identity to memoize; `w_ref`
+still handles object values. A repeated inline int is written in full each
+time, not as a back-reference. For an int51
 value outside int32 that costs 6 bytes per repetition, 8 from 2^45
-(`TYPE_LONG` against `TYPE_REF`). The assembler emits `LOAD_CONST_INLINE_INT`
-for such constants (`assemble.c`), and the magic number is 64404.
+(`TYPE_LONG` against `TYPE_REF`). This can change `.pyc` bytes while preserving
+their decoded constants. The assembler emits `LOAD_CONST_INLINE_INT` for such
+constants (`assemble.c`), and the magic number is 64404.
 
 Out-of-process tools: `_Py_DebugOffsets.pyvalue` exports the encoding (size,
 NULL bits, tag bits, pointer limit, index base, double offset, int base, int

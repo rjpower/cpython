@@ -1,0 +1,92 @@
+diff --git a/Tools/build/check_r27.py b/Tools/build/check_r27.py
+--- a/Tools/build/check_r27.py
++++ b/Tools/build/check_r27.py
+@@ -67,6 +67,7 @@
+     pickle unpickle regex_compile logging_format logging_silent logging_simple
+     xml_etree_generate xml_etree_iterparse xml_etree_parse xml_etree_process""".split())
+ FOLD_PERIOD = 30  # seconds between folds of finished dumps in `suite`
++INVALID_OWNER_SAMPLE_LIMIT = 16
+ 
+ # The shape `kernels` accepts: R.json is a list of entries (or a dict with
+ # such a list under "results" or "entries"). An entry is a dict named by one
+@@ -130,8 +131,10 @@
+         self.leftover_run = []
+         self.spawn = []
+         self.accounting_errors = []
+-
+-    def add_text(self, text):
++        self.invalid_owner_count = 0
++        self.invalid_owner_samples = []
++
++    def add_text(self, text, source="<text>"):
+         objects = {}  # dump-local index -> build-id
+         owners = []
+         tag = ""
+@@ -167,6 +170,13 @@
+                 (m["kind"] == "core" and (m["owner"] != "-" or m["at"] in ("-", "?"))) or
+                 (m["kind"] != "core" and m["owner"] == "-")):
+                 self.accounting_errors.append("invalid owner attribution")
++                self.invalid_owner_count += 1
++                if len(self.invalid_owner_samples) < INVALID_OWNER_SAMPLE_LIMIT:
++                    self.invalid_owner_samples.append({
++                        "dump": source, "tag": tag, "kind": m["kind"],
++                        "site": m["site"], "owner": m["owner"],
++                        "at": m["at"], "count": int(m["count"]),
++                    })
+         for kind in KINDS:
+             if kind not in totals or kind not in drops:
+                 self.accounting_errors.append(f"missing {kind} accounting")
+@@ -186,7 +196,7 @@
+         """Fold the finished dumps; if delete, remove them and their .run."""
+         for path in sorted(Path(directory).glob("*.txt")):
+             try:
+-                self.add_text(path.read_text(errors="replace"))
++                self.add_text(path.read_text(errors="replace"), path.name)
+             except OSError as exc:
+                 self.bad_dumps.append(f"{path.name}: {exc}")
+                 continue
+@@ -543,6 +553,8 @@
+         "box_cached": folded.box_cached, "kind_totals": folded.kind_totals,
+         "site_totals": folded.site_totals, "rows": rows, "objects": objects,
+         "stray_cus": sorted(strays), "accounting_errors": folded.accounting_errors,
++        "invalid_owner_count": folded.invalid_owner_count,
++        "invalid_owner_samples": folded.invalid_owner_samples,
+     }
+ 
+ 
+diff --git a/Lib/test/test_tools/test_check_r27.py b/Lib/test/test_tools/test_check_r27.py
+--- a/Lib/test/test_tools/test_check_r27.py
++++ b/Lib/test/test_tools/test_check_r27.py
+@@ -196,6 +196,32 @@
+             self.assertEqual(folded.leftover_run, [])
+             self.assertEqual([p.name for p in d.iterdir()], ["b.tmp"])
+ 
++    def test_invalid_owner_diagnostics_survive_fold_deletion(self):
++        with tempfile.TemporaryDirectory() as tmp:
++            path = Path(tmp, "bad.txt")
++            rows = ["Stats process: pid=4 tag=test_probe",
++                    "Box owner (core, list) - at 0+0x1: 1",
++                    "Box owner (core, list) 0+0x2 at 0+0x3: 1"]
++            rows.extend(f"Box owner (thunk, list) - at 0+0x{i:x}: 1"
++                        for i in range(18))
++            path.write_text("\n".join(rows) + "\n")
++            folded = check_r27.Folded()
++            folded.fold_dir(tmp, delete=True)
++            summary = check_r27.resolve(folded, TableResolver({}), SRC)
++            self.assertFalse(path.exists())
++            self.assertEqual(summary["invalid_owner_count"], 19)
++            self.assertEqual(len(summary["invalid_owner_samples"]), 16)
++            self.assertEqual(summary["invalid_owner_samples"][0], {
++                "dump": "bad.txt", "tag": "test_probe", "kind": "core",
++                "site": "list", "owner": "0+0x2", "at": "0+0x3", "count": 1,
++            })
++            self.assertEqual(summary["invalid_owner_samples"][1]["kind"],
++                             "thunk")
++            self.assertEqual(summary["invalid_owner_samples"][1]["owner"],
++                             "-")
++            self.assertEqual(summary["accounting_errors"].count(
++                "invalid owner attribution"), 19)
++
+     def test_markers(self):
+         with tempfile.TemporaryDirectory() as tmp:
+             d = Path(tmp)

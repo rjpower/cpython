@@ -1,0 +1,50 @@
+--- a/Modules/_io/fileio.c
++++ b/Modules/_io/fileio.c
+@@ -5,10 +5,13 @@
+ #endif
+ #define Py_VALUE_CORE 1
+ #include "Python.h"
++#include "pycore_audit.h"         // _PySys_AuditEnabled()
+ #include "pycore_fileutils.h"     // _Py_BEGIN_SUPPRESS_IPH
+ #include "pycore_long_value.h"   // _PyValue_AsInt()
+ #include "pycore_object.h"        // _PyObject_GC_UNTRACK()
++#include "pycore_pystate.h"       // _PyThreadState_GET()
+ #include "pycore_pyerrors.h"      // _PyErr_ChainExceptions1()
++#include "pycore_tuple.h"         // _PyTuple_PackValues()
+ #include "pycore_value_ops.h"     // _PyValue_SetAttr()
+ #include "pycore_value_slots.h"// _PyValue_FromObjectResult()
+ #include "pycore_weakref.h"       // FT_CLEAR_WEAKREFS()
+@@ -448,16 +451,23 @@
+     flags |= O_CLOEXEC;
+ #endif
+ 
+-    /* The audit hook takes an object: PySys_Audit() reads its "O" argument
+-       as one, and a value word does not stand for it. */
+-    PyObject *audit_name = _PyValue_AsObjectAt(nameobj, BOX_SITE_PARSER);
+-    if (audit_name == NULL) {
+-        goto error;
+-    }
+-    int audit_rc = PySys_Audit("open", "Osi", audit_name, mode, flags);
+-    Py_DECREF(audit_name);
+-    if (audit_rc < 0) {
+-        goto error;
++    if (_PySys_AuditEnabled(_PyThreadState_GET())) {
++        PyObject *audit_mode = PyUnicode_FromString(mode);
++        if (audit_mode == NULL) {
++            goto error;
++        }
++        PyObject *audit_args = _PyTuple_PackValues(3, (PyValueBorrow[]){
++            nameobj, PyValue_FromObjectBorrow(audit_mode),
++            PyValue_Borrow(PyValue_FromInt64(flags))});
++        Py_DECREF(audit_mode);
++        if (audit_args == NULL) {
++            goto error;
++        }
++        int audit_rc = PySys_AuditTuple("open", audit_args);
++        Py_DECREF(audit_args);
++        if (audit_rc < 0) {
++            goto error;
++        }
+     }
+ 
+     if (fd >= 0) {

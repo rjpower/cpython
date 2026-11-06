@@ -1,0 +1,622 @@
+--- a/Modules/_decimal/_decimal.c
++++ b/Modules/_decimal/_decimal.c
+@@ -7387,36 +7387,49 @@
+ 
+ /* Functions with a single decimal argument */
+ /*[clinic input]
++@value_function
+ _decimal.Context._apply = _decimal.Context.is_normal
+ 
+ Apply self to Decimal x.
+ [clinic start generated code]*/
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
++static PyValue
+ _decimal_Context__apply_impl(PyObject *context, PyTypeObject *cls,
+-                             PyObject *x)
+-/*[clinic end generated code: output=c6b542f4e8114b97 input=12b34468ca4a4c30]*/
++                             PyValueBorrow x)
++/*[clinic end generated code: output=b4512e9b67dca22b input=dc59cc34fa0fa04f]*/
+ {
+     PyObject *result, *a;
+ 
+-    CONVERT_OP_RAISE(&a, x, context);
++    if (!convert_op_value(&a, x, context)) {
++        return PyValue_NULL;
++    }
+ 
+     result = dec_apply(a, context);
+     Py_DECREF(a);
+-    return result;
++    if (result == NULL) {
++        return PyValue_NULL;
++    }
++    return PyValue_FromObjectSteal(result);
+ }
+ 
+ #ifdef EXTRA_FUNCTIONALITY
+ /*[clinic input]
++@value_function
+ _decimal.Context.apply = _decimal.Context._apply
+ 
+ Apply self to Decimal x.
+ [clinic start generated code]*/
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
++static PyValue
+ _decimal_Context_apply_impl(PyObject *context, PyTypeObject *cls,
+-                            PyObject *x)
+-/*[clinic end generated code: output=f8a7142d47ad4ff3 input=388e66ca82733516]*/
++                            PyValueBorrow x)
++/*[clinic end generated code: output=822153e5b34ef989 input=285411b3fdfd8895]*/
+ {
+     return _decimal_Context__apply_impl(context, cls, x);
+ }
+@@ -7450,84 +7463,102 @@
+ }
+ 
+ /*[clinic input]
++@value_function
+ _decimal.Context.copy_abs = _decimal.Context.is_normal
+ 
+ Return a copy of x with the sign set to 0.
+ [clinic start generated code]*/
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
++static PyValue
+ _decimal_Context_copy_abs_impl(PyObject *context, PyTypeObject *cls,
+-                               PyObject *x)
+-/*[clinic end generated code: output=a141ad4b9afe2deb input=4aa2f612625f0f73]*/
++                               PyValueBorrow x)
++/*[clinic end generated code: output=8d79d790b53eed38 input=648fd27e2a95ad3d]*/
+ {
+     PyObject *result, *a;
+     uint32_t status = 0;
+ 
+-    CONVERT_OP_RAISE(&a, x, context);
++    if (!convert_op_value(&a, x, context)) {
++        return PyValue_NULL;
++    }
+     decimal_state *state = PyType_GetModuleState(cls);
+     result = dec_alloc(state);
+     if (result == NULL) {
+         Py_DECREF(a);
+-        return NULL;
++        return PyValue_NULL;
+     }
+ 
+     mpd_qcopy_abs(MPD(result), MPD(a), &status);
+     Py_DECREF(a);
+     if (dec_addstatus(context, status)) {
+         Py_DECREF(result);
+-        return NULL;
++        return PyValue_NULL;
+     }
+ 
+-    return result;
++    return PyValue_FromObjectSteal(result);
+ }
+ 
+ /*[clinic input]
++@value_function
+ _decimal.Context.copy_decimal = _decimal.Context.is_normal
+ 
+ Return a copy of Decimal x.
+ [clinic start generated code]*/
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
++static PyValue
+ _decimal_Context_copy_decimal_impl(PyObject *context, PyTypeObject *cls,
+-                                   PyObject *x)
+-/*[clinic end generated code: output=639a82e1193d31f6 input=4db4f942f45fb7c9]*/
++                                   PyValueBorrow x)
++/*[clinic end generated code: output=2d0a9ca32a225649 input=3c9bf0ff48305154]*/
+ {
+     PyObject *result;
+ 
+-    CONVERT_OP_RAISE(&result, x, context);
+-    return result;
++    if (!convert_op_value(&result, x, context)) {
++        return PyValue_NULL;
++    }
++    return PyValue_FromObjectSteal(result);
+ }
+ 
+ /*[clinic input]
++@value_function
+ _decimal.Context.copy_negate = _decimal.Context.is_normal
+ 
+ Return a copy of x with the sign inverted.
+ [clinic start generated code]*/
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
++static PyValue
+ _decimal_Context_copy_negate_impl(PyObject *context, PyTypeObject *cls,
+-                                  PyObject *x)
+-/*[clinic end generated code: output=e49d013489dc252b input=2e6e213e2ed0efda]*/
++                                  PyValueBorrow x)
++/*[clinic end generated code: output=60aba97035732985 input=a39304e7ac6dc68c]*/
+ {
+     PyObject *result, *a;
+     uint32_t status = 0;
+ 
+-    CONVERT_OP_RAISE(&a, x, context);
++    if (!convert_op_value(&a, x, context)) {
++        return PyValue_NULL;
++    }
+     decimal_state *state = PyType_GetModuleState(cls);
+     result = dec_alloc(state);
+     if (result == NULL) {
+         Py_DECREF(a);
+-        return NULL;
++        return PyValue_NULL;
+     }
+ 
+     mpd_qcopy_negate(MPD(result), MPD(a), &status);
+     Py_DECREF(a);
+     if (dec_addstatus(context, status)) {
+         Py_DECREF(result);
+-        return NULL;
++        return PyValue_NULL;
+     }
+ 
+-    return result;
++    return PyValue_FromObjectSteal(result);
+ }
+ 
+ /*[clinic input]
+@@ -7700,27 +7731,37 @@
+ DecCtx_BinaryFunc_NO_CTX(mpd_compare_total_mag)
+ 
+ /*[clinic input]
++@value_function
+ _decimal.Context.copy_sign = _decimal.Context.compare_total
+ 
+ Copy the sign from y to x.
+ [clinic start generated code]*/
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
++static PyValue
+ _decimal_Context_copy_sign_impl(PyObject *context, PyTypeObject *cls,
+-                                PyObject *x, PyObject *y)
+-/*[clinic end generated code: output=77d23b6f4e42120c input=c0682aeaffc7cfdf]*/
++                                PyValueBorrow x, PyValueBorrow y)
++/*[clinic end generated code: output=eb9251e547e83937 input=a9b38205f2c955cc]*/
+ {
+     PyObject *a, *b;
+     PyObject *result;
+     uint32_t status = 0;
+ 
+-    CONVERT_BINOP_RAISE(&a, &b, x, y, context);
++    if (!convert_op_value(&a, x, context)) {
++        return PyValue_NULL;
++    }
++    if (!convert_op_value(&b, y, context)) {
++        Py_DECREF(a);
++        return PyValue_NULL;
++    }
+     decimal_state *state = PyType_GetModuleState(cls);
+     result = dec_alloc(state);
+     if (result == NULL) {
+         Py_DECREF(a);
+         Py_DECREF(b);
+-        return NULL;
++        return PyValue_NULL;
+     }
+ 
+     mpd_qcopy_sign(MPD(result), MPD(a), MPD(b), &status);
+@@ -7728,10 +7769,10 @@
+     Py_DECREF(b);
+     if (dec_addstatus(context, status)) {
+         Py_DECREF(result);
+-        return NULL;
++        return PyValue_NULL;
+     }
+ 
+-    return result;
++    return PyValue_FromObjectSteal(result);
+ }
+ 
+ /*[clinic input]
+@@ -7896,22 +7937,32 @@
+ DecCtx_BinaryFunc(mpd_qshift)
+ 
+ /*[clinic input]
++@value_function
+ _decimal.Context.same_quantum = _decimal.Context.add
+ 
+ Return True if the two operands have the same exponent.
+ [clinic start generated code]*/
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
++static PyValue
+ _decimal_Context_same_quantum_impl(PyObject *context, PyTypeObject *cls,
+-                                   PyObject *x, PyObject *y)
+-/*[clinic end generated code: output=91a4d8325f98d9e9 input=194cd156e398eaf9]*/
++                                   PyValueBorrow x, PyValueBorrow y)
++/*[clinic end generated code: output=157db287de3eda73 input=de3053b7f844fc20]*/
+ {
+     PyObject *a, *b;
+-    PyObject *result;
++    PyValue result;
+ 
+-    CONVERT_BINOP_RAISE(&a, &b, x, y, context);
++    if (!convert_op_value(&a, x, context)) {
++        return PyValue_NULL;
++    }
++    if (!convert_op_value(&b, y, context)) {
++        Py_DECREF(a);
++        return PyValue_NULL;
++    }
+ 
+-    result = mpd_same_quantum(MPD(a), MPD(b)) ? incr_true() : incr_false();
++    result = mpd_same_quantum(MPD(a), MPD(b)) ? PyValue_True : PyValue_False;
+     Py_DECREF(a);
+     Py_DECREF(b);
+ 
+--- a/Modules/_decimal/clinic/_decimal.c.h
++++ b/Modules/_decimal/clinic/_decimal.c.h
+@@ -5954,19 +5954,28 @@
+ "--\n"
+ "\n"
+ "Apply self to Decimal x.");
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+ #define _DECIMAL_CONTEXT__APPLY_METHODDEF    \
+-    {"_apply", _PyCFunction_CAST(_decimal_Context__apply), METH_METHOD|METH_FASTCALL|METH_KEYWORDS, _decimal_Context__apply__doc__},
++    {"_apply", _PyCFunction_CAST(_decimal_Context__apply), METH_VALUE|METH_METHOD|METH_KEYWORDS, _decimal_Context__apply__doc__},
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
++static PyValue
+ _decimal_Context__apply_impl(PyObject *context, PyTypeObject *cls,
+-                             PyObject *x);
++                             PyValueBorrow x);
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
+-_decimal_Context__apply(PyObject *context, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
++static PyValue
++_decimal_Context__apply(PyValueBorrow context, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+ {
+-    PyObject *return_value = NULL;
+-    PyObject *x;
++    PyValue return_value = PyValue_NULL;
++    PyValueBorrow x;
+ 
+     if (!_PyArg_NoKwnames("_apply", kwnames)) {
+         goto exit;
+@@ -5974,8 +5983,8 @@
+     if (!_PyArg_CheckPositional("_apply", nargs, 1, 1)) {
+         goto exit;
+     }
+-    x = args[0];
+-    return_value = _decimal_Context__apply_impl(context, cls, x);
++    x = PyValue_Borrow(args[0]);
++    return_value = _decimal_Context__apply_impl(PyValue_AsKnownObjectBorrow(context), cls, x);
+ 
+ exit:
+     return return_value;
+@@ -5988,19 +5997,28 @@
+ "--\n"
+ "\n"
+ "Apply self to Decimal x.");
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+ #define _DECIMAL_CONTEXT_APPLY_METHODDEF    \
+-    {"apply", _PyCFunction_CAST(_decimal_Context_apply), METH_METHOD|METH_FASTCALL|METH_KEYWORDS, _decimal_Context_apply__doc__},
++    {"apply", _PyCFunction_CAST(_decimal_Context_apply), METH_VALUE|METH_METHOD|METH_KEYWORDS, _decimal_Context_apply__doc__},
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
++static PyValue
+ _decimal_Context_apply_impl(PyObject *context, PyTypeObject *cls,
+-                            PyObject *x);
++                            PyValueBorrow x);
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
+-_decimal_Context_apply(PyObject *context, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
++static PyValue
++_decimal_Context_apply(PyValueBorrow context, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+ {
+-    PyObject *return_value = NULL;
+-    PyObject *x;
++    PyValue return_value = PyValue_NULL;
++    PyValueBorrow x;
+ 
+     if (!_PyArg_NoKwnames("apply", kwnames)) {
+         goto exit;
+@@ -6008,8 +6026,8 @@
+     if (!_PyArg_CheckPositional("apply", nargs, 1, 1)) {
+         goto exit;
+     }
+-    x = args[0];
+-    return_value = _decimal_Context_apply_impl(context, cls, x);
++    x = PyValue_Borrow(args[0]);
++    return_value = _decimal_Context_apply_impl(PyValue_AsKnownObjectBorrow(context), cls, x);
+ 
+ exit:
+     return return_value;
+@@ -6060,19 +6078,28 @@
+ "--\n"
+ "\n"
+ "Return a copy of x with the sign set to 0.");
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+ #define _DECIMAL_CONTEXT_COPY_ABS_METHODDEF    \
+-    {"copy_abs", _PyCFunction_CAST(_decimal_Context_copy_abs), METH_METHOD|METH_FASTCALL|METH_KEYWORDS, _decimal_Context_copy_abs__doc__},
++    {"copy_abs", _PyCFunction_CAST(_decimal_Context_copy_abs), METH_VALUE|METH_METHOD|METH_KEYWORDS, _decimal_Context_copy_abs__doc__},
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
++static PyValue
+ _decimal_Context_copy_abs_impl(PyObject *context, PyTypeObject *cls,
+-                               PyObject *x);
++                               PyValueBorrow x);
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
+-_decimal_Context_copy_abs(PyObject *context, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
++static PyValue
++_decimal_Context_copy_abs(PyValueBorrow context, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+ {
+-    PyObject *return_value = NULL;
+-    PyObject *x;
++    PyValue return_value = PyValue_NULL;
++    PyValueBorrow x;
+ 
+     if (!_PyArg_NoKwnames("copy_abs", kwnames)) {
+         goto exit;
+@@ -6080,8 +6107,8 @@
+     if (!_PyArg_CheckPositional("copy_abs", nargs, 1, 1)) {
+         goto exit;
+     }
+-    x = args[0];
+-    return_value = _decimal_Context_copy_abs_impl(context, cls, x);
++    x = PyValue_Borrow(args[0]);
++    return_value = _decimal_Context_copy_abs_impl(PyValue_AsKnownObjectBorrow(context), cls, x);
+ 
+ exit:
+     return return_value;
+@@ -6092,19 +6119,28 @@
+ "--\n"
+ "\n"
+ "Return a copy of Decimal x.");
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+ #define _DECIMAL_CONTEXT_COPY_DECIMAL_METHODDEF    \
+-    {"copy_decimal", _PyCFunction_CAST(_decimal_Context_copy_decimal), METH_METHOD|METH_FASTCALL|METH_KEYWORDS, _decimal_Context_copy_decimal__doc__},
++    {"copy_decimal", _PyCFunction_CAST(_decimal_Context_copy_decimal), METH_VALUE|METH_METHOD|METH_KEYWORDS, _decimal_Context_copy_decimal__doc__},
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
++static PyValue
+ _decimal_Context_copy_decimal_impl(PyObject *context, PyTypeObject *cls,
+-                                   PyObject *x);
++                                   PyValueBorrow x);
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
+-_decimal_Context_copy_decimal(PyObject *context, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
++static PyValue
++_decimal_Context_copy_decimal(PyValueBorrow context, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+ {
+-    PyObject *return_value = NULL;
+-    PyObject *x;
++    PyValue return_value = PyValue_NULL;
++    PyValueBorrow x;
+ 
+     if (!_PyArg_NoKwnames("copy_decimal", kwnames)) {
+         goto exit;
+@@ -6112,8 +6148,8 @@
+     if (!_PyArg_CheckPositional("copy_decimal", nargs, 1, 1)) {
+         goto exit;
+     }
+-    x = args[0];
+-    return_value = _decimal_Context_copy_decimal_impl(context, cls, x);
++    x = PyValue_Borrow(args[0]);
++    return_value = _decimal_Context_copy_decimal_impl(PyValue_AsKnownObjectBorrow(context), cls, x);
+ 
+ exit:
+     return return_value;
+@@ -6124,19 +6160,28 @@
+ "--\n"
+ "\n"
+ "Return a copy of x with the sign inverted.");
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+ #define _DECIMAL_CONTEXT_COPY_NEGATE_METHODDEF    \
+-    {"copy_negate", _PyCFunction_CAST(_decimal_Context_copy_negate), METH_METHOD|METH_FASTCALL|METH_KEYWORDS, _decimal_Context_copy_negate__doc__},
++    {"copy_negate", _PyCFunction_CAST(_decimal_Context_copy_negate), METH_VALUE|METH_METHOD|METH_KEYWORDS, _decimal_Context_copy_negate__doc__},
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
++static PyValue
+ _decimal_Context_copy_negate_impl(PyObject *context, PyTypeObject *cls,
+-                                  PyObject *x);
++                                  PyValueBorrow x);
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
+-_decimal_Context_copy_negate(PyObject *context, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
++static PyValue
++_decimal_Context_copy_negate(PyValueBorrow context, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+ {
+-    PyObject *return_value = NULL;
+-    PyObject *x;
++    PyValue return_value = PyValue_NULL;
++    PyValueBorrow x;
+ 
+     if (!_PyArg_NoKwnames("copy_negate", kwnames)) {
+         goto exit;
+@@ -6144,8 +6189,8 @@
+     if (!_PyArg_CheckPositional("copy_negate", nargs, 1, 1)) {
+         goto exit;
+     }
+-    x = args[0];
+-    return_value = _decimal_Context_copy_negate_impl(context, cls, x);
++    x = PyValue_Borrow(args[0]);
++    return_value = _decimal_Context_copy_negate_impl(PyValue_AsKnownObjectBorrow(context), cls, x);
+ 
+ exit:
+     return return_value;
+@@ -6433,20 +6478,29 @@
+ "--\n"
+ "\n"
+ "Copy the sign from y to x.");
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+ #define _DECIMAL_CONTEXT_COPY_SIGN_METHODDEF    \
+-    {"copy_sign", _PyCFunction_CAST(_decimal_Context_copy_sign), METH_METHOD|METH_FASTCALL|METH_KEYWORDS, _decimal_Context_copy_sign__doc__},
++    {"copy_sign", _PyCFunction_CAST(_decimal_Context_copy_sign), METH_VALUE|METH_METHOD|METH_KEYWORDS, _decimal_Context_copy_sign__doc__},
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
++static PyValue
+ _decimal_Context_copy_sign_impl(PyObject *context, PyTypeObject *cls,
+-                                PyObject *x, PyObject *y);
++                                PyValueBorrow x, PyValueBorrow y);
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
+-_decimal_Context_copy_sign(PyObject *context, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
++static PyValue
++_decimal_Context_copy_sign(PyValueBorrow context, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+ {
+-    PyObject *return_value = NULL;
+-    PyObject *x;
+-    PyObject *y;
++    PyValue return_value = PyValue_NULL;
++    PyValueBorrow x;
++    PyValueBorrow y;
+ 
+     if (!_PyArg_NoKwnames("copy_sign", kwnames)) {
+         goto exit;
+@@ -6454,9 +6508,9 @@
+     if (!_PyArg_CheckPositional("copy_sign", nargs, 2, 2)) {
+         goto exit;
+     }
+-    x = args[0];
+-    y = args[1];
+-    return_value = _decimal_Context_copy_sign_impl(context, cls, x, y);
++    x = PyValue_Borrow(args[0]);
++    y = PyValue_Borrow(args[1]);
++    return_value = _decimal_Context_copy_sign_impl(PyValue_AsKnownObjectBorrow(context), cls, x, y);
+ 
+ exit:
+     return return_value;
+@@ -6788,20 +6842,29 @@
+ "--\n"
+ "\n"
+ "Return True if the two operands have the same exponent.");
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+ #define _DECIMAL_CONTEXT_SAME_QUANTUM_METHODDEF    \
+-    {"same_quantum", _PyCFunction_CAST(_decimal_Context_same_quantum), METH_METHOD|METH_FASTCALL|METH_KEYWORDS, _decimal_Context_same_quantum__doc__},
++    {"same_quantum", _PyCFunction_CAST(_decimal_Context_same_quantum), METH_VALUE|METH_METHOD|METH_KEYWORDS, _decimal_Context_same_quantum__doc__},
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
++static PyValue
+ _decimal_Context_same_quantum_impl(PyObject *context, PyTypeObject *cls,
+-                                   PyObject *x, PyObject *y);
++                                   PyValueBorrow x, PyValueBorrow y);
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
+-_decimal_Context_same_quantum(PyObject *context, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
++static PyValue
++_decimal_Context_same_quantum(PyValueBorrow context, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+ {
+-    PyObject *return_value = NULL;
+-    PyObject *x;
+-    PyObject *y;
++    PyValue return_value = PyValue_NULL;
++    PyValueBorrow x;
++    PyValueBorrow y;
+ 
+     if (!_PyArg_NoKwnames("same_quantum", kwnames)) {
+         goto exit;
+@@ -6809,9 +6872,9 @@
+     if (!_PyArg_CheckPositional("same_quantum", nargs, 2, 2)) {
+         goto exit;
+     }
+-    x = args[0];
+-    y = args[1];
+-    return_value = _decimal_Context_same_quantum_impl(context, cls, x, y);
++    x = PyValue_Borrow(args[0]);
++    y = PyValue_Borrow(args[1]);
++    return_value = _decimal_Context_same_quantum_impl(PyValue_AsKnownObjectBorrow(context), cls, x, y);
+ 
+ exit:
+     return return_value;
+@@ -6832,4 +6895,4 @@
+ #ifndef _DECIMAL_CONTEXT_APPLY_METHODDEF
+     #define _DECIMAL_CONTEXT_APPLY_METHODDEF
+ #endif /* !defined(_DECIMAL_CONTEXT_APPLY_METHODDEF) */
+-/*[clinic end generated code: output=f2492aec9c8e5b0d input=a9049054013a1b77]*/
++/*[clinic end generated code: output=85fc6c4f7534a335 input=a9049054013a1b77]*/

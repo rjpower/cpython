@@ -1,0 +1,238 @@
+--- a/Modules/_decimal/_decimal.c
++++ b/Modules/_decimal/_decimal.c
+@@ -30,6 +30,7 @@
+ #endif
+ 
+ #include <Python.h>
++#include "pycore_descrobject.h" // _Py_VALUE_GETSET()
+ #include "pycore_dict.h"          // PyDict_GetValue()
+ #include "pycore_list.h"          // PyList_AppendValue()
+ #include "pycore_long_value.h"    // _PyValue_IntAsSsize_t()
+@@ -940,30 +941,13 @@
+     return PyLong_FromUnsignedLong(mpd_get##mem(CTX(self)));    \
+ }
+ 
+-Dec_CONTEXT_GET_SSIZE(prec)
+-Dec_CONTEXT_GET_SSIZE(emax)
+-Dec_CONTEXT_GET_SSIZE(emin)
+-Dec_CONTEXT_GET_SSIZE(clamp)
+ 
+ #ifdef EXTRA_FUNCTIONALITY
+ Dec_CONTEXT_GET_ULONG(traps)
+ Dec_CONTEXT_GET_ULONG(status)
+ #endif
+ 
+-static PyObject *
+-context_getround(PyObject *self, void *Py_UNUSED(closure))
+-{
+-    int i = mpd_getround(CTX(self));
+-    decimal_state *state = get_module_state_from_ctx(self);
+ 
+-    return Py_NewRef(state->round_map[i]);
+-}
+-
+-static PyObject *
+-context_getcapitals(PyObject *self, void *Py_UNUSED(closure))
+-{
+-    return PyLong_FromLong(CtxCaps(self));
+-}
+ 
+ #ifdef EXTRA_FUNCTIONALITY
+ static PyObject *
+@@ -1006,12 +990,12 @@
+ }
+ 
+ static int
+-context_setprec(PyObject *self, PyObject *value, void *Py_UNUSED(closure))
++context_setprec_value(PyObject *self, PyValueBorrow value, void *Py_UNUSED(closure))
+ {
+     mpd_context_t *ctx;
+     mpd_ssize_t x;
+ 
+-    x = _PyValue_IntAsSsize_t(PyValue_FromObjectBorrow(value));
++    x = _PyValue_IntAsSsize_t(value);
+     if (x == -1 && PyErr_Occurred()) {
+         return -1;
+     }
+@@ -1026,12 +1010,18 @@
+ }
+ 
+ static int
+-context_setemin(PyObject *self, PyObject *value, void *Py_UNUSED(closure))
++context_setprec(PyObject *self, PyObject *value, void *closure)
++{
++    return context_setprec_value(self, _Py_VALUE_ARG(value), closure);
++}
++
++static int
++context_setemin_value(PyObject *self, PyValueBorrow value, void *Py_UNUSED(closure))
+ {
+     mpd_context_t *ctx;
+     mpd_ssize_t x;
+ 
+-    x = _PyValue_IntAsSsize_t(PyValue_FromObjectBorrow(value));
++    x = _PyValue_IntAsSsize_t(value);
+     if (x == -1 && PyErr_Occurred()) {
+         return -1;
+     }
+@@ -1046,12 +1036,18 @@
+ }
+ 
+ static int
+-context_setemax(PyObject *self, PyObject *value, void *Py_UNUSED(closure))
++context_setemin(PyObject *self, PyObject *value, void *closure)
++{
++    return context_setemin_value(self, _Py_VALUE_ARG(value), closure);
++}
++
++static int
++context_setemax_value(PyObject *self, PyValueBorrow value, void *Py_UNUSED(closure))
+ {
+     mpd_context_t *ctx;
+     mpd_ssize_t x;
+ 
+-    x = _PyValue_IntAsSsize_t(PyValue_FromObjectBorrow(value));
++    x = _PyValue_IntAsSsize_t(value);
+     if (x == -1 && PyErr_Occurred()) {
+         return -1;
+     }
+@@ -1065,6 +1061,12 @@
+     return 0;
+ }
+ 
++static int
++context_setemax(PyObject *self, PyObject *value, void *closure)
++{
++    return context_setemax_value(self, _Py_VALUE_ARG(value), closure);
++}
++
+ #ifdef CONFIG_32
+ /*[clinic input]
+ _decimal.Context._unsafe_setprec
+@@ -1137,13 +1139,13 @@
+ #endif
+ 
+ static int
+-context_setround(PyObject *self, PyObject *value, void *Py_UNUSED(closure))
++context_setround_value(PyObject *self, PyValueBorrow value, void *Py_UNUSED(closure))
+ {
+     mpd_context_t *ctx;
+     int x;
+ 
+     decimal_state *state = get_module_state_from_ctx(self);
+-    x = getround(state, value);
++    x = getround_value(state, value);
+     if (x == -1) {
+         return -1;
+     }
+@@ -1157,11 +1159,17 @@
+ }
+ 
+ static int
+-context_setcapitals(PyObject *self, PyObject *value, void *Py_UNUSED(closure))
++context_setround(PyObject *self, PyObject *value, void *closure)
++{
++    return context_setround_value(self, _Py_VALUE_ARG(value), closure);
++}
++
++static int
++context_setcapitals_value(PyObject *self, PyValueBorrow value, void *Py_UNUSED(closure))
+ {
+     mpd_ssize_t x;
+ 
+-    x = _PyValue_IntAsSsize_t(PyValue_FromObjectBorrow(value));
++    x = _PyValue_IntAsSsize_t(value);
+     if (x == -1 && PyErr_Occurred()) {
+         return -1;
+     }
+@@ -1175,6 +1183,12 @@
+     return 0;
+ }
+ 
++static int
++context_setcapitals(PyObject *self, PyObject *value, void *closure)
++{
++    return context_setcapitals_value(self, _Py_VALUE_ARG(value), closure);
++}
++
+ #ifdef EXTRA_FUNCTIONALITY
+ static int
+ context_settraps(PyObject *self, PyObject *value, void *Py_UNUSED(closure))
+@@ -1307,12 +1321,12 @@
+ }
+ 
+ static int
+-context_setclamp(PyObject *self, PyObject *value, void *Py_UNUSED(closure))
++context_setclamp_value(PyObject *self, PyValueBorrow value, void *Py_UNUSED(closure))
+ {
+     mpd_context_t *ctx;
+     mpd_ssize_t x;
+ 
+-    x = _PyValue_IntAsSsize_t(PyValue_FromObjectBorrow(value));
++    x = _PyValue_IntAsSsize_t(value);
+     if (x == -1 && PyErr_Occurred()) {
+         return -1;
+     }
+@@ -1326,6 +1340,12 @@
+     return 0;
+ }
+ 
++static int
++context_setclamp(PyObject *self, PyObject *value, void *closure)
++{
++    return context_setclamp_value(self, _Py_VALUE_ARG(value), closure);
++}
++
+ #ifdef EXTRA_FUNCTIONALITY
+ static int
+ context_setallcr(PyObject *self, PyObject *value, void *Py_UNUSED(closure))
+@@ -1858,14 +1878,43 @@
+ }
+ 
+ 
++/* Keep the Context receiver in pointer space while passing descriptor values
++   without materializing inline integers. */
++#define CONTEXT_VALUE_GETSET(NAME, EXPR) \
++static PyValue \
++context_get##NAME##_value(PyValueBorrow receiver, void *Py_UNUSED(closure)) \
++{ \
++    PyObject *self = PyValue_AsKnownObjectBorrow(receiver); \
++    return (EXPR); \
++} \
++static int \
++context_set##NAME##_descriptor(PyValueBorrow receiver, PyValueBorrow value, \
++                               void *closure) \
++{ \
++    if (PyValue_IsNull(value)) { \
++        PyErr_SetString(PyExc_AttributeError, "context attributes cannot be deleted"); \
++        return -1; \
++    } \
++    return context_set##NAME##_value(PyValue_AsKnownObjectBorrow(receiver), \
++                                     value, closure); \
++}
++
++CONTEXT_VALUE_GETSET(prec, PyValue_FromInt64(mpd_getprec(CTX(self))))
++CONTEXT_VALUE_GETSET(emin, PyValue_FromInt64(mpd_getemin(CTX(self))))
++CONTEXT_VALUE_GETSET(emax, PyValue_FromInt64(mpd_getemax(CTX(self))))
++CONTEXT_VALUE_GETSET(clamp, PyValue_FromInt64(mpd_getclamp(CTX(self))))
++CONTEXT_VALUE_GETSET(capitals, PyValue_FromInt64(CtxCaps(self)))
++CONTEXT_VALUE_GETSET(round, PyValue_DUP(PyValue_FromObjectBorrow(
++    get_module_state_from_ctx(self)->round_map[mpd_getround(CTX(self))])))
++
+ static PyGetSetDef context_getsets [] =
+ {
+-  { "prec", context_getprec, context_setprec, NULL, NULL},
+-  { "Emax", context_getemax, context_setemax, NULL, NULL},
+-  { "Emin", context_getemin, context_setemin, NULL, NULL},
+-  { "rounding", context_getround, context_setround, NULL, NULL},
+-  { "capitals", context_getcapitals, context_setcapitals, NULL, NULL},
+-  { "clamp", context_getclamp, context_setclamp, NULL, NULL},
++  _Py_VALUE_GETSET("prec", context_getprec_value, context_setprec_descriptor, NULL, NULL),
++  _Py_VALUE_GETSET("Emax", context_getemax_value, context_setemax_descriptor, NULL, NULL),
++  _Py_VALUE_GETSET("Emin", context_getemin_value, context_setemin_descriptor, NULL, NULL),
++  _Py_VALUE_GETSET("rounding", context_getround_value, context_setround_descriptor, NULL, NULL),
++  _Py_VALUE_GETSET("capitals", context_getcapitals_value, context_setcapitals_descriptor, NULL, NULL),
++  _Py_VALUE_GETSET("clamp", context_getclamp_value, context_setclamp_descriptor, NULL, NULL),
+ #ifdef EXTRA_FUNCTIONALITY
+   { "_allcr", context_getallcr, context_setallcr, NULL, NULL},
+   { "_traps", context_gettraps, context_settraps, NULL, NULL},

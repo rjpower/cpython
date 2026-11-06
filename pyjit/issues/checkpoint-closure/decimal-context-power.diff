@@ -1,0 +1,275 @@
+--- a/Modules/_decimal/_decimal.c
++++ b/Modules/_decimal/_decimal.c
+@@ -7047,6 +7047,7 @@
+ DecCtx_BinaryFunc(mpd_qsub)
+ 
+ /*[clinic input]
++@value_function
+ _decimal.Context.divmod
+ 
+     self as context: self
+@@ -7056,29 +7057,39 @@
+ 
+ Return quotient and remainder of the division x / y.
+ [clinic start generated code]*/
+-
+-static PyObject *
+-_decimal_Context_divmod_impl(PyObject *context, PyObject *x, PyObject *y)
+-/*[clinic end generated code: output=5dbf5410e3f302af input=4d8eee07823c752a]*/
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
++
++static PyValue
++_decimal_Context_divmod_impl(PyObject *context, PyValueBorrow x,
++                             PyValueBorrow y)
++/*[clinic end generated code: output=b173ff513824ab83 input=dddfa842dcb0558d]*/
+ {
+     PyObject *a, *b;
+     PyObject *q, *r;
+     uint32_t status = 0;
+ 
+-    CONVERT_BINOP_RAISE(&a, &b, x, y, context);
++    if (!convert_op_value(&a, x, context)) {
++        return PyValue_NULL;
++    }
++    if (!convert_op_value(&b, y, context)) {
++        Py_DECREF(a);
++        return PyValue_NULL;
++    }
+     decimal_state *state = get_module_state_from_ctx(context);
+     q = dec_alloc(state);
+     if (q == NULL) {
+         Py_DECREF(a);
+         Py_DECREF(b);
+-        return NULL;
++        return PyValue_NULL;
+     }
+     r = dec_alloc(state);
+     if (r == NULL) {
+         Py_DECREF(a);
+         Py_DECREF(b);
+         Py_DECREF(q);
+-        return NULL;
++        return PyValue_NULL;
+     }
+ 
+     mpd_qdivmod(MPD(q), MPD(r), MPD(a), MPD(b), CTX(context), &status);
+@@ -7087,15 +7098,20 @@
+     if (dec_addstatus(context, status)) {
+         Py_DECREF(r);
+         Py_DECREF(q);
+-        return NULL;
++        return PyValue_NULL;
+     }
+ 
+-    return _PyTuple_FromPairSteal(q, r);
++    PyObject *result = _PyTuple_FromPairSteal(q, r);
++    if (result == NULL) {
++        return PyValue_NULL;
++    }
++    return PyValue_FromObjectSteal(result);
+ }
+ 
+ /* Binary or ternary arithmetic functions */
+ 
+ /*[clinic input]
++@value_function
+ _decimal.Context.power
+ 
+     self as context: self
+@@ -7121,23 +7137,33 @@
+     * modulo must be nonzero and less than 10**prec in absolute
+       value
+ [clinic start generated code]*/
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
++static PyValue
+ _decimal_Context_power_impl(PyObject *context, PyTypeObject *cls,
+-                            PyObject *base, PyObject *exp, PyObject *mod)
+-/*[clinic end generated code: output=d06d40c37cdd69dc input=660210a6607ca4b0]*/
++                            PyValueBorrow base, PyValueBorrow exp,
++                            PyValueBorrow mod)
++/*[clinic end generated code: output=8c70f7d7b488a9c9 input=dfe7d8cc30393ba8]*/
+ {
+     PyObject *a, *b, *c = NULL;
+     PyObject *result;
+     uint32_t status = 0;
+ 
+-    CONVERT_BINOP_RAISE(&a, &b, base, exp, context);
++    if (!convert_op_value(&a, base, context)) {
++        return PyValue_NULL;
++    }
++    if (!convert_op_value(&b, exp, context)) {
++        Py_DECREF(a);
++        return PyValue_NULL;
++    }
+ 
+-    if (mod != Py_None) {
+-        if (!convert_op(TYPE_ERR, &c, mod, context)) {
++    if (!PyValue_IsNone(mod)) {
++        if (!convert_op_value(&c, mod, context)) {
+             Py_DECREF(a);
+             Py_DECREF(b);
+-            return c;
++            return PyValue_NULL;
+         }
+     }
+ 
+@@ -7147,7 +7173,7 @@
+         Py_DECREF(a);
+         Py_DECREF(b);
+         Py_XDECREF(c);
+-        return NULL;
++        return PyValue_NULL;
+     }
+ 
+     if (c == NULL) {
+@@ -7163,10 +7189,10 @@
+     Py_DECREF(b);
+     if (dec_addstatus(context, status)) {
+         Py_DECREF(result);
+-        return NULL;
++        return PyValue_NULL;
+     }
+ 
+-    return result;
++    return PyValue_FromObjectSteal(result);
+ }
+ 
+ /* Ternary arithmetic functions */
+--- a/Modules/_decimal/clinic/_decimal.c.h
++++ b/Modules/_decimal/clinic/_decimal.c.h
+@@ -5373,26 +5373,36 @@
+ "--\n"
+ "\n"
+ "Return quotient and remainder of the division x / y.");
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+ #define _DECIMAL_CONTEXT_DIVMOD_METHODDEF    \
+-    {"divmod", _PyCFunction_CAST(_decimal_Context_divmod), METH_FASTCALL, _decimal_Context_divmod__doc__},
++    {"divmod", _PyCFunction_CAST(_decimal_Context_divmod), METH_VALUE, _decimal_Context_divmod__doc__},
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
+-_decimal_Context_divmod_impl(PyObject *context, PyObject *x, PyObject *y);
++static PyValue
++_decimal_Context_divmod_impl(PyObject *context, PyValueBorrow x,
++                             PyValueBorrow y);
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
+-_decimal_Context_divmod(PyObject *context, PyObject *const *args, Py_ssize_t nargs)
++static PyValue
++_decimal_Context_divmod(PyValueBorrow context, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+ {
+-    PyObject *return_value = NULL;
+-    PyObject *x;
+-    PyObject *y;
++    PyValue return_value = PyValue_NULL;
++    PyValueBorrow x;
++    PyValueBorrow y;
+ 
+     if (!_PyArg_CheckPositional("divmod", nargs, 2, 2)) {
+         goto exit;
+     }
+-    x = args[0];
+-    y = args[1];
+-    return_value = _decimal_Context_divmod_impl(context, x, y);
++    x = PyValue_Borrow(args[0]);
++    y = PyValue_Borrow(args[1]);
++    return_value = _decimal_Context_divmod_impl(PyValue_AsKnownObjectBorrow(context), x, y);
+ 
+ exit:
+     return return_value;
+@@ -5418,18 +5428,28 @@
+ "    * at least one of \'a\' or \'b\' must be nonzero\n"
+ "    * modulo must be nonzero and less than 10**prec in absolute\n"
+ "      value");
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+ #define _DECIMAL_CONTEXT_POWER_METHODDEF    \
+-    {"power", _PyCFunction_CAST(_decimal_Context_power), METH_METHOD|METH_FASTCALL|METH_KEYWORDS, _decimal_Context_power__doc__},
++    {"power", _PyCFunction_CAST(_decimal_Context_power), METH_VALUE|METH_METHOD|METH_KEYWORDS, _decimal_Context_power__doc__},
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
++static PyValue
+ _decimal_Context_power_impl(PyObject *context, PyTypeObject *cls,
+-                            PyObject *base, PyObject *exp, PyObject *mod);
++                            PyValueBorrow base, PyValueBorrow exp,
++                            PyValueBorrow mod);
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
+-_decimal_Context_power(PyObject *context, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
++static PyValue
++_decimal_Context_power(PyValueBorrow context, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+ {
+-    PyObject *return_value = NULL;
++    PyValue return_value = PyValue_NULL;
+     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
+ 
+     #define NUM_KEYWORDS 3
+@@ -5457,25 +5477,21 @@
+         .kwtuple = KWTUPLE,
+     };
+     #undef KWTUPLE
+-    PyObject *argsbuf[3];
+-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 2;
+-    PyObject *base;
+-    PyObject *exp;
+-    PyObject *mod = Py_None;
+-
+-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
+-            /*minpos*/ 2, /*maxpos*/ 3, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
+-    if (!args) {
+-        goto exit;
+-    }
+-    base = args[0];
+-    exp = args[1];
+-    if (!noptargs) {
+-        goto skip_optional_pos;
+-    }
+-    mod = args[2];
+-skip_optional_pos:
+-    return_value = _decimal_Context_power_impl(context, cls, base, exp, mod);
++    Py_ssize_t _idx[3];
++    PyValueBorrow base;
++    PyValueBorrow exp;
++    PyValueBorrow mod = PyValue_Borrow(PyValue_None);
++
++    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
++            /*minpos*/ 2, /*maxpos*/ 3, /*minkw*/ 0, /*varpos*/ 0, _idx, 3)) {
++        goto exit;
++    }
++    base = PyValue_Borrow(args[_idx[0]]);
++    exp = PyValue_Borrow(args[_idx[1]]);
++    if (_idx[2] >= 0) {
++        mod = PyValue_Borrow(args[_idx[2]]);
++    }
++    return_value = _decimal_Context_power_impl(PyValue_AsKnownObjectBorrow(context), cls, base, exp, mod);
+ 
+ exit:
+     return return_value;
+@@ -6922,4 +6938,4 @@
+ #ifndef _DECIMAL_CONTEXT_APPLY_METHODDEF
+     #define _DECIMAL_CONTEXT_APPLY_METHODDEF
+ #endif /* !defined(_DECIMAL_CONTEXT_APPLY_METHODDEF) */
+-/*[clinic end generated code: output=249497ac84a173e4 input=a9049054013a1b77]*/
++/*[clinic end generated code: output=c06bc08587c3c2d9 input=a9049054013a1b77]*/

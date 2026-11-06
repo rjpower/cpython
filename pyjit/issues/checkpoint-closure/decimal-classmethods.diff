@@ -1,0 +1,560 @@
+--- a/Modules/_decimal/_decimal.c
++++ b/Modules/_decimal/_decimal.c
+@@ -3129,9 +3129,29 @@
+ #define PyDec_FromSequenceExact(st, sequence, context) \
+         PyDecType_FromSequenceExact((st)->PyDec_Type, sequence, context)
+ 
++static PyObject *optional_context_value(decimal_state *state, PyValueBorrow value);
++
++/* The subclass constructor may return any Python value. */
++static PyValue
++decimal_call_subclass(PyTypeObject *type, decimal_state *state, PyObject *result)
++{
++    if (result == NULL) {
++        return PyValue_NULL;
++    }
++    if (type == state->PyDec_Type) {
++        return PyValue_FromObjectSteal(result);
++    }
++    PyValue value = _PyValue_CallOneArg(_PyThreadState_GET(),
++                                         PyValue_FromObjectBorrow(type),
++                                         PyValue_FromObjectBorrow(result));
++    Py_DECREF(result);
++    return value;
++}
++
+ /*[clinic input]
+ @permit_long_docstring_body
+ @classmethod
++@value_function
+ _decimal.Decimal.from_float
+ 
+     cls: defining_class
+@@ -3152,24 +3172,25 @@
+     >>> Decimal.from_float(float('-inf'))
+     Decimal('-Infinity')
+ [clinic start generated code]*/
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
++static PyValue
+ _decimal_Decimal_from_float_impl(PyTypeObject *type, PyTypeObject *cls,
+-                                 PyObject *pyfloat)
+-/*[clinic end generated code: output=fcb7d55d2f9dc790 input=29abf05dd8fe79e4]*/
++                                 PyValueBorrow pyfloat)
++/*[clinic end generated code: output=7e2731ec8f60bc32 input=5d9aa81eec301e8d]*/
+ {
+     PyObject *context;
+     PyObject *result;
+ 
+     decimal_state *state = PyType_GetModuleState(cls);
+-    CURRENT_CONTEXT(state, context);
+-    result = PyDecType_FromFloatExact(state->PyDec_Type, PyValue_FromObjectBorrow(pyfloat), context);
+-    if (type != state->PyDec_Type && result != NULL) {
+-        Py_SETREF(result,
+-            PyObject_CallFunctionObjArgs((PyObject *)type, result, NULL));
++    context = optional_context_value(state, PyValue_Borrow(PyValue_None));
++    if (context == NULL) {
++        return PyValue_NULL;
+     }
+-
+-    return result;
++    result = PyDecType_FromFloatExact(state->PyDec_Type, pyfloat, context);
++    return decimal_call_subclass(type, state, result);
+ }
+ 
+ /* 'v' can have any numeric type accepted by the Decimal constructor. Attempt
+@@ -3177,26 +3198,26 @@
+    for an mpd_t, fail with InvalidOperation. */
+ static PyObject *
+ PyDecType_FromNumberExact(PyTypeObject *type, PyTypeObject *cls,
+-                          PyObject *v, PyObject *context)
++                          PyValueBorrow v, PyObject *context)
+ {
+     decimal_state *state = PyType_GetModuleState(cls);
+-    assert(v != NULL);
+-    if (PyDec_Check(state, v)) {
+-        return PyDecType_FromDecimalExact(type, v, context);
++    assert(!PyValue_IsNull(v));
++    if (PyValue_IsObject(v) && PyDec_Check(state, PyValue_AsKnownObjectBorrow(v))) {
++        return PyDecType_FromDecimalExact(type, PyValue_AsKnownObjectBorrow(v), context);
+     }
+-    else if (PyLong_Check(v)) {
+-        return PyDecType_FromLongExact(type, PyValue_FromObjectBorrow(v), context);
++    else if (PyValue_LongCheck(v)) {
++        return PyDecType_FromLongExact(type, v, context);
+     }
+-    else if (PyFloat_Check(v)) {
++    else if (PyValue_FloatCheck(v)) {
+         if (dec_addstatus(context, MPD_Float_operation)) {
+             return NULL;
+         }
+-        return PyDecType_FromFloatExact(type, PyValue_FromObjectBorrow(v), context);
++        return PyDecType_FromFloatExact(type, v, context);
+     }
+     else {
+         PyErr_Format(PyExc_TypeError,
+             "conversion from %s to Decimal is not supported",
+-            Py_TYPE(v)->tp_name);
++            PyValue_TYPE(v)->tp_name);
+         return NULL;
+     }
+ }
+@@ -3205,6 +3226,7 @@
+ @permit_long_summary
+ @permit_long_docstring_body
+ @classmethod
++@value_function
+ _decimal.Decimal.from_number
+ 
+     cls: defining_class
+@@ -3220,29 +3242,31 @@
+     >>> Decimal.from_number(Decimal('3.14'))  # another decimal instance
+     Decimal('3.14')
+ [clinic start generated code]*/
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
++static PyValue
+ _decimal_Decimal_from_number_impl(PyTypeObject *type, PyTypeObject *cls,
+-                                  PyObject *number)
+-/*[clinic end generated code: output=4d3ec722b7acfd8b input=34ff3696955d3def]*/
++                                  PyValueBorrow number)
++/*[clinic end generated code: output=b3bc3640e07a0271 input=1a29810cbe5f13a1]*/
+ {
+     PyObject *context;
+     PyObject *result;
+ 
+     decimal_state *state = PyType_GetModuleState(cls);
+-    CURRENT_CONTEXT(state, context);
+-    result = PyDecType_FromNumberExact(state->PyDec_Type, cls, number, context);
+-    if (type != state->PyDec_Type && result != NULL) {
+-        Py_SETREF(result,
+-            PyObject_CallFunctionObjArgs((PyObject *)type, result, NULL));
++    context = optional_context_value(state, PyValue_Borrow(PyValue_None));
++    if (context == NULL) {
++        return PyValue_NULL;
+     }
+-
+-    return result;
++    result = PyDecType_FromNumberExact(state->PyDec_Type, cls, number, context);
++    return decimal_call_subclass(type, state, result);
+ }
+ 
+ /* create_decimal_from_float */
+ 
+ /*[clinic input]
++@value_function
+ _decimal.Context.create_decimal_from_float
+ 
+     self as context: self
+@@ -3255,15 +3279,22 @@
+ Unlike the Decimal.from_float() class method, this function observes
+ the context limits.
+ [clinic start generated code]*/
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
++static PyValue
+ _decimal_Context_create_decimal_from_float_impl(PyObject *context,
+                                                 PyTypeObject *cls,
+-                                                PyObject *f)
+-/*[clinic end generated code: output=a5548f5140fa0870 input=8c66eeb22b01ddd4]*/
++                                                PyValueBorrow f)
++/*[clinic end generated code: output=d846fac0cee8a5dd input=9cf87eda132b97c3]*/
+ {
+     decimal_state *state = PyType_GetModuleState(cls);
+-    return PyDec_FromFloat(state, f, context);
++    PyObject *result = PyDecType_FromFloat(state->PyDec_Type, f, context);
++    if (result == NULL) {
++        return PyValue_NULL;
++    }
++    return PyValue_FromObjectSteal(result);
+ }
+ 
+ /* Apply the context to the input operand. Return a new PyDecObject. */
+@@ -4230,8 +4261,6 @@
+     return NULL;
+ }
+ 
+-static PyObject *optional_context_value(decimal_state *state, PyValueBorrow value);
+-
+ /*[clinic input]
+ @value_function
+ _decimal.Decimal.to_integral_value
+@@ -5604,6 +5633,7 @@
+ Dec_UnaryFuncVA(mpd_qlogb)
+ 
+ /*[clinic input]
++@value_function
+ _decimal.Decimal.number_class = _decimal.Decimal.exp
+ 
+ Return a string describing the class of the operand.
+@@ -5626,22 +5656,33 @@
+       Number).
+     * 'sNaN', indicating that the operand is a signaling NaN.
+ [clinic start generated code]*/
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
++static PyValue
+ _decimal_Decimal_number_class_impl(PyObject *self, PyTypeObject *cls,
+-                                   PyObject *context)
+-/*[clinic end generated code: output=1ac82412e0849c52 input=0b59852b43c521aa]*/
++                                   PyValueBorrow context)
++/*[clinic end generated code: output=3a27d93c82a9111b input=0a49301b8869c3d8]*/
+ {
+     const char *cp;
+ 
+     decimal_state *state = PyType_GetModuleState(cls);
+-    CONTEXT_CHECK_VA(state, context);
++    PyObject *ctx = optional_context_value(state, context);
++    if (ctx == NULL) {
++        return PyValue_NULL;
++    }
+ 
+-    cp = mpd_class(MPD(self), CTX(context));
+-    return PyUnicode_FromString(cp);
++    cp = mpd_class(MPD(self), CTX(ctx));
++    PyObject *result = PyUnicode_FromString(cp);
++    if (result == NULL) {
++        return PyValue_NULL;
++    }
++    return PyValue_FromObjectSteal(result);
+ }
+ 
+ /*[clinic input]
++@value_function
+ _decimal.Decimal.to_eng_string = _decimal.Decimal.exp
+ 
+ Convert to an engineering-type string.
+@@ -5654,29 +5695,38 @@
+ is lower or upper case.  Otherwise, the context does not affect the
+ operation.
+ [clinic start generated code]*/
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
++static PyValue
+ _decimal_Decimal_to_eng_string_impl(PyObject *self, PyTypeObject *cls,
+-                                    PyObject *context)
+-/*[clinic end generated code: output=901f128d437ae5c0 input=111db4de6561f211]*/
++                                    PyValueBorrow context)
++/*[clinic end generated code: output=28ed01d391ca6b3e input=33b6aac5c7f61cb7]*/
+ {
+     PyObject *result;
+     mpd_ssize_t size;
+     char *s;
+ 
+     decimal_state *state = PyType_GetModuleState(cls);
+-    CONTEXT_CHECK_VA(state, context);
++    PyObject *ctx = optional_context_value(state, context);
++    if (ctx == NULL) {
++        return PyValue_NULL;
++    }
+ 
+-    size = mpd_to_eng_size(&s, MPD(self), CtxCaps(context));
++    size = mpd_to_eng_size(&s, MPD(self), CtxCaps(ctx));
+     if (size < 0) {
+         PyErr_NoMemory();
+-        return NULL;
++        return PyValue_NULL;
+     }
+ 
+     result = unicode_fromascii(s, size);
+     mpd_free(s);
+ 
+-    return result;
++    if (result == NULL) {
++        return PyValue_NULL;
++    }
++    return PyValue_FromObjectSteal(result);
+ }
+ 
+ /* Binary functions, optional context arg for conversion errors */
+--- a/Modules/_decimal/clinic/_decimal.c.h
++++ b/Modules/_decimal/clinic/_decimal.c.h
+@@ -761,19 +761,28 @@
+ "    Decimal(\'Infinity\')\n"
+ "    >>> Decimal.from_float(float(\'-inf\'))\n"
+ "    Decimal(\'-Infinity\')");
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+ #define _DECIMAL_DECIMAL_FROM_FLOAT_METHODDEF    \
+-    {"from_float", _PyCFunction_CAST(_decimal_Decimal_from_float), METH_METHOD|METH_FASTCALL|METH_KEYWORDS|METH_CLASS, _decimal_Decimal_from_float__doc__},
++    {"from_float", _PyCFunction_CAST(_decimal_Decimal_from_float), METH_VALUE|METH_METHOD|METH_KEYWORDS|METH_CLASS, _decimal_Decimal_from_float__doc__},
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
++static PyValue
+ _decimal_Decimal_from_float_impl(PyTypeObject *type, PyTypeObject *cls,
+-                                 PyObject *pyfloat);
++                                 PyValueBorrow pyfloat);
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
+-_decimal_Decimal_from_float(PyObject *type, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
++static PyValue
++_decimal_Decimal_from_float(PyValueBorrow type, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+ {
+-    PyObject *return_value = NULL;
+-    PyObject *pyfloat;
++    PyValue return_value = PyValue_NULL;
++    PyValueBorrow pyfloat;
+ 
+     if (!_PyArg_NoKwnames("from_float", kwnames)) {
+         goto exit;
+@@ -781,8 +790,8 @@
+     if (!_PyArg_CheckPositional("from_float", nargs, 1, 1)) {
+         goto exit;
+     }
+-    pyfloat = args[0];
+-    return_value = _decimal_Decimal_from_float_impl((PyTypeObject *)type, cls, pyfloat);
++    pyfloat = PyValue_Borrow(args[0]);
++    return_value = _decimal_Decimal_from_float_impl((PyTypeObject *)PyValue_AsKnownObjectBorrow(type), cls, pyfloat);
+ 
+ exit:
+     return return_value;
+@@ -800,19 +809,28 @@
+ "    Decimal(\'0.1000000000000000055511151231257827021181583404541015625\')\n"
+ "    >>> Decimal.from_number(Decimal(\'3.14\'))  # another decimal instance\n"
+ "    Decimal(\'3.14\')");
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+ #define _DECIMAL_DECIMAL_FROM_NUMBER_METHODDEF    \
+-    {"from_number", _PyCFunction_CAST(_decimal_Decimal_from_number), METH_METHOD|METH_FASTCALL|METH_KEYWORDS|METH_CLASS, _decimal_Decimal_from_number__doc__},
++    {"from_number", _PyCFunction_CAST(_decimal_Decimal_from_number), METH_VALUE|METH_METHOD|METH_KEYWORDS|METH_CLASS, _decimal_Decimal_from_number__doc__},
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
++static PyValue
+ _decimal_Decimal_from_number_impl(PyTypeObject *type, PyTypeObject *cls,
+-                                  PyObject *number);
++                                  PyValueBorrow number);
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
+-_decimal_Decimal_from_number(PyObject *type, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
++static PyValue
++_decimal_Decimal_from_number(PyValueBorrow type, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+ {
+-    PyObject *return_value = NULL;
+-    PyObject *number;
++    PyValue return_value = PyValue_NULL;
++    PyValueBorrow number;
+ 
+     if (!_PyArg_NoKwnames("from_number", kwnames)) {
+         goto exit;
+@@ -820,8 +838,8 @@
+     if (!_PyArg_CheckPositional("from_number", nargs, 1, 1)) {
+         goto exit;
+     }
+-    number = args[0];
+-    return_value = _decimal_Decimal_from_number_impl((PyTypeObject *)type, cls, number);
++    number = PyValue_Borrow(args[0]);
++    return_value = _decimal_Decimal_from_number_impl((PyTypeObject *)PyValue_AsKnownObjectBorrow(type), cls, number);
+ 
+ exit:
+     return return_value;
+@@ -835,20 +853,29 @@
+ "\n"
+ "Unlike the Decimal.from_float() class method, this function observes\n"
+ "the context limits.");
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+ #define _DECIMAL_CONTEXT_CREATE_DECIMAL_FROM_FLOAT_METHODDEF    \
+-    {"create_decimal_from_float", _PyCFunction_CAST(_decimal_Context_create_decimal_from_float), METH_METHOD|METH_FASTCALL|METH_KEYWORDS, _decimal_Context_create_decimal_from_float__doc__},
++    {"create_decimal_from_float", _PyCFunction_CAST(_decimal_Context_create_decimal_from_float), METH_VALUE|METH_METHOD|METH_KEYWORDS, _decimal_Context_create_decimal_from_float__doc__},
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
++static PyValue
+ _decimal_Context_create_decimal_from_float_impl(PyObject *context,
+                                                 PyTypeObject *cls,
+-                                                PyObject *f);
++                                                PyValueBorrow f);
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
+-_decimal_Context_create_decimal_from_float(PyObject *context, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
++static PyValue
++_decimal_Context_create_decimal_from_float(PyValueBorrow context, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+ {
+-    PyObject *return_value = NULL;
+-    PyObject *f;
++    PyValue return_value = PyValue_NULL;
++    PyValueBorrow f;
+ 
+     if (!_PyArg_NoKwnames("create_decimal_from_float", kwnames)) {
+         goto exit;
+@@ -856,8 +883,8 @@
+     if (!_PyArg_CheckPositional("create_decimal_from_float", nargs, 1, 1)) {
+         goto exit;
+     }
+-    f = args[0];
+-    return_value = _decimal_Context_create_decimal_from_float_impl(context, cls, f);
++    f = PyValue_Borrow(args[0]);
++    return_value = _decimal_Context_create_decimal_from_float_impl(PyValue_AsKnownObjectBorrow(context), cls, f);
+ 
+ exit:
+     return return_value;
+@@ -3206,18 +3233,27 @@
+ "    * \'NaN\', indicating that the operand is a quiet NaN (Not a\n"
+ "      Number).\n"
+ "    * \'sNaN\', indicating that the operand is a signaling NaN.");
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+ #define _DECIMAL_DECIMAL_NUMBER_CLASS_METHODDEF    \
+-    {"number_class", _PyCFunction_CAST(_decimal_Decimal_number_class), METH_METHOD|METH_FASTCALL|METH_KEYWORDS, _decimal_Decimal_number_class__doc__},
++    {"number_class", _PyCFunction_CAST(_decimal_Decimal_number_class), METH_VALUE|METH_METHOD|METH_KEYWORDS, _decimal_Decimal_number_class__doc__},
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
++static PyValue
+ _decimal_Decimal_number_class_impl(PyObject *self, PyTypeObject *cls,
+-                                   PyObject *context);
++                                   PyValueBorrow context);
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
+-_decimal_Decimal_number_class(PyObject *self, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
++static PyValue
++_decimal_Decimal_number_class(PyValueBorrow self, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+ {
+-    PyObject *return_value = NULL;
++    PyValue return_value = PyValue_NULL;
+     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
+ 
+     #define NUM_KEYWORDS 1
+@@ -3245,21 +3281,17 @@
+         .kwtuple = KWTUPLE,
+     };
+     #undef KWTUPLE
+-    PyObject *argsbuf[1];
+-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 0;
+-    PyObject *context = Py_None;
++    Py_ssize_t _idx[1];
++    PyValueBorrow context = PyValue_Borrow(PyValue_None);
+ 
+-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
+-            /*minpos*/ 0, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
+-    if (!args) {
++    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
++            /*minpos*/ 0, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, _idx, 1)) {
+         goto exit;
+     }
+-    if (!noptargs) {
+-        goto skip_optional_pos;
++    if (_idx[0] >= 0) {
++        context = PyValue_Borrow(args[_idx[0]]);
+     }
+-    context = args[0];
+-skip_optional_pos:
+-    return_value = _decimal_Decimal_number_class_impl(self, cls, context);
++    return_value = _decimal_Decimal_number_class_impl(PyValue_AsKnownObjectBorrow(self), cls, context);
+ 
+ exit:
+     return return_value;
+@@ -3278,18 +3310,27 @@
+ "The value of context.capitals determines whether the exponent sign\n"
+ "is lower or upper case.  Otherwise, the context does not affect the\n"
+ "operation.");
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+ #define _DECIMAL_DECIMAL_TO_ENG_STRING_METHODDEF    \
+-    {"to_eng_string", _PyCFunction_CAST(_decimal_Decimal_to_eng_string), METH_METHOD|METH_FASTCALL|METH_KEYWORDS, _decimal_Decimal_to_eng_string__doc__},
++    {"to_eng_string", _PyCFunction_CAST(_decimal_Decimal_to_eng_string), METH_VALUE|METH_METHOD|METH_KEYWORDS, _decimal_Decimal_to_eng_string__doc__},
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
++static PyValue
+ _decimal_Decimal_to_eng_string_impl(PyObject *self, PyTypeObject *cls,
+-                                    PyObject *context);
++                                    PyValueBorrow context);
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
+-_decimal_Decimal_to_eng_string(PyObject *self, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
++static PyValue
++_decimal_Decimal_to_eng_string(PyValueBorrow self, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+ {
+-    PyObject *return_value = NULL;
++    PyValue return_value = PyValue_NULL;
+     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
+ 
+     #define NUM_KEYWORDS 1
+@@ -3317,21 +3358,17 @@
+         .kwtuple = KWTUPLE,
+     };
+     #undef KWTUPLE
+-    PyObject *argsbuf[1];
+-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 0;
+-    PyObject *context = Py_None;
++    Py_ssize_t _idx[1];
++    PyValueBorrow context = PyValue_Borrow(PyValue_None);
+ 
+-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
+-            /*minpos*/ 0, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
+-    if (!args) {
++    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
++            /*minpos*/ 0, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, _idx, 1)) {
+         goto exit;
+     }
+-    if (!noptargs) {
+-        goto skip_optional_pos;
++    if (_idx[0] >= 0) {
++        context = PyValue_Borrow(args[_idx[0]]);
+     }
+-    context = args[0];
+-skip_optional_pos:
+-    return_value = _decimal_Decimal_to_eng_string_impl(self, cls, context);
++    return_value = _decimal_Decimal_to_eng_string_impl(PyValue_AsKnownObjectBorrow(self), cls, context);
+ 
+ exit:
+     return return_value;
+@@ -7135,4 +7172,4 @@
+ #ifndef _DECIMAL_CONTEXT_APPLY_METHODDEF
+     #define _DECIMAL_CONTEXT_APPLY_METHODDEF
+ #endif /* !defined(_DECIMAL_CONTEXT_APPLY_METHODDEF) */
+-/*[clinic end generated code: output=6905d42c61157194 input=a9049054013a1b77]*/
++/*[clinic end generated code: output=b22bec900e02e442 input=a9049054013a1b77]*/

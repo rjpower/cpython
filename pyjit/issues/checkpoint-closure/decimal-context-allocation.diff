@@ -1,0 +1,73 @@
+--- a/Modules/_decimal/_decimal.c
++++ b/Modules/_decimal/_decimal.c
+@@ -1687,6 +1687,19 @@
+     CtxCaps(v) = 1;
+ }
+ 
++/* The exact Context base allocates a heap Context through its value entry. */
++static PyObject *
++context_new_default(decimal_state *state)
++{
++    PyValue result = _PyValue_Vectorcall(
++        PyValue_FromObjectBorrow((PyObject *)state->PyDecContext_Type),
++        NULL, 0, NULL);
++    if (PyValue_IsNull(result)) {
++        return NULL;
++    }
++    return PyValue_AsKnownObjectSteal(result);
++}
++
+ /* Factory function for creating IEEE interchange format contexts */
+ 
+ /*[clinic input]
+@@ -1720,13 +1733,10 @@
+     }
+ 
+     decimal_state *state = get_module_state(module);
+-    PyValue result = _PyValue_Vectorcall(
+-        PyValue_FromObjectBorrow((PyObject *)state->PyDecContext_Type),
+-        NULL, 0, NULL);
+-    if (PyValue_IsNull(result)) {
++    context = context_new_default(state);
++    if (context == NULL) {
+         return PyValue_NULL;
+     }
+-    context = PyValue_AsKnownObjectSteal(result);
+     *CTX(context) = ctx;
+ 
+     return PyValue_FromObjectSteal(context);
+@@ -1743,7 +1753,7 @@
+ context_copy(decimal_state *state, PyObject *v)
+ {
+     PyObject *copy =
+-        PyObject_CallObject((PyObject *)state->PyDecContext_Type, NULL);
++        context_new_default(state);
+ 
+     if (copy == NULL) {
+         return NULL;
+@@ -9038,7 +9048,7 @@
+ 
+     /* Init default context template first */
+     ASSIGN_PTR(state->default_context_template,
+-               PyObject_CallObject((PyObject *)state->PyDecContext_Type, NULL));
++               context_new_default(state));
+     CHECK_INT(PyModule_AddObjectRef(m, "DefaultContext",
+                                     state->default_context_template));
+ 
+@@ -9054,14 +9064,14 @@
+ 
+     /* Init basic context template */
+     ASSIGN_PTR(state->basic_context_template,
+-               PyObject_CallObject((PyObject *)state->PyDecContext_Type, NULL));
++               context_new_default(state));
+     init_basic_context(state->basic_context_template);
+     CHECK_INT(PyModule_AddObjectRef(m, "BasicContext",
+                                     state->basic_context_template));
+ 
+     /* Init extended context template */
+     ASSIGN_PTR(state->extended_context_template,
+-               PyObject_CallObject((PyObject *)state->PyDecContext_Type, NULL));
++               context_new_default(state));
+     init_extended_context(state->extended_context_template);
+     CHECK_INT(PyModule_AddObjectRef(m, "ExtendedContext",
+                                     state->extended_context_template));

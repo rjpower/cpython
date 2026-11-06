@@ -1,0 +1,118 @@
+diff --git a/Lib/test/test_marshal.py b/Lib/test/test_marshal.py
+index b8a2bc5aefd..7ab64e7c57d 100644
+--- a/Lib/test/test_marshal.py
++++ b/Lib/test/test_marshal.py
+@@ -90,6 +90,16 @@ def test_inline_reference_payloads(self):
+                 self.assertEqual(marshal.loads(data), (expected, expected))
+                 self.assertEqual(marshal.load(io.BytesIO(data)), (expected, expected))
+ 
++    def test_inline_tuple_scalar_wire(self):
++        # Versions 0-2 use a five-byte tuple prefix and no reference table.
++        values = (-2**40, -2**31, 2**31 - 1, 2**40, -0.0, 1.25)
++        for version in range(3):
++            for value in values:
++                with self.subTest(version=version, value=value):
++                    data = marshal.dumps((value,), version)
++                    self.assertEqual(data[5:], marshal.dumps(value, version))
++                    self.assertEqual(marshal.loads(data), (value,))
++
+     def test_bool(self):
+         for b in (True, False):
+             self.helper(b)
+diff --git a/Python/marshal.c b/Python/marshal.c
+index 6e6d69f6d99..412921f149b 100644
+--- a/Python/marshal.c
++++ b/Python/marshal.c
+@@ -701,6 +701,61 @@ w_object(PyObject *v, WFILE *p)
+     p->depth--;
+ }
+ 
++/* Inline fields have no object identity to enter in the reference table. */
++static void
++w_value(PyValueBorrow v, WFILE *p)
++{
++    if (p->error) {
++        return;
++    }
++    assert(!PyValue_IsNull(v));
++    if (PyValue_IsObject(v)) {
++        w_object(PyValue_AsKnownObjectBorrow(v), p);
++        return;
++    }
++
++    p->depth++;
++    if (p->depth > MAX_MARSHAL_STACK_DEPTH) {
++        PyErr_SetString(PyExc_ValueError, "object too deeply nested to marshal");
++        p->error = true;
++    }
++    else if (PyValue_IsInlineInt(v)) {
++        int64_t x = PyValue_InlineInt64(v);
++        if (INT32_MIN <= x && x <= INT32_MAX) {
++            W_TYPE(TYPE_INT, p);
++            w_long((long)x, p);
++        }
++        else {
++            uint64_t magnitude = _Py_ABS_CAST(uint64_t, x);
++            uint64_t digit = magnitude;
++            long ndigits = 0;
++            do {
++                digit >>= PyLong_MARSHAL_SHIFT;
++                ndigits++;
++            } while (digit);
++            W_TYPE(TYPE_LONG, p);
++            w_long(x < 0 ? -ndigits : ndigits, p);
++            do {
++                w_short(magnitude & PyLong_MARSHAL_MASK, p);
++                magnitude >>= PyLong_MARSHAL_SHIFT;
++            } while (magnitude);
++        }
++    }
++    else {
++        assert(PyValue_IsInlineFloat(v));
++        double x = PyValue_InlineFloat(v);
++        if (p->version > 1) {
++            W_TYPE(TYPE_BINARY_FLOAT, p);
++            w_float_bin(x, p);
++        }
++        else {
++            W_TYPE(TYPE_FLOAT, p);
++            w_float_str(x, p);
++        }
++    }
++    p->depth--;
++}
++
+ static void
+ w_complex_object(PyObject *v, WFILE *p)
+ {
+@@ -800,14 +855,7 @@ w_complex_object(PyObject *v, WFILE *p)
+             W_SIZE(n, p);
+         }
+         for (i = 0; i < n; i++) {
+-            PyObject *item = _PyValue_AsObjectAt(PyTuple_GET_VALUE(v, i),
+-                                                 BOX_SITE_TUPLE);
+-            if (item == NULL) {
+-                p->error = true;
+-                break;
+-            }
+-            w_object(item, p);
+-            Py_DECREF(item);
++            w_value(PyTuple_GET_VALUE(v, i), p);
+             if (p->error) {
+                 break;
+             }
+@@ -1073,13 +1121,7 @@ w_complex_object(PyObject *v, WFILE *p)
+         // Each field is written as an object, as a tuple item is.
+         PyValue *fields[3] = {&slice->start, &slice->stop, &slice->step};
+         for (i = 0; i < 3 && !p->error; i++) {
+-            PyObject *field = _PyValue_AsObjectAt(*fields[i], BOX_SITE_FIELD);
+-            if (field == NULL) {
+-                p->error = true;
+-                break;
+-            }
+-            w_object(field, p);
+-            Py_DECREF(field);
++            w_value(PyValue_Borrow(*fields[i]), p);
+         }
+         w_complete(v, p);
+     }

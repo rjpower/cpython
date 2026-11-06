@@ -1,0 +1,79 @@
+--- a/Modules/_collectionsmodule.c
++++ b/Modules/_collectionsmodule.c
+@@ -708,6 +708,10 @@
+             PyValue_DUP(PyValue_FromObjectBorrow((PyObject *)deque)),
+             PyValue_FromInt64(old_deque->maxlen),
+         };
++        if (PyValue_IsNull(args[1])) {
++            PyValue_CLOSE(args[0]);
++            return PyValue_NULL;
++        }
+         PyValue result = _PyValue_Vectorcall(
+             PyValue_FromObjectBorrow((PyObject *)Py_TYPE(deque)), args, 2, NULL);
+         PyValue_CLOSE(args[0]);
+@@ -1807,12 +1811,10 @@
+         }
+         int b = _PyValue_RichCompareBool(x.value, y.value, Py_EQ);
+         if (b == 0) {
+-            PyValue result = _PyValue_RichCompare(x.value, y.value, op);
++            cmp = _PyValue_RichCompareBool(x.value, y.value, op);
+             PyValue_CLOSE(x.value);
+             PyValue_CLOSE(y.value);
+-            Py_XDECREF(it1);
+-            Py_XDECREF(it2);
+-            return result;
++            goto done;
+         }
+         PyValue_CLOSE(x.value);
+         PyValue_CLOSE(y.value);
+@@ -2803,7 +2805,12 @@
+                 PyValue_CLOSE(one);
+                 goto error;
+             }
+-            PyValue newval = _PyValue_IsSameWord(oldval, zero)
++            /* Inline zero boxes to the cached zero object at the old API
++               boundary, so preserve the default-argument identity test. */
++            bool is_default = _PyValue_IsSameWord(oldval, zero) ||
++                (PyValue_IsInlineInt(oldval) &&
++                 PyValue_InlineInt64(oldval) == 0);
++            PyValue newval = is_default
+                 ? PyValue_DUP(one) : _PyValue_Add(oldval, one);
+             PyValue_CLOSE(oldval);
+             if (PyValue_IsNull(newval)) {
+--- a/Lib/test/test_deque.py
++++ b/Lib/test/test_deque.py
+@@ -29,6 +29,34 @@
+ 
+ class TestBasic(unittest.TestCase):
+ 
++    def test_richcompare_returns_bool(self):
++        calls = []
++
++        class CompareResult:
++            def __bool__(self):
++                calls.append("bool")
++                return True
++
++        class Item:
++            def __eq__(self, other):
++                return False
++            def __lt__(self, other):
++                return CompareResult()
++
++        self.assertIs(deque([Item()]) < deque([Item()]), True)
++        self.assertEqual(calls, ["bool"])
++
++        class BadResult:
++            def __bool__(self):
++                raise RuntimeError("comparison truth conversion")
++
++        class BadItem(Item):
++            def __lt__(self, other):
++                return BadResult()
++
++        with self.assertRaisesRegex(RuntimeError, "comparison truth conversion"):
++            deque([BadItem()]) < deque([BadItem()])
++
+     def test_basics(self):
+         d = deque(range(-5125, -5000))
+         d.__init__(range(200))

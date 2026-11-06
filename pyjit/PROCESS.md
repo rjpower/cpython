@@ -60,9 +60,12 @@ universal-value runtime or JIT should exist.
 
 ## Model roles
 
-- **Opus:** design and independent review.
-- **Sonnet:** implementation, porting and documentation sync.
-- **Haiku:** fixed mechanical batches with a reviewed rule.
+Current user direction (2026-11-05) replaces the previous provider's model names:
+
+- **Terra, medium effort:** implementation, ownership-sensitive ports and finishing.
+- **Luna, medium effort:** bounded mechanical ports and documentation sync.
+- **Sol:** important design decisions, independent critical review or specific
+  debugging problems; do not use it for bulk migrations.
 - **Coordinator:** assigns work, reviews results, commits, integrates and
   reports status.
 

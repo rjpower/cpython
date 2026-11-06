@@ -1,6 +1,77 @@
 # Coordinator handoff
 
-Operational snapshot: 2026-11-03 20:40 PST. Read [STATUS](STATUS.md) for the
+Active closure: committed runtime HEAD is `6aec17eefeb`. Its 28-file batch
+includes cold compiler/marshal/keyword paths, Decimal construction/slots,
+deque/bytes/fileno, null-aware object exits and accounting diagnostics.
+Three builds, lint and 6,291 focused tests per debug/release build pass.
+Full release/debug runs found fixture errors and a profiler null-exit abort;
+the fixes pass focused reruns. The final full suites remain required after
+remaining ports. Evidence: `cold-slots-iterators-fixtures-fixed`; failed
+attempts are retained. A fresh full stats census is now running under
+`suite-6aec17eefeb-census`; keep shared source/binaries frozen until it ends.
+Next reviewed queue: binary constant folding; six itertools producers with
+additive fixes; Decimal richcompare/Context/initializer/method and lifetime
+layers. Integrate the v2 lifetime test packet, not the rejected subprocess
+fixture. Math/bisect packets have further review fixes in progress.
+See the [closure plan](issues/checkpoint-closure/plan.md).
+W5 stays at its original base with preserved staged and dirty work. G2 stays
+deferred until the merged baseline measurement.
+
+The coordinator created one task-owned isolated worktree at
+`python-jit/build/checkpoint-bulk-20261105` and its Clang build alongside it
+(`checkpoint-bulk-build-20261105`). It starts at `98a26bb6218` and contains the
+48 reviewed processor-safe ownership rows and header marks. Its compiling
+snapshot `f65d64a3987` is now an ancestor of the runtime. Luna's later manual
+census marks 15 further APIs there and originally recorded 459 expected diagnostics.
+It has since been advanced to `e983958bede`, preserving the manual edits;
+the recoverable task stash is `e4cf1a9101556e1c296374457a1e6a1c32590589`.
+Six small module ports and CJK callbacks landed in `f81ebbd646d`, along with
+further Decimal method families; three builds, lint and 6,001 tests per
+debug/release build pass. Do not integrate
+all of those new marks until their callers are ported. Preserve this work
+while active, then remove only this task-created isolation after integration.
+
+The runtime's latest 12-file commit `4fffee855c9` in `startup-clinic-decimal` adds the four
+startup-box fixes, selective Clinic support and 65 Decimal macro-family
+methods. Its generator merge preserves `value_core` and mutates render copies
+only; 483 Clinic tests pass. Three builds, lint and 6,649 tests on each release
+and debug build pass. The startup cleanup must use XCLOSE after
+its successful path clears the owner; the initial double-close and subsequent
+null-close findings are preserved in separate review rounds. Windows zero-box
+behavior is not verified. Private Linux no-op startup reports zero boxes.
+Cold kernel warmup still boxes compiler constants, marshal tuple/slice fields
+and frame keyword values. The first all-29 attempt exposed a repeated metadata
+flag; a narrow parser repair retains strict duplicate-counter checks. A fresh
+full-suite stats census at `4fff` has finished: 54,270 tests, 31 failures in
+eight files and 6,326 dumps. The R27 gate fails with 50,463,865 attributed debt,
+plus accounting gaps; see the [census](issues/checkpoint-closure/fullsuite-4fff-census.md).
+Do not claim complete counts from a run with missing/crashed processes.
+Earlier failed attempts are retained.
+
+H3 is committed, rather than merely queued. Its exact crash probe confirms
+that handler 306 can no longer overrun a 256-entry counter array: both axes
+now span 319 handlers. The fresh 29-kernel count produced 87 valid raw records.
+Loop deltas are zero; startup-inclusive boxes still range from two to 1,175,
+so strict R27 fails. The candidate under qualification targets the attributed
+compiler, marshal and keyword sites, plus reviewed Decimal and iterator paths.
+A new count must use the rebuilt candidate; historical zero deltas are not
+admission evidence.
+
+Terra owns remaining Decimal manual methods, constructors and slots in W5.
+Luna owns the manual API ports in the isolated tree, with temporary three-file
+W5 copies for actual runtime validation. Sol reviews designs and source.
+Only the coordinator changes shared runtime/builds. Full suite accounting,
+indirect slot audit, complete inventory and final performance remain open.
+
+Takeover checked: 2026-11-05 PST. Read [STATUS](STATUS.md) for the verified
+runtime HEAD, unfinished worktrees and remaining gates. The historical snapshot
+below predates the closure landings described above. W2b, W4b, W4c and UUID
+are landed. Preserve the old worktrees; use the closure plan for the live queue
+and defer G2 until after baseline measurement.
+The old provider's worker progress does not establish that any worker remains
+active. The Loom `plan` artifact has also been reviewed during takeover.
+
+Read [STATUS](STATUS.md) for the
 project summary, [ROADMAP](ROADMAP.md) for stage outcomes, [GOAL](GOAL.md) for
 standing direction, and [PROCESS](PROCESS.md) before assigning work. This is a
 restart guide, not a claim that workers remain active. Recheck agents and
@@ -24,11 +95,9 @@ and backend. The stage pages distinguish selected designs from working code.
 - Ports use idiomatic upstream CPython ownership code.
 - Model roles, review and commit rules are in [PROCESS](PROCESS.md). The
   coordinator owns integration and shared builds.
-- Model policy (from 2026-11-04): every agent launch sets its model and
-  effort. Opus runs at high effort, only for critical design work and subtle
-  failure debugging, and is never fanned out. Sonnet at medium effort, or
-  Haiku, does porting, finishing, reviews and doc syncs. In the W1 pilot,
-  Haiku's mechanical batch matched Sonnet's site for site.
+- Current model policy (2026-11-05): Terra/Luna at medium effort handle
+  porting and documentation. Sol handles important design, review or specific
+  debugging. The coordinator owns integration. See [PROCESS](PROCESS.md).
 - Step agents run no full suite. A landing runs the step's test list plus a
   smoke set on both builds (`tools/integrate.sh <tag> <tests>`); the full
   suites run only at integration points (`tools/full.sh`, see
@@ -42,7 +111,7 @@ and backend. The stage pages distinguish selected designs from working code.
 | --- | --- |
 | Documentation root (canonical `pyjit/`) | `/home/power/code/cpython/.worktrees/python-jit`, branch `weaver/python-jit` |
 | Runtime tree (nested worktree) | `/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/pyvalue-rc-universal` |
-| Runtime branch / HEAD | `boil/pyvalue-rc-universal`, `b9d3e3a3c9b` (see STATUS.md, Position) |
+| Runtime branch / HEAD | `boil/pyvalue-rc-universal`, `e1229448be3` (verified during takeover) |
 | Shared builds at HEAD | `build/pyvalue-rc-repr-debug`, `build/pyvalue-rc-repr-release` (under the `python-boil-the-ocean` worktree) |
 | Older debug build | `build/pyvalue-rc-debug-20261102-v1` |
 | Triage debug builds | `build/pyvalue-rc-bringup-debug`, `build/pyvalue-rc-triage-rt-debug` |
@@ -70,9 +139,10 @@ and shapes. Read the build directories for the exact commands.
 ## Source and build state
 
 The runtime tree has no held modifications. Debug and release builds link and
-run. All 67 shared modules whose third-party headers exist build; the decimal,
-tkinter, ssl, sqlite and zstd headers are not installed on this host. Runtime
-HEAD is `d63c129b95f`. Full suites last ran at the integration point
+run. W4c has since supplied a local development-header sysroot and repaired
+modules that earlier checks skipped, including sqlite, ssl, decimal and zstd;
+see `build/pyjit-link-wave1/devlibs.md` and `progress-w4c.txt` before configuring.
+Runtime HEAD is `e1229448be3`. Full merged suites last ran at the integration point
 `8eee8081ca0`, gcc debug and release: 52,178 tests each; the two failures were
 stale tests, fixed in `a1ecc0eb4f3`. Later landings ran their step tests and a
 smoke set on both builds (plus a stats-build compile since `71566e96043`),
@@ -257,12 +327,15 @@ overwritten.
 
 ## Next steps
 
-1. W2b and W4b finish.
-2. W5 and the R27 gate.
-3. G2's timed decision between A4 and B3, on a quiet host.
-4. Follow-ups in `build/pyjit-link-wave1/FOLLOWUPS.md`; post-reviews
-   `review-w2a.md` and `review-w4a.md` in the same directory.
-5. Then the checkpoint measurement.
+1. Integrate the reviewed startup/exception, mechanical API and slot-call batches
+   through the closure plan. The preserved kernel increment and required W4b
+   fixes have landed; optional sizeof fidelity remains separate.
+2. Complete the API census, manual ports, `_decimal` and indirect slot calls.
+3. Run full merged qualification and R27 accounting; resolve the measured tail.
+4. Measure the qualified checkpoint against upstream and interim controls,
+   then rank follow-ups. G2 stays deferred through that measurement.
+5. Reconcile follow-ups in `build/pyjit-link-wave1/FOLLOWUPS.md` and the design
+   and stage pages with the landed code.
 6. After the checkpoint: return `co_code` and `.pyc` to stack
    bytecode with the IR as a hidden cache
    ([proposal](design/proposals/stack-bytecode-recovery.md), user decision

@@ -242,6 +242,13 @@ a `_testcapi` test that pins the round trips above, so a change is deliberate.
   Since register IR v2 step A5a (`3e28e1755bd`) no frame slot holds a borrow:
   `PyValue_BorrowAt` returns the slot's bits untagged, and the typed borrow
   (step A5b) is not yet built.
+  **Borrow conversion preserves the null sentinel, not non-nullness.**
+  `PyValue_FromObjectBorrow(NULL)` yields `PyValue_NULL`; this says only that
+  the source pointer was NULL. It does not prove a nullable public argument is
+  safe for a value provider. Keep the public entry's null check, pending-error
+  handling, and validation order before calling a provider that requires a
+  language value. Do not weaken that provider's non-null contract to absorb a
+  legacy NULL case: preserve the public API's behavior at the outer boundary.
 * **Error.** A `PyValue` result signals an error with `PyValue_NULL` and an
   exception set. After D5, `PyValue_NULL` is 0, so the test is one compare,
   and a thunk passes NULL through unchanged.
@@ -597,6 +604,30 @@ Direct slot calls in core code bypass the dispatchers (33 sites, for example
 dispatcher call or a value-slot call in the packet of its family, and the
 check of §4 finds new ones.
 
+When code must call a *specific base implementation* to bypass an override,
+generic dispatch is not equivalent: it may select the subtype's value slot or
+redispatch through another operation. Use a narrow typed-base helper that
+receives both the exact object slot and the `PyValue` operands. The helper
+selects that base type's paired value slot when available; otherwise it adapts
+the exact supplied object slot and closes only the temporary operand boxes.
+It must not repeat generic argument validation, perform name handling, or
+redispatch to a different slot. The current helpers follow this rule:
+
+| Helper | Base behavior preserved |
+|---|---|
+| `_PyValue_CallRepr` | Calls the supplied type's exact `tp_repr` implementation. |
+| `_PyValue_CallRichCompare` | Calls the supplied type's exact `tp_richcompare` implementation and operation. |
+| `_PyValue_CallSetAttrBase` | Calls the supplied base `tp_setattro`; if no value row exists, it adapts the exact slot with the original `self`, name, and nullable value. |
+| `_PyValue_CallPowerBase` | Calls the supplied base `nb_power` row, including its third operand; it must not redispatch through a derived type's power slot. |
+
+These helpers are internal mechanisms, not replacements for ordinary
+`_PyValue_*` dispatch. Add one only when a port must preserve a proven base-slot
+call and no existing value-slot interface expresses that behavior. The direct
+slot-call checker covers call expressions; stored slot pointers called later
+remain a separate finite source audit. Reads, comparisons, and copies are not
+certified by that matcher, and the audit must list each copied pointer's
+producer and call site before the gate can claim closure.
+
 ## 3. Calls (VA6, R7, review I3)
 
 * **Value vectorcall per instance.** `typedef PyValue (*vectorcallvaluefunc)
@@ -671,6 +702,9 @@ check of §4 finds new ones.
   replaces `VALUES_TO_PYOBJECTS` (8 uses at `15859d9a592`, all in `Python/ceval.c`). Each core value vectorcall keeps
   an object-form vectorcall thunk, because `PyVectorcall_Function` exposes the
   pointer and Cython calls it directly.
+  Decimal's selective Clinic constructor also registers this paired thunk;
+  `THUNK_FILES` admits its creator in `Modules/_decimal/_decimal.c` while
+  continuing to reject core callers that invoke the object thunk.
 * **Argument Clinic.** A file-level directive selects value emission. The
   generated header then starts with `#ifndef Py_VALUE_CORE #error`. In value
   emission `object` parameters become borrowed `PyValue`; `int`, `Py_ssize_t`,

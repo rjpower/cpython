@@ -129,6 +129,40 @@ class PystatsRecordsTest(unittest.TestCase):
         self.assertEqual(original.read_bytes(), raw)
         self.assertEqual(unrelated.read_text(), "leave this file alone\n")
 
+    def test_only_identical_specializable_metadata_may_repeat(self):
+        cases = (
+            ("accepted", b"opcode[GET_ITER].specializable: 1\n"
+             b"Object inline int boxes: 7\n"
+             b"opcode[GET_ITER].specializable: 1\n", None),
+            ("conflicting", b"opcode[GET_ITER].specializable: 1\n"
+             b"opcode[GET_ITER].specializable: 0\n", "duplicate pystats key"),
+            ("nonflag", b"opcode[GET_ITER].specializable: 2\n"
+             b"opcode[GET_ITER].specializable: 2\n", "duplicate pystats key"),
+            ("opcode_boxes", b"opcode[GET_ITER].boxes: 1\n"
+             b"opcode[GET_ITER].boxes: 1\n", "duplicate pystats key"),
+        )
+        for name, raw, error in cases:
+            with self.subTest(name=name):
+                stats = self.root / name
+                stats.mkdir()
+
+                def run(command, what):
+                    (stats / "owned.txt").write_bytes(raw)
+
+                with mock.patch.object(runner, "PYSTATS_DIR", stats), \
+                     mock.patch.object(runner, "run_checked", side_effect=run):
+                    if error is None:
+                        counts = runner.pystats_counts(
+                            self.ctx, runner.Bench("sample", "kernels", 2), 2)
+                        self.assertEqual(counts, {
+                            "opcode[GET_ITER].specializable": 1,
+                            "Object inline int boxes": 7,
+                        })
+                    else:
+                        with self.assertRaisesRegex(runner.MeasurementError, error):
+                            runner.pystats_counts(
+                                self.ctx, runner.Bench("sample", "kernels", 2), 2)
+
     def test_cli_rejects_conflicts_and_existing_journal_before_target(self):
         for case in ("output", "perf", "metric", "existing"):
             with self.subTest(case=case):

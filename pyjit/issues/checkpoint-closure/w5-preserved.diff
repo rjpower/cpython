@@ -1,0 +1,4586 @@
+diff --git a/Include/cpython/pyerrors.h b/Include/cpython/pyerrors.h
+index be2e3b641c2..16e658fd73f 100644
+--- a/Include/cpython/pyerrors.h
++++ b/Include/cpython/pyerrors.h
+@@ -70,7 +70,7 @@ typedef struct {
+ 
+ typedef struct {
+     PyException_HEAD
+-    PyObject *value;
++    PyValue value;  /* the generator's return value; PyValue_NULL is None */
+ } PyStopIterationObject;
+ 
+ typedef struct {
+diff --git a/Include/internal/pycore_bytes_methods.h b/Include/internal/pycore_bytes_methods.h
+index 9b1283ffdc3..8b86be1b500 100644
+--- a/Include/internal/pycore_bytes_methods.h
++++ b/Include/internal/pycore_bytes_methods.h
+@@ -28,15 +28,15 @@ extern void _Py_bytes_title(char *result, const char *s, Py_ssize_t len);
+ extern void _Py_bytes_capitalize(char *result, const char *s, Py_ssize_t len);
+ extern void _Py_bytes_swapcase(char *result, const char *s, Py_ssize_t len);
+ 
+-extern PyObject *_Py_bytes_find(const char *str, Py_ssize_t len, PyObject *sub,
++extern PyObject *_Py_bytes_find(const char *str, Py_ssize_t len, PyValueBorrow sub,
+                                 Py_ssize_t start, Py_ssize_t end);
+-extern PyObject *_Py_bytes_index(const char *str, Py_ssize_t len, PyObject *sub,
++extern PyObject *_Py_bytes_index(const char *str, Py_ssize_t len, PyValueBorrow sub,
+                                  Py_ssize_t start, Py_ssize_t end);
+-extern PyObject *_Py_bytes_rfind(const char *str, Py_ssize_t len, PyObject *sub,
++extern PyObject *_Py_bytes_rfind(const char *str, Py_ssize_t len, PyValueBorrow sub,
+                                  Py_ssize_t start, Py_ssize_t end);
+-extern PyObject *_Py_bytes_rindex(const char *str, Py_ssize_t len, PyObject *sub,
++extern PyObject *_Py_bytes_rindex(const char *str, Py_ssize_t len, PyValueBorrow sub,
+                                  Py_ssize_t start, Py_ssize_t end);
+-extern PyObject *_Py_bytes_count(const char *str, Py_ssize_t len, PyObject *sub,
++extern PyObject *_Py_bytes_count(const char *str, Py_ssize_t len, PyValueBorrow sub,
+                                  Py_ssize_t start, Py_ssize_t end);
+ extern int _Py_bytes_contains(const char *str, Py_ssize_t len, PyObject *arg);
+ 
+@@ -66,10 +66,10 @@ _Py_bytes_contains_value(const char *str, Py_ssize_t len, PyValueBorrow arg)
+     return res;
+ }
+ extern PyObject *_Py_bytes_startswith(const char *str, Py_ssize_t len,
+-                                      PyObject *subobj, Py_ssize_t start,
++                                      PyValueBorrow subobj, Py_ssize_t start,
+                                       Py_ssize_t end);
+ extern PyObject *_Py_bytes_endswith(const char *str, Py_ssize_t len,
+-                                    PyObject *subobj, Py_ssize_t start,
++                                    PyValueBorrow subobj, Py_ssize_t start,
+                                     Py_ssize_t end);
+ 
+ /* The maketrans() static method. */
+diff --git a/Include/internal/pycore_value_call.h b/Include/internal/pycore_value_call.h
+index 4ea06de10ba..35e980f3e94 100644
+--- a/Include/internal/pycore_value_call.h
++++ b/Include/internal/pycore_value_call.h
+@@ -188,8 +188,7 @@ PyAPI_FUNC(PyValue) _PyValue_Call(PyThreadState *tstate,
+ #define _PyValue_Call(T, C, A, K) (_PyValue_Call)(T, PyValue_Borrow(C), A, K)
+ 
+ /* The fixed-arity forms. Each reserves args[-1] for a bound callee. The
+- * method forms (_PyValue_VectorcallMethod, _PyValue_CallMethodOneArg) come
+- * with W2's first batch, once M2's value method lookup exists. */
++ * method forms follow. */
+ extern PyValue _PyValue_CallNoArgs(PyThreadState *tstate,
+                                    PyValueBorrow callable);
+ // Export for '_testinternalcapi' shared extension.
+@@ -197,6 +196,22 @@ PyAPI_FUNC(PyValue) _PyValue_CallOneArg(PyThreadState *tstate,
+                                         PyValueBorrow callable,
+                                         PyValueBorrow arg);
+ #define _PyValue_CallNoArgs(T, C) (_PyValue_CallNoArgs)(T, PyValue_Borrow(C))
++
++/* The method forms: PyObject_VectorcallMethod() over a window of words
++ * (args[0] is the receiver), PyObject_CallMethodNoArgs() and
++ * PyObject_CallMethodOneArg(). */
++// Export for built-in and shared extensions with value-native method calls.
++PyAPI_FUNC(PyValue) _PyValue_VectorcallMethod(
++    PyObject *name, const PyValue *args, size_t nargsf, PyObject *kwnames);
++PyAPI_FUNC(PyValue) _PyValue_CallMethodNoArgs(PyValueBorrow self,
++                                              PyObject *name);
++PyAPI_FUNC(PyValue) _PyValue_CallMethodOneArg(PyValueBorrow self,
++                                              PyObject *name,
++                                              PyValueBorrow arg);
++#define _PyValue_CallMethodNoArgs(S, N) \
++    (_PyValue_CallMethodNoArgs)(PyValue_Borrow(S), N)
++#define _PyValue_CallMethodOneArg(S, N, A) \
++    (_PyValue_CallMethodOneArg)(PyValue_Borrow(S), N, PyValue_Borrow(A))
+ #define _PyValue_CallOneArg(T, C, A) \
+     (_PyValue_CallOneArg)(T, PyValue_Borrow(C), PyValue_Borrow(A))
+ 
+@@ -231,8 +246,10 @@ extern PyValue _PyValue_InstanceVectorcall(
+ /* The object tp_call of a type whose tp_value.call is set (the pair row of
+  * section 1.2): the tuple's words are the window, the dict expands as in
+  * _PyValue_Call(), and the result leaves through _PyValue_THUNK_EXIT(). */
+-extern PyObject *_PyValue_TpCallThunk(PyObject *callable, PyObject *args,
+-                                      PyObject *kwargs);
++// Export for shared extensions whose types set a value call.
++PyAPI_FUNC(PyObject *) _PyValue_TpCallThunk(PyObject *callable,
++                                            PyObject *args,
++                                            PyObject *kwargs);
+ 
+ /* The object vectorcall of every core callable with a value vectorcall
+  * field other than a Python function (D8): converts the object vector into
+diff --git a/Include/internal/pycore_value_ops.h b/Include/internal/pycore_value_ops.h
+index 796b777ce78..08ce8815d37 100644
+--- a/Include/internal/pycore_value_ops.h
++++ b/Include/internal/pycore_value_ops.h
+@@ -360,6 +360,12 @@ PyAPI_FUNC(_PyStatusValue) _PyValue_GetOptionalItem(PyValueBorrow o,
+ #define _PyValue_GetOptionalItem(O, K) \
+     (_PyValue_GetOptionalItem)(PyValue_Borrow(O), PyValue_Borrow(K))
+ 
++// PyObject_IsInstance(): an int or float inst is tested by its type, and
++// passed to a __instancecheck__ as a word.
++PyAPI_FUNC(int) _PyValue_IsInstance(PyValueBorrow inst, PyValueBorrow cls);
++#define _PyValue_IsInstance(I, C) \
++    (_PyValue_IsInstance)(PyValue_Borrow(I), PyValue_Borrow(C))
++
+ // PySequence_Contains() and _PySequence_IterSearch().
+ PyAPI_FUNC(int) _PyValue_Contains(PyValueBorrow seq, PyValueBorrow item);
+ PyAPI_FUNC(Py_ssize_t) _PyValue_IterSearch(PyValueBorrow seq,
+diff --git a/Modules/_abc.c b/Modules/_abc.c
+index 04b9b7ba227..fc9474e1cc1 100644
+--- a/Modules/_abc.c
++++ b/Modules/_abc.c
+@@ -435,14 +435,15 @@ compute_abstract_methods(PyObject *self)
+         }
+         PyValue value_v = PyList_CheckExact(it) ? PyList_GetValue(it, 1)
+                                   : PyTuple_GetValue(it, 1);
+-        PyObject *value = PyValue_IsNull(value_v) ? NULL : _PyValue_AsObjectStealAt(value_v, BOX_SITE_FIELD);
+-        if (value == NULL) {
++        if (PyValue_IsNull(value_v)) {
+             PyValue_CLOSE(key);
+             Py_DECREF(it);
+             goto error;
+         }
+-        int is_abstract = _PyObject_IsAbstract(value);
+-        Py_DECREF(value);
++        // An int or float has no __isabstractmethod__.
++        int is_abstract = PyValue_IsInline(value_v)
++            ? 0 : _PyObject_IsAbstract(PyValue_AsKnownObjectBorrow(value_v));
++        PyValue_CLOSE(value_v);
+         if (is_abstract < 0 ||
+                 (is_abstract && PySet_AddValue(abstracts, key) < 0)) {
+             Py_DECREF(it);
+diff --git a/Modules/_elementtree.c b/Modules/_elementtree.c
+index eaeca9dcffb..96d3184a6ba 100644
+--- a/Modules/_elementtree.c
++++ b/Modules/_elementtree.c
+@@ -24,6 +24,7 @@
+ #include "pycore_tuple.h"         // _PyTuple_FromPair
+ #include "pycore_value.h"         // PyValue_AsKnownObjectBorrow()
+ #include "pycore_value_ops.h"     // _PyValue_RichCompareBool()
++#include "pycore_slots.h"         // _Py_value_subscript
+ #include "pycore_value_slots.h"   // _PyValue_FromObjectResult()
+ #include "pycore_weakref.h"       // FT_CLEAR_WEAKREFS()
+ 
+@@ -2079,7 +2080,7 @@ element_setitem(PyObject *op, Py_ssize_t index, PyObject* item)
+ }
+ 
+ static PyObject *
+-element_subscr(PyObject *op, PyObject *item)
++element_subscr_object(PyObject *op, PyObject *item)
+ {
+     ElementObject *self = _Element_CAST(op);
+ 
+@@ -2134,6 +2135,26 @@ element_subscr(PyObject *op, PyObject *item)
+     }
+ }
+ 
++static PyValue
++element_subscr_value(PyObject *op, PyValueBorrow key)
++{
++    if (PyValue_IsInlineInt(key)) {
++        ElementObject *self = _Element_CAST(op);
++        Py_ssize_t i = (Py_ssize_t)PyValue_InlineInt64(key);
++        if (i < 0 && self->extra)
++            i += self->extra->length;
++        return _PyValue_FromObjectResult(element_getitem(op, i));
++    }
++    if (PyValue_IsInline(key)) {
++        PyErr_SetString(PyExc_TypeError, "element indices must be integers");
++        return PyValue_NULL;
++    }
++    return _PyValue_FromObjectResult(
++        element_subscr_object(op, PyValue_AsKnownObjectBorrow(key)));
++}
++
++_Py_VALUE_THUNK_SUBSCRIPT(element_subscr, element_subscr_value)
++
+ static int
+ element_ass_subscr(PyObject *op, PyObject *item, PyObject *value)
+ {
+@@ -4813,6 +4834,7 @@ static PyType_Slot element_slots[] = {
+     {Py_nb_bool, element_bool},
+     {Py_mp_length, element_length},
+     {Py_mp_subscript, element_subscr},
++    {_Py_value_subscript, element_subscr_value},
+     {Py_mp_ass_subscript, element_ass_subscr},
+     {0, NULL},
+ };
+diff --git a/Modules/_io/_iomodule.c b/Modules/_io/_iomodule.c
+index d7c3c505abf..ff04dedaf3f 100644
+--- a/Modules/_io/_iomodule.c
++++ b/Modules/_io/_iomodule.c
+@@ -548,15 +548,23 @@ _io_open_code_impl(PyObject *module, PyObject *path)
+ 
+ Py_off_t
+ PyNumber_AsOff_t(PyObject *item, PyObject *err)
++{
++    return _PyNumber_AsOffValue(PyValue_FromObjectBorrow(item), err);
++}
++
++Py_off_t
++(_PyNumber_AsOffValue)(PyValueBorrow item, PyObject *err)
+ {
+     Py_off_t result;
+     PyObject *runerr;
+-    PyValue index = _PyValue_Index(PyValue_FromObjectBorrow(item));
++    PyValue index = _PyValue_Index(item);
+     if (PyValue_IsNull(index))
+         return -1;
+-    PyObject *value = _PyValue_AsObjectStealAt(index, BOX_SITE_NUMBER);
+-    if (value == NULL)
+-        return -1;
++    if (PyValue_IsInlineInt(index)) {
++        // The inline range fits any Py_off_t.
++        return (Py_off_t)PyValue_InlineInt64(index);
++    }
++    PyObject *value = PyValue_AsKnownObjectSteal(index);
+ 
+     /* We're done if PyLong_AsSsize_t() returns without error. */
+     result = PyLong_AsOff_t(value);
+@@ -582,7 +590,7 @@ PyNumber_AsOff_t(PyObject *item, PyObject *err)
+         /* Otherwise replace the error with caller's error object. */
+         PyErr_Format(err,
+                      "cannot fit '%.200s' into an offset-sized integer",
+-                     Py_TYPE(item)->tp_name);
++                     PyValue_TYPE(item)->tp_name);
+     }
+ 
+  finish:
+diff --git a/Modules/_io/_iomodule.h b/Modules/_io/_iomodule.h
+index c9bbbf24bd4..7d3024f40cf 100644
+--- a/Modules/_io/_iomodule.h
++++ b/Modules/_io/_iomodule.h
+@@ -133,6 +133,10 @@ extern int _PyIO_trap_eintr(void);
+ #endif
+ 
+ extern Py_off_t PyNumber_AsOff_t(PyObject *item, PyObject *err);
++// PyNumber_AsOff_t() of a value: an inline int is converted without a box.
++extern Py_off_t (_PyNumber_AsOffValue)(PyValueBorrow item, PyObject *err);
++#define _PyNumber_AsOffValue(I, E) \
++    (_PyNumber_AsOffValue)(PyValue_Borrow(I), E)
+ 
+ /* Implementation details */
+ 
+diff --git a/Modules/_io/bufferedio.c b/Modules/_io/bufferedio.c
+index c02dc2de7e8..e28ab50d281 100644
+--- a/Modules/_io/bufferedio.c
++++ b/Modules/_io/bufferedio.c
+@@ -809,12 +809,12 @@ static Py_off_t
+ _buffered_raw_tell(buffered *self)
+ {
+     Py_off_t n;
+-    PyObject *res;
+-    res = PyObject_CallMethodNoArgs(self->raw, &_Py_ID(tell));
+-    if (res == NULL)
++    PyValue res = _PyValue_CallMethodNoArgs(
++        _PyValue_FromObjectKnown(self->raw), &_Py_ID(tell));
++    if (PyValue_IsNull(res))
+         return -1;
+-    n = PyNumber_AsOff_t(res, PyExc_ValueError);
+-    Py_DECREF(res);
++    n = _PyNumber_AsOffValue(res, PyExc_ValueError);
++    PyValue_CLOSE(res);
+     if (n < 0) {
+         if (!PyErr_Occurred())
+             PyErr_Format(PyExc_OSError,
+@@ -829,25 +829,21 @@ _buffered_raw_tell(buffered *self)
+ static Py_off_t
+ _buffered_raw_seek(buffered *self, Py_off_t target, int whence)
+ {
+-    PyObject *res, *posobj, *whenceobj;
+     Py_off_t n;
+ 
+-    posobj = PyLong_FromOff_t(target);
+-    if (posobj == NULL)
+-        return -1;
+-    whenceobj = PyLong_FromLong(whence);
+-    if (whenceobj == NULL) {
+-        Py_DECREF(posobj);
++    PyValue pos = PyValue_FromInt64(target);
++    if (PyValue_IsNull(pos))
+         return -1;
+-    }
+-    res = PyObject_CallMethodObjArgs(self->raw, &_Py_ID(seek),
+-                                     posobj, whenceobj, NULL);
+-    Py_DECREF(posobj);
+-    Py_DECREF(whenceobj);
+-    if (res == NULL)
++    PyValue stack[3];
++    _PyValue_WindowPut(&stack[0], _PyValue_FromObjectKnown(self->raw));
++    _PyValue_WindowPut(&stack[1], pos);
++    _PyValue_WindowPut(&stack[2], PyValue_FromInt64(whence));
++    PyValue res = _PyValue_VectorcallMethod(&_Py_ID(seek), stack, 3, NULL);
++    PyValue_CLOSE(pos);
++    if (PyValue_IsNull(res))
+         return -1;
+-    n = PyNumber_AsOff_t(res, PyExc_ValueError);
+-    Py_DECREF(res);
++    n = _PyNumber_AsOffValue(res, PyExc_ValueError);
++    PyValue_CLOSE(res);
+     if (n < 0) {
+         if (!PyErr_Occurred())
+             PyErr_Format(PyExc_OSError,
+@@ -1669,7 +1665,8 @@ static Py_ssize_t
+ _bufferedreader_raw_read(buffered *self, char *start, Py_ssize_t len)
+ {
+     Py_buffer buf;
+-    PyObject *memobj, *res;
++    PyObject *memobj;
++    PyValue res;
+     Py_ssize_t n;
+     /* NOTE: the buffer needn't be released as its object is NULL. */
+     if (PyBuffer_FillInfo(&buf, NULL, start, len, 0, PyBUF_CONTIG) == -1)
+@@ -1683,18 +1680,20 @@ _bufferedreader_raw_read(buffered *self, char *start, Py_ssize_t len)
+        raised (see issue #10956).
+     */
+     do {
+-        res = PyObject_CallMethodOneArg(self->raw, &_Py_ID(readinto), memobj);
+-    } while (res == NULL && _PyIO_trap_eintr());
++        res = _PyValue_CallMethodOneArg(_PyValue_FromObjectKnown(self->raw),
++                                        &_Py_ID(readinto),
++                                        _PyValue_FromObjectKnown(memobj));
++    } while (PyValue_IsNull(res) && _PyIO_trap_eintr());
+     Py_DECREF(memobj);
+-    if (res == NULL)
++    if (PyValue_IsNull(res))
+         return -1;
+-    if (res == Py_None) {
++    if (PyValue_IsNone(res)) {
+         /* Non-blocking stream would have blocked. Special return code! */
+-        Py_DECREF(res);
++        PyValue_CLOSE(res);
+         return -2;
+     }
+-    n = _PyValue_AsSsize_t(PyValue_FromObjectBorrow(res), PyExc_ValueError);
+-    Py_DECREF(res);
++    n = _PyValue_AsSsize_t(res, PyExc_ValueError);
++    PyValue_CLOSE(res);
+ 
+     if (n == -1 && PyErr_Occurred()) {
+         _PyErr_FormatFromCause(
+@@ -2027,7 +2026,8 @@ static Py_ssize_t
+ _bufferedwriter_raw_write(buffered *self, char *start, Py_ssize_t len)
+ {
+     Py_buffer buf;
+-    PyObject *memobj, *res;
++    PyObject *memobj;
++    PyValue res;
+     Py_ssize_t n;
+     int errnum;
+     /* NOTE: the buffer needn't be released as its object is NULL. */
+@@ -2043,22 +2043,24 @@ _bufferedwriter_raw_write(buffered *self, char *start, Py_ssize_t len)
+     */
+     do {
+         errno = 0;
+-        res = PyObject_CallMethodOneArg(self->raw, &_Py_ID(write), memobj);
++        res = _PyValue_CallMethodOneArg(_PyValue_FromObjectKnown(self->raw),
++                                        &_Py_ID(write),
++                                        _PyValue_FromObjectKnown(memobj));
+         errnum = errno;
+-    } while (res == NULL && _PyIO_trap_eintr());
++    } while (PyValue_IsNull(res) && _PyIO_trap_eintr());
+     Py_DECREF(memobj);
+-    if (res == NULL)
++    if (PyValue_IsNull(res))
+         return -1;
+-    if (res == Py_None) {
++    if (PyValue_IsNone(res)) {
+         /* Non-blocking stream would have blocked. Special return code!
+            Being paranoid we reset errno in case it is changed by code
+            triggered by a decref.  errno is used by _set_BlockingIOError(). */
+-        Py_DECREF(res);
++        PyValue_CLOSE(res);
+         errno = errnum;
+         return -2;
+     }
+-    n = _PyValue_AsSsize_t(PyValue_FromObjectBorrow(res), PyExc_ValueError);
+-    Py_DECREF(res);
++    n = _PyValue_AsSsize_t(res, PyExc_ValueError);
++    PyValue_CLOSE(res);
+     if (n < 0 || n > len) {
+         PyErr_Format(PyExc_OSError,
+                      "raw write() returned invalid length %zd "
+diff --git a/Modules/_io/textio.c b/Modules/_io/textio.c
+index c3c539f1686..c3b0e8848c0 100644
+--- a/Modules/_io/textio.c
++++ b/Modules/_io/textio.c
+@@ -814,32 +814,52 @@ buffer_getattr(textio *self, PyObject *attr_name)
+     return res;
+ }
+ 
+-static PyObject *
++static PyValue
+ buffer_callmethod_noargs(textio *self, PyObject *name)
+ {
+     PyObject *buffer = buffer_access_safe(self);
+     if (buffer == NULL) {
+-        return NULL;
++        return PyValue_NULL;
+     }
+ 
+-    PyObject *res = PyObject_CallMethodNoArgs(buffer, name);
++    PyValue res = _PyValue_CallMethodNoArgs(_PyValue_FromObjectKnown(buffer),
++                                            name);
+     Py_DECREF(buffer);
+     return res;
+ }
+ 
+-static PyObject *
+-buffer_callmethod_onearg(textio *self, PyObject *name, PyObject *arg)
++static PyValue
++buffer_callmethod_onearg(textio *self, PyObject *name, PyValueBorrow arg)
+ {
+     PyObject *buffer = buffer_access_safe(self);
+     if (buffer == NULL) {
+-        return NULL;
++        return PyValue_NULL;
+     }
+ 
+-    PyObject *res = PyObject_CallMethodOneArg(buffer, name, arg);
++    PyValue res = _PyValue_CallMethodOneArg(_PyValue_FromObjectKnown(buffer),
++                                            name, arg);
+     Py_DECREF(buffer);
+     return res;
+ }
+ 
++#define buffer_callmethod_onearg(S, N, A) \
++    (buffer_callmethod_onearg)(S, N, PyValue_Borrow(A))
++
++/* The object of a bytes-like result of the buffer, or NULL with the
++   TypeError that names what the buffer returned. */
++static PyObject *
++buffer_bytes_result(PyValue res, const char *method)
++{
++    if (PyValue_IsInline(res)) {
++        PyErr_Format(PyExc_TypeError,
++                     "underlying %s() should have returned a bytes-like "
++                     "object, not '%.200s'", method,
++                     PyValue_TYPE(res)->tp_name);
++        return NULL;
++    }
++    return PyValue_AsKnownObjectSteal(res);
++}
++
+ static void
+ textiowrapper_set_decoded_chars(textio *self, PyObject *chars);
+ 
+@@ -1006,15 +1026,14 @@ static int
+ _textiowrapper_set_decoder(textio *self, PyObject *codec_info,
+                            const char *errors)
+ {
+-    PyObject *res;
+     int r;
+ 
+-    res = buffer_callmethod_noargs(self, &_Py_ID(readable));
+-    if (res == NULL)
++    PyValue flag = buffer_callmethod_noargs(self, &_Py_ID(readable));
++    if (PyValue_IsNull(flag))
+         return -1;
+ 
+-    r = _PyValue_IsTrue(PyValue_FromObjectBorrow(res));
+-    Py_DECREF(res);
++    r = _PyValue_IsTrue(flag);
++    PyValue_CLOSE(flag);
+     if (r == -1)
+         return -1;
+ 
+@@ -1065,12 +1084,12 @@ _textiowrapper_set_encoder(textio *self, PyObject *codec_info,
+     PyObject *res;
+     int r;
+ 
+-    res = buffer_callmethod_noargs(self, &_Py_ID(writable));
+-    if (res == NULL)
++    PyValue flag = buffer_callmethod_noargs(self, &_Py_ID(writable));
++    if (PyValue_IsNull(flag))
+         return -1;
+ 
+-    r = _PyValue_IsTrue(PyValue_FromObjectBorrow(res));
+-    Py_DECREF(res);
++    r = _PyValue_IsTrue(flag);
++    PyValue_CLOSE(flag);
+     if (r == -1)
+         return -1;
+ 
+@@ -1111,25 +1130,26 @@ _textiowrapper_fix_encoder_state(textio *self)
+ 
+     self->encoding_start_of_stream = 1;
+ 
+-    PyObject *cookieObj = buffer_callmethod_noargs(self, &_Py_ID(tell));
+-    if (cookieObj == NULL) {
++    PyValue cookie = buffer_callmethod_noargs(self, &_Py_ID(tell));
++    if (PyValue_IsNull(cookie)) {
+         return -1;
+     }
+ 
+-    int cmp = _PyValue_RichCompareBool(PyValue_FromObjectBorrow(cookieObj), PyValue_FromObjectBorrow(_PyLong_GetZero()), Py_EQ);
+-    Py_DECREF(cookieObj);
++    int cmp = _PyValue_RichCompareBool(cookie, PyValue_FromInt64(0), Py_EQ);
++    PyValue_CLOSE(cookie);
+     if (cmp < 0) {
+         return -1;
+     }
+ 
+     if (cmp == 0) {
+         self->encoding_start_of_stream = 0;
+-        PyObject *res = PyObject_CallMethodOneArg(
+-            self->encoder, &_Py_ID(setstate), _PyLong_GetZero());
+-        if (res == NULL) {
++        PyValue res = _PyValue_CallMethodOneArg(
++            _PyValue_FromObjectKnown(self->encoder), &_Py_ID(setstate),
++            PyValue_FromInt64(0));
++        if (PyValue_IsNull(res)) {
+             return -1;
+         }
+-        Py_DECREF(res);
++        PyValue_CLOSE(res);
+     }
+ 
+     return 0;
+@@ -1775,16 +1795,17 @@ _textiowrapper_writeflush(textio *self)
+     self->pending_bytes = NULL;
+     Py_DECREF(pending);
+ 
+-    PyObject *ret;
++    PyValue ret;
+     do {
+-        ret = buffer_callmethod_onearg(self, &_Py_ID(write), b);
+-    } while (ret == NULL && _PyIO_trap_eintr());
++        ret = buffer_callmethod_onearg(self, &_Py_ID(write),
++                                       _PyValue_FromObjectKnown(b));
++    } while (PyValue_IsNull(ret) && _PyIO_trap_eintr());
+     Py_DECREF(b);
+     // NOTE: We cleared buffer but we don't know how many bytes are actually written
+     // when an error occurred.
+-    if (ret == NULL)
++    if (PyValue_IsNull(ret))
+         return -1;
+-    Py_DECREF(ret);
++    PyValue_CLOSE(ret);
+     return 0;
+ }
+ 
+@@ -2026,7 +2047,7 @@ textiowrapper_read_chunk(textio *self, Py_ssize_t size_hint)
+     PyObject *dec_flags = NULL;
+     PyObject *input_chunk = NULL;
+     Py_buffer input_chunk_buf;
+-    PyObject *decoded_chars, *chunk_size;
++    PyObject *decoded_chars;
+     Py_ssize_t nbytes, nchars;
+     int eof;
+ 
+@@ -2082,15 +2103,19 @@ textiowrapper_read_chunk(textio *self, Py_ssize_t size_hint)
+     if (size_hint > 0) {
+         size_hint = (Py_ssize_t)(Py_MAX(self->b2cratio, 1.0) * size_hint);
+     }
+-    chunk_size = PyLong_FromSsize_t(Py_MAX(self->chunk_size, size_hint));
+-    if (chunk_size == NULL)
++    PyValue chunk_size = PyValue_FromInt64(
++        Py_MAX(self->chunk_size, size_hint));
++    if (PyValue_IsNull(chunk_size))
+         goto fail;
+ 
+-    input_chunk = buffer_callmethod_onearg(self,
+-                                           (self->has_read1 ? &_Py_ID(read1) :
+-                                                              &_Py_ID(read)),
+-                                           chunk_size);
+-    Py_DECREF(chunk_size);
++    PyValue chunk_result = buffer_callmethod_onearg(
++        self, (self->has_read1 ? &_Py_ID(read1) : &_Py_ID(read)),
++        chunk_size);
++    PyValue_CLOSE(chunk_size);
++    if (PyValue_IsNull(chunk_result))
++        goto fail;
++    input_chunk = buffer_bytes_result(chunk_result,
++                                      self->has_read1 ? "read1" : "read");
+     if (input_chunk == NULL)
+         goto fail;
+ 
+@@ -2173,16 +2198,19 @@ _io_TextIOWrapper_read_impl(textio *self, Py_ssize_t n)
+ 
+     if (n < 0) {
+         /* Read everything */
+-        PyObject *bytes = buffer_callmethod_noargs(self, &_Py_ID(read));
++        PyValue bytes_result = buffer_callmethod_noargs(self, &_Py_ID(read));
+         PyObject *decoded;
+-        if (bytes == NULL)
++        if (PyValue_IsNull(bytes_result))
+             goto fail;
+ 
+-        if (bytes == Py_None){
+-            Py_DECREF(bytes);
++        if (PyValue_IsNone(bytes_result)){
++            PyValue_CLOSE(bytes_result);
+             PyErr_SetString(PyExc_BlockingIOError, "Read returned None.");
+             return PyValue_NULL;
+         }
++        PyObject *bytes = buffer_bytes_result(bytes_result, "read");
++        if (bytes == NULL)
++            goto fail;
+ 
+         _PyIO_State *state = self->state;
+         if (Py_IS_TYPE(self->decoder, state->PyIncrementalNewlineDecoder_Type))
+@@ -2714,7 +2742,6 @@ _io_TextIOWrapper_seek_impl(textio *self, PyValueBorrow cookieObj,
+                             int whence)
+ /*[clinic end generated code: output=c44af389eb50748d input=4bea78698be23d7e]*/
+ {
+-    PyObject *posobj;
+     cookie_type cookie;
+     PyObject *res;
+     int cmp;
+@@ -2830,14 +2857,15 @@ _io_TextIOWrapper_seek_impl(textio *self, PyValueBorrow cookieObj,
+         goto fail;
+ 
+     /* Seek back to the safe start point. */
+-    posobj = PyLong_FromOff_t(cookie.start_pos);
+-    if (posobj == NULL)
++    PyValue start_pos = PyValue_FromInt64(cookie.start_pos);
++    if (PyValue_IsNull(start_pos))
+         goto fail;
+-    res = buffer_callmethod_onearg(self, &_Py_ID(seek), posobj);
+-    Py_DECREF(posobj);
+-    if (res == NULL)
++    PyValue seek_result = buffer_callmethod_onearg(self, &_Py_ID(seek),
++                                                   start_pos);
++    PyValue_CLOSE(start_pos);
++    if (PyValue_IsNull(seek_result))
+         goto fail;
+-    Py_DECREF(res);
++    PyValue_CLOSE(seek_result);
+ 
+     textiowrapper_set_decoded_chars(self, NULL);
+     Py_CLEAR(self->snapshot);
+@@ -2850,19 +2878,27 @@ _io_TextIOWrapper_seek_impl(textio *self, PyValueBorrow cookieObj,
+ 
+     if (cookie.chars_to_skip) {
+         /* Just like _read_chunk, feed the decoder and save a snapshot. */
+-        PyObject *bytes_to_feed = PyLong_FromLong(cookie.bytes_to_feed);
+-        if (bytes_to_feed == NULL) {
++        PyValue bytes_to_feed = PyValue_FromInt64(cookie.bytes_to_feed);
++        if (PyValue_IsNull(bytes_to_feed)) {
+             goto fail;
+         }
+-        PyObject *input_chunk = buffer_callmethod_onearg(self,
+-                                                         &_Py_ID(read),
+-                                                         bytes_to_feed);
+-        Py_DECREF(bytes_to_feed);
++        PyValue chunk_result = buffer_callmethod_onearg(self, &_Py_ID(read),
++                                                        bytes_to_feed);
++        PyValue_CLOSE(bytes_to_feed);
+ 
+         PyObject *decoded;
+ 
+-        if (input_chunk == NULL)
++        if (PyValue_IsNull(chunk_result))
++            goto fail;
++        PyObject *input_chunk;
++        if (PyValue_IsInline(chunk_result)) {
++            PyErr_Format(PyExc_TypeError,
++                         "underlying read() should have returned a bytes "
++                         "object, not '%.200s'",
++                         PyValue_TYPE(chunk_result)->tp_name);
+             goto fail;
++        }
++        input_chunk = PyValue_AsKnownObjectSteal(chunk_result);
+ 
+         if (!PyBytes_Check(input_chunk)) {
+             PyErr_Format(PyExc_TypeError,
+@@ -2928,7 +2964,6 @@ _io_TextIOWrapper_tell_impl(textio *self)
+ /*[clinic end generated code: output=2ead7f3001994a0f input=aeece020f747fd92]*/
+ {
+     PyObject *res;
+-    PyObject *posobj = NULL;
+     cookie_type cookie = {0,0,0,0,0};
+     PyObject *next_input = NULL;
+     Py_ssize_t chars_to_skip, chars_decoded;
+@@ -2957,21 +2992,31 @@ _io_TextIOWrapper_tell_impl(textio *self)
+         goto fail;
+     }
+ 
+-    posobj = buffer_callmethod_noargs(self, &_Py_ID(tell));
+-    if (posobj == NULL)
++    PyValue pos_result = buffer_callmethod_noargs(self, &_Py_ID(tell));
++    if (PyValue_IsNull(pos_result))
+         goto fail;
+ 
+     if (self->decoder == NULL || self->snapshot == NULL) {
+         assert (self->decoded_chars == NULL || PyUnicode_GetLength(self->decoded_chars) == 0);
+-        return _PyValue_FromObjectResult(posobj);
++        return pos_result;
+     }
+ 
++    if (PyValue_IsInlineInt(pos_result)) {
++        cookie.start_pos = (Py_off_t)PyValue_InlineInt64(pos_result);
++    }
++    else if (PyValue_IsObject(pos_result)) {
++        PyObject *posobj_o = PyValue_AsKnownObjectBorrow(pos_result);
+ #if defined(HAVE_LARGEFILE_SUPPORT)
+-    cookie.start_pos = PyLong_AsLongLong(posobj);
++        cookie.start_pos = PyLong_AsLongLong(posobj_o);
+ #else
+-    cookie.start_pos = PyLong_AsLong(posobj);
++        cookie.start_pos = PyLong_AsLong(posobj_o);
+ #endif
+-    Py_DECREF(posobj);
++    }
++    else {
++        PyErr_Format(PyExc_TypeError, "an integer is required (got type %.200s)",
++                     PyValue_TYPE(pos_result)->tp_name);
++    }
++    PyValue_CLOSE(pos_result);
+     if (PyErr_Occurred())
+         goto fail;
+ 
+@@ -3173,13 +3218,7 @@ _io_TextIOWrapper_truncate_impl(textio *self, PyValueBorrow pos)
+         return PyValue_NULL;
+     }
+ 
+-    PyObject *pos_obj = _PyValue_AsObjectAt(pos, BOX_SITE_PARSER);
+-    if (pos_obj == NULL) {
+-        return PyValue_NULL;
+-    }
+-    PyObject *res = buffer_callmethod_onearg(self, &_Py_ID(truncate), pos_obj);
+-    Py_DECREF(pos_obj);
+-    return _PyValue_FromObjectResult(res);
++    return buffer_callmethod_onearg(self, &_Py_ID(truncate), pos);
+ }
+ 
+ static PyObject *
+@@ -3261,7 +3300,7 @@ static PyValue
+ _io_TextIOWrapper_fileno_impl(textio *self)
+ /*[clinic end generated code: output=fee91aad083303b1 input=515e1196aceb97ab]*/
+ {
+-    return _PyValue_FromObjectResult(buffer_callmethod_noargs(self, &_Py_ID(fileno)));
++    return (buffer_callmethod_noargs(self, &_Py_ID(fileno)));
+ }
+ 
+ /*[clinic input]
+@@ -3273,7 +3312,7 @@ static PyValue
+ _io_TextIOWrapper_seekable_impl(textio *self)
+ /*[clinic end generated code: output=a0bd17937972fcd1 input=71c4c092736c549b]*/
+ {
+-    return _PyValue_FromObjectResult(buffer_callmethod_noargs(self, &_Py_ID(seekable)));
++    return (buffer_callmethod_noargs(self, &_Py_ID(seekable)));
+ }
+ 
+ /*[clinic input]
+@@ -3285,7 +3324,7 @@ static PyValue
+ _io_TextIOWrapper_readable_impl(textio *self)
+ /*[clinic end generated code: output=f851a2df1fbdc2db input=80438d1f01b0a89b]*/
+ {
+-    return _PyValue_FromObjectResult(buffer_callmethod_noargs(self, &_Py_ID(readable)));
++    return (buffer_callmethod_noargs(self, &_Py_ID(readable)));
+ }
+ 
+ /*[clinic input]
+@@ -3297,7 +3336,7 @@ static PyValue
+ _io_TextIOWrapper_writable_impl(textio *self)
+ /*[clinic end generated code: output=959150ffbe20170e input=9d6c22befb0c340a]*/
+ {
+-    return _PyValue_FromObjectResult(buffer_callmethod_noargs(self, &_Py_ID(writable)));
++    return (buffer_callmethod_noargs(self, &_Py_ID(writable)));
+ }
+ 
+ /*[clinic input]
+@@ -3309,7 +3348,7 @@ static PyValue
+ _io_TextIOWrapper_isatty_impl(textio *self)
+ /*[clinic end generated code: output=eb3aa12d5467b827 input=7f83ff04d4d1733d]*/
+ {
+-    return _PyValue_FromObjectResult(buffer_callmethod_noargs(self, &_Py_ID(isatty)));
++    return (buffer_callmethod_noargs(self, &_Py_ID(isatty)));
+ }
+ 
+ /*[clinic input]
+@@ -3326,7 +3365,7 @@ _io_TextIOWrapper_flush_impl(textio *self)
+     self->telling = self->seekable;
+     if (_textiowrapper_writeflush(self) < 0)
+         return PyValue_NULL;
+-    return _PyValue_FromObjectResult(buffer_callmethod_noargs(self, &_Py_ID(flush)));
++    return (buffer_callmethod_noargs(self, &_Py_ID(flush)));
+ }
+ 
+ /*[clinic input]
+@@ -3359,11 +3398,11 @@ _io_TextIOWrapper_close_impl(textio *self)
+     else {
+         PyObject *exc = NULL;
+         if (self->finalizing) {
+-            res = buffer_callmethod_onearg(self,
+-                                           &_Py_ID(_dealloc_warn),
+-                                           (PyObject *)self);
+-            if (res) {
+-                Py_DECREF(res);
++            PyValue warn_result = buffer_callmethod_onearg(
++                self, &_Py_ID(_dealloc_warn),
++                _PyValue_FromObjectKnown((PyObject *)self));
++            if (!PyValue_IsNull(warn_result)) {
++                PyValue_CLOSE(warn_result);
+             }
+             else {
+                 PyErr_Clear();
+@@ -3373,12 +3412,13 @@ _io_TextIOWrapper_close_impl(textio *self)
+             exc = PyErr_GetRaisedException();
+         }
+ 
+-        res = buffer_callmethod_noargs(self, &_Py_ID(close));
++        PyValue close_result = buffer_callmethod_noargs(self, &_Py_ID(close));
+         if (exc != NULL) {
+             _PyErr_ChainExceptions1(exc);
+-            Py_CLEAR(res);
++            PyValue_XCLOSE(close_result);
++            close_result = PyValue_NULL;
+         }
+-        return _PyValue_FromObjectResult(res);
++        return close_result;
+     }
+ }
+ 
+diff --git a/Modules/_json.c b/Modules/_json.c
+index ffaffb8916b..191c09bdd7c 100644
+--- a/Modules/_json.c
++++ b/Modules/_json.c
+@@ -15,11 +15,14 @@
+ #include "pycore_dict.h"          // _PyDict_SetItem_Take2()
+ #include "pycore_list.h"          // _PyList_AppendTakeRef()
+ #include "pycore_global_strings.h" // _Py_ID()
++#include "pycore_modsupport.h"    // _PyArg_UnpackKeywordsValue()
+ #include "pycore_pyerrors.h"      // _PyErr_FormatNote
+ #include "pycore_runtime.h"       // _PyRuntime
++#include "pycore_slots.h"         // _Py_value_call
+ #include "pycore_tuple.h"         // _PyTuple_FromPair
+ #include "pycore_unicodeobject.h" // _PyUnicode_CheckConsistency()
+ #include "pycore_value.h"         // PyValue_AsKnownObjectBorrow()
++#include "pycore_value_call.h"    // _PyValue_CallOneArg()
+ #include "pycore_value_ops.h"     // _PyValue_IsTrue()
+ #include "pycore_value_slots.h"// _PyValue_FromObjectResult()
+ 
+@@ -114,7 +117,7 @@ encoder_clear(PyObject *self);
+ static int
+ encoder_listencode_list(PyEncoderObject *s, PyUnicodeWriter *writer, PyObject *seq, Py_ssize_t indent_level, PyObject *indent_cache);
+ static int
+-encoder_listencode_obj(PyEncoderObject *s, PyUnicodeWriter *writer, PyObject *obj, Py_ssize_t indent_level, PyObject *indent_cache);
++encoder_listencode_obj(PyEncoderObject *s, PyUnicodeWriter *writer, PyValueBorrow obj, Py_ssize_t indent_level, PyObject *indent_cache);
+ static int
+ encoder_listencode_dict(PyEncoderObject *s, PyUnicodeWriter *writer, PyObject *dct, Py_ssize_t indent_level, PyObject *indent_cache);
+ static PyObject *
+@@ -126,7 +129,7 @@ _steal_accumulate(PyUnicodeWriter *writer, PyObject *stolen);
+ static int
+ encoder_write_string(PyEncoderObject *s, PyUnicodeWriter *writer, PyObject *obj);
+ static PyObject *
+-encoder_encode_float(PyEncoderObject *s, PyObject *obj);
++encoder_encode_float(PyEncoderObject *s, PyValueBorrow obj);
+ 
+ #define S_CHAR(c) (c >= ' ' && c <= '~' && c != '\\' && c != '"')
+ #define IS_WHITESPACE(c) (((c) == ' ') || ((c) == '\t') || ((c) == '\n') || ((c) == '\r'))
+@@ -1214,35 +1217,71 @@ scan_once_unicode(PyScannerObject *s, PyObject *memo, PyObject *pystr, Py_ssize_
+     return _match_number_unicode(s, pystr, idx, next_idx_ptr);
+ }
+ 
+-static PyObject *
+-scanner_call(PyObject *self, PyObject *args, PyObject *kwds)
++/* The Py_ssize_t of a value argument, as __index__ gives it. */
++static int
++value_as_ssize_t(PyValueBorrow arg, Py_ssize_t *result)
++{
++    if (PyValue_IsInlineInt(arg)) {
++        *result = (Py_ssize_t)PyValue_InlineInt64(arg);
++        return 0;
++    }
++    PyValue iobj = _PyValue_Index(arg);
++    if (PyValue_IsNull(iobj)) {
++        return -1;
++    }
++    Py_ssize_t ival = _PyValue_IntAsSsize_t(PyValue_Borrow(iobj));
++    PyValue_CLOSE(iobj);
++    if (ival == -1 && PyErr_Occurred()) {
++        return -1;
++    }
++    *result = ival;
++    return 0;
++}
++
++static PyValue
++scanner_call(PyThreadState *tstate, PyObject *self, const PyValue *args,
++             size_t nargsf, PyObject *kwnames)
+ {
+     /* Python callable interface to scan_once_{str,unicode} */
+     PyObject *pystr;
+     PyObject *rval;
+     Py_ssize_t idx;
+     Py_ssize_t next_idx = -1;
+-    static char *kwlist[] = {"string", "idx", NULL};
+-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "On:scan_once", kwlist, &pystr, &idx))
+-        return NULL;
+-
+-    if (!PyUnicode_Check(pystr)) {
++    static const char * const _keywords[] = {"string", "idx", NULL};
++    static _PyArg_Parser _parser = {
++        .keywords = _keywords,
++        .fname = "scan_once",
++    };
++    Py_ssize_t _idx[2];
++    Py_ssize_t nargs = PyVectorcall_NARGS(nargsf);
++    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
++            /*minpos*/ 2, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, _idx, 2)) {
++        return PyValue_NULL;
++    }
++    PyValueBorrow str_value = PyValue_Borrow(args[_idx[0]]);
++    if (value_as_ssize_t(PyValue_Borrow(args[_idx[1]]), &idx) < 0) {
++        return PyValue_NULL;
++    }
++
++    if (!PyValue_IsObject(str_value)
++        || !PyUnicode_Check(PyValue_AsKnownObjectBorrow(str_value))) {
+         PyErr_Format(PyExc_TypeError,
+                      "first argument must be a string, not %.80s",
+-                     Py_TYPE(pystr)->tp_name);
+-        return NULL;
++                     PyValue_TYPE(str_value)->tp_name);
++        return PyValue_NULL;
+     }
++    pystr = PyValue_AsKnownObjectBorrow(str_value);
+ 
+     PyObject *memo = PyDict_New();
+     if (memo == NULL) {
+-        return NULL;
++        return PyValue_NULL;
+     }
+     rval = scan_once_unicode(PyScannerObject_CAST(self),
+                              memo, pystr, idx, &next_idx);
+     Py_DECREF(memo);
+     if (rval == NULL)
+-        return NULL;
+-    return _build_rval_index_tuple(rval, next_idx);
++        return PyValue_NULL;
++    return PyValue_FromObjectSteal(_build_rval_index_tuple(rval, next_idx));
+ }
+ 
+ static PyObject *
+@@ -1301,7 +1340,8 @@ PyDoc_STRVAR(scanner_doc, "JSON scanner object");
+ static PyType_Slot PyScannerType_slots[] = {
+     {Py_tp_doc, (void *)scanner_doc},
+     {Py_tp_dealloc, scanner_dealloc},
+-    {Py_tp_call, scanner_call},
++    {Py_tp_call, _PyValue_TpCallThunk},
++    {_Py_value_call, scanner_call},
+     {Py_tp_traverse, scanner_traverse},
+     {Py_tp_clear, scanner_clear},
+     {Py_tp_members, scanner_members},
+@@ -1467,22 +1507,33 @@ write_newline_indent(PyUnicodeWriter *writer,
+ }
+ 
+ 
+-static PyObject *
+-encoder_call(PyObject *op, PyObject *args, PyObject *kwds)
++static PyValue
++encoder_call(PyThreadState *tstate, PyObject *op, const PyValue *args,
++             size_t nargsf, PyObject *kwnames)
+ {
+     /* Python callable interface to encoder_listencode_obj */
+-    static char *kwlist[] = {"obj", "_current_indent_level", NULL};
+-    PyObject *obj;
++    static const char * const _keywords[] = {"obj", "_current_indent_level",
++                                             NULL};
++    static _PyArg_Parser _parser = {
++        .keywords = _keywords,
++        .fname = "_iterencode",
++    };
++    Py_ssize_t _idx[2];
++    Py_ssize_t nargs = PyVectorcall_NARGS(nargsf);
++    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
++            /*minpos*/ 2, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, _idx, 2)) {
++        return PyValue_NULL;
++    }
++    PyValueBorrow obj = PyValue_Borrow(args[_idx[0]]);
+     Py_ssize_t indent_level;
++    if (value_as_ssize_t(PyValue_Borrow(args[_idx[1]]), &indent_level) < 0) {
++        return PyValue_NULL;
++    }
+     PyEncoderObject *self = PyEncoderObject_CAST(op);
+ 
+-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "On:_iterencode", kwlist,
+-                                     &obj, &indent_level))
+-        return NULL;
+-
+     PyUnicodeWriter *writer = PyUnicodeWriter_Create(0);
+     if (writer == NULL) {
+-        return NULL;
++        return PyValue_NULL;
+     }
+ 
+     PyObject *indent_cache = NULL;
+@@ -1490,24 +1541,24 @@ encoder_call(PyObject *op, PyObject *args, PyObject *kwds)
+         indent_cache = create_indent_cache(self, indent_level);
+         if (indent_cache == NULL) {
+             PyUnicodeWriter_Discard(writer);
+-            return NULL;
++            return PyValue_NULL;
+         }
+     }
+     indent_level = 0;
+     if (encoder_listencode_obj(self, writer, obj, indent_level, indent_cache)) {
+         PyUnicodeWriter_Discard(writer);
+         Py_XDECREF(indent_cache);
+-        return NULL;
++        return PyValue_NULL;
+     }
+     Py_XDECREF(indent_cache);
+ 
+     PyObject *str = PyUnicodeWriter_Finish(writer);
+     if (str == NULL) {
+-        return NULL;
++        return PyValue_NULL;
+     }
+     PyObject *result = _PyTuple_PackValues(1, (PyValueBorrow[]){PyValue_FromObjectBorrow(str)});
+     Py_DECREF(str);
+-    return result;
++    return PyValue_FromObjectSteal(result);
+ }
+ 
+ static PyObject *
+@@ -1529,18 +1580,46 @@ _encoded_const(PyObject *obj)
+     }
+ }
+ 
++/* The text of a float's repr (float.__repr__ never depends on the subclass).
++   A non-finite value has the repr "inf", "-inf" or "nan". */
++static PyObject *
++float_repr_text(double d)
++{
++    char *buf = PyOS_double_to_string(d, 'r', 0, Py_DTSF_ADD_DOT_0, NULL);
++    if (buf == NULL) {
++        return PyErr_NoMemory();
++    }
++    PyObject *text = PyUnicode_FromString(buf);
++    PyMem_Free(buf);
++    return text;
++}
++
++static inline double
++value_float_as_double(PyValueBorrow obj)
++{
++    if (PyValue_IsInlineFloat(obj)) {
++        return PyValue_InlineFloat(obj);
++    }
++    return PyFloat_AS_DOUBLE(PyValue_AsKnownObjectBorrow(obj));
++}
++
+ static PyObject *
+-encoder_encode_float(PyEncoderObject *s, PyObject *obj)
++encoder_encode_float(PyEncoderObject *s, PyValueBorrow obj)
+ {
+     /* Return the JSON representation of a PyFloat. */
+-    double i = PyFloat_AS_DOUBLE(obj);
++    double i = value_float_as_double(obj);
+     if (!isfinite(i)) {
+         if (!s->allow_nan) {
++            PyObject *text = float_repr_text(i);
++            if (text == NULL) {
++                return NULL;
++            }
+             PyErr_Format(
+                     PyExc_ValueError,
+-                    "Out of range float values are not JSON compliant: %R",
+-                    obj
++                    "Out of range float values are not JSON compliant: %U",
++                    text
+                     );
++            Py_DECREF(text);
+             return NULL;
+         }
+         if (i > 0) {
+@@ -1553,7 +1632,7 @@ encoder_encode_float(PyEncoderObject *s, PyObject *obj)
+             return PyUnicode_FromString("NaN");
+         }
+     }
+-    return PyFloat_Type.tp_repr(obj);
++    return float_repr_text(i);
+ }
+ 
+ static int
+@@ -1588,15 +1667,36 @@ _steal_accumulate(PyUnicodeWriter *writer, PyObject *stolen)
+     return rval;
+ }
+ 
++/* Write an inline int in decimal, as its repr. */
++static int
++write_inline_int(PyUnicodeWriter *writer, PyValueBorrow obj)
++{
++    char buf[24];
++    int n = PyOS_snprintf(buf, sizeof(buf), "%lld",
++                          (long long)PyValue_InlineInt64(obj));
++    return PyUnicodeWriter_WriteASCII(writer, buf, n);
++}
++
+ static int
+ encoder_listencode_obj(PyEncoderObject *s, PyUnicodeWriter *writer,
+-                       PyObject *obj,
++                       PyValueBorrow obj_value,
+                        Py_ssize_t indent_level, PyObject *indent_cache)
+ {
+     /* Encode Python object obj to a JSON term */
+-    PyObject *newobj;
++    PyValue newobj;
+     int rv;
+ 
++    if (PyValue_IsInlineInt(obj_value)) {
++        return write_inline_int(writer, obj_value);
++    }
++    if (PyValue_IsInlineFloat(obj_value)) {
++        PyObject *encoded = encoder_encode_float(s, obj_value);
++        if (encoded == NULL)
++            return -1;
++        return _steal_accumulate(writer, encoded);
++    }
++    PyObject *obj = PyValue_AsKnownObjectBorrow(obj_value);
++
+     if (obj == Py_None) {
+       return PyUnicodeWriter_WriteASCII(writer, "null", 4);
+     }
+@@ -1620,7 +1720,7 @@ encoder_listencode_obj(PyEncoderObject *s, PyUnicodeWriter *writer,
+         return _steal_accumulate(writer, encoded);
+     }
+     else if (PyFloat_Check(obj)) {
+-        PyObject *encoded = encoder_encode_float(s, obj);
++        PyObject *encoded = encoder_encode_float(s, obj_value);
+         if (encoded == NULL)
+             return -1;
+         return _steal_accumulate(writer, encoded);
+@@ -1658,21 +1758,24 @@ encoder_listencode_obj(PyEncoderObject *s, PyUnicodeWriter *writer,
+                 return -1;
+             }
+         }
+-        newobj = PyObject_CallOneArg(s->defaultfn, obj);
+-        if (newobj == NULL) {
++        newobj = _PyValue_CallOneArg(_PyThreadState_GET(),
++                                     PyValue_FromObjectBorrow(s->defaultfn),
++                                     obj_value);
++        if (PyValue_IsNull(newobj)) {
+             Py_XDECREF(ident);
+             return -1;
+         }
+ 
+         if (_Py_EnterRecursiveCall(" while encoding a JSON object")) {
+-            Py_DECREF(newobj);
++            PyValue_CLOSE(newobj);
+             Py_XDECREF(ident);
+             return -1;
+         }
+-        rv = encoder_listencode_obj(s, writer, newobj, indent_level, indent_cache);
++        rv = encoder_listencode_obj(s, writer, PyValue_Borrow(newobj),
++                                    indent_level, indent_cache);
+         _Py_LeaveRecursiveCall();
+ 
+-        Py_DECREF(newobj);
++        PyValue_CLOSE(newobj);
+         if (rv) {
+             _PyErr_FormatNote("when serializing %T object", obj);
+             Py_XDECREF(ident);
+@@ -1691,18 +1794,28 @@ encoder_listencode_obj(PyEncoderObject *s, PyUnicodeWriter *writer,
+ 
+ static int
+ encoder_encode_key_value(PyEncoderObject *s, PyUnicodeWriter *writer, bool *first,
+-                         PyObject *dct, PyObject *key, PyObject *value,
++                         PyObject *dct, PyValueBorrow key_value,
++                         PyValueBorrow value,
+                          Py_ssize_t indent_level, PyObject *indent_cache,
+                          PyObject *item_separator)
+ {
+     PyObject *keystr = NULL;
+     int rv;
++    PyObject *key = NULL;  // the key as an object; NULL for an inline key
+ 
+-    if (PyUnicode_Check(key)) {
++    if (PyValue_IsInlineInt(key_value)) {
++        keystr = PyUnicode_FromFormat(
++            "%lld", (long long)PyValue_InlineInt64(key_value));
++    }
++    else if (PyValue_IsInlineFloat(key_value)) {
++        keystr = encoder_encode_float(s, key_value);
++    }
++    else if ((key = PyValue_AsKnownObjectBorrow(key_value),
++              PyUnicode_Check(key))) {
+         keystr = Py_NewRef(key);
+     }
+     else if (PyFloat_Check(key)) {
+-        keystr = encoder_encode_float(s, key);
++        keystr = encoder_encode_float(s, key_value);
+     }
+     else if (key == Py_True || key == Py_False || key == Py_None) {
+                     /* This must come before the PyLong_Check because
+@@ -1752,7 +1865,20 @@ encoder_encode_key_value(PyEncoderObject *s, PyUnicodeWriter *writer, bool *firs
+         return -1;
+     }
+     if (encoder_listencode_obj(s, writer, value, indent_level, indent_cache) < 0) {
+-        _PyErr_FormatNote("when serializing %T item %R", dct, key);
++        if (key != NULL) {
++            _PyErr_FormatNote("when serializing %T item %R", dct, key);
++        }
++        else {
++            // An inline key: its repr is its text, with no object made.
++            PyObject *text = PyValue_IsInlineInt(key_value)
++                ? PyUnicode_FromFormat(
++                      "%lld", (long long)PyValue_InlineInt64(key_value))
++                : float_repr_text(PyValue_InlineFloat(key_value));
++            if (text != NULL) {
++                _PyErr_FormatNote("when serializing %T item %U", dct, text);
++                Py_DECREF(text);
++            }
++        }
+         return -1;
+     }
+     return 0;
+@@ -1765,7 +1891,6 @@ _encoder_iterate_mapping_lock_held(PyEncoderObject *s, PyUnicodeWriter *writer,
+                             PyObject *separator)
+ {
+     _Py_CRITICAL_SECTION_ASSERT_OBJECT_LOCKED(items);
+-    PyObject *key, *value;
+     for (Py_ssize_t  i = 0; i < PyList_GET_SIZE(items); i++) {
+         // gh-142831: encoder_encode_key_value() can invoke user code
+         // that mutates the items list, so hold a strong reference.
+@@ -1784,23 +1909,19 @@ _encoder_iterate_mapping_lock_held(PyEncoderObject *s, PyUnicodeWriter *writer,
+ 
+         PyValue keyv = PyTuple_GetValue(item, 0);
+         PyValue valuev = PyTuple_GetValue(item, 1);
+-        key = PyValue_IsNull(keyv) ? NULL
+-                                   : _PyValue_AsObjectAt(keyv, BOX_SITE_TUPLE);
+-        value = PyValue_IsNull(valuev)
+-                    ? NULL : _PyValue_AsObjectAt(valuev, BOX_SITE_TUPLE);
+-        PyValue_XCLOSE(keyv);
+-        PyValue_XCLOSE(valuev);
+-        if (key == NULL || value == NULL) {
+-            Py_XDECREF(key);
+-            Py_XDECREF(value);
++        if (PyValue_IsNull(keyv) || PyValue_IsNull(valuev)) {
++            PyValue_XCLOSE(keyv);
++            PyValue_XCLOSE(valuev);
+             PyValue_CLOSE(itemv);
+             return -1;
+         }
+-        int rv = encoder_encode_key_value(s, writer, first, dct, key, value,
++        int rv = encoder_encode_key_value(s, writer, first, dct,
++                                          PyValue_Borrow(keyv),
++                                          PyValue_Borrow(valuev),
+                                           indent_level, indent_cache,
+                                           separator);
+-        Py_DECREF(key);
+-        Py_DECREF(value);
++        PyValue_CLOSE(keyv);
++        PyValue_CLOSE(valuev);
+         PyValue_CLOSE(itemv);
+         if (rv < 0) {
+             return -1;
+@@ -1822,20 +1943,13 @@ _encoder_iterate_dict_lock_held(PyEncoderObject *s, PyUnicodeWriter *writer,
+     // gh-145244: encoder_encode_key_value() can invoke user code
+     // that mutates the dict; the owning iterator snapshots each entry.
+     while ((rc = PyDict_NextValue(dct, &pos, &keyv, &valuev)) > 0) {
+-        PyObject *key = _PyValue_AsObjectAt(keyv, BOX_SITE_DICT);
+-        PyObject *value = _PyValue_AsObjectAt(valuev, BOX_SITE_DICT);
+-        PyValue_CLOSE(keyv);
+-        PyValue_CLOSE(valuev);
+-        if (key == NULL || value == NULL) {
+-            Py_XDECREF(key);
+-            Py_XDECREF(value);
+-            return -1;
+-        }
+-        int rv = encoder_encode_key_value(s, writer, first, dct, key, value,
++        int rv = encoder_encode_key_value(s, writer, first, dct,
++                                          PyValue_Borrow(keyv),
++                                          PyValue_Borrow(valuev),
+                                           indent_level, indent_cache,
+                                           separator);
+-        Py_DECREF(key);
+-        Py_DECREF(value);
++        PyValue_CLOSE(keyv);
++        PyValue_CLOSE(valuev);
+         if (rv < 0) {
+             return -1;
+         }
+@@ -1949,23 +2063,19 @@ _encoder_iterate_fast_seq_lock_held(PyEncoderObject *s, PyUnicodeWriter *writer,
+         if (PyValue_IsNull(objv)) {
+             return -1;
+         }
+-        PyObject *obj = _PyValue_AsObjectAt(objv, BOX_SITE_FIELD);
+-        PyValue_CLOSE(objv);
+-        if (obj == NULL) {
+-            return -1;
+-        }
+         if (i) {
+             if (PyUnicodeWriter_WriteStr(writer, separator) < 0) {
+-                Py_DECREF(obj);
++                PyValue_CLOSE(objv);
+                 return -1;
+             }
+         }
+-        if (encoder_listencode_obj(s, writer, obj, indent_level, indent_cache)) {
++        if (encoder_listencode_obj(s, writer, PyValue_Borrow(objv),
++                                   indent_level, indent_cache)) {
+             _PyErr_FormatNote("when serializing %T item %zd", seq, i);
+-            Py_DECREF(obj);
++            PyValue_CLOSE(objv);
+             return -1;
+         }
+-        Py_DECREF(obj);
++        PyValue_CLOSE(objv);
+     }
+     return 0;
+ }
+@@ -2093,7 +2203,8 @@ PyDoc_STRVAR(encoder_doc, "Encoder(markers, default, encoder, indent, key_separa
+ static PyType_Slot PyEncoderType_slots[] = {
+     {Py_tp_doc, (void *)encoder_doc},
+     {Py_tp_dealloc, encoder_dealloc},
+-    {Py_tp_call, encoder_call},
++    {Py_tp_call, _PyValue_TpCallThunk},
++    {_Py_value_call, encoder_call},
+     {Py_tp_traverse, encoder_traverse},
+     {Py_tp_clear, encoder_clear},
+     {Py_tp_members, encoder_members},
+diff --git a/Modules/_pickle.c b/Modules/_pickle.c
+index d42a99fe740..fe55265b991 100644
+--- a/Modules/_pickle.c
++++ b/Modules/_pickle.c
+@@ -796,6 +796,8 @@ typedef struct {
+ 
+ /* Forward declarations */
+ static int save(PickleState *state, PicklerObject *, PyObject *, int);
++static int save_value(PickleState *state, PicklerObject *, PyValueBorrow, int);
++static void note_serializing_item(PyObject *container, PyValueBorrow key);
+ static int save_object(PickleState *state, PicklerObject *, PyObject *,
+                        int pers_save, int weak);
+ static int save_reduce(PickleState *, PicklerObject *, PyObject *, PyObject *);
+@@ -2475,6 +2477,75 @@ save_bool(PicklerObject *self, PyObject *obj)
+     return 0;
+ }
+ 
++/* Write an int that fits a signed 4-byte integer. */
++static int
++save_long_small(PicklerObject *self, long val)
++{
++    char pdata[32];
++    Py_ssize_t len = 0;
++
++    if (self->bin) {
++        pdata[1] = (unsigned char)(val & 0xff);
++        pdata[2] = (unsigned char)((val >> 8) & 0xff);
++        pdata[3] = (unsigned char)((val >> 16) & 0xff);
++        pdata[4] = (unsigned char)((val >> 24) & 0xff);
++
++        if ((pdata[4] != 0) || (pdata[3] != 0)) {
++            pdata[0] = BININT;
++            len = 5;
++        }
++        else if (pdata[2] != 0) {
++            pdata[0] = BININT2;
++            len = 3;
++        }
++        else {
++            pdata[0] = BININT1;
++            len = 2;
++        }
++    }
++    else {
++        sprintf(pdata, "%c%ld\n", INT,  val);
++        len = strlen(pdata);
++    }
++    return _Pickler_Write(self, pdata, len);
++}
++
++/* Write an inline int, as save_long() writes the same int as an object. */
++static int
++save_long_inline(PicklerObject *self, PyValueBorrow value)
++{
++    int64_t val = PyValue_InlineInt64(value);
++    if (val <= 0x7fffffffL && val >= (-0x7fffffffL - 1)) {
++        return save_long_small(self, (long)val);
++    }
++    if (self->proto >= 2) {
++        /* The fewest bytes that hold val as a signed little-endian number. */
++        unsigned char data[8];
++        int nbytes = 8;
++        while (nbytes > 1) {
++            int64_t shifted = val >> (8 * (nbytes - 1) - 1);
++            if (shifted != 0 && shifted != -1) {
++                break;
++            }
++            nbytes--;
++        }
++        for (int i = 0; i < nbytes; i++) {
++            data[i] = (unsigned char)((uint64_t)val >> (8 * i));
++        }
++        char header[2] = {LONG1, (char)nbytes};
++        if (_Pickler_Write(self, header, 2) < 0
++            || _Pickler_Write(self, (char *)data, nbytes) < 0)
++        {
++            return -1;
++        }
++        return 0;
++    }
++    char text[40];
++    int n = PyOS_snprintf(text, sizeof(text), "%c%lldL\n", LONG,
++                          (long long)val);
++    return _Pickler_Write(self, text, n);
++}
++
+ static int
+ save_long(PicklerObject *self, PyObject *obj)
+ {
+@@ -2641,11 +2712,17 @@ save_long(PicklerObject *self, PyObject *obj)
+     return status;
+ }
+ 
++static int save_double(PicklerObject *self, double x);
++
+ static int
+ save_float(PicklerObject *self, PyObject *obj)
+ {
+-    double x = PyFloat_AS_DOUBLE((PyFloatObject *)obj);
++    return save_double(self, PyFloat_AS_DOUBLE((PyFloatObject *)obj));
++}
+ 
++static int
++save_double(PicklerObject *self, double x)
++{
+     if (self->bin) {
+         char pdata[9];
+         pdata[0] = BINFLOAT;
+@@ -3153,17 +3230,16 @@ store_tuple_elements(PickleState *state, PicklerObject *self, PyObject *t,
+     assert(PyTuple_Size(t) == len);
+ 
+     for (i = 0; i < len; i++) {
+-        PyValue element_v = PyTuple_GetValue(t, i);
+-        PyObject *element = PyValue_IsNull(element_v) ? NULL : _PyValue_AsObjectStealAt(element_v, BOX_SITE_TUPLE);
++        PyValue element = PyTuple_GetValue(t, i);
+ 
+-        if (element == NULL)
++        if (PyValue_IsNull(element))
+             return -1;
+-        if (save(state, self, element, 0) < 0) {
+-            Py_DECREF(element);
++        if (save_value(state, self, PyValue_Borrow(element), 0) < 0) {
++            PyValue_CLOSE(element);
+             _PyErr_FormatNote("when serializing %T item %zd", t, i);
+             return -1;
+         }
+-        Py_DECREF(element);
++        PyValue_CLOSE(element);
+     }
+ 
+     return 0;
+@@ -3406,7 +3482,6 @@ batch_list(PickleState *state, PicklerObject *self, PyObject *iter, PyObject *or
+ static int
+ batch_list_exact(PickleState *state, PicklerObject *self, PyObject *obj)
+ {
+-    PyObject *item = NULL;
+     Py_ssize_t this_batch, total, list_size;
+ 
+     const char append_op = APPEND;
+@@ -3423,14 +3498,13 @@ batch_list_exact(PickleState *state, PicklerObject *self, PyObject *obj)
+     total = 0;
+     do {
+         if (list_size - total == 1) {
+-            PyValue item_v = PyList_GetValue(obj, total);
+-            item = PyValue_IsNull(item_v) ? NULL : _PyValue_AsObjectStealAt(item_v, BOX_SITE_LIST);
+-            if (item == NULL) {
++            PyValue item = PyList_GetValue(obj, total);
++            if (PyValue_IsNull(item)) {
+                 _PyErr_FormatNote("when serializing %T item %zd", obj, total);
+                 return -1;
+             }
+-            int err = save(state, self, item, 0);
+-            Py_DECREF(item);
++            int err = save_value(state, self, PyValue_Borrow(item), 0);
++            PyValue_CLOSE(item);
+             if (err < 0) {
+                 _PyErr_FormatNote("when serializing %T item %zd", obj, total);
+                 return -1;
+@@ -3443,14 +3517,13 @@ batch_list_exact(PickleState *state, PicklerObject *self, PyObject *obj)
+         if (_Pickler_Write(self, &mark_op, 1) < 0)
+             return -1;
+         while (total < PyList_GET_SIZE(obj)) {
+-            PyValue item_v2 = PyList_GetValue(obj, total);
+-            item = PyValue_IsNull(item_v2) ? NULL : _PyValue_AsObjectStealAt(item_v2, BOX_SITE_LIST);
+-            if (item == NULL) {
++            PyValue item = PyList_GetValue(obj, total);
++            if (PyValue_IsNull(item)) {
+                 _PyErr_FormatNote("when serializing %T item %zd", obj, total);
+                 return -1;
+             }
+-            int err = save(state, self, item, 0);
+-            Py_DECREF(item);
++            int err = save_value(state, self, PyValue_Borrow(item), 0);
++            PyValue_CLOSE(item);
+             if (err < 0) {
+                 _PyErr_FormatNote("when serializing %T item %zd", obj, total);
+                 return -1;
+@@ -3543,25 +3616,23 @@ save_dict_item(PickleState *state, PicklerObject *self, PyObject *pair,
+                PyObject *origobj)
+ {
+     int ret = -1;
+-    PyValue key_v = PyTuple_GetValue(pair, 0);
+-    PyObject *key = PyValue_IsNull(key_v) ? NULL : _PyValue_AsObjectStealAt(key_v, BOX_SITE_TUPLE);
+-    PyValue value_v = PyTuple_GetValue(pair, 1);
+-    PyObject *value = PyValue_IsNull(value_v) ? NULL : _PyValue_AsObjectStealAt(value_v, BOX_SITE_TUPLE);
++    PyValue key = PyTuple_GetValue(pair, 0);
++    PyValue value = PyTuple_GetValue(pair, 1);
+ 
+-    if (key == NULL || value == NULL) {
++    if (PyValue_IsNull(key) || PyValue_IsNull(value)) {
+         goto done;
+     }
+-    if (save(state, self, key, 0) < 0) {
++    if (save_value(state, self, PyValue_Borrow(key), 0) < 0) {
+         goto done;
+     }
+-    if (save(state, self, value, 0) < 0) {
+-        _PyErr_FormatNote("when serializing %T item %R", origobj, key);
++    if (save_value(state, self, PyValue_Borrow(value), 0) < 0) {
++        note_serializing_item(origobj, PyValue_Borrow(key));
+         goto done;
+     }
+     ret = 0;
+ done:
+-    Py_XDECREF(key);
+-    Py_XDECREF(value);
++    PyValue_XCLOSE(key);
++    PyValue_XCLOSE(value);
+     return ret;
+ }
+ 
+@@ -3704,7 +3775,7 @@ batch_dict(PickleState *state, PicklerObject *self, PyObject *iter, PyObject *or
+ static int
+ batch_dict_exact_impl(PickleState *state, PicklerObject *self, PyObject *obj)
+ {
+-    PyObject *key = NULL, *value = NULL;
++    PyValue key = PyValue_NULL, value = PyValue_NULL;
+     int i, rc;
+     Py_ssize_t dict_size, ppos = 0;
+ 
+@@ -3722,18 +3793,7 @@ batch_dict_exact_impl(PickleState *state, PicklerObject *self, PyObject *obj)
+     Py_ssize_t total = 0;
+     do {
+         if (dict_size - total == 1) {
+-            PyValue key_v, value_v;
+-            rc = PyDict_NextValue(obj, &ppos, &key_v, &value_v);
+-            key = NULL;
+-            value = NULL;
+-            if (rc > 0) {
+-                key = _PyValue_AsObjectStealAt(key_v, BOX_SITE_DICT);
+-                value = _PyValue_AsObjectStealAt(value_v, BOX_SITE_DICT);
+-                if (key == NULL || value == NULL) {
+-                    Py_CLEAR(key); Py_CLEAR(value);
+-                    rc = -1;
+-                }
+-            }
++            rc = PyDict_NextValue(obj, &ppos, &key, &value);
+             if (rc < 0) {
+                 return -1;
+             }
+@@ -3743,15 +3803,16 @@ batch_dict_exact_impl(PickleState *state, PicklerObject *self, PyObject *obj)
+                     "dictionary keys changed during iteration");
+                 return -1;
+             }
+-            if (save(state, self, key, 0) < 0) {
++            if (save_value(state, self, PyValue_Borrow(key), 0) < 0) {
+                 goto error;
+             }
+-            if (save(state, self, value, 0) < 0) {
+-                _PyErr_FormatNote("when serializing %T item %R", obj, key);
++            if (save_value(state, self, PyValue_Borrow(value), 0) < 0) {
++                note_serializing_item(obj, PyValue_Borrow(key));
+                 goto error;
+             }
+-            Py_CLEAR(key);
+-            Py_CLEAR(value);
++            PyValue_CLOSE(key);
++            PyValue_CLOSE(value);
++            key = value = PyValue_NULL;
+             if (_Pickler_Write(self, &setitem_op, 1) < 0)
+                 return -1;
+             return 0;
+@@ -3760,24 +3821,17 @@ batch_dict_exact_impl(PickleState *state, PicklerObject *self, PyObject *obj)
+         i = 0;
+         if (_Pickler_Write(self, &mark_op, 1) < 0)
+             return -1;
+-        PyValue key_v, value_v;
+-        while ((rc = PyDict_NextValue(obj, &ppos, &key_v, &value_v)) > 0) {
+-            key = _PyValue_AsObjectStealAt(key_v, BOX_SITE_DICT);
+-            value = _PyValue_AsObjectStealAt(value_v, BOX_SITE_DICT);
+-            if (key == NULL || value == NULL) {
+-                Py_CLEAR(key); Py_CLEAR(value);
+-                rc = -1;
+-                break;
+-            }
+-            if (save(state, self, key, 0) < 0) {
++        while ((rc = PyDict_NextValue(obj, &ppos, &key, &value)) > 0) {
++            if (save_value(state, self, PyValue_Borrow(key), 0) < 0) {
+                 goto error;
+             }
+-            if (save(state, self, value, 0) < 0) {
+-                _PyErr_FormatNote("when serializing %T item %R", obj, key);
++            if (save_value(state, self, PyValue_Borrow(value), 0) < 0) {
++                note_serializing_item(obj, PyValue_Borrow(key));
+                 goto error;
+             }
+-            Py_CLEAR(key);
+-            Py_CLEAR(value);
++            PyValue_CLOSE(key);
++            PyValue_CLOSE(value);
++            key = value = PyValue_NULL;
+             total++;
+             if (++i == BATCHSIZE)
+                 break;
+@@ -3796,8 +3850,8 @@ batch_dict_exact_impl(PickleState *state, PicklerObject *self, PyObject *obj)
+     } while (total < dict_size);
+     return 0;
+ error:
+-    Py_XDECREF(key);
+-    Py_XDECREF(value);
++    PyValue_XCLOSE(key);
++    PyValue_XCLOSE(value);
+     return -1;
+ }
+ 
+@@ -4422,28 +4476,30 @@ save_type(PickleState *state, PicklerObject *self, PyObject *obj)
+ }
+ 
+ static int
+-save_pers(PickleState *state, PicklerObject *self, PyObject *obj)
++save_pers(PickleState *state, PicklerObject *self, PyValueBorrow obj)
+ {
+-    PyObject *pid = NULL;
++    PyValue pid = PyValue_NULL;
+     int status = 0;
+ 
+     const char persid_op = PERSID;
+     const char binpersid_op = BINPERSID;
+ 
+-    pid = PyObject_CallOneArg(self->persistent_id, obj);
+-    if (pid == NULL)
++    pid = _PyValue_CallOneArg(_PyThreadState_GET(),
++                              PyValue_FromObjectBorrow(self->persistent_id),
++                              obj);
++    if (PyValue_IsNull(pid))
+         return -1;
+ 
+-    if (pid != Py_None) {
++    if (!PyValue_IsNone(pid)) {
+         if (self->bin) {
+-            if (save(state, self, pid, 1) < 0 ||
++            if (save_value(state, self, PyValue_Borrow(pid), 1) < 0 ||
+                 _Pickler_Write(self, &binpersid_op, 1) < 0)
+                 goto error;
+         }
+         else {
+             PyObject *pid_str;
+ 
+-            pid_str = _PyValue_Str(PyValue_FromObjectBorrow(pid));
++            pid_str = _PyValue_Str(PyValue_Borrow(pid));
+             if (pid_str == NULL)
+                 goto error;
+ 
+@@ -4473,7 +4529,7 @@ save_pers(PickleState *state, PicklerObject *self, PyObject *obj)
+   error:
+         status = -1;
+     }
+-    Py_XDECREF(pid);
++    PyValue_CLOSE(pid);
+ 
+     return status;
+ }
+@@ -5058,7 +5114,7 @@ save_object(PickleState *st, PicklerObject *self, PyObject *obj, int pers_save,
+              0   if it did nothing successfully;
+              1   if a persistent id was saved.
+          */
+-        if ((status = save_pers(st, self, obj)) != 0)
++        if ((status = save_pers(st, self, PyValue_FromObjectBorrow(obj))) != 0)
+             return status;
+     }
+ 
+@@ -5282,6 +5338,58 @@ save(PickleState *st, PicklerObject *self, PyObject *obj, int pers_save)
+     return save_object(st, self, obj, pers_save, 0);
+ }
+ 
++/* save() of a value: an inline int or float is written from its word, and
++   only an object goes to save_object(). */
++static int
++save_value(PickleState *st, PicklerObject *self, PyValueBorrow value,
++           int pers_save)
++{
++    if (!PyValue_IsInline(value)) {
++        return save_object(st, self, PyValue_AsKnownObjectBorrow(value),
++                           pers_save, 0);
++    }
++    int status;
++    if (_Pickler_OpcodeBoundary(self) < 0) {
++        return -1;
++    }
++    if (!pers_save && self->persistent_id) {
++        if ((status = save_pers(st, self, value)) != 0) {
++            return status;
++        }
++    }
++    if (PyValue_IsInlineInt(value)) {
++        return save_long_inline(self, value);
++    }
++    return save_double(self, PyValue_InlineFloat(value));
++}
++
++/* The note that names the item of container being serialized, for a key
++   that may be an inline value (its repr is its text, with no object). */
++static void
++note_serializing_item(PyObject *container, PyValueBorrow key)
++{
++    if (PyValue_IsInlineInt(key)) {
++        PyObject *text = PyUnicode_FromFormat(
++            "%lld", (long long)PyValue_InlineInt64(key));
++        if (text != NULL) {
++            _PyErr_FormatNote("when serializing %T item %U", container, text);
++            Py_DECREF(text);
++        }
++    }
++    else if (PyValue_IsInlineFloat(key)) {
++        char *buf = PyOS_double_to_string(PyValue_InlineFloat(key), 'r', 0,
++                                          Py_DTSF_ADD_DOT_0, NULL);
++        if (buf != NULL) {
++            _PyErr_FormatNote("when serializing %T item %s", container, buf);
++            PyMem_Free(buf);
++        }
++    }
++    else {
++        _PyErr_FormatNote("when serializing %T item %R", container,
++                          PyValue_AsKnownObjectBorrow(key));
++    }
++}
++
+ static PyObject *
+ persistent_id(PyObject *self, PyObject *obj)
+ {
+@@ -5314,11 +5422,6 @@ dump(PickleState *state, PicklerObject *self, PyValueBorrow obj_value)
+     int status = -1;
+     PyObject *tmp;
+ 
+-    PyObject *obj = _PyValue_AsObjectAt(obj_value, BOX_SITE_PARSER);
+-    if (obj == NULL) {
+-        return -1;
+-    }
+-
+     /* Cache the persistent_id method. */
+     PyValue tmp_v = _PyValue_GetAttr(PyValue_FromObjectBorrow((PyObject *)self), &_Py_ID(persistent_id));
+     tmp = PyValue_IsNull(tmp_v) ? NULL : _PyValue_AsObjectStealAt(tmp_v, BOX_SITE_ATTRIBUTE);
+@@ -5353,7 +5456,7 @@ dump(PickleState *state, PicklerObject *self, PyValueBorrow obj_value)
+             self->framing = 1;
+     }
+ 
+-    if (save(state, self, obj, 0) < 0)
++    if (save_value(state, self, obj_value, 0) < 0)
+         goto error;
+ 
+     if (self->weak_only_count > 0) {
+@@ -5386,7 +5489,6 @@ dump(PickleState *state, PicklerObject *self, PyValueBorrow obj_value)
+      * be garbage-collected as long as the Pickler itself is not collected. */
+     Py_CLEAR(self->persistent_id);
+     Py_CLEAR(self->reducer_override);
+-    Py_DECREF(obj);
+     return status;
+ }
+ 
+diff --git a/Modules/_randommodule.c b/Modules/_randommodule.c
+index 90df8160485..b9156e89526 100644
+--- a/Modules/_randommodule.c
++++ b/Modules/_randommodule.c
+@@ -298,6 +298,24 @@ random_seed_time_pid(RandomObject *self)
+     return 0;
+ }
+ 
++// Seed from an unsigned 64-bit number: the key is its 32-bit chunks from
++// the right, as for a PyLong of that size.
++static void
++init_by_uint64(RandomObject *self, uint64_t u)
++{
++    uint32_t key[2] = {(uint32_t)u, (uint32_t)(u >> 32)};
++    init_by_array(self, key, key[1] != 0 ? 2 : 1);
++}
++
++// Seed from the absolute value of an inline int.
++static int
++random_seed_inline(RandomObject *self, PyValueBorrow value)
++{
++    int64_t i = PyValue_InlineInt64(value);
++    init_by_uint64(self, i < 0 ? -(uint64_t)i : (uint64_t)i);
++    return 0;
++}
++
+ static int
+ random_seed(RandomObject *self, PyValueBorrow arg_value)
+ {
+@@ -326,15 +344,30 @@ random_seed(RandomObject *self, PyValueBorrow arg_value)
+      * So: if the arg is a PyLong, use its absolute value.
+      * Otherwise use its hash value, cast to unsigned.
+      */
+-    arg = _PyValue_AsObjectAt(arg_value, BOX_SITE_PARSER);
+-    if (arg == NULL) {
+-        return -1;
++    if (PyValue_IsInlineInt(arg_value)) {
++        return random_seed_inline(self, arg_value);
++    }
++    if (PyValue_IsInline(arg_value)) {
++        /* An inline float hashes without an object. */
++        Py_hash_t hash = _PyValue_Hash(arg_value);
++        if (hash == -1) {
++            return -1;
++        }
++        init_by_uint64(self, (uint64_t)(size_t)hash);
++        return 0;
+     }
++    arg = PyValue_AsKnownObjectBorrow(arg_value);
++    Py_INCREF(arg);
+     if (PyLong_CheckExact(arg)) {
+         PyValue abs_value = _PyValue_Absolute(PyValue_FromObjectBorrow(arg));
+-        n = PyValue_IsNull(abs_value)
+-            ? NULL
+-            : _PyValue_AsObjectStealAt(abs_value, BOX_SITE_NUMBER);
++        if (PyValue_IsNull(abs_value)) {
++            goto Done;
++        }
++        if (PyValue_IsInlineInt(abs_value)) {
++            Py_DECREF(arg);
++            return random_seed_inline(self, PyValue_Borrow(abs_value));
++        }
++        n = PyValue_AsKnownObjectSteal(abs_value);
+     } else if (PyLong_Check(arg)) {
+         /* Calling int.__abs__() prevents calling arg.__abs__(), which might
+            return an invalid value. See issue #31478. */
+diff --git a/Modules/arraymodule.c b/Modules/arraymodule.c
+index cb2777f0eab..0637ff615c7 100644
+--- a/Modules/arraymodule.c
++++ b/Modules/arraymodule.c
+@@ -19,6 +19,7 @@
+ #include "pycore_modsupport.h"    // _PyArg_NoKeywords()
+ #include "pycore_moduleobject.h"  // _PyModule_GetState()
+ #include "pycore_object.h"        // _PyObject_GC_TRACK()
++#include "pycore_slots.h"         // _Py_value_item
+ #include "pycore_tuple.h"         // _PyTuple_FromPairSteal
+ #include "pycore_value.h"        // PyValue_FromObjectBorrow()
+ #include "pycore_value_ops.h"    // _PyValue_RichCompareBool()
+@@ -48,8 +49,8 @@ static struct PyModuleDef arraymodule;
+ struct arraydescr {
+     char typecode[3];  // big enough to store "Zd\0"
+     int itemsize;
+-    PyObject * (*getitem)(struct arrayobject *, Py_ssize_t);
+-    int (*setitem)(struct arrayobject *, Py_ssize_t, PyObject *);
++    PyValue (*getitem)(struct arrayobject *, Py_ssize_t);
++    int (*setitem)(struct arrayobject *, Py_ssize_t, PyValueBorrow);
+     int (*compareitems)(const void *, const void *, Py_ssize_t);
+     int is_integer_type;
+     int is_signed;
+@@ -68,7 +69,7 @@ typedef struct {
+     PyObject_HEAD
+     Py_ssize_t index;
+     arrayobject *ao;
+-    PyObject* (*getitem)(struct arrayobject *, Py_ssize_t);
++    PyValue (*getitem)(struct arrayobject *, Py_ssize_t);
+ } arrayiterobject;
+ 
+ typedef struct {
+@@ -237,34 +238,104 @@ in bounds; that's the responsibility of the caller.
+         }                                                   \
+     } while (0)
+ 
+-#define CHECK_ARRAY_BOUNDS_WITH_CLEANUP(OP, IDX, VAL, CLEANUP)  \
+-    do {                                                        \
+-        if ((IDX) >= 0 && ((OP)->ob_item == NULL ||             \
+-                  (IDX) >= Py_SIZE((OP)))) {                    \
+-            PyErr_SetString(PyExc_IndexError,                   \
+-                    "array assignment index out of range");     \
+-            if (CLEANUP) {                                      \
+-                Py_DECREF(VAL);                                 \
+-            }                                                   \
+-            return -1;                                          \
+-        }                                                       \
+-    } while (0)
++/* The setitem functions parse their value as PyArg_Parse() did, with its
++   conversions and messages, but read the word itself: an inline int or float
++   is never boxed. */
+ 
+-static PyObject *
++static int
++array_parse_long(PyValueBorrow v, long min, long max, const char *what,
++                 long *x)
++{
++    long ival = _PyValue_AsLong(v);
++    if (ival == -1 && PyErr_Occurred()) {
++        return -1;
++    }
++    if (ival < min) {
++        PyErr_Format(PyExc_OverflowError, "%s is less than minimum", what);
++        return -1;
++    }
++    if (ival > max) {
++        PyErr_Format(PyExc_OverflowError, "%s is greater than maximum", what);
++        return -1;
++    }
++    *x = ival;
++    return 0;
++}
++
++static int
++array_parse_double(PyValueBorrow v, double *x)
++{
++    if (PyValue_IsInlineFloat(v)) {
++        *x = PyValue_InlineFloat(v);
++        return 0;
++    }
++    double d = _PyValue_AsDouble(v);
++    if (d == -1.0 && PyErr_Occurred()) {
++        return -1;
++    }
++    *x = d;
++    return 0;
++}
++
++static int
++array_parse_complex(PyValueBorrow v, Py_complex *x)
++{
++    if (PyValue_IsObject(v)) {
++        *x = PyComplex_AsCComplex(PyValue_AsKnownObjectBorrow(v));
++        return PyErr_Occurred() ? -1 : 0;
++    }
++    /* An inline int or float has no __complex__. */
++    if (array_parse_double(v, &x->real) < 0) {
++        return -1;
++    }
++    x->imag = 0.0;
++    return 0;
++}
++
++/* An unsigned item: an int, or what __index__ turns into one. */
++static int
++array_parse_unsigned(PyValueBorrow v, unsigned long long *x, bool long_long)
++{
++    PyValue index = PyValue_NULL;
++    if (!PyValue_IsInlineInt(v) &&
++        !(PyValue_IsObject(v) && PyLong_Check(PyValue_AsKnownObjectBorrow(v))))
++    {
++        index = _PyValue_Index(v);
++        if (PyValue_IsNull(index)) {
++            return -1;
++        }
++        v = PyValue_Borrow(index);
++    }
++    unsigned long long r;
++    if (long_long) {
++        r = _PyValue_IntAsUnsignedLongLong(v);
++    }
++    else {
++        r = _PyValue_IntAsUnsignedLong(v);
++    }
++    PyValue_XCLOSE(index);
++    if (r == (unsigned long long)-1 && PyErr_Occurred()) {
++        return -1;
++    }
++    *x = r;
++    return 0;
++}
++
++static PyValue
+ b_getitem(arrayobject *ap, Py_ssize_t i)
+ {
+-    long x = ((signed char *)ap->ob_item)[i];
+-    return PyLong_FromLong(x);
++    return PyValue_FromInt64(((signed char *)ap->ob_item)[i]);
+ }
+ 
+ static int
+-b_setitem(arrayobject *ap, Py_ssize_t i, PyObject *v)
++b_setitem(arrayobject *ap, Py_ssize_t i, PyValueBorrow v)
+ {
+-    short x;
++    long x;
+     /* PyArg_Parse's 'b' formatter is for an unsigned char, therefore
+        must use the next size up that is signed ('h') and manually do
+        the overflow checking */
+-    if (!PyArg_Parse(v, "h;array item must be integer", &x))
++    if (array_parse_long(v, SHRT_MIN, SHRT_MAX, "signed short integer",
++                         &x) < 0)
+         return -1;
+ 
+     CHECK_ARRAY_BOUNDS(ap, i);
+@@ -284,93 +355,96 @@ b_setitem(arrayobject *ap, Py_ssize_t i, PyObject *v)
+     return 0;
+ }
+ 
+-static PyObject *
++static PyValue
+ BB_getitem(arrayobject *ap, Py_ssize_t i)
+ {
+-    long x = ((unsigned char *)ap->ob_item)[i];
+-    return PyLong_FromLong(x);
++    return PyValue_FromInt64(((unsigned char *)ap->ob_item)[i]);
+ }
+ 
+ static int
+-BB_setitem(arrayobject *ap, Py_ssize_t i, PyObject *v)
++BB_setitem(arrayobject *ap, Py_ssize_t i, PyValueBorrow v)
+ {
+-    unsigned char x;
++    long x;
+     /* 'B' == unsigned char, maps to PyArg_Parse's 'b' formatter */
+-    if (!PyArg_Parse(v, "b;array item must be integer", &x))
++    if (array_parse_long(v, 0, UCHAR_MAX, "unsigned byte integer", &x) < 0)
+         return -1;
+ 
+     CHECK_ARRAY_BOUNDS(ap, i);
+ 
+     if (i >= 0)
+-        ((unsigned char *)ap->ob_item)[i] = x;
++        ((unsigned char *)ap->ob_item)[i] = (unsigned char)x;
+     return 0;
+ }
+ 
+-static PyObject *
++static PyValue
+ w_getitem(arrayobject *ap, Py_ssize_t i)
+ {
+-    return PyUnicode_FromOrdinal(((Py_UCS4 *) ap->ob_item)[i]);
++    return _PyValue_FromObjectResult(
++        PyUnicode_FromOrdinal(((Py_UCS4 *) ap->ob_item)[i]));
+ }
+ 
+ static int
+-w_setitem(arrayobject *ap, Py_ssize_t i, PyObject *v)
++w_setitem(arrayobject *ap, Py_ssize_t i, PyValueBorrow v)
+ {
+-    if (!PyUnicode_Check(v)) {
++    if (!PyValue_IsObject(v) ||
++        !PyUnicode_Check(PyValue_AsKnownObjectBorrow(v))) {
+         PyErr_Format(PyExc_TypeError,
+-                     "array item must be a unicode character, not %T",
++                     "array item must be a unicode character, not %vT",
+                      v);
+         return -1;
+     }
++    PyObject *s = PyValue_AsKnownObjectBorrow(v);
+ 
+-    if (PyUnicode_GET_LENGTH(v) != 1) {
++    if (PyUnicode_GET_LENGTH(s) != 1) {
+         PyErr_Format(PyExc_TypeError,
+                      "array item must be a unicode character, "
+                      "not a string of length %zd",
+-                     PyUnicode_GET_LENGTH(v));
++                     PyUnicode_GET_LENGTH(s));
+         return -1;
+     }
+ 
+     if (i >= 0) {
+-        ((Py_UCS4 *)ap->ob_item)[i] = PyUnicode_READ_CHAR(v, 0);
++        ((Py_UCS4 *)ap->ob_item)[i] = PyUnicode_READ_CHAR(s, 0);
+     }
+     return 0;
+ }
+ 
+-static PyObject *
++static PyValue
+ h_getitem(arrayobject *ap, Py_ssize_t i)
+ {
+-    return PyLong_FromLong((long) ((short *)ap->ob_item)[i]);
++    return PyValue_FromInt64(((short *)ap->ob_item)[i]);
+ }
+ 
+ 
+ static int
+-h_setitem(arrayobject *ap, Py_ssize_t i, PyObject *v)
++h_setitem(arrayobject *ap, Py_ssize_t i, PyValueBorrow v)
+ {
+-    short x;
++    long x;
+     /* 'h' == signed short, maps to PyArg_Parse's 'h' formatter */
+-    if (!PyArg_Parse(v, "h;array item must be integer", &x))
++    if (array_parse_long(v, SHRT_MIN, SHRT_MAX, "signed short integer",
++                         &x) < 0)
+         return -1;
+ 
+     CHECK_ARRAY_BOUNDS(ap, i);
+ 
+     if (i >= 0)
+-                 ((short *)ap->ob_item)[i] = x;
++                 ((short *)ap->ob_item)[i] = (short)x;
+     return 0;
+ }
+ 
+-static PyObject *
++static PyValue
+ HH_getitem(arrayobject *ap, Py_ssize_t i)
+ {
+-    return PyLong_FromLong((long) ((unsigned short *)ap->ob_item)[i]);
++    return PyValue_FromInt64(((unsigned short *)ap->ob_item)[i]);
+ }
+ 
+ static int
+-HH_setitem(arrayobject *ap, Py_ssize_t i, PyObject *v)
++HH_setitem(arrayobject *ap, Py_ssize_t i, PyValueBorrow v)
+ {
+-    int x;
++    long x;
+     /* PyArg_Parse's 'h' formatter is for a signed short, therefore
+        must use the next size up and manually do the overflow checking */
+-    if (!PyArg_Parse(v, "i;array item must be integer", &x))
++    if (array_parse_long(v, INT_MIN, INT_MAX, "signed integer", &x) < 0)
+         return -1;
+     else if (x < 0) {
+         PyErr_SetString(PyExc_OverflowError,
+@@ -390,91 +464,65 @@ HH_setitem(arrayobject *ap, Py_ssize_t i, PyObject *v)
+     return 0;
+ }
+ 
+-static PyObject *
++static PyValue
+ i_getitem(arrayobject *ap, Py_ssize_t i)
+ {
+-    return PyLong_FromLong((long) ((int *)ap->ob_item)[i]);
++    return PyValue_FromInt64(((int *)ap->ob_item)[i]);
+ }
+ 
+ static int
+-i_setitem(arrayobject *ap, Py_ssize_t i, PyObject *v)
++i_setitem(arrayobject *ap, Py_ssize_t i, PyValueBorrow v)
+ {
+-    int x;
++    long x;
+     /* 'i' == signed int, maps to PyArg_Parse's 'i' formatter */
+-    if (!PyArg_Parse(v, "i;array item must be integer", &x))
++    if (array_parse_long(v, INT_MIN, INT_MAX, "signed integer", &x) < 0)
+         return -1;
+ 
+     CHECK_ARRAY_BOUNDS(ap, i);
+ 
+     if (i >= 0)
+-                 ((int *)ap->ob_item)[i] = x;
++                 ((int *)ap->ob_item)[i] = (int)x;
+     return 0;
+ }
+ 
+-static PyObject *
++static PyValue
+ II_getitem(arrayobject *ap, Py_ssize_t i)
+ {
+-    return PyLong_FromUnsignedLong(
+-        (unsigned long) ((unsigned int *)ap->ob_item)[i]);
++    return PyValue_FromUInt64(((unsigned int *)ap->ob_item)[i]);
+ }
+ 
+ static int
+-II_setitem(arrayobject *ap, Py_ssize_t i, PyObject *v)
++II_setitem(arrayobject *ap, Py_ssize_t i, PyValueBorrow v)
+ {
+-    unsigned long x;
+-    int do_decref = 0; /* if nb_int was called */
++    unsigned long long x;
+ 
+-    if (!PyLong_Check(v)) {
+-        PyValue index = _PyValue_Index(PyValue_FromObjectBorrow(v));
+-        PyObject *res = NULL;
+-        if (!PyValue_IsNull(index)) {
+-            res = _PyValue_AsObjectAt(index, BOX_SITE_NUMBER);
+-            PyValue_CLOSE(index);
+-        }
+-        if (NULL == res) {
+-            return -1;
+-        }
+-        v = res;
+-        do_decref = 1;
+-    }
+-    x = PyLong_AsUnsignedLong(v);
+-    if (x == (unsigned long)-1 && PyErr_Occurred()) {
+-        if (do_decref) {
+-            Py_DECREF(v);
+-        }
++    if (array_parse_unsigned(v, &x, false) < 0) {
+         return -1;
+     }
+     if (x > UINT_MAX) {
+         PyErr_SetString(PyExc_OverflowError,
+                         "unsigned int is greater than maximum");
+-        if (do_decref) {
+-            Py_DECREF(v);
+-        }
+         return -1;
+     }
+ 
+-    CHECK_ARRAY_BOUNDS_WITH_CLEANUP(ap, i, v, do_decref);
++    CHECK_ARRAY_BOUNDS(ap, i);
+ 
+     if (i >= 0)
+         ((unsigned int *)ap->ob_item)[i] = (unsigned int)x;
+-
+-    if (do_decref) {
+-        Py_DECREF(v);
+-    }
+     return 0;
+ }
+ 
+-static PyObject *
++static PyValue
+ l_getitem(arrayobject *ap, Py_ssize_t i)
+ {
+-    return PyLong_FromLong(((long *)ap->ob_item)[i]);
++    return PyValue_FromInt64(((long *)ap->ob_item)[i]);
+ }
+ 
+ static int
+-l_setitem(arrayobject *ap, Py_ssize_t i, PyObject *v)
++l_setitem(arrayobject *ap, Py_ssize_t i, PyValueBorrow v)
+ {
+-    long x;
+-    if (!PyArg_Parse(v, "l;array item must be integer", &x))
++    long x = _PyValue_AsLong(v);
++    if (x == -1 && PyErr_Occurred())
+         return -1;
+ 
+     CHECK_ARRAY_BOUNDS(ap, i);
+@@ -484,61 +532,39 @@ l_setitem(arrayobject *ap, Py_ssize_t i, PyObject *v)
+     return 0;
+ }
+ 
+-static PyObject *
++static PyValue
+ LL_getitem(arrayobject *ap, Py_ssize_t i)
+ {
+-    return PyLong_FromUnsignedLong(((unsigned long *)ap->ob_item)[i]);
++    return PyValue_FromUInt64(((unsigned long *)ap->ob_item)[i]);
+ }
+ 
+ static int
+-LL_setitem(arrayobject *ap, Py_ssize_t i, PyObject *v)
++LL_setitem(arrayobject *ap, Py_ssize_t i, PyValueBorrow v)
+ {
+-    unsigned long x;
+-    int do_decref = 0; /* if nb_int was called */
++    unsigned long long x;
+ 
+-    if (!PyLong_Check(v)) {
+-        PyValue index = _PyValue_Index(PyValue_FromObjectBorrow(v));
+-        PyObject *res = NULL;
+-        if (!PyValue_IsNull(index)) {
+-            res = _PyValue_AsObjectAt(index, BOX_SITE_NUMBER);
+-            PyValue_CLOSE(index);
+-        }
+-        if (NULL == res) {
+-            return -1;
+-        }
+-        v = res;
+-        do_decref = 1;
+-    }
+-    x = PyLong_AsUnsignedLong(v);
+-    if (x == (unsigned long)-1 && PyErr_Occurred()) {
+-        if (do_decref) {
+-            Py_DECREF(v);
+-        }
++    if (array_parse_unsigned(v, &x, false) < 0) {
+         return -1;
+     }
+ 
+-    CHECK_ARRAY_BOUNDS_WITH_CLEANUP(ap, i, v, do_decref);
++    CHECK_ARRAY_BOUNDS(ap, i);
+ 
+     if (i >= 0)
+-        ((unsigned long *)ap->ob_item)[i] = x;
+-
+-    if (do_decref) {
+-        Py_DECREF(v);
+-    }
++        ((unsigned long *)ap->ob_item)[i] = (unsigned long)x;
+     return 0;
+ }
+ 
+-static PyObject *
++static PyValue
+ q_getitem(arrayobject *ap, Py_ssize_t i)
+ {
+-    return PyLong_FromLongLong(((long long *)ap->ob_item)[i]);
++    return PyValue_FromInt64(((long long *)ap->ob_item)[i]);
+ }
+ 
+ static int
+-q_setitem(arrayobject *ap, Py_ssize_t i, PyObject *v)
++q_setitem(arrayobject *ap, Py_ssize_t i, PyValueBorrow v)
+ {
+-    long long x;
+-    if (!PyArg_Parse(v, "L;array item must be integer", &x))
++    long long x = _PyValue_AsLongLong(v);
++    if (x == -1 && PyErr_Occurred())
+         return -1;
+ 
+     CHECK_ARRAY_BOUNDS(ap, i);
+@@ -548,65 +574,42 @@ q_setitem(arrayobject *ap, Py_ssize_t i, PyObject *v)
+     return 0;
+ }
+ 
+-static PyObject *
++static PyValue
+ QQ_getitem(arrayobject *ap, Py_ssize_t i)
+ {
+-    return PyLong_FromUnsignedLongLong(
+-        ((unsigned long long *)ap->ob_item)[i]);
++    return PyValue_FromUInt64(((unsigned long long *)ap->ob_item)[i]);
+ }
+ 
+ static int
+-QQ_setitem(arrayobject *ap, Py_ssize_t i, PyObject *v)
++QQ_setitem(arrayobject *ap, Py_ssize_t i, PyValueBorrow v)
+ {
+     unsigned long long x;
+-    int do_decref = 0; /* if nb_int was called */
+ 
+-    if (!PyLong_Check(v)) {
+-        PyValue index = _PyValue_Index(PyValue_FromObjectBorrow(v));
+-        PyObject *res = NULL;
+-        if (!PyValue_IsNull(index)) {
+-            res = _PyValue_AsObjectAt(index, BOX_SITE_NUMBER);
+-            PyValue_CLOSE(index);
+-        }
+-        if (NULL == res) {
+-            return -1;
+-        }
+-        v = res;
+-        do_decref = 1;
+-    }
+-    x = PyLong_AsUnsignedLongLong(v);
+-    if (x == (unsigned long long)-1 && PyErr_Occurred()) {
+-        if (do_decref) {
+-            Py_DECREF(v);
+-        }
++    if (array_parse_unsigned(v, &x, true) < 0) {
+         return -1;
+     }
+ 
+-    CHECK_ARRAY_BOUNDS_WITH_CLEANUP(ap, i, v, do_decref);
++    CHECK_ARRAY_BOUNDS(ap, i);
+ 
+     if (i >= 0)
+         ((unsigned long long *)ap->ob_item)[i] = x;
+-
+-    if (do_decref) {
+-        Py_DECREF(v);
+-    }
+     return 0;
+ }
+ 
+-static PyObject *
++static PyValue
+ e_getitem(arrayobject *ap, Py_ssize_t i)
+ {
+     double x = PyFloat_Unpack2(ap->ob_item + sizeof(short)*i,
+                                PY_LITTLE_ENDIAN);
+ 
+-    return PyFloat_FromDouble(x);
++    return PyValue_FromDouble(x);
+ }
+ 
+ static int
+-e_setitem(arrayobject *ap, Py_ssize_t i, PyObject *v)
++e_setitem(arrayobject *ap, Py_ssize_t i, PyValueBorrow v)
+ {
+     double x;
+-    if (!PyArg_Parse(v, "d;array item must be float", &x)) {
++    if (array_parse_double(v, &x) < 0) {
+         return -1;
+     }
+ 
+@@ -619,17 +622,17 @@ e_setitem(arrayobject *ap, Py_ssize_t i, PyObject *v)
+     return 0;
+ }
+ 
+-static PyObject *
++static PyValue
+ f_getitem(arrayobject *ap, Py_ssize_t i)
+ {
+-    return PyFloat_FromDouble((double) ((float *)ap->ob_item)[i]);
++    return PyValue_FromDouble((double) ((float *)ap->ob_item)[i]);
+ }
+ 
+ static int
+-f_setitem(arrayobject *ap, Py_ssize_t i, PyObject *v)
++f_setitem(arrayobject *ap, Py_ssize_t i, PyValueBorrow v)
+ {
+     double x;
+-    if (!PyArg_Parse(v, "d;array item must be float", &x))
++    if (array_parse_double(v, &x) < 0)
+         return -1;
+ 
+     CHECK_ARRAY_BOUNDS(ap, i);
+@@ -641,17 +644,17 @@ f_setitem(arrayobject *ap, Py_ssize_t i, PyObject *v)
+     return 0;
+ }
+ 
+-static PyObject *
++static PyValue
+ d_getitem(arrayobject *ap, Py_ssize_t i)
+ {
+-    return PyFloat_FromDouble(((double *)ap->ob_item)[i]);
++    return PyValue_FromDouble(((double *)ap->ob_item)[i]);
+ }
+ 
+ static int
+-d_setitem(arrayobject *ap, Py_ssize_t i, PyObject *v)
++d_setitem(arrayobject *ap, Py_ssize_t i, PyValueBorrow v)
+ {
+     double x;
+-    if (!PyArg_Parse(v, "d;array item must be float", &x))
++    if (array_parse_double(v, &x) < 0)
+         return -1;
+ 
+     CHECK_ARRAY_BOUNDS(ap, i);
+@@ -661,21 +664,21 @@ d_setitem(arrayobject *ap, Py_ssize_t i, PyObject *v)
+     return 0;
+ }
+ 
+-static PyObject *
++static PyValue
+ cf_getitem(arrayobject *ap, Py_ssize_t i)
+ {
+     float f[2];
+ 
+     memcpy(&f, ap->ob_item + i*sizeof(f), sizeof(f));
+-    return PyComplex_FromDoubles(f[0], f[1]);
++    return _PyValue_FromObjectResult(PyComplex_FromDoubles(f[0], f[1]));
+ }
+ 
+ static int
+-cf_setitem(arrayobject *ap, Py_ssize_t i, PyObject *v)
++cf_setitem(arrayobject *ap, Py_ssize_t i, PyValueBorrow v)
+ {
+     Py_complex x;
+ 
+-    if (!PyArg_Parse(v, "D;array item must be complex", &x)) {
++    if (array_parse_complex(v, &x) < 0) {
+         return -1;
+     }
+ 
+@@ -697,22 +700,22 @@ cf_setitem(arrayobject *ap, Py_ssize_t i, PyObject *v)
+     return 0;
+ }
+ 
+-static PyObject *
++static PyValue
+ cd_getitem(arrayobject *ap, Py_ssize_t i)
+ {
+     double f[2];
+ 
+     memcpy(&f, ap->ob_item + i*sizeof(f), sizeof(f));
+-    return PyComplex_FromDoubles(f[0], f[1]);
++    return _PyValue_FromObjectResult(PyComplex_FromDoubles(f[0], f[1]));
+ }
+ 
+ static int
+-cd_setitem(arrayobject *ap, Py_ssize_t i, PyObject *v)
++cd_setitem(arrayobject *ap, Py_ssize_t i, PyValueBorrow v)
+ {
+     Py_complex x;
+     double f[2];
+ 
+-    if (!PyArg_Parse(v, "D;array item must be complex", &x)) {
++    if (array_parse_complex(v, &x) < 0) {
+         return -1;
+     }
+ 
+@@ -831,7 +834,7 @@ newarrayobject(PyTypeObject *type, Py_ssize_t size, const struct arraydescr *des
+     return op;
+ }
+ 
+-static PyObject *
++static PyValue
+ getarrayitem(PyObject *op, Py_ssize_t i)
+ {
+ #ifndef NDEBUG
+@@ -845,11 +848,11 @@ getarrayitem(PyObject *op, Py_ssize_t i)
+ }
+ 
+ static int
+-ins1(arrayobject *self, Py_ssize_t where, PyObject *v)
++ins1(arrayobject *self, Py_ssize_t where, PyValueBorrow v)
+ {
+     char *items;
+     Py_ssize_t n = Py_SIZE(self);
+-    if (v == NULL) {
++    if (PyValue_IsNull(v)) {
+         PyErr_BadInternalCall();
+         return -1;
+     }
+@@ -895,8 +898,8 @@ array_richcompare(PyObject *v, PyObject *w, int op)
+ {
+     array_state *state = find_array_state_by_type(Py_TYPE(v));
+     arrayobject *va, *wa;
+-    PyObject *vi = NULL;
+-    PyObject *wi = NULL;
++    PyValue vi = PyValue_NULL;
++    PyValue wi = PyValue_NULL;
+     Py_ssize_t i, k;
+     PyObject *res;
+ 
+@@ -943,19 +946,19 @@ array_richcompare(PyObject *v, PyObject *w, int op)
+     k = 1;
+     for (i = 0; i < Py_SIZE(va) && i < Py_SIZE(wa); i++) {
+         vi = getarrayitem(v, i);
+-        if (vi == NULL) {
++        if (PyValue_IsNull(vi)) {
+             return NULL;
+         }
+         wi = getarrayitem(w, i);
+-        if (wi == NULL) {
+-            Py_DECREF(vi);
++        if (PyValue_IsNull(wi)) {
++            PyValue_CLOSE(vi);
+             return NULL;
+         }
+-        k = _PyValue_RichCompareBool(PyValue_FromObjectBorrow(vi), PyValue_FromObjectBorrow(wi), Py_EQ);
++        k = _PyValue_RichCompareBool(vi, wi, Py_EQ);
+         if (k == 0)
+             break; /* Keeping vi and wi alive! */
+-        Py_DECREF(vi);
+-        Py_DECREF(wi);
++        PyValue_CLOSE(vi);
++        PyValue_CLOSE(wi);
+         if (k < 0)
+             return NULL;
+     }
+@@ -993,9 +996,7 @@ array_richcompare(PyObject *v, PyObject *w, int op)
+     }
+     else {
+         /* Compare the final item again using the proper operator */
+-        PyValue cmp_value = _PyValue_RichCompare(PyValue_FromObjectBorrow(vi),
+-                                                 PyValue_FromObjectBorrow(wi),
+-                                                 op);
++        PyValue cmp_value = _PyValue_RichCompare(vi, wi, op);
+         if (PyValue_IsNull(cmp_value)) {
+             res = NULL;
+         }
+@@ -1004,8 +1005,8 @@ array_richcompare(PyObject *v, PyObject *w, int op)
+             PyValue_CLOSE(cmp_value);
+         }
+     }
+-    Py_DECREF(vi);
+-    Py_DECREF(wi);
++    PyValue_CLOSE(vi);
++    PyValue_CLOSE(wi);
+     return res;
+ }
+ 
+@@ -1015,16 +1016,18 @@ array_length(PyObject *op)
+     return Py_SIZE(op);
+ }
+ 
+-static PyObject *
+-array_item(PyObject *op, Py_ssize_t i)
++static PyValue
++array_item_value(PyObject *op, Py_ssize_t i)
+ {
+     if (i < 0 || i >= Py_SIZE(op)) {
+         PyErr_SetString(PyExc_IndexError, "array index out of range");
+-        return NULL;
++        return PyValue_NULL;
+     }
+     return getarrayitem(op, i);
+ }
+ 
++_Py_VALUE_THUNK_ITEM(array_item, array_item_value)
++
+ static PyObject *
+ array_slice(arrayobject *a, Py_ssize_t ilow, Py_ssize_t ihigh)
+ {
+@@ -1200,7 +1203,7 @@ array_del_slice(arrayobject *a, Py_ssize_t ilow, Py_ssize_t ihigh)
+ }
+ 
+ static int
+-array_ass_item(PyObject *op, Py_ssize_t i, PyObject *v)
++array_ass_item_value(PyObject *op, Py_ssize_t i, PyValueBorrow v)
+ {
+     arrayobject *a = arrayobject_CAST(op);
+     if (i < 0 || i >= Py_SIZE(a)) {
+@@ -1208,41 +1211,49 @@ array_ass_item(PyObject *op, Py_ssize_t i, PyObject *v)
+                          "array assignment index out of range");
+         return -1;
+     }
+-    if (v == NULL)
++    if (PyValue_IsNull(v))
+         return array_del_slice(a, i, i+1);
+     return (*a->ob_descr->setitem)(a, i, v);
+ }
+ 
++_Py_VALUE_THUNK_ASSITEM(array_ass_item, array_ass_item_value)
++
+ static int
+-setarrayitem(PyObject *a, Py_ssize_t i, PyObject *v)
++setarrayitem(PyObject *a, Py_ssize_t i, PyValueBorrow v)
+ {
+ #ifndef NDEBUG
+     array_state *state = find_array_state_by_type(Py_TYPE(a));
+     assert(array_Check(a, state));
+ #endif
+-    return array_ass_item(a, i, v);
++    return array_ass_item_value(a, i, v);
+ }
+ 
+ static int
+ array_iter_extend(arrayobject *self, PyObject *bb)
+ {
+-    PyObject *it, *v;
++    PyObject *it;
+ 
+     it = _PyValue_GetIter(PyValue_FromObjectBorrow(bb));
+     if (it == NULL)
+         return -1;
+ 
+-    while ((v = PyIter_Next(it)) != NULL) {
+-        if (ins1(self, Py_SIZE(self), v) != 0) {
+-            Py_DECREF(v);
++    for (;;) {
++        _PyStatusValue next = _PyValue_IterNext(it);
++        if (next.status < 0) {
++            Py_DECREF(it);
++            return -1;
++        }
++        if (next.status == 0) {
++            break;
++        }
++        int res = ins1(self, Py_SIZE(self), PyValue_Borrow(next.value));
++        PyValue_CLOSE(next.value);
++        if (res != 0) {
+             Py_DECREF(it);
+             return -1;
+         }
+-        Py_DECREF(v);
+     }
+     Py_DECREF(it);
+-    if (PyErr_Occurred())
+-        return -1;
+     return 0;
+ }
+ 
+@@ -1325,12 +1336,7 @@ array_inplace_repeat(PyObject *op, Py_ssize_t n)
+ static PyValue
+ ins(arrayobject *self, Py_ssize_t where, PyValueBorrow v)
+ {
+-    PyObject *o = _PyValue_AsObjectAt(v, BOX_SITE_PARSER);
+-    if (o == NULL) {
+-        return PyValue_NULL;
+-    }
+-    int res = ins1(self, where, o);
+-    Py_DECREF(o);
++    int res = ins1(self, where, v);
+     if (res != 0)
+         return PyValue_NULL;
+     return PyValue_None;
+@@ -1353,14 +1359,14 @@ array_array_count_impl(arrayobject *self, PyValueBorrow v)
+     Py_ssize_t i;
+ 
+     for (i = 0; i < Py_SIZE(self); i++) {
+-        PyObject *selfi;
++        PyValue selfi;
+         int cmp;
+ 
+         selfi = getarrayitem((PyObject *)self, i);
+-        if (selfi == NULL)
++        if (PyValue_IsNull(selfi))
+             return PyValue_NULL;
+-        cmp = _PyValue_RichCompareBool(PyValue_FromObjectBorrow(selfi), v, Py_EQ);
+-        Py_DECREF(selfi);
++        cmp = _PyValue_RichCompareBool(selfi, v, Py_EQ);
++        PyValue_CLOSE(selfi);
+         if (cmp > 0)
+             count++;
+         else if (cmp < 0)
+@@ -1400,14 +1406,14 @@ array_array_index_impl(arrayobject *self, PyValueBorrow v, Py_ssize_t start,
+     // Use Py_SIZE() for every iteration in case the array is mutated
+     // during PyObject_RichCompareBool()
+     for (Py_ssize_t i = start; i < stop && i < Py_SIZE(self); i++) {
+-        PyObject *selfi;
++        PyValue selfi;
+         int cmp;
+ 
+         selfi = getarrayitem((PyObject *)self, i);
+-        if (selfi == NULL)
++        if (PyValue_IsNull(selfi))
+             return PyValue_NULL;
+-        cmp = _PyValue_RichCompareBool(PyValue_FromObjectBorrow(selfi), v, Py_EQ);
+-        Py_DECREF(selfi);
++        cmp = _PyValue_RichCompareBool(selfi, v, Py_EQ);
++        PyValue_CLOSE(selfi);
+         if (cmp > 0) {
+             return PyValue_FromInt64(i);
+         }
+@@ -1419,21 +1425,23 @@ array_array_index_impl(arrayobject *self, PyValueBorrow v, Py_ssize_t start,
+ }
+ 
+ static int
+-array_contains(PyObject *self, PyObject *v)
++array_contains_value(PyObject *self, PyValueBorrow v)
+ {
+     Py_ssize_t i;
+     int cmp;
+ 
+     for (i = 0, cmp = 0 ; cmp == 0 && i < Py_SIZE(self); i++) {
+-        PyObject *selfi = getarrayitem(self, i);
+-        if (selfi == NULL)
++        PyValue selfi = getarrayitem(self, i);
++        if (PyValue_IsNull(selfi))
+             return -1;
+-        cmp = _PyValue_RichCompareBool(PyValue_FromObjectBorrow(selfi), PyValue_FromObjectBorrow(v), Py_EQ);
+-        Py_DECREF(selfi);
++        cmp = _PyValue_RichCompareBool(selfi, v, Py_EQ);
++        PyValue_CLOSE(selfi);
+     }
+     return cmp;
+ }
+ 
++_Py_VALUE_THUNK_CONTAINS(array_contains, array_contains_value)
++
+ /*[clinic input]
+ array.array.remove
+ 
+@@ -1450,14 +1458,14 @@ array_array_remove_impl(arrayobject *self, PyValueBorrow v)
+     Py_ssize_t i;
+ 
+     for (i = 0; i < Py_SIZE(self); i++) {
+-        PyObject *selfi;
++        PyValue selfi;
+         int cmp;
+ 
+-        selfi = getarrayitem((PyObject *)self,i);
+-        if (selfi == NULL)
++        selfi = getarrayitem((PyObject *)self, i);
++        if (PyValue_IsNull(selfi))
+             return PyValue_NULL;
+-        cmp = _PyValue_RichCompareBool(PyValue_FromObjectBorrow(selfi), v, Py_EQ);
+-        Py_DECREF(selfi);
++        cmp = _PyValue_RichCompareBool(selfi, v, Py_EQ);
++        PyValue_CLOSE(selfi);
+         if (cmp > 0) {
+             if (array_del_slice(self, i, i+1) != 0)
+                 return PyValue_NULL;
+@@ -1485,7 +1493,7 @@ static PyValue
+ array_array_pop_impl(arrayobject *self, Py_ssize_t i)
+ /*[clinic end generated code: output=74de89d29f84a072 input=8e5feb4c1a11cd44]*/
+ {
+-    PyObject *v;
++    PyValue v;
+ 
+     if (Py_SIZE(self) == 0) {
+         /* Special-case most common failure cause */
+@@ -1499,13 +1507,13 @@ array_array_pop_impl(arrayobject *self, Py_ssize_t i)
+         return PyValue_NULL;
+     }
+     v = getarrayitem((PyObject *)self, i);
+-    if (v == NULL)
++    if (PyValue_IsNull(v))
+         return PyValue_NULL;
+     if (array_del_slice(self, i, i+1) != 0) {
+-        Py_DECREF(v);
++        PyValue_CLOSE(v);
+         return PyValue_NULL;
+     }
+-    return _PyValue_FromObjectResult(v);
++    return v;
+ }
+ 
+ /*[clinic input]
+@@ -1897,15 +1905,9 @@ array_array_fromlist_impl(arrayobject *self, PyValueBorrow list)
+                 array_resize(self, old_size);
+                 return PyValue_NULL;
+             }
+-            PyObject *v = _PyValue_AsObjectAt(item, BOX_SITE_LIST);
+-            PyValue_CLOSE(item);
+-            if (v == NULL) {
+-                array_resize(self, old_size);
+-                return PyValue_NULL;
+-            }
+             int res = (*self->ob_descr->setitem)(self,
+-                            Py_SIZE(self) - n + i, v);
+-            Py_DECREF(v);
++                            Py_SIZE(self) - n + i, PyValue_Borrow(item));
++            PyValue_CLOSE(item);
+             if (res != 0) {
+                 array_resize(self, old_size);
+                 return PyValue_NULL;
+@@ -1937,10 +1939,10 @@ array_array_tolist_impl(arrayobject *self)
+     if (list == NULL)
+         return PyValue_NULL;
+     for (i = 0; i < Py_SIZE(self); i++) {
+-        PyObject *v = getarrayitem((PyObject *)self, i);
+-        if (v == NULL)
++        PyValue v = getarrayitem((PyObject *)self, i);
++        if (PyValue_IsNull(v))
+             goto error;
+-        PyList_SET_VALUE(list, i, PyValue_PrepareOwned(v));
++        PyList_SET_VALUE(list, i, v);
+     }
+     return _PyValue_FromObjectResult(list);
+ 
+@@ -2740,50 +2742,69 @@ array_repr(PyObject *op)
+     return s;
+ }
+ 
+-static PyObject*
+-array_subscr(PyObject *op, PyObject *item)
++/* The index of an int, or of what __index__ gives. Returns false if item is
++   no index (the caller tries a slice next). */
++static bool
++array_index_of(PyValueBorrow item, Py_ssize_t *i)
++{
++    if (PyValue_IsInlineInt(item)) {
++        *i = PyValue_InlineInt64(item);
++        return true;
++    }
++    if (!PyValue_IsObject(item) ||
++        !PyIndex_Check(PyValue_AsKnownObjectBorrow(item))) {
++        return false;
++    }
++    *i = _PyValue_AsSsize_t(item, PyExc_IndexError);
++    return true;
++}
++
++static PyValue
++array_subscr_value(PyObject *op, PyValueBorrow key)
+ {
+     arrayobject *self = arrayobject_CAST(op);
+     array_state *state = find_array_state_by_type(Py_TYPE(self));
++    Py_ssize_t i;
+ 
+-    if (PyIndex_Check(item)) {
+-        Py_ssize_t i = _PyValue_AsSsize_t(PyValue_FromObjectBorrow(item), PyExc_IndexError);
++    if (array_index_of(key, &i)) {
+         if (i==-1 && PyErr_Occurred()) {
+-            return NULL;
++            return PyValue_NULL;
+         }
+         if (i < 0)
+             i += Py_SIZE(self);
+-        return array_item(op, i);
++        return array_item_value(op, i);
+     }
+-    else if (PySlice_Check(item)) {
+-        Py_ssize_t start, stop, step, slicelength, i;
++    PyObject *item = PyValue_IsObject(key) ? PyValue_AsKnownObjectBorrow(key) : NULL;
++    if (item != NULL && PySlice_Check(item)) {
++        Py_ssize_t start, stop, step, slicelength;
+         size_t cur;
+         PyObject* result;
+         arrayobject* ar;
+         int itemsize = self->ob_descr->itemsize;
+ 
+         if (PySlice_Unpack(item, &start, &stop, &step) < 0) {
+-            return NULL;
++            return PyValue_NULL;
+         }
+         slicelength = PySlice_AdjustIndices(Py_SIZE(self), &start, &stop,
+                                             step);
+ 
+         if (slicelength <= 0) {
+-            return newarrayobject(state->ArrayType, 0, self->ob_descr);
++            return _PyValue_FromObjectResult(
++                newarrayobject(state->ArrayType, 0, self->ob_descr));
+         }
+         else if (step == 1) {
+             PyObject *result = newarrayobject_untracked(state->ArrayType, slicelength, self->ob_descr);
+             if (result == NULL)
+-                return NULL;
++                return PyValue_NULL;
+             memcpy(((arrayobject *)result)->ob_item,
+                    self->ob_item + start * itemsize,
+                    slicelength * itemsize);
+             _PyObject_GC_TRACK(result);
+-            return result;
++            return _PyValue_FromObjectResult(result);
+         }
+         else {
+             result = newarrayobject_untracked(state->ArrayType, slicelength, self->ob_descr);
+-            if (!result) return NULL;
++            if (!result) return PyValue_NULL;
+ 
+             ar = (arrayobject*)result;
+ 
+@@ -2795,28 +2816,31 @@ array_subscr(PyObject *op, PyObject *item)
+             }
+ 
+             _PyObject_GC_TRACK(result);
+-            return result;
++            return _PyValue_FromObjectResult(result);
+         }
+     }
+     else {
+         PyErr_SetString(PyExc_TypeError,
+                         "array indices must be integers");
+-        return NULL;
++        return PyValue_NULL;
+     }
+ }
+ 
++_Py_VALUE_THUNK_SUBSCRIPT(array_subscr, array_subscr_value)
++
+ static int
+-array_ass_subscr(PyObject *op, PyObject *item, PyObject *value)
++array_ass_subscr_value(PyObject *op, PyValueBorrow key, PyValueBorrow value_v)
+ {
+     Py_ssize_t start, stop, step, slicelength, needed;
+     arrayobject *self = arrayobject_CAST(op);
+     array_state* state = find_array_state_by_type(Py_TYPE(self));
+     arrayobject* other;
+     int itemsize;
++    Py_ssize_t i;
++    PyObject *item = PyValue_IsObject(key) ? PyValue_AsKnownObjectBorrow(key) : NULL;
++    PyObject *value = PyValue_IsObject(value_v) ? PyValue_AsKnownObjectBorrow(value_v) : NULL;
+ 
+-    if (PyIndex_Check(item)) {
+-        Py_ssize_t i = _PyValue_AsSsize_t(PyValue_FromObjectBorrow(item), PyExc_IndexError);
+-
++    if (array_index_of(key, &i)) {
+         if (i == -1 && PyErr_Occurred())
+             return -1;
+         if (i < 0)
+@@ -2826,7 +2850,7 @@ array_ass_subscr(PyObject *op, PyObject *item, PyObject *value)
+                 "array assignment index out of range");
+             return -1;
+         }
+-        if (value == NULL) {
++        if (PyValue_IsNull(value_v)) {
+             /* Fall through to slice assignment */
+             start = i;
+             stop = i + 1;
+@@ -2834,9 +2858,9 @@ array_ass_subscr(PyObject *op, PyObject *item, PyObject *value)
+             slicelength = 1;
+         }
+         else
+-            return (*self->ob_descr->setitem)(self, i, value);
++            return (*self->ob_descr->setitem)(self, i, value_v);
+     }
+-    else if (PySlice_Check(item)) {
++    else if (item != NULL && PySlice_Check(item)) {
+         if (PySlice_Unpack(item, &start, &stop, &step) < 0) {
+             return -1;
+         }
+@@ -2848,11 +2872,11 @@ array_ass_subscr(PyObject *op, PyObject *item, PyObject *value)
+                         "array indices must be integers");
+         return -1;
+     }
+-    if (value == NULL) {
++    if (PyValue_IsNull(value_v)) {
+         other = NULL;
+         needed = 0;
+     }
+-    else if (array_Check(value, state)) {
++    else if (value != NULL && array_Check(value, state)) {
+         other = (arrayobject *)value;
+         needed = Py_SIZE(other);
+         if (self == other) {
+@@ -2861,7 +2885,8 @@ array_ass_subscr(PyObject *op, PyObject *item, PyObject *value)
+             value = array_slice(other, 0, needed);
+             if (value == NULL)
+                 return -1;
+-            ret = array_ass_subscr(op, item, value);
++            ret = array_ass_subscr_value(op, key,
++                                         PyValue_FromObjectBorrow(value));
+             Py_DECREF(value);
+             return ret;
+         }
+@@ -2873,7 +2898,8 @@ array_ass_subscr(PyObject *op, PyObject *item, PyObject *value)
+     else {
+         PyErr_Format(PyExc_TypeError,
+          "can only assign array (not \"%.200s\") to array slice",
+-                         Py_TYPE(value)->tp_name);
++                     value != NULL ? Py_TYPE(value)->tp_name
++                     : PyValue_IsInlineInt(value_v) ? "int" : "float");
+         return -1;
+     }
+     itemsize = self->ob_descr->itemsize;
+@@ -2964,6 +2990,8 @@ array_ass_subscr(PyObject *op, PyObject *item, PyObject *value)
+     }
+ }
+ 
++_Py_VALUE_THUNK_ASSSUBSCRIPT(array_ass_subscr, array_ass_subscr_value)
++
+ static const _Py_ALIGNED_DEF(ALIGNOF_MAX_ALIGN_T, char) emptybuf[] = "";
+ 
+ 
+@@ -3091,23 +3119,18 @@ array_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
+                 for (i = 0; i < len; i++) {
+                     PyValue item = _PyValue_SequenceGetItem(
+                         PyValue_FromObjectBorrow(initial), i);
+-                    PyObject *v = NULL;
+-                    if (!PyValue_IsNull(item)) {
+-                        v = _PyValue_AsObjectAt(item, BOX_SITE_PARSER);
+-                        PyValue_CLOSE(item);
+-                    }
+-                    if (v == NULL) {
++                    if (PyValue_IsNull(item)) {
+                         Py_DECREF(a);
+                         Py_XDECREF(it);
+                         return NULL;
+                     }
+-                    if (setarrayitem(a, i, v) != 0) {
+-                        Py_DECREF(v);
++                    int res = setarrayitem(a, i, PyValue_Borrow(item));
++                    PyValue_CLOSE(item);
++                    if (res != 0) {
+                         Py_DECREF(a);
+                         Py_XDECREF(it);
+                         return NULL;
+                     }
+-                    Py_DECREF(v);
+                 }
+             }
+             else if (initial != NULL && (PyByteArray_Check(initial) ||
+@@ -3270,15 +3293,20 @@ static PyType_Slot array_slots[] = {
+     {Py_sq_concat, array_concat},
+     {Py_sq_repeat, array_repeat},
+     {Py_sq_item, array_item},
++    {_Py_value_item, array_item_value},
+     {Py_sq_ass_item, array_ass_item},
++    {_Py_value_ass_item, array_ass_item_value},
+     {Py_sq_contains, array_contains},
++    {_Py_value_contains, array_contains_value},
+     {Py_sq_inplace_concat, array_inplace_concat},
+     {Py_sq_inplace_repeat, array_inplace_repeat},
+ 
+     /* as mapping */
+     {Py_mp_length, array_length},
+     {Py_mp_subscript, array_subscr},
++    {_Py_value_subscript, array_subscr_value},
+     {Py_mp_ass_subscript, array_ass_subscr},
++    {_Py_value_ass_subscript, array_ass_subscr_value},
+ 
+     /* as buffer */
+     {Py_bf_getbuffer, array_buffer_getbuf},
+@@ -3326,8 +3354,8 @@ array_iter(PyObject *op)
+     return (PyObject *)it;
+ }
+ 
+-static PyObject *
+-arrayiter_next(PyObject *op)
++static _PyStatusValue
++arrayiter_next_value(PyObject *op)
+ {
+     arrayiterobject *it = arrayiterobject_CAST(op);
+     assert(it != NULL);
+@@ -3337,19 +3365,23 @@ arrayiter_next(PyObject *op)
+ #endif
+     arrayobject *ao = it->ao;
+     if (ao == NULL) {
+-        return NULL;
++        return (_PyStatusValue){0, PyValue_NULL};
+     }
+ #ifndef NDEBUG
+     assert(array_Check(ao, state));
+ #endif
+     if (it->index < Py_SIZE(ao)) {
+-        return (*it->getitem)(ao, it->index++);
++        PyValue item = (*it->getitem)(ao, it->index++);
++        return (_PyStatusValue){PyValue_IsNull(item) ? -1 : 1, item};
+     }
+     it->ao = NULL;
+     Py_DECREF(ao);
+-    return NULL;
++    return (_PyStatusValue){0, PyValue_NULL};
+ }
+ 
++/* A failed box consumes the element. */
++_Py_VALUE_THUNK_ITERNEXT(arrayiter_next, arrayiter_next_value)
++
+ static void
+ arrayiter_dealloc(PyObject *op)
+ {
+@@ -3439,6 +3471,7 @@ static PyType_Slot arrayiter_slots[] = {
+     {Py_tp_traverse, arrayiter_traverse},
+     {Py_tp_iter, PyObject_SelfIter},
+     {Py_tp_iternext, arrayiter_next},
++    {_Py_value_iternext, arrayiter_next_value},
+     {Py_tp_methods, arrayiter_methods},
+     {0, NULL},
+ };
+diff --git a/Modules/mathmodule.c b/Modules/mathmodule.c
+index 37dc3271755..6b9b780d567 100644
+--- a/Modules/mathmodule.c
++++ b/Modules/mathmodule.c
+@@ -941,14 +941,24 @@ is_error(double x, int raise_edom)
+    care about right now.
+ */
+ 
+-static PyObject *
+-math_1(PyObject *arg, double (*func) (double), int can_overflow,
++/* The double of a float or int argument: floats are read in line. */
++static inline double
++value_as_double(PyValueBorrow arg)
++{
++    if (PyValue_IsInlineFloat(arg)) {
++        return PyValue_InlineFloat(arg);
++    }
++    return _PyValue_AsDouble(arg);
++}
++
++static PyValue
++math_1(PyValueBorrow arg, double (*func) (double), int can_overflow,
+        const char *err_msg)
+ {
+     double x, r;
+-    x = PyFloat_AsDouble(arg);
++    x = value_as_double(arg);
+     if (x == -1.0 && PyErr_Occurred())
+-        return NULL;
++        return PyValue_NULL;
+     errno = 0;
+     r = (*func)(x);
+     if (isnan(r) && !isnan(x))
+@@ -959,13 +969,13 @@ math_1(PyObject *arg, double (*func) (double), int can_overflow,
+                             "math range error"); /* overflow */
+         else
+             goto domain_err; /* singularity */
+-        return NULL;
++        return PyValue_NULL;
+     }
+     if (isfinite(r) && errno && is_error(r, 1))
+         /* this branch unnecessary on most platforms */
+-        return NULL;
++        return PyValue_NULL;
+ 
+-    return PyFloat_FromDouble(r);
++    return PyValue_FromDouble(r);
+ 
+ domain_err:
+     if (err_msg) {
+@@ -978,20 +988,20 @@ math_1(PyObject *arg, double (*func) (double), int can_overflow,
+ 	else {
+ 		PyErr_SetString(PyExc_ValueError, "math domain error");
+ 	}
+-    return NULL;
++    return PyValue_NULL;
+ }
+ 
+ /* variant of math_1, to be used when the function being wrapped is known to
+    set errno properly (that is, errno = EDOM for invalid or divide-by-zero,
+    errno = ERANGE for overflow). */
+ 
+-static PyObject *
+-math_1a(PyObject *arg, double (*func) (double), const char *err_msg)
++static PyValue
++math_1a(PyValueBorrow arg, double (*func) (double), const char *err_msg)
+ {
+     double x, r;
+-    x = PyFloat_AsDouble(arg);
++    x = value_as_double(arg);
+     if (x == -1.0 && PyErr_Occurred())
+-        return NULL;
++        return PyValue_NULL;
+     errno = 0;
+     r = (*func)(x);
+     if (errno && is_error(r, err_msg ? 0 : 1)) {
+@@ -1003,9 +1013,9 @@ math_1a(PyObject *arg, double (*func) (double), const char *err_msg)
+                 PyMem_Free(buf);
+             }
+         }
+-        return NULL;
++        return PyValue_NULL;
+     }
+-    return PyFloat_FromDouble(r);
++    return PyValue_FromDouble(r);
+ }
+ 
+ /*
+@@ -1035,20 +1045,20 @@ math_1a(PyObject *arg, double (*func) (double), const char *err_msg)
+    OverflowError.
+ */
+ 
+-static PyObject *
+-math_2(PyObject *const *args, Py_ssize_t nargs,
++static PyValue
++math_2(const PyValue *args, Py_ssize_t nargs,
+        double (*func) (double, double), const char *funcname)
+ {
+     double x, y, r;
+     if (!_PyArg_CheckPositional(funcname, nargs, 2, 2))
+-        return NULL;
+-    x = PyFloat_AsDouble(args[0]);
++        return PyValue_NULL;
++    x = value_as_double(PyValue_Borrow(args[0]));
+     if (x == -1.0 && PyErr_Occurred()) {
+-        return NULL;
++        return PyValue_NULL;
+     }
+-    y = PyFloat_AsDouble(args[1]);
++    y = value_as_double(PyValue_Borrow(args[1]));
+     if (y == -1.0 && PyErr_Occurred()) {
+-        return NULL;
++        return PyValue_NULL;
+     }
+     errno = 0;
+     r = (*func)(x, y);
+@@ -1065,37 +1075,42 @@ math_2(PyObject *const *args, Py_ssize_t nargs,
+             errno = 0;
+     }
+     if (errno && is_error(r, 1))
+-        return NULL;
++        return PyValue_NULL;
+     else
+-        return PyFloat_FromDouble(r);
++        return PyValue_FromDouble(r);
+ }
+ 
+-#define FUNC1(funcname, func, can_overflow, docstring)                  \
+-    static PyObject * math_##funcname(PyObject *self, PyObject *args) { \
+-        return math_1(args, func, can_overflow, NULL);                  \
++#define FUNC1(funcname, func, can_overflow, docstring) \
++    static PyValue math_##funcname(PyValueBorrow self, const PyValue *args, \
++                                   Py_ssize_t nargs, PyObject *kwnames) { \
++        return math_1(PyValue_Borrow(args[0]), func, can_overflow, NULL); \
+     }\
+     PyDoc_STRVAR(math_##funcname##_doc, docstring);
+ 
+-#define FUNC1D(funcname, func, can_overflow, docstring, err_msg)        \
+-    static PyObject * math_##funcname(PyObject *self, PyObject *args) { \
+-        return math_1(args, func, can_overflow, err_msg);               \
++#define FUNC1D(funcname, func, can_overflow, docstring, err_msg) \
++    static PyValue math_##funcname(PyValueBorrow self, const PyValue *args, \
++                                   Py_ssize_t nargs, PyObject *kwnames) { \
++        return math_1(PyValue_Borrow(args[0]), func, can_overflow, err_msg); \
+     }\
+     PyDoc_STRVAR(math_##funcname##_doc, docstring);
+ 
+-#define FUNC1A(funcname, func, docstring)                               \
+-    static PyObject * math_##funcname(PyObject *self, PyObject *args) { \
+-        return math_1a(args, func, NULL);                               \
++#define FUNC1A(funcname, func, docstring) \
++    static PyValue math_##funcname(PyValueBorrow self, const PyValue *args, \
++                                   Py_ssize_t nargs, PyObject *kwnames) { \
++        return math_1a(PyValue_Borrow(args[0]), func, NULL); \
+     }\
+     PyDoc_STRVAR(math_##funcname##_doc, docstring);
+ 
+-#define FUNC1AD(funcname, func, docstring, err_msg)                     \
+-    static PyObject * math_##funcname(PyObject *self, PyObject *args) { \
+-        return math_1a(args, func, err_msg);                            \
++#define FUNC1AD(funcname, func, docstring, err_msg) \
++    static PyValue math_##funcname(PyValueBorrow self, const PyValue *args, \
++                                   Py_ssize_t nargs, PyObject *kwnames) { \
++        return math_1a(PyValue_Borrow(args[0]), func, err_msg); \
+     }\
+     PyDoc_STRVAR(math_##funcname##_doc, docstring);
+ 
+ #define FUNC2(funcname, func, docstring) \
+-    static PyObject * math_##funcname(PyObject *self, PyObject *const *args, Py_ssize_t nargs) { \
++    static PyValue math_##funcname(PyValueBorrow self, const PyValue *args, \
++                                   Py_ssize_t nargs, PyObject *kwnames) { \
+         return math_2(args, nargs, func, #funcname); \
+     }\
+     PyDoc_STRVAR(math_##funcname##_doc, docstring);
+@@ -1783,28 +1798,39 @@ math_modf_impl(PyObject *module, double x)
+    However, intermediate overflow is possible for an int if the number of bits
+    in that int is larger than PY_SSIZE_T_MAX. */
+ 
+-static PyObject*
+-loghelper_int(PyObject* arg, double (*func)(double))
++static PyValue
++loghelper_int(PyValueBorrow arg, double (*func)(double))
+ {
+     /* If it is int, do it ourselves. */
+     double x, result;
+     int64_t e;
+ 
++    if (PyValue_IsInlineInt(arg)) {
++        int64_t n = PyValue_InlineInt64(arg);
++        if (n <= 0) {
++            PyErr_SetString(PyExc_ValueError,
++                            "expected a positive input");
++            return PyValue_NULL;
++        }
++        return PyValue_FromDouble(func((double)n));
++    }
++    PyObject *obj = PyValue_AsKnownObjectBorrow(arg);
++
+     /* Negative or zero inputs give a ValueError. */
+-    if (!_PyLong_IsPositive((PyLongObject *)arg)) {
++    if (!_PyLong_IsPositive((PyLongObject *)obj)) {
+         PyErr_SetString(PyExc_ValueError,
+                         "expected a positive input");
+-        return NULL;
++        return PyValue_NULL;
+     }
+ 
+-    x = PyLong_AsDouble(arg);
++    x = _PyValue_AsDouble(arg);
+     if (x == -1.0 && PyErr_Occurred()) {
+         if (!PyErr_ExceptionMatches(PyExc_OverflowError))
+-            return NULL;
++            return PyValue_NULL;
+         /* Here the conversion to double overflowed, but it's possible
+            to compute the log anyway.  Clear the exception and continue. */
+         PyErr_Clear();
+-        x = _PyLong_Frexp((PyLongObject *)arg, &e);
++        x = _PyLong_Frexp((PyLongObject *)obj, &e);
+         assert(!PyErr_Occurred());
+         /* Value is ~= x * 2**e, so the log ~= log(x) + log(2) * e. */
+         result = fma(func(2.0), (double)e, func(x));
+@@ -1812,33 +1838,34 @@ loghelper_int(PyObject* arg, double (*func)(double))
+     else
+         /* Successfully converted x to a double. */
+         result = func(x);
+-    return PyFloat_FromDouble(result);
++    return PyValue_FromDouble(result);
+ }
+ 
+-static PyObject*
+-loghelper(PyObject* arg, double (*func)(double))
++static PyValue
++loghelper(PyValueBorrow arg, double (*func)(double))
+ {
+     /* If it is int, do it ourselves. */
+-    if (PyLong_Check(arg)) {
++    if (PyValue_IsInlineInt(arg) ||
++        (PyValue_IsObject(arg) &&
++         PyLong_Check(PyValue_AsKnownObjectBorrow(arg)))) {
+         return loghelper_int(arg, func);
+     }
+     /* Else let libm handle it by itself. */
+-    PyObject *res = math_1(arg, func, 0, "expected a positive input, got %s");
+-    if (res == NULL &&
++    PyValue res = math_1(arg, func, 0, "expected a positive input, got %s");
++    if (PyValue_IsNull(res) &&
+         PyErr_ExceptionMatches(PyExc_OverflowError) &&
+-        PyIndex_Check(arg))
++        PyIndex_Check(PyValue_AsKnownObjectBorrow(arg)))
+     {
+         /* Here the conversion to double overflowed, but it's possible
+            to compute the log anyway.  Clear the exception, convert to
+            integer and continue. */
+         PyErr_Clear();
+-        PyValue arg_v = _PyValue_Index(PyValue_FromObjectBorrow(arg));
+-        arg = PyValue_IsNull(arg_v) ? NULL : _PyValue_AsObjectStealAt(arg_v, BOX_SITE_NUMBER);
+-        if (arg == NULL) {
+-            return NULL;
++        PyValue index = _PyValue_Index(arg);
++        if (PyValue_IsNull(index)) {
++            return PyValue_NULL;
+         }
+-        res = loghelper_int(arg, func);
+-        Py_DECREF(arg);
++        res = loghelper_int(PyValue_Borrow(index), func);
++        PyValue_CLOSE(index);
+     }
+     return res;
+ }
+@@ -1846,30 +1873,27 @@ loghelper(PyObject* arg, double (*func)(double))
+ 
+ /* AC: cannot convert yet, see gh-102839 and gh-89381, waiting
+    for support of multiple signatures */
+-static PyObject *
+-math_log(PyObject *module, PyObject * const *args, Py_ssize_t nargs)
++static PyValue
++math_log(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs,
++         PyObject *kwnames)
+ {
+-    PyObject *num, *den;
+-    PyObject *ans;
+-
+     if (!_PyArg_CheckPositional("log", nargs, 1, 2))
+-        return NULL;
++        return PyValue_NULL;
+ 
+-    num = loghelper(args[0], m_log);
+-    if (num == NULL || nargs == 1)
++    PyValue num = loghelper(PyValue_Borrow(args[0]), m_log);
++    if (PyValue_IsNull(num) || nargs == 1)
+         return num;
+ 
+-    den = loghelper(args[1], m_log);
+-    if (den == NULL) {
+-        Py_DECREF(num);
+-        return NULL;
++    PyValue den = loghelper(PyValue_Borrow(args[1]), m_log);
++    if (PyValue_IsNull(den)) {
++        PyValue_CLOSE(num);
++        return PyValue_NULL;
+     }
+ 
+-    PyValue ans_v = _PyValue_TrueDivide(PyValue_FromObjectBorrow(num),
+-                            PyValue_FromObjectBorrow(den));
+-    ans = PyValue_IsNull(ans_v) ? NULL : _PyValue_AsObjectStealAt(ans_v, BOX_SITE_NUMBER);
+-    Py_DECREF(num);
+-    Py_DECREF(den);
++    PyValue ans = _PyValue_TrueDivide(PyValue_Borrow(num),
++                                      PyValue_Borrow(den));
++    PyValue_CLOSE(num);
++    PyValue_CLOSE(den);
+     return ans;
+ }
+ 
+@@ -1891,13 +1915,7 @@ static PyValue
+ math_log2_impl(PyObject *module, PyValueBorrow x)
+ /*[clinic end generated code: output=72c989805e917cc5 input=08321262bae4f39b]*/
+ {
+-    PyObject *xo = _PyValue_AsObjectAt(x, BOX_SITE_PARSER);
+-    if (xo == NULL) {
+-        return PyValue_NULL;
+-    }
+-    PyObject *res = loghelper(xo, m_log2);
+-    Py_DECREF(xo);
+-    return _PyValue_FromObjectResult(res);
++    return loghelper(x, m_log2);
+ }
+ 
+ 
+@@ -1914,13 +1932,7 @@ static PyValue
+ math_log10_impl(PyObject *module, PyValueBorrow x)
+ /*[clinic end generated code: output=c623cc450bf05b4a input=b2469d02c6469e53]*/
+ {
+-    PyObject *xo = _PyValue_AsObjectAt(x, BOX_SITE_PARSER);
+-    if (xo == NULL) {
+-        return PyValue_NULL;
+-    }
+-    PyObject *res = loghelper(xo, m_log10);
+-    Py_DECREF(xo);
+-    return _PyValue_FromObjectResult(res);
++    return loghelper(x, m_log10);
+ }
+ 
+ 
+@@ -3307,31 +3319,31 @@ math_exec(PyObject *module)
+ }
+ 
+ static PyMethodDef math_methods[] = {
+-    {"acos",            math_acos,      METH_O,         math_acos_doc},
+-    {"acosh",           math_acosh,     METH_O,         math_acosh_doc},
+-    {"acospi",          math_acospi,    METH_O,         math_acospi_doc},
+-    {"asin",            math_asin,      METH_O,         math_asin_doc},
+-    {"asinh",           math_asinh,     METH_O,         math_asinh_doc},
+-    {"asinpi",          math_asinpi,    METH_O,         math_asinpi_doc},
+-    {"atan",            math_atan,      METH_O,         math_atan_doc},
+-    {"atan2",           _PyCFunction_CAST(math_atan2),     METH_FASTCALL,  math_atan2_doc},
+-    {"atanh",           math_atanh,     METH_O,         math_atanh_doc},
+-    {"atan2pi",         _PyCFunction_CAST(math_atan2pi),   METH_FASTCALL,  math_atan2pi_doc},
+-    {"atanpi",          math_atanpi,    METH_O,       math_atanpi_doc},
+-    {"cbrt",            math_cbrt,      METH_O,         math_cbrt_doc},
++    {"acos",            _PyCFunction_CAST(math_acos),      METH_VALUE|METH_O,         math_acos_doc},
++    {"acosh",           _PyCFunction_CAST(math_acosh),     METH_VALUE|METH_O,         math_acosh_doc},
++    {"acospi",          _PyCFunction_CAST(math_acospi),    METH_VALUE|METH_O,         math_acospi_doc},
++    {"asin",            _PyCFunction_CAST(math_asin),      METH_VALUE|METH_O,         math_asin_doc},
++    {"asinh",           _PyCFunction_CAST(math_asinh),     METH_VALUE|METH_O,         math_asinh_doc},
++    {"asinpi",          _PyCFunction_CAST(math_asinpi),    METH_VALUE|METH_O,         math_asinpi_doc},
++    {"atan",            _PyCFunction_CAST(math_atan),      METH_VALUE|METH_O,         math_atan_doc},
++    {"atan2",           _PyCFunction_CAST(math_atan2),     METH_VALUE,  math_atan2_doc},
++    {"atanh",           _PyCFunction_CAST(math_atanh),     METH_VALUE|METH_O,         math_atanh_doc},
++    {"atan2pi",         _PyCFunction_CAST(math_atan2pi),   METH_VALUE,  math_atan2pi_doc},
++    {"atanpi",          _PyCFunction_CAST(math_atanpi),    METH_VALUE|METH_O,       math_atanpi_doc},
++    {"cbrt",            _PyCFunction_CAST(math_cbrt),      METH_VALUE|METH_O,         math_cbrt_doc},
+     MATH_CEIL_METHODDEF
+-    {"copysign",        _PyCFunction_CAST(math_copysign),  METH_FASTCALL,  math_copysign_doc},
+-    {"cos",             math_cos,       METH_O,         math_cos_doc},
+-    {"cosh",            math_cosh,      METH_O,         math_cosh_doc},
+-    {"cospi",           math_cospi,     METH_O,         math_cospi_doc},
++    {"copysign",        _PyCFunction_CAST(math_copysign),  METH_VALUE,  math_copysign_doc},
++    {"cos",             _PyCFunction_CAST(math_cos),       METH_VALUE|METH_O,         math_cos_doc},
++    {"cosh",            _PyCFunction_CAST(math_cosh),      METH_VALUE|METH_O,         math_cosh_doc},
++    {"cospi",           _PyCFunction_CAST(math_cospi),     METH_VALUE|METH_O,         math_cospi_doc},
+     MATH_DEGREES_METHODDEF
+     MATH_DIST_METHODDEF
+-    {"erf",             math_erf,       METH_O,         math_erf_doc},
+-    {"erfc",            math_erfc,      METH_O,         math_erfc_doc},
+-    {"exp",             math_exp,       METH_O,         math_exp_doc},
+-    {"exp2",            math_exp2,      METH_O,         math_exp2_doc},
+-    {"expm1",           math_expm1,     METH_O,         math_expm1_doc},
+-    {"fabs",            math_fabs,      METH_O,         math_fabs_doc},
++    {"erf",             _PyCFunction_CAST(math_erf),       METH_VALUE|METH_O,         math_erf_doc},
++    {"erfc",            _PyCFunction_CAST(math_erfc),      METH_VALUE|METH_O,         math_erfc_doc},
++    {"exp",             _PyCFunction_CAST(math_exp),       METH_VALUE|METH_O,         math_exp_doc},
++    {"exp2",            _PyCFunction_CAST(math_exp2),      METH_VALUE|METH_O,         math_exp2_doc},
++    {"expm1",           _PyCFunction_CAST(math_expm1),     METH_VALUE|METH_O,         math_expm1_doc},
++    {"fabs",            _PyCFunction_CAST(math_fabs),      METH_VALUE|METH_O,         math_fabs_doc},
+     MATH_FLOOR_METHODDEF
+     MATH_FMA_METHODDEF
+     MATH_FMAX_METHODDEF
+@@ -3339,7 +3351,7 @@ static PyMethodDef math_methods[] = {
+     MATH_FMIN_METHODDEF
+     MATH_FREXP_METHODDEF
+     MATH_FSUM_METHODDEF
+-    {"gamma",           math_gamma,     METH_O,         math_gamma_doc},
++    {"gamma",           _PyCFunction_CAST(math_gamma),     METH_VALUE|METH_O,         math_gamma_doc},
+     MATH_HYPOT_METHODDEF
+     MATH_ISCLOSE_METHODDEF
+     MATH_ISFINITE_METHODDEF
+@@ -3348,23 +3360,23 @@ static PyMethodDef math_methods[] = {
+     MATH_ISINF_METHODDEF
+     MATH_ISNAN_METHODDEF
+     MATH_LDEXP_METHODDEF
+-    {"lgamma",          math_lgamma,    METH_O,         math_lgamma_doc},
+-    {"log",             _PyCFunction_CAST(math_log),       METH_FASTCALL,  math_log_doc},
+-    {"log1p",           math_log1p,     METH_O,         math_log1p_doc},
++    {"lgamma",          _PyCFunction_CAST(math_lgamma),    METH_VALUE|METH_O,         math_lgamma_doc},
++    {"log",             _PyCFunction_CAST(math_log),       METH_VALUE,  math_log_doc},
++    {"log1p",           _PyCFunction_CAST(math_log1p),     METH_VALUE|METH_O,         math_log1p_doc},
+     MATH_LOG10_METHODDEF
+     MATH_LOG2_METHODDEF
+     MATH_MODF_METHODDEF
+     MATH_POW_METHODDEF
+     MATH_RADIANS_METHODDEF
+-    {"remainder",       _PyCFunction_CAST(math_remainder), METH_FASTCALL,  math_remainder_doc},
++    {"remainder",       _PyCFunction_CAST(math_remainder), METH_VALUE,  math_remainder_doc},
+     MATH_SIGNBIT_METHODDEF
+-    {"sin",             math_sin,       METH_O,         math_sin_doc},
+-    {"sinh",            math_sinh,      METH_O,         math_sinh_doc},
+-    {"sinpi",           math_sinpi,     METH_O,         math_sinpi_doc},
+-    {"sqrt",            math_sqrt,      METH_O,         math_sqrt_doc},
+-    {"tan",             math_tan,       METH_O,         math_tan_doc},
+-    {"tanh",            math_tanh,      METH_O,         math_tanh_doc},
+-    {"tanpi",           math_tanpi,     METH_O,         math_tanpi_doc},
++    {"sin",             _PyCFunction_CAST(math_sin),       METH_VALUE|METH_O,         math_sin_doc},
++    {"sinh",            _PyCFunction_CAST(math_sinh),      METH_VALUE|METH_O,         math_sinh_doc},
++    {"sinpi",           _PyCFunction_CAST(math_sinpi),     METH_VALUE|METH_O,         math_sinpi_doc},
++    {"sqrt",            _PyCFunction_CAST(math_sqrt),      METH_VALUE|METH_O,         math_sqrt_doc},
++    {"tan",             _PyCFunction_CAST(math_tan),       METH_VALUE|METH_O,         math_tan_doc},
++    {"tanh",            _PyCFunction_CAST(math_tanh),      METH_VALUE|METH_O,         math_tanh_doc},
++    {"tanpi",           _PyCFunction_CAST(math_tanpi),     METH_VALUE|METH_O,         math_tanpi_doc},
+     MATH_SUMPROD_METHODDEF
+     MATH_TRUNC_METHODDEF
+     MATH_PROD_METHODDEF
+diff --git a/Objects/abstract.c b/Objects/abstract.c
+index 7a2f904cf87..bbe6b63b3b4 100644
+--- a/Objects/abstract.c
++++ b/Objects/abstract.c
+@@ -2859,21 +2859,6 @@ PySequence_DelSlice(PyObject *s, Py_ssize_t i1, Py_ssize_t i2)
+     return _PyValue_SequenceDelSlice(_Py_VALUE_ARG(s), i1, i2);
+ }
+ 
+-/* The next item of the iterator it as an object, for the object results of
+-   PySequence_Tuple(): NULL at the end (nothing set) or with an exception. */
+-static PyObject *
+-sequence_iter_next(PyObject *it)
+-{
+-    _PyStatusValue r = _PyValue_IterNext(it);
+-    if (r.status != PYGEN_NEXT) {
+-        return NULL;
+-    }
+-    if (PyValue_IsInline(r.value)) {
+-        return _PyValue_AsObjectAt(r.value, BOX_SITE_ITERATION);
+-    }
+-    return PyValue_AsKnownObjectSteal(r.value);
+-}
+-
+ PyObject *
+ (_PyValue_SequenceTuple)(PyValueBorrow v)
+ {
+@@ -2902,17 +2887,21 @@ PyObject *
+         return NULL;
+ 
+     Py_ssize_t n;
+-    PyObject *buffer[8];
++    PyValue buffer[8];
+     for (n = 0; n < 8; n++) {
+-        PyObject *item = sequence_iter_next(it);
+-        if (item == NULL) {
+-            if (PyErr_Occurred()) {
++        _PyStatusValue item = _PyValue_IterNext(it);
++        if (item.status == PYGEN_ERROR) {
++            goto fail;
++        }
++        if (item.status != PYGEN_NEXT) {
++            PyObject *tuple = _PyTuple_FromValueStealOnSuccess(buffer, n);
++            if (tuple == NULL) {
+                 goto fail;
+             }
+             Py_DECREF(it);
+-            return _PyTuple_FromArraySteal(buffer, n);
++            return tuple;
+         }
+-        buffer[n] = item;
++        buffer[n] = item.value;
+     }
+     PyListObject *list = (PyListObject *)PyList_New(16);
+     if (list == NULL) {
+@@ -2921,19 +2910,19 @@ PyObject *
+     assert(n == 8);
+     Py_SET_SIZE(list, n);
+     for (Py_ssize_t j = 0; j < n; j++) {
+-        PyList_SET_VALUE(list, j, PyValue_PrepareOwned(buffer[j]));
++        PyList_SET_VALUE(list, j, buffer[j]);
+     }
+     for (;;) {
+-        PyObject *item = sequence_iter_next(it);
+-        if (item == NULL) {
+-            if (PyErr_Occurred()) {
+-                Py_DECREF(list);
+-                Py_DECREF(it);
+-                return NULL;
+-            }
++        _PyStatusValue item = _PyValue_IterNext(it);
++        if (item.status == PYGEN_ERROR) {
++            Py_DECREF(list);
++            Py_DECREF(it);
++            return NULL;
++        }
++        if (item.status != PYGEN_NEXT) {
+             break;
+         }
+-        if (_PyList_AppendTakeValue(list, PyValue_PrepareOwned(item)) < 0) {
++        if (_PyList_AppendTakeValue(list, item.value) < 0) {
+             Py_DECREF(list);
+             Py_DECREF(it);
+             return NULL;
+@@ -2947,7 +2936,7 @@ PyObject *
+     Py_DECREF(it);
+     while (n > 0) {
+         n--;
+-        Py_DECREF(buffer[n]);
++        PyValue_CLOSE(buffer[n]);
+     }
+     return NULL;
+ }
+@@ -3732,15 +3721,17 @@ object_isinstance(PyObject *inst, PyObject *cls)
+     return retval;
+ }
+ 
++/* Call the special method name of cls with the one argument arg, a value
++   that the callee receives without a box. Returns 1 with the owned result
++   in *res, 0 if cls has no such method, -1 with an exception set. */
+ static int
+ call_special_method(PyThreadState *tstate, PyObject *cls, PyObject *name,
+-                    const char *where, PyObject *arg, PyObject **res)
++                    const char *where, PyValueBorrow arg, PyValue *res)
+ {
+-    *res = NULL;
++    *res = PyValue_NULL;
+     _PyCValue cref;
+     _PyThreadState_PushCValue(tstate, &cref);
+     PyValue self = PyValue_DUP(PyValue_FromObjectBorrow(cls));
+-    PyObject *method = NULL, *self_object = NULL;
+     int found = _PyObject_LookupSpecialMethod(name, &cref.ref, &self);
+     if (found <= 0) {
+         goto done;
+@@ -3749,42 +3740,62 @@ call_special_method(PyThreadState *tstate, PyObject *cls, PyObject *name,
+         found = -1;
+         goto done;
+     }
+-    method = _PyValue_AsObjectAt(cref.ref, BOX_SITE_CALL);
+-    if (method != NULL) {
+-        if (!PyValue_IsNull(self)) {
+-            self_object = _PyValue_AsObjectAt(self, BOX_SITE_CALL);
+-        }
+-        if (PyValue_IsNull(self) || self_object != NULL) {
+-            PyObject *args[2] = {self_object, arg};
+-            /* A noncallable scalar is diagnosed by the normal call API. */
+-            *res = self_object != NULL
+-                ? PyObject_Vectorcall(method, args, 2, NULL)
+-                : PyObject_Vectorcall(method, args + 1, 1, NULL);
+-        }
++    PyValue stack[2];
++    Py_ssize_t n = 0;
++    if (!PyValue_IsNull(self)) {
++        _PyValue_WindowPut(&stack[n++], PyValue_Borrow(self));
+     }
++    _PyValue_WindowPut(&stack[n++], arg);
++    /* A noncallable scalar is diagnosed by the normal call API. */
++    *res = _PyValue_VectorcallTstate(tstate, cref.ref, stack, n, NULL);
+     _Py_LeaveRecursiveCallTstate(tstate);
+-    if (*res == NULL) {
++    if (PyValue_IsNull(*res)) {
+         found = -1;
+     }
+ done:
+-    Py_CLEAR(self_object);
+-    Py_CLEAR(method);
+     PyValue_XCLOSE(self);
+     _PyThreadState_PopCValue(tstate, &cref);
+     return found;
+ }
+ 
++/* isinstance() of an int or float, whose __class__ is its type. */
+ static int
+-object_recursive_isinstance(PyThreadState *tstate, PyObject *inst, PyObject *cls)
++object_isinstance_value(PyValueBorrow inst, PyObject *cls)
+ {
++    if (!PyValue_IsInline(inst)) {
++        return object_isinstance(PyValue_AsKnownObjectBorrow(inst), cls);
++    }
++    PyTypeObject *tp = PyValue_TYPE(inst);
++    if (PyType_Check(cls)) {
++        return PyType_IsSubtype(tp, (PyTypeObject *)cls);
++    }
++    if (!check_class(cls,
++        "isinstance() arg 2 must be a type, a tuple of types, or a union"))
++        return -1;
++    return abstract_issubclass((PyObject *)tp, cls);
++}
++
++static int
++object_recursive_isinstance_value(PyThreadState *tstate, PyValueBorrow inst,
++                                  PyValueBorrow cls_value)
++{
++    if (PyValue_IsInline(cls_value)) {
++        // An int or float is no class: object_isinstance()'s check_class().
++        _PyErr_SetString(tstate, PyExc_TypeError,
++            "isinstance() arg 2 must be a type, a tuple of types, "
++            "or a union");
++        return -1;
++    }
++    PyObject *cls = PyValue_AsKnownObjectBorrow(cls_value);
++
+     /* Quick test for an exact match */
+-    if (Py_IS_TYPE(inst, (PyTypeObject *)cls)) {
++    if (PyValue_TYPE(inst) == (PyTypeObject *)cls) {
+         return 1;
+     }
+ 
+     /* We know what type's __instancecheck__ does. */
+     if (PyType_CheckExact(cls)) {
+-        return object_isinstance(inst, cls);
++        return object_isinstance_value(inst, cls);
+     }
+ 
+     if (_PyUnion_Check(cls)) {
+@@ -3800,14 +3811,8 @@ object_recursive_isinstance(PyThreadState *tstate, PyObject *inst, PyObject *cls
+         Py_ssize_t n = PyTuple_GET_SIZE(cls);
+         int r = 0;
+         for (Py_ssize_t i = 0; i < n; ++i) {
+-            PyObject *item = _PyValue_AsObjectAt(PyTuple_GET_VALUE(cls, i), BOX_SITE_TUPLE);
+-            if (item == NULL) {
+-                Py_CLEAR(item);
+-                r = -1;
+-                break;
+-            }
+-            r = object_recursive_isinstance(tstate, inst, item);
+-            Py_DECREF(item);
++            PyValueBorrow item = PyTuple_GET_VALUE(cls, i);
++            r = object_recursive_isinstance_value(tstate, inst, item);
+             if (r != 0) {
+                 /* either found it, or got an error */
+                 break;
+@@ -3817,12 +3822,12 @@ object_recursive_isinstance(PyThreadState *tstate, PyObject *inst, PyObject *cls
+         return r;
+     }
+ 
+-    PyObject *res;
++    PyValue res;
+     int found = call_special_method(tstate, cls, &_Py_ID(__instancecheck__),
+                                     " in __instancecheck__", inst, &res);
+     if (found > 0) {
+-        int ok = _PyValue_IsTrue(PyValue_FromObjectBorrow(res));
+-        Py_DECREF(res);
++        int ok = _PyValue_IsTrue(res);
++        PyValue_CLOSE(res);
+         return ok;
+     }
+     else if (found < 0) {
+@@ -3830,15 +3835,21 @@ object_recursive_isinstance(PyThreadState *tstate, PyObject *inst, PyObject *cls
+     }
+ 
+     /* cls has no __instancecheck__() method */
+-    return object_isinstance(inst, cls);
++    return object_isinstance_value(inst, cls);
+ }
+ 
++int
++(_PyValue_IsInstance)(PyValueBorrow inst, PyValueBorrow cls)
++{
++    PyThreadState *tstate = _PyThreadState_GET();
++    return object_recursive_isinstance_value(tstate, inst, cls);
++}
+ 
+ int
+ PyObject_IsInstance(PyObject *inst, PyObject *cls)
+ {
+-    PyThreadState *tstate = _PyThreadState_GET();
+-    return object_recursive_isinstance(tstate, inst, cls);
++    return _PyValue_IsInstance(PyValue_FromObjectBorrow(inst),
++                               PyValue_FromObjectBorrow(cls));
+ }
+ 
+ 
+@@ -3901,12 +3912,13 @@ object_issubclass(PyThreadState *tstate, PyObject *derived, PyObject *cls)
+         return r;
+     }
+ 
+-    PyObject *res;
++    PyValue res;
+     int found = call_special_method(tstate, cls, &_Py_ID(__subclasscheck__),
+-                                    " in __subclasscheck__", derived, &res);
++                                    " in __subclasscheck__",
++                                    PyValue_FromObjectBorrow(derived), &res);
+     if (found > 0) {
+-        int ok = _PyValue_IsTrue(PyValue_FromObjectBorrow(res));
+-        Py_DECREF(res);
++        int ok = _PyValue_IsTrue(res);
++        PyValue_CLOSE(res);
+         return ok;
+     }
+     else if (found < 0) {
+diff --git a/Objects/bytearrayobject.c b/Objects/bytearrayobject.c
+index 5eb52ce63b5..b556e88e2d6 100644
+--- a/Objects/bytearrayobject.c
++++ b/Objects/bytearrayobject.c
+@@ -120,7 +120,7 @@ bytearray_releasebuffer(PyObject *self, Py_buffer *view)
+ }
+ 
+ typedef PyObject* (*_ba_bytes_op)(const char *buf, Py_ssize_t len,
+-                                  PyObject *sub, Py_ssize_t start,
++                                  PyValueBorrow sub, Py_ssize_t start,
+                                   Py_ssize_t end);
+ 
+ static PyValue
+@@ -131,17 +131,10 @@ _bytearray_with_buffer(PyByteArrayObject *self, _ba_bytes_op op,
+ 
+     _Py_CRITICAL_SECTION_ASSERT_OBJECT_LOCKED(self);
+ 
+-    /* op takes an object: box an inline int (a byte value) argument. */
+-    PyObject *sub_obj = _PyValue_AsObjectAt(sub, BOX_SITE_PARSER);
+-    if (sub_obj == NULL) {
+-        return PyValue_NULL;
+-    }
+-
+     /* Increase exports to prevent bytearray storage from changing during op. */
+     self->ob_exports++;
+-    res = op(PyByteArray_AS_STRING(self), Py_SIZE(self), sub_obj, start, end);
++    res = op(PyByteArray_AS_STRING(self), Py_SIZE(self), sub, start, end);
+     self->ob_exports--;
+-    Py_DECREF(sub_obj);
+     return _PyValue_FromObjectResult(res);
+ }
+ 
+diff --git a/Objects/bytes_methods.c b/Objects/bytes_methods.c
+index de6317fdeda..2a75f1e6d67 100644
+--- a/Objects/bytes_methods.c
++++ b/Objects/bytes_methods.c
+@@ -402,9 +402,31 @@ The other parameters are similar to those of
+ stringlib_parse_args_finds().
+ */
+ 
++/* The argument sub of find() and friends: a byte value (an int) sets *byte
++   and leaves *subobj NULL, a bytes-like object is left in *subobj. */
+ Py_LOCAL_INLINE(int)
+-parse_args_finds_byte(const char *function_name, PyObject **subobj, char *byte)
++parse_args_finds_byte(const char *function_name, PyValueBorrow sub,
++                      PyObject **subobj, char *byte)
+ {
++    if (PyValue_IsInlineInt(sub)) {
++        int64_t ival = PyValue_InlineInt64(sub);
++        if (ival < 0 || ival > 255) {
++            PyErr_SetString(PyExc_ValueError,
++                            "byte must be in range(0, 256)");
++            return 0;
++        }
++        *subobj = NULL;
++        *byte = (char)ival;
++        return 1;
++    }
++    if (PyValue_IsInline(sub)) {
++        PyErr_Format(PyExc_TypeError,
++                     "argument should be integer or bytes-like object, "
++                     "not '%.200s'",
++                     PyValue_TYPE(sub)->tp_name);
++        return 0;
++    }
++    *subobj = PyValue_AsKnownObjectBorrow(sub);
+     if (PyObject_CheckBuffer(*subobj)) {
+         return 1;
+     }
+@@ -453,17 +475,18 @@ parse_args_finds_byte(const char *function_name, PyObject **subobj, char *byte)
+ 
+ Py_LOCAL_INLINE(Py_ssize_t)
+ find_internal(const char *str, Py_ssize_t len,
+-              const char *function_name, PyObject *subobj,
++              const char *function_name, PyValueBorrow sub_value,
+               Py_ssize_t start, Py_ssize_t end,
+               int dir)
+ {
++    PyObject *subobj;
+     char byte;
+     Py_buffer subbuf;
+     const char *sub;
+     Py_ssize_t sub_len;
+     Py_ssize_t res;
+ 
+-    if (!parse_args_finds_byte(function_name, &subobj, &byte)) {
++    if (!parse_args_finds_byte(function_name, sub_value, &subobj, &byte)) {
+         return -2;
+     }
+ 
+@@ -512,7 +535,7 @@ find_internal(const char *str, Py_ssize_t len,
+ }
+ 
+ PyObject *
+-_Py_bytes_find(const char *str, Py_ssize_t len, PyObject *sub,
++_Py_bytes_find(const char *str, Py_ssize_t len, PyValueBorrow sub,
+                Py_ssize_t start, Py_ssize_t end)
+ {
+     Py_ssize_t result = find_internal(str, len, "find", sub, start, end, +1);
+@@ -522,7 +545,7 @@ _Py_bytes_find(const char *str, Py_ssize_t len, PyObject *sub,
+ }
+ 
+ PyObject *
+-_Py_bytes_index(const char *str, Py_ssize_t len, PyObject *sub,
++_Py_bytes_index(const char *str, Py_ssize_t len, PyValueBorrow sub,
+                 Py_ssize_t start, Py_ssize_t end)
+ {
+     Py_ssize_t result = find_internal(str, len, "index", sub, start, end, +1);
+@@ -537,7 +560,7 @@ _Py_bytes_index(const char *str, Py_ssize_t len, PyObject *sub,
+ }
+ 
+ PyObject *
+-_Py_bytes_rfind(const char *str, Py_ssize_t len, PyObject *sub,
++_Py_bytes_rfind(const char *str, Py_ssize_t len, PyValueBorrow sub,
+                 Py_ssize_t start, Py_ssize_t end)
+ {
+     Py_ssize_t result = find_internal(str, len, "rfind", sub, start, end, -1);
+@@ -547,7 +570,7 @@ _Py_bytes_rfind(const char *str, Py_ssize_t len, PyObject *sub,
+ }
+ 
+ PyObject *
+-_Py_bytes_rindex(const char *str, Py_ssize_t len, PyObject *sub,
++_Py_bytes_rindex(const char *str, Py_ssize_t len, PyValueBorrow sub,
+                  Py_ssize_t start, Py_ssize_t end)
+ {
+     Py_ssize_t result = find_internal(str, len, "rindex", sub, start, end, -1);
+@@ -562,9 +585,10 @@ _Py_bytes_rindex(const char *str, Py_ssize_t len, PyObject *sub,
+ }
+ 
+ PyObject *
+-_Py_bytes_count(const char *str, Py_ssize_t len, PyObject *sub_obj,
++_Py_bytes_count(const char *str, Py_ssize_t len, PyValueBorrow sub_value,
+                 Py_ssize_t start, Py_ssize_t end)
+ {
++    PyObject *sub_obj;
+     const char *sub;
+     Py_ssize_t sub_len;
+     char byte;
+@@ -572,7 +596,7 @@ _Py_bytes_count(const char *str, Py_ssize_t len, PyObject *sub_obj,
+     Py_buffer vsub;
+     PyObject *count_obj;
+ 
+-    if (!parse_args_finds_byte("count", &sub_obj, &byte)) {
++    if (!parse_args_finds_byte("count", sub_value, &sub_obj, &byte)) {
+         return NULL;
+     }
+ 
+@@ -676,10 +700,18 @@ tailmatch(const char *str, Py_ssize_t len, PyObject *substr,
+ 
+ static PyObject *
+ _Py_bytes_tailmatch(const char *str, Py_ssize_t len,
+-                    const char *function_name, PyObject *subobj,
++                    const char *function_name, PyValueBorrow sub_value,
+                     Py_ssize_t start, Py_ssize_t end,
+                     int direction)
+ {
++    if (PyValue_IsInline(sub_value)) {
++        PyErr_Format(PyExc_TypeError,
++                     "%s first arg must be bytes or a tuple of bytes, "
++                     "not %s",
++                     function_name, PyValue_TYPE(sub_value)->tp_name);
++        return NULL;
++    }
++    PyObject *subobj = PyValue_AsKnownObjectBorrow(sub_value);
+     if (PyTuple_Check(subobj)) {
+         Py_ssize_t count = PyTuple_GET_SIZE(subobj);
+         for (Py_ssize_t i = 0; i < count; i++) {
+@@ -721,14 +753,14 @@ _Py_bytes_tailmatch(const char *str, Py_ssize_t len,
+ }
+ 
+ PyObject *
+-_Py_bytes_startswith(const char *str, Py_ssize_t len, PyObject *subobj,
++_Py_bytes_startswith(const char *str, Py_ssize_t len, PyValueBorrow subobj,
+                      Py_ssize_t start, Py_ssize_t end)
+ {
+     return _Py_bytes_tailmatch(str, len, "startswith", subobj, start, end, -1);
+ }
+ 
+ PyObject *
+-_Py_bytes_endswith(const char *str, Py_ssize_t len, PyObject *subobj,
++_Py_bytes_endswith(const char *str, Py_ssize_t len, PyValueBorrow subobj,
+                    Py_ssize_t start, Py_ssize_t end)
+ {
+     return _Py_bytes_tailmatch(str, len, "endswith", subobj, start, end, +1);
+diff --git a/Objects/bytesobject.c b/Objects/bytesobject.c
+index 216a43f67a0..66a9db5e2c3 100644
+--- a/Objects/bytesobject.c
++++ b/Objects/bytesobject.c
+@@ -1964,22 +1964,15 @@ _getbuffer_value(PyValueBorrow v, Py_buffer *view, int flags)
+ }
+ 
+ typedef PyObject* (*_bytes_sub_op)(const char *str, Py_ssize_t len,
+-                                   PyObject *sub, Py_ssize_t start,
++                                   PyValueBorrow sub, Py_ssize_t start,
+                                    Py_ssize_t end);
+ 
+-/* Call op with a value argument. An inline int (a byte value for find and
+-   friends) is boxed because op takes an object. */
+ static PyValue
+ _bytes_with_sub(PyBytesObject *self, _bytes_sub_op op, PyValueBorrow sub,
+                 Py_ssize_t start, Py_ssize_t end)
+ {
+-    PyObject *sub_obj = _PyValue_AsObjectAt(sub, BOX_SITE_PARSER);
+-    if (sub_obj == NULL) {
+-        return PyValue_NULL;
+-    }
+     PyObject *res = op(PyBytes_AS_STRING(self), PyBytes_GET_SIZE(self),
+-                       sub_obj, start, end);
+-    Py_DECREF(sub_obj);
++                       sub, start, end);
+     return _PyValue_FromObjectResult(res);
+ }
+ 
+diff --git a/Objects/call.c b/Objects/call.c
+index a4228e5c629..ddfa5fa53fb 100644
+--- a/Objects/call.c
++++ b/Objects/call.c
+@@ -1052,6 +1052,62 @@ PyObject_VectorcallMethod(PyObject *name, PyObject *const *args,
+ }
+ 
+ 
++/* The value form of PyObject_VectorcallMethod(): args is a window of words
++   that the caller keeps, args[0] the receiver and the rest the arguments, so
++   an inline operand reaches the method without a box. With the offset flag,
++   args[-1] may be used for a bound callee. The result is owned. */
++PyValue
++_PyValue_VectorcallMethod(PyObject *name, const PyValue *args, size_t nargsf,
++                          PyObject *kwnames)
++{
++    assert(name != NULL && args != NULL && PyVectorcall_NARGS(nargsf) >= 1);
++    PyThreadState *tstate = _PyThreadState_GET();
++    PyValue result = PyValue_NULL;
++    _PyCValue method;
++    _PyThreadState_PushCValue(tstate, &method);
++    _PyStatusValue found = _PyValue_GetMethod(PyValue_Borrow(args[0]), name);
++    if (found.status < 0) {
++        goto done;
++    }
++    method.ref = _PyValue_Publish(&found.value);
++    if (PyValue_IsObject(method.ref)) {
++        EVAL_CALL_STAT_INC_IF_FUNCTION(EVAL_CALL_METHOD,
++                                       PyValue_AsKnownObjectBorrow(method.ref));
++    }
++    if (found.status == 1) {
++        // An unbound method: the receiver is its first argument.
++        result = _PyValue_VectorcallTstate(
++            tstate, method.ref, args,
++            nargsf & ~PY_VECTORCALL_ARGUMENTS_OFFSET, kwnames);
++    }
++    else {
++        result = _PyValue_VectorcallTstate(tstate, method.ref, args + 1,
++                                           nargsf - 1, kwnames);
++    }
++done:
++    _PyThreadState_PopCValue(tstate, &method);
++    return result;
++}
++
++PyValue
++(_PyValue_CallMethodNoArgs)(PyValueBorrow self, PyObject *name)
++{
++    PyValue stack[1];
++    _PyValue_WindowPut(&stack[0], self);
++    return _PyValue_VectorcallMethod(name, stack, 1, NULL);
++}
++
++PyValue
++(_PyValue_CallMethodOneArg)(PyValueBorrow self, PyObject *name,
++                            PyValueBorrow arg)
++{
++    PyValue stack[2];
++    _PyValue_WindowPut(&stack[0], self);
++    _PyValue_WindowPut(&stack[1], arg);
++    return _PyValue_VectorcallMethod(name, stack, 2, NULL);
++}
++
++
+ PyObject *
+ PyObject_CallMethodObjArgs(PyObject *obj, PyObject *name, ...)
+ {
+diff --git a/Objects/exceptions.c b/Objects/exceptions.c
+index 61282e4211d..662deef97c6 100644
+--- a/Objects/exceptions.c
++++ b/Objects/exceptions.c
+@@ -18,6 +18,7 @@
+ #include "pycore_pyerrors.h"      // struct _PyErr_SetRaisedException
+ #include "pycore_setobject.h"     // PySet_AddValue()
+ #include "pycore_tuple.h"         // _PyTuple_FromPair
++#include "pycore_value_call.h"    // _PyValue_VectorcallThunk()
+ #include "pycore_value.h"         // PyValue_IsNone()
+ #include "pycore_value_ops.h"     // _PyValue_Str()
+ #include "pycore_unicodeobject.h" // _PyUnicode_Equal()
+@@ -101,19 +102,20 @@ BaseException_init(PyObject *op, PyObject *args, PyObject *kwds)
+ }
+ 
+ 
+-static PyObject *
+-BaseException_vectorcall(PyObject *type_obj, PyObject * const*args,
+-                         size_t nargsf, PyObject *kwnames)
++static PyValue
++BaseException_vectorcall(PyThreadState *tstate, PyObject *type_obj,
++                         const PyValue *args, size_t nargsf,
++                         PyObject *kwnames)
+ {
+     PyTypeObject *type = _PyType_CAST(type_obj);
+     if (!_PyArg_NoKwnames(type->tp_name, kwnames)) {
+-        return NULL;
++        return PyValue_NULL;
+     }
+ 
+     PyBaseExceptionObject *self;
+     self = (PyBaseExceptionObject *)type->tp_alloc(type, 0);
+     if (!self) {
+-        return NULL;
++        return PyValue_NULL;
+     }
+ 
+     // The dict is created on the fly in PyObject_GenericSetAttr()
+@@ -124,13 +126,13 @@ BaseException_vectorcall(PyObject *type_obj, PyObject * const*args,
+     self->context = NULL;
+     self->suppress_context = 0;
+ 
+-    self->args = PyTuple_FromArray(args, PyVectorcall_NARGS(nargsf));
++    self->args = _PyTuple_FromValueArray(args, PyVectorcall_NARGS(nargsf));
+     if (!self->args) {
+         Py_DECREF(self);
+-        return NULL;
++        return PyValue_NULL;
+     }
+ 
+-    return (PyObject *)self;
++    return PyValue_FromObjectSteal((PyObject *)self);
+ }
+ 
+ 
+@@ -667,7 +669,8 @@ static PyTypeObject _PyExc_BaseException = {
+     BaseException_init,         /* tp_init */
+     0,                          /* tp_alloc */
+     BaseException_new,          /* tp_new */
+-    .tp_vectorcall = BaseException_vectorcall,
++    .tp_vectorcall = _PyValue_VectorcallThunk,
++    .tp_value_vectorcall = (_Py_valuefunc)BaseException_vectorcall,
+ };
+ /* the CPython API expects exceptions to be (PyObject *) - both a hold-over
+ from the previous implementation and also allowing Python objects to be used
+@@ -756,7 +759,7 @@ SimpleExtendsException(PyExc_Exception, StopAsyncIteration,
+  */
+ 
+ static PyMemberDef StopIteration_members[] = {
+-    {"value", _Py_T_OBJECT, offsetof(PyStopIterationObject, value), 0,
++    {"value", _Py_T_VALUE, offsetof(PyStopIterationObject, value), 0,
+         PyDoc_STR("generator return value")},
+     {NULL}  /* Sentinel */
+ };
+@@ -772,22 +775,14 @@ static int
+ StopIteration_init(PyObject *op, PyObject *args, PyObject *kwds)
+ {
+     Py_ssize_t size = PyTuple_GET_SIZE(args);
+-    PyObject *value;
+ 
+     if (BaseException_init(op, args, kwds) == -1)
+         return -1;
+     PyStopIterationObject *self = PyStopIterationObject_CAST(op);
+-    Py_CLEAR(self->value);
+-    if (size > 0) {
+-        value = _PyValue_AsObjectAt(PyTuple_GET_VALUE(args, 0), BOX_SITE_TUPLE);
+-        if (value == NULL) {
+-            return -1;
+-        }
+-    }
+-    else {
+-        value = Py_NewRef(Py_None);
+-    }
+-    self->value = value;
++    PyValue previous = self->value;
++    self->value = size > 0 ? PyValue_DUP(PyTuple_GET_VALUE(args, 0))
++                           : PyValue_None;
++    PyValue_XCLOSE(previous);
+     return 0;
+ }
+ 
+@@ -795,7 +790,7 @@ static int
+ StopIteration_clear(PyObject *op)
+ {
+     PyStopIterationObject *self = PyStopIterationObject_CAST(op);
+-    Py_CLEAR(self->value);
++    PyValue_CLEAR(self->value);
+     return BaseException_clear(op);
+ }
+ 
+@@ -811,7 +806,7 @@ static int
+ StopIteration_traverse(PyObject *op, visitproc visit, void *arg)
+ {
+     PyStopIterationObject *self = PyStopIterationObject_CAST(op);
+-    Py_VISIT(self->value);
++    _Py_VISIT_VALUE(self->value);
+     return BaseException_traverse(op, visit, arg);
+ }
+ 
+@@ -4733,7 +4728,8 @@ _PyExc_InitTypes(PyInterpreterState *interp)
+         if (exc->tp_new == BaseException_new
+             && exc->tp_init == BaseException_init)
+         {
+-            exc->tp_vectorcall = BaseException_vectorcall;
++            exc->tp_vectorcall = _PyValue_VectorcallThunk;
++            exc->tp_value_vectorcall = (_Py_valuefunc)BaseException_vectorcall;
+         }
+     }
+     return 0;
+diff --git a/Objects/genobject.c b/Objects/genobject.c
+index 0ec4f5c0568..d0a5b36c509 100644
+--- a/Objects/genobject.c
++++ b/Objects/genobject.c
+@@ -859,18 +859,18 @@ int
+ PyValue
+ _PyGen_FetchStopIterationValue(void)
+ {
+-    PyObject *value = NULL;
++    PyValue value = PyValue_NULL;
+     if (PyErr_ExceptionMatches(PyExc_StopIteration)) {
+         PyObject *exc = PyErr_GetRaisedException();
+-        value = Py_NewRef(((PyStopIterationObject *)exc)->value);
++        value = PyValue_XDUP(((PyStopIterationObject *)exc)->value);
+         Py_DECREF(exc);
+     } else if (PyErr_Occurred()) {
+         return PyValue_NULL;
+     }
+-    if (value == NULL) {
++    if (PyValue_IsNull(value)) {
+         return PyValue_None;
+     }
+-    return PyValue_FromObjectSteal(value);
++    return value;
+ }
+ 
+ static PyObject *
+diff --git a/Objects/rangeobject.c b/Objects/rangeobject.c
+index 0ec9ebf5feb..93cd15c2a98 100644
+--- a/Objects/rangeobject.c
++++ b/Objects/rangeobject.c
+@@ -501,10 +501,55 @@ range_item_value(PyObject *op, Py_ssize_t i)
+ }
+ _Py_VALUE_THUNK_ITEM(range_item, range_item_value)
+ 
++/* r[slice] for a compact range and a slice of inline ints and None, in
++   machine arithmetic (no int object is made). Returns 0 if the case does not
++   apply; otherwise 1, with the new range or NULL with an exception set in
++   *result. */
++static int
++compute_slice_compact(rangeobject *r, PySliceObject *slice, PyObject **result)
++{
++    int64_t start, step, length;
++    if (!range_compact(r, &start, &step, &length)) {
++        return 0;
++    }
++    PyValueBorrow bounds[3] = {PyValue_Borrow(slice->start),
++                               PyValue_Borrow(slice->stop),
++                               PyValue_Borrow(slice->step)};
++    for (int k = 0; k < 3; k++) {
++        if (!PyValue_IsNone(bounds[k]) && !PyValue_IsInlineInt(bounds[k])) {
++            return 0;
++        }
++    }
++    Py_ssize_t s, e, st;
++    if (PySlice_Unpack(_PyObject_CAST(slice), &s, &e, &st) < 0) {
++        *result = NULL;
++        return 1;
++    }
++    PySlice_AdjustIndices(length, &s, &e, st);
++    int64_t new_start = start + (int64_t)s * step;
++    int64_t new_stop = start + (int64_t)e * step;
++    int64_t new_step;
++    if (__builtin_mul_overflow(step, (int64_t)st, &new_step)
++        || !_PyValue_IntFitsInline(new_start)
++        || !_PyValue_IntFitsInline(new_stop)
++        || !_PyValue_IntFitsInline(new_step))
++    {
++        return 0;
++    }
++    *result = (PyObject *)make_range_object(
++        Py_TYPE(r), PyValue_FromInt64(new_start), PyValue_FromInt64(new_stop),
++        PyValue_FromInt64(new_step));
++    return 1;
++}
++
+ static PyObject *
+ compute_slice(rangeobject *r, PyObject *_slice)
+ {
+     PySliceObject *slice = (PySliceObject *) _slice;
++    PyObject *compact_result;
++    if (compute_slice_compact(r, slice, &compact_result)) {
++        return compact_result;
++    }
+     PyObject *start = NULL, *stop = NULL, *step = NULL;
+     PyValue substart = PyValue_NULL, substop = PyValue_NULL, substep = PyValue_NULL;
+ 
+diff --git a/Objects/typeobject.c b/Objects/typeobject.c
+index 977d8e2d902..9ff7902054a 100644
+--- a/Objects/typeobject.c
++++ b/Objects/typeobject.c
+@@ -2586,13 +2586,12 @@ static int
+ type___instancecheck___impl(PyTypeObject *self, PyValueBorrow instance)
+ /*[clinic end generated code: output=ccdd7dc024cdf372 input=cdbfeaee82c01a0f]*/
+ {
+-    PyObject *instance_o = _PyValue_AsObjectAt(instance, BOX_SITE_PARSER);
+-    if (instance_o == NULL) {
+-        return -1;
++    if (PyValue_IsInline(instance)) {
++        // The __class__ of an int or float is its type.
++        return PyType_IsSubtype(PyValue_TYPE(instance), self);
+     }
+-    int res = _PyObject_RealIsInstance(instance_o, (PyObject *)self);
+-    Py_DECREF(instance_o);
+-    return res;
++    return _PyObject_RealIsInstance(PyValue_AsKnownObjectBorrow(instance),
++                                    (PyObject *)self);
+ }
+ 
+ /*[clinic input]
+@@ -12585,31 +12584,33 @@ _Py_VALUE_THUNK_UNARY(FUNCNAME, FUNCNAME##_value)
+ static Py_ssize_t
+ slot_sq_length(PyObject *self)
+ {
+-    PyObject* stack[1] = {self};
+-    PyObject *res = vectorcall_method(&_Py_ID(__len__), stack, 1);
+-    Py_ssize_t len;
+-
+-    if (res == NULL)
++    PyValue stack[1];
++    _PyValue_WindowPut(&stack[0], _PyValue_FromObjectKnown(self));
++    PyValue res = vectorcall_method_value(&_Py_ID(__len__), stack, 1);
++    if (PyValue_IsNull(res)) {
+         return -1;
++    }
+ 
+-    PyObject *index = _PyValue_AsObjectResultAt(
+-        _PyValue_Index(PyValue_FromObjectBorrow(res)), BOX_SITE_NUMBER);
+-    Py_DECREF(res);
+-    res = index;
+-    if (res == NULL)
++    PyValue index = _PyValue_Index(PyValue_Borrow(res));
++    PyValue_CLOSE(res);
++    if (PyValue_IsNull(index)) {
+         return -1;
++    }
+ 
+-    assert(PyLong_Check(res));
+-    if (_PyLong_IsNegative((PyLongObject *)res)) {
+-        Py_DECREF(res);
++    PyValueBorrow n = PyValue_Borrow(index);
++    int negative = PyValue_IsInlineInt(n)
++        ? PyValue_InlineInt64(n) < 0
++        : _PyLong_IsNegative((PyLongObject *)PyValue_AsKnownObjectBorrow(n));
++    if (negative) {
++        PyValue_CLOSE(index);
+         PyErr_SetString(PyExc_ValueError,
+                         "__len__() should return >= 0");
+         return -1;
+     }
+ 
+-    len = _PyValue_AsSsize_t(PyValue_FromObjectBorrow(res), PyExc_OverflowError);
++    Py_ssize_t len = _PyValue_AsSsize_t(n, PyExc_OverflowError);
+     assert(len >= 0 || PyErr_ExceptionMatches(PyExc_OverflowError));
+-    Py_DECREF(res);
++    PyValue_CLOSE(index);
+     return len;
+ }
+ 
+@@ -14246,6 +14247,17 @@ value_pair_in_slot_descriptor(PyTypeObject *type, int row, void *object,
+                 PyWrapperDescrObject *d = (PyWrapperDescrObject *)descr;
+                 found = (d->d_wrapped == object
+                          && (_Py_valuefunc)d->d_wrapped_value == value);
++                /* A name that two slotdefs share, as __getitem__ for
++                   sq_item and mp_subscript, has one descriptor, from the
++                   first slotdef in the table. The other row is
++                   not rewritten from it: PyType_Ready checked its pair,
++                   as for the static list. */
++                if (!found && (type->tp_flags & Py_TPFLAGS_HEAPTYPE)
++                    && slotdef_values[d->d_base - slotdefs].row != row
++                    && d->d_base->name_strobj == p->name_strobj)
++                {
++                    found = 1;
++                }
+             }
+         }
+         PyValue_CLOSE(descr_ref);
+@@ -14850,6 +14862,11 @@ type_new_set_names(PyTypeObject *type)
+     int found;
+     while ((found = PyDict_NextValue(names_to_set, &i, &key_value,
+                                      &value_value)) > 0) {
++        if (PyValue_IsInline(value_value)) {
++            // An int or float has no __set_name__.
++            PyValue_CLOSE(key_value);
++            continue;
++        }
+         key = _PyValue_AsObjectAt(key_value, BOX_SITE_DICT);
+         value = (key != NULL)
+             ? _PyValue_AsObjectAt(value_value, BOX_SITE_DICT) : NULL;
+diff --git a/Python/_warnings.c b/Python/_warnings.c
+index 07fd5499bba..ade80abbe54 100644
+--- a/Python/_warnings.c
++++ b/Python/_warnings.c
+@@ -482,7 +482,8 @@ filter_search(PyInterpreterState *interp, PyObject *category,
+     Py_BEGIN_CRITICAL_SECTION(filters);
+     for (Py_ssize_t i = 0; i < PyList_GET_SIZE(filters); i++) {
+         PyObject *tmp_item, *action = NULL, *msg = NULL, *cat = NULL;
+-        PyObject *mod = NULL, *ln_obj = NULL;
++        PyObject *mod = NULL;
++        PyValueBorrow ln_value;
+         Py_ssize_t ln;
+         int is_subclass, good_msg, good_mod;
+ 
+@@ -507,9 +508,8 @@ filter_search(PyInterpreterState *interp, PyObject *category,
+         msg = _PyValue_AsObjectAt(PyTuple_GET_VALUE(tmp_item, 1), BOX_SITE_TUPLE);
+         cat = _PyValue_AsObjectAt(PyTuple_GET_VALUE(tmp_item, 2), BOX_SITE_TUPLE);
+         mod = _PyValue_AsObjectAt(PyTuple_GET_VALUE(tmp_item, 3), BOX_SITE_TUPLE);
+-        ln_obj = _PyValue_AsObjectAt(PyTuple_GET_VALUE(tmp_item, 4), BOX_SITE_TUPLE);
+-        if (action == NULL || msg == NULL || cat == NULL || mod == NULL
+-            || ln_obj == NULL)
++        ln_value = PyTuple_GET_VALUE(tmp_item, 4);
++        if (action == NULL || msg == NULL || cat == NULL || mod == NULL)
+         {
+             goto error;
+         }
+@@ -536,7 +536,17 @@ filter_search(PyInterpreterState *interp, PyObject *category,
+             goto error;
+         }
+ 
+-        ln = PyLong_AsSsize_t(ln_obj);
++        if (PyValue_IsInlineInt(ln_value)) {
++            ln = (Py_ssize_t)PyValue_InlineInt64(ln_value);
++        }
++        else if (PyValue_IsObject(ln_value)) {
++            ln = PyLong_AsSsize_t(PyValue_AsKnownObjectBorrow(ln_value));
++        }
++        else {
++            // An inline float: PyLong_AsSsize_t()'s TypeError.
++            PyErr_SetString(PyExc_TypeError, "an integer is required");
++            ln = -1;
++        }
+         if (ln == -1 && PyErr_Occurred()) {
+             goto error;
+         }
+@@ -549,7 +559,6 @@ filter_search(PyInterpreterState *interp, PyObject *category,
+             Py_DECREF(msg);
+             Py_DECREF(cat);
+             Py_DECREF(mod);
+-            Py_DECREF(ln_obj);
+             result = true;
+             break;
+         }
+@@ -559,7 +568,6 @@ filter_search(PyInterpreterState *interp, PyObject *category,
+         Py_DECREF(msg);
+         Py_DECREF(cat);
+         Py_DECREF(mod);
+-        Py_DECREF(ln_obj);
+         continue;
+ 
+ error:
+@@ -568,7 +576,6 @@ filter_search(PyInterpreterState *interp, PyObject *category,
+         Py_XDECREF(msg);
+         Py_XDECREF(cat);
+         Py_XDECREF(mod);
+-        Py_XDECREF(ln_obj);
+         result = false;
+         break;
+     }
+@@ -653,30 +660,32 @@ already_warned(PyInterpreterState *interp, PyObject *registry, PyObject *key,
+                         &version_val) < 0) {
+         return -1;
+     }
+-    PyObject *version_obj = NULL;
++    bool should_update_version = true;
+     if (!PyValue_IsNull(version_val)) {
+-        version_obj = _PyValue_AsObjectAt(version_val, BOX_SITE_DICT);
+-        PyValue_CLOSE(version_val);
+-        if (version_obj == NULL) {
+-            return -1;
++        if (PyValue_IsInlineInt(version_val)) {
++            should_update_version =
++                PyValue_InlineInt64(version_val) != st->filters_version;
++        }
++        else if (PyValue_IsObject(version_val)
++                 && PyLong_CheckExact(PyValue_AsKnownObjectBorrow(version_val)))
++        {
++            should_update_version = PyLong_AsLong(
++                PyValue_AsKnownObjectBorrow(version_val)) != st->filters_version;
+         }
++        PyValue_CLOSE(version_val);
+     }
+-    bool should_update_version = (
+-        version_obj == NULL
+-        || !PyLong_CheckExact(version_obj)
+-        || PyLong_AsLong(version_obj) != st->filters_version
+-    );
+-    Py_XDECREF(version_obj);
+     if (should_update_version) {
+         PyDict_Clear(registry);
+-        version_obj = PyLong_FromLong(st->filters_version);
+-        if (version_obj == NULL)
++        PyValue version = PyValue_FromInt64(st->filters_version);
++        if (PyValue_IsNull(version))
+             return -1;
+-        if (PyDict_SetValue(registry, _PyValue_FromObjectKnown(&_Py_ID(version)), PyValue_FromObjectBorrow(version_obj)) < 0) {
+-            Py_DECREF(version_obj);
++        int err = PyDict_SetValue(registry,
++                                  _PyValue_FromObjectKnown(&_Py_ID(version)),
++                                  version);
++        PyValue_CLOSE(version);
++        if (err < 0) {
+             return -1;
+         }
+-        Py_DECREF(version_obj);
+     }
+     else {
+         PyValue already_warned_val;
+diff --git a/Python/bytecodes.c b/Python/bytecodes.c
+index ee246f281f7..dec69a20c3d 100644
+--- a/Python/bytecodes.c
++++ b/Python/bytecodes.c
+@@ -1835,7 +1835,7 @@ dummy_func(
+             assert(exc_value && PyExceptionInstance_Check(exc_value));
+             int matches = PyErr_GivenExceptionMatches(exc_value, PyExc_StopIteration);
+             if (matches) {
+-                value = PyValue_DUP(PyValue_FromObjectBorrow(((PyStopIterationObject *)exc_value)->value));
++                value = PyValue_DUP(((PyStopIterationObject *)exc_value)->value);
+                 DECREF_INPUTS();
+                 null_out = null_in;
+                 none = PyValue_None;
+diff --git a/Python/ceval.c b/Python/ceval.c
+index c61b8eb20c3..127256482ed 100644
+--- a/Python/ceval.c
++++ b/Python/ceval.c
+@@ -4242,21 +4242,6 @@ inline_slice_bounds(PyValueBorrow start, PyValueBorrow stop,
+     return true;
+ }
+ 
+-/* Store in *box a new box if ref holds an inline value, else NULL. Return a
+-   borrowed reference to the object ref holds or to the box, or NULL with an
+-   exception set if boxing fails. */
+-static PyObject *
+-borrow_or_box(PyValueBorrow ref, PyObject **box)
+-{
+-    if (PyValue_IsInline(ref)) {
+-        *box = PyValue_AsObject(ref);
+-        return *box;
+-    }
+-    *box = NULL;
+-    return PyValue_AsKnownObjectBorrow(ref);
+-}
+-#define borrow_or_box(V0, V1) (borrow_or_box)(PyValue_Borrow(V0), V1)
+-
+ /* The slice start:stop as a new object, with the bounds as they are (value
+    fields, M4b): no box of an inline bound. NULL with an exception set. */
+ static PyObject *
+@@ -4379,18 +4364,7 @@ int
+             }
+         }
+     }
+-    PyObject *inst_box, *cls_box = NULL;
+-    int res = -1;
+-    PyObject *inst = borrow_or_box(inst_st, &inst_box);
+-    if (inst != NULL) {
+-        PyObject *cls = borrow_or_box(cls_st, &cls_box);
+-        if (cls != NULL) {
+-            res = PyObject_IsInstance(inst, cls);
+-        }
+-    }
+-    Py_XDECREF(inst_box);
+-    Py_XDECREF(cls_box);
+-    return res;
++    return _PyValue_IsInstance(inst_st, cls_st);
+ }
+ 
+ PyObject *
+diff --git a/Python/generated_ir_cases.c.h b/Python/generated_ir_cases.c.h
+index 8046a2e544f..b2d9bf0a4ab 100644
+--- a/Python/generated_ir_cases.c.h
++++ b/Python/generated_ir_cases.c.h
+@@ -7809,7 +7809,7 @@
+             assert(exc_value && PyExceptionInstance_Check(exc_value));
+             int matches = PyErr_GivenExceptionMatches(exc_value, PyExc_StopIteration);
+             if (matches) {
+-                value = PyValue_DUP(PyValue_FromObjectBorrow(((PyStopIterationObject *)exc_value)->value));
++                value = PyValue_DUP(((PyStopIterationObject *)exc_value)->value);
+                 PyValue tmp = sub_iter;
+                 sub_iter = value;
+                 IR_PUBLISH_TEMP(window[0], sub_iter);

@@ -1,0 +1,12 @@
+--- a/Modules/_decimal/_decimal.c
++++ b/Modules/_decimal/_decimal.c
+@@ -7308,7 +7308,8 @@
+         return PyValue_NULL;
+     }
+ 
+-    PyObject *result = _PyTuple_FromPairSteal(q, r);
++    PyObject *result = _PyTuple_FromPairTakeValue(
++        PyValue_FromObjectSteal(q), PyValue_FromObjectSteal(r));
+     if (result == NULL) {
+         return PyValue_NULL;
+     }

@@ -1,0 +1,610 @@
+--- a/Modules/_decimal/_decimal.c
++++ b/Modules/_decimal/_decimal.c
+@@ -638,6 +638,16 @@
+ }
+ 
+ static int
++invalid_rounding(void)
++{
++    return type_error_int(
++        "valid values for rounding are:\n"
++        "  [ROUND_CEILING, ROUND_FLOOR, ROUND_UP, ROUND_DOWN,\n"
++        "   ROUND_HALF_UP, ROUND_HALF_DOWN, ROUND_HALF_EVEN,\n"
++        "   ROUND_05UP]");
++}
++
++static int
+ getround(decimal_state *state, PyObject *v)
+ {
+     int i;
+@@ -654,11 +664,16 @@
+         }
+     }
+ 
+-    return type_error_int(
+-        "valid values for rounding are:\n"
+-        "  [ROUND_CEILING, ROUND_FLOOR, ROUND_UP, ROUND_DOWN,\n"
+-        "   ROUND_HALF_UP, ROUND_HALF_DOWN, ROUND_HALF_EVEN,\n"
+-        "   ROUND_05UP]");
++    return invalid_rounding();
++}
++
++static int
++getround_value(decimal_state *state, PyValueBorrow value)
++{
++    if (!PyValue_IsObject(value)) {
++        return invalid_rounding();
++    }
++    return getround(state, PyValue_AsKnownObjectBorrow(value));
+ }
+ 
+ 
+@@ -4215,7 +4230,10 @@
+     return NULL;
+ }
+ 
++static PyObject *optional_context_value(decimal_state *state, PyValueBorrow value);
++
+ /*[clinic input]
++@value_function
+ _decimal.Decimal.to_integral_value
+ 
+     cls: defining_class
+@@ -4228,46 +4246,54 @@
+ else by the given context. If neither parameter is given, then the
+ rounding mode of the current default context is used.
+ [clinic start generated code]*/
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
++static PyValue
+ _decimal_Decimal_to_integral_value_impl(PyObject *self, PyTypeObject *cls,
+-                                        PyObject *rounding,
+-                                        PyObject *context)
+-/*[clinic end generated code: output=23047d848ef84db1 input=85aa9499a21ea8d7]*/
++                                        PyValueBorrow rounding,
++                                        PyValueBorrow context)
++/*[clinic end generated code: output=207f5a1019828cb5 input=42392e4489e0cabd]*/
+ {
+     PyObject *result;
+     uint32_t status = 0;
+     mpd_context_t workctx;
+ 
+     decimal_state *state = PyType_GetModuleState(cls);
+-    CONTEXT_CHECK_VA(state, context);
++    PyObject *ctx = optional_context_value(state, context);
++    if (ctx == NULL) {
++        return PyValue_NULL;
++    }
+ 
+-    workctx = *CTX(context);
+-    if (rounding != Py_None) {
+-        int round = getround(state, rounding);
++    workctx = *CTX(ctx);
++    if (!PyValue_IsNone(rounding)) {
++        int round = getround_value(state, rounding);
+         if (round < 0) {
+-            return NULL;
++            return PyValue_NULL;
+         }
+         if (!mpd_qsetround(&workctx, round)) {
+-            INTERNAL_ERROR_PTR("PyDec_ToIntegralValue"); /* GCOV_NOT_REACHED */
++            (void)runtime_error_int("internal error in PyDec_ToIntegralValue");
++            return PyValue_NULL; /* GCOV_NOT_REACHED */
+         }
+     }
+ 
+     result = dec_alloc(state);
+     if (result == NULL) {
+-        return NULL;
++        return PyValue_NULL;
+     }
+ 
+     mpd_qround_to_int(MPD(result), MPD(self), &workctx, &status);
+-    if (dec_addstatus(context, status)) {
++    if (dec_addstatus(ctx, status)) {
+         Py_DECREF(result);
+-        return NULL;
++        return PyValue_NULL;
+     }
+ 
+-    return result;
++    return PyValue_FromObjectSteal(result);
+ }
+ 
+ /*[clinic input]
++@value_function
+ _decimal.Decimal.to_integral = _decimal.Decimal.to_integral_value
+ 
+ Identical to the to_integral_value() method.
+@@ -4275,17 +4301,22 @@
+ The to_integral() name has been kept for compatibility with older
+ versions.
+ [clinic start generated code]*/
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
++static PyValue
+ _decimal_Decimal_to_integral_impl(PyObject *self, PyTypeObject *cls,
+-                                  PyObject *rounding, PyObject *context)
+-/*[clinic end generated code: output=5dac8f54c2a3ed26 input=709b54618ecd0d8b]*/
++                                  PyValueBorrow rounding,
++                                  PyValueBorrow context)
++/*[clinic end generated code: output=05743b507eb78c6c input=b8cfe14c350b3a0d]*/
+ {
+     return _decimal_Decimal_to_integral_value_impl(self, cls, rounding,
+                                                    context);
+ }
+ 
+ /*[clinic input]
++@value_function
+ _decimal.Decimal.to_integral_exact = _decimal.Decimal.to_integral_value
+ 
+ Round to the nearest integer.
+@@ -4295,43 +4326,50 @@
+ if given, else by the given context.  If neither parameter is given,
+ then the rounding mode of the current default context is used.
+ [clinic start generated code]*/
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
++static PyValue
+ _decimal_Decimal_to_integral_exact_impl(PyObject *self, PyTypeObject *cls,
+-                                        PyObject *rounding,
+-                                        PyObject *context)
+-/*[clinic end generated code: output=543a39a02eea9917 input=d4d8abe543393de1]*/
++                                        PyValueBorrow rounding,
++                                        PyValueBorrow context)
++/*[clinic end generated code: output=63d487d31fd6f5aa input=ed22bcbdba66fb4c]*/
+ {
+     PyObject *result;
+     uint32_t status = 0;
+     mpd_context_t workctx;
+ 
+     decimal_state *state = PyType_GetModuleState(cls);
+-    CONTEXT_CHECK_VA(state, context);
++    PyObject *ctx = optional_context_value(state, context);
++    if (ctx == NULL) {
++        return PyValue_NULL;
++    }
+ 
+-    workctx = *CTX(context);
+-    if (rounding != Py_None) {
+-        int round = getround(state, rounding);
++    workctx = *CTX(ctx);
++    if (!PyValue_IsNone(rounding)) {
++        int round = getround_value(state, rounding);
+         if (round < 0) {
+-            return NULL;
++            return PyValue_NULL;
+         }
+         if (!mpd_qsetround(&workctx, round)) {
+-            INTERNAL_ERROR_PTR("PyDec_ToIntegralExact"); /* GCOV_NOT_REACHED */
++            (void)runtime_error_int("internal error in PyDec_ToIntegralExact");
++            return PyValue_NULL; /* GCOV_NOT_REACHED */
+         }
+     }
+ 
+     result = dec_alloc(state);
+     if (result == NULL) {
+-        return NULL;
++        return PyValue_NULL;
+     }
+ 
+     mpd_qround_to_intx(MPD(result), MPD(self), &workctx, &status);
+-    if (dec_addstatus(context, status)) {
++    if (dec_addstatus(ctx, status)) {
+         Py_DECREF(result);
+-        return NULL;
++        return PyValue_NULL;
+     }
+ 
+-    return result;
++    return PyValue_FromObjectSteal(result);
+ }
+ 
+ static PyObject *
+@@ -5932,6 +5970,7 @@
+ Dec_BinaryFuncVA(mpd_qshift)
+ 
+ /*[clinic input]
++@value_function
+ _decimal.Decimal.quantize
+ 
+     cls: defining_class
+@@ -5962,12 +6001,15 @@
+ given context argument; if neither argument is given, the rounding
+ mode of the current thread's context is used.
+ [clinic start generated code]*/
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
++static PyValue
+ _decimal_Decimal_quantize_impl(PyObject *self, PyTypeObject *cls,
+-                               PyObject *w, PyObject *rounding,
+-                               PyObject *context)
+-/*[clinic end generated code: output=fc51edf458559913 input=7838b0a5f684adb8]*/
++                               PyValueBorrow w, PyValueBorrow rounding,
++                               PyValueBorrow context)
++/*[clinic end generated code: output=fdfc54086c807646 input=50d9599ca69d92c4]*/
+ {
+     PyObject *a, *b;
+     PyObject *result;
+@@ -5975,37 +6017,47 @@
+     mpd_context_t workctx;
+ 
+     decimal_state *state = PyType_GetModuleState(cls);
+-    CONTEXT_CHECK_VA(state, context);
++    PyObject *ctx = optional_context_value(state, context);
++    if (ctx == NULL) {
++        return PyValue_NULL;
++    }
+ 
+-    workctx = *CTX(context);
+-    if (rounding != Py_None) {
+-        int round = getround(state, rounding);
++    workctx = *CTX(ctx);
++    if (!PyValue_IsNone(rounding)) {
++        int round = getround_value(state, rounding);
+         if (round < 0) {
+-            return NULL;
++            return PyValue_NULL;
+         }
+         if (!mpd_qsetround(&workctx, round)) {
+-            INTERNAL_ERROR_PTR("dec_mpd_qquantize"); /* GCOV_NOT_REACHED */
++            (void)runtime_error_int("internal error in dec_mpd_qquantize");
++            return PyValue_NULL; /* GCOV_NOT_REACHED */
+         }
+     }
+ 
+-    CONVERT_BINOP_RAISE(&a, &b, self, w, context);
++    if (!convert_op_value(&a, PyValue_FromObjectBorrow(self), ctx)) {
++        return PyValue_NULL;
++    }
++    if (!convert_op_value(&b, w, ctx)) {
++        Py_DECREF(a);
++        return PyValue_NULL;
++    }
+ 
+     result = dec_alloc(state);
+     if (result == NULL) {
+         Py_DECREF(a);
+         Py_DECREF(b);
+-        return NULL;
++        return PyValue_NULL;
+     }
+ 
+     mpd_qquantize(MPD(result), MPD(a), MPD(b), &workctx, &status);
+     Py_DECREF(a);
+     Py_DECREF(b);
+-    if (dec_addstatus(context, status)) {
++    if (dec_addstatus(ctx, status)) {
+         Py_DECREF(result);
+-        return NULL;
++        return PyValue_NULL;
+     }
+ 
+-    return result;
++    return PyValue_FromObjectSteal(result);
+ }
+ 
+ /* Special methods */
+--- a/Modules/_decimal/clinic/_decimal.c.h
++++ b/Modules/_decimal/clinic/_decimal.c.h
+@@ -1052,19 +1052,28 @@
+ "The rounding mode is determined by the rounding parameter if given,\n"
+ "else by the given context. If neither parameter is given, then the\n"
+ "rounding mode of the current default context is used.");
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+ #define _DECIMAL_DECIMAL_TO_INTEGRAL_VALUE_METHODDEF    \
+-    {"to_integral_value", _PyCFunction_CAST(_decimal_Decimal_to_integral_value), METH_METHOD|METH_FASTCALL|METH_KEYWORDS, _decimal_Decimal_to_integral_value__doc__},
++    {"to_integral_value", _PyCFunction_CAST(_decimal_Decimal_to_integral_value), METH_VALUE|METH_METHOD|METH_KEYWORDS, _decimal_Decimal_to_integral_value__doc__},
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
++static PyValue
+ _decimal_Decimal_to_integral_value_impl(PyObject *self, PyTypeObject *cls,
+-                                        PyObject *rounding,
+-                                        PyObject *context);
++                                        PyValueBorrow rounding,
++                                        PyValueBorrow context);
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
+-_decimal_Decimal_to_integral_value(PyObject *self, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
++static PyValue
++_decimal_Decimal_to_integral_value(PyValueBorrow self, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+ {
+-    PyObject *return_value = NULL;
++    PyValue return_value = PyValue_NULL;
+     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
+ 
+     #define NUM_KEYWORDS 2
+@@ -1092,28 +1101,21 @@
+         .kwtuple = KWTUPLE,
+     };
+     #undef KWTUPLE
+-    PyObject *argsbuf[2];
+-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 0;
+-    PyObject *rounding = Py_None;
+-    PyObject *context = Py_None;
++    Py_ssize_t _idx[2];
++    PyValueBorrow rounding = PyValue_Borrow(PyValue_None);
++    PyValueBorrow context = PyValue_Borrow(PyValue_None);
+ 
+-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
+-            /*minpos*/ 0, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
+-    if (!args) {
++    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
++            /*minpos*/ 0, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, _idx, 2)) {
+         goto exit;
+     }
+-    if (!noptargs) {
+-        goto skip_optional_pos;
++    if (_idx[0] >= 0) {
++        rounding = PyValue_Borrow(args[_idx[0]]);
+     }
+-    if (args[0]) {
+-        rounding = args[0];
+-        if (!--noptargs) {
+-            goto skip_optional_pos;
+-        }
++    if (_idx[1] >= 0) {
++        context = PyValue_Borrow(args[_idx[1]]);
+     }
+-    context = args[1];
+-skip_optional_pos:
+-    return_value = _decimal_Decimal_to_integral_value_impl(self, cls, rounding, context);
++    return_value = _decimal_Decimal_to_integral_value_impl(PyValue_AsKnownObjectBorrow(self), cls, rounding, context);
+ 
+ exit:
+     return return_value;
+@@ -1127,18 +1129,28 @@
+ "\n"
+ "The to_integral() name has been kept for compatibility with older\n"
+ "versions.");
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+ #define _DECIMAL_DECIMAL_TO_INTEGRAL_METHODDEF    \
+-    {"to_integral", _PyCFunction_CAST(_decimal_Decimal_to_integral), METH_METHOD|METH_FASTCALL|METH_KEYWORDS, _decimal_Decimal_to_integral__doc__},
++    {"to_integral", _PyCFunction_CAST(_decimal_Decimal_to_integral), METH_VALUE|METH_METHOD|METH_KEYWORDS, _decimal_Decimal_to_integral__doc__},
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
++static PyValue
+ _decimal_Decimal_to_integral_impl(PyObject *self, PyTypeObject *cls,
+-                                  PyObject *rounding, PyObject *context);
++                                  PyValueBorrow rounding,
++                                  PyValueBorrow context);
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
+-_decimal_Decimal_to_integral(PyObject *self, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
++static PyValue
++_decimal_Decimal_to_integral(PyValueBorrow self, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+ {
+-    PyObject *return_value = NULL;
++    PyValue return_value = PyValue_NULL;
+     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
+ 
+     #define NUM_KEYWORDS 2
+@@ -1166,28 +1178,21 @@
+         .kwtuple = KWTUPLE,
+     };
+     #undef KWTUPLE
+-    PyObject *argsbuf[2];
+-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 0;
+-    PyObject *rounding = Py_None;
+-    PyObject *context = Py_None;
++    Py_ssize_t _idx[2];
++    PyValueBorrow rounding = PyValue_Borrow(PyValue_None);
++    PyValueBorrow context = PyValue_Borrow(PyValue_None);
+ 
+-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
+-            /*minpos*/ 0, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
+-    if (!args) {
++    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
++            /*minpos*/ 0, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, _idx, 2)) {
+         goto exit;
+     }
+-    if (!noptargs) {
+-        goto skip_optional_pos;
++    if (_idx[0] >= 0) {
++        rounding = PyValue_Borrow(args[_idx[0]]);
+     }
+-    if (args[0]) {
+-        rounding = args[0];
+-        if (!--noptargs) {
+-            goto skip_optional_pos;
+-        }
++    if (_idx[1] >= 0) {
++        context = PyValue_Borrow(args[_idx[1]]);
+     }
+-    context = args[1];
+-skip_optional_pos:
+-    return_value = _decimal_Decimal_to_integral_impl(self, cls, rounding, context);
++    return_value = _decimal_Decimal_to_integral_impl(PyValue_AsKnownObjectBorrow(self), cls, rounding, context);
+ 
+ exit:
+     return return_value;
+@@ -1203,19 +1208,28 @@
+ "occurs.  The rounding mode is determined by the rounding parameter\n"
+ "if given, else by the given context.  If neither parameter is given,\n"
+ "then the rounding mode of the current default context is used.");
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+ #define _DECIMAL_DECIMAL_TO_INTEGRAL_EXACT_METHODDEF    \
+-    {"to_integral_exact", _PyCFunction_CAST(_decimal_Decimal_to_integral_exact), METH_METHOD|METH_FASTCALL|METH_KEYWORDS, _decimal_Decimal_to_integral_exact__doc__},
++    {"to_integral_exact", _PyCFunction_CAST(_decimal_Decimal_to_integral_exact), METH_VALUE|METH_METHOD|METH_KEYWORDS, _decimal_Decimal_to_integral_exact__doc__},
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
++static PyValue
+ _decimal_Decimal_to_integral_exact_impl(PyObject *self, PyTypeObject *cls,
+-                                        PyObject *rounding,
+-                                        PyObject *context);
++                                        PyValueBorrow rounding,
++                                        PyValueBorrow context);
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
+-_decimal_Decimal_to_integral_exact(PyObject *self, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
++static PyValue
++_decimal_Decimal_to_integral_exact(PyValueBorrow self, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+ {
+-    PyObject *return_value = NULL;
++    PyValue return_value = PyValue_NULL;
+     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
+ 
+     #define NUM_KEYWORDS 2
+@@ -1243,28 +1257,21 @@
+         .kwtuple = KWTUPLE,
+     };
+     #undef KWTUPLE
+-    PyObject *argsbuf[2];
+-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 0;
+-    PyObject *rounding = Py_None;
+-    PyObject *context = Py_None;
++    Py_ssize_t _idx[2];
++    PyValueBorrow rounding = PyValue_Borrow(PyValue_None);
++    PyValueBorrow context = PyValue_Borrow(PyValue_None);
+ 
+-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
+-            /*minpos*/ 0, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
+-    if (!args) {
++    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
++            /*minpos*/ 0, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, _idx, 2)) {
+         goto exit;
+     }
+-    if (!noptargs) {
+-        goto skip_optional_pos;
++    if (_idx[0] >= 0) {
++        rounding = PyValue_Borrow(args[_idx[0]]);
+     }
+-    if (args[0]) {
+-        rounding = args[0];
+-        if (!--noptargs) {
+-            goto skip_optional_pos;
+-        }
++    if (_idx[1] >= 0) {
++        context = PyValue_Borrow(args[_idx[1]]);
+     }
+-    context = args[1];
+-skip_optional_pos:
+-    return_value = _decimal_Decimal_to_integral_exact_impl(self, cls, rounding, context);
++    return_value = _decimal_Decimal_to_integral_exact_impl(PyValue_AsKnownObjectBorrow(self), cls, rounding, context);
+ 
+ exit:
+     return return_value;
+@@ -4136,19 +4143,28 @@
+ "mode is determined by the rounding argument if given, else by the\n"
+ "given context argument; if neither argument is given, the rounding\n"
+ "mode of the current thread\'s context is used.");
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+ #define _DECIMAL_DECIMAL_QUANTIZE_METHODDEF    \
+-    {"quantize", _PyCFunction_CAST(_decimal_Decimal_quantize), METH_METHOD|METH_FASTCALL|METH_KEYWORDS, _decimal_Decimal_quantize__doc__},
++    {"quantize", _PyCFunction_CAST(_decimal_Decimal_quantize), METH_VALUE|METH_METHOD|METH_KEYWORDS, _decimal_Decimal_quantize__doc__},
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
++static PyValue
+ _decimal_Decimal_quantize_impl(PyObject *self, PyTypeObject *cls,
+-                               PyObject *w, PyObject *rounding,
+-                               PyObject *context);
++                               PyValueBorrow w, PyValueBorrow rounding,
++                               PyValueBorrow context);
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
+-_decimal_Decimal_quantize(PyObject *self, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
++static PyValue
++_decimal_Decimal_quantize(PyValueBorrow self, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+ {
+-    PyObject *return_value = NULL;
++    PyValue return_value = PyValue_NULL;
+     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
+ 
+     #define NUM_KEYWORDS 3
+@@ -4176,30 +4192,23 @@
+         .kwtuple = KWTUPLE,
+     };
+     #undef KWTUPLE
+-    PyObject *argsbuf[3];
+-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 1;
+-    PyObject *w;
+-    PyObject *rounding = Py_None;
+-    PyObject *context = Py_None;
++    Py_ssize_t _idx[3];
++    PyValueBorrow w;
++    PyValueBorrow rounding = PyValue_Borrow(PyValue_None);
++    PyValueBorrow context = PyValue_Borrow(PyValue_None);
+ 
+-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
+-            /*minpos*/ 1, /*maxpos*/ 3, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
+-    if (!args) {
++    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
++            /*minpos*/ 1, /*maxpos*/ 3, /*minkw*/ 0, /*varpos*/ 0, _idx, 3)) {
+         goto exit;
+     }
+-    w = args[0];
+-    if (!noptargs) {
+-        goto skip_optional_pos;
++    w = PyValue_Borrow(args[_idx[0]]);
++    if (_idx[1] >= 0) {
++        rounding = PyValue_Borrow(args[_idx[1]]);
+     }
+-    if (args[1]) {
+-        rounding = args[1];
+-        if (!--noptargs) {
+-            goto skip_optional_pos;
+-        }
++    if (_idx[2] >= 0) {
++        context = PyValue_Borrow(args[_idx[2]]);
+     }
+-    context = args[2];
+-skip_optional_pos:
+-    return_value = _decimal_Decimal_quantize_impl(self, cls, w, rounding, context);
++    return_value = _decimal_Decimal_quantize_impl(PyValue_AsKnownObjectBorrow(self), cls, w, rounding, context);
+ 
+ exit:
+     return return_value;
+@@ -7126,4 +7135,4 @@
+ #ifndef _DECIMAL_CONTEXT_APPLY_METHODDEF
+     #define _DECIMAL_CONTEXT_APPLY_METHODDEF
+ #endif /* !defined(_DECIMAL_CONTEXT_APPLY_METHODDEF) */
+-/*[clinic end generated code: output=bbbc2a52bcc19384 input=a9049054013a1b77]*/
++/*[clinic end generated code: output=6905d42c61157194 input=a9049054013a1b77]*/

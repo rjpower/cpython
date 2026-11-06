@@ -1,0 +1,80 @@
+diff --git a/Modules/_collectionsmodule.c b/Modules/_collectionsmodule.c
+index a5d73e82772..a234dfcd986 100644
+--- a/Modules/_collectionsmodule.c
++++ b/Modules/_collectionsmodule.c
+@@ -487,12 +487,13 @@ finalize_iterator(PyObject *it)
+ static PyObject*
+ consume_iterator(PyObject *it)
+ {
+-    PyObject *(*iternext)(PyObject *);
+-    PyObject *item;
+-
+-    iternext = *Py_TYPE(it)->tp_iternext;
+-    while ((item = iternext(it)) != NULL) {
+-        Py_DECREF(item);
++    for (;;) {
++        _PyStatusValue step = _PyValue_IterStep(it);
++        if (step.status != PYGEN_NEXT) {
++            PyValue_XCLOSE(step.value);
++            break;
++        }
++        PyValue_CLOSE(step.value);
+     }
+     return finalize_iterator(it);
+ }
+@@ -512,8 +513,7 @@ static PyValue
+ deque_extend_impl(dequeobject *deque, PyValueBorrow iterable)
+ /*[clinic end generated code: output=3e5bc2e11098cba2 input=85861954127c81da]*/
+ {
+-    PyObject *it, *item;
+-    PyObject *(*iternext)(PyObject *);
++    PyObject *it;
+     Py_ssize_t maxlen = deque->maxlen;
+ 
+     /* Handle case where id(deque) == id(iterable) */
+@@ -542,10 +542,13 @@ deque_extend_impl(dequeobject *deque, PyValueBorrow iterable)
+         deque->rightindex = 0;
+     }
+ 
+-    iternext = *Py_TYPE(it)->tp_iternext;
+-    while ((item = iternext(it)) != NULL) {
+-        if (deque_append_lock_held(deque, PyValue_PrepareOwned(item),
+-                                   maxlen) == -1) {
++    for (;;) {
++        _PyStatusValue step = _PyValue_IterStep(it);
++        if (step.status != PYGEN_NEXT) {
++            PyValue_XCLOSE(step.value);
++            break;
++        }
++        if (deque_append_lock_held(deque, step.value, maxlen) < 0) {
+             Py_DECREF(it);
+             return PyValue_NULL;
+         }
+@@ -568,8 +571,7 @@ static PyValue
+ deque_extendleft_impl(dequeobject *deque, PyValueBorrow iterable)
+ /*[clinic end generated code: output=79f1231dfee29e1e input=640dabd086115689]*/
+ {
+-    PyObject *it, *item;
+-    PyObject *(*iternext)(PyObject *);
++    PyObject *it;
+     Py_ssize_t maxlen = deque->maxlen;
+ 
+     /* Handle case where id(deque) == id(iterable) */
+@@ -598,10 +600,13 @@ deque_extendleft_impl(dequeobject *deque, PyValueBorrow iterable)
+         deque->rightindex = BLOCKLEN - 2;
+     }
+ 
+-    iternext = *Py_TYPE(it)->tp_iternext;
+-    while ((item = iternext(it)) != NULL) {
+-        if (deque_appendleft_lock_held(deque, PyValue_PrepareOwned(item),
+-                                       maxlen) == -1) {
++    for (;;) {
++        _PyStatusValue step = _PyValue_IterStep(it);
++        if (step.status != PYGEN_NEXT) {
++            PyValue_XCLOSE(step.value);
++            break;
++        }
++        if (deque_appendleft_lock_held(deque, step.value, maxlen) < 0) {
+             Py_DECREF(it);
+             return PyValue_NULL;
+         }

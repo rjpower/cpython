@@ -12,6 +12,35 @@ the first revision, and review 2
 ([reviews/register-ir-review-2.md](reviews/register-ir-review-2.md)) the
 second.
 
+**Current implementation, 2026-11-05.** Runtime `d6eae4b1c1c` builds and
+executes the register interpreter in debug, release and stats configurations.
+The source baseline and comparative tables below are dated evidence; their
+statement that the tree does not link describes November 3, not the current
+runtime. Current qualification is tracked in the
+[closure plan](../issues/checkpoint-closure/plan.md).
+
+The built word remains 64 bits: a 16-bit handler and four 12-bit fields
+(`Include/internal/pycore_ir.h:IR_HANDLER`). Slot class is tested against
+`nlocalsplus` at run time. G2 class-bit experiments are deferred; section 4's
+12-bit handler/class-bit layout is a candidate, not the current encoding.
+The immutable `co_words` and mutable `_PyCodeExec`/feedback allocation remain
+the execution model. Landed v2 work includes tail-call dispatch, constant
+slots, reduced feedback storage, removed `NOT_TAKEN`/`PUSH_NULL` words,
+discarded call results, fused compare branches and consecutive unpack targets.
+The detailed commit and validation ledger is in [WORKLOG](../WORKLOG.md).
+
+Handler-domain instrumentation is qualified. Runtime `d6eae4b1c1c` has the
+H3 full-handler-domain producer and strict reader: the generated domain,
+dispatch entries and counter arrays agree. The subsequent 29-kernel capture
+completed 87 dumps and found zero boxes in the measured loops, but raw warmup
+counts ranged from 2 to 1,175 boxes. The next reviewed candidate under full
+qualification brings eight kernels to zero in all raw processes; the other
+21 still fail. The startup-inclusive PyValue gate remains open. The earlier
+`4fffee855c9` census predates H3 and remains
+historical evidence, not a measurement of this source identity. Historical
+instruction counts and other-VM comparisons below are likewise not new
+measurements of the current runtime.
+
 **Accepted after review 2 (2026-11-03).**
 
 **Revised 2026-11-04.** The coordinator accepted the
@@ -1411,6 +1440,17 @@ owner asks for no intermediate performance gates).
 
 ### G2. The slot class is decided at run time
 
+**Checkpoint status (2026-11-05): deferred.** The register interpreter retains
+the run-time `IR_IS_LOCAL` test for this checkpoint. A4 (passing
+`nlocalsplus` through dispatch) and B3 (class bits in the instruction word)
+remain off-tree prototypes at `a1ecc0eb4f3`. Seven matched timing rounds gave
+base/candidate geomeans of 1.0100 and 1.0119, respectively, over 29 kernels;
+their 0.19 percentage-point separation is smaller than the observed
+per-kernel variation. This evidence does not justify B3's encoding change or
+establish A4's gain on the merged W5 runtime. Preserve both prototypes and
+remeasure against the qualified checkpoint before selecting one. The class-bit
+encoding below is a reviewed candidate design, not the current IR format.
+
 - **Problem.** Every handler input asks "frame variable or transfer
   temporary?" with `IR_IS_LOCAL(F)`. The test is
   `F < ((_PyCodeExec *)frame->ir_words - 1)->nlocalsplus`: a chain of
@@ -2196,6 +2236,11 @@ Counts are recorded per step. Elapsed time is measured after A5a, A3c and B7,
 and for G2.
 
 ### 4.1 Bit budget of the 64-bit word
+
+The class-bit entries in this proposed budget describe B3, which is deferred
+at the PyValue checkpoint. The current encoding keeps a 16-bit handler field
+and tests the slot class against `nlocalsplus` at run time; other landed IR v2
+changes are unaffected by that G2 decision.
 
 The word stays 64 bits with four 12-bit fields, and CD stays one 24-bit
 field. v2 splits the 16-bit handler half-word into a 12-bit handler and four

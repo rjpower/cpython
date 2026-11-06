@@ -1,7 +1,88 @@
 # Project status
 
-Status as of 2026-11-05 (PST), after the landings through `d63c129b95f`. Update this
-page at each landing.
+Live closure work, 2026-11-05: required W4b review fixes landed as
+`f84d73164fa`; debug/release/stats builds, lint and 4,202 focused/smoke tests
+per debug/release build passed. W5's reviewed kernel, gate and first startup
+batch landed as `98a26bb6218`, with three builds, lint and 8,826 focused tests
+per debug/release build passing. The marshal/AST/I/O batch landed as
+`4b2a6926d2a`, with three builds, lint and 5,937 tests per build passing.
+The startup/exception batch landed as `58db4324fec`, with three builds, lint
+and 5,561 tests per debug/release build passing. The reviewed 139-file mechanical,
+direct-slot and first Decimal batch landed as `e983958bede`, with three builds,
+lint and 9,511 tests per debug/release build passing. `4fffee855c9` adds startup
+fixes, selective Clinic value methods and 65 Decimal macro-family methods,
+with three builds, lint and 6,649 tests per build passing. Current runtime HEAD
+is `6aec17eefeb`: cold compiler/marshal/keyword, Decimal and iterator ports,
+following H3 at `d6eae4b1c1c`. Three builds, lint and 6,291 focused tests per
+debug/release build pass after full-suite findings were corrected.
+Linux no-op startup records zero boxes. Cold kernel compilation still boxes
+constants, marshal fields and keyword values; zero loop deltas do not pass R27.
+A fresh full-suite stats census at `4fff` ran 54,270 tests with 31 failures
+in eight files; the R27 gate fails with boxing and accounting debt. Its
+[triage report](issues/checkpoint-closure/fullsuite-4fff-census.md) distinguishes
+the totals and limitations. H3 instrumentation repairs the diagnosed
+256-entry stats array overrun. A fresh 87-dump run covers all 29 kernels:
+loop deltas are zero, but raw warmup boxes range from two to 1,175.
+The 28-file batch is committed. Full release/debug runs reported 54,289 and
+53,808 tests respectively. Fixture mismatches and a debug profiler null-exit
+abort were fixed; affected tests pass on both builds. Full final qualification
+is still required after the remaining ports. The new full stats census is
+running at this integration point with invalid-owner samples retained.
+Its predecessor candidate counted eight kernels at zero across all three raw
+processes; 21 retain startup/setup boxes. See the [kernel table](issues/checkpoint-closure/kernels-cold-candidate.md).
+Terra owns remaining Decimal methods/constructors/slots; Luna owns manual APIs;
+Sol owns important debugging and review. `_decimal`, manual API
+ports, the full-suite box tail and final qualification/measurement remain.
+G2 is deferred until after the merged baseline measurement.
+Execution and assignments: [closure plan](issues/checkpoint-closure/plan.md).
+
+The takeover snapshot below was checked against `e1229448be3`, before these
+closure landings. Use the live paragraph above and closure plan for assignments.
+
+## Takeover snapshot, before closure work
+
+The runtime worktree is clean. W4b (`b2dc9b86392`), W2b (`e9aca5156b8`),
+W4c (`4840754ffa7`) and the UUID traversal fix (`e1229448be3`) have landed
+since the previous status update. W2b's landing ran 14,417 tests on each of
+debug and release, all passing. W4c's landing exposed `test_uuid`; the UUID
+fix then passed its 4,453-test landing set on each build. Debug, release and
+stats builds compile; the latest lint covers 305 units with 0 failing findings.
+These are focused landing checks, not full-suite qualification of this HEAD.
+
+Unfinished work is preserved under `python-boil-the-ocean/build/worktrees/`:
+
+| Tree | Verified state | Next action |
+| --- | --- | --- |
+| `w5` | Based on `e1229448be3`; 28 changed files, including staged math changes. Last progress at 09:54 reports more kernels at zero boxes; pickle (780), regex_compile (about 107k) and XML (about 700) remain. | Rebuild the actual final diff, finish the kernel increment, independently review and land it; then finish the broader sweep and R27 gate. |
+| `rfix` | Based on `e1229448be3`; 9 changed files. Thread alias and mmap/CJK fixes are drafted, along with an optional `object.__sizeof__` compatibility change. No completed landing check found. | Separate required fixes from the optional sizeof change, complete review and focused validation. Record the posixshmem wording decision. |
+| `g2-a4`, `g2-b3`, `g2-base` | Uncommitted prototypes/control based on `a1ecc0eb4f3`; focused debug/release checks recorded. Timing finished at 10:32. | Review the timing, choose one alternative, move it to current runtime HEAD and validate the composition. |
+
+The W2b post-review reports 0 must-fix findings and 1 should-fix (`sizeof`).
+The W4b report lists 3 must-fix findings: thread aliases, mmap/CJK overflow
+messages and posixshmem argument errors; the last is a policy choice for which
+the reviewer recommends accepting upstream Clinic wording. Its debug-results
+table still contains `DEBUGPLACEHOLDER`, so review closure is incomplete.
+
+W5 is not just the three remaining kernel groups. Its interface survey counts
+about 1,200 remaining API call sites (including generator-produced AST code),
+the `_decimal` core and stronger static checks. Its early `w5-suite0` stats
+survey recorded 31 failures in 18 test files and about 76.8 million boxes
+attributed to core, core-pending or unresolved. That run predates later W5
+edits and the UUID fix; it is a failing survey, not a verdict on current HEAD.
+No completed `w5-gate.md` was found. Rebuild and triage before assigning failures.
+
+G2's seven-round timing gives base/candidate geomeans of 1.0100 for A4 and
+1.0119 for B3 over 29 kernels. Most per-kernel spreads are much larger than
+the difference between candidates. Both are about 1% faster than their old
+control; this neither establishes a clear winner nor measures current HEAD
+against upstream. Evidence: `build/pyjit-link-wave1/g2/time-quiet-1/summary.md`.
+
+The Loom `plan` artifact was still revision 1 from November 3. Treat old phase
+estimates and historical worker progress as history. No workers from the old
+provider are assumed active. Preserve their worktrees, including old conflicted
+integration attempts; they are not conflicts in the clean runtime branch.
+The detailed design pages exist and have independent reviews, but their older
+source snapshots and stage pages still need reconciliation with the landings.
 
 ## Outcome and next milestone
 
@@ -51,14 +132,15 @@ window, load at most 1.8):
 - RSS needs every build fully in the page cache first (measurement.md); with
   that, C and B match (B/C 1.010) and upstream uses 17% less (U/C 0.829).
 
-These numbers are not a baseline. The next milestone: the typed borrow (A5b)
-and tail calls as the only backend (A3a-A3c) for the loop and bridging
-costs, then the qualified baseline.
+These are historical measurements, not the qualified baseline. Typed borrowing
+and the tail-call backend have since landed. The remaining milestone is W5's
+R27 closure, review fixes, the G2 decision, merged qualification and measurement.
 
 ## Position
 
-- Runtime branch `boil/pyvalue-rc-universal`, HEAD `d63c129b95f`. The 36
-  landings since `b9d3e3a3c9b` are in the table under "Active work packets".
+- Runtime branch `boil/pyvalue-rc-universal`, HEAD `e1229448be3`. The
+  landings since `b9d3e3a3c9b` are in the table under "Active work packets"
+  and the takeover check above.
 - Landed 2026-11-03: native boundary P3 (`56ff66a596b`, `643c69c7244`,
   `6d39221996d`) and P4 (`2558376b321`, post-review fixes `fdd7fed3216`);
   representation steps 1 (`f129780a9a7`), 2 (`f7dfc5b961f`), 3 (`dbce7b1260d`,
@@ -331,16 +413,17 @@ User decisions, 2026-11-05:
 
 In flight (briefs in `build/pyjit-link-wave1/`):
 
-1. W2b is running. W2a has landed; the core slots are done for list, tuple,
-   dict, str and bytes, and the callers are in progress. W4b (all other
-   modules) is finishing. W4a has landed.
-2. G2 has the A4 and B3 prototypes off-tree. Open question 9 is counted: a
+1. W2b, W4b and W4c have landed. W5's kernel increment and the review fixes
+   remain uncommitted; see the takeover check for their actual state.
+2. G2 has the A4 and B3 prototypes off-tree, with timing now recorded.
+   Open question 9 is counted: a
    fixed-dst rule removes 9 to 14% of class tests at no word cost, so the
    decision stays between A4 and B3
    ([register-ir.md](design/register-ir.md) G2).
 
-Next: W5 and the R27 gate after W2b and W4b. G2's timed decision runs on a
-quiet host. Then the checkpoint measurement. After the checkpoint comes the
+Next: finish and review W5, close the R27 gate, then run full merged
+qualification and the checkpoint
+measurement. After the checkpoint comes the
 stack-bytecode recovery
 ([proposal](design/proposals/stack-bytecode-recovery.md)).
 

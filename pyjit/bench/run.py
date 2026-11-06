@@ -423,9 +423,18 @@ def pystats_counts(ctx: Context, bench: Bench, loops: int) -> dict[str, int]:
     for line in text.splitlines():
         key, sep, value = line.strip().rpartition(":")
         if sep and value.strip().isdigit():
-            if key.strip() in counts:
-                raise MeasurementError(f"duplicate pystats key: {key.strip()}")
-            counts[key.strip()] = int(value)
+            name = key.strip()
+            count = int(value)
+            if name in counts:
+                # The emitter lists GET_ITER both explicitly and in its
+                # cached-op loop. This flag is metadata, not a counter.
+                if (name.startswith("opcode[")
+                        and name.endswith("].specializable")
+                        and name[len("opcode["):-len("].specializable")]
+                        and counts[name] == count == 1):
+                    continue
+                raise MeasurementError(f"duplicate pystats key: {name}")
+            counts[name] = count
     path.unlink()
     return counts
 

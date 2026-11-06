@@ -1,0 +1,267 @@
+--- a/Modules/_decimal/_decimal.c
++++ b/Modules/_decimal/_decimal.c
+@@ -3994,20 +3994,25 @@
+     if (keyobj == NULL) {
+         return -1;
+     }
+-    PyObject *value;
+-    int found = PyDict_GetItemRef(dict, keyobj, &value);
++    PyValue value;
++    int found = PyDict_GetValue(dict, PyValue_FromObjectBorrow(keyobj), &value);
+     Py_DECREF(keyobj);
+     if (found <= 0) {
+         return found;
+     }
+-    PyObject *encoded = PyUnicode_AsUTF8String(value);
+-    Py_DECREF(value);
+-    value = encoded;
+-    if (value == NULL) {
++    if (!PyValue_IsObject(value) ||
++        !PyUnicode_Check(PyValue_AsKnownObjectBorrow(value))) {
++        PyValue_CLOSE(value);
++        PyErr_BadArgument();
+         return -1;
+     }
+-    *valueobj = value;
+-    *valuestr = PyBytes_AS_STRING(value);
++    PyObject *encoded = PyUnicode_AsUTF8String(PyValue_AsKnownObjectBorrow(value));
++    PyValue_CLOSE(value);
++    if (encoded == NULL) {
++        return -1;
++    }
++    *valueobj = encoded;
++    *valuestr = PyBytes_AS_STRING(encoded);
+     return 0;
+ }
+ 
+@@ -4016,46 +4021,47 @@
+  * not yet support. As documented, libmpdec follows the PEP-3101 format language:
+  * https://www.bytereef.org/mpdecimal/doc/libmpdec/assign-convert.html#to-string
+  */
+-static PyObject *
++static PyValue
+ pydec_format(PyObject *dec, PyObject *context, PyObject *fmt, decimal_state *state)
+ {
+-    PyObject *result;
+-    PyObject *pydec;
+-    PyObject *u;
+-
+     if (state->PyDecimal == NULL) {
+         state->PyDecimal = PyImport_ImportModuleAttrString("_pydecimal", "Decimal");
+         if (state->PyDecimal == NULL) {
+-            return NULL;
++            return PyValue_NULL;
+         }
+     }
+-
+-    u = dec_str(dec);
+-    if (u == NULL) {
+-        return NULL;
+-    }
+-
+-    pydec = PyObject_CallOneArg(state->PyDecimal, u);
+-    Py_DECREF(u);
+-    if (pydec == NULL) {
+-        return NULL;
++    PyObject *text = dec_str(dec);
++    if (text == NULL) {
++        return PyValue_NULL;
++    }
++    PyValue pydec = _PyValue_CallOneArg(_PyThreadState_GET(),
++        PyValue_FromObjectBorrow(state->PyDecimal), PyValue_FromObjectBorrow(text));
++    Py_DECREF(text);
++    if (PyValue_IsNull(pydec)) {
++        return PyValue_NULL;
++    }
++    PyValue method = _PyValue_GetAttr(PyValue_Borrow(pydec), &_Py_ID(__format__));
++    PyValue result = PyValue_NULL;
++    if (!PyValue_IsNull(method)) {
++        PyValue args[] = {PyValue_DUP(PyValue_FromObjectBorrow(fmt)),
++                          PyValue_DUP(PyValue_FromObjectBorrow(context))};
++        result = _PyValue_Vectorcall(PyValue_Borrow(method), args, 2, NULL);
++        PyValue_CLOSE(args[0]);
++        PyValue_CLOSE(args[1]);
++        PyValue_CLOSE(method);
+     }
+-
+-    result = PyObject_CallMethod(pydec, "__format__", "(OO)", fmt, context);
+-    Py_DECREF(pydec);
+-
+-    if (result == NULL && PyErr_ExceptionMatches(PyExc_ValueError)) {
+-        /* Do not confuse users with the _pydecimal exception */
++    PyValue_CLOSE(pydec);
++    if (PyValue_IsNull(result) && PyErr_ExceptionMatches(PyExc_ValueError)) {
+         PyErr_Clear();
+         PyErr_SetString(PyExc_ValueError, "invalid format string");
+     }
+-
+     return result;
+ }
+ 
+ /* Formatted representation of a PyDecObject. */
+ 
+ /*[clinic input]
++@value_function
+ _decimal.Decimal.__format__
+ 
+     self as dec: self
+@@ -4066,11 +4072,14 @@
+ 
+ Formats the Decimal according to format_spec.
+ [clinic start generated code]*/
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
++static PyValue
+ _decimal_Decimal___format___impl(PyObject *dec, PyTypeObject *cls,
+-                                 PyObject *fmtarg, PyObject *override)
+-/*[clinic end generated code: output=6d95f91bbb28b3ed input=2dbfaa0cbe243e9e]*/
++                                 PyObject *fmtarg, PyValueBorrow override)
++/*[clinic end generated code: output=2bf8d8e17a39965f input=f6eb5d8b6c7ad06e]*/
+ {
+     PyObject *result = NULL;
+     PyObject *dot = NULL;
+@@ -4084,17 +4093,20 @@
+     int replace_fillchar = 0;
+     Py_ssize_t size;
+     decimal_state *state = PyType_GetModuleState(cls);
+-    CURRENT_CONTEXT(state, context);
++    context = optional_context_value(state, PyValue_FromObjectBorrow(Py_None));
++    if (context == NULL) {
++        return PyValue_NULL;
++    }
+     fmt = (char *)PyUnicode_AsUTF8AndSize(fmtarg, &size);
+     if (fmt == NULL) {
+-        return NULL;
++        return PyValue_NULL;
+     }
+ 
+     if (size > 0 && fmt[size-1] == 'N') {
+         if (PyErr_WarnEx(PyExc_DeprecationWarning,
+                          "Format specifier 'N' is deprecated and "
+                          "slated for removal in Python 3.18", 1) < 0) {
+-            return NULL;
++            return PyValue_NULL;
+         }
+     }
+ 
+@@ -4104,7 +4116,7 @@
+         replace_fillchar = 1;
+         fmt = dec_strdup(fmt, size);
+         if (fmt == NULL) {
+-            return NULL;
++            return PyValue_NULL;
+         }
+         fmt[0] = '_';
+     }
+@@ -4125,20 +4137,22 @@
+         spec.fill[1] = '\0';
+     }
+ 
+-    if (override) {
++    if (!PyValue_IsNull(override)) {
+         /* Values for decimal_point, thousands_sep and grouping can
+            be explicitly specified in the override dict. These values
+            take precedence over the values obtained from localeconv()
+            in mpd_parse_fmt_str(). The feature is not documented and
+            is only used in test_decimal. */
+-        if (!PyDict_Check(override)) {
++        if (!PyValue_IsObject(override) ||
++            !PyDict_Check(PyValue_AsKnownObjectBorrow(override))) {
+             PyErr_SetString(PyExc_TypeError,
+                 "optional argument must be a dict");
+             goto finish;
+         }
+-        if (dict_get_item_string(override, "decimal_point", &dot, &spec.dot) ||
+-            dict_get_item_string(override, "thousands_sep", &sep, &spec.sep) ||
+-            dict_get_item_string(override, "grouping", &grouping, &spec.grouping))
++        PyObject *override_dict = PyValue_AsKnownObjectBorrow(override);
++        if (dict_get_item_string(override_dict, "decimal_point", &dot, &spec.dot) ||
++            dict_get_item_string(override_dict, "thousands_sep", &sep, &spec.sep) ||
++            dict_get_item_string(override_dict, "grouping", &grouping, &spec.grouping))
+         {
+             goto finish;
+         }
+@@ -4195,7 +4209,7 @@
+     Py_XDECREF(dot);
+     if (replace_fillchar) PyMem_Free(fmt);
+     if (decstring) mpd_free(decstring);
+-    return result;
++    return result == NULL ? PyValue_NULL : PyValue_FromObjectSteal(result);
+ }
+ 
+ /* Return an owned integer value from a PyDecObject using the specified
+--- a/Modules/_decimal/clinic/_decimal.c.h
++++ b/Modules/_decimal/clinic/_decimal.c.h
+@@ -1094,20 +1094,29 @@
+ "--\n"
+ "\n"
+ "Formats the Decimal according to format_spec.");
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+ #define _DECIMAL_DECIMAL___FORMAT___METHODDEF    \
+-    {"__format__", _PyCFunction_CAST(_decimal_Decimal___format__), METH_METHOD|METH_FASTCALL|METH_KEYWORDS, _decimal_Decimal___format____doc__},
++    {"__format__", _PyCFunction_CAST(_decimal_Decimal___format__), METH_VALUE|METH_METHOD|METH_KEYWORDS, _decimal_Decimal___format____doc__},
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
++static PyValue
+ _decimal_Decimal___format___impl(PyObject *dec, PyTypeObject *cls,
+-                                 PyObject *fmtarg, PyObject *override);
++                                 PyObject *fmtarg, PyValueBorrow override);
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
+-_decimal_Decimal___format__(PyObject *dec, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
++static PyValue
++_decimal_Decimal___format__(PyValueBorrow dec, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+ {
+-    PyObject *return_value = NULL;
++    PyValue return_value = PyValue_NULL;
+     PyObject *fmtarg;
+-    PyObject *override = NULL;
++    PyValueBorrow override = PyValue_Borrow(PyValue_NULL);
+ 
+     if (!_PyArg_NoKwnames("__format__", kwnames)) {
+         goto exit;
+@@ -1115,17 +1124,21 @@
+     if (!_PyArg_CheckPositional("__format__", nargs, 1, 2)) {
+         goto exit;
+     }
+-    if (!PyUnicode_Check(args[0])) {
+-        _PyArg_BadArgument("__format__", "argument 1", "str", args[0]);
++    if (!PyValue_IsObject(PyValue_Borrow(args[0]))) {
++        _PyArg_BadArgumentValue("__format__", "argument 1", "str", PyValue_Borrow(args[0]));
++        goto exit;
++    }
++    if (!PyUnicode_Check(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])))) {
++        _PyArg_BadArgument("__format__", "argument 1", "str", PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])));
+         goto exit;
+     }
+-    fmtarg = args[0];
++    fmtarg = PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0]));
+     if (nargs < 2) {
+         goto skip_optional;
+     }
+-    override = args[1];
++    override = PyValue_Borrow(args[1]);
+ skip_optional:
+-    return_value = _decimal_Decimal___format___impl(dec, cls, fmtarg, override);
++    return_value = _decimal_Decimal___format___impl(PyValue_AsKnownObjectBorrow(dec), cls, fmtarg, override);
+ 
+ exit:
+     return return_value;
+@@ -7404,4 +7417,4 @@
+ #ifndef _DECIMAL_CONTEXT_APPLY_METHODDEF
+     #define _DECIMAL_CONTEXT_APPLY_METHODDEF
+ #endif /* !defined(_DECIMAL_CONTEXT_APPLY_METHODDEF) */
+-/*[clinic end generated code: output=0779fa9308d10359 input=a9049054013a1b77]*/
++/*[clinic end generated code: output=edfad83b3886d14a input=a9049054013a1b77]*/

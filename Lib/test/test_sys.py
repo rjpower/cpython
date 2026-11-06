@@ -1980,7 +1980,7 @@ class SizeofTest(unittest.TestCase):
         # type
         # static type: PyTypeObject
         fmt = ('P2nPI13Pl4Pn9Pn12PI2PcP'
-               '53PnP')                 # value slots (fork-specific)
+               '54PnP')                 # value slots (fork-specific)
         s = vsize(fmt)
         check(int, s)
         typeid = 'n' if support.Py_GIL_DISABLED else ''

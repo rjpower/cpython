@@ -94,13 +94,29 @@ def vint_slots(t):
 class ValueSlotTableTests(unittest.TestCase):
     def test_names(self):
         names = value_slot_names()
-        self.assertEqual(len(names), 53)
-        self.assertEqual(len(set(names)), 53)
+        self.assertEqual(len(names), 54)
+        self.assertEqual(len(set(names)), 54)
         self.assertEqual(names[:16], (
             'nb_add', 'nb_subtract', 'nb_multiply', 'nb_true_divide',
             'nb_floor_divide', 'nb_remainder', 'richcompare', 'hash',
             'nb_bool', 'nb_index', 'getattro', 'subscript', 'ass_subscript',
             'contains', 'iternext', 'call'))
+
+    def test_new_pair_inheritance_and_override(self):
+        class Inherited(int):
+            pass
+
+        class Overridden(int):
+            def __new__(cls, value=0):
+                return int.__new__(cls, value)
+
+        self.assertNotEqual(value_slot(int, 'new_'), 0)
+        self.assertEqual(value_slot(Inherited, 'new_'), value_slot(int, 'new_'))
+        self.assertEqual(object_slot(Inherited, 'new_'), object_slot(int, 'new_'))
+        self.assertNotEqual(object_slot(Overridden, 'new_'), object_slot(int, 'new_'))
+        self.assertNotEqual(value_slot(Overridden, 'new_'), 0)
+        self.assertNotEqual(value_slot(Overridden, 'new_'), value_slot(int, 'new_'))
+        self.assertEqual(Overridden(17), 17)
 
     def test_unknown_name(self):
         with self.assertRaises(ValueError):
@@ -1159,14 +1175,14 @@ class IntValueRowsTests(unittest.TestCase):
     def test_int_rows(self):
         # str is object's, inherited.
         self.assertEqual(len(INT_ROWS), 24)
-        self.assertEqual(set_rows(int), set(INT_ROWS) | {'str'} | {'getattro', 'setattro'})
+        self.assertEqual(set_rows(int), set(INT_ROWS) | {'str', 'new_'} | {'getattro', 'setattro'})
         for name in INT_ROWS:
             with self.subTest(row=name):
                 self.assertNotEqual(object_slot(int, name), 0)
 
     def test_float_rows(self):
         self.assertEqual(len(FLOAT_ROWS), 17)
-        self.assertEqual(set_rows(float), set(FLOAT_ROWS) | {'str'} | {'getattro', 'setattro'})
+        self.assertEqual(set_rows(float), set(FLOAT_ROWS) | {'str', 'new_'} | {'getattro', 'setattro'})
         for name in FLOAT_ROWS:
             with self.subTest(row=name):
                 self.assertNotEqual(object_slot(float, name), 0)

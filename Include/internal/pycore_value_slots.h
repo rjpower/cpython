@@ -62,7 +62,10 @@ typedef PyValue (*_Py_vectorcallvaluefunc)(
     const PyValue *args, size_t nargsf, PyObject *kwnames);
 /* sq_concat and sq_inplace_concat: the receiver is the sequence. */
 typedef PyValue (*_Py_concatvaluefunc)(PyObject *, PyValueBorrow);
+typedef PyValue (*_Py_newvaluefunc)(PyTypeObject *, const PyValue *,
+                                    Py_ssize_t, PyObject *);
 
+#define _Py_VALUE_KIND_NEW _Py_newvaluefunc
 #define _Py_VALUE_KIND_UNARY _Py_unaryvaluefunc
 #define _Py_VALUE_KIND_BINARY _Py_binaryvaluefunc
 #define _Py_VALUE_KIND_TERNARY _Py_ternaryvaluefunc
@@ -156,7 +159,8 @@ typedef PyValue (*_Py_concatvaluefunc)(PyObject *, PyValueBorrow);
     X(ass_item, as_sequence.sq_ass_item, ASSITEM, ASSITEM) \
     X(send, as_async.am_send, SEND, NONE) \
     X(sq_concat, as_sequence.sq_concat, CONCAT, CONCAT) \
-    X(sq_inplace_concat, as_sequence.sq_inplace_concat, CONCAT, CONCAT)
+    X(sq_inplace_concat, as_sequence.sq_inplace_concat, CONCAT, CONCAT) \
+    X(new_, ht_type.tp_new, NEW, NONE)
 
 /* _Py_VALUE_SLOT_INDEX_<field>: the row of a field. */
 #define _Py_VALUE_SLOT_ENUM(FIELD, PATH, KIND, WRAPPER) \
@@ -167,7 +171,7 @@ enum {
 };
 #undef _Py_VALUE_SLOT_ENUM
 
-static_assert(_Py_VALUE_SLOT_COUNT == 53, "53 value slot fields");
+static_assert(_Py_VALUE_SLOT_COUNT == 54, "54 value slot fields");
 static_assert(sizeof(_PyValueSlots) ==
               _Py_VALUE_SLOT_COUNT * sizeof(_Py_valuefunc),
               "_PyValueSlots has one field per row of the slot table");

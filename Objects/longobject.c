@@ -7498,6 +7498,7 @@ PyTypeObject PyLong_Type = {
     .tp_value_vectorcall = (_Py_valuefunc)long_vectorcall,
     .tp_version_tag = _Py_TYPE_VERSION_INT,
     .tp_value = {
+        .new_ = _Py_VALUE_SLOT_INIT(new_, long_new_value),
         .nb_add = _Py_VALUE_SLOT_INIT(nb_add, _PyLong_ValueAdd),
         .nb_subtract = _Py_VALUE_SLOT_INIT(nb_subtract, _PyLong_ValueSubtract),
         .nb_multiply = _Py_VALUE_SLOT_INIT(nb_multiply, _PyLong_ValueMultiply),

@@ -2036,6 +2036,7 @@ PyTypeObject PyFloat_Type = {
     .tp_value_vectorcall = (_Py_valuefunc)float_vectorcall,
     .tp_version_tag = _Py_TYPE_VERSION_FLOAT,
     .tp_value = {
+        .new_ = _Py_VALUE_SLOT_INIT(new_, float_new_value),
         .nb_add = _Py_VALUE_SLOT_INIT(nb_add, _PyFloat_ValueAdd),
         .nb_subtract = _Py_VALUE_SLOT_INIT(nb_subtract,
                                            _PyFloat_ValueSubtract),

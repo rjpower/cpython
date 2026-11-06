@@ -151,6 +151,9 @@ extern PyValue _Py_type_getattro_impl(PyTypeObject *type, PyObject *name,
 Py_VALUE_ENTRY extern PyObject* _Py_BaseObject_RichCompare(PyObject* self, PyObject* other, int op);
 
 // Export the pairs for '_testinternalcapi' shared extension
+PyObject *_Py_slot_tp_new(PyTypeObject *, PyObject *, PyObject *);
+PyValue _Py_slot_tp_new_value(PyTypeObject *, const PyValue *, Py_ssize_t, PyObject *);
+
 PyAPI_FUNC(PyObject*) _Py_slot_tp_getattro(PyObject *self, PyObject *name);
 PyAPI_FUNC(PyObject*) _Py_slot_tp_getattr_hook(PyObject *self, PyObject *name);
 /* Their value sides; the pair table names the first, which the hook

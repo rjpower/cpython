@@ -227,8 +227,9 @@ slot_bf_releasebuffer(PyObject *self, Py_buffer *buffer);
 static void
 releasebuffer_call_python(PyObject *self, Py_buffer *buffer);
 
-static PyObject *
-slot_tp_new(PyTypeObject *type, PyObject *args, PyObject *kwds);
+PyObject *
+_Py_slot_tp_new(PyTypeObject *type, PyObject *args, PyObject *kwds);
+PyValue _Py_slot_tp_new_value(PyTypeObject *, const PyValue *, Py_ssize_t, PyObject *);
 
 static int
 slot_tp_setattro(PyObject *self, PyObject *name, PyObject *value);
@@ -12402,7 +12403,7 @@ tp_new_wrapper(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs,
        object.__new__(dict).  To do this, we check that the
        most derived base that's not a heap type is this type. */
     staticbase = subtype;
-    while (staticbase && (staticbase->tp_new == slot_tp_new))
+    while (staticbase && (staticbase->tp_new == _Py_slot_tp_new))
         staticbase = staticbase->tp_base;
     /* If staticbase is NULL now, it is a really weird type.
        In the spirit of backwards compatibility (?), just shut up. */
@@ -12435,12 +12436,27 @@ tp_new_wrapper(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs,
 
     PyThreadState *tstate = _PyThreadState_GET();
     _PyBorrowMark mark = _PyBorrowScope_Enter(tstate);
-    PyObject *res = type->tp_new(subtype, args_tuple, kwds);
+    newfunc object_new = type->tp_new;
+    _Py_newvaluefunc value_new = _PyType_VALUE_SLOT(type, new_);
+    PyValue result = PyValue_NULL;
+    PyObject *object_result = NULL;
+    if (value_new != NULL) {
+        _PyType_CHECK_VALUE_ROW(type, _Py_VALUE_SLOT_INDEX_new_);
+        result = value_new(subtype, args + 1, nargs - 1, kwnames);
+        _PyValue_ASSERT_RESULT(tstate, result);
+    }
+    else {
+        object_result = object_new(subtype, args_tuple, kwds);
+    }
     Py_DECREF(args_tuple);
     Py_XDECREF(kwds);
     _PyBorrowScope_Exit(tstate, mark);
-    res = _Py_CheckFunctionResult(tstate, (PyObject *)type, res, NULL);
-    return _PyValue_FromObjectResult(res);
+    if (value_new == NULL) {
+        object_result = _Py_CheckFunctionResult(tstate, (PyObject *)type,
+                                                object_result, NULL);
+        return _PyValue_FromObjectResult(object_result);
+    }
+    return result;
 }
 
 static struct PyMethodDef tp_new_methoddef[] = {
@@ -13363,18 +13379,43 @@ slot_tp_init(PyObject *self, PyObject *args, PyObject *kwds)
     return 0;
 }
 
-static PyObject *
-slot_tp_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
+PyValue
+_Py_slot_tp_new_value(PyTypeObject *type, const PyValue *args,
+                       Py_ssize_t nargs, PyObject *kwnames)
 {
     PyThreadState *tstate = _PyThreadState_GET();
-    PyObject *func = _PyValue_AsObjectResultAt(_PyValue_GetAttr(_PyValue_FromObjectKnown((PyObject *)type), &_Py_ID(__new__)), BOX_SITE_ATTRIBUTE);
-    if (func == NULL) {
-        return NULL;
+    PyValue func = _PyValue_GetAttr(_PyValue_FromObjectKnown((PyObject *)type),
+                                   &_Py_ID(__new__));
+    if (PyValue_IsNull(func)) {
+        return PyValue_NULL;
     }
-    PyObject *result = _PyObject_Call_Prepend(tstate, func, (PyObject *)type,
-                                              args, kwds);
-    Py_DECREF(func);
+    PyValue result = _PyValue_VectorcallPrepend(
+        tstate, func, PyValue_FromObjectBorrow((PyObject *)type), args, nargs,
+        kwnames);
+    PyValue_CLOSE(func);
     return result;
+}
+
+Py_VALUE_ENTRY PyObject *
+_Py_slot_tp_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
+{
+    PyThreadState *tstate = _PyThreadState_GET();
+    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
+    PyValue result;
+    if (kwds == NULL || PyDict_GET_SIZE(kwds) == 0) {
+        result = _Py_slot_tp_new_value(type, _PyTuple_ITEMS(args), nargs, NULL);
+    }
+    else {
+        PyObject *kwnames;
+        PyValue *window = _PyValue_StackUnpackDict(tstate, _PyTuple_ITEMS(args),
+                                                    nargs, kwds, &kwnames);
+        if (window == NULL) {
+            return NULL;
+        }
+        result = _Py_slot_tp_new_value(type, window, nargs, kwnames);
+        _PyValue_StackUnpackDict_Free(window, nargs, kwnames);
+    }
+    return _PyValue_THUNK_EXIT(result, BOX_SITE_CALL);
 }
 
 static void
@@ -13806,7 +13847,7 @@ static pytype_slotdef slotdefs[] = {
            "__init__($self, /, *args, **kwargs)\n--\n\n"
            "Initialize self.  See help(type(self)) for accurate signature.",
            PyWrapperFlag_KEYWORDS),
-    TPSLOT(__new__, tp_new, slot_tp_new, NULL,
+    TPSLOT(__new__, tp_new, _Py_slot_tp_new, NULL,
            "__new__(type, /, *args, **kwargs)\n--\n\n"
            "Create and return new object.  See help(type) for accurate signature."),
     TPSLOT(__del__, tp_finalize, slot_tp_finalize, (wrapperfunc)wrap_del,
@@ -14102,6 +14143,7 @@ slotdef_value_function(const pytype_slotdef *p)
     if (p->function == (void *)FUNC) { \
         return _Py_VALUE_SLOT_INIT(FIELD, FUNC##_value); \
     }
+    SLOT_VALUE_PAIR(new_, _Py_slot_tp_new)
     SLOT_VALUE_PAIR(nb_add, slot_nb_add)
     SLOT_VALUE_PAIR(nb_subtract, slot_nb_subtract)
     SLOT_VALUE_PAIR(nb_multiply, slot_nb_multiply)
@@ -14543,7 +14585,7 @@ update_one_slot(PyTypeObject *type, pytype_slotdef *p, pytype_slotdef **next_p,
             /* The __new__ wrapper is not a wrapper descriptor,
                so must be special-cased differently.
                If we don't do this, creating an instance will
-               always use slot_tp_new which will look up
+               always use _Py_slot_tp_new which will look up
                __new__ in the MRO which will call tp_new_wrapper
                which will look through the base classes looking
                for a static base and call its tp_new (usually
@@ -14552,7 +14594,8 @@ update_one_slot(PyTypeObject *type, pytype_slotdef *p, pytype_slotdef **next_p,
                list.  Cut all that nonsense short -- this speeds
                up instance creation tremendously. */
             specific = (void *)type->tp_new;
-            assert(row < 0);
+            assert(row == _Py_VALUE_SLOT_INDEX_new_);
+            specific_value = *value_slot_field(type, row);
             /* XXX I'm not 100% sure that there isn't a hole
                in this reasoning that requires additional
                sanity checks.  I'll buy the first person to

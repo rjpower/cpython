@@ -1109,3 +1109,8 @@ value_field = 'sq_concat'
 name = '_Py_value_sq_inplace_concat'
 kind = 'type'
 value_field = 'sq_inplace_concat'
+
+[309]
+name = '_Py_value_new_'
+kind = 'type'
+value_field = 'new_'

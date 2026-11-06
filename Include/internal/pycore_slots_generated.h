@@ -4,7 +4,7 @@
 #define _PY_HAVE_INTERNAL_SLOTS_GENERATED_H
 
 static_assert(_Py_slot_INTERNAL_BASE == 256, "Python/slots.toml and pycore_slots.h agree");
-#define _Py_slot_INTERNAL_COUNT 53
+#define _Py_slot_INTERNAL_COUNT 54
 static_assert(_Py_slot_INTERNAL_COUNT <= _Py_slot_INTERNAL_LIMIT, "the internal range has room");
 #define _Py_value_nb_add 256
 #define _Py_value_nb_subtract 257
@@ -59,6 +59,7 @@ static_assert(_Py_slot_INTERNAL_COUNT <= _Py_slot_INTERNAL_LIMIT, "the internal 
 #define _Py_value_send 306
 #define _Py_value_sq_concat 307
 #define _Py_value_sq_inplace_concat 308
+#define _Py_value_new_ 309
 
 static inline uint16_t
 _PySlot_resolve_type_slot(uint16_t slot_id)
@@ -218,6 +219,7 @@ _PySlot_resolve_type_slot(uint16_t slot_id)
         case _Py_value_send:
         case _Py_value_sq_concat:
         case _Py_value_sq_inplace_concat:
+        case _Py_value_new_:
             return slot_id;
         default:
             return Py_slot_invalid;
@@ -587,6 +589,8 @@ _PySlot_type_getslot(PyTypeObject *tp, uint16_t slot_id)
             return (void*)tp->tp_value.sq_concat;
         case _Py_value_sq_inplace_concat:
             return (void*)tp->tp_value.sq_inplace_concat;
+        case _Py_value_new_:
+            return (void*)tp->tp_value.new_;
     }
     _PySlot_err_bad_slot("PyType_GetSlot", slot_id);
     return NULL;
@@ -1001,6 +1005,9 @@ _PySlot_heaptype_apply_field_slot(PyHeapTypeObject *ht, PySlot slot)
         case _Py_value_sq_inplace_concat:
             ht->ht_type.tp_value.sq_inplace_concat = (_Py_valuefunc)slot.sl_func;
             break;
+        case _Py_value_new_:
+            ht->ht_type.tp_value.new_ = (_Py_valuefunc)slot.sl_func;
+            break;
     }
 }
 
@@ -1168,6 +1175,7 @@ _PySlot_get_dtype(uint16_t slot_id)
         case _Py_value_send: return _PySlot_DTYPE_FUNC;
         case _Py_value_sq_concat: return _PySlot_DTYPE_FUNC;
         case _Py_value_sq_inplace_concat: return _PySlot_DTYPE_FUNC;
+        case _Py_value_new_: return _PySlot_DTYPE_FUNC;
         default: return _PySlot_DTYPE_VOID;
     }
 }

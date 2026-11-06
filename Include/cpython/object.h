@@ -171,7 +171,7 @@ typedef struct _PyValueSlots {
     _Py_valuefunc iternext;
     _Py_valuefunc call;
 
-    /* Cold: 37 fields. */
+    /* Cold: 38 fields. */
     _Py_valuefunc nb_power;
     _Py_valuefunc nb_negative;
     _Py_valuefunc nb_positive;
@@ -209,6 +209,7 @@ typedef struct _PyValueSlots {
     _Py_valuefunc send;
     _Py_valuefunc sq_concat;
     _Py_valuefunc sq_inplace_concat;
+    _Py_valuefunc new_;
 } _PyValueSlots;
 
 // If this structure is modified, Doc/includes/typestruct.h should be updated

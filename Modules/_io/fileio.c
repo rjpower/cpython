@@ -585,11 +585,8 @@ _io_FileIO___init___impl(fileio *self, PyValueBorrow nameobj,
     _setmode(self->fd, O_BINARY);
 #endif
 
-    PyObject *name_attr = _PyValue_AsObjectAt(nameobj, BOX_SITE_PARSER);
-    if (name_attr == NULL)
-        goto error;
-    int set_name = _PyValue_SetAttr(PyValue_FromObjectBorrow((PyObject *)self), &_Py_ID(name), PyValue_FromObjectBorrow(name_attr));
-    Py_DECREF(name_attr);
+    int set_name = _PyValue_SetAttr(PyValue_FromObjectBorrow((PyObject *)self),
+                                    &_Py_ID(name), nameobj);
     if (set_name < 0)
         goto error;
 

@@ -1328,16 +1328,20 @@ r_long(RFILE *p)
 }
 
 /* r_long64 deals with the TYPE_INT64 code. */
-static PyObject *
+static PyValue
 r_long64(RFILE *p)
 {
-    const unsigned char *buffer = (const unsigned char *) r_string(8, p);
+    const unsigned char *buffer = (const unsigned char *)r_string(8, p);
     if (buffer == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
-    return _PyLong_FromByteArray(buffer, 8,
-                                 1 /* little endian */,
-                                 1 /* signed */);
+    uint64_t bits = 0;
+    for (int i = 0; i < 8; i++) {
+        bits |= (uint64_t)buffer[i] << (8 * i);
+    }
+    int64_t value;
+    memcpy(&value, &bits, sizeof(value));
+    return PyValue_FromInt64(value);
 }
 
 #define _w_digits(bitsize)                                              \
@@ -1392,17 +1396,40 @@ _w_digits(32)
 _w_digits(16)
 #undef _w_digits
 
-static PyObject *
+static PyValue
 r_PyLong(RFILE *p)
 {
     long n = r_long(p);
     if (n == -1 && PyErr_Occurred()) {
-        return NULL;
+        return PyValue_NULL;
     }
     if (n < -SIZE32_MAX || n > SIZE32_MAX) {
         PyErr_SetString(PyExc_ValueError,
                        "bad marshal data (long size out of range)");
-        return NULL;
+        return PyValue_NULL;
+    }
+
+    if (n >= -4 && n <= 4) {
+        uint64_t magnitude = 0;
+        long count = n < 0 ? -n : n;
+        for (long i = 0; i < count; i++) {
+            int digit = r_short(p);
+            if (digit < 0 || digit > PyLong_MARSHAL_BASE) {
+                if (!PyErr_Occurred()) {
+                    PyErr_SetString(PyExc_ValueError,
+                        "bad marshal data (digit out of range in long)");
+                }
+                return PyValue_NULL;
+            }
+            if (i == count - 1 && digit == 0) {
+                PyErr_SetString(PyExc_ValueError,
+                    "bad marshal data (unnormalized long data)");
+                return PyValue_NULL;
+            }
+            magnitude += (uint64_t)digit << (i * PyLong_MARSHAL_SHIFT);
+        }
+        int64_t value = (int64_t)magnitude;
+        return PyValue_FromInt64(n < 0 ? -value : value);
     }
 
     const PyLongLayout *layout = PyLong_GetNativeLayout();
@@ -1427,7 +1454,7 @@ r_PyLong(RFILE *p)
     PyLongWriter *writer = PyLongWriter_Create(n < 0, size, &digits);
 
     if (writer == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     int ret;
@@ -1440,9 +1467,9 @@ r_PyLong(RFILE *p)
     }
     if (ret < 0) {
         PyLongWriter_Discard(writer);
-        return NULL;
+        return PyValue_NULL;
     }
-    return PyLongWriter_Finish(writer);
+    return _PyValue_FromObjectResult(PyLongWriter_Finish(writer));
 }
 
 static double
@@ -1533,24 +1560,26 @@ r_ref(PyObject *o, int flag, RFILE *p)
     return o;
 }
 
-static PyObject *
-r_object(RFILE *p)
+static PyValue
+r_value(RFILE *p)
 {
     /* NULL is a valid return value, it does not necessarily means that
        an exception is set. */
-    PyObject *v, *v2;
+    PyObject *v;
+    PyValue v2;
     Py_ssize_t idx = 0;
     long i, n;
     int type, code = r_byte(p);
     int flag, is_interned = 0;
     PyObject *retval = NULL;
+    PyValue value_retval = PyValue_NULL;
 
     if (code == EOF) {
         if (PyErr_ExceptionMatches(PyExc_EOFError)) {
             PyErr_SetString(PyExc_EOFError,
                             "EOF read where object expected");
         }
-        return NULL;
+        return PyValue_NULL;
     }
 
     p->depth++;
@@ -1558,7 +1587,7 @@ r_object(RFILE *p)
     if (p->depth > MAX_MARSHAL_STACK_DEPTH) {
         p->depth--;
         PyErr_SetString(PyExc_ValueError, "recursion limit exceeded");
-        return NULL;
+        return PyValue_NULL;
     }
 
     flag = code & FLAG_REF;
@@ -1599,18 +1628,22 @@ r_object(RFILE *p)
         if (n == -1 && PyErr_Occurred()) {
             break;
         }
-        retval = PyLong_FromLong(n);
-        R_REF(retval);
+        value_retval = PyValue_FromInt64(n);
+        if (flag && !PyValue_IsNull(value_retval) &&
+            PyList_AppendValue(p->refs, value_retval) < 0) {
+            PyValue_CLOSE(value_retval);
+            value_retval = PyValue_NULL;
+        }
         break;
 
     case TYPE_INT64:
-        retval = r_long64(p);
-        R_REF(retval);
-        break;
-
     case TYPE_LONG:
-        retval = r_PyLong(p);
-        R_REF(retval);
+        value_retval = type == TYPE_INT64 ? r_long64(p) : r_PyLong(p);
+        if (flag && !PyValue_IsNull(value_retval) &&
+            PyList_AppendValue(p->refs, value_retval) < 0) {
+            PyValue_CLOSE(value_retval);
+            value_retval = PyValue_NULL;
+        }
         break;
 
     case TYPE_FLOAT:
@@ -1618,8 +1651,12 @@ r_object(RFILE *p)
             double x = r_float_str(p);
             if (x == -1.0 && PyErr_Occurred())
                 break;
-            retval = PyFloat_FromDouble(x);
-            R_REF(retval);
+            value_retval = PyValue_FromDouble(x);
+            if (flag && !PyValue_IsNull(value_retval) &&
+                PyList_AppendValue(p->refs, value_retval) < 0) {
+                PyValue_CLOSE(value_retval);
+                value_retval = PyValue_NULL;
+            }
             break;
         }
 
@@ -1628,8 +1665,12 @@ r_object(RFILE *p)
             double x = r_float_bin(p);
             if (x == -1.0 && PyErr_Occurred())
                 break;
-            retval = PyFloat_FromDouble(x);
-            R_REF(retval);
+            value_retval = PyValue_FromDouble(x);
+            if (flag && !PyValue_IsNull(value_retval) &&
+                PyList_AppendValue(p->refs, value_retval) < 0) {
+                PyValue_CLOSE(value_retval);
+                value_retval = PyValue_NULL;
+            }
             break;
         }
 
@@ -1785,15 +1826,15 @@ r_object(RFILE *p)
             break;
 
         for (i = 0; i < n; i++) {
-            v2 = r_object(p);
-            if ( v2 == NULL ) {
+            v2 = r_value(p);
+            if (PyValue_IsNull(v2)) {
                 if (!PyErr_Occurred())
                     PyErr_SetString(PyExc_TypeError,
                         "NULL object in marshal data for tuple");
                 Py_SETREF(v, NULL);
                 break;
             }
-            PyTuple_SET_VALUE(v, i, PyValue_PrepareOwned(_PyObject_CAST(v2)));
+            PyTuple_SET_VALUE(v, i, v2);
         }
         retval = r_ref_insert(v, idx, flag, p);
         break;
@@ -1812,15 +1853,15 @@ r_object(RFILE *p)
         if (v == NULL)
             break;
         for (i = 0; i < n; i++) {
-            v2 = r_object(p);
-            if ( v2 == NULL ) {
+            v2 = r_value(p);
+            if (PyValue_IsNull(v2)) {
                 if (!PyErr_Occurred())
                     PyErr_SetString(PyExc_TypeError,
                         "NULL object in marshal data for list");
                 Py_SETREF(v, NULL);
                 break;
             }
-            PyList_SET_VALUE(v, i, PyValue_PrepareOwned(_PyObject_CAST(v2)));
+            PyList_SET_VALUE(v, i, v2);
         }
         retval = v;
         break;
@@ -1845,22 +1886,19 @@ r_object(RFILE *p)
             }
         }
         for (;;) {
-            PyObject *key, *val;
-            key = r_object(p);
-            if (key == NULL)
+            PyValue key = r_value(p);
+            if (PyValue_IsNull(key))
                 break;
-            val = r_object(p);
-            if (val == NULL) {
-                Py_DECREF(key);
-                break;
-            }
-            if (PyDict_SetValue(v, PyValue_FromObjectBorrow(key), PyValue_FromObjectBorrow(val)) < 0) {
-                Py_DECREF(key);
-                Py_DECREF(val);
+            PyValue val = r_value(p);
+            if (PyValue_IsNull(val)) {
+                PyValue_CLOSE(key);
                 break;
             }
-            Py_DECREF(key);
-            Py_DECREF(val);
+            int status = PyDict_SetValue(v, key, val);
+            PyValue_CLOSE(key);
+            PyValue_CLOSE(val);
+            if (status < 0)
+                break;
         }
         if (PyErr_Occurred()) {
             Py_CLEAR(v);
@@ -1907,21 +1945,21 @@ r_object(RFILE *p)
                 break;
 
             for (i = 0; i < n; i++) {
-                v2 = r_object(p);
-                if ( v2 == NULL ) {
+                v2 = r_value(p);
+                if (PyValue_IsNull(v2)) {
                     if (!PyErr_Occurred())
                         PyErr_SetString(PyExc_TypeError,
                             "NULL object in marshal data for set");
                     Py_SETREF(v, NULL);
                     break;
                 }
-                if (PySet_AddValue(v, PyValue_FromObjectBorrow(v2)) == -1) {
+                if (PySet_AddValue(v, v2) == -1) {
                     Py_DECREF(v);
-                    Py_DECREF(v2);
+                    PyValue_CLOSE(v2);
                     v = NULL;
                     break;
                 }
-                Py_DECREF(v2);
+                PyValue_CLOSE(v2);
             }
             if (type != TYPE_SET)
                 v = r_ref_insert(v, idx, flag, p);
@@ -1937,18 +1975,30 @@ r_object(RFILE *p)
             int stacksize;
             int flags;
             PyObject *code = NULL;
+            PyValue code_value = PyValue_NULL;
             PyObject *fbinit = NULL;
+            PyValue fbinit_value = PyValue_NULL;
             PyObject *constslots = NULL;
+            PyValue constslots_value = PyValue_NULL;
             PyObject *consts = NULL;
+            PyValue consts_value = PyValue_NULL;
             PyObject *names = NULL;
+            PyValue names_value = PyValue_NULL;
             PyObject *localsplusnames = NULL;
+            PyValue localsplusnames_value = PyValue_NULL;
             PyObject *localspluskinds = NULL;
+            PyValue localspluskinds_value = PyValue_NULL;
             PyObject *filename = NULL;
+            PyValue filename_value = PyValue_NULL;
             PyObject *name = NULL;
+            PyValue name_value = PyValue_NULL;
             PyObject *qualname = NULL;
+            PyValue qualname_value = PyValue_NULL;
             int firstlineno;
             PyObject* linetable = NULL;
+            PyValue linetable_value = PyValue_NULL;
             PyObject *exceptiontable = NULL;
+            PyValue exceptiontable_value = PyValue_NULL;
 
             if (!p->allow_code) {
                 PyErr_SetString(PyExc_ValueError,
@@ -1978,45 +2028,69 @@ r_object(RFILE *p)
             flags = (int)r_long(p);
             if (flags == -1 && PyErr_Occurred())
                 goto code_error;
-            code = r_object(p);
-            if (code == NULL)
+            code_value = r_value(p);
+            if (PyValue_IsNull(code_value))
                 goto code_error;
-            fbinit = r_object(p);
-            if (fbinit == NULL)
+            code = PyValue_IsObject(code_value)
+                ? PyValue_AsKnownObjectBorrow(code_value) : Py_None;
+            fbinit_value = r_value(p);
+            if (PyValue_IsNull(fbinit_value))
                 goto code_error;
-            constslots = r_object(p);
-            if (constslots == NULL)
+            fbinit = PyValue_IsObject(fbinit_value)
+                ? PyValue_AsKnownObjectBorrow(fbinit_value) : Py_None;
+            constslots_value = r_value(p);
+            if (PyValue_IsNull(constslots_value))
                 goto code_error;
-            consts = r_object(p);
-            if (consts == NULL)
+            constslots = PyValue_IsObject(constslots_value)
+                ? PyValue_AsKnownObjectBorrow(constslots_value) : Py_None;
+            consts_value = r_value(p);
+            if (PyValue_IsNull(consts_value))
                 goto code_error;
-            names = r_object(p);
-            if (names == NULL)
+            consts = PyValue_IsObject(consts_value)
+                ? PyValue_AsKnownObjectBorrow(consts_value) : Py_None;
+            names_value = r_value(p);
+            if (PyValue_IsNull(names_value))
                 goto code_error;
-            localsplusnames = r_object(p);
-            if (localsplusnames == NULL)
+            names = PyValue_IsObject(names_value)
+                ? PyValue_AsKnownObjectBorrow(names_value) : Py_None;
+            localsplusnames_value = r_value(p);
+            if (PyValue_IsNull(localsplusnames_value))
                 goto code_error;
-            localspluskinds = r_object(p);
-            if (localspluskinds == NULL)
+            localsplusnames = PyValue_IsObject(localsplusnames_value)
+                ? PyValue_AsKnownObjectBorrow(localsplusnames_value) : Py_None;
+            localspluskinds_value = r_value(p);
+            if (PyValue_IsNull(localspluskinds_value))
                 goto code_error;
-            filename = r_object(p);
-            if (filename == NULL)
+            localspluskinds = PyValue_IsObject(localspluskinds_value)
+                ? PyValue_AsKnownObjectBorrow(localspluskinds_value) : Py_None;
+            filename_value = r_value(p);
+            if (PyValue_IsNull(filename_value))
                 goto code_error;
-            name = r_object(p);
-            if (name == NULL)
+            filename = PyValue_IsObject(filename_value)
+                ? PyValue_AsKnownObjectBorrow(filename_value) : Py_None;
+            name_value = r_value(p);
+            if (PyValue_IsNull(name_value))
                 goto code_error;
-            qualname = r_object(p);
-            if (qualname == NULL)
+            name = PyValue_IsObject(name_value)
+                ? PyValue_AsKnownObjectBorrow(name_value) : Py_None;
+            qualname_value = r_value(p);
+            if (PyValue_IsNull(qualname_value))
                 goto code_error;
+            qualname = PyValue_IsObject(qualname_value)
+                ? PyValue_AsKnownObjectBorrow(qualname_value) : Py_None;
             firstlineno = (int)r_long(p);
             if (firstlineno == -1 && PyErr_Occurred())
                 goto code_error;
-            linetable = r_object(p);
-            if (linetable == NULL)
+            linetable_value = r_value(p);
+            if (PyValue_IsNull(linetable_value))
                 goto code_error;
-            exceptiontable = r_object(p);
-            if (exceptiontable == NULL)
+            linetable = PyValue_IsObject(linetable_value)
+                ? PyValue_AsKnownObjectBorrow(linetable_value) : Py_None;
+            exceptiontable_value = r_value(p);
+            if (PyValue_IsNull(exceptiontable_value))
                 goto code_error;
+            exceptiontable = PyValue_IsObject(exceptiontable_value)
+                ? PyValue_AsKnownObjectBorrow(exceptiontable_value) : Py_None;
 
             struct _PyCodeConstructor con = {
                 .filename = filename,
@@ -2061,18 +2135,18 @@ r_object(RFILE *p)
                 PyErr_SetString(PyExc_TypeError,
                     "NULL object in marshal data for code object");
             }
-            Py_XDECREF(code);
-            Py_XDECREF(fbinit);
-            Py_XDECREF(constslots);
-            Py_XDECREF(consts);
-            Py_XDECREF(names);
-            Py_XDECREF(localsplusnames);
-            Py_XDECREF(localspluskinds);
-            Py_XDECREF(filename);
-            Py_XDECREF(name);
-            Py_XDECREF(qualname);
-            Py_XDECREF(linetable);
-            Py_XDECREF(exceptiontable);
+            PyValue_XCLOSE(code_value);
+            PyValue_XCLOSE(fbinit_value);
+            PyValue_XCLOSE(constslots_value);
+            PyValue_XCLOSE(consts_value);
+            PyValue_XCLOSE(names_value);
+            PyValue_XCLOSE(localsplusnames_value);
+            PyValue_XCLOSE(localspluskinds_value);
+            PyValue_XCLOSE(filename_value);
+            PyValue_XCLOSE(name_value);
+            PyValue_XCLOSE(qualname_value);
+            PyValue_XCLOSE(linetable_value);
+            PyValue_XCLOSE(exceptiontable_value);
         }
         retval = v;
         break;
@@ -2086,20 +2160,12 @@ r_object(RFILE *p)
             }
             break;
         }
-        PyValue ref_val = PyList_GetValue(p->refs, n);
-        v = PyValue_IsNull(ref_val)
-            ? NULL : _PyValue_AsObjectAt(ref_val, BOX_SITE_LIST);
-        PyValue_XCLOSE(ref_val);
-        if (v == NULL) {
-            Py_XDECREF(v);
-            break;
-        }
-        if (v == Py_None) {
+        value_retval = PyList_GetValue(p->refs, n);
+        if (!PyValue_IsNull(value_retval) && PyValue_IsNone(value_retval)) {
+            PyValue_CLOSE(value_retval);
+            value_retval = PyValue_NULL;
             PyErr_SetString(PyExc_ValueError, "bad marshal data (invalid reference)");
-            Py_XDECREF(v);
-            break;
         }
-        retval = v;
         break;
 
     case TYPE_SLICE:
@@ -2108,26 +2174,26 @@ r_object(RFILE *p)
         if (idx < 0) {
             break;
         }
-        PyObject *stop = NULL;
-        PyObject *step = NULL;
-        PyObject *start = r_object(p);
-        if (start == NULL) {
+        PyValue stop = PyValue_NULL;
+        PyValue step = PyValue_NULL;
+        PyValue start = r_value(p);
+        if (PyValue_IsNull(start)) {
             goto cleanup;
         }
-        stop = r_object(p);
-        if (stop == NULL) {
+        stop = r_value(p);
+        if (PyValue_IsNull(stop)) {
             goto cleanup;
         }
-        step = r_object(p);
-        if (step == NULL) {
+        step = r_value(p);
+        if (PyValue_IsNull(step)) {
             goto cleanup;
         }
-        retval = PySlice_New(start, stop, step);
+        retval = _PySlice_FromValues(start, stop, step);
         retval = r_ref_insert(retval, idx, flag, p);
     cleanup:
-        Py_XDECREF(start);
-        Py_XDECREF(stop);
-        Py_XDECREF(step);
+        PyValue_XCLOSE(start);
+        PyValue_XCLOSE(stop);
+        PyValue_XCLOSE(step);
         break;
     }
 
@@ -2139,31 +2205,36 @@ r_object(RFILE *p)
 
     }
     p->depth--;
-    return retval;
+    if (!PyValue_IsNull(value_retval)) {
+        return value_retval;
+    }
+    return _PyValue_FromObjectResult(retval);
 }
 
-static PyObject *
-read_object(RFILE *p)
+static PyValue
+read_value(RFILE *p)
 {
-    PyObject *v;
+    PyValue v;
     if (PyErr_Occurred()) {
         fprintf(stderr, "XXX readobject called with exception set\n");
-        return NULL;
+        return PyValue_NULL;
     }
     if (p->ptr && p->end) {
         if (PySys_Audit("marshal.loads", "y#", p->ptr, (Py_ssize_t)(p->end - p->ptr)) < 0) {
-            return NULL;
+            return PyValue_NULL;
         }
     } else if (p->fp || p->readable) {
         if (PySys_Audit("marshal.load", NULL) < 0) {
-            return NULL;
+            return PyValue_NULL;
         }
     }
-    v = r_object(p);
-    if (v == NULL && !PyErr_Occurred())
+    v = r_value(p);
+    if (PyValue_IsNull(v) && !PyErr_Occurred())
         PyErr_SetString(PyExc_TypeError, "NULL object in marshal data for object");
     return v;
 }
+
+
 
 int
 PyMarshal_ReadShortFromFile(FILE *fp)
@@ -2217,6 +2288,9 @@ getfilesize(FILE *fp)
  * CAUTION:  since this may read the entire remainder of the file, don't
  * call it unless you know you're done with the file.
  */
+static PyValue read_file(FILE *fp);
+static PyValue read_string(const char *str, Py_ssize_t len);
+
 PyObject *
 PyMarshal_ReadLastObjectFromFile(FILE *fp)
 {
@@ -2227,7 +2301,7 @@ PyMarshal_ReadLastObjectFromFile(FILE *fp)
     if (filesize > 0 && filesize <= REASONABLE_FILE_LIMIT) {
         char* pBuf = (char *)PyMem_Malloc(filesize);
         if (pBuf != NULL) {
-            PyObject *v = NULL;
+            PyValue v = PyValue_NULL;
             size_t n = fread(pBuf, 1, (size_t)filesize, fp);
             int saved_errno = errno;
             if (!PyErr_CheckSignals()) {
@@ -2236,27 +2310,27 @@ PyMarshal_ReadLastObjectFromFile(FILE *fp)
                     PyErr_SetFromErrno(PyExc_OSError);
                 }
                 else {
-                    v = PyMarshal_ReadObjectFromString(pBuf, n);
+                    v = read_string(pBuf, n);
                 }
             }
             PyMem_Free(pBuf);
-            return v;
+            return _PyValue_THUNK_EXIT(v, BOX_SITE_COMPILER);
         }
 
     }
     /* We don't have fstat, or we do but the file is larger than
      * REASONABLE_FILE_LIMIT or malloc failed -- read a byte at a time.
      */
-    return PyMarshal_ReadObjectFromFile(fp);
+    return _PyValue_THUNK_EXIT(read_file(fp), BOX_SITE_COMPILER);
 
 #undef REASONABLE_FILE_LIMIT
 }
 
-PyObject *
-PyMarshal_ReadObjectFromFile(FILE *fp)
+static PyValue
+read_file(FILE *fp)
 {
     RFILE rf;
-    PyObject *result;
+    PyValue result;
     rf.allow_code = 1;
     rf.fp = fp;
     rf.readable = NULL;
@@ -2265,19 +2339,19 @@ PyMarshal_ReadObjectFromFile(FILE *fp)
     rf.buf = NULL;
     rf.refs = PyList_New(0);
     if (rf.refs == NULL)
-        return NULL;
-    result = read_object(&rf);
+        return PyValue_NULL;
+    result = read_value(&rf);
     Py_DECREF(rf.refs);
     if (rf.buf != NULL)
         PyMem_Free(rf.buf);
     return result;
 }
 
-PyObject *
-PyMarshal_ReadObjectFromString(const char *str, Py_ssize_t len)
+static PyValue
+read_string(const char *str, Py_ssize_t len)
 {
     RFILE rf;
-    PyObject *result;
+    PyValue result;
     rf.allow_code = 1;
     rf.fp = NULL;
     rf.readable = NULL;
@@ -2287,12 +2361,25 @@ PyMarshal_ReadObjectFromString(const char *str, Py_ssize_t len)
     rf.depth = 0;
     rf.refs = PyList_New(0);
     if (rf.refs == NULL)
-        return NULL;
-    result = read_object(&rf);
+        return PyValue_NULL;
+    result = read_value(&rf);
     Py_DECREF(rf.refs);
     if (rf.buf != NULL)
         PyMem_Free(rf.buf);
     return result;
+}
+
+
+PyObject *
+PyMarshal_ReadObjectFromFile(FILE *fp)
+{
+    return _PyValue_THUNK_EXIT(read_file(fp), BOX_SITE_COMPILER);
+}
+
+PyObject *
+PyMarshal_ReadObjectFromString(const char *str, Py_ssize_t len)
+{
+    return _PyValue_THUNK_EXIT(read_string(str, len), BOX_SITE_COMPILER);
 }
 
 static PyObject *
@@ -2413,7 +2500,8 @@ static PyValue
 marshal_load_impl(PyObject *module, PyValueBorrow file, int allow_code)
 /*[clinic end generated code: output=6576526dea3daa48 input=2dca7b570653b82f]*/
 {
-    PyObject *data, *result;
+    PyObject *data;
+    PyValue result;
     RFILE rf;
 
     /*
@@ -2437,7 +2525,7 @@ marshal_load_impl(PyObject *module, PyValueBorrow file, int allow_code)
         PyErr_Format(PyExc_TypeError,
                      "file.read() returned not bytes but %.100s",
                      Py_TYPE(data)->tp_name);
-        result = NULL;
+        result = PyValue_NULL;
     }
     else {
         rf.allow_code = allow_code;
@@ -2447,16 +2535,16 @@ marshal_load_impl(PyObject *module, PyValueBorrow file, int allow_code)
         rf.ptr = rf.end = NULL;
         rf.buf = NULL;
         if ((rf.refs = PyList_New(0)) != NULL) {
-            result = read_object(&rf);
+            result = read_value(&rf);
             Py_DECREF(rf.refs);
             if (rf.buf != NULL)
                 PyMem_Free(rf.buf);
         } else
-            result = NULL;
+            result = PyValue_NULL;
     }
     Py_DECREF(data);
     Py_DECREF(file_obj);
-    return _PyValue_FromObjectResult(result);
+    return result;
 }
 
 /*[clinic input]
@@ -2515,7 +2603,7 @@ marshal_loads_impl(PyObject *module, Py_buffer *bytes, int allow_code)
     RFILE rf;
     char *s = bytes->buf;
     Py_ssize_t n = bytes->len;
-    PyObject* result;
+    PyValue result;
     rf.allow_code = allow_code;
     rf.fp = NULL;
     rf.readable = NULL;
@@ -2524,9 +2612,9 @@ marshal_loads_impl(PyObject *module, Py_buffer *bytes, int allow_code)
     rf.depth = 0;
     if ((rf.refs = PyList_New(0)) == NULL)
         return PyValue_NULL;
-    result = read_object(&rf);
+    result = read_value(&rf);
     Py_DECREF(rf.refs);
-    return _PyValue_FromObjectResult(result);
+    return result;
 }
 
 static PyMethodDef marshal_methods[] = {

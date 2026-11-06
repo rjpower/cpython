@@ -3893,6 +3893,19 @@ dict_update_arg(PyObject *self, PyObject *arg)
 }
 
 static int
+dict_update_arg_value(PyObject *self, PyValueBorrow arg)
+{
+    if (PyValue_IsObject(arg)) {
+        return dict_update_arg(self, PyValue_AsKnownObjectBorrow(arg));
+    }
+    /* Inline numbers have no keys method and are not iterable. */
+    PyObject *iter = _PyValue_GetIter(arg);
+    assert(iter == NULL);
+    Py_XDECREF(iter);
+    return -1;
+}
+
+static int
 dict_update_common(PyObject *self, PyObject *args, PyObject *kwds,
                    const char *methname)
 {
@@ -3946,17 +3959,17 @@ merge_from_seq2_lock_held(PyObject *d, PyObject *seq2, int override)
     Py_ssize_t index = 0;
     int status = 0;
     for (;;) {
-        PyObject *item = PyIter_Next(iterator);
-        if (item == NULL) {
-            status = PyErr_Occurred() ? -1 : 0;
+        _PyStatusValue step = _PyValue_IterNext(iterator);
+        if (step.status != PYGEN_NEXT) {
+            status = step.status == PYGEN_ERROR ? -1 : 0;
             break;
         }
-        PyObject *pair = _PyValue_SequenceFast(PyValue_FromObjectBorrow(item), "object is not iterable");
+        PyObject *pair = _PyValue_SequenceFast(step.value, "object is not iterable");
         if (pair == NULL) {
             if (PyErr_ExceptionMatches(PyExc_TypeError)) {
                 _PyErr_FormatNote("Cannot convert dictionary update sequence element #%zd to a sequence", index);
             }
-            Py_XDECREF(item);
+            PyValue_CLOSE(step.value);
             status = -1;
             break;
         }
@@ -3966,7 +3979,7 @@ merge_from_seq2_lock_held(PyObject *d, PyObject *seq2, int override)
                          "dictionary update sequence element #%zd has length %zd; 2 is required",
                          index, size);
             Py_XDECREF(pair);
-            Py_XDECREF(item);
+            PyValue_CLOSE(step.value);
             status = -1;
             break;
         }
@@ -3988,7 +4001,7 @@ merge_from_seq2_lock_held(PyObject *d, PyObject *seq2, int override)
         PyValue_XCLOSE(value);
         PyValue_XCLOSE(key);
         Py_XDECREF(pair);
-        Py_XDECREF(item);
+        PyValue_CLOSE(step.value);
         if (status < 0) {
             break;
         }
@@ -5222,80 +5235,90 @@ dict_init(PyObject *self, PyObject *args, PyObject *kwds)
     return dict_update_common(self, args, kwds, "dict");
 }
 
-static PyObject *
-dict_vectorcall(PyObject *type, PyObject * const*args,
+static PyValue
+dict_vectorcall(PyThreadState *tstate, PyObject *type, const PyValue *args,
                 size_t nargsf, PyObject *kwnames)
 {
+    assert(_PyType_CAST(type)->tp_new == dict_new);
+    assert(_PyType_CAST(type)->tp_init == dict_init);
+    assert(PyType_HasFeature(_PyType_CAST(type), Py_TPFLAGS_IMMUTABLETYPE));
     Py_ssize_t nargs = PyVectorcall_NARGS(nargsf);
     if (!_PyArg_CheckPositional("dict", nargs, 0, 1)) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     PyObject *self = dict_new(_PyType_CAST(type), NULL, NULL);
     if (self == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
     if (nargs == 1) {
-        if (dict_update_arg(self, args[0]) < 0) {
+        if (dict_update_arg_value(self, PyValue_Borrow(args[0])) < 0) {
             Py_DECREF(self);
-            return NULL;
+            return PyValue_NULL;
         }
         args++;
     }
     if (kwnames != NULL) {
         for (Py_ssize_t i = 0; i < PyTuple_GET_SIZE(kwnames); i++) {
             PyObject *key = _PyTuple_GET_OBJECT(kwnames, i);  // Unicode metadata
-            if (PyDict_SetValue(self, PyValue_FromObjectBorrow(key), PyValue_FromObjectBorrow(args[i])) < 0) {
+            if (PyDict_SetValue(self, PyValue_FromObjectBorrow(key),
+                                PyValue_Borrow(args[i])) < 0) {
                 Py_DECREF(self);
-                return NULL;
+                return PyValue_NULL;
             }
         }
     }
-    return self;
+    return PyValue_FromObjectSteal(self);
 }
 
-static PyObject *
-frozendict_vectorcall(PyObject *type, PyObject * const*args,
+static PyValue
+frozendict_vectorcall(PyThreadState *tstate, PyObject *type, const PyValue *args,
                       size_t nargsf, PyObject *kwnames)
 {
+    assert(_PyType_CAST(type)->tp_new == frozendict_new);
+    assert(_PyType_CAST(type)->tp_init == PyBaseObject_Type.tp_init);
+    assert(PyType_HasFeature(_PyType_CAST(type), Py_TPFLAGS_IMMUTABLETYPE));
     Py_ssize_t nargs = PyVectorcall_NARGS(nargsf);
     if (!_PyArg_CheckPositional("frozendict", nargs, 0, 1)) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     if (nargs == 1 && kwnames == NULL
-        && PyFrozenDict_CheckExact(args[0])
+        && PyValue_IsObject(PyValue_Borrow(args[0]))
+        && PyFrozenDict_CheckExact(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])))
         && Py_Is((PyTypeObject*)type, &PyFrozenDict_Type))
     {
         // frozendict(frozendict) returns the same object unmodified
-        return Py_NewRef(args[0]);
+        return PyValue_DUP(args[0]);
     }
 
     /* gh-151722: Keep the frozendict untracked until it is fully built,
        so a half-built object is never reachable from another thread (using the gc module). */
     PyObject *self = frozendict_new_untracked(_PyType_CAST(type));
     if (self == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
     if (nargs == 1) {
-        if (dict_update_arg(self, args[0]) < 0) {
+        if (dict_update_arg_value(self, PyValue_Borrow(args[0])) < 0) {
             Py_DECREF(self);
-            return NULL;
+            return PyValue_NULL;
         }
         args++;
     }
     if (kwnames != NULL) {
         for (Py_ssize_t i = 0; i < PyTuple_GET_SIZE(kwnames); i++) {
             PyObject *key = _PyTuple_GET_OBJECT(kwnames, i);  // Unicode metadata
-            if (_PyAnyDict_SetItem(self, key, args[i]) < 0) {
+            if (_PyDict_SetValue_Take2((PyDictObject *)self,
+                                       PyValue_DUP(PyValue_FromObjectBorrow(key)),
+                                       PyValue_DUP(PyValue_Borrow(args[i]))) < 0) {
                 Py_DECREF(self);
-                return NULL;
+                return PyValue_NULL;
             }
         }
     }
 
     _PyObject_GC_TRACK(self);
-    return self;
+    return PyValue_FromObjectSteal(self);
 }
 
 static PyObject *
@@ -5360,7 +5383,8 @@ PyTypeObject PyDict_Type = {
     _PyType_AllocNoTrack,                       /* tp_alloc */
     dict_new,                                   /* tp_new */
     PyObject_GC_Del,                            /* tp_free */
-    .tp_vectorcall = dict_vectorcall,
+    .tp_vectorcall = _PyValue_VectorcallThunk,
+    .tp_value_vectorcall = (_Py_valuefunc)dict_vectorcall,
     .tp_version_tag = _Py_TYPE_VERSION_DICT,
     .tp_value = {
         .nb_or = _Py_VALUE_SLOT_INIT(nb_or, dict_or_value),
@@ -8065,7 +8089,8 @@ PyTypeObject PyFrozenDict_Type = {
     .tp_alloc = _PyType_AllocNoTrack,
     .tp_new = frozendict_new,
     .tp_free = PyObject_GC_Del,
-    .tp_vectorcall = frozendict_vectorcall,
+    .tp_vectorcall = _PyValue_VectorcallThunk,
+    .tp_value_vectorcall = (_Py_valuefunc)frozendict_vectorcall,
     .tp_version_tag = _Py_TYPE_VERSION_FROZENDICT,
     .tp_value = {
         .nb_or = _Py_VALUE_SLOT_INIT(nb_or, frozendict_or_value),

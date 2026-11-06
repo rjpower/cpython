@@ -1092,7 +1092,7 @@ THUNK_FILES = (
     "Objects/bytearrayobject.c", "Objects/floatobject.c",
     "Objects/enumobject.c", "Objects/boolobject.c", "Objects/longobject.c",
     "Objects/unicodeobject.c", "Objects/listobject.c", "Objects/setobject.c",
-    "Objects/rangeobject.c",
+    "Objects/rangeobject.c", "Objects/dictobject.c",
     # Decimal pairs its selective Clinic constructor with the object thunk.
     "Modules/_decimal/_decimal.c",
     # BaseException stores its value vectorcall beside the object thunk.

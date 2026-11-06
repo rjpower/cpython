@@ -200,28 +200,6 @@ tl_to_d(TripleLength total)
 static const double pi = 3.141592653589793238462643383279502884197;
 static const double logpi = 1.144729885849400174143427351353058711647;
 
-/* Version of PyFloat_AsDouble() with in-line fast paths
-   for exact floats and integers.  Gives a substantial
-   speed improvement for extracting float arguments.
-*/
-
-#define ASSIGN_DOUBLE(target_var, obj, error_label)        \
-    if (PyFloat_CheckExact(obj)) {                         \
-        target_var = PyFloat_AS_DOUBLE(obj);               \
-    }                                                      \
-    else if (PyLong_CheckExact(obj)) {                     \
-        target_var = _PyValue_IntAsDouble(PyValue_FromObjectBorrow(obj));                 \
-        if (target_var == -1.0 && PyErr_Occurred()) {      \
-            goto error_label;                              \
-        }                                                  \
-    }                                                      \
-    else {                                                 \
-        target_var = _PyValue_AsDouble(PyValue_FromObjectBorrow(obj));                \
-        if (target_var == -1.0 && PyErr_Occurred()) {      \
-            goto error_label;                              \
-        }                                                  \
-    }
-
 #define ASSIGN_VALUE_DOUBLE(target_var, value, error_label) \
     if (PyValue_IsInlineFloat(value)) {                      \
         target_var = PyValue_InlineFloat(value);             \
@@ -1637,7 +1615,6 @@ math_fsum_impl(PyObject *module, PyValueBorrow seq)
 }
 
 #undef NUM_PARTIALS
-#undef ASSIGN_VALUE_DOUBLE
 
 
 /*[clinic input]
@@ -2225,7 +2202,8 @@ static PyValue
 math_dist_impl(PyObject *module, PyValueBorrow p, PyValueBorrow q)
 /*[clinic end generated code: output=9670be2ed6d50357 input=74e85e1b6092e68e]*/
 {
-    PyObject *item, *pt, *qt;
+    PyObject *pt, *qt;
+    PyValue item_value = PyValue_NULL;
     double max = 0.0;
     double x, px, qx, result;
     Py_ssize_t i, m, n;
@@ -2272,28 +2250,18 @@ math_dist_impl(PyObject *module, PyValueBorrow p, PyValueBorrow q)
         }
     }
     for (i=0 ; i<n ; i++) {
-        PyValue item_value = PyTuple_GetValue(pt, i);
+        item_value = PyTuple_GetValue(pt, i);
         if (PyValue_IsNull(item_value)) {
             goto error_exit;
         }
-        item = _PyValue_AsObjectAt(item_value, BOX_SITE_TUPLE);
-        PyValue_CLOSE(item_value);
-        if (item == NULL) {
-            goto error_exit;
-        }
-        ASSIGN_DOUBLE(px, item, error_with_item);
-        Py_DECREF(item);
+        ASSIGN_VALUE_DOUBLE(px, item_value, error_with_item);
+        PyValue_CLEAR(item_value);
         item_value = PyTuple_GetValue(qt, i);
         if (PyValue_IsNull(item_value)) {
             goto error_exit;
         }
-        item = _PyValue_AsObjectAt(item_value, BOX_SITE_TUPLE);
-        PyValue_CLOSE(item_value);
-        if (item == NULL) {
-            goto error_exit;
-        }
-        ASSIGN_DOUBLE(qx, item, error_with_item);
-        Py_DECREF(item);
+        ASSIGN_VALUE_DOUBLE(qx, item_value, error_with_item);
+        PyValue_CLEAR(item_value);
         x = fabs(px - qx);
         diffs[i] = x;
         found_nan |= isnan(x);
@@ -2314,7 +2282,7 @@ math_dist_impl(PyObject *module, PyValueBorrow p, PyValueBorrow q)
     return PyValue_FromDouble(result);
 
   error_with_item:
-    Py_DECREF(item);
+    PyValue_XCLOSE(item_value);
   error_exit:
     if (diffs != diffs_on_stack) {
         PyMem_Free(diffs);
@@ -2327,6 +2295,8 @@ math_dist_impl(PyObject *module, PyValueBorrow p, PyValueBorrow q)
     }
     return PyValue_NULL;
 }
+
+#undef ASSIGN_VALUE_DOUBLE
 
 /*[clinic input]
 math.hypot
@@ -2366,7 +2336,7 @@ math_hypot_impl(PyObject *module, const PyValue *args,
         }
     }
     for (i = 0; i < args_length; i++) {
-        // As ASSIGN_DOUBLE(): exact floats and ints convert directly.
+        // Exact floats and ints convert directly.
         x = _PyValue_AsDouble(PyValue_Borrow(args[i]));
         if (x == -1.0 && PyErr_Occurred()) {
             goto error_exit;

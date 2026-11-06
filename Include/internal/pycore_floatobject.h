@@ -40,9 +40,17 @@ extern void _PyFloat_DebugMallocStats(FILE* out);
 
 /* Format the object based on the format_spec, as defined in PEP 3101
    (Advanced String Formatting). */
+Py_VALUE_COMPAT(_PyFloat_FormatAdvancedWriterValue)
 extern int _PyFloat_FormatAdvancedWriter(
     _PyUnicodeWriter *writer,
     PyObject *obj,
+    PyObject *format_spec,
+    Py_ssize_t start,
+    Py_ssize_t end);
+
+extern int _PyFloat_FormatAdvancedWriterValue(
+    _PyUnicodeWriter *writer,
+    PyValueBorrow value,
     PyObject *format_spec,
     Py_ssize_t start,
     Py_ssize_t end);

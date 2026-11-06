@@ -4541,7 +4541,7 @@ dummy_func(
             if (!PyValue_IsNone(should_be_none)) {
                 PyErr_Format(PyExc_TypeError,
                     "__init__() should return None, not '%.200s'",
-                    Py_TYPE(PyValue_AsKnownObjectBorrow(should_be_none))->tp_name);
+                    PyValue_TYPE(should_be_none)->tp_name);
                 ERROR_NO_POP();
             }
             DEAD(should_be_none);

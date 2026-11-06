@@ -2275,11 +2275,10 @@ long_to_decimal_string(PyObject *aa)
    if alternate is nonzero. */
 
 static int
-long_format_binary(PyObject *aa, int base, int alternate,
+long_format_binary_span(_PyLongSpan a, int base, int alternate,
                    PyObject **p_output, _PyUnicodeWriter *writer,
                    PyBytesWriter *bytes_writer, char **bytes_str)
 {
-    PyLongObject *a = (PyLongObject *)aa;
     PyObject *v = NULL;
     Py_ssize_t sz;
     Py_ssize_t size_a;
@@ -2289,12 +2288,8 @@ long_format_binary(PyObject *aa, int base, int alternate,
     assert(base == 2 || base == 8 || base == 16);
     // writer or bytes_writer can be used, but not both at the same time.
     assert(writer == NULL || bytes_writer == NULL);
-    if (a == NULL || !PyLong_Check(a)) {
-        PyErr_BadInternalCall();
-        return -1;
-    }
-    size_a = _PyLong_DigitCount(a);
-    negative = _PyLong_IsNegative(a);
+    size_a = a.n;
+    negative = a.neg;
 
     /* Compute a rough upper bound for the length of the string */
     switch (base) {
@@ -2324,7 +2319,7 @@ long_format_binary(PyObject *aa, int base, int alternate,
             return -1;
         }
         size_a_in_bits = (size_a - 1) * PyLong_SHIFT +
-                         bit_length_digit(a->long_value.ob_digit[size_a - 1]);
+                         bit_length_digit(a.d[size_a - 1]);
         /* Allow 1 character for a '-' sign. */
         sz = negative + (size_a_in_bits + (bits - 1)) / bits;
     }
@@ -2363,7 +2358,7 @@ long_format_binary(PyObject *aa, int base, int alternate,
             int accumbits = 0;   /* # of bits in accum */               \
             Py_ssize_t i;                                               \
             for (i = 0; i < size_a; ++i) {                              \
-                accum |= (twodigits)a->long_value.ob_digit[i] << accumbits;        \
+                accum |= (twodigits)a.d[i] << accumbits;        \
                 accumbits += PyLong_SHIFT;                              \
                 assert(accumbits >= bits);                              \
                 do {                                                    \
@@ -2443,6 +2438,22 @@ long_format_binary(PyObject *aa, int base, int alternate,
     return 0;
 }
 
+
+static int
+long_format_binary(PyObject *obj, int base, int alternate,
+                   PyObject **p_output, _PyUnicodeWriter *writer,
+                   PyBytesWriter *bytes_writer, char **bytes_str)
+{
+    assert(base == 2 || base == 8 || base == 16);
+    if (obj == NULL || !PyLong_Check(obj)) {
+        PyErr_BadInternalCall();
+        return -1;
+    }
+    return long_format_binary_span(_PyLong_SpanOf((PyLongObject *)obj),
+                                   base, alternate, p_output, writer,
+                                   bytes_writer, bytes_str);
+}
+
 PyObject *
 _PyLong_Format(PyObject *obj, int base)
 {
@@ -2468,6 +2479,39 @@ _PyLong_FormatWriter(_PyUnicodeWriter *writer,
     else
         return long_format_binary(obj, base, alternate, NULL, writer,
                                   NULL, NULL);
+}
+
+/* The word-backed span stays live through the synchronous formatter. */
+PyObject *
+_PyLong_FormatValue(PyValueBorrow value, int base)
+{
+    if (!PyValue_IsInlineInt(value)) {
+        return _PyLong_Format(PyValue_AsKnownObjectBorrow(value), base);
+    }
+    digit digits[_PyLong_WORD_DIGITS];
+    _PyLongSpan span = _PyLong_SpanOfValue(value, digits);
+    PyObject *str;
+    int err = base == 10
+        ? long_to_decimal_string_internal(span, &str, NULL, NULL, NULL)
+        : long_format_binary_span(span, base, 1, &str, NULL, NULL, NULL);
+    return err < 0 ? NULL : str;
+}
+
+int
+_PyLong_FormatWriterValue(_PyUnicodeWriter *writer, PyValueBorrow value,
+                          int base, int alternate)
+{
+    if (!PyValue_IsInlineInt(value)) {
+        return _PyLong_FormatWriter(writer, PyValue_AsKnownObjectBorrow(value),
+                                    base, alternate);
+    }
+    digit digits[_PyLong_WORD_DIGITS];
+    _PyLongSpan span = _PyLong_SpanOfValue(value, digits);
+    if (base == 10) {
+        return long_to_decimal_writer_span(writer, span);
+    }
+    return long_format_binary_span(span, base, alternate, NULL, writer,
+                                   NULL, NULL);
 }
 
 char*
@@ -6142,16 +6186,9 @@ int___format___impl(PyValueBorrow self, PyObject *format_spec)
     _PyUnicodeWriter writer;
     int ret;
 
-    PyObject *obj = _PyValue_AsObjectAt(self, BOX_SITE_PARSER);
-    if (obj == NULL) {
-        return PyValue_NULL;
-    }
     _PyUnicodeWriter_Init(&writer);
-    ret = _PyLong_FormatAdvancedWriter(
-        &writer,
-        obj,
-        format_spec, 0, PyUnicode_GET_LENGTH(format_spec));
-    Py_DECREF(obj);
+    ret = _PyLong_FormatAdvancedWriterValue(
+        &writer, self, format_spec, 0, PyUnicode_GET_LENGTH(format_spec));
     if (ret == -1) {
         _PyUnicodeWriter_Dealloc(&writer);
         return PyValue_NULL;

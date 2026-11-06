@@ -1,4 +1,5 @@
 #include "Python.h"
+#include "pycore_typeobject.h"    // _PyType_IsGenericCallPair()
 #include "pycore_borrow.h"        // _PyBorrowScope_Enter()
 #include "pycore_call.h"          // _PyObject_CallNoArgsTstate()
 #include "pycore_ceval.h"         // _Py_EnterRecursiveCallTstate()
@@ -1431,10 +1432,9 @@ PyValue
     return res;
 }
 
-/* Whether the dispatcher would call callable through tp_call: no
-   vectorcall of either form and no value call slot. */
+/* Whether the dispatcher would select an instance vectorcall entry. */
 static inline int
-value_call_is_tp_call(PyObject *callable)
+value_call_has_vectorcall(PyObject *callable)
 {
     PyTypeObject *tp = Py_TYPE(callable);
     if (tp->tp_flags & Py_TPFLAGS_HAVE_VECTORCALL) {
@@ -1446,10 +1446,31 @@ value_call_is_tp_call(PyObject *callable)
         vectorcallfunc of;
         memcpy(&of, (char *)callable + tp->tp_vectorcall_offset, sizeof(of));
         if (f != NULL || of != NULL) {
-            return 0;
+            return 1;
         }
     }
-    return _PyType_VALUE_SLOT(tp, call) == NULL;
+    return 0;
+}
+
+static inline int
+value_call_is_tp_call(PyObject *callable)
+{
+    return !value_call_has_vectorcall(callable) &&
+           _PyType_VALUE_SLOT(Py_TYPE(callable), call) == NULL;
+}
+
+static int
+kwargs_have_non_unicode_key(PyObject *kwargs)
+{
+    Py_ssize_t pos = 0;
+    PyValueBorrow key, value;
+    while (_PyDict_NextBorrowed(kwargs, &pos, &key, &value)) {
+        if (!PyValue_IsObject(key) ||
+            !PyUnicode_Check(PyValue_AsKnownObjectBorrow(key))) {
+            return 1;
+        }
+    }
+    return 0;
 }
 
 PyValue
@@ -1458,6 +1479,9 @@ PyValue
 {
     assert(PyTuple_Check(args));
     assert(kwargs == NULL || PyDict_Check(kwargs));
+    if (!PyValue_IsObject(callable)) {
+        return _PyValue_NotCallable(tstate, callable);
+    }
     if (PyValue_IsObject(callable)) {
         PyObject *c = PyValue_AsKnownObjectBorrow(callable);
         if (value_call_is_tp_call(c)) {
@@ -1475,6 +1499,26 @@ PyValue
             PyValue res = value_tp_call(tstate, c, call, args, kwargs);
             _Py_LeaveRecursiveCallTstate(tstate);
             return res;
+        }
+        if (kwargs != NULL && PyDict_GET_SIZE(kwargs) != 0 &&
+            !value_call_has_vectorcall(c) &&
+            _PyType_IsGenericCallPair(Py_TYPE(c)) &&
+            kwargs_have_non_unicode_key(kwargs)) {
+            if (_Py_EnterRecursiveCallTstate(tstate,
+                                             " while calling a Python object")) {
+                return PyValue_NULL;
+            }
+            PyValue res = value_tp_call(tstate, c, Py_TYPE(c)->tp_call,
+                                        args, kwargs);
+            _Py_LeaveRecursiveCallTstate(tstate);
+            return res;
+        }
+        if (kwargs != NULL && PyDict_GET_SIZE(kwargs) != 0) {
+            PyValue result = PyValue_NULL;
+            if (_PyType_CallWithOriginalDict(tstate, c, args, kwargs,
+                                             &result)) {
+                return result;
+            }
         }
     }
     /* The tuple's words are the window: no box, no copy. */

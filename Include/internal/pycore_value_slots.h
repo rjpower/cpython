@@ -164,7 +164,7 @@ typedef int (*_Py_initvaluefunc)(PyValueBorrow, const PyValue *,
     X(sq_concat, as_sequence.sq_concat, CONCAT, CONCAT) \
     X(sq_inplace_concat, as_sequence.sq_inplace_concat, CONCAT, CONCAT) \
     X(new_, ht_type.tp_new, NEW, NONE) \
-    X(init_, ht_type.tp_init, INIT, NONE)
+    X(init_, ht_type.tp_init, INIT, INIT)
 
 /* _Py_VALUE_SLOT_INDEX_<field>: the row of a field. */
 #define _Py_VALUE_SLOT_ENUM(FIELD, PATH, KIND, WRAPPER) \

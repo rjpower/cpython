@@ -11,7 +11,7 @@
 #include "pycore_bitutils.h"      // _Py_bswap16()
 #include "pycore_dtoa.h"          // _Py_dg_dtoa()
 #include "pycore_descrobject.h"   // _Py_VALUE_GETTER()
-#include "pycore_floatobject.h"   // _PyFloat_FormatAdvancedWriter()
+#include "pycore_floatobject.h"   // _PyFloat_FormatAdvancedWriterValue()
 #include "pycore_freelist.h"      // _Py_FREELIST_FREE(), _Py_FREELIST_POP()
 #include "pycore_initconfig.h"    // _PyStatus_OK()
 #include "pycore_long.h"          // _PyLong_GetOne()
@@ -1913,16 +1913,11 @@ float___format___impl(PyValueBorrow self, PyObject *format_spec)
     _PyUnicodeWriter writer;
     int ret;
 
-    PyObject *obj = _PyValue_AsObjectAt(self, BOX_SITE_PARSER);
-    if (obj == NULL) {
-        return PyValue_NULL;
-    }
     _PyUnicodeWriter_Init(&writer);
-    ret = _PyFloat_FormatAdvancedWriter(
+    ret = _PyFloat_FormatAdvancedWriterValue(
         &writer,
-        obj,
+        self,
         format_spec, 0, PyUnicode_GET_LENGTH(format_spec));
-    Py_DECREF(obj);
     if (ret == -1) {
         _PyUnicodeWriter_Dealloc(&writer);
         return PyValue_NULL;

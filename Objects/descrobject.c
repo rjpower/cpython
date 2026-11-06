@@ -154,33 +154,35 @@ classmethod_get(PyObject *self, PyObject *obj, PyObject *type)
                                  PyValue_FromObjectBorrow(type), NULL, cls);
 }
 
-static PyObject *
-method_get(PyObject *self, PyObject *obj, PyObject *type)
+static PyValue
+method_get_value(PyObject *self, PyValueBorrow obj, PyObject *type)
 {
     PyMethodDescrObject *descr = (PyMethodDescrObject *)self;
-    if (obj == NULL) {
-        return Py_NewRef(descr);
+    if (PyValue_IsNull(obj)) {
+        return PyValue_DUP(PyValue_FromObjectBorrow(self));
     }
-    if (descr_check((PyDescrObject *)descr, obj) < 0) {
-        return NULL;
+    if (descr_check_value((PyDescrObject *)descr, obj) < 0) {
+        return PyValue_NULL;
     }
     if (descr->d_method->ml_flags & METH_METHOD) {
         if (type == NULL || PyType_Check(type)) {
-            return _PyCFunction_NewValue(descr->d_method,
-                                         PyValue_FromObjectBorrow(obj), NULL,
-                                         descr->d_common.d_type);
+            return _PyValue_FromObjectResult(
+                _PyCFunction_NewValue(descr->d_method, obj, NULL,
+                                      descr->d_common.d_type));
         } else {
             PyErr_Format(PyExc_TypeError,
                         "descriptor '%V' needs a type, not '%s', as arg 2",
                         descr_name((PyDescrObject *)descr), "?",
                         Py_TYPE(type)->tp_name);
-            return NULL;
+            return PyValue_NULL;
         }
     } else {
-        return _PyCFunction_NewValue(descr->d_method,
-                                     PyValue_FromObjectBorrow(obj), NULL, NULL);
+        return _PyValue_FromObjectResult(
+            _PyCFunction_NewValue(descr->d_method, obj, NULL, NULL));
     }
 }
+
+_Py_VALUE_THUNK_DESCRGET(method_get, method_get_value)
 
 static PyValue
 member_get_value(PyObject *self, PyValueBorrow obj, PyObject *type)
@@ -1042,6 +1044,7 @@ PyTypeObject PyMethodDescr_Type = {
     0,                                          /* tp_descr_set */
     .tp_value_vectorcall_offset = offsetof(PyMethodDescrObject,
                                            d_value_vectorcall),
+    .tp_value.descr_get = _Py_VALUE_SLOT_INIT(descr_get, method_get_value),
 };
 
 /* This is for METH_CLASS in C, not for "f = classmethod(f)" in Python! */

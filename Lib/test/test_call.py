@@ -34,6 +34,25 @@ class BadStr(str):
 
 class FunctionCalls(unittest.TestCase):
 
+    def test_type_non_string_kwargs_keep_vectorcall_validation(self):
+        bad_kwargs = {None: 1}
+        for call in (
+            lambda: type(**bad_kwargs),
+            lambda: type(1, **bad_kwargs),
+            lambda: type("Name", (), {}, **bad_kwargs),
+        ):
+            with self.subTest(call=call):
+                with self.assertRaisesRegex(TypeError, "keywords must be strings"):
+                    call()
+
+    def test_object_non_string_kwargs_preserve_type_error_order(self):
+        bad_kwargs = {None: 1}
+        for args in ((), (1,)):
+            with self.subTest(args=args):
+                with self.assertRaisesRegex(
+                        TypeError, r"object\(\) takes no arguments"):
+                    object(*args, **bad_kwargs)
+
     def test_kwargs_order(self):
         # bpo-34320:  **kwargs should preserve order of passed OrderedDict
         od = collections.OrderedDict([('a', 1), ('b', 2)])

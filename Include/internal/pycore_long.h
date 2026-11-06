@@ -118,6 +118,7 @@ PyAPI_DATA(unsigned char) _PyLong_DigitValue[256];
 
 /* Format the object based on the format_spec, as defined in PEP 3101
    (Advanced String Formatting). */
+Py_VALUE_COMPAT(_PyLong_FormatAdvancedWriterValue)
 extern int _PyLong_FormatAdvancedWriter(
     _PyUnicodeWriter *writer,
     PyObject *obj,

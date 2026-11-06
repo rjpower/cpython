@@ -9435,34 +9435,21 @@
         TARGET(EXIT_INIT_CHECK) {
             int opcode = EXIT_INIT_CHECK;
             (void)(opcode);
+            _PyValueTemps *const value_temps = NULL;
+            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(EXIT_INIT_CHECK);
-            PyObject *value_boxes[3];
-            _PyValueTemps value_owners;
-            value_owners = (_PyValueTemps){value_boxes, 0, 3};
-            _PyValueTemps *value_temps = &value_owners;
             PyValueBorrow should_be_none;
             PyValue ir_own_A = PyValue_NULL;
             (void)ir_own_A;
-            PyObject *ir_obj_should_be_none = NULL;
             should_be_none = IR_VIEW(IR_A(ir_word));
-            if (Py_UNLIKELY(PyValue_IsInline(should_be_none))) {
-                ir_obj_should_be_none = _PyValueTemps_Box(value_temps, should_be_none);
-                if (ir_obj_should_be_none == NULL) {
-                    JUMP_TO_LABEL(error);
-                }
-                BOX_STAT_INC(EXIT_INIT_CHECK);
-            }
-            else {
-                ir_obj_should_be_none = PyValue_AsKnownObjectBorrow(should_be_none);
-            }
             if (!PyValue_IsNone(should_be_none)) {
                 PyErr_Format(PyExc_TypeError,
                              "__init__() should return None, not '%.200s'",
-                             Py_TYPE(ir_obj_should_be_none)->tp_name);
+                             PyValue_TYPE(should_be_none)->tp_name);
                 JUMP_TO_LABEL(error);
             }
             ir_own_A = IR_CONSUME_INPUT(IR_A(ir_word), should_be_none);

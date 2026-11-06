@@ -305,6 +305,11 @@ PyAPI_FUNC(PyObject *) _PyLong_ValueRepr(PyValueBorrow v);
 /* Write the decimal repr of v, an int value, to writer: an inline int's word
    span through the decimal kernel (R-inline in _PyValue_WriteRepr()). 0, or
    -1 with an exception set. */
+extern int _PyLong_FormatAdvancedWriterValue(
+    _PyUnicodeWriter *, PyValueBorrow, PyObject *, Py_ssize_t, Py_ssize_t);
+extern PyObject *_PyLong_FormatValue(PyValueBorrow, int);
+extern int _PyLong_FormatWriterValue(_PyUnicodeWriter *, PyValueBorrow, int, int);
+
 PyAPI_FUNC(int) _PyLong_WriteDecimal(_PyUnicodeWriter *writer,
                                      PyValueBorrow v);
 

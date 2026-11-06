@@ -1159,3 +1159,15 @@ object = "_PyLong_GCD"
 value = "_PyLong_ValueGCD"
 family = "number"
 reason = "No production caller remains; adapt the owned PyValue result to the historical new-reference PyObject * return"
+
+[[manual]]
+object = "_PyFloat_FormatAdvancedWriter"
+value = "_PyFloat_FormatAdvancedWriterValue"
+family = "number"
+reason = "Status and writer/spec/range arguments are unchanged; borrow the object receiver as PyValue at the object boundary. Production core callers use the value writer; retain this entry for object-form callers"
+
+[[manual]]
+object = "_PyLong_FormatAdvancedWriter"
+value = "_PyLong_FormatAdvancedWriterValue"
+family = "number"
+reason = "Status and writer/spec/range arguments are unchanged; borrow the object receiver as PyValue at the object boundary. Production core callers use the value writer; retain this entry for object-form callers"

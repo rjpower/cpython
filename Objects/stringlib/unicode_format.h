@@ -3,7 +3,7 @@
 */
 
 #include "pycore_complexobject.h" // _PyComplex_FormatAdvancedWriter()
-#include "pycore_floatobject.h"   // _PyFloat_FormatAdvancedWriter()
+#include "pycore_floatobject.h"   // _PyFloat_FormatAdvancedWriterValue()
 #include "pycore_tuple.h"         // _PyTuple_FromPairSteal
 
 /************************************************************************/
@@ -507,14 +507,23 @@ render_field(PyValueBorrow fieldobj, SubString *format_spec, _PyUnicodeWriter *w
     PyObject *fieldobj_o = PyValue_IsObject(fieldobj)
         ? PyValue_AsKnownObjectBorrow(fieldobj) : NULL;
 
+    if (PyValue_LongCheckExact(fieldobj)) {
+        return _PyLong_FormatAdvancedWriterValue(
+            writer, fieldobj, format_spec->str,
+            format_spec->start, format_spec->end) == 0;
+    }
+
+    if (PyValue_IsInlineFloat(fieldobj) ||
+        (fieldobj_o != NULL && PyFloat_CheckExact(fieldobj_o))) {
+        return _PyFloat_FormatAdvancedWriterValue(
+            writer, fieldobj, format_spec->str,
+            format_spec->start, format_spec->end) == 0;
+    }
+
     /* If we know the type exactly, skip the lookup of __format__ and just
        call the formatter directly. */
     if (fieldobj_o != NULL && PyUnicode_CheckExact(fieldobj_o))
         formatter = _PyUnicode_FormatAdvancedWriter;
-    else if (fieldobj_o != NULL && PyLong_CheckExact(fieldobj_o))
-        formatter = _PyLong_FormatAdvancedWriter;
-    else if (fieldobj_o != NULL && PyFloat_CheckExact(fieldobj_o))
-        formatter = _PyFloat_FormatAdvancedWriter;
     else if (fieldobj_o != NULL && PyComplex_CheckExact(fieldobj_o))
         formatter = _PyComplex_FormatAdvancedWriter;
 

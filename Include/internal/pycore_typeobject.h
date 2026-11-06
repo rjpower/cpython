@@ -12,6 +12,8 @@ extern "C" {
 #include "pycore_moduleobject.h"  // PyModuleObject
 #include "pycore_structs.h"       // PyValue
 
+extern int _PyType_IsGenericCallPair(PyTypeObject *type);
+
 
 /* state */
 
@@ -155,6 +157,11 @@ int _Py_object_init(PyObject *, PyObject *, PyObject *);
 int _Py_object_init_value(PyValueBorrow, const PyValue *, Py_ssize_t, PyObject *);
 int _Py_slot_tp_init(PyObject *, PyObject *, PyObject *);
 int _Py_slot_tp_init_value(PyValueBorrow, const PyValue *, Py_ssize_t, PyObject *);
+PyObject *_Py_type_call(PyObject *, PyObject *, PyObject *);
+PyValue _Py_type_call_value(PyThreadState *, PyObject *, const PyValue *,
+                            size_t, PyObject *);
+int _PyType_CallWithOriginalDict(PyThreadState *, PyObject *, PyObject *,
+                                PyObject *, PyValue *);
 PyObject *_Py_slot_tp_new(PyTypeObject *, PyObject *, PyObject *);
 PyValue _Py_slot_tp_new_value(PyTypeObject *, const PyValue *, Py_ssize_t, PyObject *);
 

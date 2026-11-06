@@ -3710,6 +3710,19 @@ dict_getitem_value(PyValueBorrow self, const PyValue *args,
                                 PyValue_Borrow(args[0]));
 }
 
+/* Identify the value method that corresponds to the two builtin dict slots. */
+int
+_PyDict_IsBuiltinGetItemDescriptor(PyObject *descr)
+{
+    if (!Py_IS_TYPE(descr, &PyMethodDescr_Type)) {
+        return 0;
+    }
+    PyTypeObject *owner = PyDescr_TYPE(descr);
+    return (owner == &PyDict_Type || owner == &PyFrozenDict_Type) &&
+        ((PyMethodDescrObject *)descr)->d_method->ml_meth ==
+            _PyCFunction_CAST(dict_getitem_value);
+}
+
 Py_VALUE_ENTRY PyObject *
 _PyDict_Subscript(PyObject *self, PyObject *key)
 {

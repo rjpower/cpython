@@ -82,6 +82,37 @@ class FormatTest(unittest.TestCase):
             args = {k.encode('ascii'): v for k, v in args.items()}
         self.check_exc(formatstr.encode('ascii'), args, exception, excmsg)
 
+    def test_integer_value_writer(self):
+        cases = (
+            (-5, '#018x', '-0x000000000000005'),
+            (-5, '#018b', '-0b000000000000101'),
+            (0, '#o', '0o0'),
+            ((1 << 50) - 1, ',d', '1,125,899,906,842,623'),
+            (-(1 << 50), '_X', '-4_0000_0000_0000'),
+            (65, '^5c', '  A  '),
+            (15, '08d', '00000015'),
+            (12, '.2f', '12.00'),
+        )
+        for value, spec, expected in cases:
+            with self.subTest(value=value, spec=spec):
+                self.assertEqual(format(value, spec), expected)
+                self.assertEqual(('{:' + spec + '}').format(value), expected)
+
+        class IntSubclass(int):
+            def __str__(self):
+                return 'custom-str'
+
+            def __float__(self):
+                return 3.25
+
+        value = IntSubclass(4)
+        self.assertEqual(int.__format__(value, ''), 'custom-str')
+        self.assertEqual(int.__format__(value, '.1f'), '3.2')
+        with self.assertRaises(OverflowError):
+            format(0x110000, 'c')
+        with self.assertRaises(ValueError):
+            format(12, '.2d')
+
     def test_common_format(self):
         # test the format identifiers that work the same across
         # str, bytes, and bytearrays (integer, float, oct, hex)

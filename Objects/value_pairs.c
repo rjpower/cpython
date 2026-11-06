@@ -18,6 +18,8 @@
 #include "pycore_value_slots.h"   // _PyValueSlotPair
 
 const _PyValueSlotPair _PyValueSlot_Pairs[] = {
+    {_Py_VALUE_SLOT_INDEX_call, (void *)_Py_type_call,
+     _Py_VALUE_SLOT_INIT(call, _Py_type_call_value)},
     {_Py_VALUE_SLOT_INDEX_init_, (void *)_Py_object_init,
      _Py_VALUE_SLOT_INIT(init_, _Py_object_init_value)},
     {_Py_VALUE_SLOT_INDEX_init_, (void *)_Py_slot_tp_init,

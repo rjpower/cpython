@@ -233,6 +233,7 @@ PyAPI_FUNC(int) _PyDict_SetItem_Take2(PyDictObject *op, PyObject *key, PyObject 
 Py_VALUE_COMPAT(_PyDict_SetValue_Take2_KnownHash)
 PyAPI_FUNC(int) _PyDict_SetItem_Take2_KnownHash(PyDictObject *op, PyObject *key, PyObject *value, Py_hash_t hash);
 // Exported for external JIT support
+extern int _PyDict_IsBuiltinGetItemDescriptor(PyObject *descr);
 PyAPI_FUNC(int) _PyDict_SetItem_LockHeld(PyDictObject *dict, PyObject *name, PyObject *value);
 PyAPI_FUNC(int) _PyDict_SetValue_LockHeld(PyDictObject *dict, PyObject *name, PyValueBorrow value);
 // Export for '_asyncio' shared extension

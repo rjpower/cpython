@@ -385,7 +385,7 @@ typedef struct {
   if failure, sets the exception
 */
 static int
-parse_internal_render_format_spec(PyObject *obj,
+parse_internal_render_format_spec(PyTypeObject *type,
                                   PyObject *format_spec,
                                   Py_ssize_t start, Py_ssize_t end,
                                   InternalFormatSpec *format,
@@ -550,7 +550,7 @@ parse_internal_render_format_spec(PyObject *obj,
         if (actual_format_spec != NULL) {
             PyErr_Format(PyExc_ValueError,
                 "Invalid format specifier '%U' for object of type '%.200s'",
-                actual_format_spec, Py_TYPE(obj)->tp_name);
+                actual_format_spec, type->tp_name);
             Py_DECREF(actual_format_spec);
         }
         return 0;
@@ -1196,7 +1196,7 @@ done:
 /************************************************************************/
 
 static int
-format_long_internal(PyObject *value, const InternalFormatSpec *format,
+format_long_internal(PyValueBorrow value, const InternalFormatSpec *format,
                      _PyUnicodeWriter *writer)
 {
     int result = -1;
@@ -1251,7 +1251,7 @@ format_long_internal(PyObject *value, const InternalFormatSpec *format,
 
         /* taken from unicodeobject.c formatchar() */
         /* Integer input truncated to a character */
-        x = _PyValue_AsLong(PyValue_FromObjectBorrow(value));
+        x = _PyValue_AsLong(value);
         if (x == -1 && PyErr_Occurred())
             goto done;
         if (x < 0 || x > 0x10ffff) {
@@ -1307,10 +1307,10 @@ format_long_internal(PyObject *value, const InternalFormatSpec *format,
             && format->width == -1
             && format->type != 'X' && format->type != 'n'
             && !format->thousands_separators
-            && PyLong_CheckExact(value))
+            && PyValue_LongCheckExact(value))
         {
             /* Fast path */
-            return _PyLong_FormatWriter(writer, value, base, format->alternate);
+            return _PyLong_FormatWriterValue(writer, value, base, format->alternate);
         }
 
         /* The number of prefix chars is the same as the leading
@@ -1319,7 +1319,7 @@ format_long_internal(PyObject *value, const InternalFormatSpec *format,
             n_prefix = leading_chars_to_skip;
 
         /* Do the hard part, converting to a string in a given base */
-        tmp = _PyLong_Format(value, base);
+        tmp = _PyLong_FormatValue(value, base);
         if (tmp == NULL)
             goto done;
 
@@ -1378,7 +1378,7 @@ done:
 
 /* much of this is taken from unicodeobject.c */
 static int
-format_float_internal(PyObject *value,
+format_float_internal(PyValueBorrow value,
                       const InternalFormatSpec *format,
                       _PyUnicodeWriter *writer)
 {
@@ -1430,7 +1430,7 @@ format_float_internal(PyObject *value,
            format the result. We take care of that later. */
         type = 'g';
 
-    val = _PyValue_AsDouble(PyValue_FromObjectBorrow(value));
+    val = _PyValue_AsDouble(value);
     if (val == -1.0 && PyErr_Occurred())
         goto done;
 
@@ -1815,7 +1815,8 @@ _PyUnicode_FormatAdvancedWriter(_PyUnicodeWriter *writer,
     }
 
     /* parse the format_spec */
-    if (!parse_internal_render_format_spec(obj, format_spec, start, end,
+    if (!parse_internal_render_format_spec(Py_TYPE(obj),
+                                           format_spec, start, end,
                                            &format, 's', '<'))
         return -1;
 
@@ -1832,26 +1833,26 @@ _PyUnicode_FormatAdvancedWriter(_PyUnicodeWriter *writer,
 }
 
 int
-_PyLong_FormatAdvancedWriter(_PyUnicodeWriter *writer,
-                             PyObject *obj,
+_PyLong_FormatAdvancedWriterValue(_PyUnicodeWriter *writer,
+                                  PyValueBorrow value,
                              PyObject *format_spec,
                              Py_ssize_t start, Py_ssize_t end)
 {
-    PyObject *tmp = NULL;
     InternalFormatSpec format;
     int result = -1;
 
     /* check for the special case of zero length format spec, make
        it equivalent to str(obj) */
     if (start == end) {
-        if (PyLong_CheckExact(obj))
-            return _PyLong_FormatWriter(writer, obj, 10, 0);
+        if (PyValue_LongCheckExact(value))
+            return _PyLong_WriteDecimal(writer, value);
         else
-            return format_obj(obj, writer);
+            return format_obj(PyValue_AsKnownObjectBorrow(value), writer);
     }
 
     /* parse the format_spec */
-    if (!parse_internal_render_format_spec(obj, format_spec, start, end,
+    if (!parse_internal_render_format_spec(PyValue_TYPE(value),
+                                           format_spec, start, end,
                                            &format, 'd', '>'))
         goto done;
 
@@ -1865,7 +1866,7 @@ _PyLong_FormatAdvancedWriter(_PyUnicodeWriter *writer,
     case 'X':
     case 'n':
         /* no type conversion needed, already an int.  do the formatting */
-        result = format_long_internal(obj, &format, writer);
+        result = format_long_internal(value, &format, writer);
         break;
 
     case 'e':
@@ -1877,41 +1878,58 @@ _PyLong_FormatAdvancedWriter(_PyUnicodeWriter *writer,
     case '%':
         /* convert to float */
         {
-            PyValue tmp_v = _PyValue_Float(PyValue_FromObjectBorrow(obj));
-            tmp = PyValue_IsNull(tmp_v) ? NULL
-                : _PyValue_AsObjectStealAt(tmp_v, BOX_SITE_NUMBER);
+            PyValue tmp = _PyValue_Float(value);
+            if (PyValue_IsNull(tmp)) {
+                goto done;
+            }
+            result = format_float_internal(PyValue_Borrow(tmp), &format, writer);
+            PyValue_CLOSE(tmp);
+            break;
         }
-        if (tmp == NULL)
-            goto done;
-        result = format_float_internal(tmp, &format, writer);
-        break;
 
     default:
         /* unknown */
-        unknown_presentation_type(format.type, Py_TYPE(obj)->tp_name);
+        unknown_presentation_type(format.type, PyValue_TYPE(value)->tp_name);
         goto done;
     }
 
 done:
-    Py_XDECREF(tmp);
     return result;
 }
 
+
 int
-_PyFloat_FormatAdvancedWriter(_PyUnicodeWriter *writer,
-                              PyObject *obj,
-                              PyObject *format_spec,
-                              Py_ssize_t start, Py_ssize_t end)
+_PyLong_FormatAdvancedWriter(_PyUnicodeWriter *writer, PyObject *obj,
+                             PyObject *format_spec,
+                             Py_ssize_t start, Py_ssize_t end)
+{
+    return _PyLong_FormatAdvancedWriterValue(
+        writer, PyValue_FromObjectBorrow(obj), format_spec, start, end);
+}
+
+int
+_PyFloat_FormatAdvancedWriterValue(_PyUnicodeWriter *writer,
+                                   PyValueBorrow value,
+                                   PyObject *format_spec,
+                                   Py_ssize_t start, Py_ssize_t end)
 {
     InternalFormatSpec format;
 
     /* check for the special case of zero length format spec, make
        it equivalent to str(obj) */
-    if (start == end)
-        return format_obj(obj, writer);
+    if (start == end) {
+        PyObject *str = _PyValue_Str(value);
+        if (str == NULL) {
+            return -1;
+        }
+        int err = _PyUnicodeWriter_WriteStr(writer, str);
+        Py_DECREF(str);
+        return err;
+    }
 
     /* parse the format_spec */
-    if (!parse_internal_render_format_spec(obj, format_spec, start, end,
+    if (!parse_internal_render_format_spec(PyValue_TYPE(value),
+                                           format_spec, start, end,
                                            &format, '\0', '>'))
         return -1;
 
@@ -1927,13 +1945,23 @@ _PyFloat_FormatAdvancedWriter(_PyUnicodeWriter *writer,
     case 'n':
     case '%':
         /* no conversion, already a float.  do the formatting */
-        return format_float_internal(obj, &format, writer);
+        return format_float_internal(value, &format, writer);
 
     default:
         /* unknown */
-        unknown_presentation_type(format.type, Py_TYPE(obj)->tp_name);
+        unknown_presentation_type(format.type, PyValue_TYPE(value)->tp_name);
         return -1;
     }
+}
+
+int
+_PyFloat_FormatAdvancedWriter(_PyUnicodeWriter *writer,
+                              PyObject *obj,
+                              PyObject *format_spec,
+                              Py_ssize_t start, Py_ssize_t end)
+{
+    return _PyFloat_FormatAdvancedWriterValue(
+        writer, PyValue_FromObjectBorrow(obj), format_spec, start, end);
 }
 
 int
@@ -1950,7 +1978,8 @@ _PyComplex_FormatAdvancedWriter(_PyUnicodeWriter *writer,
         return format_obj(obj, writer);
 
     /* parse the format_spec */
-    if (!parse_internal_render_format_spec(obj, format_spec, start, end,
+    if (!parse_internal_render_format_spec(Py_TYPE(obj),
+                                           format_spec, start, end,
                                            &format, '\0', '>'))
         return -1;
 

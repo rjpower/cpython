@@ -161,6 +161,55 @@ class ValueSlotTableTests(unittest.TestCase):
         with self.assertRaisesRegex(TypeError, "object is not callable"):
             C()
 
+    def test_direct_init_and_type_call(self):
+        self.assertIsNone(object.__init__(17))
+        self.assertIsNone(object.__init__(1.5))
+        self.assertIsNone(object.__init__(17, 1))
+        self.assertIsNone(object.__init__(1.5, 1))
+        with self.assertRaises(TypeError):
+            object.__init__(object(), 1)
+
+        class Override:
+            def __init__(self):
+                raise AssertionError("wrong initializer")
+
+        instance = object.__new__(Override)
+        self.assertIsNone(object.__init__(instance))
+        self.assertEqual(type.__call__(int, 17), 17)
+        self.assertEqual(type.__call__(float, 1.5), 1.5)
+        self.assertIs(type.__call__(type, 17), int)
+
+        class Meta(type):
+            def __call__(cls):
+                return 42
+
+        class C(metaclass=Meta):
+            pass
+
+        self.assertEqual(C(), 42)
+        self.assertIs(type(type.__call__(C)), C)
+
+    def test_dict_subscript_pair_inheritance_and_mutation(self):
+        for base in (dict, frozendict):
+            with self.subTest(base=base):
+                class Child(base):
+                    pass
+
+                expected = (object_slot(base, 'subscript'),
+                            value_slot(base, 'subscript'))
+                self.assertNotEqual(expected[0], 0)
+                self.assertNotEqual(expected[1], 0)
+                self.assertEqual((object_slot(Child, 'subscript'),
+                                  value_slot(Child, 'subscript')), expected)
+                self.assertEqual(Child({1: 2})[1], 2)
+                Child.__getitem__ = lambda self, key: 42
+                self.assertNotEqual(object_slot(Child, 'subscript'), expected[0])
+                self.assertEqual(Child({1: 2})[1], 42)
+                del Child.__getitem__
+                self.assertEqual((object_slot(Child, 'subscript'),
+                                  value_slot(Child, 'subscript')), expected)
+                self.assertEqual(Child({1: 2})[1], 2)
+
     def test_unknown_name(self):
         with self.assertRaises(ValueError):
             value_slot(int, 'nb_nothing')

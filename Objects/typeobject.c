@@ -2672,8 +2672,8 @@ type_repr(PyObject *self)
     return result;
 }
 
-static PyObject *
-type_call(PyObject *self, PyObject *args, PyObject *kwds)
+Py_VALUE_ENTRY PyObject *
+_Py_type_call(PyObject *self, PyObject *args, PyObject *kwds)
 {
     PyTypeObject *type = PyTypeObject_CAST(self);
     PyObject *obj;
@@ -5721,15 +5721,22 @@ type_call_value(PyThreadState *tstate, PyTypeObject *type, const PyValue *args,
     }
     PyObject *kwds = NULL;
     PyValue result = PyValue_NULL;
-    if (kwnames != NULL) {
+    if (kwnames != NULL && PyTuple_GET_SIZE(kwnames) != 0) {
         kwds = _PyValue_StackAsDict(args + nargs, kwnames);
         if (kwds == NULL) {
             goto done;
         }
     }
-    if (type == &PyType_Type && nargs != 3) {
-        PyErr_SetString(PyExc_TypeError, "type() takes 1 or 3 arguments");
-        goto done;
+    if (type == &PyType_Type) {
+        if (nargs == 1 && (kwds == NULL || PyDict_GET_SIZE(kwds) == 0)) {
+            result = PyValue_DUP(PyValue_FromObjectBorrow(
+                (PyObject *)PyValue_TYPE(PyValue_Borrow(args[0]))));
+            goto done;
+        }
+        if (nargs != 3) {
+            PyErr_SetString(PyExc_TypeError, "type() takes 1 or 3 arguments");
+            goto done;
+        }
     }
     newfunc object_new_fn = type->tp_new;
     if (object_new_fn == NULL) {
@@ -5779,6 +5786,14 @@ done:
     return result;
 }
 
+PyValue
+_Py_type_call_value(PyThreadState *tstate, PyObject *callable,
+                     const PyValue *args, size_t nargsf, PyObject *kwnames)
+{
+    return type_call_value(tstate, (PyTypeObject *)callable, args,
+                           PyVectorcall_NARGS(nargsf), kwnames);
+}
+
 static PyValue
 type_value_vectorcall(PyThreadState *tstate, PyObject *metatype,
                       const PyValue *args, size_t nargsf, PyObject *kwnames)
@@ -5798,7 +5813,7 @@ type_value_vectorcall(PyThreadState *tstate, PyObject *metatype,
     }
     ternaryfunc selected_call = Py_TYPE(metatype)->tp_call;
     PyValue result;
-    if (selected_call == type_call) {
+    if (selected_call == _Py_type_call) {
         result = type_call_value(tstate, (PyTypeObject *)metatype, args,
                                  nargs, kwnames);
     }
@@ -5808,6 +5823,98 @@ type_value_vectorcall(PyThreadState *tstate, PyObject *metatype,
     }
     _Py_LeaveRecursiveCallTstate(tstate);
     return result;
+}
+
+static int
+has_active_instance_vectorcall(PyObject *callable)
+{
+    PyTypeObject *type = Py_TYPE(callable);
+    if (!(type->tp_flags & Py_TPFLAGS_HAVE_VECTORCALL)) {
+        return 0;
+    }
+
+    _Py_vectorcallvaluefunc value_call = NULL;
+    if (type->tp_value_vectorcall_offset != 0) {
+        memcpy(&value_call,
+               (char *)callable + type->tp_value_vectorcall_offset,
+               sizeof(value_call));
+    }
+    if (value_call != NULL) {
+        return 1;
+    }
+
+    vectorcallfunc object_call;
+    memcpy(&object_call,
+           (char *)callable + type->tp_vectorcall_offset,
+           sizeof(object_call));
+    return object_call != NULL;
+}
+
+static int
+dict_has_non_unicode_keys(PyObject *dict)
+{
+    Py_ssize_t pos = 0;
+    PyValueBorrow key, value;
+    while (_PyDict_NextBorrowed(dict, &pos, &key, &value)) {
+        if (!PyValue_IsObject(key) ||
+                !PyUnicode_Check(PyValue_AsKnownObjectBorrow(key))) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+int
+_PyType_CallWithOriginalDict(PyThreadState *tstate, PyObject *callable,
+                             PyObject *args, PyObject *kwargs,
+                             PyValue *result)
+{
+    if (callable == (PyObject *)&PyType_Type || !PyType_Check(callable) ||
+            !dict_has_non_unicode_keys(kwargs)) {
+        return 0;
+    }
+    PyTypeObject *metatype = Py_TYPE(callable);
+    PyTypeObject *type = (PyTypeObject *)callable;
+    if (metatype->tp_call != _Py_type_call ||
+            _PyType_VALUE_SLOT(metatype, call) != _Py_type_call_value ||
+            has_active_instance_vectorcall(callable)) {
+        return 0;
+    }
+
+    assert(PyTuple_Check(args));
+    assert(PyDict_Check(kwargs));
+    assert(!_PyErr_Occurred(tstate));
+    if (_Py_EnterRecursiveCallTstate(tstate,
+                                     " while calling a Python object")) {
+        *result = PyValue_NULL;
+        return 1;
+    }
+    if (type->tp_new == NULL) {
+        _PyErr_Format(tstate, PyExc_TypeError,
+                      "cannot create '%s' instances", type->tp_name);
+        *result = PyValue_NULL;
+        _Py_LeaveRecursiveCallTstate(tstate);
+        return 1;
+    }
+
+    _PyBorrowMark mark = _PyBorrowScope_Enter(tstate);
+    PyObject *obj = type->tp_new(type, args, kwargs);
+    obj = _Py_CheckFunctionResult(tstate, callable, obj, NULL);
+    if (obj != NULL && PyObject_TypeCheck(obj, type)) {
+        PyTypeObject *result_type = Py_TYPE(obj);
+        if (result_type->tp_init != NULL &&
+                result_type->tp_init(obj, args, kwargs) < 0) {
+            assert(_PyErr_Occurred(tstate));
+            Py_SETREF(obj, NULL);
+        }
+        else {
+            assert(!_PyErr_Occurred(tstate));
+        }
+    }
+    _PyBorrowScope_Exit(tstate, mark);
+    *result = obj == NULL ? PyValue_NULL : _PyValue_FromObjectResult(obj);
+    _Py_LeaveRecursiveCallTstate(tstate);
+    return 1;
 }
 
 /* Align up to the nearest multiple of alignof(max_align_t)
@@ -8003,7 +8110,7 @@ PyTypeObject PyType_Type = {
     0,                                          /* tp_as_sequence */
     0,                                          /* tp_as_mapping */
     0,                                          /* tp_hash */
-    type_call,                                  /* tp_call */
+    _Py_type_call,                              /* tp_call */
     0,                                          /* tp_str */
     _Py_type_getattro,                          /* tp_getattro */
     type_setattro,                              /* tp_setattro */
@@ -8036,6 +8143,7 @@ PyTypeObject PyType_Type = {
     .tp_value_vectorcall_offset = offsetof(PyTypeObject, tp_value_vectorcall),
     .tp_value_vectorcall = (_Py_valuefunc)type_value_vectorcall,
     .tp_value = {
+        .call = _Py_VALUE_SLOT_INIT(call, _Py_type_call_value),
         .getattro = _Py_VALUE_SLOT_INIT(getattro, _Py_type_getattro_value),
         .setattro = _Py_VALUE_SLOT_INIT(setattro, type_setattro_value),
         .nb_or = _Py_VALUE_SLOT_INIT(nb_or, _Py_union_type_or_value),
@@ -10237,6 +10345,7 @@ enum {
     VALUE_WRAPPER_REPR,
     VALUE_WRAPPER_CONCAT,
     VALUE_WRAPPER_CALL,
+    VALUE_WRAPPER_INIT,
     VALUE_WRAPPER_SUBSCRIPT,
     VALUE_WRAPPER_ITEM,
     VALUE_WRAPPER_ASSSUBSCRIPT,
@@ -12457,6 +12566,15 @@ wrap_init(PyObject *self, PyObject *args, void *wrapped, PyObject *kwds)
 }
 
 static PyValue
+wrap_initvalue(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs,
+               PyObject *kwnames, void *wrapped)
+{
+    _Py_initvaluefunc func = (_Py_initvaluefunc)wrapped;
+    int status = func(self, args, nargs, kwnames);
+    return status < 0 ? PyValue_NULL : PyValue_None;
+}
+
+static PyValue
 tp_new_wrapper(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs,
                PyObject *kwnames)
 {
@@ -13161,6 +13279,13 @@ slot_tp_call_value(PyThreadState *tstate, PyObject *self,
     return result;
 }
 
+int
+_PyType_IsGenericCallPair(PyTypeObject *type)
+{
+    return type->tp_call == slot_tp_call &&
+           _PyType_VALUE_SLOT(type, call) == slot_tp_call_value;
+}
+
 /* There are two slot dispatch functions for tp_getattro.
 
    - _Py_slot_tp_getattro() is used when __getattribute__ is overridden
@@ -13406,12 +13531,12 @@ static PyValue
 slot_tp_descr_get_value(PyObject *self, PyValueBorrow obj, PyObject *type)
 {
     PyTypeObject *tp = Py_TYPE(self);
-    PyObject *get = _PyType_LookupRef(tp, &_Py_ID(__get__));
-    if (get == NULL && PyErr_Occurred()) {
-        /* Boxing an inline class attribute failed. */
+    _PyStatusValue found = _PyType_LookupValue(tp, &_Py_ID(__get__));
+    PyValue get = found.value;
+    if (PyValue_IsNull(get) && PyErr_Occurred()) {
         return PyValue_NULL;
     }
-    if (get == NULL) {
+    if (PyValue_IsNull(get)) {
 #ifndef Py_GIL_DISABLED
         /* Avoid further slowdowns */
         if (tp->tp_descr_get == slot_tp_descr_get) {
@@ -13428,9 +13553,8 @@ slot_tp_descr_get_value(PyObject *self, PyValueBorrow obj, PyObject *type)
     _PyValue_WindowPut(&stack[1], PyValue_IsNull(obj)
                        ? _PyValue_FromObjectKnown(Py_None) : obj);
     _PyValue_WindowPut(&stack[2], PyValue_FromObjectBorrow(type));
-    PyValue res = _PyValue_Vectorcall(PyValue_FromObjectBorrow(get), stack, 3,
-                                      NULL);
-    Py_DECREF(get);
+    PyValue res = _PyValue_Vectorcall(get, stack, 3, NULL);
+    PyValue_CLOSE(get);
     return res;
 }
 
@@ -13505,6 +13629,21 @@ Py_VALUE_ENTRY int
 _Py_slot_tp_init(PyObject *self, PyObject *args, PyObject *kwds)
 {
     Py_ssize_t nargs = PyTuple_GET_SIZE(args);
+    if (kwds != NULL && dict_has_non_unicode_keys(kwds)) {
+        PyObject *result = call_method(self, &_Py_ID(__init__), args, kwds);
+        if (result == NULL) {
+            return -1;
+        }
+        if (result != Py_None) {
+            PyErr_Format(PyExc_TypeError,
+                         "__init__() should return None, not '%.200s'",
+                         Py_TYPE(result)->tp_name);
+            Py_DECREF(result);
+            return -1;
+        }
+        Py_DECREF(result);
+        return 0;
+    }
     if (kwds == NULL || PyDict_GET_SIZE(kwds) == 0) {
         return _Py_slot_tp_init_value(PyValue_FromObjectBorrow(self),
                                       _PyTuple_ITEMS(args), nargs, NULL);
@@ -13544,6 +13683,20 @@ _Py_slot_tp_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
 {
     PyThreadState *tstate = _PyThreadState_GET();
     Py_ssize_t nargs = PyTuple_GET_SIZE(args);
+    if (kwds != NULL && dict_has_non_unicode_keys(kwds)) {
+        PyValue func_value = _PyValue_GetAttr(
+            PyValue_FromObjectBorrow((PyObject *)type), &_Py_ID(__new__));
+        PyObject *func = _PyValue_AsObjectResultAt(func_value,
+                                                    BOX_SITE_ATTRIBUTE);
+        if (func == NULL) {
+            return NULL;
+        }
+        PyObject *result = _PyObject_Call_Prepend(tstate, func,
+                                                  (PyObject *)type,
+                                                  args, kwds);
+        Py_DECREF(func);
+        return result;
+    }
     PyValue result;
     if (kwds == NULL || PyDict_GET_SIZE(kwds) == 0) {
         result = _Py_slot_tp_new_value(type, _PyTuple_ITEMS(args), nargs, NULL);
@@ -14217,6 +14370,9 @@ slotdef_value_wrapper(const pytype_slotdef *p, int family)
     case VALUE_WRAPPER_CALL:
         assert(w == _Py_FUNC_CAST(wrapperfunc, wrap_call));
         return wrap_callvalue;
+    case VALUE_WRAPPER_INIT:
+        assert(w == _Py_FUNC_CAST(wrapperfunc, wrap_init));
+        return wrap_initvalue;
     case VALUE_WRAPPER_SUBSCRIPT:
         assert(w == wrap_binaryfunc);
         return wrap_subscriptvalue;
@@ -14719,6 +14875,29 @@ update_one_slot(PyTypeObject *type, pytype_slotdef *p, pytype_slotdef **next_p,
                    - it's wrapping the wrong class
                  */
                 use_generic = 1;
+            }
+        }
+        else if (row == _Py_VALUE_SLOT_INDEX_subscript && descr != NULL &&
+                 _PyDict_IsBuiltinGetItemDescriptor(descr) &&
+                 is_subtype_with_mro(lookup_tp_mro(type), type,
+                                     PyDescr_TYPE(descr)))
+        {
+            PyTypeObject *owner = PyDescr_TYPE(descr);
+            void *object = (void *)owner->tp_as_mapping->mp_subscript;
+            _Py_valuefunc value = owner->tp_value.subscript;
+            assert(object == (void *)_PyDict_Subscript);
+            _PyType_CHECK_VALUE_ROW(owner, _Py_VALUE_SLOT_INDEX_subscript);
+            generic = p->function;
+            generic_value = slotdef_values[p - slotdefs].function;
+            if (specific != NULL && specific != object) {
+                use_generic = 1;
+            }
+            else {
+                if (specific != NULL && specific_value != value) {
+                    value = NULL;
+                }
+                specific = object;
+                specific_value = value;
             }
         }
         else if (descr != NULL && Py_IS_TYPE(descr, &PyCFunction_Type) &&

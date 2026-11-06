@@ -328,6 +328,21 @@ def main(argv: list[str] | None = None) -> int:
                 rotation = (round_index + kernel_index) % len(labels)
                 order = labels[rotation:] + labels[:rotation]
                 for label in order:
+                    wait_started = time.monotonic()
+                    waits = []
+                    while True:
+                        loads = os.getloadavg()
+                        waits.append({"time": time.time(),
+                                      "elapsed_seconds": time.monotonic() - wait_started,
+                                      "load": loads})
+                        (args.output / "load-wait.json").write_text(json.dumps({
+                            "round": round_index + 1, "kernel": name, "label": label,
+                            "resume_below": 3.0, "samples": waits}, indent=2))
+                        if time.monotonic() >= deadline:
+                            raise RuntimeError("declared 45-minute timing window expired")
+                        if loads[0] < 3.0:
+                            break
+                        time.sleep(min(10, max(0, deadline - time.monotonic())))
                     if time.monotonic() >= deadline:
                         raise RuntimeError("declared 45-minute timing window expired")
                     path = args.output / f"r{round_index + 1}-{name}-{label}.json"
@@ -337,6 +352,7 @@ def main(argv: list[str] | None = None) -> int:
                                "-o", str(path)]
                     conditions.append({"round": round_index + 1, "kernel": name,
                                        "label": label, "load": os.getloadavg(),
+                                       "load_wait": waits,
                                        "command": command})
                     journal = {
                         "qualification": args.qualification,

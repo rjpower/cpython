@@ -1,0 +1,61 @@
+--- a/Objects/typeobject.c
++++ b/Objects/typeobject.c
+@@ -5826,6 +5826,31 @@
+ }
+ 
+ static int
++has_active_instance_vectorcall(PyObject *callable)
++{
++    PyTypeObject *type = Py_TYPE(callable);
++    if (!(type->tp_flags & Py_TPFLAGS_HAVE_VECTORCALL)) {
++        return 0;
++    }
++
++    _Py_vectorcallvaluefunc value_call = NULL;
++    if (type->tp_value_vectorcall_offset != 0) {
++        memcpy(&value_call,
++               (char *)callable + type->tp_value_vectorcall_offset,
++               sizeof(value_call));
++    }
++    if (value_call != NULL) {
++        return 1;
++    }
++
++    vectorcallfunc object_call;
++    memcpy(&object_call,
++           (char *)callable + type->tp_vectorcall_offset,
++           sizeof(object_call));
++    return object_call != NULL;
++}
++
++static int
+ dict_has_non_unicode_keys(PyObject *dict)
+ {
+     Py_ssize_t pos = 0;
+@@ -5852,8 +5877,7 @@
+     PyTypeObject *type = (PyTypeObject *)callable;
+     if (metatype->tp_call != _Py_type_call ||
+             _PyType_VALUE_SLOT(metatype, call) != _Py_type_call_value ||
+-            type->tp_vectorcall != _PyValue_VectorcallThunk ||
+-            type->tp_value_vectorcall != (_Py_valuefunc)type_value_vectorcall) {
++            has_active_instance_vectorcall(callable)) {
+         return 0;
+     }
+ 
+--- a/Lib/test/test_call.py
++++ b/Lib/test/test_call.py
+@@ -45,6 +45,14 @@
+                 with self.assertRaisesRegex(TypeError, "keywords must be strings"):
+                     call()
+ 
++    def test_object_non_string_kwargs_preserve_type_error_order(self):
++        bad_kwargs = {None: 1}
++        for args in ((), (1,)):
++            with self.subTest(args=args):
++                with self.assertRaisesRegex(
++                        TypeError, r"object\(\) takes no arguments"):
++                    object(*args, **bad_kwargs)
++
+     def test_kwargs_order(self):
+         # bpo-34320:  **kwargs should preserve order of passed OrderedDict
+         od = collections.OrderedDict([('a', 1), ('b', 2)])

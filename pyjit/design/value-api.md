@@ -23,19 +23,20 @@ Related pages: [PyValue representation](pyvalue.md) (encoding, D1–D8),
 
 ## Current implementation snapshot (2026-11-06)
 
-The committed runtime source is `build/worktrees/pyvalue-rc-universal` at
-`1ab005e79b88`. The revision-3 design and `379e92cded9` source inventory below
+The current runtime source is `build/worktrees/pyvalue-rc-universal` at
+`6a0e4c12c17`. The revision-3 design and `379e92cded9` source inventory below
 are historical references; they do not describe every slot or caller in the
-current tree. In particular, the old claim that `tp_new` has no value slot is
-superseded. The committed `_PyValueSlots` table has 55 rows, including
-`new_` and `init_`, arranged as 16 hot and 39 cold fields. The phase-2 slot
-marks and four no-production-caller aliases (`PyIter_NextItem`,
-`PyMapping_GetOptionalItemString`, `_PyMapping_GetOptionalItem2`, and
-`_PyLong_GCD`) landed in `1ab005e79b88`; merged qualification `11580` passed
-4,541 tests in both release and debug. A focused ordinary-class `A()` probe
-still records 100 boxes for 100 calls because `PyType_Type.tp_value.call` is
-null and ordinary dispatch does not enter the value constructor helper. The
-landed providers are not constructor closure.
+current tree. The committed `_PyValueSlots` table has 55 rows, including
+`new_` and `init_`, arranged as 16 hot and 39 cold fields. Constructor,
+type-call and direct-initializer wrappers are now connected. The earlier
+ordinary-class `A()` probe at `1ab005e79b88` found 100 boxes for 100 calls;
+that dispatch gap was fixed; the focused constructor probes pass. Release and
+debug full suites pass 54,351 tests each. The full R27 census still fails with
+11,028,818 core/core-pending/unresolved boxes; the 6a kernel gate also fails
+(18/29 startup-inclusive raw-zero, 29/29 zero loop deltas). See the [census
+receipt](../issues/checkpoint-closure/full-census-6a0e4c12c17.md), [kernel
+receipt](../issues/checkpoint-closure/kernels-6a0e4c12c17.md), and [live
+plan](../issues/checkpoint-closure/plan.md).
 
 ### Construction slots
 
@@ -64,17 +65,19 @@ object-backed result. The helper checks each selected pair with
 `_PyType_CHECK_VALUE_ROW`; type readiness inherits value rows alongside equal
 object slots. The Python-defined `slot_tp_new` and `slot_tp_init` paths also
 have value implementations and object-entry adapters in `Objects/typeobject.c`.
-These providers and helper behavior do not establish ordinary `A()` dispatch:
-the missing `PyType_Type.tp_value.call` pair leaves those calls on the object
-adapter path until that pair is installed and tested.
+The `PyType_Type` call path and direct initializer wrappers now select these
+providers for ordinary construction. Focused probes for ordinary construction
+pass, but this is not full construction closure. Generic calls that must retain
+an original tuple/dict still have an explicit object-slot bridge, and builtin
+`tp_new`/`tp_init` providers and object-form callables still need migration.
+See the [generic-call debt](../issues/checkpoint-closure/generic-call-original-kwargs-debt.md)
+and [type-call review](../issues/checkpoint-closure/ast-original-kwargs-peer-review-v3.md).
 
-This covers construction through type calling; it does not close every direct
-slot-descriptor call. The table's `WRAPPER=NONE` means these rows do not use a
-generic slot-wrapper family; direct `__new__` already has the dedicated
-`tp_new_wrapper` `METH_VALUE` path. Direct `__init__` and `type.__call__`
-wrapper continuations remain proposed in
-[`direct-init-call-wrapper-proposal.md`](../issues/checkpoint-closure/direct-init-call-wrapper-proposal.md).
-Do not treat their existence in the type-call path as direct-wrapper closure.
+This covers construction through type calling and the reviewed direct
+`__new__`, `__init__`, and `type.__call__` wrappers. The earlier
+[`direct-init-call-wrapper-proposal.md`](../issues/checkpoint-closure/direct-init-call-wrapper-proposal.md)
+is historical design rationale; its implementation is integrated. This does
+not close unrelated value API callers or the full R27 gate.
 
 The revision-3 slot-update table below records its original plan. Its `tp_new`
 row is historical and superseded by this section; retain the other decisions

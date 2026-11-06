@@ -234,3 +234,23 @@ that remote copy remains at revision 7. No alternate export was attempted.
   actual metatype dispatch and direct wrappers are corrected in the next
   reviewed composition. Full qualification `12246` now covers those changes,
   float formatting, descriptor lookup and native child receipts together.
+
+- 2026-11-06 — Landing `30553` passed regeneration, lint, three 117-module
+  builds and 430 AST/call tests per release/debug profile. Fourteen focused
+  startup/hot-zero/identity probes report zero boxes; 412 integer cases, 17
+  kwargs/descriptor/recursion cases and two direct-C `object()` checks match
+  upstream on both profiles. Full suites and strict R27 remain outstanding;
+  no current timing is claimed.
+- 2026-11-06 — Runtime HEAD `6a0e4c12c17` (constructor/format), following
+  `05286694774` (native child accounting), is the current frozen source. All five
+  build-info objects match their respective source HEADs; module rosters are
+  116/116/117. Both full profiles passed 54,351 tests with no failures
+  (release: 2,531 skips; debug: 2,469). The strict whole-source R27 census
+  failed with 11,028,818 core/core-pending/unresolved boxes and incomplete
+  identity/accounting. The 87-record, 29-kernel capture has 18 startup-inclusive
+  raw-zero kernels and 29 zero loop deltas, but fails strict admission. The
+  matched-build preflight passed but is ineligible as a measurement. No elapsed
+  timing exists.
+- 2026-11-06 — Synchronized live design and handoff summaries to the final 6a
+  functional, census and kernel receipts. Diagnostic timing is active, with no
+  result published; historical qualification failures remain documented.

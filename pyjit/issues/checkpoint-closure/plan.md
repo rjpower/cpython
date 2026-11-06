@@ -1,7 +1,7 @@
 # PyValue and register-interpreter checkpoint closure
 
-Coordinator plan, 2026-11-05. This effort began at `e1229448be3`; the current
-committed runtime is `1ab005e79b8` on `boil/pyvalue-rc-universal`. Canonical
+Coordinator plan, updated 2026-11-06. This effort began at `e1229448be3`; the
+current committed runtime is `6a0e4c12c17` on `boil/pyvalue-rc-universal`. Canonical
 documentation is in this checkout. The live queue is the final section; earlier
 queues are historical records. The coordinator owns interfaces, assignments,
 commits, merged qualification and measurement.
@@ -356,7 +356,7 @@ measurement controls; final freeze must verify actual stdlib/module imports.
 3. **Terra medium, Sol design review:** fix ctypes foreign-pointer keepalive ownership, then migrate private scalar/field callbacks, constructors and consumers. The preparatory `b_objects` conversion is rejected: canonicalizing the sole raw owner can invalidate a pointer in foreign memory. Preserve its artifact. Solve raw FFI ownership, GC, sharing, replacement and allocation-failure semantics before admitting inline internal keepalive tokens. Normal mutable constructor dispatch is required; the existing value-preserving type-call tuple can carry inline arguments to a ported initializer.
 4. **Luna medium:** after property, port cold `get_const_value`, deferred annotations and import attribute continuations from the latest raw-kernel PCs; return bounded proposals and minimal checks. Continue the manual API and indirect-slot census from actual compiler results rather than historical counts. Sol reviews ownership changes; the coordinator owns shared headers and integration.
 5. **Coordinator and Sol:** after these coherent closures, run a new full stats census, resolve invalid-owner rows using the reviewed allocator-independent reporter fix, and finish finite child/fork/intentional-exit accounting. Rank the remaining core, core-owned thunk and adapter tail. Complete the API/provider inventory and indirect-slot audit before setting completion metadata. Current full stats at committed `6aec17eefeb` passes 54,290 functional tests but records 41,038,468 debt boxes; this is failing admission evidence.
-6. **Coordinator:** repeat complete release/debug qualification and strict raw all-29 kernel/full-suite gates on the final clean source. The current candidate has nine raw-zero kernels and all 29 zero loop deltas; [the exact census](kernels-context-candidate.md) remains a failing gate. Do not count core-owned adapters as acceptable boundaries.
+6. **Coordinator:** repeat complete release/debug qualification and strict raw all-29 kernel/full-suite gates on the final clean source. At that candidate, the capture had nine raw-zero kernels and all 29 zero loop deltas; [the exact census](kernels-context-candidate.md) remains a failing gate. Do not count core-owned adapters as acceptable boundaries.
 7. **Coordinator:** stop worker builds, verify the matched controls' source/compiler/options and actual standard-library/C extension imports, warm all binaries, then run three rotating interleaved U/I/C kernel timing rounds, memory measurements and the established pyperformance subset. Retain spread and host conditions, and profile the measured gap. Publish per-kernel ratios, aggregate time/RSS and limitations against upstream `3a440b65695` and interim `eba351fee7d`. Historical 1.73x/1.83x results do not apply to this source.
 8. **Coordinator:** make the evidence-driven follow-up plan: interpreter cost and IR encoding choices (including deferred G2), remaining throughput/memory issues, serialization recovery, then method/tracing JIT. Keep accepted design, implementation status and deferred alternatives separate. Preserve old worktrees and sealed evidence throughout.
 
@@ -481,58 +481,49 @@ source integration, full tests, measurement and the final checkpoint recap.
 
 ## Live integration and measurement queue (2026-11-06)
 
-1. **Keep landed increments distinct from the current candidate.** `84edb605d31`
-   landed finished-process identity, `71016b30e45` direct value new, and
-   `1ab005e79b8` init providers plus four manual aliases. Those focused checks
-   remain historical evidence; they do not establish current full qualification.
-2. **Current coherent cohort.** The full-v2 candidate based on `1ab005e79b8`
-   combines the actual type-call pair and direct init wrappers, float formatting,
-   descriptor lookup, and native child identity producer/reader/benchmark
-   consumer. Regeneration, lint, limited-ABI/frozen-main checks and all three
-   117-module builds passed. The stage3 native identity set reports 13 passing
-   positive/negative probes. Keep base/additive review artifacts frozen; root
-   owns the shared source and builds.
-3. **Full-suite outcome and in-flight fixes.** Execution `10399`, tag
-   `checkpoint-constructor-float-identity-full-v2`, ran 54,347 tests in each of
-   release and debug. Both profiles have three failures (two AST, one opcache)
-   and one environment-change result (`test_tools` changed `sys.path`). Root
-   applied a frozen sys.path cleanup and a one-line init diagnostic only after
-   those runs; those edits are unbuilt and untested. Approved causal fixes are
-   in flight. Rebuild and rerun focused tests for each fix, then rerun merged
-   release/debug suites before calling this cohort qualified. The initial
-   attempt `12246` stopped at the stats roster; the later reviewed exports
-   fixed the stats link.
-4. **Close the observed box paths.** The private stats receipt reports 98 boxes
-   in the specialized-init probe, one in cold lookup, 100 each for builtin
-   float formatting and float f-strings, and 200 each for long formatting and
-   long format fields. Preserve this receipt and trace each site to its owner;
-   do not treat direct `float.__format__` or `str.format` probes as proof that
-   the builtin format and f-string paths are closed. Recheck all numeric and
-   constructor probes after the approved fixes. No box may be reclassified to
-   hide a core-owned path.
-5. **Run a fresh strict R27 census.** Retain the exact stats ELF, refresh the
-   finite API/copied-slot inventory, and account for every missing, zero,
-   crashed, or external process using the integrated marker/receipt protocol.
-   The last complete census (`af82c03c4e5`) remains historical failing evidence:
-   6,513 dumps, 14,211,307 debt boxes, 545 unfinished markers and 423 predicted
-   events. It is not a result for this cohort, and events are not unique
-   children. Ctypes raw ownership and LRU implementation remain on explicit
-   approval hold after automatic review; do not bypass those holds.
-6. **Freeze and measure only after admission.** Once full functional and R27
-   gates pass, commit the validated source, refresh `Modules/getbuildinfo.o`
-   and complete all three builds. With builds/workers stopped, verify matched
-   upstream `3a440b65695`, interim `eba351fee7d` and candidate identities and
-   their 116/116/117 module rosters. Run the declared three rotating kernel
-   rounds (load limit four, 45-minute window), the reviewed eight-module/12-result
-   pyperformance subset, warmed-page RSS and separate profiling. The reviewed
-   measurement helper has not run. The 1.73x kernel and 1.83x pyperformance
-   ratios belong to `5de7bd62ef9`, not this candidate; no current performance
-   ratio is known. Preserve raw vectors and spread.
-7. **Write the follow-up from qualified evidence.** Separate functional
-   correctness, boxing/accounting admission and elapsed-time performance. Rank
-   remaining approved ownership work, long numeric formatting, type
-   lookup/attribute continuations and cached richcompare from the fresh census;
-   then rank interpreter/IR encoding and deferred G2, memory, serialization
-   recovery, and the shared optimizing method/tracing JIT from measured costs.
-   The checkpoint remains open until every stated gate passes and the recap
-   identifies any remaining limitation.
+Runtime HEAD is `6a0e4c12c17` (constructor and format work), following
+`05286694774` (native child accounting). All five build-info objects match
+their respective source HEADs: upstream `3a440b65695`, interim `eba351fee7d`,
+and candidate `6a0e4c12c17`. Module rosters are 116/116/117. Both full
+profiles passed 54,351 tests with no failures (release: 2,531 skips; debug:
+2,469). The strict whole-source R27 census failed: 6,512 dumps contain
+11,028,818 core/core-pending/unresolved boxes, and process identity/accounting
+is incomplete. The raw capture completed with 87 records over 29 kernels:
+18/29 startup-inclusive raw-zero and 29/29 loop deltas zero, but strict kernel
+admission failed. See the [kernel receipt](kernels-6a0e4c12c17.md) and [full
+census receipt](full-census-6a0e4c12c17.md). The matched-build preflight passed
+but is ineligible as a measurement. A diagnostic timing run is active and has
+no published result. Targeted differentials remain supporting evidence, not
+replacements for the full gates.
+
+1. **Functional qualification is complete.** Both profiles passed 54,351 tests
+   with no failures (release: 2,531 skips; debug: 2,469). The earlier full-v2
+   outcome remains recorded (54,347 tests per profile; two AST failures, one opcache failure,
+   and one `test_tools` `sys.path` environment change). The targeted repair set
+   passes and the latest batch reports no environment change.
+2. **Resolve strict R27 and kernel failures.** The exact-source kernel capture
+   failed: see its receipt for the 11 raw-nonzero kernel rows and box counts.
+   Audit static inventory and process accounting; resolve remaining startup,
+   kernel, and child-accounting debt before repeating the gate. Use the exact
+   final stats executable and integrated process markers. Require all 29 startup-inclusive kernel
+   checks, complete child/fork accounting and no core, core-owned adapter,
+   core-pending or unresolved boxes. Fourteen focused zero-box probes do not
+   substitute for this gate. The `66981c963be` capture (15/29 raw-zero, zero
+   loop deltas on all 29) is historical only. Ctypes and LRU ownership
+   implementation remain on explicit approval hold.
+3. **Source/build identity is confirmed.** All five build-info objects match
+   their respective source HEADs, with 116/116/117 module rosters; the exact
+   retained executable IDs are recorded in the census and kernel receipts.
+   Keep the source and builds frozen through the active diagnostic run.
+4. **Complete diagnostics, then plan qualified measurements.** A diagnostic
+   run is active, but its results cannot qualify performance while R27 fails.
+   After functional and R27 gates pass, with workers stopped, run matched
+   upstream `3a440b65695`, interim `eba351fee7d` and candidate kernel rounds,
+   the reviewed pyperformance subset, warmed-page RSS and separate profiling.
+   Use a one-minute load guard: reject kernel or pyperformance timing samples
+   at load >= 4, and retain the full 1/5/15-minute load tuple in the journal.
+   No current elapsed timing exists; the 1.73x/1.83x ratios belong to
+   `5de7bd62ef9`.
+   Then write the checkpoint recap and rank follow-ups by measured bottlenecks.
+   G2 remains deferred; serialization recovery and the shared optimizing
+   method/tracing JIT follow the checkpoint.

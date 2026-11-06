@@ -5,18 +5,18 @@ instance fields and value-native C APIs. This page specifies the encoding as
 built, compares it with other dynamic-language runtimes, and lists the gaps
 we should close. It is the reference for value, container and C-boundary work.
 
-**Current rollout, 2026-11-06.** The committed runtime is `1ab005e79b88` and
-has 55 value-slot rows, including `new_` and `init_` (16 hot, 39 cold).
-Phase-2 marks and four no-production-caller aliases (`PyIter_NextItem`,
-`PyMapping_GetOptionalItemString`, `_PyMapping_GetOptionalItem2`, and
-`_PyLong_GCD`) landed in `1ab005e79b88`; merged qualification `11580` passed
-4,541 tests in both release and debug. The runtime has value constructor
-providers, but ordinary `A()` still records 100 boxes for 100 calls because
-`PyType_Type.tp_value.call` is null. The type-call pair is required before
-general constructor dispatch can be called closed. Direct `__init__` and
-`type.__call__` descriptor wrappers are also not closed; see
-[value-api.md](value-api.md#construction-slots) and the
-[wrapper proposal](../issues/checkpoint-closure/direct-init-call-wrapper-proposal.md).
+**Current rollout, 2026-11-06.** Runtime HEAD is `6a0e4c12c17`; it has the
+55-row value-slot table, including `new_` and `init_` (16 hot, 39 cold),
+type-call dispatch and direct initializer wrappers. Release and debug full
+suites both pass 54,351 tests with no failures. The current 14 focused
+startup/hot-zero probes report zero boxes, but the full R27 census still fails
+with 11,028,818 core/core-pending/unresolved boxes and incomplete process
+accounting. The 6a kernel receipt records 18/29 startup-inclusive raw-zero
+kernels and 29/29 zero loop deltas; strict admission fails. See the [full
+census](../issues/checkpoint-closure/full-census-6a0e4c12c17.md), [kernel
+receipt](../issues/checkpoint-closure/kernels-6a0e4c12c17.md), and
+[checkpoint plan](../issues/checkpoint-closure/plan.md). The 1ab ordinary-class
+100-box probe and wrapper proposal below are historical, superseded evidence.
 
 **Historical rollout snapshot, 2026-11-05.** Runtime `d6eae4b1c1c` uses this value format
 and builds in debug, release and stats configurations. The source snapshot

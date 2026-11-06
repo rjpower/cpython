@@ -1,25 +1,29 @@
 # Coordinator handoff
 
-The current candidate is based on committed runtime HEAD `1ab005e79b8` on
-`boil/pyvalue-rc-universal`; the constructor/dispatch, float-formatting,
-descriptor and native-child-accounting cohort completed its full-v2 suite run.
-Regeneration, lint, limited-ABI/frozen-main checks and all three 117-module
-builds passed. Release and debug each ran 54,347 tests with three failures
-(two AST, one opcache), plus one environment-change result (`test_tools`
-modified `sys.path`). After the runs, root applied the frozen `sys.path`
-cleanup and one-line init diagnostic; those edits have not been rebuilt or
-tested. Thirteen native identity probes pass, including deliberate negative
-cases. Private stats still show 98 boxes in the specialized-init case, one in
-cold lookup, 100 each in float formatting and f-strings, and 200 each in long
-formatting and long format fields. R27 and functional qualification remain
-open; approved causal fixes are in flight.
+Runtime HEAD is `6a0e4c12c17` (constructor and format work), following
+`05286694774` (native child accounting). All five build-info objects match
+their respective source HEADs: upstream `3a440b65695`, interim `eba351fee7d`,
+and candidate `6a0e4c12c17`. Module rosters are 116/116/117. The full release
+suite and debug suite both passed 54,351 tests with no failures (release: 2,531
+skips; debug: 2,469). The strict whole-source R27 census failed: 6,512 dumps
+contain 11,028,818 core/core-pending/unresolved boxes and process
+identity/accounting is incomplete. The raw kernel capture completed with 87
+records across 29 kernels: 18/29 are startup-inclusive raw-zero and all loop
+deltas are zero, but the strict kernel gate failed. See the [kernel receipt](issues/checkpoint-closure/kernels-6a0e4c12c17.md)
+and [full census receipt](issues/checkpoint-closure/full-census-6a0e4c12c17.md).
+The matched-build preflight passed but is ineligible as a measurement. A
+diagnostic timing run is active, with no result published; it cannot qualify
+performance while R27 fails.
 
-The raw kernel capture at `66981c963be` (15/29 raw-zero kernels, 29 zero loop
-deltas) is historical and is not a measurement of this cohort. Matched-build
-preflight is not a timing result; no new performance run has started. The
-measurement helper is independently reviewed, but timing waits for a frozen
-source/build window. Ctypes and LRU implementation remain on explicit approval
-hold. Root alone changes shared runtime source/builds.
+Keep the failed full-v2 results visible: both profiles ran 54,347 tests with
+two AST failures and one opcache failure, and `test_tools` changed `sys.path`.
+The targeted AST/call fixes and latest environment check passed. The earlier
+15/29 raw-zero capture at `66981c963be` remains historical, not a new
+qualification. Root owns the frozen source/builds. Audit static-gate and
+process-accounting gaps before changing marks or source. A diagnostic timing
+run is active and has no result published; it cannot qualify performance
+while R27 fails. Ctypes and LRU implementation remain on explicit approval
+hold; G2 is deferred.
 
 ## Mission and selected design
 
@@ -55,12 +59,10 @@ and backend. The stage pages distinguish selected designs from working code.
 | --- | --- |
 | Documentation root (canonical `pyjit/`) | `/home/power/code/cpython/.worktrees/python-jit`, branch `weaver/python-jit` |
 | Runtime tree (nested worktree) | `/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/pyvalue-rc-universal` |
-| Runtime branch / source base | `boil/pyvalue-rc-universal`, `1ab005e79b8` (2026-11-06; the full-v2 candidate and post-run fixes are uncommitted) |
-| Shared builds at HEAD | `build/pyvalue-rc-repr-debug`, `build/pyvalue-rc-repr-release` (under the `python-boil-the-ocean` worktree) |
-| Older debug build | `build/pyvalue-rc-debug-20261102-v1` |
-| Triage debug builds | `build/pyvalue-rc-bringup-debug`, `build/pyvalue-rc-triage-rt-debug` |
-| Release build | `build/pyvalue-rc-release-20261103` (`--with-mimalloc --with-computed-gotos --with-shapes`, -O3) |
-| Upstream control | `build/upstream-release-3a440b6` (`3a440b65695`, `CC=gcc --with-mimalloc --with-computed-gotos`, -O3); passes `test_int` |
+| Runtime branch / source | `boil/pyvalue-rc-universal`, clean HEAD `6a0e4c12c17` (2026-11-06; coordinator-owned) |
+| Candidate builds | `build/pyvalue-rc-repr-debug`, `build/pyvalue-rc-repr-release`, `build/pyvalue-rc-repr-stats`; retained IDs and control builds are linked in the current census receipts |
+| Matched controls | Upstream `3a440b65695` and interim `eba351fee7d`; exact build IDs are in the full-census and kernel receipts |
+| Historical builds | `build/pyvalue-rc-debug-20261102-v1`, `build/pyvalue-rc-bringup-debug`, `build/pyvalue-rc-triage-rt-debug`, `build/pyvalue-rc-release-20261103`, `build/upstream-release-3a440b6` (not the current matched-build set) |
 | Coordinator working files | `build/pyjit-link-wave1/` (briefs, `FOLLOWUPS.md`, reviews, progress logs; bring-up ladder in `BRINGUP-BRIEF.md`) |
 
 The outer `python-boil-the-ocean` worktree's git link is broken. Run Git in the
@@ -72,7 +74,8 @@ Python commands, with the shared cache at `/home/power/.cache/uv`.
 `/usr/bin/python3.14` has `test.support` for reference controls; it is not the
 restored candidate.
 
-The qualified interim source is `eba351fee7d`, with executables under
+The current candidate SOABI is `boilvalrc3`. The qualified interim source is
+`eba351fee7d`, with executables under
 `build/rc-integrated-{release,debug}-20261101/python`. It has inline frame values
 but boxed heap fields. Its ABI is `boilrc1`; restoration uses
 `boilvalrc1-316d-x86_64-linux-gnu`. Neither is a new native JIT tier.
@@ -82,38 +85,33 @@ and shapes. Read the build directories for the exact commands.
 
 ## Source and build state
 
-The full-v2 candidate is based on `1ab005e79b8`, with the reviewed
-constructor/formatter/native-accounting batch applied. Both full suites ended
-with the same three failures and one environment-change result. The two
-post-run edits are unvalidated. Root owns diagnosis, source changes and all
-shared builds. Earlier `af82` and `1ab` runs are historical checkpoints, not
-current full qualification.
+Runtime HEAD `6a0e4c12c17` is clean. Build-info objects match their respective
+upstream, interim and candidate source HEADs; rosters are 116/116/117. Release
+and debug full suites each passed 54,351 tests with no failures (2,531 and
+2,469 skips). The strict full census failed with 11,028,818
+core/core-pending/unresolved boxes and incomplete process identity/accounting;
+the strict kernel gate also failed. Exact counts and artifacts are in the
+[full census receipt](issues/checkpoint-closure/full-census-6a0e4c12c17.md) and
+[kernel receipt](issues/checkpoint-closure/kernels-6a0e4c12c17.md). The earlier
+full-v2 failures remain historical evidence, superseded by the final full-suite
+pass. The paired `.txt`/`.done` producer, strict reader and benchmark consumer
+are integrated; the strict reader's current census result is a failure, not a
+pending check.
 
-The first batch attempt, `12246`, stopped before the suites because the stats
-shared module could not resolve two new helpers. The two `PyAPI_FUNC(void)`
-export declarations are reviewed and applied; the new attempt uses tag
-`checkpoint-constructor-float-identity-full-v2`, preserving the failed logs.
+The raw kernel evidence at `66981c963be` is historical and keeps its own ELF.
+The current `6a0e4c12c17` kernel and full-census receipts identify the exact
+retained executables. A diagnostic timing run is active, with no result yet;
+it cannot qualify performance while the R27 gate is open.
 
-The raw kernel evidence at `66981c963be` retains its exact stats executable.
-Later relinks must never be used to symbolize its old PCs. Ordinary commits
-leave stale executable version strings; refresh `Modules/getbuildinfo.o` and
-complete all builds after the final source commit. The existing helper target
-can be forced by an extra phony prerequisite without modifying source or the
-Makefile. Real matched preflight at `66981c963be` passed all checks, with
-preflight-only results correctly ineligible for measurement.
+The final AST type-call guard admits only the selected type-call pair when the
+class object's actual object and value vectorcall fields are both inactive.
+Ordinary Python classes and `object` have null fields; active built-ins retain
+the normal vectorcall path. See the [v3 source review](issues/checkpoint-closure/ast-original-kwargs-peer-review-v3.md)
+and [merged differential](issues/checkpoint-closure/ast-original-kwargs-v3-merged-validation.md).
 
-The paired `.txt`/`.done` stats producer, strict R27 reader, and benchmark
-consumer are integrated in the current cohort. Thirteen native identity probes
-cover successful and deliberately failing cases. Preserve the frozen evidence
-and do not start timing until root resolves the full-suite and stats findings.
-Normal timing is a separate metric; no timing has run.
-
-The isolated bulk tree still contains deliberate unavailable API marks and
-cannot whole-build. Base new packets on copies of the actual current runtime;
-never copy its stale checker or test files over newer main guards. A successful
-host/Python-only fixture does not validate uncompiled C changes. W5 remains at
-its preserved historical base and original staged/dirty work; serialize shadow
-source/build/test/restore under the external common `w5-release.lock`.
+The prior isolated bulk tree and W5 copies are historical worker artifacts, not
+current source baselines. Base future runtime work on a fresh copy of clean
+HEAD `6a0e4c12c17`; preserve the sealed reviews and build evidence.
 
 The matched controls are upstream `3a440b65695` and interim `eba351fee7d`.
 G2 remains deferred until qualification and measurement. Ctypes/LRU source
@@ -287,24 +285,22 @@ overwritten.
 
 ## Next steps
 
-1. Integrate the reviewed startup/exception, mechanical API and slot-call batches
-   through the closure plan. The preserved kernel increment and required W4b
-   fixes have landed; optional sizeof fidelity remains separate.
-2. Complete the API census, manual ports, `_decimal` and indirect slot calls.
-3. Run full merged qualification and R27 accounting; resolve the measured tail.
-4. Measure the qualified checkpoint against upstream and interim controls,
-   then rank follow-ups. G2 stays deferred through that measurement.
-5. Reconcile follow-ups in `build/pyjit-link-wave1/FOLLOWUPS.md` and the design
-   and stage pages with the landed code.
-6. After the checkpoint: return `co_code` and `.pyc` to stack
-   bytecode with the IR as a hidden cache
-   ([proposal](design/proposals/stack-bytecode-recovery.md), user decision
-   2026-11-05).
-
-Use the time metric; the instruction-count metric needs `perf_event_paranoid`
-lowered, which the user has not done. Do not present host controls, object files
-or compiler-error reductions as runtime performance.
-
+1. Keep the completed full release/debug pass and exact source/build IDs as the
+   functional baseline.
+2. Audit the 11 static R27 findings and actual call sites before changing any
+   declaration marks. Resolve the failed census: debt boxes, unfinished and
+   orphan markers, incomplete identity, accounting errors, and the recorded
+   `test_subprocess` error. Do not treat predicted-uncounted events as child
+   counts.
+3. Resolve the 11 raw-nonzero kernel rows in the current capture and rerun the
+   strict startup-inclusive gate after accounting fixes.
+4. The diagnostic timing run is active; publish its results only as diagnostic
+   while R27 fails. Qualified kernel/pyperformance/RSS results require a clean
+   strict R27 pass and the exact matched builds. Use the one-minute load guard
+   (reject at load >= 4) and retain the full 1/5/15-minute tuple.
+5. Write the checkpoint recap from qualified evidence. Ctypes and LRU
+   implementation remain approval-held; G2 stays deferred. Serialization
+   recovery and the cohesive method/tracing JIT follow the checkpoint.
 ## Coordination
 
 Update the relevant workstream and STATUS at each landing, keep one WORKLOG line

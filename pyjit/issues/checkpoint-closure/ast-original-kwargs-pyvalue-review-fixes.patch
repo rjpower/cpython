@@ -1,0 +1,51 @@
+--- a/Objects/typeobject.c
++++ b/Objects/typeobject.c
+@@ -5859,16 +5859,23 @@
+     assert(PyTuple_Check(args));
+     assert(PyDict_Check(kwargs));
+     assert(!_PyErr_Occurred(tstate));
++    if (_Py_EnterRecursiveCallTstate(tstate,
++                                     " while calling a Python object")) {
++        *result = PyValue_NULL;
++        return 1;
++    }
+     Py_ssize_t nargs = PyTuple_GET_SIZE(args);
+     if (callable == (PyObject *)&PyType_Type && nargs != 3) {
+         PyErr_SetString(PyExc_TypeError, "type() takes 1 or 3 arguments");
+         *result = PyValue_NULL;
++        _Py_LeaveRecursiveCallTstate(tstate);
+         return 1;
+     }
+     if (type->tp_new == NULL) {
+         _PyErr_Format(tstate, PyExc_TypeError,
+                       "cannot create '%s' instances", type->tp_name);
+         *result = PyValue_NULL;
++        _Py_LeaveRecursiveCallTstate(tstate);
+         return 1;
+     }
+ 
+@@ -5888,6 +5895,7 @@
+     }
+     _PyBorrowScope_Exit(tstate, mark);
+     *result = obj == NULL ? PyValue_NULL : _PyValue_FromObjectResult(obj);
++    _Py_LeaveRecursiveCallTstate(tstate);
+     return 1;
+ }
+ 
+@@ -13651,7 +13659,15 @@
+     PyThreadState *tstate = _PyThreadState_GET();
+     Py_ssize_t nargs = PyTuple_GET_SIZE(args);
+     if (kwds != NULL && dict_has_non_unicode_keys(kwds)) {
+-        return call_method((PyObject *)type, &_Py_ID(__new__), args, kwds);
++        PyObject *func = PyObject_GetAttr((PyObject *)type, &_Py_ID(__new__));
++        if (func == NULL) {
++            return NULL;
++        }
++        PyObject *result = _PyObject_Call_Prepend(tstate, func,
++                                                  (PyObject *)type,
++                                                  args, kwds);
++        Py_DECREF(func);
++        return result;
+     }
+     PyValue result;
+     if (kwds == NULL || PyDict_GET_SIZE(kwds) == 0) {

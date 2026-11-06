@@ -4,19 +4,22 @@ We are rebuilding CPython around universal eight-byte PyValues, a register
 interpreter, and a cohesive method and tracing JIT. Memory management uses
 reference counting with cyclic collection. Extensions are rebuilt and ported.
 
-**Current outcome:** the candidate is based on runtime commit `1ab005e79b8`,
-with constructor/dispatch, float-formatting, descriptor and native-child-
-accounting changes under full-v2 qualification. All three builds,
-regeneration, lint, ABI and frozen-main checks passed. The release suite ran
-54,347 tests and has three failures (two AST, one opcache); `test_tools` also
-changed `sys.path`. Debug also ran 54,347 tests with the same three failures
-and environment change. Thirteen native identity probes pass, including
-negative cases. Private stats probes still find boxes in
-specialized initialization, cold lookup, float formatting/f-strings and long
-formatting. R27 and functional qualification remain open; there is no current
-performance measurement.
-**Next milestone:** close ownership/accounting debt, qualify one clean runtime,
-then measure it against matched upstream and interim controls with the JIT off.
+**Current outcome:** runtime HEAD is `6a0e4c12c17` (constructor and format
+work), following `05286694774` (native child accounting).
+All five build-info objects match their respective source HEADs: upstream
+`3a440b65695`, interim `eba351fee7d`, and candidate `6a0e4c12c17`. The module
+rosters are 116/116/117. Both full profiles passed 54,351 tests with no
+failures (release: 2,531 skips; debug: 2,469). The strict whole-source R27
+census failed: 6,512 dumps contain 11,028,818 core/core-pending/unresolved
+boxes and incomplete process identity/accounting. The raw capture finished
+with 87 records across 29 kernels: 18/29 startup-inclusive raw-zero, all loop
+deltas zero, but strict kernel admission failed. See the [full census receipt](issues/checkpoint-closure/full-census-6a0e4c12c17.md).
+The matched-build preflight passed but is ineligible as a measurement.
+
+The earlier full-v2 failures remain recorded as historical evidence. Audit
+static-gate violations and process-accounting gaps before changing marks or
+source. A diagnostic benchmark run is active, but it cannot qualify performance
+while R27 fails. No result is available yet.
 
 Start with [current status](STATUS.md) for progress and blockers, or the
 [stage map](ROADMAP.md) for the route to completion. A new coordinator should read

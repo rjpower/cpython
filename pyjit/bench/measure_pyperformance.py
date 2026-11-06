@@ -167,7 +167,7 @@ def write_launcher(path: Path, python: Path, cache_root: Path) -> None:
 
 def load_guard() -> tuple[float, float, float]:
     loads = os.getloadavg()
-    if max(loads) >= LOAD_LIMIT:
+    if loads[0] >= LOAD_LIMIT:
         raise RuntimeError(f"load guard reached {LOAD_LIMIT}: {loads}")
     return loads
 
@@ -281,7 +281,9 @@ def pyperf_stage(args, measure, builds: dict[str, Path], before: dict,
             if not result.is_file():
                 raise RuntimeError(f"pyperf did not create {result}")
             data = json.loads(result.read_text())
-            actual = sorted(item["metadata"]["name"] for item in data["benchmarks"])
+            actual = sorted(
+                {**data.get("metadata", {}), **item.get("metadata", {})}["name"]
+                for item in data["benchmarks"])
             expected = sorted(("scimark_fft", "scimark_lu", "scimark_monte_carlo",
                                "scimark_sor", "scimark_sparse_mat_mult")
                               if name == "scimark" else
@@ -341,9 +343,16 @@ def rss_stage(args, measure, builds: dict[str, Path], before: dict,
         paths = {Path(snapshot["python"])}
         paths.update(Path(module["file"]) for module in snapshot["probe"]["modules"].values()
                      if module.get("file") and Path(module["file"]).suffix == ".so")
-        for libdir in build.glob("lib.*"):
-            if libdir.is_dir():
-                paths.update(libdir.glob("*.so"))
+        libdir = (build / (build / "pybuilddir.txt").read_text().strip()).resolve()
+        if not libdir.is_dir():
+            raise ValueError(f"configured extension directory is missing: {libdir}")
+        suffix = f".{snapshot['probe']['config']['SOABI']}.so"
+        extensions = list(libdir.glob(f"*{suffix}"))
+        expected = snapshot["module_log"]["shared"]
+        if len(extensions) != expected:
+            raise ValueError(f"{role}: expected {expected} current-ABI extensions, "
+                             f"found {len(extensions)} in {libdir}")
+        paths.update(extensions)
         sorted_paths = sorted(path.resolve() for path in paths if path.is_file())
         paths_by_role[role] = sorted_paths
         warm_records[role] = [{"path": str(path), "size": path.stat().st_size,

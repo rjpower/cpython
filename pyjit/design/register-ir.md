@@ -12,12 +12,17 @@ the first revision, and review 2
 ([reviews/register-ir-review-2.md](reviews/register-ir-review-2.md)) the
 second.
 
-**Current implementation, 2026-11-06.** Runtime `1ab005e79b8` builds and
+**Current implementation, 2026-11-06.** Runtime HEAD `6a0e4c12c17` builds and
 executes the register interpreter in debug, release and stats configurations.
-The source baseline and comparative tables below are dated evidence; their
-statement that the tree does not link describes November 3, not the current
-runtime. Current qualification is tracked in the
-[closure plan](../issues/checkpoint-closure/plan.md).
+Release and debug full suites each pass 54,351 tests with no failures. The
+current 87-record kernel capture has 18/29 startup-inclusive raw-zero kernels
+and zero loop deltas for all 29; the strict gate fails. The full R27 census
+also fails with 11,028,818 core/core-pending/unresolved boxes and incomplete
+process accounting. See the [kernel receipt](../issues/checkpoint-closure/kernels-6a0e4c12c17.md),
+[full census](../issues/checkpoint-closure/full-census-6a0e4c12c17.md) and
+[checkpoint plan](../issues/checkpoint-closure/plan.md). The source baseline
+and comparative tables below are dated evidence; their statement that the tree
+does not link describes November 3, not the current runtime.
 
 The built word remains 64 bits: a 16-bit handler and four 12-bit fields
 (`Include/internal/pycore_ir.h:IR_HANDLER`). Slot class is tested against
@@ -31,10 +36,11 @@ The detailed commit and validation ledger is in [WORKLOG](../WORKLOG.md).
 
 Handler-domain instrumentation is qualified. Runtime `812cba08f4b` has the
 H3 full-handler-domain producer and strict reader: the generated domain,
-dispatch entries and counter arrays agree. The latest retained exact-source
-capture is `kernels-66981c963be`: 15 of 29 kernels have zero boxes in every raw
-process, with zero loop deltas across all 29; the strict startup-inclusive gate
-still fails. The earlier `kernels-b9888ea3b40` capture used source later
+dispatch entries and counter arrays agree. The `kernels-66981c963be` capture
+is historical: 15 of 29 kernels had zero boxes in every raw process, with
+zero loop deltas across all 29. The current `kernels-6a0e4c12c17` receipt has
+18/29 startup-inclusive raw-zero kernels and zero loop deltas across all 29;
+strict admission fails. The earlier `kernels-b9888ea3b40` capture used source later
 committed as `b9888ea3b40`, while its embedded version retained the predecessor
 dirty identity. See [status](../STATUS.md) for paths and identity caveats. The
 startup-inclusive PyValue gate remains open. The earlier `4fffee855c9` census

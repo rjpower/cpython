@@ -1,41 +1,31 @@
 # Project status
 
-Live status, 2026-11-06: candidate source is based on runtime HEAD
-`1ab005e79b8`; the constructor/dispatch, float-formatting, descriptor and
-native-child-accounting cohort is under full-v2 validation. Regeneration,
-lint, limited-ABI/frozen-main checks and all three 117-module builds passed.
-Both release and debug suites ran 54,347 tests: three failures each (two AST,
-one opcache), plus one environment-change result because `test_tools` modified
-`sys.path`. Do not mark qualification complete. After these runs, root applied
-the frozen `sys.path` cleanup and a one-line init diagnostic; neither change
-has been rebuilt or tested yet.
+Live status, 2026-11-06: runtime HEAD is `6a0e4c12c17` (constructor and format
+work), following `05286694774` (native child accounting).
+All five build-info objects match their respective source HEADs: upstream
+`3a440b65695`, interim `eba351fee7d`, and candidate `6a0e4c12c17`. Module
+rosters are 116/116/117. Both full profiles passed 54,351 tests with no
+failures (release: 2,531 skips; debug: 2,469). The strict whole-source R27
+census failed: 6,512 dumps contain 11,028,818 core/core-pending/unresolved
+boxes and incomplete process identity/accounting. The raw capture finished
+with 87 records across 29 kernels: 18/29 startup-inclusive raw-zero and all
+loop deltas zero, but strict kernel admission failed. See the [full census
+receipt](issues/checkpoint-closure/full-census-6a0e4c12c17.md). The matched-build
+preflight passed and is explicitly ineligible as a measurement.
 
-The 13 native identity probes pass, including deliberate negative cases.
-Private stats probes still find 98 boxes in the specialized-init case, one
-for cold lookup, 100 each for float formatting and f-strings, and 200 each
-for long formatting and long format fields. Approved causal fixes are in
-flight; these results keep R27 open. The measurement helper is reviewed, but
-no timing may start until the coordinator freezes source and builds.
+The earlier full-v2 outcome remains historical: each profile ran 54,347 tests
+with two AST failures, one opcache failure and a `test_tools` `sys.path`
+environment change. The 14 focused zero-box probes and targeted differentials
+are not substitutes for strict R27. Audit static-gate violations and process
+accounting gaps before changing marks or source. A diagnostic benchmark run is
+active, but it cannot qualify performance while R27 fails. No result is
+available yet.
 
-The exact-source raw [kernel capture](issues/checkpoint-closure/kernels-66981c963be.md)
-at `66981c963be` has 15/29 raw-zero kernels and all 29 zero loop deltas; it is
-historical evidence, not this cohort's qualification. The matched-build
-preflight passes, but preflight-only is ineligible as a measured result. No
-new timing exists. Complete functional and strict R27 requalification remain
-necessary.
-
-The previous full qualification point at `af82c03c4e5` ran 54,311 tests
-per profile and found the operator regression, now fixed by focused merged
-checks. Its [full stats census](issues/checkpoint-closure/fullsuite-af82-census.md)
-folded 6,513 dumps: 14,211,307 debt boxes, zero invalid owners/drops, 545
-unfinished markers, 423 predicted-uncounted audit events and one empty marker.
-Events are not unique children. These remain failing admission evidence;
-coverage differs from earlier captures, so no percentage gain is claimed.
-
-Ctypes and LRU ownership implementation remain pending explicit approval after
-automatic review. G2 remains deferred. Historical performance figures below
-are not results for the current runtime. The [closure plan](issues/checkpoint-closure/plan.md)
-contains the current ordered work and the measurement protocol.
+The raw [kernel capture](issues/checkpoint-closure/kernels-66981c963be.md) at
+`66981c963be` recorded 15/29 raw-zero kernels and 29 zero loop deltas; it is
+historical, not current qualification. Ctypes and LRU ownership implementation
+remain on explicit approval hold; G2 stays deferred. The ordered closeout and
+measurement steps are in the [plan](issues/checkpoint-closure/plan.md).
 
 ## Historical takeover snapshot, before closure work
 

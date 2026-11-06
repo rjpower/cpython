@@ -15,6 +15,7 @@
 #include "pycore_time.h"          // _PyTimeFraction
 #include "pycore_value.h"         // PyValue_IsNone()
 #include "pycore_value_api.h"     // _PyValue_AsObjectAt()
+#include "pycore_value_call.h"    // METH_VALUE, _PyValue_Vectorcall()
 #include "pycore_value_slots.h"   // _PyValue_FromObjectResult()
 
 #include <time.h>                 // clock()
@@ -1065,41 +1066,24 @@ is not present, current time as returned by localtime() is used.\n\
 \n" STRFTIME_FORMAT_CODES);
 #endif /* HAVE_STRFTIME */
 
-static PyObject *
-time_strptime(PyObject *self, PyObject *args)
+static PyValue
+time_strptime(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs,
+              PyObject *kwnames)
 {
     _PyTime_StrptimeFields fields;
     int parsed = 0;
-    if (PyTuple_GET_SIZE(args) == 2) {
-        PyValue stringvalue = PyTuple_GetValue(args, 0);
-        if (PyValue_IsNull(stringvalue)) {
-            return NULL;
-        }
-        PyObject *string = _PyValue_AsObjectAt(stringvalue, BOX_SITE_TUPLE);
-        PyValue_CLOSE(stringvalue);
-        if (string == NULL) {
-            return NULL;
-        }
-        PyValue formatvalue = PyTuple_GetValue(args, 1);
-        if (PyValue_IsNull(formatvalue)) {
-            Py_DECREF(string);
-            return NULL;
-        }
-        PyObject *format = _PyValue_AsObjectAt(formatvalue, BOX_SITE_TUPLE);
-        PyValue_CLOSE(formatvalue);
-        if (format == NULL) {
-            Py_DECREF(string);
-            return NULL;
-        }
-        parsed = _PyTime_Strptime(string, format, &fields);
-        Py_DECREF(string);
-        Py_DECREF(format);
+    if (nargs == 2 && PyValue_IsObject(PyValue_Borrow(args[0]))
+                    && PyValue_IsObject(PyValue_Borrow(args[1]))) {
+        parsed = _PyTime_Strptime(
+            PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])),
+            PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[1])), &fields);
     }
     if (parsed) {
-        time_module_state *state = get_time_state(self);
+        time_module_state *state = get_time_state(
+            PyValue_AsKnownObjectBorrow(self));
         PyObject *result = PyStructSequence_New(state->struct_time_type);
         if (result == NULL) {
-            return NULL;
+            return PyValue_NULL;
         }
         const int values[] = {
             fields.year, fields.month, fields.day,
@@ -1107,34 +1091,25 @@ time_strptime(PyObject *self, PyObject *args)
             _PyTime_Weekday(fields.year, fields.yday), fields.yday, -1
         };
         for (size_t i = 0; i < Py_ARRAY_LENGTH(values); i++) {
-            PyObject *value = PyLong_FromLong(values[i]);
-            if (value == NULL) {
-                Py_DECREF(result);
-                return NULL;
-            }
-            PyStructSequence_SET_VALUE(result, i, PyValue_PrepareOwned(value));
+            PyStructSequence_SET_VALUE(result, i,
+                                       PyValue_FromInt64(values[i]));
         }
         /* Numeric offsets don't supply a timezone name or DST information. */
         PyStructSequence_SET_VALUE(result, 9, PyValue_DUP(_PyValue_FromObjectKnown(Py_None)));
-        PyObject *offset = fields.gmtoff == INT_MIN
-                          ? Py_NewRef(Py_None)
-                          : PyLong_FromLong(fields.gmtoff);
-        if (offset == NULL) {
-            Py_DECREF(result);
-            return NULL;
-        }
-        PyStructSequence_SET_VALUE(result, 10, PyValue_PrepareOwned(offset));
-        return result;
+        PyStructSequence_SET_VALUE(
+            result, 10, fields.gmtoff == INT_MIN
+                        ? PyValue_DUP(_PyValue_FromObjectKnown(Py_None))
+                        : PyValue_FromInt64(fields.gmtoff));
+        return PyValue_FromObjectSteal(result);
     }
-    PyObject *func, *result;
-
-    func = PyImport_ImportModuleAttrString("_strptime", "_strptime_time");
+    PyObject *func = PyImport_ImportModuleAttrString("_strptime", "_strptime_time");
     if (!func) {
-        return NULL;
+        return PyValue_NULL;
     }
-
-    result = PyObject_Call(func, args, NULL);
-    Py_DECREF(func);
+    PyValue func_value = PyValue_FromObjectSteal(func);
+    PyValue result = _PyValue_Vectorcall(func_value, args, (size_t)nargs,
+                                         kwnames);
+    PyValue_CLOSE(func_value);
     return result;
 }
 
@@ -2114,7 +2089,7 @@ static PyMethodDef time_methods[] = {
 #ifdef HAVE_STRFTIME
     {"strftime",        time_strftime, METH_VARARGS, strftime_doc},
 #endif
-    {"strptime",        time_strptime, METH_VARARGS, strptime_doc},
+    {"strptime",        _PyCFunction_CAST(time_strptime), METH_VALUE, strptime_doc},
 #ifdef HAVE_WORKING_TZSET
     TIME_TZSET_METHODDEF
 #endif

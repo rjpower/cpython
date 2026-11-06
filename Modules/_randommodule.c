@@ -77,6 +77,7 @@
 #include "pycore_modsupport.h"    // _PyArg_NoKeywords()
 #include "pycore_moduleobject.h"  // _PyModule_GetState()
 #include "pycore_pylifecycle.h"   // _PyOS_URandomNonblock()
+#include "pycore_value_call.h"    // _PyValue_CallOneArg()
 #include "pycore_value_ops.h"     // _PyValue_Hash()
 #include "pycore_value_slots.h"// _PyValue_FromObjectResult()
 
@@ -322,11 +323,10 @@ random_seed(RandomObject *self, PyValueBorrow arg_value)
 {
     int result = -1;  /* guilty until proved innocent */
     PyObject *arg = NULL;
-    PyObject *n = NULL;
+    PyValue n_value = PyValue_NULL;
     uint32_t *key = NULL;
     int64_t bits;
     size_t keyused;
-    int res;
 
     if (PyValue_IsNull(arg_value) || PyValue_IsNone(arg_value)) {
        if (random_seed_urandom(self) < 0) {
@@ -360,33 +360,37 @@ random_seed(RandomObject *self, PyValueBorrow arg_value)
     arg = PyValue_AsKnownObjectBorrow(arg_value);
     Py_INCREF(arg);
     if (PyLong_CheckExact(arg)) {
-        PyValue abs_value = _PyValue_Absolute(PyValue_FromObjectBorrow(arg));
-        if (PyValue_IsNull(abs_value)) {
+        n_value = _PyValue_Absolute(PyValue_FromObjectBorrow(arg));
+        if (PyValue_IsNull(n_value)) {
             goto Done;
         }
-        if (PyValue_IsInlineInt(abs_value)) {
-            Py_DECREF(arg);
-            return random_seed_inline(self, PyValue_Borrow(abs_value));
-        }
-        n = PyValue_AsKnownObjectSteal(abs_value);
     } else if (PyLong_Check(arg)) {
         /* Calling int.__abs__() prevents calling arg.__abs__(), which might
            return an invalid value. See issue #31478. */
         _randomstate *state = _randomstate_type(Py_TYPE(self));
-        n = PyObject_CallOneArg(state->Long___abs__, arg);
+        n_value = _PyValue_CallOneArg(_PyThreadState_GET(),
+                                      PyValue_FromObjectBorrow(state->Long___abs__),
+                                      PyValue_FromObjectBorrow(arg));
+        if (PyValue_IsNull(n_value)) {
+            goto Done;
+        }
     }
     else {
         Py_hash_t hash = _PyValue_Hash(PyValue_FromObjectBorrow(arg));
         if (hash == -1)
             goto Done;
-        n = PyLong_FromSize_t((size_t)hash);
-    }
-    if (n == NULL)
+        init_by_uint64(self, (uint64_t)(size_t)hash);
+        result = 0;
         goto Done;
+    }
 
     /* Now split n into 32-bit chunks, from the right. */
-    bits = _PyLong_NumBits(n);
-    assert(bits >= 0);
+    digit digits[_PyLong_WORD_DIGITS];
+    _PyLongSpan n_span = _PyLong_SpanOfValue(PyValue_Borrow(n_value), digits);
+    bits = _PyLong_SpanNumBits(n_span);
+    if (bits < 0) {
+        goto Done;
+    }
     assert(!PyErr_Occurred());
 
     /* Figure out how many 32-bit chunks this gives us. */
@@ -398,12 +402,10 @@ random_seed(RandomObject *self, PyValueBorrow arg_value)
         PyErr_NoMemory();
         goto Done;
     }
-    res = _PyLong_AsByteArray((PyLongObject *)n,
-                              (unsigned char *)key, keyused * 4,
-                              PY_LITTLE_ENDIAN,
-                              0, /* unsigned */
-                              1); /* with exceptions */
-    if (res == -1) {
+    if (_PyLong_SpanAsNativeBytes(
+            n_span, (unsigned char *)key, (Py_ssize_t)(keyused * 4),
+            Py_ASNATIVEBYTES_LITTLE_ENDIAN |
+            Py_ASNATIVEBYTES_UNSIGNED_BUFFER) < 0) {
         goto Done;
     }
 
@@ -424,7 +426,7 @@ random_seed(RandomObject *self, PyValueBorrow arg_value)
 
 Done:
     Py_DECREF(arg);
-    Py_XDECREF(n);
+    PyValue_XCLOSE(n_value);
     PyMem_Free(key);
     return result;
 }

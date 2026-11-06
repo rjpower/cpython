@@ -14,6 +14,7 @@
 #include "pycore_long_value.h"    // _PyValue_AsInt()
 #include "pycore_traceback.h"     // _Py_DumpStack()
 #include "pycore_value.h"         // PyValue_IsNull()
+#include "pycore_value_call.h"    // _PyValue_CallNoArgs()
 #include "pycore_value_slots.h"// _PyValue_FromObjectResult()
 #ifdef HAVE_UNISTD_H
 #  include <unistd.h>             // _exit()
@@ -1491,12 +1492,13 @@ faulthandler_init_enable(void)
         return -1;
     }
 
-    PyObject *res = PyObject_CallNoArgs(enable);
+    PyValue res = _PyValue_CallNoArgs(_PyThreadState_GET(),
+                                      PyValue_FromObjectBorrow(enable));
     Py_DECREF(enable);
-    if (res == NULL) {
+    if (PyValue_IsNull(res)) {
         return -1;
     }
-    Py_DECREF(res);
+    PyValue_CLOSE(res);
 
     return 0;
 }

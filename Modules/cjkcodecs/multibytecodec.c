@@ -16,6 +16,7 @@
 #include "pycore_long_value.h"    // _PyValue_IntAsSsize_t()
 #include "pycore_tuple.h"         // _PyTuple_FromPairSteal
 #include "pycore_value.h"         // PyValue_AsKnownObjectBorrow()
+#include "pycore_value_call.h"    // _PyValue_CallOneArg()
 #include "pycore_value_ops.h"     // _PyValue_Str()
 #include "pycore_value_slots.h"// _PyValue_FromObjectResult()
 
@@ -140,21 +141,23 @@ internal_error_callback(const char *errors)
         return PyUnicode_FromString(errors);
 }
 
-static PyObject *
+static PyValue
 call_error_callback(PyObject *errors, PyObject *exc)
 {
-    PyObject *cb, *r;
+    PyObject *cb;
     const char *str;
 
     assert(PyUnicode_Check(errors));
     str = PyUnicode_AsUTF8(errors);
     if (str == NULL)
-        return NULL;
+        return PyValue_NULL;
     cb = PyCodec_LookupError(str);
     if (cb == NULL)
-        return NULL;
+        return PyValue_NULL;
 
-    r = PyObject_CallOneArg(cb, exc);
+    PyValue r = _PyValue_CallOneArg(_PyThreadState_GET(),
+                                    PyValue_FromObjectBorrow(cb),
+                                    PyValue_FromObjectBorrow(exc));
     Py_DECREF(cb);
     return r;
 }
@@ -255,7 +258,8 @@ multibytecodec_encerror(const MultibyteCodec *codec,
                         MultibyteEncodeBuffer *buf,
                         PyObject *errors, Py_ssize_t e)
 {
-    PyObject *retobj = NULL, *retstr = NULL, *tobj = NULL, *posobj = NULL;
+    PyValue retobj = PyValue_NULL, tobj_v = PyValue_NULL, posobj_v = PyValue_NULL;
+    PyObject *retstr = NULL;
     Py_ssize_t retstrsize, newpos;
     Py_ssize_t esize, start, end;
     const char *reason;
@@ -348,25 +352,29 @@ multibytecodec_encerror(const MultibyteCodec *codec,
     }
 
     retobj = call_error_callback(errors, buf->excobj);
-    if (retobj == NULL)
+    if (PyValue_IsNull(retobj))
         goto errorexit;
 
-    if (PyTuple_Check(retobj) && PyTuple_GET_SIZE(retobj) == 2) {
-        PyValue tobj_v = PyTuple_GetValue(retobj, 0);
-        tobj = PyValue_IsNull(tobj_v) ? NULL : _PyValue_AsObjectStealAt(tobj_v, BOX_SITE_TUPLE);
-        PyValue posobj_v = PyTuple_GetValue(retobj, 1);
-        posobj = PyValue_IsNull(posobj_v) ? NULL : _PyValue_AsObjectStealAt(posobj_v, BOX_SITE_TUPLE);
-        if (tobj == NULL || posobj == NULL)
+    bool valid_tuple = PyValue_IsObject(retobj)
+        && PyTuple_Check(PyValue_AsKnownObjectBorrow(retobj))
+        && PyTuple_GET_SIZE(PyValue_AsKnownObjectBorrow(retobj)) == 2;
+    if (valid_tuple) {
+        PyObject *tuple = PyValue_AsKnownObjectBorrow(retobj);
+        tobj_v = PyTuple_GetValue(tuple, 0);
+        posobj_v = PyTuple_GetValue(tuple, 1);
+        if (PyValue_IsNull(tobj_v) || PyValue_IsNull(posobj_v))
             goto errorexit;
     }
-    if (tobj == NULL ||
-        (!PyUnicode_Check(tobj) && !PyBytes_Check(tobj)) ||
-        !PyLong_Check(posobj)) {
+    if (!valid_tuple || !PyValue_IsObject(tobj_v)
+        || (!PyUnicode_Check(PyValue_AsKnownObjectBorrow(tobj_v))
+            && !PyBytes_Check(PyValue_AsKnownObjectBorrow(tobj_v)))
+        || !PyValue_LongCheck(posobj_v)) {
         PyErr_SetString(PyExc_TypeError,
                         "encoding error handler must return "
                         "(str, int) tuple");
         goto errorexit;
     }
+    PyObject *tobj = PyValue_AsKnownObjectBorrow(tobj_v);
 
     if (PyUnicode_Check(tobj)) {
         Py_ssize_t inpos;
@@ -389,7 +397,7 @@ multibytecodec_encerror(const MultibyteCodec *codec,
         buf->outbuf += retstrsize;
     }
 
-    newpos = _PyValue_IntAsSsize_t(PyValue_FromObjectBorrow(posobj));
+    newpos = _PyValue_IntAsSsize_t(posobj_v);
     if (newpos < 0 && !PyErr_Occurred())
         newpos += (Py_ssize_t)buf->inlen;
     if (newpos < 0 || newpos > buf->inlen) {
@@ -401,17 +409,17 @@ multibytecodec_encerror(const MultibyteCodec *codec,
     }
     buf->inpos = newpos;
 
-    Py_DECREF(retobj);
+    PyValue_CLOSE(retobj);
+    PyValue_CLOSE(tobj_v);
+    PyValue_CLOSE(posobj_v);
     Py_DECREF(retstr);
-    Py_DECREF(tobj);
-    Py_DECREF(posobj);
     return 0;
 
 errorexit:
-    Py_XDECREF(retobj);
+    PyValue_XCLOSE(retobj);
+    PyValue_XCLOSE(tobj_v);
+    PyValue_XCLOSE(posobj_v);
     Py_XDECREF(retstr);
-    Py_XDECREF(tobj);
-    Py_XDECREF(posobj);
     return -1;
 }
 
@@ -421,7 +429,7 @@ multibytecodec_decerror(const MultibyteCodec *codec,
                         MultibyteDecodeBuffer *buf,
                         PyObject *errors, Py_ssize_t e)
 {
-    PyObject *retobj = NULL, *retuni = NULL, *posobj = NULL;
+    PyValue retobj = PyValue_NULL, retuni_v = PyValue_NULL, posobj_v = PyValue_NULL;
     Py_ssize_t newpos;
     const char *reason;
     Py_ssize_t esize, start, end;
@@ -485,29 +493,33 @@ multibytecodec_decerror(const MultibyteCodec *codec,
     }
 
     retobj = call_error_callback(errors, buf->excobj);
-    if (retobj == NULL)
+    if (PyValue_IsNull(retobj))
         goto errorexit;
 
-    if (PyTuple_Check(retobj) && PyTuple_GET_SIZE(retobj) == 2) {
-        PyValue retuni_v = PyTuple_GetValue(retobj, 0);
-        retuni = PyValue_IsNull(retuni_v) ? NULL : _PyValue_AsObjectStealAt(retuni_v, BOX_SITE_TUPLE);
-        PyValue posobj_v2 = PyTuple_GetValue(retobj, 1);
-        posobj = PyValue_IsNull(posobj_v2) ? NULL : _PyValue_AsObjectStealAt(posobj_v2, BOX_SITE_TUPLE);
-        if (retuni == NULL || posobj == NULL)
+    bool valid_tuple = PyValue_IsObject(retobj)
+        && PyTuple_Check(PyValue_AsKnownObjectBorrow(retobj))
+        && PyTuple_GET_SIZE(PyValue_AsKnownObjectBorrow(retobj)) == 2;
+    if (valid_tuple) {
+        PyObject *tuple = PyValue_AsKnownObjectBorrow(retobj);
+        retuni_v = PyTuple_GetValue(tuple, 0);
+        posobj_v = PyTuple_GetValue(tuple, 1);
+        if (PyValue_IsNull(retuni_v) || PyValue_IsNull(posobj_v))
             goto errorexit;
     }
-    if (retuni == NULL || !PyUnicode_Check(retuni) ||
-        !PyLong_Check(posobj)) {
+    if (!valid_tuple || !PyValue_IsObject(retuni_v)
+        || !PyUnicode_Check(PyValue_AsKnownObjectBorrow(retuni_v))
+        || !PyValue_LongCheck(posobj_v)) {
         PyErr_SetString(PyExc_TypeError,
                         "decoding error handler must return "
                         "(str, int) tuple");
         goto errorexit;
     }
+    PyObject *retuni = PyValue_AsKnownObjectBorrow(retuni_v);
 
     if (_PyUnicodeWriter_WriteStr(&buf->writer, retuni) < 0)
         goto errorexit;
 
-    newpos = _PyValue_IntAsSsize_t(PyValue_FromObjectBorrow(posobj));
+    newpos = _PyValue_IntAsSsize_t(posobj_v);
     if (newpos < 0 && !PyErr_Occurred())
         newpos += (Py_ssize_t)(buf->inbuf_end - buf->inbuf_top);
     if (newpos < 0 || buf->inbuf_top + newpos > buf->inbuf_end) {
@@ -518,15 +530,15 @@ multibytecodec_decerror(const MultibyteCodec *codec,
         goto errorexit;
     }
     buf->inbuf = buf->inbuf_top + newpos;
-    Py_DECREF(retobj);
-    Py_DECREF(retuni);
-    Py_DECREF(posobj);
+    PyValue_CLOSE(retobj);
+    PyValue_CLOSE(retuni_v);
+    PyValue_CLOSE(posobj_v);
     return 0;
 
 errorexit:
-    Py_XDECREF(retobj);
-    Py_XDECREF(retuni);
-    Py_XDECREF(posobj);
+    PyValue_XCLOSE(retobj);
+    PyValue_XCLOSE(retuni_v);
+    PyValue_XCLOSE(posobj_v);
     return -1;
 }
 

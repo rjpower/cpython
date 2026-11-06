@@ -237,7 +237,6 @@ FUNCNAME(PyObject *obj, void *ptr)                                  \
     return 1;                                                       \
 }
 
-INT_TYPE_CONVERTER_FUNC(lzma_vli, lzma_vli_obj_converter)
 INT_TYPE_CONVERTER_FUNC(lzma_mode, lzma_mode_converter)
 INT_TYPE_CONVERTER_FUNC(lzma_match_finder, lzma_mf_converter)
 
@@ -246,13 +245,20 @@ INT_TYPE_CONVERTER_FUNC(lzma_match_finder, lzma_mf_converter)
 static int
 lzma_vli_converter(PyValueBorrow value, void *ptr)
 {
-    PyObject *obj = _PyValue_AsObjectAt(value, BOX_SITE_PARSER);
-    if (obj == NULL) {
+    Py_ssize_t bytes = _PyValue_AsNativeBytes(value, ptr, sizeof(lzma_vli),
+            Py_ASNATIVEBYTES_NATIVE_ENDIAN |
+            Py_ASNATIVEBYTES_ALLOW_INDEX |
+            Py_ASNATIVEBYTES_REJECT_NEGATIVE |
+            Py_ASNATIVEBYTES_UNSIGNED_BUFFER);
+    if (bytes < 0) {
         return 0;
     }
-    int ok = lzma_vli_obj_converter(obj, ptr);
-    Py_DECREF(obj);
-    return ok;
+    if ((size_t)bytes > sizeof(lzma_vli)) {
+        PyErr_SetString(PyExc_OverflowError,
+                        "Python int too large for C lzma_vli");
+        return 0;
+    }
+    return 1;
 }
 
 
@@ -274,13 +280,26 @@ parse_filter_spec_lzma(_lzma_state *state, PyObject *spec)
     /* First, fill in default values for all the options using a preset.
        Then, override the defaults with any values given by the caller. */
 
-    if (PyMapping_GetOptionalItemString(spec, "preset", &preset_obj) < 0) {
+    _PyStatusValue preset_result =
+        _PyValue_MappingGetOptionalItemString(PyValue_FromObjectBorrow(spec),
+                                              "preset");
+    if (preset_result.status < 0) {
         return NULL;
     }
-    if (preset_obj != NULL) {
-        int ok = _PyLong_UInt32_Converter(preset_obj, &preset);
-        Py_DECREF(preset_obj);
-        if (!ok) {
+    if (preset_result.status > 0) {
+        Py_ssize_t bytes = _PyValue_AsNativeBytes(preset_result.value, &preset,
+                sizeof(preset),
+                Py_ASNATIVEBYTES_NATIVE_ENDIAN |
+                Py_ASNATIVEBYTES_ALLOW_INDEX |
+                Py_ASNATIVEBYTES_REJECT_NEGATIVE |
+                Py_ASNATIVEBYTES_UNSIGNED_BUFFER);
+        PyValue_CLOSE(preset_result.value);
+        if (bytes < 0) {
+            return NULL;
+        }
+        if ((size_t)bytes > sizeof(preset)) {
+            PyErr_SetString(PyExc_OverflowError,
+                            "Python int too large for C uint32_t");
             return NULL;
         }
     }
@@ -367,27 +386,26 @@ static int
 lzma_filter_converter(_lzma_state *state, PyObject *spec, void *ptr)
 {
     lzma_filter *f = (lzma_filter *)ptr;
-    PyObject *id_obj;
-
     if (!_PyValue_MappingCheck(PyValue_FromObjectBorrow(spec))) {
         PyErr_SetString(PyExc_TypeError,
                         "Filter specifier must be a dict or dict-like object");
         return 0;
     }
-    if (PyMapping_GetOptionalItemString(spec, "id", &id_obj) < 0) {
+    _PyStatusValue id_result =
+        _PyValue_MappingGetOptionalItemString(PyValue_FromObjectBorrow(spec),
+                                              "id");
+    if (id_result.status < 0) {
         return 0;
     }
-    if (id_obj == NULL) {
+    if (id_result.status == 0) {
         PyErr_SetString(PyExc_ValueError,
                         "Filter specifier must have an \"id\" entry");
         return 0;
     }
     lzma_vli id;
-    if (!lzma_vli_obj_converter(id_obj, &id)) {
-        Py_DECREF(id_obj);
-        return 0;
-    }
-    Py_DECREF(id_obj);
+    int ok = lzma_vli_converter(PyValue_Borrow(id_result.value), &id);
+    PyValue_CLOSE(id_result.value);
+    if (!ok) return 0;
     f->id = id;
 
     switch (f->id) {

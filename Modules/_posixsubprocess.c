@@ -11,6 +11,7 @@
 #include "pycore_pystate.h"       // _PyInterpreterState_GET()
 #include "pycore_signal.h"        // _Py_RestoreSignals()
 #include "pycore_value.h"      // _PyValue_AsObjectAt()
+#include "pycore_value_call.h" // _PyValue_Call()
 #include "pycore_value_ops.h"  // _PyValue_SequenceFast()
 #include "pycore_value_slots.h"// _PyValue_FromObjectResult()
 
@@ -708,7 +709,7 @@ child_exec(char *const exec_array[],
            PyObject *preexec_fn_args_tuple)
 {
     int i, saved_errno;
-    PyObject *result;
+    PyValue result;
     /* Indicate to the parent that the error happened before exec(). */
     const char *err_msg = "noexec";
     /* Buffer large enough to hold a hex integer.  We can't malloc. */
@@ -826,8 +827,10 @@ child_exec(char *const exec_array[],
     err_msg = "";
     if (preexec_fn != Py_None && preexec_fn_args_tuple) {
         /* This is where the user has asked us to deadlock their program. */
-        result = PyObject_Call(preexec_fn, preexec_fn_args_tuple, NULL);
-        if (result == NULL) {
+        result = _PyValue_Call(_PyThreadState_GET(),
+                               PyValue_FromObjectBorrow(preexec_fn),
+                               preexec_fn_args_tuple, NULL);
+        if (PyValue_IsNull(result)) {
             /* Stringifying the exception or traceback would involve
              * memory allocation and thus potential for deadlock.
              * We've already faced potential deadlock by calling back

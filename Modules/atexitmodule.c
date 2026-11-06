@@ -18,6 +18,7 @@
 #include "pycore_pystate.h"       // _PyInterpreterState_GET
 #include "pycore_tuple.h"         // _PyTuple_PackValues()
 #include "pycore_value.h"         // PyValue
+#include "pycore_value_call.h"    // _PyValue_Call()
 #include "pycore_value_ops.h"     // _PyValue_RichCompareBool()
 
 /*[clinic input]
@@ -162,17 +163,17 @@ atexit_callfuncs(struct atexit_state *state)
         // register() accepts only callables, the args tuple and the kwargs
         // dict, so all three are objects.
         PyObject *func_obj = PyValue_AsKnownObjectBorrow(func);
-        PyObject *res = PyObject_Call(func_obj,
-                                      PyValue_AsKnownObjectBorrow(args),
-                                      PyValue_IsNone(kwargs)
-                                      ? NULL
-                                      : PyValue_AsKnownObjectBorrow(kwargs));
-        if (res == NULL) {
+        PyValue res = _PyValue_Call(_PyThreadState_GET(), func,
+                                    PyValue_AsKnownObjectBorrow(args),
+                                    PyValue_IsNone(kwargs)
+                                    ? NULL
+                                    : PyValue_AsKnownObjectBorrow(kwargs));
+        if (PyValue_IsNull(res)) {
             PyErr_FormatUnraisable(
                 "Exception ignored in atexit callback %R", func_obj);
         }
         else {
-            Py_DECREF(res);
+            PyValue_CLOSE(res);
         }
 next:
         PyValue_XCLOSE(func);

@@ -13,6 +13,7 @@
 
 #include "Python.h"
 #include "multibytecodec.h"
+#include "pycore_value_call.h"    // _PyValue_CallOneArg()
 
 
 /* a unicode "undefined" code point */
@@ -323,57 +324,64 @@ capsulate_codec(PyObject *mod, const MultibyteCodec *codec)
     return data;
 }
 
-static PyObject *
+static PyValue
 _getcodec(PyObject *self, const MultibyteCodec *codec)
 {
     PyObject *cofunc = getmultibytecodec();
     if (cofunc == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
+    PyValue cofunc_value = PyValue_FromObjectSteal(cofunc);
 
     codec_capsule *data = capsulate_codec(self, codec);
     if (data == NULL) {
-        Py_DECREF(cofunc);
-        return NULL;
+        PyValue_CLOSE(cofunc_value);
+        return PyValue_NULL;
     }
     PyObject *codecobj = PyCapsule_New(data, CODEC_CAPSULE,
                                        destroy_codec_capsule);
     if (codecobj == NULL) {
         PyMem_Free(data);
-        Py_DECREF(cofunc);
-        return NULL;
+        PyValue_CLOSE(cofunc_value);
+        return PyValue_NULL;
     }
 
-    PyObject *res = PyObject_CallOneArg(cofunc, codecobj);
-    Py_DECREF(codecobj);
-    Py_DECREF(cofunc);
+    PyValue codec_value = PyValue_FromObjectSteal(codecobj);
+    PyValue res = _PyValue_CallOneArg(_PyThreadState_GET(), cofunc_value,
+                                      PyValue_Borrow(codec_value));
+    PyValue_CLOSE(codec_value);
+    PyValue_CLOSE(cofunc_value);
     return res;
 }
 
-static PyObject *
-getcodec(PyObject *self, PyObject *encoding)
+static PyValue
+getcodec(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs,
+         PyObject *kwnames)
 {
-    if (!PyUnicode_Check(encoding)) {
+    PyValueBorrow encoding = PyValue_Borrow(args[0]);
+    if (!PyValue_IsObject(encoding)
+        || !PyUnicode_Check(PyValue_AsKnownObjectBorrow(encoding))) {
         PyErr_SetString(PyExc_TypeError,
                         "encoding name must be a string.");
-        return NULL;
+        return PyValue_NULL;
     }
-    const char *enc = PyUnicode_AsUTF8(encoding);
+    const char *enc = PyUnicode_AsUTF8(PyValue_AsKnownObjectBorrow(encoding));
     if (enc == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
 
-    cjkcodecs_module_state *st = get_module_state(self);
+    PyObject *self_obj = PyValue_AsKnownObjectBorrow(self);
+    cjkcodecs_module_state *st = get_module_state(self_obj);
     for (int i = 0; i < st->num_codecs; i++) {
         const MultibyteCodec *codec = &st->codec_list[i];
         if (strcmp(codec->encoding, enc) == 0) {
-            return _getcodec(self, codec);
+            return _getcodec(self_obj, codec);
         }
     }
 
     PyErr_SetString(PyExc_LookupError,
                     "no such codec is supported.");
-    return NULL;
+    return PyValue_NULL;
 }
 
 static int add_mappings(cjkcodecs_module_state *);
@@ -498,7 +506,7 @@ _cjk_free(void *mod)
 }
 
 static struct PyMethodDef _cjk_methods[] = {
-    {"getcodec", getcodec, METH_O, ""},
+    {"getcodec", _PyCFunction_CAST(getcodec), METH_VALUE|METH_O, ""},
     {NULL, NULL},
 };
 

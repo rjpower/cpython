@@ -335,11 +335,11 @@ class ContainsTests(unittest.TestCase):
 
     @unittest.skipUnless(STATS, "needs a Py_STATS build")
     def test_box_counter_sees_boxes(self):
-        # A list is searched through the object API, which boxes the key.
-        items = list(range(0, 8))
+        # Exercise an explicit test bridge; core membership stays value-native.
+        contract = import_helper.import_module('_testinternalcapi').pyvalue_contract
         def loop(n):
             for i in range(n):
-                i in items
+                contract(i)
         self.assertGreaterEqual(boxes(loop, N), N)
 
 

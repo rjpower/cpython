@@ -15,6 +15,7 @@ from generators_common import (
     write_header,
 )
 from cwriter import CWriter
+from ir_generator import num_handlers
 from typing import TextIO
 
 
@@ -39,6 +40,7 @@ def generate_opcode_header(
         write_define("HAVE_ARGUMENT", analysis.have_arg)
         write_define("MIN_SPECIALIZED_OPCODE", analysis.opmap["RESUME"]+1)
         write_define("MIN_INSTRUMENTED_OPCODE", analysis.min_instrumented)
+        write_define("IR_NUM_HANDLERS", num_handlers(analysis))
 
 
 arg_parser = argparse.ArgumentParser(

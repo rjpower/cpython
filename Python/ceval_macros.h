@@ -21,15 +21,21 @@
 #endif
 
 #ifdef Py_STATS
-/* The handlers of the register IR that have no opcode have no statistics. */
+/* Count the entered handler, including IR-only and specialized targets. */
 #define INSTRUCTION_STATS(op) \
     do { \
-        if ((op) < 256) { \
-            PyStats *s = _PyStats_GET(); \
-            OPCODE_EXE_INC(op); \
-            if (s) s->opcode_stats[lastopcode].pair_count[op]++; \
-            lastopcode = op; \
+        int entry_opcode = (op); \
+        assert(entry_opcode >= 0 && entry_opcode < IR_NUM_HANDLERS); \
+        assert(_PyIR_HandlerFlags[entry_opcode] & _PyIR_H_DISPATCH); \
+        assert(lastopcode >= 0 && lastopcode < IR_NUM_HANDLERS); \
+        assert(lastopcode == 0 || \
+               (_PyIR_HandlerFlags[lastopcode] & _PyIR_H_DISPATCH)); \
+        PyStats *s = _PyStats_GET(); \
+        if (s != NULL) { \
+            s->opcode_stats[entry_opcode].execution_count++; \
+            s->opcode_stats[lastopcode].pair_count[entry_opcode]++; \
         } \
+        lastopcode = entry_opcode; \
     } while (0)
 #else
 #define INSTRUCTION_STATS(op) ((void)0)
@@ -729,6 +735,5 @@ _PyIR_UnpackToLocals(PyValue *locals, PyValue *window, int n)
 #define _PyIR_FbHeaderOf(FRAME, INSTR, HANDLER) \
     ((void)(HANDLER), \
      _PyIR_InstrFeedback(_PyFrame_GetCode(FRAME), _PyFrame_Exec(FRAME), (INSTR)))
-
 
 

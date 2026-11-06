@@ -15,7 +15,7 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP);
+            INSTRUCTION_STATS(BINARY_OP_ADD);
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_D(ir_word));
@@ -332,7 +332,7 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP);
+            INSTRUCTION_STATS(BINARY_OP_AND);
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_D(ir_word));
@@ -561,7 +561,7 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP);
+            INSTRUCTION_STATS(BINARY_OP_FLOOR_DIVIDE);
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_D(ir_word));
@@ -723,7 +723,7 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP);
+            INSTRUCTION_STATS(BINARY_OP_INPLACE_ADD);
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_D(ir_word));
@@ -887,7 +887,7 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP);
+            INSTRUCTION_STATS(BINARY_OP_INPLACE_AND);
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_D(ir_word));
@@ -964,7 +964,7 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP);
+            INSTRUCTION_STATS(BINARY_OP_INPLACE_FLOOR_DIVIDE);
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_D(ir_word));
@@ -1041,7 +1041,7 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP);
+            INSTRUCTION_STATS(BINARY_OP_INPLACE_LSHIFT);
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_D(ir_word));
@@ -1118,7 +1118,7 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP);
+            INSTRUCTION_STATS(BINARY_OP_INPLACE_MATRIX_MULTIPLY);
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_D(ir_word));
@@ -1195,7 +1195,7 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP);
+            INSTRUCTION_STATS(BINARY_OP_INPLACE_MULTIPLY);
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_D(ir_word));
@@ -1272,7 +1272,7 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP);
+            INSTRUCTION_STATS(BINARY_OP_INPLACE_OR);
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_D(ir_word));
@@ -1349,7 +1349,7 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP);
+            INSTRUCTION_STATS(BINARY_OP_INPLACE_POWER);
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_D(ir_word));
@@ -1426,7 +1426,7 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP);
+            INSTRUCTION_STATS(BINARY_OP_INPLACE_REMAINDER);
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_D(ir_word));
@@ -1503,7 +1503,7 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP);
+            INSTRUCTION_STATS(BINARY_OP_INPLACE_RSHIFT);
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_D(ir_word));
@@ -1580,7 +1580,7 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP);
+            INSTRUCTION_STATS(BINARY_OP_INPLACE_SUBTRACT);
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_D(ir_word));
@@ -1657,7 +1657,7 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP);
+            INSTRUCTION_STATS(BINARY_OP_INPLACE_TRUE_DIVIDE);
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_D(ir_word));
@@ -1734,7 +1734,7 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP);
+            INSTRUCTION_STATS(BINARY_OP_INPLACE_XOR);
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_D(ir_word));
@@ -1811,7 +1811,7 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP);
+            INSTRUCTION_STATS(BINARY_OP_LSHIFT);
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_D(ir_word));
@@ -1978,7 +1978,7 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP);
+            INSTRUCTION_STATS(BINARY_OP_MATRIX_MULTIPLY);
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_D(ir_word));
@@ -2055,7 +2055,7 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP);
+            INSTRUCTION_STATS(BINARY_OP_MULTIPLY);
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_D(ir_word));
@@ -2279,7 +2279,7 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP);
+            INSTRUCTION_STATS(BINARY_OP_OR);
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_D(ir_word));
@@ -2431,7 +2431,7 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP);
+            INSTRUCTION_STATS(BINARY_OP_POWER);
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_D(ir_word));
@@ -2508,7 +2508,7 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP);
+            INSTRUCTION_STATS(BINARY_OP_REMAINDER);
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_D(ir_word));
@@ -2670,7 +2670,7 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP);
+            INSTRUCTION_STATS(BINARY_OP_RSHIFT);
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_D(ir_word));
@@ -2828,7 +2828,7 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP);
+            INSTRUCTION_STATS(BINARY_OP_SUBSCR);
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_D(ir_word));
@@ -3553,7 +3553,7 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP);
+            INSTRUCTION_STATS(BINARY_OP_SUBTRACT);
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_D(ir_word));
@@ -3845,7 +3845,7 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP);
+            INSTRUCTION_STATS(BINARY_OP_TRUE_DIVIDE);
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_D(ir_word));
@@ -3922,7 +3922,7 @@
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
-            INSTRUCTION_STATS(BINARY_OP);
+            INSTRUCTION_STATS(BINARY_OP_XOR);
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_D(ir_word));

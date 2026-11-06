@@ -20,7 +20,7 @@ row, without _PyIR_VALID.
 
 import argparse
 
-from analyzer import Analysis, analyze_files
+from analyzer import Analysis, Uop, analyze_files
 from generators_common import DEFAULT_INPUT, ROOT, write_header
 from cwriter import CWriter
 from ir_generator import (
@@ -39,6 +39,7 @@ from ir_generator import (
     monitoring_events,
     STACK_ONLY,
     num_handlers,
+    uses_feedback,
 )
 from typing import TextIO
 
@@ -56,6 +57,57 @@ def shadow_of(name: str, analysis: Analysis) -> str:
         if name.startswith(fused) or name.startswith("INSTRUMENTED_" + fused):
             return compare
     return name
+
+
+def handler_facts(analysis: Analysis, formats: dict[str, IRFormat]
+                  ) -> tuple[dict[str, int], dict[str, str], dict[str, list[str]]]:
+    """The named IR domain, its canonical bases and generated properties."""
+    ids = {**analysis.opmap, **handler_ids(analysis)}
+    dispatch = handler_ids(analysis)
+    insts = handler_instructions(analysis)
+    binary = set(binary_op_handlers(analysis))
+    bases = {}
+    flags = {}
+    for name in ids:
+        inst = insts.get(name) or analysis.instructions.get(name)
+        base = inst.family.name if inst is not None and inst.family else name
+        if name.startswith("INSTRUMENTED_") and base == name:
+            original = name[len("INSTRUMENTED_"):]
+            if original in ids:
+                base = original
+        bases[name] = base
+        parts = ["_PyIR_H_METADATA"]
+        if name in dispatch:
+            parts.append("_PyIR_H_DISPATCH")
+        if inst is not None and inst.family:
+            parts.append("_PyIR_H_SPECIALIZED")
+        if name.startswith("INSTRUMENTED_"):
+            parts.append("_PyIR_H_INSTRUMENTED")
+        if name in binary:
+            parts.append("_PyIR_H_BINARY_OP")
+        if name in analysis.ir_only:
+            parts.append("_PyIR_H_IR_ONLY")
+        if name.endswith("_NOFB"):
+            parts.append("_PyIR_H_NOFB")
+        if name in analysis.pseudos:
+            parts.append("_PyIR_H_PSEUDO")
+        if name in dispatch and (inst is None or not inst.family) \
+                and not name.startswith("INSTRUMENTED_"):
+            parts.append("_PyIR_H_PRISTINE")
+            fmt = formats[name]
+            if (fmt.fb != "_PyIR_LOC_NONE" and inst is not None
+                    and uses_feedback(inst)
+                    and any(isinstance(part, Uop)
+                            and "specializing" in part.annotations
+                            for part in inst.parts)):
+                parts.append("_PyIR_H_ADAPTIVE")
+        flags[name] = parts
+    for name, base in bases.items():
+        if base not in ids or bases[base] != base:
+            raise ValueError(f"noncanonical handler base: {name} -> {base}")
+    if len(set(ids.values())) != len(ids) or max(ids.values()) >= num_handlers(analysis):
+        raise ValueError("invalid handler domain")
+    return ids, bases, flags
 
 
 def bits(names: list[str]) -> str:
@@ -113,6 +165,7 @@ def generate_ir_metadata(
     contracts = handler_contracts(analysis, formats)
     insts = handler_instructions(analysis)
     ids = handler_ids(analysis)
+    fact_ids, bases, flags = handler_facts(analysis, formats)
     n = num_handlers(analysis)
     first = first_ir_only_handler(analysis)
     ir_only = sorted((name for name in ids if ids[name] >= first),
@@ -128,7 +181,24 @@ def generate_ir_metadata(
         out.emit(f"#define {'IR_FIRST_ONLY_HANDLER':<46} {first}\n")
         for name in ir_only:
             out.emit(f"#define {name:<46} {ids[name]}\n")
-        out.emit(f"#define {'IR_NUM_HANDLERS':<46} {n}\n\n")
+        out.emit("\n")
+        for kind, bit in (("SPECIALIZED", 1), ("INSTRUMENTED", 2),
+                          ("BINARY_OP", 4), ("IR_ONLY", 8), ("NOFB", 16),
+                          ("PSEUDO", 32), ("METADATA", 64), ("DISPATCH", 128),
+                          ("PRISTINE", 256), ("ADAPTIVE", 512)):
+            out.emit(f"#define _PyIR_H_{kind} {bit}\n")
+        out.emit("\n")
+        for ctype, table, values in (
+                ("uint16_t", "_PyIR_HandlerFlags", {
+                    name: " | ".join(flags[name]) for name in fact_ids}),
+                ("uint16_t", "_PyIR_HandlerBase", {
+                    name: str(fact_ids[bases[name]]) for name in fact_ids})):
+            out.emit(f"PyAPI_DATA(const {ctype}) {table}[IR_NUM_HANDLERS];\n")
+            out.emit("#ifdef NEED_IR_METADATA\n")
+            out.emit(f"const {ctype} {table}[IR_NUM_HANDLERS] = {{\n")
+            for name in sorted(fact_ids, key=fact_ids.get):
+                out.emit(f"[{fact_ids[name]}] = {values[name]}, /* {name} */\n")
+            out.emit("};\n#endif\n\n")
         ranges = analysis.numbers.ranges
         if ranges:
             out.emit("/* Numbers reserved by ir_numbers.txt for the steps that "

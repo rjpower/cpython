@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 import sys
 import tempfile
 import textwrap
@@ -78,6 +79,8 @@ def run_test_code_stats(
     code = code.replace('_TEST_CODE_', textwrap.dedent(test_code))
     script_args = args + ['-c', code]
     env_vars = dict(env_vars or {})
+    # Toggle tests control startup collection independently of their parent.
+    env_vars.setdefault('PYTHONSTATS', '')
     # Each run dumps into a directory of its own, never the shared default.
     # A process can dump more than once (sys._stats_dump(), then exit), so
     # the counters of all its dumps add up.
@@ -121,6 +124,75 @@ class TestPyStats(unittest.TestCase):
     """Tests for pystats functionality (requires --enable-pystats build
     option).
     """
+
+    def test_ir_handler_entry_metadata(self):
+        code = textwrap.dedent("""
+            import _testinternalcapi
+            import sys
+
+            def add(a, b):
+                return a + b
+
+            assert 'BINARY_OP_ADD' in (
+                word[0] for word in _testinternalcapi.get_ir(add.__code__, True))
+            sys._stats_on()
+            sys._stats_clear()
+            assert add(4, 5) == 9
+            sys._stats_off()
+            sys._stats_dump()
+            sys._stats_clear()
+        """)
+        with tempfile.TemporaryDirectory() as directory:
+            script_helper.assert_python_ok('-c', code,
+                                           PYTHON_PYSTATS_DIR=directory)
+            dumps = list(Path(directory).glob('*.txt'))
+            self.assertTrue(dumps)
+            for dump in dumps:
+                counters = {}
+                for line in dump.read_text().splitlines():
+                    key, separator, value = line.rpartition(':')
+                    if not separator or not value.strip().isdigit():
+                        continue
+                    key = key.strip()
+                    self.assertNotIn(key, counters)
+                    counters[key] = int(value)
+                self.assertEqual(counters['Handler entry coverage version'], 2)
+                self.assertEqual(counters['Handler entry dispatch mode'], 1)
+                self.assertGreater(counters['Handler domain count'], 256)
+                self.assertGreater(counters['Handler metadata entries'], 256)
+                names = {key[len('opcode['):-len('].handler_id')]
+                         for key in counters
+                         if key.startswith('opcode[')
+                         and key.endswith('].handler_id')}
+                self.assertEqual(len(names),
+                                 counters['Handler metadata entries'])
+                ids = {}
+                for name in names:
+                    prefix = f'opcode[{name}]'
+                    identity = counters[prefix + '.handler_id']
+                    base = counters[prefix + '.base_id']
+                    flags = counters[prefix + '.handler_flags']
+                    self.assertLess(identity, counters['Handler domain count'])
+                    self.assertNotIn(identity, ids)
+                    self.assertTrue(flags & 64)
+                    ids[identity] = name
+                    self.assertLess(base, counters['Handler domain count'])
+                for name in names:
+                    base = counters[f'opcode[{name}].base_id']
+                    base_name = ids[base]
+                    self.assertEqual(counters[f'opcode[{base_name}].base_id'],
+                                     base)
+                self.assertIn('BINARY_OP_ADD', names)
+            self.assertTrue(any(
+                'opcode[BINARY_OP_ADD].execution_count' in dump.read_text()
+                for dump in dumps))
+
+    def test_malloc_debug_with_stats(self):
+        with tempfile.TemporaryDirectory() as directory:
+            script_helper.assert_python_ok(
+                '-c', 'import test.support',
+                PYTHONMALLOC='malloc_debug', PYTHONSTATS='1',
+                PYTHON_PYSTATS_DIR=directory)
 
     def test_stats_toggle_on(self):
         """Check the toggle on functionality.
@@ -244,9 +316,13 @@ class TestPyStats(unittest.TestCase):
         """Check that the dump has a box count for every site class.
         """
         code = """
+        import _testinternalcapi
         def func_start():
+            sys._stats_clear()
             items = [1000]
             items.pop()
+            _testinternalcapi.pyvalue_contract(1000)
+            sys._stats_off()
         """
         stats = run_test_code_stats(code, args=['-X', 'pystats'])
         sites = ['unattributed', 'number', 'compare', 'repr', 'sequence',
@@ -256,8 +332,9 @@ class TestPyStats(unittest.TestCase):
         boxes = {site: int(stats[f'Boxing by site ({site})'])
                  for site in sites}
         self.assertIn('Entry unboxing', stats)
-        # list.pop() boxes the inline int it removes.
-        self.assertGreaterEqual(boxes['list'], 1)
+        self.assertEqual(boxes['list'], 0)
+        # The test-only owning bridge deliberately projects an inline value.
+        self.assertGreaterEqual(boxes['test'], 1)
         self.assertEqual(sum(boxes.values()),
                          int(stats['Object inline int boxes'])
                          + int(stats['Object inline float boxes']))
@@ -267,13 +344,14 @@ class TestPyStats(unittest.TestCase):
         value-api-v2a0.md, section 4.7).
         """
         code = """
-        import operator
+        import _testcapi
         def func_start():
-            # int's value slots are in place (V2a-1a): PyNumber_Add() makes
-            # its operands inline, the adapter boxes them for the object-form
-            # operator.add(), which reaches int's nb_add thunk with objects,
-            # and the thunk boxes the inline result.
-            operator.add(1000, 2000)
+            sys._stats_clear()
+            # The object fastcall requires two adapter projections. The
+            # number API deliberately exercises parser and result thunks.
+            _testcapi.meth_fastcall(1000, 2000)
+            _testcapi.number_add(1000, 2000)
+            sys._stats_off()
         """
         stats = run_test_code_stats(code, args=['-X', 'pystats'])
         kinds = box_kinds(stats)
@@ -296,16 +374,15 @@ class TestPyStats(unittest.TestCase):
         # Collection stops right after the statement, so that the template's
         # threads add nothing; the dump at exit still has the counts.
         for statement, expected in (
-            # int's and str's value sides return NotImplemented; the C box is
-            # the generic COMPARE_OP handler's.
-            ("x == 'a'", {'core': 1, 'slot adapter': 0, 'thunk': 0,
+            # These core paths now stay in value form end to end.
+            ("x == 'a'", {'core': 0, 'slot adapter': 0, 'thunk': 0,
                           'call adapter': 0}),
             ("'a' in [x, 2000, 'a']", {'core': 0, 'slot adapter': 0,
                                        'thunk': 0, 'call adapter': 0}),
             ("repr([x, 2000])", {'core': 0, 'slot adapter': 0, 'thunk': 0,
                                  'call adapter': 0}),
             ("operator.add(x, 2000)", {'core': 0, 'slot adapter': 0,
-                                       'thunk': 1, 'call adapter': 2}),
+                                       'thunk': 0, 'call adapter': 0}),
         ):
             with self.subTest(statement=statement):
                 code = f"""

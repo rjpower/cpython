@@ -369,6 +369,15 @@ class Test_IncrementalDecoder(unittest.TestCase):
                 self.assertEqual(decoder.decode(b'!', final=True), '\ufffd')
 
 class Test_StreamReader(unittest.TestCase):
+    def test_size_overflow_message(self):
+        msg = "Python int too large to convert to C ssize_t"
+        reader = codecs.getreader('euc_jp')(io.BytesIO(b'abc'))
+        for method in (reader.read, reader.readline, reader.readlines):
+            for n in (2**63, -2**63 - 1, 2**70):
+                with self.subTest(method=method.__name__, n=n):
+                    with self.assertRaisesRegex(OverflowError, msg):
+                        method(n)
+
     def test_bug1728403(self):
         try:
             f = open(TESTFN, 'wb')

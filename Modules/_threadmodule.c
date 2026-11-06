@@ -2784,9 +2784,9 @@ static PyMethodDef thread_methods[] = {
     _THREAD_DAEMON_THREADS_ALLOWED_METHODDEF
     _THREAD_ALLOCATE_LOCK_METHODDEF
     {"allocate",                _PyCFunction_CAST(_thread_allocate_lock),
-     METH_VALUE, allocate_doc},
+     METH_VALUE|METH_NOARGS, allocate_doc},
     {"exit_thread",             _PyCFunction_CAST(_thread_exit),
-     METH_VALUE, exit_thread_doc},
+     METH_VALUE|METH_NOARGS, exit_thread_doc},
     _THREAD_EXIT_METHODDEF
     _THREAD_INTERRUPT_MAIN_METHODDEF
     _THREAD_GET_IDENT_METHODDEF

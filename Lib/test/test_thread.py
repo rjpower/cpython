@@ -24,6 +24,16 @@ def verbose_print(arg):
             print(arg)
 
 
+class NoArgumentsTest(unittest.TestCase):
+
+    def test_aliases_take_no_arguments(self):
+        for name in ('allocate', 'exit_thread', 'allocate_lock', 'exit'):
+            with self.subTest(name=name):
+                msg = rf"_thread\.{name}\(\) takes no arguments \(1 given\)"
+                with self.assertRaisesRegex(TypeError, msg):
+                    getattr(thread, name)(1)
+
+
 class BasicThreadTest(unittest.TestCase):
 
     def setUp(self):

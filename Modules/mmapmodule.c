@@ -28,6 +28,7 @@
 #include "pycore_bytesobject.h"   // _PyBytes_Find()
 #include "pycore_fileutils.h"     // _Py_stat_struct
 #include "pycore_mmap.h"          // _PyAnnotateMemoryMap()
+#include "pycore_long_value.h"    // _PyValue_IntAsSsize_t()
 #include "pycore_value.h"         // PyValue_FromInt64()
 #include "pycore_value_ops.h"      // _PyValue_AsSsize_t()
 #include "pycore_value_slots.h"// _PyValue_FromObjectResult()
@@ -156,7 +157,13 @@ typedef struct {
 static Py_ssize_t
 _As_Py_ssize_t(PyValueBorrow arg) {
     assert(!PyValue_IsNull(arg));
-    return _PyValue_AsSsize_t(arg, PyExc_OverflowError);
+    PyValue idx = _PyValue_Index(arg);
+    if (PyValue_IsNull(idx)) {
+        return -1;
+    }
+    Py_ssize_t r = _PyValue_IntAsSsize_t(idx);
+    PyValue_CLOSE(idx);
+    return r;
 }
 
 static void

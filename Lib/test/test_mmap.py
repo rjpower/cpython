@@ -36,6 +36,17 @@ if is_emscripten:
 
 class MmapTests(unittest.TestCase):
 
+    def test_index_overflow_message(self):
+        m = mmap.mmap(-1, 16)
+        self.addCleanup(m.close)
+        msg = "Python int too large to convert to C ssize_t"
+        with self.assertRaisesRegex(OverflowError, msg):
+            m.find(b'a', 2**63)
+        with self.assertRaisesRegex(OverflowError, msg):
+            m.rfind(b'a', 0, 2**63)
+        with self.assertRaisesRegex(OverflowError, msg):
+            m.find(b'a', -2**63 - 1)
+
     def setUp(self):
         if os.path.exists(TESTFN):
             os.unlink(TESTFN)

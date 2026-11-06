@@ -13,7 +13,7 @@
 
 #include "multibytecodec.h"
 #include "clinic/multibytecodec.c.h"
-#include "pycore_long_value.h"    // _PyValue_AsSsize_t()
+#include "pycore_long_value.h"    // _PyValue_IntAsSsize_t()
 #include "pycore_tuple.h"         // _PyTuple_FromPairSteal
 #include "pycore_value.h"         // PyValue_AsKnownObjectBorrow()
 #include "pycore_value_ops.h"     // _PyValue_Str()
@@ -1623,7 +1623,7 @@ _multibytecodec_MultibyteStreamReader_read_impl(MultibyteStreamReaderObject *sel
     if (PyValue_IsNone(sizeobj))
         size = -1;
     else if (PyType_IsSubtype(PyValue_TYPE(sizeobj), &PyLong_Type))
-        size = _PyValue_AsSsize_t(sizeobj, PyExc_OverflowError);
+        size = _PyValue_IntAsSsize_t(sizeobj);
     else {
         PyErr_SetString(PyExc_TypeError, "arg 1 must be an integer");
         return PyValue_NULL;
@@ -1652,7 +1652,7 @@ _multibytecodec_MultibyteStreamReader_readline_impl(MultibyteStreamReaderObject 
     if (PyValue_IsNone(sizeobj))
         size = -1;
     else if (PyType_IsSubtype(PyValue_TYPE(sizeobj), &PyLong_Type))
-        size = _PyValue_AsSsize_t(sizeobj, PyExc_OverflowError);
+        size = _PyValue_IntAsSsize_t(sizeobj);
     else {
         PyErr_SetString(PyExc_TypeError, "arg 1 must be an integer");
         return PyValue_NULL;
@@ -1682,7 +1682,7 @@ _multibytecodec_MultibyteStreamReader_readlines_impl(MultibyteStreamReaderObject
     if (PyValue_IsNone(sizehintobj))
         sizehint = -1;
     else if (PyType_IsSubtype(PyValue_TYPE(sizehintobj), &PyLong_Type))
-        sizehint = _PyValue_AsSsize_t(sizehintobj, PyExc_OverflowError);
+        sizehint = _PyValue_IntAsSsize_t(sizehintobj);
     else {
         PyErr_SetString(PyExc_TypeError, "arg 1 must be an integer");
         return PyValue_NULL;

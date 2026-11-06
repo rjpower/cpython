@@ -1,23 +1,28 @@
 # Project status
 
-Live status, 2026-11-06: runtime HEAD is `1ab005e79b8`. Finished-process
-identity landed as `84edb605d31` (4,276 tests/profile), direct value new as
-`71016b30e45`, and paired init/constructor providers plus four API aliases
-as `1ab005e79b8` (4,541 tests/profile). All three profiles build 117 modules.
-Direct int/float new calls now have zero boxes in bounded actual probes, but
-ordinary class calls still had 100 boxes in 100 calls at the object type-call
-slot. The dispatch correction, direct initializer wrappers, float formatting,
-descriptor lookup and native child receipts are now applied together under
-full merged validation, execution `10399`. The first attempt stopped at the
-stats module check: two native accounting helpers needed exported declarations.
-The reviewed export fix is applied. Keep shared source/builds frozen.
+Live status, 2026-11-06: candidate source is based on runtime HEAD
+`1ab005e79b8`; the constructor/dispatch, float-formatting, descriptor and
+native-child-accounting cohort is under full-v2 validation. Regeneration,
+lint, limited-ABI/frozen-main checks and all three 117-module builds passed.
+Both release and debug suites ran 54,347 tests: three failures each (two AST,
+one opcache), plus one environment-change result because `test_tools` modified
+`sys.path`. Do not mark qualification complete. After these runs, root applied
+the frozen `sys.path` cleanup and a one-line init diagnostic; neither change
+has been rebuilt or tested yet.
+
+The 13 native identity probes pass, including deliberate negative cases.
+Private stats probes still find 98 boxes in the specialized-init case, one
+for cold lookup, 100 each for float formatting and f-strings, and 200 each
+for long formatting and long format fields. Approved causal fixes are in
+flight; these results keep R27 open. The measurement helper is reviewed, but
+no timing may start until the coordinator freezes source and builds.
 
 The exact-source raw [kernel capture](issues/checkpoint-closure/kernels-66981c963be.md)
-at `66981c963be` has 15/29 raw-zero kernels and all 29 zero loop deltas.
-The actual matched-build preflight now passes after refreshing build-info;
-preflight-only is explicitly ineligible as a measured result. No new timing
-exists. Full suite outcomes below predate the latest integrations, so
-complete functional and strict R27 requalification remain necessary.
+at `66981c963be` has 15/29 raw-zero kernels and all 29 zero loop deltas; it is
+historical evidence, not this cohort's qualification. The matched-build
+preflight passes, but preflight-only is ineligible as a measured result. No
+new timing exists. Complete functional and strict R27 requalification remain
+necessary.
 
 The previous full qualification point at `af82c03c4e5` ran 54,311 tests
 per profile and found the operator regression, now fixed by focused merged

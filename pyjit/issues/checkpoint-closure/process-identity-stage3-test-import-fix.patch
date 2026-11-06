@@ -1,0 +1,26 @@
+--- a/Lib/test/test_tools/test_stage3_identity.py
++++ b/Lib/test/test_tools/test_stage3_identity.py
+@@ -1,18 +1,16 @@
+ """Native child receipt and marker admission fixtures for check_r27."""
+ 
+-import importlib.util
+ import json
+ import os
+ from pathlib import Path
+-import sys
+ import tempfile
+ import unittest
+ 
+-CHECKER = Path(__file__).resolve().parents[3] / "Tools/build/check_r27.py"
+-sys.path.insert(0, str(CHECKER.parent))
+-spec = importlib.util.spec_from_file_location("stage3_check_r27", CHECKER)
+-check_r27 = importlib.util.module_from_spec(spec)
+-spec.loader.exec_module(check_r27)
++from test.test_tools import imports_under_tool, skip_if_missing
++
++skip_if_missing("build")
++with imports_under_tool("build"):
++    import check_r27
+ 
+ PARENT = "a" * 40
+ CHILD = "b" * 40

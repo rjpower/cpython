@@ -31,17 +31,16 @@ The detailed commit and validation ledger is in [WORKLOG](../WORKLOG.md).
 
 Handler-domain instrumentation is qualified. Runtime `812cba08f4b` has the
 H3 full-handler-domain producer and strict reader: the generated domain,
-dispatch entries and counter arrays agree. The latest captured candidate has
-15 of 29 kernels at zero boxes in every raw process, with zero loop deltas
-across all 29; the strict startup-inclusive gate still fails. The capture named
-`kernels-b9888ea3b40` used the source later committed as `b9888ea3b40`, while
-its embedded version retained the predecessor dirty identity. See
-[status](../STATUS.md) for capture paths and the identity caveat. This supersedes
-the earlier eleven-kernel struct/property capture. The startup-inclusive PyValue gate
-remains open. The earlier `4fffee855c9` census predates H3 and remains
-historical evidence, not a measurement of this source identity. Historical
-instruction counts and other-VM comparisons below are likewise not new
-measurements of the current runtime.
+dispatch entries and counter arrays agree. The latest retained exact-source
+capture is `kernels-66981c963be`: 15 of 29 kernels have zero boxes in every raw
+process, with zero loop deltas across all 29; the strict startup-inclusive gate
+still fails. The earlier `kernels-b9888ea3b40` capture used source later
+committed as `b9888ea3b40`, while its embedded version retained the predecessor
+dirty identity. See [status](../STATUS.md) for paths and identity caveats. The
+startup-inclusive PyValue gate remains open. The earlier `4fffee855c9` census
+predates H3 and is historical evidence, not a measurement of current source.
+Historical instruction counts and other-VM comparisons below are likewise
+not new measurements of the current runtime.
 
 **Accepted after review 2 (2026-11-03).**
 

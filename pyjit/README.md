@@ -4,13 +4,17 @@ We are rebuilding CPython around universal eight-byte PyValues, a register
 interpreter, and a cohesive method and tracing JIT. Memory management uses
 reference counting with cyclic collection. Extensions are rebuilt and ported.
 
-**Current outcome:** the universal-value runtime links and runs. Runtime
-`1ab005e79b8` includes paired new/init providers and four checked API aliases;
-three builds and 4,541 tests per profile pass. An actual boxing probe found
-ordinary class dispatch still entering an object slot. Its correction is now
-in full merged qualification with float formatting, descriptor lookup and
-native child accounting. Full functional qualification and R27 remain open;
-there is no current performance measurement.
+**Current outcome:** the candidate is based on runtime commit `1ab005e79b8`,
+with constructor/dispatch, float-formatting, descriptor and native-child-
+accounting changes under full-v2 qualification. All three builds,
+regeneration, lint, ABI and frozen-main checks passed. The release suite ran
+54,347 tests and has three failures (two AST, one opcache); `test_tools` also
+changed `sys.path`. Debug also ran 54,347 tests with the same three failures
+and environment change. Thirteen native identity probes pass, including
+negative cases. Private stats probes still find boxes in
+specialized initialization, cold lookup, float formatting/f-strings and long
+formatting. R27 and functional qualification remain open; there is no current
+performance measurement.
 **Next milestone:** close ownership/accounting debt, qualify one clean runtime,
 then measure it against matched upstream and interim controls with the JIT off.
 

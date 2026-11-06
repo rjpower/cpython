@@ -1,17 +1,25 @@
 # Coordinator handoff
 
-Current committed runtime HEAD is `1ab005e79b8` on `boil/pyvalue-rc-universal`.
-Finished identity and new/init providers have landed; the latest focused
-landing passes 4,541 tests per profile and all three 117-module builds. Its
-ordinary-class boxing probe still finds 100 boxes in 100 calls: the new value
-provider needs an actual metatype call-slot pair. That correction, direct init
-wrappers, float formatting, descriptor lookup and native child receipts are
-now in full merged validation (`10399`), including the matching suite and
-benchmark readers. Root alone changes shared source/builds. Do not run the
-benchmark counter reader against an unmatched protocol. The latest raw census is 15/29 zero kernels,
-all zero loop deltas, with an exact retained ELF and matching clean source.
-Matched-build preflight passes after the targeted build-info refresh; no
-timing has run. Ctypes/LRU approval holds and full R27 remain open.
+The current candidate is based on committed runtime HEAD `1ab005e79b8` on
+`boil/pyvalue-rc-universal`; the constructor/dispatch, float-formatting,
+descriptor and native-child-accounting cohort completed its full-v2 suite run.
+Regeneration, lint, limited-ABI/frozen-main checks and all three 117-module
+builds passed. Release and debug each ran 54,347 tests with three failures
+(two AST, one opcache), plus one environment-change result (`test_tools`
+modified `sys.path`). After the runs, root applied the frozen `sys.path`
+cleanup and one-line init diagnostic; those edits have not been rebuilt or
+tested. Thirteen native identity probes pass, including deliberate negative
+cases. Private stats still show 98 boxes in the specialized-init case, one in
+cold lookup, 100 each in float formatting and f-strings, and 200 each in long
+formatting and long format fields. R27 and functional qualification remain
+open; approved causal fixes are in flight.
+
+The raw kernel capture at `66981c963be` (15/29 raw-zero kernels, 29 zero loop
+deltas) is historical and is not a measurement of this cohort. Matched-build
+preflight is not a timing result; no new performance run has started. The
+measurement helper is independently reviewed, but timing waits for a frozen
+source/build window. Ctypes and LRU implementation remain on explicit approval
+hold. Root alone changes shared runtime source/builds.
 
 ## Mission and selected design
 
@@ -47,7 +55,7 @@ and backend. The stage pages distinguish selected designs from working code.
 | --- | --- |
 | Documentation root (canonical `pyjit/`) | `/home/power/code/cpython/.worktrees/python-jit`, branch `weaver/python-jit` |
 | Runtime tree (nested worktree) | `/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/pyvalue-rc-universal` |
-| Runtime branch / latest commit | `boil/pyvalue-rc-universal`, `1ab005e79b8` (2026-11-06) |
+| Runtime branch / source base | `boil/pyvalue-rc-universal`, `1ab005e79b8` (2026-11-06; the full-v2 candidate and post-run fixes are uncommitted) |
 | Shared builds at HEAD | `build/pyvalue-rc-repr-debug`, `build/pyvalue-rc-repr-release` (under the `python-boil-the-ocean` worktree) |
 | Older debug build | `build/pyvalue-rc-debug-20261102-v1` |
 | Triage debug builds | `build/pyvalue-rc-bringup-debug`, `build/pyvalue-rc-triage-rt-debug` |
@@ -74,13 +82,12 @@ and shapes. Read the build directories for the exact commands.
 
 ## Source and build state
 
-Runtime HEAD is `1ab005e79b8`, with the reviewed constructor/formatter/native
-accounting batch applied under full validation `10399`. Keep source and shared
-builds frozen until it finishes. Workers have stopped code and build work.
-Only the coordinator changes shared source and builds. The previous full suites at
-`af82c03c4e5` each ran 54,311 tests
-and failed only the now-corrected operator call regression. Full qualification
-must repeat after the remaining coherent ports; focused passes are insufficient.
+The full-v2 candidate is based on `1ab005e79b8`, with the reviewed
+constructor/formatter/native-accounting batch applied. Both full suites ended
+with the same three failures and one environment-change result. The two
+post-run edits are unvalidated. Root owns diagnosis, source changes and all
+shared builds. Earlier `af82` and `1ab` runs are historical checkpoints, not
+current full qualification.
 
 The first batch attempt, `12246`, stopped before the suites because the stats
 shared module could not resolve two new helpers. The two `PyAPI_FUNC(void)`
@@ -95,11 +102,10 @@ can be forced by an extra phony prerequisite without modifying source or the
 Makefile. Real matched preflight at `66981c963be` passed all checks, with
 preflight-only results correctly ineligible for measurement.
 
-Canonical `pyjit/bench/run.py` now has the reviewed private-directory paired
-`.txt`/`.done` consumer. Its C producer and R27 reader are not integrated yet;
-do not run new boxing captures until all three are coherent. The runtime
-still uses the older one-file producer. Preserve the frozen consumer v2 packet,
-producer patch, stage-one current-main patch and subsequent reader additions.
+The paired `.txt`/`.done` stats producer, strict R27 reader, and benchmark
+consumer are integrated in the current cohort. Thirteen native identity probes
+cover successful and deliberately failing cases. Preserve the frozen evidence
+and do not start timing until root resolves the full-suite and stats findings.
 Normal timing is a separate metric; no timing has run.
 
 The isolated bulk tree still contains deliberate unavailable API marks and

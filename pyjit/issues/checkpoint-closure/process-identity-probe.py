@@ -48,6 +48,11 @@ def main():
             "subprocess.run([sys.executable, '-I', '-S', '-B', '-X', 'pystats', "
             "'-X', 'pystats_dir=' + @STATS_DIR@, '-c', 'pass'], check=True)\n",
             2, 0),
+        "popen_fork_exec": (
+            "import subprocess, sys\n"
+            "subprocess.run([sys.executable, '-I', '-S', '-B', '-X', 'pystats', "
+            "'-X', 'pystats_dir=' + @STATS_DIR@, '-c', 'pass'], "
+            "check=True, start_new_session=True)\n", 2, 0),
         "failed_spawn": (
             "import os\ntry:\n"
             " os.posix_spawn('/no-such-identity-probe', ['missing'], os.environ)\n"
@@ -109,7 +114,8 @@ def main():
         if not parents or any(identity["ppid"] != os.getpid() for identity in parents):
             raise AssertionError(f"{name}: incorrect launched process identity")
         child_sources = {"fork": "fork", "fork_callback_dump": "fork",
-                         "spawn": "spawn", "popen": "fork_exec"}
+                         "spawn": "spawn", "popen": "spawn",
+                         "popen_fork_exec": "fork_exec"}
         if name in child_sources:
             children = [identity for identity in identities if identity["pid"] != proc.pid]
             if len(children) != 1 or children[0]["ppid"] != proc.pid:

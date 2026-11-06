@@ -481,60 +481,58 @@ source integration, full tests, measurement and the final checkpoint recap.
 
 ## Live integration and measurement queue (2026-11-06)
 
-1. **Preserve the qualified increments.** Runtime `84edb605d31` lands finished
-   process identity and strict launch capture after three builds and 4,276
-   tests/profile; real exit, zero, repeated-dump, fork and argv-byte probes
-   pass. `71016b30e45` lands direct value new; bounded int/float calls each
-   fall from 100 boxes to zero for 100 calls, and true object C entries pass.
-   `1ab005e79b8` lands value init providers and four checked manual aliases,
-   with three builds and 4,541 tests/profile. Its ordinary-class call probe
-   still has 100 boxes/100 calls; do not infer closure from functional tests.
-2. **Integrate the exact reviewed composition.** The coordinator has applied
-   the actual type-call pair, captured direct-init wrapper, descriptor-get
-   lookup, float value writer and its manual alias, and native successful-child
-   receipts. The latter includes marker v2, strict roots/lineage/image checks,
-   suite fixtures, benchmark consumer and real probe together. All base and
-   additive packets stay frozen. Terra supplied constructor/descriptor ports;
-   Luna supplied float ports/docs; Sol supplied/reviewed accounting. The
-   coordinator owns the merged source and every shared build.
-3. **Run bulk qualification once at this integration point.** Execution
-   `10399`, tag `checkpoint-constructor-float-identity-full-v2`, follows 27 host
-   benchmark tests (passed, two skips), regeneration, lint, three expected
-   117-module builds, ABI/frozen-main checks, then complete release/debug
-   suites. No worker builds or new ports run during this phase. Retain and
-   diagnose failures; make bounded fixes, independently review, and rerun only
-   affected tests before broadening where the findings justify it.
-   The initial attempt `12246` stopped at the stats module roster because two
-   native helpers lacked exported declarations; its logs are retained. The
-   independently reviewed two-line export fix is in the new attempt.
-4. **Verify real producer and dispatch behavior.** After the stats link,
-   execute v2 identity probes, including configured stats-off fork failure and
-   late activation, actual spawn/Popen and repeated intervals. Run private
-   constructor and numeric-format probes with exact ELF retention. Require
-   zero core boxes for each claimed closed path, preserve nonzero direct/C
-   boundary cases separately, and repeat the private three-process benchmark
-   capture before all 29 raw kernels. No reclassification may hide a core box.
-5. **Repeat strict R27 on the composed source.** Retain the stats ELF before
-   the full stats suite, refresh the finite API/copied-slot census, and account
-   for every missing/zero/crashed process and external image. The latest old
-   census is still `af82`: 6,513 dumps, 14,211,307 debt boxes, no owner drops or
-   invalid owners, 545 unfinished markers and 423 predicted events. These are
-   historical failing evidence, not current counts or unique child counts.
-   Ctypes raw ownership and LRU implementation remain on explicit approval
-   hold after automatic review; no worker may bypass those holds.
-6. **Freeze and remeasure.** Commit the validated source and benchmark code,
-   refresh `Modules/getbuildinfo.o` in all three profiles and complete builds.
-   With all workers/builds/tests stopped, verify matched upstream/interim/
-   candidate identities and 116/116/117 module logs. Run the declared three
-   rotating kernel rounds with load limit four and a 45-minute window, then
-   the established eight-module/12-result pyperformance subset, warmed-page
-   RSS and separate profiling. If R27 remains open, label the measurement
-   diagnostic and ineligible for checkpoint admission; never label a passing
-   preflight as a performance result. Preserve every raw vector and spread.
-7. **Publish a bounded follow-up plan from evidence.** Distinguish functional
-   correctness, boxing/accounting admission and elapsed-time performance.
-   Rank remaining approval-held ownership work, long numeric formatting,
-   type lookup/attribute continuations and cached richcompare by the fresh
-   census. Then rank interpreter/G2, memory, serialization recovery and the
-   shared optimizing method/tracing JIT from the measured costs. State any
-   unfinished checkpoint requirement plainly in the recap.
+1. **Keep landed increments distinct from the current candidate.** `84edb605d31`
+   landed finished-process identity, `71016b30e45` direct value new, and
+   `1ab005e79b8` init providers plus four manual aliases. Those focused checks
+   remain historical evidence; they do not establish current full qualification.
+2. **Current coherent cohort.** The full-v2 candidate based on `1ab005e79b8`
+   combines the actual type-call pair and direct init wrappers, float formatting,
+   descriptor lookup, and native child identity producer/reader/benchmark
+   consumer. Regeneration, lint, limited-ABI/frozen-main checks and all three
+   117-module builds passed. The stage3 native identity set reports 13 passing
+   positive/negative probes. Keep base/additive review artifacts frozen; root
+   owns the shared source and builds.
+3. **Full-suite outcome and in-flight fixes.** Execution `10399`, tag
+   `checkpoint-constructor-float-identity-full-v2`, ran 54,347 tests in each of
+   release and debug. Both profiles have three failures (two AST, one opcache)
+   and one environment-change result (`test_tools` changed `sys.path`). Root
+   applied a frozen sys.path cleanup and a one-line init diagnostic only after
+   those runs; those edits are unbuilt and untested. Approved causal fixes are
+   in flight. Rebuild and rerun focused tests for each fix, then rerun merged
+   release/debug suites before calling this cohort qualified. The initial
+   attempt `12246` stopped at the stats roster; the later reviewed exports
+   fixed the stats link.
+4. **Close the observed box paths.** The private stats receipt reports 98 boxes
+   in the specialized-init probe, one in cold lookup, 100 each for builtin
+   float formatting and float f-strings, and 200 each for long formatting and
+   long format fields. Preserve this receipt and trace each site to its owner;
+   do not treat direct `float.__format__` or `str.format` probes as proof that
+   the builtin format and f-string paths are closed. Recheck all numeric and
+   constructor probes after the approved fixes. No box may be reclassified to
+   hide a core-owned path.
+5. **Run a fresh strict R27 census.** Retain the exact stats ELF, refresh the
+   finite API/copied-slot inventory, and account for every missing, zero,
+   crashed, or external process using the integrated marker/receipt protocol.
+   The last complete census (`af82c03c4e5`) remains historical failing evidence:
+   6,513 dumps, 14,211,307 debt boxes, 545 unfinished markers and 423 predicted
+   events. It is not a result for this cohort, and events are not unique
+   children. Ctypes raw ownership and LRU implementation remain on explicit
+   approval hold after automatic review; do not bypass those holds.
+6. **Freeze and measure only after admission.** Once full functional and R27
+   gates pass, commit the validated source, refresh `Modules/getbuildinfo.o`
+   and complete all three builds. With builds/workers stopped, verify matched
+   upstream `3a440b65695`, interim `eba351fee7d` and candidate identities and
+   their 116/116/117 module rosters. Run the declared three rotating kernel
+   rounds (load limit four, 45-minute window), the reviewed eight-module/12-result
+   pyperformance subset, warmed-page RSS and separate profiling. The reviewed
+   measurement helper has not run. The 1.73x kernel and 1.83x pyperformance
+   ratios belong to `5de7bd62ef9`, not this candidate; no current performance
+   ratio is known. Preserve raw vectors and spread.
+7. **Write the follow-up from qualified evidence.** Separate functional
+   correctness, boxing/accounting admission and elapsed-time performance. Rank
+   remaining approved ownership work, long numeric formatting, type
+   lookup/attribute continuations and cached richcompare from the fresh census;
+   then rank interpreter/IR encoding and deferred G2, memory, serialization
+   recovery, and the shared optimizing method/tracing JIT from measured costs.
+   The checkpoint remains open until every stated gate passes and the recap
+   identifies any remaining limitation.

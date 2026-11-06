@@ -1,0 +1,94 @@
+--- a/Objects/typeobject.c
++++ b/Objects/typeobject.c
+@@ -14749,6 +14749,29 @@
+                 use_generic = 1;
+             }
+         }
++        else if (row == _Py_VALUE_SLOT_INDEX_subscript && descr != NULL &&
++                 _PyDict_IsBuiltinGetItemDescriptor(descr) &&
++                 is_subtype_with_mro(lookup_tp_mro(type), type,
++                                     PyDescr_TYPE(descr)))
++        {
++            PyTypeObject *owner = PyDescr_TYPE(descr);
++            void *object = (void *)owner->tp_as_mapping->mp_subscript;
++            _Py_valuefunc value = owner->tp_value.subscript;
++            assert(object == (void *)_PyDict_Subscript);
++            _PyType_CHECK_VALUE_ROW(owner, _Py_VALUE_SLOT_INDEX_subscript);
++            generic = p->function;
++            generic_value = slotdef_values[p - slotdefs].function;
++            if (specific != NULL && specific != object) {
++                use_generic = 1;
++            }
++            else {
++                if (specific != NULL && specific_value != value) {
++                    value = NULL;
++                }
++                specific = object;
++                specific_value = value;
++            }
++        }
+         else if (descr != NULL && Py_IS_TYPE(descr, &PyCFunction_Type) &&
+                  PyCFunction_GET_FUNCTION(descr) ==
+                  _PyCFunction_CAST(tp_new_wrapper) &&
+--- a/Objects/dictobject.c
++++ b/Objects/dictobject.c
+@@ -3710,6 +3710,19 @@
+                                 PyValue_Borrow(args[0]));
+ }
+ 
++/* Identify the value method that corresponds to the two builtin dict slots. */
++int
++_PyDict_IsBuiltinGetItemDescriptor(PyObject *descr)
++{
++    if (!Py_IS_TYPE(descr, &PyMethodDescr_Type)) {
++        return 0;
++    }
++    PyTypeObject *owner = PyDescr_TYPE(descr);
++    return (owner == &PyDict_Type || owner == &PyFrozenDict_Type) &&
++        ((PyMethodDescrObject *)descr)->d_method->ml_meth ==
++            _PyCFunction_CAST(dict_getitem_value);
++}
++
+ Py_VALUE_ENTRY PyObject *
+ _PyDict_Subscript(PyObject *self, PyObject *key)
+ {
+--- a/Include/internal/pycore_dict.h
++++ b/Include/internal/pycore_dict.h
+@@ -233,6 +233,7 @@
+ Py_VALUE_COMPAT(_PyDict_SetValue_Take2_KnownHash)
+ PyAPI_FUNC(int) _PyDict_SetItem_Take2_KnownHash(PyDictObject *op, PyObject *key, PyObject *value, Py_hash_t hash);
+ // Exported for external JIT support
++extern int _PyDict_IsBuiltinGetItemDescriptor(PyObject *descr);
+ PyAPI_FUNC(int) _PyDict_SetItem_LockHeld(PyDictObject *dict, PyObject *name, PyObject *value);
+ PyAPI_FUNC(int) _PyDict_SetValue_LockHeld(PyDictObject *dict, PyObject *name, PyValueBorrow value);
+ // Export for '_asyncio' shared extension
+--- a/Lib/test/test_value_slots.py
++++ b/Lib/test/test_value_slots.py
+@@ -189,6 +189,27 @@
+         self.assertEqual(C(), 42)
+         self.assertIs(type(type.__call__(C)), C)
+ 
++    def test_dict_subscript_pair_inheritance_and_mutation(self):
++        for base in (dict, frozendict):
++            with self.subTest(base=base):
++                class Child(base):
++                    pass
++
++                expected = (object_slot(base, 'subscript'),
++                            value_slot(base, 'subscript'))
++                self.assertNotEqual(expected[0], 0)
++                self.assertNotEqual(expected[1], 0)
++                self.assertEqual((object_slot(Child, 'subscript'),
++                                  value_slot(Child, 'subscript')), expected)
++                self.assertEqual(Child({1: 2})[1], 2)
++                Child.__getitem__ = lambda self, key: 42
++                self.assertNotEqual(object_slot(Child, 'subscript'), expected[0])
++                self.assertEqual(Child({1: 2})[1], 42)
++                del Child.__getitem__
++                self.assertEqual((object_slot(Child, 'subscript'),
++                                  value_slot(Child, 'subscript')), expected)
++                self.assertEqual(Child({1: 2})[1], 2)
++
+     def test_unknown_name(self):
+         with self.assertRaises(ValueError):
+             value_slot(int, 'nb_nothing')

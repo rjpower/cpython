@@ -10,6 +10,8 @@
 #include "pycore_fileutils.h"     // _Py_BEGIN_SUPPRESS_IPH
 #include "pycore_object.h"        // _PyObject_GC_UNTRACK()
 #include "pycore_pyerrors.h"      // _PyErr_ChainExceptions1()
+#include "pycore_long_value.h"    // _PyValue_AsLong()
+#include "pycore_value.h"         // PyValue_IsInlineInt()
 #include "pycore_weakref.h"       // FT_CLEAR_WEAKREFS()
 
 #ifdef HAVE_WINDOWS_CONSOLE_IO
@@ -133,6 +135,29 @@ char _PyIO_get_console_type(PyObject *path_or_fd) {
     if (pname_buf != name_buf)
         PyMem_Free(pname_buf);
     return m;
+}
+
+char _PyIO_get_console_type_value(PyValueBorrow path_or_fd) {
+    if (PyValue_IsObject(path_or_fd)) {
+        return _PyIO_get_console_type(PyValue_AsKnownObjectBorrow(path_or_fd));
+    }
+    if (!PyValue_IsInlineInt(path_or_fd)) {
+        return '\0';
+    }
+
+    long fd = _PyValue_AsLong(path_or_fd);
+    if (fd == -1 && PyErr_Occurred()) {
+        PyErr_Clear();
+        return '\0';
+    }
+    if (fd < 0) {
+        return '\0';
+    }
+    HANDLE handle = _Py_get_osfhandle_noraise((int)fd);
+    if (handle == INVALID_HANDLE_VALUE) {
+        return '\0';
+    }
+    return _get_console_type(handle);
 }
 
 static DWORD

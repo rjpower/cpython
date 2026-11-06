@@ -19,10 +19,15 @@
 #include "pycore_pyerrors.h"      // _PyErr_ChainExceptions1()
 #include "pycore_pystate.h"       // _PyInterpreterState_GET()
 #include "pycore_value.h"         // PyValue_FromObjectBorrow()
+#include "pycore_value_call.h"    // _PyValue_Vectorcall()
 #include "pycore_value_ops.h"     // _PyValue_IsTrue()
 #include "pycore_value_slots.h"// _PyValue_FromObjectResult()
 
 #include "_iomodule.h"
+
+#ifdef HAVE_WINDOWS_CONSOLE_IO
+extern char _PyIO_get_console_type_value(PyValueBorrow path_or_fd);
+#endif
 
 #ifdef HAVE_SYS_TYPES_H
 #include <sys/types.h>
@@ -223,27 +228,26 @@ _io_open_impl(PyObject *module, PyValueBorrow file, const char *mode,
     char rawmode[6], *m;
     int line_buffering, is_number, isatty = 0;
 
-    PyObject *raw, *modeobj = NULL, *buffer, *wrapper, *result = NULL, *path_or_fd = NULL;
+    PyObject *raw, *modeobj = NULL, *buffer, *wrapper, *result = NULL;
+    PyValue path_or_fd = PyValue_NULL;
 
     /* An inline int or float is a number. */
     is_number = (!PyValue_IsObject(file)
                  || PyNumber_Check(PyValue_AsKnownObjectBorrow(file)));
 
     if (is_number) {
-        path_or_fd = _PyValue_AsObjectAt(file, BOX_SITE_PARSER);
-        if (path_or_fd == NULL) {
-            return PyValue_NULL;
-        }
+        path_or_fd = PyValue_DUP(file);
     } else {
-        path_or_fd = PyOS_FSPath(PyValue_AsKnownObjectBorrow(file));
-        if (path_or_fd == NULL) {
+        PyObject *path = PyOS_FSPath(PyValue_AsKnownObjectBorrow(file));
+        if (path == NULL) {
             return PyValue_NULL;
         }
+        path_or_fd = PyValue_FromObjectSteal(path);
     }
 
     if (!is_number &&
-        !PyUnicode_Check(path_or_fd) &&
-        !PyBytes_Check(path_or_fd)) {
+        !PyUnicode_Check(PyValue_AsKnownObjectBorrow(path_or_fd)) &&
+        !PyBytes_Check(PyValue_AsKnownObjectBorrow(path_or_fd))) {
         PyErr_Format(PyExc_TypeError, "invalid file: %R",
                      PyValue_AsKnownObjectBorrow(file));
         goto error;
@@ -339,30 +343,45 @@ _io_open_impl(PyObject *module, PyValueBorrow file, const char *mode,
     /* Create the Raw file stream */
     _PyIO_State *state = get_io_state(module);
     {
-        PyObject *RawIO_class = (PyObject *)state->PyFileIO_Type;
+        PyValue rawio_class = PyValue_DUP(PyValue_FromObjectBorrow(
+            (PyObject *)state->PyFileIO_Type));
 #ifdef HAVE_WINDOWS_CONSOLE_IO
         const PyConfig *config = _Py_GetConfig();
-        if (!config->legacy_windows_stdio && _PyIO_get_console_type(path_or_fd) != '\0') {
-            RawIO_class = (PyObject *)state->PyWindowsConsoleIO_Type;
+        if (!config->legacy_windows_stdio &&
+            _PyIO_get_console_type_value(PyValue_Borrow(path_or_fd)) != '\0') {
+            PyValue_CLOSE(rawio_class);
+            rawio_class = PyValue_DUP(PyValue_FromObjectBorrow(
+                (PyObject *)state->PyWindowsConsoleIO_Type));
             encoding = "utf-8";
         }
 #endif
-        PyObject *opener_obj = _PyValue_AsObjectAt(opener, BOX_SITE_PARSER);
-        if (opener_obj == NULL) {
+        PyObject *rawmode_obj = PyUnicode_FromString(rawmode);
+        if (rawmode_obj == NULL) {
+            PyValue_CLOSE(rawio_class);
             goto error;
         }
-        raw = PyObject_CallFunction(RawIO_class, "OsOO",
-                                    path_or_fd, rawmode,
-                                    closefd ? Py_True : Py_False,
-                                    opener_obj);
-        Py_DECREF(opener_obj);
+        PyValue args[4] = {
+            PyValue_DUP(PyValue_Borrow(path_or_fd)),
+            PyValue_FromObjectSteal(rawmode_obj),
+            closefd ? PyValue_True : PyValue_False,
+            PyValue_DUP(opener),
+        };
+        PyValue raw_value = _PyValue_Vectorcall(rawio_class, args, 4, NULL);
+        for (int arg = 0; arg < 4; arg++) {
+            PyValue_CLOSE(args[arg]);
+        }
+        PyValue_CLOSE(rawio_class);
+        if (PyValue_IsNull(raw_value)) {
+            goto error;
+        }
+        raw = PyValue_AsKnownObjectSteal(raw_value);
     }
 
     if (raw == NULL)
         goto error;
     result = raw;
 
-    Py_SETREF(path_or_fd, NULL);
+    PyValue_CLEAR(path_or_fd);
 
     modeobj = PyUnicode_FromString(mode);
     if (modeobj == NULL)
@@ -472,7 +491,7 @@ _io_open_impl(PyObject *module, PyValueBorrow file, const char *mode,
         Py_XDECREF(close_result);
         Py_DECREF(result);
     }
-    Py_XDECREF(path_or_fd);
+    PyValue_XCLOSE(path_or_fd);
     Py_XDECREF(modeobj);
     return PyValue_NULL;
 }

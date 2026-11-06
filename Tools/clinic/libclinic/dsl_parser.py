@@ -308,6 +308,7 @@ class DSLParser:
         self.target_critical_section = []
         self.disable_fastcall = False
         self.vectorcall: bool = False
+        self.value_function = False
         self.slot = None
         self.permit_long_summary = False
         self.permit_long_docstring_body = False
@@ -517,6 +518,13 @@ class DSLParser:
         if self.vectorcall:
             fail("Called @vectorcall twice!")
         self.vectorcall = True
+
+    def at_value_function(self) -> None:
+        if self.value_function:
+            fail("Called @value_function twice!")
+        if self.clinic.codegen.limited_capi:
+            fail("@value_function cannot be used with the limited C API")
+        self.value_function = True
 
     def at_coexist(self) -> None:
         if self.coexist:
@@ -742,6 +750,7 @@ class DSLParser:
             "docstring": "",
             "docstring_line_number": None,
             "line_number": self.line_number,
+            "value_function": self.value_function,
         }
         if existing_function.kind is SLOT or self.slot is not None:
             fail("Type slot methods cannot be cloned")
@@ -820,6 +829,7 @@ class DSLParser:
             forced_text_signature=self.forced_text_signature,
             line_number=self.line_number,
             vectorcall=self.vectorcall,
+            value_function=self.value_function,
             slot=self.slot,
         )
         self.add_function(func)

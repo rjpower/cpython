@@ -189,10 +189,14 @@ def is_value_function(f: Function, codegen: CodeGen) -> bool:
     syslog.syslog), whose group parser has no value form, and the functions
     with a converter that declares has_value_form = False.
     """
-    return (codegen.value_emission
-            and f.kind is not SLOT and f.kind not in ACCESSORS
-            and not any(p.group for p in f.parameters.values())
-            and all(p.converter.has_value_form for p in f.parameters.values()))
+    eligible = (f.kind is not SLOT and f.kind not in ACCESSORS
+                and not any(p.group for p in f.parameters.values())
+                and all(p.converter.has_value_form for p in f.parameters.values()))
+    if f.value_function and (not eligible or f.kind.new_or_init or any(
+            (p.converter.alias_of is not None or p.deprecated_until is not None
+             or p.is_var_keyword()) for p in f.parameters.values())):
+        fail("@value_function requires a supported value parser")
+    return (codegen.value_emission or f.value_function) and eligible
 
 
 DOCSTRING_PROTOTYPE_VAR: Final[str] = libclinic.normalize_snippet("""
@@ -368,7 +372,7 @@ class ParseArgsCodeGen:
         self.func = func
         self.codegen = codegen
 
-        self.parameters = list(self.func.parameters.values())
+        self.parameters = list(self.func.render_parameters)
         self_parameter = self.parameters.pop(0)
         if not isinstance(self_parameter.converter, self_converter):
             raise ValueError("the first parameter must use self_converter")
@@ -396,10 +400,10 @@ class ParseArgsCodeGen:
         self.value = is_value_function(func, codegen)
         if self.value:
             # The parameters are rendered from copies.
-            for p in [*func.parameters.values(), *func.render_parameters]:
+            for p in func.render_parameters:
                 p.converter.set_value_emission()
         elif codegen.value_emission or codegen.value_core:
-            for p in [*func.parameters.values(), *func.render_parameters]:
+            for p in func.render_parameters:
                 p.converter.object_in_value_unit = True
 
         if self.func.critical_section:
@@ -1326,7 +1330,8 @@ class ParseArgsCodeGen:
         """
         aliased = p.converter.alias_of
         assert aliased is not None
-        i = self.parameters.index(aliased)
+        i = next(i for i, item in enumerate(self.parameters)
+                 if item.name == aliased.name)
         other = f"name ('{aliased.name}')"
         arg = ''
         if i < self.max_pos:

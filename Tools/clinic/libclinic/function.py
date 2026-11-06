@@ -160,6 +160,7 @@ class Function:
     # Line on which the docstring starts (`None` if there is no docstring).
     docstring_line_number: int | None = None
     vectorcall: bool = False
+    value_function: bool = False
     # The type slot which the function implements (kind is SLOT).
     slot: SlotSpec | None = None
 

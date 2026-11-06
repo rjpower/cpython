@@ -318,6 +318,9 @@ class CLanguage(Language):
         codegen = clinic.codegen
         data = CRenderData()
         data.value_emission = is_value_function(f, codegen)
+        if f.value_function:
+            codegen.selective_value_used = True
+            codegen.add_include('pycore_value_call.h', 'METH_VALUE')
 
         assert f.parameters, "We should always have a 'self' at this point!"
         parameters = f.render_parameters
@@ -517,6 +520,10 @@ class CLanguage(Language):
             if clinic.line_suffix:
                 s = libclinic.suffix_all_lines(s, clinic.line_suffix)
 
+            if f.value_function and s and ('PyValue' in s or 'METH_VALUE' in s):
+                s = ("#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)\n"
+                     '#  error "@value_function Clinic output requires a core build"\n'
+                     "#endif\n" + s)
             destination.append(s)
 
         return clinic.get_destination('block').dump()

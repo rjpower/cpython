@@ -3944,6 +3944,19 @@ class ClinicExternalTest(TestCase):
                         generated.index('#include'))
         self.assertIn("METH_VALUE", generated)
 
+    def test_selective_value_header_guard_precedes_include(self):
+        generated = self.generate_file(dedent("""
+            /*[clinic input]
+            output everything file
+            module m
+            @value_function
+            m.f
+            [clinic start generated code]*/
+        """))
+        guard = '@value_function Clinic output requires a core build'
+        self.assertLess(generated.index(guard), generated.index('#include'))
+        self.assertIn('METH_VALUE', generated)
+
     def test_no_header_guard_without_value_emission(self):
         generated = self.generate_file(dedent("""
             /*[clinic input]
@@ -6477,6 +6490,113 @@ class ValueEmissionTests(unittest.TestCase):
                 *
                 b as a: int = 0
         """, "parameter aliases")
+
+
+class SelectiveValueEmissionTests(unittest.TestCase):
+    def generate(self, blocks):
+        text = """/*[clinic input]
+output everything buffer
+module m
+class m.T "PyObject *" "&TestType"
+[clinic start generated code]*/
+"""
+        for block in blocks:
+            text += "/*[clinic input]\n" + dedent(block).strip() + (
+                "\n[clinic start generated code]*/\n")
+        text += "/*[clinic input]\ndump buffer\n[clinic start generated code]*/\n"
+        return _make_clinic().parse(text)
+
+    def test_value_core_with_selective_value_method(self):
+        generated = self.generate([
+            "value_core",
+            """@value_function
+            m.direct
+                x: object
+                /""",
+            """m.neighbor
+                n: int
+                /""",
+        ])
+        self.assertIn('METH_VALUE|METH_O, m_direct__doc__', generated)
+        self.assertIn('(PyCFunction)m_neighbor, METH_O, m_neighbor__doc__', generated)
+        self.assertIn('_PyValue_AsInt(PyValue_FromObjectBorrow(', generated)
+
+    def test_clone_flags_and_converter_state(self):
+        generated = self.generate([
+            """@value_function
+            m.first
+                x: object
+                /""",
+            "m.second = m.first",
+            """@value_function
+            m.third = m.second""",
+            "m.fourth = m.third",
+        ])
+        for name in ("first", "third"):
+            self.assertIn(f'METH_VALUE|METH_O, m_{name}__doc__', generated)
+            self.assertIn(f'm_{name}_impl(PyObject *module, PyValueBorrow x)', generated)
+        for name in ("second", "fourth"):
+            self.assertIn(f'(PyCFunction)m_{name}, METH_O, m_{name}__doc__', generated)
+            self.assertIn(f'm_{name}(PyObject *module, PyObject *x)', generated)
+        self.assertIn('@value_function Clinic output requires a core build', generated)
+
+    def test_defining_class_and_keyword_default(self):
+        generated = self.generate(["""@value_function
+            m.T.f
+                cls: defining_class
+                x: object = None
+            """])
+        self.assertIn('METH_VALUE|METH_METHOD|METH_KEYWORDS', generated)
+        self.assertIn('PyTypeObject *cls', generated)
+        self.assertIn('PyValueBorrow x', generated)
+        self.assertIn('PyValue_AsKnownObjectBorrow(self)', generated)
+
+    def test_classmethod_numeric_return(self):
+        generated = self.generate(["""@value_function
+            @classmethod
+            m.T.f -> int
+                x: int = 3
+                /"""])
+        self.assertIn('METH_VALUE', generated)
+        self.assertIn('PyValue_FromInt64', generated)
+        self.assertIn('_PyValue_AsInt', generated)
+        self.assertIn('PyValue_AsKnownObjectBorrow', generated)
+
+    def test_multiple_file_destinations_rejected(self):
+        text = """
+            /*[clinic input]
+            destination second new file {dirname}/other.h
+            module m
+            @value_function
+            m.f
+            [clinic start generated code]*/
+        """
+        _expect_failure(self, _make_clinic().parse, text,
+                        '@value_function supports only one file destination')
+
+    def test_unsupported_forms_and_limited_api(self):
+        prefix = "/*[clinic input]\nmodule m\n[clinic start generated code]*/\n"
+        def wrapped(body):
+            return prefix + "/*[clinic input]\n" + dedent(body).strip() + (
+                "\n[clinic start generated code]*/\n")
+        for body in ("""@value_function
+                m.f
+                    [
+                    x: int
+                    ]
+                    /""", """@value_function
+                m.f
+                    x: str(encoding="utf-8")
+                    /""", """@value_function
+                m.f
+                    x: int
+                    *
+                    y as x: int = 0"""):
+            _expect_failure(self, _make_clinic().parse, wrapped(body),
+                            '@value_function requires a supported value parser')
+        _expect_failure(self, _make_clinic(limited_capi=True).parse,
+                        wrapped('@value_function\nm.f'),
+                        '@value_function cannot be used with the limited C API')
 
 
 class TupleReceiverOutputTests(unittest.TestCase):

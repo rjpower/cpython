@@ -2570,11 +2570,7 @@ dict_selection_matches(PyDictObject *mp, PyDictKeysObject *saved_keys,
 static void
 dict_value_keyerror(PyValue key)
 {
-    PyObject *object = _PyValue_AsObjectAt(key, BOX_SITE_DICT);
-    if (object != NULL) {
-        _PyErr_SetKeyError(object);
-    }
-    Py_XDECREF(object);
+    _PyErr_SetKeyErrorValue(key);
 }
 
 #define delvalue_knownhash_lock_held(V0, V1, V2) \

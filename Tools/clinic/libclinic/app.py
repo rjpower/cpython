@@ -44,6 +44,13 @@ VALUE_EMISSION_GUARD = """
 """
 
 
+SELECTIVE_VALUE_GUARD = """
+#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
+#  error "@value_function Clinic output requires a core build"
+#endif
+"""
+
+
 class Clinic:
 
     presets_text = """
@@ -213,6 +220,12 @@ impl_definition block
         # is rendered when the whole file is parsed.
         self.language.render_properties(self)
 
+        # Includes are shared across destinations. Keep selective value output
+        # within one core-only file until includes are routed per destination.
+        if self.codegen.selective_value_used and sum(
+                d.type == 'file' for d in self.destinations.values()) > 1:
+            fail("@value_function supports only one file destination")
+
         # these are destinations not buffers
         for name, destination in self.destinations.items():
             if destination.type == 'suppress':
@@ -253,7 +266,9 @@ impl_definition block
                     includes = self.codegen.get_includes()
 
                     guard = (VALUE_EMISSION_GUARD
-                             if (self.codegen.value_emission or self.codegen.value_core) else '')
+                             if (self.codegen.value_emission or self.codegen.value_core) else
+                             SELECTIVE_VALUE_GUARD
+                             if self.codegen.selective_value_used else '')
                     printer_2 = BlockPrinter(self.language)
                     printer_2.print_block(block, header_includes=includes,
                                           header_guard=guard)

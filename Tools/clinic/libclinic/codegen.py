@@ -281,6 +281,7 @@ class CodeGen:
         # take and return values (METH_VALUE).
         self.value_emission = False
         self.value_core = False
+        self.selective_value_used = False
         self._ifndef_symbols: set[str] = set()
         # dict: include name => Include instance
         self._includes: dict[str, Include] = {}

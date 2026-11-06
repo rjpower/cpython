@@ -1632,6 +1632,40 @@ int
 }
 
 int
+_PyValue_CallSetAttrBase(PyTypeObject *base, setattrofunc slot,
+                         PyValueBorrow self, PyObject *name,
+                         PyValueBorrow value)
+{
+    assert(slot != NULL);
+    int row = _Py_VALUE_SLOT_INDEX_setattro;
+    _Py_setattrovaluefunc f =
+        (_Py_setattrovaluefunc)_PyType_VALUE_FIELD_AT(base, row);
+    if (f != NULL) {
+        _PyType_CHECK_VALUE_ROW(base, row);
+        return f(self, name, value);
+    }
+
+    PyObject *self_obj = _PyValue_AdapterBox(self, BOX_SITE_ATTRIBUTE, slot);
+    if (self_obj == NULL) {
+        return -1;
+    }
+    PyObject *value_obj = NULL;
+    if (!PyValue_IsNull(value)) {
+        value_obj = _PyValue_AdapterBox(value, BOX_SITE_ATTRIBUTE, slot);
+        if (value_obj == NULL) {
+            _PyValue_AdapterRelease(self, self_obj);
+            return -1;
+        }
+    }
+    int result = slot(self_obj, name, value_obj);
+    if (value_obj != NULL) {
+        _PyValue_AdapterRelease(value, value_obj);
+    }
+    _PyValue_AdapterRelease(self, self_obj);
+    return result;
+}
+
+int
 PyObject_SetAttr(PyObject *v, PyObject *name, PyObject *value)
 {
     return (_PyValue_SetAttr)(_Py_VALUE_ARG(v), name, _Py_VALUE_ARG(value));
@@ -2297,7 +2331,7 @@ _dir_locals(void)
         return NULL;
     }
 
-    names = PyMapping_Keys(locals);
+    names = _PyValue_MappingKeys(PyValue_FromObjectBorrow(locals));
     Py_DECREF(locals);
     if (!names) {
         return NULL;

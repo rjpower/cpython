@@ -1,3 +1,4 @@
+#include "pycore_long_value.h"    // _PyValue_IntAsSsize_t()
 #include "pycore_weakref.h"       // _PyWeakref_GET_REF()
 
 
@@ -519,7 +520,7 @@ _long_shared(PyThreadState *tstate, PyObject *obj, _PyXIData_t *xidata)
      * sys.maxsize.  Hence on 32-bit architectures that is half the
      * size of maximum shareable ints on 64-bit.
      */
-    Py_ssize_t value = PyLong_AsSsize_t(obj);
+    Py_ssize_t value = _PyValue_IntAsSsize_t(PyValue_FromObjectBorrow(obj));
     if (value == -1 && PyErr_Occurred()) {
         if (PyErr_ExceptionMatches(PyExc_OverflowError)) {
             PyErr_SetString(PyExc_OverflowError, "try sending as bytes");
@@ -551,7 +552,7 @@ _float_shared(PyThreadState *tstate, PyObject *obj, _PyXIData_t *xidata)
         return -1;
     }
     double *shared = (double *)xidata->data;
-    *shared = PyFloat_AsDouble(obj);
+    *shared = _PyValue_AsDouble(PyValue_FromObjectBorrow(obj));
     return 0;
 }
 

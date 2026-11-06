@@ -13,6 +13,7 @@
 #include "pycore_hashtable.h"        // _Py_hashtable_t
 #include "pycore_list.h"          // PyList_AppendValue()
 #include "pycore_long.h"             // _PyLong_IsZero()
+#include "pycore_long_value.h"    // _PyValue_AsLongAndOverflow()
 #include "pycore_object.h"           // _PyObject_IsUniquelyReferenced
 #include "pycore_pystate.h"          // _PyInterpreterState_GET()
 #include "pycore_setobject.h"        // _PySet_NextEntryRef()
@@ -707,7 +708,7 @@ w_complex_object(PyObject *v, WFILE *p)
 
     if (PyLong_CheckExact(v)) {
         int overflow;
-        long x = PyLong_AsLongAndOverflow(v, &overflow);
+        long x = _PyValue_AsLongAndOverflow(PyValue_FromObjectBorrow(v), &overflow);
         if (overflow) {
             w_PyLong((PyLongObject *)v, p);
         }

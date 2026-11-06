@@ -5,6 +5,7 @@
 #include "Python.h"
 #include "pycore_fileutils.h"     // _Py_GetLocaleconvNumeric()
 #include "pycore_long.h"          // _PyLong_FormatWriter()
+#include "pycore_long_value.h"    // _PyValue_AsDouble()
 #include "pycore_unicodeobject.h" // PyUnicode_MAX_CHAR_VALUE()
 #include "pycore_value_ops.h"     // _PyValue_Str()
 #include <locale.h>
@@ -1250,7 +1251,7 @@ format_long_internal(PyObject *value, const InternalFormatSpec *format,
 
         /* taken from unicodeobject.c formatchar() */
         /* Integer input truncated to a character */
-        x = PyLong_AsLong(value);
+        x = _PyValue_AsLong(PyValue_FromObjectBorrow(value));
         if (x == -1 && PyErr_Occurred())
             goto done;
         if (x < 0 || x > 0x10ffff) {
@@ -1429,7 +1430,7 @@ format_float_internal(PyObject *value,
            format the result. We take care of that later. */
         type = 'g';
 
-    val = PyFloat_AsDouble(value);
+    val = _PyValue_AsDouble(PyValue_FromObjectBorrow(value));
     if (val == -1.0 && PyErr_Occurred())
         goto done;
 

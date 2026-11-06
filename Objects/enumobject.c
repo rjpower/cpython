@@ -3,6 +3,7 @@
 #include "Python.h"
 #include "pycore_call.h"          // _PyObject_CallNoArgs()
 #include "pycore_long.h"          // _PyLong_GetOne()
+#include "pycore_long_value.h"    // _PyValue_IntAsSsize_t()
 #include "pycore_modsupport.h"    // _PyArg_NoKwnames()
 #include "pycore_object.h"        // _PyObject_GC_TRACK()
 #include "pycore_unicodeobject.h" // _PyUnicode_EqualToASCIIString
@@ -393,7 +394,7 @@ reversed_new_impl(PyTypeObject *type, PyValueBorrow seq)
         return res;
     }
 
-    if (!(PyValue_IsObject(seq) && PySequence_Check(PyValue_AsKnownObjectBorrow(seq)))) {
+    if (!(PyValue_IsObject(seq) && _PyValue_SequenceCheck(seq))) {
         PyErr_Format(PyExc_TypeError,
                      "'%.200s' object is not reversible",
                      PyValue_TYPE(seq)->tp_name);
@@ -467,7 +468,7 @@ reversed_len(PyObject *op, PyObject *Py_UNUSED(ignored))
     if (index == -1)
         return PyLong_FromLong(0);
     assert(ro->seq != NULL);
-    seqsize = PySequence_Size(ro->seq);
+    seqsize = _PyValue_SequenceSize(PyValue_FromObjectBorrow(ro->seq));
     if (seqsize == -1)
         return NULL;
     position = index + 1;
@@ -493,7 +494,7 @@ static PyObject *
 reversed_setstate(PyObject *op, PyObject *state)
 {
     reversedobject *ro = _reversedobject_CAST(op);
-    Py_ssize_t index = PyLong_AsSsize_t(state);
+    Py_ssize_t index = _PyValue_IntAsSsize_t(PyValue_FromObjectBorrow(state));
     if (index == -1 && PyErr_Occurred())
         return NULL;
     Py_ssize_t ro_index = FT_ATOMIC_LOAD_SSIZE_RELAXED(ro->index);
@@ -501,7 +502,7 @@ reversed_setstate(PyObject *op, PyObject *state)
     // this is for backwards compatibility reasons. in practice this situation
     // will not occur, see gh-120971
     if (ro_index != -1) {
-        Py_ssize_t n = PySequence_Size(ro->seq);
+        Py_ssize_t n = _PyValue_SequenceSize(PyValue_FromObjectBorrow(ro->seq));
         if (n < 0)
             return NULL;
         if (index < -1)

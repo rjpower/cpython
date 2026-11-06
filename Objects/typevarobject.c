@@ -836,12 +836,12 @@ typevar_typing_prepare_subst_impl(typevarobject *self, PyValueBorrow alias,
     if (params == NULL) {
         goto error;
     }
-    Py_ssize_t i = PySequence_Index(params, (PyObject *)self);
+    Py_ssize_t i = _PyValue_SequenceIndex(PyValue_FromObjectBorrow(params), PyValue_FromObjectBorrow((PyObject *)self));
     if (i == -1) {
         Py_DECREF(params);
         goto error;
     }
-    Py_ssize_t args_len = PySequence_Length(args_obj);
+    Py_ssize_t args_len = _PyValue_SequenceSize(PyValue_FromObjectBorrow(args_obj));
     if (args_len == -1) {
         Py_DECREF(params);
         goto error;

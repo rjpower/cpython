@@ -8,6 +8,7 @@
 #define Py_VALUE_CORE 1
 #include "Python.h"
 #include "pycore_crossinterp.h"   // _PyXIData_t
+#include "pycore_long_value.h"    // _PyValue_AsLongLongAndOverflow()
 #include "pycore_value.h"         // PyValue_AsKnownObjectBorrow(), _PyValue_AsObjectAt()
 #include "pycore_value_slots.h"// _PyValue_FromObjectResult()
 
@@ -120,7 +121,7 @@ idarg_int64_converter(PyObject *arg, void *ptr)
 
     if (PyIndex_Check(arg)) {
         int overflow = 0;
-        id = PyLong_AsLongLongAndOverflow(arg, &overflow);
+        id = _PyValue_AsLongLongAndOverflow(PyValue_FromObjectBorrow(arg), &overflow);
         if (id == -1 && PyErr_Occurred()) {
             return 0;
         }

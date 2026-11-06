@@ -4,6 +4,7 @@
 
 #define Py_VALUE_CORE 1
 #include "Python.h"
+#include "pycore_long_value.h"    // _PyValue_AsNativeBytes()
 #include "pycore_value.h"      // PyValue_IsNull()
 #include "pycore_value_ops.h"  // _PyValue_SequenceTuple()
 #include "pycore_value_slots.h"// _PyValue_FromObjectResult()
@@ -153,8 +154,7 @@ py2rlim(PyValueBorrow value, rlim_t *out)
     }
     int neg = PyLong_IsNegative(obj);
     assert(neg >= 0);
-    Py_ssize_t bytes = PyLong_AsNativeBytes(obj, out, sizeof(*out),
-                                            Py_ASNATIVEBYTES_NATIVE_ENDIAN |
+    Py_ssize_t bytes = _PyValue_AsNativeBytes(PyValue_FromObjectBorrow(obj), out, sizeof(*out), Py_ASNATIVEBYTES_NATIVE_ENDIAN |
                                             Py_ASNATIVEBYTES_UNSIGNED_BUFFER);
     Py_DECREF(obj);
     if (bytes < 0) {

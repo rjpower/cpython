@@ -14,6 +14,7 @@
 #include "pycore_freelist.h"      // _PyObject_ClearFreeLists()
 #include "pycore_gc_trace.h"      // _PyGC_TRACE_CAPTURE_THREAD()
 #include "pycore_initconfig.h"    // _PyStatus_OK()
+#include "pycore_long_value.h"    // _PyValue_AsLongLong()
 #include "pycore_pystats.h"       // _PyStats_InterpFini()
 #include "pycore_interpframe.h"   // _PyThreadState_HasStackSpace()
 #include "pycore_object.h"        // _Py_ClearImmortal()
@@ -1188,7 +1189,7 @@ _PyInterpreterState_ObjectToID(PyObject *idobj)
 
     // This may raise OverflowError.
     // For now, we don't worry about if LLONG_MAX < INT64_MAX.
-    long long id = PyLong_AsLongLong(idobj);
+    long long id = _PyValue_AsLongLong(PyValue_FromObjectBorrow(idobj));
     if (id == -1 && PyErr_Occurred()) {
         return -1;
     }

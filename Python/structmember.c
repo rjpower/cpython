@@ -5,6 +5,7 @@
 #include "pycore_abstract.h"      // _PyNumber_Index()
 #include "pycore_descrobject.h"   // _PyMember_GetOffset()
 #include "pycore_long.h"          // _PyLong_IsNegative()
+#include "pycore_long_value.h"    // _PyValue_AsDouble()
 #include "pycore_object.h"        // _Py_TryIncrefCompare(), FT_ATOMIC_*()
 #include "pycore_critical_section.h"
 #include "pycore_value.h"
@@ -252,7 +253,7 @@ member_set_object(char *addr, PyMemberDef *l, PyObject *v)
         break;
         }
     case Py_T_BYTE:{
-        long long_val = PyLong_AsLong(v);
+        long long_val = _PyValue_AsLong(PyValue_FromObjectBorrow(v));
         if ((long_val == -1) && PyErr_Occurred())
             return -1;
         FT_ATOMIC_STORE_CHAR_RELAXED(*(char*)addr, (char)long_val);
@@ -263,7 +264,7 @@ member_set_object(char *addr, PyMemberDef *l, PyObject *v)
         break;
         }
     case Py_T_UBYTE:{
-        long long_val = PyLong_AsLong(v);
+        long long_val = _PyValue_AsLong(PyValue_FromObjectBorrow(v));
         if ((long_val == -1) && PyErr_Occurred())
             return -1;
         FT_ATOMIC_STORE_UCHAR_RELAXED(*(unsigned char*)addr, (unsigned char)long_val);
@@ -272,7 +273,7 @@ member_set_object(char *addr, PyMemberDef *l, PyObject *v)
         break;
         }
     case Py_T_SHORT:{
-        long long_val = PyLong_AsLong(v);
+        long long_val = _PyValue_AsLong(PyValue_FromObjectBorrow(v));
         if ((long_val == -1) && PyErr_Occurred())
             return -1;
         FT_ATOMIC_STORE_SHORT_RELAXED(*(short*)addr, (short)long_val);
@@ -281,7 +282,7 @@ member_set_object(char *addr, PyMemberDef *l, PyObject *v)
         break;
         }
     case Py_T_USHORT:{
-        long long_val = PyLong_AsLong(v);
+        long long_val = _PyValue_AsLong(PyValue_FromObjectBorrow(v));
         if ((long_val == -1) && PyErr_Occurred())
             return -1;
         FT_ATOMIC_STORE_USHORT_RELAXED(*(unsigned short*)addr, (unsigned short)long_val);
@@ -290,7 +291,7 @@ member_set_object(char *addr, PyMemberDef *l, PyObject *v)
         break;
         }
     case Py_T_INT:{
-        long long_val = PyLong_AsLong(v);
+        long long_val = _PyValue_AsLong(PyValue_FromObjectBorrow(v));
         if ((long_val == -1) && PyErr_Occurred())
             return -1;
         FT_ATOMIC_STORE_INT_RELAXED(*(int *)addr, (int)long_val);
@@ -308,7 +309,7 @@ member_set_object(char *addr, PyMemberDef *l, PyObject *v)
             return -1;
         }
         if (_PyLong_IsNegative((PyLongObject *)v)) {
-            long long_val = PyLong_AsLong(v);
+            long long_val = _PyValue_AsLong(PyValue_FromObjectBorrow(v));
             Py_DECREF(v);
             if (long_val == -1 && PyErr_Occurred()) {
                 return -1;
@@ -317,7 +318,7 @@ member_set_object(char *addr, PyMemberDef *l, PyObject *v)
             WARN("Writing negative value into unsigned field");
         }
         else {
-            unsigned long ulong_val = PyLong_AsUnsignedLong(v);
+            unsigned long ulong_val = _PyValue_IntAsUnsignedLong(PyValue_FromObjectBorrow(v));
             Py_DECREF(v);
             if (ulong_val == (unsigned long)-1 && PyErr_Occurred()) {
                 return -1;
@@ -330,7 +331,7 @@ member_set_object(char *addr, PyMemberDef *l, PyObject *v)
         break;
     }
     case Py_T_LONG: {
-        const long long_val = PyLong_AsLong(v);
+        const long long_val = _PyValue_AsLong(PyValue_FromObjectBorrow(v));
         if ((long_val == -1) && PyErr_Occurred())
             return -1;
         FT_ATOMIC_STORE_LONG_RELAXED(*(long*)addr, long_val);
@@ -346,7 +347,7 @@ member_set_object(char *addr, PyMemberDef *l, PyObject *v)
             return -1;
         }
         if (_PyLong_IsNegative((PyLongObject *)v)) {
-            long long_val = PyLong_AsLong(v);
+            long long_val = _PyValue_AsLong(PyValue_FromObjectBorrow(v));
             Py_DECREF(v);
             if (long_val == -1 && PyErr_Occurred()) {
                 return -1;
@@ -355,7 +356,7 @@ member_set_object(char *addr, PyMemberDef *l, PyObject *v)
             WARN("Writing negative value into unsigned field");
         }
         else {
-            unsigned long ulong_val = PyLong_AsUnsignedLong(v);
+            unsigned long ulong_val = _PyValue_IntAsUnsignedLong(PyValue_FromObjectBorrow(v));
             Py_DECREF(v);
             if (ulong_val == (unsigned long)-1 && PyErr_Occurred()) {
                 return -1;
@@ -365,21 +366,21 @@ member_set_object(char *addr, PyMemberDef *l, PyObject *v)
         break;
     }
     case Py_T_PYSSIZET: {
-        const Py_ssize_t ssize_val = PyLong_AsSsize_t(v);
+        const Py_ssize_t ssize_val = _PyValue_IntAsSsize_t(PyValue_FromObjectBorrow(v));
         if ((ssize_val == (Py_ssize_t)-1) && PyErr_Occurred())
             return -1;
         FT_ATOMIC_STORE_SSIZE_RELAXED(*(Py_ssize_t*)addr, ssize_val);
         break;
     }
     case Py_T_FLOAT:{
-        double double_val = PyFloat_AsDouble(v);
+        double double_val = _PyValue_AsDouble(PyValue_FromObjectBorrow(v));
         if ((double_val == -1) && PyErr_Occurred())
             return -1;
         FT_ATOMIC_STORE_FLOAT_RELAXED(*(float*)addr, (float)double_val);
         break;
         }
     case Py_T_DOUBLE: {
-        const double double_val = PyFloat_AsDouble(v);
+        const double double_val = _PyValue_AsDouble(PyValue_FromObjectBorrow(v));
         if ((double_val == -1) && PyErr_Occurred())
             return -1;
         FT_ATOMIC_STORE_DOUBLE_RELAXED(*(double *) addr, double_val);
@@ -419,7 +420,7 @@ member_set_object(char *addr, PyMemberDef *l, PyObject *v)
         PyErr_SetString(PyExc_TypeError, "readonly attribute");
         return -1;
     case Py_T_LONGLONG:{
-        long long value = PyLong_AsLongLong(v);
+        long long value = _PyValue_AsLongLong(PyValue_FromObjectBorrow(v));
         if ((value == -1) && PyErr_Occurred())
             return -1;
         FT_ATOMIC_STORE_LLONG_RELAXED(*(long long*)addr, value);
@@ -433,7 +434,7 @@ member_set_object(char *addr, PyMemberDef *l, PyObject *v)
             return -1;
         }
         if (_PyLong_IsNegative((PyLongObject *)v)) {
-            long long_val = PyLong_AsLong(v);
+            long long_val = _PyValue_AsLong(PyValue_FromObjectBorrow(v));
             Py_DECREF(v);
             if (long_val == -1 && PyErr_Occurred()) {
                 return -1;
@@ -442,7 +443,7 @@ member_set_object(char *addr, PyMemberDef *l, PyObject *v)
             WARN("Writing negative value into unsigned field");
         }
         else {
-            unsigned long long ulonglong_val = PyLong_AsUnsignedLongLong(v);
+            unsigned long long ulonglong_val = _PyValue_IntAsUnsignedLongLong(PyValue_FromObjectBorrow(v));
             Py_DECREF(v);
             if (ulonglong_val == (unsigned long long)-1 && PyErr_Occurred()) {
                 return -1;

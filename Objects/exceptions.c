@@ -12,6 +12,7 @@
 #include "pycore_exceptions.h"    // struct _Py_exc_state
 #include "pycore_initconfig.h"
 #include "pycore_list.h"          // PyList_GET_VALUE(), PyList_AppendValue()
+#include "pycore_long_value.h"    // _PyValue_AsLongAndOverflow()
 #include "pycore_modsupport.h"    // _PyArg_NoKeywords()
 #include "pycore_moduleobject.h"  // _PyModule_CAST()
 #include "pycore_object.h"
@@ -922,7 +923,7 @@ BaseExceptionGroup_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
         return NULL;
     }
 
-    if (!PySequence_Check(exceptions)) {
+    if (!_PyValue_SequenceCheck(PyValue_FromObjectBorrow(exceptions))) {
         PyErr_SetString(
             PyExc_TypeError,
             "second argument (exceptions) must be a sequence");
@@ -1205,7 +1206,7 @@ exceptiongroup_subset(
     PyObject *orig = (PyObject *)_orig;
 
     *result = NULL;
-    Py_ssize_t num_excs = PySequence_Size(excs);
+    Py_ssize_t num_excs = _PyValue_SequenceSize(PyValue_FromObjectBorrow(excs));
     if (num_excs < 0) {
         return -1;
     }
@@ -1243,7 +1244,7 @@ exceptiongroup_subset(
         goto error;
     }
     if (notes) {
-        if (PySequence_Check(notes)) {
+        if (_PyValue_SequenceCheck(PyValue_FromObjectBorrow(notes))) {
             /* Make a copy so the parts have independent notes lists. */
             PyObject *notes_copy = _PyValue_SequenceList(PyValue_FromObjectBorrow(notes));
             Py_DECREF(notes);
@@ -3128,7 +3129,7 @@ SyntaxError_str(PyObject *op)
         result = PyUnicode_FromFormat("%S (%U, line %ld)",
                    self->msg ? self->msg : Py_None,
                    filename,
-                   PyLong_AsLongAndOverflow(self->lineno, &overflow));
+                   _PyValue_AsLongAndOverflow(PyValue_FromObjectBorrow(self->lineno), &overflow));
     else if (filename)
         result = PyUnicode_FromFormat("%S (%U)",
                    self->msg ? self->msg : Py_None,
@@ -3136,7 +3137,7 @@ SyntaxError_str(PyObject *op)
     else /* only have_lineno */
         result = PyUnicode_FromFormat("%S (line %ld)",
                    self->msg ? self->msg : Py_None,
-                   PyLong_AsLongAndOverflow(self->lineno, &overflow));
+                   _PyValue_AsLongAndOverflow(PyValue_FromObjectBorrow(self->lineno), &overflow));
     Py_XDECREF(filename);
     return result;
 }

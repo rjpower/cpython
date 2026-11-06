@@ -253,7 +253,7 @@ impl_definition block
                     includes = self.codegen.get_includes()
 
                     guard = (VALUE_EMISSION_GUARD
-                             if self.codegen.value_emission else '')
+                             if (self.codegen.value_emission or self.codegen.value_core) else '')
                     printer_2 = BlockPrinter(self.language)
                     printer_2.print_block(block, header_includes=includes,
                                           header_guard=guard)

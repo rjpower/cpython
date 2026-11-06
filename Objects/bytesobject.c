@@ -13,6 +13,7 @@
 #include "pycore_initconfig.h"    // _PyStatus_OK()
 #include "pycore_long.h"          // _PyLong_DigitValue
 #include "pycore_list.h"          // _PyList_GetItemRef
+#include "pycore_long_value.h"    // _PyValue_AsDouble()
 #include "pycore_object.h"        // _PyObject_GC_TRACK
 #include "pycore_pymem.h"         // PYMEM_CLEANBYTE
 #include "pycore_strhex.h"        // _Py_strhex_with_sep()
@@ -512,7 +513,7 @@ formatfloat(PyObject *v, Py_ssize_t argidx, PyObject *key,
     size_t len;
     int dtoa_flags = 0;
 
-    x = PyFloat_AsDouble(v);
+    x = _PyValue_AsDouble(PyValue_FromObjectBorrow(v));
     if (x == -1.0 && PyErr_Occurred()) {
         if (PyErr_ExceptionMatches(PyExc_TypeError)) {
             FORMAT_ERROR(PyExc_TypeError,
@@ -613,7 +614,7 @@ byte_converter(PyObject *arg, Py_ssize_t argidx, PyObject *key, char *p)
     }
     else if (PyIndex_Check(arg)) {
         int overflow;
-        long ival = PyLong_AsLongAndOverflow(arg, &overflow);
+        long ival = _PyValue_AsLongAndOverflow(PyValue_FromObjectBorrow(arg), &overflow);
         if (ival == -1 && PyErr_Occurred()) {
             return 0;
         }
@@ -863,7 +864,7 @@ _PyBytes_FormatEx(const char *format, Py_ssize_t format_len,
                     FORMAT_ERROR(PyExc_TypeError, "* requires int, not %T", v);
                     goto error;
                 }
-                width = PyLong_AsSsize_t(v);
+                width = _PyValue_IntAsSsize_t(PyValue_FromObjectBorrow(v));
                 if (width == -1 && PyErr_Occurred()) {
                     if (PyErr_ExceptionMatches(PyExc_OverflowError)) {
                         FORMAT_ERROR(PyExc_OverflowError,
@@ -919,7 +920,7 @@ _PyBytes_FormatEx(const char *format, Py_ssize_t format_len,
                                      "* requires int, not %T", v);
                         goto error;
                     }
-                    prec = PyLong_AsInt(v);
+                    prec = _PyValue_AsInt(PyValue_FromObjectBorrow(v));
                     if (prec == -1 && PyErr_Occurred()) {
                         if (PyErr_ExceptionMatches(PyExc_OverflowError)) {
                             FORMAT_ERROR(PyExc_OverflowError,
@@ -975,7 +976,7 @@ _PyBytes_FormatEx(const char *format, Py_ssize_t format_len,
             case 'r':
                 // %r is only for 2/3 code; 3 only code should use %a
             case 'a':
-                temp = PyObject_ASCII(v);
+                temp = _PyValue_ASCII(PyValue_FromObjectBorrow(v));
                 if (temp == NULL)
                     goto error;
                 assert(PyUnicode_IS_ASCII(temp));
@@ -2145,6 +2146,13 @@ PyBytes_Join(PyObject *sep, PyObject *iterable)
                      "sep: expected bytes, got %T", sep);
         return NULL;
     }
+    if (iterable == NULL) {
+        if (!PyErr_Occurred()) {
+            PyErr_SetString(PyExc_SystemError,
+                            "null argument to internal routine");
+        }
+        return NULL;
+    }
 
     return stringlib_bytes_join(sep, iterable);
 }
@@ -3199,7 +3207,7 @@ _PyBytes_FromSequence_lock_held(PyObject *x, PyObject **result)
             PyBytesWriter_Discard(writer);
             return -1;
         }
-        Py_ssize_t value = PyLong_AsSsize_t(item);
+        Py_ssize_t value = _PyValue_IntAsSsize_t(PyValue_FromObjectBorrow(item));
         Py_DECREF(item);
         if (value == -1 && PyErr_Occurred()) {
             PyBytesWriter_Discard(writer);
@@ -3225,7 +3233,7 @@ _PyBytes_FromIterator(PyObject *it, PyObject *x)
     Py_ssize_t i, size;
 
     /* For iterator version, create a bytes object and resize as needed */
-    size = PyObject_LengthHint(x, 64);
+    size = _PyValue_LengthHint(PyValue_FromObjectBorrow(x), 64);
     if (size == -1 && PyErr_Occurred())
         return NULL;
 
@@ -3781,7 +3789,7 @@ PyDoc_STRVAR(reduce_doc, "Return state information for pickling.");
 static PyObject *
 striter_setstate(PyObject *op, PyObject *state)
 {
-    Py_ssize_t index = PyLong_AsSsize_t(state);
+    Py_ssize_t index = _PyValue_IntAsSsize_t(PyValue_FromObjectBorrow(state));
     if (index == -1 && PyErr_Occurred())
         return NULL;
     striterobject *it = _striterobject_CAST(op);

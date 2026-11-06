@@ -1182,7 +1182,7 @@ hash_unicode_key(PyObject *key)
     assert(PyUnicode_CheckExact(key));
     Py_hash_t hash = unicode_get_hash(key);
     if (hash == -1) {
-        hash = PyUnicode_Type.tp_hash(key);
+        hash = _PyValue_Hash(PyValue_FromObjectBorrow(key));
         assert(hash != -1);
     }
     return hash;
@@ -1241,7 +1241,7 @@ _PyDictKeys_StringLookupSplit(PyDictKeysObject* dk, PyObject *key)
     assert(PyUnicode_CheckExact(key));
     Py_hash_t hash = unicode_get_hash(key);
     if (hash == -1) {
-        hash = PyUnicode_Type.tp_hash(key);
+        hash = _PyValue_Hash(PyValue_FromObjectBorrow(key));
         if (hash == -1) {
             PyErr_Clear();
             return DKIX_ERROR;
@@ -3964,7 +3964,7 @@ merge_from_seq2_lock_held(PyObject *d, PyObject *seq2, int override)
             status = PyErr_Occurred() ? -1 : 0;
             break;
         }
-        PyObject *pair = PySequence_Fast(item, "object is not iterable");
+        PyObject *pair = _PyValue_SequenceFast(PyValue_FromObjectBorrow(item), "object is not iterable");
         if (pair == NULL) {
             if (PyErr_ExceptionMatches(PyExc_TypeError)) {
                 _PyErr_FormatNote("Cannot convert dictionary update sequence element #%zd to a sequence", index);
@@ -4145,7 +4145,7 @@ dict_merge(PyObject *a, PyObject *b, int override, PyObject **dupkey)
         Py_END_CRITICAL_SECTION2();
         return status;
     }
-    PyObject *keys = PyMapping_Keys(b);
+    PyObject *keys = _PyValue_MappingKeys(PyValue_FromObjectBorrow(b));
     if (keys == NULL) {
         return -1;
     }

@@ -329,20 +329,6 @@ extern "C" {
 #  define Py_VALUE_COMPAT(REPLACEMENT) Py_VALUE_ENTRY
 #endif
 
-/* Py_VALUE_COMPAT_NUMBERS(REPLACEMENT) marks the int and float extractors
- * that became compatibility thunks of their value rows
- * (pyjit/design/proposals/value-api-v2a1a.md, D12), but only in a unit that
- * defines Py_VALUE_MARK_NUMBERS: Objects/longobject.c, floatobject.c,
- * boolobject.c and Python/pyvalue.c, whose value slots must call none of
- * them. Wave W2 marks them in every value-native unit and deletes this
- * opt-in. */
-#if defined(Py_VALUE_MARK_NUMBERS)
-#  define Py_VALUE_COMPAT_NUMBERS(REPLACEMENT) Py_VALUE_COMPAT(REPLACEMENT)
-#else
-#  define Py_VALUE_COMPAT_NUMBERS(REPLACEMENT)
-#endif
-
-
 #if defined(__clang__)
 #define _Py_COMP_DIAG_PUSH _Pragma("clang diagnostic push")
 #define _Py_COMP_DIAG_IGNORE_DEPR_DECLS \

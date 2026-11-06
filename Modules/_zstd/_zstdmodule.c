@@ -6,6 +6,7 @@
 
 #define Py_VALUE_CORE 1
 #include "Python.h"
+#include "pycore_long_value.h"    // _PyValue_AsInt()
 #include "pycore_value.h"         // PyValue
 
 #include "_zstdmodule.h"
@@ -53,7 +54,7 @@ _Py_parse_zstd_dict(const _zstd_state *state, PyObject *dict, int *ptype)
         }
         int is_zdict = PyObject_TypeCheck(zd, state->ZstdDict_type)
                        && PyLong_Check(type_obj);
-        int type = is_zdict ? PyLong_AsInt(type_obj) : 0;
+        int type = is_zdict ? _PyValue_AsInt(PyValue_FromObjectBorrow(type_obj)) : 0;
         Py_DECREF(type_obj);
         /* The caller's tuple still owns zd, so the borrow outlives this
            reference. */
@@ -259,7 +260,7 @@ calculate_samples_stats(PyBytesObject *samples_bytes, PyObject *samples_sizes,
         if (size_obj == NULL) {
             return -1;
         }
-        size_t size = PyLong_AsSize_t(size_obj);
+        size_t size = _PyValue_IntAsSize_t(PyValue_FromObjectBorrow(size_obj));
         Py_DECREF(size_obj);
         (*chunk_sizes)[i] = size;
         if (size == (size_t)-1 && PyErr_Occurred()) {

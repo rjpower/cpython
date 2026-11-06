@@ -12,7 +12,6 @@ preserve
 #  include "pycore_value.h"       // _PyValue_STATIC_IMMORTAL()
 #endif
 #include "pycore_critical_section.h"// Py_BEGIN_CRITICAL_SECTION()
-#include "pycore_long.h"          // _PyLong_UnsignedLongLong_Converter()
 #include "pycore_long_value.h"    // _PyValue_AsInt()
 #include "pycore_modsupport.h"    // _PyArg_CheckPositional()
 #include "pycore_tuple.h"         // _PyTuple_ITEMS()
@@ -1300,7 +1299,7 @@ _ssl__SSLContext_verify_mode_set(PyObject *self, PyObject *arg, void *Py_UNUSED(
                      Py_TYPE(self)->tp_name);
         return -1;
     }
-    value = PyLong_AsInt(arg);
+    value = _PyValue_AsInt(PyValue_FromObjectBorrow(arg));
     if (value == -1 && PyErr_Occurred()) {
         goto exit;
     }
@@ -1349,12 +1348,15 @@ _ssl__SSLContext_verify_flags_set(PyObject *self, PyObject *arg, void *Py_UNUSED
                      Py_TYPE(self)->tp_name);
         return -1;
     }
-    if (!PyIndex_Check(arg)) {
-        PyErr_Format(PyExc_TypeError, "attribute 'verify_flags' must be int, not %T", arg);
-        goto exit;
-    }
+        if (PyValue_TYPE(PyValue_FromObjectBorrow(arg))->tp_as_number == NULL ||
+            PyValue_TYPE(PyValue_FromObjectBorrow(arg))->tp_as_number->nb_index == NULL)
+        {
+            _PyArg_BadArgumentValue("verify_flags", "argument", "int", PyValue_FromObjectBorrow(arg));
+            goto exit;
+        }
+
     {
-        Py_ssize_t _bytes = PyLong_AsNativeBytes(arg, &value, sizeof(unsigned long),
+        Py_ssize_t _bytes = _PyValue_AsNativeBytes(PyValue_FromObjectBorrow(arg), &value, sizeof(unsigned long),
                 Py_ASNATIVEBYTES_NATIVE_ENDIAN |
                 Py_ASNATIVEBYTES_ALLOW_INDEX |
                 Py_ASNATIVEBYTES_UNSIGNED_BUFFER);
@@ -1488,7 +1490,7 @@ _ssl__SSLContext_num_tickets_set(PyObject *self, PyObject *arg, void *Py_UNUSED(
                      Py_TYPE(self)->tp_name);
         return -1;
     }
-    value = PyLong_AsLong(arg);
+    value = _PyValue_AsLong(PyValue_FromObjectBorrow(arg));
     if (value == -1 && PyErr_Occurred()) {
         goto exit;
     }
@@ -1549,8 +1551,20 @@ _ssl__SSLContext_options_set(PyObject *self, PyObject *arg, void *Py_UNUSED(cont
                      Py_TYPE(self)->tp_name);
         return -1;
     }
-    if (!_PyLong_UnsignedLongLong_Converter(arg, &value)) {
-        goto exit;
+    {
+        Py_ssize_t _bytes = _PyValue_AsNativeBytes(PyValue_FromObjectBorrow(arg), &value, sizeof(unsigned long long),
+                Py_ASNATIVEBYTES_NATIVE_ENDIAN |
+                Py_ASNATIVEBYTES_ALLOW_INDEX |
+                Py_ASNATIVEBYTES_REJECT_NEGATIVE |
+                Py_ASNATIVEBYTES_UNSIGNED_BUFFER);
+        if (_bytes < 0) {
+            goto exit;
+        }
+        if ((size_t)_bytes > sizeof(unsigned long long)) {
+            PyErr_SetString(PyExc_OverflowError,
+                        "Python int too large for C unsigned long long");
+            goto exit;
+        }
     }
     Py_BEGIN_CRITICAL_SECTION(self);
     return_value = _ssl__SSLContext_options_set_impl((PySSLContext *)self, value);
@@ -1597,7 +1611,7 @@ _ssl__SSLContext__host_flags_set(PyObject *self, PyObject *arg, void *Py_UNUSED(
         return -1;
     }
     {
-        Py_ssize_t _bytes = PyLong_AsNativeBytes(arg, &value, sizeof(unsigned int),
+        Py_ssize_t _bytes = _PyValue_AsNativeBytes(PyValue_FromObjectBorrow(arg), &value, sizeof(unsigned int),
                 Py_ASNATIVEBYTES_NATIVE_ENDIAN |
                 Py_ASNATIVEBYTES_ALLOW_INDEX |
                 Py_ASNATIVEBYTES_UNSIGNED_BUFFER);
@@ -3147,4 +3161,4 @@ exit:
 
 #define _SSL_SSLSESSION_HAS_TICKET_GETSETDEF {"has_ticket", (getter)_ssl_SSLSession_has_ticket_get, (setter)NULL, _ssl_SSLSession_has_ticket__doc__},
 
-/*[clinic end generated code: output=19a11f8110ccffea input=a9049054013a1b77]*/
+/*[clinic end generated code: output=69889b1cb301eda3 input=a9049054013a1b77]*/

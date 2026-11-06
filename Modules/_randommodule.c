@@ -73,6 +73,7 @@
 #define Py_VALUE_CORE 1
 #include "Python.h"
 #include "pycore_long.h"          // _PyLong_NumBits()
+#include "pycore_long_value.h"    // _PyValue_AsLong()
 #include "pycore_modsupport.h"    // _PyArg_NoKeywords()
 #include "pycore_moduleobject.h"  // _PyModule_GetState()
 #include "pycore_pylifecycle.h"   // _PyOS_URandomNonblock()
@@ -531,7 +532,7 @@ _random_Random_setstate_impl(RandomObject *self, PyValueBorrow state)
         if (item == NULL) {
             return PyValue_NULL;
         }
-        element = PyLong_AsUnsignedLong(item);
+        element = _PyValue_IntAsUnsignedLong(PyValue_FromObjectBorrow(item));
         Py_DECREF(item);
         if (element == (unsigned long)-1 && PyErr_Occurred())
             return PyValue_NULL;
@@ -546,7 +547,7 @@ _random_Random_setstate_impl(RandomObject *self, PyValueBorrow state)
     if (index_obj == NULL) {
         return PyValue_NULL;
     }
-    index = PyLong_AsLong(index_obj);
+    index = _PyValue_AsLong(PyValue_FromObjectBorrow(index_obj));
     Py_DECREF(index_obj);
     if (index == -1 && PyErr_Occurred())
         return PyValue_NULL;

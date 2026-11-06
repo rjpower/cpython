@@ -1,6 +1,5 @@
 /* The int and float object extractors are compatibility thunks of their
    value rows; this unit calls none of them (value-api-v2a1a.md, D12). */
-#define Py_VALUE_MARK_NUMBERS 1
 
 #include "Python.h"
 

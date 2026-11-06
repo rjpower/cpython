@@ -1,8 +1,10 @@
 #include "Python.h"
 #include "pycore_initconfig.h"    // _PyStatus_ERR
+#include "pycore_long_value.h"    // _PyValue_AsDouble()
 #include "pycore_pystate.h"       // _Py_AssertHoldsTstate()
 #include "pycore_runtime.h"       // _PyRuntime
 #include "pycore_time.h"          // export _PyLong_FromTime_t()
+#include "pycore_value.h"         // PyValue_FromObjectBorrow()
 
 #include <time.h>                 // gmtime_r()
 #ifdef HAVE_SYS_TIME_H
@@ -205,7 +207,7 @@ time_t
 _PyLong_AsTime_t(PyObject *obj)
 {
 #if SIZEOF_TIME_T == SIZEOF_LONG_LONG
-    long long val = PyLong_AsLongLong(obj);
+    long long val = _PyValue_AsLongLong(PyValue_FromObjectBorrow(obj));
 #elif SIZEOF_TIME_T <= SIZEOF_LONG
     long val = PyLong_AsLong(obj);
 #else
@@ -464,7 +466,7 @@ pytime_object_to_denominator(PyObject *obj, time_t *sec, long *numerator,
         return 0;
     }
     else {
-        double d = PyFloat_AsDouble(obj);
+        double d = _PyValue_AsDouble(PyValue_FromObjectBorrow(obj));
         if (d == -1 && PyErr_Occurred()) {
             *numerator = 0;
             return -1;
@@ -495,7 +497,7 @@ _PyTime_ObjectToTime_t(PyObject *obj, time_t *sec, _PyTime_round_t round)
         /* volatile avoids optimization changing how numbers are rounded */
         volatile double d;
 
-        d = PyFloat_AsDouble(obj);
+        d = _PyValue_AsDouble(PyValue_FromObjectBorrow(obj));
         if (d == -1 && PyErr_Occurred()) {
             return -1;
         }
@@ -652,7 +654,7 @@ pytime_from_object(PyTime_t *tp, PyObject *obj, _PyTime_round_t round,
                    long unit_to_ns)
 {
     if (PyIndex_Check(obj)) {
-        long long sec = PyLong_AsLongLong(obj);
+        long long sec = _PyValue_AsLongLong(PyValue_FromObjectBorrow(obj));
         if (sec == -1 && PyErr_Occurred()) {
             if (PyErr_ExceptionMatches(PyExc_OverflowError)) {
                 pytime_overflow();
@@ -673,7 +675,7 @@ pytime_from_object(PyTime_t *tp, PyObject *obj, _PyTime_round_t round,
     }
     else {
         double d;
-        d = PyFloat_AsDouble(obj);
+        d = _PyValue_AsDouble(PyValue_FromObjectBorrow(obj));
         if (d == -1 && PyErr_Occurred()) {
             return -1;
         }

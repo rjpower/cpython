@@ -482,7 +482,7 @@ get_field_object(SubString *input, PyObject *args, PyObject *kwargs,
             if (index == -1)
                 tmp = getitem_str(obj, &name);
             else
-                if (PySequence_Check(obj))
+                if (_PyValue_SequenceCheck(PyValue_FromObjectBorrow(obj)))
                     tmp = getitem_sequence(obj, index);
                 else
                     /* not a sequence */
@@ -552,7 +552,7 @@ render_field(PyObject *fieldobj, SubString *format_spec, _PyUnicodeWriter *write
         if (format_spec_object == NULL)
             goto done;
 
-        result = PyObject_Format(fieldobj, format_spec_object);
+        result = _PyValue_Format(PyValue_FromObjectBorrow(fieldobj), PyValue_FromObjectBorrow(format_spec_object));
     }
     if (result == NULL)
         goto done;
@@ -789,7 +789,7 @@ do_conversion(PyObject *obj, Py_UCS4 conversion)
     case 's':
         return _PyValue_Str(PyValue_FromObjectBorrow(obj));
     case 'a':
-        return PyObject_ASCII(obj);
+        return _PyValue_ASCII(PyValue_FromObjectBorrow(_PyObject_CAST(obj)));
     default:
         if (conversion > 32 && conversion < 127) {
                 /* It's the ASCII subrange; casting to char is safe

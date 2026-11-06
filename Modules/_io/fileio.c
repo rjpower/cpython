@@ -531,7 +531,7 @@ _io_FileIO___init___impl(fileio *self, PyValueBorrow nameobj,
                 goto error;
             }
 
-            self->fd = PyLong_AsInt(fdobj);
+            self->fd = _PyValue_AsInt(PyValue_FromObjectBorrow(fdobj));
             Py_DECREF(fdobj);
             if (self->fd < 0) {
                 if (!PyErr_Occurred()) {

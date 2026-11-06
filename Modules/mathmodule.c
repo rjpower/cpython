@@ -210,13 +210,13 @@ static const double logpi = 1.144729885849400174143427351353058711647;
         target_var = PyFloat_AS_DOUBLE(obj);               \
     }                                                      \
     else if (PyLong_CheckExact(obj)) {                     \
-        target_var = PyLong_AsDouble(obj);                 \
+        target_var = _PyValue_IntAsDouble(PyValue_FromObjectBorrow(obj));                 \
         if (target_var == -1.0 && PyErr_Occurred()) {      \
             goto error_label;                              \
         }                                                  \
     }                                                      \
     else {                                                 \
-        target_var = PyFloat_AsDouble(obj);                \
+        target_var = _PyValue_AsDouble(PyValue_FromObjectBorrow(obj));                \
         if (target_var == -1.0 && PyErr_Occurred()) {      \
             goto error_label;                              \
         }                                                  \
@@ -2467,11 +2467,11 @@ math_sumprod_impl(PyObject *module, PyValueBorrow p, PyValueBorrow q)
                 int overflow;
                 long int_p, int_q, int_prod;
 
-                int_p = PyLong_AsLongAndOverflow(p_i, &overflow);
+                int_p = _PyValue_AsLongAndOverflow(PyValue_FromObjectBorrow(p_i), &overflow);
                 if (overflow) {
                     goto finalize_int_path;
                 }
-                int_q = PyLong_AsLongAndOverflow(q_i, &overflow);
+                int_q = _PyValue_AsLongAndOverflow(PyValue_FromObjectBorrow(q_i), &overflow);
                 if (overflow) {
                     goto finalize_int_path;
                 }
@@ -2525,14 +2525,14 @@ math_sumprod_impl(PyObject *module, PyValueBorrow p, PyValueBorrow q)
                        times quantity, measurements with integer weights, or
                        data selected by a vector of bools. */
                     flt_p = PyFloat_AS_DOUBLE(p_i);
-                    flt_q = PyLong_AsDouble(q_i);
+                    flt_q = _PyValue_IntAsDouble(PyValue_FromObjectBorrow(q_i));
                     if (flt_q == -1.0 && PyErr_Occurred()) {
                         PyErr_Clear();
                         goto finalize_flt_path;
                     }
                 } else if (q_type_float && (PyLong_CheckExact(p_i) || PyBool_Check(p_i))) {
                     flt_q = PyFloat_AS_DOUBLE(q_i);
-                    flt_p = PyLong_AsDouble(p_i);
+                    flt_p = _PyValue_IntAsDouble(PyValue_FromObjectBorrow(p_i));
                     if (flt_p == -1.0 && PyErr_Occurred()) {
                         PyErr_Clear();
                         goto finalize_flt_path;
@@ -2986,7 +2986,7 @@ math_prod_impl(PyObject *module, PyValueBorrow iterable, PyValueBorrow start)
     */
     if (PyLong_CheckExact(result)) {
         int overflow;
-        long i_result = PyLong_AsLongAndOverflow(result, &overflow);
+        long i_result = _PyValue_AsLongAndOverflow(PyValue_FromObjectBorrow(result), &overflow);
         /* If this already overflowed, don't even enter the loop. */
         if (overflow == 0) {
             Py_SETREF(result, NULL);
@@ -3003,7 +3003,7 @@ math_prod_impl(PyObject *module, PyValueBorrow iterable, PyValueBorrow start)
                 return PyValue_FromInt64(i_result);
             }
             if (PyLong_CheckExact(item)) {
-                long b = PyLong_AsLongAndOverflow(item, &overflow);
+                long b = _PyValue_AsLongAndOverflow(PyValue_FromObjectBorrow(item), &overflow);
                 if (overflow == 0 && !_check_long_mult_overflow(i_result, b)) {
                     long x = i_result * b;
                     i_result = x;
@@ -3055,7 +3055,7 @@ math_prod_impl(PyObject *module, PyValueBorrow iterable, PyValueBorrow start)
             if (PyLong_CheckExact(item)) {
                 long value;
                 int overflow;
-                value = PyLong_AsLongAndOverflow(item, &overflow);
+                value = _PyValue_AsLongAndOverflow(PyValue_FromObjectBorrow(item), &overflow);
                 if (!overflow) {
                     f_result *= (double)value;
                     Py_DECREF(item);
@@ -3157,7 +3157,7 @@ math_nextafter_impl(PyObject *module, double x, double y,
         return PyValue_NULL;
     }
 
-    unsigned long long usteps_ull = PyLong_AsUnsignedLongLong(steps_index);
+    unsigned long long usteps_ull = _PyValue_IntAsUnsignedLongLong(PyValue_FromObjectBorrow(steps_index));
     // Conveniently, uint64_t and double have the same number of bits
     // on all the platforms we care about.
     // So if an overflow occurs, we can just use UINT64_MAX.

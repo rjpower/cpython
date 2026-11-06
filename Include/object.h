@@ -402,7 +402,7 @@ PyAPI_FUNC(void) PyType_Modified(PyTypeObject *);
 /* Generic operations on objects */
 Py_VALUE_COMPAT(_PyValue_Repr) PyAPI_FUNC(PyObject *) PyObject_Repr(PyObject *);
 Py_VALUE_COMPAT(_PyValue_Str) PyAPI_FUNC(PyObject *) PyObject_Str(PyObject *);
-Py_VALUE_ENTRY PyAPI_FUNC(PyObject *) PyObject_ASCII(PyObject *);
+Py_VALUE_COMPAT(_PyValue_ASCII) PyAPI_FUNC(PyObject *) PyObject_ASCII(PyObject *);
 PyAPI_FUNC(PyObject *) PyObject_Bytes(PyObject *);
 Py_VALUE_COMPAT(_PyValue_RichCompare) PyAPI_FUNC(PyObject *) PyObject_RichCompare(PyObject *, PyObject *, int);
 Py_VALUE_COMPAT(_PyValue_RichCompareBool) PyAPI_FUNC(int) PyObject_RichCompareBool(PyObject *, PyObject *, int);

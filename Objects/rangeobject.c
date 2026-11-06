@@ -61,7 +61,7 @@ range_long(PyValue v, int *overflow)
         *overflow = 0;
         return (long)PyValue_InlineInt64(v);
     }
-    return PyLong_AsLongAndOverflow(PyValue_AsKnownObjectBorrow(v), overflow);
+    return _PyValue_AsLongAndOverflow(v, overflow);
 }
 
 static int

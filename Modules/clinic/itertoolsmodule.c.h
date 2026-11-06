@@ -693,21 +693,6 @@ itertools_chain_from_iterable(PyValueBorrow type, const PyValue *args, Py_ssize_
 }
 
 static PyObject *
-chain_next_impl(chainobject *self);
-
-static PyObject *
-chain_next(PyObject *self)
-{
-    PyObject *return_value = NULL;
-
-    Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = chain_next_impl((chainobject *)self);
-    Py_END_CRITICAL_SECTION();
-
-    return return_value;
-}
-
-static PyObject *
 product_next_impl(productobject *self);
 
 static PyObject *
@@ -1360,4 +1345,4 @@ zip_longest_next(PyObject *self)
 
     return return_value;
 }
-/*[clinic end generated code: output=84454aff60fe0907 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=5a5229673d8609ae input=a9049054013a1b77]*/

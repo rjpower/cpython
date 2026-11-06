@@ -174,7 +174,7 @@ STRINGLIB(bytes_join)(PyObject *sep, PyObject *iterable)
 {
     PyObject *seq, *res;
 
-    seq = PySequence_Fast(iterable, "can only join an iterable");
+    seq = _PyValue_SequenceFast(PyValue_FromObjectBorrow(iterable), "can only join an iterable");
     if (seq == NULL) {
         return NULL;
     }

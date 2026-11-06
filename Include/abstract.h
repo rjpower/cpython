@@ -374,6 +374,7 @@ PyAPI_FUNC(int) PyObject_SetItem(PyObject *o, PyObject *key, PyObject *v);
    Returns -1 on failure.
 
    This is equivalent to the Python statement: del o[key]. */
+Py_VALUE_COMPAT(_PyValue_DelItemString)
 PyAPI_FUNC(int) PyObject_DelItemString(PyObject *o, const char *key);
 
 /* Delete the mapping for the object 'key' from the object 'o'.
@@ -386,6 +387,7 @@ PyAPI_FUNC(int) PyObject_DelItem(PyObject *o, PyObject *key);
 
 /* Takes an arbitrary object and returns the result of calling
    obj.__format__(format_spec). */
+Py_VALUE_COMPAT(_PyValue_Format)
 PyAPI_FUNC(PyObject *) PyObject_Format(PyObject *obj,
                                        PyObject *format_spec);
 
@@ -678,13 +680,16 @@ PyAPI_FUNC(PyObject *) PyNumber_ToBase(PyObject *n, int base);
    otherwise.
 
    This function always succeeds. */
+Py_VALUE_COMPAT(_PyValue_SequenceCheck)
 PyAPI_FUNC(int) PySequence_Check(PyObject *o);
 
 /* Return the size of sequence object o, or -1 on failure. */
+Py_VALUE_COMPAT(_PyValue_SequenceSize)
 PyAPI_FUNC(Py_ssize_t) PySequence_Size(PyObject *o);
 
 /* For DLL compatibility */
 #undef PySequence_Length
+Py_VALUE_COMPAT(_PyValue_SequenceSize)
 PyAPI_FUNC(Py_ssize_t) PySequence_Length(PyObject *o);
 #define PySequence_Length PySequence_Size
 
@@ -711,23 +716,27 @@ PyAPI_FUNC(PyObject *) PySequence_GetItem(PyObject *o, Py_ssize_t i);
 /* Return the slice of sequence object o between i1 and i2, or NULL on failure.
 
    This is the equivalent of the Python expression: o[i1:i2]. */
+Py_VALUE_COMPAT(_PyValue_SequenceGetSlice)
 PyAPI_FUNC(PyObject *) PySequence_GetSlice(PyObject *o, Py_ssize_t i1, Py_ssize_t i2);
 
 /* Assign object 'v' to the ith element of the sequence 'o'. Raise an exception
    and return -1 on failure; return 0 on success.
 
    This is the equivalent of the Python statement o[i] = v. */
+Py_VALUE_COMPAT(_PyValue_SequenceSetItem)
 PyAPI_FUNC(int) PySequence_SetItem(PyObject *o, Py_ssize_t i, PyObject *v);
 
 /* Delete the 'i'-th element of the sequence 'v'. Returns -1 on failure.
 
    This is the equivalent of the Python statement: del o[i]. */
+Py_VALUE_COMPAT(_PyValue_SequenceDelItem)
 PyAPI_FUNC(int) PySequence_DelItem(PyObject *o, Py_ssize_t i);
 
 /* Assign the sequence object 'v' to the slice in sequence object 'o',
    from 'i1' to 'i2'. Returns -1 on failure.
 
    This is the equivalent of the Python statement: o[i1:i2] = v. */
+Py_VALUE_COMPAT(_PyValue_SequenceSetSlice)
 PyAPI_FUNC(int) PySequence_SetSlice(PyObject *o, Py_ssize_t i1, Py_ssize_t i2,
                                     PyObject *v);
 
@@ -735,6 +744,7 @@ PyAPI_FUNC(int) PySequence_SetSlice(PyObject *o, Py_ssize_t i1, Py_ssize_t i2,
    Returns -1 on failure.
 
    This is the equivalent of the Python statement: del o[i1:i2]. */
+Py_VALUE_COMPAT(_PyValue_SequenceDelSlice)
 PyAPI_FUNC(int) PySequence_DelSlice(PyObject *o, Py_ssize_t i1, Py_ssize_t i2);
 
 /* Returns the sequence 'o' as a tuple on success, and NULL on failure.
@@ -755,6 +765,7 @@ PyAPI_FUNC(PyObject *) PySequence_List(PyObject *o);
 
    Returns NULL on failure.  If the object does not support iteration, raises a
    TypeError exception with 'm' as the message text. */
+Py_VALUE_COMPAT(_PyValue_SequenceFast)
 PyAPI_FUNC(PyObject *) PySequence_Fast(PyObject *o, const char* m);
 
 /* Return the number of occurrences on value on 'o', that is, return
@@ -762,6 +773,7 @@ PyAPI_FUNC(PyObject *) PySequence_Fast(PyObject *o, const char* m);
 
    On failure, return -1.  This is equivalent to the Python expression:
    o.count(value). */
+Py_VALUE_COMPAT(_PyValue_SequenceCount)
 PyAPI_FUNC(Py_ssize_t) PySequence_Count(PyObject *o, PyObject *value);
 
 /* Return 1 if 'ob' is in the sequence 'seq'; 0 if 'ob' is not in the sequence
@@ -787,6 +799,7 @@ PyAPI_FUNC(int) PySequence_In(PyObject *o, PyObject *value);
    On error, return -1.
 
    This is equivalent to the Python expression: o.index(value). */
+Py_VALUE_COMPAT(_PyValue_SequenceIndex)
 PyAPI_FUNC(Py_ssize_t) PySequence_Index(PyObject *o, PyObject *value);
 
 
@@ -796,12 +809,14 @@ PyAPI_FUNC(Py_ssize_t) PySequence_Index(PyObject *o, PyObject *value);
    resulting object, which could be 'o1', or NULL on failure.
 
   This is the equivalent of the Python expression: o1 += o2. */
+Py_VALUE_COMPAT(_PyValue_SequenceInPlaceConcat)
 PyAPI_FUNC(PyObject *) PySequence_InPlaceConcat(PyObject *o1, PyObject *o2);
 
 /* Repeat sequence 'o' by 'count', in-place when possible. Return the resulting
    object, which could be 'o', or NULL on failure.
 
    This is the equivalent of the Python expression: o1 *= count.  */
+Py_VALUE_COMPAT(_PyValue_SequenceInPlaceRepeat)
 PyAPI_FUNC(PyObject *) PySequence_InPlaceRepeat(PyObject *o, Py_ssize_t count);
 
 
@@ -810,14 +825,17 @@ PyAPI_FUNC(PyObject *) PySequence_InPlaceRepeat(PyObject *o, Py_ssize_t count);
 /* Return 1 if the object provides mapping protocol, and 0 otherwise.
 
    This function always succeeds. */
+Py_VALUE_COMPAT(_PyValue_MappingCheck)
 PyAPI_FUNC(int) PyMapping_Check(PyObject *o);
 
 /* Returns the number of keys in mapping object 'o' on success, and -1 on
   failure. This is equivalent to the Python expression: len(o). */
+Py_VALUE_COMPAT(_PyValue_MappingSize)
 PyAPI_FUNC(Py_ssize_t) PyMapping_Size(PyObject *o);
 
 /* For DLL compatibility */
 #undef PyMapping_Length
+Py_VALUE_COMPAT(_PyValue_MappingSize)
 PyAPI_FUNC(Py_ssize_t) PyMapping_Length(PyObject *o);
 #define PyMapping_Length PyMapping_Size
 
@@ -848,6 +866,7 @@ PyAPI_FUNC(Py_ssize_t) PyMapping_Length(PyObject *o);
    This is equivalent to the Python expression: key in o.
 
    This function always succeeds. */
+Py_VALUE_COMPAT(_PyValue_MappingHasKeyString)
 PyAPI_FUNC(int) PyMapping_HasKeyString(PyObject *o, const char *key);
 
 /* Return 1 if the mapping object has the key 'key', and 0 otherwise.
@@ -855,36 +874,43 @@ PyAPI_FUNC(int) PyMapping_HasKeyString(PyObject *o, const char *key);
    This is equivalent to the Python expression: key in o.
 
    This function always succeeds. */
+Py_VALUE_COMPAT(_PyValue_MappingHasKey)
 PyAPI_FUNC(int) PyMapping_HasKey(PyObject *o, PyObject *key);
 
 /* Return 1 if the mapping object has the key 'key', and 0 otherwise.
    This is equivalent to the Python expression: key in o.
    On failure, return -1. */
 
+Py_VALUE_COMPAT(_PyValue_MappingHasKeyWithError)
 PyAPI_FUNC(int) PyMapping_HasKeyWithError(PyObject *o, PyObject *key);
 
 /* Return 1 if the mapping object has the key 'key', and 0 otherwise.
    This is equivalent to the Python expression: key in o.
    On failure, return -1. */
 
+Py_VALUE_COMPAT(_PyValue_MappingHasKeyStringWithError)
 PyAPI_FUNC(int) PyMapping_HasKeyStringWithError(PyObject *o, const char *key);
 
 /* On success, return a list of the keys in mapping object 'o'.
    On failure, return NULL. */
+Py_VALUE_COMPAT(_PyValue_MappingKeys)
 PyAPI_FUNC(PyObject *) PyMapping_Keys(PyObject *o);
 
 /* On success, return a list of the values in mapping object 'o'.
    On failure, return NULL. */
+Py_VALUE_COMPAT(_PyValue_MappingValues)
 PyAPI_FUNC(PyObject *) PyMapping_Values(PyObject *o);
 
 /* On success, return a list of the items in mapping object 'o',
    where each item is a tuple containing a key-value pair. On failure, return
    NULL. */
+Py_VALUE_COMPAT(_PyValue_MappingItems)
 PyAPI_FUNC(PyObject *) PyMapping_Items(PyObject *o);
 
 /* Return element of 'o' corresponding to the string 'key' or NULL on failure.
 
    This is the equivalent of the Python expression: o[key]. */
+Py_VALUE_COMPAT(_PyValue_MappingGetItemString)
 PyAPI_FUNC(PyObject *) PyMapping_GetItemString(PyObject *o,
                                                const char *key);
 
@@ -907,6 +933,7 @@ PyAPI_FUNC(int) PyMapping_GetOptionalItemString(PyObject *, const char *, PyObje
    Returns -1 on failure.
 
    This is the equivalent of the Python statement: o[key]=v. */
+Py_VALUE_COMPAT(_PyValue_MappingSetItemString)
 PyAPI_FUNC(int) PyMapping_SetItemString(PyObject *o, const char *key,
                                         PyObject *value);
 

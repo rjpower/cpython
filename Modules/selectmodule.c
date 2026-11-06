@@ -167,7 +167,7 @@ seq2set(PyValueBorrow seq, fd_set *set, pylist fd2obj[FD_SETSIZE + 1])
     PyObject *seq_obj = _PyValue_AsObjectAt(seq, BOX_SITE_PARSER);
     if (seq_obj == NULL)
         return -1;
-    fast_seq = PySequence_Fast(seq_obj, "arguments 1-3 must be sequences");
+    fast_seq = _PyValue_SequenceFast(PyValue_FromObjectBorrow(seq_obj), "arguments 1-3 must be sequences");
     Py_DECREF(seq_obj);
     if (!fast_seq)
         return -1;

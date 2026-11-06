@@ -3442,7 +3442,7 @@ array_arrayiterator___setstate___impl(arrayiterobject *self,
     PyObject *stateo = _PyValue_AsObjectAt(state, BOX_SITE_PARSER);
     if (stateo == NULL)
         return PyValue_NULL;
-    Py_ssize_t index = PyLong_AsSsize_t(stateo);
+    Py_ssize_t index = _PyValue_IntAsSsize_t(PyValue_FromObjectBorrow(stateo));
     Py_DECREF(stateo);
     if (index == -1 && PyErr_Occurred())
         return PyValue_NULL;

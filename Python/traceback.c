@@ -7,6 +7,7 @@
 #include "pycore_frame.h"         // PyFrameObject
 #include "pycore_interp.h"        // PyInterpreterState.gc
 #include "pycore_interpframe.h"   // _PyFrame_GetCode()
+#include "pycore_long_value.h"    // _PyValue_AsLongAndOverflow()
 #include "pycore_pyerrors.h"      // _PyErr_GetRaisedException()
 #include "pycore_pystate.h"       // _PyThreadState_GET()
 #include "pycore_traceback.h"     // EXCEPTION_TB_HEADER
@@ -802,7 +803,7 @@ _PyTraceBack_Print(PyObject *v, const char *header, PyObject *f)
     }
     else if (limitv != NULL && PyLong_Check(limitv)) {
         int overflow;
-        limit = PyLong_AsLongAndOverflow(limitv, &overflow);
+        limit = _PyValue_AsLongAndOverflow(PyValue_FromObjectBorrow(limitv), &overflow);
         if (overflow > 0) {
             limit = LONG_MAX;
         }

@@ -11,6 +11,7 @@
 #include "pycore_long.h"          // _PyLong_GetZero()
 #include "pycore_long_value.h"    // _PyValue_AsLongLongAndOverflow()
 #include "pycore_value.h"         // PyValue_TYPE()
+#include "pycore_value_api.h"     // _PyValue_AsObjectStealAt()
 #include "pycore_value_ops.h"     // _PyValue_RichCompareBool()
 #include "pycore_value_slots.h"// _PyValue_FromObjectResult()
 
@@ -421,7 +422,7 @@ math_integer_isqrt_impl(PyObject *module, PyValueBorrow n_arg)
        fast, almost branch-free algorithm. */
     if (c <= 31) {
         int shift = 31 - (int)c;
-        m = (uint64_t)PyLong_AsUnsignedLongLong(n);
+        m = (uint64_t)_PyValue_IntAsUnsignedLongLong(PyValue_FromObjectBorrow(n));
         Py_DECREF(n);
         if (m == (uint64_t)(-1) && PyErr_Occurred()) {
             return PyValue_NULL;
@@ -446,7 +447,7 @@ math_integer_isqrt_impl(PyObject *module, PyValueBorrow n_arg)
     if (b == NULL) {
         goto error;
     }
-    m = (uint64_t)PyLong_AsUnsignedLongLong(b);
+    m = (uint64_t)_PyValue_IntAsUnsignedLongLong(PyValue_FromObjectBorrow(b));
     Py_DECREF(b);
     if (m == (uint64_t)(-1) && PyErr_Occurred()) {
         goto error;
@@ -498,7 +499,11 @@ math_integer_isqrt_impl(PyObject *module, PyValueBorrow n_arg)
     if (b == NULL) {
         goto error;
     }
-    PyObject *cmp = PyLong_Type.tp_richcompare(n, b, Py_LT);
+    PyObject *cmp = _PyValue_AsObjectStealAt(
+        _PyValue_CallRichCompare(&PyLong_Type, PyLong_Type.tp_richcompare,
+                                 PyValue_FromObjectBorrow(n),
+                                 PyValue_FromObjectBorrow(b), Py_LT),
+        BOX_SITE_COMPARE);
     Py_DECREF(b);
     if (cmp == NULL) {
         goto error;
@@ -1131,7 +1136,7 @@ math_integer_perm_impl(PyObject *module, PyValueBorrow n_arg,
         goto error;
     }
 
-    ki = PyLong_AsLongLongAndOverflow(k, &overflow);
+    ki = _PyValue_AsLongLongAndOverflow(PyValue_FromObjectBorrow(k), &overflow);
     assert(overflow >= 0 && !PyErr_Occurred());
     if (overflow > 0) {
         PyErr_Format(PyExc_OverflowError,
@@ -1141,7 +1146,7 @@ math_integer_perm_impl(PyObject *module, PyValueBorrow n_arg,
     }
     assert(ki >= 0);
 
-    ni = PyLong_AsLongLongAndOverflow(n, &overflow);
+    ni = _PyValue_AsLongLongAndOverflow(PyValue_FromObjectBorrow(n), &overflow);
     assert(overflow >= 0 && !PyErr_Occurred());
     if (!overflow && ki > 1) {
         assert(ni >= 0);
@@ -1218,11 +1223,11 @@ math_integer_comb_impl(PyObject *module, PyValueBorrow n_arg,
         goto error;
     }
 
-    ni = PyLong_AsLongLongAndOverflow(n, &overflow);
+    ni = _PyValue_AsLongLongAndOverflow(PyValue_FromObjectBorrow(n), &overflow);
     assert(overflow >= 0 && !PyErr_Occurred());
     if (!overflow) {
         assert(ni >= 0);
-        ki = PyLong_AsLongLongAndOverflow(k, &overflow);
+        ki = _PyValue_AsLongLongAndOverflow(PyValue_FromObjectBorrow(k), &overflow);
         assert(overflow >= 0 && !PyErr_Occurred());
         if (overflow || ki > ni) {
             Py_DECREF(n);
@@ -1264,7 +1269,7 @@ math_integer_comb_impl(PyObject *module, PyValueBorrow n_arg,
             }
         }
 
-        ki = PyLong_AsLongLongAndOverflow(k, &overflow);
+        ki = _PyValue_AsLongLongAndOverflow(PyValue_FromObjectBorrow(k), &overflow);
         assert(overflow >= 0 && !PyErr_Occurred());
         if (overflow) {
             PyErr_Format(PyExc_OverflowError,

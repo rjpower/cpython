@@ -40,7 +40,7 @@ PyAPI_FUNC(PyObject*) PyFloat_FromDouble(double);
 
 /* Extract C double from Python float.  The macro version trades safety for
    speed. */
-Py_VALUE_COMPAT_NUMBERS(_PyValue_AsDouble)
+Py_VALUE_COMPAT(_PyValue_AsDouble)
 PyAPI_FUNC(double) PyFloat_AsDouble(PyObject*);
 
 #ifndef Py_LIMITED_API

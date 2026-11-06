@@ -11,6 +11,7 @@
 
 #include "pycore_bitutils.h"      // _Py_bswap32()
 #include "pycore_call.h"          // _PyObject_CallNoArgs()
+#include "pycore_long_value.h"    // _PyValue_AsDouble()
 #include "pycore_value.h"         // PyValue_IsObject()
 #include "pycore_value_api.h"     // _PyValue_AsObjectAt()
 #include "pycore_value_ops.h"     // _PyValue_IsTrue()
@@ -159,7 +160,7 @@ PyCField_new_impl(PyTypeObject *type, PyObject *name, PyValueBorrow proto,
         if (bit_size_pyobj == NULL) {
             goto error;
         }
-        bitfield_size = PyLong_AsSsize_t(bit_size_pyobj);
+        bitfield_size = _PyValue_IntAsSsize_t(PyValue_FromObjectBorrow(bit_size_pyobj));
         Py_DECREF(bit_size_pyobj);
         if ((bitfield_size <= 0) || (bitfield_size > 255)) {
             if (!PyErr_Occurred()) {
@@ -174,7 +175,7 @@ PyCField_new_impl(PyTypeObject *type, PyObject *name, PyValueBorrow proto,
         if (bit_offset_pyobj == NULL) {
             goto error;
         }
-        bit_offset = PyLong_AsSsize_t(bit_offset_pyobj);
+        bit_offset = _PyValue_IntAsSsize_t(PyValue_FromObjectBorrow(bit_offset_pyobj));
         Py_DECREF(bit_offset_pyobj);
         if ((bit_offset < 0) || (bit_offset > 255)) {
             if (!PyErr_Occurred()) {
@@ -583,8 +584,8 @@ Py_ssize_t NUM_BITS(Py_ssize_t bitsize) {
                       (PyLongObject *)value);                                 \
         }                                                                     \
         else {                                                                \
-            Py_ssize_t res = PyLong_AsNativeBytes(                            \
-                value, &val, (NBITS) / 8,                                     \
+            Py_ssize_t res = _PyValue_AsNativeBytes(PyValue_FromObjectBorrow(\
+                value), &val, (NBITS) / 8, \
                 Py_ASNATIVEBYTES_NATIVE_ENDIAN                                \
                 | Py_ASNATIVEBYTES_ALLOW_INDEX);                              \
             if (res < 0) {                                                    \
@@ -753,7 +754,7 @@ g_set(void *ptr, PyObject *value, Py_ssize_t size)
     assert(NUM_BITS(size) || (size == sizeof(long double)));
     long double x;
 
-    x = PyFloat_AsDouble(value);
+    x = _PyValue_AsDouble(PyValue_FromObjectBorrow(value));
     if (x == -1 && PyErr_Occurred())
         return NULL;
     memcpy(ptr, &x, sizeof(long double));
@@ -776,7 +777,7 @@ d_set(void *ptr, PyObject *value, Py_ssize_t size)
     assert(NUM_BITS(size) || (size == sizeof(double)));
     double x;
 
-    x = PyFloat_AsDouble(value);
+    x = _PyValue_AsDouble(PyValue_FromObjectBorrow(value));
     if (x == -1 && PyErr_Occurred())
         return NULL;
     memcpy(ptr, &x, sizeof(double));
@@ -960,7 +961,7 @@ d_set_sw(void *ptr, PyObject *value, Py_ssize_t size)
     assert(NUM_BITS(size) || (size == sizeof(double)));
     double x;
 
-    x = PyFloat_AsDouble(value);
+    x = _PyValue_AsDouble(PyValue_FromObjectBorrow(value));
     if (x == -1 && PyErr_Occurred())
         return NULL;
 #ifdef WORDS_BIGENDIAN
@@ -991,7 +992,7 @@ f_set(void *ptr, PyObject *value, Py_ssize_t size)
     assert(NUM_BITS(size) || (size == sizeof(float)));
     float x;
 
-    x = (float)PyFloat_AsDouble(value);
+    x = (float)_PyValue_AsDouble(PyValue_FromObjectBorrow(value));
     if (x == -1 && PyErr_Occurred())
         return NULL;
     memcpy(ptr, &x, sizeof(x));
@@ -1013,7 +1014,7 @@ f_set_sw(void *ptr, PyObject *value, Py_ssize_t size)
     assert(NUM_BITS(size) || (size == sizeof(float)));
     float x;
 
-    x = (float)PyFloat_AsDouble(value);
+    x = (float)_PyValue_AsDouble(PyValue_FromObjectBorrow(value));
     if (x == -1 && PyErr_Occurred())
         return NULL;
 #ifdef WORDS_BIGENDIAN
@@ -1102,7 +1103,7 @@ c_set(void *ptr, PyObject *value, Py_ssize_t size)
     }
     if (PyLong_Check(value)) {
         int overflow;
-        long longval = PyLong_AsLongAndOverflow(value, &overflow);
+        long longval = _PyValue_AsLongAndOverflow(PyValue_FromObjectBorrow(value), &overflow);
         if (longval == -1 && PyErr_Occurred()) {
             return NULL;
         }
@@ -1292,7 +1293,7 @@ z_set(void *ptr, PyObject *value, Py_ssize_t size)
         return Py_NewRef(value);
     } else if (PyLong_Check(value)) {
 #if SIZEOF_VOID_P == SIZEOF_LONG_LONG
-        *(char **)ptr = (char *)PyLong_AsUnsignedLongLongMask(value);
+        *(char **)ptr = (char *)_PyValue_AsUnsignedLongLongMask(PyValue_FromObjectBorrow(value));
 #else
         *(char **)ptr = (char *)PyLong_AsUnsignedLongMask(value);
 #endif
@@ -1330,7 +1331,7 @@ Z_set(void *ptr, PyObject *value, Py_ssize_t size)
     }
     if (PyLong_Check(value)) {
 #if SIZEOF_VOID_P == SIZEOF_LONG_LONG
-        *(wchar_t **)ptr = (wchar_t *)PyLong_AsUnsignedLongLongMask(value);
+        *(wchar_t **)ptr = (wchar_t *)_PyValue_AsUnsignedLongLongMask(PyValue_FromObjectBorrow(value));
 #else
         *(wchar_t **)ptr = (wchar_t *)PyLong_AsUnsignedLongMask(value);
 #endif
@@ -1450,7 +1451,7 @@ P_set(void *ptr, PyObject *value, Py_ssize_t size)
     }
 
 #if SIZEOF_VOID_P <= SIZEOF_LONG
-    v = (void *)PyLong_AsUnsignedLongMask(value);
+    v = (void *)_PyValue_AsUnsignedLongMask(PyValue_FromObjectBorrow(value));
 #else
 #if SIZEOF_LONG_LONG < SIZEOF_VOID_P
 #   error "PyLong_AsVoidPtr: sizeof(long long) < sizeof(void*)"

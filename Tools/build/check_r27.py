@@ -682,7 +682,7 @@ def static_violations(cdb_path, src, ownership=None):
     table = Path(ownership) if ownership else src / "Tools/build/value_ownership.toml"
     try:
         inventory = tomllib.loads(table.read_text())
-        rows = inventory["row"]
+        rows = inventory.get("row", []) + inventory.get("manual", [])
         if inventory.get("r27_complete") is not True:
             out.append("ownership inventory is not reviewed as complete for R27")
     except (OSError, ValueError, KeyError) as exc:
@@ -695,11 +695,18 @@ def static_violations(cdb_path, src, ownership=None):
     headers = [(p, p.read_text(errors="replace")) for p in (src / "Include").rglob("*.h")]
     if not headers:
         out.append("no headers found for ownership inventory")
+    seen = set()
     for row in rows:
+        if not isinstance(row, dict):
+            out.append(f"invalid ownership row: {row!r}")
+            continue
         obj, value = row.get("object"), row.get("value")
         if not isinstance(obj, str) or not isinstance(value, str):
             out.append(f"invalid ownership row: {row!r}")
             continue
+        if obj in seen:
+            out.append(f"duplicate ownership entry: {obj}")
+        seen.add(obj)
         pattern = re.compile(
             rf"^([ \t]*)((?:(?:Py_VALUE_ENTRY|Py_VALUE_COMPAT\(\w+\))[ \t]+)?"
             rf"(?:Py_DEPRECATED\([^)]*\)\s*)?(?:PyAPI_FUNC\([^)]*\)|extern\b[^;(]*?)"

@@ -77,6 +77,7 @@ PyObject_CallMethodOneArg(PyObject *self, PyObject *name, PyObject *arg)
 /* Guess the size of object 'o' using len(o) or o.__length_hint__().
    If neither of those return a non-negative value, then return the default
    value.  If one of the calls fails, this function returns -1. */
+Py_VALUE_COMPAT(_PyValue_LengthHint)
 PyAPI_FUNC(Py_ssize_t) PyObject_LengthHint(PyObject *o, Py_ssize_t);
 
 /* === Sequence protocol ================================================ */

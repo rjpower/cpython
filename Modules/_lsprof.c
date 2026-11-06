@@ -7,6 +7,7 @@
 #include "pycore_call.h"          // _PyObject_CallNoArgs()
 #include "pycore_ceval.h"         // _PyEval_SetProfile()
 #include "pycore_list.h"          // PyList_AppendValue()
+#include "pycore_long_value.h"    // _PyValue_AsInt64()
 #include "pycore_pystate.h"       // _PyThreadState_GET()
 #include "pycore_time.h"          // _PyTime_FromSecondsObject()
 #include "pycore_typeobject.h"    // _PyType_GetModuleState()
@@ -121,7 +122,7 @@ static PyTime_t CallExternalTimer(ProfilerObject *pObj)
     if (pObj->externalTimerUnit > 0.0) {
         /* interpret the result as an integer that will be scaled
            in profiler_getstats() */
-        err = PyLong_AsInt64(o, &result);
+        err = _PyValue_AsInt64(PyValue_FromObjectBorrow(o), &result);
     }
     else {
         /* interpret the result as a double measured in seconds.
@@ -731,8 +732,10 @@ PyObject* get_cfunc_from_callable(PyObject* callable, PyObject* self_arg, PyObje
         if (self_arg == missing) {
             return NULL;
         }
-        PyObject *meth = Py_TYPE(callable)->tp_descr_get(
-            callable, self_arg, (PyObject*)Py_TYPE(self_arg));
+        PyObject *meth = _PyValue_AsObjectStealAt(
+            _PyValue_DescrGet(callable, PyValue_FromObjectBorrow(self_arg),
+                              Py_TYPE(self_arg)),
+            BOX_SITE_ATTRIBUTE);
         if (meth == NULL) {
             PyErr_Clear();
             return NULL;

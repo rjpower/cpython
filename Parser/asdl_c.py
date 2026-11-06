@@ -981,7 +981,7 @@ static PyObject *
 format_missing(PyObject *missing, PyObject *fields)
 {
     Py_ssize_t num_fields, num_total, num_left;
-    num_fields = PySequence_Size(fields);
+    num_fields = _PyValue_SequenceSize(PyValue_FromObjectBorrow(fields));
     if (num_fields == -1) {
         return NULL;
     }
@@ -1067,7 +1067,7 @@ ast_type_init(PyObject *self, PyObject *args, PyObject *kw)
         goto cleanup;
     }
 
-    numfields = PySequence_Size(fields);
+    numfields = _PyValue_SequenceSize(PyValue_FromObjectBorrow(fields));
     if (numfields < 0) {
         goto cleanup;
     }
@@ -1345,7 +1345,7 @@ ast_type_reduce(PyObject *self, PyObject *unused)
             goto cleanup;
         }
         if (fields) {
-            Py_ssize_t numfields = PySequence_Size(fields);
+            Py_ssize_t numfields = _PyValue_SequenceSize(PyValue_FromObjectBorrow(fields));
             if (numfields == -1) {
                 Py_DECREF(dict);
                 goto cleanup;
@@ -1420,7 +1420,7 @@ ast_type_replace_update_payload(PyObject *payload,
     if (keys == NULL) {
         return 0;
     }
-    Py_ssize_t n = PySequence_Size(keys);
+    Py_ssize_t n = _PyValue_SequenceSize(PyValue_FromObjectBorrow(keys));
     if (n == -1) {
         return -1;
     }
@@ -1550,7 +1550,7 @@ ast_repr_list(PyObject *list, int depth)
         return NULL;
     }
 
-    Py_ssize_t length = PySequence_Size(list);
+    Py_ssize_t length = _PyValue_SequenceSize(PyValue_FromObjectBorrow(list));
     if (length < 0) {
         return NULL;
     }
@@ -1640,7 +1640,7 @@ ast_repr_max_depth(AST_object *self, int depth)
         return NULL;
     }
 
-    Py_ssize_t numfields = PySequence_Size(fields);
+    Py_ssize_t numfields = _PyValue_SequenceSize(PyValue_FromObjectBorrow(fields));
     if (numfields < 0) {
         Py_DECREF(fields);
         return NULL;
@@ -1956,10 +1956,7 @@ static int obj2ast_int(struct ast_state* Py_UNUSED(state), PyValueBorrow obj, in
         *out = (int)value;
         return 0;
     }
-    object = PyValue_IsPointerSpace(obj) ? PyValue_AsKnownObjectBorrow(obj) : _PyValue_AsObjectAt(obj, BOX_SITE_PARSER);
-    if (object == NULL) return -1;
-    i = PyLong_AsInt(object);
-    if (!PyValue_IsPointerSpace(obj)) Py_DECREF(object);
+    i = _PyValue_AsInt(obj);
     if (i == -1 && PyErr_Occurred())
         return -1;
     *out = i;
@@ -2458,6 +2455,7 @@ def generate_module_def(mod, metadata, f, internal_h):
         #include "pycore_dict.h"          // PyDict_GetValue()
         #include "pycore_list.h"          // PyList_AppendValue()
         #include "pycore_lock.h"          // _PyOnceFlag
+        #include "pycore_long_value.h"    // _PyValue_AsInt()
         #include "pycore_modsupport.h"    // _PyArg_NoPositional()
         #include "pycore_pystate.h"       // _PyInterpreterState_GET()
         #include "pycore_runtime.h"       // _Py_ID()

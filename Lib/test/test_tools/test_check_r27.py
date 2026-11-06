@@ -358,6 +358,32 @@ class CompletenessTests(unittest.TestCase):
         self.assertTrue(check_r27.suite_violations(summary))
         self.assertIn("core total does not match owners and drops", summary["accounting_errors"])
 
+    def test_manual_inventory_marks_and_duplicates(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "Include").mkdir()
+            header = root / "Include/a.h"
+            header.write_text("Py_VALUE_COMPAT(PyValue_Foo)\n"
+                              "PyAPI_FUNC(int) PyFoo(void);\n"
+                              "PyAPI_FUNC(int) PyBar(void);\n")
+            source = root / "a.c"
+            source.write_text("#define Py_VALUE_CORE\n")
+            inventory = root / "inventory.toml"
+            table = ('r27_complete=true\n[[row]]\nobject="PyFoo"\nvalue="PyValue_Foo"\n'
+                     '[[manual]]\nobject="PyBar"\nvalue="PyValue_Bar"\n')
+            inventory.write_text(table)
+            cdb = root / "cdb.json"
+            cdb.write_text(json.dumps([{"directory": tmp, "file": str(source),
+                                       "arguments": ["cc", "-c", str(source)]}]))
+            out, _ = check_r27.static_violations(cdb, root, inventory)
+            self.assertEqual(len(out), 1, out)
+            self.assertIn("PyBar lacks Py_VALUE_COMPAT", out[0])
+            header.write_text(header.read_text().replace(
+                "PyAPI_FUNC(int) PyBar", "Py_VALUE_COMPAT(PyValue_Bar)\nPyAPI_FUNC(int) PyBar"))
+            inventory.write_text(table + '[[manual]]\nobject="PyFoo"\nvalue="PyValue_Foo"\n')
+            out, _ = check_r27.static_violations(cdb, root, inventory)
+            self.assertEqual(out, ["duplicate ownership entry: PyFoo"])
+
     def test_static_inventory_and_deferral(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -379,6 +405,9 @@ class CompletenessTests(unittest.TestCase):
             header.write_text("Py_VALUE_COMPAT(PyValue_Foo)\nPyAPI_FUNC(int) PyFoo(void);\n")
             source.write_text("#define Py_BUILD_CORE_MODULE\n#define Py_VALUE_CORE\n")
             out, _ = check_r27.static_violations(cdb, root, inventory)
+            self.assertEqual(out, [])
+            with patch.object(check_r27.check_value_api, "MARKED_SLOT_FAMILIES", frozenset()):
+                out, _ = check_r27.static_violations(cdb, root, inventory)
             self.assertEqual(len(out), 1)
             self.assertIn("object-slot calls", out[0])
 

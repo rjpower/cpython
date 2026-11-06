@@ -624,7 +624,7 @@ my_ ## NAME ## Handler PARAMS {                     \
     RC_HANDLER(                                     \
         int, NAME, PARAMS,                          \
         int rc = 0;, PARAM_FORMAT,                  \
-        rc = PyLong_AsLong(rv);, rc,                \
+        rc = _PyValue_AsLong(PyValue_FromObjectBorrow(rv));, rc,                \
         xmlparseobject_CAST(userData)               \
     )
 
@@ -841,7 +841,7 @@ RC_HANDLER(int, ExternalEntityRef,
                  conv_string_to_unicode_void, context,
                  string_intern(self, base),
                  string_intern(self, systemId), string_intern(self, publicId)),
-                rc = PyLong_AsLong(rv);, rc,
+                rc = _PyValue_AsLong(PyValue_FromObjectBorrow(rv));, rc,
                 XML_GetUserData(parser))
 
 /* XXX UnknownEncodingHandler */
@@ -1972,7 +1972,7 @@ xmlparse_buffer_size_setter(PyObject *op, PyObject *v, void *Py_UNUSED(closure))
         return -1;
     }
 
-    new_buffer_size = PyLong_AsLong(v);
+    new_buffer_size = _PyValue_AsLong(PyValue_FromObjectBorrow(v));
     if (new_buffer_size <= 0) {
         if (!PyErr_Occurred()) {
             PyErr_SetString(PyExc_ValueError, "buffer_size must be greater than zero");

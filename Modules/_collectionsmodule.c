@@ -6,6 +6,7 @@
 #include "pycore_call.h"          // _PyObject_CallNoArgs()
 #include "pycore_dict.h"          // _PyDict_GetItem_KnownHash()
 #include "pycore_long.h"          // _PyLong_GetZero()
+#include "pycore_long_value.h"    // _PyValue_IntAsSsize_t()
 #include "pycore_moduleobject.h"  // _PyModule_GetState()
 #include "pycore_pyatomic_ft_wrappers.h"
 #include "pycore_tuple.h"         // _PyTuple_PackValues()
@@ -1817,7 +1818,7 @@ deque_init_impl(dequeobject *deque, PyValueBorrow iterable,
         PyObject *maxlen_obj = _PyValue_AsObjectAt(maxlenobj, BOX_SITE_PARSER);
         if (maxlen_obj == NULL)
             return -1;
-        maxlen = PyLong_AsSsize_t(maxlen_obj);
+        maxlen = _PyValue_IntAsSsize_t(PyValue_FromObjectBorrow(maxlen_obj));
         Py_DECREF(maxlen_obj);
         if (maxlen == -1 && PyErr_Occurred())
             return -1;
@@ -2451,7 +2452,9 @@ defdict_repr(PyObject *op)
     PyObject *baserepr;
     PyObject *defrepr;
     PyObject *result;
-    baserepr = PyDict_Type.tp_repr(op);
+    baserepr = _PyValue_CallRepr(&PyDict_Type, PyDict_Type.tp_repr,
+                                _Py_VALUE_SLOT_INDEX_repr,
+                                PyValue_FromObjectBorrow(op));
     if (baserepr == NULL)
         return NULL;
     if (dd->default_factory == NULL)
@@ -2563,7 +2566,7 @@ defdict_init(PyObject *self, PyObject *args, PyObject *kwds)
                 return -1;
             }
         }
-        newargs = PySequence_GetSlice(args, 1, n);
+        newargs = PyTuple_GetSlice(args, 1, n);
     }
     if (newargs == NULL) {
         Py_XDECREF(newdefault);

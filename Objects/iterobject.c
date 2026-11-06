@@ -6,6 +6,7 @@
 #include "pycore_ceval.h"         // _PyEval_GetBuiltin()
 #include "pycore_genobject.h"     // _PyCoro_GetAwaitableIter()
 #include "pycore_iterobject.h"    // _PyCallIter_NewEx()
+#include "pycore_long_value.h"    // _PyValue_IntAsSsize_t()
 #include "pycore_object.h"        // _PyObject_GC_TRACK()
 #include "pycore_pyatomic_ft_wrappers.h"  // FT_ATOMIC_LOAD_SSIZE_RELAXED()
 #include "pycore_pyerrors.h"      // _PyErr_FormatFromCause()
@@ -29,7 +30,7 @@ PySeqIter_New(PyObject *seq)
 {
     seqiterobject *it;
 
-    if (!PySequence_Check(seq)) {
+    if (!_PyValue_SequenceCheck(PyValue_FromObjectBorrow(seq))) {
         PyErr_BadInternalCall();
         return NULL;
     }
@@ -119,7 +120,7 @@ iter_len(PyObject *op, PyObject *Py_UNUSED(ignored))
     Py_ssize_t index = FT_ATOMIC_LOAD_SSIZE_RELAXED(it->it_index);
     if (index >= 0 && it->it_seq != NULL) {
         if (_PyObject_HasLen(it->it_seq)) {
-            seqsize = PySequence_Size(it->it_seq);
+            seqsize = _PyValue_SequenceSize(PyValue_FromObjectBorrow(it->it_seq));
             if (seqsize == -1)
                 return NULL;
         }
@@ -158,7 +159,7 @@ static PyObject *
 iter_setstate(PyObject *op, PyObject *state)
 {
     seqiterobject *it = (seqiterobject*)op;
-    Py_ssize_t index = PyLong_AsSsize_t(state);
+    Py_ssize_t index = _PyValue_IntAsSsize_t(PyValue_FromObjectBorrow(state));
     if (index == -1 && PyErr_Occurred())
         return NULL;
     if (index < 0)

@@ -11,7 +11,6 @@ preserve
 #  include "pycore_runtime.h"     // _Py_ID()
 #  include "pycore_value.h"       // _PyValue_STATIC_IMMORTAL()
 #endif
-#include "pycore_long.h"          // _PyLong_UInt32_Converter()
 #include "pycore_long_value.h"    // _PyValue_AsNativeBytes()
 #include "pycore_modsupport.h"    // _PyArg_NoKwnames()
 #include "pycore_tuple.h"         // _PyTuple_ITEMS()
@@ -411,8 +410,20 @@ _sqlite3_Cursor_arraysize_set(PyObject *self, PyObject *arg, void *Py_UNUSED(con
                      Py_TYPE(self)->tp_name);
         return -1;
     }
-    if (!_PyLong_UInt32_Converter(arg, &value)) {
-        goto exit;
+    {
+        Py_ssize_t _bytes = _PyValue_AsNativeBytes(PyValue_FromObjectBorrow(arg), &value, sizeof(uint32_t),
+                Py_ASNATIVEBYTES_NATIVE_ENDIAN |
+                Py_ASNATIVEBYTES_ALLOW_INDEX |
+                Py_ASNATIVEBYTES_REJECT_NEGATIVE |
+                Py_ASNATIVEBYTES_UNSIGNED_BUFFER);
+        if (_bytes < 0) {
+            goto exit;
+        }
+        if ((size_t)_bytes > sizeof(uint32_t)) {
+            PyErr_SetString(PyExc_OverflowError,
+                        "Python int too large for C uint32_t");
+            goto exit;
+        }
     }
     return_value = _sqlite3_Cursor_arraysize_set_impl((pysqlite_Cursor *)self, value);
 
@@ -421,4 +432,4 @@ exit:
 }
 #define _SQLITE3_CURSOR_ARRAYSIZE_GETSETDEF {"arraysize", (getter)_sqlite3_Cursor_arraysize_get, (setter)_sqlite3_Cursor_arraysize_set, NULL},
 
-/*[clinic end generated code: output=cedea19750ffeefa input=a9049054013a1b77]*/
+/*[clinic end generated code: output=a030f120e82c42e1 input=a9049054013a1b77]*/

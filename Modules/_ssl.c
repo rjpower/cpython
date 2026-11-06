@@ -33,6 +33,7 @@
 #include "pycore_fileutils.h"     // _PyIsSelectable_fd()
 #include "pycore_list.h"          // PyList_AppendValue()
 #include "pycore_long.h"          // _PyLong_UnsignedLongLong_Converter()
+#include "pycore_long_value.h"    // _PyValue_AsLong()
 #include "pycore_pyerrors.h"      // _PyErr_ChainExceptions1()
 #include "pycore_time.h"          // _PyDeadline_Init()
 #include "pycore_tuple.h"         // _PyTuple_FromPair
@@ -5368,7 +5369,7 @@ _servername_callback(SSL *s, int *al, void *Py_UNUSED(args))
         if (result == Py_None) {
             ret = SSL_TLSEXT_ERR_OK;
         } else {
-            *al = (int) PyLong_AsLong(result);
+            *al = (int) _PyValue_AsLong(PyValue_FromObjectBorrow(result));
             if (PyErr_Occurred()) {
                 PyErr_FormatUnraisable("Exception ignored "
                                        "in ssl servername callback "

@@ -331,7 +331,7 @@ _enter_buffered_busy(buffered *self)
     }
     Py_END_ALLOW_THREADS
     if (relax_locking && st != PY_LOCK_ACQUIRED) {
-        PyObject *ascii = PyObject_ASCII((PyObject*)self);
+        PyObject *ascii = _PyValue_ASCII(PyValue_FromObjectBorrow((PyObject*)self));
         _Py_FatalErrorFormat(__func__,
             "could not acquire lock for %s at interpreter "
             "shutdown, possibly due to daemon threads",

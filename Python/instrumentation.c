@@ -8,6 +8,7 @@
 #include "pycore_frame.h"         // PyFrameObject
 #include "pycore_interpframe.h"   // _PyFrame_GetBytecode()
 #include "pycore_long.h"          // _PyLong_GetZero()
+#include "pycore_long_value.h"    // _PyValue_AsInt()
 #include "pycore_modsupport.h"    // _PyModule_CreateInitialized()
 #include "pycore_namespace.h"     // _PyNamespace_New()
 #include "pycore_opcode_metadata.h" // IS_VALID_OPCODE()
@@ -3154,8 +3155,7 @@ branch_handler_vectorcall(
         src_offset = (int)PyValue_InlineInt64(PyValue_Borrow(args[1]));
     }
     else {
-        src_offset = PyLong_AsInt(
-            PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[1])));
+        src_offset = _PyValue_AsInt(PyValue_Borrow(args[1]));
         if (src_offset == -1 && PyErr_Occurred()) {
             return PyValue_NULL;
         }

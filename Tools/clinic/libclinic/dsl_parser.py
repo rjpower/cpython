@@ -356,9 +356,20 @@ class DSLParser:
             fail("value_emission cannot be used with the limited C API")
         if codegen.value_emission:
             fail("value_emission given twice")
+        if codegen.value_core:
+            fail("value_emission conflicts with value_core")
         if self.seen_function:
             fail("value_emission must precede the first function of the file")
         codegen.value_emission = True
+
+    def directive_value_core(self) -> None:
+        """Keep object signatures while using value readers in a core unit."""
+        codegen = self.clinic.codegen
+        if codegen.limited_capi or codegen.value_emission or codegen.value_core:
+            fail("value_core requires an ordinary value-native core unit")
+        if self.seen_function:
+            fail("value_core must precede the first function of the file")
+        codegen.value_core = True
 
     def directive_set(self, name: str, value: str) -> None:
         if name not in ("line_prefix", "line_suffix"):

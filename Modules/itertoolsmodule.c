@@ -1618,35 +1618,37 @@ takewhile_traverse(PyObject *op, visitproc visit, void *arg)
     return 0;
 }
 
-static PyObject *
-takewhile_next(PyObject *op)
+static _PyStatusValue
+takewhile_next_value(PyObject *op)
 {
     takewhileobject *lz = takewhileobject_CAST(op);
-    PyObject *item, *good;
-    PyObject *it = lz->it;
-    long ok;
-
     if (lz->stop == 1)
-        return NULL;
+        return (_PyStatusValue){PYGEN_RETURN, PyValue_NULL};
 
-    item = (*Py_TYPE(it)->tp_iternext)(it);
-    if (item == NULL)
-        return NULL;
-
-    good = PyObject_CallOneArg(lz->func, item);
-    if (good == NULL) {
-        Py_DECREF(item);
-        return NULL;
+    _PyStatusValue step = _PyValue_IterStep(lz->it);
+    if (step.status != PYGEN_NEXT) {
+        return step;
     }
-    ok = _PyValue_IsTrue(PyValue_FromObjectBorrow(good));
-    Py_DECREF(good);
+
+    PyValue good = _PyValue_CallOneArg(_PyThreadState_GET(),
+                                      PyValue_FromObjectBorrow(lz->func),
+                                      step.value);
+    if (PyValue_IsNull(good)) {
+        PyValue_CLOSE(step.value);
+        return (_PyStatusValue){PYGEN_ERROR, PyValue_NULL};
+    }
+    int ok = _PyValue_IsTrue(good);
+    PyValue_CLOSE(good);
     if (ok > 0)
-        return item;
-    Py_DECREF(item);
+        return step;
+    PyValue_CLOSE(step.value);
     if (ok == 0)
         lz->stop = 1;
-    return NULL;
+    return (_PyStatusValue){ok < 0 ? PYGEN_ERROR : PYGEN_RETURN,
+                            PyValue_NULL};
 }
+
+_Py_VALUE_THUNK_ITERNEXT(takewhile_next, takewhile_next_value)
 
 static PyType_Slot takewhile_slots[] = {
     {Py_tp_dealloc, takewhile_dealloc},
@@ -1655,6 +1657,7 @@ static PyType_Slot takewhile_slots[] = {
     {Py_tp_traverse, takewhile_traverse},
     {Py_tp_iter, PyObject_SelfIter},
     {Py_tp_iternext, takewhile_next},
+    {_Py_value_iternext, takewhile_next_value},
     {Py_tp_new, itertools_takewhile},
     {Py_tp_free, PyObject_GC_Del},
     {0, NULL},
@@ -1932,28 +1935,31 @@ starmap_traverse(PyObject *op, visitproc visit, void *arg)
     return 0;
 }
 
-static PyObject *
-starmap_next(PyObject *op)
+static _PyStatusValue
+starmap_next_value(PyObject *op)
 {
     starmapobject *lz = starmapobject_CAST(op);
-    PyObject *args;
-    PyObject *result;
-    PyObject *it = lz->it;
-
-    args = (*Py_TYPE(it)->tp_iternext)(it);
-    if (args == NULL)
-        return NULL;
-    if (!PyTuple_CheckExact(args)) {
-        PyObject *newargs = _PyValue_SequenceTuple(PyValue_FromObjectBorrow(args));
-        Py_DECREF(args);
-        if (newargs == NULL)
-            return NULL;
-        args = newargs;
+    _PyStatusValue step = _PyValue_IterStep(lz->it);
+    if (step.status != PYGEN_NEXT) {
+        return step;
     }
-    result = PyObject_Call(lz->func, args, NULL);
+
+    PyObject *args = _PyValue_SequenceTuple(step.value);
+    PyValue_CLOSE(step.value);
+    if (args == NULL) {
+        return (_PyStatusValue){PYGEN_ERROR, PyValue_NULL};
+    }
+    PyValue result = _PyValue_Call(_PyThreadState_GET(),
+                                   PyValue_FromObjectBorrow(lz->func),
+                                   args, NULL);
     Py_DECREF(args);
-    return result;
+    if (PyValue_IsNull(result)) {
+        return (_PyStatusValue){PYGEN_ERROR, PyValue_NULL};
+    }
+    return (_PyStatusValue){PYGEN_NEXT, result};
 }
+
+_Py_VALUE_THUNK_ITERNEXT(starmap_next, starmap_next_value)
 
 static PyType_Slot starmap_slots[] = {
     {Py_tp_dealloc, starmap_dealloc},
@@ -1962,6 +1968,7 @@ static PyType_Slot starmap_slots[] = {
     {Py_tp_traverse, starmap_traverse},
     {Py_tp_iter, PyObject_SelfIter},
     {Py_tp_iternext, starmap_next},
+    {_Py_value_iternext, starmap_next_value},
     {Py_tp_new, itertools_starmap},
     {Py_tp_free, PyObject_GC_Del},
     {0, NULL},
@@ -2064,50 +2071,49 @@ chain_traverse(PyObject *op, visitproc visit, void *arg)
     return 0;
 }
 
-/*[clinic input]
-@critical_section
-itertools.chain.__next__ as chain_next
-[clinic start generated code]*/
-
-static PyObject *
-chain_next_impl(chainobject *self)
-/*[clinic end generated code: output=91e716f45def7fa9 input=e17098e9dc88706b]*/
+static _PyStatusValue
+chain_next_lock_held(chainobject *lz)
 {
-    chainobject *lz = self;
-    PyObject *item;
-
-    /* lz->source is the iterator of iterables. If it's NULL, we've already
-     * consumed them all. lz->active is the current iterator. If it's NULL,
-     * we should grab a new one from lz->source. */
     while (lz->source != NULL) {
         if (lz->active == NULL) {
-            PyObject *iterable = PyIter_Next(lz->source);
-            if (iterable == NULL) {
+            _PyStatusValue source = _PyValue_IterNext(lz->source);
+            if (source.status == PYGEN_ERROR) {
                 Py_CLEAR(lz->source);
-                return NULL;            /* no more input sources */
+                return source;
             }
-            lz->active = _PyValue_GetIter(PyValue_FromObjectBorrow(iterable));
-            Py_DECREF(iterable);
+            if (source.status != PYGEN_NEXT) {
+                PyValue_XCLOSE(source.value);
+                Py_CLEAR(lz->source);
+                return (_PyStatusValue){PYGEN_RETURN, PyValue_NULL};
+            }
+            lz->active = _PyValue_GetIter(source.value);
+            PyValue_CLOSE(source.value);
             if (lz->active == NULL) {
                 Py_CLEAR(lz->source);
-                return NULL;            /* input not iterable */
+                return (_PyStatusValue){PYGEN_ERROR, PyValue_NULL};
             }
         }
-        item = (*Py_TYPE(lz->active)->tp_iternext)(lz->active);
-        if (item != NULL)
+
+        _PyStatusValue item = _PyValue_IterNext(lz->active);
+        if (item.status == PYGEN_NEXT || item.status == PYGEN_ERROR) {
             return item;
-        if (PyErr_Occurred()) {
-            if (PyErr_ExceptionMatches(PyExc_StopIteration))
-                PyErr_Clear();
-            else
-                return NULL;            /* input raised an exception */
         }
-        /* lz->active is consumed, try with the next iterable. */
+        PyValue_XCLOSE(item.value);
         Py_CLEAR(lz->active);
     }
-    /* Everything had been consumed already. */
-    return NULL;
+    return (_PyStatusValue){PYGEN_RETURN, PyValue_NULL};
 }
+
+static _PyStatusValue
+chain_next_value(PyObject *op)
+{
+    _PyStatusValue result;
+    Py_BEGIN_CRITICAL_SECTION(op);
+    result = chain_next_lock_held(chainobject_CAST(op));
+    Py_END_CRITICAL_SECTION();
+    return result;
+}
+_Py_VALUE_THUNK_ITERNEXT(chain_next, chain_next_value)
 
 PyDoc_STRVAR(chain_doc,
 "chain(*iterables)\n\
@@ -2135,6 +2141,7 @@ static PyType_Slot chain_slots[] = {
     {Py_tp_traverse, chain_traverse},
     {Py_tp_iter, PyObject_SelfIter},
     {Py_tp_iternext, chain_next},
+    {_Py_value_iternext, chain_next_value},
     {Py_tp_methods, chain_methods},
     {Py_tp_new, chain_new},
     {Py_tp_free, PyObject_GC_Del},
@@ -3775,7 +3782,7 @@ count_step_is_one(PyValueBorrow step)
     if (!PyValue_LongCheck(step)) {
         return 0;
     }
-    long v = PyLong_AsLong(PyValue_AsKnownObjectBorrow(step));
+    long v = _PyValue_AsLong(step);
     if (v == -1 && PyErr_Occurred()) {
         PyErr_Clear();
     }

@@ -4,7 +4,6 @@
 
 /* The int extractors are compatibility thunks of their value rows; the value
    slots here call none of them (value-api-v2a1a.md, D12). */
-#define Py_VALUE_MARK_NUMBERS 1
 
 #include "Python.h"
 #include "opcode.h"               // NB_ADD
@@ -28,12 +27,7 @@
 #include <float.h>                // DBL_MANT_DIG
 #include <stddef.h>               // offsetof
 
-/* The Clinic parsers stay object-form until M3b regenerates the class int
-   lines with value readers. int.to_bytes's length is their one extractor
-   call: it reads the row, as Py_VALUE_MARK_NUMBERS requires in this unit. */
-#define PyLong_AsSsize_t(op) _PyValue_IntAsSsize_t(PyValue_FromObjectBorrow(op))
 #include "clinic/longobject.c.h"
-#undef PyLong_AsSsize_t
 /*[clinic input]
 value_emission
 [clinic start generated code]*/

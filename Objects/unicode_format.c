@@ -44,6 +44,7 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #include "pycore_abstract.h"      // _PyIndex_Check()
 #include "pycore_format.h"        // F_ALT
 #include "pycore_long.h"          // _PyLong_FormatWriter()
+#include "pycore_long_value.h"    // _PyValue_AsDouble()
 #include "pycore_object.h"        // _PyObject_IsUniquelyReferenced()
 #include "pycore_tuple.h"         // PyTuple_GET_VALUE()
 #include "pycore_unicodeobject.h" // _Py_MAX_UNICODE
@@ -203,7 +204,7 @@ formatfloat(PyObject *v,
             PyObject **p_output,
             _PyUnicodeWriter *writer)
 {
-    double x = PyFloat_AsDouble(v);
+    double x = _PyValue_AsDouble(PyValue_FromObjectBorrow(v));
     if (x == -1.0 && PyErr_Occurred()) {
         if (PyErr_ExceptionMatches(PyExc_TypeError)) {
             FORMAT_ERROR(PyExc_TypeError,
@@ -493,7 +494,7 @@ formatchar(PyObject *v,
     }
     else {
         int overflow;
-        long x = PyLong_AsLongAndOverflow(v, &overflow);
+        long x = _PyValue_AsLongAndOverflow(PyValue_FromObjectBorrow(v), &overflow);
         if (x == -1 && PyErr_Occurred()) {
             if (PyErr_ExceptionMatches(PyExc_TypeError)) {
                 FORMAT_ERROR(PyExc_TypeError,
@@ -610,7 +611,7 @@ unicode_format_arg_parse(struct unicode_formatter_t *ctx,
             FORMAT_ERROR(PyExc_TypeError, "* requires int, not %T", v);
             return -1;
         }
-        arg->width = PyLong_AsSsize_t(v);
+        arg->width = _PyValue_IntAsSsize_t(PyValue_FromObjectBorrow(v));
         if (arg->width == -1 && PyErr_Occurred()) {
             if (PyErr_ExceptionMatches(PyExc_OverflowError)) {
                 FORMAT_ERROR(PyExc_OverflowError,
@@ -675,7 +676,7 @@ unicode_format_arg_parse(struct unicode_formatter_t *ctx,
                 FORMAT_ERROR(PyExc_TypeError, "* requires int, not %T", v);
                 return -1;
             }
-            arg->prec = PyLong_AsInt(v);
+            arg->prec = _PyValue_AsInt(PyValue_FromObjectBorrow(v));
             if (arg->prec == -1 && PyErr_Occurred()) {
                 if (PyErr_ExceptionMatches(PyExc_OverflowError)) {
                     FORMAT_ERROR(PyExc_OverflowError,
@@ -947,7 +948,7 @@ unicode_format_arg_format(struct unicode_formatter_t *ctx,
         else if (arg->ch == 'r')
             *p_str = _PyValue_Repr(PyValue_FromObjectBorrow(v));
         else
-            *p_str = PyObject_ASCII(v);
+            *p_str = _PyValue_ASCII(PyValue_FromObjectBorrow(v));
         break;
 
     case 'i':
@@ -1294,7 +1295,7 @@ _PyUnicode_FormatValue(PyObject *format, PyValueBorrow args_value)
     }
     ctx.single = PyValue_DUP(args_value);
     ctx.curarg = NULL;
-    if (args != NULL && PyMapping_Check(args) && !PyTuple_Check(args)
+    if (args != NULL && _PyValue_MappingCheck(PyValue_FromObjectBorrow(args)) && !PyTuple_Check(args)
         && !PyUnicode_Check(args))
         ctx.dict = args;
     else

@@ -1362,7 +1362,7 @@ _elementtree_Element_extend_impl(ElementObject *self, PyTypeObject *cls,
     if (elements_obj == NULL) {
         return PyValue_NULL;
     }
-    seq = PySequence_Fast(elements_obj, "'elements' must be an iterable");
+    seq = _PyValue_SequenceFast(PyValue_FromObjectBorrow(elements_obj), "'elements' must be an iterable");
     Py_DECREF(elements_obj);
     if (!seq) {
         return PyValue_NULL;
@@ -2253,7 +2253,7 @@ element_ass_subscr(PyObject *op, PyObject *item, PyObject *value)
         }
 
         /* A new slice is actually being assigned */
-        seq = PySequence_Fast(value, "assignment expects an iterable");
+        seq = _PyValue_SequenceFast(PyValue_FromObjectBorrow(value), "assignment expects an iterable");
         if (!seq) {
             return -1;
         }
@@ -4625,8 +4625,7 @@ _elementtree_XMLParser__setevents_impl(XMLParserObject *self,
     if (events_to_report_obj == NULL) {
         return PyValue_NULL;
     }
-    events_seq = PySequence_Fast(events_to_report_obj,
-                                 "events must be a sequence");
+    events_seq = _PyValue_SequenceFast(PyValue_FromObjectBorrow(events_to_report_obj), "events must be a sequence");
     Py_DECREF(events_to_report_obj);
     if (!events_seq) {
         return PyValue_NULL;

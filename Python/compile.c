@@ -22,6 +22,7 @@
 #include "pycore_dict.h"
 #include "pycore_flowgraph.h"     // _PyCfg_FromInstructionSequence()
 #include "pycore_list.h"
+#include "pycore_long_value.h"    // _PyValue_AsLong()
 #include "pycore_regcfg.h"        // _PyRegCfg_Free()
 #include "pycore_pystate.h"       // _Py_GetConfig()
 #include "pycore_runtime.h"       // _Py_ID()
@@ -539,7 +540,7 @@ dict_add_value(PyObject *dict, PyValueBorrow key)
     }
     Py_ssize_t result = PyValue_IsInlineInt(selected)
                         ? PyValue_InlineInt64(selected)
-                        : PyLong_AsSsize_t(PyValue_AsKnownObjectBorrow(selected));
+                        : _PyValue_IntAsSsize_t(selected);
     PyValue_CLOSE(selected);
     return result;
 }
@@ -639,7 +640,7 @@ dictbytype(PyObject *src, int scope_type, int flag, Py_ssize_t offset)
         }
         assert(PyValue_LongCheckExact(value));
         long vi = PyValue_IsInlineInt(value) ? PyValue_InlineInt64(value) :
-                  PyLong_AsLong(PyValue_AsKnownObjectBorrow(value));
+                  _PyValue_AsLong(value);
         if (vi == -1 && PyErr_Occurred()) {
             goto error;
         }
@@ -680,7 +681,7 @@ add_cell_names_from_symbols(PyObject *symbols, PyObject *names)
         assert(PyUnicode_CheckExact(PyValue_AsKnownObjectBorrow(key)));
         assert(PyValue_LongCheckExact(value));
         long flags = PyValue_IsInlineInt(value) ? PyValue_InlineInt64(value) :
-                     PyLong_AsLong(PyValue_AsKnownObjectBorrow(value));
+                     _PyValue_AsLong(value);
         if (flags == -1 && PyErr_Occurred()) {
             goto error;
         }
@@ -915,7 +916,7 @@ _PyCompile_ExitScope(compiler *c)
         // not read; cannot fail for a valid capsule.
         (void)PyCapsule_SetName(capsule, NULL);
         /* we are deleting from a list so this really shouldn't fail */
-        if (PySequence_DelItem(c->c_stack, n) < 0) {
+        if (_PyValue_SequenceDelItem(PyValue_FromObjectBorrow(c->c_stack), n) < 0) {
             PyErr_FormatUnraisable("Exception ignored while removing "
                                    "the last compiler stack item");
         }
@@ -1136,7 +1137,7 @@ dict_lookup_arg(PyObject *dict, PyObject *name)
     }
     assert(PyValue_LongCheckExact(value));
     long result = PyValue_IsInlineInt(value) ? PyValue_InlineInt64(value) :
-                  PyLong_AsLong(PyValue_AsKnownObjectBorrow(value));
+                  _PyValue_AsLong(value);
     PyValue_CLOSE(value);
     return result;
 }
@@ -1519,7 +1520,7 @@ consts_dict_keys_inorder(PyObject *dict)
     while ((next = _PyDict_NextValue(dict, &pos, &key, &index, NULL)) > 0) {
         Py_ssize_t i = PyValue_IsInlineInt(index)
                        ? PyValue_InlineInt64(index)
-                       : PyLong_AsSsize_t(PyValue_AsKnownObjectBorrow(index));
+                       : _PyValue_IntAsSsize_t(index);
         PyValue_CLOSE(index);
         if (i < 0 || i >= size) {
             PyValue_CLOSE(key);

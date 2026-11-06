@@ -108,6 +108,25 @@ class TextRuleTests(unittest.TestCase):
                             if f.rule == rule]
                 self.assertEqual(len(findings), count, findings)
 
+    def test_slot_call_fixtures_and_marked_families(self):
+        fixtures = {
+            name: count
+            for name, (_, rule, count) in check_value_api.SELF_TESTS.items()
+            if rule == "slot-call"
+        }
+        self.assertEqual(fixtures, {
+            "slot_call_direct": 1,
+            "slot_call_parenthesized": 1,
+            "slot_call_cast": 1,
+            "slot_read_comparison": 0,
+            "slot_read_argument": 0,
+            "slot_read_copy": 0,
+        })
+        self.assertEqual(check_value_api.MARKED_SLOT_FAMILIES, {
+            "number", "compare", "hash", "repr", "attribute",
+            "descriptor", "subscript", "iteration", "call",
+        })
+
     def test_call_text(self):
         # window-read and vectorcall-thunk (value-api-m3.md, sections 1.1
         # and 1.7).

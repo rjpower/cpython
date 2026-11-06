@@ -6,6 +6,7 @@
 #include "pycore_freelist.h"      // _Py_FREELIST_PUSH()
 #include "pycore_gc.h"            // _PyObject_GC_IS_TRACKED()
 #include "pycore_list.h"          // _Py_memory_repeat()
+#include "pycore_long_value.h"    // _PyValue_IntAsSsize_t()
 #include "pycore_modsupport.h"    // _PyArg_NoKwnames()
 #include "pycore_object.h"        // _PyObject_GC_TRACK()
 #include "pycore_value_call.h"     // _PyValue_VectorcallThunk()
@@ -1353,7 +1354,7 @@ static PyObject *
 tupleiter_setstate(PyObject *self, PyObject *state)
 {
     _PyTupleIterObject *it = _PyTupleIterObject_CAST(self);
-    Py_ssize_t index = PyLong_AsSsize_t(state);
+    Py_ssize_t index = _PyValue_IntAsSsize_t(PyValue_FromObjectBorrow(state));
     if (index == -1 && PyErr_Occurred())
         return NULL;
     if (it->it_seq != NULL) {

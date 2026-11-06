@@ -2,7 +2,6 @@
 
 // float's value slots call int's and float's value functions, never an
 // extractor thunk (D12).
-#define Py_VALUE_MARK_NUMBERS 1
 
 /* XXX There should be overflow checks here, but it's hard to check
    for any kind of float exception without losing portability. */
@@ -23,6 +22,7 @@
 #include "pycore_pystate.h"       // _PyInterpreterState_GET()
 #include "pycore_value_call.h"   // _PyValue_VectorcallThunk()
 #include "pycore_value.h"      // PyValue_AsKnownObjectBorrow()
+#include "pycore_value_api.h"  // _PyValue_AsObjectStealAt()
 #include "pycore_value_ops.h"     // _PyValue_RichCompareBool()
 #include "pycore_value_slots.h"   // _Py_VALUE_THUNK_BINARY()
 #include "pycore_structseq.h"     // _PyStructSequence_FiniBuiltin()
@@ -318,7 +318,7 @@ double
         res = float_slot(v);
     }
     else {
-        res = _PyValue_FromObjectResult(nb->nb_float(op));
+        res = _PyValue_Float(v);
     }
     if (PyValue_IsNull(res)) {
         return -1;
@@ -947,24 +947,10 @@ _PyFloat_ValuePower(PyValueBorrow v, PyValueBorrow w, PyValueBorrow z)
         return PyValue_FromDouble(ix);
     }
 
-    /* A negative base and a fractional exponent: complex's own slot, which
-       takes objects (there is no value slot of complex yet), so the
-       operands are boxed here, as core boxes of site class NUMBER, and
-       released after the call. */
-    PyObject *vo = _PyValue_AsObjectAt(v, BOX_SITE_NUMBER);
-    if (vo == NULL) {
-        return PyValue_NULL;
-    }
-    PyObject *wo = _PyValue_AsObjectAt(w, BOX_SITE_NUMBER);
-    if (wo == NULL) {
-        Py_DECREF(vo);
-        return PyValue_NULL;
-    }
-    PyObject *result = PyComplex_Type.tp_as_number->nb_power(
-        vo, wo, PyValue_AsKnownObjectBorrow(z));
-    Py_DECREF(wo);
-    Py_DECREF(vo);
-    return _PyValue_FromObjectResult(result);
+    /* Preserve complex's base power semantics while dispatching through its
+       typed slot when present. */
+    return _PyValue_CallPowerBase(
+        &PyComplex_Type, PyComplex_Type.tp_as_number->nb_power, v, w, z);
 }
 _Py_VALUE_THUNK_TERNARY(float_pow, _PyFloat_ValuePower)
 
@@ -1690,11 +1676,9 @@ float_as_integer_ratio_impl(PyValueBorrow self)
     int exponent;
     int i;
 
-    PyObject *py_exponent = NULL;
-    PyObject *numerator = NULL;
-    PyObject *denominator = NULL;
-    PyObject *result_pair = NULL;
-    PyNumberMethods *long_methods = PyLong_Type.tp_as_number;
+    PyValue py_exponent = PyValue_NULL;
+    PyValue numerator = PyValue_NULL;
+    PyValue denominator = PyValue_NULL;
 
     self_double = float_known(self);
 
@@ -1719,38 +1703,41 @@ float_as_integer_ratio_impl(PyValueBorrow self)
        If FLT_RADIX != 2, the 300 steps may leave a tiny fractional part
        to be truncated by PyLong_FromDouble(). */
 
-    numerator = PyLong_FromDouble(float_part);
-    if (numerator == NULL)
+    numerator = _PyValue_FromObjectResult(PyLong_FromDouble(float_part));
+    if (PyValue_IsNull(numerator))
         goto error;
-    denominator = PyLong_FromLong(1);
-    if (denominator == NULL)
+    denominator = _PyValue_FromObjectResult(PyLong_FromLong(1));
+    if (PyValue_IsNull(denominator))
         goto error;
-    py_exponent = PyLong_FromLong(Py_ABS(exponent));
-    if (py_exponent == NULL)
+    py_exponent = _PyValue_FromObjectResult(PyLong_FromLong(Py_ABS(exponent)));
+    if (PyValue_IsNull(py_exponent))
         goto error;
 
     /* fold in 2**exponent */
     if (exponent > 0) {
-        Py_SETREF(numerator,
-                  long_methods->nb_lshift(numerator, py_exponent));
-        if (numerator == NULL)
+        PyValue shifted = _PyValue_Lshift(numerator, py_exponent);
+        PyValue_CLOSE(numerator);
+        numerator = shifted;
+        if (PyValue_IsNull(numerator))
             goto error;
     }
     else {
-        Py_SETREF(denominator,
-                  long_methods->nb_lshift(denominator, py_exponent));
-        if (denominator == NULL)
+        PyValue shifted = _PyValue_Lshift(denominator, py_exponent);
+        PyValue_CLOSE(denominator);
+        denominator = shifted;
+        if (PyValue_IsNull(denominator))
             goto error;
     }
-    Py_DECREF(py_exponent);
+    PyValue_CLOSE(py_exponent);
 
-    return _PyValue_FromObjectResult(_PyTuple_FromPairTakeValue(PyValue_PrepareOwned(numerator), PyValue_PrepareOwned(denominator)));
+    return _PyValue_FromObjectResult(
+        _PyTuple_FromPairTakeValue(numerator, denominator));
 
 error:
-    Py_XDECREF(py_exponent);
-    Py_XDECREF(denominator);
-    Py_XDECREF(numerator);
-    return _PyValue_FromObjectResult(result_pair);
+    PyValue_CLOSE(py_exponent);
+    PyValue_CLOSE(denominator);
+    PyValue_CLOSE(numerator);
+    return PyValue_NULL;
 }
 
 static PyObject *

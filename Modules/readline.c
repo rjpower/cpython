@@ -12,6 +12,7 @@
 #define Py_VALUE_CORE 1
 #include "Python.h"
 #include "pycore_fileutils.h"     // _Py_open_noraise()
+#include "pycore_long_value.h"    // _PyValue_AsInt()
 #include "pycore_pyatomic_ft_wrappers.h"
 #include "pycore_pylifecycle.h"   // _Py_SetLocaleFromEnv()
 #include "pycore_value.h"         // PyValue
@@ -1351,7 +1352,7 @@ on_hook(PyObject *func)
         if (r == Py_None)
             result = 0;
         else {
-            result = PyLong_AsInt(r);
+            result = _PyValue_AsInt(PyValue_FromObjectBorrow(r));
             if (result == -1 && PyErr_Occurred())
                 goto error;
         }
@@ -1438,7 +1439,7 @@ on_completion_display_matches_hook(char **matches,
     m=NULL;
 
     if (r == NULL ||
-        (r != Py_None && PyLong_AsLong(r) == -1 && PyErr_Occurred())) {
+        (r != Py_None && _PyValue_AsLong(PyValue_FromObjectBorrow(r)) == -1 && PyErr_Occurred())) {
         goto error;
     }
     Py_CLEAR(r);

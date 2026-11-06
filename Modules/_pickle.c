@@ -1427,7 +1427,7 @@ _Unpickler_ReadIntoFromFile(PickleState *state, UnpicklerObject *self, char *buf
     if (read_size_obj == NULL) {
         return -1;
     }
-    Py_ssize_t read_size = PyLong_AsSsize_t(read_size_obj);
+    Py_ssize_t read_size = _PyValue_IntAsSsize_t(PyValue_FromObjectBorrow(read_size_obj));
     Py_DECREF(read_size_obj);
 
     if (read_size < 0) {
@@ -2555,7 +2555,7 @@ save_long(PicklerObject *self, PyObject *obj)
     int overflow;
     int status = 0;
 
-    val= PyLong_AsLongAndOverflow(obj, &overflow);
+    val= _PyValue_AsLongAndOverflow(PyValue_FromObjectBorrow(obj), &overflow);
     if (!overflow && (sizeof(long) <= 4 ||
             (val <= 0x7fffffffL && val >= (-0x7fffffffL - 1))))
     {
@@ -4239,7 +4239,6 @@ save_global(PickleState *st, PicklerObject *self, PyObject *obj,
          * so generate an EXT opcode.
          */
         PyObject *extension_key;
-        PyObject *code_obj;      /* extension code as Python object */
         long code;               /* extension code as C value */
         char pdata[5];
         Py_ssize_t n;
@@ -4250,23 +4249,15 @@ save_global(PickleState *st, PicklerObject *self, PyObject *obj,
         }
         PyValue code_obj_v;
         int rc_dict = PyDict_GetValue(st->extension_registry, PyValue_FromObjectBorrow(extension_key), &code_obj_v);
-        code_obj = NULL;
-        if (rc_dict > 0 && (code_obj = _PyValue_AsObjectStealAt(code_obj_v, BOX_SITE_DICT)) == NULL) {
-            rc_dict = -1;
-        }
+        Py_DECREF(extension_key);
         if (rc_dict < 0) {
-            Py_DECREF(extension_key);
             goto error;
         }
-        Py_DECREF(extension_key);
-        if (code_obj == NULL) {
-            /* The object is not registered in the extension registry.
-               This is the most likely code path. */
+        if (rc_dict == 0) {
             goto gen_global;
         }
-
-        code = PyLong_AsLong(code_obj);
-        Py_DECREF(code_obj);
+        code = _PyValue_AsLong(code_obj_v);
+        PyValue_CLOSE(code_obj_v);
         if (code <= 0 || code > 0x7fffffffL) {
             /* Should never happen in normal circumstances, since the type and
                the value of the code are checked in copyreg.add_extension(). */
@@ -5978,7 +5969,7 @@ Pickler_set_memo(PyObject *op, PyObject *obj, void *Py_UNUSED(closure))
                 Py_XDECREF(memo_obj);
                 goto error;
             }
-            memo_id = PyLong_AsSsize_t(memo_id_obj);
+            memo_id = _PyValue_IntAsSsize_t(PyValue_FromObjectBorrow(memo_id_obj));
             Py_DECREF(memo_id_obj);
             if (memo_id == -1 && PyErr_Occurred()) {
                 Py_DECREF(memo_obj);
@@ -7205,7 +7196,7 @@ load_get(PickleState *st, UnpicklerObject *self)
     key = PyLong_FromString(s, NULL, 10);
     if (key == NULL)
         return -1;
-    idx = PyLong_AsSsize_t(key);
+    idx = _PyValue_IntAsSsize_t(PyValue_FromObjectBorrow(key));
     Py_DECREF(key);
     if (idx == -1 && PyErr_Occurred()) {
         return -1;
@@ -7392,7 +7383,7 @@ load_put(PickleState *state, UnpicklerObject *self)
     key = PyLong_FromString(s, NULL, 10);
     if (key == NULL)
         return -1;
-    idx = PyLong_AsSsize_t(key);
+    idx = _PyValue_IntAsSsize_t(PyValue_FromObjectBorrow(key));
     Py_DECREF(key);
     if (idx < 0) {
         if (!PyErr_Occurred())
@@ -8760,7 +8751,7 @@ Unpickler_set_memo(PyObject *op, PyObject *obj, void *Py_UNUSED(closure))
                                 "memo key must be integers");
                 goto error_installed;
             }
-            idx = PyLong_AsSsize_t(key);
+            idx = _PyValue_IntAsSsize_t(PyValue_FromObjectBorrow(key));
             if (idx == -1 && PyErr_Occurred())
                 goto error_installed;
             if (idx < 0) {

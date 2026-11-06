@@ -255,19 +255,19 @@ gc_set_threshold(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
         PyErr_SetString(PyExc_TypeError, "gc.set_threshold requires 1 to 3 arguments");
         goto exit;
     }
-    threshold0 = PyLong_AsInt(args[0]);
+    threshold0 = _PyValue_AsInt(PyValue_FromObjectBorrow(args[0]));
     if (threshold0 == -1 && PyErr_Occurred()) {
         goto exit;
     }
     if (nargs >= 2) {
-        threshold1 = PyLong_AsInt(args[1]);
+        threshold1 = _PyValue_AsInt(PyValue_FromObjectBorrow(args[1]));
         if (threshold1 == -1 && PyErr_Occurred()) {
             goto exit;
         }
         group_right_1 = 1;
     }
     if (nargs >= 3) {
-        threshold2 = PyLong_AsInt(args[2]);
+        threshold2 = _PyValue_AsInt(PyValue_FromObjectBorrow(args[2]));
         if (threshold2 == -1 && PyErr_Occurred()) {
             goto exit;
         }
@@ -614,4 +614,4 @@ gc_get_freeze_count(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs,
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=dda9a8678dbe1423 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=d91b05b2a13c70e0 input=a9049054013a1b77]*/

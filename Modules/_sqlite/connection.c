@@ -862,7 +862,7 @@ _pysqlite_set_result(sqlite3_context* context, PyObject* py_val)
             return -1;
         sqlite3_result_int64(context, value);
     } else if (PyFloat_Check(py_val)) {
-        double value = PyFloat_AsDouble(py_val);
+        double value = _PyValue_AsDouble(PyValue_FromObjectBorrow(py_val));
         if (value == -1 && PyErr_Occurred()) {
             return -1;
         }
@@ -1525,7 +1525,7 @@ authorizer_callback(void *ctx_vp, int action, const char *arg1,
     }
     else {
         if (PyLong_Check(ret)) {
-            rc = PyLong_AsInt(ret);
+            rc = _PyValue_AsInt(PyValue_FromObjectBorrow(ret));
             if (rc == -1 && PyErr_Occurred()) {
                 print_or_clear_traceback(ctx);
                 rc = SQLITE_DENY;
@@ -2103,7 +2103,7 @@ collation_callback(void *context, int text1_length, const void *text1_data,
         goto finally;
     }
 
-    longval = PyLong_AsLongAndOverflow(retval, &result);
+    longval = _PyValue_AsLongAndOverflow(PyValue_FromObjectBorrow(retval), &result);
     if (longval == -1 && PyErr_Occurred()) {
         PyErr_Clear();
         result = 0;

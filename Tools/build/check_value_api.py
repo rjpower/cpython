@@ -13,10 +13,11 @@ Py_BUILD_CORE_MODULE, or one that defines Py_VALUE_CORE (Include/pyport.h).
   (va_arg(*vargs, PyValueBorrow) in Objects/unicodeobject.c): the check
   requires every value conversion to receive one, and reports an owner
   there, which the caller passes as PyValue_Borrow(v).
-* slot-read: a read of an object slot field that has a value form
+* slot-call: a direct call through an object slot field that has a value form
   (tp_as_number->nb_add, tp_richcompare, tp_iternext, tp_call and the rest).
-  A read of a slot whose family is in MARKED_SLOT_FAMILIES fails; other reads
-  are listed. Units that define Py_VALUE_ADAPTER are skipped.
+  Calls in a family in MARKED_SLOT_FAMILIES fail. Mere reads, comparisons,
+  copies and indirect calls are listed as non-failing slot-read findings.
+  Units that define Py_VALUE_ADAPTER are skipped.
 * raw-bits: knowledge of the word's encoding outside the code that may have
   it (value-api.md, section 1.6, rule 1: ENCODING_FILES and
   ENCODING_FUNCTIONS). In a value-native unit: a .bits or ->bits access of a
@@ -103,10 +104,8 @@ Py_BUILD_CORE_MODULE, or one that defines Py_VALUE_CORE (Include/pyport.h).
   pass): value-api-g.md, section 1.7; see BOX_TEXT_RULES.
 
 The functions that Py_VALUE_COMPAT marks need no other rule here: calling
-one from a value-native unit is a compile error. The int and float
-extractors (PyLong_AsLong, PyFloat_AsDouble, ...) carry
-Py_VALUE_COMPAT_NUMBERS instead, which marks them only in a unit that defines
-Py_VALUE_MARK_NUMBERS, until wave W2 marks them everywhere.
+one from a value-native unit is a compile error, including the int and float
+extractors (PyLong_AsLong, PyFloat_AsDouble, ...).
 
 The script reads compile_commands.json, which intercept-build records while
 the units compile, and runs clang-query over every value-native unit, then
@@ -187,7 +186,13 @@ SLOT_FAMILIES = {
 }
 
 # The packet that marks a family adds it here (value-api.md, section 9).
-MARKED_SLOT_FAMILIES = frozenset()
+# V2a/V2b have operational value dispatch for every family below. Keep this
+# list explicit: a typed slot-table row is not enough to mark a family until
+# its dispatcher is wired.
+MARKED_SLOT_FAMILIES = frozenset({
+    "number", "compare", "hash", "repr", "attribute", "descriptor",
+    "subscript", "iteration", "call",
+})
 
 VALUE_TYPES = ("PyValue", "PyValueBorrow")
 PYVALUE_TYPES = tuple(f'asString("{const}{name}")' for name in VALUE_TYPES
@@ -201,6 +206,12 @@ SLOT_READ_MATCHER = (
     "implicitCastExpr(hasCastKind(\"CK_LValueToRValue\"), has(memberExpr(member("
     "hasAnyName({names})))))"
     '.bind("slot")'.format(
+        names=", ".join(f'"{name}"' for name in sorted(SLOT_FAMILIES)))
+)
+SLOT_CALL_MATCHER = (
+    "callExpr(callee(expr(hasDescendant(memberExpr(member("
+    "hasAnyName({names})))))))"
+    '.bind("slotcall")'.format(
         names=", ".join(f'"{name}"' for name in sorted(SLOT_FAMILIES)))
 )
 
@@ -418,6 +429,7 @@ QUERY = "\n".join([
                              HOME_COPY_MATCHER)),
     "set traversal AsIs",
     f"match {SLOT_READ_MATCHER}",
+    f"match {SLOT_CALL_MATCHER}",
     f"match {COMPAT_BODY_MATCHER}",
     "",
 ])
@@ -817,15 +829,20 @@ def parse_output(text, kind, directory):
             for message in check_call(parse_call_dump(dump)):
                 findings.append(
                     Finding(path, line, column, "variadic", message, True))
-        elif binding == "slot" and kind == "core":
+        elif binding in ("slot", "slotcall") and kind == "core":
             names = re.findall(r"->(\w+)|\.(\w+)", " ".join(dump))
             field = next((a or b for a, b in names
                           if (a or b) in SLOT_FAMILIES), None)
             family = SLOT_FAMILIES.get(field, "?")
-            findings.append(Finding(
-                path, line, column, "slot-read",
-                f"read of {field} ({family} family)",
-                family in MARKED_SLOT_FAMILIES))
+            if binding == "slotcall":
+                findings.append(Finding(
+                    path, line, column, "slot-call",
+                    f"direct call of {field} ({family} family)",
+                    family in MARKED_SLOT_FAMILIES))
+            else:
+                findings.append(Finding(
+                    path, line, column, "slot-read",
+                    f"read of {field} ({family} family)", False))
         elif binding == "entry_box":
             findings.append(Finding(
                 path, line, column, "compat-body",
@@ -1458,6 +1475,32 @@ SELF_TESTS = {
         PyObject *f(PyObject *o) {
             return Py_TYPE(o)->tp_as_number->nb_add(o, o);
         }""", "slot-read", 1),
+    "slot_call_direct": ("""
+        PyObject *f(PyObject *o) {
+            return Py_TYPE(o)->tp_as_number->nb_add(o, o);
+        }""", "slot-call", 1),
+    "slot_call_parenthesized": ("""
+        PyObject *f(PyObject *o) {
+            return ((Py_TYPE(o)->tp_richcompare))(o, o, Py_EQ);
+        }""", "slot-call", 1),
+    "slot_call_cast": ("""
+        PyObject *f(PyObject *o) {
+            return ((binaryfunc)Py_TYPE(o)->tp_as_number->nb_add)(o, o);
+        }""", "slot-call", 1),
+    "slot_read_comparison": ("""
+        int f(PyObject *o) {
+            return Py_TYPE(o)->tp_hash == NULL;
+        }""", "slot-call", 0),
+    "slot_read_argument": ("""
+        static void consume(iternextfunc);
+        void f(PyObject *o) {
+            consume(Py_TYPE(o)->tp_iternext);
+        }""", "slot-call", 0),
+    "slot_read_copy": ("""
+        PyObject *f(PyObject *o) {
+            unaryfunc next = Py_TYPE(o)->tp_iternext;
+            return NULL;
+        }""", "slot-call", 0),
     "raw_bits_access": ("""
         uintptr_t f(PyValue v, PyValueBorrow *p) {
             return v.bits + p->bits;
@@ -2268,16 +2311,15 @@ def self_test(clang_query, template, compiler, cxx, jobs):
         # unit does not compile; from a module unit it does.
         flags = compile_flags(template)
         call = "void f(void) { _PyValue_CompatProbe(); }\n"
-        # The int and float extractors are marked only in a unit that opts
-        # in with Py_VALUE_MARK_NUMBERS.
+        # Numeric compatibility calls obey the same core/module boundary.
         numbers_call = "long f(void) { return PyLong_AsLong(0); }\n"
-        numbers_mark = "#define Py_VALUE_MARK_NUMBERS 1\n"
         for name, prefix, body, should_fail in (
                 ("unavailable_core", "", call, True),
                 ("unavailable_module", "#define Py_BUILD_CORE_MODULE 1\n",
                  call, False),
-                ("unavailable_numbers", numbers_mark, numbers_call, True),
-                ("available_numbers", "", numbers_call, False)):
+                ("unavailable_numbers", "", numbers_call, True),
+                ("available_numbers_module", "#define Py_BUILD_CORE_MODULE 1\n",
+                 numbers_call, False)):
             path = Path(tmp, f"{name}.c")
             path.write_text(prefix + SELF_TEST_HEADER + body)
             proc = subprocess.run(

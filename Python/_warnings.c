@@ -6,6 +6,7 @@
 #include "pycore_interpframe.h"   // _PyFrame_GetCode()
 #include "pycore_list.h"          // PyList_GET_VALUE()
 #include "pycore_long.h"          // _PyLong_GetZero()
+#include "pycore_long_value.h"    // _PyValue_AsLong()
 #include "pycore_pylifecycle.h"   // _Py_IsInterpreterFinalizing()
 #include "pycore_pystate.h"       // _PyThreadState_GET()
 #include "pycore_traceback.h"     // _Py_DisplaySourceLine()
@@ -540,7 +541,7 @@ filter_search(PyInterpreterState *interp, PyObject *category,
             ln = (Py_ssize_t)PyValue_InlineInt64(ln_value);
         }
         else if (PyValue_IsObject(ln_value)) {
-            ln = PyLong_AsSsize_t(PyValue_AsKnownObjectBorrow(ln_value));
+            ln = _PyValue_IntAsSsize_t(ln_value);
         }
         else {
             // An inline float: PyLong_AsSsize_t()'s TypeError.
@@ -669,8 +670,7 @@ already_warned(PyInterpreterState *interp, PyObject *registry, PyObject *key,
         else if (PyValue_IsObject(version_val)
                  && PyLong_CheckExact(PyValue_AsKnownObjectBorrow(version_val)))
         {
-            should_update_version = PyLong_AsLong(
-                PyValue_AsKnownObjectBorrow(version_val)) != st->filters_version;
+            should_update_version = _PyValue_AsLong(version_val) != st->filters_version;
         }
         PyValue_CLOSE(version_val);
     }

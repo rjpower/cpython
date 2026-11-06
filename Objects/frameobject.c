@@ -10,6 +10,7 @@
 #include "pycore_genobject.h"     // _PyGen_GetGeneratorFromFrame()
 #include "pycore_interpframe.h"   // _PyFrame_GetLocalsArray()
 #include "pycore_list.h"          // _PyList_AppendTakeRef()
+#include "pycore_long_value.h"    // _PyValue_AsLongAndOverflow()
 #include "pycore_modsupport.h"    // _PyArg_CheckPositional()
 #include "pycore_object.h"        // _PyObject_GC_UNTRACK()
 #include "pycore_opcode_metadata.h" // _PyOpcode_Caches
@@ -382,7 +383,7 @@ framelocalsproxy_merge(PyObject* self, PyObject* other)
         return -1;
     }
 
-    PyObject *keys = PyMapping_Keys(other);
+    PyObject *keys = _PyValue_MappingKeys(PyValue_FromObjectBorrow(other));
     if (keys == NULL) {
         return -1;
     }
@@ -2110,7 +2111,7 @@ frame_lineno_set_impl(PyFrameObject *self, PyObject *value)
     /* Fail if the line falls outside the code block and
         select first line with actual code. */
     int overflow;
-    long l_new_lineno = PyLong_AsLongAndOverflow(value, &overflow);
+    long l_new_lineno = _PyValue_AsLongAndOverflow(PyValue_FromObjectBorrow(value), &overflow);
     if (overflow
 #if SIZEOF_LONG > SIZEOF_INT
         || l_new_lineno > INT_MAX

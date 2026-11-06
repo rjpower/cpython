@@ -336,7 +336,7 @@ Py_ssize_t
         Py_DECREF(result);
         return -1;
     }
-    res = PyLong_AsSsize_t(result);
+    res = _PyValue_IntAsSsize_t(PyValue_FromObjectBorrow(result));
     Py_DECREF(result);
     if (res < 0 && PyErr_Occurred()) {
         return -1;
@@ -892,7 +892,7 @@ PyBuffer_SizeFromFormat(const char *format)
         goto done;
     }
 
-    itemsize = PyLong_AsSsize_t(res);
+    itemsize = _PyValue_IntAsSsize_t(PyValue_FromObjectBorrow(res));
     if (itemsize < 0) {
         goto done;
     }
@@ -1400,6 +1400,20 @@ call_ternary(ternaryfunc slot, _Py_valuefunc value,
 {
     if (value != NULL) {
         return ((_Py_ternaryvaluefunc)value)(v, w, z);
+    }
+    return adapt_ternary(slot, v, w, z);
+}
+
+PyValue
+_PyValue_CallPowerBase(PyTypeObject *base, ternaryfunc slot,
+                       PyValueBorrow v, PyValueBorrow w, PyValueBorrow z)
+{
+    int row = _Py_VALUE_SLOT_INDEX_nb_power;
+    _Py_ternaryvaluefunc f =
+        (_Py_ternaryvaluefunc)_PyType_VALUE_FIELD_AT(base, row);
+    if (f != NULL) {
+        _PyType_CHECK_VALUE_ROW(base, row);
+        return f(v, w, z);
     }
     return adapt_ternary(slot, v, w, z);
 }
@@ -2452,7 +2466,11 @@ PySequence_Size(PyObject *s)
 Py_ssize_t
 PySequence_Length(PyObject *s)
 {
-    return PySequence_Size(s);
+    if (s == NULL) {
+        null_error();
+        return -1;
+    }
+    return _PyValue_SequenceSize(_Py_VALUE_ARG(s));
 }
 #define PySequence_Length PySequence_Size
 
@@ -3265,7 +3283,11 @@ PyMapping_Size(PyObject *o)
 Py_ssize_t
 PyMapping_Length(PyObject *o)
 {
-    return PyMapping_Size(o);
+    if (o == NULL) {
+        null_error();
+        return -1;
+    }
+    return _PyValue_MappingSize(_Py_VALUE_ARG(o));
 }
 #define PyMapping_Length PyMapping_Size
 
@@ -3964,7 +3986,7 @@ PyObject *
 
     f = t->tp_iter;
     if (f == NULL) {
-        if (PySequence_Check(o))
+        if (_PyValue_SequenceCheck(PyValue_FromObjectBorrow(o)))
             return PySeqIter_New(o);
         return type_error("'%.200s' object is not iterable", o);
     }

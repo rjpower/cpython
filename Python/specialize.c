@@ -12,6 +12,7 @@
 #include "pycore_interpframe.h"   // FRAME_SPECIALS_SIZE
 #include "pycore_lazyimportobject.h" // PyLazyImport_CheckExact
 #include "pycore_list.h"          // _PyListIterObject, _PyList_Concat
+#include "pycore_long_value.h"    // _PyValue_IntAsSsize_t()
 #include "pycore_tuple.h"         // _PyTuple_Concat
 #include "pycore_long.h"          // _PyLong_IsNonNegativeCompact()
 #include "pycore_moduleobject.h"
@@ -2527,7 +2528,7 @@ binary_op_fail_kind(int oparg, PyValueBorrow lhs_st, PyValueBorrow rhs_st)
     static PyObject * \
     (NAME)(PyObject *lhs, PyObject *rhs) \
     { \
-        Py_ssize_t count = PyLong_AsSsize_t(COUNT); \
+        Py_ssize_t count = _PyValue_IntAsSsize_t(PyValue_FromObjectBorrow(COUNT)); \
         if (count == -1 && PyErr_Occurred()) { \
             return NULL; \
         } \
@@ -2914,7 +2915,7 @@ success:
 static int
 unpack_sequence_fail_kind(PyObject *seq)
 {
-    if (PySequence_Check(seq)) {
+    if (_PyValue_SequenceCheck(PyValue_FromObjectBorrow(seq))) {
         return SPEC_FAIL_UNPACK_SEQUENCE_SEQUENCE;
     }
     if (PyIter_Check(seq)) {

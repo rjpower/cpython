@@ -15,6 +15,7 @@
 #include "pycore_dict.h"          // _PyDict_SetItem_Take2()
 #include "pycore_list.h"          // _PyList_AppendTakeRef()
 #include "pycore_global_strings.h" // _Py_ID()
+#include "pycore_long_value.h"    // _PyValue_IntAsSsize_t()
 #include "pycore_modsupport.h"    // _PyArg_UnpackKeywordsValue()
 #include "pycore_pyerrors.h"      // _PyErr_FormatNote
 #include "pycore_runtime.h"       // _PyRuntime
@@ -1714,7 +1715,9 @@ encoder_listencode_obj(PyEncoderObject *s, PyUnicodeWriter *writer,
             // Fast-path for exact integers
             return PyUnicodeWriter_WriteRepr(writer, obj);
         }
-        PyObject *encoded = PyLong_Type.tp_repr(obj);
+        PyObject *encoded = _PyValue_CallRepr(&PyLong_Type,
+                PyLong_Type.tp_repr, _Py_VALUE_SLOT_INDEX_repr,
+                PyValue_FromObjectBorrow(obj));
         if (encoded == NULL)
             return -1;
         return _steal_accumulate(writer, encoded);
@@ -1823,7 +1826,9 @@ encoder_encode_key_value(PyEncoderObject *s, PyUnicodeWriter *writer, bool *firs
         keystr = _encoded_const(key);
     }
     else if (PyLong_Check(key)) {
-        keystr = PyLong_Type.tp_repr(key);
+        keystr = _PyValue_CallRepr(&PyLong_Type, PyLong_Type.tp_repr,
+                                   _Py_VALUE_SLOT_INDEX_repr,
+                                   PyValue_FromObjectBorrow(key));
     }
     else if (s->skipkeys) {
         return 0;
@@ -2000,7 +2005,7 @@ encoder_listencode_dict(PyEncoderObject *s, PyUnicodeWriter *writer,
     }
 
     if (s->sort_keys || !PyAnyDict_CheckExact(dct)) {
-        PyObject *items = PyMapping_Items(dct);
+        PyObject *items = _PyValue_MappingItems(PyValue_FromObjectBorrow(dct));
         if (items == NULL || (s->sort_keys && PyList_Sort(items) < 0)) {
             Py_XDECREF(items);
             goto bail;
@@ -2088,7 +2093,7 @@ encoder_listencode_list(PyEncoderObject *s, PyUnicodeWriter *writer,
     PyObject *ident = NULL;
     PyObject *s_fast = NULL;
 
-    s_fast = PySequence_Fast(seq, "encoder_listencode_list needs a sequence");
+    s_fast = _PyValue_SequenceFast(PyValue_FromObjectBorrow(seq), "encoder_listencode_list needs a sequence");
     if (s_fast == NULL)
         return -1;
     if (PySequence_Fast_GET_SIZE(s_fast) == 0) {

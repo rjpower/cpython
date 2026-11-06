@@ -2408,7 +2408,7 @@ _create_sharedns(PyObject *names)
     assert(names != NULL);
     Py_ssize_t numnames = PyDict_CheckExact(names)
         ? PyDict_Size(names)
-        : PySequence_Size(names);
+        : _PyValue_SequenceSize(PyValue_FromObjectBorrow(names));
 
     _PyXI_namespace *ns = _sharedns_alloc(numnames);
     if (ns == NULL) {
@@ -2440,7 +2440,7 @@ _create_sharedns(PyObject *names)
             goto error;
         }
     }
-    else if (PySequence_Check(names)) {
+    else if (_PyValue_SequenceCheck(PyValue_FromObjectBorrow(names))) {
         for (Py_ssize_t i = 0; i < numnames; i++) {
             PyValue name_v = _PyValue_SequenceGetItem(PyValue_FromObjectBorrow(names), i);
             PyObject *name = PyValue_IsNull(name_v) ? NULL

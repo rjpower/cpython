@@ -398,7 +398,7 @@ class ParseArgsCodeGen:
             # The parameters are rendered from copies.
             for p in [*func.parameters.values(), *func.render_parameters]:
                 p.converter.set_value_emission()
-        elif codegen.value_emission:
+        elif codegen.value_emission or codegen.value_core:
             for p in [*func.parameters.values(), *func.render_parameters]:
                 p.converter.object_in_value_unit = True
 

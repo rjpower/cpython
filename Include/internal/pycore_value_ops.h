@@ -102,6 +102,9 @@ PyAPI_FUNC(PyValue) _PyValue_Power(PyValueBorrow v, PyValueBorrow w,
                                    PyValueBorrow z);
 PyAPI_FUNC(PyValue) _PyValue_InPlacePower(PyValueBorrow v, PyValueBorrow w,
                                           PyValueBorrow z);
+PyAPI_FUNC(PyValue) _PyValue_CallPowerBase(PyTypeObject *base, ternaryfunc slot,
+                                          PyValueBorrow v, PyValueBorrow w,
+                                          PyValueBorrow z);
 #define _PyValue_Power(V, W, Z) \
     (_PyValue_Power)(PyValue_Borrow(V), PyValue_Borrow(W), PyValue_Borrow(Z))
 #define _PyValue_InPlacePower(V, W, Z) \
@@ -157,11 +160,14 @@ PyAPI_FUNC(int) _PyValue_RichCompareBool(PyValueBorrow v, PyValueBorrow w,
 /* The compare and repr pairs of type t (object.c): the value slot of the
    row if it is set, else the object slot through the adapter. object's own
    value sides call them for the receiver's type (typeobject.c). */
-extern PyValue _PyValue_CallRichCompare(PyTypeObject *t, richcmpfunc slot,
-                                        PyValueBorrow v, PyValueBorrow w,
-                                        int op);
-extern PyObject *_PyValue_CallRepr(PyTypeObject *t, reprfunc slot, int row,
-                                   PyValueBorrow v);
+PyAPI_FUNC(PyValue) _PyValue_CallRichCompare(PyTypeObject *t, richcmpfunc slot,
+                                             PyValueBorrow v, PyValueBorrow w,
+                                             int op);
+PyAPI_FUNC(PyObject *) _PyValue_CallRepr(PyTypeObject *t, reprfunc slot, int row,
+                                        PyValueBorrow v);
+PyAPI_FUNC(int) _PyValue_CallSetAttrBase(PyTypeObject *base, setattrofunc slot,
+                                         PyValueBorrow self, PyObject *name,
+                                         PyValueBorrow value);
 
 /* object's value sides (typeobject.c), which NoneType and the sentinel type
    inherit: upstream's object_richcompare() (== is identity, else

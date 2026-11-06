@@ -369,7 +369,7 @@ _PyRun_InteractiveOne(FILE *fp, PyObject *filename, PyCompilerFlags *flags)
                 Py_DECREF(xs);
                 goto error;
             }
-            int n = PyLong_AsInt(exc_lineno);
+            int n = _PyValue_AsInt(PyValue_FromObjectBorrow(exc_lineno));
             Py_DECREF(exc_lineno);
             if (n <= 0 || n > PyList_GET_SIZE(xs)) {
                 Py_DECREF(xs);

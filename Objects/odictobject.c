@@ -1602,7 +1602,12 @@ odict_richcompare_lock_held(PyObject *v, PyObject *w, int op)
         PyObject *res, *cmp;
         int eq;
 
-        cmp = PyDict_Type.tp_richcompare(v, w, op);
+        cmp = _PyValue_AsObjectStealAt(
+            _PyValue_CallRichCompare(&PyDict_Type,
+                                     PyDict_Type.tp_richcompare,
+                                     PyValue_FromObjectBorrow(v),
+                                     PyValue_FromObjectBorrow(w), op),
+            BOX_SITE_COMPARE);
         if (cmp == NULL)
             return NULL;
         if (!PyODict_Check(w))

@@ -7695,7 +7695,7 @@ merge_class_dict(PyObject *dict, PyObject *aclass)
     if (bases != NULL) {
         /* We have no guarantee that bases is a real tuple */
         Py_ssize_t i, n;
-        n = PySequence_Size(bases); /* This better be right */
+        n = _PyValue_SequenceSize(PyValue_FromObjectBorrow(bases)); /* This better be right */
         if (n < 0) {
             Py_DECREF(bases);
             return -1;
@@ -12992,7 +12992,7 @@ slot_tp_hash_value(PyValueBorrow self)
        Py_hash_t.  Therefore our transformation must preserve values that
        already lie within this range, to ensure that if x.__hash__() returns
        hash(y) then hash(x) == hash(y). */
-    Py_ssize_t h = PyLong_AsSsize_t(res_object);
+    Py_ssize_t h = _PyValue_IntAsSsize_t(PyValue_FromObjectBorrow(res_object));
     if (h == -1 && PyErr_Occurred()) {
         /* res was not within the range of a Py_hash_t, so we're free to
            use any sufficiently bit-mixing transformation;

@@ -30,6 +30,9 @@ class BaseUnsignedIntConverter(CConverter):
                              f'{self.converter}()')
 
     def parse_arg(self, argname: str, displayname: str, *, limited_capi: bool) -> str | None:
+        if self.object_in_value_unit:
+            return self.parse_value_arg(
+                f'PyValue_FromObjectBorrow({argname})', displayname)
         if self.bitwise:
             result = self.format_code("""
                 {{{{
@@ -169,6 +172,9 @@ class bool_converter(CConverter):
 
     def parse_arg(self, argname: str, displayname: str, *, limited_capi: bool) -> str | None:
         if self.format_unit == 'i':
+            if self.object_in_value_unit:
+                return self.parse_value_arg(
+                    f'PyValue_FromObjectBorrow({argname})', displayname)
             return self.format_code("""
                 {paramname} = PyLong_AsInt({argname});
                 if ({paramname} == -1 && PyErr_Occurred()) {{{{
@@ -463,6 +469,9 @@ class int_converter(CConverter):
 
     def parse_arg(self, argname: str, displayname: str, *, limited_capi: bool) -> str | None:
         if self.format_unit == 'i':
+            if self.object_in_value_unit:
+                return self.parse_value_arg(
+                    f'PyValue_FromObjectBorrow({argname})', displayname)
             return self.format_code("""
                 {paramname} = PyLong_AsInt({argname});
                 if ({paramname} == -1 && PyErr_Occurred()) {{{{
@@ -520,6 +529,9 @@ class long_converter(CConverter):
     c_ignored_default = "0"
 
     def parse_arg(self, argname: str, displayname: str, *, limited_capi: bool) -> str | None:
+        if self.object_in_value_unit:
+            return self.parse_value_arg(
+                f'PyValue_FromObjectBorrow({argname})', displayname)
         if self.format_unit == 'l':
             return self.format_code("""
                 {paramname} = PyLong_AsLong({argname});

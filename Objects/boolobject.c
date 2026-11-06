@@ -1,7 +1,6 @@
 /* Boolean type, a subtype of int */
 
 // bool's value slots call int's value functions, never an int thunk (D12).
-#define Py_VALUE_MARK_NUMBERS 1
 
 #include "Python.h"
 #include "pycore_long.h"          // FALSE_TAG TRUE_TAG

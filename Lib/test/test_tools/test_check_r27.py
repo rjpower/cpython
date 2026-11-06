@@ -863,6 +863,78 @@ class CompletenessTests(unittest.TestCase):
             out, _ = check_r27.static_violations(cdb, root, inventory)
             self.assertEqual(out, ["duplicate ownership entry: PyFoo"])
 
+    def test_no_caller_manual_aliases_require_exact_marks(self):
+        pairs = (
+            ("PyIter_NextItem", "_PyValue_IterNext", "item"),
+            ("PyMapping_GetOptionalItemString",
+             "_PyValue_MappingGetOptionalItemString", "item"),
+            ("_PyMapping_GetOptionalItem2", "_PyValue_GetOptionalItem", "item"),
+            ("_PyLong_GCD", "_PyLong_ValueGCD", "number"),
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            include = root / "Include"
+            include.mkdir()
+            header = include / "api.h"
+            declarations = {
+                "PyIter_NextItem": (
+                    "PyAPI_FUNC(int) PyIter_NextItem(PyObject *, PyObject **);"),
+                "PyMapping_GetOptionalItemString": (
+                    "PyAPI_FUNC(int) PyMapping_GetOptionalItemString("
+                    "PyObject *, const char *, PyObject **);"),
+                "_PyMapping_GetOptionalItem2": (
+                    "PyAPI_FUNC(PyObject*) _PyMapping_GetOptionalItem2("
+                    "PyObject *, PyObject *, int *);"),
+                "_PyLong_GCD": (
+                    "PyAPI_FUNC(PyObject *) _PyLong_GCD("
+                    "PyObject *, PyObject *);"),
+            }
+            providers = (
+                "PyAPI_FUNC(_PyStatusValue) _PyValue_IterNext(PyObject *);",
+                "PyAPI_FUNC(_PyStatusValue) "
+                "_PyValue_MappingGetOptionalItemString(PyValueBorrow, const char *);",
+                "PyAPI_FUNC(_PyStatusValue) _PyValue_GetOptionalItem("
+                "PyValueBorrow, PyValueBorrow);",
+                "PyAPI_FUNC(PyValue) _PyLong_ValueGCD("
+                "PyValueBorrow, PyValueBorrow);",
+            )
+
+            def write_header(missing_mark=None):
+                lines = []
+                for obj, value, _ in pairs:
+                    if obj != missing_mark:
+                        lines.append(f"Py_VALUE_COMPAT({value})")
+                    lines.append(declarations[obj])
+                lines.extend(providers)
+                header.write_text("\n".join(lines) + "\n")
+
+            write_header()
+            source_dir = root / "Modules"
+            source_dir.mkdir()
+            source = source_dir / "probe.c"
+            source.write_text("#define Py_VALUE_CORE\n")
+            inventory = root / "inventory.toml"
+            rows = ["r27_complete=true"]
+            for obj, value, family in pairs:
+                rows.extend(("[[manual]]", f'object="{obj}"',
+                             f'value="{value}"', f'family="{family}"'))
+            inventory.write_text("\n".join(rows) + "\n")
+            cdb = root / "cdb.json"
+            cdb.write_text(json.dumps([{
+                "directory": tmp, "file": str(source),
+                "arguments": ["cc", "-c", str(source)],
+            }]))
+
+            self.assertEqual(check_r27.static_violations(
+                cdb, root, inventory)[0], [])
+            for obj, value, _ in pairs:
+                with self.subTest(missing_mark=obj):
+                    write_header(missing_mark=obj)
+                    out, _ = check_r27.static_violations(cdb, root, inventory)
+                    self.assertEqual(len(out), 1, out)
+                    self.assertIn(f"{obj} lacks Py_VALUE_COMPAT({value})",
+                                  out[0])
+
     def test_static_inventory_and_deferral(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

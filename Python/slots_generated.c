@@ -173,4 +173,5 @@ const char *const _PySlot_internal_names[_Py_slot_INTERNAL_LIMIT] = {
     "_Py_value_sq_concat",
     "_Py_value_sq_inplace_concat",
     "_Py_value_new_",
+    "_Py_value_init_",
 };

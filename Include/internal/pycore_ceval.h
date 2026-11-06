@@ -434,6 +434,7 @@ _Py_BuildMap_ValueSteal(
 // Like PyMapping_GetOptionalItem, but returns the PyObject* instead of taking
 // it as an out parameter. This helps MSVC's escape analysis when used with
 // tail calling.
+Py_VALUE_COMPAT(_PyValue_GetOptionalItem)
 PyAPI_FUNC(PyObject*) _PyMapping_GetOptionalItem2(PyObject* obj, PyObject* key, int* err);
 
 #ifdef __cplusplus

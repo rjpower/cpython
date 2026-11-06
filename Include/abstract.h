@@ -420,6 +420,7 @@ PyAPI_FUNC(int) PyAIter_Check(PyObject *);
  * Return 0 and set 'item' to NULL when there are no remaining values.
  * Return -1, set 'item' to NULL and set an exception on error.
  */
+Py_VALUE_COMPAT(_PyValue_IterNext)
 PyAPI_FUNC(int) PyIter_NextItem(PyObject *iter, PyObject **item);
 #endif
 
@@ -926,6 +927,7 @@ PyAPI_FUNC(PyObject *) PyMapping_GetItemString(PyObject *o,
 */
 #if !defined(Py_LIMITED_API) || Py_LIMITED_API+0 >= 0x030d0000
 PyAPI_FUNC(int) PyMapping_GetOptionalItem(PyObject *, PyObject *, PyObject **);
+Py_VALUE_COMPAT(_PyValue_MappingGetOptionalItemString)
 PyAPI_FUNC(int) PyMapping_GetOptionalItemString(PyObject *, const char *, PyObject **);
 #endif
 

@@ -151,6 +151,10 @@ extern PyValue _Py_type_getattro_impl(PyTypeObject *type, PyObject *name,
 Py_VALUE_ENTRY extern PyObject* _Py_BaseObject_RichCompare(PyObject* self, PyObject* other, int op);
 
 // Export the pairs for '_testinternalcapi' shared extension
+int _Py_object_init(PyObject *, PyObject *, PyObject *);
+int _Py_object_init_value(PyValueBorrow, const PyValue *, Py_ssize_t, PyObject *);
+int _Py_slot_tp_init(PyObject *, PyObject *, PyObject *);
+int _Py_slot_tp_init_value(PyValueBorrow, const PyValue *, Py_ssize_t, PyObject *);
 PyObject *_Py_slot_tp_new(PyTypeObject *, PyObject *, PyObject *);
 PyValue _Py_slot_tp_new_value(PyTypeObject *, const PyValue *, Py_ssize_t, PyObject *);
 

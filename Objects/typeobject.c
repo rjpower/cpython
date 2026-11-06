@@ -4391,7 +4391,7 @@ typedef struct {
 
 static void object_dealloc(PyObject *);
 static PyObject *object_new(PyTypeObject *, PyObject *, PyObject *);
-static int object_init(PyObject *, PyObject *, PyObject *);
+int _Py_object_init(PyObject *, PyObject *, PyObject *);
 static int update_slot(PyTypeObject *, PyObject *, slot_update_t *update);
 static void fixup_slot_dispatchers(PyTypeObject *);
 static int type_ready(PyTypeObject *, int, int);
@@ -5712,6 +5712,74 @@ done:
 
 
 static PyValue
+type_call_value(PyThreadState *tstate, PyTypeObject *type, const PyValue *args,
+                Py_ssize_t nargs, PyObject *kwnames)
+{
+    PyObject *tuple = _PyTuple_FromValueArray(args, nargs);
+    if (tuple == NULL) {
+        return PyValue_NULL;
+    }
+    PyObject *kwds = NULL;
+    PyValue result = PyValue_NULL;
+    if (kwnames != NULL) {
+        kwds = _PyValue_StackAsDict(args + nargs, kwnames);
+        if (kwds == NULL) {
+            goto done;
+        }
+    }
+    if (type == &PyType_Type && nargs != 3) {
+        PyErr_SetString(PyExc_TypeError, "type() takes 1 or 3 arguments");
+        goto done;
+    }
+    newfunc object_new_fn = type->tp_new;
+    if (object_new_fn == NULL) {
+        _PyErr_Format(tstate, PyExc_TypeError, "cannot create '%s' instances",
+                      type->tp_name);
+        goto done;
+    }
+    _PyBorrowMark mark = _PyBorrowScope_Enter(tstate);
+    _Py_newvaluefunc value_new = _PyType_VALUE_SLOT(type, new_);
+    if (value_new != NULL) {
+        _PyType_CHECK_VALUE_ROW(type, _Py_VALUE_SLOT_INDEX_new_);
+        result = value_new(type, args, nargs, kwnames);
+        _PyValue_ASSERT_RESULT(tstate, result);
+    }
+    else {
+        PyObject *object_result = object_new_fn(type, tuple, kwds);
+        object_result = _Py_CheckFunctionResult(tstate, (PyObject *)type,
+                                                 object_result, NULL);
+        result = _PyValue_FromObjectResult(object_result);
+    }
+    if (!PyValue_IsNull(result)) {
+        PyTypeObject *result_type = PyValue_TYPE(result);
+        if (result_type == type || PyType_IsSubtype(result_type, type)) {
+            initproc init = result_type->tp_init;
+            if (init != NULL) {
+                _Py_initvaluefunc value_init = _PyType_VALUE_SLOT(result_type, init_);
+                int status;
+                if (value_init != NULL) {
+                    _PyType_CHECK_VALUE_ROW(result_type, _Py_VALUE_SLOT_INDEX_init_);
+                    status = value_init(PyValue_Borrow(result), args, nargs, kwnames);
+                }
+                else {
+                    assert(PyValue_IsObject(result));
+                    status = init(PyValue_AsKnownObjectBorrow(result), tuple, kwds);
+                }
+                if (status < 0) {
+                    PyValue_CLOSE(result);
+                    result = PyValue_NULL;
+                }
+            }
+        }
+    }
+    _PyBorrowScope_Exit(tstate, mark);
+done:
+    Py_XDECREF(kwds);
+    Py_DECREF(tuple);
+    return result;
+}
+
+static PyValue
 type_value_vectorcall(PyThreadState *tstate, PyObject *metatype,
                       const PyValue *args, size_t nargsf, PyObject *kwnames)
 {
@@ -5728,8 +5796,16 @@ type_value_vectorcall(PyThreadState *tstate, PyObject *metatype,
     if (_Py_EnterRecursiveCallTstate(tstate, " while calling a Python object")) {
         return PyValue_NULL;
     }
-    PyValue result = _PyValue_TpCallAdapter(tstate, metatype, args, nargsf,
-                                            kwnames);
+    ternaryfunc selected_call = Py_TYPE(metatype)->tp_call;
+    PyValue result;
+    if (selected_call == type_call) {
+        result = type_call_value(tstate, (PyTypeObject *)metatype, args,
+                                 nargs, kwnames);
+    }
+    else {
+        result = _PyValue_TpCallAdapter(tstate, metatype, args, nargsf,
+                                         kwnames);
+    }
     _Py_LeaveRecursiveCallTstate(tstate);
     return result;
 }
@@ -8014,12 +8090,12 @@ excess_args(PyObject *args, PyObject *kwds)
         (kwds && PyDict_Check(kwds) && PyDict_GET_SIZE(kwds));
 }
 
-static int
-object_init(PyObject *self, PyObject *args, PyObject *kwds)
+int
+_Py_object_init(PyObject *self, PyObject *args, PyObject *kwds)
 {
     PyTypeObject *type = Py_TYPE(self);
     if (excess_args(args, kwds)) {
-        if (type->tp_init != object_init) {
+        if (type->tp_init != _Py_object_init) {
             PyErr_SetString(PyExc_TypeError,
                             "object.__init__() takes exactly one argument (the instance to initialize)");
             return -1;
@@ -8028,6 +8104,27 @@ object_init(PyObject *self, PyObject *args, PyObject *kwds)
             PyErr_Format(PyExc_TypeError,
                          "%.200s.__init__() takes exactly one argument (the instance to initialize)",
                          type->tp_name);
+            return -1;
+        }
+    }
+    return 0;
+}
+
+int
+_Py_object_init_value(PyValueBorrow self, const PyValue *args,
+                       Py_ssize_t nargs, PyObject *kwnames)
+{
+    PyTypeObject *type = PyValue_TYPE(self);
+    if (nargs || (kwnames != NULL && PyTuple_GET_SIZE(kwnames))) {
+        if (type->tp_init != _Py_object_init) {
+            PyErr_SetString(PyExc_TypeError,
+                "object.__init__() takes exactly one argument (the instance to initialize)");
+            return -1;
+        }
+        if (type->tp_new == object_new) {
+            PyErr_Format(PyExc_TypeError,
+                "%.200s.__init__() takes exactly one argument (the instance to initialize)",
+                type->tp_name);
             return -1;
         }
     }
@@ -8043,7 +8140,7 @@ object_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
                             "object.__new__() takes exactly one argument (the type to instantiate)");
             return NULL;
         }
-        if (type->tp_init == object_init) {
+        if (type->tp_init == _Py_object_init) {
             PyErr_Format(PyExc_TypeError, "%.200s() takes no arguments",
                          type->tp_name);
             return NULL;
@@ -9381,11 +9478,12 @@ PyTypeObject PyBaseObject_Type = {
     0,                                          /* tp_descr_get */
     0,                                          /* tp_descr_set */
     0,                                          /* tp_dictoffset */
-    object_init,                                /* tp_init */
+    _Py_object_init,                                /* tp_init */
     PyType_GenericAlloc,                        /* tp_alloc */
     object_new,                                 /* tp_new */
     PyObject_Free,                              /* tp_free */
     .tp_value = {
+        .init_ = _Py_VALUE_SLOT_INIT(init_, _Py_object_init_value),
         .richcompare = _Py_VALUE_SLOT_INIT(richcompare,
                                            _PyObject_ValueRichCompare),
         .str = _Py_VALUE_SLOT_INIT(str, _PyObject_ValueStr),
@@ -13362,21 +13460,66 @@ slot_tp_descr_set_value(PyObject *self, PyValueBorrow target,
     return 0;
 }
 
-static int
-slot_tp_init(PyObject *self, PyObject *args, PyObject *kwds)
+int
+_Py_slot_tp_init_value(PyValueBorrow self, const PyValue *args,
+                        Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *res = call_method(self, &_Py_ID(__init__), args, kwds);
-    if (res == NULL)
-        return -1;
-    if (res != Py_None) {
-        PyErr_Format(PyExc_TypeError,
-                     "__init__() should return None, not '%.200s'",
-                     Py_TYPE(res)->tp_name);
-        Py_DECREF(res);
+    assert(PyValue_IsObject(self));
+    PyObject *self_owner = Py_NewRef(PyValue_AsKnownObjectBorrow(self));
+    PyValue receiver = PyValue_DUP(self);
+    PyValue meth = PyValue_NULL;
+    PyValue result = PyValue_NULL;
+    int found = _PyObject_LookupSpecialMethod(&_Py_ID(__init__), &meth, &receiver);
+    if (found <= 0) {
+        if (found == 0) {
+            PyErr_SetObject(PyExc_AttributeError, &_Py_ID(__init__));
+        }
+        goto done;
+    }
+    PyThreadState *tstate = _PyThreadState_GET();
+    if (!PyValue_IsNull(receiver)) {
+        result = _PyValue_VectorcallPrepend(tstate, meth, receiver,
+                                             args, nargs, kwnames);
+    }
+    else {
+        result = _PyValue_VectorcallTstate(tstate, meth, args, nargs, kwnames);
+    }
+done:
+    PyValue_XCLOSE(meth);
+    PyValue_XCLOSE(receiver);
+    Py_DECREF(self_owner);
+    if (PyValue_IsNull(result)) {
         return -1;
     }
-    Py_DECREF(res);
+    if (!PyValue_IsNone(result)) {
+        PyErr_Format(PyExc_TypeError, "__init__() should return None, not '%.200s'",
+                     PyValue_TYPE(result)->tp_name);
+        PyValue_CLOSE(result);
+        return -1;
+    }
+    PyValue_CLOSE(result);
     return 0;
+}
+
+Py_VALUE_ENTRY int
+_Py_slot_tp_init(PyObject *self, PyObject *args, PyObject *kwds)
+{
+    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
+    if (kwds == NULL || PyDict_GET_SIZE(kwds) == 0) {
+        return _Py_slot_tp_init_value(PyValue_FromObjectBorrow(self),
+                                      _PyTuple_ITEMS(args), nargs, NULL);
+    }
+    PyThreadState *tstate = _PyThreadState_GET();
+    PyObject *kwnames;
+    PyValue *window = _PyValue_StackUnpackDict(tstate, _PyTuple_ITEMS(args),
+                                                nargs, kwds, &kwnames);
+    if (window == NULL) {
+        return -1;
+    }
+    int result = _Py_slot_tp_init_value(PyValue_FromObjectBorrow(self),
+                                         window, nargs, kwnames);
+    _PyValue_StackUnpackDict_Free(window, nargs, kwnames);
+    return result;
 }
 
 PyValue
@@ -13842,7 +13985,7 @@ static pytype_slotdef slotdefs[] = {
     TPSLOT(__delete__, tp_descr_set, slot_tp_descr_set,
            wrap_descr_delete,
            "__delete__($self, instance, /)\n--\n\nDelete an attribute of instance."),
-    FLSLOT(__init__, tp_init, slot_tp_init,
+    FLSLOT(__init__, tp_init, _Py_slot_tp_init,
            _Py_FUNC_CAST(wrapperfunc, wrap_init),
            "__init__($self, /, *args, **kwargs)\n--\n\n"
            "Initialize self.  See help(type(self)) for accurate signature.",
@@ -14143,6 +14286,7 @@ slotdef_value_function(const pytype_slotdef *p)
     if (p->function == (void *)FUNC) { \
         return _Py_VALUE_SLOT_INIT(FIELD, FUNC##_value); \
     }
+    SLOT_VALUE_PAIR(init_, _Py_slot_tp_init)
     SLOT_VALUE_PAIR(new_, _Py_slot_tp_new)
     SLOT_VALUE_PAIR(nb_add, slot_nb_add)
     SLOT_VALUE_PAIR(nb_subtract, slot_nb_subtract)

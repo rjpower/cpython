@@ -1101,10 +1101,28 @@ family = "item"
 reason = "PyObject ** output and int status become _PyStatusValue; preserve missing KeyError clearing"
 
 [[manual]]
+object = "PyMapping_GetOptionalItemString"
+value = "_PyValue_MappingGetOptionalItemString"
+family = "item"
+reason = "No production caller remains; retain the C-string key and adapt owned _PyStatusValue result to the public 1/0/-1 plus PyObject ** contract"
+
+[[manual]]
+object = "_PyMapping_GetOptionalItem2"
+value = "_PyValue_GetOptionalItem"
+family = "item"
+reason = "No production caller remains; unpack the owned status value into the historical PyObject * return and int *err output"
+
+[[manual]]
 object = "PyIter_Next"
 value = "_PyValue_IterNext"
 family = "item"
 reason = "owned PyObject * or NULL becomes _PyStatusValue with NEXT/RETURN/ERROR; preserve exception clearing"
+
+[[manual]]
+object = "PyIter_NextItem"
+value = "_PyValue_IterNext"
+family = "item"
+reason = "No production caller remains; preserve the explicit iterator check and adapt owned NEXT/RETURN/ERROR to 1/0/-1 plus PyObject ** output at the object boundary"
 
 [[manual]]
 object = "PyIter_Send"
@@ -1135,3 +1153,9 @@ object = "PyObject_CallNoArgs"
 value = "_PyValue_CallNoArgs"
 family = "call"
 reason = "value twin adds PyThreadState * first parameter and returns owned PyValue"
+
+[[manual]]
+object = "_PyLong_GCD"
+value = "_PyLong_ValueGCD"
+family = "number"
+reason = "No production caller remains; adapt the owned PyValue result to the historical new-reference PyObject * return"

@@ -86,4 +86,5 @@ PyAPI_FUNC(int) _PyLong_AsByteArray(PyLongObject* v,
     int little_endian, int is_signed, int with_exceptions);
 
 /* For use by the gcd function in mathmodule.c */
+Py_VALUE_COMPAT(_PyLong_ValueGCD)
 PyAPI_FUNC(PyObject *) _PyLong_GCD(PyObject *, PyObject *);

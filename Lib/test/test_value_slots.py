@@ -94,8 +94,8 @@ def vint_slots(t):
 class ValueSlotTableTests(unittest.TestCase):
     def test_names(self):
         names = value_slot_names()
-        self.assertEqual(len(names), 54)
-        self.assertEqual(len(set(names)), 54)
+        self.assertEqual(len(names), 55)
+        self.assertEqual(len(set(names)), 55)
         self.assertEqual(names[:16], (
             'nb_add', 'nb_subtract', 'nb_multiply', 'nb_true_divide',
             'nb_floor_divide', 'nb_remainder', 'richcompare', 'hash',
@@ -117,6 +117,49 @@ class ValueSlotTableTests(unittest.TestCase):
         self.assertNotEqual(value_slot(Overridden, 'new_'), 0)
         self.assertNotEqual(value_slot(Overridden, 'new_'), value_slot(int, 'new_'))
         self.assertEqual(Overridden(17), 17)
+
+    def test_constructor_pairs_follow_runtime_mutation(self):
+        class C:
+            pass
+
+        original_new = (object_slot(C, 'new_'), value_slot(C, 'new_'))
+        original_init = (object_slot(C, 'init_'), value_slot(C, 'init_'))
+        C.__new__ = lambda cls, *args: object.__new__(cls)
+        C.__init__ = lambda self, value: setattr(self, 'value', value)
+        self.assertNotEqual(object_slot(C, 'new_'), original_new[0])
+        self.assertNotEqual(value_slot(C, 'new_'), 0)
+        self.assertNotEqual(object_slot(C, 'init_'), original_init[0])
+        self.assertNotEqual(value_slot(C, 'init_'), 0)
+        self.assertEqual(C(17).value, 17)
+        del C.__init__
+        del C.__new__
+        # Removing the attributes can leave the generic Python slot in place;
+        # it must retain a value partner and construct normally.
+        for name, original in (('new_', original_new), ('init_', original_init)):
+            pair = (object_slot(C, name), value_slot(C, name))
+            if pair[0] == original[0]:
+                self.assertEqual(pair[1], original[1])
+            else:
+                self.assertNotEqual(pair[1], 0)
+        self.assertIs(type(C()), C)
+
+    def test_inline_noncallable_initializer(self):
+        for value in (17, 1.5):
+            class C:
+                __init__ = value
+            with self.subTest(value=value):
+                with self.assertRaisesRegex(TypeError, "object is not callable"):
+                    C()
+
+        class Descriptor:
+            def __get__(self, obj, typ):
+                return 17
+
+        class C:
+            __init__ = Descriptor()
+
+        with self.assertRaisesRegex(TypeError, "object is not callable"):
+            C()
 
     def test_unknown_name(self):
         with self.assertRaises(ValueError):
@@ -1175,14 +1218,14 @@ class IntValueRowsTests(unittest.TestCase):
     def test_int_rows(self):
         # str is object's, inherited.
         self.assertEqual(len(INT_ROWS), 24)
-        self.assertEqual(set_rows(int), set(INT_ROWS) | {'str', 'new_'} | {'getattro', 'setattro'})
+        self.assertEqual(set_rows(int), set(INT_ROWS) | {'str', 'new_', 'init_'} | {'getattro', 'setattro'})
         for name in INT_ROWS:
             with self.subTest(row=name):
                 self.assertNotEqual(object_slot(int, name), 0)
 
     def test_float_rows(self):
         self.assertEqual(len(FLOAT_ROWS), 17)
-        self.assertEqual(set_rows(float), set(FLOAT_ROWS) | {'str', 'new_'} | {'getattro', 'setattro'})
+        self.assertEqual(set_rows(float), set(FLOAT_ROWS) | {'str', 'new_', 'init_'} | {'getattro', 'setattro'})
         for name in FLOAT_ROWS:
             with self.subTest(row=name):
                 self.assertNotEqual(object_slot(float, name), 0)
@@ -1190,7 +1233,7 @@ class IntValueRowsTests(unittest.TestCase):
     def test_bool_rows(self):
         # bool has its own four rows and inherits int's others, but not
         # repr: bool_repr has no value side. str is object's.
-        self.assertEqual(set_rows(bool), set(INT_ROWS) - {'repr'} | {'str'} | {'getattro', 'setattro'})
+        self.assertEqual(set_rows(bool), set(INT_ROWS) - {'repr'} | {'str', 'init_'} | {'getattro', 'setattro'})
         self.assertEqual(value_slot(bool, 'repr'), 0)
         for name in INT_ROWS:
             if name == 'repr':
@@ -1205,7 +1248,7 @@ class IntValueRowsTests(unittest.TestCase):
 
     def test_object_rows(self):
         # hash predates V2a-1a; richcompare and str are its.
-        self.assertEqual(set_rows(object), {'hash', 'richcompare', 'str', 'getattro', 'setattro'})
+        self.assertEqual(set_rows(object), {'hash', 'richcompare', 'str', 'getattro', 'setattro', 'init_'})
 
     def test_none_and_sentinel_inherit_richcompare(self):
         types = [type(None)]
@@ -1222,10 +1265,10 @@ class IntValueRowsTests(unittest.TestCase):
     def test_str_rows(self):
         self.assertEqual(set_rows(str), {
             'richcompare', 'getattro', 'setattro', 'nb_remainder',
-            'subscript', 'contains', 'sq_concat'})
+            'subscript', 'contains', 'sq_concat', 'init_'})
 
     def test_container_rows(self):
-        base = {'getattro', 'setattro', 'hash', 'str', 'richcompare'}
+        base = {'getattro', 'setattro', 'hash', 'str', 'richcompare', 'init_'}
         self.assertEqual(set_rows(list) - base, {
             'subscript', 'ass_subscript', 'contains', 'item', 'ass_item',
             'sq_concat', 'sq_inplace_concat'})
@@ -1246,7 +1289,7 @@ class IntValueRowsTests(unittest.TestCase):
                 self.assertEqual(set_rows(view) - base, {'contains'})
 
     def test_bytes_rows(self):
-        base = {'getattro', 'setattro', 'hash', 'str', 'richcompare'}
+        base = {'getattro', 'setattro', 'hash', 'str', 'richcompare', 'init_'}
         read = {'item', 'subscript', 'contains', 'nb_remainder', 'sq_concat'}
         self.assertEqual(set_rows(bytes) - base, read)
         self.assertEqual(set_rows(bytearray) - base, read | {
@@ -1276,7 +1319,7 @@ class IntValueRowsTests(unittest.TestCase):
                 self.assertTrue(value_slot(t, 'nb_or'))
 
     def test_complex_rows(self):
-        self.assertEqual(set_rows(complex) - {'getattro', 'setattro', 'str'}, {
+        self.assertEqual(set_rows(complex) - {'getattro', 'setattro', 'str', 'init_'}, {
             'richcompare', 'nb_add', 'nb_subtract', 'nb_multiply',
             'nb_true_divide', 'nb_power', 'nb_negative', 'nb_positive',
             'nb_absolute', 'nb_bool'})

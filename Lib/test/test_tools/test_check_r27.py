@@ -225,7 +225,7 @@ class FoldTests(unittest.TestCase):
     def test_markers(self):
         with tempfile.TemporaryDirectory() as tmp:
             d = Path(tmp)
-            (d / "x.run").write_text("pid: 4\nppid: 1\ntag: test_foo\nargv: python -c x\n")
+            (d / "x.run").write_text('pid: 4\nppid: 1\ntag: test_foo\nargv: ["python","-c","x"]\n')
             (d / "y.run").write_text("pid: 5\ntag: done\n")
             (d / "y.txt").write_text("")
             (d / "z.spawn").write_text("test_bar\tpython -m x\n")
@@ -235,6 +235,42 @@ class FoldTests(unittest.TestCase):
                              [("x", "test_foo")])
             self.assertEqual(folded.spawn,
                              [{"tag": "test_bar", "argv": "python -m x"}])
+
+    def test_marker_argument_boundaries_and_malformed_record(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            d = Path(tmp)
+            (d / "ok.run").write_text(
+                'pid: 4\nppid: 1\ntag: test_foo\n'
+                'argv: ["python","-c","a\\u000ab","a b"]\n')
+            (d / "bad.run").write_text(
+                'pid: 5\nppid: 1\ntag: test_foo\nargv: ["python","-c"\n')
+            (d / "utf.run").write_text(
+                'pid: 6\nppid: 1\ntag: test_foo\n'
+                'argv: ["\\u00c3\\u00a9","\\u00ff"]\n')
+            (d / "notbytes.run").write_text(
+                'pid: 7\nppid: 1\ntag: test_foo\nargv: ["\\u20ac"]\n')
+            (d / "new.spawn").write_text(json.dumps({
+                "tag": "test_foo", "pid": 4, "event": "subprocess.Popen",
+                "reason": "-E", "argv": ["python", "-E"],
+                "counts": False}) + "\n")
+            (d / "bad.spawn").write_text(json.dumps({
+                "tag": "test_foo", "pid": 4, "event": "subprocess.Popen",
+                "reason": "-E", "argv": ["python", "-E"],
+                "counts": "true"}) + "\n")
+            folded = check_r27.Folded()
+            folded.read_markers(d)
+            by_id = {run["id"]: run for run in folded.leftover_run}
+            self.assertEqual(by_id["ok"]["argv"],
+                             ["python", "-c", "a\nb", "a b"])
+            self.assertEqual(by_id["utf"]["argv"],
+                             ["é", os.fsdecode(b"\xff")])
+            self.assertIn("malformed run argv in bad.run",
+                          folded.accounting_errors)
+            self.assertIn("malformed run argv in notbytes.run",
+                          folded.accounting_errors)
+            self.assertIn("incomplete spawn record in bad.spawn",
+                          folded.accounting_errors)
+            self.assertEqual(folded.spawn[0]["argv"], ["python", "-E"])
 
 
 def clean_summary(**changes):
@@ -266,16 +302,78 @@ class GateTests(unittest.TestCase):
         self.assertIn("drops (thunk)", out[0])
 
     def test_leftover_run(self):
-        run = {"id": "r", "tag": "test_crash", "pid": "3"}
-        self.assertEqual(len(self.violations(clean_summary(leftover_run=[run]))), 1)
-        self.assertEqual(self.violations(clean_summary(leftover_run=[run]),
-                                         crashes={"test_crash"}), [])
+        run = {"id": "r", "tag": "test_crash", "pid": "3", "ppid": "1",
+               "argv": ["/build/python", "-c", "x"]}
+        summary = clean_summary(leftover_run=[run], build="/build")
+        self.assertTrue(self.violations(summary, crashes={"test_crash"}))
+        rules = {"runs": {("test_crash", ("{BUILD}/python", "-c", "x")): 1},
+                 "spawns": {}}
+        self.assertEqual(check_r27.suite_violations(
+            summary, {"test_crash"}, (), rules), [])
+        run["argv"][-1] = "y"
+        self.assertTrue(check_r27.suite_violations(
+            summary, {"test_crash"}, (), rules))
 
     def test_uncounted_launch(self):
-        spawn = [{"tag": "test_sub", "argv": "x"}]
-        self.assertEqual(len(self.violations(clean_summary(spawn=spawn))), 1)
-        self.assertEqual(self.violations(clean_summary(spawn=spawn),
-                                         uncounted={"test_sub"}), [])
+        spawn = [{"tag": "test_sub", "argv": ["/build/python", "-E"],
+                  "reason": "isolated", "event": "subprocess.Popen", "pid": 4}]
+        summary = clean_summary(spawn=spawn, build="/build")
+        self.assertTrue(self.violations(summary, uncounted={"test_sub"}))
+        rules = {"runs": {}, "spawns": {
+            ("test_sub", "isolated", "subprocess.Popen",
+             ("{BUILD}/python", "-E")): 1}}
+        self.assertEqual(check_r27.suite_violations(
+            summary, (), {"test_sub"}, rules), [])
+        spawn[0]["argv"].append("-I")
+        self.assertTrue(check_r27.suite_violations(
+            summary, (), {"test_sub"}, rules))
+
+    def test_accounting_rule_bounds_and_schema(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp, "rules.json")
+            path.write_text('{"runs":[],"spawns":[{"tag":"t",'
+                            '"reason":"-E","event":"subprocess.Popen",'
+                            '"argv":["{BUILD}/python","-E"],"max":1,'
+                            '"why":"isolated child"}]}')
+            rules = check_r27.read_accounting_rules(path)
+            launch = {"tag": "t", "reason": "-E", "event": "subprocess.Popen",
+                      "argv": ["/build/python", "-E"], "pid": 5}
+            summary = clean_summary(spawn=[launch], build="/build")
+            self.assertEqual(check_r27.suite_violations(
+                summary, (), {"t"}, rules), [])
+            summary["spawn"].append(dict(launch, pid=6))
+            self.assertTrue(check_r27.suite_violations(
+                summary, (), {"t"}, rules))
+            path.write_text('{"runs":[],"spawns":[{"tag":"t",'
+                            '"reason":"-E","event":"subprocess.Popen",'
+                            '"argv":"ambiguous", "max":1,"why":"bad"}]}')
+            with self.assertRaises(ValueError):
+                check_r27.read_accounting_rules(path)
+
+    def test_accounting_normalization_does_not_rewrite_code_payload(self):
+        summary = {"build": "/build", "src": "/source",
+                   "dump_dir": "/attempt"}
+        normalize = check_r27.normalize_accounting_argv
+        self.assertEqual(normalize(
+            ["/build/python", "-X", "pystats_dir=/attempt", "-c",
+             "/build/python"], summary),
+            ("{BUILD}/python", "-X", "pystats_dir={DUMPS}", "-c",
+             "/build/python"))
+        self.assertEqual(normalize(
+            ["env", "-i", "/build/python", "-c", "/source/Lib/test"],
+            summary),
+            ("env", "-i", "/build/python", "-c", "/source/Lib/test"))
+        self.assertEqual(normalize(
+            ["/build/python", "-c", "pystats_dir=/attempt"], summary),
+            ("{BUILD}/python", "-c", "pystats_dir=/attempt"))
+        self.assertEqual(normalize(
+            ["/bin/sh", "-c", "/build/python"], summary),
+            ("/bin/sh", "-c", "/build/python"))
+        self.assertEqual(normalize(
+            ["/build/python", "-X", "dev", "-X",
+             "pystats_dir=/attempt", "-c", "/build/python"], summary),
+            ("{BUILD}/python", "-X", "dev", "-X",
+             "pystats_dir={DUMPS}", "-c", "/build/python"))
 
     def test_resets(self):
         ok = clean_summary(resets_by_tag={"test_pystats": 4})

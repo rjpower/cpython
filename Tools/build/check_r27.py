@@ -14,9 +14,9 @@ fallback for objects without .debug_aranges).
 
 Dump directory layout (written by Python/pystats.c): <rand>.txt (a finished
 process), <rand>.run (a process that started and has not finished), <rand>.spawn
-(one "<tag>TAB<argv>" line per uncounted launch), objects/<build-id> (copies of
-objects that no build product explains). Anything else, including .tmp, is
-ignored.
+(one structured JSON line per uncounted launch), objects/<build-id> (copies
+of objects that no build product explains). The run marker stores an escaped
+JSON argv array. Anything else, including .tmp, is ignored.
 
 Classification. A CORE box (owner "-") is classed by the box primitive's call
 site (the "at" address); every other box by its owner. An address is
@@ -36,6 +36,7 @@ unresolved (a build product without DWARF cannot be shown to be core).
 
 import argparse
 import bisect
+from collections import Counter
 import json
 import os
 import re
@@ -216,6 +217,19 @@ class Folded:
                 key, sep, value = line.partition(": ")
                 if sep:
                     info[key] = value
+            try:
+                raw_argv = json.loads(info["argv"])
+                if (not isinstance(raw_argv, list) or not raw_argv or
+                    any(not isinstance(arg, str) for arg in raw_argv)):
+                    raise ValueError("run argv is not a string list")
+                # The C marker escapes each raw byte as a JSON code point.
+                # Reconstruct Python's filesystem strings, including
+                # surrogateescape for invalid UTF-8 bytes.
+                info["argv"] = [os.fsdecode(arg.encode("latin-1"))
+                                for arg in raw_argv]
+            except (KeyError, ValueError, UnicodeEncodeError):
+                self.accounting_errors.append(
+                    f"malformed run argv in {path.name}")
             self.leftover_run.append(info)
         self.spawn = []
         for path in sorted(directory.glob("*.spawn")):
@@ -230,15 +244,36 @@ class Folded:
                     try:
                         launch = json.loads(line)
                     except ValueError:
+                        self.accounting_errors.append(
+                            f"malformed spawn record in {path.name}")
+                        continue
+                    if not isinstance(launch, dict):
+                        self.accounting_errors.append(
+                            f"malformed spawn record in {path.name}")
+                        continue
+                    if (type(launch.get("counts")) is not bool or
+                        not isinstance(launch.get("tag"), str) or
+                        type(launch.get("pid")) is not int or
+                        not isinstance(launch.get("event"), str) or
+                        not isinstance(launch.get("reason"), str) or
+                        not isinstance(launch.get("argv"), list) or
+                        any(not isinstance(arg, str)
+                            for arg in launch["argv"])):
+                        self.accounting_errors.append(
+                            f"incomplete spawn record in {path.name}")
                         continue
                     if launch.get("counts"):
                         continue
                     self.spawn.append({
                         "tag": launch.get("tag", ""),
-                        "argv": " ".join(launch.get("argv", [])),
-                        "reason": launch.get("reason", "")})
+                        "argv": launch.get("argv"),
+                        "reason": launch.get("reason"),
+                        "event": launch.get("event"),
+                        "pid": launch.get("pid")})
                     continue
                 tag, _, argv = line.partition("\t")
+                # Historical TSV records have no reason or argument boundaries.
+                # Retain them for diagnosis; the admission gate rejects them.
                 self.spawn.append({"tag": tag, "argv": argv})
 
 
@@ -573,7 +608,72 @@ def read_list(path):
     return {line for line in lines if line}
 
 
-def suite_violations(summary, crashes=(), uncounted=()):
+def read_accounting_rules(path):
+    """Read exact, bounded process admissions. Missing file admits nothing."""
+    path = Path(path)
+    if not path.is_file():
+        return {"runs": {}, "spawns": {}}
+    data = json.loads(path.read_text())
+    if not isinstance(data, dict) or set(data) != {"runs", "spawns"}:
+        raise ValueError("accounting rules need runs and spawns lists")
+    rules = {"runs": {}, "spawns": {}}
+    for kind, fields in (("runs", ("tag", "argv")),
+                         ("spawns", ("tag", "reason", "event", "argv"))):
+        if not isinstance(data[kind], list):
+            raise ValueError(f"accounting {kind} must be a list")
+        for row in data[kind]:
+            if not isinstance(row, dict) or set(row) != set(fields) | {"max", "why"}:
+                raise ValueError(f"invalid accounting {kind} rule")
+            if (type(row["max"]) is not int or row["max"] < 1 or
+                not isinstance(row["why"], str) or not row["why"].strip()):
+                raise ValueError(f"invalid accounting {kind} bound or reason")
+            if any(not isinstance(row[field], str) or not row[field]
+                   for field in fields if field != "argv"):
+                raise ValueError(f"invalid accounting {kind} identity")
+            argv = row["argv"]
+            if (not isinstance(argv, list) or not argv or
+                any(not isinstance(arg, str) for arg in argv)):
+                raise ValueError(f"accounting {kind} argv must be a list")
+            key = (*(row[field] for field in fields[:-1]), tuple(argv))
+            if key in rules[kind]:
+                raise ValueError(f"duplicate accounting {kind} rule")
+            rules[kind][key] = row["max"]
+    return rules
+
+
+def normalize_accounting_argv(argv, summary):
+    """Normalize an exact executable and its explicit stats-dir option."""
+    words = list(argv)
+    build = summary.get("build")
+    products = ({f"{build}/{name}": f"{{BUILD}}/{name}"
+                for name in ("python", "Programs/_testembed")}
+                if build else {})
+    if not words or words[0] not in products:
+        return tuple(words)
+    words[0] = products[words[0]]
+    dumps = summary.get("dump_dir")
+    if dumps:
+        i = 1
+        while i < len(argv):
+            arg = argv[i]
+            if arg in ("-c", "-m", "--") or not arg.startswith("-"):
+                break
+            if arg == "-X" and i + 1 < len(argv):
+                if argv[i + 1] == f"pystats_dir={dumps}":
+                    words[i + 1] = "pystats_dir={DUMPS}"
+                i += 2
+                continue
+            if arg == "-W" and i + 1 < len(argv):
+                i += 2
+                continue
+            if arg == f"-Xpystats_dir={dumps}":
+                words[i] = "-Xpystats_dir={DUMPS}"
+            i += 1
+    return tuple(words)
+
+
+def suite_violations(summary, crashes=(), uncounted=(), accounting=None):
+    accounting = accounting or {"runs": {}, "spawns": {}}
     out = []
     if not summary.get("dumps"):
         out.append("no stats dumps")
@@ -585,15 +685,48 @@ def suite_violations(summary, crashes=(), uncounted=()):
     for kind, n in sorted(summary["drops"].items()):
         if n:
             out.append(f"{n} owner-table drops ({kind})")
+    run_counts = Counter()
     for run in summary["leftover_run"]:
         tag = run.get("tag", "")
         if tag not in crashes:
             out.append(f"leftover .run {run['id']} (tag {tag!r}, "
                        f"pid {run.get('pid', '?')}) not in the crash list")
+        if (set(run) != {"id", "pid", "ppid", "tag", "argv"} or
+            not str(run.get("pid", "")).isdigit() or
+            not str(run.get("ppid", "")).isdigit() or
+            not isinstance(run.get("argv"), list) or not run["argv"] or
+            any(not isinstance(arg, str) for arg in run["argv"])):
+            out.append(f"leftover .run {run['id']} has incomplete metadata")
+            continue
+        run_counts[(tag, normalize_accounting_argv(run["argv"], summary))] += 1
+    for key, count in sorted(run_counts.items()):
+        cap = accounting["runs"].get(key)
+        if cap is None or count > cap:
+            out.append(f"leftover .run shape {key!r}: {count} observed, "
+                       f"approved max {cap!r}")
     # A launch without a tag (the pty REPL tests) is listed as <untagged>.
     launched = {s["tag"] or "<untagged>" for s in summary["spawn"]}
     for tag in sorted(launched - set(uncounted)):
         out.append(f"uncounted launch by tag {tag!r} not in the uncounted list")
+    spawn_counts = Counter()
+    for launch in summary["spawn"]:
+        argv = launch.get("argv")
+        if (not isinstance(argv, list) or not argv or
+            any(not isinstance(arg, str) for arg in argv) or
+            not isinstance(launch.get("reason"), str) or
+            not launch["reason"] or not isinstance(launch.get("event"), str) or
+            not launch["event"] or type(launch.get("pid")) is not int):
+            out.append(f"uncounted launch in tag {launch.get('tag', '')!r} "
+                       "has incomplete metadata")
+            continue
+        key = (launch["tag"], launch["reason"], launch["event"],
+               normalize_accounting_argv(argv, summary))
+        spawn_counts[key] += 1
+    for key, count in sorted(spawn_counts.items()):
+        cap = accounting["spawns"].get(key)
+        if cap is None or count > cap:
+            out.append(f"uncounted launch shape {key!r}: {count} observed, "
+                       f"approved max {cap!r}")
     for tag, n in sorted(summary["resets_by_tag"].items()):
         # test_sys clears the stats on purpose (sys._stats_clear()).
         if tag not in ("test_pystats", "test_sys"):
@@ -900,7 +1033,11 @@ def collect(directory, src, cdb=None, folded=None, delete=False, cache_dir=None,
     folded.read_markers(directory)
     resolver = ElfResolver(src, build=build, dump_dir=directory,
                            paths=folded.paths, cache_dir=cache_dir)
-    return resolve(folded, resolver, src, cdb)
+    summary = resolve(folded, resolver, src, cdb)
+    summary["dump_dir"] = str(Path(directory).resolve())
+    if build is not None:
+        summary["build"] = str(Path(build).resolve())
+    return summary
 
 
 def run_suite(build, jobs, directory, regrtest_args):
@@ -938,12 +1075,15 @@ def finish(violations, gate, what):
 
 def suite_gate(summary, args):
     return finish(suite_violations(summary, read_list(args.crashes),
-                                   read_list(args.uncounted)), args.gate, "suite")
+                                   read_list(args.uncounted),
+                                   read_accounting_rules(args.accounting)),
+                  args.gate, "suite")
 
 
 def cmd_collect(args):
     cdb = load_cdb(args.cdb) if args.cdb else None
-    summary = collect(Path(args.dir), args.src, cdb, cache_dir=args.cache)
+    summary = collect(Path(args.dir), args.src, cdb, cache_dir=args.cache,
+                      build=args.build)
     Path(args.output).write_text(json.dumps(summary, indent=1))
     return suite_gate(summary, args)
 
@@ -1090,10 +1230,13 @@ def build_parser():
                         help="directory of per-build-id CU tables")
         sp.add_argument("--crashes", default=HERE / "r27_crashes.txt")
         sp.add_argument("--uncounted", default=HERE / "r27_uncounted.txt")
+        sp.add_argument("--accounting", default=HERE / "r27_accounting.json",
+                        help="exact bounded process-accounting admissions")
         sp.add_argument("-o", "--output", required=True)
 
     sp = common(sub.add_parser("collect", help="fold and resolve a dump dir"))
     sp.add_argument("dir")
+    sp.add_argument("--build", help="stats build for marker path normalization")
     suite_options(sp)
     sp.set_defaults(func=cmd_collect)
 

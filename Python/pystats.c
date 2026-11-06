@@ -850,6 +850,44 @@ stats_random_stem(char *hex_name)
 static char run_stem[41];
 static pid_t run_pid;
 
+/* Keep argv boundaries and control bytes on one marker line. */
+static void
+run_marker_argv(FILE *out, FILE *cmd)
+{
+    fputc('[', out);
+    int c;
+    int open = 0;
+    int first = 1;
+    while ((c = fgetc(cmd)) != EOF) {
+        if (!open) {
+            if (!first) {
+                fputc(',', out);
+            }
+            fputc('"', out);
+            open = 1;
+            first = 0;
+        }
+        if (c == '\0') {
+            fputc('"', out);
+            open = 0;
+        }
+        else if (c == '"' || c == '\\') {
+            fputc('\\', out);
+            fputc(c, out);
+        }
+        else if (c < 0x20 || c >= 0x7f) {
+            fprintf(out, "\\u%04x", c);
+        }
+        else {
+            fputc(c, out);
+        }
+    }
+    if (open) {
+        fputc('"', out);
+    }
+    fputc(']', out);
+}
+
 static void
 run_marker_create(PyInterpreterState *interp)
 {
@@ -873,10 +911,7 @@ run_marker_create(PyInterpreterState *interp)
             (int)getppid(), tag != NULL ? tag : "");
     FILE *cmd = fopen("/proc/self/cmdline", "r");
     if (cmd != NULL) {
-        int c;
-        while ((c = fgetc(cmd)) != EOF) {
-            fputc(c == '\0' ? ' ' : c, f);
-        }
+        run_marker_argv(f, cmd);
         fclose(cmd);
     }
     fputc('\n', f);

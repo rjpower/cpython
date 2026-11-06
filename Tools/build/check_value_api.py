@@ -1106,6 +1106,8 @@ THUNK_FILES = (
     # functools.partial is a value-vectorcall type: its instances store the
     # value call beside the object thunk.
     "Modules/_functoolsmodule.c",
+    # Operator getter/caller instances store paired value vectorcalls.
+    "Modules/_operator.c",
 )
 FUNCTION_VECTORCALL_FILES = (
     "Objects/call.c", "Objects/funcobject.c", "Python/bytecodes.c",

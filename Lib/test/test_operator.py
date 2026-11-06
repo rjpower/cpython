@@ -376,6 +376,9 @@ class OperatorTestCase:
         a.name = 'arthur'
         f = operator.attrgetter('name')
         self.assertEqual(f(a), 'arthur')
+        a.child = 7
+        self.assertEqual(operator.attrgetter('child.real')(a), 7)
+        self.assertEqual(operator.attrgetter('child', 'child.real')(a), (7, 7))
         self.assertRaises(TypeError, f)
         self.assertRaises(TypeError, f, a, 'dent')
         self.assertRaises(TypeError, f, a, surname='dent')
@@ -426,6 +429,8 @@ class OperatorTestCase:
         a = 'ABCDE'
         f = operator.itemgetter(2)
         self.assertEqual(f(a), 'C')
+        self.assertEqual(operator.itemgetter(0)((17,)), 17)
+        self.assertEqual(operator.itemgetter(1, 0)((17, 23)), (23, 17))
         self.assertRaises(TypeError, f)
         self.assertRaises(TypeError, f, a, 3)
         self.assertRaises(TypeError, f, a, size=3)
@@ -490,6 +495,10 @@ class OperatorTestCase:
         self.assertRaises(IndexError, f, a)
         f = operator.methodcaller('foo', 1, 2)
         self.assertEqual(f(a), 3)
+        self.assertEqual(operator.methodcaller('bit_length')(7), 3)
+        self.assertEqual(operator.methodcaller('__pow__', 3)(2), 8)
+        self.assertEqual(operator.methodcaller('to_bytes', length=1)(7), b'\x07')
+
         self.assertRaises(TypeError, f)
         self.assertRaises(TypeError, f, a, 3)
         self.assertRaises(TypeError, f, a, spam=3)
@@ -511,6 +520,22 @@ class OperatorTestCase:
 
         f = operator.methodcaller('return_arguments', *many_positional_arguments, **many_kw_arguments)
         self.assertEqual(f(a), (many_positional_arguments, many_kw_arguments))
+
+        destroyed = []
+        class ReprError:
+            def __repr__(self):
+                raise ValueError('repr failed')
+            def __del__(self):
+                destroyed.append(True)
+
+        value = ReprError()
+        caller = operator.methodcaller('unused', value)
+        del value
+        with self.assertRaisesRegex(ValueError, 'repr failed'):
+            repr(caller)
+        del caller
+        support.gc_collect()
+        self.assertEqual(destroyed, [True])
 
     def test_methodcaller_cyclic_gc(self):
         # gh-156762: Check for undefined behavior on calling methodcaller_clear()

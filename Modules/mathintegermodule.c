@@ -611,12 +611,12 @@ count_set_bits(unsigned long n)
  * divide and conquer.  Assumes start and stop are odd and stop > start.
  * max_bits must be >= bit_length(stop - 2). */
 
-static PyObject *
+static PyValue
 factorial_partial_product(unsigned long start, unsigned long stop,
                           unsigned long max_bits)
 {
     unsigned long midpoint, num_operands;
-    PyObject *left = NULL, *right = NULL, *result = NULL;
+    PyValue left = PyValue_NULL, right = PyValue_NULL, result = PyValue_NULL;
 
     /* If the return value will fit an unsigned long, then we can
      * multiply in a tight, fast loop where each multiply is O(1).
@@ -642,40 +642,37 @@ factorial_partial_product(unsigned long start, unsigned long stop,
         unsigned long j, total;
         for (total = start, j = start + 2; j < stop; j += 2)
             total *= j;
-        return PyLong_FromUnsignedLong(total);
+        return PyValue_FromUInt64(total);
     }
 
     /* find midpoint of range(start, stop), rounded up to next odd number. */
     midpoint = (start + num_operands) | 1;
     left = factorial_partial_product(start, midpoint,
                                      _Py_bit_length(midpoint - 2));
-    if (left == NULL)
+    if (PyValue_IsNull(left))
         goto error;
     right = factorial_partial_product(midpoint, stop, max_bits);
-    if (right == NULL)
+    if (PyValue_IsNull(right))
         goto error;
-    PyValue result_v = _PyValue_Multiply(PyValue_FromObjectBorrow(left), PyValue_FromObjectBorrow(right));
-    result = PyValue_IsNull(result_v) ? NULL : _PyValue_AsObjectStealAt(result_v, BOX_SITE_NUMBER);
+    result = _PyLong_ValueMultiply(PyValue_Borrow(left), PyValue_Borrow(right));
 
   error:
-    Py_XDECREF(left);
-    Py_XDECREF(right);
+    PyValue_XCLOSE(left);
+    PyValue_XCLOSE(right);
     return result;
 }
 
 /* factorial_odd_part:  compute the odd part of factorial(n). */
 
-static PyObject *
+static PyValue
 factorial_odd_part(unsigned long n)
 {
     long i;
     unsigned long v, lower, upper;
-    PyObject *partial, *tmp, *inner, *outer;
+    PyValue partial, tmp, inner, outer;
 
-    inner = PyLong_FromLong(1);
-    if (inner == NULL)
-        return NULL;
-    outer = Py_NewRef(inner);
+    inner = PyValue_FromInt64(1);
+    outer = PyValue_DUP(inner);
 
     upper = 3;
     for (i = _Py_bit_length(n) - 2; i >= 0; i--) {
@@ -690,31 +687,31 @@ factorial_odd_part(unsigned long n)
            product of all odd integers j in the range (n/2**(i+1), n/2**i]. */
         partial = factorial_partial_product(lower, upper, _Py_bit_length(upper-2));
         /* inner *= partial */
-        if (partial == NULL)
+        if (PyValue_IsNull(partial))
             goto error;
-        PyValue tmp_v = _PyValue_Multiply(PyValue_FromObjectBorrow(inner), PyValue_FromObjectBorrow(partial));
-        tmp = PyValue_IsNull(tmp_v) ? NULL : _PyValue_AsObjectStealAt(tmp_v, BOX_SITE_NUMBER);
-        Py_DECREF(partial);
-        if (tmp == NULL)
+        tmp = _PyLong_ValueMultiply(PyValue_Borrow(inner), PyValue_Borrow(partial));
+        PyValue_CLOSE(partial);
+        if (PyValue_IsNull(tmp))
             goto error;
-        Py_SETREF(inner, tmp);
+        PyValue_CLOSE(inner);
+        inner = tmp;
         /* Now inner is the product of all odd integers j in the range (0,
            n/2**i], giving the inner product in the formula above. */
 
         /* outer *= inner; */
-        PyValue tmp_v2 = _PyValue_Multiply(PyValue_FromObjectBorrow(outer), PyValue_FromObjectBorrow(inner));
-        tmp = PyValue_IsNull(tmp_v2) ? NULL : _PyValue_AsObjectStealAt(tmp_v2, BOX_SITE_NUMBER);
-        if (tmp == NULL)
+        tmp = _PyLong_ValueMultiply(PyValue_Borrow(outer), PyValue_Borrow(inner));
+        if (PyValue_IsNull(tmp))
             goto error;
-        Py_SETREF(outer, tmp);
+        PyValue_CLOSE(outer);
+        outer = tmp;
     }
-    Py_DECREF(inner);
+    PyValue_CLOSE(inner);
     return outer;
 
   error:
-    Py_DECREF(outer);
-    Py_DECREF(inner);
-    return NULL;
+    PyValue_CLOSE(outer);
+    PyValue_CLOSE(inner);
+    return PyValue_NULL;
 }
 
 
@@ -745,7 +742,7 @@ math_integer_factorial_impl(PyObject *module, PyValueBorrow arg)
 {
     long x, two_valuation;
     int overflow;
-    PyObject *result, *odd_part;
+    PyValue result, odd_part;
 
     x = _PyValue_AsLongAndOverflow(arg, &overflow);
     if (x == -1 && PyErr_Occurred()) {
@@ -770,12 +767,18 @@ math_integer_factorial_impl(PyObject *module, PyValueBorrow arg)
     /* else express in the form odd_part * 2**two_valuation, and compute as
        odd_part << two_valuation. */
     odd_part = factorial_odd_part(x);
-    if (odd_part == NULL)
+    if (PyValue_IsNull(odd_part))
         return PyValue_NULL;
     two_valuation = x - count_set_bits(x);
-    result = _PyLong_Lshift(odd_part, two_valuation);
-    Py_DECREF(odd_part);
-    return _PyValue_FromObjectResult(result);
+    PyValue shift = PyValue_FromInt64(two_valuation);
+    if (PyValue_IsNull(shift)) {
+        PyValue_CLOSE(odd_part);
+        return PyValue_NULL;
+    }
+    result = _PyLong_ValueLshift(PyValue_Borrow(odd_part), PyValue_Borrow(shift));
+    PyValue_CLOSE(odd_part);
+    PyValue_CLOSE(shift);
+    return result;
 }
 
 

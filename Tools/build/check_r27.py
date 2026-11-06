@@ -13,10 +13,11 @@ Standard library only, plus readelf and addr2line (llvm-dwarfdump is the
 fallback for objects without .debug_aranges).
 
 Dump directory layout (written by Python/pystats.c): <rand>.txt (a finished
-process), <rand>.run (a process that started and has not finished), <rand>.spawn
-(one structured JSON line per uncounted launch), objects/<build-id> (copies
-of objects that no build product explains). The run marker stores an escaped
-JSON argv array. Anything else, including .tmp, is ignored.
+process), <rand>.done (its start-time identity), <rand>.zero (an explicit
+zero-stats outcome), <rand>.run (a process that has not finished), <rand>.spawn
+(structured launch events), objects/<build-id> (copies of objects that no build
+product explains). Completed dumps require a matching .done marker; .zero,
+orphan, malformed and contradictory identities are accounting failures.
 
 Classification. A CORE box (owner "-") is classed by the box primitive's call
 site (the "at" address); every other box by its owner. An address is
@@ -97,7 +98,7 @@ OWNER_RE = re.compile(
     r"(?P<owner>-|foreign|\?|\d+\+0x[0-9a-fA-F]+) "
     r"at (?P<at>-|\?|\d+\+0x[0-9a-fA-F]+): (?P<count>\d+)\s*$")
 ADDR_RE = re.compile(r"^(\d+)\+0x([0-9a-fA-F]+)$")
-PROCESS_RE = re.compile(r"^Stats process: pid=(\d+) tag=(.*?)\s*$")
+PROCESS_RE = re.compile(r"^Stats process: pid=(\d+) tag=(.*)$")
 DROPPED_RE = re.compile(r"^Box owners dropped \(([^()]+)\): (\d+)\s*$")
 RESETS_RE = re.compile(r"^Stats resets: (\d+)\s*$")
 CACHED_RE = re.compile(r"^Object box cached: (\d+)\s*$")
@@ -131,6 +132,14 @@ class Folded:
         self.site_totals = {}
         self.leftover_run = []
         self.spawn = []
+        self.counted_spawn = []
+        self.opaque_spawn = []
+        self.dump_identities = {}
+        self.folded_dump_stems = set()
+        self.identity_records = {}
+        self.identity_errors = []
+        self.identity_matched_count = 0
+        self.identity_required = False
         self.accounting_errors = []
         self.invalid_owner_count = 0
         self.invalid_owner_samples = []
@@ -194,87 +203,214 @@ class Folded:
         self.dumps += 1
 
     def fold_dir(self, directory, delete=False):
-        """Fold the finished dumps; if delete, remove them and their .run."""
+        """Fold finished dumps, retaining their process identity by stem."""
+        self.identity_required = True
         for path in sorted(Path(directory).glob("*.txt")):
             try:
-                self.add_text(path.read_text(errors="replace"), path.name)
+                text = path.read_text(errors="replace")
+                self.add_text(text, path.name)
             except OSError as exc:
                 self.bad_dumps.append(f"{path.name}: {exc}")
                 continue
+            process_rows = [PROCESS_RE.match(line) for line in text.splitlines()
+                            if line.startswith("Stats process:")]
+            if path.stem in self.folded_dump_stems:
+                message = f"duplicate folded dump stem {path.stem}"
+                self.identity_errors.append(message)
+                self.accounting_errors.append(message)
+            elif len(process_rows) != 1 or process_rows[0] is None:
+                self.folded_dump_stems.add(path.stem)
+                message = f"dump {path.name} has missing or malformed process identity"
+                self.identity_errors.append(message)
+                self.accounting_errors.append(message)
+            else:
+                self.folded_dump_stems.add(path.stem)
+                match = process_rows[0]
+                pid = int(match[1])
+                if pid <= 0:
+                    message = f"dump {path.name} has invalid process pid"
+                    self.identity_errors.append(message)
+                    self.accounting_errors.append(message)
+                else:
+                    self.dump_identities[path.stem] = {"pid": pid, "tag": match[2]}
             if delete:
                 path.unlink(missing_ok=True)
-                path.with_suffix(".run").unlink(missing_ok=True)
+
+    @staticmethod
+    def _read_identity(path):
+        """Parse one start-time marker without normalizing escaped argv bytes."""
+        fields = {}
+        for line in path.read_text(encoding="utf-8").splitlines():
+            key, sep, value = line.partition(": ")
+            if not sep or key not in {"pid", "ppid", "tag", "argv"} or key in fields:
+                raise ValueError("invalid or duplicate marker field")
+            fields[key] = value
+        if set(fields) != {"pid", "ppid", "tag", "argv"}:
+            raise ValueError("incomplete marker")
+        if not fields["pid"].isdigit() or int(fields["pid"]) <= 0:
+            raise ValueError("invalid marker pid")
+        if not fields["ppid"].isdigit():
+            raise ValueError("invalid marker ppid")
+        raw_argv = json.loads(fields["argv"])
+        if (not isinstance(raw_argv, list) or not raw_argv or
+            any(not isinstance(arg, str) for arg in raw_argv)):
+            raise ValueError("marker argv is not a nonempty string list")
+        argv = [os.fsdecode(arg.encode("latin-1")) for arg in raw_argv]
+        return {"id": path.stem, "pid": int(fields["pid"]),
+                "ppid": int(fields["ppid"]), "tag": fields["tag"],
+                "argv": argv}
 
     def read_markers(self, directory):
         """List .run files that no .txt replaced, and the .spawn lines."""
         directory = Path(directory)
         self.leftover_run = []
-        for path in sorted(directory.glob("*.run")):
-            if path.with_suffix(".txt").exists():
+        self.identity_records = {}
+        self.identity_matched_count = 0
+
+        def identity_error(message):
+            self.identity_errors.append(message)
+            self.accounting_errors.append(message)
+
+        sidecars = {}
+        for suffix in ("done", "zero", "run"):
+            for path in sorted(directory.glob(f"*.{suffix}")):
+                try:
+                    record = self._read_identity(path)
+                except (OSError, UnicodeError, ValueError) as exc:
+                    identity_error(
+                        f"malformed {suffix} identity {path.name}: {type(exc).__name__}")
+                    continue
+                sidecars.setdefault(path.stem, {})[suffix] = record
+                self.identity_records[path.name] = record
+                if suffix == "run":
+                    self.leftover_run.append(record)
+                elif suffix == "zero":
+                    identity_error(
+                        f"zero-stats identity {path.name} has no completed dump")
+
+        for stem, dump in self.dump_identities.items():
+            records = sidecars.get(stem, {})
+            done = records.get("done")
+            if done is None:
+                identity_error(f"missing .done identity for dump {stem}.txt")
                 continue
-            info = {"id": path.stem}
-            for line in path.read_text(errors="replace").splitlines():
-                key, sep, value = line.partition(": ")
-                if sep:
-                    info[key] = value
-            try:
-                raw_argv = json.loads(info["argv"])
-                if (not isinstance(raw_argv, list) or not raw_argv or
-                    any(not isinstance(arg, str) for arg in raw_argv)):
-                    raise ValueError("run argv is not a string list")
-                # The C marker escapes each raw byte as a JSON code point.
-                # Reconstruct Python's filesystem strings, including
-                # surrogateescape for invalid UTF-8 bytes.
-                info["argv"] = [os.fsdecode(arg.encode("latin-1"))
-                                for arg in raw_argv]
-            except (KeyError, ValueError, UnicodeEncodeError):
-                self.accounting_errors.append(
-                    f"malformed run argv in {path.name}")
-            self.leftover_run.append(info)
+            if "run" in records:
+                identity_error(f"contradictory .run and .txt identity for {stem}")
+            if "zero" in records:
+                identity_error(f"contradictory .zero and completed dump for {stem}")
+            if (done["pid"] != dump["pid"] or done["tag"] != dump["tag"]):
+                identity_error(f".done identity does not match dump {stem}.txt")
+            elif "run" not in records and "zero" not in records:
+                self.identity_matched_count += 1
+        for stem in sidecars:
+            if "done" in sidecars[stem] and stem not in self.dump_identities:
+                identity_error(f"orphan .done identity {stem}.done")
         self.spawn = []
+        self.counted_spawn = []
+        self.opaque_spawn = []
         for path in sorted(directory.glob("*.spawn")):
-            for line in path.read_text(errors="replace").splitlines():
+            try:
+                contents = path.read_bytes().decode("utf-8")
+            except (OSError, UnicodeError) as exc:
+                self.accounting_errors.append(
+                    f"unreadable spawn ledger {path.name}: {type(exc).__name__}")
+                continue
+            if not contents.strip():
+                self.accounting_errors.append(f"empty spawn ledger {path.name}")
+                continue
+            if contents and not contents.endswith("\n"):
+                self.accounting_errors.append(
+                    f"truncated spawn ledger {path.name}")
+            for line in contents.splitlines():
                 if not line.strip():
                     continue
                 if line.startswith("{"):
-                    # The regrtest worker's audit hook: one JSON object per
-                    # launch of a build product. Only the launches that will
-                    # not count are listed; a counted child leaves its own
-                    # dump.
                     try:
                         launch = json.loads(line)
                     except ValueError:
                         self.accounting_errors.append(
-                            f"malformed spawn record in {path.name}")
+                            f"malformed spawn JSON {path.name}")
                         continue
                     if not isinstance(launch, dict):
                         self.accounting_errors.append(
-                            f"malformed spawn record in {path.name}")
+                            f"malformed spawn record {path.name}")
                         continue
-                    if (type(launch.get("counts")) is not bool or
-                        not isinstance(launch.get("tag"), str) or
-                        type(launch.get("pid")) is not int or
+                    shape = launch.get("shape")
+                    classification = launch.get("classification")
+                    argv = launch.get("argv")
+                    counts = launch.get("counts")
+                    if (not isinstance(launch.get("tag"), str) or
+                        type(launch.get("pid")) is not int or launch["pid"] <= 0 or
                         not isinstance(launch.get("event"), str) or
+                        not isinstance(launch.get("executable"), (str, type(None))) or
                         not isinstance(launch.get("reason"), str) or
-                        not isinstance(launch.get("argv"), list) or
-                        any(not isinstance(arg, str)
-                            for arg in launch["argv"])):
+                        not isinstance(launch.get("command"), (str, type(None))) or
+                        not isinstance(shape, str) or
+                        classification not in ("direct", "opaque-shell")):
                         self.accounting_errors.append(
                             f"incomplete spawn record in {path.name}")
                         continue
-                    if launch.get("counts"):
+                    if classification == "opaque-shell":
+                        valid_argv = (argv is None if shape == "opaque-shell" else
+                                      isinstance(argv, list) and
+                                      all(isinstance(arg, str) for arg in argv))
+                        valid_command = (shape == "structured" or
+                                         isinstance(launch.get("command"), str))
+                        if counts is not None or not valid_argv or not valid_command:
+                            self.accounting_errors.append(
+                                f"incomplete opaque spawn record in {path.name}")
+                            continue
+                        self.opaque_spawn.append(launch)
+                        self.accounting_errors.append(
+                            f"opaque shell launch in {path.name}")
+                        continue
+                    if (not isinstance(argv, list) or not argv or
+                        any(not isinstance(arg, str) for arg in argv) or
+                        shape != "structured" or classification != "direct" or
+                            not isinstance(launch.get("executable"), str) or
+                        not launch["executable"] or type(counts) is not bool):
+                        self.accounting_errors.append(
+                            f"invalid structured spawn record in {path.name}")
+                        continue
+                    if counts is True:
+                        self.counted_spawn.append(launch)
+                        continue
+                    if counts is not False:
+                        self.accounting_errors.append(
+                            f"invalid spawn prediction in {path.name}")
                         continue
                     self.spawn.append({
-                        "tag": launch.get("tag", ""),
-                        "argv": launch.get("argv"),
-                        "reason": launch.get("reason"),
-                        "event": launch.get("event"),
-                        "pid": launch.get("pid")})
+                        "tag": launch.get("tag", ""), "argv": argv,
+                        "command": launch.get("command"),
+                        "reason": launch.get("reason", ""),
+                        "event": launch.get("event", ""),
+                        "pid": launch["pid"],
+                    })
                     continue
                 tag, _, argv = line.partition("\t")
                 # Historical TSV records have no reason or argument boundaries.
                 # Retain them for diagnosis; the admission gate rejects them.
                 self.spawn.append({"tag": tag, "argv": argv})
+
+        for path in sorted(directory.glob("*.audit-error")):
+            self.accounting_errors.append(
+                f"audit error ledger present: {path.name}")
+            try:
+                path.read_bytes()
+            except OSError as exc:
+                self.accounting_errors.append(
+                    f"unreadable audit error ledger {path.name}: {type(exc).__name__}")
+
+        self.identity_complete = (
+            self.identity_required and not self.identity_errors and
+            not self.bad_dumps and self.dumps == len(self.dump_identities) and
+            self.identity_matched_count == len(self.dump_identities))
+
+        identity_kinds = ("done", "zero", "run")
+        for stem, records in sidecars.items():
+            if sum(kind in records for kind in identity_kinds) > 1:
+                identity_error(f"contradictory process identity sidecars for {stem}")
+                self.identity_complete = False
 
 
 def add(table, key, n):
@@ -583,7 +719,24 @@ def resolve(folded, resolver, src, cdb=None):
     return {
         "version": 1, "src": str(src), "dumps": folded.dumps,
         "bad_dumps": folded.bad_dumps, "leftover_run": folded.leftover_run,
-        "spawn": folded.spawn, "resets": folded.resets,
+        "spawn": folded.spawn, "counted_spawn": folded.counted_spawn,
+        "opaque_spawn": folded.opaque_spawn, "resets": folded.resets,
+        "identity_coverage": {
+            "complete": getattr(folded, "identity_complete", False),
+            "dumps": len(folded.dump_identities),
+            "markers": len(folded.identity_records),
+            "matched": folded.identity_matched_count,
+            "error_count": len(folded.identity_errors),
+            "errors": list(folded.identity_errors[:16]),
+            "samples": [
+                {"stem": stem, **identity}
+                for stem, identity in list(sorted(folded.dump_identities.items()))[:16]
+            ],
+            "marker_samples": [
+                {"file": name, **identity}
+                for name, identity in list(sorted(folded.identity_records.items()))[:16]
+            ],
+        },
         "resets_by_tag": folded.resets_by_tag, "drops": folded.drops,
         "box_cached": folded.box_cached, "kind_totals": folded.kind_totals,
         "site_totals": folded.site_totals, "rows": rows, "objects": objects,
@@ -675,6 +828,9 @@ def normalize_accounting_argv(argv, summary):
 def suite_violations(summary, crashes=(), uncounted=(), accounting=None):
     accounting = accounting or {"runs": {}, "spawns": {}}
     out = []
+    identity_coverage = summary.get("identity_coverage")
+    if not isinstance(identity_coverage, dict) or identity_coverage.get("complete") is not True:
+        out.append("missing or incomplete process identity coverage")
     if not summary.get("dumps"):
         out.append("no stats dumps")
     if "regrtest_returncode" in summary and summary["regrtest_returncode"] != 0:

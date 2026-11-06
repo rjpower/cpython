@@ -1,9 +1,9 @@
 import json
+import os
 import re
-import shlex
 import subprocess
 import sys
-import os
+from dataclasses import dataclass
 from _colorize import can_colorize  # type: ignore[import-not-found]
 from typing import Any, NoReturn
 
@@ -12,6 +12,7 @@ from test.support import os_helper, Py_DEBUG
 from .setup import setup_process, setup_test_dir
 from .runtests import WorkerRunTests, JsonFile, JsonFileType
 from .single import run_single_test
+from .result import State
 from .utils import (
     StrPath, StrJSON, TestFilter,
     get_temp_dir, get_work_dir, exit_timeout)
@@ -58,26 +59,127 @@ def _text(item) -> str:
     return os.fsdecode(item)
 
 
-def _find_product(tokens: list[str], products: list[str]) -> int | None:
-    for i, token in enumerate(tokens):
-        if token in products:
-            return i
-    return None
+@dataclass
+class _Launch:
+    shape: str
+    executable: str | None
+    argv: list[str] | None
+    command: str | None
+    env: dict[str, str]
 
 
-def _predict(argv: list[str], env: dict[str, str], products: list[str]):
-    """(counts, reason) for the child that argv starts, given its environment."""
-    start = _find_product(argv, products)
-    # Words before the program: "env -i", NAME=value.
-    env = dict(env)
-    for word in argv[:start]:
-        if word == '-i' or word == '--ignore-environment':
+def _launch(event: str, args: tuple) -> _Launch | None:
+    """Decode an audit event without changing argv boundaries."""
+    command = None
+    match event:
+        case 'subprocess.Popen':
+            executable, argv, _cwd, env = args
+        case 'os.posix_spawn' | 'os.exec':
+            executable, argv, env = args
+        case 'os.spawn':
+            _mode, executable, argv, env = args
+        case 'os.system':
+            command_arg = args[0]
+            command = (_text(command_arg)
+                       if type(command_arg) in (str, bytes)
+                       else 'opaque shell command shape')
+            return _Launch('opaque-shell', None, None, command, {})
+        case _:
+            return None
+
+    if type(argv) in (str, bytes):
+        # Some platforms expose command strings directly. Never parse them as
+        # argv: a shell command does not identify the process it may start.
+        executable_text = (_text(executable)
+                           if type(executable) in (str, bytes) else None)
+        return _Launch('opaque-shell', executable_text, None, _text(argv), {})
+    if type(argv) not in (list, tuple) or any(
+            type(arg) not in (str, bytes) for arg in argv):
+        return _Launch('opaque-shell', None, None,
+                       'opaque launch argument shape', {})
+    argv = [_text(arg) for arg in argv]
+    if executable is None:
+        executable = argv[0] if argv else None
+    if executable is not None and type(executable) not in (str, bytes):
+        return _Launch('structured', None, argv,
+                       'opaque executable argument shape', {})
+    executable = _text(executable) if executable is not None else None
+    if env is None:
+        env = dict(os.environ)
+    elif type(env) is dict:
+        if any(type(key) not in (str, bytes) or
+               type(value) not in (str, bytes) for key, value in env.items()):
+            return _Launch('structured', None, argv,
+                           'opaque environment values', {})
+        env = dict(env)
+    else:
+        return _Launch('structured', None, argv,
+                       'opaque environment mapping', {})
+    env = {_text(key): _text(value) for key, value in env.items()}
+    return _Launch('structured', executable, argv, command, env)
+
+
+_SHELL_NAMES = frozenset({
+    'sh', 'bash', 'dash', 'zsh', 'ksh', 'cmd.exe', 'powershell.exe', 'pwsh.exe',
+})
+
+
+def _classify_launch(launch: _Launch, products: list[str]):
+    """Return (target argv, environment, opaque reason), if a product starts."""
+    executable = launch.executable
+    if launch.shape != 'structured' or executable is None:
+        return None, launch.env, 'opaque shell command'
+
+    if os.path.isabs(executable):
+        executable_path = os.path.realpath(executable)
+        if executable in products or executable_path in products:
+            return launch.argv, launch.env, None
+    else:
+        # PATH and cwd can make any relative name an alias of this build.
+        # Until child-image receipts exist, do not silently claim otherwise.
+        return None, launch.env, 'ambiguous relative executable'
+
+    if os.path.basename(executable).lower() in _SHELL_NAMES:
+        return None, launch.env, 'opaque shell command'
+
+    if os.path.basename(executable) != 'env' or not launch.argv:
+        return None, launch.env, None
+
+    # Parse only the small, known env prefix grammar. Do not search arbitrary
+    # argv elements for a build product.
+    env = dict(launch.env)
+    argv = launch.argv
+    index = 1  # argv[0] is env's program name
+    while index < len(argv):
+        word = argv[index]
+        if word in ('-i', '--ignore-environment'):
             env = {}
+            index += 1
         elif '=' in word and not word.startswith('-'):
             name, _, value = word.partition('=')
             env[name] = value
+            index += 1
+        elif word.startswith('-'):
+            return None, launch.env, 'unsupported env option'
+        else:
+            break
+    if index >= len(argv):
+        return None, launch.env, 'env command has no executable'
+    target = argv[index:]
+    if not os.path.isabs(target[0]):
+        return None, launch.env, 'ambiguous relative env target'
+    target_path = os.path.realpath(target[0])
+    if target[0] not in products and target_path not in products:
+        return None, launch.env, 'unresolved env target'
+    return target, env, None
+
+
+def _predict(argv: list[str], env: dict[str, str]):
+    """(counts, reason) for an already identified interpreter argv."""
+    if not argv:
+        return False, 'empty interpreter argv'
     options = []
-    args = iter(argv[start + 1:])
+    args = iter(argv[1:])
     for arg in args:
         if not arg.startswith('-') or arg == '-':
             break
@@ -113,87 +215,108 @@ def _predict(argv: list[str], env: dict[str, str], products: list[str]):
     return True, ''
 
 
-def _launch(event: str, args: tuple):
-    """(argv, env) of the launch, or None for a shape the hook ignores."""
-    match event:
-        case 'subprocess.Popen':
-            _executable, argv, _cwd, env = args
-        case 'os.posix_spawn' | 'os.exec':
-            _path, argv, env = args
-        case 'os.spawn':
-            _mode, _path, argv, env = args
-        case 'os.system':
-            argv, env = args[0], None
-        case _:
-            return None
-    if isinstance(argv, (str, bytes, os.PathLike)):
-        # A command string (os.system, a Popen with a string): the shell
-        # words, so that a product is found inside the string.
-        try:
-            argv = shlex.split(_text(argv))
-        except ValueError:
-            argv = _text(argv).split()
-    argv = [_text(arg) for arg in argv]
-    # A shell command string inside argv ("sh -c 'python ...'").
-    words = []
-    for arg in argv:
-        if ' ' in arg:
-            try:
-                words.extend(shlex.split(arg))
-                continue
-            except ValueError:
-                words.extend(arg.split())
-                continue
-        words.append(arg)
-    if env is None:
-        env = os.environ
-    env = {_text(k): _text(v) for k, v in dict(env).items()}
-    return words, env
+def _write_record(path: str, record: dict[str, Any]) -> None:
+    line = (json.dumps(record) + '\n').encode()
+    fd = os.open(path, os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o644)
+    try:
+        if os.write(fd, line) != len(line):
+            raise OSError("short write while recording pystats launch")
+    finally:
+        os.close(fd)
 
 
 def _make_spawn_hook(stats_dir: str):
     products = _build_products()
     pid_of = os.getpid
+    failure_state: dict[str, Any] = {'failed': False, 'errors': [], 'omitted': 0}
+
+    def remember_failure(event, stage, exc):
+        # Set the fail-closed bit before allocating diagnostics or touching disk.
+        failure_state['failed'] = True
+        try:
+            errors = failure_state['errors']
+            if len(errors) < 16:
+                errors.append({'event': event, 'stage': stage,
+                               'error_type': type(exc).__name__})
+            else:
+                failure_state['omitted'] += 1
+        except BaseException:
+            # The failure bit is the allocation-free fail-closed signal.
+            pass
+
+    def append_audit_error(event, stage, exc):
+        remember_failure(event, stage, exc)
+        try:
+            tag = os.environ.get('PYTHON_PYSTATS_TAG', '')
+            name = re.sub(r'[^A-Za-z0-9_.-]', '_', tag) or 'untagged'
+            _write_record(os.path.join(stats_dir, name + '.audit-error'), {
+                'tag': tag, 'pid': pid_of(), 'event': event,
+                'stage': stage, 'error_type': type(exc).__name__,
+            })
+        except BaseException as ledger_exc:
+            remember_failure(event, 'error-write', ledger_exc)
 
     def hook(event, args):
         if event not in _SPAWN_EVENTS:
             return
-        # The hook must never raise into the test.
         try:
             launch = _launch(event, args)
             if launch is None:
                 return
-            words, env = launch
-            if _find_product(words, products) is None:
+            target_argv, child_env, opaque_reason = _classify_launch(launch, products)
+            if target_argv is None and opaque_reason is None:
                 return
-            counts, reason = _predict(words, env, products)
+            if target_argv is None:
+                counts, reason = None, opaque_reason
+            else:
+                counts, reason = _predict(target_argv, child_env)
             tag = os.environ.get('PYTHON_PYSTATS_TAG', '')
-            line = json.dumps({
+            record = {
                 'tag': tag, 'pid': pid_of(), 'event': event,
-                'argv': words, 'counts': counts, 'reason': reason,
-            }) + '\n'
+                'shape': launch.shape, 'executable': launch.executable,
+                'classification': 'opaque-shell' if target_argv is None else 'direct',
+                'argv': launch.argv, 'command': launch.command,
+                'counts': counts, 'reason': reason,
+            }
             name = re.sub(r'[^A-Za-z0-9_.-]', '_', tag) or 'untagged'
-            fd = os.open(os.path.join(stats_dir, name + '.spawn'),
-                         os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o644)
             try:
-                os.write(fd, line.encode())
-            finally:
-                os.close(fd)
-        except Exception:
-            pass
+                _write_record(os.path.join(stats_dir, name + '.spawn'), record)
+            except BaseException as exc:
+                append_audit_error(event, 'spawn-write', exc)
+        except BaseException as exc:
+            append_audit_error(event, 'capture', exc)
 
-    return hook
+    return hook, failure_state
 
 
-def _setup_pystats(test_name: str) -> None:
+def _apply_audit_failures(result, failure_state):
+    if failure_state is None or not failure_state['failed']:
+        return
+    details = failure_state['errors']
+    if failure_state['omitted']:
+        details = [*details, {'stage': 'omitted',
+                             'count': failure_state['omitted']}]
+    if not details:
+        details = [{'stage': 'diagnostics-unavailable'}]
+    message = 'pystats audit capture failed: ' + json.dumps(details, sort_keys=True)
+    if result.errors is None:
+        result.errors = []
+    result.errors.append(('<pystats audit hook>', message))
+    result.state = State.FAILED
+
+
+def _setup_pystats(test_name: str):
     """Tag this worker's stats and record its launches of build products."""
     if not hasattr(sys, '_stats_on'):
-        return
+        return None
     # Children inherit the tag.
     os.environ['PYTHON_PYSTATS_TAG'] = test_name
     stats_dir = _stats_dir()
     if stats_dir is not None:
-        sys.addaudithook(_make_spawn_hook(stats_dir))
+        hook, failure_state = _make_spawn_hook(stats_dir)
+        sys.addaudithook(hook)
+        return failure_state
+    return None
 
 
 def create_worker_process(runtests: WorkerRunTests, output_fd: int,
@@ -269,7 +392,7 @@ def worker_process(worker_json: StrJSON) -> NoReturn:
 
     setup_test_dir(runtests.test_dir)
     setup_process()
-    _setup_pystats(test_name)
+    audit_failure_state = _setup_pystats(test_name)
 
     if runtests.rerun:
         if match_tests:
@@ -279,6 +402,7 @@ def worker_process(worker_json: StrJSON) -> NoReturn:
             print(f"Re-running {test_name} in verbose mode", flush=True)
 
     result = run_single_test(test_name, runtests)
+    _apply_audit_failures(result, audit_failure_state)
     if runtests.coverage:
         if "test.cov" in sys.modules:  # imported by -Xpresite=
             result.covered_lines = list(sys.modules["test.cov"].coverage)

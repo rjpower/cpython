@@ -12,6 +12,8 @@ from pathlib import Path
 from unittest.mock import patch
 
 from test.test_tools import imports_under_tool, skip_if_missing
+from test.libregrtest import worker
+from test.libregrtest.result import State, TestResult as LibregrtestResult
 
 skip_if_missing("build")
 
@@ -186,15 +188,17 @@ class FoldTests(unittest.TestCase):
     def test_dir_ignores_tmp_and_deletes_when_asked(self):
         with tempfile.TemporaryDirectory() as tmp:
             d = Path(tmp)
-            (d / "a.txt").write_text("Stats resets: 1\nStats process: pid=1 tag=t\n")
-            (d / "a.run").write_text("pid: 1\n")
+            (d / "a.txt").write_text("Stats process: pid=1 tag=t\nStats resets: 1\n")
+            (d / "a.done").write_text(
+                'pid: 1\nppid: 0\ntag: t\nargv: ["python"]\n')
             (d / "b.tmp").write_text("Stats resets: 9\n")
             folded = check_r27.Folded()
             folded.fold_dir(d, delete=True)
             folded.read_markers(d)
             self.assertEqual((folded.dumps, folded.resets), (1, 1))
             self.assertEqual(folded.leftover_run, [])
-            self.assertEqual([p.name for p in d.iterdir()], ["b.tmp"])
+            self.assertTrue(folded.identity_complete)
+            self.assertEqual({p.name for p in d.iterdir()}, {"a.done", "b.tmp"})
 
     def test_invalid_owner_diagnostics_survive_fold_deletion(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -226,15 +230,134 @@ class FoldTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             d = Path(tmp)
             (d / "x.run").write_text('pid: 4\nppid: 1\ntag: test_foo\nargv: ["python","-c","x"]\n')
-            (d / "y.run").write_text("pid: 5\ntag: done\n")
-            (d / "y.txt").write_text("")
+            (d / "y.done").write_text('pid: 5\nppid: 1\ntag: done\nargv: ["python"]\n')
+            (d / "y.txt").write_text("Stats process: pid=5 tag=done\n")
             (d / "z.spawn").write_text("test_bar\tpython -m x\n")
             folded = check_r27.Folded()
+            folded.fold_dir(d)
             folded.read_markers(d)
             self.assertEqual([(r["id"], r["tag"]) for r in folded.leftover_run],
                              [("x", "test_foo")])
             self.assertEqual(folded.spawn,
                              [{"tag": "test_bar", "argv": "python -m x"}])
+            self.assertEqual(folded.leftover_run[0]["argv"],
+                             ["python", "-c", "x"])
+            self.assertTrue(folded.identity_complete)
+
+    def test_process_identity_pairing_and_retention(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            d = Path(tmp)
+            (d / "a.txt").write_text("Stats process: pid=9 tag=probe\n")
+            (d / "a.done").write_text(
+                'pid: 9\nppid: 2\ntag: probe\n'
+                'argv: ["python", "\\u00ff"]\n')
+            folded = check_r27.Folded()
+            folded.fold_dir(d, delete=True)
+            folded.read_markers(d)
+            self.assertFalse((d / "a.txt").exists())
+            self.assertTrue((d / "a.done").exists())
+            self.assertTrue(folded.identity_complete)
+            self.assertEqual(folded.dump_identities,
+                             {"a": {"pid": 9, "tag": "probe"}})
+            self.assertEqual(folded.identity_records["a.done"],
+                             {"id": "a", "pid": 9, "ppid": 2,
+                              "tag": "probe", "argv": ["python", os.fsdecode(b"\xff")]})
+            coverage = check_r27.resolve(
+                folded, TableResolver({}), SRC)["identity_coverage"]
+            self.assertEqual(coverage["marker_samples"][0]["argv"],
+                             ["python", os.fsdecode(b"\xff")])
+
+    def test_process_identity_missing_or_orphan_done_fails_closed(self):
+        for files, expected in [
+            ({"a.txt": "Stats process: pid=9 tag=probe\n"}, "missing .done"),
+            ({"a.done": 'pid: 9\nppid: 2\ntag: probe\nargv: ["python"]\n'},
+             "orphan .done"),
+        ]:
+            with self.subTest(expected=expected), tempfile.TemporaryDirectory() as tmp:
+                d = Path(tmp)
+                for name, content in files.items():
+                    (d / name).write_text(content)
+                folded = check_r27.Folded()
+                folded.fold_dir(d)
+                folded.read_markers(d)
+                self.assertFalse(folded.identity_complete)
+                self.assertTrue(any(expected in error
+                                    for error in folded.accounting_errors))
+
+    def test_repeated_fold_of_same_stem_is_rejected(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            d = Path(tmp)
+            (d / "a.txt").write_text("Stats process: pid=9 tag=probe\n")
+            (d / "a.done").write_text(
+                'pid: 9\nppid: 2\ntag: probe\nargv: ["python"]\n')
+            folded = check_r27.Folded()
+            folded.fold_dir(d)
+            folded.fold_dir(d)
+            folded.read_markers(d)
+            self.assertFalse(folded.identity_complete)
+            self.assertTrue(any("duplicate folded dump stem" in error
+                                for error in folded.accounting_errors))
+
+    def test_process_identity_mismatch_zero_and_run_with_dump_fail(self):
+        cases = [
+            ("mismatch", "a.done",
+             'pid: 10\nppid: 2\ntag: other\nargv: ["python"]\n',
+             ".done identity does not match"),
+            ("zero", "a.zero",
+             'pid: 9\nppid: 2\ntag: probe\nargv: ["python"]\n',
+             "zero-stats identity"),
+            ("run", "a.run",
+             'pid: 9\nppid: 2\ntag: probe\nargv: ["python"]\n',
+             "contradictory .run"),
+        ]
+        for name, marker, contents, expected in cases:
+            with self.subTest(name=name), tempfile.TemporaryDirectory() as tmp:
+                d = Path(tmp)
+                (d / "a.txt").write_text("Stats process: pid=9 tag=probe\n")
+                (d / marker).write_text(contents)
+                if marker != "a.done":
+                    (d / "a.done").write_text(
+                        'pid: 9\nppid: 2\ntag: probe\nargv: ["python"]\n')
+                folded = check_r27.Folded()
+                folded.fold_dir(d)
+                folded.read_markers(d)
+                self.assertFalse(folded.identity_complete)
+                self.assertTrue(any(expected in error
+                                    for error in folded.accounting_errors))
+
+    def test_process_identity_malformed_and_duplicate_fields_fail(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            d = Path(tmp)
+            (d / "bad.txt").write_text("Stats process: pid=3 tag=t\n")
+            (d / "bad.done").write_text(
+                'pid: 3\npid: 3\nppid: 1\ntag: t\nargv: ["python"]\n')
+            (d / "empty.zero").write_text("")
+            folded = check_r27.Folded()
+            folded.fold_dir(d)
+            folded.read_markers(d)
+            self.assertFalse(folded.identity_complete)
+            self.assertTrue(any("malformed done identity" in error
+                                for error in folded.accounting_errors))
+            self.assertTrue(any("malformed zero identity" in error
+                                for error in folded.accounting_errors))
+
+    def test_gate_rejects_missing_identity_coverage(self):
+        summary = clean_summary()
+        del summary["identity_coverage"]
+        self.assertTrue(any("identity coverage" in error
+                            for error in check_r27.suite_violations(summary)))
+
+    def test_spawn_ledger_empty_and_invalid_utf8_fail_closed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            d = Path(tmp)
+            (d / "empty.spawn").write_bytes(b"")
+            (d / "invalid.spawn").write_bytes(bytes([0xff, 0x0a]))
+            folded = check_r27.Folded()
+            folded.read_markers(d)
+            self.assertTrue(any("empty spawn ledger" in error
+                                for error in folded.accounting_errors))
+            self.assertTrue(any("unreadable spawn ledger" in error
+                                for error in folded.accounting_errors))
 
     def test_marker_argument_boundaries_and_malformed_record(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -251,6 +374,8 @@ class FoldTests(unittest.TestCase):
                 'pid: 7\nppid: 1\ntag: test_foo\nargv: ["\\u20ac"]\n')
             (d / "new.spawn").write_text(json.dumps({
                 "tag": "test_foo", "pid": 4, "event": "subprocess.Popen",
+                "shape": "structured", "classification": "direct",
+                "executable": "/build/python", "command": None,
                 "reason": "-E", "argv": ["python", "-E"],
                 "counts": False}) + "\n")
             (d / "bad.spawn").write_text(json.dumps({
@@ -264,18 +389,246 @@ class FoldTests(unittest.TestCase):
                              ["python", "-c", "a\nb", "a b"])
             self.assertEqual(by_id["utf"]["argv"],
                              ["é", os.fsdecode(b"\xff")])
-            self.assertIn("malformed run argv in bad.run",
-                          folded.accounting_errors)
-            self.assertIn("malformed run argv in notbytes.run",
-                          folded.accounting_errors)
+            self.assertTrue(any(error.startswith("malformed run identity bad.run:")
+                                for error in folded.accounting_errors))
+            self.assertTrue(any(error.startswith(
+                "malformed run identity notbytes.run:")
+                for error in folded.accounting_errors))
             self.assertIn("incomplete spawn record in bad.spawn",
                           folded.accounting_errors)
             self.assertEqual(folded.spawn[0]["argv"], ["python", "-E"])
 
 
+    def test_spawn_preserves_counted_events(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            d = Path(tmp)
+            launches = [
+                {"tag": "counted", "event": "subprocess.Popen",
+                 "shape": "structured", "classification": "direct",
+                 "executable": "/build/python",
+                 "argv": ["python", "-c", "print('x y')"],
+                 "counts": True, "reason": "" , "pid": 44},
+                {"tag": "uncounted", "event": "subprocess.Popen",
+                 "shape": "structured", "classification": "direct",
+                 "executable": "/build/python",
+                 "argv": ["python", "-E"],
+                 "counts": False, "reason": "-E", "pid": 45},
+            ]
+            (d / "worker.spawn").write_text(
+                "".join(json.dumps(item) + "\n" for item in launches))
+            folded = check_r27.Folded()
+            folded.read_markers(d)
+            self.assertEqual(folded.counted_spawn, [launches[0]])
+            self.assertEqual(folded.spawn[0]["argv"], launches[1]["argv"])
+            self.assertEqual(folded.spawn[0]["pid"], 45)
+            self.assertEqual(folded.accounting_errors, [])
+
+    def test_spawn_and_audit_error_ledgers_fail_closed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            d = Path(tmp)
+            (d / "malformed.spawn").write_text("{not-json}\n")
+            (d / "opaque.spawn").write_text(json.dumps({
+                "tag": "shell", "pid": 7, "event": "subprocess.Popen",
+                "executable": "/bin/sh", "reason": "opaque shell command",
+                "command": None, "shape": "structured",
+                "classification": "opaque-shell", "counts": None,
+                "argv": ["sh", "-c", "python -c 'pass'"],
+            }) + "\n")
+            (d / "truncated.spawn").write_text(json.dumps({
+                "tag": "test", "shape": "structured", "counts": False,
+                "argv": ["python"],
+            }))
+            (d / "incomplete-counted.spawn").write_text(json.dumps({
+                "tag": "counted", "shape": "structured", "counts": True,
+                "argv": ["python"],
+            }) + "\n")
+            (d / "empty.audit-error").write_text("")
+            folded = check_r27.Folded()
+            folded.read_markers(d)
+            self.assertTrue(any("malformed spawn JSON" in error
+                                for error in folded.accounting_errors))
+            self.assertTrue(any("audit error ledger present" in error
+                                for error in folded.accounting_errors))
+            self.assertTrue(any("truncated spawn ledger" in error
+                                for error in folded.accounting_errors))
+            self.assertTrue(any("incomplete spawn record" in error
+                                for error in folded.accounting_errors))
+            self.assertEqual(len(folded.opaque_spawn), 1)
+            self.assertTrue(any("opaque shell launch" in error
+                                for error in folded.accounting_errors))
+            summary = {
+                "dumps": 1, "accounting_errors": folded.accounting_errors,
+                "rows": [], "drops": {}, "leftover_run": [], "spawn": [],
+                "resets_by_tag": {}, "bad_dumps": [],
+            }
+            self.assertTrue(check_r27.suite_violations(summary))
+
+    def test_unreadable_audit_error_ledger_fails_closed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            d = Path(tmp)
+            path = d / "worker.audit-error"
+            path.write_text('{"stage":"spawn-write"}\n')
+            with patch.object(Path, "read_bytes", side_effect=OSError("denied")):
+                folded = check_r27.Folded()
+                folded.read_markers(d)
+            self.assertTrue(any("unreadable audit error ledger" in error
+                                for error in folded.accounting_errors))
+
+
+class WorkerLaunchTests(unittest.TestCase):
+    def test_structured_argv_and_executable_identity(self):
+        python = "/build/python"
+        launch = worker._launch(
+            "subprocess.Popen",
+            (python, [b"fake-argv0", b"-c", b'print("a b")'], None, {}))
+        self.assertEqual(launch.argv, ["fake-argv0", "-c", 'print("a b")'])
+        self.assertEqual(launch.executable, python)
+        target, _, reason = worker._classify_launch(launch, [python])
+        self.assertEqual(target, launch.argv)
+        self.assertIsNone(reason)
+        self.assertEqual(worker._predict(
+            ["fake-argv0", "-E"], {"PYTHONSTATS": "1"}),
+            (False, "no -X pystats and -E or -I ignores PYTHONSTATS"))
+        self.assertEqual(worker._predict(
+            ["fake-argv0", "-X", "pystats", "-X", "pystats_dir=/tmp"], {}),
+            (True, ""))
+
+        payload_only = worker._launch(
+            "subprocess.Popen",
+            ("/other/python", ["other", "-c", python], None, {}))
+        target, _, reason = worker._classify_launch(payload_only, [python])
+        self.assertIsNone(target)
+        self.assertIsNone(reason)
+
+        env_launch = worker._launch(
+            "subprocess.Popen",
+            ("/usr/bin/env", ["env", "-i", "PYTHONSTATS=1",
+                              "PYTHON_PYSTATS_DIR=/tmp", python, "-X", "pystats"],
+             None, {}))
+        target, child_env, reason = worker._classify_launch(env_launch, [python])
+        self.assertEqual(target, [python, "-X", "pystats"])
+        self.assertEqual(child_env["PYTHONSTATS"], "1")
+        self.assertIsNone(reason)
+
+        unsupported_env = worker._launch(
+            "subprocess.Popen", ("/usr/bin/env", ["env", "-u", "NAME", python], None, {}))
+        target, _, reason = worker._classify_launch(unsupported_env, [python])
+        self.assertIsNone(target)
+        self.assertEqual(reason, "unsupported env option")
+
+        unknown_env = worker._launch(
+            "subprocess.Popen", ("/usr/bin/env", ["env", "grep", "needle"], None, {}))
+        target, _, reason = worker._classify_launch(unknown_env, [python])
+        self.assertIsNone(target)
+        self.assertEqual(reason, "ambiguous relative env target")
+
+    def test_shell_command_is_opaque(self):
+        launch = worker._launch("os.system", ("python -c 'print(1 2)'",))
+        self.assertEqual(launch.shape, "opaque-shell")
+        self.assertIsNone(launch.argv)
+        self.assertEqual(launch.command, "python -c 'print(1 2)'")
+        target, _, reason = worker._classify_launch(launch, ["/build/python"])
+        self.assertIsNone(target)
+        self.assertEqual(reason, "opaque shell command")
+
+        shell = worker._launch(
+            "subprocess.Popen",
+            ("/bin/sh", ["sh", "-c", "/build/python -X pystats"], None, {}))
+        target, _, reason = worker._classify_launch(shell, ["/build/python"])
+        self.assertIsNone(target)
+        self.assertEqual(reason, "opaque shell command")
+        self.assertEqual(shell.argv[2], "/build/python -X pystats")
+
+        relative = worker._launch(
+            "subprocess.Popen", (None, ["python", "-c", "pass"], None, {}))
+        target, _, reason = worker._classify_launch(
+            relative, ["/build/python"])
+        self.assertIsNone(target)
+        self.assertEqual(reason, "ambiguous relative executable")
+        alias = worker._launch(
+            "subprocess.Popen", (None, ["myrunner", "-c", "pass"], None, {}))
+        target, _, reason = worker._classify_launch(alias, ["/build/python"])
+        self.assertIsNone(target)
+        self.assertEqual(reason, "ambiguous relative executable")
+
+    def test_custom_environment_mapping_is_not_iterated_by_audit(self):
+        class HostileEnv(dict):
+            def items(self):
+                raise AssertionError("audit hook must not call env mapping")
+
+        launch = worker._launch(
+            "subprocess.Popen",
+            ("/build/python", ["python", "-E"], None, HostileEnv()))
+        self.assertEqual(launch.shape, "structured")
+        self.assertEqual(launch.command, "opaque environment mapping")
+        target, _, reason = worker._classify_launch(launch, ["/build/python"])
+        self.assertIsNone(target)
+        self.assertEqual(reason, "opaque shell command")
+
+    def test_dual_ledger_failure_reaches_result(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch.object(worker, "_build_products", return_value=["/build/python"]):
+                hook, failure_state = worker._make_spawn_hook(tmp)
+            event_args = ("/build/python", ["python", "-c", "pass"], None, {})
+            with patch.object(worker.os, "open", side_effect=OSError("write failed")):
+                hook("subprocess.Popen", event_args)
+            self.assertTrue(failure_state["failed"])
+            self.assertEqual({error["stage"] for error in failure_state["errors"]},
+                             {"spawn-write", "error-write"})
+            result = LibregrtestResult("test_worker_capture", state=State.PASSED,
+                                       errors=[("test_case", "prior test error")])
+            worker._apply_audit_failures(result, failure_state)
+            self.assertEqual(result.state, State.FAILED)
+            self.assertEqual(result.errors[0], ("test_case", "prior test error"))
+            self.assertIn("pystats audit capture failed", result.errors[-1][1])
+
+    def test_short_spawn_write_fails_closed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch.object(worker.os, "write", return_value=1):
+                with self.assertRaises(OSError):
+                    worker._write_record(os.path.join(tmp, "worker.spawn"),
+                                         {"event": "test"})
+
+    def test_spawn_failure_records_error_ledger(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            python = "/build/python"
+            with patch.object(worker, "_build_products", return_value=[python]):
+                hook, failure_state = worker._make_spawn_hook(tmp)
+            real_open = os.open
+
+            def open_spawn_fail_audit_ok(path, flags, mode=0o777):
+                if str(path).endswith(".spawn"):
+                    raise OSError("spawn write failed")
+                return real_open(path, flags, mode)
+
+            with patch.object(worker.os, "open", side_effect=open_spawn_fail_audit_ok):
+                hook("subprocess.Popen", (python, ["python", "-c", "pass"], None, {}))
+            self.assertTrue(failure_state["failed"])
+            ledgers = list(Path(tmp).glob("*.audit-error"))
+            self.assertEqual(len(ledgers), 1)
+            error = json.loads(ledgers[0].read_text())
+            self.assertEqual((error["stage"], error["event"]),
+                             ("spawn-write", "subprocess.Popen"))
+
+    def test_hook_writes_structured_counted_event(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            python = "/build/python"
+            with patch.object(worker, "_build_products", return_value=[python]):
+                hook, failure_state = worker._make_spawn_hook(tmp)
+            argv = ["fake-argv0", "-X", "pystats", "-X", f"pystats_dir={tmp}",
+                    "-c", "print('a b')"]
+            with patch.dict(os.environ, {"PYTHON_PYSTATS_TAG": "test_spawn"}):
+                hook("subprocess.Popen", (python, argv, None, {}))
+            self.assertFalse(failure_state["failed"])
+            record = json.loads((Path(tmp) / "test_spawn.spawn").read_text())
+            self.assertEqual(record["argv"], argv)
+            self.assertTrue(record["counts"])
+
+
 def clean_summary(**changes):
     summary = {"dumps": 1, "accounting_errors": [], "rows": [], "drops": {"thunk": 0}, "leftover_run": [],
-               "spawn": [], "resets_by_tag": {}, "bad_dumps": []}
+               "spawn": [], "resets_by_tag": {}, "bad_dumps": [],
+               "identity_coverage": {"complete": True}}
     summary.update(changes)
     return summary
 

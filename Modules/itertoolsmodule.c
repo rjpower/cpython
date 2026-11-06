@@ -217,67 +217,63 @@ batched_traverse(PyObject *op, visitproc visit, void *arg)
     return 0;
 }
 
-static PyObject *
-batched_next(PyObject *op)
+static _PyStatusValue
+batched_next_value(PyObject *op)
 {
     batchedobject *bo = batchedobject_CAST(op);
     Py_ssize_t i;
     Py_ssize_t n = FT_ATOMIC_LOAD_SSIZE_RELAXED(bo->batch_size);
     PyObject *it = bo->it;
-    PyObject *item;
     PyObject *result;
 
     if (n < 0) {
-        return NULL;
+        return (_PyStatusValue){PYGEN_RETURN, PyValue_NULL};
     }
     result = PyTuple_New(n);
     if (result == NULL) {
-        return NULL;
+        return (_PyStatusValue){PYGEN_ERROR, PyValue_NULL};
     }
-    iternextfunc iternext = *Py_TYPE(it)->tp_iternext;
     PyValue *items = _PyTuple_ITEMS(result);
     for (i=0 ; i < n ; i++) {
-        item = iternext(it);
-        if (item == NULL) {
-            goto null_item;
+        _PyStatusValue next = _PyValue_IterNext(it);
+        if (next.status != PYGEN_NEXT) {
+            PyValue_XCLOSE(next.value);
+            if (next.status < 0) {
+                FT_ATOMIC_STORE_SSIZE_RELAXED(bo->batch_size, -1);
+#ifndef Py_GIL_DISABLED
+                Py_CLEAR(bo->it);
+#endif
+                Py_DECREF(result);
+                return (_PyStatusValue){PYGEN_ERROR, PyValue_NULL};
+            }
+            if (i == 0) {
+                FT_ATOMIC_STORE_SSIZE_RELAXED(bo->batch_size, -1);
+#ifndef Py_GIL_DISABLED
+                Py_CLEAR(bo->it);
+#endif
+                Py_DECREF(result);
+                return (_PyStatusValue){PYGEN_RETURN, PyValue_NULL};
+            }
+            if (bo->strict) {
+                FT_ATOMIC_STORE_SSIZE_RELAXED(bo->batch_size, -1);
+#ifndef Py_GIL_DISABLED
+                Py_CLEAR(bo->it);
+#endif
+                Py_DECREF(result);
+                PyErr_SetString(PyExc_ValueError, "batched(): incomplete batch");
+                return (_PyStatusValue){PYGEN_ERROR, PyValue_NULL};
+            }
+            if (_PyTuple_Resize(&result, i) < 0) {
+                return (_PyStatusValue){PYGEN_ERROR, PyValue_NULL};
+            }
+            return (_PyStatusValue){PYGEN_NEXT, _PyValue_FromObjectResult(result)};
         }
-        items[i] = PyValue_PrepareOwned(item);
+        items[i] = next.value;
     }
-    return result;
-
- null_item:
-    if (PyErr_Occurred()) {
-        if (!PyErr_ExceptionMatches(PyExc_StopIteration)) {
-            /* Input raised an exception other than StopIteration */
-            FT_ATOMIC_STORE_SSIZE_RELAXED(bo->batch_size, -1);
-#ifndef Py_GIL_DISABLED
-            Py_CLEAR(bo->it);
-#endif
-            Py_DECREF(result);
-            return NULL;
-        }
-        PyErr_Clear();
-    }
-    if (i == 0) {
-        FT_ATOMIC_STORE_SSIZE_RELAXED(bo->batch_size, -1);
-#ifndef Py_GIL_DISABLED
-        Py_CLEAR(bo->it);
-#endif
-        Py_DECREF(result);
-        return NULL;
-    }
-    if (bo->strict) {
-        FT_ATOMIC_STORE_SSIZE_RELAXED(bo->batch_size, -1);
-#ifndef Py_GIL_DISABLED
-        Py_CLEAR(bo->it);
-#endif
-        Py_DECREF(result);
-        PyErr_SetString(PyExc_ValueError, "batched(): incomplete batch");
-        return NULL;
-    }
-    _PyTuple_Resize(&result, i);
-    return result;
+    return (_PyStatusValue){PYGEN_NEXT, _PyValue_FromObjectResult(result)};
 }
+
+_Py_VALUE_THUNK_ITERNEXT(batched_next, batched_next_value)
 
 static PyType_Slot batched_slots[] = {
     {Py_tp_dealloc, batched_dealloc},
@@ -286,6 +282,7 @@ static PyType_Slot batched_slots[] = {
     {Py_tp_traverse, batched_traverse},
     {Py_tp_iter, PyObject_SelfIter},
     {Py_tp_iternext, batched_next},
+    {_Py_value_iternext, batched_next_value},
     {Py_tp_alloc, PyType_GenericAlloc},
     {Py_tp_new, batched_new},
     {Py_tp_free, PyObject_GC_Del},
@@ -1352,26 +1349,23 @@ cycle_traverse(PyObject *op, visitproc visit, void *arg)
     return 0;
 }
 
-static PyObject *
-cycle_next(PyObject *op)
+static _PyStatusValue
+cycle_next_value(PyObject *op)
 {
     cycleobject *lz = cycleobject_CAST(op);
-    PyObject *item;
-
     Py_ssize_t index = FT_ATOMIC_LOAD_SSIZE_RELAXED(lz->index);
 
     if (index < 0) {
-        item = PyIter_Next(lz->it);
-        if (item != NULL) {
-            if (PyList_AppendValue(lz->saved, PyValue_FromObjectBorrow(item))) {
-                Py_DECREF(item);
-                return NULL;
+        _PyStatusValue item = _PyValue_IterNext(lz->it);
+        if (item.status == PYGEN_NEXT) {
+            if (PyList_AppendValue(lz->saved, item.value) < 0) {
+                PyValue_CLOSE(item.value);
+                return (_PyStatusValue){PYGEN_ERROR, PyValue_NULL};
             }
             return item;
         }
-        /* Note:  StopIteration is already cleared by PyIter_Next() */
-        if (PyErr_Occurred())
-            return NULL;
+        if (item.status < 0)
+            return item;
         index = 0;
         FT_ATOMIC_STORE_SSIZE_RELAXED(lz->index, 0);
 #ifndef Py_GIL_DISABLED
@@ -1379,21 +1373,19 @@ cycle_next(PyObject *op)
 #endif
     }
     if (PyList_GET_SIZE(lz->saved) == 0)
-        return NULL;
+        return (_PyStatusValue){PYGEN_RETURN, PyValue_NULL};
     PyValue saved_item = PyList_GetValue(lz->saved, index);
-    assert(!PyValue_IsNull(saved_item));
-    item = _PyValue_AsObjectAt(saved_item, BOX_SITE_LIST);
-    PyValue_CLOSE(saved_item);
-    if (item == NULL) {
-        return NULL;
-    }
+    if (PyValue_IsNull(saved_item))
+        return (_PyStatusValue){PYGEN_ERROR, PyValue_NULL};
     index++;
     if (index >= PyList_GET_SIZE(lz->saved)) {
         index = 0;
     }
     FT_ATOMIC_STORE_SSIZE_RELAXED(lz->index, index);
-    return item;
+    return (_PyStatusValue){PYGEN_NEXT, saved_item};
 }
+
+_Py_VALUE_THUNK_ITERNEXT(cycle_next, cycle_next_value)
 
 static PyType_Slot cycle_slots[] = {
     {Py_tp_dealloc, cycle_dealloc},
@@ -1402,6 +1394,7 @@ static PyType_Slot cycle_slots[] = {
     {Py_tp_traverse, cycle_traverse},
     {Py_tp_iter, PyObject_SelfIter},
     {Py_tp_iternext, cycle_next},
+    {_Py_value_iternext, cycle_next_value},
     {Py_tp_new, itertools_cycle},
     {Py_tp_free, PyObject_GC_Del},
     {0, NULL},
@@ -1420,7 +1413,7 @@ static PyType_Spec cycle_spec = {
 
 typedef struct {
     PyObject_HEAD
-    PyObject *func;
+    PyValue func;
     PyObject *it;
     long start;
 } dropwhileobject;
@@ -1458,11 +1451,8 @@ itertools_dropwhile_impl(PyTypeObject *type, PyValueBorrow func,
         return PyValue_NULL;
     }
     lz->it = it;
-    lz->func = _PyValue_AsObjectAt(func, BOX_SITE_FIELD);
-    if (lz->func == NULL) {
-        Py_DECREF(lz);
-        return PyValue_NULL;
-    }
+    lz->func = PyValue_DUP(func);
+    _PyValue_CheckHome(lz->func);
     lz->start = 0;
 
     return _PyValue_FromObjectResult((PyObject *)lz);
@@ -1474,7 +1464,7 @@ dropwhile_dealloc(PyObject *op)
     dropwhileobject *lz = dropwhileobject_CAST(op);
     PyTypeObject *tp = Py_TYPE(lz);
     PyObject_GC_UnTrack(lz);
-    Py_XDECREF(lz->func);
+    PyValue_CLOSE(lz->func);
     Py_XDECREF(lz->it);
     tp->tp_free(lz);
     Py_DECREF(tp);
@@ -1486,43 +1476,41 @@ dropwhile_traverse(PyObject *op, visitproc visit, void *arg)
     dropwhileobject *lz = dropwhileobject_CAST(op);
     Py_VISIT(Py_TYPE(lz));
     Py_VISIT(lz->it);
-    Py_VISIT(lz->func);
+    _Py_VISIT_VALUE(lz->func);
     return 0;
 }
 
-static PyObject *
-dropwhile_next(PyObject *op)
+static _PyStatusValue
+dropwhile_next_value(PyObject *op)
 {
     dropwhileobject *lz = dropwhileobject_CAST(op);
-    PyObject *item, *good;
     PyObject *it = lz->it;
-    long ok;
-    PyObject *(*iternext)(PyObject *);
-
-    iternext = *Py_TYPE(it)->tp_iternext;
     for (;;) {
-        item = iternext(it);
-        if (item == NULL)
-            return NULL;
+        _PyStatusValue item = _PyValue_IterStep(it);
+        if (item.status != PYGEN_NEXT)
+            return item;
         if (lz->start == 1)
             return item;
 
-        good = PyObject_CallOneArg(lz->func, item);
-        if (good == NULL) {
-            Py_DECREF(item);
-            return NULL;
+        PyValue good = _PyValue_CallOneArg(_PyThreadState_GET(), lz->func,
+                                           item.value);
+        if (PyValue_IsNull(good)) {
+            PyValue_CLOSE(item.value);
+            return (_PyStatusValue){PYGEN_ERROR, PyValue_NULL};
         }
-        ok = _PyValue_IsTrue(PyValue_FromObjectBorrow(good));
-        Py_DECREF(good);
+        int ok = _PyValue_IsTrue(good);
+        PyValue_CLOSE(good);
         if (ok == 0) {
             lz->start = 1;
             return item;
         }
-        Py_DECREF(item);
+        PyValue_CLOSE(item.value);
         if (ok < 0)
-            return NULL;
+            return (_PyStatusValue){PYGEN_ERROR, PyValue_NULL};
     }
 }
+
+_Py_VALUE_THUNK_ITERNEXT(dropwhile_next, dropwhile_next_value)
 
 static PyType_Slot dropwhile_slots[] = {
     {Py_tp_dealloc, dropwhile_dealloc},
@@ -1531,6 +1519,7 @@ static PyType_Slot dropwhile_slots[] = {
     {Py_tp_traverse, dropwhile_traverse},
     {Py_tp_iter, PyObject_SelfIter},
     {Py_tp_iternext, dropwhile_next},
+    {_Py_value_iternext, dropwhile_next_value},
     {Py_tp_new, itertools_dropwhile},
     {Py_tp_free, PyObject_GC_Del},
     {0, NULL},
@@ -1792,32 +1781,35 @@ islice_traverse(PyObject *op, visitproc visit, void *arg)
     return 0;
 }
 
-static PyObject *
-islice_next(PyObject *op)
+static _PyStatusValue
+islice_next_value(PyObject *op)
 {
     isliceobject *lz = isliceobject_CAST(op);
-    PyObject *item;
     PyObject *it = lz->it;
     Py_ssize_t stop = lz->stop;
     Py_ssize_t oldnext;
-    PyObject *(*iternext)(PyObject *);
 
     if (it == NULL)
-        return NULL;
+        return (_PyStatusValue){PYGEN_RETURN, PyValue_NULL};
 
-    iternext = *Py_TYPE(it)->tp_iternext;
     while (lz->cnt < lz->next) {
-        item = iternext(it);
-        if (item == NULL)
-            goto empty;
-        Py_DECREF(item);
+        _PyStatusValue skipped = _PyValue_IterStep(it);
+        if (skipped.status != PYGEN_NEXT) {
+            Py_CLEAR(lz->it);
+            return skipped;
+        }
+        PyValue_CLOSE(skipped.value);
         lz->cnt++;
     }
-    if (stop != -1 && lz->cnt >= stop)
-        goto empty;
-    item = iternext(it);
-    if (item == NULL)
-        goto empty;
+    if (stop != -1 && lz->cnt >= stop) {
+        Py_CLEAR(lz->it);
+        return (_PyStatusValue){PYGEN_RETURN, PyValue_NULL};
+    }
+    _PyStatusValue item = _PyValue_IterStep(it);
+    if (item.status != PYGEN_NEXT) {
+        Py_CLEAR(lz->it);
+        return item;
+    }
     lz->cnt++;
     oldnext = lz->next;
     /* The (size_t) cast below avoids the danger of undefined
@@ -1826,11 +1818,9 @@ islice_next(PyObject *op)
     if (lz->next < oldnext || (stop != -1 && lz->next > stop))
         lz->next = stop;
     return item;
-
-empty:
-    Py_CLEAR(lz->it);
-    return NULL;
 }
+
+_Py_VALUE_THUNK_ITERNEXT(islice_next, islice_next_value)
 
 PyDoc_STRVAR(islice_doc,
 "islice(iterable, stop) --> islice object\n\
@@ -1850,6 +1840,7 @@ static PyType_Slot islice_slots[] = {
     {Py_tp_traverse, islice_traverse},
     {Py_tp_iter, PyObject_SelfIter},
     {Py_tp_iternext, islice_next},
+    {_Py_value_iternext, islice_next_value},
     {Py_tp_new, islice_new},
     {Py_tp_free, PyObject_GC_Del},
     {0, NULL},
@@ -3424,15 +3415,11 @@ compress_traverse(PyObject *op, visitproc visit, void *arg)
     return 0;
 }
 
-static PyObject *
-compress_next(PyObject *op)
+static _PyStatusValue
+compress_next_value(PyObject *op)
 {
     compressobject *lz = compressobject_CAST(op);
     PyObject *data = lz->data, *selectors = lz->selectors;
-    PyObject *datum, *selector;
-    PyObject *(*datanext)(PyObject *) = *Py_TYPE(data)->tp_iternext;
-    PyObject *(*selectornext)(PyObject *) = *Py_TYPE(selectors)->tp_iternext;
-    int ok;
 
     while (1) {
         /* Steps:  get datum, get selector, evaluate selector.
@@ -3441,25 +3428,27 @@ compress_next(PyObject *op)
            exception first).
         */
 
-        datum = datanext(data);
-        if (datum == NULL)
-            return NULL;
+        _PyStatusValue datum = _PyValue_IterStep(data);
+        if (datum.status != PYGEN_NEXT)
+            return datum;
 
-        selector = selectornext(selectors);
-        if (selector == NULL) {
-            Py_DECREF(datum);
-            return NULL;
+        _PyStatusValue selector = _PyValue_IterStep(selectors);
+        if (selector.status != PYGEN_NEXT) {
+            PyValue_CLOSE(datum.value);
+            return selector;
         }
 
-        ok = _PyValue_IsTrue(PyValue_FromObjectBorrow(selector));
-        Py_DECREF(selector);
+        int ok = _PyValue_IsTrue(selector.value);
+        PyValue_CLOSE(selector.value);
         if (ok > 0)
             return datum;
-        Py_DECREF(datum);
+        PyValue_CLOSE(datum.value);
         if (ok < 0)
-            return NULL;
+            return (_PyStatusValue){PYGEN_ERROR, PyValue_NULL};
     }
 }
+
+_Py_VALUE_THUNK_ITERNEXT(compress_next, compress_next_value)
 
 static PyType_Slot compress_slots[] = {
     {Py_tp_dealloc, compress_dealloc},
@@ -3468,6 +3457,7 @@ static PyType_Slot compress_slots[] = {
     {Py_tp_traverse, compress_traverse},
     {Py_tp_iter, PyObject_SelfIter},
     {Py_tp_iternext, compress_next},
+    {_Py_value_iternext, compress_next_value},
     {Py_tp_new, itertools_compress},
     {Py_tp_free, PyObject_GC_Del},
     {0, NULL},
@@ -3486,7 +3476,7 @@ static PyType_Spec compress_spec = {
 
 typedef struct {
     PyObject_HEAD
-    PyObject *func;
+    PyValue func;
     PyObject *it;
 } filterfalseobject;
 
@@ -3523,11 +3513,8 @@ itertools_filterfalse_impl(PyTypeObject *type, PyValueBorrow func,
         return PyValue_NULL;
     }
     lz->it = it;
-    lz->func = _PyValue_AsObjectAt(func, BOX_SITE_FIELD);
-    if (lz->func == NULL) {
-        Py_DECREF(lz);
-        return PyValue_NULL;
-    }
+    lz->func = PyValue_DUP(func);
+    _PyValue_CheckHome(lz->func);
 
     return _PyValue_FromObjectResult((PyObject *)lz);
 }
@@ -3538,7 +3525,7 @@ filterfalse_dealloc(PyObject *op)
     filterfalseobject *lz = filterfalseobject_CAST(op);
     PyTypeObject *tp = Py_TYPE(lz);
     PyObject_GC_UnTrack(lz);
-    Py_XDECREF(lz->func);
+    PyValue_CLOSE(lz->func);
     Py_XDECREF(lz->it);
     tp->tp_free(lz);
     Py_DECREF(tp);
@@ -3550,44 +3537,45 @@ filterfalse_traverse(PyObject *op, visitproc visit, void *arg)
     filterfalseobject *lz = filterfalseobject_CAST(op);
     Py_VISIT(Py_TYPE(lz));
     Py_VISIT(lz->it);
-    Py_VISIT(lz->func);
+    _Py_VISIT_VALUE(lz->func);
     return 0;
 }
 
-static PyObject *
-filterfalse_next(PyObject *op)
+static _PyStatusValue
+filterfalse_next_value(PyObject *op)
 {
     filterfalseobject *lz = filterfalseobject_CAST(op);
-    PyObject *item;
     PyObject *it = lz->it;
-    long ok;
-    PyObject *(*iternext)(PyObject *);
 
-    iternext = *Py_TYPE(it)->tp_iternext;
     for (;;) {
-        item = iternext(it);
-        if (item == NULL)
-            return NULL;
+        _PyStatusValue item = _PyValue_IterStep(it);
+        if (item.status != PYGEN_NEXT)
+            return item;
 
-        if (lz->func == Py_None || lz->func == (PyObject *)&PyBool_Type) {
-            ok = _PyValue_IsTrue(PyValue_FromObjectBorrow(item));
+        int ok;
+        if (PyValue_Is(lz->func, PyValue_None) ||
+            (PyValue_IsObject(lz->func) &&
+             PyValue_AsKnownObjectBorrow(lz->func) == (PyObject *)&PyBool_Type)) {
+            ok = _PyValue_IsTrue(item.value);
         } else {
-            PyObject *good;
-            good = PyObject_CallOneArg(lz->func, item);
-            if (good == NULL) {
-                Py_DECREF(item);
-                return NULL;
+            PyValue good = _PyValue_CallOneArg(_PyThreadState_GET(), lz->func,
+                                               item.value);
+            if (PyValue_IsNull(good)) {
+                PyValue_CLOSE(item.value);
+                return (_PyStatusValue){PYGEN_ERROR, PyValue_NULL};
             }
-            ok = _PyValue_IsTrue(PyValue_FromObjectBorrow(good));
-            Py_DECREF(good);
+            ok = _PyValue_IsTrue(good);
+            PyValue_CLOSE(good);
         }
         if (ok == 0)
             return item;
-        Py_DECREF(item);
+        PyValue_CLOSE(item.value);
         if (ok < 0)
-            return NULL;
+            return (_PyStatusValue){PYGEN_ERROR, PyValue_NULL};
     }
 }
+
+_Py_VALUE_THUNK_ITERNEXT(filterfalse_next, filterfalse_next_value)
 
 static PyType_Slot filterfalse_slots[] = {
     {Py_tp_dealloc, filterfalse_dealloc},
@@ -3596,6 +3584,7 @@ static PyType_Slot filterfalse_slots[] = {
     {Py_tp_traverse, filterfalse_traverse},
     {Py_tp_iter, PyObject_SelfIter},
     {Py_tp_iternext, filterfalse_next},
+    {_Py_value_iternext, filterfalse_next_value},
     {Py_tp_new, itertools_filterfalse},
     {Py_tp_free, PyObject_GC_Del},
     {0, NULL},

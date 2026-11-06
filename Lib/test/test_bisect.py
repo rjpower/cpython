@@ -123,6 +123,10 @@ class TestBisect:
         mod = self.module
         self.assertRaises(ValueError, mod.bisect_left, [1, 2, 3], 5, -1, 3)
         self.assertRaises(ValueError, mod.bisect_right, [1, 2, 3], 5, -1, 3)
+        for func in (mod.bisect_left, mod.bisect_right):
+            for args in ((1, 5, -1), (1, 5, -1, 0)):
+                with self.assertRaises(ValueError):
+                    func(*args)
         self.assertRaises(ValueError, mod.insort_left, [1, 2, 3], 5, -1, 3)
         self.assertRaises(ValueError, mod.insort_right, [1, 2, 3], 5, -1, 3)
 
@@ -232,6 +236,31 @@ class TestBisect:
                 mod.bisect_right(arr, x, key=keyfunc),
                 mod.bisect_right(precomputed_arr, x)
             )
+
+    def test_key_callback_changes_sequence_getitem(self):
+        calls = []
+
+        class Sequence(list):
+            def __getitem__(self, index):
+                calls.append(("old", index))
+                return super().__getitem__(index)
+
+        def new_getitem(self, index):
+            calls.append(("new", index))
+            return super(Sequence, self).__getitem__(index)
+
+        sequence = Sequence(range(4))
+        changed = False
+
+        def key(value):
+            nonlocal changed
+            if not changed:
+                changed = True
+                Sequence.__getitem__ = new_getitem
+            return value
+
+        self.assertEqual(self.module.bisect_right(sequence, 2.5, key=key), 3)
+        self.assertEqual(calls, [("old", 2), ("new", 3)])
 
     def test_insort(self):
         from random import shuffle

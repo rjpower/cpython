@@ -595,15 +595,7 @@ abc_abc_init_body(PyObject *module, PyObject *self)
         }
 
         long val;
-        {
-            PyObject *flags_obj = _PyValue_AsObjectAt(flags, BOX_SITE_NUMBER);
-            if (flags_obj == NULL) {
-                PyValue_CLOSE(flags);
-                return PyValue_NULL;
-            }
-            val = _PyValue_AsLong(PyValue_FromObjectBorrow(flags_obj));
-            Py_DECREF(flags_obj);
-        }
+        val = _PyValue_AsLong(flags);
         PyValue_CLOSE(flags);
         if (val == -1 && PyErr_Occurred()) {
             return PyValue_NULL;

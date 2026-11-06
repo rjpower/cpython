@@ -6585,6 +6585,26 @@ class m.T "PyObject *" "&TestType"
             with self.assertRaises(ClinicError):
                 _make_clinic().parse(text)
 
+    def test_value_initializer_pairs_entries_and_defaults(self):
+        generated = self.generate(["""@value_initializer
+            @vectorcall
+            m.T.__init__
+                value: object = None"""])
+        self.assertIn('m_T___init___value(', generated)
+        self.assertIn('m_T_vectorcall(PyThreadState *tstate', generated)
+        self.assertIn('PyValue_Borrow(PyValue_None)', generated)
+        self.assertIn('tp_new', generated)
+        self.assertIn('Py_DECREF(self)', generated)
+
+    def test_value_initializer_rejects_unsupported(self):
+        prefix = "/*[clinic input]\nmodule m\nclass m.T \"PyObject *\" \"&TestType\"\n[clinic start generated code]*/\n"
+        for body in ("@value_initializer\nm.T.__init__",
+                     "@value_initializer\n@vectorcall\nm.f",
+                     "@value_initializer\n@value_constructor\n@vectorcall\nm.T.__init__"):
+            text = prefix + "/*[clinic input]\n" + body + "\n[clinic start generated code]*/\n"
+            with self.assertRaises(ClinicError):
+                _make_clinic().parse(text)
+
     def test_multiple_file_destinations_rejected(self):
         text = """
             /*[clinic input]

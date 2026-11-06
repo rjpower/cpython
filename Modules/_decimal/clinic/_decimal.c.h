@@ -8,14 +8,14 @@ preserve
 
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 #  include "pycore_gc.h"          // PyGC_Head
-#  include "pycore_runtime.h"     // _Py_ID()
 #  include "pycore_value.h"       // _PyValue_STATIC_IMMORTAL()
 #endif
-#include "pycore_abstract.h"      // _PyNumber_Index()
-#include "pycore_borrow.h"        // _PyBorrow_TupleItems()
-#include "pycore_modsupport.h"    // _PyArg_UnpackKeywords()
+#include "pycore_long_value.h"    // _PyValue_IntAsSsize_t()
+#include "pycore_modsupport.h"    // _PyArg_UnpackKeywordsValue()
+#include "pycore_runtime.h"       // _Py_SINGLETON()
 #include "pycore_tuple.h"         // _PyTuple_ITEMS()
 #include "pycore_value_call.h"    // METH_VALUE
+#include "pycore_value_ops.h"     // _PyValue_Index()
 #include "pycore_value_slots.h"   // _PyValue_THUNK_EXIT()
 
 PyDoc_STRVAR(_decimal_Context_Etiny__doc__,
@@ -26,17 +26,30 @@ PyDoc_STRVAR(_decimal_Context_Etiny__doc__,
 "\n"
 "This is the minimum exponent value for subnormal results.  When\n"
 "underflow occurs, the exponent is set to Etiny.");
+#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
+#  error "@value_function Clinic output requires a core build"
+#endif
 
 #define _DECIMAL_CONTEXT_ETINY_METHODDEF    \
-    {"Etiny", (PyCFunction)_decimal_Context_Etiny, METH_NOARGS, _decimal_Context_Etiny__doc__},
+    {"Etiny", _PyCFunction_CAST(_decimal_Context_Etiny), METH_VALUE|METH_NOARGS, _decimal_Context_Etiny__doc__},
+#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
+#  error "@value_function Clinic output requires a core build"
+#endif
 
-static PyObject *
+static PyValue
 _decimal_Context_Etiny_impl(PyObject *self);
+#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
+#  error "@value_function Clinic output requires a core build"
+#endif
 
-static PyObject *
-_decimal_Context_Etiny(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+_decimal_Context_Etiny(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _decimal_Context_Etiny_impl(self);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _decimal_Context_Etiny_impl(PyValue_AsKnownObjectBorrow(self));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(_decimal_Context_Etop__doc__,
@@ -47,17 +60,30 @@ PyDoc_STRVAR(_decimal_Context_Etop__doc__,
 "\n"
 "This is the maximum exponent if the _clamp field of the context is\n"
 "set to 1 (IEEE clamp mode).  Etop() must not be negative.");
+#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
+#  error "@value_function Clinic output requires a core build"
+#endif
 
 #define _DECIMAL_CONTEXT_ETOP_METHODDEF    \
-    {"Etop", (PyCFunction)_decimal_Context_Etop, METH_NOARGS, _decimal_Context_Etop__doc__},
+    {"Etop", _PyCFunction_CAST(_decimal_Context_Etop), METH_VALUE|METH_NOARGS, _decimal_Context_Etop__doc__},
+#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
+#  error "@value_function Clinic output requires a core build"
+#endif
 
-static PyObject *
+static PyValue
 _decimal_Context_Etop_impl(PyObject *self);
+#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
+#  error "@value_function Clinic output requires a core build"
+#endif
 
-static PyObject *
-_decimal_Context_Etop(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+_decimal_Context_Etop(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _decimal_Context_Etop_impl(self);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _decimal_Context_Etop_impl(PyValue_AsKnownObjectBorrow(self));
+
+    return return_value;
 }
 
 #if defined(CONFIG_32)
@@ -66,32 +92,41 @@ PyDoc_STRVAR(_decimal_Context__unsafe_setprec__doc__,
 "_unsafe_setprec($self, x, /)\n"
 "--\n"
 "\n");
+#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
+#  error "@value_function Clinic output requires a core build"
+#endif
 
 #define _DECIMAL_CONTEXT__UNSAFE_SETPREC_METHODDEF    \
-    {"_unsafe_setprec", (PyCFunction)_decimal_Context__unsafe_setprec, METH_O, _decimal_Context__unsafe_setprec__doc__},
+    {"_unsafe_setprec", _PyCFunction_CAST(_decimal_Context__unsafe_setprec), METH_VALUE|METH_O, _decimal_Context__unsafe_setprec__doc__},
+#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
+#  error "@value_function Clinic output requires a core build"
+#endif
 
-static PyObject *
+static PyValue
 _decimal_Context__unsafe_setprec_impl(PyObject *self, Py_ssize_t x);
+#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
+#  error "@value_function Clinic output requires a core build"
+#endif
 
-static PyObject *
-_decimal_Context__unsafe_setprec(PyObject *self, PyObject *arg)
+static PyValue
+_decimal_Context__unsafe_setprec(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     Py_ssize_t x;
 
     {
         Py_ssize_t ival = -1;
-        PyObject *iobj = _PyNumber_Index(arg);
-        if (iobj != NULL) {
-            ival = PyLong_AsSsize_t(iobj);
-            Py_DECREF(iobj);
+        PyValue iobj = _PyValue_Index(PyValue_Borrow(args[0]));
+        if (!PyValue_IsNull(iobj)) {
+            ival = _PyValue_IntAsSsize_t(PyValue_Borrow(iobj));
+            PyValue_CLOSE(iobj);
         }
         if (ival == -1 && PyErr_Occurred()) {
             goto exit;
         }
         x = ival;
     }
-    return_value = _decimal_Context__unsafe_setprec_impl(self, x);
+    return_value = _decimal_Context__unsafe_setprec_impl(PyValue_AsKnownObjectBorrow(self), x);
 
 exit:
     return return_value;
@@ -105,32 +140,41 @@ PyDoc_STRVAR(_decimal_Context__unsafe_setemin__doc__,
 "_unsafe_setemin($self, x, /)\n"
 "--\n"
 "\n");
+#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
+#  error "@value_function Clinic output requires a core build"
+#endif
 
 #define _DECIMAL_CONTEXT__UNSAFE_SETEMIN_METHODDEF    \
-    {"_unsafe_setemin", (PyCFunction)_decimal_Context__unsafe_setemin, METH_O, _decimal_Context__unsafe_setemin__doc__},
+    {"_unsafe_setemin", _PyCFunction_CAST(_decimal_Context__unsafe_setemin), METH_VALUE|METH_O, _decimal_Context__unsafe_setemin__doc__},
+#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
+#  error "@value_function Clinic output requires a core build"
+#endif
 
-static PyObject *
+static PyValue
 _decimal_Context__unsafe_setemin_impl(PyObject *self, Py_ssize_t x);
+#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
+#  error "@value_function Clinic output requires a core build"
+#endif
 
-static PyObject *
-_decimal_Context__unsafe_setemin(PyObject *self, PyObject *arg)
+static PyValue
+_decimal_Context__unsafe_setemin(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     Py_ssize_t x;
 
     {
         Py_ssize_t ival = -1;
-        PyObject *iobj = _PyNumber_Index(arg);
-        if (iobj != NULL) {
-            ival = PyLong_AsSsize_t(iobj);
-            Py_DECREF(iobj);
+        PyValue iobj = _PyValue_Index(PyValue_Borrow(args[0]));
+        if (!PyValue_IsNull(iobj)) {
+            ival = _PyValue_IntAsSsize_t(PyValue_Borrow(iobj));
+            PyValue_CLOSE(iobj);
         }
         if (ival == -1 && PyErr_Occurred()) {
             goto exit;
         }
         x = ival;
     }
-    return_value = _decimal_Context__unsafe_setemin_impl(self, x);
+    return_value = _decimal_Context__unsafe_setemin_impl(PyValue_AsKnownObjectBorrow(self), x);
 
 exit:
     return return_value;
@@ -144,32 +188,41 @@ PyDoc_STRVAR(_decimal_Context__unsafe_setemax__doc__,
 "_unsafe_setemax($self, x, /)\n"
 "--\n"
 "\n");
+#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
+#  error "@value_function Clinic output requires a core build"
+#endif
 
 #define _DECIMAL_CONTEXT__UNSAFE_SETEMAX_METHODDEF    \
-    {"_unsafe_setemax", (PyCFunction)_decimal_Context__unsafe_setemax, METH_O, _decimal_Context__unsafe_setemax__doc__},
+    {"_unsafe_setemax", _PyCFunction_CAST(_decimal_Context__unsafe_setemax), METH_VALUE|METH_O, _decimal_Context__unsafe_setemax__doc__},
+#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
+#  error "@value_function Clinic output requires a core build"
+#endif
 
-static PyObject *
+static PyValue
 _decimal_Context__unsafe_setemax_impl(PyObject *self, Py_ssize_t x);
+#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
+#  error "@value_function Clinic output requires a core build"
+#endif
 
-static PyObject *
-_decimal_Context__unsafe_setemax(PyObject *self, PyObject *arg)
+static PyValue
+_decimal_Context__unsafe_setemax(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     Py_ssize_t x;
 
     {
         Py_ssize_t ival = -1;
-        PyObject *iobj = _PyNumber_Index(arg);
-        if (iobj != NULL) {
-            ival = PyLong_AsSsize_t(iobj);
-            Py_DECREF(iobj);
+        PyValue iobj = _PyValue_Index(PyValue_Borrow(args[0]));
+        if (!PyValue_IsNull(iobj)) {
+            ival = _PyValue_IntAsSsize_t(PyValue_Borrow(iobj));
+            PyValue_CLOSE(iobj);
         }
         if (ival == -1 && PyErr_Occurred()) {
             goto exit;
         }
         x = ival;
     }
-    return_value = _decimal_Context__unsafe_setemax_impl(self, x);
+    return_value = _decimal_Context__unsafe_setemax_impl(PyValue_AsKnownObjectBorrow(self), x);
 
 exit:
     return return_value;
@@ -229,14 +282,21 @@ PyDoc_STRVAR(context_init__doc__,
 "    ...             traps=[InvalidOperation, DivisionByZero, Overflow],\n"
 "    ...             flags=[])\n"
 "    >>>");
+#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
+#  error "@value_function Clinic output requires a core build"
+#endif
 
 static int
-context_init_impl(PyObject *self, PyObject *prec, PyObject *rounding,
-                  PyObject *emin, PyObject *emax, PyObject *capitals,
-                  PyObject *clamp, PyObject *status, PyObject *traps);
+context_init_impl(PyObject *self, PyValueBorrow prec, PyValueBorrow rounding,
+                  PyValueBorrow emin, PyValueBorrow emax,
+                  PyValueBorrow capitals, PyValueBorrow clamp,
+                  PyValueBorrow status, PyValueBorrow traps);
+#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
+#  error "@value_function Clinic output requires a core build"
+#endif
 
 static int
-context_init(PyObject *self, PyObject *args, PyObject *kwargs)
+context_init_value(PyObject *self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
     int return_value = -1;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
@@ -266,79 +326,93 @@ context_init(PyObject *self, PyObject *args, PyObject *kwargs)
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[8];
-    PyObject * const *fastargs;
-    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
-    Py_ssize_t noptargs = nargs + (kwargs ? PyDict_GET_SIZE(kwargs) : 0) - 0;
-    PyObject *prec = Py_None;
-    PyObject *rounding = Py_None;
-    PyObject *emin = Py_None;
-    PyObject *emax = Py_None;
-    PyObject *capitals = Py_None;
-    PyObject *clamp = Py_None;
-    PyObject *status = Py_None;
-    PyObject *traps = Py_None;
+    Py_ssize_t _idx[8];
+    PyValueBorrow prec = PyValue_Borrow(PyValue_None);
+    PyValueBorrow rounding = PyValue_Borrow(PyValue_None);
+    PyValueBorrow emin = PyValue_Borrow(PyValue_None);
+    PyValueBorrow emax = PyValue_Borrow(PyValue_None);
+    PyValueBorrow capitals = PyValue_Borrow(PyValue_None);
+    PyValueBorrow clamp = PyValue_Borrow(PyValue_None);
+    PyValueBorrow status = PyValue_Borrow(PyValue_None);
+    PyValueBorrow traps = PyValue_Borrow(PyValue_None);
 
-    PyObject *const *_args_items = _PyBorrow_TupleItems(args, Py_MIN(nargs, 8));
-    if (_args_items == NULL) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 0, /*maxpos*/ 8, /*minkw*/ 0, /*varpos*/ 0, _idx, 8)) {
         goto exit;
     }
-    fastargs = _PyArg_UnpackKeywords(_args_items, nargs, kwargs, NULL, &_parser,
-            /*minpos*/ 0, /*maxpos*/ 8, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!fastargs) {
-        goto exit;
+    if (_idx[0] >= 0) {
+        prec = PyValue_Borrow(args[_idx[0]]);
     }
-    if (!noptargs) {
-        goto skip_optional_pos;
+    if (_idx[1] >= 0) {
+        rounding = PyValue_Borrow(args[_idx[1]]);
     }
-    if (fastargs[0]) {
-        prec = fastargs[0];
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
+    if (_idx[2] >= 0) {
+        emin = PyValue_Borrow(args[_idx[2]]);
     }
-    if (fastargs[1]) {
-        rounding = fastargs[1];
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
+    if (_idx[3] >= 0) {
+        emax = PyValue_Borrow(args[_idx[3]]);
     }
-    if (fastargs[2]) {
-        emin = fastargs[2];
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
+    if (_idx[4] >= 0) {
+        capitals = PyValue_Borrow(args[_idx[4]]);
     }
-    if (fastargs[3]) {
-        emax = fastargs[3];
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
+    if (_idx[5] >= 0) {
+        clamp = PyValue_Borrow(args[_idx[5]]);
     }
-    if (fastargs[4]) {
-        capitals = fastargs[4];
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
+    if (_idx[6] >= 0) {
+        status = PyValue_Borrow(args[_idx[6]]);
     }
-    if (fastargs[5]) {
-        clamp = fastargs[5];
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
+    if (_idx[7] >= 0) {
+        traps = PyValue_Borrow(args[_idx[7]]);
     }
-    if (fastargs[6]) {
-        status = fastargs[6];
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
-    }
-    traps = fastargs[7];
-skip_optional_pos:
     return_value = context_init_impl(self, prec, rounding, emin, emax, capitals, clamp, status, traps);
 
 exit:
     return return_value;
+}
+#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
+#  error "@value_function Clinic output requires a core build"
+#endif
+
+static int
+context_init(PyObject *self, PyObject *args, PyObject *kwargs)
+{
+    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
+    if (kwargs == NULL || PyDict_GET_SIZE(kwargs) == 0) {
+        return context_init_value(self, _PyTuple_ITEMS(args), nargs, NULL);
+    }
+    PyObject *kwnames;
+    PyValue *window = _PyValue_StackUnpackDict(_PyThreadState_GET(),
+        _PyTuple_ITEMS(args), nargs, kwargs, &kwnames);
+    if (window == NULL) {
+        return -1;
+    }
+    int result = context_init_value(self, window, nargs, kwnames);
+    _PyValue_StackUnpackDict_Free(window, nargs, kwnames);
+    return result;
+}
+#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
+#  error "@value_function Clinic output requires a core build"
+#endif
+
+static PyValue
+context_vectorcall(PyThreadState *tstate, PyObject *type, const PyValue *args,
+    size_t nargsf, PyObject *kwnames)
+{
+    assert(_PyType_CAST(type)->tp_init == context_init);
+    /* Make sure the type object is immutable: the generated
+     * vectorcall doesn't deal e.g. with users reassigning __init__. */
+    assert(PyType_HasFeature(_PyType_CAST(type), Py_TPFLAGS_IMMUTABLETYPE));
+    Py_ssize_t nargs = PyVectorcall_NARGS(nargsf);
+    PyObject *self = _PyType_CAST(type)->tp_new(_PyType_CAST(type),
+        (PyObject *)&_Py_SINGLETON(tuple_empty), NULL);
+    if (self == NULL) {
+        return PyValue_NULL;
+    }
+    if (context_init_value(self, args, nargs, kwnames) != 0) {
+        Py_DECREF(self);
+        return PyValue_NULL;
+    }
+    return PyValue_FromObjectSteal(self);
 }
 
 PyDoc_STRVAR(_decimal_IEEEContext__doc__,
@@ -349,32 +423,41 @@ PyDoc_STRVAR(_decimal_IEEEContext__doc__,
 "\n"
 "The argument must be a multiple of 32 and less than\n"
 "IEEE_CONTEXT_MAX_BITS.");
+#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
+#  error "@value_function Clinic output requires a core build"
+#endif
 
 #define _DECIMAL_IEEECONTEXT_METHODDEF    \
-    {"IEEEContext", (PyCFunction)_decimal_IEEEContext, METH_O, _decimal_IEEEContext__doc__},
+    {"IEEEContext", _PyCFunction_CAST(_decimal_IEEEContext), METH_VALUE|METH_O, _decimal_IEEEContext__doc__},
+#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
+#  error "@value_function Clinic output requires a core build"
+#endif
 
-static PyObject *
+static PyValue
 _decimal_IEEEContext_impl(PyObject *module, Py_ssize_t bits);
+#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
+#  error "@value_function Clinic output requires a core build"
+#endif
 
-static PyObject *
-_decimal_IEEEContext(PyObject *module, PyObject *arg)
+static PyValue
+_decimal_IEEEContext(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     Py_ssize_t bits;
 
     {
         Py_ssize_t ival = -1;
-        PyObject *iobj = _PyNumber_Index(arg);
-        if (iobj != NULL) {
-            ival = PyLong_AsSsize_t(iobj);
-            Py_DECREF(iobj);
+        PyValue iobj = _PyValue_Index(PyValue_Borrow(args[0]));
+        if (!PyValue_IsNull(iobj)) {
+            ival = _PyValue_IntAsSsize_t(PyValue_Borrow(iobj));
+            PyValue_CLOSE(iobj);
         }
         if (ival == -1 && PyErr_Occurred()) {
             goto exit;
         }
         bits = ival;
     }
-    return_value = _decimal_IEEEContext_impl(module, bits);
+    return_value = _decimal_IEEEContext_impl(PyValue_AsKnownObjectBorrow(module), bits);
 
 exit:
     return return_value;
@@ -428,21 +511,31 @@ PyDoc_STRVAR(_decimal_Context___replace____doc__,
 "--\n"
 "\n"
 "Return a copy of the context with the specified attributes replaced.");
+#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
+#  error "@value_function Clinic output requires a core build"
+#endif
 
 #define _DECIMAL_CONTEXT___REPLACE___METHODDEF    \
-    {"__replace__", _PyCFunction_CAST(_decimal_Context___replace__), METH_METHOD|METH_FASTCALL|METH_KEYWORDS, _decimal_Context___replace____doc__},
+    {"__replace__", _PyCFunction_CAST(_decimal_Context___replace__), METH_VALUE|METH_METHOD|METH_KEYWORDS, _decimal_Context___replace____doc__},
+#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
+#  error "@value_function Clinic output requires a core build"
+#endif
 
-static PyObject *
+static PyValue
 _decimal_Context___replace___impl(PyObject *self, PyTypeObject *cls,
-                                  PyObject *prec, PyObject *rounding,
-                                  PyObject *emin, PyObject *emax,
-                                  PyObject *capitals, PyObject *clamp,
-                                  PyObject *status, PyObject *traps);
+                                  PyValueBorrow prec, PyValueBorrow rounding,
+                                  PyValueBorrow emin, PyValueBorrow emax,
+                                  PyValueBorrow capitals,
+                                  PyValueBorrow clamp, PyValueBorrow status,
+                                  PyValueBorrow traps);
+#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
+#  error "@value_function Clinic output requires a core build"
+#endif
 
-static PyObject *
-_decimal_Context___replace__(PyObject *self, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_decimal_Context___replace__(PyValueBorrow self, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 8
@@ -470,70 +563,45 @@ _decimal_Context___replace__(PyObject *self, PyTypeObject *cls, PyObject *const 
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[8];
-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 0;
-    PyObject *prec = NULL;
-    PyObject *rounding = NULL;
-    PyObject *emin = NULL;
-    PyObject *emax = NULL;
-    PyObject *capitals = NULL;
-    PyObject *clamp = NULL;
-    PyObject *status = NULL;
-    PyObject *traps = NULL;
+    Py_ssize_t _idx[8];
+    PyValueBorrow prec = PyValue_Borrow(PyValue_NULL);
+    PyValueBorrow rounding = PyValue_Borrow(PyValue_NULL);
+    PyValueBorrow emin = PyValue_Borrow(PyValue_NULL);
+    PyValueBorrow emax = PyValue_Borrow(PyValue_NULL);
+    PyValueBorrow capitals = PyValue_Borrow(PyValue_NULL);
+    PyValueBorrow clamp = PyValue_Borrow(PyValue_NULL);
+    PyValueBorrow status = PyValue_Borrow(PyValue_NULL);
+    PyValueBorrow traps = PyValue_Borrow(PyValue_NULL);
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 0, /*maxpos*/ 0, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 0, /*maxpos*/ 0, /*minkw*/ 0, /*varpos*/ 0, _idx, 8)) {
         goto exit;
     }
-    if (!noptargs) {
-        goto skip_optional_kwonly;
+    if (_idx[0] >= 0) {
+        prec = PyValue_Borrow(args[_idx[0]]);
     }
-    if (args[0]) {
-        prec = args[0];
-        if (!--noptargs) {
-            goto skip_optional_kwonly;
-        }
+    if (_idx[1] >= 0) {
+        rounding = PyValue_Borrow(args[_idx[1]]);
     }
-    if (args[1]) {
-        rounding = args[1];
-        if (!--noptargs) {
-            goto skip_optional_kwonly;
-        }
+    if (_idx[2] >= 0) {
+        emin = PyValue_Borrow(args[_idx[2]]);
     }
-    if (args[2]) {
-        emin = args[2];
-        if (!--noptargs) {
-            goto skip_optional_kwonly;
-        }
+    if (_idx[3] >= 0) {
+        emax = PyValue_Borrow(args[_idx[3]]);
     }
-    if (args[3]) {
-        emax = args[3];
-        if (!--noptargs) {
-            goto skip_optional_kwonly;
-        }
+    if (_idx[4] >= 0) {
+        capitals = PyValue_Borrow(args[_idx[4]]);
     }
-    if (args[4]) {
-        capitals = args[4];
-        if (!--noptargs) {
-            goto skip_optional_kwonly;
-        }
+    if (_idx[5] >= 0) {
+        clamp = PyValue_Borrow(args[_idx[5]]);
     }
-    if (args[5]) {
-        clamp = args[5];
-        if (!--noptargs) {
-            goto skip_optional_kwonly;
-        }
+    if (_idx[6] >= 0) {
+        status = PyValue_Borrow(args[_idx[6]]);
     }
-    if (args[6]) {
-        status = args[6];
-        if (!--noptargs) {
-            goto skip_optional_kwonly;
-        }
+    if (_idx[7] >= 0) {
+        traps = PyValue_Borrow(args[_idx[7]]);
     }
-    traps = args[7];
-skip_optional_kwonly:
-    return_value = _decimal_Context___replace___impl(self, cls, prec, rounding, emin, emax, capitals, clamp, status, traps);
+    return_value = _decimal_Context___replace___impl(PyValue_AsKnownObjectBorrow(self), cls, prec, rounding, emin, emax, capitals, clamp, status, traps);
 
 exit:
     return return_value;
@@ -543,21 +611,35 @@ PyDoc_STRVAR(_decimal_Context___reduce____doc__,
 "__reduce__($self, /)\n"
 "--\n"
 "\n");
+#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
+#  error "@value_function Clinic output requires a core build"
+#endif
 
 #define _DECIMAL_CONTEXT___REDUCE___METHODDEF    \
-    {"__reduce__", _PyCFunction_CAST(_decimal_Context___reduce__), METH_METHOD|METH_FASTCALL|METH_KEYWORDS, _decimal_Context___reduce____doc__},
+    {"__reduce__", _PyCFunction_CAST(_decimal_Context___reduce__), METH_VALUE|METH_METHOD|METH_KEYWORDS, _decimal_Context___reduce____doc__},
+#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
+#  error "@value_function Clinic output requires a core build"
+#endif
 
-static PyObject *
+static PyValue
 _decimal_Context___reduce___impl(PyObject *self, PyTypeObject *cls);
+#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
+#  error "@value_function Clinic output requires a core build"
+#endif
 
-static PyObject *
-_decimal_Context___reduce__(PyObject *self, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_decimal_Context___reduce__(PyValueBorrow self, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
+    PyValue return_value = PyValue_NULL;
+
     if (nargs || (kwnames && PyTuple_GET_SIZE(kwnames))) {
         PyErr_SetString(PyExc_TypeError, "__reduce__() takes no arguments");
-        return NULL;
+        goto exit;
     }
-    return _decimal_Context___reduce___impl(self, cls);
+    return_value = _decimal_Context___reduce___impl(PyValue_AsKnownObjectBorrow(self), cls);
+
+exit:
+    return return_value;
 }
 
 PyDoc_STRVAR(_decimal_getcontext__doc__,
@@ -583,9 +665,33 @@ PyDoc_STRVAR(_decimal_setcontext__doc__,
 "--\n"
 "\n"
 "Set a new default context.");
+#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
+#  error "@value_function Clinic output requires a core build"
+#endif
 
 #define _DECIMAL_SETCONTEXT_METHODDEF    \
-    {"setcontext", (PyCFunction)_decimal_setcontext, METH_O, _decimal_setcontext__doc__},
+    {"setcontext", _PyCFunction_CAST(_decimal_setcontext), METH_VALUE|METH_O, _decimal_setcontext__doc__},
+#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
+#  error "@value_function Clinic output requires a core build"
+#endif
+
+static PyValue
+_decimal_setcontext_impl(PyObject *module, PyValueBorrow context);
+#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
+#  error "@value_function Clinic output requires a core build"
+#endif
+
+static PyValue
+_decimal_setcontext(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+{
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow context;
+
+    context = PyValue_Borrow(args[0]);
+    return_value = _decimal_setcontext_impl(PyValue_AsKnownObjectBorrow(module), context);
+
+    return return_value;
+}
 
 PyDoc_STRVAR(_decimal_localcontext__doc__,
 "localcontext($module, /, ctx=None, **kwargs)\n"
@@ -597,20 +703,30 @@ PyDoc_STRVAR(_decimal_localcontext__doc__,
 "with-statement and restore the previous default context when exiting\n"
 "the with-statement. If no context is specified, a copy of the current\n"
 "default context is used.");
+#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
+#  error "@value_function Clinic output requires a core build"
+#endif
 
 #define _DECIMAL_LOCALCONTEXT_METHODDEF    \
-    {"localcontext", _PyCFunction_CAST(_decimal_localcontext), METH_FASTCALL|METH_KEYWORDS, _decimal_localcontext__doc__},
+    {"localcontext", _PyCFunction_CAST(_decimal_localcontext), METH_VALUE|METH_KEYWORDS, _decimal_localcontext__doc__},
+#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
+#  error "@value_function Clinic output requires a core build"
+#endif
 
-static PyObject *
-_decimal_localcontext_impl(PyObject *module, PyObject *local, PyObject *prec,
-                           PyObject *rounding, PyObject *Emin,
-                           PyObject *Emax, PyObject *capitals,
-                           PyObject *clamp, PyObject *flags, PyObject *traps);
+static PyValue
+_decimal_localcontext_impl(PyObject *module, PyValueBorrow local,
+                           PyValueBorrow prec, PyValueBorrow rounding,
+                           PyValueBorrow Emin, PyValueBorrow Emax,
+                           PyValueBorrow capitals, PyValueBorrow clamp,
+                           PyValueBorrow flags, PyValueBorrow traps);
+#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
+#  error "@value_function Clinic output requires a core build"
+#endif
 
-static PyObject *
-_decimal_localcontext(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_decimal_localcontext(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 9
@@ -638,81 +754,49 @@ _decimal_localcontext(PyObject *module, PyObject *const *args, Py_ssize_t nargs,
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[9];
-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 0;
-    PyObject *local = Py_None;
-    PyObject *prec = NULL;
-    PyObject *rounding = NULL;
-    PyObject *Emin = NULL;
-    PyObject *Emax = NULL;
-    PyObject *capitals = NULL;
-    PyObject *clamp = NULL;
-    PyObject *flags = NULL;
-    PyObject *traps = NULL;
+    Py_ssize_t _idx[9];
+    PyValueBorrow local = PyValue_Borrow(PyValue_None);
+    PyValueBorrow prec = PyValue_Borrow(PyValue_NULL);
+    PyValueBorrow rounding = PyValue_Borrow(PyValue_NULL);
+    PyValueBorrow Emin = PyValue_Borrow(PyValue_NULL);
+    PyValueBorrow Emax = PyValue_Borrow(PyValue_NULL);
+    PyValueBorrow capitals = PyValue_Borrow(PyValue_NULL);
+    PyValueBorrow clamp = PyValue_Borrow(PyValue_NULL);
+    PyValueBorrow flags = PyValue_Borrow(PyValue_NULL);
+    PyValueBorrow traps = PyValue_Borrow(PyValue_NULL);
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 0, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 0, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, _idx, 9)) {
         goto exit;
     }
-    if (!noptargs) {
-        goto skip_optional_pos;
+    if (_idx[0] >= 0) {
+        local = PyValue_Borrow(args[_idx[0]]);
     }
-    if (args[0]) {
-        local = args[0];
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
+    if (_idx[1] >= 0) {
+        prec = PyValue_Borrow(args[_idx[1]]);
     }
-skip_optional_pos:
-    if (!noptargs) {
-        goto skip_optional_kwonly;
+    if (_idx[2] >= 0) {
+        rounding = PyValue_Borrow(args[_idx[2]]);
     }
-    if (args[1]) {
-        prec = args[1];
-        if (!--noptargs) {
-            goto skip_optional_kwonly;
-        }
+    if (_idx[3] >= 0) {
+        Emin = PyValue_Borrow(args[_idx[3]]);
     }
-    if (args[2]) {
-        rounding = args[2];
-        if (!--noptargs) {
-            goto skip_optional_kwonly;
-        }
+    if (_idx[4] >= 0) {
+        Emax = PyValue_Borrow(args[_idx[4]]);
     }
-    if (args[3]) {
-        Emin = args[3];
-        if (!--noptargs) {
-            goto skip_optional_kwonly;
-        }
+    if (_idx[5] >= 0) {
+        capitals = PyValue_Borrow(args[_idx[5]]);
     }
-    if (args[4]) {
-        Emax = args[4];
-        if (!--noptargs) {
-            goto skip_optional_kwonly;
-        }
+    if (_idx[6] >= 0) {
+        clamp = PyValue_Borrow(args[_idx[6]]);
     }
-    if (args[5]) {
-        capitals = args[5];
-        if (!--noptargs) {
-            goto skip_optional_kwonly;
-        }
+    if (_idx[7] >= 0) {
+        flags = PyValue_Borrow(args[_idx[7]]);
     }
-    if (args[6]) {
-        clamp = args[6];
-        if (!--noptargs) {
-            goto skip_optional_kwonly;
-        }
+    if (_idx[8] >= 0) {
+        traps = PyValue_Borrow(args[_idx[8]]);
     }
-    if (args[7]) {
-        flags = args[7];
-        if (!--noptargs) {
-            goto skip_optional_kwonly;
-        }
-    }
-    traps = args[8];
-skip_optional_kwonly:
-    return_value = _decimal_localcontext_impl(module, local, prec, rounding, Emin, Emax, capitals, clamp, flags, traps);
+    return_value = _decimal_localcontext_impl(PyValue_AsKnownObjectBorrow(module), local, prec, rounding, Emin, Emax, capitals, clamp, flags, traps);
 
 exit:
     return return_value;
@@ -723,25 +807,34 @@ PyDoc_STRVAR(_decimal_ContextManager___exit____doc__,
 "--\n"
 "\n"
 "Restore the global context.");
+#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
+#  error "@value_function Clinic output requires a core build"
+#endif
 
 #define _DECIMAL_CONTEXTMANAGER___EXIT___METHODDEF    \
-    {"__exit__", _PyCFunction_CAST(_decimal_ContextManager___exit__), METH_FASTCALL, _decimal_ContextManager___exit____doc__},
+    {"__exit__", _PyCFunction_CAST(_decimal_ContextManager___exit__), METH_VALUE, _decimal_ContextManager___exit____doc__},
+#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
+#  error "@value_function Clinic output requires a core build"
+#endif
 
-static PyObject *
+static PyValue
 _decimal_ContextManager___exit___impl(PyDecContextManagerObject *self,
-                                      PyObject * const *exc_info,
+                                      const PyValue *exc_info,
                                       Py_ssize_t exc_info_length);
+#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
+#  error "@value_function Clinic output requires a core build"
+#endif
 
-static PyObject *
-_decimal_ContextManager___exit__(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_decimal_ContextManager___exit__(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
-    PyObject * const *exc_info;
+    PyValue return_value = PyValue_NULL;
+    const PyValue *exc_info;
     Py_ssize_t exc_info_length;
 
     exc_info = args;
     exc_info_length = nargs;
-    return_value = _decimal_ContextManager___exit___impl((PyDecContextManagerObject *)self, exc_info, exc_info_length);
+    return_value = _decimal_ContextManager___exit___impl((PyDecContextManagerObject *)PyValue_AsKnownObjectBorrow(self), exc_info, exc_info_length);
 
     return return_value;
 }
@@ -1048,20 +1141,29 @@ PyDoc_STRVAR(_decimal_Decimal___format____doc__,
 "--\n"
 "\n"
 "Formats the Decimal according to format_spec.");
+#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
+#  error "@value_function Clinic output requires a core build"
+#endif
 
 #define _DECIMAL_DECIMAL___FORMAT___METHODDEF    \
-    {"__format__", _PyCFunction_CAST(_decimal_Decimal___format__), METH_METHOD|METH_FASTCALL|METH_KEYWORDS, _decimal_Decimal___format____doc__},
+    {"__format__", _PyCFunction_CAST(_decimal_Decimal___format__), METH_VALUE|METH_METHOD|METH_KEYWORDS, _decimal_Decimal___format____doc__},
+#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
+#  error "@value_function Clinic output requires a core build"
+#endif
 
-static PyObject *
+static PyValue
 _decimal_Decimal___format___impl(PyObject *dec, PyTypeObject *cls,
-                                 PyObject *fmtarg, PyObject *override);
+                                 PyObject *fmtarg, PyValueBorrow override);
+#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
+#  error "@value_function Clinic output requires a core build"
+#endif
 
-static PyObject *
-_decimal_Decimal___format__(PyObject *dec, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_decimal_Decimal___format__(PyValueBorrow dec, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *fmtarg;
-    PyObject *override = NULL;
+    PyValueBorrow override = PyValue_Borrow(PyValue_NULL);
 
     if (!_PyArg_NoKwnames("__format__", kwnames)) {
         goto exit;
@@ -1069,17 +1171,21 @@ _decimal_Decimal___format__(PyObject *dec, PyTypeObject *cls, PyObject *const *a
     if (!_PyArg_CheckPositional("__format__", nargs, 1, 2)) {
         goto exit;
     }
-    if (!PyUnicode_Check(args[0])) {
-        _PyArg_BadArgument("__format__", "argument 1", "str", args[0]);
+    if (!PyValue_IsObject(PyValue_Borrow(args[0]))) {
+        _PyArg_BadArgumentValue("__format__", "argument 1", "str", PyValue_Borrow(args[0]));
         goto exit;
     }
-    fmtarg = args[0];
+    if (!PyUnicode_Check(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])))) {
+        _PyArg_BadArgument("__format__", "argument 1", "str", PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])));
+        goto exit;
+    }
+    fmtarg = PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0]));
     if (nargs < 2) {
         goto skip_optional;
     }
-    override = args[1];
+    override = PyValue_Borrow(args[1]);
 skip_optional:
-    return_value = _decimal_Decimal___format___impl(dec, cls, fmtarg, override);
+    return_value = _decimal_Decimal___format___impl(PyValue_AsKnownObjectBorrow(dec), cls, fmtarg, override);
 
 exit:
     return return_value;
@@ -3016,17 +3122,30 @@ PyDoc_STRVAR(_decimal_Decimal_adjusted__doc__,
 "--\n"
 "\n"
 "Return the adjusted exponent (exp + digits - 1) of the number.");
+#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
+#  error "@value_function Clinic output requires a core build"
+#endif
 
 #define _DECIMAL_DECIMAL_ADJUSTED_METHODDEF    \
-    {"adjusted", (PyCFunction)_decimal_Decimal_adjusted, METH_NOARGS, _decimal_Decimal_adjusted__doc__},
+    {"adjusted", _PyCFunction_CAST(_decimal_Decimal_adjusted), METH_VALUE|METH_NOARGS, _decimal_Decimal_adjusted__doc__},
+#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
+#  error "@value_function Clinic output requires a core build"
+#endif
 
-static PyObject *
+static PyValue
 _decimal_Decimal_adjusted_impl(PyObject *self);
+#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
+#  error "@value_function Clinic output requires a core build"
+#endif
 
-static PyObject *
-_decimal_Decimal_adjusted(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+_decimal_Decimal_adjusted(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _decimal_Decimal_adjusted_impl(self);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _decimal_Decimal_adjusted_impl(PyValue_AsKnownObjectBorrow(self));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(_decimal_Decimal_canonical__doc__,
@@ -3076,21 +3195,35 @@ PyDoc_STRVAR(_decimal_Decimal_radix__doc__,
 "\n"
 "This is the radix (base) in which the Decimal class does all its\n"
 "arithmetic. Included for compatibility with the specification.");
+#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
+#  error "@value_function Clinic output requires a core build"
+#endif
 
 #define _DECIMAL_DECIMAL_RADIX_METHODDEF    \
-    {"radix", _PyCFunction_CAST(_decimal_Decimal_radix), METH_METHOD|METH_FASTCALL|METH_KEYWORDS, _decimal_Decimal_radix__doc__},
+    {"radix", _PyCFunction_CAST(_decimal_Decimal_radix), METH_VALUE|METH_METHOD|METH_KEYWORDS, _decimal_Decimal_radix__doc__},
+#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
+#  error "@value_function Clinic output requires a core build"
+#endif
 
-static PyObject *
+static PyValue
 _decimal_Decimal_radix_impl(PyObject *self, PyTypeObject *cls);
+#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
+#  error "@value_function Clinic output requires a core build"
+#endif
 
-static PyObject *
-_decimal_Decimal_radix(PyObject *self, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_decimal_Decimal_radix(PyValueBorrow self, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
+    PyValue return_value = PyValue_NULL;
+
     if (nargs || (kwnames && PyTuple_GET_SIZE(kwnames))) {
         PyErr_SetString(PyExc_TypeError, "radix() takes no arguments");
-        return NULL;
+        goto exit;
     }
-    return _decimal_Decimal_radix_impl(self, cls);
+    return_value = _decimal_Decimal_radix_impl(PyValue_AsKnownObjectBorrow(self), cls);
+
+exit:
+    return return_value;
 }
 
 PyDoc_STRVAR(_decimal_Decimal_copy_abs__doc__,
@@ -4416,9 +4549,33 @@ PyDoc_STRVAR(_decimal_Decimal___deepcopy____doc__,
 "__deepcopy__($self, memo, /)\n"
 "--\n"
 "\n");
+#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
+#  error "@value_function Clinic output requires a core build"
+#endif
 
 #define _DECIMAL_DECIMAL___DEEPCOPY___METHODDEF    \
-    {"__deepcopy__", (PyCFunction)_decimal_Decimal___deepcopy__, METH_O, _decimal_Decimal___deepcopy____doc__},
+    {"__deepcopy__", _PyCFunction_CAST(_decimal_Decimal___deepcopy__), METH_VALUE|METH_O, _decimal_Decimal___deepcopy____doc__},
+#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
+#  error "@value_function Clinic output requires a core build"
+#endif
+
+static PyValue
+_decimal_Decimal___deepcopy___impl(PyObject *self, PyValueBorrow memo);
+#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
+#  error "@value_function Clinic output requires a core build"
+#endif
+
+static PyValue
+_decimal_Decimal___deepcopy__(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+{
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow memo;
+
+    memo = PyValue_Borrow(args[0]);
+    return_value = _decimal_Decimal___deepcopy___impl(PyValue_AsKnownObjectBorrow(self), memo);
+
+    return return_value;
+}
 
 PyDoc_STRVAR(_decimal_Decimal___floor____doc__,
 "__floor__($self, /)\n"
@@ -4479,17 +4636,30 @@ PyDoc_STRVAR(_decimal_Decimal___sizeof____doc__,
 "--\n"
 "\n"
 "Returns size in memory, in bytes");
+#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
+#  error "@value_function Clinic output requires a core build"
+#endif
 
 #define _DECIMAL_DECIMAL___SIZEOF___METHODDEF    \
-    {"__sizeof__", (PyCFunction)_decimal_Decimal___sizeof__, METH_NOARGS, _decimal_Decimal___sizeof____doc__},
+    {"__sizeof__", _PyCFunction_CAST(_decimal_Decimal___sizeof__), METH_VALUE|METH_NOARGS, _decimal_Decimal___sizeof____doc__},
+#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
+#  error "@value_function Clinic output requires a core build"
+#endif
 
-static PyObject *
+static PyValue
 _decimal_Decimal___sizeof___impl(PyObject *v);
+#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
+#  error "@value_function Clinic output requires a core build"
+#endif
 
-static PyObject *
-_decimal_Decimal___sizeof__(PyObject *v, PyObject *Py_UNUSED(ignored))
+static PyValue
+_decimal_Decimal___sizeof__(PyValueBorrow v, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _decimal_Decimal___sizeof___impl(v);
+    PyValue return_value = PyValue_NULL;
+
+    return_value = _decimal_Decimal___sizeof___impl(PyValue_AsKnownObjectBorrow(v));
+
+    return return_value;
 }
 
 PyDoc_STRVAR(_decimal_Decimal___trunc____doc__,
@@ -5895,21 +6065,35 @@ PyDoc_STRVAR(_decimal_Context_radix__doc__,
 "--\n"
 "\n"
 "Return 10.");
+#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
+#  error "@value_function Clinic output requires a core build"
+#endif
 
 #define _DECIMAL_CONTEXT_RADIX_METHODDEF    \
-    {"radix", _PyCFunction_CAST(_decimal_Context_radix), METH_METHOD|METH_FASTCALL|METH_KEYWORDS, _decimal_Context_radix__doc__},
+    {"radix", _PyCFunction_CAST(_decimal_Context_radix), METH_VALUE|METH_METHOD|METH_KEYWORDS, _decimal_Context_radix__doc__},
+#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
+#  error "@value_function Clinic output requires a core build"
+#endif
 
-static PyObject *
+static PyValue
 _decimal_Context_radix_impl(PyObject *context, PyTypeObject *cls);
+#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
+#  error "@value_function Clinic output requires a core build"
+#endif
 
-static PyObject *
-_decimal_Context_radix(PyObject *context, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_decimal_Context_radix(PyValueBorrow context, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
+    PyValue return_value = PyValue_NULL;
+
     if (nargs || (kwnames && PyTuple_GET_SIZE(kwnames))) {
         PyErr_SetString(PyExc_TypeError, "radix() takes no arguments");
-        return NULL;
+        goto exit;
     }
-    return _decimal_Context_radix_impl(context, cls);
+    return_value = _decimal_Context_radix_impl(PyValue_AsKnownObjectBorrow(context), cls);
+
+exit:
+    return return_value;
 }
 
 PyDoc_STRVAR(_decimal_Context_is_normal__doc__,
@@ -7304,4 +7488,4 @@ exit:
 #ifndef _DECIMAL_CONTEXT_APPLY_METHODDEF
     #define _DECIMAL_CONTEXT_APPLY_METHODDEF
 #endif /* !defined(_DECIMAL_CONTEXT_APPLY_METHODDEF) */
-/*[clinic end generated code: output=3fdbf05cd4278dc6 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=1ccc6345f506fd53 input=a9049054013a1b77]*/

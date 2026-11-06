@@ -6167,6 +6167,138 @@ def tearDownModule():
                          "sys.modules['decimal'].")
 
 
+@unittest.skipUnless(C, "requires the C decimal module")
+class CContextLifetimeTests(unittest.TestCase):
+    def test_signal_dict_truth_callback_destroys_context(self):
+        import _decimal
+        import gc
+
+        holder = [_decimal.Context()]
+        flags = holder[0].flags
+
+        class Truth:
+            def __bool__(self):
+                holder.clear()
+                gc.collect()
+                return True
+
+        with self.assertRaisesRegex(ValueError, "invalid signal dict"):
+            flags[_decimal.Inexact] = Truth()
+
+    def test_signal_dict_comparisons(self):
+        import _decimal
+        import gc
+
+        context = _decimal.Context()
+        flags = context.flags
+        matching = dict(flags)
+        self.assertEqual(flags, matching)
+        self.assertEqual(matching, flags)
+        self.assertNotEqual(flags, {})
+        malformed = matching.copy()
+        malformed.pop(next(iter(malformed)))
+        self.assertNotEqual(flags, malformed)
+        for other in (1, 1.5):
+            self.assertNotEqual(flags, other)
+            self.assertNotEqual(other, flags)
+            with self.assertRaises(TypeError):
+                flags < other
+        invalid = _decimal.Context().flags
+        gc.collect()
+        with self.assertRaisesRegex(ValueError, "invalid signal dict"):
+            invalid == flags
+        with self.assertRaisesRegex(ValueError, "invalid signal dict"):
+            flags == invalid
+
+    def test_reentrant_current_context_replacement(self):
+        import _decimal
+        import _pydecimal
+        import gc
+        import numbers
+
+        original_context = _decimal.getcontext()
+        self.addCleanup(_decimal.setcontext, original_context)
+        events = []
+
+        class Tracked(_decimal.Context):
+            def __del__(self):
+                events.append("finalized")
+
+        old = Tracked(prec=13)
+        old_id = id(old)
+        _decimal.setcontext(old)
+        del old
+
+        decimal_type = _pydecimal.Decimal
+        original_new = decimal_type.__new__
+        original_new_descriptor = decimal_type.__dict__["__new__"]
+        original_format = decimal_type.__format__
+        self.addCleanup(setattr, decimal_type, "__new__", original_new_descriptor)
+        self.addCleanup(setattr, decimal_type, "__format__", original_format)
+
+        def reentrant_new(cls, value):
+            _decimal.setcontext(_decimal.Context(prec=17))
+            gc.collect()
+            self.assertEqual(events, [])
+            return original_new(cls, value)
+
+        def check_format(value, fmt, context):
+            self.assertEqual(id(context), old_id)
+            self.assertEqual(context.prec, 13)
+            return "ok"
+
+        decimal_type.__new__ = staticmethod(reentrant_new)
+        decimal_type.__format__ = check_format
+        self.assertEqual(_decimal.Decimal(1).__format__("#"), "ok")
+        gc.collect()
+        self.assertEqual(events, ["finalized"])
+        decimal_type.__new__ = original_new_descriptor
+        decimal_type.__format__ = original_format
+
+        old = Tracked(prec=11)
+        old_id = id(old)
+        _decimal.setcontext(old)
+        flags = dict(old.flags)
+        del old
+
+        test = self
+
+        class Truth:
+            def __bool__(self):
+                _decimal.setcontext(_decimal.Context(prec=23))
+                gc.collect()
+                test.assertEqual(events, ["finalized"])
+                return False
+        flags[next(iter(flags))] = Truth()
+        manager = _decimal.localcontext(flags=flags)
+        with manager as context:
+            self.assertEqual(context.prec, 11)
+        self.assertEqual(id(_decimal.getcontext()), old_id)
+
+        old = Tracked(prec=9)
+        old.traps[_decimal.InvalidOperation] = False
+        _decimal.setcontext(old)
+        del old
+        before = len(events)
+
+        class Rational:
+            @property
+            def numerator(self):
+                _decimal.setcontext(_decimal.Context(prec=31))
+                gc.collect()
+                test.assertEqual(len(events), before)
+                return 1
+
+            @property
+            def denominator(self):
+                return 1
+
+        numbers.Rational.register(Rational)
+        self.assertFalse(_decimal.Decimal("sNaN") == Rational())
+        gc.collect()
+        self.assertEqual(len(events), before + 1)
+
+
 ARITH = None
 TEST_ALL = True
 TODO_TESTS = None

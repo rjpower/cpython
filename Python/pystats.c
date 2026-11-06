@@ -939,7 +939,9 @@ stats_objs_collect(struct dl_phdr_info *info, size_t size, void *data)
     stats_objs *objs = data;
     if (objs->n == objs->cap) {
         size_t cap = objs->cap ? objs->cap * 2 : 64;
-        stats_obj *v = PyMem_RawRealloc(objs->v, cap * sizeof(stats_obj));
+        // Stats reporting must still resolve owners when Python's allocator
+        // is deliberately failing, as in test.support.inject_memory_error().
+        stats_obj *v = realloc(objs->v, cap * sizeof(stats_obj));
         if (v == NULL) {
             return 1;
         }
@@ -961,7 +963,7 @@ stats_objs_collect(struct dl_phdr_info *info, size_t size, void *data)
         name = exe;
     }
     size_t len = strlen(name) + 1;
-    o->path = PyMem_RawMalloc(len);
+    o->path = malloc(len);
     if (o->path == NULL) {
         return 1;
     }
@@ -1130,9 +1132,9 @@ print_box_owners(FILE *out, PyInterpreterState *interp, const char *dir)
         }
     }
     for (size_t j = 0; j < objs.n; j++) {
-        PyMem_RawFree(objs.v[j].path);
+        free(objs.v[j].path);
     }
-    PyMem_RawFree(objs.v);
+    free(objs.v);
 #else
     for (size_t i = 0; i < BOX_OWNERS_SIZE; i++) {
         const _PyBoxOwnerEntry *e = &interp->box_owners->entries[i];

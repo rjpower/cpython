@@ -28,6 +28,7 @@ module math.integer
 [clinic start generated code]*/
 /*[clinic end generated code: output=da39a3ee5e6b4b0d input=e3d09c1c90de7fa8]*/
 
+static bool long_value_is_one(PyValueBorrow value);
 
 /*[clinic input]
 math.integer.gcd
@@ -46,19 +47,8 @@ math_integer_gcd_impl(PyObject *module, const PyValue *args,
     if (args_length == 2 && PyValue_TYPE(PyValue_Borrow(args[0])) == &PyLong_Type
         && PyValue_TYPE(PyValue_Borrow(args[1])) == &PyLong_Type)
     {
-        PyObject *a = _PyValue_AsObjectAt(PyValue_Borrow(args[0]), BOX_SITE_PARSER);
-        if (a == NULL) {
-            return PyValue_NULL;
-        }
-        PyObject *b = _PyValue_AsObjectAt(PyValue_Borrow(args[1]), BOX_SITE_PARSER);
-        if (b == NULL) {
-            Py_DECREF(a);
-            return PyValue_NULL;
-        }
-        PyObject *g = _PyLong_GCD(a, b);
-        Py_DECREF(a);
-        Py_DECREF(b);
-        return _PyValue_FromObjectResult(g);
+        return _PyLong_ValueGCD(PyValue_Borrow(args[0]),
+                                PyValue_Borrow(args[1]));
     }
 
     if (args_length == 0) {
@@ -67,68 +57,82 @@ math_integer_gcd_impl(PyObject *module, const PyValue *args,
 
     PyValue res_v = _PyValue_IndexExact(PyValue_Borrow(args[0]));
 
-    PyObject *res = PyValue_IsNull(res_v) ? NULL : _PyValue_AsObjectStealAt(res_v, BOX_SITE_NUMBER);
-
-    if (res == NULL) {
+    if (PyValue_IsNull(res_v)) {
         return PyValue_NULL;
     }
     if (args_length == 1) {
-        PyValue item_v8 = _PyValue_Absolute(PyValue_FromObjectBorrow(res));
-        Py_SETREF(res, (PyValue_IsNull(item_v8) ? NULL : _PyValue_AsObjectStealAt(item_v8, BOX_SITE_NUMBER)));
-        return _PyValue_FromObjectResult(res);
+        PyValue abs = _PyValue_Absolute(res_v);
+        PyValue_CLOSE(res_v);
+        return abs;
     }
 
-    PyObject *one = _PyLong_GetOne();  // borrowed ref
     for (Py_ssize_t i = 1; i < args_length; i++) {
         PyValue x_v = _PyValue_Index(PyValue_Borrow(args[i]));
-        PyObject *x = PyValue_IsNull(x_v) ? NULL : _PyValue_AsObjectStealAt(x_v, BOX_SITE_NUMBER);
-        if (x == NULL) {
-            Py_DECREF(res);
+        if (PyValue_IsNull(x_v)) {
+            PyValue_CLOSE(res_v);
             return PyValue_NULL;
         }
-        if (res == one) {
+        if (long_value_is_one(PyValue_Borrow(res_v))) {
             /* Fast path: just check arguments.
                It is okay to use identity comparison here. */
-            Py_DECREF(x);
+            PyValue_CLOSE(x_v);
             continue;
         }
-        Py_SETREF(res, _PyLong_GCD(res, x));
-        Py_DECREF(x);
-        if (res == NULL) {
+        PyValue gcd = _PyLong_ValueGCD(PyValue_Borrow(res_v),
+                                      PyValue_Borrow(x_v));
+        PyValue_CLOSE(x_v);
+        PyValue_CLOSE(res_v);
+        if (PyValue_IsNull(gcd)) {
             return PyValue_NULL;
         }
+        res_v = gcd;
     }
-    return _PyValue_FromObjectResult(res);
+    return res_v;
 }
 
 
-static PyObject *
-long_lcm(PyObject *a, PyObject *b)
+static bool
+long_value_is_zero(PyValueBorrow value)
 {
-    PyObject *g, *m, *f, *ab;
+    if (PyValue_IsInlineInt(value)) {
+        return PyValue_InlineInt64(value) == 0;
+    }
+    return _PyLong_IsZero((PyLongObject *)PyValue_AsKnownObjectBorrow(value));
+}
 
-    if (_PyLong_IsZero((PyLongObject *)a) || _PyLong_IsZero((PyLongObject *)b)) {
-        return PyLong_FromLong(0);
+static bool
+long_value_is_one(PyValueBorrow value)
+{
+    if (PyValue_IsInlineInt(value)) {
+        return PyValue_InlineInt64(value) == 1;
     }
-    g = _PyLong_GCD(a, b);
-    if (g == NULL) {
-        return NULL;
+    return PyValue_AsKnownObjectBorrow(value) == _PyLong_GetOne();
+}
+
+static PyValue
+long_lcm(PyValueBorrow a, PyValueBorrow b)
+{
+    PyValue g, f, m;
+
+    if (long_value_is_zero(a) || long_value_is_zero(b)) {
+        return PyValue_FromInt64(0);
     }
-    PyValue f_v = _PyValue_FloorDivide(PyValue_FromObjectBorrow(a), PyValue_FromObjectBorrow(g));
-    f = PyValue_IsNull(f_v) ? NULL : _PyValue_AsObjectStealAt(f_v, BOX_SITE_NUMBER);
-    Py_DECREF(g);
-    if (f == NULL) {
-        return NULL;
+    g = _PyLong_ValueGCD(a, b);
+    if (PyValue_IsNull(g)) {
+        return PyValue_NULL;
     }
-    PyValue m_v = _PyValue_Multiply(PyValue_FromObjectBorrow(f), PyValue_FromObjectBorrow(b));
-    m = PyValue_IsNull(m_v) ? NULL : _PyValue_AsObjectStealAt(m_v, BOX_SITE_NUMBER);
-    Py_DECREF(f);
-    if (m == NULL) {
-        return NULL;
+    f = _PyValue_FloorDivide(a, g);
+    PyValue_CLOSE(g);
+    if (PyValue_IsNull(f)) {
+        return PyValue_NULL;
     }
-    PyValue ab_v = _PyValue_Absolute(PyValue_FromObjectBorrow(m));
-    ab = PyValue_IsNull(ab_v) ? NULL : _PyValue_AsObjectStealAt(ab_v, BOX_SITE_NUMBER);
-    Py_DECREF(m);
+    m = _PyValue_Multiply(f, b);
+    PyValue_CLOSE(f);
+    if (PyValue_IsNull(m)) {
+        return PyValue_NULL;
+    }
+    PyValue ab = _PyValue_Absolute(m);
+    PyValue_CLOSE(m);
     return ab;
 }
 
@@ -146,44 +150,44 @@ math_integer_lcm_impl(PyObject *module, const PyValue *args,
                       Py_ssize_t args_length)
 /*[clinic end generated code: output=71be139b5cebe723 input=261bddc85a136bdf]*/
 {
-    PyObject *res, *x;
+    PyValue res;
     Py_ssize_t i;
 
     if (args_length == 0) {
         return PyValue_FromInt64(1);
     }
     PyValue res_v = _PyValue_IndexExact(PyValue_Borrow(args[0]));
-    res = PyValue_IsNull(res_v) ? NULL : _PyValue_AsObjectStealAt(res_v, BOX_SITE_NUMBER);
-    if (res == NULL) {
+    res = res_v;
+    if (PyValue_IsNull(res)) {
         return PyValue_NULL;
     }
     if (args_length == 1) {
-        PyValue item_v9 = _PyValue_Absolute(PyValue_FromObjectBorrow(res));
-        Py_SETREF(res, (PyValue_IsNull(item_v9) ? NULL : _PyValue_AsObjectStealAt(item_v9, BOX_SITE_NUMBER)));
-        return _PyValue_FromObjectResult(res);
+        PyValue abs = _PyValue_Absolute(res);
+        PyValue_CLOSE(res);
+        return abs;
     }
 
-    PyObject *zero = _PyLong_GetZero();  // borrowed ref
     for (i = 1; i < args_length; i++) {
         PyValue x_v = _PyValue_IndexExact(PyValue_Borrow(args[i]));
-        x = PyValue_IsNull(x_v) ? NULL : _PyValue_AsObjectStealAt(x_v, BOX_SITE_NUMBER);
-        if (x == NULL) {
-            Py_DECREF(res);
+        if (PyValue_IsNull(x_v)) {
+            PyValue_CLOSE(res);
             return PyValue_NULL;
         }
-        if (res == zero) {
+        if (long_value_is_zero(PyValue_Borrow(res))) {
             /* Fast path: just check arguments.
                It is okay to use identity comparison here. */
-            Py_DECREF(x);
+            PyValue_CLOSE(x_v);
             continue;
         }
-        Py_SETREF(res, long_lcm(res, x));
-        Py_DECREF(x);
-        if (res == NULL) {
+        PyValue next = long_lcm(PyValue_Borrow(res), PyValue_Borrow(x_v));
+        PyValue_CLOSE(x_v);
+        PyValue_CLOSE(res);
+        if (PyValue_IsNull(next)) {
             return PyValue_NULL;
         }
+        res = next;
     }
-    return _PyValue_FromObjectResult(res);
+    return res;
 }
 
 

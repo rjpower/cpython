@@ -2234,6 +2234,43 @@ class MathTests(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             prod([10., BadMultiply()])
 
+        # The old accumulator is released before the current iterable item.
+        # User finalizers can observe that order.
+        finalizers = []
+
+        class Product:
+            def __init__(self, name):
+                self.name = name
+
+            def __mul__(self, other):
+                return Product("intermediate" if self.name == "start"
+                               else "final")
+
+            def __del__(self):
+                finalizers.append(self.name)
+
+        class Item:
+            def __del__(self):
+                finalizers.append("item")
+
+        class Items:
+            def __init__(self):
+                self.count = 0
+
+            def __iter__(self):
+                return self
+
+            def __next__(self):
+                if self.count == 2:
+                    raise StopIteration
+                self.count += 1
+                return Item()
+
+        product = prod(Items(), start=Product("start"))
+        del product
+        self.assertLess(finalizers.index("intermediate"),
+                        finalizers.index("item", finalizers.index("intermediate") + 1))
+
         # Test overflow in fast-path for integers
         self.assertEqual(prod([1, 1, 2**32, 1, 1]), 2**32)
         # Test overflow in fast-path for floats

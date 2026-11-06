@@ -1379,15 +1379,13 @@ mappingproxy_len(PyObject *self)
     return _PyValue_Size(PyValue_FromObjectBorrow(pp->mapping));
 }
 
-static PyObject *
-mappingproxy_getitem(PyObject *self, PyObject *key)
+static PyValue
+mappingproxy_getitem_value(PyObject *self, PyValueBorrow key)
 {
     mappingproxyobject *pp = (mappingproxyobject *)self;
-    return _PyValue_AsObjectResultAt(
-        _PyValue_GetItem(PyValue_FromObjectBorrow(pp->mapping),
-                         PyValue_FromObjectBorrow(key)),
-        BOX_SITE_SEQUENCE);
+    return _PyValue_GetItem(PyValue_FromObjectBorrow(pp->mapping), key);
 }
+_Py_VALUE_THUNK_SUBSCRIPT(mappingproxy_getitem, mappingproxy_getitem_value)
 
 static PyMappingMethods mappingproxy_as_mapping = {
     mappingproxy_len,                           /* mp_length */
@@ -2447,6 +2445,10 @@ PyTypeObject PyDictProxy_Type = {
     0,                                          /* tp_init */
     0,                                          /* tp_alloc */
     mappingproxy_new,                           /* tp_new */
+    .tp_value = {
+        .subscript = _Py_VALUE_SLOT_INIT(subscript,
+                                         mappingproxy_getitem_value),
+    },
 };
 
 PyTypeObject PyProperty_Type = {

@@ -2346,6 +2346,32 @@ def L(seqn):
 
 class TestVariousIteratorArgs(unittest.TestCase):
 
+    def test_value_iterator_stop_iteration_payload(self):
+        class StopWithPayload:
+            def __init__(self, payload):
+                self.payload = payload
+
+            def __iter__(self):
+                return self
+
+            def __next__(self):
+                raise StopIteration(self.payload)
+
+        cases = (
+            dropwhile(bool, StopWithPayload("dropwhile")),
+            islice(StopWithPayload("islice"), 1),
+            compress(StopWithPayload("compress data"), repeat(True)),
+            compress([1], StopWithPayload("compress selector")),
+            filterfalse(None, StopWithPayload("filterfalse")),
+        )
+        for iterator, payload in zip(cases,
+                                     ("dropwhile", "islice", "compress data",
+                                      "compress selector", "filterfalse")):
+            with self.subTest(iterator=iterator):
+                with self.assertRaises(StopIteration) as cm:
+                    next(iterator)
+                self.assertEqual(cm.exception.args, (payload,))
+
     def test_accumulate(self):
         s = [1,2,3,4,5]
         r = [1,3,6,10,15]

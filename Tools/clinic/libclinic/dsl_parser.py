@@ -310,6 +310,7 @@ class DSLParser:
         self.vectorcall: bool = False
         self.value_function = False
         self.value_constructor = False
+        self.value_initializer = False
         self.slot = None
         self.permit_long_summary = False
         self.permit_long_docstring_body = False
@@ -533,6 +534,13 @@ class DSLParser:
         if self.clinic.codegen.limited_capi:
             fail("@value_constructor cannot be used with the limited C API")
         self.value_constructor = True
+
+    def at_value_initializer(self) -> None:
+        if self.value_initializer:
+            fail("Called @value_initializer twice!")
+        if self.clinic.codegen.limited_capi:
+            fail("@value_initializer cannot be used with the limited C API")
+        self.value_initializer = True
 
     def at_coexist(self) -> None:
         if self.coexist:
@@ -760,6 +768,7 @@ class DSLParser:
             "line_number": self.line_number,
             "value_function": self.value_function,
             "value_constructor": self.value_constructor,
+            "value_initializer": self.value_initializer,
         }
         if existing_function.kind is SLOT or self.slot is not None:
             fail("Type slot methods cannot be cloned")
@@ -840,6 +849,7 @@ class DSLParser:
             vectorcall=self.vectorcall,
             value_function=self.value_function,
             value_constructor=self.value_constructor,
+            value_initializer=self.value_initializer,
             slot=self.slot,
         )
         self.add_function(func)

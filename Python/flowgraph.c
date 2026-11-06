@@ -1941,210 +1941,168 @@ const_folding_check_complexity(PyValueBorrow value, Py_ssize_t limit)
 #define MAX_STR_SIZE          4096  /* characters */
 #define MAX_TOTAL_ITEMS       1024  /* including nested collections */
 
-static PyObject *
-const_folding_safe_multiply(PyObject *v, PyObject *w)
+static int64_t
+const_folding_long_nbits(PyValueBorrow v)
 {
-    if (PyLong_Check(v) && PyLong_Check(w) &&
-        !_PyLong_IsZero((PyLongObject *)v) && !_PyLong_IsZero((PyLongObject *)w)
+    digit buf[_PyLong_WORD_DIGITS];
+    return _PyLong_SpanNumBits(_PyLong_SpanOfValue(v, buf));
+}
+
+static bool
+const_folding_long_is_zero(PyValueBorrow v)
+{
+    digit buf[_PyLong_WORD_DIGITS];
+    return _PyLong_SpanOfValue(v, buf).n == 0;
+}
+
+static bool
+const_folding_long_is_positive(PyValueBorrow v)
+{
+    digit buf[_PyLong_WORD_DIGITS];
+    _PyLongSpan span = _PyLong_SpanOfValue(v, buf);
+    return span.n != 0 && !span.neg;
+}
+
+static PyValue
+const_folding_safe_multiply_value(PyValueBorrow v, PyValueBorrow w)
+{
+    PyObject *vo = PyValue_IsObject(v) ? PyValue_AsKnownObjectBorrow(v) : NULL;
+    PyObject *wo = PyValue_IsObject(w) ? PyValue_AsKnownObjectBorrow(w) : NULL;
+    if (PyValue_LongCheck(v) && PyValue_LongCheck(w) &&
+        !const_folding_long_is_zero(v) && !const_folding_long_is_zero(w)
     ) {
-        int64_t vbits = _PyLong_NumBits(v);
-        int64_t wbits = _PyLong_NumBits(w);
+        int64_t vbits = const_folding_long_nbits(v);
+        int64_t wbits = const_folding_long_nbits(w);
         assert(vbits >= 0);
         assert(wbits >= 0);
         if (vbits + wbits > MAX_INT_SIZE) {
-            return NULL;
+            return PyValue_NULL;
         }
     }
-    else if (PyLong_Check(v) && PyTuple_Check(w)) {
-        Py_ssize_t size = PyTuple_GET_SIZE(w);
+    else if (PyValue_LongCheck(v) && wo != NULL && PyTuple_Check(wo)) {
+        Py_ssize_t size = PyTuple_GET_SIZE(wo);
         if (size) {
-            long n = _PyValue_AsLong(PyValue_FromObjectBorrow(v));
+            long n = _PyValue_AsLong(v);
             if (n < 0 || n > MAX_COLLECTION_SIZE / size) {
-                return NULL;
+                return PyValue_NULL;
             }
-            if (n && const_folding_check_complexity(
-                    PyValue_FromObjectBorrow(w), MAX_TOTAL_ITEMS / n) < 0) {
-                return NULL;
+            if (n && const_folding_check_complexity(w, MAX_TOTAL_ITEMS / n) < 0) {
+                return PyValue_NULL;
             }
         }
     }
-    else if (PyLong_Check(v) && (PyUnicode_Check(w) || PyBytes_Check(w))) {
-        Py_ssize_t size = PyUnicode_Check(w) ? PyUnicode_GET_LENGTH(w) :
-                                               PyBytes_GET_SIZE(w);
+    else if (PyValue_LongCheck(v) && wo != NULL &&
+             (PyUnicode_Check(wo) || PyBytes_Check(wo))) {
+        Py_ssize_t size = PyUnicode_Check(wo) ? PyUnicode_GET_LENGTH(wo) :
+                                                PyBytes_GET_SIZE(wo);
         if (size) {
-            long n = _PyValue_AsLong(PyValue_FromObjectBorrow(v));
+            long n = _PyValue_AsLong(v);
             if (n < 0 || n > MAX_STR_SIZE / size) {
-                return NULL;
+                return PyValue_NULL;
             }
         }
     }
-    else if (PyLong_Check(w) &&
-             (PyTuple_Check(v) || PyUnicode_Check(v) || PyBytes_Check(v)))
+    else if (PyValue_LongCheck(w) && vo != NULL &&
+             (PyTuple_Check(vo) || PyUnicode_Check(vo) || PyBytes_Check(vo)))
     {
-        return const_folding_safe_multiply(w, v);
+        return const_folding_safe_multiply_value(w, v);
     }
 
-    PyValue rv = _PyValue_Multiply(PyValue_FromObjectBorrow(v), PyValue_FromObjectBorrow(w));
-    return PyValue_IsNull(rv) ? NULL
-        : _PyValue_AsObjectStealAt(rv, BOX_SITE_COMPILER);
+    return _PyValue_Multiply(v, w);
 }
 
-static PyObject *
-const_folding_safe_power(PyObject *v, PyObject *w)
+static PyValue
+const_folding_safe_power_value(PyValueBorrow v, PyValueBorrow w)
 {
-    if (PyLong_Check(v) && PyLong_Check(w) &&
-        !_PyLong_IsZero((PyLongObject *)v) && _PyLong_IsPositive((PyLongObject *)w)
+    if (PyValue_LongCheck(v) && PyValue_LongCheck(w) &&
+        !const_folding_long_is_zero(v) && const_folding_long_is_positive(w)
     ) {
-        int64_t vbits = _PyLong_NumBits(v);
-        size_t wbits = _PyValue_IntAsSize_t(PyValue_FromObjectBorrow(w));
+        int64_t vbits = const_folding_long_nbits(v);
+        size_t wbits = _PyValue_IntAsSize_t(w);
         assert(vbits >= 0);
         if (wbits == (size_t)-1) {
-            return NULL;
+            return PyValue_NULL;
         }
         if ((uint64_t)vbits > MAX_INT_SIZE / wbits) {
-            return NULL;
+            return PyValue_NULL;
         }
     }
 
-    PyValue rv = _PyValue_Power(PyValue_FromObjectBorrow(v), PyValue_FromObjectBorrow(w),
-                                 PyValue_None);
-    return PyValue_IsNull(rv) ? NULL
-        : _PyValue_AsObjectStealAt(rv, BOX_SITE_COMPILER);
+    return _PyValue_Power(v, w, PyValue_None);
 }
 
-static PyObject *
-const_folding_safe_lshift(PyObject *v, PyObject *w)
+static PyValue
+const_folding_safe_lshift_value(PyValueBorrow v, PyValueBorrow w)
 {
-    if (PyLong_Check(v) && PyLong_Check(w) &&
-        !_PyLong_IsZero((PyLongObject *)v) && !_PyLong_IsZero((PyLongObject *)w)
+    if (PyValue_LongCheck(v) && PyValue_LongCheck(w) &&
+        !const_folding_long_is_zero(v) && !const_folding_long_is_zero(w)
     ) {
-        int64_t vbits = _PyLong_NumBits(v);
-        size_t wbits = _PyValue_IntAsSize_t(PyValue_FromObjectBorrow(w));
+        int64_t vbits = const_folding_long_nbits(v);
+        size_t wbits = _PyValue_IntAsSize_t(w);
         assert(vbits >= 0);
         if (wbits == (size_t)-1) {
-            return NULL;
+            return PyValue_NULL;
         }
         if (wbits > MAX_INT_SIZE || (uint64_t)vbits > MAX_INT_SIZE - wbits) {
-            return NULL;
+            return PyValue_NULL;
         }
     }
 
-    PyValue rv = _PyValue_Lshift(PyValue_FromObjectBorrow(v), PyValue_FromObjectBorrow(w));
-    return PyValue_IsNull(rv) ? NULL
-        : _PyValue_AsObjectStealAt(rv, BOX_SITE_COMPILER);
+    return _PyValue_Lshift(v, w);
 }
 
-static PyObject *
-const_folding_safe_mod(PyObject *v, PyObject *w)
+static PyValue
+const_folding_safe_mod_value(PyValueBorrow v, PyValueBorrow w)
 {
-    if (PyUnicode_Check(v) || PyBytes_Check(v)) {
-        return NULL;
+    if (PyValue_IsObject(v)) {
+        PyObject *vo = PyValue_AsKnownObjectBorrow(v);
+        if (PyUnicode_Check(vo) || PyBytes_Check(vo)) {
+            return PyValue_NULL;
+        }
     }
 
-    PyValue rv = _PyValue_Remainder(PyValue_FromObjectBorrow(v), PyValue_FromObjectBorrow(w));
-    return PyValue_IsNull(rv) ? NULL
-        : _PyValue_AsObjectStealAt(rv, BOX_SITE_COMPILER);
+    return _PyValue_Remainder(v, w);
 }
 
-static PyObject *
-eval_const_binop(PyObject *left, int op, PyObject *right)
+static PyValue
+eval_const_binop_value(PyValueBorrow left, int op, PyValueBorrow right)
 {
-    assert(left != NULL && right != NULL);
+    assert(!PyValue_IsNull(left) && !PyValue_IsNull(right));
     assert(op >= 0 && op <= NB_OPARG_LAST);
 
-    PyObject *result = NULL;
     switch (op) {
         case NB_ADD:
-            {
-                PyValue rv = _PyValue_Add(PyValue_FromObjectBorrow(left),
-                                  PyValue_FromObjectBorrow(right));
-                result = PyValue_IsNull(rv) ? NULL
-                    : _PyValue_AsObjectStealAt(rv, BOX_SITE_COMPILER);
-                break;
-            }
+            return _PyValue_Add(left, right);
         case NB_SUBTRACT:
-            {
-                PyValue rv = _PyValue_Subtract(PyValue_FromObjectBorrow(left),
-                                  PyValue_FromObjectBorrow(right));
-                result = PyValue_IsNull(rv) ? NULL
-                    : _PyValue_AsObjectStealAt(rv, BOX_SITE_COMPILER);
-                break;
-            }
+            return _PyValue_Subtract(left, right);
         case NB_MULTIPLY:
-            result = const_folding_safe_multiply(left, right);
-            break;
+            return const_folding_safe_multiply_value(left, right);
         case NB_TRUE_DIVIDE:
-            {
-                PyValue rv = _PyValue_TrueDivide(PyValue_FromObjectBorrow(left),
-                                  PyValue_FromObjectBorrow(right));
-                result = PyValue_IsNull(rv) ? NULL
-                    : _PyValue_AsObjectStealAt(rv, BOX_SITE_COMPILER);
-                break;
-            }
+            return _PyValue_TrueDivide(left, right);
         case NB_FLOOR_DIVIDE:
-            {
-                PyValue rv = _PyValue_FloorDivide(PyValue_FromObjectBorrow(left),
-                                  PyValue_FromObjectBorrow(right));
-                result = PyValue_IsNull(rv) ? NULL
-                    : _PyValue_AsObjectStealAt(rv, BOX_SITE_COMPILER);
-                break;
-            }
+            return _PyValue_FloorDivide(left, right);
         case NB_REMAINDER:
-            result = const_folding_safe_mod(left, right);
-            break;
+            return const_folding_safe_mod_value(left, right);
         case NB_POWER:
-            result = const_folding_safe_power(left, right);
-            break;
+            return const_folding_safe_power_value(left, right);
         case NB_LSHIFT:
-            result = const_folding_safe_lshift(left, right);
-            break;
+            return const_folding_safe_lshift_value(left, right);
         case NB_RSHIFT:
-            {
-                PyValue rv = _PyValue_Rshift(PyValue_FromObjectBorrow(left),
-                                  PyValue_FromObjectBorrow(right));
-                result = PyValue_IsNull(rv) ? NULL
-                    : _PyValue_AsObjectStealAt(rv, BOX_SITE_COMPILER);
-                break;
-            }
+            return _PyValue_Rshift(left, right);
         case NB_OR:
-            {
-                PyValue rv = _PyValue_Or(PyValue_FromObjectBorrow(left),
-                                  PyValue_FromObjectBorrow(right));
-                result = PyValue_IsNull(rv) ? NULL
-                    : _PyValue_AsObjectStealAt(rv, BOX_SITE_COMPILER);
-                break;
-            }
+            return _PyValue_Or(left, right);
         case NB_XOR:
-            {
-                PyValue rv = _PyValue_Xor(PyValue_FromObjectBorrow(left),
-                                  PyValue_FromObjectBorrow(right));
-                result = PyValue_IsNull(rv) ? NULL
-                    : _PyValue_AsObjectStealAt(rv, BOX_SITE_COMPILER);
-                break;
-            }
+            return _PyValue_Xor(left, right);
         case NB_AND:
-            {
-                PyValue rv = _PyValue_And(PyValue_FromObjectBorrow(left),
-                                  PyValue_FromObjectBorrow(right));
-                result = PyValue_IsNull(rv) ? NULL
-                    : _PyValue_AsObjectStealAt(rv, BOX_SITE_COMPILER);
-                break;
-            }
+            return _PyValue_And(left, right);
         case NB_SUBSCR:
-            {
-                PyValue rv = _PyValue_GetItem(PyValue_FromObjectBorrow(left),
-                                  PyValue_FromObjectBorrow(right));
-                result = PyValue_IsNull(rv) ? NULL
-                    : _PyValue_AsObjectStealAt(rv, BOX_SITE_COMPILER);
-                break;
-            }
+            return _PyValue_GetItem(left, right);
         case NB_MATRIX_MULTIPLY:
             // No builtin constants implement matrix multiplication
-            break;
+            return PyValue_NULL;
         default:
             Py_UNREACHABLE();
     }
-    return result;
 }
 
 static int
@@ -2166,23 +2124,27 @@ fold_const_binop(basicblock *bb, int i, PyObject *consts,
 
     cfg_instr *lhs_instr = operands_instrs[0];
     assert(loads_const(lhs_instr->i_opcode));
-    PyObject *lhs = get_const_value(lhs_instr->i_opcode, lhs_instr->i_oparg, consts);
-    if (lhs == NULL) {
+    PyValue lhs = get_const_value_value(lhs_instr->i_opcode, lhs_instr->i_oparg,
+                                        consts);
+    if (PyValue_IsNull(lhs)) {
         return ERROR;
     }
 
     cfg_instr *rhs_instr = operands_instrs[1];
     assert(loads_const(rhs_instr->i_opcode));
-    PyObject *rhs = get_const_value(rhs_instr->i_opcode, rhs_instr->i_oparg, consts);
-    if (rhs == NULL) {
-        Py_DECREF(lhs);
+    PyValue rhs = get_const_value_value(rhs_instr->i_opcode, rhs_instr->i_oparg,
+                                        consts);
+    if (PyValue_IsNull(rhs)) {
+        PyValue_CLOSE(lhs);
         return ERROR;
     }
 
-    PyObject *newconst = eval_const_binop(lhs, binop->i_oparg, rhs);
-    Py_DECREF(lhs);
-    Py_DECREF(rhs);
-    if (newconst == NULL) {
+    PyValue newconst = eval_const_binop_value(PyValue_Borrow(lhs),
+                                              binop->i_oparg,
+                                              PyValue_Borrow(rhs));
+    PyValue_CLOSE(lhs);
+    PyValue_CLOSE(rhs);
+    if (PyValue_IsNull(newconst)) {
         if (PyErr_ExceptionMatches(PyExc_KeyboardInterrupt)) {
             return ERROR;
         }
@@ -2191,7 +2153,8 @@ fold_const_binop(basicblock *bb, int i, PyObject *consts,
     }
 
     nop_out(operands_instrs, BINOP_OPERAND_COUNT);
-    return instr_make_load_const(binop, newconst, consts, const_cache, consts_index);
+    return instr_make_load_const_value(binop, newconst, consts,
+                                       const_cache, consts_index);
 }
 
 static PyValue

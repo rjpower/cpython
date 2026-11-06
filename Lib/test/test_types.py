@@ -1223,6 +1223,11 @@ class MappingProxyTests(unittest.TestCase):
         self.assertIsNone(view.get('xxx'))
         self.assertEqual(view.get('xxx', 42), 42)
 
+    def test_get_inline_key_and_value(self):
+        view = self.mappingproxy({1: 2})
+        self.assertEqual(view[1], 2)
+        self.assertRaises(KeyError, view.__getitem__, 3)
+
     def test_missing(self):
         class dictmissing(dict):
             def __missing__(self, key):

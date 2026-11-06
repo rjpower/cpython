@@ -1186,13 +1186,8 @@ int (_PyEval_StoreName)(PyThreadState *tstate, PyValueBorrow v, PyObject *name, 
         // PyDict_SetItem() with the value as it is: an inline value needs no box.
         return PyDict_SetValue(ns, PyValue_FromObjectBorrow(name), v);
     }
-    PyObject *v_o = PyValue_AsObject(v);
-    if (v_o == NULL) {
-        return -1;
-    }
-    int err = _PyValue_SetItem(PyValue_FromObjectBorrow(ns), PyValue_FromObjectBorrow(name), PyValue_FromObjectBorrow(v_o));
-    Py_DECREF(v_o);
-    return err;
+    return _PyValue_SetItem(PyValue_FromObjectBorrow(ns),
+                            PyValue_FromObjectBorrow(name), v);
 }
 
 /* The wrappers below keep the address of a C local out of the interpreter

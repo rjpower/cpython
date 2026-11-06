@@ -223,7 +223,7 @@ extern const size_t _PyValueSlot_PairCount;
  * (section 4.4); the value dispatchers call it, through
  * _PyType_CHECK_VALUE_ROW(), before each value-slot call. A failure is
  * fatal. */
-extern void _PyType_CheckValueRow(PyTypeObject *type, int row);
+PyAPI_FUNC(void) _PyType_CheckValueRow(PyTypeObject *type, int row);
 #  define _PyType_CHECK_VALUE_ROW(type, row) _PyType_CheckValueRow(type, row)
 #else
 #  define _PyType_CHECK_VALUE_ROW(type, row) ((void)0)

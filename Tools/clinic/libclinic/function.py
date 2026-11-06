@@ -162,6 +162,7 @@ class Function:
     vectorcall: bool = False
     value_function: bool = False
     value_constructor: bool = False
+    value_initializer: bool = False
     # The type slot which the function implements (kind is SLOT).
     slot: SlotSpec | None = None
 

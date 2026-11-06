@@ -481,6 +481,10 @@ source integration, full tests, measurement and the final checkpoint recap.
 
 ## Live integration and measurement queue (2026-11-06)
 
+The independently reviewed [follow-up queue](follow-up-6a0e4c12c17.md) gives
+packet boundaries, worker roles, focused checks and integration exits. Its
+performance section remains pending until the diagnostic collection finishes.
+
 Runtime HEAD is `6a0e4c12c17` (constructor and format work), following
 `05286694774` (native child accounting). All five build-info objects match
 their respective source HEADs: upstream `3a440b65695`, interim `eba351fee7d`,

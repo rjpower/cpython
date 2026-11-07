@@ -3135,14 +3135,10 @@ cleanup:
 
 /* Parent inputs are never offered to a consuming binder. Copies can fail
  * and retire while the parent's actual IN_CALL homes remain owning. */
-static int
-call_transaction_push_python(_PyCallTransaction *call,
-                             _PyInterpreterFrame **out)
+static Py_NO_INLINE int
+call_transaction_push_python_fallback(_PyCallTransaction *call,
+                                      _PyInterpreterFrame **out)
 {
-    int overlap = call_transaction_overlap_python(call, out);
-    if (overlap <= 0) {
-        return overlap;
-    }
     PyValue small[16];
     PyValue *storage = small;
     int copied = 0, retired_count = 0;
@@ -3274,6 +3270,17 @@ done:
     }
     *out = child;
     return child != NULL ? 0 : 1;
+}
+
+static int
+call_transaction_push_python(_PyCallTransaction *call,
+                             _PyInterpreterFrame **out)
+{
+    int overlap = call_transaction_overlap_python(call, out);
+    if (overlap <= 0) {
+        return overlap;
+    }
+    return call_transaction_push_python_fallback(call, out);
 }
 
 static int

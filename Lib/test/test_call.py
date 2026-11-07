@@ -44,11 +44,17 @@ class FunctionCalls(unittest.TestCase):
         first = target(sentinel)
         second = target(sentinel)
         self.assertEqual(first[:3], (sentinel, sentinel, ()))
+        self.assertIs(first[2], second[2])
         self.assertEqual(first[3], {})
         self.assertIsNot(first[3], second[3])
         first[3]["kept"] = sentinel
         self.assertEqual(second[3], {})
         self.assertEqual(target(1, 2, 3, key=4), (1, 2, (3,), {"key": 4}))
+
+        def generator_caller():
+            yield target(sentinel)[2]
+
+        self.assertIs(next(generator_caller()), first[2])
 
         class Receiver:
             def method(self, value=sentinel, *args, **kwargs):

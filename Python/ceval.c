@@ -3112,8 +3112,8 @@ call_transaction_overlap_python(_PyCallTransaction *call,
     }
     int extra = code->co_argcount;
     if (flags & CO_VARARGS) {
-        child->base[extra++] = PyValue_DUP(PyValue_FromObjectBorrow(
-            (PyObject *)&_Py_SINGLETON(tuple_empty)));
+        PyValue empty = _PyValue_STATIC_IMMORTAL(&_Py_SINGLETON(tuple_empty));
+        child->base[extra++] = empty;
     }
     if (flags & CO_VARKEYWORDS) {
         child->base[extra] = PyValue_FromObjectSteal(kwdict);

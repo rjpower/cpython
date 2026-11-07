@@ -14,6 +14,7 @@ import math
 import os
 from pathlib import Path
 import re
+import signal
 import statistics
 import subprocess
 import sys
@@ -269,6 +270,130 @@ def identity_differences(before: dict, after: dict) -> dict:
     return differences
 
 
+def load_guard_rejected(proc: subprocess.CompletedProcess, path: Path,
+                        label: str, name: str) -> bool:
+    """Recognize only run.py's documented load rejection, with no report."""
+    if proc.returncode != 1 or path.exists() or proc.stdout:
+        return False
+    progress = (rf"{re.escape(label)} time kernels/{re.escape(name)} "
+                r"(?:[0-9]{1,3}(?:,[0-9]{3})*|[0-9]+)\.[0-9] ns per loop\n")
+    guard = (r"run\.py: 1-minute load average ([0-9]+\.[0-9]{2}) reached "
+             r"--max-load 4\.0; no measurement report written\n?")
+    match = re.fullmatch(rf"(?:{progress})?{guard}", proc.stderr)
+    return match is not None and float(match.group(1)) >= 4.0
+
+
+def run_timing_invocation(output: Path, command: list[str], path: Path,
+                          label: str, name: str, round_index: int,
+                          deadline: float, conditions: list[dict],
+                          qualification: str, admission_note: str) -> float:
+    """Retry this scheduled cell only when run.py rejected its load."""
+    attempt_number = 0
+
+    def write_journal():
+        temporary = output / "invocations.json.tmp"
+        temporary.write_text(json.dumps({
+            "qualification": qualification, "admission_note": admission_note,
+            "preflight_before": "preflight-before.json",
+            "invocations": conditions}, indent=2))
+        temporary.replace(output / "invocations.json")
+
+    while True:
+        wait_started = time.monotonic()
+        waits = []
+        while True:
+            loads = os.getloadavg()
+            waits.append({"time": time.time(),
+                          "elapsed_seconds": time.monotonic() - wait_started,
+                          "load": loads})
+            (output / "load-wait.json").write_text(json.dumps({
+                "round": round_index + 1, "kernel": name, "label": label,
+                "resume_below": 3.0, "samples": waits}, indent=2))
+            if time.monotonic() >= deadline:
+                raise RuntimeError("declared 45-minute timing window expired")
+            if loads[0] < 3.0:
+                break
+            time.sleep(min(10, max(0, deadline - time.monotonic())))
+        if time.monotonic() >= deadline:
+            raise RuntimeError("declared 45-minute timing window expired")
+        attempt_number += 1
+        attempt = {"round": round_index + 1, "kernel": name, "label": label,
+                   "attempt": attempt_number,
+                   "load": os.getloadavg(), "load_wait": waits,
+                   "command": command, "report_path": str(path)}
+        conditions.append(attempt)
+
+        write_journal()
+        try:
+            process = subprocess.Popen(
+                command, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                text=True, encoding="utf-8", errors="surrogateescape",
+                start_new_session=True)
+        except BaseException as exc:
+            attempt.update(classification="launch_failed", error=repr(exc),
+                           load_after=os.getloadavg(), report_exists=path.exists())
+            write_journal()
+            raise
+        try:
+            stdout, stderr = process.communicate(
+                timeout=max(0, deadline - time.monotonic()))
+        except BaseException as exc:
+            # The runner launches the interpreter. Stop the whole session so a
+            # timed-out or interrupted measurement cannot leave it running.
+            try:
+                os.killpg(process.pid, signal.SIGTERM)
+            except ProcessLookupError:
+                pass
+            reaped = False
+            try:
+                stdout, stderr = process.communicate(timeout=2)
+                reaped = True
+            except BaseException as cleanup_error:
+                attempt["cleanup_error"] = repr(cleanup_error)
+            finally:
+                # A grandchild may survive after the runner closes its pipes.
+                try:
+                    os.killpg(process.pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+            if not reaped:
+                stdout, stderr = process.communicate()
+            attempt.update(classification="timeout" if isinstance(exc, subprocess.TimeoutExpired)
+                           else "interrupted", stdout=stdout, stderr=stderr,
+                           report_exists=path.exists(), load_after=os.getloadavg())
+            write_journal()
+            raise
+        proc = subprocess.CompletedProcess(command, process.returncode, stdout, stderr)
+        rejected = load_guard_rejected(proc, path, label, name)
+        attempt.update(returncode=proc.returncode, stdout=proc.stdout, stderr=proc.stderr,
+                       report_exists=path.exists(), load_after=os.getloadavg(),
+                       classification="load_rejected" if rejected else "failed")
+        if proc.returncode:
+            write_journal()
+            if rejected:
+                continue
+            raise subprocess.CalledProcessError(proc.returncode, command,
+                                                output=proc.stdout, stderr=proc.stderr)
+        try:
+            data = json.loads(path.read_text())
+            value = data["results"]["time"][name]["value"]
+            if (isinstance(value, bool) or not isinstance(value, (int, float))
+                    or not math.isfinite(value) or value <= 0):
+                raise ValueError(f"invalid timing value for {name}: {value!r}")
+        except (OSError, ValueError, KeyError, TypeError):
+            attempt["classification"] = "invalid_report"
+            write_journal()
+            raise
+        if time.monotonic() >= deadline:
+            attempt["classification"] = "deadline_expired"
+            write_journal()
+            raise RuntimeError("declared 45-minute timing window expired")
+        attempt["classification"] = "accepted"
+        write_journal()
+        return value
+
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--candidate", required=True, type=Path)
@@ -328,43 +453,15 @@ def main(argv: list[str] | None = None) -> int:
                 rotation = (round_index + kernel_index) % len(labels)
                 order = labels[rotation:] + labels[:rotation]
                 for label in order:
-                    wait_started = time.monotonic()
-                    waits = []
-                    while True:
-                        loads = os.getloadavg()
-                        waits.append({"time": time.time(),
-                                      "elapsed_seconds": time.monotonic() - wait_started,
-                                      "load": loads})
-                        (args.output / "load-wait.json").write_text(json.dumps({
-                            "round": round_index + 1, "kernel": name, "label": label,
-                            "resume_below": 3.0, "samples": waits}, indent=2))
-                        if time.monotonic() >= deadline:
-                            raise RuntimeError("declared 45-minute timing window expired")
-                        if loads[0] < 3.0:
-                            break
-                        time.sleep(min(10, max(0, deadline - time.monotonic())))
-                    if time.monotonic() >= deadline:
-                        raise RuntimeError("declared 45-minute timing window expired")
                     path = args.output / f"r{round_index + 1}-{name}-{label}.json"
                     command = [sys.executable, "-B", str(registry), "--build",
                                str(builds[label]), "--label", label, "--set", "kernels",
                                "--only", name, "--metric", "time", "--max-load", "4",
                                "-o", str(path)]
-                    conditions.append({"round": round_index + 1, "kernel": name,
-                                       "label": label, "load": os.getloadavg(),
-                                       "load_wait": waits,
-                                       "command": command})
-                    journal = {
-                        "qualification": args.qualification,
-                        "admission_note": before["admission_note"],
-                        "preflight_before": "preflight-before.json",
-                        "invocations": conditions,
-                    }
-                    (args.output / "invocations.json").write_text(
-                        json.dumps(journal, indent=2))
-                    subprocess.run(command, check=True)
-                    data = json.loads(path.read_text())
-                    results[label][name].append(data["results"]["time"][name]["value"])
+                    value = run_timing_invocation(
+                        args.output, command, path, label, name, round_index, deadline,
+                        conditions, args.qualification, before["admission_note"])
+                    results[label][name].append(value)
                     print(f"round {round_index + 1}: {name} {label}", flush=True)
     except BaseException as exc:
         failure = f"{type(exc).__name__}: {exc}"

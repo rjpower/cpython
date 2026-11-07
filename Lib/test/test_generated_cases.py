@@ -298,23 +298,39 @@ class TestIRCases(unittest.TestCase):
         self.assertEqual(self.ir_output(input).strip(), expected.strip())
 
     def test_retirement_flush_reuses_published_temporary(self):
-        input = """
-        inst(LOAD_ATTR_SHAPE, (owner -- attr)) {
-            attr = PyValue_DUP(owner);
-            PyValue receiver = OWNER(owner);
-            IR_RETIRE_PUBLISHED(receiver);
-        }
-        """
-        analysis = self.analyze(input)
-        self.assertTrue(analysis.instructions["LOAD_ATTR_SHAPE"].properties.sync_sp)
-        out = io.StringIO()
-        ir_generator.generate_ir([self.temp_input_filename], analysis, out, False)
-        handler = self.handler(out.getvalue(), "LOAD_ATTR_SHAPE")
-        store = "IR_STORE_TEMP_DST(IR_A(ir_word), attr);"
-        retire = handler.index("retire_published_values(")
-        self.assertEqual(handler.count(store), 1)
-        self.assertLess(handler.index(store), retire)
-        self.assertIn("IR_STORE_DST(IR_A(ir_word), attr);", handler[retire:])
+        for name in ("LOAD_ATTR_SLOT", "LOAD_ATTR_INSTANCE_VALUE", "LOAD_ATTR_MODULE",
+                     "LOAD_ATTR_WITH_HINT", "LOAD_ATTR_SHAPE"):
+            with self.subTest(name=name):
+                input = f"""
+                op(_ATTR, (owner -- attr)) {{
+                    attr = PyValue_DUP(owner);
+                    PyValue receiver = OWNER(owner);
+                    IR_RETIRE_PUBLISHED(receiver);
+                }}
+                op(_PUSH_NULL_CONDITIONAL, ( -- null[oparg & 1])) {{
+                    if (oparg & 1) {{
+                        null[0] = PyValue_NULL;
+                    }}
+                }}
+                macro({name}) = _ATTR + _PUSH_NULL_CONDITIONAL;
+                """
+                analysis = self.analyze(input)
+                self.assertTrue(analysis.instructions[name].properties.sync_sp)
+                out = io.StringIO()
+                ir_generator.generate_ir([self.temp_input_filename], analysis, out, False)
+                handler = self.handler(out.getvalue(), name)
+                store = "IR_STORE_TEMP_DST(IR_A(ir_word), attr);"
+                retire = handler.index("retire_published_values(")
+                self.assertEqual(handler.count(store), 1)
+                self.assertLess(handler.index(store), retire)
+                self.assertIn("(IR_IS_LOCAL(IR_A(ir_word)) ? attr : PyValue_NULL)",
+                              handler[retire:])
+                self.assertIn("null = &IR_SLOT(IR_A(ir_word) + 1);", handler[retire:])
+                self.assertIn("null[0] = PyValue_NULL;", handler[retire:])
+                self.assertIn("if (IR_IS_LOCAL(IR_A(ir_word))) {\n"
+                              "                IR_STORE_DST(IR_A(ir_word), attr);",
+                              handler[retire:])
+                self.assertIn("finish_displaced_local(", handler[retire:])
 
     def test_retirement_publication_rejects_intervening_escape(self):
         input = """

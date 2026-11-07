@@ -1891,7 +1891,7 @@ class IRStack(Stack):
         # Set by IR_WINDOW_TAKEN(): the handler disposed of its window, so
         # that the slots of the dead inputs stay as it left them.
         self.window_taken = False
-        # The selected generic attribute helper published temporary outputs
+        # Attribute completion or retirement published the temporary result
         # before receiver retirement. Only a folded local remains to write.
         self.published_temporary_result = False
         # The IR_STORE_DST and IR_MOVE_TO_DST lines emitted for the handler.
@@ -2363,6 +2363,8 @@ class IREmitter(Emitter):
             fmt = self.format_of(inst)
             dst = FIELD_VARS[fmt.field_of(ROLE_DST)]
             failure_result = f"(IR_IS_LOCAL({dst}) ? attr : PyValue_NULL)"
+            assert isinstance(storage.stack, IRStack)
+            storage.stack.published_temporary_result = True
         self.emit("{\n")
         boxes = " || value_temps->count != 0" if self.has_record else ""
         self.emit(f"int retire_needed = _PyValue_MayDealloc({first.text}){boxes};\n")

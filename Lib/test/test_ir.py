@@ -2,10 +2,12 @@
 assembler (Python/assemble.c) emits."""
 
 import dis
+import gc
 import io
 import sys
 import types
 import unittest
+import weakref
 from test import support
 from test.support import import_helper
 from test.support.bytecode_helper import AssemblerTestCase, encode_words
@@ -111,6 +113,83 @@ class AssemblerTest(unittest.TestCase):
             self.assertNotIn("LOAD_ATTR", handlers(f))
         # The words of the code object stay as the compiler emitted them
         self.assertEqual(get_ir(f.__code__), ir)
+
+    @support.requires_refcounting
+    def test_specialized_attribute_result_survives_receiver_retirement(self):
+        events = []
+        references = []
+        observe = False
+
+        class Payload:
+            pass
+
+        class Old:
+            def __del__(self):
+                if observe:
+                    frame = sys._getframe(1)
+                    events.append(("old", frame.f_locals["result"] is references[-1]()))
+
+        def retire_receiver():
+            if observe:
+                frame = sys._getframe(2)
+                old_is_visible = isinstance(frame.f_locals.get("result"), Old)
+                gc.collect()
+                events.append(("receiver", old_is_visible, references[-1]() is not None))
+
+        class Slotted:
+            __slots__ = ("value",)
+
+            def __del__(self):
+                retire_receiver()
+
+        class Shaped:
+            def __del__(self):
+                retire_receiver()
+
+        def factory(cls):
+            owner = cls()
+            owner.value = Payload()
+            references.append(weakref.ref(owner.value))
+            return owner
+
+        for cls, expected_handler in ((Slotted, "LOAD_ATTR_SLOT"),
+                                      (Shaped, "LOAD_ATTR_SHAPE")):
+            for local in (False, True):
+                with self.subTest(cls=cls.__name__, local=local):
+                    if local:
+                        read = make_function(
+                            "def f(factory, cls, Old):\n"
+                            "    result = Old()\n"
+                            "    result = factory(cls).value\n"
+                            "    return result\n")
+                    else:
+                        read = make_function(
+                            "def f(factory, cls, Old):\n"
+                            "    return factory(cls).value\n")
+                    attr = next(word for word in get_ir(read.__code__)
+                                if word[0] == "LOAD_ATTR")
+                    if local:
+                        self.assertLess(attr[1], nlocalsplus(read))
+                    else:
+                        self.assertGreaterEqual(attr[1], nlocalsplus(read))
+                    for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 3):
+                        read(factory, cls, Old)
+                    if SPECIALIZES:
+                        self.assertIn(expected_handler, handlers(read))
+                    events.clear()
+                    observe = True
+                    try:
+                        result = read(factory, cls, Old)
+                    finally:
+                        observe = False
+                    if SPECIALIZES:
+                        self.assertIn(expected_handler, handlers(read))
+                    self.assertIs(result, references[-1]())
+                    self.assertEqual(events, [("receiver", local, True)] +
+                                     ([("old", True)] if local else []))
+                    del result
+                    self.assertIsNone(references[-1]())
+                    references.clear()
 
     def test_deopt_after_borrowing_a_local(self):
         # A deoptimising LOAD_ATTR must preserve the local's owner.

@@ -12548,7 +12548,9 @@
                     null[0] = PyValue_NULL;
                 }
             }
-            IR_STORE_DST(IR_A(ir_word), attr);
+            if (IR_IS_LOCAL(IR_A(ir_word))) {
+                IR_STORE_DST(IR_A(ir_word), attr);
+            }
             if (!PyValue_IsNull(ir_displaced) &&
                 finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
@@ -12840,7 +12842,9 @@
                     null[0] = PyValue_NULL;
                 }
             }
-            IR_STORE_DST(IR_A(ir_word), attr);
+            if (IR_IS_LOCAL(IR_A(ir_word))) {
+                IR_STORE_DST(IR_A(ir_word), attr);
+            }
             if (!PyValue_IsNull(ir_displaced) &&
                 finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
@@ -13144,7 +13148,9 @@
                     null[0] = PyValue_NULL;
                 }
             }
-            IR_STORE_DST(IR_A(ir_word), attr);
+            if (IR_IS_LOCAL(IR_A(ir_word))) {
+                IR_STORE_DST(IR_A(ir_word), attr);
+            }
             if (!PyValue_IsNull(ir_displaced) &&
                 finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
@@ -13228,7 +13234,9 @@
                     null[0] = PyValue_NULL;
                 }
             }
-            IR_STORE_DST(IR_A(ir_word), attr);
+            if (IR_IS_LOCAL(IR_A(ir_word))) {
+                IR_STORE_DST(IR_A(ir_word), attr);
+            }
             if (!PyValue_IsNull(ir_displaced) &&
                 finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
@@ -13352,7 +13360,9 @@
                     null[0] = PyValue_NULL;
                 }
             }
-            IR_STORE_DST(IR_A(ir_word), attr);
+            if (IR_IS_LOCAL(IR_A(ir_word))) {
+                IR_STORE_DST(IR_A(ir_word), attr);
+            }
             if (!PyValue_IsNull(ir_displaced) &&
                 finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;

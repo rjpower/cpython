@@ -338,6 +338,58 @@ class TestIRCases(unittest.TestCase):
                               handler[retire:])
                 self.assertIn("finish_displaced_local(", handler[retire:])
 
+    def test_canonical_home_publication(self):
+        source = """
+        op(_ATTR, (owner -- attr)) {
+            PyValueBorrow found = PyValue_Borrow(owner);
+            attr = IR_CANONICAL_HOME_DUP(found);
+            PyValue receiver = OWNER(owner);
+            IR_RETIRE_PUBLISHED_RESULT(attr, receiver);
+        }
+        op(_PUSH_NULL_CONDITIONAL, ( -- null[oparg & 1])) {
+            if (oparg & 1) {
+                null[0] = PyValue_NULL;
+            }
+        }
+        macro(LOAD_ATTR_SHAPE) = _ATTR + _PUSH_NULL_CONDITIONAL;
+        """
+        handler = self.handler(self.ir_output(source), "LOAD_ATTR_SHAPE")
+        direct = "IR_STORE_CANONICAL_TEMP_DST(IR_A(ir_word), attr);"
+        retire = handler.index("retire_published_values(")
+        failure = handler.index("if (retire_failed < 0)", retire)
+        local = handler.index("IR_STORE_DST(IR_A(ir_word), attr);", failure)
+        self.assertEqual(handler.count(direct), 1)
+        self.assertLess(handler.index(direct), retire)
+        self.assertIn("JUMP_TO_LABEL(error)", handler[failure:local])
+        self.assertIn("if (IR_IS_LOCAL(IR_A(ir_word)))", handler[failure:local])
+        self.assertIn("null[0] = PyValue_NULL;", handler[retire:])
+
+    def test_canonical_home_declaration_rejections(self):
+        template = """
+        inst(OP, (owner -- attr)) {{
+            PyValueBorrow found = PyValue_Borrow(owner);
+            {assignment}
+            {extra}
+            PyValue receiver = OWNER(owner);
+            {marker}
+        }}
+        """
+        cases = (
+            ("other = IR_CANONICAL_HOME_DUP(found);", "", "IR_RETIRE_PUBLISHED_RESULT(attr, receiver);"),
+            ("attr = IR_CANONICAL_HOME_DUP(found);", "IR_CANONICAL_HOME_DUP(found);", "IR_RETIRE_PUBLISHED_RESULT(attr, receiver);"),
+            ("if (oparg) { attr = IR_CANONICAL_HOME_DUP(found); }", "", "IR_RETIRE_PUBLISHED_RESULT(attr, receiver);"),
+            ("attr = IR_CANONICAL_HOME_DUP(found);", "", "IR_RETIRE_PUBLISHED(receiver);"),
+            ("attr = IR_CANONICAL_HOME_DUP(found);", "attr = PyValue_DUP(owner);", "IR_RETIRE_PUBLISHED_RESULT(attr, receiver);"),
+            ("attr = IR_CANONICAL_HOME_DUP(found);", "mutate(&attr);", "IR_RETIRE_PUBLISHED_RESULT(attr, receiver);"),
+            ("attr = IR_CANONICAL_HOME_DUP(found);", "escape(attr);", "IR_RETIRE_PUBLISHED_RESULT(attr, receiver);"),
+            ("attr = IR_CANONICAL_HOME_DUP(found + 1);", "", "IR_RETIRE_PUBLISHED_RESULT(attr, receiver);"),
+        )
+        for assignment, extra, marker in cases:
+            with self.subTest(assignment=assignment, extra=extra, marker=marker):
+                with self.assertRaises(SyntaxError):
+                    self.ir_output(template.format(assignment=assignment,
+                                                   extra=extra, marker=marker))
+
     def test_retirement_publication_rejects_wrong_output(self):
         input = """
         inst(LOAD_ATTR_SHAPE, (owner -- other, attr)) {

@@ -13122,11 +13122,11 @@
                 PyValueBorrow found =
                 PyValue_Borrow(*(PyValue *)((char *)owner_o + offset));
                 assert(!PyValue_IsNull(found));
-                attr = PyValue_XDUP(found);
+                attr = IR_CANONICAL_HOME_DUP(found);
                 STAT_INC(LOAD_ATTR, hit);
                 ir_own_B = IR_CONSUME_INPUT(IR_B(ir_word), owner);
                 PyValue receiver = ir_own_B;
-                IR_STORE_TEMP_DST(IR_A(ir_word), attr);
+                IR_STORE_CANONICAL_TEMP_DST(IR_A(ir_word), attr);
                 {
                     int retire_needed = _PyValue_MayDealloc(receiver);
                     if (!retire_needed) {

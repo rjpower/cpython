@@ -7256,6 +7256,7 @@ store_instance_attr_dict(PyObject *obj, PyDictObject *dict,
 int
 (_PyObject_StoreInstanceValue)(PyObject *obj, PyObject *name, PyValueBorrow value)
 {
+    assert(_PyValue_IsHome(value));
     assert(PyValue_IsLanguageValue(value) || PyValue_IsNull(value));
     Py_INCREF(obj);
     Py_INCREF(name);

@@ -2710,7 +2710,7 @@ dummy_func(
                 PyValue_Borrow(*(PyValue *)((char *)owner_o + offset));
             // The shape proves the slot filled.
             assert(!PyValue_IsNull(found));
-            attr = PyValue_XDUP(found);
+            attr = IR_CANONICAL_HOME_DUP(found);
             STAT_INC(LOAD_ATTR, hit);
             PyValue receiver = OWNER(owner);
             IR_RETIRE_PUBLISHED_RESULT(attr, receiver);

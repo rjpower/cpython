@@ -588,6 +588,21 @@ _PyIR_AdoptTemp(PyValueBorrow view)
         } \
     } while (0)
 
+/* The source is a borrowed value from a canonical home. */
+#define IR_CANONICAL_HOME_DUP(V) \
+    (assert(_PyValue_IsHome(V)), PyValue_XDUP(V))
+
+/* The checked producer already owns canonical bits. */
+#define IR_STORE_CANONICAL_TEMP_DST(F, V) \
+    do { \
+        if (!IR_IS_LOCAL(F)) { \
+            assert(PyValue_IsNull(IR_SLOT(F)) \
+                   || PyValue_Is(IR_SLOT(F), (V))); \
+            IR_SLOT(F) = (V); \
+            _PyValue_CheckTemp(IR_SLOT(F)); \
+        } \
+    } while (0)
+
 /* Before code that may run other code, the result V goes to dst field F
  * if F names a temporary.  A local gets it at the end, IR_STORE_DST. */
 #define IR_STORE_TEMP_DST(F, V) \

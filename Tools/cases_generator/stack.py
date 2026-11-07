@@ -597,10 +597,13 @@ class Storage:
                 return True
         return False
 
-    def flush(self, out: CWriter) -> None:
+    def prepare_flush(self, out: CWriter) -> None:
         self._print(out)
         self.clear_dead_inputs()
         self._push_defined_outputs()
+
+    def flush(self, out: CWriter) -> None:
+        self.prepare_flush(out)
         self.stack.flush(out)
 
     def save(self, out: CWriter) -> None:

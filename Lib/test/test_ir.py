@@ -4,6 +4,7 @@ assembler (Python/assemble.c) emits."""
 import dis
 import gc
 import io
+import math
 import sys
 import types
 import unittest
@@ -190,6 +191,97 @@ class AssemblerTest(unittest.TestCase):
                     del result
                     self.assertIsNone(references[-1]())
                     references.clear()
+
+    def test_shape_result_value_categories(self):
+        class IntSubclass(int):
+            pass
+
+        class FloatSubclass(float):
+            pass
+
+        class Shaped:
+            pass
+
+        values = (42, 1.25, 0.0, -0.0, float("nan"), 1 << 100, IntSubclass(42),
+                  FloatSubclass(1.25), None, object())
+        for value in values:
+            for local in (False, True):
+                with self.subTest(value=value, local=local):
+                    source = ("def f(owner):\n"
+                              + ("    result = owner.value\n    return result\n"
+                                 if local else "    return owner.value\n"))
+                    read = make_function(source)
+                    owner = Shaped()
+                    owner.value = value
+                    for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 3):
+                        result = read(owner)
+                        if type(value) is float and math.isnan(value):
+                            self.assertTrue(math.isnan(result))
+                        else:
+                            self.assertEqual(result, value)
+                        if type(value) is float and value == 0.0:
+                            self.assertEqual(math.copysign(1.0, result),
+                                             math.copysign(1.0, value))
+                        self.assertIs(type(result), type(value))
+                        if type(value) not in (int, float):
+                            self.assertIs(result, value)
+                    if SPECIALIZES:
+                        self.assertIn("LOAD_ATTR_SHAPE", handlers(read))
+                    attr = next(word for word in get_ir(read.__code__)
+                                if word[0] == "LOAD_ATTR")
+                    self.assertEqual(attr[1] < nlocalsplus(read), local)
+
+    @support.requires_refcounting
+    def test_shape_receiver_replaces_folded_local(self):
+        events = []
+        references = []
+        observe = False
+
+        class Payload:
+            pass
+
+        class Old:
+            def __del__(self):
+                if observe:
+                    events.append("old")
+
+        class Sentinel:
+            def __del__(self):
+                if observe:
+                    events.append("sentinel")
+
+        class Shaped:
+            def __del__(self):
+                if observe:
+                    frame = sys._getframe(1)
+                    events.append(("receiver", isinstance(frame.f_locals["result"], Old)))
+                    frame.f_locals["result"] = Sentinel()
+
+        def factory():
+            owner = Shaped()
+            owner.value = Payload()
+            references.append(weakref.ref(owner.value))
+            return owner
+
+        read = make_function("def f(factory, Old):\n"
+                             "    result = Old()\n"
+                             "    result = factory().value\n"
+                             "    return result\n")
+        attr = next(word for word in get_ir(read.__code__)
+                    if word[0] == "LOAD_ATTR")
+        self.assertLess(attr[1], nlocalsplus(read))
+        for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 3):
+            read(factory, Old)
+        if SPECIALIZES:
+            self.assertIn("LOAD_ATTR_SHAPE", handlers(read))
+        observe = True
+        try:
+            result = read(factory, Old)
+        finally:
+            observe = False
+        self.assertIs(result, references[-1]())
+        # The frame retains overwritten locals until it is released.
+        self.assertEqual(events, [("receiver", True), "sentinel", "old"])
 
     def test_deopt_after_borrowing_a_local(self):
         # A deoptimising LOAD_ATTR must preserve the local's owner.

@@ -913,7 +913,8 @@ extern PyObject* _PyType_GetTextSignatureFromInternalDoc(const char *, const cha
 PyAPI_FUNC(int) _PyObject_SetAttributeErrorContext(PyObject *v, PyObject* name);
 
 void _PyObject_InitInlineValues(PyObject *obj, PyTypeObject *tp);
-/* Borrow value/NULL1 deletion; TryGet returns -1 error, 0 fallback,
+/* Store borrows a canonical home value, or NULL for deletion.
+ * TryGet returns -1 error, 0 fallback,
  * 1 inline handled, with independently owned value or NULL1 miss. */
 PyAPI_FUNC(int) _PyObject_StoreInstanceValue(PyObject *, PyObject *, PyValueBorrow);
 #define _PyObject_StoreInstanceValue(O, N, V) \

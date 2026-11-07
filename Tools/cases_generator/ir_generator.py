@@ -576,7 +576,7 @@ def classify_inputs(inst: Instruction, n_inputs: int) -> list[str]:
 # use of a view (IREmitter.check_inplace_input()).  The C compiler rejects
 # a view that reaches an owner, a home or a function that takes PyValue.
 INPLACE_READERS = {
-    "PyValue_DUP", "PyValue_XDUP", "PyValue_AsObject",
+    "PyValue_DUP", "PyValue_XDUP", "IR_CANONICAL_HOME_DUP", "PyValue_AsObject",
     "PyValue_AsKnownObjectBorrow", "PyValue_TYPE",
     "PyValue_BoolCheck", "PyValue_FloatOperandValues", "PyValue_InlineFloat",
     "PyValue_InlineInt64", "_PyValue_IntScaled", "PyValue_LongCheckExact",
@@ -2035,7 +2035,8 @@ class IRStack(Stack):
         out.emit(f"{owner_name(self.layout.in_fields[p])} = "
                  f"IR_CONSUME_INPUT({f}, {names[-1]});\n")
 
-    def store(self, out: CWriter, var: Local, memory_offset: PointerOffset) -> bool:
+    def store(self, out: CWriter, var: Local, memory_offset: PointerOffset,
+              canonical_result: str | None = None) -> bool:
         """Write var, which the stack holds at memory_offset; whether the
         frame then holds it there"""
         out.start_line()
@@ -2091,7 +2092,9 @@ class IRStack(Stack):
                 return True
             # Before the end, dst gets the result only if it is a
             # temporary; a local gets it at the end, releasing its value.
-            out.emit(f"IR_STORE_TEMP_DST({FIELD_VARS[lay.dst]}, {var.name});\n")
+            macro = ("IR_STORE_CANONICAL_TEMP_DST" if var.name == canonical_result
+                     else "IR_STORE_TEMP_DST")
+            out.emit(f"{macro}({FIELD_VARS[lay.dst]}, {var.name});\n")
             return False
         if previous == "out":
             out.emit(f"IR_PUBLISH_TEMP({slot}, {var.name});\n")
@@ -2126,12 +2129,13 @@ class IRStack(Stack):
             raise StackError(f"'{var.name}' has no slot at position {p}")
         return False
 
-    def save_variables(self, out: CWriter) -> None:
+    def save_variables(self, out: CWriter,
+                       canonical_result: str | None = None) -> None:
         out.start_line()
         var_offset = self.base_offset
         for var in self.variables:
             if var.in_local and not var.memory_offset and not var.is_array():
-                if self.store(out, var, var_offset):
+                if self.store(out, var, var_offset, canonical_result):
                     var.memory_offset = var_offset
             var_offset = var_offset.push(var.item)
 
@@ -2175,7 +2179,8 @@ class IRStack(Stack):
             del self.owner[p]
         out.emit(f"IR_CLEAR_SLOTS(&{self.out_slot(low)}, {count.to_c()});\n")
 
-    def flush(self, out: CWriter) -> None:
+    def flush(self, out: CWriter,
+              canonical_result: str | None = None) -> None:
         if self.physical_sp is None:
             # After a frame switch there is nothing of this frame to write.
             if self.variables:
@@ -2184,7 +2189,7 @@ class IRStack(Stack):
         self._print(out)
         if may_be_positive(self.physical_sp - self.logical_sp):
             self.vacate(out, self.logical_sp, self.physical_sp)
-        self.save_variables(out)
+        self.save_variables(out, canonical_result)
         self.physical_sp = self.logical_sp
         out.start_line()
 
@@ -2372,7 +2377,13 @@ class IREmitter(Emitter):
                     f"{tkn.text}({retired.text}) of a view: retire its "
                     f"OWNER()", retired)
         storage.clear_inputs("before published receiver retirement")
-        storage.flush(self.out)
+        if (tkn.text == "IR_RETIRE_PUBLISHED_RESULT"
+                and self.result_publication.canonical_source):
+            storage.prepare_flush(self.out)
+            assert isinstance(storage.stack, IRStack)
+            storage.stack.flush(self.out, canonical_result=result_name)
+        else:
+            storage.flush(self.out)
         self.pending_owner = None
         failure_result = "PyValue_NULL"
         if tkn.text == "IR_RETIRE_PUBLISHED_RESULT":
@@ -4115,6 +4126,7 @@ class ResultPublicationContract:
     owner: str | None
     producer: Uop
     kind: str
+    canonical_source: bool = False
 
 
 def _statement_text(stmt: SimpleStmt) -> list[str]:
@@ -4389,6 +4401,13 @@ def result_publication_contract(
 ) -> ResultPublicationContract | None:
     "Validate the source of the first-output publication postcondition."
     marker = "IR_RETIRE_PUBLISHED_RESULT"
+    canonical = "IR_CANONICAL_HOME_DUP"
+    canonical_occurrences = [
+        (part, token) for part in inst.parts if isinstance(part, Uop)
+        for token in part.body.tokens() if token.text == canonical]
+    if len(canonical_occurrences) > 1:
+        raise analysis_error(
+            f"{inst.name}: duplicate canonical home declaration", inst.where)
     generic = "IR_COMPLETE_ATTR_READER"
     marker_occurrences = [
         (part, token) for part in inst.parts if isinstance(part, Uop)
@@ -4405,6 +4424,10 @@ def result_publication_contract(
             f"{inst.name}: conflicting result publication declarations",
             inst.where)
     if not marker_occurrences and not generic_occurrences:
+        if canonical_occurrences:
+            raise analysis_error(
+                f"{inst.name}: canonical home declaration requires result marker",
+                canonical_occurrences[0][1])
         return None
 
     is_explicit = bool(marker_occurrences)
@@ -4453,12 +4476,29 @@ def result_publication_contract(
             raise analysis_error(
                 f"{inst.name}: result {result} is used before receiver "
                 "retirement", token)
+        canonical_source = bool(canonical_occurrences)
+        if canonical_source:
+            canonical_producer, canonical_token = canonical_occurrences[0]
+            assignment = _statement_text(result_assignment)
+            if (canonical_producer is not producer
+                    or len(assignment) != 7
+                    or assignment[:4] != [result, "=", canonical, "("]
+                    or not re.fullmatch(r"[A-Za-z_]\w*", assignment[4])
+                    or assignment[5:] != [")", ";"]):
+                raise analysis_error(
+                    f"{inst.name}: canonical home declaration must be the "
+                    "direct result assignment with one identifier", canonical_token)
         _publication_result(inst, fmt, result, producer)
         outputs = external_io(inst)[1]
         _validate_publication_suffix(inst, producer, outputs, result)
         return ResultPublicationContract(
             RESULT_PHASE_DST_TEMP_CANONICAL_BEFORE_RETIRE,
-            result, owner, producer, "explicit")
+            result, owner, producer, "explicit", canonical_source)
+
+    if canonical_occurrences:
+        raise analysis_error(
+            f"{inst.name}: canonical home declaration requires result marker",
+            canonical_occurrences[0][1])
 
     # The generic reader completes publication in a trusted helper, then
     # assigns its first result to the handler output.

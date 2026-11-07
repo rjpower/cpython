@@ -165,8 +165,9 @@ def write_launcher(path: Path, python: Path, cache_root: Path) -> None:
     path.chmod(0o755)
 
 
-def load_guard() -> tuple[float, float, float]:
-    loads = os.getloadavg()
+def load_guard(loads: tuple[float, float, float] | None = None) -> tuple[float, float, float]:
+    if loads is None:
+        loads = os.getloadavg()
     if loads[0] >= LOAD_LIMIT:
         raise RuntimeError(f"load guard reached {LOAD_LIMIT}: {loads}")
     return loads
@@ -181,17 +182,52 @@ def journal_record(path: Path, record: dict) -> None:
 
 def run_command(command: list[str], env: dict[str, str], cwd: Path,
                 log_prefix: Path, journal: Path, *, timeout: float | None = None) -> None:
-    loads = load_guard()
+    if timeout is None:
+        loads = load_guard()
+        deadline = None
+    else:
+        wait_started = time.monotonic()
+        deadline = wait_started + timeout
+        while True:
+            loads = os.getloadavg()
+            now = time.monotonic()
+            journal_record(journal, {"phase": "load-wait", "time": time.time(),
+                                     "elapsed_seconds": now - wait_started,
+                                     "loadavg": loads, "command": command})
+            if now >= deadline:
+                journal_record(journal, {"phase": "load-wait-timeout",
+                                         "time": time.time(), "command": command})
+                raise TimeoutError("declared 30-minute pyperf window expired")
+            if loads[0] < 3.0:
+                # Recheck at the existing hard guard immediately before launch.
+                loads = os.getloadavg()
+                journal_record(journal, {"phase": "load-guard", "time": time.time(),
+                                         "elapsed_seconds": time.monotonic() - wait_started,
+                                         "loadavg": loads, "command": command})
+                try:
+                    load_guard(loads)
+                except RuntimeError:
+                    continue
+                break
+            time.sleep(min(10, max(0, deadline - time.monotonic())))
     started = time.time()
     journal_record(journal, {"phase": "start", "time": started,
                              "loadavg": loads, "cwd": str(cwd),
                              "command": command,
                              "environment": {"PYTHONPATH": env.get("PYTHONPATH"),
                                              "PYTHONHASHSEED": env.get("PYTHONHASHSEED")}})
+    if deadline is not None:
+        timeout = deadline - time.monotonic()
+        if timeout <= 0:
+            journal_record(journal, {"phase": "load-wait-timeout",
+                                     "time": time.time(), "command": command})
+            raise TimeoutError("declared 30-minute pyperf window expired")
     proc = subprocess.Popen(command, cwd=cwd, env=env, text=True,
                             stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                             start_new_session=True)
     try:
+        if deadline is not None:
+            timeout = max(0, deadline - time.monotonic())
         stdout, stderr = proc.communicate(timeout=timeout)
     except subprocess.TimeoutExpired as exc:
         try:
@@ -277,7 +313,8 @@ def pyperf_stage(args, measure, builds: dict[str, Path], before: dict,
             prefix = out / f"{role}-{name}"
             run_command(command, env, benchmark_root / next(
                 folder for task_name, folder, _script, _opts in TASKS
-                if task_name == name), prefix, journal, timeout=remaining)
+                if task_name == name), prefix, journal,
+                timeout=max(0, deadline - time.monotonic()))
             if not result.is_file():
                 raise RuntimeError(f"pyperf did not create {result}")
             data = json.loads(result.read_text())

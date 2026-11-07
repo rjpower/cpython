@@ -1,14 +1,15 @@
 # Coordinator handoff
 
-Current runtime HEAD is `7780e32e0e2` (Integration C, final attribute
-publication); the runtime worktree is clean. Release, debug and stats build
-identities match this source and each reports 117 modules. Release and debug
-suites both passed 54,361 tests with no failures (release: 2,467 skips in
-3m05s; debug: 2,405 skips in 9m11s). Across each, 616/627 files passed and 79
-were skipped, including 11 resource-denied skips. Integration C has passed
-the functional suite gate. Final 29-kernel and pyperformance comparisons are
-running serially; no performance conclusion is available yet. See the
-[current status](STATUS.md), [Integration C receipt](issues/interpreter-throughput/integration-c.md)
+Current runtime HEAD `7780e32e0e2` is clean. Release, debug and stats builds
+each report 117 modules; release and debug suites each passed 54,361 tests
+with no failures. Final-v4 measurements are complete. Candidate / upstream
+and candidate / interim elapsed factors are 1.263136 / 1.054877 on 29 kernels
+and 1.084920 / 0.902391 on the declared 12-result subset. These noisy,
+sequential results show no convincing broad elapsed-time win or upstream
+parity. Per-loop instructions fell 2.2%, 6.7% and 1.4% in three selected
+counter workloads, but remain 2.001520x, 1.774821x and 1.605447x upstream.
+The [final report](bench/results/interpreter-throughput-20261106.md) is the
+evidence source; see also [status](STATUS.md), the [Integration C receipt](issues/interpreter-throughput/integration-c.md)
 and [throughput follow-up](issues/interpreter-throughput/follow-up.md).
 
 ## Historical checkpoint: runtime 6a0e4c12c17
@@ -85,8 +86,8 @@ and backend. The stage pages distinguish selected designs from working code.
 | --- | --- |
 | Documentation root (canonical `pyjit/`) | `/home/power/code/cpython/.worktrees/python-jit`, branch `weaver/python-jit` |
 | Runtime tree (nested worktree) | `/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/pyvalue-rc-universal` |
-| Runtime branch / source | `boil/pyvalue-rc-universal`, clean HEAD `6a0e4c12c17` (2026-11-06; coordinator-owned) |
-| Candidate builds | `build/pyvalue-rc-repr-debug`, `build/pyvalue-rc-repr-release`, `build/pyvalue-rc-repr-stats`; retained IDs and control builds are linked in the current census receipts |
+| Runtime branch / source | `boil/pyvalue-rc-universal`, clean HEAD `7780e32e0e2` (coordinator-owned) |
+| Candidate builds | `build/pyvalue-rc-repr-debug`, `build/pyvalue-rc-repr-release`, `build/pyvalue-rc-repr-stats`; all match current source and report 117 modules |
 | Matched controls | Upstream `3a440b65695` and interim `eba351fee7d`; exact build IDs are in the full-census and kernel receipts |
 | Historical builds | `build/pyvalue-rc-debug-20261102-v1`, `build/pyvalue-rc-bringup-debug`, `build/pyvalue-rc-triage-rt-debug`, `build/pyvalue-rc-release-20261103`, `build/upstream-release-3a440b6` (not the current matched-build set) |
 | Coordinator working files | `build/pyjit-link-wave1/` (briefs, `FOLLOWUPS.md`, reviews, progress logs; bring-up ladder in `BRINGUP-BRIEF.md`) |
@@ -113,24 +114,18 @@ diagnostic report.
 
 ## Source and build state
 
-Runtime HEAD `6a0e4c12c17` is clean. Build-info objects match their respective
-upstream, interim and candidate source HEADs; rosters are 116/116/117. Release
-and debug full suites each passed 54,351 tests with no failures (2,531 and
-2,469 skips). The strict full census failed with 11,028,818
-core/core-pending/unresolved boxes and incomplete process identity/accounting;
-the strict kernel gate also failed. Exact counts and artifacts are in the
-[full census receipt](issues/checkpoint-closure/full-census-6a0e4c12c17.md) and
-[kernel receipt](issues/checkpoint-closure/kernels-6a0e4c12c17.md). The earlier
-full-v2 failures remain historical evidence, superseded by the final full-suite
-pass. The paired `.txt`/`.done` producer, strict reader and benchmark consumer
-are integrated; the strict reader's current census result is a failure, not a
-pending check.
+Runtime HEAD `7780e32e0e2` is clean. Release, debug and stats build identities
+match it and each reports 117 modules. Release and debug suites each passed
+54,361 tests with no failures. Final-v4 candidate / upstream factors are
+1.263136 for kernels and 1.084920 for the selected 12-result subset; candidate /
+interim factors are 1.054877 and 0.902391. The batch does not establish a
+convincing broad elapsed-time win or upstream parity. The [final report](bench/results/interpreter-throughput-20261106.md)
+holds the complete measurements and limitations.
 
-The raw kernel evidence at `66981c963be` is historical and keeps its own ELF.
-The current `6a0e4c12c17` kernel and full-census receipts identify the exact
-retained executables. The final diagnostic results are recorded separately;
-they retain their sampling and workload limits; the separate failed R27
-zero-box criterion no longer vetoes throughput decisions.
+The raw kernel evidence at `66981c963be` and the `6a0e4c12c17` census are
+historical and retain their original ELF identities. The final-v4 report
+identifies the current retained executables and its sampling and workload
+limits. The zero-box criterion remains diagnostic, not a throughput veto.
 
 The final AST type-call guard admits only the selected type-call pair when the
 class object's actual object and value vectorcall fields are both inactive.
@@ -139,8 +134,9 @@ the normal vectorcall path. See the [v3 source review](issues/checkpoint-closure
 and [merged differential](issues/checkpoint-closure/ast-original-kwargs-v3-merged-validation.md).
 
 The prior isolated bulk tree and W5 copies are historical worker artifacts, not
-current source baselines. Base future runtime work on a fresh copy of clean
-HEAD `6a0e4c12c17`; preserve the sealed reviews and build evidence.
+current source baselines. Continue from clean HEAD `7780e32e0e2`, reusing the
+existing runtime worktree unless isolation is needed. Preserve the sealed
+reviews and build evidence.
 
 The matched controls are upstream `3a440b65695` and interim `eba351fee7d`.
 G2 remains deferred until qualification and measurement. Ctypes/LRU source
@@ -278,6 +274,10 @@ commit:
 
 ## Designs
 
+The ledger below records earlier design reviews. Its old running/completed
+labels are historical; current implementation notes in the linked designs and
+the final throughput report take precedence.
+
 All under `design/`. Each is short markdown. Design reviews live in
 `design/reviews/`; code reviews of ports live in `build/pyjit-link-wave1/`.
 The designs below and the value API page are accepted.
@@ -313,6 +313,24 @@ must be made in `Tools/clinic/libclinic/`; bulk edits to generated C are
 overwritten.
 
 ## Next steps
+
+The calls/frame/publication batch and its report are complete. Continue with
+the [throughput follow-up](issues/interpreter-throughput/follow-up.md):
+
+1. Use the final call annotation and call-shape evidence to choose one bounded
+   preparation/frame/guard change in `Python/ceval.c`. Keep prepare/guard/commit
+   ownership and test accepted and declined paths.
+2. Review one shared attribute-helper phase/effect/output contract before
+   removing more publication or refresh work. Keep interpreter homes separate
+   from future-read liveness and optimizing SSA.
+3. Select further PyValue ports by measured bridge cost. Use focused tests per
+   packet, a basic matched screen and a fresh cold review per integration;
+   reserve full suites for coherent integration points.
+
+GCC remains fixed. The older zero-box queue below is retained as history, not
+the current admission policy or an instruction to restart a full census.
+
+### Historical next steps at runtime 6a0e4c12c17
 
 1. Keep the completed full release/debug pass and exact source/build IDs as the
    functional baseline.

@@ -4,15 +4,14 @@ We are rebuilding CPython around universal eight-byte PyValues, a register
 interpreter, and a cohesive method and tracing JIT. Memory management uses
 reference counting with cyclic collection. Extensions are rebuilt and ported.
 
-**Current status, 2026-11-06:** runtime HEAD is `7780e32e0e2` (Integration C,
-final attribute publication), and the runtime worktree is clean. Release,
-debug and stats build identities match this source, with 117 modules each.
-Release and debug suites both passed 54,361 tests with no failures (release:
-2,467 skips in 3m05s; debug: 2,405 skips in 9m11s). Across each, 616/627 files
-passed and 79 were skipped; 11 skips were resource-denied. Integration C has
-passed the functional suite gate. The final 29-kernel and pyperformance
-comparisons are running serially; no performance conclusion is available yet.
-See [current status](STATUS.md),
+**Current status, 2026-11-07:** runtime HEAD `7780e32e0e2` is clean; release,
+debug and stats builds each report 117 modules, and both full suites passed
+54,361 tests with no failures. Final-v4 measurements are complete. Candidate /
+upstream and candidate / interim elapsed factors are 1.263136 / 1.054877 on
+29 kernels and 1.084920 / 0.902391 on the declared 12-result subset. These
+noisy sequential results establish no convincing broad elapsed-time win or
+upstream parity. The coordinator's [final report](bench/results/interpreter-throughput-20261106.md)
+contains validation, evidence limits and next work; see also [status](STATUS.md),
 the [Integration C receipt](issues/interpreter-throughput/integration-c.md)
 and the [throughput follow-up](issues/interpreter-throughput/follow-up.md).
 

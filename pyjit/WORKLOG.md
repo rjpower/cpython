@@ -275,3 +275,16 @@ that remote copy remains at revision 7. No alternate export was attempted.
   workload instruction counts from per-bytecode costs. Current work prioritizes
   generated publication/helper overhead, call/frame traffic and useful ports;
   earlier strict R27 outcomes remain historical diagnostics.
+- 2026-11-07 — Integrated and cold-reviewed the calls/frame/publication batch
+  at runtime `7780e32e0e2`, following `8a8fdc91368` and `ba37cc10058`.
+  Both full profiles ran 54,361 tests with zero failures; all three builds
+  report 117 modules. The completed GCC-only campaign gives elapsed factors
+  1.263136/1.054877 against upstream/interim over 29 kernels and
+  1.084920/0.902391 over the declared 12-result subset. Selected-loop native
+  instructions fall 2.2%/6.7%/1.4% from 6a, but remain
+  2.002x/1.775x/1.605x upstream. Host variation prevents a convincing broad
+  elapsed-gain claim; B's known-NULL reuse benefit remains unproven. Retained
+  source/build identities, 54 counter runs and six loss-free profiles drive
+  the [report](bench/results/interpreter-throughput-20261106.md) and
+  [follow-up](issues/interpreter-throughput/follow-up.md). Runtime source
+  remains clean; no second compiler or new zero-box census was used.

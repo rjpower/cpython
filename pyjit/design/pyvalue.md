@@ -5,15 +5,16 @@ instance fields and value-native C APIs. This page specifies the encoding as
 built, compares it with other dynamic-language runtimes, and lists the gaps
 we should close. It is the reference for value, container and C-boundary work.
 
-**Current implementation, 2026-11-06.** Runtime HEAD is `7780e32e0e2`.
+**Current implementation, 2026-11-07.** Runtime HEAD is `7780e32e0e2`.
 The eight-byte PyValue format is unchanged. Release, debug and stats builds
 report 117 modules each; release and debug full suites pass 54,361 tests with
-no failures. Current integration adds reviewed call/frame transfer and
-generated-publication improvements; see the [Integration C receipt](../issues/interpreter-throughput/integration-c.md)
-and [call/frame contract](call-and-frame-lifetimes.md). The final matched
-performance campaign is running; no performance result or new boxing census
-is claimed here. The zero-box criterion remains diagnostic, not a
-performance-admission gate.
+no failures. Final-v4 candidate / upstream and candidate / interim factors are
+1.263136 and 1.054877 on 29 kernels, and 1.084920 and 0.902391 on the selected
+12-result subset. The results establish no convincing broad elapsed-time win
+or upstream parity. No new boxing census was run; zero-box remains diagnostic,
+not a performance gate. See the [final report](../bench/results/interpreter-throughput-20261106.md),
+[Integration C receipt](../issues/interpreter-throughput/integration-c.md)
+and [call/frame contract](call-and-frame-lifetimes.md).
 
 **Historical rollout evidence at `6a0e4c12c17`.** That runtime had the 55-row
 value-slot table, including `new_` and `init_` (16 hot, 39 cold), type-call

@@ -1,8 +1,11 @@
 # Interpreter throughput: calls, frames and generated handlers
 
-Coordinator plan, 2026-11-06. Runtime starts at `6a0e4c12c17`; GCC and the
-current value representation remain fixed. Correct behavior and measured
-throughput decide admission. Absolute zero boxing is a diagnostic, not a gate.
+Coordinator plan and completed batch, 2026-11-07. Runtime starts at
+`6a0e4c12c17` and ends at `7780e32e0e2`; GCC and the PyValue encoding remain
+fixed. The final-v4 campaign, validation and admission review are complete.
+The batch establishes no convincing broad elapsed-time win or upstream parity.
+See the [final report](../../bench/results/interpreter-throughput-20261106.md)
+for results and limits. Absolute zero boxing remains diagnostic, not a gate.
 
 ## Parallel ownership
 
@@ -20,18 +23,24 @@ Workers never run full suites or shared builds, and stop source edits during
 integration/measurement freezes. Keep unrelated worker artifacts and earlier
 results unchanged. The old empty performance-report worktree edit is unrelated.
 
-Integration A is accepted after release/debug/stats builds and the focused
+Integration A was accepted after release/debug/stats builds and the focused
 939-test release/debug profiles. Its small timing sample is mixed; see the
 [A receipt](integration-a.md), and make no broad speedup claim. Integration B
 is committed and accepted after three builds, focused release/debug profiles,
 lint and cold review; its basic screen shows no overall gain, so a performance
-benefit remains unproven. See the
+benefit remains unproven. The reviewer prefers dropping the clear elision;
+the coordinator retains the bounded known-NULL contract as a maintenance
+choice, not a throughput admission. See the
 [B receipt](integration-b.md). Integration C's reviewed final-publication
 change is committed as `7780e32e0e2`; lint and scoped tests pass, and three
 builds, cold review, the mixed basic screen and both full test suites are
-complete. The functional suite gate passes. The final 29-kernel and
-pyperformance comparisons are running serially; no performance conclusion is
-available yet. See the [C receipt](integration-c.md).
+complete. The functional suite gate passes. The retry-only measurement helper
+is committed as `d9cd6c08fb7`, accepted by source review, and passed eight
+focused fixtures. Final-v4 completed with accepted final-v3 kernels and the
+restarted subset, counters and profiles. Full tests passed on release and
+debug. The report contains results and the retained history of rejected
+attempts. This plan is complete; subsequent work belongs to the
+[throughput follow-up](follow-up.md), not this batch.
 
 ## Design questions and decisions
 
@@ -55,10 +64,12 @@ stores without tracking publication state across effects. A remaining final
 temporary store was separately inspected in generated code. Integration C
 uses the existing `published_temporary_result` postcondition for the five
 specialized attribute handlers, suppressing only the redundant final temporary
-write while preserving the folded-local write. Its validation and performance
-receipt is still in progress.
+write while preserving the folded-local write. Its source and correctness
+validation are complete; final-v4 shows no convincing broad elapsed-time win.
+The [final report](../../bench/results/interpreter-throughput-20261106.md)
+records the combined result and its attribution limits.
 
-## Integration ladder
+## Integration ladder used
 
 1. Capture a fresh frozen baseline on the selected kernels before edits/builds.
 2. Integrate one coherent reviewed increment, using release compile and its

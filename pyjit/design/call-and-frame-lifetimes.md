@@ -1,9 +1,9 @@
 # Calls, frame homes and observation
 
-Reviewed contract and bounded implementation direction, 2026-11-06. Source
-baseline: runtime `6a0e4c12c17`. This page documents existing invariants and
-labels proposed changes explicitly. It adds no executing representation or
-runtime switches. See [compiler and IR](compiler-and-ir.md),
+Reviewed contract and bounded implementation, 2026-11-06. Source: runtime
+`7780e32e0e2`. This page documents the landed A/B call paths and remaining
+shape limits. It adds no executing representation or runtime switches. See
+[compiler and IR](compiler-and-ir.md),
 [observer contract](handler-and-observer-contract.md), and the
 [holistic review](../issues/interpreter-throughput/holistic-design-review.md).
 
@@ -14,6 +14,9 @@ records checks and limitations. The bounded overlap-initialization recipe
 below is integrated at `ba37cc10058`; its checks and mixed screening results
 are recorded in the
 [B receipt](../issues/interpreter-throughput/integration-b.md).
+The independent [call-path follow-up audit](../issues/interpreter-throughput/call-followup-audit.md)
+records retained GCC structure and a possible future experiment. It is static
+evidence, not a throughput result.
 
 ## What a home means
 
@@ -51,12 +54,11 @@ Generators and detached frame objects own separate arrays. Exact positional
 calls already overlap a thread caller's argument window with the child's
 initial locals; they do not allocate a second argument array.
 
-The current source has one DSL overlap producer,
-`bytecodes.c:_INIT_CALL_PY_EXACT_ARGS` at `4313`. It expands into
-`CALL_PY_EXACT_ARGS` and `CALL_BOUND_METHOD_EXACT_ARGS` in generated handlers
-(`generated_ir_cases.c.h:7243` and `4899`). Generator-owned callers use the
-existing non-overlap transfer branch. The helper is
-`pycore_interpframe.h:_PyFrame_PushOverlapping` at `527`.
+Exact positional calls and the common positional-call transfer use the
+thread-stack overlap path through `pycore_interpframe.h:_PyFrame_PushOverlapping`.
+Generator-owned callers use the existing non-overlap transfer branch. The
+common path fills defaults and installs empty varargs and fresh empty kwargs
+as needed; its checks and limitations are in the A receipt.
 
 **Normal thread cleanup is already locals-only.** At `frame.c:185`,
 `_PyFrame_ClearExceptCode` asserts temporaries are NULL, then clears only
@@ -74,8 +76,10 @@ to this consuming binder would leave observable stale owners or require rollback
 after arbitrary partial consumption. This duplication is a consequence of the
 provider contract; it is not evidence that frames lack a stack.
 
-A common positional binding path should share one prepare/guard/commit
-protocol, with the existing binder for unsupported shapes:
+The exact and common positional paths share a prepare/guard/commit protocol.
+Instrumented, free-threaded, keyword/EX and generator-owned callers retain
+their existing provider paths. The common overlap path also declines when the
+executable or sufficient stack space is unavailable. The protocol is:
 
 1. Prepare while the actual caller homes remain owning. Pin code and any
    resource needed across allocation. Allocate a fresh empty `**kwargs` dict
@@ -105,11 +109,9 @@ protocol, with the existing binder for unsupported shapes:
 
 Do not blanket-clear an overlapping window: argument cells are now child
 homes. Borrowed locals are not legal array inputs for this call window.
-Ordinary CALL provenance is verified by `regcfg.c:1172` and `1440`; an
-instrumented CALL uses the same field format, but enabling the new route also
-requires proving original CALL provenance and monitor-once behavior. It may
-initially retain the old provider. CALL_KW and CALL_FUNCTION_EX are outside
-this first overlap extension.
+Ordinary CALL provenance is verified by `regcfg.c:1172` and `1440`.
+Instrumented calls retain the existing provider, preserving its monitor-once
+behavior. CALL_KW and CALL_FUNCTION_EX remain outside the overlap path.
 
 ## Bounded initialization recipe: reuse the known-NULL overlap
 
@@ -135,26 +137,28 @@ The proof obligations are precise:
 - Zero any newly exposed tail before the child can be observed. Skip the
   transferred arguments. Fill hidden child constants normally afterward,
   including mortal constants installed by `code.replace`. Then install
-  prepared defaults/empty varargs/kwargs for the proposed common-call route.
+  prepared defaults/empty varargs/kwargs for the common-call route.
 - Preserve `saved_top` and parent ownership boundaries. Do not reuse this
   argument for generator storage, stack growth into another chunk, ordinary
   non-overlap entry, or arbitrary free stack memory containing stale headers.
 
-The smallest implementation is confined to overlap initialization: compute
-the already-valid prefix, initialize the remaining tail, and retain normal
-constant filling. An existing initialization helper may accept the proven
-prefix boundary; it must not conflate an argument count with a new claim that
-uninitialized memory is valid. No code-object layout or per-op bitmap is needed.
-Debug assertions should verify every skipped non-argument cell is NULL.
+The implementation is confined to overlap initialization: it computes the
+already-valid prefix, initializes the remaining tail, and retains normal
+constant filling. The helper accepts the proven prefix boundary; debug
+assertions verify every skipped non-argument cell is NULL. It does not treat an
+argument count as evidence that uninitialized memory is valid. No code-object
+layout or per-op bitmap is needed.
 
-Test smaller/equal/larger child extents, defaults and constants, receiver/no
+Tests cover smaller/equal/larger child extents, defaults and constants, receiver/no
 receiver, nested calls, mortal values/finalizers, exception unwind, exposed
-frames and the generator fallback. The new generic commit must inherit exactly
-the same window proof before using this recipe. Measure skipped versus newly
-zeroed words and inspect GCC code; an extra bounds calculation may outweigh
-saving a tiny memset. Keep this change independent from generic binding so
-existing exact calls provide a meaningful measurement even if the latter has
-limited coverage.
+frames and the generator fallback. The common positional commit uses exactly
+the same window proof. The A and B landings were integrated separately;
+preserve that measurement history when interpreting their receipts. An
+independent static audit notes a possible slow-path outlining experiment, but
+does not establish dynamic frequency or a speedup.
+The initialization change has unproven throughput benefit: its extra bounds
+calculation may outweigh a short saved clear. The current contract is a local
+known-NULL reuse rule, not a general liveness optimization.
 
 ## Observation, effects and later metadata
 

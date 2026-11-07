@@ -12,16 +12,17 @@ the first revision, and review 2
 ([reviews/register-ir-review-2.md](reviews/register-ir-review-2.md)) the
 second.
 
-**Current implementation, 2026-11-06.** Runtime HEAD is `7780e32e0e2`; the
+**Current implementation, 2026-11-07.** Runtime HEAD is `7780e32e0e2`; the
 register-IR encoding and 64-bit instruction format described below are
 unchanged. Release, debug and stats builds report 117 modules each. Release
-and debug full suites both pass 54,361 tests with no failures. The current
-calls/frame/publication integration and its limits are recorded in the
+and debug full suites pass 54,361 tests with no failures. Final-v4 candidate /
+upstream elapsed factors are 1.263136 on 29 kernels and 1.084920 on the
+selected 12-result subset; candidate / interim factors are 1.054877 and
+0.902391. These noisy sequential results establish no convincing broad
+elapsed-time win or upstream parity. The zero-box criterion remains
+diagnostic, not a performance-admission gate. See the [final report](../bench/results/interpreter-throughput-20261106.md),
 [Integration C receipt](../issues/interpreter-throughput/integration-c.md) and
-[call/frame contract](call-and-frame-lifetimes.md). The final matched
-performance campaign is running; this note makes no new performance or census
-claim. The zero-box criterion remains diagnostic, not a performance-admission
-gate.
+[call/frame contract](call-and-frame-lifetimes.md).
 
 **Historical checkpoint evidence, runtime `6a0e4c12c17`.** That runtime built
 and executed the register interpreter in debug, release and stats

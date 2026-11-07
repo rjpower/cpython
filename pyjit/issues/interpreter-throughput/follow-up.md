@@ -1,35 +1,39 @@
 # Throughput follow-up after the calls/frame/publication batch
 
-Execution proposal, 2026-11-06. Start from the final runtime identified in the
+Execution plan, 2026-11-07. Start from the final runtime identified in the
 [batch plan](plan.md) and its performance report, not an older worker tree.
 GCC, build flags and the selected value representation remain fixed. The
 checkpoint does not imply upstream parity or completion of every value-native
 adapter. Absolute zero boxing and startup RSS are not performance gates.
 
-Current checkpoint: Integration C is `7780e32e0e2`; cold review accepts it and
-the basic matched screen is mixed, with no broad win established. Release
-and debug full suites both passed, so the functional gate is complete. The
-final 29-kernel and pyperformance comparisons are running serially; no
-performance conclusion is available yet. See the
-[current status](../../STATUS.md) and [Integration C receipt](integration-c.md).
+Current checkpoint: runtime `7780e32e0e2` is clean, cold C review accepts it,
+and full release/debug suites pass. Final-v4 is complete: candidate / upstream
+and candidate / interim elapsed factors are 1.263136 / 1.054877 on 29 kernels
+and 1.084920 / 0.902391 on the selected 12-result subset. These noisy,
+sequential comparisons establish no convincing broad elapsed-time win or
+upstream parity. Candidate instructions per workload loop fell 2.2%, 6.7% and
+1.4% in the selected counter workloads, but remain 2.001520x, 1.774821x and
+1.605447x upstream. See the [final report](../../bench/results/interpreter-throughput-20261106.md)
+for limitations and the [current status](../../STATUS.md).
 
 ## Admission before more implementation
 
-Finish the frozen measurements and the [admission review](admission-review.md).
-Distinguish a removed source store, fewer executed native instructions and a
-repeatable elapsed-time improvement. The seven-kernel screens alone do not
-establish the last of these. In particular, keep the overlap-clear experiment
-under review: additional bounds arithmetic may outweigh a short saved clear.
-Retain the independent assertion/ownership fixes regardless of that decision.
+Measurements and the [admission review](admission-review.md) are complete.
+The coordinator retains B's bounded known-NULL initialization contract for
+clarity and reuse of a proven ownership invariant, while its throughput
+benefit remains unproven and the independent reviewer preferred dropping the
+clear elision. Do not extend it or treat it as a speedup. Keep the useful
+provider-decline assertion and ownership clarification. The final report
+records this maintenance judgment and the separate measurement history.
 
 ## Parallel packets
 
 | Priority | Packet | Owner and boundary | Smallest useful result |
 | --- | --- | --- | --- |
-| 1 | Attribute/helper overhead | Terra medium owns one generated helper sequence; Sol reviews its effects and ownership | Identify an actually frequent retained GCC sequence in a remaining regression; propose one shared operation contract and remove only proven repeated work |
-| 1 | Remaining call adapters | Luna medium inventories selected hot call shapes; Terra medium owns one adapter; Sol reviews prepare/commit | Separate common overlap, exact overlap, keyword/EX, generator, instrumentation and native paths before selecting another fast route |
-| 2 | Useful PyValue ports | Terra/Luna medium own bounded caller groups after one reviewed ownership recipe | Choose a measured workload with material bridge cost; preserve owners, errors and callback order rather than optimize census counts |
-| 2 | IR phase/effect contract | Sol designs, Terra implements one producer/checker increment, Luna syncs references | Give consume, publish, retire, observe and failure phases one generated definition when another real producer needs them |
+| 1 | Call preparation and guards | Terra medium owns one bounded `Python/ceval.c` call path; Luna medium inventories call shapes in selected profiles; Sol reviews the protocol | Explain measured cost across annotations, frame preparation, guards/revalidation and adapters, not only the stack-canary prologue; preserve transaction and fallback semantics |
+| 1 | Attribute/helper overhead | Terra medium owns one DSL/generator helper sequence; Sol reviews phase/effect/output facts | Remove only repeated work proven by producer and consumer facts; preserve publication-before-release and folded-local semantics |
+| 2 | Measured PyValue ports | Terra and Luna medium own bounded native caller groups selected from measured profiles; Sol reviews one ownership recipe | Reduce bridge work in measured paths while preserving owners, errors and callback order, rather than optimizing census counts |
+| 2 | Shared IR phase/effect facts | Sol proposes the contract; Terra implements one producer/analyzer increment; Luna updates documentation | Give consume, publish, retire, observe and failure phases one generated definition without parallel hand-maintained metadata |
 | Integration | Coordinator | Shared headers, generated products, builds, quiet measurements and current documentation | Review actual composition, commit separately, measure each integration and obtain a fresh cold review |
 
 Start each implementation packet with a 60–90 minute proposal/first-result
@@ -44,14 +48,14 @@ counter only when it changes the choice of patch. Do not convert aggregate
 hardware counts into a per-bytecode cost without dynamic IR and upstream
 operation counts for the same measured region.
 
-A concrete call candidate is cold-provider outlining. The final GCC
-`call_transaction_push_python` still reserves `0xf8` bytes and loads a stack
-canary before its common-overlap guards; the same function contains the slow
-provider's local argument array. Check whether separating that consuming
-provider removes this prologue from the common route without increasing calls
-or spills elsewhere. The retained instructions establish a hypothesis, not
-their dynamic cost or an expected speedup. Keep prepare/guard/commit ownership
-unchanged and require a real same-workload comparison before admission.
+A concrete call candidate is cold-provider outlining, considered within the
+broader preparation/frame-setup/guard audit. The retained GCC function reserves
+`0xf8` bytes and loads a stack canary before common-overlap guards, while also
+containing the slow provider's local argument array. These instructions are a
+hypothesis, not a dynamic cost estimate. The [call follow-up audit](call-followup-audit.md)
+records source, disassembly and profile-annotation evidence. Check accepted and declined call
+shapes, frame preparation and guard work together; require same-workload
+evidence before admission and preserve prepare/guard/commit ownership.
 
 ## Design constraints
 
@@ -72,11 +76,11 @@ mutates that output after retirement must invalidate or reestablish the fact;
 do not grow distributed caches and opcode exceptions around it.
 
 The interpreter IR describes Python execution and frame homes. Optimizing typed
-SSA, recovery states and machine register allocation remain separate layers.
-Before resuming native method/tracing work, review shared effects, Action and
-FrameState contracts, exceptional recovery, invalidation and generator/OSR
-entry. The detailed open questions remain in the canonical register-IR and JIT
-designs; this batch does not close them by improving the interpreter.
+SSA, recovery states and machine register allocation remain separate layers;
+their gaps remain open. Before resuming native method/tracing work, review
+shared effects, Action and FrameState contracts, exceptional recovery,
+invalidation and generator/OSR entry. This interpreter batch does not close
+those design gaps.
 
 ## Validation and boundaries
 

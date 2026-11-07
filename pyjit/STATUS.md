@@ -1,17 +1,16 @@
 # Project status
 
-Live status, 2026-11-06: runtime HEAD is `7780e32e0e2` (Integration C,
-final attribute publication), and the runtime worktree is clean. Release,
-debug and stats build identities match this source; all three report 117
-modules. Release and debug suites both passed 54,361 tests with no failures
-(release: 2,467 skips in 3m05s; debug: 2,405 skips in 9m11s). Across each,
-616/627 files passed and 79 were skipped, including 11 resource-denied skips.
-Integration C has passed the functional suite gate. The final 29-kernel and
-pyperformance comparisons are running serially; no performance conclusion is
-available yet. Follow the
-[Integration C receipt](issues/interpreter-throughput/integration-c.md) and
-[throughput follow-up](issues/interpreter-throughput/follow-up.md) for the
-current stage.
+Live status, 2026-11-07: runtime HEAD `7780e32e0e2` is clean. Release, debug
+and stats builds each report 117 modules; release and debug full suites each
+passed 54,361 tests with no failures. Final-v4 measurements are complete:
+candidate / upstream and candidate / interim elapsed factors are 1.263136 /
+1.054877 on 29 kernels and 1.084920 / 0.902391 on the declared 12-result
+subset. They do not establish a convincing broad elapsed-time win or upstream
+parity. Per-loop instructions fell 2.2%, 6.7% and 1.4% in the three selected
+counter workloads, while remaining 2.001520x, 1.774821x and 1.605447x upstream.
+The [final report](bench/results/interpreter-throughput-20261106.md) contains
+the evidence and limitations. See the [Integration C receipt](issues/interpreter-throughput/integration-c.md)
+and [throughput follow-up](issues/interpreter-throughput/follow-up.md).
 
 ## Historical checkpoint: runtime 6a0e4c12c17
 

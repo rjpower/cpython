@@ -14,22 +14,23 @@ census failed: 6,512 dumps contain 11,028,818 core/core-pending/unresolved
 boxes and incomplete process identity/accounting. The raw capture finished
 with 87 records across 29 kernels: 18/29 startup-inclusive raw-zero, all loop
 deltas zero, but strict kernel admission failed. See the [full census receipt](issues/checkpoint-closure/full-census-6a0e4c12c17.md).
-The matched diagnostic campaign is complete but does not qualify performance
-because R27 fails. Candidate/baseline elapsed-time factors are 1.287/1.075
+The matched diagnostic campaign is complete and shows a throughput gap.
+R27's failed zero-box criterion is now diagnostic, not an admission veto.
+Candidate/baseline elapsed-time factors are 1.287/1.075
 for 29-kernel geomeans and 1.096/0.913 for the 12-result pyperformance
 subset against upstream/interim (lower is better); peak-RSS factors are
 1.259/1.062. See the [diagnostic report](bench/results/checkpoint-6a0e4c12c17.md).
 
-The earlier full-v2 failures remain recorded as historical evidence. Audit
-static-gate violations and process-accounting gaps before changing marks or
-source. Follow the [P0–P5 closure queue](issues/checkpoint-closure/follow-up-6a0e4c12c17.md)
-before changing code based on profiles. P5 contains diagnostic leads, not causal
-findings. Prioritize steady-state throughput; RSS is secondary. The extended
-source review and hardware-counter analysis are complete; they identify
-bounded experiments but do not establish a single cause for the regressions.
-See the [source review](issues/checkpoint-closure/steady-state-source-review.md)
-and [counter report](bench/results/checkpoint-6a0e4c12c17.md). P0–P4 admission
-work remains ahead of those experiments.
+The earlier full-v2 failures remain historical evidence. Keep correctness and
+workload identity/accounting trustworthy, but do not require zero-box R27 to
+begin or admit performance work: the full census is diagnostic and helps rank
+useful PyValue ports. Follow the updated [work queue](issues/checkpoint-closure/follow-up-6a0e4c12c17.md).
+Prioritize steady-state throughput; RSS is secondary. The source review and
+hardware-counter analysis identify GCC-side hypotheses but do not prove one
+cause for the regressions. See the [source review](issues/checkpoint-closure/steady-state-source-review.md)
+and [counter report](bench/results/checkpoint-6a0e4c12c17.md).
+The [narrowed slowdown summary](issues/checkpoint-closure/slowdown-summary-6a0e4c12c17.md)
+separates migration debt from hot-loop costs and records the GCC-only plan.
 
 Start with [current status](STATUS.md) for progress and blockers, or the
 [stage map](ROADMAP.md) for the route to completion. A new coordinator should read

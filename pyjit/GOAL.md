@@ -20,8 +20,15 @@ direction; Loom's `goal` artifact mirrors it.
 - The method/tracing JIT is a cohesive selected direction with shared optimizing
   IR, recovery and backend. Experiments improve mechanisms inside it. Existing
   Python JIT, interpreter and object patterns may be replaced when they are poor.
-- First complete and measure the unified-value register interpreter, with JIT
-  explicitly disabled, against matched interim RC and upstream controls.
+- Complete and measure the unified-value register interpreter, with JIT
+  explicitly disabled, against matched interim RC and upstream controls. Keep
+  the compiler fixed at GCC; do not spend effort on a two-compiler comparison.
+- Require correct behavior and trustworthy workload/accounting evidence for
+  performance decisions. The full zero-box R27 census is a diagnostic and a
+  source of porting priorities, not an admission veto or required final count.
+- Prioritize measured throughput impact. Normalize hardware work against
+  workload operations, dispatch/semantic-operation counts, call shapes and
+  frame activity before attributing costs to bytecodes or PyValue bridges.
 - Mechanize repetitive ports and use cheaper agents for bounded batches under
   reviewed ownership rules. Prioritize a safe runnable baseline; converting
   correct owning object bridges into direct-value operations is later tuning.

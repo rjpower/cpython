@@ -6,8 +6,10 @@ The [full census](full-census-6a0e4c12c17.md) reports 11,028,818
 core/core-pending/unresolved boxes, incomplete process accounting and 11
 static-gate findings. The [kernel capture](kernels-6a0e4c12c17.md) contains 87
 raw records over 29 kernels: 18/29 are startup-inclusive raw-zero, all 29 loop
-deltas are zero, and the strict gate fails. This queue keeps correctness and
-accounting work ahead of performance admission.
+deltas are zero, and the strict gate fails. Treat these as diagnostic results
+and port-priority data. Performance work may proceed when behavior is correct
+and the workload, identity, event and accounting evidence is trustworthy; a
+zero-box full census is not an admission veto.
 
 The implementation references are [value API](../../design/value-api.md),
 [native boundary](../../design/native-boundary.md),
@@ -22,7 +24,8 @@ run its smallest meaningful tests, obtain post-review, then hand it to the
 coordinator for merged integration. A worker packet does not claim integration.
 Workers use release syntax/compile checks and focused tests, not full suites or
 shared builds. The coordinator owns shared headers, merged builds, full suites,
-the R27 and kernel gates, and the final performance comparison. If a source
+workload-accounting review, and the final performance comparison. The R27 box
+census remains a diagnostic, not a required zero-count gate. If a source
 boundary or test would cross ownership, pause that packet and obtain agreement
 before editing.
 
@@ -30,25 +33,22 @@ before editing.
 
 | Priority | Packet and boundary | Owner / review | Minimal evidence and exit condition |
 | --- | --- | --- | --- |
-| P0 | Repair the census contract and reproduce the full-census `test_subprocess` failure. Audit `.run`/`.done`/`.zero`/`.child` pair handling, incomplete identities, 539 unfinished markers, 251 orphan `.done` markers, 1,233 identity errors, 1,774 accounting errors, and the 437 predicted-uncounted events. These events are not unique children. Do not allowlist the orphans or infer an external disposition. | Terra, medium, process-accounting/checker ownership; Sol reviews accounting semantics; root owns producer/reader interfaces and integration. | Add narrowly targeted checker/producer fixtures for each repaired failure class; preserve the original stats regrtest error. Run the focused subprocess/accounting tests. Exit only when fixture failures are resolved and a fresh coherent stats integration has no unexplained identity or accounting errors, orphan/unfinished markers, or missing observed child. Then rerun full stats census. A standalone `test_subprocess` pass (371 pass, 48 skip) does not erase the recorded full-census failure. |
-| P1 | Audit the 11 static R27 findings before changing annotations: one incomplete ownership inventory plus ten missing `Py_VALUE_COMPAT` declaration marks. For each API, enumerate production callers, verify the exact value-provider status/ownership contract, and either port callers or establish a reviewed no-production-caller alias. Never mark a declaration solely to quiet the scanner. | Luna, medium, caller inventory and straightforward ports; Sol reviews signatures/ownership; root owns checker policy and final metadata. | Per API, capture current `rg` caller inventory, declarations, provider and affected tests. Add checker positive/negative fixtures for any genuinely new manual row. Exit when all actual callers have reviewed dispositions, no blanket exemption was added, and the static scan reports no unexplained finding. Full suite is reserved for the integrated batch. |
-| P2 | Port startup boxes with known value homes: `Objects/sliceobject.c:slice_new` argument parsing; `Modules/itertoolsmodule.c:repeat_new`; `Python/getargs.c` format `n`; `Objects/exceptions.c:UnicodeDecodeError_init`; `Objects/unicodeobject.c:unicode_decode_call_errorhandler_writer`. Keep argument values owned through integer/index conversion and callbacks; retain validation order, type checks, overflow text and cleanup. These sites contribute to logging, regex and XML raw rows; comprehension and JSON rows are attributed to `lru_cache_new`, which remains approval-held. | Terra, medium, constructor/parser ownership; Luna can take disjoint mechanical parser sites after interfaces are reviewed. Sol reviews the callback-heavy Unicode/error-handler conversion; root integrates shared parser/API changes. | `test_slice`, `test_itertools`, `Lib/test/test_capi/test_getargs.py`, `test_exceptions`, and `test_codecs`/multibyte codec tests as appropriate. Add focused inline int, subclass `__index__`, overflow, malformed callback tuple, Unicode/buffer and error-order cases where those semantics change. Exit when the targeted sites disappear from a fresh attributed capture, unrelated owners remain unchanged, and focused tests, release compile and post-review pass. Overall kernel zero is a coordinator gate, not a single-packet exit condition. |
-| P3 | Resolve `Python/ceval.c:native_call_builtin_o` in regex (9 boxes) to the actual `METH_O` callee before changing the ABI. Then port only that identified callee if a paired value entry preserves its semantics. Trace the logging shared `PyValue_AsObject` (one box per logging kernel) to an owner-bearing call site before porting; the shared boxing PC alone does not identify its caller. Review `Modules/_stat.c:stat_S_ISLNK` (two regex boxes) as a bounded paired-value method candidate, preserving `__index__` behavior. | Luna, medium, exact callee inventory and bounded module port; Sol reviews the selected ABI/dispatch change; root owns `ceval.c`, shared call conventions and integration. | First deliver a trace artifact naming exact callee and call route; no source edit before that. Then use `test_re`, the selected module's focused tests, and logging tests only where touched. Add custom `__index__`/error and dispatch-preservation cases. Exit when each raw box has a source-backed owner and an integrated kernel retest removes only the intended site. |
-| P4 | After P0–P3, obtain fresh owner-bearing traces for the largest remaining core-attributed census groups: `Objects/call.c` (2,284,628 boxes), `Python/bltinmodule.c` (743,952), `Modules/selectmodule.c` (403,727), `Modules/timemodule.c` (386,485), and math integer operations (370,203). These are census box counts, not elapsed-time costs. Identify the exact API/caller and signature before proposing a port; do not infer a module-wide migration from the totals. | Terra, medium, ownership-sensitive ports after exact trace; Luna, medium, source census and mechanical callers after review; Sol reviews call/result ownership; root owns shared headers and integration. | One file/caller cluster per proposal, with raw owner PCs, existing value API (if any), callback order and owner-close map. Choose focused tests only after the caller is identified (callables, builtins, select, time or math tests as appropriate). Exit packet-by-packet when targeted owners disappear and unrelated counts remain stable; only the coordinator reruns full gates. |
-| P5 | After P0–P4, prioritize steady-state throughput experiments. The completed source review and hardware counters identify extra retired instructions in the selected regressions: candidate/upstream instruction ratios are 2.047 for deltablue, 1.903 for logging_silent and 1.628 for comprehensions; CPI is comparable or lower, and cache counters are noisy. Investigate matched Clang A3 R1/Q2; bounded attribute/shape and list-accessor work; Python-call preparation; then frame liveness/retirement. These are hypotheses, not causal diagnoses. Startup RSS is secondary. Do not infer that boxing explains the gaps or rewrite IR speculatively. | Terra, medium, one ownership/effects-preserving experiment at a time; Luna can inventory exact sites and assemble focused tests; Sol reviews semantic/design changes; root owns profiles, merged comparison and prioritization. | The [source review](steady-state-source-review.md) and [counter report](../../bench/results/checkpoint-6a0e4c12c17.md) complete the initial attribution. After P0–P4, choose one bounded experiment, record a focused semantic test and source-level falsification check, then obtain post-review and a matched before/after diagnostic. No G2 restart. |
+| P0 | Repair only accounting defects that prevent trustworthy workload evidence. Reproduce the full-census `test_subprocess` failure; audit `.run`/`.done`/`.zero`/`.child` identity and event matching, preserving the 539 unfinished markers, 251 orphan `.done` markers, 1,233 identity errors, 1,774 accounting errors and 437 predicted-uncounted events as evidence. The 437 are not unique children. Do not allowlist or infer missing dispositions. | Terra, medium, process-accounting/checker ownership; Sol reviews accounting semantics; root owns producer/reader interfaces and integration. | Preserve and explain actual child/start/exit linkage for the workloads being compared, prevent silent event loss, and retain the original stats regrtest failure. Use focused producer/reader and subprocess/accounting fixtures. Full-census zero boxes are not an exit condition; unresolved census records remain published and labeled. |
+| P1 | Keep the 11 static R27 findings and production callers accurately inventoried. Verify signatures and ownership for any API touched by a performance or porting packet; never add marks solely to quiet the scanner. Static findings and the 11,028,818-box census remain useful port-priority diagnostics, not global performance admission gates. | Luna, medium, source inventory and focused checker fixtures; Sol reviews signatures/ownership; root owns checker policy and integration. | Per touched API, record the exact callers, provider status/ownership, callback behavior and relevant tests. A packet may proceed when its own behavior and measured workload accounting are trustworthy; no blanket exemptions or false closure claims. |
+| P2 | Normalize selected workload work before ranking ports. Add targeted dispatch/semantic-operation counters so hardware instructions are related to benchmark operations, not mislabeled as per-bytecode cost. Count relevant call shapes and frame slots, and record PyValue bridge allocations/time by real workload and call path. | Terra, medium, instrumentation design and source ownership; Sol reviews counter meaning and sampling; root owns benchmark integration and shared measurements. | Start with the three counter cases and preserve exact workload/loop denominators. Check counter conservation, operation counts and call/frame attribution against source-derived expectations. Report unassigned work explicitly; do not infer per-bytecode costs from aggregate hardware counts. |
+| P3 | Reduce measured GCC source overhead in bounded code-generation packets: generated repeated publication/refresh sequences and unnecessary helper calls. Keep GCC and build flags fixed; no Clang/two-compiler comparison. Inspect emitted GCC code at attributed hot sites before proposing a change. | Terra, medium, one generator or helper cluster at a time; Sol reviews effects/ownership; root owns generator regeneration, integration and matched measurement. | Add the smallest relevant generator/compiler tests plus a workload-specific semantic test. Preserve publication order, roots and callback visibility. Exit when the generated/source change removes the targeted work, unrelated behavior is stable, and the same workload shows repeatable measured movement beyond run spread. |
+| P4 | Reduce Python-call duplicate/bind/retire work and broad frame initialization/cleanup where measured call shapes and live-slot counts support a safe change. Preserve error order, monitoring, tracing, recursion, reentry and finalizer visibility. | Terra, medium, separately owned call and frame packets; Luna prepares exact source inventories and focused cases; Sol reviews lifecycle/effect rules; root owns shared integration. | First rank call shapes and initialized/cleared frame slots by selected workload. Use focused call/descriptor/reentry and generator/frame tests appropriate to each packet. Keep broad liveness changes separate from call preparation and reject changes that do not move the intended measured cost. |
+| P5 | Finish useful PyValue ports according to measured workload impact. Use the normalized dispatch/operation, call-shape, frame-slot and bridge-cost evidence from P2, then select direct-value continuations that preserve behavior and ownership. Keep ctypes and all LRU implementation on explicit approval hold. | Terra, medium, bounded bulk ports after reviewed recipes; Luna, medium, mechanical callers and tests; Sol reviews design/ownership; root integrates and ranks measured effects. | Each packet names exact files/functions, owners, callbacks, error order, minimal tests and workload contribution before editing. Do not optimize for box counts alone. Keep the full R27 census as a diagnostic trend; only promote a zero-box target when it aligns with a measured useful workload. |
 
-File boundaries: for P0, the worker packet is limited to
-`Tools/build/check_r27.py`, its focused checker tests under
-`Lib/test/test_tools/`, and the specifically assigned fixture tests
-`Lib/test/test_pyvalue_box_sites.py`, `Lib/test/test_value_slots.py`, and
-`Lib/test/test_subprocess.py`; the coordinator owns `Python/pystats.c` and
-`pyjit/bench/run.py` changes. P1 owns a current caller inventory and focused
-checker fixtures in `Tools/build/check_value_api.py` and
-`Tools/build/value_ownership.toml`; each runtime header/caller pair must be
-assigned only after its actual production callers are reviewed. P2 and P3 own
-only the named function and its direct generated producer, if any. P4 owns no
-runtime source until a fresh trace names the exact function and the coordinator
-assigns its file.
+File boundaries: P0 owns the assigned checker/fixture and subprocess-accounting
+tests; the coordinator owns `Python/pystats.c` and `pyjit/bench/run.py`. P1 owns
+the caller inventory and focused checker fixtures in
+`Tools/build/check_value_api.py` and `Tools/build/value_ownership.toml`; no API
+marks change without a production-caller review. P2 adds only counters required
+to answer a specific workload question, with benchmark interfaces assigned by
+the coordinator. P3 owns one generator/helper region and its producer. P4 owns
+one call-preparation or frame-lifecycle region per packet. P5 ports are assigned
+by exact file and caller after workload impact and ownership are reviewed.
 
 ### P0 evidence constraints
 
@@ -71,16 +71,16 @@ of successful exit or a cause. Capture both dump publication and completion
 markers with raw files retained, and establish matching start/exit identity
 before assigning a cause.
 
-Initial timeboxes and scope cuts: P0 first returns a fixture/failure-class map
-in 30 minutes, then takes at most a half-day per reviewed accounting increment;
-P1 inventories the 11 findings in its first 60 minutes; P2 takes one function
-per packet (90 minutes for simple parsers, up to three hours for the callback
-writer); P3 spends its first 60 minutes on exact callee tracing and stops if
-attribution is ambiguous; P4 spends its first 60 minutes on owner tracing,
-then takes one identified caller per reviewed packet, capped at two hours.
-When a timebox expires, retain the reproducer, owner rows and unresolved
-behavior, then propose a narrower next increment. Do not reduce test coverage
-or weaken the admission gate to meet a deadline.
+Initial timeboxes and scope cuts: P0 first returns a workload-accounting
+failure map within 30 minutes; investigate census-only anomalies separately
+unless they affect correctness or measured workload evidence. P1 inventories
+the 11 static findings within 60 minutes but does not gate unrelated throughput
+work. P2 proposes a narrowly scoped instrumentation question within 60 minutes;
+do not build a general profiling framework. P3–P5 each start with one reviewed
+function cluster and a 90-minute proposal/first-increment budget (up to three
+hours for a callback-heavy packet). When a timebox expires, retain the measured
+question, reproducer and unresolved ownership, then cut scope. Do not reduce
+test coverage to meet a deadline.
 
 The [kernel attribution](kernels-6a-box-attribution.md) records bounded kernel
 owners for `Modules/_stat.c:stat_S_ISLNK`, Unicode error handling and the generic
@@ -110,11 +110,13 @@ an IR encoding change. Preserve the accepted IR design and its open questions
 in [register-ir.md](../../design/register-ir.md); do not infer a reason to
 change the encoding from box counts alone.
 
-## Diagnostic performance evidence: complete, not qualified
+## Diagnostic performance evidence: complete; upstream parity remains open
 
-The matched campaign is complete, but R27 fails, so these are diagnostic
-results rather than a qualified performance checkpoint. Candidate/baseline
-means candidate divided by baseline; lower is better.
+The matched campaign is complete and its workload/build evidence passed review.
+The candidate remains slower than upstream on the broad elapsed-time aggregates;
+the separate R27 box census still fails but is not a reason to discard valid
+measurements or block targeted work. Candidate/baseline means candidate divided
+by baseline; lower is better.
 
 | Metric | Candidate / upstream | Candidate / interim | Qualification |
 | --- | ---: | ---: | --- |
@@ -140,21 +142,24 @@ contains the per-kernel and per-result tables, raw vectors, RSS details,
 commands, identities and limitations. Historical 1.73x kernel and 1.83x
 pyperformance ratios refer to runtime `5de7bd62ef9`, not this source.
 
-Completed source review and hardware counters prioritize matched compiler
-convention, bounded attribute/accessor work, Python-call preparation, and
-frame traffic. The three selected regressions retire 2.047x, 1.903x and 1.628x
+Completed source review and hardware counters prioritize GCC-only source
+overhead, bounded attribute/accessor work, Python-call preparation, and frame
+traffic. The three selected regressions retire 2.047x, 1.903x and 1.628x
 the upstream instructions, while CPI is comparable or lower; cache counters
 are too noisy to attribute. These findings do not establish the cause of the
-elapsed gaps. P5 records hypotheses for later experiments; first complete
-P0–P4 and pass R27. The checkpoint is not complete until the
-functional, static/API, accounting, startup-inclusive kernel and performance
-gates all have their required evidence.
+elapsed gaps. Use existing evidence for bounded patches; add targeted
+dispatch/semantic-operation counts, call-shape/frame-slot counts or bridge
+costs only when needed to rank a specific change. P0 work must preserve correct
+workload identity and accounting, but P1–P2 are not serial gates for every
+throughput patch. The checkpoint needs functional correctness, trustworthy
+workload evidence, reviewed changes and measured throughput results; an
+exhaustive zero-box census is not required.
 
 ## After checkpoint
 
-Only after a coherent source passes functional tests, static/API review, full
-R27 accounting and startup-inclusive kernel admission, and has qualified
-performance results, close the PyValue/register-interpreter checkpoint with a
+After a coherent source passes functional tests, has trustworthy accounting
+for the workloads used to assess it, and has a reviewed throughput result,
+close the PyValue/register-interpreter checkpoint with a
 recap of status, limits and measured follow-ups. Then resume stack-bytecode
 serialization recovery and the shared optimizing method/tracing JIT work.
 Before native method/tracing optimization, review a shared effects/Action/

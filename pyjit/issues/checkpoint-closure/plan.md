@@ -6,13 +6,22 @@ documentation is in this checkout. The live queue is the final section; earlier
 queues are historical records. The coordinator owns interfaces, assignments,
 commits, merged qualification and measurement.
 
+Current user direction supersedes the original zero-box completion criterion:
+keep GCC fixed, prioritize measured throughput and useful PyValue ports, and
+retain the full R27 census as a diagnostic. See the
+[narrowed slowdown summary](slowdown-summary-6a0e4c12c17.md) and live queue.
+Correct Python behavior and trustworthy measured-workload accounting remain
+required; a second compiler and an exhaustive zero-box sweep are not selected.
+
 ## Outcome
 
 Deliver the universal eight-byte PyValue register interpreter, with the JIT off,
 and measure it against upstream `3a440b65695` and interim RC `eba351fee7d`.
-The accepted R27 requirement is zero boxing attributable to core operations on
-the declared kernels and regression-suite run, with explicit boundary accounting.
-A normal lint pass or a few zero-box kernels is insufficient.
+The full R27 box census is a diagnostic for identifying useful ports, not an
+admission veto or required zero count. Require correct Python behavior and
+trustworthy workload identity, event and accounting evidence for performance
+decisions. A few zero-box kernels remain useful evidence but do not describe
+whole-application throughput.
 
 The checkpoint report must distinguish implemented, independently reviewed,
 integrated, qualified and measured work. It must retain regressions and unknowns.
@@ -132,8 +141,11 @@ Checkpoint admission requires:
 1. Reviewed commits integrated on one clean runtime source identity.
 2. Debug, release and stats builds include expected modules; no silently skipped
    extension hides unfinished source.
-3. Static R27 and all 29 kernel checks pass; the declared suite has zero core,
-   core-pending or unresolved boxing, with complete subprocess/crash accounting.
+3. Static/API findings have reviewed dispositions, and the declared workload
+   has trustworthy subprocess/crash accounting. The full zero-box R27 census
+   remains tracked as a porting diagnostic; residual boxes do not veto a
+   performance decision when they do not compromise correctness or workload
+   evidence.
 4. Full debug/release outcomes are green or any genuine environment limitation
    is explicit and independently reviewed. No test bypass substitutes for a fix.
 5. Designs, stage/workstream status and handoff distinguish built behavior from
@@ -482,9 +494,10 @@ source integration, full tests, measurement and the final checkpoint recap.
 ## Live integration and measurement queue (2026-11-06)
 
 The independently reviewed [follow-up queue](follow-up-6a0e4c12c17.md) gives
-packet boundaries, worker roles, focused checks and integration exits. Its
-performance section now records the completed diagnostic campaign; R27
-qualification and the checkpoint remain open.
+packet boundaries, worker roles, focused checks and integration exits. The
+diagnostic campaign is complete; throughput work can proceed on correct
+behavior and trustworthy workload accounting without waiting for a zero-box
+census. R27 remains a porting diagnostic.
 
 Runtime HEAD is `6a0e4c12c17` (constructor and format work), following
 `05286694774` (native child accounting). All five build-info objects match
@@ -497,7 +510,8 @@ is incomplete. The raw capture completed with 87 records over 29 kernels:
 18/29 startup-inclusive raw-zero and 29/29 loop deltas zero, but strict kernel
 admission failed. See the [kernel receipt](kernels-6a0e4c12c17.md) and [full
 census receipt](full-census-6a0e4c12c17.md). The matched diagnostic campaign
-is complete but does not qualify performance because R27 fails. Candidate/
+is complete and does not show upstream parity. The independent R27 census
+also fails but is not a performance admission veto. Candidate/
 baseline elapsed-time factors are 1.287/1.075 for kernel geomeans, 1.096/0.913
 for the 12-result pyperformance subset, and 1.259/1.062 for peak RSS against
 upstream/interim; lower is better. See the [diagnostic report](../../bench/results/checkpoint-6a0e4c12c17.md).
@@ -509,35 +523,33 @@ full gates.
    outcome remains recorded (54,347 tests per profile; two AST failures, one opcache failure,
    and one `test_tools` `sys.path` environment change). The targeted repair set
    passes and the latest batch reports no environment change.
-2. **Resolve strict R27 and kernel failures.** The exact-source kernel capture
-   failed: see its receipt for the 11 raw-nonzero kernel rows and box counts.
-   Audit static inventory and process accounting; resolve remaining startup,
-   kernel, and child-accounting debt before repeating the gate. Use the exact
-   final stats executable and integrated process markers. Require all 29 startup-inclusive kernel
-   checks, complete child/fork accounting and no core, core-owned adapter,
-   core-pending or unresolved boxes. Fourteen focused zero-box probes do not
-   substitute for this gate. The `66981c963be` capture (15/29 raw-zero, zero
-   loop deltas on all 29) is historical only. Ctypes and LRU ownership
-   implementation remain on explicit approval hold.
+2. **Keep workload accounting trustworthy.** Fix process/event defects that
+   affect workload identity, counter conservation or test correctness. Preserve
+   the 11 raw-nonzero kernel rows and all census errors as diagnostic evidence;
+   do not require all 29 kernels or the full suite to reach zero boxes before a
+   bounded performance packet. Ctypes and LRU ownership implementation remain
+   on explicit approval hold.
 3. **Source/build identity is confirmed.** All five build-info objects match
    their respective source HEADs, with 116/116/117 module rosters; the exact
    retained executable IDs are recorded in the census, kernel and diagnostic
    receipts.
-4. **Diagnostic measurement is complete; qualification remains open.** The
+4. **Diagnostic measurement is complete; upstream parity remains open.** The
    report used JIT-off GCC `-O3` builds without PGO/LTO and unchanged source.
    Pyperformance warned on 35/36 results about one-percent precision; six
-   kernel rows were noisy. Profiles suggest attribute lookup, calls/frames,
-   iteration and dictionary work, but do not establish causal boxing cost or
-   total gain. Finish P0–P4 and pass R27 before a qualified performance claim.
-   P5 in the [follow-up queue](follow-up-6a0e4c12c17.md) contains
-   measurement-driven hypotheses, not fixes. Keep the one-minute load guard
+   kernel rows were noisy. The completed source review and hardware counters
+   point to GCC source overhead, Python-call preparation and frame traffic,
+   but do not establish causal boxing cost or total gain. Use existing evidence
+   to start bounded throughput work; add counters only for a specific patch
+   question. Correctness and trustworthy workload accounting are required, not
+   a zero-box census. P5 in the [follow-up queue](follow-up-6a0e4c12c17.md)
+   contains measurement-driven hypotheses, not fixes. Keep the one-minute load guard
    (reject at load >= 4) and full 1/5/15-minute tuple for future campaigns.
    Historical 1.73x/1.83x ratios refer to `5de7bd62ef9` only.
    Prioritize steady-state throughput; RSS is secondary. The completed
    [hardware evidence review](hardware-perf-review-6a0e4c12c17.md) accepts all
    54 counter runs, 18 empty calibrations and six user-only DWARF captures.
    The three selected regressions retire 1.63–2.05 times upstream instructions
-   with comparable or lower CPI. P5 now proposes matched Clang A3 R1/Q2,
+   with comparable or lower CPI. P5 now proposes GCC-only source overhead,
    bounded attribute/accessor work, Python-call preparation and frame traffic;
    no optimization speedup has been measured yet.
 5. **Write the checkpoint recap from qualified evidence.** Ctypes and LRU

@@ -269,3 +269,9 @@ that remote copy remains at revision 7. No alternate export was attempted.
   while cache counters are too noisy for attribution. The review proposes
   matched Clang A3 R1/Q2, bounded attribute/accessor, Python-call and
   frame-traffic experiments. R27 remains open; P0–P4 precede implementation.
+- 2026-11-06 — User narrows throughput work to GCC and removes absolute
+  zero-box admission as a requirement. The [slowdown summary](issues/checkpoint-closure/slowdown-summary-6a0e4c12c17.md)
+  separates unfinished API migration from measured hot-loop overhead, and
+  workload instruction counts from per-bytecode costs. Current work prioritizes
+  generated publication/helper overhead, call/frame traffic and useful ports;
+  earlier strict R27 outcomes remain historical diagnostics.

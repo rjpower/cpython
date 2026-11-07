@@ -58,13 +58,14 @@ links in debug and release and passed 54,351 tests in each full profile. Its
 diagnostic comparison reports candidate/baseline elapsed-time factors of
 1.287/1.075 for the kernel geomean and 1.096/0.913 for the declared
 pyperformance subset against upstream/interim; peak-RSS factors are
-1.259/1.062. Lower is better. This is not a performance qualification:
-whole-source R27 and startup-inclusive kernel gates still fail. See the
+1.259/1.062. Lower is better. Whole-source R27 and startup-inclusive
+zero-box gates still fail their original criteria; they are now diagnostics,
+not prerequisites for throughput work. See the
 [diagnostic report](../bench/results/checkpoint-6a0e4c12c17.md) and
 [current status](../STATUS.md). The runtime still has no new native JIT tier.
 Follow-up prioritizes steady-state throughput; RSS is secondary. The completed
 [source review](../issues/checkpoint-closure/steady-state-source-review.md)
-and hardware counters identify bounded compiler, attribute/accessor,
+and hardware counters identify bounded GCC source, attribute/accessor,
 Python-call and frame-traffic experiments. On the three selected regressions,
 candidate retired instructions are 2.047x, 1.903x and 1.628x upstream, while
 CPI is comparable or lower; cache counters are noisy. This narrows the next

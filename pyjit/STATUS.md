@@ -11,8 +11,9 @@ boxes and incomplete process identity/accounting. The raw capture finished
 with 87 records across 29 kernels: 18/29 startup-inclusive raw-zero and all
 loop deltas zero, but strict kernel admission failed. See the [full census
 receipt](issues/checkpoint-closure/full-census-6a0e4c12c17.md). The matched
-diagnostic campaign is complete but does not qualify performance because R27
-fails. Candidate/baseline elapsed-time factors are 1.287/1.075 for 29-kernel
+diagnostic campaign is complete and shows a throughput gap. R27's failed
+zero-box criterion remains diagnostic rather than a performance veto.
+Candidate/baseline elapsed-time factors are 1.287/1.075 for 29-kernel
 geomeans and 1.096/0.913 for the 12-result pyperformance subset against
 upstream/interim (lower is better); peak-RSS factors are 1.259/1.062. See the
 [diagnostic report](bench/results/checkpoint-6a0e4c12c17.md).
@@ -22,13 +23,15 @@ Its independent evidence review is recorded in
 The earlier full-v2 outcome remains historical: each profile ran 54,347 tests
 with two AST failures, one opcache failure and a `test_tools` `sys.path`
 environment change. The 14 focused zero-box probes and targeted differentials
-are not substitutes for strict R27. Audit static-gate violations and process
-accounting gaps before changing marks or source. The pyperformance run reported
+are not substitutes for full-suite correctness. The full zero-box R27 census
+remains diagnostic, not a required outcome or admission veto. Fix process or
+workload-accounting defects that undermine the measured workload, and keep
+static API findings inventoried before changing marks. The pyperformance run reported
 precision warnings for 35/36 results; six kernel rows were noisy. The report
-makes no significance or causal-boxing claim. Finish P0–P4 before acting on
-the diagnostic P5 hypotheses. Prioritize steady-state throughput; RSS is a
+makes no significance or causal-boxing claim. Prioritize steady-state
+throughput; do not require a zero-box census before targeted work. RSS is a
 secondary measure. The source-level profile review and hardware-counter
-analysis are complete; they prioritize compiler convention, bounded
+analysis are complete; they prioritize GCC helper/state traffic, bounded
 attribute/accessor work, Python-call preparation and frame traffic without
 claiming a causal explanation. See the [source review](issues/checkpoint-closure/steady-state-source-review.md)
 and [diagnostic report](bench/results/checkpoint-6a0e4c12c17.md).

@@ -3262,7 +3262,7 @@ done:
         value_revalidation_error("value bridge changed the active frame");
         status = -1;
     }
-    assert(status < 0 ||
+    assert(status != 0 ||
            child->ir_words == _PyFrame_GetCode(child)->_co_exec->words);
     if (child != NULL && status < 0) {
         /* The child has not entered its recursion/monitor protocol. Restore

@@ -269,15 +269,13 @@ _PyFrame_FillConstSlots(_PyInterpreterFrame *frame, PyCodeObject *code)
     }
 }
 
-/* Consumes reference to func and locals.
-   Does not initialize frame->previous, which happens
-   when frame is linked into the frame stack.
- */
+/* Consumes reference to func and locals. The caller is responsible for slots
+   before null_from. */
 static inline void
 _PyFrame_Initialize(
     PyThreadState *tstate, _PyInterpreterFrame *frame, PyValue func,
     PyObject *locals, PyCodeObject *code, PyValue *base,
-    int null_locals_from, _PyInterpreterFrame *previous)
+    int null_from, _PyInterpreterFrame *previous)
 {
     frame->previous = previous;
     frame->base = base;
@@ -298,7 +296,7 @@ _PyFrame_Initialize(
 #endif
 
     int nslots = _PyFrame_NumSlotsForCodeObject(code);
-    for (int i = null_locals_from; i < nslots; i++) {
+    for (int i = null_from; i < nslots; i++) {
         frame->base[i] = PyValue_NULL;
     }
     // The constant slots (CO_FAST_CONST): owners of inline scalars and
@@ -519,10 +517,11 @@ _PyFrame_PushUnchecked(PyThreadState *tstate, PyValue func, int null_locals_from
 
 /* Pushes a frame for the function func whose slots start at base, among the
  * slots of previous, the current frame, where its nargs arguments already
- * are: the frame overlaps the window of the call.  The slots of previous
- * above base are dead temporaries, which are NULL and which the callee
- * leaves NULL.  Must be guarded by _PyThreadState_HasStackSpace(), for
- * co_framesize.  Consumes the reference to func. */
+ * are: the frame overlaps the window of the call. Argument owners transfer
+ * to child homes in the same cells; the parent no longer owns those aliases.
+ * The remaining caller homes from base + nargs to its slot end are NULL,
+ * and the callee leaves the overlap NULL on retirement. Must be guarded by
+ * _PyThreadState_HasStackSpace(), for co_framesize. Consumes func. */
 static inline _PyInterpreterFrame *
 _PyFrame_PushOverlapping(PyThreadState *tstate, PyValue func,
                          PyValue *base, int nargs,
@@ -534,16 +533,30 @@ _PyFrame_PushOverlapping(PyThreadState *tstate, PyValue func,
     assert(previous->owner == FRAME_OWNED_BY_THREAD);
     assert(base > previous->base &&
            base <= _PyDataStack_Slots(tstate->datastack_top));
+    /* Arguments occupy [0, nargs); the remaining caller homes below
+     * null_from are already NULL. Only the new tail needs initialization. */
+    int nslots = _PyFrame_NumSlotsForCodeObject(code);
+    PyValue *previous_end = previous->base +
+        _PyFrame_NumSlotsForCodeObject(_PyFrame_GetCode(previous));
+    assert(base + nargs <= previous_end);
+    Py_ssize_t known = previous_end - base;
+    int null_from = known < nslots ? (int)known : nslots;
+    assert(null_from >= nargs);
+#ifndef NDEBUG
+    for (int i = nargs; i < null_from; i++) {
+        assert(PyValue_IsNull(base[i]));
+    }
+#endif
     _PyInterpreterFrame *frame =
         (_PyInterpreterFrame *)(tstate->datastack_limit - FRAME_SPECIALS_SIZE);
     frame->saved_top = _PyDataStack_Slots(tstate->datastack_top);
     tstate->datastack_limit = (PyObject **)frame;
-    PyValue *end = base + _PyFrame_NumSlotsForCodeObject(code);
+    PyValue *end = base + nslots;
     if (end > frame->saved_top) {
         tstate->datastack_top = _PyDataStack_Address(end);
     }
     assert(tstate->datastack_top < tstate->datastack_limit);
-    _PyFrame_Initialize(tstate, frame, func, NULL, code, base, nargs, previous);
+    _PyFrame_Initialize(tstate, frame, func, NULL, code, base, null_from, previous);
     return frame;
 }
 

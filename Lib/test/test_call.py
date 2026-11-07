@@ -141,6 +141,46 @@ class FunctionCalls(unittest.TestCase):
         del result
         self.assertEqual(released, ["released"])
 
+    def test_overlapping_frame_extents_and_unwind(self):
+        events = []
+
+        class Value:
+            def __del__(self):
+                events.append("released")
+
+        def small(value, default=5, *args, **kwargs):
+            return value, default, args, kwargs
+
+        def large(value, default=5, *args, **kwargs):
+            a, b, c, d, e, f, g, h = range(8)
+            if value is None:
+                raise ValueError("unwind")
+            return value, default, args, kwargs, (a, b, c, d, e, f, g, h)
+
+        def small_caller(fn, value):
+            return fn(value)
+
+        def large_caller(fn, value):
+            a, b, c, d, e, f, g, h = range(8)
+            if value is False:
+                return fn(a, b, c, d, e, f, g, h)
+            return fn(value), (a, b, c, d, e, f, g, h)
+
+        # Exercise different relative frame extents after call specialization.
+        for _ in range(50):
+            self.assertEqual(small_caller(small, 1)[:3], (1, 5, ()))
+            self.assertEqual(small_caller(large, 1)[:3], (1, 5, ()))
+            self.assertEqual(large_caller(small, 1)[0][:3], (1, 5, ()))
+            self.assertEqual(large_caller(large, 1)[0][:3], (1, 5, ()))
+        with self.assertRaisesRegex(ValueError, "unwind"):
+            small_caller(large, None)
+        value = Value()
+        result = large_caller(small, value)
+        del value
+        self.assertEqual(events, [])
+        del result
+        self.assertEqual(events, ["released"])
+
     def test_type_non_string_kwargs_keep_vectorcall_validation(self):
         bad_kwargs = {None: 1}
         for call in (

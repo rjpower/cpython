@@ -1327,6 +1327,29 @@ class ConstSlotsTest(unittest.TestCase):
             self.assertEqual(f(60), self.loop_with_seven(60, 2 ** 70 + 7))
         self.assertEqual(sys.getrefcount(mortal), before)
 
+    def test_mortal_constant_after_overlapping_calls(self):
+        class Constant:
+            def __rsub__(self, left):
+                return left - 7
+
+        code = self.loop.__code__
+        consts = list(code.co_consts)
+        mortal = Constant()
+        indices = [index for _, index in self.slots(code)
+                   if consts[index] == 7]
+        self.assertEqual(len(indices), 1)
+        consts[indices[0]] = mortal
+        function = types_FunctionType(code.replace(co_consts=tuple(consts)), globals())
+
+        def caller():
+            return function(60)
+
+        expected = self.loop(60)
+        before = sys.getrefcount(mortal)
+        for _ in range(50):
+            self.assertEqual(caller(), expected)
+        self.assertEqual(sys.getrefcount(mortal), before)
+
     @staticmethod
     def loop_with_seven(n, seven):
         total = 0

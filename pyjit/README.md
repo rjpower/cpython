@@ -4,7 +4,14 @@ We are rebuilding CPython around universal eight-byte PyValues, a register
 interpreter, and a cohesive method and tracing JIT. Memory management uses
 reference counting with cyclic collection. Extensions are rebuilt and ported.
 
-**Current status, 2026-11-07:** runtime HEAD `7780e32e0e2` is clean; release,
+**Active batch, 2026-11-07:** interpreter architecture and cleanup work is
+running under the [integration plan](issues/interpreter-architecture-20261107/plan.md).
+R1–R3 are integrated through `225480a4250`, with release/debug focused
+checks, basic timing screens and fresh cold reviews passed. The timing screens
+are mixed; no broad speedup is established.
+Full qualification and measurements below describe the preceding batch.
+
+**Previous completed batch:** runtime HEAD `7780e32e0e2` was clean; release,
 debug and stats builds each report 117 modules, and both full suites passed
 54,361 tests with no failures. Final-v4 measurements are complete. Candidate /
 upstream and candidate / interim elapsed factors are 1.263136 / 1.054877 on

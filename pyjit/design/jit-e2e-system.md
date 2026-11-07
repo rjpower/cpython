@@ -96,8 +96,8 @@ Common fast paths can become native instructions; generic operations initially
 call generated semantic helpers. A helper returns to its compiled continuation,
 not an interpreter opcode-dispatch loop.
 
-Use `Action entry(JitContext *)` and
-`Action op(JitContext *, const DecodedOp *)` as the common interface.
+Use `JitAction entry(JitContext *)` and
+`JitAction op(JitContext *, const DecodedOp *)` as the common interface.
 `JitContext` carries the real thread state, current Python frame, logical word
 PC and typed transfer state. Actions distinguish Continue, Branch, EnterFrame,
 Return, Raise, Yield and Deopt. Known branch targets become native jumps.
@@ -207,6 +207,112 @@ this ABI. Actual CFI, source maps and supported tooling precede adoption.
 
 RC with cyclic collection stays selected. This design does not reopen GC or
 require a new allocator to compile loops and calls.
+
+### Executable Action and recovery interface
+
+**Design contract, not present runtime code (2026-11-07).** The integrated
+runtime has the register interpreter and `Python/perf_jit_trampoline.c`, but
+no whole-method JIT, `JitContext`, native `JitAction` ABI or native recovery
+implementation. The types below define the next executable boundary; they do
+not turn a generated handler effect bit into a state map.
+
+A `JitAction` returns one tagged outcome: `Continue(next_word)`,
+`Branch(target_word)`, `EnterFrame(prepared_call)`,
+`Return(owned_value, recipient_slot)`, `Raise(fault_word)`,
+`Yield(owned_value, resume_word, recipient_slot)`, or
+`Deopt(resume_word, statepoint_id)`. `Continue` and `Branch` require no
+pending exception; `Raise` requires a raised exception and records its fault
+word, not a selected handler or next word. `RERAISE` may update that fault
+word before returning `Raise`. A shared unwinder performs raise monitoring,
+traceback attribution and exception-table selection. Every action also names
+the completed-effect prefix and a `before-effect`, `after-effect`, or `error`
+statepoint; a guard failure after a callback, store or release cannot restart
+the word. `JitContext` carries a **non-owning** current-frame handle, thread
+state, executable epoch and logical word PC. The frame's existing `owner`
+governs its storage lifetime. No raw frame/word/slot pointer survives an
+allocation, helper or callback without revalidation and reload.
+
+There is one transfer protocol, shared by interpreter and native entry.
+Preparation may allocate, bind and decline while the parent call window
+still owns its homes. `EnterFrame` carries a prepared transaction that owns
+its private copies and any allocated child; it has not detached the parent
+or changed `current_frame`. The trampoline invokes the shared commit routine
+once: set the parent's `return_slot`, detach inputs, publish the fully
+initialized child as current, then retire displaced owners. A failure before
+commit cleans the private copies/child and leaves parent homes owning; after
+commit there is no decline or replay. Existing
+`call_transaction_overlap_python`/fallback already perform parts of this
+commit, including changing `current_frame`; JIT adapters cannot call them
+unchanged. Factoring their existing preparation and commit is a prerequisite
+of native call actions, and must preserve the interpreter's sequence.
+`Return` and `Yield` each transfer exactly one owned `PyValue` to the named
+recipient home; the transfer routine consumes it on success or closes it on
+failure. Return unlinks the dying frame before clearing it, then installs the
+held result in the parent. Yield installs the held result for the caller,
+sets the generator's send `return_slot` and logical resume word, moves its
+handled-exception link, records suspension state and resumes the parent.
+These transitions, recursion/monitoring events and cleanup run once in the
+shared transfer routine; the trampoline routes its result and does not
+repeat field mutations. `Yield` inherits the current no-raise contract.
+
+Each recoverable native point has a `FrameState` with: logical frame chain;
+executing/fault word and next semantic word separately; parent call's
+`return_slot`; the pending raised exception separately from the
+handled-exception stack; and **every physical frame home**, including
+explicit NULLs. The handler target is chosen by the shared unwinder from
+the fault position and current exception table, not frozen in a snapshot.
+Mark each home as real or virtual. For each non-NULL value record its
+location (canonical home, machine register, spill or constant),
+representation and owner identity: exactly one owner per owned reference,
+or a borrow naming a stable owning home, or an immortal. Two locations can
+alias one owner but cannot each claim its count. Add owners kept only for an
+error edge. A materialization recipe names its inputs, destination and
+whether it can allocate, release or call Python. A statepoint records
+`before-effect`, `after-effect` or `error`, the completed-effect prefix and
+the corresponding resume/fault word. This is semantic state, not interpreter
+`reads`/`through` extent or future-read liveness; a valid home may be needed
+even if the next word never reads it. Optimizing SSA values and physical
+register/spill locations map *to* these homes, without changing the baseline
+64-bit word.
+
+Recovery has two phases. First, while the current native activation still
+owns its values, validate the code epoch and reserve/materialize everything
+fallible **without destroying the old valid state**. An allocation or
+release may itself call Python: publish valid frame homes and roots before
+that call, then revalidate the actual current frame, executable words and
+feedback, instrumentation and dependency versions afterward. Second,
+atomically install canonical owned values and NULLs in real frame homes,
+set `instr_ptr`/return slots and exception state, and transfer to the
+interpreter or baseline continuation. No C-owned value may be both installed
+and closed; no borrowed register owns an object or survives a callback
+without a proven stable home. The first implementation retains canonical
+homes at every helper/effect boundary and **prohibits** fallible
+materialization after an irreversible effect. Later compiled regions may
+allow it only with a specific post-effect OOM route: the completed operation
+remains completed, the new error has a declared fault PC and precedence over
+any prior pending error, and each original/intermediate owner has one
+cleanup path. Otherwise reserve and materialize before the effect.
+Callback/finalizer statepoints publish observer-visible locals and PC first,
+then invalidate facts depending on mutable homes, instrumentation or code
+identity. OSR imports the actual loop-header owner/NULL map after required
+periodic work. Suspension publishes generator homes and a logical resume PC,
+with no native-stack dependency.
+
+The first **planned checker**, before any native backend claim, is a bounded
+offline fixture over current pristine IR: decode one ordinary call with
+success/raise/decline outcomes and one attribute-result retirement with a
+callback using their actual word roles and generated contracts. Record
+source-checked before/after/error home maps, NULLs, one owned result, a
+borrow's named owner, fault/resume words and the parent return slot. Reject
+duplicate owners, an unowned borrow, missing home/NULL, a before-effect
+resume after a callback, and success with a pending exception. This validates
+the contract *shape* only; existing `_PyIRFormat` effects are whole-handler
+summaries and do not prove intra-handler order. Keep the fixture local to
+this experiment, with no parallel opcode table. Admission of **native
+recovery** later requires forced exits from an actual compiled slice and
+differential comparison of frames, values, raised and handled exceptions,
+finalizer order, call failure, post-effect guard, generator yield/resume and
+OSR entry against the interpreter. No speedup is claimed from the checker.
 
 ## Optimization layers and concrete hypotheses
 

@@ -1,6 +1,12 @@
 # Coordinator handoff
 
-Current runtime HEAD `7780e32e0e2` is clean. Release, debug and stats builds
+Active work is the [interpreter architecture batch](issues/interpreter-architecture-20261107/plan.md).
+R1–R3 have landed through `225480a4250` and passed release/debug focused checks,
+basic screens and fresh cold reviews. Screens are mixed. Continue the shared
+semantic-contract implementation and canonical-output proof; the completed
+qualification below precedes those edits.
+
+Previous qualified runtime HEAD `7780e32e0e2` was clean. Release, debug and stats builds
 each report 117 modules; release and debug suites each passed 54,361 tests
 with no failures. Final-v4 measurements are complete. Candidate / upstream
 and candidate / interim elapsed factors are 1.263136 / 1.054877 on 29 kernels

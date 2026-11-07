@@ -1,6 +1,13 @@
 # Project status
 
-Live status, 2026-11-07: runtime HEAD `7780e32e0e2` is clean. Release, debug
+Active batch, 2026-11-07: runtime R1–R3 are integrated through
+`225480a4250`. Each passes release/debug builds, 916 focused tests per profile
+with one skip, a basic screen and a fresh cold review. Timing screens are mixed;
+no broad speedup is established.
+The [integration plan](issues/interpreter-architecture-20261107/plan.md) tracks
+the remaining call/contract work and the later full-suite boundary.
+
+Previous full qualification: runtime HEAD `7780e32e0e2` was clean. Release, debug
 and stats builds each report 117 modules; release and debug full suites each
 passed 54,361 tests with no failures. Final-v4 measurements are complete:
 candidate / upstream and candidate / interim elapsed factors are 1.263136 /

@@ -288,3 +288,7 @@ that remote copy remains at revision 7. No alternate export was attempted.
   the [report](bench/results/interpreter-throughput-20261106.md) and
   [follow-up](issues/interpreter-throughput/follow-up.md). Runtime source
   remains clean; no second compiler or new zero-box census was used.
+- 2026-11-07 — A fresh [holistic source assessment](issues/interpreter-throughput/holistic-assessment-20261107.md)
+  finds coherent ownership but unfinished execution-path simplification; it
+  prioritizes call preparation, shared phase/output facts, measured handler
+  work, write-only call bookkeeping cleanup and the JIT recovery interface.

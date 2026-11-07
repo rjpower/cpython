@@ -40,6 +40,9 @@ For the current call-transfer and frame-home contract, see
 [call-and-frame-lifetimes.md](call-and-frame-lifetimes.md). The independent
 [holistic interpreter review](../issues/interpreter-throughput/holistic-design-review.md)
 records the architecture assessment and reviewed improvement sequence.
+The later [whole-system source assessment](../issues/interpreter-throughput/holistic-assessment-20261107.md)
+reviews the integrated runtime, distinguishes baseline bytecode from optimizing
+SSA, and records the remaining phase/output, call-path and recovery gaps.
 
 **Historical performance evidence at `6a0e4c12c17`.** The matched JIT-off
 [performance report](../bench/results/checkpoint-6a0e4c12c17.md)

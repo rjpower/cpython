@@ -15,6 +15,9 @@ upstream parity. Candidate instructions per workload loop fell 2.2%, 6.7% and
 1.4% in the selected counter workloads, but remain 2.001520x, 1.774821x and
 1.605447x upstream. See the [final report](../../bench/results/interpreter-throughput-20261106.md)
 for limitations and the [current status](../../STATUS.md).
+The fresh [holistic source assessment](holistic-assessment-20261107.md)
+distinguishes accepted ownership correctness from the unfinished whole-system
+simplification audit and identifies one concrete dead-state cleanup.
 
 ## Admission before more implementation
 
@@ -34,6 +37,7 @@ records this maintenance judgment and the separate measurement history.
 | 1 | Attribute/helper overhead | Terra medium owns one DSL/generator helper sequence; Sol reviews phase/effect/output facts | Remove only repeated work proven by producer and consumer facts; preserve publication-before-release and folded-local semantics |
 | 2 | Measured PyValue ports | Terra and Luna medium own bounded native caller groups selected from measured profiles; Sol reviews one ownership recipe | Reduce bridge work in measured paths while preserving owners, errors and callback order, rather than optimizing census counts |
 | 2 | Shared IR phase/effect facts | Sol proposes the contract; Terra implements one producer/analyzer increment; Luna updates documentation | Give consume, publish, retire, observe and failure phases one generated definition without parallel hand-maintained metadata |
+| 2 | Call bookkeeping cleanup | Terra medium owns `_PyCallTransaction.effects` and its writes in `Python/ceval.c`; Sol checks the remaining protocol | Remove the write-only record field separately from generated `CALL_EFFECTS` uses; verify focused call behavior without claiming a speedup |
 | Integration | Coordinator | Shared headers, generated products, builds, quiet measurements and current documentation | Review actual composition, commit separately, measure each integration and obtain a fresh cold review |
 
 Start each implementation packet with a 60–90 minute proposal/first-result

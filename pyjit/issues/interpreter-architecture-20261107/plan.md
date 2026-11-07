@@ -99,13 +99,15 @@ source work and repeatable elapsed improvement are separate conclusions.
 Raw evidence uses the established build storage:
 `build/pyjit-link-wave1/interpreter-architecture-20261107/` under
 `python-boil-the-ocean`. Canonical plans, proposals, reviews and receipts live
-here. The initial seven-kernel baseline completed at `7780e32e0e2` with
-unchanged identities. R1 (`22f49d676db`), R2 (`25ce1654801`) and R3
-(`225480a4250`) are integrated: each passes release/debug builds, 117-module
-checks, 916 focused tests per profile with one skip, a basic performance
-screen and a fresh cold review. Screens are mixed and do not establish a
-broad speedup. Release/debug identities match R3; stats remains at the prior
-qualified C source until its next required rebuild. The shared semantic
-publication contract is being implemented in the isolated contract worktree;
-the canonical-output optimization still requires its boundary proof and peer
-review. The recovery-interface amendment awaits independent re-review.
+here. R1–R5 are integrated through `0953757f4e7`; release and debug full suites
+passed with zero failures, and release/debug/stats builds match the source.
+Collection is complete: the 29-kernel candidate/upstream and candidate/interim
+factors are 1.247431/1.044650, and the selected 12-result subset factors are
+1.048074/0.878774. The direct R4/R5 whole-kernel factor is 0.992103; independent
+review accepts keeping R5 with its local costs documented. The profile
+campaign has 54 valid perf-stat invocations and six valid DWARF captures with
+zero lost samples. No upstream parity is established. Independent final
+evidence/report review is complete; the batch is closed. See the [R4](integration-r4.md),
+[R5](integration-r5.md) and [current report](../../bench/results/interpreter-architecture-20261107.md).
+The recovery-interface amendment passed independent re-review and landed in
+canonical commit `cc52f097df0`; its native implementation remains future work.

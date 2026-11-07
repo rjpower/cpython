@@ -12,17 +12,19 @@ the first revision, and review 2
 ([reviews/register-ir-review-2.md](reviews/register-ir-review-2.md)) the
 second.
 
-**Current implementation, 2026-11-07.** Runtime HEAD is `7780e32e0e2`; the
-register-IR encoding and 64-bit instruction format described below are
-unchanged. Release, debug and stats builds report 117 modules each. Release
-and debug full suites pass 54,361 tests with no failures. Final-v4 candidate /
-upstream elapsed factors are 1.263136 on 29 kernels and 1.084920 on the
-selected 12-result subset; candidate / interim factors are 1.054877 and
-0.902391. These noisy sequential results establish no convincing broad
-elapsed-time win or upstream parity. The zero-box criterion remains
-diagnostic, not a performance-admission gate. See the [final report](../bench/results/interpreter-throughput-20261106.md),
-[Integration C receipt](../issues/interpreter-throughput/integration-c.md) and
-[call/frame contract](call-and-frame-lifetimes.md).
+**Current source and implemented contracts, 2026-11-07.** Runtime R5
+`0953757f4e7` on R4 `b58036e9718` extends the previously qualified interpreter
+without changing its 64-bit word layout. The batch removes write-only call
+bookkeeping, clarifies the call
+fallback boundary, uses the immortal empty tuple for common varargs, declares
+the shared first-output publication phase, and adds a checked canonical-source
+fact for one shape-result temporary flush. See the [R4 receipt](../issues/interpreter-architecture-20261107/integration-r4.md),
+[R5 receipt](../issues/interpreter-architecture-20261107/integration-r5.md),
+[current plan](../issues/interpreter-architecture-20261107/plan.md), and
+[current throughput report](../bench/results/interpreter-architecture-20261107.md)
+for validation and performance evidence. The R5 paired and basic results do
+not establish a broad speedup or upstream parity. Native method/tracing JIT
+recovery remains future work; R5 adds no recovery state or backend.
 
 **Historical checkpoint evidence, runtime `6a0e4c12c17`.** That runtime built
 and executed the register interpreter in debug, release and stats
@@ -44,18 +46,11 @@ The later [whole-system source assessment](../issues/interpreter-throughput/holi
 reviews the integrated runtime, distinguishes baseline bytecode from optimizing
 SSA, and records the remaining phase/output, call-path and recovery gaps.
 
-**Historical performance evidence at `6a0e4c12c17`.** The matched JIT-off
-[performance report](../bench/results/checkpoint-6a0e4c12c17.md)
-finds candidate/upstream elapsed-time factors of 1.287 over 29 kernels and
-1.096 over the declared 12-result subset. This interpreter is not yet
-competitive overall. Hardware counters on three selected regressions show
-1.63–2.05 times upstream retired instructions, with comparable or lower CPI.
-Disassembly confirms real tail jumps; source-backed experiments target
-compiler/helper state traffic, attribute lookup, call preparation and frame
-homes. Register IR alone does not ensure fewer executed machine instructions.
-Keep interpreter homes distinct from typed optimizing SSA and hardware
-allocation; these measurements do not justify changing the encoding or
-closing the effects/liveness/OSR gaps documented below.
+The matched JIT-off report for checkpoint `6a0e4c12c17` is historical evidence;
+see [the report](../bench/results/checkpoint-6a0e4c12c17.md). Keep interpreter
+homes distinct from typed optimizing SSA and hardware allocation. The report
+does not justify changing the encoding or closing the effects/liveness/OSR
+gaps documented below.
 
 The built word remains 64 bits: a 16-bit handler and four 12-bit fields
 (`Include/internal/pycore_ir.h:IR_HANDLER`). Slot class is tested against

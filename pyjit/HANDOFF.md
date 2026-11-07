@@ -1,10 +1,16 @@
 # Coordinator handoff
 
-Active work is the [interpreter architecture batch](issues/interpreter-architecture-20261107/plan.md).
-R1–R3 have landed through `225480a4250` and passed release/debug focused checks,
-basic screens and fresh cold reviews. Screens are mixed. Continue the shared
-semantic-contract implementation and canonical-output proof; the completed
-qualification below precedes those edits.
+The [interpreter architecture batch](issues/interpreter-architecture-20261107/plan.md) is complete.
+R1–R5 have landed through `0953757f4e7` and full correctness qualification
+passed. Candidate/upstream and candidate/interim factors are 1.247431/1.044650
+on 29 kernels and 1.048074/0.878774 on the selected 12-result subset. The
+direct R4/R5 paired factor is 0.992103; the bounded keep decision is accepted
+with local-read costs documented. All 54 perf-stat invocations are valid, and
+six DWARF captures have zero lost samples. There is no upstream parity. The
+independent final evidence/report review is complete. Continue from the
+reviewed follow-up queue, preserving frozen measurement evidence. See the
+[current report](bench/results/interpreter-architecture-20261107.md) and
+[follow-up](issues/interpreter-architecture-20261107/follow-up.md).
 
 Previous qualified runtime HEAD `7780e32e0e2` was clean. Release, debug and stats builds
 each report 117 modules; release and debug suites each passed 54,361 tests
@@ -92,7 +98,7 @@ and backend. The stage pages distinguish selected designs from working code.
 | --- | --- |
 | Documentation root (canonical `pyjit/`) | `/home/power/code/cpython/.worktrees/python-jit`, branch `weaver/python-jit` |
 | Runtime tree (nested worktree) | `/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/pyvalue-rc-universal` |
-| Runtime branch / source | `boil/pyvalue-rc-universal`, clean HEAD `7780e32e0e2` (coordinator-owned) |
+| Runtime branch / source | `boil/pyvalue-rc-universal`, clean HEAD `0953757f4e7` (coordinator-owned) |
 | Candidate builds | `build/pyvalue-rc-repr-debug`, `build/pyvalue-rc-repr-release`, `build/pyvalue-rc-repr-stats`; all match current source and report 117 modules |
 | Matched controls | Upstream `3a440b65695` and interim `eba351fee7d`; exact build IDs are in the full-census and kernel receipts |
 | Historical builds | `build/pyvalue-rc-debug-20261102-v1`, `build/pyvalue-rc-bringup-debug`, `build/pyvalue-rc-triage-rt-debug`, `build/pyvalue-rc-release-20261103`, `build/upstream-release-3a440b6` (not the current matched-build set) |
@@ -120,17 +126,20 @@ diagnostic report.
 
 ## Source and build state
 
-Runtime HEAD `7780e32e0e2` is clean. Release, debug and stats build identities
+Runtime HEAD `0953757f4e7` is clean. Release, debug and stats build identities
 match it and each reports 117 modules. Release and debug suites each passed
-54,361 tests with no failures. Final-v4 candidate / upstream factors are
-1.263136 for kernels and 1.084920 for the selected 12-result subset; candidate /
-interim factors are 1.054877 and 0.902391. The batch does not establish a
-convincing broad elapsed-time win or upstream parity. The [final report](bench/results/interpreter-throughput-20261106.md)
-holds the complete measurements and limitations.
+54,380 tests with no failures. The completed 29-kernel campaign has
+candidate/upstream factor 1.247431 and candidate/interim factor 1.044650; the
+selected subset factors are 1.048074 and 0.878774. All 54 perf-stat
+invocations are valid, and six DWARF captures have zero lost samples. The
+independent final evidence/report review is complete. No upstream
+parity is established. See the [current report](bench/results/interpreter-architecture-20261107.md)
+and [follow-up](issues/interpreter-architecture-20261107/follow-up.md).
+Previous final-v4 measurements belong to `7780e32e0e2`.
 
 The raw kernel evidence at `66981c963be` and the `6a0e4c12c17` census are
 historical and retain their original ELF identities. The final-v4 report
-identifies the current retained executables and its sampling and workload
+identifies that preceding batch's retained executables and its sampling and workload
 limits. The zero-box criterion remains diagnostic, not a throughput veto.
 
 The final AST type-call guard admits only the selected type-call pair when the
@@ -140,7 +149,7 @@ the normal vectorcall path. See the [v3 source review](issues/checkpoint-closure
 and [merged differential](issues/checkpoint-closure/ast-original-kwargs-v3-merged-validation.md).
 
 The prior isolated bulk tree and W5 copies are historical worker artifacts, not
-current source baselines. Continue from clean HEAD `7780e32e0e2`, reusing the
+current source baselines. Continue from clean HEAD `0953757f4e7`, reusing the
 existing runtime worktree unless isolation is needed. Preserve the sealed
 reviews and build evidence.
 

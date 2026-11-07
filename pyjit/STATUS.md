@@ -1,11 +1,16 @@
 # Project status
 
-Active batch, 2026-11-07: runtime R1–R3 are integrated through
-`225480a4250`. Each passes release/debug builds, 916 focused tests per profile
-with one skip, a basic screen and a fresh cold review. Timing screens are mixed;
-no broad speedup is established.
-The [integration plan](issues/interpreter-architecture-20261107/plan.md) tracks
-the remaining call/contract work and the later full-suite boundary.
+Completed batch, 2026-11-07: R1–R5 are integrated through `0953757f4e7`; release
+and debug full suites passed with no failures, and all three builds check 117
+modules. The completed candidate/upstream and candidate/interim factors are
+1.247431/1.044650 on 29 kernels and 1.048074/0.878774 on the selected
+12-result subset. The direct R4/R5 29-kernel paired factor is 0.992103; the
+bounded keep decision is accepted with local-read costs recorded. All 54
+perf-stat invocations are valid, and six DWARF captures have zero lost
+samples. No upstream parity is established. Independent final evidence
+and report review is complete. See the [current report](bench/results/interpreter-architecture-20261107.md),
+[follow-up](issues/interpreter-architecture-20261107/follow-up.md) and
+[integration plan](issues/interpreter-architecture-20261107/plan.md).
 
 Previous full qualification: runtime HEAD `7780e32e0e2` was clean. Release, debug
 and stats builds each report 117 modules; release and debug full suites each

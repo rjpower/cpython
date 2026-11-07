@@ -4,12 +4,18 @@ We are rebuilding CPython around universal eight-byte PyValues, a register
 interpreter, and a cohesive method and tracing JIT. Memory management uses
 reference counting with cyclic collection. Extensions are rebuilt and ported.
 
-**Active batch, 2026-11-07:** interpreter architecture and cleanup work is
-running under the [integration plan](issues/interpreter-architecture-20261107/plan.md).
-R1–R3 are integrated through `225480a4250`, with release/debug focused
-checks, basic timing screens and fresh cold reviews passed. The timing screens
-are mixed; no broad speedup is established.
-Full qualification and measurements below describe the preceding batch.
+**Completed batch, 2026-11-07:** R1–R5 are integrated through `0953757f4e7` and
+full correctness qualification passed. The completed campaign gives
+candidate/upstream and candidate/interim factors of 1.247431/1.044650 on 29
+kernels and 1.048074/0.878774 on the selected 12-result subset. The direct
+R4/R5 paired factor is 0.992103; the bounded keep decision is accepted, with
+local-read costs documented. All 54 perf-stat invocations are valid, and six
+DWARF captures have zero lost samples. No upstream parity is established. The
+independent final evidence/report review is complete. See the
+[current report](bench/results/interpreter-architecture-20261107.md),
+[follow-up](issues/interpreter-architecture-20261107/follow-up.md) and
+[integration plan](issues/interpreter-architecture-20261107/plan.md).
+Measurements below describe the preceding batch.
 
 **Previous completed batch:** runtime HEAD `7780e32e0e2` was clean; release,
 debug and stats builds each report 117 modules, and both full suites passed

@@ -292,3 +292,22 @@ that remote copy remains at revision 7. No alternate export was attempted.
   finds coherent ownership but unfinished execution-path simplification; it
   prioritizes call preparation, shared phase/output facts, measured handler
   work, write-only call bookkeeping cleanup and the JIT recovery interface.
+- 2026-11-07 — Completed R1–R5 interpreter architecture and cleanup through
+  runtime `0953757f4e7`: dead call state removed, consuming fallback outlined,
+  direct immortal empty-varargs home, shared checked first-result publication
+  contract and bounded canonical shape-result store. Independent proposals,
+  postreviews and cold reviews resolved unsafe declaration forms before
+  admission. Both full profiles passed 54,380 tests with zero failures;
+  release/debug/stats check 117 modules and value API lint passes 306 units.
+  Direct balanced R4/R5 paired whole-kernel factor is 0.992103; keep accepted
+  with local-read regressions documented. Final candidate/upstream factors
+  are 1.247431 on 29 kernels and 1.048074 on the selected twelve-result subset;
+  candidate/interim factors are 1.044650 and 0.878774. All 54 counter runs and
+  six zero-loss profiles pass independent evidence review. Selected native
+  instructions remain 1.960x/1.720x/1.590x upstream with lower CPI. The
+  [report](bench/results/interpreter-architecture-20261107.md) records noise,
+  regressions and the remaining gap; the [follow-up](issues/interpreter-architecture-20261107/follow-up.md)
+  prioritizes shape/local emission, call-route counts and a separate first
+  recovery slice. Native JIT recovery remains planned. Removed only the
+  task-created contract worktree/branch and R4 build hardlink after retaining
+  the final patch and exact ELFs; runtime source remains clean.

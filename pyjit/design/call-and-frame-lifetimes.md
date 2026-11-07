@@ -1,9 +1,12 @@
 # Calls, frame homes and observation
 
-Reviewed contract and bounded implementation, 2026-11-06. Source: runtime
-`7780e32e0e2`. This page documents the landed A/B call paths and remaining
-shape limits. It adds no executing representation or runtime switches. See
-[compiler and IR](compiler-and-ir.md),
+Current qualification, measured tradeoffs and follow-up are in the
+[architecture batch report](../bench/results/interpreter-architecture-20261107.md).
+
+Reviewed contract and bounded implementation, 2026-11-07. The A/B call
+paths below were first documented at runtime `7780e32e0e2`; the current R1–R5
+batch is summarized next. This page records ownership and observation
+contracts, not a throughput claim. See [compiler and IR](compiler-and-ir.md),
 [observer contract](handler-and-observer-contract.md), and the
 [holistic review](../issues/interpreter-throughput/holistic-design-review.md).
 
@@ -17,6 +20,79 @@ are recorded in the
 The independent [call-path follow-up audit](../issues/interpreter-throughput/call-followup-audit.md)
 records retained GCC structure and a possible future experiment. It is static
 evidence, not a throughput result.
+
+## Current integration batch: R1–R5
+
+R1–R3 simplify call preparation while preserving caller ownership and
+fallback semantics. R4 declares the shared success-path first-output
+publication phase. R5 adds a checked canonical-source fact for one shape
+result's first temporary flush. The batch retains the owning frame-home model;
+it adds no native JIT recovery protocol. See the [R4 receipt](../issues/interpreter-architecture-20261107/integration-r4.md)
+and [R5 receipt](../issues/interpreter-architecture-20261107/integration-r5.md)
+for the implementation details, reviews and evidence. Current results establish
+no broad speedup or upstream parity.
+
+## R5 canonical-source publication
+
+`attr = IR_CANONICAL_HOME_DUP(found)` records a narrow producer fact on the
+existing frozen publication contract. The checker accepts the direct,
+unconditional assignment with one simple identifier argument and its matching
+retirement marker; existing assignment, output, and suffix checks still
+apply. The generator does not prove the C pointer provenance of `found`. The
+shape-home writer audit establishes that premise, while the intrinsic's fatal
+debug assertion checks `_PyValue_IsHome(found)` before duplication.
+
+The internal `_PyObject_StoreInstanceValue` boundary now states and asserts
+that its borrowed input is a canonical home value or NULL. In-tree object and
+generic setter adapters canonicalize object inputs; specialized shape stores
+transfer canonical frame-home owners. This writer chain is a manual source
+proof supported by the fatal assertion, not a static pointer-provenance
+checker. Rebuilt external callers of the internal API must satisfy the
+explicit precondition.
+
+Only the checked result's first temporary flush uses a direct canonical
+store. It preserves the temporary NULL/same-value assertion and debug home
+check. Folded locals still use `_PyValue_Publish` on final publication after
+receiver retirement, so callbacks can mutate the local and success replaces
+the current home. Error exits, result cleanup, refresh, companion outputs,
+and other producers retain their previous paths. The R5 change does not add
+frame state, error root maps, recovery protocols, or a method/tracing backend;
+native JIT recovery remains future work. The bounded design and proposal
+history are in the
+[canonical-output proposal](../issues/interpreter-architecture-20261107/canonical-output-boundary-proposal.md)
+and [RHS refinement](../issues/interpreter-architecture-20261107/canonical-output-rhs-review.md).
+
+## R4 first-output publication phase
+
+`IR_RETIRE_PUBLISHED_RESULT(attr, receiver)` declares one success-path fact
+for the five specialized attribute producers. The generated
+`_PyIRFormat.result_phase` is either
+`_PyIR_RESULT_PHASE_NONE` or
+`_PyIR_RESULT_PHASE_DST_TEMP_CANONICAL_BEFORE_RETIRE`. The latter describes
+only the first output and only its temporary-home case: publication occurs
+before the receiver is released. It is not a general root map, failure
+protocol, effect summary, or proof that the full handler cannot run Python.
+
+For a folded local, the old home remains owning until receiver retirement
+begins; the new result remains owned by C and is installed only after
+successful refresh. A finalizer or callback may mutate public locals during
+retirement. If retirement/refresh fails, the handler does not install its new
+result and preserves callback mutations; the helper closes the C-owned result.
+On successful completion, the final store replaces the current home and retires
+its actual displaced owner. For a temporary destination, the published home
+owns the result; the unwinder handles it after an error. The final-store
+omission applies only to the already-published temporary output.
+
+Generic `IR_COMPLETE_ATTR_READER` has the same first-output phase through the
+checked completion helper. `value_reader_complete()` and
+`value_attribute_complete()` publish/store that result before closing the
+receiver and refreshing state. Generic lookup may call Python before entering
+that helper, so the phase does not claim publication before lookup or whole-
+handler purity. The method form also publishes a second result, which this
+phase intentionally does not describe. The checker accepts only its validated
+producer sequence and effect-free, disjoint suffix; it rejects conditional or
+ambiguous result assignments, reassignment, result escape, suffix overlap,
+frame access, and releases before any later uop.
 
 ## What a home means
 

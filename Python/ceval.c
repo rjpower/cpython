@@ -786,7 +786,6 @@ typedef struct {
     int argument_count;
     _PyCallTransactionKind kind;
     int instrumented;
-    int effects;
     int monitored;
     int periodic;
     int prepared;
@@ -1556,8 +1555,7 @@ call_transaction_monitor(PyThreadState *tstate, _PyInterpreterFrame *frame,
     return status < 0 ? -1 : 0;
 }
 
-/* The transaction-record forms of the three preparations, for
- * call_transaction_run_*(), which records their effects. */
+/* The transaction-record forms of the call preparations. */
 static int
 call_record_refresh(_PyCallTransaction *call)
 {
@@ -1570,9 +1568,6 @@ call_record_expand_method(_PyCallTransaction *call)
     call->prepared = 1;
     int status = call_transaction_expand_method(call->tstate, call->frame,
                                                 call->current, call->base);
-    if (status > 0) {
-        call->effects = 1;
-    }
     return status < 0 ? -1 : 0;
 }
 
@@ -1581,7 +1576,6 @@ call_record_prepare_tuple(_PyCallTransaction *call)
 {
     assert(call->kind == CALL_TRANSACTION_EX);
     call->prepared = 1;
-    call->effects = 1;
     return call_transaction_prepare_tuple(call->tstate, call->frame,
                                           call->current, call->base);
 }
@@ -1590,7 +1584,6 @@ static int
 call_record_monitor(_PyCallTransaction *call)
 {
     assert(!call->monitored);
-    call->effects = 1;
     call->monitored = 1;
     return call_transaction_monitor(call->tstate, call->frame, call->current,
                                     call->base, call->argument_count,
@@ -1655,7 +1648,6 @@ call_transaction_native(_PyCallTransaction *call)
     PyValue callable = PyValue_NULL;
     PyValue monitor_argument = PyValue_NULL;
     int retired_count = 0, call_status = -1, to_local = 0;
-    call->effects = 1;
     if (call->instrumented && !call->monitored &&
         call_record_monitor(call) < 0) {
         return -1;
@@ -3160,7 +3152,6 @@ call_transaction_push_python(_PyCallTransaction *call,
     PyObject *locals = NULL, *names = NULL, *tuple = NULL, *kwargs = NULL;
     PyCodeObject *code = NULL;
     _PyInterpreterFrame *child = NULL;
-    call->effects = 1;
     if (call->count > (int)Py_ARRAY_LENGTH(small) / 2) {
         storage = PyMem_Malloc((size_t)call->count * 2 * sizeof(PyValue));
         if (storage == NULL) {
@@ -3335,7 +3326,6 @@ call_transaction_run(PyThreadState *tstate, _PyInterpreterFrame *frame,
         .base = base, .count = count, .destination = destination,
         .argument_count = argument_count, .kind = kind,
         .instrumented = (flags & CALL_INSTRUMENTED) != 0,
-        .effects = (flags & CALL_EFFECTS) != 0,
         .monitored = (flags & CALL_MONITORED) != 0,
         .periodic = (flags & CALL_PERIODIC) != 0,
         .prepared = (flags & CALL_PREPARED) != 0,

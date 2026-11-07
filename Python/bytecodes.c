@@ -2683,7 +2683,7 @@ dummy_func(
             attr = PyValue_XDUP(found);
             STAT_INC(LOAD_ATTR, hit);
             PyValue receiver = OWNER(owner);
-            IR_RETIRE_PUBLISHED(receiver);
+            IR_RETIRE_PUBLISHED_RESULT(attr, receiver);
         }
 
         macro(LOAD_ATTR_INSTANCE_VALUE) =
@@ -2713,7 +2713,7 @@ dummy_func(
             attr = PyValue_XDUP(found);
             STAT_INC(LOAD_ATTR, hit);
             PyValue receiver = OWNER(owner);
-            IR_RETIRE_PUBLISHED(receiver);
+            IR_RETIRE_PUBLISHED_RESULT(attr, receiver);
         }
 
         macro(LOAD_ATTR_SHAPE) =
@@ -2740,7 +2740,7 @@ dummy_func(
             attr = PyValue_XDUP(found);
             STAT_INC(LOAD_ATTR, hit);
             PyValue receiver = OWNER(owner);
-            IR_RETIRE_PUBLISHED(receiver);
+            IR_RETIRE_PUBLISHED_RESULT(attr, receiver);
         }
 
         macro(LOAD_ATTR_MODULE) =
@@ -2779,7 +2779,7 @@ dummy_func(
             STAT_INC(LOAD_ATTR, hit);
             attr = PyValue_XDUP(found);
             PyValue receiver = OWNER(owner);
-            IR_RETIRE_PUBLISHED(receiver);
+            IR_RETIRE_PUBLISHED_RESULT(attr, receiver);
         }
 
         macro(LOAD_ATTR_WITH_HINT) =
@@ -2799,7 +2799,7 @@ dummy_func(
             attr = PyValue_DUP(value);
             PyValue receiver = OWNER(owner);
             STAT_INC(LOAD_ATTR, hit);
-            IR_RETIRE_PUBLISHED(receiver);
+            IR_RETIRE_PUBLISHED_RESULT(attr, receiver);
         }
 
         macro(LOAD_ATTR_SLOT) =

@@ -150,6 +150,7 @@ def format_initializer(fmt: IRFormat, shadow: str,
         f".fb = {fmt.fb}, .ninputs = {fmt.n_inputs}, .dst = {dst}, "
         f".borrow_mask = {fmt.borrow_mask:#x}, "
         f".fb_kind = {fb_kind}, .fb_size = {fb_size}, "
+        f".result_phase = {contract.result_phase}, "
         f".reads = {extent_initializer(contract.reads)}, "
         f".writes = {extent_initializer(contract.writes)}, "
         f".through = {extent_initializer(contract.through)}, "

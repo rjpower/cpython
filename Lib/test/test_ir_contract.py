@@ -92,6 +92,25 @@ def names_with(bit, key="effects"):
 
 class ContractTests(unittest.TestCase):
 
+    def test_result_publication_phase(self):
+        phase = _opcode.IR_RESULT_PHASE_DST_TEMP_CANONICAL_BEFORE_RETIRE
+        for name in ("LOAD_ATTR_SLOT", "LOAD_ATTR_INSTANCE_VALUE",
+                     "LOAD_ATTR_SHAPE", "LOAD_ATTR_MODULE",
+                     "LOAD_ATTR_WITH_HINT", "LOAD_ATTR"):
+            with self.subTest(handler=name):
+                self.assertEqual(BY_NAME[name].result_phase, phase)
+        self.assertEqual(BY_NAME["STORE_ATTR"].result_phase,
+                         _opcode.IR_RESULT_PHASE_NONE)
+        self.assertEqual(BY_NAME["NOP"].result_phase,
+                         _opcode.IR_RESULT_PHASE_NONE)
+        for name, row in BY_NAME.items():
+            with self.subTest(handler=name):
+                self.assertIn(row.result_phase,
+                              (_opcode.IR_RESULT_PHASE_NONE, phase))
+                if row.result_phase == phase:
+                    self.assertTrue(row.flags & _opcode.IR_STORE_DST)
+                    self.assertIn(_opcode.IR_ROLE_DST, row.roles)
+
     def test_rows(self):
         self.assertEqual(len(CONTRACT), _opcode.IR_NUM_HANDLERS)
         named = {**opcode.opmap, **opcode._specialized_opmap, **opcode._ir_opmap}

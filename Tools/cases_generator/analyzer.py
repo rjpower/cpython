@@ -547,6 +547,7 @@ def has_error_without_pop(op: parser.CodeDef) -> bool:
     return (
         variable_used(op, "ERROR_NO_POP")
         or variable_used(op, "IR_RETIRE_PUBLISHED")
+        or variable_used(op, "IR_RETIRE_PUBLISHED_RESULT")
         or variable_used(op, "IR_RETIRE_PUBLISHED_PAIR")
         or variable_used(op, "IR_FINISH_VALUE_OPERATION")
         or variable_used(op, "IR_ABORT_VALUE_READER")
@@ -1031,6 +1032,7 @@ def compute_properties(op: parser.CodeDef) -> Properties:
         always_exits=always_exits(op),
         sync_sp=(variable_used(op, "SYNC_SP")
                  or variable_used(op, "IR_RETIRE_PUBLISHED")
+                 or variable_used(op, "IR_RETIRE_PUBLISHED_RESULT")
                  or variable_used(op, "IR_RETIRE_PUBLISHED_PAIR")
                  or variable_used(op, "SAVE_STACK")
                  or variable_used(op, "RELOAD_STACK")

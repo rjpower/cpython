@@ -305,7 +305,7 @@ class TestIRCases(unittest.TestCase):
                 op(_ATTR, (owner -- attr)) {{
                     attr = PyValue_DUP(owner);
                     PyValue receiver = OWNER(owner);
-                    IR_RETIRE_PUBLISHED(receiver);
+                    IR_RETIRE_PUBLISHED_RESULT(attr, receiver);
                 }}
                 op(_PUSH_NULL_CONDITIONAL, ( -- null[oparg & 1])) {{
                     if (oparg & 1) {{
@@ -316,6 +316,11 @@ class TestIRCases(unittest.TestCase):
                 """
                 analysis = self.analyze(input)
                 self.assertTrue(analysis.instructions[name].properties.sync_sp)
+                formats = ir_generator.compute_formats(analysis)
+                contract = ir_generator.handler_contracts(analysis, formats)[name]
+                self.assertEqual(
+                    contract.result_phase,
+                    ir_generator.RESULT_PHASE_DST_TEMP_CANONICAL_BEFORE_RETIRE)
                 out = io.StringIO()
                 ir_generator.generate_ir([self.temp_input_filename], analysis, out, False)
                 handler = self.handler(out.getvalue(), name)
@@ -323,7 +328,8 @@ class TestIRCases(unittest.TestCase):
                 retire = handler.index("retire_published_values(")
                 self.assertEqual(handler.count(store), 1)
                 self.assertLess(handler.index(store), retire)
-                self.assertIn("(IR_IS_LOCAL(IR_A(ir_word)) ? attr : PyValue_NULL)",
+                self.assertIn(
+                    "(IR_IS_LOCAL(IR_A(ir_word)) ? attr : PyValue_NULL)",
                               handler[retire:])
                 self.assertIn("null = &IR_SLOT(IR_A(ir_word) + 1);", handler[retire:])
                 self.assertIn("null[0] = PyValue_NULL;", handler[retire:])
@@ -332,18 +338,245 @@ class TestIRCases(unittest.TestCase):
                               handler[retire:])
                 self.assertIn("finish_displaced_local(", handler[retire:])
 
-    def test_retirement_publication_rejects_intervening_escape(self):
+    def test_retirement_publication_rejects_wrong_output(self):
+        input = """
+        inst(LOAD_ATTR_SHAPE, (owner -- other, attr)) {
+            other = PyValue_DUP(owner);
+            attr = PyValue_DUP(owner);
+            PyValue receiver = OWNER(owner);
+            IR_RETIRE_PUBLISHED_RESULT(attr, receiver);
+        }
+        """
+        with self.assertRaisesRegex(
+                SyntaxError, r"published result attr is not the scalar ROLE_DST"):
+            self.ir_output(input)
+
+    def test_retirement_publication_rejects_conditional_marker(self):
         input = """
         inst(LOAD_ATTR_SHAPE, (owner -- attr)) {
             attr = PyValue_DUP(owner);
             PyValue receiver = OWNER(owner);
-            PyObject *result = spam_call();
-            IR_RETIRE_PUBLISHED(receiver);
+            if (flag) {
+                IR_RETIRE_PUBLISHED_RESULT(attr, receiver);
+            }
         }
         """
         with self.assertRaisesRegex(
-                SyntaxError, r"code can run between OWNER\(\) and IR_RETIRE_PUBLISHED"):
+                SyntaxError, r"result marker must be a top-level final statement"):
             self.ir_output(input)
+
+    def test_retirement_publication_rejects_conditional_result_assignment(self):
+        input = """
+        inst(LOAD_ATTR_SHAPE, (owner -- attr)) {
+            if (flag) {
+                attr = PyValue_DUP(owner);
+            }
+            PyValue receiver = OWNER(owner);
+            IR_RETIRE_PUBLISHED_RESULT(attr, receiver);
+        }
+        """
+        with self.assertRaisesRegex(
+                SyntaxError, r"one unconditional top-level assignment"):
+            self.ir_output(input)
+
+    def test_retirement_publication_rejects_consumed_result(self):
+        input = """
+        inst(LOAD_ATTR_SHAPE, (owner -- attr)) {
+            attr = PyValue_DUP(owner);
+            PyValue_CLOSE(attr);
+            PyValue receiver = OWNER(owner);
+            IR_RETIRE_PUBLISHED_RESULT(attr, receiver);
+        }
+        """
+        with self.assertRaisesRegex(
+                SyntaxError, r"result attr is used before receiver retirement"):
+            self.ir_output(input)
+
+    def test_retirement_publication_rejects_comma_consumed_result(self):
+        input = """
+        inst(LOAD_ATTR_SHAPE, (owner -- attr)) {
+            attr = PyValue_DUP(owner), PyValue_CLOSE(attr);
+            PyValue receiver = OWNER(owner);
+            IR_RETIRE_PUBLISHED_RESULT(attr, receiver);
+        }
+        """
+        with self.assertRaisesRegex(
+                SyntaxError, r"result assignment must bind attr only once"):
+            self.ir_output(input)
+
+    def test_retirement_publication_rejects_conditional_expression_assignment(self):
+        input = """
+        inst(LOAD_ATTR_SHAPE, (owner -- attr)) {
+            flag ? (attr = PyValue_DUP(owner)) : PyValue_DUP(owner);
+            PyValue receiver = OWNER(owner);
+            IR_RETIRE_PUBLISHED_RESULT(attr, receiver);
+        }
+        """
+        with self.assertRaisesRegex(
+                SyntaxError, r"one unconditional top-level assignment"):
+            self.ir_output(input)
+
+    def test_retirement_publication_rejects_reassigned_receiver(self):
+        input = """
+        inst(LOAD_ATTR_SHAPE, (owner -- attr)) {
+            attr = PyValue_DUP(owner);
+            PyValue receiver = OWNER(owner);
+            receiver = PyValue_DUP(owner);
+            IR_RETIRE_PUBLISHED_RESULT(attr, receiver);
+        }
+        """
+        with self.assertRaisesRegex(
+                SyntaxError, r"unmodified top-level OWNER\(\) result"):
+            self.ir_output(input)
+
+    def test_retirement_publication_rejects_duplicate_marker(self):
+        input = """
+        inst(LOAD_ATTR_SHAPE, (owner -- attr)) {
+            attr = PyValue_DUP(owner);
+            PyValue receiver = OWNER(owner);
+            IR_RETIRE_PUBLISHED_RESULT(attr, receiver);
+            IR_RETIRE_PUBLISHED_RESULT(attr, receiver);
+        }
+        """
+        with self.assertRaisesRegex(
+                SyntaxError, r"duplicate result publication declaration"):
+            self.ir_output(input)
+
+    def test_retirement_publication_rejects_result_address(self):
+        input = """
+        inst(LOAD_ATTR_SHAPE, (owner -- attr)) {
+            attr = PyValue_DUP(owner);
+            PyValue *result = &attr;
+            PyValue receiver = OWNER(owner);
+            IR_RETIRE_PUBLISHED_RESULT(attr, receiver);
+        }
+        """
+        with self.assertRaisesRegex(
+                SyntaxError, r"address of a handler local"):
+            self.ir_output(input)
+
+    def test_retirement_publication_rejects_suffix_escape(self):
+        input = """
+        op(_ATTR, (owner -- attr)) {
+            attr = PyValue_DUP(owner);
+            PyValue receiver = OWNER(owner);
+            IR_RETIRE_PUBLISHED_RESULT(attr, receiver);
+        }
+        op(_ESCAPE, ( -- )) {
+            PyObject *result = spam_call();
+        }
+        macro(LOAD_ATTR_SHAPE) = _ATTR + _ESCAPE;
+        """
+        with self.assertRaisesRegex(
+                SyntaxError, r"publication suffix has an effect boundary"):
+            self.ir_output(input)
+
+    def test_retirement_publication_rejects_suffix_read(self):
+        input = """
+        op(_ATTR, (owner -- attr)) {
+            attr = PyValue_DUP(owner);
+            PyValue receiver = OWNER(owner);
+            IR_RETIRE_PUBLISHED_RESULT(attr, receiver);
+        }
+        op(_PASS_ATTR, (attr -- attr)) {
+            (void)0;
+        }
+        macro(LOAD_ATTR_SHAPE) = _ATTR + _PASS_ATTR;
+        """
+        with self.assertRaisesRegex(
+                SyntaxError, r"publication suffix reads the declared result"):
+            self.ir_output(input)
+
+    def test_retirement_publication_rejects_suffix_alias_read(self):
+        input = """
+        op(_ATTR, (owner -- attr)) {
+            attr = PyValue_DUP(owner);
+            PyValue receiver = OWNER(owner);
+            IR_RETIRE_PUBLISHED_RESULT(attr, receiver);
+        }
+        op(_READ, ( -- )) {
+            PyValue alias = PyValue_DUP(attr);
+        }
+        macro(LOAD_ATTR_SHAPE) = _ATTR + _READ;
+        """
+        with self.assertRaisesRegex(
+                SyntaxError, r"publication suffix references result attr"):
+            self.ir_output(input)
+
+    def test_generic_attribute_reader_phase(self):
+        input = """
+        inst(LOAD_ATTR, (owner -- attr)) {
+            PyValue receiver = TAKE(owner);
+            PyValue pending = PyValue_NULL;
+            PyValue pending_self = PyValue_NULL;
+            int method = 0;
+            IR_COMPLETE_ATTR_READER(pending, pending_self, receiver, method);
+            attr = pending;
+        }
+        """
+        analysis = self.analyze(input)
+        formats = ir_generator.compute_formats(analysis)
+        contract = ir_generator.handler_contracts(analysis, formats)["LOAD_ATTR"]
+        self.assertEqual(
+            contract.result_phase,
+            ir_generator.RESULT_PHASE_DST_TEMP_CANONICAL_BEFORE_RETIRE)
+
+    def test_generic_reader_allows_abort_cleanup(self):
+        input = """
+        inst(LOAD_ATTR, (owner -- attr)) {
+            PyValue receiver = TAKE(owner);
+            PyValue pending = PyValue_NULL;
+            PyValue pending_self = PyValue_NULL;
+            int method = 0;
+            if (PyValue_IsNull(pending)) {
+                value_operation_close3(receiver, PyValue_NULL, PyValue_NULL);
+                IR_ABORT_VALUE_READER();
+            }
+            IR_COMPLETE_ATTR_READER(pending, pending_self, receiver, method);
+            attr = pending;
+        }
+        """
+        analysis = self.analyze(input)
+        formats = ir_generator.compute_formats(analysis)
+        contract = ir_generator.handler_contracts(analysis, formats)["LOAD_ATTR"]
+        self.assertEqual(
+            contract.result_phase,
+            ir_generator.RESULT_PHASE_DST_TEMP_CANONICAL_BEFORE_RETIRE)
+
+    def test_generic_reader_rejects_consumed_inputs(self):
+        prefix = """
+        inst(LOAD_ATTR, (owner -- attr)) {
+            PyValue receiver = TAKE(owner);
+            PyValue pending = PyValue_NULL;
+            PyValue pending_self = PyValue_NULL;
+            int method = 0;
+            %s
+            IR_COMPLETE_ATTR_READER(pending, pending_self, receiver, method);
+            attr = pending;
+        }
+        """
+        phase_error = r"generic completion consumes, mutates, or addresses"
+        cases = (
+            ("PyValue_CLOSE(receiver);", "receiver release", phase_error),
+            ("PyValue_CLOSE(pending);", "pending release", phase_error),
+            ("PyValue_CLOSE(pending_self);", "pending-self release", phase_error),
+            ("value_operation_close3(receiver, PyValue_NULL, PyValue_NULL);",
+             "reader close", phase_error),
+            ("PyValue_AsKnownObjectSteal(receiver);", "view take", phase_error),
+            ("if (flag) { PyValue_CLOSE(receiver); }", "conditional release",
+             phase_error),
+            ("for (; PyValue_IsNull(TAKE(receiver)); ) { }", "loop-header take",
+             phase_error),
+            ("receiver.bits = 0;", "member mutation", phase_error),
+            ("pending += receiver;", "compound mutation", phase_error),
+            ("consume(&pending);", "address escape",
+             r"address of a handler local"),
+        )
+        for cleanup, name, diagnostic in cases:
+            with self.subTest(name=name):
+                with self.assertRaisesRegex(
+                        SyntaxError, diagnostic):
+                    self.ir_output(prefix % cleanup)
 
     def test_register_style(self):
         # Inputs that are only used as objects are read through their fields
@@ -1802,6 +2035,7 @@ class TestIRCases(unittest.TestCase):
                 "_PyIR_ROLE_LOCAL_IN, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, "
                 ".imm = _PyIR_LOC_B, .fb = _PyIR_LOC_NONE, .ninputs = 0, "
                 ".dst = 0, .borrow_mask = 0x0, .fb_kind = 0, .fb_size = 0, "
+                ".result_phase = _PyIR_RESULT_PHASE_NONE, "
                 ".reads = { 0, _PyIR_EXT_FIXED }, "
                 ".writes = { 1, _PyIR_EXT_FIXED }, "
                 ".through = { 0, _PyIR_EXT_FIXED }, .shadow = LOAD, "
@@ -1818,7 +2052,9 @@ class TestIRCases(unittest.TestCase):
             ".roles = { _PyIR_ROLE_NONE, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE, "
             "_PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, "
             ".ninputs = 0, .dst = _PyIR_NO_DST, .borrow_mask = 0x0, "
-            ".fb_kind = 0, .fb_size = 0, .reads = { 0, _PyIR_EXT_FIXED }, "
+            ".fb_kind = 0, .fb_size = 0, "
+            ".result_phase = _PyIR_RESULT_PHASE_NONE, "
+            ".reads = { 0, _PyIR_EXT_FIXED }, "
             ".writes = { 0, _PyIR_EXT_FIXED }, "
             ".through = { 0, _PyIR_EXT_FIXED }, .shadow = IR_PASS, "
             ".twin = 0, .events = 0 },",

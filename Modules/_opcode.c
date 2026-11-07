@@ -402,6 +402,7 @@ static PyStructSequence_Field ir_contract_fields[] = {
     {"borrow_mask", "bit k: input k may name a borrowed local"},
     {"fb_kind", "the kind of the feedback entry"},
     {"fb_size", "the size of the feedback entry, or 0"},
+    {"result_phase", "the first output's conditional publication phase"},
     {"reads", "the stack inputs, a (k, form) extent"},
     {"writes", "the stack outputs, a (k, form) extent"},
     {"through", "the deepest inputs left in place, a (k, form) extent"},
@@ -447,6 +448,7 @@ ir_contract_row(PyTypeObject *type, int h)
         PyLong_FromLong(fmt->borrow_mask),
         PyLong_FromLong(fmt->fb_kind),
         PyLong_FromLong(fmt->fb_size),
+        PyLong_FromLong(fmt->result_phase),
         Py_BuildValue("(ii)", fmt->reads.k, fmt->reads.form),
         Py_BuildValue("(ii)", fmt->writes.k, fmt->writes.form),
         Py_BuildValue("(ii)", fmt->through.k, fmt->through.form),
@@ -544,6 +546,9 @@ _opcode_exec(PyObject *m) {
     }
     ADD_IR_CONSTANT("IR_FIRST_ONLY_HANDLER", IR_FIRST_ONLY_HANDLER);
     ADD_IR_CONSTANT("IR_NUM_HANDLERS", IR_NUM_HANDLERS);
+    ADD_IR_CONSTANT("IR_RESULT_PHASE_NONE", _PyIR_RESULT_PHASE_NONE);
+    ADD_IR_CONSTANT("IR_RESULT_PHASE_DST_TEMP_CANONICAL_BEFORE_RETIRE",
+                    _PyIR_RESULT_PHASE_DST_TEMP_CANONICAL_BEFORE_RETIRE);
     ADD_IR_CONSTANT("IR_ROLE_NONE", _PyIR_ROLE_NONE);
     ADD_IR_CONSTANT("IR_ROLE_DST", _PyIR_ROLE_DST);
     ADD_IR_CONSTANT("IR_ROLE_BASE", _PyIR_ROLE_BASE);

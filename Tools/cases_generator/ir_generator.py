@@ -7,7 +7,7 @@ Reads the instruction definitions from Python/bytecodes.c and writes
 - Python/ir_targets.h, the prototypes of the handlers and labels and the
   table of handlers, indexed by handler.
 
-Design note boil/design/06-architecture-v2.md describes the IR, and
+Design note pyjit/design/register-ir.md describes the IR, and
 Include/internal/pycore_ir.h the word layout. In short, an instruction is one
 64-bit word: a 16-bit handler index and four 12-bit fields A, B, C and D, of
 which C and D also form a 24-bit field CD. A field names a frame slot, the
@@ -90,7 +90,8 @@ from analyzer import (
     analysis_error,
     analyze_files,
 )
-from parser import SimpleStmt
+from parser import (BlockStmt, ForStmt, IfStmt, MacroIfStmt, SimpleStmt, Stmt,
+                    WhileStmt)
 from generators_common import (
     DEFAULT_INPUT,
     NON_ESCAPING_DEALLOCS,
@@ -355,7 +356,8 @@ RELEASES = {
     "_PyValue_CLOSE_POINTER", "_PyValue_XCLOSE_POINTER", "DECREF_INPUTS",
     "Py_DECREF", "Py_XDECREF", "Py_CLEAR", "Py_SETREF", "Py_XSETREF",
     # The value and attribute transactions release the inputs they retire
-    "IR_RETIRE_PUBLISHED", "IR_RETIRE_PUBLISHED_PAIR",
+    "IR_RETIRE_PUBLISHED", "IR_RETIRE_PUBLISHED_RESULT",
+    "IR_RETIRE_PUBLISHED_PAIR",
     "IR_FINISH_VALUE_OPERATION", "IR_ABORT_VALUE_READER",
     "IR_COMPLETE_VALUE_READER", "IR_COMPLETE_ATTR_READER",
     "_PyFrame_ClearTemporaries", "_PyEval_FrameClearAndPop", "_PyErr_Clear",
@@ -2275,6 +2277,7 @@ class IREmitter(Emitter):
         self._replacers["IR_BASE"] = self.ir_base
         self._replacers["IR_WINDOW_TAKEN"] = self.ir_window_taken
         self._replacers["IR_RETIRE_PUBLISHED"] = self.retire_published
+        self._replacers["IR_RETIRE_PUBLISHED_RESULT"] = self.retire_published
         self._replacers["IR_RETIRE_PUBLISHED_PAIR"] = self.retire_published
         self._replacers["IR_FINISH_VALUE_OPERATION"] = self.finish_value_operation
         self._replacers["IR_RESTORE_VALUE_INPUTS"] = self.restore_value_inputs
@@ -2322,6 +2325,7 @@ class IREmitter(Emitter):
         self.call_flags = ""
         # The format of the handler being emitted
         self.handler_format: IRFormat | None = None
+        self.result_publication: "ResultPublicationContract | None" = None
         # Whether the handler being emitted has a value record, value_temps:
         # only a handler whose contract has BOXES does (boxing_handlers)
         self.has_record = True
@@ -2342,13 +2346,26 @@ class IREmitter(Emitter):
         first = next(tkn_iter)
         assert first.kind == "IDENTIFIER"
         second = None
+        result_name = None
         end = next(tkn_iter)
         if end.kind == "COMMA":
             second = next(tkn_iter)
             assert second.kind == "IDENTIFIER"
             end = next(tkn_iter)
+            if tkn.text == "IR_RETIRE_PUBLISHED_RESULT":
+                result_name = first.text
+                first = second
+                second = None
         assert end.kind == "RPAREN"
         assert next(tkn_iter).kind == "SEMI"
+        if tkn.text == "IR_RETIRE_PUBLISHED_RESULT":
+            contract = self.result_publication
+            if (contract is None or contract.kind != "explicit"
+                    or contract.result != result_name
+                    or contract.owner != first.text
+                    or uop is not contract.producer):
+                raise analysis_error(
+                    f"{tkn.text} has no matching checked result contract", tkn)
         for retired in (first, second):
             if self.view_field(retired, storage) is not None:
                 raise analysis_error(
@@ -2358,11 +2375,11 @@ class IREmitter(Emitter):
         storage.flush(self.out)
         self.pending_owner = None
         failure_result = "PyValue_NULL"
-        if inst.name in ("LOAD_ATTR_SLOT", "LOAD_ATTR_INSTANCE_VALUE", "LOAD_ATTR_SHAPE",
-                         "LOAD_ATTR_MODULE", "LOAD_ATTR_WITH_HINT"):
+        if tkn.text == "IR_RETIRE_PUBLISHED_RESULT":
             fmt = self.format_of(inst)
             dst = FIELD_VARS[fmt.field_of(ROLE_DST)]
-            failure_result = f"(IR_IS_LOCAL({dst}) ? attr : PyValue_NULL)"
+            failure_result = (
+                f"(IR_IS_LOCAL({dst}) ? {result_name} : PyValue_NULL)")
             assert isinstance(storage.stack, IRStack)
             storage.stack.published_temporary_result = True
         self.emit("{\n")
@@ -2423,6 +2440,11 @@ class IREmitter(Emitter):
 
     def complete_attr_reader(self, tkn, tkn_iter, uop, storage, inst):
         assert inst is not None
+        contract = self.result_publication
+        if (contract is None or contract.kind != "generic"
+                or contract.producer is not uop):
+            raise analysis_error(
+                "IR_COMPLETE_ATTR_READER has no checked result contract", tkn)
         result, self_value, receiver, method = self.macro_args(tkn, tkn_iter, 4)
         dst = FIELD_VARS[self.format_of(inst).field_of(ROLE_DST)]
         self.out.start_line()
@@ -3074,10 +3096,13 @@ class IREmitter(Emitter):
         self.check_spent_views(tokens, storage)
         texts = [t.text for t in tokens]
         if self.pending_owner is not None and self.pending_owner.text in texts \
-                and texts[0] not in ("IR_RETIRE_PUBLISHED", "IR_RETIRE_PUBLISHED_PAIR"):
+                and texts[0] not in ("IR_RETIRE_PUBLISHED",
+                                     "IR_RETIRE_PUBLISHED_RESULT",
+                                     "IR_RETIRE_PUBLISHED_PAIR"):
             raise analysis_error(
                 f"'{self.pending_owner.text}', the owner that OWNER() gave, is "
-                "NULL for a local: only IR_RETIRE_PUBLISHED may read it; "
+                "NULL for a local: only a published-retirement marker may "
+                "read it; "
                 "use TAKE()", tokens[texts.index(self.pending_owner.text)])
         for i, tkn in enumerate(tokens):
             if (tkn.text in OWNER_READS and i + 2 < len(tokens)
@@ -3515,7 +3540,8 @@ def write_uop(
     if emitter.pending_owner is not None:
         raise analysis_error(
             f"OWNER() gave '{emitter.pending_owner.text}', which no "
-            f"IR_RETIRE_PUBLISHED of {uop.name} retires", emitter.pending_owner)
+            f"IR_RETIRE_PUBLISHED marker of {uop.name} retires",
+            emitter.pending_owner)
     if braces:
         emitter.out.start_line()
         emitter.emit("}\n")
@@ -3597,6 +3623,7 @@ def generate_handler(name: str, inst: Instruction, fmt: IRFormat,
     locals; the second declares them, a view as a PyValueBorrow (S8).  A
     name with both roles is refused: the DSL gives the owner another name,
     as `taken = TAKE(value)` does."""
+    emitter.result_publication = result_publication_contract(inst, fmt)
     saved = emitter.out
     roles: dict[str, set[str]] = {}
     emitter.boxes = set()
@@ -4072,6 +4099,440 @@ class HandlerContract:
     writes: Extent
     through: Extent
     twin: str | None
+    result_phase: str
+
+
+RESULT_PHASE_NONE = "_PyIR_RESULT_PHASE_NONE"
+RESULT_PHASE_DST_TEMP_CANONICAL_BEFORE_RETIRE = (
+    "_PyIR_RESULT_PHASE_DST_TEMP_CANONICAL_BEFORE_RETIRE")
+
+
+@dataclass(frozen=True)
+class ResultPublicationContract:
+    "A checked source declaration of the first output's publication phase"
+    phase: str
+    result: str
+    owner: str | None
+    producer: Uop
+    kind: str
+
+
+def _statement_text(stmt: SimpleStmt) -> list[str]:
+    return [token.text for token in stmt.contents if token.kind != "COMMENT"]
+
+
+def _publication_result(inst: Instruction, fmt: IRFormat,
+                        result: str, producer: Uop) -> None:
+    "Check a declared result against the handler's scalar first output."
+    inputs, outputs = external_io(inst)
+    first_output = first_new_output(outputs, len(inputs))
+    producer_output = next((i for i, item in enumerate(producer.stack.outputs)
+                            if item.name == result), None)
+    if (not fmt.store_dst or fmt.window or first_output is None
+            or fmt.dst_offset != first_output or outputs[0].external >= 0
+            or fmt.field_of(ROLE_DST) is None
+            or not outputs or outputs[0].item.is_array()
+            or outputs[0].item.name != result
+            or outputs[0].aliased or result in producer.aliased_outputs
+            or producer_output != 0):
+        raise analysis_error(
+            f"{inst.name}: published result {result} is not the scalar "
+            "ROLE_DST output", inst.where)
+
+
+def _sole_top_level_assignment(uop: Uop, name: str) -> SimpleStmt | None:
+    "Return a variable's one unconditional top-level assignment, if any."
+    all_tokens = [token for token in uop.body.tokens()
+                  if token.kind != "COMMENT"]
+    assignments = [i for i, token in enumerate(all_tokens[:-1])
+                   if token.text == name
+                   and all_tokens[i + 1].kind == "EQUALS"]
+    top_level = []
+    for stmt in uop.body.body:
+        if not isinstance(stmt, SimpleStmt):
+            continue
+        tokens = [token for token in stmt.contents if token.kind != "COMMENT"]
+        direct = (len(tokens) >= 2 and tokens[0].text == name
+                  and tokens[1].kind == "EQUALS")
+        declared = (len(tokens) >= 3 and tokens[0].text == "PyValue"
+                    and tokens[1].text == name
+                    and tokens[2].kind == "EQUALS")
+        if direct or declared:
+            top_level.append(stmt)
+    if len(assignments) != 1 or len(top_level) != 1:
+        return None
+    tokens = list(uop.body.tokens())
+    for index, token in enumerate(tokens):
+        if (token.text == name and index > 0
+                and tokens[index - 1].kind == "AND"
+                and (index < 2 or tokens[index - 2].kind not in OPERANDS)):
+            return None
+    return top_level[0]
+
+
+def _owned_result_assignment(uop: Uop, name: str, source: str,
+                             before: SimpleStmt) -> bool:
+    "Whether name is assigned once from OWNER/TAKE in a top-level statement."
+    assignment = _sole_top_level_assignment(uop, name)
+    if (assignment is None or uop.body.body.index(assignment)
+            >= uop.body.body.index(before)):
+        return False
+    tokens = [item for item in assignment.contents if item.kind != "COMMENT"]
+    texts = [item.text for item in tokens]
+    return (len(texts) == 8
+            and texts[:5] == ["PyValue", name, "=", source, "("]
+            and tokens[5].kind == "IDENTIFIER"
+            and texts[6:] == [")", ";"])
+
+
+def _protected_argument_consumption_tokens(tokens: list[Token],
+                                           protected: set[str],
+                                           immutable: set[str]) -> bool:
+    consuming_callees = OWNER_READS | {"DEAD", "value_operation_close3"}
+    for index, token in enumerate(tokens):
+        if (token.kind == "AND" and index + 1 < len(tokens)
+                and tokens[index + 1].text in protected):
+            return True
+        if (token.kind == "IDENTIFIER" and token.text in protected
+                and ((index > 0 and tokens[index - 1].kind in {
+                    "PLUSPLUS", "MINUSMINUS"})
+                     or (index + 1 < len(tokens)
+                         and tokens[index + 1].kind in {
+                             "PLUSPLUS", "MINUSMINUS"}))):
+            return True
+        if (token.kind != "IDENTIFIER"
+                or not (RELEASE_LIKE.search(token.text)
+                        or token.text in consuming_callees)):
+            continue
+        if index + 1 >= len(tokens) or tokens[index + 1].kind != "LPAREN":
+            continue
+        depth = 0
+        for argument in tokens[index + 1:]:
+            if argument.kind == "LPAREN":
+                depth += 1
+            elif argument.kind == "RPAREN":
+                depth -= 1
+                if depth == 0:
+                    break
+            elif depth > 0 and argument.kind == "IDENTIFIER" \
+                    and argument.text in protected:
+                return True
+    for index, token in enumerate(tokens):
+        if token.kind not in ASSIGNMENTS:
+            continue
+        start = index - 1
+        while start >= 0 and tokens[start].kind not in {
+                "COMMA", "SEMI", "LBRACE", "RBRACE"}:
+            start -= 1
+        lhs = tokens[start + 1:index]
+        targets = [item.text for item in lhs
+                   if item.kind == "IDENTIFIER" and item.text in protected]
+        if not targets:
+            continue
+        assignable = protected - immutable
+        if (len(lhs) == 1 and targets[0] in assignable
+                and token.kind == "EQUALS"):
+            continue
+        if (len(lhs) >= 2 and lhs[-1].text in assignable
+                and lhs[-1].kind == "IDENTIFIER"
+                and token.kind == "EQUALS" and lhs[-2].text in {
+                    "PyValue", "int", "_PyStatusValue"}):
+            continue
+        return True
+    return False
+
+
+def _protected_argument_consumption(stmt: SimpleStmt,
+                                    protected: set[str],
+                                    immutable: set[str]) -> bool:
+    """Whether a simple statement consumes, mutates, or addresses a value."""
+    tokens = [token for token in stmt.contents if token.kind != "COMMENT"]
+    return _protected_argument_consumption_tokens(tokens, protected, immutable)
+
+
+def _is_flat_abort_cleanup(stmt: Stmt, protected: set[str],
+                           immutable: set[str]) -> bool:
+    """Allow only a flat cleanup branch that terminates in reader abort."""
+    if (not isinstance(stmt, IfStmt) or stmt.else_body is not None
+            or not isinstance(stmt.body, BlockStmt)):
+        return False
+    body = stmt.body.body
+    if (not body or any(not isinstance(item, SimpleStmt) for item in body)
+            or _protected_argument_consumption_tokens(
+                stmt.condition, protected, immutable)):
+        return False
+    if _statement_text(body[-1]) != ["IR_ABORT_VALUE_READER", "(", ")", ";"]:
+        return False
+    cleanup = body[:-1]
+    return bool(cleanup) and all(
+        _protected_argument_consumption(item, protected, immutable)
+        and any(token.kind == "IDENTIFIER"
+                and (RELEASE_LIKE.search(token.text)
+                     or token.text == "value_operation_close3"
+                     or token.text in VIEW_RELEASES)
+                for token in item.contents)
+        for item in cleanup)
+
+
+def _has_protected_consumption(stmt: Stmt, protected: set[str],
+                               immutable: set[str]) -> bool:
+    if isinstance(stmt, SimpleStmt):
+        return _protected_argument_consumption(stmt, protected, immutable)
+    if isinstance(stmt, IfStmt):
+        return (_protected_argument_consumption_tokens(
+                    stmt.condition, protected, immutable)
+                or _has_protected_consumption(stmt.body, protected, immutable)
+                or (stmt.else_body is not None and _has_protected_consumption(
+                    stmt.else_body, protected, immutable)))
+    if isinstance(stmt, BlockStmt):
+        return any(_has_protected_consumption(item, protected, immutable)
+                   for item in stmt.body)
+    if isinstance(stmt, (ForStmt, WhileStmt)):
+        return any(token.kind == "IDENTIFIER" and token.text in protected
+                   for token in stmt.tokens())
+    if isinstance(stmt, MacroIfStmt):
+        return ((stmt.condition.kind == "IDENTIFIER"
+                 and stmt.condition.text in protected)
+                or any(_has_protected_consumption(item, protected, immutable)
+                    for item in stmt.body)
+                or (stmt.else_body is not None and any(
+                    _has_protected_consumption(item, protected, immutable)
+                    for item in stmt.else_body)))
+    return any(token.kind == "IDENTIFIER" and token.text in protected
+               for token in stmt.tokens())
+
+
+def _validate_generic_reader_prefix(producer: Uop, call_stmt: SimpleStmt,
+                                    call_args: list[str], token: Token) -> None:
+    """Reject known input consumption except an abort-only cleanup branch."""
+    protected = set(call_args[:3])
+    immutable = {call_args[2]}
+    receiver_init = _sole_top_level_assignment(producer, call_args[2])
+    if receiver_init is None:
+        raise analysis_error(
+            "generic completion receiver must have one top-level TAKE()",
+            token)
+    call_position = producer.body.body.index(call_stmt)
+    for stmt in producer.body.body[:call_position]:
+        if stmt is receiver_init:
+            continue
+        if _is_flat_abort_cleanup(stmt, protected, immutable):
+            continue
+        if _has_protected_consumption(stmt, protected, immutable):
+            raise analysis_error(
+                "generic completion consumes, mutates, or addresses an input "
+                "on a continuing path", token)
+
+
+def _validate_publication_suffix(inst: Instruction, producer: Uop,
+                                 outputs: list[Entry], result: str) -> None:
+    "Ensure later uops preserve output zero without effects or alias escapes."
+    producer_index = inst.parts.index(producer)
+    suffix = [part for part in inst.parts[producer_index + 1:]
+              if isinstance(part, Uop)]
+    if not outputs or outputs[0].item.is_array():
+        raise analysis_error(
+            f"{inst.name}: publication result must be a scalar first output",
+            inst.where)
+    if any(item.is_array() for uop in suffix for item in uop.stack.inputs):
+        raise analysis_error(
+            f"{inst.name}: publication suffix has an array input effect",
+            inst.where)
+    if any(item.is_array() for uop in suffix[:-1] for item in uop.stack.outputs):
+        raise analysis_error(
+            f"{inst.name}: publication suffix follows a dynamic array output",
+            inst.where)
+    depth = len(outputs) - sum(len(u.stack.outputs) - len(u.stack.inputs)
+                               for u in suffix)
+    for uop in suffix:
+        p = uop.properties
+        releases = any(
+            token.kind == "IDENTIFIER" and RELEASE_LIKE.search(token.text)
+            for token in uop.body.tokens())
+        writes_frame = any(
+            token.kind == "IDENTIFIER"
+            and token.text in {"IR_SLOT", "_PyFrame_Slots", "slots", "window"}
+            for token in uop.body.tokens())
+        if (p.escapes or p.eval_breaker or p.switches_frame or p.returns
+                or releases
+                or p.error_with_pop
+                or p.error_without_pop or p.deopts or p.side_exit
+                or p.jumps or p.always_exits or writes_frame):
+            raise analysis_error(
+                f"{inst.name}: publication suffix has an effect boundary",
+                inst.where)
+        if any(token.kind == "IDENTIFIER" and token.text == result
+               for token in uop.body.tokens()):
+            raise analysis_error(
+                f"{inst.name}: publication suffix references result {result}",
+                inst.where)
+        input_count = len(uop.stack.inputs)
+        output_count = len(uop.stack.outputs)
+        base = depth - input_count
+        if any(base + i == 0 for i in range(input_count)):
+            raise analysis_error(
+                f"{inst.name}: publication suffix reads the declared result "
+                "position", inst.where)
+        if any(base + j == 0 for j in range(output_count)):
+            raise analysis_error(
+                f"{inst.name}: publication suffix overwrites the declared "
+                "result position", inst.where)
+        depth += output_count - input_count
+    if depth != len(outputs):
+        raise analysis_error(
+            f"{inst.name}: publication suffix changes the declared result "
+            "home", inst.where)
+
+
+def result_publication_contract(
+    inst: Instruction, fmt: IRFormat,
+) -> ResultPublicationContract | None:
+    "Validate the source of the first-output publication postcondition."
+    marker = "IR_RETIRE_PUBLISHED_RESULT"
+    generic = "IR_COMPLETE_ATTR_READER"
+    marker_occurrences = [
+        (part, token) for part in inst.parts if isinstance(part, Uop)
+        for token in part.body.tokens() if token.text == marker]
+    generic_occurrences = [
+        (part, token) for part in inst.parts if isinstance(part, Uop)
+        for token in part.body.tokens() if token.text == generic]
+    if len(marker_occurrences) > 1 or len(generic_occurrences) > 1:
+        raise analysis_error(
+            f"{inst.name}: duplicate result publication declaration",
+            inst.where)
+    if marker_occurrences and generic_occurrences:
+        raise analysis_error(
+            f"{inst.name}: conflicting result publication declarations",
+            inst.where)
+    if not marker_occurrences and not generic_occurrences:
+        return None
+
+    is_explicit = bool(marker_occurrences)
+    producer, token = (marker_occurrences or generic_occurrences)[0]
+    statements = producer.body.body
+    meaningful = [stmt for stmt in statements
+                  if not isinstance(stmt, SimpleStmt)
+                  or _statement_text(stmt)]
+    if is_explicit:
+        if not meaningful or not isinstance(meaningful[-1], SimpleStmt):
+            raise analysis_error(
+                f"{inst.name}: result marker must be a top-level final "
+                "statement", token)
+        declaration = meaningful[-1]
+        texts = _statement_text(declaration)
+        if (texts[0:2] != [marker, "("] or len(texts) != 7
+                or texts[3] != "," or texts[5:7] != [")", ";"]
+                or any(not re.fullmatch(r"[A-Za-z_]\w*", name)
+                       for name in (texts[2], texts[4]))):
+            raise analysis_error(
+                f"{inst.name}: expected {marker}(result, owner);", token)
+        result, owner = texts[2], texts[4]
+        if not _owned_result_assignment(producer, owner, "OWNER", declaration):
+            raise analysis_error(
+                f"{inst.name}: result marker owner must be an unmodified "
+                "top-level OWNER() result",
+                token)
+        result_assignment = _sole_top_level_assignment(producer, result)
+        if (result_assignment is None
+                or statements.index(result_assignment)
+                >= statements.index(declaration)):
+            raise analysis_error(
+                f"{inst.name}: result {result} must have one unconditional "
+                "top-level assignment before its marker",
+                token)
+        if sum(item.kind == "IDENTIFIER" and item.text == result
+               for item in result_assignment.contents) != 1:
+            raise analysis_error(
+                f"{inst.name}: result assignment must bind {result} only once",
+                token)
+        assignment_index = statements.index(result_assignment)
+        marker_index = statements.index(declaration)
+        if any(token.kind == "IDENTIFIER" and token.text == result
+               for stmt in statements[assignment_index + 1:marker_index]
+               for token in stmt.tokens()):
+            raise analysis_error(
+                f"{inst.name}: result {result} is used before receiver "
+                "retirement", token)
+        _publication_result(inst, fmt, result, producer)
+        outputs = external_io(inst)[1]
+        _validate_publication_suffix(inst, producer, outputs, result)
+        return ResultPublicationContract(
+            RESULT_PHASE_DST_TEMP_CANONICAL_BEFORE_RETIRE,
+            result, owner, producer, "explicit")
+
+    # The generic reader completes publication in a trusted helper, then
+    # assigns its first result to the handler output.
+    call_stmt = None
+    call_args: list[str] = []
+    for stmt in producer.body.body:
+        if not isinstance(stmt, SimpleStmt):
+            continue
+        items = [item.text for item in stmt.contents
+                 if item.kind != "COMMENT"]
+        if not items or items[0] != generic:
+            continue
+        if (len(items) != 11 or items[1] != "(" or items[-2:] != [")", ";"]
+                or items[3] != "," or items[5] != "," or items[7] != ","):
+            raise analysis_error(
+                f"{inst.name}: malformed {generic} arguments", token)
+        call_stmt = stmt
+        call_args = [items[2], items[4], items[6], items[8]]
+        break
+    if call_stmt is None:
+        raise analysis_error(
+            f"{inst.name}: {generic} must be a top-level statement", token)
+    call_position = producer.body.body.index(call_stmt)
+    following = [stmt for stmt in producer.body.body[call_position + 1:]
+                 if not isinstance(stmt, SimpleStmt)
+                 or _statement_text(stmt)]
+    if not following or not isinstance(following[0], SimpleStmt):
+        raise analysis_error(
+            f"{inst.name}: generic completion has no output assignment", token)
+    result_stmt = following[0]
+    assignment = _statement_text(result_stmt)
+    if (len(assignment) != 4 or assignment[1] != "="
+            or assignment[2] != call_args[0] or assignment[3] != ";"):
+        raise analysis_error(
+            f"{inst.name}: generic completion does not assign its first result",
+            token)
+    result = assignment[0]
+    if len(following) != 1:
+        raise analysis_error(
+            f"{inst.name}: generic completion must be followed directly by "
+            "its output assignment", token)
+    if result in call_args:
+        raise analysis_error(
+            f"{inst.name}: generic completion output must be distinct from "
+            "its inputs", token)
+    if _sole_top_level_assignment(producer, result) is not result_stmt:
+        raise analysis_error(
+            f"{inst.name}: generic output must have one unconditional "
+            "top-level assignment", token)
+    result_position = producer.body.body.index(result_stmt)
+    if any(token.kind == "IDENTIFIER" and token.text == result
+           for stmt in producer.body.body[:result_position]
+           for token in stmt.tokens()):
+        raise analysis_error(
+            f"{inst.name}: generic output {result} is used before completion",
+            token)
+    if (len(set(call_args)) != len(call_args)
+            or any(not re.fullmatch(r"[A-Za-z_]\w*", name)
+                   for name in call_args)):
+        raise analysis_error(
+            f"{inst.name}: {generic} arguments must name distinct values",
+            token)
+    receiver = call_args[2]
+    if not _owned_result_assignment(producer, receiver, "TAKE", call_stmt):
+        raise analysis_error(
+            f"{inst.name}: {generic} receiver must be an unmodified "
+            "top-level TAKE() result", token)
+    _validate_generic_reader_prefix(producer, call_stmt, call_args, token)
+    _publication_result(inst, fmt, result, producer)
+    outputs = external_io(inst)[1]
+    _validate_publication_suffix(inst, producer, outputs, result)
+    return ResultPublicationContract(
+        RESULT_PHASE_DST_TEMP_CANONICAL_BEFORE_RETIRE,
+        result, None, producer, "generic")
 
 
 def handler_effects(name: str, inst: Instruction, fmt: IRFormat,
@@ -4119,12 +4580,15 @@ def handler_contracts(analysis: Analysis,
     for name, inst in insts.items():
         fmt = formats[name]
         inputs, outputs = external_io(inst)
+        publication = result_publication_contract(inst, fmt)
         result[name] = HandlerContract(
             effects=handler_effects(name, inst, fmt, name in boxing),
             reads=extent(inputs, inst),
             writes=extent([e.item for e in outputs], inst),
             through=extent(through_items(inst, inputs, outputs), inst),
             twin=twin_of(name, fmt, ids),
+            result_phase=(publication.phase if publication is not None
+                          else RESULT_PHASE_NONE),
         )
     return result
 

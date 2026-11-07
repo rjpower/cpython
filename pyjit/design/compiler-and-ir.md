@@ -32,6 +32,13 @@ callers use their own frame storage. Neither path removes the need to publish
 initialized roots, preserve exception state or keep the current instruction
 position meaningful at observation points.
 
+Future-read liveness does not identify every owned reference: a slot may still
+own a value after its last program read. The compactor preserves those owners
+until consumption. Runtime GC, frame copying and error cleanup currently rely
+on every physical home containing a valid value or NULL. See the
+[call/frame lifetime contract](call-and-frame-lifetimes.md) before changing
+initialization or exporting liveness as a root map.
+
 ## Shared improvements
 
 Operation names should express useful shared contracts, not proliferate

@@ -35,8 +35,12 @@ source mechanism. Source and native stacks identify concrete contributors:
   sampled cycle period. Exact-argument calls already have a separate
   overlapping-frame fast path; a general binder rewrite is too broad.
 * **Frame-slot traffic.** The candidate initializes register homes and
-  constant slots and scans/clears the full slot array. Upstream initializes
-  locals and clears through the live stack pointer. Logging has 7.22% of
+  constant slots. Ordinary thread-frame retirement already clears locals
+  only after asserting temporaries are empty; generators, detached frames and
+  exception unwind have separate clearing paths. The earlier full-slot
+  description was too broad; the [holistic review](../interpreter-throughput/holistic-design-review.md)
+  corrects it. Upstream initializes locals and clears through its live stack
+  pointer. Logging has 7.22% of
   sampled cycle period in an unresolved memset-shaped libc routine directly
   under frame initialization, on both exact and generic call paths. Clearing
   frames costs additional time in both runtimes. Slots cannot be left unsafe

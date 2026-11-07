@@ -31,6 +31,7 @@ flowchart TD
 | --- | --- |
 | [Compiler and IR](compiler-and-ir.md) | compile/codegen/flowgraph → regcfg/regcfg_passes → assemble; physical frame homes, liveness and generated formats |
 | [Interpreter](handler-and-observer-contract.md) | bytecodes and cases generators → ceval; dispatch, frames, effects, specialization and observation |
+| [Calls and frame homes](call-and-frame-lifetimes.md) | Frame stack, prepare/commit ownership transfer, initialized homes versus future-read liveness, and observation boundaries |
 | [Values and objects](values-and-object-protocol.md) | Canonical scalar/object encoding, managed storage, attributes and ownership boundaries |
 | [Memory and lifetimes](gc-roots-and-lifetimes.md) | Reference counting, cyclic traversal, release/reentry and weakref/finalization contracts |
 | [PyValue](pyvalue.md) | Accepted ([review](reviews/pyvalue-review-1.md)). Canonical spec for the eight-byte value: as-built encoding, comparison with other engines, prioritised gaps |

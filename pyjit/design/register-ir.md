@@ -12,19 +12,36 @@ the first revision, and review 2
 ([reviews/register-ir-review-2.md](reviews/register-ir-review-2.md)) the
 second.
 
-**Current implementation, 2026-11-06.** Runtime HEAD `6a0e4c12c17` builds and
-executes the register interpreter in debug, release and stats configurations.
-Release and debug full suites each pass 54,351 tests with no failures. The
-current 87-record kernel capture has 18/29 startup-inclusive raw-zero kernels
-and zero loop deltas for all 29; the strict gate fails. The full R27 census
-also fails with 11,028,818 core/core-pending/unresolved boxes and incomplete
+**Current implementation, 2026-11-06.** Runtime HEAD is `7780e32e0e2`; the
+register-IR encoding and 64-bit instruction format described below are
+unchanged. Release, debug and stats builds report 117 modules each. Release
+and debug full suites both pass 54,361 tests with no failures. The current
+calls/frame/publication integration and its limits are recorded in the
+[Integration C receipt](../issues/interpreter-throughput/integration-c.md) and
+[call/frame contract](call-and-frame-lifetimes.md). The final matched
+performance campaign is running; this note makes no new performance or census
+claim. The zero-box criterion remains diagnostic, not a performance-admission
+gate.
+
+**Historical checkpoint evidence, runtime `6a0e4c12c17`.** That runtime built
+and executed the register interpreter in debug, release and stats
+configurations. Release and debug full suites each passed 54,351 tests with no
+failures. Its 87-record kernel capture had 18/29 startup-inclusive raw-zero
+kernels and zero loop deltas for all 29; the strict gate failed. Its full R27
+census failed with 11,028,818 core/core-pending/unresolved boxes and incomplete
 process accounting. See the [kernel receipt](../issues/checkpoint-closure/kernels-6a0e4c12c17.md),
 [full census](../issues/checkpoint-closure/full-census-6a0e4c12c17.md) and
-[checkpoint plan](../issues/checkpoint-closure/plan.md). The source baseline
-and comparative tables below are dated evidence; their statement that the tree
-does not link describes November 3, not the current runtime.
+[checkpoint plan](../issues/checkpoint-closure/plan.md). Source baseline and
+comparative tables below are dated evidence; the statement that the tree does
+not link describes November 3, not the current runtime.
 
-The matched JIT-off [performance report](../bench/results/checkpoint-6a0e4c12c17.md)
+For the current call-transfer and frame-home contract, see
+[call-and-frame-lifetimes.md](call-and-frame-lifetimes.md). The independent
+[holistic interpreter review](../issues/interpreter-throughput/holistic-design-review.md)
+records the architecture assessment and reviewed improvement sequence.
+
+**Historical performance evidence at `6a0e4c12c17`.** The matched JIT-off
+[performance report](../bench/results/checkpoint-6a0e4c12c17.md)
 finds candidate/upstream elapsed-time factors of 1.287 over 29 kernels and
 1.096 over the declared 12-result subset. This interpreter is not yet
 competitive overall. Hardware counters on three selected regressions show
@@ -50,9 +67,10 @@ Handler-domain instrumentation is qualified. Runtime `812cba08f4b` has the
 H3 full-handler-domain producer and strict reader: the generated domain,
 dispatch entries and counter arrays agree. The `kernels-66981c963be` capture
 is historical: 15 of 29 kernels had zero boxes in every raw process, with
-zero loop deltas across all 29. The current `kernels-6a0e4c12c17` receipt has
-18/29 startup-inclusive raw-zero kernels and zero loop deltas across all 29;
-strict admission fails. The earlier `kernels-b9888ea3b40` capture used source later
+zero loop deltas across all 29. At the historical `6a0e4c12c17` checkpoint,
+the kernel receipt recorded 18/29 startup-inclusive raw-zero kernels and zero
+loop deltas across all 29; strict admission failed. The earlier
+`kernels-b9888ea3b40` capture used source later
 committed as `b9888ea3b40`, while its embedded version retained the predecessor
 dirty identity. See [status](../STATUS.md) for paths and identity caveats. The
 startup-inclusive PyValue gate remains open. The earlier `4fffee855c9` census

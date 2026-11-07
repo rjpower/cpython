@@ -12,7 +12,7 @@ Change producers and consumers together; guessed opcode ranges are invalid.
 
 ## Dispatch and state
 
-GCC computed dispatch is the qualified interim implementation. Generated C
+The register interpreter uses generated tail-call handlers under GCC. Generated C
 does not explicitly control hardware register assignments as LuaJIT's assembly
 does. Evaluate emitted code, dispatch, slot traffic, code density and elapsed
 performance rather than assuming the IR or C compiler gets them right.
@@ -22,6 +22,9 @@ homes on success and failure. Calls, returns, yield/resume, unwind and redispatc
 use the actual current frame. Thread-owned call windows may share frame storage;
 generator-owned frames have separate storage. Both obey the same value/ownership
 contract. [Values](values-and-object-protocol.md) explains the restoration target.
+The [call/frame lifetime contract](call-and-frame-lifetimes.md) distinguishes
+initialized homes, owned references and future-read liveness, and defines the
+prepare/guard/commit boundary for overlapping calls.
 
 ## Reentry and observation
 
@@ -30,6 +33,26 @@ owning inputs before them. Stage a result, publish actual caller state, release
 retired owners in semantic order, then revalidate frame, instruction and observer
 state before decoding again. An old decoded pointer is not valid merely because
 the result has been published. Deallocators preserve the entry exception.
+
+`IR_RETIRE_PUBLISHED` and its pair form own input consumption and result
+publication before receiver/displaced-owner release. Specialized attribute
+loads do not issue a separate `SYNC_SP` immediately before them. The macro
+keeps a folded-local result in C until retirement and preserves the final
+destination write. Both retirement markers imply synchronization in generated
+analysis metadata. This local contract replaces remembering publication state
+across generator branches or callbacks; actual reentry still requires refresh.
+See the [source review](../issues/interpreter-throughput/publication-review.md).
+
+For the five specialized attribute-load paths, the generator also has a narrow
+postcondition after receiver retirement: the unchanged result remains published
+to its temporary home. Integration C reuses the existing
+`published_temporary_result` fact to omit only the final duplicate temporary
+store. The folded-local path still writes the result after retirement, when
+replacing the old local can release its owner. This fact is specific to those
+reviewed flows and does not authorize carrying publication knowledge across a
+later reassignment, home change, or callback. See the
+[final-publication review](../issues/interpreter-throughput/final-publication-review.md)
+and [Integration C receipt](../issues/interpreter-throughput/integration-c.md).
 
 Specialization must guard receiver behavior, representation, shape/type version
 and descriptor precedence as applicable. Keep generic behavior and recovery for

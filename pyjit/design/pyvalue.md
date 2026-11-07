@@ -5,18 +5,29 @@ instance fields and value-native C APIs. This page specifies the encoding as
 built, compares it with other dynamic-language runtimes, and lists the gaps
 we should close. It is the reference for value, container and C-boundary work.
 
-**Current rollout, 2026-11-06.** Runtime HEAD is `6a0e4c12c17`; it has the
-55-row value-slot table, including `new_` and `init_` (16 hot, 39 cold),
-type-call dispatch and direct initializer wrappers. Release and debug full
-suites both pass 54,351 tests with no failures. The integration cohort's 14 focused
-startup/hot-zero probes report zero boxes, but the full R27 census still fails
-with 11,028,818 core/core-pending/unresolved boxes and incomplete process
-accounting. The 6a kernel receipt records 18/29 startup-inclusive raw-zero
-kernels and 29/29 zero loop deltas; strict admission fails. See the [full
+**Current implementation, 2026-11-06.** Runtime HEAD is `7780e32e0e2`.
+The eight-byte PyValue format is unchanged. Release, debug and stats builds
+report 117 modules each; release and debug full suites pass 54,361 tests with
+no failures. Current integration adds reviewed call/frame transfer and
+generated-publication improvements; see the [Integration C receipt](../issues/interpreter-throughput/integration-c.md)
+and [call/frame contract](call-and-frame-lifetimes.md). The final matched
+performance campaign is running; no performance result or new boxing census
+is claimed here. The zero-box criterion remains diagnostic, not a
+performance-admission gate.
+
+**Historical rollout evidence at `6a0e4c12c17`.** That runtime had the 55-row
+value-slot table, including `new_` and `init_` (16 hot, 39 cold), type-call
+dispatch and direct initializer wrappers. Its full release/debug suites each
+passed 54,351 tests. The integration cohort's 14 focused startup/hot-zero
+probes reported zero boxes, but the full R27 census failed with 11,028,818
+core/core-pending/unresolved boxes and incomplete process accounting. The 6a
+kernel receipt recorded 18/29 startup-inclusive raw-zero kernels and 29/29
+zero loop deltas; strict admission failed. See the [full
 census](../issues/checkpoint-closure/full-census-6a0e4c12c17.md), [kernel
 receipt](../issues/checkpoint-closure/kernels-6a0e4c12c17.md), and
 [checkpoint plan](../issues/checkpoint-closure/plan.md). The 1ab ordinary-class
-100-box probe and wrapper proposal below are historical, superseded evidence.
+100-box probe and wrapper proposal below are also historical, superseded
+evidence.
 
 **Historical rollout snapshot, 2026-11-05.** Runtime `d6eae4b1c1c` uses this value format
 and builds in debug, release and stats configurations. The source snapshot

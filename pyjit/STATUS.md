@@ -1,7 +1,23 @@
 # Project status
 
-Live status, 2026-11-06: runtime HEAD is `6a0e4c12c17` (constructor and format
-work), following `05286694774` (native child accounting).
+Live status, 2026-11-06: runtime HEAD is `7780e32e0e2` (Integration C,
+final attribute publication), and the runtime worktree is clean. Release,
+debug and stats build identities match this source; all three report 117
+modules. Release and debug suites both passed 54,361 tests with no failures
+(release: 2,467 skips in 3m05s; debug: 2,405 skips in 9m11s). Across each,
+616/627 files passed and 79 were skipped, including 11 resource-denied skips.
+Integration C has passed the functional suite gate. The final 29-kernel and
+pyperformance comparisons are running serially; no performance conclusion is
+available yet. Follow the
+[Integration C receipt](issues/interpreter-throughput/integration-c.md) and
+[throughput follow-up](issues/interpreter-throughput/follow-up.md) for the
+current stage.
+
+## Historical checkpoint: runtime 6a0e4c12c17
+
+The following zero-box census and measurement results describe the earlier
+`6a0e4c12c17` checkpoint, not the current runtime.
+
 All five build-info objects match their respective source HEADs: upstream
 `3a440b65695`, interim `eba351fee7d`, and candidate `6a0e4c12c17`. Module
 rosters are 116/116/117. Both full profiles passed 54,351 tests with no

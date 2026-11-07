@@ -1,11 +1,26 @@
 # Coordinator handoff
 
-Runtime HEAD is `6a0e4c12c17` (constructor and format work), following
-`05286694774` (native child accounting). All five build-info objects match
-their respective source HEADs: upstream `3a440b65695`, interim `eba351fee7d`,
-and candidate `6a0e4c12c17`. Module rosters are 116/116/117. The full release
-suite and debug suite both passed 54,351 tests with no failures (release: 2,531
-skips; debug: 2,469). The strict whole-source R27 census failed: 6,512 dumps
+Current runtime HEAD is `7780e32e0e2` (Integration C, final attribute
+publication); the runtime worktree is clean. Release, debug and stats build
+identities match this source and each reports 117 modules. Release and debug
+suites both passed 54,361 tests with no failures (release: 2,467 skips in
+3m05s; debug: 2,405 skips in 9m11s). Across each, 616/627 files passed and 79
+were skipped, including 11 resource-denied skips. Integration C has passed
+the functional suite gate. Final 29-kernel and pyperformance comparisons are
+running serially; no performance conclusion is available yet. See the
+[current status](STATUS.md), [Integration C receipt](issues/interpreter-throughput/integration-c.md)
+and [throughput follow-up](issues/interpreter-throughput/follow-up.md).
+
+## Historical checkpoint: runtime 6a0e4c12c17
+
+The following census and measurement results describe the earlier
+`6a0e4c12c17` checkpoint, not the current runtime.
+
+All five build-info objects match their respective source HEADs: upstream
+`3a440b65695`, interim `eba351fee7d`, and candidate `6a0e4c12c17`. Module
+rosters are 116/116/117. The full release suite and debug suite both passed
+54,351 tests with no failures (release: 2,531 skips; debug: 2,469). The strict
+whole-source R27 census failed: 6,512 dumps
 contain 11,028,818 core/core-pending/unresolved boxes and process
 identity/accounting is incomplete. The raw kernel capture completed with 87
 records across 29 kernels: 18/29 are startup-inclusive raw-zero and all loop

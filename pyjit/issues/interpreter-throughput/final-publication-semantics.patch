@@ -1,0 +1,11 @@
+--- a/Lib/test/test_ir.py
++++ b/Lib/test/test_ir.py
+@@ -182,6 +182,8 @@
+                         result = read(factory, cls, Old)
+                     finally:
+                         observe = False
++                    if SPECIALIZES:
++                        self.assertIn(expected_handler, handlers(read))
+                     self.assertIs(result, references[-1]())
+                     self.assertEqual(events, [("receiver", local, True)] +
+                                      ([("old", True)] if local else []))

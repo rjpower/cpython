@@ -297,6 +297,38 @@ class TestIRCases(unittest.TestCase):
     def run_ir_test(self, input: str, expected: str):
         self.assertEqual(self.ir_output(input).strip(), expected.strip())
 
+    def test_retirement_flush_reuses_published_temporary(self):
+        input = """
+        inst(LOAD_ATTR_SHAPE, (owner -- attr)) {
+            attr = PyValue_DUP(owner);
+            PyValue receiver = OWNER(owner);
+            IR_RETIRE_PUBLISHED(receiver);
+        }
+        """
+        analysis = self.analyze(input)
+        self.assertTrue(analysis.instructions["LOAD_ATTR_SHAPE"].properties.sync_sp)
+        out = io.StringIO()
+        ir_generator.generate_ir([self.temp_input_filename], analysis, out, False)
+        handler = self.handler(out.getvalue(), "LOAD_ATTR_SHAPE")
+        store = "IR_STORE_TEMP_DST(IR_A(ir_word), attr);"
+        retire = handler.index("retire_published_values(")
+        self.assertEqual(handler.count(store), 1)
+        self.assertLess(handler.index(store), retire)
+        self.assertIn("IR_STORE_DST(IR_A(ir_word), attr);", handler[retire:])
+
+    def test_retirement_publication_rejects_intervening_escape(self):
+        input = """
+        inst(LOAD_ATTR_SHAPE, (owner -- attr)) {
+            attr = PyValue_DUP(owner);
+            PyValue receiver = OWNER(owner);
+            PyObject *result = spam_call();
+            IR_RETIRE_PUBLISHED(receiver);
+        }
+        """
+        with self.assertRaisesRegex(
+                SyntaxError, r"code can run between OWNER\(\) and IR_RETIRE_PUBLISHED"):
+            self.ir_output(input)
+
     def test_register_style(self):
         # Inputs that are only used as objects are read through their fields
         # and may be borrowed locals.  (The result of a call that runs no

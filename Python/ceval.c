@@ -3052,12 +3052,105 @@ _PyEvalFramePushAndInit_Ex(PyThreadState *tstate, PyValue func,
     return frame;
 }
 
+/* The caller owns its whole window until the final non-reentrant commit. */
+static int
+call_transaction_overlap_python(_PyCallTransaction *call,
+                                _PyInterpreterFrame **out)
+{
+#ifdef Py_GIL_DISABLED
+    return 1;
+#else
+    if (call->kind != CALL_TRANSACTION_VECTOR || call->instrumented ||
+        call->frame->owner != FRAME_OWNED_BY_THREAD) {
+        return 1;
+    }
+    PyValue *homes = _PyFrame_Slots(call->frame) + call->base;
+    PyFunctionObject *func = (PyFunctionObject *)PyValue_AsKnownObjectBorrow(homes[0]);
+    PyCodeObject *code = (PyCodeObject *)func->func_code;
+    int offset = PyValue_IsNull(homes[1]) ? 2 : 1;
+    int nargs = call->argument_count + 2 - offset;
+    int flags = code->co_flags;
+    PyObject *defaults = func->func_defaults;
+    Py_ssize_t ndefaults = defaults == NULL ? 0 : PyTuple_GET_SIZE(defaults);
+    if (!(flags & CO_OPTIMIZED) || code->co_kwonlyargcount ||
+        nargs > code->co_argcount || nargs < code->co_argcount - ndefaults ||
+        code->_co_exec == NULL ||
+        !_PyThreadState_HasStackSpace(call->tstate, code->co_framesize)) {
+        return 1;
+    }
+
+    /* Allocation can run Python. Pin the selected code and revalidate after
+     * preparing kwargs; no window owner has been detached yet. */
+    PyObject *kwdict = NULL;
+    int status = 1;
+    Py_INCREF(code);
+    if (flags & CO_VARKEYWORDS) {
+        kwdict = PyDict_New();
+        if (kwdict == NULL || call_record_refresh(call) < 0) {
+            status = -1;
+            goto cleanup;
+        }
+    }
+    homes = _PyFrame_Slots(call->frame) + call->base;
+    if (!PyValue_IsObject(homes[0]) ||
+        Py_TYPE(PyValue_AsKnownObjectBorrow(homes[0])) != &PyFunction_Type ||
+        (PyObject *)func != PyValue_AsKnownObjectBorrow(homes[0]) ||
+        func->func_code != (PyObject *)code ||
+        func->vectorcall != _PyFunction_Vectorcall ||
+        IS_PEP523_HOOKED(call->tstate) || code->_co_exec == NULL ||
+        !_PyThreadState_HasStackSpace(call->tstate, code->co_framesize)) {
+        goto cleanup;
+    }
+    defaults = func->func_defaults;
+    ndefaults = defaults == NULL ? 0 : PyTuple_GET_SIZE(defaults);
+    if (nargs < code->co_argcount - ndefaults ||
+        offset != (PyValue_IsNull(homes[1]) ? 2 : 1)) {
+        goto cleanup;
+    }
+    Py_DECREF(code);  /* The function still owns it. */
+
+    /* No callback, release or failure is allowed until child is current. */
+    PyValue function = homes[0];
+    homes[0] = PyValue_NULL;
+    _PyInterpreterFrame *child = _PyFrame_PushOverlapping(
+        call->tstate, function, homes + offset, nargs, call->frame);
+    for (int i = nargs; i < code->co_argcount; i++) {
+        child->base[i] = PyValue_XDUP(
+            _PyTuple_ITEMS(defaults)[i - (code->co_argcount - ndefaults)]);
+    }
+    int extra = code->co_argcount;
+    if (flags & CO_VARARGS) {
+        child->base[extra++] = PyValue_DUP(PyValue_FromObjectBorrow(
+            (PyObject *)&_Py_SINGLETON(tuple_empty)));
+    }
+    if (flags & CO_VARKEYWORDS) {
+        child->base[extra] = PyValue_FromObjectSteal(kwdict);
+    }
+    call->frame->return_slot = (uint16_t)call->destination;
+    call->tstate->current_frame = child;
+    *out = child;
+    return 0;
+
+cleanup:
+    Py_XDECREF(kwdict);
+    Py_DECREF(code);
+    if (call_record_refresh(call) < 0) {
+        return -1;
+    }
+    return status;
+#endif
+}
+
 /* Parent inputs are never offered to a consuming binder. Copies can fail
  * and retire while the parent's actual IN_CALL homes remain owning. */
 static int
 call_transaction_push_python(_PyCallTransaction *call,
                              _PyInterpreterFrame **out)
 {
+    int overlap = call_transaction_overlap_python(call, out);
+    if (overlap <= 0) {
+        return overlap;
+    }
     PyValue small[16];
     PyValue *storage = small;
     int copied = 0, retired_count = 0;

@@ -16,6 +16,7 @@ try:
     import _testinternalcapi
 except ImportError:
     _testinternalcapi = None
+import sys
 import struct
 import collections
 import itertools
@@ -33,6 +34,112 @@ class BadStr(str):
 
 
 class FunctionCalls(unittest.TestCase):
+
+    def test_positional_defaults_and_empty_variadics(self):
+        sentinel = object()
+
+        def target(first, second=sentinel, /, *args, **kwargs):
+            return first, second, args, kwargs
+
+        first = target(sentinel)
+        second = target(sentinel)
+        self.assertEqual(first[:3], (sentinel, sentinel, ()))
+        self.assertEqual(first[3], {})
+        self.assertIsNot(first[3], second[3])
+        first[3]["kept"] = sentinel
+        self.assertEqual(second[3], {})
+        self.assertEqual(target(1, 2, 3, key=4), (1, 2, (3,), {"key": 4}))
+
+        class Receiver:
+            def method(self, value=sentinel, *args, **kwargs):
+                return self, value, args, kwargs
+
+        receiver = Receiver()
+        receiver.method()  # Prepare the callee before checking the overlap path.
+        self.assertEqual(receiver.method(), (receiver, sentinel, (), {}))
+
+    def test_positional_default_mutation_and_generator_caller(self):
+        def target(value=1, **kwargs):
+            return value, kwargs
+
+        self.assertEqual(target(), (1, {}))
+        target.__defaults__ = (2,)
+        self.assertEqual(target(), (2, {}))
+
+        def caller():
+            yield target()
+
+        self.assertEqual(next(caller()), (2, {}))
+        with self.assertRaises(TypeError):
+            target(1, 2)
+
+
+    def test_positional_frame_and_tracing(self):
+        seen = []
+
+        def target(value=1, **kwargs):
+            caller = sys._getframe(1)
+            seen.append((caller.f_code.co_name, value, kwargs))
+            return value
+
+        def caller():
+            return target()
+
+        self.assertEqual(caller(), 1)
+        self.assertEqual(seen[-1], ("caller", 1, {}))
+
+        def trace(frame, event, arg):
+            if event == "call" and frame.f_code is caller.__code__:
+                target.__defaults__ = (2,)
+            return trace
+
+        old_trace = sys.gettrace()
+        try:
+            sys.settrace(trace)
+            self.assertEqual(caller(), 2)
+        finally:
+            sys.settrace(old_trace)
+        self.assertEqual(seen[-1], ("caller", 2, {}))
+
+    def test_positional_retained_frame_and_generator_callee(self):
+        def frame_target(value=7, **kwargs):
+            return sys._getframe()
+
+        frame_target()
+        frame = frame_target()
+        self.assertEqual(frame.f_locals["value"], 7)
+        self.assertEqual(frame.f_locals["kwargs"], {})
+
+        def gen_target(value=8, *args, **kwargs):
+            yield value, args, kwargs
+
+        self.assertEqual(next(gen_target()), (8, (), {}))
+        first = gen_target()
+        second = gen_target()
+        a = next(first)
+        b = next(second)
+        self.assertEqual(a[:2], (8, ()))
+        self.assertEqual(a[2], {})
+        self.assertIsNot(a[2], b[2])
+
+    def test_positional_argument_lifetime(self):
+        released = []
+
+        class Value:
+            def __del__(self):
+                released.append("released")
+
+        def target(value, default=None, *args, **kwargs):
+            self.assertEqual(released, [])
+            return value
+
+        target(None)  # The first call prepares the callee's executable.
+        value = Value()
+        result = target(value)
+        del value
+        self.assertEqual(released, [])
+        del result
+        self.assertEqual(released, ["released"])
 
     def test_type_non_string_kwargs_keep_vectorcall_validation(self):
         bad_kwargs = {None: 1}

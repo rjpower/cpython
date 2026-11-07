@@ -2683,7 +2683,6 @@ dummy_func(
             attr = PyValue_XDUP(found);
             STAT_INC(LOAD_ATTR, hit);
             PyValue receiver = OWNER(owner);
-            SYNC_SP();
             IR_RETIRE_PUBLISHED(receiver);
         }
 
@@ -2714,7 +2713,6 @@ dummy_func(
             attr = PyValue_XDUP(found);
             STAT_INC(LOAD_ATTR, hit);
             PyValue receiver = OWNER(owner);
-            SYNC_SP();
             IR_RETIRE_PUBLISHED(receiver);
         }
 
@@ -2742,7 +2740,6 @@ dummy_func(
             attr = PyValue_XDUP(found);
             STAT_INC(LOAD_ATTR, hit);
             PyValue receiver = OWNER(owner);
-            SYNC_SP();
             IR_RETIRE_PUBLISHED(receiver);
         }
 
@@ -2782,7 +2779,6 @@ dummy_func(
             STAT_INC(LOAD_ATTR, hit);
             attr = PyValue_XDUP(found);
             PyValue receiver = OWNER(owner);
-            SYNC_SP();
             IR_RETIRE_PUBLISHED(receiver);
         }
 
@@ -2803,7 +2799,6 @@ dummy_func(
             attr = PyValue_DUP(value);
             PyValue receiver = OWNER(owner);
             STAT_INC(LOAD_ATTR, hit);
-            SYNC_SP();
             IR_RETIRE_PUBLISHED(receiver);
         }
 

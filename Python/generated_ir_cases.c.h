@@ -12527,7 +12527,6 @@
                 ir_own_B = IR_CONSUME_INPUT(IR_B(ir_word), owner);
                 PyValue receiver = ir_own_B;
                 IR_STORE_TEMP_DST(IR_A(ir_word), attr);
-                IR_STORE_TEMP_DST(IR_A(ir_word), attr);
                 {
                     int retire_needed = _PyValue_MayDealloc(receiver);
                     if (!retire_needed) {
@@ -12819,7 +12818,6 @@
                 STAT_INC(LOAD_ATTR, hit);
                 ir_own_B = IR_CONSUME_INPUT(IR_B(ir_word), owner);
                 PyValue receiver = ir_own_B;
-                IR_STORE_TEMP_DST(IR_A(ir_word), attr);
                 IR_STORE_TEMP_DST(IR_A(ir_word), attr);
                 {
                     int retire_needed = _PyValue_MayDealloc(receiver);
@@ -13125,7 +13123,6 @@
                 ir_own_B = IR_CONSUME_INPUT(IR_B(ir_word), owner);
                 PyValue receiver = ir_own_B;
                 IR_STORE_TEMP_DST(IR_A(ir_word), attr);
-                IR_STORE_TEMP_DST(IR_A(ir_word), attr);
                 {
                     int retire_needed = _PyValue_MayDealloc(receiver);
                     if (!retire_needed) {
@@ -13209,7 +13206,6 @@
                 ir_own_B = IR_CONSUME_INPUT(IR_B(ir_word), owner);
                 PyValue receiver = ir_own_B;
                 STAT_INC(LOAD_ATTR, hit);
-                IR_STORE_TEMP_DST(IR_A(ir_word), attr);
                 IR_STORE_TEMP_DST(IR_A(ir_word), attr);
                 {
                     int retire_needed = _PyValue_MayDealloc(receiver);
@@ -13334,7 +13330,6 @@
                 attr = PyValue_XDUP(found);
                 ir_own_B = IR_CONSUME_INPUT(IR_B(ir_word), owner);
                 PyValue receiver = ir_own_B;
-                IR_STORE_TEMP_DST(IR_A(ir_word), attr);
                 IR_STORE_TEMP_DST(IR_A(ir_word), attr);
                 {
                     int retire_needed = _PyValue_MayDealloc(receiver);

@@ -2336,20 +2336,6 @@ class IREmitter(Emitter):
             return self.handler_format
         return self.formats[inst.name]
 
-    def sync_sp(self, tkn, tkn_iter, uop, storage, inst):
-        if inst is None or inst.name not in (
-                "LOAD_ATTR_SLOT", "LOAD_ATTR_INSTANCE_VALUE", "LOAD_ATTR_SHAPE",
-                "LOAD_ATTR_MODULE", "LOAD_ATTR_WITH_HINT"):
-            return super().sync_sp(tkn, tkn_iter, uop, storage, inst)
-        next(tkn_iter)
-        next(tkn_iter)
-        next(tkn_iter)
-        storage.clear_inputs("before published receiver retirement")
-        storage.flush(self.out)
-        # A folded local must keep its computed owning result in C until
-        # receiver retirement. Its old destination is still observable.
-        return True
-
     def retire_published(self, tkn, tkn_iter, uop, storage, inst):
         assert inst is not None
         assert next(tkn_iter).kind == "LPAREN"
@@ -2363,12 +2349,13 @@ class IREmitter(Emitter):
             end = next(tkn_iter)
         assert end.kind == "RPAREN"
         assert next(tkn_iter).kind == "SEMI"
-        storage.flush(self.out)
         for retired in (first, second):
             if self.view_field(retired, storage) is not None:
                 raise analysis_error(
                     f"{tkn.text}({retired.text}) of a view: retire its "
                     f"OWNER()", retired)
+        storage.clear_inputs("before published receiver retirement")
+        storage.flush(self.out)
         self.pending_owner = None
         failure_result = "PyValue_NULL"
         if inst.name in ("LOAD_ATTR_SLOT", "LOAD_ATTR_INSTANCE_VALUE", "LOAD_ATTR_SHAPE",

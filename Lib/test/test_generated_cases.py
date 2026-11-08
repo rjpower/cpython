@@ -2453,7 +2453,8 @@ class TestCallTransactionMarkers(unittest.TestCase):
     def test_real_callout_and_transfer_properties(self):
         for name in ("_MAYBE_EXPAND_METHOD", "_MONITOR_CALL",
                      "_MAKE_CALLARGS_A_TUPLE", "_DO_CALL", "_PY_FRAME_GENERAL",
-                     "_DO_CALL_KW", "_PY_FRAME_KW", "_DO_CALL_FUNCTION_EX"):
+                     "_PY_FRAME_GENERAL_GUARDED", "_DO_CALL_KW", "_PY_FRAME_KW",
+                     "_DO_CALL_FUNCTION_EX"):
             with self.subTest(name=name):
                 uop = self.analysis.uops[name]
                 self.assertTrue(uop.properties.escapes)
@@ -2462,9 +2463,10 @@ class TestCallTransactionMarkers(unittest.TestCase):
                 self.assertTrue(uop.properties.sync_sp)
                 self.assertTrue(uop.properties.needs_this)
                 self.assertFalse(uop.is_viable())
-        invoke = self.analysis.uops["_DO_CALL"].properties
-        self.assertTrue(invoke.always_exits)
-        self.assertTrue(invoke.switches_frame)
+        for name in ("_DO_CALL", "_PY_FRAME_GENERAL_GUARDED"):
+            invoke = self.analysis.uops[name].properties
+            self.assertTrue(invoke.always_exits)
+            self.assertTrue(invoke.switches_frame)
         self.assertFalse(self.analysis.uops["_MONITOR_CALL"].properties.always_exits)
 
     def test_pure_latch_and_unrelated_uppercase_macro(self):

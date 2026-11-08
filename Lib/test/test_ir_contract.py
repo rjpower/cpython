@@ -669,9 +669,9 @@ def _changed_in(body, name, array):
 def _scan_stack(ops, macros, name):
     """The inputs of handler name, from the deepest, and the stack entries
     that it leaves, as dicts of size (None for one item) and whether the
-    entry is an input that keeps its value.  An op that invokes a call
-    (IR_INVOKE_CALL) publishes the result itself, so the ops after it, which
-    push the callee's frame, are not part of the register IR word."""
+    entry is an input that keeps its value.  Both call-invoke markers publish
+    the result themselves, so trailing callee-frame operations are not part
+    of the register IR word."""
     stack = []
     inputs = []
     for part in macros.get(name, [name]):
@@ -693,7 +693,7 @@ def _scan_stack(ops, macros, name):
                 stack.append(popped[k])
             else:
                 stack.append({"size": size, "kept": False})
-        if re.search(r"\bIR_INVOKE_CALL\b", body):
+        if re.search(r"\bIR_INVOKE_(?:CALL|GUARDED_PYTHON_CALL)\b", body):
             break
     return inputs, stack
 

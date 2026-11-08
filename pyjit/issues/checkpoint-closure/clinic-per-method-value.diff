@@ -1,0 +1,311 @@
+diff --git a/Lib/test/test_clinic.py b/Lib/test/test_clinic.py
+index 37f61adced4..a0cdfa0d187 100644
+--- a/Lib/test/test_clinic.py
++++ b/Lib/test/test_clinic.py
+@@ -3944,6 +3944,19 @@ def test_value_emission_header_guard(self):
+                         generated.index('#include'))
+         self.assertIn("METH_VALUE", generated)
+ 
++    def test_selective_value_header_guard_precedes_include(self):
++        generated = self.generate_file(dedent("""
++            /*[clinic input]
++            output everything file
++            module m
++            @value_function
++            m.f
++            [clinic start generated code]*/
++        """))
++        guard = '@value_function Clinic output requires a core build'
++        self.assertLess(generated.index(guard), generated.index('#include'))
++        self.assertIn('METH_VALUE', generated)
++
+     def test_no_header_guard_without_value_emission(self):
+         generated = self.generate_file(dedent("""
+             /*[clinic input]
+@@ -6453,6 +6466,98 @@ def test_refused_aliases(self):
+         """, "parameter aliases")
+ 
+ 
++class SelectiveValueEmissionTests(unittest.TestCase):
++    def generate(self, blocks):
++        text = """/*[clinic input]
++output everything buffer
++module m
++class m.T "PyObject *" "&TestType"
++[clinic start generated code]*/
++"""
++        for block in blocks:
++            text += "/*[clinic input]\n" + dedent(block).strip() + (
++                "\n[clinic start generated code]*/\n")
++        text += "/*[clinic input]\ndump buffer\n[clinic start generated code]*/\n"
++        return _make_clinic().parse(text)
++
++    def test_clone_flags_and_converter_state(self):
++        generated = self.generate([
++            """@value_function
++            m.first
++                x: object
++                /""",
++            "m.second = m.first",
++            """@value_function
++            m.third = m.second""",
++            "m.fourth = m.third",
++        ])
++        for name in ("first", "third"):
++            self.assertIn(f'METH_VALUE|METH_O, m_{name}__doc__', generated)
++            self.assertIn(f'm_{name}_impl(PyObject *module, PyValueBorrow x)', generated)
++        for name in ("second", "fourth"):
++            self.assertIn(f'(PyCFunction)m_{name}, METH_O, m_{name}__doc__', generated)
++            self.assertIn(f'm_{name}(PyObject *module, PyObject *x)', generated)
++        self.assertIn('@value_function Clinic output requires a core build', generated)
++
++    def test_defining_class_and_keyword_default(self):
++        generated = self.generate(["""@value_function
++            m.T.f
++                cls: defining_class
++                x: object = None
++            """])
++        self.assertIn('METH_VALUE|METH_METHOD|METH_KEYWORDS', generated)
++        self.assertIn('PyTypeObject *cls', generated)
++        self.assertIn('PyValueBorrow x', generated)
++        self.assertIn('PyValue_AsKnownObjectBorrow(self)', generated)
++
++    def test_classmethod_numeric_return(self):
++        generated = self.generate(["""@value_function
++            @classmethod
++            m.T.f -> int
++                x: int = 3
++                /"""])
++        self.assertIn('METH_VALUE', generated)
++        self.assertIn('PyValue_FromInt64', generated)
++        self.assertIn('_PyValue_AsInt', generated)
++        self.assertIn('PyValue_AsKnownObjectBorrow', generated)
++
++    def test_multiple_file_destinations_rejected(self):
++        text = """
++            /*[clinic input]
++            destination second new file {dirname}/other.h
++            module m
++            @value_function
++            m.f
++            [clinic start generated code]*/
++        """
++        _expect_failure(self, _make_clinic().parse, text,
++                        '@value_function supports only one file destination')
++
++    def test_unsupported_forms_and_limited_api(self):
++        prefix = "/*[clinic input]\nmodule m\n[clinic start generated code]*/\n"
++        def wrapped(body):
++            return prefix + "/*[clinic input]\n" + dedent(body).strip() + (
++                "\n[clinic start generated code]*/\n")
++        for body in ("""@value_function
++                m.f
++                    [
++                    x: int
++                    ]
++                    /""", """@value_function
++                m.f
++                    x: str(encoding="utf-8")
++                    /""", """@value_function
++                m.f
++                    x: int
++                    *
++                    y as x: int = 0"""):
++            _expect_failure(self, _make_clinic().parse, wrapped(body),
++                            '@value_function requires a supported value parser')
++        _expect_failure(self, _make_clinic(limited_capi=True).parse,
++                        wrapped('@value_function\nm.f'),
++                        '@value_function cannot be used with the limited C API')
++
++
+ class TupleReceiverOutputTests(unittest.TestCase):
+     """Tuples hold canonical PyValues, so tuple receivers (METH_VARARGS,
+     tp_new, tp_init) lend their items from a borrow stack run."""
+diff --git a/Tools/clinic/libclinic/app.py b/Tools/clinic/libclinic/app.py
+index d4aeedf58a8..5c7f96ecb3c 100644
+--- a/Tools/clinic/libclinic/app.py
++++ b/Tools/clinic/libclinic/app.py
+@@ -44,6 +44,13 @@
+ """
+ 
+ 
++SELECTIVE_VALUE_GUARD = """
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
++"""
++
++
+ class Clinic:
+ 
+     presets_text = """
+@@ -213,6 +220,12 @@ def parse(self, input: str) -> str:
+         # is rendered when the whole file is parsed.
+         self.language.render_properties(self)
+ 
++        # Includes are shared across destinations. Keep selective value output
++        # within one core-only file until includes are routed per destination.
++        if self.codegen.selective_value_used and sum(
++                d.type == 'file' for d in self.destinations.values()) > 1:
++            fail("@value_function supports only one file destination")
++
+         # these are destinations not buffers
+         for name, destination in self.destinations.items():
+             if destination.type == 'suppress':
+@@ -253,7 +266,9 @@ def parse(self, input: str) -> str:
+                     includes = self.codegen.get_includes()
+ 
+                     guard = (VALUE_EMISSION_GUARD
+-                             if self.codegen.value_emission else '')
++                             if self.codegen.value_emission else
++                             SELECTIVE_VALUE_GUARD
++                             if self.codegen.selective_value_used else '')
+                     printer_2 = BlockPrinter(self.language)
+                     printer_2.print_block(block, header_includes=includes,
+                                           header_guard=guard)
+diff --git a/Tools/clinic/libclinic/clanguage.py b/Tools/clinic/libclinic/clanguage.py
+index 3df149f5bc9..c326062e270 100644
+--- a/Tools/clinic/libclinic/clanguage.py
++++ b/Tools/clinic/libclinic/clanguage.py
+@@ -318,6 +318,9 @@ def render_function(
+         codegen = clinic.codegen
+         data = CRenderData()
+         data.value_emission = is_value_function(f, codegen)
++        if f.value_function:
++            codegen.selective_value_used = True
++            codegen.add_include('pycore_value_call.h', 'METH_VALUE')
+ 
+         assert f.parameters, "We should always have a 'self' at this point!"
+         parameters = f.render_parameters
+@@ -517,6 +520,10 @@ def render_function(
+             if clinic.line_suffix:
+                 s = libclinic.suffix_all_lines(s, clinic.line_suffix)
+ 
++            if f.value_function and s and ('PyValue' in s or 'METH_VALUE' in s):
++                s = ("#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)\n"
++                     '#  error "@value_function Clinic output requires a core build"\n'
++                     "#endif\n" + s)
+             destination.append(s)
+ 
+         return clinic.get_destination('block').dump()
+diff --git a/Tools/clinic/libclinic/codegen.py b/Tools/clinic/libclinic/codegen.py
+index e91ae66f7d8..90ae6364ed8 100644
+--- a/Tools/clinic/libclinic/codegen.py
++++ b/Tools/clinic/libclinic/codegen.py
+@@ -280,6 +280,7 @@ def __init__(self, limited_capi: bool) -> None:
+         # Set by the value_emission directive: the functions of the file
+         # take and return values (METH_VALUE).
+         self.value_emission = False
++        self.selective_value_used = False
+         self._ifndef_symbols: set[str] = set()
+         # dict: include name => Include instance
+         self._includes: dict[str, Include] = {}
+diff --git a/Tools/clinic/libclinic/dsl_parser.py b/Tools/clinic/libclinic/dsl_parser.py
+index d569cb3b9fc..4377649534d 100644
+--- a/Tools/clinic/libclinic/dsl_parser.py
++++ b/Tools/clinic/libclinic/dsl_parser.py
+@@ -308,6 +308,7 @@ def reset(self) -> None:
+         self.target_critical_section = []
+         self.disable_fastcall = False
+         self.vectorcall: bool = False
++        self.value_function = False
+         self.slot = None
+         self.permit_long_summary = False
+         self.permit_long_docstring_body = False
+@@ -507,6 +508,13 @@ def at_vectorcall(self) -> None:
+             fail("Called @vectorcall twice!")
+         self.vectorcall = True
+ 
++    def at_value_function(self) -> None:
++        if self.value_function:
++            fail("Called @value_function twice!")
++        if self.clinic.codegen.limited_capi:
++            fail("@value_function cannot be used with the limited C API")
++        self.value_function = True
++
+     def at_coexist(self) -> None:
+         if self.coexist:
+             fail("Called @coexist twice!")
+@@ -731,6 +739,7 @@ def parse_cloned_function(self, names: FunctionNames, existing: str) -> None:
+             "docstring": "",
+             "docstring_line_number": None,
+             "line_number": self.line_number,
++            "value_function": self.value_function,
+         }
+         if existing_function.kind is SLOT or self.slot is not None:
+             fail("Type slot methods cannot be cloned")
+@@ -809,6 +818,7 @@ def state_modulename_name(self, line: str) -> None:
+             forced_text_signature=self.forced_text_signature,
+             line_number=self.line_number,
+             vectorcall=self.vectorcall,
++            value_function=self.value_function,
+             slot=self.slot,
+         )
+         self.add_function(func)
+diff --git a/Tools/clinic/libclinic/function.py b/Tools/clinic/libclinic/function.py
+index 5270f452018..e02c56f580e 100644
+--- a/Tools/clinic/libclinic/function.py
++++ b/Tools/clinic/libclinic/function.py
+@@ -160,6 +160,7 @@ class Function:
+     # Line on which the docstring starts (`None` if there is no docstring).
+     docstring_line_number: int | None = None
+     vectorcall: bool = False
++    value_function: bool = False
+     # The type slot which the function implements (kind is SLOT).
+     slot: SlotSpec | None = None
+ 
+diff --git a/Tools/clinic/libclinic/parse_args.py b/Tools/clinic/libclinic/parse_args.py
+index f7eb7443e35..1d6a063d491 100644
+--- a/Tools/clinic/libclinic/parse_args.py
++++ b/Tools/clinic/libclinic/parse_args.py
+@@ -189,10 +189,14 @@ def is_value_function(f: Function, codegen: CodeGen) -> bool:
+     syslog.syslog), whose group parser has no value form, and the functions
+     with a converter that declares has_value_form = False.
+     """
+-    return (codegen.value_emission
+-            and f.kind is not SLOT and f.kind not in ACCESSORS
+-            and not any(p.group for p in f.parameters.values())
+-            and all(p.converter.has_value_form for p in f.parameters.values()))
++    eligible = (f.kind is not SLOT and f.kind not in ACCESSORS
++                and not any(p.group for p in f.parameters.values())
++                and all(p.converter.has_value_form for p in f.parameters.values()))
++    if f.value_function and (not eligible or f.kind.new_or_init or any(
++            (p.converter.alias_of is not None or p.deprecated_until is not None
++             or p.is_var_keyword()) for p in f.parameters.values())):
++        fail("@value_function requires a supported value parser")
++    return (codegen.value_emission or f.value_function) and eligible
+ 
+ 
+ DOCSTRING_PROTOTYPE_VAR: Final[str] = libclinic.normalize_snippet("""
+@@ -368,7 +372,7 @@ def __init__(self, func: Function, codegen: CodeGen) -> None:
+         self.func = func
+         self.codegen = codegen
+ 
+-        self.parameters = list(self.func.parameters.values())
++        self.parameters = list(self.func.render_parameters)
+         self_parameter = self.parameters.pop(0)
+         if not isinstance(self_parameter.converter, self_converter):
+             raise ValueError("the first parameter must use self_converter")
+@@ -396,10 +400,10 @@ def __init__(self, func: Function, codegen: CodeGen) -> None:
+         self.value = is_value_function(func, codegen)
+         if self.value:
+             # The parameters are rendered from copies.
+-            for p in [*func.parameters.values(), *func.render_parameters]:
++            for p in func.render_parameters:
+                 p.converter.set_value_emission()
+         elif codegen.value_emission:
+-            for p in [*func.parameters.values(), *func.render_parameters]:
++            for p in func.render_parameters:
+                 p.converter.object_in_value_unit = True
+ 
+         if self.func.critical_section:
+@@ -1326,7 +1330,8 @@ def render_alias(self, p: Parameter, argname_fmt: str,
+         """
+         aliased = p.converter.alias_of
+         assert aliased is not None
+-        i = self.parameters.index(aliased)
++        i = next(i for i, item in enumerate(self.parameters)
++                 if item.name == aliased.name)
+         other = f"name ('{aliased.name}')"
+         arg = ''
+         if i < self.max_pos:

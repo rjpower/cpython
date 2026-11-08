@@ -1,0 +1,191 @@
+--- a/Modules/_decimal/_decimal.c
++++ b/Modules/_decimal/_decimal.c
+@@ -196,6 +196,30 @@
+ }
+ 
+ 
++static inline decimal_state *
++find_state_ternary_value(PyValueBorrow left, PyValueBorrow right,
++                         PyValueBorrow modulus)
++{
++    PyTypeObject *base;
++    if (PyType_GetBaseByToken(PyValue_TYPE(left), &dec_spec, &base) != 1) {
++        assert(!PyErr_Occurred());
++        if (PyType_GetBaseByToken(PyValue_TYPE(right), &dec_spec, &base) != 1) {
++            assert(!PyErr_Occurred());
++            if (PyValue_IsNull(modulus)) {
++                base = NULL;
++            }
++            else {
++                PyType_GetBaseByToken(PyValue_TYPE(modulus), &dec_spec, &base);
++            }
++        }
++    }
++    assert(base != NULL);
++    void *state = _PyType_GetModuleState(base);
++    assert(state != NULL);
++    Py_DECREF(base);
++    return (decimal_state *)state;
++}
++
+ #if !defined(MPD_VERSION_HEX) || MPD_VERSION_HEX < 0x02050000
+   #error "libmpdec version >= 2.5.0 required"
+ #endif
+@@ -4939,91 +4963,108 @@
+ 
+ _Py_VALUE_THUNK_INQUIRY(nm_nonzero, nm_nonzero_value)
+ 
+-static PyObject *
+-nm_mpd_qdivmod(PyObject *v, PyObject *w)
++static PyValue
++nm_mpd_qdivmod_value(PyValueBorrow left, PyValueBorrow right)
+ {
+-    PyObject *a, *b;
+-    PyObject *q, *r;
+-    PyObject *context;
++    PyObject *a, *b, *q, *r;
+     uint32_t status = 0;
+-
+-    decimal_state *state = find_state_left_or_right(v, w);
+-    CURRENT_CONTEXT(state, context);
+-    CONVERT_BINOP(&a, &b, v, w, context);
+-
++    decimal_state *state = find_state_left_or_right_value(left, right);
++    PyObject *context = optional_context_value(state, PyValue_Borrow(PyValue_None));
++    if (context == NULL) {
++        return PyValue_NULL;
++    }
++    int converted = convert_op_slot(&a, left, context);
++    if (converted <= 0) {
++        return converted < 0 ? PyValue_NULL : PyValue_NotImplemented;
++    }
++    converted = convert_op_slot(&b, right, context);
++    if (converted <= 0) {
++        Py_DECREF(a);
++        return converted < 0 ? PyValue_NULL : PyValue_NotImplemented;
++    }
+     q = dec_alloc(state);
+     if (q == NULL) {
+         Py_DECREF(a);
+         Py_DECREF(b);
+-        return NULL;
++        return PyValue_NULL;
+     }
+     r = dec_alloc(state);
+     if (r == NULL) {
+         Py_DECREF(a);
+         Py_DECREF(b);
+         Py_DECREF(q);
+-        return NULL;
++        return PyValue_NULL;
+     }
+-
+     mpd_qdivmod(MPD(q), MPD(r), MPD(a), MPD(b), CTX(context), &status);
+     Py_DECREF(a);
+     Py_DECREF(b);
+     if (dec_addstatus(context, status)) {
+         Py_DECREF(r);
+         Py_DECREF(q);
+-        return NULL;
++        return PyValue_NULL;
+     }
+-
+-    return _PyTuple_FromPairSteal(q, r);
++    PyObject *result = _PyTuple_FromPairTakeValue(PyValue_FromObjectSteal(q),
++                                                   PyValue_FromObjectSteal(r));
++    if (result == NULL) {
++        return PyValue_NULL;
++    }
++    return PyValue_FromObjectSteal(result);
+ }
+ 
+-static PyObject *
+-nm_mpd_qpow(PyObject *base, PyObject *exp, PyObject *mod)
++_Py_VALUE_THUNK_BINARY(nm_mpd_qdivmod, nm_mpd_qdivmod_value)
++
++static PyValue
++nm_mpd_qpow_value(PyValueBorrow base, PyValueBorrow exp, PyValueBorrow mod)
+ {
+-    PyObject *a, *b, *c = NULL;
+-    PyObject *result;
+-    PyObject *context;
++    PyObject *a, *b, *c = NULL, *result;
+     uint32_t status = 0;
+-
+-    decimal_state *state = find_state_ternary(base, exp, mod);
+-    CURRENT_CONTEXT(state, context);
+-    CONVERT_BINOP(&a, &b, base, exp, context);
+-
+-    if (mod != Py_None) {
+-        if (!convert_op(NOT_IMPL, &c, mod, context)) {
++    decimal_state *state = find_state_ternary_value(base, exp, mod);
++    PyObject *context = optional_context_value(state, PyValue_Borrow(PyValue_None));
++    if (context == NULL) {
++        return PyValue_NULL;
++    }
++    int converted = convert_op_slot(&a, base, context);
++    if (converted <= 0) {
++        return converted < 0 ? PyValue_NULL : PyValue_NotImplemented;
++    }
++    converted = convert_op_slot(&b, exp, context);
++    if (converted <= 0) {
++        Py_DECREF(a);
++        return converted < 0 ? PyValue_NULL : PyValue_NotImplemented;
++    }
++    if (!PyValue_IsNull(mod) && !PyValue_IsNone(mod)) {
++        converted = convert_op_slot(&c, mod, context);
++        if (converted <= 0) {
+             Py_DECREF(a);
+             Py_DECREF(b);
+-            return c;
++            return converted < 0 ? PyValue_NULL : PyValue_NotImplemented;
+         }
+     }
+-
+     result = dec_alloc(state);
+     if (result == NULL) {
+         Py_DECREF(a);
+         Py_DECREF(b);
+         Py_XDECREF(c);
+-        return NULL;
++        return PyValue_NULL;
+     }
+-
+     if (c == NULL) {
+-        mpd_qpow(MPD(result), MPD(a), MPD(b),
+-                 CTX(context), &status);
++        mpd_qpow(MPD(result), MPD(a), MPD(b), CTX(context), &status);
+     }
+     else {
+-        mpd_qpowmod(MPD(result), MPD(a), MPD(b), MPD(c),
+-                    CTX(context), &status);
++        mpd_qpowmod(MPD(result), MPD(a), MPD(b), MPD(c), CTX(context), &status);
+         Py_DECREF(c);
+     }
+     Py_DECREF(a);
+     Py_DECREF(b);
+     if (dec_addstatus(context, status)) {
+         Py_DECREF(result);
+-        return NULL;
++        return PyValue_NULL;
+     }
+-
+-    return result;
++    return PyValue_FromObjectSteal(result);
+ }
+ 
++_Py_VALUE_THUNK_TERNARY(nm_mpd_qpow, nm_mpd_qpow_value)
++
+ 
+ /******************************************************************************/
+ /*                             Decimal Methods                                */
+@@ -6698,7 +6739,9 @@
+     {Py_nb_remainder, nm_mpd_qrem},
+     {_Py_value_nb_remainder, nm_mpd_qrem_value},
+     {Py_nb_divmod, nm_mpd_qdivmod},
++    {_Py_value_nb_divmod, nm_mpd_qdivmod_value},
+     {Py_nb_power, nm_mpd_qpow},
++    {_Py_value_nb_power, nm_mpd_qpow_value},
+     {Py_nb_negative, nm_mpd_qminus},
+     {_Py_value_nb_negative, nm_mpd_qminus_value},
+     {Py_nb_positive, nm_mpd_qplus},

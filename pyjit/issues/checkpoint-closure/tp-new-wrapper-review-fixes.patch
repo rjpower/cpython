@@ -1,0 +1,37 @@
+diff --git a/Objects/typeobject.c b/Objects/typeobject.c
+--- a/Objects/typeobject.c
++++ b/Objects/typeobject.c
+@@ -12372,16 +12372,17 @@
+                      type->tp_name);
+         return PyValue_NULL;
+     }
++    PyValueBorrow subtype_value = PyValue_Borrow(args[0]);
+     PyTypeObject *subtype;
+-    if (!PyValue_IsObject(PyValue_Borrow(args[0])) ||
+-        !PyType_Check(PyValue_AsKnownObjectBorrow(args[0]))) {
++    if (!PyValue_IsObject(subtype_value) ||
++        !PyType_Check(PyValue_AsKnownObjectBorrow(subtype_value))) {
+         PyErr_Format(PyExc_TypeError,
+                      "%s.__new__(X): X is not a type object (%s)",
+                      type->tp_name,
+-                     PyValue_TYPE(args[0])->tp_name);
++                     PyValue_TYPE(subtype_value)->tp_name);
+         return PyValue_NULL;
+     }
+-    subtype = (PyTypeObject *)PyValue_AsKnownObjectBorrow(args[0]);
++    subtype = (PyTypeObject *)PyValue_AsKnownObjectBorrow(subtype_value);
+ 
+     if (!PyType_IsSubtype(subtype, type)) {
+         PyErr_Format(PyExc_TypeError,
+diff --git a/Lib/test/test_descr.py b/Lib/test/test_descr.py
+--- a/Lib/test/test_descr.py
++++ b/Lib/test/test_descr.py
+@@ -2082,7 +2082,7 @@
+         MutableList.marker = 1
+         obj = list.__new__(MutableList, [1, 2])
+         self.assertIs(type(obj), MutableList)
+-        self.assertEqual(obj, [1, 2])
++        self.assertEqual(obj, [])
+         self.assertEqual(init_calls, [])
+ 
+     @unittest.expectedFailure

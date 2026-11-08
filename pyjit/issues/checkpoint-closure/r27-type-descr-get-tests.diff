@@ -1,0 +1,34 @@
+--- a/Lib/test/test_descr.py
++++ b/Lib/test/test_descr.py
+@@ -2456,6 +2456,31 @@
+             setattr(X, name, ErrDescr())
+             self.assertRaises(MyException, runner, X())
+ 
++    def test_descriptor_get_inline_and_mutation(self):
++        for value in (17, 1.5):
++            class Descriptor:
++                __get__ = value
++
++            class C:
++                attr = Descriptor()
++
++            with self.subTest(value=value):
++                with self.assertRaisesRegex(TypeError, "object is not callable"):
++                    C().attr
++                del Descriptor.__get__
++                self.assertIsInstance(C().attr, Descriptor)
++
++        class Descriptor:
++            def __get__(self, obj, owner):
++                Descriptor.__get__ = lambda self, obj, owner: 23
++                return 19
++
++        class C:
++            attr = Descriptor()
++
++        self.assertEqual(C().attr, 19)
++        self.assertEqual(C().attr, 23)
++
+     def test_specials(self):
+         # Testing special operators...
+         # Test operators like __hash__ for which a built-in default exists

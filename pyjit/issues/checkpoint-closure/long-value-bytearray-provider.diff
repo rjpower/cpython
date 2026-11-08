@@ -1,0 +1,30 @@
+--- a/Objects/longobject.c
++++ b/Objects/longobject.c
+@@ -1345,6 +1345,15 @@
+ }
+ 
+ int
++_PyLong_ValueAsByteArray(PyValueBorrow value, unsigned char *bytes, size_t n,
++                         int little_endian, int is_signed, int with_exceptions)
++{
++    digit digits[_PyLong_WORD_DIGITS];
++    return span_as_byte_array(_PyLong_SpanOfValue(value, digits), bytes, n,
++                              little_endian, is_signed, with_exceptions);
++}
++
++int
+ _PyLong_AsByteArray(PyLongObject* v,
+                     unsigned char* bytes, size_t n,
+                     int little_endian, int is_signed,
+--- a/Include/internal/pycore_long_value.h
++++ b/Include/internal/pycore_long_value.h
+@@ -443,6 +443,9 @@
+ PyAPI_FUNC(Py_ssize_t) _PyValue_AsNativeBytes(PyValueBorrow v, void *buffer,
+                                               Py_ssize_t n, int flags);
+ PyAPI_FUNC(void *) _PyValue_IntAsVoidPtr(PyValueBorrow v);
++PyAPI_FUNC(int) _PyLong_ValueAsByteArray(PyValueBorrow value,
++    unsigned char *bytes, size_t n, int little_endian, int is_signed,
++    int with_exceptions);
+ // PyFloat_AsDouble(): __float__, then __index__.
+ PyAPI_FUNC(double) _PyValue_AsDouble(PyValueBorrow v);
+ 

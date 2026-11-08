@@ -1,0 +1,417 @@
+{
+ "schema": "boil-bench/1",
+ "build": {
+  "label": "C",
+  "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/remeasure-release-5de7bd62ef9/python",
+  "version": "3.16.0a1+dev (heads/boil/pyvalue-rc-universal:5de7bd62ef9, Nov  4 2026, 10:02:21) [GCC 15.2.0]",
+  "git": [
+   "CPython",
+   "heads/boil/pyvalue-rc-universal",
+   "5de7bd62ef9"
+  ],
+  "hash_seed": 0
+ },
+ "machine": {
+  "hostname": "bento-cat",
+  "kernel": "7.0.0-43-generic",
+  "cpus": 16,
+  "cpu": "AMD Ryzen 7 3800X 8-Core Processor",
+  "memory": "65726112 kB"
+ },
+ "results": {
+  "rss": {
+   "richards": {
+    "group": "kernels",
+    "unit": "KiB peak RSS",
+    "value": 12920,
+    "values": [
+     14988,
+     12920,
+     12904
+    ],
+    "loops": 2,
+    "runs": 3
+   },
+   "go": {
+    "group": "kernels",
+    "unit": "KiB peak RSS",
+    "value": 14832,
+    "values": [
+     17112,
+     14828,
+     14832
+    ],
+    "loops": 1,
+    "runs": 3
+   },
+   "nbody": {
+    "group": "kernels",
+    "unit": "KiB peak RSS",
+    "value": 12772,
+    "values": [
+     13420,
+     12736,
+     12772
+    ],
+    "loops": 1,
+    "runs": 3
+   },
+   "float": {
+    "group": "kernels",
+    "unit": "KiB peak RSS",
+    "value": 20688,
+    "values": [
+     21392,
+     20688,
+     20472
+    ],
+    "loops": 1,
+    "runs": 3
+   },
+   "spectral_norm": {
+    "group": "kernels",
+    "unit": "KiB peak RSS",
+    "value": 12732,
+    "values": [
+     13152,
+     12732,
+     12420
+    ],
+    "loops": 1,
+    "runs": 3
+   },
+   "raytrace": {
+    "group": "kernels",
+    "unit": "KiB peak RSS",
+    "value": 14332,
+    "values": [
+     18332,
+     14076,
+     14332
+    ],
+    "loops": 1,
+    "runs": 3
+   },
+   "deltablue": {
+    "group": "kernels",
+    "unit": "KiB peak RSS",
+    "value": 13756,
+    "values": [
+     14888,
+     13756,
+     13376
+    ],
+    "loops": 30,
+    "runs": 3
+   },
+   "chaos": {
+    "group": "kernels",
+    "unit": "KiB peak RSS",
+    "value": 14936,
+    "values": [
+     15644,
+     14428,
+     14936
+    ],
+    "loops": 2,
+    "runs": 3
+   },
+   "nqueens": {
+    "group": "kernels",
+    "unit": "KiB peak RSS",
+    "value": 12720,
+    "values": [
+     13196,
+     12352,
+     12720
+    ],
+    "loops": 1,
+    "runs": 3
+   },
+   "fannkuch": {
+    "group": "kernels",
+    "unit": "KiB peak RSS",
+    "value": 12532,
+    "values": [
+     13196,
+     12532,
+     12468
+    ],
+    "loops": 1,
+    "runs": 3
+   },
+   "generators": {
+    "group": "kernels",
+    "unit": "KiB peak RSS",
+    "value": 22884,
+    "values": [
+     23428,
+     22884,
+     22784
+    ],
+    "loops": 2,
+    "runs": 3
+   },
+   "comprehensions": {
+    "group": "kernels",
+    "unit": "KiB peak RSS",
+    "value": 15748,
+    "values": [
+     23152,
+     15660,
+     15748
+    ],
+    "loops": 6000,
+    "runs": 3
+   },
+   "coroutines": {
+    "group": "kernels",
+    "unit": "KiB peak RSS",
+    "value": 12752,
+    "values": [
+     13052,
+     12708,
+     12752
+    ],
+    "loops": 4,
+    "runs": 3
+   },
+   "unpack_sequence": {
+    "group": "kernels",
+    "unit": "KiB peak RSS",
+    "value": 13012,
+    "values": [
+     17400,
+     13012,
+     12600
+    ],
+    "loops": 4000,
+    "runs": 3
+   },
+   "deepcopy": {
+    "group": "kernels",
+    "unit": "KiB peak RSS",
+    "value": 14756,
+    "values": [
+     16128,
+     14704,
+     14756
+    ],
+    "loops": 300,
+    "runs": 3
+   },
+   "deepcopy_reduce": {
+    "group": "kernels",
+    "unit": "KiB peak RSS",
+    "value": 14640,
+    "values": [
+     14640,
+     14476,
+     14664
+    ],
+    "loops": 20000,
+    "runs": 3
+   },
+   "deepcopy_memo": {
+    "group": "kernels",
+    "unit": "KiB peak RSS",
+    "value": 14656,
+    "values": [
+     14732,
+     14656,
+     14632
+    ],
+    "loops": 4000,
+    "runs": 3
+   },
+   "json_dumps": {
+    "group": "kernels",
+    "unit": "KiB peak RSS",
+    "value": 15992,
+    "values": [
+     19816,
+     15984,
+     15992
+    ],
+    "loops": 10,
+    "runs": 3
+   },
+   "json_loads": {
+    "group": "kernels",
+    "unit": "KiB peak RSS",
+    "value": 16304,
+    "values": [
+     16452,
+     16304,
+     16184
+    ],
+    "loops": 200,
+    "runs": 3
+   },
+   "pickle": {
+    "group": "kernels",
+    "unit": "KiB peak RSS",
+    "value": 15796,
+    "values": [
+     19952,
+     15600,
+     15796
+    ],
+    "loops": 400,
+    "runs": 3
+   },
+   "unpickle": {
+    "group": "kernels",
+    "unit": "KiB peak RSS",
+    "value": 15744,
+    "values": [
+     15744,
+     15568,
+     15744
+    ],
+    "loops": 300,
+    "runs": 3
+   },
+   "regex_compile": {
+    "group": "kernels",
+    "unit": "KiB peak RSS",
+    "value": 18544,
+    "values": [
+     27116,
+     18504,
+     18544
+    ],
+    "loops": 1,
+    "runs": 3
+   },
+   "logging_format": {
+    "group": "kernels",
+    "unit": "KiB peak RSS",
+    "value": 19440,
+    "values": [
+     25628,
+     19440,
+     19264
+    ],
+    "loops": 1000,
+    "runs": 3
+   },
+   "logging_silent": {
+    "group": "kernels",
+    "unit": "KiB peak RSS",
+    "value": 17516,
+    "values": [
+     17508,
+     17728,
+     17516
+    ],
+    "loops": 60000,
+    "runs": 3
+   },
+   "logging_simple": {
+    "group": "kernels",
+    "unit": "KiB peak RSS",
+    "value": 19240,
+    "values": [
+     18968,
+     19276,
+     19240
+    ],
+    "loops": 1000,
+    "runs": 3
+   },
+   "xml_etree_generate": {
+    "group": "kernels",
+    "unit": "KiB peak RSS",
+    "value": 23096,
+    "values": [
+     26700,
+     23028,
+     23096
+    ],
+    "loops": 1,
+    "runs": 3
+   },
+   "xml_etree_iterparse": {
+    "group": "kernels",
+    "unit": "KiB peak RSS",
+    "value": 23060,
+    "values": [
+     22924,
+     23492,
+     23060
+    ],
+    "loops": 1,
+    "runs": 3
+   },
+   "xml_etree_parse": {
+    "group": "kernels",
+    "unit": "KiB peak RSS",
+    "value": 22336,
+    "values": [
+     22336,
+     22292,
+     22444
+    ],
+    "loops": 1,
+    "runs": 3
+   },
+   "xml_etree_process": {
+    "group": "kernels",
+    "unit": "KiB peak RSS",
+    "value": 23268,
+    "values": [
+     23776,
+     23268,
+     23256
+    ],
+    "loops": 1,
+    "runs": 3
+   }
+  }
+ },
+ "runs": {
+  "rss": {
+   "timestamp": "2026-11-04T10:24:35-08:00",
+   "commit": {
+    "sha": "d8ad9d14d9fb7e6f3b9be22f030092fd2d5cfe87",
+    "dirty": true
+   },
+   "load_1min": {
+    "max": 1.19189453125,
+    "samples": [
+     0.947265625,
+     0.947265625,
+     0.947265625,
+     0.947265625,
+     0.947265625,
+     1.19189453125,
+     1.19189453125,
+     1.19189453125,
+     1.19189453125,
+     1.19189453125,
+     1.17626953125,
+     1.17626953125,
+     1.17626953125,
+     1.17626953125,
+     1.17626953125,
+     1.162109375,
+     1.162109375,
+     1.162109375,
+     1.162109375,
+     1.162109375,
+     1.162109375,
+     1.162109375,
+     1.14892578125,
+     1.14892578125,
+     1.14892578125,
+     1.14892578125,
+     1.14892578125,
+     1.14892578125,
+     1.14892578125,
+     1.13671875
+    ]
+   }
+  }
+ }
+}

@@ -1,0 +1,7 @@
+# Generic type call and initializer values
+
+The final frozen patch `r27-typecall-phase2-v6.diff` applies to runtime `71016b30e45`, which includes phase one and its size fixture. Runtime source is identical to the independently reviewed v5; v6 adds persistent negative tests for inline noncallable initializers and descriptors. It selects the generic value continuation only for the actual `type_call` metaclass slot, pairs a cold `init_` field with object and Python initializer slots, and keeps special-method lookup and the result as owned values. Earlier v2–v5 patches remain unchanged.
+
+A locked W5 release shadow build and restoration each checked 117 modules with zero import failures. `test_value_slots` passed 244 tests with three skips, 65 filtered int/float/descriptor tests passed with one skip, and the `test_sys` object-size case passed. The C++17 header syntax check passed. `r27-typecall-phase2-probe.py` matched upstream output for nonmatching `__new__` results, actual-subtype initializer dispatch, invalid initializer results, metaclass overrides, runtime slot mutation/deletion, builtins, and inline noncallable/descriptor initializers.
+
+Root reviewed v5 source. Full merged debug/release tests, true object-C initializer probes, exact-current-binary stats attribution, and any resulting performance measurements belong to integration. No checkpoint or performance claim is made by this worker receipt.

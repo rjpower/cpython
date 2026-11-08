@@ -1,0 +1,40 @@
+diff --git a/Include/cpython/pyerrors.h b/Include/cpython/pyerrors.h
+--- a/Include/cpython/pyerrors.h
++++ b/Include/cpython/pyerrors.h
+@@ -68,11 +68,6 @@ typedef struct {
+     Py_ssize_t written;   /* only for BlockingIOError, -1 otherwise */
+ } PyOSErrorObject;
+ 
+-typedef struct {
+-    PyException_HEAD
+-    PyValue value;  /* the generator's return value; PyValue_NULL is None */
+-} PyStopIterationObject;
+-
+ typedef struct {
+     PyException_HEAD
+     PyObject *name;
+diff --git a/Include/internal/pycore_pyerrors.h b/Include/internal/pycore_pyerrors.h
+--- a/Include/internal/pycore_pyerrors.h
++++ b/Include/internal/pycore_pyerrors.h
+@@ -7,5 +7,10 @@ extern "C" {
+ #  error "this header requires Py_BUILD_CORE define"
+ #endif
+ 
++typedef struct {
++    PyException_HEAD
++    PyValue value;  /* the generator's return value; PyValue_NULL is None */
++} PyStopIterationObject;
++
+ 
+ /* Error handling definitions */
+diff --git a/Tools/build/check_value_api.py b/Tools/build/check_value_api.py
+--- a/Tools/build/check_value_api.py
++++ b/Tools/build/check_value_api.py
+@@ -1075,5 +1075,7 @@ THUNK_FILES = (
+     "Objects/enumobject.c", "Objects/boolobject.c", "Objects/longobject.c",
+     "Objects/unicodeobject.c", "Objects/listobject.c", "Objects/setobject.c",
+     "Objects/rangeobject.c",
++    # BaseException stores its value vectorcall beside the object thunk.
++    "Objects/exceptions.c",
+     # The test helpers: a spec type that stores the thunk, and an accessor
+     # that compares against both.

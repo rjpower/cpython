@@ -1,0 +1,30 @@
+{
+  "candidate_execution_authorized_by_this_decision": false,
+  "changed_paths": 2,
+  "decision": "ACCEPT_TERMINAL_SETTLEMENT_CORRECTION_FOR_FRESH_NATIVE_VALIDATION",
+  "final_syntax_translation_units_passed": 1,
+  "future_source_edits_authorized": false,
+  "host_generator_tests_passed": 35,
+  "independent_source_review": {
+    "receipt.json": {
+      "path": "boil/issues/jit-e2e-system/m3-terminal-settlement-source-receipt-20261101-v1.json",
+      "sha256": "5a8d900a2cec6ef27bf29c5bc3a8bb69e0b1684b5728716163cfb0b2993f1dd7"
+    },
+    "review.md": {
+      "path": "boil/issues/jit-e2e-system/m3-terminal-settlement-source-review-20261101-v1.md",
+      "sha256": "7abd91227eb44228127af25ff9a9da442fcdb0b1c369c3de98b079a90156b2f9"
+    }
+  },
+  "integration_or_performance_acceptance": false,
+  "limits": "Frozen parent optimizer/backend evidence retained; two-file correction only. Corrected candidate behavior and fresh ordinary publication remain pending.",
+  "native_bytes_executed": false,
+  "runtime_methods_pending": 36,
+  "source_attempt_closed_early": true,
+  "source_base": "90cdb7bbda9d1547f1d1ccdcef2388a5b82744c5",
+  "source_capsule": {
+    "path": "build/worktrees/jit-terminal-settlement/build/jit-method-m3-terminal-source/capsule.json",
+    "sha256": "5b9f1ae2eb2bd6e3121f0a56ed5943f9ec85183c734cd95c133aaa74789a4e72"
+  },
+  "source_head": "95be1d28a12ebbd9de102f70e1b5e881d06c7384",
+  "utc": "2026-11-01T21:27:52.730713+00:00"
+}

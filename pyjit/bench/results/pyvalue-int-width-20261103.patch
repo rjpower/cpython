@@ -1,0 +1,229 @@
+diff --git a/Objects/floatobject.c b/Objects/floatobject.c
+index c19ed6e6b60..f457ae606a3 100644
+--- a/Objects/floatobject.c
++++ b/Objects/floatobject.c
+@@ -122,9 +122,11 @@ PyFloat_GetInfo(void)
+     return floatinfo;
+ }
+ 
++extern void iw_count_double(double);
+ PyObject *
+ PyFloat_FromDouble(double fval)
+ {
++    iw_count_double(fval);
+     PyFloatObject *op = _Py_FREELIST_POP(PyFloatObject, floats);
+     if (op == NULL) {
+         op = PyObject_Malloc(sizeof(PyFloatObject));
+diff --git a/Objects/longobject.c b/Objects/longobject.c
+index f5526213944..21cb66bfecc 100644
+--- a/Objects/longobject.c
++++ b/Objects/longobject.c
+@@ -57,10 +57,152 @@ is_medium_int(stwodigits x)
+     return x_plus_mask < ((twodigits)PyLong_MASK) + PyLong_BASE;
+ }
+ 
++
++/* ---- intwidth instrumentation (measurement only) ---- */
++#include <fcntl.h>
++#include <unistd.h>
++#include <math.h>
++#include "pycore_frame.h"
++#include "pycore_interpframe.h"
++#include "pycore_code.h"
++enum { IW_SMALL, IW_LE31, IW_32_51, IW_52_62, IW_GT62, IW_NB };
++enum { IWF_ZERO, IWF_NAN, IWF_INF, IWF_IN, IWF_OUT_HI, IWF_OUT_LO, IWF_NB };
++unsigned long long iw_int[IW_NB];
++unsigned long long iw_float[IWF_NB];
++unsigned long long iw_hist[66];  /* non-small ints by bit length of |x|; 65 = 65 or more */
++#define IW_MAXSITES 4096
++static struct { int bucket; int line; char file[96]; char name[48]; unsigned long long n; } iw_sites[IW_MAXSITES];
++static int iw_nsites;
++static int iw_sample = -1;
++static int iw_registered;
++static void iw_dump(void);
++
++static void
++iw_ensure(void)
++{
++    if (!iw_registered) {
++        iw_registered = 1;
++        iw_sample = getenv("INTWIDTH_SITES") != NULL;
++        atexit(iw_dump);
++    }
++}
++
++static void
++iw_site(int bucket)
++{
++    PyThreadState *ts = _PyThreadState_GET();
++    if (ts == NULL || ts->current_frame == NULL) return;
++    _PyInterpreterFrame *f = ts->current_frame;
++    while (f && f->owner == FRAME_OWNED_BY_INTERPRETER) f = f->previous;
++    if (f == NULL) return;
++    PyObject *ex = PyStackRef_AsPyObjectBorrow(f->f_executable);
++    if (ex == NULL || !PyCode_Check(ex)) return;
++    PyCodeObject *co = (PyCodeObject *)ex;
++    int line = PyCode_Addr2Line(co, _PyInterpreterFrame_LASTI(f) * (int)sizeof(_Py_CODEUNIT));
++    const char *file = PyUnicode_Check(co->co_filename) ? PyUnicode_AsUTF8(co->co_filename) : "?";
++    const char *name = PyUnicode_Check(co->co_name) ? PyUnicode_AsUTF8(co->co_name) : "?";
++    if (!file) { PyErr_Clear(); file = "?"; }
++    if (!name) { PyErr_Clear(); name = "?"; }
++    size_t fl = strlen(file);
++    if (fl > 90) file += fl - 90;
++    for (int i = 0; i < iw_nsites; i++) {
++        if (iw_sites[i].bucket == bucket && iw_sites[i].line == line &&
++            strcmp(iw_sites[i].file, file) == 0 && strcmp(iw_sites[i].name, name) == 0) {
++            iw_sites[i].n++;
++            return;
++        }
++    }
++    if (iw_nsites == IW_MAXSITES) return;
++    iw_sites[iw_nsites].bucket = bucket;
++    iw_sites[iw_nsites].line = line;
++    snprintf(iw_sites[iw_nsites].file, sizeof(iw_sites[0].file), "%s", file);
++    snprintf(iw_sites[iw_nsites].name, sizeof(iw_sites[0].name), "%s", name);
++    iw_sites[iw_nsites].n = 1;
++    iw_nsites++;
++}
++
++void
++iw_count_bits(unsigned long long bits)
++{
++    iw_ensure();
++    int b = bits <= 31 ? IW_LE31 : bits <= 51 ? IW_32_51 : bits <= 62 ? IW_52_62 : IW_GT62;
++    iw_int[b]++;
++    iw_hist[bits > 65 ? 65 : bits]++;
++    if (iw_sample && (b == IW_32_51 || b == IW_52_62)) iw_site(b);
++}
++
++void iw_count_small(void) { iw_ensure(); iw_int[IW_SMALL]++; }
++
++/* Count a freshly produced non-small int object by its bit length. */
++static void
++iw_count_obj(PyLongObject *v)
++{
++    Py_ssize_t n = _PyLong_DigitCount(v);
++    if (n == 0) { iw_count_small(); return; }
++    digit top = v->long_value.ob_digit[n-1];
++    unsigned long long bits = (unsigned long long)(n-1) * PyLong_SHIFT;
++    while (top) { bits++; top >>= 1; }
++    iw_count_bits(bits);
++}
++
++void
++iw_count_double(double d)
++{
++    iw_ensure();
++    if (d != d) { iw_float[IWF_NAN]++; return; }
++    if (isinf(d)) { iw_float[IWF_INF]++; return; }
++    if (d == 0.0) { iw_float[IWF_ZERO]++; return; }
++    int e;
++    frexp(d, &e);
++    e -= 1;  /* unbiased exponent of the leading bit */
++    if (e > 255) iw_float[IWF_OUT_HI]++;
++    else if (e < -255) iw_float[IWF_OUT_LO]++;
++    else iw_float[IWF_IN]++;
++}
++
++static void
++iw_dump(void)
++{
++    const char *path = getenv("INTWIDTH_OUT");
++    if (!path) return;
++    char cmd[256] = "";
++    int fd = open("/proc/self/cmdline", O_RDONLY);
++    if (fd >= 0) {
++        ssize_t k = read(fd, cmd, sizeof(cmd)-1);
++        close(fd);
++        if (k < 0) k = 0;
++        cmd[k] = 0;
++        for (ssize_t i = 0; i < k; i++) {
++            if (cmd[i] == 0) cmd[i] = ' ';
++            else if (cmd[i] == '"' || cmd[i] == '\\' || (unsigned char)cmd[i] < 32 || (unsigned char)cmd[i] > 126) cmd[i] = '_';
++        }
++    }
++    static char buf[IW_MAXSITES * 200 + 4096];
++    int o = snprintf(buf, sizeof(buf),
++        "{\"pid\":%d,\"cmd\":\"%s\",\"int\":{\"small\":%llu,\"le31\":%llu,\"b32_51\":%llu,\"b52_62\":%llu,\"gt62\":%llu},"
++        "\"float\":{\"zero\":%llu,\"nan\":%llu,\"inf\":%llu,\"in\":%llu,\"out_hi\":%llu,\"out_lo\":%llu}",
++        (int)getpid(), cmd, iw_int[0], iw_int[1], iw_int[2], iw_int[3], iw_int[4],
++        iw_float[0], iw_float[1], iw_float[2], iw_float[3], iw_float[4], iw_float[5]);
++    o += snprintf(buf + o, sizeof(buf) - o, ",\"hist\":[");
++    for (int i = 0; i < 66; i++) o += snprintf(buf + o, sizeof(buf) - o, "%s%llu", i ? "," : "", iw_hist[i]);
++    o += snprintf(buf + o, sizeof(buf) - o, "],\"sites\":[");
++    for (int i = 0; i < iw_nsites && o < (int)sizeof(buf) - 400; i++) {
++        for (char *c = iw_sites[i].file; *c; c++) if (*c == '"' || *c == '\\') *c = '_';
++        for (char *c = iw_sites[i].name; *c; c++) if (*c == '"' || *c == '\\') *c = '_';
++        o += snprintf(buf + o, sizeof(buf) - o, "%s[%d,\"%s\",%d,\"%s\",%llu]", i ? "," : "",
++                      iw_sites[i].bucket, iw_sites[i].file, iw_sites[i].line, iw_sites[i].name, iw_sites[i].n);
++    }
++    o += snprintf(buf + o, sizeof(buf) - o, "]}\n");
++    int out = open(path, O_WRONLY | O_APPEND | O_CREAT, 0644);
++    if (out >= 0) { ssize_t w = write(out, buf, o); (void)w; close(out); }
++}
++/* ---- end intwidth ---- */
++
+ static PyObject *
+ get_small_int(sdigit ival)
+ {
+     assert(IS_SMALL_INT(ival));
++    iw_count_small();
+     return (PyObject *)&_PyLong_SMALL_INTS[_PY_NSMALLNEGINTS + ival];
+ }
+ 
+@@ -138,6 +280,7 @@ long_normalize(PyLongObject *v)
+             _PyLong_SetDigitCount(v, i);
+         }
+     }
++    if (!(_PyLong_IsCompact(v) && IS_SMALL_INT(medium_value(v)))) iw_count_obj(v);
+     return v;
+ }
+ 
+@@ -263,6 +406,7 @@ _PyLong_FromMedium(sdigit x)
+         _PyObject_Init((PyObject*)v, &PyLong_Type);
+         _PyLong_InitTag(v);
+     }
++    iw_count_bits(30);
+     digit abs_x = x < 0 ? -x : x;
+     _PyLong_SetSignAndDigitCount(v, x<0?-1:1, 1);
+     v->long_value.ob_digit[0] = abs_x;
+@@ -288,6 +432,7 @@ _PyLong_FromLarge(stwodigits ival)
+     }
+     /* Must be at least two digits */
+     assert(abs_ival >> PyLong_SHIFT != 0);
++    { twodigits q = abs_ival; unsigned long long b = 0; while (q) { b++; q >>= 1; } iw_count_bits(b); }
+     twodigits t = abs_ival >> (PyLong_SHIFT * 2);
+     Py_ssize_t ndigits = 2;
+     while (t) {
+@@ -343,6 +488,7 @@ medium_from_stwodigits(stwodigits x)
+         _PyObject_Init((PyObject*)v, &PyLong_Type);
+         _PyLong_InitTag(v);
+     }
++    iw_count_bits(30);
+     digit abs_x = x < 0 ? (digit)(-x) : (digit)x;
+     _PyLong_SetSignAndDigitCount(v, x<0?-1:1, 1);
+     v->long_value.ob_digit[0] = abs_x;
+@@ -377,6 +523,7 @@ _PyLong_Negate(PyLongObject **x_p)
+             return _PyLong_FromMedium((sdigit)(ival));                              \
+         }                                                                           \
+         UINT_TYPE abs_ival = (ival) < 0 ? 0U-(UINT_TYPE)(ival) : (UINT_TYPE)(ival); \
++        { UINT_TYPE q = abs_ival; unsigned long long b = 0; while (q) { b++; q >>= 1; } iw_count_bits(b); } \
+         /* Do shift in two steps to avoid possible undefined behavior. */           \
+         UINT_TYPE t = abs_ival >> PyLong_SHIFT >> PyLong_SHIFT;                     \
+         /* Count digits (at least two - smaller cases were handled above). */       \
+@@ -418,6 +565,7 @@ PyLong_FromLong(long ival)
+         if ((ival) <= PyLong_MASK) { \
+             return _PyLong_FromMedium((sdigit)(ival)); \
+         } \
++        { INT_TYPE q = (ival); unsigned long long b = 0; while (q) { b++; q >>= 1; } iw_count_bits(b); } \
+         /* Do shift in two steps to avoid possible undefined behavior. */ \
+         INT_TYPE t = (ival) >> PyLong_SHIFT >> PyLong_SHIFT; \
+         /* Count digits (at least two - smaller cases were handled above). */ \
+@@ -503,6 +651,7 @@ PyLong_FromDouble(double dval)
+     }
+     frac = frexp(dval, &expo); /* dval = frac*2**expo; 0.0 <= frac < 1.0 */
+     assert(expo > 0);
++    iw_count_bits((unsigned long long)expo);
+     ndig = (expo-1) / PyLong_SHIFT + 1; /* Number of 'digits' in result */
+     v = long_alloc(ndig);
+     if (v == NULL)

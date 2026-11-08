@@ -1,0 +1,80 @@
+--- a/Objects/typeobject.c
++++ b/Objects/typeobject.c
+@@ -5844,7 +5844,8 @@
+                              PyObject *args, PyObject *kwargs,
+                              PyValue *result)
+ {
+-    if (!PyType_Check(callable) || !dict_has_non_unicode_keys(kwargs)) {
++    if (callable == (PyObject *)&PyType_Type || !PyType_Check(callable) ||
++            !dict_has_non_unicode_keys(kwargs)) {
+         return 0;
+     }
+     PyTypeObject *metatype = Py_TYPE(callable);
+@@ -5859,9 +5860,8 @@
+     assert(PyTuple_Check(args));
+     assert(PyDict_Check(kwargs));
+     assert(!_PyErr_Occurred(tstate));
+-    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
+-    if (callable == (PyObject *)&PyType_Type && nargs != 3) {
+-        PyErr_SetString(PyExc_TypeError, "type() takes 1 or 3 arguments");
++    if (_Py_EnterRecursiveCallTstate(tstate,
++                                     " while calling a Python object")) {
+         *result = PyValue_NULL;
+         return 1;
+     }
+@@ -5869,6 +5869,7 @@
+         _PyErr_Format(tstate, PyExc_TypeError,
+                       "cannot create '%s' instances", type->tp_name);
+         *result = PyValue_NULL;
++        _Py_LeaveRecursiveCallTstate(tstate);
+         return 1;
+     }
+ 
+@@ -5888,6 +5889,7 @@
+     }
+     _PyBorrowScope_Exit(tstate, mark);
+     *result = obj == NULL ? PyValue_NULL : _PyValue_FromObjectResult(obj);
++    _Py_LeaveRecursiveCallTstate(tstate);
+     return 1;
+ }
+ 
+@@ -13651,7 +13653,18 @@
+     PyThreadState *tstate = _PyThreadState_GET();
+     Py_ssize_t nargs = PyTuple_GET_SIZE(args);
+     if (kwds != NULL && dict_has_non_unicode_keys(kwds)) {
+-        return call_method((PyObject *)type, &_Py_ID(__new__), args, kwds);
++        PyValue func_value = _PyValue_GetAttr(
++            PyValue_FromObjectBorrow((PyObject *)type), &_Py_ID(__new__));
++        PyObject *func = _PyValue_AsObjectResultAt(func_value,
++                                                    BOX_SITE_ATTRIBUTE);
++        if (func == NULL) {
++            return NULL;
++        }
++        PyObject *result = _PyObject_Call_Prepend(tstate, func,
++                                                  (PyObject *)type,
++                                                  args, kwds);
++        Py_DECREF(func);
++        return result;
+     }
+     PyValue result;
+     if (kwds == NULL || PyDict_GET_SIZE(kwds) == 0) {
+--- a/Lib/test/test_call.py
++++ b/Lib/test/test_call.py
+@@ -34,6 +34,17 @@
+ 
+ class FunctionCalls(unittest.TestCase):
+ 
++    def test_type_non_string_kwargs_keep_vectorcall_validation(self):
++        bad_kwargs = {None: 1}
++        for call in (
++            lambda: type(**bad_kwargs),
++            lambda: type(1, **bad_kwargs),
++            lambda: type("Name", (), {}, **bad_kwargs),
++        ):
++            with self.subTest(call=call):
++                with self.assertRaisesRegex(TypeError, "keywords must be strings"):
++                    call()
++
+     def test_kwargs_order(self):
+         # bpo-34320:  **kwargs should preserve order of passed OrderedDict
+         od = collections.OrderedDict([('a', 1), ('b', 2)])

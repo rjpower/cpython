@@ -1,0 +1,5 @@
+# Decimal integer-method review
+
+Reviewed `decimal-int-methods.diff` against the W5 source and generated Clinic header. **No blocking source finding.** Context `Etiny`/`Etop` and Decimal `adjusted` preserve signed `mpd_ssize_t` results through `PyValue_FromInt64`; `__sizeof__` preserves unsigned `size_t` through `PyValue_FromUInt64`. The two `radix` methods keep the defining-class state lookup and transfer the helper's owned result. `IEEEContext` calls the exact immutable Context type through its reviewed value constructor and transfers its guaranteed object result. The three `CONFIG_32` unsafe setters keep the existing index conversion, range errors, and `None` result while passing scalar `Py_ssize_t` values.
+
+The author reports W5 build/import and 83 focused tests. A real `CONFIG_32` sysroot was unavailable, so the three conditional setters have source review and generated-header inspection only; they still need a 32-bit compile/test when that configuration is available. Merged validation remains the coordinator's integration evidence.

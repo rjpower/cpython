@@ -1,0 +1,159 @@
+diff --git a/Python/flowgraph.c b/Python/flowgraph.c
+index 8189b2d8fa7..1832c4d1c69 100644
+--- a/Python/flowgraph.c
++++ b/Python/flowgraph.c
+@@ -1322,42 +1322,6 @@ loads_const(int opcode)
+ }
+ 
+ /* Returns new reference */
+-static PyObject*
+-get_const_value(int opcode, int oparg, PyObject *co_consts)
+-{
+-    PyObject *constant = NULL;
+-    assert(loads_const(opcode));
+-    if (opcode == LOAD_CONST) {
+-        assert(PyList_Check(co_consts));
+-        Py_ssize_t n = PyList_GET_SIZE(co_consts);
+-        if (oparg < 0 || oparg >= n) {
+-            PyErr_Format(PyExc_ValueError,
+-                         "LOAD_CONST index %d is out of range for consts (len=%zd)",
+-                         oparg, n);
+-            return NULL;
+-        }
+-        PyValue v = PyList_GetValue(co_consts, oparg);
+-        PyObject *obj = PyValue_IsNull(v) ? NULL : _PyValue_AsObjectAt(v, BOX_SITE_LIST);
+-        PyValue_XCLOSE(v);
+-        return obj;
+-    }
+-    if (opcode == LOAD_SMALL_INT) {
+-        return PyLong_FromLong(oparg);
+-    }
+-    if (opcode == LOAD_COMMON_CONSTANT) {
+-        assert(oparg < NUM_COMMON_CONSTANTS);
+-        return _PyValue_AsObjectAt(
+-            _PyInterpreterState_GET()->common_consts[oparg], BOX_SITE_COMPILER);
+-    }
+-
+-    if (constant == NULL) {
+-        PyErr_SetString(PyExc_SystemError,
+-                        "Internal error: failed to get value of a constant");
+-        return NULL;
+-    }
+-    return Py_NewRef(constant);
+-}
+-
+ static PyValue
+ get_const_value_value(int opcode, int oparg, PyObject *co_consts)
+ {
+@@ -1703,12 +1667,13 @@ fold_tuple_of_constants(basicblock *bb, int i, PyObject *consts,
+     for (int i = 0; i < seq_size; i++) {
+         cfg_instr *inst = const_instrs[i];
+         assert(loads_const(inst->i_opcode));
+-        PyObject *element = get_const_value(inst->i_opcode, inst->i_oparg, consts);
+-        if (element == NULL) {
++        PyValue element = get_const_value_value(
++            inst->i_opcode, inst->i_oparg, consts);
++        if (PyValue_IsNull(element)) {
+             Py_DECREF(const_tuple);
+             return ERROR;
+         }
+-        PyTuple_SET_VALUE(const_tuple, i, PyValue_PrepareOwned(element));
++        PyTuple_SET_VALUE(const_tuple, i, element);
+     }
+ 
+     nop_out(const_instrs, seq_size);
+@@ -1787,13 +1752,14 @@ fold_constant_seq_into_load_const(basicblock *bb, int i,
+                     continue;
+                 }
+                 if (loads_const(instr->i_opcode)) {
+-                    PyObject *constant = get_const_value(instr->i_opcode, instr->i_oparg, consts);
+-                    if (constant == NULL) {
++                    PyValue constant = get_const_value_value(
++                        instr->i_opcode, instr->i_oparg, consts);
++                    if (PyValue_IsNull(constant)) {
+                         Py_DECREF(newconst);
+                         return ERROR;
+                     }
+                     assert(consts_found > 0);
+-                    PyTuple_SET_VALUE(newconst, --consts_found, PyValue_PrepareOwned(constant));
++                    PyTuple_SET_VALUE(newconst, --consts_found, constant);
+                 }
+                 nop_out(&instr, 1);
+             }
+@@ -1877,12 +1843,13 @@ optimize_lists_and_sets(basicblock *bb, int i, int nextop,
+     for (int i = 0; i < seq_size; i++) {
+         cfg_instr *inst = const_instrs[i];
+         assert(loads_const(inst->i_opcode));
+-        PyObject *element = get_const_value(inst->i_opcode, inst->i_oparg, consts);
+-        if (element == NULL) {
++        PyValue element = get_const_value_value(
++            inst->i_opcode, inst->i_oparg, consts);
++        if (PyValue_IsNull(element)) {
+             Py_DECREF(const_result);
+             return ERROR;
+         }
+-        PyTuple_SET_VALUE(const_result, i, PyValue_PrepareOwned(element));
++        PyTuple_SET_VALUE(const_result, i, element);
+     }
+ 
+     if (instr->i_opcode == BUILD_SET) {
+@@ -2487,12 +2454,12 @@ basicblock_optimize_load_const(PyObject *const_cache, basicblock *bb,
+             case JUMP_IF_TRUE:
+             {
+                 /* Remove LOAD_CONST const; conditional jump */
+-                PyObject* cnt = get_const_value(opcode, oparg, consts);
+-                if (cnt == NULL) {
++                PyValue cnt = get_const_value_value(opcode, oparg, consts);
++                if (PyValue_IsNull(cnt)) {
+                     return ERROR;
+                 }
+-                int is_true = _PyValue_IsTrue(PyValue_FromObjectBorrow(cnt));
+-                Py_DECREF(cnt);
++                int is_true = _PyValue_IsTrue(PyValue_Borrow(cnt));
++                PyValue_CLOSE(cnt);
+                 if (is_true == -1) {
+                     return ERROR;
+                 }
+@@ -2521,12 +2488,13 @@ basicblock_optimize_load_const(PyObject *const_cache, basicblock *bb,
+                 // - LOAD_CONST(None) IS_OP(1) POP_JUMP_IF_TRUE
+                 // - LOAD_CONST(None) IS_OP(0) TO_BOOL POP_JUMP_IF_FALSE
+                 // - LOAD_CONST(None) IS_OP(1) TO_BOOL POP_JUMP_IF_TRUE
+-                PyObject *cnt = get_const_value(opcode, oparg, consts);
+-                if (cnt == NULL) {
++                PyValue cnt = get_const_value_value(opcode, oparg, consts);
++                if (PyValue_IsNull(cnt)) {
+                     return ERROR;
+                 }
+-                if (!Py_IsNone(cnt)) {
+-                    Py_DECREF(cnt);
++                bool is_none = PyValue_IsNone(cnt);
++                PyValue_CLOSE(cnt);
++                if (!is_none) {
+                     break;
+                 }
+                 if (bb->b_iused <= i + 2) {
+@@ -2557,17 +2525,18 @@ basicblock_optimize_load_const(PyObject *const_cache, basicblock *bb,
+             }
+             case TO_BOOL:
+             {
+-                PyObject *cnt = get_const_value(opcode, oparg, consts);
+-                if (cnt == NULL) {
++                PyValue cnt = get_const_value_value(opcode, oparg, consts);
++                if (PyValue_IsNull(cnt)) {
+                     return ERROR;
+                 }
+-                int is_true = _PyValue_IsTrue(PyValue_FromObjectBorrow(cnt));
+-                Py_DECREF(cnt);
++                int is_true = _PyValue_IsTrue(PyValue_Borrow(cnt));
++                PyValue_CLOSE(cnt);
+                 if (is_true == -1) {
+                     return ERROR;
+                 }
+-                cnt = PyBool_FromLong(is_true);
+-                int index = add_const(cnt, consts, const_cache, consts_index);
++                PyValue result = is_true ? PyValue_True : PyValue_False;
++                int index = add_const_value(result, consts, const_cache,
++                                            consts_index);
+                 if (index < 0) {
+                     return ERROR;
+                 }

@@ -1,0 +1,11 @@
+--- a/Objects/typeobject.c
++++ b/Objects/typeobject.c
+@@ -7404,7 +7404,7 @@
+         goto done;
+     }
+     BEGIN_TYPE_DICT_LOCK(dict);
+-    res = type_update_dict(type, (PyDictObject *)dict, name, value, &old_value);
++    res = type_update_dict(type, (PyDictObject *)dict, name, PyValue_Borrow(value), &old_value);
+     assert(_PyType_CheckConsistency(type));
+     if (res == 0 && is_dunder_name(name) && has_slotdef(name)) {
+         res = update_slot_after_setattr(type, name);

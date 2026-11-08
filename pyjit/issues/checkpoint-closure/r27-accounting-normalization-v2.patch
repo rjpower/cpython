@@ -1,0 +1,90 @@
+--- a/Tools/build/check_r27.py
++++ b/Tools/build/check_r27.py
+@@ -633,18 +633,30 @@
+     return rules
+ 
+ 
+-def normalize_accounting_arg(arg, summary):
+-    """Replace only known build/source/dump paths; retain all other bytes."""
+-    for name, path in (("BUILD", summary.get("build")),
+-                       ("SRC", summary.get("src")),
+-                       ("DUMPS", summary.get("dump_dir"))):
+-        if path and arg.startswith(path + "/"):
+-            return f"{{{name}}}" + arg[len(path):]
+-        if path and arg == path:
+-            return f"{{{name}}}"
+-        if name == "DUMPS" and path and arg == f"pystats_dir={path}":
+-            return "pystats_dir={DUMPS}"
+-    return arg
++def normalize_accounting_argv(argv, summary):
++    """Normalize the first build product and its explicit stats-dir option."""
++    words = list(argv)
++    build = summary.get("build")
++    executable = None
++    if build:
++        products = {f"{build}/{name}": f"{{BUILD}}/{name}"
++                    for name in ("python", "Programs/_testembed")}
++        for i, arg in enumerate(words):
++            if arg in products:
++                words[i] = products[arg]
++                executable = i
++                break
++    dumps = summary.get("dump_dir")
++    if dumps and executable is not None:
++        for i in range(executable + 1, len(argv)):
++            if argv[i] in ("-c", "-m", "--") or not argv[i].startswith("-"):
++                break
++            if (argv[i] == "-X" and i + 1 < len(argv) and
++                argv[i + 1] == f"pystats_dir={dumps}"):
++                words[i + 1] = "pystats_dir={DUMPS}"
++            elif argv[i] == f"-Xpystats_dir={dumps}":
++                words[i] = "-Xpystats_dir={DUMPS}"
++    return tuple(words)
+ 
+ 
+ def suite_violations(summary, crashes=(), uncounted=(), accounting=None):
+@@ -673,8 +685,7 @@
+             any(not isinstance(arg, str) for arg in run["argv"])):
+             out.append(f"leftover .run {run['id']} has incomplete metadata")
+             continue
+-        run_counts[(tag, tuple(normalize_accounting_arg(arg, summary)
+-                                for arg in run["argv"]))] += 1
++        run_counts[(tag, normalize_accounting_argv(run["argv"], summary))] += 1
+     for key, count in sorted(run_counts.items()):
+         cap = accounting["runs"].get(key)
+         if cap is None or count > cap:
+@@ -696,7 +707,7 @@
+                        "has incomplete metadata")
+             continue
+         key = (launch["tag"], launch["reason"], launch["event"],
+-               tuple(normalize_accounting_arg(arg, summary) for arg in argv))
++               normalize_accounting_argv(argv, summary))
+         spawn_counts[key] += 1
+     for key, count in sorted(spawn_counts.items()):
+         cap = accounting["spawns"].get(key)
+--- a/Lib/test/test_tools/test_check_r27.py
++++ b/Lib/test/test_tools/test_check_r27.py
+@@ -340,6 +340,23 @@
+             with self.assertRaises(ValueError):
+                 check_r27.read_accounting_rules(path)
+ 
++    def test_accounting_normalization_does_not_rewrite_code_payload(self):
++        summary = {"build": "/build", "src": "/source",
++                   "dump_dir": "/attempt"}
++        normalize = check_r27.normalize_accounting_argv
++        self.assertEqual(normalize(
++            ["/build/python", "-X", "pystats_dir=/attempt", "-c",
++             "/build/python"], summary),
++            ("{BUILD}/python", "-X", "pystats_dir={DUMPS}", "-c",
++             "/build/python"))
++        self.assertEqual(normalize(
++            ["env", "-i", "/build/python", "-c", "/source/Lib/test"],
++            summary),
++            ("env", "-i", "{BUILD}/python", "-c", "/source/Lib/test"))
++        self.assertEqual(normalize(
++            ["/build/python", "-c", "pystats_dir=/attempt"], summary),
++            ("{BUILD}/python", "-c", "pystats_dir=/attempt"))
++
+     def test_resets(self):
+         ok = clean_summary(resets_by_tag={"test_pystats": 4})
+         self.assertEqual(self.violations(ok), [])

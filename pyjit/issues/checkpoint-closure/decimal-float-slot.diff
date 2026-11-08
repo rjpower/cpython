@@ -1,0 +1,169 @@
+--- a/Modules/_decimal/_decimal.c
++++ b/Modules/_decimal/_decimal.c
+@@ -4486,38 +4486,49 @@
+     return PyValue_FromObjectSteal(result);
+ }
+ 
+-static PyObject *
+-PyDec_AsFloat(PyObject *dec)
++/* Decimal's own string form is ASCII and has no whitespace or underscores. */
++static PyValue
++PyDec_AsFloatValue(PyValueBorrow value)
+ {
+-    PyObject *f, *s;
+-
++    PyObject *dec = PyValue_AsKnownObjectBorrow(value);
++    PyObject *s;
+     if (mpd_isnan(MPD(dec))) {
+         if (mpd_issnan(MPD(dec))) {
+             PyErr_SetString(PyExc_ValueError,
+                 "cannot convert signaling NaN to float");
+-            return NULL;
+-        }
+-        if (mpd_isnegative(MPD(dec))) {
+-            s = PyUnicode_FromString("-nan");
+-        }
+-        else {
+-            s = PyUnicode_FromString("nan");
++            return PyValue_NULL;
+         }
++        s = PyUnicode_FromString(mpd_isnegative(MPD(dec)) ? "-nan" : "nan");
+     }
+     else {
+         s = dec_str(dec);
+     }
+-
+     if (s == NULL) {
+-        return NULL;
++        return PyValue_NULL;
++    }
++    Py_ssize_t len;
++    const char *start = PyUnicode_AsUTF8AndSize(s, &len);
++    if (start == NULL) {
++        Py_DECREF(s);
++        return PyValue_NULL;
++    }
++    char *end;
++    double result = PyOS_string_to_double(start, &end, NULL);
++    if (end != start + len) {
++        PyErr_Format(PyExc_ValueError, "could not convert string to float: %R", s);
++        Py_DECREF(s);
++        return PyValue_NULL;
++    }
++    if (result == -1.0 && PyErr_Occurred()) {
++        Py_DECREF(s);
++        return PyValue_NULL;
+     }
+-
+-    f = PyFloat_FromString(s);
+     Py_DECREF(s);
+-
+-    return f;
++    return PyValue_FromDouble(result);
+ }
+ 
++_Py_VALUE_THUNK_UNARY(PyDec_AsFloat, PyDec_AsFloatValue)
++
+ /*[clinic input]
+ @value_function
+ _decimal.Decimal.__round__
+@@ -6320,30 +6331,33 @@
+ }
+ 
+ /*[clinic input]
++@value_function
+ _decimal.Decimal.__complex__
+ 
+ Convert this value to exact type complex.
+ [clinic start generated code]*/
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
++static PyValue
+ _decimal_Decimal___complex___impl(PyObject *self)
+-/*[clinic end generated code: output=c9b5b4a9fdebc912 input=6b11c6f20af7061a]*/
++/*[clinic end generated code: output=a2f4c127690eacca input=35da284cd3bc0673]*/
+ {
+-    PyObject *f;
+-    double x;
+-
+-    f = PyDec_AsFloat(self);
+-    if (f == NULL) {
+-        return NULL;
++    PyValue f = PyDec_AsFloatValue(PyValue_FromObjectBorrow(self));
++    if (PyValue_IsNull(f)) {
++        return PyValue_NULL;
+     }
+-
+-    x = PyFloat_AsDouble(f);
+-    Py_DECREF(f);
++    double x = _PyValue_AsDouble(f);
++    PyValue_CLOSE(f);
+     if (x == -1.0 && PyErr_Occurred()) {
+-        return NULL;
++        return PyValue_NULL;
+     }
+-
+-    return PyComplex_FromDoubles(x, 0);
++    PyObject *result = PyComplex_FromDoubles(x, 0);
++    if (result == NULL) {
++        return PyValue_NULL;
++    }
++    return PyValue_FromObjectSteal(result);
+ }
+ 
+ /*[clinic input]
+@@ -6753,6 +6767,7 @@
+     {Py_nb_int, nm_dec_as_long},
+     {_Py_value_nb_int, nm_dec_as_long_value},
+     {Py_nb_float, PyDec_AsFloat},
++    {_Py_value_nb_float, PyDec_AsFloatValue},
+     {Py_nb_floor_divide, nm_mpd_qdivint},
+     {_Py_value_nb_floor_divide, nm_mpd_qdivint_value},
+     {Py_nb_true_divide, nm_mpd_qdiv},
+--- a/Modules/_decimal/clinic/_decimal.c.h
++++ b/Modules/_decimal/clinic/_decimal.c.h
+@@ -4355,17 +4355,30 @@
+ "--\n"
+ "\n"
+ "Convert this value to exact type complex.");
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+ #define _DECIMAL_DECIMAL___COMPLEX___METHODDEF    \
+-    {"__complex__", (PyCFunction)_decimal_Decimal___complex__, METH_NOARGS, _decimal_Decimal___complex____doc__},
++    {"__complex__", _PyCFunction_CAST(_decimal_Decimal___complex__), METH_VALUE|METH_NOARGS, _decimal_Decimal___complex____doc__},
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
++static PyValue
+ _decimal_Decimal___complex___impl(PyObject *self);
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
+-_decimal_Decimal___complex__(PyObject *self, PyObject *Py_UNUSED(ignored))
++static PyValue
++_decimal_Decimal___complex__(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+ {
+-    return _decimal_Decimal___complex___impl(self);
++    PyValue return_value = PyValue_NULL;
++
++    return_value = _decimal_Decimal___complex___impl(PyValue_AsKnownObjectBorrow(self));
++
++    return return_value;
+ }
+ 
+ PyDoc_STRVAR(_decimal_Decimal___copy____doc__,
+@@ -7277,4 +7290,4 @@
+ #ifndef _DECIMAL_CONTEXT_APPLY_METHODDEF
+     #define _DECIMAL_CONTEXT_APPLY_METHODDEF
+ #endif /* !defined(_DECIMAL_CONTEXT_APPLY_METHODDEF) */
+-/*[clinic end generated code: output=35b4eccf255ea6a6 input=a9049054013a1b77]*/
++/*[clinic end generated code: output=f58113269b20b956 input=a9049054013a1b77]*/

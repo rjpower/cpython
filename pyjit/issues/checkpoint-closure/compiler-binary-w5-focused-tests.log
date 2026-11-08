@@ -1,0 +1,15 @@
+Using random seed: 2821834875
+0:00:00 load avg: 6.92 mem:   26.9 MiB Run 2 tests sequentially in a single process
+0:00:00 load avg: 6.92 mem:   26.9 MiB [1/2] test_compile
+0:00:03 load avg: 8.13 mem:   37.6 MiB [1/2] test_compile passed
+0:00:03 load avg: 8.13 mem:   37.6 MiB [2/2] test_ast
+0:00:04 load avg: 8.13 mem:   47.8 MiB [2/2] test_ast passed
+
+== Tests result: SUCCESS ==
+
+All 2 tests OK.
+
+Total duration: 4.9 sec
+Total tests: run=426 skipped=3
+Total test files: run=2/2
+Result: SUCCESS

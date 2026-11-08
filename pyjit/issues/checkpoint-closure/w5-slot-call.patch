@@ -1,0 +1,767 @@
+diff --git a/Include/internal/pycore_value_ops.h b/Include/internal/pycore_value_ops.h
+--- a/Include/internal/pycore_value_ops.h
++++ b/Include/internal/pycore_value_ops.h
+@@ -102,6 +102,9 @@
+                                    PyValueBorrow z);
+ PyAPI_FUNC(PyValue) _PyValue_InPlacePower(PyValueBorrow v, PyValueBorrow w,
+                                           PyValueBorrow z);
++PyAPI_FUNC(PyValue) _PyValue_CallPowerBase(PyTypeObject *base, ternaryfunc slot,
++                                          PyValueBorrow v, PyValueBorrow w,
++                                          PyValueBorrow z);
+ #define _PyValue_Power(V, W, Z) \
+     (_PyValue_Power)(PyValue_Borrow(V), PyValue_Borrow(W), PyValue_Borrow(Z))
+ #define _PyValue_InPlacePower(V, W, Z) \
+@@ -157,11 +160,14 @@
+ /* The compare and repr pairs of type t (object.c): the value slot of the
+    row if it is set, else the object slot through the adapter. object's own
+    value sides call them for the receiver's type (typeobject.c). */
+-extern PyValue _PyValue_CallRichCompare(PyTypeObject *t, richcmpfunc slot,
+-                                        PyValueBorrow v, PyValueBorrow w,
+-                                        int op);
+-extern PyObject *_PyValue_CallRepr(PyTypeObject *t, reprfunc slot, int row,
+-                                   PyValueBorrow v);
++PyAPI_FUNC(PyValue) _PyValue_CallRichCompare(PyTypeObject *t, richcmpfunc slot,
++                                             PyValueBorrow v, PyValueBorrow w,
++                                             int op);
++PyAPI_FUNC(PyObject *) _PyValue_CallRepr(PyTypeObject *t, reprfunc slot, int row,
++                                        PyValueBorrow v);
++PyAPI_FUNC(int) _PyValue_CallSetAttrBase(PyTypeObject *base, setattrofunc slot,
++                                         PyValueBorrow self, PyObject *name,
++                                         PyValueBorrow value);
+ 
+ /* object's value sides (typeobject.c), which NoneType and the sentinel type
+    inherit: upstream's object_richcompare() (== is identity, else
+diff --git a/Lib/test/test_tools/test_check_value_api.py b/Lib/test/test_tools/test_check_value_api.py
+--- a/Lib/test/test_tools/test_check_value_api.py
++++ b/Lib/test/test_tools/test_check_value_api.py
+@@ -108,6 +108,25 @@
+                             if f.rule == rule]
+                 self.assertEqual(len(findings), count, findings)
+ 
++    def test_slot_call_fixtures_and_marked_families(self):
++        fixtures = {
++            name: count
++            for name, (_, rule, count) in check_value_api.SELF_TESTS.items()
++            if rule == "slot-call"
++        }
++        self.assertEqual(fixtures, {
++            "slot_call_direct": 1,
++            "slot_call_parenthesized": 1,
++            "slot_call_cast": 1,
++            "slot_read_comparison": 0,
++            "slot_read_argument": 0,
++            "slot_read_copy": 0,
++        })
++        self.assertEqual(check_value_api.MARKED_SLOT_FAMILIES, {
++            "number", "compare", "hash", "repr", "attribute",
++            "descriptor", "subscript", "iteration", "call",
++        })
++
+     def test_call_text(self):
+         # window-read and vectorcall-thunk (value-api-m3.md, sections 1.1
+         # and 1.7).
+diff --git a/Modules/_collectionsmodule.c b/Modules/_collectionsmodule.c
+--- a/Modules/_collectionsmodule.c
++++ b/Modules/_collectionsmodule.c
+@@ -2451,7 +2451,9 @@
+     PyObject *baserepr;
+     PyObject *defrepr;
+     PyObject *result;
+-    baserepr = PyDict_Type.tp_repr(op);
++    baserepr = _PyValue_CallRepr(&PyDict_Type, PyDict_Type.tp_repr,
++                                _Py_VALUE_SLOT_INDEX_repr,
++                                PyValue_FromObjectBorrow(op));
+     if (baserepr == NULL)
+         return NULL;
+     if (dd->default_factory == NULL)
+diff --git a/Modules/_ctypes/_ctypes.c b/Modules/_ctypes/_ctypes.c
+--- a/Modules/_ctypes/_ctypes.c
++++ b/Modules/_ctypes/_ctypes.c
+@@ -1212,7 +1212,10 @@
+         }
+     }
+ 
+-    return PyType_Type.tp_setattro(self, key, value);
++    return _PyValue_CallSetAttrBase(
++        &PyType_Type, PyType_Type.tp_setattro,
++        PyValue_FromObjectBorrow(self), key,
++        PyValue_FromObjectBorrow(value));
+ }
+ 
+ static int
+diff --git a/Modules/_json.c b/Modules/_json.c
+--- a/Modules/_json.c
++++ b/Modules/_json.c
+@@ -1714,7 +1714,9 @@
+             // Fast-path for exact integers
+             return PyUnicodeWriter_WriteRepr(writer, obj);
+         }
+-        PyObject *encoded = PyLong_Type.tp_repr(obj);
++        PyObject *encoded = _PyValue_CallRepr(&PyLong_Type,
++                PyLong_Type.tp_repr, _Py_VALUE_SLOT_INDEX_repr,
++                PyValue_FromObjectBorrow(obj));
+         if (encoded == NULL)
+             return -1;
+         return _steal_accumulate(writer, encoded);
+@@ -1823,7 +1825,9 @@
+         keystr = _encoded_const(key);
+     }
+     else if (PyLong_Check(key)) {
+-        keystr = PyLong_Type.tp_repr(key);
++        keystr = _PyValue_CallRepr(&PyLong_Type, PyLong_Type.tp_repr,
++                                   _Py_VALUE_SLOT_INDEX_repr,
++                                   PyValue_FromObjectBorrow(key));
+     }
+     else if (s->skipkeys) {
+         return 0;
+diff --git a/Modules/_lsprof.c b/Modules/_lsprof.c
+--- a/Modules/_lsprof.c
++++ b/Modules/_lsprof.c
+@@ -731,8 +731,10 @@
+         if (self_arg == missing) {
+             return NULL;
+         }
+-        PyObject *meth = Py_TYPE(callable)->tp_descr_get(
+-            callable, self_arg, (PyObject*)Py_TYPE(self_arg));
++        PyObject *meth = _PyValue_AsObjectStealAt(
++            _PyValue_DescrGet(callable, PyValue_FromObjectBorrow(self_arg),
++                              Py_TYPE(self_arg)),
++            BOX_SITE_ATTRIBUTE);
+         if (meth == NULL) {
+             PyErr_Clear();
+             return NULL;
+diff --git a/Modules/clinic/itertoolsmodule.c.h b/Modules/clinic/itertoolsmodule.c.h
+--- a/Modules/clinic/itertoolsmodule.c.h
++++ b/Modules/clinic/itertoolsmodule.c.h
+@@ -688,21 +688,6 @@
+ 
+     arg = PyValue_Borrow(args[0]);
+     return_value = itertools_chain_from_iterable_impl((PyTypeObject *)PyValue_AsKnownObjectBorrow(type), arg);
+-
+-    return return_value;
+-}
+-
+-static PyObject *
+-chain_next_impl(chainobject *self);
+-
+-static PyObject *
+-chain_next(PyObject *self)
+-{
+-    PyObject *return_value = NULL;
+-
+-    Py_BEGIN_CRITICAL_SECTION(self);
+-    return_value = chain_next_impl((chainobject *)self);
+-    Py_END_CRITICAL_SECTION();
+ 
+     return return_value;
+ }
+@@ -1360,4 +1345,4 @@
+ 
+     return return_value;
+ }
+-/*[clinic end generated code: output=84454aff60fe0907 input=a9049054013a1b77]*/
++/*[clinic end generated code: output=5a5229673d8609ae input=a9049054013a1b77]*/
+diff --git a/Modules/itertoolsmodule.c b/Modules/itertoolsmodule.c
+--- a/Modules/itertoolsmodule.c
++++ b/Modules/itertoolsmodule.c
+@@ -1618,35 +1618,37 @@
+     return 0;
+ }
+ 
+-static PyObject *
+-takewhile_next(PyObject *op)
++static _PyStatusValue
++takewhile_next_value(PyObject *op)
+ {
+     takewhileobject *lz = takewhileobject_CAST(op);
+-    PyObject *item, *good;
+-    PyObject *it = lz->it;
+-    long ok;
+-
+     if (lz->stop == 1)
+-        return NULL;
+-
+-    item = (*Py_TYPE(it)->tp_iternext)(it);
+-    if (item == NULL)
+-        return NULL;
+-
+-    good = PyObject_CallOneArg(lz->func, item);
+-    if (good == NULL) {
+-        Py_DECREF(item);
+-        return NULL;
+-    }
+-    ok = _PyValue_IsTrue(PyValue_FromObjectBorrow(good));
+-    Py_DECREF(good);
++        return (_PyStatusValue){PYGEN_RETURN, PyValue_NULL};
++
++    _PyStatusValue step = _PyValue_IterStep(lz->it);
++    if (step.status != PYGEN_NEXT) {
++        return step;
++    }
++
++    PyValue good = _PyValue_CallOneArg(_PyThreadState_GET(),
++                                      PyValue_FromObjectBorrow(lz->func),
++                                      step.value);
++    if (PyValue_IsNull(good)) {
++        PyValue_CLOSE(step.value);
++        return (_PyStatusValue){PYGEN_ERROR, PyValue_NULL};
++    }
++    int ok = _PyValue_IsTrue(good);
++    PyValue_CLOSE(good);
+     if (ok > 0)
+-        return item;
+-    Py_DECREF(item);
++        return step;
++    PyValue_CLOSE(step.value);
+     if (ok == 0)
+         lz->stop = 1;
+-    return NULL;
+-}
++    return (_PyStatusValue){ok < 0 ? PYGEN_ERROR : PYGEN_RETURN,
++                            PyValue_NULL};
++}
++
++_Py_VALUE_THUNK_ITERNEXT(takewhile_next, takewhile_next_value)
+ 
+ static PyType_Slot takewhile_slots[] = {
+     {Py_tp_dealloc, takewhile_dealloc},
+@@ -1655,6 +1657,7 @@
+     {Py_tp_traverse, takewhile_traverse},
+     {Py_tp_iter, PyObject_SelfIter},
+     {Py_tp_iternext, takewhile_next},
++    {_Py_value_iternext, takewhile_next_value},
+     {Py_tp_new, itertools_takewhile},
+     {Py_tp_free, PyObject_GC_Del},
+     {0, NULL},
+@@ -1932,28 +1935,31 @@
+     return 0;
+ }
+ 
+-static PyObject *
+-starmap_next(PyObject *op)
++static _PyStatusValue
++starmap_next_value(PyObject *op)
+ {
+     starmapobject *lz = starmapobject_CAST(op);
+-    PyObject *args;
+-    PyObject *result;
+-    PyObject *it = lz->it;
+-
+-    args = (*Py_TYPE(it)->tp_iternext)(it);
+-    if (args == NULL)
+-        return NULL;
+-    if (!PyTuple_CheckExact(args)) {
+-        PyObject *newargs = _PyValue_SequenceTuple(PyValue_FromObjectBorrow(args));
+-        Py_DECREF(args);
+-        if (newargs == NULL)
+-            return NULL;
+-        args = newargs;
+-    }
+-    result = PyObject_Call(lz->func, args, NULL);
++    _PyStatusValue step = _PyValue_IterStep(lz->it);
++    if (step.status != PYGEN_NEXT) {
++        return step;
++    }
++
++    PyObject *args = _PyValue_SequenceTuple(step.value);
++    PyValue_CLOSE(step.value);
++    if (args == NULL) {
++        return (_PyStatusValue){PYGEN_ERROR, PyValue_NULL};
++    }
++    PyValue result = _PyValue_Call(_PyThreadState_GET(),
++                                   PyValue_FromObjectBorrow(lz->func),
++                                   args, NULL);
+     Py_DECREF(args);
+-    return result;
+-}
++    if (PyValue_IsNull(result)) {
++        return (_PyStatusValue){PYGEN_ERROR, PyValue_NULL};
++    }
++    return (_PyStatusValue){PYGEN_NEXT, result};
++}
++
++_Py_VALUE_THUNK_ITERNEXT(starmap_next, starmap_next_value)
+ 
+ static PyType_Slot starmap_slots[] = {
+     {Py_tp_dealloc, starmap_dealloc},
+@@ -1962,6 +1968,7 @@
+     {Py_tp_traverse, starmap_traverse},
+     {Py_tp_iter, PyObject_SelfIter},
+     {Py_tp_iternext, starmap_next},
++    {_Py_value_iternext, starmap_next_value},
+     {Py_tp_new, itertools_starmap},
+     {Py_tp_free, PyObject_GC_Del},
+     {0, NULL},
+@@ -2064,50 +2071,49 @@
+     return 0;
+ }
+ 
+-/*[clinic input]
+-@critical_section
+-itertools.chain.__next__ as chain_next
+-[clinic start generated code]*/
+-
+-static PyObject *
+-chain_next_impl(chainobject *self)
+-/*[clinic end generated code: output=91e716f45def7fa9 input=e17098e9dc88706b]*/
+-{
+-    chainobject *lz = self;
+-    PyObject *item;
+-
+-    /* lz->source is the iterator of iterables. If it's NULL, we've already
+-     * consumed them all. lz->active is the current iterator. If it's NULL,
+-     * we should grab a new one from lz->source. */
++static _PyStatusValue
++chain_next_lock_held(chainobject *lz)
++{
+     while (lz->source != NULL) {
+         if (lz->active == NULL) {
+-            PyObject *iterable = PyIter_Next(lz->source);
+-            if (iterable == NULL) {
++            _PyStatusValue source = _PyValue_IterNext(lz->source);
++            if (source.status == PYGEN_ERROR) {
+                 Py_CLEAR(lz->source);
+-                return NULL;            /* no more input sources */
++                return source;
+             }
+-            lz->active = _PyValue_GetIter(PyValue_FromObjectBorrow(iterable));
+-            Py_DECREF(iterable);
++            if (source.status != PYGEN_NEXT) {
++                PyValue_XCLOSE(source.value);
++                Py_CLEAR(lz->source);
++                return (_PyStatusValue){PYGEN_RETURN, PyValue_NULL};
++            }
++            lz->active = _PyValue_GetIter(source.value);
++            PyValue_CLOSE(source.value);
+             if (lz->active == NULL) {
+                 Py_CLEAR(lz->source);
+-                return NULL;            /* input not iterable */
++                return (_PyStatusValue){PYGEN_ERROR, PyValue_NULL};
+             }
+         }
+-        item = (*Py_TYPE(lz->active)->tp_iternext)(lz->active);
+-        if (item != NULL)
++
++        _PyStatusValue item = _PyValue_IterNext(lz->active);
++        if (item.status == PYGEN_NEXT || item.status == PYGEN_ERROR) {
+             return item;
+-        if (PyErr_Occurred()) {
+-            if (PyErr_ExceptionMatches(PyExc_StopIteration))
+-                PyErr_Clear();
+-            else
+-                return NULL;            /* input raised an exception */
+-        }
+-        /* lz->active is consumed, try with the next iterable. */
++        }
++        PyValue_XCLOSE(item.value);
+         Py_CLEAR(lz->active);
+     }
+-    /* Everything had been consumed already. */
+-    return NULL;
+-}
++    return (_PyStatusValue){PYGEN_RETURN, PyValue_NULL};
++}
++
++static _PyStatusValue
++chain_next_value(PyObject *op)
++{
++    _PyStatusValue result;
++    Py_BEGIN_CRITICAL_SECTION(op);
++    result = chain_next_lock_held(chainobject_CAST(op));
++    Py_END_CRITICAL_SECTION();
++    return result;
++}
++_Py_VALUE_THUNK_ITERNEXT(chain_next, chain_next_value)
+ 
+ PyDoc_STRVAR(chain_doc,
+ "chain(*iterables)\n\
+@@ -2135,6 +2141,7 @@
+     {Py_tp_traverse, chain_traverse},
+     {Py_tp_iter, PyObject_SelfIter},
+     {Py_tp_iternext, chain_next},
++    {_Py_value_iternext, chain_next_value},
+     {Py_tp_methods, chain_methods},
+     {Py_tp_new, chain_new},
+     {Py_tp_free, PyObject_GC_Del},
+diff --git a/Modules/mathintegermodule.c b/Modules/mathintegermodule.c
+--- a/Modules/mathintegermodule.c
++++ b/Modules/mathintegermodule.c
+@@ -11,6 +11,7 @@
+ #include "pycore_long.h"          // _PyLong_GetZero()
+ #include "pycore_long_value.h"    // _PyValue_AsLongLongAndOverflow()
+ #include "pycore_value.h"         // PyValue_TYPE()
++#include "pycore_value_api.h"     // _PyValue_AsObjectStealAt()
+ #include "pycore_value_ops.h"     // _PyValue_RichCompareBool()
+ #include "pycore_value_slots.h"// _PyValue_FromObjectResult()
+ 
+@@ -498,7 +499,11 @@
+     if (b == NULL) {
+         goto error;
+     }
+-    PyObject *cmp = PyLong_Type.tp_richcompare(n, b, Py_LT);
++    PyObject *cmp = _PyValue_AsObjectStealAt(
++        _PyValue_CallRichCompare(&PyLong_Type, PyLong_Type.tp_richcompare,
++                                 PyValue_FromObjectBorrow(n),
++                                 PyValue_FromObjectBorrow(b), Py_LT),
++        BOX_SITE_COMPARE);
+     Py_DECREF(b);
+     if (cmp == NULL) {
+         goto error;
+diff --git a/Modules/posixmodule.c b/Modules/posixmodule.c
+--- a/Modules/posixmodule.c
++++ b/Modules/posixmodule.c
+@@ -7606,7 +7606,9 @@
+         return NULL;
+     }
+     for (i = 0; i < *argc; i++) {
+-        PyObject* item = PySequence_ITEM(argv, i);
++        PyObject* item = _PyValue_AsObjectStealAt(
++            _PyValue_SequenceGetItem(PyValue_FromObjectBorrow(argv), i),
++            BOX_SITE_SEQUENCE);
+         if (item == NULL)
+             goto fail;
+         if (!fsconvert_strdup(item, &argvlist[i])) {
+diff --git a/Objects/abstract.c b/Objects/abstract.c
+--- a/Objects/abstract.c
++++ b/Objects/abstract.c
+@@ -1400,6 +1400,20 @@
+ {
+     if (value != NULL) {
+         return ((_Py_ternaryvaluefunc)value)(v, w, z);
++    }
++    return adapt_ternary(slot, v, w, z);
++}
++
++PyValue
++_PyValue_CallPowerBase(PyTypeObject *base, ternaryfunc slot,
++                       PyValueBorrow v, PyValueBorrow w, PyValueBorrow z)
++{
++    int row = _Py_VALUE_SLOT_INDEX_nb_power;
++    _Py_ternaryvaluefunc f =
++        (_Py_ternaryvaluefunc)_PyType_VALUE_FIELD_AT(base, row);
++    if (f != NULL) {
++        _PyType_CHECK_VALUE_ROW(base, row);
++        return f(v, w, z);
+     }
+     return adapt_ternary(slot, v, w, z);
+ }
+diff --git a/Objects/dictobject.c b/Objects/dictobject.c
+--- a/Objects/dictobject.c
++++ b/Objects/dictobject.c
+@@ -1182,7 +1182,7 @@
+     assert(PyUnicode_CheckExact(key));
+     Py_hash_t hash = unicode_get_hash(key);
+     if (hash == -1) {
+-        hash = PyUnicode_Type.tp_hash(key);
++        hash = _PyValue_Hash(PyValue_FromObjectBorrow(key));
+         assert(hash != -1);
+     }
+     return hash;
+@@ -1241,7 +1241,7 @@
+     assert(PyUnicode_CheckExact(key));
+     Py_hash_t hash = unicode_get_hash(key);
+     if (hash == -1) {
+-        hash = PyUnicode_Type.tp_hash(key);
++        hash = _PyValue_Hash(PyValue_FromObjectBorrow(key));
+         if (hash == -1) {
+             PyErr_Clear();
+             return DKIX_ERROR;
+diff --git a/Objects/floatobject.c b/Objects/floatobject.c
+--- a/Objects/floatobject.c
++++ b/Objects/floatobject.c
+@@ -23,6 +23,7 @@
+ #include "pycore_pystate.h"       // _PyInterpreterState_GET()
+ #include "pycore_value_call.h"   // _PyValue_VectorcallThunk()
+ #include "pycore_value.h"      // PyValue_AsKnownObjectBorrow()
++#include "pycore_value_api.h"  // _PyValue_AsObjectStealAt()
+ #include "pycore_value_ops.h"     // _PyValue_RichCompareBool()
+ #include "pycore_value_slots.h"   // _Py_VALUE_THUNK_BINARY()
+ #include "pycore_structseq.h"     // _PyStructSequence_FiniBuiltin()
+@@ -318,7 +319,7 @@
+         res = float_slot(v);
+     }
+     else {
+-        res = _PyValue_FromObjectResult(nb->nb_float(op));
++        res = _PyValue_Float(v);
+     }
+     if (PyValue_IsNull(res)) {
+         return -1;
+@@ -947,24 +948,10 @@
+         return PyValue_FromDouble(ix);
+     }
+ 
+-    /* A negative base and a fractional exponent: complex's own slot, which
+-       takes objects (there is no value slot of complex yet), so the
+-       operands are boxed here, as core boxes of site class NUMBER, and
+-       released after the call. */
+-    PyObject *vo = _PyValue_AsObjectAt(v, BOX_SITE_NUMBER);
+-    if (vo == NULL) {
+-        return PyValue_NULL;
+-    }
+-    PyObject *wo = _PyValue_AsObjectAt(w, BOX_SITE_NUMBER);
+-    if (wo == NULL) {
+-        Py_DECREF(vo);
+-        return PyValue_NULL;
+-    }
+-    PyObject *result = PyComplex_Type.tp_as_number->nb_power(
+-        vo, wo, PyValue_AsKnownObjectBorrow(z));
+-    Py_DECREF(wo);
+-    Py_DECREF(vo);
+-    return _PyValue_FromObjectResult(result);
++    /* Preserve complex's base power semantics while dispatching through its
++       typed slot when present. */
++    return _PyValue_CallPowerBase(
++        &PyComplex_Type, PyComplex_Type.tp_as_number->nb_power, v, w, z);
+ }
+ _Py_VALUE_THUNK_TERNARY(float_pow, _PyFloat_ValuePower)
+ 
+@@ -1690,11 +1677,9 @@
+     int exponent;
+     int i;
+ 
+-    PyObject *py_exponent = NULL;
+-    PyObject *numerator = NULL;
+-    PyObject *denominator = NULL;
+-    PyObject *result_pair = NULL;
+-    PyNumberMethods *long_methods = PyLong_Type.tp_as_number;
++    PyValue py_exponent = PyValue_NULL;
++    PyValue numerator = PyValue_NULL;
++    PyValue denominator = PyValue_NULL;
+ 
+     self_double = float_known(self);
+ 
+@@ -1719,38 +1704,41 @@
+        If FLT_RADIX != 2, the 300 steps may leave a tiny fractional part
+        to be truncated by PyLong_FromDouble(). */
+ 
+-    numerator = PyLong_FromDouble(float_part);
+-    if (numerator == NULL)
++    numerator = _PyValue_FromObjectResult(PyLong_FromDouble(float_part));
++    if (PyValue_IsNull(numerator))
+         goto error;
+-    denominator = PyLong_FromLong(1);
+-    if (denominator == NULL)
++    denominator = _PyValue_FromObjectResult(PyLong_FromLong(1));
++    if (PyValue_IsNull(denominator))
+         goto error;
+-    py_exponent = PyLong_FromLong(Py_ABS(exponent));
+-    if (py_exponent == NULL)
++    py_exponent = _PyValue_FromObjectResult(PyLong_FromLong(Py_ABS(exponent)));
++    if (PyValue_IsNull(py_exponent))
+         goto error;
+ 
+     /* fold in 2**exponent */
+     if (exponent > 0) {
+-        Py_SETREF(numerator,
+-                  long_methods->nb_lshift(numerator, py_exponent));
+-        if (numerator == NULL)
++        PyValue shifted = _PyValue_Lshift(numerator, py_exponent);
++        PyValue_CLOSE(numerator);
++        numerator = shifted;
++        if (PyValue_IsNull(numerator))
+             goto error;
+     }
+     else {
+-        Py_SETREF(denominator,
+-                  long_methods->nb_lshift(denominator, py_exponent));
+-        if (denominator == NULL)
++        PyValue shifted = _PyValue_Lshift(denominator, py_exponent);
++        PyValue_CLOSE(denominator);
++        denominator = shifted;
++        if (PyValue_IsNull(denominator))
+             goto error;
+     }
+-    Py_DECREF(py_exponent);
+-
+-    return _PyValue_FromObjectResult(_PyTuple_FromPairTakeValue(PyValue_PrepareOwned(numerator), PyValue_PrepareOwned(denominator)));
++    PyValue_CLOSE(py_exponent);
++
++    return _PyValue_FromObjectResult(
++        _PyTuple_FromPairTakeValue(numerator, denominator));
+ 
+ error:
+-    Py_XDECREF(py_exponent);
+-    Py_XDECREF(denominator);
+-    Py_XDECREF(numerator);
+-    return _PyValue_FromObjectResult(result_pair);
++    PyValue_CLOSE(py_exponent);
++    PyValue_CLOSE(denominator);
++    PyValue_CLOSE(numerator);
++    return PyValue_NULL;
+ }
+ 
+ static PyObject *
+diff --git a/Objects/object.c b/Objects/object.c
+--- a/Objects/object.c
++++ b/Objects/object.c
+@@ -1629,6 +1629,40 @@
+                      PyValue_IsNull(value) ? "del" : "assign to",
+                      name);
+     return -1;
++}
++
++int
++_PyValue_CallSetAttrBase(PyTypeObject *base, setattrofunc slot,
++                         PyValueBorrow self, PyObject *name,
++                         PyValueBorrow value)
++{
++    assert(slot != NULL);
++    int row = _Py_VALUE_SLOT_INDEX_setattro;
++    _Py_setattrovaluefunc f =
++        (_Py_setattrovaluefunc)_PyType_VALUE_FIELD_AT(base, row);
++    if (f != NULL) {
++        _PyType_CHECK_VALUE_ROW(base, row);
++        return f(self, name, value);
++    }
++
++    PyObject *self_obj = _PyValue_AdapterBox(self, BOX_SITE_ATTRIBUTE, slot);
++    if (self_obj == NULL) {
++        return -1;
++    }
++    PyObject *value_obj = NULL;
++    if (!PyValue_IsNull(value)) {
++        value_obj = _PyValue_AdapterBox(value, BOX_SITE_ATTRIBUTE, slot);
++        if (value_obj == NULL) {
++            _PyValue_AdapterRelease(self, self_obj);
++            return -1;
++        }
++    }
++    int result = slot(self_obj, name, value_obj);
++    if (value_obj != NULL) {
++        _PyValue_AdapterRelease(value, value_obj);
++    }
++    _PyValue_AdapterRelease(self, self_obj);
++    return result;
+ }
+ 
+ int
+diff --git a/Objects/odictobject.c b/Objects/odictobject.c
+--- a/Objects/odictobject.c
++++ b/Objects/odictobject.c
+@@ -1602,7 +1602,12 @@
+         PyObject *res, *cmp;
+         int eq;
+ 
+-        cmp = PyDict_Type.tp_richcompare(v, w, op);
++        cmp = _PyValue_AsObjectStealAt(
++            _PyValue_CallRichCompare(&PyDict_Type,
++                                     PyDict_Type.tp_richcompare,
++                                     PyValue_FromObjectBorrow(v),
++                                     PyValue_FromObjectBorrow(w), op),
++            BOX_SITE_COMPARE);
+         if (cmp == NULL)
+             return NULL;
+         if (!PyODict_Check(w))
+diff --git a/Tools/build/check_value_api.py b/Tools/build/check_value_api.py
+--- a/Tools/build/check_value_api.py
++++ b/Tools/build/check_value_api.py
+@@ -13,10 +13,11 @@
+   (va_arg(*vargs, PyValueBorrow) in Objects/unicodeobject.c): the check
+   requires every value conversion to receive one, and reports an owner
+   there, which the caller passes as PyValue_Borrow(v).
+-* slot-read: a read of an object slot field that has a value form
++* slot-call: a direct call through an object slot field that has a value form
+   (tp_as_number->nb_add, tp_richcompare, tp_iternext, tp_call and the rest).
+-  A read of a slot whose family is in MARKED_SLOT_FAMILIES fails; other reads
+-  are listed. Units that define Py_VALUE_ADAPTER are skipped.
++  Calls in a family in MARKED_SLOT_FAMILIES fail. Mere reads, comparisons,
++  copies and indirect calls are listed as non-failing slot-read findings.
++  Units that define Py_VALUE_ADAPTER are skipped.
+ * raw-bits: knowledge of the word's encoding outside the code that may have
+   it (value-api.md, section 1.6, rule 1: ENCODING_FILES and
+   ENCODING_FUNCTIONS). In a value-native unit: a .bits or ->bits access of a
+@@ -187,7 +188,13 @@
+ }
+ 
+ # The packet that marks a family adds it here (value-api.md, section 9).
+-MARKED_SLOT_FAMILIES = frozenset()
++# V2a/V2b have operational value dispatch for every family below. Keep this
++# list explicit: a typed slot-table row is not enough to mark a family until
++# its dispatcher is wired.
++MARKED_SLOT_FAMILIES = frozenset({
++    "number", "compare", "hash", "repr", "attribute", "descriptor",
++    "subscript", "iteration", "call",
++})
+ 
+ VALUE_TYPES = ("PyValue", "PyValueBorrow")
+ PYVALUE_TYPES = tuple(f'asString("{const}{name}")' for name in VALUE_TYPES
+@@ -201,6 +208,12 @@
+     "implicitCastExpr(hasCastKind(\"CK_LValueToRValue\"), has(memberExpr(member("
+     "hasAnyName({names})))))"
+     '.bind("slot")'.format(
++        names=", ".join(f'"{name}"' for name in sorted(SLOT_FAMILIES)))
++)
++SLOT_CALL_MATCHER = (
++    "callExpr(callee(expr(hasDescendant(memberExpr(member("
++    "hasAnyName({names})))))))"
++    '.bind("slotcall")'.format(
+         names=", ".join(f'"{name}"' for name in sorted(SLOT_FAMILIES)))
+ )
+ 
+@@ -418,6 +431,7 @@
+                              HOME_COPY_MATCHER)),
+     "set traversal AsIs",
+     f"match {SLOT_READ_MATCHER}",
++    f"match {SLOT_CALL_MATCHER}",
+     f"match {COMPAT_BODY_MATCHER}",
+     "",
+ ])
+@@ -817,15 +831,20 @@
+             for message in check_call(parse_call_dump(dump)):
+                 findings.append(
+                     Finding(path, line, column, "variadic", message, True))
+-        elif binding == "slot" and kind == "core":
++        elif binding in ("slot", "slotcall") and kind == "core":
+             names = re.findall(r"->(\w+)|\.(\w+)", " ".join(dump))
+             field = next((a or b for a, b in names
+                           if (a or b) in SLOT_FAMILIES), None)
+             family = SLOT_FAMILIES.get(field, "?")
+-            findings.append(Finding(
+-                path, line, column, "slot-read",
+-                f"read of {field} ({family} family)",
+-                family in MARKED_SLOT_FAMILIES))
++            if binding == "slotcall":
++                findings.append(Finding(
++                    path, line, column, "slot-call",
++                    f"direct call of {field} ({family} family)",
++                    family in MARKED_SLOT_FAMILIES))
++            else:
++                findings.append(Finding(
++                    path, line, column, "slot-read",
++                    f"read of {field} ({family} family)", False))
+         elif binding == "entry_box":
+             findings.append(Finding(
+                 path, line, column, "compat-body",
+@@ -1458,6 +1477,32 @@
+         PyObject *f(PyObject *o) {
+             return Py_TYPE(o)->tp_as_number->nb_add(o, o);
+         }""", "slot-read", 1),
++    "slot_call_direct": ("""
++        PyObject *f(PyObject *o) {
++            return Py_TYPE(o)->tp_as_number->nb_add(o, o);
++        }""", "slot-call", 1),
++    "slot_call_parenthesized": ("""
++        PyObject *f(PyObject *o) {
++            return ((Py_TYPE(o)->tp_richcompare))(o, o, Py_EQ);
++        }""", "slot-call", 1),
++    "slot_call_cast": ("""
++        PyObject *f(PyObject *o) {
++            return ((binaryfunc)Py_TYPE(o)->tp_as_number->nb_add)(o, o);
++        }""", "slot-call", 1),
++    "slot_read_comparison": ("""
++        int f(PyObject *o) {
++            return Py_TYPE(o)->tp_hash == NULL;
++        }""", "slot-call", 0),
++    "slot_read_argument": ("""
++        static void consume(iternextfunc);
++        void f(PyObject *o) {
++            consume(Py_TYPE(o)->tp_iternext);
++        }""", "slot-call", 0),
++    "slot_read_copy": ("""
++        PyObject *f(PyObject *o) {
++            unaryfunc next = Py_TYPE(o)->tp_iternext;
++            return NULL;
++        }""", "slot-call", 0),
+     "raw_bits_access": ("""
+         uintptr_t f(PyValue v, PyValueBorrow *p) {
+             return v.bits + p->bits;

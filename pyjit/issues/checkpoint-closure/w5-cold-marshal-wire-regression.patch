@@ -1,0 +1,16 @@
+diff --git a/Lib/test/test_marshal.py b/Lib/test/test_marshal.py
+--- a/Lib/test/test_marshal.py
++++ b/Lib/test/test_marshal.py
+@@ -99,6 +99,11 @@ class IntTestCase(unittest.TestCase, HelperMixin):
+                     data = marshal.dumps((value,), version)
+                     self.assertEqual(data[5:], marshal.dumps(value, version))
+                     self.assertEqual(marshal.loads(data), (value,))
+ 
++        # Inline integers have no object identity to enter in the ref table.
++        repeated = marshal.dumps((1, 1), 6)
++        self.assertTrue(repeated.endswith(b"i\x01\x00\x00\x00" * 2))
++        self.assertEqual(marshal.loads(repeated), (1, 1))
++
+     def test_bool(self):
+         for b in (True, False):
+             self.helper(b)

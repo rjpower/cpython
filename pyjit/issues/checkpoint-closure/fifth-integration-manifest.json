@@ -1,0 +1,11 @@
+{
+  "base": "b9888ea3b40",
+  "applied": [
+    "r27-dict-ctor-values.diff",
+    "dict-constructor-borrow-and-creator-fix.patch",
+    "r27-math-dist-values.diff"
+  ],
+  "notes": [
+    "Explicitborrowguardsusewindowreadcontract; dictobjectisnowalegitimatepairedconstructorcreator,matchingexistingstaticbuiltinallowlist."
+  ]
+}

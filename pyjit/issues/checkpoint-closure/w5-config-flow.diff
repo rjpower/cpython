@@ -1,0 +1,136 @@
+diff --git a/Python/config_common.h b/Python/config_common.h
+index 88d2c426161..26d4493cb5b 100644
+--- a/Python/config_common.h
++++ b/Python/config_common.h
+@@ -23,6 +23,21 @@ _config_dict_get(PyObject *dict, const char *name, PyObject **p_item)
+ }
+ 
+ 
++static inline PyValue
++config_dict_get_value(PyObject *dict, const char *name)
++{
++    PyValue item;
++    int rc = PyDict_GetValueString(dict, name, &item);
++    if (rc <= 0) {
++        if (rc == 0) {
++            PyErr_Format(PyExc_ValueError, "missing config key: %s", name);
++        }
++        return PyValue_NULL;
++    }
++    return item;
++}
++
++
+ static PyObject*
+ config_dict_get(PyObject *dict, const char *name)
+ {
+diff --git a/Python/flowgraph.c b/Python/flowgraph.c
+index 74d44d9565d..970aabfe385 100644
+--- a/Python/flowgraph.c
++++ b/Python/flowgraph.c
+@@ -2387,12 +2387,29 @@ basicblock_optimize_load_const(PyObject *const_cache, basicblock *bb,
+     for (int i = 0; i < bb->b_iused; i++) {
+         cfg_instr *inst = &bb->b_instr[i];
+         if (inst->i_opcode == LOAD_CONST) {
+-            PyObject *constant = get_const_value(inst->i_opcode, inst->i_oparg, consts);
+-            if (constant == NULL) {
++            Py_ssize_t n = PyList_GET_SIZE(consts);
++            if (inst->i_oparg < 0 || inst->i_oparg >= n) {
++                PyErr_Format(PyExc_ValueError,
++                             "LOAD_CONST index %d is out of range for consts (len=%zd)",
++                             inst->i_oparg, n);
++                return ERROR;
++            }
++            PyValue constant = PyList_GetValue(consts, inst->i_oparg);
++            if (PyValue_IsNull(constant)) {
+                 return ERROR;
+             }
+-            int res = maybe_instr_make_load_smallint(inst, constant, consts, const_cache);
+-            Py_DECREF(constant);
++            int res = 0;
++            if (PyValue_IsInlineInt(constant)) {
++                int64_t val = PyValue_InlineInt64(constant);
++                if (0 <= val && val <= 255 && _PY_IS_SMALL_INT(val)) {
++                    INSTR_SET_OP1(inst, LOAD_SMALL_INT, (int)val);
++                }
++            }
++            else if (PyValue_IsObject(constant)) {
++                res = maybe_instr_make_load_smallint(
++                    inst, PyValue_AsKnownObjectBorrow(constant), consts, const_cache);
++            }
++            PyValue_CLOSE(constant);
+             if (res < 0) {
+                 return ERROR;
+             }
+@@ -2506,12 +2523,21 @@ basicblock_optimize_load_const(PyObject *const_cache, basicblock *bb,
+             }
+         }
+         if (inst->i_opcode == LOAD_CONST) {
+-            PyObject *constant = get_const_value(inst->i_opcode, inst->i_oparg, consts);
+-            if (constant == NULL) {
++            PyValue constant = PyList_GetValue(consts, inst->i_oparg);
++            if (PyValue_IsNull(constant)) {
+                 return ERROR;
+             }
+-            int res = maybe_instr_make_load_common_const(inst, constant);
+-            Py_DECREF(constant);
++            int res = 0;
++            if (PyValue_IsInlineInt(constant)) {
++                if (PyValue_InlineInt64(constant) == -1) {
++                    INSTR_SET_OP1(inst, LOAD_COMMON_CONSTANT, CONSTANT_MINUS_ONE);
++                }
++            }
++            else if (PyValue_IsObject(constant)) {
++                res = maybe_instr_make_load_common_const(
++                    inst, PyValue_AsKnownObjectBorrow(constant));
++            }
++            PyValue_CLOSE(constant);
+             if (res < 0) {
+                 return ERROR;
+             }
+diff --git a/Python/initconfig.c b/Python/initconfig.c
+index 6e63070d59d..07eca6e59cb 100644
+--- a/Python/initconfig.c
++++ b/Python/initconfig.c
+@@ -6,6 +6,7 @@
+ #include "pycore_interp.h"        // _PyInterpreterState.runtime
+ #include "pycore_list.h"          // PyList_AppendValue()
+ #include "pycore_long.h"          // _PY_LONG_MAX_STR_DIGITS_THRESHOLD
++#include "pycore_long_value.h"    // _PyValue_AsInt()
+ #include "pycore_pathconfig.h"    // _Py_path_config
+ #include "pycore_pyerrors.h"      // _PyErr_GetRaisedException()
+ #include "pycore_pylifecycle.h"   // _Py_PreInitializeFromConfig()
+@@ -1428,12 +1429,12 @@ config_dict_invalid_value(const char *name)
+ static int
+ config_dict_get_int(PyObject *dict, const char *name, int *result)
+ {
+-    PyObject *item = config_dict_get(dict, name);
+-    if (item == NULL) {
++    PyValue item = config_dict_get_value(dict, name);
++    if (PyValue_IsNull(item)) {
+         return -1;
+     }
+-    int value = PyLong_AsInt(item);
+-    Py_DECREF(item);
++    int value = _PyValue_AsInt(item);
++    PyValue_CLOSE(item);
+     if (value == -1 && PyErr_Occurred()) {
+         if (PyErr_ExceptionMatches(PyExc_TypeError)) {
+             config_dict_invalid_type(name);
+@@ -1451,12 +1452,12 @@ config_dict_get_int(PyObject *dict, const char *name, int *result)
+ static int
+ config_dict_get_ulong(PyObject *dict, const char *name, unsigned long *result)
+ {
+-    PyObject *item = config_dict_get(dict, name);
+-    if (item == NULL) {
++    PyValue item = config_dict_get_value(dict, name);
++    if (PyValue_IsNull(item)) {
+         return -1;
+     }
+-    unsigned long value = PyLong_AsUnsignedLong(item);
+-    Py_DECREF(item);
++    unsigned long value = _PyValue_IntAsUnsignedLong(item);
++    PyValue_CLOSE(item);
+     if (value == (unsigned long)-1 && PyErr_Occurred()) {
+         if (PyErr_ExceptionMatches(PyExc_TypeError)) {
+             config_dict_invalid_type(name);

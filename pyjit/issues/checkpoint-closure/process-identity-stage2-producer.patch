@@ -1,0 +1,62 @@
+--- a/Python/pystats.c
++++ b/Python/pystats.c
+@@ -18,7 +18,7 @@
+ 
+ static uint64_t stats_resets;
+ static void run_marker_create(PyInterpreterState *interp);
+-static void run_marker_remove(PyInterpreterState *interp);
++static void run_marker_finish(PyInterpreterState *interp, const char *outcome);
+ static void box_owners_clear(PyInterpreterState *interp);
+ 
+ PyStats *
+@@ -921,19 +921,28 @@
+ }
+ 
+ static void
+-run_marker_remove(PyInterpreterState *interp)
++run_marker_finish(PyInterpreterState *interp, const char *outcome)
+ {
+     if (run_pid == getpid() && run_stem[0] != '\0') {
+         char dir[MAXPATHLEN + 1], path[MAXPATHLEN + 1];
++        char finished[MAXPATHLEN + 1];
+         stats_dump_dir(interp, dir, sizeof(dir));
+-        PyOS_snprintf(path, sizeof(path), "%s/%s.run", dir, run_stem);
+-        unlink(path);
++        int n = PyOS_snprintf(path, sizeof(path), "%s/%s.run", dir, run_stem);
++        int n2 = PyOS_snprintf(finished, sizeof(finished), "%s/%s.%s",
++                              dir, run_stem, outcome);
++        if (n > 0 && (size_t)n < sizeof(path) &&
++            n2 > 0 && (size_t)n2 < sizeof(finished)) {
++            /* Keep the start-time pid, ppid, tag and argv after a dump. A
++               failed rename leaves the .run file for the gate to reject. */
++            (void)rename(path, finished);
++        }
+     }
+     run_stem[0] = '\0';
+ }
+ #else
+ static void run_marker_create(PyInterpreterState *interp) { (void)interp; }
+-static void run_marker_remove(PyInterpreterState *interp) { (void)interp; }
++static void run_marker_finish(PyInterpreterState *interp, const char *outcome)
++{ (void)interp; (void)outcome; }
+ #endif
+ 
+ void
+@@ -1221,7 +1230,7 @@
+         // gh-108753: -X pystats command line was used, but then _stats_off()
+         // and _stats_clear() have been called: in this case, avoid printing
+         // useless "all zeros" statistics.
+-        run_marker_remove(interp);
++        run_marker_finish(interp, "zero");
+         return 0;
+     }
+ 
+@@ -1267,7 +1276,7 @@
+     if (out != stderr) {
+         fclose(out);
+         if (rename(tmp_path, final_path) == 0) {
+-            run_marker_remove(interp);
++            run_marker_finish(interp, "done");
+         }
+     }
+     return 1;

@@ -1,0 +1,1547 @@
+--- a/Modules/_decimal/_decimal.c
++++ b/Modules/_decimal/_decimal.c
+@@ -6371,12 +6371,18 @@
+     PyObject *result;                                            \
+     uint32_t status = 0;                                         \
+                                                                  \
+-    CONVERT_BINOP_RAISE(&a, &b, x, y, context);                  \
++    if (!convert_op_value(&a, x, context)) {                     \
++        return PyValue_NULL;                                     \
++    }                                                            \
++    if (!convert_op_value(&b, y, context)) {                     \
++        Py_DECREF(a);                                            \
++        return PyValue_NULL;                                     \
++    }                                                            \
+     decimal_state *state = PyType_GetModuleState(cls);           \
+     if ((result = dec_alloc(state)) == NULL) {                   \
+         Py_DECREF(a);                                            \
+         Py_DECREF(b);                                            \
+-        return NULL;                                             \
++        return PyValue_NULL;                                     \
+     }                                                            \
+                                                                  \
+     MPDFUNC(MPD(result), MPD(a), MPD(b), CTX(context), &status); \
+@@ -6384,10 +6390,10 @@
+     Py_DECREF(b);                                                \
+     if (dec_addstatus(context, status)) {                        \
+         Py_DECREF(result);                                       \
+-        return NULL;                                             \
++        return PyValue_NULL;                                     \
+     }                                                            \
+                                                                  \
+-    return result;                                               \
++    return PyValue_FromObjectSteal(result);                       \
+ }
+ 
+ /*
+@@ -6671,6 +6677,7 @@
+ /* Binary arithmetic functions */
+ 
+ /*[clinic input]
++@value_function
+ _decimal.Context.add
+ 
+     self as context: self
+@@ -6681,146 +6688,194 @@
+ 
+ Return the sum of x and y.
+ [clinic start generated code]*/
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
+-_decimal_Context_add_impl(PyObject *context, PyTypeObject *cls, PyObject *x,
+-                          PyObject *y)
+-/*[clinic end generated code: output=ab4f0fb841e6a867 input=f2c74f6a845f62e9]*/
++static PyValue
++_decimal_Context_add_impl(PyObject *context, PyTypeObject *cls,
++                          PyValueBorrow x, PyValueBorrow y)
++/*[clinic end generated code: output=f39fe3d301271926 input=a2aa7411b21bd746]*/
+ DecCtx_BinaryFunc(mpd_qadd)
+ 
+ /*[clinic input]
++@value_function
+ _decimal.Context.compare = _decimal.Context.add
+ 
+ Compare x and y numerically.
+ [clinic start generated code]*/
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
++static PyValue
+ _decimal_Context_compare_impl(PyObject *context, PyTypeObject *cls,
+-                              PyObject *x, PyObject *y)
+-/*[clinic end generated code: output=56efd1faf653f1d7 input=f701cb179c966ec1]*/
++                              PyValueBorrow x, PyValueBorrow y)
++/*[clinic end generated code: output=feaf6d978b62af65 input=66ca21a82b66913f]*/
+ DecCtx_BinaryFunc(mpd_qcompare)
+ 
+ /*[clinic input]
++@value_function
+ _decimal.Context.compare_signal = _decimal.Context.add
+ 
+ Compare x and y numerically.  All NaNs signal.
+ [clinic start generated code]*/
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
++static PyValue
+ _decimal_Context_compare_signal_impl(PyObject *context, PyTypeObject *cls,
+-                                     PyObject *x, PyObject *y)
+-/*[clinic end generated code: output=7c1a9a9f6ae4e5cd input=32a1bcef7bbc5179]*/
++                                     PyValueBorrow x, PyValueBorrow y)
++/*[clinic end generated code: output=5d0f1ce318d50eff input=8303dac5d235ca98]*/
+ DecCtx_BinaryFunc(mpd_qcompare_signal)
+ 
+ /*[clinic input]
++@value_function
+ _decimal.Context.divide = _decimal.Context.add
+ 
+ Return x divided by y.
+ [clinic start generated code]*/
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
++static PyValue
+ _decimal_Context_divide_impl(PyObject *context, PyTypeObject *cls,
+-                             PyObject *x, PyObject *y)
+-/*[clinic end generated code: output=1a7924b20e24a528 input=00cd9bc2ba2a1786]*/
++                             PyValueBorrow x, PyValueBorrow y)
++/*[clinic end generated code: output=f1a2f70bcc073874 input=718311720d32e7e7]*/
+ DecCtx_BinaryFunc(mpd_qdiv)
+ 
+ /*[clinic input]
++@value_function
+ _decimal.Context.divide_int = _decimal.Context.add
+ 
+ Return x divided by y, truncated to an integer.
+ [clinic start generated code]*/
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
++static PyValue
+ _decimal_Context_divide_int_impl(PyObject *context, PyTypeObject *cls,
+-                                 PyObject *x, PyObject *y)
+-/*[clinic end generated code: output=7a1d8948625105f0 input=e80ada2f50d9719d]*/
++                                 PyValueBorrow x, PyValueBorrow y)
++/*[clinic end generated code: output=c31b8b0bd952b914 input=6f9018e31eee7b51]*/
+ DecCtx_BinaryFunc(mpd_qdivint)
+ 
+ /*[clinic input]
++@value_function
+ _decimal.Context.max = _decimal.Context.add
+ 
+ Compare the values numerically and return the maximum.
+ [clinic start generated code]*/
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
+-_decimal_Context_max_impl(PyObject *context, PyTypeObject *cls, PyObject *x,
+-                          PyObject *y)
+-/*[clinic end generated code: output=cd54af10a51c11fc input=22008ab898c86a8b]*/
++static PyValue
++_decimal_Context_max_impl(PyObject *context, PyTypeObject *cls,
++                          PyValueBorrow x, PyValueBorrow y)
++/*[clinic end generated code: output=1de9b5e410879d5a input=b989ef139bbe7063]*/
+ DecCtx_BinaryFunc(mpd_qmax)
+ 
+ /*[clinic input]
++@value_function
+ _decimal.Context.max_mag = _decimal.Context.add
+ 
+ Compare the values numerically with their sign ignored.
+ [clinic start generated code]*/
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
++static PyValue
+ _decimal_Context_max_mag_impl(PyObject *context, PyTypeObject *cls,
+-                              PyObject *x, PyObject *y)
+-/*[clinic end generated code: output=1c812e73bcb7827f input=f7ce42ef82a7c52e]*/
++                              PyValueBorrow x, PyValueBorrow y)
++/*[clinic end generated code: output=22a2db92d908bb38 input=fb1c0e3a78a1fa21]*/
+ DecCtx_BinaryFunc(mpd_qmax_mag)
+ 
+ /*[clinic input]
++@value_function
+ _decimal.Context.min = _decimal.Context.add
+ 
+ Compare the values numerically and return the minimum.
+ [clinic start generated code]*/
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
+-_decimal_Context_min_impl(PyObject *context, PyTypeObject *cls, PyObject *x,
+-                          PyObject *y)
+-/*[clinic end generated code: output=aa494e95b88107b3 input=2aeec1167638c5ef]*/
++static PyValue
++_decimal_Context_min_impl(PyObject *context, PyTypeObject *cls,
++                          PyValueBorrow x, PyValueBorrow y)
++/*[clinic end generated code: output=2743a7a0f79a0605 input=8f9f7af9fb98a960]*/
+ DecCtx_BinaryFunc(mpd_qmin)
+ 
+ /*[clinic input]
++@value_function
+ _decimal.Context.min_mag = _decimal.Context.add
+ 
+ Compare the values numerically with their sign ignored.
+ [clinic start generated code]*/
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
++static PyValue
+ _decimal_Context_min_mag_impl(PyObject *context, PyTypeObject *cls,
+-                              PyObject *x, PyObject *y)
+-/*[clinic end generated code: output=ee0b69c1d9a14185 input=19d158c29e4fc140]*/
++                              PyValueBorrow x, PyValueBorrow y)
++/*[clinic end generated code: output=46dcfc49b3d042d6 input=c32b8d0768ad7134]*/
+ DecCtx_BinaryFunc(mpd_qmin_mag)
+ 
+ /*[clinic input]
++@value_function
+ _decimal.Context.multiply = _decimal.Context.add
+ 
+ Return the product of x and y.
+ [clinic start generated code]*/
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
++static PyValue
+ _decimal_Context_multiply_impl(PyObject *context, PyTypeObject *cls,
+-                               PyObject *x, PyObject *y)
+-/*[clinic end generated code: output=45f33b805afa01a8 input=2fdd01acdbeef8ba]*/
++                               PyValueBorrow x, PyValueBorrow y)
++/*[clinic end generated code: output=18f86a92ce4fbaf3 input=687e7cbcd0f2de41]*/
+ DecCtx_BinaryFunc(mpd_qmul)
+ 
+ /*[clinic input]
++@value_function
+ _decimal.Context.next_toward = _decimal.Context.add
+ 
+ Return the number closest to x, in the direction towards y.
+ [clinic start generated code]*/
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
++static PyValue
+ _decimal_Context_next_toward_impl(PyObject *context, PyTypeObject *cls,
+-                                  PyObject *x, PyObject *y)
+-/*[clinic end generated code: output=436afff6f43edec2 input=aac775298e02b68c]*/
++                                  PyValueBorrow x, PyValueBorrow y)
++/*[clinic end generated code: output=e48bb01f1cf29094 input=ee010528247d6373]*/
+ DecCtx_BinaryFunc(mpd_qnext_toward)
+ 
+ /*[clinic input]
++@value_function
+ _decimal.Context.quantize = _decimal.Context.add
+ 
+ Return a value equal to x (rounded), having the exponent of y.
+ [clinic start generated code]*/
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
++static PyValue
+ _decimal_Context_quantize_impl(PyObject *context, PyTypeObject *cls,
+-                               PyObject *x, PyObject *y)
+-/*[clinic end generated code: output=fcf8cd32b7d628c9 input=43d67a696ab6d895]*/
++                               PyValueBorrow x, PyValueBorrow y)
++/*[clinic end generated code: output=52e0f049d42562f0 input=cb3ee988632ff560]*/
+ DecCtx_BinaryFunc(mpd_qquantize)
+ 
+ /*[clinic input]
++@value_function
+ _decimal.Context.remainder = _decimal.Context.add
+ 
+ Return the remainder from integer division.
+@@ -6828,14 +6883,18 @@
+ The sign of the result, if non-zero, is the same as that of the
+ original dividend.
+ [clinic start generated code]*/
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
++static PyValue
+ _decimal_Context_remainder_impl(PyObject *context, PyTypeObject *cls,
+-                                PyObject *x, PyObject *y)
+-/*[clinic end generated code: output=e0f96c834abbfbd2 input=36d0eb2b392c1215]*/
++                                PyValueBorrow x, PyValueBorrow y)
++/*[clinic end generated code: output=67e794c017dce04d input=33fa6f87f4d65b8e]*/
+ DecCtx_BinaryFunc(mpd_qrem)
+ 
+ /*[clinic input]
++@value_function
+ _decimal.Context.remainder_near = _decimal.Context.add
+ 
+ Return x - y * n.
+@@ -6843,23 +6902,30 @@
+ Here n is the integer nearest the exact value of x / y (if the
+ result is 0 then its sign will be the sign of x).
+ [clinic start generated code]*/
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
++static PyValue
+ _decimal_Context_remainder_near_impl(PyObject *context, PyTypeObject *cls,
+-                                     PyObject *x, PyObject *y)
+-/*[clinic end generated code: output=7f18c535a12cf8ac input=60342558000d4be6]*/
++                                     PyValueBorrow x, PyValueBorrow y)
++/*[clinic end generated code: output=9deb63ee9be4183e input=8f0325b10ebf29d8]*/
+ DecCtx_BinaryFunc(mpd_qrem_near)
+ 
+ /*[clinic input]
++@value_function
+ _decimal.Context.subtract = _decimal.Context.add
+ 
+ Return the difference between x and y.
+ [clinic start generated code]*/
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
++static PyValue
+ _decimal_Context_subtract_impl(PyObject *context, PyTypeObject *cls,
+-                               PyObject *x, PyObject *y)
+-/*[clinic end generated code: output=3d764a8a87e79401 input=6767683ec68f7a1a]*/
++                               PyValueBorrow x, PyValueBorrow y)
++/*[clinic end generated code: output=7087c993f466fe9c input=4ea6c507511774fb]*/
+ DecCtx_BinaryFunc(mpd_qsub)
+ 
+ /*[clinic input]
+@@ -7504,6 +7570,7 @@
+ 
+ /*[clinic input]
+ @permit_long_docstring_body
++@value_function
+ _decimal.Context.logical_and = _decimal.Context.add
+ 
+ Applies the logical operation 'and' between each operand's digits.
+@@ -7529,14 +7596,18 @@
+     >>> ExtendedContext.logical_and(110, Decimal(1101))
+     Decimal('100')
+ [clinic start generated code]*/
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
++static PyValue
+ _decimal_Context_logical_and_impl(PyObject *context, PyTypeObject *cls,
+-                                  PyObject *x, PyObject *y)
+-/*[clinic end generated code: output=009dfa08ecaa2ac8 input=9f8a93a31b9d7088]*/
++                                  PyValueBorrow x, PyValueBorrow y)
++/*[clinic end generated code: output=2692c1fbe7fa31e3 input=d33f55f40b7ff257]*/
+ DecCtx_BinaryFunc(mpd_qand)
+ 
+ /*[clinic input]
++@value_function
+ _decimal.Context.logical_or = _decimal.Context.add
+ 
+ Applies the logical operation 'or' between each operand's digits.
+@@ -7562,15 +7633,19 @@
+     >>> ExtendedContext.logical_or(110, Decimal(1101))
+     Decimal('1111')
+ [clinic start generated code]*/
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
++static PyValue
+ _decimal_Context_logical_or_impl(PyObject *context, PyTypeObject *cls,
+-                                 PyObject *x, PyObject *y)
+-/*[clinic end generated code: output=eb38617e8d31bf12 input=47b45d296fb90846]*/
++                                 PyValueBorrow x, PyValueBorrow y)
++/*[clinic end generated code: output=3fb1438473450ec5 input=5f024b8a9bbc238f]*/
+ DecCtx_BinaryFunc(mpd_qor)
+ 
+ /*[clinic input]
+ @permit_long_docstring_body
++@value_function
+ _decimal.Context.logical_xor = _decimal.Context.add
+ 
+ Applies the logical operation 'xor' between each operand's digits.
+@@ -7596,47 +7671,62 @@
+     >>> ExtendedContext.logical_xor(110, Decimal(1101))
+     Decimal('1011')
+ [clinic start generated code]*/
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
++static PyValue
+ _decimal_Context_logical_xor_impl(PyObject *context, PyTypeObject *cls,
+-                                  PyObject *x, PyObject *y)
+-/*[clinic end generated code: output=23cd81fdcd865d5a input=119412854ae58440]*/
++                                  PyValueBorrow x, PyValueBorrow y)
++/*[clinic end generated code: output=c96ba9ecd6e72c45 input=bb61e565145002d2]*/
+ DecCtx_BinaryFunc(mpd_qxor)
+ 
+ /*[clinic input]
++@value_function
+ _decimal.Context.rotate = _decimal.Context.add
+ 
+ Return a copy of x, rotated by y places.
+ [clinic start generated code]*/
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
++static PyValue
+ _decimal_Context_rotate_impl(PyObject *context, PyTypeObject *cls,
+-                             PyObject *x, PyObject *y)
+-/*[clinic end generated code: output=3d5b3cfcb4659432 input=7ad91845c909eb0a]*/
++                             PyValueBorrow x, PyValueBorrow y)
++/*[clinic end generated code: output=0784416de922c247 input=03c1fa0935ce81b8]*/
+ DecCtx_BinaryFunc(mpd_qrotate)
+ 
+ /*[clinic input]
++@value_function
+ _decimal.Context.scaleb = _decimal.Context.add
+ 
+ Return the first operand after adding the second value to its exp.
+ [clinic start generated code]*/
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
++static PyValue
+ _decimal_Context_scaleb_impl(PyObject *context, PyTypeObject *cls,
+-                             PyObject *x, PyObject *y)
+-/*[clinic end generated code: output=795ac61bcbe61c67 input=c5d2ee7a57f65f8c]*/
++                             PyValueBorrow x, PyValueBorrow y)
++/*[clinic end generated code: output=bab0a9fbf2aa4846 input=380c21906c131a94]*/
+ DecCtx_BinaryFunc(mpd_qscaleb)
+ 
+ /*[clinic input]
++@value_function
+ _decimal.Context.shift = _decimal.Context.add
+ 
+ Return a copy of x, shifted by y places.
+ [clinic start generated code]*/
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
++static PyValue
+ _decimal_Context_shift_impl(PyObject *context, PyTypeObject *cls,
+-                            PyObject *x, PyObject *y)
+-/*[clinic end generated code: output=43d69615f0271c81 input=1ab44ff0854420ce]*/
++                            PyValueBorrow x, PyValueBorrow y)
++/*[clinic end generated code: output=c20c024e8b320336 input=ec96adb5948fa689]*/
+ DecCtx_BinaryFunc(mpd_qshift)
+ 
+ /*[clinic input]
+--- a/Modules/_decimal/clinic/_decimal.c.h
++++ b/Modules/_decimal/clinic/_decimal.c.h
+@@ -4632,20 +4632,29 @@
+ "--\n"
+ "\n"
+ "Return the sum of x and y.");
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+ #define _DECIMAL_CONTEXT_ADD_METHODDEF    \
+-    {"add", _PyCFunction_CAST(_decimal_Context_add), METH_METHOD|METH_FASTCALL|METH_KEYWORDS, _decimal_Context_add__doc__},
++    {"add", _PyCFunction_CAST(_decimal_Context_add), METH_VALUE|METH_METHOD|METH_KEYWORDS, _decimal_Context_add__doc__},
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
+-_decimal_Context_add_impl(PyObject *context, PyTypeObject *cls, PyObject *x,
+-                          PyObject *y);
++static PyValue
++_decimal_Context_add_impl(PyObject *context, PyTypeObject *cls,
++                          PyValueBorrow x, PyValueBorrow y);
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
+-_decimal_Context_add(PyObject *context, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
++static PyValue
++_decimal_Context_add(PyValueBorrow context, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+ {
+-    PyObject *return_value = NULL;
+-    PyObject *x;
+-    PyObject *y;
++    PyValue return_value = PyValue_NULL;
++    PyValueBorrow x;
++    PyValueBorrow y;
+ 
+     if (!_PyArg_NoKwnames("add", kwnames)) {
+         goto exit;
+@@ -4653,9 +4662,9 @@
+     if (!_PyArg_CheckPositional("add", nargs, 2, 2)) {
+         goto exit;
+     }
+-    x = args[0];
+-    y = args[1];
+-    return_value = _decimal_Context_add_impl(context, cls, x, y);
++    x = PyValue_Borrow(args[0]);
++    y = PyValue_Borrow(args[1]);
++    return_value = _decimal_Context_add_impl(PyValue_AsKnownObjectBorrow(context), cls, x, y);
+ 
+ exit:
+     return return_value;
+@@ -4666,20 +4675,29 @@
+ "--\n"
+ "\n"
+ "Compare x and y numerically.");
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+ #define _DECIMAL_CONTEXT_COMPARE_METHODDEF    \
+-    {"compare", _PyCFunction_CAST(_decimal_Context_compare), METH_METHOD|METH_FASTCALL|METH_KEYWORDS, _decimal_Context_compare__doc__},
++    {"compare", _PyCFunction_CAST(_decimal_Context_compare), METH_VALUE|METH_METHOD|METH_KEYWORDS, _decimal_Context_compare__doc__},
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
++static PyValue
+ _decimal_Context_compare_impl(PyObject *context, PyTypeObject *cls,
+-                              PyObject *x, PyObject *y);
++                              PyValueBorrow x, PyValueBorrow y);
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
+-_decimal_Context_compare(PyObject *context, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
++static PyValue
++_decimal_Context_compare(PyValueBorrow context, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+ {
+-    PyObject *return_value = NULL;
+-    PyObject *x;
+-    PyObject *y;
++    PyValue return_value = PyValue_NULL;
++    PyValueBorrow x;
++    PyValueBorrow y;
+ 
+     if (!_PyArg_NoKwnames("compare", kwnames)) {
+         goto exit;
+@@ -4687,9 +4705,9 @@
+     if (!_PyArg_CheckPositional("compare", nargs, 2, 2)) {
+         goto exit;
+     }
+-    x = args[0];
+-    y = args[1];
+-    return_value = _decimal_Context_compare_impl(context, cls, x, y);
++    x = PyValue_Borrow(args[0]);
++    y = PyValue_Borrow(args[1]);
++    return_value = _decimal_Context_compare_impl(PyValue_AsKnownObjectBorrow(context), cls, x, y);
+ 
+ exit:
+     return return_value;
+@@ -4700,20 +4718,29 @@
+ "--\n"
+ "\n"
+ "Compare x and y numerically.  All NaNs signal.");
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+ #define _DECIMAL_CONTEXT_COMPARE_SIGNAL_METHODDEF    \
+-    {"compare_signal", _PyCFunction_CAST(_decimal_Context_compare_signal), METH_METHOD|METH_FASTCALL|METH_KEYWORDS, _decimal_Context_compare_signal__doc__},
++    {"compare_signal", _PyCFunction_CAST(_decimal_Context_compare_signal), METH_VALUE|METH_METHOD|METH_KEYWORDS, _decimal_Context_compare_signal__doc__},
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
++static PyValue
+ _decimal_Context_compare_signal_impl(PyObject *context, PyTypeObject *cls,
+-                                     PyObject *x, PyObject *y);
++                                     PyValueBorrow x, PyValueBorrow y);
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
+-_decimal_Context_compare_signal(PyObject *context, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
++static PyValue
++_decimal_Context_compare_signal(PyValueBorrow context, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+ {
+-    PyObject *return_value = NULL;
+-    PyObject *x;
+-    PyObject *y;
++    PyValue return_value = PyValue_NULL;
++    PyValueBorrow x;
++    PyValueBorrow y;
+ 
+     if (!_PyArg_NoKwnames("compare_signal", kwnames)) {
+         goto exit;
+@@ -4721,9 +4748,9 @@
+     if (!_PyArg_CheckPositional("compare_signal", nargs, 2, 2)) {
+         goto exit;
+     }
+-    x = args[0];
+-    y = args[1];
+-    return_value = _decimal_Context_compare_signal_impl(context, cls, x, y);
++    x = PyValue_Borrow(args[0]);
++    y = PyValue_Borrow(args[1]);
++    return_value = _decimal_Context_compare_signal_impl(PyValue_AsKnownObjectBorrow(context), cls, x, y);
+ 
+ exit:
+     return return_value;
+@@ -4734,20 +4761,29 @@
+ "--\n"
+ "\n"
+ "Return x divided by y.");
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+ #define _DECIMAL_CONTEXT_DIVIDE_METHODDEF    \
+-    {"divide", _PyCFunction_CAST(_decimal_Context_divide), METH_METHOD|METH_FASTCALL|METH_KEYWORDS, _decimal_Context_divide__doc__},
++    {"divide", _PyCFunction_CAST(_decimal_Context_divide), METH_VALUE|METH_METHOD|METH_KEYWORDS, _decimal_Context_divide__doc__},
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
++static PyValue
+ _decimal_Context_divide_impl(PyObject *context, PyTypeObject *cls,
+-                             PyObject *x, PyObject *y);
++                             PyValueBorrow x, PyValueBorrow y);
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
+-_decimal_Context_divide(PyObject *context, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
++static PyValue
++_decimal_Context_divide(PyValueBorrow context, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+ {
+-    PyObject *return_value = NULL;
+-    PyObject *x;
+-    PyObject *y;
++    PyValue return_value = PyValue_NULL;
++    PyValueBorrow x;
++    PyValueBorrow y;
+ 
+     if (!_PyArg_NoKwnames("divide", kwnames)) {
+         goto exit;
+@@ -4755,9 +4791,9 @@
+     if (!_PyArg_CheckPositional("divide", nargs, 2, 2)) {
+         goto exit;
+     }
+-    x = args[0];
+-    y = args[1];
+-    return_value = _decimal_Context_divide_impl(context, cls, x, y);
++    x = PyValue_Borrow(args[0]);
++    y = PyValue_Borrow(args[1]);
++    return_value = _decimal_Context_divide_impl(PyValue_AsKnownObjectBorrow(context), cls, x, y);
+ 
+ exit:
+     return return_value;
+@@ -4768,20 +4804,29 @@
+ "--\n"
+ "\n"
+ "Return x divided by y, truncated to an integer.");
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+ #define _DECIMAL_CONTEXT_DIVIDE_INT_METHODDEF    \
+-    {"divide_int", _PyCFunction_CAST(_decimal_Context_divide_int), METH_METHOD|METH_FASTCALL|METH_KEYWORDS, _decimal_Context_divide_int__doc__},
++    {"divide_int", _PyCFunction_CAST(_decimal_Context_divide_int), METH_VALUE|METH_METHOD|METH_KEYWORDS, _decimal_Context_divide_int__doc__},
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
++static PyValue
+ _decimal_Context_divide_int_impl(PyObject *context, PyTypeObject *cls,
+-                                 PyObject *x, PyObject *y);
++                                 PyValueBorrow x, PyValueBorrow y);
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
+-_decimal_Context_divide_int(PyObject *context, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
++static PyValue
++_decimal_Context_divide_int(PyValueBorrow context, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+ {
+-    PyObject *return_value = NULL;
+-    PyObject *x;
+-    PyObject *y;
++    PyValue return_value = PyValue_NULL;
++    PyValueBorrow x;
++    PyValueBorrow y;
+ 
+     if (!_PyArg_NoKwnames("divide_int", kwnames)) {
+         goto exit;
+@@ -4789,9 +4834,9 @@
+     if (!_PyArg_CheckPositional("divide_int", nargs, 2, 2)) {
+         goto exit;
+     }
+-    x = args[0];
+-    y = args[1];
+-    return_value = _decimal_Context_divide_int_impl(context, cls, x, y);
++    x = PyValue_Borrow(args[0]);
++    y = PyValue_Borrow(args[1]);
++    return_value = _decimal_Context_divide_int_impl(PyValue_AsKnownObjectBorrow(context), cls, x, y);
+ 
+ exit:
+     return return_value;
+@@ -4802,20 +4847,29 @@
+ "--\n"
+ "\n"
+ "Compare the values numerically and return the maximum.");
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+ #define _DECIMAL_CONTEXT_MAX_METHODDEF    \
+-    {"max", _PyCFunction_CAST(_decimal_Context_max), METH_METHOD|METH_FASTCALL|METH_KEYWORDS, _decimal_Context_max__doc__},
++    {"max", _PyCFunction_CAST(_decimal_Context_max), METH_VALUE|METH_METHOD|METH_KEYWORDS, _decimal_Context_max__doc__},
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
+-_decimal_Context_max_impl(PyObject *context, PyTypeObject *cls, PyObject *x,
+-                          PyObject *y);
++static PyValue
++_decimal_Context_max_impl(PyObject *context, PyTypeObject *cls,
++                          PyValueBorrow x, PyValueBorrow y);
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
+-_decimal_Context_max(PyObject *context, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
++static PyValue
++_decimal_Context_max(PyValueBorrow context, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+ {
+-    PyObject *return_value = NULL;
+-    PyObject *x;
+-    PyObject *y;
++    PyValue return_value = PyValue_NULL;
++    PyValueBorrow x;
++    PyValueBorrow y;
+ 
+     if (!_PyArg_NoKwnames("max", kwnames)) {
+         goto exit;
+@@ -4823,9 +4877,9 @@
+     if (!_PyArg_CheckPositional("max", nargs, 2, 2)) {
+         goto exit;
+     }
+-    x = args[0];
+-    y = args[1];
+-    return_value = _decimal_Context_max_impl(context, cls, x, y);
++    x = PyValue_Borrow(args[0]);
++    y = PyValue_Borrow(args[1]);
++    return_value = _decimal_Context_max_impl(PyValue_AsKnownObjectBorrow(context), cls, x, y);
+ 
+ exit:
+     return return_value;
+@@ -4836,20 +4890,29 @@
+ "--\n"
+ "\n"
+ "Compare the values numerically with their sign ignored.");
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+ #define _DECIMAL_CONTEXT_MAX_MAG_METHODDEF    \
+-    {"max_mag", _PyCFunction_CAST(_decimal_Context_max_mag), METH_METHOD|METH_FASTCALL|METH_KEYWORDS, _decimal_Context_max_mag__doc__},
++    {"max_mag", _PyCFunction_CAST(_decimal_Context_max_mag), METH_VALUE|METH_METHOD|METH_KEYWORDS, _decimal_Context_max_mag__doc__},
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
++static PyValue
+ _decimal_Context_max_mag_impl(PyObject *context, PyTypeObject *cls,
+-                              PyObject *x, PyObject *y);
++                              PyValueBorrow x, PyValueBorrow y);
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
+-_decimal_Context_max_mag(PyObject *context, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
++static PyValue
++_decimal_Context_max_mag(PyValueBorrow context, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+ {
+-    PyObject *return_value = NULL;
+-    PyObject *x;
+-    PyObject *y;
++    PyValue return_value = PyValue_NULL;
++    PyValueBorrow x;
++    PyValueBorrow y;
+ 
+     if (!_PyArg_NoKwnames("max_mag", kwnames)) {
+         goto exit;
+@@ -4857,9 +4920,9 @@
+     if (!_PyArg_CheckPositional("max_mag", nargs, 2, 2)) {
+         goto exit;
+     }
+-    x = args[0];
+-    y = args[1];
+-    return_value = _decimal_Context_max_mag_impl(context, cls, x, y);
++    x = PyValue_Borrow(args[0]);
++    y = PyValue_Borrow(args[1]);
++    return_value = _decimal_Context_max_mag_impl(PyValue_AsKnownObjectBorrow(context), cls, x, y);
+ 
+ exit:
+     return return_value;
+@@ -4870,20 +4933,29 @@
+ "--\n"
+ "\n"
+ "Compare the values numerically and return the minimum.");
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+ #define _DECIMAL_CONTEXT_MIN_METHODDEF    \
+-    {"min", _PyCFunction_CAST(_decimal_Context_min), METH_METHOD|METH_FASTCALL|METH_KEYWORDS, _decimal_Context_min__doc__},
++    {"min", _PyCFunction_CAST(_decimal_Context_min), METH_VALUE|METH_METHOD|METH_KEYWORDS, _decimal_Context_min__doc__},
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
+-_decimal_Context_min_impl(PyObject *context, PyTypeObject *cls, PyObject *x,
+-                          PyObject *y);
++static PyValue
++_decimal_Context_min_impl(PyObject *context, PyTypeObject *cls,
++                          PyValueBorrow x, PyValueBorrow y);
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
+-_decimal_Context_min(PyObject *context, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
++static PyValue
++_decimal_Context_min(PyValueBorrow context, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+ {
+-    PyObject *return_value = NULL;
+-    PyObject *x;
+-    PyObject *y;
++    PyValue return_value = PyValue_NULL;
++    PyValueBorrow x;
++    PyValueBorrow y;
+ 
+     if (!_PyArg_NoKwnames("min", kwnames)) {
+         goto exit;
+@@ -4891,9 +4963,9 @@
+     if (!_PyArg_CheckPositional("min", nargs, 2, 2)) {
+         goto exit;
+     }
+-    x = args[0];
+-    y = args[1];
+-    return_value = _decimal_Context_min_impl(context, cls, x, y);
++    x = PyValue_Borrow(args[0]);
++    y = PyValue_Borrow(args[1]);
++    return_value = _decimal_Context_min_impl(PyValue_AsKnownObjectBorrow(context), cls, x, y);
+ 
+ exit:
+     return return_value;
+@@ -4904,20 +4976,29 @@
+ "--\n"
+ "\n"
+ "Compare the values numerically with their sign ignored.");
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+ #define _DECIMAL_CONTEXT_MIN_MAG_METHODDEF    \
+-    {"min_mag", _PyCFunction_CAST(_decimal_Context_min_mag), METH_METHOD|METH_FASTCALL|METH_KEYWORDS, _decimal_Context_min_mag__doc__},
++    {"min_mag", _PyCFunction_CAST(_decimal_Context_min_mag), METH_VALUE|METH_METHOD|METH_KEYWORDS, _decimal_Context_min_mag__doc__},
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
++static PyValue
+ _decimal_Context_min_mag_impl(PyObject *context, PyTypeObject *cls,
+-                              PyObject *x, PyObject *y);
++                              PyValueBorrow x, PyValueBorrow y);
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
+-_decimal_Context_min_mag(PyObject *context, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
++static PyValue
++_decimal_Context_min_mag(PyValueBorrow context, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+ {
+-    PyObject *return_value = NULL;
+-    PyObject *x;
+-    PyObject *y;
++    PyValue return_value = PyValue_NULL;
++    PyValueBorrow x;
++    PyValueBorrow y;
+ 
+     if (!_PyArg_NoKwnames("min_mag", kwnames)) {
+         goto exit;
+@@ -4925,9 +5006,9 @@
+     if (!_PyArg_CheckPositional("min_mag", nargs, 2, 2)) {
+         goto exit;
+     }
+-    x = args[0];
+-    y = args[1];
+-    return_value = _decimal_Context_min_mag_impl(context, cls, x, y);
++    x = PyValue_Borrow(args[0]);
++    y = PyValue_Borrow(args[1]);
++    return_value = _decimal_Context_min_mag_impl(PyValue_AsKnownObjectBorrow(context), cls, x, y);
+ 
+ exit:
+     return return_value;
+@@ -4938,20 +5019,29 @@
+ "--\n"
+ "\n"
+ "Return the product of x and y.");
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+ #define _DECIMAL_CONTEXT_MULTIPLY_METHODDEF    \
+-    {"multiply", _PyCFunction_CAST(_decimal_Context_multiply), METH_METHOD|METH_FASTCALL|METH_KEYWORDS, _decimal_Context_multiply__doc__},
++    {"multiply", _PyCFunction_CAST(_decimal_Context_multiply), METH_VALUE|METH_METHOD|METH_KEYWORDS, _decimal_Context_multiply__doc__},
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
++static PyValue
+ _decimal_Context_multiply_impl(PyObject *context, PyTypeObject *cls,
+-                               PyObject *x, PyObject *y);
++                               PyValueBorrow x, PyValueBorrow y);
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
+-_decimal_Context_multiply(PyObject *context, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
++static PyValue
++_decimal_Context_multiply(PyValueBorrow context, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+ {
+-    PyObject *return_value = NULL;
+-    PyObject *x;
+-    PyObject *y;
++    PyValue return_value = PyValue_NULL;
++    PyValueBorrow x;
++    PyValueBorrow y;
+ 
+     if (!_PyArg_NoKwnames("multiply", kwnames)) {
+         goto exit;
+@@ -4959,9 +5049,9 @@
+     if (!_PyArg_CheckPositional("multiply", nargs, 2, 2)) {
+         goto exit;
+     }
+-    x = args[0];
+-    y = args[1];
+-    return_value = _decimal_Context_multiply_impl(context, cls, x, y);
++    x = PyValue_Borrow(args[0]);
++    y = PyValue_Borrow(args[1]);
++    return_value = _decimal_Context_multiply_impl(PyValue_AsKnownObjectBorrow(context), cls, x, y);
+ 
+ exit:
+     return return_value;
+@@ -4972,20 +5062,29 @@
+ "--\n"
+ "\n"
+ "Return the number closest to x, in the direction towards y.");
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+ #define _DECIMAL_CONTEXT_NEXT_TOWARD_METHODDEF    \
+-    {"next_toward", _PyCFunction_CAST(_decimal_Context_next_toward), METH_METHOD|METH_FASTCALL|METH_KEYWORDS, _decimal_Context_next_toward__doc__},
++    {"next_toward", _PyCFunction_CAST(_decimal_Context_next_toward), METH_VALUE|METH_METHOD|METH_KEYWORDS, _decimal_Context_next_toward__doc__},
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
++static PyValue
+ _decimal_Context_next_toward_impl(PyObject *context, PyTypeObject *cls,
+-                                  PyObject *x, PyObject *y);
++                                  PyValueBorrow x, PyValueBorrow y);
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
+-_decimal_Context_next_toward(PyObject *context, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
++static PyValue
++_decimal_Context_next_toward(PyValueBorrow context, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+ {
+-    PyObject *return_value = NULL;
+-    PyObject *x;
+-    PyObject *y;
++    PyValue return_value = PyValue_NULL;
++    PyValueBorrow x;
++    PyValueBorrow y;
+ 
+     if (!_PyArg_NoKwnames("next_toward", kwnames)) {
+         goto exit;
+@@ -4993,9 +5092,9 @@
+     if (!_PyArg_CheckPositional("next_toward", nargs, 2, 2)) {
+         goto exit;
+     }
+-    x = args[0];
+-    y = args[1];
+-    return_value = _decimal_Context_next_toward_impl(context, cls, x, y);
++    x = PyValue_Borrow(args[0]);
++    y = PyValue_Borrow(args[1]);
++    return_value = _decimal_Context_next_toward_impl(PyValue_AsKnownObjectBorrow(context), cls, x, y);
+ 
+ exit:
+     return return_value;
+@@ -5006,20 +5105,29 @@
+ "--\n"
+ "\n"
+ "Return a value equal to x (rounded), having the exponent of y.");
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+ #define _DECIMAL_CONTEXT_QUANTIZE_METHODDEF    \
+-    {"quantize", _PyCFunction_CAST(_decimal_Context_quantize), METH_METHOD|METH_FASTCALL|METH_KEYWORDS, _decimal_Context_quantize__doc__},
++    {"quantize", _PyCFunction_CAST(_decimal_Context_quantize), METH_VALUE|METH_METHOD|METH_KEYWORDS, _decimal_Context_quantize__doc__},
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
++static PyValue
+ _decimal_Context_quantize_impl(PyObject *context, PyTypeObject *cls,
+-                               PyObject *x, PyObject *y);
++                               PyValueBorrow x, PyValueBorrow y);
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
+-_decimal_Context_quantize(PyObject *context, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
++static PyValue
++_decimal_Context_quantize(PyValueBorrow context, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+ {
+-    PyObject *return_value = NULL;
+-    PyObject *x;
+-    PyObject *y;
++    PyValue return_value = PyValue_NULL;
++    PyValueBorrow x;
++    PyValueBorrow y;
+ 
+     if (!_PyArg_NoKwnames("quantize", kwnames)) {
+         goto exit;
+@@ -5027,9 +5135,9 @@
+     if (!_PyArg_CheckPositional("quantize", nargs, 2, 2)) {
+         goto exit;
+     }
+-    x = args[0];
+-    y = args[1];
+-    return_value = _decimal_Context_quantize_impl(context, cls, x, y);
++    x = PyValue_Borrow(args[0]);
++    y = PyValue_Borrow(args[1]);
++    return_value = _decimal_Context_quantize_impl(PyValue_AsKnownObjectBorrow(context), cls, x, y);
+ 
+ exit:
+     return return_value;
+@@ -5043,20 +5151,29 @@
+ "\n"
+ "The sign of the result, if non-zero, is the same as that of the\n"
+ "original dividend.");
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+ #define _DECIMAL_CONTEXT_REMAINDER_METHODDEF    \
+-    {"remainder", _PyCFunction_CAST(_decimal_Context_remainder), METH_METHOD|METH_FASTCALL|METH_KEYWORDS, _decimal_Context_remainder__doc__},
++    {"remainder", _PyCFunction_CAST(_decimal_Context_remainder), METH_VALUE|METH_METHOD|METH_KEYWORDS, _decimal_Context_remainder__doc__},
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
++static PyValue
+ _decimal_Context_remainder_impl(PyObject *context, PyTypeObject *cls,
+-                                PyObject *x, PyObject *y);
++                                PyValueBorrow x, PyValueBorrow y);
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
+-_decimal_Context_remainder(PyObject *context, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
++static PyValue
++_decimal_Context_remainder(PyValueBorrow context, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+ {
+-    PyObject *return_value = NULL;
+-    PyObject *x;
+-    PyObject *y;
++    PyValue return_value = PyValue_NULL;
++    PyValueBorrow x;
++    PyValueBorrow y;
+ 
+     if (!_PyArg_NoKwnames("remainder", kwnames)) {
+         goto exit;
+@@ -5064,9 +5181,9 @@
+     if (!_PyArg_CheckPositional("remainder", nargs, 2, 2)) {
+         goto exit;
+     }
+-    x = args[0];
+-    y = args[1];
+-    return_value = _decimal_Context_remainder_impl(context, cls, x, y);
++    x = PyValue_Borrow(args[0]);
++    y = PyValue_Borrow(args[1]);
++    return_value = _decimal_Context_remainder_impl(PyValue_AsKnownObjectBorrow(context), cls, x, y);
+ 
+ exit:
+     return return_value;
+@@ -5080,20 +5197,29 @@
+ "\n"
+ "Here n is the integer nearest the exact value of x / y (if the\n"
+ "result is 0 then its sign will be the sign of x).");
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+ #define _DECIMAL_CONTEXT_REMAINDER_NEAR_METHODDEF    \
+-    {"remainder_near", _PyCFunction_CAST(_decimal_Context_remainder_near), METH_METHOD|METH_FASTCALL|METH_KEYWORDS, _decimal_Context_remainder_near__doc__},
++    {"remainder_near", _PyCFunction_CAST(_decimal_Context_remainder_near), METH_VALUE|METH_METHOD|METH_KEYWORDS, _decimal_Context_remainder_near__doc__},
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
++static PyValue
+ _decimal_Context_remainder_near_impl(PyObject *context, PyTypeObject *cls,
+-                                     PyObject *x, PyObject *y);
++                                     PyValueBorrow x, PyValueBorrow y);
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
+-_decimal_Context_remainder_near(PyObject *context, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
++static PyValue
++_decimal_Context_remainder_near(PyValueBorrow context, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+ {
+-    PyObject *return_value = NULL;
+-    PyObject *x;
+-    PyObject *y;
++    PyValue return_value = PyValue_NULL;
++    PyValueBorrow x;
++    PyValueBorrow y;
+ 
+     if (!_PyArg_NoKwnames("remainder_near", kwnames)) {
+         goto exit;
+@@ -5101,9 +5227,9 @@
+     if (!_PyArg_CheckPositional("remainder_near", nargs, 2, 2)) {
+         goto exit;
+     }
+-    x = args[0];
+-    y = args[1];
+-    return_value = _decimal_Context_remainder_near_impl(context, cls, x, y);
++    x = PyValue_Borrow(args[0]);
++    y = PyValue_Borrow(args[1]);
++    return_value = _decimal_Context_remainder_near_impl(PyValue_AsKnownObjectBorrow(context), cls, x, y);
+ 
+ exit:
+     return return_value;
+@@ -5114,20 +5240,29 @@
+ "--\n"
+ "\n"
+ "Return the difference between x and y.");
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+ #define _DECIMAL_CONTEXT_SUBTRACT_METHODDEF    \
+-    {"subtract", _PyCFunction_CAST(_decimal_Context_subtract), METH_METHOD|METH_FASTCALL|METH_KEYWORDS, _decimal_Context_subtract__doc__},
++    {"subtract", _PyCFunction_CAST(_decimal_Context_subtract), METH_VALUE|METH_METHOD|METH_KEYWORDS, _decimal_Context_subtract__doc__},
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
++static PyValue
+ _decimal_Context_subtract_impl(PyObject *context, PyTypeObject *cls,
+-                               PyObject *x, PyObject *y);
++                               PyValueBorrow x, PyValueBorrow y);
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
+-_decimal_Context_subtract(PyObject *context, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
++static PyValue
++_decimal_Context_subtract(PyValueBorrow context, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+ {
+-    PyObject *return_value = NULL;
+-    PyObject *x;
+-    PyObject *y;
++    PyValue return_value = PyValue_NULL;
++    PyValueBorrow x;
++    PyValueBorrow y;
+ 
+     if (!_PyArg_NoKwnames("subtract", kwnames)) {
+         goto exit;
+@@ -5135,9 +5270,9 @@
+     if (!_PyArg_CheckPositional("subtract", nargs, 2, 2)) {
+         goto exit;
+     }
+-    x = args[0];
+-    y = args[1];
+-    return_value = _decimal_Context_subtract_impl(context, cls, x, y);
++    x = PyValue_Borrow(args[0]);
++    y = PyValue_Borrow(args[1]);
++    return_value = _decimal_Context_subtract_impl(PyValue_AsKnownObjectBorrow(context), cls, x, y);
+ 
+ exit:
+     return return_value;
+@@ -6155,20 +6290,29 @@
+ "    Decimal(\'100\')\n"
+ "    >>> ExtendedContext.logical_and(110, Decimal(1101))\n"
+ "    Decimal(\'100\')");
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+ #define _DECIMAL_CONTEXT_LOGICAL_AND_METHODDEF    \
+-    {"logical_and", _PyCFunction_CAST(_decimal_Context_logical_and), METH_METHOD|METH_FASTCALL|METH_KEYWORDS, _decimal_Context_logical_and__doc__},
++    {"logical_and", _PyCFunction_CAST(_decimal_Context_logical_and), METH_VALUE|METH_METHOD|METH_KEYWORDS, _decimal_Context_logical_and__doc__},
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
++static PyValue
+ _decimal_Context_logical_and_impl(PyObject *context, PyTypeObject *cls,
+-                                  PyObject *x, PyObject *y);
++                                  PyValueBorrow x, PyValueBorrow y);
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
+-_decimal_Context_logical_and(PyObject *context, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
++static PyValue
++_decimal_Context_logical_and(PyValueBorrow context, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+ {
+-    PyObject *return_value = NULL;
+-    PyObject *x;
+-    PyObject *y;
++    PyValue return_value = PyValue_NULL;
++    PyValueBorrow x;
++    PyValueBorrow y;
+ 
+     if (!_PyArg_NoKwnames("logical_and", kwnames)) {
+         goto exit;
+@@ -6176,9 +6320,9 @@
+     if (!_PyArg_CheckPositional("logical_and", nargs, 2, 2)) {
+         goto exit;
+     }
+-    x = args[0];
+-    y = args[1];
+-    return_value = _decimal_Context_logical_and_impl(context, cls, x, y);
++    x = PyValue_Borrow(args[0]);
++    y = PyValue_Borrow(args[1]);
++    return_value = _decimal_Context_logical_and_impl(PyValue_AsKnownObjectBorrow(context), cls, x, y);
+ 
+ exit:
+     return return_value;
+@@ -6210,20 +6354,29 @@
+ "    Decimal(\'1111\')\n"
+ "    >>> ExtendedContext.logical_or(110, Decimal(1101))\n"
+ "    Decimal(\'1111\')");
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+ #define _DECIMAL_CONTEXT_LOGICAL_OR_METHODDEF    \
+-    {"logical_or", _PyCFunction_CAST(_decimal_Context_logical_or), METH_METHOD|METH_FASTCALL|METH_KEYWORDS, _decimal_Context_logical_or__doc__},
++    {"logical_or", _PyCFunction_CAST(_decimal_Context_logical_or), METH_VALUE|METH_METHOD|METH_KEYWORDS, _decimal_Context_logical_or__doc__},
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
++static PyValue
+ _decimal_Context_logical_or_impl(PyObject *context, PyTypeObject *cls,
+-                                 PyObject *x, PyObject *y);
++                                 PyValueBorrow x, PyValueBorrow y);
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
+-_decimal_Context_logical_or(PyObject *context, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
++static PyValue
++_decimal_Context_logical_or(PyValueBorrow context, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+ {
+-    PyObject *return_value = NULL;
+-    PyObject *x;
+-    PyObject *y;
++    PyValue return_value = PyValue_NULL;
++    PyValueBorrow x;
++    PyValueBorrow y;
+ 
+     if (!_PyArg_NoKwnames("logical_or", kwnames)) {
+         goto exit;
+@@ -6231,9 +6384,9 @@
+     if (!_PyArg_CheckPositional("logical_or", nargs, 2, 2)) {
+         goto exit;
+     }
+-    x = args[0];
+-    y = args[1];
+-    return_value = _decimal_Context_logical_or_impl(context, cls, x, y);
++    x = PyValue_Borrow(args[0]);
++    y = PyValue_Borrow(args[1]);
++    return_value = _decimal_Context_logical_or_impl(PyValue_AsKnownObjectBorrow(context), cls, x, y);
+ 
+ exit:
+     return return_value;
+@@ -6265,20 +6418,29 @@
+ "    Decimal(\'1011\')\n"
+ "    >>> ExtendedContext.logical_xor(110, Decimal(1101))\n"
+ "    Decimal(\'1011\')");
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+ #define _DECIMAL_CONTEXT_LOGICAL_XOR_METHODDEF    \
+-    {"logical_xor", _PyCFunction_CAST(_decimal_Context_logical_xor), METH_METHOD|METH_FASTCALL|METH_KEYWORDS, _decimal_Context_logical_xor__doc__},
++    {"logical_xor", _PyCFunction_CAST(_decimal_Context_logical_xor), METH_VALUE|METH_METHOD|METH_KEYWORDS, _decimal_Context_logical_xor__doc__},
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
++static PyValue
+ _decimal_Context_logical_xor_impl(PyObject *context, PyTypeObject *cls,
+-                                  PyObject *x, PyObject *y);
++                                  PyValueBorrow x, PyValueBorrow y);
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
+-_decimal_Context_logical_xor(PyObject *context, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
++static PyValue
++_decimal_Context_logical_xor(PyValueBorrow context, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+ {
+-    PyObject *return_value = NULL;
+-    PyObject *x;
+-    PyObject *y;
++    PyValue return_value = PyValue_NULL;
++    PyValueBorrow x;
++    PyValueBorrow y;
+ 
+     if (!_PyArg_NoKwnames("logical_xor", kwnames)) {
+         goto exit;
+@@ -6286,9 +6448,9 @@
+     if (!_PyArg_CheckPositional("logical_xor", nargs, 2, 2)) {
+         goto exit;
+     }
+-    x = args[0];
+-    y = args[1];
+-    return_value = _decimal_Context_logical_xor_impl(context, cls, x, y);
++    x = PyValue_Borrow(args[0]);
++    y = PyValue_Borrow(args[1]);
++    return_value = _decimal_Context_logical_xor_impl(PyValue_AsKnownObjectBorrow(context), cls, x, y);
+ 
+ exit:
+     return return_value;
+@@ -6299,20 +6461,29 @@
+ "--\n"
+ "\n"
+ "Return a copy of x, rotated by y places.");
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+ #define _DECIMAL_CONTEXT_ROTATE_METHODDEF    \
+-    {"rotate", _PyCFunction_CAST(_decimal_Context_rotate), METH_METHOD|METH_FASTCALL|METH_KEYWORDS, _decimal_Context_rotate__doc__},
++    {"rotate", _PyCFunction_CAST(_decimal_Context_rotate), METH_VALUE|METH_METHOD|METH_KEYWORDS, _decimal_Context_rotate__doc__},
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
++static PyValue
+ _decimal_Context_rotate_impl(PyObject *context, PyTypeObject *cls,
+-                             PyObject *x, PyObject *y);
++                             PyValueBorrow x, PyValueBorrow y);
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
+-_decimal_Context_rotate(PyObject *context, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
++static PyValue
++_decimal_Context_rotate(PyValueBorrow context, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+ {
+-    PyObject *return_value = NULL;
+-    PyObject *x;
+-    PyObject *y;
++    PyValue return_value = PyValue_NULL;
++    PyValueBorrow x;
++    PyValueBorrow y;
+ 
+     if (!_PyArg_NoKwnames("rotate", kwnames)) {
+         goto exit;
+@@ -6320,9 +6491,9 @@
+     if (!_PyArg_CheckPositional("rotate", nargs, 2, 2)) {
+         goto exit;
+     }
+-    x = args[0];
+-    y = args[1];
+-    return_value = _decimal_Context_rotate_impl(context, cls, x, y);
++    x = PyValue_Borrow(args[0]);
++    y = PyValue_Borrow(args[1]);
++    return_value = _decimal_Context_rotate_impl(PyValue_AsKnownObjectBorrow(context), cls, x, y);
+ 
+ exit:
+     return return_value;
+@@ -6333,20 +6504,29 @@
+ "--\n"
+ "\n"
+ "Return the first operand after adding the second value to its exp.");
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+ #define _DECIMAL_CONTEXT_SCALEB_METHODDEF    \
+-    {"scaleb", _PyCFunction_CAST(_decimal_Context_scaleb), METH_METHOD|METH_FASTCALL|METH_KEYWORDS, _decimal_Context_scaleb__doc__},
++    {"scaleb", _PyCFunction_CAST(_decimal_Context_scaleb), METH_VALUE|METH_METHOD|METH_KEYWORDS, _decimal_Context_scaleb__doc__},
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
++static PyValue
+ _decimal_Context_scaleb_impl(PyObject *context, PyTypeObject *cls,
+-                             PyObject *x, PyObject *y);
++                             PyValueBorrow x, PyValueBorrow y);
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
+-_decimal_Context_scaleb(PyObject *context, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
++static PyValue
++_decimal_Context_scaleb(PyValueBorrow context, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+ {
+-    PyObject *return_value = NULL;
+-    PyObject *x;
+-    PyObject *y;
++    PyValue return_value = PyValue_NULL;
++    PyValueBorrow x;
++    PyValueBorrow y;
+ 
+     if (!_PyArg_NoKwnames("scaleb", kwnames)) {
+         goto exit;
+@@ -6354,9 +6534,9 @@
+     if (!_PyArg_CheckPositional("scaleb", nargs, 2, 2)) {
+         goto exit;
+     }
+-    x = args[0];
+-    y = args[1];
+-    return_value = _decimal_Context_scaleb_impl(context, cls, x, y);
++    x = PyValue_Borrow(args[0]);
++    y = PyValue_Borrow(args[1]);
++    return_value = _decimal_Context_scaleb_impl(PyValue_AsKnownObjectBorrow(context), cls, x, y);
+ 
+ exit:
+     return return_value;
+@@ -6367,20 +6547,29 @@
+ "--\n"
+ "\n"
+ "Return a copy of x, shifted by y places.");
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+ #define _DECIMAL_CONTEXT_SHIFT_METHODDEF    \
+-    {"shift", _PyCFunction_CAST(_decimal_Context_shift), METH_METHOD|METH_FASTCALL|METH_KEYWORDS, _decimal_Context_shift__doc__},
++    {"shift", _PyCFunction_CAST(_decimal_Context_shift), METH_VALUE|METH_METHOD|METH_KEYWORDS, _decimal_Context_shift__doc__},
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
++static PyValue
+ _decimal_Context_shift_impl(PyObject *context, PyTypeObject *cls,
+-                            PyObject *x, PyObject *y);
++                            PyValueBorrow x, PyValueBorrow y);
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
+-_decimal_Context_shift(PyObject *context, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
++static PyValue
++_decimal_Context_shift(PyValueBorrow context, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+ {
+-    PyObject *return_value = NULL;
+-    PyObject *x;
+-    PyObject *y;
++    PyValue return_value = PyValue_NULL;
++    PyValueBorrow x;
++    PyValueBorrow y;
+ 
+     if (!_PyArg_NoKwnames("shift", kwnames)) {
+         goto exit;
+@@ -6388,9 +6577,9 @@
+     if (!_PyArg_CheckPositional("shift", nargs, 2, 2)) {
+         goto exit;
+     }
+-    x = args[0];
+-    y = args[1];
+-    return_value = _decimal_Context_shift_impl(context, cls, x, y);
++    x = PyValue_Borrow(args[0]);
++    y = PyValue_Borrow(args[1]);
++    return_value = _decimal_Context_shift_impl(PyValue_AsKnownObjectBorrow(context), cls, x, y);
+ 
+ exit:
+     return return_value;
+@@ -6445,4 +6634,4 @@
+ #ifndef _DECIMAL_CONTEXT_APPLY_METHODDEF
+     #define _DECIMAL_CONTEXT_APPLY_METHODDEF
+ #endif /* !defined(_DECIMAL_CONTEXT_APPLY_METHODDEF) */
+-/*[clinic end generated code: output=3a675a5144f69f05 input=a9049054013a1b77]*/
++/*[clinic end generated code: output=f9ade9218bb91342 input=a9049054013a1b77]*/

@@ -1,0 +1,3807 @@
+{
+ "deepcopy_memo": {
+  "times_ns": {
+   "C": 82502.016,
+   "B": 142958.763,
+   "U": 29508.21875
+  },
+  "samples": {
+   "C": 724,
+   "B": 1204,
+   "U": 1285
+  },
+  "frac": {
+   "C": {
+    "eval loop self": 0.4102209944751381,
+    "exception save/restore": 0.0,
+    "PyValue bridge/boxing": 0.1919889502762431,
+    "attribute lookup": 0.0,
+    "frames": 0.04696132596685083,
+    "specialiser": 0.0,
+    "other": 0.35082872928176795
+   },
+   "B": {
+    "eval loop self": 0.3073089700996678,
+    "exception save/restore": 0.1079734219269103,
+    "PyValue bridge/boxing": 0.22259136212624583,
+    "attribute lookup": 0.0008305647840531562,
+    "frames": 0.02408637873754153,
+    "specialiser": 0.0,
+    "other": 0.3372093023255814
+   },
+   "U": {
+    "eval loop self": 0.48249027237354086,
+    "exception save/restore": 0.0,
+    "PyValue bridge/boxing": 0.0,
+    "attribute lookup": 0.0038910505836575876,
+    "frames": 0.07237354085603113,
+    "specialiser": 0.0,
+    "other": 0.4412451361867704
+   }
+  },
+  "loops": {
+   "C": 7821,
+   "B": 7821,
+   "U": 41712
+  },
+  "load_1min_before": {
+   "C": 6.22900390625,
+   "B": 6.21044921875,
+   "U": 5.953125
+  },
+  "top_symbols": {
+   "C": [
+    [
+     "_PyEval_EvalFrameLoop",
+     297,
+     "eval loop self"
+    ],
+    [
+     "_PyCFunction_CallScoped",
+     36,
+     "other"
+    ],
+    [
+     "_PyNativeScope_End",
+     25,
+     "PyValue bridge/boxing"
+    ],
+    [
+     "_PyNativeScope_Begin",
+     24,
+     "PyValue bridge/boxing"
+    ],
+    [
+     "_Py_dict_lookup",
+     22,
+     "other"
+    ],
+    [
+     "native_call_finish",
+     21,
+     "other"
+    ],
+    [
+     "_dl_mcount_wrapper@GLIBC_2",
+     20,
+     "other"
+    ],
+    [
+     "_PyFrame_ClearExceptCode",
+     20,
+     "frames"
+    ],
+    [
+     "_PyValue_Publish",
+     17,
+     "PyValue bridge/boxing"
+    ],
+    [
+     "_PyNativeScope_Objects",
+     14,
+     "PyValue bridge/boxing"
+    ],
+    [
+     "PyValue_FromObjectBorrow",
+     14,
+     "PyValue bridge/boxing"
+    ],
+    [
+     "PyValue_PrepareOwned",
+     13,
+     "PyValue bridge/boxing"
+    ],
+    [
+     "_PyObject_MiMalloc",
+     12,
+     "other"
+    ],
+    [
+     "_PyDict_GetValue_KnownHash",
+     12,
+     "other"
+    ],
+    [
+     "value_reader_complete",
+     9,
+     "PyValue bridge/boxing"
+    ],
+    [
+     "set_lookkey",
+     8,
+     "other"
+    ],
+    [
+     "_PyEval_FrameClearAndPop",
+     8,
+     "frames"
+    ],
+    [
+     "value_operation_refresh",
+     7,
+     "PyValue bridge/boxing"
+    ],
+    [
+     "mi_free_ex",
+     7,
+     "other"
+    ],
+    [
+     "sys_audit_tstate",
+     7,
+     "other"
+    ],
+    [
+     "native_call_publish_result",
+     6,
+     "other"
+    ],
+    [
+     "PyDict_GetValue",
+     6,
+     "other"
+    ],
+    [
+     "_PyFrame_PushOverlapping",
+     6,
+     "frames"
+    ],
+    [
+     "_PyObject_ValueIdentity",
+     5,
+     "other"
+    ],
+    [
+     "PyList_GET_VALUE",
+     5,
+     "other"
+    ],
+    [
+     "long_dealloc",
+     4,
+     "other"
+    ],
+    [
+     "PyLong_AsLongLongAndOverflow",
+     4,
+     "other"
+    ],
+    [
+     "PyDict_Contains",
+     4,
+     "other"
+    ],
+    [
+     "PyLong_FromLongLong",
+     4,
+     "other"
+    ],
+    [
+     "long_hash",
+     4,
+     "other"
+    ]
+   ],
+   "B": [
+    [
+     "_PyEval_EvalFrameLoop",
+     370,
+     "eval loop self"
+    ],
+    [
+     "_PyNativeScope_End",
+     68,
+     "PyValue bridge/boxing"
+    ],
+    [
+     "PyErr_GetRaisedException",
+     67,
+     "exception save/restore"
+    ],
+    [
+     "PyErr_Occurred",
+     43,
+     "exception save/restore"
+    ],
+    [
+     "_PyNativeScope_Begin",
+     40,
+     "PyValue bridge/boxing"
+    ],
+    [
+     "_Py_dict_lookup",
+     38,
+     "other"
+    ],
+    [
+     "_PyCFunction_CallScoped",
+     34,
+     "other"
+    ],
+    [
+     "PyLong_AsLongAndOverflow",
+     32,
+     "other"
+    ],
+    [
+     "_PyNativeScope_Objects",
+     31,
+     "PyValue bridge/boxing"
+    ],
+    [
+     "native_call_finish",
+     24,
+     "other"
+    ],
+    [
+     "_dl_mcount_wrapper@GLIBC_2",
+     22,
+     "other"
+    ],
+    [
+     "set_lookkey",
+     22,
+     "other"
+    ],
+    [
+     "PyValue_FromObjectBorrow",
+     18,
+     "PyValue bridge/boxing"
+    ],
+    [
+     "native_call_publish_result",
+     17,
+     "other"
+    ],
+    [
+     "PyValue_PrepareOwned",
+     16,
+     "PyValue bridge/boxing"
+    ],
+    [
+     "PyDict_GetValue",
+     16,
+     "other"
+    ],
+    [
+     "_PyValue_Publish",
+     15,
+     "PyValue bridge/boxing"
+    ],
+    [
+     "_PyValue_IsSameValue",
+     15,
+     "PyValue bridge/boxing"
+    ],
+    [
+     "_PyDict_GetValue_KnownHash",
+     14,
+     "other"
+    ],
+    [
+     "_PyValue_RichCompareBool",
+     14,
+     "PyValue bridge/boxing"
+    ],
+    [
+     "_PyFrame_ClearExceptCode",
+     13,
+     "frames"
+    ],
+    [
+     "PyErr_SetRaisedException",
+     12,
+     "exception save/restore"
+    ],
+    [
+     "list_append",
+     11,
+     "other"
+    ],
+    [
+     "value_reader_complete",
+     11,
+     "PyValue bridge/boxing"
+    ],
+    [
+     "box_operands",
+     11,
+     "other"
+    ],
+    [
+     "_PyFrame_PushOverlapping",
+     10,
+     "frames"
+    ],
+    [
+     "value_operation_refresh",
+     9,
+     "PyValue bridge/boxing"
+    ],
+    [
+     "long_richcompare",
+     9,
+     "other"
+    ],
+    [
+     "_PyNativeScope_StageResult",
+     9,
+     "PyValue bridge/boxing"
+    ],
+    [
+     "_PyObject_MiMalloc",
+     8,
+     "other"
+    ]
+   ],
+   "U": [
+    [
+     "_PyEval_EvalFrameDefault",
+     620,
+     "eval loop self"
+    ],
+    [
+     "_Py_dict_lookup",
+     109,
+     "other"
+    ],
+    [
+     "set_lookkey",
+     53,
+     "other"
+    ],
+    [
+     "_PyFrame_ClearExceptCode",
+     48,
+     "frames"
+    ],
+    [
+     "_PyObject_Free",
+     45,
+     "other"
+    ],
+    [
+     "_PyObject_Malloc",
+     38,
+     "other"
+    ],
+    [
+     "_PySet_Contains",
+     27,
+     "other"
+    ],
+    [
+     "long_richcompare",
+     26,
+     "other"
+    ],
+    [
+     "PyObject_Hash",
+     22,
+     "other"
+    ],
+    [
+     "_PyEval_FrameClearAndPop",
+     21,
+     "frames"
+    ],
+    [
+     "PyDict_Contains",
+     20,
+     "other"
+    ],
+    [
+     "long_hash",
+     20,
+     "other"
+    ],
+    [
+     "_PyFrame_PushUnchecked",
+     19,
+     "frames"
+    ],
+    [
+     "sys_audit_tstate",
+     18,
+     "other"
+    ],
+    [
+     "PyObject_RichCompareBool",
+     16,
+     "other"
+    ],
+    [
+     "_PyDict_Subscript",
+     16,
+     "other"
+    ],
+    [
+     "list_append",
+     14,
+     "other"
+    ],
+    [
+     "_Py_Dealloc",
+     11,
+     "other"
+    ],
+    [
+     "_dl_mcount_wrapper@GLIBC_2",
+     11,
+     "other"
+    ],
+    [
+     "PyLong_FromVoidPtr",
+     9,
+     "other"
+    ],
+    [
+     "list_dealloc",
+     9,
+     "other"
+    ],
+    [
+     "_PyObject_Realloc",
+     8,
+     "other"
+    ],
+    [
+     "PySys_Audit",
+     8,
+     "other"
+    ],
+    [
+     "_PyThreadState_PopFrame",
+     5,
+     "frames"
+    ],
+    [
+     "py_dealloc",
+     4,
+     "other"
+    ],
+    [
+     "__default_morecore@GLIBC_2",
+     4,
+     "other"
+    ],
+    [
+     "builtin_id",
+     4,
+     "other"
+    ],
+    [
+     "tuple_alloc",
+     4,
+     "other"
+    ],
+    [
+     "initialize_locals",
+     4,
+     "other"
+    ],
+    [
+     "visit_reachable",
+     3,
+     "other"
+    ]
+   ]
+  },
+  "B_vs_U": {
+   "eval loop self": 0.26174472690823575,
+   "exception save/restore": 0.13605705408987648,
+   "PyValue bridge/boxing": 0.28048684996989914,
+   "attribute lookup": 3.453965210676426e-05,
+   "frames": 0.011527001856375932,
+   "specialiser": 0.0,
+   "other": 0.31014982752350584
+  },
+  "B/U": 4.844710018289396,
+  "C_vs_U": {
+   "eval loop self": 0.3699797252739466,
+   "exception save/restore": 0.0,
+   "PyValue bridge/boxing": 0.29889300766258664,
+   "attribute lookup": -0.0021666303935199372,
+   "frames": 0.032811194540442436,
+   "specialiser": 0.0,
+   "other": 0.30048270291654416
+  },
+  "C/U": 2.7958995661166433,
+  "B_minus_C": {
+   "eval loop self": 0.1668705591210314,
+   "exception save/restore": 0.25531884531511717,
+   "PyValue bridge/boxing": 0.26435279980478177,
+   "attribute lookup": 0.0019639911178085936,
+   "frames": -0.007129810620308492,
+   "specialiser": 0.0,
+   "other": 0.3186236152615695
+  },
+  "C/B": 0.5771035945519478,
+  "cat_time_over_B": {
+   "C": {
+    "eval loop self": 0.23674001047227694,
+    "exception save/restore": 0.0,
+    "PyValue bridge/boxing": 0.11079751331867507,
+    "attribute lookup": 0.0,
+    "frames": 0.027101550020395337,
+    "specialiser": 0.0,
+    "other": 0.20246452074060048
+   },
+   "B": {
+    "eval loop self": 0.3073089700996678,
+    "exception save/restore": 0.1079734219269103,
+    "PyValue bridge/boxing": 0.22259136212624583,
+    "attribute lookup": 0.0008305647840531562,
+    "frames": 0.02408637873754153,
+    "specialiser": 0.0,
+    "other": 0.3372093023255814
+   },
+   "U": {
+    "eval loop self": 0.09959115624094708,
+    "exception save/restore": 0.0,
+    "PyValue bridge/boxing": 0.0,
+    "attribute lookup": 0.0008031544858140894,
+    "frames": 0.014938673436142063,
+    "specialiser": 0.0,
+    "other": 0.09107771869131774
+   }
+  },
+  "last_C_frac": {
+   "eval loop self": 0.30837004405286345,
+   "exception save/restore": 0.10044052863436123,
+   "PyValue bridge/boxing": 0.226431718061674,
+   "attribute lookup": 0.001762114537444934,
+   "frames": 0.029955947136563875,
+   "specialiser": 0.0,
+   "other": 0.33303964757709253
+  },
+  "last_C_vs_U": {
+   "eval loop self": 0.25557516268698793,
+   "exception save/restore": 0.12771573214777432,
+   "PyValue bridge/boxing": 0.2884211014991277,
+   "attribute lookup": 0.001356391312482633,
+   "frames": 0.01795189976271543,
+   "specialiser": 0.0,
+   "other": 0.30897971259091206
+  },
+  "last_C/U": 4.652749963066499
+ },
+ "richards": {
+  "times_ns": {
+   "C": 105353465.5,
+   "B": 159151603.5,
+   "U": 60887939.5
+  },
+  "samples": {
+   "C": 647,
+   "B": 976,
+   "U": 1198
+  },
+  "frac": {
+   "C": {
+    "eval loop self": 0.5162287480680062,
+    "exception save/restore": 0.0,
+    "PyValue bridge/boxing": 0.13292117465224113,
+    "attribute lookup": 0.15301391035548687,
+    "frames": 0.07882534775888717,
+    "specialiser": 0.0015455950540958269,
+    "other": 0.11746522411128284
+   },
+   "B": {
+    "eval loop self": 0.44364754098360654,
+    "exception save/restore": 0.13012295081967212,
+    "PyValue bridge/boxing": 0.12807377049180327,
+    "attribute lookup": 0.13524590163934427,
+    "frames": 0.0430327868852459,
+    "specialiser": 0.0020491803278688526,
+    "other": 0.11782786885245902
+   },
+   "U": {
+    "eval loop self": 0.5834724540901502,
+    "exception save/restore": 0.0,
+    "PyValue bridge/boxing": 0.0,
+    "attribute lookup": 0.1994991652754591,
+    "frames": 0.07846410684474124,
+    "specialiser": 0.005008347245409015,
+    "other": 0.1335559265442404
+   }
+  },
+  "loops": {
+   "C": 6,
+   "B": 6,
+   "U": 20
+  },
+  "load_1min_before": {
+   "C": 6.22900390625,
+   "B": 6.21044921875,
+   "U": 5.953125
+  },
+  "top_symbols": {
+   "C": [
+    [
+     "_PyEval_EvalFrameLoop",
+     334,
+     "eval loop self"
+    ],
+    [
+     "value_reader_complete",
+     21,
+     "PyValue bridge/boxing"
+    ],
+    [
+     "value_attribute_complete",
+     20,
+     "PyValue bridge/boxing"
+    ],
+    [
+     "_PyObject_GetMethodValue",
+     19,
+     "attribute lookup"
+    ],
+    [
+     "_PyObject_GenericGetAttrWithDict",
+     19,
+     "attribute lookup"
+    ],
+    [
+     "unicodekeys_lookup_unicode",
+     18,
+     "other"
+    ],
+    [
+     "_PyFrame_ClearExceptCode",
+     18,
+     "frames"
+    ],
+    [
+     "_PyTypeCache_Lookup",
+     16,
+     "attribute lookup"
+    ],
+    [
+     "_PyFrame_PushOverlapping",
+     15,
+     "frames"
+    ],
+    [
+     "value_load_attribute",
+     13,
+     "PyValue bridge/boxing"
+    ],
+    [
+     "_PyObject_GetAttrValue",
+     13,
+     "attribute lookup"
+    ],
+    [
+     "_dl_mcount_wrapper@GLIBC_2",
+     11,
+     "other"
+    ],
+    [
+     "_PyType_LookupValueAndVersion",
+     11,
+     "attribute lookup"
+    ],
+    [
+     "value_operation_refresh",
+     10,
+     "PyValue bridge/boxing"
+    ],
+    [
+     "_PyObject_TryGetInstanceValue",
+     9,
+     "attribute lookup"
+    ],
+    [
+     "_PyEval_FrameClearAndPop",
+     9,
+     "frames"
+    ],
+    [
+     "_PyType_GetVersionForCurrentState",
+     9,
+     "attribute lookup"
+    ],
+    [
+     "PyValue_FromObjectBorrow",
+     8,
+     "PyValue bridge/boxing"
+    ],
+    [
+     "eval_frame_push_and_init_code",
+     7,
+     "frames"
+    ],
+    [
+     "_PyObject_StoreInstanceValue",
+     5,
+     "other"
+    ],
+    [
+     "call_transaction_invoke",
+     5,
+     "PyValue bridge/boxing"
+    ],
+    [
+     "value_operation_finish",
+     4,
+     "PyValue bridge/boxing"
+    ],
+    [
+     "_PyCode_GetExec",
+     4,
+     "other"
+    ],
+    [
+     "_Py_dict_lookup",
+     4,
+     "other"
+    ],
+    [
+     "specialize_dict_access",
+     4,
+     "other"
+    ],
+    [
+     "insert_split_key",
+     3,
+     "other"
+    ],
+    [
+     "mi_free_ex",
+     2,
+     "other"
+    ],
+    [
+     "PyUnicode_CompareWithASCIIString",
+     2,
+     "other"
+    ],
+    [
+     "_PyType_TryLookupValueNoAlloc",
+     2,
+     "attribute lookup"
+    ],
+    [
+     "_PyThreadState_PushFrame",
+     2,
+     "frames"
+    ]
+   ],
+   "B": [
+    [
+     "_PyEval_EvalFrameLoop",
+     433,
+     "eval loop self"
+    ],
+    [
+     "PyErr_GetRaisedException",
+     47,
+     "exception save/restore"
+    ],
+    [
+     "PyErr_Occurred",
+     43,
+     "exception save/restore"
+    ],
+    [
+     "unicodekeys_lookup_unicode",
+     36,
+     "other"
+    ],
+    [
+     "_PyTypeCache_Lookup",
+     35,
+     "attribute lookup"
+    ],
+    [
+     "value_attribute_complete",
+     27,
+     "PyValue bridge/boxing"
+    ],
+    [
+     "value_operation_refresh",
+     21,
+     "PyValue bridge/boxing"
+    ],
+    [
+     "_PyValue_RestoreException",
+     19,
+     "exception save/restore"
+    ],
+    [
+     "_PyObject_GenericGetAttrWithDict",
+     18,
+     "attribute lookup"
+    ],
+    [
+     "_PyType_LookupValueAndVersion",
+     18,
+     "attribute lookup"
+    ],
+    [
+     "PyErr_SetRaisedException",
+     18,
+     "exception save/restore"
+    ],
+    [
+     "_PyFrame_ClearExceptCode",
+     17,
+     "frames"
+    ],
+    [
+     "PyValue_FromObjectBorrow",
+     17,
+     "PyValue bridge/boxing"
+    ],
+    [
+     "_PyObject_GetAttrValue",
+     16,
+     "attribute lookup"
+    ],
+    [
+     "value_reader_complete",
+     15,
+     "PyValue bridge/boxing"
+    ],
+    [
+     "_PyObject_GetMethodValue",
+     14,
+     "attribute lookup"
+    ],
+    [
+     "_PyFrame_PushOverlapping",
+     13,
+     "frames"
+    ],
+    [
+     "value_operation_close3",
+     12,
+     "PyValue bridge/boxing"
+    ],
+    [
+     "call_transaction_invoke",
+     11,
+     "PyValue bridge/boxing"
+    ],
+    [
+     "_dl_mcount_wrapper@GLIBC_2",
+     11,
+     "other"
+    ],
+    [
+     "_PyObject_TryGetInstanceAttribute",
+     11,
+     "attribute lookup"
+    ],
+    [
+     "call_transaction_begin",
+     11,
+     "PyValue bridge/boxing"
+    ],
+    [
+     "store_instance_attr_lock_held",
+     10,
+     "other"
+    ],
+    [
+     "type_cache_admitted",
+     9,
+     "attribute lookup"
+    ],
+    [
+     "_PyEval_FrameClearAndPop",
+     8,
+     "frames"
+    ],
+    [
+     "value_load_attribute",
+     7,
+     "PyValue bridge/boxing"
+    ],
+    [
+     "_PyObject_TryGetInstanceValue",
+     5,
+     "attribute lookup"
+    ],
+    [
+     "_Py_dict_lookup",
+     4,
+     "other"
+    ],
+    [
+     "_PyObject_GenericSetAttrWithDict",
+     4,
+     "other"
+    ],
+    [
+     "_PyIR_InstrFeedback",
+     4,
+     "other"
+    ]
+   ],
+   "U": [
+    [
+     "_PyEval_EvalFrameDefault",
+     699,
+     "eval loop self"
+    ],
+    [
+     "_PyTypeCache_Lookup",
+     72,
+     "attribute lookup"
+    ],
+    [
+     "_PyObject_GenericGetAttrWithDict",
+     52,
+     "attribute lookup"
+    ],
+    [
+     "unicodekeys_lookup_unicode",
+     47,
+     "other"
+    ],
+    [
+     "_PyObject_TryGetInstanceAttribute",
+     47,
+     "attribute lookup"
+    ],
+    [
+     "_PyObject_GetMethodStackRef",
+     40,
+     "attribute lookup"
+    ],
+    [
+     "_PyFrame_ClearExceptCode",
+     35,
+     "frames"
+    ],
+    [
+     "_PyObject_GetAttrStackRef",
+     30,
+     "other"
+    ],
+    [
+     "_PyType_LookupStackRefAndVersion",
+     28,
+     "attribute lookup"
+    ],
+    [
+     "_PyEval_FrameClearAndPop",
+     27,
+     "frames"
+    ],
+    [
+     "_PyFrame_PushUnchecked",
+     15,
+     "frames"
+    ],
+    [
+     "PyObject_GenericSetAttr",
+     9,
+     "other"
+    ],
+    [
+     "_PyThreadState_PopFrame",
+     9,
+     "frames"
+    ],
+    [
+     "_PyType_GetDict",
+     8,
+     "other"
+    ],
+    [
+     "_PyEvalFramePushAndInit",
+     8,
+     "frames"
+    ],
+    [
+     "long_dealloc",
+     7,
+     "other"
+    ],
+    [
+     "store_instance_attr_lock_held",
+     6,
+     "other"
+    ],
+    [
+     "_dl_mcount_wrapper@GLIBC_2",
+     5,
+     "other"
+    ],
+    [
+     "_PyObject_StoreInstanceAttribute",
+     5,
+     "other"
+    ],
+    [
+     "_Py_Specialize_LoadAttr",
+     5,
+     "specialiser"
+    ],
+    [
+     "_PyCompactLong_Add",
+     5,
+     "other"
+    ],
+    [
+     "initialize_locals",
+     5,
+     "other"
+    ],
+    [
+     "_PyUnicode_InternMortal",
+     4,
+     "other"
+    ],
+    [
+     "PyObject_SetAttr",
+     4,
+     "other"
+    ],
+    [
+     "PyObject_GenericGetAttr",
+     3,
+     "other"
+    ],
+    [
+     "siphash13",
+     2,
+     "other"
+    ],
+    [
+     "_PyLong_FromMedium",
+     2,
+     "other"
+    ],
+    [
+     "PyNumber_FloorDivide",
+     2,
+     "other"
+    ],
+    [
+     "_PyCompactLong_Subtract",
+     2,
+     "other"
+    ],
+    [
+     "build_indices_unicode",
+     1,
+     "other"
+    ]
+   ]
+  },
+  "B_vs_U": {
+   "eval loop self": 0.35700665560176287,
+   "exception save/restore": 0.21075212781707853,
+   "PyValue bridge/boxing": 0.20743319667035287,
+   "attribute lookup": 0.0954321121906493,
+   "frames": 0.021078180489753722,
+   "specialiser": 0.00021556687492874142,
+   "other": 0.10808216035547387
+  },
+  "B/U": 2.6138444625803112,
+  "C_vs_U": {
+   "eval loop self": 0.42414998340811905,
+   "exception save/restore": 0.0,
+   "PyValue bridge/boxing": 0.3149340095053494,
+   "attribute lookup": 0.08936029723485613,
+   "frames": 0.07932000546124834,
+   "specialiser": -0.0031960523499665883,
+   "other": 0.09543175674039371
+  },
+  "C/U": 1.7302846239360752,
+  "B_minus_C": {
+   "eval loop self": 0.3015109916384478,
+   "exception save/restore": 0.38494410856937944,
+   "PyValue bridge/boxing": 0.11858104739827822,
+   "attribute lookup": 0.10045062130306523,
+   "frames": -0.02706016553548313,
+   "specialiser": 0.0030353567224264957,
+   "other": 0.11853803990388578
+  },
+  "C/B": 0.6619692367724086,
+  "cat_time_over_B": {
+   "C": {
+    "eval loop self": 0.3417275503585541,
+    "exception save/restore": 0.0,
+    "PyValue bridge/boxing": 0.08798972853543609,
+    "attribute lookup": 0.1012905014535834,
+    "frames": 0.052179955294270226,
+    "specialiser": 0.0010231363783190241,
+    "other": 0.07775836475224583
+   },
+   "B": {
+    "eval loop self": 0.44364754098360654,
+    "exception save/restore": 0.13012295081967212,
+    "PyValue bridge/boxing": 0.12807377049180327,
+    "attribute lookup": 0.13524590163934427,
+    "frames": 0.0430327868852459,
+    "specialiser": 0.0020491803278688526,
+    "other": 0.11782786885245902
+   },
+   "U": {
+    "eval loop self": 0.22322386142064599,
+    "exception save/restore": 0.0,
+    "PyValue bridge/boxing": 0.0,
+    "attribute lookup": 0.07632403845426952,
+    "frames": 0.030018659475737803,
+    "specialiser": 0.0019160846473875192,
+    "other": 0.05109559059700051
+   }
+  },
+  "last_C_frac": {
+   "eval loop self": 0.449438202247191,
+   "exception save/restore": 0.118488253319714,
+   "PyValue bridge/boxing": 0.14504596527068436,
+   "attribute lookup": 0.12972420837589377,
+   "frames": 0.06332992849846783,
+   "specialiser": 0.0040858018386108275,
+   "other": 0.0898876404494382
+  },
+  "last_C_vs_U": {
+   "eval loop self": 0.36174837015949207,
+   "exception save/restore": 0.19001426402309077,
+   "PyValue bridge/boxing": 0.2326036680282663,
+   "attribute lookup": 0.10096405752041035,
+   "frames": 0.05214297854855545,
+   "specialiser": 0.0050987933695084055,
+   "other": 0.057427868350676675
+  },
+  "last_C/U": 2.6565757289483516
+ },
+ "deltablue": {
+  "times_ns": {
+   "C": 9437164.433333334,
+   "B": 12984670.366666667,
+   "U": 3804312.966666667
+  },
+  "samples": {
+   "C": 698,
+   "B": 969,
+   "U": 1201
+  },
+  "frac": {
+   "C": {
+    "eval loop self": 0.5329512893982808,
+    "exception save/restore": 0.0,
+    "PyValue bridge/boxing": 0.11461318051575932,
+    "attribute lookup": 0.11604584527220631,
+    "frames": 0.0659025787965616,
+    "specialiser": 0.0,
+    "other": 0.17048710601719197
+   },
+   "B": {
+    "eval loop self": 0.44169246646026833,
+    "exception save/restore": 0.10835913312693499,
+    "PyValue bridge/boxing": 0.14654282765737875,
+    "attribute lookup": 0.13106295149638802,
+    "frames": 0.053663570691434466,
+    "specialiser": 0.0,
+    "other": 0.11867905056759546
+   },
+   "U": {
+    "eval loop self": 0.6569525395503747,
+    "exception save/restore": 0.0,
+    "PyValue bridge/boxing": 0.0,
+    "attribute lookup": 0.038301415487094086,
+    "frames": 0.08659450457951708,
+    "specialiser": 0.0008326394671107411,
+    "other": 0.21731890091590342
+   }
+  },
+  "loops": {
+   "C": 70,
+   "B": 70,
+   "U": 314
+  },
+  "load_1min_before": {
+   "C": 6.22900390625,
+   "B": 6.21044921875,
+   "U": 5.953125
+  },
+  "top_symbols": {
+   "C": [
+    [
+     "_PyEval_EvalFrameLoop",
+     372,
+     "eval loop self"
+    ],
+    [
+     "_PyTypeCache_Lookup",
+     24,
+     "attribute lookup"
+    ],
+    [
+     "_PyFrame_PushOverlapping",
+     23,
+     "frames"
+    ],
+    [
+     "_Py_type_getattro_value",
+     19,
+     "attribute lookup"
+    ],
+    [
+     "value_reader_complete",
+     18,
+     "PyValue bridge/boxing"
+    ],
+    [
+     "_PyFrame_ClearExceptCode",
+     15,
+     "frames"
+    ],
+    [
+     "_PyType_GetVersionForCurrentState",
+     12,
+     "attribute lookup"
+    ],
+    [
+     "value_operation_refresh",
+     12,
+     "PyValue bridge/boxing"
+    ],
+    [
+     "_dl_mcount_wrapper@GLIBC_2",
+     10,
+     "other"
+    ],
+    [
+     "_PyForIter_VirtualIteratorNext",
+     10,
+     "other"
+    ],
+    [
+     "call_transaction_invoke",
+     10,
+     "PyValue bridge/boxing"
+    ],
+    [
+     "_PyObject_GetAttrValue",
+     9,
+     "attribute lookup"
+    ],
+    [
+     "value_load_attribute",
+     9,
+     "PyValue bridge/boxing"
+    ],
+    [
+     "_PyType_LookupValueAndVersion",
+     9,
+     "attribute lookup"
+    ],
+    [
+     "listiter_next",
+     9,
+     "other"
+    ],
+    [
+     "_PyStaticType_GetState",
+     8,
+     "other"
+    ],
+    [
+     "value_attribute_complete",
+     8,
+     "PyValue bridge/boxing"
+    ],
+    [
+     "_PyEval_FrameClearAndPop",
+     7,
+     "frames"
+    ],
+    [
+     "call_transaction_refresh",
+     6,
+     "PyValue bridge/boxing"
+    ],
+    [
+     "PyType_IsSubtype",
+     5,
+     "other"
+    ],
+    [
+     "gc_collect_main",
+     5,
+     "other"
+    ],
+    [
+     "PyObject_ClearManagedDict",
+     4,
+     "other"
+    ],
+    [
+     "_PyObject_GetMethodValue",
+     4,
+     "attribute lookup"
+    ],
+    [
+     "subtype_dealloc",
+     4,
+     "other"
+    ],
+    [
+     "mi_page_free_list_extend",
+     3,
+     "other"
+    ],
+    [
+     "PyValue_FromObjectBorrow",
+     3,
+     "PyValue bridge/boxing"
+    ],
+    [
+     "_PyNativeScope_BeginObjectVector",
+     3,
+     "PyValue bridge/boxing"
+    ],
+    [
+     "_PyType_AllocNoTrack",
+     3,
+     "other"
+    ],
+    [
+     "_PyBorrowScope_Release",
+     3,
+     "other"
+    ],
+    [
+     "_Py_dict_lookup",
+     3,
+     "other"
+    ]
+   ],
+   "B": [
+    [
+     "_PyEval_EvalFrameLoop",
+     428,
+     "eval loop self"
+    ],
+    [
+     "PyErr_Occurred",
+     42,
+     "exception save/restore"
+    ],
+    [
+     "_PyTypeCache_Lookup",
+     38,
+     "attribute lookup"
+    ],
+    [
+     "PyErr_GetRaisedException",
+     34,
+     "exception save/restore"
+    ],
+    [
+     "value_operation_refresh",
+     31,
+     "PyValue bridge/boxing"
+    ],
+    [
+     "_Py_type_getattro_value",
+     26,
+     "attribute lookup"
+    ],
+    [
+     "_PyFrame_PushOverlapping",
+     22,
+     "frames"
+    ],
+    [
+     "value_operation_close3",
+     20,
+     "PyValue bridge/boxing"
+    ],
+    [
+     "_PyFrame_ClearExceptCode",
+     19,
+     "frames"
+    ],
+    [
+     "PyErr_SetRaisedException",
+     19,
+     "exception save/restore"
+    ],
+    [
+     "_PyType_LookupValueAndVersion",
+     17,
+     "attribute lookup"
+    ],
+    [
+     "_PyType_GetVersionForCurrentState",
+     17,
+     "attribute lookup"
+    ],
+    [
+     "type_cache_admitted",
+     16,
+     "attribute lookup"
+    ],
+    [
+     "value_attribute_complete",
+     15,
+     "PyValue bridge/boxing"
+    ],
+    [
+     "_PyNativeScope_End",
+     12,
+     "PyValue bridge/boxing"
+    ],
+    [
+     "call_transaction_begin",
+     11,
+     "PyValue bridge/boxing"
+    ],
+    [
+     "value_reader_complete",
+     11,
+     "PyValue bridge/boxing"
+    ],
+    [
+     "call_transaction_refresh",
+     10,
+     "PyValue bridge/boxing"
+    ],
+    [
+     "_PyEval_FrameClearAndPop",
+     10,
+     "frames"
+    ],
+    [
+     "_PyValue_RestoreException",
+     10,
+     "exception save/restore"
+    ],
+    [
+     "value_load_attribute",
+     7,
+     "PyValue bridge/boxing"
+    ],
+    [
+     "_PyStaticType_GetState",
+     7,
+     "other"
+    ],
+    [
+     "call_transaction_invoke",
+     7,
+     "PyValue bridge/boxing"
+    ],
+    [
+     "listiter_next",
+     7,
+     "other"
+    ],
+    [
+     "_dl_mcount_wrapper@GLIBC_2",
+     6,
+     "other"
+    ],
+    [
+     "gc_collect_main",
+     4,
+     "other"
+    ],
+    [
+     "_PyObject_GetMethodValue",
+     4,
+     "attribute lookup"
+    ],
+    [
+     "_PyObject_GetAttrValue",
+     4,
+     "attribute lookup"
+    ],
+    [
+     "__libc_alloca_cutoff@@GLIBC_PRIVATE",
+     3,
+     "other"
+    ],
+    [
+     "PyObject_ClearManagedDict",
+     3,
+     "other"
+    ]
+   ],
+   "U": [
+    [
+     "_PyEval_EvalFrameDefault",
+     789,
+     "eval loop self"
+    ],
+    [
+     "_PyFrame_ClearExceptCode",
+     50,
+     "frames"
+    ],
+    [
+     "listiter_next",
+     32,
+     "other"
+    ],
+    [
+     "_PyEval_FrameClearAndPop",
+     25,
+     "frames"
+    ],
+    [
+     "_PyFrame_PushUnchecked",
+     18,
+     "frames"
+    ],
+    [
+     "_PyObject_GetMethodStackRef",
+     16,
+     "attribute lookup"
+    ],
+    [
+     "_PyTypeCache_Lookup",
+     14,
+     "attribute lookup"
+    ],
+    [
+     "list_iter",
+     11,
+     "other"
+    ],
+    [
+     "_PyObject_Malloc",
+     9,
+     "other"
+    ],
+    [
+     "unicodekeys_lookup_unicode",
+     8,
+     "other"
+    ],
+    [
+     "initialize_locals",
+     8,
+     "other"
+    ],
+    [
+     "_PyObject_Free",
+     8,
+     "other"
+    ],
+    [
+     "_PyThreadState_PopFrame",
+     7,
+     "frames"
+    ],
+    [
+     "subtype_dealloc",
+     7,
+     "other"
+    ],
+    [
+     "_PySuper_LookupDescr",
+     7,
+     "other"
+    ],
+    [
+     "_PyType_GetDict",
+     7,
+     "other"
+    ],
+    [
+     "PyMethod_New",
+     6,
+     "other"
+    ],
+    [
+     "PyObject_ClearManagedDict",
+     6,
+     "other"
+    ],
+    [
+     "_dl_mcount_wrapper@GLIBC_2",
+     6,
+     "other"
+    ],
+    [
+     "_PyCompactLong_Add",
+     6,
+     "other"
+    ],
+    [
+     "py_dealloc",
+     6,
+     "other"
+    ],
+    [
+     "_PyType_AllocNoTrack",
+     5,
+     "other"
+    ],
+    [
+     "_PyObject_TryGetInstanceAttribute",
+     5,
+     "attribute lookup"
+    ],
+    [
+     "_Py_type_getattro",
+     5,
+     "attribute lookup"
+    ],
+    [
+     "visit_decref",
+     5,
+     "other"
+    ],
+    [
+     "gc_collect_main",
+     5,
+     "other"
+    ],
+    [
+     "PyObject_VisitManagedDict",
+     5,
+     "other"
+    ],
+    [
+     "_PyForIter_VirtualIteratorNext",
+     5,
+     "other"
+    ],
+    [
+     "PyDict_GetItemRef",
+     4,
+     "other"
+    ],
+    [
+     "object_richcompare",
+     4,
+     "other"
+    ]
+   ]
+  },
+  "B_vs_U": {
+   "eval loop self": 0.35248932854514686,
+   "exception save/restore": 0.1532628375525991,
+   "PyValue bridge/boxing": 0.20726974221399116,
+   "attribute lookup": 0.16950305778768274,
+   "frames": 0.04001708904194276,
+   "specialiser": -0.00034504333363838494,
+   "other": 0.0778029881922758
+  },
+  "B/U": 3.4131446283305698,
+  "C_vs_U": {
+   "eval loop self": 0.4492033747536139,
+   "exception save/restore": 0.0,
+   "PyValue bridge/boxing": 0.19202058445091671,
+   "attribute lookup": 0.168552847110945,
+   "frames": 0.051927674251815124,
+   "specialiser": -0.0005623477096871344,
+   "other": 0.1388578671423965
+  },
+  "C/U": 2.480648809922219,
+  "B_minus_C": {
+   "eval loop self": 0.19892345232947417,
+   "exception save/restore": 0.3966188221562573,
+   "PyValue bridge/boxing": 0.2314828773814509,
+   "attribute lookup": 0.17101183485661214,
+   "frames": 0.021105053761638744,
+   "specialiser": 0.0,
+   "other": -0.019142040485433318
+  },
+  "C/B": 0.7267927615289917,
+  "cat_time_over_B": {
+   "C": {
+    "eval loop self": 0.38734513938221343,
+    "exception save/restore": 0.0,
+    "PyValue bridge/boxing": 0.08330002997466955,
+    "attribute lookup": 0.08434128034935293,
+    "frames": 0.047897517235434985,
+    "specialiser": 0.0,
+    "other": 0.12390879458732094
+   },
+   "B": {
+    "eval loop self": 0.44169246646026833,
+    "exception save/restore": 0.10835913312693499,
+    "PyValue bridge/boxing": 0.14654282765737875,
+    "attribute lookup": 0.13106295149638802,
+    "frames": 0.053663570691434466,
+    "specialiser": 0.0,
+    "other": 0.11867905056759546
+   },
+   "U": {
+    "eval loop self": 0.19247720535994456,
+    "exception save/restore": 0.0,
+    "PyValue bridge/boxing": 0.0,
+    "attribute lookup": 0.011221738208564574,
+    "frames": 0.02537088638458078,
+    "specialiser": 0.00024395083062096905,
+    "other": 0.06367116679207292
+   }
+  },
+  "last_C_frac": {
+   "eval loop self": 0.43017329255861364,
+   "exception save/restore": 0.1162079510703364,
+   "PyValue bridge/boxing": 0.14475025484199797,
+   "attribute lookup": 0.12844036697247707,
+   "frames": 0.06218144750254842,
+   "specialiser": 0.0010193679918450561,
+   "other": 0.11722731906218145
+  },
+  "last_C_vs_U": {
+   "eval loop self": 0.3506101162896602,
+   "exception save/restore": 0.16322392534457228,
+   "PyValue bridge/boxing": 0.20331401227130932,
+   "attribute lookup": 0.16475077603148836,
+   "frames": 0.048028639932254154,
+   "specialiser": 0.0010839084823936293,
+   "other": 0.06898862164832208
+  },
+  "last_C/U": 3.4716695307113272
+ },
+ "deepcopy": {
+  "times_ns": {
+   "C": 673996.8166666667,
+   "B": 959141.1433333333,
+   "U": 314689.6566666667
+  },
+  "samples": {
+   "C": 709,
+   "B": 1031,
+   "U": 1211
+  },
+  "frac": {
+   "C": {
+    "eval loop self": 0.3906911142454161,
+    "exception save/restore": 0.0,
+    "PyValue bridge/boxing": 0.12129760225669958,
+    "attribute lookup": 0.01692524682651622,
+    "frames": 0.045133991537376586,
+    "specialiser": 0.0,
+    "other": 0.42595204513399154
+   },
+   "B": {
+    "eval loop self": 0.3171677982541222,
+    "exception save/restore": 0.06207565470417071,
+    "PyValue bridge/boxing": 0.16391852570320078,
+    "attribute lookup": 0.02521823472356935,
+    "frames": 0.03491755577109602,
+    "specialiser": 0.0,
+    "other": 0.39670223084384093
+   },
+   "U": {
+    "eval loop self": 0.3509496284062758,
+    "exception save/restore": 0.0016515276630883566,
+    "PyValue bridge/boxing": 0.0,
+    "attribute lookup": 0.038810900082576386,
+    "frames": 0.07184145334434351,
+    "specialiser": 0.0,
+    "other": 0.5367464905037159
+   }
+  },
+  "loops": {
+   "C": 1018,
+   "B": 1018,
+   "U": 3798
+  },
+  "load_1min_before": {
+   "C": 6.22900390625,
+   "B": 6.21044921875,
+   "U": 5.953125
+  },
+  "top_symbols": {
+   "C": [
+    [
+     "_PyEval_EvalFrameLoop",
+     277,
+     "eval loop self"
+    ],
+    [
+     "_dl_mcount_wrapper@GLIBC_2",
+     24,
+     "other"
+    ],
+    [
+     "_Py_dict_lookup",
+     23,
+     "other"
+    ],
+    [
+     "mi_free_ex",
+     16,
+     "other"
+    ],
+    [
+     "_PyNativeScope_End",
+     14,
+     "PyValue bridge/boxing"
+    ],
+    [
+     "_PyObject_MiMalloc",
+     13,
+     "other"
+    ],
+    [
+     "_PyFrame_ClearExceptCode",
+     12,
+     "frames"
+    ],
+    [
+     "_PyNativeScope_Begin",
+     12,
+     "PyValue bridge/boxing"
+    ],
+    [
+     "PyValue_FromObjectBorrow",
+     9,
+     "PyValue bridge/boxing"
+    ],
+    [
+     "native_call_finish",
+     9,
+     "other"
+    ],
+    [
+     "call_transaction_invoke",
+     9,
+     "PyValue bridge/boxing"
+    ],
+    [
+     "eval_frame_push_and_init_code",
+     8,
+     "frames"
+    ],
+    [
+     "_PyCFunction_CallScoped",
+     8,
+     "other"
+    ],
+    [
+     "set_lookkey",
+     8,
+     "other"
+    ],
+    [
+     "unicodekeys_lookup_unicode",
+     7,
+     "other"
+    ],
+    [
+     "native_call_publish_result",
+     7,
+     "other"
+    ],
+    [
+     "_PyNativeScope_Objects",
+     7,
+     "PyValue bridge/boxing"
+    ],
+    [
+     "tuple_dealloc",
+     6,
+     "other"
+    ],
+    [
+     "_PyEval_FrameClearAndPop",
+     6,
+     "frames"
+    ],
+    [
+     "PyLong_AsLongLongAndOverflow",
+     5,
+     "other"
+    ],
+    [
+     "PyValue_PrepareOwned",
+     5,
+     "PyValue bridge/boxing"
+    ],
+    [
+     "py_dealloc",
+     5,
+     "other"
+    ],
+    [
+     "insertdict",
+     5,
+     "other"
+    ],
+    [
+     "dictresize",
+     4,
+     "other"
+    ],
+    [
+     "dictiter_capture",
+     4,
+     "other"
+    ],
+    [
+     "_PyValue_Hash",
+     4,
+     "PyValue bridge/boxing"
+    ],
+    [
+     "_Py_Dealloc",
+     4,
+     "other"
+    ],
+    [
+     "list_dealloc",
+     4,
+     "other"
+    ],
+    [
+     "_PyDict_GetValue_KnownHash",
+     4,
+     "other"
+    ],
+    [
+     "value_reader_complete",
+     4,
+     "PyValue bridge/boxing"
+    ]
+   ],
+   "B": [
+    [
+     "_PyEval_EvalFrameLoop",
+     327,
+     "eval loop self"
+    ],
+    [
+     "_Py_dict_lookup",
+     33,
+     "other"
+    ],
+    [
+     "PyErr_GetRaisedException",
+     29,
+     "exception save/restore"
+    ],
+    [
+     "_PyNativeScope_End",
+     25,
+     "PyValue bridge/boxing"
+    ],
+    [
+     "PyErr_Occurred",
+     22,
+     "exception save/restore"
+    ],
+    [
+     "PyLong_AsLongAndOverflow",
+     22,
+     "other"
+    ],
+    [
+     "_dl_mcount_wrapper@GLIBC_2",
+     19,
+     "other"
+    ],
+    [
+     "native_call_finish",
+     17,
+     "other"
+    ],
+    [
+     "value_operation_refresh",
+     16,
+     "PyValue bridge/boxing"
+    ],
+    [
+     "PyValue_FromObjectBorrow",
+     14,
+     "PyValue bridge/boxing"
+    ],
+    [
+     "_PyValue_IsSameValue",
+     14,
+     "PyValue bridge/boxing"
+    ],
+    [
+     "_PyCFunction_CallScoped",
+     13,
+     "other"
+    ],
+    [
+     "_PyFrame_ClearExceptCode",
+     12,
+     "frames"
+    ],
+    [
+     "_PyDict_GetValue_KnownHash",
+     12,
+     "other"
+    ],
+    [
+     "_PyNativeScope_Objects",
+     12,
+     "PyValue bridge/boxing"
+    ],
+    [
+     "_PyNativeScope_Begin",
+     11,
+     "PyValue bridge/boxing"
+    ],
+    [
+     "PyValue_PrepareOwned",
+     10,
+     "PyValue bridge/boxing"
+    ],
+    [
+     "PyObject_Hash",
+     10,
+     "other"
+    ],
+    [
+     "call_transaction_refresh",
+     10,
+     "PyValue bridge/boxing"
+    ],
+    [
+     "call_transaction_invoke",
+     10,
+     "PyValue bridge/boxing"
+    ],
+    [
+     "_PyEval_FrameClearAndPop",
+     9,
+     "frames"
+    ],
+    [
+     "PyErr_SetRaisedException",
+     8,
+     "exception save/restore"
+    ],
+    [
+     "insertdict",
+     8,
+     "other"
+    ],
+    [
+     "_PyObject_MiMalloc",
+     8,
+     "other"
+    ],
+    [
+     "tuple_dealloc",
+     8,
+     "other"
+    ],
+    [
+     "call_transaction_begin",
+     8,
+     "PyValue bridge/boxing"
+    ],
+    [
+     "native_call_publish_result",
+     7,
+     "other"
+    ],
+    [
+     "_PyBorrowScope_Release",
+     7,
+     "other"
+    ],
+    [
+     "_PyObject_GenericGetAttrWithDict",
+     7,
+     "attribute lookup"
+    ],
+    [
+     "_PyValue_Publish",
+     7,
+     "PyValue bridge/boxing"
+    ]
+   ],
+   "U": [
+    [
+     "_PyEval_EvalFrameDefault",
+     425,
+     "eval loop self"
+    ],
+    [
+     "_PyObject_Malloc",
+     51,
+     "other"
+    ],
+    [
+     "_PyFrame_ClearExceptCode",
+     40,
+     "frames"
+    ],
+    [
+     "_PyObject_Free",
+     39,
+     "other"
+    ],
+    [
+     "_Py_dict_lookup",
+     39,
+     "other"
+    ],
+    [
+     "_Py_Dealloc",
+     23,
+     "other"
+    ],
+    [
+     "set_lookkey",
+     22,
+     "other"
+    ],
+    [
+     "unicodekeys_lookup_unicode",
+     19,
+     "other"
+    ],
+    [
+     "_PyFrame_PushUnchecked",
+     19,
+     "frames"
+    ],
+    [
+     "PyObject_GC_UnTrack",
+     18,
+     "other"
+    ],
+    [
+     "py_dealloc",
+     17,
+     "other"
+    ],
+    [
+     "_PyEval_FrameClearAndPop",
+     17,
+     "frames"
+    ],
+    [
+     "_PyTypeCache_Lookup",
+     17,
+     "attribute lookup"
+    ],
+    [
+     "insertdict",
+     16,
+     "other"
+    ],
+    [
+     "tuple_dealloc",
+     16,
+     "other"
+    ],
+    [
+     "dictiter_iternextitem",
+     15,
+     "other"
+    ],
+    [
+     "_PyObject_GenericGetAttrWithDict",
+     14,
+     "attribute lookup"
+    ],
+    [
+     "_dl_mcount_wrapper@GLIBC_2",
+     13,
+     "other"
+    ],
+    [
+     "initialize_locals",
+     10,
+     "other"
+    ],
+    [
+     "method_get",
+     10,
+     "other"
+    ],
+    [
+     "_PySet_Contains",
+     10,
+     "other"
+    ],
+    [
+     "sys_audit_tstate",
+     9,
+     "other"
+    ],
+    [
+     "PyObject_IsSubclass",
+     9,
+     "other"
+    ],
+    [
+     "list_dealloc",
+     8,
+     "other"
+    ],
+    [
+     "_PyObject_TryGetInstanceAttribute",
+     8,
+     "attribute lookup"
+    ],
+    [
+     "PySys_Audit",
+     8,
+     "other"
+    ],
+    [
+     "find_empty_slot",
+     7,
+     "other"
+    ],
+    [
+     "_PyEvalFramePushAndInit",
+     7,
+     "frames"
+    ],
+    [
+     "PyCMethod_New",
+     7,
+     "other"
+    ],
+    [
+     "insert_to_emptydict",
+     6,
+     "other"
+    ]
+   ]
+  },
+  "B_vs_U": {
+   "eval loop self": 0.3006719211367629,
+   "exception save/restore": 0.09158113057993111,
+   "PyValue bridge/boxing": 0.24396095813151988,
+   "attribute lookup": 0.018580851951538788,
+   "frames": 0.016887387650573904,
+   "specialiser": 0.0,
+   "other": 0.32831775054967355
+  },
+  "B/U": 3.0478953566284464,
+  "C_vs_U": {
+   "eval loop self": 0.4254976417138423,
+   "exception save/restore": -0.0014464467484387937,
+   "PyValue bridge/boxing": 0.22753289355635162,
+   "attribute lookup": -0.002242722743239328,
+   "frames": 0.021742968696438665,
+   "specialiser": 0.0,
+   "other": 0.32891566552504553
+  },
+  "C/U": 2.141782554297913,
+  "B_minus_C": {
+   "eval loop self": 0.1433804341210157,
+   "exception save/restore": 0.20880413481178914,
+   "PyValue bridge/boxing": 0.2646617775930292,
+   "attribute lookup": 0.04482040429365888,
+   "frames": 0.010768924568616866,
+   "specialiser": 0.0,
+   "other": 0.32756432461189033
+  },
+  "C/B": 0.702708690322995,
+  "cat_time_over_B": {
+   "C": {
+    "eval loop self": 0.2745420412122279,
+    "exception save/restore": 0.0,
+    "PyValue bridge/boxing": 0.08523687922112493,
+    "attribute lookup": 0.011893518030854642,
+    "frames": 0.031716048082279034,
+    "specialiser": 0.0,
+    "other": 0.2993202037765085
+   },
+   "B": {
+    "eval loop self": 0.3171677982541222,
+    "exception save/restore": 0.06207565470417071,
+    "PyValue bridge/boxing": 0.1639185257032008,
+    "attribute lookup": 0.02521823472356935,
+    "frames": 0.03491755577109602,
+    "specialiser": 0.0,
+    "other": 0.39670223084384093
+   },
+   "U": {
+    "eval loop self": 0.1151449073351695,
+    "exception save/restore": 0.0005418583874596211,
+    "PyValue bridge/boxing": 0.0,
+    "attribute lookup": 0.012733672105301097,
+    "frames": 0.023570839854493517,
+    "specialiser": 0.0,
+    "other": 0.17610397592437685
+   }
+  },
+  "last_C_frac": {
+   "eval loop self": 0.3307317073170732,
+   "exception save/restore": 0.07707317073170732,
+   "PyValue bridge/boxing": 0.19414634146341464,
+   "attribute lookup": 0.026341463414634145,
+   "frames": 0.03609756097560975,
+   "specialiser": 0.0,
+   "other": 0.335609756097561
+  },
+  "last_C_vs_U": {
+   "eval loop self": 0.3026377533570004,
+   "exception save/restore": 0.11288482806585735,
+   "PyValue bridge/boxing": 0.2875415346848928,
+   "attribute lookup": 0.0217272121514887,
+   "frames": 0.02479309783913032,
+   "specialiser": 0.0,
+   "other": 0.2504155739016306
+  },
+  "last_C/U": 3.0787616018204957
+ },
+ "logging_silent": {
+  "times_ns": {
+   "C": 2531.844666666667,
+   "B": 3482.3578166666666,
+   "U": 1122.7531333333334
+  },
+  "samples": {
+   "C": 814,
+   "B": 1130,
+   "U": 1221
+  },
+  "frac": {
+   "C": {
+    "eval loop self": 0.5233415233415234,
+    "exception save/restore": 0.0,
+    "PyValue bridge/boxing": 0.12653562653562653,
+    "attribute lookup": 0.0036855036855036856,
+    "frames": 0.15724815724815724,
+    "specialiser": 0.0,
+    "other": 0.1891891891891892
+   },
+   "B": {
+    "eval loop self": 0.38495575221238937,
+    "exception save/restore": 0.07168141592920355,
+    "PyValue bridge/boxing": 0.2327433628318584,
+    "attribute lookup": 0.0017699115044247787,
+    "frames": 0.08761061946902655,
+    "specialiser": 0.0,
+    "other": 0.22123893805309736
+   },
+   "U": {
+    "eval loop self": 0.4873054873054873,
+    "exception save/restore": 0.0,
+    "PyValue bridge/boxing": 0.0,
+    "attribute lookup": 0.001638001638001638,
+    "frames": 0.1769041769041769,
+    "specialiser": 0.0,
+    "other": 0.33415233415233414
+   }
+  },
+  "loops": {
+   "C": 280446,
+   "B": 280446,
+   "U": 1012231
+  },
+  "load_1min_before": {
+   "C": 6.22900390625,
+   "B": 6.21044921875,
+   "U": 5.71630859375
+  },
+  "top_symbols": {
+   "C": [
+    [
+     "_PyEval_EvalFrameLoop",
+     426,
+     "eval loop self"
+    ],
+    [
+     "call_transaction_invoke",
+     56,
+     "PyValue bridge/boxing"
+    ],
+    [
+     "_dl_mcount_wrapper@GLIBC_2",
+     47,
+     "other"
+    ],
+    [
+     "_PyFrame_ClearExceptCode",
+     45,
+     "frames"
+    ],
+    [
+     "eval_frame_push_and_init_code",
+     44,
+     "frames"
+    ],
+    [
+     "_Py_dict_lookup",
+     23,
+     "other"
+    ],
+    [
+     "_PyEval_FrameClearAndPop",
+     15,
+     "frames"
+    ],
+    [
+     "_PyFrame_PushOverlapping",
+     15,
+     "frames"
+    ],
+    [
+     "value_reader_complete",
+     15,
+     "PyValue bridge/boxing"
+    ],
+    [
+     "dict_dealloc",
+     13,
+     "other"
+    ],
+    [
+     "PyDict_GetValue",
+     11,
+     "other"
+    ],
+    [
+     "call_transaction_refresh",
+     10,
+     "PyValue bridge/boxing"
+    ],
+    [
+     "_PyThreadState_PushFrame",
+     9,
+     "frames"
+    ],
+    [
+     "value_binary_operation",
+     9,
+     "PyValue bridge/boxing"
+    ],
+    [
+     "__libc_alloca_cutoff@@GLIBC_PRIVATE",
+     7,
+     "other"
+    ],
+    [
+     "value_operation_refresh",
+     7,
+     "PyValue bridge/boxing"
+    ],
+    [
+     "_PyDict_GetValue_KnownHash",
+     7,
+     "other"
+    ],
+    [
+     "PyDict_New",
+     7,
+     "other"
+    ],
+    [
+     "py_dealloc",
+     5,
+     "other"
+    ],
+    [
+     "_Py_Dealloc",
+     4,
+     "other"
+    ],
+    [
+     "call_transaction_expand_method",
+     4,
+     "PyValue bridge/boxing"
+    ],
+    [
+     "getdents64@@GLIBC_2",
+     3,
+     "other"
+    ],
+    [
+     "_PyCode_GetExec",
+     3,
+     "other"
+    ],
+    [
+     "unicodekeys_lookup_unicode",
+     2,
+     "other"
+    ],
+    [
+     "mi_page_free_list_extend",
+     2,
+     "other"
+    ],
+    [
+     "find_name_in_mro",
+     2,
+     "attribute lookup"
+    ],
+    [
+     "PyObject_GC_UnTrack",
+     2,
+     "other"
+    ],
+    [
+     "dict_setdefault_value_lock_held",
+     1,
+     "other"
+    ],
+    [
+     "setitem_lock_held",
+     1,
+     "other"
+    ],
+    [
+     "r_object",
+     1,
+     "other"
+    ]
+   ],
+   "B": [
+    [
+     "_PyEval_EvalFrameLoop",
+     435,
+     "eval loop self"
+    ],
+    [
+     "call_transaction_invoke",
+     92,
+     "PyValue bridge/boxing"
+    ],
+    [
+     "call_transaction_begin",
+     69,
+     "PyValue bridge/boxing"
+    ],
+    [
+     "_dl_mcount_wrapper@GLIBC_2",
+     49,
+     "other"
+    ],
+    [
+     "_PyFrame_ClearExceptCode",
+     41,
+     "frames"
+    ],
+    [
+     "value_operation_refresh",
+     36,
+     "PyValue bridge/boxing"
+    ],
+    [
+     "PyErr_Occurred",
+     32,
+     "exception save/restore"
+    ],
+    [
+     "_Py_dict_lookup",
+     30,
+     "other"
+    ],
+    [
+     "eval_frame_push_and_init_code",
+     26,
+     "frames"
+    ],
+    [
+     "value_reader_complete",
+     20,
+     "PyValue bridge/boxing"
+    ],
+    [
+     "PyDict_GetValue",
+     20,
+     "other"
+    ],
+    [
+     "PyErr_GetRaisedException",
+     17,
+     "exception save/restore"
+    ],
+    [
+     "value_operation_close3",
+     17,
+     "PyValue bridge/boxing"
+    ],
+    [
+     "PyErr_SetRaisedException",
+     17,
+     "exception save/restore"
+    ],
+    [
+     "_PyFrame_PushOverlapping",
+     16,
+     "frames"
+    ],
+    [
+     "_PyValue_RestoreException",
+     15,
+     "exception save/restore"
+    ],
+    [
+     "py_dealloc",
+     13,
+     "other"
+    ],
+    [
+     "_PyDict_GetValue_KnownHash",
+     12,
+     "other"
+    ],
+    [
+     "dict_dealloc",
+     12,
+     "other"
+    ],
+    [
+     "call_transaction_refresh",
+     12,
+     "PyValue bridge/boxing"
+    ],
+    [
+     "_PyEval_FrameClearAndPop",
+     12,
+     "frames"
+    ],
+    [
+     "__libc_alloca_cutoff@@GLIBC_PRIVATE",
+     9,
+     "other"
+    ],
+    [
+     "value_binary_operation",
+     8,
+     "PyValue bridge/boxing"
+    ],
+    [
+     "PyObject_GC_UnTrack",
+     7,
+     "other"
+    ],
+    [
+     "PyDict_New",
+     7,
+     "other"
+    ],
+    [
+     "_PyCode_GetExec",
+     7,
+     "other"
+    ],
+    [
+     "unicodekeys_lookup_unicode",
+     4,
+     "other"
+    ],
+    [
+     "_Py_Dealloc",
+     4,
+     "other"
+    ],
+    [
+     "call_transaction_expand_method",
+     4,
+     "PyValue bridge/boxing"
+    ],
+    [
+     "_PyThreadState_PushFrame",
+     4,
+     "frames"
+    ]
+   ],
+   "U": [
+    [
+     "_PyEval_EvalFrameDefault",
+     595,
+     "eval loop self"
+    ],
+    [
+     "_PyFrame_ClearExceptCode",
+     86,
+     "frames"
+    ],
+    [
+     "initialize_locals",
+     72,
+     "other"
+    ],
+    [
+     "_Py_dict_lookup",
+     70,
+     "other"
+    ],
+    [
+     "PyDict_New",
+     49,
+     "other"
+    ],
+    [
+     "dict_dealloc",
+     46,
+     "other"
+    ],
+    [
+     "_PyEvalFramePushAndInit",
+     45,
+     "frames"
+    ],
+    [
+     "py_dealloc",
+     44,
+     "other"
+    ],
+    [
+     "_PyEval_FrameClearAndPop",
+     43,
+     "frames"
+    ],
+    [
+     "PyObject_GC_UnTrack",
+     40,
+     "other"
+    ],
+    [
+     "_PyDict_Subscript",
+     25,
+     "other"
+    ],
+    [
+     "_PyFrame_PushUnchecked",
+     21,
+     "frames"
+    ],
+    [
+     "_Py_Dealloc",
+     15,
+     "other"
+    ],
+    [
+     "_PyThreadState_PushFrame",
+     12,
+     "frames"
+    ],
+    [
+     "_PyThreadState_PopFrame",
+     9,
+     "frames"
+    ],
+    [
+     "PyObject_Hash",
+     6,
+     "other"
+    ],
+    [
+     "long_hash",
+     6,
+     "other"
+    ],
+    [
+     "__libc_alloca_cutoff@@GLIBC_PRIVATE",
+     4,
+     "other"
+    ],
+    [
+     "_PyLong_FromMedium",
+     4,
+     "other"
+    ],
+    [
+     "_PyObject_Malloc",
+     3,
+     "other"
+    ],
+    [
+     "unicodekeys_lookup_unicode",
+     2,
+     "other"
+    ],
+    [
+     "__default_morecore@GLIBC_2",
+     2,
+     "other"
+    ],
+    [
+     "long_dealloc",
+     2,
+     "other"
+    ],
+    [
+     "_Py_NewReference",
+     2,
+     "other"
+    ],
+    [
+     "allocate_from_new_pool",
+     1,
+     "other"
+    ],
+    [
+     "_init",
+     1,
+     "other"
+    ],
+    [
+     "_PyDict_FromItems",
+     1,
+     "other"
+    ],
+    [
+     "_PyUnicode_FromUCS1",
+     1,
+     "other"
+    ],
+    [
+     "_Py_hashtable_get_entry_generic",
+     1,
+     "other"
+    ],
+    [
+     "PyObject_IS_GC",
+     1,
+     "other"
+    ]
+   ]
+  },
+  "B_vs_U": {
+   "eval loop self": 0.3362554395781231,
+   "exception save/restore": 0.10578905052780552,
+   "PyValue bridge/boxing": 0.34348790480015856,
+   "attribute lookup": 0.0018326771943262515,
+   "frames": 0.04512273066929391,
+   "specialiser": 0.0,
+   "other": 0.16751219723029276
+  },
+  "B/U": 3.101623779332435,
+  "C_vs_U": {
+   "eval loop self": 0.5520547555306784,
+   "exception save/restore": 0.0,
+   "PyValue bridge/boxing": 0.22735822592709107,
+   "attribute lookup": 0.005316937332614762,
+   "frames": 0.1415863942358909,
+   "specialiser": 0.0,
+   "other": 0.07368368697372499
+  },
+  "C/U": 2.2550323766631513,
+  "B_minus_C": {
+   "eval loop self": 0.016342991225492973,
+   "exception save/restore": 0.2626163973331632,
+   "PyValue bridge/boxing": 0.5156447521502012,
+   "attribute lookup": -0.0033325763961087377,
+   "frames": -0.09788016372096991,
+   "specialiser": 0.0,
+   "other": 0.30660859940822105
+  },
+  "C/B": 0.7270489708292422,
+  "cat_time_over_B": {
+   "C": {
+    "eval loop self": 0.3804949159376624,
+    "exception save/restore": 0.0,
+    "PyValue bridge/boxing": 0.09199759704596061,
+    "attribute lookup": 0.002679541661532834,
+    "frames": 0.11432711089206755,
+    "specialiser": 0.0,
+    "other": 0.1375498052920188
+   },
+   "B": {
+    "eval loop self": 0.38495575221238937,
+    "exception save/restore": 0.07168141592920355,
+    "PyValue bridge/boxing": 0.23274336283185837,
+    "attribute lookup": 0.0017699115044247787,
+    "frames": 0.08761061946902655,
+    "specialiser": 0.0,
+    "other": 0.22123893805309736
+   },
+   "U": {
+    "eval loop self": 0.15711302271817457,
+    "exception save/restore": 0.0,
+    "PyValue bridge/boxing": 0.0,
+    "attribute lookup": 0.0005281110007333599,
+    "frames": 0.05703598807920287,
+    "specialiser": 0.0,
+    "other": 0.10773464414960542
+   }
+  },
+  "last_C_frac": {
+   "eval loop self": 0.3747697974217311,
+   "exception save/restore": 0.08103130755064457,
+   "PyValue bridge/boxing": 0.24769797421731124,
+   "attribute lookup": 0.001841620626151013,
+   "frames": 0.11694290976058933,
+   "specialiser": 0.0,
+   "other": 0.17771639042357273
+  },
+  "last_C_vs_U": {
+   "eval loop self": 0.3107781341389164,
+   "exception save/restore": 0.12096030118804905,
+   "PyValue bridge/boxing": 0.3697536479498318,
+   "attribute lookup": 0.002333967105098867,
+   "frames": 0.09776853729901848,
+   "specialiser": 0.0,
+   "other": 0.09840541231908549
+  },
+  "last_C/U": 3.029385170247228
+ },
+ "_extra_not_in_means": {
+  "note": "generators and unpack_sequence, sampled after the five; not in the means",
+  "generators": {
+   "times_ns": {
+    "C": 71809472.5,
+    "B": 77734607.0,
+    "U": 30460067.5
+   },
+   "samples": {
+    "C": 1150,
+    "B": 1258,
+    "U": 1282
+   },
+   "frac": {
+    "C": {
+     "eval loop self": 0.7182608695652174,
+     "exception save/restore": 0.0,
+     "PyValue bridge/boxing": 0.014782608695652174,
+     "attribute lookup": 0.021739130434782608,
+     "frames": 0.028695652173913042,
+     "specialiser": 0.0,
+     "other": 0.2165217391304348
+    },
+    "B": {
+     "eval loop self": 0.6820349761526232,
+     "exception save/restore": 0.01987281399046105,
+     "PyValue bridge/boxing": 0.016693163751987282,
+     "attribute lookup": 0.023052464228934817,
+     "frames": 0.038950715421303655,
+     "specialiser": 0.001589825119236884,
+     "other": 0.2178060413354531
+    },
+    "U": {
+     "eval loop self": 0.671606864274571,
+     "exception save/restore": 0.0,
+     "PyValue bridge/boxing": 0.0,
+     "attribute lookup": 0.031981279251170044,
+     "frames": 0.04914196567862714,
+     "specialiser": 0.00078003120124805,
+     "other": 0.24648985959438377
+    }
+   },
+   "top_symbols": {
+    "C": [
+     [
+      "_PyEval_EvalFrameLoop",
+      822,
+      "eval loop self"
+     ],
+     [
+      "gc_collect_main",
+      17,
+      "other"
+     ],
+     [
+      "gen_dealloc",
+      17,
+      "other"
+     ],
+     [
+      "_dl_mcount_wrapper@GLIBC_2",
+      16,
+      "other"
+     ],
+     [
+      "_PyCode_InstrOparg",
+      11,
+      "other"
+     ],
+     [
+      "make_gen",
+      11,
+      "other"
+     ],
+     [
+      "_PyFrame_ClearExceptCode",
+      10,
+      "frames"
+     ],
+     [
+      "_PyEval_Vector",
+      10,
+      "other"
+     ],
+     [
+      "slot_tp_iter",
+      10,
+      "other"
+     ],
+     [
+      "lookup_method_ex",
+      10,
+      "attribute lookup"
+     ],
+     [
+      "_PyLong_FromMedium",
+      8,
+      "other"
+     ],
+     [
+      "eval_frame_push_and_init_code",
+      8,
+      "frames"
+     ],
+     [
+      "mi_free_ex",
+      8,
+      "other"
+     ],
+     [
+      "gen_iternext",
+      7,
+      "other"
+     ],
+     [
+      "_PyObject_GC_NewVar",
+      7,
+      "other"
+     ],
+     [
+      "_PyTypeCache_Lookup",
+      6,
+      "attribute lookup"
+     ],
+     [
+      "_PyType_LookupValueAndVersion",
+      6,
+      "attribute lookup"
+     ],
+     [
+      "visit_decref",
+      5,
+      "other"
+     ],
+     [
+      "_PyValue_BoxInlineValue",
+      5,
+      "PyValue bridge/boxing"
+     ],
+     [
+      "visit_reachable",
+      5,
+      "other"
+     ],
+     [
+      "PyObject_RichCompareBool",
+      5,
+      "other"
+     ],
+     [
+      "PyObject_VisitManagedDict",
+      5,
+      "other"
+     ],
+     [
+      "_Py_Dealloc",
+      5,
+      "other"
+     ],
+     [
+      "_PyObject_MiMalloc",
+      5,
+      "other"
+     ],
+     [
+      "_PyForIter_VirtualIteratorNext",
+      5,
+      "other"
+     ],
+     [
+      "PyValue_FromObjectBorrow",
+      5,
+      "PyValue bridge/boxing"
+     ],
+     [
+      "_PyCode_GetExec",
+      4,
+      "other"
+     ],
+     [
+      "_PyEvalFramePushAndInit",
+      4,
+      "frames"
+     ],
+     [
+      "PyObject_GetIter",
+      4,
+      "other"
+     ],
+     [
+      "_PyFrame_ClearLocals",
+      4,
+      "frames"
+     ]
+    ],
+    "B": [
+     [
+      "_PyEval_EvalFrameLoop",
+      850,
+      "eval loop self"
+     ],
+     [
+      "_PyEval_Vector",
+      23,
+      "other"
+     ],
+     [
+      "gc_collect_main",
+      22,
+      "other"
+     ],
+     [
+      "_dl_mcount_wrapper@GLIBC_2",
+      16,
+      "other"
+     ],
+     [
+      "maybe_call_special_no_args",
+      15,
+      "other"
+     ],
+     [
+      "make_gen",
+      13,
+      "other"
+     ],
+     [
+      "eval_frame_push_and_init_code",
+      12,
+      "frames"
+     ],
+     [
+      "_PyFrame_ClearExceptCode",
+      12,
+      "frames"
+     ],
+     [
+      "PyErr_Occurred",
+      12,
+      "exception save/restore"
+     ],
+     [
+      "_PyTypeCache_Lookup",
+      11,
+      "attribute lookup"
+     ],
+     [
+      "_Py_Dealloc",
+      9,
+      "other"
+     ],
+     [
+      "gen_dealloc",
+      9,
+      "other"
+     ],
+     [
+      "_PyObject_MiMalloc",
+      9,
+      "other"
+     ],
+     [
+      "_PyCode_InstrOparg",
+      9,
+      "other"
+     ],
+     [
+      "_PyFrame_ClearLocals",
+      8,
+      "frames"
+     ],
+     [
+      "_PyEval_EvalFrameDefault",
+      8,
+      "eval loop self"
+     ],
+     [
+      "PyObject_RichCompareBool",
+      7,
+      "other"
+     ],
+     [
+      "_PyLong_FromMedium",
+      7,
+      "other"
+     ],
+     [
+      "gen_iternext",
+      7,
+      "other"
+     ],
+     [
+      "PyObject_CallOneArg",
+      7,
+      "other"
+     ],
+     [
+      "_PyThreadState_PushFrame",
+      7,
+      "frames"
+     ],
+     [
+      "_PyValue_Canonicalize",
+      7,
+      "PyValue bridge/boxing"
+     ],
+     [
+      "PyValue_FromObjectBorrow",
+      7,
+      "PyValue bridge/boxing"
+     ],
+     [
+      "visit_decref",
+      6,
+      "other"
+     ],
+     [
+      "long_dealloc",
+      6,
+      "other"
+     ],
+     [
+      "_PyEval_FrameClearAndPop",
+      6,
+      "frames"
+     ],
+     [
+      "lookup_method_ex",
+      6,
+      "attribute lookup"
+     ],
+     [
+      "_PyValue_RestoreException",
+      6,
+      "exception save/restore"
+     ],
+     [
+      "subtype_traverse",
+      5,
+      "other"
+     ],
+     [
+      "_Py_NewReference",
+      5,
+      "other"
+     ]
+    ],
+    "U": [
+     [
+      "_PyEval_EvalFrameDefault",
+      861,
+      "eval loop self"
+     ],
+     [
+      "gen_dealloc",
+      40,
+      "other"
+     ],
+     [
+      "_PyEvalFramePushAndInit",
+      33,
+      "frames"
+     ],
+     [
+      "initialize_locals",
+      30,
+      "other"
+     ],
+     [
+      "make_gen",
+      21,
+      "other"
+     ],
+     [
+      "_PyTypeCache_Lookup",
+      21,
+      "attribute lookup"
+     ],
+     [
+      "_PyObject_Free",
+      20,
+      "other"
+     ],
+     [
+      "_PyEval_Vector",
+      19,
+      "other"
+     ],
+     [
+      "_PyObject_Malloc",
+      17,
+      "other"
+     ],
+     [
+      "_PyFrame_ClearExceptCode",
+      17,
+      "frames"
+     ],
+     [
+      "_PyObject_GC_NewVar",
+      16,
+      "other"
+     ],
+     [
+      "PyObject_CallOneArg",
+      13,
+      "other"
+     ],
+     [
+      "lookup_method_ex",
+      13,
+      "attribute lookup"
+     ],
+     [
+      "_PyEval_GetIter",
+      12,
+      "other"
+     ],
+     [
+      "_PyEval_FrameClearAndPop",
+      11,
+      "frames"
+     ],
+     [
+      "gc_collect_main",
+      11,
+      "other"
+     ],
+     [
+      "PyObject_CallFinalizerFromDealloc",
+      8,
+      "other"
+     ],
+     [
+      "visit_decref",
+      8,
+      "other"
+     ],
+     [
+      "slot_tp_iter",
+      7,
+      "other"
+     ],
+     [
+      "PyObject_IsTrue",
+      7,
+      "other"
+     ],
+     [
+      "_PyType_LookupStackRefAndVersion",
+      7,
+      "attribute lookup"
+     ],
+     [
+      "py_dealloc",
+      6,
+      "other"
+     ],
+     [
+      "_Py_MakeCoro",
+      5,
+      "other"
+     ],
+     [
+      "PyObject_GC_Del",
+      5,
+      "other"
+     ],
+     [
+      "PyObject_RichCompareBool",
+      4,
+      "other"
+     ],
+     [
+      "_PyFunction_Vectorcall",
+      4,
+      "other"
+     ],
+     [
+      "PyObject_GetIter",
+      4,
+      "other"
+     ],
+     [
+      "PyNumber_Add",
+      3,
+      "other"
+     ],
+     [
+      "PyObject_VisitManagedDict",
+      3,
+      "other"
+     ],
+     [
+      "_PySlice_GetLongIndices",
+      3,
+      "other"
+     ]
+    ]
+   },
+   "B_vs_U": {
+    "eval loop self": 0.6887540472437974,
+    "exception save/restore": 0.03267732275916916,
+    "PyValue bridge/boxing": 0.027448951117702097,
+    "attribute lookup": 0.017299424407736793,
+    "frames": 0.03238425969205291,
+    "specialiser": 0.002111593869687205,
+    "other": 0.19932440090985445
+   },
+   "C_vs_U": {
+    "eval loop self": 0.7526285745007165,
+    "exception save/restore": 0.0,
+    "PyValue bridge/boxing": 0.025672227511101927,
+    "attribute lookup": 0.014194244497676468,
+    "frames": 0.013633861333639693,
+    "specialiser": -0.0005746105183888785,
+    "other": 0.1944457026752544
+   },
+   "B_minus_C": {
+    "eval loop self": 0.2429964536010056,
+    "exception save/restore": 0.2607207288767186,
+    "PyValue bridge/boxing": 0.039848072856182644,
+    "attribute lookup": 0.03896936990837444,
+    "frames": 0.16323661682139115,
+    "specialiser": 0.020857658310137486,
+    "other": 0.23337109962618938
+   }
+  },
+  "unpack_sequence": {
+   "times_ns": {
+    "C": 30753.882,
+    "B": 34469.48175,
+    "U": 13785.29425
+   },
+   "samples": {
+    "C": 973,
+    "B": 1054,
+    "U": 1240
+   },
+   "frac": {
+    "C": {
+     "eval loop self": 0.9804727646454265,
+     "exception save/restore": 0.0,
+     "PyValue bridge/boxing": 0.0020554984583761563,
+     "attribute lookup": 0.0,
+     "frames": 0.0,
+     "specialiser": 0.0,
+     "other": 0.017471736896197326
+    },
+    "B": {
+     "eval loop self": 0.9753320683111955,
+     "exception save/restore": 0.0009487666034155598,
+     "PyValue bridge/boxing": 0.0018975332068311196,
+     "attribute lookup": 0.0,
+     "frames": 0.0,
+     "specialiser": 0.0,
+     "other": 0.021821631878557873
+    },
+    "U": {
+     "eval loop self": 0.9919354838709677,
+     "exception save/restore": 0.0,
+     "PyValue bridge/boxing": 0.0,
+     "attribute lookup": 0.0,
+     "frames": 0.0,
+     "specialiser": 0.0,
+     "other": 0.008064516129032258
+    }
+   },
+   "top_symbols": {
+    "C": [
+     [
+      "_PyEval_EvalFrameLoop",
+      954,
+      "eval loop self"
+     ],
+     [
+      "intern_constants",
+      2,
+      "other"
+     ],
+     [
+      "listiter_next",
+      2,
+      "other"
+     ],
+     [
+      "unicodekeys_lookup_unicode",
+      1,
+      "other"
+     ],
+     [
+      "dict_traverse",
+      1,
+      "other"
+     ],
+     [
+      "setitem_take2_lock_held",
+      1,
+      "other"
+     ],
+     [
+      "unicode_dealloc",
+      1,
+      "other"
+     ],
+     [
+      "call_transaction_refresh",
+      1,
+      "PyValue bridge/boxing"
+     ],
+     [
+      "__libc_alloca_cutoff@@GLIBC_PRIVATE",
+      1,
+      "other"
+     ],
+     [
+      "_imp_create_builtin",
+      1,
+      "other"
+     ],
+     [
+      "_PyUnicode_InternImmortal",
+      1,
+      "other"
+     ],
+     [
+      "_PyObject_IsAbstract",
+      1,
+      "other"
+     ],
+     [
+      "_PyCode_Validate",
+      1,
+      "other"
+     ],
+     [
+      "take_gil",
+      1,
+      "other"
+     ],
+     [
+      "listiter_dealloc",
+      1,
+      "other"
+     ],
+     [
+      "visit_decref",
+      1,
+      "other"
+     ],
+     [
+      "_PyCode_ClearExec",
+      1,
+      "other"
+     ],
+     [
+      "PyValue_FromObjectBorrow",
+      1,
+      "PyValue bridge/boxing"
+     ]
+    ],
+    "B": [
+     [
+      "_PyEval_EvalFrameLoop",
+      1028,
+      "eval loop self"
+     ],
+     [
+      "mi_page_free_list_extend",
+      2,
+      "other"
+     ],
+     [
+      "__libc_alloca_cutoff@@GLIBC_PRIVATE",
+      2,
+      "other"
+     ],
+     [
+      "primary_rule",
+      2,
+      "other"
+     ],
+     [
+      "_PyArg_CheckPositional",
+      1,
+      "other"
+     ],
+     [
+      "_thread_RLock___exit__",
+      1,
+      "other"
+     ],
+     [
+      "PyErr_Occurred",
+      1,
+      "exception save/restore"
+     ],
+     [
+      "visit_reachable",
+      1,
+      "other"
+     ],
+     [
+      "r_long",
+      1,
+      "other"
+     ],
+     [
+      "_PyValue_Canonicalize",
+      1,
+      "PyValue bridge/boxing"
+     ],
+     [
+      "_Py_dict_lookup",
+      1,
+      "other"
+     ],
+     [
+      "dictiter_capture",
+      1,
+      "other"
+     ],
+     [
+      "dict_getitemref_owned",
+      1,
+      "other"
+     ],
+     [
+      "PyType_IsSubtype",
+      1,
+      "other"
+     ],
+     [
+      "_PyDict_GetValue_KnownHash",
+      1,
+      "other"
+     ],
+     [
+      "_PyPegen_fill_token",
+      1,
+      "other"
+     ],
+     [
+      "codegen_visit_expr_impl",
+      1,
+      "other"
+     ],
+     [
+      "_dl_mcount_wrapper@GLIBC_2",
+      1,
+      "other"
+     ],
+     [
+      "_PyLong_FromMedium",
+      1,
+      "other"
+     ],
+     [
+      "_PyValue_BoxInlineValue",
+      1,
+      "PyValue bridge/boxing"
+     ],
+     [
+      "PyLong_FromLong",
+      1,
+      "other"
+     ],
+     [
+      "_PyGC_VisitValue",
+      1,
+      "other"
+     ],
+     [
+      "_PyObjectDict_SetItem",
+      1,
+      "other"
+     ],
+     [
+      "mi_free_ex",
+      1,
+      "other"
+     ]
+    ],
+    "U": [
+     [
+      "_PyEval_EvalFrameDefault",
+      1230,
+      "eval loop self"
+     ],
+     [
+      "allocate_from_new_pool",
+      1,
+      "other"
+     ],
+     [
+      "_PyObject_Malloc",
+      1,
+      "other"
+     ],
+     [
+      "find_empty_slot",
+      1,
+      "other"
+     ],
+     [
+      "__open_nocancel@@GLIBC_PRIVATE",
+      1,
+      "other"
+     ],
+     [
+      "unicode_rstrip",
+      1,
+      "other"
+     ],
+     [
+      "initialize_locals",
+      1,
+      "other"
+     ],
+     [
+      "_Py_dict_lookup",
+      1,
+      "other"
+     ],
+     [
+      "_PyUnicode_ResizeCompact",
+      1,
+      "other"
+     ],
+     [
+      "visit_reachable",
+      1,
+      "other"
+     ],
+     [
+      "code_dealloc",
+      1,
+      "other"
+     ]
+    ]
+   },
+   "B_vs_U": {
+    "eval loop self": 0.9642664671583101,
+    "exception save/restore": 0.0015810866692947026,
+    "PyValue bridge/boxing": 0.003162173338589405,
+    "attribute lookup": 0.0,
+    "frames": 0.0,
+    "specialiser": 0.0,
+    "other": 0.030990272833805444
+   },
+   "C_vs_U": {
+    "eval loop self": 0.9711604423851834,
+    "exception save/restore": 0.0,
+    "PyValue bridge/boxing": 0.003725387048788561,
+    "attribute lookup": 0.0,
+    "frames": 0.0,
+    "specialiser": 0.0,
+    "other": 0.025114170566028295
+   },
+   "B_minus_C": {
+    "eval loop self": 0.9327827144792125,
+    "exception save/restore": 0.008801672763984372,
+    "PyValue bridge/boxing": 0.0005900606497785503,
+    "attribute lookup": 0.0,
+    "frames": 0.0,
+    "specialiser": 0.0,
+    "other": 0.057825552107023934
+   }
+  }
+ }
+}

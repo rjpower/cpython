@@ -1,0 +1,53 @@
+--- a/Modules/_decimal/_decimal.c
++++ b/Modules/_decimal/_decimal.c
+@@ -8724,35 +8724,36 @@
+ };
+ 
+ 
+-static PyObject *
+-decimal_getattr(PyObject *self, PyObject *args)
++static PyValue
++decimal_getattr(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs,
++                PyObject *kwnames)
+ {
+-    PyObject *name;
+-    if (!PyArg_UnpackTuple(args, "__getattr__", 1, 1, &name)) {
+-        return NULL;
++    if (!_PyArg_CheckPositional("__getattr__", nargs, 1, 1)) {
++        return PyValue_NULL;
+     }
+-
+-    if (PyUnicode_Check(name) && PyUnicode_EqualToUTF8(name, "__version__")) {
++    PyValueBorrow name = PyValue_Borrow(args[0]);
++    if (PyValue_IsObject(name) &&
++        PyUnicode_Check(PyValue_AsKnownObjectBorrow(name)) &&
++        PyUnicode_EqualToUTF8(PyValue_AsKnownObjectBorrow(name), "__version__")) {
+         if (PyErr_WarnEx(PyExc_DeprecationWarning,
+                          "'__version__' is deprecated and slated for removal in Python 3.20",
+                          1) < 0) {
+-            return NULL;
++            return PyValue_NULL;
+         }
+-        return PyUnicode_FromString(MPD_SPEC_VERSION);
++        PyObject *version = PyUnicode_FromString(MPD_SPEC_VERSION);
++        return version == NULL ? PyValue_NULL : PyValue_FromObjectSteal(version);
+     }
+-
+-    PyErr_Format(PyExc_AttributeError, "module 'decimal' has no attribute %R", name);
+-    return NULL;
++    PyErr_Format(PyExc_AttributeError, "module 'decimal' has no attribute %vR", name);
++    return PyValue_NULL;
+ }
+ 
+-
+ static PyMethodDef _decimal_methods [] =
+ {
+   _DECIMAL_GETCONTEXT_METHODDEF
+   _DECIMAL_SETCONTEXT_METHODDEF
+   _DECIMAL_LOCALCONTEXT_METHODDEF
+   _DECIMAL_IEEECONTEXT_METHODDEF
+-  {"__getattr__", decimal_getattr, METH_VARARGS, "Module __getattr__"},
++  {"__getattr__", _PyCFunction_CAST(decimal_getattr), METH_VALUE, "Module __getattr__"},
+   { NULL, NULL, 1, NULL }
+ };
+ 

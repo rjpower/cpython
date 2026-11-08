@@ -1,0 +1,461 @@
+diff --git a/pyjit/bench/run.py b/pyjit/bench/run.py
+index 62396219c21..d8a49784409 100644
+--- a/pyjit/bench/run.py
++++ b/pyjit/bench/run.py
+@@ -39,11 +39,9 @@
+     instruction, handler entries/pairs and native boxing sites. The complete
+     parsed counters from the warm-up and low/high processes are retained;
+     normalized differences include startup/setup and are not hot-only counts.
+-    Py_STATS writes each process's stats to a new
+-    randomly named file in /tmp/py_stats, shared with other users of the
+-    machine, so the runner takes the one file that appears during its
+-    child's run and fails if there is not exactly one; it never clears the
+-    directory. Use ``--pystats-records FILE`` to retain original dump text
++    Each child writes its stats and completion marker to a private directory.
++    The runner verifies the matching process identities and fails on extra
++    files. Use ``--pystats-records FILE`` to retain both original records
+     before parsing, including dumps rejected by later schema checks.
+     Boxing call sites: pyjit/tools/measure/box_audit.py -v.
+ rss
+@@ -73,12 +71,15 @@
+ from __future__ import annotations
+ 
+ import argparse
++import base64
+ import datetime
+ import hashlib
+ import json
+ import os
+ import platform
++import re
+ import shutil
++import stat
+ import statistics
+ import subprocess
+ import sys
+@@ -92,7 +93,6 @@
+ REPO = HERE.parents[1]
+ GROUPS = ("kernels", "micro", "memory")
+ METRICS = ("instr", "time", "rss", "boxes")
+-PYSTATS_DIR = Path("/tmp/py_stats")
+ GNU_TIME = "/usr/bin/time"
+ CHILD_ENV = {k: v for k, v in os.environ.items() if not k.startswith("PYTHON")}
+ CHILD_ENV["PYTHONHASHSEED"] = "0"
+@@ -269,6 +269,7 @@ class Context:
+     perf_sequence: int = 0
+     pystats_records: Path | None = None
+     pystats_dumps: int = 0
++    pystats_sequence: int = 0
+ 
+     def command(self, bench: Bench, mode: str, loops: int, runs: int = 1,
+                 options: tuple[str, ...] = ()) -> list[str]:
+@@ -398,27 +399,103 @@ def measure_rss(ctx: Context, bench: Bench, runs: int, loops: int) -> dict:
+               "Object inline array boxes")
+ 
+ 
+-def pystats_counts(ctx: Context, bench: Bench, loops: int) -> dict[str, int]:
+-    """Run the benchmark under -X pystats and return its counters by name."""
+-    PYSTATS_DIR.mkdir(exist_ok=True)
+-    before = set(PYSTATS_DIR.iterdir())
+-    run_checked(ctx.command(bench, "run", loops, options=("-X", "pystats")),
+-                f"{bench.name} under pystats at {loops}")
+-    new = set(PYSTATS_DIR.iterdir()) - before
+-    if len(new) != 1:
+-        raise MeasurementError(f"{len(new)} new files in {PYSTATS_DIR} during {bench.name}; "
+-                               "another process is writing stats, so none is attributable")
+-    path = new.pop()
+-    raw = path.read_bytes()
+-    text = raw.decode("utf-8")
++STATS_STEM = re.compile(r"[0-9a-f]{40}\Z")
++STATS_PROCESS = re.compile(r"Stats process: pid=([0-9]+) tag=(.*)\Z")
++
++
++def _marker_identity(raw: bytes) -> tuple[int, int, str, list[str]]:
++    try:
++        lines = raw.decode("utf-8").splitlines()
++        if len(lines) != 4:
++            raise ValueError("expected four marker lines")
++        prefixes = ("pid: ", "ppid: ", "tag: ", "argv: ")
++        if any(not line.startswith(prefix) for line, prefix in zip(lines, prefixes)):
++            raise ValueError("invalid marker fields")
++        pid_text, ppid_text = (lines[0][5:], lines[1][6:])
++        if not pid_text.isascii() or not pid_text.isdecimal() or not ppid_text.isascii() or not ppid_text.isdecimal():
++            raise ValueError("invalid marker process id")
++        pid, ppid = int(pid_text), int(ppid_text)
++        if pid <= 0:
++            raise ValueError("invalid marker process id")
++        encoded = json.loads(lines[3][6:])
++        if not isinstance(encoded, list) or not encoded or any(not isinstance(arg, str) for arg in encoded):
++            raise ValueError("invalid marker argv")
++        argv = [os.fsdecode(arg.encode("latin-1")) for arg in encoded]
++        return pid, ppid, lines[2][5:], argv
++    except (UnicodeError, ValueError, TypeError) as exc:
++        raise MeasurementError(f"invalid pystats completion marker: {exc}") from exc
++
++
++def _record_pystats(ctx: Context, bench: Bench, loops: int, command: list[str],
++                    directory: Path, files: list[Path]) -> dict[Path, bytes]:
++    artifacts = []
++    contents = {}
++    artifact_error = None
++    for path in files:
++        artifact = {"path": str(path)}
++        try:
++            mode = path.lstat().st_mode
++            if not stat.S_ISREG(mode):
++                artifact["kind"] = "symlink" if stat.S_ISLNK(mode) else "nonregular"
++                artifact_error = f"nonregular pystats artifact: {path}"
++            else:
++                raw = path.read_bytes()
++                contents[path] = raw
++                artifact.update(kind="regular", raw_base64=base64.b64encode(raw).decode("ascii"),
++                                sha256=hashlib.sha256(raw).hexdigest())
++        except OSError as exc:
++            artifact["read_error"] = str(exc)
++            artifact_error = f"unreadable pystats artifact: {path}: {exc}"
++        artifacts.append(artifact)
++    record = {"dump": ctx.pystats_dumps, "invocation": ctx.pystats_sequence,
++              "benchmark": bench.name, "loops": loops, "command": command,
++              "directory": str(directory), "artifacts": artifacts}
+     if ctx.pystats_records is not None:
+-        record = {"dump": ctx.pystats_dumps, "benchmark": bench.name, "loops": loops,
+-                  "command": ctx.command(bench, "run", loops, options=("-X", "pystats")),
+-                  "source_path": str(path), "text": text,
+-                  "sha256": hashlib.sha256(raw).hexdigest()}
+         with ctx.pystats_records.open("a") as stream:
+             stream.write(json.dumps(record) + "\n")
+         ctx.pystats_dumps += 1
++    if artifact_error is not None:
++        raise MeasurementError(artifact_error)
++    return contents
++
++
++def pystats_counts(ctx: Context, bench: Bench, loops: int) -> dict[str, int]:
++    """Run the benchmark under -X pystats and return its counters by name."""
++    ctx.pystats_sequence += 1
++    directory = ctx.scratch / "pystats" / f"{ctx.pystats_sequence:06d}"
++    directory.mkdir(parents=True, exist_ok=False)
++    command = ctx.command(bench, "run", loops,
++                          options=("-X", "pystats", "-X", f"pystats_dir={directory}"))
++    child_error = None
++    try:
++        run_checked(command, f"{bench.name} under pystats at {loops}")
++    except MeasurementError as exc:
++        child_error = exc
++    files = sorted(directory.iterdir())
++    contents = _record_pystats(ctx, bench, loops, command, directory, files)
++    if child_error is not None:
++        raise child_error
++    if len(files) != 2 or any(path.is_symlink() or not path.is_file() for path in files):
++        raise MeasurementError(f"expected one completed pystats pair in {directory}; found {files}")
++    by_suffix = {path.suffix: path for path in files}
++    if (set(by_suffix) != {".txt", ".done"}
++            or files[0].stem != files[1].stem
++            or STATS_STEM.fullmatch(files[0].stem) is None):
++        raise MeasurementError(f"invalid pystats pair in {directory}: {files}")
++    path, marker_path = by_suffix[".txt"], by_suffix[".done"]
++    raw = contents[path]
++    marker_raw = contents[marker_path]
++    pid, ppid, tag, argv = _marker_identity(marker_raw)
++    if ppid != os.getpid() or argv != command:
++        raise MeasurementError(f"pystats completion marker does not identify {command}")
++    try:
++        text = raw.decode("utf-8")
++    except UnicodeError as exc:
++        raise MeasurementError(f"invalid pystats dump encoding: {path}") from exc
++    identities = [STATS_PROCESS.fullmatch(line) for line in text.splitlines()
++                  if line.startswith("Stats process")]
++    if len(identities) != 1 or identities[0] is None or int(identities[0][1]) != pid or identities[0][2] != tag:
++        raise MeasurementError(f"pystats dump and completion marker disagree: {path}")
+     counts = {}
+     for line in text.splitlines():
+         key, sep, value = line.strip().rpartition(":")
+@@ -436,6 +513,7 @@ def pystats_counts(ctx: Context, bench: Bench, loops: int) -> dict[str, int]:
+                 raise MeasurementError(f"duplicate pystats key: {name}")
+             counts[name] = count
+     path.unlink()
++    marker_path.unlink()
+     return counts
+ 
+ 
+diff --git a/pyjit/bench/tests/test_pystats_records.py b/pyjit/bench/tests/test_pystats_records.py
+index a470c05d3f5..12c8c8ea2b5 100644
+--- a/pyjit/bench/tests/test_pystats_records.py
++++ b/pyjit/bench/tests/test_pystats_records.py
+@@ -1,9 +1,11 @@
+ """Host-only stats-record tests; no target interpreter or counter probe runs."""
+ 
++import base64
+ import hashlib
+ import importlib.util
+ import io
+ import json
++import os
+ from pathlib import Path
+ import sys
+ import tempfile
+@@ -49,6 +51,24 @@ def sample_counts():
+     return [metadata | {"warmup-only counter": 7}, low, high]
+ 
+ 
++STEM = "a" * 40
++
++
++def write_pair(command, raw, *, stem=STEM, pid=12345, ppid=None, tag="", argv=None,
++               marker=True):
++    directory = Path(next(arg.removeprefix("pystats_dir=") for arg in command
++                          if arg.startswith("pystats_dir=")))
++    text = f"Stats process: pid={pid} tag={tag}\n".encode() + raw
++    dump = directory / f"{stem}.txt"
++    dump.write_bytes(text)
++    done = directory / f"{stem}.done"
++    if marker:
++        byte_argv = [os.fsencode(arg).decode("latin-1") for arg in (command if argv is None else argv)]
++        done.write_text(f"pid: {pid}\nppid: {os.getpid() if ppid is None else ppid}\n"
++                        f"tag: {tag}\nargv: {json.dumps(byte_argv)}\n")
++    return dump, done
++
++
+ class PystatsRecordsTest(unittest.TestCase):
+     def setUp(self):
+         temporary = tempfile.TemporaryDirectory(prefix="boil-pystats-record-test-")
+@@ -103,30 +123,30 @@ def test_retention_does_not_accept_mismatched_coverage(self):
+                         runner.measure_boxes(self.ctx, runner.Bench("sample", "kernels", 2), 1, 2)
+ 
+     def test_original_dump_is_journaled_before_duplicate_key_failure(self):
+-        stats = self.root / "stats"
+-        stats.mkdir()
+-        unrelated = stats / "unrelated.txt"
++        unrelated = self.root / "unrelated.txt"
+         unrelated.write_text("leave this file alone\n")
+         journal = self.root / "stats.jsonl"
+         journal.touch()
+         self.ctx.pystats_records = journal
+         raw = b"Object inline int boxes: 1\nObject inline int boxes: 2\n"
+-        original = stats / "owned.txt"
++        created = []
+ 
+         def run(command, what):
+-            original.write_bytes(raw)
++            created.extend(write_pair(command, raw))
+ 
+-        with mock.patch.object(runner, "PYSTATS_DIR", stats), \
+-             mock.patch.object(runner, "run_checked", side_effect=run):
++        with mock.patch.object(runner, "run_checked", side_effect=run):
+             with self.assertRaisesRegex(runner.MeasurementError, "duplicate pystats key"):
+                 runner.pystats_counts(self.ctx, runner.Bench("sample", "kernels", 2), 2)
+         record = json.loads(journal.read_text())
+-        self.assertEqual(record["text"].encode("utf-8"), raw)
+-        self.assertEqual(record["sha256"], hashlib.sha256(raw).hexdigest())
+-        self.assertEqual(record["source_path"], str(original))
++        self.assertEqual(len(record["artifacts"]), 2)
++        for artifact in record["artifacts"]:
++            path = Path(artifact["path"])
++            self.assertEqual(base64.b64decode(artifact["raw_base64"]), path.read_bytes())
++            self.assertEqual(artifact["sha256"], hashlib.sha256(path.read_bytes()).hexdigest())
+         self.assertEqual(record["loops"], 2)
+         self.assertEqual(self.ctx.pystats_dumps, 1)
+-        self.assertEqual(original.read_bytes(), raw)
++        self.assertIn(raw, created[0].read_bytes())
++        self.assertTrue(all(path.exists() for path in created))
+         self.assertEqual(unrelated.read_text(), "leave this file alone\n")
+ 
+     def test_only_identical_specializable_metadata_may_repeat(self):
+@@ -143,14 +163,10 @@ def test_only_identical_specializable_metadata_may_repeat(self):
+         )
+         for name, raw, error in cases:
+             with self.subTest(name=name):
+-                stats = self.root / name
+-                stats.mkdir()
+-
+                 def run(command, what):
+-                    (stats / "owned.txt").write_bytes(raw)
++                    write_pair(command, raw)
+ 
+-                with mock.patch.object(runner, "PYSTATS_DIR", stats), \
+-                     mock.patch.object(runner, "run_checked", side_effect=run):
++                with mock.patch.object(runner, "run_checked", side_effect=run):
+                     if error is None:
+                         counts = runner.pystats_counts(
+                             self.ctx, runner.Bench("sample", "kernels", 2), 2)
+@@ -163,6 +179,85 @@ def run(command, what):
+                             runner.pystats_counts(
+                                 self.ctx, runner.Bench("sample", "kernels", 2), 2)
+ 
++    def test_completed_pair_rejects_wrong_identity_and_extra_files(self):
++        cases = ("pid", "ppid", "tag", "argv", "stem", "run", "zero",
++                 "orphan", "extra", "empty", "bad_argv")
++        for case in cases:
++            with self.subTest(case=case):
++                def run(command, what):
++                    directory = Path(next(arg.removeprefix("pystats_dir=") for arg in command
++                                          if arg.startswith("pystats_dir=")))
++                    dump, done = write_pair(command, b"Object inline int boxes: 0\n")
++                    if case == "pid":
++                        done.write_bytes(done.read_bytes().replace(b"pid: 12345", b"pid: 12346", 1))
++                    elif case == "ppid":
++                        done.write_bytes(done.read_bytes().replace(
++                            f"ppid: {os.getpid()}".encode(), b"ppid: 1", 1))
++                    elif case == "tag":
++                        done.write_bytes(done.read_bytes().replace(b"tag: \n", b"tag: other\n", 1))
++                    elif case == "argv":
++                        done.write_bytes(done.read_bytes().replace(b"argv: [", b'argv: ["extra",', 1))
++                    elif case == "stem":
++                        done.rename(directory / ("b" * 40 + ".done"))
++                    elif case == "run":
++                        done.rename(directory / (STEM + ".run"))
++                    elif case == "zero":
++                        done.rename(directory / (STEM + ".zero"))
++                    elif case == "orphan":
++                        done.unlink()
++                    elif case == "extra":
++                        (directory / ("b" * 40 + ".txt")).write_bytes(dump.read_bytes())
++                    elif case == "empty":
++                        done.write_bytes(b"")
++                    elif case == "bad_argv":
++                        done.write_bytes(done.read_bytes().replace(b"argv: [", b'argv: ["\\u0100",', 1))
++
++                with mock.patch.object(runner, "run_checked", side_effect=run):
++                    with self.assertRaises(runner.MeasurementError):
++                        runner.pystats_counts(self.ctx, runner.Bench("sample", "kernels", 2), 2)
++
++    def test_marker_argv_decodes_filesystem_bytes(self):
++        encoded = ["caf\u00c3\u00a9", "raw\u00ff"]
++        raw = ("pid: 12345\nppid: 1\ntag: \nargv: " + json.dumps(encoded) + "\n").encode()
++        pid, ppid, tag, argv = runner._marker_identity(raw)
++        self.assertEqual((pid, ppid, tag), (12345, 1, ""))
++        self.assertEqual([os.fsencode(arg) for arg in argv],
++                         [b"caf\xc3\xa9", b"raw\xff"])
++
++    def test_nonregular_and_unreadable_artifacts_are_journaled_before_failure(self):
++        for case in ("symlink", "unreadable"):
++            with self.subTest(case=case):
++                journal = self.root / f"{case}.jsonl"
++                journal.touch()
++                self.ctx.pystats_records = journal
++                original_read = Path.read_bytes
++
++                def run(command, what):
++                    directory = Path(next(arg.removeprefix("pystats_dir=") for arg in command
++                                          if arg.startswith("pystats_dir=")))
++                    dump, done = write_pair(command, b"Object inline int boxes: 0\n")
++                    if case == "symlink":
++                        done.unlink()
++                        done.symlink_to(dump)
++
++                def read(path):
++                    if case == "unreadable" and path.suffix == ".done":
++                        raise PermissionError("test read failure")
++                    return original_read(path)
++
++                with mock.patch.object(runner, "run_checked", side_effect=run), \
++                     mock.patch.object(Path, "read_bytes", read):
++                    with self.assertRaises(runner.MeasurementError):
++                        runner.pystats_counts(self.ctx, runner.Bench("sample", "kernels", 2), 2)
++                record = json.loads(journal.read_text())
++                self.assertEqual(len(record["artifacts"]), 2)
++                problem = next(artifact for artifact in record["artifacts"]
++                               if artifact["path"].endswith(".done"))
++                if case == "symlink":
++                    self.assertEqual(problem["kind"], "symlink")
++                else:
++                    self.assertIn("test read failure", problem["read_error"])
++
+     def test_cli_rejects_conflicts_and_existing_journal_before_target(self):
+         for case in ("output", "perf", "metric", "existing"):
+             with self.subTest(case=case):
+@@ -198,9 +293,7 @@ def test_cli_rejects_conflicts_and_existing_journal_before_target(self):
+     def test_unattributable_or_undecodable_dumps_preserve_originals(self):
+         for case in ("failed", "ambiguous", "missing", "invalid_utf8"):
+             with self.subTest(case=case):
+-                stats = self.root / case
+-                stats.mkdir()
+-                unrelated = stats / "unrelated.txt"
++                unrelated = self.root / f"{case}-unrelated.txt"
+                 unrelated.write_bytes(b"original unrelated evidence\n")
+                 journal = self.root / (case + ".jsonl")
+                 journal.touch()
+@@ -209,21 +302,22 @@ def test_unattributable_or_undecodable_dumps_preserve_originals(self):
+ 
+                 def run(command, what):
+                     if case != "missing":
+-                        created[stats / "new.txt"] = b"\xff" if case == "invalid_utf8" else b"counter: 1\n"
++                        raw = b"\xff" if case == "invalid_utf8" else b"counter: 1\n"
++                        for path in write_pair(command, raw):
++                            created[path] = path.read_bytes()
+                     if case == "ambiguous":
+-                        created[stats / "other-new.txt"] = b"counter: 2\n"
+-                    for path, raw in created.items():
+-                        path.write_bytes(raw)
++                        directory = next(iter(created)).parent
++                        extra = directory / ("b" * 40 + ".txt")
++                        extra.write_bytes(b"counter: 2\n")
++                        created[extra] = extra.read_bytes()
+                     if case == "failed":
+                         raise runner.MeasurementError("actual child failed")
+ 
+-                expected = UnicodeDecodeError if case == "invalid_utf8" else runner.MeasurementError
+-                with mock.patch.object(runner, "PYSTATS_DIR", stats), \
+-                     mock.patch.object(runner, "run_checked", side_effect=run):
+-                    with self.assertRaises(expected):
++                with mock.patch.object(runner, "run_checked", side_effect=run):
++                    with self.assertRaises(runner.MeasurementError):
+                         runner.pystats_counts(self.ctx, runner.Bench("sample", "kernels", 2), 2)
+-                self.assertEqual(journal.read_bytes(), b"")
+-                self.assertEqual(self.ctx.pystats_dumps, 0)
++                record = json.loads(journal.read_text())
++                self.assertEqual(len(record["artifacts"]), len(created))
+                 self.assertEqual(unrelated.read_bytes(), b"original unrelated evidence\n")
+                 for path, raw in created.items():
+                     self.assertEqual(path.read_bytes(), raw)
+@@ -238,9 +332,7 @@ def test_missing_coverage_is_rejected(self):
+                         runner.measure_boxes(self.ctx, runner.Bench("sample", "kernels", 2), 1, 2)
+ 
+     def test_successful_run_binds_exact_journal_and_preserves_unrelated_dump(self):
+-        stats = self.root / "stats"
+-        stats.mkdir()
+-        unrelated = stats / "unrelated.txt"
++        unrelated = self.root / "unrelated.txt"
+         unrelated.write_bytes(b"leave this preexisting dump alone\n")
+         journal = self.root / "retained.jsonl"
+         output = self.root / "report.json"
+@@ -251,16 +343,14 @@ def test_successful_run_binds_exact_journal_and_preserves_unrelated_dump(self):
+         def run(command, what):
+             index = len(commands)
+             raw = "".join(f"{key}: {value}\n" for key, value in samples[index].items()).encode()
+-            path = stats / f"dump-{index}.txt"
+-            path.write_bytes(raw)
+-            originals.append((path, raw))
++            paths = write_pair(command, raw)
++            originals.append([(path, path.read_bytes()) for path in paths])
+             commands.append(command)
+ 
+         with mock.patch.object(runner, "resolve_build", return_value=Path("/test/python")), \
+              mock.patch.object(runner, "select", return_value=[runner.Bench("sample", "kernels", 2)]), \
+              mock.patch.object(runner, "build_info", return_value={"path": "/test/python", "label": "test"}), \
+              mock.patch.object(runner, "check_pystats"), \
+-             mock.patch.object(runner, "PYSTATS_DIR", stats), \
+              mock.patch.object(runner, "run_checked", side_effect=run), \
+              mock.patch.object(runner.os, "getloadavg", return_value=(0, 0, 0)), \
+              mock.patch.object(runner, "git", return_value=""), \
+@@ -272,13 +362,15 @@ def run(command, what):
+         self.assertEqual(result, 0)
+         records = [json.loads(line) for line in journal.read_text().splitlines()]
+         self.assertEqual(len(records), 3)
+-        for index, (record, (path, raw)) in enumerate(zip(records, originals)):
++        for index, (record, originals_for_run) in enumerate(zip(records, originals)):
+             self.assertEqual(record["dump"], index)
+             self.assertEqual(record["command"], commands[index])
+-            self.assertEqual(record["source_path"], str(path))
+-            self.assertEqual(record["text"].encode(), raw)
+-            self.assertEqual(record["sha256"], hashlib.sha256(raw).hexdigest())
+-            self.assertFalse(path.exists())
++            self.assertEqual(len(record["artifacts"]), 2)
++            for artifact, (path, raw) in zip(record["artifacts"], sorted(originals_for_run)):
++                self.assertEqual(artifact["path"], str(path))
++                self.assertEqual(base64.b64decode(artifact["raw_base64"]), raw)
++                self.assertEqual(artifact["sha256"], hashlib.sha256(raw).hexdigest())
++                self.assertFalse(path.exists())
+         report = json.loads(output.read_text())
+         self.assertEqual(report["runs"]["boxes"]["pystats_records"], {
+             "path": str(journal.resolve()),

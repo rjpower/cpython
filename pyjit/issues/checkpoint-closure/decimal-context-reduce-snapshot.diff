@@ -1,0 +1,39 @@
+--- a/Modules/_decimal/_decimal.c
++++ b/Modules/_decimal/_decimal.c
+@@ -1878,22 +1878,30 @@
+         return PyValue_NULL;
+     }
+ 
++    /* Py_BuildValue previously evaluated every scalar before allocating. */
++    mpd_ssize_t prec = ctx->prec;
++    const char *rounding_name = mpd_round_string[ctx->round];
++    mpd_ssize_t emin = ctx->emin;
++    mpd_ssize_t emax = ctx->emax;
++    int capitals = CtxCaps(self);
++    int clamp = ctx->clamp;
++
+     PyValue fields[6] = {PyValue_NULL, PyValue_NULL, PyValue_NULL,
+                          PyValue_NULL, PyValue_NULL, PyValue_NULL};
+     PyObject *args = NULL;
+     PyObject *result = NULL;
+-    fields[0] = PyValue_FromInt64(ctx->prec);
++    fields[0] = PyValue_FromInt64(prec);
+     if (PyValue_IsNull(fields[0])) goto done;
+-    PyObject *rounding = PyUnicode_FromString(mpd_round_string[ctx->round]);
++    PyObject *rounding = PyUnicode_FromString(rounding_name);
+     if (rounding == NULL) goto done;
+     fields[1] = PyValue_FromObjectSteal(rounding);
+-    fields[2] = PyValue_FromInt64(ctx->emin);
++    fields[2] = PyValue_FromInt64(emin);
+     if (PyValue_IsNull(fields[2])) goto done;
+-    fields[3] = PyValue_FromInt64(ctx->emax);
++    fields[3] = PyValue_FromInt64(emax);
+     if (PyValue_IsNull(fields[3])) goto done;
+-    fields[4] = PyValue_FromInt64(CtxCaps(self));
++    fields[4] = PyValue_FromInt64(capitals);
+     if (PyValue_IsNull(fields[4])) goto done;
+-    fields[5] = PyValue_FromInt64(ctx->clamp);
++    fields[5] = PyValue_FromInt64(clamp);
+     if (PyValue_IsNull(fields[5])) goto done;
+ 
+     args = _PyTuple_PackValues(8, (PyValueBorrow[]){

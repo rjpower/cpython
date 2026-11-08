@@ -1,0 +1,259 @@
+--- a/Objects/rangeobject.c
++++ b/Objects/rangeobject.c
+@@ -17,9 +17,9 @@
+ 
+ typedef struct {
+     PyObject_HEAD
+-    PyObject *start;
+-    PyObject *step;
+-    PyObject *len;
++    PyValue start;
++    PyValue step;
++    PyValue len;
+ } longrangeiterobject;
+ 
+ /*[clinic input]
+@@ -1271,8 +1271,7 @@
+ longrange_iterator___length_hint___impl(longrangeiterobject *r)
+ /*[clinic end generated code: output=e57dcdffeda56119 input=ba94b050d940411e]*/
+ {
+-    Py_INCREF(r->len);
+-    return _PyValue_FromObjectResult(r->len);
++    return PyValue_DUP(r->len);
+ }
+ 
+ /*[clinic input]
+@@ -1288,9 +1287,9 @@
+ /*[clinic end generated code: output=8dd460d2a9186f04 input=2e8930e897ace086]*/
+ {
+     /* create a range object for pickling.  Must calculate the "stop" value */
+-    PyValueBorrow start = PyValue_FromObjectBorrow(r->start);
+-    PyValueBorrow step = PyValue_FromObjectBorrow(r->step);
+-    PyValue product = _PyValue_Multiply(PyValue_FromObjectBorrow(r->len), step);
++    PyValueBorrow start = PyValue_Borrow(r->start);
++    PyValueBorrow step = PyValue_Borrow(r->step);
++    PyValue product = _PyValue_Multiply(r->len, step);
+     if (PyValue_IsNull(product))
+         return PyValue_NULL;
+     PyValue stop = _PyValue_Add(start, product);
+@@ -1333,58 +1332,50 @@
+         return PyValue_NULL;
+     }
+ 
+-    /* The clip and the arithmetic work on objects, so box an inline state once. */
+-    PyObject *index = _PyValue_AsObjectAt(state, BOX_SITE_PARSER);
+-    if (index == NULL)
+-        return PyValue_NULL;
+-    PyObject *zero = _PyLong_GetZero();  // borrowed reference
+-    int cmp;
+-
+-    /* clip the value */
+-    cmp = _PyValue_RichCompareBool(PyValue_FromObjectBorrow(index), PyValue_FromObjectBorrow(zero), Py_LT);
++    PyValue index = PyValue_DUP(state);
++    int cmp = _PyValue_RichCompareBool(index, PyValue_FromInt64(0), Py_LT);
+     if (cmp < 0) {
+-        Py_DECREF(index);
++        PyValue_CLOSE(index);
+         return PyValue_NULL;
+     }
+     if (cmp > 0) {
+-        Py_SETREF(index, Py_NewRef(zero));
++        PyValue_CLOSE(index);
++        index = PyValue_FromInt64(0);
+     }
+     else {
+-        cmp = _PyValue_RichCompareBool(PyValue_FromObjectBorrow(r->len), PyValue_FromObjectBorrow(index), Py_LT);
++        cmp = _PyValue_RichCompareBool(r->len, index, Py_LT);
+         if (cmp < 0) {
+-            Py_DECREF(index);
++            PyValue_CLOSE(index);
+             return PyValue_NULL;
+         }
+-        if (cmp > 0)
+-            Py_SETREF(index, Py_NewRef(r->len));
++        if (cmp > 0) {
++            PyValue_CLOSE(index);
++            index = PyValue_DUP(r->len);
++        }
+     }
+-    PyValue product_v = _PyValue_Multiply(PyValue_FromObjectBorrow(index), PyValue_FromObjectBorrow(r->step));
+-    PyObject *product = PyValue_IsNull(product_v) ? NULL
+-        : _PyValue_AsObjectStealAt(product_v, BOX_SITE_NUMBER);
+-    if (product == NULL) {
+-        Py_DECREF(index);
++    PyValue product = _PyValue_Multiply(index, r->step);
++    if (PyValue_IsNull(product)) {
++        PyValue_CLOSE(index);
+         return PyValue_NULL;
+     }
+-    PyValue new_start_v = _PyValue_Add(PyValue_FromObjectBorrow(r->start), PyValue_FromObjectBorrow(product));
+-    PyObject *new_start = PyValue_IsNull(new_start_v) ? NULL
+-        : _PyValue_AsObjectStealAt(new_start_v, BOX_SITE_NUMBER);
+-    Py_DECREF(product);
+-    if (new_start == NULL) {
+-        Py_DECREF(index);
++    PyValue new_start = _PyValue_Add(r->start, product);
++    PyValue_CLOSE(product);
++    if (PyValue_IsNull(new_start)) {
++        PyValue_CLOSE(index);
+         return PyValue_NULL;
+     }
+-    PyValue new_len_v = _PyValue_Subtract(PyValue_FromObjectBorrow(r->len), PyValue_FromObjectBorrow(index));
+-    PyObject *new_len = PyValue_IsNull(new_len_v) ? NULL
+-        : _PyValue_AsObjectStealAt(new_len_v, BOX_SITE_NUMBER);
+-    Py_DECREF(index);
+-    if (new_len == NULL) {
+-        Py_DECREF(new_start);
++    PyValue new_len = _PyValue_Subtract(r->len, index);
++    PyValue_CLOSE(index);
++    if (PyValue_IsNull(new_len)) {
++        PyValue_CLOSE(new_start);
+         return PyValue_NULL;
+     }
+-    PyObject *tmp = r->start;
++    PyValue old_start = r->start;
++    PyValue old_len = r->len;
+     r->start = new_start;
+-    Py_SETREF(r->len, new_len);
+-    Py_DECREF(tmp);
++    r->len = new_len;
++    PyValue_CLOSE(old_start);
++    PyValue_CLOSE(old_len);
+     return PyValue_None;
+ }
+ 
+@@ -1399,48 +1390,47 @@
+ longrangeiter_dealloc(PyObject *op)
+ {
+     longrangeiterobject *r = (longrangeiterobject*)op;
+-    Py_XDECREF(r->start);
+-    Py_XDECREF(r->step);
+-    Py_XDECREF(r->len);
++    PyValue_XCLOSE(r->start);
++    PyValue_XCLOSE(r->step);
++    PyValue_XCLOSE(r->len);
+     PyObject_Free(r);
+ }
+ 
+ /* One step under the iterator's lock: the next int, or NULL with or without
+    an exception set. */
+-static PyObject *
++static PyValue
+ longrangeiter_step(longrangeiterobject *r)
+ {
+-    if (_PyValue_RichCompareBool(PyValue_FromObjectBorrow(r->len), PyValue_FromObjectBorrow(_PyLong_GetZero()), Py_GT) != 1)
+-        return NULL;
+-
+-    PyValue new_start_v = _PyValue_Add(PyValue_FromObjectBorrow(r->start), PyValue_FromObjectBorrow(r->step));
+-    PyObject *new_start = PyValue_IsNull(new_start_v) ? NULL
+-        : _PyValue_AsObjectStealAt(new_start_v, BOX_SITE_NUMBER);
+-    if (new_start == NULL) {
+-        return NULL;
++    int positive = _PyValue_RichCompareBool(r->len, PyValue_FromInt64(0), Py_GT);
++    if (positive != 1) {
++        return PyValue_NULL;
+     }
+-    PyValue new_len_v = _PyValue_Subtract(PyValue_FromObjectBorrow(r->len), PyValue_FromObjectBorrow(_PyLong_GetOne()));
+-    PyObject *new_len = PyValue_IsNull(new_len_v) ? NULL
+-        : _PyValue_AsObjectStealAt(new_len_v, BOX_SITE_NUMBER);
+-    if (new_len == NULL) {
+-        Py_DECREF(new_start);
+-        return NULL;
++    PyValue new_start = _PyValue_Add(r->start, r->step);
++    if (PyValue_IsNull(new_start)) {
++        return PyValue_NULL;
+     }
+-    PyObject *result = r->start;
++    PyValue new_len = _PyValue_Subtract(r->len, PyValue_FromInt64(1));
++    if (PyValue_IsNull(new_len)) {
++        PyValue_CLOSE(new_start);
++        return PyValue_NULL;
++    }
++    PyValue result = r->start;
++    PyValue old_len = r->len;
+     r->start = new_start;
+-    Py_SETREF(r->len, new_len);
++    r->len = new_len;
++    PyValue_CLOSE(old_len);
+     return result;
+ }
+ 
+ static _PyStatusValue
+ longrangeiter_next_value(PyObject *self)
+ {
+-    PyObject *result;
++    PyValue result;
+     Py_BEGIN_CRITICAL_SECTION(self);
+     result = longrangeiter_step((longrangeiterobject *)self);
+     Py_END_CRITICAL_SECTION();
+-    if (result != NULL) {
+-        return (_PyStatusValue){PYGEN_NEXT, PyValue_FromObjectSteal(result)};
++    if (!PyValue_IsNull(result)) {
++        return (_PyStatusValue){PYGEN_NEXT, result};
+     }
+     return (_PyStatusValue){PyErr_Occurred() ? PYGEN_ERROR : PYGEN_RETURN,
+                             PyValue_NULL};
+@@ -1452,9 +1442,9 @@
+ longrangeiter_traverse(PyObject *op, visitproc visit, void *arg)
+ {
+     longrangeiterobject *r = (longrangeiterobject *)op;
+-    Py_VISIT(r->start);
+-    Py_VISIT(r->step);
+-    Py_VISIT(r->len);
++    _Py_VISIT_VALUE(r->start);
++    _Py_VISIT_VALUE(r->step);
++    _Py_VISIT_VALUE(r->len);
+     return 0;
+ }
+ 
+@@ -1541,14 +1531,9 @@
+     if (it == NULL)
+         return NULL;
+ 
+-    /* The iterator holds objects: this path is for values beyond a C long. */
+-    it->start = _PyValue_AsObjectAt(r->start, BOX_SITE_FIELD);
+-    it->step = _PyValue_AsObjectAt(r->step, BOX_SITE_FIELD);
+-    it->len = _PyValue_AsObjectAt(r->length, BOX_SITE_FIELD);
+-    if (it->start == NULL || it->step == NULL || it->len == NULL) {
+-        Py_DECREF(it);
+-        return NULL;
+-    }
++    it->start = PyValue_DUP(r->start);
++    it->step = PyValue_DUP(r->step);
++    it->len = PyValue_DUP(r->length);
+     return (PyObject *)it;
+ }
+ 
+@@ -1623,9 +1608,9 @@
+     it = PyObject_New(longrangeiterobject, &PyLongRangeIter_Type);
+     if (it == NULL)
+         return NULL;
+-    it->start = it->step = it->len = NULL;
++    it->start = it->step = it->len = PyValue_NULL;
+ 
+-    /* start + (len - 1) * step, in words; the iterator holds objects. */
++    /* start + (len - 1) * step, using owned values. */
+     PyValue one = PyValue_FromInt64(1);
+     PyValue diff = _PyValue_Subtract(range->length, one);
+     if (PyValue_IsNull(diff))
+@@ -1638,17 +1623,13 @@
+     PyValue_CLOSE(product);
+     if (PyValue_IsNull(sum))
+         goto create_failure;
+-    it->start = _PyValue_AsObjectStealAt(sum, BOX_SITE_FIELD);
+-    if (!it->start)
+-        goto create_failure;
++    it->start = sum;
+ 
+     PyValue nstep = _PyValue_Negative(range->step);
+     if (PyValue_IsNull(nstep))
+         goto create_failure;
+-    it->step = _PyValue_AsObjectStealAt(nstep, BOX_SITE_FIELD);
+-    it->len = _PyValue_AsObjectAt(range->length, BOX_SITE_FIELD);
+-    if (it->step == NULL || it->len == NULL)
+-        goto create_failure;
++    it->step = nstep;
++    it->len = PyValue_DUP(range->length);
+ 
+     return (PyObject *)it;
+ 

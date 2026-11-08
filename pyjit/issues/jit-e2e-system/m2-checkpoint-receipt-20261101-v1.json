@@ -1,0 +1,35 @@
+{
+  "utc": "2026-11-01T19:02:16.637714+00:00",
+  "decision": "ACCEPT_PARTIAL_CHECKPOINT_CONTINUE_UNDER_EXISTING_SOURCE_CAP",
+  "review": {
+    "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/jit-method-m2-source-review-20261101-v1/checkpoint-review.md",
+    "sha256": "c8e656a4201a8e9146c443bf373ef4a20c8bb57867c53ff28fc0892b59b17f4a"
+  },
+  "author_checkpoint": {
+    "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/jit-natural-method/build/jit-method-m2-source/checkpoint.json",
+    "sha256": "1126bc406c7f18caf715543d8dd16f1df0030487666e48732f1857e11e1445e2"
+  },
+  "archived_observed_references": {
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/jit-natural-method/build/jit-method-m2-source/host-v7.log": {
+      "observed_sha256": "dd498e20ab49f49790550e6afdd93b3fc56b0646b885fd4c372af6f59ace4a30",
+      "archive": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/jit-method-m2-source-review-20261101-v1/checkpoint-observed-inputs/host-v7.log"
+    },
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/jit-natural-method/build/jit-method-m2-source/host-check.json": {
+      "observed_sha256": "c9369270fa0c7448b2d35d51f0476e75c94a49b6c10c6fce1d25186459b2fd3d",
+      "archive": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/jit-method-m2-source-review-20261101-v1/checkpoint-observed-inputs/host-check.json"
+    },
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/jit-natural-method/build/jit-method-m2-source/syntax-v4/syntax-result.json": {
+      "observed_sha256": "26e5b091cf189b635b2e2b96ad3fc769ee7df424e8075bbd00dbd90decf917eb",
+      "archive": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/jit-method-m2-source-review-20261101-v1/checkpoint-observed-inputs/syntax-result.json"
+    }
+  },
+  "independent_replay": {
+    "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/jit-method-m2-source-review-20261101-v1/checkpoint-replay.json",
+    "sha256": "06ba21cf25501f5199626e95a33b7aef6a830a25e29f4d053bc2055192861710"
+  },
+  "source_changed_after_author_checkpoint": {},
+  "old_metadata_format_rows_exact": 290,
+  "old_definitions_exact_except_handler_count": true,
+  "syntax_rows_verified": 9,
+  "scope": "Host file/source review, hashes and Git metadata only; no compiler or target invocation by reviewer."
+}

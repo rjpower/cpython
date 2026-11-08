@@ -1,0 +1,77 @@
+--- a/Lib/test/test_decimal.py
++++ b/Lib/test/test_decimal.py
+@@ -6167,6 +6167,74 @@
+                          "sys.modules['decimal'].")
+ 
+ 
++@unittest.skipUnless(C, "requires the C decimal module")
++class CContextLifetimeTests(unittest.TestCase):
++    def test_reentrant_current_context_replacement(self):
++        # Isolate the _pydecimal fallback cache and avoid retaining the
++        # replaced Context in test-local state.
++        from test.support.script_helper import assert_python_ok
++        assert_python_ok("-c", """
++            import _decimal, _pydecimal, gc
++            C = _decimal.Context
++            events=[]
++            class Tracked(C):
++                def __del__(self): events.append('old finalized')
++            old=Tracked(prec=13)
++            old_id=id(old)
++            _decimal.setcontext(old)
++            del old
++            class Fake:
++                def __init__(self, s):
++                    _decimal.setcontext(C(prec=17))
++                    gc.collect()
++                    assert 'old finalized' not in events
++                def __format__(self, fmt, ctx):
++                    assert id(ctx) == old_id and ctx.prec == 13
++                    return 'ok'
++            _pydecimal.Decimal=Fake
++            assert _decimal.Decimal(1).__format__('#') == 'ok'
++            gc.collect()
++            assert events == ['old finalized'], events
++            old=Tracked(prec=11)
++            old_id=id(old)
++            _decimal.setcontext(old)
++            flags=dict(old.flags)
++            del old
++            class Truth:
++                def __bool__(self):
++                    _decimal.setcontext(C(prec=23))
++                    gc.collect()
++                    assert events == ['old finalized'], events
++                    return False
++            flags[next(iter(flags))]=Truth()
++            manager=_decimal.localcontext(flags=flags)
++            with manager as ctx:
++                assert ctx.prec == 11
++            assert id(_decimal.getcontext()) == old_id
++            print('format and localcontext keep previous Context alive through reentrant replacement')
++            import numbers
++            old=Tracked(prec=9)
++            old.traps[_decimal.InvalidOperation] = False
++            old_id=id(old)
++            _decimal.setcontext(old)
++            del old
++            before = len(events)
++            class Rational:
++                @property
++                def numerator(self):
++                    _decimal.setcontext(C(prec=31))
++                    gc.collect()
++                    assert len(events) == before
++                    return 1
++                @property
++                def denominator(self): return 1
++            numbers.Rational.register(Rational)
++            assert not (_decimal.Decimal('sNaN') == Rational())
++            gc.collect()
++            assert len(events) == before + 1
++            print('rich comparison keeps Context alive through Rational callback')
++        """)
++
+ ARITH = None
+ TEST_ALL = True
+ TODO_TESTS = None

@@ -1,0 +1,144 @@
+--- a/Include/internal/pycore_ceval.h
++++ b/Include/internal/pycore_ceval.h
+@@ -326,7 +326,7 @@
+ PyAPI_FUNC(void) _PyEval_LoadGlobalValue(PyObject *globals, PyObject *builtins,
+     PyObject *name, PyValue *writeto);
+ PyAPI_FUNC(PyObject *) _PyEval_GetAwaitable(PyObject *iterable, int oparg);
+-PyAPI_FUNC(PyObject *) _PyEval_LoadName(PyThreadState *tstate, _PyInterpreterFrame *frame, PyObject *name);
++PyAPI_FUNC(PyValue) _PyEval_LoadName(PyThreadState *tstate, _PyInterpreterFrame *frame, PyObject *name);
+ PyAPI_FUNC(int)
+ _Py_Check_ArgsIterable(PyThreadState *tstate, PyObject *func, PyObject *args);
+ PyAPI_FUNC(int) _PyEval_StoreName(PyThreadState *tstate, PyValueBorrow v, PyObject *name, PyObject* ns);
+--- a/Python/ceval.c
++++ b/Python/ceval.c
+@@ -5041,51 +5041,41 @@
+     return iter;
+ }
+ 
+-PyObject *
++PyValue
+ _PyEval_LoadName(PyThreadState *tstate, _PyInterpreterFrame *frame, PyObject *name)
+ {
+-    PyObject *value;
+     PyObject *namespace = frame->f_locals;
+     if (namespace == NULL) {
+-        _PyErr_SetString(tstate, PyExc_SystemError,
+-                            "no locals found");
+-        return NULL;
+-    }
+-    if (PyMapping_GetOptionalItem(namespace, name, &value) < 0) {
+-        return NULL;
+-    }
+-    if (value != NULL) {
+-        goto found;
++        _PyErr_SetString(tstate, PyExc_SystemError, "no locals found");
++        return PyValue_NULL;
++    }
++    _PyStatusValue found = value_load_from_dict(tstate, namespace, name);
++    if (found.status != 0) {
++        return found.value;
+     }
+     namespace = frame->f_globals;
+-    PyValue value_v;
+-    int global_found = PyDict_GetValue(
+-        namespace, PyValue_FromObjectBorrow(name), &value_v);
+-    if (global_found < 0) {
+-        return NULL;
+-    }
+-    if (global_found > 0) {
+-        value = _PyValue_AsObjectStealAt(value_v, BOX_SITE_DICT);
+-        if (value == NULL) {
+-            return NULL;
+-        }
+-        goto found;
++    found.status = PyDict_GetValue(namespace, PyValue_FromObjectBorrow(name),
++                                   &found.value);
++    if (found.status < 0) {
++        return PyValue_NULL;
++    }
++    if (found.status > 0) {
++        if (PyValue_IsObject(found.value) &&
++            PyLazyImport_CheckExact(PyValue_AsKnownObjectBorrow(found.value))) {
++            PyObject *reified = _PyLazyImport_Reify(
++                tstate, PyValue_AsKnownObjectBorrow(found.value), name, namespace);
++            PyValue_CLOSE(found.value);
++            return _PyValue_FromObjectResult(reified);
++        }
++        return found.value;
+     }
+     namespace = frame->f_builtins;
+-    if (PyMapping_GetOptionalItem(namespace, name, &value) < 0) {
+-        return NULL;
+-    }
+-    if (value == NULL) {
+-        _PyEval_FormatExcCheckArg(
+-                    tstate, PyExc_NameError,
+-                            NAME_ERROR_MSG, name);
+-        return NULL;
+-    }
+-found:
+-    if (PyLazyImport_CheckExact(value)) {
+-        Py_SETREF(value, _PyLazyImport_Reify(tstate, value, name, namespace));
+-    }
+-    return value;
++    found = value_load_from_dict(tstate, namespace, name);
++    if (found.status != 0) {
++        return found.value;
++    }
++    _PyEval_FormatExcCheckArg(tstate, PyExc_NameError, NAME_ERROR_MSG, name);
++    return PyValue_NULL;
+ }
+ 
+ /* Out of line, as when it was exported. */
+--- a/Python/bytecodes.c
++++ b/Python/bytecodes.c
+@@ -2045,9 +2045,8 @@
+ 
+         inst(LOAD_NAME, (-- v)) {
+             PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
+-            PyObject *v_o = _PyEval_LoadName(tstate, frame, name);
+-            ERROR_IF(v_o == NULL);
+-            v = PyValue_FromObjectSteal(v_o);
++            v = _PyEval_LoadName(tstate, frame, name);
++            ERROR_IF(PyValue_IsNull(v));
+         }
+ 
+         family(LOAD_GLOBAL, INLINE_CACHE_ENTRIES_LOAD_GLOBAL) = {
+--- a/Python/generated_ir_cases.c.h
++++ b/Python/generated_ir_cases.c.h
+@@ -14003,11 +14003,10 @@
+             (void)oparg;
+             PyValue v;
+             PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
+-            PyObject *v_o = _PyEval_LoadName(tstate, frame, name);
+-            if (v_o == NULL) {
+-                JUMP_TO_LABEL(error);
+-            }
+-            v = PyValue_FromObjectSteal(v_o);
++            v = _PyEval_LoadName(tstate, frame, name);
++            if (PyValue_IsNull(v)) {
++                JUMP_TO_LABEL(error);
++            }
+             IR_STORE_DST(IR_A(ir_word), v);
+             if (!PyValue_IsNull(ir_displaced) &&
+                 finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
+diff --git a/Lib/test/test_scope.py b/Lib/test/test_scope.py
+index 520fbc1b662..7037a2ae216 100644
+--- a/Lib/test/test_scope.py
++++ b/Lib/test/test_scope.py
+@@ -7,6 +7,15 @@
+ 
+ class ScopeTests(unittest.TestCase):
+ 
++    def test_load_name_globals_dict_subclass(self):
++        class Globals(dict):
++            def __getitem__(self, key):
++                raise AssertionError("globals lookup called __getitem__")
++
++        namespace = {}
++        exec("y = x", Globals(x=17), namespace)
++        self.assertEqual(namespace["y"], 17)
++
+     def testSimpleNesting(self):
+ 
+         def make_adder(x):

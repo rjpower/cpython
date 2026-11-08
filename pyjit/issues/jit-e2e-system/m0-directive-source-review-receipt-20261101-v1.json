@@ -1,0 +1,39 @@
+{
+  "decision": "ACCEPT_M0_DIRECTIVE_SOURCE_FOR_FRESH_DEBUG_FEEDBACK",
+  "host_replay": {
+    "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/jit-method-m0-directive-source-review-20261101-v1/host-replay.json",
+    "sha256": "936274c70329ef388eeae5afa667b0280a13f4934854d2dafb741b008f405d49"
+  },
+  "host_replay_log": {
+    "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/jit-method-m0-directive-source-review-20261101-v1/host-replay.log",
+    "sha256": "15190428d7f7d95650ddddfe8328f7866e6efdc3a818a88c2a283a0bb0a00387"
+  },
+  "host_tests": 31,
+  "old_header_negative_subtests": 27,
+  "old_source_artifacts_checked": 21,
+  "review": {
+    "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/jit-method-m0-directive-source-review-20261101-v1/review.md",
+    "sha256": "8ac9fdf4f766c8ed6c926f288a60c8c81d67b0ae6491af2a300d7ae677eb3a66"
+  },
+  "reviewer_compiler_calls": 0,
+  "reviewer_target_calls": 0,
+  "runtime_tests_run": 0,
+  "signedness_warning_retained": true,
+  "source_base": "49cc47360ccd79c7a89acc8bfa3d546f94afc46c",
+  "source_capsule": {
+    "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/jit-method-baseline/build/jit-method-m0-directive-correction-v1/capsule.json",
+    "sha256": "cdd8c342ab46e68906696488ea06b48346a494d5364e5e52ad78d712b75ea81f"
+  },
+  "source_clean": true,
+  "source_files": {
+    "Lib/test/test_generated_cases.py": "81aaa089594af3d2a25693ef7798664ea53fa519ed731125c48ffad300ba9580",
+    "Python/generated_jit_helpers.c.h": "e6cc82c4c8c81b1207898129d91e5280b4e2623da72bd24562a80e6ea355dab7",
+    "Tools/cases_generator/ir_generator.py": "d87098d2c9441d365a47213b034d46304ca57ca1ce545604cedad8f404d9a92c"
+  },
+  "source_head": "f0a49b6d30a38db705329bcfd5e5f2d6d2413710",
+  "syntax_result": {
+    "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/jit-method-baseline/build/jit-method-m0-directive-correction-v1/syntax-result.json",
+    "sha256": "bb9411145568bfa8eb4c2377e0983f9eb9cc09f585d3d009509e36abf8f83914"
+  },
+  "utc": "2026-11-01T17:08:07.318578+00:00"
+}

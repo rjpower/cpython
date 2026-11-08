@@ -1,0 +1,12 @@
+--- a/Python/ceval.c
++++ b/Python/ceval.c
+@@ -3120,7 +3120,8 @@
+     }
+     int extra = code->co_argcount;
+     if (flags & CO_VARARGS) {
+-        child->base[extra++] = PyValue_FromObjectBorrow((PyObject *)&_Py_SINGLETON(tuple_empty));
++        child->base[extra++] = PyValue_DUP(PyValue_FromObjectBorrow(
++            (PyObject *)&_Py_SINGLETON(tuple_empty)));
+     }
+     if (flags & CO_VARKEYWORDS) {
+         child->base[extra] = PyValue_FromObjectSteal(kwdict);

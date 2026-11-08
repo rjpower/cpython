@@ -1,0 +1,3 @@
+# I/O no-argument value returns receipt
+
+The patches `r27-io-noargs-iobase.diff`, `r27-io-noargs-bufferedio.diff`, and `r27-io-noargs-textio.diff` apply cleanly to runtime `af82c03c4e5`. Under the common W5 lock, the release shadow built and ran 49 focused buffered-reader and newline-decoder tests. `r27-io-noargs-probe.py` additionally covers self-receiver `readall`/`close` numeric return values, raw detach and decoder reinitialization during method lookup, receiver lifetime through the resulting callback, and raising method propagation. The three W5 sources and release build were restored. Source post-review and merged qualification remain separate.

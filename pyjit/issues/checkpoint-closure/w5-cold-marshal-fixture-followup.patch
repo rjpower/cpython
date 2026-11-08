@@ -1,0 +1,28 @@
+diff --git a/Lib/test/test_marshal.py b/Lib/test/test_marshal.py
+--- a/Lib/test/test_marshal.py
++++ b/Lib/test/test_marshal.py
+@@ -97,7 +97,9 @@
+             for value in values:
+                 with self.subTest(version=version, value=value):
+                     data = marshal.dumps((value,), version)
+-                    self.assertEqual(data[5:], marshal.dumps(value, version))
++                    stream = io.BytesIO(data)
++                    self.assertEqual(stream.read(5), b"(\x01\x00\x00\x00")
++                    self.assertEqual(stream.read(), marshal.dumps(value, version))
+                     self.assertEqual(marshal.loads(data), (value,))
+ 
+         # Inline integers have no object identity to enter in the ref table.
+@@ -1169,10 +1171,10 @@
+                          b'[\x04\0\0\0' + flagged(data_c) +
+                          b'\xa9\x03' + flagged(data_a) + data_b + ref(2) +
+                          ref(1) + ref(0))
+-        # Small ints and interned strings are not special.
++        # Inline ints are written in full; interned strings retain references.
+         self.assertEqual(dumps((1, 2, 1, 'a', 'a')),
+-                         b')\x05\xe9\x01\0\0\0i\x02\0\0\0r\0\0\0\0'
+-                         b'\xda\x01ar\x01\0\0\0')
++                         b')\x05i\x01\0\0\0i\x02\0\0\0i\x01\0\0\0'
++                         b'\xda\x01ar\0\0\0\0')
+         # A recursive list refers to itself.
+         lst = [a]
+         lst.append(lst)

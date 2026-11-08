@@ -1,0 +1,32 @@
+--- a/Objects/descrobject.c
++++ b/Objects/descrobject.c
+@@ -1973,6 +1973,9 @@
+ }
+ 
+ PyDoc_STRVAR(getter_doc,
++             "getter($self, object, /)\n"
++             "--\n"
++             "\n"
+              "Descriptor to obtain a copy of the property with a different getter.");
+ 
+ static PyValue
+@@ -1988,6 +1991,9 @@
+ 
+ 
+ PyDoc_STRVAR(setter_doc,
++             "setter($self, object, /)\n"
++             "--\n"
++             "\n"
+              "Descriptor to obtain a copy of the property with a different setter.");
+ 
+ static PyValue
+@@ -2003,6 +2009,9 @@
+ 
+ 
+ PyDoc_STRVAR(deleter_doc,
++             "deleter($self, object, /)\n"
++             "--\n"
++             "\n"
+              "Descriptor to obtain a copy of the property with a different deleter.");
+ 
+ static PyValue

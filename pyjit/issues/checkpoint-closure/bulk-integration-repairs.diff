@@ -1,0 +1,164 @@
+diff --git a/Include/pyport.h b/Include/pyport.h
+index 073888f68be..a0698522ce7 100644
+--- a/Include/pyport.h
++++ b/Include/pyport.h
+@@ -329,20 +329,6 @@ extern "C" {
+ #  define Py_VALUE_COMPAT(REPLACEMENT) Py_VALUE_ENTRY
+ #endif
+ 
+-/* Py_VALUE_COMPAT_NUMBERS(REPLACEMENT) marks the int and float extractors
+- * that became compatibility thunks of their value rows
+- * (pyjit/design/proposals/value-api-v2a1a.md, D12), but only in a unit that
+- * defines Py_VALUE_MARK_NUMBERS: Objects/longobject.c, floatobject.c,
+- * boolobject.c and Python/pyvalue.c, whose value slots must call none of
+- * them. Wave W2 marks them in every value-native unit and deletes this
+- * opt-in. */
+-#if defined(Py_VALUE_MARK_NUMBERS)
+-#  define Py_VALUE_COMPAT_NUMBERS(REPLACEMENT) Py_VALUE_COMPAT(REPLACEMENT)
+-#else
+-#  define Py_VALUE_COMPAT_NUMBERS(REPLACEMENT)
+-#endif
+-
+-
+ #if defined(__clang__)
+ #define _Py_COMP_DIAG_PUSH _Pragma("clang diagnostic push")
+ #define _Py_COMP_DIAG_IGNORE_DEPR_DECLS \
+diff --git a/Modules/_sqlite/clinic/cursor.c.h b/Modules/_sqlite/clinic/cursor.c.h
+index e1539aa61dd..e0e598f900c 100644
+--- a/Modules/_sqlite/clinic/cursor.c.h
++++ b/Modules/_sqlite/clinic/cursor.c.h
+@@ -11,7 +11,6 @@ preserve
+ #  include "pycore_runtime.h"     // _Py_ID()
+ #  include "pycore_value.h"       // _PyValue_STATIC_IMMORTAL()
+ #endif
+-#include "pycore_long.h"          // _PyLong_UInt32_Converter()
+ #include "pycore_long_value.h"    // _PyValue_AsNativeBytes()
+ #include "pycore_modsupport.h"    // _PyArg_NoKwnames()
+ #include "pycore_tuple.h"         // _PyTuple_ITEMS()
+@@ -411,8 +410,20 @@ _sqlite3_Cursor_arraysize_set(PyObject *self, PyObject *arg, void *Py_UNUSED(con
+                      Py_TYPE(self)->tp_name);
+         return -1;
+     }
+-    if (!_PyLong_UInt32_Converter(arg, &value)) {
+-        goto exit;
++    {
++        Py_ssize_t _bytes = _PyValue_AsNativeBytes(PyValue_FromObjectBorrow(arg), &value, sizeof(uint32_t),
++                Py_ASNATIVEBYTES_NATIVE_ENDIAN |
++                Py_ASNATIVEBYTES_ALLOW_INDEX |
++                Py_ASNATIVEBYTES_REJECT_NEGATIVE |
++                Py_ASNATIVEBYTES_UNSIGNED_BUFFER);
++        if (_bytes < 0) {
++            goto exit;
++        }
++        if ((size_t)_bytes > sizeof(uint32_t)) {
++            PyErr_SetString(PyExc_OverflowError,
++                        "Python int too large for C uint32_t");
++            goto exit;
++        }
+     }
+     return_value = _sqlite3_Cursor_arraysize_set_impl((pysqlite_Cursor *)self, value);
+ 
+@@ -421,4 +432,4 @@ exit:
+ }
+ #define _SQLITE3_CURSOR_ARRAYSIZE_GETSETDEF {"arraysize", (getter)_sqlite3_Cursor_arraysize_get, (setter)_sqlite3_Cursor_arraysize_set, NULL},
+ 
+-/*[clinic end generated code: output=cedea19750ffeefa input=a9049054013a1b77]*/
++/*[clinic end generated code: output=a030f120e82c42e1 input=a9049054013a1b77]*/
+diff --git a/Objects/boolobject.c b/Objects/boolobject.c
+index cc9fbdb83b4..a9e83422cc3 100644
+--- a/Objects/boolobject.c
++++ b/Objects/boolobject.c
+@@ -1,7 +1,6 @@
+ /* Boolean type, a subtype of int */
+ 
+ // bool's value slots call int's value functions, never an int thunk (D12).
+-#define Py_VALUE_MARK_NUMBERS 1
+ 
+ #include "Python.h"
+ #include "pycore_long.h"          // FALSE_TAG TRUE_TAG
+diff --git a/Objects/floatobject.c b/Objects/floatobject.c
+index 8b044dfe098..565722db732 100644
+--- a/Objects/floatobject.c
++++ b/Objects/floatobject.c
+@@ -2,7 +2,6 @@
+ 
+ // float's value slots call int's and float's value functions, never an
+ // extractor thunk (D12).
+-#define Py_VALUE_MARK_NUMBERS 1
+ 
+ /* XXX There should be overflow checks here, but it's hard to check
+    for any kind of float exception without losing portability. */
+diff --git a/Objects/longobject.c b/Objects/longobject.c
+index ab4280bee6f..f7dbc3b1a89 100644
+--- a/Objects/longobject.c
++++ b/Objects/longobject.c
+@@ -4,7 +4,6 @@
+ 
+ /* The int extractors are compatibility thunks of their value rows; the value
+    slots here call none of them (value-api-v2a1a.md, D12). */
+-#define Py_VALUE_MARK_NUMBERS 1
+ 
+ #include "Python.h"
+ #include "opcode.h"               // NB_ADD
+@@ -28,12 +27,7 @@
+ #include <float.h>                // DBL_MANT_DIG
+ #include <stddef.h>               // offsetof
+ 
+-/* The Clinic parsers stay object-form until M3b regenerates the class int
+-   lines with value readers. int.to_bytes's length is their one extractor
+-   call: it reads the row, as Py_VALUE_MARK_NUMBERS requires in this unit. */
+-#define PyLong_AsSsize_t(op) _PyValue_IntAsSsize_t(PyValue_FromObjectBorrow(op))
+ #include "clinic/longobject.c.h"
+-#undef PyLong_AsSsize_t
+ /*[clinic input]
+ value_emission
+ [clinic start generated code]*/
+diff --git a/Python/pyvalue.c b/Python/pyvalue.c
+index 19957a13311..b25cba262fd 100644
+--- a/Python/pyvalue.c
++++ b/Python/pyvalue.c
+@@ -1,6 +1,5 @@
+ /* The int and float object extractors are compatibility thunks of their
+    value rows; this unit calls none of them (value-api-v2a1a.md, D12). */
+-#define Py_VALUE_MARK_NUMBERS 1
+ 
+ #include "Python.h"
+ 
+diff --git a/Tools/build/check_value_api.py b/Tools/build/check_value_api.py
+index 6a026883940..e4bf0e23621 100644
+--- a/Tools/build/check_value_api.py
++++ b/Tools/build/check_value_api.py
+@@ -103,10 +103,8 @@
+   pass): value-api-g.md, section 1.7; see BOX_TEXT_RULES.
+ 
+ The functions that Py_VALUE_COMPAT marks need no other rule here: calling
+-one from a value-native unit is a compile error. The int and float
+-extractors (PyLong_AsLong, PyFloat_AsDouble, ...) carry
+-Py_VALUE_COMPAT_NUMBERS instead, which marks them only in a unit that defines
+-Py_VALUE_MARK_NUMBERS, until wave W2 marks them everywhere.
++one from a value-native unit is a compile error, including the int and float
++extractors (PyLong_AsLong, PyFloat_AsDouble, ...).
+ 
+ The script reads compile_commands.json, which intercept-build records while
+ the units compile, and runs clang-query over every value-native unit, then
+@@ -2268,16 +2266,15 @@ def self_test(clang_query, template, compiler, cxx, jobs):
+         # unit does not compile; from a module unit it does.
+         flags = compile_flags(template)
+         call = "void f(void) { _PyValue_CompatProbe(); }\n"
+-        # The int and float extractors are marked only in a unit that opts
+-        # in with Py_VALUE_MARK_NUMBERS.
++        # Numeric compatibility calls obey the same core/module boundary.
+         numbers_call = "long f(void) { return PyLong_AsLong(0); }\n"
+-        numbers_mark = "#define Py_VALUE_MARK_NUMBERS 1\n"
+         for name, prefix, body, should_fail in (
+                 ("unavailable_core", "", call, True),
+                 ("unavailable_module", "#define Py_BUILD_CORE_MODULE 1\n",
+                  call, False),
+-                ("unavailable_numbers", numbers_mark, numbers_call, True),
+-                ("available_numbers", "", numbers_call, False)):
++                ("unavailable_numbers", "", numbers_call, True),
++                ("available_numbers_module", "#define Py_BUILD_CORE_MODULE 1\n",
++                 numbers_call, False)):
+             path = Path(tmp, f"{name}.c")
+             path.write_text(prefix + SELF_TEST_HEADER + body)
+             proc = subprocess.run(

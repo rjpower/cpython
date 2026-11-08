@@ -1,0 +1,877 @@
+{
+ "schema": "boil-bench/1",
+ "build": {
+  "label": "C",
+  "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/remeasure-release-c8a0b4dc54c/python",
+  "version": "3.16.0a1+dev (heads/boil/pyvalue-rc-universal:c8a0b4dc54c, Nov  4 2026, 01:03:50) [GCC 15.2.0]",
+  "git": [
+   "CPython",
+   "heads/boil/pyvalue-rc-universal",
+   "c8a0b4dc54c"
+  ],
+  "hash_seed": 0
+ },
+ "machine": {
+  "hostname": "bento-cat",
+  "kernel": "7.0.0-43-generic",
+  "cpus": 16,
+  "cpu": "AMD Ryzen 7 3800X 8-Core Processor",
+  "memory": "65726112 kB"
+ },
+ "results": {
+  "time": {
+   "richards": {
+    "group": "kernels",
+    "unit": "ns per loop",
+    "value": 160347093.5,
+    "values": [
+     160977422.0,
+     160347093.5,
+     159173461.0,
+     158911760.0,
+     160829046.5
+    ],
+    "loops": 2,
+    "runs": 5,
+    "warmup_calls": 1
+   },
+   "go": {
+    "group": "kernels",
+    "unit": "ns per loop",
+    "value": 318734475.0,
+    "values": [
+     327056835.0,
+     329096788.0,
+     318734475.0,
+     304050335.0,
+     305254403.0
+    ],
+    "loops": 1,
+    "runs": 5,
+    "warmup_calls": 1
+   },
+   "nbody": {
+    "group": "kernels",
+    "unit": "ns per loop",
+    "value": 185912024.0,
+    "values": [
+     186159745.0,
+     185697713.0,
+     185912024.0,
+     185749494.0,
+     186721010.0
+    ],
+    "loops": 1,
+    "runs": 5,
+    "warmup_calls": 1
+   },
+   "float": {
+    "group": "kernels",
+    "unit": "ns per loop",
+    "value": 169935897.0,
+    "values": [
+     169718006.0,
+     175762272.0,
+     168976821.0,
+     169935897.0,
+     172186060.0
+    ],
+    "loops": 1,
+    "runs": 5,
+    "warmup_calls": 1
+   },
+   "spectral_norm": {
+    "group": "kernels",
+    "unit": "ns per loop",
+    "value": 181287136.0,
+    "values": [
+     182840246.0,
+     180062509.0,
+     182899346.0,
+     181287136.0,
+     181094265.0
+    ],
+    "loops": 1,
+    "runs": 5,
+    "warmup_calls": 1
+   },
+   "raytrace": {
+    "group": "kernels",
+    "unit": "ns per loop",
+    "value": 716421772.0,
+    "values": [
+     719165768.0,
+     716421772.0,
+     722370758.0,
+     707896299.0,
+     666697269.0
+    ],
+    "loops": 1,
+    "runs": 5,
+    "warmup_calls": 1
+   },
+   "deltablue": {
+    "group": "kernels",
+    "unit": "ns per loop",
+    "value": 12969936.8,
+    "values": [
+     12769815.6,
+     12776762.633333333,
+     12969936.8,
+     13231387.766666668,
+     13069956.1
+    ],
+    "loops": 30,
+    "runs": 5,
+    "warmup_calls": 1
+   },
+   "chaos": {
+    "group": "kernels",
+    "unit": "ns per loop",
+    "value": 151168867.5,
+    "values": [
+     151168867.5,
+     150778345.5,
+     151088926.5,
+     151238573.0,
+     151213408.0
+    ],
+    "loops": 2,
+    "runs": 5,
+    "warmup_calls": 1
+   },
+   "nqueens": {
+    "group": "kernels",
+    "unit": "ns per loop",
+    "value": 186704399.0,
+    "values": [
+     187367353.0,
+     186588279.0,
+     186704399.0,
+     187567095.0,
+     186600139.0
+    ],
+    "loops": 1,
+    "runs": 5,
+    "warmup_calls": 1
+   },
+   "fannkuch": {
+    "group": "kernels",
+    "unit": "ns per loop",
+    "value": 978423390.0,
+    "values": [
+     935780360.0,
+     986464110.0,
+     978423390.0,
+     932186428.0,
+     980234442.0
+    ],
+    "loops": 1,
+    "runs": 5,
+    "warmup_calls": 1
+   },
+   "generators": {
+    "group": "kernels",
+    "unit": "ns per loop",
+    "value": 73188121.5,
+    "values": [
+     71870478.5,
+     73188121.5,
+     73026910.5,
+     74676236.0,
+     75409055.0
+    ],
+    "loops": 2,
+    "runs": 5,
+    "warmup_calls": 1
+   },
+   "comprehensions": {
+    "group": "kernels",
+    "unit": "ns per loop",
+    "value": 46379.63966666667,
+    "values": [
+     46277.3825,
+     48066.359833333336,
+     46431.305166666665,
+     46379.63966666667,
+     46264.1505
+    ],
+    "loops": 6000,
+    "runs": 5,
+    "warmup_calls": 1
+   },
+   "coroutines": {
+    "group": "kernels",
+    "unit": "ns per loop",
+    "value": 53505724.0,
+    "values": [
+     53402383.5,
+     53651302.25,
+     53754888.0,
+     53505724.0,
+     53185989.5
+    ],
+    "loops": 4,
+    "runs": 5,
+    "warmup_calls": 1
+   },
+   "unpack_sequence": {
+    "group": "kernels",
+    "unit": "ns per loop",
+    "value": 34375.8395,
+    "values": [
+     34596.58875,
+     34383.00725,
+     34356.31225,
+     34375.8395,
+     34344.13475
+    ],
+    "loops": 4000,
+    "runs": 5,
+    "warmup_calls": 1
+   },
+   "deepcopy": {
+    "group": "kernels",
+    "unit": "ns per loop",
+    "value": 977070.3633333333,
+    "values": [
+     984557.0766666667,
+     989219.9366666666,
+     973015.37,
+     975182.9166666666,
+     977070.3633333333
+    ],
+    "loops": 300,
+    "runs": 5,
+    "warmup_calls": 1
+   },
+   "deepcopy_reduce": {
+    "group": "kernels",
+    "unit": "ns per loop",
+    "value": 11094.1197,
+    "values": [
+     11094.1197,
+     11201.1034,
+     11107.20225,
+     10997.3956,
+     11086.77615
+    ],
+    "loops": 20000,
+    "runs": 5,
+    "warmup_calls": 1
+   },
+   "deepcopy_memo": {
+    "group": "kernels",
+    "unit": "ns per loop",
+    "value": 142329.72325,
+    "values": [
+     142329.72325,
+     139617.502,
+     142264.3555,
+     142656.8705,
+     142751.58625
+    ],
+    "loops": 4000,
+    "runs": 5,
+    "warmup_calls": 1
+   },
+   "json_dumps": {
+    "group": "kernels",
+    "unit": "ns per loop",
+    "value": 24893455.8,
+    "values": [
+     25126005.3,
+     24893455.8,
+     24821965.5,
+     24988576.5,
+     24659726.5
+    ],
+    "loops": 10,
+    "runs": 5,
+    "warmup_calls": 1
+   },
+   "json_loads": {
+    "group": "kernels",
+    "unit": "ns per loop",
+    "value": 983949.555,
+    "values": [
+     959402.605,
+     955930.635,
+     1013060.18,
+     992817.01,
+     983949.555
+    ],
+    "loops": 200,
+    "runs": 5,
+    "warmup_calls": 1
+   },
+   "pickle": {
+    "group": "kernels",
+    "unit": "ns per loop",
+    "value": 391168.0625,
+    "values": [
+     399902.44,
+     398123.8025,
+     391168.0625,
+     369860.7825,
+     368810.3775
+    ],
+    "loops": 400,
+    "runs": 5,
+    "warmup_calls": 1
+   },
+   "unpickle": {
+    "group": "kernels",
+    "unit": "ns per loop",
+    "value": 463130.56,
+    "values": [
+     507749.03,
+     463130.56,
+     465034.0733333333,
+     451950.89,
+     457161.38666666666
+    ],
+    "loops": 300,
+    "runs": 5,
+    "warmup_calls": 1
+   },
+   "regex_compile": {
+    "group": "kernels",
+    "unit": "ns per loop",
+    "value": 424603931.0,
+    "values": [
+     417849840.0,
+     430340456.0,
+     426121890.0,
+     424603931.0,
+     398311311.0
+    ],
+    "loops": 1,
+    "runs": 5,
+    "warmup_calls": 1
+   },
+   "logging_format": {
+    "group": "kernels",
+    "unit": "ns per loop",
+    "value": 192672.586,
+    "values": [
+     201571.481,
+     199222.155,
+     192672.586,
+     190960.825,
+     191779.8
+    ],
+    "loops": 1000,
+    "runs": 5,
+    "warmup_calls": 1
+   },
+   "logging_silent": {
+    "group": "kernels",
+    "unit": "ns per loop",
+    "value": 3387.5498333333335,
+    "values": [
+     3405.1817833333334,
+     3385.7091666666665,
+     3387.5498333333335,
+     3403.2154333333333,
+     3384.70115
+    ],
+    "loops": 60000,
+    "runs": 5,
+    "warmup_calls": 1
+   },
+   "logging_simple": {
+    "group": "kernels",
+    "unit": "ns per loop",
+    "value": 185226.491,
+    "values": [
+     186570.248,
+     185226.491,
+     186455.837,
+     184572.717,
+     183948.392
+    ],
+    "loops": 1000,
+    "runs": 5,
+    "warmup_calls": 1
+   },
+   "xml_etree_generate": {
+    "group": "kernels",
+    "unit": "ns per loop",
+    "value": 297906548.0,
+    "values": [
+     293068338.0,
+     291845181.0,
+     297906548.0,
+     324601530.0,
+     315388154.0
+    ],
+    "loops": 1,
+    "runs": 5,
+    "warmup_calls": 1
+   },
+   "xml_etree_iterparse": {
+    "group": "kernels",
+    "unit": "ns per loop",
+    "value": 194231765.0,
+    "values": [
+     196625380.0,
+     191769531.0,
+     194231765.0,
+     195324992.0,
+     183370319.0
+    ],
+    "loops": 1,
+    "runs": 5,
+    "warmup_calls": 1
+   },
+   "xml_etree_parse": {
+    "group": "kernels",
+    "unit": "ns per loop",
+    "value": 211729432.0,
+    "values": [
+     210730536.0,
+     213222041.0,
+     211729432.0,
+     212945899.0,
+     210505195.0
+    ],
+    "loops": 1,
+    "runs": 5,
+    "warmup_calls": 1
+   },
+   "xml_etree_process": {
+    "group": "kernels",
+    "unit": "ns per loop",
+    "value": 218116450.0,
+    "values": [
+     217684338.0,
+     208095320.0,
+     226057380.0,
+     218116450.0,
+     220384845.0
+    ],
+    "loops": 1,
+    "runs": 5,
+    "warmup_calls": 1
+   }
+  }
+ },
+ "runs": {
+  "time": {
+   "interleaved_per_kernel": true,
+   "per_kernel": {
+    "richards": {
+     "timestamp": "2026-11-04T01:10:58-08:00",
+     "commit": {
+      "sha": "e097c2e85afcd91c50273b27532bb32bbacf1421",
+      "dirty": true
+     },
+     "load_1min": {
+      "max": 1.1240234375,
+      "samples": [
+       1.1240234375,
+       1.1240234375
+      ]
+     }
+    },
+    "go": {
+     "timestamp": "2026-11-04T01:11:04-08:00",
+     "commit": {
+      "sha": "e097c2e85afcd91c50273b27532bb32bbacf1421",
+      "dirty": true
+     },
+     "load_1min": {
+      "max": 1.11376953125,
+      "samples": [
+       1.11376953125,
+       1.11376953125
+      ]
+     }
+    },
+    "nbody": {
+     "timestamp": "2026-11-04T01:11:08-08:00",
+     "commit": {
+      "sha": "e097c2e85afcd91c50273b27532bb32bbacf1421",
+      "dirty": true
+     },
+     "load_1min": {
+      "max": 1.1044921875,
+      "samples": [
+       1.1044921875,
+       1.1044921875
+      ]
+     }
+    },
+    "float": {
+     "timestamp": "2026-11-04T01:11:11-08:00",
+     "commit": {
+      "sha": "e097c2e85afcd91c50273b27532bb32bbacf1421",
+      "dirty": true
+     },
+     "load_1min": {
+      "max": 1.095703125,
+      "samples": [
+       1.095703125,
+       1.095703125
+      ]
+     }
+    },
+    "spectral_norm": {
+     "timestamp": "2026-11-04T01:11:15-08:00",
+     "commit": {
+      "sha": "e097c2e85afcd91c50273b27532bb32bbacf1421",
+      "dirty": true
+     },
+     "load_1min": {
+      "max": 1.16845703125,
+      "samples": [
+       1.095703125,
+       1.16845703125
+      ]
+     }
+    },
+    "raytrace": {
+     "timestamp": "2026-11-04T01:11:23-08:00",
+     "commit": {
+      "sha": "e097c2e85afcd91c50273b27532bb32bbacf1421",
+      "dirty": true
+     },
+     "load_1min": {
+      "max": 1.15478515625,
+      "samples": [
+       1.15478515625,
+       1.14208984375
+      ]
+     }
+    },
+    "deltablue": {
+     "timestamp": "2026-11-04T01:11:32-08:00",
+     "commit": {
+      "sha": "e097c2e85afcd91c50273b27532bb32bbacf1421",
+      "dirty": true
+     },
+     "load_1min": {
+      "max": 1.13037109375,
+      "samples": [
+       1.13037109375,
+       1.13037109375
+      ]
+     }
+    },
+    "chaos": {
+     "timestamp": "2026-11-04T01:11:38-08:00",
+     "commit": {
+      "sha": "e097c2e85afcd91c50273b27532bb32bbacf1421",
+      "dirty": true
+     },
+     "load_1min": {
+      "max": 1.11962890625,
+      "samples": [
+       1.11962890625,
+       1.11962890625
+      ]
+     }
+    },
+    "nqueens": {
+     "timestamp": "2026-11-04T01:11:42-08:00",
+     "commit": {
+      "sha": "e097c2e85afcd91c50273b27532bb32bbacf1421",
+      "dirty": true
+     },
+     "load_1min": {
+      "max": 1.10986328125,
+      "samples": [
+       1.10986328125,
+       1.10986328125
+      ]
+     }
+    },
+    "fannkuch": {
+     "timestamp": "2026-11-04T01:11:52-08:00",
+     "commit": {
+      "sha": "e097c2e85afcd91c50273b27532bb32bbacf1421",
+      "dirty": true
+     },
+     "load_1min": {
+      "max": 1.16650390625,
+      "samples": [
+       1.16650390625,
+       1.15283203125
+      ]
+     }
+    },
+    "generators": {
+     "timestamp": "2026-11-04T01:12:01-08:00",
+     "commit": {
+      "sha": "e097c2e85afcd91c50273b27532bb32bbacf1421",
+      "dirty": true
+     },
+     "load_1min": {
+      "max": 1.15283203125,
+      "samples": [
+       1.15283203125,
+       1.14013671875
+      ]
+     }
+    },
+    "comprehensions": {
+     "timestamp": "2026-11-04T01:12:05-08:00",
+     "commit": {
+      "sha": "e097c2e85afcd91c50273b27532bb32bbacf1421",
+      "dirty": true
+     },
+     "load_1min": {
+      "max": 1.14013671875,
+      "samples": [
+       1.14013671875,
+       1.12890625
+      ]
+     }
+    },
+    "coroutines": {
+     "timestamp": "2026-11-04T01:12:09-08:00",
+     "commit": {
+      "sha": "e097c2e85afcd91c50273b27532bb32bbacf1421",
+      "dirty": true
+     },
+     "load_1min": {
+      "max": 1.12890625,
+      "samples": [
+       1.12890625,
+       1.12890625
+      ]
+     }
+    },
+    "unpack_sequence": {
+     "timestamp": "2026-11-04T01:12:12-08:00",
+     "commit": {
+      "sha": "e097c2e85afcd91c50273b27532bb32bbacf1421",
+      "dirty": true
+     },
+     "load_1min": {
+      "max": 1.1181640625,
+      "samples": [
+       1.1181640625,
+       1.1181640625
+      ]
+     }
+    },
+    "deepcopy": {
+     "timestamp": "2026-11-04T01:12:16-08:00",
+     "commit": {
+      "sha": "e097c2e85afcd91c50273b27532bb32bbacf1421",
+      "dirty": true
+     },
+     "load_1min": {
+      "max": 1.1083984375,
+      "samples": [
+       1.1083984375,
+       1.1083984375
+      ]
+     }
+    },
+    "deepcopy_reduce": {
+     "timestamp": "2026-11-04T01:12:21-08:00",
+     "commit": {
+      "sha": "e097c2e85afcd91c50273b27532bb32bbacf1421",
+      "dirty": true
+     },
+     "load_1min": {
+      "max": 1.1083984375,
+      "samples": [
+       1.1083984375,
+       1.099609375
+      ]
+     }
+    },
+    "deepcopy_memo": {
+     "timestamp": "2026-11-04T01:12:28-08:00",
+     "commit": {
+      "sha": "e097c2e85afcd91c50273b27532bb32bbacf1421",
+      "dirty": true
+     },
+     "load_1min": {
+      "max": 1.09130859375,
+      "samples": [
+       1.09130859375,
+       1.083984375
+      ]
+     }
+    },
+    "json_dumps": {
+     "timestamp": "2026-11-04T01:12:34-08:00",
+     "commit": {
+      "sha": "e097c2e85afcd91c50273b27532bb32bbacf1421",
+      "dirty": true
+     },
+     "load_1min": {
+      "max": 1.083984375,
+      "samples": [
+       1.083984375,
+       1.083984375
+      ]
+     }
+    },
+    "json_loads": {
+     "timestamp": "2026-11-04T01:12:39-08:00",
+     "commit": {
+      "sha": "e097c2e85afcd91c50273b27532bb32bbacf1421",
+      "dirty": true
+     },
+     "load_1min": {
+      "max": 1.0771484375,
+      "samples": [
+       1.0771484375,
+       1.0771484375
+      ]
+     }
+    },
+    "pickle": {
+     "timestamp": "2026-11-04T01:12:43-08:00",
+     "commit": {
+      "sha": "e097c2e85afcd91c50273b27532bb32bbacf1421",
+      "dirty": true
+     },
+     "load_1min": {
+      "max": 1.07080078125,
+      "samples": [
+       1.07080078125,
+       1.07080078125
+      ]
+     }
+    },
+    "unpickle": {
+     "timestamp": "2026-11-04T01:12:46-08:00",
+     "commit": {
+      "sha": "e097c2e85afcd91c50273b27532bb32bbacf1421",
+      "dirty": true
+     },
+     "load_1min": {
+      "max": 1.07080078125,
+      "samples": [
+       1.07080078125,
+       1.06494140625
+      ]
+     }
+    },
+    "regex_compile": {
+     "timestamp": "2026-11-04T01:12:51-08:00",
+     "commit": {
+      "sha": "e097c2e85afcd91c50273b27532bb32bbacf1421",
+      "dirty": true
+     },
+     "load_1min": {
+      "max": 1.0595703125,
+      "samples": [
+       1.0595703125,
+       1.0595703125
+      ]
+     }
+    },
+    "logging_format": {
+     "timestamp": "2026-11-04T01:12:57-08:00",
+     "commit": {
+      "sha": "e097c2e85afcd91c50273b27532bb32bbacf1421",
+      "dirty": true
+     },
+     "load_1min": {
+      "max": 1.0546875,
+      "samples": [
+       1.0546875,
+       1.0546875
+      ]
+     }
+    },
+    "logging_silent": {
+     "timestamp": "2026-11-04T01:13:01-08:00",
+     "commit": {
+      "sha": "e097c2e85afcd91c50273b27532bb32bbacf1421",
+      "dirty": true
+     },
+     "load_1min": {
+      "max": 1.0546875,
+      "samples": [
+       1.0546875,
+       1.05029296875
+      ]
+     }
+    },
+    "logging_simple": {
+     "timestamp": "2026-11-04T01:13:04-08:00",
+     "commit": {
+      "sha": "e097c2e85afcd91c50273b27532bb32bbacf1421",
+      "dirty": true
+     },
+     "load_1min": {
+      "max": 1.05029296875,
+      "samples": [
+       1.05029296875,
+       1.05029296875
+      ]
+     }
+    },
+    "xml_etree_generate": {
+     "timestamp": "2026-11-04T01:13:09-08:00",
+     "commit": {
+      "sha": "e097c2e85afcd91c50273b27532bb32bbacf1421",
+      "dirty": true
+     },
+     "load_1min": {
+      "max": 1.0458984375,
+      "samples": [
+       1.0458984375,
+       1.0419921875
+      ]
+     }
+    },
+    "xml_etree_iterparse": {
+     "timestamp": "2026-11-04T01:13:14-08:00",
+     "commit": {
+      "sha": "e097c2e85afcd91c50273b27532bb32bbacf1421",
+      "dirty": true
+     },
+     "load_1min": {
+      "max": 1.0419921875,
+      "samples": [
+       1.0419921875,
+       1.0419921875
+      ]
+     }
+    },
+    "xml_etree_parse": {
+     "timestamp": "2026-11-04T01:13:19-08:00",
+     "commit": {
+      "sha": "e097c2e85afcd91c50273b27532bb32bbacf1421",
+      "dirty": true
+     },
+     "load_1min": {
+      "max": 1.03857421875,
+      "samples": [
+       1.03857421875,
+       1.03857421875
+      ]
+     }
+    },
+    "xml_etree_process": {
+     "timestamp": "2026-11-04T01:13:23-08:00",
+     "commit": {
+      "sha": "e097c2e85afcd91c50273b27532bb32bbacf1421",
+      "dirty": true
+     },
+     "load_1min": {
+      "max": 1.03515625,
+      "samples": [
+       1.03515625,
+       1.03515625
+      ]
+     }
+    }
+   },
+   "load_1min": {
+    "max": 1.16845703125,
+    "min": 1.03515625
+   }
+  }
+ }
+}

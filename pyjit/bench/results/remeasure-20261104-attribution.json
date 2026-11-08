@@ -1,0 +1,552 @@
+{
+ "deepcopy_memo": {
+  "times_ns": {
+   "C": 142329.72325,
+   "B": 169824.92875,
+   "U": 30590.45175
+  },
+  "samples": {
+   "C": 1135,
+   "B": 1372,
+   "U": 1233
+  },
+  "frac": {
+   "C": {
+    "eval loop self": 0.30837004405286345,
+    "exception save/restore": 0.10044052863436123,
+    "PyValue bridge/boxing": 0.226431718061674,
+    "attribute lookup": 0.001762114537444934,
+    "frames": 0.029955947136563875,
+    "specialiser": 0.0,
+    "other": 0.33303964757709253
+   },
+   "B": {
+    "eval loop self": 0.2849854227405248,
+    "exception save/restore": 0.21355685131195334,
+    "PyValue bridge/boxing": 0.19169096209912537,
+    "attribute lookup": 0.0007288629737609329,
+    "frames": 0.02696793002915452,
+    "specialiser": 0.0,
+    "other": 0.2820699708454811
+   },
+   "U": {
+    "eval loop self": 0.5012165450121655,
+    "exception save/restore": 0.0008110300081103001,
+    "PyValue bridge/boxing": 0.0,
+    "attribute lookup": 0.0032441200324412004,
+    "frames": 0.07380373073803731,
+    "specialiser": 0.0,
+    "other": 0.4209245742092457
+   }
+  },
+  "triage_F_vs_U": {
+   "eval loop self": 0.26466691158754574,
+   "exception save/restore": 0.21531335005727367,
+   "PyValue bridge/boxing": 0.23646036803371406,
+   "attribute lookup": 0.0034063918861168877,
+   "frames": 0.026902192050085955,
+   "specialiser": 0.0,
+   "other": 0.25325078638526377
+  },
+  "triage_F/U": 5.420834138180533,
+  "B_vs_U": {
+   "eval loop self": 0.2374784556787749,
+   "exception save/restore": 0.2602980818019371,
+   "PyValue bridge/boxing": 0.23380634367235723,
+   "attribute lookup": 0.00017624948786113215,
+   "frames": 0.016677890287362013,
+   "specialiser": 0.0,
+   "other": 0.25156297907170777
+  },
+  "B/U": 5.5515665521350135,
+  "C_vs_U": {
+   "eval loop self": 0.25557516268698793,
+   "exception save/restore": 0.12771573214777432,
+   "PyValue bridge/boxing": 0.2884211014991277,
+   "attribute lookup": 0.001356391312482633,
+   "frames": 0.01795189976271543,
+   "specialiser": 0.0,
+   "other": 0.30897971259091206
+  },
+  "C/U": 4.652749963066499,
+  "B_minus_C": {
+   "eval loop self": 0.16393425694031957,
+   "exception save/restore": 0.7991067538853092,
+   "PyValue bridge/boxing": 0.011854438176969588,
+   "attribute lookup": -0.00461979350770358,
+   "frames": 0.011500373405006361,
+   "specialiser": 0.0,
+   "other": 0.01822397110009915
+  },
+  "C/B": 0.8380967641065477,
+  "cat_time_over_B": {
+   "C": {
+    "eval loop self": 0.25844393606809846,
+    "exception save/restore": 0.0841788820336092,
+    "PyValue bridge/boxing": 0.1897716901985751,
+    "attribute lookup": 0.0014768224918177053,
+    "frames": 0.02510598236090099,
+    "specialiser": 0.0,
+    "other": 0.2791194509535463
+   },
+   "B": {
+    "eval loop self": 0.2849854227405248,
+    "exception save/restore": 0.21355685131195334,
+    "PyValue bridge/boxing": 0.19169096209912537,
+    "attribute lookup": 0.0007288629737609329,
+    "frames": 0.02696793002915452,
+    "specialiser": 0.0,
+    "other": 0.2820699708454811
+   },
+   "U": {
+    "eval loop self": 0.09028380373453478,
+    "exception save/restore": 0.00014609029730507244,
+    "PyValue bridge/boxing": 0.0,
+    "attribute lookup": 0.0005843611892202898,
+    "frames": 0.013294217054761592,
+    "specialiser": 0.0,
+    "other": 0.0758208643013326
+   }
+  }
+ },
+ "richards": {
+  "times_ns": {
+   "C": 160347093.5,
+   "B": 183760846.0,
+   "U": 60358563.0
+  },
+  "samples": {
+   "C": 979,
+   "B": 1138,
+   "U": 1246
+  },
+  "frac": {
+   "C": {
+    "eval loop self": 0.449438202247191,
+    "exception save/restore": 0.118488253319714,
+    "PyValue bridge/boxing": 0.14504596527068436,
+    "attribute lookup": 0.12972420837589377,
+    "frames": 0.06332992849846783,
+    "specialiser": 0.0040858018386108275,
+    "other": 0.0898876404494382
+   },
+   "B": {
+    "eval loop self": 0.37258347978910367,
+    "exception save/restore": 0.23286467486818982,
+    "PyValue bridge/boxing": 0.14938488576449913,
+    "attribute lookup": 0.11775043936731107,
+    "frames": 0.05536028119507909,
+    "specialiser": 0.0008787346221441124,
+    "other": 0.07117750439367311
+   },
+   "U": {
+    "eval loop self": 0.5947030497592295,
+    "exception save/restore": 0.0,
+    "PyValue bridge/boxing": 0.0,
+    "attribute lookup": 0.17736757624398075,
+    "frames": 0.08186195826645265,
+    "specialiser": 0.002407704654895666,
+    "other": 0.14365971107544143
+   }
+  },
+  "triage_F_vs_U": {
+   "eval loop self": 0.34178628833842706,
+   "exception save/restore": 0.26563542862152173,
+   "PyValue bridge/boxing": 0.18466634075292956,
+   "attribute lookup": 0.11114618103556023,
+   "frames": 0.026769911637572794,
+   "specialiser": 0.0006337137495296499,
+   "other": 0.06936213586445898
+  },
+  "triage_F/U": 4.825362144050379,
+  "B_vs_U": {
+   "eval loop self": 0.26394028671645403,
+   "exception save/restore": 0.34676351698690616,
+   "PyValue bridge/boxing": 0.22245206750103413,
+   "attribute lookup": 0.08859048685614003,
+   "frames": 0.04239777267229789,
+   "specialiser": 0.00013088432469907484,
+   "other": 0.03572498494246868
+  },
+  "B/U": 3.0444867615552744,
+  "C_vs_U": {
+   "eval loop self": 0.36174837015949207,
+   "exception save/restore": 0.19001426402309077,
+   "PyValue bridge/boxing": 0.2326036680282663,
+   "attribute lookup": 0.10096405752041035,
+   "frames": 0.05214297854855545,
+   "specialiser": 0.0050987933695084055,
+   "other": 0.057427868350676675
+  },
+  "C/U": 2.6565757289483516,
+  "B_minus_C": {
+   "eval loop self": -0.15374955323939032,
+   "exception save/restore": 1.016161874248292,
+   "PyValue bridge/boxing": 0.17909961389749623,
+   "attribute lookup": 0.03574910024977278,
+   "frames": 0.0007808291692452265,
+   "specialiser": -0.021084592564285024,
+   "other": -0.056957271761131
+  },
+  "C/B": 0.8725857384222099,
+  "cat_time_over_B": {
+   "C": {
+    "eval loop self": 0.3921733655830157,
+    "exception save/restore": 0.1033911600173405,
+    "PyValue bridge/boxing": 0.12656504071088234,
+    "attribute lookup": 0.11319549415691589,
+    "frames": 0.055260792423061304,
+    "specialiser": 0.003565212414391052,
+    "other": 0.07843467311660313
+   },
+   "B": {
+    "eval loop self": 0.37258347978910367,
+    "exception save/restore": 0.23286467486818982,
+    "PyValue bridge/boxing": 0.14938488576449913,
+    "attribute lookup": 0.11775043936731108,
+    "frames": 0.05536028119507908,
+    "specialiser": 0.0008787346221441124,
+    "other": 0.07117750439367311
+   },
+   "U": {
+    "eval loop self": 0.1953377026528523,
+    "exception save/restore": 0.0,
+    "PyValue bridge/boxing": 0.0,
+    "attribute lookup": 0.05825861307190334,
+    "frames": 0.026888590648570767,
+    "specialiser": 0.0007908409014285519,
+    "other": 0.047186840451903606
+   }
+  }
+ },
+ "deltablue": {
+  "times_ns": {
+   "C": 12969936.8,
+   "B": 16504320.033333333,
+   "U": 3735936.466666667
+  },
+  "samples": {
+   "C": 981,
+   "B": 1222,
+   "U": 1163
+  },
+  "frac": {
+   "C": {
+    "eval loop self": 0.43017329255861364,
+    "exception save/restore": 0.1162079510703364,
+    "PyValue bridge/boxing": 0.14475025484199797,
+    "attribute lookup": 0.12844036697247707,
+    "frames": 0.06218144750254842,
+    "specialiser": 0.0010193679918450561,
+    "other": 0.11722731906218145
+   },
+   "B": {
+    "eval loop self": 0.3608837970540098,
+    "exception save/restore": 0.25040916530278234,
+    "PyValue bridge/boxing": 0.1309328968903437,
+    "attribute lookup": 0.11702127659574468,
+    "frames": 0.05155482815057283,
+    "specialiser": 0.0016366612111292963,
+    "other": 0.08756137479541735
+   },
+   "U": {
+    "eval loop self": 0.6268271711092004,
+    "exception save/restore": 0.0,
+    "PyValue bridge/boxing": 0.0,
+    "attribute lookup": 0.03869303525365434,
+    "frames": 0.09716251074806535,
+    "specialiser": 0.0008598452278589854,
+    "other": 0.236457437661221
+   }
+  },
+  "triage_F_vs_U": {
+   "eval loop self": 0.31780554511290676,
+   "exception save/restore": 0.2790145225801849,
+   "PyValue bridge/boxing": 0.15405048930102871,
+   "attribute lookup": 0.14586508446116367,
+   "frames": 0.03723328409383248,
+   "specialiser": 0.001914088178433194,
+   "other": 0.0641169862724503
+  },
+  "triage_F/U": 4.506428826955655,
+  "B_vs_U": {
+   "eval loop self": 0.28307069377326793,
+   "exception save/restore": 0.3236770717184769,
+   "PyValue bridge/boxing": 0.16924291331685065,
+   "attribute lookup": 0.1399395521685216,
+   "frames": 0.038210350857382246,
+   "specialiser": 0.0018639519362736627,
+   "other": 0.043995466229226926
+  },
+  "B/U": 4.417719674997328,
+  "C_vs_U": {
+   "eval loop self": 0.3506101162896602,
+   "exception save/restore": 0.16322392534457228,
+   "PyValue bridge/boxing": 0.20331401227130932,
+   "attribute lookup": 0.16475077603148836,
+   "frames": 0.048028639932254154,
+   "specialiser": 0.0010839084823936293,
+   "other": 0.06898862164832208
+  },
+  "C/U": 3.4716695307113272,
+  "B_minus_C": {
+   "eval loop self": 0.10661584752239206,
+   "exception save/restore": 0.7428801714637399,
+   "PyValue bridge/boxing": 0.08022807866752824,
+   "attribute lookup": 0.0751172524076186,
+   "frames": 0.012558892426083212,
+   "specialiser": 0.0039019090670145543,
+   "other": -0.0213021515543765
+  },
+  "C/B": 0.7858510240836925,
+  "cat_time_over_B": {
+   "C": {
+    "eval loop self": 0.33805212249064037,
+    "exception save/restore": 0.09132213735529149,
+    "PyValue bridge/boxing": 0.11375213600395956,
+    "attribute lookup": 0.10093499391900637,
+    "frames": 0.048865354198884034,
+    "specialiser": 0.0008010713803095744,
+    "other": 0.09212320873560105
+   },
+   "B": {
+    "eval loop self": 0.3608837970540098,
+    "exception save/restore": 0.25040916530278234,
+    "PyValue bridge/boxing": 0.1309328968903437,
+    "attribute lookup": 0.11702127659574468,
+    "frames": 0.05155482815057283,
+    "specialiser": 0.0016366612111292963,
+    "other": 0.08756137479541735
+   },
+   "U": {
+    "eval loop self": 0.14188930426183718,
+    "exception save/restore": 0.0,
+    "PyValue bridge/boxing": 0.0,
+    "attribute lookup": 0.008758599028508469,
+    "frames": 0.0219938153382546,
+    "specialiser": 0.00019463553396685486,
+    "other": 0.05352477184088508
+   }
+  }
+ },
+ "deepcopy": {
+  "times_ns": {
+   "C": 977070.3633333333,
+   "B": 1181344.2766666666,
+   "U": 317358.24
+  },
+  "samples": {
+   "C": 1025,
+   "B": 1185,
+   "U": 1141
+  },
+  "frac": {
+   "C": {
+    "eval loop self": 0.3307317073170732,
+    "exception save/restore": 0.07707317073170732,
+    "PyValue bridge/boxing": 0.19414634146341464,
+    "attribute lookup": 0.026341463414634145,
+    "frames": 0.03609756097560975,
+    "specialiser": 0.0,
+    "other": 0.335609756097561
+   },
+   "B": {
+    "eval loop self": 0.27257383966244725,
+    "exception save/restore": 0.19662447257383966,
+    "PyValue bridge/boxing": 0.150210970464135,
+    "attribute lookup": 0.018565400843881856,
+    "frames": 0.030379746835443037,
+    "specialiser": 0.0,
+    "other": 0.33164556962025316
+   },
+   "U": {
+    "eval loop self": 0.38913234005258546,
+    "exception save/restore": 0.0026292725679228747,
+    "PyValue bridge/boxing": 0.0,
+    "attribute lookup": 0.03593339176161262,
+    "frames": 0.05959684487291849,
+    "specialiser": 0.0,
+    "other": 0.5127081507449606
+   }
+  },
+  "triage_F_vs_U": {
+   "eval loop self": 0.27801597813171997,
+   "exception save/restore": 0.24091856403727163,
+   "PyValue bridge/boxing": 0.19295473990370002,
+   "attribute lookup": 0.02162888126536118,
+   "frames": 0.008831274158871652,
+   "specialiser": -0.00027228951290403245,
+   "other": 0.2579228520159796
+  },
+  "triage_F/U": 3.8963419292647647,
+  "B_vs_U": {
+   "eval loop self": 0.22975972118020035,
+   "exception save/restore": 0.26788253998411016,
+   "PyValue bridge/boxing": 0.2053862709806891,
+   "attribute lookup": 0.01218581275325447,
+   "frames": 0.01964775995420367,
+   "specialiser": 0.0,
+   "other": 0.26513789514754227
+  },
+  "B/U": 3.722431396981111,
+  "C_vs_U": {
+   "eval loop self": 0.3026377533570004,
+   "exception save/restore": 0.11288482806585735,
+   "PyValue bridge/boxing": 0.2875415346848928,
+   "attribute lookup": 0.0217272121514887,
+   "frames": 0.02479309783913032,
+   "specialiser": 0.0,
+   "other": 0.2504155739016306
+  },
+  "C/U": 3.0787616018204957,
+  "B_minus_C": {
+   "eval loop self": -0.005603280228880175,
+   "exception save/restore": 0.7684548743210031,
+   "PyValue bridge/boxing": -0.05993798201322464,
+   "attribute lookup": -0.01862858128201829,
+   "frames": 0.003030651455413774,
+   "specialiser": 0.0,
+   "other": 0.31268431774770566
+  },
+  "C/B": 0.8270835036254447,
+  "cat_time_over_B": {
+   "C": {
+    "eval loop self": 0.27354273924783,
+    "exception save/restore": 0.06374594808430256,
+    "PyValue bridge/boxing": 0.16057523631362292,
+    "attribute lookup": 0.02178658985159708,
+    "frames": 0.02985569720404044,
+    "specialiser": 0.0,
+    "other": 0.2775772929240517
+   },
+   "B": {
+    "eval loop self": 0.27257383966244725,
+    "exception save/restore": 0.19662447257383966,
+    "PyValue bridge/boxing": 0.150210970464135,
+    "attribute lookup": 0.018565400843881856,
+    "frames": 0.03037974683544304,
+    "specialiser": 0.0,
+    "other": 0.33164556962025316
+   },
+   "U": {
+    "eval loop self": 0.10453714213999256,
+    "exception save/restore": 0.0007063320414864362,
+    "PyValue bridge/boxing": 0.0,
+    "attribute lookup": 0.009653204566981296,
+    "frames": 0.01601019294035922,
+    "specialiser": 0.0,
+    "other": 0.13773474808985506
+   }
+  }
+ },
+ "logging_silent": {
+  "times_ns": {
+   "C": 3387.5498333333335,
+   "B": 4182.88585,
+   "U": 1118.23015
+  },
+  "samples": {
+   "C": 1086,
+   "B": 1257,
+   "U": 1187
+  },
+  "frac": {
+   "C": {
+    "eval loop self": 0.3747697974217311,
+    "exception save/restore": 0.08103130755064457,
+    "PyValue bridge/boxing": 0.24769797421731124,
+    "attribute lookup": 0.001841620626151013,
+    "frames": 0.11694290976058933,
+    "specialiser": 0.0,
+    "other": 0.17771639042357273
+   },
+   "B": {
+    "eval loop self": 0.29832935560859186,
+    "exception save/restore": 0.21957040572792363,
+    "PyValue bridge/boxing": 0.25934765314240255,
+    "attribute lookup": 0.0,
+    "frames": 0.08035003977724742,
+    "specialiser": 0.0,
+    "other": 0.1424025457438345
+   },
+   "U": {
+    "eval loop self": 0.5046335299073293,
+    "exception save/restore": 0.0,
+    "PyValue bridge/boxing": 0.0,
+    "attribute lookup": 0.0008424599831508003,
+    "frames": 0.15585509688289806,
+    "specialiser": 0.0,
+    "other": 0.33866891322662174
+   }
+  },
+  "triage_F_vs_U": {
+   "eval loop self": 0.28695321083729014,
+   "exception save/restore": 0.2740070503356153,
+   "PyValue bridge/boxing": 0.3405984051980557,
+   "attribute lookup": 0.0015564557321910478,
+   "frames": 0.045236395663742844,
+   "specialiser": 0.0,
+   "other": 0.05164848223310493
+  },
+  "triage_F/U": 3.663161523875194,
+  "B_vs_U": {
+   "eval loop self": 0.22305318420320253,
+   "exception save/restore": 0.2996871535024606,
+   "PyValue bridge/boxing": 0.3539783044992832,
+   "attribute lookup": -0.00030739640780128,
+   "frames": 0.05279978957034479,
+   "specialiser": 0.0,
+   "other": 0.07078896463251023
+  },
+  "B/U": 3.740630540144173,
+  "C_vs_U": {
+   "eval loop self": 0.3107781341389164,
+   "exception save/restore": 0.12096030118804905,
+   "PyValue bridge/boxing": 0.3697536479498318,
+   "attribute lookup": 0.002333967105098867,
+   "frames": 0.09776853729901848,
+   "specialiser": 0.0,
+   "other": 0.09840541231908549
+  },
+  "C/U": 3.029385170247228,
+  "B_minus_C": {
+   "eval loop self": -0.027251028653766062,
+   "exception save/restore": 0.8096456558184575,
+   "PyValue bridge/boxing": 0.3089667664154025,
+   "attribute lookup": -0.007843957163322769,
+   "frames": -0.07550882743813143,
+   "specialiser": 0.0,
+   "other": -0.008008608978639874
+  },
+  "C/B": 0.8098594976798934,
+  "cat_time_over_B": {
+   "C": {
+    "eval loop self": 0.3035108798855585,
+    "exception save/restore": 0.06562397402930996,
+    "PyValue bridge/boxing": 0.20060055697595885,
+    "attribute lookup": 0.0014914539552115902,
+    "frames": 0.09470732615593598,
+    "specialiser": 0.0,
+    "other": 0.14392530667791842
+   },
+   "B": {
+    "eval loop self": 0.29832935560859186,
+    "exception save/restore": 0.21957040572792363,
+    "PyValue bridge/boxing": 0.25934765314240255,
+    "attribute lookup": 0.0,
+    "frames": 0.08035003977724742,
+    "specialiser": 0.0,
+    "other": 0.1424025457438345
+   },
+   "U": {
+    "eval loop self": 0.13490600701984312,
+    "exception save/restore": 0.0,
+    "PyValue bridge/boxing": 0.0,
+    "attribute lookup": 0.00022521870954898688,
+    "frames": 0.04166546126656257,
+    "specialiser": 0.0,
+    "other": 0.09053792123869273
+   }
+  }
+ }
+}

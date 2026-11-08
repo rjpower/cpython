@@ -1,0 +1,36 @@
+{
+  "utc": "2026-11-01T17:09:08.525649+00:00",
+  "decision": "ACCEPT_DIRECTIVE_CORRECTION_FOR_RUNTIME_VALIDATION",
+  "source_commit": "f0a49b6d30a38db705329bcfd5e5f2d6d2413710",
+  "source_parent": "49cc47360ccd79c7a89acc8bfa3d546f94afc46c",
+  "changed_paths": [
+    "Lib/test/test_generated_cases.py",
+    "Python/generated_jit_helpers.c.h",
+    "Tools/cases_generator/ir_generator.py"
+  ],
+  "capsule": {
+    "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/jit-method-baseline/build/jit-method-m0-directive-correction-v1/capsule.json",
+    "sha256": "cdd8c342ab46e68906696488ea06b48346a494d5364e5e52ad78d712b75ea81f"
+  },
+  "independent_review": {
+    "path": "m0-directive-source-review-20261101-v1.md",
+    "sha256": "8ac9fdf4f766c8ed6c926f288a60c8c81d67b0ae6491af2a300d7ae677eb3a66"
+  },
+  "independent_receipt": {
+    "path": "m0-directive-source-review-receipt-20261101-v1.json",
+    "sha256": "9dcf471d92c626e529afd123b890ebc3f90bf19eaa6d6eda5d1a4cce00d044f1"
+  },
+  "host_tests_passed": 31,
+  "old_header_negative_subtests": 27,
+  "c_syntax_only_checks_passed": 2,
+  "objects_or_executables_produced": false,
+  "runtime_methods_executed": 0,
+  "prior_failed_batch_preserved": true,
+  "prior_21_source_capsule_artifacts_exact": true,
+  "historical_receipt_restoration_disclosed": true,
+  "source_attempt_closed_early": true,
+  "source_edits_authorized": false,
+  "native_executable_or_timing_authorized": false,
+  "m1_source_authorized": false,
+  "gc_work_authorized": false
+}

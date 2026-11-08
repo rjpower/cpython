@@ -1,0 +1,11 @@
+# Exception and LOAD_NAME value-port peer review
+
+The proposal in `exception-load-name-proposal.md` is suitable for implementation. Its OSError port treats every arbitrary payload (`myerrno`, `strerror`, `filename`, `filename2`, and Windows `winerror`) as a value home, so tuple argument extraction cannot merely move a box from parsing to storage. Moving the full struct to an internal header satisfies the public-layout boundary and accounts for its in-tree `_ssl` and `_io` consumers. `_Py_T_VALUE` preserves missing-field presentation as `None`, while value traversal and clear preserve GC ownership.
+
+Implementation review should verify that Windows `winerror` follows `PyLong_Check`, including bool and subclasses; that failed partial initialization closes every owned field; and that OSError's string and reduce paths preserve missing-field order and argument slicing. `_PyIO_trap_eintr` must check the exact-int case before extracting from the value home.
+
+SystemExit's new error setter must preserve `_PyErr_CreateException` semantics: absent and `None` call the exception type with zero args, a tuple is an argument list, and any other value is one argument. The null `code` home must still read as `None` on zero-argument or repeated initialization. Normalization failures must preserve the original note, chaining and traceback behavior without projecting inline values merely to format that note.
+
+`_PyEval_LoadName` can return an owned `PyValue` directly to its sole generated `LOAD_NAME` caller. The existing `_PyValue_GetOptionalItem` reports found, missing and error separately and preserves `KeyError` suppression for arbitrary mappings. Lazy-import reification should only inspect object values, retain the found owner across the callback, then close it once replaced. The instruction must own the returned value and regenerate `generated_ir_cases.c.h` from the bytecode source.
+
+The implemented `w5-io-audit.diff` has no must-fix finding. Its enabled path produces the same flat three-item `open` event tuple, and its mode and tuple references close on every exit. Focused release validation passed 134 `test_audit` and `test_io.test_fileio` tests, 4 skipped, with a direct file-descriptor event of `(0, 'rb', flags)`.

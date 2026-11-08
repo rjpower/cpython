@@ -1,0 +1,32 @@
+{
+  "utc": "2026-11-01T18:15:05.692262+00:00",
+  "decision": "ACCEPT_SHARED_TYPED_IR_AND_ATTRIBUTE_FEEDBACK_DESIGN_FOR_IMPLEMENTATION_PLANNING",
+  "designs": {
+    "boil/design/jit-ir-feedback/design.md": "2f7574a1af56160a9126ed9e6aa4b631e8bebe146a638bcb9ebd190a0a85ade7",
+    "boil/design/jit-ir-feedback/dictionary-storage-comparison.md": "66998d3eb7378b5755913e32fc5fa95592646d8e001bfc200c6c640a7b0b366f"
+  },
+  "independent_review": {
+    "review.md": {
+      "path": "boil/issues/jit-e2e-system/ir-feedback-design-review-20261101-v1.md",
+      "sha256": "963822657a9e52d8e21e2f06a6b106bb87f4b2599e4574de8e4f1d9ee829c3f4"
+    },
+    "receipt.json": {
+      "path": "boil/issues/jit-e2e-system/ir-feedback-design-receipt-20261101-v1.json",
+      "sha256": "ff6c85a6a6835b6d56385fc19d5c489dd60426babf409ae2620d847ee26a1cee"
+    }
+  },
+  "method_source_inspected": "15987a03c236d5257b8a7b944bf858ee20e52fc3",
+  "implemented_state": "Interpreter has feedback/specialized attribute handlers; M1 has63generic helpers and BEFORE fallback for STORE_ATTR, no optimizingSSA. M1focused14method native behavior accepted separately.",
+  "adopted_contracts": [
+    "Shared typedSSA for method and actual observed trace frontends",
+    "Separate semantic type, representation, receiver/layout/access strategy, ownership and effects",
+    "Versioned feedback informs guards, not proof; existingPOLY is observation history, not PICdispatch",
+    "Publish/root BEFORE preparation, reserve recovery, revalidate fresh guards, commit, allocation-free AFTER publication, then callback-capable release",
+    "Opaque genericcalls may return to compiledcontinuation with validstate and invalidated mutablefacts",
+    "Evaluate dictionarylocation prediction alongside existing shared-key/hint/shape storage through sameIR/backend"
+  ],
+  "storage_rewrite_or_permanent_selector_authorized": false,
+  "source_or_native_execution_authorized": false,
+  "performance_advantage_claimed": false,
+  "next": "Concrete M2 implementation proposal and independent review; dictionary storage simplification needs measured mechanism/memory/wholeprogram evidence."
+}

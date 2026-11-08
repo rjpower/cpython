@@ -1,0 +1,12 @@
+--- a/Modules/_decimal/_decimal.c
++++ b/Modules/_decimal/_decimal.c
+@@ -792,6 +792,9 @@
+     if (truth < 0) {
+         return -1;
+     }
++    if (SdFlagAddr(self) == NULL) {
++        return value_error_int(INVALID_SIGNALDICT_ERROR_MSG);
++    }
+     if (truth) {
+         SdFlags(self) |= flag;
+     }

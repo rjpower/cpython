@@ -1,0 +1,28 @@
+{
+  "utc": "2026-11-01T17:57:26.386520+00:00",
+  "decision": "ACCEPT_BOUNDED_FOCUSED_NATIVE_SOURCE_ONLY",
+  "source_head": "15987a03c236d5257b8a7b944bf858ee20e52fc3",
+  "source_parent": "f0a49b6d30a38db705329bcfd5e5f2d6d2413710",
+  "review": {
+    "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/jit-method-m1-source-review-20261101-v1/review.md",
+    "sha256": "489eaad41c2135a29a98c61028eede879ed06d910a5c745faaf75f28f6dffbb1"
+  },
+  "capsule": {
+    "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/jit-method-baseline/build/jit-method-m1-source/capsule.json",
+    "sha256": "e25c69ed5cb61bfc7a53be1bab05533cb9d07916a5a3fa2fddb3990a62d28cb3"
+  },
+  "verified_counts": {
+    "source_files": 18,
+    "references": 4,
+    "historical_artifacts_verified": 34,
+    "artifacts": 121
+  },
+  "independent_host_methods": 31,
+  "host_proof": {
+    "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/jit-method-m1-source-review-20261101-v1/host-replay.json",
+    "sha256": "d33dbff3c82c6069312e24d2d5ffb7f4f5061594885f08e6132d929e58826c5b"
+  },
+  "retained_syntax_distinct_TUs": 7,
+  "compiler_or_candidate_target_calls_by_reviewer": 0,
+  "native_behavior_executed": false
+}

@@ -1,0 +1,7 @@
+# Original keyword dictionary: pointer-guard correction
+
+The first composed helper rejected ordinary Python classes because it required their per-class vectorcall fields to equal the built-in `type` functions. A read-only probe against the merged release interpreter found `class A: pass` and `object` have both fields null, while `type` and `int` have active fields. The 17-case differential therefore missed class `__new__` and `__init__` descriptors, and recursive `__new__` lookup returned an early keyword error.
+
+Reviewed the separate `ast-original-kwargs-pyvalue-review-fixes-v3.patch` after the base and v2 correction. It reads the actual value and object vectorcall fields at the metatype's offsets, under the same flag rule as `_PyValue_VectorcallTstate`, and admits only classes with neither field active. It retains the selected type-call pair check and the exact `PyType_Type` exclusion. Ordinary classes and `object` now reach the original tuple/dictionary path; active built-ins keep vectorcall keyword validation. No new source blocker found.
+
+The correction also matters for direct C `PyObject_Call(object, (), {None: 1})`: upstream raises `object() takes no arguments`, while the pre-v3 merged candidate raised `keywords must be strings`. The Python `object(*args, **bad_kwargs)` test is useful, but merged validation must include this direct C case and the class descriptor and recursive-new differential. This review supersedes the earlier assumption in the base review that ordinary classes had the active built-in vectorcall pair.

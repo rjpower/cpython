@@ -1,0 +1,300 @@
+--- a/Modules/mathmodule.c
++++ b/Modules/mathmodule.c
+@@ -222,6 +222,27 @@
+         }                                                  \
+     }
+ 
++#define ASSIGN_VALUE_DOUBLE(target_var, value, error_label) \
++    if (PyValue_IsInlineFloat(value)) {                      \
++        target_var = PyValue_InlineFloat(value);             \
++    }                                                       \
++    else if (PyValue_TYPE(value) == &PyFloat_Type) {        \
++        target_var = PyFloat_AS_DOUBLE(                     \
++            PyValue_AsKnownObjectBorrow(value));            \
++    }                                                       \
++    else if (PyValue_TYPE(value) == &PyLong_Type) {         \
++        target_var = _PyValue_IntAsDouble(value);           \
++        if (target_var == -1.0 && PyErr_Occurred()) {       \
++            goto error_label;                               \
++        }                                                   \
++    }                                                       \
++    else {                                                  \
++        target_var = _PyValue_AsDouble(value);              \
++        if (target_var == -1.0 && PyErr_Occurred()) {       \
++            goto error_label;                               \
++        }                                                   \
++    }
++
+ #ifndef _Py_HAVE_ACOSPI
+ /*
+    acos(x)/pi.  It conforms to C23 Annex 'F'.
+@@ -1494,7 +1515,8 @@
+ math_fsum_impl(PyObject *module, PyValueBorrow seq)
+ /*[clinic end generated code: output=f3788c6f85431c86 input=4506244ded6057dc]*/
+ {
+-    PyObject *item, *iter;
++    PyObject *iter;
++    PyValue item = PyValue_NULL;
+     PyValue sum = PyValue_NULL;
+     Py_ssize_t i, j, n = 0, m = NUM_PARTIALS;
+     double x, y, t, ps[NUM_PARTIALS], *p = ps;
+@@ -1510,14 +1532,18 @@
+         assert((m == NUM_PARTIALS && p == ps) ||
+                (m >  NUM_PARTIALS && p != NULL));
+ 
+-        item = PyIter_Next(iter);
+-        if (item == NULL) {
+-            if (PyErr_Occurred())
+-                goto _fsum_error;
++        _PyStatusValue next = _PyValue_IterNext(iter);
++        if (next.status == PYGEN_RETURN) {
+             break;
+         }
+-        ASSIGN_DOUBLE(x, item, error_with_item);
+-        Py_DECREF(item);
++        if (next.status != PYGEN_NEXT) {
++            PyValue_XCLOSE(next.value);
++            goto _fsum_error;
++        }
++        item = next.value;
++        ASSIGN_VALUE_DOUBLE(x, item, error_with_item);
++        PyValue_CLOSE(item);
++        item = PyValue_NULL;
+ 
+         xsave = x;
+         for (i = j = 0; j < n; j++) {       /* for y in partials */
+@@ -1605,11 +1631,13 @@
+     return sum;
+ 
+   error_with_item:
+-    Py_DECREF(item);
++    PyValue_CLOSE(item);
++    item = PyValue_NULL;
+     goto _fsum_error;
+ }
+ 
+ #undef NUM_PARTIALS
++#undef ASSIGN_VALUE_DOUBLE
+ 
+ 
+ /*[clinic input]
+@@ -2961,8 +2989,8 @@
+ math_prod_impl(PyObject *module, PyValueBorrow iterable, PyValueBorrow start)
+ /*[clinic end generated code: output=acc63d17cbd9c27f input=4c5ab0682782ed54]*/
+ {
+-    PyObject *result;
+-    PyObject *temp, *item, *iter;
++    PyObject *iter;
++    PyValue result;
+ 
+     iter = _PyValue_GetIter(iterable);
+     if (iter == NULL) {
+@@ -2970,61 +2998,60 @@
+     }
+ 
+     if (PyValue_IsNull(start)) {
+-        result = Py_NewRef(_PyLong_GetOne());
++        result = PyValue_DUP(PyValue_FromObjectBorrow(_PyLong_GetOne()));
+     }
+     else {
+-        result = _PyValue_AsObjectAt(start, BOX_SITE_PARSER);
+-        if (result == NULL) {
+-            Py_DECREF(iter);
+-            return PyValue_NULL;
+-        }
++        result = PyValue_DUP(start);
+     }
+ #ifndef SLOW_PROD
+     /* Fast paths for integers keeping temporary products in C.
+      * Assumes all inputs are the same type.
+      * If the assumption fails, default to use PyObjects instead.
+     */
+-    if (PyLong_CheckExact(result)) {
++    if (PyValue_TYPE(result) == &PyLong_Type) {
+         int overflow;
+-        long i_result = _PyValue_AsLongAndOverflow(PyValue_FromObjectBorrow(result), &overflow);
++        long i_result = _PyValue_AsLongAndOverflow(result, &overflow);
+         /* If this already overflowed, don't even enter the loop. */
+         if (overflow == 0) {
+-            Py_SETREF(result, NULL);
++            PyValue_CLOSE(result);
++            result = PyValue_NULL;
+         }
+         /* Loop over all the items in the iterable until we finish, we overflow
+          * or we found a non integer element */
+-        while (result == NULL) {
+-            item = PyIter_Next(iter);
+-            if (item == NULL) {
++        while (PyValue_IsNull(result)) {
++            _PyStatusValue next = _PyValue_IterNext(iter);
++            if (next.status == PYGEN_RETURN) {
+                 Py_DECREF(iter);
+-                if (PyErr_Occurred()) {
+-                    return PyValue_NULL;
+-                }
+                 return PyValue_FromInt64(i_result);
+             }
+-            if (PyLong_CheckExact(item)) {
+-                long b = _PyValue_AsLongAndOverflow(PyValue_FromObjectBorrow(item), &overflow);
++            if (next.status != PYGEN_NEXT) {
++                PyValue_XCLOSE(next.value);
++                Py_DECREF(iter);
++                return PyValue_NULL;
++            }
++            PyValue item = next.value;
++            if (PyValue_TYPE(item) == &PyLong_Type) {
++                long b = _PyValue_AsLongAndOverflow(item, &overflow);
+                 if (overflow == 0 && !_check_long_mult_overflow(i_result, b)) {
+                     long x = i_result * b;
+                     i_result = x;
+-                    Py_DECREF(item);
++                    PyValue_CLOSE(item);
+                     continue;
+                 }
+             }
+             /* Either overflowed or is not an int.
+-             * Restore real objects and process normally */
+-            result = PyLong_FromLong(i_result);
+-            if (result == NULL) {
+-                Py_DECREF(item);
++             * Restore the value and process normally. */
++            result = PyValue_FromInt64(i_result);
++            if (PyValue_IsNull(result)) {
++                PyValue_CLOSE(item);
+                 Py_DECREF(iter);
+                 return PyValue_NULL;
+             }
+-            PyValue temp_v = _PyValue_Multiply(PyValue_FromObjectBorrow(result), PyValue_FromObjectBorrow(item));
+-            temp = PyValue_IsNull(temp_v) ? NULL : _PyValue_AsObjectStealAt(temp_v, BOX_SITE_NUMBER);
+-            Py_DECREF(result);
+-            Py_DECREF(item);
++            PyValue temp = _PyValue_Multiply(result, item);
++            PyValue_CLOSE(result);
++            PyValue_CLOSE(item);
+             result = temp;
+-            if (result == NULL) {
++            if (PyValue_IsNull(result)) {
+                 Py_DECREF(iter);
+                 return PyValue_NULL;
+             }
+@@ -3035,45 +3062,53 @@
+      * Assumes all inputs are the same type.
+      * If the assumption fails, default to use PyObjects instead.
+     */
+-    if (PyFloat_CheckExact(result)) {
+-        double f_result = PyFloat_AS_DOUBLE(result);
+-        Py_SETREF(result, NULL);
+-        while(result == NULL) {
+-            item = PyIter_Next(iter);
+-            if (item == NULL) {
++    if (PyValue_TYPE(result) == &PyFloat_Type) {
++        double f_result = PyValue_IsInlineFloat(result)
++            ? PyValue_InlineFloat(result)
++            : PyFloat_AS_DOUBLE(PyValue_AsKnownObjectBorrow(result));
++        PyValue_CLOSE(result);
++        result = PyValue_NULL;
++        while (PyValue_IsNull(result)) {
++            _PyStatusValue next = _PyValue_IterNext(iter);
++            if (next.status == PYGEN_RETURN) {
+                 Py_DECREF(iter);
+-                if (PyErr_Occurred()) {
+-                    return PyValue_NULL;
+-                }
+                 return PyValue_FromDouble(f_result);
+             }
+-            if (PyFloat_CheckExact(item)) {
+-                f_result *= PyFloat_AS_DOUBLE(item);
+-                Py_DECREF(item);
++            if (next.status != PYGEN_NEXT) {
++                PyValue_XCLOSE(next.value);
++                Py_DECREF(iter);
++                return PyValue_NULL;
++            }
++            PyValue item = next.value;
++            if (PyValue_TYPE(item) == &PyFloat_Type) {
++                double value = PyValue_IsInlineFloat(item)
++                    ? PyValue_InlineFloat(item)
++                    : PyFloat_AS_DOUBLE(PyValue_AsKnownObjectBorrow(item));
++                f_result *= value;
++                PyValue_CLOSE(item);
+                 continue;
+             }
+-            if (PyLong_CheckExact(item)) {
++            if (PyValue_TYPE(item) == &PyLong_Type) {
+                 long value;
+                 int overflow;
+-                value = _PyValue_AsLongAndOverflow(PyValue_FromObjectBorrow(item), &overflow);
++                value = _PyValue_AsLongAndOverflow(item, &overflow);
+                 if (!overflow) {
+                     f_result *= (double)value;
+-                    Py_DECREF(item);
++                    PyValue_CLOSE(item);
+                     continue;
+                 }
+             }
+-            result = PyFloat_FromDouble(f_result);
+-            if (result == NULL) {
+-                Py_DECREF(item);
++            result = PyValue_FromDouble(f_result);
++            if (PyValue_IsNull(result)) {
++                PyValue_CLOSE(item);
+                 Py_DECREF(iter);
+                 return PyValue_NULL;
+             }
+-            PyValue temp_v2 = _PyValue_Multiply(PyValue_FromObjectBorrow(result), PyValue_FromObjectBorrow(item));
+-            temp = PyValue_IsNull(temp_v2) ? NULL : _PyValue_AsObjectStealAt(temp_v2, BOX_SITE_NUMBER);
+-            Py_DECREF(result);
+-            Py_DECREF(item);
++            PyValue temp = _PyValue_Multiply(result, item);
++            PyValue_CLOSE(result);
++            PyValue_CLOSE(item);
+             result = temp;
+-            if (result == NULL) {
++            if (PyValue_IsNull(result)) {
+                 Py_DECREF(iter);
+                 return PyValue_NULL;
+             }
+@@ -3082,25 +3117,29 @@
+ #endif
+     /* Consume rest of the iterable (if any) that could not be handled
+      * by specialized functions above.*/
+-    for(;;) {
+-        item = PyIter_Next(iter);
+-        if (item == NULL) {
+-            /* error, or end-of-sequence */
+-            if (PyErr_Occurred()) {
+-                Py_SETREF(result, NULL);
+-            }
++    for (;;) {
++        _PyStatusValue next = _PyValue_IterNext(iter);
++        if (next.status == PYGEN_RETURN) {
+             break;
+         }
+-        PyValue temp_v3 = _PyValue_Multiply(PyValue_FromObjectBorrow(result), PyValue_FromObjectBorrow(item));
+-        temp = PyValue_IsNull(temp_v3) ? NULL : _PyValue_AsObjectStealAt(temp_v3, BOX_SITE_NUMBER);
+-        Py_DECREF(result);
+-        Py_DECREF(item);
++        if (next.status != PYGEN_NEXT) {
++            PyValue_XCLOSE(next.value);
++            PyValue_CLOSE(result);
++            Py_DECREF(iter);
++            return PyValue_NULL;
++        }
++        PyValue item = next.value;
++        PyValue temp = _PyValue_Multiply(result, item);
++        PyValue_CLOSE(item);
++        PyValue_CLOSE(result);
+         result = temp;
+-        if (result == NULL)
+-            break;
++        if (PyValue_IsNull(result)) {
++            Py_DECREF(iter);
++            return PyValue_NULL;
++        }
+     }
+     Py_DECREF(iter);
+-    return _PyValue_FromObjectResult(result);
++    return result;
+ }
+ 
+ 

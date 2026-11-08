@@ -1,0 +1,5 @@
+# First three manual value ports: source post-review
+
+Reviewed frozen [`w5-manual-first-three.patch`](w5-manual-first-three.patch), based on `f65d64a398778ecb78c43730d0f8d5cb22e3302a`. **Approved; no must-fix finding.** The LZMA `id` and `preset` mapping results remain owned through conversion and are closed on success and error. The VLI and UInt32 readers use the same native-byte flags and overflow messages as the existing object converters; inline integers avoid a parser box. `_posixsubprocess` retains the successful `preexec_fn` result in the child through exec, matching the prior intentionally unclosed owner. `atexit` holds callback and argument owners across its value call and closes a successful result; the error formatter sees a still-live callback.
+
+Luna reports compilation of the three S translation units, a W5 shadow release build with 117 modules and no failed imports, and focused `test_lzma`, `test_subprocess`, and `test_atexit` with 505 tests passed and 50 skipped. Wider manual-call inventory and merged validation remain separate work.

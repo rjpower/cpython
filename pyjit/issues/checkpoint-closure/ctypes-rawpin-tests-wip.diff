@@ -1,0 +1,87 @@
+diff --git a/Lib/test/test_ctypes/test_pyobject_pins.py b/Lib/test/test_ctypes/test_pyobject_pins.py
+new file mode 100644
+index 00000000000..d802ef108c9
+--- /dev/null
++++ b/Lib/test/test_ctypes/test_pyobject_pins.py
+@@ -0,0 +1,81 @@
++import ctypes
++import gc
++import unittest
++import weakref
++
++
++class PyObjectPinTests(unittest.TestCase):
++    def test_numeric_fields_and_array(self):
++        class Record(ctypes.Structure):
++            _fields_ = [("value", ctypes.py_object)]
++
++        record = Record()
++        values = (ctypes.py_object * 2)()
++        for number in (1000000007, 1.25, -7000000009, -0.5):
++            record.value = number
++            values[0] = number
++            gc.collect()
++            self.assertEqual(record.value, number)
++            self.assertEqual(values[0], number)
++
++    def test_cast_before_first_write_and_nested_view(self):
++        class Record(ctypes.Structure):
++            _fields_ = [("value", ctypes.py_object)]
++
++        array = (Record * 1)()
++        alias = ctypes.cast(array, ctypes.POINTER(ctypes.py_object))
++        array[0].value = 1000000007
++        gc.collect()
++        self.assertEqual(alias[0], 1000000007)
++        alias[0] = 1.25
++        gc.collect()
++        self.assertEqual(array[0].value, 1.25)
++
++    def test_pointer_retarget_retains_previous_slot(self):
++        values = (ctypes.py_object * 2)()
++        pointer = ctypes.cast(values, ctypes.POINTER(ctypes.py_object))
++        pointer[0] = 1000000007
++        pointer.contents = ctypes.py_object.from_buffer(
++            values, ctypes.sizeof(ctypes.py_object))
++        pointer[0] = 1.25
++        gc.collect()
++        self.assertEqual(values[0], 1000000007)
++        self.assertEqual(values[1], 1.25)
++
++    def test_reentrant_replacement_keeps_latest_slot(self):
++        class Record(ctypes.Structure):
++            _fields_ = [("value", ctypes.py_object)]
++
++        record = Record()
++        events = []
++
++        class Reenter:
++            def __del__(self):
++                record.value = 1.25
++                events.append("reentered")
++
++        record.value = Reenter()
++        record.value = 1000000007
++        gc.collect()
++        self.assertEqual(events, ["reentered"])
++        self.assertEqual(record.value, 1.25)
++
++    def test_pin_cycle_is_collectable(self):
++        class Holder:
++            pass
++
++        class Record(ctypes.Structure):
++            _fields_ = [("value", ctypes.py_object)]
++
++        record = Record()
++        holder = Holder()
++        holder.record = record
++        ref = weakref.ref(holder)
++        record.value = holder
++        del holder, record
++        gc.collect()
++        self.assertIsNone(ref())
++
++
++if __name__ == "__main__":
++    unittest.main()

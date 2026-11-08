@@ -1,0 +1,77 @@
+{
+  "utc": "2026-11-01T19:39:37.589975+00:00",
+  "decision": "FAILED_PARTIAL_NOT_ACCEPTED",
+  "accepted": false,
+  "source_head": "3bcb891956a9d2796bbe5e92c4f0c9e2f2516899",
+  "review": {
+    "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/jit-method-m2-outcome-review-20261101-v1/review.md",
+    "sha256": "6c6886ebad25dd233656cb1a209e34dc68a13f8f4d0c076a28195868a1d8d8ef"
+  },
+  "replay": {
+    "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/jit-method-m2-outcome-review-20261101-v1/replay.json",
+    "sha256": "7c02d34894fe609ed780c6ba1989552e3d81df1d3382298784cf3015c5b24d1d"
+  },
+  "reader": {
+    "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/jit-method-m2-outcome-review-20261101-v1/audit.py",
+    "sha256": "30e117828f07e5e1803040a2e6c6c32bf57b993cbf95246b0ca984e3f55d632f"
+  },
+  "first_reader_assumption_preserved": {
+    "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/jit-method-m2-outcome-review-20261101-v1/audit-first-suite-result-assumption.py",
+    "sha256": "979627c408e6f718d82474d238bbe0bb98713e5a4ba65eeb95ecf6df4b74cd58"
+  },
+  "root_cleanup": {
+    "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/jit-method-m2-root-activation-20261101-v1/terminal-cleanup.json",
+    "sha256": "1534b620dd47e3cedae9e564e8f4698d55ce00a3ec0762ecf1eb7b24a96467d7"
+  },
+  "raw": {
+    "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/jit-natural-method/build/jit-method-m2-feedback-v1/affected/debug-focus.log",
+    "sha256": "13a4e3c4b52610e97af1c15e57bd5586089275739a7e5e0e438b9de14ac06d0a"
+  },
+  "result": {
+    "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/jit-natural-method/build/jit-method-m2-feedback-v1/affected/debug-focus.result.json",
+    "sha256": "11b13119baaaa6abe21c497257ee82e17e337733a4e15a11159195e0e9311d7c"
+  },
+  "state": {
+    "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/jit-natural-method/build/jit-method-m2-feedback-v1/affected/debug-focus.state.jsonl",
+    "sha256": "0b9cbaed7b45ab6401fbe1e02bd1806091e88d9c4231e1524c0fd9fa00eb8190"
+  },
+  "build": {
+    "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/jit-natural-method/build/jit-method-m2-feedback-v1/debug/build-result.json",
+    "sha256": "2dc463abbb3330bb036609b3ec253aedadaefd3e440f88dfa836d697d281ca4c"
+  },
+  "failure_receipt": {
+    "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/jit-natural-method/build/jit-method-m2-feedback-v1/feedback-batch-failure.json",
+    "sha256": "bfa355ee002650b98d2fb866406cb0f67fd3e7ff914ea9981f5558e67e4c1f22"
+  },
+  "native_witness": {
+    "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/jit-method-m2-outcome-review-20261101-v1/native-witness-line.txt",
+    "sha256": "508b1468dbfb23ebddeaeb09c354a4eec945760b02d8d178c94d7835bb49673a"
+  },
+  "actual_tests": 14,
+  "passed": 13,
+  "failed": 1,
+  "skipped": 0,
+  "not_run_ids": [
+    "test.test_jit_method.TestNaturalMethods.test_call_heat_and_attribute_semantics",
+    "test.test_jit_method.TestNaturalMethods.test_periodic_loop_iteration_and_containers",
+    "test.test_jit_method.TestNaturalMethods.test_keyword_call_and_closure_continuation",
+    "test.test_jit_method.TestNaturalMethods.test_unsupported_cache_and_unrelated_method",
+    "test.test_jit_method.TestNaturalMethods.test_generator_creation_return_and_suspension",
+    "test.test_jit_method.TestNaturalMethods.test_target_replacement_and_exception_frame_reuse",
+    "test.test_jit_method.TestNaturalMethods.test_exec_only_words_rejected_by_constructor_and_marshal",
+    "test.test_jit_method.TestNaturalMethods.test_observer_off_fresh_call_and_same_loop_rearm",
+    "test.test_jit_method.TestNaturalMethods.test_pending_capacity_preserves_older_callers",
+    "test.test_jit_method.TestNaturalMethods.test_actual_coroutine_creation_and_interpreted_suspension",
+    "test.test_jit_method.TestNaturalMethods.test_visible_store_precedes_displaced_owner_finalizer",
+    "test.test_jit_method.TestNaturalMethods.test_bootstrap_resource_failure_obeys_eligible_cooldown",
+    "test.test_jit_method.TestNaturalMethods.test_cold_call_owns_original_operand_and_retries_observers",
+    "test.test_jit_method.TestNaturalMethods.test_flow_failure_and_callback_error_restore_request"
+  ],
+  "suite_result_snapshot_absent": true,
+  "completion_absent": true,
+  "image_sha256": "b5c3a2dec965ab1cf9e294904846bf369748b790bc5940b4e796b23df8da85ea",
+  "products_verified": 587,
+  "prior_files_verified": 1417,
+  "parent_fingerprints_verified": 30,
+  "compiler_or_candidate_calls_by_reviewer": 0
+}

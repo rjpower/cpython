@@ -1,0 +1,22 @@
+{
+  "utc": "2026-11-01T20:44:46.055702+00:00",
+  "decision": "CLOSE_REVIEWED_TEMPORARY_RECORDING_LIFETIME_GAP_WITHIN_EXISTING_M3_SCOPE",
+  "source_grant_sha256": "d2d3b7eb38d5eec72f4ad379b498321b7464270bc150da9bf13dfc74fd1d919d",
+  "deadline_utc": "2026-11-01T21:31:13.818210+00:00",
+  "extension_authorized": false,
+  "independent_reviewer": "qualification_review_resumed",
+  "finding": "A deterministic nominated loop can remain unvisited while another loop runs indefinitely; terminal-only exhaustion does not bound extra Before/After hooks.",
+  "fixed_temporary_unit_event_budget": 4096,
+  "budget_role": "Resource bound for the temporary recording Unit only; not a new hotness/admission counter or policy selector.",
+  "contracts": [
+    "Consume the temporary Unit budget even before the nominated loop is reached; ordinary baseline Units have no recorder budget/hook overhead.",
+    "After budget exhaustion, finish the current semantic operation exactly once and settle to ordinary baseline at a validated AFTER boundary; terminal actions touch only pinned Unit metadata and defer cold service to fresh ownership.",
+    "Consume the one-shot recording attempt before callback-capable allocation; detach session pointers before free and revalidate after replacement/free before any borrowed exec/frame access.",
+    "Do not nominate another loop, infer heat of an unvisited loop, add retries, raise quotas or extend source/native budgets.",
+    "Keep zero-iteration/early-return and alternate-hot-loop behavior in the existing eight runtime fixture categories, alongside replacement/free callback invalidation."
+  ],
+  "candidate_build_runtime_or_timing_authorized": false,
+  "active_record_event_capacity_unchanged": 512,
+  "budget_reason": "Separate temporary Unit lifetime bound from active event-buffer capacity; the reviewed4096-event default leaves room to reach and record a nominated loop while still bounding all temporary hooks.",
+  "prepublication_correction": "Initial root draft conflated the512-event recording buffer with lifetime instrumentation; author/reviewer4096 lifetime proposal adopted before any new root instruction, binding or publication."
+}

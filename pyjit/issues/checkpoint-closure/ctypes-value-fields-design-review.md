@@ -1,0 +1,7 @@
+# `_ctypes` value fields: design review
+
+Reviewed `ctypes-value-fields-proposal.md` against `ctypes.h` and the current `PyCData_get`, `PyCData_set`, and `KeepRef` call chain. **The paired value getter/setter design is suitable for implementation.** `KeepRef` explicitly steals its keepalive token even on failure, and the destination critical section currently spans setter execution and `KeepRef`; the value continuation must retain both properties. A value setter therefore returns an owned token, not a status code. Its object compatibility callback must receive an object only at a genuine object C or foreign-memory boundary.
+
+The proposal correctly requires a complete normal/swapped callback table and a value home before storing any inline non-None keepalive token in `b_objects`. The mutable `ctypes.c_int` subclass constructor remains an unresolved interface requirement: before claiming constructor closure, prove that value type-call dispatch honors current `tp_new`/`tp_init` and Python overrides without boxing the argument window. Keep this explicit as an admission condition for that phase.
+
+Recommended first packet: callback metadata and a small integer/bool/float family with field-descriptor call sites, retaining the lock through the setter and keepalive transfer. Validate table completeness and owner cleanup before pointer, string, array, and callback families. No source or runtime behavior was approved by this design review.

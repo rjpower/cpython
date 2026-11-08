@@ -1,0 +1,1200 @@
+--- a/Python/pystats.c
++++ b/Python/pystats.c
+@@ -9,10 +9,16 @@
+ #include "pycore_tstate.h"
+ #include "pycore_initconfig.h"      // _PyStatus_OK()
+ #include "pycore_pystate.h"         // _PyThreadState_GET()
++#include "pycore_pystats.h"          // _PyStats_ChildCreated()
+ #include "pycore_runtime.h"         // NUM_GENERATIONS
+ #include "osdefs.h"                 // MAXPATHLEN
+ 
+ #include <stdlib.h> // rand()
++#ifndef MS_WINDOWS
++#  include <fcntl.h>
++#  include <sys/stat.h>
++#  include <unistd.h>
++#endif
+ 
+ #ifdef Py_STATS
+ 
+@@ -845,10 +851,146 @@
+              (unsigned int)(uintptr_t)hex_name);
+ }
+ 
++static uint64_t child_receipt_errors;
++
+ #ifndef MS_WINDOWS
+ // The run marker of this process: <stem>.run, replaced by its dump.
+ static char run_stem[41];
+ static pid_t run_pid;
++static uint64_t child_receipt_serial;
++static unsigned long long run_image_dev, run_image_ino;
++
++static int
++receipt_write(int fd, const char *text, size_t length)
++{
++    while (length != 0) {
++        ssize_t written = write(fd, text, length);
++        if (written < 0 && errno == EINTR) {
++            continue;
++        }
++        if (written <= 0) {
++            return -1;
++        }
++        text += written;
++        length -= (size_t)written;
++    }
++    return 0;
++}
++
++#define RECEIPT_TEXT(FD, S) receipt_write((FD), (S), strlen(S))
++
++void
++_PyStats_CopyIntervalStem(char out[41])
++{
++    /* A configured process remains accountable while collection is toggled
++       off. Only a process that never allocated stats is outside this gate. */
++    if (_PyInterpreterState_GET()->pystats_struct == NULL) {
++        out[0] = '\0';
++        return;
++    }
++    if (run_pid == getpid() && run_stem[0] != '\0') {
++        memcpy(out, run_stem, 41);
++    }
++    else {
++        out[0] = '\0';
++        child_receipt_errors++;
++    }
++}
++
++/* This path runs in the parent, after fork locks have been released. It uses
++   libc I/O only, so receipt failure cannot change the Python API result. */
++void
++_PyStats_ChildCreated(pid_t child, const char *source,
++                      const char *const *candidates, size_t candidate_count,
++                      const char parent_stem[41])
++{
++    int saved_errno = errno;
++    if (parent_stem[0] == '\0') {
++        errno = saved_errno;
++        return;
++    }
++    char dir[MAXPATHLEN + 1], path[MAXPATHLEN + 1], tmp[MAXPATHLEN + 1];
++    char item[512];
++    int fd = -1;
++    unsigned long long serial = ++child_receipt_serial;
++    if (child <= 0 || candidate_count > 4096) {
++        goto failed;
++    }
++    stats_dump_dir(_PyInterpreterState_GET(), dir, sizeof(dir));
++    int n = PyOS_snprintf(path, sizeof(path), "%s/%s.%llu.child", dir,
++                          parent_stem, serial);
++    int n2 = PyOS_snprintf(tmp, sizeof(tmp), "%s.tmp", path);
++    if (n <= 0 || (size_t)n >= sizeof(path) ||
++        n2 <= 0 || (size_t)n2 >= sizeof(tmp)) {
++        goto failed;
++    }
++    fd = open(tmp, O_WRONLY | O_CREAT | O_EXCL, 0600);
++    if (fd < 0) {
++        goto failed;
++    }
++    n = PyOS_snprintf(item, sizeof(item),
++        "{\"version\":1,\"parent_pid\":%d,\"child_pid\":%d,"
++        "\"parent_stem\":\"%s\",\"serial\":%llu,\"source\":\"%s\","
++        "\"parent_image_dev\":%llu,\"parent_image_ino\":%llu,"
++        "\"candidate_count\":%zu,\"candidates\":[",
++        (int)getpid(), (int)child, parent_stem, serial, source,
++        run_image_dev, run_image_ino, candidate_count);
++    if (n <= 0 || (size_t)n >= sizeof(item) ||
++        receipt_write(fd, item, (size_t)n) < 0) {
++        goto failed;
++    }
++    for (size_t i = 0; i < candidate_count; i++) {
++        if (candidates[i] == NULL ||
++            RECEIPT_TEXT(fd, i == 0 ? "\"" : ",\"") < 0) {
++            goto failed;
++        }
++        const unsigned char *p = (const unsigned char *)candidates[i];
++        for (; *p != '\0'; p++) {
++            char escaped[7];
++            size_t length;
++            if (*p == '"' || *p == '\\') {
++                escaped[0] = '\\'; escaped[1] = (char)*p; length = 2;
++            }
++            else if (*p < 0x20 || *p >= 0x7f) {
++                static const char hex[] = "0123456789abcdef";
++                escaped[0] = '\\'; escaped[1] = 'u';
++                escaped[2] = '0'; escaped[3] = '0';
++                escaped[4] = hex[*p >> 4]; escaped[5] = hex[*p & 15];
++                length = 6;
++            }
++            else {
++                escaped[0] = (char)*p; length = 1;
++            }
++            if (receipt_write(fd, escaped, length) < 0) {
++                goto failed;
++            }
++        }
++        if (RECEIPT_TEXT(fd, "\"") < 0) {
++            goto failed;
++        }
++    }
++    if (RECEIPT_TEXT(fd, "]}\n") < 0) {
++        goto failed;
++    }
++    if (close(fd) < 0) {
++        fd = -1;
++        goto failed;
++    }
++    fd = -1;
++    if (rename(tmp, path) < 0) {
++        goto failed;
++    }
++    errno = saved_errno;
++    return;
++failed:
++    child_receipt_errors++;
++    if (fd >= 0) {
++        (void)close(fd);
++    }
++    errno = saved_errno;
++}
++
++#undef RECEIPT_TEXT
+ 
+ /* Keep argv boundaries and control bytes on one marker line. */
+ static void
+@@ -907,14 +1049,22 @@
+         return;
+     }
+     const char *tag = getenv("PYTHON_PYSTATS_TAG");
+-    fprintf(f, "pid: %d\nppid: %d\ntag: %s\nargv: ", (int)getpid(),
+-            (int)getppid(), tag != NULL ? tag : "");
++    struct stat image;
++    int image_ok = stat("/proc/self/exe", &image) == 0;
++    run_image_dev = image_ok ? (unsigned long long)image.st_dev : 0;
++    run_image_ino = image_ok ? (unsigned long long)image.st_ino : 0;
++    if (!image_ok) {
++        child_receipt_errors++;
++    }
++    fprintf(f, "version: 2\npid: %d\nppid: %d\ntag: %s\nargv: ",
++            (int)getpid(), (int)getppid(), tag != NULL ? tag : "");
+     FILE *cmd = fopen("/proc/self/cmdline", "r");
+     if (cmd != NULL) {
+         run_marker_argv(f, cmd);
+         fclose(cmd);
+     }
+-    fputc('\n', f);
++    fprintf(f, "\nimage_dev: %llu\nimage_ino: %llu\n",
++            run_image_dev, run_image_ino);
+     fclose(f);
+     memcpy(run_stem, stem, sizeof(stem));
+     run_pid = getpid();
+@@ -1270,6 +1420,8 @@
+ #endif
+             getenv("PYTHON_PYSTATS_TAG") != NULL
+                 ? getenv("PYTHON_PYSTATS_TAG") : "");
++    fprintf(out, "Stats child receipt errors: %llu\n",
++            (unsigned long long)child_receipt_errors);
+     print_stats(out, stats);
+     print_box_owners(out, interp, dir);
+     STATS_UNLOCK(interp);
+@@ -1313,6 +1465,8 @@
+     stats_resets = 0;
+ #ifndef MS_WINDOWS
+     run_stem[0] = '\0';
++    child_receipt_serial = 0;
++    child_receipt_errors = 0;
+ #endif
+     if (interp->pystats_enabled) {
+         run_marker_create(interp);
+--- a/Modules/posixmodule.c
++++ b/Modules/posixmodule.c
+@@ -8245,6 +8245,13 @@
+ #ifdef _Py_MEMORY_SANITIZER
+     __msan_unpoison(&pid, sizeof(pid));
+ #endif
++#ifdef Py_STATS
++    char parent_stem[41];
++    _PyStats_CopyIntervalStem(parent_stem);
++    const char *candidate[] = {path->narrow};
++    _PyStats_ChildCreated(pid, use_posix_spawnp ? "spawnp" : "spawn",
++                          candidate, 1, parent_stem);
++#endif
+     result = PyValue_FromInt64(pid);
+ 
+ exit:
+@@ -8905,6 +8912,12 @@
+     PyOS_BeforeFork();
+     pid = fork1();
+     int saved_errno = errno;
++#ifdef Py_STATS
++    char parent_stem[41] = {0};
++    if (pid > 0) {
++        _PyStats_CopyIntervalStem(parent_stem);
++    }
++#endif
+     if (pid == 0) {
+         /* child: this clobbers and resets the import lock. */
+         PyOS_AfterFork_Child();
+@@ -8913,6 +8926,11 @@
+         Py_ssize_t num_os_threads = get_number_of_os_threads();
+         /* parent: release the import lock. */
+         PyOS_AfterFork_Parent();
++#ifdef Py_STATS
++        if (pid > 0) {
++            _PyStats_ChildCreated(pid, "fork1", NULL, 0, parent_stem);
++        }
++#endif
+         // After PyOS_AfterFork_Parent() starts the world to avoid deadlock.
+         if (warn_about_fork_with_threads("fork1", num_os_threads) < 0) {
+             return NULL;
+@@ -8958,6 +8976,12 @@
+     PyOS_BeforeFork();
+     pid = fork();
+     int saved_errno = errno;
++#ifdef Py_STATS
++    char parent_stem[41] = {0};
++    if (pid > 0) {
++        _PyStats_CopyIntervalStem(parent_stem);
++    }
++#endif
+     if (pid == 0) {
+         /* child: this clobbers and resets the import lock. */
+         PyOS_AfterFork_Child();
+@@ -8966,6 +8990,11 @@
+         Py_ssize_t num_os_threads = get_number_of_os_threads();
+         /* parent: release the import lock. */
+         PyOS_AfterFork_Parent();
++#ifdef Py_STATS
++        if (pid > 0) {
++            _PyStats_ChildCreated(pid, "fork", NULL, 0, parent_stem);
++        }
++#endif
+         // After PyOS_AfterFork_Parent() starts the world to avoid deadlock.
+         if (warn_about_fork_with_threads("fork", num_os_threads) < 0)
+             return PyValue_NULL;
+@@ -9862,6 +9891,12 @@
+     }
+     PyOS_BeforeFork();
+     pid = forkpty(&master_fd, NULL, NULL, NULL);
++#ifdef Py_STATS
++    char parent_stem[41] = {0};
++    if (pid > 0) {
++        _PyStats_CopyIntervalStem(parent_stem);
++    }
++#endif
+     if (pid == 0) {
+         /* child: this clobbers and resets the import lock. */
+         PyOS_AfterFork_Child();
+@@ -9870,6 +9905,11 @@
+         Py_ssize_t num_os_threads = get_number_of_os_threads();
+         /* parent: release the import lock. */
+         PyOS_AfterFork_Parent();
++#ifdef Py_STATS
++        if (pid > 0) {
++            _PyStats_ChildCreated(pid, "forkpty", NULL, 0, parent_stem);
++        }
++#endif
+         /* set O_CLOEXEC on master_fd */
+         if (_Py_set_inheritable(master_fd, 0, NULL) < 0) {
+             PyErr_FormatUnraisable("Exception ignored when setting master_fd "
+--- a/Modules/_posixsubprocess.c
++++ b/Modules/_posixsubprocess.c
+@@ -9,6 +9,7 @@
+ #include "pycore_interp.h"        // _PyInterpreterState_GetFinalizing()
+ #include "pycore_long_value.h"    // _PyValue_AsLong()
+ #include "pycore_pystate.h"       // _PyInterpreterState_GET()
++#include "pycore_pystats.h"       // _PyStats_ChildCreated()
+ #include "pycore_signal.h"        // _Py_RestoreSignals()
+ #include "pycore_value.h"      // _PyValue_AsObjectAt()
+ #include "pycore_value_call.h" // _PyValue_Call()
+@@ -1353,6 +1354,13 @@
+                        c_fds_to_keep, fds_to_keep_len,
+                        preexec_fn_obj, preexec_fn_args_tuple);
+ 
++#ifdef Py_STATS
++    char parent_stem[41] = {0};
++    if (pid > 0) {
++        _PyStats_CopyIntervalStem(parent_stem);
++    }
++#endif
++
+     /* Parent (original) process */
+     if (pid == (pid_t)-1) {
+         /* Capture errno for the exception. */
+@@ -1379,6 +1387,17 @@
+ 
+     if (need_after_fork)
+         PyOS_AfterFork_Parent();
++#ifdef Py_STATS
++    if (pid > 0) {
++        size_t candidate_count = 0;
++        while (exec_array[candidate_count] != NULL) {
++            candidate_count++;
++        }
++        _PyStats_ChildCreated(pid, "fork_exec",
++                              (const char *const *)exec_array,
++                              candidate_count, parent_stem);
++    }
++#endif
+ 
+ cleanup:
+     if (c_fds_to_keep != NULL) {
+--- a/Include/internal/pycore_pystats.h
++++ b/Include/internal/pycore_pystats.h
+@@ -26,6 +26,13 @@
+ // Interpreter deletion and fork: the process accounting of section 1.4.
+ extern void _PyStats_InterpFini(PyInterpreterState *interp);
+ extern void _Py_StatsAfterFork(void);
++/* Linux stats only: snapshot the parent interval before after-fork hooks,
++   then publish one receipt after a successful native child creation. */
++extern void _PyStats_CopyIntervalStem(char out[41]);
++extern void _PyStats_ChildCreated(pid_t child, const char *source,
++                                  const char *const *candidates,
++                                  size_t candidate_count,
++                                  const char parent_stem[41]);
+ #endif
+ 
+ #ifdef __cplusplus
+--- a/Tools/build/check_r27.py
++++ b/Tools/build/check_r27.py
+@@ -42,6 +42,7 @@
+ import os
+ import re
+ import shutil
++import stat
+ import subprocess
+ import sys
+ import tempfile
+@@ -70,6 +71,21 @@
+     xml_etree_generate xml_etree_iterparse xml_etree_parse xml_etree_process""".split())
+ FOLD_PERIOD = 30  # seconds between folds of finished dumps in `suite`
+ INVALID_OWNER_SAMPLE_LIMIT = 16
++
++
++def strict_json_object(pairs):
++    result = {}
++    for key, value in pairs:
++        if key in result:
++            raise ValueError(f"duplicate JSON field: {key}")
++        result[key] = value
++    return result
++
++
++def read_regular_text(path):
++    if not stat.S_ISREG(path.lstat().st_mode):
++        raise ValueError("metadata file is not regular")
++    return path.read_text(encoding="utf-8")
+ 
+ # The shape `kernels` accepts: R.json is a list of entries (or a dict with
+ # such a list under "results" or "entries"). An entry is a dict named by one
+@@ -143,13 +159,15 @@
+         self.accounting_errors = []
+         self.invalid_owner_count = 0
+         self.invalid_owner_samples = []
+-
+-    def add_text(self, text, source="<text>"):
++        self.child_receipts = []
++
++    def add_text(self, text, source="<text>", require_child_receipts=False):
+         objects = {}  # dump-local index -> build-id
+         owners = []
+         tag = ""
+         resets = 0
+         totals, drops = {}, {}
++        receipt_errors = []
+         for line in text.splitlines():
+             if m := OBJECT_RE.match(line):
+                 bid = m[3].lower()
+@@ -159,6 +177,8 @@
+                 owners.append(m)
+             elif m := PROCESS_RE.match(line):
+                 tag = m[2]
++            elif line.startswith("Stats child receipt errors:"):
++                receipt_errors.append(line.removeprefix("Stats child receipt errors: "))
+             elif m := DROPPED_RE.match(line):
+                 add(self.drops, m[1], int(m[2]))
+                 add(drops, m[1], int(m[2]))
+@@ -173,6 +193,11 @@
+                 add(totals, m[1], int(m[2]))
+             elif line.startswith("Box owner ("):
+                 self.accounting_errors.append("malformed owner row")
++        if require_child_receipts:
++            if len(receipt_errors) != 1 or not receipt_errors[0].isdigit():
++                self.accounting_errors.append("missing or malformed child receipt error count")
++            elif int(receipt_errors[0]):
++                self.accounting_errors.append("native child receipt publication failed")
+         counts = {}
+         for m in owners:
+             add(counts, m["kind"], int(m["count"]))
+@@ -208,7 +233,7 @@
+         for path in sorted(Path(directory).glob("*.txt")):
+             try:
+                 text = path.read_text(errors="replace")
+-                self.add_text(text, path.name)
++                self.add_text(text, path.name, require_child_receipts=True)
+             except OSError as exc:
+                 self.bad_dumps.append(f"{path.name}: {exc}")
+                 continue
+@@ -240,12 +265,12 @@
+     def _read_identity(path):
+         """Parse one start-time marker without normalizing escaped argv bytes."""
+         fields = {}
+-        for line in path.read_text(encoding="utf-8").splitlines():
++        for line in read_regular_text(path).splitlines():
+             key, sep, value = line.partition(": ")
+-            if not sep or key not in {"pid", "ppid", "tag", "argv"} or key in fields:
++            if not sep or key not in {"version", "pid", "ppid", "tag", "argv", "image_dev", "image_ino"} or key in fields:
+                 raise ValueError("invalid or duplicate marker field")
+             fields[key] = value
+-        if set(fields) != {"pid", "ppid", "tag", "argv"}:
++        if set(fields) != {"version", "pid", "ppid", "tag", "argv", "image_dev", "image_ino"} or fields["version"] != "2":
+             raise ValueError("incomplete marker")
+         if not fields["pid"].isdigit() or int(fields["pid"]) <= 0:
+             raise ValueError("invalid marker pid")
+@@ -256,9 +281,14 @@
+             any(not isinstance(arg, str) for arg in raw_argv)):
+             raise ValueError("marker argv is not a nonempty string list")
+         argv = [os.fsdecode(arg.encode("latin-1")) for arg in raw_argv]
++        if (not fields["image_dev"].isdigit() or
++            not fields["image_ino"].isdigit() or
++            int(fields["image_ino"]) == 0):
++            raise ValueError("invalid marker image identity")
+         return {"id": path.stem, "pid": int(fields["pid"]),
+                 "ppid": int(fields["ppid"]), "tag": fields["tag"],
+-                "argv": argv}
++                "argv": argv, "image_dev": int(fields["image_dev"]),
++                "image_ino": int(fields["image_ino"])}
+ 
+     def read_markers(self, directory):
+         """List .run files that no .txt replaced, and the .spawn lines."""
+@@ -305,6 +335,122 @@
+         for stem in sidecars:
+             if "done" in sidecars[stem] and stem not in self.dump_identities:
+                 identity_error(f"orphan .done identity {stem}.done")
++        roots_path = directory / "root-launch.json"
++        roots = []
++        try:
++            roots = json.loads(read_regular_text(roots_path),
++                               object_pairs_hook=strict_json_object) if (
++                                   sidecars or self.dump_identities or roots_path.exists()) else []
++            if not isinstance(roots, list):
++                raise ValueError("root launches must be a list")
++            for root in roots:
++                if (not isinstance(root, dict) or set(root) !=
++                    {"version", "pid", "ppid", "argv", "image_dev", "image_ino"}
++                    or type(root["version"]) is not int or root["version"] != 1
++                    or type(root["pid"]) is not int
++                    or root["pid"] <= 0 or type(root["ppid"]) is not int
++                    or root["ppid"] < 0
++                    or type(root["image_dev"]) is not int
++                    or root["image_dev"] < 0
++                    or type(root["image_ino"]) is not int
++                    or root["image_ino"] <= 0 or not isinstance(root["argv"], list)
++                    or not root["argv"] or any(not isinstance(a, str) for a in root["argv"])):
++                    raise ValueError("invalid root launch")
++        except (OSError, UnicodeError, ValueError) as exc:
++            identity_error(f"missing or malformed root launches: {type(exc).__name__}")
++            roots = []
++
++        self.child_receipts = []
++        for path in sorted(directory.glob("*.child")):
++            try:
++                parts = path.name.split(".")
++                if (len(parts) != 3 or not re.fullmatch(r"[0-9a-f]{40}", parts[0])
++                    or not parts[1].isdigit() or int(parts[1]) <= 0):
++                    raise ValueError("invalid receipt filename")
++                receipt = json.loads(read_regular_text(path),
++                                     object_pairs_hook=strict_json_object)
++                if (not isinstance(receipt, dict) or set(receipt) !=
++                    {"version", "parent_pid", "child_pid", "parent_stem", "serial",
++                     "source", "parent_image_dev", "parent_image_ino",
++                     "candidate_count", "candidates"}
++                    or type(receipt["version"]) is not int
++                    or receipt["version"] != 1
++                    or any(type(receipt[k]) is not int or receipt[k] <= 0
++                           for k in ("parent_pid", "child_pid", "serial", "parent_image_ino"))
++                    or type(receipt["parent_image_dev"]) is not int
++                    or receipt["parent_image_dev"] < 0
++                    or receipt["parent_stem"] != parts[0]
++                    or receipt["serial"] != int(parts[1])
++                    or receipt["source"] not in
++                        {"spawn", "spawnp", "fork", "fork1", "forkpty", "fork_exec"}
++                    or type(receipt["candidate_count"]) is not int
++                    or not isinstance(receipt["candidates"], list)
++                    or receipt["candidate_count"] != len(receipt["candidates"])
++                    or any(not isinstance(c, str) for c in receipt["candidates"])):
++                    raise ValueError("invalid receipt fields")
++                n = receipt["candidate_count"]
++                if (n != 0 if receipt["source"] in {"fork", "fork1", "forkpty"}
++                    else n != 1 if receipt["source"] in {"spawn", "spawnp"}
++                    else n < 1):
++                    raise ValueError("invalid receipt candidate count")
++                receipt["candidates"] = [os.fsdecode(c.encode("latin-1"))
++                                         for c in receipt["candidates"]]
++                self.child_receipts.append(receipt)
++            except (OSError, UnicodeError, ValueError, TypeError) as exc:
++                identity_error(f"malformed child receipt {path.name}: {type(exc).__name__}")
++        for path in directory.glob("*.child.tmp"):
++            identity_error(f"unfinished child receipt {path.name}")
++
++        by_pid = {}
++        for record in self.identity_records.values():
++            by_pid.setdefault(record["pid"], []).append(record)
++        admitted = set()
++        for root in roots:
++            pid = root["pid"]
++            if pid in admitted:
++                identity_error(f"duplicate root launch for pid {pid}")
++                continue
++            matches = by_pid.get(pid, [])
++            if not matches or not all(
++                r["ppid"] == root["ppid"] and r["argv"] == root["argv"]
++                and r["image_dev"] == root["image_dev"]
++                and r["image_ino"] == root["image_ino"] for r in matches):
++                identity_error(f"root launch does not match marker for pid {pid}")
++            admitted.add(pid)
++        child_pids = set()
++        for receipt in self.child_receipts:
++            parent = sidecars.get(receipt["parent_stem"], {}).get("done")
++            pid = receipt["child_pid"]
++            if pid in child_pids or pid in admitted:
++                identity_error(f"duplicate child receipt for pid {pid}")
++            child_pids.add(pid)
++            if (parent is None or parent["pid"] != receipt["parent_pid"]
++                or parent["image_dev"] != receipt["parent_image_dev"]
++                or parent["image_ino"] != receipt["parent_image_ino"]):
++                identity_error(f"unmatched parent interval for child pid {pid}")
++            matches = by_pid.get(pid, [])
++            if not matches or not all(r["ppid"] == receipt["parent_pid"]
++                                      for r in matches):
++                identity_error(f"native child receipt lacks matching child marker: {pid}")
++        for pid in by_pid.keys() - admitted - child_pids:
++            identity_error(f"process pid {pid} has no root launch or native receipt")
++        reachable = set(admitted)
++        for _ in range(len(self.child_receipts)):
++            prior = len(reachable)
++            reachable.update(r["child_pid"] for r in self.child_receipts
++                             if r["parent_pid"] in reachable)
++            if len(reachable) == prior:
++                break
++        for pid in by_pid.keys() - reachable:
++            identity_error(f"process pid {pid} is not reachable from a root launch")
++        images = {(r["image_dev"], r["image_ino"]) for r in roots}
++        if len(images) != 1 and by_pid:
++            identity_error("root launches have no single measured image")
++        elif images:
++            image = next(iter(images))
++            for records in by_pid.values():
++                if any((r["image_dev"], r["image_ino"]) != image for r in records):
++                    identity_error("child marker has an unmeasured executable image")
+         self.spawn = []
+         self.counted_spawn = []
+         self.opaque_spawn = []
+@@ -1207,6 +1353,11 @@
+            *regrtest_args]
+     folded = Folded()
+     proc = subprocess.Popen(cmd, env=env)
++    image = (build / "python").stat()
++    (directory / "root-launch.json").write_text(json.dumps([{
++        "version": 1, "pid": proc.pid, "ppid": os.getpid(), "argv": cmd,
++        "image_dev": image.st_dev, "image_ino": image.st_ino,
++    }]))
+     while True:
+         try:
+             proc.wait(timeout=FOLD_PERIOD)
+--- a/Lib/test/test_tools/test_check_r27.py
++++ b/Lib/test/test_tools/test_check_r27.py
+@@ -52,6 +52,20 @@
+     for text in texts:
+         folded.add_text(text)
+     return folded
++
++
++def v2_marker(pid, ppid, tag, argv):
++    encoded = [os.fsencode(arg).decode("latin-1") for arg in argv]
++    return (f"version: 2\npid: {pid}\nppid: {ppid}\ntag: {tag}\n"
++            f"argv: {json.dumps(encoded)}\nimage_dev: 1\nimage_ino: 2\n")
++
++
++def write_roots(directory, *launches):
++    (directory / "root-launch.json").write_text(json.dumps([
++        {"version": 1, "pid": pid, "ppid": ppid, "argv": argv,
++         "image_dev": 1, "image_ino": 2}
++        for pid, ppid, argv in launches
++    ]))
+ 
+ 
+ def classes(folded, resolver, cdb=None):
+@@ -189,8 +203,8 @@
+         with tempfile.TemporaryDirectory() as tmp:
+             d = Path(tmp)
+             (d / "a.txt").write_text("Stats process: pid=1 tag=t\nStats resets: 1\n")
+-            (d / "a.done").write_text(
+-                'pid: 1\nppid: 0\ntag: t\nargv: ["python"]\n')
++            (d / "a.done").write_text(v2_marker(1, 0, "t", ["python"]))
++            write_roots(d, (1, 0, ["python"]))
+             (d / "b.tmp").write_text("Stats resets: 9\n")
+             folded = check_r27.Folded()
+             folded.fold_dir(d, delete=True)
+@@ -198,7 +212,8 @@
+             self.assertEqual((folded.dumps, folded.resets), (1, 1))
+             self.assertEqual(folded.leftover_run, [])
+             self.assertTrue(folded.identity_complete)
+-            self.assertEqual({p.name for p in d.iterdir()}, {"a.done", "b.tmp"})
++            self.assertEqual({p.name for p in d.iterdir()},
++                             {"a.done", "b.tmp", "root-launch.json"})
+ 
+     def test_invalid_owner_diagnostics_survive_fold_deletion(self):
+         with tempfile.TemporaryDirectory() as tmp:
+@@ -229,8 +244,9 @@
+     def test_markers(self):
+         with tempfile.TemporaryDirectory() as tmp:
+             d = Path(tmp)
+-            (d / "x.run").write_text('pid: 4\nppid: 1\ntag: test_foo\nargv: ["python","-c","x"]\n')
+-            (d / "y.done").write_text('pid: 5\nppid: 1\ntag: done\nargv: ["python"]\n')
++            (d / "x.run").write_text(v2_marker(4, 1, "test_foo", ["python", "-c", "x"]))
++            (d / "y.done").write_text(v2_marker(5, 1, "done", ["python"]))
++            write_roots(d, (4, 1, ["python", "-c", "x"]), (5, 1, ["python"]))
+             (d / "y.txt").write_text("Stats process: pid=5 tag=done\n")
+             (d / "z.spawn").write_text("test_bar\tpython -m x\n")
+             folded = check_r27.Folded()
+@@ -249,8 +265,8 @@
+             d = Path(tmp)
+             (d / "a.txt").write_text("Stats process: pid=9 tag=probe\n")
+             (d / "a.done").write_text(
+-                'pid: 9\nppid: 2\ntag: probe\n'
+-                'argv: ["python", "\\u00ff"]\n')
++                v2_marker(9, 2, "probe", ["python", os.fsdecode(b"\xff")]))
++            write_roots(d, (9, 2, ["python", os.fsdecode(b"\xff")]))
+             folded = check_r27.Folded()
+             folded.fold_dir(d, delete=True)
+             folded.read_markers(d)
+@@ -261,7 +277,8 @@
+                              {"a": {"pid": 9, "tag": "probe"}})
+             self.assertEqual(folded.identity_records["a.done"],
+                              {"id": "a", "pid": 9, "ppid": 2,
+-                              "tag": "probe", "argv": ["python", os.fsdecode(b"\xff")]})
++                              "tag": "probe", "argv": ["python", os.fsdecode(b"\xff")],
++                              "image_dev": 1, "image_ino": 2})
+             coverage = check_r27.resolve(
+                 folded, TableResolver({}), SRC)["identity_coverage"]
+             self.assertEqual(coverage["marker_samples"][0]["argv"],
+@@ -270,7 +287,7 @@
+     def test_process_identity_missing_or_orphan_done_fails_closed(self):
+         for files, expected in [
+             ({"a.txt": "Stats process: pid=9 tag=probe\n"}, "missing .done"),
+-            ({"a.done": 'pid: 9\nppid: 2\ntag: probe\nargv: ["python"]\n'},
++            ({"a.done": v2_marker(9, 2, "probe", ["python"])},
+              "orphan .done"),
+         ]:
+             with self.subTest(expected=expected), tempfile.TemporaryDirectory() as tmp:
+@@ -288,8 +305,7 @@
+         with tempfile.TemporaryDirectory() as tmp:
+             d = Path(tmp)
+             (d / "a.txt").write_text("Stats process: pid=9 tag=probe\n")
+-            (d / "a.done").write_text(
+-                'pid: 9\nppid: 2\ntag: probe\nargv: ["python"]\n')
++            (d / "a.done").write_text(v2_marker(9, 2, "probe", ["python"]))
+             folded = check_r27.Folded()
+             folded.fold_dir(d)
+             folded.fold_dir(d)
+@@ -301,13 +317,13 @@
+     def test_process_identity_mismatch_zero_and_run_with_dump_fail(self):
+         cases = [
+             ("mismatch", "a.done",
+-             'pid: 10\nppid: 2\ntag: other\nargv: ["python"]\n',
++             v2_marker(10, 2, "other", ["python"]),
+              ".done identity does not match"),
+             ("zero", "a.zero",
+-             'pid: 9\nppid: 2\ntag: probe\nargv: ["python"]\n',
++             v2_marker(9, 2, "probe", ["python"]),
+              "zero-stats identity"),
+             ("run", "a.run",
+-             'pid: 9\nppid: 2\ntag: probe\nargv: ["python"]\n',
++             v2_marker(9, 2, "probe", ["python"]),
+              "contradictory .run"),
+         ]
+         for name, marker, contents, expected in cases:
+@@ -316,8 +332,7 @@
+                 (d / "a.txt").write_text("Stats process: pid=9 tag=probe\n")
+                 (d / marker).write_text(contents)
+                 if marker != "a.done":
+-                    (d / "a.done").write_text(
+-                        'pid: 9\nppid: 2\ntag: probe\nargv: ["python"]\n')
++                    (d / "a.done").write_text(v2_marker(9, 2, "probe", ["python"]))
+                 folded = check_r27.Folded()
+                 folded.fold_dir(d)
+                 folded.read_markers(d)
+@@ -363,13 +378,11 @@
+         with tempfile.TemporaryDirectory() as tmp:
+             d = Path(tmp)
+             (d / "ok.run").write_text(
+-                'pid: 4\nppid: 1\ntag: test_foo\n'
+-                'argv: ["python","-c","a\\u000ab","a b"]\n')
++                v2_marker(4, 1, "test_foo", ["python", "-c", "a\nb", "a b"]))
+             (d / "bad.run").write_text(
+                 'pid: 5\nppid: 1\ntag: test_foo\nargv: ["python","-c"\n')
+             (d / "utf.run").write_text(
+-                'pid: 6\nppid: 1\ntag: test_foo\n'
+-                'argv: ["\\u00c3\\u00a9","\\u00ff"]\n')
++                v2_marker(6, 1, "test_foo", ["é", os.fsdecode(b"\xff")]))
+             (d / "notbytes.run").write_text(
+                 'pid: 7\nppid: 1\ntag: test_foo\nargv: ["\\u20ac"]\n')
+             (d / "new.spawn").write_text(json.dumps({
+--- /dev/null
++++ b/Lib/test/test_tools/test_stage3_identity.py
+@@ -0,0 +1,129 @@
++"""Native child receipt and marker admission fixtures for check_r27."""
++
++import importlib.util
++import json
++import os
++from pathlib import Path
++import sys
++import tempfile
++import unittest
++
++CHECKER = Path(__file__).resolve().parents[3] / "Tools/build/check_r27.py"
++sys.path.insert(0, str(CHECKER.parent))
++spec = importlib.util.spec_from_file_location("stage3_check_r27", CHECKER)
++check_r27 = importlib.util.module_from_spec(spec)
++spec.loader.exec_module(check_r27)
++
++PARENT = "a" * 40
++CHILD = "b" * 40
++
++
++def marker(pid, ppid):
++    return (f"version: 2\npid: {pid}\nppid: {ppid}\ntag: test\n"
++            f"argv: [\"python\"]\nimage_dev: 1\nimage_ino: 2\n")
++
++
++def root_launch():
++    return [{"version": 1, "pid": 100, "ppid": os.getpid(),
++             "argv": ["python"], "image_dev": 1, "image_ino": 2}]
++
++
++def receipt():
++    return {"version": 1, "parent_pid": 100, "child_pid": 101,
++            "parent_stem": PARENT, "serial": 1, "source": "fork",
++            "parent_image_dev": 1, "parent_image_ino": 2,
++            "candidate_count": 0, "candidates": []}
++
++
++class NativeIdentityTests(unittest.TestCase):
++    def make_dir(self, directory, child=False):
++        directory = Path(directory)
++        (directory / f"{PARENT}.done").write_text(marker(100, os.getpid()))
++        (directory / "root-launch.json").write_text(json.dumps(root_launch()))
++        folded = check_r27.Folded()
++        folded.identity_required = True
++        folded.dumps = 1 + child
++        folded.dump_identities[PARENT] = {"pid": 100, "tag": "test"}
++        if child:
++            (directory / f"{CHILD}.done").write_text(marker(101, 100))
++            (directory / f"{PARENT}.1.child").write_text(json.dumps(receipt()))
++            folded.dump_identities[CHILD] = {"pid": 101, "tag": "test"}
++        return folded
++
++    def test_root_and_native_child(self):
++        with tempfile.TemporaryDirectory() as tmp:
++            folded = self.make_dir(tmp, child=True)
++            folded.read_markers(tmp)
++            self.assertTrue(folded.identity_complete, folded.identity_errors)
++            self.assertEqual(len(folded.child_receipts), 1)
++
++    def test_missing_receipt_and_unenumerated_root_fail(self):
++        with tempfile.TemporaryDirectory() as tmp:
++            folded = self.make_dir(tmp, child=True)
++            (Path(tmp) / f"{PARENT}.1.child").unlink()
++            folded.read_markers(tmp)
++            self.assertFalse(folded.identity_complete)
++            self.assertTrue(any("no root launch or native receipt" in e
++                                for e in folded.identity_errors))
++        with tempfile.TemporaryDirectory() as tmp:
++            folded = self.make_dir(tmp)
++            (Path(tmp) / "root-launch.json").unlink()
++            folded.read_markers(tmp)
++            self.assertFalse(folded.identity_complete)
++
++    def test_bad_receipt_and_v1_marker_fail(self):
++        with tempfile.TemporaryDirectory() as tmp:
++            folded = self.make_dir(tmp, child=True)
++            path = Path(tmp) / f"{PARENT}.1.child"
++            bad = receipt()
++            bad["parent_pid"] = 999
++            path.write_text(json.dumps(bad))
++            folded.read_markers(tmp)
++            self.assertFalse(folded.identity_complete)
++            self.assertTrue(any("unmatched parent interval" in e
++                                for e in folded.identity_errors))
++        with tempfile.TemporaryDirectory() as tmp:
++            folded = self.make_dir(tmp)
++            path = Path(tmp) / f"{PARENT}.done"
++            path.write_text(path.read_text().replace("version: 2", "version: 1"))
++            folded.read_markers(tmp)
++            self.assertFalse(folded.identity_complete)
++
++    def test_duplicate_keys_and_nonregular_receipts_fail(self):
++        with tempfile.TemporaryDirectory() as tmp:
++            folded = self.make_dir(tmp, child=True)
++            path = Path(tmp) / f"{PARENT}.1.child"
++            path.write_text(path.read_text().replace('"version": 1,',
++                                                    '"version": 1, "version": 1,', 1))
++            folded.read_markers(tmp)
++            self.assertFalse(folded.identity_complete)
++            self.assertTrue(any("malformed child receipt" in e
++                                for e in folded.identity_errors))
++        with tempfile.TemporaryDirectory() as tmp:
++            folded = self.make_dir(tmp, child=True)
++            path = Path(tmp) / f"{PARENT}.1.child"
++            path.unlink()
++            path.symlink_to(Path(tmp) / "root-launch.json")
++            folded.read_markers(tmp)
++            self.assertFalse(folded.identity_complete)
++            self.assertTrue(any("malformed child receipt" in e
++                                for e in folded.identity_errors))
++
++    def test_unfinished_receipt_and_sticky_failure_fail(self):
++        with tempfile.TemporaryDirectory() as tmp:
++            folded = self.make_dir(tmp, child=True)
++            (Path(tmp) / f"{PARENT}.1.child").rename(
++                Path(tmp) / f"{PARENT}.1.child.tmp")
++            folded.read_markers(tmp)
++            self.assertFalse(folded.identity_complete)
++            self.assertTrue(any("unfinished child receipt" in e
++                                for e in folded.identity_errors))
++        folded = check_r27.Folded()
++        folded.add_text("Stats child receipt errors: 1\n", "case.txt",
++                        require_child_receipts=True)
++        self.assertIn("native child receipt publication failed",
++                      folded.accounting_errors)
++
++
++if __name__ == "__main__":
++    unittest.main()
+--- a/pyjit/bench/run.py
++++ b/pyjit/bench/run.py
+@@ -260,6 +260,18 @@
+     """A measurement could not be made; nothing is guessed in its place."""
+ 
+ 
++class LaunchedMeasurementError(MeasurementError):
++    def __init__(self, message: str, pid: int):
++        super().__init__(message)
++        self.pid = pid
++
++
++class LaunchedProcess(subprocess.CompletedProcess):
++    def __init__(self, args, returncode, stdout, stderr, pid: int):
++        super().__init__(args, returncode, stdout, stderr)
++        self.pid = pid
++
++
+ @dataclass
+ class Context:
+     python: Path
+@@ -287,8 +299,14 @@
+ 
+ 
+ def run_checked(cmd: list[str], what: str) -> subprocess.CompletedProcess:
+-    proc = subprocess.run(cmd, check=False, capture_output=True, text=True, env=CHILD_ENV)
+-    return check_result(proc, cmd, what)
++    with subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
++                          text=True, env=CHILD_ENV) as child:
++        stdout, stderr = child.communicate()
++    proc = LaunchedProcess(cmd, child.returncode, stdout, stderr, child.pid)
++    try:
++        return check_result(proc, cmd, what)
++    except MeasurementError as exc:
++        raise LaunchedMeasurementError(str(exc), child.pid) from exc
+ 
+ 
+ def write_perf_record(ctx: Context, record: dict) -> None:
+@@ -403,31 +421,39 @@
+ STATS_PROCESS = re.compile(r"Stats process: pid=([0-9]+) tag=(.*)\Z")
+ 
+ 
+-def _marker_identity(raw: bytes) -> tuple[int, int, str, list[str]]:
++def _marker_identity(raw: bytes) -> tuple[int, int, str, list[str], int, int]:
+     try:
+         lines = raw.decode("utf-8").splitlines()
+-        if len(lines) != 4:
+-            raise ValueError("expected four marker lines")
+-        prefixes = ("pid: ", "ppid: ", "tag: ", "argv: ")
++        if len(lines) != 7:
++            raise ValueError("expected seven marker lines")
++        prefixes = ("version: ", "pid: ", "ppid: ", "tag: ", "argv: ",
++                    "image_dev: ", "image_ino: ")
+         if any(not line.startswith(prefix) for line, prefix in zip(lines, prefixes)):
+             raise ValueError("invalid marker fields")
+-        pid_text, ppid_text = (lines[0][5:], lines[1][6:])
++        if lines[0] != "version: 2":
++            raise ValueError("invalid marker version")
++        pid_text, ppid_text = (lines[1][5:], lines[2][6:])
+         if not pid_text.isascii() or not pid_text.isdecimal() or not ppid_text.isascii() or not ppid_text.isdecimal():
+             raise ValueError("invalid marker process id")
+         pid, ppid = int(pid_text), int(ppid_text)
+         if pid <= 0:
+             raise ValueError("invalid marker process id")
+-        encoded = json.loads(lines[3][6:])
++        encoded = json.loads(lines[4][6:])
+         if not isinstance(encoded, list) or not encoded or any(not isinstance(arg, str) for arg in encoded):
+             raise ValueError("invalid marker argv")
+         argv = [os.fsdecode(arg.encode("latin-1")) for arg in encoded]
+-        return pid, ppid, lines[2][5:], argv
++        image_dev, image_ino = lines[5][11:], lines[6][11:]
++        if (not image_dev.isascii() or not image_dev.isdecimal()
++            or not image_ino.isascii() or not image_ino.isdecimal()
++            or int(image_ino) == 0):
++            raise ValueError("invalid marker image identity")
++        return pid, ppid, lines[3][5:], argv, int(image_dev), int(image_ino)
+     except (UnicodeError, ValueError, TypeError) as exc:
+         raise MeasurementError(f"invalid pystats completion marker: {exc}") from exc
+ 
+ 
+ def _record_pystats(ctx: Context, bench: Bench, loops: int, command: list[str],
+-                    directory: Path, files: list[Path]) -> dict[Path, bytes]:
++                    directory: Path, files: list[Path], launch: dict) -> dict[Path, bytes]:
+     artifacts = []
+     contents = {}
+     artifact_error = None
+@@ -449,7 +475,8 @@
+         artifacts.append(artifact)
+     record = {"dump": ctx.pystats_dumps, "invocation": ctx.pystats_sequence,
+               "benchmark": bench.name, "loops": loops, "command": command,
+-              "directory": str(directory), "artifacts": artifacts}
++              "directory": str(directory), "root_launch": launch,
++              "artifacts": artifacts}
+     if ctx.pystats_records is not None:
+         with ctx.pystats_records.open("a") as stream:
+             stream.write(json.dumps(record) + "\n")
+@@ -467,12 +494,19 @@
+     command = ctx.command(bench, "run", loops,
+                           options=("-X", "pystats", "-X", f"pystats_dir={directory}"))
+     child_error = None
++    image = os.stat(command[0])
++    launch = {"version": 1, "pid": None, "ppid": os.getpid(),
++              "argv": command, "image_dev": image.st_dev, "image_ino": image.st_ino}
+     try:
+-        run_checked(command, f"{bench.name} under pystats at {loops}")
+-    except MeasurementError as exc:
++        proc = run_checked(command, f"{bench.name} under pystats at {loops}")
++        launch["pid"] = proc.pid
++    except LaunchedMeasurementError as exc:
++        launch["pid"] = exc.pid
++        child_error = exc
++    except (MeasurementError, OSError) as exc:
+         child_error = exc
+     files = sorted(directory.iterdir())
+-    contents = _record_pystats(ctx, bench, loops, command, directory, files)
++    contents = _record_pystats(ctx, bench, loops, command, directory, files, launch)
+     if child_error is not None:
+         raise child_error
+     if len(files) != 2 or any(path.is_symlink() or not path.is_file() for path in files):
+@@ -485,8 +519,9 @@
+     path, marker_path = by_suffix[".txt"], by_suffix[".done"]
+     raw = contents[path]
+     marker_raw = contents[marker_path]
+-    pid, ppid, tag, argv = _marker_identity(marker_raw)
+-    if ppid != os.getpid() or argv != command:
++    pid, ppid, tag, argv, image_dev, image_ino = _marker_identity(marker_raw)
++    if (pid != launch["pid"] or ppid != launch["ppid"] or argv != command
++        or image_dev != launch["image_dev"] or image_ino != launch["image_ino"]):
+         raise MeasurementError(f"pystats completion marker does not identify {command}")
+     try:
+         text = raw.decode("utf-8")
+--- a/pyjit/bench/tests/test_pystats_records.py
++++ b/pyjit/bench/tests/test_pystats_records.py
+@@ -10,6 +10,7 @@
+ import sys
+ import tempfile
+ import unittest
++from types import SimpleNamespace
+ from unittest import mock
+ 
+ SOURCE = Path(__file__).resolve().parents[1] / "run.py"
+@@ -64,8 +65,10 @@
+     done = directory / f"{stem}.done"
+     if marker:
+         byte_argv = [os.fsencode(arg).decode("latin-1") for arg in (command if argv is None else argv)]
+-        done.write_text(f"pid: {pid}\nppid: {os.getpid() if ppid is None else ppid}\n"
+-                        f"tag: {tag}\nargv: {json.dumps(byte_argv)}\n")
++        image = os.stat(command[0])
++        done.write_text(f"version: 2\npid: {pid}\nppid: {os.getpid() if ppid is None else ppid}\n"
++                        f"tag: {tag}\nargv: {json.dumps(byte_argv)}\n"
++                        f"image_dev: {image.st_dev}\nimage_ino: {image.st_ino}\n")
+     return dump, done
+ 
+ 
+@@ -74,7 +77,7 @@
+         temporary = tempfile.TemporaryDirectory(prefix="boil-pystats-record-test-")
+         self.addCleanup(temporary.cleanup)
+         self.root = Path(temporary.name)
+-        self.ctx = runner.Context(Path("/test/python"), self.root / "cache", self.root)
++        self.ctx = runner.Context(Path(sys.executable), self.root / "cache", self.root)
+ 
+     def test_preserves_complete_samples_and_normalizes_union(self):
+         for inner in (1, 1000):
+@@ -133,6 +136,7 @@
+ 
+         def run(command, what):
+             created.extend(write_pair(command, raw))
++            return SimpleNamespace(pid=12345)
+ 
+         with mock.patch.object(runner, "run_checked", side_effect=run):
+             with self.assertRaisesRegex(runner.MeasurementError, "duplicate pystats key"):
+@@ -165,6 +169,7 @@
+             with self.subTest(name=name):
+                 def run(command, what):
+                     write_pair(command, raw)
++                    return SimpleNamespace(pid=12345)
+ 
+                 with mock.patch.object(runner, "run_checked", side_effect=run):
+                     if error is None:
+@@ -180,8 +185,9 @@
+                                 self.ctx, runner.Bench("sample", "kernels", 2), 2)
+ 
+     def test_completed_pair_rejects_wrong_identity_and_extra_files(self):
+-        cases = ("pid", "ppid", "tag", "argv", "stem", "run", "zero",
+-                 "orphan", "extra", "empty", "bad_argv")
++        cases = ("pid", "ppid", "tag", "argv", "version", "image",
++                 "child_receipt", "stem", "run", "zero", "orphan",
++                 "extra", "empty", "bad_argv")
+         for case in cases:
+             with self.subTest(case=case):
+                 def run(command, what):
+@@ -197,6 +203,14 @@
+                         done.write_bytes(done.read_bytes().replace(b"tag: \n", b"tag: other\n", 1))
+                     elif case == "argv":
+                         done.write_bytes(done.read_bytes().replace(b"argv: [", b'argv: ["extra",', 1))
++                    elif case == "version":
++                        done.write_bytes(done.read_bytes().replace(b"version: 2", b"version: 1", 1))
++                    elif case == "image":
++                        marker_lines = done.read_text().splitlines()
++                        marker_lines[-1] = "image_ino: 1"
++                        done.write_text("\n".join(marker_lines) + "\n")
++                    elif case == "child_receipt":
++                        (directory / (STEM + ".1.child")).write_text("{}")
+                     elif case == "stem":
+                         done.rename(directory / ("b" * 40 + ".done"))
+                     elif case == "run":
+@@ -211,6 +225,7 @@
+                         done.write_bytes(b"")
+                     elif case == "bad_argv":
+                         done.write_bytes(done.read_bytes().replace(b"argv: [", b'argv: ["\\u0100",', 1))
++                    return SimpleNamespace(pid=12345)
+ 
+                 with mock.patch.object(runner, "run_checked", side_effect=run):
+                     with self.assertRaises(runner.MeasurementError):
+@@ -218,11 +233,13 @@
+ 
+     def test_marker_argv_decodes_filesystem_bytes(self):
+         encoded = ["caf\u00c3\u00a9", "raw\u00ff"]
+-        raw = ("pid: 12345\nppid: 1\ntag: \nargv: " + json.dumps(encoded) + "\n").encode()
+-        pid, ppid, tag, argv = runner._marker_identity(raw)
++        raw = ("version: 2\npid: 12345\nppid: 1\ntag: \nargv: "
++               + json.dumps(encoded) + "\nimage_dev: 1\nimage_ino: 2\n").encode()
++        pid, ppid, tag, argv, image_dev, image_ino = runner._marker_identity(raw)
+         self.assertEqual((pid, ppid, tag), (12345, 1, ""))
+         self.assertEqual([os.fsencode(arg) for arg in argv],
+                          [b"caf\xc3\xa9", b"raw\xff"])
++        self.assertEqual((image_dev, image_ino), (1, 2))
+ 
+     def test_nonregular_and_unreadable_artifacts_are_journaled_before_failure(self):
+         for case in ("symlink", "unreadable"):
+@@ -239,6 +256,7 @@
+                     if case == "symlink":
+                         done.unlink()
+                         done.symlink_to(dump)
++                    return SimpleNamespace(pid=12345)
+ 
+                 def read(path):
+                     if case == "unreadable" and path.suffix == ".done":
+@@ -312,6 +330,7 @@
+                         created[extra] = extra.read_bytes()
+                     if case == "failed":
+                         raise runner.MeasurementError("actual child failed")
++                    return SimpleNamespace(pid=12345)
+ 
+                 with mock.patch.object(runner, "run_checked", side_effect=run):
+                     with self.assertRaises(runner.MeasurementError):
+@@ -346,8 +365,9 @@
+             paths = write_pair(command, raw)
+             originals.append([(path, path.read_bytes()) for path in paths])
+             commands.append(command)
+-
+-        with mock.patch.object(runner, "resolve_build", return_value=Path("/test/python")), \
++            return SimpleNamespace(pid=12345)
++
++        with mock.patch.object(runner, "resolve_build", return_value=Path(sys.executable)), \
+              mock.patch.object(runner, "select", return_value=[runner.Bench("sample", "kernels", 2)]), \
+              mock.patch.object(runner, "build_info", return_value={"path": "/test/python", "label": "test"}), \
+              mock.patch.object(runner, "check_pystats"), \
+--- a/pyjit/issues/checkpoint-closure/process-identity-probe.py
++++ b/pyjit/issues/checkpoint-closure/process-identity-probe.py
+@@ -29,6 +29,14 @@
+             "import os, sys\npid = os.fork()\n"
+             "if pid == 0:\n    sys.exit(0)\n"
+             "os.waitpid(pid, 0)\n", 2, 0),
++        "off_fork": (
++            "import os, sys\nsys._stats_off()\npid = os.fork()\n"
++            "if pid == 0:\n    os._exit(0)\n"
++            "os.waitpid(pid, 0)\nsys._stats_on()\n", 1, 0),
++        "late_on": (
++            "import os, sys\npid = os.fork()\n"
++            "if pid == 0:\n    os._exit(0)\n"
++            "os.waitpid(pid, 0)\nsys._stats_on()\n", 1, 0),
+         "argv_bytes": ("pass", 1, 0),
+     }
+     env = {k: v for k, v in os.environ.items() if not k.startswith("PYTHON")}
+@@ -39,6 +47,9 @@
+         directory.mkdir()
+         command = [str(args.python.resolve()), "-I", "-S", "-B", "-X", "pystats",
+                    "-X", f"pystats_dir={directory.resolve()}", "-c", code]
++        if name == "late_on":
++            command.remove("pystats")
++            command.remove("-X")
+         if name == "argv_bytes":
+             command.extend(["é", os.fsdecode(b"\xff"), "a\nb", "a b", ""])
+         with subprocess.Popen(command, env=env, stdout=subprocess.PIPE,
+@@ -48,6 +59,12 @@
+         (directory / "stderr.log").write_bytes(stderr)
+         if proc.returncode:
+             raise RuntimeError(f"{name}: child returned {proc.returncode}")
++        image = args.python.stat()
++        (directory / "root-launch.json").write_text(json.dumps([{
++            "version": 1, "pid": proc.pid, "ppid": os.getpid(),
++            "argv": command, "image_dev": image.st_dev,
++            "image_ino": image.st_ino,
++        }]))
+         folded = reader.Folded()
+         folded.fold_dir(directory)
+         folded.read_markers(directory)
+@@ -57,6 +74,11 @@
+         if expected_zero:
+             if folded.identity_complete or not folded.accounting_errors:
+                 raise AssertionError("zero-stats outcome incorrectly admitted")
++        elif name == "off_fork":
++            if (folded.identity_complete or len(folded.child_receipts) != 1
++                or not any("lacks matching child marker" in error
++                           for error in folded.accounting_errors)):
++                raise AssertionError("stats-off fork was silently admitted")
+         elif not folded.identity_complete or folded.accounting_errors:
+             raise AssertionError(f"{name}: {folded.accounting_errors}")
+         identities = list(folded.identity_records.values())
+@@ -67,8 +89,12 @@
+             children = [identity for identity in identities if identity["pid"] != proc.pid]
+             if len(children) != 1 or children[0]["ppid"] != proc.pid:
+                 raise AssertionError("fork child identity does not name its parent")
++            if len(folded.child_receipts) != 1 or folded.child_receipts[0]["source"] != "fork":
++                raise AssertionError("fork did not publish one native child receipt")
+         elif any(identity["pid"] != proc.pid for identity in identities):
+             raise AssertionError(f"{name}: unexpected process identity")
++        elif name != "off_fork" and folded.child_receipts:
++            raise AssertionError(f"{name}: unexpected native child receipt")
+         if name == "repeated" and len(folded.dump_identities) != 2:
+             raise AssertionError("repeated dump overwrote its interval stem")
+         if name == "argv_bytes":

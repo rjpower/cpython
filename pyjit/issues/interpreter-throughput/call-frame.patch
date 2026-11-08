@@ -1,0 +1,231 @@
+--- a/Python/ceval.c
++++ b/Python/ceval.c
+@@ -3052,12 +3052,105 @@
+     return frame;
+ }
+ 
++/* The caller owns its whole window until the final non-reentrant commit. */
++static int
++call_transaction_overlap_python(_PyCallTransaction *call,
++                                _PyInterpreterFrame **out)
++{
++#ifdef Py_GIL_DISABLED
++    return 1;
++#else
++    if (call->kind != CALL_TRANSACTION_VECTOR || call->instrumented ||
++        call->frame->owner != FRAME_OWNED_BY_THREAD) {
++        return 1;
++    }
++    PyValue *homes = _PyFrame_Slots(call->frame) + call->base;
++    PyFunctionObject *func = (PyFunctionObject *)PyValue_AsKnownObjectBorrow(homes[0]);
++    PyCodeObject *code = (PyCodeObject *)func->func_code;
++    int offset = PyValue_IsNull(homes[1]) ? 2 : 1;
++    int nargs = call->argument_count + 2 - offset;
++    int flags = code->co_flags;
++    PyObject *defaults = func->func_defaults;
++    Py_ssize_t ndefaults = defaults == NULL ? 0 : PyTuple_GET_SIZE(defaults);
++    if (!(flags & CO_OPTIMIZED) || code->co_kwonlyargcount ||
++        nargs > code->co_argcount || nargs < code->co_argcount - ndefaults ||
++        code->_co_exec == NULL ||
++        !_PyThreadState_HasStackSpace(call->tstate, code->co_framesize)) {
++        return 1;
++    }
++
++    /* Allocation can run Python. Pin the selected code and revalidate after
++     * preparing kwargs; no window owner has been detached yet. */
++    PyObject *kwdict = NULL;
++    int status = 1;
++    Py_INCREF(code);
++    if (flags & CO_VARKEYWORDS) {
++        kwdict = PyDict_New();
++        if (kwdict == NULL || call_record_refresh(call) < 0) {
++            status = -1;
++            goto cleanup;
++        }
++    }
++    homes = _PyFrame_Slots(call->frame) + call->base;
++    if (!PyValue_IsObject(homes[0]) ||
++        Py_TYPE(PyValue_AsKnownObjectBorrow(homes[0])) != &PyFunction_Type ||
++        (PyObject *)func != PyValue_AsKnownObjectBorrow(homes[0]) ||
++        func->func_code != (PyObject *)code ||
++        func->vectorcall != _PyFunction_Vectorcall ||
++        IS_PEP523_HOOKED(call->tstate) || code->_co_exec == NULL ||
++        !_PyThreadState_HasStackSpace(call->tstate, code->co_framesize)) {
++        goto cleanup;
++    }
++    defaults = func->func_defaults;
++    ndefaults = defaults == NULL ? 0 : PyTuple_GET_SIZE(defaults);
++    if (nargs < code->co_argcount - ndefaults ||
++        offset != (PyValue_IsNull(homes[1]) ? 2 : 1)) {
++        goto cleanup;
++    }
++    Py_DECREF(code);  /* The function still owns it. */
++
++    /* No callback, release or failure is allowed until child is current. */
++    PyValue function = homes[0];
++    homes[0] = PyValue_NULL;
++    _PyInterpreterFrame *child = _PyFrame_PushOverlapping(
++        call->tstate, function, homes + offset, nargs, call->frame);
++    for (int i = nargs; i < code->co_argcount; i++) {
++        child->base[i] = PyValue_XDUP(
++            _PyTuple_ITEMS(defaults)[i - (code->co_argcount - ndefaults)]);
++    }
++    int extra = code->co_argcount;
++    if (flags & CO_VARARGS) {
++        child->base[extra++] = PyValue_DUP(
++            PyValue_FromObjectBorrow((PyObject *)&_Py_SINGLETON(tuple_empty)));
++    }
++    if (flags & CO_VARKEYWORDS) {
++        child->base[extra] = PyValue_FromObjectSteal(kwdict);
++    }
++    call->frame->return_slot = (uint16_t)call->destination;
++    call->tstate->current_frame = child;
++    *out = child;
++    return 0;
++
++cleanup:
++    Py_XDECREF(kwdict);
++    Py_DECREF(code);
++    if (call_record_refresh(call) < 0) {
++        return -1;
++    }
++    return status;
++#endif
++}
++
+ /* Parent inputs are never offered to a consuming binder. Copies can fail
+  * and retire while the parent's actual IN_CALL homes remain owning. */
+ static int
+ call_transaction_push_python(_PyCallTransaction *call,
+                              _PyInterpreterFrame **out)
+ {
++    int overlap = call_transaction_overlap_python(call, out);
++    if (overlap <= 0) {
++        return overlap;
++    }
+     PyValue small[16];
+     PyValue *storage = small;
+     int copied = 0, retired_count = 0;
+--- a/Lib/test/test_call.py
++++ b/Lib/test/test_call.py
+@@ -16,6 +16,7 @@
+     import _testinternalcapi
+ except ImportError:
+     _testinternalcapi = None
++import sys
+ import struct
+ import collections
+ import itertools
+@@ -34,6 +35,112 @@
+ 
+ class FunctionCalls(unittest.TestCase):
+ 
++    def test_positional_defaults_and_empty_variadics(self):
++        sentinel = object()
++
++        def target(first, second=sentinel, /, *args, **kwargs):
++            return first, second, args, kwargs
++
++        first = target(sentinel)
++        second = target(sentinel)
++        self.assertEqual(first[:3], (sentinel, sentinel, ()))
++        self.assertEqual(first[3], {})
++        self.assertIsNot(first[3], second[3])
++        first[3]["kept"] = sentinel
++        self.assertEqual(second[3], {})
++        self.assertEqual(target(1, 2, 3, key=4), (1, 2, (3,), {"key": 4}))
++
++        class Receiver:
++            def method(self, value=sentinel, *args, **kwargs):
++                return self, value, args, kwargs
++
++        receiver = Receiver()
++        receiver.method()  # Prepare the callee before checking the overlap path.
++        self.assertEqual(receiver.method(), (receiver, sentinel, (), {}))
++
++    def test_positional_default_mutation_and_generator_caller(self):
++        def target(value=1, **kwargs):
++            return value, kwargs
++
++        self.assertEqual(target(), (1, {}))
++        target.__defaults__ = (2,)
++        self.assertEqual(target(), (2, {}))
++
++        def caller():
++            yield target()
++
++        self.assertEqual(next(caller()), (2, {}))
++        with self.assertRaises(TypeError):
++            target(1, 2)
++
++
++    def test_positional_frame_and_tracing(self):
++        seen = []
++
++        def target(value=1, **kwargs):
++            caller = sys._getframe(1)
++            seen.append((caller.f_code.co_name, value, kwargs))
++            return value
++
++        def caller():
++            return target()
++
++        self.assertEqual(caller(), 1)
++        self.assertEqual(seen[-1], ("caller", 1, {}))
++
++        def trace(frame, event, arg):
++            if event == "call" and frame.f_code is caller.__code__:
++                target.__defaults__ = (2,)
++            return trace
++
++        old_trace = sys.gettrace()
++        try:
++            sys.settrace(trace)
++            self.assertEqual(caller(), 2)
++        finally:
++            sys.settrace(old_trace)
++        self.assertEqual(seen[-1], ("caller", 2, {}))
++
++    def test_positional_retained_frame_and_generator_callee(self):
++        def frame_target(value=7, **kwargs):
++            return sys._getframe()
++
++        frame_target()
++        frame = frame_target()
++        self.assertEqual(frame.f_locals["value"], 7)
++        self.assertEqual(frame.f_locals["kwargs"], {})
++
++        def gen_target(value=8, *args, **kwargs):
++            yield value, args, kwargs
++
++        self.assertEqual(next(gen_target()), (8, (), {}))
++        first = gen_target()
++        second = gen_target()
++        a = next(first)
++        b = next(second)
++        self.assertEqual(a[:2], (8, ()))
++        self.assertEqual(a[2], {})
++        self.assertIsNot(a[2], b[2])
++
++    def test_positional_argument_lifetime(self):
++        released = []
++
++        class Value:
++            def __del__(self):
++                released.append("released")
++
++        def target(value, default=None, *args, **kwargs):
++            self.assertEqual(released, [])
++            return value
++
++        target(None)  # The first call prepares the callee's executable.
++        value = Value()
++        result = target(value)
++        del value
++        self.assertEqual(released, [])
++        del result
++        self.assertEqual(released, ["released"])
++
+     def test_type_non_string_kwargs_keep_vectorcall_validation(self):
+         bad_kwargs = {None: 1}
+         for call in (

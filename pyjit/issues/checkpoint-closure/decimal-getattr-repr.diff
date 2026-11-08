@@ -1,0 +1,16 @@
+--- a/Modules/_decimal/_decimal.c
++++ b/Modules/_decimal/_decimal.c
+@@ -8753,7 +8753,12 @@
+         PyObject *version = PyUnicode_FromString(MPD_SPEC_VERSION);
+         return version == NULL ? PyValue_NULL : PyValue_FromObjectSteal(version);
+     }
+-    PyErr_Format(PyExc_AttributeError, "module 'decimal' has no attribute %vR", name);
++    PyObject *repr = _PyValue_Repr(name);
++    if (repr == NULL) {
++        return PyValue_NULL;
++    }
++    PyErr_Format(PyExc_AttributeError, "module \047decimal\047 has no attribute %U", repr);
++    Py_DECREF(repr);
+     return PyValue_NULL;
+ }
+ 

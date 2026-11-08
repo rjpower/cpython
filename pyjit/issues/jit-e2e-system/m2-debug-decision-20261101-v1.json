@@ -1,0 +1,29 @@
+{
+  "build_passed": true,
+  "decision": "FAILED_PARTIAL_BATCH_STALE_UNSUPPORTED_FIXTURE",
+  "failure": "The old list-construction fixture is now supported; its inactive-unit assertion is stale.",
+  "independent_receipt": {
+    "path": "boil/issues/jit-e2e-system/m2-debug-outcome-receipt-20261101-v1.json",
+    "sha256": "5f56bd5f5a41e8ae46dbc0c314f6b85feafc64d9d5ac1871b5b685cb41a339eb"
+  },
+  "independent_review": {
+    "path": "boil/issues/jit-e2e-system/m2-debug-outcome-review-20261101-v1.md",
+    "sha256": "6c6886ebad25dd233656cb1a209e34dc68a13f8f4d0c076a28195868a1d8d8ef"
+  },
+  "natural_methods_not_run": 14,
+  "natural_runtime_or_performance_acceptance": false,
+  "old_attempt_rerun_authorized": false,
+  "runtime_failed": 1,
+  "runtime_passed": 13,
+  "runtime_skipped": 0,
+  "source_head": "3bcb891956a9d2796bbe5e92c4f0c9e2f2516899",
+  "source_image_logs_preserved": true,
+  "suite_result_snapshot": "Absent on raised test failure; actual IDs/counts come from standard returned state and verbose raw results.",
+  "supervisor_session": 75385,
+  "terminal_cleanup": {
+    "path": "build/jit-method-m2-root-activation-20261101-v1/terminal-cleanup.json",
+    "sha256": "1534b620dd47e3cedae9e564e8f4698d55ce00a3ec0762ecf1eb7b24a96467d7"
+  },
+  "terminal_exit_code": 1,
+  "utc": "2026-11-01T19:46:39.048499+00:00"
+}

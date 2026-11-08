@@ -1,0 +1,160 @@
+--- a/Include/abstract.h
++++ b/Include/abstract.h
+@@ -420,6 +420,7 @@
+  * Return 0 and set 'item' to NULL when there are no remaining values.
+  * Return -1, set 'item' to NULL and set an exception on error.
+  */
++Py_VALUE_COMPAT(_PyValue_IterNext)
+ PyAPI_FUNC(int) PyIter_NextItem(PyObject *iter, PyObject **item);
+ #endif
+ 
+@@ -926,6 +927,7 @@
+ */
+ #if !defined(Py_LIMITED_API) || Py_LIMITED_API+0 >= 0x030d0000
+ PyAPI_FUNC(int) PyMapping_GetOptionalItem(PyObject *, PyObject *, PyObject **);
++Py_VALUE_COMPAT(_PyValue_MappingGetOptionalItemString)
+ PyAPI_FUNC(int) PyMapping_GetOptionalItemString(PyObject *, const char *, PyObject **);
+ #endif
+ 
+--- a/Include/cpython/longobject.h
++++ b/Include/cpython/longobject.h
+@@ -86,4 +86,5 @@
+     int little_endian, int is_signed, int with_exceptions);
+ 
+ /* For use by the gcd function in mathmodule.c */
++Py_VALUE_COMPAT(_PyLong_ValueGCD)
+ PyAPI_FUNC(PyObject *) _PyLong_GCD(PyObject *, PyObject *);
+--- a/Include/internal/pycore_ceval.h
++++ b/Include/internal/pycore_ceval.h
+@@ -434,6 +434,7 @@
+ // Like PyMapping_GetOptionalItem, but returns the PyObject* instead of taking
+ // it as an out parameter. This helps MSVC's escape analysis when used with
+ // tail calling.
++Py_VALUE_COMPAT(_PyValue_GetOptionalItem)
+ PyAPI_FUNC(PyObject*) _PyMapping_GetOptionalItem2(PyObject* obj, PyObject* key, int* err);
+ 
+ #ifdef __cplusplus
+--- a/Tools/build/value_ownership.toml
++++ b/Tools/build/value_ownership.toml
+@@ -1101,12 +1101,30 @@
+ reason = "PyObject ** output and int status become _PyStatusValue; preserve missing KeyError clearing"
+ 
+ [[manual]]
++object = "PyMapping_GetOptionalItemString"
++value = "_PyValue_MappingGetOptionalItemString"
++family = "item"
++reason = "No production caller remains; retain the C-string key and adapt owned _PyStatusValue result to the public 1/0/-1 plus PyObject ** contract"
++
++[[manual]]
++object = "_PyMapping_GetOptionalItem2"
++value = "_PyValue_GetOptionalItem"
++family = "item"
++reason = "No production caller remains; unpack the owned status value into the historical PyObject * return and int *err output"
++
++[[manual]]
+ object = "PyIter_Next"
+ value = "_PyValue_IterNext"
+ family = "item"
+ reason = "owned PyObject * or NULL becomes _PyStatusValue with NEXT/RETURN/ERROR; preserve exception clearing"
+ 
+ [[manual]]
++object = "PyIter_NextItem"
++value = "_PyValue_IterNext"
++family = "item"
++reason = "No production caller remains; preserve the explicit iterator check and adapt owned NEXT/RETURN/ERROR to 1/0/-1 plus PyObject ** output at the object boundary"
++
++[[manual]]
+ object = "PyIter_Send"
+ value = "_PyValue_Send"
+ family = "item"
+@@ -1135,3 +1153,9 @@
+ value = "_PyValue_CallNoArgs"
+ family = "call"
+ reason = "value twin adds PyThreadState * first parameter and returns owned PyValue"
++
++[[manual]]
++object = "_PyLong_GCD"
++value = "_PyLong_ValueGCD"
++family = "number"
++reason = "No production caller remains; adapt the owned PyValue result to the historical new-reference PyObject * return"
+--- a/Lib/test/test_tools/test_check_r27.py
++++ b/Lib/test/test_tools/test_check_r27.py
+@@ -863,6 +863,78 @@
+             out, _ = check_r27.static_violations(cdb, root, inventory)
+             self.assertEqual(out, ["duplicate ownership entry: PyFoo"])
+ 
++    def test_no_caller_manual_aliases_require_exact_marks(self):
++        pairs = (
++            ("PyIter_NextItem", "_PyValue_IterNext", "item"),
++            ("PyMapping_GetOptionalItemString",
++             "_PyValue_MappingGetOptionalItemString", "item"),
++            ("_PyMapping_GetOptionalItem2", "_PyValue_GetOptionalItem", "item"),
++            ("_PyLong_GCD", "_PyLong_ValueGCD", "number"),
++        )
++        with tempfile.TemporaryDirectory() as tmp:
++            root = Path(tmp)
++            include = root / "Include"
++            include.mkdir()
++            header = include / "api.h"
++            declarations = {
++                "PyIter_NextItem": (
++                    "PyAPI_FUNC(int) PyIter_NextItem(PyObject *, PyObject **);"),
++                "PyMapping_GetOptionalItemString": (
++                    "PyAPI_FUNC(int) PyMapping_GetOptionalItemString("
++                    "PyObject *, const char *, PyObject **);"),
++                "_PyMapping_GetOptionalItem2": (
++                    "PyAPI_FUNC(PyObject*) _PyMapping_GetOptionalItem2("
++                    "PyObject *, PyObject *, int *);"),
++                "_PyLong_GCD": (
++                    "PyAPI_FUNC(PyObject *) _PyLong_GCD("
++                    "PyObject *, PyObject *);"),
++            }
++            providers = (
++                "PyAPI_FUNC(_PyStatusValue) _PyValue_IterNext(PyObject *);",
++                "PyAPI_FUNC(_PyStatusValue) "
++                "_PyValue_MappingGetOptionalItemString(PyValueBorrow, const char *);",
++                "PyAPI_FUNC(_PyStatusValue) _PyValue_GetOptionalItem("
++                "PyValueBorrow, PyValueBorrow);",
++                "PyAPI_FUNC(PyValue) _PyLong_ValueGCD("
++                "PyValueBorrow, PyValueBorrow);",
++            )
++
++            def write_header(missing_mark=None):
++                lines = []
++                for obj, value, _ in pairs:
++                    if obj != missing_mark:
++                        lines.append(f"Py_VALUE_COMPAT({value})")
++                    lines.append(declarations[obj])
++                lines.extend(providers)
++                header.write_text("\n".join(lines) + "\n")
++
++            write_header()
++            source_dir = root / "Modules"
++            source_dir.mkdir()
++            source = source_dir / "probe.c"
++            source.write_text("#define Py_VALUE_CORE\n")
++            inventory = root / "inventory.toml"
++            rows = ["r27_complete=true"]
++            for obj, value, family in pairs:
++                rows.extend(("[[manual]]", f'object="{obj}"',
++                             f'value="{value}"', f'family="{family}"'))
++            inventory.write_text("\n".join(rows) + "\n")
++            cdb = root / "cdb.json"
++            cdb.write_text(json.dumps([{
++                "directory": tmp, "file": str(source),
++                "arguments": ["cc", "-c", str(source)],
++            }]))
++
++            self.assertEqual(check_r27.static_violations(
++                cdb, root, inventory)[0], [])
++            for obj, value, _ in pairs:
++                with self.subTest(missing_mark=obj):
++                    write_header(missing_mark=obj)
++                    out, _ = check_r27.static_violations(cdb, root, inventory)
++                    self.assertEqual(len(out), 1, out)
++                    self.assertIn(f"{obj} lacks Py_VALUE_COMPAT({value})",
++                                  out[0])
++
+     def test_static_inventory_and_deferral(self):
+         with tempfile.TemporaryDirectory() as tmp:
+             root = Path(tmp)

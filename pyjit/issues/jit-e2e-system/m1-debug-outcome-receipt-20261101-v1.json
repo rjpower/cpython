@@ -1,0 +1,53 @@
+{
+  "utc": "2026-11-01T18:06:20.220102+00:00",
+  "accepted": true,
+  "decision": "ACCEPT_FOCUSED_M1_DEBUG_NATIVE_BEHAVIOR_ONLY",
+  "source_head": "15987a03c236d5257b8a7b944bf858ee20e52fc3",
+  "image_sha256": "75246581087e50ebcd9903722910641054aba142fceebbe3b473f46146e282ae",
+  "review": {
+    "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/jit-method-m1-outcome-review-20261101-v1/review.md",
+    "sha256": "950cf396d1c406f318ec7f21cd97c09f4ef0d93d2e7d3072bfbb7cad31e267dc"
+  },
+  "replay": {
+    "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/jit-method-m1-outcome-review-20261101-v1/replay.json",
+    "sha256": "4c8d1969f20d5fde00529af31862dd4fc5b523cc02921f2b399c769258b56068"
+  },
+  "emission": {
+    "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/jit-method-m1-outcome-review-20261101-v1/emission.json",
+    "sha256": "b71880eef16bf8621d2f9dfb456cab7fef1a438a52eeed52641bf1d48d425cb4"
+  },
+  "native_bytes": {
+    "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/jit-method-m1-outcome-review-20261101-v1/method.bin",
+    "sha256": "10a2d1902399b2655ddf9a1f3566690f4abee66d6ffc22acd02a74f087327514"
+  },
+  "offline_disassembly": {
+    "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/jit-method-m1-outcome-review-20261101-v1/method.disassembly.txt",
+    "sha256": "f48cf56f5d0281cb8ee26a83d69b119def4fd38e4056e077703036a7f784dc8b"
+  },
+  "completion": {
+    "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/jit-method-baseline/build/jit-method-m1-feedback-v1/feedback-batch-completion.json",
+    "sha256": "dbd7b5f1ca151e6c2baf7f0a26132d1f949666f06f0e3a54ff84d11a2733ccf4"
+  },
+  "root_cleanup": {
+    "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/jit-method-m1-root-activation-20261101-v1/terminal-cleanup.json",
+    "sha256": "c506f2993b6912eeb82b6791f55da21a90ff6a26ec3139459a75cd472a85ae90"
+  },
+  "methods": 14,
+  "modules": 1,
+  "skipped": 0,
+  "completion_artifacts": 8118,
+  "native_products": 587,
+  "prior_files": 776,
+  "parent_fingerprints": 30,
+  "locks": 22,
+  "optional_module_summary": [
+    "Checked 116 modules (37 built-in, 67 shared, 1 n/a on linux-x86_64, 1 disabled, 10 missing, 0 failed on import)"
+  ],
+  "native_entry_and_compiled_continuation_credit": true,
+  "compiler_or_candidate_calls_by_reviewer": 0,
+  "offline_host_tools": [
+    "objdump captured binary",
+    "readelf pinned ELF"
+  ],
+  "elapsed_or_broad_qualification_or_integration_credit": false
+}

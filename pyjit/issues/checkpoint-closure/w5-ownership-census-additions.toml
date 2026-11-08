@@ -1,0 +1,40 @@
+# Further declaration-census candidates. This is an audit packet, not a
+# completeness assertion. All pairs need call-site review before marking.
+# These are manual because the signatures or control flow do not fit the
+# current value_sweep row processor.
+
+[[manual]]
+object = "PyMapping_GetOptionalItemString"
+value = "_PyValue_MappingGetOptionalItemString"
+family = "item"
+reason = "int plus PyObject ** output becomes _PyStatusValue; keep the C string and mapping alive across lookup"
+
+[[manual]]
+object = "PyIter_NextItem"
+value = "_PyValue_IterNext"
+family = "item"
+reason = "int plus PyObject ** output becomes _PyStatusValue; retain the non-iterator TypeError precheck"
+
+[[manual]]
+object = "_PyMapping_GetOptionalItem2"
+value = "_PyValue_GetOptionalItem"
+family = "item"
+reason = "PyObject * result plus int * status becomes _PyStatusValue; preserve both outputs and absent/error distinction"
+
+[[manual]]
+object = "_PyType_LookupRef"
+value = "_PyType_LookupValue"
+family = "attr"
+reason = "owned PyObject * or NULL becomes _PyStatusValue; own the value result until use or close"
+
+[[manual]]
+object = "_PySuper_Lookup"
+value = "_PySuper_LookupValue"
+family = "attr"
+reason = "owned PyObject * plus method out-flag becomes _PyStatusValue; preserve want_method and unbound-method flag"
+
+[[manual]]
+object = "_PyObject_Call"
+value = "_PyValue_Call"
+family = "call"
+reason = "owned PyObject * result becomes PyValue; preserve existing tstate, assertions and call accounting"

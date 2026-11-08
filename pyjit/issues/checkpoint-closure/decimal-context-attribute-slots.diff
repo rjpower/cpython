@@ -1,0 +1,84 @@
+--- a/Modules/_decimal/_decimal.c
++++ b/Modules/_decimal/_decimal.c
+@@ -1368,45 +1368,50 @@
+ }
+ #endif
+ 
+-static PyObject *
+-context_getattr(PyObject *self, PyObject *name)
++static PyValue
++context_getattr_value(PyValueBorrow receiver, PyObject *name)
+ {
+-    PyObject *retval;
+-
++    PyObject *self = PyValue_AsKnownObjectBorrow(receiver);
+     if (PyUnicode_Check(name)) {
+         if (PyUnicode_CompareWithASCIIString(name, "traps") == 0) {
+-            retval = ((PyDecContextObject *)self)->traps;
+-            return Py_NewRef(retval);
++            return PyValue_DUP(PyValue_FromObjectBorrow(
++                ((PyDecContextObject *)self)->traps));
+         }
+         if (PyUnicode_CompareWithASCIIString(name, "flags") == 0) {
+-            retval = ((PyDecContextObject *)self)->flags;
+-            return Py_NewRef(retval);
++            return PyValue_DUP(PyValue_FromObjectBorrow(
++                ((PyDecContextObject *)self)->flags));
+         }
+     }
+-
+-    return PyObject_GenericGetAttr(self, name);
++    return _PyObject_GenericGetAttrValue(receiver, name);
+ }
++_Py_VALUE_THUNK_GETATTRO(context_getattr, context_getattr_value)
+ 
+ static int
+-context_setattr(PyObject *self, PyObject *name, PyObject *value)
++context_setattr_value(PyValueBorrow receiver, PyObject *name,
++                      PyValueBorrow value)
+ {
+-    if (value == NULL) {
++    if (PyValue_IsNull(value)) {
+         PyErr_SetString(PyExc_AttributeError,
+-            "context attributes cannot be deleted");
++                        "context attributes cannot be deleted");
+         return -1;
+     }
+-
+-    if (PyUnicode_Check(name)) {
+-        if (PyUnicode_CompareWithASCIIString(name, "traps") == 0) {
+-            return context_settraps_dict(self, value);
++    if (PyUnicode_Check(name) &&
++        (PyUnicode_CompareWithASCIIString(name, "traps") == 0 ||
++         PyUnicode_CompareWithASCIIString(name, "flags") == 0)) {
++        if (!PyValue_IsObject(value)) {
++            PyErr_SetString(PyExc_TypeError, "argument must be a signal dict");
++            return -1;
+         }
+-        if (PyUnicode_CompareWithASCIIString(name, "flags") == 0) {
+-            return context_setstatus_dict(self, value);
++        PyObject *self = PyValue_AsKnownObjectBorrow(receiver);
++        PyObject *obj = PyValue_AsKnownObjectBorrow(value);
++        if (PyUnicode_CompareWithASCIIString(name, "traps") == 0) {
++            return context_settraps_dict(self, obj);
+         }
++        return context_setstatus_dict(self, obj);
+     }
+-
+-    return PyObject_GenericSetAttr(self, name, value);
++    return _PyObject_GenericSetAttrValue(receiver, name, value);
+ }
++_Py_VALUE_THUNK_SETATTRO(context_setattr, context_setattr_value)
+ 
+ /* In the constructor None means "not specified". */
+ #define NONE_TO_NULL(x) ((x) == Py_None ? NULL : (x))
+@@ -8586,7 +8591,9 @@
+     {Py_tp_clear, context_clear},
+     {Py_tp_repr, context_repr},
+     {Py_tp_getattro, context_getattr},
++    {_Py_value_getattro, context_getattr_value},
+     {Py_tp_setattro, context_setattr},
++    {_Py_value_setattro, context_setattr_value},
+     {Py_tp_doc, (void *)context_init__doc__},
+     {Py_tp_methods, context_methods},
+     {Py_tp_getset, context_getsets},

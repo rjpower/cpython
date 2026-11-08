@@ -1,0 +1,23 @@
+diff --git a/Objects/rangeobject.c b/Objects/rangeobject.c
+--- a/Objects/rangeobject.c
++++ b/Objects/rangeobject.c
+@@ -512,12 +512,12 @@ compute_slice_compact(rangeobject *r, PySliceObject *slice, PyObject **result)
+     if (!range_compact(r, &start, &step, &length)) {
+         return 0;
+     }
+-    PyValueBorrow bounds[3] = {PyValue_Borrow(slice->start),
+-                               PyValue_Borrow(slice->stop),
+-                               PyValue_Borrow(slice->step)};
+-    for (int k = 0; k < 3; k++) {
+-        if (!PyValue_IsNone(bounds[k]) && !PyValue_IsInlineInt(bounds[k])) {
+-            return 0;
+-        }
++    PyValueBorrow lower = PyValue_Borrow(slice->start);
++    PyValueBorrow upper = PyValue_Borrow(slice->stop);
++    PyValueBorrow stride = PyValue_Borrow(slice->step);
++    if ((!PyValue_IsNone(lower) && !PyValue_IsInlineInt(lower)) ||
++        (!PyValue_IsNone(upper) && !PyValue_IsInlineInt(upper)) ||
++        (!PyValue_IsNone(stride) && !PyValue_IsInlineInt(stride))) {
++        return 0;
+     }
+     Py_ssize_t s, e, st;

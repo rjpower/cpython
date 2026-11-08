@@ -1,0 +1,5 @@
+# Type attribute assignment values
+
+Apply `r27-type-setattro-values.diff` followed by `r27-type-setattro-borrow-fix.diff`; the latter fixes a typed-borrow compile error in the frozen first draft. Both were prepared against runtime `66981c963be` before the current integration. The patch pairs the type value slot and object thunk, keeps assigned and displaced values owned through callbacks and slot updates, and updates type dictionaries through an existing-lock value setter.
+
+A locked W5 release shadow build and restoration each checked 117 modules with zero import failures. Nineteen filtered `test_descr` metaclass, slot and attribute tests passed. The direct probe `r27-type-setattro-probe.py` matched upstream for scalar writes, invalid and immutable errors, Unicode-subclass names, metaclass descriptor assignment, a reentrant displaced-value finalizer and special slot replacement. No full-suite or fresh box-count claim is made. Sol source post-review approved the combined patches with no must-fix.

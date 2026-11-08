@@ -1,0 +1,59 @@
+{
+  "author_checkpoint": {
+    "path": "build/worktrees/jit-natural-method/build/jit-method-m2-source/checkpoint.json",
+    "sha256": "1126bc406c7f18caf715543d8dd16f1df0030487666e48732f1857e11e1445e2"
+  },
+  "candidate_build_runtime_timing_authorized": false,
+  "checkpoint_deadline_utc": "2026-11-01T19:05:56.305708+00:00",
+  "concrete_evidence": {
+    "callable_helpers": 82,
+    "classifications": 293,
+    "distinct_syntax_translation_units_passed": 9,
+    "host_methods_passed": 33,
+    "old_metadata_format_rows_exact": 290,
+    "private_ids": [
+      302,
+      303,
+      304
+    ],
+    "real_consumers": [
+      "normal return after actual result store",
+      "exception into waiting caller",
+      "RETURN_GENERATOR retire before PopFrame and resume after IR_STORE_RETURN"
+    ]
+  },
+  "decision": "CHECKPOINT_DELIVERABLES_PRESENT_CONTINUE_WITHIN_ORIGINAL_SOURCE_CAP",
+  "historical_failures_preserved": [
+    "host-v1/v2: miniature DSL alias error",
+    "host-v4: nonexistent BUILD_CONST_KEY_MAP oracle",
+    "syntax-v3: raw INSTR_OPCODE generated condition"
+  ],
+  "independent_checkpoint": {
+    "m2-checkpoint-receipt-20261101-v1.json": {
+      "path": "boil/issues/jit-e2e-system/m2-checkpoint-receipt-20261101-v1.json",
+      "sha256": "41d936d3f3f302a065888a2520e67335a6013af5344e552cba399248659b3d5c"
+    },
+    "m2-checkpoint-review-20261101-v1.md": {
+      "path": "boil/issues/jit-e2e-system/m2-checkpoint-review-20261101-v1.md",
+      "sha256": "c8e656a4201a8e9146c443bf373ef4a20c8bb57867c53ff28fc0892b59b17f4a"
+    }
+  },
+  "policy_clarification": {
+    "path": "boil/issues/jit-e2e-system/m2-policy-clarification-20261101-v1.json",
+    "sha256": "72fca38d1dffcdae1f2bb8dd6802324832fddabc6c9726fb71193b39599646a1"
+  },
+  "remaining": [
+    "Bootstrap backoff and scoped cold-allocation fault/reentry fixture",
+    "Natural observer, pending-capacity and actual-coroutine fixtures",
+    "Final exact-source review and checks after all edits",
+    "Separate fresh focused native build/runtime validation",
+    "Fixed six-program natural coverage, cold cost and elapsed evidence",
+    "Shared optimizing SSA and genuine observed-loop implementation"
+  ],
+  "source_accepted": false,
+  "source_complete": false,
+  "source_deadline_utc": "2026-11-01T20:05:56.305708+00:00",
+  "source_extension_authorized": false,
+  "source_frozen": false,
+  "utc": "2026-11-01T19:03:13.834477+00:00"
+}

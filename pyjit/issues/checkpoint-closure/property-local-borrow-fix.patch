@@ -1,0 +1,16 @@
+--- a/Objects/descrobject.c
++++ b/Objects/descrobject.c
+@@ -2213,10 +2213,10 @@
+     PyValue type = PyValue_FromObjectSteal(type_obj);
+     PyValue args[4];
+     PyValue fields[3] = {old_get, old_set, old_del};
+-    PyValueBorrow requested[3] = {get, set, del};
+     for (int i = 0; i < 3; i++) {
+-        if (!PyValue_IsNull(requested[i]) && !PyValue_IsNone(requested[i])) {
+-            args[i] = PyValue_DUP(requested[i]);
++        PyValueBorrow requested = i == 0 ? get : (i == 1 ? set : del);
++        if (!PyValue_IsNull(requested) && !PyValue_IsNone(requested)) {
++            args[i] = PyValue_DUP(requested);
+         }
+         else if (!PyValue_IsNull(fields[i])) {
+             args[i] = PyValue_DUP(fields[i]);

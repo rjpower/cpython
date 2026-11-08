@@ -1,0 +1,177 @@
+--- a/Objects/dictobject.c
++++ b/Objects/dictobject.c
+@@ -2570,11 +2570,7 @@
+ static void
+ dict_value_keyerror(PyValue key)
+ {
+-    PyObject *object = _PyValue_AsObjectAt(key, BOX_SITE_DICT);
+-    if (object != NULL) {
+-        _PyErr_SetKeyError(object);
+-    }
+-    Py_XDECREF(object);
++    _PyErr_SetKeyErrorValue(key);
+ }
+ 
+ #define delvalue_knownhash_lock_held(V0, V1, V2) \
+--- a/Modules/_io/_iomodule.c
++++ b/Modules/_io/_iomodule.c
+@@ -19,10 +19,15 @@
+ #include "pycore_pyerrors.h"      // _PyErr_ChainExceptions1()
+ #include "pycore_pystate.h"       // _PyInterpreterState_GET()
+ #include "pycore_value.h"         // PyValue_FromObjectBorrow()
++#include "pycore_value_call.h"    // _PyValue_Vectorcall()
+ #include "pycore_value_ops.h"     // _PyValue_IsTrue()
+ #include "pycore_value_slots.h"// _PyValue_FromObjectResult()
+ 
+ #include "_iomodule.h"
++
++#ifdef HAVE_WINDOWS_CONSOLE_IO
++extern char _PyIO_get_console_type_value(PyValueBorrow path_or_fd);
++#endif
+ 
+ #ifdef HAVE_SYS_TYPES_H
+ #include <sys/types.h>
+@@ -223,27 +228,26 @@
+     char rawmode[6], *m;
+     int line_buffering, is_number, isatty = 0;
+ 
+-    PyObject *raw, *modeobj = NULL, *buffer, *wrapper, *result = NULL, *path_or_fd = NULL;
++    PyObject *raw, *modeobj = NULL, *buffer, *wrapper, *result = NULL;
++    PyValue path_or_fd = PyValue_NULL;
+ 
+     /* An inline int or float is a number. */
+     is_number = (!PyValue_IsObject(file)
+                  || PyNumber_Check(PyValue_AsKnownObjectBorrow(file)));
+ 
+     if (is_number) {
+-        path_or_fd = _PyValue_AsObjectAt(file, BOX_SITE_PARSER);
+-        if (path_or_fd == NULL) {
++        path_or_fd = PyValue_DUP(file);
++    } else {
++        PyObject *path = PyOS_FSPath(PyValue_AsKnownObjectBorrow(file));
++        if (path == NULL) {
+             return PyValue_NULL;
+         }
+-    } else {
+-        path_or_fd = PyOS_FSPath(PyValue_AsKnownObjectBorrow(file));
+-        if (path_or_fd == NULL) {
+-            return PyValue_NULL;
+-        }
++        path_or_fd = PyValue_FromObjectSteal(path);
+     }
+ 
+     if (!is_number &&
+-        !PyUnicode_Check(path_or_fd) &&
+-        !PyBytes_Check(path_or_fd)) {
++        !PyUnicode_Check(PyValue_AsKnownObjectBorrow(path_or_fd)) &&
++        !PyBytes_Check(PyValue_AsKnownObjectBorrow(path_or_fd))) {
+         PyErr_Format(PyExc_TypeError, "invalid file: %R",
+                      PyValue_AsKnownObjectBorrow(file));
+         goto error;
+@@ -339,30 +343,45 @@
+     /* Create the Raw file stream */
+     _PyIO_State *state = get_io_state(module);
+     {
+-        PyObject *RawIO_class = (PyObject *)state->PyFileIO_Type;
++        PyValue rawio_class = PyValue_DUP(PyValue_FromObjectBorrow(
++            (PyObject *)state->PyFileIO_Type));
+ #ifdef HAVE_WINDOWS_CONSOLE_IO
+         const PyConfig *config = _Py_GetConfig();
+-        if (!config->legacy_windows_stdio && _PyIO_get_console_type(path_or_fd) != '\0') {
+-            RawIO_class = (PyObject *)state->PyWindowsConsoleIO_Type;
++        if (!config->legacy_windows_stdio &&
++            _PyIO_get_console_type_value(PyValue_Borrow(path_or_fd)) != '\0') {
++            PyValue_CLOSE(rawio_class);
++            rawio_class = PyValue_DUP(PyValue_FromObjectBorrow(
++                (PyObject *)state->PyWindowsConsoleIO_Type));
+             encoding = "utf-8";
+         }
+ #endif
+-        PyObject *opener_obj = _PyValue_AsObjectAt(opener, BOX_SITE_PARSER);
+-        if (opener_obj == NULL) {
++        PyObject *rawmode_obj = PyUnicode_FromString(rawmode);
++        if (rawmode_obj == NULL) {
++            PyValue_CLOSE(rawio_class);
+             goto error;
+         }
+-        raw = PyObject_CallFunction(RawIO_class, "OsOO",
+-                                    path_or_fd, rawmode,
+-                                    closefd ? Py_True : Py_False,
+-                                    opener_obj);
+-        Py_DECREF(opener_obj);
++        PyValue args[4] = {
++            PyValue_DUP(PyValue_Borrow(path_or_fd)),
++            PyValue_FromObjectSteal(rawmode_obj),
++            closefd ? PyValue_True : PyValue_False,
++            PyValue_DUP(opener),
++        };
++        PyValue raw_value = _PyValue_Vectorcall(rawio_class, args, 4, NULL);
++        for (int arg = 0; arg < 4; arg++) {
++            PyValue_CLOSE(args[arg]);
++        }
++        PyValue_CLOSE(rawio_class);
++        if (PyValue_IsNull(raw_value)) {
++            goto error;
++        }
++        raw = PyValue_AsKnownObjectSteal(raw_value);
+     }
+ 
+     if (raw == NULL)
+         goto error;
+     result = raw;
+ 
+-    Py_SETREF(path_or_fd, NULL);
++    PyValue_CLEAR(path_or_fd);
+ 
+     modeobj = PyUnicode_FromString(mode);
+     if (modeobj == NULL)
+@@ -472,7 +491,7 @@
+         Py_XDECREF(close_result);
+         Py_DECREF(result);
+     }
+-    Py_XDECREF(path_or_fd);
++    PyValue_XCLOSE(path_or_fd);
+     Py_XDECREF(modeobj);
+     return PyValue_NULL;
+ }
+--- a/Modules/_io/winconsoleio.c
++++ b/Modules/_io/winconsoleio.c
+@@ -10,6 +10,8 @@
+ #include "pycore_fileutils.h"     // _Py_BEGIN_SUPPRESS_IPH
+ #include "pycore_object.h"        // _PyObject_GC_UNTRACK()
+ #include "pycore_pyerrors.h"      // _PyErr_ChainExceptions1()
++#include "pycore_long_value.h"    // _PyValue_AsLong()
++#include "pycore_value.h"         // PyValue_IsInlineInt()
+ #include "pycore_weakref.h"       // FT_CLEAR_WEAKREFS()
+ 
+ #ifdef HAVE_WINDOWS_CONSOLE_IO
+@@ -133,6 +135,29 @@
+     if (pname_buf != name_buf)
+         PyMem_Free(pname_buf);
+     return m;
++}
++
++char _PyIO_get_console_type_value(PyValueBorrow path_or_fd) {
++    if (PyValue_IsObject(path_or_fd)) {
++        return _PyIO_get_console_type(PyValue_AsKnownObjectBorrow(path_or_fd));
++    }
++    if (!PyValue_IsInlineInt(path_or_fd)) {
++        return '\0';
++    }
++
++    long fd = _PyValue_AsLong(path_or_fd);
++    if (fd == -1 && PyErr_Occurred()) {
++        PyErr_Clear();
++        return '\0';
++    }
++    if (fd < 0) {
++        return '\0';
++    }
++    HANDLE handle = _Py_get_osfhandle_noraise((int)fd);
++    if (handle == INVALID_HANDLE_VALUE) {
++        return '\0';
++    }
++    return _get_console_type(handle);
+ }
+ 
+ static DWORD

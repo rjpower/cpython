@@ -1,0 +1,55 @@
+{
+  "allowed_source_paths": [
+    "Python/jit_runtime.c",
+    "Lib/test/test_jit_method.py"
+  ],
+  "branch": "boil/jit-terminal-settlement",
+  "candidate_build_runtime_timing_or_integration_authorized": false,
+  "contracts": [
+    "Reuse existing replacement/BUILDING/TLS/quota/owner machinery; one fresh entry lookup, no retry or witness-bit copy.",
+    "Synchronize changed monitoring epoch once at the exact pending word after cold release and identity checks; no RESUME/poll/op replay.",
+    "Preserve original failed source/image/logs/products; keep all limits, hotness policy, formats, backend and selectors unchanged.",
+    "Existing counter fields must not be claimed to count replacement compilations unless their implementation establishes that meaning.",
+    "Freeze exact clean source with byte-bound cheap evidence, then independent review before any new native batch."
+  ],
+  "deadline_utc": "2026-11-01T21:34:16.990615+00:00",
+  "decision": "AUTHORIZE_ONE_ISOLATED_TERMINAL_SETTLEMENT_SOURCE_CORRECTION",
+  "design": {
+    "path": "boil/issues/jit-e2e-system/m3-terminal-settlement-design-20261101-v1.md",
+    "sha256": "24730fd2bb2116e8c457b6271e1b68006d731c37959c321430d6150705e60667"
+  },
+  "design_review": {
+    "path": "boil/issues/jit-e2e-system/m3-terminal-settlement-design-review-20261101-v1.md",
+    "sha256": "ed59bcf7c808407803e8f45096ff4f2d93eee42885b9447cf1f4f198cfeadb8a"
+  },
+  "extension_authorized": false,
+  "failed_attempt": {
+    "path": "boil/issues/jit-e2e-system/m3-debug-decision-20261101-v1.json",
+    "sha256": "7f66e351029975798ade79d1a31f868488f24f1d1be19b528c9397003c29131b"
+  },
+  "host_generator_tests_authorized": true,
+  "observer_clarification": {
+    "path": "boil/issues/jit-e2e-system/m3-terminal-settlement-observer-clarification-20261101-v1.md",
+    "sha256": "872b7d51b71c32a9acea159eaff9be0dace19231bdb75f7e7e42cb5b8855caf3"
+  },
+  "observer_review": {
+    "path": "boil/issues/jit-e2e-system/m3-terminal-settlement-observer-review-20261101-v1.md",
+    "sha256": "c0bc9b8e964c7fe1efc70df78133fb0270bb7c049d0b384b3ed0a66ad1d10497"
+  },
+  "owner": "restart_audit",
+  "preserve_old28_ast": true,
+  "previous_attempt_remains_frozen": true,
+  "reviewer": "qualification_review_resumed",
+  "runtime_ids": 36,
+  "source_base": "90cdb7bbda9d1547f1d1ccdcef2388a5b82744c5",
+  "standalone_backend_runs_authorized": false,
+  "start_utc": "2026-11-01T21:19:16.990615+00:00",
+  "syntax_only": {
+    "aggregate_compiler_ceiling_seconds": 30,
+    "authorized": true,
+    "configuration": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/jit-observed-loop/build/jit-method-m3-v1-debug-20261101",
+    "scope": "Actual changed runtime TU and correction worktree includes; no objects/link/build products"
+  },
+  "utc": "2026-11-01T21:19:16.990615+00:00",
+  "worktree": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/jit-terminal-settlement"
+}

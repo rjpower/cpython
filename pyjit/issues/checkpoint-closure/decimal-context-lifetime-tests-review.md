@@ -1,0 +1,5 @@
+# Decimal current-context regression review
+
+`decimal-context-lifetime-tests.diff` is approved. The single C Decimal subprocess test tracks destruction of a replaced Context without keeping a test-local reference to it. It exercises three callback points: fallback formatting construction, `localcontext` signal-flag truth conversion, and Rational numerator access during rich comparison. Each callback changes the current Context and collects garbage, then checks that the old Context remains alive until the C operation has finished using it. The author reports this focused test passing on the corrected W5 build.
+
+The subprocess route isolates `_pydecimal.Decimal` fallback caching. Under a tagged stats-gate run, `script_helper.run_python_until_end` adds explicit `-X pystats` and dump-directory options to this child, so it is counted. Its preliminary cached interpreter-environment probe is the separately identified uncounted `-E -c import sys; sys.exit(0)` mechanism in the full-suite accounting audit; the test does not introduce a new category.

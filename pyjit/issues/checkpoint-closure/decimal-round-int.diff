@@ -1,0 +1,690 @@
+--- a/Modules/_decimal/_decimal.c
++++ b/Modules/_decimal/_decimal.c
+@@ -36,6 +36,8 @@
+ #include "pycore_value_call.h"    // _PyValue_CallMethodNoArgs()
+ #include "pycore_value_ops.h"     // _PyValue_IsTrue()
+ #include "pycore_object.h"        // _PyObject_VisitType()
++#include "pycore_slots.h"         // _Py_value_nb_int
++#include "pycore_value_slots.h"   // _Py_VALUE_THUNK_UNARY()
+ #include "pycore_pystate.h"       // _PyThreadState_GET()
+ #include "pycore_tuple.h"         // _PyTuple_FromPair
+ #include "pycore_typeobject.h"
+@@ -4072,8 +4074,8 @@
+ 
+ /* Return a PyLongObject from a PyDecObject, using the specified rounding
+  * mode. The context precision is not observed. */
+-static PyObject *
+-dec_as_long(PyObject *dec, PyObject *context, int round)
++static PyValue
++dec_as_long_value(PyObject *dec, PyObject *context, int round)
+ {
+     if (mpd_isspecial(MPD(dec))) {
+         if (mpd_isnan(MPD(dec))) {
+@@ -4084,14 +4086,14 @@
+             PyErr_SetString(PyExc_OverflowError,
+                 "cannot convert Infinity to integer");
+         }
+-        return NULL;
++        return PyValue_NULL;
+     }
+ 
+     mpd_t *x = mpd_qnew();
+ 
+     if (x == NULL) {
+         PyErr_NoMemory();
+-        return NULL;
++        return PyValue_NULL;
+     }
+ 
+     mpd_context_t workctx = *CTX(context);
+@@ -4101,7 +4103,7 @@
+     mpd_qround_to_int(x, MPD(dec), &workctx, &status);
+     if (dec_addstatus(context, status)) {
+         mpd_del(x);
+-        return NULL;
++        return PyValue_NULL;
+     }
+ 
+     status = 0;
+@@ -4109,7 +4111,7 @@
+ 
+     if (!status) {
+         mpd_del(x);
+-        return PyLong_FromInt64(val);
++        return PyValue_FromInt64(val);
+     }
+     assert(!mpd_iszero(x));
+ 
+@@ -4141,7 +4143,7 @@
+         PyErr_NoMemory();
+         mpd_del(x);
+         mpd_free(tmp_digits);
+-        return NULL;
++        return PyValue_NULL;
+     }
+ 
+     void *digits;
+@@ -4150,15 +4152,20 @@
+     mpd_del(x);
+     if (writer == NULL) {
+         mpd_free(tmp_digits);
+-        return NULL;
++        return PyValue_NULL;
+     }
+     memcpy(digits, tmp_digits, layout->digit_size*n);
+     mpd_free(tmp_digits);
+-    return PyLongWriter_Finish(writer);
++    PyObject *result = PyLongWriter_Finish(writer);
++    if (result == NULL) {
++        return PyValue_NULL;
++    }
++    return PyValue_FromObjectSteal(result);
+ }
+ 
+ /*[clinic input]
+ @permit_long_summary
++@value_function
+ _decimal.Decimal.as_integer_ratio
+ 
+     cls: defining_class
+@@ -4168,107 +4175,112 @@
+ The ratio is in lowest terms and with a positive denominator.
+ Raise OverflowError on infinities and a ValueError on NaNs.
+ [clinic start generated code]*/
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
++static PyValue
+ _decimal_Decimal_as_integer_ratio_impl(PyObject *self, PyTypeObject *cls)
+-/*[clinic end generated code: output=eb49c512701f844b input=136f1dc585ca8d80]*/
++/*[clinic end generated code: output=72c6b9f93c18cb63 input=d4a93f345bc247cb]*/
+ {
+-    PyObject *numerator = NULL;
+-    PyObject *denominator = NULL;
+-    PyObject *exponent = NULL;
++    PyValue numerator = PyValue_NULL;
++    PyValue denominator = PyValue_NULL;
++    PyValue exponent = PyValue_NULL;
++    PyValue divisor = PyValue_NULL;
+     PyObject *tmp;
+     mpd_ssize_t exp;
+-    PyObject *context;
+     uint32_t status = 0;
+ 
+     if (mpd_isspecial(MPD(self))) {
+         if (mpd_isnan(MPD(self))) {
+-            PyErr_SetString(PyExc_ValueError,
+-                "cannot convert NaN to integer ratio");
++            PyErr_SetString(PyExc_ValueError, "cannot convert NaN to integer ratio");
+         }
+         else {
+-            PyErr_SetString(PyExc_OverflowError,
+-                "cannot convert Infinity to integer ratio");
++            PyErr_SetString(PyExc_OverflowError, "cannot convert Infinity to integer ratio");
+         }
+-        return NULL;
++        return PyValue_NULL;
+     }
+-
+     decimal_state *state = PyType_GetModuleState(cls);
+-    CURRENT_CONTEXT(state, context);
+-
++    PyObject *context = optional_context_value(state, PyValue_Borrow(PyValue_None));
++    if (context == NULL) {
++        return PyValue_NULL;
++    }
+     tmp = dec_alloc(state);
+     if (tmp == NULL) {
+-        return NULL;
++        return PyValue_NULL;
+     }
+-
+     if (!mpd_qcopy(MPD(tmp), MPD(self), &status)) {
+         Py_DECREF(tmp);
+         PyErr_NoMemory();
+-        return NULL;
++        return PyValue_NULL;
+     }
+-
+     exp = mpd_iszero(MPD(tmp)) ? 0 : MPD(tmp)->exp;
+     MPD(tmp)->exp = 0;
+-
+-    /* context and rounding are unused here: the conversion is exact */
+-    numerator = dec_as_long(tmp, context, MPD_ROUND_FLOOR);
++    numerator = dec_as_long_value(tmp, context, MPD_ROUND_FLOOR);
+     Py_DECREF(tmp);
+-    if (numerator == NULL) {
++    if (PyValue_IsNull(numerator)) {
+         goto error;
+     }
+-
+-    exponent = PyLong_FromSsize_t(exp < 0 ? -exp : exp);
+-    if (exponent == NULL) {
++    exponent = PyValue_FromInt64(exp < 0 ? -exp : exp);
++    if (PyValue_IsNull(exponent)) {
+         goto error;
+     }
+-
+-    tmp = PyLong_FromLong(10);
+-    if (tmp == NULL) {
++    PyValue power = _PyLong_ValuePower(PyValue_Borrow(PyValue_FromInt64(10)),
++                                        PyValue_Borrow(exponent),
++                                        PyValue_Borrow(PyValue_None));
++    PyValue_CLOSE(exponent);
++    exponent = power;
++    if (PyValue_IsNull(exponent)) {
+         goto error;
+     }
+-
+-    Py_SETREF(exponent, state->_py_long_power(tmp, exponent, Py_None));
+-    Py_DECREF(tmp);
+-    if (exponent == NULL) {
+-        goto error;
+-    }
+-
+     if (exp >= 0) {
+-        Py_SETREF(numerator, state->_py_long_multiply(numerator, exponent));
+-        Py_CLEAR(exponent);
+-        if (numerator == NULL) {
+-            goto error;
+-        }
+-        denominator = PyLong_FromLong(1);
+-        if (denominator == NULL) {
++        PyValue product = _PyLong_ValueMultiply(PyValue_Borrow(numerator),
++                                                  PyValue_Borrow(exponent));
++        PyValue_CLOSE(numerator);
++        numerator = product;
++        PyValue_CLOSE(exponent);
++        exponent = PyValue_NULL;
++        if (PyValue_IsNull(numerator)) {
+             goto error;
+         }
++        denominator = PyValue_FromInt64(1);
+     }
+     else {
+         denominator = exponent;
+-        exponent = NULL;
+-        tmp = _PyLong_GCD(numerator, denominator);
+-        if (tmp == NULL) {
++        exponent = PyValue_NULL;
++        divisor = _PyLong_ValueGCD(PyValue_Borrow(numerator), PyValue_Borrow(denominator));
++        if (PyValue_IsNull(divisor)) {
+             goto error;
+         }
+-        Py_SETREF(numerator, state->_py_long_floor_divide(numerator, tmp));
+-        if (numerator == NULL) {
+-            Py_DECREF(tmp);
++        PyValue quotient = _PyLong_ValueFloorDivide(PyValue_Borrow(numerator),
++                                                     PyValue_Borrow(divisor));
++        PyValue_CLOSE(numerator);
++        numerator = quotient;
++        if (PyValue_IsNull(numerator)) {
+             goto error;
+         }
+-        Py_SETREF(denominator, state->_py_long_floor_divide(denominator, tmp));
+-        Py_DECREF(tmp);
+-        if (denominator == NULL) {
++        quotient = _PyLong_ValueFloorDivide(PyValue_Borrow(denominator),
++                                             PyValue_Borrow(divisor));
++        PyValue_CLOSE(denominator);
++        denominator = quotient;
++        PyValue_CLOSE(divisor);
++        divisor = PyValue_NULL;
++        if (PyValue_IsNull(denominator)) {
+             goto error;
+         }
+     }
+-    return _PyTuple_FromPairSteal(numerator, denominator);
++    PyObject *result = _PyTuple_FromPairTakeValue(numerator, denominator);
++    if (result == NULL) {
++        return PyValue_NULL;
++    }
++    return PyValue_FromObjectSteal(result);
+ 
+ error:
+-    Py_XDECREF(exponent);
+-    Py_XDECREF(denominator);
+-    Py_XDECREF(numerator);
+-    return NULL;
++    PyValue_XCLOSE(divisor);
++    PyValue_XCLOSE(exponent);
++    PyValue_XCLOSE(denominator);
++    PyValue_XCLOSE(numerator);
++    return PyValue_NULL;
+ }
+ 
+ /*[clinic input]
+@@ -4444,6 +4456,7 @@
+ }
+ 
+ /*[clinic input]
++@value_function
+ _decimal.Decimal.__round__
+ 
+     cls: defining_class
+@@ -4452,48 +4465,54 @@
+ 
+ Return the Integral closest to self, rounding half toward even.
+ [clinic start generated code]*/
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
++static PyValue
+ _decimal_Decimal___round___impl(PyObject *self, PyTypeObject *cls,
+-                                PyObject *ndigits)
+-/*[clinic end generated code: output=790c2c6bd57890e6 input=d69e7178a58a66b1]*/
++                                PyValueBorrow ndigits)
++/*[clinic end generated code: output=b2dc8c8c9183bfa7 input=8745399a85a36c78]*/
+ {
+     PyObject *result;
+     uint32_t status = 0;
+     PyObject *context;
+     decimal_state *state = PyType_GetModuleState(cls);
+-    CURRENT_CONTEXT(state, context);
+-    if (ndigits) {
++    context = optional_context_value(state, PyValue_Borrow(PyValue_None));
++    if (context == NULL) {
++        return PyValue_NULL;
++    }
++    if (!PyValue_IsNull(ndigits)) {
+         mpd_uint_t dq[1] = {1};
+         mpd_t q = {MPD_STATIC|MPD_CONST_DATA,0,1,1,1,dq};
+         mpd_ssize_t y;
+ 
+-        if (!PyLong_Check(ndigits)) {
++        if (!PyValue_LongCheck(ndigits)) {
+             PyErr_SetString(PyExc_TypeError,
+                 "optional arg must be an integer");
+-            return NULL;
++            return PyValue_NULL;
+         }
+ 
+-        y = PyLong_AsSsize_t(ndigits);
++        y = _PyValue_IntAsSsize_t(ndigits);
+         if (y == -1 && PyErr_Occurred()) {
+-            return NULL;
++            return PyValue_NULL;
+         }
+         result = dec_alloc(state);
+         if (result == NULL) {
+-            return NULL;
++            return PyValue_NULL;
+         }
+ 
+         q.exp = (y == MPD_SSIZE_MIN) ? MPD_SSIZE_MAX : -y;
+         mpd_qquantize(MPD(result), MPD(self), &q, CTX(context), &status);
+         if (dec_addstatus(context, status)) {
+             Py_DECREF(result);
+-            return NULL;
++            return PyValue_NULL;
+         }
+ 
+-        return result;
++        return PyValue_FromObjectSteal(result);
+     }
+     else {
+-        return dec_as_long(self, context, MPD_ROUND_HALF_EVEN);
++        return dec_as_long_value(self, context, MPD_ROUND_HALF_EVEN);
+     }
+ }
+ 
+@@ -4852,15 +4871,20 @@
+ Dec_BinaryNumberMethod(mpd_qrem)
+ Dec_BinaryNumberMethod(mpd_qdivint)
+ 
+-static PyObject *
+-nm_dec_as_long(PyObject *dec)
++static PyValue
++nm_dec_as_long_value(PyValueBorrow value)
+ {
+-    PyObject *context;
++    PyObject *dec = PyValue_AsKnownObjectBorrow(value);
+     decimal_state *state = get_module_state_by_def(Py_TYPE(dec));
+-    CURRENT_CONTEXT(state, context);
+-    return dec_as_long(dec, context, MPD_ROUND_DOWN);
++    PyObject *context = optional_context_value(state, PyValue_Borrow(PyValue_None));
++    if (context == NULL) {
++        return PyValue_NULL;
++    }
++    return dec_as_long_value(dec, context, MPD_ROUND_DOWN);
+ }
+ 
++_Py_VALUE_THUNK_UNARY(nm_dec_as_long, nm_dec_as_long_value)
++
+ static int
+ nm_nonzero(PyObject *v)
+ {
+@@ -6181,22 +6205,29 @@
+ }
+ 
+ /*[clinic input]
++@value_function
+ _decimal.Decimal.__ceil__
+ 
+     cls: defining_class
+ 
+ Return the ceiling as an Integral.
+ [clinic start generated code]*/
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
++static PyValue
+ _decimal_Decimal___ceil___impl(PyObject *self, PyTypeObject *cls)
+-/*[clinic end generated code: output=d986ebf9aadbf9fe input=a8e0b87897706816]*/
++/*[clinic end generated code: output=5154d32a8c8949a3 input=e78e6e404c1c70b2]*/
+ {
+     PyObject *context;
+ 
+     decimal_state *state = PyType_GetModuleState(cls);
+-    CURRENT_CONTEXT(state, context);
+-    return dec_as_long(self, context, MPD_ROUND_CEILING);
++    context = optional_context_value(state, PyValue_Borrow(PyValue_None));
++    if (context == NULL) {
++        return PyValue_NULL;
++    }
++    return dec_as_long_value(self, context, MPD_ROUND_CEILING);
+ }
+ 
+ /*[clinic input]
+@@ -6254,20 +6285,27 @@
+ }
+ 
+ /*[clinic input]
++@value_function
+ _decimal.Decimal.__floor__ = _decimal.Decimal.__ceil__
+ 
+ Return the floor as an Integral.
+ [clinic start generated code]*/
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
++static PyValue
+ _decimal_Decimal___floor___impl(PyObject *self, PyTypeObject *cls)
+-/*[clinic end generated code: output=e239a2f7f6514c12 input=dcc37aeceb0efb8d]*/
++/*[clinic end generated code: output=7e695ea386013103 input=2420576e43545f9d]*/
+ {
+     PyObject *context;
+ 
+     decimal_state *state = PyType_GetModuleState(cls);
+-    CURRENT_CONTEXT(state, context);
+-    return dec_as_long(self, context, MPD_ROUND_FLOOR);
++    context = optional_context_value(state, PyValue_Borrow(PyValue_None));
++    if (context == NULL) {
++        return PyValue_NULL;
++    }
++    return dec_as_long_value(self, context, MPD_ROUND_FLOOR);
+ }
+ 
+ /* Always uses the module context */
+@@ -6442,20 +6480,27 @@
+ }
+ 
+ /*[clinic input]
++@value_function
+ _decimal.Decimal.__trunc__ = _decimal.Decimal.__ceil__
+ 
+ Return the Integral closest to x between 0 and x.
+ [clinic start generated code]*/
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
++static PyValue
+ _decimal_Decimal___trunc___impl(PyObject *self, PyTypeObject *cls)
+-/*[clinic end generated code: output=7b3decc4b636ce32 input=9b3a3a85f63b0515]*/
++/*[clinic end generated code: output=231d76dc35552d06 input=24cceab002f00ebd]*/
+ {
+     PyObject *context;
+ 
+     decimal_state *state = PyType_GetModuleState(cls);
+-    CURRENT_CONTEXT(state, context);
+-    return dec_as_long(self, context, MPD_ROUND_DOWN);
++    context = optional_context_value(state, PyValue_Borrow(PyValue_None));
++    if (context == NULL) {
++        return PyValue_NULL;
++    }
++    return dec_as_long_value(self, context, MPD_ROUND_DOWN);
+ }
+ 
+ /* real and imag */
+@@ -6607,6 +6652,7 @@
+     {Py_nb_absolute, nm_mpd_qabs},
+     {Py_nb_bool, nm_nonzero},
+     {Py_nb_int, nm_dec_as_long},
++    {_Py_value_nb_int, nm_dec_as_long_value},
+     {Py_nb_float, PyDec_AsFloat},
+     {Py_nb_floor_divide, nm_mpd_qdivint},
+     {Py_nb_true_divide, nm_mpd_qdiv},
+--- a/Modules/_decimal/clinic/_decimal.c.h
++++ b/Modules/_decimal/clinic/_decimal.c.h
+@@ -1062,21 +1062,35 @@
+ "\n"
+ "The ratio is in lowest terms and with a positive denominator.\n"
+ "Raise OverflowError on infinities and a ValueError on NaNs.");
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+ #define _DECIMAL_DECIMAL_AS_INTEGER_RATIO_METHODDEF    \
+-    {"as_integer_ratio", _PyCFunction_CAST(_decimal_Decimal_as_integer_ratio), METH_METHOD|METH_FASTCALL|METH_KEYWORDS, _decimal_Decimal_as_integer_ratio__doc__},
++    {"as_integer_ratio", _PyCFunction_CAST(_decimal_Decimal_as_integer_ratio), METH_VALUE|METH_METHOD|METH_KEYWORDS, _decimal_Decimal_as_integer_ratio__doc__},
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
++static PyValue
+ _decimal_Decimal_as_integer_ratio_impl(PyObject *self, PyTypeObject *cls);
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
+-_decimal_Decimal_as_integer_ratio(PyObject *self, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
++static PyValue
++_decimal_Decimal_as_integer_ratio(PyValueBorrow self, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+ {
++    PyValue return_value = PyValue_NULL;
++
+     if (nargs || (kwnames && PyTuple_GET_SIZE(kwnames))) {
+         PyErr_SetString(PyExc_TypeError, "as_integer_ratio() takes no arguments");
+-        return NULL;
++        goto exit;
+     }
+-    return _decimal_Decimal_as_integer_ratio_impl(self, cls);
++    return_value = _decimal_Decimal_as_integer_ratio_impl(PyValue_AsKnownObjectBorrow(self), cls);
++
++exit:
++    return return_value;
+ }
+ 
+ PyDoc_STRVAR(_decimal_Decimal_to_integral_value__doc__,
+@@ -1318,19 +1332,28 @@
+ "--\n"
+ "\n"
+ "Return the Integral closest to self, rounding half toward even.");
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+ #define _DECIMAL_DECIMAL___ROUND___METHODDEF    \
+-    {"__round__", _PyCFunction_CAST(_decimal_Decimal___round__), METH_METHOD|METH_FASTCALL|METH_KEYWORDS, _decimal_Decimal___round____doc__},
++    {"__round__", _PyCFunction_CAST(_decimal_Decimal___round__), METH_VALUE|METH_METHOD|METH_KEYWORDS, _decimal_Decimal___round____doc__},
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
++static PyValue
+ _decimal_Decimal___round___impl(PyObject *self, PyTypeObject *cls,
+-                                PyObject *ndigits);
++                                PyValueBorrow ndigits);
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
+-_decimal_Decimal___round__(PyObject *self, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
++static PyValue
++_decimal_Decimal___round__(PyValueBorrow self, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+ {
+-    PyObject *return_value = NULL;
+-    PyObject *ndigits = NULL;
++    PyValue return_value = PyValue_NULL;
++    PyValueBorrow ndigits = PyValue_Borrow(PyValue_NULL);
+ 
+     if (!_PyArg_NoKwnames("__round__", kwnames)) {
+         goto exit;
+@@ -1341,9 +1364,9 @@
+     if (nargs < 1) {
+         goto skip_optional;
+     }
+-    ndigits = args[0];
++    ndigits = PyValue_Borrow(args[0]);
+ skip_optional:
+-    return_value = _decimal_Decimal___round___impl(self, cls, ndigits);
++    return_value = _decimal_Decimal___round___impl(PyValue_AsKnownObjectBorrow(self), cls, ndigits);
+ 
+ exit:
+     return return_value;
+@@ -4265,21 +4288,35 @@
+ "--\n"
+ "\n"
+ "Return the ceiling as an Integral.");
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+ #define _DECIMAL_DECIMAL___CEIL___METHODDEF    \
+-    {"__ceil__", _PyCFunction_CAST(_decimal_Decimal___ceil__), METH_METHOD|METH_FASTCALL|METH_KEYWORDS, _decimal_Decimal___ceil____doc__},
++    {"__ceil__", _PyCFunction_CAST(_decimal_Decimal___ceil__), METH_VALUE|METH_METHOD|METH_KEYWORDS, _decimal_Decimal___ceil____doc__},
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
++static PyValue
+ _decimal_Decimal___ceil___impl(PyObject *self, PyTypeObject *cls);
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
+-_decimal_Decimal___ceil__(PyObject *self, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
++static PyValue
++_decimal_Decimal___ceil__(PyValueBorrow self, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+ {
++    PyValue return_value = PyValue_NULL;
++
+     if (nargs || (kwnames && PyTuple_GET_SIZE(kwnames))) {
+         PyErr_SetString(PyExc_TypeError, "__ceil__() takes no arguments");
+-        return NULL;
++        goto exit;
+     }
+-    return _decimal_Decimal___ceil___impl(self, cls);
++    return_value = _decimal_Decimal___ceil___impl(PyValue_AsKnownObjectBorrow(self), cls);
++
++exit:
++    return return_value;
+ }
+ 
+ PyDoc_STRVAR(_decimal_Decimal___complex____doc__,
+@@ -4330,21 +4367,35 @@
+ "--\n"
+ "\n"
+ "Return the floor as an Integral.");
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+ #define _DECIMAL_DECIMAL___FLOOR___METHODDEF    \
+-    {"__floor__", _PyCFunction_CAST(_decimal_Decimal___floor__), METH_METHOD|METH_FASTCALL|METH_KEYWORDS, _decimal_Decimal___floor____doc__},
++    {"__floor__", _PyCFunction_CAST(_decimal_Decimal___floor__), METH_VALUE|METH_METHOD|METH_KEYWORDS, _decimal_Decimal___floor____doc__},
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
++static PyValue
+ _decimal_Decimal___floor___impl(PyObject *self, PyTypeObject *cls);
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
+-_decimal_Decimal___floor__(PyObject *self, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
++static PyValue
++_decimal_Decimal___floor__(PyValueBorrow self, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+ {
++    PyValue return_value = PyValue_NULL;
++
+     if (nargs || (kwnames && PyTuple_GET_SIZE(kwnames))) {
+         PyErr_SetString(PyExc_TypeError, "__floor__() takes no arguments");
+-        return NULL;
++        goto exit;
+     }
+-    return _decimal_Decimal___floor___impl(self, cls);
++    return_value = _decimal_Decimal___floor___impl(PyValue_AsKnownObjectBorrow(self), cls);
++
++exit:
++    return return_value;
+ }
+ 
+ PyDoc_STRVAR(_decimal_Decimal___reduce____doc__,
+@@ -4388,21 +4439,35 @@
+ "--\n"
+ "\n"
+ "Return the Integral closest to x between 0 and x.");
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+ #define _DECIMAL_DECIMAL___TRUNC___METHODDEF    \
+-    {"__trunc__", _PyCFunction_CAST(_decimal_Decimal___trunc__), METH_METHOD|METH_FASTCALL|METH_KEYWORDS, _decimal_Decimal___trunc____doc__},
++    {"__trunc__", _PyCFunction_CAST(_decimal_Decimal___trunc__), METH_VALUE|METH_METHOD|METH_KEYWORDS, _decimal_Decimal___trunc____doc__},
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
++static PyValue
+ _decimal_Decimal___trunc___impl(PyObject *self, PyTypeObject *cls);
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
+-_decimal_Decimal___trunc__(PyObject *self, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
++static PyValue
++_decimal_Decimal___trunc__(PyValueBorrow self, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+ {
++    PyValue return_value = PyValue_NULL;
++
+     if (nargs || (kwnames && PyTuple_GET_SIZE(kwnames))) {
+         PyErr_SetString(PyExc_TypeError, "__trunc__() takes no arguments");
+-        return NULL;
++        goto exit;
+     }
+-    return _decimal_Decimal___trunc___impl(self, cls);
++    return_value = _decimal_Decimal___trunc___impl(PyValue_AsKnownObjectBorrow(self), cls);
++
++exit:
++    return return_value;
+ }
+ 
+ PyDoc_STRVAR(_decimal_Context_abs__doc__,
+@@ -7181,4 +7246,4 @@
+ #ifndef _DECIMAL_CONTEXT_APPLY_METHODDEF
+     #define _DECIMAL_CONTEXT_APPLY_METHODDEF
+ #endif /* !defined(_DECIMAL_CONTEXT_APPLY_METHODDEF) */
+-/*[clinic end generated code: output=8f432f6d454f009b input=a9049054013a1b77]*/
++/*[clinic end generated code: output=377f64e518224754 input=a9049054013a1b77]*/

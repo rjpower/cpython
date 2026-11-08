@@ -1,0 +1,38 @@
+{
+  "accepted": true,
+  "artifacts_checked": 7477,
+  "completion": {
+    "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/jit-method-baseline/build/jit-method-m0-feedback-v2/feedback-batch-completion.json",
+    "sha256": "b6e2d1453b4037c76c699d5edf5592a4b699b8ec10b33de71a0d959728d7e27d"
+  },
+  "decision": "ACCEPT_FOCUSED_M0_DEBUG_BEHAVIOR_ONLY",
+  "elapsed_or_qualification_credit": false,
+  "failed_attempt_files_preserved": 137,
+  "image_sha256": "8c033ed28af623e19f2d5931ccaa733292bca4ab939278938ce3cba713169bbc",
+  "locks": 21,
+  "methods": 8,
+  "modules": 1,
+  "native_jit_credit": false,
+  "native_products_checked": 585,
+  "optional_module_summary": [
+    "Checked 116 modules (37 built-in, 67 shared, 1 n/a on linux-x86_64, 1 disabled, 10 missing, 0 failed on import)"
+  ],
+  "parent_fingerprints": 30,
+  "replay": {
+    "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/jit-method-m0-outcome-review-20261101-v2/replay.json",
+    "sha256": "1c4c7a697bd22c8721f41aedb5ead25688167cf0d23eec29c0de915f352c008e"
+  },
+  "review": {
+    "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/jit-method-m0-outcome-review-20261101-v2/review.md",
+    "sha256": "6afaed6420e847548bbe7dd154482f1f927cf7e577c0392e03e2108873faaed7"
+  },
+  "reviewer_compiler_calls": 0,
+  "reviewer_target_calls": 0,
+  "root_cleanup": {
+    "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/jit-method-m0-v2-root-activation-20261101-v1/terminal-cleanup.json",
+    "sha256": "ec3306d8a10bdf35475fc74e902e6ecdf74541d84b794e7cd5b48ba74e401aa8"
+  },
+  "skipped": 0,
+  "source_head": "f0a49b6d30a38db705329bcfd5e5f2d6d2413710",
+  "utc": "2026-11-01T17:15:52.936711+00:00"
+}

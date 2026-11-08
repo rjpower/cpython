@@ -1,0 +1,367 @@
+diff --git a/Include/abstract.h b/Include/abstract.h
+index 4560055a900..2709e97fa09 100644
+--- a/Include/abstract.h
++++ b/Include/abstract.h
+@@ -196,6 +196,7 @@ extern "C" {
+ 
+ #if !defined(Py_LIMITED_API) || Py_LIMITED_API+0 >= 0x03090000
+ /* Call a callable Python object without any arguments */
++Py_VALUE_COMPAT(_PyValue_CallNoArgs)
+ PyAPI_FUNC(PyObject *) PyObject_CallNoArgs(PyObject *func);
+ #endif
+ 
+@@ -208,6 +209,7 @@ PyAPI_FUNC(PyObject *) PyObject_CallNoArgs(PyObject *func);
+ 
+    This is the equivalent of the Python expression:
+    callable(*args, **kwargs). */
++Py_VALUE_COMPAT(_PyValue_Call)
+ PyAPI_FUNC(PyObject *) PyObject_Call(PyObject *callable,
+                                      PyObject *args, PyObject *kwargs);
+ 
+@@ -287,6 +289,7 @@ PyAPI_FUNC(PyObject *) PyVectorcall_Call(PyObject *callable, PyObject *tuple, Py
+     (_Py_STATIC_CAST(size_t, 1) << (8 * sizeof(size_t) - 1))
+ 
+ /* Perform a PEP 590-style vector call on 'callable' */
++Py_VALUE_COMPAT(_PyValue_Vectorcall)
+ PyAPI_FUNC(PyObject *) PyObject_Vectorcall(
+     PyObject *callable,
+     PyObject *const *args,
+@@ -420,6 +423,7 @@ PyAPI_FUNC(int) PyAIter_Check(PyObject *);
+  * Return 0 and set 'item' to NULL when there are no remaining values.
+  * Return -1, set 'item' to NULL and set an exception on error.
+  */
++Py_VALUE_COMPAT(_PyValue_IterNext)
+ PyAPI_FUNC(int) PyIter_NextItem(PyObject *iter, PyObject **item);
+ #endif
+ 
+@@ -432,6 +436,7 @@ PyAPI_FUNC(int) PyIter_NextItem(PyObject *iter, PyObject **item);
+    NULL with an exception means an error occurred.
+ 
+    Prefer PyIter_NextItem() instead. */
++Py_VALUE_COMPAT(_PyValue_IterNext)
+ PyAPI_FUNC(PyObject *) PyIter_Next(PyObject *);
+ 
+ #if !defined(Py_LIMITED_API) || Py_LIMITED_API+0 >= 0x030A0000
+@@ -444,6 +449,7 @@ PyAPI_FUNC(PyObject *) PyIter_Next(PyObject *);
+      'result' parameter is NULL
+    - PYGEN_NEXT (1) if generator has yielded.
+      'result' parameter is filled with yielded value. */
++Py_VALUE_COMPAT(_PyValue_Send)
+ PyAPI_FUNC(PySendResult) PyIter_Send(PyObject *, PyObject *, PyObject **);
+ #endif
+ 
+@@ -925,7 +931,9 @@ PyAPI_FUNC(PyObject *) PyMapping_GetItemString(PyObject *o,
+    set *result to NULL.
+ */
+ #if !defined(Py_LIMITED_API) || Py_LIMITED_API+0 >= 0x030d0000
++Py_VALUE_COMPAT(_PyValue_GetOptionalItem)
+ PyAPI_FUNC(int) PyMapping_GetOptionalItem(PyObject *, PyObject *, PyObject **);
++Py_VALUE_COMPAT(_PyValue_MappingGetOptionalItemString)
+ PyAPI_FUNC(int) PyMapping_GetOptionalItemString(PyObject *, const char *, PyObject **);
+ #endif
+ 
+diff --git a/Include/cpython/abstract.h b/Include/cpython/abstract.h
+index 0c702e94948..e7614d6c0d8 100644
+--- a/Include/cpython/abstract.h
++++ b/Include/cpython/abstract.h
+@@ -56,6 +56,7 @@ PyAPI_FUNC(PyObject *) PyObject_VectorcallDict(
+     size_t nargsf,
+     PyObject *kwargs);
+ 
++Py_VALUE_COMPAT(_PyValue_CallOneArg)
+ PyAPI_FUNC(PyObject *) PyObject_CallOneArg(PyObject *func, PyObject *arg);
+ 
+ static inline PyObject *
+diff --git a/Include/cpython/object.h b/Include/cpython/object.h
+index 2f69ca77047..dc10e324715 100644
+--- a/Include/cpython/object.h
++++ b/Include/cpython/object.h
+@@ -373,6 +373,7 @@ typedef struct _heaptypeobject {
+ } PyHeapTypeObject;
+ 
+ PyAPI_FUNC(const char *) _PyType_Name(PyTypeObject *);
++Py_VALUE_COMPAT(_PyType_LookupValue)
+ PyAPI_FUNC(PyObject *) _PyType_LookupRef(PyTypeObject *, PyObject *);
+ PyAPI_FUNC(PyObject *) PyType_GetDict(PyTypeObject *);
+ 
+diff --git a/Include/internal/pycore_call.h b/Include/internal/pycore_call.h
+index 1bc10fd2ee8..237e0752996 100644
+--- a/Include/internal/pycore_call.h
++++ b/Include/internal/pycore_call.h
+@@ -55,6 +55,7 @@ extern PyObject* _PyObject_VectorcallDictTstate(
+     size_t nargsf,
+     PyObject *kwargs);
+ 
++Py_VALUE_COMPAT(_PyValue_Call)
+ extern PyObject* _PyObject_Call(
+     PyThreadState *tstate,
+     PyObject *callable,
+diff --git a/Include/internal/pycore_ceval.h b/Include/internal/pycore_ceval.h
+index 963347013eb..5b506deb99e 100644
+--- a/Include/internal/pycore_ceval.h
++++ b/Include/internal/pycore_ceval.h
+@@ -433,6 +433,7 @@ _Py_BuildMap_ValueSteal(
+ // Like PyMapping_GetOptionalItem, but returns the PyObject* instead of taking
+ // it as an out parameter. This helps MSVC's escape analysis when used with
+ // tail calling.
++Py_VALUE_COMPAT(_PyValue_GetOptionalItem)
+ PyAPI_FUNC(PyObject*) _PyMapping_GetOptionalItem2(PyObject* obj, PyObject* key, int* err);
+ 
+ #ifdef __cplusplus
+diff --git a/Include/internal/pycore_object.h b/Include/internal/pycore_object.h
+index b6d8f16d0eb..a2afa416486 100644
+--- a/Include/internal/pycore_object.h
++++ b/Include/internal/pycore_object.h
+@@ -987,6 +987,7 @@ extern PyObject ** _PyObject_ComputedDictPointer(PyObject *);
+ extern int _PyObject_IsInstanceDictEmpty(PyObject *);
+ 
+ // Export for 'math' shared extension
++Py_VALUE_COMPAT(_PyValue_LookupSpecial)
+ PyAPI_FUNC(PyObject*) _PyObject_LookupSpecial(PyObject *, PyObject *);
+ PyAPI_FUNC(int) _PyObject_LookupSpecialMethod(PyObject *attr, PyValue *method,
+                                               PyValue *self);
+diff --git a/Include/internal/pycore_typeobject.h b/Include/internal/pycore_typeobject.h
+index c637a4e31c7..215958f6445 100644
+--- a/Include/internal/pycore_typeobject.h
++++ b/Include/internal/pycore_typeobject.h
+@@ -164,6 +164,7 @@ extern int _PyType_HasSlotTpIternext(PyTypeObject *type);
+ 
+ extern PyTypeObject _PyBufferWrapper_Type;
+ 
++Py_VALUE_COMPAT(_PySuper_LookupValue)
+ PyAPI_FUNC(PyObject*) _PySuper_Lookup(PyTypeObject *su_type, PyObject *su_obj,
+                                  PyObject *name, int *meth_found);
+ 
+diff --git a/Include/object.h b/Include/object.h
+index 51f286c339f..079b622c804 100644
+--- a/Include/object.h
++++ b/Include/object.h
+@@ -413,6 +413,7 @@ PyAPI_FUNC(int) PyObject_HasAttrString(PyObject *, const char *);
+ Py_VALUE_COMPAT(_PyValue_GetAttr)
+ PyAPI_FUNC(PyObject *) PyObject_GetAttr(PyObject *, PyObject *);
+ #if !defined(Py_LIMITED_API) || Py_LIMITED_API+0 >= 0x030d0000
++Py_VALUE_COMPAT(_PyValue_GetOptionalAttr)
+ PyAPI_FUNC(int) PyObject_GetOptionalAttr(PyObject *, PyObject *, PyObject **);
+ PyAPI_FUNC(int) PyObject_GetOptionalAttrString(PyObject *, const char *, PyObject **);
+ #endif
+diff --git a/Modules/_lzmamodule.c b/Modules/_lzmamodule.c
+index d5ca498b7cc..916e18bd646 100644
+--- a/Modules/_lzmamodule.c
++++ b/Modules/_lzmamodule.c
+@@ -237,7 +237,6 @@ FUNCNAME(PyObject *obj, void *ptr)                                  \
+     return 1;                                                       \
+ }
+ 
+-INT_TYPE_CONVERTER_FUNC(lzma_vli, lzma_vli_obj_converter)
+ INT_TYPE_CONVERTER_FUNC(lzma_mode, lzma_mode_converter)
+ INT_TYPE_CONVERTER_FUNC(lzma_match_finder, lzma_mf_converter)
+ 
+@@ -246,13 +245,20 @@ INT_TYPE_CONVERTER_FUNC(lzma_match_finder, lzma_mf_converter)
+ static int
+ lzma_vli_converter(PyValueBorrow value, void *ptr)
+ {
+-    PyObject *obj = _PyValue_AsObjectAt(value, BOX_SITE_PARSER);
+-    if (obj == NULL) {
++    Py_ssize_t bytes = _PyValue_AsNativeBytes(value, ptr, sizeof(lzma_vli),
++            Py_ASNATIVEBYTES_NATIVE_ENDIAN |
++            Py_ASNATIVEBYTES_ALLOW_INDEX |
++            Py_ASNATIVEBYTES_REJECT_NEGATIVE |
++            Py_ASNATIVEBYTES_UNSIGNED_BUFFER);
++    if (bytes < 0) {
+         return 0;
+     }
+-    int ok = lzma_vli_obj_converter(obj, ptr);
+-    Py_DECREF(obj);
+-    return ok;
++    if ((size_t)bytes > sizeof(lzma_vli)) {
++        PyErr_SetString(PyExc_OverflowError,
++                        "Python int too large for C lzma_vli");
++        return 0;
++    }
++    return 1;
+ }
+ 
+ 
+@@ -274,13 +280,26 @@ parse_filter_spec_lzma(_lzma_state *state, PyObject *spec)
+     /* First, fill in default values for all the options using a preset.
+        Then, override the defaults with any values given by the caller. */
+ 
+-    if (PyMapping_GetOptionalItemString(spec, "preset", &preset_obj) < 0) {
++    _PyStatusValue preset_result =
++        _PyValue_MappingGetOptionalItemString(PyValue_FromObjectBorrow(spec),
++                                              "preset");
++    if (preset_result.status < 0) {
+         return NULL;
+     }
+-    if (preset_obj != NULL) {
+-        int ok = _PyLong_UInt32_Converter(preset_obj, &preset);
+-        Py_DECREF(preset_obj);
+-        if (!ok) {
++    if (preset_result.status > 0) {
++        Py_ssize_t bytes = _PyValue_AsNativeBytes(preset_result.value, &preset,
++                sizeof(preset),
++                Py_ASNATIVEBYTES_NATIVE_ENDIAN |
++                Py_ASNATIVEBYTES_ALLOW_INDEX |
++                Py_ASNATIVEBYTES_REJECT_NEGATIVE |
++                Py_ASNATIVEBYTES_UNSIGNED_BUFFER);
++        PyValue_CLOSE(preset_result.value);
++        if (bytes < 0) {
++            return NULL;
++        }
++        if ((size_t)bytes > sizeof(preset)) {
++            PyErr_SetString(PyExc_OverflowError,
++                            "Python int too large for C uint32_t");
+             return NULL;
+         }
+     }
+@@ -367,27 +386,26 @@ static int
+ lzma_filter_converter(_lzma_state *state, PyObject *spec, void *ptr)
+ {
+     lzma_filter *f = (lzma_filter *)ptr;
+-    PyObject *id_obj;
+-
+     if (!_PyValue_MappingCheck(PyValue_FromObjectBorrow(spec))) {
+         PyErr_SetString(PyExc_TypeError,
+                         "Filter specifier must be a dict or dict-like object");
+         return 0;
+     }
+-    if (PyMapping_GetOptionalItemString(spec, "id", &id_obj) < 0) {
++    _PyStatusValue id_result =
++        _PyValue_MappingGetOptionalItemString(PyValue_FromObjectBorrow(spec),
++                                              "id");
++    if (id_result.status < 0) {
+         return 0;
+     }
+-    if (id_obj == NULL) {
++    if (id_result.status == 0) {
+         PyErr_SetString(PyExc_ValueError,
+                         "Filter specifier must have an \"id\" entry");
+         return 0;
+     }
+     lzma_vli id;
+-    if (!lzma_vli_obj_converter(id_obj, &id)) {
+-        Py_DECREF(id_obj);
+-        return 0;
+-    }
+-    Py_DECREF(id_obj);
++    int ok = lzma_vli_converter(PyValue_Borrow(id_result.value), &id);
++    PyValue_CLOSE(id_result.value);
++    if (!ok) return 0;
+     f->id = id;
+ 
+     switch (f->id) {
+diff --git a/Modules/_posixsubprocess.c b/Modules/_posixsubprocess.c
+index 91a7b772c4c..f9410f7affd 100644
+--- a/Modules/_posixsubprocess.c
++++ b/Modules/_posixsubprocess.c
+@@ -11,6 +11,7 @@
+ #include "pycore_pystate.h"       // _PyInterpreterState_GET()
+ #include "pycore_signal.h"        // _Py_RestoreSignals()
+ #include "pycore_value.h"      // _PyValue_AsObjectAt()
++#include "pycore_value_call.h" // _PyValue_Call()
+ #include "pycore_value_ops.h"  // _PyValue_SequenceFast()
+ #include "pycore_value_slots.h"// _PyValue_FromObjectResult()
+ 
+@@ -708,7 +709,7 @@ child_exec(char *const exec_array[],
+            PyObject *preexec_fn_args_tuple)
+ {
+     int i, saved_errno;
+-    PyObject *result;
++    PyValue result;
+     /* Indicate to the parent that the error happened before exec(). */
+     const char *err_msg = "noexec";
+     /* Buffer large enough to hold a hex integer.  We can't malloc. */
+@@ -826,8 +827,10 @@ child_exec(char *const exec_array[],
+     err_msg = "";
+     if (preexec_fn != Py_None && preexec_fn_args_tuple) {
+         /* This is where the user has asked us to deadlock their program. */
+-        result = PyObject_Call(preexec_fn, preexec_fn_args_tuple, NULL);
+-        if (result == NULL) {
++        result = _PyValue_Call(_PyThreadState_GET(),
++                               PyValue_FromObjectBorrow(preexec_fn),
++                               preexec_fn_args_tuple, NULL);
++        if (PyValue_IsNull(result)) {
+             /* Stringifying the exception or traceback would involve
+              * memory allocation and thus potential for deadlock.
+              * We've already faced potential deadlock by calling back
+diff --git a/Modules/atexitmodule.c b/Modules/atexitmodule.c
+index 8c4da454f7c..8a646fa489f 100644
+--- a/Modules/atexitmodule.c
++++ b/Modules/atexitmodule.c
+@@ -18,6 +18,7 @@
+ #include "pycore_pystate.h"       // _PyInterpreterState_GET
+ #include "pycore_tuple.h"         // _PyTuple_PackValues()
+ #include "pycore_value.h"         // PyValue
++#include "pycore_value_call.h"    // _PyValue_Call()
+ #include "pycore_value_ops.h"     // _PyValue_RichCompareBool()
+ 
+ /*[clinic input]
+@@ -162,17 +163,17 @@ atexit_callfuncs(struct atexit_state *state)
+         // register() accepts only callables, the args tuple and the kwargs
+         // dict, so all three are objects.
+         PyObject *func_obj = PyValue_AsKnownObjectBorrow(func);
+-        PyObject *res = PyObject_Call(func_obj,
+-                                      PyValue_AsKnownObjectBorrow(args),
+-                                      PyValue_IsNone(kwargs)
+-                                      ? NULL
+-                                      : PyValue_AsKnownObjectBorrow(kwargs));
+-        if (res == NULL) {
++        PyValue res = _PyValue_Call(_PyThreadState_GET(), func,
++                                    PyValue_AsKnownObjectBorrow(args),
++                                    PyValue_IsNone(kwargs)
++                                    ? NULL
++                                    : PyValue_AsKnownObjectBorrow(kwargs));
++        if (PyValue_IsNull(res)) {
+             PyErr_FormatUnraisable(
+                 "Exception ignored in atexit callback %R", func_obj);
+         }
+         else {
+-            Py_DECREF(res);
++            PyValue_CLOSE(res);
+         }
+ next:
+         PyValue_XCLOSE(func);
+diff --git a/Tools/build/value_ownership.toml b/Tools/build/value_ownership.toml
+index cf8dde8ed78..8e731b1c29e 100644
+--- a/Tools/build/value_ownership.toml
++++ b/Tools/build/value_ownership.toml
+@@ -1135,3 +1135,39 @@ object = "PyObject_CallNoArgs"
+ value = "_PyValue_CallNoArgs"
+ family = "call"
+ reason = "value twin adds PyThreadState * first parameter and returns owned PyValue"
++
++[[manual]]
++object = "PyMapping_GetOptionalItemString"
++value = "_PyValue_MappingGetOptionalItemString"
++family = "item"
++reason = "int plus PyObject ** output becomes _PyStatusValue; keep the C string and mapping alive across lookup"
++
++[[manual]]
++object = "PyIter_NextItem"
++value = "_PyValue_IterNext"
++family = "item"
++reason = "int plus PyObject ** output becomes _PyStatusValue; retain the non-iterator TypeError precheck"
++
++[[manual]]
++object = "_PyMapping_GetOptionalItem2"
++value = "_PyValue_GetOptionalItem"
++family = "item"
++reason = "PyObject * result plus int * status becomes _PyStatusValue; preserve both outputs and absent/error distinction"
++
++[[manual]]
++object = "_PyType_LookupRef"
++value = "_PyType_LookupValue"
++family = "attr"
++reason = "owned PyObject * or NULL becomes _PyStatusValue; own the value result until use or close"
++
++[[manual]]
++object = "_PySuper_Lookup"
++value = "_PySuper_LookupValue"
++family = "attr"
++reason = "owned PyObject * plus method out-flag becomes _PyStatusValue; preserve want_method and unbound-method flag"
++
++[[manual]]
++object = "_PyObject_Call"
++value = "_PyValue_Call"
++family = "call"
++reason = "owned PyObject * result becomes PyValue; preserve existing tstate, assertions and call accounting"

@@ -1,0 +1,66 @@
+{
+ "schema": "boil-bench/1",
+ "build": {
+  "label": "C",
+  "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/remeasure-release-5de7bd62ef9/python",
+  "version": "3.16.0a1+dev (heads/boil/pyvalue-rc-universal:5de7bd62ef9, Nov  4 2026, 10:02:21) [GCC 15.2.0]",
+  "git": [
+   "CPython",
+   "heads/boil/pyvalue-rc-universal",
+   "5de7bd62ef9"
+  ],
+  "hash_seed": 0
+ },
+ "machine": {
+  "hostname": "bento-cat",
+  "kernel": "7.0.0-43-generic",
+  "cpus": 16,
+  "cpu": "AMD Ryzen 7 3800X 8-Core Processor",
+  "memory": "65726112 kB"
+ },
+ "results": {
+  "rss": {
+   "startup": {
+    "group": "memory",
+    "unit": "KiB peak RSS",
+    "value": 12384,
+    "values": [
+     14472,
+     12384,
+     12348
+    ],
+    "loops": 1,
+    "runs": 3
+   },
+   "imports": {
+    "group": "memory",
+    "unit": "KiB peak RSS",
+    "value": 15124,
+    "values": [
+     23752,
+     15112,
+     15124
+    ],
+    "loops": 1,
+    "runs": 3
+   }
+  }
+ },
+ "runs": {
+  "rss": {
+   "timestamp": "2026-11-04T10:24:58-08:00",
+   "commit": {
+    "sha": "d8ad9d14d9fb7e6f3b9be22f030092fd2d5cfe87",
+    "dirty": true
+   },
+   "load_1min": {
+    "max": 1.13671875,
+    "samples": [
+     1.13671875,
+     1.13671875,
+     1.13671875
+    ]
+   }
+  }
+ }
+}

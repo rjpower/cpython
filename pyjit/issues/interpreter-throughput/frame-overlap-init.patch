@@ -1,0 +1,145 @@
+--- a/Include/internal/pycore_interpframe.h
++++ b/Include/internal/pycore_interpframe.h
+@@ -269,15 +269,13 @@
+     }
+ }
+ 
+-/* Consumes reference to func and locals.
+-   Does not initialize frame->previous, which happens
+-   when frame is linked into the frame stack.
+- */
++/* Consumes reference to func and locals. The caller is responsible for slots
++   before null_from. */
+ static inline void
+ _PyFrame_Initialize(
+     PyThreadState *tstate, _PyInterpreterFrame *frame, PyValue func,
+     PyObject *locals, PyCodeObject *code, PyValue *base,
+-    int null_locals_from, _PyInterpreterFrame *previous)
++    int null_from, _PyInterpreterFrame *previous)
+ {
+     frame->previous = previous;
+     frame->base = base;
+@@ -298,7 +296,7 @@
+ #endif
+ 
+     int nslots = _PyFrame_NumSlotsForCodeObject(code);
+-    for (int i = null_locals_from; i < nslots; i++) {
++    for (int i = null_from; i < nslots; i++) {
+         frame->base[i] = PyValue_NULL;
+     }
+     // The constant slots (CO_FAST_CONST): owners of inline scalars and
+@@ -534,16 +532,30 @@
+     assert(previous->owner == FRAME_OWNED_BY_THREAD);
+     assert(base > previous->base &&
+            base <= _PyDataStack_Slots(tstate->datastack_top));
++    /* Arguments occupy [0, nargs); the remaining caller homes below
++     * null_from are already NULL. Only the new tail needs initialization. */
++    int nslots = _PyFrame_NumSlotsForCodeObject(code);
++    PyValue *previous_end = previous->base +
++        _PyFrame_NumSlotsForCodeObject(_PyFrame_GetCode(previous));
++    assert(base + nargs <= previous_end);
++    Py_ssize_t known = previous_end - base;
++    int null_from = known < nslots ? (int)known : nslots;
++    assert(null_from >= nargs);
++#ifndef NDEBUG
++    for (int i = nargs; i < null_from; i++) {
++        assert(PyValue_IsNull(base[i]));
++    }
++#endif
+     _PyInterpreterFrame *frame =
+         (_PyInterpreterFrame *)(tstate->datastack_limit - FRAME_SPECIALS_SIZE);
+     frame->saved_top = _PyDataStack_Slots(tstate->datastack_top);
+     tstate->datastack_limit = (PyObject **)frame;
+-    PyValue *end = base + _PyFrame_NumSlotsForCodeObject(code);
++    PyValue *end = base + nslots;
+     if (end > frame->saved_top) {
+         tstate->datastack_top = _PyDataStack_Address(end);
+     }
+     assert(tstate->datastack_top < tstate->datastack_limit);
+-    _PyFrame_Initialize(tstate, frame, func, NULL, code, base, nargs, previous);
++    _PyFrame_Initialize(tstate, frame, func, NULL, code, base, null_from, previous);
+     return frame;
+ }
+ 
+--- a/Lib/test/test_call.py
++++ b/Lib/test/test_call.py
+@@ -141,6 +141,46 @@
+         del result
+         self.assertEqual(released, ["released"])
+ 
++    def test_overlapping_frame_extents_and_unwind(self):
++        events = []
++
++        class Value:
++            def __del__(self):
++                events.append("released")
++
++        def small(value, default=5, *args, **kwargs):
++            return value, default, args, kwargs
++
++        def large(value, default=5, *args, **kwargs):
++            a, b, c, d, e, f, g, h = range(8)
++            if value is None:
++                raise ValueError("unwind")
++            return value, default, args, kwargs, (a, b, c, d, e, f, g, h)
++
++        def small_caller(fn, value):
++            return fn(value)
++
++        def large_caller(fn, value):
++            a, b, c, d, e, f, g, h = range(8)
++            if value is False:
++                return fn(a, b, c, d, e, f, g, h)
++            return fn(value), (a, b, c, d, e, f, g, h)
++
++        # Exercise different relative frame extents after call specialization.
++        for _ in range(50):
++            self.assertEqual(small_caller(small, 1)[:3], (1, 5, ()))
++            self.assertEqual(small_caller(large, 1)[:3], (1, 5, ()))
++            self.assertEqual(large_caller(small, 1)[0][:3], (1, 5, ()))
++            self.assertEqual(large_caller(large, 1)[0][:3], (1, 5, ()))
++        with self.assertRaisesRegex(ValueError, "unwind"):
++            small_caller(large, None)
++        value = Value()
++        result = large_caller(small, value)
++        del value
++        self.assertEqual(events, [])
++        del result
++        self.assertEqual(events, ["released"])
++
+     def test_type_non_string_kwargs_keep_vectorcall_validation(self):
+         bad_kwargs = {None: 1}
+         for call in (
+--- a/Lib/test/test_code.py
++++ b/Lib/test/test_code.py
+@@ -1327,6 +1327,30 @@
+             self.assertEqual(f(60), self.loop_with_seven(60, 2 ** 70 + 7))
+         self.assertEqual(sys.getrefcount(mortal), before)
+ 
++    def test_mortal_constant_after_overlapping_calls(self):
++        def original(n):
++            result = None
++            for _ in range(n):
++                result = 12345
++            return result
++
++        code = original.__code__
++        consts = list(code.co_consts)
++        mortal = object()
++        indices = [index for _, index in self.slots(code)
++                   if consts[index] == 12345]
++        self.assertEqual(len(indices), 1)
++        consts[indices[0]] = mortal
++        function = types_FunctionType(code.replace(co_consts=tuple(consts)), globals())
++
++        def caller():
++            return function(3)
++
++        before = sys.getrefcount(mortal)
++        for _ in range(50):
++            self.assertIs(caller(), mortal)
++        self.assertEqual(sys.getrefcount(mortal), before)
++
+     @staticmethod
+     def loop_with_seven(n, seven):
+         total = 0

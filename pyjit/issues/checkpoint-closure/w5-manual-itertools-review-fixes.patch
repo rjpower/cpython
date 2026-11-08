@@ -1,0 +1,102 @@
+--- a/Modules/itertoolsmodule.c
++++ b/Modules/itertoolsmodule.c
+@@ -263,7 +263,9 @@
+                 PyErr_SetString(PyExc_ValueError, "batched(): incomplete batch");
+                 return (_PyStatusValue){PYGEN_ERROR, PyValue_NULL};
+             }
+-            _PyTuple_Resize(&result, i);
++            if (_PyTuple_Resize(&result, i) < 0) {
++                return (_PyStatusValue){PYGEN_ERROR, PyValue_NULL};
++            }
+             return (_PyStatusValue){PYGEN_NEXT, _PyValue_FromObjectResult(result)};
+         }
+         items[i] = next.value;
+@@ -1484,7 +1486,7 @@
+     dropwhileobject *lz = dropwhileobject_CAST(op);
+     PyObject *it = lz->it;
+     for (;;) {
+-        _PyStatusValue item = _PyValue_IterNext(it);
++        _PyStatusValue item = _PyValue_IterStep(it);
+         if (item.status != PYGEN_NEXT)
+             return item;
+         if (lz->start == 1)
+@@ -1791,9 +1793,8 @@
+         return (_PyStatusValue){PYGEN_RETURN, PyValue_NULL};
+ 
+     while (lz->cnt < lz->next) {
+-        _PyStatusValue skipped = _PyValue_IterNext(it);
++        _PyStatusValue skipped = _PyValue_IterStep(it);
+         if (skipped.status != PYGEN_NEXT) {
+-            PyValue_XCLOSE(skipped.value);
+             Py_CLEAR(lz->it);
+             return skipped;
+         }
+@@ -1804,9 +1805,8 @@
+         Py_CLEAR(lz->it);
+         return (_PyStatusValue){PYGEN_RETURN, PyValue_NULL};
+     }
+-    _PyStatusValue item = _PyValue_IterNext(it);
++    _PyStatusValue item = _PyValue_IterStep(it);
+     if (item.status != PYGEN_NEXT) {
+-        PyValue_XCLOSE(item.value);
+         Py_CLEAR(lz->it);
+         return item;
+     }
+@@ -3428,11 +3428,11 @@
+            exception first).
+         */
+ 
+-        _PyStatusValue datum = _PyValue_IterNext(data);
++        _PyStatusValue datum = _PyValue_IterStep(data);
+         if (datum.status != PYGEN_NEXT)
+             return datum;
+ 
+-        _PyStatusValue selector = _PyValue_IterNext(selectors);
++        _PyStatusValue selector = _PyValue_IterStep(selectors);
+         if (selector.status != PYGEN_NEXT) {
+             PyValue_CLOSE(datum.value);
+             return selector;
+@@ -3548,7 +3548,7 @@
+     PyObject *it = lz->it;
+ 
+     for (;;) {
+-        _PyStatusValue item = _PyValue_IterNext(it);
++        _PyStatusValue item = _PyValue_IterStep(it);
+         if (item.status != PYGEN_NEXT)
+             return item;
+ 
+--- a/Lib/test/test_itertools.py
++++ b/Lib/test/test_itertools.py
+@@ -2346,6 +2346,32 @@
+ 
+ class TestVariousIteratorArgs(unittest.TestCase):
+ 
++    def test_value_iterator_stop_iteration_payload(self):
++        class StopWithPayload:
++            def __init__(self, payload):
++                self.payload = payload
++
++            def __iter__(self):
++                return self
++
++            def __next__(self):
++                raise StopIteration(self.payload)
++
++        cases = (
++            dropwhile(bool, StopWithPayload("dropwhile")),
++            islice(StopWithPayload("islice"), 1),
++            compress(StopWithPayload("compress data"), repeat(True)),
++            compress([1], StopWithPayload("compress selector")),
++            filterfalse(None, StopWithPayload("filterfalse")),
++        )
++        for iterator, payload in zip(cases,
++                                     ("dropwhile", "islice", "compress data",
++                                      "compress selector", "filterfalse")):
++            with self.subTest(iterator=iterator):
++                with self.assertRaises(StopIteration) as cm:
++                    next(iterator)
++                self.assertEqual(cm.exception.args, (payload,))
++
+     def test_accumulate(self):
+         s = [1,2,3,4,5]
+         r = [1,3,6,10,15]

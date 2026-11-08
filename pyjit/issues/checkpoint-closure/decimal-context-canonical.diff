@@ -1,0 +1,180 @@
+--- a/Modules/_decimal/_decimal.c
++++ b/Modules/_decimal/_decimal.c
+@@ -7391,24 +7391,30 @@
+ DecCtx_BoolFunc_NO_CTX(mpd_iszero)
+ 
+ /*[clinic input]
++@value_function
+ _decimal.Context.is_canonical = _decimal.Context.is_normal
+ 
+ Return True if x is canonical, False otherwise.
+ [clinic start generated code]*/
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
++static PyValue
+ _decimal_Context_is_canonical_impl(PyObject *context, PyTypeObject *cls,
+-                                   PyObject *x)
+-/*[clinic end generated code: output=18ee249d9aec957c input=1bf2129808e55eb9]*/
++                                   PyValueBorrow x)
++/*[clinic end generated code: output=e9d7385c7f74bd84 input=cb2d79f458034aca]*/
+ {
+     decimal_state *state = PyType_GetModuleState(cls);
+-    if (!PyDec_Check(state, x)) {
++    if (!PyValue_IsObject(x) ||
++        !PyDec_Check(state, PyValue_AsKnownObjectBorrow(x))) {
+         PyErr_SetString(PyExc_TypeError,
+             "argument must be a Decimal");
+-        return NULL;
++        return PyValue_NULL;
+     }
+ 
+-    return mpd_iscanonical(MPD(x)) ? incr_true() : incr_false();
++    return mpd_iscanonical(MPD(PyValue_AsKnownObjectBorrow(x)))
++        ? PyValue_True : PyValue_False;
+ }
+ 
+ /* Functions with a single decimal argument */
+@@ -7462,6 +7468,7 @@
+ #endif
+ 
+ /*[clinic input]
++@value_function
+ _decimal.Context.canonical = _decimal.Context.is_normal
+ 
+ Returns the same Decimal object.
+@@ -7472,20 +7479,24 @@
+ >>> ExtendedContext.canonical(Decimal('2.50'))
+ Decimal('2.50')
+ [clinic start generated code]*/
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
++static PyValue
+ _decimal_Context_canonical_impl(PyObject *context, PyTypeObject *cls,
+-                                PyObject *x)
+-/*[clinic end generated code: output=f213e433e2032e5e input=d9f19ee3e7ed9433]*/
++                                PyValueBorrow x)
++/*[clinic end generated code: output=6ea215e288370882 input=2bfd10e642c97e0f]*/
+ {
+     decimal_state *state = PyType_GetModuleState(cls);
+-    if (!PyDec_Check(state, x)) {
++    if (!PyValue_IsObject(x) ||
++        !PyDec_Check(state, PyValue_AsKnownObjectBorrow(x))) {
+         PyErr_SetString(PyExc_TypeError,
+             "argument must be a Decimal");
+-        return NULL;
++        return PyValue_NULL;
+     }
+ 
+-    return Py_NewRef(x);
++    return PyValue_DUP(x);
+ }
+ 
+ /*[clinic input]
+--- a/Modules/_decimal/clinic/_decimal.c.h
++++ b/Modules/_decimal/clinic/_decimal.c.h
+@@ -5938,19 +5938,28 @@
+ "--\n"
+ "\n"
+ "Return True if x is canonical, False otherwise.");
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+ #define _DECIMAL_CONTEXT_IS_CANONICAL_METHODDEF    \
+-    {"is_canonical", _PyCFunction_CAST(_decimal_Context_is_canonical), METH_METHOD|METH_FASTCALL|METH_KEYWORDS, _decimal_Context_is_canonical__doc__},
++    {"is_canonical", _PyCFunction_CAST(_decimal_Context_is_canonical), METH_VALUE|METH_METHOD|METH_KEYWORDS, _decimal_Context_is_canonical__doc__},
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
++static PyValue
+ _decimal_Context_is_canonical_impl(PyObject *context, PyTypeObject *cls,
+-                                   PyObject *x);
++                                   PyValueBorrow x);
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
+-_decimal_Context_is_canonical(PyObject *context, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
++static PyValue
++_decimal_Context_is_canonical(PyValueBorrow context, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+ {
+-    PyObject *return_value = NULL;
+-    PyObject *x;
++    PyValue return_value = PyValue_NULL;
++    PyValueBorrow x;
+ 
+     if (!_PyArg_NoKwnames("is_canonical", kwnames)) {
+         goto exit;
+@@ -5958,8 +5967,8 @@
+     if (!_PyArg_CheckPositional("is_canonical", nargs, 1, 1)) {
+         goto exit;
+     }
+-    x = args[0];
+-    return_value = _decimal_Context_is_canonical_impl(context, cls, x);
++    x = PyValue_Borrow(args[0]);
++    return_value = _decimal_Context_is_canonical_impl(PyValue_AsKnownObjectBorrow(context), cls, x);
+ 
+ exit:
+     return return_value;
+@@ -6062,19 +6071,28 @@
+ "\n"
+ ">>> ExtendedContext.canonical(Decimal(\'2.50\'))\n"
+ "Decimal(\'2.50\')");
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+ #define _DECIMAL_CONTEXT_CANONICAL_METHODDEF    \
+-    {"canonical", _PyCFunction_CAST(_decimal_Context_canonical), METH_METHOD|METH_FASTCALL|METH_KEYWORDS, _decimal_Context_canonical__doc__},
++    {"canonical", _PyCFunction_CAST(_decimal_Context_canonical), METH_VALUE|METH_METHOD|METH_KEYWORDS, _decimal_Context_canonical__doc__},
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
++static PyValue
+ _decimal_Context_canonical_impl(PyObject *context, PyTypeObject *cls,
+-                                PyObject *x);
++                                PyValueBorrow x);
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
+-_decimal_Context_canonical(PyObject *context, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
++static PyValue
++_decimal_Context_canonical(PyValueBorrow context, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+ {
+-    PyObject *return_value = NULL;
+-    PyObject *x;
++    PyValue return_value = PyValue_NULL;
++    PyValueBorrow x;
+ 
+     if (!_PyArg_NoKwnames("canonical", kwnames)) {
+         goto exit;
+@@ -6082,8 +6100,8 @@
+     if (!_PyArg_CheckPositional("canonical", nargs, 1, 1)) {
+         goto exit;
+     }
+-    x = args[0];
+-    return_value = _decimal_Context_canonical_impl(context, cls, x);
++    x = PyValue_Borrow(args[0]);
++    return_value = _decimal_Context_canonical_impl(PyValue_AsKnownObjectBorrow(context), cls, x);
+ 
+ exit:
+     return return_value;
+@@ -6938,4 +6956,4 @@
+ #ifndef _DECIMAL_CONTEXT_APPLY_METHODDEF
+     #define _DECIMAL_CONTEXT_APPLY_METHODDEF
+ #endif /* !defined(_DECIMAL_CONTEXT_APPLY_METHODDEF) */
+-/*[clinic end generated code: output=c06bc08587c3c2d9 input=a9049054013a1b77]*/
++/*[clinic end generated code: output=3b3ff297b53a709e input=a9049054013a1b77]*/

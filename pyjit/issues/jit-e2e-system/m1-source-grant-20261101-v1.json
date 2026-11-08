@@ -1,0 +1,83 @@
+{
+  "decision": "AUTHORIZE_BOUNDED_M1_WHOLE_METHOD_SOURCE_IMPLEMENTATION",
+  "start_utc": "2026-11-01T17:17:09.038683+00:00",
+  "checkpoint_utc": "2026-11-01T17:47:09.038683+00:00",
+  "deadline_utc": "2026-11-01T18:47:09.038683+00:00",
+  "source_ceiling_seconds": 5400,
+  "extension_authorized": false,
+  "worktree": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/jit-method-baseline",
+  "branch": "boil/jit-method-baseline",
+  "base_source_head": "f0a49b6d30a38db705329bcfd5e5f2d6d2413710",
+  "source_owner": "restart_audit",
+  "independent_reviewer": "qualification_review_resumed",
+  "allowed_source_paths": [
+    "Include/internal/pycore_jit.h",
+    "Include/internal/pycore_ir.h",
+    "Python/ceval.c",
+    "Python/ceval_macros.h",
+    "Python/jit_runtime.c",
+    "Python/bytecodes.c",
+    "Python/ir.c",
+    "Tools/cases_generator/jit_helpers_generator.py",
+    "Tools/cases_generator/ir_generator.py",
+    "Python/generated_jit_helpers.c.h",
+    "Python/generated_ir_cases.c.h",
+    "Makefile.pre.in",
+    "Modules/_testinternalcapi.c",
+    "Lib/test/test_generated_cases.py",
+    "Lib/test/test_jit_method.py",
+    "Include/opcode_ids.h",
+    "Include/internal/pycore_uop_ids.h",
+    "Lib/_opcode_metadata.py",
+    "Include/internal/pycore_opcode_metadata.h",
+    "Python/ir_targets.h",
+    "Include/internal/pycore_ir_metadata.h",
+    "Python/jit_baseline.c",
+    "Python/jit_backend_x86.c",
+    "Python/jit_x86.h",
+    "Python/instrumentation.c"
+  ],
+  "hypothesis": "Predecoded complete method CFGs with direct native branches and helper continuations can execute loops, Python/C calls and error paths through one existing VM Action consumer; this supplies the shared baseline/backend for optimizing method and trace frontends.",
+  "architecture": {
+    "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/boil/design/jit-e2e-system.md",
+    "sha256": "724b2ab88e55394ea6e536887b2aeb6b871ce69e74d802fe02eb620a17912ccc"
+  },
+  "reviewed_first_slice": {
+    "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/jit-e2e-first-slice-20261101-v1/proposal.md",
+    "sha256": "7c598fd92dd6ebdf2515a5bd3f6601b0bf0238d430463d905175707e3858d629"
+  },
+  "lifetime_note": {
+    "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/jit-e2e-first-slice-20261101-v1/activation-lifetime-note.md",
+    "sha256": "3c974e9af269c90216d5f563ed0b0dd0bae9555af27a6620e76272844c6fcffc"
+  },
+  "integration_checklist": {
+    "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/jit-method-m1-integration-checklist-20261101-v1/checklist.md",
+    "sha256": "b89af2d5ddb7601b20d82c9600112f7f912fccc8faa8d2541b4ce0e436ee495c"
+  },
+  "prerequisite": {
+    "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/boil/issues/jit-e2e-system/m0-behavior-decision-20261101-v1.json",
+    "sha256": "050ea96c5da0f85bd93287749b30359e7baaa1c29a7b8258ba683eab376bda78"
+  },
+  "checkpoint_requirement": "Concrete common descriptors/LIR, call-aware emitted method branches/helper calls and CodeUnit/Action ownership transitions available for review; not declarations only. Host encoder checks may emit actual instruction bytes. Report unfinished transfer/lifetime contracts explicitly.",
+  "completion_requirement": "Complete native method CFG source for varying loop/branch/Python call/C bridge/normal and error paths, actual emitted entry and compiled-continuation witness producers, owner/invalidation/retirement and exact fallback, cheap checks and independent exact source review. Runtime exposure follows a separate bounded grant.",
+  "implementation_choices": [
+    "Reuse existing PyMem allocation domain; BUILDING blocks recursive publication and recheck same exec/source/generation/epoch after cold allocation. Preserve/propagate pending errors from reentry; only error-free optional failure may decline.",
+    "Add narrow instrumentation detach before exec rewrites and post-helper observer/epoch checks. Resume after completed effects without replay.",
+    "Native resume enters a valid SysV prologue, establishes ctx/callee-saved registers, then selects logical word label once per transfer. Interior labels alone are not callable entry adapters.",
+    "One nullable exec-owned JitState and common CodeUnit owner; private sizeof/clear changes allowed and accounted. Code indices avoid hidden strong Python-object cycles.",
+    "Pin native bytes/metadata across C callbacks; detach entry before reentrant release. Handle terminal RETURN/ENTER before touching potentially freed old exec/frame state; clear borrowed pointers before unpin and resolve fresh caller on Python return.",
+    "Cold internal compile/install uses the same method compiler and normal admission. Forced compilation proves method execution, not automatic hotness. No per-function-name eligibility or revived arithmetic-prefix tier."
+  ],
+  "host_generators_tests_authorized": true,
+  "standalone_encoder_c_checks_authorized": true,
+  "standalone_encoder_checks_total_ceiling_seconds": 120,
+  "standalone_encoder_scope": "Only actual encoder/LIR host fixtures; preserve original source/configuration/results. No candidate Python/JIT executable or full profile build.",
+  "candidate_python_jit_runtime_or_timing_authorized": false,
+  "full_native_build_authorized": false,
+  "broad_qualification_or_integration_authorized": false,
+  "publication_unwind_adoption_deferred": true,
+  "new_opcode_ids_persisted_cache_or_collector_options_authorized": false,
+  "gc_work_authorized": false,
+  "preserve_existing_profiles_and_evidence": true,
+  "next_gate": "Freeze coherent source; independently review; then one finite native loop/call/error validation and emitted ABI/entry/continuation proof. Full29 and expensive qualification remain integration milestones."
+}

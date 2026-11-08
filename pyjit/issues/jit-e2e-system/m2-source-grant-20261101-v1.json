@@ -1,0 +1,117 @@
+{
+  "decision": "ACCEPT_M2_DESIGN_AND_AUTHORIZE_BOUNDED_SOURCE_IMPLEMENTATION",
+  "start_utc": "2026-11-01T18:35:56.305708+00:00",
+  "checkpoint_utc": "2026-11-01T19:05:56.305708+00:00",
+  "deadline_utc": "2026-11-01T20:05:56.305708+00:00",
+  "source_ceiling_seconds": 5400,
+  "extension_authorized": false,
+  "worktree": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/jit-natural-method",
+  "branch": "boil/jit-natural-method",
+  "base_source_head": "15987a03c236d5257b8a7b944bf858ee20e52fc3",
+  "source_owner": "restart_audit",
+  "independent_reviewer": "qualification_review_resumed",
+  "allowed_source_paths": [
+    "Include/internal/pycore_jit.h",
+    "Include/internal/pycore_ir.h",
+    "Include/internal/pycore_feedback.h",
+    "Python/bytecodes.c",
+    "Python/ceval.c",
+    "Python/ceval_macros.h",
+    "Python/jit_runtime.c",
+    "Python/jit_baseline.c",
+    "Python/jit_backend_x86.c",
+    "Python/jit_x86.h",
+    "Python/ir.c",
+    "Python/specialize.c",
+    "Python/instrumentation.c",
+    "Objects/codeobject.c",
+    "Python/marshal.c",
+    "Modules/_opcode.c",
+    "Modules/_testinternalcapi.c",
+    "Makefile.pre.in",
+    "Tools/cases_generator/jit_helpers_generator.py",
+    "Tools/cases_generator/ir_generator.py",
+    "Tools/cases_generator/ir_metadata_generator.py",
+    "Tools/cases_generator/opcode_id_generator.py",
+    "Tools/cases_generator/py_metadata_generator.py",
+    "Tools/cases_generator/opcode_metadata_generator.py",
+    "Python/generated_ir_cases.c.h",
+    "Python/generated_jit_helpers.c.h",
+    "Include/opcode_ids.h",
+    "Include/internal/pycore_uop_ids.h",
+    "Include/internal/pycore_opcode_metadata.h",
+    "Include/internal/pycore_opcode_utils.h",
+    "Include/internal/pycore_ir_metadata.h",
+    "Python/ir_targets.h",
+    "Lib/_opcode_metadata.py",
+    "Lib/dis.py",
+    "Lib/opcode.py",
+    "Lib/test/test_generated_cases.py",
+    "Lib/test/test_jit_method.py",
+    "Lib/test/test_ir.py",
+    "Lib/test/test_code.py",
+    "Lib/test/test_marshal.py",
+    "Lib/test/test_dis.py"
+  ],
+  "reviewed_design": {
+    "m2-design-20261101-v1.md": {
+      "path": "boil/issues/jit-e2e-system/m2-design-20261101-v1.md",
+      "sha256": "79a3759eaa3de4a2c81fbf4e606cee589dd0d7ea678d2f0e819ad9f665425ac7"
+    },
+    "m2-design-review-20261101-v1.md": {
+      "path": "boil/issues/jit-e2e-system/m2-design-review-20261101-v1.md",
+      "sha256": "850e22d60b3ad5b1932ae62802c714117008c54b0e14cf3e722917afb14c10bf"
+    },
+    "m2-design-receipt-20261101-v1.json": {
+      "path": "boil/issues/jit-e2e-system/m2-design-receipt-20261101-v1.json",
+      "sha256": "56ba892b52c0553c7a2238f0c31084cbf9237d2503b53173277c920a5a597b35"
+    }
+  },
+  "proposal_evidence": {
+    "path": "build/jit-method-m2-design-20261101-v1/proposal-evidence.json",
+    "sha256": "6f32fb0b58d33bcc12a83f25b35c54a0f0bf4cf8e8a408c01d31600640b8da53"
+  },
+  "workload_matrix": {
+    "path": "build/jit-method-m2-design-20261101-v1/workload-matrix.json",
+    "sha256": "5d084620f0d130a69b51bc9c94394b47025c5c8947bb4b016a992dae5d1c0c23"
+  },
+  "hypothesis": "Shared generic object/iteration/call helpers plus site-local hotness and method-specific entry can execute useful methods naturally, with exact call continuations and bounded costs; this supplies workloads for shared optimizing trace/method SSA.",
+  "checkpoint_requirement": "Actual16-form helper generation/edges, stable old0..301 metadata plus three exec-only rejection/readers, real pending normal/error/generator return consumers. Report unfinished paths; declarations alone are insufficient.",
+  "completion_requirement": "Coherent natural CALL/backedge entry and generic attribute/iteration/call source, owned inputs across cold reentry, restoration/observer/retirement and bounded pending-frame cleanup, code-cache/cooldown accounting and meaningful fixtures. Freeze and independently review exact source before fresh native execution.",
+  "fixed_policy": {
+    "call_heat": 64,
+    "periodic_backedge_heat_per_exec": 256,
+    "pending_caller_capacity": 64,
+    "max_method_words": 4096,
+    "process_units_live_or_retired": 64,
+    "process_metadata_and_code_bytes": 8388608,
+    "resource_cooldown_eligible_events": 4096
+  },
+  "metadata_contract": "Append only CALL_JIT_WARM/JUMP_BACKWARD_JIT_WARM/RESUME_JIT as exec-only IDs302..304. Preserve all existing0..301 IDs/formats, pristine/marshal semantics and cache magic; close shared construction/marshal rejection and all readers.",
+  "implementation_contracts": [
+    "Only installed methods patch their actual validated firsttraceable RESUME; original service/retry exactly once; restore head before detach/free/instrumentation rewrite.",
+    "Use nonzero FB_CALL.hits and separate lazy perexec loop heat, never feedback entry0/branch history.",
+    "Own original evaluated call inputs before callback-capable preparation; never resample operands after reentry.",
+    "JitFlow is evaluator-local/lazy, with64scalar records and no semantic code/constants/function root or native label across Python callees.",
+    "Retire records on matched return, exception into waiting caller, frame clear/reuse, generator creation or unsupported suspension; no return-chain scan.",
+    "M0 semantic-step request retains priority; all14M1methods remain behavior requirements.",
+    "Automatic eligibility covers every pristine word, with no workload/name filters. Separate transient observers/resources from immutable unsupported cache.",
+    "Charge installed and retired pinned artifacts to process bounds until actual free; no dangling interpreter-owned budget pointer."
+  ],
+  "host_generators_tests_authorized": true,
+  "syntax_only_checks": {
+    "authorized": true,
+    "aggregate_compiler_ceiling_seconds": 120,
+    "configuration": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/jit-method-baseline/build/jit-method-m1-v1-debug-20261101",
+    "scope": "Matching retained debug config, actual changed M2 TUs with new-worktree source/includes. No old-source substitution, object/link/config/product mutation; new M2 evidence logs only."
+  },
+  "standalone_encoder_checks": {
+    "authorized": true,
+    "aggregate_ceiling_seconds": 120,
+    "scope": "Small actual encoder/LIR host emission/failure fixtures; no emitted machine bytes or candidate executable execution."
+  },
+  "candidate_build_runtime_timing_or_integration_authorized": false,
+  "ssa_or_heap_storage_rewrite_or_gc_authorized": false,
+  "preserve_all_previous_source_images_and_evidence": true,
+  "next_gate": "Freeze/review source; finite focused native validation; actual natural-coverage diagnostics before fixed cold/warm matrix. Broad qualification remains a coherent adoption gate."
+}

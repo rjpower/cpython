@@ -1,0 +1,34 @@
+{
+  "allowed_method": "TestNativeMethods.test_unsupported_disables_only_affected_code",
+  "allowed_source_paths": [
+    "Lib/test/test_jit_method.py"
+  ],
+  "base_source_head": "3bcb891956a9d2796bbe5e92c4f0c9e2f2516899",
+  "branch": "boil/jit-natural-method-fixture-correction",
+  "candidate_build_runtime_timing_or_integration_authorized": false,
+  "compiler_or_encoder_checks_authorized": false,
+  "deadline_utc": "2026-11-01T19:50:04.986864+00:00",
+  "decision": "AUTHORIZE_ONE_TEST_FIXTURE_CORRECTION_AFTER_PRESERVED_FAILED_BATCH",
+  "extension_authorized": false,
+  "failed_outcome_receipt": {
+    "path": "build/jit-method-m2-outcome-review-20261101-v1/receipt.json",
+    "sha256": "5f56bd5f5a41e8ae46dbc0c314f6b85feafc64d9d5ac1871b5b685cb41a339eb"
+  },
+  "failed_outcome_review": {
+    "path": "build/jit-method-m2-outcome-review-20261101-v1/review.md",
+    "sha256": "6c6886ebad25dd233656cb1a209e34dc68a13f8f4d0c076a28195868a1d8d8ef"
+  },
+  "host_ast_roster_and_diff_checks_authorized": true,
+  "hypothesis": "The failed assertion is a stale unsupported-operation fixture: BUILD_LIST is now supported. CALL_FUNCTION_EX remains explicitly unsupported and can test the same affected-only fallback contract.",
+  "independent_design_review": "qualification_review_resumed explicitly accepted actual CALL_FUNCTION_EX ID4 NULL classification and supported BUILD_TUPLE49, retained in linked failed outcome.",
+  "independent_reviewer": "qualification_review_resumed",
+  "next_gate": "Freeze the one-method test-only commit, independently review all other source exact, then prepare a new finite full28-method native batch; do not rerun failed artifacts.",
+  "original_m2_source_cap_utc": "2026-11-01T20:05:56.305708+00:00",
+  "preserve_frozen_source_image_and_evidence": true,
+  "reviewed_change": "Replace list/index fixture with args=(value,) and callback(*args); add a local callback ledger and assert exactly one call before the distinct supported other(19) check. Keep inactive/disabled/recompile-refusal/unrelated-native assertions and all28 IDs.",
+  "runtime_header_generator_or_policy_changes_authorized": false,
+  "source_ceiling_seconds": 600,
+  "source_owner": "restart_audit",
+  "start_utc": "2026-11-01T19:40:04.986864+00:00",
+  "worktree": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/jit-natural-method-fixture-correction"
+}

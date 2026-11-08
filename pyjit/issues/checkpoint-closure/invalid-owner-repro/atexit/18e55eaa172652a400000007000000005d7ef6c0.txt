@@ -1,0 +1,2808 @@
+Stats process: pid=7 tag=test_atexit
+Handler entry coverage version : 2
+Handler entry dispatch mode : 1
+Handler domain count : 319
+Handler metadata entries : 298
+opcode[CACHE].handler_id : 0
+opcode[CACHE].base_id : 0
+opcode[CACHE].handler_flags : 448
+opcode[CACHE].pair_count[NOP] : 1
+opcode[CACHE].pair_count[POP_TOP] : 31
+opcode[CACHE].pair_count[COPY_FREE_VARS] : 138
+opcode[CACHE].pair_count[LOAD_ATTR] : 3
+opcode[CACHE].pair_count[LOAD_CONST] : 18
+opcode[CACHE].pair_count[LOAD_FAST] : 1
+opcode[CACHE].pair_count[LOAD_FAST_BORROW] : 34
+opcode[CACHE].pair_count[LOAD_GLOBAL] : 19
+opcode[CACHE].pair_count[LOAD_NAME] : 10
+opcode[CACHE].pair_count[MAKE_CELL] : 80
+opcode[CACHE].pair_count[POP_JUMP_IF_NOT_NONE] : 1
+opcode[CACHE].pair_count[STORE_ATTR] : 18
+opcode[CACHE].pair_count[RESUME] : 2
+opcode[CACHE].pair_count[LOAD_ATTR_SHAPE] : 63
+opcode[CACHE].pair_count[LOAD_GLOBAL_BUILTIN] : 2
+opcode[CACHE].pair_count[LOAD_GLOBAL_MODULE] : 88
+opcode[CACHE].pair_count[LOAD_SMALL_INT_INLINE] : 6
+opcode[CACHE].pair_count[STORE_ATTR_SHAPE] : 3
+opcode[CACHE].pair_count[STORE_ATTR_SHAPE_ADD] : 34
+opcode[BINARY_SLICE].handler_id : 1
+opcode[BINARY_SLICE].base_id : 1
+opcode[BINARY_SLICE].handler_flags : 448
+    opcode[BINARY_SLICE].specialization.deferred : 19
+    opcode[BINARY_SLICE].execution_count : 19
+opcode[BINARY_SLICE].pair_count[BUILD_TUPLE] : 5
+opcode[BINARY_SLICE].pair_count[CALL] : 2
+opcode[BINARY_SLICE].pair_count[LOAD_DEREF] : 5
+opcode[BINARY_SLICE].pair_count[POP_JUMP_IF_FALSE] : 2
+opcode[BINARY_SLICE].pair_count[CALL_METHOD_DESCRIPTOR_FAST] : 4
+opcode[BINARY_SLICE].pair_count[BINARY_OP_ADD] : 1
+opcode[BUILD_TEMPLATE].handler_id : 2
+opcode[BUILD_TEMPLATE].base_id : 2
+opcode[BUILD_TEMPLATE].handler_flags : 448
+opcode[BINARY_OP_INPLACE_ADD_UNICODE].handler_id : 3
+opcode[BINARY_OP_INPLACE_ADD_UNICODE].base_id : 42
+opcode[BINARY_OP_INPLACE_ADD_UNICODE].handler_flags : 193
+    opcode[BINARY_OP_INPLACE_ADD_UNICODE].execution_count : 12
+opcode[BINARY_OP_INPLACE_ADD_UNICODE].pair_count[JUMP_BACKWARD] : 12
+opcode[CALL_FUNCTION_EX].handler_id : 4
+opcode[CALL_FUNCTION_EX].base_id : 4
+opcode[CALL_FUNCTION_EX].handler_flags : 960
+opcode[CALL_FUNCTION_EX].specializable : 1
+    opcode[CALL_FUNCTION_EX].specialization.success : 5
+    opcode[CALL_FUNCTION_EX].specialization.deferred : 9
+    opcode[CALL_FUNCTION_EX].execution_count : 14
+opcode[CALL_FUNCTION_EX].pair_count[RETURN_VALUE] : 4
+opcode[CALL_FUNCTION_EX].pair_count[BUILD_LIST] : 1
+opcode[CALL_FUNCTION_EX].pair_count[COPY_FREE_VARS] : 1
+opcode[CALL_FUNCTION_EX].pair_count[LOAD_ATTR] : 2
+opcode[CALL_FUNCTION_EX].pair_count[LOAD_GLOBAL] : 4
+opcode[CALL_FUNCTION_EX].pair_count[MAKE_CELL] : 1
+opcode[CALL_FUNCTION_EX].pair_count[LOAD_GLOBAL_MODULE] : 1
+opcode[CHECK_EG_MATCH].handler_id : 5
+opcode[CHECK_EG_MATCH].base_id : 5
+opcode[CHECK_EG_MATCH].handler_flags : 448
+opcode[CHECK_EXC_MATCH].handler_id : 6
+opcode[CHECK_EXC_MATCH].base_id : 6
+opcode[CHECK_EXC_MATCH].handler_flags : 448
+    opcode[CHECK_EXC_MATCH].execution_count : 97
+opcode[CHECK_EXC_MATCH].pair_count[POP_JUMP_IF_FALSE] : 26
+opcode[CHECK_EXC_MATCH].pair_count[POP_JUMP_IF_FALSE_BOOL] : 71
+opcode[CLEANUP_THROW].handler_id : 7
+opcode[CLEANUP_THROW].base_id : 7
+opcode[CLEANUP_THROW].handler_flags : 448
+opcode[DELETE_SUBSCR].handler_id : 8
+opcode[DELETE_SUBSCR].base_id : 8
+opcode[DELETE_SUBSCR].handler_flags : 448
+    opcode[DELETE_SUBSCR].execution_count : 28
+opcode[DELETE_SUBSCR].pair_count[LOAD_GLOBAL] : 2
+opcode[DELETE_SUBSCR].pair_count[LOAD_GLOBAL_MODULE] : 26
+opcode[END_FOR].handler_id : 9
+opcode[END_FOR].base_id : 9
+opcode[END_FOR].handler_flags : 448
+    opcode[END_FOR].execution_count : 1
+opcode[END_FOR].pair_count[POP_ITER] : 1
+opcode[END_SEND].handler_id : 10
+opcode[END_SEND].base_id : 10
+opcode[END_SEND].handler_flags : 448
+opcode[EXIT_INIT_CHECK].handler_id : 11
+opcode[EXIT_INIT_CHECK].base_id : 11
+opcode[EXIT_INIT_CHECK].handler_flags : 448
+    opcode[EXIT_INIT_CHECK].execution_count : 86
+opcode[EXIT_INIT_CHECK].pair_count[RETURN_VALUE] : 86
+opcode[FORMAT_SIMPLE].handler_id : 12
+opcode[FORMAT_SIMPLE].base_id : 12
+opcode[FORMAT_SIMPLE].handler_flags : 448
+    opcode[FORMAT_SIMPLE].execution_count : 68
+opcode[FORMAT_SIMPLE].pair_count[FORMAT_SIMPLE] : 26
+opcode[FORMAT_SIMPLE].pair_count[BUILD_STRING] : 8
+opcode[FORMAT_SIMPLE].pair_count[CONVERT_VALUE] : 1
+opcode[FORMAT_SIMPLE].pair_count[LOAD_CONST] : 27
+opcode[FORMAT_SIMPLE].pair_count[LOAD_NAME] : 4
+opcode[FORMAT_SIMPLE].pair_count[LOAD_SMALL_INT_INLINE] : 1
+opcode[FORMAT_SIMPLE].pair_count[BINARY_OP_SUBSCR] : 1
+opcode[FORMAT_WITH_SPEC].handler_id : 13
+opcode[FORMAT_WITH_SPEC].base_id : 13
+opcode[FORMAT_WITH_SPEC].handler_flags : 448
+opcode[GET_AITER].handler_id : 14
+opcode[GET_AITER].base_id : 14
+opcode[GET_AITER].handler_flags : 448
+opcode[GET_ANEXT].handler_id : 15
+opcode[GET_ANEXT].base_id : 15
+opcode[GET_ANEXT].handler_flags : 448
+opcode[GET_LEN].handler_id : 16
+opcode[GET_LEN].base_id : 16
+opcode[GET_LEN].handler_flags : 448
+opcode[RESERVED].handler_id : 17
+opcode[RESERVED].base_id : 17
+opcode[RESERVED].handler_flags : 448
+opcode[INTERPRETER_EXIT].handler_id : 18
+opcode[INTERPRETER_EXIT].base_id : 18
+opcode[INTERPRETER_EXIT].handler_flags : 448
+    opcode[INTERPRETER_EXIT].execution_count : 545
+opcode[LOAD_BUILD_CLASS].handler_id : 19
+opcode[LOAD_BUILD_CLASS].base_id : 19
+opcode[LOAD_BUILD_CLASS].handler_flags : 448
+    opcode[LOAD_BUILD_CLASS].execution_count : 85
+opcode[LOAD_BUILD_CLASS].pair_count[LOAD_CONST] : 84
+opcode[LOAD_BUILD_CLASS].pair_count[LOAD_FAST_BORROW] : 1
+opcode[LOAD_LOCALS].handler_id : 20
+opcode[LOAD_LOCALS].base_id : 20
+opcode[LOAD_LOCALS].handler_flags : 448
+    opcode[LOAD_LOCALS].execution_count : 76
+opcode[LOAD_LOCALS].pair_count[STORE_DEREF] : 76
+opcode[MAKE_FUNCTION].handler_id : 21
+opcode[MAKE_FUNCTION].base_id : 21
+opcode[MAKE_FUNCTION].handler_flags : 448
+    opcode[MAKE_FUNCTION].execution_count : 772
+opcode[MAKE_FUNCTION].pair_count[RETURN_VALUE] : 1
+opcode[MAKE_FUNCTION].pair_count[CALL] : 69
+opcode[MAKE_FUNCTION].pair_count[LOAD_CONST] : 84
+opcode[MAKE_FUNCTION].pair_count[LOAD_FAST_BORROW] : 3
+opcode[MAKE_FUNCTION].pair_count[LOAD_GLOBAL] : 2
+opcode[MAKE_FUNCTION].pair_count[LOAD_NAME] : 1
+opcode[MAKE_FUNCTION].pair_count[SET_FUNCTION_ATTRIBUTE] : 183
+opcode[MAKE_FUNCTION].pair_count[STORE_NAME] : 429
+opcode[MATCH_KEYS].handler_id : 22
+opcode[MATCH_KEYS].base_id : 22
+opcode[MATCH_KEYS].handler_flags : 448
+opcode[MATCH_MAPPING].handler_id : 23
+opcode[MATCH_MAPPING].base_id : 23
+opcode[MATCH_MAPPING].handler_flags : 448
+opcode[MATCH_SEQUENCE].handler_id : 24
+opcode[MATCH_SEQUENCE].base_id : 24
+opcode[MATCH_SEQUENCE].handler_flags : 448
+opcode[NOP].handler_id : 25
+opcode[NOP].base_id : 25
+opcode[NOP].handler_flags : 448
+    opcode[NOP].execution_count : 761
+opcode[NOP].pair_count[NOP] : 42
+opcode[NOP].pair_count[LOAD_ATTR] : 103
+opcode[NOP].pair_count[LOAD_COMMON_CONSTANT] : 86
+opcode[NOP].pair_count[LOAD_FAST] : 14
+opcode[NOP].pair_count[LOAD_FAST_BORROW] : 38
+opcode[NOP].pair_count[LOAD_GLOBAL] : 40
+opcode[NOP].pair_count[LOAD_NAME] : 7
+opcode[NOP].pair_count[STORE_ATTR] : 70
+opcode[NOP].pair_count[LOAD_ATTR_CLASS] : 10
+opcode[NOP].pair_count[LOAD_ATTR_METHOD_WITH_VALUES] : 11
+opcode[NOP].pair_count[LOAD_ATTR_MODULE] : 7
+opcode[NOP].pair_count[LOAD_ATTR_PROPERTY] : 33
+opcode[NOP].pair_count[LOAD_ATTR_SHAPE] : 109
+opcode[NOP].pair_count[LOAD_GLOBAL_BUILTIN] : 4
+opcode[NOP].pair_count[LOAD_GLOBAL_MODULE] : 176
+opcode[NOP].pair_count[LOAD_SMALL_INT_INLINE] : 11
+opcode[POP_EXCEPT].handler_id : 27
+opcode[POP_EXCEPT].base_id : 27
+opcode[POP_EXCEPT].handler_flags : 448
+    opcode[POP_EXCEPT].execution_count : 98
+opcode[POP_EXCEPT].pair_count[RETURN_VALUE] : 1
+opcode[POP_EXCEPT].pair_count[JUMP_BACKWARD] : 8
+opcode[POP_EXCEPT].pair_count[JUMP_BACKWARD_NO_INTERRUPT] : 76
+opcode[POP_EXCEPT].pair_count[LOAD_COMMON_CONSTANT] : 6
+opcode[POP_EXCEPT].pair_count[LOAD_FAST] : 5
+opcode[POP_EXCEPT].pair_count[RERAISE] : 2
+opcode[POP_ITER].handler_id : 28
+opcode[POP_ITER].base_id : 28
+opcode[POP_ITER].handler_flags : 448
+    opcode[POP_ITER].execution_count : 117
+opcode[POP_ITER].pair_count[RETURN_VALUE] : 19
+opcode[POP_ITER].pair_count[JUMP_BACKWARD] : 4
+opcode[POP_ITER].pair_count[JUMP_FORWARD] : 1
+opcode[POP_ITER].pair_count[LOAD_ATTR] : 11
+opcode[POP_ITER].pair_count[LOAD_COMMON_CONSTANT] : 40
+opcode[POP_ITER].pair_count[LOAD_FAST_BORROW] : 1
+opcode[POP_ITER].pair_count[LOAD_GLOBAL] : 5
+opcode[POP_ITER].pair_count[LOAD_NAME] : 2
+opcode[POP_ITER].pair_count[POP_JUMP_IF_FALSE] : 2
+opcode[POP_ITER].pair_count[STORE_ATTR] : 2
+opcode[POP_ITER].pair_count[STORE_NAME] : 1
+opcode[POP_ITER].pair_count[SWAP] : 27
+opcode[POP_ITER].pair_count[LOAD_ATTR_SHAPE] : 1
+opcode[POP_ITER].pair_count[STORE_ATTR_SHAPE_ADD] : 1
+opcode[POP_TOP].handler_id : 29
+opcode[POP_TOP].base_id : 29
+opcode[POP_TOP].handler_flags : 448
+    opcode[POP_TOP].execution_count : 1093
+opcode[POP_TOP].pair_count[LOAD_BUILD_CLASS] : 14
+opcode[POP_TOP].pair_count[NOP] : 195
+opcode[POP_TOP].pair_count[POP_EXCEPT] : 13
+opcode[POP_TOP].pair_count[POP_TOP] : 79
+opcode[POP_TOP].pair_count[RETURN_VALUE] : 173
+opcode[POP_TOP].pair_count[BUILD_LIST] : 2
+opcode[POP_TOP].pair_count[BUILD_MAP] : 1
+opcode[POP_TOP].pair_count[JUMP_BACKWARD] : 55
+opcode[POP_TOP].pair_count[JUMP_FORWARD] : 1
+opcode[POP_TOP].pair_count[LOAD_ATTR] : 17
+opcode[POP_TOP].pair_count[LOAD_COMMON_CONSTANT] : 142
+opcode[POP_TOP].pair_count[LOAD_CONST] : 12
+opcode[POP_TOP].pair_count[LOAD_FAST] : 4
+opcode[POP_TOP].pair_count[LOAD_FAST_BORROW] : 7
+opcode[POP_TOP].pair_count[LOAD_FAST_CHECK] : 50
+opcode[POP_TOP].pair_count[LOAD_GLOBAL] : 28
+opcode[POP_TOP].pair_count[LOAD_NAME] : 86
+opcode[POP_TOP].pair_count[POP_JUMP_IF_NONE] : 4
+opcode[POP_TOP].pair_count[STORE_ATTR] : 2
+opcode[POP_TOP].pair_count[STORE_NAME] : 3
+opcode[POP_TOP].pair_count[RESUME] : 17
+opcode[POP_TOP].pair_count[BINARY_OP_ADD_UNICODE] : 10
+opcode[POP_TOP].pair_count[LOAD_ATTR_METHOD_NO_DICT] : 27
+opcode[POP_TOP].pair_count[LOAD_ATTR_METHOD_WITH_VALUES] : 4
+opcode[POP_TOP].pair_count[LOAD_ATTR_SHAPE] : 71
+opcode[POP_TOP].pair_count[LOAD_GLOBAL_BUILTIN] : 34
+opcode[POP_TOP].pair_count[LOAD_GLOBAL_MODULE] : 30
+opcode[POP_TOP].pair_count[LOAD_SMALL_INT_INLINE] : 6
+opcode[POP_TOP].pair_count[POP_JUMP_IF_FALSE_STR] : 3
+opcode[POP_TOP].pair_count[STORE_ATTR_SHAPE] : 1
+opcode[POP_TOP].pair_count[BINARY_OP_ADD] : 2
+opcode[PUSH_EXC_INFO].handler_id : 30
+opcode[PUSH_EXC_INFO].base_id : 30
+opcode[PUSH_EXC_INFO].handler_flags : 448
+    opcode[PUSH_EXC_INFO].execution_count : 98
+opcode[PUSH_EXC_INFO].pair_count[WITH_EXCEPT_START] : 1
+opcode[PUSH_EXC_INFO].pair_count[LOAD_GLOBAL] : 22
+opcode[PUSH_EXC_INFO].pair_count[LOAD_NAME] : 4
+opcode[PUSH_EXC_INFO].pair_count[LOAD_GLOBAL_BUILTIN] : 71
+opcode[PUSH_NULL].handler_id : 31
+opcode[PUSH_NULL].base_id : 31
+opcode[PUSH_NULL].handler_flags : 64
+opcode[RETURN_GENERATOR].handler_id : 32
+opcode[RETURN_GENERATOR].base_id : 32
+opcode[RETURN_GENERATOR].handler_flags : 448
+    opcode[RETURN_GENERATOR].execution_count : 20
+opcode[RETURN_GENERATOR].pair_count[CALL] : 5
+opcode[RETURN_GENERATOR].pair_count[FOR_ITER] : 2
+opcode[RETURN_GENERATOR].pair_count[LOAD_COMMON_CONSTANT] : 1
+opcode[RETURN_GENERATOR].pair_count[STORE_NAME] : 2
+opcode[RETURN_GENERATOR].pair_count[CALL_BUILTIN_FAST_WITH_KEYWORDS] : 3
+opcode[RETURN_GENERATOR].pair_count[CALL_METHOD_DESCRIPTOR_FAST] : 7
+opcode[RETURN_VALUE].handler_id : 33
+opcode[RETURN_VALUE].base_id : 33
+opcode[RETURN_VALUE].handler_flags : 448
+    opcode[RETURN_VALUE].execution_count : 1975
+opcode[RETURN_VALUE].pair_count[END_FOR] : 1
+opcode[RETURN_VALUE].pair_count[EXIT_INIT_CHECK] : 86
+opcode[RETURN_VALUE].pair_count[INTERPRETER_EXIT] : 529
+opcode[RETURN_VALUE].pair_count[NOP] : 110
+opcode[RETURN_VALUE].pair_count[POP_TOP] : 374
+opcode[RETURN_VALUE].pair_count[RETURN_VALUE] : 117
+opcode[RETURN_VALUE].pair_count[BUILD_TUPLE] : 4
+opcode[RETURN_VALUE].pair_count[CALL] : 9
+opcode[RETURN_VALUE].pair_count[COPY] : 34
+opcode[RETURN_VALUE].pair_count[GET_ITER] : 1
+opcode[RETURN_VALUE].pair_count[JUMP_BACKWARD] : 8
+opcode[RETURN_VALUE].pair_count[JUMP_FORWARD] : 48
+opcode[RETURN_VALUE].pair_count[LIST_APPEND] : 6
+opcode[RETURN_VALUE].pair_count[LOAD_ATTR] : 37
+opcode[RETURN_VALUE].pair_count[LOAD_COMMON_CONSTANT] : 148
+opcode[RETURN_VALUE].pair_count[LOAD_CONST] : 8
+opcode[RETURN_VALUE].pair_count[LOAD_FAST] : 18
+opcode[RETURN_VALUE].pair_count[LOAD_FAST_BORROW] : 55
+opcode[RETURN_VALUE].pair_count[LOAD_GLOBAL] : 22
+opcode[RETURN_VALUE].pair_count[POP_JUMP_IF_FALSE] : 21
+opcode[RETURN_VALUE].pair_count[POP_JUMP_IF_NOT_NONE] : 71
+opcode[RETURN_VALUE].pair_count[POP_JUMP_IF_TRUE] : 13
+opcode[RETURN_VALUE].pair_count[STORE_ATTR] : 13
+opcode[RETURN_VALUE].pair_count[STORE_GLOBAL] : 3
+opcode[RETURN_VALUE].pair_count[STORE_NAME] : 34
+opcode[RETURN_VALUE].pair_count[SWAP] : 34
+opcode[RETURN_VALUE].pair_count[UNPACK_SEQUENCE] : 10
+opcode[RETURN_VALUE].pair_count[UNPACK_SEQUENCE_TWO_TUPLE] : 13
+opcode[RETURN_VALUE].pair_count[LOAD_CONST_INLINE_INT] : 12
+opcode[RETURN_VALUE].pair_count[LOAD_GLOBAL_BUILTIN] : 14
+opcode[RETURN_VALUE].pair_count[LOAD_GLOBAL_MODULE] : 21
+opcode[RETURN_VALUE].pair_count[POP_JUMP_IF_FALSE_BOOL] : 8
+opcode[RETURN_VALUE].pair_count[POP_JUMP_IF_FALSE_NONE] : 25
+opcode[RETURN_VALUE].pair_count[POP_JUMP_IF_TRUE_BOOL] : 8
+opcode[RETURN_VALUE].pair_count[STORE_ATTR_SHAPE] : 23
+opcode[RETURN_VALUE].pair_count[STORE_ATTR_SHAPE_ADD] : 36
+opcode[RETURN_VALUE].pair_count[BINARY_OP_SUBSCR] : 1
+opcode[SETUP_ANNOTATIONS].handler_id : 34
+opcode[SETUP_ANNOTATIONS].base_id : 34
+opcode[SETUP_ANNOTATIONS].handler_flags : 448
+opcode[STORE_SLICE].handler_id : 35
+opcode[STORE_SLICE].base_id : 35
+opcode[STORE_SLICE].handler_flags : 448
+opcode[STORE_SUBSCR].handler_id : 36
+opcode[STORE_SUBSCR].base_id : 36
+opcode[STORE_SUBSCR].handler_flags : 960
+opcode[STORE_SUBSCR].specializable : 1
+    opcode[STORE_SUBSCR].specialization.success : 6
+    opcode[STORE_SUBSCR].specialization.hit : 124
+    opcode[STORE_SUBSCR].specialization.deferred : 23
+    opcode[STORE_SUBSCR].execution_count : 29
+opcode[STORE_SUBSCR].pair_count[NOP] : 2
+opcode[STORE_SUBSCR].pair_count[POP_EXCEPT] : 1
+opcode[STORE_SUBSCR].pair_count[RETURN_VALUE] : 2
+opcode[STORE_SUBSCR].pair_count[JUMP_BACKWARD] : 1
+opcode[STORE_SUBSCR].pair_count[LOAD_COMMON_CONSTANT] : 1
+opcode[STORE_SUBSCR].pair_count[LOAD_GLOBAL] : 2
+opcode[STORE_SUBSCR].pair_count[LOAD_NAME] : 13
+opcode[STORE_SUBSCR].pair_count[LOAD_SMALL_INT_INLINE] : 1
+opcode[STORE_SUBSCR].pair_count[STORE_SUBSCR_DICT] : 6
+opcode[TO_BOOL].handler_id : 37
+opcode[TO_BOOL].base_id : 37
+opcode[TO_BOOL].handler_flags : 960
+opcode[TO_BOOL].specializable : 1
+    opcode[TO_BOOL].specialization.hit : 855
+    opcode[TO_BOOL].specialization.failure_kinds[17] : 2
+opcode[UNARY_INVERT].handler_id : 38
+opcode[UNARY_INVERT].base_id : 38
+opcode[UNARY_INVERT].handler_flags : 448
+opcode[UNARY_NEGATIVE].handler_id : 39
+opcode[UNARY_NEGATIVE].base_id : 39
+opcode[UNARY_NEGATIVE].handler_flags : 448
+opcode[UNARY_NOT].handler_id : 40
+opcode[UNARY_NOT].base_id : 40
+opcode[UNARY_NOT].handler_flags : 448
+opcode[WITH_EXCEPT_START].handler_id : 41
+opcode[WITH_EXCEPT_START].base_id : 41
+opcode[WITH_EXCEPT_START].handler_flags : 448
+    opcode[WITH_EXCEPT_START].execution_count : 1
+opcode[WITH_EXCEPT_START].pair_count[POP_JUMP_IF_TRUE] : 1
+opcode[BINARY_OP].handler_id : 42
+opcode[BINARY_OP].base_id : 42
+opcode[BINARY_OP].handler_flags : 64
+    opcode[BINARY_OP].specialization.success : 32
+    opcode[BINARY_OP].specialization.failure : 9
+    opcode[BINARY_OP].specialization.hit : 673
+    opcode[BINARY_OP].specialization.failure_kinds[17] : 1
+    opcode[BINARY_OP].specialization.failure_kinds[38] : 1
+    opcode[BINARY_OP].specialization.failure_kinds[39] : 3
+    opcode[BINARY_OP].specialization.failure_kinds[48] : 4
+opcode[BUILD_INTERPOLATION].handler_id : 43
+opcode[BUILD_INTERPOLATION].base_id : 43
+opcode[BUILD_INTERPOLATION].handler_flags : 448
+opcode[BUILD_LIST].handler_id : 44
+opcode[BUILD_LIST].base_id : 44
+opcode[BUILD_LIST].handler_flags : 448
+    opcode[BUILD_LIST].execution_count : 231
+opcode[BUILD_LIST].pair_count[NOP] : 4
+opcode[BUILD_LIST].pair_count[BUILD_LIST] : 1
+opcode[BUILD_LIST].pair_count[CALL] : 10
+opcode[BUILD_LIST].pair_count[LOAD_CONST] : 10
+opcode[BUILD_LIST].pair_count[LOAD_DEREF] : 3
+opcode[BUILD_LIST].pair_count[LOAD_FAST] : 9
+opcode[BUILD_LIST].pair_count[LOAD_FAST_BORROW] : 5
+opcode[BUILD_LIST].pair_count[LOAD_GLOBAL] : 5
+opcode[BUILD_LIST].pair_count[LOAD_NAME] : 1
+opcode[BUILD_LIST].pair_count[POP_JUMP_IF_FALSE] : 1
+opcode[BUILD_LIST].pair_count[STORE_ATTR] : 12
+opcode[BUILD_LIST].pair_count[STORE_FAST] : 1
+opcode[BUILD_LIST].pair_count[STORE_GLOBAL] : 1
+opcode[BUILD_LIST].pair_count[STORE_NAME] : 10
+opcode[BUILD_LIST].pair_count[SWAP] : 27
+opcode[BUILD_LIST].pair_count[CALL_METHOD_DESCRIPTOR_FAST] : 2
+opcode[BUILD_LIST].pair_count[STORE_ATTR_SHAPE_ADD] : 88
+opcode[BUILD_LIST].pair_count[BINARY_OP_ADD] : 1
+opcode[BUILD_LIST].pair_count[COMPARE_OP_JUMP] : 40
+opcode[BUILD_MAP].handler_id : 45
+opcode[BUILD_MAP].base_id : 45
+opcode[BUILD_MAP].handler_flags : 448
+    opcode[BUILD_MAP].execution_count : 163
+opcode[BUILD_MAP].pair_count[NOP] : 4
+opcode[BUILD_MAP].pair_count[RETURN_VALUE] : 4
+opcode[BUILD_MAP].pair_count[DICT_UPDATE] : 1
+opcode[BUILD_MAP].pair_count[LOAD_ATTR] : 6
+opcode[BUILD_MAP].pair_count[LOAD_CONST] : 42
+opcode[BUILD_MAP].pair_count[LOAD_FAST_BORROW] : 98
+opcode[BUILD_MAP].pair_count[STORE_ATTR] : 3
+opcode[BUILD_MAP].pair_count[STORE_NAME] : 5
+opcode[BUILD_SET].handler_id : 46
+opcode[BUILD_SET].base_id : 46
+opcode[BUILD_SET].handler_flags : 448
+    opcode[BUILD_SET].execution_count : 3
+opcode[BUILD_SET].pair_count[LOAD_NAME] : 2
+opcode[BUILD_SET].pair_count[SWAP] : 1
+opcode[BUILD_SLICE].handler_id : 47
+opcode[BUILD_SLICE].base_id : 47
+opcode[BUILD_SLICE].handler_flags : 448
+opcode[BUILD_STRING].handler_id : 48
+opcode[BUILD_STRING].base_id : 48
+opcode[BUILD_STRING].handler_flags : 448
+    opcode[BUILD_STRING].execution_count : 26
+opcode[BUILD_STRING].pair_count[NOP] : 1
+opcode[BUILD_STRING].pair_count[RETURN_VALUE] : 1
+opcode[BUILD_STRING].pair_count[BUILD_LIST] : 1
+opcode[BUILD_STRING].pair_count[CALL] : 2
+opcode[BUILD_STRING].pair_count[LOAD_CONST] : 1
+opcode[BUILD_STRING].pair_count[LOAD_FAST_BORROW] : 13
+opcode[BUILD_STRING].pair_count[LOAD_NAME] : 1
+opcode[BUILD_STRING].pair_count[SET_ADD] : 1
+opcode[BUILD_STRING].pair_count[STORE_NAME] : 5
+opcode[BUILD_TUPLE].handler_id : 49
+opcode[BUILD_TUPLE].base_id : 49
+opcode[BUILD_TUPLE].handler_flags : 448
+    opcode[BUILD_TUPLE].execution_count : 198
+opcode[BUILD_TUPLE].pair_count[CHECK_EXC_MATCH] : 6
+opcode[BUILD_TUPLE].pair_count[RETURN_VALUE] : 23
+opcode[BUILD_TUPLE].pair_count[BUILD_MAP] : 30
+opcode[BUILD_TUPLE].pair_count[BUILD_TUPLE] : 11
+opcode[BUILD_TUPLE].pair_count[CALL] : 7
+opcode[BUILD_TUPLE].pair_count[GET_ITER] : 1
+opcode[BUILD_TUPLE].pair_count[LOAD_CONST] : 79
+opcode[BUILD_TUPLE].pair_count[LOAD_FAST_BORROW] : 2
+opcode[BUILD_TUPLE].pair_count[LOAD_GLOBAL] : 1
+opcode[BUILD_TUPLE].pair_count[LOAD_NAME] : 22
+opcode[BUILD_TUPLE].pair_count[STORE_NAME] : 2
+opcode[BUILD_TUPLE].pair_count[YIELD_VALUE] : 9
+opcode[BUILD_TUPLE].pair_count[CALL_ISINSTANCE] : 2
+opcode[BUILD_TUPLE].pair_count[CALL_LIST_APPEND] : 3
+opcode[CALL].handler_id : 50
+opcode[CALL].base_id : 50
+opcode[CALL].handler_flags : 960
+opcode[CALL].specializable : 1
+    opcode[CALL].specialization.success : 255
+    opcode[CALL].specialization.hit : 2451
+    opcode[CALL].specialization.deferred : 944
+    opcode[CALL].specialization.miss : 145
+    opcode[CALL].execution_count : 1199
+    opcode[CALL].specialization.failure_kinds[21] : 1
+opcode[CALL].pair_count[NOP] : 20
+opcode[CALL].pair_count[POP_EXCEPT] : 1
+opcode[CALL].pair_count[POP_TOP] : 63
+opcode[CALL].pair_count[PUSH_EXC_INFO] : 11
+opcode[CALL].pair_count[RETURN_GENERATOR] : 3
+opcode[CALL].pair_count[RETURN_VALUE] : 29
+opcode[CALL].pair_count[BUILD_LIST] : 6
+opcode[CALL].pair_count[BUILD_TUPLE] : 1
+opcode[CALL].pair_count[CALL] : 47
+opcode[CALL].pair_count[COMPARE_OP] : 1
+opcode[CALL].pair_count[CONTAINS_OP] : 2
+opcode[CALL].pair_count[COPY] : 8
+opcode[CALL].pair_count[COPY_FREE_VARS] : 14
+opcode[CALL].pair_count[GET_ITER] : 5
+opcode[CALL].pair_count[JUMP_BACKWARD] : 14
+opcode[CALL].pair_count[JUMP_FORWARD] : 2
+opcode[CALL].pair_count[JUMP_IF_TRUE_OR_POP] : 6
+opcode[CALL].pair_count[LIST_APPEND] : 4
+opcode[CALL].pair_count[LIST_EXTEND] : 1
+opcode[CALL].pair_count[LOAD_ATTR] : 46
+opcode[CALL].pair_count[LOAD_COMMON_CONSTANT] : 144
+opcode[CALL].pair_count[LOAD_CONST] : 14
+opcode[CALL].pair_count[LOAD_FAST] : 2
+opcode[CALL].pair_count[LOAD_FAST_AND_CLEAR] : 4
+opcode[CALL].pair_count[LOAD_FAST_BORROW] : 96
+opcode[CALL].pair_count[LOAD_GLOBAL] : 124
+opcode[CALL].pair_count[LOAD_NAME] : 2
+opcode[CALL].pair_count[MAKE_CELL] : 15
+opcode[CALL].pair_count[POP_JUMP_IF_FALSE] : 38
+opcode[CALL].pair_count[POP_JUMP_IF_NONE] : 8
+opcode[CALL].pair_count[POP_JUMP_IF_NOT_NONE] : 20
+opcode[CALL].pair_count[POP_JUMP_IF_TRUE] : 44
+opcode[CALL].pair_count[RAISE_VARARGS] : 2
+opcode[CALL].pair_count[STORE_ATTR] : 18
+opcode[CALL].pair_count[STORE_DEREF] : 4
+opcode[CALL].pair_count[STORE_FAST] : 1
+opcode[CALL].pair_count[STORE_GLOBAL] : 3
+opcode[CALL].pair_count[STORE_NAME] : 201
+opcode[CALL].pair_count[SWAP] : 2
+opcode[CALL].pair_count[UNPACK_SEQUENCE] : 2
+opcode[CALL].pair_count[YIELD_VALUE] : 3
+opcode[CALL].pair_count[LOAD_ATTR_METHOD_LAZY_DICT] : 2
+opcode[CALL].pair_count[LOAD_ATTR_METHOD_WITH_VALUES] : 2
+opcode[CALL].pair_count[LOAD_ATTR_MODULE] : 10
+opcode[CALL].pair_count[LOAD_GLOBAL_BUILTIN] : 10
+opcode[CALL].pair_count[LOAD_GLOBAL_MODULE] : 110
+opcode[CALL].pair_count[LOAD_SMALL_INT_INLINE] : 22
+opcode[CALL].pair_count[POP_JUMP_IF_FALSE_STR] : 2
+opcode[CALL].pair_count[POP_JUMP_IF_TRUE_BOOL] : 2
+opcode[CALL].pair_count[BINARY_OP_MULTIPLY] : 2
+opcode[CALL].pair_count[BINARY_OP_SUBSCR] : 1
+opcode[CALL].pair_count[COMPARE_OP_JUMP] : 3
+opcode[CALL].pair_count[IS_OP_JUMP] : 2
+opcode[CALL_INTRINSIC_1].handler_id : 51
+opcode[CALL_INTRINSIC_1].base_id : 51
+opcode[CALL_INTRINSIC_1].handler_flags : 448
+    opcode[CALL_INTRINSIC_1].execution_count : 13
+opcode[CALL_INTRINSIC_1].pair_count[CALL_FUNCTION_EX] : 3
+opcode[CALL_INTRINSIC_1].pair_count[POP_TOP] : 4
+opcode[CALL_INTRINSIC_1].pair_count[BUILD_MAP] : 4
+opcode[CALL_INTRINSIC_1].pair_count[LOAD_CONST] : 1
+opcode[CALL_INTRINSIC_1].pair_count[CALL_EX_NON_PY_GENERAL] : 1
+opcode[CALL_INTRINSIC_2].handler_id : 52
+opcode[CALL_INTRINSIC_2].base_id : 52
+opcode[CALL_INTRINSIC_2].handler_flags : 448
+opcode[CALL_KW].handler_id : 53
+opcode[CALL_KW].base_id : 53
+opcode[CALL_KW].handler_flags : 960
+opcode[CALL_KW].specializable : 1
+    opcode[CALL_KW].specialization.success : 12
+    opcode[CALL_KW].specialization.deferred : 26
+    opcode[CALL_KW].execution_count : 38
+opcode[CALL_KW].pair_count[POP_TOP] : 1
+opcode[CALL_KW].pair_count[RETURN_VALUE] : 3
+opcode[CALL_KW].pair_count[LOAD_COMMON_CONSTANT] : 4
+opcode[CALL_KW].pair_count[LOAD_GLOBAL] : 2
+opcode[CALL_KW].pair_count[POP_JUMP_IF_NOT_NONE] : 8
+opcode[CALL_KW].pair_count[RAISE_VARARGS] : 4
+opcode[CALL_KW].pair_count[STORE_ATTR] : 4
+opcode[CALL_KW].pair_count[STORE_NAME] : 10
+opcode[CALL_KW].pair_count[LOAD_GLOBAL_MODULE] : 2
+opcode[COMPARE_OP].handler_id : 54
+opcode[COMPARE_OP].base_id : 54
+opcode[COMPARE_OP].handler_flags : 960
+opcode[COMPARE_OP].specializable : 1
+    opcode[COMPARE_OP].specialization.success : 23
+    opcode[COMPARE_OP].specialization.failure : 6
+    opcode[COMPARE_OP].specialization.hit : 608
+    opcode[COMPARE_OP].specialization.deferred : 6
+    opcode[COMPARE_OP].execution_count : 8
+    opcode[COMPARE_OP].specialization.failure_kinds[12] : 1
+    opcode[COMPARE_OP].specialization.failure_kinds[15] : 1
+    opcode[COMPARE_OP].specialization.failure_kinds[17] : 2
+    opcode[COMPARE_OP].specialization.failure_kinds[19] : 1
+    opcode[COMPARE_OP].specialization.failure_kinds[21] : 1
+opcode[COMPARE_OP].pair_count[RETURN_VALUE] : 1
+opcode[COMPARE_OP].pair_count[POP_JUMP_IF_FALSE] : 1
+opcode[COMPARE_OP].pair_count[STORE_NAME] : 3
+opcode[COMPARE_OP].pair_count[YIELD_VALUE] : 1
+opcode[COMPARE_OP].pair_count[COMPARE_OP_INT] : 2
+opcode[CONTAINS_OP].handler_id : 55
+opcode[CONTAINS_OP].base_id : 55
+opcode[CONTAINS_OP].handler_flags : 960
+opcode[CONTAINS_OP].specializable : 1
+    opcode[CONTAINS_OP].specialization.success : 10
+    opcode[CONTAINS_OP].specialization.failure : 13
+    opcode[CONTAINS_OP].specialization.hit : 135
+    opcode[CONTAINS_OP].specialization.deferred : 3
+    opcode[CONTAINS_OP].execution_count : 5
+    opcode[CONTAINS_OP].specialization.failure_kinds[0] : 3
+    opcode[CONTAINS_OP].specialization.failure_kinds[9] : 2
+    opcode[CONTAINS_OP].specialization.failure_kinds[10] : 5
+    opcode[CONTAINS_OP].specialization.failure_kinds[11] : 3
+opcode[CONTAINS_OP].pair_count[RETURN_VALUE] : 2
+opcode[CONTAINS_OP].pair_count[LOAD_FAST] : 1
+opcode[CONTAINS_OP].pair_count[CONTAINS_OP_DICT] : 2
+opcode[CONVERT_VALUE].handler_id : 56
+opcode[CONVERT_VALUE].base_id : 56
+opcode[CONVERT_VALUE].handler_flags : 448
+    opcode[CONVERT_VALUE].execution_count : 4
+opcode[CONVERT_VALUE].pair_count[FORMAT_SIMPLE] : 4
+opcode[COPY].handler_id : 57
+opcode[COPY].base_id : 57
+opcode[COPY].handler_flags : 448
+    opcode[COPY].execution_count : 180
+opcode[COPY].pair_count[POP_EXCEPT] : 2
+opcode[COPY].pair_count[LOAD_COMMON_CONSTANT] : 2
+opcode[COPY].pair_count[LOAD_SPECIAL] : 162
+opcode[COPY].pair_count[STORE_FAST] : 1
+opcode[COPY].pair_count[STORE_NAME] : 13
+opcode[COPY_FREE_VARS].handler_id : 58
+opcode[COPY_FREE_VARS].base_id : 58
+opcode[COPY_FREE_VARS].handler_flags : 448
+    opcode[COPY_FREE_VARS].execution_count : 180
+opcode[COPY_FREE_VARS].pair_count[MAKE_CELL] : 1
+opcode[COPY_FREE_VARS].pair_count[RESUME] : 179
+opcode[DELETE_DEREF].handler_id : 59
+opcode[DELETE_DEREF].base_id : 59
+opcode[DELETE_DEREF].handler_flags : 448
+opcode[DELETE_FAST].handler_id : 60
+opcode[DELETE_FAST].base_id : 60
+opcode[DELETE_FAST].handler_flags : 448
+    opcode[DELETE_FAST].execution_count : 1
+opcode[DELETE_FAST].pair_count[LOAD_COMMON_CONSTANT] : 1
+opcode[DICT_MERGE].handler_id : 61
+opcode[DICT_MERGE].base_id : 61
+opcode[DICT_MERGE].handler_flags : 448
+    opcode[DICT_MERGE].execution_count : 98
+opcode[DICT_MERGE].pair_count[CALL_FUNCTION_EX] : 7
+opcode[DICT_MERGE].pair_count[CALL_EX_NON_PY_GENERAL] : 89
+opcode[DICT_MERGE].pair_count[CALL_EX_PY] : 2
+opcode[DICT_UPDATE].handler_id : 62
+opcode[DICT_UPDATE].base_id : 62
+opcode[DICT_UPDATE].handler_flags : 448
+    opcode[DICT_UPDATE].execution_count : 23
+opcode[DICT_UPDATE].pair_count[BUILD_MAP] : 21
+opcode[DICT_UPDATE].pair_count[LOAD_CONST] : 1
+opcode[DICT_UPDATE].pair_count[STORE_NAME] : 1
+opcode[END_ASYNC_FOR].handler_id : 63
+opcode[END_ASYNC_FOR].base_id : 63
+opcode[END_ASYNC_FOR].handler_flags : 448
+opcode[FOR_ITER].handler_id : 65
+opcode[FOR_ITER].base_id : 65
+opcode[FOR_ITER].handler_flags : 960
+opcode[FOR_ITER].specializable : 1
+    opcode[FOR_ITER].specialization.success : 33
+    opcode[FOR_ITER].specialization.failure : 3
+    opcode[FOR_ITER].specialization.hit : 779
+    opcode[FOR_ITER].specialization.deferred : 58
+    opcode[FOR_ITER].specialization.miss : 4
+    opcode[FOR_ITER].execution_count : 94
+    opcode[FOR_ITER].specialization.failure_kinds[21] : 1
+    opcode[FOR_ITER].specialization.failure_kinds[27] : 2
+opcode[FOR_ITER].pair_count[NOP] : 1
+opcode[FOR_ITER].pair_count[POP_ITER] : 11
+opcode[FOR_ITER].pair_count[FOR_ITER] : 3
+opcode[FOR_ITER].pair_count[LOAD_ATTR] : 1
+opcode[FOR_ITER].pair_count[LOAD_CONST] : 3
+opcode[FOR_ITER].pair_count[LOAD_DEREF] : 2
+opcode[FOR_ITER].pair_count[LOAD_FAST] : 5
+opcode[FOR_ITER].pair_count[LOAD_FAST_BORROW] : 4
+opcode[FOR_ITER].pair_count[LOAD_GLOBAL] : 12
+opcode[FOR_ITER].pair_count[POP_JUMP_IF_FALSE] : 3
+opcode[FOR_ITER].pair_count[POP_JUMP_IF_TRUE] : 1
+opcode[FOR_ITER].pair_count[STORE_NAME] : 2
+opcode[FOR_ITER].pair_count[UNPACK_SEQUENCE] : 7
+opcode[FOR_ITER].pair_count[UNPACK_SEQUENCE_TWO_TUPLE] : 6
+opcode[FOR_ITER].pair_count[FOR_ITER_GEN] : 1
+opcode[FOR_ITER].pair_count[FOR_ITER_LIST] : 16
+opcode[FOR_ITER].pair_count[FOR_ITER_RANGE] : 1
+opcode[FOR_ITER].pair_count[FOR_ITER_TUPLE] : 13
+opcode[FOR_ITER].pair_count[FOR_ITER_VIRTUAL] : 2
+opcode[GET_AWAITABLE].handler_id : 66
+opcode[GET_AWAITABLE].base_id : 66
+opcode[GET_AWAITABLE].handler_flags : 448
+opcode[GET_ITER].handler_id : 67
+opcode[GET_ITER].base_id : 67
+opcode[GET_ITER].handler_flags : 960
+opcode[GET_ITER].specializable : 1
+    opcode[GET_ITER].specialization.success : 18
+    opcode[GET_ITER].specialization.failure : 1
+    opcode[GET_ITER].specialization.hit : 153
+    opcode[GET_ITER].specialization.deferred : 42
+    opcode[GET_ITER].execution_count : 61
+    opcode[GET_ITER].specialization.failure_kinds[0] : 1
+opcode[GET_ITER].pair_count[RETURN_GENERATOR] : 5
+opcode[GET_ITER].pair_count[FOR_ITER] : 35
+opcode[GET_ITER].pair_count[GET_ITER] : 1
+opcode[GET_ITER].pair_count[FOR_ITER_RANGE] : 2
+opcode[GET_ITER].pair_count[GET_ITER_SELF] : 1
+opcode[GET_ITER].pair_count[GET_ITER_VIRTUAL] : 17
+opcode[IMPORT_FROM].handler_id : 68
+opcode[IMPORT_FROM].base_id : 68
+opcode[IMPORT_FROM].handler_flags : 448
+    opcode[IMPORT_FROM].execution_count : 34
+opcode[IMPORT_FROM].pair_count[STORE_NAME] : 34
+opcode[IMPORT_NAME].handler_id : 69
+opcode[IMPORT_NAME].base_id : 69
+opcode[IMPORT_NAME].handler_flags : 448
+    opcode[IMPORT_NAME].execution_count : 69
+opcode[IMPORT_NAME].pair_count[PUSH_EXC_INFO] : 1
+opcode[IMPORT_NAME].pair_count[CALL_INTRINSIC_1] : 4
+opcode[IMPORT_NAME].pair_count[IMPORT_FROM] : 16
+opcode[IMPORT_NAME].pair_count[STORE_ATTR] : 2
+opcode[IMPORT_NAME].pair_count[STORE_GLOBAL] : 1
+opcode[IMPORT_NAME].pair_count[STORE_NAME] : 44
+opcode[IMPORT_NAME].pair_count[STORE_ATTR_SHAPE_ADD] : 1
+opcode[IS_OP].handler_id : 70
+opcode[IS_OP].base_id : 70
+opcode[IS_OP].handler_flags : 448
+opcode[JUMP_BACKWARD].handler_id : 71
+opcode[JUMP_BACKWARD].base_id : 71
+opcode[JUMP_BACKWARD].handler_flags : 448
+    opcode[JUMP_BACKWARD].execution_count : 653
+opcode[JUMP_BACKWARD].pair_count[NOP] : 1
+opcode[JUMP_BACKWARD].pair_count[FOR_ITER] : 40
+opcode[JUMP_BACKWARD].pair_count[POP_JUMP_IF_FALSE] : 1
+opcode[JUMP_BACKWARD].pair_count[FOR_ITER_LIST] : 454
+opcode[JUMP_BACKWARD].pair_count[FOR_ITER_RANGE] : 5
+opcode[JUMP_BACKWARD].pair_count[FOR_ITER_TUPLE] : 147
+opcode[JUMP_BACKWARD].pair_count[FOR_ITER_VIRTUAL] : 4
+opcode[JUMP_BACKWARD].pair_count[POP_JUMP_IF_FALSE_LIST] : 1
+opcode[JUMP_BACKWARD_NO_INTERRUPT].handler_id : 72
+opcode[JUMP_BACKWARD_NO_INTERRUPT].base_id : 72
+opcode[JUMP_BACKWARD_NO_INTERRUPT].handler_flags : 448
+    opcode[JUMP_BACKWARD_NO_INTERRUPT].execution_count : 76
+opcode[JUMP_BACKWARD_NO_INTERRUPT].pair_count[LOAD_GLOBAL] : 2
+opcode[JUMP_BACKWARD_NO_INTERRUPT].pair_count[LOAD_NAME] : 1
+opcode[JUMP_BACKWARD_NO_INTERRUPT].pair_count[POP_JUMP_IF_NOT_NONE] : 69
+opcode[JUMP_BACKWARD_NO_INTERRUPT].pair_count[LOAD_GLOBAL_MODULE] : 3
+opcode[JUMP_BACKWARD_NO_INTERRUPT].pair_count[COMPARE_OP_JUMP] : 1
+opcode[JUMP_FORWARD].handler_id : 73
+opcode[JUMP_FORWARD].base_id : 73
+opcode[JUMP_FORWARD].handler_flags : 448
+    opcode[JUMP_FORWARD].execution_count : 83
+opcode[JUMP_FORWARD].pair_count[NOP] : 1
+opcode[JUMP_FORWARD].pair_count[LOAD_ATTR] : 2
+opcode[JUMP_FORWARD].pair_count[LOAD_CONST] : 1
+opcode[JUMP_FORWARD].pair_count[LOAD_FAST_BORROW] : 7
+opcode[JUMP_FORWARD].pair_count[LOAD_GLOBAL] : 10
+opcode[JUMP_FORWARD].pair_count[LOAD_NAME] : 4
+opcode[JUMP_FORWARD].pair_count[POP_JUMP_IF_FALSE] : 1
+opcode[JUMP_FORWARD].pair_count[POP_JUMP_IF_NOT_NONE] : 31
+opcode[JUMP_FORWARD].pair_count[POP_JUMP_IF_TRUE] : 1
+opcode[JUMP_FORWARD].pair_count[STORE_ATTR] : 2
+opcode[JUMP_FORWARD].pair_count[SWAP] : 1
+opcode[JUMP_FORWARD].pair_count[LOAD_GLOBAL_BUILTIN] : 3
+opcode[JUMP_FORWARD].pair_count[LOAD_GLOBAL_MODULE] : 16
+opcode[JUMP_FORWARD].pair_count[STORE_ATTR_SHAPE] : 3
+opcode[JUMP_IF_FALSE_OR_POP].handler_id : 74
+opcode[JUMP_IF_FALSE_OR_POP].base_id : 74
+opcode[JUMP_IF_FALSE_OR_POP].handler_flags : 448
+    opcode[JUMP_IF_FALSE_OR_POP].execution_count : 1
+opcode[JUMP_IF_FALSE_OR_POP].pair_count[STORE_NAME] : 1
+opcode[JUMP_IF_TRUE_OR_POP].handler_id : 75
+opcode[JUMP_IF_TRUE_OR_POP].base_id : 75
+opcode[JUMP_IF_TRUE_OR_POP].handler_flags : 448
+    opcode[JUMP_IF_TRUE_OR_POP].execution_count : 23
+opcode[JUMP_IF_TRUE_OR_POP].pair_count[RETURN_VALUE] : 1
+opcode[JUMP_IF_TRUE_OR_POP].pair_count[CALL] : 4
+opcode[JUMP_IF_TRUE_OR_POP].pair_count[LOAD_COMMON_CONSTANT] : 1
+opcode[JUMP_IF_TRUE_OR_POP].pair_count[LOAD_GLOBAL] : 1
+opcode[JUMP_IF_TRUE_OR_POP].pair_count[LOAD_NAME] : 8
+opcode[JUMP_IF_TRUE_OR_POP].pair_count[STORE_NAME] : 3
+opcode[JUMP_IF_TRUE_OR_POP].pair_count[CALL_BUILTIN_FAST_WITH_KEYWORDS] : 1
+opcode[JUMP_IF_TRUE_OR_POP].pair_count[CALL_PY_EXACT_ARGS] : 4
+opcode[LIST_APPEND].handler_id : 76
+opcode[LIST_APPEND].base_id : 76
+opcode[LIST_APPEND].handler_flags : 448
+    opcode[LIST_APPEND].execution_count : 653
+opcode[LIST_APPEND].pair_count[CALL_INTRINSIC_1] : 1
+opcode[LIST_APPEND].pair_count[JUMP_BACKWARD] : 438
+opcode[LIST_APPEND].pair_count[LOAD_COMMON_CONSTANT] : 76
+opcode[LIST_APPEND].pair_count[LOAD_CONST] : 85
+opcode[LIST_APPEND].pair_count[STORE_NAME] : 2
+opcode[LIST_APPEND].pair_count[LOAD_CONST_INLINE_INT] : 51
+opcode[LIST_EXTEND].handler_id : 77
+opcode[LIST_EXTEND].base_id : 77
+opcode[LIST_EXTEND].handler_flags : 448
+    opcode[LIST_EXTEND].execution_count : 17
+opcode[LIST_EXTEND].pair_count[CALL] : 4
+opcode[LIST_EXTEND].pair_count[CALL_INTRINSIC_1] : 8
+opcode[LIST_EXTEND].pair_count[LOAD_COMMON_CONSTANT] : 1
+opcode[LIST_EXTEND].pair_count[STORE_NAME] : 4
+opcode[LOAD_ATTR].handler_id : 78
+opcode[LOAD_ATTR].base_id : 78
+opcode[LOAD_ATTR].handler_flags : 960
+opcode[LOAD_ATTR].specializable : 1
+    opcode[LOAD_ATTR].specialization.success : 223
+    opcode[LOAD_ATTR].specialization.failure : 55
+    opcode[LOAD_ATTR].specialization.hit : 2698
+    opcode[LOAD_ATTR].specialization.deferred : 1466
+    opcode[LOAD_ATTR].specialization.miss : 486
+    opcode[LOAD_ATTR].execution_count : 1746
+    opcode[LOAD_ATTR].specialization.failure_kinds[9] : 4
+    opcode[LOAD_ATTR].specialization.failure_kinds[10] : 7
+    opcode[LOAD_ATTR].specialization.failure_kinds[15] : 14
+    opcode[LOAD_ATTR].specialization.failure_kinds[20] : 5
+    opcode[LOAD_ATTR].specialization.failure_kinds[22] : 2
+    opcode[LOAD_ATTR].specialization.failure_kinds[23] : 13
+    opcode[LOAD_ATTR].specialization.failure_kinds[27] : 8
+opcode[LOAD_ATTR].pair_count[FORMAT_SIMPLE] : 11
+opcode[LOAD_ATTR].pair_count[LOAD_BUILD_CLASS] : 2
+opcode[LOAD_ATTR].pair_count[NOP] : 1
+opcode[LOAD_ATTR].pair_count[PUSH_EXC_INFO] : 13
+opcode[LOAD_ATTR].pair_count[RETURN_VALUE] : 34
+opcode[LOAD_ATTR].pair_count[STORE_SUBSCR] : 3
+opcode[LOAD_ATTR].pair_count[BUILD_LIST] : 9
+opcode[LOAD_ATTR].pair_count[BUILD_MAP] : 4
+opcode[LOAD_ATTR].pair_count[BUILD_TUPLE] : 2
+opcode[LOAD_ATTR].pair_count[CALL] : 93
+opcode[LOAD_ATTR].pair_count[CONTAINS_OP] : 2
+opcode[LOAD_ATTR].pair_count[COPY] : 2
+opcode[LOAD_ATTR].pair_count[GET_ITER] : 8
+opcode[LOAD_ATTR].pair_count[JUMP_IF_TRUE_OR_POP] : 1
+opcode[LOAD_ATTR].pair_count[LOAD_ATTR] : 188
+opcode[LOAD_ATTR].pair_count[LOAD_COMMON_CONSTANT] : 1
+opcode[LOAD_ATTR].pair_count[LOAD_CONST] : 99
+opcode[LOAD_ATTR].pair_count[LOAD_DEREF] : 2
+opcode[LOAD_ATTR].pair_count[LOAD_FAST] : 27
+opcode[LOAD_ATTR].pair_count[LOAD_FAST_BORROW] : 253
+opcode[LOAD_ATTR].pair_count[LOAD_FAST_CHECK] : 1
+opcode[LOAD_ATTR].pair_count[LOAD_GLOBAL] : 26
+opcode[LOAD_ATTR].pair_count[LOAD_NAME] : 50
+opcode[LOAD_ATTR].pair_count[POP_JUMP_IF_FALSE] : 12
+opcode[LOAD_ATTR].pair_count[POP_JUMP_IF_NONE] : 38
+opcode[LOAD_ATTR].pair_count[POP_JUMP_IF_NOT_NONE] : 89
+opcode[LOAD_ATTR].pair_count[POP_JUMP_IF_TRUE] : 3
+opcode[LOAD_ATTR].pair_count[STORE_ATTR] : 32
+opcode[LOAD_ATTR].pair_count[STORE_NAME] : 7
+opcode[LOAD_ATTR].pair_count[BINARY_OP_AND_INT] : 2
+opcode[LOAD_ATTR].pair_count[BINARY_OP_SUBSCR_DICT] : 3
+opcode[LOAD_ATTR].pair_count[CALL_BUILTIN_FAST_WITH_KEYWORDS] : 44
+opcode[LOAD_ATTR].pair_count[CALL_NON_PY_GENERAL] : 39
+opcode[LOAD_ATTR].pair_count[CALL_PY_EXACT_ARGS] : 2
+opcode[LOAD_ATTR].pair_count[CALL_PY_GENERAL] : 2
+opcode[LOAD_ATTR].pair_count[CALL_TYPE_1] : 9
+opcode[LOAD_ATTR].pair_count[CONTAINS_OP_DICT] : 14
+opcode[LOAD_ATTR].pair_count[GET_ITER_VIRTUAL] : 1
+opcode[LOAD_ATTR].pair_count[LOAD_ATTR_CLASS] : 3
+opcode[LOAD_ATTR].pair_count[LOAD_ATTR_METHOD_LAZY_DICT] : 1
+opcode[LOAD_ATTR].pair_count[LOAD_ATTR_METHOD_NO_DICT] : 134
+opcode[LOAD_ATTR].pair_count[LOAD_ATTR_METHOD_WITH_VALUES] : 14
+opcode[LOAD_ATTR].pair_count[LOAD_ATTR_MODULE] : 93
+opcode[LOAD_ATTR].pair_count[LOAD_ATTR_PROPERTY] : 3
+opcode[LOAD_ATTR].pair_count[LOAD_ATTR_SHAPE] : 129
+opcode[LOAD_ATTR].pair_count[LOAD_ATTR_SLOT] : 1
+opcode[LOAD_ATTR].pair_count[LOAD_CONST_INLINE_INT] : 7
+opcode[LOAD_ATTR].pair_count[LOAD_GLOBAL_BUILTIN] : 1
+opcode[LOAD_ATTR].pair_count[LOAD_SMALL_INT_INLINE] : 5
+opcode[LOAD_ATTR].pair_count[POP_JUMP_IF_FALSE_BOOL] : 29
+opcode[LOAD_ATTR].pair_count[POP_JUMP_IF_FALSE_STR] : 10
+opcode[LOAD_ATTR].pair_count[POP_JUMP_IF_TRUE_LIST] : 1
+opcode[LOAD_ATTR].pair_count[BINARY_OP_ADD] : 1
+opcode[LOAD_ATTR].pair_count[BINARY_OP_AND] : 2
+opcode[LOAD_ATTR].pair_count[BINARY_OP_SUBSCR] : 44
+opcode[LOAD_ATTR].pair_count[COMPARE_OP_JUMP] : 7
+opcode[LOAD_ATTR].pair_count[CONTAINS_OP_JUMP] : 71
+opcode[LOAD_ATTR].pair_count[COMPARE_OP_JUMP_INT] : 48
+opcode[LOAD_ATTR].pair_count[CONTAINS_OP_JUMP_DICT] : 13
+opcode[LOAD_COMMON_CONSTANT].handler_id : 79
+opcode[LOAD_COMMON_CONSTANT].base_id : 79
+opcode[LOAD_COMMON_CONSTANT].handler_flags : 448
+    opcode[LOAD_COMMON_CONSTANT].execution_count : 2587
+opcode[LOAD_COMMON_CONSTANT].pair_count[BINARY_SLICE] : 13
+opcode[LOAD_COMMON_CONSTANT].pair_count[NOP] : 4
+opcode[LOAD_COMMON_CONSTANT].pair_count[POP_EXCEPT] : 74
+opcode[LOAD_COMMON_CONSTANT].pair_count[RETURN_VALUE] : 909
+opcode[LOAD_COMMON_CONSTANT].pair_count[BUILD_MAP] : 14
+opcode[LOAD_COMMON_CONSTANT].pair_count[BUILD_TUPLE] : 2
+opcode[LOAD_COMMON_CONSTANT].pair_count[CALL] : 48
+opcode[LOAD_COMMON_CONSTANT].pair_count[DELETE_FAST] : 1
+opcode[LOAD_COMMON_CONSTANT].pair_count[IMPORT_NAME] : 49
+opcode[LOAD_COMMON_CONSTANT].pair_count[JUMP_FORWARD] : 11
+opcode[LOAD_COMMON_CONSTANT].pair_count[LIST_APPEND] : 77
+opcode[LOAD_COMMON_CONSTANT].pair_count[LOAD_ATTR] : 7
+opcode[LOAD_COMMON_CONSTANT].pair_count[LOAD_COMMON_CONSTANT] : 396
+opcode[LOAD_COMMON_CONSTANT].pair_count[LOAD_CONST] : 6
+opcode[LOAD_COMMON_CONSTANT].pair_count[LOAD_FAST_BORROW] : 3
+opcode[LOAD_COMMON_CONSTANT].pair_count[LOAD_GLOBAL] : 9
+opcode[LOAD_COMMON_CONSTANT].pair_count[POP_JUMP_IF_FALSE] : 2
+opcode[LOAD_COMMON_CONSTANT].pair_count[STORE_ATTR] : 54
+opcode[LOAD_COMMON_CONSTANT].pair_count[STORE_GLOBAL] : 12
+opcode[LOAD_COMMON_CONSTANT].pair_count[STORE_NAME] : 103
+opcode[LOAD_COMMON_CONSTANT].pair_count[BINARY_OP_ADD_INT] : 4
+opcode[LOAD_COMMON_CONSTANT].pair_count[CALL_BUILTIN_FAST] : 230
+opcode[LOAD_COMMON_CONSTANT].pair_count[CALL_LIST_APPEND] : 34
+opcode[LOAD_COMMON_CONSTANT].pair_count[CALL_METHOD_DESCRIPTOR_FAST] : 70
+opcode[LOAD_COMMON_CONSTANT].pair_count[CALL_PY_EXACT_ARGS] : 48
+opcode[LOAD_COMMON_CONSTANT].pair_count[CALL_PY_GENERAL] : 59
+opcode[LOAD_COMMON_CONSTANT].pair_count[LOAD_ATTR_METHOD_NO_DICT] : 6
+opcode[LOAD_COMMON_CONSTANT].pair_count[LOAD_GLOBAL_BUILTIN] : 28
+opcode[LOAD_COMMON_CONSTANT].pair_count[LOAD_GLOBAL_MODULE] : 36
+opcode[LOAD_COMMON_CONSTANT].pair_count[POP_JUMP_IF_FALSE_STR] : 26
+opcode[LOAD_COMMON_CONSTANT].pair_count[STORE_ATTR_SHAPE] : 56
+opcode[LOAD_COMMON_CONSTANT].pair_count[STORE_ATTR_SHAPE_ADD] : 180
+opcode[LOAD_COMMON_CONSTANT].pair_count[BINARY_OP_ADD] : 2
+opcode[LOAD_COMMON_CONSTANT].pair_count[COMPARE_OP_JUMP] : 4
+opcode[LOAD_COMMON_CONSTANT].pair_count[IS_OP_JUMP] : 2
+opcode[LOAD_COMMON_CONSTANT].pair_count[COMPARE_OP_JUMP_STR] : 8
+opcode[LOAD_CONST].handler_id : 80
+opcode[LOAD_CONST].base_id : 80
+opcode[LOAD_CONST].handler_flags : 448
+    opcode[LOAD_CONST].execution_count : 3617
+opcode[LOAD_CONST].pair_count[FORMAT_SIMPLE] : 3
+opcode[LOAD_CONST].pair_count[MAKE_FUNCTION] : 772
+opcode[LOAD_CONST].pair_count[RETURN_VALUE] : 21
+opcode[LOAD_CONST].pair_count[STORE_SUBSCR] : 16
+opcode[LOAD_CONST].pair_count[BUILD_LIST] : 11
+opcode[LOAD_CONST].pair_count[BUILD_MAP] : 1
+opcode[LOAD_CONST].pair_count[BUILD_STRING] : 18
+opcode[LOAD_CONST].pair_count[BUILD_TUPLE] : 23
+opcode[LOAD_CONST].pair_count[CALL] : 169
+opcode[LOAD_CONST].pair_count[CALL_KW] : 38
+opcode[LOAD_CONST].pair_count[COMPARE_OP] : 3
+opcode[LOAD_CONST].pair_count[CONVERT_VALUE] : 2
+opcode[LOAD_CONST].pair_count[COPY] : 3
+opcode[LOAD_CONST].pair_count[GET_ITER] : 5
+opcode[LOAD_CONST].pair_count[IMPORT_NAME] : 20
+opcode[LOAD_CONST].pair_count[LIST_APPEND] : 87
+opcode[LOAD_CONST].pair_count[LIST_EXTEND] : 8
+opcode[LOAD_CONST].pair_count[LOAD_ATTR] : 13
+opcode[LOAD_CONST].pair_count[LOAD_COMMON_CONSTANT] : 280
+opcode[LOAD_CONST].pair_count[LOAD_CONST] : 574
+opcode[LOAD_CONST].pair_count[LOAD_FAST_BORROW] : 80
+opcode[LOAD_CONST].pair_count[LOAD_GLOBAL] : 8
+opcode[LOAD_CONST].pair_count[LOAD_NAME] : 73
+opcode[LOAD_CONST].pair_count[MAP_ADD] : 391
+opcode[LOAD_CONST].pair_count[STORE_ATTR] : 1
+opcode[LOAD_CONST].pair_count[STORE_NAME] : 220
+opcode[LOAD_CONST].pair_count[BINARY_OP_ADD_UNICODE] : 7
+opcode[LOAD_CONST].pair_count[BINARY_OP_SUBSCR_DICT] : 4
+opcode[LOAD_CONST].pair_count[CALL_BUILTIN_FAST] : 40
+opcode[LOAD_CONST].pair_count[CALL_BUILTIN_FAST_WITH_KEYWORDS] : 10
+opcode[LOAD_CONST].pair_count[CALL_KW_NON_PY] : 41
+opcode[LOAD_CONST].pair_count[CALL_KW_PY] : 62
+opcode[LOAD_CONST].pair_count[CALL_METHOD_DESCRIPTOR_FAST] : 68
+opcode[LOAD_CONST].pair_count[CALL_METHOD_DESCRIPTOR_FAST_WITH_KEYWORDS] : 2
+opcode[LOAD_CONST].pair_count[CALL_PY_GENERAL] : 11
+opcode[LOAD_CONST].pair_count[GET_ITER_VIRTUAL] : 5
+opcode[LOAD_CONST].pair_count[LOAD_ATTR_METHOD_NO_DICT] : 4
+opcode[LOAD_CONST].pair_count[LOAD_ATTR_SHAPE] : 28
+opcode[LOAD_CONST].pair_count[LOAD_CONST_INLINE_INT] : 1
+opcode[LOAD_CONST].pair_count[LOAD_SMALL_INT_INLINE] : 3
+opcode[LOAD_CONST].pair_count[BINARY_OP_ADD] : 7
+opcode[LOAD_CONST].pair_count[BINARY_OP_INPLACE_ADD] : 2
+opcode[LOAD_CONST].pair_count[BINARY_OP_SUBSCR] : 29
+opcode[LOAD_CONST].pair_count[COMPARE_OP_JUMP] : 34
+opcode[LOAD_CONST].pair_count[CONTAINS_OP_JUMP] : 32
+opcode[LOAD_CONST].pair_count[COMPARE_OP_JUMP_STR] : 387
+opcode[LOAD_DEREF].handler_id : 81
+opcode[LOAD_DEREF].base_id : 81
+opcode[LOAD_DEREF].handler_flags : 448
+    opcode[LOAD_DEREF].execution_count : 205
+opcode[LOAD_DEREF].pair_count[RETURN_VALUE] : 1
+opcode[LOAD_DEREF].pair_count[BUILD_TUPLE] : 9
+opcode[LOAD_DEREF].pair_count[CALL] : 8
+opcode[LOAD_DEREF].pair_count[LIST_EXTEND] : 3
+opcode[LOAD_DEREF].pair_count[LOAD_ATTR] : 2
+opcode[LOAD_DEREF].pair_count[LOAD_COMMON_CONSTANT] : 5
+opcode[LOAD_DEREF].pair_count[LOAD_CONST] : 4
+opcode[LOAD_DEREF].pair_count[LOAD_FAST_BORROW] : 125
+opcode[LOAD_DEREF].pair_count[LOAD_GLOBAL] : 2
+opcode[LOAD_DEREF].pair_count[POP_JUMP_IF_FALSE] : 1
+opcode[LOAD_DEREF].pair_count[CALL_NON_PY_GENERAL] : 34
+opcode[LOAD_DEREF].pair_count[CALL_PY_EXACT_ARGS] : 3
+opcode[LOAD_DEREF].pair_count[LOAD_ATTR_METHOD_NO_DICT] : 3
+opcode[LOAD_DEREF].pair_count[LOAD_SMALL_INT_INLINE] : 5
+opcode[LOAD_FAST].handler_id : 82
+opcode[LOAD_FAST].base_id : 82
+opcode[LOAD_FAST].handler_flags : 448
+    opcode[LOAD_FAST].execution_count : 1001
+opcode[LOAD_FAST].pair_count[NOP] : 14
+opcode[LOAD_FAST].pair_count[RETURN_VALUE] : 5
+opcode[LOAD_FAST].pair_count[STORE_SUBSCR] : 2
+opcode[LOAD_FAST].pair_count[CALL] : 5
+opcode[LOAD_FAST].pair_count[GET_ITER] : 25
+opcode[LOAD_FAST].pair_count[JUMP_FORWARD] : 4
+opcode[LOAD_FAST].pair_count[JUMP_IF_TRUE_OR_POP] : 3
+opcode[LOAD_FAST].pair_count[LIST_APPEND] : 375
+opcode[LOAD_FAST].pair_count[LOAD_ATTR] : 6
+opcode[LOAD_FAST].pair_count[LOAD_FAST] : 2
+opcode[LOAD_FAST].pair_count[LOAD_FAST_AND_CLEAR] : 22
+opcode[LOAD_FAST].pair_count[LOAD_GLOBAL] : 2
+opcode[LOAD_FAST].pair_count[LOAD_SPECIAL] : 28
+opcode[LOAD_FAST].pair_count[STORE_ATTR] : 2
+opcode[LOAD_FAST].pair_count[BINARY_OP_SUBSCR_STR_INT] : 386
+opcode[LOAD_FAST].pair_count[CALL_PY_EXACT_ARGS] : 2
+opcode[LOAD_FAST].pair_count[GET_ITER_VIRTUAL] : 105
+opcode[LOAD_FAST].pair_count[LOAD_GLOBAL_MODULE] : 2
+opcode[LOAD_FAST].pair_count[STORE_SUBSCR_DICT] : 2
+opcode[LOAD_FAST].pair_count[BINARY_OP_SUBSCR] : 2
+opcode[LOAD_FAST].pair_count[COMPARE_OP_JUMP] : 1
+opcode[LOAD_FAST].pair_count[CONTAINS_OP_JUMP] : 2
+opcode[LOAD_FAST].pair_count[CONTAINS_OP_JUMP_SET] : 4
+opcode[LOAD_FAST_AND_CLEAR].handler_id : 83
+opcode[LOAD_FAST_AND_CLEAR].base_id : 83
+opcode[LOAD_FAST_AND_CLEAR].handler_flags : 448
+    opcode[LOAD_FAST_AND_CLEAR].execution_count : 31
+opcode[LOAD_FAST_AND_CLEAR].pair_count[LOAD_FAST_AND_CLEAR] : 3
+opcode[LOAD_FAST_AND_CLEAR].pair_count[SWAP] : 28
+opcode[LOAD_FAST_BORROW].handler_id : 84
+opcode[LOAD_FAST_BORROW].base_id : 84
+opcode[LOAD_FAST_BORROW].handler_flags : 448
+    opcode[LOAD_FAST_BORROW].execution_count : 3973
+opcode[LOAD_FAST_BORROW].pair_count[CALL_FUNCTION_EX] : 4
+opcode[LOAD_FAST_BORROW].pair_count[FORMAT_SIMPLE] : 1
+opcode[LOAD_FAST_BORROW].pair_count[BUILD_LIST] : 15
+opcode[LOAD_FAST_BORROW].pair_count[BUILD_MAP] : 68
+opcode[LOAD_FAST_BORROW].pair_count[BUILD_TUPLE] : 121
+opcode[LOAD_FAST_BORROW].pair_count[CALL] : 271
+opcode[LOAD_FAST_BORROW].pair_count[COPY] : 7
+opcode[LOAD_FAST_BORROW].pair_count[DICT_MERGE] : 98
+opcode[LOAD_FAST_BORROW].pair_count[LIST_EXTEND] : 4
+opcode[LOAD_FAST_BORROW].pair_count[LOAD_ATTR] : 136
+opcode[LOAD_FAST_BORROW].pair_count[LOAD_COMMON_CONSTANT] : 11
+opcode[LOAD_FAST_BORROW].pair_count[LOAD_CONST] : 313
+opcode[LOAD_FAST_BORROW].pair_count[LOAD_DEREF] : 19
+opcode[LOAD_FAST_BORROW].pair_count[LOAD_FAST] : 28
+opcode[LOAD_FAST_BORROW].pair_count[LOAD_FAST_BORROW] : 1130
+opcode[LOAD_FAST_BORROW].pair_count[LOAD_FAST_CHECK] : 3
+opcode[LOAD_FAST_BORROW].pair_count[LOAD_GLOBAL] : 90
+opcode[LOAD_FAST_BORROW].pair_count[LOAD_SUPER_ATTR] : 7
+opcode[LOAD_FAST_BORROW].pair_count[POP_JUMP_IF_TRUE] : 2
+opcode[LOAD_FAST_BORROW].pair_count[SWAP] : 31
+opcode[LOAD_FAST_BORROW].pair_count[UNPACK_SEQUENCE] : 2
+opcode[LOAD_FAST_BORROW].pair_count[UNPACK_SEQUENCE_TUPLE] : 10
+opcode[LOAD_FAST_BORROW].pair_count[BINARY_OP_ADD_UNICODE] : 11
+opcode[LOAD_FAST_BORROW].pair_count[CALL_ALLOC_AND_ENTER_INIT] : 86
+opcode[LOAD_FAST_BORROW].pair_count[CALL_BOUND_METHOD_EXACT_ARGS] : 79
+opcode[LOAD_FAST_BORROW].pair_count[CALL_BOUND_METHOD_GENERAL] : 1
+opcode[LOAD_FAST_BORROW].pair_count[CALL_BUILTIN_CLASS] : 27
+opcode[LOAD_FAST_BORROW].pair_count[CALL_BUILTIN_FAST] : 213
+opcode[LOAD_FAST_BORROW].pair_count[CALL_BUILTIN_FAST_WITH_KEYWORDS] : 56
+opcode[LOAD_FAST_BORROW].pair_count[CALL_EX_PY] : 1
+opcode[LOAD_FAST_BORROW].pair_count[CALL_ISINSTANCE] : 3
+opcode[LOAD_FAST_BORROW].pair_count[CALL_LEN] : 13
+opcode[LOAD_FAST_BORROW].pair_count[CALL_LIST_APPEND] : 1
+opcode[LOAD_FAST_BORROW].pair_count[CALL_METHOD_DESCRIPTOR_FAST] : 58
+opcode[LOAD_FAST_BORROW].pair_count[CALL_METHOD_DESCRIPTOR_FAST_WITH_KEYWORDS] : 10
+opcode[LOAD_FAST_BORROW].pair_count[CALL_NON_PY_GENERAL] : 76
+opcode[LOAD_FAST_BORROW].pair_count[CALL_PY_EXACT_ARGS] : 196
+opcode[LOAD_FAST_BORROW].pair_count[CALL_PY_GENERAL] : 124
+opcode[LOAD_FAST_BORROW].pair_count[CALL_STR_1] : 4
+opcode[LOAD_FAST_BORROW].pair_count[CALL_TYPE_1] : 3
+opcode[LOAD_FAST_BORROW].pair_count[LOAD_ATTR_CLASS] : 22
+opcode[LOAD_FAST_BORROW].pair_count[LOAD_ATTR_SHAPE] : 4
+opcode[LOAD_FAST_BORROW].pair_count[LOAD_CONST_INLINE_INT] : 9
+opcode[LOAD_FAST_BORROW].pair_count[LOAD_GLOBAL_BUILTIN] : 101
+opcode[LOAD_FAST_BORROW].pair_count[LOAD_GLOBAL_MODULE] : 354
+opcode[LOAD_FAST_BORROW].pair_count[LOAD_SMALL_INT_INLINE] : 13
+opcode[LOAD_FAST_BORROW].pair_count[LOAD_SUPER_ATTR_ATTR] : 27
+opcode[LOAD_FAST_BORROW].pair_count[LOAD_SUPER_ATTR_METHOD] : 68
+opcode[LOAD_FAST_BORROW].pair_count[POP_JUMP_IF_TRUE_STR] : 40
+opcode[LOAD_FAST_BORROW].pair_count[BINARY_OP_ADD] : 2
+opcode[LOAD_FAST_CHECK].handler_id : 86
+opcode[LOAD_FAST_CHECK].base_id : 86
+opcode[LOAD_FAST_CHECK].handler_flags : 448
+    opcode[LOAD_FAST_CHECK].execution_count : 57
+opcode[LOAD_FAST_CHECK].pair_count[CALL] : 3
+opcode[LOAD_FAST_CHECK].pair_count[LOAD_FAST_BORROW] : 3
+opcode[LOAD_FAST_CHECK].pair_count[POP_JUMP_IF_NOT_NONE] : 50
+opcode[LOAD_FAST_CHECK].pair_count[CALL_LIST_APPEND] : 1
+opcode[LOAD_FROM_DICT_OR_DEREF].handler_id : 88
+opcode[LOAD_FROM_DICT_OR_DEREF].base_id : 88
+opcode[LOAD_FROM_DICT_OR_DEREF].handler_flags : 448
+opcode[LOAD_FROM_DICT_OR_GLOBALS].handler_id : 89
+opcode[LOAD_FROM_DICT_OR_GLOBALS].base_id : 89
+opcode[LOAD_FROM_DICT_OR_GLOBALS].handler_flags : 448
+opcode[LOAD_GLOBAL].handler_id : 90
+opcode[LOAD_GLOBAL].base_id : 90
+opcode[LOAD_GLOBAL].handler_flags : 960
+opcode[LOAD_GLOBAL].specializable : 1
+    opcode[LOAD_GLOBAL].specialization.success : 270
+    opcode[LOAD_GLOBAL].specialization.hit : 2794
+    opcode[LOAD_GLOBAL].specialization.deferred : 1029
+    opcode[LOAD_GLOBAL].specialization.miss : 563
+    opcode[LOAD_GLOBAL].execution_count : 1299
+opcode[LOAD_GLOBAL].pair_count[CHECK_EXC_MATCH] : 45
+opcode[LOAD_GLOBAL].pair_count[DELETE_SUBSCR] : 1
+opcode[LOAD_GLOBAL].pair_count[FORMAT_SIMPLE] : 1
+opcode[LOAD_GLOBAL].pair_count[RETURN_VALUE] : 15
+opcode[LOAD_GLOBAL].pair_count[STORE_SUBSCR] : 3
+opcode[LOAD_GLOBAL].pair_count[BUILD_LIST] : 1
+opcode[LOAD_GLOBAL].pair_count[BUILD_TUPLE] : 6
+opcode[LOAD_GLOBAL].pair_count[CALL] : 49
+opcode[LOAD_GLOBAL].pair_count[COPY] : 1
+opcode[LOAD_GLOBAL].pair_count[LOAD_ATTR] : 171
+opcode[LOAD_GLOBAL].pair_count[LOAD_CONST] : 21
+opcode[LOAD_GLOBAL].pair_count[LOAD_DEREF] : 37
+opcode[LOAD_GLOBAL].pair_count[LOAD_FAST] : 1
+opcode[LOAD_GLOBAL].pair_count[LOAD_FAST_BORROW] : 331
+opcode[LOAD_GLOBAL].pair_count[LOAD_GLOBAL] : 35
+opcode[LOAD_GLOBAL].pair_count[POP_JUMP_IF_FALSE] : 3
+opcode[LOAD_GLOBAL].pair_count[POP_JUMP_IF_NONE] : 2
+opcode[LOAD_GLOBAL].pair_count[POP_JUMP_IF_NOT_NONE] : 4
+opcode[LOAD_GLOBAL].pair_count[STORE_ATTR] : 7
+opcode[LOAD_GLOBAL].pair_count[STORE_FAST] : 5
+opcode[LOAD_GLOBAL].pair_count[BINARY_OP_SUBSCR_DICT] : 22
+opcode[LOAD_GLOBAL].pair_count[CALL_BUILTIN_CLASS] : 2
+opcode[LOAD_GLOBAL].pair_count[CALL_BUILTIN_FAST] : 14
+opcode[LOAD_GLOBAL].pair_count[CALL_ISINSTANCE] : 11
+opcode[LOAD_GLOBAL].pair_count[LOAD_ATTR_METHOD_NO_DICT] : 22
+opcode[LOAD_GLOBAL].pair_count[LOAD_ATTR_MODULE] : 1
+opcode[LOAD_GLOBAL].pair_count[LOAD_ATTR_SHAPE] : 59
+opcode[LOAD_GLOBAL].pair_count[LOAD_GLOBAL_BUILTIN] : 83
+opcode[LOAD_GLOBAL].pair_count[LOAD_GLOBAL_MODULE] : 256
+opcode[LOAD_GLOBAL].pair_count[LOAD_SMALL_INT_INLINE] : 3
+opcode[LOAD_GLOBAL].pair_count[BINARY_OP_SUBSCR] : 4
+opcode[LOAD_GLOBAL].pair_count[COMPARE_OP_JUMP] : 2
+opcode[LOAD_GLOBAL].pair_count[CONTAINS_OP_JUMP] : 29
+opcode[LOAD_GLOBAL].pair_count[IS_OP_JUMP] : 24
+opcode[LOAD_GLOBAL].pair_count[CONTAINS_OP_JUMP_DICT] : 28
+opcode[LOAD_NAME].handler_id : 91
+opcode[LOAD_NAME].base_id : 91
+opcode[LOAD_NAME].handler_flags : 448
+    opcode[LOAD_NAME].execution_count : 842
+opcode[LOAD_NAME].pair_count[CHECK_EXC_MATCH] : 2
+opcode[LOAD_NAME].pair_count[FORMAT_SIMPLE] : 15
+opcode[LOAD_NAME].pair_count[BUILD_LIST] : 3
+opcode[LOAD_NAME].pair_count[BUILD_MAP] : 9
+opcode[LOAD_NAME].pair_count[BUILD_SET] : 2
+opcode[LOAD_NAME].pair_count[BUILD_TUPLE] : 10
+opcode[LOAD_NAME].pair_count[CALL] : 139
+opcode[LOAD_NAME].pair_count[CONVERT_VALUE] : 1
+opcode[LOAD_NAME].pair_count[COPY] : 3
+opcode[LOAD_NAME].pair_count[GET_ITER] : 2
+opcode[LOAD_NAME].pair_count[JUMP_IF_FALSE_OR_POP] : 1
+opcode[LOAD_NAME].pair_count[JUMP_IF_TRUE_OR_POP] : 7
+opcode[LOAD_NAME].pair_count[LIST_EXTEND] : 1
+opcode[LOAD_NAME].pair_count[LOAD_ATTR] : 116
+opcode[LOAD_NAME].pair_count[LOAD_COMMON_CONSTANT] : 2
+opcode[LOAD_NAME].pair_count[LOAD_CONST] : 211
+opcode[LOAD_NAME].pair_count[LOAD_FAST_AND_CLEAR] : 1
+opcode[LOAD_NAME].pair_count[LOAD_FAST_BORROW] : 2
+opcode[LOAD_NAME].pair_count[LOAD_NAME] : 109
+opcode[LOAD_NAME].pair_count[POP_JUMP_IF_FALSE] : 42
+opcode[LOAD_NAME].pair_count[POP_JUMP_IF_TRUE] : 37
+opcode[LOAD_NAME].pair_count[STORE_ATTR] : 1
+opcode[LOAD_NAME].pair_count[STORE_NAME] : 109
+opcode[LOAD_NAME].pair_count[LOAD_SMALL_INT_INLINE] : 2
+opcode[LOAD_NAME].pair_count[POP_JUMP_IF_TRUE_STR] : 1
+opcode[LOAD_NAME].pair_count[BINARY_OP_ADD] : 1
+opcode[LOAD_NAME].pair_count[BINARY_OP_OR] : 3
+opcode[LOAD_NAME].pair_count[BINARY_OP_SUBSCR] : 5
+opcode[LOAD_NAME].pair_count[COMPARE_OP_JUMP] : 2
+opcode[LOAD_NAME].pair_count[CONTAINS_OP_JUMP] : 3
+opcode[LOAD_SMALL_INT].handler_id : 92
+opcode[LOAD_SMALL_INT].base_id : 92
+opcode[LOAD_SMALL_INT].handler_flags : 448
+opcode[LOAD_SPECIAL].handler_id : 93
+opcode[LOAD_SPECIAL].base_id : 93
+opcode[LOAD_SPECIAL].handler_flags : 448
+    opcode[LOAD_SPECIAL].execution_count : 380
+opcode[LOAD_SPECIAL].pair_count[CALL] : 12
+opcode[LOAD_SPECIAL].pair_count[SWAP] : 190
+opcode[LOAD_SPECIAL].pair_count[CALL_METHOD_DESCRIPTOR_FAST] : 70
+opcode[LOAD_SPECIAL].pair_count[CALL_PY_EXACT_ARGS] : 108
+opcode[LOAD_SUPER_ATTR].handler_id : 94
+opcode[LOAD_SUPER_ATTR].base_id : 94
+opcode[LOAD_SUPER_ATTR].handler_flags : 960
+opcode[LOAD_SUPER_ATTR].specializable : 1
+    opcode[LOAD_SUPER_ATTR].specialization.success : 3
+    opcode[LOAD_SUPER_ATTR].specialization.hit : 98
+    opcode[LOAD_SUPER_ATTR].specialization.deferred : 4
+    opcode[LOAD_SUPER_ATTR].execution_count : 7
+opcode[LOAD_SUPER_ATTR].pair_count[LOAD_FAST_BORROW] : 4
+opcode[LOAD_SUPER_ATTR].pair_count[LOAD_SUPER_ATTR_ATTR] : 1
+opcode[LOAD_SUPER_ATTR].pair_count[LOAD_SUPER_ATTR_METHOD] : 2
+opcode[MAKE_CELL].handler_id : 95
+opcode[MAKE_CELL].base_id : 95
+opcode[MAKE_CELL].handler_flags : 448
+    opcode[MAKE_CELL].execution_count : 110
+opcode[MAKE_CELL].pair_count[MAKE_CELL] : 11
+opcode[MAKE_CELL].pair_count[RESUME] : 99
+opcode[MAP_ADD].handler_id : 96
+opcode[MAP_ADD].base_id : 96
+opcode[MAP_ADD].handler_flags : 448
+    opcode[MAP_ADD].execution_count : 391
+opcode[MAP_ADD].pair_count[BUILD_MAP] : 1
+opcode[MAP_ADD].pair_count[DICT_UPDATE] : 22
+opcode[MAP_ADD].pair_count[LOAD_CONST] : 368
+opcode[MATCH_CLASS].handler_id : 97
+opcode[MATCH_CLASS].base_id : 97
+opcode[MATCH_CLASS].handler_flags : 448
+opcode[POP_JUMP_IF_FALSE].handler_id : 98
+opcode[POP_JUMP_IF_FALSE].base_id : 98
+opcode[POP_JUMP_IF_FALSE].handler_flags : 960
+opcode[POP_JUMP_IF_FALSE].specializable : 1
+    opcode[POP_JUMP_IF_FALSE].specialization.success : 47
+    opcode[POP_JUMP_IF_FALSE].specialization.failure : 2
+    opcode[POP_JUMP_IF_FALSE].specialization.miss : 32
+    opcode[POP_JUMP_IF_FALSE].execution_count : 249
+opcode[POP_JUMP_IF_FALSE].pair_count[NOP] : 5
+opcode[POP_JUMP_IF_FALSE].pair_count[POP_TOP] : 16
+opcode[POP_JUMP_IF_FALSE].pair_count[RETURN_VALUE] : 3
+opcode[POP_JUMP_IF_FALSE].pair_count[BUILD_LIST] : 1
+opcode[POP_JUMP_IF_FALSE].pair_count[JUMP_BACKWARD] : 1
+opcode[POP_JUMP_IF_FALSE].pair_count[JUMP_FORWARD] : 1
+opcode[POP_JUMP_IF_FALSE].pair_count[LOAD_ATTR] : 13
+opcode[POP_JUMP_IF_FALSE].pair_count[LOAD_COMMON_CONSTANT] : 42
+opcode[POP_JUMP_IF_FALSE].pair_count[LOAD_CONST] : 15
+opcode[POP_JUMP_IF_FALSE].pair_count[LOAD_DEREF] : 1
+opcode[POP_JUMP_IF_FALSE].pair_count[LOAD_FAST] : 1
+opcode[POP_JUMP_IF_FALSE].pair_count[LOAD_FAST_BORROW] : 2
+opcode[POP_JUMP_IF_FALSE].pair_count[LOAD_GLOBAL] : 14
+opcode[POP_JUMP_IF_FALSE].pair_count[LOAD_NAME] : 40
+opcode[POP_JUMP_IF_FALSE].pair_count[POP_JUMP_IF_FALSE] : 5
+opcode[POP_JUMP_IF_FALSE].pair_count[POP_JUMP_IF_NONE] : 1
+opcode[POP_JUMP_IF_FALSE].pair_count[STORE_ATTR] : 1
+opcode[POP_JUMP_IF_FALSE].pair_count[STORE_FAST] : 1
+opcode[POP_JUMP_IF_FALSE].pair_count[STORE_NAME] : 1
+opcode[POP_JUMP_IF_FALSE].pair_count[LOAD_ATTR_SHAPE] : 2
+opcode[POP_JUMP_IF_FALSE].pair_count[LOAD_GLOBAL_MODULE] : 34
+opcode[POP_JUMP_IF_FALSE].pair_count[LOAD_SMALL_INT_INLINE] : 1
+opcode[POP_JUMP_IF_FALSE].pair_count[POP_JUMP_IF_FALSE_BOOL] : 28
+opcode[POP_JUMP_IF_FALSE].pair_count[POP_JUMP_IF_FALSE_INT] : 3
+opcode[POP_JUMP_IF_FALSE].pair_count[POP_JUMP_IF_FALSE_LIST] : 2
+opcode[POP_JUMP_IF_FALSE].pair_count[POP_JUMP_IF_FALSE_NONE] : 5
+opcode[POP_JUMP_IF_FALSE].pair_count[POP_JUMP_IF_FALSE_STR] : 9
+opcode[POP_JUMP_IF_FALSE].pair_count[CONTAINS_OP_JUMP] : 1
+opcode[POP_JUMP_IF_NONE].handler_id : 99
+opcode[POP_JUMP_IF_NONE].base_id : 99
+opcode[POP_JUMP_IF_NONE].handler_flags : 448
+    opcode[POP_JUMP_IF_NONE].execution_count : 121
+opcode[POP_JUMP_IF_NONE].pair_count[NOP] : 6
+opcode[POP_JUMP_IF_NONE].pair_count[LOAD_ATTR] : 6
+opcode[POP_JUMP_IF_NONE].pair_count[LOAD_CONST] : 3
+opcode[POP_JUMP_IF_NONE].pair_count[LOAD_FAST_BORROW] : 5
+opcode[POP_JUMP_IF_NONE].pair_count[LOAD_GLOBAL] : 17
+opcode[POP_JUMP_IF_NONE].pair_count[POP_JUMP_IF_NONE] : 1
+opcode[POP_JUMP_IF_NONE].pair_count[STORE_ATTR] : 1
+opcode[POP_JUMP_IF_NONE].pair_count[LOAD_ATTR_METHOD_NO_DICT] : 1
+opcode[POP_JUMP_IF_NONE].pair_count[LOAD_ATTR_PROPERTY] : 32
+opcode[POP_JUMP_IF_NONE].pair_count[LOAD_ATTR_SHAPE] : 34
+opcode[POP_JUMP_IF_NONE].pair_count[LOAD_GLOBAL_BUILTIN] : 4
+opcode[POP_JUMP_IF_NONE].pair_count[LOAD_GLOBAL_MODULE] : 11
+opcode[POP_JUMP_IF_NOT_NONE].handler_id : 100
+opcode[POP_JUMP_IF_NOT_NONE].base_id : 100
+opcode[POP_JUMP_IF_NOT_NONE].handler_flags : 448
+    opcode[POP_JUMP_IF_NOT_NONE].execution_count : 672
+opcode[POP_JUMP_IF_NOT_NONE].pair_count[NOP] : 79
+opcode[POP_JUMP_IF_NOT_NONE].pair_count[POP_TOP] : 40
+opcode[POP_JUMP_IF_NOT_NONE].pair_count[RETURN_VALUE] : 4
+opcode[POP_JUMP_IF_NOT_NONE].pair_count[JUMP_BACKWARD] : 27
+opcode[POP_JUMP_IF_NOT_NONE].pair_count[LOAD_ATTR] : 24
+opcode[POP_JUMP_IF_NOT_NONE].pair_count[LOAD_COMMON_CONSTANT] : 14
+opcode[POP_JUMP_IF_NOT_NONE].pair_count[LOAD_FAST] : 1
+opcode[POP_JUMP_IF_NOT_NONE].pair_count[LOAD_FAST_BORROW] : 16
+opcode[POP_JUMP_IF_NOT_NONE].pair_count[LOAD_FAST_CHECK] : 1
+opcode[POP_JUMP_IF_NOT_NONE].pair_count[LOAD_GLOBAL] : 29
+opcode[POP_JUMP_IF_NOT_NONE].pair_count[POP_JUMP_IF_FALSE] : 3
+opcode[POP_JUMP_IF_NOT_NONE].pair_count[POP_JUMP_IF_NONE] : 5
+opcode[POP_JUMP_IF_NOT_NONE].pair_count[POP_JUMP_IF_NOT_NONE] : 1
+opcode[POP_JUMP_IF_NOT_NONE].pair_count[POP_JUMP_IF_TRUE] : 6
+opcode[POP_JUMP_IF_NOT_NONE].pair_count[LOAD_ATTR_METHOD_WITH_VALUES] : 4
+opcode[POP_JUMP_IF_NOT_NONE].pair_count[LOAD_ATTR_SHAPE] : 168
+opcode[POP_JUMP_IF_NOT_NONE].pair_count[LOAD_GLOBAL_BUILTIN] : 38
+opcode[POP_JUMP_IF_NOT_NONE].pair_count[LOAD_GLOBAL_MODULE] : 105
+opcode[POP_JUMP_IF_NOT_NONE].pair_count[POP_JUMP_IF_FALSE_NONE] : 25
+opcode[POP_JUMP_IF_NOT_NONE].pair_count[POP_JUMP_IF_TRUE_BOOL] : 58
+opcode[POP_JUMP_IF_NOT_NONE].pair_count[POP_JUMP_IF_TRUE_STR] : 24
+opcode[POP_JUMP_IF_TRUE].handler_id : 101
+opcode[POP_JUMP_IF_TRUE].base_id : 101
+opcode[POP_JUMP_IF_TRUE].handler_flags : 960
+opcode[POP_JUMP_IF_TRUE].specializable : 1
+    opcode[POP_JUMP_IF_TRUE].specialization.success : 34
+    opcode[POP_JUMP_IF_TRUE].specialization.miss : 12
+    opcode[POP_JUMP_IF_TRUE].execution_count : 131
+opcode[POP_JUMP_IF_TRUE].pair_count[LOAD_BUILD_CLASS] : 1
+opcode[POP_JUMP_IF_TRUE].pair_count[NOP] : 15
+opcode[POP_JUMP_IF_TRUE].pair_count[POP_ITER] : 1
+opcode[POP_JUMP_IF_TRUE].pair_count[RETURN_VALUE] : 1
+opcode[POP_JUMP_IF_TRUE].pair_count[BUILD_LIST] : 1
+opcode[POP_JUMP_IF_TRUE].pair_count[JUMP_BACKWARD] : 5
+opcode[POP_JUMP_IF_TRUE].pair_count[LOAD_ATTR] : 5
+opcode[POP_JUMP_IF_TRUE].pair_count[LOAD_COMMON_CONSTANT] : 2
+opcode[POP_JUMP_IF_TRUE].pair_count[LOAD_CONST] : 3
+opcode[POP_JUMP_IF_TRUE].pair_count[LOAD_FAST_BORROW] : 3
+opcode[POP_JUMP_IF_TRUE].pair_count[LOAD_GLOBAL] : 19
+opcode[POP_JUMP_IF_TRUE].pair_count[LOAD_NAME] : 36
+opcode[POP_JUMP_IF_TRUE].pair_count[POP_JUMP_IF_FALSE] : 1
+opcode[POP_JUMP_IF_TRUE].pair_count[POP_JUMP_IF_NOT_NONE] : 1
+opcode[POP_JUMP_IF_TRUE].pair_count[POP_JUMP_IF_TRUE] : 2
+opcode[POP_JUMP_IF_TRUE].pair_count[RERAISE] : 1
+opcode[POP_JUMP_IF_TRUE].pair_count[POP_JUMP_IF_TRUE_BOOL] : 22
+opcode[POP_JUMP_IF_TRUE].pair_count[POP_JUMP_IF_TRUE_INT] : 1
+opcode[POP_JUMP_IF_TRUE].pair_count[POP_JUMP_IF_TRUE_LIST] : 2
+opcode[POP_JUMP_IF_TRUE].pair_count[POP_JUMP_IF_TRUE_NONE] : 1
+opcode[POP_JUMP_IF_TRUE].pair_count[POP_JUMP_IF_TRUE_STR] : 8
+opcode[RAISE_VARARGS].handler_id : 102
+opcode[RAISE_VARARGS].base_id : 102
+opcode[RAISE_VARARGS].handler_flags : 448
+    opcode[RAISE_VARARGS].execution_count : 8
+opcode[RAISE_VARARGS].pair_count[PUSH_EXC_INFO] : 2
+opcode[RERAISE].handler_id : 103
+opcode[RERAISE].base_id : 103
+opcode[RERAISE].handler_flags : 448
+    opcode[RERAISE].execution_count : 3
+opcode[RERAISE].pair_count[PUSH_EXC_INFO] : 1
+opcode[RERAISE].pair_count[COPY] : 1
+opcode[SEND].handler_id : 104
+opcode[SEND].base_id : 104
+opcode[SEND].handler_flags : 960
+opcode[SEND].specializable : 1
+opcode[SET_ADD].handler_id : 105
+opcode[SET_ADD].base_id : 105
+opcode[SET_ADD].handler_flags : 448
+    opcode[SET_ADD].execution_count : 1
+opcode[SET_ADD].pair_count[JUMP_BACKWARD] : 1
+opcode[SET_FUNCTION_ATTRIBUTE].handler_id : 106
+opcode[SET_FUNCTION_ATTRIBUTE].base_id : 106
+opcode[SET_FUNCTION_ATTRIBUTE].handler_flags : 448
+    opcode[SET_FUNCTION_ATTRIBUTE].execution_count : 193
+opcode[SET_FUNCTION_ATTRIBUTE].pair_count[CALL] : 12
+opcode[SET_FUNCTION_ATTRIBUTE].pair_count[LOAD_CONST] : 2
+opcode[SET_FUNCTION_ATTRIBUTE].pair_count[LOAD_FAST_BORROW] : 10
+opcode[SET_FUNCTION_ATTRIBUTE].pair_count[LOAD_GLOBAL] : 2
+opcode[SET_FUNCTION_ATTRIBUTE].pair_count[SET_FUNCTION_ATTRIBUTE] : 10
+opcode[SET_FUNCTION_ATTRIBUTE].pair_count[STORE_DEREF] : 1
+opcode[SET_FUNCTION_ATTRIBUTE].pair_count[STORE_FAST] : 41
+opcode[SET_FUNCTION_ATTRIBUTE].pair_count[STORE_NAME] : 112
+opcode[SET_FUNCTION_ATTRIBUTE].pair_count[LOAD_GLOBAL_MODULE] : 3
+opcode[SET_UPDATE].handler_id : 107
+opcode[SET_UPDATE].base_id : 107
+opcode[SET_UPDATE].handler_flags : 448
+opcode[STORE_ATTR].handler_id : 108
+opcode[STORE_ATTR].base_id : 108
+opcode[STORE_ATTR].handler_flags : 960
+opcode[STORE_ATTR].specializable : 1
+    opcode[STORE_ATTR].specialization.success : 57
+    opcode[STORE_ATTR].specialization.failure : 13
+    opcode[STORE_ATTR].specialization.hit : 607
+    opcode[STORE_ATTR].specialization.deferred : 482
+    opcode[STORE_ATTR].specialization.miss : 240
+    opcode[STORE_ATTR].execution_count : 552
+    opcode[STORE_ATTR].specialization.failure_kinds[2] : 9
+    opcode[STORE_ATTR].specialization.failure_kinds[9] : 1
+    opcode[STORE_ATTR].specialization.failure_kinds[14] : 1
+    opcode[STORE_ATTR].specialization.failure_kinds[18] : 2
+opcode[STORE_ATTR].pair_count[NOP] : 36
+opcode[STORE_ATTR].pair_count[POP_EXCEPT] : 1
+opcode[STORE_ATTR].pair_count[RETURN_VALUE] : 48
+opcode[STORE_ATTR].pair_count[BUILD_LIST] : 37
+opcode[STORE_ATTR].pair_count[BUILD_MAP] : 3
+opcode[STORE_ATTR].pair_count[JUMP_BACKWARD] : 2
+opcode[STORE_ATTR].pair_count[JUMP_FORWARD] : 1
+opcode[STORE_ATTR].pair_count[LOAD_ATTR] : 6
+opcode[STORE_ATTR].pair_count[LOAD_COMMON_CONSTANT] : 116
+opcode[STORE_ATTR].pair_count[LOAD_CONST] : 2
+opcode[STORE_ATTR].pair_count[LOAD_FAST] : 1
+opcode[STORE_ATTR].pair_count[LOAD_GLOBAL] : 10
+opcode[STORE_ATTR].pair_count[POP_JUMP_IF_FALSE] : 3
+opcode[STORE_ATTR].pair_count[POP_JUMP_IF_NONE] : 1
+opcode[STORE_ATTR].pair_count[POP_JUMP_IF_NOT_NONE] : 1
+opcode[STORE_ATTR].pair_count[POP_JUMP_IF_TRUE] : 4
+opcode[STORE_ATTR].pair_count[STORE_ATTR] : 33
+opcode[STORE_ATTR].pair_count[LOAD_ATTR_PROPERTY] : 1
+opcode[STORE_ATTR].pair_count[POP_JUMP_IF_FALSE_NONE] : 30
+opcode[STORE_ATTR].pair_count[POP_JUMP_IF_TRUE_BOOL] : 66
+opcode[STORE_ATTR].pair_count[STORE_ATTR_SHAPE] : 16
+opcode[STORE_ATTR].pair_count[STORE_ATTR_SHAPE_ADD] : 133
+opcode[STORE_ATTR].pair_count[STORE_ATTR_SLOT] : 1
+opcode[STORE_DEREF].handler_id : 109
+opcode[STORE_DEREF].base_id : 109
+opcode[STORE_DEREF].handler_flags : 448
+    opcode[STORE_DEREF].execution_count : 90
+opcode[STORE_DEREF].pair_count[LOAD_BUILD_CLASS] : 1
+opcode[STORE_DEREF].pair_count[LOAD_COMMON_CONSTANT] : 18
+opcode[STORE_DEREF].pair_count[LOAD_CONST] : 56
+opcode[STORE_DEREF].pair_count[LOAD_FAST_BORROW] : 4
+opcode[STORE_DEREF].pair_count[LOAD_GLOBAL] : 1
+opcode[STORE_DEREF].pair_count[LOAD_NAME] : 1
+opcode[STORE_DEREF].pair_count[STORE_FAST] : 9
+opcode[STORE_FAST].handler_id : 110
+opcode[STORE_FAST].base_id : 110
+opcode[STORE_FAST].handler_flags : 448
+    opcode[STORE_FAST].execution_count : 92
+opcode[STORE_FAST].pair_count[RETURN_VALUE] : 4
+opcode[STORE_FAST].pair_count[CALL] : 2
+opcode[STORE_FAST].pair_count[JUMP_FORWARD] : 5
+opcode[STORE_FAST].pair_count[LOAD_ATTR] : 2
+opcode[STORE_FAST].pair_count[LOAD_DEREF] : 1
+opcode[STORE_FAST].pair_count[LOAD_FAST] : 3
+opcode[STORE_FAST].pair_count[LOAD_FAST_BORROW] : 3
+opcode[STORE_FAST].pair_count[LOAD_GLOBAL] : 10
+opcode[STORE_FAST].pair_count[POP_JUMP_IF_NONE] : 1
+opcode[STORE_FAST].pair_count[STORE_ATTR] : 2
+opcode[STORE_FAST].pair_count[STORE_FAST] : 3
+opcode[STORE_FAST].pair_count[STORE_NAME] : 1
+opcode[STORE_FAST].pair_count[SWAP] : 1
+opcode[STORE_FAST].pair_count[CALL_METHOD_DESCRIPTOR_FAST] : 17
+opcode[STORE_FAST].pair_count[LOAD_ATTR_METHOD_NO_DICT] : 7
+opcode[STORE_FAST].pair_count[LOAD_GLOBAL_MODULE] : 29
+opcode[STORE_FAST].pair_count[STORE_ATTR_SHAPE_ADD] : 1
+opcode[STORE_GLOBAL].handler_id : 113
+opcode[STORE_GLOBAL].base_id : 113
+opcode[STORE_GLOBAL].handler_flags : 448
+    opcode[STORE_GLOBAL].execution_count : 21
+opcode[STORE_GLOBAL].pair_count[LOAD_BUILD_CLASS] : 1
+opcode[STORE_GLOBAL].pair_count[LOAD_ATTR] : 2
+opcode[STORE_GLOBAL].pair_count[LOAD_COMMON_CONSTANT] : 8
+opcode[STORE_GLOBAL].pair_count[LOAD_CONST] : 5
+opcode[STORE_GLOBAL].pair_count[LOAD_GLOBAL] : 3
+opcode[STORE_GLOBAL].pair_count[STORE_GLOBAL] : 1
+opcode[STORE_GLOBAL].pair_count[LOAD_SMALL_INT_INLINE] : 1
+opcode[STORE_NAME].handler_id : 114
+opcode[STORE_NAME].base_id : 114
+opcode[STORE_NAME].handler_flags : 448
+    opcode[STORE_NAME].execution_count : 1653
+opcode[STORE_NAME].pair_count[LOAD_BUILD_CLASS] : 66
+opcode[STORE_NAME].pair_count[LOAD_LOCALS] : 76
+opcode[STORE_NAME].pair_count[NOP] : 9
+opcode[STORE_NAME].pair_count[POP_EXCEPT] : 1
+opcode[STORE_NAME].pair_count[POP_TOP] : 16
+opcode[STORE_NAME].pair_count[RETURN_VALUE] : 7
+opcode[STORE_NAME].pair_count[BUILD_LIST] : 5
+opcode[STORE_NAME].pair_count[BUILD_MAP] : 5
+opcode[STORE_NAME].pair_count[IMPORT_FROM] : 18
+opcode[STORE_NAME].pair_count[JUMP_FORWARD] : 5
+opcode[STORE_NAME].pair_count[LOAD_COMMON_CONSTANT] : 178
+opcode[STORE_NAME].pair_count[LOAD_CONST] : 654
+opcode[STORE_NAME].pair_count[LOAD_FAST_BORROW] : 16
+opcode[STORE_NAME].pair_count[LOAD_NAME] : 273
+opcode[STORE_NAME].pair_count[STORE_NAME] : 99
+opcode[STORE_NAME].pair_count[LOAD_CONST_INLINE_INT] : 93
+opcode[STORE_NAME].pair_count[LOAD_SMALL_INT_INLINE] : 132
+opcode[SWAP].handler_id : 115
+opcode[SWAP].base_id : 115
+opcode[SWAP].handler_flags : 448
+    opcode[SWAP].execution_count : 565
+opcode[SWAP].pair_count[POP_EXCEPT] : 1
+opcode[SWAP].pair_count[POP_TOP] : 38
+opcode[SWAP].pair_count[BUILD_LIST] : 27
+opcode[SWAP].pair_count[BUILD_SET] : 1
+opcode[SWAP].pair_count[GET_ITER] : 10
+opcode[SWAP].pair_count[LOAD_COMMON_CONSTANT] : 31
+opcode[SWAP].pair_count[LOAD_SPECIAL] : 190
+opcode[SWAP].pair_count[STORE_FAST] : 28
+opcode[SWAP].pair_count[SWAP] : 221
+opcode[SWAP].pair_count[GET_ITER_VIRTUAL] : 18
+opcode[UNPACK_EX].handler_id : 116
+opcode[UNPACK_EX].base_id : 116
+opcode[UNPACK_EX].handler_flags : 448
+opcode[UNPACK_SEQUENCE].handler_id : 117
+opcode[UNPACK_SEQUENCE].base_id : 117
+opcode[UNPACK_SEQUENCE].handler_flags : 960
+opcode[UNPACK_SEQUENCE].specializable : 1
+    opcode[UNPACK_SEQUENCE].specialization.success : 11
+    opcode[UNPACK_SEQUENCE].specialization.hit : 59
+    opcode[UNPACK_SEQUENCE].specialization.deferred : 13
+    opcode[UNPACK_SEQUENCE].execution_count : 24
+opcode[UNPACK_SEQUENCE].pair_count[NOP] : 1
+opcode[UNPACK_SEQUENCE].pair_count[LOAD_ATTR] : 2
+opcode[UNPACK_SEQUENCE].pair_count[LOAD_CONST] : 1
+opcode[UNPACK_SEQUENCE].pair_count[LOAD_FAST] : 1
+opcode[UNPACK_SEQUENCE].pair_count[LOAD_GLOBAL] : 5
+opcode[UNPACK_SEQUENCE].pair_count[STORE_DEREF] : 1
+opcode[UNPACK_SEQUENCE].pair_count[STORE_NAME] : 1
+opcode[UNPACK_SEQUENCE].pair_count[UNPACK_SEQUENCE_TUPLE] : 2
+opcode[UNPACK_SEQUENCE].pair_count[UNPACK_SEQUENCE_TWO_TUPLE] : 9
+opcode[UNPACK_SEQUENCE].pair_count[CONTAINS_OP_JUMP] : 1
+opcode[YIELD_VALUE].handler_id : 118
+opcode[YIELD_VALUE].base_id : 118
+opcode[YIELD_VALUE].handler_flags : 448
+    opcode[YIELD_VALUE].execution_count : 16
+opcode[YIELD_VALUE].pair_count[INTERPRETER_EXIT] : 16
+opcode[TO_BOOL_BOOL].handler_id : 119
+opcode[TO_BOOL_BOOL].base_id : 37
+opcode[TO_BOOL_BOOL].handler_flags : 193
+opcode[TO_BOOL_INT].handler_id : 120
+opcode[TO_BOOL_INT].base_id : 37
+opcode[TO_BOOL_INT].handler_flags : 193
+opcode[TO_BOOL_LIST].handler_id : 121
+opcode[TO_BOOL_LIST].base_id : 37
+opcode[TO_BOOL_LIST].handler_flags : 193
+opcode[TO_BOOL_NONE].handler_id : 122
+opcode[TO_BOOL_NONE].base_id : 37
+opcode[TO_BOOL_NONE].handler_flags : 193
+opcode[TO_BOOL_STR].handler_id : 123
+opcode[TO_BOOL_STR].base_id : 37
+opcode[TO_BOOL_STR].handler_flags : 193
+opcode[UNPACK_SEQUENCE_LIST].handler_id : 124
+opcode[UNPACK_SEQUENCE_LIST].base_id : 117
+opcode[UNPACK_SEQUENCE_LIST].handler_flags : 193
+opcode[UNPACK_SEQUENCE_TUPLE].handler_id : 125
+opcode[UNPACK_SEQUENCE_TUPLE].base_id : 117
+opcode[UNPACK_SEQUENCE_TUPLE].handler_flags : 193
+    opcode[UNPACK_SEQUENCE_TUPLE].execution_count : 14
+opcode[UNPACK_SEQUENCE_TUPLE].pair_count[LOAD_GLOBAL] : 2
+opcode[UNPACK_SEQUENCE_TUPLE].pair_count[LOAD_GLOBAL_MODULE] : 12
+opcode[UNPACK_SEQUENCE_TWO_TUPLE].handler_id : 126
+opcode[UNPACK_SEQUENCE_TWO_TUPLE].base_id : 117
+opcode[UNPACK_SEQUENCE_TWO_TUPLE].handler_flags : 193
+    opcode[UNPACK_SEQUENCE_TWO_TUPLE].execution_count : 45
+opcode[UNPACK_SEQUENCE_TWO_TUPLE].pair_count[NOP] : 11
+opcode[UNPACK_SEQUENCE_TWO_TUPLE].pair_count[LOAD_ATTR] : 2
+opcode[UNPACK_SEQUENCE_TWO_TUPLE].pair_count[LOAD_CONST] : 1
+opcode[UNPACK_SEQUENCE_TWO_TUPLE].pair_count[LOAD_GLOBAL] : 3
+opcode[UNPACK_SEQUENCE_TWO_TUPLE].pair_count[STORE_DEREF] : 8
+opcode[UNPACK_SEQUENCE_TWO_TUPLE].pair_count[LOAD_ATTR_METHOD_NO_DICT] : 2
+opcode[UNPACK_SEQUENCE_TWO_TUPLE].pair_count[LOAD_ATTR_METHOD_WITH_VALUES] : 3
+opcode[UNPACK_SEQUENCE_TWO_TUPLE].pair_count[LOAD_GLOBAL_BUILTIN] : 13
+opcode[UNPACK_SEQUENCE_TWO_TUPLE].pair_count[CONTAINS_OP_JUMP] : 1
+opcode[UNPACK_SEQUENCE_TWO_TUPLE].pair_count[CONTAINS_OP_JUMP_SET] : 1
+opcode[RESUME].handler_id : 128
+opcode[RESUME].base_id : 128
+opcode[RESUME].handler_flags : 448
+    opcode[RESUME].execution_count : 297
+opcode[RESUME].pair_count[BUILD_LIST] : 3
+opcode[RESUME].pair_count[FOR_ITER] : 5
+opcode[RESUME].pair_count[LOAD_ATTR] : 1
+opcode[RESUME].pair_count[LOAD_CONST] : 5
+opcode[RESUME].pair_count[LOAD_DEREF] : 37
+opcode[RESUME].pair_count[LOAD_FAST] : 15
+opcode[RESUME].pair_count[LOAD_FAST_BORROW] : 21
+opcode[RESUME].pair_count[LOAD_GLOBAL] : 16
+opcode[RESUME].pair_count[LOAD_NAME] : 76
+opcode[RESUME].pair_count[POP_JUMP_IF_NOT_NONE] : 4
+opcode[RESUME].pair_count[FOR_ITER_LIST] : 8
+opcode[RESUME].pair_count[FOR_ITER_VIRTUAL] : 4
+opcode[RESUME].pair_count[LOAD_ATTR_SHAPE] : 1
+opcode[RESUME].pair_count[LOAD_GLOBAL_BUILTIN] : 99
+opcode[RESUME].pair_count[LOAD_GLOBAL_MODULE] : 2
+opcode[BINARY_OP_ADD_FLOAT].handler_id : 129
+opcode[BINARY_OP_ADD_FLOAT].base_id : 42
+opcode[BINARY_OP_ADD_FLOAT].handler_flags : 193
+opcode[BINARY_OP_ADD_INT].handler_id : 130
+opcode[BINARY_OP_ADD_INT].base_id : 42
+opcode[BINARY_OP_ADD_INT].handler_flags : 193
+    opcode[BINARY_OP_ADD_INT].execution_count : 10
+opcode[BINARY_OP_ADD_INT].pair_count[BINARY_SLICE] : 5
+opcode[BINARY_OP_ADD_INT].pair_count[LOAD_COMMON_CONSTANT] : 5
+opcode[BINARY_OP_ADD_UNICODE].handler_id : 131
+opcode[BINARY_OP_ADD_UNICODE].base_id : 42
+opcode[BINARY_OP_ADD_UNICODE].handler_flags : 193
+    opcode[BINARY_OP_ADD_UNICODE].execution_count : 47
+opcode[BINARY_OP_ADD_UNICODE].pair_count[BINARY_OP_INPLACE_ADD_UNICODE] : 11
+opcode[BINARY_OP_ADD_UNICODE].pair_count[CALL] : 1
+opcode[BINARY_OP_ADD_UNICODE].pair_count[LIST_APPEND] : 8
+opcode[BINARY_OP_ADD_UNICODE].pair_count[LOAD_GLOBAL] : 2
+opcode[BINARY_OP_ADD_UNICODE].pair_count[STORE_NAME] : 1
+opcode[BINARY_OP_ADD_UNICODE].pair_count[CALL_PY_GENERAL] : 10
+opcode[BINARY_OP_ADD_UNICODE].pair_count[LOAD_GLOBAL_MODULE] : 2
+opcode[BINARY_OP_ADD_UNICODE].pair_count[BINARY_OP_INPLACE_ADD] : 1
+opcode[BINARY_OP_ADD_UNICODE].pair_count[CONTAINS_OP_JUMP] : 1
+opcode[BINARY_OP_ADD_UNICODE].pair_count[CONTAINS_OP_JUMP_SET] : 10
+opcode[BINARY_OP_AND_INT].handler_id : 132
+opcode[BINARY_OP_AND_INT].base_id : 42
+opcode[BINARY_OP_AND_INT].handler_flags : 193
+    opcode[BINARY_OP_AND_INT].execution_count : 21
+opcode[BINARY_OP_AND_INT].pair_count[COMPARE_OP] : 1
+opcode[BINARY_OP_AND_INT].pair_count[POP_JUMP_IF_FALSE] : 1
+opcode[BINARY_OP_AND_INT].pair_count[COMPARE_OP_INT] : 5
+opcode[BINARY_OP_AND_INT].pair_count[LOAD_SMALL_INT_INLINE] : 3
+opcode[BINARY_OP_AND_INT].pair_count[POP_JUMP_IF_FALSE_INT] : 2
+opcode[BINARY_OP_AND_INT].pair_count[COMPARE_OP_JUMP] : 3
+opcode[BINARY_OP_AND_INT].pair_count[COMPARE_OP_JUMP_INT] : 6
+opcode[BINARY_OP_EXTEND].handler_id : 133
+opcode[BINARY_OP_EXTEND].base_id : 42
+opcode[BINARY_OP_EXTEND].handler_flags : 193
+opcode[BINARY_OP_FLOOR_DIVIDE_INT].handler_id : 134
+opcode[BINARY_OP_FLOOR_DIVIDE_INT].base_id : 42
+opcode[BINARY_OP_FLOOR_DIVIDE_INT].handler_flags : 193
+opcode[BINARY_OP_LSHIFT_INT].handler_id : 135
+opcode[BINARY_OP_LSHIFT_INT].base_id : 42
+opcode[BINARY_OP_LSHIFT_INT].handler_flags : 193
+opcode[BINARY_OP_MULTIPLY_FLOAT].handler_id : 136
+opcode[BINARY_OP_MULTIPLY_FLOAT].base_id : 42
+opcode[BINARY_OP_MULTIPLY_FLOAT].handler_flags : 193
+opcode[BINARY_OP_MULTIPLY_INT].handler_id : 137
+opcode[BINARY_OP_MULTIPLY_INT].base_id : 42
+opcode[BINARY_OP_MULTIPLY_INT].handler_flags : 193
+opcode[BINARY_OP_OR_INT].handler_id : 138
+opcode[BINARY_OP_OR_INT].base_id : 42
+opcode[BINARY_OP_OR_INT].handler_flags : 193
+opcode[BINARY_OP_REMAINDER_INT].handler_id : 139
+opcode[BINARY_OP_REMAINDER_INT].base_id : 42
+opcode[BINARY_OP_REMAINDER_INT].handler_flags : 193
+opcode[BINARY_OP_RSHIFT_INT].handler_id : 140
+opcode[BINARY_OP_RSHIFT_INT].base_id : 42
+opcode[BINARY_OP_RSHIFT_INT].handler_flags : 193
+opcode[BINARY_OP_SUBSCR_DICT].handler_id : 141
+opcode[BINARY_OP_SUBSCR_DICT].base_id : 42
+opcode[BINARY_OP_SUBSCR_DICT].handler_flags : 193
+    opcode[BINARY_OP_SUBSCR_DICT].execution_count : 126
+opcode[BINARY_OP_SUBSCR_DICT].pair_count[NOP] : 4
+opcode[BINARY_OP_SUBSCR_DICT].pair_count[PUSH_EXC_INFO] : 65
+opcode[BINARY_OP_SUBSCR_DICT].pair_count[RETURN_VALUE] : 4
+opcode[BINARY_OP_SUBSCR_DICT].pair_count[CALL] : 4
+opcode[BINARY_OP_SUBSCR_DICT].pair_count[LOAD_FAST_BORROW] : 3
+opcode[BINARY_OP_SUBSCR_DICT].pair_count[STORE_ATTR] : 1
+opcode[BINARY_OP_SUBSCR_DICT].pair_count[CALL_BUILTIN_CLASS] : 2
+opcode[BINARY_OP_SUBSCR_DICT].pair_count[CALL_METHOD_DESCRIPTOR_FAST] : 37
+opcode[BINARY_OP_SUBSCR_DICT].pair_count[CALL_NON_PY_GENERAL] : 6
+opcode[BINARY_OP_SUBSCR_GETITEM].handler_id : 142
+opcode[BINARY_OP_SUBSCR_GETITEM].base_id : 42
+opcode[BINARY_OP_SUBSCR_GETITEM].handler_flags : 193
+opcode[BINARY_OP_SUBSCR_LIST_INT].handler_id : 143
+opcode[BINARY_OP_SUBSCR_LIST_INT].base_id : 42
+opcode[BINARY_OP_SUBSCR_LIST_INT].handler_flags : 193
+    opcode[BINARY_OP_SUBSCR_LIST_INT].execution_count : 3
+opcode[BINARY_OP_SUBSCR_LIST_INT].pair_count[BINARY_OP_ADD_UNICODE] : 2
+opcode[BINARY_OP_SUBSCR_LIST_INT].pair_count[BINARY_OP_ADD] : 1
+opcode[BINARY_OP_SUBSCR_LIST_SLICE].handler_id : 144
+opcode[BINARY_OP_SUBSCR_LIST_SLICE].base_id : 42
+opcode[BINARY_OP_SUBSCR_LIST_SLICE].handler_flags : 193
+opcode[BINARY_OP_SUBSCR_STR_INT].handler_id : 145
+opcode[BINARY_OP_SUBSCR_STR_INT].base_id : 42
+opcode[BINARY_OP_SUBSCR_STR_INT].handler_flags : 193
+    opcode[BINARY_OP_SUBSCR_STR_INT].execution_count : 387
+opcode[BINARY_OP_SUBSCR_STR_INT].pair_count[LOAD_CONST] : 387
+opcode[BINARY_OP_SUBSCR_TUPLE_INT].handler_id : 146
+opcode[BINARY_OP_SUBSCR_TUPLE_INT].base_id : 42
+opcode[BINARY_OP_SUBSCR_TUPLE_INT].handler_flags : 193
+    opcode[BINARY_OP_SUBSCR_TUPLE_INT].execution_count : 67
+opcode[BINARY_OP_SUBSCR_TUPLE_INT].pair_count[NOP] : 5
+opcode[BINARY_OP_SUBSCR_TUPLE_INT].pair_count[RETURN_VALUE] : 33
+opcode[BINARY_OP_SUBSCR_TUPLE_INT].pair_count[LOAD_COMMON_CONSTANT] : 27
+opcode[BINARY_OP_SUBSCR_TUPLE_INT].pair_count[LOAD_GLOBAL_MODULE] : 2
+opcode[BINARY_OP_SUBSCR_USTR_INT].handler_id : 147
+opcode[BINARY_OP_SUBSCR_USTR_INT].base_id : 42
+opcode[BINARY_OP_SUBSCR_USTR_INT].handler_flags : 193
+opcode[BINARY_OP_SUBTRACT_FLOAT].handler_id : 148
+opcode[BINARY_OP_SUBTRACT_FLOAT].base_id : 42
+opcode[BINARY_OP_SUBTRACT_FLOAT].handler_flags : 193
+opcode[BINARY_OP_SUBTRACT_INT].handler_id : 149
+opcode[BINARY_OP_SUBTRACT_INT].base_id : 42
+opcode[BINARY_OP_SUBTRACT_INT].handler_flags : 193
+opcode[BINARY_OP_TRUEDIV_FLOAT].handler_id : 150
+opcode[BINARY_OP_TRUEDIV_FLOAT].base_id : 42
+opcode[BINARY_OP_TRUEDIV_FLOAT].handler_flags : 193
+opcode[BINARY_OP_XOR_INT].handler_id : 151
+opcode[BINARY_OP_XOR_INT].base_id : 42
+opcode[BINARY_OP_XOR_INT].handler_flags : 193
+opcode[CALL_ALLOC_AND_ENTER_INIT].handler_id : 152
+opcode[CALL_ALLOC_AND_ENTER_INIT].base_id : 50
+opcode[CALL_ALLOC_AND_ENTER_INIT].handler_flags : 193
+    opcode[CALL_ALLOC_AND_ENTER_INIT].execution_count : 86
+opcode[CALL_ALLOC_AND_ENTER_INIT].pair_count[LOAD_GLOBAL_MODULE] : 26
+opcode[CALL_ALLOC_AND_ENTER_INIT].pair_count[STORE_ATTR_SHAPE_ADD] : 60
+opcode[CALL_BOUND_METHOD_EXACT_ARGS].handler_id : 153
+opcode[CALL_BOUND_METHOD_EXACT_ARGS].base_id : 50
+opcode[CALL_BOUND_METHOD_EXACT_ARGS].handler_flags : 193
+    opcode[CALL_BOUND_METHOD_EXACT_ARGS].specialization.miss : 32
+    opcode[CALL_BOUND_METHOD_EXACT_ARGS].execution_count : 79
+opcode[CALL_BOUND_METHOD_EXACT_ARGS].pair_count[BUILD_LIST] : 3
+opcode[CALL_BOUND_METHOD_EXACT_ARGS].pair_count[CALL] : 32
+opcode[CALL_BOUND_METHOD_EXACT_ARGS].pair_count[COPY_FREE_VARS] : 12
+opcode[CALL_BOUND_METHOD_EXACT_ARGS].pair_count[LOAD_COMMON_CONSTANT] : 6
+opcode[CALL_BOUND_METHOD_EXACT_ARGS].pair_count[LOAD_GLOBAL] : 1
+opcode[CALL_BOUND_METHOD_EXACT_ARGS].pair_count[LOAD_GLOBAL_MODULE] : 15
+opcode[CALL_BOUND_METHOD_EXACT_ARGS].pair_count[POP_JUMP_IF_FALSE_STR] : 10
+opcode[CALL_BOUND_METHOD_GENERAL].handler_id : 154
+opcode[CALL_BOUND_METHOD_GENERAL].base_id : 50
+opcode[CALL_BOUND_METHOD_GENERAL].handler_flags : 193
+    opcode[CALL_BOUND_METHOD_GENERAL].execution_count : 1
+opcode[CALL_BOUND_METHOD_GENERAL].pair_count[LOAD_GLOBAL_MODULE] : 1
+opcode[CALL_BUILTIN_CLASS].handler_id : 155
+opcode[CALL_BUILTIN_CLASS].base_id : 50
+opcode[CALL_BUILTIN_CLASS].handler_flags : 193
+    opcode[CALL_BUILTIN_CLASS].execution_count : 33
+opcode[CALL_BUILTIN_CLASS].pair_count[NOP] : 2
+opcode[CALL_BUILTIN_CLASS].pair_count[LOAD_FAST_AND_CLEAR] : 1
+opcode[CALL_BUILTIN_CLASS].pair_count[GET_ITER_SELF] : 1
+opcode[CALL_BUILTIN_CLASS].pair_count[POP_JUMP_IF_TRUE_LIST] : 26
+opcode[CALL_BUILTIN_CLASS].pair_count[STORE_ATTR_SHAPE] : 1
+opcode[CALL_BUILTIN_CLASS].pair_count[STORE_ATTR_SHAPE_ADD] : 2
+opcode[CALL_BUILTIN_FAST].handler_id : 156
+opcode[CALL_BUILTIN_FAST].base_id : 50
+opcode[CALL_BUILTIN_FAST].handler_flags : 193
+    opcode[CALL_BUILTIN_FAST].execution_count : 899
+opcode[CALL_BUILTIN_FAST].pair_count[POP_TOP] : 175
+opcode[CALL_BUILTIN_FAST].pair_count[RETURN_VALUE] : 64
+opcode[CALL_BUILTIN_FAST].pair_count[JUMP_BACKWARD] : 33
+opcode[CALL_BUILTIN_FAST].pair_count[LOAD_COMMON_CONSTANT] : 156
+opcode[CALL_BUILTIN_FAST].pair_count[LOAD_CONST] : 1
+opcode[CALL_BUILTIN_FAST].pair_count[POP_JUMP_IF_NOT_NONE] : 134
+opcode[CALL_BUILTIN_FAST].pair_count[CALL_BUILTIN_FAST] : 58
+opcode[CALL_BUILTIN_FAST].pair_count[CONTAINS_OP_DICT] : 14
+opcode[CALL_BUILTIN_FAST].pair_count[LOAD_ATTR_SHAPE] : 34
+opcode[CALL_BUILTIN_FAST].pair_count[LOAD_GLOBAL_BUILTIN] : 52
+opcode[CALL_BUILTIN_FAST].pair_count[LOAD_GLOBAL_MODULE] : 34
+opcode[CALL_BUILTIN_FAST].pair_count[POP_JUMP_IF_FALSE_BOOL] : 41
+opcode[CALL_BUILTIN_FAST].pair_count[POP_JUMP_IF_FALSE_INT] : 29
+opcode[CALL_BUILTIN_FAST].pair_count[POP_JUMP_IF_TRUE_BOOL] : 33
+opcode[CALL_BUILTIN_FAST].pair_count[POP_JUMP_IF_TRUE_NONE] : 12
+opcode[CALL_BUILTIN_FAST].pair_count[POP_JUMP_IF_TRUE_STR] : 3
+opcode[CALL_BUILTIN_FAST].pair_count[STORE_ATTR_SHAPE_ADD] : 26
+opcode[CALL_BUILTIN_FAST_WITH_KEYWORDS].handler_id : 157
+opcode[CALL_BUILTIN_FAST_WITH_KEYWORDS].base_id : 50
+opcode[CALL_BUILTIN_FAST_WITH_KEYWORDS].handler_flags : 193
+    opcode[CALL_BUILTIN_FAST_WITH_KEYWORDS].execution_count : 116
+opcode[CALL_BUILTIN_FAST_WITH_KEYWORDS].pair_count[NOP] : 2
+opcode[CALL_BUILTIN_FAST_WITH_KEYWORDS].pair_count[PUSH_EXC_INFO] : 2
+opcode[CALL_BUILTIN_FAST_WITH_KEYWORDS].pair_count[RETURN_VALUE] : 33
+opcode[CALL_BUILTIN_FAST_WITH_KEYWORDS].pair_count[COPY] : 2
+opcode[CALL_BUILTIN_FAST_WITH_KEYWORDS].pair_count[LOAD_COMMON_CONSTANT] : 10
+opcode[CALL_BUILTIN_FAST_WITH_KEYWORDS].pair_count[LOAD_ATTR_METHOD_NO_DICT] : 11
+opcode[CALL_BUILTIN_FAST_WITH_KEYWORDS].pair_count[LOAD_GLOBAL_BUILTIN] : 4
+opcode[CALL_BUILTIN_FAST_WITH_KEYWORDS].pair_count[LOAD_GLOBAL_MODULE] : 15
+opcode[CALL_BUILTIN_FAST_WITH_KEYWORDS].pair_count[LOAD_SMALL_INT_INLINE] : 3
+opcode[CALL_BUILTIN_FAST_WITH_KEYWORDS].pair_count[STORE_ATTR_SLOT] : 34
+opcode[CALL_BUILTIN_O].handler_id : 158
+opcode[CALL_BUILTIN_O].base_id : 50
+opcode[CALL_BUILTIN_O].handler_flags : 193
+opcode[CALL_EX_NON_PY_GENERAL].handler_id : 159
+opcode[CALL_EX_NON_PY_GENERAL].base_id : 4
+opcode[CALL_EX_NON_PY_GENERAL].handler_flags : 193
+    opcode[CALL_EX_NON_PY_GENERAL].execution_count : 90
+opcode[CALL_EX_NON_PY_GENERAL].pair_count[RETURN_VALUE] : 63
+opcode[CALL_EX_NON_PY_GENERAL].pair_count[LOAD_GLOBAL_MODULE] : 27
+opcode[CALL_EX_PY].handler_id : 160
+opcode[CALL_EX_PY].base_id : 4
+opcode[CALL_EX_PY].handler_flags : 193
+    opcode[CALL_EX_PY].execution_count : 3
+opcode[CALL_EX_PY].pair_count[LOAD_ATTR_SHAPE] : 2
+opcode[CALL_EX_PY].pair_count[LOAD_GLOBAL_MODULE] : 1
+opcode[CALL_ISINSTANCE].handler_id : 161
+opcode[CALL_ISINSTANCE].base_id : 50
+opcode[CALL_ISINSTANCE].handler_flags : 193
+    opcode[CALL_ISINSTANCE].execution_count : 36
+opcode[CALL_ISINSTANCE].pair_count[POP_JUMP_IF_FALSE_BOOL] : 21
+opcode[CALL_ISINSTANCE].pair_count[POP_JUMP_IF_TRUE_BOOL] : 15
+opcode[CALL_KW_BOUND_METHOD].handler_id : 162
+opcode[CALL_KW_BOUND_METHOD].base_id : 53
+opcode[CALL_KW_BOUND_METHOD].handler_flags : 193
+opcode[CALL_KW_NON_PY].handler_id : 163
+opcode[CALL_KW_NON_PY].base_id : 53
+opcode[CALL_KW_NON_PY].handler_flags : 193
+    opcode[CALL_KW_NON_PY].execution_count : 41
+opcode[CALL_KW_NON_PY].pair_count[RETURN_VALUE] : 24
+opcode[CALL_KW_NON_PY].pair_count[LOAD_COMMON_CONSTANT] : 2
+opcode[CALL_KW_NON_PY].pair_count[POP_JUMP_IF_NOT_NONE] : 3
+opcode[CALL_KW_NON_PY].pair_count[RAISE_VARARGS] : 2
+opcode[CALL_KW_NON_PY].pair_count[STORE_ATTR_SHAPE] : 10
+opcode[CALL_KW_PY].handler_id : 164
+opcode[CALL_KW_PY].base_id : 53
+opcode[CALL_KW_PY].handler_flags : 193
+    opcode[CALL_KW_PY].execution_count : 62
+opcode[CALL_KW_PY].pair_count[LOAD_COMMON_CONSTANT] : 26
+opcode[CALL_KW_PY].pair_count[POP_JUMP_IF_NOT_NONE] : 24
+opcode[CALL_KW_PY].pair_count[LOAD_GLOBAL_MODULE] : 12
+opcode[CALL_LEN].handler_id : 165
+opcode[CALL_LEN].base_id : 50
+opcode[CALL_LEN].handler_flags : 193
+    opcode[CALL_LEN].execution_count : 107
+opcode[CALL_LEN].pair_count[CALL_BUILTIN_CLASS] : 1
+opcode[CALL_LEN].pair_count[LOAD_SMALL_INT_INLINE] : 72
+opcode[CALL_LEN].pair_count[POP_JUMP_IF_TRUE_INT] : 34
+opcode[CALL_LIST_APPEND].handler_id : 166
+opcode[CALL_LIST_APPEND].base_id : 50
+opcode[CALL_LIST_APPEND].handler_flags : 193
+    opcode[CALL_LIST_APPEND].execution_count : 39
+opcode[CALL_LIST_APPEND].pair_count[POP_TOP] : 36
+opcode[CALL_LIST_APPEND].pair_count[JUMP_BACKWARD] : 3
+opcode[CALL_METHOD_DESCRIPTOR_FAST].handler_id : 167
+opcode[CALL_METHOD_DESCRIPTOR_FAST].base_id : 50
+opcode[CALL_METHOD_DESCRIPTOR_FAST].handler_flags : 193
+    opcode[CALL_METHOD_DESCRIPTOR_FAST].specialization.miss : 72
+    opcode[CALL_METHOD_DESCRIPTOR_FAST].execution_count : 565
+opcode[CALL_METHOD_DESCRIPTOR_FAST].pair_count[POP_TOP] : 137
+opcode[CALL_METHOD_DESCRIPTOR_FAST].pair_count[RETURN_VALUE] : 22
+opcode[CALL_METHOD_DESCRIPTOR_FAST].pair_count[CALL] : 72
+opcode[CALL_METHOD_DESCRIPTOR_FAST].pair_count[JUMP_BACKWARD] : 8
+opcode[CALL_METHOD_DESCRIPTOR_FAST].pair_count[LIST_APPEND] : 44
+opcode[CALL_METHOD_DESCRIPTOR_FAST].pair_count[LOAD_COMMON_CONSTANT] : 72
+opcode[CALL_METHOD_DESCRIPTOR_FAST].pair_count[LOAD_FAST_BORROW] : 80
+opcode[CALL_METHOD_DESCRIPTOR_FAST].pair_count[POP_JUMP_IF_NONE] : 6
+opcode[CALL_METHOD_DESCRIPTOR_FAST].pair_count[POP_JUMP_IF_NOT_NONE] : 2
+opcode[CALL_METHOD_DESCRIPTOR_FAST].pair_count[SWAP] : 2
+opcode[CALL_METHOD_DESCRIPTOR_FAST].pair_count[YIELD_VALUE] : 3
+opcode[CALL_METHOD_DESCRIPTOR_FAST].pair_count[UNPACK_SEQUENCE_TUPLE] : 2
+opcode[CALL_METHOD_DESCRIPTOR_FAST].pair_count[LOAD_SMALL_INT_INLINE] : 63
+opcode[CALL_METHOD_DESCRIPTOR_FAST].pair_count[POP_JUMP_IF_FALSE_BOOL] : 12
+opcode[CALL_METHOD_DESCRIPTOR_FAST].pair_count[POP_JUMP_IF_TRUE_BOOL] : 14
+opcode[CALL_METHOD_DESCRIPTOR_FAST].pair_count[IS_OP_JUMP] : 26
+opcode[CALL_METHOD_DESCRIPTOR_FAST_WITH_KEYWORDS].handler_id : 168
+opcode[CALL_METHOD_DESCRIPTOR_FAST_WITH_KEYWORDS].base_id : 50
+opcode[CALL_METHOD_DESCRIPTOR_FAST_WITH_KEYWORDS].handler_flags : 193
+    opcode[CALL_METHOD_DESCRIPTOR_FAST_WITH_KEYWORDS].execution_count : 12
+opcode[CALL_METHOD_DESCRIPTOR_FAST_WITH_KEYWORDS].pair_count[RETURN_VALUE] : 1
+opcode[CALL_METHOD_DESCRIPTOR_FAST_WITH_KEYWORDS].pair_count[LOAD_GLOBAL_BUILTIN] : 1
+opcode[CALL_METHOD_DESCRIPTOR_FAST_WITH_KEYWORDS].pair_count[POP_JUMP_IF_FALSE_BOOL] : 10
+opcode[CALL_METHOD_DESCRIPTOR_NOARGS].handler_id : 169
+opcode[CALL_METHOD_DESCRIPTOR_NOARGS].base_id : 50
+opcode[CALL_METHOD_DESCRIPTOR_NOARGS].handler_flags : 193
+opcode[CALL_METHOD_DESCRIPTOR_O].handler_id : 170
+opcode[CALL_METHOD_DESCRIPTOR_O].base_id : 50
+opcode[CALL_METHOD_DESCRIPTOR_O].handler_flags : 193
+opcode[CALL_NON_PY_GENERAL].handler_id : 171
+opcode[CALL_NON_PY_GENERAL].base_id : 50
+opcode[CALL_NON_PY_GENERAL].handler_flags : 193
+    opcode[CALL_NON_PY_GENERAL].execution_count : 263
+opcode[CALL_NON_PY_GENERAL].pair_count[RETURN_VALUE] : 14
+opcode[CALL_NON_PY_GENERAL].pair_count[COPY] : 48
+opcode[CALL_NON_PY_GENERAL].pair_count[LOAD_COMMON_CONSTANT] : 39
+opcode[CALL_NON_PY_GENERAL].pair_count[LOAD_CONST] : 2
+opcode[CALL_NON_PY_GENERAL].pair_count[POP_JUMP_IF_NONE] : 34
+opcode[CALL_NON_PY_GENERAL].pair_count[POP_JUMP_IF_NOT_NONE] : 6
+opcode[CALL_NON_PY_GENERAL].pair_count[CALL_PY_EXACT_ARGS] : 34
+opcode[CALL_NON_PY_GENERAL].pair_count[LOAD_ATTR_SHAPE] : 34
+opcode[CALL_NON_PY_GENERAL].pair_count[LOAD_GLOBAL_MODULE] : 26
+opcode[CALL_NON_PY_GENERAL].pair_count[STORE_ATTR_SHAPE_ADD] : 26
+opcode[CALL_PY_EXACT_ARGS].handler_id : 172
+opcode[CALL_PY_EXACT_ARGS].base_id : 50
+opcode[CALL_PY_EXACT_ARGS].handler_flags : 193
+    opcode[CALL_PY_EXACT_ARGS].specialization.miss : 38
+    opcode[CALL_PY_EXACT_ARGS].execution_count : 511
+opcode[CALL_PY_EXACT_ARGS].pair_count[NOP] : 39
+opcode[CALL_PY_EXACT_ARGS].pair_count[CALL] : 38
+opcode[CALL_PY_EXACT_ARGS].pair_count[COPY_FREE_VARS] : 13
+opcode[CALL_PY_EXACT_ARGS].pair_count[LOAD_COMMON_CONSTANT] : 48
+opcode[CALL_PY_EXACT_ARGS].pair_count[LOAD_CONST] : 5
+opcode[CALL_PY_EXACT_ARGS].pair_count[LOAD_FAST_BORROW] : 1
+opcode[CALL_PY_EXACT_ARGS].pair_count[MAKE_CELL] : 2
+opcode[CALL_PY_EXACT_ARGS].pair_count[LOAD_ATTR_METHOD_NO_DICT] : 6
+opcode[CALL_PY_EXACT_ARGS].pair_count[LOAD_ATTR_METHOD_WITH_VALUES] : 2
+opcode[CALL_PY_EXACT_ARGS].pair_count[LOAD_ATTR_SHAPE] : 13
+opcode[CALL_PY_EXACT_ARGS].pair_count[LOAD_GLOBAL_BUILTIN] : 32
+opcode[CALL_PY_EXACT_ARGS].pair_count[LOAD_GLOBAL_MODULE] : 310
+opcode[CALL_PY_EXACT_ARGS].pair_count[POP_JUMP_IF_TRUE_STR] : 2
+opcode[CALL_PY_GENERAL].handler_id : 173
+opcode[CALL_PY_GENERAL].base_id : 50
+opcode[CALL_PY_GENERAL].handler_flags : 193
+    opcode[CALL_PY_GENERAL].specialization.miss : 3
+    opcode[CALL_PY_GENERAL].execution_count : 234
+opcode[CALL_PY_GENERAL].pair_count[NOP] : 3
+opcode[CALL_PY_GENERAL].pair_count[CALL] : 3
+opcode[CALL_PY_GENERAL].pair_count[COPY_FREE_VARS] : 2
+opcode[CALL_PY_GENERAL].pair_count[LOAD_ATTR] : 11
+opcode[CALL_PY_GENERAL].pair_count[LOAD_FAST_BORROW] : 51
+opcode[CALL_PY_GENERAL].pair_count[LOAD_ATTR_SHAPE] : 56
+opcode[CALL_PY_GENERAL].pair_count[LOAD_GLOBAL_MODULE] : 77
+opcode[CALL_PY_GENERAL].pair_count[POP_JUMP_IF_TRUE_BOOL] : 31
+opcode[CALL_STR_1].handler_id : 174
+opcode[CALL_STR_1].base_id : 50
+opcode[CALL_STR_1].handler_flags : 193
+    opcode[CALL_STR_1].execution_count : 4
+opcode[CALL_STR_1].pair_count[LOAD_COMMON_CONSTANT] : 2
+opcode[CALL_STR_1].pair_count[CALL_BUILTIN_FAST_WITH_KEYWORDS] : 2
+opcode[CALL_TUPLE_1].handler_id : 175
+opcode[CALL_TUPLE_1].base_id : 50
+opcode[CALL_TUPLE_1].handler_flags : 193
+opcode[CALL_TYPE_1].handler_id : 176
+opcode[CALL_TYPE_1].base_id : 50
+opcode[CALL_TYPE_1].handler_flags : 193
+    opcode[CALL_TYPE_1].execution_count : 27
+opcode[CALL_TYPE_1].pair_count[LOAD_FAST_BORROW] : 24
+opcode[CALL_TYPE_1].pair_count[CALL_ISINSTANCE] : 3
+opcode[COMPARE_OP_FLOAT].handler_id : 177
+opcode[COMPARE_OP_FLOAT].base_id : 54
+opcode[COMPARE_OP_FLOAT].handler_flags : 193
+opcode[COMPARE_OP_INT].handler_id : 178
+opcode[COMPARE_OP_INT].base_id : 54
+opcode[COMPARE_OP_INT].handler_flags : 193
+    opcode[COMPARE_OP_INT].execution_count : 9
+opcode[COMPARE_OP_INT].pair_count[RETURN_VALUE] : 6
+opcode[COMPARE_OP_INT].pair_count[POP_JUMP_IF_FALSE] : 1
+opcode[COMPARE_OP_INT].pair_count[POP_JUMP_IF_FALSE_BOOL] : 2
+opcode[COMPARE_OP_STR].handler_id : 179
+opcode[COMPARE_OP_STR].base_id : 54
+opcode[COMPARE_OP_STR].handler_flags : 193
+opcode[CONTAINS_OP_DICT].handler_id : 180
+opcode[CONTAINS_OP_DICT].base_id : 55
+opcode[CONTAINS_OP_DICT].handler_flags : 193
+    opcode[CONTAINS_OP_DICT].execution_count : 42
+opcode[CONTAINS_OP_DICT].pair_count[RETURN_VALUE] : 15
+opcode[CONTAINS_OP_DICT].pair_count[LOAD_FAST] : 27
+opcode[CONTAINS_OP_SET].handler_id : 181
+opcode[CONTAINS_OP_SET].base_id : 55
+opcode[CONTAINS_OP_SET].handler_flags : 193
+opcode[FOR_ITER_GEN].handler_id : 182
+opcode[FOR_ITER_GEN].base_id : 65
+opcode[FOR_ITER_GEN].handler_flags : 193
+    opcode[FOR_ITER_GEN].execution_count : 1
+opcode[FOR_ITER_GEN].pair_count[POP_TOP] : 1
+opcode[FOR_ITER_LIST].handler_id : 183
+opcode[FOR_ITER_LIST].base_id : 65
+opcode[FOR_ITER_LIST].handler_flags : 193
+    opcode[FOR_ITER_LIST].execution_count : 520
+opcode[FOR_ITER_LIST].pair_count[NOP] : 7
+opcode[FOR_ITER_LIST].pair_count[POP_ITER] : 28
+opcode[FOR_ITER_LIST].pair_count[LOAD_ATTR] : 1
+opcode[FOR_ITER_LIST].pair_count[LOAD_CONST] : 8
+opcode[FOR_ITER_LIST].pair_count[LOAD_FAST] : 387
+opcode[FOR_ITER_LIST].pair_count[LOAD_FAST_BORROW] : 8
+opcode[FOR_ITER_LIST].pair_count[LOAD_GLOBAL] : 4
+opcode[FOR_ITER_LIST].pair_count[POP_JUMP_IF_FALSE] : 1
+opcode[FOR_ITER_LIST].pair_count[STORE_NAME] : 1
+opcode[FOR_ITER_LIST].pair_count[UNPACK_SEQUENCE] : 2
+opcode[FOR_ITER_LIST].pair_count[UNPACK_SEQUENCE_TWO_TUPLE] : 10
+opcode[FOR_ITER_LIST].pair_count[LOAD_ATTR_MODULE] : 4
+opcode[FOR_ITER_LIST].pair_count[LOAD_GLOBAL_BUILTIN] : 6
+opcode[FOR_ITER_LIST].pair_count[LOAD_GLOBAL_MODULE] : 53
+opcode[FOR_ITER_RANGE].handler_id : 184
+opcode[FOR_ITER_RANGE].base_id : 65
+opcode[FOR_ITER_RANGE].handler_flags : 193
+    opcode[FOR_ITER_RANGE].execution_count : 8
+opcode[FOR_ITER_RANGE].pair_count[POP_ITER] : 3
+opcode[FOR_ITER_RANGE].pair_count[LOAD_CONST] : 5
+opcode[FOR_ITER_TUPLE].handler_id : 185
+opcode[FOR_ITER_TUPLE].base_id : 65
+opcode[FOR_ITER_TUPLE].handler_flags : 193
+    opcode[FOR_ITER_TUPLE].specialization.miss : 4
+    opcode[FOR_ITER_TUPLE].execution_count : 254
+opcode[FOR_ITER_TUPLE].pair_count[POP_ITER] : 67
+opcode[FOR_ITER_TUPLE].pair_count[FOR_ITER] : 4
+opcode[FOR_ITER_TUPLE].pair_count[LOAD_FAST] : 39
+opcode[FOR_ITER_TUPLE].pair_count[LOAD_FAST_BORROW] : 82
+opcode[FOR_ITER_TUPLE].pair_count[LOAD_GLOBAL] : 6
+opcode[FOR_ITER_TUPLE].pair_count[STORE_NAME] : 2
+opcode[FOR_ITER_TUPLE].pair_count[UNPACK_SEQUENCE] : 1
+opcode[FOR_ITER_TUPLE].pair_count[UNPACK_SEQUENCE_TWO_TUPLE] : 7
+opcode[FOR_ITER_TUPLE].pair_count[LOAD_GLOBAL_BUILTIN] : 35
+opcode[FOR_ITER_TUPLE].pair_count[LOAD_GLOBAL_MODULE] : 11
+opcode[FOR_ITER_VIRTUAL].handler_id : 186
+opcode[FOR_ITER_VIRTUAL].base_id : 65
+opcode[FOR_ITER_VIRTUAL].handler_flags : 193
+    opcode[FOR_ITER_VIRTUAL].execution_count : 10
+opcode[FOR_ITER_VIRTUAL].pair_count[POP_ITER] : 6
+opcode[FOR_ITER_VIRTUAL].pair_count[LOAD_DEREF] : 4
+opcode[GET_ITER_SELF].handler_id : 187
+opcode[GET_ITER_SELF].base_id : 67
+opcode[GET_ITER_SELF].handler_flags : 193
+    opcode[GET_ITER_SELF].execution_count : 2
+opcode[GET_ITER_SELF].pair_count[FOR_ITER] : 2
+opcode[GET_ITER_VIRTUAL].handler_id : 188
+opcode[GET_ITER_VIRTUAL].base_id : 67
+opcode[GET_ITER_VIRTUAL].handler_flags : 193
+    opcode[GET_ITER_VIRTUAL].execution_count : 151
+opcode[GET_ITER_VIRTUAL].pair_count[RETURN_GENERATOR] : 12
+opcode[GET_ITER_VIRTUAL].pair_count[FOR_ITER] : 3
+opcode[GET_ITER_VIRTUAL].pair_count[FOR_ITER_LIST] : 42
+opcode[GET_ITER_VIRTUAL].pair_count[FOR_ITER_TUPLE] : 94
+opcode[LOAD_ATTR_CLASS].handler_id : 189
+opcode[LOAD_ATTR_CLASS].base_id : 78
+opcode[LOAD_ATTR_CLASS].handler_flags : 193
+    opcode[LOAD_ATTR_CLASS].execution_count : 35
+opcode[LOAD_ATTR_CLASS].pair_count[LOAD_CONST] : 13
+opcode[LOAD_ATTR_CLASS].pair_count[LOAD_FAST_BORROW] : 11
+opcode[LOAD_ATTR_CLASS].pair_count[COMPARE_OP_JUMP] : 1
+opcode[LOAD_ATTR_CLASS].pair_count[COMPARE_OP_JUMP_STR] : 10
+opcode[LOAD_ATTR_CLASS_WITH_METACLASS_CHECK].handler_id : 190
+opcode[LOAD_ATTR_CLASS_WITH_METACLASS_CHECK].base_id : 78
+opcode[LOAD_ATTR_CLASS_WITH_METACLASS_CHECK].handler_flags : 193
+opcode[LOAD_ATTR_GETATTRIBUTE_OVERRIDDEN].handler_id : 191
+opcode[LOAD_ATTR_GETATTRIBUTE_OVERRIDDEN].base_id : 78
+opcode[LOAD_ATTR_GETATTRIBUTE_OVERRIDDEN].handler_flags : 193
+opcode[LOAD_ATTR_INSTANCE_VALUE].handler_id : 192
+opcode[LOAD_ATTR_INSTANCE_VALUE].base_id : 78
+opcode[LOAD_ATTR_INSTANCE_VALUE].handler_flags : 193
+opcode[LOAD_ATTR_METHOD_LAZY_DICT].handler_id : 193
+opcode[LOAD_ATTR_METHOD_LAZY_DICT].base_id : 78
+opcode[LOAD_ATTR_METHOD_LAZY_DICT].handler_flags : 193
+    opcode[LOAD_ATTR_METHOD_LAZY_DICT].execution_count : 3
+opcode[LOAD_ATTR_METHOD_LAZY_DICT].pair_count[CALL] : 1
+opcode[LOAD_ATTR_METHOD_LAZY_DICT].pair_count[CALL_METHOD_DESCRIPTOR_FAST] : 2
+opcode[LOAD_ATTR_METHOD_NO_DICT].handler_id : 194
+opcode[LOAD_ATTR_METHOD_NO_DICT].base_id : 78
+opcode[LOAD_ATTR_METHOD_NO_DICT].handler_flags : 193
+    opcode[LOAD_ATTR_METHOD_NO_DICT].execution_count : 523
+opcode[LOAD_ATTR_METHOD_NO_DICT].pair_count[CALL] : 4
+opcode[LOAD_ATTR_METHOD_NO_DICT].pair_count[LOAD_ATTR] : 10
+opcode[LOAD_ATTR_METHOD_NO_DICT].pair_count[LOAD_COMMON_CONSTANT] : 35
+opcode[LOAD_ATTR_METHOD_NO_DICT].pair_count[LOAD_CONST] : 89
+opcode[LOAD_ATTR_METHOD_NO_DICT].pair_count[LOAD_DEREF] : 2
+opcode[LOAD_ATTR_METHOD_NO_DICT].pair_count[LOAD_FAST] : 18
+opcode[LOAD_ATTR_METHOD_NO_DICT].pair_count[LOAD_FAST_BORROW] : 141
+opcode[LOAD_ATTR_METHOD_NO_DICT].pair_count[LOAD_FAST_CHECK] : 2
+opcode[LOAD_ATTR_METHOD_NO_DICT].pair_count[LOAD_GLOBAL] : 4
+opcode[LOAD_ATTR_METHOD_NO_DICT].pair_count[POP_JUMP_IF_FALSE] : 1
+opcode[LOAD_ATTR_METHOD_NO_DICT].pair_count[CALL_METHOD_DESCRIPTOR_FAST] : 36
+opcode[LOAD_ATTR_METHOD_NO_DICT].pair_count[LOAD_ATTR_SHAPE] : 96
+opcode[LOAD_ATTR_METHOD_NO_DICT].pair_count[LOAD_GLOBAL_MODULE] : 83
+opcode[LOAD_ATTR_METHOD_NO_DICT].pair_count[POP_JUMP_IF_FALSE_STR] : 2
+opcode[LOAD_ATTR_METHOD_WITH_VALUES].handler_id : 195
+opcode[LOAD_ATTR_METHOD_WITH_VALUES].base_id : 78
+opcode[LOAD_ATTR_METHOD_WITH_VALUES].handler_flags : 193
+    opcode[LOAD_ATTR_METHOD_WITH_VALUES].execution_count : 122
+opcode[LOAD_ATTR_METHOD_WITH_VALUES].pair_count[CALL] : 7
+opcode[LOAD_ATTR_METHOD_WITH_VALUES].pair_count[LOAD_ATTR] : 2
+opcode[LOAD_ATTR_METHOD_WITH_VALUES].pair_count[LOAD_FAST_BORROW] : 16
+opcode[LOAD_ATTR_METHOD_WITH_VALUES].pair_count[CALL_PY_EXACT_ARGS] : 61
+opcode[LOAD_ATTR_METHOD_WITH_VALUES].pair_count[LOAD_ATTR_MODULE] : 2
+opcode[LOAD_ATTR_METHOD_WITH_VALUES].pair_count[LOAD_ATTR_SHAPE] : 34
+opcode[LOAD_ATTR_MODULE].handler_id : 196
+opcode[LOAD_ATTR_MODULE].base_id : 78
+opcode[LOAD_ATTR_MODULE].handler_flags : 193
+    opcode[LOAD_ATTR_MODULE].specialization.miss : 280
+    opcode[LOAD_ATTR_MODULE].execution_count : 1071
+opcode[LOAD_ATTR_MODULE].pair_count[FORMAT_SIMPLE] : 2
+opcode[LOAD_ATTR_MODULE].pair_count[CALL] : 14
+opcode[LOAD_ATTR_MODULE].pair_count[CONTAINS_OP] : 1
+opcode[LOAD_ATTR_MODULE].pair_count[GET_ITER] : 1
+opcode[LOAD_ATTR_MODULE].pair_count[LOAD_ATTR] : 310
+opcode[LOAD_ATTR_MODULE].pair_count[LOAD_CONST] : 30
+opcode[LOAD_ATTR_MODULE].pair_count[LOAD_FAST] : 4
+opcode[LOAD_ATTR_MODULE].pair_count[LOAD_FAST_BORROW] : 223
+opcode[LOAD_ATTR_MODULE].pair_count[LOAD_GLOBAL] : 3
+opcode[LOAD_ATTR_MODULE].pair_count[POP_JUMP_IF_NONE] : 6
+opcode[LOAD_ATTR_MODULE].pair_count[POP_JUMP_IF_NOT_NONE] : 14
+opcode[LOAD_ATTR_MODULE].pair_count[POP_JUMP_IF_TRUE] : 1
+opcode[LOAD_ATTR_MODULE].pair_count[BINARY_OP_SUBSCR_DICT] : 5
+opcode[LOAD_ATTR_MODULE].pair_count[CALL_BUILTIN_FAST] : 310
+opcode[LOAD_ATTR_MODULE].pair_count[CALL_NON_PY_GENERAL] : 26
+opcode[LOAD_ATTR_MODULE].pair_count[CALL_TYPE_1] : 1
+opcode[LOAD_ATTR_MODULE].pair_count[CONTAINS_OP_DICT] : 12
+opcode[LOAD_ATTR_MODULE].pair_count[GET_ITER_VIRTUAL] : 1
+opcode[LOAD_ATTR_MODULE].pair_count[LOAD_ATTR_METHOD_NO_DICT] : 31
+opcode[LOAD_ATTR_MODULE].pair_count[LOAD_ATTR_MODULE] : 7
+opcode[LOAD_ATTR_MODULE].pair_count[LOAD_ATTR_SHAPE] : 36
+opcode[LOAD_ATTR_MODULE].pair_count[LOAD_GLOBAL_BUILTIN] : 4
+opcode[LOAD_ATTR_MODULE].pair_count[POP_JUMP_IF_TRUE_LIST] : 1
+opcode[LOAD_ATTR_MODULE].pair_count[BINARY_OP_SUBSCR] : 3
+opcode[LOAD_ATTR_MODULE].pair_count[CONTAINS_OP_JUMP] : 11
+opcode[LOAD_ATTR_MODULE].pair_count[CONTAINS_OP_JUMP_DICT] : 14
+opcode[LOAD_ATTR_NONDESCRIPTOR_NO_DICT].handler_id : 197
+opcode[LOAD_ATTR_NONDESCRIPTOR_NO_DICT].base_id : 78
+opcode[LOAD_ATTR_NONDESCRIPTOR_NO_DICT].handler_flags : 193
+opcode[LOAD_ATTR_NONDESCRIPTOR_WITH_VALUES].handler_id : 198
+opcode[LOAD_ATTR_NONDESCRIPTOR_WITH_VALUES].base_id : 78
+opcode[LOAD_ATTR_NONDESCRIPTOR_WITH_VALUES].handler_flags : 193
+opcode[LOAD_ATTR_PROPERTY].handler_id : 199
+opcode[LOAD_ATTR_PROPERTY].base_id : 78
+opcode[LOAD_ATTR_PROPERTY].handler_flags : 193
+    opcode[LOAD_ATTR_PROPERTY].specialization.miss : 58
+    opcode[LOAD_ATTR_PROPERTY].execution_count : 69
+opcode[LOAD_ATTR_PROPERTY].pair_count[LOAD_ATTR] : 60
+opcode[LOAD_ATTR_PROPERTY].pair_count[LOAD_ATTR_SHAPE] : 9
+opcode[LOAD_ATTR_SHAPE].handler_id : 200
+opcode[LOAD_ATTR_SHAPE].base_id : 78
+opcode[LOAD_ATTR_SHAPE].handler_flags : 193
+    opcode[LOAD_ATTR_SHAPE].specialization.miss : 148
+    opcode[LOAD_ATTR_SHAPE].execution_count : 1326
+opcode[LOAD_ATTR_SHAPE].pair_count[NOP] : 2
+opcode[LOAD_ATTR_SHAPE].pair_count[RETURN_VALUE] : 12
+opcode[LOAD_ATTR_SHAPE].pair_count[STORE_SUBSCR] : 3
+opcode[LOAD_ATTR_SHAPE].pair_count[BUILD_LIST] : 38
+opcode[LOAD_ATTR_SHAPE].pair_count[CALL] : 11
+opcode[LOAD_ATTR_SHAPE].pair_count[COPY] : 70
+opcode[LOAD_ATTR_SHAPE].pair_count[GET_ITER] : 2
+opcode[LOAD_ATTR_SHAPE].pair_count[JUMP_IF_TRUE_OR_POP] : 5
+opcode[LOAD_ATTR_SHAPE].pair_count[LOAD_ATTR] : 230
+opcode[LOAD_ATTR_SHAPE].pair_count[LOAD_CONST] : 29
+opcode[LOAD_ATTR_SHAPE].pair_count[LOAD_FAST] : 5
+opcode[LOAD_ATTR_SHAPE].pair_count[LOAD_FAST_BORROW] : 36
+opcode[LOAD_ATTR_SHAPE].pair_count[LOAD_GLOBAL] : 3
+opcode[LOAD_ATTR_SHAPE].pair_count[POP_JUMP_IF_FALSE] : 37
+opcode[LOAD_ATTR_SHAPE].pair_count[POP_JUMP_IF_NONE] : 8
+opcode[LOAD_ATTR_SHAPE].pair_count[POP_JUMP_IF_NOT_NONE] : 44
+opcode[LOAD_ATTR_SHAPE].pair_count[STORE_ATTR] : 3
+opcode[LOAD_ATTR_SHAPE].pair_count[BINARY_OP_ADD_UNICODE] : 10
+opcode[LOAD_ATTR_SHAPE].pair_count[BINARY_OP_SUBSCR_DICT] : 34
+opcode[LOAD_ATTR_SHAPE].pair_count[CALL_BUILTIN_CLASS] : 1
+opcode[LOAD_ATTR_SHAPE].pair_count[CALL_LEN] : 94
+opcode[LOAD_ATTR_SHAPE].pair_count[CALL_METHOD_DESCRIPTOR_FAST] : 96
+opcode[LOAD_ATTR_SHAPE].pair_count[CALL_PY_EXACT_ARGS] : 35
+opcode[LOAD_ATTR_SHAPE].pair_count[CALL_PY_GENERAL] : 28
+opcode[LOAD_ATTR_SHAPE].pair_count[GET_ITER_VIRTUAL] : 4
+opcode[LOAD_ATTR_SHAPE].pair_count[LOAD_ATTR_METHOD_NO_DICT] : 146
+opcode[LOAD_ATTR_SHAPE].pair_count[LOAD_ATTR_METHOD_WITH_VALUES] : 46
+opcode[LOAD_ATTR_SHAPE].pair_count[LOAD_ATTR_SHAPE] : 28
+opcode[LOAD_ATTR_SHAPE].pair_count[LOAD_ATTR_SLOT] : 34
+opcode[LOAD_ATTR_SHAPE].pair_count[LOAD_GLOBAL_MODULE] : 56
+opcode[LOAD_ATTR_SHAPE].pair_count[POP_JUMP_IF_FALSE_LIST] : 34
+opcode[LOAD_ATTR_SHAPE].pair_count[STORE_SUBSCR_DICT] : 90
+opcode[LOAD_ATTR_SHAPE].pair_count[BINARY_OP_ADD] : 1
+opcode[LOAD_ATTR_SHAPE].pair_count[BINARY_OP_SUBSCR] : 1
+opcode[LOAD_ATTR_SHAPE].pair_count[COMPARE_OP_JUMP] : 8
+opcode[LOAD_ATTR_SHAPE].pair_count[COMPARE_OP_JUMP_INT] : 40
+opcode[LOAD_ATTR_SHAPE].pair_count[COMPARE_OP_JUMP_STR] : 2
+opcode[LOAD_ATTR_SLOT].handler_id : 201
+opcode[LOAD_ATTR_SLOT].base_id : 78
+opcode[LOAD_ATTR_SLOT].handler_flags : 193
+    opcode[LOAD_ATTR_SLOT].execution_count : 35
+opcode[LOAD_ATTR_SLOT].pair_count[CALL] : 1
+opcode[LOAD_ATTR_SLOT].pair_count[CALL_BUILTIN_FAST] : 34
+opcode[LOAD_ATTR_WITH_HINT].handler_id : 202
+opcode[LOAD_ATTR_WITH_HINT].base_id : 78
+opcode[LOAD_ATTR_WITH_HINT].handler_flags : 193
+opcode[LOAD_CONST_INLINE_FLOAT].handler_id : 203
+opcode[LOAD_CONST_INLINE_FLOAT].base_id : 80
+opcode[LOAD_CONST_INLINE_FLOAT].handler_flags : 193
+opcode[LOAD_CONST_INLINE_INT].handler_id : 204
+opcode[LOAD_CONST_INLINE_INT].base_id : 80
+opcode[LOAD_CONST_INLINE_INT].handler_flags : 193
+    opcode[LOAD_CONST_INLINE_INT].execution_count : 174
+opcode[LOAD_CONST_INLINE_INT].pair_count[BUILD_MAP] : 1
+opcode[LOAD_CONST_INLINE_INT].pair_count[CALL] : 4
+opcode[LOAD_CONST_INLINE_INT].pair_count[LIST_APPEND] : 51
+opcode[LOAD_CONST_INLINE_INT].pair_count[STORE_NAME] : 93
+opcode[LOAD_CONST_INLINE_INT].pair_count[BINARY_OP_AND_INT] : 11
+opcode[LOAD_CONST_INLINE_INT].pair_count[CALL_PY_EXACT_ARGS] : 5
+opcode[LOAD_CONST_INLINE_INT].pair_count[BINARY_OP_AND] : 8
+opcode[LOAD_CONST_INLINE_INT].pair_count[BINARY_OP_LSHIFT] : 1
+opcode[LOAD_GLOBAL_BUILTIN].handler_id : 205
+opcode[LOAD_GLOBAL_BUILTIN].base_id : 90
+opcode[LOAD_GLOBAL_BUILTIN].handler_flags : 193
+    opcode[LOAD_GLOBAL_BUILTIN].specialization.miss : 446
+    opcode[LOAD_GLOBAL_BUILTIN].execution_count : 908
+opcode[LOAD_GLOBAL_BUILTIN].pair_count[CHECK_EXC_MATCH] : 44
+opcode[LOAD_GLOBAL_BUILTIN].pair_count[RETURN_VALUE] : 5
+opcode[LOAD_GLOBAL_BUILTIN].pair_count[BUILD_TUPLE] : 1
+opcode[LOAD_GLOBAL_BUILTIN].pair_count[CALL] : 8
+opcode[LOAD_GLOBAL_BUILTIN].pair_count[LOAD_ATTR] : 19
+opcode[LOAD_GLOBAL_BUILTIN].pair_count[LOAD_CONST] : 4
+opcode[LOAD_GLOBAL_BUILTIN].pair_count[LOAD_DEREF] : 66
+opcode[LOAD_GLOBAL_BUILTIN].pair_count[LOAD_FAST_BORROW] : 179
+opcode[LOAD_GLOBAL_BUILTIN].pair_count[LOAD_GLOBAL] : 456
+opcode[LOAD_GLOBAL_BUILTIN].pair_count[CALL_ISINSTANCE] : 15
+opcode[LOAD_GLOBAL_BUILTIN].pair_count[LOAD_ATTR_SHAPE] : 64
+opcode[LOAD_GLOBAL_BUILTIN].pair_count[LOAD_GLOBAL_BUILTIN] : 2
+opcode[LOAD_GLOBAL_BUILTIN].pair_count[LOAD_GLOBAL_MODULE] : 45
+opcode[LOAD_GLOBAL_MODULE].handler_id : 206
+opcode[LOAD_GLOBAL_MODULE].base_id : 90
+opcode[LOAD_GLOBAL_MODULE].handler_flags : 193
+    opcode[LOAD_GLOBAL_MODULE].specialization.miss : 117
+    opcode[LOAD_GLOBAL_MODULE].execution_count : 2449
+opcode[LOAD_GLOBAL_MODULE].pair_count[DELETE_SUBSCR] : 27
+opcode[LOAD_GLOBAL_MODULE].pair_count[STORE_SUBSCR] : 2
+opcode[LOAD_GLOBAL_MODULE].pair_count[BUILD_TUPLE] : 3
+opcode[LOAD_GLOBAL_MODULE].pair_count[CALL] : 11
+opcode[LOAD_GLOBAL_MODULE].pair_count[LOAD_ATTR] : 89
+opcode[LOAD_GLOBAL_MODULE].pair_count[LOAD_CONST] : 135
+opcode[LOAD_GLOBAL_MODULE].pair_count[LOAD_FAST_BORROW] : 490
+opcode[LOAD_GLOBAL_MODULE].pair_count[LOAD_GLOBAL] : 123
+opcode[LOAD_GLOBAL_MODULE].pair_count[POP_JUMP_IF_FALSE] : 1
+opcode[LOAD_GLOBAL_MODULE].pair_count[POP_JUMP_IF_NONE] : 1
+opcode[LOAD_GLOBAL_MODULE].pair_count[POP_JUMP_IF_NOT_NONE] : 27
+opcode[LOAD_GLOBAL_MODULE].pair_count[STORE_FAST] : 2
+opcode[LOAD_GLOBAL_MODULE].pair_count[BINARY_OP_SUBSCR_DICT] : 49
+opcode[LOAD_GLOBAL_MODULE].pair_count[CALL_ISINSTANCE] : 2
+opcode[LOAD_GLOBAL_MODULE].pair_count[CALL_METHOD_DESCRIPTOR_FAST] : 98
+opcode[LOAD_GLOBAL_MODULE].pair_count[CALL_NON_PY_GENERAL] : 82
+opcode[LOAD_GLOBAL_MODULE].pair_count[CALL_PY_EXACT_ARGS] : 7
+opcode[LOAD_GLOBAL_MODULE].pair_count[CALL_TYPE_1] : 14
+opcode[LOAD_GLOBAL_MODULE].pair_count[LOAD_ATTR_METHOD_NO_DICT] : 58
+opcode[LOAD_GLOBAL_MODULE].pair_count[LOAD_ATTR_METHOD_WITH_VALUES] : 34
+opcode[LOAD_GLOBAL_MODULE].pair_count[LOAD_ATTR_MODULE] : 947
+opcode[LOAD_GLOBAL_MODULE].pair_count[LOAD_ATTR_SHAPE] : 49
+opcode[LOAD_GLOBAL_MODULE].pair_count[LOAD_GLOBAL_MODULE] : 53
+opcode[LOAD_GLOBAL_MODULE].pair_count[LOAD_SMALL_INT_INLINE] : 3
+opcode[LOAD_GLOBAL_MODULE].pair_count[POP_JUMP_IF_FALSE_STR] : 2
+opcode[LOAD_GLOBAL_MODULE].pair_count[STORE_SUBSCR_DICT] : 26
+opcode[LOAD_GLOBAL_MODULE].pair_count[BINARY_OP_SUBSCR] : 2
+opcode[LOAD_GLOBAL_MODULE].pair_count[COMPARE_OP_JUMP] : 3
+opcode[LOAD_GLOBAL_MODULE].pair_count[CONTAINS_OP_JUMP] : 17
+opcode[LOAD_GLOBAL_MODULE].pair_count[IS_OP_JUMP] : 77
+opcode[LOAD_GLOBAL_MODULE].pair_count[CONTAINS_OP_JUMP_DICT] : 15
+opcode[LOAD_SMALL_INT_INLINE].handler_id : 207
+opcode[LOAD_SMALL_INT_INLINE].base_id : 92
+opcode[LOAD_SMALL_INT_INLINE].handler_flags : 193
+    opcode[LOAD_SMALL_INT_INLINE].execution_count : 362
+opcode[LOAD_SMALL_INT_INLINE].pair_count[BUILD_MAP] : 1
+opcode[LOAD_SMALL_INT_INLINE].pair_count[CALL] : 4
+opcode[LOAD_SMALL_INT_INLINE].pair_count[COMPARE_OP] : 2
+opcode[LOAD_SMALL_INT_INLINE].pair_count[COPY] : 1
+opcode[LOAD_SMALL_INT_INLINE].pair_count[LOAD_COMMON_CONSTANT] : 49
+opcode[LOAD_SMALL_INT_INLINE].pair_count[LOAD_CONST] : 34
+opcode[LOAD_SMALL_INT_INLINE].pair_count[STORE_NAME] : 88
+opcode[LOAD_SMALL_INT_INLINE].pair_count[BINARY_OP_ADD_INT] : 3
+opcode[LOAD_SMALL_INT_INLINE].pair_count[BINARY_OP_AND_INT] : 2
+opcode[LOAD_SMALL_INT_INLINE].pair_count[BINARY_OP_SUBSCR_LIST_INT] : 2
+opcode[LOAD_SMALL_INT_INLINE].pair_count[BINARY_OP_SUBSCR_TUPLE_INT] : 63
+opcode[LOAD_SMALL_INT_INLINE].pair_count[COMPARE_OP_INT] : 2
+opcode[LOAD_SMALL_INT_INLINE].pair_count[LOAD_CONST_INLINE_INT] : 1
+opcode[LOAD_SMALL_INT_INLINE].pair_count[BINARY_OP_ADD] : 4
+opcode[LOAD_SMALL_INT_INLINE].pair_count[BINARY_OP_AND] : 2
+opcode[LOAD_SMALL_INT_INLINE].pair_count[BINARY_OP_SUBSCR] : 13
+opcode[LOAD_SMALL_INT_INLINE].pair_count[COMPARE_OP_JUMP] : 14
+opcode[LOAD_SMALL_INT_INLINE].pair_count[COMPARE_OP_JUMP_INT] : 77
+opcode[LOAD_SUPER_ATTR_ATTR].handler_id : 208
+opcode[LOAD_SUPER_ATTR_ATTR].base_id : 94
+opcode[LOAD_SUPER_ATTR_ATTR].handler_flags : 193
+    opcode[LOAD_SUPER_ATTR_ATTR].execution_count : 28
+opcode[LOAD_SUPER_ATTR_ATTR].pair_count[LOAD_FAST_BORROW] : 28
+opcode[LOAD_SUPER_ATTR_METHOD].handler_id : 209
+opcode[LOAD_SUPER_ATTR_METHOD].base_id : 94
+opcode[LOAD_SUPER_ATTR_METHOD].handler_flags : 193
+    opcode[LOAD_SUPER_ATTR_METHOD].execution_count : 70
+opcode[LOAD_SUPER_ATTR_METHOD].pair_count[LOAD_FAST_BORROW] : 70
+opcode[POP_JUMP_IF_FALSE_ALWAYS_TRUE].handler_id : 210
+opcode[POP_JUMP_IF_FALSE_ALWAYS_TRUE].base_id : 98
+opcode[POP_JUMP_IF_FALSE_ALWAYS_TRUE].handler_flags : 193
+opcode[POP_JUMP_IF_FALSE_BOOL].handler_id : 211
+opcode[POP_JUMP_IF_FALSE_BOOL].base_id : 98
+opcode[POP_JUMP_IF_FALSE_BOOL].handler_flags : 193
+    opcode[POP_JUMP_IF_FALSE_BOOL].execution_count : 222
+opcode[POP_JUMP_IF_FALSE_BOOL].pair_count[NOP] : 13
+opcode[POP_JUMP_IF_FALSE_BOOL].pair_count[POP_TOP] : 80
+opcode[POP_JUMP_IF_FALSE_BOOL].pair_count[RETURN_VALUE] : 30
+opcode[POP_JUMP_IF_FALSE_BOOL].pair_count[JUMP_FORWARD] : 1
+opcode[POP_JUMP_IF_FALSE_BOOL].pair_count[LOAD_ATTR] : 3
+opcode[POP_JUMP_IF_FALSE_BOOL].pair_count[LOAD_COMMON_CONSTANT] : 15
+opcode[POP_JUMP_IF_FALSE_BOOL].pair_count[LOAD_CONST] : 16
+opcode[POP_JUMP_IF_FALSE_BOOL].pair_count[LOAD_FAST_BORROW] : 12
+opcode[POP_JUMP_IF_FALSE_BOOL].pair_count[LOAD_GLOBAL] : 5
+opcode[POP_JUMP_IF_FALSE_BOOL].pair_count[POP_JUMP_IF_FALSE] : 1
+opcode[POP_JUMP_IF_FALSE_BOOL].pair_count[POP_JUMP_IF_NONE] : 1
+opcode[POP_JUMP_IF_FALSE_BOOL].pair_count[POP_JUMP_IF_TRUE] : 2
+opcode[POP_JUMP_IF_FALSE_BOOL].pair_count[LOAD_ATTR_METHOD_NO_DICT] : 2
+opcode[POP_JUMP_IF_FALSE_BOOL].pair_count[LOAD_ATTR_SHAPE] : 32
+opcode[POP_JUMP_IF_FALSE_BOOL].pair_count[LOAD_GLOBAL_MODULE] : 7
+opcode[POP_JUMP_IF_FALSE_BOOL].pair_count[POP_JUMP_IF_TRUE_BOOL] : 2
+opcode[POP_JUMP_IF_FALSE_INT].handler_id : 212
+opcode[POP_JUMP_IF_FALSE_INT].base_id : 98
+opcode[POP_JUMP_IF_FALSE_INT].handler_flags : 193
+    opcode[POP_JUMP_IF_FALSE_INT].execution_count : 34
+opcode[POP_JUMP_IF_FALSE_INT].pair_count[RETURN_VALUE] : 3
+opcode[POP_JUMP_IF_FALSE_INT].pair_count[LOAD_COMMON_CONSTANT] : 18
+opcode[POP_JUMP_IF_FALSE_INT].pair_count[LOAD_GLOBAL] : 1
+opcode[POP_JUMP_IF_FALSE_INT].pair_count[LOAD_GLOBAL_MODULE] : 12
+opcode[POP_JUMP_IF_FALSE_LIST].handler_id : 213
+opcode[POP_JUMP_IF_FALSE_LIST].base_id : 98
+opcode[POP_JUMP_IF_FALSE_LIST].handler_flags : 193
+    opcode[POP_JUMP_IF_FALSE_LIST].execution_count : 37
+opcode[POP_JUMP_IF_FALSE_LIST].pair_count[LOAD_ATTR] : 2
+opcode[POP_JUMP_IF_FALSE_LIST].pair_count[LOAD_COMMON_CONSTANT] : 1
+opcode[POP_JUMP_IF_FALSE_LIST].pair_count[LOAD_ATTR_SHAPE] : 34
+opcode[POP_JUMP_IF_FALSE_NONE].handler_id : 214
+opcode[POP_JUMP_IF_FALSE_NONE].base_id : 98
+opcode[POP_JUMP_IF_FALSE_NONE].handler_flags : 193
+    opcode[POP_JUMP_IF_FALSE_NONE].specialization.miss : 32
+    opcode[POP_JUMP_IF_FALSE_NONE].execution_count : 99
+opcode[POP_JUMP_IF_FALSE_NONE].pair_count[NOP] : 23
+opcode[POP_JUMP_IF_FALSE_NONE].pair_count[RETURN_VALUE] : 11
+opcode[POP_JUMP_IF_FALSE_NONE].pair_count[LOAD_COMMON_CONSTANT] : 9
+opcode[POP_JUMP_IF_FALSE_NONE].pair_count[POP_JUMP_IF_FALSE] : 34
+opcode[POP_JUMP_IF_FALSE_NONE].pair_count[POP_JUMP_IF_FALSE_STR] : 22
+opcode[POP_JUMP_IF_FALSE_STR].handler_id : 215
+opcode[POP_JUMP_IF_FALSE_STR].base_id : 98
+opcode[POP_JUMP_IF_FALSE_STR].handler_flags : 193
+    opcode[POP_JUMP_IF_FALSE_STR].execution_count : 87
+opcode[POP_JUMP_IF_FALSE_STR].pair_count[NOP] : 23
+opcode[POP_JUMP_IF_FALSE_STR].pair_count[BUILD_LIST] : 3
+opcode[POP_JUMP_IF_FALSE_STR].pair_count[LOAD_CONST] : 2
+opcode[POP_JUMP_IF_FALSE_STR].pair_count[LOAD_FAST] : 3
+opcode[POP_JUMP_IF_FALSE_STR].pair_count[LOAD_FAST_BORROW] : 4
+opcode[POP_JUMP_IF_FALSE_STR].pair_count[LOAD_GLOBAL] : 4
+opcode[POP_JUMP_IF_FALSE_STR].pair_count[STORE_ATTR] : 11
+opcode[POP_JUMP_IF_FALSE_STR].pair_count[LOAD_GLOBAL_BUILTIN] : 12
+opcode[POP_JUMP_IF_FALSE_STR].pair_count[LOAD_GLOBAL_MODULE] : 24
+opcode[POP_JUMP_IF_FALSE_STR].pair_count[CONTAINS_OP_JUMP] : 1
+opcode[POP_JUMP_IF_TRUE_ALWAYS_TRUE].handler_id : 216
+opcode[POP_JUMP_IF_TRUE_ALWAYS_TRUE].base_id : 101
+opcode[POP_JUMP_IF_TRUE_ALWAYS_TRUE].handler_flags : 193
+opcode[POP_JUMP_IF_TRUE_BOOL].handler_id : 217
+opcode[POP_JUMP_IF_TRUE_BOOL].base_id : 101
+opcode[POP_JUMP_IF_TRUE_BOOL].handler_flags : 193
+    opcode[POP_JUMP_IF_TRUE_BOOL].execution_count : 251
+opcode[POP_JUMP_IF_TRUE_BOOL].pair_count[RETURN_VALUE] : 6
+opcode[POP_JUMP_IF_TRUE_BOOL].pair_count[JUMP_BACKWARD] : 5
+opcode[POP_JUMP_IF_TRUE_BOOL].pair_count[LOAD_ATTR] : 11
+opcode[POP_JUMP_IF_TRUE_BOOL].pair_count[LOAD_DEREF] : 3
+opcode[POP_JUMP_IF_TRUE_BOOL].pair_count[LOAD_FAST_BORROW] : 30
+opcode[POP_JUMP_IF_TRUE_BOOL].pair_count[LOAD_GLOBAL] : 9
+opcode[POP_JUMP_IF_TRUE_BOOL].pair_count[POP_JUMP_IF_TRUE] : 2
+opcode[POP_JUMP_IF_TRUE_BOOL].pair_count[LOAD_ATTR_METHOD_NO_DICT] : 1
+opcode[POP_JUMP_IF_TRUE_BOOL].pair_count[LOAD_ATTR_METHOD_WITH_VALUES] : 1
+opcode[POP_JUMP_IF_TRUE_BOOL].pair_count[LOAD_GLOBAL_BUILTIN] : 167
+opcode[POP_JUMP_IF_TRUE_BOOL].pair_count[LOAD_GLOBAL_MODULE] : 3
+opcode[POP_JUMP_IF_TRUE_BOOL].pair_count[POP_JUMP_IF_TRUE_STR] : 13
+opcode[POP_JUMP_IF_TRUE_INT].handler_id : 218
+opcode[POP_JUMP_IF_TRUE_INT].base_id : 101
+opcode[POP_JUMP_IF_TRUE_INT].handler_flags : 193
+    opcode[POP_JUMP_IF_TRUE_INT].execution_count : 35
+opcode[POP_JUMP_IF_TRUE_INT].pair_count[LOAD_COMMON_CONSTANT] : 35
+opcode[POP_JUMP_IF_TRUE_LIST].handler_id : 219
+opcode[POP_JUMP_IF_TRUE_LIST].base_id : 101
+opcode[POP_JUMP_IF_TRUE_LIST].handler_flags : 193
+    opcode[POP_JUMP_IF_TRUE_LIST].execution_count : 30
+opcode[POP_JUMP_IF_TRUE_LIST].pair_count[LOAD_FAST_BORROW] : 27
+opcode[POP_JUMP_IF_TRUE_LIST].pair_count[LOAD_GLOBAL] : 1
+opcode[POP_JUMP_IF_TRUE_LIST].pair_count[LOAD_GLOBAL_MODULE] : 2
+opcode[POP_JUMP_IF_TRUE_NONE].handler_id : 220
+opcode[POP_JUMP_IF_TRUE_NONE].base_id : 101
+opcode[POP_JUMP_IF_TRUE_NONE].handler_flags : 193
+    opcode[POP_JUMP_IF_TRUE_NONE].specialization.miss : 12
+    opcode[POP_JUMP_IF_TRUE_NONE].execution_count : 13
+opcode[POP_JUMP_IF_TRUE_NONE].pair_count[LOAD_CONST] : 1
+opcode[POP_JUMP_IF_TRUE_NONE].pair_count[POP_JUMP_IF_TRUE] : 12
+opcode[POP_JUMP_IF_TRUE_STR].handler_id : 221
+opcode[POP_JUMP_IF_TRUE_STR].base_id : 101
+opcode[POP_JUMP_IF_TRUE_STR].handler_flags : 193
+    opcode[POP_JUMP_IF_TRUE_STR].execution_count : 91
+opcode[POP_JUMP_IF_TRUE_STR].pair_count[NOP] : 4
+opcode[POP_JUMP_IF_TRUE_STR].pair_count[LOAD_ATTR] : 2
+opcode[POP_JUMP_IF_TRUE_STR].pair_count[LOAD_GLOBAL] : 3
+opcode[POP_JUMP_IF_TRUE_STR].pair_count[LOAD_NAME] : 2
+opcode[POP_JUMP_IF_TRUE_STR].pair_count[POP_JUMP_IF_NOT_NONE] : 25
+opcode[POP_JUMP_IF_TRUE_STR].pair_count[LOAD_ATTR_METHOD_NO_DICT] : 51
+opcode[POP_JUMP_IF_TRUE_STR].pair_count[LOAD_GLOBAL_MODULE] : 4
+opcode[SEND_ASYNC_GEN].handler_id : 222
+opcode[SEND_ASYNC_GEN].base_id : 104
+opcode[SEND_ASYNC_GEN].handler_flags : 193
+opcode[SEND_GEN].handler_id : 223
+opcode[SEND_GEN].base_id : 104
+opcode[SEND_GEN].handler_flags : 193
+opcode[SEND_VIRTUAL].handler_id : 224
+opcode[SEND_VIRTUAL].base_id : 104
+opcode[SEND_VIRTUAL].handler_flags : 193
+opcode[STORE_ATTR_INSTANCE_VALUE].handler_id : 225
+opcode[STORE_ATTR_INSTANCE_VALUE].base_id : 108
+opcode[STORE_ATTR_INSTANCE_VALUE].handler_flags : 193
+opcode[STORE_ATTR_SHAPE].handler_id : 226
+opcode[STORE_ATTR_SHAPE].base_id : 108
+opcode[STORE_ATTR_SHAPE].handler_flags : 193
+    opcode[STORE_ATTR_SHAPE].execution_count : 149
+opcode[STORE_ATTR_SHAPE].pair_count[RETURN_VALUE] : 33
+opcode[STORE_ATTR_SHAPE].pair_count[JUMP_FORWARD] : 2
+opcode[STORE_ATTR_SHAPE].pair_count[LOAD_ATTR] : 4
+opcode[STORE_ATTR_SHAPE].pair_count[LOAD_COMMON_CONSTANT] : 8
+opcode[STORE_ATTR_SHAPE].pair_count[LOAD_GLOBAL] : 2
+opcode[STORE_ATTR_SHAPE].pair_count[POP_JUMP_IF_FALSE] : 1
+opcode[STORE_ATTR_SHAPE].pair_count[POP_JUMP_IF_NOT_NONE] : 3
+opcode[STORE_ATTR_SHAPE].pair_count[LOAD_ATTR_SHAPE] : 59
+opcode[STORE_ATTR_SHAPE].pair_count[LOAD_GLOBAL_BUILTIN] : 26
+opcode[STORE_ATTR_SHAPE].pair_count[LOAD_GLOBAL_MODULE] : 1
+opcode[STORE_ATTR_SHAPE].pair_count[POP_JUMP_IF_FALSE_NONE] : 10
+opcode[STORE_ATTR_SHAPE_ADD].handler_id : 227
+opcode[STORE_ATTR_SHAPE_ADD].base_id : 108
+opcode[STORE_ATTR_SHAPE_ADD].handler_flags : 193
+    opcode[STORE_ATTR_SHAPE_ADD].specialization.miss : 240
+    opcode[STORE_ATTR_SHAPE_ADD].execution_count : 663
+opcode[STORE_ATTR_SHAPE_ADD].pair_count[NOP] : 29
+opcode[STORE_ATTR_SHAPE_ADD].pair_count[BUILD_LIST] : 63
+opcode[STORE_ATTR_SHAPE_ADD].pair_count[LOAD_ATTR] : 1
+opcode[STORE_ATTR_SHAPE_ADD].pair_count[LOAD_COMMON_CONSTANT] : 167
+opcode[STORE_ATTR_SHAPE_ADD].pair_count[LOAD_FAST] : 2
+opcode[STORE_ATTR_SHAPE_ADD].pair_count[LOAD_GLOBAL] : 4
+opcode[STORE_ATTR_SHAPE_ADD].pair_count[POP_JUMP_IF_FALSE] : 2
+opcode[STORE_ATTR_SHAPE_ADD].pair_count[STORE_ATTR] : 252
+opcode[STORE_ATTR_SHAPE_ADD].pair_count[LOAD_ATTR_SHAPE] : 34
+opcode[STORE_ATTR_SHAPE_ADD].pair_count[LOAD_GLOBAL_BUILTIN] : 2
+opcode[STORE_ATTR_SHAPE_ADD].pair_count[LOAD_GLOBAL_MODULE] : 27
+opcode[STORE_ATTR_SHAPE_ADD].pair_count[POP_JUMP_IF_FALSE_NONE] : 4
+opcode[STORE_ATTR_SHAPE_ADD].pair_count[POP_JUMP_IF_FALSE_STR] : 1
+opcode[STORE_ATTR_SHAPE_ADD].pair_count[STORE_ATTR_SHAPE_ADD] : 75
+opcode[STORE_ATTR_SLOT].handler_id : 228
+opcode[STORE_ATTR_SLOT].base_id : 108
+opcode[STORE_ATTR_SLOT].handler_flags : 193
+    opcode[STORE_ATTR_SLOT].execution_count : 35
+opcode[STORE_ATTR_SLOT].pair_count[RETURN_VALUE] : 35
+opcode[STORE_ATTR_WITH_HINT].handler_id : 229
+opcode[STORE_ATTR_WITH_HINT].base_id : 108
+opcode[STORE_ATTR_WITH_HINT].handler_flags : 193
+opcode[STORE_SUBSCR_DICT].handler_id : 230
+opcode[STORE_SUBSCR_DICT].base_id : 36
+opcode[STORE_SUBSCR_DICT].handler_flags : 193
+    opcode[STORE_SUBSCR_DICT].execution_count : 124
+opcode[STORE_SUBSCR_DICT].pair_count[NOP] : 29
+opcode[STORE_SUBSCR_DICT].pair_count[POP_EXCEPT] : 3
+opcode[STORE_SUBSCR_DICT].pair_count[RETURN_VALUE] : 35
+opcode[STORE_SUBSCR_DICT].pair_count[JUMP_BACKWARD] : 1
+opcode[STORE_SUBSCR_DICT].pair_count[LOAD_GLOBAL] : 2
+opcode[STORE_SUBSCR_DICT].pair_count[LOAD_GLOBAL_MODULE] : 54
+opcode[STORE_SUBSCR_LIST_INT].handler_id : 231
+opcode[STORE_SUBSCR_LIST_INT].base_id : 36
+opcode[STORE_SUBSCR_LIST_INT].handler_flags : 193
+opcode[TO_BOOL_ALWAYS_TRUE].handler_id : 232
+opcode[TO_BOOL_ALWAYS_TRUE].base_id : 37
+opcode[TO_BOOL_ALWAYS_TRUE].handler_flags : 193
+opcode[INSTRUMENTED_END_FOR].handler_id : 233
+opcode[INSTRUMENTED_END_FOR].base_id : 9
+opcode[INSTRUMENTED_END_FOR].handler_flags : 194
+opcode[INSTRUMENTED_POP_ITER].handler_id : 234
+opcode[INSTRUMENTED_POP_ITER].base_id : 28
+opcode[INSTRUMENTED_POP_ITER].handler_flags : 194
+opcode[INSTRUMENTED_END_SEND].handler_id : 235
+opcode[INSTRUMENTED_END_SEND].base_id : 10
+opcode[INSTRUMENTED_END_SEND].handler_flags : 194
+opcode[INSTRUMENTED_FOR_ITER].handler_id : 236
+opcode[INSTRUMENTED_FOR_ITER].base_id : 65
+opcode[INSTRUMENTED_FOR_ITER].handler_flags : 194
+opcode[INSTRUMENTED_INSTRUCTION].handler_id : 237
+opcode[INSTRUMENTED_INSTRUCTION].base_id : 237
+opcode[INSTRUMENTED_INSTRUCTION].handler_flags : 194
+opcode[INSTRUMENTED_JUMP_FORWARD].handler_id : 238
+opcode[INSTRUMENTED_JUMP_FORWARD].base_id : 73
+opcode[INSTRUMENTED_JUMP_FORWARD].handler_flags : 194
+opcode[INSTRUMENTED_POP_JUMP_IF_NONE].handler_id : 240
+opcode[INSTRUMENTED_POP_JUMP_IF_NONE].base_id : 99
+opcode[INSTRUMENTED_POP_JUMP_IF_NONE].handler_flags : 194
+opcode[INSTRUMENTED_JUMP_IF_FALSE_OR_POP].handler_id : 241
+opcode[INSTRUMENTED_JUMP_IF_FALSE_OR_POP].base_id : 74
+opcode[INSTRUMENTED_JUMP_IF_FALSE_OR_POP].handler_flags : 194
+opcode[INSTRUMENTED_JUMP_IF_TRUE_OR_POP].handler_id : 242
+opcode[INSTRUMENTED_JUMP_IF_TRUE_OR_POP].base_id : 75
+opcode[INSTRUMENTED_JUMP_IF_TRUE_OR_POP].handler_flags : 194
+opcode[INSTRUMENTED_POP_JUMP_IF_NOT_NONE].handler_id : 243
+opcode[INSTRUMENTED_POP_JUMP_IF_NOT_NONE].base_id : 100
+opcode[INSTRUMENTED_POP_JUMP_IF_NOT_NONE].handler_flags : 194
+opcode[INSTRUMENTED_RESUME].handler_id : 244
+opcode[INSTRUMENTED_RESUME].base_id : 128
+opcode[INSTRUMENTED_RESUME].handler_flags : 194
+opcode[INSTRUMENTED_RETURN_VALUE].handler_id : 245
+opcode[INSTRUMENTED_RETURN_VALUE].base_id : 33
+opcode[INSTRUMENTED_RETURN_VALUE].handler_flags : 194
+opcode[INSTRUMENTED_YIELD_VALUE].handler_id : 246
+opcode[INSTRUMENTED_YIELD_VALUE].base_id : 118
+opcode[INSTRUMENTED_YIELD_VALUE].handler_flags : 194
+opcode[INSTRUMENTED_END_ASYNC_FOR].handler_id : 247
+opcode[INSTRUMENTED_END_ASYNC_FOR].base_id : 63
+opcode[INSTRUMENTED_END_ASYNC_FOR].handler_flags : 194
+opcode[INSTRUMENTED_LOAD_SUPER_ATTR].handler_id : 248
+opcode[INSTRUMENTED_LOAD_SUPER_ATTR].base_id : 94
+opcode[INSTRUMENTED_LOAD_SUPER_ATTR].handler_flags : 194
+opcode[INSTRUMENTED_CALL].handler_id : 249
+opcode[INSTRUMENTED_CALL].base_id : 50
+opcode[INSTRUMENTED_CALL].handler_flags : 194
+opcode[INSTRUMENTED_CALL_KW].handler_id : 250
+opcode[INSTRUMENTED_CALL_KW].base_id : 53
+opcode[INSTRUMENTED_CALL_KW].handler_flags : 194
+opcode[INSTRUMENTED_CALL_FUNCTION_EX].handler_id : 251
+opcode[INSTRUMENTED_CALL_FUNCTION_EX].base_id : 4
+opcode[INSTRUMENTED_CALL_FUNCTION_EX].handler_flags : 194
+opcode[INSTRUMENTED_JUMP_BACKWARD].handler_id : 252
+opcode[INSTRUMENTED_JUMP_BACKWARD].base_id : 71
+opcode[INSTRUMENTED_JUMP_BACKWARD].handler_flags : 194
+opcode[INSTRUMENTED_POP_JUMP_IF_TRUE].handler_id : 253
+opcode[INSTRUMENTED_POP_JUMP_IF_TRUE].base_id : 101
+opcode[INSTRUMENTED_POP_JUMP_IF_TRUE].handler_flags : 194
+opcode[INSTRUMENTED_POP_JUMP_IF_FALSE].handler_id : 254
+opcode[INSTRUMENTED_POP_JUMP_IF_FALSE].base_id : 98
+opcode[INSTRUMENTED_POP_JUMP_IF_FALSE].handler_flags : 194
+opcode[INSTRUMENTED_LINE].handler_id : 255
+opcode[INSTRUMENTED_LINE].base_id : 255
+opcode[INSTRUMENTED_LINE].handler_flags : 194
+opcode[ANNOTATIONS_PLACEHOLDER].handler_id : 256
+opcode[ANNOTATIONS_PLACEHOLDER].base_id : 256
+opcode[ANNOTATIONS_PLACEHOLDER].handler_flags : 96
+opcode[JUMP].handler_id : 257
+opcode[JUMP].base_id : 257
+opcode[JUMP].handler_flags : 96
+opcode[JUMP_IF_FALSE].handler_id : 258
+opcode[JUMP_IF_FALSE].base_id : 258
+opcode[JUMP_IF_FALSE].handler_flags : 96
+opcode[JUMP_IF_TRUE].handler_id : 259
+opcode[JUMP_IF_TRUE].base_id : 259
+opcode[JUMP_IF_TRUE].handler_flags : 96
+opcode[JUMP_NO_INTERRUPT].handler_id : 260
+opcode[JUMP_NO_INTERRUPT].base_id : 260
+opcode[JUMP_NO_INTERRUPT].handler_flags : 96
+opcode[LOAD_CLOSURE].handler_id : 261
+opcode[LOAD_CLOSURE].base_id : 261
+opcode[LOAD_CLOSURE].handler_flags : 96
+opcode[POP_BLOCK].handler_id : 262
+opcode[POP_BLOCK].base_id : 262
+opcode[POP_BLOCK].handler_flags : 96
+opcode[SETUP_CLEANUP].handler_id : 263
+opcode[SETUP_CLEANUP].base_id : 263
+opcode[SETUP_CLEANUP].handler_flags : 96
+opcode[SETUP_FINALLY].handler_id : 264
+opcode[SETUP_FINALLY].base_id : 264
+opcode[SETUP_FINALLY].handler_flags : 96
+opcode[SETUP_WITH].handler_id : 265
+opcode[SETUP_WITH].base_id : 265
+opcode[SETUP_WITH].handler_flags : 96
+opcode[STORE_FAST_MAYBE_NULL].handler_id : 266
+opcode[STORE_FAST_MAYBE_NULL].base_id : 266
+opcode[STORE_FAST_MAYBE_NULL].handler_flags : 96
+opcode[IR_JUMP].handler_id : 267
+opcode[IR_JUMP].base_id : 267
+opcode[IR_JUMP].handler_flags : 456
+opcode[BINARY_OP_ADD].handler_id : 268
+opcode[BINARY_OP_ADD].base_id : 268
+opcode[BINARY_OP_ADD].handler_flags : 964
+opcode[BINARY_OP_ADD].specializable : 1
+    opcode[BINARY_OP_ADD].execution_count : 24
+opcode[BINARY_OP_ADD].pair_count[BINARY_SLICE] : 1
+opcode[BINARY_OP_ADD].pair_count[RETURN_VALUE] : 1
+opcode[BINARY_OP_ADD].pair_count[CALL] : 1
+opcode[BINARY_OP_ADD].pair_count[JUMP_IF_TRUE_OR_POP] : 1
+opcode[BINARY_OP_ADD].pair_count[LIST_APPEND] : 1
+opcode[BINARY_OP_ADD].pair_count[LOAD_COMMON_CONSTANT] : 4
+opcode[BINARY_OP_ADD].pair_count[LOAD_GLOBAL] : 3
+opcode[BINARY_OP_ADD].pair_count[STORE_NAME] : 1
+opcode[BINARY_OP_ADD].pair_count[BINARY_OP_ADD_INT] : 3
+opcode[BINARY_OP_ADD].pair_count[BINARY_OP_ADD_UNICODE] : 6
+opcode[BINARY_OP_ADD].pair_count[BINARY_OP_INPLACE_ADD] : 1
+opcode[BINARY_OP_ADD].pair_count[CONTAINS_OP_JUMP] : 1
+opcode[BINARY_OP_AND].handler_id : 269
+opcode[BINARY_OP_AND].base_id : 269
+opcode[BINARY_OP_AND].handler_flags : 964
+opcode[BINARY_OP_AND].specializable : 1
+    opcode[BINARY_OP_AND].execution_count : 12
+opcode[BINARY_OP_AND].pair_count[COMPARE_OP] : 1
+opcode[BINARY_OP_AND].pair_count[POP_JUMP_IF_FALSE] : 1
+opcode[BINARY_OP_AND].pair_count[BINARY_OP_AND_INT] : 6
+opcode[BINARY_OP_AND].pair_count[LOAD_SMALL_INT_INLINE] : 1
+opcode[BINARY_OP_AND].pair_count[COMPARE_OP_JUMP] : 3
+opcode[BINARY_OP_FLOOR_DIVIDE].handler_id : 270
+opcode[BINARY_OP_FLOOR_DIVIDE].base_id : 270
+opcode[BINARY_OP_FLOOR_DIVIDE].handler_flags : 964
+opcode[BINARY_OP_FLOOR_DIVIDE].specializable : 1
+opcode[BINARY_OP_LSHIFT].handler_id : 271
+opcode[BINARY_OP_LSHIFT].base_id : 271
+opcode[BINARY_OP_LSHIFT].handler_flags : 964
+opcode[BINARY_OP_LSHIFT].specializable : 1
+    opcode[BINARY_OP_LSHIFT].execution_count : 1
+opcode[BINARY_OP_LSHIFT].pair_count[CALL] : 1
+opcode[BINARY_OP_MATRIX_MULTIPLY].handler_id : 272
+opcode[BINARY_OP_MATRIX_MULTIPLY].base_id : 272
+opcode[BINARY_OP_MATRIX_MULTIPLY].handler_flags : 964
+opcode[BINARY_OP_MATRIX_MULTIPLY].specializable : 1
+opcode[BINARY_OP_MULTIPLY].handler_id : 273
+opcode[BINARY_OP_MULTIPLY].base_id : 273
+opcode[BINARY_OP_MULTIPLY].handler_flags : 964
+opcode[BINARY_OP_MULTIPLY].specializable : 1
+    opcode[BINARY_OP_MULTIPLY].execution_count : 3
+opcode[BINARY_OP_MULTIPLY].pair_count[BINARY_OP_MULTIPLY] : 1
+opcode[BINARY_OP_MULTIPLY].pair_count[COMPARE_OP_JUMP] : 2
+opcode[BINARY_OP_REMAINDER].handler_id : 274
+opcode[BINARY_OP_REMAINDER].base_id : 274
+opcode[BINARY_OP_REMAINDER].handler_flags : 964
+opcode[BINARY_OP_REMAINDER].specializable : 1
+opcode[BINARY_OP_OR].handler_id : 275
+opcode[BINARY_OP_OR].base_id : 275
+opcode[BINARY_OP_OR].handler_flags : 964
+opcode[BINARY_OP_OR].specializable : 1
+    opcode[BINARY_OP_OR].execution_count : 3
+opcode[BINARY_OP_OR].pair_count[LOAD_CONST] : 3
+opcode[BINARY_OP_POWER].handler_id : 276
+opcode[BINARY_OP_POWER].base_id : 276
+opcode[BINARY_OP_POWER].handler_flags : 964
+opcode[BINARY_OP_POWER].specializable : 1
+opcode[BINARY_OP_RSHIFT].handler_id : 277
+opcode[BINARY_OP_RSHIFT].base_id : 277
+opcode[BINARY_OP_RSHIFT].handler_flags : 964
+opcode[BINARY_OP_RSHIFT].specializable : 1
+opcode[BINARY_OP_SUBTRACT].handler_id : 278
+opcode[BINARY_OP_SUBTRACT].base_id : 278
+opcode[BINARY_OP_SUBTRACT].handler_flags : 964
+opcode[BINARY_OP_SUBTRACT].specializable : 1
+opcode[BINARY_OP_TRUE_DIVIDE].handler_id : 279
+opcode[BINARY_OP_TRUE_DIVIDE].base_id : 279
+opcode[BINARY_OP_TRUE_DIVIDE].handler_flags : 964
+opcode[BINARY_OP_TRUE_DIVIDE].specializable : 1
+opcode[BINARY_OP_XOR].handler_id : 280
+opcode[BINARY_OP_XOR].base_id : 280
+opcode[BINARY_OP_XOR].handler_flags : 964
+opcode[BINARY_OP_XOR].specializable : 1
+opcode[BINARY_OP_INPLACE_ADD].handler_id : 281
+opcode[BINARY_OP_INPLACE_ADD].base_id : 281
+opcode[BINARY_OP_INPLACE_ADD].handler_flags : 964
+opcode[BINARY_OP_INPLACE_ADD].specializable : 1
+    opcode[BINARY_OP_INPLACE_ADD].execution_count : 4
+opcode[BINARY_OP_INPLACE_ADD].pair_count[BINARY_OP_INPLACE_ADD_UNICODE] : 1
+opcode[BINARY_OP_INPLACE_ADD].pair_count[JUMP_BACKWARD] : 1
+opcode[BINARY_OP_INPLACE_ADD].pair_count[STORE_NAME] : 1
+opcode[BINARY_OP_INPLACE_ADD].pair_count[BINARY_OP_ADD_UNICODE] : 1
+opcode[BINARY_OP_INPLACE_AND].handler_id : 282
+opcode[BINARY_OP_INPLACE_AND].base_id : 282
+opcode[BINARY_OP_INPLACE_AND].handler_flags : 964
+opcode[BINARY_OP_INPLACE_AND].specializable : 1
+opcode[BINARY_OP_INPLACE_FLOOR_DIVIDE].handler_id : 283
+opcode[BINARY_OP_INPLACE_FLOOR_DIVIDE].base_id : 283
+opcode[BINARY_OP_INPLACE_FLOOR_DIVIDE].handler_flags : 964
+opcode[BINARY_OP_INPLACE_FLOOR_DIVIDE].specializable : 1
+opcode[BINARY_OP_INPLACE_LSHIFT].handler_id : 284
+opcode[BINARY_OP_INPLACE_LSHIFT].base_id : 284
+opcode[BINARY_OP_INPLACE_LSHIFT].handler_flags : 964
+opcode[BINARY_OP_INPLACE_LSHIFT].specializable : 1
+opcode[BINARY_OP_INPLACE_MATRIX_MULTIPLY].handler_id : 285
+opcode[BINARY_OP_INPLACE_MATRIX_MULTIPLY].base_id : 285
+opcode[BINARY_OP_INPLACE_MATRIX_MULTIPLY].handler_flags : 964
+opcode[BINARY_OP_INPLACE_MATRIX_MULTIPLY].specializable : 1
+opcode[BINARY_OP_INPLACE_MULTIPLY].handler_id : 286
+opcode[BINARY_OP_INPLACE_MULTIPLY].base_id : 286
+opcode[BINARY_OP_INPLACE_MULTIPLY].handler_flags : 964
+opcode[BINARY_OP_INPLACE_MULTIPLY].specializable : 1
+opcode[BINARY_OP_INPLACE_REMAINDER].handler_id : 287
+opcode[BINARY_OP_INPLACE_REMAINDER].base_id : 287
+opcode[BINARY_OP_INPLACE_REMAINDER].handler_flags : 964
+opcode[BINARY_OP_INPLACE_REMAINDER].specializable : 1
+opcode[BINARY_OP_INPLACE_OR].handler_id : 288
+opcode[BINARY_OP_INPLACE_OR].base_id : 288
+opcode[BINARY_OP_INPLACE_OR].handler_flags : 964
+opcode[BINARY_OP_INPLACE_OR].specializable : 1
+opcode[BINARY_OP_INPLACE_POWER].handler_id : 289
+opcode[BINARY_OP_INPLACE_POWER].base_id : 289
+opcode[BINARY_OP_INPLACE_POWER].handler_flags : 964
+opcode[BINARY_OP_INPLACE_POWER].specializable : 1
+opcode[BINARY_OP_INPLACE_RSHIFT].handler_id : 290
+opcode[BINARY_OP_INPLACE_RSHIFT].base_id : 290
+opcode[BINARY_OP_INPLACE_RSHIFT].handler_flags : 964
+opcode[BINARY_OP_INPLACE_RSHIFT].specializable : 1
+opcode[BINARY_OP_INPLACE_SUBTRACT].handler_id : 291
+opcode[BINARY_OP_INPLACE_SUBTRACT].base_id : 291
+opcode[BINARY_OP_INPLACE_SUBTRACT].handler_flags : 964
+opcode[BINARY_OP_INPLACE_SUBTRACT].specializable : 1
+opcode[BINARY_OP_INPLACE_TRUE_DIVIDE].handler_id : 292
+opcode[BINARY_OP_INPLACE_TRUE_DIVIDE].base_id : 292
+opcode[BINARY_OP_INPLACE_TRUE_DIVIDE].handler_flags : 964
+opcode[BINARY_OP_INPLACE_TRUE_DIVIDE].specializable : 1
+opcode[BINARY_OP_INPLACE_XOR].handler_id : 293
+opcode[BINARY_OP_INPLACE_XOR].base_id : 293
+opcode[BINARY_OP_INPLACE_XOR].handler_flags : 964
+opcode[BINARY_OP_INPLACE_XOR].specializable : 1
+opcode[BINARY_OP_SUBSCR].handler_id : 294
+opcode[BINARY_OP_SUBSCR].base_id : 294
+opcode[BINARY_OP_SUBSCR].handler_flags : 964
+opcode[BINARY_OP_SUBSCR].specializable : 1
+    opcode[BINARY_OP_SUBSCR].execution_count : 114
+opcode[BINARY_OP_SUBSCR].pair_count[FORMAT_SIMPLE] : 4
+opcode[BINARY_OP_SUBSCR].pair_count[NOP] : 3
+opcode[BINARY_OP_SUBSCR].pair_count[PUSH_EXC_INFO] : 3
+opcode[BINARY_OP_SUBSCR].pair_count[RETURN_VALUE] : 1
+opcode[BINARY_OP_SUBSCR].pair_count[CALL] : 12
+opcode[BINARY_OP_SUBSCR].pair_count[JUMP_FORWARD] : 1
+opcode[BINARY_OP_SUBSCR].pair_count[LOAD_ATTR] : 1
+opcode[BINARY_OP_SUBSCR].pair_count[LOAD_COMMON_CONSTANT] : 1
+opcode[BINARY_OP_SUBSCR].pair_count[LOAD_CONST] : 2
+opcode[BINARY_OP_SUBSCR].pair_count[LOAD_FAST_BORROW] : 5
+opcode[BINARY_OP_SUBSCR].pair_count[LOAD_GLOBAL] : 1
+opcode[BINARY_OP_SUBSCR].pair_count[POP_JUMP_IF_NOT_NONE] : 40
+opcode[BINARY_OP_SUBSCR].pair_count[STORE_ATTR] : 1
+opcode[BINARY_OP_SUBSCR].pair_count[STORE_NAME] : 4
+opcode[BINARY_OP_SUBSCR].pair_count[BINARY_OP_SUBSCR_DICT] : 9
+opcode[BINARY_OP_SUBSCR].pair_count[BINARY_OP_SUBSCR_LIST_INT] : 1
+opcode[BINARY_OP_SUBSCR].pair_count[BINARY_OP_SUBSCR_STR_INT] : 1
+opcode[BINARY_OP_SUBSCR].pair_count[BINARY_OP_SUBSCR_TUPLE_INT] : 4
+opcode[BINARY_OP_SUBSCR].pair_count[CALL_PY_EXACT_ARGS] : 6
+opcode[BINARY_OP_SUBSCR].pair_count[LOAD_GLOBAL_MODULE] : 1
+opcode[BINARY_OP_SUBSCR].pair_count[LOAD_SMALL_INT_INLINE] : 4
+opcode[BINARY_OP_SUBSCR].pair_count[BINARY_OP_ADD] : 1
+opcode[BINARY_OP_SUBSCR].pair_count[BINARY_OP_SUBSCR] : 8
+opcode[COMPARE_OP_JUMP].handler_id : 303
+opcode[COMPARE_OP_JUMP].base_id : 303
+opcode[COMPARE_OP_JUMP].handler_flags : 968
+opcode[COMPARE_OP_JUMP].specializable : 1
+    opcode[COMPARE_OP_JUMP].execution_count : 134
+opcode[COMPARE_OP_JUMP].pair_count[FORMAT_SIMPLE] : 1
+opcode[COMPARE_OP_JUMP].pair_count[NOP] : 2
+opcode[COMPARE_OP_JUMP].pair_count[POP_EXCEPT] : 1
+opcode[COMPARE_OP_JUMP].pair_count[RETURN_VALUE] : 4
+opcode[COMPARE_OP_JUMP].pair_count[LOAD_ATTR] : 9
+opcode[COMPARE_OP_JUMP].pair_count[LOAD_COMMON_CONSTANT] : 5
+opcode[COMPARE_OP_JUMP].pair_count[LOAD_CONST] : 7
+opcode[COMPARE_OP_JUMP].pair_count[LOAD_DEREF] : 2
+opcode[COMPARE_OP_JUMP].pair_count[LOAD_FAST] : 3
+opcode[COMPARE_OP_JUMP].pair_count[LOAD_FAST_BORROW] : 3
+opcode[COMPARE_OP_JUMP].pair_count[LOAD_GLOBAL] : 16
+opcode[COMPARE_OP_JUMP].pair_count[LOAD_NAME] : 11
+opcode[COMPARE_OP_JUMP].pair_count[POP_JUMP_IF_NONE] : 1
+opcode[COMPARE_OP_JUMP].pair_count[STORE_ATTR] : 2
+opcode[COMPARE_OP_JUMP].pair_count[LOAD_ATTR_METHOD_WITH_VALUES] : 1
+opcode[COMPARE_OP_JUMP].pair_count[LOAD_ATTR_SHAPE] : 6
+opcode[COMPARE_OP_JUMP].pair_count[LOAD_GLOBAL_BUILTIN] : 2
+opcode[COMPARE_OP_JUMP].pair_count[LOAD_GLOBAL_MODULE] : 3
+opcode[COMPARE_OP_JUMP].pair_count[LOAD_SMALL_INT_INLINE] : 1
+opcode[COMPARE_OP_JUMP].pair_count[STORE_ATTR_SHAPE] : 27
+opcode[COMPARE_OP_JUMP].pair_count[COMPARE_OP_JUMP] : 6
+opcode[COMPARE_OP_JUMP].pair_count[COMPARE_OP_JUMP_INT] : 12
+opcode[COMPARE_OP_JUMP].pair_count[COMPARE_OP_JUMP_STR] : 9
+opcode[CONTAINS_OP_JUMP].handler_id : 304
+opcode[CONTAINS_OP_JUMP].base_id : 304
+opcode[CONTAINS_OP_JUMP].handler_flags : 968
+opcode[CONTAINS_OP_JUMP].specializable : 1
+    opcode[CONTAINS_OP_JUMP].execution_count : 184
+opcode[CONTAINS_OP_JUMP].pair_count[NOP] : 1
+opcode[CONTAINS_OP_JUMP].pair_count[JUMP_BACKWARD] : 1
+opcode[CONTAINS_OP_JUMP].pair_count[LOAD_ATTR] : 43
+opcode[CONTAINS_OP_JUMP].pair_count[LOAD_COMMON_CONSTANT] : 7
+opcode[CONTAINS_OP_JUMP].pair_count[LOAD_CONST] : 3
+opcode[CONTAINS_OP_JUMP].pair_count[LOAD_DEREF] : 14
+opcode[CONTAINS_OP_JUMP].pair_count[LOAD_FAST_BORROW] : 2
+opcode[CONTAINS_OP_JUMP].pair_count[LOAD_GLOBAL] : 16
+opcode[CONTAINS_OP_JUMP].pair_count[LOAD_NAME] : 2
+opcode[CONTAINS_OP_JUMP].pair_count[LOAD_GLOBAL_MODULE] : 74
+opcode[CONTAINS_OP_JUMP].pair_count[CONTAINS_OP_JUMP] : 13
+opcode[CONTAINS_OP_JUMP].pair_count[CONTAINS_OP_JUMP_DICT] : 4
+opcode[CONTAINS_OP_JUMP].pair_count[CONTAINS_OP_JUMP_SET] : 4
+opcode[IS_OP_JUMP].handler_id : 305
+opcode[IS_OP_JUMP].base_id : 305
+opcode[IS_OP_JUMP].handler_flags : 456
+    opcode[IS_OP_JUMP].execution_count : 131
+opcode[IS_OP_JUMP].pair_count[POP_TOP] : 2
+opcode[IS_OP_JUMP].pair_count[RETURN_VALUE] : 1
+opcode[IS_OP_JUMP].pair_count[JUMP_BACKWARD] : 3
+opcode[IS_OP_JUMP].pair_count[LOAD_ATTR] : 2
+opcode[IS_OP_JUMP].pair_count[LOAD_CONST] : 28
+opcode[IS_OP_JUMP].pair_count[LOAD_GLOBAL] : 14
+opcode[IS_OP_JUMP].pair_count[STORE_ATTR] : 2
+opcode[IS_OP_JUMP].pair_count[LOAD_GLOBAL_BUILTIN] : 14
+opcode[IS_OP_JUMP].pair_count[LOAD_GLOBAL_MODULE] : 63
+opcode[IS_OP_JUMP].pair_count[STORE_ATTR_SHAPE] : 2
+opcode[COMPARE_OP_JUMP_FLOAT].handler_id : 306
+opcode[COMPARE_OP_JUMP_FLOAT].base_id : 303
+opcode[COMPARE_OP_JUMP_FLOAT].handler_flags : 201
+opcode[COMPARE_OP_JUMP_INT].handler_id : 307
+opcode[COMPARE_OP_JUMP_INT].base_id : 303
+opcode[COMPARE_OP_JUMP_INT].handler_flags : 201
+    opcode[COMPARE_OP_JUMP_INT].execution_count : 183
+opcode[COMPARE_OP_JUMP_INT].pair_count[LOAD_ATTR] : 1
+opcode[COMPARE_OP_JUMP_INT].pair_count[LOAD_COMMON_CONSTANT] : 82
+opcode[COMPARE_OP_JUMP_INT].pair_count[LOAD_DEREF] : 4
+opcode[COMPARE_OP_JUMP_INT].pair_count[LOAD_GLOBAL] : 4
+opcode[COMPARE_OP_JUMP_INT].pair_count[POP_JUMP_IF_NONE] : 3
+opcode[COMPARE_OP_JUMP_INT].pair_count[LOAD_ATTR_SHAPE] : 34
+opcode[COMPARE_OP_JUMP_INT].pair_count[LOAD_GLOBAL_BUILTIN] : 44
+opcode[COMPARE_OP_JUMP_INT].pair_count[LOAD_GLOBAL_MODULE] : 4
+opcode[COMPARE_OP_JUMP_INT].pair_count[STORE_ATTR_SHAPE] : 7
+opcode[COMPARE_OP_JUMP_STR].handler_id : 308
+opcode[COMPARE_OP_JUMP_STR].base_id : 303
+opcode[COMPARE_OP_JUMP_STR].handler_flags : 201
+    opcode[COMPARE_OP_JUMP_STR].execution_count : 416
+opcode[COMPARE_OP_JUMP_STR].pair_count[NOP] : 7
+opcode[COMPARE_OP_JUMP_STR].pair_count[JUMP_BACKWARD] : 13
+opcode[COMPARE_OP_JUMP_STR].pair_count[LOAD_ATTR] : 2
+opcode[COMPARE_OP_JUMP_STR].pair_count[LOAD_DEREF] : 3
+opcode[COMPARE_OP_JUMP_STR].pair_count[LOAD_FAST] : 374
+opcode[COMPARE_OP_JUMP_STR].pair_count[LOAD_FAST_BORROW] : 3
+opcode[COMPARE_OP_JUMP_STR].pair_count[LOAD_GLOBAL] : 2
+opcode[COMPARE_OP_JUMP_STR].pair_count[LOAD_NAME] : 1
+opcode[COMPARE_OP_JUMP_STR].pair_count[LOAD_ATTR_METHOD_NO_DICT] : 10
+opcode[COMPARE_OP_JUMP_STR].pair_count[LOAD_GLOBAL_MODULE] : 1
+opcode[CONTAINS_OP_JUMP_DICT].handler_id : 309
+opcode[CONTAINS_OP_JUMP_DICT].base_id : 304
+opcode[CONTAINS_OP_JUMP_DICT].handler_flags : 201
+    opcode[CONTAINS_OP_JUMP_DICT].execution_count : 74
+opcode[CONTAINS_OP_JUMP_DICT].pair_count[LOAD_COMMON_CONSTANT] : 1
+opcode[CONTAINS_OP_JUMP_DICT].pair_count[LOAD_FAST_BORROW] : 69
+opcode[CONTAINS_OP_JUMP_DICT].pair_count[LOAD_GLOBAL] : 2
+opcode[CONTAINS_OP_JUMP_DICT].pair_count[LOAD_GLOBAL_MODULE] : 2
+opcode[CONTAINS_OP_JUMP_SET].handler_id : 310
+opcode[CONTAINS_OP_JUMP_SET].base_id : 304
+opcode[CONTAINS_OP_JUMP_SET].handler_flags : 201
+    opcode[CONTAINS_OP_JUMP_SET].execution_count : 19
+opcode[CONTAINS_OP_JUMP_SET].pair_count[JUMP_BACKWARD] : 9
+opcode[CONTAINS_OP_JUMP_SET].pair_count[LOAD_ATTR] : 3
+opcode[CONTAINS_OP_JUMP_SET].pair_count[LOAD_GLOBAL] : 2
+opcode[CONTAINS_OP_JUMP_SET].pair_count[LOAD_ATTR_METHOD_NO_DICT] : 1
+opcode[CONTAINS_OP_JUMP_SET].pair_count[LOAD_ATTR_SHAPE] : 3
+opcode[CONTAINS_OP_JUMP_SET].pair_count[LOAD_GLOBAL_MODULE] : 1
+opcode[INSTRUMENTED_COMPARE_OP_JUMP].handler_id : 311
+opcode[INSTRUMENTED_COMPARE_OP_JUMP].base_id : 303
+opcode[INSTRUMENTED_COMPARE_OP_JUMP].handler_flags : 202
+opcode[INSTRUMENTED_CONTAINS_OP_JUMP].handler_id : 312
+opcode[INSTRUMENTED_CONTAINS_OP_JUMP].base_id : 304
+opcode[INSTRUMENTED_CONTAINS_OP_JUMP].handler_flags : 202
+opcode[INSTRUMENTED_IS_OP_JUMP].handler_id : 313
+opcode[INSTRUMENTED_IS_OP_JUMP].base_id : 305
+opcode[INSTRUMENTED_IS_OP_JUMP].handler_flags : 202
+Calls to PyEval_EvalDefault: 552
+Calls to Python functions inlined: 1385
+Frames pushed: 1991
+Frame objects created: 101
+Calls via PyEval_EvalFrame[0] : 552
+Calls via PyEval_EvalFrame[1] : 521
+Calls via PyEval_EvalFrame[2] : 31
+Calls via PyEval_EvalFrame[3] : 20
+Calls via PyEval_EvalFrame[4] : 416
+Calls via PyEval_EvalFrame[5] : 85
+Calls via PyEval_EvalFrame[6] : 2
+Calls via PyEval_EvalFrame[7] : 0
+Calls via PyEval_EvalFrame[8] : 167
+Calls via PyEval_EvalFrame[9] : 6
+Object allocations from freelist: 3980
+Object frees to freelist: 6038
+Object allocations: 26905
+Object allocations to 512 bytes: 25955
+Object allocations to 4 kbytes: 892
+Object allocations over 4 kbytes: 58
+Object frees: 19160
+Object inline values: 203
+Object interpreter mortal increfs: 19698
+Object interpreter mortal decrefs: 26715
+Object mortal increfs: 101213
+Object mortal decrefs: 111651
+Object interpreter immortal increfs: 511
+Object interpreter immortal decrefs: 413
+Object immortal increfs: 73181
+Object immortal decrefs: 37334
+Object materialize dict (on request): 0
+Object materialize dict (new key): 0
+Object materialize dict (too big): 0
+Object materialize dict (str subclass): 0
+Object method cache hits: 2779
+Object method cache misses: 1162
+Object method cache too big: 0
+Object method cache dunder hits: 3304
+Object method cache dunder misses: 234
+Object method cache invalidations: 184
+Object method cache resizes: 141
+Object inline ints created: 1154
+Object inline floats created: 0
+Object inline int boxes: 8
+Object inline float boxes: 0
+Object inline array boxes: 0
+Boxing by kind (core): 4
+Boxing by kind (thunk): 4
+Boxing by kind (slot adapter): 0
+Boxing by kind (call adapter): 0
+Boxing by site (unattributed): 0
+Boxing by site (number): 2
+Boxing by site (compare): 0
+Boxing by site (repr): 0
+Boxing by site (sequence): 0
+Boxing by site (iteration): 0
+Boxing by site (attribute): 0
+Boxing by site (call): 4
+Boxing by site (list): 0
+Boxing by site (tuple): 0
+Boxing by site (dict): 0
+Boxing by site (set): 0
+Boxing by site (cell/structseq): 0
+Boxing by site (call adapter): 0
+Boxing by site (parser): 0
+Boxing by site (interpreter): 0
+Boxing by site (field): 2
+Boxing by site (frame): 0
+Boxing by site (compiler): 0
+Boxing by site (test): 0
+Entry unboxing: 1414
+Object box cached: 8
+GC[0] collections: 3
+GC[0] object visits: 42833
+GC[0] objects collected: 23
+GC[0] objects reachable from roots: 0
+GC[0] objects not reachable from roots: 0
+GC[1] collections: 0
+GC[1] object visits: 0
+GC[1] objects collected: 0
+GC[1] objects reachable from roots: 0
+GC[1] objects not reachable from roots: 0
+GC[2] collections: 3
+GC[2] object visits: 114633
+GC[2] objects collected: 1834
+GC[2] objects reachable from roots: 0
+GC[2] objects not reachable from roots: 0
+Rare event (set_class): 0
+Rare event (set_bases): 0
+Rare event (set_eval_frame_func): 0
+Rare event (builtin_dict): 0
+Rare event (func_modification): 9
+Rare event (watched_dict_modification): 3748
+Rare event (watched_globals_modification): 0
+Box owners dropped (core): 0
+Box owners dropped (thunk): 0
+Box owners dropped (slot adapter): 0
+Box owners dropped (call adapter): 0
+Stats resets: 0
+Box object [0]: /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/pyvalue-rc-repr-stats/python build-id=24be9db413bd97d800223ce00ed114ad746ba075
+Box owner (core, field) - at 0+0x248ad2: 1
+Box owner (thunk, call) 0+0x12ddcc at 0+0x12c11c: 4
+Box owner (core, field) - at 0+0x248a77: 1
+Box owner (core, number) - at 0+0x64c759: 2

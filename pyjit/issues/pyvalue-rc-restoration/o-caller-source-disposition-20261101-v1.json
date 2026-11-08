@@ -1,0 +1,23 @@
+{
+  "decision": "ACCEPT_SPECIALIZED_O_CALL_PRODUCTION_SOURCE_COMPONENT",
+  "decided_utc": "2026-11-01T23:47:00+00:00",
+  "source_window_closed_early": true,
+  "original_start_utc": "2026-11-01T23:29:00+00:00",
+  "original_ceiling_utc": "2026-11-01T23:59:00+00:00",
+  "author_checkpoint": "build/worktrees/pyvalue-rc-universal/build/pyvalue-o-caller-source/checkpoint-v2/receipt.json",
+  "author_checkpoint_sha256": "5940dafe2fbe92d28f119a2b100d8c4e6b31ec097859128c0dcd2c62a999044c",
+  "review_sha256": "26e01bbfd95f67a6d0937f257ce0e5f24e0f135a93d9ecc89d42eb0e0bc769b2",
+  "actual_handler_sha256": "02d76a8136702a6d4832f5f551ad6e4961cc0b8c6602a805a56d5d475ea33bb9",
+  "host_generator_tests_pass": 40,
+  "generators_pass": 7,
+  "provisional_syntax_units_pass": 4,
+  "candidate_runtime_executed": false,
+  "scope": "Actual specialized interpreter O caller publication, semantic release order and state reload",
+  "limitations": [
+    "Historical capsule-parameter test does not witness native original-argument retirement",
+    "Corrected temporary-argument and actual End-result-box fixtures need separate exact binding and eventual runtime execution",
+    "Shared displaced-local last-reference cleanup/status/reload remains a required followup",
+    "Generic dispatch, NOARGS and other native families remain outside this production cut",
+    "No universal runtime, opaque extension backend conformance or performance acceptance"
+  ]
+}

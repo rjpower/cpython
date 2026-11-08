@@ -1,0 +1,31 @@
+--- a/Objects/typeobject.c
++++ b/Objects/typeobject.c
+@@ -13406,12 +13406,12 @@
+ slot_tp_descr_get_value(PyObject *self, PyValueBorrow obj, PyObject *type)
+ {
+     PyTypeObject *tp = Py_TYPE(self);
+-    PyObject *get = _PyType_LookupRef(tp, &_Py_ID(__get__));
+-    if (get == NULL && PyErr_Occurred()) {
+-        /* Boxing an inline class attribute failed. */
++    _PyStatusValue found = _PyType_LookupValue(tp, &_Py_ID(__get__));
++    PyValue get = found.value;
++    if (PyValue_IsNull(get) && PyErr_Occurred()) {
+         return PyValue_NULL;
+     }
+-    if (get == NULL) {
++    if (PyValue_IsNull(get)) {
+ #ifndef Py_GIL_DISABLED
+         /* Avoid further slowdowns */
+         if (tp->tp_descr_get == slot_tp_descr_get) {
+@@ -13428,9 +13428,8 @@
+     _PyValue_WindowPut(&stack[1], PyValue_IsNull(obj)
+                        ? _PyValue_FromObjectKnown(Py_None) : obj);
+     _PyValue_WindowPut(&stack[2], PyValue_FromObjectBorrow(type));
+-    PyValue res = _PyValue_Vectorcall(PyValue_FromObjectBorrow(get), stack, 3,
+-                                      NULL);
+-    Py_DECREF(get);
++    PyValue res = _PyValue_Vectorcall(get, stack, 3, NULL);
++    PyValue_CLOSE(get);
+     return res;
+ }
+ 

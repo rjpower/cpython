@@ -1,0 +1,49 @@
+--- a/pyjit/bench/run.py
++++ b/pyjit/bench/run.py
+@@ -260,6 +260,18 @@
+     """A measurement could not be made; nothing is guessed in its place."""
+ 
+ 
++class LaunchedMeasurementError(MeasurementError):
++    def __init__(self, message: str, pid: int):
++        super().__init__(message)
++        self.pid = pid
++
++
++class LaunchedProcess(subprocess.CompletedProcess):
++    def __init__(self, args, returncode, stdout, stderr, pid: int):
++        super().__init__(args, returncode, stdout, stderr)
++        self.pid = pid
++
++
+ @dataclass
+ class Context:
+     python: Path
+@@ -290,13 +302,11 @@
+     with subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                           text=True, env=CHILD_ENV) as child:
+         stdout, stderr = child.communicate()
+-    proc = subprocess.CompletedProcess(cmd, child.returncode, stdout, stderr)
+-    proc.pid = child.pid
++    proc = LaunchedProcess(cmd, child.returncode, stdout, stderr, child.pid)
+     try:
+         return check_result(proc, cmd, what)
+     except MeasurementError as exc:
+-        exc.pid = child.pid
+-        raise
++        raise LaunchedMeasurementError(str(exc), child.pid) from exc
+ 
+ 
+ def write_perf_record(ctx: Context, record: dict) -> None:
+@@ -490,8 +500,10 @@
+     try:
+         proc = run_checked(command, f"{bench.name} under pystats at {loops}")
+         launch["pid"] = proc.pid
++    except LaunchedMeasurementError as exc:
++        launch["pid"] = exc.pid
++        child_error = exc
+     except (MeasurementError, OSError) as exc:
+-        launch["pid"] = getattr(exc, "pid", None)
+         child_error = exc
+     files = sorted(directory.iterdir())
+     contents = _record_pystats(ctx, bench, loops, command, directory, files, launch)

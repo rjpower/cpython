@@ -1189,6 +1189,7 @@ dummy_func(
             _GUARD_NOS_DICT_SUBSCRIPT + unused/5 + _BINARY_OP_SUBSCR_DICT;
 
         inline_ok op(_BINARY_OP_SUBSCR_DICT, (dict_st, sub_st -- res)) {
+            IR_TRY_DICT_FIRST_PROBE();
             PyValue held_dict = TAKE(dict_st);
             PyValue held_sub = TAKE(sub_st);
             INPUTS_DEAD();

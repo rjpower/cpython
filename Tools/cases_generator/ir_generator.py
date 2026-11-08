@@ -359,6 +359,7 @@ RELEASES = {
     "IR_RETIRE_PUBLISHED", "IR_RETIRE_PUBLISHED_RESULT",
     "IR_RETIRE_PUBLISHED_PAIR",
     "IR_FINISH_VALUE_OPERATION", "IR_ABORT_VALUE_READER",
+    "IR_TRY_DICT_FIRST_PROBE",
     "IR_COMPLETE_VALUE_READER", "IR_COMPLETE_ATTR_READER",
     "_PyFrame_ClearTemporaries", "_PyEval_FrameClearAndPop", "_PyErr_Clear",
 }
@@ -2282,6 +2283,7 @@ class IREmitter(Emitter):
         self._replacers["IR_BASE"] = self.ir_base
         self._replacers["IR_WINDOW_TAKEN"] = self.ir_window_taken
         self._replacers["IR_EXECUTE_ORDINARY_NOP"] = self.execute_ordinary_nop
+        self._replacers["IR_TRY_DICT_FIRST_PROBE"] = self.try_dict_first_probe
         self._replacers["IR_RETIRE_PUBLISHED"] = self.retire_published
         self._replacers["IR_RETIRE_PUBLISHED_RESULT"] = self.retire_published
         self._replacers["IR_RETIRE_PUBLISHED_PAIR"] = self.retire_published
@@ -2394,35 +2396,42 @@ class IREmitter(Emitter):
                 f"(IR_IS_LOCAL({dst}) ? {result_name} : PyValue_NULL)")
             assert isinstance(storage.stack, IRStack)
             storage.stack.published_temporary_result = True
-        self.emit("{\n")
-        boxes = " || value_temps->count != 0" if self.has_record else ""
-        self.emit(f"int retire_needed = _PyValue_MayDealloc({first.text}){boxes};\n")
-        self.emit("if (!retire_needed) {\n")
-        self.emit(f"PyValue_XCLOSE({first.text}); {first.text} = PyValue_NULL;\n")
-        if second is not None:
-            self.emit(f"retire_needed = _PyValue_MayDealloc({second.text});\n")
-        self.emit("}\n")
-        self.emit("if (retire_needed) {\n")
-        # The values pass by value and are dead after the call (R-a)
-        second_value = "PyValue_NULL" if second is None else second.text
-        self.emit(f"int retire_failed = retire_published_values(tstate, frame, next_instr, {self.temps}, {first.text}, {second_value}, {failure_result});\n")
-        self.emit("if (retire_failed < 0) { JUMP_TO_LABEL(error); }\n")
-        self.emit("this_instr = frame->instr_ptr;\n")
-        self.emit("ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);\n")
-        self.emit("slots = _PyFrame_Slots(frame);\n")
-        if self.format_of(inst).window:
-            base = FIELD_VARS[self.format_of(inst).field_of(ROLE_BASE)]
-            self.emit(f"window = &IR_SLOT({base});\n")
-        self.emit("}\n")
-        if second is not None:
-            self.emit("else {\n")
-            self.emit(f"PyValue_XCLOSE({second.text}); {second.text} = PyValue_NULL;\n")
-            self.emit("}\n")
-        self.emit("}\n")
+        window = (FIELD_VARS[self.format_of(inst).field_of(ROLE_BASE)]
+                  if self.format_of(inst).window else None)
+        self.emit_ordered_retirement(first.text, second.text if second else None,
+                                     failure_result, self.temps, window)
         stack = storage.stack
         assert isinstance(stack, IRStack)
         stack.code_ran()
         return True
+
+    def emit_ordered_retirement(self, first, second, failure_result, temps, window):
+        """Retire owners in order, checking each after the preceding close."""
+        self.emit("{\n")
+        boxes = " || value_temps->count != 0" if temps != "NULL" else ""
+        self.emit(f"int retire_needed = _PyValue_MayDealloc({first}){boxes};\n")
+        self.emit("if (!retire_needed) {\n")
+        self.emit(f"PyValue_XCLOSE({first}); {first} = PyValue_NULL;\n")
+        if second is not None:
+            self.emit(f"retire_needed = _PyValue_MayDealloc({second});\n")
+        self.emit("}\n")
+        self.emit("if (retire_needed) {\n")
+        # The values pass by value and are dead after the call (R-a)
+        second_value = "PyValue_NULL" if second is None else second
+        self.emit(f"int retire_failed = retire_published_values(tstate, frame, next_instr, {temps}, {first}, {second_value}, {failure_result});\n")
+        self.emit("if (retire_failed < 0) { JUMP_TO_LABEL(error); }\n")
+        self.emit("this_instr = frame->instr_ptr;\n")
+        self.emit("ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);\n")
+        self.emit("slots = _PyFrame_Slots(frame);\n")
+        if window is not None:
+            base = window
+            self.emit(f"window = &IR_SLOT({base});\n")
+        self.emit("}\n")
+        if second is not None:
+            self.emit("else {\n")
+            self.emit(f"PyValue_XCLOSE({second}); {second} = PyValue_NULL;\n")
+            self.emit("}\n")
+        self.emit("}\n")
 
     def macro_args(self, tkn, tkn_iter, count: int) -> list[str]:
         "The count identifiers of the statement IR_X(a, b, ...);"
@@ -2524,6 +2533,28 @@ class IREmitter(Emitter):
         self.emit("this_instr = frame->instr_ptr;\n")
         self.emit("ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);\n")
         self.emit("slots = _PyFrame_Slots(frame);\n")
+
+    def try_dict_first_probe(self, tkn, tkn_iter, uop, storage, inst):
+        self.macro_args(tkn, tkn_iter, 0)
+        self.emit("{\n")
+        self.emit("PyValue ir_leaf_result = _PyDict_TryGetFirstProbeValue(dict_st, sub_st);\n")
+        self.emit("if (!PyValue_IsNull(ir_leaf_result)) {\n")
+        self.emit("PyValue ir_leaf_dict = IR_CONSUME_INPUT(IR_B(ir_word), dict_st);\n")
+        self.emit("PyValue ir_leaf_key = IR_CONSUME_INPUT(IR_C(ir_word), sub_st);\n")
+        self.emit("STAT_INC(BINARY_OP, hit);\n")
+        self.emit("IR_STORE_CANONICAL_TEMP_DST(IR_A(ir_word), ir_leaf_result);\n")
+        self.emit_ordered_retirement(
+            "ir_leaf_key", "ir_leaf_dict",
+            "(IR_IS_LOCAL(IR_A(ir_word)) ? ir_leaf_result : PyValue_NULL)",
+            "NULL", None)
+        self.emit("if (IR_IS_LOCAL(IR_A(ir_word))) {\n")
+        self.emit("IR_STORE_DST(IR_A(ir_word), ir_leaf_result);\n")
+        self.release_displaced()
+        self.emit("}\n")
+        self.emit("DISPATCH();\n")
+        self.emit("}\n")
+        self.emit("}\n")
+        return True
 
     def execute_ordinary_nop(self, tkn, tkn_iter, uop, storage, inst):
         self.macro_args(tkn, tkn_iter, 0)
@@ -3140,6 +3171,7 @@ class IREmitter(Emitter):
                         ) -> tuple[bool, Token | None, Storage]:
         """A statement that kills an input, as DEAD(), a close or a steal,
         gives up its slot"""
+        leaf_marker = any(t.text == "IR_TRY_DICT_FIRST_PROBE" for t in stmt.contents)
         transaction_marker = any(t.text in CALL_TRANSACTION_MARKERS
                                  for t in stmt.contents)
         if inst is not None and uses_call_transaction(inst):
@@ -3185,7 +3217,7 @@ class IREmitter(Emitter):
                 if var is not None and var.ir_inplace is None and not var.is_array():
                     stack.bind(var.name, None)
         self.note_view_object(stmt, storage, escape is not None)
-        if escape is not None or transaction_marker:
+        if not leaf_marker and (escape is not None or transaction_marker):
             stack.code_ran()
         if reachable:
             self.consume_killed(storage)
@@ -3664,6 +3696,47 @@ def validate_ordinary_nop_boundary(inst: Instruction, fmt: IRFormat) -> None:
                              "terminal boolean branch", inst.where)
 
 
+def validate_dict_first_probe(inst: Instruction, fmt: IRFormat) -> None:
+    parts = [p for p in inst.parts if isinstance(p, Uop)]
+    markers = [(p, t) for p in parts for t in p.body.tokens()
+               if t.text == "IR_TRY_DICT_FIRST_PROBE"]
+    if not markers:
+        return
+    inputs, outputs = external_io(inst)
+    expected = ["_GUARD_NOS_DICT_SUBSCRIPT", "_BINARY_OP_SUBSCR_DICT"]
+    # The named guard's mapping-provider semantics are maintained with this
+    # rule. Its exact shape and nonescaping effects keep the prefix harmless.
+    guard = parts[0]
+    producer = parts[-1] if parts else None
+    first = (" ".join(t.text for t in producer.body.body[0].tokens())
+             if producer and producer.body.body else "")
+    def stack_items(items):
+        return [(item.name, item.peek, item.size) for item in items]
+
+    checked_shapes = [
+        ([("nos", True, ""), ("unused", True, "")],
+         [("nos", True, ""), ("unused", True, "")]),
+        ([("dict_st", False, ""), ("sub_st", False, "")],
+         [("res", False, "")]),
+    ]
+    if (len(markers) != 1 or [p.name for p in parts] != expected
+            or [(stack_items(p.stack.inputs), stack_items(p.stack.outputs))
+                for p in parts] != checked_shapes
+            or inst.parts[-1] is not producer
+            or first != "IR_TRY_DICT_FIRST_PROBE ( ) ;"
+            or not guard.is_guard() or guard.properties.escapes
+            or guard.properties.eval_breaker or guard.properties.switches_frame
+            or guard.properties.error_with_pop or guard.properties.error_without_pop
+            or len(inputs) != 2 or any(i.size for i in inputs)
+            or len(outputs) != 1 or outputs[0].item.size
+            or fmt.window or fmt.n_inputs != 2 or fmt.borrow_mask != 3
+            or fmt.input_field(0) != "B" or fmt.input_field(1) != "C"
+            or fmt.field_of(ROLE_DST) != "A" or not fmt.store_dst
+            or fmt.discards or fmt.unpacks):
+        raise analysis_error("IR_TRY_DICT_FIRST_PROBE requires the checked "
+                             "dictionary reader prefix and scalar format", inst.where)
+
+
 def generate_handler(name: str, inst: Instruction, fmt: IRFormat,
                      emitter: IREmitter, out: CWriter, record: bool) -> None:
     """The handler name, which runs inst: inst itself, or for a handler of a
@@ -3680,6 +3753,7 @@ def generate_handler(name: str, inst: Instruction, fmt: IRFormat,
     name with both roles is refused: the DSL gives the owner another name,
     as `taken = TAKE(value)` does."""
     validate_ordinary_nop_boundary(inst, fmt)
+    validate_dict_first_probe(inst, fmt)
     emitter.result_publication = result_publication_contract(inst, fmt)
     saved = emitter.out
     roles: dict[str, set[str]] = {}
@@ -4147,6 +4221,11 @@ def boxing_handlers(analysis: Analysis, formats: dict[str, IRFormat]) -> set[str
         # Classify the handler as emitted with a record
         generate_handler(name, inst, formats[name], emitter, out, True)
         if boxes_into_record(buffer.getvalue()):
+            if any(isinstance(p, Uop) and any(
+                    t.text == "IR_TRY_DICT_FIRST_PROBE" for t in p.body.tokens())
+                   for p in inst.parts):
+                raise analysis_error("IR_TRY_DICT_FIRST_PROBE cannot use "
+                                     "a value record", inst.where)
             if emitter.execute_nop_boundary:
                 raise analysis_error("IR_EXECUTE_ORDINARY_NOP cannot follow "
                                      "boxed inputs", inst.where)

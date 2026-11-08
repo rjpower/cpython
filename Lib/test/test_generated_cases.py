@@ -328,6 +328,54 @@ class TestIRCases(unittest.TestCase):
                                             "requires the checked terminal boolean branch"):
                     generate(source.replace(old, new, 1))
 
+    def test_dict_first_probe_contract(self):
+        source = (Path(__file__).resolve().parents[2] /
+                  "Python" / "bytecodes.c").read_text()
+
+        def generate(text):
+            Path(self.temp_input_filename).write_text(text)
+            with handle_stderr():
+                analysis = analyzer.analyze_files([self.temp_input_filename])
+            out = io.StringIO()
+            ir_generator.generate_ir([self.temp_input_filename], analysis, out, False)
+            return out.getvalue()
+
+        body = self.handler(generate(source), "BINARY_OP_SUBSCR_DICT")
+        provider = body.index("_PyDict_TryGetFirstProbeValue")
+        consume = body.index("IR_CONSUME_INPUT", provider)
+        publish = body.index("IR_STORE_CANONICAL_TEMP_DST", consume)
+        key = body.index("_PyValue_MayDealloc(ir_leaf_key)", publish)
+        dictionary = body.index("_PyValue_MayDealloc(ir_leaf_dict)", key)
+        dispatch = body.index("DISPATCH();", dictionary)
+        slow = body.index("value_subscript(held_dict, held_sub)", dispatch)
+        self.assertLess(provider, consume)
+        self.assertLess(dispatch, slow)
+        self.assertNotIn("value_reader_complete", body[provider:dispatch])
+        self.assertLess(body.index("IR_STORE_DST", dictionary), dispatch)
+
+        marker = "IR_TRY_DICT_FIRST_PROBE();"
+        guard = "DEOPT_IF(!Py_TYPE(o)->tp_as_mapping);"
+        changes = (
+            (marker, "STAT_INC(BINARY_OP, hit); " + marker),
+            (marker, marker + " " + marker),
+            (guard, "spam_call(); " + guard),
+            ("(dict_st, sub_st -- res)", "(sub_st, dict_st -- res)"),
+            (marker, "if (oparg) { " + marker + " }"),
+        )
+        for old, new in changes:
+            with self.subTest(new=new):
+                self.assertIn(old, source)
+                with self.assertRaises(SyntaxError):
+                    generate(source.replace(old, new, 1))
+
+        boxes_into_record = ir_generator.boxes_into_record
+        def box_dict_reader(code):
+            return ("_PyDict_TryGetFirstProbeValue" in code or
+                    boxes_into_record(code))
+        with mock.patch.object(ir_generator, "boxes_into_record", box_dict_reader):
+            with self.assertRaisesRegex(SyntaxError, "cannot use a value record"):
+                generate(source)
+
     def run_ir_test(self, input: str, expected: str):
         self.assertEqual(self.ir_output(input).strip(), expected.strip())
 

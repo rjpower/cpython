@@ -521,6 +521,7 @@ def tier_variable(node: parser.CodeDef) -> int | None:
 # must still expose their real callout/control-flow properties to consumers;
 # ordinary uppercase macros keep their existing non-call interpretation.
 CALL_TRANSACTION_MARKERS = {
+    "IR_TRY_DICT_FIRST_PROBE": frozenset(("escapes", "error", "sync", "pc")),
     "IR_BEGIN_CALL_EFFECTS": frozenset(),
     **dict.fromkeys(("IR_PREPARE_CALL_METHOD", "IR_PREPARE_CALL_TUPLE",
                      "IR_MONITOR_CALL", "IR_REFRESH_CALL"),

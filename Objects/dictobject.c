@@ -124,6 +124,7 @@ As a consequence of this, split keys have a maximum size of 16.
 #include "pycore_dict.h"          // export _PyDict_SizeOf()
 #include "pycore_freelist.h"      // _PyFreeListState_GET()
 #include "pycore_gc.h"            // _PyObject_GC_IS_TRACKED()
+#include "pycore_long_value.h"    // _PyLong_ValueHash()
 #include "pycore_list.h"          // PyList_GET_VALUE()
 #include "pycore_object.h"        // _PyObject_GC_TRACK(), _PyDebugAllocatorStats()
 #include "pycore_pyatomic_ft_wrappers.h" // FT_ATOMIC_LOAD_SSIZE_RELAXED
@@ -497,6 +498,41 @@ dictkeys_get_index(const PyDictKeysObject *keys, Py_ssize_t i)
     }
     assert(ix >= DKIX_DUMMY);
     return ix;
+}
+
+/* Return an owned value only when the first probe proves an identity hit.
+ * Declining leaves the inputs, table, and exception state untouched. */
+PyValue
+_PyDict_TryGetFirstProbeValue(PyValueBorrow container, PyValueBorrow key)
+{
+#ifdef Py_GIL_DISABLED
+    return PyValue_NULL;
+#else
+    if (!PyValue_IsObject(container) || !PyValue_IsInlineInt(key)) {
+        return PyValue_NULL;
+    }
+    PyObject *object = PyValue_AsKnownObjectBorrow(container);
+    if (!PyDict_CheckExact(object)) {
+        return PyValue_NULL;
+    }
+    PyDictObject *dict = (PyDictObject *)object;
+    PyDictKeysObject *keys = dict->ma_keys;
+    if (keys->dk_kind != DICT_KEYS_GENERAL || dict->ma_values != NULL) {
+        return PyValue_NULL;
+    }
+    Py_hash_t hash = _PyLong_ValueHash(key);
+    Py_ssize_t index = dictkeys_get_index(keys, (size_t)hash & DK_MASK(keys));
+    if (index < 0) {
+        return PyValue_NULL;
+    }
+    assert(index < keys->dk_nentries);
+    PyDictKeyEntry *entry = &DK_ENTRIES(keys)[index];
+    if (!PyValue_Is(entry->me_key, key) || PyValue_IsNull(entry->me_value)) {
+        return PyValue_NULL;
+    }
+    assert(_PyValue_IsHome(entry->me_value));
+    return PyValue_XDUP(entry->me_value);
+#endif
 }
 
 /* write to indices. */

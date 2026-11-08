@@ -1545,6 +1545,131 @@ class FoldTest(unittest.TestCase):
         self.assertEqual(lines, [f.__code__.co_firstlineno + 1])
 
 
+class DictFirstProbeTest(unittest.TestCase):
+    def test_dict_lookup_hits_and_declines(self):
+        def lookup(d, key):
+            return d[key]
+
+        values = (None, 42, 3.25, 2**80, float("nan"), "immortal", object())
+        for value in values:
+            for key in (0, 1, -1, -2, 123):
+                d = {key: value}
+                for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 2):
+                    self.assertIs(lookup(d, key), value)
+        if SPECIALIZES:
+            self.assertIn("BINARY_OP_SUBSCR_DICT", handlers(lookup))
+
+        d = {0: "zero", 8: "collision", -1: "negative"}
+        del d[0]
+        d.update({i: i for i in range(40)})
+        self.assertEqual(lookup(d, 8), 8)
+        self.assertEqual(lookup(d, -1), "negative")
+        self.assertEqual(lookup({True: "bool"}, 1), "bool")
+        self.assertEqual(lookup({1: "int"}, True), "int")
+        self.assertEqual(lookup(frozendict({1: "frozen"}), 1), "frozen")
+        self.assertEqual(lookup({2**80: "wide"}, 2**80), "wide")
+        with self.assertRaises(KeyError):
+            lookup(d, 999)
+        class Missing(dict):
+            def __missing__(self, key):
+                return key + 1
+        self.assertEqual(lookup(Missing(), 3), 4)
+
+    def test_collision_callback_and_owned_result(self):
+        calls = []
+        class Collision:
+            def __hash__(self):
+                return 7
+            def __eq__(self, other):
+                calls.append(other)
+                return False
+        class Value:
+            pass
+        def lookup(d, key):
+            return d[key]
+        for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 2):
+            lookup({7: 1}, 7)
+        d = {Collision(): "other", 7: "answer"}
+        calls.clear()
+        self.assertEqual(lookup(d, 7), "answer")
+        self.assertEqual(calls, [7])
+
+        armed = False
+        class MutatingCollision:
+            def __hash__(self):
+                return 7
+            def __eq__(self, other):
+                if armed:
+                    calls.append(other)
+                    d["callback"] = True
+                return False
+        d = {MutatingCollision(): "other", 7: "answer"}
+        armed = True
+        calls.clear()
+        self.assertEqual(lookup(d, 7), "answer")
+        self.assertEqual(calls, [7])
+        self.assertTrue(d["callback"])
+
+        class BadHash:
+            def __hash__(self):
+                raise ValueError("hash")
+        with self.assertRaisesRegex(ValueError, "hash"):
+            lookup(d, BadHash())
+        value = Value()
+        self.assertIs(lookup({7: value}, 7), value)
+        d = {}
+        d[7] = d
+        self.assertIs(lookup(d, 7), d)
+
+    @support.requires_refcounting
+    def test_temporary_dictionary_retirement_before_local_store(self):
+        events = []
+        observing = False
+
+        class Old:
+            def __del__(self):
+                if observing:
+                    events.append("old")
+
+        class Sentinel:
+            def __del__(self):
+                if observing:
+                    events.append("sentinel")
+
+        class Retired:
+            def __del__(self):
+                if observing:
+                    frame = sys._getframe(1)
+                    events.append(("dict", isinstance(frame.f_locals["result"], Old)))
+                    frame.f_locals["result"] = Sentinel()
+
+        class Payload:
+            pass
+
+        def factory():
+            return {7: Payload(), 8: Retired()}
+
+        read = make_function("def f(factory, Old):\n"
+                             "    result = Old()\n"
+                             "    result = factory()[7]\n"
+                             "    return result\n")
+        subscript = next(word for word in get_ir(read.__code__)
+                         if word[0] == "BINARY_OP_SUBSCR")
+        self.assertLess(subscript[1], nlocalsplus(read))
+        for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 3):
+            read(factory, Old)
+        if SPECIALIZES:
+            self.assertIn("BINARY_OP_SUBSCR_DICT", handlers(read))
+        observing = True
+        try:
+            result = read(factory, Old)
+        finally:
+            observing = False
+        self.assertIsInstance(result, Payload)
+        # Rebinding through f_locals pins Old until frame destruction.
+        self.assertEqual(events, [("dict", True), "sentinel", "old"])
+
+
 class Truthy:
     pass
 

@@ -2938,6 +2938,41 @@
                 sub_st = IR_VIEW(IR_C(ir_word));
                 dict_st = nos;
                 (void)dict_st;
+                {
+                    PyValue ir_leaf_result = _PyDict_TryGetFirstProbeValue(dict_st, sub_st);
+                    if (!PyValue_IsNull(ir_leaf_result)) {
+                        PyValue ir_leaf_dict = IR_CONSUME_INPUT(IR_B(ir_word), dict_st);
+                        PyValue ir_leaf_key = IR_CONSUME_INPUT(IR_C(ir_word), sub_st);
+                        STAT_INC(BINARY_OP, hit);
+                        IR_STORE_CANONICAL_TEMP_DST(IR_A(ir_word), ir_leaf_result);
+                        {
+                            int retire_needed = _PyValue_MayDealloc(ir_leaf_key);
+                            if (!retire_needed) {
+                                PyValue_XCLOSE(ir_leaf_key); ir_leaf_key = PyValue_NULL;
+                                retire_needed = _PyValue_MayDealloc(ir_leaf_dict);
+                            }
+                            if (retire_needed) {
+                                int retire_failed = retire_published_values(tstate, frame, next_instr, NULL, ir_leaf_key, ir_leaf_dict, (IR_IS_LOCAL(IR_A(ir_word)) ? ir_leaf_result : PyValue_NULL));
+                                if (retire_failed < 0) { JUMP_TO_LABEL(error); }
+                                this_instr = frame->instr_ptr;
+                                ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
+                                slots = _PyFrame_Slots(frame);
+                            }
+                            else {
+                                PyValue_XCLOSE(ir_leaf_dict); ir_leaf_dict = PyValue_NULL;
+                            }
+                        }
+                        if (IR_IS_LOCAL(IR_A(ir_word))) {
+                            IR_STORE_DST(IR_A(ir_word), ir_leaf_result);
+                            if (!PyValue_IsNull(ir_displaced) &&
+                                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
+                                next_instr = frame->instr_ptr + 1;
+                                JUMP_TO_LABEL(error);
+                            }
+                        }
+                        DISPATCH();
+                    }
+                }
                 ir_own_B = IR_CONSUME_INPUT(IR_B(ir_word), dict_st);
                 PyValue held_dict = IR_TAKE(dict_st, ir_own_B);
                 ir_own_C = IR_CONSUME_INPUT(IR_C(ir_word), sub_st);

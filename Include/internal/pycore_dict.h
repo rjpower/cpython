@@ -13,6 +13,12 @@ extern "C" {
 #include "pycore_value.h"             // PyValue
 #include "pycore_stats.h"
 
+// The caller keeps both borrowed inputs alive throughout this nonescaping
+// lookup.  A hit returns an owned canonical value; NULL declines without
+// changing either input, the table, or the current exception.
+PyAPI_FUNC(PyValue) _PyDict_TryGetFirstProbeValue(PyValueBorrow container,
+                                                 PyValueBorrow key);
+
 // Delete an item from a dict if a predicate is true
 // Returns -1 on error, 1 if the item was deleted, 0 otherwise
 // Export for '_asyncio' shared extension

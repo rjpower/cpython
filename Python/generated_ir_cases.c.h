@@ -14997,6 +14997,10 @@
                     JUMPTO(oparg);
                 }
             }
+            // _EXECUTE_ORDINARY_NOP
+            {
+            }
+            IR_EXECUTE_ORDINARY_NOP();
             DISPATCH();
         }
 

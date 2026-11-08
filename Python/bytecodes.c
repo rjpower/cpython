@@ -3484,6 +3484,10 @@ dummy_func(
             }
         }
 
+        tier1 op(_EXECUTE_ORDINARY_NOP, (--)) {
+            IR_EXECUTE_ORDINARY_NOP();
+        }
+
         // A conditional jump tests the truth of any value: the compiler
         // drops the TO_BOOL before it (Python/flowgraph.c), so the jumps
         // specialise as TO_BOOL does, and their entries keep the branch
@@ -3526,7 +3530,8 @@ dummy_func(
             unused/1 + _SPECIALIZE_POP_JUMP_IF + unused/2 + _TO_BOOL + _POP_JUMP_IF_FALSE;
 
         macro(POP_JUMP_IF_FALSE_BOOL) =
-            unused/1 + unused/2 + _GUARD_TOS_BOOL + _POP_JUMP_IF_FALSE;
+            unused/1 + unused/2 + _GUARD_TOS_BOOL + _POP_JUMP_IF_FALSE +
+            _EXECUTE_ORDINARY_NOP;
         macro(POP_JUMP_IF_TRUE_BOOL) =
             unused/1 + unused/2 + _GUARD_TOS_BOOL + _POP_JUMP_IF_TRUE;
         macro(POP_JUMP_IF_FALSE_INT) =

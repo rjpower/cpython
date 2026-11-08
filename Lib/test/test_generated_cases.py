@@ -294,6 +294,40 @@ class TestIRCases(unittest.TestCase):
         end = output.find("TARGET(", start + 1)
         return output[start:end if end >= 0 else len(output)]
 
+    def test_ordinary_nop_boundary_contract(self):
+        source = (Path(__file__).resolve().parents[2] /
+                  "Python" / "bytecodes.c").read_text()
+
+        def generate(text):
+            Path(self.temp_input_filename).write_text(text)
+            with handle_stderr():
+                analysis = analyzer.analyze_files([self.temp_input_filename])
+            out = io.StringIO()
+            ir_generator.generate_ir([self.temp_input_filename], analysis, out, False)
+            return out.getvalue()
+
+        output = generate(source)
+        branch = self.handler(output, "POP_JUMP_IF_FALSE_BOOL")
+        self.assertEqual(branch.count("IR_EXECUTE_ORDINARY_NOP();"), 1)
+        self.assertLess(branch.index("IR_CONSUME_INPUT"),
+                        branch.index("IR_EXECUTE_ORDINARY_NOP();"))
+        self.assertLess(branch.index("IR_EXECUTE_ORDINARY_NOP();"),
+                        branch.rindex("DISPATCH();"))
+        self.assertNotIn("IR_EXECUTE_ORDINARY_NOP();",
+                         self.handler(output, "POP_JUMP_IF_TRUE_BOOL"))
+
+        guard = "EXIT_IF(!PyValue_BoolCheck(value));"
+        branch_call = "RECORD_BRANCH_TAKEN(FB_BRANCH(), flag);"
+        for old, new in ((guard, "EXIT_IF(!PyValue_IsObject(value));"),
+                         (branch_call, "spam_call(); " + branch_call),
+                         ("_POP_JUMP_IF_FALSE +\n            _EXECUTE_ORDINARY_NOP;",
+                          "_EXECUTE_ORDINARY_NOP +\n            _POP_JUMP_IF_FALSE;")):
+            with self.subTest(old=old):
+                self.assertIn(old, source)
+                with self.assertRaisesRegex(SyntaxError,
+                                            "requires the checked terminal boolean branch"):
+                    generate(source.replace(old, new, 1))
+
     def run_ir_test(self, input: str, expected: str):
         self.assertEqual(self.ir_output(input).strip(), expected.strip())
 

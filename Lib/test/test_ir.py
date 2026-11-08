@@ -342,6 +342,93 @@ class AssemblerTest(unittest.TestCase):
         self.assertEqual([e[1] for e in events if e[0] == "opcode"], lasti)
         self.assertEqual(f(C()), 5)
 
+    @unittest.skipUnless(SPECIALIZES, "the IR is not specialised")
+    def test_bool_branch_nop_observation(self):
+        def f(flag, enable):
+            enable()
+            value = 4
+            if flag:
+                return 1
+            try:
+                value = 2
+            except RuntimeError:
+                value = 3
+            return value
+
+        def noop():
+            pass
+
+        for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 10):
+            self.assertEqual(f(False, noop), 2)
+        self.assertEqual(f(True, noop), 1)
+        self.assertIn("POP_JUMP_IF_FALSE_BOOL", handlers(f))
+        nop = next(i for i in dis.get_instructions(f) if i.opname == "NOP")
+        self.assertTrue(nop.starts_line)
+        self.assertIsNotNone(nop.line_number)
+        self.assertEqual(f(False, noop), 2)
+
+        events = []
+        def tracer(frame, event, arg):
+            if frame.f_code is f.__code__:
+                frame.f_trace_opcodes = True
+                events.append((event, frame.f_lasti))
+            return tracer
+
+        def enable():
+            frame = sys._getframe(1)
+            frame.f_trace = tracer
+            frame.f_trace_opcodes = True
+            sys.settrace(tracer)
+
+        try:
+            self.assertEqual(f(False, enable), 2)
+        finally:
+            sys.settrace(None)
+
+        def jump(frame, event, arg):
+            if (frame.f_code is f.__code__ and event == "line" and
+                    frame.f_lineno == nop.line_number):
+                frame.f_lineno = f.__code__.co_firstlineno + 9
+            return jump
+
+        sys.settrace(jump)
+        try:
+            self.assertEqual(f(False, noop), 4)
+        finally:
+            sys.settrace(None)
+
+        mon = sys.monitoring
+        tool = mon.DEBUGGER_ID
+        seen = []
+        mon.use_tool_id(tool, "test_ir_nop")
+        try:
+            for event in (mon.events.BRANCH_LEFT, mon.events.BRANCH_RIGHT):
+                mon.register_callback(tool, event,
+                    lambda code, src, dst: seen.append((src, dst)))
+            mon.set_local_events(tool, f.__code__,
+                                 mon.events.BRANCH_LEFT | mon.events.BRANCH_RIGHT)
+            self.assertEqual(f(False, noop), 2)
+            self.assertEqual(f(True, noop), 1)
+        finally:
+            mon.set_local_events(tool, f.__code__, 0)
+            mon.free_tool_id(tool)
+        self.assertGreaterEqual(len({dst for _, dst in seen}), 2)
+        self.assertIn(("opcode", nop.offset), events)
+
+        def raising(frame, event, arg):
+            if (frame.f_code is f.__code__ and event == "opcode" and
+                    frame.f_lasti == nop.offset):
+                raise LookupError("nop observer")
+            frame.f_trace_opcodes = True
+            return raising
+
+        sys.settrace(raising)
+        try:
+            with self.assertRaisesRegex(LookupError, "nop observer"):
+                f(False, noop)
+        finally:
+            sys.settrace(None)
+
     def test_frames_when_instrumented(self):
         # Frames that are in the code when instrumentation rewrites its
         # executing copy go on in it: a suspended generator, and a frame in

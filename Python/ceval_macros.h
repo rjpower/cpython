@@ -738,6 +738,26 @@ _PyIR_UnpackToLocals(PyValue *locals, PyValue *window, int n)
         } \
     } while (0)
 
+/* Execute the retained ordinary NOP boundary after the checked bool branch.
+ * Instrumented targets and lltrace still enter the normal handler. */
+#ifdef Py_GIL_DISABLED
+#  define IR_EXECUTE_ORDINARY_NOP() ((void)0)
+#else
+#  ifdef Py_DEBUG
+#    define IR_NOP_NO_LLTRACE() (frame->lltrace < 5)
+#  else
+#    define IR_NOP_NO_LLTRACE() 1
+#  endif
+#  define IR_EXECUTE_ORDINARY_NOP() \
+    do { \
+        if (IR_NOP_NO_LLTRACE() && \
+            IR_HANDLER(FT_ATOMIC_LOAD_UINT64_RELAXED(*next_instr)) == NOP) { \
+            frame->instr_ptr = next_instr; \
+            next_instr++; \
+        } \
+    } while (0)
+#endif
+
 /* After a frame switch, V goes to the slot of the frame that control came
  * back to (frame->return_slot). */
 #define IR_STORE_RETURN(V) \

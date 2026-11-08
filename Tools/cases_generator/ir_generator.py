@@ -2281,6 +2281,7 @@ class IREmitter(Emitter):
         self._replacers["IR_DST_SLOT"] = self.ir_dst_slot
         self._replacers["IR_BASE"] = self.ir_base
         self._replacers["IR_WINDOW_TAKEN"] = self.ir_window_taken
+        self._replacers["IR_EXECUTE_ORDINARY_NOP"] = self.execute_ordinary_nop
         self._replacers["IR_RETIRE_PUBLISHED"] = self.retire_published
         self._replacers["IR_RETIRE_PUBLISHED_RESULT"] = self.retire_published
         self._replacers["IR_RETIRE_PUBLISHED_PAIR"] = self.retire_published
@@ -2523,6 +2524,11 @@ class IREmitter(Emitter):
         self.emit("this_instr = frame->instr_ptr;\n")
         self.emit("ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);\n")
         self.emit("slots = _PyFrame_Slots(frame);\n")
+
+    def execute_ordinary_nop(self, tkn, tkn_iter, uop, storage, inst):
+        self.macro_args(tkn, tkn_iter, 0)
+        self.execute_nop_boundary = True
+        return True
 
     def call_reload(self, inst):
         self.reader_reload()
@@ -3619,6 +3625,45 @@ def value_bridge_bound(name: str, inst: Instruction) -> int:
     )
 
 
+def validate_ordinary_nop_boundary(inst: Instruction, fmt: IRFormat) -> None:
+    parts = [p for p in inst.parts if isinstance(p, Uop)]
+    markers = [p for p in parts if any(
+        t.text == "IR_EXECUTE_ORDINARY_NOP" for t in p.body.tokens())]
+    if not markers:
+        return
+    expected = ["_GUARD_TOS_BOOL", "_POP_JUMP_IF_FALSE",
+                "_EXECUTE_ORDINARY_NOP"]
+    stack_effects = [
+        ([('value', True, '')], [('value', True, '')]),
+        ([('cond', False, '')], []),
+        ([], []),
+    ]
+    def stack_items(items):
+        return [(item.name, item.peek, item.size) for item in items]
+
+    inputs, outputs = external_io(inst)
+    if [p.name for p in parts] != expected or inst.parts[-1] is not parts[-1]:
+        raise analysis_error("IR_EXECUTE_ORDINARY_NOP requires the checked "
+                             "terminal boolean branch", inst.where)
+    statements = parts[0].body.body
+    guard = (" ".join(t.text for t in statements[0].tokens())
+             if statements and isinstance(statements[0], SimpleStmt) else "")
+    marker = " ".join(t.text for t in parts[-1].body.tokens())
+    if (guard != "EXIT_IF ( ! PyValue_BoolCheck ( value ) ) ;"
+            or marker != "{ IR_EXECUTE_ORDINARY_NOP ( ) ; }"
+            or not parts[0].is_guard() or not parts[1].properties.jumps
+            or [(stack_items(p.stack.inputs), stack_items(p.stack.outputs))
+                for p in parts] != stack_effects
+            or len(inputs) != 1 or inputs[0].size or outputs or fmt.window
+            or fmt.store_dst or releases_object(inst)
+            or any(p.properties.escapes or p.properties.eval_breaker
+                   or p.properties.switches_frame or p.properties.error_with_pop
+                   or p.properties.error_without_pop
+                   for p in parts)):
+        raise analysis_error("IR_EXECUTE_ORDINARY_NOP requires the checked "
+                             "terminal boolean branch", inst.where)
+
+
 def generate_handler(name: str, inst: Instruction, fmt: IRFormat,
                      emitter: IREmitter, out: CWriter, record: bool) -> None:
     """The handler name, which runs inst: inst itself, or for a handler of a
@@ -3634,6 +3679,7 @@ def generate_handler(name: str, inst: Instruction, fmt: IRFormat,
     locals; the second declares them, a view as a PyValueBorrow (S8).  A
     name with both roles is refused: the DSL gives the owner another name,
     as `taken = TAKE(value)` does."""
+    validate_ordinary_nop_boundary(inst, fmt)
     emitter.result_publication = result_publication_contract(inst, fmt)
     saved = emitter.out
     roles: dict[str, set[str]] = {}
@@ -3666,6 +3712,7 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
         operation = "NB_" + name.removeprefix(BINARY_OP_FAMILY + "_")
     transaction = uses_call_transaction(inst)
     emitter.call_finished = False
+    emitter.execute_nop_boundary = False
     emitter.call_fallback_used = False
     emitter.call_fallback = f"call_transaction_fallback_{name}"
     is_target = inst.is_target and name == inst.name
@@ -3825,6 +3872,8 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
             emitter.release_displaced()
         if fmt.unpacks:
             emitter.unpack_to_locals(fmt, UNPACKS[fmt.group])
+        if emitter.execute_nop_boundary:
+            out.emit("IR_EXECUTE_ORDINARY_NOP();\n")
         out.emit("DISPATCH();\n")
     if transaction and emitter.call_fallback_used:
         out.emit(f"{emitter.call_fallback}:;\n")
@@ -4098,6 +4147,9 @@ def boxing_handlers(analysis: Analysis, formats: dict[str, IRFormat]) -> set[str
         # Classify the handler as emitted with a record
         generate_handler(name, inst, formats[name], emitter, out, True)
         if boxes_into_record(buffer.getvalue()):
+            if emitter.execute_nop_boundary:
+                raise analysis_error("IR_EXECUTE_ORDINARY_NOP cannot follow "
+                                     "boxed inputs", inst.where)
             result.add(name)
     return result
 

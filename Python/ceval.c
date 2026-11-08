@@ -3322,13 +3322,6 @@ call_transaction_invoke(_PyCallTransaction *call, _PyInterpreterFrame **child)
     return call_transaction_native(call);
 }
 
-/* Run a call: the rest of its preparation, its CALL event, and either a
- * pushed Python frame or a native call.  The handler keeps the call's state
- * in registers (flags: CALL_EFFECTS, CALL_PREPARED and CALL_MONITORED for
- * what it did, CALL_INSTRUMENTED and CALL_PERIODIC for what it is).  The
- * transaction record, whose helpers take its address, lives only in this
- * function's frame (register-ir-v2-a3.md 3.5, R-c).  Returns {-1, NULL} on
- * error, {0, child} for a pushed frame, {0, NULL} for a finished call. */
 static inline _PyCallTransaction
 call_transaction_init(PyThreadState *tstate, _PyInterpreterFrame *frame,
                       int base, int count, int destination, int argument_count,
@@ -3345,6 +3338,13 @@ call_transaction_init(PyThreadState *tstate, _PyInterpreterFrame *frame,
     };
 }
 
+/* Run a call: the rest of its preparation, its CALL event, and either a
+ * pushed Python frame or a native call.  The handler keeps the call's state
+ * in registers (flags: CALL_EFFECTS, CALL_PREPARED and CALL_MONITORED for
+ * what it did, CALL_INSTRUMENTED and CALL_PERIODIC for what it is).  The
+ * transaction record, whose helpers take its address, lives only in this
+ * function's frame (register-ir-v2-a3.md 3.5, R-c).  Returns {-1, NULL} on
+ * error, {0, child} for a pushed frame, {0, NULL} for a finished call. */
 static inline _PyCallResult
 call_transaction_run(PyThreadState *tstate, _PyInterpreterFrame *frame,
                      int base, int count, int destination, int argument_count,

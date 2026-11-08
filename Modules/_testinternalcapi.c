@@ -3335,7 +3335,7 @@ pyvalue_entry_null(PyObject *self, PyObject *unused)
 }
 
 static PyObject *
-test_frame_code_home(PyObject *self, PyObject *arg)
+check_frame_code_home(PyObject *self, PyObject *arg)
 {
     if (!PyCode_Check(arg) || _Py_IsImmortal(arg)) {
         PyErr_SetString(PyExc_ValueError, "expected a mortal code object");
@@ -4278,7 +4278,7 @@ static PyMethodDef module_functions[] = {
     {"pyvalue_from_object_borrow_inline", pyvalue_from_object_borrow_inline, METH_O, NULL},
     {"pyvalue_from_object_known", pyvalue_from_object_known, METH_O, NULL},
     {"pyvalue_entry_null", pyvalue_entry_null, METH_NOARGS, NULL},
-    {"test_frame_code_home", test_frame_code_home, METH_O, NULL},
+    {"check_frame_code_home", check_frame_code_home, METH_O, NULL},
     {"pyvalue_format", pyvalue_format, METH_VARARGS, NULL},
     {"pyvalue_format_inline", pyvalue_format_inline, METH_NOARGS, NULL},
     {"pyvalue_format_list_item", pyvalue_format_list_item, METH_O, NULL},

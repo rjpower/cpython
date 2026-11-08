@@ -95,7 +95,7 @@ class FrameCodeHomeTests(unittest.TestCase):
     def test_code_home_tag_and_count(self):
         code = self.test_code_home_tag_and_count.__code__.replace()
         self.assertFalse(sys._is_immortal(code))
-        _testinternalcapi.test_frame_code_home(code)
+        _testinternalcapi.check_frame_code_home(code)
 
     def test_active_code_survives_replacement(self):
         def original(function, replacement, reference):

@@ -7386,11 +7386,12 @@
                     JUMP_TO_PREDICTED(CALL);
                 }
             }
-            // _PY_FRAME_GENERAL
+            // _PY_FRAME_GENERAL_GUARDED
             {
+                assert(fb->func_version >= FUNC_VERSION_FIRST_VALID);
                 assert(frame->instr_ptr == this_instr);
                 {
-                    _PyCallResult call_result = call_transaction_run_vector(tstate, frame, call_base, call_destination, oparg, (0) | call_state);
+                    _PyCallResult call_result = call_transaction_run_guarded_python_vector(tstate, frame, call_base, call_destination, oparg, (0) | call_state);
                     if (call_result.status < 0) {
                         JUMP_TO_LABEL(error);
                     }

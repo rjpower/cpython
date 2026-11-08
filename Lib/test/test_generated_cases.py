@@ -376,6 +376,54 @@ class TestIRCases(unittest.TestCase):
             with self.assertRaisesRegex(SyntaxError, "cannot use a value record"):
                 generate(source)
 
+    def test_guarded_python_call_contract(self):
+        source = (Path(__file__).resolve().parents[2] /
+                  "Python" / "bytecodes.c").read_text()
+
+        def generate(text):
+            Path(self.temp_input_filename).write_text(text)
+            with handle_stderr():
+                analysis = analyzer.analyze_files([self.temp_input_filename])
+            out = io.StringIO()
+            ir_generator.generate_ir([self.temp_input_filename], analysis, out, False)
+            return out.getvalue()
+
+        output = generate(source)
+        body = self.handler(output, "CALL_PY_GENERAL")
+        success, fallback = body.split("call_transaction_fallback_CALL_PY_GENERAL:;")
+        self.assertIn("call_transaction_run_guarded_python_vector(", success)
+        self.assertNotIn("call_transaction_run_vector(", success)
+        self.assertIn("call_transaction_run_vector(", fallback)
+        self.assertNotIn("call_transaction_run_guarded_python_vector(", fallback)
+        other = self.handler(output, "CALL_BOUND_METHOD_GENERAL")
+        self.assertIn("call_transaction_run_vector(", other)
+        self.assertNotIn("call_transaction_run_guarded_python_vector(", other)
+
+        changes = (
+            ("_CHECK_PEP_523 +\n            _CHECK_FUNCTION_VERSION +\n"
+             "            _CHECK_RECURSION_REMAINING +\n"
+             "            _PY_FRAME_GENERAL_GUARDED +",
+             "_CHECK_FUNCTION_VERSION +\n            _CHECK_RECURSION_REMAINING +\n"
+             "            _PY_FRAME_GENERAL_GUARDED +"),
+            ("_CHECK_FUNCTION_VERSION +\n            _CHECK_RECURSION_REMAINING +\n"
+             "            _PY_FRAME_GENERAL_GUARDED +",
+             "_CHECK_RECURSION_REMAINING +\n            _PY_FRAME_GENERAL_GUARDED +"),
+            ("DEOPT_IF(IS_PEP523_HOOKED(tstate));",
+             "spam_call(); DEOPT_IF(IS_PEP523_HOOKED(tstate));"),
+            ("IR_INVOKE_GUARDED_PYTHON_CALL();",
+             "IR_INVOKE_GUARDED_PYTHON_CALL(); IR_INVOKE_GUARDED_PYTHON_CALL();"),
+            ("_CHECK_METHOD_VERSION +\n            _EXPAND_METHOD +",
+             "_CHECK_METHOD_VERSION +\n            _PY_FRAME_GENERAL_GUARDED +\n"
+             "            _EXPAND_METHOD +"),
+            ("_MONITOR_CALL + _DO_CALL + _CHECK_PERIODIC_AT_END;",
+             "_MONITOR_CALL + _PY_FRAME_GENERAL_GUARDED + _CHECK_PERIODIC_AT_END;"),
+        )
+        for old, new in changes:
+            with self.subTest(new=new):
+                self.assertIn(old, source)
+                with self.assertRaises(SyntaxError):
+                    generate(source.replace(old, new, 1))
+
     def run_ir_test(self, input: str, expected: str):
         self.assertEqual(self.ir_output(input).strip(), expected.strip())
 

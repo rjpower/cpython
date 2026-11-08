@@ -137,7 +137,28 @@ function_get_annotations(PyObject *self, PyObject *func)
 }
 
 
+/* A distinct provider for testing specialization invalidation. */
+static PyObject *
+function_test_vectorcall(PyObject *callable, PyObject *const *args,
+                         size_t nargsf, PyObject *kwnames)
+{
+    return PyUnicode_FromString("custom vectorcall");
+}
+
+static PyObject *
+function_set_test_vectorcall(PyObject *self, PyObject *func)
+{
+    if (!PyFunction_Check(func)) {
+        PyErr_SetString(PyExc_TypeError, "expected a function");
+        return NULL;
+    }
+    PyFunction_SetVectorcall((PyFunctionObject *)func, function_test_vectorcall);
+    Py_RETURN_NONE;
+}
+
+
 static PyMethodDef test_methods[] = {
+    {"function_set_test_vectorcall", function_set_test_vectorcall, METH_O, NULL},
     {"function_get_code", function_get_code, METH_O, NULL},
     {"function_get_globals", function_get_globals, METH_O, NULL},
     {"function_get_module", function_get_module, METH_O, NULL},

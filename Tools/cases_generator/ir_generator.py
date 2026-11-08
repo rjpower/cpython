@@ -78,7 +78,8 @@ from dataclasses import dataclass, replace
 
 from analyzer import (
     Analysis,
-    CALL_TRANSACTION_MARKERS,
+    IR_MARKER_EFFECTS,
+    CALL_INVOKE_MARKERS,
     CodeSection,
     Instruction,
     Uop,
@@ -329,7 +330,7 @@ def declare_variables(inst: Instruction, out: CWriter,
             if var.used and var.name not in seen:
                 seen.add(var.name)
                 declare_variable(var, out, roles or {})
-        if any(token.text == "IR_INVOKE_CALL" for token in part.body.tokens()):
+        if any(token.text in CALL_INVOKE_MARKERS for token in part.body.tokens()):
             break
 
 
@@ -482,7 +483,7 @@ def external_io(inst: Instruction) -> tuple[list[StackItem], list[Entry]]:
                 stack.append(popped[i])
             else:
                 stack.append(Entry(-1, item, item.name in part.aliased_outputs))
-        if any(token.text == "IR_INVOKE_CALL" for token in part.body.tokens()):
+        if any(token.text in CALL_INVOKE_MARKERS for token in part.body.tokens()):
             # A terminal transaction owns both immediate result publication
             # and the child's eventual return. Trailing legacy frame/poll
             # uops do not execute and cannot erase that logical output.
@@ -2296,6 +2297,7 @@ class IREmitter(Emitter):
         self._replacers["IR_PREPARE_CALL_TUPLE"] = self.prepare_call
         self._replacers["IR_MONITOR_CALL"] = self.prepare_call
         self._replacers["IR_INVOKE_CALL"] = self.invoke_call
+        self._replacers["IR_INVOKE_GUARDED_PYTHON_CALL"] = self.invoke_call
         self._replacers["IR_BEGIN_CALL_EFFECTS"] = self.call_effects
         self._replacers["IR_REFRESH_CALL"] = self.refresh_call
         self._replacers["TAKE"] = self.take_view
@@ -2614,7 +2616,7 @@ class IREmitter(Emitter):
         self.call_reload(inst)
         return True
 
-    def call_completion(self):
+    def call_completion(self, run_override=None):
         if self.has_record:
             self.emit("assert(value_temps->count == 0);\n")
         # One out-of-line call, which keeps the transaction record in its own
@@ -2624,7 +2626,7 @@ class IREmitter(Emitter):
         self.emit("assert(frame->instr_ptr == this_instr);\n")
         self.emit("{\n")
         argc = f"{self.call_argc}, " if self.call_kind != "CALL_TRANSACTION_EX" else ""
-        self.emit(f"_PyCallResult call_result = {self.call_run}(tstate, frame, "
+        self.emit(f"_PyCallResult call_result = {run_override or self.call_run}(tstate, frame, "
                   f"call_base, call_destination, {argc}{self.call_flags} | call_state);\n")
         self.emit("if (call_result.status < 0) {\n")
         self.reader_error()
@@ -2641,7 +2643,11 @@ class IREmitter(Emitter):
 
     def invoke_call(self, tkn, tkn_iter, uop, storage, inst):
         self.macro_args(tkn, tkn_iter, 0)
-        self.call_completion()
+        run_override = ("call_transaction_run_guarded_python_vector"
+                        if tkn.text == "IR_INVOKE_GUARDED_PYTHON_CALL" else None)
+        if run_override:
+            self.emit("assert(fb->func_version >= FUNC_VERSION_FIRST_VALID);\n")
+        self.call_completion(run_override)
         self.call_finished = True
         return False
 
@@ -3172,7 +3178,7 @@ class IREmitter(Emitter):
         """A statement that kills an input, as DEAD(), a close or a steal,
         gives up its slot"""
         leaf_marker = any(t.text == "IR_TRY_DICT_FIRST_PROBE" for t in stmt.contents)
-        transaction_marker = any(t.text in CALL_TRANSACTION_MARKERS
+        transaction_marker = any(t.text in IR_MARKER_EFFECTS
                                  for t in stmt.contents)
         if inst is not None and uses_call_transaction(inst):
             transaction_marker |= any(t.text in {
@@ -3638,7 +3644,7 @@ def polls_at_end(name: str, inst: Instruction) -> bool:
 
 def uses_call_transaction(inst: Instruction) -> bool:
     return any(isinstance(part, Uop) and
-               any(token.text == "IR_INVOKE_CALL" for token in part.body.tokens())
+               any(token.text in CALL_INVOKE_MARKERS for token in part.body.tokens())
                for part in inst.parts)
 
 
@@ -3737,6 +3743,64 @@ def validate_dict_first_probe(inst: Instruction, fmt: IRFormat) -> None:
                              "dictionary reader prefix and scalar format", inst.where)
 
 
+def validate_guarded_python_call(inst: Instruction, fmt: IRFormat) -> None:
+    parts = [p for p in inst.parts if isinstance(p, Uop)]
+    markers = [(p, t) for p in parts for t in p.body.tokens()
+               if t.text == "IR_INVOKE_GUARDED_PYTHON_CALL"]
+    if not markers:
+        return
+    expected = ["_CHECK_PEP_523", "_CHECK_FUNCTION_VERSION",
+                "_CHECK_RECURSION_REMAINING", "_PY_FRAME_GENERAL_GUARDED",
+                "_SAVE_RETURN_SLOT", "_PUSH_FRAME"]
+    if len(markers) != 1 or [p.name for p in parts] != expected:
+        raise analysis_error("guarded Python call requires the checked prefix", inst.where)
+    prefix = parts[:3]
+    invoke = parts[3]
+    inputs, outputs = external_io(inst)
+    def shape(items):
+        return [(item.name, item.peek, item.size) for item in items]
+    guard_shapes = [([], []),
+                    ([("callable", True, ""), ("unused", True, ""),
+                      ("unused", True, "oparg")],
+                     [("callable", True, ""), ("unused", True, ""),
+                      ("unused", True, "oparg")]),
+                    ([], [])]
+    invoke_shape = ([("callable", False, ""), ("self_or_null", False, ""),
+                     ("args", False, "oparg")], [("new_frame", False, "")])
+    def statements(part):
+        return [" ".join(t.text for t in stmt.tokens())
+                for stmt in part.body.body]
+    checks = [statements(p) for p in prefix]
+    # These guards' semantics are a shared contract with this optimization.
+    # The source primitives establish the PEP 523, version/provider and
+    # recursion facts; their shape and nonescaping prefix are checked here.
+    if (inst.name != "CALL_PY_GENERAL" or not fmt.window or not fmt.store_dst
+            or fmt.field_of(ROLE_BASE) is None or fmt.field_of(ROLE_DST) is None
+            or fmt.group != "CALL" or not inst.properties.oparg
+            or [(i.size) for i in inputs] != ["", "", "oparg"]
+            or len(outputs) != 1 or outputs[0].item.size
+            or [(shape(p.stack.inputs), shape(p.stack.outputs))
+                for p in prefix] != guard_shapes
+            or (shape(invoke.stack.inputs), shape(invoke.stack.outputs)) != invoke_shape
+            or " ".join(t.text for t in invoke.body.tokens()) !=
+               "{ IR_INVOKE_GUARDED_PYTHON_CALL ( ) ; }"
+            or any(not p.is_guard() or p.properties.escapes or p.properties.eval_breaker
+                   or p.properties.switches_frame or p.properties.error_with_pop
+                   or p.properties.error_without_pop or p.properties.sync_sp
+                   or changes(p, "callable", False) for p in prefix)
+            or [len(check) for check in checks] != [1, 4, 1]
+            or checks[0][0] != "DEOPT_IF ( IS_PEP523_HOOKED ( tstate ) ) ;"
+            or "PyValue_AsKnownObjectBorrow ( callable )" not in checks[1][0]
+            or not checks[1][0].startswith("PyObject * callable_o = ")
+            or not checks[1][2].startswith("PyFunctionObject * func = ")
+            or "callable_o" not in checks[1][2]
+            or checks[1][1] != "EXIT_IF ( ! PyFunction_Check ( callable_o ) ) ;"
+            or checks[1][3] != "EXIT_IF ( func -> func_version != func_version ) ;"
+            or checks[2][0] != "DEOPT_IF ( tstate -> py_recursion_remaining <= 1 ) ;"):
+
+        raise analysis_error("guarded Python call requires the checked prefix", inst.where)
+
+
 def generate_handler(name: str, inst: Instruction, fmt: IRFormat,
                      emitter: IREmitter, out: CWriter, record: bool) -> None:
     """The handler name, which runs inst: inst itself, or for a handler of a
@@ -3754,6 +3818,7 @@ def generate_handler(name: str, inst: Instruction, fmt: IRFormat,
     as `taken = TAKE(value)` does."""
     validate_ordinary_nop_boundary(inst, fmt)
     validate_dict_first_probe(inst, fmt)
+    validate_guarded_python_call(inst, fmt)
     emitter.result_publication = result_publication_contract(inst, fmt)
     saved = emitter.out
     roles: dict[str, set[str]] = {}
@@ -4095,7 +4160,7 @@ def changed_inputs(inst: Instruction) -> set[int]:
         for j in range(len(part.stack.outputs)):
             i = passed_through(part, j)
             stack.append(popped[i] if i is not None else -1)
-        if any(token.text == "IR_INVOKE_CALL" for token in part.body.tokens()):
+        if any(token.text in CALL_INVOKE_MARKERS for token in part.body.tokens()):
             break
     return {n - 1 - ext for ext in changed}
 

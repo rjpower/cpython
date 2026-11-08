@@ -520,20 +520,23 @@ def tier_variable(node: parser.CodeDef) -> int | None:
 # These register-IR markers own their publication/reload protocol. Analysis
 # must still expose their real callout/control-flow properties to consumers;
 # ordinary uppercase macros keep their existing non-call interpretation.
-CALL_TRANSACTION_MARKERS = {
+CALL_INVOKE_MARKERS = frozenset(("IR_INVOKE_CALL", "IR_INVOKE_GUARDED_PYTHON_CALL"))
+
+IR_MARKER_EFFECTS = {
     "IR_TRY_DICT_FIRST_PROBE": frozenset(("escapes", "error", "sync", "pc")),
     "IR_BEGIN_CALL_EFFECTS": frozenset(),
     **dict.fromkeys(("IR_PREPARE_CALL_METHOD", "IR_PREPARE_CALL_TUPLE",
                      "IR_MONITOR_CALL", "IR_REFRESH_CALL"),
                     frozenset(("escapes", "error", "sync", "pc"))),
-    "IR_INVOKE_CALL": frozenset(("escapes", "error", "sync", "pc",
-                                 "terminal", "frame")),
+    **dict.fromkeys(CALL_INVOKE_MARKERS,
+                    frozenset(("escapes", "error", "sync", "pc",
+                               "terminal", "frame"))),
 }
 
 
-def call_transaction_properties(op: parser.CodeDef) -> set[str]:
+def ir_marker_properties(op: parser.CodeDef) -> set[str]:
     return set().union(*(properties for marker, properties in
-                         CALL_TRANSACTION_MARKERS.items()
+                         IR_MARKER_EFFECTS.items()
                          if variable_used(op, marker)))
 
 
@@ -555,7 +558,7 @@ def has_error_without_pop(op: parser.CodeDef) -> bool:
         or variable_used(op, "IR_COMPLETE_VALUE_READER")
         or variable_used(op, "IR_COMPLETE_ATTR_READER")
         or variable_used(op, "exception_unwind")
-        or "error" in call_transaction_properties(op)
+        or "error" in ir_marker_properties(op)
     )
 
 
@@ -793,8 +796,8 @@ def escaping_call_in_simple_stmt(stmt: SimpleStmt, result: dict[SimpleStmt, Esca
             break
         if next_tkn.kind != lexer.LPAREN:
             continue
-        if tkn.text in CALL_TRANSACTION_MARKERS:
-            if "escapes" in CALL_TRANSACTION_MARKERS[tkn.text]:
+        if tkn.text in IR_MARKER_EFFECTS:
+            if "escapes" in IR_MARKER_EFFECTS[tkn.text]:
                 result[stmt] = EscapingCall(stmt, tkn, None)
             continue
         if tkn.kind == lexer.IDENTIFIER:
@@ -866,7 +869,7 @@ def always_exits(op: parser.CodeDef) -> bool:
             if tkn.text in EXITS:
                 return True
         elif tkn.kind == "IDENTIFIER":
-            if "terminal" in CALL_TRANSACTION_MARKERS.get(tkn.text, ()):
+            if "terminal" in IR_MARKER_EFFECTS.get(tkn.text, ()):
                 return True
             if tkn.text in EXITS:
                 return True
@@ -978,7 +981,7 @@ def switches_frame(op: parser.CodeDef) -> bool:
             continue
         if tkn.text == "DISPATCH_INLINED":
             return True
-        if "frame" in CALL_TRANSACTION_MARKERS.get(tkn.text, ()):
+        if "frame" in IR_MARKER_EFFECTS.get(tkn.text, ()):
             return True
         if (tkn.text == "frame" and i + 1 < len(tokens)
                 and tokens[i + 1].kind == "EQUALS"
@@ -988,7 +991,7 @@ def switches_frame(op: parser.CodeDef) -> bool:
 
 
 def compute_properties(op: parser.CodeDef) -> Properties:
-    call_properties = call_transaction_properties(op)
+    call_properties = ir_marker_properties(op)
     escaping_calls = find_escaping_api_calls(op)
     has_free = (
         variable_used(op, "PyCell_New")

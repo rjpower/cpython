@@ -1666,8 +1666,79 @@ class DictFirstProbeTest(unittest.TestCase):
         finally:
             observing = False
         self.assertIsInstance(result, Payload)
-        # Rebinding through f_locals pins Old until frame destruction.
+        # The frame-locals proxy retains the overwritten local until frame
+        # destruction, so Old survives the subsequent Sentinel retirement.
         self.assertEqual(events, [("dict", True), "sentinel", "old"])
+
+
+class GuardedPythonCallTest(unittest.TestCase):
+    def test_general_call_and_function_mutation(self):
+        def target(a=3, *args, **kwargs):
+            return a, args, kwargs
+        def caller(func):
+            return func(1, 2)
+        for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 3):
+            self.assertEqual(caller(target), (1, (2,), {}))
+        if SPECIALIZES:
+            self.assertIn("CALL_PY_GENERAL", handlers(caller))
+        def replacement(a=5, *args, **kwargs):
+            return ("new", a, args, kwargs)
+        target.__code__ = replacement.__code__
+        self.assertEqual(caller(target), ("new", 1, (2,), {}))
+        target.__defaults__ = (9,)
+        self.assertEqual(target(), ("new", 9, (), {}))
+
+        class C:
+            def method(self, a=3, *args, **kwargs):
+                return a, args, kwargs
+        self.assertEqual(caller(C().method), (1, (2,), {}))
+        def generator(a=3, *args, **kwargs):
+            yield a, args, kwargs
+        self.assertEqual(list(caller(generator)), [(1, (2,), {})])
+        with self.assertRaises(TypeError):
+            caller(lambda: None)
+
+    def test_function_vectorcall_setter_invalidates_specialization(self):
+        testcapi = import_helper.import_module("_testcapi")
+        def target(a=3, *args, **kwargs):
+            return a, args, kwargs
+        def caller(func):
+            return func(1, 2)
+        for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 3):
+            self.assertEqual(caller(target), (1, (2,), {}))
+        if SPECIALIZES:
+            self.assertIn("CALL_PY_GENERAL", handlers(caller))
+        testcapi.function_set_test_vectorcall(target)
+        self.assertEqual(caller(target), "custom vectorcall")
+
+    def test_monitoring_after_specialization(self):
+        def target(a=3, *args, **kwargs):
+            return a, args, kwargs
+        def caller(func):
+            return func(1, 2)
+        for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 3):
+            caller(target)
+        if SPECIALIZES:
+            self.assertIn("CALL_PY_GENERAL", handlers(caller))
+        events = []
+        mon = sys.monitoring
+        tool = mon.DEBUGGER_ID
+        mon.use_tool_id(tool, "test_ir")
+        try:
+            mon.register_callback(tool, mon.events.CALL,
+                                  lambda *event: events.append(event))
+            mon.set_local_events(tool, caller.__code__, mon.events.CALL)
+            self.assertEqual(caller(target), (1, (2,), {}))
+            self.assertEqual(len(events), 1)
+            def fail(*event):
+                raise ValueError("monitor")
+            mon.register_callback(tool, mon.events.CALL, fail)
+            with self.assertRaisesRegex(ValueError, "monitor"):
+                caller(target)
+        finally:
+            mon.set_local_events(tool, caller.__code__, 0)
+            mon.register_callback(tool, mon.events.CALL, None)
+            mon.free_tool_id(tool)
 
 
 class Truthy:

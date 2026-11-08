@@ -2,6 +2,7 @@
 
 #include "ceval.h"
 #include "pycore_dict.h"          // PyDict_GetValue()
+#include "pycore_function.h"      // FUNC_VERSION_FIRST_VALID
 #include "pycore_list.h"          // PyList_AppendValue()
 #include "pycore_long.h"
 #include "pycore_long_value.h"    // _PyValue_AsInt()
@@ -1812,6 +1813,8 @@ done:
  * _PyEvalFramePushAndInit and its kin, which they use. */
 static _PyCallResult call_transaction_run_vector(
     PyThreadState *, _PyInterpreterFrame *, int, int, int, int);
+static _PyCallResult call_transaction_run_guarded_python_vector(
+    PyThreadState *, _PyInterpreterFrame *, int, int, int, int);
 static _PyCallResult call_transaction_run_keywords(
     PyThreadState *, _PyInterpreterFrame *, int, int, int, int);
 static _PyCallResult call_transaction_run_ex(
@@ -3326,12 +3329,12 @@ call_transaction_invoke(_PyCallTransaction *call, _PyInterpreterFrame **child)
  * transaction record, whose helpers take its address, lives only in this
  * function's frame (register-ir-v2-a3.md 3.5, R-c).  Returns {-1, NULL} on
  * error, {0, child} for a pushed frame, {0, NULL} for a finished call. */
-static inline _PyCallResult
-call_transaction_run(PyThreadState *tstate, _PyInterpreterFrame *frame,
-                     int base, int count, int destination, int argument_count,
-                     _PyCallTransactionKind kind, int flags)
+static inline _PyCallTransaction
+call_transaction_init(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                      int base, int count, int destination, int argument_count,
+                      _PyCallTransactionKind kind, int flags)
 {
-    _PyCallTransaction call = {
+    return (_PyCallTransaction) {
         .tstate = tstate, .frame = frame, .current = frame->instr_ptr,
         .base = base, .count = count, .destination = destination,
         .argument_count = argument_count, .kind = kind,
@@ -3340,6 +3343,15 @@ call_transaction_run(PyThreadState *tstate, _PyInterpreterFrame *frame,
         .periodic = (flags & CALL_PERIODIC) != 0,
         .prepared = (flags & CALL_PREPARED) != 0,
     };
+}
+
+static inline _PyCallResult
+call_transaction_run(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                     int base, int count, int destination, int argument_count,
+                     _PyCallTransactionKind kind, int flags)
+{
+    _PyCallTransaction call = call_transaction_init(
+        tstate, frame, base, count, destination, argument_count, kind, flags);
     _PyInterpreterFrame *child;
     int status = call_transaction_invoke(&call, &child);
     return (_PyCallResult){status < 0 ? -1 : 0, status < 0 ? NULL : child};
@@ -3356,6 +3368,31 @@ call_transaction_run_vector(PyThreadState *tstate, _PyInterpreterFrame *frame,
     return call_transaction_run(tstate, frame, base, argument_count + 2,
                                 destination, argument_count,
                                 CALL_TRANSACTION_VECTOR, flags);
+}
+
+/* The successful specialized guard proves an unbound exact function with
+ * its standard provider before any operation that can run Python. */
+static Py_NO_INLINE _PyCallResult
+call_transaction_run_guarded_python_vector(PyThreadState *tstate,
+                                           _PyInterpreterFrame *frame,
+                                           int base, int destination,
+                                           int argument_count, int flags)
+{
+#ifdef Py_GIL_DISABLED
+    return call_transaction_run_vector(tstate, frame, base, destination,
+                                       argument_count, flags);
+#else
+    assert(!(flags & (CALL_INSTRUMENTED | CALL_MONITORED | CALL_EFFECTS)));
+    _PyCallTransaction call = call_transaction_init(
+        tstate, frame, base, argument_count + 2, destination, argument_count,
+        CALL_TRANSACTION_VECTOR, flags | CALL_PREPARED);
+    _PyInterpreterFrame *child = NULL;
+    int status = call_transaction_push_python(&call, &child);
+    if (status > 0) {
+        status = call_transaction_native(&call);
+    }
+    return (_PyCallResult){status < 0 ? -1 : 0, status < 0 ? NULL : child};
+#endif
 }
 
 static Py_NO_INLINE _PyCallResult

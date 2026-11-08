@@ -4211,6 +4211,10 @@ dummy_func(
             IR_INVOKE_CALL();
         }
 
+        inline_ok op(_PY_FRAME_GENERAL_GUARDED, (callable, self_or_null, args[oparg] -- new_frame)) {
+            IR_INVOKE_GUARDED_PYTHON_CALL();
+        }
+
         op(_CHECK_FUNCTION_VERSION, (func_version/2, callable, unused, unused[oparg] -- callable, unused, unused[oparg])) {
             PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
             EXIT_IF(!PyFunction_Check(callable_o));
@@ -4223,7 +4227,7 @@ dummy_func(
             _CHECK_PEP_523 +
             _CHECK_FUNCTION_VERSION +
             _CHECK_RECURSION_REMAINING +
-            _PY_FRAME_GENERAL +
+            _PY_FRAME_GENERAL_GUARDED +
             _SAVE_RETURN_SLOT +
             _PUSH_FRAME;
 

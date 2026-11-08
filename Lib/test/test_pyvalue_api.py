@@ -1,8 +1,12 @@
 """Value API packet V1 (pyjit/design/value-api.md): the entry primitives of
 section 1.3 and the value format conversions of section 4."""
 
+import contextvars
 import math
+import sys
+import types
 import unittest
+import weakref
 from test import support
 from test.support import import_helper
 from test.support.script_helper import assert_python_failure
@@ -85,6 +89,60 @@ class KnownEntryTests(unittest.TestCase):
                 _, _, err = assert_python_failure("-c", code)
                 self.assertIn(b"_PyValue_FromObjectKnown() needs an object",
                               err)
+
+
+class FrameCodeHomeTests(unittest.TestCase):
+    def test_code_home_tag_and_count(self):
+        code = self.test_code_home_tag_and_count.__code__.replace()
+        self.assertFalse(sys._is_immortal(code))
+        _testinternalcapi.test_frame_code_home(code)
+
+    def test_active_code_survives_replacement(self):
+        def original(function, replacement, reference):
+            function.__code__ = replacement
+            return reference() is not None
+
+        def replacement(function, replacement, reference):
+            return False
+
+        code = original.__code__.replace()
+        function = types.FunctionType(code, globals())
+        reference = weakref.ref(code)
+        del code
+        self.assertTrue(function(function, replacement.__code__, reference))
+        self.assertIsNone(reference())
+
+    def test_suspended_generator_keeps_code(self):
+        def original():
+            yield 1
+
+        def replacement():
+            yield 2
+
+        code = original.__code__.replace()
+        function = types.FunctionType(code, globals())
+        reference = weakref.ref(code)
+        generator = function()
+        function.__code__ = replacement.__code__
+        del code
+        self.assertIsNotNone(reference())
+        self.assertEqual(next(generator), 1)
+        generator.close()
+        del generator
+        self.assertIsNone(reference())
+
+    def test_context_and_init_trampoline(self):
+        class Item:
+            def __init__(self, fail=False):
+                if fail:
+                    raise ValueError("init")
+
+        context = contextvars.copy_context()
+        for _ in range(100):
+            self.assertIsInstance(Item(), Item)
+            self.assertIsInstance(context.run(Item), Item)
+        with self.assertRaisesRegex(ValueError, "init"):
+            context.run(Item, True)
 
 
 class ValueFormatTests(unittest.TestCase):

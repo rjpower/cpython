@@ -1423,6 +1423,9 @@ call_transaction_refresh(PyThreadState *tstate, _PyInterpreterFrame *frame,
                          _PyInstr *current)
 {
     int status = value_operation_refresh(tstate, frame, current, PyValue_NULL);
+    if (status == 0) {
+        return 0;
+    }
     if (!value_frame_is_current(tstate, frame)) {
         value_revalidation_error(
             "call preparation changed the active frame");

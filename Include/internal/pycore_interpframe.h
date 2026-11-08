@@ -269,6 +269,13 @@ _PyFrame_FillConstSlots(_PyInterpreterFrame *frame, PyCodeObject *code)
     }
 }
 
+static inline PyValue
+_PyFrame_CodeHome(PyCodeObject *code)
+{
+    assert(code != NULL && PyCode_Check(code));
+    return PyValue_DUP(_PyValue_PointerBorrow((PyObject *)code));
+}
+
 /* Consumes reference to func and locals. The caller is responsible for slots
    before null_from. */
 static inline void
@@ -280,7 +287,7 @@ _PyFrame_Initialize(
     frame->previous = previous;
     frame->base = base;
     frame->f_funcobj = func;
-    frame->f_executable = PyValue_DUP(PyValue_FromObjectBorrow(code));
+    frame->f_executable = _PyFrame_CodeHome(code);
     PyFunctionObject *func_obj = (PyFunctionObject *)PyValue_AsKnownObjectBorrow(func);
     frame->f_builtins = func_obj->func_builtins;
     frame->f_globals = func_obj->func_globals;
@@ -570,7 +577,7 @@ _PyFrame_PushTrampolineUnchecked(PyThreadState *tstate, PyCodeObject *code, int 
     _PyInterpreterFrame *frame = _PyThreadState_PushFrameUnchecked(tstate, nslots);
     frame->previous = previous;
     frame->f_funcobj = PyValue_None;
-    frame->f_executable = PyValue_DUP(PyValue_FromObjectBorrow(code));
+    frame->f_executable = _PyFrame_CodeHome(code);
 #ifdef Py_DEBUG
     frame->f_builtins = NULL;
     frame->f_globals = NULL;

@@ -725,6 +725,21 @@ _PyValue_IsNumberType(PyTypeObject *type)
     return type == &PyLong_Type || type == &PyFloat_Type;
 }
 
+/* Borrow a pointer representation only after proving it is canonical:
+   either the object is not an exact number, or numeric canonicalization
+   has selected its boxed representation. */
+static inline PyValueBorrow
+_PyValue_PointerBorrow(PyObject *obj)
+{
+    assert(obj != NULL);
+    assert((uintptr_t)obj < Py_PTR_LIMIT);
+    PyValueBorrow value = {(uintptr_t)obj};
+    if (_Py_IsImmortal(obj)) {
+        value.bits |= Py_TAG_REFCNT;
+    }
+    return value;
+}
+
 /* Python's `is` on two objects, either of which may be NULL: the same
    address, or boxes of one inline value (see "Value identity"). C code that
    tests identity on Python's behalf (operator.is_, object.__eq__, method
@@ -773,10 +788,7 @@ PyValue_FromObjectBorrow(PyObject *obj)
             return value;
         }
     }
-    if (_Py_IsImmortal(obj)) {
-        value.bits |= Py_TAG_REFCNT;
-    }
-    return value;
+    return _PyValue_PointerBorrow(obj);
 }
 #define PyValue_FromObjectBorrow(obj) (PyValue_FromObjectBorrow)(_PyObject_CAST(obj))
 

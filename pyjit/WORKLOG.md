@@ -311,3 +311,4 @@ that remote copy remains at revision 7. No alternate export was attempted.
   recovery slice. Native JIT recovery remains planned. Removed only the
   task-created contract worktree/branch and R4 build hardlink after retaining
   the final patch and exact ELFs; runtime source remains clean.
+- 2026-11-08: [V8 comparison checkpoint](issues/interpreter-parity-20261108/comparison-checkpoint.md): eight recommendations, competing structural proposals and independent reviews; pinned logging baseline 1.657289x upstream, 161 dispatches/20 frames per loop. Runtime remains qualified R5; implementation selection is open.

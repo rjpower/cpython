@@ -1,5 +1,18 @@
 # Project status
 
+Current milestone, 2026-11-08: source-backed interpreter/IR comparison with
+V8, producing 5–10 reviewed recommendations and separating IR layout
+constraints from implementation costs. `logging_silent` is the selected real
+workload. The eight-item comparison and pinned baseline are complete;
+architectural alternatives are being assessed before implementation selection.
+No parity is established. Follow the [active plan](issues/interpreter-parity-20261108/plan.md)
+and [comparison checkpoint](issues/interpreter-parity-20261108/comparison-checkpoint.md).
+Independent review reproduced the 1.657289x pinned logging baseline and the
+161-dispatch/20-frame loop counts. Competing structural proposals have two
+review rounds; observer and dictionary proofs remain open. No new runtime
+optimization is integrated.
+The 2026-11-07 qualified baseline below is the starting point.
+
 Completed batch, 2026-11-07: R1–R5 are integrated through `0953757f4e7`; release
 and debug full suites passed with no failures, and all three builds check 117
 modules. The completed candidate/upstream and candidate/interim factors are

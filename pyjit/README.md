@@ -1,5 +1,16 @@
 # PyJIT
 
+**Current milestone, 2026-11-08:** independently compare the interpreter and IR
+with V8, then propose 5–10 source-backed recommendations that distinguish IR
+layout constraints from implementation costs. The active `logging_silent`
+experiment uses real `Logger.debug` and `isEnabledFor` calls. The eight-item
+V8 review is complete, and a fresh pinned baseline is 1.657289x upstream.
+Architectural alternatives are being compared before implementation selection;
+no parity result is claimed. See the
+[experiment plan](issues/interpreter-parity-20261108/plan.md),
+[progress](issues/interpreter-parity-20261108/parity-docs-progress.md) and
+[current status](STATUS.md).
+
 We are rebuilding CPython around universal eight-byte PyValues, a register
 interpreter, and a cohesive method and tracing JIT. Memory management uses
 reference counting with cyclic collection. Extensions are rebuilt and ported.

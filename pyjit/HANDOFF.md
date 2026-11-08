@@ -1,5 +1,28 @@
 # Coordinator handoff
 
+Current assignment (2026-11-08): compare the interpreter and IR independently
+with V8, produce 5–10 source-backed recommendations, and distinguish IR layout
+constraints from implementation costs. The active workload is real
+`logging_silent` calls. The eight-item comparison is complete; the fresh pinned
+baseline is 1.657289x upstream. The user rejected prematurely narrowing the
+work to call preparation. Compare the architectural alternatives before
+selecting implementation. There is no parity claim. Follow the
+[active plan](issues/interpreter-parity-20261108/plan.md) and
+[progress record](issues/interpreter-parity-20261108/parity-docs-progress.md).
+The 2026-11-07 qualification remains the starting evidence.
+
+Runtime `pyvalue-rc-universal` remains clean at qualified R5 `0953757f4e7`.
+The task worktree `interpreter-parity-20261108` has only the held three-line
+successful-refresh cleanup in `Python/ceval.c`, uncommitted, unbuilt and
+untested. It is not the selected parity architecture. The comparison, decision
+ledger and competing proposals live in
+`issues/interpreter-parity-20261108/`. Raw baseline and warmed-IR/frame-layout
+captures live under the matching `build/pyjit-link-wave1/` experiment directory.
+Both hot callees have zero constant homes; constant relocation is therefore
+not a demonstrated lever for this workload. Source review also finds that
+shape/method handlers already avoid refresh on their proven leaf paths;
+measure remaining traffic rather than proposing that existing optimization.
+
 The [interpreter architecture batch](issues/interpreter-architecture-20261107/plan.md) is complete.
 R1–R5 have landed through `0953757f4e7` and full correctness qualification
 passed. Candidate/upstream and candidate/interim factors are 1.247431/1.044650
@@ -329,18 +352,11 @@ overwritten.
 
 ## Next steps
 
-The calls/frame/publication batch and its report are complete. Continue with
-the [throughput follow-up](issues/interpreter-throughput/follow-up.md):
-
-1. Use the final call annotation and call-shape evidence to choose one bounded
-   preparation/frame/guard change in `Python/ceval.c`. Keep prepare/guard/commit
-   ownership and test accepted and declined paths.
-2. Review one shared attribute-helper phase/effect/output contract before
-   removing more publication or refresh work. Keep interpreter homes separate
-   from future-read liveness and optimizing SSA.
-3. Select further PyValue ports by measured bridge cost. Use focused tests per
-   packet, a basic matched screen and a fresh cold review per integration;
-   reserve full suites for coherent integration points.
+Complete the [interpreter parity packet](issues/interpreter-parity-20261108/plan.md):
+source-backed independent IR/interpreter comparison, reviewed recommendations,
+then propose, review, implement, focus-test, post-review and integrate accepted
+changes. Measure `logging_silent` toward upstream parity; retain the documented
+evidence limits and do not infer a result before measurement.
 
 GCC remains fixed. The older zero-box queue below is retained as history, not
 the current admission policy or an instruction to restart a full census.

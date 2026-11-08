@@ -1,25 +1,28 @@
 # Stage 1: coherent runtime integration
 
-State: in progress. Owner role: coordinator, with bounded Sol design/review and
-Luna analysis/mechanical implementation packets. The role list is not an active assignment list.
+State: integrated and qualified at runtime `0953757f4e7`. Current optimization
+work is tracked under [interpreter parity](../../issues/interpreter-parity-20261108/plan.md).
+Owner role: coordinator; role names are not an active assignment list.
 
 Deliver one runtime with canonical eight-byte PyValues across frames,
 containers and attributes; a register interpreter; RC with cyclic collection;
 and correct owning native boundaries. The selected baseline profile is Linux
 x86-64/GIL. Do not reopen the closed tracing-GC/nursery work.
 
-| Workstream | Responsibility | Current next step |
+The table records earlier integration packets. Their dated pages are history;
+the qualified report and active parity packet own current admission work.
+
+| Workstream | Responsibility | Historical next step |
 | --- | --- | --- |
 | [Consumer ports](workstreams/consumers.md) | Core/startup and selected bundled container consumers | Core, stdlib, system and test modules ported; fix what suite triage finds |
 | [Type system](workstreams/type-system.md) | Value-aware lookup, slots, mutation, cache and guard contracts | Type projection committed (checkpoint57); close lookup/version packets |
 | [Native boundaries](workstreams/native-boundaries.md) | Per-thread borrow stack, getargs, Clinic | P1 to P3 landed; finish P4 and the post-review |
-| [Integration](workstreams/integration.md) | Exact composition, commits and merged build | Suite triage, then the representation packet |
+| [Integration](workstreams/integration.md) | Exact composition, commits and merged build | Qualified baseline complete; continue the active parity experiment |
 
-The selected build now links and runs (debug and release; debug suite 484 of
-619 files OK at 17:31, 30 failed, 3 env changed). Exit when known required
-ownership and admission contracts are closed and the suite is near green.
-Stage 2 owns broader qualification and the first matched performance baseline. Owning temporary object views are valid; removing their
-boxing costs is later tuning.
+The selected runtime completed release and debug full-suite qualification with
+no failures. The 2026-11-07 report records the qualification and matched
+measurements. The active parity packet proposes source-backed interpreter/IR
+changes against V8 and uses `logging_silent` as its selected workload.
 
 See [current status](../../STATUS.md), [handoff](../../HANDOFF.md),
 [architecture](../../design/runtime-architecture.md) and

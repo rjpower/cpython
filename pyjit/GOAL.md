@@ -7,6 +7,18 @@ direction; Loom's `goal` artifact mirrors it.
 
 ## Decisions to retain
 
+- Current optimization milestone (2026-11-08): compare the interpreter and IR
+  independently with V8, grounding 5–10 recommendations in source. Separate
+  IR layout constraints from implementation costs. For each accepted change,
+  use propose → independent review → implement → focused tests → post-review →
+  integrate. Drive the selected real `logging_silent` workload toward upstream
+  parity; do not claim parity until measured evidence supports it. The active
+  packet is [interpreter parity](issues/interpreter-parity-20261108/plan.md).
+  Compare the architectural alternatives before choosing an implementation
+  direction. A selected benchmark is an evaluation target, not a commitment
+  to a call-path rewrite. Separate small cleanups from changes with enough
+  coverage to address the measured gap.
+
 - Use universal canonical eight-byte PyValues across interpreter operations,
   containers and attributes. A frame-only value format with boxed heap fields
   is an interim regression, not the target. Do not add competing representations

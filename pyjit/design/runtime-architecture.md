@@ -10,10 +10,10 @@ flowchart TD
     Source[Python source] --> CFG[Stack CFG and register lowering]
     CFG --> IR[Pristine register IR and source maps]
     IR --> VM[Generated C interpreter]
-    IR --> Baseline[Whole-method baseline]
-    IR --> Methods[Optimizing method builder]
+    IR -. planned .-> Baseline[Whole-method baseline]
+    IR -. planned .-> Methods[Optimizing method builder]
     VM --> Feedback[Guarded feedback and hot paths]
-    Feedback --> Traces[Trace builder]
+    Feedback -. planned .-> Traces[Trace builder]
     Methods --> SSA[Shared typed SSA and optimization]
     Traces --> SSA
     SSA --> Native[Shared allocation and native backend]
@@ -30,13 +30,13 @@ flowchart TD
 | Subsystem | Design and source organization |
 | --- | --- |
 | [Compiler and IR](compiler-and-ir.md) | compile/codegen/flowgraph → regcfg/regcfg_passes → assemble; physical frame homes, liveness and generated formats |
-| [Interpreter](handler-and-observer-contract.md) | bytecodes and cases generators → ceval; dispatch, frames, effects, specialization and observation |
+| [Interpreter](interpreter.md) | bytecodes and cases generators → ceval; dispatch, frames, effects, specialization and observation; deeper [handler contract](handler-and-observer-contract.md) |
 | [Calls and frame homes](call-and-frame-lifetimes.md) | Frame stack, prepare/commit ownership transfer, initialized homes versus future-read liveness, and observation boundaries |
 | [Values and objects](values-and-object-protocol.md) | Canonical scalar/object encoding, managed storage, attributes and ownership boundaries |
 | [Memory and lifetimes](gc-roots-and-lifetimes.md) | Reference counting, cyclic traversal, release/reentry and weakref/finalization contracts |
 | [PyValue](pyvalue.md) | Accepted ([review](reviews/pyvalue-review-1.md)). Canonical spec for the eight-byte value: as-built encoding, comparison with other engines, prioritised gaps |
 | [Native boundary](native-boundary.md) | Accepted with changes ([review](reviews/native-boundary-review-1.md)). Canonical spec for native calls: per-thread borrow stack, parser entry points, Clinic output |
-| [Register IR](register-ir.md) | Accepted ([review 1](reviews/register-ir-review-1.md), [review 2](reviews/register-ir-review-2.md)). Canonical spec for the register IR as built, compared with V8 Ignition and LuaJIT |
+| [Register IR](register-ir.md) | Current as-built encoding, operands, source maps and execution copy; [dated comparisons and decisions](archive/register-ir-20261108.md) retain earlier reviews |
 | [Extension API](extension-api.md) | Owning, fallible rebuilt-source bridges and gradual opaque handle adoption |
 | [Method/tracing JIT](jit-e2e-system.md) | Shared semantic helpers, typed SSA, effects, state recovery, backend and code lifetime |
 | [JIT feedback and attribute IR](jit-ir-feedback/design.md) | Receiver/descriptor/storage facts, guards and dictionary prediction |
@@ -53,24 +53,23 @@ silently discard effects or confuse a stored value kind with receiver behavior.
 
 ## What exists today
 
-The qualified interim images at `eba351fee7d` use register IR, NaN-boxed frame
-values and boxed heap/shape fields under RC. The universal PyValue runtime (branch `boil/pyvalue-rc-universal`) now
-links in debug and release and passed 54,351 tests in each full profile. Its
-diagnostic comparison reports candidate/baseline elapsed-time factors of
-1.287/1.075 for the kernel geomean and 1.096/0.913 for the declared
-pyperformance subset against upstream/interim; peak-RSS factors are
-1.259/1.062. Lower is better. Whole-source R27 and startup-inclusive
-zero-box gates still fail their original criteria; they are now diagnostics,
-not prerequisites for throughput work. See the
-[diagnostic report](../bench/results/checkpoint-6a0e4c12c17.md) and
-[current status](../STATUS.md). The runtime still has no new native JIT tier.
-Follow-up prioritizes steady-state throughput; RSS is secondary. The completed
-[source review](../issues/checkpoint-closure/steady-state-source-review.md)
-and hardware counters identify bounded GCC source, attribute/accessor,
-Python-call and frame-traffic experiments. On the three selected regressions,
-candidate retired instructions are 2.047x, 1.903x and 1.628x upstream, while
-CPI is comparable or lower; cache counters are noisy. This narrows the next
-experiments but does not prove causation or explain the aggregate gap.
+The universal PyValue register interpreter is qualified and frozen at the
+[2026-11-08 golden checkpoint](../issues/golden-20261108/README.md).
+Release/debug full suites passed at functional `0267d428808`; runtime
+`0765e9be47f` only moves a comment. Its interpreter, core heap fields and
+rebuilt bundled extensions use canonical values. Owning bridges remain where
+value-native APIs have not replaced them. The older `eba351fee7d` image with
+boxed heap fields is a historical interim control.
+
+No new native method/tracing JIT tier is qualified. Dashed entry edges in the
+diagram describe planned tiers, not an implemented execution path. Logging
+remains about 1.38× upstream and the broad screen about 1.24×. Read the
+[current report](../bench/results/interpreter-parity-20261108.md) for exact
+protocols and limits. Added retired work is the main measured logging
+indicator; samples do not establish a causal allocation among helpers.
+The [cold review and next plan](../issues/golden-20261108/next-steps.md)
+compare structural improvements. Zero-box census and startup RSS are not
+throughput admission gates.
 
 The target has one canonical core representation and one selected collector.
 Internal PyValue bits are private; opaque extension handles do not expose them.

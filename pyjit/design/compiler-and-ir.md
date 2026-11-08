@@ -1,5 +1,9 @@
 # Compiler and register IR
 
+Read the current [IR specification](register-ir.md) and
+[interpreter specification](interpreter.md) for the golden checkpoint's
+as-built encoding and execution path. This page summarizes shared constraints.
+
 The compiler emits the register representation directly. The main source paths
 are `Python/compile.c`, `codegen.c`, `flowgraph.c`, `regcfg.c`,
 `regcfg_passes.c`, `assemble.c` and `ir.c`.

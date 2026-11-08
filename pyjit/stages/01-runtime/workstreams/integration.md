@@ -17,14 +17,14 @@ Expensive broad qualification and quiet timing belong to coherent candidates.
 Preserve failures and reviewed commits. Do not stage unrelated work or erase
 user changes. Stop superseded assignments and report actual running work.
 
-Current state (2026-11-03 17:40): runtime HEAD `6d39221996d`. Debug and release
-builds link and run, and 67 shared modules build. The debug suite at 17:31 ran
-611 of 619 files: 484 OK, 30 failed, 3 env changed; 48,500 tests, 52 failures.
-Two triage agents are fixing the rest. There are no performance results yet.
-Commits and next steps are in [HANDOFF](../../../HANDOFF.md).
+Current state (2026-11-08): runtime `0765e9be47f` is frozen as the
+[golden baseline](../../../issues/golden-20261108/README.md). Full release/debug
+qualification and measured outcomes at functional `0267d428808` are complete.
+The earlier linking/triage loop is finished; its old instructions remain in
+Git history. No old triage assignment should be restarted from this page.
 
-The next integration packet is the
-[PyValue representation packet](../../../design/proposals/pyvalue-representation-packet.md)
-(11 steps, accepted after review), which starts after triage and native-boundary
-P4. IR v2 follows. The next stage is
-[interpreter qualification and measurement](../../02-baseline/README.md).
+The [cold review and next plan](../../../issues/golden-20261108/next-steps.md)
+own subsequent design and performance experiments. Keep the golden tag
+immutable. The coordinator qualifies each coherent batch and compares it
+against this baseline before admission. Exact source/build paths and preserved
+local changes are in [HANDOFF](../../../HANDOFF.md).

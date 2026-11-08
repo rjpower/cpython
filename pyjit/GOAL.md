@@ -7,11 +7,24 @@ direction; Loom's `goal` artifact mirrors it.
 
 ## Decisions to retain
 
-- Current optimization milestone (2026-11-08): the source-backed eight-item V8
+- Golden baseline (2026-11-08): freeze and publish the qualified runtime as
+  `pyjit-golden-20261108-runtime` (`0765e9be47f`, functional qualification
+  `0267d428808`). Keep a coherent source/documentation snapshot and a concise
+  [manifest](issues/golden-20261108/README.md), with current
+  [IR](design/register-ir.md) and [interpreter](design/interpreter.md)
+  specifications and Mermaid diagrams. Historical boards are archived;
+  preserve sealed evidence and unrelated local work. The fresh
+  [cold review and next plan](issues/golden-20261108/next-steps.md) supersede
+  the previous ordering of experiments. Evaluate independent structural ideas
+  before selecting implementation: executable NOPs are not inherent to a
+  register machine, and borrowed frame homes are one alternative rather than
+  a predetermined next change. The golden tag remains immutable.
+
+- Completed optimization milestone (2026-11-08): the source-backed eight-item V8
   comparison and selected interpreter improvements are integrated, qualified
   and measured; see the [checkpoint report](bench/results/interpreter-parity-20261108.md).
   Continue driving the unchanged real `logging_silent` workload toward upstream
-  parity; the current checkpoint does not reach it. The next packet measures
+  parity; the current checkpoint does not reach it. A prepared packet measures
   borrowed arguments across frame boundaries and decides their lifetime and
   representation contract before implementation. Preserve universal canonical
   heap values and explicit ownership; do not treat the current independently

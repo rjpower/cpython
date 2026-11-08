@@ -19,6 +19,11 @@ next step and links a bounded packet; an experiment owns the detailed evidence.
 Update the relevant parent when an outcome changes. Archive or Git retains the
 chronology; do not keep completed agents listed as running.
 
+The current baseline specifications are [register IR](design/register-ir.md)
+and [interpreter](design/interpreter.md). The former combined, dated reference
+is [archived](design/archive/register-ir-20261108.md). Keep current contracts
+separate from historical recommendations; label proposed JIT tiers explicitly.
+
 Distinguish proposed, reviewed, implemented, tested, committed, integrated,
 qualified and measured. State what was actually executed and on which runtime.
 An author template, reference test or C compile is not a candidate runtime pass.

@@ -1,10 +1,12 @@
 # Stage 2: qualified interpreter baseline
 
-State: qualified baseline and selected optimization batch complete at
-`0267d428808`. The batch is kept with an accepted `spectral_norm` regression;
+State: qualified baseline is frozen as the
+[2026-11-08 golden checkpoint](../../issues/golden-20261108/README.md),
+runtime `0765e9be47f` (functional qualification `0267d428808`).
+The batch is kept with an accepted `spectral_norm` regression;
 the broader screen remains 1.2412× upstream, so parity is open. See the
 [checkpoint report](../../bench/results/interpreter-parity-20261108.md) and
-[interpreter parity plan](../../issues/interpreter-parity-20261108/plan.md).
+[next plan](../../issues/golden-20261108/next-steps.md).
 
 Deliver a trustworthy starting point for optimization: the register interpreter
 with universal values, measured with JIT explicitly off. The qualified older
@@ -20,8 +22,9 @@ JIT-off evidence. Separate startup, lowering and warm execution; report time
 and memory. No arbitrary text-size veto substitutes for performance evidence.
 
 Baseline exit evidence is complete. The selected batch is measured and kept;
-parity remains open. Borrowed-frame work is limited to diagnostics and a
-representation decision, with implementation gates unresolved.
+parity remains open. The fresh cold review defines the next experiment ordering.
+Borrowed-frame work remains limited to diagnostics and a representation
+decision, with implementation gates unresolved.
 
 References: [gates](../../design/validation.md), [measurement](../../design/measurement.md),
 [integration](../../issues/pyvalue-rc-restoration/integration/status.md),

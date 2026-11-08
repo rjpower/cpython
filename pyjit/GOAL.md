@@ -7,17 +7,20 @@ direction; Loom's `goal` artifact mirrors it.
 
 ## Decisions to retain
 
-- Current optimization milestone (2026-11-08): compare the interpreter and IR
-  independently with V8, grounding 5–10 recommendations in source. Separate
-  IR layout constraints from implementation costs. For each accepted change,
-  use propose → independent review → implement → focused tests → post-review →
-  integrate. Drive the selected real `logging_silent` workload toward upstream
-  parity; do not claim parity until measured evidence supports it. The active
-  packet is [interpreter parity](issues/interpreter-parity-20261108/plan.md).
-  Compare the architectural alternatives before choosing an implementation
-  direction. A selected benchmark is an evaluation target, not a commitment
-  to a call-path rewrite. Separate small cleanups from changes with enough
-  coverage to address the measured gap.
+- Current optimization milestone (2026-11-08): the source-backed eight-item V8
+  comparison and selected interpreter improvements are integrated, qualified
+  and measured; see the [checkpoint report](bench/results/interpreter-parity-20261108.md).
+  Continue driving the unchanged real `logging_silent` workload toward upstream
+  parity; the current checkpoint does not reach it. The next packet measures
+  borrowed arguments across frame boundaries and decides their lifetime and
+  representation contract before implementation. Preserve universal canonical
+  heap values and explicit ownership; do not treat the current independently
+  owning frame-home policy as a law of eight-byte values. Complete owner/GC,
+  promotion, observer, fallback and consumer proofs under independent review.
+  The [active plan](issues/interpreter-parity-20261108/plan.md) retains other
+  reviewed alternatives and the accepted spectral tradeoff. Use propose → peer
+  review → implement → focused tests → post-review → integrate; whole suites
+  and broader performance work belong at coherent checkpoints.
 
 - Use universal canonical eight-byte PyValues across interpreter operations,
   containers and attributes. A frame-only value format with boxed heap fields

@@ -3,16 +3,17 @@
 This is the reference for the register IR, its compiler and the interpreter
 that runs it. Section 1 specifies the design as built. Section 2 compares it
 with V8 Ignition, LuaJIT 2, JSC LLInt and Lua 5.4. Section 3 records the
-coordinator's decisions and lists the gaps in priority order. Section 4
-proposes the one encoding revision, IR v2, that the format gaps are batched
-into. Section 5 specifies the instruction contract, section 6 the interfaces
+coordinator's dated decisions and gap analysis. Section 4 retains the IR v2
+design that grouped the format changes. Use section 1 and the current
+qualification report for implemented behavior; dated proposal status is
+history. Section 5 specifies the instruction contract, section 6 the interfaces
 the JIT needs, and section 7 the decisions still open. Review 1
 ([reviews/register-ir-review-1.md](reviews/register-ir-review-1.md)) drove
 the first revision, and review 2
 ([reviews/register-ir-review-2.md](reviews/register-ir-review-2.md)) the
 second.
 
-**Current source and implemented contracts, 2026-11-07.** Runtime R5
+**Preceding R1–R5 batch, 2026-11-07.** Runtime R5
 `0953757f4e7` on R4 `b58036e9718` extends the previously qualified interpreter
 without changing its 64-bit word layout. The batch removes write-only call
 bookkeeping, clarifies the call
@@ -25,6 +26,37 @@ fact for one shape-result temporary flush. See the [R4 receipt](../issues/interp
 for validation and performance evidence. The R5 paired and basic results do
 not establish a broad speedup or upstream parity. Native method/tracing JIT
 recovery remains future work; R5 adds no recovery state or backend.
+
+**Interpreter-parity packet, 2026-11-08.** P1/P2 is integrated at
+`0539e0c1ff9`; both frame initializers use typed canonical code homes, and
+successful refresh returns before failure-path revalidation. The pointer-borrow
+domain is the canonical `PyValue` pointer representation, not an arbitrary
+numeric `PyObject *`; generic entry still canonicalizes scalar values first.
+M2b is integrated at `73c20472a9f`: only the ordinary boolean continuation may
+execute one checked live NOP inline. The NOP word and PC publication remain;
+instrumented wrappers retain their handlers and debug lltrace declines. Stats
+record 151 entered handlers versus 161 before, with ten NOP entries removed.
+M1 is integrated at `d93b83800a5`: an exact-dict/inline-int first-probe
+identity hit returns an owned canonical value and uses shared ordered leaf
+retirement; decline preserves the original generic slow path and input state.
+Neither changes the current register-word layout. Regeneration removes the
+affected operations from the unused legacy optimizing expansion table; a future
+optimizing frontend must provide the appropriate lowering before relying on
+that table. P3's private guarded `CALL_PY_GENERAL` entry is integrated at
+`10627c339fa`; its generic fallback and post-allocation guards remain part of
+the contract. The combined batch passed release/debug correctness qualification
+at `0267d428808`; the two test-interface follow-ups change no interpreter
+protocol. The selected batch is kept after measured review; broad performance
+remains behind upstream and the spectral regression is accepted. See the
+[checkpoint report](../bench/results/interpreter-parity-20261108.md) for exact
+numbers, ownership of the diagnostic and evidence limits. The
+[borrowed-frame source comparison](../issues/interpreter-parity-20261108/borrow-frame-followup.md)
+identifies a separate ownership alternative for the next design investigation;
+current homes still own their mortal values. See the
+[parity plan](../issues/interpreter-parity-20261108/plan.md),
+[M2b post-review](../issues/interpreter-parity-20261108/m2b-post-review-round2.md),
+[M1 post-review](../issues/interpreter-parity-20261108/m1-post-review.md),
+[P2 post-review](../issues/interpreter-parity-20261108/p2-post-review.md).
 
 **Historical checkpoint evidence, runtime `6a0e4c12c17`.** That runtime built
 and executed the register interpreter in debug, release and stats

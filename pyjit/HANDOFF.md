@@ -1,27 +1,63 @@
 # Coordinator handoff
 
-Current assignment (2026-11-08): compare the interpreter and IR independently
-with V8, produce 5–10 source-backed recommendations, and distinguish IR layout
-constraints from implementation costs. The active workload is real
-`logging_silent` calls. The eight-item comparison is complete; the fresh pinned
-baseline is 1.657289x upstream. The user rejected prematurely narrowing the
-work to call preparation. Compare the architectural alternatives before
-selecting implementation. There is no parity claim. Follow the
-[active plan](issues/interpreter-parity-20261108/plan.md) and
-[progress record](issues/interpreter-parity-20261108/parity-docs-progress.md).
-The 2026-11-07 qualification remains the starting evidence.
+Checkpoint closed, 2026-11-08. The selected V8-review interpreter batch is
+integrated, qualified and kept with measured tradeoffs. Logging remains about
+1.38× upstream; parity is open. Start with the
+[current report](bench/results/interpreter-parity-20261108.md),
+[next plan](issues/interpreter-parity-20261108/plan.md) and
+[decision ledger](issues/interpreter-parity-20261108/recommendations.md).
+The next packet is borrowed-frame diagnostics and a representation/lifetime
+decision; its two-round review does not approve implementation.
 
-Runtime `pyvalue-rc-universal` remains clean at qualified R5 `0953757f4e7`.
-The task worktree `interpreter-parity-20261108` has only the held three-line
-successful-refresh cleanup in `Python/ceval.c`, uncommitted, unbuilt and
-untested. It is not the selected parity architecture. The comparison, decision
-ledger and competing proposals live in
-`issues/interpreter-parity-20261108/`. Raw baseline and warmed-IR/frame-layout
-captures live under the matching `build/pyjit-link-wave1/` experiment directory.
-Both hot callees have zero constant homes; constant relocation is therefore
-not a demonstrated lever for this workload. Source review also finds that
-shape/method handlers already avoid refresh on their proven leaf paths;
-measure remaining traffic rather than proposing that existing optimization.
+## Operational snapshot
+
+- Runtime source: `build/worktrees/pyvalue-rc-universal`, branch
+  `boil/pyvalue-rc-universal`, clean HEAD **`0765e9be47f`**. P1/P2 `0539e0c1ff9`,
+  M2b `73c20472a9f`, M1 `d93b83800a5`, P3 `10627c339fa`; test-interface fixes
+  `1c8774797f3` and `0267d428808`; final comment placement `0765e9be47f`.
+- Full suites and all final measurements identify functional **`0267d428808`**:
+  release/debug each 54,394 tests, zero failures, 2,531/2,469 skips; lint
+  306 units/zero failing findings. All failed attempts are retained. Latest
+  commit only moves an existing comment; no suites/timings repeated for it.
+- Current `pyvalue-rc-repr-{release,debug,stats}` binaries all identify
+  `0765e9be47f`, JIT disabled, GCC15.2.0; each checks 117 modules and rebuilt
+  stats smoke passes 142 tests. Debug text matches `0267d428808`. Release's only four
+  changed text bytes are equivalent `f`-literal address relocations from
+  build-identifier suffix merging. Exact measured0267 ELF remains retained.
+- Build/evidence root:
+  `/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/`.
+  Current evidence: `pyjit-link-wave1/interpreter-parity-20261108/`, including
+  `final-qualified-*`, `comment-cleanup-*`, `final-target-{1,2}`, `final-broad`,
+  `final-vs-r5`, `final-perf-*`, `spectral-perf-*`, `profile-analysis` and
+  `warmed-shape-comparison`. `run-checks.py`, `run-performance.py` and exact
+  receipts record executed commands. Do not reuse existing output names.
+- Temporary counters were retired byte-for-byte and stats forcibly rebuilt;
+  current source/binaries contain no route/hit diagnostic overlay. All 72 stat
+  invocations pass; eight profiles have zero lost samples, with the recorded
+  `HEADER_EVENT_DESC` metadata warning. Full limits are in the report.
+- Task worktree/branch `interpreter-parity-20261108` and build-local
+  `python-r5-parity-control` copy were removed after byte verification.
+  Original R5 ELF is retained at `baseline-identities/candidate-python` under
+  the evidence root; recreating the task control copy in the release build
+  directory is required before reusing its direct-comparison launcher.
+  Other preexisting worktrees and evidence are preserved.
+- Workers' source, doc, code/evidence and proposal-review packets are complete;
+  no native jobs remain. Role tables in the plan are next-work owners, not a
+  live-agent list. Next: attributable argument-owner diagnostics, complete the
+  frame-home consumer census, decide representation, review before porting.
+
+Both logging callees have zero constant homes. Calls already use a frame stack
+and overlap; no consuming binder fallback occurs in the measured logging
+interval. Its retained message is mortal. Upstream's borrowed child arguments
+are a legitimate alternative to the current strong-home policy, but anchor/GC,
+ordinary guard-decline, promotion, observer and native-transfer proofs must
+close before changing it. Keep spectral in the next integration screens;
+its +8.6% direct regression has a confirmed CPI penalty, unresolved cause.
+
+Canonical unrelated work to preserve: the emptied
+`bench/results/checkpoint-6a0e4c12c17.md`, appended
+`issues/checkpoint-closure/ctypes-rawpin-build.log`, and untracked
+`issues/checkpoint-closure/w5-release.lock`. They are not part of this batch.
 
 The [interpreter architecture batch](issues/interpreter-architecture-20261107/plan.md) is complete.
 R1–R5 have landed through `0953757f4e7` and full correctness qualification

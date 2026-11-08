@@ -19,3 +19,14 @@ P2 authorization.
 Coordinator hold: broaden architecture alternatives and cost coverage before
 selecting priorities. Preserve the uncommitted P1 diff in W; no integration,
 build, test, commit or further runtime edits, including P2 and P3.
+
+User authorized implementation; coordinator approved corrected P2. W now has
+P1 plus the P2 restricted `_PyValue_PointerBorrow` shared with generic borrow,
+and typed `_PyFrame_CodeHome` used by both normal and trampoline frame
+initializers. Added a direct internal C test of a mortal code's acquire/release
+and the static immortal `_Py_InitCleanup` tag, plus Python active-code
+replacement, suspended-generator, class-init and context/exception exercises.
+Reviewed diff; `git diff --check` and host AST parsing pass. No runtime build,
+native test, workload or commit. Ready for independent actual-diff review and
+coordinator build; the trampoline specialization should be confirmed by the
+coordinator, not inferred merely from warming the class call.

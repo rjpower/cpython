@@ -54,6 +54,17 @@ later reassignment, home change, or callback. See the
 [final-publication review](../issues/interpreter-throughput/final-publication-review.md)
 and [Integration C receipt](../issues/interpreter-throughput/integration-c.md).
 
+The 2026-11-08 parity packet integrates P1/P2 at `0539e0c1ff9` and M2b at
+`73c20472a9f`; P1/P2 adds no observer rule. M2b permits one checked inline
+continuation only when the live target word's handler is exactly ordinary
+`NOP`. It still publishes the original PC and retains the NOP word. Instrumented
+line/instruction wrappers retain their handlers and callback behavior; debug
+lltrace declines the shortcut and dispatches the NOP normally. The bounded
+change removes ten handler entries in the observed loop (161 to 151), without
+establishing a performance or parity result. See the
+[M2b post-review](../issues/interpreter-parity-20261108/m2b-post-review-round2.md)
+and [implementation contract](../issues/interpreter-parity-20261108/implementation-contracts.md).
+
 Specialization must guard receiver behavior, representation, shape/type version
 and descriptor precedence as applicable. Keep generic behavior and recovery for
 hooks, mutation, misses and exceptions. Selected noallocation nomination paths

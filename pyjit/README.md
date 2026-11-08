@@ -1,15 +1,15 @@
 # PyJIT
 
-**Current milestone, 2026-11-08:** independently compare the interpreter and IR
-with V8, then propose 5–10 source-backed recommendations that distinguish IR
-layout constraints from implementation costs. The active `logging_silent`
-experiment uses real `Logger.debug` and `isEnabledFor` calls. The eight-item
-V8 review is complete, and a fresh pinned baseline is 1.657289x upstream.
-Architectural alternatives are being compared before implementation selection;
-no parity result is claimed. See the
-[experiment plan](issues/interpreter-parity-20261108/plan.md),
-[progress](issues/interpreter-parity-20261108/parity-docs-progress.md) and
-[current status](STATUS.md).
+**Current checkpoint, 2026-11-08:** the selected five-mechanism batch is
+integrated at `0267d428808` and passes release/debug full-suite qualification
+(54,394 tests each, zero failures). The retained-ELF comparison with current shared modules gives
+logging 0.840163 against R5; the 29-kernel comparison is 0.980981. The two-round broad
+upstream screen is 1.2412, and logging remains 1.38× upstream. The batch is kept
+with the repeatable `spectral_norm` regression (1.0860 against R5) accepted.
+Upstream parity is not established. The later `0765e9be47f` successor is
+comment-only; qualification and timings remain tied to `0267d428808`. See the
+[checkpoint report](bench/results/interpreter-parity-20261108.md),
+[active plan](issues/interpreter-parity-20261108/plan.md) and [status](STATUS.md).
 
 We are rebuilding CPython around universal eight-byte PyValues, a register
 interpreter, and a cohesive method and tracing JIT. Memory management uses

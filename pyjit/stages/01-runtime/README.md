@@ -1,7 +1,9 @@
 # Stage 1: coherent runtime integration
 
-State: integrated and qualified at runtime `0953757f4e7`. Current optimization
-work is tracked under [interpreter parity](../../issues/interpreter-parity-20261108/plan.md).
+State: integrated and qualified at `0267d428808`; selected batch kept after
+performance admission. The broad upstream screen remains 1.2412× and parity
+is not established. See the [checkpoint report](../../bench/results/interpreter-parity-20261108.md)
+and [interpreter parity plan](../../issues/interpreter-parity-20261108/plan.md).
 Owner role: coordinator; role names are not an active assignment list.
 
 Deliver one runtime with canonical eight-byte PyValues across frames,
@@ -19,10 +21,9 @@ the qualified report and active parity packet own current admission work.
 | [Native boundaries](workstreams/native-boundaries.md) | Per-thread borrow stack, getargs, Clinic | P1 to P3 landed; finish P4 and the post-review |
 | [Integration](workstreams/integration.md) | Exact composition, commits and merged build | Qualified baseline complete; continue the active parity experiment |
 
-The selected runtime completed release and debug full-suite qualification with
-no failures. The 2026-11-07 report records the qualification and matched
-measurements. The active parity packet proposes source-backed interpreter/IR
-changes against V8 and uses `logging_silent` as its selected workload.
+The selected runtime completed release and debug full-suite qualification:
+54,394 tests each with zero failures. The checkpoint report records the matched
+measurements, evidence limits, and accepted spectral tradeoff.
 
 See [current status](../../STATUS.md), [handoff](../../HANDOFF.md),
 [architecture](../../design/runtime-architecture.md) and

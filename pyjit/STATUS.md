@@ -1,17 +1,28 @@
 # Project status
 
-Current milestone, 2026-11-08: source-backed interpreter/IR comparison with
-V8, producing 5–10 reviewed recommendations and separating IR layout
-constraints from implementation costs. `logging_silent` is the selected real
-workload. The eight-item comparison and pinned baseline are complete;
-architectural alternatives are being assessed before implementation selection.
-No parity is established. Follow the [active plan](issues/interpreter-parity-20261108/plan.md)
-and [comparison checkpoint](issues/interpreter-parity-20261108/comparison-checkpoint.md).
-Independent review reproduced the 1.657289x pinned logging baseline and the
-161-dispatch/20-frame loop counts. Competing structural proposals have two
-review rounds; observer and dictionary proofs remain open. No new runtime
-optimization is integrated.
-The 2026-11-07 qualified baseline below is the starting point.
+Current checkpoint, 2026-11-08: selected batch `0267d428808` is qualified and
+kept after performance review. Release and debug each passed 54,394 tests with
+zero failures; release/debug/stats each report 117 modules; API lint covers 306
+units with zero failing findings. The four-round retained-ELF logging factor
+against R5, sharing current modules, is 0.840163, and the 29-kernel factor is 0.980981. The broad
+two-round upstream factor is 1.2412; logging is 1.38× upstream, so parity is
+not established. The repeatable spectral regression is 1.0860 against R5 and
+is an accepted tradeoff. Runtime `0765e9be47f` is a comment-only successor;
+qualification and performance evidence identify `0267d428808`. The [checkpoint
+report](bench/results/interpreter-parity-20261108.md) records evidence and
+limits. The next borrowed-frame work is a diagnostics and representation
+decision, not implementation; GC anchors, promotion and consumer proofs remain
+open. See the [plan](issues/interpreter-parity-20261108/plan.md) and [decision
+ledger](issues/interpreter-parity-20261108/recommendations.md).
+
+The pinned R5 logging baseline is 1.657289x upstream. The checked NOP
+continuation reduces handler entries from 161 to 151 per logging workload
+loop, while retaining the same 20 frames and observable IR words. These counts
+are not elapsed-time gains. Constant relocation is not a target lever: both
+hot callees have zero constant homes. Full qualification and the quiet elapsed,
+route and hardware-counter measurements recorded in the [checkpoint
+report](bench/results/interpreter-parity-20261108.md) determined the batch's
+keep decision.
 
 Completed batch, 2026-11-07: R1–R5 are integrated through `0953757f4e7`; release
 and debug full suites passed with no failures, and all three builds check 117

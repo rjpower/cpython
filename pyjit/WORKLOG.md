@@ -312,3 +312,5 @@ that remote copy remains at revision 7. No alternate export was attempted.
   task-created contract worktree/branch and R4 build hardlink after retaining
   the final patch and exact ELFs; runtime source remains clean.
 - 2026-11-08: [V8 comparison checkpoint](issues/interpreter-parity-20261108/comparison-checkpoint.md): eight recommendations, competing structural proposals and independent reviews; pinned logging baseline 1.657289x upstream, 161 dispatches/20 frames per loop. Runtime remains qualified R5; implementation selection is open.
+
+- 2026-11-08 — [Interpreter parity batch](bench/results/interpreter-parity-20261108.md): selected V8 mechanisms qualified through functional `0267d428808`, comment-only successor `0765e9be47f`; both suites 54,394/0 failures, logging 1.38× upstream and 0.8402× retained R5, direct 29-kernel GM 0.9810 with spectral +8.6% tradeoff; next borrowed-frame lifetime/representation investigation.

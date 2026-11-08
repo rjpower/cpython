@@ -250,6 +250,17 @@ An inline value in a generic position never needs a box. The operation reads
 its type with `PyValue_TYPE` and raises the upstream `TypeError` itself
 (`len(5)`, `5()`, `iter(2.5)`, `5[0]`).
 
+The 2026-11-08 P1/P2 increment integrates at `0539e0c1ff9` the narrow typed
+pointer-tail pattern: `_PyValue_PointerBorrow` accepts a pointer only after the
+caller has proved it is in the canonical `PyValue` pointer representation; it
+does not accept an arbitrary numeric `PyObject *`. It preserves the
+address-limit check and immortal tag, while generic object entry performs
+exact-int and exact-float canonicalization first. `_PyFrame_CodeHome` accepts
+a typed `PyCodeObject *` and duplicates the borrow, so a mortal code home owns
+a reference and an immortal code home carries its no-count tag. The source
+review and evidence are linked from the
+[P2 post-review](../issues/interpreter-parity-20261108/p2-post-review.md).
+
 ### 1.3 Conversions
 
 | Direction | Primitive | Contract | Today |

@@ -1,7 +1,7 @@
 # Calls, frame homes and observation
 
 Current qualification, measured tradeoffs and follow-up are in the
-[architecture batch report](../bench/results/interpreter-architecture-20261107.md).
+[interpreter-parity checkpoint report](../bench/results/interpreter-parity-20261108.md).
 
 Reviewed contract and bounded implementation, 2026-11-07. The A/B call
 paths below were first documented at runtime `7780e32e0e2`; the current R1–R5
@@ -31,6 +31,47 @@ it adds no native JIT recovery protocol. See the [R4 receipt](../issues/interpre
 and [R5 receipt](../issues/interpreter-architecture-20261107/integration-r5.md)
 for the implementation details, reviews and evidence. Current results establish
 no broad speedup or upstream parity.
+
+## Interpreter-parity packet: P1/P2, M2b, M1 and P3 integrated
+
+P1/P2 is integrated at `0539e0c1ff9`. `_PyFrame_CodeHome` accepts a typed
+`PyCodeObject *` and returns a duplicated pointer borrow: mortal code gains a
+reference, while immortal code retains its no-count tag. Both ordinary frame
+initialization and unchecked trampoline initialization use this helper. The
+generic object-to-value constructor keeps its scalar checks and reaches the
+pointer-borrow tail only after those checks have established pointer form.
+Successful refresh publishes the original PC and can return immediately;
+failure still performs the later validation because error construction may
+reenter. These ownership and refresh changes have focused release/debug checks,
+but no performance claim. See the
+[source review](../issues/interpreter-parity-20261108/p2-source-review.md) and
+[post-review](../issues/interpreter-parity-20261108/p2-post-review.md).
+
+M2b is integrated at `73c20472a9f`. Its ordinary boolean continuation executes
+one checked live NOP inline, with original PC publication and the NOP word
+retained; wrappers keep their handlers and debug lltrace declines. M1 is
+integrated at `d93b83800a5`. Its owned exact-dict first-probe identity hit
+begins with borrowed container/key inputs and uses shared ordered retirement.
+A temporary owns the result before key/dict retirement; a folded local is
+written afterward, following successful retirement and callback refresh. A
+decline leaves the generic reader path and input state untouched. These changes do not alter the current register-word
+layout. Regeneration removes affected entries from the unused legacy
+optimizing expansion table, so a future optimizing frontend needs a suitable
+lowering before using that table.
+
+P3's private unbound `CALL_PY_GENERAL` guarded entry shares the call-record
+initializer and existing overlap/consuming paths. The successful guarded entry
+keeps its callable/provider proof only until potentially allocating kwargs
+preparation; final callable, code, vectorcall, hook, defaults, stack-capacity
+and argument-offset checks remain after allocation. Push/final post-allocation
+guards remain in place, and the generic fallback still uses the generic
+transaction runner. P3 is integrated at `10627c339fa`; the combined batch
+passed release/debug correctness qualification at `0267d428808`. The batch is
+kept after measured review, with the spectral regression accepted; upstream
+parity remains open. See the [checkpoint report](../bench/results/interpreter-parity-20261108.md),
+[M2b post-review](../issues/interpreter-parity-20261108/m2b-post-review-round2.md),
+[M1 post-review](../issues/interpreter-parity-20261108/m1-post-review.md),
+[implementation contract](../issues/interpreter-parity-20261108/implementation-contracts.md).
 
 ## R5 canonical-source publication
 
@@ -100,6 +141,15 @@ The frame has one `PyValue` array. Locals, cells, free variables and hidden
 constant homes precede transfer temporaries. A home contains NULL, an inline
 value, an immortal, or its owning object reference. A mortal borrow is a C-local
 view supported by an owner; it is not a second owner in a frame slot.
+
+This is the current owning-home contract, not a requirement of eight-byte
+values. Pinned upstream can carry a borrowed argument into a synchronous
+child frame, preserve overwritten caller locals and promote on frame escape.
+The [source comparison](../issues/interpreter-parity-20261108/borrow-frame-followup.md)
+and [next-packet proposal](../issues/interpreter-parity-20261108/borrowed-frame-views-proposal.md)
+review that alternative. No borrowed mortal frame slot is supported by the
+current candidate; changing it requires updating GC edge accounting, copies,
+retirement, observations and native transfers together.
 
 Three distinct questions must remain separate:
 

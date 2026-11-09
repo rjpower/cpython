@@ -31,7 +31,7 @@ flowchart TD
 | --- | --- |
 | [Compiler and IR](compiler-and-ir.md) | compile/codegen/flowgraph → regcfg/regcfg_passes → assemble; physical frame homes, liveness and generated formats |
 | [Interpreter](interpreter.md) | bytecodes and cases generators → ceval; dispatch, frames, effects, specialization and observation; deeper [handler contract](handler-and-observer-contract.md) |
-| [Calls and frame homes](call-and-frame-lifetimes.md) | Frame stack, prepare/commit ownership transfer, initialized homes versus future-read liveness, and observation boundaries |
+| [Calls and frame homes](call-and-frame-lifetimes.md) | Initialized arena, known binding plans, owning argument windows, explicit recipients/continuations, semantic completion and observation |
 | [Values and objects](values-and-object-protocol.md) | Canonical scalar/object encoding, managed storage, attributes and ownership boundaries |
 | [Memory and lifetimes](gc-roots-and-lifetimes.md) | Reference counting, cyclic traversal, release/reentry and weakref/finalization contracts |
 | [PyValue](pyvalue.md) | Accepted ([review](reviews/pyvalue-review-1.md)). Canonical spec for the eight-byte value: as-built encoding, comparison with other engines, prioritised gaps |
@@ -61,15 +61,31 @@ rebuilt bundled extensions use canonical values. Owning bridges remain where
 value-native APIs have not replaced them. The older `eba351fee7d` image with
 boxed heap fields is a historical interim control.
 
-No new native method/tracing JIT tier is qualified. Dashed entry edges in the
-diagram describe planned tiers, not an implemented execution path. Logging
-remains about 1.38× upstream and the broad screen about 1.24×. Read the
-[current report](../bench/results/interpreter-parity-20261108.md) for exact
-protocols and limits. Added retired work is the main measured logging
-indicator; samples do not establish a causal allocation among helpers.
-The [cold review and next plan](../issues/golden-20261108/next-steps.md)
-compare structural improvements. Zero-box census and startup RSS are not
-throughput admission gates.
+The active [frame/call increment](../issues/frame-call-model-20261109/plan.md)
+changes the interpreter beneath that architecture: compact executable words and
+source-edge metadata, direct versioned Python binding, deferred eligible empty
+kwargs, plain result destinations and real return continuations, semantic
+iteration/delegation completion, and an initialized chunk frontier. Generated
+physical output facts and shared cold read/definition/outcome contracts connect
+compiler ownership to constructor and debugger consumers. Activation-local
+source errors and cold LINE handoffs preserve observation through reentry.
+These later source changes remain under integration; standalone shared cleanup
+and broader debugger/reader recipes are not all complete.
+
+The first engineering increment `6ef45e391aa` has a short logging screen near
+upstream elapsed parity, with broad regressions still present. That is not a
+passed parity campaign or functional promotion. Read the
+[first increment report](../issues/frame-call-model-20261109/integration-report.md)
+and [status](../STATUS.md) for identities, limits and subsequent gates. The
+older [golden report](../bench/results/interpreter-parity-20261108.md) and
+[preceding candidate report](../issues/execution-boundaries-20261108/report.md)
+remain evidence for those images only. Counts or samples alone do not establish
+a causal allocation of cost among helpers.
+
+No native method/tracing JIT tier is qualified. Dashed diagram edges describe
+planned tiers, not implemented execution paths. Compiler and interpreter share
+one owning baseline ABI; future recovery reconstructs that state. Zero-box
+counts and startup RSS are not throughput admission gates.
 
 The target has one canonical core representation and one selected collector.
 Internal PyValue bits are private; opaque extension handles do not expose them.

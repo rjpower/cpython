@@ -1,218 +1,175 @@
 # Register interpreter: current contract
 
-This page describes the active integration runtime at
-`/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/execution-boundaries-20261108`:
-integrated commit `4b3d739d867`, containing the operand, boolean-boundary and
-discarded-result changes. Release and debug each passed 54,421 full-suite tests;
-debug passed on retry after an unexplained profiling failure, retained in the
-[investigation](../issues/execution-boundaries-20261108/profiling-investigation.md).
-Performance promotion is withheld after repeated broad regressions; see the
-[candidate report](../issues/execution-boundaries-20261108/report.md). The
-immutable golden `0765e9be47f` remains qualified at functional `0267d428808`;
-its [checkpoint report](../bench/results/interpreter-parity-20261108.md) is
-baseline evidence, not qualification of the new code.
+This page describes the active frame/call source on branch
+`pyjit/frame-call-model-20261109`. Engineering commit `6ef45e391aa` and later
+semantic-completion, initialized-arena and observer repairs are not a fully
+qualified replacement for golden `0765e9be47f`. See [status](../STATUS.md), the
+[active packet](../issues/frame-call-model-20261109/plan.md), and the immutable
+[baseline report](../bench/results/interpreter-parity-20261108.md).
 
-See the [register IR](register-ir.md), [call/frame lifetimes](call-and-frame-lifetimes.md)
-and [handler/observer contract](handler-and-observer-contract.md). The selected
-ownership and release points do not require a future implementation to preserve
-immediate finalization; see [language and lifetime policy](lifetimes-and-language-semantics.md).
+The [register encoding](register-ir.md), [frame ABI](call-and-frame-lifetimes.md)
+and [observer contract](handler-and-observer-contract.md) describe the same
+runtime. Its owning homes and release protocol implement RC; Python does not
+require immediate finalization. [Lifetime policy](lifetimes-and-language-semantics.md)
+separates language behavior from that implementation choice.
 
 ## Entry and dispatch
 
-The code object holds immutable eight-byte IR words plus feedback-initializer
-metadata. `Python/ir.c:_PyCode_GetExec` lazily creates one `_PyCodeExec` per code
-object. Frames and threads share it; free-threaded builds publish it through
-the code object's atomic pointer. Its contiguous allocation contains a mutable
-instruction copy followed by feedback storage. A running frame keeps its code
-alive, so its executing word pointer remains valid. Specialization and
-instrumentation update handler fields in that shared executing copy.
+A code object holds pristine eight-byte IR words and feedback initialization.
+`Python/ir.c:_PyCode_GetExec` lazily creates its shared mutable executing copy
+and feedback vector. Running frames own the code and retain pointers into that
+allocation. Specialization and instrumentation patch handler fields.
 
-`Python/generated_ir_cases.c.h` and `Python/ir_targets.h` are generated from
-`Python/bytecodes.c` and IR metadata. Each handler is a function in the
-`_TAIL_CALL_*` table. Handlers dispatch to the next handler with musttail
-transfers; `Python/ceval.c` enters the first handler and does not select a
-computed-goto backend. A handler loads operands from frame homes, performs
-value operations, and publishes results or selects control flow. This is the
-interpreter's execution path; it does not lower to upstream stack bytecode at
-call time.
+`Python/bytecodes.c` and the cases generators produce one `_TAIL_CALL_*` handler
+domain, dispatch metadata and observer contracts. `Python/ceval.c` enters the
+first handler; handlers transfer with GCC musttail dispatch. Execution consumes
+register homes directly, without a runtime stack-bytecode translation stage.
+IR registers are physical memory homes, not machine registers or optimizing SSA.
 
 ```mermaid
 flowchart TD
-    enter[Evaluator entry] --> word[Load executing word]
-    word --> select[Musttail dispatch by handler identity]
-    select --> base[Generic or specialized operation]
-    select --> wrapper[Patched instrumentation wrapper]
-    wrapper --> observe[Observer callback and state refresh]
-    observe --> base
-    base --> outcome{Control result}
-    outcome -->|ordinary| word
-    outcome -->|selected bool edge variant| edge[Constant edge continuation<br/>skip admitted NOP without decode or PC store]
-    edge --> word
-    outcome -->|unrefined false-bool continuation| check{Live successor is ordinary NOP?}
-    check -->|yes, lltrace permits| nop[Publish NOP PC and advance one word]
-    check -->|no| word
-    nop --> word
-    outcome -->|exception| unwind[Exception lookup and frame unwind]
-    outcome -->|Python call or return| switch[Transfer between frame-stack entries]
-    switch --> word
+    entry[Evaluator activation] --> word[Real executing IR word]
+    word --> handler[Generic or specialized semantic operation]
+    word --> wrapper[Instrumented wrapper]
+    wrapper --> observer[Callback and redirect validation]
+    observer --> handler
+    handler --> ordinary[Publish ordinary result or branch]
+    ordinary --> word
+    handler --> child_entry[Commit a child and its result recipient]
+    child_entry --> word
+    handler --> completion[Complete loop, delegation or return]
+    completion --> word
+    handler --> error[Select actual exception recipe and unwind]
+    error --> word
 ```
 
+Source-only boundaries have no dispatched word. Shared cleanup instructions
+that remain in the current compiler are an unfinished separate workstream;
+there is no claim that every release-only word has been removed.
 
-## Frame homes and ownership
+## Frame storage and ownership
 
-A frame's value array is the single home store for locals, cells, free
-variables, hidden constant homes and compiler temporaries. Each home contains
-NULL or a valid `PyValue`; a mortal object value in a home owns its reference.
-Inline values and immortal values follow their tag-specific no-count rules.
-Borrowed object views exist only in C locals while a home or other owner keeps
-them alive. No mortal borrowed frame slot is supported.
+Locals, cells, free variables, hidden scalar constant homes and temporaries
+share one canonical PyValue array. A home contains NULL, an inline value, an
+immortal, or an owning object edge. Mortal borrowed views are C-local and require
+an owner; ordinary frame homes are not borrowed references.
 
-Temporary liveness and ownership are distinct. A value can remain an owner
-that cleanup must release even after its last future read. Homes are initialized
-so GC traversal, frame copying and exception unwinding can inspect the full
-physical array. Normal thread-frame cleanup clears locals after asserting
-compacted temporaries are NULL; exceptional and exposed/detached frame paths
-retain their corresponding full handling.
+Temporary future-read liveness is not owner occupancy. Cleanup must retain or
+retire an initialized owner even if no later Python operation reads it. GC,
+frame copying, unwind and debugger inspection share that invariant. Normal
+thread retirement clears local homes after proving temporary homes NULL;
+exceptional and escaped/generator paths retain their appropriate full handling.
 
-Handlers that can allocate, call Python, release an owner or invoke an observer
-must preserve valid ownership across re-entry. Generated reader paths use
-borrow/consume helpers and temporary result ownership; successful completion
-publishes the output at the declared phase, retires inputs in order, refreshes
-state where required, and installs folded-local results only after successful
-retirement. Decline paths preserve inputs and fall through to the original
-reader; failure paths close temporary owners and leave cleanup to the
-established unwinder. The detailed per-handler contracts are in the linked
-observer and frame-lifetime pages.
+Thread chunks have opposing header/value stacks and one initialized frontier.
+Reservation establishes valid value cells before constructing a header, filling
+only the uncertain suffix. A header truncates that frontier before overwriting
+value-capable memory; pop never restores a saved frontier. All retirement and
+reentry paths must leave reusable value cells NULL. Separate heap frames are
+initialized once, while full ownership copies initialize their destination by
+moving every home. See the [frame ABI](call-and-frame-lifetimes.md).
 
-## Effects, observations and PC
+## Python calls and ordinary return
 
-Handler metadata declares relevant properties such as whether an operation may
-raise, escape into Python, read or write slots, branch, or be observed. The
-register compiler uses these effects to constrain transformations such as copy
-propagation and dead-store removal. A handler's fast specialization may decline
-when a guard fails; decline is not a Python exception and must preserve the
-state expected by its generic path.
+Exact calls guard their standard Python provider and transfer argument owners
+into a child. A versioned known-call plan lets guarded CALL_PY_GENERAL bind
+common positional calls directly through `call_bind_known_python`; no generic
+transaction record is built on that hit. It fills defaults and empty variadic
+bindings under the same owning-frame ABI. A pre-effect miss uses the existing
+transaction/provider path. Keyword, extended, instrumented and unsupported
+shapes retain their complete provider handling, not a second execution model.
 
-The instruction position is measured in IR words. Line events, exception
-ranges and monitoring recover the logical opcode/instruction from the current
-word and metadata. Instrumentation rewrites the executing handler while
-preserving the base operation and operand layout. Instrumented wrappers may
-publish the original PC before calling observer code, then refresh execution
-state after that code can re-enter. Fused handlers preserve their event mapping.
+Compiler-proven empty kwargs may remain a pending local until a materialization
+barrier. Folded reads, cell/alias hazards and frame publication are covered by
+the compiler/constructor proof and cold observation helper; unrelated local
+loads have no pending-value class test. Excluded code eagerly creates its dict.
 
-Six execution-only aliases refine existing specializations: one local-receiver /
-temporary-result shape reader, three static bool edge continuations, and exact
-and guarded-general ignored Python-call completions. Their conservative effects
-and canonical deopt/instrumentation contracts are inherited. Opcode tables,
-stats and stored feedback use canonical specialized opcodes; full handler
-metadata covers physical aliases. Adaptive disassembly preserves specialized
-names while the internal executing-IR view can report aliases.
-
-The selected shape reader borrows its local receiver without consumption and
-publishes its canonical result directly to its temporary. Other input/output
-modes retain the ordinary handler and its retirement/refresh behavior.
-
-The three bool variants skip one admitted NOP on taken, fallthrough or both
-edges without a runtime NOP check or NOP PC store. Selection checks canonical
-and live successors and generated `SAVES_IP` facts. The interval after a
-successful bool guard has no callback or finalizing release; the next
-handler publishes its own PC. Instrumentation invalidates dependent skips before
-patching targets. Debug and free-threaded builds do not select these variants;
-unrefined `POP_JUMP_IF_FALSE_BOOL` keeps its checked live-NOP path. Canonical anchors and all word
-coordinates remain, so this is not physical code compaction.
-
-## Calls, returns and fallback
-
-A call instruction names a contiguous operand window. The exact-argument
-handler (`CALL_PY_EXACT_ARGS`) checks its entry guards, then calls
-`_PyFrame_PushOverlapping` directly for thread-owned callers; generator-owned
-callers use the non-overlap transfer. The callable and argument homes move into
-the child mapping, and the caller saves its destination in
-`frame->return_slot` (`_SAVE_RETURN_SLOT`). This path does not use the generic
-call transaction runner.
-
-`CALL_PY_GENERAL` uses a guarded call transaction. It performs allocating
-preparation while caller homes remain owning, then rechecks callable, code,
-vectorcall, hooks, defaults, stack capacity and argument offsets after kwargs
-preparation before commit. A decline before commit runs the generic call
-transaction; an error propagates through the exception path and does not replay
-completed monitoring or callback work. Neither path falls back after commit. Instrumented, keyword/extended and other
-shapes use their provider-specific handling; generator-owned callers use
-non-overlap storage. The ownership table, guards and exclusions are detailed in
-[call/frame lifetimes](call-and-frame-lifetimes.md).
-
-An exact or guarded-general discard alias is selected for a temporary result
-followed by a matching same-line canonical POP. It excludes generator/coroutine
-callers and callees, local destinations and native completion. Exact entry
-marks the caller recipient at its existing save point. General entry keeps the
-destination numeric through callbacks and fallback, then marks it only when a
-Python child commits. A native fallback publishes normally and reaches the
-original POP. Guarded resource and provider revalidation remains unchanged.
-
-A Python return holds its owned `PyValue` in C, switches the current frame to
-the caller, and retires the child with `_PyEval_FrameClearAndPop`. Only then
-`IR_STORE_RETURN` completes the caller's saved recipient. Ordinary homes use the
-shared publisher; `IR_NO_DST` closes the result. A tagged ignored result clears
-the tag and checks the live next word: an ordinary matching POP with lltrace
-permitting it lets completion close the C owner and continue after POP without
-writing or clearing a result slot. Otherwise it publishes the original home
-and dispatches the observer POP path. Child-cleanup callbacks can change the
-live decision before completion. POP line/opcode observation active before the
-completion guard materializes POP. If the result finalizer itself enables that
-observation after the
-guard, CALL disposal is already committed; observation begins at the next real
-instruction, without a retroactive POP event.
-
-Direct disposal is part of CALL, retaining CALL PC while a result finalizer can
-run; selection requires the dormant POP to share its source line. This is an
-explicit implementation-coordinate policy. A live POP line/opcode action materializes
-its home and uses the original events and positioning. A successful f_lineno
-write cancels a pending tag before changing PC, preserving the existing return
-continuation. See the [lifetime policy](lifetimes-and-language-semantics.md) for
-language requirements versus chosen compatibility. No extra frame owner or
-borrowed home is introduced.
-
-Exception exits use the exception table and release homes above the handler
-boundary while retaining owners needed by the handler. A child exception has
-no caller result owner to retire; ordinary unwind remains authoritative.
+The caller saves `return_pc` as a real executable continuation and `return_slot`
+as a plain local/temporary destination or IR_NO_DST. Return keeps its canonical
+owned value in C across child unlinking and retirement. Ordinary CALL recipient
+completion stays inline: publish into the destination, retiring its actual
+replaced owner, or close the discarded C owner. No dormant POP lookup, tagged
+recipient, historical result home or same-line restriction is involved.
 
 ```mermaid
 flowchart TD
-    call[Call window owns callable and arguments] --> route{Entry route}
-    route -->|exact Python| exact[Entry guards and direct child preparation]
-    route -->|guarded general Python| prep[Prepare resources with caller owners intact]
-    prep --> guards[Revalidate after allocating preparation]
-    guards -->|decline before commit| generic[Existing generic transaction]
-    exact --> commit[Commit child and ordinary or tagged recipient]
-    guards -->|admitted| commit
-    exact -->|guard decline| generic
-    commit --> child[Execute Python child]
-    generic -->|Python child| child
-    generic -->|native completion| native[Publish normally and resume original continuation]
-    child --> result[Hold owned return value in C]
-    result --> retire[Make caller current and retire child]
+    guard[Known provider and binding guards] --> decision{Plan admitted?}
+    decision -->|yes| commit[Reserve initialized storage and transfer owners]
+    decision -->|miss before effects| generic[Generic transaction and binder]
+    generic --> commit
+    commit --> child[Complete child is current]
+    child --> result[Return owns result in C]
+    result --> retire[Restore caller and retire child]
     retire --> recipient{Caller recipient}
-    recipient -->|ordinary slot| publish[Publish result home]
-    recipient -->|IR_NO_DST| close[Close owned result]
-    recipient -->|tagged ignored result| clear[Clear tag and preserve result-slot index]
-    clear --> live{Live matching ordinary POP and lltrace permits?}
-    live -->|yes| direct[Close C owner at CALL PC<br/>advance past POP without slot traffic]
-    live -->|no| fallback[Publish preserved temporary<br/>dispatch original POP]
-    publish --> resume[Resume caller]
-    close --> resume
-    direct --> resume
-    fallback -->|success| resume
-    fallback -->|observer error| error
-    native --> resume
-    prep -->|error| error[Unwind without replay]
-    child -->|exception| error
+    recipient -->|destination| store[Install canonical owner]
+    recipient -->|IR_NO_DST| discard[Close C owner]
+    store --> resume[Resume saved real return_pc]
+    discard --> resume
 ```
 
-## Current limits
+Generic transactions still protect caller owners across preparation, callbacks,
+monitoring and fallible binding. They pin the actual executing code and refresh
+after effects; a completed callback is not replayed on a guard miss. Once
+ownership commit begins, failure retires the published child instead of falling
+back to a second call. Code remains a separate owner because function.__code__
+can change while a child executes.
 
-The active candidate extends the qualified golden register interpreter and
-has passing release/debug full runs, with the unexplained earlier debug
-failure retained. Performance promotion is withheld. Native method/tracing
-compilation, general deoptimization, OSR, machine-state recovery and borrowed
-frame homes remain later work. The candidate report and
-[status](../STATUS.md) record the measured result and open design work.
+## Iteration, delegation and resume
+
+FOR_ITER's body edge preserves its iterator/cursor and defines only the item
+recipient. Exhaustion kills the pair and does not overwrite the last loop local.
+SEND's yielded result goes to B+2; completed delegation kills its window and
+publishes A, or discards at IR_NO_DST. CLEANUP_THROW completes into that same
+recipient and its named real successor. Native and Python-generator routes use
+the same owning completion primitive; ordinary CALL return does not pay a
+universal generator transaction.
+
+Completion separates fallible PRE observation while original owners exist from
+POST observation after the semantic outcome is committed. It detaches windows,
+publishes destinations and continuations before closing owners, and preserves
+supported callback redirects. STOP_ITERATION, branch directions and source LINE
+are independent observer capabilities. Real error StopIteration reporting and
+implicit completion reporting must not emit duplicate exception events.
+
+YIELD_VALUE separates its outgoing owner from the next resume input recipient.
+For an unused input, IR_NO_DST closes the incoming owner only after the parent
+transfer cell is detached and the resumed child's current-frame, exception and
+recursion links are committed. Delegated suspension retains the actual receiver
+lookup relationship. Initial generator construction uses the same explicit
+recipient model. Hidden interpreter/initialization entry starts at its real word-zero
+continuation.
+
+## Errors and observation
+
+`f_lasti`, disassembly and exception offsets remain compact executable indices.
+Eliminated source LINE spans are edge metadata in the code's normalized source
+container. Their callbacks publish an observer-only source cursor and line;
+they do not invent an INSTRUCTION event or a virtual public offset.
+
+The constructor's completion proof follows normal/error/source-callback edges,
+tracks unavailable original homes and definite NULL, and rejects required reads
+of retired owners. Actual exception/lasti definitions and fresh physical output
+locations matter; frontend writes and pass-through shapes alone are insufficient.
+Implicit RERAISE anchors may be semantically unread, while saved locals that a
+handler restores remain required. This preserves the selected PEP479 and
+inlined-comprehension error semantics without a second unwind engine.
+
+Each C evaluator activation owns its pending source-error frame/record. Nested
+Python entry during retirement has a separate activation, so its error cannot
+replace the outer source handler. The frame-object cursor serves display; it
+is not the sole error storage and need not exist on allocation failure.
+
+A cold frame-object LINE handoff records expected real landing, previous source
+line and monitoring epoch. It is separate from public f_lineno. Landing detaches
+it before callbacks and accepts only matching continuation/configuration;
+reconfiguration produces a fresh landing event without replaying old edges.
+Exact relaxation adapters normalize LINE landings while their helper words keep
+real INSTRUCTION events. Setter, exception and frame-clear paths invalidate the
+handoff before callbacks. These observer repairs remain under integration.
+
+## Limits
+
+The active interpreter uses the selected universal PyValue/RC representation
+and rebuilt-source ABI. Native method/tracing JIT tiers, machine register
+allocation, OSR and general native recovery maps are separate future work.
+Source-level ownership review and a short parity screen do not replace full
+functional qualification, broad regression repair or the matched parity gate.

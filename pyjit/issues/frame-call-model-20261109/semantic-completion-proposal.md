@@ -355,3 +355,107 @@ new stream under coordinator integration, never optimistic old snapshots.
 7. Root's release/debug/stats merged suites, compiled-path review and matched
    unchanged workload screens. This source increment is admitted only after
    the current correctness gate and first frame-binding measurement.
+
+### Implemented source contract, pending merged validation
+
+`_PyEval_CompleteStep` consumes a canonical held completion owner on all
+paths. It calls PRE only for an original exact generator/coroutine receiver,
+then detaches the entire input window without callbacks. SEND publishes A
+only after detachment; FOR_ITER never writes A on exhaustion. CLEANUP_THROW
+is the third fixed outcome: four input owners, no PRE STOP, and a source
+fallthrough POST. POST errors retain the semantic operation's published PC;
+the existing `error` entry receives its required next-PC adapter from the
+observer result. Successful completion publishes the selected continuation
+before any detached owner or displaced local is closed, then reads back the
+published PC so a supported callback redirect wins. A PRE redirect returns
+before cached receiver/window values are reused, and refreshes its target
+again after dropping the held result.
+
+The initial EH hypothesis (superseded by the refined proof below) was that
+the existing register EH recipe applies to both phases: PRE still has the
+input homes; POST has NULL input homes and an optional published result home.
+Unwind clears the handler's dead scratch range, tolerating NULL, and preserves
+outer anchors below its exception slot. No separate unwind phase field is
+introduced. Compiler ingress/outcome verification must preserve this property;
+a release-only word cannot supply a missing handler anchor.
+
+#### Refined exception contract after bootstrap failures
+
+The first semantic bootstrap rejected generator-expression FOR_ITER sites
+whose input exception floor was B+2. Their enclosing PEP 479 wrapper keeps
+the iterator/cursor prefix, but its actual handler reads only the exception
+and lasti. Those lower homes occur only as implicit RERAISE unwind owners;
+they are not semantic operands. A preserved prefix therefore does not prove
+that every preserved home must retain its original value.
+
+Final code construction now applies the same encoded proof to compiled
+programs and public constructors. Starting at the selected handler, it tracks
+the at most four retired window homes as unavailable old values. A semantic
+read before a definite definition rejects the code. Normal branches and
+exceptional successors participate; exception/lasti installation defines
+their actual homes. A retired NULL home is not a new definition. Explicit
+POP_TOP/POP_ITER operands still require their owners; there is no blanket
+cleanup exemption. The original PEP 479 conversion and comprehension-local
+restoration handlers stay in place. There is no new POST schema or hot phase
+field. A missing owner cannot be supplied by selecting an outer handler or
+the next surviving word across POP_BLOCK.
+
+CLEANUP_THROW now names its completed continuation as a real unconditional
+normal-success frontend jump, encoded in C/D. A is the completed recipient,
+B the four-owner input window. Its successful source edge is TAKEN and has
+no invented branch event. This replaces the old assumption that shared
+END_SEND is physically adjacent; no old intermediate jump executes with a
+new, hidden completion phase.
+
+`IR_ENTER_GENERATOR` is a terminal generator emission primitive. It detaches
+SEND B+2 into a C owner, installs parent recipient/return PC, child previous
+and exception links, current frame and recursion entry exactly once, then
+publishes or drops incoming input. Last-owner disposal therefore sees an
+executing child with a valid linked frame and a cleared caller transfer home.
+Recursion failure drops the held input once and enters child unwind without
+another recursion entry. Created/non-None SEND is rejected before executing
+state is acquired. Delegated yields retain a real resume home for receiver
+lookup; only initial and nondelegating unused resume input use IR_NO_DST.
+
+RETURN_VALUE has no artificial cross-frame DSL output. Its checked canonical
+owner survives child retirement, then ordinary CALL uses the inline existing
+recipient helper; generator completion calls the cold shared outcome helper.
+The checked whole-body provenance guard and mutation tests remain fail-closed.
+The generator stops emitting later uops after a terminal primitive, so the old
+_PUSH_FRAME cannot perform a second activation in a resumed generator path.
+
+A's host checks cover full-source analysis and generation in memory, five
+canonical provenance mutations, single-entry/input-disposal ordering, and
+AST validity of the focused tests. Native validation belongs to the coordinator.
+
+
+#### Shared nullable input contract
+
+Native12 exposed CALL_FUNCTION_EX's fourth window cell, absent **kwargs,
+as a valid NULL operand. The shared cold _PyIR_NullableInputs(word)
+contract in pycore_ir_outcomes.h now describes audited relative positions:
+CALL/CALL_KW bit1 (optional method self), CALL_FUNCTION_EX bits1 and3 (NULL
+self and optional kwargs). Canonical semantic BaseOpcode normalization covers
+specializations and explicit call instrumentation twins. Callable bit0 and
+EX argument-tuple bit2 remain required. Nullable capability is independent of
+retirement/definition; completion proof still needs its actual U/N NULL fact.
+The upcoming debugger recipe must use this same role contract plus independently
+proved current NULL, rather than inventing a parallel opcode list.
+
+
+The native13 census extends this shared contract to FOR_ITER/SEND cursor1,
+CLEANUP_THROW cursor1 and transferred-send owner2, WITH_EXCEPT_START self1,
+and surviving scalar POP_ITER/END_SEND semantic cursor input1. For WINDOW
+rows bits are relative to BASE; register rows use semantic IN0+k. STORE_GLOBAL
+input0 is NULL deletion. STORE_ATTR remains unadmitted because its generic
+NULL deletion semantics do not match every specialized handler. Nullable
+capability still requires independent U/N facts and never defines ownership.
+
+Physical fresh definitions now use a generated per-handler output_kind from
+the same store_mode as emission. REGISTER_DST, WINDOW and WINDOW_DST_FIRST
+separate explicit results, implicit windows, and moving only the first window
+result while leaving a variable tail. OUTCOME delegates to fixed semantic
+outcomes. The shared cold _PyIR_DefinesHome applies this mapping, excludes
+through-prefix freshness, honors existing UNPACKS conditional local/window
+publication, and treats SWAP as transport. Constructor and upcoming debugger
+analysis share this rule. See nullable-input-census.md for source disposition.

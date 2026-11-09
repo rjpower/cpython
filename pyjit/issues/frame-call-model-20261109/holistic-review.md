@@ -378,3 +378,51 @@ accounts for recursion and links exactly once. Source instrumentation migration
 must cover accessors, add/remove/restart/DISABLE, sanity checks, allocation,
 branch-pair APIs and async-for SEND references together. No passing runtime
 receipt or performance gain is inferred from proposal approval.
+
+### First semantic completion source handoff
+
+B's bounded component now lowers allocated frontend completion effects into
+FOR_ITER, SEND and CLEANUP_THROW. Matching inputs/outputs, all represented
+completion-block ingress, physical windows, destinations and preserved handler
+anchors are checked before word selection. Shared SEND completion through
+CLEANUP_THROW is included. Near and far completion successors name real words;
+FOR_ITER relaxation now has the same two real helper jumps as SEND.
+
+The frontend retains its allocation shapes; runtime and cold observer consumers
+use explicit body/completion/resume outcomes. The new cold outcome helper drives
+per-edge liveness definitions instead of killing a union of conditional outputs.
+Initial/unused nondelegating resume input uses the sink recipient after a
+positive sole-consumer proof, including the ordinary sink pass's earlier proof.
+No executable recovery home or post-return decoder is introduced.
+
+Observation has independent RIGHT, LEFT and STOP masks for FOR_ITER. SEND
+reports semantic completion directly without an invented instrumentation twin.
+PRE/POST status retains actual owner state. The generated error adapter uses
+published current PC plus one solely for its existing next-instruction error
+ABI, honoring a callback's committed redirect; source errors keep their explicit
+edge cursor. Existing unwind recipes are sufficient because retired window
+homes are NULL and verified outer handler anchors are untouched. Constructor
+checks reject incomplete windows and handler recipes that preserve those
+retired owners.
+
+INSTRUCTION instrumentation now visits every real relaxation jump. Semantic
+branch APIs retain their logical source/destination pairs. Destination lookup
+uses canonical words, so an INSTRUCTION wrapper cannot hide a helper jump from
+source-edge normalization. Pending LINE handoff is hidden during real-word
+INSTRUCTION callbacks and discarded when LINE observation shuts down. Source
+records/locations are not read on the unobserved completion path.
+
+The focused test component covers preserved loop locals, shared throw/send
+completion, discarded inputs, independent three-event DISABLE/restart, PRE/POST
+callback failures and traceback PC, malformed windows/handler depth, real far-
+jump instruction counts, mixed local/global LINE/INSTRUCTION enable order and
+suspension, and tool-ID reuse. Existing exact tight-loop expectations remain.
+Host Python syntax and full-source in-memory IR/metadata generation pass;
+`git diff --check` passes. No native build or test was run by B, and this is not
+qualification or a measured performance claim.
+
+Still open: the two useful debugger owner recipes, protected/suspended debugger
+recipes, remote source-cursor and actual slot upper-bound/schema handling, and
+shared/canonical release categories. In particular optimized all/any has a
+standalone POP_ITER early exit, so no blanket POP_ITER constructor ban or whole-
+program no-release-word claim is made. The final user objective remains open.

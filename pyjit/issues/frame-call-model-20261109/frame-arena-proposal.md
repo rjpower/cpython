@@ -134,3 +134,73 @@ loss controls and independent post-review. Full release/debug and the broad
 screen belong to coherent checkpoints. Keep this change only if correctness
 holds and matched measurement supports the intended effect. No workload guard,
 benchmark edit, collector change or second compiler is part of this design.
+
+## Read-only implementation addendum after semantic completion
+
+The full direct-call census agrees with `frame-arena-retirement-census.md`.
+Only `clear_thread_frame` and RETURN_GENERATOR directly pop thread frames;
+the latter first moves every home through `_PyFrame_Copy`. Direct initializer
+callers are `_PyFrame_PushUnchecked`, overlap, generic binding and heap
+`init_frame`. Trampoline constructs its header separately. No additional
+initializer or pop bypass was found. Current datastack pointer writes are
+confined to these reservation/pop helpers, chunk switching and thread teardown.
+
+Use `_PyStackChunk.initialized`, a `PyObject **` pointing at the first uncertain
+cell, before data. The public chunk already uses pointer-sized untyped storage;
+value writes continue through `_PyDataStack_Slots`, rather than adding casts at
+call sites. The field is an address guarantee, not a count of owners or a GC
+edge. A fresh chunk initializes it to `&chunk->data[0]`; cached reuse changes
+links/top only.
+
+The common inline primitive is
+`_PyThreadState_EnsureFrameStorage(chunk, header, value_end)`, with pointer-cell
+arguments. Capacity selection already happened. Assert data <= value_end <
+header; truncate initialized to header *before the first header write*; fill
+only `[initialized, value_end)` with PyValue_NULL when the end is higher; then
+advance initialized. Ordinary unchecked reservation, overlap and new/cached
+chunk reservation all call this same primitive before writing `frame->base`
+or `saved_top`. Overlap passes the maximum of the child's end and existing
+physical stack top, preserving the ancestor's full initialized range. No
+callback or allocator occurs within this primitive. Pop never restores a
+saved frontier.
+
+Remove `null_from` from `_PyFrame_Initialize` and `null_locals_from` from
+`_PyFrame_PushUnchecked` and all callers (getitem/property/exact entry). Remove
+the overlap-derived previous-end fill bound. Retain its debug ownership check
+that caller homes after the transferred arguments are NULL. The header and
+constant initializer consumes initialized storage. Heap `init_frame` explicitly
+fills owned_slots once before it calls that initializer; do not fill
+`_PyFrame_New_NoTrack` globally, because introspection escape and generator
+copies write every destination home already.
+
+Chunk capacity arithmetic must name the data offset explicitly. The minimum
+allocation includes `offsetof(_PyStackChunk, data)`, the requested value cells,
+FRAME_SPECIALS_SIZE header cells, one spare owned_slots cell beyond the header,
+and one cell for strict value/header separation. Keep the existing growth
+headroom independently and check addition/doubling bounds. Adding the frontier
+changes only the exported chunk offset values, not the descriptor schema.
+
+No missing NULL retirement path was found by this source census. Normal return
+consumes its source then `_PyFrame_ClearExceptCode` checks scratch and clears
+locals; binding failure has initialized scratch and clears partial locals;
+unhandled errors clear the complete scratch range; handled errors keep an
+active range; escape/generator moves NULL every source home. These guarantees
+still depend on compiler/runtime instruction correctness and require native
+debug coverage; the census is not proof that every IR producer is correct.
+
+Debug pop checks can inspect `[frame->base, datastack_top)` before storage is
+released, without asking a cleared executable for its former slot count. For
+overlap, that physical suffix includes the caller's already-NULL tail. The
+check must run while the dying frame remains reserved, after retirement/copy.
+A reservation debug check of reused inactive cells starts at the old physical
+top; it must not inspect transferred argument owners as though they were NULL.
+
+Focused C-level test support should reserve real frame ranges through the
+common helpers, without publishing fake Python locals. Exercise a dirty custom
+arena allocator; cached and root reuse; many tiny headers followed by a large
+value reservation crossing their old addresses; and assert initialized covers
+the new range with NULL inactive cells. Pair this with Python tests for exact/
+general/property/getitem entry, binding/recursion failures, mortal constants,
+heap PyFrame_New, generator construction/escape and ordinary/error finalizers
+that re-enter Python. Keep departing datastack ranges reserved until all such
+callbacks finish. No runtime or test changes were made for this addendum.

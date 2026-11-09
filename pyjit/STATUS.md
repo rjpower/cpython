@@ -1,20 +1,29 @@
 # Project status
 
 Active work: the [frame/call model redesign](issues/frame-call-model-20261109/plan.md)
-continues in the existing runtime checkout, branch `pyjit/frame-call-model-20261109`.
-The goal is unchanged logging parity and repaired broad regressions, with compact
-executable IR and source/observer positions in metadata. Frame/call and IR
-architecture proposals have passed independent review. First engineering source
-`6ef45e391aa` is committed but unqualified: release checks 117 modules and 18 of
-22 focused modules pass, with debugger resumes and a tight-loop LINE duplication
-still open. The first two-round logging/upstream screen is **1.00365**, versus
-1.39308 at the preceding candidate; this does not pass the parity gate.
-Logging/golden is **0.74243** and unpack/golden **0.83394**, but deepcopy_memo
-and nbody still regress. Logging's measured instruction excess falls from about
-5,617 to 1,124 per outer iteration. See the [first integration report](issues/frame-call-model-20261109/integration-report.md)
-for qualification limits and retained evidence. Reviewed semantic loop/send
-completion and debugger owner recipes are now being implemented; final full
-qualification, broad repair and parity campaigns remain required.
+continues in the existing runtime checkout on branch
+`pyjit/frame-call-model-20261109`. Second engineering integration `3e5cbdb1123`
+implements semantic completion, initialized frame storage, target-described
+remote layouts and observer state tied to real execution phases. It is not
+qualified or promoted. Release/debug each check 117 modules and pass 207 focused
+tests; all 2,152 valid library files compile without rejection. Useful debugger
+reconstruction and final release/debug full qualification remain open.
+
+The first matched logging/upstream screen is **0.97449× elapsed time**, about
+2.6% faster, over two balanced pairs. This does not replace the final parity
+campaigns. The broad screen repairs the prior material unpack, float and
+deepcopy losses; pickle retains about 0.7% overhead. Nbody remains about 8%
+slower than golden over four repeat pairs. Warmed nbody counters show 3.2% more
+instructions, 8.0% more cycles and nearly unchanged branch misses. See the
+[second integration report](issues/frame-call-model-20261109/second-integration-report.md)
+for protocols, retained failures, profiles and qualification limits.
+
+The next increment implements reviewed debugger NULL/iterator-owner recipes
+and evaluates numeric publication. A minimal destination-category reorder is
+source-only; a checked canonical numeric-result proposal awaits peer review.
+The remaining owner-retirement model needs explicit semantic transitions;
+ordinary thread returns require scratch homes cleared. Six canonical design
+diagrams render and have been inspected. Golden remains immutable and selected.
 
 The previous [execution-boundary and operand-mode packet](issues/execution-boundaries-20261108/plan.md)
 implements the first three bounded cold-review recommendations at runtime
@@ -100,7 +109,8 @@ The current engineering increment uses compact real instruction positions and
 source-edge metadata. Semantic loop/send completion, shared branch/exception
 owner retirement and owner-aware debugger recipes remain under implementation.
 Normal execution does not walk source maps. First profiles identify redundant
-frame-tail initialization; its separate arena proposal still requires review.
+frame-tail initialization. Its arena proposal passed independent review;
+target-described remote layouts precede its implementation and qualification.
 
 Borrowed frame views are a reviewed investigation, not an approved implementation.
 Ownership anchors, GC traversal, promotion, ordinary fallback and a complete

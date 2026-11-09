@@ -38,39 +38,43 @@ permanent experiment switches or weakened correctness assertions.
 
 ## Current execution
 
-The first reviewed engineering increment is committed at runtime `6ef45e391aa`.
-It is not qualified or promoted. Release checks 117 modules; the 22-module focus
-runs 2,694 tests with 18 modules passing. Subsequent ownership/observer checks
-pass GC, weakref, finalization, UUID, frame calls and source-boundary modules.
-Useful debugger resumes and one tight-loop source event case remain failing.
-Literal fixtures, source context/positions and observed delegation crashes are
-repaired. Full release/debug qualification has not run this packet.
+Second engineering integration `3e5cbdb11236ec91f79d8fabc0ceb7ad2ee674cb`
+implements semantic loop/send completion, initialized frame storage,
+target-described remote layouts, activation-local source errors, epoch-based
+cold LINE handoff and a coherent RESUME source barrier. Release/debug each
+check 117 modules and pass 207 focused tests. All 2,152 valid library files
+compile without rejection; 11 intended syntax fixtures remain. Cache format
+is 64415. This source is not fully qualified or promoted.
 
-The first balanced two-round logging/upstream screen is **1.003646**, near parity
-but above the gate. Logging/golden is **0.742426**; unpack/golden **0.833936**.
-Other broad losses remain, notably deepcopy_memo **1.092133** and nbody
-**1.055594**; the former spectral gain is absent. Warmed logging counters are
-1.08061× upstream instructions and 1.01471× cycles. See the
-[first integration report](integration-report.md) for exact protocols, failures,
-profiles and limits. Do not infer component attribution from the combined image.
+The first matched two-round logging/upstream screen is **0.974490**; both pairs
+are below 1.0. The broad golden screen repairs prior material unpack, float and
+deepcopy regressions. Pickle retains about 0.7% overhead. Nbody's loss repeats
+at **1.080373** over four pairs; warmed PMU captures show instructions 1.031942,
+cycles 1.080012, branches 1.056085 and branch misses 1.000104 versus golden.
+Read the [second report](second-integration-report.md) for exact protocols,
+profile limits and retained failures. Final full qualification and the two
+six-round parity campaigns remain required. The
+[first report](integration-report.md) preserves the earlier 6ef experiment.
 
-The independently reviewed [semantic completion proposal](semantic-completion-proposal.md)
-is admitted for runtime/compiler implementation: loop/send outcomes, generator
-resumption and physically compact static programs. The
-[debugger proposal](debugger-owner-recipe-proposal.md) starts with real loop
-anchors and nullable call cells. A measured frame-tail initialization cost
-motivates a separate arena-invariant design; it is not yet implementation
-admission. Shared-owner and protected/suspended reconstruction work remains open.
-The [progress](progress.md) and [latest source review](source-origin-post-review.md)
-record current evidence and unresolved gates.
+Next-source work is debugger reconstruction and numeric publication. The
+[concrete debugger plan](debugger-recipe-implementation-plan.md) implements
+proved NULL requirements before a surviving dynamic FOR anchor. The
+[independent numeric review](numeric-hotpath-independent-review.md) admits a
+minimal local-first category-order experiment; its benefit remains unmeasured.
+The [canonical-result proposal](numeric-canonical-result-proposal.md) requires
+constructor and full-result-flow proof before bypassing redundant publication.
+Remaining standalone owner retirement requires explicit semantic transitions;
+ordinary return does not already clear scratch. Protected/suspended debugger
+recipes and remote/GDB active source-cursor display remain open. Six updated
+canonical design diagrams render and were inspected.
 
 ## Parallel responsibilities
 
 | Stream | Owner | Initial deliverable |
 | --- | --- | --- |
-| Frame/call ABI | Sol 6.1 medium worker | Concrete call-layout, direct binding, ownership/lifetime and lazy argument-container proposal |
-| Executable IR and positions | Independent Sol 6.1 medium worker | Compact instruction/CFG and logical-site mapping proposal, plus cold review of the call model |
-| Integration and measurement | Coordinator | Resolve shared interfaces, review proposals, run native builds/checks, integrate and measure the merged model |
+| Numeric publication and architectural review | Sol 6.1 medium A | Reviewed local-first store experiment, checked constructor proof, cross-review of debugger owners |
+| Debugger owners and cold contracts | Sol 6.1 medium B | NULL/active-loop recipes, safe redirect application, cross-review of numeric changes |
+| Integration and measurement | Coordinator | Native gates, coherent commits, logging/broad measurements, profiling, canonical/Loom reports |
 
 Workers propose first and independently review each other's contracts. Runtime
 file ownership is assigned after interface review. They do not run shared
@@ -87,8 +91,10 @@ Reviewers inspect actual source and measured evidence after each integration.
    where file ownership is disjoint. Regenerate all producers/consumers and
    cache metadata together. Eliminate the previous packet's ad hoc execution
    variants where the model makes them unnecessary.
-3. Build release first. Run the smallest meaningful semantic/observer/IR tests,
-   then logging, spectral and unpack controls; add the other repeated broad
+3. Build release first. Run the smallest meaningful semantic/observer/IR tests
+   and compile the library corpus without importing its modules, collecting
+   constructor rejections together. Then run logging, spectral and unpack
+   controls; add the other repeated broad
    regressions at the merged integration. Review compiled work and counter
    evidence when measurements leave a gap.
 4. Iterate on measured structural costs until logging reaches parity and broad

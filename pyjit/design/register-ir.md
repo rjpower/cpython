@@ -1,22 +1,20 @@
 # Register IR: current contract
 
-This page describes the active integration runtime at
-`/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/execution-boundaries-20261108`:
-integrated commit `4b3d739d867`, containing the operand, boolean-boundary and
-discarded-result changes. Release and debug each passed 54,421 full-suite tests;
-debug passed on retry after an unexplained profiling failure, retained in the
-[investigation](../issues/execution-boundaries-20261108/profiling-investigation.md).
-Performance promotion is withheld after repeated broad regressions; see the
-[candidate report](../issues/execution-boundaries-20261108/report.md). The
-immutable golden baseline remains `0765e9be47f`, qualified at functional
-`0267d428808`; its [report](../bench/results/interpreter-parity-20261108.md)
-does not qualify these new changes.
+This describes the active 2026-11-09 frame/call source in
+`build/worktrees/execution-boundaries-20261108`, branch
+`pyjit/frame-call-model-20261109`. The first engineering increment is committed
+at `6ef45e391aa`; subsequent semantic completion, arena and observer repairs
+remain under integration. This is a source contract, not full qualification or
+parity evidence. [Status](../STATUS.md) and the
+[active packet](../issues/frame-call-model-20261109/plan.md) track admission.
+The immutable golden `0765e9be47f`, qualified at functional `0267d428808`, remains
+the [baseline](../bench/results/interpreter-parity-20261108.md).
 
-This is an as-built contract. The archived [register IR history](archive/register-ir-20261108.md)
-keeps dated decisions; [compiler and IR](compiler-and-ir.md),
-[call/frame lifetimes](call-and-frame-lifetimes.md), and the
-[observer contract](handler-and-observer-contract.md) cover deeper details.
-Ownership choices do not make prompt finalization a Python language rule; see
+The [archive](archive/register-ir-20261108.md) retains earlier designs.
+[Call/frame lifetimes](call-and-frame-lifetimes.md) and the
+[observer contract](handler-and-observer-contract.md) define ownership and
+observation. Release points implement the selected RC runtime; they are not a
+Python guarantee of immediate finalization. See
 [language and lifetime policy](lifetimes-and-language-semantics.md).
 
 ## Producer path
@@ -94,60 +92,64 @@ verifier checks slot ranges, window extents, destination legality, and jump
 boundaries. A jump target is a word index and must land on an instruction.
 Exception ranges and source lines are likewise expressed in word offsets.
 
-## Execution copy, feedback and NOP anchors
+## Compact execution and source positions
 
-`Python/ir.c:make_exec` allocates one `_PyCodeExec` per code object, shared by
-frames and threads under the free-threaded publication protocol. It contains a
-copy of the immutable words and, when needed, feedback storage. Specialization
-and monitoring change the handler field of executing words; free-threaded
-specialization is disabled. Immutable code-object
-words remain the source template. Feedback entries hold borrowed pointers and
-counters, not GC-owned references. Entry zero is a shared header-only entry.
+`Python/ir.c:make_exec` allocates a shared `_PyCodeExec` for a code object:
+mutable executing words and feedback storage. Specialization and monitoring
+patch its handlers; pristine code words remain the template. A frame owns its
+code, keeping both code and executing allocation alive. Feedback contains
+borrowed predictions and counters, not owning GC edges. Entry zero is the
+shared header-only entry. Free-threaded specialization remains disabled.
 
-Specialization can select six execution-only refinements after slot allocation.
-They change only the handler field of the executing copy; the eight-byte format
-and canonical words remain unchanged.
+Compiler source-only operations occupy no executable word. Pristine streams
+admit semantic operations and real control transfers; source-only line events live in the versioned
+`co_linetable` container alongside ordinary word-position data. `f_lasti`,
+disassembly offsets, jump targets and `co_positions()` describe compact real
+words. `co_lines()` also retains source-only zero-width entries. There is no
+second public instruction coordinate domain and no INSTRUCTION event for an
+eliminated operation.
 
-| Refinement | Selection and removed ordinary work |
-| --- | --- |
-| `LOAD_ATTR_SHAPE_LOCAL_TEMP` | Local receiver, temporary result; input class and destination class are static, so the handler does not rediscover them |
-| `POP_JUMP_IF_FALSE_BOOL_SKIP_TAKEN`, `_SKIP_FALLTHROUGH`, `_SKIP_BOTH` | One ordinary NOP on the selected edge; constant continuation skips its decode and PC publication |
-| `CALL_PY_EXACT_ARGS_DISCARD`, `CALL_PY_GENERAL_DISCARD` | Matching immediate call-result POP; Python return can dispose of the result without publishing its home or dispatching POP |
+Eligible unique fresh scalar results use `IR_NO_DST`. Calls use the same plain
+recipient, including across source lines and generator-related control flow;
+there is no tagged postcall recipient or live-POP decoder. A producer may still
+use a real internal result window before its final discard; that slot traffic
+is distinct from dispatching a release operation. Shared-owner/exception/branch
+cleanup words remain a separate unfinished inventory. The overall objective
+of eliminating standalone release-only execution is not yet complete.
 
-Each alias inherits its original instruction format, conservative effects,
-family, deopt and instrumentation mappings. Generated handler facts include
-`SAVES_IP`, derived from the same `no_save_ip` property that controls emitted PC
-stores. Fixed opcode tables and feedback rows use canonical specialized opcodes;
-physical aliases have full handler-domain rows. Adaptive disassembly displays
-the canonical specialization; the internal executing-IR view exposes its alias.
-These refinements do not create a Cartesian product of ownership modes.
+A single shape-reader ownership variant, `LOAD_ATTR_SHAPE_LOCAL_TEMP`, remains:
+its local input and temporary destination are static. Generated canonical,
+family, statistics and feedback mappings cover the physical handler domain.
+Adaptive disassembly names the specialization; internal executing-IR inspection
+can expose an ownership variant. This does not create a product of every mode.
 
-NOP words still retain distinct source/instrumentation coordinates. For the
-three bool variants, selection checks both canonical and live edges once and
-requires the post-NOP successor to save its own PC before observable work.
-The guarded bool interval cannot call Python, allocate, poll, suspend or
-release a finalizing owner. Its ordinary continuation therefore needs neither a
-NOP test nor a NOP PC store. Instrumentation resets dependent skip handlers
-before patching any target. Debug and free-threaded builds do not select these
-variants. The ordinary `POP_JUMP_IF_FALSE_BOOL` handler retains its prior checked
-live-NOP continuation and PC publication when no skip variant is selected;
-wrappers and debug lltrace retain their ordinary handling.
+## Semantic completion and generated contracts
 
-Call-result POP words also remain addressable. `POP_TOP` names a register
-owner to retire; it does not pop a runtime operand stack. A discarded-result
-variant uses
-a tagged caller recipient, not a new word operand: `IR_POSTCALL_DISCARD` is a
-high bit of the existing 16-bit `return_slot`; its low slot bits retain the
-original temporary destination. Completion checks the live POP and its input
-before direct disposal, or materializes the result for the observer path.
-`IR_NO_DST` remains a separate ordinary discard sentinel. POP line/opcode observation enabled
-inside a directly disposed result's finalizer starts at the next real instruction;
-it does not retroactively execute the dormant POP boundary.
+FOR_ITER defines its item recipient only on its body edge; exhaustion retires
+its iterator/cursor and preserves the last item binding. SEND yields into its
+receiver window but completes into its explicit result recipient. CLEANUP_THROW
+has its own named real target and shares SEND completion ownership. YIELD_VALUE
+names its incoming resume recipient separately from its outgoing value.
+Semantic edge definitions override the frontend's stack-shape union.
 
-These are bounded execution eliminations. Canonical NOP/POP storage, word-indexed
-jumps, source and exception tables, suspended positions and debugger coordinates
-remain in place. General metadata-only anchors and physical word compaction
-have not been implemented.
+Long FOR_ITER/SEND branches use actual IR_JUMP adapter words. The observer
+recognizes only their exact assembler shape for LINE/branch grouping; helper
+words retain their own INSTRUCTION events. The static initialization shim also
+contains only its real operations, with an explicit saved continuation.
+
+`_PyIRFormat` describes operand roles, stack-shape extents, fold capability,
+effects, feedback and monitoring. Per-handler `output_kind` separately describes
+actual publication: register dst, window, first window result moved to dst, or
+semantic outcome. A conditional trailing window output stays in its actual
+window even when the first result moves. `_PyIR_STORE_DST` alone says a local
+fold is allowed, not where every output is physically written.
+
+Cold consumers share `_PyIR_Outcome`, `_PyIR_ReadsHome`, `_PyIR_DefinesHome` and
+`_PyIR_NullableInputs` from `pycore_ir_outcomes.h`. They distinguish explicit
+source fields from untouched window holes, preserve through owners and SWAP
+provenance, and admit only audited nullable roles. The constructor checks
+completion/error ownership, including exceptional source-edge callbacks;
+these facts are not a general bytecode type verifier or native recovery map.
 
 ## Explicit boundary
 

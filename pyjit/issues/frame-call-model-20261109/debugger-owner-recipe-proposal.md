@@ -220,3 +220,44 @@ and return to the same landing line. Keep exact LINE order/counts, exact expecte
 real INSTRUCTION offsets and callback counts; do not accept arbitrary line
 membership or omit unsupported paths. The repeated edge also checks that
 DISABLE is local to its source event/site, while restart is explicit.
+
+## Next bounded implementation after the semantic focused gate
+
+Implement in `Objects/frameobject.c` with the existing cold
+`pycore_ir_outcomes.h` edge contracts; no handler instrumentation or hot frame
+field is needed. Keep the two existing behavior tests unchanged.
+
+1. Factor cold required-input analysis from recipe application. Add a forward
+   must-NULL bitset, intersecting incoming edges. Entry scratch is NULL;
+   definitions become unknown, consumed scratch becomes NULL, and through
+   owners remain. Apply semantic body/completion/resume definitions separately.
+   A CALL self-or-NULL input is exempt from owner requirements only when its
+   actual read site is definitely NULL on every incoming path. Retain this NULL
+   requirement in the target recipe and check the current home is also NULL.
+   This admits folded-assignment replay without inventing an old result home
+   or treating arbitrary nullable method receivers as missing owners.
+2. Add one bounded active FOR_ITER anchor-pair recipe. Its body edge establishes
+   the iterator/cursor pair. A forward must-analysis proves availability at
+   the current site on every path. Source and target must be in the same body
+   region, and every path from target to its first arrival at source must
+   preserve that pair: no defining GET_ITER, retirement, consuming move, COPY
+   substitution or matching FOR_ITER re-entry. Unknown ingress and paths that
+   cross a new iteration before first arrival reject. Static producer-PC
+   equality or non-NULL cells alone do not establish dynamic generation.
+   The straight-line two-update test needs only this pair; FOR_ITER's item is
+   already a named local and its exhaustion edge does not define that local.
+3. Apply a verified preserve set rather than clearing every scratch home.
+   Allocate bounded cold storage before changing frame state, detach all
+   surplus owners without callbacks, publish target/continuation, then close
+   only the detached owners. A nested finalizer redirect cannot make the outer
+   cleanup clear a newly required frame home. Preserve locals, constants and
+   the proven pair; never overwrite callback-selected PC afterward. Leave
+   pending-child overlap to the existing empty-owner continuation recipe.
+
+Tests add known-NULL plain-call versus required method-self input, unavailable
+or replaced iterator homes, same producer in another iteration, nested-loop
+re-entry, COPY versus move ownership, and a retirement finalizer redirect.
+The original folded assignment and loop-body jumps must pass with their exact
+results. Protected/suspended region transitions remain separate recipes and
+retain their tests; this bounded increment does not claim their completion.
+Implementation waits for the coordinator's native window and source admission.

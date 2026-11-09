@@ -1,89 +1,117 @@
-# Interpreter design and observer contract
+# Handler and observer contract
 
-The current [interpreter specification](interpreter.md) and
-[call/frame contract](call-and-frame-lifetimes.md) describe the execution-only
-operand, boolean-edge and discarded-result refinements added after golden.
-The dated implementation notes below remain the underlying handler protocol.
-Release order describes that protocol, not a Python guarantee of immediate
-finalization; see [language and lifetime policy](lifetimes-and-language-semantics.md).
+The active [interpreter](interpreter.md), [IR](register-ir.md) and
+[frame ABI](call-and-frame-lifetimes.md) share one owning-home model. This page
+describes the 2026-11-09 integration source, including observer repairs still
+under qualification. [Status](../STATUS.md) separates it from the immutable
+qualified golden runtime. Release phases implement RC; they do not impose an
+immediate-finalization guarantee on Python programs.
 
-The compiler emits register IR; execution does not translate stack bytecode at
-runtime. Code objects keep pristine words, while `Python/ir.c` supplies the
-mutable executing copy and feedback. [Compiler/IR details](compiler-and-ir.md)
-describe lowering, liveness and physical frame homes.
+## Generated execution contract
 
-`Python/bytecodes.c` defines operations and effects. The cases generators emit
-handlers and metadata; `Python/ceval.c` dispatches them. One generated handler
-domain serves execution, specialization, instrumentation, statistics and readers.
-Change producers and consumers together; guessed opcode ranges are invalid.
+`Python/bytecodes.c` defines semantic operations. The cases generators emit
+handlers, operand layouts and effects; `Python/ceval.c` enters their musttail
+dispatch domain. Pristine code is compiler-produced register IR. Execution
+patches handler identities for specialization and observation without another
+stack-bytecode compiler. GC, debugger, feedback, statistics, disassembly and
+remote readers must cover the actual handler domain.
 
-## Dispatch and state
+| Contract | Meaning |
+| --- | --- |
+| Field roles and extents | Encoded operands and frontend stack shape |
+| Through prefix | Values remain in the same physical homes, not fresh definitions |
+| output_kind | Actual register/window/first-result publication, or semantic outcome |
+| result_phase | Checked first-result publication before input retirement |
+| Effects | Conservative raises, escape, frame switch, suspension, polling and other capabilities |
+| Events | Monitoring capabilities of the semantic handler or its wrapper |
 
-The register interpreter uses generated tail-call handlers under GCC. Generated C
-does not explicitly control hardware register assignments as LuaJIT's assembly
-does. Evaluate emitted code, dispatch, slot traffic, code density and elapsed
-performance rather than assuming the IR or C compiler gets them right.
+Fold capability does not identify every output home. An ignored A on a window
+producer cannot create an owner; a first window result moved to A does not move
+its variable tail. Likewise, full frontend window reads can include untouched
+holes; explicit source fields may point outside that window. Cold consumers
+share ReadsHome/DefinesHome/NullableInputs and per-edge Outcome rather than
+reconstruct these facts from one extent or guessed opcode range.
 
-Handlers consume initialized operands and publish outputs, frame/PC and live
-homes on success and failure. Calls, returns, yield/resume, unwind and redispatch
-use the actual current frame. Thread-owned call windows may share frame storage;
-generator-owned frames have separate storage. Both obey the same value/ownership
-contract. [Values](values-and-object-protocol.md) explains the restoration target.
-The [call/frame lifetime contract](call-and-frame-lifetimes.md) distinguishes
-initialized homes, owned references and future-read liveness, and defines the
-prepare/guard/commit boundary for overlapping calls.
+Suspension metadata recognizes actual generator-state writes, not a comparison
+against a child's FRAME_CREATED state. SEND can push/resume a Python child
+without suspending its own generator. Static provider or ownership refinements
+inherit only facts their actual path establishes.
 
-## Reentry and observation
+## Publication, release and callbacks
 
-Allocation, boxing, object release and opaque calls can run callbacks. Capture
-owning inputs before them. Stage a result, publish actual caller state, release
-retired owners in semantic order, then revalidate frame, instruction and observer
-state before decoding again. An old decoded pointer is not valid merely because
-the result has been published. Deallocators preserve the entry exception.
+A handler starts from valid canonical homes. Before an opaque callback it
+publishes the actual frame, PC, executable, exception state and committed owner
+phase. Detached inputs are NULL; an unpublished result remains an explicit C
+owner. Decline paths preserve the generic path's inputs. Post-commit errors
+retire the actual phase rather than replay a call or restore fictitious owners.
 
-`IR_RETIRE_PUBLISHED` and its pair form own input consumption and result
-publication before receiver/displaced-owner release. Specialized attribute
-loads do not issue a separate `SYNC_SP` immediately before them. The macro
-keeps a folded-local result in C until retirement and preserves the final
-destination write. Both retirement markers imply synchronization in generated
-analysis metadata. This local contract replaces remembering publication state
-across generator branches or callbacks; actual reentry still requires refresh.
-See the [source review](../issues/interpreter-throughput/publication-review.md).
+The specialized reader retirement markers publish a temporary result before
+receiver retirement. A folded local instead keeps the result owned in C until
+successful retirement/refresh, then replaces the current local and retires its
+actual displaced owner. A failure closes the C owner and preserves observer
+mutations. The checked first-output phase is narrower than whole-handler purity
+or a general error root map. See [reader publication](call-and-frame-lifetimes.md#first-output-publication-phase).
 
-For the five specialized attribute-load paths, the generator also has a narrow
-postcondition after receiver retirement: the unchanged result remains published
-to its temporary home. Integration C reuses the existing
-`published_temporary_result` fact to omit only the final duplicate temporary
-store. The folded-local path still writes the result after retirement, when
-replacing the old local can release its owner. This fact is specific to those
-reviewed flows and does not authorize carrying publication knowledge across a
-later reassignment, home change, or callback. See the
-[final-publication review](../issues/interpreter-throughput/final-publication-review.md)
-and [Integration C receipt](../issues/interpreter-throughput/integration-c.md).
+Semantic FOR_ITER/SEND/THROW completion distinguishes PRE receiver observation
+from POST committed-window observation. Destination definitions differ by edge.
+One helper owns the held result and detached inputs through callbacks, publishes
+the selected real continuation before closes, and honors later redirects.
+Ordinary CALL return remains inline. Implicit StopIteration completion and real
+error reporting must each produce their appropriate single monitoring event.
 
-The 2026-11-08 parity packet integrates P1/P2 at `0539e0c1ff9` and M2b at
-`73c20472a9f`; P1/P2 adds no observer rule. M2b permits one checked inline
-continuation only when the live target word's handler is exactly ordinary
-`NOP`. It still publishes the original PC and retains the NOP word. Instrumented
-line/instruction wrappers retain their handlers and callback behavior; debug
-lltrace declines the shortcut and dispatches the NOP normally. The bounded
-change removes ten handler entries in the observed loop (161 to 151), without
-establishing a performance or parity result. See the
-[M2b post-review](../issues/interpreter-parity-20261108/m2b-post-review-round2.md)
-and [implementation contract](../issues/interpreter-parity-20261108/implementation-contracts.md).
+## Executable position and source context
 
-Specialization must guard receiver behavior, representation, shape/type version
-and descriptor precedence as applicable. Keep generic behavior and recovery for
-hooks, mutation, misses and exceptions. Selected noallocation nomination paths
-must have a real transitive proof; do not infer purity from an operation name.
+`f_lasti`, branch targets, disassembly and INSTRUCTION events use compact real
+word offsets. Eliminated source-only spans are immutable edge records in the
+normalized co_linetable envelope. LINE callbacks temporarily expose their
+source span through the observed frame object. Source-only records add LINE
+context within the single executable-offset domain. Shared cleanup words still
+present in this increment are an unfinished inventory.
 
-Monitoring observes the current executing handler and source position. Preserve
-BEFORE/AFTER events and event-poll behavior through redispatch. Instrumentation,
-specialization and cleanup can invalidate cached facts. The same rules must
-hold in generic, specialized and native paths.
+RESUME owns entry synchronization and PY_START/PY_RESUME ordering. Source
+records may describe its outgoing body edge; a source-only landing at RESUME
+is invalid. Compiler-generated initial input disposal carries no source origin.
+The constructor checks this barrier before admitting code.
 
-Universal canonical PyValues are integrated across the interpreter and rebuilt
-bundled extensions. Owning object bridges remain tuning opportunities for
-iterators, calls and parsers; they do not imply a second heap representation.
-See the [status](../STATUS.md). Root-map and backend proposals are evidence to
-assess, not prerequisites imported from the retired tracing collector.
+```mermaid
+flowchart TD
+    edge[Observed semantic transition] --> records[Match immutable source edge records]
+    records --> display[Publish source cursor and line for callback]
+    display --> callback[LINE callback]
+    callback -->|success| landing[Cold expected landing and line handoff]
+    callback -->|redirect| redirect[Invalidate handoff and commit actual target]
+    callback -->|error| recipe[Activation-local source exception recipe]
+    landing --> consume[Detach at matching PC and monitoring epoch]
+    consume --> line[Continue real landing LINE handling]
+    recipe --> unwind[Existing exception and owner unwind]
+```
+
+An evaluator activation owns its pending source-error frame/record. Nested C
+entry, including finalizers and instrumentation callbacks, links a fresh
+activation and restores the parent on exit. The error recipe therefore survives
+a nested error during outer result retirement. Frame-object allocation failure
+can still record it. The optional frame-object source cursor supplies display
+and traceback state; it is not the only copy of handler selection.
+
+A separate cold frame-object record carries expected real LINE landing,
+previous source line and monitoring epoch. Public f_lineno remains display/cache
+state. Monitoring reconfiguration invalidates the old handoff; consumption is
+one-shot and occurs before callbacks. A stale configuration gets a fresh
+landing event without retroactively replaying completed source events. Exact
+assembler relaxation adapters normalize LINE landings while helper words retain
+real INSTRUCTION callbacks. Exception selection, debugger redirection and frame
+clear invalidate the record before callback-capable retirement.
+
+## Boundaries and open work
+
+Specialization guards receiver behavior, representation, type/shape version,
+provider and descriptor precedence as needed. Opaque hooks and misses retain the
+generic route. Names alone do not prove allocation-free or non-reentrant work;
+canonical transfer requires an actual producer chain. Future method/tracing
+JIT recovery maps remain separate from these baseline contracts.
+
+Debugger owner recipes remain bounded: NULL requirements and actual iterator
+generation must be proved before admitting a target. Remote layout is versioned
+and target-described; remote/GDB active source-cursor display is a separate
+consumer port still pending. The current integration must complete its native
+observer gates, broad repair and parity campaign before promotion.

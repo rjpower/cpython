@@ -1,6 +1,6 @@
 # Debugger entry and frame transfers
 
-This describes engineering source `192cfbe8aa0` on
+This describes engineering source `4a1f70fcef4` on
 `pyjit/frame-call-model-20261109`. Focused checks pass; full qualification and
 the broader transfer model remain open. See [status](../STATUS.md), the
 [frame ABI](call-and-frame-lifetimes.md), [observer contract](handler-and-observer-contract.md)
@@ -76,6 +76,16 @@ owner; matching POP_EXCEPT restores its parent. COPY and SWAP transport value
 origins without inventing another dynamic generation. Conflicting ingress is
 ambiguous. Ordinary and source-error edges participate in this analysis.
 
+Saved named-local bindings have a separate column per actual LOCAL_MOVE index.
+LOAD_FAST_AND_CLEAR creates a token for the saved binding, including genuine
+NULL, with a parent from that same local's active chain. COPY duplicates origins
+and SWAP transports them. A matching STORE_FAST restores only the youngest save
+of its destination local. Different locals may restore in either order; normal
+and error paths need not use the same order. Losing every known token home keeps
+the obligation active. Ambiguous joins, lost origins and repeated active producers
+cannot establish an empty column. Request allocation products are checked before
+mutation. These facts come from actual words, not trusted compiler annotations.
+
 `RegisterResumePlan` carries a preserve-home bitmap. Its single application path
 detaches surplus scratch owners, commits state, then closes the detached owners.
 Warning callbacks can redirect the frame: generation detects that intent and
@@ -86,7 +96,8 @@ Closing callbacks never encounter subsequent writes from the old transaction.
 
 | Phase or state | Current proof and behavior |
 | --- | --- |
-| Real LINE identity | First selected real target equals actual LINE wrapper; exact observed frame; no source/error, pending-child or suspended phase. Preserve all owners and exception links; commit generation. |
+| Real LINE identity | Requested resolved line equals the actual current LINE wrapper's line; exact observed frame; no source/error, pending-child or suspended phase. Preserve current PC, all owners and exception links; commit generation. Earlier words sharing that line do not restart the expression or scope. |
+| Cancellable PRE operation | A centralized phase factory proves the actual real LINE before its handler. Current expression inputs may be detached when the target needs none and all saved-local columns are positively empty; handled context and independently proved roots must survive. Source-only targets do not acquire this permission. |
 | INHERITED context | Existing physical incoming-owner/NULL proof. Bounded FOR-body replay still requires an empty exception table. Ordinary protected try need not create a caught context. |
 | Same CAUGHT context | Backward replay preserves actual saved-previous owners and every parent; path/dominance proof excludes read, replacement, pop and reentry. Active exception links remain untouched. |
 | Pending ignored Python call | Caller changes its continuation only; overlapping child owners remain intact until successful child completion. Used-result, external and protected child cases still need their own plans. |
@@ -99,14 +110,21 @@ exception. It does not implement caught exit.
 
 ## Remaining model work
 
-Current incoming requirements still conservatively mix disposable expression
-owners with protocol roots. A cancellable real LINE can often abandon an
-expression and retire its owners if the target has no incoming requirements.
-That does not authorize dropping a comprehension's saved outer-local value.
-The next model must derive saved-local/with context and restoration actions,
-then distinguish cancellation from preservation. It must also specify real
-LINE, protected source-only destinations, source post-edge,
-yield-before-suspension and already-suspended phases.
+The current PRE plan distinguishes disposable expression inputs from saved-local
+obligations. It cannot yet execute restoration actions to leave an active
+comprehension. The next plan restores actual saved bindings before committing
+the target, then retires displaced owners after the whole frame is valid.
+Retained outer-with/loop roots need their own availability proof. Source POST,
+protected source-only destinations, yield-before-suspension and an actually
+suspended frame remain distinct phases with different owner contracts.
+
+Observed providers must commit outputs before advertising POST. The cold review
+found FOR-body and OR_POP results still held in C across callbacks, followed by
+old output stores. The next generator convention publishes a complete semantic
+outcome and forbids stores after a redirect; constructor and debugger proofs
+must use that same physical mapping. A fresh value at an old input's home does
+not restore the old owner's provenance. The current implementation does not
+claim these provider repairs are complete.
 
 Caught exit needs the target's actual exception-restoration link. A Python
 callback may hold the target's previous context in its own saved-previous cell;

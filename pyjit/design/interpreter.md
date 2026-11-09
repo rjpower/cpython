@@ -1,7 +1,7 @@
 # Register interpreter: current contract
 
 This page describes the active frame/call source on branch
-`pyjit/frame-call-model-20261109`, through `192cfbe8aa0`. Its semantic-completion,
+`pyjit/frame-call-model-20261109`, through `4a1f70fcef4`. Its semantic-completion,
 initialized-arena and bounded observer repairs are not a fully
 qualified replacement for golden `0765e9be47f`. See [status](../STATUS.md), the
 [active packet](../issues/frame-call-model-20261109/plan.md), and the immutable

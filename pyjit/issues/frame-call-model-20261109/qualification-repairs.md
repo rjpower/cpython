@@ -201,3 +201,34 @@ retry counts; all other material handler counts match except removed POP_ITER
 does not explain native cost by itself. The actual thirteen-case compile-only
 cancellation inventory also succeeds under 192, with no fixture function invoked:
 `ownership28-cancellation-inventory/` records its ELF, driver, command and output.
+
+## Per-local PRE cancellation and LINE identity: 4a1f70fcef4
+
+Integrated after independent source/result review: per-distinct-local save
+obligations, bounded real-LINE PRE cancellation and actual-current-operation
+identity. Independent locals restore in different normal/EH orders; only nested
+saves of one local are ordered. Lost saved origins remain obligations.
+
+Retained native28 attempts include the rejected global-order proof, two source-map
+fixture mistakes and the first wide check's same-line with-entry loop. The latter
+has a captured faulthandler diagnostic; root stopped only its own worker. The
+fixed bounded probe has16 rows per profile with no caps/errors and unchanged
+current PC on identity. See `ownership28-running-line-after/`.
+
+`ownership28-identity-small-*` passes125 tests per profile with one skip.
+`ownership28-model-port-and-geometry` separately passes the two identity and
+101-argument call tests. Its first geometry driver failed a mistaken near-distance
+assertion; the corrected v3 driver verifies actual near/far helper shapes and
+shows all20 variants accepted on each unmodified native profile, including the
+invalid B+3 destination. That is missing-gate evidence, not a repaired gate pass.
+
+The last `ownership28-wide-v2` precedes the capacity test port:999 tests each,
+four failed modules. Trace errors fall65→38, with21 diagnostic mismatches plus the
+now-ported expectation; Pdb retains two failures/two errors. No full qualification.
+The `fifth-engineering-{release,debug}-identity.log` files identify clean4a and
+117 modules each. Stats remains192.
+
+`fifth-engineering-upstream/` gives logging0.838496 over two balanced pairs.
+The separate `fifth-engineering-golden/` has logging0.585975, nbody0.999512,
+pickle1.014001. See the [fifth report](fifth-integration-report.md) for pair values,
+limits and the next three-stream packet. Engineering timing is not final parity.

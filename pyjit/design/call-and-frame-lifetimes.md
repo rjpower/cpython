@@ -1,7 +1,7 @@
 # Calls, frame homes and observation
 
 This is the active 2026-11-09 frame/call source contract on branch
-`pyjit/frame-call-model-20261109`. Engineering commit `192cfbe8aa0` includes
+`pyjit/frame-call-model-20261109`. Engineering commit `4a1f70fcef4` includes
 completion, arena, observer and bounded debugger repairs; full qualification
 remains open. The immutable golden
 `0765e9be47f` retains its separate functional qualification at `0267d428808`.

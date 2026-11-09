@@ -121,11 +121,13 @@ otherwise the original source exception recipe remains valid. Frame-object
 creation and public line-cache reads do not advance the generation. Ordinary
 dispatch does not check it.
 
-An identity request is an actual phase check, not source-line equality. It
-requires the first selected real target to be the current LINE wrapper, the
-observed frame itself and no source/error, suspended or pending-child phase.
+An identity request checks the actual phase as well as the resolved source line.
+It requires the current real LINE wrapper to describe that line, the observed
+frame itself and no source/error, suspended or pending-child phase.
 It preserves every owner and exception link, including protected regions,
-while committing redirect generation. Other protected transfers still need
+and keeps the current PC while committing redirect generation. An earlier word
+sharing the line does not make identity restart a scope or expression.
+Other protected transfers still need
 their own context and owner proof.
 
 ## Boundaries and open work

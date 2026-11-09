@@ -2,7 +2,7 @@
 
 This describes the active 2026-11-09 frame/call source in
 `build/worktrees/execution-boundaries-20261108`, branch
-`pyjit/frame-call-model-20261109`, through `192cfbe8aa0`. Semantic completion,
+`pyjit/frame-call-model-20261109`, through `4a1f70fcef4`. Semantic completion,
 initialized frame storage and bounded observer repairs are integrated; broader
 debugger qualification remains open. This is a source contract, not full qualification or
 parity evidence. [Status](../STATUS.md) and the

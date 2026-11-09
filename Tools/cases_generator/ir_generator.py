@@ -2017,7 +2017,7 @@ class SlotLayout:
     temp_fields: tuple[str, ...] = ()
     store_dst: bool = False         # dst may name a local
     canonical_return: bool = False  # proven unchanged canonical slot input
-    canonical_numeric_result: str | None = None  # checked constructor owner
+    canonical_result: str | None = None  # checked canonical owner
 
     @staticmethod
     def empty() -> "SlotLayout":
@@ -2366,7 +2366,7 @@ class IRStack(Stack):
                     field = FIELD_VARS[lay.dst]
                     out.emit(f"if (IR_IS_LOCAL({field}) || {field} == IR_NO_DST) {{\n")
                 macro = ("IR_STORE_CANONICAL_DST"
-                         if var.name == lay.canonical_numeric_result else "IR_STORE_DST")
+                         if var.name == lay.canonical_result else "IR_STORE_DST")
                 if self.observer_deferred is not None:
                     macro = "IR_COMMIT_OBSERVED_DST"
                     expression = f"{macro}({FIELD_VARS[lay.dst]}, {var.name}, {self.observer_deferred})"
@@ -4260,14 +4260,14 @@ def generate_handler(name: str, inst: Instruction, fmt: IRFormat,
 
 
 @dataclass(frozen=True)
-class CanonicalNumericResult:
-    "A canonical constructor owner preserved through the complete uop chain."
+class CanonicalResult:
+    "A checked canonical owner preserved through the complete uop chain."
     producer: Uop
     result: str
 
 
-def canonical_numeric_result(inst: Instruction, fmt: IRFormat
-                             ) -> CanonicalNumericResult | None:
+def canonical_result_source(inst: Instruction, fmt: IRFormat
+                            ) -> CanonicalResult | None:
     "Recognize bounded source proofs, independently of instruction names."
     inputs, outputs = external_io(inst)
     # Skip entries are unnamed feedback padding and emit no code or C
@@ -4303,6 +4303,25 @@ def canonical_numeric_result(inst: Instruction, fmt: IRFormat
               if token.kind != "COMMENT"]
     if any(token.kind.startswith("CMACRO") for token in tokens):
         return None
+    local_field = fmt.field_of(ROLE_LOCAL_IN)
+    home_helpers = {"GETLOCAL", "PyValue_DUP", "assert", "PyValue_IsNull"}
+    if (len(parts) == 1 and not inputs and fmt.n_inputs == 0
+            and producer.properties.pure
+            and len(producer.stack.outputs) == 1
+            and local_field is not None
+            and fmt.imm == FIELD_LOCS[local_field]
+            and not any(item.name in home_helpers for part in parts
+                        for item in (*part.stack.inputs, *part.stack.outputs))
+            and not any(cache.name in home_helpers for part in parts
+                        for cache in part.caches)):
+        expected = f"""{{
+            assert(!PyValue_IsNull(GETLOCAL(oparg)));
+            {result} = PyValue_DUP(GETLOCAL(oparg));
+        }}"""
+        if ([token.text for token in producer.body.tokens()
+             if token.kind != "COMMENT"]
+                == [token.text for token in tokenize(expected)]):
+            return CanonicalResult(producer, result)
     assignments = [stmt for stmt in producer.body.body
                    if isinstance(stmt, SimpleStmt)
                    and _statement_text(stmt)[:2] == [result, "="]]
@@ -4372,7 +4391,7 @@ def canonical_numeric_result(inst: Instruction, fmt: IRFormat
         if ([t.text for t in producer.body.tokens() if t.kind != "COMMENT"]
                 != [t.text for t in tokenize(expected)]):
             return None
-    return CanonicalNumericResult(producer, result)
+    return CanonicalResult(producer, result)
 
 
 def canonical_return_input(inst: Instruction) -> bool:
@@ -4569,9 +4588,9 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
     for box in sorted(emitter.boxes):
         out.emit(f"PyObject *{box} = NULL;\n")
     layout = slot_layout(inst, fmt, mode)
-    numeric = canonical_numeric_result(inst, fmt)
+    canonical = canonical_result_source(inst, fmt)
     layout = replace(layout, canonical_return=canonical_return_input(inst),
-                     canonical_numeric_result=numeric.result if numeric else None)
+                     canonical_result=canonical.result if canonical else None)
     if emitter.execution_variant is not None:
         layout = replace(layout, local_fields=emitter.execution_variant.local_fields,
                          temp_fields=emitter.execution_variant.temp_fields)

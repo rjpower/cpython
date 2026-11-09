@@ -14031,7 +14031,7 @@
             PyValue value;
             assert(!PyValue_IsNull(GETLOCAL(oparg)));
             value = PyValue_DUP(GETLOCAL(oparg));
-            IR_STORE_DST(IR_A(ir_word), value);
+            IR_STORE_CANONICAL_DST(IR_A(ir_word), value);
             if (!PyValue_IsNull(ir_displaced) &&
                 finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
@@ -14083,7 +14083,7 @@
             PyValue value;
             assert(!PyValue_IsNull(GETLOCAL(oparg)));
             value = PyValue_DUP(GETLOCAL(oparg));
-            IR_STORE_DST(IR_A(ir_word), value);
+            IR_STORE_CANONICAL_DST(IR_A(ir_word), value);
             if (!PyValue_IsNull(ir_displaced) &&
                 finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;

@@ -551,7 +551,7 @@ class TestIRCases(unittest.TestCase):
         names = ('BINARY_OP_MULTIPLY_FLOAT', 'BINARY_OP_ADD_FLOAT',
                  'BINARY_OP_SUBTRACT_FLOAT', 'BINARY_OP_TRUEDIV_FLOAT')
         for name in names:
-            contract = ir_generator.canonical_numeric_result(
+            contract = ir_generator.canonical_result_source(
                 analysis.instructions[name], formats[name])
             self.assertIsNotNone(contract, name)
             self.assertEqual(contract.result, 'res')
@@ -562,7 +562,7 @@ class TestIRCases(unittest.TestCase):
             self.assertIn('IR_STORE_CANONICAL_DST(IR_A(ir_word), res);', handler)
             self.assertNotIn('IR_STORE_DST(IR_A(ir_word), res);', handler)
         for name in ('BINARY_OP_ADD_INT', 'BINARY_OP_SUBTRACT_INT'):
-            self.assertIsNone(ir_generator.canonical_numeric_result(
+            self.assertIsNone(ir_generator.canonical_result_source(
                 analysis.instructions[name], formats[name]))
             self.assertIn('IR_STORE_DST(IR_A(ir_word), res);',
                           self.handler(output.getvalue(), name))
@@ -574,7 +574,7 @@ class TestIRCases(unittest.TestCase):
             other = analyzer.analyze_files(
                 [self.temp_input_filename], SequentialNumbers())
         other_formats = ir_generator.compute_formats(other)
-        self.assertIsNotNone(ir_generator.canonical_numeric_result(
+        self.assertIsNotNone(ir_generator.canonical_result_source(
             other.instructions['RENAMED_PRODUCT'], other_formats['RENAMED_PRODUCT']))
 
     def test_canonical_numeric_constructor_mutations_fail_closed(self):
@@ -626,7 +626,7 @@ class TestIRCases(unittest.TestCase):
                 with handle_stderr():
                     analysis = analyzer.analyze_files([self.temp_input_filename])
                 formats = ir_generator.compute_formats(analysis)
-                self.assertIsNone(ir_generator.canonical_numeric_result(
+                self.assertIsNone(ir_generator.canonical_result_source(
                     analysis.instructions['BINARY_OP_MULTIPLY_FLOAT'],
                     formats['BINARY_OP_MULTIPLY_FLOAT']))
 
@@ -646,8 +646,69 @@ class TestIRCases(unittest.TestCase):
                         parse_src(source.replace('PyValue_FromInt64', constructor)),
                         SequentialNumbers())
                 formats = ir_generator.compute_formats(analysis)
-                contract = ir_generator.canonical_numeric_result(
+                contract = ir_generator.canonical_result_source(
                     analysis.instructions['DIRECT'], formats['DIRECT'])
+                self.assertEqual(contract is not None, valid)
+
+    def test_canonical_local_duplicate_source(self):
+        source = (Path(__file__).resolve().parents[2] /
+                  "Python" / "bytecodes.c").read_text()
+        Path(self.temp_input_filename).write_text(source)
+        with handle_stderr():
+            analysis = analyzer.analyze_files([self.temp_input_filename])
+        formats = ir_generator.compute_formats(analysis)
+        out = io.StringIO()
+        ir_generator.generate_ir([self.temp_input_filename], analysis, out, False)
+        for name in ("LOAD_FAST", "LOAD_FAST_BORROW"):
+            with self.subTest(name=name):
+                contract = ir_generator.canonical_result_source(
+                    analysis.instructions[name], formats[name])
+                self.assertIsNotNone(contract)
+                self.assertEqual(contract.result, "value")
+                handler = self.handler(out.getvalue(), name)
+                self.assertIn("IR_STORE_CANONICAL_DST(IR_A(ir_word), value);",
+                              handler)
+
+        template = """
+        pure inst(RENAMED_LOCAL_DUP, (-- result)) {
+            assert(!PyValue_IsNull(GETLOCAL(oparg)));
+            result = PyValue_DUP(GETLOCAL(oparg));
+        }
+        """
+        variants = (
+            (template, True),
+            (template.replace("GETLOCAL(oparg)", "GETLOCAL(oparg + 1)"), False),
+            (template.replace("PyValue_DUP(GETLOCAL(oparg))",
+                              "GETLOCAL(oparg)"),
+             False),
+            (template.replace("result = PyValue_DUP(GETLOCAL(oparg));",
+                              "result = PyValue_DUP(GETLOCAL(oparg)); callback();"),
+             False),
+            (template.replace("result = PyValue_DUP(GETLOCAL(oparg));",
+                              "result = PyValue_DUP(GETLOCAL(oparg)); result = PyValue_NULL;"),
+             False),
+            (template.replace("(-- result)", "(GETLOCAL -- result)"), False),
+            (template.replace("pure inst(RENAMED_LOCAL_DUP, (-- result))",
+                              "pure inst(RENAMED_LOCAL_DUP, (GETLOCAL/1 -- result))"),
+             False),
+            (template.replace("result = PyValue_DUP(GETLOCAL(oparg));",
+                              "#define GETLOCAL(x) replacement(x)\n"
+                              "result = PyValue_DUP(GETLOCAL(oparg));\n"
+                              "#undef GETLOCAL"),
+             False),
+        )
+        for text, valid in variants:
+            with self.subTest(source=text), mock.patch.dict(
+                ir_generator.FEEDBACK_LAYOUTS,
+                {"RENAMED_LOCAL_DUP": ir_generator.FB_HEADER}
+            ):
+                with handle_stderr():
+                    variant = analyzer.analyze_forest(
+                        parse_src(text), SequentialNumbers())
+                variant_formats = ir_generator.compute_formats(variant)
+                contract = ir_generator.canonical_result_source(
+                    variant.instructions["RENAMED_LOCAL_DUP"],
+                    variant_formats["RENAMED_LOCAL_DUP"])
                 self.assertEqual(contract is not None, valid)
 
     def test_canonical_return_provenance_fails_closed(self):

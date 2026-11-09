@@ -594,7 +594,7 @@ _PyIR_AdoptTemp(PyValueBorrow view)
 #define IR_STORE_DST(F, V) \
     IR_STORE_DST_IMPL(F, V, _PyValue_Publish(&(V)))
 
-/* Only a checked constructor-result proof selects this owner transfer. */
+/* Only a checked canonical-result proof selects this owner transfer. */
 #define IR_STORE_CANONICAL_DST(F, V) \
     IR_STORE_DST_IMPL(F, V, (V))
 

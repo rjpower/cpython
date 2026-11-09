@@ -2,25 +2,32 @@
 
 Active work: the [frame/call model redesign](issues/frame-call-model-20261109/plan.md)
 continues in the existing runtime checkout on branch
-`pyjit/frame-call-model-20261109`. Second engineering integration `3e5cbdb1123`
-implements semantic completion, initialized frame storage, target-described
-remote layouts and observer state tied to real execution phases. It is not
-qualified or promoted. Release/debug each check 117 modules and pass 207 focused
-tests; all 2,152 valid library files compile without rejection. Useful debugger
-reconstruction and final release/debug full qualification remain open.
+`pyjit/frame-call-model-20261109`. Third engineering integration `87f13087ed9`
+adds bounded debugger owner reconstruction, redirect intent and checked numeric
+publication to the semantic completion/frame-arena model. It is not qualified
+or promoted. Release/debug each check 117 modules and pass 320 focused tests.
+The full release diagnostic ran 54,504 tests; 13 modules failed with 126 failures
+and 99 errors, chiefly debugger/source-event behavior and obsolete format
+fixtures. The [third report](issues/frame-call-model-20261109/third-integration-report.md)
+owns current evidence. Final release/debug qualification remains open.
 
-The first matched logging/upstream screen is **0.97449× elapsed time**, about
-2.6% faster, over two balanced pairs. This does not replace the final parity
-campaigns. The broad screen repairs the prior material unpack, float and
-deepcopy losses; pickle retains about 0.7% overhead. Nbody remains about 8%
-slower than golden over four repeat pairs. Warmed nbody counters show 3.2% more
-instructions, 8.0% more cycles and nearly unchanged branch misses. See the
+The latest matched logging/upstream screen is **0.84554× elapsed time**, about
+15% faster, over two balanced pairs. This does not replace the final parity
+campaigns. A four-pair repeat has nbody 5.6% slower than golden and pickle 1.0%
+slower. Warmed nbody counters show 3.3% more instructions, 5.4% more cycles and
+nearly unchanged branch misses. The previous broad screen repaired material
+unpack, float and deepcopy losses; the full broad rerun remains open. See the
 [second integration report](issues/frame-call-model-20261109/second-integration-report.md)
 for protocols, retained failures, profiles and qualification limits.
 
 The next increment implements reviewed debugger NULL/iterator-owner recipes
-and evaluates numeric publication. A minimal destination-category reorder is
-source-only; a checked canonical numeric-result proposal awaits peer review.
+and evaluates numeric publication. The first NULL recipe and generation-aware
+observer redirects build with 117 modules and pass 74 focused tests per profile;
+same-address replay and callback-error attribution pass cold and warm probes.
+These are engineering checks, not full qualification. Wider tracing checks still
+report 89 errors and 27 failures, mostly missing protected/suspended recipes.
+A local-first destination order and checked canonical numeric results are
+implemented and measured together; no component speedup is established.
 The remaining owner-retirement model needs explicit semantic transitions;
 ordinary thread returns require scratch homes cleared. Six canonical design
 diagrams render and have been inspected. Golden remains immutable and selected.

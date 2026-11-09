@@ -11,44 +11,60 @@ started at revisions 8/18 at the initial reviewed-implementation milestone.
 
 Continue runtime `build/worktrees/execution-boundaries-20261108`, branch
 `pyjit/frame-call-model-20261109`, HEAD
-`3e5cbdb11236ec91f79d8fabc0ceb7ad2ee674cb`. This second engineering integration
-is unqualified. It contains semantic completion, initialized arena storage,
-versioned remote layouts, activation-local source errors, explicit cold LINE
-handoff and the RESUME source barrier. Cache format is 64415. Release/debug
-`observer20` each check 117 modules and pass 207 focused tests. The compile-only
-library check accepts 2,152 valid files, zero rejections and 11 intentional
-syntax fixtures. Earlier failed observer runs, the cubic co_lines regression
-and the repaired entry-version assertion remain in the diagnostic reports.
-Do not call them full qualification. Stats remains the old build.
+`87f13087ed9b97254b983bfb1adef61ae1fcde88`. This third engineering integration
+is unqualified. It adds debugger NULL/current-FOR owner recipes and redirect
+intent (`84a5f476eed`), then checked canonical numeric results/local-first stores
+(`87f13087ed9`) to the semantic completion/arena/observer model. Cache 64415.
+Release/debug each check 117 modules, pass 21 targeted tests and 320 focused
+tests (overlapping sets), five skips. The numeric matrix passes 108 edge cases
+and 400 displaced-owner callbacks per build. All 87 host generator tests pass.
+The full release diagnostic `third-integration-release-full.log` ran 54,504 tests
+in 3m37s, failing 13 modules with 126 failures and 99 errors. The
+[third report](issues/frame-call-model-20261109/third-integration-report.md)
+owns counts/limits. No final qualification; stats remains old. The last complete
+library compile-only check belongs to 3e5 (2,152 valid, no rejections).
 
 Canonical documentation is here. Evidence is
-`build/pyjit-link-wave1/frame-call-model-20261109/`. The release identity rebuild
-`second-engineering-release-identity.log` identifies 3e5 and checks 117 modules.
-`second-engineering-upstream/` logging is 0.974490 over two balanced pairs.
-`second-engineering-golden/` contains the seven-workload screen;
-`second-engineering-repeat/` confirms nbody/golden 1.080373, pickle 1.006788 and
-logging 0.614583 over four pairs. These campaigns are separate: do not derive
-control-to-control ratios. Nbody `second-nbody-stat/` has 12 valid warmed
-captures, stable identities, 100% running: instructions 1.031942, cycles
-1.080012, branches 1.056085 and misses 1.000104 versus golden.
-`second-nbody-record/` retains matched ELFs and profiles with zero lost samples,
-but HEADER_EVENT_DESC warnings and zero header timestamps limit timeline use.
-The [second report](issues/frame-call-model-20261109/second-integration-report.md)
-owns interpretation. Logging's final two six-round parity campaigns are pending.
+`build/pyjit-link-wave1/frame-call-model-20261109/`.
+`third-engineering-{release,debug}-identity.log` identifies 87 and checks 117
+modules each. `third-engineering-upstream/` logging is 0.845543 over two pairs.
+`third-engineering-golden/` contains the three-workload screen;
+`third-engineering-repeat/` confirms nbody/golden 1.056203, pickle 1.010377 and
+logging 0.589521 over four pairs. Do not derive control-to-control ratios across
+separate campaigns. Twelve valid `third-nbody-stat/` captures have stable
+identities and 100% running; summary ratios are instructions 1.033246, cycles
+1.053810, branches 1.058609 and misses 0.999944. Numeric publication has not
+removed the measured instruction gap. Earlier `second-nbody-record/` profiles
+retain ELFs but have HEADER_EVENT_DESC warnings and zero header timestamps;
+use flat locations only. Final two six-round logging campaigns remain pending.
 
-Runtime is dirty for the next increment, not the measured 3e5 image. Sol 6.1
-medium A changed only IR_STORE_DST category order (local, discard, temporary),
-with independent B source approval. Its benefit is unmeasured. B is implementing
-the reviewed first debugger NULL recipe in frameobject, tests and shared cold
-nullable-home mapping, then the current-iteration FOR anchor. A is preparing
-checked canonical numeric-result implementation after independent proposal
-review; no such implementation is admitted yet. Workers never build or commit.
-Root owns source freezes, regeneration, native checks, integration and timing.
-The C-only nbody/owner PRINT inventories passed and remain retained. The proposed
-free terminal cleanup was rejected: thread return asserts scratch NULL and
-clears locals, so removing release words requires an explicit owner transition.
-No retained-owner bank has been admitted. Six design diagrams render and were
-inspected. Preserve the three unrelated canonical changes below.
+Runtime is now dirty for the next repair, not the measured 87 image. B's bounded
+actual-real-LINE identity path is source-peer approved and awaits root native
+checks; frameobject/test_code belong to B. A owns source-event/completion/debugger
+entry design and instrumentation; its wildcard/Bdb probes reproduced missing
+coverage and shifted first stops. The derived context schema is proposal only;
+actual census shows caught-context and saved-local ownership cannot be guessed
+from EH floors. Root owns the admitted format/layout/frozen-main fixture plan,
+mechanical processors, native checks, regeneration, commits and timing. Workers
+never build or commit. Agent spawning, including A's child attempt, fails with
+thread limit; two existing Sol6.1 medium workers remain usable. Do not claim a
+new external cold review from their reciprocal reviews.
+
+Full-diagnostic groups: debugger/protected owner refusals (test_ir, monitoring,
+sys_settrace, peepholer), immediate debugger entry/stepping (pdb, doctest,
+remote_pdb), missing wildcard coverage (patma), completion notification policy
+(value_slots and five legacy trace cases), and static layout/format/frozen data
+(dis, sys, exceptions, embed, one CFG fixture). Root's verbose details are
+`third-failure-details-release-focus.log`. Earlier wrong-selector focus and a
+120-second direct-unittest CPU-fixture timeout remain failed evidence, followed
+by proper regrtest inventories. Probes `ownership23-*-{debugger-context-inventory,
+observer-completion-events,source-boundary-stops}` are executed candidate/upstream
+receipts; scripts prepared later are not automatically executed.
+
+The proposed free terminal cleanup remains rejected: normal thread return asserts
+scratch NULL and clears locals. Removing owner-retirement words needs an explicit
+semantic transition. No retained-owner bank is admitted. Six canonical diagrams
+rendered and were inspected. Preserve the three unrelated changes below.
 
 The revised design has one public compact instruction-offset domain. Removed
 frontend bookkeeping creates no synthetic instruction events or recovery slots.
@@ -164,21 +180,19 @@ Python language mandate. Preserve supported observation APIs and owner/GC safety
 
 ## Next execution
 
-Finish and peer-review the bounded debugger implementation. Run the original
-folded-assignment jump first, then the loop replay, negative ownership and
-reentry cases. Integrate the minimal numeric reorder with its unchanged
-ownership behavior and measure logging, nbody and pickle before broadening it.
-The checked numeric constructor proposal must pass independent review before
-implementation. Preserve shared cold ReadsHome/DefinesHome/NullableHome/Outcome
-contracts and real entry/error phases; do not add a per-dispatch liveness map.
+Build and minimally validate the peer-approved identity/format repairs, then
+continue the coherent context and source-event/debugger-entry work. Capture
+actual final IR and observer phases before implementation; do not weaken old
+behavior expectations or synthesize empty executable instructions. Keep shared
+cold operand/outcome contracts and no per-dispatch liveness map. Recheck nbody
+with dynamic work/compiled-path evidence before another performance change.
 
-After the coherent repairs, run full release/debug qualification, API lint,
-stats rebuild, 29-workload screen and two independent six-round logging/upstream
-campaigns. Repair remaining material regressions and cold-review findings before
-promotion. Keep golden source, builds, tags and sealed evidence immutable. Use
-GCC, JIT off, CPU 15, sanitized native environments and `uv run` for host drivers.
-Never weaken old debugger expectations or relabel an engineering screen as a
-qualified parity pass. Canonical docs and Loom artifacts must follow the source.
+After coherent repairs, run full release/debug qualification, API lint, a stats
+rebuild, the 29-workload screen and two independent six-round logging/upstream
+campaigns. Repair material regressions and review findings before promotion.
+Keep golden source/builds/tags and sealed evidence immutable. Use GCC, JIT off,
+CPU15, sanitized native environments and uv host drivers. Canonical docs and
+Loom artifacts must follow actual source and executed evidence.
 
 ## Preserved local work
 

@@ -1,8 +1,9 @@
 # Calls, frame homes and observation
 
 This is the active 2026-11-09 frame/call source contract on branch
-`pyjit/frame-call-model-20261109`. Engineering commit `6ef45e391aa` and subsequent
-completion, arena and observer repairs remain unqualified. The immutable golden
+`pyjit/frame-call-model-20261109`. Engineering commit `87f13087ed9` includes
+completion, arena, observer and bounded debugger repairs; full qualification
+remains open. The immutable golden
 `0765e9be47f` retains its separate functional qualification at `0267d428808`.
 See [status](../STATUS.md), the [active packet](../issues/frame-call-model-20261109/plan.md)
 and the [baseline report](../bench/results/interpreter-parity-20261108.md).
@@ -141,6 +142,16 @@ publication unless their producer contract proves it. The
 records those bounded producer chains. It does not authorize blanket removal
 of normalization from raw results.
 
+Four float arithmetic producers also transfer their final constructor result
+without normalizing it again. The generator checks the direct canonical
+constructor assignment, its exact error path and the full non-reentrant input
+retirement chain. Named cache bindings, preprocessing, changed result identity
+or unsupported suffixes prevent the optimization. Local, temporary and discard
+destinations share one final-store implementation; only the value expression
+differs. This proof neither moves publication across callbacks nor applies to
+conditional integer constructors. See the
+[constructor contract](../issues/frame-call-model-20261109/numeric-canonical-result-proposal.md).
+
 ## Semantic iteration, delegation and input resume
 
 | Outcome | Retained homes | Defined recipient | Retired homes |
@@ -186,8 +197,20 @@ is active records a pending target without touching the overlapping child-owned
 window. Completion clears the flag, publishes the selected continuation and
 retires surplus caller scratch only after child retirement. Exceptional child
 retirement cancels the request, including one requested during cleanup. Broader
-protected/suspended and iterator-generation recipes remain work under review;
-a matching static producer or non-NULL pair alone does not prove dynamic identity.
+protected/suspended recipes remain work under review. A bounded backward replay
+within a FOR body preserves its current iterator/cursor pair only after proving
+all-path body-phase availability, target dominance and a cut-free path to the
+current site. A matching static producer or non-NULL pair alone does not prove
+dynamic identity. Nullable operands require a separate current-NULL proof; every
+aliased read of the physical home must accept NULL.
+
+The setter detaches all surplus owners before committing the target and closing
+the detached values. Closing callbacks may redirect again; the outer setter
+makes no later frame writes. Successful commits increment a cold frame-object
+generation, including when the selected physical PC is unchanged. Observer
+transactions use that generation alongside the PC before restoring cursors,
+cached continuations or an old source-error recipe. Public line getters and
+lazy frame-object creation do not express redirect intent.
 
 Source-only events use immutable edge metadata and a frame-object display cursor.
 Pending source errors belong to the evaluator activation, so nested finalizer

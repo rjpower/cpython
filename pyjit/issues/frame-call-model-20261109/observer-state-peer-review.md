@@ -95,3 +95,38 @@ constructor and assert that invariant in wrapper construction. This fixes the
 false boundary at its producer instead of adding version checks to dispatch or
 extraordinary synchronization to every frame entry. Native validation and the
 actual implementation remain coordinator-owned.
+
+## First debugger NULL chunk: actual-source review pending two repairs
+
+A read the new register_resume_sites and setter application plus shared
+NullableHome. Root's two concrete findings are confirmed. The initial helper
+accepts the first nullable alias; a required read alias of the same home must
+instead defeat NULL admission. Count all actual explicit and audited window
+read roles, excluding untouched window holes. Generic STORE_ATTR's nullable
+value cannot excuse its required aliased receiver. Scalar and mixed-role
+constructor negatives are needed.
+
+Warning-hook reentry needs a cold frameobject redirect generation, not equality
+of PC/continuation/source cursor/public line cache. An identical-PC successful
+nested setter is still new intent; a getter changing f_lineno is not. Initialize
+new frameobjects, preserve the generation on escape, check overflow before any
+binding/detachment effect and increment at each successful actual or deferred
+commit after validation/allocation succeed. Failed setters do not increment.
+
+The complete-boundary NULL invariant, actual-handler role check and
+all-surplus-detach before continuation commit/close are otherwise consistent
+with the reviewed bounded plan. Active child overlap retains its separate gate.
+Source admission remains conditional on the two repairs and focused tests;
+no worker native execution.
+
+Actual repaired NULL chunk source admitted: ReadsWindowHome factors only the
+previous window audit; ReadsHome remains explicit/window union. NullableHome
+now requires every actual aliased input role to accept NULL and returns false
+for no read. Constructor and debugger pass the argument extent. The aliased
+STORE_ATTR receiver negative is present. f_lineno_generation initializes in the
+common New_NoTrack allocator used by both frame construction routes, stays on
+the frameobject through escape, checks overflow before warning/effects, and
+increments only after validation/allocation at actual or deferred commit. The
+same-PC warning setter and getter-only controls cover intent vs public cache.
+No hot interpreter-frame field added. No remaining concrete source blocker;
+coordinator native validation pending.

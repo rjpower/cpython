@@ -196,3 +196,39 @@ implementation. No performance admission from source inspection alone.
 
 No bytecodes.c change is expected for the direct-constructor phase. Conditional
 integer proof and callback-crossing published-home reuse remain separate work.
+
+## Implemented bounded source, pending native review
+
+The generator now records CanonicalNumericResult only after exact parsed
+producer/body and retirement-body checks. Actual float operands, result and
+suffix aliases must have distinct scalar identities; each of the two suffixes
+consumes the top non-result position, leaving precisely the result at final
+ROLE_DST. The matcher uses no instruction-name whitelist. It accepts the current
+four float chains and a renamed version, plus a zero-input decimal-constant
+FromInt64 source form. Broader FromInt64 expressions are not enabled.
+
+Only Uop and inert unnamed Skip parts qualify; Flush and future part kinds fail
+closed. Named uop caches are excluded entirely, along with trusted-helper-named
+stack bindings. Exact body checks exclude declarations/rebindings and macros;
+CMACRO tokens also receive an explicit rejection. Box/Scaled helpers, conditional
+integer producers, unknown result/suffix effects and unsupported shapes retain
+ordinary publication.
+
+Final scalar stores share IR_STORE_DST_IMPL; the canonical front end substitutes
+only (V) for the ordinary _PyValue_Publish expression. This does not change
+pre-retirement flush timing or input/displaced-local ownership. No bytecodes,
+metadata, opcode number or value-format changes.
+
+Four focused host generator methods PASS in17.032s: numeric constructor proof,
+mutation negatives, direct-int64 boundary and existing canonical-return
+provenance mutations. Test loading uses uv host Python with Lib appended after
+startup, not PYTHONPATH before codec initialization. Source AST/diff checks pass.
+B final source peer and coordinator regeneration/native checks/measurement are
+pending. No benefit is claimed from this source result.
+
+B actual source peer approved the final bounded proof and shared macro.
+Coordinator regeneration23 changes exactly four final float-store calls;
+A generated-source review confirms unchanged guard/deopt/zero-divisor/error,
+input retirement and displaced-local suffixes. Full host test_generated_cases
+module: 87 PASS in37.871s. Native23 build/focus and paired measurements remain
+coordinator-owned and pending; no worker native result claimed.

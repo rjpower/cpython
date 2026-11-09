@@ -38,42 +38,46 @@ permanent experiment switches or weakened correctness assertions.
 
 ## Current execution
 
-Second engineering integration `3e5cbdb11236ec91f79d8fabc0ceb7ad2ee674cb`
-implements semantic loop/send completion, initialized frame storage,
-target-described remote layouts, activation-local source errors, epoch-based
-cold LINE handoff and a coherent RESUME source barrier. Release/debug each
-check 117 modules and pass 207 focused tests. All 2,152 valid library files
-compile without rejection; 11 intended syntax fixtures remain. Cache format
-is 64415. This source is not fully qualified or promoted.
+Third engineering integration `87f13087ed9b97254b983bfb1adef61ae1fcde88`
+contains semantic loop/send completion, initialized frame storage, target-described
+remote layouts, activation-local source errors and cold LINE handoff. It adds
+proved NULL/current-loop debugger recipes, explicit redirect intent and checked
+canonical numeric results. Cache format is 64415. Both builds check 117 modules
+and pass 320 focused tests, with five skips. All 87 host generator tests pass.
+The full release diagnostic ran 54,504 tests: 13 modules failed, reporting
+126 failures and 99 errors. This is not qualified or promoted.
 
-The first matched two-round logging/upstream screen is **0.974490**; both pairs
-are below 1.0. The broad golden screen repairs prior material unpack, float and
-deepcopy regressions. Pickle retains about 0.7% overhead. Nbody's loss repeats
-at **1.080373** over four pairs; warmed PMU captures show instructions 1.031942,
-cycles 1.080012, branches 1.056085 and branch misses 1.000104 versus golden.
-Read the [second report](second-integration-report.md) for exact protocols,
-profile limits and retained failures. Final full qualification and the two
-six-round parity campaigns remain required. The
-[first report](integration-report.md) preserves the earlier 6ef experiment.
+The matched two-pair logging/upstream screen is **0.845543**. A four-pair repeat
+versus golden has logging 0.589521, nbody 1.056203 and pickle 1.010377. Warmed
+nbody counters show instructions 1.033246, cycles 1.053810, branches 1.058609 and
+branch misses 0.999944. The extra instruction gap remains; no component speedup
+is attributed to numeric publication. The prior seven-workload screen repaired
+material unpack, float and deepcopy losses. The complete broad rerun, final
+qualification and two six-round parity campaigns remain open. Read the
+[third report](third-integration-report.md) for protocols and retained failures;
+the [second](second-integration-report.md) and [first](integration-report.md)
+reports retain earlier source-specific measurements.
 
-Next-source work is debugger reconstruction and numeric publication. The
-[concrete debugger plan](debugger-recipe-implementation-plan.md) implements
-proved NULL requirements before a surviving dynamic FOR anchor. The
-[independent numeric review](numeric-hotpath-independent-review.md) admits a
-minimal local-first category-order experiment; its benefit remains unmeasured.
-The [canonical-result proposal](numeric-canonical-result-proposal.md) requires
-constructor and full-result-flow proof before bypassing redundant publication.
-Remaining standalone owner retirement requires explicit semantic transitions;
-ordinary return does not already clear scratch. Protected/suspended debugger
-recipes and remote/GDB active source-cursor display remain open. Six updated
-canonical design diagrams render and were inspected.
+Current repair streams follow the full diagnostic. The
+[context proposal](debugger-context-schema-draft.md) starts with final-IR derived
+handled-exception state, independently from physical owner requirements. Real
+LINE identity is admitted; general protected/suspended transfers still need
+proof and review. Actual homes and ambiguous cases are in the
+[context census](debugger-context-census.md). The
+[source/debugger entry proposal](source-boundary-debugger-entry-proposal.md)
+addresses missing source events and immediate debugger entry without inventing
+executable operations. The [format plan](format-fixture-repair-plan.md) covers
+stale static disassembly/location/layout fixtures and native frozen embedding;
+behavior assertions stay intact. Remote/GDB active source display and remaining
+semantic owner retirement are still open. Ordinary return does not already clear
+scratch. Six canonical design diagrams render and were inspected.
 
 ## Parallel responsibilities
 
 | Stream | Owner | Initial deliverable |
 | --- | --- | --- |
-| Numeric publication and architectural review | Sol 6.1 medium A | Reviewed local-first store experiment, checked constructor proof, cross-review of debugger owners |
-| Debugger owners and cold contracts | Sol 6.1 medium B | NULL/active-loop recipes, safe redirect application, cross-review of numeric changes |
+| Observation and source boundaries | Sol 6.1 medium A | Source coverage, semantic completion events and immediate debugger entry; cross-review of context owners |
+| Debugger context and cold contracts | Sol 6.1 medium B | Real-phase identity, protected/suspended context recipes and independent source review |
 | Integration and measurement | Coordinator | Native gates, coherent commits, logging/broad measurements, profiling, canonical/Loom reports |
 
 Workers propose first and independently review each other's contracts. Runtime

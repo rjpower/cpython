@@ -31,6 +31,8 @@ its variable tail. Likewise, full frontend window reads can include untouched
 holes; explicit source fields may point outside that window. Cold consumers
 share ReadsHome/DefinesHome/NullableInputs and per-edge Outcome rather than
 reconstruct these facts from one extent or guessed opcode range.
+NullableHome checks every actual aliased read: a nullable deletion value cannot
+authorize a required receiver to be NULL in the same physical cell.
 
 Suspension metadata recognizes actual generator-state writes, not a comparison
 against a child's FRAME_CREATED state. SEND can push/resume a Python child
@@ -101,6 +103,15 @@ landing event without retroactively replaying completed source events. Exact
 assembler relaxation adapters normalize LINE landings while helper words retain
 real INSTRUCTION callbacks. Exception selection, debugger redirection and frame
 clear invalidate the record before callback-capable retirement.
+
+Debugger intent has its own cold frame-object generation. A successful setter
+commit advances it even when the selected physical word is unchanged. Source,
+jump and semantic-completion callback transactions compare both PC and generation
+before returning a cached continuation or restoring source context. If a callback
+commits a redirect and then raises, attribution uses the committed real PC;
+otherwise the original source exception recipe remains valid. Frame-object
+creation and public line-cache reads do not advance the generation. Ordinary
+dispatch does not check it.
 
 ## Boundaries and open work
 

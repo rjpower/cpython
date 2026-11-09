@@ -2,34 +2,44 @@
 
 Active work: the [frame/call model redesign](issues/frame-call-model-20261109/plan.md)
 continues in the existing runtime checkout on branch
-`pyjit/frame-call-model-20261109`. Third engineering integration `87f13087ed9`
-adds bounded debugger owner reconstruction, redirect intent and checked numeric
-publication to the semantic completion/frame-arena model. It is not qualified
-or promoted. Release/debug each check 117 modules and pass 320 focused tests.
-The full release diagnostic ran 54,504 tests; 13 modules failed with 126 failures
-and 99 errors, chiefly debugger/source-event behavior and obsolete format
-fixtures. The [third report](issues/frame-call-model-20261109/third-integration-report.md)
-owns current evidence. Final release/debug qualification remains open.
+`pyjit/frame-call-model-20261109`, through engineering `192cfbe8aa0`.
+The frame stack, compact IR and semantic completion model now includes explicit
+debugger entry, cold inherited/same-caught transfer plans and corrected completion
+payload/legacy projection. It is not qualified or promoted. Release/debug each
+check 117 modules and pass 131 focused tests. The latest wide check runs 1,572
+tests per profile; four actual modules still fail, mostly missing debugger
+owner/context plans. A mistaken obsolete profiling selector is retained as a
+harness failure; the corrected tracing-profiler module passes 28 tests each.
+The last full release diagnostic belongs to `87f13087ed9`: 54,504 tests, 13 failed
+modules, 126 failures and 99 errors. The
+[fourth report](issues/frame-call-model-20261109/fourth-integration-report.md)
+owns the latest screen; the [repair log](issues/frame-call-model-20261109/qualification-repairs.md)
+owns later gates. Final release/debug qualification remains open.
 
-The latest matched logging/upstream screen is **0.84554× elapsed time**, about
-15% faster, over two balanced pairs. This does not replace the final parity
-campaigns. A four-pair repeat has nbody 5.6% slower than golden and pickle 1.0%
-slower. Warmed nbody counters show 3.3% more instructions, 5.4% more cycles and
-nearly unchanged branch misses. The previous broad screen repaired material
-unpack, float and deepcopy losses; the full broad rerun remains open. See the
+The latest matched logging/upstream screen at `192cfbe8aa0` is **0.81746× elapsed
+time**, about 18% faster, over two balanced pairs. This does not replace the final
+parity campaigns. A four-pair golden repeat has logging 0.59280, nbody 1.00005
+and pickle 1.01793. Nbody's earlier 5.6% loss does not repeat on this image;
+pickle varies from 0.99776 to 1.03983 and remains under investigation. The stable
+existing-counter census shows fewer nbody handlers with otherwise equal material
+routes, not a native cost attribution. Older PMU evidence belongs to the older
+87 image. The previous broad screen repaired material unpack, float and deepcopy
+losses; the full broad rerun remains open. See the
 [second integration report](issues/frame-call-model-20261109/second-integration-report.md)
 for protocols, retained failures, profiles and qualification limits.
 
-The next increment implements reviewed debugger NULL/iterator-owner recipes
-and evaluates numeric publication. The first NULL recipe and generation-aware
-observer redirects build with 117 modules and pass 74 focused tests per profile;
-same-address replay and callback-error attribution pass cold and warm probes.
-These are engineering checks, not full qualification. Wider tracing checks still
-report 89 errors and 27 failures, mostly missing protected/suspended recipes.
-A local-first destination order and checked canonical numeric results are
-implemented and measured together; no component speedup is established.
+Qualification repair `37a67b9d155` is integrated after independent source and
+result review. Fused branches now describe both source edges using their actual
+encoded control operation; repeating a real LINE preserves protected owners and
+exception state. Compact-format, frame-size and frozen-embedding consumers are
+updated. Release/debug each pass 1,027 tests across eight affected modules;
+2,152 valid library files compile without rejection. Cache magic is 64416.
+These are focused checks, not full qualification. Explicit entry and bounded context transfers are now integrated. The latest
+repair narrows LINE invalidation; broader cancellation/restoration
+plans and source-aware tooling remain open. See the
+[qualification repair log](issues/frame-call-model-20261109/qualification-repairs.md).
 The remaining owner-retirement model needs explicit semantic transitions;
-ordinary thread returns require scratch homes cleared. Six canonical design
+ordinary thread returns require scratch homes cleared. Seven canonical design
 diagrams render and have been inspected. Golden remains immutable and selected.
 
 The previous [execution-boundary and operand-mode packet](issues/execution-boundaries-20261108/plan.md)
@@ -61,7 +71,7 @@ owns the retained measurements.
   argument windows. See the [IR](design/register-ir.md) and
   [interpreter](design/interpreter.md) specifications.
 - The selected batch integrates typed code homes, successful-refresh cleanup,
-  a dictionary first-probe hit, checked NOP continuation and guarded general
+  a dictionary first-probe hit and guarded general
   Python-call entry. Full qualification at functional `0267d428808` passed
   **54,394 tests each in release and debug, zero failures**. All three builds
   check 117 modules; API lint covers 306 units with zero failing findings.
@@ -112,12 +122,12 @@ pass design → peer review → implementation → focused checks → post-revie
 integration. Broad performance screens and full suites belong at coherent
 integration points.
 
-The current engineering increment uses compact real instruction positions and
-source-edge metadata. Semantic loop/send completion, shared branch/exception
-owner retirement and owner-aware debugger recipes remain under implementation.
-Normal execution does not walk source maps. First profiles identify redundant
-frame-tail initialization. Its arena proposal passed independent review;
-target-described remote layouts precede its implementation and qualification.
+The current source implements compact executable positions, source-edge metadata,
+semantic loop/delegation completion and initialized frame storage. The next cold
+transfer model separates cancellable expression owners from saved-local/with
+roots and exception restoration. General caught exits, suspended phases and
+source-aware remote/GDB display remain open. Semantic owner retirement still
+needs explicit transitions; ordinary thread clear does not clear live scratch.
 
 Borrowed frame views are a reviewed investigation, not an approved implementation.
 Ownership anchors, GC traversal, promotion, ordinary fallback and a complete

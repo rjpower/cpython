@@ -58,19 +58,36 @@ qualification and two six-round parity campaigns remain open. Read the
 the [second](second-integration-report.md) and [first](integration-report.md)
 reports retain earlier source-specific measurements.
 
-Current repair streams follow the full diagnostic. The
-[context proposal](debugger-context-schema-draft.md) starts with final-IR derived
-handled-exception state, independently from physical owner requirements. Real
-LINE identity is admitted; general protected/suspended transfers still need
-proof and review. Actual homes and ambiguous cases are in the
-[context census](debugger-context-census.md). The
-[source/debugger entry proposal](source-boundary-debugger-entry-proposal.md)
-addresses missing source events and immediate debugger entry without inventing
-executable operations. The [format plan](format-fixture-repair-plan.md) covers
-stale static disassembly/location/layout fixtures and native frozen embedding;
-behavior assertions stay intact. Remote/GDB active source display and remaining
-semantic owner retirement are still open. Ordinary return does not already clear
-scratch. Six canonical design diagrams render and were inspected.
+Qualification repair `37a67b9d155` now integrates fused source coverage,
+exact protected real-LINE identity and format/layout/frozen-embedding consumers.
+Cache magic is 64416. Both profiles check 117 modules and pass 1,027 tests in
+eight affected modules; 2,152 valid library files compile without rejection.
+The [repair log](qualification-repairs.md) records source/build identities and
+qualification limits. No elapsed result is attributed to this cold repair.
+
+Engineering26 `9f677103e00` now integrates explicit entry and its stdlib
+consumers, request-local context/owner plans, payload identity and a narrow legacy
+projection preserving modern STOP(None). Both builds check 117 modules and pass 131
+focused tests; corrected tracing profiling passes 28; 2,154 valid files compile.
+The 1,572-test wide gate still fails four actual modules plus an obsolete root
+profiling selector (subsequently corrected). No full qualification is claimed.
+
+Integrated `192cfbe8aa0` completes the reviewed LINE invalidation repair: preserve LINE
+handoffs when only INSTRUCTION changes, and reset masks for reused LINE identities.
+B designs cancellation and saved-local/context restoration separately from
+incoming target requirements. The [debugger transfer design](../../design/debugger-frame-transfers.md)
+records implemented limits. Remote/GDB source display, general caught exits,
+suspension and semantic owner retirement remain open. Ordinary return does not
+already clear scratch. The clean fourth engineering screen at 192 has logging/upstream 0.817460
+(two balanced pairs). Four-pair golden repeats are logging 0.592805, nbody
+1.000054 and pickle 1.017928; the earlier nbody loss does not repeat. The stable
+0/2/4 census differs only by 40,007 fewer entered handlers per outer loop, with
+nonlinear POWER adaptive retries in both roles. This is not native cost
+attribution. All three builds identify 192; stats smoke passes 146. B implements
+peer-admitted bounded PRE cancellation and saved-local context analysis; A
+proposes scoped cold POST phases. Final qualification and parity campaigns stay
+open; no cold-repair speedup is inferred. The [fourth report](fourth-integration-report.md)
+records the current screen and retained limitations.
 
 ## Parallel responsibilities
 

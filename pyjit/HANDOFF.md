@@ -2,87 +2,101 @@
 
 ## Current goal: frame/call model and logging parity
 
-User direction on 2026-11-09 supersedes the previous bounded-ablation plan:
-continue until unchanged JIT-off logging reaches upstream parity and the broad
-regressions are repaired. Follow Python's data model. The active
-[plan](issues/frame-call-model-20261109/plan.md), frame/call proposal, revised
-IR-position proposal and holistic review live in that packet. Loom goal/plan
-started at revisions 8/18 at the initial reviewed-implementation milestone.
+Continue until unchanged JIT-off logging reaches matched upstream parity and
+broad regressions are repaired. Follow Python's data model; source boundaries
+are metadata, not empty executable operations. The active
+[plan](issues/frame-call-model-20261109/plan.md) owns admission. Golden remains
+immutable and selected. The goal tool is active, without a token budget.
 
-Continue runtime `build/worktrees/execution-boundaries-20261108`, branch
-`pyjit/frame-call-model-20261109`, HEAD
-`87f13087ed9b97254b983bfb1adef61ae1fcde88`. This third engineering integration
-is unqualified. It adds debugger NULL/current-FOR owner recipes and redirect
-intent (`84a5f476eed`), then checked canonical numeric results/local-first stores
-(`87f13087ed9`) to the semantic completion/arena/observer model. Cache 64415.
-Release/debug each check 117 modules, pass 21 targeted tests and 320 focused
-tests (overlapping sets), five skips. The numeric matrix passes 108 edge cases
-and 400 displaced-owner callbacks per build. All 87 host generator tests pass.
-The full release diagnostic `third-integration-release-full.log` ran 54,504 tests
-in 3m37s, failing 13 modules with 126 failures and 99 errors. The
-[third report](issues/frame-call-model-20261109/third-integration-report.md)
-owns counts/limits. No final qualification; stats remains old. The last complete
-library compile-only check belongs to 3e5 (2,152 valid, no rejections).
+Runtime source is
+`/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/execution-boundaries-20261108`,
+branch `pyjit/frame-call-model-20261109`, clean engineering HEAD
+`192cfbe8aa0d0b593dcc40f26e1c8f70e84b02ae`. Cache magic is 64416. Canonical docs
+are in this coordinator checkout. Candidate builds are
+`build/execution-boundaries-{release,debug,stats}`; current evidence is
+`build/pyjit-link-wave1/frame-call-model-20261109/`, relative to python-boil-the-ocean.
 
-Canonical documentation is here. Evidence is
-`build/pyjit-link-wave1/frame-call-model-20261109/`.
-`third-engineering-{release,debug}-identity.log` identifies 87 and checks 117
-modules each. `third-engineering-upstream/` logging is 0.845543 over two pairs.
-`third-engineering-golden/` contains the three-workload screen;
-`third-engineering-repeat/` confirms nbody/golden 1.056203, pickle 1.010377 and
-logging 0.589521 over four pairs. Do not derive control-to-control ratios across
-separate campaigns. Twelve valid `third-nbody-stat/` captures have stable
-identities and 100% running; summary ratios are instructions 1.033246, cycles
-1.053810, branches 1.058609 and misses 0.999944. Numeric publication has not
-removed the measured instruction gap. Earlier `second-nbody-record/` profiles
-retain ELFs but have HEADER_EVENT_DESC warnings and zero header timestamps;
-use flat locations only. Final two six-round logging campaigns remain pending.
+The integrated model includes overlapping owning call frames, lazy kwargs,
+compact words with sparse source edges, semantic loop/send/throw completion,
+initialized arena frontiers, activation-local source errors, explicit debugger
+entry and stdlib consumers, cold context/owner transfer plans, completion payload
+identity and a narrow legacy adapter. The latest commit narrows LINE invalidation
+to real LINE changes, reused tool identity and restart. It resets stale LINE
+DISABLE masks without replaying LINE for an INSTRUCTION-only change.
 
-Runtime is now dirty for the next repair, not the measured 87 image. B's bounded
-actual-real-LINE identity path is source-peer approved and awaits root native
-checks; frameobject/test_code belong to B. A owns source-event/completion/debugger
-entry design and instrumentation; its wildcard/Bdb probes reproduced missing
-coverage and shifted first stops. The derived context schema is proposal only;
-actual census shows caught-context and saved-local ownership cannot be guessed
-from EH floors. Root owns the admitted format/layout/frozen-main fixture plan,
-mechanical processors, native checks, regeneration, commits and timing. Workers
-never build or commit. Agent spawning, including A's child attempt, fails with
-thread limit; two existing Sol6.1 medium workers remain usable. Do not claim a
-new external cold review from their reciprocal reviews.
+Read the [frame ABI](design/call-and-frame-lifetimes.md),
+[debugger transfer design](design/debugger-frame-transfers.md) and
+[repair log](issues/frame-call-model-20261109/qualification-repairs.md).
+The latter owns exact source/build/evidence identities and all retained failures.
 
-Full-diagnostic groups: debugger/protected owner refusals (test_ir, monitoring,
-sys_settrace, peepholer), immediate debugger entry/stepping (pdb, doctest,
-remote_pdb), missing wildcard coverage (patma), completion notification policy
-(value_slots and five legacy trace cases), and static layout/format/frozen data
-(dis, sys, exceptions, embed, one CFG fixture). Root's verbose details are
-`third-failure-details-release-focus.log`. Earlier wrong-selector focus and a
-120-second direct-unittest CPU-fixture timeout remain failed evidence, followed
-by proper regrtest inventories. Probes `ownership23-*-{debugger-context-inventory,
-observer-completion-events,source-boundary-stops}` are executed candidate/upstream
-receipts; scripts prepared later are not automatically executed.
+### Executed checks and limits
 
-The proposed free terminal cleanup remains rejected: normal thread return asserts
-scratch NULL and clears locals. Removing owner-retirement words needs an explicit
-semantic transition. No retained-owner bank is admitted. Six canonical diagrams
-rendered and were inspected. Preserve the three unrelated changes below.
+- `37a67b9d155`: fused source coverage, exact real-LINE identity and format/layout/
+  frozen-embedding repairs. `ownership24-*` checks 117 modules and passes 1,027
+  tests per profile; 2,152 valid library files compile without rejection.
+- `9f677103e00`: entry consumers, shared EH decoder, inherited/same-caught plans,
+  payload/legacy repair. `ownership26-small-*` passes 131 tests per profile;
+  fifty payload probe rows each have zero identity mismatches. The corrected
+  `test_profiling.test_tracing_profiler` gate passes 28 each. The first wide driver
+  mistakenly selected obsolete test_cprofile; keep that import failure as a
+  harness error. All 2,154 valid library files compile; eleven intentionally
+  invalid parser fixtures remain SyntaxError.
+- `192cfbe8aa0`: `ownership27-*` checks 117 modules and passes 21 related plus
+  51 existing tests per profile. The faithful unchanged class-init probe passes
+  both base and opcode variants on both builds; previously the opcode case failed.
+- The last wide check belongs to native26: 1,572 tests per profile, with four
+  actual failed modules (monitoring, pdb, peepholer, sys_settrace) plus the bad
+  selector above. Trace reports 65 errors, 21 diagnostic mismatches and the
+  now-repaired epoch duplicate. Pdb has six failures/two errors across three
+  repeated backend cases. Do not relabel these as current full qualification.
+- The last full release diagnostic belongs to measured `87f13087ed9`: 54,504
+  tests, 13 failed modules, 126 failures and 99 errors. No final release/debug
+  qualification or performance promotion. No new external cold reviewer could
+  be spawned: thread limit persists; the two workers provide reciprocal reviews.
 
-The revised design has one public compact instruction-offset domain. Removed
-frontend bookkeeping creates no synthetic instruction events or recovery slots.
-Sparse source-edge line metadata preserves source tracing; ordinary execution
-does not interpret it. Lazy kwargs use a canonical NULL home plus explicit
-pending metadata, compiler first-read materialization and frame-publication
-barriers. Rebinding/captured/suspending cases initially use eager binding.
+All three candidate build identities now match clean committed `192cfbe8aa0`.
+`fourth-engineering-{release,debug}-identity.log` each checks 117 modules; stats
+build/smoke passes 146 tests. Root serializes native builds/tests and quiet
+measurements. Workers do not run native jobs.
 
-The task goal tool is active, without a requested token budget. Do not end at
-implementation or a partial speedup: the measured parity and regression gates
-in the plan remain required. Preserve the three unrelated canonical changes
-listed in the previous packet's protection snapshot.
+### Performance and next execution
 
-The 2026-11-08 golden runtime is published. Read [STATUS](STATUS.md), the
-[manifest](issues/golden-20261108/README.md), [current IR](design/register-ir.md),
-[interpreter](design/interpreter.md) and [next plan](issues/golden-20261108/next-steps.md).
-The previous 435-line board is [archived](archive/20261108/HANDOFF.md).
-Do not recover active assignments from its historical instructions.
+Clean `192cfbe8aa0`, GCC 15.2, JIT off, CPU 15. The matched two-pair
+logging/upstream screen is 0.817460. The four-pair golden repeat has logging
+0.592805, nbody 1.000054 and pickle 1.017928. Nbody's earlier 87-image 5.6% loss
+does not repeat; pickle varies 0.997762–1.039830. Do not infer a cold-repair gain
+or combine ratios across controls/campaigns. Final parity needs two independent
+six-round logging/upstream campaigns after coherent qualification.
+
+`fourth-nbody-census-v2` has stable selected routes before/after all six 0/2/4
+captures. Warm twenty separate run(1) calls: the first census's single run(20)
+left setup specialization active. All material counts match except removed
+POP_ITER (40,005/outer) and POP_TOP (2/outer): 17,600,702 vs 17,560,695 entered
+handlers. POWER adaptive retry counts are nonlinear in both controls; retain that
+limit. These are stats counters, not native instructions or timings. Older 87 PMU
+and flat profile limits remain in the third report; no new hot optimization is
+admitted from them.
+
+The compile-only thirteen-case cancellation inventory succeeds under 192:
+`ownership28-cancellation-inventory/inventory.json`. B now implements the
+peer/root-admitted bounded PRE cancellation with derived positively empty saved-
+local contexts. Origin loss keeps an obligation active; only matching TOP
+restoration pops it; caught implicit roots remain preserved. A prepares a scoped
+cold POST phase proposal and independently reviews B's eventual source. Runtime
+freeze is released after the completed screen/census. Root alone builds/tests.
+
+Caught exit needs a separately proved target restoration link. Matched upstream
+clobbers a callback-owned exception in this case; do not reproduce that behavior.
+Protected FOR, source-only destinations, generator phases and comprehension
+restoration remain open. Remote/GDB source-cursor display and semantic owner
+retirement also remain. Normal thread clear asserts scratch NULL; a proposed
+free terminal cleanup was rejected. No retained-owner bank is admitted.
+
+After coherent repairs, qualify full release/debug, rebuild stats, run API lint,
+the unchanged 29-workload screen and final logging campaigns. Repair material
+regressions/findings before promotion. Seven canonical diagrams now include the
+new rendered/inspected debugger transaction; six prior diagrams are retained.
+Preserve the three unrelated canonical changes listed below and sealed evidence.
 
 ## Previous qualified candidate
 

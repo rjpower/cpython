@@ -2,9 +2,9 @@
 
 This describes the active 2026-11-09 frame/call source in
 `build/worktrees/execution-boundaries-20261108`, branch
-`pyjit/frame-call-model-20261109`. The first engineering increment is committed
-at `6ef45e391aa`; subsequent semantic completion, arena and observer repairs
-remain under integration. This is a source contract, not full qualification or
+`pyjit/frame-call-model-20261109`, through `192cfbe8aa0`. Semantic completion,
+initialized frame storage and bounded observer repairs are integrated; broader
+debugger qualification remains open. This is a source contract, not full qualification or
 parity evidence. [Status](../STATUS.md) and the
 [active packet](../issues/frame-call-model-20261109/plan.md) track admission.
 The immutable golden `0765e9be47f`, qualified at functional `0267d428808`, remains
@@ -131,6 +131,10 @@ receiver window but completes into its explicit result recipient. CLEANUP_THROW
 has its own named real target and shares SEND completion ownership. YIELD_VALUE
 names its incoming resume recipient separately from its outgoing value.
 Semantic edge definitions override the frontend's stack-shape union.
+
+Source-edge assembly follows the same controlling operation as word encoding.
+A fused comparison uses its paired conditional jump's target and fallthrough,
+while source records retain the emitted comparison's actual executable offset.
 
 Long FOR_ITER/SEND branches use actual IR_JUMP adapter words. The observer
 recognizes only their exact assembler shape for LINE/branch grouping; helper

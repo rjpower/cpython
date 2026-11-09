@@ -131,3 +131,12 @@ coverage for compare/contains/is fused conditions with multiple empty statements
 on both edges, plus callback error in a protected source-only branch. Assert the
 actual fused handler exists so fixtures cannot silently exercise only unfused
 control. No executable boundary or output expectation weakening.
+
+Actual fused source-map patch is source frozen for engineering24: select
+control_index from the actual fused flag, assert same-block/zero-word control,
+and derive target/fallthrough from that operation while retaining emitted
+from-PC. Two new ordinary source tests cover compare/contains/is fused handlers,
+both source-only statement edges, and protected callback exception routing.
+Original patma expectations remain unchanged. Host AST/diff checks pass; B
+actual source peer and coordinator native24 are pending. No event suppression,
+executable boundary, generator or observer-state change.

@@ -97,12 +97,20 @@ and traceback state; it is not the only copy of handler selection.
 
 A separate cold frame-object record carries expected real LINE landing,
 previous source line and monitoring epoch. Public f_lineno remains display/cache
-state. Monitoring reconfiguration invalidates the old handoff; consumption is
+state. Actual LINE mask, tool-identity or restart changes invalidate the old
+handoff; unrelated INSTRUCTION changes preserve it. Consumption is
 one-shot and occurs before callbacks. A stale configuration gets a fresh
 landing event without retroactively replaying completed source events. Exact
 assembler relaxation adapters normalize LINE landings while helper words retain
 real INSTRUCTION callbacks. Exception selection, debugger redirection and frame
 clear invalidate the record before callback-capable retirement.
+
+Tool reuse is checked against the code's last successfully instrumented global
+version, even when SetLocalEvents has refreshed its local version field. Reused
+LINE bits pass through both removal and addition so old DISABLE decisions do
+not transfer to a new identity. Callback replacement alone retains the existing
+no-automatic-restart policy: later selected events use the new callback; an
+explicit restart re-enables disabled events.
 
 Debugger intent has its own cold frame-object generation. A successful setter
 commit advances it even when the selected physical word is unchanged. Source,
@@ -112,6 +120,13 @@ commits a redirect and then raises, attribution uses the committed real PC;
 otherwise the original source exception recipe remains valid. Frame-object
 creation and public line-cache reads do not advance the generation. Ordinary
 dispatch does not check it.
+
+An identity request is an actual phase check, not source-line equality. It
+requires the first selected real target to be the current LINE wrapper, the
+observed frame itself and no source/error, suspended or pending-child phase.
+It preserves every owner and exception link, including protected regions,
+while committing redirect generation. Other protected transfers still need
+their own context and owner proof.
 
 ## Boundaries and open work
 

@@ -1,8 +1,8 @@
 # Register interpreter: current contract
 
 This page describes the active frame/call source on branch
-`pyjit/frame-call-model-20261109`. Engineering commit `6ef45e391aa` and later
-semantic-completion, initialized-arena and observer repairs are not a fully
+`pyjit/frame-call-model-20261109`, through `192cfbe8aa0`. Its semantic-completion,
+initialized-arena and bounded observer repairs are not a fully
 qualified replacement for golden `0765e9be47f`. See [status](../STATUS.md), the
 [active packet](../issues/frame-call-model-20261109/plan.md), and the immutable
 [baseline report](../bench/results/interpreter-parity-20261108.md).
@@ -12,6 +12,8 @@ and [observer contract](handler-and-observer-contract.md) describe the same
 runtime. Its owning homes and release protocol implement RC; Python does not
 require immediate finalization. [Lifetime policy](lifetimes-and-language-semantics.md)
 separates language behavior from that implementation choice.
+The [debugger transfer model](debugger-frame-transfers.md) defines explicit
+entry, cold context/owner proofs and the remaining restoration work.
 
 ## Entry and dispatch
 

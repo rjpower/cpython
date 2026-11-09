@@ -49,6 +49,8 @@ struct _PyInterpreterFrame {
      * into: the bases of jump targets and feedback indices. */
     _PyInstr *ir_words;
     char *ir_feedback;
+    /* Real executable continuation while this frame awaits a child result. */
+    _PyInstr *return_pc;
 #ifdef Py_GIL_DISABLED
     /* Index of thread-local bytecode containing instr_ptr. */
     int32_t tlbc_index;
@@ -58,9 +60,12 @@ struct _PyInterpreterFrame {
      * generator the slot of the value it yielded, where the value sent in
      * goes. */
     uint16_t return_slot;
+    /* Virtual empty **kwargs local, or IR_NO_DST when no binding is pending. */
+    uint16_t pending_kwargs;
     char owner;
     uint8_t visited:1;
     uint8_t external:1; /* Set when the frame was pushed by something other than the VM */
+    uint8_t pending_redirect:1; /* Commit a debugger continuation after child retirement */
 #ifdef Py_DEBUG
     uint8_t lltrace:5;
 #endif

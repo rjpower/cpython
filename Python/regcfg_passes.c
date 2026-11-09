@@ -283,10 +283,11 @@ _PyRegPass_CopyProp(_PyRegCfg *cfg)
                     }
                     continue;
                 }
-                if (uses == 1) {
+                if (uses == 1 && load->except == op->except) {
                     for (int k = 0; k < op->nread; k++) {
                         if (in[k] == v && borrow_field(cfg, op, k) >= 0) {
                             in[k] = load->oparg;
+                            op->flags |= load->flags & _PyReg_SOURCE_ORIGIN;
                             load->opcode = _PyReg_DEAD;
                             load->flags |= _PyReg_LOAD_FOLDED;
                             load->reader = i;
@@ -535,13 +536,22 @@ remove_with_line(_PyRegCfg *cfg, int start, int end, _PyRegOp *prod,
                  _PyRegOp *pop)
 {
     _PyRegOp *first = prod != NULL ? prod : pop;
+    if (prod != NULL && (prod->loc.lineno != pop->loc.lineno ||
+                         prod->except != pop->except))
+    {
+        return;
+    }
     _PyRegOp *before = live_neighbour(cfg, start, end,
                                       (int)(first - cfg->ops), -1);
     _PyRegOp *after = live_neighbour(cfg, start, end,
                                      (int)(pop - cfg->ops), 1);
     int line = first->loc.lineno;
-    int keeps_line = (before != NULL && before->loc.lineno == line)
-                     || (after != NULL && after->loc.lineno == line);
+    int keeps_line = (before != NULL && before->loc.lineno == line &&
+                      before->except == first->except &&
+                      (before->flags & _PyReg_SOURCE_ORIGIN)) ||
+                     (after != NULL && after->loc.lineno == line &&
+                      after->except == first->except &&
+                      (after->flags & _PyReg_SOURCE_ORIGIN));
     if (prod != NULL) {
         prod->opcode = _PyReg_DEAD;
     }
@@ -552,6 +562,8 @@ remove_with_line(_PyRegCfg *cfg, int start, int end, _PyRegOp *prod,
         pop->opcode = NOP;
         pop->oparg = 0;
         pop->loc = first->loc;
+        pop->flags = (pop->flags & ~_PyReg_SOURCE_ORIGIN) |
+                     (first->flags & _PyReg_SOURCE_ORIGIN);
         pop->nread = pop->npop = 0;
     }
 }
@@ -616,14 +628,8 @@ _PyRegPass_PopTop(_PyRegCfg *cfg)
 }
 
 
-/* Discarded call results (pass e).
- *
- * A call (a format with _PyIR_DISCARDS) whose result the next live op, a
- * POP_TOP on the same line, releases: the call's dst field becomes
- * IR_NO_DST and its handler releases the result, so the POP_TOP goes.  The
- * result's register stays as the output but is never written (compaction
- * takes no slot for it), and nothing reads it.  The POP_TOP stays where it
- * ends its line (see discard_region). */
+/* An unread result is a semantic sink, not a register followed by a release
+ * instruction. Source lines are retained independently of executable words. */
 
 static int
 discard_region(_PyRegCfg *cfg, int start, int end)
@@ -634,24 +640,32 @@ discard_region(_PyRegCfg *cfg, int start, int end)
             continue;
         }
         int v = _PyReg_IN(cfg, pop)[0];
-        _PyRegOp *prod = live_neighbour(cfg, start, end, i, -1);
-        if (prod == NULL || prod->dst >= 0 || prod->nout != 1
-            || _PyReg_OUT(cfg, prod)[0] != v || !is_fresh(cfg, v)
-            || prod->loc.lineno != pop->loc.lineno
-            || !(_PyRegCfg_FormatOf(prod->opcode)->flags & _PyIR_DISCARDS))
+        if (!is_fresh(cfg, v)) {
+            continue;
+        }
+        _PyRegOp *prod = NULL;
+        int other_read = 0;
+        for (int j = start; j < end; j++) {
+            _PyRegOp *op = &cfg->ops[j];
+            if (op->opcode == _PyReg_DEAD || op == pop) {
+                continue;
+            }
+            for (int k = 0; k < op->nread + op->nimplicit; k++) {
+                other_read |= _PyReg_IN(cfg, op)[k] == v;
+            }
+            if (j < i && op->nout == 1 && _PyReg_OUT(cfg, op)[0] == v) {
+                prod = op;
+            }
+        }
+        if (other_read || prod == NULL || prod->dst >= 0 ||
+            !(_PyRegCfg_FormatOf(prod->opcode)->flags & _PyIR_DISCARDS))
         {
             continue;
         }
-        // A debugger that starts tracing inside the call (pdb.set_trace())
-        // sees its first line event at the word after the call: the POP_TOP
-        // keeps it on the call's line.  Only where another word of the
-        // line follows is the POP_TOP not that word.
-        _PyRegOp *after = live_neighbour(cfg, start, end, i, 1);
-        if (after == NULL || after->loc.lineno != pop->loc.lineno) {
-            continue;
-        }
         prod->flags |= _PyReg_DISCARD;
-        pop->opcode = _PyReg_DEAD;
+        pop->opcode = NOP;
+        pop->oparg = 0;
+        pop->nread = pop->npop = pop->nout = 0;
     }
     return SUCCESS;
 }
@@ -1203,8 +1217,12 @@ elide_null_region(_PyRegCfg *cfg, int start, int end)
         _PyRegOp *before = live_neighbour(cfg, start, end, i, -1);
         _PyRegOp *after = live_neighbour(cfg, start, end, i, 1);
         int line = op->loc.lineno;
-        int keeps_line = (before != NULL && before->loc.lineno == line)
-                         || (after != NULL && after->loc.lineno == line);
+        int keeps_line = (before != NULL && before->loc.lineno == line &&
+                          before->except == op->except &&
+                          (before->flags & _PyReg_SOURCE_ORIGIN)) ||
+                         (after != NULL && after->loc.lineno == line &&
+                          after->except == op->except &&
+                          (after->flags & _PyReg_SOURCE_ORIGIN));
         op->flags |= _PyReg_ELIDED | (keeps_line ? 0 : _PyReg_ELIDED_NOP);
     }
     return SUCCESS;

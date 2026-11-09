@@ -419,15 +419,6 @@ fb_put_row(_PyFbPoly *poly, int i, fb_row row, int opcode)
     if (opcode == LOAD_ATTR_SHAPE_LOCAL_TEMP) {
         opcode = LOAD_ATTR_SHAPE;
     }
-    if (opcode == POP_JUMP_IF_FALSE_BOOL_SKIP_TAKEN ||
-        opcode == POP_JUMP_IF_FALSE_BOOL_SKIP_FALLTHROUGH ||
-        opcode == POP_JUMP_IF_FALSE_BOOL_SKIP_BOTH)
-    {
-        opcode = POP_JUMP_IF_FALSE_BOOL;
-    }
-    if (opcode == CALL_PY_EXACT_ARGS_DISCARD || opcode == CALL_PY_GENERAL_DISCARD) {
-        opcode = _PyIR_FormatOf(opcode)->shadow;
-    }
     poly->handler[i] = (uint16_t)opcode;
 }
 
@@ -551,15 +542,6 @@ fb_record(_PyInstr *instr, _PyFbHeader *h, int opcode)
     if (opcode == LOAD_ATTR_SHAPE_LOCAL_TEMP) {
         opcode = LOAD_ATTR_SHAPE;
     }
-    if (opcode == CALL_PY_EXACT_ARGS_DISCARD || opcode == CALL_PY_GENERAL_DISCARD) {
-        opcode = _PyIR_FormatOf(opcode)->shadow;
-    }
-    if (opcode == POP_JUMP_IF_FALSE_BOOL_SKIP_TAKEN ||
-        opcode == POP_JUMP_IF_FALSE_BOOL_SKIP_FALLTHROUGH ||
-        opcode == POP_JUMP_IF_FALSE_BOOL_SKIP_BOTH)
-    {
-        opcode = POP_JUMP_IF_FALSE_BOOL;
-    }
     if (h->poly == 0) {
         h->state = FB_MONO;
         return;
@@ -611,91 +593,6 @@ instr_is_fused(_PyInstr *instr)
     return (_PyIR_FormatOf(handler)->flags & _PyIR_FUSED) != 0;
 }
 
-#if !defined(Py_DEBUG) && !defined(Py_GIL_DISABLED)
-/* Only the selected edge is elided; other predecessors still reach the
- * logical anchor. The next handler must publish its PC before observable work. */
-static int
-bool_boundary_edge(_PyInterpreterFrame *frame, int target)
-{
-    PyCodeObject *code = _PyFrame_GetCode(frame);
-    _PyCodeExec *exec = _PyFrame_Exec(frame);
-    if (target < 0 || target + 1 >= exec->nwords ||
-        _PyCode_InstrHandler(code, target) != NOP ||
-        IR_HANDLER(exec->words[target]) != NOP)
-    {
-        return 0;
-    }
-    int canonical = _PyCode_InstrHandler(code, target + 1);
-    int live = IR_HANDLER(exec->words[target + 1]);
-    return (_PyIR_HandlerFlags[canonical] & _PyIR_H_SAVES_IP) &&
-           (_PyIR_HandlerFlags[live] & _PyIR_H_SAVES_IP);
-}
-
-#endif
-
-static int
-bool_boundary_handler(_PyInstr *instr)
-{
-#if defined(Py_DEBUG) || defined(Py_GIL_DISABLED)
-    /* lltrace belongs to a frame; executing words are shared by frames. */
-    (void)instr;
-    return POP_JUMP_IF_FALSE_BOOL;
-#else
-    _PyInterpreterFrame *frame = current_frame();
-    int i = _PyFrame_InstrOffset(frame, instr);
-    int target = _PyCode_InstrTarget(_PyFrame_GetCode(frame), i);
-    int mask = bool_boundary_edge(frame, target) |
-               (bool_boundary_edge(frame, i + 1) << 1);
-    switch (mask) {
-        case 1: return POP_JUMP_IF_FALSE_BOOL_SKIP_TAKEN;
-        case 2: return POP_JUMP_IF_FALSE_BOOL_SKIP_FALLTHROUGH;
-        case 3: return POP_JUMP_IF_FALSE_BOOL_SKIP_BOTH;
-        default: return POP_JUMP_IF_FALSE_BOOL;
-    }
-#endif
-}
-
-static int
-python_discard_handler(_PyInstr *instr, int opcode)
-{
-#ifdef Py_GIL_DISABLED
-    return opcode;
-#else
-    _PyInterpreterFrame *frame = current_frame();
-    PyCodeObject *code = _PyFrame_GetCode(frame);
-    int suspended = CO_GENERATOR | CO_COROUTINE | CO_ASYNC_GENERATOR;
-    int i = _PyFrame_InstrOffset(frame, instr);
-    _PyIRWord word = FT_ATOMIC_LOAD_UINT64_RELAXED(*instr);
-    uint32_t destination = IR_A(word);
-    if (frame->owner != FRAME_OWNED_BY_THREAD || code->co_flags & suspended ||
-        i + 1 >= Py_SIZE(code) || destination < (uint32_t)code->co_nlocalsplus ||
-        destination == IR_NO_DST || _PyCode_InstrHandler(code, i + 1) != POP_TOP)
-    {
-        return opcode;
-    }
-    _PyIRWord pop = ((const _PyIRWord *)code->co_words)[i + 1];
-    int line = PyCode_Addr2Line(code, i);
-    if (IR_A(pop) != destination || line < 0 ||
-        line != PyCode_Addr2Line(code, i + 1))
-    {
-        return opcode;
-    }
-    PyValue callable = _PyFrame_Slots(frame)[IR_B(word)];
-    if (!PyValue_IsObject(callable) ||
-        !PyFunction_Check(PyValue_AsKnownObjectBorrow(callable)))
-    {
-        return opcode;
-    }
-    PyCodeObject *callee = (PyCodeObject *)
-        ((PyFunctionObject *)PyValue_AsKnownObjectBorrow(callable))->func_code;
-    if (callee->co_flags & suspended) {
-        return opcode;
-    }
-    return opcode == CALL_PY_EXACT_ARGS ? CALL_PY_EXACT_ARGS_DISCARD
-                                       : CALL_PY_GENERAL_DISCARD;
-#endif
-}
-
 static inline void
 specialize(_PyInstr *instr, uint8_t specialized_opcode)
 {
@@ -706,15 +603,9 @@ specialize(_PyInstr *instr, uint8_t specialized_opcode)
         _PyIRWord word = FT_ATOMIC_LOAD_UINT64_RELAXED(*instr);
         int nlocalsplus = _PyFrame_GetCode(current_frame())->co_nlocalsplus;
         if (IR_B(word) < (uint32_t)nlocalsplus &&
-            IR_A(word) >= (uint32_t)nlocalsplus) {
+            IR_A(word) >= (uint32_t)nlocalsplus && IR_A(word) != IR_NO_DST) {
             handler = LOAD_ATTR_SHAPE_LOCAL_TEMP;
         }
-    }
-    if (specialized_opcode == POP_JUMP_IF_FALSE_BOOL) {
-        handler = bool_boundary_handler(instr);
-    }
-    if (handler == CALL_PY_EXACT_ARGS || handler == CALL_PY_GENERAL) {
-        handler = python_discard_handler(instr, handler);
     }
     if (!set_opcode(instr, handler)) {
         STAT_INC(_PyOpcode_Deopt[specialized_opcode], failure);
@@ -2289,6 +2180,34 @@ specialize_py_call(PyFunctionObject *func, _PyInstr *instr, int nargs,
         return -1;
     }
     fb->func_version = version;
+    /* The hit path reads current defaults through the guarded function;
+     * the cache stores layout facts, never borrowed object pointers. */
+    fb->binding_flags = 0;
+    int supplied = nargs + bound_method;
+    PyObject *defaults = func->func_defaults;
+    Py_ssize_t ndefaults = defaults == NULL ? 0 : PyTuple_GET_SIZE(defaults);
+    Py_ssize_t first_default = code->co_argcount - ndefaults;
+    if (!bound_method && (code->co_flags & CO_OPTIMIZED) &&
+        !(code->co_flags & (CO_GENERATOR | CO_COROUTINE | CO_ASYNC_GENERATOR)) &&
+        code->co_kwonlyargcount == 0 && supplied <= code->co_argcount &&
+        supplied >= first_default && ndefaults <= UINT16_MAX &&
+        supplied - first_default <= UINT16_MAX)
+    {
+        fb->bound_count = (uint16_t)supplied;
+        fb->default_start = (uint16_t)(supplied - first_default);
+        int extra = code->co_argcount;
+        fb->binding_flags = _Py_CALL_BIND_DIRECT;
+        if (code->co_flags & CO_VARARGS) {
+            fb->binding_flags |= _Py_CALL_BIND_VARARGS;
+            extra++;
+        }
+        fb->kwargs_slot = code->co_flags & CO_VARKEYWORDS ? extra : IR_NO_DST;
+        if ((code->co_flags & (CO_VARKEYWORDS | CO_VIRTUAL_KWARGS)) ==
+            (CO_VARKEYWORDS | CO_VIRTUAL_KWARGS))
+        {
+            fb->binding_flags |= _Py_CALL_BIND_VIRTUAL_KWARGS;
+        }
+    }
     uint8_t opcode;
     if (argcount == nargs + bound_method) {
         opcode =

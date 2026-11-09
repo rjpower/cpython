@@ -3933,6 +3933,13 @@ gc_verify_with_pymem_array(PyObject *self, PyObject *factory)
 }
 
 static PyObject *
+frame_has_virtual_kwargs(PyObject *self, PyObject *Py_UNUSED(args))
+{
+    _PyInterpreterFrame *frame = _PyThreadState_GET()->current_frame;
+    return PyBool_FromLong(frame != NULL && frame->pending_kwargs != IR_NO_DST);
+}
+
+static PyObject *
 common_constant_storage(PyObject *module, PyObject *Py_UNUSED(args))
 {
     PyInterpreterState *interp = _PyInterpreterState_GET();
@@ -4270,6 +4277,7 @@ static PyMethodDef module_functions[] = {
     {"test_list_setitem_take_value", test_list_setitem_take_value, METH_NOARGS},
     {"dict_vm_storage", dict_vm_storage, METH_O},
     {"common_constant_storage", common_constant_storage, METH_NOARGS},
+    {"frame_has_virtual_kwargs", frame_has_virtual_kwargs, METH_NOARGS},
     {"pyvalue_contract", pyvalue_contract, METH_O, NULL},
     {"pyvalue_internal_contract", pyvalue_internal_contract, METH_NOARGS, NULL},
     {"pyvalue_home_violations", pyvalue_home_violations, METH_NOARGS, NULL},

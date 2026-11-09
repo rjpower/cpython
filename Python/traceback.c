@@ -319,7 +319,8 @@ _PyTraceBack_FromFrame(PyObject *tb_next, PyFrameObject *frame)
     assert(tb_next == NULL || PyTraceBack_Check(tb_next));
     assert(frame != NULL);
     int addr = _PyInterpreterFrame_LASTI(frame->f_frame);
-    return tb_create_raw((PyTracebackObject *)tb_next, frame, addr, -1);
+    int source_line = frame->f_source_event_error >= 0 ? frame->f_lineno : -1;
+    return tb_create_raw((PyTracebackObject *)tb_next, frame, addr, source_line);
 }
 
 

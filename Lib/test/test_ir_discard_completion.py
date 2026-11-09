@@ -13,7 +13,7 @@ from test import support, test_tools
 from test.support import import_helper
 
 _testinternalcapi = import_helper.import_module("_testinternalcapi")
-VARIANTS = ("CALL_PY_EXACT_ARGS_DISCARD", "CALL_PY_GENERAL_DISCARD")
+VARIANTS = ("CALL_PY_EXACT_ARGS", "CALL_PY_GENERAL")
 ROUNDS = _testinternalcapi.SPECIALIZATION_THRESHOLD + 10
 
 
@@ -59,9 +59,7 @@ class DiscardCompletionTests(unittest.TestCase):
                 events.clear()
                 self.assertEqual(caller(make), 7)
                 self.assertEqual(events, ["local", ("result", caller.__code__, call)])
-                # CALL is the direct-disposal position. The dormant POP remains
-                # available to tooling but is not the last attempted operation.
-                self.assertIn("POP_TOP", [i.opname for i in dis.get_instructions(caller)])
+                self.assertNotIn("POP_TOP", [i.opname for i in dis.get_instructions(caller)])
 
     def test_warmed_inline_results_on_both_routes(self):
         for general, variant in enumerate(VARIANTS):
@@ -110,16 +108,19 @@ class DiscardCompletionTests(unittest.TestCase):
                 for _ in range(ROUNDS):
                     caller(make)
                 self.assertTrue(set(handlers(caller)) & set(VARIANTS))
-                pop = next(i.offset for i in dis.get_instructions(caller)
-                           if i.opname == "POP_TOP")
+                call = next(i.offset for i in dis.get_instructions(caller)
+                            if i.opname == "CALL")
+                successor = next(i.offset for i in dis.get_instructions(caller)
+                                 if i.offset > call)
                 armed = True
                 try:
                     self.assertEqual(caller(make), 7)
                 finally:
                     sys.settrace(None)
-                self.assertIn(("opcode", pop), seen)
-                self.assertIn(("result", pop), seen)
-                self.assertLess(seen.index(("opcode", pop)), seen.index(("result", pop)))
+                self.assertIn(("result", call), seen)
+                self.assertIn(("opcode", successor), seen)
+                self.assertLess(seen.index(("result", call)),
+                                seen.index(("opcode", successor)))
 
     def test_result_finalizer_enables_observation_after_discard_boundary(self):
         for mode in ("trace", "monitor"):
@@ -155,8 +156,8 @@ class DiscardCompletionTests(unittest.TestCase):
                 self.assertIn(VARIANTS[0], handlers(caller))
                 call = next(i.offset for i in dis.get_instructions(caller)
                             if i.opname == "CALL")
-                pop = next(i.offset for i in dis.get_instructions(caller)
-                           if i.opname == "POP_TOP")
+                successor = next(i.offset for i in dis.get_instructions(caller)
+                                 if i.offset > call)
                 if mode == "monitor":
                     mon.use_tool_id(tool, "discard finalizer")
                     mon.register_callback(tool, mon.events.INSTRUCTION,
@@ -172,8 +173,8 @@ class DiscardCompletionTests(unittest.TestCase):
                         mon.free_tool_id(tool)
                 self.assertEqual(positions, [call])
                 self.assertTrue(seen)
-                self.assertNotIn(pop, seen)
-                self.assertTrue(all(offset > pop for offset in seen))
+                self.assertNotIn(call, seen)
+                self.assertTrue(all(offset >= successor for offset in seen))
 
     def test_local_monitoring_from_callee_and_callback_error_cleanup(self):
         caller = make_caller()
@@ -192,10 +193,12 @@ class DiscardCompletionTests(unittest.TestCase):
         for _ in range(ROUNDS):
             caller(make)
         self.assertIn(VARIANTS[1], handlers(caller))
-        pop = next(i.offset for i in dis.get_instructions(caller)
-                   if i.opname == "POP_TOP")
+        call = next(i.offset for i in dis.get_instructions(caller)
+                    if i.opname == "CALL")
+        successor = next(i.offset for i in dis.get_instructions(caller)
+                         if i.offset > call)
         def observer(code, offset):
-            if code is caller.__code__ and offset == pop:
+            if code is caller.__code__ and offset == successor:
                 raise LookupError("discard observer")
         mon.use_tool_id(tool, "discard completion")
         try:
@@ -209,7 +212,7 @@ class DiscardCompletionTests(unittest.TestCase):
         gc.collect()
         self.assertTrue(all(ref() is None for ref in references))
 
-    def test_cross_frame_lineno_change_cancels_pending_discard(self):
+    def test_cross_frame_lineno_change_preserves_semantic_discard(self):
         caller = make_caller()
         armed = False
         jumped = False
@@ -239,9 +242,9 @@ class DiscardCompletionTests(unittest.TestCase):
         finally:
             sys.settrace(None)
         self.assertTrue(jumped)
-        # Existing return continuation uses debugger-selected PC + 1. Its
-        # RETURN_VALUE receives the original call result after materialization.
-        self.assertIsInstance(result, Result)
+        # The child result is ignored by the semantic CALL. Redirecting its
+        # continuation does not reconstruct a removed evaluation-stack value.
+        self.assertEqual(result, 7)
 
     def test_result_reachability_and_guard_failure(self):
         caller = make_caller()
@@ -265,20 +268,36 @@ class DiscardCompletionTests(unittest.TestCase):
         gc.collect()
         self.assertTrue(all(ref() is None for ref in references))
 
-    def test_generator_caller_and_callee_are_excluded(self):
+    def test_discard_recipient_with_generator_caller_and_callee(self):
         def make():
             return object()
         def caller():
             make()
-            yield 1
+            sent = yield 1
+            return sent
         ordinary = make_caller()
+        events = []
         def generator():
+            events.append("entered")
             yield 1
         for _ in range(ROUNDS):
-            self.assertEqual(list(caller()), [1])
+            active = caller()
+            self.assertEqual(next(active), 1)
+            with self.assertRaises(StopIteration) as caught:
+                active.send(23)
+            self.assertEqual(caught.exception.value, 23)
             self.assertEqual(ordinary(generator), 7)
-        self.assertFalse(set(handlers(caller)) & set(VARIANTS))
-        self.assertFalse(set(handlers(ordinary)) & set(VARIANTS))
+        self.assertEqual(events, [])
+        # This contract concerns unused CALL results. Generator entry and
+        # iteration completion have separate ownership lowering; a whole-
+        # program POP inventory would conflate those unfinished contracts.
+        for function in (caller, ordinary):
+            with self.subTest(function=function):
+                calls = [word for word in
+                         _testinternalcapi.get_ir(function.__code__)
+                         if word[0] == "CALL"]
+                self.assertEqual(len(calls), 1)
+                self.assertEqual(calls[0][1], 4095)
 
 
 @unittest.skipIf(test_tools.basepath is None, "needs the source tree")
@@ -292,26 +311,14 @@ class DiscardCompletionGeneratorTests(unittest.TestCase):
             str(Path(test_tools.basepath) / "Python" / "bytecodes.c")])
         output = io.StringIO()
         gen.generate_ir([], analysis, output, False)
-        for variant in VARIANTS:
-            body = output.getvalue().split(f"TARGET({variant}) {{", 1)[1]
-            body = body.split("TARGET(", 1)[0]
-            if variant == VARIANTS[0]:
-                self.assertIn("IR_A(ir_word) | IR_POSTCALL_DISCARD", body)
-            else:
-                self.assertIn("CALL_POSTCALL_DISCARD", body)
-                self.assertIn("call_transaction_run_guarded_python_vector", body)
-
-    def test_invalid_discard_descriptor(self):
-        test_tools.skip_if_missing("cases_generator")
-        with test_tools.imports_under_tool("cases_generator"):
-            import analyzer
-            import ir_generator as gen
-        analysis = analyzer.analyze_files([
-            str(Path(test_tools.basepath) / "Python" / "bytecodes.c")])
-        invalid = gen.ExecutionVariant("POP_JUMP_IF_FALSE_BOOL", postcall_discard=True)
-        with mock.patch.dict(gen.EXECUTION_VARIANTS, {VARIANTS[0]: invalid}):
-            with self.assertRaisesRegex(ValueError, "invalid discard completion"):
-                gen.generate_ir([], analysis, io.StringIO(), False)
+        generated = output.getvalue()
+        for name in VARIANTS:
+            self.assertIn(f"TARGET({name}) {{", generated)
+        self.assertNotIn("IR_POSTCALL_DISCARD", generated)
+        self.assertNotIn("CALL_POSTCALL_DISCARD", generated)
+        self.assertNotIn("TARGET(CALL_PY_EXACT_ARGS_DISCARD)", generated)
+        self.assertNotIn("TARGET(CALL_PY_GENERAL_DISCARD)", generated)
+        self.assertIn("frame->return_slot = (uint16_t)IR_A(ir_word)", generated)
 
 
 if __name__ == "__main__":

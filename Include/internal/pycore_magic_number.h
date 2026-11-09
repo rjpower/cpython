@@ -339,8 +339,9 @@ Known values:
    64408: B6: fused compare-and-jump handlers
    64409: B5: discarded call results and no PUSH_NULL
    64410: B5b: unpack to locals and append sources
-   64411: execution-only operand-mode and boundary handler table entries */
-#define PYC_MAGIC_NUMBER 64411
+   64411: execution-only operand-mode and boundary handler table entries
+   64412: compact register instructions, source-edge tables and virtual kwargs */
+#define PYC_MAGIC_NUMBER 64412
 /* This is equivalent to converting PYC_MAGIC_NUMBER to 2 bytes
    (little-endian) and then appending b'\r\n'. */
 #define PYC_MAGIC_NUMBER_TOKEN \

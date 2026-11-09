@@ -771,7 +771,6 @@ typedef enum {
 #define CALL_MONITORED 4
 #define CALL_INSTRUMENTED 8
 #define CALL_PERIODIC 16
-#define CALL_POSTCALL_DISCARD 32
 
 /* The state of one call, which lives only in the frame of the out-of-line
  * call_transaction_run_*(), across the helpers it calls (R-c).  Numeric
@@ -791,7 +790,6 @@ typedef struct {
     int monitored;
     int periodic;
     int prepared;
-    int postcall_discard;
 } _PyCallTransaction;
 
 /* Raise the SystemError of a failed revalidation. An operation error can be
@@ -1080,15 +1078,11 @@ static_assert(offsetof(_PyEntryFrame, stack) ==
  * executing copy, for IR_IS_LOCAL(). */
 static const struct {
     _PyCodeExec exec;
-    _PyIRWord words[3];
+    _PyIRWord words[1];
 } entry_trampoline = {
-    .exec = { .nwords = 3, .nlocalsplus = 1 },
+    .exec = { .nwords = 1, .nlocalsplus = 1 },
     .words = {
-        /* Put a NOP at the start, so that the IP points into
-        * the code, rather than before it */
-        IR_WORD(NOP, 0, 0, 0, 0),
         IR_WORD(INTERPRETER_EXIT, 1, 0, 0, 0),  /* reached on return and yield */
-        IR_WORD(INTERPRETER_EXIT, 1, 0, 0, 0),
     },
 };
 #define _Py_INTERPRETER_TRAMPOLINE_INSTRUCTIONS (entry_trampoline.words)
@@ -1815,8 +1809,8 @@ done:
  * _PyEvalFramePushAndInit and its kin, which they use. */
 static _PyCallResult call_transaction_run_vector(
     PyThreadState *, _PyInterpreterFrame *, int, int, int, int);
-static _PyCallResult call_transaction_run_guarded_python_vector(
-    PyThreadState *, _PyInterpreterFrame *, int, int, int, int);
+static inline _PyCallResult call_bind_known_python(
+    PyThreadState *, _PyInterpreterFrame *, int, int, int, const _PyFbCall *);
 static _PyCallResult call_transaction_run_keywords(
     PyThreadState *, _PyInterpreterFrame *, int, int, int, int);
 static _PyCallResult call_transaction_run_ex(
@@ -1841,10 +1835,11 @@ value_reader_complete(PyThreadState *tstate, _PyInterpreterFrame *frame,
         _PyValueTemps_Close(temps);
         return PyValue_NULL;
     }
-    int local = result_slot < _PyFrame_GetCode(frame)->co_nlocalsplus;
-    if (result_slot < 0 ||
+    int discard = result_slot == IR_NO_DST;
+    int local = discard || result_slot < _PyFrame_GetCode(frame)->co_nlocalsplus;
+    if (!discard && (result_slot < 0 ||
         result_slot >= _PyFrame_NumSlots(frame) ||
-        (!local && !PyValue_IsNull(_PyFrame_Slots(frame)[result_slot]))) {
+        (!local && !PyValue_IsNull(_PyFrame_Slots(frame)[result_slot])))) {
         PyErr_SetString(PyExc_SystemError, "value reader changed its result home");
         PyValue_XCLOSE(result);
         value_operation_close3(first, second, PyValue_NULL);
@@ -1897,7 +1892,18 @@ value_attribute_complete(PyThreadState *tstate, _PyInterpreterFrame *frame,
         slot + 1 >= _PyFrame_NumSlots(frame) ||
         !PyValue_IsNull(_PyFrame_Slots(frame)[slot]) ||
         !PyValue_IsNull(_PyFrame_Slots(frame)[slot + 1])) {
-        PyErr_SetString(PyExc_SystemError, "method lookup changed its output homes");
+        int nlocals = _PyFrame_GetCode(frame)->co_nlocalsplus;
+        int nslots = _PyFrame_NumSlots(frame);
+        int occupied = slot >= nlocals && slot + 1 < nslots
+            ? ((!PyValue_IsNull(_PyFrame_Slots(frame)[slot])) |
+               (!PyValue_IsNull(_PyFrame_Slots(frame)[slot + 1]) << 1)) : -1;
+        PyErr_Format(PyExc_SystemError,
+                     "method lookup changed its output homes "
+                     "(current=%d, dst=%d, locals=%d, slots=%d, "
+                     "occupied=%d, pc=%zd)",
+                     value_frame_is_current(tstate, frame), slot, nlocals,
+                     nslots, occupied,
+                     current - frame->ir_words);
         PyValue_XCLOSE(result);
         PyValue_XCLOSE(self);
         value_operation_close3(receiver, PyValue_NULL, PyValue_NULL);
@@ -1957,7 +1963,8 @@ finish_displaced_local(PyThreadState *tstate, _PyInterpreterFrame *frame,
 static Py_NO_INLINE int
 finish_unpack_to_locals(PyThreadState *tstate, _PyInterpreterFrame *frame,
                         _PyInstr *next, _PyValueTemps *temps,
-                        PyValue *locals, PyValue *window, int n, int first)
+                        PyValue *locals, PyValue *window, int n, int first,
+                        int canonical)
 {
     int err = 0;
     for (int i = first; i < n; i++) {
@@ -1969,7 +1976,8 @@ finish_unpack_to_locals(PyThreadState *tstate, _PyInterpreterFrame *frame,
             continue;
         }
         PyValue old = locals[i];
-        locals[i] = _PyValue_Publish(element);
+        assert(!canonical || _PyValue_IsHome(*element));
+        locals[i] = canonical ? *element : _PyValue_Publish(element);
         _PyValue_CheckHome(locals[i]);
         *element = PyValue_NULL;
         err = finish_value_bridges_ex(tstate, frame, next, temps, &old, 1,
@@ -2177,8 +2185,7 @@ _PyEval_EvalFrameLoop(PyThreadState *tstate, _PyInterpreterFrame *frame, int thr
 #endif
     entry->frame.f_executable = PyValue_None;
     entry->frame.base = entry->frame.owned_slots;
-    /* A return or a yield resumes the entry frame at the word after its
-     * instr_ptr, the first INTERPRETER_EXIT */
+    /* Returns and yields resume the explicit real INTERPRETER_EXIT target. */
     entry->frame.instr_ptr = (_PyInstr *)_Py_INTERPRETER_TRAMPOLINE_INSTRUCTIONS;
     entry->frame.ir_words = (_PyInstr *)_Py_INTERPRETER_TRAMPOLINE_INSTRUCTIONS;
     entry->frame.ir_feedback = NULL;
@@ -2186,6 +2193,9 @@ _PyEval_EvalFrameLoop(PyThreadState *tstate, _PyInterpreterFrame *frame, int thr
     entry->frame.visited = 0;
     /* What the frame returns or yields lands in entry->stack[0] */
     entry->frame.return_slot = 1;
+    entry->frame.return_pc = (_PyInstr *)_Py_INTERPRETER_TRAMPOLINE_INSTRUCTIONS;
+    entry->frame.pending_kwargs = IR_NO_DST;
+    entry->frame.pending_redirect = 0;
 #ifdef Py_DEBUG
     entry->frame.lltrace = 0;
 #endif
@@ -2891,7 +2901,7 @@ clear_gen_frame(PyThreadState *tstate, _PyInterpreterFrame * frame)
 _PyInstr *
 _PyEval_GeneratorReturnTarget(_PyInterpreterFrame *frame)
 {
-    _PyInstr *next = frame->instr_ptr + 1;
+    _PyInstr *next = frame->return_pc;
     if (frame->owner == FRAME_OWNED_BY_INTERPRETER) {
         return next;
     }
@@ -3052,19 +3062,6 @@ _PyEvalFramePushAndInit_Ex(PyThreadState *tstate, PyValue func,
     return frame;
 }
 
-/* Keep the destination numeric through preparation and native fallback. */
-static inline uint16_t
-call_python_recipient(_PyCallTransaction *call, PyCodeObject *code)
-{
-    uint16_t recipient = (uint16_t)call->destination;
-    if (call->postcall_discard && call->frame->owner == FRAME_OWNED_BY_THREAD &&
-        !(code->co_flags & (CO_GENERATOR | CO_COROUTINE | CO_ASYNC_GENERATOR)))
-    {
-        recipient |= IR_POSTCALL_DISCARD;
-    }
-    return recipient;
-}
-
 /* The caller owns its whole window until the final non-reentrant commit. */
 static int
 call_transaction_overlap_python(_PyCallTransaction *call,
@@ -3139,7 +3136,8 @@ call_transaction_overlap_python(_PyCallTransaction *call,
     if (flags & CO_VARKEYWORDS) {
         child->base[extra] = PyValue_FromObjectSteal(kwdict);
     }
-    call->frame->return_slot = call_python_recipient(call, code);
+    call->frame->return_slot = (uint16_t)call->destination;
+    call->frame->return_pc = call->frame->instr_ptr + 1;
     call->tstate->current_frame = child;
     *out = child;
     return 0;
@@ -3241,7 +3239,8 @@ call_transaction_push_python_fallback(_PyCallTransaction *call,
     PyValue *retired = storage + call->count;
     call_transaction_detach(call, retired);
     retired_count = call->count;
-    call->frame->return_slot = call_python_recipient(call, code);
+    call->frame->return_slot = (uint16_t)call->destination;
+    call->frame->return_pc = call->frame->instr_ptr + 1;
     assert(child->previous == call->frame);
     call->tstate->current_frame = child;
     status = 0;
@@ -3350,7 +3349,6 @@ call_transaction_init(PyThreadState *tstate, _PyInterpreterFrame *frame,
         .monitored = (flags & CALL_MONITORED) != 0,
         .periodic = (flags & CALL_PERIODIC) != 0,
         .prepared = (flags & CALL_PREPARED) != 0,
-        .postcall_discard = (flags & CALL_POSTCALL_DISCARD) != 0,
     };
 }
 
@@ -3386,28 +3384,69 @@ call_transaction_run_vector(PyThreadState *tstate, _PyInterpreterFrame *frame,
                                 CALL_TRANSACTION_VECTOR, flags);
 }
 
-/* The successful specialized guard proves an unbound exact function with
- * its standard provider before any operation that can run Python. */
-static Py_NO_INLINE _PyCallResult
-call_transaction_run_guarded_python_vector(PyThreadState *tstate,
-                                           _PyInterpreterFrame *frame,
-                                           int base, int destination,
-                                           int argument_count, int flags)
+/* The checked prefix proves the function version and standard provider.
+ * Return 1 before effects on a miss; no transaction record exists on a hit. */
+static inline _PyCallResult
+call_bind_known_python(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                       int base, int destination, int argument_count,
+                       const _PyFbCall *binding)
 {
 #ifdef Py_GIL_DISABLED
-    return call_transaction_run_vector(tstate, frame, base, destination,
-                                       argument_count, flags);
+    return (_PyCallResult){1, NULL};
 #else
-    assert(!(flags & (CALL_INSTRUMENTED | CALL_MONITORED | CALL_EFFECTS)));
-    _PyCallTransaction call = call_transaction_init(
-        tstate, frame, base, argument_count + 2, destination, argument_count,
-        CALL_TRANSACTION_VECTOR, flags | CALL_PREPARED);
-    _PyInterpreterFrame *child = NULL;
-    int status = call_transaction_push_python(&call, &child);
-    if (status > 0) {
-        status = call_transaction_native(&call);
+    if ((binding->binding_flags & _Py_CALL_BIND_DIRECT) &&
+        frame->owner == FRAME_OWNED_BY_THREAD)
+    {
+        PyValue *homes = frame->base + base;
+        PyFunctionObject *func = (PyFunctionObject *)
+            PyValue_AsKnownObjectBorrow(homes[0]);
+        PyCodeObject *code = (PyCodeObject *)func->func_code;
+        int offset = PyValue_IsNull(homes[1]) ? 2 : 1;
+        int supplied = argument_count + 2 - offset;
+        if (supplied == binding->bound_count && code->_co_exec != NULL &&
+            _PyThreadState_HasStackSpace(tstate, code->co_framesize))
+        {
+            PyObject *kwargs = NULL;
+            if (binding->kwargs_slot != IR_NO_DST &&
+                !(binding->binding_flags & _Py_CALL_BIND_VIRTUAL_KWARGS))
+            {
+                /* Empty-dict allocation schedules GC; it does not run
+                 * Python before the complete child is published. */
+                kwargs = PyDict_New();
+                if (kwargs == NULL) {
+                    return (_PyCallResult){-1, NULL};
+                }
+            }
+            PyValue function = homes[0];
+            homes[0] = PyValue_NULL;
+            _PyInterpreterFrame *child = _PyFrame_PushOverlapping(
+                tstate, function, homes + offset, supplied, frame);
+            if (supplied < code->co_argcount) {
+                PyValue *defaults = _PyTuple_ITEMS(func->func_defaults);
+                for (int i = supplied; i < code->co_argcount; i++) {
+                    child->base[i] = PyValue_XDUP(
+                        defaults[binding->default_start + i - supplied]);
+                }
+            }
+            if (binding->binding_flags & _Py_CALL_BIND_VARARGS) {
+                child->base[code->co_argcount] =
+                    (PyValue)_PyValue_STATIC_IMMORTAL(&_Py_SINGLETON(tuple_empty));
+            }
+            if (binding->kwargs_slot != IR_NO_DST) {
+                if (binding->binding_flags & _Py_CALL_BIND_VIRTUAL_KWARGS) {
+                    child->pending_kwargs = binding->kwargs_slot;
+                }
+                else {
+                    child->base[binding->kwargs_slot] = PyValue_FromObjectSteal(kwargs);
+                }
+            }
+            frame->return_slot = (uint16_t)destination;
+            frame->return_pc = frame->instr_ptr + 1;
+            tstate->current_frame = child;
+            return (_PyCallResult){0, child};
+        }
     }
-    return (_PyCallResult){status < 0 ? -1 : 0, status < 0 ? NULL : child};
+    return (_PyCallResult){1, NULL};
 #endif
 }
 

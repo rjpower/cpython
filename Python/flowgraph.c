@@ -38,7 +38,8 @@ typedef _Py_SourceLocation location;
 typedef _PyJumpTargetLabel jump_target_label;
 
 typedef struct _PyCfgInstruction {
-    int i_opcode;
+    unsigned i_opcode : 16;
+    unsigned i_source : 1; /* explicit source span, not propagated location */
     int i_oparg;
     _Py_SourceLocation i_loc;
     struct _PyCfgBasicblock *i_target; /* target block (if jump instruction) */
@@ -139,6 +140,7 @@ is_jump(cfg_instr *i)
     do { \
         cfg_instr *_instr__ptr_ = (I); \
         _instr__ptr_->i_loc = (LOC); \
+        _instr__ptr_->i_source = (LOC).lineno >= 0; \
     } while (0);
 
 /***** Blocks *****/
@@ -210,6 +212,7 @@ basicblock_addop(basicblock *b, int opcode, int oparg, location loc,
     i->i_opcode = opcode;
     i->i_oparg = oparg;
     i->i_loc = loc;
+    i->i_source = loc.lineno >= 0 && opcode != POP_BLOCK;
     i->i_except = except;
     // memory is already zero initialized
     assert(i->i_target == NULL);
@@ -948,6 +951,10 @@ label_exception_targets(basicblock *entryblock) {
                 handler = push_except_block(except_stack, instr);
             }
             else if (instr->i_opcode == POP_BLOCK) {
+                /* A source span inherited by this zero-word marker still
+                 * belongs to the region being exited. */
+                instr->i_except = handler;
+                instr->i_source = 0;
                 handler = pop_except_block(except_stack);
                 INSTR_SET_OP0(instr, NOP);
             }
@@ -1071,6 +1078,7 @@ basicblock_remove_redundant_nops(basicblock *bb) {
     /* Remove NOPs when legal to do so. */
     int dest = 0;
     int prev_lineno = -1;
+    basicblock *prev_except = NULL;
     for (int src = 0; src < bb->b_iused; src++) {
         int lineno = bb->b_instr[src].i_loc.lineno;
         if (bb->b_instr[src].i_opcode == NOP) {
@@ -1078,18 +1086,29 @@ basicblock_remove_redundant_nops(basicblock *bb) {
             if (lineno < 0) {
                 continue;
             }
-            /* or, if the previous instruction had the same line number. */
-            if (prev_lineno == lineno) {
+            /* Equal source lines do not imply equal observer exception state.
+             * In particular, line propagation can cross POP_BLOCK. */
+            if (prev_lineno == lineno &&
+                prev_except == bb->b_instr[src].i_except)
+            {
+                bb->b_instr[dest - 1].i_source |= bb->b_instr[src].i_source;
                 continue;
             }
             /* or, if the next instruction has same line number or no line number */
             if (src < bb->b_iused - 1) {
                 int next_lineno = bb->b_instr[src+1].i_loc.lineno;
-                if (next_lineno == lineno) {
+                if (next_lineno == lineno &&
+                    bb->b_instr[src+1].i_except == bb->b_instr[src].i_except)
+                {
+                    bb->b_instr[src+1].i_source |= bb->b_instr[src].i_source;
                     continue;
                 }
-                if (next_lineno < 0) {
+                if (next_lineno < 0 &&
+                    bb->b_instr[src+1].i_opcode != POP_BLOCK &&
+                    bb->b_instr[src+1].i_except == bb->b_instr[src].i_except)
+                {
                     bb->b_instr[src+1].i_loc = bb->b_instr[src].i_loc;
+                    bb->b_instr[src+1].i_source |= bb->b_instr[src].i_source;
                     continue;
                 }
             }
@@ -1098,6 +1117,8 @@ basicblock_remove_redundant_nops(basicblock *bb) {
                 /* or if last instruction in BB and next BB has same line number */
                 if (next) {
                     location next_loc = NO_LOCATION;
+                    basicblock *next_except = NULL;
+                    cfg_instr *next_source = NULL;
                     for (int next_i=0; next_i < next->b_iused; next_i++) {
                         cfg_instr *instr = &next->b_instr[next_i];
                         if (instr->i_opcode == NOP && instr->i_loc.lineno < 0) {
@@ -1105,9 +1126,15 @@ basicblock_remove_redundant_nops(basicblock *bb) {
                             continue;
                         }
                         next_loc = instr->i_loc;
+                        next_except = instr->i_except;
+                        next_source = instr;
                         break;
                     }
-                    if (lineno == next_loc.lineno) {
+                    if (lineno == next_loc.lineno &&
+                        next_except == bb->b_instr[src].i_except)
+                    {
+                        assert(next_source != NULL);
+                        next_source->i_source |= bb->b_instr[src].i_source;
                         continue;
                     }
                 }
@@ -1117,6 +1144,7 @@ basicblock_remove_redundant_nops(basicblock *bb) {
         if (dest != src) {
             bb->b_instr[dest] = bb->b_instr[src];
         }
+        prev_except = bb->b_instr[dest].i_except;
         dest++;
         prev_lineno = lineno;
     }
@@ -4409,6 +4437,9 @@ cfg_to_regcfg(cfg_builder *g, int nlocalsplus, int maxdepth,
             {
                 goto error;
             }
+            if (instr->i_source) {
+                cfg->ops[cfg->nops - 1].flags |= _PyReg_SOURCE_ORIGIN;
+            }
         }
     }
     PyMem_Free(is_handler);
@@ -4422,7 +4453,7 @@ error:
 
 int
 _PyCfg_OptimizedCfgToRegCfg(cfg_builder *g, _PyCompile_CodeUnitMetadata *umd,
-                            int *stackdepth, int *nlocalsplus,
+                            int code_flags, int *stackdepth, int *nlocalsplus,
                             _PyRegCfg **result)
 {
     *result = NULL;
@@ -4460,6 +4491,17 @@ _PyCfg_OptimizedCfgToRegCfg(cfg_builder *g, _PyCompile_CodeUnitMetadata *umd,
 
     _PyRegCfg *cfg;
     RETURN_IF_ERROR(cfg_to_regcfg(g, *nlocalsplus, *stackdepth, &cfg));
+    if ((code_flags & (CO_OPTIMIZED | CO_VARKEYWORDS)) ==
+            (CO_OPTIMIZED | CO_VARKEYWORDS) &&
+        !(code_flags & (CO_GENERATOR | CO_COROUTINE | CO_ASYNC_GENERATOR)))
+    {
+        int kwargs_slot = (int)(umd->u_posonlyargcount + umd->u_argcount +
+                               umd->u_kwonlyargcount) + !!(code_flags & CO_VARARGS);
+        if (_PyRegCfg_PrepareKwargs(cfg, kwargs_slot) < 0) {
+            _PyRegCfg_Free(cfg);
+            return ERROR;
+        }
+    }
     if (_PyRegCfg_Build(cfg) < 0) {
         _PyRegCfg_Free(cfg);
         return ERROR;

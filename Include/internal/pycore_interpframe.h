@@ -182,48 +182,26 @@ _PyFrame_PublishReturnSlot(_PyInterpreterFrame *f, PyValue v)
     PyValue_XCLOSE(old);
 }
 
-static inline void
+void _PyFrame_CompleteRedirect(_PyInterpreterFrame *frame);
+
+static inline int
 _PyFrame_SetReturnValue(_PyInterpreterFrame *f, PyValue v)
 {
-    assert(!(f->return_slot & IR_POSTCALL_DISCARD));
+    int redirected = f->pending_redirect;
+    if (redirected) {
+        _PyFrame_CompleteRedirect(f);
+    }
     if (f->return_slot == IR_NO_DST) {
         PyValue_XCLOSE(v);
-        return;
+        return redirected;
     }
     _PyFrame_PublishReturnSlot(f, v);
+    return redirected;
 }
 
-/* Complete a Python child's owned result after retiring that child. An
- * instrumented boundary materializes its original home and uses the existing POP;
- * ordinary disposal is part of CALL, whose source line is the same. */
-static inline _PyInstr *
-_PyFrame_CompleteReturn(_PyInterpreterFrame *f, PyValue value, _PyInstr *next)
-{
-    uint16_t recipient = f->return_slot;
-    if (recipient < IR_NO_DST) {
-        _PyFrame_PublishReturnSlot(f, value);
-        return next;
-    }
-    if (recipient == IR_NO_DST) {
-        PyValue_XCLOSE(value);
-        return next;
-    }
-    assert(recipient & IR_POSTCALL_DISCARD);
-    uint16_t slot = recipient & ~IR_POSTCALL_DISCARD;
-    f->return_slot = slot;
-    _PyIRWord word = FT_ATOMIC_LOAD_UINT64_RELAXED(*next);
-    int ordinary = IR_HANDLER(word) == POP_TOP && IR_A(word) == slot;
-#ifdef Py_DEBUG
-    ordinary = ordinary && f->lltrace < 5;
-#endif
-    if (!ordinary) {
-        _PyFrame_PublishReturnSlot(f, value);
-        return next;
-    }
-    /* All homes remain valid while finalization can re-enter the caller. */
-    PyValue_XCLOSE(value);
-    return next + 1;
-}
+/* Materialize a compiler-proven virtual empty kwargs binding before a read
+ * or before publishing a frame object to observers. */
+int _PyFrame_MaterializeKwargs(_PyInterpreterFrame *frame);
 
 /* Release the temporaries of f from slot first on and leave them NULL.
  * The slot rules of register-ir.md §1.5.4 (regcfg.c:_PyRegCfg_Compact)
@@ -280,6 +258,9 @@ static inline void _PyFrame_Copy(_PyInterpreterFrame *src, _PyInterpreterFrame *
     dest->tlbc_index = src->tlbc_index;
 #endif
     dest->return_slot = src->return_slot;
+    dest->return_pc = src->return_pc;
+    dest->pending_kwargs = src->pending_kwargs;
+    dest->pending_redirect = src->pending_redirect;
     // visited is GC bookkeeping for the current stack walk, not frame state.
     dest->visited = 0;
 #ifdef Py_DEBUG
@@ -333,7 +314,10 @@ _PyFrame_Initialize(
     frame->frame_obj = NULL;
     (void)tstate;
     _PyFrame_InitIRInstrPtr(frame, code);
+    frame->return_pc = frame->instr_ptr;
     frame->return_slot = 0;
+    frame->pending_kwargs = IR_NO_DST;
+    frame->pending_redirect = 0;
     frame->owner = FRAME_OWNED_BY_THREAD;
     frame->visited = 0;
 #ifdef Py_DEBUG
@@ -630,6 +614,9 @@ _PyFrame_PushTrampolineUnchecked(PyThreadState *tstate, PyCodeObject *code, int 
 #endif
     assert(return_slot < nslots);
     frame->return_slot = (uint16_t)return_slot;
+    frame->return_pc = frame->instr_ptr;
+    frame->pending_kwargs = IR_NO_DST;
+    frame->pending_redirect = 0;
     for (int i = 0; i < nslots; i++) {
         frame->base[i] = PyValue_NULL;
     }

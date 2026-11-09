@@ -294,40 +294,6 @@ class TestIRCases(unittest.TestCase):
         end = output.find("TARGET(", start + 1)
         return output[start:end if end >= 0 else len(output)]
 
-    def test_ordinary_nop_boundary_contract(self):
-        source = (Path(__file__).resolve().parents[2] /
-                  "Python" / "bytecodes.c").read_text()
-
-        def generate(text):
-            Path(self.temp_input_filename).write_text(text)
-            with handle_stderr():
-                analysis = analyzer.analyze_files([self.temp_input_filename])
-            out = io.StringIO()
-            ir_generator.generate_ir([self.temp_input_filename], analysis, out, False)
-            return out.getvalue()
-
-        output = generate(source)
-        branch = self.handler(output, "POP_JUMP_IF_FALSE_BOOL")
-        self.assertEqual(branch.count("IR_EXECUTE_ORDINARY_NOP();"), 1)
-        self.assertLess(branch.index("IR_CONSUME_INPUT"),
-                        branch.index("IR_EXECUTE_ORDINARY_NOP();"))
-        self.assertLess(branch.index("IR_EXECUTE_ORDINARY_NOP();"),
-                        branch.rindex("DISPATCH();"))
-        self.assertNotIn("IR_EXECUTE_ORDINARY_NOP();",
-                         self.handler(output, "POP_JUMP_IF_TRUE_BOOL"))
-
-        guard = "EXIT_IF(!PyValue_BoolCheck(value));"
-        branch_call = "RECORD_BRANCH_TAKEN(FB_BRANCH(), flag);"
-        for old, new in ((guard, "EXIT_IF(!PyValue_IsObject(value));"),
-                         (branch_call, "spam_call(); " + branch_call),
-                         ("_POP_JUMP_IF_FALSE +\n            _EXECUTE_ORDINARY_NOP;",
-                          "_EXECUTE_ORDINARY_NOP +\n            _POP_JUMP_IF_FALSE;")):
-            with self.subTest(old=old):
-                self.assertIn(old, source)
-                with self.assertRaisesRegex(SyntaxError,
-                                            "requires the checked terminal boolean branch"):
-                    generate(source.replace(old, new, 1))
-
     def test_dict_first_probe_contract(self):
         source = (Path(__file__).resolve().parents[2] /
                   "Python" / "bytecodes.c").read_text()
@@ -391,13 +357,15 @@ class TestIRCases(unittest.TestCase):
         output = generate(source)
         body = self.handler(output, "CALL_PY_GENERAL")
         success, fallback = body.split("call_transaction_fallback_CALL_PY_GENERAL:;")
-        self.assertIn("call_transaction_run_guarded_python_vector(", success)
-        self.assertNotIn("call_transaction_run_vector(", success)
+        self.assertIn("call_bind_known_python(", success)
+        self.assertIn("if (call_result.status > 0)", success)
+        self.assertIn("call_transaction_run_vector(", success)
+        self.assertIn("CALL_PREPARED", success)
         self.assertIn("call_transaction_run_vector(", fallback)
-        self.assertNotIn("call_transaction_run_guarded_python_vector(", fallback)
+        self.assertNotIn("call_bind_known_python(", fallback)
         other = self.handler(output, "CALL_BOUND_METHOD_GENERAL")
         self.assertIn("call_transaction_run_vector(", other)
-        self.assertNotIn("call_transaction_run_guarded_python_vector(", other)
+        self.assertNotIn("call_bind_known_python(", other)
 
         changes = (
             ("_CHECK_PEP_523 +\n            _CHECK_FUNCTION_VERSION +\n"
@@ -423,6 +391,55 @@ class TestIRCases(unittest.TestCase):
                 self.assertIn(old, source)
                 with self.assertRaises(SyntaxError):
                     generate(source.replace(old, new, 1))
+
+    def test_canonical_return_provenance_fails_closed(self):
+        source = (Path(__file__).resolve().parents[2] /
+                  "Python" / "bytecodes.c").read_text()
+
+        def analyze(text):
+            Path(self.temp_input_filename).write_text(text)
+            with handle_stderr():
+                return analyzer.analyze_files([self.temp_input_filename])
+
+        original = analyze(source)
+        for name in ("RETURN_VALUE", "INSTRUMENTED_RETURN_VALUE"):
+            self.assertTrue(ir_generator.canonical_return_input(
+                original.instructions[name]))
+
+        changes = (
+            ("PyValue temp = retval;",
+             "retval = PyValue_DUP(retval); PyValue temp = retval;",
+             ("RETURN_VALUE", "INSTRUMENTED_RETURN_VALUE")),
+            ("res = temp;", "res = PyValue_DUP(temp);",
+             ("RETURN_VALUE", "INSTRUMENTED_RETURN_VALUE")),
+            ("PyValue held = TAKE(val);",
+             "val = PyValue_None; PyValue held = TAKE(val);",
+             ("INSTRUMENTED_RETURN_VALUE",)),
+            ("taken = held;", "taken = PyValue_DUP(held);",
+             ("INSTRUMENTED_RETURN_VALUE",)),
+            ("taken = held;", "transform(&held); taken = held;",
+             ("INSTRUMENTED_RETURN_VALUE",)),
+        )
+        for old, new, affected in changes:
+            with self.subTest(new=new):
+                self.assertIn(old, source)
+                analysis = analyze(source.replace(old, new, 1))
+                for name in affected:
+                    self.assertFalse(ir_generator.canonical_return_input(
+                        analysis.instructions[name]))
+                # An unsupported mutation may also be rejected by ownership
+                # validation; it must never silently regain canonical stores.
+                output = io.StringIO()
+                try:
+                    ir_generator.generate_ir(
+                        [self.temp_input_filename], analysis, output, False)
+                except SyntaxError:
+                    continue
+                for name in affected:
+                    self.assertNotIn("IR_STORE_CANONICAL_RETURN(",
+                                     self.handler(output.getvalue(), name))
+                    self.assertIn("IR_STORE_RETURN(",
+                                  self.handler(output.getvalue(), name))
 
     def run_ir_test(self, input: str, expected: str):
         self.assertEqual(self.ir_output(input).strip(), expected.strip())
@@ -459,11 +476,11 @@ class TestIRCases(unittest.TestCase):
                 self.assertEqual(handler.count(store), 1)
                 self.assertLess(handler.index(store), retire)
                 self.assertIn(
-                    "(IR_IS_LOCAL(IR_A(ir_word)) ? attr : PyValue_NULL)",
+                    "((IR_IS_LOCAL(IR_A(ir_word)) || IR_A(ir_word) == IR_NO_DST) ? attr : PyValue_NULL)",
                               handler[retire:])
-                self.assertIn("null = &IR_SLOT(IR_A(ir_word) + 1);", handler[retire:])
+                self.assertIn("null = ((oparg & 1) ? &IR_SLOT(IR_A(ir_word) + 1) : NULL);", handler[retire:])
                 self.assertIn("null[0] = PyValue_NULL;", handler[retire:])
-                self.assertIn("if (IR_IS_LOCAL(IR_A(ir_word))) {\n"
+                self.assertIn("if (IR_IS_LOCAL(IR_A(ir_word)) || IR_A(ir_word) == IR_NO_DST) {\n"
                               "                IR_STORE_DST(IR_A(ir_word), attr);",
                               handler[retire:])
                 self.assertIn("finish_displaced_local(", handler[retire:])
@@ -491,7 +508,7 @@ class TestIRCases(unittest.TestCase):
         self.assertEqual(handler.count(direct), 1)
         self.assertLess(handler.index(direct), retire)
         self.assertIn("JUMP_TO_LABEL(error)", handler[failure:local])
-        self.assertIn("if (IR_IS_LOCAL(IR_A(ir_word)))", handler[failure:local])
+        self.assertIn("if (IR_IS_LOCAL(IR_A(ir_word)) || IR_A(ir_word) == IR_NO_DST)", handler[failure:local])
         self.assertIn("null[0] = PyValue_NULL;", handler[retire:])
 
     def test_canonical_home_declaration_rejections(self):
@@ -1680,8 +1697,28 @@ class TestIRCases(unittest.TestCase):
         self.assertIn("IR_STORE_TEMP(IR_SLOT(IR_A(ir_word)), res);",
                       self.handler(output, "ALIAS"))
         self.assertNotIn("IR_STORE_DST", self.handler(output, "PAIR"))
-        self.assertIn("assert(!IR_IS_LOCAL(IR_A(ir_word)));",
+        self.assertIn("assert(!IR_IS_LOCAL(IR_A(ir_word)) && IR_A(ir_word) != IR_NO_DST);",
                       self.handler(output, "PAIR"))
+
+    def test_scalar_conditional_array_has_no_empty_home(self):
+        source = """
+        inst(ATTR, (owner -- attr, null[oparg & 1])) {
+            attr = PyValue_DUP(owner);
+            PyValue_CLOSE(owner);
+            if (oparg & 1) {
+                null[0] = PyValue_NULL;
+            }
+        }
+        """
+        fmt = self.formats(source)["ATTR"]
+        self.assertTrue(fmt.discards)
+        handler = self.handler(self.ir_output(source), "ATTR")
+        self.assertIn(
+            "null = ((oparg & 1) ? &IR_SLOT(IR_A(ir_word) + 1) : NULL);",
+            handler)
+        self.assertNotIn("null = &IR_SLOT", handler)
+        self.assertIn("if (oparg & 1)", handler)
+        self.assertIn("IR_STORE_DST(IR_A(ir_word), attr)", handler)
 
     def test_unused_outputs_pass_through(self):
         input = """
@@ -1734,7 +1771,7 @@ class TestIRCases(unittest.TestCase):
             res = SPAM(callable, args, oparg);
             IR_CLEAR_SLOTS(&window[1], oparg);
             IR_PUBLISH_TEMP(window[0], res);
-            IR_MOVE_TO_DST(IR_A(ir_word), window[0]);
+            IR_MOVE_TO_DST_OR_DISCARD(IR_A(ir_word), window[0]);
             if (!PyValue_IsNull(ir_displaced) &&
                 finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
@@ -1746,6 +1783,7 @@ class TestIRCases(unittest.TestCase):
         self.run_ir_test(input, output)
         fmt = self.formats(input)["OP"]
         self.assertTrue(fmt.window)
+        self.assertTrue(fmt.discards)
         self.assertEqual(fmt.roles, [ir_generator.ROLE_DST,
                                      ir_generator.ROLE_BASE,
                                      ir_generator.ROLE_IMM,
@@ -2211,7 +2249,7 @@ class TestIRCases(unittest.TestCase):
         self.assertEqual(ir_generator.num_handlers(analysis), 258)
         # The oparg names the local that LOAD reads (_PyIR_ROLE_LOCAL_IN).
         # Only the twin runs Python itself; the format does, as the twin's.
-        load = ("{ .flags = _PyIR_VALID | _PyIR_STORE_DST | _PyIR_RUNS_CODE, "
+        load = ("{ .flags = _PyIR_VALID | _PyIR_STORE_DST | _PyIR_RUNS_CODE | _PyIR_DISCARDS, "
                 ".effects = 0, "
                 ".roles = { _PyIR_ROLE_DST, "
                 "_PyIR_ROLE_LOCAL_IN, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, "

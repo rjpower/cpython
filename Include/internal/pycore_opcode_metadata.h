@@ -408,6 +408,8 @@ int _PyOpcode_num_popped(int opcode, int oparg)  {
             return 1;
         case MATCH_SEQUENCE:
             return 1;
+        case MATERIALIZE_KWARGS:
+            return 0;
         case NOP:
             return 0;
         case POP_BLOCK:
@@ -937,6 +939,8 @@ int _PyOpcode_num_pushed(int opcode, int oparg)  {
             return 2;
         case MATCH_SEQUENCE:
             return 2;
+        case MATERIALIZE_KWARGS:
+            return 0;
         case NOP:
             return 0;
         case POP_BLOCK:
@@ -1340,6 +1344,7 @@ const struct opcode_metadata _PyOpcode_opcode_metadata[267] = {
     [MATCH_KEYS] = { true, INSTR_FMT_IX, HAS_ERROR_FLAG | HAS_ESCAPES_FLAG },
     [MATCH_MAPPING] = { true, INSTR_FMT_IX, 0 },
     [MATCH_SEQUENCE] = { true, INSTR_FMT_IX, 0 },
+    [MATERIALIZE_KWARGS] = { true, INSTR_FMT_IB, HAS_ARG_FLAG | HAS_ERROR_FLAG | HAS_ESCAPES_FLAG },
     [NOP] = { true, INSTR_FMT_IX, HAS_PURE_FLAG },
     [POP_EXCEPT] = { true, INSTR_FMT_IX, HAS_ESCAPES_FLAG },
     [POP_ITER] = { true, INSTR_FMT_IX, HAS_ESCAPES_FLAG },
@@ -1569,11 +1574,13 @@ _PyOpcode_macro_expansion[256] = {
     [MATCH_KEYS] = { .nuops = 1, .uops = { { _MATCH_KEYS, OPARG_SIMPLE, 0 } } },
     [MATCH_MAPPING] = { .nuops = 1, .uops = { { _MATCH_MAPPING, OPARG_SIMPLE, 0 } } },
     [MATCH_SEQUENCE] = { .nuops = 1, .uops = { { _MATCH_SEQUENCE, OPARG_SIMPLE, 0 } } },
+    [MATERIALIZE_KWARGS] = { .nuops = 1, .uops = { { _MATERIALIZE_KWARGS, OPARG_SIMPLE, 0 } } },
     [NOP] = { .nuops = 1, .uops = { { _NOP, OPARG_SIMPLE, 0 } } },
     [POP_EXCEPT] = { .nuops = 1, .uops = { { _POP_EXCEPT, OPARG_SIMPLE, 0 } } },
     [POP_ITER] = { .nuops = 1, .uops = { { _POP_ITER, OPARG_SIMPLE, 0 } } },
     [POP_JUMP_IF_FALSE] = { .nuops = 2, .uops = { { _TO_BOOL, OPARG_SIMPLE, 3 }, { _POP_JUMP_IF_FALSE, OPARG_REPLACED, 3 } } },
     [POP_JUMP_IF_FALSE_ALWAYS_TRUE] = { .nuops = 4, .uops = { { _GUARD_TYPE_VERSION, 2, 1 }, { _REPLACE_WITH_TRUE, OPARG_SIMPLE, 3 }, { _POP_TOP, OPARG_SIMPLE, 3 }, { _POP_JUMP_IF_FALSE, OPARG_REPLACED, 3 } } },
+    [POP_JUMP_IF_FALSE_BOOL] = { .nuops = 2, .uops = { { _GUARD_TOS_BOOL, OPARG_SIMPLE, 3 }, { _POP_JUMP_IF_FALSE, OPARG_REPLACED, 3 } } },
     [POP_JUMP_IF_FALSE_INT] = { .nuops = 4, .uops = { { _GUARD_TOS_EXACT_INT, OPARG_SIMPLE, 0 }, { _TO_BOOL_INT, OPARG_SIMPLE, 3 }, { _POP_TOP_INT, OPARG_SIMPLE, 3 }, { _POP_JUMP_IF_FALSE, OPARG_REPLACED, 3 } } },
     [POP_JUMP_IF_FALSE_LIST] = { .nuops = 4, .uops = { { _GUARD_TOS_LIST, OPARG_SIMPLE, 0 }, { _TO_BOOL_LIST, OPARG_SIMPLE, 3 }, { _POP_TOP, OPARG_SIMPLE, 3 }, { _POP_JUMP_IF_FALSE, OPARG_REPLACED, 3 } } },
     [POP_JUMP_IF_FALSE_NONE] = { .nuops = 2, .uops = { { _TO_BOOL_NONE, OPARG_SIMPLE, 3 }, { _POP_JUMP_IF_FALSE, OPARG_REPLACED, 3 } } },
@@ -1819,6 +1826,7 @@ const char *_PyOpcode_OpName[267] = {
     [MATCH_KEYS] = "MATCH_KEYS",
     [MATCH_MAPPING] = "MATCH_MAPPING",
     [MATCH_SEQUENCE] = "MATCH_SEQUENCE",
+    [MATERIALIZE_KWARGS] = "MATERIALIZE_KWARGS",
     [NOP] = "NOP",
     [POP_BLOCK] = "POP_BLOCK",
     [POP_EXCEPT] = "POP_EXCEPT",
@@ -1977,7 +1985,6 @@ PyAPI_DATA(const uint8_t) _PyOpcode_Deopt[256];
 const uint8_t _PyOpcode_Deopt[256] = {
     [111] = 111,
     [112] = 112,
-    [127] = 127,
     [239] = 239,
     [26] = 26,
     [64] = 64,
@@ -2163,6 +2170,7 @@ const uint8_t _PyOpcode_Deopt[256] = {
     [MATCH_KEYS] = MATCH_KEYS,
     [MATCH_MAPPING] = MATCH_MAPPING,
     [MATCH_SEQUENCE] = MATCH_SEQUENCE,
+    [MATERIALIZE_KWARGS] = MATERIALIZE_KWARGS,
     [NOP] = NOP,
     [POP_EXCEPT] = POP_EXCEPT,
     [POP_ITER] = POP_ITER,
@@ -2242,7 +2250,6 @@ const uint8_t _PyOpcode_Deopt[256] = {
     case 87: \
     case 111: \
     case 112: \
-    case 127: \
     case 239: \
         ;
 struct pseudo_targets {

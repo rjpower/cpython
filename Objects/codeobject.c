@@ -9,6 +9,7 @@
 #include "pycore_initconfig.h"    // _PyStatus_OK()
 #include "pycore_interp.h"        // PyInterpreterState.co_extra_freefuncs
 #include "pycore_interpframe.h"   // FRAME_SPECIALS_SIZE
+#include "pycore_ir_source.h"
 #include "pycore_opcode_metadata.h" // _PyOpcode_Caches
 #include "pycore_opcode_utils.h"  // RESUME_AT_FUNC_START
 #include "pycore_pymem.h"         // _PyMem_FreeDelayed()
@@ -582,6 +583,282 @@ fbinit_is_valid(PyObject *fbinit)
     return 1;
 }
 
+/* Validate location payloads before the variable-length runtime readers see
+ * them. Raw constructors may omit trailing locations; stored maps may not. */
+static int
+location_words(const _PyIRSourceMap *map, uint32_t *covered)
+{
+    const unsigned char *p = map->locations;
+    const unsigned char *end = p + map->locations_size;
+    uint64_t count = 0;
+    while (p < end) {
+        unsigned int header = *p++;
+        if (!(header & 128)) {
+            return -1;
+        }
+        count += (header & 7) + 1;
+        int kind = (header >> 3) & 15;
+        int fixed = kind < 10 ? 1 : kind < 13 ? 2 : 0;
+        if (end - p < fixed) {
+            return -1;
+        }
+        for (int j = 0; j < fixed; j++) {
+            if (p[j] & 128) {
+                return -1;
+            }
+        }
+        p += fixed;
+        int varints = kind == 13 ? 1 : kind == 14 ? 4 : 0;
+        for (int k = 0; k < varints; k++) {
+            int bytes = 0;
+            unsigned int byte;
+            do {
+                if (p == end || ++bytes > 6 || (*p & 128)) {
+                    return -1;
+                }
+                byte = *p++;
+            } while (byte & 64);
+        }
+        if (count > UINT32_MAX) {
+            return -1;
+        }
+    }
+    *covered = (uint32_t)count;
+    return 0;
+}
+
+static PyObject *
+normalize_source_map(const _PyIRSourceMap *map, uint32_t nwords)
+{
+    uint32_t covered;
+    if (location_words(map, &covered) < 0 || covered > nwords) {
+        PyErr_SetString(PyExc_ValueError, "code: malformed source map locations");
+        return NULL;
+    }
+    uint32_t padding = (nwords - covered + 7) / 8;
+    PyObject *locations = PyBytes_FromStringAndSize(NULL, (Py_ssize_t)map->locations_size + padding);
+    if (locations == NULL) {
+        return NULL;
+    }
+    unsigned char *p = (unsigned char *)PyBytes_AS_STRING(locations);
+    memcpy(p, map->locations, map->locations_size);
+    p += map->locations_size;
+    while (covered < nwords) {
+        uint32_t run = Py_MIN(nwords - covered, 8u);
+        /* Location kind 15: no line or column, over run real words. */
+        *p++ = (unsigned char)(0xF8 | (run - 1));
+        covered += run;
+    }
+    PyObject *result = _PyIRSource_Pack(
+        (const unsigned char *)PyBytes_AS_STRING(locations),
+        (uint32_t)PyBytes_GET_SIZE(locations), map->records, map->nrecords);
+    Py_DECREF(locations);
+    return result;
+}
+
+static int
+validate_source_map(struct _PyCodeConstructor *con)
+{
+    _PyIRSourceMap map;
+    int format = _PyIRSource_Decode(PyBytes_AS_STRING(con->linetable),
+                                    PyBytes_GET_SIZE(con->linetable), &map);
+    if (format < 0) {
+        PyErr_SetString(PyExc_ValueError, "code: malformed source map");
+        return -1;
+    }
+    int nwords = (int)(PyBytes_GET_SIZE(con->code) / sizeof(_PyIRWord));
+    int nslots = (int)PyTuple_GET_SIZE(con->localsplusnames) + con->stacksize;
+    uint32_t covered;
+    if (location_words(&map, &covered) < 0 || covered > (uint32_t)nwords ||
+        (format && covered != (uint32_t)nwords))
+    {
+        PyErr_SetString(PyExc_ValueError, "code: source map locations do not fit code");
+        return -1;
+    }
+    for (uint32_t i = 0; i < map.nrecords; i++) {
+        _PyIRSourceEvent event;
+        _PyIRSource_Event(&map, i, &event);
+        if (event.from < 0 || event.from >= nwords ||
+            event.to < 0 || event.to >= nwords ||
+            event.edge < 0 || event.edge > _PyIR_SOURCE_TAKEN ||
+            event.line <= 0 || event.handler < -1 || event.handler >= nwords ||
+            (event.handler >= 0 &&
+             (event.exc_slot < PyTuple_GET_SIZE(con->localsplusnames) + event.lasti ||
+              event.exc_slot >= nslots ||
+              (event.lasti != 0 && event.lasti != 1))))
+        {
+            PyErr_SetString(PyExc_ValueError, "code: source map does not fit code");
+            return -1;
+        }
+    }
+    return 0;
+}
+
+static int
+kwargs_word_access(_PyIRWord word, int slot)
+{
+    const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
+    uint32_t fields[] = {IR_A(word), IR_B(word), IR_C(word), IR_D(word)};
+    int reads = 0;
+    for (int f = 0; f < 4; f++) {
+        if (fields[f] != (uint32_t)slot) {
+            continue;
+        }
+        int role = fmt->roles[f];
+        if (role == _PyIR_ROLE_DST || role == _PyIR_ROLE_LOCAL_OUT ||
+            role == _PyIR_ROLE_LOCAL_CLEAR || role == _PyIR_ROLE_LOCAL_MOVE ||
+            role == _PyIR_ROLE_CELL)
+        {
+            return -1;
+        }
+        reads |= role == _PyIR_ROLE_LOCAL_IN || role >= _PyIR_ROLE_IN0;
+    }
+    if (fmt->flags & _PyIR_WINDOW) {
+        int base = -1;
+        for (int f = 0; f < 4; f++) {
+            if (fmt->roles[f] == _PyIR_ROLE_BASE) {
+                base = (int)fields[f];
+            }
+        }
+        /* A feedback-encoded argument cannot put the local inside a window:
+         * generated windows otherwise live above all ordinary locals. */
+        if (base >= 0 && base <= slot) {
+            int oparg = fmt->imm == _PyIR_LOC_FBARG ? IR_MAX_SLOTS
+                                                 : _PyIR_FieldOparg(word);
+            int writes = _PyIR_Extent(fmt->writes, oparg);
+            if (slot < base + writes) {
+                return -1;
+            }
+            reads |= slot < base + _PyIR_Extent(fmt->reads, oparg);
+        }
+    }
+    return reads;
+}
+
+/* Prove that a pending kwargs home is immutable and cannot be read before a
+ * materialization barrier. After a barrier the immutable binding stays real.
+ * Exception handlers are conservative independent pending entry points. */
+static int
+validate_virtual_kwargs(struct _PyCodeConstructor *con)
+{
+    if (!(con->flags & CO_VIRTUAL_KWARGS)) {
+        return 0;
+    }
+    int slot = con->argcount + con->kwonlyargcount + !!(con->flags & CO_VARARGS);
+    if (!(con->flags & CO_VARKEYWORDS) ||
+        con->flags & (CO_GENERATOR | CO_COROUTINE | CO_ASYNC_GENERATOR) ||
+        slot >= PyBytes_GET_SIZE(con->localspluskinds) ||
+        (_PyLocals_GetKind(con->localspluskinds, slot) & (CO_FAST_CELL | CO_FAST_FREE)))
+    {
+        goto invalid;
+    }
+    int nwords = (int)(PyBytes_GET_SIZE(con->code) / sizeof(_PyIRWord));
+    const _PyIRWord *words = (const _PyIRWord *)PyBytes_AS_STRING(con->code);
+    unsigned char *seen = PyMem_Calloc((size_t)Py_MAX(nwords, 1), 1);
+    int *todo = PyMem_Malloc((size_t)Py_MAX(nwords, 1) * sizeof(int));
+    if (seen == NULL || todo == NULL) {
+        PyMem_Free(seen);
+        PyMem_Free(todo);
+        PyErr_NoMemory();
+        return -1;
+    }
+    int count = 0;
+    if (nwords) {
+        seen[0] = 1;
+        todo[count++] = 0;
+    }
+    for (int i = 0; i < nwords; i++) {
+        int handler = IR_HANDLER(words[i]);
+        if (handler >= IR_NUM_HANDLERS || !(_PyIR_FormatOf(handler)->flags & _PyIR_VALID) ||
+            (handler != MATERIALIZE_KWARGS && kwargs_word_access(words[i], slot) < 0) ||
+            (handler == MATERIALIZE_KWARGS && IR_A(words[i]) != (uint32_t)slot))
+        {
+            goto invalid_allocated;
+        }
+    }
+    const unsigned char *p = (const unsigned char *)PyBytes_AS_STRING(con->exceptiontable);
+    const unsigned char *end = p + PyBytes_GET_SIZE(con->exceptiontable);
+    while (p < end) {
+        unsigned int fields[4] = {0};
+        for (int k = 0; k < 4; k++) {
+            unsigned int byte;
+            do {
+                if (p == end || fields[k] > (UINT_MAX >> 6)) {
+                    goto invalid_allocated;
+                }
+                byte = *p++;
+                fields[k] = (fields[k] << 6) | (byte & 63);
+            } while (byte & 64);
+        }
+        unsigned int target = fields[2];
+        if (target >= (unsigned int)nwords) {
+            goto invalid_allocated;
+        }
+        if (!seen[target]) {
+            seen[target] = 1;
+            todo[count++] = (int)target;
+        }
+    }
+    _PyIRSourceMap source;
+    if (_PyIRSource_Decode(PyBytes_AS_STRING(con->linetable),
+                          PyBytes_GET_SIZE(con->linetable), &source) < 0) {
+        goto invalid_allocated;
+    }
+    for (uint32_t j = 0; j < source.nrecords; j++) {
+        _PyIRSourceEvent event;
+        _PyIRSource_Event(&source, j, &event);
+        if (event.handler >= 0 && !seen[event.handler]) {
+            seen[event.handler] = 1;
+            todo[count++] = event.handler;
+        }
+    }
+    while (count) {
+        int i = todo[--count];
+        _PyIRWord word = words[i];
+        int handler = IR_HANDLER(word);
+        if (handler == MATERIALIZE_KWARGS) {
+            continue;
+        }
+        if (kwargs_word_access(word, slot)) {
+            goto invalid_allocated;
+        }
+        const _PyIRFormat *fmt = _PyIR_FormatOf(handler);
+        int base = _PyIR_HandlerBase[handler];
+        int next[2] = {i + 1, -1};
+        if (fmt->flags & (_PyIR_JUMPS | _PyIR_FORWARD)) {
+            if (!(fmt->flags & _PyIR_NAMES_TARGET)) {
+                next[1] = fmt->flags & (_PyIR_FORWARD | _PyIR_FUSED)
+                    ? i + 1 + IR_DS(word) : (int)IR_CD(word);
+            }
+        }
+        if (IS_SCOPE_EXIT_OPCODE(base) || (fmt->flags & _PyIR_JUMP_ALWAYS)) {
+            next[0] = -1;
+        }
+        for (int k = 0; k < 2; k++) {
+            int target = next[k];
+            if (target < 0 || target == nwords) {
+                continue;
+            }
+            if (target > nwords) {
+                goto invalid_allocated;
+            }
+            if (!seen[target]) {
+                seen[target] = 1;
+                todo[count++] = target;
+            }
+        }
+    }
+    PyMem_Free(seen);
+    PyMem_Free(todo);
+    return 0;
+invalid_allocated:
+    PyMem_Free(seen);
+    PyMem_Free(todo);
+invalid:
+    PyErr_SetString(PyExc_ValueError, "code: invalid virtual kwargs binding");
+    return -1;
+}
+
 int
 _PyCode_Validate(struct _PyCodeConstructor *con)
 {
@@ -643,7 +920,23 @@ _PyCode_Validate(struct _PyCodeConstructor *con)
         PyErr_SetString(PyExc_ValueError, "code: co_varnames is too small");
         return -1;
     }
-
+    const _PyIRWord *words = (const _PyIRWord *)PyBytes_AS_STRING(con->code);
+    Py_ssize_t nwords = PyBytes_GET_SIZE(con->code) / sizeof(_PyIRWord);
+    for (Py_ssize_t i = 0; i < nwords; i++) {
+        int handler = IR_HANDLER(words[i]);
+        if (handler >= IR_NUM_HANDLERS || !(_PyIR_FormatOf(handler)->flags & _PyIR_VALID)) {
+            PyErr_SetString(PyExc_ValueError, "code: invalid executable handler");
+            return -1;
+        }
+        if (handler == NOP) {
+            PyErr_SetString(PyExc_ValueError,
+                            "code: empty or release-only executable instruction");
+            return -1;
+        }
+    }
+    if (validate_source_map(con) < 0 || validate_virtual_kwargs(con) < 0) {
+        return -1;
+    }
     return 0;
 }
 
@@ -804,13 +1097,20 @@ static PyObject *
 remove_column_info(PyObject *locations)
 {
     Py_ssize_t offset = 0;
-    const uint8_t *data = (const uint8_t *)PyBytes_AS_STRING(locations);
+    _PyIRSourceMap source;
+    if (_PyIRSource_Decode(PyBytes_AS_STRING(locations),
+                          PyBytes_GET_SIZE(locations), &source) < 0)
+    {
+        PyErr_SetString(PyExc_ValueError, "code: malformed source map");
+        return NULL;
+    }
+    const uint8_t *data = source.locations;
     PyBytesWriter *res = PyBytesWriter_Create(32);
     if (res == NULL) {
         return NULL;
     }
     uint8_t *output = (uint8_t *)PyBytesWriter_GetData(res);
-    while (offset < PyBytes_GET_SIZE(locations)) {
+    while (offset < source.locations_size) {
         Py_ssize_t write_offset = output - (uint8_t *)PyBytesWriter_GetData(res);
         if (write_offset + 16 >= PyBytesWriter_GetSize(res)) {
             if (PyBytesWriter_Resize(res, PyBytesWriter_GetSize(res) * 2) < 0) {
@@ -831,12 +1131,30 @@ remove_column_info(PyObject *locations)
             output += write_signed_varint(output, ldelta);
         }
         offset++;
-        while (offset < PyBytes_GET_SIZE(locations) &&
+        while (offset < source.locations_size &&
             (data[offset] & 128) == 0) {
             offset++;
         }
     }
-    return PyBytesWriter_FinishWithPointer(res, output);
+    PyObject *body = PyBytesWriter_FinishWithPointer(res, output);
+    if (body == NULL) {
+        return NULL;
+    }
+    PyObject *result = _PyIRSource_Pack(
+        (const unsigned char *)PyBytes_AS_STRING(body),
+        (uint32_t)PyBytes_GET_SIZE(body), source.records, source.nrecords);
+    Py_DECREF(body);
+    if (result != NULL) {
+        _PyIRSourceMap stripped = _PyIRSource_Stored(result);
+        for (uint32_t i = 0; i < stripped.nrecords; i++) {
+            _PyIRSourceEvent event;
+            _PyIRSource_Event(&stripped, i, &event);
+            event.column = event.end_column = -1;
+            _PyIRSource_EncodeEvent((unsigned char *)stripped.records +
+                                     i * _PyIR_SOURCE_RECORD, &event);
+        }
+    }
+    return result;
 }
 
 static int
@@ -873,14 +1191,30 @@ _PyCode_New(struct _PyCodeConstructor *con)
         return NULL;
     }
 
-    PyObject *replacement_locations = NULL;
+    _PyIRSourceMap source;
+    int source_format = _PyIRSource_Decode(PyBytes_AS_STRING(con->linetable),
+                                          PyBytes_GET_SIZE(con->linetable), &source);
+    if (source_format < 0) {
+        PyErr_SetString(PyExc_ValueError, "code: malformed source map");
+        return NULL;
+    }
+    PyObject *replacement_locations = source_format
+        ? Py_NewRef(con->linetable)
+        : normalize_source_map(&source,
+            (uint32_t)(PyBytes_GET_SIZE(con->code) / sizeof(_PyIRWord)));
+    if (replacement_locations == NULL) {
+        return NULL;
+    }
+    con->linetable = replacement_locations;
     // Compact the linetable if we are opted out of debug
     // ranges.
     if (!_Py_GetConfig()->code_debug_ranges) {
-        replacement_locations = remove_column_info(con->linetable);
-        if (replacement_locations == NULL) {
+        PyObject *stripped = remove_column_info(con->linetable);
+        if (stripped == NULL) {
+            Py_DECREF(replacement_locations);
             return NULL;
         }
+        Py_SETREF(replacement_locations, stripped);
         con->linetable = replacement_locations;
     }
 
@@ -1401,8 +1735,14 @@ _PyCode_SafeAddr2Line(PyCodeObject *co, int addrq)
 void
 _PyLineTable_InitAddressRange(const char *linetable, Py_ssize_t length, int firstlineno, PyCodeAddressRange *range)
 {
-    range->opaque.lo_next = (const uint8_t *)linetable;
-    range->opaque.limit = range->opaque.lo_next + length;
+    _PyIRSourceMap source;
+    int valid = _PyIRSource_Decode(linetable, length, &source);
+    assert(valid >= 0);
+    if (valid < 0) {
+        source = (_PyIRSourceMap){(const unsigned char *)linetable, 0, NULL, 0};
+    }
+    range->opaque.lo_next = source.locations;
+    range->opaque.limit = range->opaque.lo_next + source.locations_size;
     range->ar_start = -1;
     range->ar_end = 0;
     range->opaque.computed_line = firstlineno;
@@ -1651,6 +1991,10 @@ typedef struct {
     PyObject_HEAD
     PyCodeObject *li_code;
     PyCodeAddressRange li_line;
+    int li_offset;
+    int li_source_offset;
+    int li_source_line;
+    int li_last_line;
 } lineiterator;
 
 
@@ -1676,19 +2020,54 @@ lineiter_next(PyObject *self)
 {
     lineiterator *li = (lineiterator*)self;
     PyCodeAddressRange *bounds = &li->li_line;
-    if (!_PyLineTable_NextAddressRange(bounds)) {
+    _PyIRSourceMap source = _PyIRSource_Stored(li->li_code->co_linetable);
+find_source:;
+    int next_source = INT_MAX, source_line = INT_MAX;
+    for (uint32_t i = 0; i < source.nrecords; i++) {
+        _PyIRSourceEvent event;
+        _PyIRSource_Event(&source, i, &event);
+        if (event.to < li->li_offset ||
+            (event.to == li->li_source_offset && event.line <= li->li_source_line))
+        {
+            continue;
+        }
+        if (event.to < next_source ||
+            (event.to == next_source && event.line < source_line))
+        {
+            next_source = event.to;
+            source_line = event.line;
+        }
+    }
+    if (next_source == li->li_offset) {
+        li->li_source_offset = next_source;
+        li->li_source_line = source_line;
+        int real_line = _PyCode_CheckLineNumber(next_source, bounds);
+        if (source_line == real_line || source_line == li->li_last_line) {
+            /* Runtime edge events remain distinct. Static line ranges merge
+             * adjacent equal lines, including zero-width eliminated spans. */
+            goto find_source;
+        }
+        li->li_last_line = source_line;
+        return Py_BuildValue("iii", next_source, next_source, source_line);
+    }
+    if (li->li_offset >= Py_SIZE(li->li_code)) {
         return NULL;
     }
-    int start = bounds->ar_start;
-    int line = bounds->ar_line;
+    int line = _PyCode_CheckLineNumber(li->li_offset, bounds);
+    int start = li->li_offset;
+    int end = bounds->ar_end;
     // Merge overlapping entries:
     while (_PyLineTable_NextAddressRange(bounds)) {
         if (bounds->ar_line != line) {
             _PyLineTable_PreviousAddressRange(bounds);
             break;
         }
+        end = bounds->ar_end;
     }
-    return Py_BuildValue("iiO&", start, bounds->ar_end,
+    end = Py_MIN(end, next_source);
+    li->li_offset = end;
+    li->li_last_line = line;
+    return Py_BuildValue("iiO&", start, end,
                          _source_offset_converter, &line);
 }
 
@@ -1750,6 +2129,10 @@ new_linesiterator(PyCodeObject *code)
         return NULL;
     }
     li->li_code = (PyCodeObject*)Py_NewRef(code);
+    li->li_offset = 0;
+    li->li_source_offset = -1;
+    li->li_source_line = -1;
+    li->li_last_line = INT_MIN;
     _PyCode_InitAddressRange(code, &li->li_line);
     return li;
 }
@@ -2715,6 +3098,8 @@ free_monitoring_data(_PyCoMonitoringData *data)
     if (data->line_tools) {
         PyMem_Free(data->line_tools);
     }
+    PyMem_Free(data->source_line_tools);
+    PyMem_Free(data->source_forced);
     if (data->per_instruction_opcodes) {
         PyMem_Free(data->per_instruction_opcodes);
     }
@@ -3182,6 +3567,32 @@ code_replace_impl(PyCodeObject *self, int co_argcount,
 
 #undef CHECK_INT_ARG
 
+    bool structural_change =
+        co_argcount != self->co_argcount ||
+        co_posonlyargcount != self->co_posonlyargcount ||
+        co_kwonlyargcount != self->co_kwonlyargcount ||
+        co_nlocals != self->co_nlocals || co_stacksize != self->co_stacksize ||
+        (co_flags & ~CO_VIRTUAL_KWARGS) != (self->co_flags & ~CO_VIRTUAL_KWARGS) ||
+        co_varnames != NULL || co_freevars != NULL || co_cellvars != NULL;
+    if (co_code != NULL) {
+        structural_change |= PyBytes_GET_SIZE(co_code) != Py_SIZE(self) * (Py_ssize_t)sizeof(_PyIRWord) ||
+            memcmp(PyBytes_AS_STRING(co_code), self->co_words,
+                   (size_t)Py_MIN(PyBytes_GET_SIZE(co_code),
+                                 Py_SIZE(self) * (Py_ssize_t)sizeof(_PyIRWord))) != 0;
+        if (structural_change && co_linetable == self->co_linetable) {
+            _PyIRSourceMap source;
+            int decoded = _PyIRSource_Decode(PyBytes_AS_STRING(co_linetable),
+                                             PyBytes_GET_SIZE(co_linetable), &source);
+            if (decoded < 0 || source.nrecords) {
+                PyErr_SetString(PyExc_ValueError,
+                                "code.replace: changed code requires a matching source map");
+                return PyValue_NULL;
+            }
+        }
+    }
+    if (structural_change) {
+        co_flags &= ~CO_VIRTUAL_KWARGS;
+    }
     PyObject *code = NULL;
     if (co_code == NULL) {
         code = _PyCode_GetCode(self);

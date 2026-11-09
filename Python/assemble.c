@@ -5,6 +5,7 @@
 #include "pycore_flowgraph.h"
 #include "pycore_intrinsics.h"      // INTRINSIC_COMPARE_OP
 #include "pycore_ir.h"                // IR_WORD()
+#include "pycore_ir_source.h"
 #include "pycore_list.h"              // PyList_GET_VALUE()
 #include "pycore_long.h"              // _PyLong_CheckExactAndCompact()
 #include "pycore_long_value.h"    // _PyValue_AsInt()
@@ -349,6 +350,121 @@ assemble_location_info(struct assembler *a, _PyRegCfg *cfg, int firstlineno)
     return SUCCESS;
 }
 
+/* Source-only operations occupy no word. Find the actual continuation first,
+ * then record only this edge's eliminated source lines and exception state. */
+static int
+assemble_source_edge(PyBytesWriter *writer, _PyRegCfg *cfg, int from,
+                     int edge, int block, int first)
+{
+    int b = block, i = first;
+    while (b < cfg->nblocks) {
+        if (i == cfg->blocks[b].end) {
+            if (!cfg->blocks[b].falls_through || b + 1 == cfg->nblocks) {
+                return SUCCESS;
+            }
+            i = cfg->blocks[++b].start;
+            continue;
+        }
+        if (cfg->ops[i].nwords) {
+            break;
+        }
+        i++;
+    }
+    if (b == cfg->nblocks) {
+        return SUCCESS;
+    }
+    int to = cfg->ops[i].word;
+    for (int j = first; j < i; j++) {
+        _PyRegOp *op = &cfg->ops[j];
+        if (!(op->flags & _PyReg_SOURCE_ORIGIN) || op->loc.lineno <= 0 ||
+            !(op->opcode == NOP || (op->flags & _PyReg_ELIDED_NOP)))
+        {
+            continue;
+        }
+        _PyIRSourceEvent event = {
+            .from = from, .to = to, .edge = edge,
+            .line = op->loc.lineno, .end_line = op->loc.end_lineno,
+            .column = op->loc.col_offset, .end_column = op->loc.end_col_offset,
+            .handler = -1, .exc_slot = 0, .lasti = 0,
+        };
+        if (op->except >= 0) {
+            _PyRegBlock *handler = &cfg->blocks[op->except];
+            event.handler = handler->word;
+            event.exc_slot = cfg->nlocalsplus + handler->startdepth - 1;
+            event.lasti = handler->preserve_lasti;
+        }
+        unsigned char encoded[_PyIR_SOURCE_RECORD];
+        _PyIRSource_EncodeEvent(encoded, &event);
+        RETURN_IF_ERROR(PyBytesWriter_WriteBytes(writer, encoded, sizeof(encoded)));
+    }
+    return SUCCESS;
+}
+
+static int
+assemble_source_map(struct assembler *a, _PyRegCfg *cfg)
+{
+    PyBytesWriter *writer = PyBytesWriter_Create(0);
+    if (writer == NULL) {
+        return ERROR;
+    }
+    /* There is no executed predecessor before the real entry prologue.
+     * Do not accept a leading source-only span without entry semantics. */
+    for (int i = 0; i < cfg->nops && !cfg->ops[i].nwords; i++) {
+        _PyRegOp *op = &cfg->ops[i];
+        if ((op->flags & _PyReg_SOURCE_ORIGIN) && op->loc.lineno > 0 &&
+            (op->opcode == NOP || (op->flags & _PyReg_ELIDED_NOP)))
+        {
+            PyErr_SetString(PyExc_SystemError,
+                            "source-only span before executable entry");
+            goto error;
+        }
+    }
+    for (int b = 0; b < cfg->nblocks; b++) {
+        for (int i = cfg->blocks[b].start; i < cfg->blocks[b].end; i++) {
+            _PyRegOp *op = &cfg->ops[i];
+            if (!op->nwords) {
+                continue;
+            }
+            const _PyIRFormat *fmt = _PyRegCfg_FormatOf(op->opcode);
+            if (op->target >= 0 && !(fmt->flags & _PyIR_NAMES_TARGET)) {
+                int target = op->target;
+                if (assemble_source_edge(writer, cfg, op->word,
+                                         _PyIR_SOURCE_TAKEN, target,
+                                         cfg->blocks[target].start) < 0)
+                {
+                    goto error;
+                }
+            }
+            if (!IS_SCOPE_EXIT_OPCODE(op->opcode) &&
+                !IS_UNCONDITIONAL_JUMP_OPCODE(op->opcode) &&
+                assemble_source_edge(writer, cfg, op->word,
+                                     _PyIR_SOURCE_FALLTHROUGH, b, i + 1) < 0)
+            {
+                goto error;
+            }
+        }
+    }
+    PyObject *records = PyBytesWriter_Finish(writer);
+    if (records == NULL) {
+        return ERROR;
+    }
+    Py_ssize_t size = PyBytes_GET_SIZE(records);
+    PyObject *map = _PyIRSource_Pack(
+        (const unsigned char *)PyBytes_AS_STRING(a->a_linetable),
+        (uint32_t)PyBytes_GET_SIZE(a->a_linetable),
+        (const unsigned char *)PyBytes_AS_STRING(records),
+        (uint32_t)(size / _PyIR_SOURCE_RECORD));
+    Py_DECREF(records);
+    if (map == NULL) {
+        return ERROR;
+    }
+    Py_SETREF(a->a_linetable, map);
+    return SUCCESS;
+error:
+    PyBytesWriter_Discard(writer);
+    return ERROR;
+}
+
 static int
 assemble_emit(struct assembler *a, _PyRegCfg *cfg, int first_lineno,
               PyObject *const_cache)
@@ -373,6 +489,7 @@ assemble_emit(struct assembler *a, _PyRegCfg *cfg, int first_lineno,
     if (a->a_linetable == NULL) {
         return ERROR;
     }
+    RETURN_IF_ERROR(assemble_source_map(a, cfg));
     RETURN_IF_ERROR(_PyCompile_ConstCacheMergeOne(const_cache, &a->a_linetable));
     RETURN_IF_ERROR(_PyCompile_ConstCacheMergeOne(const_cache, &a->a_bytecode));
     RETURN_IF_ERROR(_PyCompile_ConstCacheMergeOne(const_cache, &a->a_fbinit));
@@ -993,11 +1110,9 @@ choose_handlers(_PyRegCfg *cfg, PyObject *consts)
         }
         assert(!IS_PSEUDO_INSTR(op->opcode));
         assert(IS_VALID_OPCODE(op->opcode));
-        if (op->flags & _PyReg_ELIDED) {
-            // No handler runs for it (PUSH_NULL has none); a NOP holds a
-            // line that nothing else on it does
+        if (op->opcode == NOP || (op->flags & _PyReg_ELIDED)) {
             op->handler = NOP;
-            op->nwords = (op->flags & _PyReg_ELIDED_NOP) ? 1 : 0;
+            op->nwords = 0;
             continue;
         }
         op->handler = choose_handler(op, consts);
@@ -1346,6 +1461,10 @@ _PyAssemble_MakeCodeObject(_PyCompile_CodeUnitMetadata *umd, PyObject *const_cac
     // which compaction may make fewer than the deepest stack
     struct assembler a;
     memset(&a, 0, sizeof(a));
+    code_flags &= ~CO_VIRTUAL_KWARGS;
+    if (cfg->virtual_kwargs) {
+        code_flags |= CO_VIRTUAL_KWARGS;
+    }
     int res = _PyRegCfg_AssignConstSlots(
         cfg, consts, (int)PyDict_GET_SIZE(umd->u_freevars));
     // The hidden constant slots are part of the frame

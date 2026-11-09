@@ -345,7 +345,7 @@ class AssemblerTest(unittest.TestCase):
         self.assertEqual(f(C()), 5)
 
     @unittest.skipUnless(SPECIALIZES, "the IR is not specialised")
-    def test_bool_branch_nop_observation(self):
+    def test_bool_branch_source_boundary_observation(self):
         def f(flag, enable):
             enable()
             value = 4
@@ -363,19 +363,17 @@ class AssemblerTest(unittest.TestCase):
         for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 10):
             self.assertEqual(f(False, noop), 2)
         self.assertEqual(f(True, noop), 1)
-        self.assertTrue(any(name == "POP_JUMP_IF_FALSE_BOOL" or
-                            name.startswith("POP_JUMP_IF_FALSE_BOOL_SKIP_")
-                            for name in handlers(f)))
-        nop = next(i for i in dis.get_instructions(f) if i.opname == "NOP")
-        self.assertTrue(nop.starts_line)
-        self.assertIsNotNone(nop.line_number)
+        self.assertIn("POP_JUMP_IF_FALSE_BOOL", handlers(f))
+        instructions = list(dis.get_instructions(f))
+        self.assertNotIn("NOP", [i.opname for i in instructions])
+        source_line = f.__code__.co_firstlineno + 5  # try:
         self.assertEqual(f(False, noop), 2)
 
         events = []
         def tracer(frame, event, arg):
             if frame.f_code is f.__code__:
                 frame.f_trace_opcodes = True
-                events.append((event, frame.f_lasti))
+                events.append((event, frame.f_lasti, frame.f_lineno))
             return tracer
 
         def enable():
@@ -391,7 +389,7 @@ class AssemblerTest(unittest.TestCase):
 
         def jump(frame, event, arg):
             if (frame.f_code is f.__code__ and event == "line" and
-                    frame.f_lineno == nop.line_number):
+                    frame.f_lineno == source_line):
                 frame.f_lineno = f.__code__.co_firstlineno + 9
             return jump
 
@@ -404,7 +402,7 @@ class AssemblerTest(unittest.TestCase):
         mon = sys.monitoring
         tool = mon.DEBUGGER_ID
         seen = []
-        mon.use_tool_id(tool, "test_ir_nop")
+        mon.use_tool_id(tool, "test_ir_source")
         try:
             for event in (mon.events.BRANCH_LEFT, mon.events.BRANCH_RIGHT):
                 mon.register_callback(tool, event,
@@ -417,18 +415,21 @@ class AssemblerTest(unittest.TestCase):
             mon.set_local_events(tool, f.__code__, 0)
             mon.free_tool_id(tool)
         self.assertGreaterEqual(len({dst for _, dst in seen}), 2)
-        self.assertIn(("opcode", nop.offset), events)
+        self.assertIn(source_line,
+                      [line for event, _, line in events if event == "line"])
+        self.assertTrue({offset for event, offset, _ in events if event == "opcode"}
+                        <= {i.offset for i in instructions})
 
         def raising(frame, event, arg):
-            if (frame.f_code is f.__code__ and event == "opcode" and
-                    frame.f_lasti == nop.offset):
-                raise LookupError("nop observer")
+            if (frame.f_code is f.__code__ and event == "line" and
+                    frame.f_lineno == source_line):
+                raise LookupError("source boundary observer")
             frame.f_trace_opcodes = True
             return raising
 
         sys.settrace(raising)
         try:
-            with self.assertRaisesRegex(LookupError, "nop observer"):
+            with self.assertRaisesRegex(LookupError, "source boundary observer"):
                 f(False, noop)
         finally:
             sys.settrace(None)
@@ -850,7 +851,7 @@ class FeedbackLayoutTest(unittest.TestCase):
         total = int.from_bytes(code.co_fbinit[:4], sys.byteorder) & 0xFFFF
         position = 2
         sizes = {"UNARY": (24,), "BINARY": (32,), "ATTR": (40,),
-                 "GLOBAL": (32,), "CALL": (24,), "BRANCH": (16, 24)}
+                 "GLOBAL": (32,), "CALL": (32,), "BRANCH": (16, 24)}
         for kind, unit, arg, units in entries[1:]:
             self.assertEqual(unit, position)
             self.assertIn(units * 8, sizes[kinds[kind]])
@@ -1027,7 +1028,7 @@ class FeedbackLayoutTest(unittest.TestCase):
                     c.replace(co_fbinit=fbinit)
         # A word that names a unit that starts no entry, or whose entry is
         # too small for its handler
-        short = table(word(0, 0, 5), word(dis._FEEDBACK_KINDS.index("CALL"), 2, 0))
+        short = table(word(0, 0, 6), word(dis._FEEDBACK_KINDS.index("CALL"), 2, 0))
         with self.assertRaisesRegex(ValueError, "feedback"):
             c.replace(co_fbinit=short)
 
@@ -2203,14 +2204,20 @@ class RegCfgTest(unittest.TestCase):
         self.assertNotIn("POP_TOP", self.names(f))
         self.assertNotIn("PUSH_NULL", self.names(f))
 
-    def test_pop_top_that_ends_a_line_stays(self):
-        # A debugger that starts tracing inside the call (pdb.set_trace())
-        # stops at the word after it, and that must still be on the line
+    def test_call_discard_across_source_lines(self):
+        # Source boundaries do not require a temporary result or a POP word.
         def f(g):
             g()
             return 1
-        self.assertIn("POP_TOP", self.names(f))
+        self.assertNotIn("POP_TOP", self.names(f))
         self.assertNotIn("PUSH_NULL", self.names(f))
+        call = next(word for word in get_ir(f.__code__) if word[0] == "CALL")
+        self.assertEqual(call[1], IR_FIELD_MAX)
+        first = f.__code__.co_firstlineno
+        result, events = trace(f, lambda: object())
+        self.assertEqual(result, 1)
+        self.assertEqual([e[2] - first for e in events if e[0] == "line"],
+                         [1, 2])
 
     # d. Truth folding in value context
 

@@ -3,6 +3,7 @@
 from test import support
 import unittest
 import sys
+import struct
 import difflib
 import gc
 from functools import wraps
@@ -323,12 +324,32 @@ generator_example.events = ([(0, 'call'),
                             [(5, 'line'), (5, 'return')])
 
 
-def lineno_matches_lasti(frame):
-    last_line = None
-    for start, end, line in frame.f_code.co_lines():
-        if start <= frame.f_lasti < end:
-            last_line = line
-    return last_line == frame.f_lineno
+def lineno_matches_lasti(frame, event):
+    ranges = list(frame.f_code.co_lines())
+    if any(start <= frame.f_lasti < end and line == frame.f_lineno
+           for start, end, line in ranges):
+        return True
+    if event != 'line':
+        return False
+    # Source-only LINE keeps f_lasti at the actual predecessor. Independently
+    # validate that exact edge span, rather than accepting any line in code.
+    raw = frame.f_code.co_linetable
+    if len(raw) < 16:
+        return False
+    magic, version, size, count = struct.unpack_from('<4sIII', raw)
+    if magic != b'IRSM' or version != 1 or 16 + size + count * 40 != len(raw):
+        return False
+    words = len(frame.f_code.co_code) // 8
+    for record in struct.iter_unpack('<10i', raw[16 + size:]):
+        source, target, edge, line = record[:4]
+        if (source != frame.f_lasti or line != frame.f_lineno or
+                not 0 <= source < words or not 0 <= target < words or edge not in (0, 1)):
+            continue
+        if any(location == line and
+               (start <= target < end or start == end == target or end == target)
+               for start, end, location in ranges):
+            return True
+    return False
 
 class Tracer:
     def __init__(self, trace_line_events=None, trace_opcode_events=None):
@@ -343,7 +364,7 @@ class Tracer:
             frame.f_trace_opcodes = self.trace_opcode_events
 
     def trace(self, frame, event, arg):
-        assert lineno_matches_lasti(frame)
+        assert lineno_matches_lasti(frame, event)
         self._reconfigure_frame(frame)
         self.events.append((frame.f_lineno, event))
         return self.trace
@@ -2031,7 +2052,7 @@ class JumpTracer:
     def trace(self, frame, event, arg):
         if self.done:
             return
-        assert lineno_matches_lasti(frame)
+        assert lineno_matches_lasti(frame, event)
         # frame.f_code.co_firstlineno is the first line of the decorator when
         # 'function' is decorated and the decorator may be written using
         # multiple physical lines when it is too long. Use the first line

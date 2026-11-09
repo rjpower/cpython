@@ -70,6 +70,68 @@ _PyRegCfg_Free(_PyRegCfg *cfg)
 }
 
 static int
+kwargs_read(const _PyRegOp *op, int slot)
+{
+    return op->oparg == slot &&
+        (op->opcode == LOAD_FAST || op->opcode == LOAD_FAST_CHECK ||
+         op->opcode == LOAD_FAST_BORROW);
+}
+
+/* Run before conversion and load folding. An immutable kwargs binding needs
+ * a barrier on its read paths only; unrelated local loads keep their ABI. */
+int
+_PyRegCfg_PrepareKwargs(_PyRegCfg *cfg, int slot)
+{
+    int reads = 0;
+    for (int i = 0; i < cfg->nops; i++) {
+        _PyRegOp *op = &cfg->ops[i];
+        if (op->oparg != slot) {
+            continue;
+        }
+        if (kwargs_read(op, slot)) {
+            reads++;
+        }
+        else if (OPCODE_HAS_LOCAL(op->opcode) || op->opcode == MAKE_CELL ||
+                 op->opcode == LOAD_DEREF || op->opcode == STORE_DEREF ||
+                 op->opcode == DELETE_DEREF || op->opcode == LOAD_CLOSURE)
+        {
+            return SUCCESS;
+        }
+    }
+    _PyRegOp *ops = PyMem_Calloc((size_t)cfg->nops + reads, sizeof(*ops));
+    if (ops == NULL) {
+        PyErr_NoMemory();
+        return ERROR;
+    }
+    int next = 0;
+    for (int b = 0; b < cfg->nblocks; b++) {
+        _PyRegBlock *block = &cfg->blocks[b];
+        int start = block->start, end = block->end;
+        block->start = next;
+        for (int i = start; i < end; i++) {
+            _PyRegOp *op = &cfg->ops[i];
+            if (kwargs_read(op, slot)) {
+                ops[next++] = (_PyRegOp) {
+                    .opcode = MATERIALIZE_KWARGS,
+                    .oparg = slot,
+                    .target = -1,
+                    .except = op->except,
+                    .dst = -1,
+                    .loc = op->loc,
+                };
+            }
+            ops[next++] = *op;
+        }
+        block->end = next;
+    }
+    PyMem_Free(cfg->ops);
+    cfg->ops = ops;
+    cfg->nops = cfg->aops = next;
+    cfg->virtual_kwargs = 1;
+    return SUCCESS;
+}
+
+static int
 grow(void **array, int *alloc, int needed, size_t item)
 {
     if (needed <= *alloc) {
@@ -770,7 +832,10 @@ _PyRegCfg_OpSlots(const _PyRegCfg *cfg, const _PyRegOp *op,
     for (int k = 0; k < fmt->ninputs && k < 4; k++) {
         slots->in[k] = first + k >= 0 ? _PyRegCfg_Slot(cfg, in[first + k]) : 0;
     }
-    if (op->dst >= 0) {
+    if (op->flags & _PyReg_DISCARD) {
+        slots->dst = IR_NO_DST;
+    }
+    else if (op->dst >= 0) {
         slots->dst = op->dst;
     }
     else if (fmt->dst == _PyIR_NO_DST) {
@@ -1579,6 +1644,7 @@ static const struct {
     {"pop top", _PyRegPass_PopTop},
     {"discard", _PyRegPass_Discard},
     {"truth folding", _PyRegPass_TruthFold},
+    {"discard after truth folding", _PyRegPass_Discard},
     {"jump fusion", _PyRegPass_FuseJump},
     {"null elision", _PyRegPass_ElideNull},
 };

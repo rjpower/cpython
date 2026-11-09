@@ -106,7 +106,7 @@ from generators_common import (
     write_header,
 )
 from cwriter import CWriter
-from lexer import Token
+from lexer import Token, tokenize
 from stack import (
     Local,
     PointerOffset,
@@ -150,22 +150,10 @@ class ExecutionVariant:
     base: str
     local_fields: tuple[str, ...] = ()
     temp_fields: tuple[str, ...] = ()
-    boundary_mask: int = 0
-    postcall_discard: bool = False
 
 
 # Execution-only refinements: canonical words keep their ordinary handlers.
 EXECUTION_VARIANTS = {
-    "CALL_PY_EXACT_ARGS_DISCARD": ExecutionVariant(
-        "CALL_PY_EXACT_ARGS", postcall_discard=True),
-    "CALL_PY_GENERAL_DISCARD": ExecutionVariant(
-        "CALL_PY_GENERAL", postcall_discard=True),
-    "POP_JUMP_IF_FALSE_BOOL_SKIP_TAKEN": ExecutionVariant(
-        "POP_JUMP_IF_FALSE_BOOL", boundary_mask=1),
-    "POP_JUMP_IF_FALSE_BOOL_SKIP_FALLTHROUGH": ExecutionVariant(
-        "POP_JUMP_IF_FALSE_BOOL", boundary_mask=2),
-    "POP_JUMP_IF_FALSE_BOOL_SKIP_BOTH": ExecutionVariant(
-        "POP_JUMP_IF_FALSE_BOOL", boundary_mask=3),
     "LOAD_ATTR_SHAPE_LOCAL_TEMP": ExecutionVariant(
         "LOAD_ATTR_SHAPE", local_fields=("B",), temp_fields=("A",)),
 }
@@ -243,11 +231,6 @@ FUSED_JUMPS = ("COMPARE_OP_JUMP", "CONTAINS_OP_JUMP", "IS_OP_JUMP")
 FUSED_SHADOWS = {"COMPARE_OP_JUMP": "COMPARE_OP",
                  "CONTAINS_OP_JUMP": "CONTAINS_OP", "IS_OP_JUMP": "IS_OP"}
 
-# The families whose dst field may be IR_NO_DST, so that the word of a call
-# whose result is popped at once (CALL; POP_TOP) needs no POP_TOP.  The
-# intrinsics are not calls in this sense and keep their POP_TOP.
-DISCARDING = ("CALL", "CALL_KW", "CALL_FUNCTION_EX")
-
 # The unpacks: their dst field names the first of a run of locals that
 # receive the elements in order (the STORE_FASTs folded in), or is IR_NO_DST.
 # The count of elements as a function of the oparg.
@@ -312,7 +295,7 @@ class IRFormat:
                                     # the local's old value
     runs_code: bool = False         # a member may run Python code, see
                                     # runs_code()
-    discards: bool = False          # dst may be IR_NO_DST, see DISCARDING
+    discards: bool = False          # scalar result may use the IR_NO_DST sink
     unpacks: bool = False           # dst names a run of locals for the
                                     # elements, or IR_NO_DST, see UNPACKS
     # The rest of the instruction contract (pycore_ir.h, _PyIRFormat)
@@ -1404,7 +1387,8 @@ def compute_format(group: str, members: list[Instruction]) -> IRFormat:
         fused=fused,
         no_fold=no_fold,
         store_dst=store_dst, runs_code=any(runs_code(m) for m in members),
-        discards=store_dst and window and group in DISCARDING,
+        discards=store_dst and store_mode(head, io[head.name][1]) in
+            (STORE_RESULT, STORE_RETURN),
         unpacks=unpacks,
         jump_always=jumps and jumps_always(head),
         names_target=jumps and names_target_only(head),
@@ -1824,6 +1808,7 @@ class SlotLayout:
     local_fields: tuple[str, ...] = ()
     temp_fields: tuple[str, ...] = ()
     store_dst: bool = False         # dst may name a local
+    canonical_return: bool = False  # proven unchanged canonical slot input
 
     @staticmethod
     def empty() -> "SlotLayout":
@@ -2051,6 +2036,15 @@ class IRStack(Stack):
                 return f"IR_VIEW({self.input_field(p)})"
         return super().load(var, memory_offset)
 
+    def array_output(self, var: StackItem, memory_offset: PointerOffset) -> str:
+        address = super().array_output(var, memory_offset)
+        if self.layout.store_dst and not self.layout.window:
+            # A scalar result can be discarded or folded into a local when
+            # its conditional trailing array is empty. No array home exists
+            # then, so even forming its address would be invalid.
+            return f"(({var.size}) ? {address} : NULL)"
+        return address
+
     def pop(self, var: StackItem, out: CWriter) -> Local:
         before = self.variables[-1] if self.variables else None
         old_name = before.name if before is not None else None
@@ -2107,7 +2101,9 @@ class IRStack(Stack):
             self.refuse_inplace(var, memory_offset)
             if memory_offset.as_int() != 0:
                 raise StackError(f"'{var.name}' is written after the frame changed")
-            out.emit(f"IR_STORE_RETURN({var.name});\n")
+            macro = ("IR_STORE_CANONICAL_RETURN" if self.layout.canonical_return
+                     else "IR_STORE_RETURN")
+            out.emit(f"{macro}({var.name});\n")
             return True
         lay = self.layout
         if lay.window:
@@ -2155,7 +2151,8 @@ class IRStack(Stack):
                 return False
             if self.final:
                 if self.published_temporary_result:
-                    out.emit(f"if (IR_IS_LOCAL({FIELD_VARS[lay.dst]})) {{\n")
+                    field = FIELD_VARS[lay.dst]
+                    out.emit(f"if (IR_IS_LOCAL({field}) || {field} == IR_NO_DST) {{\n")
                 self.dst_stores.append(f"IR_STORE_DST({FIELD_VARS[lay.dst]}, {var.name})")
                 out.emit(f"{self.dst_stores[-1]};\n")
                 if self.published_temporary_result:
@@ -2352,8 +2349,6 @@ class IREmitter(Emitter):
         self._replacers["IR_DST_SLOT"] = self.ir_dst_slot
         self._replacers["IR_BASE"] = self.ir_base
         self._replacers["IR_WINDOW_TAKEN"] = self.ir_window_taken
-        self._replacers["IR_EXECUTE_ORDINARY_NOP"] = self.execute_ordinary_nop
-        self._replacers["JUMPTO"] = self.boundary_jump
         self._replacers["IR_TRY_DICT_FIRST_PROBE"] = self.try_dict_first_probe
         self._replacers["IR_RETIRE_PUBLISHED"] = self.retire_published
         self._replacers["IR_RETIRE_PUBLISHED_RESULT"] = self.retire_published
@@ -2468,7 +2463,7 @@ class IREmitter(Emitter):
             if (self.execution_variant is None or
                     fmt.field_of(ROLE_DST) not in self.execution_variant.temp_fields):
                 failure_result = (
-                    f"(IR_IS_LOCAL({dst}) ? {result_name} : PyValue_NULL)")
+                    f"((IR_IS_LOCAL({dst}) || {dst} == IR_NO_DST) ? {result_name} : PyValue_NULL)")
             assert isinstance(storage.stack, IRStack)
             storage.stack.published_temporary_result = True
         window = (FIELD_VARS[self.format_of(inst).field_of(ROLE_BASE)]
@@ -2586,7 +2581,7 @@ class IREmitter(Emitter):
         self.reader_error()
         self.emit("}\n")
 
-    def unpack_to_locals(self, fmt, count):
+    def unpack_to_locals(self, fmt, count, canonical=False):
         """The elements are in the window, in stack order; if dst names a
         run of locals they go there, one element at a time as the STORE_FASTs
         they replace would, so that a __del__ sees the same locals.  A
@@ -2594,11 +2589,12 @@ class IREmitter(Emitter):
         dst = FIELD_VARS[fmt.field_of(ROLE_DST)]
         self.emit(f"if (IR_IS_LOCAL({dst})) {{\n")
         self.emit(f"int ir_n = {count};\n")
-        self.emit(f"int ir_rest = IR_UNPACK_TO_LOCALS(&IR_SLOT({dst}), "
+        macro = "IR_UNPACK_CANONICAL_TO_LOCALS" if canonical else "IR_UNPACK_TO_LOCALS"
+        self.emit(f"int ir_rest = {macro}(&IR_SLOT({dst}), "
                   "window, ir_n);\n")
         self.emit("if (ir_rest >= 0 &&\n")
         self.emit("    finish_unpack_to_locals(tstate, frame, next_instr, "
-                  f"{self.temps}, &IR_SLOT({dst}), window, ir_n, ir_rest) < 0) {{\n")
+                  f"{self.temps}, &IR_SLOT({dst}), window, ir_n, ir_rest, {int(canonical)}) < 0) {{\n")
         self.emit("next_instr = frame->instr_ptr + 1;\n")
         self.reader_error()
         self.emit("}\n")
@@ -2620,32 +2616,15 @@ class IREmitter(Emitter):
         self.emit("IR_STORE_CANONICAL_TEMP_DST(IR_A(ir_word), ir_leaf_result);\n")
         self.emit_ordered_retirement(
             "ir_leaf_key", "ir_leaf_dict",
-            "(IR_IS_LOCAL(IR_A(ir_word)) ? ir_leaf_result : PyValue_NULL)",
+            "((IR_IS_LOCAL(IR_A(ir_word)) || IR_A(ir_word) == IR_NO_DST) ? ir_leaf_result : PyValue_NULL)",
             "NULL", None)
-        self.emit("if (IR_IS_LOCAL(IR_A(ir_word))) {\n")
+        self.emit("if (IR_IS_LOCAL(IR_A(ir_word)) || IR_A(ir_word) == IR_NO_DST) {\n")
         self.emit("IR_STORE_DST(IR_A(ir_word), ir_leaf_result);\n")
         self.release_displaced()
         self.emit("}\n")
         self.emit("DISPATCH();\n")
         self.emit("}\n")
         self.emit("}\n")
-        return True
-
-    def boundary_jump(self, tkn, tkn_iter, uop, storage, inst):
-        variant = self.execution_variant
-        if variant is None or not variant.boundary_mask:
-            self.emit(tkn)
-            return True
-        target, = self.macro_args(tkn, tkn_iter, 1)
-        self.emit(f"JUMPTO({target});\n")
-        if variant.boundary_mask & 1:
-            self.emit("next_instr += 1;\n")
-        return True
-
-    def execute_ordinary_nop(self, tkn, tkn_iter, uop, storage, inst):
-        self.macro_args(tkn, tkn_iter, 0)
-        self.execute_nop_boundary = not (self.execution_variant is not None
-                                           and self.execution_variant.boundary_mask)
         return True
 
     def call_reload(self, inst):
@@ -2711,8 +2690,17 @@ class IREmitter(Emitter):
         self.emit("assert(frame->instr_ptr == this_instr);\n")
         self.emit("{\n")
         argc = f"{self.call_argc}, " if self.call_kind != "CALL_TRANSACTION_EX" else ""
-        self.emit(f"_PyCallResult call_result = {run_override or self.call_run}(tstate, frame, "
-                  f"call_base, call_destination, {argc}{self.call_flags} | call_state);\n")
+        if run_override:
+            self.emit(f"_PyCallResult call_result = call_bind_known_python(tstate, frame, "
+                      f"call_base, call_destination, {argc}fb);\n")
+            self.emit("if (call_result.status > 0) {\n")
+            self.emit(f"call_result = call_transaction_run_vector(tstate, frame, "
+                      f"call_base, call_destination, {argc}"
+                      f"{self.call_flags} | call_state | CALL_PREPARED);\n")
+            self.emit("}\n")
+        else:
+            self.emit(f"_PyCallResult call_result = {self.call_run}(tstate, frame, "
+                      f"call_base, call_destination, {argc}{self.call_flags} | call_state);\n")
         self.emit("if (call_result.status < 0) {\n")
         self.reader_error()
         self.emit("}\n")
@@ -2728,7 +2716,7 @@ class IREmitter(Emitter):
 
     def invoke_call(self, tkn, tkn_iter, uop, storage, inst):
         self.macro_args(tkn, tkn_iter, 0)
-        run_override = ("call_transaction_run_guarded_python_vector"
+        run_override = ("call_bind_known_python"
                         if tkn.text == "IR_INVOKE_GUARDED_PYTHON_CALL" else None)
         if run_override:
             self.emit("assert(fb->func_version >= FUNC_VERSION_FIRST_VALID);\n")
@@ -3498,13 +3486,7 @@ class IREmitter(Emitter):
         field = fmt.field_of(ROLE_DST)
         if field is None:
             raise analysis_error(f"{inst.name} has no dst", tkn)
-        if (self.execution_variant is not None
-                and self.execution_variant.postcall_discard):
-            if uop.name != "_SAVE_RETURN_SLOT":
-                raise analysis_error("discard recipient requires save-return-slot", tkn)
-            self.emit(f"({FIELD_VARS[field]} | IR_POSTCALL_DISCARD)")
-        else:
-            self.emit(FIELD_VARS[field])
+        self.emit(FIELD_VARS[field])
         return True
 
     def ir_base(
@@ -3682,10 +3664,6 @@ def write_uop(
             if inst.family is None:
                 emitter.emit(f"(void){cache.name};\n")
     emitter.emit_object_inputs(uop, storage, inst)
-    variant = emitter.execution_variant
-    if (variant is not None and variant.boundary_mask & 2
-            and uop.name == "_POP_JUMP_IF_FALSE"):
-        emitter.emit("next_instr += 1;\n")
     reachable, storage = emitter.emit_tokens(uop, storage, inst, False)
     if emitter.pending_owner is not None:
         raise analysis_error(
@@ -3758,44 +3736,6 @@ def value_bridge_bound(name: str, inst: Instruction) -> int:
     )
 
 
-def validate_ordinary_nop_boundary(inst: Instruction, fmt: IRFormat) -> None:
-    parts = [p for p in inst.parts if isinstance(p, Uop)]
-    markers = [p for p in parts if any(
-        t.text == "IR_EXECUTE_ORDINARY_NOP" for t in p.body.tokens())]
-    if not markers:
-        return
-    expected = ["_GUARD_TOS_BOOL", "_POP_JUMP_IF_FALSE",
-                "_EXECUTE_ORDINARY_NOP"]
-    stack_effects = [
-        ([('value', True, '')], [('value', True, '')]),
-        ([('cond', False, '')], []),
-        ([], []),
-    ]
-    def stack_items(items):
-        return [(item.name, item.peek, item.size) for item in items]
-
-    inputs, outputs = external_io(inst)
-    if [p.name for p in parts] != expected or inst.parts[-1] is not parts[-1]:
-        raise analysis_error("IR_EXECUTE_ORDINARY_NOP requires the checked "
-                             "terminal boolean branch", inst.where)
-    statements = parts[0].body.body
-    guard = (" ".join(t.text for t in statements[0].tokens())
-             if statements and isinstance(statements[0], SimpleStmt) else "")
-    marker = " ".join(t.text for t in parts[-1].body.tokens())
-    if (guard != "EXIT_IF ( ! PyValue_BoolCheck ( value ) ) ;"
-            or marker != "{ IR_EXECUTE_ORDINARY_NOP ( ) ; }"
-            or not parts[0].is_guard() or not parts[1].properties.jumps
-            or [(stack_items(p.stack.inputs), stack_items(p.stack.outputs))
-                for p in parts] != stack_effects
-            or len(inputs) != 1 or inputs[0].size or outputs or fmt.window
-            or fmt.store_dst or releases_object(inst)
-            or any(p.properties.escapes or p.properties.eval_breaker
-                   or p.properties.switches_frame or p.properties.error_with_pop
-                   or p.properties.error_without_pop
-                   for p in parts)):
-        raise analysis_error("IR_EXECUTE_ORDINARY_NOP requires the checked "
-                             "terminal boolean branch", inst.where)
-
 
 def validate_dict_first_probe(inst: Instruction, fmt: IRFormat) -> None:
     parts = [p for p in inst.parts if isinstance(p, Uop)]
@@ -3833,7 +3773,7 @@ def validate_dict_first_probe(inst: Instruction, fmt: IRFormat) -> None:
             or fmt.window or fmt.n_inputs != 2 or fmt.borrow_mask != 3
             or fmt.input_field(0) != "B" or fmt.input_field(1) != "C"
             or fmt.field_of(ROLE_DST) != "A" or not fmt.store_dst
-            or fmt.discards or fmt.unpacks):
+            or fmt.unpacks):
         raise analysis_error("IR_TRY_DICT_FIRST_PROBE requires the checked "
                              "dictionary reader prefix and scalar format", inst.where)
 
@@ -3912,34 +3852,6 @@ def generate_handler(name: str, inst: Instruction, fmt: IRFormat,
     name with both roles is refused: the DSL gives the owner another name,
     as `taken = TAKE(value)` does."""
     emitter.execution_variant = EXECUTION_VARIANTS.get(name)
-    variant = emitter.execution_variant
-    if variant is not None and variant.boundary_mask:
-        if variant.base != "POP_JUMP_IF_FALSE_BOOL" or variant.boundary_mask not in (1, 2, 3):
-            raise ValueError(f"invalid boundary continuation for {name}")
-    if variant is not None and variant.postcall_discard:
-        if variant.base not in ("CALL_PY_EXACT_ARGS", "CALL_PY_GENERAL"):
-            raise ValueError(f"invalid discard completion for {name}")
-        parts = [part for part in inst.parts if isinstance(part, Uop)]
-        if ([part.name for part in parts[-2:]] !=
-                ["_SAVE_RETURN_SLOT", "_PUSH_FRAME"] or not fmt.window
-                or not fmt.discards or not fmt.store_dst):
-            raise analysis_error("discard completion requires checked Python "
-                                 "child commit", inst.where)
-        save_body = " ".join(token.text for token in parts[-2].body.tokens())
-        if save_body != "{ frame -> return_slot = ( uint16_t ) IR_DST_SLOT ; }":
-            raise analysis_error("discard completion requires the checked "
-                                 "recipient store", inst.where)
-    validate_ordinary_nop_boundary(inst, fmt)
-    if variant is not None and variant.boundary_mask:
-        branch = next(part for part in inst.parts if isinstance(part, Uop)
-                      and part.name == "_POP_JUMP_IF_FALSE")
-        expected = ("{ assert ( PyValue_BoolCheck ( cond ) ) ; "
-                    "int flag = PyValue_IsFalse ( cond ) ; DEAD ( cond ) ; "
-                    "RECORD_BRANCH_TAKEN ( FB_BRANCH ( ) , flag ) ; "
-                    "if ( flag ) { JUMPTO ( oparg ) ; } }")
-        if " ".join(token.text for token in branch.body.tokens()) != expected:
-            raise analysis_error("boundary continuation requires the checked "
-                                 "boolean branch body", inst.where)
     validate_dict_first_probe(inst, fmt)
     validate_guarded_python_call(inst, fmt)
     emitter.result_publication = result_publication_contract(inst, fmt)
@@ -3962,6 +3874,59 @@ def generate_handler(name: str, inst: Instruction, fmt: IRFormat,
     emit_handler(name, inst, fmt, emitter, out, record, {})
 
 
+def canonical_return_input(inst: Instruction) -> bool:
+    """A return transfers a canonical slot input without changing its bits.
+
+    Fail closed to ordinary publication if the checked uop chain changes.
+    Native/SEND results do not acquire this fact from their handler name.
+    """
+    parts = [p for p in inst.parts if isinstance(p, Uop)]
+    if [p.name for p in parts] not in (
+        ["_MAKE_HEAP_SAFE", "_RETURN_VALUE"],
+        ["_RETURN_VALUE_EVENT", "_RETURN_VALUE"],
+    ):
+        return False
+    prefix = [t.text for t in parts[0].body.tokens() if t.kind != "COMMENT"]
+    body = [t.text for t in parts[1].body.tokens() if t.kind != "COMMENT"]
+    expected_body = """{
+        assert(frame->owner != FRAME_OWNED_BY_INTERPRETER);
+        PyValue temp = retval;
+        DEAD(retval);
+        SAVE_STACK();
+        _PyFrame_AssertTemporariesClear(frame);
+        DTRACE_FUNCTION_RETURN();
+        _Py_LeaveRecursiveCallPy(tstate);
+        _PyInterpreterFrame *dying = frame;
+        int generator_return = dying->owner == FRAME_OWNED_BY_GENERATOR;
+        frame = tstate->current_frame = dying->previous;
+        _PyEval_FrameClearAndPop(tstate, dying);
+        RELOAD_STACK();
+        if (generator_return) {
+            next_instr = _PyEval_GeneratorReturnTarget(frame);
+        }
+        else {
+            next_instr = frame->return_pc;
+        }
+        res = temp;
+        LLTRACE_RESUME_FRAME();
+    }"""
+    if body != [t.text for t in tokenize(expected_body)]:
+        return False
+    if parts[0].name == "_MAKE_HEAP_SAFE":
+        return prefix == ["{", "taken", "=", "TAKE", "(", "value", ")", ";", "}"]
+    expected_event = """{
+        PyValue held = TAKE(val);
+        int err = _Py_call_instrumentation_arg(
+            tstate, PY_MONITORING_EVENT_PY_RETURN, frame, this_instr, held);
+        if (err) {
+            PyValue_CLOSE(held);
+            ERROR_IF(true);
+        }
+        taken = held;
+    }"""
+    return prefix == [t.text for t in tokenize(expected_event)]
+
+
 def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
                  emitter: IREmitter, out: CWriter, record: bool,
                  roles: dict[str, set[str]]) -> None:
@@ -3974,7 +3939,6 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
         operation = "NB_" + name.removeprefix(BINARY_OP_FAMILY + "_")
     transaction = uses_call_transaction(inst)
     emitter.call_finished = False
-    emitter.execute_nop_boundary = False
     emitter.call_fallback_used = False
     emitter.call_fallback = f"call_transaction_fallback_{name}"
     is_target = inst.is_target and name == inst.name
@@ -4078,9 +4042,6 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
             flags.append("CALL_INSTRUMENTED")
         if polls_at_end(name, inst):
             flags.append("CALL_PERIODIC")
-        if (emitter.execution_variant is not None
-                and emitter.execution_variant.postcall_discard):
-            flags.append("CALL_POSTCALL_DISCARD")
         emitter.call_flags = "(" + (" | ".join(flags) or "0") + ")"
         # The transaction's state is in registers: its numeric homes, read
         # once, and what the handler did (register-ir-v2-a3.md 3.5, R-b)
@@ -4098,11 +4059,13 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
         out.emit(f"opcode = {canonical_handler(name)};\n")
     mode = store_mode(inst, external_io(inst)[1]) if fmt.store_dst else None
     if mode == STORE_LEAVE:
-        out.emit(f"if (IR_IS_LOCAL({FIELD_VARS[fmt.field_of(ROLE_DST)]})) {{\n")
+        dst = FIELD_VARS[fmt.field_of(ROLE_DST)]
+        out.emit(f"if (IR_IS_LOCAL({dst}) || {dst} == IR_NO_DST) {{\n")
         emitter.emit_jump_to_predicted(inst)
         out.emit("}\n")
     elif mode == STORE_NEVER:
-        out.emit(f"assert(!IR_IS_LOCAL({FIELD_VARS[fmt.field_of(ROLE_DST)]}));\n")
+        dst = FIELD_VARS[fmt.field_of(ROLE_DST)]
+        out.emit(f"assert(!IR_IS_LOCAL({dst}) && {dst} != IR_NO_DST);\n")
     declare_variables(inst, out, emitter.declared_roles)
     for k in range(fmt.n_inputs):
         if fmt.borrow_mask & (1 << k):
@@ -4112,6 +4075,7 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
     for box in sorted(emitter.boxes):
         out.emit(f"PyObject *{box} = NULL;\n")
     layout = slot_layout(inst, fmt, mode)
+    layout = replace(layout, canonical_return=canonical_return_input(inst))
     if emitter.execution_variant is not None:
         layout = replace(layout, local_fields=emitter.execution_variant.local_fields,
                          temp_fields=emitter.execution_variant.temp_fields)
@@ -4140,9 +4104,10 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
         if fmt.store_dst:
             emitter.release_displaced()
         if fmt.unpacks:
-            emitter.unpack_to_locals(fmt, UNPACKS[fmt.group])
-        if emitter.execute_nop_boundary:
-            out.emit("IR_EXECUTE_ORDINARY_NOP();\n")
+            emitter.unpack_to_locals(
+                fmt, UNPACKS[fmt.group], canonical=inst.name in (
+                    "UNPACK_SEQUENCE_TWO_TUPLE", "UNPACK_SEQUENCE_TUPLE",
+                    "UNPACK_SEQUENCE_LIST"))
         out.emit("DISPATCH();\n")
     if transaction and emitter.call_fallback_used:
         out.emit(f"{emitter.call_fallback}:;\n")
@@ -4423,9 +4388,6 @@ def boxing_handlers(analysis: Analysis, formats: dict[str, IRFormat]) -> set[str
                    for p in inst.parts):
                 raise analysis_error("IR_TRY_DICT_FIRST_PROBE cannot use "
                                      "a value record", inst.where)
-            if emitter.execute_nop_boundary:
-                raise analysis_error("IR_EXECUTE_ORDINARY_NOP cannot follow "
-                                     "boxed inputs", inst.where)
             result.add(name)
     return result
 

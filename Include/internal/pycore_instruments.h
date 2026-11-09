@@ -89,6 +89,12 @@ PyAPI_DATA(PyObject) _PyInstrumentation_DISABLE;
 #define _PY_MONITORING_EVENTS 19
 
 /* Tables of which tools are active for each monitored event. */
+enum {
+    _PyIR_SOURCE_BRANCH_WRAPPER = 1,
+    _PyIR_SOURCE_LINE_WRAPPER = 2,
+    _PyIR_SOURCE_INGRESS_WRAPPER = 4,
+};
+
 typedef struct _Py_LocalMonitors {
     uint8_t tools[_PY_MONITORING_UNGROUPED_EVENTS];
 } _Py_LocalMonitors;
@@ -128,6 +134,10 @@ typedef struct _PyCoMonitoringData {
     _PyCoLineInstrumentationData *lines;
     /* The tools that are to be notified for line events for the matching code unit */
     uint8_t *line_tools;
+    uint8_t *source_line_tools;  /* per source-only edge record */
+    /* Observer-only wrappers: branch twin (1), landing LINE (2), or
+     * INSTRUCTION wrapper recording otherwise unsaved ingress PC (4). */
+    uint8_t *source_forced;
     /* Information to support instruction events */
     /* The underlying instructions, which can themselves be instrumented */
     uint8_t *per_instruction_opcodes;

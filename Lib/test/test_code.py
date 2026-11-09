@@ -285,7 +285,7 @@ class CodeTest(unittest.TestCase):
                 for k, role in enumerate(roles):
                     is_slot = role in (_opcode.IR_ROLE_DST, _opcode.IR_ROLE_BASE) \
                               or role >= _opcode.IR_ROLE_IN0
-                    if is_slot and fields[k] >= c.co_nlocals:
+                    if is_slot and fields[k] != 4095 and fields[k] >= c.co_nlocals:
                         fields[k] += by
                 words.append((handler, *fields))
             return encode_words(*words)
@@ -295,7 +295,8 @@ class CodeTest(unittest.TestCase):
             self.assertEqual(c.co_freevars, ())
             return c.replace(co_freevars=('__class__',),
                              co_code=encode_words((COPY_FREE_VARS, 1))
-                                     + shift_stack_slots(c, 1))
+                                     + shift_stack_slots(c, 1),
+                             co_linetable=b'')
 
         def add_foreign_method(cls, name, f):
             code = new_code(f.__code__)
@@ -446,7 +447,8 @@ class CodeTest(unittest.TestCase):
         def func():
             pass
         new_code = code = func.__code__.replace(co_linetable=b'')
-        self.assertEqual(list(new_code.co_lines()), [])
+        self.assertEqual(list(new_code.co_lines()),
+                         [(0, len(new_code.co_code) // 8, None)])
 
     @unittest.skipIf(_testinternalcapi is None, '_testinternalcapi is missing')
     def test_returns_only_none(self):
@@ -507,15 +509,14 @@ class CodeTest(unittest.TestCase):
         def foo():
             pass
 
-        # assert that opcode 127 is invalid
-        self.assertEqual(opname[127], '<127>')
+        unused = next(i for i, name in enumerate(opname[:233])
+                      if name == f'<{i}>')
 
-        # change the first handler to 0x7f (=127); the constructor
+        # Change the first handler to an unused number; the constructor
         # rejects words whose handler does not exist
-        msg = "word 0 has no handler 127"
-        with self.assertRaisesRegex(ValueError, msg):
+        with self.assertRaisesRegex(ValueError, "invalid executable handler"):
             foo.__code__.replace(
-                co_code=b'\x7f\x00' + foo.__code__.co_code[2:])
+                co_code=unused.to_bytes(2, 'little') + foo.__code__.co_code[2:])
 
     def test_code_units_padded(self):
         # Cython passes zeroed code in 2-byte units that only spans its line
@@ -523,7 +524,7 @@ class CodeTest(unittest.TestCase):
         def foo():
             pass
 
-        code = foo.__code__.replace(co_code=bytes(12))
+        code = foo.__code__.replace(co_code=bytes(12), co_linetable=b'')
         self.assertEqual(code.co_code, bytes(16))
         with self.assertRaisesRegex(ValueError, "co_code is malformed"):
             foo.__code__.replace(co_code=bytes(3))
@@ -625,10 +626,13 @@ class CodeTest(unittest.TestCase):
         def func():
             x = 1
         new_code = func.__code__.replace(co_linetable=b'')
-        positions = new_code.co_positions()
+        positions = list(new_code.co_positions())
+        self.assertEqual(len(positions), len(new_code.co_code) // 8)
         for line, end_line, column, end_column in positions:
             self.assertIsNone(line)
-            self.assertEqual(end_line, new_code.co_firstlineno + 1)
+            self.assertIsNone(end_line)
+            self.assertIsNone(column)
+            self.assertIsNone(end_column)
 
     def test_code_equality(self):
         def f():
@@ -1813,7 +1817,17 @@ def read_signed_varint(it):
 
 def parse_location_table(code):
     line = code.co_firstlineno
-    it = iter(code.co_linetable)
+    locations = code.co_linetable
+    if locations[:4] == b"IRSM":
+        if len(locations) < 16:
+            raise ValueError("truncated source map")
+        version = int.from_bytes(locations[4:8], "little")
+        size = int.from_bytes(locations[8:12], "little")
+        records = int.from_bytes(locations[12:16], "little")
+        if version != 1 or 16 + size + records * 40 != len(locations):
+            raise ValueError("malformed source map")
+        locations = locations[16:16 + size]
+    it = iter(locations)
     while True:
         try:
             first_byte = read(it)
@@ -1924,8 +1938,13 @@ class CodeLocationTest(unittest.TestCase):
 
     def check_lines(self, func):
         co = func.__code__
-        lines1 = [line for _, _, line in co.co_lines()]
+        ranges = list(co.co_lines())
+        lines1 = [line for _, _, line in ranges]
         self.assertEqual(lines1, list(dedup(lines1)))
+        # Source-only lines have zero-width ranges; co_positions describes
+        # real words. Compare their word coverage independently of those
+        # extra source records.
+        lines1 = list(dedup(line for start, end, line in ranges if start < end))
         lines2 = list(lines_from_postions(positions_from_location_table(co)))
         for l1, l2 in zip(lines1, lines2):
             self.assertEqual(l1, l2)
@@ -1949,7 +1968,6 @@ class CodeLocationTest(unittest.TestCase):
             co_firstlineno=42,
             co_code=encode_words(
                 ("RESUME", 0),
-                ("NOP",),
                 ("LOAD_COMMON_CONSTANT", 0, 0),
                 ("RAISE_VARARGS", 0, 1),
             ),
@@ -1957,7 +1975,7 @@ class CodeLocationTest(unittest.TestCase):
                 [
                     (1 << 7)
                     | (PY_CODE_LOCATION_INFO_NO_COLUMNS << 3)
-                    | (4 - 1),
+                    | (3 - 1),
                     0,
                 ]
             ),
@@ -1965,7 +1983,7 @@ class CodeLocationTest(unittest.TestCase):
         self.assertRaises(AssertionError, f)
         self.assertEqual(
             list(f.__code__.co_positions()),
-            4 * [(42, 42, None, None)],
+            3 * [(42, 42, None, None)],
         )
 
     @cpython_only

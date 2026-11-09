@@ -145,6 +145,13 @@ dummy_func(
         pure inst(NOP, (--)) {
         }
 
+        inst(MATERIALIZE_KWARGS, (--)) {
+            assert(frame->pending_kwargs == IR_NO_DST ||
+                   frame->pending_kwargs == oparg);
+            int err = _PyFrame_MaterializeKwargs(frame);
+            ERROR_IF(err < 0);
+        }
+
         op(_CHECK_PERIODIC, (--)) {
             int err = check_periodics(tstate);
             ERROR_IF(err != 0);
@@ -1228,6 +1235,7 @@ dummy_func(
             pushed_frame->base[1] = TAKE(sub);
             INPUTS_DEAD();
             frame->return_slot = (uint16_t)IR_DST_SLOT;
+            frame->return_pc = next_instr;
             new_frame = PyValue_Wrap(pushed_frame);
         }
 
@@ -1488,7 +1496,7 @@ dummy_func(
                 next_instr = _PyEval_GeneratorReturnTarget(frame);
             }
             else {
-                LOAD_IP(1);
+                next_instr = frame->return_pc;
             }
             res = temp;
             LLTRACE_RESUME_FRAME();
@@ -1599,6 +1607,7 @@ dummy_func(
                 gen->gi_exc_state.previous_item = tstate->exc_info;
                 tstate->exc_info = &gen->gi_exc_state;
                 frame->return_slot = (uint16_t)IR_DST_SLOT;
+                frame->return_pc = next_instr;
                 assert(gen_frame->previous == NULL);
                 gen_frame->previous = frame;
                 DISPATCH_INLINED(gen_frame);
@@ -1644,6 +1653,7 @@ dummy_func(
             gen->gi_exc_state.previous_item = tstate->exc_info;
             tstate->exc_info = &gen->gi_exc_state;
             frame->return_slot = (uint16_t)IR_DST_SLOT;
+            frame->return_pc = next_instr;
             pushed_frame->previous = frame;
             gen_frame = PyValue_Wrap(pushed_frame);
         }
@@ -1753,7 +1763,7 @@ dummy_func(
             }
             #endif
             RELOAD_STACK();
-            LOAD_IP(1);
+            next_instr = frame->return_pc;
             value = temp;
             LLTRACE_RESUME_FRAME();
         }
@@ -3485,10 +3495,6 @@ dummy_func(
             }
         }
 
-        tier1 op(_EXECUTE_ORDINARY_NOP, (--)) {
-            IR_EXECUTE_ORDINARY_NOP();
-        }
-
         // A conditional jump tests the truth of any value: the compiler
         // drops the TO_BOOL before it (Python/flowgraph.c), so the jumps
         // specialise as TO_BOOL does, and their entries keep the branch
@@ -3531,8 +3537,7 @@ dummy_func(
             unused/1 + _SPECIALIZE_POP_JUMP_IF + unused/2 + _TO_BOOL + _POP_JUMP_IF_FALSE;
 
         macro(POP_JUMP_IF_FALSE_BOOL) =
-            unused/1 + unused/2 + _GUARD_TOS_BOOL + _POP_JUMP_IF_FALSE +
-            _EXECUTE_ORDINARY_NOP;
+            unused/1 + unused/2 + _GUARD_TOS_BOOL + _POP_JUMP_IF_FALSE;
         macro(POP_JUMP_IF_TRUE_BOOL) =
             unused/1 + unused/2 + _GUARD_TOS_BOOL + _POP_JUMP_IF_TRUE;
         macro(POP_JUMP_IF_FALSE_INT) =
@@ -3943,6 +3948,7 @@ dummy_func(
             tstate->exc_info = &gen->gi_exc_state;
             pushed_frame->previous = frame;
             frame->return_slot = (uint16_t)IR_DST_SLOT;
+            frame->return_pc = next_instr;
             gen_frame = PyValue_Wrap(pushed_frame);
         }
 
@@ -4526,6 +4532,7 @@ dummy_func(
                 ERROR_NO_POP();
             }
             frame->return_slot = (uint16_t)IR_DST_SLOT;
+            frame->return_pc = next_instr;
             /* Account for pushing the extra frame.
              * We don't check recursion depth here,
              * as it will be checked after start_frame */
@@ -5265,7 +5272,7 @@ dummy_func(
             _PyThreadState_UpdateLastProfiledFrame(tstate, frame, prev);
             _PyThreadState_PopFrame(tstate, frame);
             frame = tstate->current_frame = prev;
-            LOAD_IP(1);
+            next_instr = frame->return_pc;
             RELOAD_STACK();
             res = PyValue_FromObjectSteal((PyObject *)gen);
             LLTRACE_RESUME_FRAME();
@@ -5385,7 +5392,7 @@ dummy_func(
                         tstate, frame, this_instr, prev_instr);
                 RELOAD_STACK();
                 if (original_opcode < 0) {
-                    next_instr = this_instr+1;
+                    next_instr = frame->instr_ptr+1;
                     goto error;
                 }
                 next_instr = frame->instr_ptr;
@@ -5548,6 +5555,7 @@ dummy_func(
 
         op(_SAVE_RETURN_SLOT, (--)) {
             frame->return_slot = (uint16_t)IR_DST_SLOT;
+            frame->return_pc = next_instr;
         }
 
         label(error) {
@@ -5576,7 +5584,7 @@ dummy_func(
         spilled label(exception_unwind) {
             /* We can't use frame->instr_ptr here, as RERAISE may have set it */
             int offset = CURRENT_OFFSET();
-            _PyExceptionHandler found = get_exception_handler(_PyFrame_GetCode(frame), offset);
+            _PyExceptionHandler found = get_frame_exception_handler(frame, offset);
             int exc_slot = found.exc_slot, handler = found.handler, lasti = found.lasti;
             if (found.handled == 0) {
                 // No handlers, so exit.
@@ -5633,7 +5641,9 @@ dummy_func(
             // GH-99729: We need to unlink the frame *before* clearing it:
             _PyInterpreterFrame *dying = frame;
             frame = tstate->current_frame = dying->previous;
+            frame->pending_redirect = 0;
             _PyEval_FrameClearAndPop(tstate, dying);
+            frame->pending_redirect = 0;
             if (frame->owner == FRAME_OWNED_BY_INTERPRETER) {
                 /* Restore previous frame and exit */
                 tstate->current_frame = frame->previous;

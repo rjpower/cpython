@@ -9,12 +9,15 @@
 #include "pycore_function.h"      // _PyFunction_FromConstructor()
 #include "pycore_genobject.h"     // _PyGen_GetGeneratorFromFrame()
 #include "pycore_interpframe.h"   // _PyFrame_GetLocalsArray()
+#include "pycore_ir_source.h"
 #include "pycore_list.h"          // _PyList_AppendTakeRef()
 #include "pycore_long_value.h"    // _PyValue_AsLongAndOverflow()
 #include "pycore_modsupport.h"    // _PyArg_CheckPositional()
 #include "pycore_object.h"        // _PyObject_GC_UNTRACK()
+#include "pycore_opcode_utils.h"
 #include "pycore_opcode_metadata.h" // _PyOpcode_Caches
 #include "pycore_setobject.h"     // PySet_AddValue()
+#include "pycore_tstate.h"
 #include "pycore_tuple.h"         // _PyTuple_FromPair
 #include "pycore_unicodeobject.h" // _PyUnicode_Equal()
 #include "pycore_value_ops.h"     // _PyValue_GetItem()
@@ -1325,652 +1328,123 @@ frame_trace_opcodes_set_impl(PyFrameObject *self, PyObject *value)
     return 0;
 }
 
-/* Model the evaluation stack, to determine which jumps
- * are safe and how many values needs to be popped.
- * The stack is modelled by a 64 integer, treating any
- * stack that can't fit into 64 bits as "overflowed".
- */
-
-typedef enum kind {
-    Iterator = 1,
-    Except = 2,
-    Object = 3,
-    Null = 4,
-    Lasti = 5,
-    // The position of a local that a later word reads in place of a folded
-    // load: the slot stays empty, so nothing can jump to a stack that holds
-    // one.
-    Hole = 6,
-} Kind;
-
-/* Whether an input that a word reads from the stack form holds an object */
-static inline int
-is_object_kind(Kind kind)
+/* Debugger redirection must use the executable register contract. A slot
+ * containing an unrelated value is not a reconstruction of a missing input.
+ * This cold dataflow admits only sites with no required temporary inputs. */
+static unsigned char *
+register_resume_sites(PyCodeObject *code)
 {
-    return kind == Object || kind == Hole;
-}
-
-static int
-compatible_kind(Kind from, Kind to) {
-    if (to == 0) {
-        return 0;
+    int n = (int)Py_SIZE(code), nl = code->co_nlocalsplus;
+    int nt = code->co_framesize - FRAME_SPECIALS_SIZE - nl;
+    int nb = (nt + 63) / 64;
+    size_t stride = (size_t)Py_MAX(nb, 1);
+    if ((size_t)n > (16 * 1024 * 1024) / (stride * sizeof(uint64_t))) {
+        PyErr_SetString(PyExc_ValueError, "register resume analysis is too large");
+        return NULL;
     }
-    if (to == Hole) {
-        return 0;
-    }
-    if (to == Object) {
-        return from != Null && from != Hole;
-    }
-    if (to == Null) {
-        return 1;
-    }
-    return from == to;
-}
-
-#define BITS_PER_BLOCK 3
-
-#define UNINITIALIZED -2
-#define OVERFLOWED -1
-
-#define MAX_STACK_ENTRIES (63/BITS_PER_BLOCK)
-#define WILL_OVERFLOW (1ULL<<((MAX_STACK_ENTRIES-1)*BITS_PER_BLOCK))
-
-#define EMPTY_STACK 0
-
-static inline int64_t
-push_value(int64_t stack, Kind kind)
-{
-    if (((uint64_t)stack) >= WILL_OVERFLOW) {
-        return OVERFLOWED;
-    }
-    else {
-        return (stack << BITS_PER_BLOCK) | kind;
-    }
-}
-
-static inline int64_t
-pop_value(int64_t stack)
-{
-    return Py_ARITHMETIC_RIGHT_SHIFT(int64_t, stack, BITS_PER_BLOCK);
-}
-
-#define MASK ((1<<BITS_PER_BLOCK)-1)
-
-static inline Kind
-top_of_stack(int64_t stack)
-{
-    return stack & MASK;
-}
-
-/* The number of values on stack; every kind is nonzero */
-static int
-stack_depth(int64_t stack)
-{
-    int depth = 0;
-    while (stack != EMPTY_STACK) {
-        stack = pop_value(stack);
-        depth++;
-    }
-    return depth;
-}
-
-static inline Kind
-peek(int64_t stack, int n)
-{
-    assert(n >= 1);
-    return (stack>>(BITS_PER_BLOCK*(n-1))) & MASK;
-}
-
-static int64_t
-stack_swap(int64_t stack, int n)
-{
-    assert(n >= 1);
-    Kind to_swap = peek(stack, n);
-    Kind top = top_of_stack(stack);
-    int shift = BITS_PER_BLOCK*(n-1);
-    int64_t replaced_low = (stack & ~(MASK << shift)) | (top << shift);
-    int64_t replaced_top = (replaced_low & ~MASK) | to_swap;
-    return replaced_top;
-}
-
-static int64_t
-pop_to_level(int64_t stack, int level) {
-    if (level == 0) {
-        return EMPTY_STACK;
-    }
-    int64_t max_item = (1<<BITS_PER_BLOCK) - 1;
-    int64_t level_max_stack = max_item << ((level-1) * BITS_PER_BLOCK);
-    while (stack > level_max_stack) {
-        stack = pop_value(stack);
-    }
-    return stack;
-}
-
-#if 0
-/* These functions are useful for debugging the stack marking code */
-
-static char
-tos_char(int64_t stack) {
-    switch(top_of_stack(stack)) {
-        case Iterator:
-            return 'I';
-        case Except:
-            return 'E';
-        case Object:
-            return 'O';
-        case Lasti:
-            return 'L';
-        case Null:
-            return 'N';
-    }
-    return '?';
-}
-
-static void
-print_stack(int64_t stack) {
-    if (stack < 0) {
-        if (stack == UNINITIALIZED) {
-            printf("---");
-        }
-        else if (stack == OVERFLOWED) {
-            printf("OVERFLOWED");
-        }
-        else {
-            printf("??");
-        }
-        return;
-    }
-    while (stack) {
-        printf("%c", tos_char(stack));
-        stack = pop_value(stack);
-    }
-}
-
-static void
-print_stacks(int64_t *stacks, int n) {
-    for (int i = 0; i < n; i++) {
-        printf("%d: ", i);
-        print_stack(stacks[i]);
-        printf("\n");
-    }
-}
-
-#endif
-
-/* How many words is_pending_hole follows before it gives up */
-#define HOLE_SCAN_LIMIT 48
-
-/* Whether the entry at depth p, which no word has pushed yet, is the local
- * that a later word reads in place of a folded load (1), or the NULL of an
- * elided PUSH_NULL (0).  The first word that touches depth p or below ends
- * the scan: it reads p as a folded load if it lists it, and otherwise p is
- * one of its own inputs, a NULL.  Returns -1 if the scan cannot tell: it
- * meets a loop that is not a FOR_ITER loop, a word whose depth is not known,
- * or the word limit.
- * The caller then gives up on the stack, so that no jump is allowed. */
-static int
-is_pending_hole(PyCodeObject *code_obj, int len, int i, int p)
-{
-    int j = i;
-    for (int steps = 0; steps < HOLE_SCAN_LIMIT && j < len; steps++, j++) {
-        int holes[4];
-        int n = _PyCode_InstrHoles(code_obj, j, holes);
-        for (int k = 0; k < n; k++) {
-            if (holes[k] == p) {
-                return 1;
-            }
-        }
-        int floor;
-        int named = _PyCode_InstrDepthBefore(code_obj, j, &floor);
-        if (named == _PyCode_DEPTH_UNKNOWN) {
-            return -1;
-        }
-        if (named >= 0 && floor <= p) {
-            return 0;
-        }
-        // Follow the line of execution: a forward jump goes to its target,
-        // and the others that end a block end the scan
-        switch (_PyIR_BaseOpcode(_PyCode_InstrHandler(code_obj, j))) {
-            case JUMP_FORWARD:
-                j = _PyCode_InstrTarget(code_obj, j) - 1;
-                break;
-            case JUMP_BACKWARD:
-            case JUMP_BACKWARD_NO_INTERRUPT:
-            {
-                // A loop inside the expression (an inlined comprehension)
-                // does not touch p: go on at its exit.  Any other loop is
-                // not understood.
-                int head = _PyCode_InstrTarget(code_obj, j);
-                if (_PyIR_BaseOpcode(_PyCode_InstrHandler(code_obj, head))
-                    != FOR_ITER)
-                {
-                    return -1;
-                }
-                j = _PyCode_InstrTarget(code_obj, head) - 1;
-                break;
-            }
-            case RETURN_VALUE:
-            case RAISE_VARARGS:
-            case RERAISE:
-                return 0;
-        }
-    }
-    return -1;
-}
-
-/* The stack with its Null and Hole entries removed, in reverse order: equal
- * reversed stacks are equal stacks. */
-static int64_t
-reversed_without_nulls(int64_t stack)
-{
-    int64_t reversed = EMPTY_STACK;
-    for (; stack != EMPTY_STACK; stack = pop_value(stack)) {
-        if (top_of_stack(stack) != Null && top_of_stack(stack) != Hole) {
-            reversed = (reversed << BITS_PER_BLOCK) | top_of_stack(stack);
-        }
-    }
-    return reversed;
-}
-
-/* Whether two models agree but for Nulls and Holes: the repair of
- * mark_stacks puts the NULLs of elided PUSH_NULLs in once a word shows where
- * they lie, so a stack that a jump stored earlier may lack them.  An OVERFLOWED stack
- * agrees with any. */
-static int
-agree_but_nulls(int64_t a, int64_t b)
-{
-    if (a < 0 || b < 0) {
-        return 1;
-    }
-    return reversed_without_nulls(a) == reversed_without_nulls(b);
-}
-
-/* The Holes that the word at index i reads become objects, as the loads
- * of the stack form would have pushed them.  Returns OVERFLOWED if the
- * stack does not hold a Hole where the word reads one. */
-static int64_t
-read_holes(PyCodeObject *code_obj, int i, int64_t stack)
-{
-    int holes[4];
-    int n = _PyCode_InstrHoles(code_obj, i, holes);
-    for (int k = 0; k < n && stack >= 0; k++) {
-        int depth = stack_depth(stack);
-        if (holes[k] >= depth) {
-            return OVERFLOWED;
-        }
-        int shift = BITS_PER_BLOCK * (depth - 1 - holes[k]);
-        if (((stack >> shift) & MASK) != Hole) {
-            return OVERFLOWED;
-        }
-        stack = (stack & ~((int64_t)MASK << shift)) | ((int64_t)Object << shift);
-    }
-    return stack;
-}
-
-/* The stack without the Holes at its top */
-static int64_t
-without_top_holes(int64_t stack)
-{
-    while (stack > 0 && top_of_stack(stack) == Hole) {
-        stack = pop_value(stack);
-    }
-    return stack;
-}
-
-/* The entries below the first word that names them: the frame slots that
- * the word reads or writes show that the stack is named entries deep, but
- * no word pushed the NULL of an elided PUSH_NULL, nor the local that a later
- * word reads in place of a folded load.  Push them, so that the model holds
- * every position of the stack form: a Null for a NULL and a Hole for the
- * local.  Returns OVERFLOWED where the answer is not certain. */
-static int64_t
-fill_unpushed(PyCodeObject *code_obj, int len, int i, int named, int64_t stack)
-{
-    if (stack < 0) {
-        return stack;
-    }
-    int depth = stack_depth(stack);
-    if (named < depth) {
-        // The model holds more than the word's slots show
-        return OVERFLOWED;
-    }
-    for (int p = depth; p < named; p++) {
-        int hole = is_pending_hole(code_obj, len, i, p);
-        if (hole < 0) {
-            return OVERFLOWED;
-        }
-        stack = push_value(stack, hole ? Hole : Null);
-    }
-    return stack;
-}
-
-static int64_t *
-mark_stacks(PyCodeObject *code_obj, int len)
-{
-    int64_t *stacks = PyMem_New(int64_t, len+1);
-
-    if (stacks == NULL) {
+    uint64_t *live = PyMem_Calloc((size_t)Py_MAX(n, 1) * stride, sizeof(uint64_t));
+    uint64_t *work = PyMem_Calloc(stride, sizeof(uint64_t));
+    unsigned char *safe = PyMem_Calloc((size_t)Py_MAX(n, 1), 1);
+    if (live == NULL || work == NULL || safe == NULL) {
+        PyMem_Free(live); PyMem_Free(work); PyMem_Free(safe);
         PyErr_NoMemory();
         return NULL;
     }
-    for (int i = 1; i <= len; i++) {
-        stacks[i] = UNINITIALIZED;
-    }
-    stacks[0] = EMPTY_STACK;
-    int todo = 1;
-    while (todo) {
-        todo = 0;
-        /* Scan instructions, one word each.  The jumps of a relaxed FOR_ITER
-         * or SEND are JUMP_FORWARD. */
-        for (int i = 0; i < len;) {
-            int j;
-            int64_t next_stack = stacks[i];
-            int opcode = _PyIR_BaseOpcode(_PyCode_InstrHandler(code_obj, i));
-            int oparg = _PyCode_InstrOparg(code_obj, i);
-            int next_i = i + 1;
-            if (next_stack == UNINITIALIZED) {
-                i = next_i;
-                continue;
-            }
-            // The slots the word names give the depth the stack had before
-            // it ran.  Positions that no word pushed (an elided PUSH_NULL,
-            // a folded load) get an entry now, in the stack form's order.
-            // A word that names no temporary leaves the model as it is.
-            int floor;
-            int named = _PyCode_InstrDepthBefore(code_obj, i, &floor);
-            if (named == _PyCode_DEPTH_UNKNOWN) {
-                next_stack = OVERFLOWED;
-                stacks[i] = next_stack;
-            }
-            else if (named >= 0) {
-                next_stack = fill_unpushed(code_obj, len, i, named, next_stack);
-            }
-            else {
-                // The word names no temporary: the loads folded into it
-                // push their values only as it runs
-                for (int k = _PyCode_InstrFoldedInputs(code_obj, i); k > 0; k--) {
-                    next_stack = push_value(next_stack, Object);
-                }
-            }
-            // A jump to this word, or the frame stopped at it, finds the
-            // slots empty above the stack that it holds: the Holes at the
-            // top are still to be read, not occupied.
-            if (named >= 0 || named == _PyCode_DEPTH_UNKNOWN) {
-                int64_t published = without_top_holes(next_stack);
-                if (published != stacks[i]) {
-                    stacks[i] = published;
-                }
-            }
-            // The word now reads the locals that its Holes stand for
-            if (named >= 0) {
-                next_stack = read_holes(code_obj, i, next_stack);
-            }
-            if (_PyIR_FormatOf(_PyCode_InstrHandler(code_obj, i))->flags
-                & _PyIR_FUSED)
+    bool changed;
+    do {
+        changed = false;
+        for (int i = n; i-- > 0;) {
+            _PyIRWord word = code->co_words[i];
+            const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
+            int baseop = _PyIR_HandlerBase[IR_HANDLER(word)];
+            memset(work, 0, stride * sizeof(uint64_t));
+            int successors[2] = {i + 1, -1};
+            if ((fmt->flags & (_PyIR_JUMPS | _PyIR_FORWARD)) &&
+                !(fmt->flags & _PyIR_NAMES_TARGET))
             {
-                // A compare and the conditional jump on its result: both
-                // inputs are popped, on both paths
-                int64_t target_stack = pop_value(pop_value(next_stack));
-                j = _PyCode_InstrTarget(code_obj, i);
-                assert(j < len);
-                assert(stacks[j] == UNINITIALIZED
-                       || agree_but_nulls(stacks[j], target_stack));
-                stacks[j] = target_stack;
-                stacks[next_i] = target_stack;
-                i = next_i;
-                continue;
+                successors[1] = fmt->flags & (_PyIR_FORWARD | _PyIR_FUSED)
+                    ? i + 1 + IR_DS(word) : (int)IR_CD(word);
             }
-            switch (opcode) {
-                case POP_JUMP_IF_FALSE:
-                case POP_JUMP_IF_TRUE:
-                case POP_JUMP_IF_NONE:
-                case POP_JUMP_IF_NOT_NONE:
-                {
-                    int64_t target_stack;
-                    j = _PyCode_InstrTarget(code_obj, i);
-                    assert(j < len);
-                    next_stack = pop_value(next_stack);
-                    target_stack = next_stack;
-                    assert(stacks[j] == UNINITIALIZED
-                           || agree_but_nulls(stacks[j], target_stack));
-                    stacks[j] = target_stack;
-                    stacks[next_i] = next_stack;
-                    break;
-                }
-                case JUMP_IF_FALSE_OR_POP:
-                case JUMP_IF_TRUE_OR_POP:
-                {
-                    // The value stays where the jump goes and is popped
-                    // where it falls through
-                    j = _PyCode_InstrTarget(code_obj, i);
-                    assert(j < len);
-                    assert(stacks[j] == UNINITIALIZED
-                           || agree_but_nulls(stacks[j], next_stack));
-                    stacks[j] = next_stack;
-                    stacks[next_i] = pop_value(next_stack);
-                    break;
-                }
-                case SEND:
-                    j = _PyCode_InstrTarget(code_obj, i);
-                    assert(j < len);
-                    assert(stacks[j] == UNINITIALIZED
-                           || agree_but_nulls(stacks[j], next_stack));
-                    stacks[j] = next_stack;
-                    stacks[next_i] = next_stack;
-                    break;
-                case JUMP_FORWARD:
-                    j = _PyCode_InstrTarget(code_obj, i);
-                    assert(j < len);
-                    assert(stacks[j] == UNINITIALIZED
-                           || agree_but_nulls(stacks[j], next_stack));
-                    stacks[j] = next_stack;
-                    break;
-                case JUMP_BACKWARD:
-                case JUMP_BACKWARD_NO_INTERRUPT:
-                    j = _PyCode_InstrTarget(code_obj, i);
-                    assert(j >= 0);
-                    assert(j < len);
-                    if (stacks[j] == UNINITIALIZED && j < i) {
-                        todo = 1;
+            if (IS_SCOPE_EXIT_OPCODE(baseop) || (fmt->flags & _PyIR_JUMP_ALWAYS)) {
+                successors[0] = -1;
+            }
+            for (int k = 0; k < 2; k++) {
+                int next = successors[k];
+                if (next >= 0 && next < n) {
+                    for (int j = 0; j < nb; j++) {
+                        work[j] |= live[(size_t)next * stride + j];
                     }
-                    assert(stacks[j] == UNINITIALIZED
-                           || agree_but_nulls(stacks[j], next_stack));
-                    stacks[j] = next_stack;
-                    break;
-                case GET_ITER:
-                    next_stack = push_value(pop_value(next_stack), Iterator);
-                    next_stack = push_value(next_stack, Iterator);
-                    stacks[next_i] = next_stack;
-                    break;
-                case GET_AITER:
-                    next_stack = push_value(pop_value(next_stack), Iterator);
-                    stacks[next_i] = next_stack;
-                    break;
-                case FOR_ITER:
-                {
-                    int64_t target_stack = push_value(next_stack, Object);
-                    stacks[next_i] = target_stack;
-                    j = _PyCode_InstrTarget(code_obj, i);
-                    assert(j < len);
-                    assert(stacks[j] == UNINITIALIZED
-                           || agree_but_nulls(stacks[j], target_stack));
-                    stacks[j] = target_stack;
-                    break;
-                }
-                case END_ASYNC_FOR:
-                    next_stack = pop_value(pop_value(next_stack));
-                    stacks[next_i] = next_stack;
-                    break;
-                case PUSH_EXC_INFO:
-                    next_stack = push_value(next_stack, Except);
-                    stacks[next_i] = next_stack;
-                    break;
-                case POP_EXCEPT:
-                    assert(next_stack < 0 || top_of_stack(next_stack) == Except);
-                    next_stack = pop_value(next_stack);
-                    stacks[next_i] = next_stack;
-                    break;
-                case RETURN_VALUE:
-                    assert(next_stack < 0 || pop_value(next_stack) == EMPTY_STACK);
-                    assert(next_stack < 0 || is_object_kind(top_of_stack(next_stack)));
-                    break;
-                case RAISE_VARARGS:
-                    break;
-                case RERAISE:
-                    assert(next_stack < 0 || top_of_stack(next_stack) == Except);
-                    /* End of block */
-                    break;
-                case PUSH_NULL:
-                    next_stack = push_value(next_stack, Null);
-                    stacks[next_i] = next_stack;
-                    break;
-                case LOAD_GLOBAL:
-                {
-                    int j = oparg;
-                    next_stack = push_value(next_stack, Object);
-                    if (j & 1) {
-                        next_stack = push_value(next_stack, Null);
-                    }
-                    stacks[next_i] = next_stack;
-                    break;
-                }
-                case LOAD_ATTR:
-                {
-                    assert(next_stack < 0 || is_object_kind(top_of_stack(next_stack)));
-                    int j = oparg;
-                    next_stack = pop_value(next_stack);
-                    next_stack = push_value(next_stack, Object);
-                    if (j & 1) {
-                        next_stack = push_value(next_stack, Null);
-                    }
-                    stacks[next_i] = next_stack;
-                    break;
-                }
-                case SWAP:
-                {
-                    int n = oparg;
-                    next_stack = stack_swap(next_stack, n);
-                    stacks[next_i] = next_stack;
-                    break;
-                }
-                case COPY:
-                {
-                    int n = oparg;
-                    Kind copied = peek(next_stack, n);
-                    next_stack = push_value(next_stack,
-                                            copied == Hole ? Object : copied);
-                    stacks[next_i] = next_stack;
-                    break;
-                }
-                default:
-                {
-                    int delta = PyCompile_OpcodeStackEffect(opcode, oparg);
-                    assert(delta != PY_INVALID_STACK_EFFECT);
-                    while (delta < 0) {
-                        next_stack = pop_value(next_stack);
-                        delta++;
-                    }
-                    while (delta > 0) {
-                        next_stack = push_value(next_stack, Object);
-                        delta--;
-                    }
-                    stacks[next_i] = next_stack;
                 }
             }
-            for (int n = _PyCode_InstrUnpackedLocals(code_obj, i); n > 0; n--) {
-                // The STORE_FASTs of the elements are folded into the word
-                stacks[next_i] = pop_value(stacks[next_i]);
-            }
-            if (_PyCode_InstrStoredLocal(code_obj, i) >= 0
-                || _PyCode_InstrDiscards(code_obj, i)) {
-                // A STORE_FAST of the result is folded into the word
-                stacks[next_i] = pop_value(stacks[next_i]);
-            }
-            i = next_i;
-        }
-        /* Scan exception table */
-        unsigned char *start = (unsigned char *)PyBytes_AS_STRING(code_obj->co_exceptiontable);
-        unsigned char *end = start + PyBytes_GET_SIZE(code_obj->co_exceptiontable);
-        unsigned char *scan = start;
-        while (scan < end) {
-            int start_offset, size, handler;
-            scan = parse_varint(scan, &start_offset);
-            assert(start_offset >= 0 && start_offset < len);
-            scan = parse_varint(scan, &size);
-            assert(size >= 0 && start_offset+size <= len);
-            scan = parse_varint(scan, &handler);
-            assert(handler >= 0 && handler < len);
-            int slot_and_lasti;
-            scan = parse_varint(scan, &slot_and_lasti);
-            int lasti = slot_and_lasti & 1;
-            /* The entry names the slot of the exception, above lasti */
-            int level = (slot_and_lasti >> 1) - lasti - code_obj->co_nlocalsplus;
-            if (stacks[start_offset] != UNINITIALIZED) {
-                if (stacks[handler] == UNINITIALIZED) {
-                    todo = 1;
-                    // A stack shallower than the handler's level lacks entries
-                    // that no word has shown
-                    int64_t target_stack = stacks[start_offset] >= 0
-                        && stack_depth(stacks[start_offset]) < level
-                        ? OVERFLOWED : pop_to_level(stacks[start_offset], level);
-                    if (lasti) {
-                        target_stack = push_value(target_stack, Lasti);
-                    }
-                    target_stack = push_value(target_stack, Except);
-                    stacks[handler] = target_stack;
+            uint32_t fields[] = {IR_A(word), IR_B(word), IR_C(word), IR_D(word)};
+            int arg = _PyCode_InstrOparg(code, i), window = -1;
+            for (int f = 0; f < 4; f++) {
+                if (fmt->roles[f] == _PyIR_ROLE_BASE) {
+                    window = (int)fields[f];
                 }
+            }
+            /* Conditional outputs are not guaranteed on both successors. */
+            if (!(fmt->flags & (_PyIR_JUMPS | _PyIR_FORWARD))) {
+                for (int f = 0; f < 4; f++) {
+                    int slot = (int)fields[f] - nl;
+                    if (fmt->roles[f] == _PyIR_ROLE_DST) {
+                        int writes = _PyIR_Extent(fmt->writes, arg);
+                        for (int j = 0; j < writes; j++) {
+                            int output = slot + j;
+                            if (output >= 0 && output < nt) {
+                                work[output / 64] &= ~((uint64_t)1 << (output % 64));
+                            }
+                        }
+                    }
+                }
+                if (window >= 0) {
+                    int writes = _PyIR_Extent(fmt->writes, arg);
+                    for (int j = 0; j < writes; j++) {
+                        int slot = window + j - nl;
+                        if (slot >= 0 && slot < nt) {
+                            work[slot / 64] &= ~((uint64_t)1 << (slot % 64));
+                        }
+                    }
+                }
+            }
+            for (int f = 0; f < 4; f++) {
+                int slot = (int)fields[f] - nl;
+                if (fmt->roles[f] >= _PyIR_ROLE_IN0 && slot >= 0 && slot < nt) {
+                    work[slot / 64] |= (uint64_t)1 << (slot % 64);
+                }
+            }
+            if (window >= 0) {
+                int reads = _PyIR_Extent(fmt->reads, arg);
+                for (int j = 0; j < reads; j++) {
+                    int slot = window + j - nl;
+                    if (slot >= 0 && slot < nt) {
+                        work[slot / 64] |= (uint64_t)1 << (slot % 64);
+                    }
+                }
+            }
+            /* Immutable entry constants have a valid home at every site. */
+            const uint32_t *constants = _PyCode_CONSTSLOTS(code);
+            for (int j = 0; j < code->co_nconstslots; j++) {
+                int slot = (int)constants[j * 2] - nl;
+                if (slot >= 0 && slot < nt) {
+                    work[slot / 64] &= ~((uint64_t)1 << (slot % 64));
+                }
+            }
+            uint64_t *before = live + (size_t)i * stride;
+            if (memcmp(before, work, stride * sizeof(uint64_t))) {
+                memcpy(before, work, stride * sizeof(uint64_t));
+                changed = true;
             }
         }
-    }
-    return stacks;
-}
-
-static int
-compatible_stack(int64_t from_stack, int64_t to_stack)
-{
-    if (from_stack < 0 || to_stack < 0) {
-        return 0;
-    }
-    while(from_stack > to_stack) {
-        from_stack = pop_value(from_stack);
-    }
-    while(from_stack) {
-        Kind from_top = top_of_stack(from_stack);
-        Kind to_top = top_of_stack(to_stack);
-        if (!compatible_kind(from_top, to_top)) {
-            return 0;
+    } while (changed);
+    for (int i = 0; i < n; i++) {
+        safe[i] = 1;
+        for (int j = 0; j < nb; j++) {
+            safe[i] &= live[(size_t)i * stride + j] == 0;
         }
-        from_stack = pop_value(from_stack);
-        to_stack = pop_value(to_stack);
     }
-    return to_stack == 0;
-}
-
-static const char *
-explain_incompatible_stack(int64_t to_stack)
-{
-    assert(to_stack != 0);
-    if (to_stack == OVERFLOWED) {
-        return "stack is too deep to analyze";
-    }
-    if (to_stack == UNINITIALIZED) {
-        return "can't jump into an exception handler, or code may be unreachable";
-    }
-    Kind target_kind = top_of_stack(to_stack);
-    switch(target_kind) {
-        case Except:
-            return "can't jump into an 'except' block as there's no exception";
-        case Lasti:
-            return "can't jump into a re-raising block as there's no location";
-        case Object:
-        case Null:
-        case Hole:
-            return "incompatible stacks";
-        case Iterator:
-            return "can't jump into the body of a for loop";
-        default:
-            Py_UNREACHABLE();
-    }
+    PyMem_Free(live); PyMem_Free(work);
+    return safe;
 }
 
 static int *
@@ -2139,7 +1613,18 @@ frame_lineno_set_impl(PyFrameObject *self, PyObject *value)
         return -1;
     }
 
-    new_lineno = first_line_not_before(lines, len, new_lineno);
+    int requested_line = new_lineno;
+    new_lineno = first_line_not_before(lines, len, requested_line);
+    _PyIRSourceMap source = _PyIRSource_Stored(code->co_linetable);
+    for (uint32_t j = 0; j < source.nrecords; j++) {
+        _PyIRSourceEvent event;
+        _PyIRSource_Event(&source, j, &event);
+        if (event.line >= requested_line &&
+            (new_lineno < 0 || event.line < new_lineno))
+        {
+            new_lineno = event.line;
+        }
+    }
     if (new_lineno < 0) {
         PyErr_Format(PyExc_ValueError,
                     "line %d comes after the current code block",
@@ -2148,45 +1633,80 @@ frame_lineno_set_impl(PyFrameObject *self, PyObject *value)
         return -1;
     }
 
-    int64_t *stacks = mark_stacks(code, len);
-    if (stacks == NULL) {
+    /* Protected and suspended resumptions need explicit owner/exception
+     * recipes. Do not let a frontend stack projection authorize them. */
+    if (is_suspended || PyBytes_GET_SIZE(code->co_exceptiontable)) {
+        PyMem_Free(lines);
+        PyErr_SetString(PyExc_ValueError,
+                        "jump requires a suspended or protected owner recipe");
+        return -1;
+    }
+    unsigned char *safe = register_resume_sites(code);
+    if (safe == NULL) {
         PyMem_Free(lines);
         return -1;
     }
-
-    int64_t best_stack = OVERFLOWED;
+    int current = _PyInterpreterFrame_LASTI(self->f_frame);
+    bool pending_call = false;
+    _PyInterpreterFrame *observed =
+        ((_PyThreadStateImpl *)PyThreadState_GET())->observed_frame;
+    _PyInterpreterFrame *child = observed;
+    if (observed != self->f_frame) {
+        while (child != NULL && child->previous != self->f_frame) {
+            child = child->previous;
+        }
+        if (child == NULL) {
+            PyMem_Free(safe);
+            PyMem_Free(lines);
+            PyErr_SetString(PyExc_ValueError, "frame is not an active observer ancestor");
+            return -1;
+        }
+    }
+    else {
+        child = NULL;
+    }
+    if (child != NULL) {
+        int opcode = _PyIR_EventOpcode(_PyCode_InstrHandler(code, current));
+        if (child->external || self->f_frame->return_slot != IR_NO_DST ||
+            (opcode != CALL && opcode != CALL_KW))
+        {
+            PyMem_Free(safe);
+            PyMem_Free(lines);
+            PyErr_SetString(PyExc_ValueError,
+                            "jump requires an unsupported active call recipe");
+            return -1;
+        }
+        /* The child owns the argument window. Its successful completion,
+         * rather than the consumed CALL input state, is the source state. */
+        current = _PyFrame_InstrOffset(self->f_frame, self->f_frame->return_pc);
+        pending_call = true;
+    }
+    if (!pending_call && self->f_source_event >= 0) {
+        _PyIRSourceEvent event;
+        _PyIRSource_Event(&source, (uint32_t)self->f_source_event, &event);
+        current = event.to;
+    }
     int best_addr = -1;
-    int64_t start_stack = stacks[_PyInterpreterFrame_LASTI(self->f_frame)];
-    int err = -1;
-    const char *msg = "cannot find bytecode for specified line";
-    for (int i = 0; i < len; i++) {
-        if (lines[i] == new_lineno) {
-            int64_t target_stack = stacks[i];
-            if (compatible_stack(start_stack, target_stack)) {
-                err = 0;
-                if (target_stack > best_stack) {
-                    best_stack = target_stack;
-                    best_addr = i;
-                }
+    if (current >= 0 && current < len && safe[current]) {
+        for (int i = 0; i < len; i++) {
+            if (lines[i] == new_lineno && safe[i]) {
+                best_addr = i;
+                break;
             }
-            else if (err < 0) {
-                if (start_stack == OVERFLOWED) {
-                    msg = "stack to deep to analyze";
-                }
-                else if (start_stack == UNINITIALIZED) {
-                    msg = "can't jump from unreachable code";
-                }
-                else {
-                    msg = explain_incompatible_stack(target_stack);
-                    err = 1;
-                }
+        }
+        for (uint32_t j = 0; best_addr < 0 && j < source.nrecords; j++) {
+            _PyIRSourceEvent event;
+            _PyIRSource_Event(&source, j, &event);
+            if (event.line == new_lineno && safe[event.to] && event.handler < 0) {
+                best_addr = event.to;
             }
         }
     }
-    PyMem_Free(stacks);
+    PyMem_Free(safe);
     PyMem_Free(lines);
-    if (err) {
-        PyErr_SetString(PyExc_ValueError, msg);
+    if (best_addr < 0) {
+        PyErr_SetString(PyExc_ValueError,
+                        "jump requires an incoming temporary register owner");
         return -1;
     }
     // Populate any NULL locals that the compiler might have "proven" to exist
@@ -2214,39 +1734,33 @@ frame_lineno_set_impl(PyFrameObject *self, PyObject *value)
         }
         assert(unbound == 0);
     }
-    if (is_suspended) {
-        /* Account for value popped by yield */
-        start_stack = pop_value(start_stack);
-    }
-    /* The temporary at depth d is in slot co_nlocalsplus + d */
-    PyValue *stack_base = _PyFrame_Stackbase(self->f_frame);
-    int depth = stack_depth(start_stack);
-    while (start_stack > best_stack) {
-        depth--;
-        // a move: cleared below
-        PyValue popped = stack_base[depth];
-        stack_base[depth] = PyValue_NULL;
-        if (top_of_stack(start_stack) == Except) {
-            /* Pop exception stack as well as the evaluation stack */
-            PyObject *exc = PyValue_AsKnownObjectBorrow(popped);
-            assert(PyExceptionInstance_Check(exc) || exc == Py_None);
-            PyThreadState *tstate = _PyThreadState_GET();
-            Py_XSETREF(tstate->exc_info->exc_value, exc == Py_None ? NULL : exc);
-        }
-        else {
-            PyValue_XCLOSE(popped);
-        }
-        start_stack = pop_value(start_stack);
-    }
-    if (is_suspended) {
-        /* The value sent in goes on top of the new stack */
-        self->f_frame->return_slot = (uint16_t)(code->co_nlocalsplus + depth);
-    }
-    /* Finally set the new lasti and return OK. */
+    /* Commit the continuation before any closing callback. A suspended
+     * caller's overlap remains untouched until its child retires. */
     self->f_lineno = 0;
-    /* A pending call must honor the debugger-selected continuation. */
-    self->f_frame->return_slot &= ~IR_POSTCALL_DISCARD;
-    self->f_frame->instr_ptr = _PyFrame_InstrAt(self->f_frame, best_addr);
+    self->f_frame->return_pc = _PyFrame_InstrAt(self->f_frame, best_addr);
+    self->f_source_event = -1;
+    self->f_source_event_error = -1;
+    if (pending_call) {
+        self->f_frame->pending_redirect = 1;
+        return 0;
+    }
+    self->f_frame->instr_ptr = self->f_frame->return_pc;
+    /* Both sites require no incoming temporary values. Retire source
+     * scratch owners without manufacturing a historical evaluation stack. */
+    PyValue *base = self->f_frame->base;
+    const uint32_t *constants = _PyCode_CONSTSLOTS(code);
+    int nslots = code->co_framesize - FRAME_SPECIALS_SIZE;
+    for (int slot = code->co_nlocalsplus; slot < nslots; slot++) {
+        bool constant = false;
+        for (int j = 0; j < code->co_nconstslots; j++) {
+            constant |= constants[j * 2] == (uint32_t)slot;
+        }
+        if (!constant) {
+            PyValue old = base[slot];
+            base[slot] = PyValue_NULL;
+            PyValue_XCLOSE(old);
+        }
+    }
     return 0;
 }
 
@@ -2532,6 +2046,8 @@ _PyFrame_New_NoTrack(PyCodeObject *code)
     f->f_trace_lines = 1;
     f->f_trace_opcodes = 0;
     f->f_lineno = 0;
+    f->f_source_event = -1;
+    f->f_source_event_error = -1;
     f->f_extra_locals = NULL;
     f->f_locals_cache = NULL;
     f->f_overwritten_fast_locals = NULL;

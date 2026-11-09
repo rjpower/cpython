@@ -1814,7 +1814,7 @@ optimize_and_assemble_code_unit(struct compiler_unit *u, PyObject *const_cache,
 
     int stackdepth;
     int nlocalsplus;
-    if (_PyCfg_OptimizedCfgToRegCfg(g, &u->u_metadata, &stackdepth,
+    if (_PyCfg_OptimizedCfgToRegCfg(g, &u->u_metadata, code_flags, &stackdepth,
                                     &nlocalsplus, &regcfg) < 0) {
         goto error;
     }
@@ -2101,7 +2101,7 @@ _PyCompile_Assemble(_PyCompile_CodeUnitMetadata *umd, PyObject *filename,
 
     int code_flags = 0;
     int stackdepth, nlocalsplus;
-    if (_PyCfg_OptimizedCfgToRegCfg(g, umd, &stackdepth, &nlocalsplus,
+    if (_PyCfg_OptimizedCfgToRegCfg(g, umd, code_flags, &stackdepth, &nlocalsplus,
                                     &regcfg) < 0) {
         goto error;
     }

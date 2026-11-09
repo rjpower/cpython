@@ -400,7 +400,7 @@ do { \
     } else { \
         next_instr = _Py_call_instrumentation_jump(this_instr, tstate, event, frame, src, _dest); \
         if (next_instr == NULL) { \
-            next_instr = _dest + 1; \
+            next_instr = frame->instr_ptr + 1; \
             JUMP_TO_LABEL(error); \
         } \
     } \
@@ -574,7 +574,10 @@ _PyIR_AdoptTemp(PyValueBorrow view)
  * NULL, or V when the handler wrote it there before (IR_STORE_TEMP_DST). */
 #define IR_STORE_DST(F, V) \
     do { \
-        if (IR_IS_LOCAL(F)) { \
+        if ((F) == IR_NO_DST) { \
+            PyValue_XCLOSE(V); \
+        } \
+        else if (IR_IS_LOCAL(F)) { \
             PyValue ir_old = IR_SLOT(F); \
             IR_SLOT(F) = _PyValue_Publish(&(V)); \
             _PyValue_CheckHome(IR_SLOT(F)); \
@@ -595,7 +598,7 @@ _PyIR_AdoptTemp(PyValueBorrow view)
 /* The checked producer already owns canonical bits. */
 #define IR_STORE_CANONICAL_TEMP_DST(F, V) \
     do { \
-        if (!IR_IS_LOCAL(F)) { \
+        if (!IR_IS_LOCAL(F) && (F) != IR_NO_DST) { \
             assert(PyValue_IsNull(IR_SLOT(F)) \
                    || PyValue_Is(IR_SLOT(F), (V))); \
             IR_SLOT(F) = (V); \
@@ -607,7 +610,7 @@ _PyIR_AdoptTemp(PyValueBorrow view)
  * if F names a temporary.  A local gets it at the end, IR_STORE_DST. */
 #define IR_STORE_TEMP_DST(F, V) \
     do { \
-        if (!IR_IS_LOCAL(F)) { \
+        if (!IR_IS_LOCAL(F) && (F) != IR_NO_DST) { \
             assert(PyValue_IsNull(IR_SLOT(F)) \
                    || PyValue_Is(IR_SLOT(F), (V))); \
             IR_SLOT(F) = _PyValue_Publish(&(V)); \
@@ -622,7 +625,8 @@ _PyIR_AdoptTemp(PyValueBorrow view)
     do { \
         if (IR_IS_LOCAL(F)) { \
             PyValue ir_old = IR_SLOT(F); \
-            IR_SLOT(F) = _PyValue_Publish(&(SLOT)); \
+            assert(_PyValue_IsHome(SLOT)); \
+            IR_SLOT(F) = (SLOT); \
             _PyValue_CheckHome(IR_SLOT(F)); \
             (SLOT) = PyValue_NULL; \
             IR_RETIRE_LOCAL(ir_old); \
@@ -635,7 +639,8 @@ _PyIR_AdoptTemp(PyValueBorrow view)
     do { \
         if (IR_IS_LOCAL(F)) { \
             PyValue ir_old = IR_SLOT(F); \
-            IR_SLOT(F) = _PyValue_Publish(&(SLOT)); \
+            assert(_PyValue_IsHome(SLOT)); \
+            IR_SLOT(F) = (SLOT); \
             _PyValue_CheckHome(IR_SLOT(F)); \
             (SLOT) = PyValue_NULL; \
             IR_RETIRE_LOCAL(ir_old); \
@@ -656,21 +661,25 @@ _PyIR_AdoptTemp(PyValueBorrow view)
  * finish_unpack_to_locals() does the rest out of line, so that the release
  * sees the locals as the STORE_FAST sequence leaves them. */
 static inline int
-_PyIR_UnpackToLocals(PyValue *locals, PyValue *window, int n)
+_PyIR_UnpackToLocals(PyValue *locals, PyValue *window, int n, int canonical)
 {
     for (int i = 0; i < n; i++) {
         PyValue old = locals[i];
         if (_PyValue_MayDealloc(old)) {
             return i;
         }
-        locals[i] = _PyValue_Publish(&window[n - 1 - i]);
+        PyValue *element = &window[n - 1 - i];
+        assert(!canonical || _PyValue_IsHome(*element));
+        locals[i] = canonical ? *element : _PyValue_Publish(element);
         _PyValue_CheckHome(locals[i]);
         window[n - 1 - i] = PyValue_NULL;
         PyValue_XCLOSE(old);
     }
     return -1;
 }
-#define IR_UNPACK_TO_LOCALS(L, W, N) _PyIR_UnpackToLocals((L), (W), (N))
+#define IR_UNPACK_TO_LOCALS(L, W, N) _PyIR_UnpackToLocals((L), (W), (N), 0)
+#define IR_UNPACK_CANONICAL_TO_LOCALS(L, W, N) \
+    _PyIR_UnpackToLocals((L), (W), (N), 1)
 
 /* Clear N slots from PTR on; N may be zero or less. */
 #define IR_CLEAR_SLOTS(PTR, N) \
@@ -738,31 +747,21 @@ _PyIR_UnpackToLocals(PyValue *locals, PyValue *window, int n)
         } \
     } while (0)
 
-/* Execute the retained ordinary NOP boundary after the checked bool branch.
- * Instrumented targets and lltrace still enter the normal handler. */
-#ifdef Py_GIL_DISABLED
-#  define IR_EXECUTE_ORDINARY_NOP() ((void)0)
-#else
-#  ifdef Py_DEBUG
-#    define IR_NOP_NO_LLTRACE() (frame->lltrace < 5)
-#  else
-#    define IR_NOP_NO_LLTRACE() 1
-#  endif
-#  define IR_EXECUTE_ORDINARY_NOP() \
-    do { \
-        if (IR_NOP_NO_LLTRACE() && \
-            IR_HANDLER(FT_ATOMIC_LOAD_UINT64_RELAXED(*next_instr)) == NOP) { \
-            frame->instr_ptr = next_instr; \
-            next_instr++; \
-        } \
-    } while (0)
-#endif
-
 /* After a frame switch, V goes to the slot of the frame that control came
  * back to (frame->return_slot). */
 #define IR_STORE_RETURN(V) \
-    (next_instr = _PyFrame_CompleteReturn( \
-        frame, _PyValue_Publish(&(V)), next_instr))
+    do { \
+        if (_PyFrame_SetReturnValue(frame, _PyValue_Publish(&(V)))) { \
+            next_instr = frame->return_pc; \
+        } \
+    } while (0)
+#define IR_STORE_CANONICAL_RETURN(V) \
+    do { \
+        assert(_PyValue_IsHome(V)); \
+        if (_PyFrame_SetReturnValue(frame, (V))) { \
+            next_instr = frame->return_pc; \
+        } \
+    } while (0)
 
 /* The oparg and feedback entry of another instruction of the frame. */
 #define _PyIR_Oparg(FRAME, INSTR) \
@@ -771,5 +770,3 @@ _PyIR_UnpackToLocals(PyValue *locals, PyValue *window, int n)
 #define _PyIR_FbHeaderOf(FRAME, INSTR, HANDLER) \
     ((void)(HANDLER), \
      _PyIR_InstrFeedback(_PyFrame_GetCode(FRAME), _PyFrame_Exec(FRAME), (INSTR)))
-
-

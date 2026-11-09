@@ -7,6 +7,18 @@
 #include "pycore_pyerrors.h"      // _Py_FatalErrorFormat()
 #include "pycore_value.h"      // _Py_VISIT_VALUE()
 
+void
+_PyFrame_CompleteRedirect(_PyInterpreterFrame *frame)
+{
+    assert(frame->pending_redirect);
+    assert(frame->return_slot == IR_NO_DST);
+    /* The child has retired its overlap. Publish the new state before
+     * closing remaining scratch owners, whose finalizers can inspect it. */
+    frame->pending_redirect = 0;
+    frame->instr_ptr = frame->return_pc;
+    _PyFrame_ClearTemporaries(frame, _PyFrame_GetCode(frame)->co_nlocalsplus);
+}
+
 
 int
 _PyFrame_Traverse(_PyInterpreterFrame *frame, visitproc visit, void *arg)
@@ -22,6 +34,10 @@ PyFrameObject *
 _PyFrame_MakeAndSetFrameObject(_PyInterpreterFrame *frame)
 {
     PyObject *exc = PyErr_GetRaisedException();
+    if (_PyFrame_MaterializeKwargs(frame) < 0) {
+        Py_XDECREF(exc);
+        return NULL;
+    }
 
     PyFrameObject *f = _PyFrame_New_NoTrack(_PyFrame_GetCode(frame));
     if (f == NULL) {
@@ -50,6 +66,26 @@ _PyFrame_MakeAndSetFrameObject(_PyInterpreterFrame *frame)
     frame->frame_obj = f;
 #endif
     return f;
+}
+
+int
+_PyFrame_MaterializeKwargs(_PyInterpreterFrame *frame)
+{
+    uint16_t slot = frame->pending_kwargs;
+    if (slot == IR_NO_DST) {
+        return 0;
+    }
+    assert(slot < _PyFrame_GetCode(frame)->co_nlocalsplus);
+    assert(PyValue_IsNull(frame->base[slot]));
+    /* As for frame-object allocation above, GC is scheduled, not run here.
+     * Install the owner before a subsequent poll can invoke an observer. */
+    PyObject *dict = PyDict_New();
+    if (dict == NULL) {
+        return -1;
+    }
+    frame->base[slot] = PyValue_FromObjectSteal(dict);
+    frame->pending_kwargs = IR_NO_DST;
+    return 0;
 }
 
 static void

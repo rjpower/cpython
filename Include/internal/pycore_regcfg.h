@@ -51,6 +51,7 @@ extern "C" {
 #define _PyReg_DEAD             (-1)
 
 /* _PyRegOp.flags */
+#define _PyReg_SOURCE_ORIGIN   256 // explicit source span, not propagated location
 #define _PyReg_LOAD_FOLDED      1   // a load that its consumer reads in place
 #define _PyReg_STORE_FOLDED     2   // a store that its producer does
 #define _PyReg_JUMP_OUTPUT      4   // outputs only where it jumps
@@ -111,6 +112,7 @@ typedef struct _PyRegBlock {
 
 typedef struct _PyRegCfg {
     int nlocalsplus;
+    int virtual_kwargs;     // compiler-proven immutable, uncaptured kwargs local
     int nvregs;             // registers allocated, fresh included
     _PyRegOp *ops;
     int nops;
@@ -132,6 +134,8 @@ typedef struct _PyRegCfg {
     int nconst;
     int *const_index;
 } _PyRegCfg;
+
+int _PyRegCfg_PrepareKwargs(_PyRegCfg *cfg, int slot);
 
 /* Canonical temporaries are numbered by stack position below the frame
  * limit; the fresh ones follow. */

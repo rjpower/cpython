@@ -7,6 +7,7 @@
 
 #define Py_VALUE_CORE 1
 #include "_remote_debugging.h"
+#include "pycore_ir_source.h"
 
 #define MAX_LINETABLE_SIZE (64 * 1024)
 
@@ -186,8 +187,12 @@ parse_linetable(const uintptr_t addrq, const char* linetable, Py_ssize_t linetab
         return false;
     }
 
-    const uint8_t* ptr = (const uint8_t*)(linetable);
-    const uint8_t* end = ptr + linetable_size;
+    _PyIRSourceMap source;
+    if (_PyIRSource_Decode(linetable, linetable_size, &source) < 0) {
+        return false;
+    }
+    const uint8_t* ptr = source.locations;
+    const uint8_t* end = ptr + source.locations_size;
     uintptr_t addr = 0;
     int computed_line = firstlineno;  // Running accumulator, separate from output
     int val;  // Temporary for varint results

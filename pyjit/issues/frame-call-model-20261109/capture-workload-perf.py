@@ -188,6 +188,8 @@ def record_check(row, role, identity, perf, env, output):
 
 
 def collect(args, output):
+    require(args.mode == 'stat' or args.stat_group == 'cycles-instructions',
+            'record mode does not accept a stat group')
     protocol = load('sealed_perf_protocol', PROTOCOL)
     checkpoint = load('perf_checkpoint', CHECKPOINT)
     protocol.CASES = CASES
@@ -230,9 +232,13 @@ def collect(args, output):
     shutil.copy2(args.repeat / 'commands.json', output / 'calibration-commands.json')
     results = []
     rounds = 3 if args.mode == 'stat' else 1
-    group = ('cycles-instructions', ('cycles:u', 'instructions:u'))
     if args.mode == 'record':
         group = ('cycles-record', ('cycles:u',))
+    else:
+        groups = dict(protocol.EVENT_GROUPS)
+        require(args.stat_group in ('cycles-instructions', 'branches')
+                and args.stat_group in groups, 'unsupported stat group')
+        group = (args.stat_group, groups[args.stat_group])
     failure = postflight_error = None
     after = None
     deadline = time.monotonic() + 45 * 60
@@ -279,6 +285,8 @@ def collect(args, output):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--mode', choices=('stat', 'record'), required=True)
+    parser.add_argument('--stat-group', choices=('cycles-instructions', 'branches'),
+                        default='cycles-instructions')
     parser.add_argument('--cases', default=','.join(CASES))
     parser.add_argument('--repeat', type=Path, default=REPEAT)
     parser.add_argument('--output', type=Path, required=True)

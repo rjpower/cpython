@@ -1,0 +1,266 @@
+{
+  "candidate": {
+    "elf": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/pyjit-link-wave1/frame-call-model-20261109/ninth-workload-perf-record/candidate-python",
+    "sha256": "63abc1562ae04023a85a6867a722b6e8dac5e9873bdc25c47e33f0f0e582bfd1",
+    "handlers": {
+      "BINARY_OP_MULTIPLY_FLOAT": {
+        "address": "0x3533b0",
+        "size_bytes": 1134,
+        "address_mod64": 48,
+        "instruction_lines": 257,
+        "conditional_jumps": 33,
+        "direct_calls": 8,
+        "indirect_jumps": 0
+      },
+      "BINARY_OP_ADD_FLOAT": {
+        "address": "0x3539f0",
+        "size_bytes": 1134,
+        "address_mod64": 48,
+        "instruction_lines": 257,
+        "conditional_jumps": 33,
+        "direct_calls": 8,
+        "indirect_jumps": 0
+      },
+      "BINARY_OP_SUBTRACT_FLOAT": {
+        "address": "0x352d70",
+        "size_bytes": 1134,
+        "address_mod64": 48,
+        "instruction_lines": 257,
+        "conditional_jumps": 33,
+        "direct_calls": 8,
+        "indirect_jumps": 0
+      },
+      "LOAD_FAST_BORROW": {
+        "address": "0x34dcd0",
+        "size_bytes": 310,
+        "address_mod64": 16,
+        "instruction_lines": 82,
+        "conditional_jumps": 13,
+        "direct_calls": 3,
+        "indirect_jumps": 0
+      },
+      "BINARY_OP_SUBSCR_LIST_INT": {
+        "address": "0x361d30",
+        "size_bytes": 1225,
+        "address_mod64": 48,
+        "instruction_lines": 273,
+        "conditional_jumps": 47,
+        "direct_calls": 8,
+        "indirect_jumps": 0
+      },
+      "STORE_SUBSCR_LIST_INT": {
+        "address": "0x34a6b0",
+        "size_bytes": 589,
+        "address_mod64": 48,
+        "instruction_lines": 132,
+        "conditional_jumps": 19,
+        "direct_calls": 3,
+        "indirect_jumps": 0
+      },
+      "COPY": {
+        "address": "0x33b230",
+        "size_bytes": 218,
+        "address_mod64": 48,
+        "instruction_lines": 54,
+        "conditional_jumps": 6,
+        "direct_calls": 1,
+        "indirect_jumps": 0
+      },
+      "STORE_FAST": {
+        "address": "0x33bcf0",
+        "size_bytes": 159,
+        "address_mod64": 48,
+        "instruction_lines": 38,
+        "conditional_jumps": 3,
+        "direct_calls": 1,
+        "indirect_jumps": 0
+      },
+      "LOAD_SMALL_INT_INLINE": {
+        "address": "0x34d780",
+        "size_bytes": 281,
+        "address_mod64": 0,
+        "instruction_lines": 72,
+        "conditional_jumps": 9,
+        "direct_calls": 2,
+        "indirect_jumps": 0
+      },
+      "UNPACK_SEQUENCE_LIST": {
+        "address": "0x36afc0",
+        "size_bytes": 672,
+        "address_mod64": 0,
+        "instruction_lines": 167,
+        "conditional_jumps": 22,
+        "direct_calls": 4,
+        "indirect_jumps": 0
+      },
+      "UNPACK_SEQUENCE_TUPLE": {
+        "address": "0x36ad20",
+        "size_bytes": 672,
+        "address_mod64": 32,
+        "instruction_lines": 168,
+        "conditional_jumps": 22,
+        "direct_calls": 4,
+        "indirect_jumps": 0
+      },
+      "UNPACK_SEQUENCE_TWO_TUPLE": {
+        "address": "0x36a950",
+        "size_bytes": 973,
+        "address_mod64": 16,
+        "instruction_lines": 227,
+        "conditional_jumps": 31,
+        "direct_calls": 6,
+        "indirect_jumps": 0
+      },
+      "FOR_ITER_LIST": {
+        "address": "0x374690",
+        "size_bytes": 1216,
+        "address_mod64": 16,
+        "instruction_lines": 279,
+        "conditional_jumps": 34,
+        "direct_calls": 10,
+        "indirect_jumps": 0
+      },
+      "JUMP_BACKWARD": {
+        "address": "0x340150",
+        "size_bytes": 116,
+        "address_mod64": 16,
+        "instruction_lines": 31,
+        "conditional_jumps": 2,
+        "direct_calls": 1,
+        "indirect_jumps": 0
+      }
+    }
+  },
+  "golden": {
+    "elf": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/pyjit-link-wave1/frame-call-model-20261109/ninth-workload-perf-record/golden-python",
+    "sha256": "c9c3370017e5754670a27acb40a65e61ab103f4020a33ebad55b1a3029509ece",
+    "handlers": {
+      "BINARY_OP_MULTIPLY_FLOAT": {
+        "address": "0x348b60",
+        "size_bytes": 1276,
+        "address_mod64": 32,
+        "instruction_lines": 290,
+        "conditional_jumps": 38,
+        "direct_calls": 8,
+        "indirect_jumps": 0
+      },
+      "BINARY_OP_ADD_FLOAT": {
+        "address": "0x34e4d0",
+        "size_bytes": 1276,
+        "address_mod64": 16,
+        "instruction_lines": 290,
+        "conditional_jumps": 38,
+        "direct_calls": 8,
+        "indirect_jumps": 0
+      },
+      "BINARY_OP_SUBTRACT_FLOAT": {
+        "address": "0x345df0",
+        "size_bytes": 1276,
+        "address_mod64": 48,
+        "instruction_lines": 290,
+        "conditional_jumps": 38,
+        "direct_calls": 8,
+        "indirect_jumps": 0
+      },
+      "LOAD_FAST_BORROW": {
+        "address": "0x33e200",
+        "size_bytes": 461,
+        "address_mod64": 0,
+        "instruction_lines": 113,
+        "conditional_jumps": 17,
+        "direct_calls": 4,
+        "indirect_jumps": 0
+      },
+      "BINARY_OP_SUBSCR_LIST_INT": {
+        "address": "0x346b50",
+        "size_bytes": 932,
+        "address_mod64": 16,
+        "instruction_lines": 219,
+        "conditional_jumps": 40,
+        "direct_calls": 7,
+        "indirect_jumps": 0
+      },
+      "STORE_SUBSCR_LIST_INT": {
+        "address": "0x33b440",
+        "size_bytes": 589,
+        "address_mod64": 0,
+        "instruction_lines": 132,
+        "conditional_jumps": 19,
+        "direct_calls": 3,
+        "indirect_jumps": 0
+      },
+      "COPY": {
+        "address": "0x32a010",
+        "size_bytes": 218,
+        "address_mod64": 16,
+        "instruction_lines": 54,
+        "conditional_jumps": 6,
+        "direct_calls": 1,
+        "indirect_jumps": 0
+      },
+      "STORE_FAST": {
+        "address": "0x32aa90",
+        "size_bytes": 159,
+        "address_mod64": 16,
+        "instruction_lines": 38,
+        "conditional_jumps": 3,
+        "direct_calls": 1,
+        "indirect_jumps": 0
+      },
+      "LOAD_SMALL_INT_INLINE": {
+        "address": "0x33dd20",
+        "size_bytes": 243,
+        "address_mod64": 32,
+        "instruction_lines": 65,
+        "conditional_jumps": 8,
+        "direct_calls": 2,
+        "indirect_jumps": 0
+      },
+      "UNPACK_SEQUENCE_LIST": {
+        "address": "0x35aa90",
+        "size_bytes": 822,
+        "address_mod64": 16,
+        "instruction_lines": 202,
+        "conditional_jumps": 28,
+        "direct_calls": 5,
+        "indirect_jumps": 0
+      },
+      "UNPACK_SEQUENCE_TUPLE": {
+        "address": "0x35a750",
+        "size_bytes": 822,
+        "address_mod64": 16,
+        "instruction_lines": 203,
+        "conditional_jumps": 28,
+        "direct_calls": 5,
+        "indirect_jumps": 0
+      },
+      "UNPACK_SEQUENCE_TWO_TUPLE": {
+        "address": "0x35a2f0",
+        "size_bytes": 1109,
+        "address_mod64": 48,
+        "instruction_lines": 260,
+        "conditional_jumps": 37,
+        "direct_calls": 7,
+        "indirect_jumps": 0
+      },
+      "FOR_ITER_LIST": {
+        "address": "0x340ec0",
+        "size_bytes": 1231,
+        "address_mod64": 0,
+        "instruction_lines": 280,
+        "conditional_jumps": 35,
+        "direct_calls": 9,
+        "indirect_jumps": 0
+      },
+      "JUMP_BACKWARD": {
+        "address": "0x32f710",
+        "size_bytes": 116,
+        "address_mod64": 16,
+        "instruction_lines": 31,
+        "conditional_jumps": 2,
+        "direct_calls": 1,
+        "indirect_jumps": 0
+      }
+    }
+  }
+}

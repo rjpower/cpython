@@ -1,0 +1,86 @@
+candidate
+['perf', 'report', '--stdio', '--no-children', '--call-graph', 'none', '--sort', 'symbol,symoff', '--percent-limit', '0.8', '-i', '/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/pyjit-link-wave1/frame-call-model-20261109/ninth-workload-perf-record/record-r1-candidate-nbody-cycles-record-perf.data']
+# To display the perf.data header info, please use --header/--header-only options.
+#
+#
+# Total Lost Samples: 0
+#
+# Samples: 2K of event 'cycles:u'
+# Event count (approx.): 20909403913
+#
+# Overhead  Symbol                                    Symbol Offset  IPC   [IPC Coverage]
+# ........  ........................................  .............  ....................
+#
+     5.50%  [.] _TAIL_CALL_BINARY_OP_MULTIPLY_FLOAT   [.] _TAIL_CALL_BINARY_OP_MULTIPLY_FLOAT+0xd8  -      -            
+     2.11%  [.] _TAIL_CALL_LOAD_FAST_BORROW           [.] _TAIL_CALL_LOAD_FAST_BORROW+0xef  -      -            
+     2.05%  [.] _TAIL_CALL_COPY                       [.] _TAIL_CALL_COPY+0xb5  -      -            
+     1.91%  [.] _TAIL_CALL_BINARY_OP_ADD_FLOAT        [.] _TAIL_CALL_BINARY_OP_ADD_FLOAT+0xd8  -      -            
+     1.82%  [.] PyList_GET_VALUE                      [.] PyList_GET_VALUE+0xc  -      -            
+     1.79%  [.] _TAIL_CALL_BINARY_OP_SUBSCR_LIST_INT  [.] _TAIL_CALL_BINARY_OP_SUBSCR_LIST_INT+0x67  -      -            
+     1.76%  [.] _TAIL_CALL_LOAD_FAST_BORROW           [.] _TAIL_CALL_LOAD_FAST_BORROW+0x41  -      -            
+     1.64%  [.] _TAIL_CALL_BINARY_OP_SUBTRACT_FLOAT   [.] _TAIL_CALL_BINARY_OP_SUBTRACT_FLOAT+0xd8  -      -            
+     1.52%  [.] _TAIL_CALL_BINARY_OP_MULTIPLY_FLOAT   [.] _TAIL_CALL_BINARY_OP_MULTIPLY_FLOAT+0xed  -      -            
+     1.40%  [.] _TAIL_CALL_BINARY_OP_ADD_FLOAT        [.] _TAIL_CALL_BINARY_OP_ADD_FLOAT+0xe7  -      -            
+     1.32%  [.] _TAIL_CALL_BINARY_OP_SUBTRACT_FLOAT   [.] _TAIL_CALL_BINARY_OP_SUBTRACT_FLOAT+0x343  -      -            
+     1.27%  [.] _TAIL_CALL_BINARY_OP_MULTIPLY_FLOAT   [.] _TAIL_CALL_BINARY_OP_MULTIPLY_FLOAT+0xe7  -      -            
+     1.23%  [.] _TAIL_CALL_STORE_FAST                 [.] _TAIL_CALL_STORE_FAST+0x72  -      -            
+     1.23%  [.] _TAIL_CALL_BINARY_OP_ADD_FLOAT        [.] _TAIL_CALL_BINARY_OP_ADD_FLOAT+0x4d  -      -            
+     1.19%  [.] _TAIL_CALL_LOAD_SMALL_INT_INLINE      [.] _TAIL_CALL_LOAD_SMALL_INT_INLINE+0x93  -      -            
+     1.11%  [.] _TAIL_CALL_BINARY_OP_SUBSCR_LIST_INT  [.] _TAIL_CALL_BINARY_OP_SUBSCR_LIST_INT+0x375  -      -            
+     1.11%  [.] _TAIL_CALL_LOAD_FAST_BORROW           [.] _TAIL_CALL_LOAD_FAST_BORROW+0x4  -      -            
+     1.08%  [.] _TAIL_CALL_BINARY_OP_SUBTRACT_FLOAT   [.] _TAIL_CALL_BINARY_OP_SUBTRACT_FLOAT+0xe7  -      -            
+     1.07%  [.] _TAIL_CALL_STORE_SUBSCR_LIST_INT      [.] _TAIL_CALL_STORE_SUBSCR_LIST_INT+0xd0  -      -            
+     0.92%  [.] _TAIL_CALL_UNPACK_SEQUENCE_LIST       [.] _TAIL_CALL_UNPACK_SEQUENCE_LIST+0xc3  -      -            
+     0.92%  [.] _TAIL_CALL_BINARY_OP_MULTIPLY_FLOAT   [.] _TAIL_CALL_BINARY_OP_MULTIPLY_FLOAT+0x4d  -      -            
+     0.91%  [.] _TAIL_CALL_BINARY_OP_MULTIPLY_FLOAT   [.] _TAIL_CALL_BINARY_OP_MULTIPLY_FLOAT+0x5c  -      -            
+     0.91%  [.] _TAIL_CALL_LOAD_FAST_BORROW           [.] _TAIL_CALL_LOAD_FAST_BORROW+0x58  -      -            
+     0.88%  [.] _TAIL_CALL_JUMP_BACKWARD              [.] _TAIL_CALL_JUMP_BACKWARD+0x4  -      -            
+     0.87%  [.] _TAIL_CALL_STORE_SUBSCR_LIST_INT      [.] _TAIL_CALL_STORE_SUBSCR_LIST_INT+0x74  -      -            
+
+
+#
+# (Cannot load tips.txt file, please install perf!)
+#
+golden
+['perf', 'report', '--stdio', '--no-children', '--call-graph', 'none', '--sort', 'symbol,symoff', '--percent-limit', '0.8', '-i', '/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/pyjit-link-wave1/frame-call-model-20261109/ninth-workload-perf-record/record-r1-golden-nbody-cycles-record-perf.data']
+# To display the perf.data header info, please use --header/--header-only options.
+#
+#
+# Total Lost Samples: 0
+#
+# Samples: 2K of event 'cycles:u'
+# Event count (approx.): 20855024662
+#
+# Overhead  Symbol                                    Symbol Offset  IPC   [IPC Coverage]
+# ........  ........................................  .............  ....................
+#
+     4.27%  [.] _TAIL_CALL_BINARY_OP_MULTIPLY_FLOAT   [.] _TAIL_CALL_BINARY_OP_MULTIPLY_FLOAT+0xd8  -      -            
+     2.28%  [.] _TAIL_CALL_LOAD_FAST_BORROW           [.] _TAIL_CALL_LOAD_FAST_BORROW+0x13f  -      -            
+     1.92%  [.] _TAIL_CALL_BINARY_OP_SUBSCR_LIST_INT  [.] _TAIL_CALL_BINARY_OP_SUBSCR_LIST_INT+0x66  -      -            
+     1.92%  [.] PyList_GET_VALUE                      [.] PyList_GET_VALUE+0xc  -      -            
+     1.71%  [.] _TAIL_CALL_BINARY_OP_MULTIPLY_FLOAT   [.] _TAIL_CALL_BINARY_OP_MULTIPLY_FLOAT+0xed  -      -            
+     1.63%  [.] _TAIL_CALL_LOAD_FAST_BORROW           [.] _TAIL_CALL_LOAD_FAST_BORROW+0x41  -      -            
+     1.59%  [.] _TAIL_CALL_BINARY_OP_MULTIPLY_FLOAT   [.] _TAIL_CALL_BINARY_OP_MULTIPLY_FLOAT+0xe7  -      -            
+     1.50%  [.] _TAIL_CALL_BINARY_OP_ADD_FLOAT        [.] _TAIL_CALL_BINARY_OP_ADD_FLOAT+0xe7  -      -            
+     1.48%  [.] _TAIL_CALL_BINARY_OP_SUBTRACT_FLOAT   [.] _TAIL_CALL_BINARY_OP_SUBTRACT_FLOAT+0xe7  -      -            
+     1.48%  [.] _TAIL_CALL_BINARY_OP_SUBTRACT_FLOAT   [.] _TAIL_CALL_BINARY_OP_SUBTRACT_FLOAT+0xd8  -      -            
+     1.44%  [.] _TAIL_CALL_BINARY_OP_ADD_FLOAT        [.] _TAIL_CALL_BINARY_OP_ADD_FLOAT+0xd8  -      -            
+     1.40%  [.] _TAIL_CALL_STORE_SUBSCR_LIST_INT      [.] _TAIL_CALL_STORE_SUBSCR_LIST_INT+0xd0  -      -            
+     1.19%  [.] _TAIL_CALL_COPY                       [.] _TAIL_CALL_COPY+0xb5  -      -            
+     1.08%  [.] _TAIL_CALL_BINARY_OP_MULTIPLY_FLOAT   [.] _TAIL_CALL_BINARY_OP_MULTIPLY_FLOAT+0x306  -      -            
+     1.04%  [.] _TAIL_CALL_BINARY_OP_SUBSCR_LIST_INT  [.] _TAIL_CALL_BINARY_OP_SUBSCR_LIST_INT+0x30  -      -            
+     1.04%  [.] _TAIL_CALL_UNPACK_SEQUENCE_LIST       [.] _TAIL_CALL_UNPACK_SEQUENCE_LIST+0xc3  -      -            
+     1.00%  [.] _TAIL_CALL_LOAD_FAST_BORROW           [.] _TAIL_CALL_LOAD_FAST_BORROW+0x5  -      -            
+     1.00%  [.] _TAIL_CALL_BINARY_OP_MULTIPLY_FLOAT   [.] _TAIL_CALL_BINARY_OP_MULTIPLY_FLOAT+0x5c  -      -            
+     0.92%  [.] _TAIL_CALL_UNPACK_SEQUENCE_TUPLE      [.] _TAIL_CALL_UNPACK_SEQUENCE_TUPLE+0xcd  -      -            
+     0.88%  [.] _TAIL_CALL_BINARY_OP_SUBSCR_LIST_INT  [.] _TAIL_CALL_BINARY_OP_SUBSCR_LIST_INT+0x305  -      -            
+     0.88%  [.] _TAIL_CALL_LOAD_FAST_BORROW           [.] _TAIL_CALL_LOAD_FAST_BORROW+0x4  -      -            
+     0.84%  [.] _TAIL_CALL_STORE_SUBSCR_LIST_INT      [.] _TAIL_CALL_STORE_SUBSCR_LIST_INT+0x91  -      -            
+     0.84%  [.] _TAIL_CALL_BINARY_OP_MULTIPLY_FLOAT   [.] _TAIL_CALL_BINARY_OP_MULTIPLY_FLOAT+0x3ac  -      -            
+     0.84%  [.] _TAIL_CALL_BINARY_OP_MULTIPLY_FLOAT   [.] _TAIL_CALL_BINARY_OP_MULTIPLY_FLOAT+0x35a  -      -            
+     0.81%  [.] _TAIL_CALL_BINARY_OP_SUBTRACT_FLOAT   [.] _TAIL_CALL_BINARY_OP_SUBTRACT_FLOAT+0x43  -      -            
+
+
+#
+# (Cannot load tips.txt file, please install perf!)
+#

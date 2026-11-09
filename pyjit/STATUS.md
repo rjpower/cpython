@@ -37,11 +37,15 @@ and nbody +4.9%. The goal remains active. The
 [ninth report](issues/frame-call-model-20261109/ninth-integration-report.md)
 records the complete breakdown and exact evidence.
 
-Next: collect current counters/profiles for those repeated losses, then admit
-an evidence-backed shared-model improvement. A fresh cold review finds normal
-frame/call ownership coherent; no new frame ABI rewrite is justified by code
-size alone. The next NULL-only debugger proposal remains design-only. Review
-remaining debugger cases against documented useful jumps and explicit safe
+Current counters confirm generators/coroutines execute 5–6% more instructions;
+nbody executes 1.4% fewer but takes 5.6% more cycles. All 18 counter captures and
+six zero-loss cycle profiles pass their gates. Nbody's six further branch
+captures show fewer branches and no consistent miss penalty. Next: peer-review
+shared completion specialization against saved continuations and direct heap
+frame binding, then admit a bounded shared-model improvement. The normal
+frame/call owner model remains coherent; a new ABI needs evidence for its
+per-resume work and frame-size costs. The next NULL-only debugger proposal
+remains design-only. Review remaining debugger cases against documented useful jumps and explicit safe
 refusals across active protocols; no blanket skips or weaker assertions. See the
 [scope review](issues/frame-call-model-20261109/debugger-transfer-scope-review.md).
 Full qualification, current stats and final review still remain.

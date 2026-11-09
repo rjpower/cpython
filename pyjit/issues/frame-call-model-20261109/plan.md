@@ -67,8 +67,14 @@ upstream. The four-pair golden repeat confirms generators 1.070556,
 coroutines 1.086596 and nbody 1.048799. The other four original losses are flat
 or faster in the two-pair screen. See the
 [ninth report](ninth-integration-report.md) for complete evidence and limits.
-Current PMU/profile collection is being prepared; c142 captures remain historical.
-Runtime/build/benchmark/Lib freeze continues during the collection.
+Current PMU is complete: 18 valid cycle/instruction captures and six valid
+zero-loss profiles with stable identities. Generators/coroutines execute 5–6%
+more instructions; nbody executes 1.4% fewer but takes 5.6% more cycles. Six further
+nbody branch captures show fewer branches and no consistent miss increase.
+The [three-option proposal](generator-completion-and-creation-alternatives.md)
+compares completion specialization, saved continuations and direct heap-frame
+binding. Runtime remains frozen until a source proposal passes independent
+review and root admission; c142 captures remain historical.
 
 The [NULL-only consumer proposal](null-only-consumer-interface.md) and shared
 physical transfer contract are independently reviewed but not implemented.
@@ -81,10 +87,10 @@ No runtime edits are admitted during measurement/qualification freeze.
 
 | Stream | Owner | Current deliverable |
 | --- | --- | --- |
-| API borrow and semantic scope | Sol 6.1 medium A | Six tracing window reads; independent POST review; documented debugger guarantees versus CPython-specific jump permissiveness |
-| Stopped-frame view | Sol 6.1 medium B | Reviewed nonneutral committed-edge view, focused controls and unchanged strict adapters |
-| Independent model/source review | Sol 6.1 medium H | Actual POST/borrow diff review; precise shared physical transfer facts and NULL requirements |
-| Integration and measurement | Coordinator | Focused native gates and commit, then unchanged broad screen before further debugger work; qualification, current PMU and final logging campaigns |
+| Completion and creation design | Sol 6.1 medium A | Three structural alternatives, concrete shared-completion proposal and reviewed bounded implementation |
+| Independent source and regression review | Sol 6.1 medium B | Current nbody counts/assembly, completion alternatives peer, debugger capability review |
+| Independent measurement/model review | Sol 6.1 medium H | Retained current profile reports, counter audit and completion alternatives peer |
+| Integration and measurement | Coordinator | Source admission, serialized native gates/commit/basic performance, qualification and final logging campaigns |
 
 Workers propose first and independently review each other's contracts. Runtime
 file ownership is assigned after interface review. They do not run shared
@@ -93,11 +99,12 @@ Reviewers inspect actual source and measured evidence after each integration.
 
 ## Work sequence
 
-1. Collect current counters and profiles for the three confirmed losses:
-   generators, coroutines and nbody. Use the matched four-pair calibration,
-   retained executable identities and sealed FIFO hot-region protocol. Keep
-   per-workload instruction/cycle counts distinct from sample locations; old
-   source or profiles do not establish the current cause.
+1. Use the accepted current counters/profiles to select the next structural
+   increment. Compare shared completion specialization, explicit saved
+   continuations and direct owning heap-frame binding; include per-resume work,
+   frame-size, GC, observation and ordinary-call costs. Keep measured workload
+   counts distinct from sample locations; old profiles do not establish the
+   current cause. Nbody's remaining CPI penalty is not yet explained.
 2. Fold the independent cold architectural review into the next admission.
    Keep one frame/call/owner model. A new optimization needs a concrete producer
    or call-shape proof and an isolated comparison, not a benchmark-specific path.

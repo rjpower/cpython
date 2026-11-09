@@ -51,23 +51,35 @@ screen (unpack,float,pickle,deepcopy_memo). E11 directories are
 `ninth-logging-confirmation-{1,2}`, `ninth-engineering-{golden,upstream}` and
 `ninth-repeat-golden`. Do not combine campaigns or relabel c142 PMU as current.
 
-Native queue is idle after current API lint. H is actively implementing generic
-`capture-workload-perf.py` using the sealed FIFO protocol; A is actively peering
-its plan/source and calibration gates. Both assignments were explicitly started
-after root caught messages queued to idle agents. No current PMU captures have
-run yet. Root waits for actual source peer/host checks, then profiles the three
-confirmed losses. Runtime/build/benchmark/Lib freeze continues. Do not launch
-other native jobs during quiet timing/profiling. Reconcile live agent states on
-recovery; a queued message does not trigger a completed agent.
+Current PMU is complete: E11/ninth-workload-perf-stat-v2 has 18 valid captures,
+100% running and stable identities. E11/ninth-workload-perf-record has six valid
+zero-loss profiles with expected executable build IDs and stable identities.
+E11/ninth-workload-perf-summary.json gives cycles/instructions/CPI ratios:
+generators 1.077414/1.056034/1.020246; coroutines 1.084348/1.052249/1.030505;
+nbody 1.056129/0.986232/1.070872. Do not substitute c142 counts for these.
+The further nbody branch group completes six valid captures at 100% running:
+branches .976534, misses 1.014470 versus golden. Miss mean is skewed by candidate
+round1; remaining counts match golden. No consistent branch-miss cause is proved.
+The original collector attempt failed before capturing due to a shadowed loader;
+retain it separately from the reviewed successful v2 campaign.
 
-Source hypotheses: common generator/delegation completion and checked resume;
-static result-discard tests/semantic FOR completion for nbody. No current causal
-attribution yet. H's cold review finds normal frame/call ownership coherent;
-profile before another ABI rewrite. B's scope audit is design-only: 11 ordinary
-positives, 11 proposed protocol-crossing refusals, 2 unresolved same-caught arm
-cases. Actual-PC/provenance probes and independent admission precede test ports.
-No blanket skips, per-method setter restrictions or weakened assertions. The
-NULL-only shared physical/requirement proposal is reviewed, not implemented.
+Native queue is idle after these captures. A proposes three generator/coroutine
+alternatives; B/H independently peer them. H retains flat reports from existing
+raw profiles; this is read-only processing, not a new capture. Source32 remains
+frozen until root admits the reviewed source packet. Shared completion
+specialization is the smallest proposed experiment; saved continuations add
+per-resume/header cost and direct heap-frame binding needs partial-construction
+GC and call-result contracts. No implementation is admitted yet. Root owns native
+jobs and commits. Inspect actual agent state; queued messages do not start idle
+agents.
+
+B's debugger scope audit remains design-only: 11 ordinary positives, 11 proposed
+protocol-crossing refusals, 2 unresolved same-caught arm cases. Current32 census
+runs 892 tests/14 skips over peepholer/sys_settrace/pdb and confirms the prior24
+trace errors plus peepholer3 and pdb2 failures/2 errors. Actual-PC/provenance
+probes and independent admission precede test ports. No blanket skips, per-method
+setter restrictions or weakened assertions. NULL-only physical/requirement
+proposal is reviewed, not implemented.
 
 Retained clean417 executable is still at
 `build/execution-boundaries-release/python-canonical-before`, SHA256
@@ -79,7 +91,7 @@ not 213 checked modules. First component preflight rejected lexical/resolved
 symlink keys; corrected campaign is stable and reports nbody 0.970773,
 logging 1.034605, pickle 1.011179 by ratios of round medians. Keep the failed attempt.
 
-Next: reviewed current PMU/cycle profiles, shared-model improvement for persistent
+Next: reviewed shared-model improvement for persistent
 losses, focused checks/post-review/commit/basic performance, coherent full suites/
 stats and final review. Preserve timing parity through changes. Source/benchmark/
 control inputs and sealed evidence remain immutable during collection. Protected

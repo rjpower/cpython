@@ -111,15 +111,43 @@ combined with these campaign ratios.
 
 ## Current investigation and follow-up
 
-Current PMU/profile collection is being prepared for the three repeated losses.
-The retained c142 captures remain historical; no current counter attribution is
-claimed. The source review identifies two testable questions: general semantic
-completion on generator/coroutine returns, and repeated destination-discard
-checks on nbody's arithmetic/iteration path. Both can remove dispatches while
-adding C work, so inspect current counters and emitted assembly before choosing
-a change. See [generator routes](generator-resume-cost-source-review.md),
-[nbody routes](nbody-source-cost-review-after32.md) and the
-[current PMU plan](current-pmu-plan-after32.md).
+Current PMU collection is complete at this source: 18 cycle/instruction captures
+and six cycle profiles pass native identity, capture and before/after gates.
+Counters ran 100%; the six profiles have the expected executable build IDs and
+zero lost records. Counts below are arithmetic means of raw counts per hot loop,
+three balanced rounds per role. They are distinct from elapsed campaign ratios.
+
+| Workload | Cycles / golden | Instructions / golden | CPI / golden |
+| --- | ---: | ---: | ---: |
+| generators | 1.077414 | 1.056034 | 1.020246 |
+| coroutines | 1.084348 | 1.052249 | 1.030505 |
+| nbody | 1.056129 | 0.986232 | 1.070872 |
+
+Generators and coroutines execute about 5–6% more instructions. Current assembly
+shows real metadata decoder calls and a general completion helper on normal
+returns. Profiles locate SEND/yield for tree generators and call, creation and
+completion for recursive coroutines; sample fractions do not apportion their
+cost. The [three-option review](generator-completion-and-creation-alternatives.md)
+compares shared completion specialization, saved completion continuations and
+direct owning heap-frame binding before selecting an implementation.
+
+Nbody executes fewer instructions but takes more cycles. A further six-capture
+branch group passes all gates at 100% running: branches/golden **0.976534**,
+branch misses/golden **1.014470**. The latter mean is skewed by the first candidate
+capture; its other two miss counts match golden closely. Extra branches or a
+consistent branch-miss increase are not established causes. Current assembly
+also shrinks hot numeric/load handlers while list-subscript macro expansion
+grows. Address movement and footprint alone do not prove a layout cause.
+
+Evidence: `ninth-workload-perf-stat-v2/`, `ninth-workload-perf-record/`,
+`ninth-workload-perf-summary.json`, `ninth-nbody-branches/` and
+`ninth-nbody-branches-summary.json`. The initial generic collector attempt failed
+before capturing because a local variable shadowed its loader; the corrected
+collector passed host success/failure checks and independent review. Preserve
+that failed directory. The retained c142 captures remain historical. See the
+[independent current review](ninth-current-perf-review.md),
+[compiled completion routes](normal-completion-assembly-review32.md) and
+[nbody source review](nbody-source-cost-review-after32.md).
 
 The [cold architectural review](cold-review-after32.md) finds the normal
 frame/call owner model coherent. It recommends current shape measurements before

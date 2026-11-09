@@ -88,3 +88,84 @@ instruction/cycle samples locate historical arithmetic/subscription work only;
 they do not quantify the current canonical stores or helper path. The
 [current PMU plan](current-pmu-plan-after32.md) is the next discriminator. No
 runtime optimization is admitted by this review.
+
+## Current PMU qualification and static inspection
+
+The accepted current capture changes the priority of the source questions
+above. `ninth-workload-perf-stat-v2` at the same current/golden identities reports
+cycles1.056129, instructions0.986232 and CPI1.070872. The three nbody instruction
+ratios are identical. The workload now retires fewer instructions while taking
+more cycles. Therefore the earlier c142 added-instruction explanation and a
+simple count of added discard tests cannot explain this binary's net loss.
+The source observations above remain historical hypotheses about particular
+routes, not a current whole-workload added-work finding.
+
+Read the accepted raw flat cycle records with no children/call graph. Current
+versus golden shares are MULTIPLY_FLOAT15.50%/15.70%, LOAD_FAST_BORROW9.56%/11.56%
+and list subscription9.68%/8.67%. Both records have zero lost samples. These are
+location shares in one approximately2,000-sample capture per role; they are not
+per-handler cycle ratios. The flat symbol-offset report is retained in
+`nbody-flat-locations-after32.txt` with its exact read-only report commands.
+
+Static `nm -S`/`objdump` inspection of those retained ELFs gives:
+
+| Handler | Golden/current bytes | Golden/current static conditional jumps |
+| --- | ---: | ---: |
+| MULTIPLY_FLOAT, ADD_FLOAT, SUBTRACT_FLOAT each | 1276 / 1134 | 38 / 33 |
+| LOAD_FAST_BORROW | 461 / 310 | 17 / 13 |
+| BINARY_OP_SUBSCR_LIST_INT | 932 / 1225 | 40 / 47 |
+| STORE_SUBSCR_LIST_INT | 589 / 589 | 19 / 19 |
+| COPY | 218 / 218 | 6 / 6 |
+| STORE_FAST | 159 / 159 | 3 / 3 |
+| UNPACK_SEQUENCE_LIST | 822 / 672 | 28 / 22 |
+| UNPACK_SEQUENCE_TUPLE | 822 / 672 | 28 / 22 |
+| FOR_ITER_LIST | 1231 / 1216 | 35 / 34 |
+| JUMP_BACKWARD | 116 / 116 | 2 / 2 |
+
+The full selected-symbol table, addresses, alignments, instruction-line counts
+and ELF hashes are in `nbody-static-handler-layout-after32.json`. Static jump
+counts include cold/error/sink paths, not just executed hot branches. The list
+subscription's generated C body is unchanged, but shared macro expansion and
+compiler block layout differ. Thus unchanged source bodies are controls, not
+proof of identical machine paths. The smaller numeric/load functions also
+change addresses and block placement. Most compared function addresses change
+their offset within a64-byte line; that observation supplies no cache or branch
+predictor diagnosis.
+
+The leading MULTIPLY_FLOAT sample offset is +0xd8 in both ELFs (current5.50%,
+golden4.27%). In both, +0xd4 is the same MULSD and +0xd8 is the same LEA of the
+next instruction, followed by the same saved-pointer move and NaN check. A
+sample at the LEA cannot be read as the latency of that instruction or proof
+that a newly added store branch caused it; sampling skid and predecessor work
+remain relevant. COPY also peaks at the same +0xb5 despite its unchanged size.
+
+The entire executable .text grows from4,872,313 to4,951,993 bytes, while several
+hot functions shrink. The dispatch table grows by one8-byte entry and is
+64-byte aligned in both ELFs. These are placement/footprint facts, not evidence
+of instruction-cache, BTB or data-cache misses. The coordinator's current
+branch group can test branch counts/misses next. A lower miss count would not
+identify a different stall source; a higher miss count would still need actual
+path evidence. No layout experiment or destination-specific opcode variant is
+proposed from these static facts.
+
+### Current branch counts close the added-branch question
+
+Independently recomputed all six raw branch counters divided by their own hot
+loop counts in `ninth-nbody-branches`: identities are stable and every event
+runs at100%. Mean branches candidate/golden are0.976533757215, so the current
+binary executes fewer branches as well as fewer instructions. Mean misses are
+1.014469706509, but the three candidate normalized miss counts are
+1,171,909 /1,120,788 /1,120,641, versus golden1,120,833 /1,122,803 /1,121,017.
+Only the first candidate is elevated. The median miss ratio is0.999795409222;
+this diagnostic does not replace or hide the accepted mean, but it demonstrates
+that the campaign has no consistent miss increase across rounds.
+
+Extra branch count or a persistent branch-miss penalty therefore is not a
+supported explanation of the measured nbody loss. Stop this measurement branch
+rather than tune alignment, collect arbitrary counters or create destination
+variants. Prioritize the generator/coroutine completion route with its measured
+instruction excess. A later bounded source improvement could audit list-child
+canonical duplication through the existing checked canonical-home producer
+mechanism; it must preserve temporary publication before receiver retirement,
+folded-local reentry behavior and all sink semantics. That would be a source
+proof experiment, not an established repair for this higher-CPI observation.

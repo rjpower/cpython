@@ -56,3 +56,21 @@ Branch counts and misses could distinguish one source of CPI pressure; they
 would not by themselves prove the cause. This is a design-only option pending
 the collector commit and root admission. No driver or runtime change is
 proposed during the capture freeze.
+
+## Executed follow-up
+
+The admitted branch-group capture is complete: six valid nbody invocations,
+stable identities and 100% event running. Independent arithmetic on the three
+normalized counts per role reproduces branches/golden **0.976534** and branch
+misses/golden **1.014470**. Golden and candidate mean miss rates are 0.5901%
+and 0.6130%. Candidate's first miss count is high; its next two average
+1,120,715 misses per loop against golden's 1,121,910 for the same rounds.
+Thus the aggregate miss ratio does not establish a consistent miss increase or
+explain nbody's higher CPI.
+
+Six flat reports from the accepted cycle recordings are retained under
+`E11/ninth-workload-profile-reports/`. Their manifest records exact commands,
+input and output hashes and exit status. Each report is nonempty, exited zero,
+reported zero lost samples and left its input `perf.data` unchanged. The
+location percentages above remain one-record code locations, not measured
+per-symbol speed ratios.

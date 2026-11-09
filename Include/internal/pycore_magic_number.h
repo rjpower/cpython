@@ -343,8 +343,9 @@ Known values:
    64412: compact register instructions, source-edge tables and virtual kwargs
    64413: semantic iteration/delegation completion and explicit resume recipients
    64414: delegated throw has an explicit absolute completion target
-   64415: source boundaries respect generator resume barriers */
-#define PYC_MAGIC_NUMBER 64415
+   64415: source boundaries respect generator resume barriers
+   64416: fused branch source coverage follows the encoded control edge */
+#define PYC_MAGIC_NUMBER 64416
 /* This is equivalent to converting PYC_MAGIC_NUMBER to 2 bytes
    (little-endian) and then appending b'\r\n'. */
 #define PYC_MAGIC_NUMBER_TOKEN \

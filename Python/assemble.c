@@ -425,9 +425,16 @@ assemble_source_map(struct assembler *a, _PyRegCfg *cfg)
             if (!op->nwords) {
                 continue;
             }
-            const _PyIRFormat *fmt = _PyRegCfg_FormatOf(op->opcode);
-            if (op->target >= 0 && !(fmt->flags & _PyIR_NAMES_TARGET)) {
-                int target = op->target;
+            /* A fused word executes the compare's conditional jump too.
+             * Use the same control operation as word encoding, while source
+             * observers retain the actual emitted instruction's position. */
+            int control_index = op->flags & _PyReg_FUSED ? op->fuse : i;
+            _PyRegOp *control = &cfg->ops[control_index];
+            assert(control_index >= i && control_index < cfg->blocks[b].end);
+            assert(control == op || control->nwords == 0);
+            const _PyIRFormat *fmt = _PyRegCfg_FormatOf(control->opcode);
+            if (control->target >= 0 && !(fmt->flags & _PyIR_NAMES_TARGET)) {
+                int target = control->target;
                 if (assemble_source_edge(writer, cfg, op->word,
                                          _PyIR_SOURCE_TAKEN, target,
                                          cfg->blocks[target].start) < 0)
@@ -435,9 +442,9 @@ assemble_source_map(struct assembler *a, _PyRegCfg *cfg)
                     goto error;
                 }
             }
-            if (!IS_NO_FALLTHROUGH_OPCODE(op->opcode) &&
+            if (!IS_NO_FALLTHROUGH_OPCODE(control->opcode) &&
                 assemble_source_edge(writer, cfg, op->word,
-                                     _PyIR_SOURCE_FALLTHROUGH, b, i + 1) < 0)
+                                     _PyIR_SOURCE_FALLTHROUGH, b, control_index + 1) < 0)
             {
                 goto error;
             }

@@ -131,6 +131,81 @@ class SourceReentryTests(unittest.TestCase):
                     else:
                         self.assertEqual(commits, [])
 
+    def test_fused_branch_preserves_source_only_lines(self):
+        for condition, handler, yes, no in (
+            ('value == marker', 'COMPARE_OP_JUMP', (1, 1), (0, 1)),
+            ('value in marker', 'CONTAINS_OP_JUMP', (1, (1,)), (0, (1,))),
+            ('value is marker', 'IS_OP_JUMP', (None, None), (0, None)),
+        ):
+            with self.subTest(condition=condition):
+                source = (f'def target(value, marker):\n'
+                          f'    if {condition}:\n'
+                          '        pass\n'
+                          '        if False:\n'
+                          '            return 10\n'
+                          '    else:\n'
+                          '        pass\n'
+                          '        if False:\n'
+                          '            return 20\n')
+                namespace = {}
+                exec(compile(source, '<fused-source-lines>', 'exec'), namespace)
+                target = namespace['target']
+                self.assertIn(handler, [word[0] for word in
+                                        _testinternalcapi.get_ir(target.__code__)])
+                for arguments, expected in ((yes, [1, 2, 3]), (no, [1, 6, 7])):
+                    events = []
+                    def trace(frame, event, arg):
+                        if frame.f_code is target.__code__ and event == 'line':
+                            events.append(frame.f_lineno - target.__code__.co_firstlineno)
+                        return trace
+                    old_trace = sys.gettrace()
+                    try:
+                        sys.settrace(trace)
+                        self.assertIsNone(target(*arguments))
+                    finally:
+                        sys.settrace(old_trace)
+                    self.assertEqual(events, expected)
+
+    def test_fused_branch_source_error_uses_source_handler(self):
+        for condition, handler, yes, no in (
+            ('value == marker', 'COMPARE_OP_JUMP', (1, 1), (0, 1)),
+            ('value in marker', 'CONTAINS_OP_JUMP', (1, (1,)), (0, (1,))),
+            ('value is marker', 'IS_OP_JUMP', (None, None), (0, None)),
+        ):
+            with self.subTest(condition=condition):
+                source = (f'def target(value, marker):\n'
+                          '    try:\n'
+                          f'        if {condition}:\n'
+                          '            pass\n'
+                          '            if False:\n'
+                          '                return 10\n'
+                          '        else:\n'
+                          '            pass\n'
+                          '            if False:\n'
+                          '                return 20\n'
+                          '    except OuterError:\n'
+                          '        return "caught"\n')
+                namespace = {'OuterError': OuterError}
+                exec(compile(source, '<fused-source-errors>', 'exec'), namespace)
+                target = namespace['target']
+                self.assertIn(handler, [word[0] for word in
+                                        _testinternalcapi.get_ir(target.__code__)])
+                for arguments, source_line in ((yes, 3), (no, 7)):
+                    events = []
+                    def trace(frame, event, arg):
+                        if (frame.f_code is target.__code__ and event == 'line'
+                                and frame.f_lineno == target.__code__.co_firstlineno + source_line):
+                            events.append(source_line)
+                            raise OuterError('fused source callback')
+                        return trace
+                    old_trace = sys.gettrace()
+                    try:
+                        sys.settrace(trace)
+                        self.assertEqual(target(*arguments), 'caught')
+                    finally:
+                        sys.settrace(old_trace)
+                    self.assertEqual(events, [source_line])
+
     def test_nested_callback_error_preserves_outer_recipe(self):
         outer_line = next(i for i, line in enumerate(SOURCE.splitlines(), 1)
                           if '# outer event' in line)

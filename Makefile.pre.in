@@ -1682,11 +1682,16 @@ Makefile Modules/config.c: Makefile.pre \
 	@echo "The Makefile was updated, you may need to re-run make."
 
 .PHONY: regen-test-frozenmain
-regen-test-frozenmain: $(BUILDPYTHON)
+regen-test-frozenmain: $(PYTHON_FOR_BUILD_DEPS)
 	# Regenerate Programs/test_frozenmain.h
 	# from Programs/test_frozenmain.py
 	# using Programs/freeze_test_frozenmain.py
-	$(RUNSHARED) ./$(BUILDPYTHON) $(srcdir)/Programs/freeze_test_frozenmain.py Programs/test_frozenmain.h
+	$(RUNSHARED) $(PYTHON_FOR_BUILD) $(srcdir)/Programs/freeze_test_frozenmain.py $(abs_builddir)/Programs/test_frozenmain.h
+
+$(abs_builddir)/Programs/test_frozenmain.h: $(PYTHON_FOR_BUILD_DEPS) \
+		$(srcdir)/Programs/test_frozenmain.py \
+		$(srcdir)/Programs/freeze_test_frozenmain.py
+	$(RUNSHARED) $(PYTHON_FOR_BUILD) $(srcdir)/Programs/freeze_test_frozenmain.py $@
 
 .PHONY: regen-test-levenshtein
 regen-test-levenshtein:
@@ -1978,7 +1983,7 @@ Modules/getpath.o: $(srcdir)/Modules/getpath.c Python/frozen_modules/getpath.h M
 Programs/python.o: $(srcdir)/Programs/python.c
 	$(CC) -c $(PY_CORE_CFLAGS) -o $@ $(srcdir)/Programs/python.c
 
-Programs/_testembed.o: $(srcdir)/Programs/_testembed.c Programs/test_frozenmain.h $(PYTHON_HEADERS)
+Programs/_testembed.o: $(srcdir)/Programs/_testembed.c $(abs_builddir)/Programs/test_frozenmain.h $(PYTHON_HEADERS)
 	$(CC) -c $(PY_CORE_CFLAGS) -o $@ $(srcdir)/Programs/_testembed.c
 
 Modules/_sre/sre.o: $(srcdir)/Modules/_sre/sre.c $(srcdir)/Modules/_sre/sre.h $(srcdir)/Modules/_sre/sre_constants.h $(srcdir)/Modules/_sre/sre_lib.h

@@ -201,6 +201,7 @@ import sys
 import threading
 import doctest
 import unittest
+import warnings
 import textwrap
 import weakref
 import dis
@@ -1608,6 +1609,87 @@ class ConstSlotsTest(unittest.TestCase):
         finally:
             sys.settrace(old_trace)
         self.assertTrue(rejected)
+
+    def test_settrace_same_real_line_preserves_protected_state(self):
+        sources = {
+            "try": """def f(manager):
+    value = 1
+    try:
+        value += 2  # identity
+    except ZeroDivisionError:
+        value = -1
+    return value, None, None
+""",
+            "except": """def f(manager):
+    try:
+        1 / 0
+    except ZeroDivisionError as error:
+        before = sys.exception()
+        value = 1
+        value += 2  # identity
+        after = sys.exception()
+    return value, before, after
+""",
+            "with": """def f(manager):
+    with manager as value:
+        value += 2  # identity
+    return value, None, None
+""",
+        }
+        class Manager:
+            def __init__(self):
+                self.events = []
+            def __enter__(self):
+                self.events.append("enter")
+                return 1
+            def __exit__(self, *args):
+                self.events.append("exit")
+
+        for context, source in sources.items():
+            with self.subTest(context=context):
+                namespace = {"sys": sys}
+                exec(source, namespace)
+                f = namespace["f"]
+                line = next(i for i, text in enumerate(source.splitlines(), 1)
+                            if "# identity" in text)
+                positions = list(f.__code__.co_positions())
+                applied = False
+                def tracer(frame, event, arg):
+                    nonlocal applied
+                    if (frame.f_code is f.__code__ and event == "line" and
+                            frame.f_lineno == line and not applied):
+                        applied = True
+                        self.assertEqual(positions[frame.f_lasti][0], line)
+                        before = dict(frame.f_locals)
+                        inherited = sys.exception()
+                        try:
+                            raise LookupError("callback-owned")
+                        except LookupError as callback:
+                            frame.f_lineno = line
+                            self.assertIs(sys.exception(), callback)
+                        self.assertIs(sys.exception(), inherited)
+                        self.assertEqual(dict(frame.f_locals), before)
+                    return tracer
+
+                manager = Manager()
+                old_trace = sys.gettrace()
+                with warnings.catch_warnings():
+                    warnings.simplefilter("error", RuntimeWarning)
+                    sys.settrace(tracer)
+                    try:
+                        result, before, after = f(manager)
+                    finally:
+                        sys.settrace(old_trace)
+                self.assertTrue(applied)
+                self.assertEqual(result, 3)
+                if context == "except":
+                    self.assertIsInstance(before, ZeroDivisionError)
+                    self.assertIs(after, before)
+                else:
+                    self.assertIsNone(before)
+                    self.assertIsNone(after)
+                self.assertEqual(manager.events,
+                                 ["enter", "exit"] if context == "with" else [])
 
     def test_marshal_copy(self):
         import marshal

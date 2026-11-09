@@ -2385,7 +2385,7 @@ static int test_py_getenv(void)
 
 
 #ifndef MS_WINDOWS
-#include "test_frozenmain.h"      // M_test_frozenmain
+#include <Programs/test_frozenmain.h>  // Build-generated M_test_frozenmain
 
 static int test_frozenmain(void)
 {

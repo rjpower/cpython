@@ -17,6 +17,7 @@
 #include "pycore_object.h"        // _PyObject_GC_UNTRACK()
 #include "pycore_opcode_utils.h"
 #include "pycore_opcode_metadata.h" // _PyOpcode_Caches
+#include "pycore_pyatomic_ft_wrappers.h" // FT_ATOMIC_LOAD_UINT64_RELAXED()
 #include "pycore_setobject.h"     // PySet_AddValue()
 #include "pycore_tstate.h"
 #include "pycore_tuple.h"         // _PyTuple_FromPair
@@ -1930,6 +1931,42 @@ frame_lineno_set_impl(PyFrameObject *self, PyObject *value)
                     (int)l_new_lineno);
         PyMem_Free(lines);
         return -1;
+    }
+
+    /* Repeating the actual real-LINE phase needs no reconstruction, even
+     * inside a protected region. Source-only callbacks publish a predecessor
+     * and can carry another EH recipe, so logical offset equality is not this
+     * proof. Keep every owner and the handled-exception link unchanged. */
+    int identity_target = -1;
+    for (int i = 0; i < len; i++) {
+        if (lines[i] == new_lineno) {
+            identity_target = i;
+            break;
+        }
+    }
+    _PyInterpreterFrame *frame_at_line = self->f_frame;
+    int real_current = _PyInterpreterFrame_LASTI(frame_at_line);
+    _PyThreadStateImpl *line_tstate = (_PyThreadStateImpl *)PyThreadState_GET();
+    if (what_event == PY_MONITORING_EVENT_LINE && !is_suspended &&
+        line_tstate->observed_frame == frame_at_line &&
+        !frame_at_line->pending_redirect &&
+        self->f_source_event < 0 && self->f_source_event_error < 0 &&
+        real_current >= 0 && real_current < len &&
+        identity_target == real_current &&
+        IR_HANDLER(FT_ATOMIC_LOAD_UINT64_RELAXED(*frame_at_line->instr_ptr)) ==
+            INSTRUMENTED_LINE &&
+        PyCode_Addr2Line(code, real_current) == new_lineno)
+    {
+        PyMem_Free(lines);
+        if (self->f_lineno_generation == UINT64_MAX) {
+            PyErr_SetString(PyExc_OverflowError, "debugger redirect generation exhausted");
+            return -1;
+        }
+        frame_at_line->return_pc = frame_at_line->instr_ptr;
+        self->f_line_next = -1;
+        self->f_lineno = 0;
+        self->f_lineno_generation++;
+        return 0;
     }
 
     /* Protected and suspended resumptions need explicit owner/exception

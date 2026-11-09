@@ -2277,7 +2277,7 @@ Include/pydtrace_probes.h: $(srcdir)/Include/pydtrace.d
 
 Python/ceval.o: $(srcdir)/Include/pydtrace.h
 Python/gc.o: $(srcdir)/Include/pydtrace.h
-Python/import.o: $(srcdir)/Include/pydtrace.h
+Python/import.o: $(srcdir)/Include/pydtrace.h $(srcdir)/Include/internal/pycore_magic_number.h
 
 Python/pydtrace.o: $(srcdir)/Include/pydtrace.d $(DTRACE_DEPS)
 	CC="$(CC)" CFLAGS="$(CFLAGS)" $(DTRACE) $(DFLAGS) -o $@ -G -s $(srcdir)/Include/pydtrace.d $(DTRACE_DEPS)

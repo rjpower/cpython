@@ -36,6 +36,18 @@ Completion requires:
 No benchmark, logging-library or upstream-control edits, second compiler,
 permanent experiment switches or weakened correctness assertions.
 
+## Current execution
+
+The second merged release build passes its 117-module check; all 11 new
+frame/call tests pass. The initial four-file focused run fails on method-output
+ownership, source-only callback exception context and debugger redirection.
+Independent reviews also found raw location-table consumers that need the new
+envelope and a malformed fixed-payload validation gap. Those are current repair
+work. Shared-owner/loop completion and protected/suspended debugger recipes
+remain open. No new elapsed-time result or full qualification is claimed.
+The [progress](progress.md), [frame source review](fresh-code-review.md) and
+[observer source review](observer-code-review.md) record the evidence and limits.
+
 ## Parallel responsibilities
 
 | Stream | Owner | Initial deliverable |

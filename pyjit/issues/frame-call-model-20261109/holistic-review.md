@@ -127,3 +127,71 @@ invent fallback representations. Root owns native validation and measurements;
 the previous qualified checkpoint and golden remain evidence/control. Continue
 through measured logging parity and broad-regression repair, rather than
 stopping after this design or a small local instruction reduction.
+
+## First source handoff: provisional integration, not admission
+
+The IR worker has implemented the normalized `IRSM` linetable envelope,
+zero-word frontend NOPs, semantic result sinks for unique fresh producers,
+source-edge LINE instrumentation and explicit callback exception recipes.
+Public offsets still count real words. Observer-only frame cursors and the
+exceptional thread-state cursor add no ordinary dispatch metadata work.
+Construction validates source bounds, including the `lasti` slot before the
+exception home. Virtual kwargs construction proves immutable local use and
+barrier domination, including handler targets belonging only to source events.
+Structural `code.replace` clears compiler-derived kwargs eligibility; replacing
+words while retaining a nonempty source map requires a matching new map.
+
+The debugger implementation deliberately does not authorize jumps using the
+old frontend stack projection. Its cold fixed-point analysis reads actual IR
+slot roles, window extents, successors and constant homes. Both source and
+target must need no incoming temporary owners; scratch owners are then cleared
+without fabricating stack entries. Source-only callbacks use their real landing
+state. This is a provisional safety gate: protected/exception and suspended
+resumptions need explicit recipes and currently raise `ValueError`. Existing
+`test_sys_settrace` expectations remain unchanged. Native failures must identify
+missing incoming-register, exception-state or suspended-continuation recipes;
+blanket rejection is not final debugger admission. Cross-frame debugger changes
+while a child owns an overlapping call window also remain an explicit test.
+
+The initial sink pass does **not** finish the requested artifact removal:
+canonical/shared POP_TOP values crossing CFG edges remain; FOR_ITER/SEND and
+END_FOR/POP_ITER/END_SEND completion still need a semantic edge owner transfer.
+Do not rename those cleanup instructions or drop them under a NULL-slot
+assumption. The next lowering must attach retirement to the actual semantic
+producer/edge, account for both normal and exceptional successors, and make the
+loop/send destination the first real successor. Relevant hooks are
+`discard_region` in `Python/regcfg_passes.c`, handler/word selection in
+`Python/assemble.c`, loop/send bytecodes and generator retirement metadata.
+Canonical constructors reject NOP words now; the POP_TOP ban is deferred until
+the compiler no longer emits the supported remaining ownership cases.
+
+Boundary tests now ask for real instruction offsets, zero-width source lines,
+late instruction enabling, source callback exceptions, suspension and actual
+owner-preserving line jumps. Discard tests retain finalizer reachability,
+late observer enabling, callback failures and cross-frame line changes, while
+removing dead-POP event and deleted-specialization assertions. Host syntax and
+diff checks pass; root owns the first generated/native integration run. No
+runtime or performance qualification is claimed for this handoff.
+
+### First bootstrap failure and bounded correction
+
+The first native merged release build reached the new freezer, then failed
+compiling importlib kwargs reads with `SystemError: stack underflow` (lines 543
+and 399). No runtime tests passed that build. The inserted materializer was
+IR-only, absent from frontend stack-effect tables; their `-1` result triggered
+`mark_blocks` rejection. Its self-shadow also violated the existing 8-bit
+instrumentation event opcode contract. The bounded correction makes
+MATERIALIZE_KWARGS a real semantic opcode (pinned 127), with generated zero
+stack effects and its own public instruction identity. No fake NOP event view
+or special stack-effect bridge remains.
+
+The same bounded batch validates every canonical handler before invoking new
+format consumers, validates location payload boundaries and coverage, and
+normalizes raw missing location suffixes into no-location entries. Normalized
+maps must cover exactly the actual word count; empty raw tables therefore
+produce one no-location position per executable word. Focused tests cover
+malformed headers/lengths/record fields, empty locations, stale retained maps,
+zero-width range ordering and marshal roundtrips. These changes are frozen for
+the coordinator's second regeneration/build. They have host syntax/diff checks,
+not native admission. The provisional debugger and retained ownership-artifact
+limitations above remain open.

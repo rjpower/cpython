@@ -7,12 +7,13 @@ continue until unchanged JIT-off logging reaches upstream parity and the broad
 regressions are repaired. Follow Python's data model. The active
 [plan](issues/frame-call-model-20261109/plan.md), frame/call proposal, revised
 IR-position proposal and holistic review live in that packet. Loom goal/plan
-are revisions 8/18 at the initial reviewed-implementation milestone.
+started at revisions 8/18 at the initial reviewed-implementation milestone.
 
 Continue the existing runtime checkout
 `build/worktrees/execution-boundaries-20261108`, now branch
 `pyjit/frame-call-model-20261109` from `4b3d739d867`. It contains in-progress
-runtime edits; do not call this intermediate source buildable or qualified.
+runtime edits; the merged release snapshot builds, but fails focused integration
+and is not qualified.
 Canonical documentation remains in this checkout. Evidence is
 `build/pyjit-link-wave1/frame-call-model-20261109/`; starting-state identities
 are recorded. Reuse candidate `execution-boundaries-{release,debug,stats}`
@@ -24,9 +25,14 @@ canonical transfers, plain recipients/continuations, frame headers and generated
 handler changes. IR worker owns compact lowering, sparse source-line metadata,
 instrumentation, code/persistence and frame/debugger consumers. Shared edits are
 coordinated directly. The coordinator owns native regeneration/builds/checks,
-commits, integration, quiet measurement and fresh cold review. No new native
-build or timing has run yet. Root should freeze the merged source when both
-workers report ready, regenerate/build release and run focused checks first.
+commits, integration, quiet measurement and fresh cold review. `merge1` failed
+bootstrap compilation: the new materializer lacked frontend opcode metadata.
+It is now semantic opcode 127, with cache magic 64412. `merge2` builds and checks
+117 modules; 11 new frame/call tests pass. The four-file focused run fails
+method-output home validation, source-only callback exceptions and debugger
+redirects; remaining generator cleanup words also fail the new invariant.
+See `merge2-small-release-focus.log` and the two cold source reviews in the
+packet. Workers are fixing these categories before broader tests or timing.
 
 The revised design has one public compact instruction-offset domain. Removed
 frontend bookkeeping creates no synthetic instruction events or recovery slots.

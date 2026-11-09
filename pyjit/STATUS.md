@@ -4,9 +4,12 @@ Active work: the [frame/call model redesign](issues/frame-call-model-20261109/pl
 continues in the existing runtime checkout, branch `pyjit/frame-call-model-20261109`.
 The goal is unchanged logging parity and repaired broad regressions, with compact
 executable IR and source/observer positions in metadata. Frame/call and IR
-architecture proposals have passed independent review. Implementation is in
-progress with separate file ownership; no new build or runtime result is
-claimed yet.
+architecture proposals have passed independent review. The first merged release
+build checks 117 modules, and all 11 new frame/call tests pass. Focused integration
+still fails on method-output ownership, source callback exception context and
+debugger redirection; repairs and independent source review are in progress.
+No new performance result or qualification is claimed. See the packet's
+[progress](issues/frame-call-model-20261109/progress.md).
 
 The previous [execution-boundary and operand-mode packet](issues/execution-boundaries-20261108/plan.md)
 implements the first three bounded cold-review recommendations at runtime

@@ -140,13 +140,13 @@ targets/ranges/states and advance cache magic. Changed co_code must not silently
 retain incompatible maps. Synthetic code without maps gets a validated trivial
 map with no source-only transitions, not an old executable-stream fallback.
 
-IR worker owns regcfg sinks/cleanup/empty-block composition, assembler layout
-and source-record schemas, persistence, verifier and disassembly. Frame worker
-owns guarded binding, continuation/result ABI, retirement/virtual locals and
-suspension mechanics. Coordinator owns instrumentation and frameobject.c
-line/debugger consumers unless explicitly reassigned. Agree generated hooks
-and headers first. Frame worker supplies kwargs-materialization helper calls
-to coordinator rather than concurrently editing frameobject.c.
+IR worker owns regcfg sinks/cleanup/empty-block composition, assembler layout,
+source records, persistence, verifier, disassembly, instrumentation and
+frameobject.c line/debugger consumers. Frame worker owns guarded binding,
+continuation/result ABI, retirement/virtual locals and suspension mechanics.
+Coordinator integrates and validates. Agree generated hooks and headers first;
+frame worker sends kwargs-helper requirements to IR owner rather than editing
+frameobject.c concurrently.
 
 Admission asserts actual executable arrays contain no NOP, POP_TOP or
 cleanup-only aliases and every INSTRUCTION event identifies a real word. Test

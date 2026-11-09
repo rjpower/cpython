@@ -266,3 +266,104 @@ reads and invalid ownership transitions. Coordinator owns native builds,
 compiled-path checks, matched logging and spectral/unpack/pickle/float/deepcopy/
 nbody screens. No permanent runtime switch, benchmark rewrite or alternate
 compiler is proposed.
+
+## Proposed completion lowering (not admitted or implemented)
+
+This increment removes the remaining executable ownership-only instructions.
+The scalar discard sink is not sufficient: canonical stack-position owners,
+shared values, loop exhaustion and delegated-generator completion have different
+ownership transitions. `POP_EXCEPT` remains a semantic exception-state operation.
+
+### Iterator completion
+
+`FOR_ITER` has two outcomes. A yielded item publishes its body result and keeps
+its iterator/index owners live. Exhaustion detaches iterator/index, holds any
+returned value in C, emits the applicable StopIteration observation while its
+inputs are valid, and completes directly at the real exhausted target. All
+specialized variants obey this contract; neither `END_FOR` nor `POP_ITER` is an
+executable successor. A generator child return invokes the same semantic
+completion after child retirement, rather than returning to cleanup words.
+
+Before a callback, either the published pre-completion window owns its inputs,
+or C owns detached inputs and the window is NULL. Never advertise both owners.
+On observation failure, retain the original error, close detached owners, and
+unwind from the actual FOR_ITER/source-edge EH state. On success, detach before
+closing: finalizers can observe a valid completed frame. A finalizer enabling
+observation starts subsequent events; it cannot recreate completed operations.
+
+### Delegation completion
+
+`SEND` needs distinct yielded and completed destinations. Its window's yielded
+home remains `base + 2`, preserving receiver/index for resumption. Its explicit
+A field names the completed result recipient; its branch field names the real
+completion target. B folds the former `END_SEND` output mapping into these
+fields before allocation. A generator yield returns to the yielded home; a
+return uses the completion recipient after child retirement. Native send and
+inlined generator send use the same outcome contract.
+
+For completion, hold the result in C across child retirement and applicable
+StopIteration observation. On callback error, release that owner and unwind
+with the still-valid receiver state or an explicitly detached NULL window.
+On success, detach receiver/index, commit the result to its destination (or
+close it for IR_NO_DST), retire detached owners and resume the real target.
+No old END_SEND instruction event or historical destruction coordinate remains.
+The cold child-completion helper may decode the actual pending SEND/FOR_ITER
+operation to select its semantic outcome. Ordinary dispatch does not interpret
+a generic release list. Unsupported ancestor redirects must not clear an
+active child's overlapping argument homes; pending redirect is committed only
+after child retirement.
+
+### Shared or canonical owners
+
+First remove needless sharing in the compiler: a COPY used only by a branch and
+its discard should lower to the branch's semantic consuming/retaining outcomes.
+Source-edge metadata supplies source lines independently; a historical line
+boundary must not force a copy or release word. Unique producer sinks remain
+the primary lowering for independently owned unused results.
+
+For genuinely shared owners that outlive their last semantic use, propose a
+bounded owning region rather than a hidden per-op cleanup program. Homes have
+three ranges: named locals L, internal retained owner homes R, ephemeral
+scratch T. Only L is exposed through local names; L+R have the existing
+borrow-on-read and replace-on-write ownership behavior. T keeps the current
+NULL-before-reuse rule. R is fixed at compilation, not appended at each loop
+iteration; each overwrite detaches and releases the old owner. Frame exit
+releases all physical owners. This retains a bounded number of values, though
+an individual retained value may be large; memory screens are required.
+
+This requires an explicit internal owning-home count in code/execution
+metadata, not fictitious Python locals. The compiler may put an owner in R
+only when every producer supports replace-on-write and every consumer supports
+borrowing or an explicit ordinary argument-window transfer. Multioutput and
+window producers need a proven ownership assignment; they cannot silently use
+the local-store path. The compiler verifier must prove scratch NULL reuse,
+borrow anchors across callbacks, and disjoint owning homes at merges. Exception
+unwind clears T and preserves valid R owners until their region/frame retires;
+GC visits all actual homes. Escaping frames preserve R just like other physical
+owners, while debugger/source states expose only semantically live values.
+
+Normal overwrite installs the new canonical owner before closing the detached
+old owner; on callback failure the new state remains valid and unwinds normally.
+A read of R creates no new owner until a consumer requires ownership, such as a
+call-window copy or return transfer. No local name/proxy exposes a logically
+dead retained owner. Simply deleting POP while reusing its old scratch home is
+not valid and is not this proposal.
+
+### Integration interfaces and gates
+
+B owns CFG outcome fusion, discard/copy analysis, retained-home allocation and
+verification, compact targets, source-edge/EH recipes and observer jump
+admission. A owns DSL/generator outcome handling, result/owner transfer helpers,
+all specialized iterator/send implementations, return completion and static
+init shim. The init shim becomes real EXIT_INIT_CHECK plus RETURN_VALUE, and
+its caller saves the real first continuation; no dummy NOP remains. Root owns
+merged regeneration, native checks and measurement.
+
+Before implementation, review the exact retained-owner metadata/consumer
+census and determine whether compiler consuming branches eliminate the observed
+shared POP inventory without R. Do not introduce R merely to solve an absent
+case. Tests must cover native/generator exhaustion, send yield/return/error,
+StopIteration callbacks that raise or enable tracing, shared mortal owners in
+loops, overwrites, frame escape, GC cycles and exception cleanup. Native gates
+must also demonstrate no executable NOP, POP_TOP, END_FOR, POP_ITER or END_SEND
+in ordinary or static programs, without replacing them with cleanup aliases.

@@ -2041,13 +2041,15 @@ class JumpTracer:
     """Defines a trace function that jumps from one place to another."""
 
     def __init__(self, function, jumpFrom, jumpTo, event='line',
-                 decorated=False):
+                 decorated=False, refusal=None):
         self.code = function.__code__
         self.jumpFrom = jumpFrom
         self.jumpTo = jumpTo
         self.event = event
         self.firstLine = None if decorated else self.code.co_firstlineno
         self.done = False
+        self.refusal = refusal
+        self.attempts = 0
 
     def trace(self, frame, event, arg):
         if self.done:
@@ -2066,6 +2068,11 @@ class JumpTracer:
             while f is not None and f.f_code != self.code:
                 f = f.f_back
             if f is not None:
+                if self.refusal is not None:
+                    self.done = True
+                    self.attempts += 1
+                    self.refusal(frame, self.firstLine + self.jumpTo, event, arg)
+                    return self.trace
                 # Cope with non-integer self.jumpTo (because of
                 # no_jump_to_non_integers below).
                 try:
@@ -2101,6 +2108,7 @@ def no_jump_without_trace_function():
 class JumpTestCase(unittest.TestCase):
     unbound_locals = r"assigning None to [0-9]+ unbound local"
     incoming_owner_error = r'^jump requires an incoming temporary register owner$'
+    protected_owner_error = r'^jump requires a suspended or protected owner recipe$'
 
     def setUp(self):
         self.addCleanup(sys.settrace, sys.gettrace())
@@ -2112,13 +2120,42 @@ class JumpTestCase(unittest.TestCase):
                        "Expected: " + repr(expected) + "\n" +
                        "Received: " + repr(received))
 
+    def check_refused_jump(self, frame, target, event, arg, pattern):
+        before_pc = frame.f_lasti
+        before_line = frame.f_lineno
+        before_code = frame.f_code
+        before_locals = dict(frame.f_locals)
+        output = before_locals.get('output')
+        before_output = tuple(output) if type(output) is list else None
+        inherited = sys.exception()
+        try:
+            raise LookupError('callback-owned exception')
+        except LookupError as callback:
+            with warnings.catch_warnings():
+                warnings.simplefilter('error')
+                with self.assertRaisesRegex(ValueError, pattern):
+                    frame.f_lineno = target
+            self.assertIs(sys.exception(), callback)
+        self.assertIs(sys.exception(), inherited)
+        self.assertEqual(frame.f_lasti, before_pc)
+        self.assertEqual(frame.f_lineno, before_line)
+        self.assertIs(frame.f_code, before_code)
+        after_locals = dict(frame.f_locals)
+        self.assertEqual(after_locals.keys(), before_locals.keys())
+        for name, value in before_locals.items():
+            self.assertIs(after_locals[name], value, name)
+        if before_output is not None:
+            self.assertEqual(tuple(output), before_output)
+
     def run_test(self, func, jumpFrom, jumpTo, expected, error=None,
-                 event='line', decorated=False, warning=None):
+                 event='line', decorated=False, warning=None, refusal=None):
         wrapped = func
         while hasattr(wrapped, '__wrapped__'):
             wrapped = wrapped.__wrapped__
 
-        tracer = JumpTracer(wrapped, jumpFrom, jumpTo, event, decorated)
+        checker = None if refusal is None else lambda frame, target, event, arg: (
+            self.check_refused_jump(frame, target, event, arg, refusal))
+        tracer = JumpTracer(wrapped, jumpFrom, jumpTo, event, decorated, checker)
         sys.settrace(tracer.trace)
         output = []
 
@@ -2133,15 +2170,19 @@ class JumpTestCase(unittest.TestCase):
             func(output)
 
         sys.settrace(None)
+        if refusal is not None:
+            self.assertEqual(tracer.attempts, 1)
         self.compare_jump_output(expected, output)
 
     def run_async_test(self, func, jumpFrom, jumpTo, expected, error=None,
-                 event='line', decorated=False, warning=None):
+                 event='line', decorated=False, warning=None, refusal=None):
         wrapped = func
         while hasattr(wrapped, '__wrapped__'):
             wrapped = wrapped.__wrapped__
 
-        tracer = JumpTracer(wrapped, jumpFrom, jumpTo, event, decorated)
+        checker = None if refusal is None else lambda frame, target, event, arg: (
+            self.check_refused_jump(frame, target, event, arg, refusal))
+        tracer = JumpTracer(wrapped, jumpFrom, jumpTo, event, decorated, checker)
         sys.settrace(tracer.trace)
         output = []
 
@@ -2150,12 +2191,18 @@ class JumpTestCase(unittest.TestCase):
                 stack.enter_context(self.assertRaisesRegex(*error))
             if warning is not None:
                 stack.enter_context(self.assertWarnsRegex(*warning))
+            elif refusal is not None:
+                stack.enter_context(warnings.catch_warnings())
+                warnings.simplefilter('error')
             run_no_yield_async_fn(func, output)
 
         sys.settrace(None)
+        if refusal is not None:
+            self.assertEqual(tracer.attempts, 1)
         self.compare_jump_output(expected, output)
 
-    def jump_test(jumpFrom, jumpTo, expected, error=None, event='line', warning=None):
+    def jump_test(jumpFrom, jumpTo, expected, error=None, event='line', warning=None,
+                  refusal=None):
         """Decorator that creates a test that makes a jump
         from one place to another in the following code.
         """
@@ -2163,11 +2210,13 @@ class JumpTestCase(unittest.TestCase):
             @wraps(func)
             def test(self):
                 self.run_test(func, jumpFrom, jumpTo, expected,
-                              error=error, event=event, decorated=True, warning=warning)
+                              error=error, event=event, decorated=True,
+                              warning=warning, refusal=refusal)
             return test
         return decorator
 
-    def async_jump_test(jumpFrom, jumpTo, expected, error=None, event='line', warning=None):
+    def async_jump_test(jumpFrom, jumpTo, expected, error=None, event='line', warning=None,
+                        refusal=None):
         """Decorator that creates a test that makes a jump
         from one place to another in the following asynchronous code.
         """
@@ -2175,7 +2224,8 @@ class JumpTestCase(unittest.TestCase):
             @wraps(func)
             def test(self):
                 self.run_async_test(func, jumpFrom, jumpTo, expected,
-                              error=error, event=event, decorated=True, warning=warning)
+                                    error=error, event=event, decorated=True,
+                                    warning=warning, refusal=refusal)
             return test
         return decorator
 
@@ -2406,7 +2456,7 @@ class JumpTestCase(unittest.TestCase):
             output.append(7)
         output.append(8)
 
-    @jump_test(5, 7, [4, 7, 8])
+    @jump_test(5, 7, [4, 5, 7, 8], refusal=incoming_owner_error)
     def test_jump_from_except_to_finally(output):
         try:
             1/0
@@ -2452,7 +2502,7 @@ class JumpTestCase(unittest.TestCase):
         async with asynctracecontext(output, 4):
             output.append(5)
 
-    @jump_test(4, 5, [1, 3, 5, 6])
+    @jump_test(4, 5, [1, 3, 4, -3, 5, 6], refusal=incoming_owner_error)
     def test_jump_out_of_with_block_within_for_block(output):
         output.append(1)
         for i in [1]:
@@ -2461,7 +2511,7 @@ class JumpTestCase(unittest.TestCase):
             output.append(5)
         output.append(6)
 
-    @async_jump_test(4, 5, [1, 3, 5, 6])
+    @async_jump_test(4, 5, [1, 3, 4, -3, 5, 6], refusal=incoming_owner_error)
     async def test_jump_out_of_async_with_block_within_for_block(output):
         output.append(1)
         for i in [1]:
@@ -2470,7 +2520,7 @@ class JumpTestCase(unittest.TestCase):
             output.append(5)
         output.append(6)
 
-    @jump_test(4, 5, [1, 2, 3, 5, -2, 6])
+    @jump_test(4, 5, [1, 2, 3, 4, -3, 5, -2, 6], refusal=incoming_owner_error)
     def test_jump_out_of_with_block_within_with_block(output):
         output.append(1)
         with tracecontext(output, 2):
@@ -2479,7 +2529,7 @@ class JumpTestCase(unittest.TestCase):
             output.append(5)
         output.append(6)
 
-    @async_jump_test(4, 5, [1, 2, 3, 5, -2, 6])
+    @async_jump_test(4, 5, [1, 2, 3, 4, -3, 5, -2, 6], refusal=incoming_owner_error)
     async def test_jump_out_of_async_with_block_within_with_block(output):
         output.append(1)
         with tracecontext(output, 2):
@@ -2508,7 +2558,7 @@ class JumpTestCase(unittest.TestCase):
             output.append(6)
         output.append(7)
 
-    @jump_test(8, 11, [1, 3, 5, 11, 12])
+    @jump_test(8, 11, [1, 3, 5, 8, 8, 10, 5, 8, 8, 10, 11, 12], refusal=incoming_owner_error)
     def test_jump_out_of_complex_nested_blocks(output):
         output.append(1)
         for i in [1]:
@@ -2794,7 +2844,7 @@ class JumpTestCase(unittest.TestCase):
             raise
         output.append(8)
 
-    @jump_test(7, 1, [1, 3, 6, 1, 3, 6, 7])
+    @jump_test(7, 1, [1, 3, 6, 7], refusal=incoming_owner_error)
     def test_jump_out_of_bare_except_block(output):
         output.append(1)
         try:
@@ -2804,7 +2854,7 @@ class JumpTestCase(unittest.TestCase):
             output.append(6)
             output.append(7)
 
-    @jump_test(7, 1, [1, 3, 6, 1, 3, 6, 7])
+    @jump_test(7, 1, [1, 3, 6, 7], refusal=incoming_owner_error)
     def test_jump_out_of_qualified_except_block(output):
         output.append(1)
         try:
@@ -2814,7 +2864,7 @@ class JumpTestCase(unittest.TestCase):
             output.append(6)
             output.append(7)
 
-    @jump_test(3, 5, [1, 2, 5, -2])
+    @jump_test(3, 5, [1, 2, 3, -2, 4, 5, -4], refusal=incoming_owner_error)
     def test_jump_between_with_blocks(output):
         output.append(1)
         with tracecontext(output, 2):
@@ -2822,7 +2872,7 @@ class JumpTestCase(unittest.TestCase):
         with tracecontext(output, 4):
             output.append(5)
 
-    @async_jump_test(3, 5, [1, 2, 5, -2])
+    @async_jump_test(3, 5, [1, 2, 3, -2, 4, 5, -4], refusal=incoming_owner_error)
     async def test_jump_between_async_with_blocks(output):
         output.append(1)
         async with asynctracecontext(output, 2):
@@ -2924,13 +2974,137 @@ output.append(4)
         output.append(1)
         1 / 0
 
-    @jump_test(3, 2, [2, 2, 5], event='return')
+    @jump_test(3, 2, [2, 5], event='return', refusal=protected_owner_error)
     def test_jump_from_yield(output):
         def gen():
             output.append(2)
             yield 3
         next(gen())
         output.append(5)
+
+    def test_refused_with_jump_preserves_manager_protocol(self):
+        for asynchronous in (False, True):
+            with self.subTest(asynchronous=asynchronous):
+                protocol = []
+                checkpoint = object()
+
+                class Checkpoint:
+                    def __await__(self):
+                        protocol.append('await start')
+                        yield checkpoint
+                        protocol.append('await finish')
+
+                class Manager:
+                    def __enter__(self):
+                        protocol.append(('enter', self))
+                        return self
+
+                    def __exit__(self, *exc):
+                        protocol.append(('exit', self))
+
+                    async def __aenter__(self):
+                        await Checkpoint()
+                        return self.__enter__()
+
+                    async def __aexit__(self, *exc):
+                        await Checkpoint()
+                        self.__exit__(*exc)
+
+                outer, inner = Manager(), Manager()
+                if asynchronous:
+                    async def f(output):
+                        async with outer:
+                            async with inner:
+                                output.append('body')
+                            output.append('after')
+                else:
+                    def f(output):
+                        with outer:
+                            with inner:
+                                output.append('body')
+                            output.append('after')
+
+                def checker(frame, target, event, arg):
+                    before_protocol = tuple(protocol)
+                    self.check_refused_jump(frame, target, event, arg,
+                                            self.incoming_owner_error)
+                    self.assertEqual(tuple(protocol), before_protocol)
+                tracer = JumpTracer(f, 3, 4, refusal=checker)
+                output = []
+                previous = sys.gettrace()
+                sys.settrace(tracer.trace)
+                try:
+                    if asynchronous:
+                        coro = f(output)
+                        try:
+                            with self.assertRaises(StopIteration):
+                                for _ in range(5):
+                                    self.assertIs(coro.send(None), checkpoint)
+                        finally:
+                            coro.close()
+                    else:
+                        f(output)
+                finally:
+                    sys.settrace(previous)
+                self.assertEqual(tracer.attempts, 1)
+                self.assertEqual(output, ['body', 'after'])
+                managers = [entry for entry in protocol if type(entry) is tuple]
+                self.assertEqual(managers, [('enter', outer), ('enter', inner),
+                                            ('exit', inner), ('exit', outer)])
+                self.assertEqual(protocol.count('await start'),
+                                 4 if asynchronous else 0)
+                self.assertEqual(protocol.count('await finish'),
+                                 4 if asynchronous else 0)
+
+    def test_refused_caught_exit_preserves_handled_exception(self):
+        observed = []
+        def f(output):
+            try:
+                1 / 0
+            except ZeroDivisionError as error:
+                output.append('caught')
+                observed.append((error, sys.exception()))
+            finally:
+                output.append('finally')
+
+        self.run_test(f, 5, 1, ['caught', 'finally'],
+                      refusal=self.incoming_owner_error)
+        self.assertEqual(len(observed), 1)
+        self.assertIsInstance(observed[0][0], ZeroDivisionError)
+        self.assertIs(observed[0][0], observed[0][1])
+
+    def test_refused_yield_jump_preserves_payload_and_resume(self):
+        class Payload:
+            pass
+        payload = Payload()
+        output = []
+        def gen(output):
+            try:
+                received = yield payload
+                output.append(received)
+            finally:
+                output.append('finally')
+
+        def checker(frame, target, event, arg):
+            self.assertIs(iterator.gi_frame, frame)
+            self.assertIs(arg, payload)
+            self.check_refused_jump(frame, target, event, arg,
+                                    self.protected_owner_error)
+        tracer = JumpTracer(gen, 2, 1, event='return', refusal=checker)
+        iterator = gen(output)
+        previous = sys.gettrace()
+        sys.settrace(tracer.trace)
+        try:
+            self.assertIs(next(iterator), payload)
+            self.assertEqual(tracer.attempts, 1)
+            self.assertIsNotNone(iterator.gi_frame)
+            with self.assertRaises(StopIteration):
+                iterator.send('resumed')
+        finally:
+            sys.settrace(previous)
+            iterator.close()
+        self.assertEqual(output, ['resumed', 'finally'])
+        self.assertIsNone(iterator.gi_frame)
 
     @jump_test(2, 3, [1, 3], warning=(RuntimeWarning, unbound_locals))
     def test_jump_forward_over_listcomp(output):

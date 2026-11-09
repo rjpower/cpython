@@ -7,6 +7,20 @@ direction; Loom's `goal` artifact mirrors it.
 
 ## Decisions to retain
 
+- Lifetime policy clarification (2026-11-08): Python does not guarantee immediate
+  finalization. Separate language and supported API requirements, selected
+  CPython compatibility, ownership/GC safety and memory-retention quality.
+  Evaluate frame/region cleanup and direct call-result disposal without treating
+  existing decref locations or release opcodes as mandatory. See
+  [language and lifetime policy](design/lifetimes-and-language-semantics.md).
+  The active [execution-boundary packet](issues/execution-boundaries-20261108/plan.md)
+  implements the first reviewed improvements using Sol 6.1 medium workers.
+  Runtime `4b3d739d867` is a qualified candidate, with performance promotion
+  withheld after repeated broad regressions and no logging gain. Golden remains
+  selected. The [follow-up](issues/execution-boundaries-20261108/next-steps.md)
+  starts with a bounded component ablation and call/ownership cost ledger;
+  the coordinator owns integration and measurements.
+
 - Golden baseline (2026-11-08): freeze and publish the qualified runtime as
   `pyjit-golden-20261108-runtime` (`0765e9be47f`, functional qualification
   `0267d428808`). Keep a coherent source/documentation snapshot and a concise

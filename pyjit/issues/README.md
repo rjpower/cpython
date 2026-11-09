@@ -6,6 +6,7 @@ hold detailed experiments; their presence does not mean they are active.
 
 | Record family | Parent workstream |
 | --- | --- |
+| [Execution boundaries and static operand modes](execution-boundaries-20261108/plan.md) | [Interpreter baseline](../stages/02-baseline/README.md) |
 | [Golden checkpoint, cold review and next steps](golden-20261108/README.md) | [Interpreter baseline](../stages/02-baseline/README.md) |
 | [Universal-value restoration](pyvalue-rc-restoration/status.md) | [Runtime integration](../stages/01-runtime/README.md) |
 | [Consumer rules and ports](pyvalue-rc-restoration/porting/status.md) | [Consumer workstream](../stages/01-runtime/workstreams/consumers.md) |

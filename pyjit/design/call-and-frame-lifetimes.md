@@ -1,14 +1,115 @@
 # Calls, frame homes and observation
 
-Current qualification, measured tradeoffs and follow-up are in the
-[interpreter-parity checkpoint report](../bench/results/interpreter-parity-20261108.md).
+The active runtime is
+`build/worktrees/execution-boundaries-20261108`, integrated commit `4b3d739d867`,
+containing the operand, boolean-boundary and ignored-result completion changes.
+Release and debug each passed 54,421 full-suite tests; debug passed on retry
+after an unexplained profiling failure, retained in the
+[investigation](../issues/execution-boundaries-20261108/profiling-investigation.md).
+Performance promotion is withheld after repeated broad regressions; see the
+[candidate report](../issues/execution-boundaries-20261108/report.md). The immutable golden
+`0765e9be47f` and its functional qualification `0267d428808` remain the baseline;
+see the [checkpoint report](../bench/results/interpreter-parity-20261108.md).
 
-Reviewed contract and bounded implementation, 2026-11-07. The A/B call
-paths below were first documented at runtime `7780e32e0e2`; the current R1–R5
-batch is summarized next. This page records ownership and observation
-contracts, not a throughput claim. See [compiler and IR](compiler-and-ir.md),
-[observer contract](handler-and-observer-contract.md), and the
-[holistic review](../issues/interpreter-throughput/holistic-design-review.md).
+This page records the current ownership/observation contract and its retained
+implementation history. Release points are a selected runtime policy, not a
+Python language requirement for immediate finalization. See
+[language and lifetime policy](lifetimes-and-language-semantics.md),
+[register IR](register-ir.md), [interpreter](interpreter.md), and
+[observer contract](handler-and-observer-contract.md).
+
+## Current execution-boundary increment
+
+The merged runtime keeps canonical NOP and POP words and their coordinates.
+POP_TOP names a register owner to retire; its inherited name does not imply a
+runtime operand stack.
+One shape-reader alias fixes its local-receiver/temporary-result ownership mode;
+three bool edge aliases skip admitted NOP execution; two Python-call aliases
+complete ignored results without an intermediate home on the ordinary path.
+Generated formats, effects and family mappings remain inherited. Debug and
+free-threaded builds decline the new bool variants; free-threaded builds also
+decline discarded-call selection. No borrowed frame-home policy, general owner
+map or native JIT recovery protocol is added.
+
+The shape alias's receiver remains owned by the local. Canonical result
+duplication is unchanged; its temporary publication is unconditional, and there
+is no receiver owner or displaced local to retire. Other shape modes preserve
+the R4/R5 ordered-retirement protocol below.
+
+For bool edges, generated `SAVES_IP` facts exclude successors such as END_FOR
+and IR_JUMP that intentionally leave the prior PC in place. Selection checks
+canonical/live targets once. The successful bool interval cannot run
+Python, poll or suspend, so a constant edge continuation can omit NOP decode
+and PC publication. Instrumentation invalidates these dependencies before
+patching an anchor. The unrefined `POP_JUMP_IF_FALSE_BOOL` handler keeps its old checked-NOP
+continuation.
+
+For ignored results, `CALL_PY_EXACT_ARGS_DISCARD` and
+`CALL_PY_GENERAL_DISCARD` require a matching immediate canonical POP, a temporary
+destination and the same known source line. Generator/coroutine callers and
+callees, bound-method/keyword/EX handler variants and native completion are
+outside this selection. The physical call handler has canonical specialization,
+feedback and observer mappings; it is not serialized into canonical code.
+
+`IR_POSTCALL_DISCARD` uses a high bit in the existing caller `return_slot`, keeping
+the original slot index for fallback. Exact entry installs the tag at its
+existing recipient save after unchanged guards/preparation. General entry
+carries a nonowning constant flag while keeping the destination numeric through
+preparation. It tags only a successful Python-child commit. The consuming
+provider pins an explicit code object and initializes the child with that same
+code, so commit-time synchronous flags describe the actual child even if a
+callback mutates function.__code__. Native fallback ignores the tag request and
+uses ordinary publication/input retirement. No after-effect call replay is added.
+
+On return, the owned result stays in C while the child is unlinked and retired.
+The caller is current and its destination has not changed. Completion then
+publishes ordinary recipients, closes IR_NO_DST results, or decodes a tagged
+recipient. A live matching ordinary POP and permitted lltrace allow direct
+closure at CALL PC and continuation past the dormant POP. This path does not
+publish, load or clear a caller result home. Wrapped/instrumented/declined POPs
+receive the result in their original temporary before dispatch, preserving
+observer state and error cleanup. Child-cleanup finalizers can change which
+path completion selects. POP line/opcode observation active before this guard
+materializes the original POP path. Such observation enabled by the result
+finalizer itself starts at
+the next real instruction: disposal has already committed as CALL completion,
+so the dormant POP is not observed retroactively.
+
+```mermaid
+flowchart TD
+    child[Owned result in C; child has finished] --> cleanup[Make caller current and retire child]
+    cleanup --> kind{Recipient}
+    kind -->|slot| publish[Publish through shared return-slot helper]
+    kind -->|IR_NO_DST| dispose[Release C owner]
+    kind -->|postcall tag| clear[Clear tag and preserve result-slot index]
+    clear --> guard{Matching ordinary live POP and lltrace permits?}
+    guard -->|yes| fast[Release C owner at CALL PC<br/>skip POP without result-home traffic]
+    guard -->|no| observe[Publish original temporary<br/>dispatch original POP]
+    publish --> resume[Resume existing caller continuation]
+    dispose --> resume
+    fast --> resume
+    observe -->|success| resume
+    observe -->|callback error| unwind[Unwind with materialized result ownership]
+```
+
+CALL PC during direct disposal is an explicit implementation-coordinate choice;
+raw f_lasti without an active POP line/opcode action can differ from the old
+standalone POP while its source line and selected release order remain unchanged. It is not a language mandate
+or general permission to change supported debugging behavior. A successful
+f_lineno setter cancels a pending tag before changing the saved caller PC.
+Cross-parent writes during a result finalizer do not establish a general jump
+extension; the [documented f_lineno interface](https://docs.python.org/3/reference/datamodel.html#frame.f_lineno)
+is restricted to the bottom-most frame. The active observation path materializes its result home. See the
+[lifetime policy](lifetimes-and-language-semantics.md).
+
+These changes eliminate bounded execution and slot traffic, not physical
+anchor storage. Their new selection/completion checks and handler text require
+net compiled/performance accounting. Neither the local operand screen nor the
+combined candidate establishes a logging speedup. Combined performance
+promotion is withheld after repeated broad regressions; see the
+[report](../issues/execution-boundaries-20261108/report.md).
+
+## Retained implementation history
 
 The common positional-call transfer is integrated at `8a8fdc91368`, including
 default filling, empty varargs and fresh empty kwargs. Its
@@ -21,7 +122,7 @@ The independent [call-path follow-up audit](../issues/interpreter-throughput/cal
 records retained GCC structure and a possible future experiment. It is static
 evidence, not a throughput result.
 
-## Current integration batch: R1–R5
+## Earlier integration batch: R1–R5
 
 R1–R3 simplify call preparation while preserving caller ownership and
 fallback semantics. R4 declares the shared success-path first-output
@@ -32,7 +133,7 @@ and [R5 receipt](../issues/interpreter-architecture-20261107/integration-r5.md)
 for the implementation details, reviews and evidence. Current results establish
 no broad speedup or upstream parity.
 
-## Interpreter-parity packet: P1/P2, M2b, M1 and P3 integrated
+## Golden parity packet: P1/P2, M2b, M1 and P3
 
 P1/P2 is integrated at `0539e0c1ff9`. `_PyFrame_CodeHome` accepts a typed
 `PyCodeObject *` and returns a duplicated pointer borrow: mortal code gains a
@@ -47,7 +148,7 @@ but no performance claim. See the
 [source review](../issues/interpreter-parity-20261108/p2-source-review.md) and
 [post-review](../issues/interpreter-parity-20261108/p2-post-review.md).
 
-M2b is integrated at `73c20472a9f`. Its ordinary boolean continuation executes
+M2b was integrated at `73c20472a9f`. Its retained fallback continuation executes
 one checked live NOP inline, with original PC publication and the NOP word
 retained; wrappers keep their handlers and debug lltrace declines. M1 is
 integrated at `d93b83800a5`. Its owned exact-dict first-probe identity hit
@@ -202,7 +303,9 @@ to this consuming binder would leave observable stale owners or require rollback
 after arbitrary partial consumption. This duplication is a consequence of the
 provider contract; it is not evidence that frames lack a stack.
 
-The exact and common positional paths share a prepare/guard/commit protocol.
+The exact path bypasses the generic transaction runner; the common positional
+transaction performs allocating preparation. Both retain the ownership
+discipline of prepare/guard/commit below.
 Instrumented, free-threaded, keyword/EX and generator-owned callers retain
 their existing provider paths. The common overlap path also declines when the
 executable or sufficient stack space is unavailable. The protocol is:

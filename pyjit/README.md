@@ -12,6 +12,12 @@ about 1.38× elapsed time on logging and 1.24× on the broad benchmark screen.
 The native JIT is unfinished. Read the [golden manifest](issues/golden-20261108/README.md)
 for exact identities, qualifications and measurement limits.
 
+The [active optimization packet](issues/execution-boundaries-20261108/plan.md)
+builds on golden; its [report](issues/execution-boundaries-20261108/report.md) and
+[next steps](issues/execution-boundaries-20261108/next-steps.md) own the follow-up.
+Its [lifetime policy](design/lifetimes-and-language-semantics.md)
+distinguishes Python guarantees from CPython timing and our ownership machinery.
+
 | Read | Purpose |
 | --- | --- |
 | [Status](STATUS.md) | Current outcome and remaining work |

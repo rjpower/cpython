@@ -1,13 +1,21 @@
 # Register interpreter: current contract
 
-This page describes the interpreter in the canonical runtime checkout at
-`/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/pyvalue-rc-universal`,
-HEAD `0765e9be47f55d97ba5d31d2ae1c02a55ea2e5ae` (2026-11-08). It is an
-as-built specification. Full-suite and performance qualification is identified
-with `0267d428808`; the successor changes comments only. See the
-[register IR specification](register-ir.md), [call/frame lifetimes](call-and-frame-lifetimes.md),
-[handler/observer contract](handler-and-observer-contract.md), and the
-[checkpoint report](../bench/results/interpreter-parity-20261108.md).
+This page describes the active integration runtime at
+`/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/execution-boundaries-20261108`:
+integrated commit `4b3d739d867`, containing the operand, boolean-boundary and
+discarded-result changes. Release and debug each passed 54,421 full-suite tests;
+debug passed on retry after an unexplained profiling failure, retained in the
+[investigation](../issues/execution-boundaries-20261108/profiling-investigation.md).
+Performance promotion is withheld after repeated broad regressions; see the
+[candidate report](../issues/execution-boundaries-20261108/report.md). The
+immutable golden `0765e9be47f` remains qualified at functional `0267d428808`;
+its [checkpoint report](../bench/results/interpreter-parity-20261108.md) is
+baseline evidence, not qualification of the new code.
+
+See the [register IR](register-ir.md), [call/frame lifetimes](call-and-frame-lifetimes.md)
+and [handler/observer contract](handler-and-observer-contract.md). The selected
+ownership and release points do not require a future implementation to preserve
+immediate finalization; see [language and lifetime policy](lifetimes-and-language-semantics.md).
 
 ## Entry and dispatch
 
@@ -32,19 +40,20 @@ call time.
 flowchart TD
     enter[Evaluator entry] --> word[Load executing word]
     word --> select[Musttail dispatch by handler identity]
-    select --> base[Generic or specialized handler]
+    select --> base[Generic or specialized operation]
     select --> wrapper[Patched instrumentation wrapper]
     wrapper --> observe[Observer callback and state refresh]
-    observe --> op[Operation and ordered ownership retirement]
-    base --> op
-    op --> outcome{Control result}
-    outcome -->|ordinary continuation| word
-    outcome -->|checked boolean continuation| check{Live next handler is ordinary NOP?}
-    check -->|yes, no debug lltrace| nop[Publish NOP PC and advance one word]
-    nop --> word
+    observe --> base
+    base --> outcome{Control result}
+    outcome -->|ordinary| word
+    outcome -->|selected bool edge variant| edge[Constant edge continuation<br/>skip admitted NOP without decode or PC store]
+    edge --> word
+    outcome -->|unrefined false-bool continuation| check{Live successor is ordinary NOP?}
+    check -->|yes, lltrace permits| nop[Publish NOP PC and advance one word]
     check -->|no| word
+    nop --> word
     outcome -->|exception| unwind[Exception lookup and frame unwind]
-    outcome -->|Python call / return| switch[Transfer control between frame-stack entries]
+    outcome -->|Python call or return| switch[Transfer between frame-stack entries]
     switch --> word
 ```
 
@@ -91,12 +100,26 @@ preserving the base operation and operand layout. Instrumented wrappers may
 publish the original PC before calling observer code, then refresh execution
 state after that code can re-enter. Fused handlers preserve their event mapping.
 
-The NOP word can remain as a source-line/instrumentation anchor. Only the
-checked `POP_JUMP_IF_FALSE_BOOL` continuation may execute one live NOP inline,
-retaining
-both the word and PC publication. Patched wrappers use their handler path, and
-debug lltrace declines the inline continuation. This optimization does not turn
-NOPs into metadata-only entries.
+Six execution-only aliases refine existing specializations: one local-receiver /
+temporary-result shape reader, three static bool edge continuations, and exact
+and guarded-general ignored Python-call completions. Their conservative effects
+and canonical deopt/instrumentation contracts are inherited. Opcode tables,
+stats and stored feedback use canonical specialized opcodes; full handler
+metadata covers physical aliases. Adaptive disassembly preserves specialized
+names while the internal executing-IR view can report aliases.
+
+The selected shape reader borrows its local receiver without consumption and
+publishes its canonical result directly to its temporary. Other input/output
+modes retain the ordinary handler and its retirement/refresh behavior.
+
+The three bool variants skip one admitted NOP on taken, fallthrough or both
+edges without a runtime NOP check or NOP PC store. Selection checks canonical
+and live successors and generated `SAVES_IP` facts. The interval after a
+successful bool guard has no callback or finalizing release; the next
+handler publishes its own PC. Instrumentation invalidates dependent skips before
+patching targets. Debug and free-threaded builds do not select these variants;
+unrefined `POP_JUMP_IF_FALSE_BOOL` keeps its checked live-NOP path. Canonical anchors and all word
+coordinates remain, so this is not physical code compaction.
 
 ## Calls, returns and fallback
 
@@ -118,43 +141,78 @@ shapes use their provider-specific handling; generator-owned callers use
 non-overlap storage. The ownership table, guards and exclusions are detailed in
 [call/frame lifetimes](call-and-frame-lifetimes.md).
 
-A Python return keeps its owned `PyValue` in a C temporary, switches the
-current frame to the caller, and retires the child with
-`_PyEval_FrameClearAndPop`. Only then does `IR_STORE_RETURN` publish the result
-to the caller home or close a discarded result. The saved `return_slot` belongs
-to the caller. Child-cleanup finalizers can therefore run before that home
-changes; the result remains owned across cleanup. `IR_NO_DST` is a discard
-sentinel, never a writable home. Exception exits use the exception table and
-release homes above the handler boundary while retaining the owners needed by
-the handler.
+An exact or guarded-general discard alias is selected for a temporary result
+followed by a matching same-line canonical POP. It excludes generator/coroutine
+callers and callees, local destinations and native completion. Exact entry
+marks the caller recipient at its existing save point. General entry keeps the
+destination numeric through callbacks and fallback, then marks it only when a
+Python child commits. A native fallback publishes normally and reaches the
+original POP. Guarded resource and provider revalidation remains unchanged.
+
+A Python return holds its owned `PyValue` in C, switches the current frame to
+the caller, and retires the child with `_PyEval_FrameClearAndPop`. Only then
+`IR_STORE_RETURN` completes the caller's saved recipient. Ordinary homes use the
+shared publisher; `IR_NO_DST` closes the result. A tagged ignored result clears
+the tag and checks the live next word: an ordinary matching POP with lltrace
+permitting it lets completion close the C owner and continue after POP without
+writing or clearing a result slot. Otherwise it publishes the original home
+and dispatches the observer POP path. Child-cleanup callbacks can change the
+live decision before completion. POP line/opcode observation active before the
+completion guard materializes POP. If the result finalizer itself enables that
+observation after the
+guard, CALL disposal is already committed; observation begins at the next real
+instruction, without a retroactive POP event.
+
+Direct disposal is part of CALL, retaining CALL PC while a result finalizer can
+run; selection requires the dormant POP to share its source line. This is an
+explicit implementation-coordinate policy. A live POP line/opcode action materializes
+its home and uses the original events and positioning. A successful f_lineno
+write cancels a pending tag before changing PC, preserving the existing return
+continuation. See the [lifetime policy](lifetimes-and-language-semantics.md) for
+language requirements versus chosen compatibility. No extra frame owner or
+borrowed home is introduced.
+
+Exception exits use the exception table and release homes above the handler
+boundary while retaining owners needed by the handler. A child exception has
+no caller result owner to retire; ordinary unwind remains authoritative.
 
 ```mermaid
 flowchart TD
-    call[Call window: callable and argument owners] --> route{Selected handler}
-    route -->|exact Python arguments| exact[Check exact-entry guards]
-    exact -->|admitted| push[Direct overlapping push for thread-owned caller]
-    exact -->|decline| generic[Generic call handling]
-    route -->|guarded general Python call| prep[Prepare kwargs and resources with caller owners intact]
-    prep --> guards[Revalidate guards after allocating preparation]
-    guards -->|decline before commit| generic
-    guards -->|admitted| commit[Commit child mapping and ownership transfer]
-    push --> child[Execute child frame]
-    commit --> child
-    child --> result[Hold owned result in C temporary]
-    result --> retire[Switch to caller and retire child]
-    retire --> publish[Publish to caller destination or discard]
+    call[Call window owns callable and arguments] --> route{Entry route}
+    route -->|exact Python| exact[Entry guards and direct child preparation]
+    route -->|guarded general Python| prep[Prepare resources with caller owners intact]
+    prep --> guards[Revalidate after allocating preparation]
+    guards -->|decline before commit| generic[Existing generic transaction]
+    exact --> commit[Commit child and ordinary or tagged recipient]
+    guards -->|admitted| commit
+    exact -->|guard decline| generic
+    commit --> child[Execute Python child]
+    generic -->|Python child| child
+    generic -->|native completion| native[Publish normally and resume original continuation]
+    child --> result[Hold owned return value in C]
+    result --> retire[Make caller current and retire child]
+    retire --> recipient{Caller recipient}
+    recipient -->|ordinary slot| publish[Publish result home]
+    recipient -->|IR_NO_DST| close[Close owned result]
+    recipient -->|tagged ignored result| clear[Clear tag and preserve result-slot index]
+    clear --> live{Live matching ordinary POP and lltrace permits?}
+    live -->|yes| direct[Close C owner at CALL PC<br/>advance past POP without slot traffic]
+    live -->|no| fallback[Publish preserved temporary<br/>dispatch original POP]
     publish --> resume[Resume caller]
-    generic -->|Python call| child
-    generic -->|native result| native[Publish or discard under native call completion]
+    close --> resume
+    direct --> resume
+    fallback -->|success| resume
+    fallback -->|observer error| error
     native --> resume
-    prep -->|error| error[Unwind without replaying callbacks]
+    prep -->|error| error[Unwind without replay]
     child -->|exception| error
 ```
 
 ## Current limits
 
-This interpreter is the qualified baseline for the register IR. It is not a
-native method/tracing JIT and does not yet provide general deoptimization,
-OSR, machine-state recovery, or borrowed frame homes. Performance qualification
-does not establish upstream parity. The checkpoint report and
+The active candidate extends the qualified golden register interpreter and
+has passing release/debug full runs, with the unexplained earlier debug
+failure retained. Performance promotion is withheld. Native method/tracing
+compilation, general deoptimization, OSR, machine-state recovery and borrowed
+frame homes remain later work. The candidate report and
 [status](../STATUS.md) record the measured result and open design work.

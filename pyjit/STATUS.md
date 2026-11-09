@@ -1,5 +1,16 @@
 # Project status
 
+Active work: the [execution-boundary and operand-mode packet](issues/execution-boundaries-20261108/plan.md)
+implements the first three bounded cold-review recommendations at runtime
+`4b3d739d867`. Release and debug each passed 54,421 tests, debug on retry after
+an unexplained profiling failure. **Performance promotion is withheld:**
+logging is flat versus golden and several broad regressions repeat. The
+[report](issues/execution-boundaries-20261108/report.md) records the candidate;
+golden remains selected.
+Python does not require CPython's prompt
+finalizer timing; the [lifetime policy](design/lifetimes-and-language-semantics.md)
+separates language requirements, compatibility choices and runtime safety.
+
 The 2026-11-08 interpreter checkpoint is **golden**: frozen, qualified and
 published at `pyjit-golden-20261108-runtime` (`0765e9be47f`). It is a baseline,
 not a claim of upstream parity. The [manifest](issues/golden-20261108/README.md)
@@ -24,7 +35,23 @@ owns the retained measurements.
   check 117 modules; API lint covers 306 units with zero failing findings.
   `0765e9be47f` moves an existing comment; the manifest records its binary check.
 
-## Performance
+## Candidate measurements
+
+At `4b3d739d867`, six-round logging/golden is **1.00142**, logging/upstream
+**1.39308**; Richards/golden is **0.98296**, spectral/golden **0.84032**.
+The two-round 29-workload geomean is **1.00428 / golden**, **1.24457 / upstream**.
+A four-round repeat confirms unpack +9.8%, pickle +8.0%, float +7.3%,
+deepcopy_memo +6.4% and nbody +4.6%. Spectral's 16% gain repeats; the initial
+generator regression does not repeat consistently. These are combined-image
+results without component attribution. Next: bounded ablation, then a call/owner
+cost ledger. See [follow-up](issues/execution-boundaries-20261108/next-steps.md).
+
+Logging counters at the candidate show 1.4028× upstream instructions and
+1.3988× cycles per workload iteration, with almost identical cycles/instruction.
+Samples point to call preparation, frame clear, method lookup and return.
+Profiles report zero lost samples but retain a header metadata warning.
+
+## Golden performance
 
 Elapsed ratios below are candidate/control; lower is better. Protocols differ,
 so compare within each row. All use GCC and explicitly disable the JIT.
@@ -46,17 +73,18 @@ retained perf metadata warning. See the report before interpreting samples.
 
 ## What remains
 
-The [fresh cold review and next plan](issues/golden-20261108/next-steps.md)
-own the next work. Keep the golden runtime immutable; changes start from it and
+The [current follow-up plan](issues/execution-boundaries-20261108/next-steps.md)
+owns the next work and preserves all nine cold-review ideas. Keep the golden runtime immutable; changes start from it and
 pass design → peer review → implementation → focused checks → post-review →
 integration. Broad performance screens and full suites belong at coherent
 integration points.
 
-Executable NOP words are an implementation choice for source/monitoring anchors,
-not a register-machine requirement. Their current continuation avoids dispatch
-but retains word testing and PC updates. Metadata-only anchors need a coherent
-mapping design. Nine logging result POPs still retire ownership and preserve
-observation boundaries; dead-result lowering must account for both.
+Canonical NOP/POP words remain source/monitoring anchors. The active packet's
+selected false-bool edges omit NOP testing/PC updates, and exact/general Python
+completion can discard an ignored result without a register home or POP entry.
+Logging enters 142 handlers versus golden 151, with zero POP entries and 20
+frame entries unchanged. These counts are not throughput measurements. General
+metadata-only anchors and physical compaction still need a coherent mapping design.
 
 Borrowed frame views are a reviewed investigation, not an approved implementation.
 Ownership anchors, GC traversal, promotion, ordinary fallback and a complete

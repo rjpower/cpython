@@ -1,14 +1,23 @@
 # Register IR: current contract
 
-This page describes the IR in the canonical runtime checkout at
-`/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/pyvalue-rc-universal`,
-HEAD `0765e9be47f55d97ba5d31d2ae1c02a55ea2e5ae` (2026-11-08). That tree is
-clean; the checkpoint's full-suite and performance qualification is tied to
-`0267d428808`, whose successor only changes comments. This is an as-built
-contract, not a proposal. The archived [register IR history](archive/register-ir-20261108.md)
-keeps dated decisions and analysis; [compiler and IR](compiler-and-ir.md),
+This page describes the active integration runtime at
+`/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/execution-boundaries-20261108`:
+integrated commit `4b3d739d867`, containing the operand, boolean-boundary and
+discarded-result changes. Release and debug each passed 54,421 full-suite tests;
+debug passed on retry after an unexplained profiling failure, retained in the
+[investigation](../issues/execution-boundaries-20261108/profiling-investigation.md).
+Performance promotion is withheld after repeated broad regressions; see the
+[candidate report](../issues/execution-boundaries-20261108/report.md). The
+immutable golden baseline remains `0765e9be47f`, qualified at functional
+`0267d428808`; its [report](../bench/results/interpreter-parity-20261108.md)
+does not qualify these new changes.
+
+This is an as-built contract. The archived [register IR history](archive/register-ir-20261108.md)
+keeps dated decisions; [compiler and IR](compiler-and-ir.md),
 [call/frame lifetimes](call-and-frame-lifetimes.md), and the
 [observer contract](handler-and-observer-contract.md) cover deeper details.
+Ownership choices do not make prompt finalization a Python language rule; see
+[language and lifetime policy](lifetimes-and-language-semantics.md).
 
 ## Producer path
 
@@ -24,7 +33,7 @@ store and truth simplification]
     compact --> assemble[Word and metadata assembly]
     assemble --> code[Code object<br/>immutable words + feedback init]
     code --> first[Lazy image creation<br/>ir.c: make_exec]
-    first --> live[Private executing copy<br/>words + feedback vector]
+    first --> live[Per-code executing copy<br/>words + feedback vector]
 ```
 
 `Python/compile.c` sequences CFG optimization, `_PyCfg_OptimizedCfgToRegCfg`
@@ -95,15 +104,50 @@ specialization is disabled. Immutable code-object
 words remain the source template. Feedback entries hold borrowed pointers and
 counters, not GC-owned references. Entry zero is a shared header-only entry.
 
-Some emitted NOP words retain a source-line or instrumentation location. A NOP
-is therefore part of the observable word stream and remains addressable by
-line/exception metadata even when ordinary dispatch can skip its handler.
-The current M2b optimization checks and executes one live NOP inline only on
-the checked `POP_JUMP_IF_FALSE_BOOL` continuation. Instrumented wrappers keep their own
-handlers, and debug lltrace declines the inline path. The NOP word and PC
-publication remain in place. This dispatch elision is a local optimization,
-not a requirement of register IR. Metadata-only anchors have been proposed
-but are not implemented.
+Specialization can select six execution-only refinements after slot allocation.
+They change only the handler field of the executing copy; the eight-byte format
+and canonical words remain unchanged.
+
+| Refinement | Selection and removed ordinary work |
+| --- | --- |
+| `LOAD_ATTR_SHAPE_LOCAL_TEMP` | Local receiver, temporary result; input class and destination class are static, so the handler does not rediscover them |
+| `POP_JUMP_IF_FALSE_BOOL_SKIP_TAKEN`, `_SKIP_FALLTHROUGH`, `_SKIP_BOTH` | One ordinary NOP on the selected edge; constant continuation skips its decode and PC publication |
+| `CALL_PY_EXACT_ARGS_DISCARD`, `CALL_PY_GENERAL_DISCARD` | Matching immediate call-result POP; Python return can dispose of the result without publishing its home or dispatching POP |
+
+Each alias inherits its original instruction format, conservative effects,
+family, deopt and instrumentation mappings. Generated handler facts include
+`SAVES_IP`, derived from the same `no_save_ip` property that controls emitted PC
+stores. Fixed opcode tables and feedback rows use canonical specialized opcodes;
+physical aliases have full handler-domain rows. Adaptive disassembly displays
+the canonical specialization; the internal executing-IR view exposes its alias.
+These refinements do not create a Cartesian product of ownership modes.
+
+NOP words still retain distinct source/instrumentation coordinates. For the
+three bool variants, selection checks both canonical and live edges once and
+requires the post-NOP successor to save its own PC before observable work.
+The guarded bool interval cannot call Python, allocate, poll, suspend or
+release a finalizing owner. Its ordinary continuation therefore needs neither a
+NOP test nor a NOP PC store. Instrumentation resets dependent skip handlers
+before patching any target. Debug and free-threaded builds do not select these
+variants. The ordinary `POP_JUMP_IF_FALSE_BOOL` handler retains its prior checked
+live-NOP continuation and PC publication when no skip variant is selected;
+wrappers and debug lltrace retain their ordinary handling.
+
+Call-result POP words also remain addressable. `POP_TOP` names a register
+owner to retire; it does not pop a runtime operand stack. A discarded-result
+variant uses
+a tagged caller recipient, not a new word operand: `IR_POSTCALL_DISCARD` is a
+high bit of the existing 16-bit `return_slot`; its low slot bits retain the
+original temporary destination. Completion checks the live POP and its input
+before direct disposal, or materializes the result for the observer path.
+`IR_NO_DST` remains a separate ordinary discard sentinel. POP line/opcode observation enabled
+inside a directly disposed result's finalizer starts at the next real instruction;
+it does not retroactively execute the dormant POP boundary.
+
+These are bounded execution eliminations. Canonical NOP/POP storage, word-indexed
+jumps, source and exception tables, suspended positions and debugger coordinates
+remain in place. General metadata-only anchors and physical word compaction
+have not been implemented.
 
 ## Explicit boundary
 

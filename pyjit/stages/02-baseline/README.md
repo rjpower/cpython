@@ -8,6 +8,11 @@ the broader screen remains 1.2412× upstream, so parity is open. See the
 [checkpoint report](../../bench/results/interpreter-parity-20261108.md) and
 [next plan](../../issues/golden-20261108/next-steps.md).
 
+The subsequent [execution-boundary packet](../../issues/execution-boundaries-20261108/report.md)
+implements bounded result-discard, bool-boundary and operand-mode changes.
+Golden remains the immutable control; the packet records qualification,
+measured admission and the next experiment separately.
+
 Deliver a trustworthy starting point for optimization: the register interpreter
 with universal values, measured with JIT explicitly off. The qualified older
 interim image has boxed heap fields and cannot stand in for this result.

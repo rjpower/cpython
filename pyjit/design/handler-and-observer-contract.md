@@ -1,5 +1,12 @@
 # Interpreter design and observer contract
 
+The current [interpreter specification](interpreter.md) and
+[call/frame contract](call-and-frame-lifetimes.md) describe the execution-only
+operand, boolean-edge and discarded-result refinements added after golden.
+The dated implementation notes below remain the underlying handler protocol.
+Release order describes that protocol, not a Python guarantee of immediate
+finalization; see [language and lifetime policy](lifetimes-and-language-semantics.md).
+
 The compiler emits register IR; execution does not translate stack bytecode at
 runtime. Code objects keep pristine words, while `Python/ir.c` supplies the
 mutable executing copy and feedback. [Compiler/IR details](compiler-and-ir.md)
@@ -75,7 +82,8 @@ BEFORE/AFTER events and event-poll behavior through redispatch. Instrumentation,
 specialization and cleanup can invalidate cached facts. The same rules must
 hold in generic, specialized and native paths.
 
-Current restoration has reviewed components for attributes and selected native
-callers, with wider iterator, CALL and parser coverage still unfinished. See the
-[board](../issues/README.md). Root-map and backend proposals are evidence to
+Universal canonical PyValues are integrated across the interpreter and rebuilt
+bundled extensions. Owning object bridges remain tuning opportunities for
+iterators, calls and parsers; they do not imply a second heap representation.
+See the [status](../STATUS.md). Root-map and backend proposals are evidence to
 assess, not prerequisites imported from the retired tracing collector.

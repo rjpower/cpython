@@ -3,7 +3,8 @@
 Stages describe outcomes and gates, not percentages or an inflexible waterfall.
 The qualified interpreter is frozen as the
 [2026-11-08 golden baseline](issues/golden-20261108/README.md); the
-[next plan](issues/golden-20261108/next-steps.md) governs further optimization.
+[execution-boundary report and follow-up](issues/execution-boundaries-20261108/next-steps.md)
+track the first bounded implementations of its cold-review recommendations.
 The baseline extension profile is part of runtime integration; wider extension
 migration can proceed alongside later compiler work.
 

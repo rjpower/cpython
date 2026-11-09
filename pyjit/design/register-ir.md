@@ -1,6 +1,6 @@
 # Register IR: current contract
 
-This describes the register interpreter integrated at `c1424be11db4`.
+This describes the register interpreter integrated at `3cde040a1afd`.
 It defines the executable and ownership contract; [status](../STATUS.md)
 tracks qualification. The bounded observer and debugger rules below do not
 authorize every source transfer.
@@ -157,6 +157,20 @@ declared source callback's POST exception recipe and both compute PRE and
 observer POST for ordinary exception coverage. FOR_ITER's temporary A must be
 its actual B+2 item home; a local A moves that item, and IR_NO_DST discards it.
 These checks are not a general bytecode type verifier or native recovery map.
+
+The positive terminal marker supplies reported source, physical continuation,
+monitoring event and an explicit owner edge. Its literal edge and destination
+shape drive the same metadata and runtime call. The event does not select the
+owner edge: POP_ITER reports BRANCH_RIGHT while its own outcome falls through;
+an unconditional JUMP takes its target. The actual executing word remains the
+owner/EH site even when a callback reports another source word. Zero-output
+transfers have valid committed facts without creating a result owner.
+
+Scoped source callbacks retain the immediate real continuation separately from
+the normalized landing in their source record. Only a completed provider grants
+SOURCE_POST scope; unproved inline hooks still deliver source events under an
+unsupported scope. The current setter admits real PRE and certified
+owner-neutral committed JUMP recipes, not general SOURCE_POST or yield transfer.
 
 ## Explicit boundary
 

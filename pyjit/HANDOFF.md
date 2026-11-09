@@ -10,83 +10,72 @@ without a token budget.
 
 Runtime source:
 `/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/execution-boundaries-20261108`,
-branch `pyjit/frame-call-model-20261109`, committed engineering HEAD
-`c1424be11db46b5d9e2aca84bcc96ddad6a7ea62`. Live next-packet edits are admitted
-only under explicit worker file ownership. Root alone regenerates, builds,
-tests, commits and measures after freezing source. Cache magic is 64416.
-Canonical documentation stays in this checkout; runtime worktree copies are
-historical. Build/evidence paths below are relative to python-boil-the-ocean.
+branch `pyjit/frame-call-model-20261109`, clean engineering HEAD
+`3cde040a1afdc433db274ff3771dabff08d7b777`. Root alone regenerates, builds,
+tests, commits and measures. Cache magic is 64416. Canonical documentation lives
+in this checkout; runtime copies are historical. Paths below are relative to
+python-boil-the-ocean.
 
-Candidate release/debug builds `build/execution-boundaries-{release,debug}`
-identify c142 and check 117 modules. Stats still identifies192 and needs a
-current rebuild. Evidence: `build/pyjit-link-wave1/frame-call-model-20261109/`.
-The [sixth report](issues/frame-call-model-20261109/sixth-integration-report.md)
-and [repair log](issues/frame-call-model-20261109/qualification-repairs.md)
-record exact scopes and failed attempts.
+Release/debug `build/execution-boundaries-{release,debug}` identify this commit
+and check 117 modules. Stats still identifies192 and needs a current rebuild.
+Evidence lives under `build/pyjit-link-wave1/frame-call-model-20261109/`.
+The [eighth report](issues/frame-call-model-20261109/eighth-integration-report.md)
+records current component evidence and links the preceding coherent417 gate.
 
-### Executed checks and limits
+### Integrated and tested
 
-- Native29 debug: 363 tests across six core modules, one skip, all pass.
-  Release selected gate:22 pass. Eight additional observer/frame modules:
-  64 tests pass per profile. Owner probes leave zero survivors after collection
-  from660 values, and zero from three FOR items on both normal/error paths.
-- Dependency-correct release accepts2,156 valid library files;11 intentionally
-  invalid parser fixtures remain SyntaxError. Missing Makefile dependencies on
-  four IR headers are fixed; retain the earlier stale-object v2 failure.
-- Native29 wide release:999 tests,14 skips, four failed modules. Monitoring has
-  one error; peepholer three; sys_settrace38; pdb two failures/two errors.
-  The21 obsolete diagnostic mismatches are gone. Last full release remains87:
-  54,504 tests,13 failed modules,126 failures and99 errors. Full release/debug,
-  current stats and306-unit API lint remain open.
-- c142 is independently source/result reviewed. Its five canonical design
-  pages are synchronized; two changed Mermaid diagrams rendered and inspected
-  under `design-diagrams29/`. Historical qualification does not transfer to live
-  worker edits.
+- `417a8bd6e2e3` adds explicit actual-owner/physical-next terminal facts and an
+  exact committed-jump stopped view. The six unchanged each-LINE fixtures pass.
+  Each profile passes343 focused tests with one skip, five generator methods
+  and a selected twelve-test gate. Ownership probes leave zero survivors from
+  660 values per profile. Both builds check117 modules.
+- Each wider run executes999 tests with14 skips, four modules still failing:
+  monitoring1 error, peepholer3, sys_settrace24 (down from38), pdb2 failures/
+  2 errors. Last full release diagnostic remains87:54,504 tests,13 failed
+  modules. Current full suites, stats and306-unit API lint remain open.
+- `3cde040a1afd` reuses canonical local-home duplication instead of publishing
+  it again. Independent source/result review approved. Host four methods and
+  release/debug25 focused tests pass. Exactly two generated load bodies change;
+  285 other bodies, four numeric constructors and metadata remain unchanged.
+  Static GCC load-handler instructions shrink134 to85; this is not a dynamic
+  performance result. Committed release/debug identities check117 modules.
 
-### Current measurements and assignments
+### Measurements and active sequence
 
-Clean c142, GCC15.2, JIT0, CPU15: two balanced pairs logging/upstream0.936868;
-separate golden logging0.653035,nbody1.041296,pickle1.026258. Four-pair repeat:
-nbody1.019904,pickle1.021510. All pre/post identities stable. Final logging needs
-two independent balanced six-round campaigns, mean at most1.0 and every pair
-at most1.02, after coherent qualification.
+Clean417 two-pair logging/upstream0.864255; separate golden logging0.618457,
+nbody1.048030,pickle0.978917. These are short engineering screens, not final
+parity. Retained PMU/profile captures belong to c142: logging/upstream
+cycles0.918210,instructions1.044970; nbody/golden cycles1.040876,
+instructions1.033309. Do not relabel them as current captures.
 
-Current warmed PMU: logging/upstream cycles0.918210,instructions1.044970;
-nbody/golden cycles1.040876,instructions1.033309. Logging18/nbody12 stat captures
-are valid at100%event running. Both cycle-record comparisons report zero lost
-samples. `sixth-perf-input-postflight.json` confirms401 logging inputs unchanged.
-Use the retained native profiles for location evidence; no old-image timing or
-handler census supplies current causal attribution. Launched perf works at
-kernel level2; independent worker attach was denied and GDB is unavailable.
+Native31 component measurement uses the retained clean417 executable
+`build/execution-boundaries-release/python-canonical-before`, SHA256
+`f010ea12dd5b93cea78b670639d340029331df7ae1f0ac39993d239600fb47fe`.
+Do not overwrite or remove it until the comparison finishes. Both executables
+share213 physical extension files (including historical ABI variants), whose
+exact paths/hashes remain unchanged; this is not a213-module qualification.
+The first `canonical31-component` preflight rejected a driver lexical/resolved
+symlink-key mismatch before timing. Preserve that failure. The corrected driver
+passed independent review. `canonical31-component-v2` completes four pairs with
+stable identities: ratios of round medians nbody0.970773, logging1.034605,
+pickle1.011179. Every logging pair slows; no general win is claimed.
 
-Reconcile actual Sol6.1 medium agent states after restart:
+A coherent full release diagnostic is running. Next, use its actual failures
+to admit the next reviewed shared stopped-state capabilities.
+The monitoring witness is a committed conditional edge; peepholer witnesses
+are real PRE states with independently proved NULL-only target requirements.
+A/B/H are reviewing shared transfer facts, simultaneous COPY/SWAP transport,
+ordinary nonsuspending-entry bounds and conservative unknown/error paths.
+No next-model runtime source edits are admitted during measurement/full freeze.
+Retained roots, caught exits and pre-suspension yield need separate evidence.
 
-- A (`boundary_design_impl`): admitted producer increment in bytecodes,
-  generator, instrumentation and provider tests: four-argument explicit owner
-  edge marker, positive source-publication argument, physical-next threading,
-  terminal JUMP/POP_ITER. Host evidence changes only these three providers,
-  preserving prior ten observed and262 ordinary bodies. Actual source review
-  and merged native gate pending. Yield is separate, not admitted yet.
-- B (`boundary_cold_review`): actual debugger failure diagnosis and revised
-  shared stopped-state proposal. Root executed84 capped cold/warm probe rows:
-  list/set/dict ordinals2/3/4 stop at pc9 INSTRUMENTED_JUMP_BACKWARD and refuse;
-  ordinal1/5 real LINE stops commit. All six unchanged fixtures have zero source
-  records. Their line callbacks run under JUMP monitoring, not PRE LINE.
-  A's certified JUMP outcome supplies a concrete POST consumer witness. Peer
-  and root admission precede consumer edits; no broad event-name inference.
-- H (`holistic_assessment`): independent schema/source/result reviews and design
-  synchronization complete. Current performance review ranks audited canonical
-  home duplication, float path and fixed call binding. A bounded canonical-home
-  producer proposal is requested; no optimization source edits admitted yet.
-- Root: integration, native gates, quiet performance, final full/broad checks,
-  profiling and canonical/Loom state. Workers never commit or run native jobs.
-
-Next: complete and review the coherent producer/consumer packet, focused native
-release/debug checks, commit/basic performance, then coherent full suites,
-current stats/API, unchanged29-workload screen with material-loss repeats, final
-logging campaigns and cold review. Retained roots, caught exits, true yield and
-remaining completion providers need explicit semantic contracts. Preserve sealed
-controls/evidence and unrelated local work listed below.
+All native work and quiet timing serialize. Workers do read-only preparation
+and explicit nonoverlapping edits; root owns integration. Reconcile actual
+agent state after recovery rather than treating a completed assignment as live.
+After coherent repairs: release/debug full qualification, stats/API, unchanged
+29-workload screens with material-loss repeats, current PMU, two independent
+six-round logging/upstream campaigns and cold review. Final logging requires
+mean≤1.0 and every pair≤1.02. Golden remains immutable and selected.
 
 ## Previous qualified candidate
 

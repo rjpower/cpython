@@ -2,7 +2,7 @@
 
 The active [interpreter](interpreter.md), [IR](register-ir.md) and
 [frame ABI](call-and-frame-lifetimes.md) share one owning-home model. This page
-describes the contract integrated at `c1424be11db4`, whose broad qualification
+describes the contract integrated at `3cde040a1afd`, whose broad qualification
 remains open. [Status](../STATUS.md) separates it from the immutable
 qualified golden runtime. Release phases implement RC; they do not impose an
 immediate-finalization guarantee on Python programs.
@@ -62,14 +62,24 @@ the selected real continuation before closes, and honors later redirects.
 Ordinary CALL return remains inline. Implicit StopIteration completion and real
 error reporting must each produce their appropriate single monitoring event.
 
-Declared terminal branches publish output homes and the selected continuation
-before their callback. Inputs and displaced local owners remain in C until the
-callback decision, then close with its error preserved. The generated edge fact
+Declared terminal providers publish output homes and the saved continuation
+before their callback. The actual PC remains the semantic owner site during
+observation; the selected PC is published before deferred closes. Inputs and
+displaced local owners remain in C until the callback decision, then close with
+its error preserved. The generated edge fact
 describes the physical result and the unavailable old input owner separately;
 a fresh value or explicit NULL at an aliased home cannot restore that old owner.
 The constructor checks the declared source-callback POST recipe and both compute
 PRE and committed POST for an ordinary exception handler. A terminal fact does
 not claim whole-handler purity or authorize a debugger transfer.
+
+The positive marker takes reported source, physical next, event and an explicit
+owner-edge literal. Its edge/destination proof drives both metadata and runtime;
+public event direction is not ownership authority. POP_ITER owns fallthrough
+while reporting BRANCH_RIGHT from a prior source; unconditional JUMP owns taken.
+Both use their actual word for owner and exception state. No-output committed
+transfers define no result. Deferred iterator retirement and backward polling
+remain on their respective sides of the terminal barrier.
 
 ## Executable position and source context
 
@@ -111,6 +121,13 @@ replaces that record; exit restores it before closing a callback result.
 Unsupported callbacks have no transfer authority. Nested activation lookup
 requires the actual frame and event; a changed generation invalidates the old
 outcome, so only a separately proved fresh PRE landing can authorize a jump.
+
+Source delivery carries an immediate physical continuation and a publication
+contract. Shared completion POST, declared terminal providers and completed
+landing wrappers can supply SOURCE_POST; unproved legacy inline hooks supply
+UNSUPPORTED while preserving event delivery, display and error routing. Source
+`record.to` is the normalized landing, not necessarily that immediate pointer.
+Only the exact assembler relaxation shape may relate them.
 
 A separate cold frame-object record carries expected real LINE landing,
 previous source line and monitoring epoch. Public f_lineno remains display/cache
@@ -158,6 +175,11 @@ JIT recovery maps remain separate from these baseline contracts.
 Debugger owner recipes remain bounded: NULL requirements and actual iterator
 generation must be proved before admitting a target. Remote layout is versioned
 and target-described; remote/GDB active source-cursor display is a separate
-consumer port still pending. Bounded PRE restoration and exact real LINE
-identity are the current setter authority; SOURCE_POST and yield transfers
-need their own stopped-state proof. Broad repair and parity remain open.
+consumer port still pending. Current setter authority covers bounded PRE
+restoration, exact real LINE identity and certified owner-neutral committed
+JUMP. The JUMP view borrows exact site rows, validates scoped generation
+and actual successor, and reuses the same owner/restoration Plan. New
+cancellation requires inherited context and an empty target scratch requirement;
+strict existing FOR/caught recipes do not gain cancellation permission.
+SOURCE_POST and yield transfers need their own stopped-state proof. Broad repair
+and parity remain open.

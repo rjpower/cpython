@@ -1,6 +1,6 @@
 # Calls, frame homes and observation
 
-This is the frame/call contract integrated at `c1424be11db4`. Its bounded
+This is the frame/call contract integrated at `3cde040a1afd`. Its bounded
 observer and debugger rules remain subject to broad qualification. The immutable
 golden `0765e9be47f` retains its functional qualification at `0267d428808`.
 See [status](../STATUS.md), the [active packet](../issues/frame-call-model-20261109/plan.md)
@@ -129,8 +129,8 @@ checks its unchanged provenance chain and fails closed to ordinary publication
 if that chain changes. Ordinary CALL completion stays inline; generator return
 uses the cold semantic completion adapter. Discard closes the held owner instead
 of writing an unused register. Local replacement retires the current displaced
-owner, including observer mutations. No tagged recipient, dormant POP lookup,
-same-line rule or observer resurrection home is involved.
+owner, including observer mutations. The saved recipient and continuation fully
+describe normal return.
 
 Window-to-local moves likewise transfer already canonical home bits instead of
 repeating exact-number publication checks. Tuple/list unpack has a separately
@@ -139,6 +139,14 @@ publication unless their producer contract proves it. The
 [canonical transfer audit](../issues/frame-call-model-20261109/canonical-transfer-proof.md)
 records those bounded producer chains. It does not authorize blanket removal
 of normalization from raw results.
+
+Pure local duplication uses the same canonical final store. The generator
+requires the exact local-index read and owned duplicate, with no input owner,
+callback, result mutation or named cache. This applies to LOAD_FAST and
+LOAD_FAST_BORROW by source proof, independently of their names. It removes
+redundant publication checks while retaining the duplicate owner and the shared
+local/temporary/discard destination protocol. See the
+[source review](../issues/frame-call-model-20261109/canonical-home-post-review.md).
 
 Four float arithmetic producers also transfer their final constructor result
 without normalizing it again. The generator checks the direct canonical
@@ -197,11 +205,17 @@ while detached windows are NULL. A decline preserves its inputs; a committed
 operation cannot replay a provider after effects.
 
 The cold debugger recipe validates incoming owners/NULL requirements before
-changing state. Bounded PRE transfers restore saved named-local bindings from
-surviving per-local LOAD_FAST_AND_CLEAR token chains, including a genuinely
-unbound NULL. A target that reads such a local without an actual unbound check
-is refused. An admitted ignored-result caller redirect while its VM child
-is active records a pending target without touching the overlapping child-owned
+changing state. Bounded PRE and certified owner-neutral committed JUMP
+transfers share a stopped-state view and restore saved named-local bindings
+from surviving per-local LOAD_FAST_AND_CLEAR token chains, including a genuinely
+unbound NULL. The committed view borrows the actual site's unchanged rows only
+after checking the generated positive zero-IO contract, selected successor,
+scoped generation and committed return PC. New committed cancellation needs
+inherited handled context and an empty target scratch requirement; other
+targets retain their prior strict proof. A target that reads such a local before
+a guaranteed binding definition needs an actual unbound check or is refused.
+An admitted ignored-result caller redirect while its VM child is active records
+a pending target without touching the overlapping child-owned
 window. Completion clears the flag, publishes the selected continuation and
 retires surplus caller scratch only after child retirement. Exceptional child
 retirement cancels the request, including one requested during cleanup. Broader
@@ -218,13 +232,17 @@ makes no later frame writes. Successful commits increment a cold frame-object
 generation, including when the selected physical PC is unchanged. Observer
 transactions use that generation alongside the PC before restoring cursors,
 cached continuations or an old source-error recipe. Public line getters and
-lazy frame-object creation do not express redirect intent.
+lazy frame-object creation do not express redirect intent. Warning reproof
+captures scoped authority again before validating the Plan; it cannot upgrade
+a deliberately unauthorized source-only target.
 
 Source-only events use immutable edge metadata and a frame-object display cursor.
 Scoped observer records bind a callback to its frame, site, edge, phase and
 redirect generation. They prevent an unsupported hook from borrowing another
-callback's authority. The setter currently uses bounded PRE plans and exact
-real LINE identity; a SOURCE_POST record alone does not admit a jump.
+callback's authority. The setter uses bounded PRE plans, exact real LINE
+identity and certified neutral committed JUMP. A Python tracing LINE can be a
+legacy monitoring-JUMP callback; its public name does not select a PRE phase.
+SOURCE_POST and yield-ready setter authority remain unimplemented.
 Pending source errors belong to the evaluator activation, so nested finalizer
 entry cannot replace the outer handler recipe even when no frame object could
 be allocated. Cold LINE handoff has its own landing/previous-line/epoch fields;

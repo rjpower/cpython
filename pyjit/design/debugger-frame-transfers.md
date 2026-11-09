@@ -1,6 +1,6 @@
 # Debugger entry and frame transfers
 
-This describes the contract integrated at `c1424be11db4`. Full qualification and
+This describes the contract integrated at `3cde040a1afd`. Full qualification and
 the broader transfer model remain open. See [status](../STATUS.md), the
 [frame ABI](call-and-frame-lifetimes.md), [observer contract](handler-and-observer-contract.md)
 and [repair evidence](../issues/frame-call-model-20261109/qualification-repairs.md).
@@ -94,7 +94,9 @@ guaranteed binding definition uses an unbound-binding check. A physical
 nullable input is not such a check: NULL can mean deletion or absent optional
 self in a handler ABI.
 Warning callbacks can redirect the frame: generation detects that intent and
-cancels the outer request. Otherwise the plan is reproved against current state.
+cancels the outer request. Otherwise non-OTHER scoped authority is captured
+again before the full plan is reproved. A source-only target deliberately
+selected without cancellation authority cannot gain it during reproof.
 Closing callbacks never encounter subsequent writes from the old transaction.
 
 ## Current supported plans
@@ -103,6 +105,7 @@ Closing callbacks never encounter subsequent writes from the old transaction.
 | --- | --- |
 | Real LINE identity | Requested resolved line equals the actual current LINE wrapper's line; exact observed frame; no source/error, pending-child or suspended phase. Preserve current PC, all owners and exception links; commit generation. Earlier words sharing that line do not restart the expression or scope. |
 | Cancellable PRE operation | A centralized phase factory proves the actual real LINE before its handler. Current expression inputs may be detached when the target needs none; proven saved named locals may be restored from per-local chains. Handled context and independently proved roots must survive. Source-only targets do not acquire this permission. |
+| Neutral committed JUMP | A generated positive terminal fact, zero physical IO, non-owning roles and exact selected successor prove the actual site's rows survive unchanged. Scope frame/event/generation, site PC and committed return PC must match. New cancellation/restoration requires inherited context, a save-empty target and no target scratch inputs. |
 | INHERITED context | Existing physical incoming-owner/NULL proof. Bounded FOR-body replay still requires an empty exception table. Ordinary protected try need not create a caught context. |
 | Same CAUGHT context | Backward replay preserves actual saved-previous owners and every parent; path/dominance proof excludes read, replacement, pop and reentry. Active exception links remain untouched. |
 | Pending ignored Python call | Caller changes its continuation only; overlapping child owners remain intact until successful child completion. Used-result, external and protected child cases still need their own plans. |
@@ -115,9 +118,13 @@ exception. It does not implement caught exit.
 
 ## Remaining model work
 
-The bounded PRE plan distinguishes disposable expression inputs from saved-local
-obligations and restores proven bindings before committing the target. It retires
-displaced owners after the whole frame is valid.
+The shared stopped-state view distinguishes disposable expression inputs from
+saved-local obligations. PRE and certified neutral committed JUMP use exact
+site rows with the same restoration Plan. This repairs legacy tracing LINE
+callbacks delivered under a monitoring JUMP without pretending they are PRE
+LINE wrappers. Other targets retain their existing strict proofs; they do not
+acquire new cancellation authority. Displaced owners retire after the whole
+frame is valid.
 Retained outer-with/loop roots need their own availability proof. Source POST,
 protected source-only destinations, yield-before-suspension and an actually
 suspended frame remain distinct phases with different owner contracts.

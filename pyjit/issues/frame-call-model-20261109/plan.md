@@ -38,54 +38,38 @@ permanent experiment switches or weakened correctness assertions.
 
 ## Current execution
 
-Engineering `c1424be11db46b5d9e2aca84bcc96ddad6a7ea62` integrates terminal
-observer output commits and saved-local restoration on the existing frame ABI.
-Generated terminal providers publish final homes and continuation before a
-callback; detached owners remain in C through retirement. Activation-owned
-scopes identify the actual frame, site, phase, edge and redirect generation.
-Restoration uses explicit source-home actions, preserves genuinely unbound
-locals, and rejects targets that would read those locals unchecked. Physical
-replacement values never resurrect an old saved-owner obligation.
+Engineering `417a8bd6e2e3` integrates exact actual-owner/physical-next
+terminal facts and committed-jump stopped-state restoration. It preserves
+existing strict owner recipes and repairs the six unchanged each-LINE fixtures.
+Each release/debug profile checks117 modules, passes343 focused tests with one
+skip, five generator methods and the selected twelve-test gate. The999-test
+wide gates still fail monitoring1, peepholer3, sys_settrace24 and pdb2 failures/
+2 errors. Full qualification remains open. See the
+[seventh report](seventh-integration-report.md).
 
-Release/debug builds check 117 modules. Debug passes 363 tests across six core
-modules, with one skip; both profiles pass 64 additional observer/frame tests.
-The 22 selected release ownership/diagnostic tests pass. Owner probes leave no
-survivors after collection, including the formerly stranded FOR result on a
-callback error. The constructor accepts 2,156 valid library files with no new
-rejections. The current release wide check runs 999 tests with 14 skips and
-still fails four modules: monitoring (one error), peepholer (three errors),
-sys_settrace (38 errors), and pdb (two failures/two errors). The 21 obsolete
-diagnostic mismatches are repaired. These checks do not establish full
-qualification; golden remains selected. The [repair log](qualification-repairs.md)
-retains exact receipts and failed attempts.
+Engineering `3cde040a1afd` additionally reuses canonical local-home duplication
+through the shared final store. Independent actual source/result review approved;
+25 focused tests pass in each profile and committed builds check117 modules.
+Only two generated load handlers change; 285 other bodies, four numeric bodies
+and metadata stay unchanged. Four balanced before/after pairs give ratios of
+round medians nbody 0.970773, logging 1.034605 and pickle 1.011179. Logging slows
+in every pair. A coherent full release diagnostic is running before more model
+edits. See the [eighth report](eighth-integration-report.md).
 
-The current clean two-pair logging/upstream screen is 0.936868 (pairs 0.913258
-and 0.961087). The separate golden screen has logging 0.653035, nbody 1.041296
-and pickle 1.026258. Four-pair repeats give nbody 1.019904 and pickle 1.021510.
-Warmed PMU counts show logging/upstream cycles 0.918210 and instructions 1.044970;
-nbody/golden cycles 1.040876 and instructions 1.033309. The [sixth report](sixth-integration-report.md)
-owns current evidence and limits. Do not combine campaigns or attribute changes
-to cold code without an experiment. Final parity campaigns, full suites, API
-checks and the unchanged broad screen remain open.
+Clean417 short screens give logging/upstream0.864255; separate golden
+logging0.618457,nbody1.048030,pickle0.978917. Retained c142 PMU/profile evidence
+is historical: logging/upstream cycles0.918210/instructions1.044970;
+nbody/golden cycles1.040876/instructions1.033309. Native31 still needs direct
+upstream measurement. Do not combine campaigns or infer dynamic gain from static assembly.
 
-The [next independently reviewed packet](next-provider-stopped-state-peer-review.md)
-uses one request-owned stopped-state view for exact committed source edges and
-the existing restoration Plan. It will separate physical continuation, normalized
-source landing, reported monitoring event and actual owner edge. Extend the
-terminal contract to jumps and iterator retirement; keep legacy uncommitted
-source hooks unauthorized. The first consumer scope has inherited exception
-context, a save-empty target, no incoming target scratch and no token-creating
-transfer. Yield cancellation is a separately gated pre-suspension adapter;
-retained protocol roots and caught exits require their own proofs. The basic
-performance/profile capture is complete. The producer stream is admitted;
-the consumer stream first investigates actual each-LINE callback stops: a
-native compile inventory finds no source-only records in any of its six
-unchanged fixtures. Event ordinals alone do not establish SOURCE_POST.
-A bounded 84-row probe confirms the repeated list/set/dict stops occur inside
-backward JUMP callbacks. The [amended consumer](stopped-state-actual-jump-amendment.md)
-is now admitted: a positively declared owner-neutral committed edge supplies
-the shared stopped view and restoration Plan. Public LINE spelling grants no
-authority; SOURCE_POST and yield consumers remain separate.
+The [next shared capability proposal](nonneutral-post-and-null-requirements-proposal.md)
+addresses actual committed conditional callbacks and proved NULL-only incoming
+target requirements. It reuses the selected normal transfer and shared Plan;
+COPY/SWAP requirements transport simultaneously, required aliases dominate and
+fresh NULL seeds are bounded to ordinary nonsuspending entry. Shared physical
+transfer facts require independent review before implementation. General source,
+retained protocol roots, caught exits and yield remain separately gated. No
+runtime edits are admitted during native measurement/qualification freeze.
 
 ## Parallel responsibilities
 

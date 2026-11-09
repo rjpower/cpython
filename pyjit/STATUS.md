@@ -1,41 +1,45 @@
 # Project status
 
 The active [frame/call redesign](issues/frame-call-model-20261109/plan.md)
-is integrated through engineering `c1424be11db4`, with further reviewed work
-in the existing runtime checkout. It is not fully qualified or promoted.
+is integrated through engineering `3cde040a1afd` in the existing runtime
+checkout. It is not fully qualified or promoted.
 The frame stack, compact register IR and initialized arena now have terminal
 observer output commits, activation-owned phase scopes and explicit saved-local
 restoration. Genuine unbound bindings remain unbound; unsafe target reads refuse.
-The [sixth report](issues/frame-call-model-20261109/sixth-integration-report.md)
-owns current qualification and performance evidence.
+Committed jumps now provide an exact stopped-state view; canonical local loads
+reuse their existing value format without redundant publication checks.
+The [eighth report](issues/frame-call-model-20261109/eighth-integration-report.md)
+owns current component evidence. The local
+load change has independent source review, 117-module release/debug builds and
+25 focused tests passing in each profile. Four component pairs give nbody
+0.97077, logging 1.03461 and pickle 1.01118 versus retained417, using ratios of
+round medians. Logging slows in all four pairs; no general win is claimed.
 
-Release/debug builds each check 117 modules. Debug passes 363 core tests with
-one skip; each profile passes 64 further observer/frame tests. The 22 selected
-release constructor/diagnostic checks and eventual ownership probes pass.
+At `417a8bd6e2e3`, release/debug each pass 343 focused tests with one skip, five generator
+methods and the selected twelve-test gate. Eventual ownership probes pass.
 The compiler accepts 2,156 valid library files without new rejections.
-The current 999-test release wide gate still fails four modules: monitoring
-(one error), peepholer (three), sys_settrace (38), pdb (two failures/two errors).
+The 999-test wide gate in each profile still fails four modules: monitoring
+(one error), peepholer (three), sys_settrace (24, down from 38), pdb (two failures/two errors).
 The old 21 diagnostic mismatches are repaired. The last full release diagnostic
 remains 87: 54,504 tests and 13 failed modules. Final full suites, stats and
 API checks remain open. Golden stays immutable and selected.
 
-The current clean two-pair logging/upstream screen is **0.93687× elapsed time**,
-about 6% faster. A separate golden screen gives logging 0.65303, nbody 1.04130
-and pickle 1.02626; four-pair repeats give nbody 1.01990 and pickle 1.02151.
-Final parity campaigns and the unchanged broad screen remain open. Current
+The clean `417a8bd6e2e3` two-pair logging/upstream screen is **0.86426× elapsed time**,
+about 14% faster. A separate golden screen gives logging 0.61846, nbody 1.04803
+and pickle 0.97892. Native31 still needs a direct upstream comparison.
+Final parity campaigns and the unchanged broad screen remain open. Retained c142
 warmed PMU counts show logging/upstream cycles 0.91821 and instructions 1.04497;
 nbody/golden cycles 1.04088 and instructions 1.03331. Flat profiles locate method
 lookup, calls/retirement and numeric/local paths; they do not assign causal
 speedup budgets. See the [performance review](issues/frame-call-model-20261109/sixth-performance-review.md).
 
-Next: explicit actual-owner edges and positive source-publication authority for
-terminal jumps/iterator retirement, then a shared stopped-state consumer backed
-by actual failing callback phases. The six each-LINE fixtures have no source-only
-records; a bounded native probe locates their repeated refusals in backward-jump
-callbacks. Public line events do not independently establish a PRE state.
+Next: complete the running full release diagnostic,
+then shared committed-edge and typed NULL-requirement capabilities for the
+remaining actual callback phases. All six each-LINE fixtures now pass without
+changing expectations. Public line events do not independently establish PRE.
 Retained protocol roots, caught exits, yield cancellation and complete observer
 qualification remain work in the [repair plan](issues/frame-call-model-20261109/plan.md).
-The five current design specifications are synchronized to c142; both changed
+The five current design specifications are synchronized to `417a8bd6e2e3`; both previously changed
 Mermaid diagrams render and have been inspected.
 
 The previous [execution-boundary and operand-mode packet](issues/execution-boundaries-20261108/plan.md)

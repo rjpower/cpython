@@ -1,6 +1,6 @@
 # Register interpreter: current contract
 
-This page describes the register interpreter integrated at `c1424be11db4`.
+This page describes the register interpreter integrated at `3cde040a1afd`.
 Its bounded observer and debugger contracts still require broad qualification.
 See [status](../STATUS.md), the
 [active packet](../issues/frame-call-model-20261109/plan.md), and the immutable
@@ -57,6 +57,12 @@ share one canonical PyValue array. A home contains NULL, an inline value, an
 immortal, or an owning object edge. Mortal borrowed views are C-local and require
 an owner; ordinary frame homes are not borrowed references.
 
+Pure local loads duplicate the canonical home's owner and reuse its value bits.
+The generator proves the exact local-read/duplicate source before selecting the
+shared canonical final store. Local, temporary and discarded destinations retain
+the same ownership and displaced-owner handling; raw providers still publish
+their results through the ordinary boundary.
+
 Temporary future-read liveness is not owner occupancy. Cleanup must retain or
 retire an initialized owner even if no later Python operation reads it. GC,
 frame copying, unwind and debugger inspection share that invariant. Normal
@@ -90,8 +96,8 @@ The caller saves `return_pc` as a real executable continuation and `return_slot`
 as a plain local/temporary destination or IR_NO_DST. Return keeps its canonical
 owned value in C across child unlinking and retirement. Ordinary CALL recipient
 completion stays inline: publish into the destination, retiring its actual
-replaced owner, or close the discarded C owner. No dormant POP lookup, tagged
-recipient, historical result home or same-line restriction is involved.
+replaced owner, or close the discarded C owner. The saved recipient and
+continuation fully describe normal return.
 
 ```mermaid
 flowchart TD
@@ -133,6 +139,14 @@ supported callback redirects. STOP_ITERATION, branch directions and source LINE
 are independent observer capabilities. Real error StopIteration reporting and
 implicit completion reporting must not emit duplicate exception events.
 
+Declared terminal providers commit output homes and the saved continuation
+before observing. The actual PC remains their semantic owner site during the
+callback, then the selected PC is published before deferred retirement. Errors
+preserve the callback exception; close-time redirects retain the latest PC.
+The backward JUMP poll remains before this barrier. POP_ITER holds its detached
+iterator through observation and retires it afterward. Its reported branch
+source and BRANCH_RIGHT event are distinct from its own fallthrough edge.
+
 YIELD_VALUE separates its outgoing owner from the next resume input recipient.
 For an unused input, IR_NO_DST closes the incoming owner only after the parent
 transfer cell is detached and the resumed child's current-frame, exception and
@@ -164,6 +178,19 @@ Each C evaluator activation owns its pending source-error frame/record. Nested
 Python entry during retirement has a separate activation, so its error cannot
 replace the outer source handler. The frame-object cursor serves display; it
 is not the sole error storage and need not exist on allocation failure.
+
+Observer scopes pair actual frame, site, physical continuation, event, owner
+edge and redirect generation. Completed source providers grant SOURCE_POST;
+legacy inline hooks with unfinished work deliver the same events under an
+unsupported scope. Source records name normalized real landings, while the
+scope retains an immediate relaxation continuation when present.
+
+The setter can cancel from a certified owner-neutral committed JUMP using its
+exact site state. New cancellation requires inherited handled context, proved
+saved bindings and no incoming target scratch owners; existing strict protocol
+recipes retain their separate checks. A legacy LINE callback emitted on a
+backward JUMP carries that JUMP's committed scope. General SOURCE_POST, yield and
+suspended-frame transfers remain unadmitted.
 
 A cold frame-object LINE handoff records expected real landing, previous source
 line and monitoring epoch. It is separate from public f_lineno. Landing detaches

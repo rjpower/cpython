@@ -77,3 +77,29 @@ bindings are visible and the newer target wins. Keep same-line PRE identity and
 source-only same-PC/error regressions as controls. H peers positive zero-output
 facts and no old-origin fabrication. No native job or runtime source change was
 performed for this proposal.
+
+## Source checkpoint
+
+Root admitted the exact neutral committed-JUMP consumer after A/H design peer.
+The source draft adds RegisterStoppedState and one centralized scoped capture.
+It checks generated FORMAT_VALUE, zero physical extents, non-owning roles,
+unconditional selected successor and no frame/suspension transition, then
+same-generation actual site/return-PC agreement. Neutrality is structural;
+whole-handler polling/raising effects are not rejected merely by their names.
+Exact site rows are borrowed and supplied to the existing saved-local builder.
+No new dataflow graph, token creation or parent-table writes are introduced.
+
+New cancellation authority is restricted to inherited context and no target
+scratch needs. Otherwise old strict FOR/caught recipes retain their original
+proof; they do not acquire new cancellation/restoration permission. This avoids
+turning the narrow extension into a regression for previously admitted strict
+jumps. Stale committed edge state is discarded; only an independently proved
+real-LINE PRE landing may support a later nested redirect. Warning preparation
+recaptures non-OTHER scoped authority before the full Plan reproof; deliberately
+OTHER source-only target selection cannot upgrade itself.
+
+Four focused source methods cover bound and genuine-NULL restoration cold/
+warm20 at an asserted actual backward JUMP, required-target-owner refusal,
+lost-token refusal and close-time newer redirect precedence. Host AST and diff
+checks pass. Actual source peers and coordinator native execution remain the
+qualification boundary; this note is not a native pass claim.

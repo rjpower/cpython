@@ -28,6 +28,7 @@
 #include "pycore_import.h"        // _PyImport_ClearExtension()
 #include "pycore_initconfig.h"    // _Py_GetConfigsAsDict()
 #include "pycore_instruction_sequence.h"  // _PyInstructionSequence_New()
+#include "pycore_ir_outcomes.h"    // _PyIR_NormalPhysicalTransfer()
 #include "pycore_interpframe.h"   // _PyFrame_GetFunction()
 #include "pycore_lock.h"          // PyEvent_WaitTimed()
 #include "pycore_list.h"          // _PyList_SetItemTakeValue()
@@ -1653,6 +1654,26 @@ get_ir(PyObject *self, PyObject *args)
         Py_DECREF(item);
     }
     return result;
+}
+
+static PyObject *
+ir_normal_physical_transfer(PyObject *self, PyObject *args)
+{
+    int handler, a, b, c, d, arg, edge, home, nl, limit;
+    if (!PyArg_ParseTuple(args, "iiiiiiiiii", &handler, &a, &b, &c, &d,
+                          &arg, &edge, &home, &nl, &limit)) {
+        return NULL;
+    }
+    if (handler < 0 || handler >= IR_NUM_HANDLERS ||
+        a < 0 || a > IR_FIELD_MAX || b < 0 || b > IR_FIELD_MAX ||
+        c < 0 || c > IR_FIELD_MAX || d < 0 || d > IR_FIELD_MAX) {
+        PyErr_SetString(PyExc_ValueError, "invalid IR word field");
+        return NULL;
+    }
+    _PyIRWord word = IR_WORD(handler, a, b, c, d);
+    _PyIRPhysicalTransfer result =
+        _PyIR_NormalPhysicalTransfer(word, arg, edge, home, nl, limit);
+    return Py_BuildValue("(ii)", result.kind, result.source);
 }
 
 /* Set the farthest exit of FOR_ITER and SEND that the assembler does not
@@ -4468,6 +4489,8 @@ static PyMethodDef module_functions[] = {
     {"get_co_localskinds", get_co_localskinds, METH_O, NULL},
     {"get_feedback", get_feedback, METH_VARARGS, NULL},
     {"get_ir", get_ir, METH_VARARGS, NULL},
+    {"ir_normal_physical_transfer", ir_normal_physical_transfer,
+     METH_VARARGS, NULL},
     {"set_ir_max_forward", set_ir_max_forward, METH_O, NULL},
     {"set_ir_max_slots", set_ir_max_slots, METH_O, NULL},
     {"get_code_var_counts", _PyCFunction_CAST(get_code_var_counts),

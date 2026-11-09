@@ -92,6 +92,51 @@ def names_with(bit, key="effects"):
 
 class ContractTests(unittest.TestCase):
 
+    def test_normal_physical_transfer(self):
+        testapi = import_helper.import_module("_testinternalcapi")
+        named = {**opcode.opmap, **opcode._specialized_opmap,
+                 **opcode._ir_opmap}
+        preserve = (0, -1)
+        set_null = (1, -1)
+        unknown = (2, -1)
+
+        def transfer(name, fields, arg, edge, home, nl=2, limit=10):
+            return testapi.ir_normal_physical_transfer(
+                named[name], *fields, arg, edge, home, nl, limit)
+
+        copy = (4, 2, 0, 0)
+        self.assertEqual(transfer("COPY", copy, 2, 0, 6), (3, 4))
+        self.assertEqual(transfer("COPY", copy, 2, 0, 4), preserve)
+        self.assertEqual(transfer("COPY", copy, 2, 0, 7), preserve)
+        self.assertEqual(transfer("COPY", copy, 2, 1, 6), unknown)
+        self.assertEqual(transfer("COPY", (8, 2, 0, 0), 2, 0, 9), unknown)
+        self.assertEqual(transfer("COPY", copy, 2**31 - 1, 0, 6), unknown)
+
+        swap = (4, 3, 0, 0)
+        self.assertEqual(transfer("SWAP", swap, 3, 0, 4), (3, 6))
+        self.assertEqual(transfer("SWAP", swap, 3, 0, 6), (3, 4))
+        self.assertEqual(transfer("SWAP", swap, 3, 0, 5), preserve)
+        self.assertEqual(transfer("SWAP", (9, 3, 0, 0), 3, 0, 9), unknown)
+
+        store_fast = (4, 0, 0, 0)
+        self.assertEqual(transfer("STORE_FAST", store_fast, 0, 0, 4), set_null)
+        self.assertEqual(transfer("STORE_FAST", store_fast, 0, 0, 5), preserve)
+
+        for_iter = (6, 4, 0, 1)
+        self.assertEqual(transfer("FOR_ITER", for_iter, 1, 1, 4), set_null)
+        self.assertEqual(transfer("FOR_ITER", for_iter, 1, 1, 5), set_null)
+        self.assertEqual(transfer("FOR_ITER", for_iter, 1, 0, 5), unknown)
+        self.assertEqual(transfer("FOR_ITER", for_iter, 1, 0, 7), unknown)
+        self.assertEqual(transfer("FOR_ITER", for_iter, 1, 1, 7), unknown)
+        self.assertEqual(transfer("FOR_ITER", (7, 4, 0, 1), 1, 1, 4), unknown)
+        self.assertEqual(transfer("FOR_ITER_RANGE", for_iter, 1, 1, 4), set_null)
+        self.assertEqual(transfer("FOR_ITER_GEN", for_iter, 1, 1, 4), set_null)
+        self.assertEqual(transfer("FOR_ITER_GEN", for_iter, 1, 0, 7), unknown)
+
+        load_global = (5, 0, 0, 0)
+        self.assertEqual(transfer("LOAD_GLOBAL", load_global, 0, 0, 6), preserve)
+        self.assertEqual(transfer("LOAD_GLOBAL", load_global, 1, 0, 6), unknown)
+
     def test_generator_completion_operand_layout(self):
         families = {opcode.opmap['SEND'], opcode.opmap['FOR_ITER']}
         # Exported base uses BaseOpcode, which retains instrumented IDs.

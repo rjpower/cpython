@@ -1505,6 +1505,222 @@ class ConstSlotsTest(unittest.TestCase):
         self.assertIn("total = 14", text)
         self.assertNotIn(".k", text)
 
+    def test_settrace_pathwise_null_input_after_loop(self):
+        def f():
+            x = y = 2
+            if not x:
+                return 4
+            for i in range(3):
+                x + 6
+            checkpoint = 8
+            return x + y + checkpoint
+
+        first = f.__code__.co_firstlineno
+        names = [row[0] for row in _testinternalcapi.get_ir(f.__code__, True)]
+        self.assertIn("COPY", names)
+        self.assertIn("STORE_FAST", names)
+        self.assertTrue(any(name.startswith("FOR_ITER") for name in names))
+        original = f.__code__.co_code
+        for warm in (0, 20):
+            with self.subTest(warm=warm):
+                for _ in range(warm):
+                    self.assertEqual(f(), 12)
+                attempts = []
+                events = 0
+                def tracer(frame, event, arg):
+                    nonlocal events
+                    if frame.f_code is f.__code__ and event == "line":
+                        events += 1
+                        self.assertLess(events, 80)
+                        if frame.f_lineno == first + 6 and not attempts:
+                            word = _testinternalcapi.get_ir(f.__code__, True)[frame.f_lasti]
+                            self.assertEqual(word[0], "INSTRUMENTED_LINE")
+                            attempts.append(frame.f_lasti)
+                            frame.f_lineno = first + 2
+                    return tracer
+
+                previous = sys.gettrace()
+                sys.settrace(tracer)
+                try:
+                    self.assertEqual(f(), 12)
+                finally:
+                    sys.settrace(previous)
+                self.assertEqual(len(attempts), 1)
+                self.assertEqual(f.__code__.co_code, original)
+
+    def test_settrace_pathwise_null_rechecks_warning_redirect(self):
+        def f():
+            x = y = 2
+            if not x:
+                return 4
+            for i in range(3):
+                x + 6
+            del x
+            checkpoint = 8
+            return 42
+
+        first = f.__code__.co_firstlineno
+        for nested in (False, True):
+            with self.subTest(nested=nested):
+                frames, seen = [], []
+                def tracer(frame, event, arg):
+                    if (frame.f_code is f.__code__ and event == "line" and
+                            frame.f_lineno == first + 7 and not frames):
+                        frames.append(frame)
+                        frame.f_lineno = first + 2
+                    return tracer
+
+                def showwarning(*args, **kwargs):
+                    frame = frames[0]
+                    seen.append(frame.f_lineno)
+                    self.assertEqual(len(seen), 1)
+                    self.assertEqual(str(args[0]),
+                                     "assigning None to 2 unbound locals")
+                    if nested:
+                        frame.f_locals["x"] = 5
+                        frame.f_locals["checkpoint"] = 8
+                        frame.f_lineno = first + 8
+
+                previous = sys.gettrace()
+                with warnings.catch_warnings():
+                    warnings.simplefilter("always", RuntimeWarning)
+                    warnings.showwarning = showwarning
+                    sys.settrace(tracer)
+                    try:
+                        self.assertEqual(f(), 42 if nested else 4)
+                    finally:
+                        sys.settrace(previous)
+                self.assertEqual(seen, [first + 7])
+                self.assertEqual(len(frames), 1)
+                frames.clear()
+
+    def test_settrace_null_input_cannot_replace_method_owner(self):
+        calls = []
+        class Receiver:
+            def method(self, value):
+                calls.append(value)
+                return value
+
+        def f(obj, go):
+            if go:
+                return obj.method(
+                    7,
+                )
+            for item in range(2):
+                pass
+            checkpoint = 1
+            return "done"
+
+        first = f.__code__.co_firstlineno
+        receiver = Receiver()
+        for warm in (0, 20):
+            with self.subTest(warm=warm):
+                for _ in range(warm):
+                    self.assertEqual(f(receiver, False), "done")
+                attempts = []
+                events = 0
+                def tracer(frame, event, arg):
+                    nonlocal events
+                    if frame.f_code is f.__code__ and event == "line":
+                        events += 1
+                        self.assertLess(events, 60)
+                        if frame.f_lineno == first + 7 and not attempts:
+                            before = frame.f_lasti
+                            attempts.append(before)
+                            with self.assertRaisesRegex(ValueError, "incoming temporary"):
+                                frame.f_lineno = first + 3
+                            self.assertEqual(frame.f_lasti, before)
+                            self.assertIs(frame.f_locals["obj"], receiver)
+                    return tracer
+
+                previous = sys.gettrace()
+                sys.settrace(tracer)
+                try:
+                    self.assertEqual(f(receiver, False), "done")
+                finally:
+                    sys.settrace(previous)
+                self.assertEqual(len(attempts), 1)
+                self.assertEqual(calls, [])
+
+    def test_settrace_null_requirements_keep_both_join_obligations(self):
+        def lost_null(flag):
+            x = y = 2
+            if flag:
+                left = right = 3
+            else:
+                left = 0
+            for i in range(3):
+                x + 6
+            checkpoint = 8
+            return 42
+
+        def mixed(flag):
+            x = y = 2
+            if flag:
+                left = right = 3
+            else:
+                for i in range(3):
+                    x + 6
+            checkpoint = 8
+            return 42
+
+        for original, stop, mode in ((lost_null, 8, "lost-null"),
+                                     (mixed, 7, "mixed")):
+            with self.subTest(mode=mode):
+                code = original.__code__
+                first = code.co_firstlineno
+                rows = _testinternalcapi.get_ir(code)
+                calls = [row for row in rows if row[0] == "CALL"]
+                self.assertEqual(len(calls), 1)
+                optional_self = calls[0][2] + 1
+                self.assertGreaterEqual(optional_self, code.co_nlocals)
+                branch_words = [instruction for instruction in dis.get_instructions(code)
+                                if instruction.positions.lineno == first + 3]
+                copy = next(instruction for instruction in branch_words
+                            if instruction.opname == "COPY")
+                self.assertEqual(rows[copy.offset][1] + 1, optional_self)
+                words = list(memoryview(code.co_code).cast("Q"))
+                if mode == "lost-null":
+                    # The untaken arm leaves the optional-self home occupied.
+                    # Its join with the ordinary NULL arm cannot prove NULL.
+                    store = next(instruction for instruction in branch_words
+                                 if instruction.opname == "STORE_FAST" and
+                                 rows[instruction.offset][1] == optional_self)
+                    pc, source = store.offset, optional_self - 1
+                else:
+                    # The untaken arm requires this incoming owner; the other
+                    # arm's CALL requires the same home specifically NULL.
+                    pc, source = copy.offset, optional_self
+                words[pc] = (words[pc] & ~(4095 << 16)) | (source << 16)
+                matching_map = memoryview(code.co_linetable).tobytes()
+                self.assertEqual(matching_map, code.co_linetable)
+                self.assertIsNot(matching_map, code.co_linetable)
+                changed = code.replace(co_code=b"".join(
+                    word.to_bytes(8, sys.byteorder) for word in words),
+                    co_linetable=matching_map)
+                f = types.FunctionType(changed, original.__globals__)
+                attempts = []
+                def tracer(frame, event, arg):
+                    if (frame.f_code is changed and event == "line" and
+                            frame.f_lineno == first + stop and not attempts):
+                        before = frame.f_lasti
+                        attempts.append(before)
+                        with self.assertRaisesRegex(ValueError, "incoming temporary"):
+                            frame.f_lineno = first + 2
+                        self.assertEqual(frame.f_lasti, before)
+                        self.assertIs(frame.f_locals["flag"], False)
+                    return tracer
+
+                previous = sys.gettrace()
+                sys.settrace(tracer)
+                try:
+                    # Only the original, unmodified arm executes. The encoded
+                    # other arm is a proof witness, not an executable recipe.
+                    self.assertEqual(f(False), 42)
+                finally:
+                    sys.settrace(previous)
+                self.assertEqual(len(attempts), 1)
+
     def test_settrace_lineno_jump(self):
         def f():
             total = 0

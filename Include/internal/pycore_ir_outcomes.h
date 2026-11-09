@@ -471,6 +471,181 @@ _PyIR_DefinesHome(_PyIRWord word, int arg, int home)
     }
 }
 
+enum {
+    _PyIR_PHYSICAL_PRESERVE,
+    _PyIR_PHYSICAL_SET_NULL,
+    _PyIR_PHYSICAL_UNKNOWN,
+    _PyIR_PHYSICAL_TRANSPORT,
+};
+
+typedef struct {
+    int kind;
+    int source;
+} _PyIRPhysicalTransfer;
+
+/* A normal successor's physical scratch-home update. TRANSPORT reads the
+ * incoming row: callers must calculate all destinations before changing it.
+ * This does not prove that a source is a valid executable input owner. */
+static inline _PyIRPhysicalTransfer
+_PyIR_NormalPhysicalTransfer(_PyIRWord word, int arg, int edge, int home,
+                             int nl, int limit)
+{
+    const _PyIRPhysicalTransfer unknown = {_PyIR_PHYSICAL_UNKNOWN, -1};
+    const _PyIRPhysicalTransfer preserve = {_PyIR_PHYSICAL_PRESERVE, -1};
+    int handler = IR_HANDLER(word);
+    if (handler >= IR_NUM_HANDLERS || nl < 0 || limit > IR_MAX_SLOTS ||
+        limit < nl || home < nl || home >= limit || edge < 0 || edge > 1)
+    {
+        return unknown;
+    }
+    const _PyIRFormat *fmt = _PyIR_FormatOf(handler);
+    if (!(fmt->flags & _PyIR_VALID) ||
+        (edge && !(fmt->flags & (_PyIR_JUMPS | _PyIR_FORWARD))))
+    {
+        return unknown;
+    }
+    uint32_t fields[] = {IR_A(word), IR_B(word), IR_C(word), IR_D(word)};
+    int base = -1;
+    int dst = -1;
+    for (int f = 0; f < 4; f++) {
+        int role = fmt->roles[f];
+        if (role == _PyIR_ROLE_BASE) {
+            base = (int)fields[f];
+        }
+        else if (role == _PyIR_ROLE_DST) {
+            dst = (int)fields[f];
+            if (dst != IR_NO_DST && dst >= limit) {
+                return unknown;
+            }
+            if (dst == IR_NO_DST && !(fmt->flags & _PyIR_DISCARDS)) {
+                return unknown;
+            }
+        }
+        else if (role >= _PyIR_ROLE_IN0 && fields[f] >= (uint32_t)limit) {
+            return unknown;
+        }
+        else if (role >= _PyIR_ROLE_LOCAL_IN &&
+                 role <= _PyIR_ROLE_CELL && fields[f] >= (uint32_t)nl)
+        {
+            return unknown;
+        }
+    }
+    /* Extent arithmetic uses int; reject malformed arguments before it. */
+    if (arg < -IR_FIELD_MAX || arg > IR_CD_MAX) {
+        return unknown;
+    }
+    int reads = _PyIR_Extent(fmt->reads, arg);
+    int writes = _PyIR_Extent(fmt->writes, arg);
+    int through = _PyIR_Extent(fmt->through, arg);
+    if (reads < 0 || writes < 0 || through < 0 || through > reads ||
+        writes < through ||
+        (base >= 0 && (base < nl || base > limit - Py_MAX(reads, writes))))
+    {
+        return unknown;
+    }
+
+    switch (_PyIR_HandlerBase[handler]) {
+        case COPY:
+            if (edge || fmt->roles[0] != _PyIR_ROLE_BASE ||
+                fmt->roles[1] != _PyIR_ROLE_IMM || arg != (int)IR_B(word) ||
+                arg < 1 || reads != arg || writes != arg + 1 ||
+                through != arg || base < 0)
+            {
+                return unknown;
+            }
+            if (home == base + arg) {
+                return (_PyIRPhysicalTransfer){_PyIR_PHYSICAL_TRANSPORT, base};
+            }
+            return preserve;
+        case SWAP:
+            if (edge || fmt->roles[0] != _PyIR_ROLE_BASE ||
+                fmt->roles[1] != _PyIR_ROLE_IMM || arg != (int)IR_B(word) ||
+                arg < 2 || reads != arg || writes != arg || base < 0)
+            {
+                return unknown;
+            }
+            if (home == base) {
+                return (_PyIRPhysicalTransfer){_PyIR_PHYSICAL_TRANSPORT,
+                                               base + arg - 1};
+            }
+            if (home == base + arg - 1) {
+                return (_PyIRPhysicalTransfer){_PyIR_PHYSICAL_TRANSPORT, base};
+            }
+            return preserve;
+        case STORE_FAST:
+            if (edge || fmt->roles[0] != _PyIR_ROLE_IN0 ||
+                fmt->roles[1] != _PyIR_ROLE_LOCAL_OUT ||
+                arg != (int)IR_B(word) || IR_B(word) >= (uint32_t)nl ||
+                reads != 1 || writes != 0)
+            {
+                return unknown;
+            }
+            if (home == (int)IR_A(word)) {
+                return (_PyIRPhysicalTransfer){_PyIR_PHYSICAL_SET_NULL, -1};
+            }
+            return preserve;
+        case FOR_ITER:
+            if (fmt->roles[0] != _PyIR_ROLE_DST ||
+                fmt->roles[1] != _PyIR_ROLE_BASE || base < 0 ||
+                reads != 2 || fmt->dst != 2 ||
+                !((writes == 3 && through <= 2) ||
+                  (writes == 2 && through == 2 &&
+                   (fmt->effects & _PyIR_PUSHES_FRAME))) ||
+                (dst >= nl && dst != IR_NO_DST && dst != base + 2))
+            {
+                return unknown;
+            }
+            if (edge == 1 && (home == base || home == base + 1)) {
+                if (_PyIR_ObserverOutcome(word, edge) !=
+                    _PyIR_OBSERVER_COMPLETION)
+                {
+                    return unknown;
+                }
+                return (_PyIRPhysicalTransfer){_PyIR_PHYSICAL_SET_NULL, -1};
+            }
+            /* A pristine FOR word can run the child-entering GEN variant.
+             * Only the completed receiver/cursor pair has a shared fact. */
+            return unknown;
+    }
+
+    if (fmt->effects & _PyIR_PUSHES_FRAME) {
+        /* A child activation may reuse scratch homes beyond this row's
+         * declared input and output window. */
+        return unknown;
+    }
+
+    /* In every other format, a read outside the unchanged prefix or a
+     * published result may replace the old physical value. An untouched
+     * home, including LOAD_GLOBAL's unrequested optional-self slot, survives. */
+    for (int f = 0; f < 4; f++) {
+        int role = fmt->roles[f];
+        if (role >= _PyIR_ROLE_IN0 && (int)fields[f] == home) {
+            return unknown;
+        }
+        if (role >= _PyIR_ROLE_LOCAL_IN && role <= _PyIR_ROLE_CELL &&
+            (int)fields[f] == home)
+        {
+            return unknown;
+        }
+    }
+    if (base >= 0 && home >= base + through &&
+        home - base < Py_MAX(reads, writes))
+    {
+        return unknown;
+    }
+    _PyIRSlotOutcome outcome = _PyIR_Outcome(word, edge);
+    if (outcome.semantic &&
+        ((home >= outcome.first && home - outcome.first < outcome.count) ||
+         home == outcome.dst))
+    {
+        return unknown;
+    }
+    if (_PyIR_DefinesHome(word, arg, home)) {
+        return unknown;
+    }
+    return preserve;
+}
+
 static inline int
 _PyIR_CompletionWindow(int opcode)
 {

@@ -1363,6 +1363,7 @@ typedef struct {
     size_t stride;
     unsigned char *safe;
     uint64_t *required;
+    uint64_t *null_states, *value_required, *null_required;
     _PyIRExceptionEntry *handlers;
     int *context, *origins, *parents;
     int *save_tops, *save_parents, *save_columns;
@@ -1552,6 +1553,7 @@ register_resume_analysis_clear(RegisterResumeAnalysis *analysis)
 {
     PyMem_Free(analysis->safe);
     PyMem_Free(analysis->required);
+    PyMem_Free(analysis->null_states);
     PyMem_Free(analysis->handlers);
     PyMem_Free(analysis->context);
     PyMem_Free(analysis->origins);
@@ -1675,14 +1677,15 @@ register_resume_graph(PyCodeObject *code, RegisterResumeAnalysis *analysis)
 /* Exception and lasti are supplied by unwind. Only preserved-prefix inputs
  * are requirements on the failing instruction's pre-success state. */
 static void
-register_resume_error_needs(RegisterResumeAnalysis *analysis, uint64_t *work,
+register_resume_error_needs(RegisterResumeAnalysis *analysis, const uint64_t *live,
+                             uint64_t *work,
                              int target, int slot, int lasti)
 {
     if (target < 0) {
         return;
     }
     int prefix = slot - lasti - analysis->nl;
-    const uint64_t *needed = analysis->required + (size_t)target * analysis->stride;
+    const uint64_t *needed = live + (size_t)target * analysis->stride;
     for (int j = 0; j < prefix; j++) {
         if (needed[j / 64] & ((uint64_t)1 << (j % 64))) {
             work[j / 64] |= (uint64_t)1 << (j % 64);
@@ -1690,10 +1693,154 @@ register_resume_error_needs(RegisterResumeAnalysis *analysis, uint64_t *work,
     }
 }
 
+enum {
+    REGISTER_REQUIRE_ALL,
+    REGISTER_REQUIRE_VALUE,
+    REGISTER_REQUIRE_NULL_ONLY,
+    REGISTER_REQUIRE_COUNT,
+};
+
+/* These are physical NULL facts, not owner identities. Only ordinary entry
+ * initializes this analysis; resumed and child-overlap entries cannot borrow
+ * that initialization. A successful transport always reads the old row. */
+static int
+register_resume_null_states(PyCodeObject *code, RegisterResumeAnalysis *analysis)
+{
+    int n = analysis->n, nt = analysis->nt, nl = analysis->nl;
+    size_t stride = analysis->stride;
+    if (n == 0) {
+        return 0;
+    }
+    size_t budget = 16 * 1024 * 1024;
+    /* Include the three requirement lanes and temporary work/queue storage. */
+    if (stride > budget / (6 * sizeof(uint64_t))) {
+        PyErr_SetString(PyExc_ValueError, "register resume analysis is too large");
+        return -1;
+    }
+    size_t row_bytes = stride * sizeof(uint64_t);
+    size_t node_bytes = (REGISTER_REQUIRE_COUNT + 1) * row_bytes + sizeof(int) + 2;
+    if ((size_t)n > (budget - 6 * row_bytes) / node_bytes) {
+        PyErr_SetString(PyExc_ValueError, "register resume analysis is too large");
+        return -1;
+    }
+    analysis->null_states = PyMem_Calloc((size_t)n * stride, sizeof(uint64_t));
+    uint64_t *work = PyMem_Calloc(stride, sizeof(uint64_t));
+    int *queue = PyMem_New(int, n);
+    unsigned char *reached = PyMem_Calloc((size_t)n, 1);
+    unsigned char *queued = PyMem_Calloc((size_t)n, 1);
+    if (analysis->null_states == NULL || work == NULL || queue == NULL ||
+        reached == NULL || queued == NULL)
+    {
+        PyMem_Free(work); PyMem_Free(queue);
+        PyMem_Free(reached); PyMem_Free(queued);
+        PyErr_NoMemory();
+        return -1;
+    }
+    uint64_t *entry = analysis->null_states;
+    for (int j = 0; j < nt; j++) {
+        entry[j / 64] |= (uint64_t)1 << (j % 64);
+    }
+    const uint32_t *constants = _PyCode_CONSTSLOTS(code);
+    for (int j = 0; j < code->co_nconstslots; j++) {
+        int slot = (int)constants[j * 2] - nl;
+        if (slot >= 0 && slot < nt) {
+            entry[slot / 64] &= ~((uint64_t)1 << (slot % 64));
+        }
+    }
+    int head = 0, tail = 1 % n, count = 1;
+    queue[0] = 0;
+    reached[0] = queued[0] = 1;
+    while (count) {
+        int pc = queue[head];
+        head = (head + 1) % n;
+        count--;
+        queued[pc] = 0;
+        const uint64_t *before = analysis->null_states + (size_t)pc * stride;
+        _PyIRWord word = code->co_words[pc];
+        int arg = _PyCode_InstrOparg(code, pc);
+        for (int e = analysis->edge_heads[pc]; e >= 0;
+             e = analysis->edges[e].next)
+        {
+            RegisterResumeEdge edge = analysis->edges[e];
+            memset(work, 0, stride * sizeof(uint64_t));
+            /* Forget facts on all errors, including source errors. This does
+             * not presume partial-error or inline callback publication. */
+            if (edge.floor < 0 && edge.phase >= 0) {
+                for (int j = 0; j < nt; j++) {
+                    _PyIRPhysicalTransfer transfer = _PyIR_NormalPhysicalTransfer(
+                        word, arg, edge.phase, nl + j, nl, nl + nt);
+                    bool is_null = transfer.kind == _PyIR_PHYSICAL_SET_NULL;
+                    int source = transfer.kind == _PyIR_PHYSICAL_TRANSPORT
+                        ? transfer.source - nl : j;
+                    if ((transfer.kind == _PyIR_PHYSICAL_PRESERVE ||
+                         transfer.kind == _PyIR_PHYSICAL_TRANSPORT) &&
+                        source >= 0 && source < nt)
+                    {
+                        is_null = (before[source / 64] >> (source % 64)) & 1;
+                    }
+                    if (is_null) {
+                        work[j / 64] |= (uint64_t)1 << (j % 64);
+                    }
+                }
+            }
+            uint64_t *after = analysis->null_states + (size_t)edge.to * stride;
+            bool changed = !reached[edge.to];
+            for (size_t j = 0; j < stride; j++) {
+                uint64_t value = reached[edge.to] ? after[j] & work[j] : work[j];
+                changed |= value != after[j];
+                after[j] = value;
+            }
+            reached[edge.to] = 1;
+            if (changed && !queued[edge.to]) {
+                queue[tail] = edge.to;
+                tail = (tail + 1) % n;
+                count++;
+                queued[edge.to] = 1;
+            }
+        }
+    }
+    PyMem_Free(work); PyMem_Free(queue);
+    PyMem_Free(reached); PyMem_Free(queued);
+    return 0;
+}
+
+/* Map both demand kinds through the same simultaneous physical transport.
+ * UNKNOWN is not an owner definition and cannot discharge a demand. */
+static void
+register_resume_transport_needs(_PyIRWord word, int arg, int outcome, int lane,
+                               RegisterResumeAnalysis *analysis,
+                               uint64_t *needs, uint64_t *mapped)
+{
+    int nl = analysis->nl, nt = analysis->nt;
+    memcpy(mapped, needs, analysis->stride * sizeof(uint64_t));
+    for (int j = 0; j < nt; j++) {
+        _PyIRPhysicalTransfer transfer = _PyIR_NormalPhysicalTransfer(
+            word, arg, outcome, nl + j, nl, nl + nt);
+        if ((lane == REGISTER_REQUIRE_NULL_ONLY &&
+             transfer.kind == _PyIR_PHYSICAL_SET_NULL) ||
+            transfer.kind == _PyIR_PHYSICAL_TRANSPORT)
+        {
+            mapped[j / 64] &= ~((uint64_t)1 << (j % 64));
+        }
+    }
+    for (int j = 0; j < nt; j++) {
+        if (!(needs[j / 64] & ((uint64_t)1 << (j % 64)))) {
+            continue;
+        }
+        _PyIRPhysicalTransfer transfer = _PyIR_NormalPhysicalTransfer(
+            word, arg, outcome, nl + j, nl, nl + nt);
+        int source = transfer.source - nl;
+        if (transfer.kind == _PyIR_PHYSICAL_TRANSPORT && source >= 0 && source < nt) {
+            mapped[source / 64] |= (uint64_t)1 << (source % 64);
+        }
+    }
+    memcpy(needs, mapped, analysis->stride * sizeof(uint64_t));
+}
+
 /* Debugger redirection must use the executable register contract. A slot
  * containing an unrelated value is not a reconstruction of a missing input.
- * This cold dataflow computes incoming owners for the recipes below. NULL
- * protocol inputs are omitted only under the whole-code invariant. */
+ * The strict lane omits NULL inputs only under the whole-code invariant.
+ * Optional lanes retain pathwise NULL expectations for the bounded PRE Plan. */
 static unsigned char *
 register_resume_liveness(_PyInterpreterFrame *frame, bool allow_null,
                           RegisterResumeAnalysis *analysis)
@@ -1708,16 +1855,21 @@ register_resume_liveness(_PyInterpreterFrame *frame, bool allow_null,
         PyErr_SetString(PyExc_ValueError, "register resume analysis is too large");
         return NULL;
     }
-    uint64_t *live = PyMem_Calloc((size_t)Py_MAX(n, 1) * stride, sizeof(uint64_t));
+    int lanes = analysis->null_states != NULL ? REGISTER_REQUIRE_COUNT : 1;
+    size_t rows = (size_t)Py_MAX(n, 1) * stride;
+    uint64_t *live = PyMem_Calloc(rows * lanes, sizeof(uint64_t));
     uint64_t *work = PyMem_Calloc(stride, sizeof(uint64_t));
     uint64_t *edge = PyMem_Calloc(stride, sizeof(uint64_t));
+    uint64_t *mapped = lanes > 1 ? PyMem_Calloc(stride, sizeof(uint64_t)) : NULL;
     unsigned char *safe = PyMem_Calloc((size_t)Py_MAX(n, 1), 1);
     unsigned char *null_home = PyMem_Calloc((size_t)Py_MAX(nt, 1), 1);
-    if (live == NULL || work == NULL || edge == NULL || safe == NULL ||
+    if (live == NULL || work == NULL || edge == NULL ||
+        (lanes > 1 && mapped == NULL) || safe == NULL ||
         null_home == NULL)
     {
         PyMem_Free(live); PyMem_Free(work); PyMem_Free(edge); PyMem_Free(safe);
         PyMem_Free(null_home);
+        PyMem_Free(mapped);
         PyErr_NoMemory();
         return NULL;
     }
@@ -1801,101 +1953,132 @@ register_resume_liveness(_PyInterpreterFrame *frame, bool allow_null,
         }
     }
     analysis->required = live;
+    if (lanes == REGISTER_REQUIRE_COUNT) {
+        analysis->value_required = live + REGISTER_REQUIRE_VALUE * rows;
+        analysis->null_required = live + REGISTER_REQUIRE_NULL_ONLY * rows;
+    }
     bool changed;
     do {
         changed = false;
         for (int i = n; i-- > 0;) {
-            _PyIRWord word = code->co_words[i];
-            const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
-            memset(work, 0, stride * sizeof(uint64_t));
-            int successors[2];
-            register_resume_successors(code, i, successors);
-            for (int k = 0; k < 2; k++) {
-                int next = successors[k];
-                if (next >= 0 && next < n) {
-                    memcpy(edge, live + (size_t)next * stride, stride * sizeof(uint64_t));
-                    /* Source callbacks run after this normal outcome. Their
-                     * error inputs pass through the same success definitions. */
-                    for (int r = analysis->source_heads[i]; r >= 0;
-                         r = analysis->source_next[r])
-                    {
-                        _PyIRSourceEvent event = analysis->source_events[r];
-                        if (event.edge == k) {
-                            register_resume_error_needs(analysis, edge, event.handler,
-                                                        event.exc_slot, event.lasti);
-                        }
-                    }
-                    _PyIRSlotOutcome outcome = _PyIR_Outcome(word, k == 1);
-                    if (outcome.semantic) {
-                        for (int r = 0; r <= outcome.count; r++) {
-                            int slot = (r < outcome.count ? outcome.first + r : outcome.dst) - nl;
-                            if (slot >= 0 && slot < nt && slot + nl != IR_NO_DST) {
-                                edge[slot / 64] &= ~((uint64_t)1 << (slot % 64));
+            for (int lane = REGISTER_REQUIRE_ALL; lane < lanes; lane++) {
+                uint64_t *lane_live = live + (size_t)lane * rows;
+                _PyIRWord word = code->co_words[i];
+                const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
+                int arg = _PyCode_InstrOparg(code, i);
+                memset(work, 0, stride * sizeof(uint64_t));
+                int successors[2];
+                register_resume_successors(code, i, successors);
+                for (int k = 0; k < 2; k++) {
+                    int next = successors[k];
+                    if (next >= 0 && next < n) {
+                        memcpy(edge, lane_live + (size_t)next * stride, stride * sizeof(uint64_t));
+                        /* Source callbacks run after this normal outcome. Their
+                         * error inputs pass through the same success definitions. */
+                        for (int r = analysis->source_heads[i]; r >= 0;
+                             r = analysis->source_next[r])
+                        {
+                            _PyIRSourceEvent event = analysis->source_events[r];
+                            if (event.edge == k) {
+                                register_resume_error_needs(analysis, lane_live, edge, event.handler,
+                                                            event.exc_slot, event.lasti);
                             }
                         }
-                    }
-                    for (int j = 0; j < nb; j++) {
-                        work[j] |= edge[j];
+                        if (lane != REGISTER_REQUIRE_ALL) {
+                            register_resume_transport_needs(word, arg, k, lane, analysis,
+                                                            edge, mapped);
+                        }
+                        _PyIRSlotOutcome outcome = _PyIR_Outcome(word, k == 1);
+                        if (outcome.semantic) {
+                            for (int r = 0; r <= outcome.count; r++) {
+                                int slot = (r < outcome.count ? outcome.first + r : outcome.dst) - nl;
+                                if (slot >= 0 && slot < nt && slot + nl != IR_NO_DST) {
+                                    if (lane == REGISTER_REQUIRE_VALUE && _PyIR_NormalPhysicalTransfer(
+                                            word, arg, k, slot + nl, nl, nl + nt).kind ==
+                                                _PyIR_PHYSICAL_SET_NULL)
+                                    {
+                                        continue;
+                                    }
+                                    edge[slot / 64] &= ~((uint64_t)1 << (slot % 64));
+                                }
+                            }
+                        }
+                        for (int j = 0; j < nb; j++) {
+                            work[j] |= edge[j];
+                        }
                     }
                 }
-            }
-            int arg = _PyCode_InstrOparg(code, i);
-            /* Conditional and semantic outputs are handled per edge above.
-             * Other definitions use the actual generated output mapping. */
-            if (!_PyIR_Outcome(word, 0).semantic &&
-                !(fmt->flags & (_PyIR_JUMPS | _PyIR_FORWARD)))
-            {
-                for (int j = 0; j < nt; j++) {
-                    if (_PyIR_DefinesHome(word, arg, nl + j)) {
-                        work[j / 64] &= ~((uint64_t)1 << (j % 64));
-                    }
-                }
-            }
-            /* Ordinary exceptions happen before success definitions. Joining
-             * these last prevents a fresh destination from erasing old input
-             * requirements needed by the handler. */
-            _PyIRExceptionEntry handler = analysis->handlers[i];
-            register_resume_error_needs(analysis, work, handler.target,
-                                        handler.slot, handler.lasti);
-            /* Transparent observation can hide the runtime reader. Use its
-             * recovered handler, never a family-wide NULL capability. */
-            _PyInstr *instr = _PyFrame_InstrAt(frame, i);
-            int real_handler = _PyIR_RealHandler(frame, instr);
-            _PyIRWord actual = (word & ~(_PyIRWord)0xffff) | real_handler;
-            for (int j = 0; j < nt; j++) {
-                int home = nl + j;
-                if (_PyIR_ReadsHome(word, arg, home) &&
-                    !(null_home[j] && _PyIR_NullableHome(actual, arg, home)))
+                /* Conditional and semantic outputs are handled per edge above.
+                 * Other definitions use the actual generated output mapping. */
+                if (!_PyIR_Outcome(word, 0).semantic &&
+                    !(fmt->flags & (_PyIR_JUMPS | _PyIR_FORWARD)))
                 {
-                    work[j / 64] |= (uint64_t)1 << (j % 64);
+                    for (int j = 0; j < nt; j++) {
+                        if (_PyIR_DefinesHome(word, arg, nl + j)) {
+                            work[j / 64] &= ~((uint64_t)1 << (j % 64));
+                        }
+                    }
                 }
-            }
-            /* Immutable entry constants have a valid home at every site. */
-            const uint32_t *constants = _PyCode_CONSTSLOTS(code);
-            for (int j = 0; j < code->co_nconstslots; j++) {
-                int slot = (int)constants[j * 2] - nl;
-                if (slot >= 0 && slot < nt) {
-                    work[slot / 64] &= ~((uint64_t)1 << (slot % 64));
+                /* Ordinary exceptions happen before success definitions. Joining
+                 * these last prevents a fresh destination from erasing old input
+                 * requirements needed by the handler. */
+                _PyIRExceptionEntry handler = analysis->handlers[i];
+                register_resume_error_needs(analysis, lane_live, work, handler.target,
+                                            handler.slot, handler.lasti);
+                /* Transparent observation can hide the runtime reader. Use its
+                 * recovered handler, never a family-wide NULL capability. */
+                _PyInstr *instr = _PyFrame_InstrAt(frame, i);
+                int real_handler = _PyIR_RealHandler(frame, instr);
+                _PyIRWord actual = (word & ~(_PyIRWord)0xffff) | real_handler;
+                for (int j = 0; j < nt; j++) {
+                    int home = nl + j;
+                    bool nullable = _PyIR_NullableHome(actual, arg, home);
+                    bool path_null = analysis->null_states != NULL && nullable &&
+                        (analysis->null_states[(size_t)i * stride + j / 64] &
+                         ((uint64_t)1 << (j % 64)));
+                    if (_PyIR_ReadsHome(word, arg, home) && !(null_home[j] && nullable) &&
+                        (lane == REGISTER_REQUIRE_ALL ||
+                         (lane == REGISTER_REQUIRE_VALUE && !path_null) ||
+                         (lane == REGISTER_REQUIRE_NULL_ONLY && path_null)))
+                    {
+                        work[j / 64] |= (uint64_t)1 << (j % 64);
+                    }
                 }
-            }
-            uint64_t *before = live + (size_t)i * stride;
-            if (memcmp(before, work, stride * sizeof(uint64_t))) {
-                memcpy(before, work, stride * sizeof(uint64_t));
-                changed = true;
+                /* Immutable entry constants have a valid home at every site. */
+                const uint32_t *constants = _PyCode_CONSTSLOTS(code);
+                for (int j = 0; j < code->co_nconstslots; j++) {
+                    int slot = (int)constants[j * 2] - nl;
+                    if (slot >= 0 && slot < nt) {
+                        work[slot / 64] &= ~((uint64_t)1 << (slot % 64));
+                    }
+                }
+                uint64_t *before = lane_live + (size_t)i * stride;
+                if (memcmp(before, work, stride * sizeof(uint64_t))) {
+                    memcpy(before, work, stride * sizeof(uint64_t));
+                    changed = true;
+                }
             }
         }
     } while (changed);
     for (int i = 0; i < n; i++) {
         safe[i] = 1;
         for (int j = 0; j < nb; j++) {
+            if (lanes == REGISTER_REQUIRE_COUNT) {
+                /* Strict adapters retain every old requirement and every
+                 * newly transported NULL/value requirement. */
+                live[(size_t)i * stride + j] |=
+                    live[REGISTER_REQUIRE_VALUE * rows + (size_t)i * stride + j] |
+                    live[REGISTER_REQUIRE_NULL_ONLY * rows + (size_t)i * stride + j];
+            }
             safe[i] &= live[(size_t)i * stride + j] == 0;
         }
     }
-    PyMem_Free(work); PyMem_Free(edge); PyMem_Free(null_home);
+    PyMem_Free(work); PyMem_Free(edge); PyMem_Free(null_home); PyMem_Free(mapped);
     return safe;
 error:
     PyMem_Free(live); PyMem_Free(work); PyMem_Free(edge);
     PyMem_Free(null_home); PyMem_Free(safe);
+    PyMem_Free(mapped);
     analysis->required = NULL;
     return NULL;
 }
@@ -2348,7 +2531,7 @@ register_resume_contexts(PyCodeObject *code, RegisterResumeAnalysis *analysis)
 }
 
 static int
-register_resume_analyze(_PyInterpreterFrame *frame, bool allow_null,
+register_resume_analyze(_PyInterpreterFrame *frame, bool allow_null, bool path_null,
                         RegisterResumeAnalysis *analysis)
 {
     PyCodeObject *code = _PyFrame_GetCode(frame);
@@ -2377,6 +2560,12 @@ register_resume_analyze(_PyInterpreterFrame *frame, bool allow_null,
     }
     if (register_resume_handlers(code, analysis) < 0 ||
         register_resume_graph(code, analysis) < 0)
+    {
+        goto error;
+    }
+    if (path_null && (code->co_flags & CO_OPTIMIZED) && !(code->co_flags &
+                      (CO_GENERATOR | CO_COROUTINE | CO_ASYNC_GENERATOR)) &&
+        register_resume_null_states(code, analysis) < 0)
     {
         goto error;
     }
@@ -2971,6 +3160,36 @@ register_resume_plan(_PyInterpreterFrame *frame, int current, int target,
     {
         return 0;
     }
+    if (phase.kind == REGISTER_RESUME_PRE_WORD && phase.pc == current &&
+        context == 0 && analysis->null_states != NULL)
+    {
+        bool empty_saves = true, has_null = false, compatible = true;
+        for (int col = 0; col < analysis->nsave_columns; col++) {
+            empty_saves &= phase.save_tops[col] == 0 &&
+                analysis->save_tops[(size_t)target * analysis->nsave_columns + col] == 0;
+        }
+        for (size_t j = 0; j < analysis->stride; j++) {
+            uint64_t value = analysis->value_required[(size_t)target * analysis->stride + j];
+            uint64_t needs = analysis->null_required[(size_t)target * analysis->stride + j];
+            uint64_t all = analysis->required[(size_t)target * analysis->stride + j];
+            uint64_t available = analysis->null_states[(size_t)current * analysis->stride + j];
+            has_null |= needs != 0;
+            compatible &= value == 0 && (all & ~needs) == 0 &&
+                          (needs & ~available) == 0;
+        }
+        for (int j = 0; j < analysis->nt && compatible; j++) {
+            if ((analysis->null_required[(size_t)target * analysis->stride + j / 64] &
+                 ((uint64_t)1 << (j % 64))) &&
+                !PyValue_IsNull(frame->base[analysis->nl + j]))
+            {
+                compatible = false;
+            }
+        }
+        if (empty_saves && compatible && has_null) {
+            /* A proved NULL input requires no owner to preserve or invent. */
+            return 1;
+        }
+    }
     int restored = register_saved_locals_plan(frame, target, analysis, phase,
                                              can_cancel && allow_anchor, plan);
     if (restored <= 0) {
@@ -3286,7 +3505,8 @@ frame_lineno_set_impl(PyFrameObject *self, PyObject *value)
     }
     RegisterStoppedState phase = register_stopped_state(self, current, what_event,
                                                        pending_call, observed);
-    if (register_resume_analyze(self->f_frame, !pending_call, &analysis) < 0) {
+    if (register_resume_analyze(self->f_frame, !pending_call,
+                              phase.kind == REGISTER_RESUME_PRE_WORD, &analysis) < 0) {
         PyMem_Free(lines);
         return -1;
     }
@@ -3438,7 +3658,9 @@ frame_lineno_set_impl(PyFrameObject *self, PyObject *value)
             register_resume_plan_clear(&plan);
             return 0;
         }
-        if (register_resume_analyze(frame, !pending_call, &analysis) < 0) {
+        if (register_resume_analyze(frame, !pending_call,
+                                    selected_phase.kind == REGISTER_RESUME_PRE_WORD,
+                                    &analysis) < 0) {
             register_resume_plan_clear(&plan);
             return -1;
         }

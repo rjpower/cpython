@@ -20,21 +20,23 @@ methods and the selected twelve-test gate. Eventual ownership probes pass.
 The compiler accepts 2,156 valid library files without new rejections.
 The 999-test wide gate in each profile still fails four modules: monitoring
 (one error), peepholer (three), sys_settrace (24, down from 38), pdb (two failures/two errors).
-The old 21 diagnostic mismatches are repaired. The last full release diagnostic
-remains 87: 54,504 tests and 13 failed modules. Final full suites, stats and
+The old 21 diagnostic mismatches are repaired. The current full release
+diagnostic runs 54,563 tests with six failed modules: the four above, plus a
+GC-verifier negative control and test_tools API lint. The GC method and whole
+module pass on three isolated build roles; its full-run failure remains
+unresolved. Final full suites, stats and
 API checks remain open. Golden stays immutable and selected.
 
-The clean `417a8bd6e2e3` two-pair logging/upstream screen is **0.86426× elapsed time**,
-about 14% faster. A separate golden screen gives logging 0.61846, nbody 1.04803
-and pickle 0.97892. Native31 still needs a direct upstream comparison.
+The clean `3cde040a1afd` two-pair logging/upstream screen is **0.92135× elapsed
+time**, about 8% faster. Prior417's separate golden screen gives logging
+0.61846, nbody 1.04803 and pickle 0.97892; it does not qualify current31.
 Final parity campaigns and the unchanged broad screen remain open. Retained c142
 warmed PMU counts show logging/upstream cycles 0.91821 and instructions 1.04497;
 nbody/golden cycles 1.04088 and instructions 1.03331. Flat profiles locate method
 lookup, calls/retirement and numeric/local paths; they do not assign causal
 speedup budgets. See the [performance review](issues/frame-call-model-20261109/sixth-performance-review.md).
 
-Next: complete the running full release diagnostic,
-then shared committed-edge and typed NULL-requirement capabilities for the
+Next: integrate shared committed-edge and typed NULL-requirement capabilities for the
 remaining actual callback phases. All six each-LINE fixtures now pass without
 changing expectations. Public line events do not independently establish PRE.
 Retained protocol roots, caught exits, yield cancellation and complete observer

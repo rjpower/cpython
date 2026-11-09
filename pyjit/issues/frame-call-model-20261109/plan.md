@@ -53,14 +53,17 @@ through the shared final store. Independent actual source/result review approved
 Only two generated load handlers change; 285 other bodies, four numeric bodies
 and metadata stay unchanged. Four balanced before/after pairs give ratios of
 round medians nbody 0.970773, logging 1.034605 and pickle 1.011179. Logging slows
-in every pair. A coherent full release diagnostic is running before more model
-edits. See the [eighth report](eighth-integration-report.md).
+in every pair. Full release runs54,563 tests with six failed modules: the known
+four, GC-verifier negative control and API-lint test_tools. Isolated GC method
+and module pass in three roles; its full-run failure remains unresolved.
+See the [eighth report](eighth-integration-report.md).
 
 Clean417 short screens give logging/upstream0.864255; separate golden
 logging0.618457,nbody1.048030,pickle0.978917. Retained c142 PMU/profile evidence
 is historical: logging/upstream cycles0.918210/instructions1.044970;
-nbody/golden cycles1.040876/instructions1.033309. Native31 still needs direct
-upstream measurement. Do not combine campaigns or infer dynamic gain from static assembly.
+nbody/golden cycles1.040876/instructions1.033309. Direct clean31 logging/upstream
+two-pair screen gives0.921349 (0.906858,0.936071). Final campaigns remain open;
+do not combine campaigns or infer dynamic gain from static assembly.
 
 The [next shared capability proposal](nonneutral-post-and-null-requirements-proposal.md)
 addresses actual committed conditional callbacks and proved NULL-only incoming
@@ -70,15 +73,17 @@ fresh NULL seeds are bounded to ordinary nonsuspending entry. Shared physical
 transfer facts require independent review before implementation. General source,
 retained protocol roots, caught exits and yield remain separately gated. No
 runtime edits are admitted during native measurement/qualification freeze.
+The freeze has ended: B is implementing only the reviewed nonneutral POST view
+and A the six explicit tracing borrow views; NULL-flow source is not yet admitted.
 
 ## Parallel responsibilities
 
-| Stream | Owner | Initial deliverable |
+| Stream | Owner | Current deliverable |
 | --- | --- | --- |
-| Output commit and observer phases | Sol 6.1 medium A | Generator terminal outcomes, activation-scoped phases and exact-frame source-error invalidation |
-| Frame restoration | Sol 6.1 medium B | Saved-local actions, retained protocol roots and shared Plan application |
-| Encoded ownership proof | Independent Sol reviewer | Physical output mapping, constructor POST/error proof and cross-review |
-| Integration and measurement | Coordinator | Native gates, coherent commits, logging/broad measurements, profiling, canonical/Loom reports |
+| API borrow and semantic scope | Sol 6.1 medium A | Six tracing window reads; independent POST review; documented debugger guarantees versus CPython-specific jump permissiveness |
+| Stopped-frame view | Sol 6.1 medium B | Reviewed nonneutral committed-edge view, focused controls and unchanged strict adapters |
+| Independent model/source review | Sol 6.1 medium H | Actual POST/borrow diff review; precise shared physical transfer facts and NULL requirements |
+| Integration and measurement | Coordinator | Focused native gates and commit, then unchanged broad screen before further debugger work; qualification, current PMU and final logging campaigns |
 
 Workers propose first and independently review each other's contracts. Runtime
 file ownership is assigned after interface review. They do not run shared

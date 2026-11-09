@@ -57,9 +57,24 @@ the failed attempt remains preserved.
 
 ## Current qualification and next work
 
-A full release diagnostic is running at the clean integrated source. It will
-replace the old native87 inventory and determine which remaining failures need
-runtime repair versus source-map/display consumer updates. It is not yet a pass.
+The full release diagnostic completes 54,563 tests in 3m54s. Six modules fail,
+down from thirteen in the old native87 inventory: test_monitoring,
+test_peepholer, test_sys_settrace, test_pdb, test_gc_verify and test_tools.
+This is a diagnostic result, not qualification. Evidence:
+`canonical31-full-release-release-full.log` and its command journal.
+
+The GC-verifier failure is its deliberate hidden-array negative control,
+`test_hole_list_is_kept`, which did not find its expected hole. The exact method
+and whole module pass separately on retained417 release, current31 release and
+current31 debug (six commands, `canonical31-gc-focus/`). No repair or cause is
+established; retain the full-run failure as unresolved. Test_tools reports six
+argument-window reads in the legacy StopIteration tracing adapter. Explicit
+borrow views are the proposed fix; no lint exception is needed.
+
+A separate direct upstream screen, two balanced pairs, gives logging_silent
+**0.921349** geometric mean (pairs 0.906858 and 0.936071). Identities remain
+stable in `eighth-engineering-upstream/`. This does not replace the two required
+six-round confirmation campaigns or negate the component logging regression.
 Debug full qualification, current stats/API checks, the unchanged broad screen,
 material-loss repeats, current PMU and both six-round logging/upstream campaigns
 remain open.

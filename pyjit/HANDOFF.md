@@ -31,8 +31,10 @@ records current component evidence and links the preceding coherent417 gate.
   660 values per profile. Both builds check117 modules.
 - Each wider run executes999 tests with14 skips, four modules still failing:
   monitoring1 error, peepholer3, sys_settrace24 (down from38), pdb2 failures/
-  2 errors. Last full release diagnostic remains87:54,504 tests,13 failed
-  modules. Current full suites, stats and306-unit API lint remain open.
+  2 errors. Current full release diagnostic runs54,563 tests with six failed
+  modules: the four above plus GC-verifier negative control and test_tools.
+  GC exact method and whole module pass on retained417 release/current31
+  release/debug; the full-run failure remains unresolved. Current full suites, stats and306-unit API lint remain open.
 - `3cde040a1afd` reuses canonical local-home duplication instead of publishing
   it again. Independent source/result review approved. Host four methods and
   release/debug25 focused tests pass. Exactly two generated load bodies change;
@@ -60,13 +62,16 @@ passed independent review. `canonical31-component-v2` completes four pairs with
 stable identities: ratios of round medians nbody0.970773, logging1.034605,
 pickle1.011179. Every logging pair slows; no general win is claimed.
 
-A coherent full release diagnostic is running. Next, use its actual failures
-to admit the next reviewed shared stopped-state capabilities.
+Full release diagnostic is complete (six failed modules). Direct31 two-pair
+logging/upstream is0.921349 with stable identities. B is now admitted to implement
+only the peer-reviewed nonneutral POST view in frameobject/test_code, while A
+fixes six tracing window reads via explicit borrow views. No NULL-flow source
+is admitted yet. Root freezes both before builds and focused tests.
 The monitoring witness is a committed conditional edge; peepholer witnesses
 are real PRE states with independently proved NULL-only target requirements.
 A/B/H are reviewing shared transfer facts, simultaneous COPY/SWAP transport,
 ordinary nonsuspending-entry bounds and conservative unknown/error paths.
-No next-model runtime source edits are admitted during measurement/full freeze.
+Native builds/tests/timing await the next coherent source freeze.
 Retained roots, caught exits and pre-suspension yield need separate evidence.
 
 All native work and quiet timing serialize. Workers do read-only preparation

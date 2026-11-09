@@ -97,8 +97,10 @@ Do not advertise POST merely because normal physical transfer is known.
 
 Backward liveness propagates VALUE and NULL_ONLY separately through the existing
 edge/definition structure. COPY/SWAP are simultaneous transports: an output
-requirement maps to its actual source home, not a fresh-definition kill. Merge
-all aliased demands, with any VALUE demand defeating NULL_ONLY. A guaranteed
+requirement maps to its actual source home, not a fresh-definition kill. Any
+required alias classifies that actual read as VALUE. Across CFG joins, retain
+VALUE and NULL_ONLY as independent obligations; an incoming home with both
+refuses rather than dropping its NULL expectation. A guaranteed
 fresh definition makes incoming ownership unnecessary; NULL transfer is not a
 fresh old owner. All required aliases and
 all normal/error/source paths must participate. A conflict or unsupported fact

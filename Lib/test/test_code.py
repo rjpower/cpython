@@ -1610,6 +1610,260 @@ class ConstSlotsTest(unittest.TestCase):
             sys.settrace(old_trace)
         self.assertTrue(rejected)
 
+    def test_settrace_pre_cancellation_commits_before_owner_callbacks(self):
+        frames, finalized, calls = [], [], []
+        class Callable:
+            def __call__(self, value):
+                calls.append(value)
+            def __del__(inner):
+                frame = frames[0]
+                finalized.append(frame.f_lineno)
+                frame.f_lineno = fallback_line
+        def factory():
+            return Callable()
+        def f(value):
+            result = 0
+            factory()(
+                value)  # cancel
+            result = 7  # target
+            return result  # fallback
+
+        first = f.__code__.co_firstlineno
+        cancel_line, target_line, fallback_line = first + 3, first + 4, first + 5
+        redirected = False
+        def tracer(frame, event, arg):
+            nonlocal redirected
+            if (frame.f_code is f.__code__ and event == "line" and
+                    frame.f_lineno == cancel_line and not redirected):
+                redirected = True
+                self.assertEqual(list(f.__code__.co_positions())[frame.f_lasti][0],
+                                 cancel_line)
+                frames.append(frame)
+                frame.f_lineno = target_line
+            return tracer
+
+        previous = sys.gettrace()
+        sys.settrace(tracer)
+        try:
+            self.assertEqual(f(object()), 0)
+        finally:
+            sys.settrace(previous)
+            frames.clear()
+        self.assertTrue(redirected)
+        self.assertEqual(calls, [])
+        self.assertEqual(finalized, [target_line])
+
+    def test_settrace_cancellation_requires_restored_comprehension_locals(self):
+        def f(values, prebound):
+            marker = "outer"
+            if not prebound:
+                del marker
+            result = [
+                marker + 1  # active
+                for marker in values
+            ]
+            len(
+                result)  # cancel
+            return marker, result  # target
+
+        first = f.__code__.co_firstlineno
+        active_line, cancel_line, target_line = first + 5, first + 9, first + 10
+        for prebound in (True, False):
+            with self.subTest(prebound=prebound):
+                refused = redirected = False
+                def tracer(frame, event, arg):
+                    nonlocal refused, redirected
+                    if frame.f_code is not f.__code__ or event != "line":
+                        return tracer
+                    if frame.f_lineno == active_line and not refused:
+                        refused = True
+                        self.assertEqual(list(f.__code__.co_positions())[frame.f_lasti][0],
+                                         active_line)
+                        with self.assertRaisesRegex(ValueError, "incoming temporary"):
+                            frame.f_lineno = target_line
+                    elif frame.f_lineno == cancel_line and not redirected:
+                        redirected = True
+                        if prebound:
+                            self.assertEqual(frame.f_locals["marker"], "outer")
+                        else:
+                            self.assertNotIn("marker", frame.f_locals)
+                        self.assertEqual(list(f.__code__.co_positions())[frame.f_lasti][0],
+                                         cancel_line)
+                        frame.f_lineno = target_line
+                    return tracer
+
+                previous = sys.gettrace()
+                with warnings.catch_warnings(record=True) as caught:
+                    warnings.simplefilter("always", RuntimeWarning)
+                    sys.settrace(tracer)
+                    try:
+                        self.assertEqual(f([1, 2], prebound),
+                                         ("outer" if prebound else None, [2, 3]))
+                    finally:
+                        sys.settrace(previous)
+                self.assertEqual(len(caught), 0 if prebound else 1)
+                self.assertTrue(all(issubclass(w.category, RuntimeWarning) for w in caught))
+                self.assertTrue(refused)
+                self.assertTrue(redirected)
+
+    def test_settrace_lost_saved_origin_remains_an_obligation(self):
+        def f(value):
+            copy = value
+            checkpoint = 1
+            return copy
+
+        instruction = next(i for i in dis.get_instructions(f)
+                           if i.opname in ("LOAD_FAST", "LOAD_FAST_BORROW") and
+                           i.argval == "value")
+        words = list(struct.unpack(f'<{len(f.__code__.co_code) // 8}Q', f.__code__.co_code))
+        # Discard the saved value on purpose. The proof must not confuse a
+        # missing token home with a completed named-local restoration.
+        words[instruction.offset] = (dis.opmap["LOAD_FAST_AND_CLEAR"] |
+                                      (4095 << 16) |
+                                      (f.__code__.co_varnames.index("value") << 28))
+        f.__code__ = f.__code__.replace(co_code=struct.pack(f'<{len(words)}Q', *words))
+        class Finished(Exception):
+            pass
+        refused = False
+        first = f.__code__.co_firstlineno
+        def tracer(frame, event, arg):
+            nonlocal refused
+            if (frame.f_code is f.__code__ and event == "line" and
+                    frame.f_lineno == first + 2):
+                with self.assertRaisesRegex(ValueError, "incoming temporary"):
+                    frame.f_lineno = first + 3
+                refused = True
+                # Do not execute the deliberately uninitialized copy load.
+                raise Finished
+            return tracer
+
+        previous = sys.gettrace()
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", RuntimeWarning)
+            sys.settrace(tracer)
+            try:
+                with self.assertRaises(Finished):
+                    f(object())
+            finally:
+                sys.settrace(previous)
+        self.assertTrue(refused)
+
+    def test_settrace_each_distinct_local_requires_restoration(self):
+        def f(run):
+            left = 10
+            right = 20
+            result = None
+            checkpoint = 0
+            if run:
+                result = [(left, right) for left, right in [(1, 2)]]
+            checkpoint = 1
+            return checkpoint
+
+        instructions = list(dis.get_instructions(f))
+        saves = [i for i in instructions if i.opname == "LOAD_FAST_AND_CLEAR"]
+        self.assertEqual(len(saves), 2)
+        first_name, second_name = (i.argval for i in saves)
+        second_restore = next(i for i in instructions
+                           if i.offset > saves[-1].offset and
+                           i.opname == "STORE_FAST" and i.argval == second_name)
+        first_restore = next(i for i in instructions
+                             if i.offset > saves[-1].offset and
+                             i.opname == "STORE_FAST" and i.argval == first_name)
+        original = f.__code__
+        words = list(struct.unpack(f'<{len(original.co_code) // 8}Q', original.co_code))
+        first_word = words[first_restore.offset]
+        # Another write to the first local cannot replace restoration of
+        # the distinct second local. That obligation remains active.
+        words[second_restore.offset] = (dis.opmap["STORE_FAST"] |
+                                      (first_word & (((1 << 24) - 1) << 16)))
+        bad = original.replace(co_code=struct.pack(f'<{len(words)}Q', *words))
+        first = original.co_firstlineno
+        for invalid in (False, True):
+            with self.subTest(invalid=invalid):
+                f.__code__ = bad if invalid else original
+                visited = False
+                def tracer(frame, event, arg):
+                    nonlocal visited
+                    if (frame.f_code is f.__code__ and event == "line" and
+                            frame.f_lineno == first + 7 and not visited):
+                        visited = True
+                        if invalid:
+                            with self.assertRaisesRegex(ValueError, "incoming temporary"):
+                                frame.f_lineno = first + 8
+                        else:
+                            frame.f_lineno = first + 8
+                    return tracer
+                previous = sys.gettrace()
+                sys.settrace(tracer)
+                try:
+                    # The malformed branch is never executed. Both static
+                    # ingresses must nevertheless agree before cancellation.
+                    self.assertEqual(f(False), 1 if invalid else 0)
+                finally:
+                    sys.settrace(previous)
+                self.assertTrue(visited)
+
+    def test_settrace_same_local_ancestor_cannot_skip_younger_save(self):
+        def f(run):
+            left = 10
+            result = None
+            checkpoint = 0
+            if run:
+                result = [[left for left in left] for left in [(1, 2)]]
+            checkpoint = 1
+            return checkpoint, left, result
+
+        original = f.__code__
+        instructions = list(dis.get_instructions(f))
+        saves = [i for i in instructions if i.opname == "LOAD_FAST_AND_CLEAR"]
+        self.assertEqual(len(saves), 2)
+        self.assertEqual([i.argval for i in saves], ["left", "left"])
+        restores = [i for i in instructions
+                    if i.offset > saves[-1].offset and
+                    i.opname == "STORE_FAST" and i.argval == "left"]
+        self.assertGreaterEqual(len(restores), 2)
+        inner, outer = restores[:2]
+        words = list(struct.unpack(f'<{len(original.co_code) // 8}Q', original.co_code))
+        self.assertEqual(len({(words[i.offset] >> 28) & 4095 for i in saves}), 1)
+        inner_home = (words[inner.offset] >> 16) & 4095
+        outer_home = (words[outer.offset] >> 16) & 4095
+        self.assertNotEqual(inner_home, outer_home)
+        # The younger same-local save is still active. Supplying its ancestor
+        # token must not be accepted as a restoration of the younger binding.
+        words[inner.offset] = ((words[inner.offset] & ~(4095 << 16)) |
+                                (outer_home << 16))
+        matching_map = memoryview(original.co_linetable).tobytes()
+        self.assertEqual(matching_map, original.co_linetable)
+        self.assertIsNot(matching_map, original.co_linetable)
+        bad = original.replace(co_code=struct.pack(f'<{len(words)}Q', *words),
+                               co_linetable=matching_map)
+        self.assertEqual(f(True), (1, 10, [[1, 2]]))
+        first = original.co_firstlineno
+        for invalid in (False, True):
+            with self.subTest(invalid=invalid):
+                f.__code__ = bad if invalid else original
+                visited = False
+                def tracer(frame, event, arg):
+                    nonlocal visited
+                    if (frame.f_code is f.__code__ and event == "line" and
+                            frame.f_lineno == first + 6 and not visited):
+                        visited = True
+                        if invalid:
+                            with self.assertRaisesRegex(ValueError, "incoming temporary"):
+                                frame.f_lineno = first + 7
+                        else:
+                            frame.f_lineno = first + 7
+                    return tracer
+                previous = sys.gettrace()
+                sys.settrace(tracer)
+                try:
+                    # Exercise the well-formed ingress only; the malformed
+                    # branch contributes solely to the cold proof's join.
+                    self.assertEqual(f(False), (1 if invalid else 0, 10, None))
+                finally:
+                    sys.settrace(previous)
+                self.assertTrue(visited)
+
     def test_settrace_inherited_protected_redirects(self):
         for entering in (False, True):
             with self.subTest(entering=entering):
@@ -1816,6 +2070,60 @@ class ConstSlotsTest(unittest.TestCase):
                     self.assertIsNone(after)
                 self.assertEqual(manager.events,
                                  ["enter", "exit"] if context == "with" else [])
+
+    def test_settrace_running_line_does_not_reenter_with(self):
+        for warm in (0, 20):
+            with self.subTest(warm=warm):
+                events = []
+                class Manager:
+                    def __call__(self, *args):
+                        events.append("call")
+                    def __enter__(self):
+                        events.append("enter")
+                    def __exit__(self, *args):
+                        events.append("exit")
+
+                def body():
+                    events.append("body")
+
+                def f(a, b):
+                    a(b if b else a, b)
+                    with b:
+                        body()
+
+                manager = Manager()
+                for _ in range(warm):
+                    f(manager, manager)
+                events.clear()
+                stops = []
+                applied = []
+                def tracer(frame, event, arg):
+                    if frame.f_code is not f.__code__:
+                        return None
+                    if event == "line":
+                        self.assertLess(len(stops), 40, "running-line replay loop")
+                        before, line = frame.f_lasti, frame.f_lineno
+                        stops.append((before, line))
+                        try:
+                            frame.f_lineno = line
+                        except ValueError:
+                            # Source-only phases still require their own recipe.
+                            pass
+                        else:
+                            self.assertEqual(frame.f_lasti, before)
+                            applied.append((before, line))
+                    return tracer
+
+                old_trace = sys.gettrace()
+                sys.settrace(tracer)
+                try:
+                    self.assertIsNone(f(manager, manager))
+                finally:
+                    sys.settrace(old_trace)
+                self.assertEqual(events, ["call", "enter", "body", "exit"])
+                header_pcs = {pc for pc, line in applied
+                              if line == f.__code__.co_firstlineno + 2}
+                self.assertGreaterEqual(len(header_pcs), 2)
 
     def test_marshal_copy(self):
         import marshal

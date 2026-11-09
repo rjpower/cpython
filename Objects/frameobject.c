@@ -1363,6 +1363,8 @@ typedef struct {
     uint64_t *required;
     _PyIRExceptionEntry *handlers;
     int *context, *origins, *parents;
+    int *save_tops, *save_parents, *save_columns;
+    int nsave_columns;
     int *edge_heads, *reverse_heads, nedges;
     RegisterResumeEdge *edges;
     int *source_heads, *source_next;
@@ -1375,6 +1377,32 @@ typedef struct {
     size_t stride;
 } RegisterResumePlan;
 
+typedef struct {
+    enum { REGISTER_RESUME_OTHER, REGISTER_RESUME_PRE_WORD } kind;
+    int pc;
+} RegisterResumePhase;
+
+/* The request copies one proved observer phase. Later POST adapters can
+ * supply this same view from their scoped callback record; raw event bits
+ * elsewhere do not independently authorize cancellation. */
+static RegisterResumePhase
+register_resume_phase(PyFrameObject *self, int current, int what_event,
+                       bool pending_call, _PyInterpreterFrame *observed)
+{
+    RegisterResumePhase phase = {REGISTER_RESUME_OTHER, current};
+    _PyInterpreterFrame *frame = self->f_frame;
+    if (what_event == PY_MONITORING_EVENT_LINE && observed == frame &&
+        !pending_call && !frame->pending_redirect &&
+        self->f_source_event < 0 && self->f_source_event_error < 0 &&
+        current >= 0 && current < Py_SIZE(_PyFrame_GetCode(frame)) &&
+        frame->instr_ptr == _PyFrame_InstrAt(frame, current) &&
+        IR_HANDLER(FT_ATOMIC_LOAD_UINT64_RELAXED(*frame->instr_ptr)) == INSTRUMENTED_LINE)
+    {
+        phase.kind = REGISTER_RESUME_PRE_WORD;
+    }
+    return phase;
+}
+
 static void
 register_resume_analysis_clear(RegisterResumeAnalysis *analysis)
 {
@@ -1384,6 +1412,9 @@ register_resume_analysis_clear(RegisterResumeAnalysis *analysis)
     PyMem_Free(analysis->context);
     PyMem_Free(analysis->origins);
     PyMem_Free(analysis->parents);
+    PyMem_Free(analysis->save_tops);
+    PyMem_Free(analysis->save_parents);
+    PyMem_Free(analysis->save_columns);
     PyMem_Free(analysis->edge_heads);
     PyMem_Free(analysis->reverse_heads);
     PyMem_Free(analysis->edges);
@@ -1723,15 +1754,18 @@ error:
 
 enum { REGISTER_CONTEXT_UNREACHED = -1, REGISTER_CONTEXT_AMBIGUOUS = -2 };
 
-/* Context labels describe saved previous-exception values. They do not own
- * Python objects and never replace the thread's active exception link. */
+/* Positive origin labels describe previous-exception values; negative labels
+ * describe saved named-local states (which may be NULL). Neither owns Python
+ * objects. The separate active contexts survive loss of every known home. */
 static int
 register_context_join(RegisterResumeAnalysis *analysis, int target,
-                       int context, const int *origins)
+                       int context, const int *save_tops, const int *origins)
 {
     int *stored = analysis->origins + (size_t)target * analysis->nt;
+    int *saved = analysis->save_tops + (size_t)target * analysis->nsave_columns;
     if (analysis->context[target] == REGISTER_CONTEXT_UNREACHED) {
         analysis->context[target] = context;
+        memcpy(saved, save_tops, (size_t)analysis->nsave_columns * sizeof(int));
         memcpy(stored, origins, (size_t)analysis->nt * sizeof(int));
         return 1;
     }
@@ -1741,6 +1775,12 @@ register_context_join(RegisterResumeAnalysis *analysis, int target,
     {
         analysis->context[target] = REGISTER_CONTEXT_AMBIGUOUS;
         changed = 1;
+    }
+    for (int col = 0; col < analysis->nsave_columns; col++) {
+        if (saved[col] != save_tops[col] && saved[col] != REGISTER_CONTEXT_AMBIGUOUS) {
+            saved[col] = REGISTER_CONTEXT_AMBIGUOUS;
+            changed = 1;
+        }
     }
     for (int j = 0; j < analysis->nt; j++) {
         if (stored[j] && stored[j] != origins[j]) {
@@ -1752,18 +1792,25 @@ register_context_join(RegisterResumeAnalysis *analysis, int target,
 }
 
 static bool
-register_context_chain(RegisterResumeAnalysis *analysis, int node, int exclude)
+register_origin_chain(const int *parents, int n, int node, int exclude, int limit)
 {
-    for (int depth = 0; depth < CO_MAXBLOCKS; depth++) {
+    for (int depth = 0; depth < limit; depth++) {
         if (node == 0) {
             return true;
         }
-        if (node < 0 || node > analysis->n || node == exclude) {
+        if (node < 0 || node > n || node == exclude) {
             return false;
         }
-        node = analysis->parents[node - 1];
+        node = parents[node - 1];
     }
     return node == 0;
+}
+
+static bool
+register_context_chain(RegisterResumeAnalysis *analysis, int node, int exclude)
+{
+    return register_origin_chain(analysis->parents, analysis->n, node, exclude,
+                                  CO_MAXBLOCKS);
 }
 
 static void
@@ -1793,7 +1840,7 @@ register_context_forget_reads(PyCodeObject *code, int pc,
 static int
 register_context_normal(PyCodeObject *code, int pc, int taken,
                          RegisterResumeAnalysis *analysis, int context,
-                         int *origins)
+                         int *save_tops, int *origins)
 {
     _PyIRWord word = code->co_words[pc];
     int opcode = _PyIR_BaseOpcode(IR_HANDLER(word));
@@ -1808,6 +1855,18 @@ register_context_normal(PyCodeObject *code, int pc, int taken,
             base = (int)fields[f] - analysis->nl;
         }
     }
+    int local = -1, input = -1;
+    for (int f = 0; f < 4; f++) {
+        if (fmt->roles[f] == _PyIR_ROLE_LOCAL_MOVE ||
+            fmt->roles[f] == _PyIR_ROLE_LOCAL_OUT)
+        {
+            local = (int)fields[f];
+        }
+        if (fmt->roles[f] == _PyIR_ROLE_IN0) {
+            input = (int)fields[f] - analysis->nl;
+        }
+    }
+    int input_origin = input >= 0 && input < analysis->nt ? origins[input] : 0;
     int old = base >= 0 && base < analysis->nt ? origins[base] : 0;
     int top = opcode == SWAP && base >= 0 && base < analysis->nt &&
               arg >= 2 && arg <= analysis->nt - base ? base + arg - 1 : -1;
@@ -1816,6 +1875,9 @@ register_context_normal(PyCodeObject *code, int pc, int taken,
         /* This proof tracks scratch-only permutations. A constructed window
          * crossing named locals cannot preserve a saved-owner label here. */
         memset(origins, 0, (size_t)analysis->nt * sizeof(int));
+        for (int col = 0; col < analysis->nsave_columns; col++) {
+            save_tops[col] = REGISTER_CONTEXT_AMBIGUOUS;
+        }
         return REGISTER_CONTEXT_AMBIGUOUS;
     }
     if (opcode == POP_EXCEPT) {
@@ -1828,6 +1890,27 @@ register_context_normal(PyCodeObject *code, int pc, int taken,
         else {
             context = analysis->parents[context - 1];
         }
+    }
+    if (opcode == STORE_FAST && input_origin < 0) {
+        int col = local >= 0 && local < analysis->nl ? analysis->save_columns[local] : -1;
+        if (col >= 0) {
+            int top = save_tops[col];
+            if (top <= 0 || input_origin != -top ||
+                !register_origin_chain(analysis->save_parents, analysis->n, top, -1,
+                                        analysis->n) ||
+                _PyIR_BaseOpcode(IR_HANDLER(code->co_words[top - 1])) != LOAD_FAST_AND_CLEAR ||
+                local != (int)IR_B(code->co_words[top - 1]))
+            {
+                /* Independent locals commute. Only a younger save of this
+                 * same local prevents restoring an ancestor's token. */
+                save_tops[col] = REGISTER_CONTEXT_AMBIGUOUS;
+            }
+            else {
+                save_tops[col] = analysis->save_parents[top - 1];
+            }
+        }
+        /* A token stored to a different, unsaved local does not restore its
+         * original binding. Its original column remains active. */
     }
     if (opcode != COPY && opcode != SWAP) {
         register_context_forget_reads(code, pc, analysis, origins);
@@ -1878,6 +1961,30 @@ register_context_normal(PyCodeObject *code, int pc, int taken,
             origins[base] = context > 0 ? node : 0;
         }
     }
+    if (opcode == LOAD_FAST_AND_CLEAR) {
+        int node = pc + 1;
+        int col = analysis->save_columns[local];
+        int *parent = &analysis->save_parents[pc];
+        if (save_tops[col] < 0 ||
+            !register_origin_chain(analysis->save_parents, analysis->n,
+                                    save_tops[col], node, analysis->n))
+        {
+            *parent = REGISTER_CONTEXT_AMBIGUOUS;
+        }
+        else if (*parent == REGISTER_CONTEXT_UNREACHED) {
+            *parent = save_tops[col];
+        }
+        else if (*parent != save_tops[col]) {
+            *parent = REGISTER_CONTEXT_AMBIGUOUS;
+        }
+        save_tops[col] = *parent < 0 ? REGISTER_CONTEXT_AMBIGUOUS : node;
+        int dst = (int)IR_A(word) - analysis->nl;
+        if (dst >= 0 && dst < analysis->nt) {
+            /* A NULL saved value still has a binding-state token. Losing
+             * its physical home never empties the active local column. */
+            origins[dst] = save_tops[col] > 0 ? -node : 0;
+        }
+    }
     return context;
 }
 
@@ -1894,27 +2001,64 @@ static int
 register_resume_contexts(PyCodeObject *code, RegisterResumeAnalysis *analysis)
 {
     int n = analysis->n, nt = analysis->nt;
-    if ((size_t)Py_MAX(n, 1) > (16 * 1024 * 1024) /
+    if ((size_t)Py_MAX(nt, 1) > (16 * 1024 * 1024) / sizeof(int) ||
+        (size_t)Py_MAX(n, 1) > (16 * 1024 * 1024) /
                                     (sizeof(int) * (size_t)Py_MAX(nt, 1)))
     {
         PyErr_SetString(PyExc_ValueError, "debugger context analysis is too large");
         return -1;
     }
     size_t count = (size_t)Py_MAX(n, 1) * (size_t)Py_MAX(nt, 1);
+    if ((size_t)Py_MAX(analysis->nl, 1) > (16 * 1024 * 1024) / sizeof(int)) {
+        PyErr_SetString(PyExc_ValueError, "debugger saved-local map is too large");
+        return -1;
+    }
+    analysis->save_columns = PyMem_New(int, Py_MAX(analysis->nl, 1));
+    if (analysis->save_columns == NULL) {
+        PyErr_NoMemory();
+        return -1;
+    }
+    for (int local = 0; local < analysis->nl; local++) {
+        analysis->save_columns[local] = -1;
+    }
+    for (int i = 0; i < n; i++) {
+        _PyIRWord word = code->co_words[i];
+        if (_PyIR_BaseOpcode(IR_HANDLER(word)) == LOAD_FAST_AND_CLEAR) {
+            int local = (int)IR_B(word);
+            if (local < 0 || local >= analysis->nl) {
+                PyErr_SetString(PyExc_ValueError, "jump requires valid saved-local operands");
+                return -1;
+            }
+            if (analysis->save_columns[local] < 0) {
+                analysis->save_columns[local] = analysis->nsave_columns++;
+            }
+        }
+    }
+    size_t save_stride = (size_t)Py_MAX(analysis->nsave_columns, 1);
+    if (save_stride > (16 * 1024 * 1024) / sizeof(int) ||
+        (size_t)Py_MAX(n, 1) > (16 * 1024 * 1024) / (sizeof(int) * save_stride)) {
+        PyErr_SetString(PyExc_ValueError, "debugger saved-local analysis is too large");
+        return -1;
+    }
     analysis->context = PyMem_New(int, Py_MAX(n, 1));
     analysis->parents = PyMem_New(int, Py_MAX(n, 1));
+    analysis->save_tops = PyMem_Calloc((size_t)Py_MAX(n, 1) * save_stride, sizeof(int));
+    analysis->save_parents = PyMem_New(int, Py_MAX(n, 1));
     analysis->origins = PyMem_Calloc(count, sizeof(int));
     int *work = PyMem_Calloc((size_t)Py_MAX(nt, 1), sizeof(int));
     int *error = PyMem_Calloc((size_t)Py_MAX(nt, 1), sizeof(int));
+    int *saved_work = PyMem_Calloc(save_stride, sizeof(int));
     if (analysis->context == NULL || analysis->parents == NULL ||
-        analysis->origins == NULL || work == NULL || error == NULL)
+        analysis->origins == NULL || analysis->save_tops == NULL ||
+        analysis->save_parents == NULL || work == NULL || error == NULL || saved_work == NULL)
     {
-        PyMem_Free(work); PyMem_Free(error);
+        PyMem_Free(work); PyMem_Free(error); PyMem_Free(saved_work);
         PyErr_NoMemory();
         return -1;
     }
     for (int i = 0; i < n; i++) {
         analysis->context[i] = analysis->parents[i] = REGISTER_CONTEXT_UNREACHED;
+        analysis->save_parents[i] = REGISTER_CONTEXT_UNREACHED;
     }
     if (n) {
         analysis->context[0] = 0;
@@ -1927,13 +2071,15 @@ register_resume_contexts(PyCodeObject *code, RegisterResumeAnalysis *analysis)
             if (context == REGISTER_CONTEXT_UNREACHED) {
                 continue;
             }
+            const int *saved_before = analysis->save_tops + (size_t)i * analysis->nsave_columns;
             const int *before = analysis->origins + (size_t)i * nt;
             _PyIRExceptionEntry handler = analysis->handlers[i];
             if (handler.target >= 0) {
                 memcpy(error, before, (size_t)nt * sizeof(int));
                 register_context_forget_reads(code, i, analysis, error);
                 register_context_unwind(analysis, error, handler.slot, handler.lasti);
-                changed |= register_context_join(analysis, handler.target, context, error);
+                changed |= register_context_join(analysis, handler.target, context,
+                                                  saved_before, error);
             }
             int next[2];
             register_resume_successors(code, i, next);
@@ -1942,8 +2088,11 @@ register_resume_contexts(PyCodeObject *code, RegisterResumeAnalysis *analysis)
                     continue;
                 }
                 memcpy(work, before, (size_t)nt * sizeof(int));
-                int after = register_context_normal(code, i, k, analysis, context, work);
-                changed |= register_context_join(analysis, next[k], after, work);
+                memcpy(saved_work, saved_before,
+                       (size_t)analysis->nsave_columns * sizeof(int));
+                int after = register_context_normal(code, i, k, analysis, context,
+                                                      saved_work, work);
+                changed |= register_context_join(analysis, next[k], after, saved_work, work);
                 for (int r = analysis->source_heads[i]; r >= 0;
                      r = analysis->source_next[r])
                 {
@@ -1951,13 +2100,14 @@ register_resume_contexts(PyCodeObject *code, RegisterResumeAnalysis *analysis)
                     if (event.edge == k && event.handler >= 0) {
                         memcpy(error, work, (size_t)nt * sizeof(int));
                         register_context_unwind(analysis, error, event.exc_slot, event.lasti);
-                        changed |= register_context_join(analysis, event.handler, after, error);
+                        changed |= register_context_join(analysis, event.handler, after,
+                                                      saved_work, error);
                     }
                 }
             }
         }
     } while (changed);
-    PyMem_Free(work); PyMem_Free(error);
+    PyMem_Free(work); PyMem_Free(error); PyMem_Free(saved_work);
     return 0;
 }
 
@@ -2370,9 +2520,19 @@ done:
 static int
 register_resume_plan(_PyInterpreterFrame *frame, int current, int target,
                      RegisterResumeAnalysis *analysis, bool allow_anchor,
-                     RegisterResumePlan *plan)
+                     RegisterResumePhase phase, RegisterResumePlan *plan)
 {
+    bool can_cancel = phase.kind == REGISTER_RESUME_PRE_WORD && phase.pc == current;
     memset(plan->preserve, 0, plan->stride * sizeof(uint64_t));
+    /* Empty means positively restored, not merely that every saved value
+     * origin was lost. This rung cannot abandon a named-local obligation. */
+    for (int col = 0; col < analysis->nsave_columns; col++) {
+        if (analysis->save_tops[(size_t)current * analysis->nsave_columns + col] != 0 ||
+            analysis->save_tops[(size_t)target * analysis->nsave_columns + col] != 0)
+        {
+            return 0;
+        }
+    }
     int context = analysis->context[current];
     if (context < 0 || context != analysis->context[target] ||
         !register_context_chain(analysis, context, -1))
@@ -2380,6 +2540,11 @@ register_resume_plan(_PyInterpreterFrame *frame, int current, int target,
         return 0;
     }
     if (context == 0) {
+        if (can_cancel && analysis->safe[target]) {
+            /* Inputs needed only by the skipped operation can be retired.
+             * Every target input and protocol obligation was proved above. */
+            return 1;
+        }
         int pair;
         /* The existing FOR dynamic-phase proof has ordinary edges only.
          * Keep that adapter bounded until its own exceptional survival proof
@@ -2422,8 +2587,10 @@ register_resume_plan(_PyInterpreterFrame *frame, int current, int target,
         }
     }
     for (size_t j = 0; j < analysis->stride; j++) {
-        uint64_t needs = analysis->required[(size_t)current * analysis->stride + j] |
-                         analysis->required[(size_t)target * analysis->stride + j];
+        uint64_t needs = analysis->required[(size_t)target * analysis->stride + j];
+        if (!can_cancel) {
+            needs |= analysis->required[(size_t)current * analysis->stride + j];
+        }
         if (needs & ~plan->preserve[j]) {
             return 0;
         }
@@ -2483,19 +2650,12 @@ static bool frame_is_suspended(PyFrameObject *frame)
     return false;
 }
 
-/* Setter for f_lineno - you can set f_lineno from within a trace function in
- * order to jump to a given line of code, subject to some restrictions.  Most
- * lines are OK to jump to because they don't make any assumptions about the
- * state of the stack (obvious because you could remove the line and the code
- * would still work without any stack errors), but there are some constructs
- * that limit jumping:
- *
- *  o Any exception handlers.
- *  o 'for' and 'async for' loops can't be jumped into because the
- *    iterator needs to be on the stack.
- *  o Jumps cannot be made from within a trace function invoked with a
- *    'return' or 'exception' event since the eval loop has been exited at
- *    that time.
+/* A debugger transfer is a cold transaction over an observed register phase.
+ * Prove the target's incoming owners and semantic protocol roots before
+ * changing any home: a line number cannot create an iterator, handled
+ * exception or saved outer-local binding. A cancellable pre-operation phase
+ * may retire expression inputs that the selected target does not need.
+ * Detach surplus owners, commit the continuation, then run closing callbacks.
  */
 /*[clinic input]
 @critical_section
@@ -2516,14 +2676,8 @@ frame_lineno_set_impl(PyFrameObject *self, PyObject *value)
     }
 
     bool is_suspended = frame_is_suspended(self);
-    /*
-     * This code preserves the historical restrictions on
-     * setting the line number of a frame.
-     * Jumps are forbidden on a 'return' trace event (except after a yield).
-     * Jumps from 'call' trace events are also forbidden.
-     * In addition, jumps are forbidden when not tracing,
-     * as this is a debugging feature.
-     */
+    /* Event eligibility permits a request; the phase and owner proofs below
+     * still decide whether this particular transfer can be performed. */
     int what_event = PyThreadState_GET()->what_event;
     if (what_event < 0) {
         PyErr_Format(PyExc_ValueError,
@@ -2623,13 +2777,6 @@ frame_lineno_set_impl(PyFrameObject *self, PyObject *value)
      * inside a protected region. Source-only callbacks publish a predecessor
      * and can carry another EH recipe, so logical offset equality is not this
      * proof. Keep every owner and the handled-exception link unchanged. */
-    int identity_target = -1;
-    for (int i = 0; i < len; i++) {
-        if (lines[i] == new_lineno) {
-            identity_target = i;
-            break;
-        }
-    }
     _PyInterpreterFrame *frame_at_line = self->f_frame;
     int real_current = _PyInterpreterFrame_LASTI(frame_at_line);
     _PyThreadStateImpl *line_tstate = (_PyThreadStateImpl *)PyThreadState_GET();
@@ -2638,7 +2785,6 @@ frame_lineno_set_impl(PyFrameObject *self, PyObject *value)
         !frame_at_line->pending_redirect &&
         self->f_source_event < 0 && self->f_source_event_error < 0 &&
         real_current >= 0 && real_current < len &&
-        identity_target == real_current &&
         IR_HANDLER(FT_ATOMIC_LOAD_UINT64_RELAXED(*frame_at_line->instr_ptr)) ==
             INSTRUMENTED_LINE &&
         PyCode_Addr2Line(code, real_current) == new_lineno)
@@ -2704,6 +2850,8 @@ frame_lineno_set_impl(PyFrameObject *self, PyObject *value)
         _PyIRSource_Event(&source, (uint32_t)self->f_source_event, &event);
         current = event.to;
     }
+    RegisterResumePhase phase = register_resume_phase(self, current, what_event,
+                                                       pending_call, observed);
     if (register_resume_analyze(self->f_frame, !pending_call, &analysis) < 0) {
         PyMem_Free(lines);
         return -1;
@@ -2731,15 +2879,29 @@ frame_lineno_set_impl(PyFrameObject *self, PyObject *value)
         }
         memcpy(origins, analysis.origins + (size_t)event.from * analysis.nt,
                (size_t)analysis.nt * sizeof(int));
+        int *saved = PyMem_New(int, Py_MAX(analysis.nsave_columns, 1));
+        if (saved == NULL) {
+            PyMem_Free(origins); register_resume_analysis_clear(&analysis);
+            PyMem_Free(plan.preserve); PyMem_Free(lines);
+            PyErr_NoMemory();
+            return -1;
+        }
+        memcpy(saved, analysis.save_tops + (size_t)event.from * analysis.nsave_columns,
+               (size_t)analysis.nsave_columns * sizeof(int));
         int context = register_context_normal(code, event.from, event.edge,
                                               &analysis, analysis.context[event.from],
-                                              origins);
+                                              saved, origins);
         PyMem_Free(origins);
-        if (context < 0 || context != analysis.context[current]) {
+        bool same_saves = memcmp(saved,
+            analysis.save_tops + (size_t)current * analysis.nsave_columns,
+            (size_t)analysis.nsave_columns * sizeof(int)) == 0;
+        PyMem_Free(saved);
+        if (context < 0 || context != analysis.context[current] || !same_saves) {
             current = -1;
         }
     }
     int best_addr = -1;
+    RegisterResumePhase selected_phase = phase;
     int recipe = 0;
     if (current >= 0 && current < len) {
         for (int i = 0; i < len; i++) {
@@ -2747,7 +2909,7 @@ frame_lineno_set_impl(PyFrameObject *self, PyObject *value)
                 continue;
             }
             recipe = register_resume_plan(self->f_frame, current, i, &analysis,
-                                          !pending_call, &plan);
+                                          !pending_call, phase, &plan);
             if (recipe != 0) {
                 if (recipe > 0) {
                     best_addr = i;
@@ -2760,9 +2922,12 @@ frame_lineno_set_impl(PyFrameObject *self, PyObject *value)
             _PyIRSource_Event(&source, j, &event);
             if (event.line == new_lineno && event.handler < 0) {
                 recipe = register_resume_plan(self->f_frame, current, event.to,
-                                              &analysis, !pending_call, &plan);
+                                              &analysis, !pending_call,
+                                              (RegisterResumePhase){REGISTER_RESUME_OTHER, current},
+                                              &plan);
                 if (recipe > 0) {
                     best_addr = event.to;
+                    selected_phase.kind = REGISTER_RESUME_OTHER;
                     break;
                 }
             }
@@ -2822,7 +2987,7 @@ frame_lineno_set_impl(PyFrameObject *self, PyObject *value)
             return -1;
         }
         int valid = register_resume_plan(frame, current, best_addr, &analysis,
-                                          !pending_call, &plan);
+                                          !pending_call, selected_phase, &plan);
         register_resume_analysis_clear(&analysis);
         if (valid < 0) {
             PyMem_Free(plan.preserve);

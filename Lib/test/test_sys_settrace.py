@@ -3195,11 +3195,12 @@ output.append(4)
         output.append(3)
 
 
-class JumpStackModelTestCase(unittest.TestCase):
-    """Setting f_lineno models the stack of the whole code object, with the
-    NULL slots of calls that have no instruction.  Setting it to the line
-    that is running must not break the function, whatever the shape of the
-    expressions on it."""
+class JumpFrameModelTestCase(unittest.TestCase):
+    """Line jumps preserve or reconstruct valid frame owners and protocols.
+
+    Repeating the current real line must preserve its executing phase,
+    whatever the shape of the expression on that line.
+    """
 
     SOURCES = {
         "attribute_of_call": "def f(a):\n    return a().b\n",
@@ -3274,9 +3275,8 @@ class JumpStackModelTestCase(unittest.TestCase):
                 self.run_with_line_jumps(source)
 
     def test_jump_out_of_comprehension_at_each_line_event(self):
-        # The appends of a comprehension read the loop variable in place;
-        # the model must still hold the stack of the loop head, where every
-        # iteration after the first stops for its line event
+        # A comprehension's loop owners and saved bindings remain live at
+        # repeated header events. An exit needs an explicit owner recipe.
         sources = {
             "list": "def f(lst):\n    x = [m for m in lst]\n    return 1\n",
             "set": "def f(lst):\n    x = {m for m in lst}\n    return 1\n",
@@ -3323,39 +3323,53 @@ class JumpStackModelTestCase(unittest.TestCase):
                         finally:
                             sys.settrace(None)
 
-    def test_stack_too_deep_is_refused(self):
-        # More temporaries than the stack model can hold, or than it can
-        # scan to place: the jump is refused, not guessed.  A hundred
-        # arguments are built by as many appends, which read their operands
-        # in place, so the call's NULL is placed after more words than the
-        # scan follows.
+    def test_large_call_window_cancellation(self):
+        # Cancel partial argument preparation, then rebuild it from the
+        # named local without retaining the abandoned call window.
         args = ", ".join("a" for _ in range(100))
         source = f"def f(a):\n    return a({args},\n        a)\n"
         namespace = {}
         exec(source, namespace)
         function = namespace["f"]
         code = function.__code__
-        refused = []
+        calls = []
+        frames = []
+        result = object()
+        redirected = False
+        stops = 0
+
+        def callee(*values):
+            calls.append(values)
+            return result
 
         def tracer(frame, event, arg):
+            nonlocal redirected, stops
             if frame.f_code is not code:
                 return None
-            if event == "line" and frame.f_lineno == 3:
-                try:
+            if event == "line":
+                stops += 1
+                self.assertLess(stops, 40, "large-window replay loop")
+                if frame.f_lineno == 3 and not redirected:
+                    redirected = True
+                    frames.append(frame)
                     frame.f_lineno = 2
-                except ValueError as e:
-                    refused.append(str(e))
-                else:
-                    # Do not loop on a jump that was allowed
-                    sys.settrace(None)
             return tracer
 
+        old_trace = sys.gettrace()
         sys.settrace(tracer)
         try:
-            function(lambda *args: None)
+            self.assertIs(function(callee), result)
         finally:
-            sys.settrace(None)
-        self.assertEqual(len(refused), 1)
+            sys.settrace(old_trace)
+        self.assertTrue(redirected)
+        self.assertEqual(len(frames), 1)
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(len(calls[0]), 101)
+        self.assertTrue(all(value is callee for value in calls[0]))
+        self.assertIs(frames[0].f_code, code)
+        self.assertIs(frames[0].f_locals["a"], callee)
+        self.assertGreaterEqual(frames[0].f_lasti, 0)
+        self.assertLess(frames[0].f_lasti, len(tuple(code.co_positions())))
 
 
 class TestExtendedArgs(unittest.TestCase):

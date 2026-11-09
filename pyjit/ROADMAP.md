@@ -19,7 +19,7 @@ flowchart LR
 | Stage | Deliverable | Exit evidence |
 | --- | --- | --- |
 | [1. Runtime](stages/01-runtime/README.md) | One coherent canonical-value runtime under RC | Qualified at `0267d428808`; selected interpreter batch kept after performance admission |
-| [2. Baseline](stages/02-baseline/README.md) | A trustworthy register-interpreter starting point | Golden baseline qualified; optimized candidate frozen for full measurement. Current parity and capability limits are in STATUS. |
+| [2. Baseline](stages/02-baseline/README.md) | A trustworthy register-interpreter starting point | Golden baseline qualified; optimized candidate measured; logging target met. Broad parity and capability limits are in STATUS. |
 | [3. Method JIT](stages/03-method-jit/README.md) | Cohesive method compilation through shared optimizing IR | Whole-method/native transitions, recovery, ownership and measured workloads validated |
 | [4. Tracing](stages/04-tracing-jit/README.md) | Hot-path compilation using the same compiler core | Trace guards, exits, recovery and interactions with method code validated and measured |
 | [5. Extensions](stages/05-extensions/README.md) | Practical incremental source ports and opaque interfaces | Declared extensions rebuild and pass their behavior/lifetime tests against the selected API |

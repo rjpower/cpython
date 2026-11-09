@@ -1,9 +1,10 @@
 # Register interpreter: current contract
 
 This page describes the register interpreter integrated at `4d666e1b482`.
-Its bounded observer and debugger contracts still require broad qualification.
+The closing report records full diagnostics and the remaining observer/tooling
+capability limits.
 See [status](../STATUS.md), the
-[active packet](../issues/frame-call-model-20261109/plan.md), and the immutable
+[round plan](../issues/frame-call-model-20261109/plan.md), and the immutable
 [baseline report](../bench/results/interpreter-parity-20261108.md).
 
 The [register encoding](register-ir.md), [frame ABI](call-and-frame-lifetimes.md)

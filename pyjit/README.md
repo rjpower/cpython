@@ -5,7 +5,7 @@ interpreter, reference counting with cyclic collection, and a shared method
 and tracing JIT. Extensions are rebuilt and ported.
 
 Start with the [goal](GOAL.md), [current plan](issues/frame-call-model-20261109/plan.md)
-and [status](STATUS.md). The frame/call round is closing against a frozen
+and [status](STATUS.md). The frame/call round is closed at a frozen
 candidate; its [report](issues/frame-call-model-20261109/closing-report.md)
 separates measured performance, Python behavior and optional tooling/capability
 limits. The [next five priorities](issues/frame-call-model-20261109/next-steps.md)

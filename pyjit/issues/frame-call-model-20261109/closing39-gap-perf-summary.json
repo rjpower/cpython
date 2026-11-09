@@ -1,0 +1,26 @@
+{
+  "source": "E11/closing39-gap-perf-stat/invocations.json",
+  "normalization": "raw counter_value / each invocation's hot_loops; mean of three rounds per role; candidate/upstream ratio",
+  "status": {
+    "valid_invocations": 18,
+    "event_running_percent": 100,
+    "stable_identity": true
+  },
+  "cases": {
+    "deltablue": {
+      "upstream": {"cycles_per_loop": 15479041.914656773, "instructions_per_loop": 38936985.83178726, "cpi": 0.39754083640495974},
+      "candidate": {"cycles_per_loop": 25616052.283283282, "instructions_per_loop": 72781518.96396397, "cpi": 0.3519581982888604},
+      "candidate_over_upstream": {"cycles": 1.6548861631434688, "instructions": 1.8692129708855587, "cpi": 0.8853384760964127}
+    },
+    "generators": {
+      "upstream": {"cycles_per_loop": 128069576.05555557, "instructions_per_loop": 359750877.6363637, "cpi": 0.35599517337385994},
+      "candidate": {"cycles_per_loop": 184738443.57971016, "instructions_per_loop": 509371916.2753623, "cpi": 0.362678894687712},
+      "candidate_over_upstream": {"cycles": 1.4424850090826573, "instructions": 1.4159018029977835, "cpi": 1.0187747526195612}
+    },
+    "nbody": {
+      "upstream": {"cycles_per_loop": 412658184.79999995, "instructions_per_loop": 1091201618.3500001, "cpi": 0.3781685967658095},
+      "candidate": {"cycles_per_loop": 350447131.8055556, "instructions_per_loop": 1231628607.777778, "cpi": 0.2845396165633614},
+      "candidate_over_upstream": {"cycles": 0.8492431380596613, "instructions": 1.1286902320032448, "cpi": 0.7524147139577795}
+    }
+  }
+}

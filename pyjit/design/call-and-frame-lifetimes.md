@@ -1,9 +1,9 @@
 # Calls, frame homes and observation
 
 This is the frame/call contract integrated at `4d666e1b482`. Its bounded
-observer and debugger rules remain subject to broad qualification. The immutable
+observer and debugger qualification limits are recorded in status. The immutable
 golden `0765e9be47f` retains its functional qualification at `0267d428808`.
-See [status](../STATUS.md), the [active packet](../issues/frame-call-model-20261109/plan.md)
+See [status](../STATUS.md), the [round plan](../issues/frame-call-model-20261109/plan.md)
 and the [baseline report](../bench/results/interpreter-parity-20261108.md).
 
 Frame ownership defines retention and cleanup responsibility. It does not

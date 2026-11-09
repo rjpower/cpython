@@ -97,7 +97,11 @@ def snapshot(builds, logs, heads, env):
                 and record["probe"]["method_jit"]["natural_admission"] is not True,
                 f"{role} JIT was not disabled")
         extensions = list(builds[role].glob("build/lib*/*.so"))
-        require(len(extensions) == 213, f"{role} extension count is not 213")
+        # Value-runtime build directories retain historical ABI variants.
+        # Checked module counts above are distinct from physical DSO paths.
+        expected_extensions = 78 if role == "upstream" else 213
+        require(len(extensions) == expected_extensions,
+                f"{role} physical extension set differs from the retained census")
         records[role] = record
     require(records["golden"]["probe"]["config"] ==
             records["candidate"]["probe"]["config"],

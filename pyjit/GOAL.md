@@ -6,11 +6,12 @@ Python behavior, explicit ownership and useful observation APIs.
 
 ## Current checkpoint
 
-Close the frame/call-model round at runtime `4d666e1b482`: finish release/debug
-qualification, measure the complete registered benchmark set against immutable
-golden and matched upstream, publish independent architectural reviews and a
-ranked five-item follow-up. The coordinator owns integration and the report.
-Current measurements and limitations belong in [status](STATUS.md), not here.
+The frame/call round is closed at runtime `4d666e1b482`. Full diagnostics,
+the complete benchmark set, current profiles and independent reviews are
+published in the [report](issues/frame-call-model-20261109/closing-report.md).
+Logging meets the round's parity gate; broad upstream parity remains open.
+The [next five priorities](issues/frame-call-model-20261109/next-steps.md) guide
+the next round. The coordinator owns integration and measured outcomes.
 
 Logging parity is the throughput target for this round. Use unchanged kernels,
 GCC, JIT disabled, fixed affinity/hash seed and verified native/source identities.
@@ -42,6 +43,8 @@ Python does not guarantee prompt finalization or CPython's internal frame layout
 | --- | --- |
 | [Plan](issues/frame-call-model-20261109/plan.md) | Round closure and ranked next work |
 | [Status](STATUS.md) | Actual source, results and limitations |
+| [Report](issues/frame-call-model-20261109/closing-report.md) | Full results, profiling and analysis |
+| [Next five priorities](issues/frame-call-model-20261109/next-steps.md) | Evidence, risks and first experiments |
 | [Architecture](design/runtime-architecture.md) | Runtime and intended compiler tiers |
 | [Register IR](design/register-ir.md) | Executable encoding, effects and lowering |
 | [Interpreter](design/interpreter.md) | Dispatch, execution and completion |

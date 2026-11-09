@@ -2,8 +2,8 @@
 
 The active [interpreter](interpreter.md), [IR](register-ir.md) and
 [frame ABI](call-and-frame-lifetimes.md) share one owning-home model. This page
-describes the contract integrated at `4d666e1b482`, whose broad qualification
-remains open. [Status](../STATUS.md) separates it from the immutable
+describes the contract integrated at `4d666e1b482`; full diagnostics retain
+the documented capability/tooling limits. [Status](../STATUS.md) separates it from the immutable
 qualified golden runtime. Release phases implement RC; they do not impose an
 immediate-finalization guarantee on Python programs.
 

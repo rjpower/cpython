@@ -18,29 +18,30 @@ implemented behavior: [IR](../../design/register-ir.md),
 [interpreter](../../design/interpreter.md), and
 [frames/calls](../../design/call-and-frame-lifetimes.md).
 
-## Closure gates
+## Completed closure
 
-1. Complete release/debug full diagnostics and current stats/API checks. Keep
+1. Completed release/debug full diagnostics and current stats/API checks. Keep
    real runtime failures, optional frame-jump gaps and GDB tooling failures
    distinct. Never claim a green full suite when recorded tests failed.
-2. Run unchanged balanced timing for all 29 kernels against golden and upstream.
+2. Ran unchanged balanced timing for all 29 kernels against golden and upstream.
    Confirm logging with two independent six-round upstream campaigns. Repeat
    material broad losses individually instead of hiding them in an aggregate.
-3. Cover all 65 registered micro instruction rows and all six timed memory
+3. Covered all 65 registered micro instruction rows and all six timed memory
    workloads on the three builds with default samples and retained raw counts.
    These supplemental sweeps are diagnostics; their unpaired memory times are
    not a balanced throughput claim. Startup/import RSS stays out of scope.
-4. Audit native identities, fixed compiler/affinity/hash/JIT state, input hashes
+4. Audited native identities, fixed compiler/affinity/hash/JIT state, input hashes
    and raw results. Profiles must name the image actually recorded. Do not
    relabel older PMU data as current or infer a causal budget from sample shares.
-5. Publish independent cold reviews and a ranked five-item next plan. Collate
+5. Published independent cold reviews and a ranked five-item next plan. Collate
    repository and Loom navigation, archive historical active artifacts, preserve
    evidence/user work and remove only task-created scratch/worktrees.
 
+All closure checks and campaigns are complete; the report states their limits.
 The coordinator owns all native runs, integrations and measurement windows.
-Workers are now source-review and results-audit only. No new runtime feature
-is added while closing this round. Benchmarks, library inputs and builds remain
-fixed throughout the measurement window.
+No worker or native job remains active for this round. No further runtime feature
+is included. Benchmarks, library inputs and builds stayed fixed throughout
+measurement.
 
 ## Scope and decision
 

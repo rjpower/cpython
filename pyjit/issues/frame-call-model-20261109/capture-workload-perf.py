@@ -20,11 +20,11 @@ ROOT = Path(__file__).resolve().parents[2]
 BUILD = Path('/home/power/code/cpython/.worktrees/python-boil-the-ocean/build')
 PROTOCOL = BUILD / 'pyjit-link-wave1/interpreter-parity-20261108/final-diagnostic-perf.py'
 CHECKPOINT = ROOT / 'issues/checkpoint-closure/measure.py'
-REPEAT = BUILD / 'pyjit-link-wave1/frame-call-model-20261109/completion34-repeat-golden'
+REPEAT = BUILD / 'pyjit-link-wave1/frame-call-model-20261109/null36-repeat-golden'
 CASES = ('nbody', 'generators', 'coroutines')
 ROLES = ('golden', 'candidate')
 HEADS = {'golden': '0765e9be47f55d97ba5d31d2ae1c02a55ea2e5ae',
-         'candidate': 'bfd67cbe4b410c9c78292a8eb17849bb24edcb20'}
+         'candidate': '4c9c113b4e5ab0d8d061eb1b8a75c24f5c271d3c'}
 sys.dont_write_bytecode = True
 
 

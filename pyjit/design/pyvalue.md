@@ -7,7 +7,7 @@ we should close. It is the reference for value, container and C-boundary work.
 
 **Current implementation, 2026-11-09.** The eight-byte PyValue encoding and
 canonical-home rule below remain the representation contract. The frame/call
-candidate is integrated through runtime `df12a12b131`; it is not promoted.
+candidate is integrated through runtime `d7abf803c60`; it is not promoted.
 The independently qualified golden remains `0765e9be47f`. The candidate has
 met the logging timing target. The current repeat repairs coroutine and nbody
 losses against golden; generators and full qualification remain open. Current identities,

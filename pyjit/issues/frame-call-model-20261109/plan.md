@@ -38,43 +38,49 @@ permanent experiment switches or weakened correctness assertions.
 
 ## Current execution
 
-Engineering `df12a12b131384976466310b7a6138417b7a36eb` is committed and
-independently reviewed. Canonical plain-yield/list-child transfers reuse the
-existing sink machinery after full-chain source/AST proofs. Release/debug each
-build 117 modules and pass 582 focused tests / 12 modules. Exactly two generated
-final stores change; the other 285 handlers and all metadata remain identical.
-The [twelfth report](twelfth-integration-report.md) records current evidence.
+Engineering `d7abf803c607b0de3cec58d7e91ba91ff1699792` is committed.
+Both profiles build117 modules and pass136 focused tests plus four selected
+original/backward/forward/refusal controls each. The preceding NULL36 packet
+passed691 tests/13 modules in both roles and repaired three original peepholer
+cases. The [thirteenth report](thirteenth-integration-report.md) records both.
 
-The unchanged 29 screen is 0.954489/golden and 1.163732/upstream. Logging preserves
-parity in this basic screen at 0.899568/upstream. Four-pair golden repeats give
-generators 1.025477, coroutines 0.979644, nbody 0.986605. Only the generator loss
-persists among those three; float has a smaller two-pair 1.1% loss. Current
-hardware profiles have not been captured and old counters
-must not be relabelled35. Cross-campaign changes do not establish causes.
+Current37 basic logging is0.907800/upstream. Two-pair golden ratios are
+logging0.645187, generators1.006499, coroutines0.958126 and nbody0.979884.
+Generator37 needs a repeat before declaring its earlier loss repaired. The
+current hardware evidence remains36: cycles1.045237/instructions1.020424/
+CPI1.024316/golden, six valid100% captures and two records; no37 profile is
+claimed. The latest full29 screen is35. Final two six-round logging campaigns
+and broad checks remain required at the final source.
 
-The isolated NULL PRE packet is source-frozen, independently accepted, retained
-as a patch and applied into the primary source after timing35. Root is running
-serialized release/debug native qualification. The shared query, pathwise
-must-NULL facts and VALUE/NULL_ONLY obligations use the existing graph and Plan.
-Permission stays ordinary real-LINE PRE/inherited context/empty saved bindings;
-all-alias and physical-cell reproof preserve strict adapters. Original
-peepholer witnesses and new join/reentry controls remain unqualified until
-executed. No native build was created in the isolated worktree.
+Forward same-caught PRE now reuses the existing graph, origins, cuts and Plan,
+preserves the old backward proof, and requires fresh PRE/empty saves/exact
+caught roots with a normal-edge-only current-to-target survival slice. Finally
+payload roots and sibling except arms remain probe-first. The next CALL
+success-window NULL query has a finite22-route provider census and independent
+source approval; it is applied to the primary runtime for native checks.
+The shared contract excludes arbitrary temporary aliases and unknown tails.
 
-Next: qualify this merged packet, inventory actual remaining debugger phases,
-and admit shared retained-root capabilities from that evidence. Independent
-review also records an increased cold resource bound for eligible PRE requests;
-large-function qualification must retain that limit explicitly. One frame/call
-model remains selected. Golden/upstream controls and sealed evidence stay
-immutable, and full suites remain for the coherent combined checkpoint.
+The isolated source now has committed36 plus the frozen forward packet. B/H
+have reviewed the CALL success-window physical fact separately. Read-only C
+matrix probes confirm two ordinary refusals need a NULL fact after completed
+CALLs; every provider and result alias must support the proof before admission.
+No separate native build exists. Root owns source admission, native jobs,
+commits and qualification. Full suites belong at a coherent combined checkpoint,
+with no source/build mutation during quiet performance windows.
+
+The aggregate cold-analysis budget is stricter for large eligible PRE requests
+than the previous single lane; retain that qualification caveat. Golden and
+upstream controls and sealed evidence remain immutable. Current stats, full
+release/debug suites, generator repair, final logging gate and cold review
+remain open.
 
 ## Parallel responsibilities
 
 | Stream | Owner | Current deliverable |
 | --- | --- | --- |
-| Canonical-home transfer | Sol 6.1 medium A | Integrated canonical35; next same-caught proposal and independent diagnostic peer |
-| NULL-only PRE consumer | Sol 6.1 medium B | Frozen NULL PRE consumer; next read-only actual-state diagnostic for remaining jumps |
-| Shared physical facts and review | Sol 6.1 medium H | Frozen NULL query/controls; independent native and performance audits |
+| Canonical-home transfer | Sol 6.1 medium A | Canonical35 integrated; forward same-caught implementation frozen for root native gate |
+| NULL-only PRE consumer | Sol 6.1 medium B | NULL36 integrated; CALL success-window proof and actual-state diagnosis |
+| Shared physical facts and review | Sol 6.1 medium H | NULL36 integrated; independent source/provider and current PMU audits |
 | Integration and measurement | Coordinator | Source admission, serialized native gates/commit/basic performance, qualification and final logging campaigns |
 
 Workers propose first and independently review each other's contracts. Runtime

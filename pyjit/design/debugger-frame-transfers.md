@@ -44,9 +44,11 @@ flowchart TD
     phase --> identity{Exact real LINE identity?}
     identity -->|yes| keep[Preserve owners and exception links; commit generation]
     identity -->|no| analyze[Decode final IR, source metadata and canonical EH]
-    analyze --> needs[Derive incoming owner requirements]
+    analyze --> needs[Derive VALUE and NULL_ONLY requirements]
     analyze --> context[Derive handled context and saved-owner origins]
+    analyze --> nulls[Intersect physical NULL facts at ingresses]
     needs --> plan[Select target, preserve homes and saved bindings]
+    nulls --> plan
     context --> plan
     plan --> warning[Warn and reprove after callback-capable preparation]
     warning --> detach[Detach surplus owners and restore sources without callbacks]
@@ -69,6 +71,23 @@ after normal definition kills. Source-callback errors use the actual normal
 post-operation outcome. Exception/lasti writes also invalidate whole-code NULL
 facts. Immutable constant homes are already available. A nullable operand cannot
 authorize an aliased nonnullable reader.
+
+For eligible ordinary PRE requests, a forward must-NULL matrix intersects
+reachable ingress facts, including the initial-entry predecessor on a backedge.
+The shared physical query reads COPY/SWAP sources simultaneously, certifies
+STORE_FAST and completed-FOR clearing, and forgets unsupported/error/child-tail
+facts. Constants are initialized values rather than NULL. Backward VALUE and
+NULL_ONLY demands use the same graph, all-alias input checks and actual reader;
+a NULL clear discharges only NULL_ONLY. The strict projection retains the old
+ALL requirements and unions both new lanes. Facts are not owner identities.
+
+A bounded NULL-only Plan requires inherited context, fresh real-LINE PRE, empty
+current/target saved bindings, zero VALUE demands, ALL contained in NULL_ONLY,
+and each needed home both proved and physically NULL at the stopped PC. It
+preserves no missing owner. Warning reproof rebuilds the matrices and Plan.
+The optional matrices have a checked aggregate cold-analysis budget, stricter
+for large requests than the prior single lane. No matrix lives on a frame or
+code object or runs during dispatch.
 
 Handled context is derived separately. INHERITED can contain a caller's handled
 exception. PUSH_EXC_INFO creates a caught node with its actual saved-previous
@@ -113,10 +132,11 @@ scope and analysis.
 | --- | --- |
 | Real LINE identity | Requested resolved line equals the actual current LINE wrapper's line; exact observed frame; no source/error, pending-child or suspended phase. Preserve current PC, all owners and exception links; commit generation. Earlier words sharing that line do not restart the expression or scope. |
 | Cancellable PRE operation | A centralized phase factory proves the actual real LINE before its handler. Current expression inputs may be detached when the target needs none; proven saved named locals may be restored from per-local chains. Handled context and independently proved roots must survive. Source-only targets do not acquire this permission. |
+| NULL-only PRE | Ordinary nonsuspending optimized entry, inherited context, empty saved columns, no VALUE requirement, and pathwise plus actual NULL for every NULL_ONLY input. Strict requirements remain included; no owner is invented. |
 | Neutral committed JUMP | A generated positive terminal fact, zero physical IO, non-owning roles and exact selected successor prove the actual site's rows survive unchanged. Scope frame/event/generation, site PC and committed return PC must match. New cancellation/restoration requires inherited context, a save-empty target and no target scratch inputs. |
 | Other certified committed edge | Exact scope, generated publication fact, physical geometry and selected normal successor prove a copied post-edge row. Cancellation requires inherited context, empty stopped and target save columns, and no incoming target scratch owner. It does not use a PRE survivor slice, restore saved bindings or select a source-only destination. |
 | INHERITED context | Existing physical incoming-owner/NULL proof. Bounded FOR-body replay still requires an empty exception table. Ordinary protected try need not create a caught context. |
-| Same CAUGHT context | Backward replay preserves actual saved-previous owners and every parent; path/dominance proof excludes read, replacement, pop and reentry. Active exception links remain untouched. |
+| Same CAUGHT context | Backward replay preserves actual saved-previous owners and every parent using its dominance/survival proof. Forward real-PRE transfer additionally requires empty saved columns and a normal-edge-only current-to-target slice. Both exclude preserved-root reads, replacement, pop, child overlap and reentry. Active exception links remain untouched. |
 | Pending ignored Python call | Caller changes its continuation only; overlapping child owners remain intact until successful child completion. Used-result, external and protected child cases still need their own plans. |
 | Other contexts/phases | Refuse before mutation until their owner and semantic actions are proved. |
 

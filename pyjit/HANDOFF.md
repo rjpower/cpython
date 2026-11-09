@@ -2,36 +2,59 @@
 
 ## Current goal: frame/call model and logging parity
 
-Logging's timing gate was met at `488e85fa3a8`; basic33/34/35 checks preserve
-parity. Current35 repairs nbody/coroutine golden losses; generators remain2.55%
-slower. Continue through that regression and full qualification. Python's data
-model governs behavior; source positions are metadata. Golden stays immutable
-and selected; the goal remains active. See [plan](issues/frame-call-model-20261109/plan.md)
-and [twelfth report](issues/frame-call-model-20261109/twelfth-integration-report.md).
+Logging's full timing gate passed at32; current36 basic check remains below
+upstream. The generator golden regression and qualification keep the goal
+active. Follow Python's data model; source positions are metadata. Golden is
+immutable and selected. See [plan](issues/frame-call-model-20261109/plan.md)
+and [thirteenth report](issues/frame-call-model-20261109/thirteenth-integration-report.md).
 
-Primary runtime is `build/worktrees/execution-boundaries-20261108`, branch
+Primary runtime: `build/worktrees/execution-boundaries-20261108`, branch
 `pyjit/frame-call-model-20261109`, committed HEAD
-`df12a12b131384976466310b7a6138417b7a36eb`. The reviewed NULL PRE five-file
-patch is now dirty in this source for root-owned release/debug build and
-qualification. It is retained at E11/null-pre-frozen-source.patch. Inspect
-actual job state before any native command. Do not time the dirty source.
-Release/debug previously identify committed35 and check117 modules each;
-current NULL builds are in progress. Stats still identifies192 and needs a
-current rebuild. Magic64416. Canonical documentation is this checkout; runtime
-copies are historical. Root owns native jobs and commits. Paths below are
-relative to python-boil-the-ocean; E11 is
-`build/pyjit-link-wave1/frame-call-model-20261109/`.
+`d7abf803c607b0de3cec58d7e91ba91ff1699792`. The reviewed CALL38 two-file
+patch is now dirty there for root-owned release/debug build/native checks.
+Evidence patch: E11/call38-frozen-source.patch. Inspect actual job state
+before any native command. Do not time the dirty source. Committed37 identity
+builds check117 modules each; stats still identifies192 and needs rebuilding.
+Magic64416. Root owns native jobs, commits and merged validation. Canonical
+docs stay in this checkout. E11 is
+`build/pyjit-link-wave1/frame-call-model-20261109/` under python-boil-the-ocean.
 
-Current35 evidence: canonical35-{release,debug}-{build,focus}.log passes582
-across12 modules each; committed identity logs117 each. Screens
-canonical35-broad-{golden,upstream} give GM.954489/1.163732; logging.899568/upstream.
-canonical35-repeat-golden fourpairs gives gen1.025477/coro.979644/nbody.986605.
-Independent raw audit passes. No35 PMU capture. NULL PRE source peer accepts;
-its actual native outcome remains pending. The isolated null-pre-20261109
-worktree remains frozen with the retained original patch; no separate build.
-Remove that task-created worktree only after source/evidence integration is
-complete. Earlier sections below retain historical32/33/34 evidence; their
-active-assignment wording is superseded by this current section.
+Forward37:136 focused tests/2modules/1skip each and four selected original,
+backward, newforward and strengthened refusal tests pass both roles. Compiled
+geometry pins negative FORpc16 BASE4/cursor5, target17..20/exit21, back20→16;
+test derives all geometry without constants. H postreview accepts. Basic37
+stable two-pair golden logging.645187/gen1.006499/coro.958126/nbody.979884;
+upstreamlogging.907800. Generator needs current final repeat. CALL38 frozen
+header+contract packet is applied for builds. N retains A/B source based36;
+compare only assigned files and preserve both retained patches. No worker build.
+
+NULL36: minimal300tests/3modules/2skips and frame-observer691/13/1skip pass both.
+The first minimal warning-fixture failure is retained in both roles; exact
+outer-two-local assertion and binding checkpoint before nested setter repair
+the fixture without runtime changes. Original3 peepholer cases pass unchanged.
+Current release debugger census:726tests/13skips;23traceerrors and4Pdb outcomes.
+Read-only trace-capabilities-v2 runs all24 original methods with one request
+each/no caps. Firstattempt capped5 during regex setup. GDB masks-v2 proves two
+actualNULL CALL-self homes classifiedVALUE:4→21/home2 and33→4/home5. Original
+GDB script failed on optimized-out phase; v2 reports matrices, not phase authority.
+
+Current36 performance E11/null36-repeat-golden fourpairs:
+gen1.037690/coro.948954/nbody.982620 (one nbody pair>1). Basic-upstream two:
+logging.913965/gen1.433626/coro1.279977/nbody.846876/float.818632/pickle.919044.
+Generator stat-v2:6/6valid100%running/stable, cycles1.045237/instr1.020424/
+CPI1.024316; firststat parentaffinity rejection retained. Generatorrecord2/2valid
+stable with expectedELFs; source locations still need analysis. Collector
+retarget exactly2constants; independent peer +root hostgate PASS. No new full29
+at36:35screen remains.954489/golden and1.163732/upstream.
+
+Isolated `build/worktrees/null-pre-20261109` was safely cleaned by reversing the
+retained original frozen patch, then fast-forwarded to committed36. It now
+holds the frozen forward37 packet (A frameobject+test_code); B/H CALL query work
+must use nonoverlapping files after provider peer. No separate native build.
+Root retained original36 patch and integrated36 patch; do not discard new
+pending source. Remove the task-created worktree only after final integration.
+Earlier sections below retain historical32/33/34 evidence; their active-job
+wording is superseded by this current section.
 
 ### Integrated and tested
 

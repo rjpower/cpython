@@ -1,34 +1,41 @@
 # Project status
 
-The frame/call redesign is integrated through engineering `df12a12b131` and
+The frame/call redesign is integrated through engineering `d7abf803c60` and
 remains unpromoted. Frames use initialized storage and explicit call/result
-ownership; source boundaries live in metadata. The latest packet carries
-proved canonical values through plain yield and final list-child publication,
-using existing stores. Release/debug each build 117 modules and pass 582 focused
-tests / 12 modules. The [twelfth report](issues/frame-call-model-20261109/twelfth-integration-report.md)
-records source proofs, independent reviews and current performance.
+ownership; source boundaries live in metadata. The new cold frame analysis
+distinguishes owned-value requirements from proved NULL inputs using the
+existing graph and Plan. Committed37 preserves caught owners across a bounded
+forward same-exception jump. Release/debug build117 modules and pass136 focused
+tests plus four selected originals/controls each;36 passed691 across13 modules.
+The original three peepholer failures and same-except forward witness are repaired.
+See the [thirteenth report](issues/frame-call-model-20261109/thirteenth-integration-report.md).
 
-Current35's unchanged 29-kernel screen is **0.954489/golden** and
-**1.163732/upstream**. Logging is **0.899568/upstream** in this basic screen;
-the full two-campaign six-round gate belongs to 32. A four-pair golden repeat
-shows coroutines 0.979644 and nbody 0.986605, every pair faster than golden.
-Generators retain a confirmed 2.55% loss. Numeric/logging wins coexist with
-substantial remaining upstream gaps in generators, coroutines, comprehensions
-and object-heavy kernels. These campaigns do not isolate component causes.
+Logging remains faster than upstream in current36's basic check: **0.913965**.
+The final two-campaign six-round gate still needs repeating at final source.
+Four-pair golden means are generators1.037690, coroutines0.948954 and
+nbody0.982620; nbody has one slower pair. The generator loss persists. The latest
+full29 screen belongs to35: **0.954489/golden**, **1.163732/upstream**. Small
+float/deepcopy_memo differences in that screen remain unconfirmed.
 
-The reviewed NULL-only PRE packet is now applied to the primary runtime for
-serialized release/debug native qualification. It extends the existing cold
-graph/Plan with shared physical facts and independent VALUE/NULL_ONLY demands;
-no second execution model is added. The isolated source has no native build.
-Actual stopped-state probes will guide remaining same-protocol debugger gaps.
+Current generator counters pass six captures with stable identity and100%
+running: cycles1.045237, instructions1.020424 and CPI1.024316/golden. Two current
+recordings also pass. Both added work and execution efficiency contribute;
+source cause is not yet isolated. These are36 measurements, not relabelled34.
 
-Full release/debug qualification and current stats remain open. The last full
-release diagnostic at 31 ran 54,563 tests with six failed modules. Focused32
-checks repaired monitoring/tools; its API check passes 306 units with zero
-failing findings/parse errors. Peepholer, sys_settrace and pdb still have open
-cases. The GC negative-control full-run failure remains unexplained despite
-isolated method/module passes. No blanket skips or weaker assertions. Golden
-remains immutable and selected; the goal stays active.
+Basic37 gives logging0.907800/upstream and golden logging0.645187,
+generators1.006499, coroutines0.958126 and nbody0.979884 over two pairs. The
+generator difference has not yet been repeated at37. These are combined-image
+checks, not causal attribution to a cold helper. The source-reviewed CALL
+success-window NULL proof is applied for native qualification next. It covers
+the finite22-route family and exact recipient geometry, retaining UNKNOWN for
+outside-window and unsupported states.
+
+Full release/debug qualification and current stats remain open. The36 release
+debugger census has23 trace errors and four Pdb outcomes. Ordinary protocol
+capabilities remain obligations; unsupported crossings need explicit reviewed
+safety tests. The GC negative-control full-run failure remains unexplained.
+No blanket skips or weaker assertions. Golden is immutable and selected; the
+goal remains active.
 
 The previous [execution-boundary and operand-mode packet](issues/execution-boundaries-20261108/plan.md)
 implements the first three bounded cold-review recommendations at runtime

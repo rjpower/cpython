@@ -1,6 +1,6 @@
 # Register IR: current contract
 
-This describes the register interpreter integrated at `df12a12b131`.
+This describes the register interpreter integrated at `d7abf803c60`.
 It defines the executable and ownership contract; [status](../STATUS.md)
 tracks qualification. The bounded observer and debugger rules below do not
 authorize every source transfer.

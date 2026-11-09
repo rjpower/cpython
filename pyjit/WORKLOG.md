@@ -328,3 +328,7 @@ that remote copy remains at revision 7. No alternate export was attempted.
 - 2026-11-09 — [Shared completion specialization](issues/frame-call-model-20261109/eleventh-integration-report.md): bfd67cbe4b4 preserves one owner body with known VM facts, 575 focused tests pass per build, completion text+1194B. Basic logging/upstream0.80151; generator/coroutine/nbody golden losses7.0%/2.6%/4.5% persist. Current counters show coroutine/nbody retire fewer instructions; next canonical transfers and NULL-only PRE capability proceed in parallel.
 
 - 2026-11-09 canonical35 (`df12a12b131`): shared canonical yield/list sinks; release/debug582 focused tests each, independent reviews; 29screen0.954489/golden,1.163732/upstream; generator2.55%loss remains. [Report](issues/frame-call-model-20261109/twelfth-integration-report.md).
+
+- 2026-11-09 NULL36 (`4c9c113b4e5`): pathwise VALUE/NULL_ONLY frame requirements; both roles691 focused tests, original peepholer3 repaired; logging.913965/upstream basic, generator3.77% golden loss persists; current PMU captured. [Report](issues/frame-call-model-20261109/thirteenth-integration-report.md).
+
+- 2026-11-09 forward37 (`d7abf803c60`): same-caught normal PRE survival; both profiles136 focused +4selected tests; basic logging.907800/upstream, generator1.006499/golden needs repeat. [Follow-up](issues/frame-call-model-20261109/thirteenth-integration-report.md).

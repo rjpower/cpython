@@ -1610,6 +1610,132 @@ class ConstSlotsTest(unittest.TestCase):
             sys.settrace(old_trace)
         self.assertTrue(rejected)
 
+    def test_settrace_inherited_protected_redirects(self):
+        for entering in (False, True):
+            with self.subTest(entering=entering):
+                source = """def f():
+    value = 0
+    value += 10  # outside
+    try:
+        value += 1  # target
+        value += 2  # inside
+    except LookupError:
+        value = -1
+    return value
+"""
+                namespace = {}
+                exec(source, namespace)
+                f = namespace["f"]
+                source_line = next(i for i, line in enumerate(source.splitlines(), 1)
+                                   if ("# outside" if entering else "# inside") in line)
+                target_line = next(i for i, line in enumerate(source.splitlines(), 1)
+                                   if "# target" in line)
+                redirected = False
+                def tracer(frame, event, arg):
+                    nonlocal redirected
+                    if (frame.f_code is f.__code__ and event == "line" and
+                            frame.f_lineno == source_line and not redirected):
+                        redirected = True
+                        frame.f_lineno = target_line
+                    return tracer
+
+                previous = sys.gettrace()
+                sys.settrace(tracer)
+                try:
+                    result = f()
+                finally:
+                    sys.settrace(previous)
+                self.assertTrue(redirected)
+                self.assertEqual(result, 3 if entering else 14)
+
+    def test_settrace_same_caught_redirect_preserves_exception_owners(self):
+        source = """def f():
+    value = 0
+    before = after = None
+    try:
+        1 / 0
+    except ZeroDivisionError as error:
+        before = sys.exception()
+        value += 1  # target
+        value += 2  # source
+        after = sys.exception()
+    return value, before, after
+"""
+        namespace = {"sys": sys}
+        exec(source, namespace)
+        f = namespace["f"]
+        target_line = next(i for i, line in enumerate(source.splitlines(), 1)
+                           if "# target" in line)
+        source_line = next(i for i, line in enumerate(source.splitlines(), 1)
+                           if "# source" in line)
+        redirected = False
+        def tracer(frame, event, arg):
+            nonlocal redirected
+            if (frame.f_code is f.__code__ and event == "line" and
+                    frame.f_lineno == source_line and not redirected):
+                redirected = True
+                inherited = sys.exception()
+                self.assertIs(inherited, frame.f_locals["error"])
+                try:
+                    raise LookupError("callback owned")
+                except LookupError as callback:
+                    frame.f_lineno = target_line
+                    self.assertIs(sys.exception(), callback)
+                self.assertIs(sys.exception(), inherited)
+            return tracer
+
+        previous = sys.gettrace()
+        sys.settrace(tracer)
+        try:
+            value, before, after = f()
+        finally:
+            sys.settrace(previous)
+        self.assertTrue(redirected)
+        self.assertEqual(value, 4)
+        self.assertIsInstance(before, ZeroDivisionError)
+        self.assertIs(before, after)
+
+    def test_settrace_cannot_manufacture_or_exit_caught_context(self):
+        source = """def f(reraise=False):
+    value = 0
+    value += 1  # root
+    try:
+        1 / 0
+    except ZeroDivisionError:
+        value += 2  # caught
+        if reraise:
+            raise  # bare
+    return value  # exit
+"""
+        for exiting in (False, True):
+            with self.subTest(exiting=exiting):
+                namespace = {}
+                exec(source, namespace)
+                f = namespace["f"]
+                target = "# exit" if exiting else "# bare"
+                stopped = "# caught" if exiting else "# root"
+                target_line = next(i for i, line in enumerate(source.splitlines(), 1)
+                                   if target in line)
+                source_line = next(i for i, line in enumerate(source.splitlines(), 1)
+                                   if stopped in line)
+                refused = False
+                def tracer(frame, event, arg):
+                    nonlocal refused
+                    if (frame.f_code is f.__code__ and event == "line" and
+                            frame.f_lineno == source_line and not refused):
+                        refused = True
+                        with self.assertRaisesRegex(ValueError, "incoming temporary"):
+                            frame.f_lineno = target_line
+                    return tracer
+
+                previous = sys.gettrace()
+                sys.settrace(tracer)
+                try:
+                    self.assertEqual(f(), 3)
+                finally:
+                    sys.settrace(previous)
+                self.assertTrue(refused)
+
     def test_settrace_same_real_line_preserves_protected_state(self):
         sources = {
             "try": """def f(manager):

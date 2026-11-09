@@ -88,6 +88,9 @@ PyAPI_DATA(PyObject) _PyInstrumentation_DISABLE;
 /* Count of all  monitoring events */
 #define _PY_MONITORING_EVENTS 19
 
+/* Private observer phase: never a registered monitoring event or tool index. */
+#define _PY_DEBUGGER_ENTRY_EVENT _PY_MONITORING_EVENTS
+
 /* Tables of which tools are active for each monitored event. */
 enum {
     _PyIR_SOURCE_BRANCH_WRAPPER = 1,

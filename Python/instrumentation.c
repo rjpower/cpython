@@ -6,6 +6,7 @@
 #include "pycore_critical_section.h" // _Py_CRITICAL_SECTION_ASSERT_OBJECT_LOCKED()
 #include "pycore_dict.h"          // PyDict_SetValueString()
 #include "pycore_frame.h"         // PyFrameObject
+#include "pycore_genobject.h"     // _PyGen_SetStopIterationValue()
 #include "pycore_interpframe.h"   // _PyFrame_GetBytecode()
 #include "pycore_ir_source.h"
 #include "pycore_long.h"          // _PyLong_GetZero()
@@ -1633,12 +1634,10 @@ _PyIR_ObserveStep(PyThreadState *tstate, _PyInterpreterFrame *frame,
         {
             return result;
         }
-        PyObject *boxed = PyValue_AsObject(value);
-        if (boxed == NULL) {
+        if (_PyGen_SetStopIterationValue(
+                PyValue_IsNone(value) ? PyValue_Borrow(PyValue_NULL) : value) < 0) {
             goto error;
         }
-        PyErr_SetObject(PyExc_StopIteration, boxed);
-        Py_DECREF(boxed);
         PyObject *exc = _PyErr_GetRaisedException(tstate);
         if (exc == NULL) {
             PyErr_SetString(PyExc_SystemError, "missing completion exception");

@@ -11,6 +11,7 @@
 #include "pycore_interpframe.h"   // _PyFrame_GetLocalsArray()
 #include "pycore_ir_source.h"
 #include "pycore_ir_outcomes.h"
+#include "pycore_ir_exception.h"
 #include "pycore_list.h"          // _PyList_AppendTakeRef()
 #include "pycore_long_value.h"    // _PyValue_AsLongAndOverflow()
 #include "pycore_modsupport.h"    // _PyArg_CheckPositional()
@@ -1351,20 +1352,180 @@ register_resume_successors(PyCodeObject *code, int i, int next[2])
     }
 }
 
+typedef struct {
+    int from, to, next, reverse_next, floor;
+} RegisterResumeEdge;
+
+typedef struct {
+    int n, nl, nt;
+    size_t stride;
+    unsigned char *safe;
+    uint64_t *required;
+    _PyIRExceptionEntry *handlers;
+    int *context, *origins, *parents;
+    int *edge_heads, *reverse_heads, nedges;
+    RegisterResumeEdge *edges;
+    int *source_heads, *source_next;
+    _PyIRSourceEvent *source_events;
+    uint32_t nsource;
+} RegisterResumeAnalysis;
+
+typedef struct {
+    uint64_t *preserve;
+    size_t stride;
+} RegisterResumePlan;
+
+static void
+register_resume_analysis_clear(RegisterResumeAnalysis *analysis)
+{
+    PyMem_Free(analysis->safe);
+    PyMem_Free(analysis->required);
+    PyMem_Free(analysis->handlers);
+    PyMem_Free(analysis->context);
+    PyMem_Free(analysis->origins);
+    PyMem_Free(analysis->parents);
+    PyMem_Free(analysis->edge_heads);
+    PyMem_Free(analysis->reverse_heads);
+    PyMem_Free(analysis->edges);
+    PyMem_Free(analysis->source_heads);
+    PyMem_Free(analysis->source_next);
+    PyMem_Free(analysis->source_events);
+    memset(analysis, 0, sizeof(*analysis));
+}
+
+static int
+register_resume_handlers(PyCodeObject *code, RegisterResumeAnalysis *analysis)
+{
+    const unsigned char *cursor = (const unsigned char *)PyBytes_AS_STRING(code->co_exceptiontable);
+    const unsigned char *end = cursor + PyBytes_GET_SIZE(code->co_exceptiontable);
+    if (!_PyIR_ExceptionTableValid(cursor, end, analysis->n, analysis->nl,
+                                   analysis->nl + analysis->nt))
+    {
+        PyErr_SetString(PyExc_ValueError, "jump requires a canonical exception table");
+        return -1;
+    }
+    analysis->handlers = PyMem_Calloc((size_t)Py_MAX(analysis->n, 1),
+                                      sizeof(*analysis->handlers));
+    if (analysis->handlers == NULL) {
+        PyErr_NoMemory();
+        return -1;
+    }
+    for (int i = 0; i < analysis->n; i++) {
+        analysis->handlers[i].target = -1;
+    }
+    while (cursor < end) {
+        _PyIRExceptionEntry entry;
+        if (_PyIR_ExceptionNext(&cursor, end, &entry) < 0) {
+            Py_FatalError("validated debugger exception table changed");
+        }
+        for (int i = entry.start; i < entry.end; i++) {
+            analysis->handlers[i] = entry;
+        }
+    }
+    return 0;
+}
+
+static void
+register_resume_add_edge(RegisterResumeAnalysis *analysis, int from, int to, int floor)
+{
+    int index = analysis->nedges++;
+    analysis->edges[index] = (RegisterResumeEdge){from, to,
+        analysis->edge_heads[from], analysis->reverse_heads[to], floor};
+    analysis->edge_heads[from] = analysis->reverse_heads[to] = index;
+}
+
+/* Decode and index immutable source records once per request. Both forward
+ * ownership and reverse survival walks use the same sparse physical graph. */
+static int
+register_resume_graph(PyCodeObject *code, RegisterResumeAnalysis *analysis)
+{
+    _PyIRSourceMap source = _PyIRSource_Stored(code->co_linetable);
+    size_t n = (size_t)Py_MAX(analysis->n, 1);
+    size_t r = (size_t)source.nrecords;
+    size_t budget = 16 * 1024 * 1024;
+    if (n > budget / (3 * sizeof(RegisterResumeEdge) + 3 * sizeof(int)) ||
+        r > budget / (sizeof(RegisterResumeEdge) + sizeof(_PyIRSourceEvent) + sizeof(int)) ||
+        source.nrecords > INT_MAX)
+    {
+        PyErr_SetString(PyExc_ValueError, "debugger context graph is too large");
+        return -1;
+    }
+    analysis->edge_heads = PyMem_New(int, n);
+    analysis->reverse_heads = PyMem_New(int, n);
+    analysis->source_heads = PyMem_New(int, n);
+    analysis->edges = PyMem_New(RegisterResumeEdge, 3 * n + r);
+    analysis->source_next = PyMem_New(int, Py_MAX(r, 1));
+    analysis->source_events = PyMem_New(_PyIRSourceEvent, Py_MAX(r, 1));
+    if (analysis->edge_heads == NULL || analysis->reverse_heads == NULL ||
+        analysis->source_heads == NULL || analysis->edges == NULL ||
+        analysis->source_next == NULL || analysis->source_events == NULL)
+    {
+        PyErr_NoMemory();
+        return -1;
+    }
+    analysis->nsource = source.nrecords;
+    for (int i = 0; i < analysis->n; i++) {
+        analysis->edge_heads[i] = analysis->reverse_heads[i] = analysis->source_heads[i] = -1;
+    }
+    for (int i = 0; i < analysis->n; i++) {
+        int next[2];
+        register_resume_successors(code, i, next);
+        for (int k = 0; k < 2; k++) {
+            if (next[k] >= 0 && next[k] < analysis->n) {
+                register_resume_add_edge(analysis, i, next[k], -1);
+            }
+        }
+        _PyIRExceptionEntry handler = analysis->handlers[i];
+        if (handler.target >= 0) {
+            register_resume_add_edge(analysis, i, handler.target, handler.slot - handler.lasti);
+        }
+    }
+    for (uint32_t j = 0; j < source.nrecords; j++) {
+        _PyIRSourceEvent *event = &analysis->source_events[j];
+        _PyIRSource_Event(&source, j, event);
+        analysis->source_next[j] = analysis->source_heads[event->from];
+        analysis->source_heads[event->from] = (int)j;
+        if (event->handler >= 0) {
+            register_resume_add_edge(analysis, event->from, event->handler,
+                                     event->exc_slot - event->lasti);
+        }
+    }
+    return 0;
+}
+
+/* Exception and lasti are supplied by unwind. Only preserved-prefix inputs
+ * are requirements on the failing instruction's pre-success state. */
+static void
+register_resume_error_needs(RegisterResumeAnalysis *analysis, uint64_t *work,
+                             int target, int slot, int lasti)
+{
+    if (target < 0) {
+        return;
+    }
+    int prefix = slot - lasti - analysis->nl;
+    const uint64_t *needed = analysis->required + (size_t)target * analysis->stride;
+    for (int j = 0; j < prefix; j++) {
+        if (needed[j / 64] & ((uint64_t)1 << (j % 64))) {
+            work[j / 64] |= (uint64_t)1 << (j % 64);
+        }
+    }
+}
+
 /* Debugger redirection must use the executable register contract. A slot
  * containing an unrelated value is not a reconstruction of a missing input.
  * This cold dataflow computes incoming owners for the recipes below. NULL
  * protocol inputs are omitted only under the whole-code invariant. */
 static unsigned char *
-register_resume_sites(_PyInterpreterFrame *frame, bool allow_null,
-                      uint64_t **required)
+register_resume_liveness(_PyInterpreterFrame *frame, bool allow_null,
+                          RegisterResumeAnalysis *analysis)
 {
     PyCodeObject *code = _PyFrame_GetCode(frame);
     int n = (int)Py_SIZE(code), nl = code->co_nlocalsplus;
     int nt = code->co_framesize - FRAME_SPECIALS_SIZE - nl;
     int nb = (nt + 63) / 64;
     size_t stride = (size_t)Py_MAX(nb, 1);
-    if ((size_t)n > (16 * 1024 * 1024) / (stride * sizeof(uint64_t))) {
+    if (stride > (16 * 1024 * 1024) / sizeof(uint64_t) ||
+        (size_t)n > (16 * 1024 * 1024) / (stride * sizeof(uint64_t))) {
         PyErr_SetString(PyExc_ValueError, "register resume analysis is too large");
         return NULL;
     }
@@ -1432,6 +1593,26 @@ register_resume_sites(_PyInterpreterFrame *frame, bool allow_null,
                 }
             }
         }
+        /* EH payload writes are real writers too. A home untouched by normal
+         * words may still hold an exception or lasti on a protected path. */
+        for (int i = 0; i < n; i++) {
+            _PyIRExceptionEntry handler = analysis->handlers[i];
+            if (handler.target >= 0) {
+                null_home[handler.slot - nl] = 0;
+                if (handler.lasti) {
+                    null_home[handler.slot - nl - 1] = 0;
+                }
+            }
+        }
+        for (uint32_t r = 0; r < analysis->nsource; r++) {
+            _PyIRSourceEvent event = analysis->source_events[r];
+            if (event.handler >= 0) {
+                null_home[event.exc_slot - nl] = 0;
+                if (event.lasti) {
+                    null_home[event.exc_slot - nl - 1] = 0;
+                }
+            }
+        }
         /* These facts describe boundary states, never an active child's
          * aliased argument cells. Validate the actual source snapshot too. */
         for (int j = 0; j < nt; j++) {
@@ -1440,6 +1621,7 @@ register_resume_sites(_PyInterpreterFrame *frame, bool allow_null,
             }
         }
     }
+    analysis->required = live;
     bool changed;
     do {
         changed = false;
@@ -1453,6 +1635,17 @@ register_resume_sites(_PyInterpreterFrame *frame, bool allow_null,
                 int next = successors[k];
                 if (next >= 0 && next < n) {
                     memcpy(edge, live + (size_t)next * stride, stride * sizeof(uint64_t));
+                    /* Source callbacks run after this normal outcome. Their
+                     * error inputs pass through the same success definitions. */
+                    for (int r = analysis->source_heads[i]; r >= 0;
+                         r = analysis->source_next[r])
+                    {
+                        _PyIRSourceEvent event = analysis->source_events[r];
+                        if (event.edge == k) {
+                            register_resume_error_needs(analysis, edge, event.handler,
+                                                        event.exc_slot, event.lasti);
+                        }
+                    }
                     _PyIRSlotOutcome outcome = _PyIR_Outcome(word, k == 1);
                     if (outcome.semantic) {
                         for (int r = 0; r <= outcome.count; r++) {
@@ -1479,11 +1672,17 @@ register_resume_sites(_PyInterpreterFrame *frame, bool allow_null,
                     }
                 }
             }
+            /* Ordinary exceptions happen before success definitions. Joining
+             * these last prevents a fresh destination from erasing old input
+             * requirements needed by the handler. */
+            _PyIRExceptionEntry handler = analysis->handlers[i];
+            register_resume_error_needs(analysis, work, handler.target,
+                                        handler.slot, handler.lasti);
             /* Transparent observation can hide the runtime reader. Use its
              * recovered handler, never a family-wide NULL capability. */
             _PyInstr *instr = _PyFrame_InstrAt(frame, i);
-            int handler = _PyIR_RealHandler(frame, instr);
-            _PyIRWord actual = (word & ~(_PyIRWord)0xffff) | handler;
+            int real_handler = _PyIR_RealHandler(frame, instr);
+            _PyIRWord actual = (word & ~(_PyIRWord)0xffff) | real_handler;
             for (int j = 0; j < nt; j++) {
                 int home = nl + j;
                 if (_PyIR_ReadsHome(word, arg, home) &&
@@ -1513,18 +1712,296 @@ register_resume_sites(_PyInterpreterFrame *frame, bool allow_null,
             safe[i] &= live[(size_t)i * stride + j] == 0;
         }
     }
-    if (required != NULL) {
-        *required = live;
-    }
-    else {
-        PyMem_Free(live);
-    }
     PyMem_Free(work); PyMem_Free(edge); PyMem_Free(null_home);
     return safe;
 error:
     PyMem_Free(live); PyMem_Free(work); PyMem_Free(edge);
     PyMem_Free(null_home); PyMem_Free(safe);
+    analysis->required = NULL;
     return NULL;
+}
+
+enum { REGISTER_CONTEXT_UNREACHED = -1, REGISTER_CONTEXT_AMBIGUOUS = -2 };
+
+/* Context labels describe saved previous-exception values. They do not own
+ * Python objects and never replace the thread's active exception link. */
+static int
+register_context_join(RegisterResumeAnalysis *analysis, int target,
+                       int context, const int *origins)
+{
+    int *stored = analysis->origins + (size_t)target * analysis->nt;
+    if (analysis->context[target] == REGISTER_CONTEXT_UNREACHED) {
+        analysis->context[target] = context;
+        memcpy(stored, origins, (size_t)analysis->nt * sizeof(int));
+        return 1;
+    }
+    int changed = 0;
+    if (analysis->context[target] != context &&
+        analysis->context[target] != REGISTER_CONTEXT_AMBIGUOUS)
+    {
+        analysis->context[target] = REGISTER_CONTEXT_AMBIGUOUS;
+        changed = 1;
+    }
+    for (int j = 0; j < analysis->nt; j++) {
+        if (stored[j] && stored[j] != origins[j]) {
+            stored[j] = 0;
+            changed = 1;
+        }
+    }
+    return changed;
+}
+
+static bool
+register_context_chain(RegisterResumeAnalysis *analysis, int node, int exclude)
+{
+    for (int depth = 0; depth < CO_MAXBLOCKS; depth++) {
+        if (node == 0) {
+            return true;
+        }
+        if (node < 0 || node > analysis->n || node == exclude) {
+            return false;
+        }
+        node = analysis->parents[node - 1];
+    }
+    return node == 0;
+}
+
+static void
+register_context_forget_reads(PyCodeObject *code, int pc,
+                              RegisterResumeAnalysis *analysis, int *origins)
+{
+    _PyIRWord word = code->co_words[pc];
+    const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
+    int arg = _PyCode_InstrOparg(code, pc);
+    int base = -1;
+    uint32_t fields[] = {IR_A(word), IR_B(word), IR_C(word), IR_D(word)};
+    for (int f = 0; f < 4; f++) {
+        if (fmt->roles[f] == _PyIR_ROLE_BASE) {
+            base = (int)fields[f];
+        }
+    }
+    for (int j = 0; j < analysis->nt; j++) {
+        int home = analysis->nl + j;
+        if (_PyIR_ReadsHome(word, arg, home) ||
+            ((fmt->effects & _PyIR_PUSHES_FRAME) && (base < 0 || home >= base)))
+        {
+            origins[j] = 0;
+        }
+    }
+}
+
+static int
+register_context_normal(PyCodeObject *code, int pc, int taken,
+                         RegisterResumeAnalysis *analysis, int context,
+                         int *origins)
+{
+    _PyIRWord word = code->co_words[pc];
+    int opcode = _PyIR_BaseOpcode(IR_HANDLER(word));
+    int arg = _PyCode_InstrOparg(code, pc);
+    const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
+    uint32_t fields[] = {IR_A(word), IR_B(word), IR_C(word), IR_D(word)};
+    int base = -1;
+    for (int f = 0; f < 4; f++) {
+        if (fmt->roles[f] == _PyIR_ROLE_BASE ||
+            (opcode == POP_EXCEPT && fmt->roles[f] == _PyIR_ROLE_IN0))
+        {
+            base = (int)fields[f] - analysis->nl;
+        }
+    }
+    int old = base >= 0 && base < analysis->nt ? origins[base] : 0;
+    int top = opcode == SWAP && base >= 0 && base < analysis->nt &&
+              arg >= 2 && arg <= analysis->nt - base ? base + arg - 1 : -1;
+    int old_top = top >= 0 && top < analysis->nt ? origins[top] : 0;
+    if (opcode == SWAP && top < 0) {
+        /* This proof tracks scratch-only permutations. A constructed window
+         * crossing named locals cannot preserve a saved-owner label here. */
+        memset(origins, 0, (size_t)analysis->nt * sizeof(int));
+        return REGISTER_CONTEXT_AMBIGUOUS;
+    }
+    if (opcode == POP_EXCEPT) {
+        /* Use POP_EXCEPT's actual explicit register input. */
+        if (context <= 0 || old != context ||
+            !register_context_chain(analysis, context, -1))
+        {
+            context = REGISTER_CONTEXT_AMBIGUOUS;
+        }
+        else {
+            context = analysis->parents[context - 1];
+        }
+    }
+    if (opcode != COPY && opcode != SWAP) {
+        register_context_forget_reads(code, pc, analysis, origins);
+    }
+    for (int j = 0; j < analysis->nt; j++) {
+        if (_PyIR_DefinesHome(word, arg, analysis->nl + j)) {
+            origins[j] = 0;
+        }
+    }
+    _PyIRSlotOutcome outcome = _PyIR_Outcome(word, taken);
+    if (outcome.semantic) {
+        for (int j = 0; j < analysis->nt; j++) {
+            int home = analysis->nl + j;
+            if ((home >= outcome.first && home < outcome.first + outcome.count) ||
+                home == outcome.dst)
+            {
+                origins[j] = 0;
+            }
+        }
+    }
+    if (opcode == COPY) {
+        /* Actual COPY output is the new window tail; middle holes survive. */
+        if (arg >= 1 && base >= 0 && base < analysis->nt &&
+            arg < analysis->nt - base)
+        {
+            origins[base + arg] = old;
+        }
+    }
+    else if (opcode == SWAP && base >= 0 && base < analysis->nt &&
+             top < analysis->nt && top >= 0) {
+        origins[base] = old_top;
+        origins[top] = old;
+    }
+    else if (opcode == PUSH_EXC_INFO) {
+        int node = pc + 1;
+        int *parent = &analysis->parents[pc];
+        if (context < 0 || !register_context_chain(analysis, context, node)) {
+            *parent = REGISTER_CONTEXT_AMBIGUOUS;
+        }
+        else if (*parent == REGISTER_CONTEXT_UNREACHED) {
+            *parent = context;
+        }
+        else if (*parent != context) {
+            *parent = REGISTER_CONTEXT_AMBIGUOUS;
+        }
+        context = *parent < 0 ? REGISTER_CONTEXT_AMBIGUOUS : node;
+        if (base >= 0 && base < analysis->nt) {
+            origins[base] = context > 0 ? node : 0;
+        }
+    }
+    return context;
+}
+
+static void
+register_context_unwind(RegisterResumeAnalysis *analysis, int *origins,
+                         int slot, int lasti)
+{
+    for (int j = Py_MAX(slot - lasti - analysis->nl, 0); j < analysis->nt; j++) {
+        origins[j] = 0;
+    }
+}
+
+static int
+register_resume_contexts(PyCodeObject *code, RegisterResumeAnalysis *analysis)
+{
+    int n = analysis->n, nt = analysis->nt;
+    if ((size_t)Py_MAX(n, 1) > (16 * 1024 * 1024) /
+                                    (sizeof(int) * (size_t)Py_MAX(nt, 1)))
+    {
+        PyErr_SetString(PyExc_ValueError, "debugger context analysis is too large");
+        return -1;
+    }
+    size_t count = (size_t)Py_MAX(n, 1) * (size_t)Py_MAX(nt, 1);
+    analysis->context = PyMem_New(int, Py_MAX(n, 1));
+    analysis->parents = PyMem_New(int, Py_MAX(n, 1));
+    analysis->origins = PyMem_Calloc(count, sizeof(int));
+    int *work = PyMem_Calloc((size_t)Py_MAX(nt, 1), sizeof(int));
+    int *error = PyMem_Calloc((size_t)Py_MAX(nt, 1), sizeof(int));
+    if (analysis->context == NULL || analysis->parents == NULL ||
+        analysis->origins == NULL || work == NULL || error == NULL)
+    {
+        PyMem_Free(work); PyMem_Free(error);
+        PyErr_NoMemory();
+        return -1;
+    }
+    for (int i = 0; i < n; i++) {
+        analysis->context[i] = analysis->parents[i] = REGISTER_CONTEXT_UNREACHED;
+    }
+    if (n) {
+        analysis->context[0] = 0;
+    }
+    bool changed;
+    do {
+        changed = false;
+        for (int i = 0; i < n; i++) {
+            int context = analysis->context[i];
+            if (context == REGISTER_CONTEXT_UNREACHED) {
+                continue;
+            }
+            const int *before = analysis->origins + (size_t)i * nt;
+            _PyIRExceptionEntry handler = analysis->handlers[i];
+            if (handler.target >= 0) {
+                memcpy(error, before, (size_t)nt * sizeof(int));
+                register_context_forget_reads(code, i, analysis, error);
+                register_context_unwind(analysis, error, handler.slot, handler.lasti);
+                changed |= register_context_join(analysis, handler.target, context, error);
+            }
+            int next[2];
+            register_resume_successors(code, i, next);
+            for (int k = 0; k < 2; k++) {
+                if (next[k] < 0 || next[k] >= n) {
+                    continue;
+                }
+                memcpy(work, before, (size_t)nt * sizeof(int));
+                int after = register_context_normal(code, i, k, analysis, context, work);
+                changed |= register_context_join(analysis, next[k], after, work);
+                for (int r = analysis->source_heads[i]; r >= 0;
+                     r = analysis->source_next[r])
+                {
+                    _PyIRSourceEvent event = analysis->source_events[r];
+                    if (event.edge == k && event.handler >= 0) {
+                        memcpy(error, work, (size_t)nt * sizeof(int));
+                        register_context_unwind(analysis, error, event.exc_slot, event.lasti);
+                        changed |= register_context_join(analysis, event.handler, after, error);
+                    }
+                }
+            }
+        }
+    } while (changed);
+    PyMem_Free(work); PyMem_Free(error);
+    return 0;
+}
+
+static int
+register_resume_analyze(_PyInterpreterFrame *frame, bool allow_null,
+                        RegisterResumeAnalysis *analysis)
+{
+    PyCodeObject *code = _PyFrame_GetCode(frame);
+    *analysis = (RegisterResumeAnalysis){0};
+    if (Py_SIZE(code) > INT_MAX) {
+        PyErr_SetString(PyExc_ValueError, "debugger context analysis is too large");
+        return -1;
+    }
+    analysis->n = (int)Py_SIZE(code);
+    analysis->nl = code->co_nlocalsplus;
+    analysis->nt = code->co_framesize - FRAME_SPECIALS_SIZE - analysis->nl;
+    analysis->stride = (size_t)Py_MAX((analysis->nt + 63) / 64, 1);
+    for (int i = 0; i < analysis->n; i++) {
+        _PyIRWord word = code->co_words[i];
+        const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
+        uint32_t fields[] = {IR_A(word), IR_B(word), IR_C(word), IR_D(word)};
+        for (int f = 0; f < 4; f++) {
+            if (fmt->roles[f] >= _PyIR_ROLE_LOCAL_IN &&
+                fmt->roles[f] <= _PyIR_ROLE_CELL &&
+                fields[f] >= (uint32_t)analysis->nl)
+            {
+                PyErr_SetString(PyExc_ValueError, "jump requires valid named-local operands");
+                return -1;
+            }
+        }
+    }
+    if (register_resume_handlers(code, analysis) < 0 ||
+        register_resume_graph(code, analysis) < 0)
+    {
+        goto error;
+    }
+    analysis->safe = register_resume_liveness(frame, allow_null, analysis);
+    if (analysis->safe == NULL || register_resume_contexts(code, analysis) < 0) {
+        goto error;
+    }
+    return 0;
+error:
+    register_resume_analysis_clear(analysis);
+    return -1;
 }
 
 /* A pair survives only untouched physical operations. Even a read is a
@@ -1747,6 +2224,214 @@ register_resume_recipe(_PyInterpreterFrame *frame, int current, int target,
     return result;
 }
 
+static bool
+register_plan_has(const RegisterResumePlan *plan, int relative)
+{
+    return (plan->preserve[relative / 64] & ((uint64_t)1 << (relative % 64))) != 0;
+}
+
+static bool
+register_context_cut(PyCodeObject *code, RegisterResumeAnalysis *analysis,
+                      RegisterResumePlan *plan, int pc)
+{
+    _PyIRWord word = code->co_words[pc];
+    int opcode = _PyIR_BaseOpcode(IR_HANDLER(word));
+    if (opcode == PUSH_EXC_INFO || opcode == POP_EXCEPT) {
+        return true;
+    }
+    for (int j = 0; j < analysis->nt; j++) {
+        if (register_plan_has(plan, j)) {
+            int home = analysis->nl + j;
+            int arg = _PyCode_InstrOparg(code, pc);
+            if (_PyIR_ReadsHome(word, arg, home) || _PyIR_DefinesHome(word, arg, home)) {
+                return true;
+            }
+            for (int k = 0; k < 2; k++) {
+                _PyIRSlotOutcome outcome = _PyIR_Outcome(word, k);
+                if (outcome.semantic &&
+                    ((home >= outcome.first && home < outcome.first + outcome.count) ||
+                     home == outcome.dst))
+                {
+                    return true;
+                }
+            }
+            const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
+            if (fmt->effects & _PyIR_PUSHES_FRAME) {
+                uint32_t fields[] = {IR_A(word), IR_B(word), IR_C(word), IR_D(word)};
+                int base = -1;
+                for (int f = 0; f < 4; f++) {
+                    if (fmt->roles[f] == _PyIR_ROLE_BASE) {
+                        base = (int)fields[f];
+                    }
+                }
+                if (base < 0 || home >= base) {
+                    return true;
+                }
+            }
+        }
+    }
+    return false;
+}
+
+static int
+register_caught_slice(PyCodeObject *code, RegisterResumeAnalysis *analysis,
+                      RegisterResumePlan *plan, int current, int target, int node)
+{
+    int n = analysis->n;
+    unsigned char *reach = PyMem_Calloc((size_t)Py_MAX(n, 1), 1);
+    unsigned char *seen = PyMem_Calloc((size_t)Py_MAX(n, 1), 1);
+    int *queue = PyMem_New(int, Py_MAX(n, 1));
+    if (reach == NULL || seen == NULL || queue == NULL) {
+        PyMem_Free(reach); PyMem_Free(seen); PyMem_Free(queue);
+        PyErr_NoMemory();
+        return -1;
+    }
+    /* Only paths capable of reaching the stopped phase matter. */
+    int head = 0, tail = 0;
+    reach[current] = 1;
+    queue[tail++] = current;
+    while (head < tail) {
+        int to = queue[head++];
+        for (int e = analysis->reverse_heads[to]; e >= 0;
+             e = analysis->edges[e].reverse_next)
+        {
+            int from = analysis->edges[e].from;
+            if (!reach[from]) {
+                reach[from] = 1;
+                queue[tail++] = from;
+            }
+        }
+    }
+    int result = 0;
+    /* Target must dominate this dynamic arrival after the caught PUSH. */
+    int start = node;  /* node == PUSH pc + 1 */
+    if (start >= n || !reach[target]) {
+        goto done;
+    }
+    head = tail = 0;
+    seen[start] = 1;
+    queue[tail++] = start;
+    while (head < tail) {
+        int i = queue[head++];
+        if (i == target) {
+            continue;
+        }
+        if (i == current) {
+            goto done;
+        }
+        for (int e = analysis->edge_heads[i]; e >= 0; e = analysis->edges[e].next) {
+            int j = analysis->edges[e].to;
+            if (!seen[j] && reach[j]) {
+                seen[j] = 1;
+                queue[tail++] = j;
+            }
+        }
+    }
+    memset(seen, 0, (size_t)n);
+    head = tail = 0;
+    seen[target] = 1;
+    queue[tail++] = target;
+    while (head < tail) {
+        int i = queue[head++];
+        if (i == current) {
+            continue;
+        }
+        if (analysis->context[i] != node || register_context_cut(code, analysis, plan, i)) {
+            goto done;
+        }
+        for (int e = analysis->edge_heads[i]; e >= 0; e = analysis->edges[e].next) {
+            int j = analysis->edges[e].to;
+            if (!reach[j]) {
+                continue;
+            }
+            if (j <= i) {
+                goto done;  /* repeated producer/iteration is not the same owner */
+            }
+            int floor = analysis->edges[e].floor;
+            for (int h = 0; h < analysis->nt; h++) {
+                if (register_plan_has(plan, h) && floor >= 0 &&
+                    analysis->nl + h >= floor)
+                {
+                    goto done;
+                }
+            }
+            if (!seen[j]) {
+                seen[j] = 1;
+                queue[tail++] = j;
+            }
+        }
+    }
+    result = 1;
+done:
+    PyMem_Free(reach); PyMem_Free(seen); PyMem_Free(queue);
+    return result;
+}
+
+static int
+register_resume_plan(_PyInterpreterFrame *frame, int current, int target,
+                     RegisterResumeAnalysis *analysis, bool allow_anchor,
+                     RegisterResumePlan *plan)
+{
+    memset(plan->preserve, 0, plan->stride * sizeof(uint64_t));
+    int context = analysis->context[current];
+    if (context < 0 || context != analysis->context[target] ||
+        !register_context_chain(analysis, context, -1))
+    {
+        return 0;
+    }
+    if (context == 0) {
+        int pair;
+        /* The existing FOR dynamic-phase proof has ordinary edges only.
+         * Keep that adapter bounded until its own exceptional survival proof
+         * is extended; empty inherited recipes already include EH liveness. */
+        bool ordinary_anchor = allow_anchor &&
+            PyBytes_GET_SIZE(_PyFrame_GetCode(frame)->co_exceptiontable) == 0;
+        int result = register_resume_recipe(frame, current, target, analysis->safe,
+                                             analysis->required, ordinary_anchor, &pair);
+        if (result > 0 && pair >= 0) {
+            for (int h = pair; h < pair + 2; h++) {
+                int j = h - analysis->nl;
+                plan->preserve[j / 64] |= (uint64_t)1 << (j % 64);
+            }
+        }
+        return result;
+    }
+    if (!allow_anchor || target >= current) {
+        return 0;
+    }
+    const int *before = analysis->origins + (size_t)current * analysis->nt;
+    const int *after = analysis->origins + (size_t)target * analysis->nt;
+    for (int node = context; node > 0; node = analysis->parents[node - 1]) {
+        bool found = false;
+        for (int j = 0; j < analysis->nt; j++) {
+            if (before[j] != node || after[j] != node) {
+                continue;
+            }
+            PyValueBorrow value = PyValue_Borrow(frame->base[analysis->nl + j]);
+            if (!PyValue_IsNone(value) &&
+                !(PyValue_IsObject(value) &&
+                  PyExceptionInstance_Check(PyValue_AsKnownObjectBorrow(value))))
+            {
+                return 0;
+            }
+            plan->preserve[j / 64] |= (uint64_t)1 << (j % 64);
+            found = true;
+        }
+        if (!found) {
+            return 0;
+        }
+    }
+    for (size_t j = 0; j < analysis->stride; j++) {
+        uint64_t needs = analysis->required[(size_t)current * analysis->stride + j] |
+                         analysis->required[(size_t)target * analysis->stride + j];
+        if (needs & ~plan->preserve[j]) {
+            return 0;
+        }
+    }
+    return register_caught_slice(_PyFrame_GetCode(frame), analysis, plan,
+                                  current, target, context);
+}
+
 static int *
 marklines(PyCodeObject *code, int len)
 {
@@ -1853,6 +2538,7 @@ frame_lineno_set_impl(PyFrameObject *self, PyObject *value)
         case PY_MONITORING_EVENT_BRANCH_RIGHT:
         case PY_MONITORING_EVENT_LINE:
         case PY_MONITORING_EVENT_PY_YIELD:
+        case _PY_DEBUGGER_ENTRY_EVENT:
             /* Setting f_lineno is allowed for the above events */
             break;
         case PY_MONITORING_EVENT_PY_START:
@@ -1971,14 +2657,14 @@ frame_lineno_set_impl(PyFrameObject *self, PyObject *value)
 
     /* Protected and suspended resumptions need explicit owner/exception
      * recipes. Do not let a frontend stack projection authorize them. */
-    if (is_suspended || PyBytes_GET_SIZE(code->co_exceptiontable)) {
+    if (is_suspended || what_event == PY_MONITORING_EVENT_PY_YIELD) {
         PyMem_Free(lines);
         PyErr_SetString(PyExc_ValueError,
                         "jump requires a suspended or protected owner recipe");
         return -1;
     }
-    unsigned char *safe = NULL;
-    uint64_t *required = NULL;
+    RegisterResumeAnalysis analysis = {0};
+    RegisterResumePlan plan = {0};
     int current = _PyInterpreterFrame_LASTI(self->f_frame);
     bool pending_call = false;
     _PyInterpreterFrame *observed =
@@ -1989,7 +2675,6 @@ frame_lineno_set_impl(PyFrameObject *self, PyObject *value)
             child = child->previous;
         }
         if (child == NULL) {
-            PyMem_Free(safe);
             PyMem_Free(lines);
             PyErr_SetString(PyExc_ValueError, "frame is not an active observer ancestor");
             return -1;
@@ -2000,10 +2685,10 @@ frame_lineno_set_impl(PyFrameObject *self, PyObject *value)
     }
     if (child != NULL) {
         int opcode = _PyIR_EventOpcode(_PyCode_InstrHandler(code, current));
-        if (child->external || self->f_frame->return_slot != IR_NO_DST ||
+        if (child->external || PyBytes_GET_SIZE(code->co_exceptiontable) ||
+            self->f_frame->return_slot != IR_NO_DST ||
             (opcode != CALL && opcode != CALL_KW))
         {
-            PyMem_Free(safe);
             PyMem_Free(lines);
             PyErr_SetString(PyExc_ValueError,
                             "jump requires an unsupported active call recipe");
@@ -2019,20 +2704,50 @@ frame_lineno_set_impl(PyFrameObject *self, PyObject *value)
         _PyIRSource_Event(&source, (uint32_t)self->f_source_event, &event);
         current = event.to;
     }
-    safe = register_resume_sites(self->f_frame, !pending_call, &required);
-    if (safe == NULL) {
+    if (register_resume_analyze(self->f_frame, !pending_call, &analysis) < 0) {
         PyMem_Free(lines);
         return -1;
     }
-    int best_addr = -1, preserve = -1;
+    plan.stride = analysis.stride;
+    plan.preserve = PyMem_Calloc(plan.stride, sizeof(uint64_t));
+    if (plan.preserve == NULL) {
+        register_resume_analysis_clear(&analysis);
+        PyMem_Free(lines);
+        PyErr_NoMemory();
+        return -1;
+    }
+    /* A source callback observes a post-operation edge. Require its actual
+     * context to agree with the selected landing's derived context; merging
+     * at event.to alone cannot establish the stopped phase. */
+    if (!pending_call && self->f_source_event >= 0) {
+        _PyIRSourceEvent event;
+        _PyIRSource_Event(&source, (uint32_t)self->f_source_event, &event);
+        int *origins = PyMem_New(int, Py_MAX(analysis.nt, 1));
+        if (origins == NULL) {
+            register_resume_analysis_clear(&analysis);
+            PyMem_Free(plan.preserve); PyMem_Free(lines);
+            PyErr_NoMemory();
+            return -1;
+        }
+        memcpy(origins, analysis.origins + (size_t)event.from * analysis.nt,
+               (size_t)analysis.nt * sizeof(int));
+        int context = register_context_normal(code, event.from, event.edge,
+                                              &analysis, analysis.context[event.from],
+                                              origins);
+        PyMem_Free(origins);
+        if (context < 0 || context != analysis.context[current]) {
+            current = -1;
+        }
+    }
+    int best_addr = -1;
     int recipe = 0;
     if (current >= 0 && current < len) {
         for (int i = 0; i < len; i++) {
             if (lines[i] != new_lineno) {
                 continue;
             }
-            recipe = register_resume_recipe(self->f_frame, current, i, safe,
-                                            required, !pending_call, &preserve);
+            recipe = register_resume_plan(self->f_frame, current, i, &analysis,
+                                          !pending_call, &plan);
             if (recipe != 0) {
                 if (recipe > 0) {
                     best_addr = i;
@@ -2044,9 +2759,8 @@ frame_lineno_set_impl(PyFrameObject *self, PyObject *value)
             _PyIRSourceEvent event;
             _PyIRSource_Event(&source, j, &event);
             if (event.line == new_lineno && event.handler < 0) {
-                recipe = register_resume_recipe(self->f_frame, current, event.to,
-                                                safe, required, !pending_call,
-                                                &preserve);
+                recipe = register_resume_plan(self->f_frame, current, event.to,
+                                              &analysis, !pending_call, &plan);
                 if (recipe > 0) {
                     best_addr = event.to;
                     break;
@@ -2054,10 +2768,10 @@ frame_lineno_set_impl(PyFrameObject *self, PyObject *value)
             }
         }
     }
-    PyMem_Free(required);
-    PyMem_Free(safe);
+    register_resume_analysis_clear(&analysis);
     PyMem_Free(lines);
     if (best_addr < 0) {
+        PyMem_Free(plan.preserve);
         if (recipe >= 0) {
             PyErr_SetString(PyExc_ValueError,
                             "jump requires an incoming temporary register owner");
@@ -2074,6 +2788,7 @@ frame_lineno_set_impl(PyFrameObject *self, PyObject *value)
         unbound += PyValue_IsNull(self->f_frame->base[i]);
     }
     if (self->f_lineno_generation == UINT64_MAX) {
+        PyMem_Free(plan.preserve);
         PyErr_SetString(PyExc_OverflowError, "debugger redirect generation exhausted");
         return -1;
     }
@@ -2087,6 +2802,7 @@ frame_lineno_set_impl(PyFrameObject *self, PyObject *value)
         const char *e = "assigning None to %d unbound local%s";
         const char *s = (unbound == 1) ? "" : "s";
         if (PyErr_WarnFormat(PyExc_RuntimeWarning, 0, e, unbound, s)) {
+            PyMem_Free(plan.preserve);
             return -1;
         }
         /* Warning hooks may execute Python and redirect this same frame.
@@ -2098,20 +2814,22 @@ frame_lineno_set_impl(PyFrameObject *self, PyObject *value)
             self->f_lineno_generation != before_generation ||
             frame->pending_redirect != before_pending)
         {
+            PyMem_Free(plan.preserve);
             return 0;
         }
-        safe = register_resume_sites(frame, !pending_call, &required);
-        if (safe == NULL) {
+        if (register_resume_analyze(frame, !pending_call, &analysis) < 0) {
+            PyMem_Free(plan.preserve);
             return -1;
         }
-        int valid = register_resume_recipe(frame, current, best_addr, safe,
-                                           required, !pending_call, &preserve);
-        PyMem_Free(required);
-        PyMem_Free(safe);
+        int valid = register_resume_plan(frame, current, best_addr, &analysis,
+                                          !pending_call, &plan);
+        register_resume_analysis_clear(&analysis);
         if (valid < 0) {
+            PyMem_Free(plan.preserve);
             return -1;
         }
         if (!valid) {
+            PyMem_Free(plan.preserve);
             PyErr_SetString(PyExc_ValueError,
                             "jump owner state changed during warning");
             return -1;
@@ -2122,6 +2840,7 @@ frame_lineno_set_impl(PyFrameObject *self, PyObject *value)
     if (!pending_call) {
         retired = PyMem_New(PyValue, Py_MAX(nslots - code->co_nlocalsplus, 1));
         if (retired == NULL) {
+            PyMem_Free(plan.preserve);
             PyErr_NoMemory();
             return -1;
         }
@@ -2140,13 +2859,13 @@ frame_lineno_set_impl(PyFrameObject *self, PyObject *value)
             for (int j = 0; j < code->co_nconstslots; j++) {
                 constant |= constants[j * 2] == (uint32_t)slot;
             }
-            if (!constant &&
-                !(preserve >= 0 && (slot == preserve || slot == preserve + 1))) {
+            if (!constant && !register_plan_has(&plan, slot - code->co_nlocalsplus)) {
                 retired[nretired++] = frame->base[slot];
                 frame->base[slot] = PyValue_NULL;
             }
         }
     }
+    PyMem_Free(plan.preserve);
     /* Commit the continuation before any closing callback. A suspended
      * caller's overlap remains untouched until its child retires. */
     self->f_lineno_generation++;

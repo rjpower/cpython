@@ -585,40 +585,33 @@ class Pdb(bdb.Bdb, cmd.Cmd):
         if frame is None:
             frame = sys._getframe().f_back
 
-        # We need set_trace to set up the basics, however, this will call
-        # set_stepinstr() will we need to compensate for, because we don't
-        # want to trigger on calls
-        self.set_trace(frame, commands=commands)
-        # Changing the stopframe will disable trace dispatch on calls
+        if self.enterframe is not None:
+            return
+        Pdb._last_pdb_instance = self
+        if commands is not None:
+            self.rcLines.extend(commands)
+        self._prepare_set_trace(frame)
         self.stopframe = frame
-        # We need to stop tracing because we don't have the privilege to avoid
-        # triggering tracing functions as normal, as we are not already in
-        # tracing functions
-        self.stop_trace()
-
         self.async_shim_frame = sys._getframe()
         self.async_awaitable = None
 
-        while True:
-            self.async_awaitable = None
-            # Simulate a trace event
-            # This should bring up pdb and make pdb believe it's debugging the
-            # caller frame
-            self.trace_dispatch(frame, "opcode", None)
-            if self.async_awaitable is not None:
+        try:
+            while True:
+                self.async_awaitable = None
+                sys._debugger_entry(frame, self._dispatch_async_entry)
+                if self.async_awaitable is None:
+                    break
                 try:
                     if self.breaks:
                         with self.set_enterframe(frame):
-                            # set_continue requires enterframe to work
                             self.set_continue()
                         self.start_trace()
                     await self.async_awaitable
                 except Exception:
                     self._error_exc()
-            else:
-                break
-
-        self.async_shim_frame = None
+        finally:
+            self.async_shim_frame = None
+            self.async_awaitable = None
 
         # start the trace (the actual command is already set by set_* calls)
         if self.returnframe is None and self.stoplineno == -1 and not self.breaks:
@@ -627,6 +620,14 @@ class Pdb(bdb.Bdb, cmd.Cmd):
             return
 
         self.start_trace()
+
+    def _dispatch_async_entry(self, frame):
+        try:
+            self._dispatch_entry(frame)
+        finally:
+            # Await runs outside the suppressed entry transaction. Keep tracing
+            # stopped between interaction and its explicit async activation.
+            self.stop_trace()
 
     def sigint_handler(self, signum, frame):
         if self.allow_kbdint:

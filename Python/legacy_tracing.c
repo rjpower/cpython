@@ -7,8 +7,10 @@
 #include "pycore_ceval.h"         // export _PyEval_SetProfile()
 #include "pycore_frame.h"         // PyFrameObject members
 #include "pycore_interpframe.h"   // _PyFrame_GetCode()
+#include "pycore_ir.h"            // _PyCode_InstrHandler()
 #include "pycore_ir_source.h"     // _PyIRSource_Stored()
 #include "pycore_long_value.h"    // _PyValue_AsInt()
+#include "pycore_pyerrors.h"      // PyStopIterationObject
 #include "pycore_tstate.h"        // _PyThreadStateImpl
 #include "pycore_tuple.h"         // _PyTuple_PackValues()
 #include "pycore_value_api.h"     // _PyBox_CALL_ADAPTER()
@@ -377,6 +379,37 @@ offset_from_word(PyValueBorrow word, int *out)
 }
 
 static PyValue
+sys_trace_stop_iteration_func(
+    PyThreadState *tstate, PyObject *callable, const PyValue *args,
+    size_t nargsf, PyObject *kwnames
+) {
+    assert(kwnames == NULL);
+    assert(PyVectorcall_NARGS(nargsf) == 3);
+    /* STOP is a semantic completion notification. The legacy API omits
+     * implicit valueless FOR exhaustion; actual RAISE events remain intact.
+     * Use the immutable event site, not a callback-redirected frame PC. */
+    if (PyValue_IsObject(args[0]) && PyValue_IsInlineInt(args[1]) &&
+        PyValue_IsObject(args[2]))
+    {
+        PyObject *code_obj = PyValue_AsKnownObjectBorrow(args[0]);
+        PyObject *exc = PyValue_AsKnownObjectBorrow(args[2]);
+        int64_t offset = PyValue_InlineInt64(args[1]);
+        if (PyCode_Check(code_obj) && Py_IS_TYPE(exc, (PyTypeObject *)PyExc_StopIteration)) {
+            PyCodeObject *code = (PyCodeObject *)code_obj;
+            if (offset >= 0 && offset < Py_SIZE(code) &&
+                _PyIR_BaseOpcode(_PyCode_InstrHandler(code, (int)offset)) == FOR_ITER)
+            {
+                PyValue value = ((PyStopIterationObject *)exc)->value;
+                if (PyValue_IsNull(value) || PyValue_IsNone(value)) {
+                    return PyValue_None;
+                }
+            }
+        }
+    }
+    return sys_trace_exception_func(tstate, callable, args, nargsf, kwnames);
+}
+
+static PyValue
 sys_trace_line_func(
     PyThreadState *tstate, PyObject *callable, const PyValue *args,
     size_t nargsf, PyObject *kwnames
@@ -721,8 +754,12 @@ setup_trace_callbacks(void *Py_UNUSED(arg))
     }
     if (set_callbacks(PY_MONITORING_SYS_TRACE_ID,
                       sys_trace_exception_func, PyTrace_EXCEPTION,
-                      PY_MONITORING_EVENT_RAISE,
-                      PY_MONITORING_EVENT_STOP_ITERATION)) {
+                      PY_MONITORING_EVENT_RAISE, -1)) {
+        return -1;
+    }
+    if (set_callbacks(PY_MONITORING_SYS_TRACE_ID,
+                      sys_trace_stop_iteration_func, PyTrace_EXCEPTION,
+                      PY_MONITORING_EVENT_STOP_ITERATION, -1)) {
         return -1;
     }
     if (set_callbacks(PY_MONITORING_SYS_TRACE_ID,

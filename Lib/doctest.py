@@ -399,6 +399,16 @@ class _OutputRedirectingPdb(pdb.Pdb):
         if self.__debugger_used:
             pdb.Pdb.set_continue(self)
 
+    def user_entry(self, frame):
+        # Explicit entry bypasses trace_dispatch, but interaction still writes
+        # to the doctest debugger stream rather than captured example output.
+        save_stdout = sys.stdout
+        sys.stdout = self.__out
+        try:
+            return super().user_entry(frame)
+        finally:
+            sys.stdout = save_stdout
+
     def trace_dispatch(self, *args):
         # Redirect stdout to the given stream.
         save_stdout = sys.stdout

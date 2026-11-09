@@ -1370,6 +1370,41 @@ exit:
     return return_value;
 }
 
+PyDoc_STRVAR(sys__debugger_entry__doc__,
+"_debugger_entry($module, frame, callback, /)\n"
+"--\n"
+"\n"
+"Invoke a private debugger entry callback for an active ancestor frame.");
+
+#define SYS__DEBUGGER_ENTRY_METHODDEF    \
+    {"_debugger_entry", _PyCFunction_CAST(sys__debugger_entry), METH_VALUE, sys__debugger_entry__doc__},
+
+static PyValue
+sys__debugger_entry_impl(PyObject *module, PyObject *frame,
+                         PyValueBorrow callback);
+
+static PyValue
+sys__debugger_entry(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+{
+    PyValue return_value = PyValue_NULL;
+    PyObject *frame;
+    PyValueBorrow callback;
+
+    if (!_PyArg_CheckPositional("_debugger_entry", nargs, 2, 2)) {
+        goto exit;
+    }
+    if (!PyType_IsSubtype(PyValue_TYPE(PyValue_Borrow(args[0])), &PyFrame_Type)) {
+        _PyArg_BadArgumentValue("_debugger_entry", "argument 1", (&PyFrame_Type)->tp_name, PyValue_Borrow(args[0]));
+        goto exit;
+    }
+    frame = PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0]));
+    callback = PyValue_Borrow(args[1]);
+    return_value = sys__debugger_entry_impl(PyValue_AsKnownObjectBorrow(module), frame, callback);
+
+exit:
+    return return_value;
+}
+
 PyDoc_STRVAR(sys__getframe__doc__,
 "_getframe($module, depth=0, /)\n"
 "--\n"
@@ -2361,4 +2396,4 @@ exit:
 #ifndef SYS_GETANDROIDAPILEVEL_METHODDEF
     #define SYS_GETANDROIDAPILEVEL_METHODDEF
 #endif /* !defined(SYS_GETANDROIDAPILEVEL_METHODDEF) */
-/*[clinic end generated code: output=c6af722b73705d6f input=a9049054013a1b77]*/
+/*[clinic end generated code: output=eb884b69f76824ab input=a9049054013a1b77]*/

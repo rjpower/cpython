@@ -11,6 +11,7 @@
 #include "pycore_interpframe.h"   // FRAME_SPECIALS_SIZE
 #include "pycore_ir_source.h"
 #include "pycore_ir_outcomes.h"
+#include "pycore_ir_exception.h"
 #include "pycore_opcode_metadata.h" // _PyOpcode_Caches
 #include "pycore_opcode_utils.h"  // RESUME_AT_FUNC_START
 #include "pycore_pymem.h"         // _PyMem_FreeDelayed()
@@ -889,22 +890,6 @@ invalid:
     return -1;
 }
 
-static int
-completion_varint(const unsigned char **cursor, const unsigned char *end,
-                  int *value)
-{
-    uint32_t result = 0;
-    unsigned char byte;
-    do {
-        if (*cursor == end || result > ((uint32_t)INT_MAX >> 6)) {
-            return -1;
-        }
-        byte = *(*cursor)++;
-        result = (result << 6) | (byte & 63);
-    } while (byte & 64);
-    *value = (int)result;
-    return 0;
-}
 
 typedef struct {
     uint16_t *facts;
@@ -1048,10 +1033,10 @@ completion_handler_safe(struct _PyCodeConstructor *con, int entry, int exc_slot,
         const unsigned char *end = cursor + PyBytes_GET_SIZE(con->exceptiontable);
         while (cursor < end) {
             int start, size, target, slot_lasti;
-            if (completion_varint(&cursor, end, &start) < 0 ||
-                completion_varint(&cursor, end, &size) < 0 ||
-                completion_varint(&cursor, end, &target) < 0 ||
-                completion_varint(&cursor, end, &slot_lasti) < 0)
+            if (_PyIR_ExceptionVarint(&cursor, end, &start) < 0 ||
+                _PyIR_ExceptionVarint(&cursor, end, &size) < 0 ||
+                _PyIR_ExceptionVarint(&cursor, end, &target) < 0 ||
+                _PyIR_ExceptionVarint(&cursor, end, &slot_lasti) < 0)
             {
                 safe = 0;
                 break;
@@ -1184,38 +1169,16 @@ validate_completion_words(struct _PyCodeConstructor *con)
     }
     const unsigned char *cursor = (const unsigned char *)PyBytes_AS_STRING(con->exceptiontable);
     const unsigned char *end = cursor + PyBytes_GET_SIZE(con->exceptiontable);
-    int previous_end = 0;
-    while (cursor < end) {
-        int fields[4];
-        for (int f = 0; f < 4; f++) {
-            const unsigned char *first = cursor;
-            if (cursor == end || ((*cursor & 128) != (f == 0 ? 128 : 0)) ||
-                completion_varint(&cursor, end, &fields[f]) < 0)
-            {
-                goto invalid;
-            }
-            for (const unsigned char *p = first + 1; p < cursor; p++) {
-                if (*p & 128) {
-                    goto invalid;
-                }
-            }
-        }
-        int start = fields[0], size = fields[1], target = fields[2];
-        int slot = fields[3] >> 1, floor = slot - (fields[3] & 1);
-        if (start < previous_end || start > n || size <= 0 ||
-            size > n - start || target >= n || floor < nl || slot >= limit)
-        {
-            goto invalid;
-        }
-        previous_end = start + size;
+    if (!_PyIR_ExceptionTableValid(cursor, end, n, nl, limit)) {
+        goto invalid;
     }
     cursor = (const unsigned char *)PyBytes_AS_STRING(con->exceptiontable);
     while (cursor < end) {
         int start, size, target, slot_lasti;
-        if (completion_varint(&cursor, end, &start) < 0 ||
-            completion_varint(&cursor, end, &size) < 0 ||
-            completion_varint(&cursor, end, &target) < 0 ||
-            completion_varint(&cursor, end, &slot_lasti) < 0 ||
+        if (_PyIR_ExceptionVarint(&cursor, end, &start) < 0 ||
+            _PyIR_ExceptionVarint(&cursor, end, &size) < 0 ||
+            _PyIR_ExceptionVarint(&cursor, end, &target) < 0 ||
+            _PyIR_ExceptionVarint(&cursor, end, &slot_lasti) < 0 ||
             start > n || size > n - start || target >= n)
         {
             goto invalid;

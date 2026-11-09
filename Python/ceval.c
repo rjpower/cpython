@@ -3066,13 +3066,16 @@ _PyEval_CompleteGeneratorReturn(PyThreadState *tstate,
         return (_PyIRStepResult){frame->return_pc, _PY_IR_STEP_EXIT};
     }
     _PyInstr *site = frame->instr_ptr;
-    uint64_t word = FT_ATOMIC_LOAD_UINT64_RELAXED(*site);
     PyCodeObject *code = _PyFrame_GetCode(frame);
     int offset = (int)_PyFrame_InstrOffset(frame, site);
-    int opcode = _PyIR_BaseOpcode(_PyCode_InstrHandler(code, offset));
+    assert(offset >= 0 && offset < Py_SIZE(code));
+    /* SEND/FOR completion uses the immutable A/B/signed-D layout, including
+     * when the executing site has a transparent instrumentation wrapper. */
+    _PyIRWord word = code->co_words[offset];
+    int opcode = _PyIR_HandlerBase[IR_HANDLER(word)];
     assert(opcode == SEND || opcode == FOR_ITER);
     return _PyEval_CompleteStep(tstate, frame, site, IR_B(word), IR_A(word),
-        frame->return_pc + _PyCode_InstrOparg(code, offset), value,
+        frame->return_pc + IR_DS(word), value,
         opcode == SEND ? _PY_IR_SEND : _PY_IR_FOR_ITER);
 }
 

@@ -1,6 +1,7 @@
 """Loop/send outcomes own their results and real continuations."""
 
 import dis
+import sys
 import unittest
 
 from test.support import import_helper
@@ -14,6 +15,48 @@ def opnames(function):
 
 
 class SemanticCompletionTests(unittest.TestCase):
+    def test_monitored_generator_for_completion(self):
+        item, returned = object(), object()
+
+        def source():
+            yield item
+            return returned
+
+        def consume():
+            last = None
+            for last in source():
+                pass
+            return last
+
+        monitoring, tool = sys.monitoring, 4
+        monitoring.use_tool_id(tool, 'generator completion decoder')
+        self.addCleanup(monitoring.free_tool_id, tool)
+        self.addCleanup(monitoring.register_callback, tool,
+                        monitoring.events.STOP_ITERATION, None)
+        self.addCleanup(monitoring.set_local_events, tool, consume.__code__, 0)
+        stopped = []
+
+        def on_stop(code, offset, exception):
+            self.assertIs(code, consume.__code__)
+            word = _testinternalcapi.get_ir(code, True)[offset]
+            self.assertEqual(word[0], 'INSTRUMENTED_FOR_ITER')
+            self.assertIs(type(exception), StopIteration)
+            self.assertIs(exception.value, returned)
+            stopped.append(offset)
+
+        monitoring.register_callback(tool, monitoring.events.STOP_ITERATION,
+                                     on_stop)
+        for warm in (0, ROUNDS):
+            with self.subTest(warm=warm):
+                monitoring.set_local_events(tool, consume.__code__, 0)
+                for _ in range(warm):
+                    self.assertIs(consume(), item)
+                stopped.clear()
+                monitoring.set_local_events(tool, consume.__code__,
+                                             monitoring.events.STOP_ITERATION)
+                self.assertIs(consume(), item)
+                self.assertEqual(len(stopped), 1)
+
     def test_for_iter_preserves_last_local_on_generator_return(self):
         item = object()
         returned = object()

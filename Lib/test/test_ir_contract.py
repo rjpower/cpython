@@ -92,6 +92,28 @@ def names_with(bit, key="effects"):
 
 class ContractTests(unittest.TestCase):
 
+    def test_generator_completion_operand_layout(self):
+        families = {opcode.opmap['SEND'], opcode.opmap['FOR_ITER']}
+        # Exported base uses BaseOpcode, which retains instrumented IDs.
+        # Include their positively declared canonical-family twin links.
+        twins = {row.twin for row in ROWS.values()
+                 if row.base in families and row.twin}
+        selected = set()
+        for handler, row in ROWS.items():
+            if row.base not in families and handler not in twins:
+                continue
+            name = opcode.opname[handler]
+            selected.add(name)
+            with self.subTest(handler=name):
+                self.assertEqual(row.roles, (_opcode.IR_ROLE_DST,
+                                             _opcode.IR_ROLE_BASE,
+                                             _opcode.IR_ROLE_FB,
+                                             _opcode.IR_ROLE_IMM))
+                self.assertEqual(row.imm, _opcode.IR_LOC_D)
+                self.assertTrue(row.flags & _opcode.IR_FORWARD)
+        self.assertTrue({'SEND', 'SEND_GEN', 'FOR_ITER', 'FOR_ITER_GEN',
+                         'INSTRUMENTED_FOR_ITER'} <= selected)
+
     def test_result_publication_phase(self):
         phase = _opcode.IR_RESULT_PHASE_DST_TEMP_CANONICAL_BEFORE_RETIRE
         for name in ("LOAD_ATTR_SLOT", "LOAD_ATTR_INSTANCE_VALUE",

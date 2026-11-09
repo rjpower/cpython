@@ -1373,6 +1373,7 @@ typedef struct {
     int *source_heads, *source_next;
     _PyIRSourceEvent *source_events;
     uint32_t nsource;
+    int *stopped_row;
 } RegisterResumeAnalysis;
 
 typedef struct {
@@ -1410,25 +1411,26 @@ typedef struct {
         REGISTER_RESUME_OTHER,
         REGISTER_RESUME_PRE_WORD,
         REGISTER_RESUME_COMMITTED_NEUTRAL,
+        REGISTER_RESUME_COMMITTED,
     } kind;
     int pc;
-    /* Neutral committed edges preserve these exact site rows. They are not
-     * the merged rows of the branch destination. */
+    /* PRE/neutral views borrow exact site rows. Other committed views bind
+     * request-owned transferred rows, never the merged destination rows. */
     int context;
     const int *save_tops, *origins;
+    _PyIRObserverSpec scope;
 } RegisterStoppedState;
 
 static bool
-register_neutral_jump_scope(_PyInterpreterFrame *frame,
-                            const _PyIRObserverSpec *scope)
+register_committed_scope(_PyInterpreterFrame *frame,
+                         const _PyIRObserverSpec *scope)
 {
     PyCodeObject *code = _PyFrame_GetCode(frame);
     uintptr_t first = (uintptr_t)frame->ir_words;
     uintptr_t site = (uintptr_t)scope->site;
     size_t size = (size_t)Py_SIZE(code) * sizeof(_PyIRWord);
     if (scope->phase != _PY_IR_OBSERVER_POST_COMMITTED ||
-        scope->event != PY_MONITORING_EVENT_JUMP ||
-        scope->edge != _PyIR_SOURCE_TAKEN || site < first ||
+        scope->edge < 0 || scope->edge > 1 || site < first ||
         site - first >= size || (site - first) % sizeof(_PyIRWord))
     {
         return false;
@@ -1436,15 +1438,33 @@ register_neutral_jump_scope(_PyInterpreterFrame *frame,
     int pc = (int)((site - first) / sizeof(_PyIRWord));
     _PyIRWord word = code->co_words[pc];
     const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
-    int arg = _PyCode_InstrOparg(code, pc);
-    if (_PyIR_ObserverOutcome(word, scope->edge) != _PyIR_OBSERVER_FORMAT_VALUE ||
+    _PyIRObservedHomes homes;
+    if ((fmt->effects & (_PyIR_PUSHES_FRAME | _PyIR_SUSPENDS)) ||
+        !_PyIR_ObservedHomes(word, scope->edge, code->co_nlocalsplus,
+                            code->co_framesize - FRAME_SPECIALS_SIZE, &homes))
+    {
+        return false;
+    }
+    int successors[2];
+    register_resume_successors(code, pc, successors);
+    int next = successors[scope->edge];
+    return next >= 0 && next < Py_SIZE(code) &&
+           scope->next == _PyFrame_InstrAt(frame, next);
+}
+
+/* The common committed-scope proof has already checked the physical edge. */
+static bool
+register_neutral_jump_word(_PyIRWord word, int arg)
+{
+    const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
+    if (_PyIR_ObserverOutcome(word, _PyIR_SOURCE_TAKEN) != _PyIR_OBSERVER_FORMAT_VALUE ||
         !(fmt->flags & (_PyIR_JUMPS | _PyIR_FORWARD)) ||
         !(fmt->flags & _PyIR_JUMP_ALWAYS) ||
         (fmt->effects & (_PyIR_PUSHES_FRAME | _PyIR_SUSPENDS)) ||
         _PyIR_Extent(fmt->reads, arg) != 0 ||
         _PyIR_Extent(fmt->writes, arg) != 0 ||
         _PyIR_Extent(fmt->through, arg) != 0 ||
-        _PyIR_Outcome(word, scope->edge).semantic)
+        _PyIR_Outcome(word, _PyIR_SOURCE_TAKEN).semantic)
     {
         return false;
     }
@@ -1455,14 +1475,11 @@ register_neutral_jump_scope(_PyInterpreterFrame *frame,
             return false;
         }
     }
-    int successors[2];
-    register_resume_successors(code, pc, successors);
-    return successors[1] >= 0 && successors[1] < Py_SIZE(code) &&
-           scope->next == _PyFrame_InstrAt(frame, successors[1]);
+    return true;
 }
 
-/* Capture one proved stopped phase. A certified neutral committed edge and
- * PRE both borrow exact site rows; raw event bits do not authorize either. */
+/* Capture one proved stopped phase; bind its rows after analysis. Raw event
+ * bits alone authorize neither a PRE view nor a committed edge. */
 static RegisterStoppedState
 register_stopped_state(PyFrameObject *self, int current, int what_event,
                        bool pending_call, _PyInterpreterFrame *observed)
@@ -1473,7 +1490,16 @@ register_stopped_state(PyFrameObject *self, int current, int what_event,
     if (!_PyEval_GetObserverContext(PyThreadState_GET(), frame, what_event, &context)) {
         return phase;
     }
-    bool neutral_jump = register_neutral_jump_scope(frame, &context);
+    bool committed = register_committed_scope(frame, &context);
+    bool neutral_jump = false;
+    if (committed && context.event == PY_MONITORING_EVENT_JUMP &&
+        context.edge == _PyIR_SOURCE_TAKEN)
+    {
+        int pc = _PyFrame_InstrOffset(frame, context.site);
+        PyCodeObject *code = _PyFrame_GetCode(frame);
+        neutral_jump = register_neutral_jump_word(code->co_words[pc],
+                                                  _PyCode_InstrOparg(code, pc));
+    }
     bool original_pre = context.phase == _PY_IR_OBSERVER_PRE_WORD &&
                         context.site == frame->instr_ptr &&
                         context.generation == self->f_lineno_generation;
@@ -1483,13 +1509,12 @@ register_stopped_state(PyFrameObject *self, int current, int what_event,
     bool committed_pre = context.generation != self->f_lineno_generation &&
                          (context.phase == _PY_IR_OBSERVER_PRE_WORD ||
                           context.phase == _PY_IR_OBSERVER_SOURCE_POST ||
-                          neutral_jump) &&
+                          committed) &&
                          frame->instr_ptr == frame->return_pc;
     bool line_phase = what_event == PY_MONITORING_EVENT_LINE &&
                       (original_pre || committed_pre);
-    bool fresh_jump_landing = what_event == PY_MONITORING_EVENT_JUMP &&
-                              neutral_jump && committed_pre;
-    if ((line_phase || fresh_jump_landing) && observed == frame &&
+    bool fresh_committed_landing = committed && committed_pre;
+    if ((line_phase || fresh_committed_landing) && observed == frame &&
         !pending_call && !frame->pending_redirect &&
         self->f_source_event < 0 && self->f_source_event_error < 0 &&
         current >= 0 && current < Py_SIZE(_PyFrame_GetCode(frame)) &&
@@ -1507,6 +1532,17 @@ register_stopped_state(PyFrameObject *self, int current, int what_event,
              context.site == _PyFrame_InstrAt(frame, current))
     {
         phase.kind = REGISTER_RESUME_COMMITTED_NEUTRAL;
+    }
+    else if (committed && observed == frame && !pending_call &&
+             !frame->pending_redirect && self->f_source_event < 0 &&
+             self->f_source_event_error < 0 &&
+             context.generation == self->f_lineno_generation &&
+             frame->instr_ptr == context.site && frame->return_pc == context.next &&
+             current >= 0 && current < Py_SIZE(_PyFrame_GetCode(frame)) &&
+             context.site == _PyFrame_InstrAt(frame, current))
+    {
+        phase.kind = REGISTER_RESUME_COMMITTED;
+        phase.scope = context;
     }
     return phase;
 }
@@ -1530,6 +1566,7 @@ register_resume_analysis_clear(RegisterResumeAnalysis *analysis)
     PyMem_Free(analysis->source_heads);
     PyMem_Free(analysis->source_next);
     PyMem_Free(analysis->source_events);
+    PyMem_Free(analysis->stopped_row);
     memset(analysis, 0, sizeof(*analysis));
 }
 
@@ -2097,6 +2134,94 @@ register_context_normal(PyCodeObject *code, int pc, int taken,
         }
     }
     return context;
+}
+
+/* Bind one request-owned post-edge row. Token-creating transfers update the
+ * analysis parent tables, so they need a different proof from this view. */
+static int
+register_stopped_state_bind(PyFrameObject *self, RegisterResumeAnalysis *analysis,
+                            RegisterStoppedState *phase)
+{
+    int pc = phase->pc;
+    if (pc < 0 || pc >= analysis->n) {
+        return 0;
+    }
+    phase->context = analysis->context[pc];
+    phase->save_tops = analysis->save_tops + (size_t)pc * analysis->nsave_columns;
+    phase->origins = analysis->origins + (size_t)pc * analysis->nt;
+    if (phase->kind != REGISTER_RESUME_COMMITTED) {
+        return 1;
+    }
+    _PyInterpreterFrame *frame = self->f_frame;
+    PyThreadState *tstate = PyThreadState_GET();
+    RegisterStoppedState fresh = register_stopped_state(
+        self, pc, tstate->what_event, false,
+        ((_PyThreadStateImpl *)tstate)->observed_frame);
+    if (fresh.kind != phase->kind || fresh.scope.site != phase->scope.site ||
+        fresh.scope.next != phase->scope.next ||
+        fresh.scope.edge != phase->scope.edge ||
+        fresh.scope.generation != phase->scope.generation)
+    {
+        return 0;
+    }
+    PyCodeObject *code = _PyFrame_GetCode(frame);
+    _PyIRWord word = code->co_words[pc];
+    const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
+    if (_PyIR_HandlerBase[IR_HANDLER(word)] == PUSH_EXC_INFO) {
+        return 0;
+    }
+    for (int f = 0; f < 4; f++) {
+        if (fmt->roles[f] == _PyIR_ROLE_LOCAL_MOVE) {
+            return 0;
+        }
+    }
+    if (phase->context < 0) {
+        return 0;
+    }
+    size_t columns = (size_t)analysis->nsave_columns;
+    size_t count = columns + (size_t)analysis->nt;
+    size_t alloc_count = count ? count : 1;
+    if (count < columns || alloc_count > SIZE_MAX / sizeof(int)) {
+        PyErr_NoMemory();
+        return -1;
+    }
+    assert(analysis->stopped_row == NULL);
+    analysis->stopped_row = PyMem_New(int, alloc_count);
+    if (analysis->stopped_row == NULL) {
+        PyErr_NoMemory();
+        return -1;
+    }
+    int *saved = analysis->stopped_row;
+    int *origins = saved + columns;
+    memcpy(saved, phase->save_tops, columns * sizeof(int));
+    memcpy(origins, phase->origins, (size_t)analysis->nt * sizeof(int));
+    int context = register_context_normal(code, pc, phase->scope.edge, analysis,
+                                          phase->context, saved, origins);
+    _PyIRObservedHomes homes;
+    if (!_PyIR_ObservedHomes(word, phase->scope.edge, analysis->nl,
+                            analysis->nl + analysis->nt, &homes))
+    {
+        return 0;
+    }
+    for (int k = 0; k < homes.count; k++) {
+        if (homes.old_cut[k]) {
+            origins[homes.home[k] - analysis->nl] = 0;
+        }
+    }
+    /* This permission cancels expression inputs, not active binding or
+     * exception protocols. Existing PRE/neutral adapters keep their proofs. */
+    if (context != 0) {
+        return 0;
+    }
+    for (int col = 0; col < analysis->nsave_columns; col++) {
+        if (saved[col] != 0) {
+            return 0;
+        }
+    }
+    phase->context = context;
+    phase->save_tops = saved;
+    phase->origins = origins;
+    return 1;
 }
 
 static void
@@ -2825,15 +2950,17 @@ register_resume_plan(_PyInterpreterFrame *frame, int current, int target,
                      RegisterResumeAnalysis *analysis, bool allow_anchor,
                      RegisterStoppedState phase, RegisterResumePlan *plan)
 {
-    bool committed = phase.kind == REGISTER_RESUME_COMMITTED_NEUTRAL;
-    /* The current packet supports only a positively owner-neutral edge, so
-     * the exact pre-site rows are also its committed rows. */
-    phase.context = analysis->context[current];
-    phase.save_tops = analysis->save_tops + (size_t)current * analysis->nsave_columns;
-    phase.origins = analysis->origins + (size_t)current * analysis->nt;
+    bool committed = phase.kind == REGISTER_RESUME_COMMITTED_NEUTRAL ||
+                     phase.kind == REGISTER_RESUME_COMMITTED;
     memset(plan->preserve, 0, plan->stride * sizeof(uint64_t));
     plan->nrestores = 0;
     int context = phase.context;
+    if (phase.kind == REGISTER_RESUME_COMMITTED &&
+        (context != 0 || !analysis->safe[target]))
+    {
+        /* A pre-site survivor slice cannot prove an already consumed input. */
+        return 0;
+    }
     bool can_cancel = phase.pc == current &&
         (phase.kind == REGISTER_RESUME_PRE_WORD ||
          (committed && context == 0 && analysis->safe[target]));
@@ -3163,6 +3290,16 @@ frame_lineno_set_impl(PyFrameObject *self, PyObject *value)
         PyMem_Free(lines);
         return -1;
     }
+    int bound = register_stopped_state_bind(self, &analysis, &phase);
+    if (bound <= 0) {
+        register_resume_analysis_clear(&analysis);
+        PyMem_Free(lines);
+        if (bound == 0) {
+            PyErr_SetString(PyExc_ValueError,
+                            "jump requires an incoming temporary register owner");
+        }
+        return -1;
+    }
     plan.stride = analysis.stride;
     plan.preserve = PyMem_Calloc(plan.stride, sizeof(uint64_t));
     plan.restores = PyMem_Calloc((size_t)Py_MAX(analysis.nsave_columns, 1),
@@ -3212,6 +3349,12 @@ frame_lineno_set_impl(PyFrameObject *self, PyObject *value)
     }
     int best_addr = -1;
     RegisterStoppedState selected_phase = phase;
+    RegisterStoppedState source_phase = {.kind = REGISTER_RESUME_OTHER, .pc = current};
+    /* Source-only target selection retains its prior conservative site row,
+     * never the transferred POST row or its cancellation authority. */
+    if (current >= 0) {
+        (void)register_stopped_state_bind(self, &analysis, &source_phase);
+    }
     int recipe = 0;
     if (current >= 0 && current < len) {
         for (int i = 0; i < len; i++) {
@@ -3227,17 +3370,19 @@ frame_lineno_set_impl(PyFrameObject *self, PyObject *value)
                 break;
             }
         }
-        for (uint32_t j = 0; best_addr < 0 && recipe >= 0 && j < source.nrecords; j++) {
+        for (uint32_t j = 0;
+             phase.kind != REGISTER_RESUME_COMMITTED && best_addr < 0 &&
+             recipe >= 0 && j < source.nrecords; j++) {
             _PyIRSourceEvent event;
             _PyIRSource_Event(&source, j, &event);
             if (event.line == new_lineno && event.handler < 0) {
                 recipe = register_resume_plan(self->f_frame, current, event.to,
                                               &analysis, !pending_call,
-                                              (RegisterStoppedState){.kind = REGISTER_RESUME_OTHER, .pc = current},
+                                              source_phase,
                                               &plan);
                 if (recipe > 0) {
                     best_addr = event.to;
-                    selected_phase.kind = REGISTER_RESUME_OTHER;
+                    selected_phase = source_phase;
                     break;
                 }
             }
@@ -3305,6 +3450,17 @@ frame_lineno_set_impl(PyFrameObject *self, PyObject *value)
                 pending_call, impl->observed_frame);
             phase_valid = fresh.kind == selected_phase.kind && fresh.pc == current;
             selected_phase = fresh;
+        }
+        /* Every view borrows this analysis or its request-owned copied row;
+         * the previous analysis was released before preparation callbacks. */
+        if (phase_valid) {
+            int bound = register_stopped_state_bind(self, &analysis, &selected_phase);
+            if (bound < 0) {
+                register_resume_analysis_clear(&analysis);
+                register_resume_plan_clear(&plan);
+                return -1;
+            }
+            phase_valid = bound > 0;
         }
         /* A source-only target deliberately selected OTHER must not gain
          * cancellation authority merely because preparation called Python. */

@@ -385,15 +385,18 @@ sys_trace_stop_iteration_func(
 ) {
     assert(kwnames == NULL);
     assert(PyVectorcall_NARGS(nargsf) == 3);
+    PyValueBorrow code_arg = PyValue_Borrow(args[0]);
+    PyValueBorrow offset_arg = PyValue_Borrow(args[1]);
+    PyValueBorrow exception_arg = PyValue_Borrow(args[2]);
     /* STOP is a semantic completion notification. The legacy API omits
      * implicit valueless FOR exhaustion; actual RAISE events remain intact.
      * Use the immutable event site, not a callback-redirected frame PC. */
-    if (PyValue_IsObject(args[0]) && PyValue_IsInlineInt(args[1]) &&
-        PyValue_IsObject(args[2]))
+    if (PyValue_IsObject(code_arg) && PyValue_IsInlineInt(offset_arg) &&
+        PyValue_IsObject(exception_arg))
     {
-        PyObject *code_obj = PyValue_AsKnownObjectBorrow(args[0]);
-        PyObject *exc = PyValue_AsKnownObjectBorrow(args[2]);
-        int64_t offset = PyValue_InlineInt64(args[1]);
+        PyObject *code_obj = PyValue_AsKnownObjectBorrow(code_arg);
+        PyObject *exc = PyValue_AsKnownObjectBorrow(exception_arg);
+        int64_t offset = PyValue_InlineInt64(offset_arg);
         if (PyCode_Check(code_obj) && Py_IS_TYPE(exc, (PyTypeObject *)PyExc_StopIteration)) {
             PyCodeObject *code = (PyCodeObject *)code_obj;
             if (offset >= 0 && offset < Py_SIZE(code) &&

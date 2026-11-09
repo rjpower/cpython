@@ -1745,6 +1745,211 @@ class ConstSlotsTest(unittest.TestCase):
                         sys.settrace(previous)
                 self.assertTrue(redirected)
 
+    def _monitor_branch(self, f, event, callback):
+        monitoring = sys.monitoring
+        tool = 3
+        monitoring.use_tool_id(tool, "test_code committed branch")
+        self.addCleanup(monitoring.free_tool_id, tool)
+        self.addCleanup(monitoring.register_callback, tool, event, None)
+        self.addCleanup(monitoring.set_local_events, tool, f.__code__, 0)
+        monitoring.register_callback(tool, event, callback)
+        return tool
+
+    def test_monitoring_committed_conditional_redirect(self):
+        def f(flag):
+            if bool(flag):
+                return "original"
+            return "redirected"
+
+        first = f.__code__.co_firstlineno
+        attempts = []
+        def callback(code, src, dst):
+            frame = sys._getframe(1)
+            self.assertIs(frame.f_code, code)
+            self.assertEqual(frame.f_lasti, src)
+            word = _testinternalcapi.get_ir(code, True)[src]
+            self.assertIn(word[0], ("INSTRUMENTED_POP_JUMP_IF_FALSE",
+                                    "INSTRUMENTED_POP_JUMP_IF_TRUE"))
+            self.assertEqual(dst, src + 1)
+            attempts.append(src)
+            self.assertLessEqual(len(attempts), 1)
+            frame.f_lineno = first + 3
+            self.assertEqual(frame.f_lineno, first + 3)
+
+        tool = self._monitor_branch(f, sys.monitoring.events.BRANCH_LEFT, callback)
+        for warm in (0, 20):
+            with self.subTest(warm=warm):
+                sys.monitoring.set_local_events(tool, f.__code__, 0)
+                for _ in range(warm):
+                    self.assertEqual(f(True), "original")
+                attempts.clear()
+                sys.monitoring.set_local_events(tool, f.__code__,
+                                                sys.monitoring.events.BRANCH_LEFT)
+                self.assertEqual(f(True), "redirected")
+                self.assertEqual(len(attempts), 1)
+
+    def test_monitoring_committed_conditional_requires_target_owners(self):
+        def f(values, flag):
+            for outer in values:
+                if bool(flag):
+                    checkpoint = outer
+            return "done"
+
+        first = f.__code__.co_firstlineno
+        self.assertIn("FOR_ITER", [word[0] for word in
+                                   _testinternalcapi.get_ir(f.__code__)])
+        attempts = []
+        def callback(code, src, dst):
+            frame = sys._getframe(1)
+            self.assertIs(frame.f_code, code)
+            if frame.f_lineno != first + 2 or attempts:
+                return
+            self.assertIn(_testinternalcapi.get_ir(code, True)[src][0],
+                          ("INSTRUMENTED_POP_JUMP_IF_FALSE",
+                           "INSTRUMENTED_POP_JUMP_IF_TRUE"))
+            self.assertNotEqual(dst, src + 1)
+            attempts.append(src)
+            before = dict(frame.f_locals)
+            with self.assertRaisesRegex(ValueError, "incoming temporary register owner"):
+                frame.f_lineno = first + 3
+            self.assertEqual(frame.f_lasti, src)
+            self.assertEqual(dict(frame.f_locals), before)
+
+        tool = self._monitor_branch(f, sys.monitoring.events.BRANCH_RIGHT, callback)
+        for warm in (0, 20):
+            with self.subTest(warm=warm):
+                sys.monitoring.set_local_events(tool, f.__code__, 0)
+                for _ in range(warm):
+                    self.assertEqual(f([1], True), "done")
+                attempts.clear()
+                sys.monitoring.set_local_events(tool, f.__code__,
+                                                sys.monitoring.events.BRANCH_RIGHT)
+                self.assertEqual(f([1], True), "done")
+                self.assertEqual(len(attempts), 1)
+
+    def test_monitoring_committed_conditional_keeps_saved_binding_obligation(self):
+        def f(values):
+            marker = "outer"
+            result = [marker for marker in values if bool(marker)]
+            return marker, result
+
+        first = f.__code__.co_firstlineno
+        self.assertIn("LOAD_FAST_AND_CLEAR", [word[0] for word in
+                                              _testinternalcapi.get_ir(f.__code__)])
+        attempts = []
+        def callback(code, src, dst):
+            frame = sys._getframe(1)
+            self.assertIs(frame.f_code, code)
+            word = _testinternalcapi.get_ir(code, True)[src]
+            if attempts or word[0] not in ("INSTRUMENTED_POP_JUMP_IF_FALSE",
+                                           "INSTRUMENTED_POP_JUMP_IF_TRUE"):
+                return
+            self.assertEqual(frame.f_lineno, first + 2)
+            self.assertNotEqual(dst, src + 1)
+            attempts.append(src)
+            self.assertEqual(frame.f_locals["marker"], "inner")
+            with self.assertRaisesRegex(ValueError, "incoming temporary register owner"):
+                frame.f_lineno = first + 3
+            self.assertEqual(frame.f_lasti, src)
+            self.assertEqual(frame.f_locals["marker"], "inner")
+
+        tool = self._monitor_branch(f, sys.monitoring.events.BRANCH_RIGHT, callback)
+        for warm in (0, 20):
+            with self.subTest(warm=warm):
+                sys.monitoring.set_local_events(tool, f.__code__, 0)
+                for _ in range(warm):
+                    self.assertEqual(f(["inner"]), ("outer", ["inner"]))
+                attempts.clear()
+                sys.monitoring.set_local_events(tool, f.__code__,
+                                                sys.monitoring.events.BRANCH_RIGHT)
+                self.assertEqual(f(["inner"]), ("outer", ["inner"]))
+                self.assertEqual(len(attempts), 1)
+
+    def test_monitoring_committed_redirect_honors_close_time_redirect(self):
+        frames, closed = [], []
+        def sink(*args):
+            self.fail("cancelled call executed")
+        class Guard:
+            def __del__(inner):
+                frame = frames[0]
+                closed.append((frame.f_lineno, frame.f_locals["value"]))
+                frame.f_lineno = first + 5
+        def f(flag):
+            value = 0
+            sink(Guard(),
+                 "yes" if bool(flag) else "no")
+            value = 7
+            return value
+
+        first = f.__code__.co_firstlineno
+        attempts = []
+        def callback(code, src, dst):
+            frame = sys._getframe(1)
+            self.assertIs(frame.f_code, code)
+            frames.append(frame)
+            attempts.append(src)
+            self.assertLessEqual(len(attempts), 1)
+            frame.f_lineno = first + 4
+
+        tool = self._monitor_branch(f, sys.monitoring.events.BRANCH_LEFT, callback)
+        sys.monitoring.register_callback(tool, sys.monitoring.events.LINE,
+                                         lambda *args: None)
+        self.addCleanup(sys.monitoring.register_callback, tool,
+                        sys.monitoring.events.LINE, None)
+        sys.monitoring.set_local_events(tool, f.__code__,
+                                        sys.monitoring.events.BRANCH_LEFT |
+                                        sys.monitoring.events.LINE)
+        # This witnesses our explicit close transaction, not a language promise
+        # of prompt finalization in another implementation.
+        self.assertEqual(f(True), 0)
+        self.assertEqual(len(attempts), 1)
+        self.assertEqual(closed, [(first + 4, 0)])
+        frames.clear()
+
+    def test_monitoring_committed_redirect_rechecks_warning_state(self):
+        def f(flag, bind):
+            if bind:
+                missing = 1
+            if bool(flag):
+                return "original"
+            return "redirected", missing
+
+        first = f.__code__.co_firstlineno
+        attempts, seen, frames = [], [], []
+        def callback(code, src, dst):
+            frame = sys._getframe(1)
+            self.assertIs(frame.f_code, code)
+            if frame.f_lineno != first + 3:
+                return
+            attempts.append(src)
+            self.assertLessEqual(len(attempts), 1)
+            frames.append(frame)
+            frame.f_lineno = first + 5
+        def showwarning(*args, **kwargs):
+            frame = frames[0]
+            seen.append(frame.f_lineno)  # Public getter changes only its cache.
+            self.assertEqual(len(seen), 1)
+            if nested:
+                frame.f_locals["missing"] = 5
+                frame.f_lineno = first + 4
+
+        tool = self._monitor_branch(f, sys.monitoring.events.BRANCH_LEFT, callback)
+        for nested in (False, True):
+            with self.subTest(nested=nested):
+                attempts.clear()
+                seen.clear()
+                frames.clear()
+                sys.monitoring.set_local_events(tool, f.__code__,
+                                                sys.monitoring.events.BRANCH_LEFT)
+                with warnings.catch_warnings():
+                    warnings.simplefilter("always", RuntimeWarning)
+                    warnings.showwarning = showwarning
+                    self.assertEqual(f(True, False),
+                                     "original" if nested else ("redirected", None))
+                self.assertEqual(len(attempts), 1)
+                self.assertEqual(seen, [first + 3])
+        frames.clear()
+
     def test_settrace_restores_binding_from_committed_backedge(self):
         def f(values, prebound):
             marker = "outer"

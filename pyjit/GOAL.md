@@ -7,6 +7,17 @@ direction; Loom's `goal` artifact mirrors it.
 
 ## Decisions to retain
 
+- Frame/call model mandate (2026-11-09): continue until unchanged JIT-off
+  `logging_silent` reaches matched upstream parity and the repeated broad
+  regressions are repaired. Redesign frame storage, calling conventions,
+  ownership/liveness and executable IR as one model. Source and observer
+  positions belong in metadata rather than empty executable instructions.
+  Follow Python's data model instead of exact CPython destruction behavior.
+  The [active plan](issues/frame-call-model-20261109/plan.md) supersedes the
+  previous packet's bounded-ablation ordering. Sol 6.1 medium workers propose,
+  peer-review and implement; the coordinator integrates, measures and persists
+  through parity. Golden remains an immutable measurement control.
+
 - Lifetime policy clarification (2026-11-08): Python does not guarantee immediate
   finalization. Separate language and supported API requirements, selected
   CPython compatibility, ownership/GC safety and memory-retention quality.

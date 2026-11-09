@@ -1,6 +1,14 @@
 # Project status
 
-Active work: the [execution-boundary and operand-mode packet](issues/execution-boundaries-20261108/plan.md)
+Active work: the [frame/call model redesign](issues/frame-call-model-20261109/plan.md)
+continues in the existing runtime checkout, branch `pyjit/frame-call-model-20261109`.
+The goal is unchanged logging parity and repaired broad regressions, with compact
+executable IR and source/observer positions in metadata. Frame/call and IR
+architecture proposals have passed independent review. Implementation is in
+progress with separate file ownership; no new build or runtime result is
+claimed yet.
+
+The previous [execution-boundary and operand-mode packet](issues/execution-boundaries-20261108/plan.md)
 implements the first three bounded cold-review recommendations at runtime
 `4b3d739d867`. Release and debug each passed 54,421 tests, debug on retry after
 an unexplained profiling failure. **Performance promotion is withheld:**

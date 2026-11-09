@@ -1,5 +1,45 @@
 # Coordinator handoff
 
+## Current goal: frame/call model and logging parity
+
+User direction on 2026-11-09 supersedes the previous bounded-ablation plan:
+continue until unchanged JIT-off logging reaches upstream parity and the broad
+regressions are repaired. Follow Python's data model. The active
+[plan](issues/frame-call-model-20261109/plan.md), frame/call proposal, revised
+IR-position proposal and holistic review live in that packet. Loom goal/plan
+are revisions 8/18 at the initial reviewed-implementation milestone.
+
+Continue the existing runtime checkout
+`build/worktrees/execution-boundaries-20261108`, now branch
+`pyjit/frame-call-model-20261109` from `4b3d739d867`. It contains in-progress
+runtime edits; do not call this intermediate source buildable or qualified.
+Canonical documentation remains in this checkout. Evidence is
+`build/pyjit-link-wave1/frame-call-model-20261109/`; starting-state identities
+are recorded. Reuse candidate `execution-boundaries-{release,debug,stats}`
+builds against this source. Frozen golden/upstream builds remain untouched.
+
+Sol 6.1 medium workers have independently reviewed the design and are
+implementing it. Frame worker owns direct guarded binding, virtual empty kwargs,
+canonical transfers, plain recipients/continuations, frame headers and generated
+handler changes. IR worker owns compact lowering, sparse source-line metadata,
+instrumentation, code/persistence and frame/debugger consumers. Shared edits are
+coordinated directly. The coordinator owns native regeneration/builds/checks,
+commits, integration, quiet measurement and fresh cold review. No new native
+build or timing has run yet. Root should freeze the merged source when both
+workers report ready, regenerate/build release and run focused checks first.
+
+The revised design has one public compact instruction-offset domain. Removed
+frontend bookkeeping creates no synthetic instruction events or recovery slots.
+Sparse source-edge line metadata preserves source tracing; ordinary execution
+does not interpret it. Lazy kwargs use a canonical NULL home plus explicit
+pending metadata, compiler first-read materialization and frame-publication
+barriers. Rebinding/captured/suspending cases initially use eager binding.
+
+The task goal tool is active, without a requested token budget. Do not end at
+implementation or a partial speedup: the measured parity and regression gates
+in the plan remain required. Preserve the three unrelated canonical changes
+listed in the previous packet's protection snapshot.
+
 The 2026-11-08 golden runtime is published. Read [STATUS](STATUS.md), the
 [manifest](issues/golden-20261108/README.md), [current IR](design/register-ir.md),
 [interpreter](design/interpreter.md) and [next plan](issues/golden-20261108/next-steps.md).

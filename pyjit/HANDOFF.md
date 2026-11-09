@@ -2,25 +2,36 @@
 
 ## Current goal: frame/call model and logging parity
 
-Logging's timing gate was met at `488e85fa3a8`; the basic checks at33/34 preserve parity. Continue repairing the three
-confirmed broad losses and completing qualification. Follow Python's data
-model; source positions are metadata. The goal tool remains active without a
-budget. Golden is immutable and selected. See the
-[active plan](issues/frame-call-model-20261109/plan.md) and
-[eleventh report](issues/frame-call-model-20261109/eleventh-integration-report.md).
+Logging's timing gate was met at `488e85fa3a8`; basic33/34/35 checks preserve
+parity. Current35 repairs nbody/coroutine golden losses; generators remain2.55%
+slower. Continue through that regression and full qualification. Python's data
+model governs behavior; source positions are metadata. Golden stays immutable
+and selected; the goal remains active. See [plan](issues/frame-call-model-20261109/plan.md)
+and [twelfth report](issues/frame-call-model-20261109/twelfth-integration-report.md).
 
-Runtime source:
-`/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/execution-boundaries-20261108`,
-branch `pyjit/frame-call-model-20261109`, committed engineering HEAD
-`bfd67cbe4b410c9c78292a8eb17849bb24edcb20`. A now owns a canonical-home
-source-proof packet in this primary source; inspect its pending diff before
-any native job. The reviewed shared-completion specialization is committed.
-Root owns all native jobs and commits.
-Release/debug `build/execution-boundaries-{release,debug}` identify this commit
-and check 117 modules. Stats still identifies192 and needs a current rebuild.
-Cache magic 64416. Canonical documentation stays in this checkout; runtime
-copies are historical. Paths below are relative to python-boil-the-ocean.
-Evidence: `build/pyjit-link-wave1/frame-call-model-20261109/` (E11).
+Primary runtime is `build/worktrees/execution-boundaries-20261108`, branch
+`pyjit/frame-call-model-20261109`, committed HEAD
+`df12a12b131384976466310b7a6138417b7a36eb`. The reviewed NULL PRE five-file
+patch is now dirty in this source for root-owned release/debug build and
+qualification. It is retained at E11/null-pre-frozen-source.patch. Inspect
+actual job state before any native command. Do not time the dirty source.
+Release/debug previously identify committed35 and check117 modules each;
+current NULL builds are in progress. Stats still identifies192 and needs a
+current rebuild. Magic64416. Canonical documentation is this checkout; runtime
+copies are historical. Root owns native jobs and commits. Paths below are
+relative to python-boil-the-ocean; E11 is
+`build/pyjit-link-wave1/frame-call-model-20261109/`.
+
+Current35 evidence: canonical35-{release,debug}-{build,focus}.log passes582
+across12 modules each; committed identity logs117 each. Screens
+canonical35-broad-{golden,upstream} give GM.954489/1.163732; logging.899568/upstream.
+canonical35-repeat-golden fourpairs gives gen1.025477/coro.979644/nbody.986605.
+Independent raw audit passes. No35 PMU capture. NULL PRE source peer accepts;
+its actual native outcome remains pending. The isolated null-pre-20261109
+worktree remains frozen with the retained original patch; no separate build.
+Remove that task-created worktree only after source/evidence integration is
+complete. Earlier sections below retain historical32/33/34 evidence; their
+active-assignment wording is superseded by this current section.
 
 ### Integrated and tested
 

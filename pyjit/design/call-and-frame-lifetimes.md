@@ -1,6 +1,6 @@
 # Calls, frame homes and observation
 
-This is the frame/call contract integrated at `bfd67cbe4b4`. Its bounded
+This is the frame/call contract integrated at `df12a12b131`. Its bounded
 observer and debugger rules remain subject to broad qualification. The immutable
 golden `0765e9be47f` retains its functional qualification at `0267d428808`.
 See [status](../STATUS.md), the [active packet](../issues/frame-call-model-20261109/plan.md)

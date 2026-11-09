@@ -1,37 +1,34 @@
 # Project status
 
-The active [frame/call redesign](issues/frame-call-model-20261109/plan.md)
-is integrated through engineering `bfd67cbe4b4`. It remains unpromoted.
-Frames use initialized storage and explicit call/result ownership; source
-boundaries live in metadata. Proved VM completion directly decodes immutable
-SEND/FOR fields and specializes one shared owner/observer body. Native/THROW
-providers retain publication. There is no new frame ABI or per-resume work.
-Release/debug build 117 modules and pass575 focused tests/11modules each.
-The [eleventh report](issues/frame-call-model-20261109/eleventh-integration-report.md)
-records compiled tradeoffs, current counters and validation limits.
+The frame/call redesign is integrated through engineering `df12a12b131` and
+remains unpromoted. Frames use initialized storage and explicit call/result
+ownership; source boundaries live in metadata. The latest packet carries
+proved canonical values through plain yield and final list-child publication,
+using existing stores. Release/debug each build 117 modules and pass 582 focused
+tests / 12 modules. The [twelfth report](issues/frame-call-model-20261109/twelfth-integration-report.md)
+records source proofs, independent reviews and current performance.
 
-Logging preserves parity in its latest four-pair check: **0.80151/upstream**,
-all pairs below0.820. The full two-campaign six-round gate belongs to32; the
-latest change is not assigned logging's observed gain. Current four-pair golden
-losses persist: generators+7.0%, coroutines+2.6%, nbody+4.5%. Source32's full29
-screen remains **0.96632/golden**, **1.19038/upstream**, not new34 evidence.
+Current35's unchanged 29-kernel screen is **0.954489/golden** and
+**1.163732/upstream**. Logging is **0.899568/upstream** in this basic screen;
+the full two-campaign six-round gate belongs to 32. A four-pair golden repeat
+shows coroutines 0.979644 and nbody 0.986605, every pair faster than golden.
+Generators retain a confirmed 2.55% loss. Numeric/logging wins coexist with
+substantial remaining upstream gaps in generators, coroutines, comprehensions
+and object-heavy kernels. These campaigns do not isolate component causes.
 
-Current34 counters pass18 capture/identity gates with100% event running:
-generators1.0330 instructions and1.0842 cycles/golden; coroutines0.9908/1.0293;
-nbody0.9860/1.0366. No single extra-work explanation fits all three. Compiled
-SEND_GEN already coalesces the apparently duplicate state loads. Next: preserve
-proved canonical values through plain yield and list-child transfers, using
-existing transfer/store machinery. In a separate source worktree, the reviewed
-NULL-only PRE query and consumer are being implemented. File ownership is
-explicit; native integration and timing remain serialized.
+The reviewed NULL-only PRE packet is now applied to the primary runtime for
+serialized release/debug native qualification. It extends the existing cold
+graph/Plan with shared physical facts and independent VALUE/NULL_ONLY demands;
+no second execution model is added. The isolated source has no native build.
+Actual stopped-state probes will guide remaining same-protocol debugger gaps.
 
 Full release/debug qualification and current stats remain open. The last full
-release diagnostic at31 ran 54,563 tests with six failed modules. Focused32
-checks repair monitoring/tools; its API check passes306 units with zero failing
-findings/parse errors. Peepholer, sys_settrace and pdb still have open debugger
-cases. The GC negative-control full-run failure is unresolved despite isolated
-method/module passes. No blanket skips or weaker assertions. Golden remains
-immutable and selected; the overall goal stays active.
+release diagnostic at 31 ran 54,563 tests with six failed modules. Focused32
+checks repaired monitoring/tools; its API check passes 306 units with zero
+failing findings/parse errors. Peepholer, sys_settrace and pdb still have open
+cases. The GC negative-control full-run failure remains unexplained despite
+isolated method/module passes. No blanket skips or weaker assertions. Golden
+remains immutable and selected; the goal stays active.
 
 The previous [execution-boundary and operand-mode packet](issues/execution-boundaries-20261108/plan.md)
 implements the first three bounded cold-review recommendations at runtime

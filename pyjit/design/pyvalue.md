@@ -7,10 +7,10 @@ we should close. It is the reference for value, container and C-boundary work.
 
 **Current implementation, 2026-11-09.** The eight-byte PyValue encoding and
 canonical-home rule below remain the representation contract. The frame/call
-candidate is integrated through runtime `bfd67cbe4b4`; it is not promoted.
+candidate is integrated through runtime `df12a12b131`; it is not promoted.
 The independently qualified golden remains `0765e9be47f`. The candidate has
-met the logging timing target, while repeated generator, coroutine and nbody
-losses against golden and full qualification remain open. Current identities,
+met the logging timing target. The current repeat repairs coroutine and nbody
+losses against golden; generators and full qualification remain open. Current identities,
 measurements and gates belong to [STATUS](../STATUS.md),
 [HANDOFF](../HANDOFF.md) and the [frame/call plan](../issues/frame-call-model-20261109/plan.md).
 The ownership and call-boundary details are in the

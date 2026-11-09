@@ -1,6 +1,6 @@
 # Register interpreter: current contract
 
-This page describes the register interpreter integrated at `bfd67cbe4b4`.
+This page describes the register interpreter integrated at `df12a12b131`.
 Its bounded observer and debugger contracts still require broad qualification.
 See [status](../STATUS.md), the
 [active packet](../issues/frame-call-model-20261109/plan.md), and the immutable
@@ -62,6 +62,13 @@ The generator proves the exact local-read/duplicate source before selecting the
 shared canonical final store. Local, temporary and discarded destinations retain
 the same ownership and displaced-owner handling; raw providers still publish
 their results through the ordinary boundary.
+
+Plain yield transfers an unchanged canonical input through the existing
+canonical return sink. Specialized list indexing uses the canonical final store
+only after the complete guard/bounds/duplicate/retirement chain is proved. Its
+early temporary publication before retiring the list remains ordinary. Proofs
+bind the original token structure to the AST actually emitted; altered bodies
+fall back to ordinary publication. Instrumented yield keeps its full boundary.
 
 Temporary future-read liveness is not owner occupancy. Cleanup must retain or
 retire an initialized owner even if no later Python operation reads it. GC,

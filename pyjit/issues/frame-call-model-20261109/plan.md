@@ -1,122 +1,61 @@
-# Frame and call model: logging parity
+# Frame/call round: closure and next work
 
-The user requires logging parity, repaired broad regressions and a coherent
-register interpreter model. Python's data model governs behavior; historical
-CPython destruction positions are not a constraint. This work continues the
-existing integration checkout and universal-value runtime.
+Standing direction: [goal](../../GOAL.md). Actual outcomes: [status](../../STATUS.md).
+The [closing report](closing-report.md) owns measurements and qualification;
+[the next five priorities](next-steps.md) own proposed follow-up work.
 
-## Starting point and completion
+## Frozen candidate
 
-Runtime source is `build/worktrees/execution-boundaries-20261108`, switched
-in place from `4b3d739d867` to branch `pyjit/frame-call-model-20261109`.
-Canonical documentation remains in the coordinator checkout. Golden runtime
-`0765e9be47f`, its builds and the matched upstream build are immutable controls.
-The [previous candidate report](../execution-boundaries-20261108/report.md)
-records the starting qualification and regressions.
+Runtime `4d666e1b482cb4983c7683f91c5922af14d0ab40`, branch
+`pyjit/frame-call-model-20261109`. Production code is from `24f4d270ced`; the final commit adds reviewed
+explicit refusal/cleanup and immediate-entry tests. The candidate is clean.
+Unfinished coroutine, retained-owner and GDB drafts are excluded and preserved.
+Golden `0765e9be47f` and matched upstream `3a440b65695` remain immutable controls.
 
-Completion requires:
+This round redesigned storage, argument/result ownership, executable source
+positions and semantic completion as one model. The design pages describe
+implemented behavior: [IR](../../design/register-ir.md),
+[interpreter](../../design/interpreter.md), and
+[frames/calls](../../design/call-and-frame-lifetimes.md).
 
-- Unchanged `logging_silent`, JIT disabled, matched GCC configuration and native
-  identity checks: two independent balanced six-round campaigns with geometric
-  mean candidate/upstream at most 1.0 and every pair at most 1.02.
-- Repair the five repeated broad regressions against golden. Run the unchanged
-  29-workload screen at coherent integration points and investigate repeatable
-  material losses individually rather than hiding them in an aggregate.
-- Compact executable register instructions. Source/event/exception positions
-  are metadata; empty source boundaries are not dispatched or decoded. Calls
-  name result recipients directly, including discard. No post-return decoding
-  of an inherited release operation.
-- Reviewed, implemented frame/argument/result ownership and validity rules,
-  including exceptions, generators, re-entry, frame escape, locals inspection,
-  debugger jumps and observation enabled while a frame is active.
-- Appropriate focused checks, release/debug full qualification at the coherent
-  final source, independent source/result review, current design diagrams,
-  and a published report/plan in the repository and Loom.
+## Closure gates
 
-No benchmark, logging-library or upstream-control edits, second compiler,
-permanent experiment switches or weakened correctness assertions.
+1. Complete release/debug full diagnostics and current stats/API checks. Keep
+   real runtime failures, optional frame-jump gaps and GDB tooling failures
+   distinct. Never claim a green full suite when recorded tests failed.
+2. Run unchanged balanced timing for all 29 kernels against golden and upstream.
+   Confirm logging with two independent six-round upstream campaigns. Repeat
+   material broad losses individually instead of hiding them in an aggregate.
+3. Cover all 65 registered micro instruction rows and all six timed memory
+   workloads on the three builds with default samples and retained raw counts.
+   These supplemental sweeps are diagnostics; their unpaired memory times are
+   not a balanced throughput claim. Startup/import RSS stays out of scope.
+4. Audit native identities, fixed compiler/affinity/hash/JIT state, input hashes
+   and raw results. Profiles must name the image actually recorded. Do not
+   relabel older PMU data as current or infer a causal budget from sample shares.
+5. Publish independent cold reviews and a ranked five-item next plan. Collate
+   repository and Loom navigation, archive historical active artifacts, preserve
+   evidence/user work and remove only task-created scratch/worktrees.
 
-## Current execution
+The coordinator owns all native runs, integrations and measurement windows.
+Workers are now source-review and results-audit only. No new runtime feature
+is added while closing this round. Benchmarks, library inputs and builds remain
+fixed throughout the measurement window.
 
-Engineering `24f4d270ced` is committed. Release/debug check117 modules and
-pass860 focused tests/14 modules/two skips each. The four original synchronous
-jump cases pass unchanged. A release debugger census retains20 trace errors
-and two Pdb transcript failures; basic Pdb jump commands pass. See the
-[fourteenth report](fourteenth-integration-report.md).
+## Scope and decision
 
-Current38's four-pair golden check passes stable identities: logging0.572018,
-generators0.992624, coroutines0.871626 and nbody0.975905. The earlier generator
-loss does not repeat. Full release qualification of frozen38 is running. Basic37 gave
-logging0.907800/upstream over two pairs. The full29 screen remains35, and counters remain36.
-Final qualification and logging campaigns must use the final coherent source.
+Logging parity is the round's throughput objective: unchanged JIT-off workload,
+two balanced six-round campaigns, geometric mean candidate/upstream at most 1.0
+and every pair at most 1.02. Broad performance is reported separately.
 
-The isolated source has been fast-forwarded to38 while preserving the reviewed
-refusal and Pdb test ports. H owns coroutine first-resume analysis and tests;
-A owns only those debugger test ports. B designs a shared retained-owner/context
-recipe for remaining ordinary exception/loop transfers. Created-throw ingress
-at prologue0 is explicitly excluded from the bounded coroutine NULL proof when
-ordinary or source-error recipes cover it. No separate native build exists.
-Root owns all native gates, commits and measurements. Workers do not mutate the
-primary source or builds during frozen qualification or performance windows.
+GDB pretty printing is developer tooling. Exact CPython display formats,
+internal bytecode presentation and prompt finalizer timing are not language or
+performance gates. Frame-jump capabilities and source positions have their own
+stated API limits; preserve safety/control tests and report unsupported cases.
+This boundary follows the user's close-round direction. It does not turn failed
+tests into passes or authorize dropped owners and partial commits.
 
-The aggregate cold-analysis budget remains a qualification caveat. Golden and
-upstream controls and sealed evidence stay immutable. No test port may turn an
-ordinary capability failure into a permitted refusal without a reviewed
-semantic distinction and strong unchanged-state/normal-cleanup controls.
-
-## Parallel responsibilities
-
-| Stream | Owner | Current deliverable |
-| --- | --- | --- |
-| Debugger test ports | Sol 6.1 medium A | Explicit protocol refusal controls and immediate-entry Pdb position/continuation |
-| Retained owner/context model | Sol 6.1 medium B | Shared owner-bundle proposal for ordinary caught/finally/loop capabilities |
-| Coroutine ingress and review | Sol 6.1 medium H | Bounded first-resume proof, independent source/result reviews |
-| Integration and measurement | Coordinator | Source admission, serialized native gates/commit/basic performance, qualification and final logging campaigns |
-
-Workers propose first and independently review each other's contracts. Runtime
-file ownership is assigned after interface review. They do not run shared
-native builds or measurements. The coordinator owns commits and integration.
-Reviewers inspect actual source and measured evidence after each integration.
-
-## Work sequence
-
-1. Finish the independently reviewed canonical-home packet in the primary
-   source, inspect exact generated-handler changes, run focused gates and
-   basic performance. In parallel complete the isolated shared NULL query and
-   frame consumer under explicit file ownership. Keep one ownership/transfer
-   model, source-derived facts and strong negative/reentry tests. No new state
-   field or benchmark-specific shortcut is admitted.
-2. Fold the independent cold architectural review into the next admission.
-   Keep one frame/call/owner model. A new optimization needs a concrete producer
-   or call-shape proof and an isolated comparison, not a benchmark-specific path.
-3. For correctness, admit only shared capabilities backed by actual failures.
-   The three ordinary PRE NULL-only witnesses use forward physical facts and
-   independent VALUE/NULL_ONLY demands, with simultaneous transports, all-alias
-   checks and conservative unsupported/error states. Do not reproduce arbitrary
-   CPython debugger crossings solely to satisfy its accepted jump matrix.
-4. Each admitted source packet gets the cheapest meaningful checks, native
-   release/debug focused gates, independent post-review, commit and basic
-   performance check. Keep full suites for coherent integration points.
-5. Run coherent full release/debug qualification and current stats. The current
-   API check already passes 306 units with zero failing findings/parse errors;
-   repeat it only when subsequent changes justify it. Retain the prior GC negative-control failure; a later pass alone does
-   not establish its cause. Resolve documented contract differences explicitly
-   and preserve their safety/behavior tests rather than silently weakening them.
-6. Complete two independent balanced six-round logging/upstream campaigns,
-   current profile evidence and a final cold review. Update canonical designs,
-   diagrams if changed, status and repository/Loom report. Logging parity and
-   repaired broad performance remain the completion conditions.
-
-## Measurement and recovery
-
-Evidence belongs under `build/pyjit-link-wave1/frame-call-model-20261109/`.
-Reuse the existing candidate release/debug/stats builds configured against
-the integration source; do not modify frozen golden products. Host drivers use
-`uv run --no-project python -B`, sanitized native environments, CPU 15, fixed
-hash seed, JIT-off checks and fixed workloads. Native builds/tests and quiet
-timing serialize. Preserve failed attempts and source identities.
-
-Earlier candidate source, reports and measurements remain historical evidence.
-Current specifications will describe the new model directly. Update this plan
-and STATUS from actual progress; a prepared command or agent assignment is not
-an executed result.
+After closure, implement [the ranked next work](next-steps.md) in separate
+reviewed experiments. No claim is made that all five will improve performance.
+The immutable golden remains the selected control; promotion of this engineering
+candidate is a separate explicit decision based on the final report.

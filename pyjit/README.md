@@ -4,21 +4,20 @@ We are rebuilding CPython around canonical eight-byte PyValues, a register
 interpreter, reference counting with cyclic collection, and a shared method
 and tracing JIT. Extensions are rebuilt and ported.
 
-The **2026-11-08 golden runtime** is published as
-[`pyjit-golden-20261108-runtime`](https://github.com/rjpower/cpython/tree/pyjit-golden-20261108-runtime).
-It is the reproducible baseline for the next experiments. Release and debug
-qualification passed 54,394 tests each. It remains slower than upstream:
-about 1.38× elapsed time on logging and 1.24× on the broad benchmark screen.
-The native JIT is unfinished. Read the [golden manifest](issues/golden-20261108/README.md)
-for exact identities, qualifications and measurement limits.
+Start with the [goal](GOAL.md), [current plan](issues/frame-call-model-20261109/plan.md)
+and [status](STATUS.md). The frame/call round is closing against a frozen
+candidate; its [report](issues/frame-call-model-20261109/closing-report.md)
+separates measured performance, Python behavior and optional tooling/capability
+limits. The [next five priorities](issues/frame-call-model-20261109/next-steps.md)
+come from independent architectural reviews.
 
-The [active frame/call model redesign](issues/frame-call-model-20261109/plan.md)
-targets logging parity and repairs broad regressions through a coherent frame,
-call and executable-position model. The
-[previous candidate report](issues/execution-boundaries-20261108/report.md)
-records its starting measurements.
-Its [lifetime policy](design/lifetimes-and-language-semantics.md)
-distinguishes Python guarantees from CPython timing and our ownership machinery.
+The universal-value register interpreter is implemented. Native method/tracing
+JIT tiers remain unfinished. The published
+[2026-11-08 golden runtime](https://github.com/rjpower/cpython/tree/pyjit-golden-20261108-runtime)
+remains an immutable comparison control; its
+[manifest](issues/golden-20261108/README.md) retains qualification and identities.
+Python's [lifetime policy](design/lifetimes-and-language-semantics.md) governs
+semantics rather than exact CPython destruction timing.
 
 | Read | Purpose |
 | --- | --- |

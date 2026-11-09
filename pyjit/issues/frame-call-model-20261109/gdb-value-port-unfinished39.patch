@@ -1,0 +1,124 @@
+diff --git a/Lib/test/test_gdb/test_pretty_print.py b/Lib/test/test_gdb/test_pretty_print.py
+index 04e06a64aaa..9edd7ee74a8 100644
+--- a/Lib/test/test_gdb/test_pretty_print.py
++++ b/Lib/test/test_gdb/test_pretty_print.py
+@@ -14,13 +14,11 @@ def setUpModule():
+ class PrettyPrintTests(DebuggerTests):
+     def get_gdb_repr(self, source,
+                      cmds_after_breakpoint=None,
+-                     import_site=False):
++                     import_site=False, print_expression='$value'):
+         # Given an input python source representation of data,
+-        # run "python -c'id(DATA)'" under gdb with a breakpoint on
+-        # builtin_id and scrape out gdb's representation of the "op"
+-        # parameter, and verify that the gdb displays the same string
+-        #
+-        # Verify that the gdb displays the expected string
++        # builtin_id's value-native wrapper receives its input in args[0].
++        # Snapshot it before fault injection and print through the registered
++        # GDB printer, independently of optimized C parameter spelling.
+         #
+         # For a nested structure, the first time we hit the breakpoint will
+         # give us the top-level structure
+@@ -28,22 +26,21 @@ def get_gdb_repr(self, source,
+         # NOTE: avoid decoding too much of the traceback as some
+         # undecodable characters may lurk there in optimized mode
+         # (issue #19743).
+-        cmds_after_breakpoint = cmds_after_breakpoint or ["backtrace 1"]
++        commands = ['set $value = args[0]']
++        commands.extend(cmds_after_breakpoint or ['backtrace 1'])
++        commands.extend(['printf "PYTHON_VALUE_BEGIN\\n"',
++                         'print ' + print_expression,
++                         'printf "PYTHON_VALUE_END\\n"'])
+         gdb_output = self.get_stack_trace(source, breakpoint=BREAKPOINT_FN,
+-                                          cmds_after_breakpoint=cmds_after_breakpoint,
++                                          cmds_after_breakpoint=commands,
+                                           import_site=import_site)
+         # gdb can insert additional '\n' and space characters in various places
+         # in its output, depending on the width of the terminal it's connected
+         # to (using its "wrap_here" function)
+-        m = re.search(
+-            # Match '#0 builtin_id(self=..., v=...)'
+-            r'#0\s+builtin_id\s+\(self\=.*,\s+v=\s*(.*?)?\)'
+-            # Match ' at Python/bltinmodule.c'.
+-            # bpo-38239: builtin_id() is defined in Python/bltinmodule.c,
+-            # but accept any "Directory\file.c" to support Link Time
+-            # Optimization (LTO).
+-            r'\s+at\s+\S*[A-Za-z]+/[A-Za-z0-9_-]+\.c',
+-            gdb_output, re.DOTALL)
++        self.assertEqual(gdb_output.count('PYTHON_VALUE_BEGIN\n'), 1)
++        self.assertEqual(gdb_output.count('PYTHON_VALUE_END\n'), 1)
++        m = re.search(r'PYTHON_VALUE_BEGIN\n\$[0-9]+ = (.*?)\nPYTHON_VALUE_END\n',
++                      gdb_output, re.DOTALL)
+         if not m:
+             self.fail('Unexpected gdb output: %r\n%s' % (gdb_output, gdb_output))
+         return m.group(1), gdb_output
+@@ -52,6 +49,19 @@ def test_getting_backtrace(self):
+         gdb_output = self.get_stack_trace('id(42)')
+         self.assertTrue(BREAKPOINT_FN in gdb_output)
+ 
++    def test_value_and_borrowed_printers(self):
++        for expression, expected in (
++            ('42', '42'), ('-7', '-7'), ('1 << 80', str(1 << 80)),
++            ('2.5', '2.5'), ('-0.0', '-0.0'), ('[1, 2]', '[1, 2]'),
++        ):
++            for view in ('$value', '*(PyValueBorrow *)args',
++                         '*(const PyValue *)args',
++                         '*(const PyValueBorrow *)args'):
++                with self.subTest(expression=expression, view=view):
++                    rendered, output = self.get_gdb_repr(
++                        f'id({expression})', print_expression=view)
++                    self.assertEqual(rendered, expected, output)
++
+     def assertGdbRepr(self, val, exp_repr=None):
+         # Ensure that gdb's rendering of the value in a debugged process
+         # matches repr(value) in this process:
+diff --git a/Tools/gdb/libpython.py b/Tools/gdb/libpython.py
+index 3d96b3e1ad5..3d27510b390 100755
+--- a/Tools/gdb/libpython.py
++++ b/Tools/gdb/libpython.py
+@@ -145,6 +145,17 @@ def getvalue(self):
+         return self._val
+ 
+ 
++def _is_pyvalue(gdbval):
++    """Match the owned and borrowed value typedefs, preserving their names."""
++    typ = gdbval.type.unqualified()
++    if typ.name not in ('PyValue', 'PyValueBorrow'):
++        return False
++    layout = typ.strip_typedefs()
++    fields = layout.fields()
++    return (layout.code == gdb.TYPE_CODE_STRUCT and len(fields) == 1
++            and fields[0].name == 'bits' and typ.sizeof == _sizeof_void_p())
++
++
+ def _PyValue_AsKnownObjectBorrow(gdbval):
+     return gdb.Value(int(gdbval['bits']) & ~USED_TAGS)
+ 
+@@ -184,7 +195,7 @@ class PyObjectPtr(object):
+ 
+     def __init__(self, gdbval, cast_to=None):
+         # Clear the tagged pointer
+-        if gdbval.type.name == 'PyValue':
++        if _is_pyvalue(gdbval):
+             if cast_to is None:
+                 cast_to = gdb.lookup_type('PyObject').pointer()
+             self._gdbval = _PyValue_AsKnownObjectBorrow(gdbval).cast(cast_to)
+@@ -400,7 +411,7 @@ def from_pyobject_ptr(cls, gdbval):
+         Try to locate the appropriate derived class dynamically, and cast
+         the pointer accordingly.
+         '''
+-        if gdbval.type.name == 'PyValue':
++        if _is_pyvalue(gdbval):
+             value = _PyValue_InlineValue(gdbval)
+             if value is not None:
+                 return InlineStackValue(value)
+@@ -1704,7 +1715,7 @@ def to_string (self):
+ 
+ def pretty_printer_lookup(gdbval):
+     type = gdbval.type.strip_typedefs().unqualified()
+-    if type.code == gdb.TYPE_CODE_UNION and type.tag == 'PyValue':
++    if _is_pyvalue(gdbval):
+         return PyObjectPtrPrinter(gdbval)
+ 
+     if type.code != gdb.TYPE_CODE_PTR:

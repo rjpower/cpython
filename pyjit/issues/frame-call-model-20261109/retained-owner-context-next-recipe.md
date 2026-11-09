@@ -42,12 +42,22 @@ The first descriptors come from existing executable contracts:
   its actual ABI validation and successful-edge phase proof. A surviving
   iterator object alone does not prove a compatible cursor or active iteration.
 
-Use one explicit origin namespace/table rather than overloading saved-binding
-negative tokens or assuming that every positive token is a PUSH PC. Existing
-caught-root lookup can become an accessor over that description; saved-local
-obligations keep their current per-local ordering and cannot disappear when a
-root loses its home. This is request-owned metadata, not a new frame/header
-field or serialized compiler region scheme.
+For the first source, reuse the existing int origin rows: saved previous keeps
+token node=PUSHpc+1; the actual propagation payload at PUSH BASE+1 uses n+node,
+with n<=INT_MAX/2 checked before encoding. Small encode/decode predicates keep
+the two roles distinct. POP_EXCEPT and the previous-root collector must never
+accept a payload token as a saved-previous token. Existing COPY/SWAP, joins,
+read/definition and unwind cuts carry these labels without a new token table
+or matrix. Saved-local negative tokens and per-local ordering are unchanged.
+Losing a root home never discharges an active saved-local obligation.
+
+A's actual source census shows both retained finally witnesses re-raise with
+arg0 and need payload home2, not a standalone lasti token. Exclude standalone
+EH lasti roots from this first source rather than expanding the namespace
+speculatively. Positive payload labels require audited PUSH read1/write2/
+through0/WINDOW output at BASE+1, not a generic assumption about every EH
+exception home. This is request-owned analysis, not a new frame/header field
+or serialized compiler region scheme.
 
 ## Shared establishment and survival proof
 

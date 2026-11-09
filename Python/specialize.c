@@ -416,6 +416,9 @@ fb_put_row(_PyFbPoly *poly, int i, fb_row row, int opcode)
     poly->aux[i] = row.aux;
     poly->index[i] = row.index;
     poly->descr[i] = row.descr;
+    if (opcode == LOAD_ATTR_SHAPE_LOCAL_TEMP) {
+        opcode = LOAD_ATTR_SHAPE;
+    }
     poly->handler[i] = (uint16_t)opcode;
 }
 
@@ -536,6 +539,9 @@ fb_begin_call(_PyInstr *instr, PyTypeObject *callable_type)
 static void
 fb_record(_PyInstr *instr, _PyFbHeader *h, int opcode)
 {
+    if (opcode == LOAD_ATTR_SHAPE_LOCAL_TEMP) {
+        opcode = LOAD_ATTR_SHAPE;
+    }
     if (h->poly == 0) {
         h->state = FB_MONO;
         return;
@@ -593,6 +599,14 @@ specialize(_PyInstr *instr, uint8_t specialized_opcode)
     assert(!PyErr_Occurred());
     int handler = instr_is_fused(instr) ? fused_form(specialized_opcode)
                                         : specialized_opcode;
+    if (handler == LOAD_ATTR_SHAPE) {
+        _PyIRWord word = FT_ATOMIC_LOAD_UINT64_RELAXED(*instr);
+        int nlocalsplus = _PyFrame_GetCode(current_frame())->co_nlocalsplus;
+        if (IR_B(word) < (uint32_t)nlocalsplus &&
+            IR_A(word) >= (uint32_t)nlocalsplus) {
+            handler = LOAD_ATTR_SHAPE_LOCAL_TEMP;
+        }
+    }
     if (!set_opcode(instr, handler)) {
         STAT_INC(_PyOpcode_Deopt[specialized_opcode], failure);
         SPECIALIZATION_FAIL(_PyOpcode_Deopt[specialized_opcode],

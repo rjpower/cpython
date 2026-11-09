@@ -54,6 +54,7 @@ extern "C" {
 #define INSTRUMENTED_COMPARE_OP_JUMP                   311
 #define INSTRUMENTED_CONTAINS_OP_JUMP                  312
 #define INSTRUMENTED_IS_OP_JUMP                        313
+#define LOAD_ATTR_SHAPE_LOCAL_TEMP                     319
 
 #define _PyIR_H_SPECIALIZED 1
 #define _PyIR_H_INSTRUMENTED 2
@@ -367,6 +368,7 @@ const uint16_t _PyIR_HandlerFlags[IR_NUM_HANDLERS] = {
     [311] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_INSTRUMENTED | _PyIR_H_IR_ONLY, /* INSTRUMENTED_COMPARE_OP_JUMP */
     [312] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_INSTRUMENTED | _PyIR_H_IR_ONLY, /* INSTRUMENTED_CONTAINS_OP_JUMP */
     [313] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_INSTRUMENTED | _PyIR_H_IR_ONLY, /* INSTRUMENTED_IS_OP_JUMP */
+    [319] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SPECIALIZED | _PyIR_H_IR_ONLY, /* LOAD_ATTR_SHAPE_LOCAL_TEMP */
 };
 #endif
 
@@ -671,6 +673,7 @@ const uint16_t _PyIR_HandlerBase[IR_NUM_HANDLERS] = {
     [311] = 303, /* INSTRUMENTED_COMPARE_OP_JUMP */
     [312] = 304, /* INSTRUMENTED_CONTAINS_OP_JUMP */
     [313] = 305, /* INSTRUMENTED_IS_OP_JUMP */
+    [319] = 78, /* LOAD_ATTR_SHAPE_LOCAL_TEMP */
 };
 #endif
 
@@ -733,9 +736,9 @@ typedef _PyFbBinary _PyFb_STORE_SUBSCR;
 typedef _PyFbUnary _PyFb_TO_BOOL;
 typedef _PyFbUnary _PyFb_UNPACK_SEQUENCE;
 
-PyAPI_DATA(const _PyIRFormat) _PyIR_Formats[319];
+PyAPI_DATA(const _PyIRFormat) _PyIR_Formats[320];
 #ifdef NEED_IR_METADATA
-const _PyIRFormat _PyIR_Formats[319] = {
+const _PyIRFormat _PyIR_Formats[320] = {
     [CACHE] = { .flags = _PyIR_VALID, .effects = 0, .roles = { _PyIR_ROLE_NONE, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .ninputs = 0, .dst = _PyIR_NO_DST, .borrow_mask = 0x0, .fb_kind = 0, .fb_size = 0, .result_phase = _PyIR_RESULT_PHASE_NONE, .reads = { 0, _PyIR_EXT_FIXED }, .writes = { 0, _PyIR_EXT_FIXED }, .through = { 0, _PyIR_EXT_FIXED }, .shadow = CACHE, .twin = 0, .events = 0 },
     [BINARY_SLICE] = { .flags = _PyIR_VALID | _PyIR_STORE_DST | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_ALLOCATES, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_IN0 + 0, _PyIR_ROLE_IN0 + 1, _PyIR_ROLE_IN0 + 2 }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .ninputs = 3, .dst = -3, .borrow_mask = 0x7, .fb_kind = 0, .fb_size = 0, .result_phase = _PyIR_RESULT_PHASE_NONE, .reads = { 3, _PyIR_EXT_FIXED }, .writes = { 1, _PyIR_EXT_FIXED }, .through = { 0, _PyIR_EXT_FIXED }, .shadow = BINARY_SLICE, .twin = 0, .events = 0 },
     [BUILD_TEMPLATE] = { .flags = _PyIR_VALID | _PyIR_STORE_DST | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_ALLOCATES | _PyIR_BOXES, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_IN0 + 0, _PyIR_ROLE_IN0 + 1, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .ninputs = 2, .dst = -2, .borrow_mask = 0x3, .fb_kind = 0, .fb_size = 0, .result_phase = _PyIR_RESULT_PHASE_NONE, .reads = { 2, _PyIR_EXT_FIXED }, .writes = { 1, _PyIR_EXT_FIXED }, .through = { 0, _PyIR_EXT_FIXED }, .shadow = BUILD_TEMPLATE, .twin = 0, .events = 0 },
@@ -1023,12 +1026,13 @@ const _PyIRFormat _PyIR_Formats[319] = {
     [INSTRUMENTED_COMPARE_OP_JUMP] = { .flags = _PyIR_VALID | _PyIR_FORWARD | _PyIR_RUNS_CODE | _PyIR_FUSED, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_ALLOCATES, .roles = { _PyIR_ROLE_IN0 + 0, _PyIR_ROLE_IN0 + 1, _PyIR_ROLE_FB, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_D, .fb = _PyIR_LOC_C, .ninputs = 2, .dst = _PyIR_NO_DST, .borrow_mask = 0x3, .fb_kind = FB_BINARY, .fb_size = sizeof(_PyFbBinary), .result_phase = _PyIR_RESULT_PHASE_NONE, .reads = { 2, _PyIR_EXT_FIXED }, .writes = { 0, _PyIR_EXT_FIXED }, .through = { 0, _PyIR_EXT_FIXED }, .shadow = COMPARE_OP, .twin = INSTRUMENTED_COMPARE_OP_JUMP, .events = (1u << PY_MONITORING_EVENT_BRANCH_LEFT) | (1u << PY_MONITORING_EVENT_BRANCH_RIGHT) },
     [INSTRUMENTED_CONTAINS_OP_JUMP] = { .flags = _PyIR_VALID | _PyIR_FORWARD | _PyIR_RUNS_CODE | _PyIR_FUSED, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_ALLOCATES, .roles = { _PyIR_ROLE_IN0 + 0, _PyIR_ROLE_IN0 + 1, _PyIR_ROLE_FB, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_D, .fb = _PyIR_LOC_C, .ninputs = 2, .dst = _PyIR_NO_DST, .borrow_mask = 0x3, .fb_kind = FB_BINARY, .fb_size = sizeof(_PyFbBinary), .result_phase = _PyIR_RESULT_PHASE_NONE, .reads = { 2, _PyIR_EXT_FIXED }, .writes = { 0, _PyIR_EXT_FIXED }, .through = { 0, _PyIR_EXT_FIXED }, .shadow = CONTAINS_OP, .twin = INSTRUMENTED_CONTAINS_OP_JUMP, .events = (1u << PY_MONITORING_EVENT_BRANCH_LEFT) | (1u << PY_MONITORING_EVENT_BRANCH_RIGHT) },
     [INSTRUMENTED_IS_OP_JUMP] = { .flags = _PyIR_VALID | _PyIR_FORWARD | _PyIR_RUNS_CODE | _PyIR_FUSED, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_ALLOCATES, .roles = { _PyIR_ROLE_IN0 + 0, _PyIR_ROLE_IN0 + 1, _PyIR_ROLE_FB, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_D, .fb = _PyIR_LOC_C, .ninputs = 2, .dst = _PyIR_NO_DST, .borrow_mask = 0x3, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .result_phase = _PyIR_RESULT_PHASE_NONE, .reads = { 2, _PyIR_EXT_FIXED }, .writes = { 0, _PyIR_EXT_FIXED }, .through = { 0, _PyIR_EXT_FIXED }, .shadow = IS_OP, .twin = INSTRUMENTED_IS_OP_JUMP, .events = (1u << PY_MONITORING_EVENT_BRANCH_LEFT) | (1u << PY_MONITORING_EVENT_BRANCH_RIGHT) },
+    [LOAD_ATTR_SHAPE_LOCAL_TEMP] = { .flags = _PyIR_VALID | _PyIR_NO_FOLD | _PyIR_STORE_DST | _PyIR_RUNS_CODE, .effects = _PyIR_RAISES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS | _PyIR_ALLOCATES, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_IN0 + 0, _PyIR_ROLE_FB, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_D, .fb = _PyIR_LOC_C, .ninputs = 1, .dst = -1, .borrow_mask = 0x1, .fb_kind = FB_ATTR, .fb_size = sizeof(_PyFbAttr), .result_phase = _PyIR_RESULT_PHASE_DST_TEMP_CANONICAL_BEFORE_RETIRE, .reads = { 1, _PyIR_EXT_FIXED }, .writes = { 1, _PyIR_EXT_BIT0 }, .through = { 0, _PyIR_EXT_FIXED }, .shadow = LOAD_ATTR_SHAPE, .twin = 0, .events = 0 },
 };
 #endif
 
-PyAPI_DATA(const char *const) _PyIR_OnlyNames[52];
+PyAPI_DATA(const char *const) _PyIR_OnlyNames[53];
 #ifdef NEED_IR_METADATA
-const char *const _PyIR_OnlyNames[52] = {
+const char *const _PyIR_OnlyNames[53] = {
     [IR_JUMP - IR_FIRST_ONLY_HANDLER] = "IR_JUMP",
     [BINARY_OP_ADD - IR_FIRST_ONLY_HANDLER] = "BINARY_OP_ADD",
     [BINARY_OP_AND - IR_FIRST_ONLY_HANDLER] = "BINARY_OP_AND",
@@ -1068,6 +1072,7 @@ const char *const _PyIR_OnlyNames[52] = {
     [INSTRUMENTED_COMPARE_OP_JUMP - IR_FIRST_ONLY_HANDLER] = "INSTRUMENTED_COMPARE_OP_JUMP",
     [INSTRUMENTED_CONTAINS_OP_JUMP - IR_FIRST_ONLY_HANDLER] = "INSTRUMENTED_CONTAINS_OP_JUMP",
     [INSTRUMENTED_IS_OP_JUMP - IR_FIRST_ONLY_HANDLER] = "INSTRUMENTED_IS_OP_JUMP",
+    [LOAD_ATTR_SHAPE_LOCAL_TEMP - IR_FIRST_ONLY_HANDLER] = "LOAD_ATTR_SHAPE_LOCAL_TEMP",
 };
 #endif
 

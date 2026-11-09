@@ -13195,6 +13195,95 @@
             DISPATCH();
         }
 
+        TARGET(LOAD_ATTR_SHAPE_LOCAL_TEMP) {
+            int opcode = LOAD_ATTR_SHAPE;
+            (void)(opcode);
+            _PyValueTemps *const value_temps = NULL;
+            (void)value_temps;
+            _PyIRWord* this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            next_instr += 1;
+            INSTRUCTION_STATS(LOAD_ATTR_SHAPE);
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
+            _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_C(ir_word));
+            int oparg = (int)IR_D(ir_word);
+            (void)oparg;
+            PyValueBorrow owner;
+            PyValue attr;
+            PyValue *null;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            // _GUARD_TYPE_VERSION
+            {
+                owner = IR_VIEW(IR_B(ir_word));
+                uint32_t type_version = fb->type_version;
+                if (Py_UNLIKELY(!PyValue_IsPointerSpace(owner))) {
+                    UPDATE_MISS_STATS(LOAD_ATTR);
+                    assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
+                    JUMP_TO_PREDICTED(LOAD_ATTR);
+                }
+                PyTypeObject *tp = Py_TYPE(PyValue_AsKnownObjectBorrow(owner));
+                assert(type_version != 0);
+                if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
+                    UPDATE_MISS_STATS(LOAD_ATTR);
+                    assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
+                    JUMP_TO_PREDICTED(LOAD_ATTR);
+                }
+            }
+            // _GUARD_SHAPE
+            {
+                uint32_t shape = fb->shape;
+                if (_PyObject_Shape(PyValue_AsKnownObjectBorrow(owner)) != shape) {
+                    UPDATE_MISS_STATS(LOAD_ATTR);
+                    assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
+                    JUMP_TO_PREDICTED(LOAD_ATTR);
+                }
+            }
+            // _LOAD_ATTR_SHAPE
+            {
+                uint32_t offset = fb->offset;
+                PyObject *owner_o = PyValue_AsKnownObjectBorrow(owner);
+                PyValueBorrow found =
+                PyValue_Borrow(*(PyValue *)((char *)owner_o + offset));
+                assert(!PyValue_IsNull(found));
+                attr = IR_CANONICAL_HOME_DUP(found);
+                STAT_INC(LOAD_ATTR, hit);
+                ir_own_B = PyValue_NULL;
+                PyValue receiver = ir_own_B;
+                assert(PyValue_IsNull(IR_SLOT(IR_A(ir_word))) || PyValue_Is(IR_SLOT(IR_A(ir_word)), attr));
+                IR_SLOT(IR_A(ir_word)) = attr;
+                _PyValue_CheckTemp(IR_SLOT(IR_A(ir_word)));
+                {
+                    int retire_needed = _PyValue_MayDealloc(receiver);
+                    if (!retire_needed) {
+                        PyValue_XCLOSE(receiver); receiver = PyValue_NULL;
+                    }
+                    if (retire_needed) {
+                        int retire_failed = retire_published_values(tstate, frame, next_instr, NULL, receiver, PyValue_NULL, PyValue_NULL);
+                        if (retire_failed < 0) { JUMP_TO_LABEL(error); }
+                        this_instr = frame->instr_ptr;
+                        ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
+                        slots = _PyFrame_Slots(frame);
+                    }
+                }
+            }
+            // _PUSH_NULL_CONDITIONAL
+            {
+                null = &IR_SLOT(IR_A(ir_word) + 1);
+                if (oparg & 1) {
+                    null[0] = PyValue_NULL;
+                }
+            }
+            if (!PyValue_IsNull(ir_displaced) &&
+                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
+                next_instr = frame->instr_ptr + 1;
+                JUMP_TO_LABEL(error);
+            }
+            DISPATCH();
+        }
+
         TARGET(LOAD_ATTR_SLOT) {
             int opcode = LOAD_ATTR_SLOT;
             (void)(opcode);

@@ -145,6 +145,33 @@ FIELDS = ("A", "B", "C", "D")
 FIELD_VARS = {f: f"IR_{f}(ir_word)" for f in FIELDS}
 
 
+@dataclass(frozen=True)
+class ExecutionVariant:
+    base: str
+    local_fields: tuple[str, ...] = ()
+    temp_fields: tuple[str, ...] = ()
+
+
+# Execution-only refinements: canonical words keep their ordinary handlers.
+EXECUTION_VARIANTS = {
+    "LOAD_ATTR_SHAPE_LOCAL_TEMP": ExecutionVariant(
+        "LOAD_ATTR_SHAPE", local_fields=("B",), temp_fields=("A",)),
+}
+
+
+def execution_variants(analysis: Analysis) -> dict[str, ExecutionVariant]:
+    # Synthetic generator inputs may reuse a specialization's name without
+    # declaring its family or operand contract.
+    return {name: variant for name, variant in EXECUTION_VARIANTS.items()
+            if variant.base in analysis.instructions
+            and analysis.instructions[variant.base].family is not None}
+
+
+def canonical_handler(name: str) -> str:
+    variant = EXECUTION_VARIANTS.get(name)
+    return variant.base if variant is not None else name
+
+
 def owner_name(field: str) -> str:
     """The owner of the borrowable input read through field: the value that
     IR_CONSUME_INPUT gives the handler, PyValue_NULL for a local"""
@@ -1080,7 +1107,8 @@ def handler_ids(analysis: Analysis) -> dict[str, int]:
     has none."""
     ids = {name: inst.opcode for name, inst in analysis.instructions.items()
            if name != BINARY_OP_FAMILY and name not in STACK_ONLY}
-    names = sorted(analysis.ir_only) + binary_op_handlers(analysis)
+    names = (sorted(analysis.ir_only) + binary_op_handlers(analysis)
+             + list(execution_variants(analysis)))
     table = analysis.numbers
     for name in names:
         ids[name] = table.number(
@@ -1095,6 +1123,9 @@ def handler_instructions(analysis: Analysis) -> dict[str, Instruction]:
               if name in insts}
     for name in binary_op_handlers(analysis):
         result[name] = insts[BINARY_OP_FAMILY]
+    for name, variant in execution_variants(analysis).items():
+        if variant.base in result:
+            result[name] = result[variant.base]
     return result
 
 
@@ -1735,6 +1766,18 @@ def compute_formats(analysis: Analysis) -> dict[str, IRFormat]:
             inputs=[], n_inputs=0, dst_offset=None, borrow_mask=0,
             imm=LOC_NONE, fb=LOC_NONE, jumps=False,
             transparent=True, runs_code=runs_code(insts[name]))
+    for name, variant in execution_variants(analysis).items():
+        if variant.base not in formats:
+            continue
+        fmt = formats[variant.base]
+        local_inputs = {fmt.input_field(k) for k in range(fmt.n_inputs)
+                        if fmt.borrow_mask & (1 << k)}
+        if (fmt.window
+                or not set(variant.local_fields) <= local_inputs
+                or not set(variant.temp_fields) <= {fmt.field_of(ROLE_DST)}
+                or set(variant.local_fields) & set(variant.temp_fields)):
+            raise ValueError(f"invalid operand modes for {name}")
+        formats[name] = fmt
     return formats
 
 
@@ -1767,6 +1810,8 @@ class SlotLayout:
     dst: str | None = None
     dst_offset: int | None = None   # register: position of dst; window:
                                     # its offset from base
+    local_fields: tuple[str, ...] = ()
+    temp_fields: tuple[str, ...] = ()
     store_dst: bool = False         # dst may name a local
 
     @staticmethod
@@ -2034,8 +2079,10 @@ class IRStack(Stack):
         if not names:
             raise StackError(f"no variable holds the view of the input "
                              f"in {f} when the handler takes it")
-        out.emit(f"{owner_name(self.layout.in_fields[p])} = "
-                 f"IR_CONSUME_INPUT({f}, {names[-1]});\n")
+        field = self.layout.in_fields[p]
+        consume = ("PyValue_NULL" if field in self.layout.local_fields else
+                   f"IR_CONSUME_INPUT({f}, {names[-1]})")
+        out.emit(f"{owner_name(field)} = {consume};\n")
 
     def store(self, out: CWriter, var: Local, memory_offset: PointerOffset,
               canonical_result: str | None = None) -> bool:
@@ -2084,6 +2131,17 @@ class IRStack(Stack):
             previous = None
         slot = self.out_slot(memory_offset)
         if lay.store_dst and p == lay.dst_offset:
+            if lay.dst in lay.temp_fields:
+                if self.final and self.published_temporary_result:
+                    return True
+                if var.name == canonical_result:
+                    out.emit(f"assert(PyValue_IsNull({slot}) || "
+                             f"PyValue_Is({slot}, {var.name}));\n")
+                    out.emit(f"{slot} = {var.name};\n")
+                    out.emit(f"_PyValue_CheckTemp({slot});\n")
+                else:
+                    out.emit(f"IR_STORE_TEMP({slot}, {var.name});\n")
+                return False
             if self.final:
                 if self.published_temporary_result:
                     out.emit(f"if (IR_IS_LOCAL({FIELD_VARS[lay.dst]})) {{\n")
@@ -2335,6 +2393,7 @@ class IREmitter(Emitter):
         self.call_flags = ""
         # The format of the handler being emitted
         self.handler_format: IRFormat | None = None
+        self.execution_variant: ExecutionVariant | None = None
         self.result_publication: "ResultPublicationContract | None" = None
         # Whether the handler being emitted has a value record, value_temps:
         # only a handler whose contract has BOXES does (boxing_handlers)
@@ -2394,8 +2453,10 @@ class IREmitter(Emitter):
         if tkn.text == "IR_RETIRE_PUBLISHED_RESULT":
             fmt = self.format_of(inst)
             dst = FIELD_VARS[fmt.field_of(ROLE_DST)]
-            failure_result = (
-                f"(IR_IS_LOCAL({dst}) ? {result_name} : PyValue_NULL)")
+            if (self.execution_variant is None or
+                    fmt.field_of(ROLE_DST) not in self.execution_variant.temp_fields):
+                failure_result = (
+                    f"(IR_IS_LOCAL({dst}) ? {result_name} : PyValue_NULL)")
             assert isinstance(storage.stack, IRStack)
             storage.stack.published_temporary_result = True
         window = (FIELD_VARS[self.format_of(inst).field_of(ROLE_BASE)]
@@ -3847,7 +3908,7 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
     emitter.taken_outputs = set()
     operation = None
     emitter.has_record = record
-    if name != inst.name:
+    if name != inst.name and name not in EXECUTION_VARIANTS:
         operation = "NB_" + name.removeprefix(BINARY_OP_FAMILY + "_")
     transaction = uses_call_transaction(inst)
     emitter.call_finished = False
@@ -3858,7 +3919,7 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
     out.emit("\n")
     out.emit(f"TARGET({name}) {{\n")
     bridge_bound = value_bridge_bound(name, inst)
-    out.emit(f"int opcode = {name};\n")
+    out.emit(f"int opcode = {canonical_handler(name)};\n")
     out.emit(f"(void)(opcode);\n")
     if not record:
         # No value record: the dispatch macros finish no bridges
@@ -3867,7 +3928,7 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
     if inst.properties.needs_prev:
         out.emit(f"_PyIRWord* const prev_instr = frame->instr_ptr;\n")
     if not is_target:
-        qualifier = "" if transaction or inst.name == "BINARY_OP" or name in ("CALL", "CALL_KW", "INSTRUMENTED_CALL", "INSTRUMENTED_CALL_KW", "CALL_NON_PY_GENERAL", "CALL_KW_NON_PY", "CALL_BUILTIN_O", "LOAD_ATTR_SLOT", "STORE_ATTR_SLOT",
+        qualifier = "" if transaction or inst.name == "BINARY_OP" or canonical_handler(name) in ("CALL", "CALL_KW", "INSTRUMENTED_CALL", "INSTRUMENTED_CALL_KW", "CALL_NON_PY_GENERAL", "CALL_KW_NON_PY", "CALL_BUILTIN_O", "LOAD_ATTR_SLOT", "STORE_ATTR_SLOT",
                                    "BUILD_MAP", "STORE_SUBSCR", "STORE_SUBSCR_DICT",
                                    "STORE_ATTR_WITH_HINT", "BINARY_OP_SUBSCR_DICT", "LOAD_GLOBAL",
                                    "LOAD_ATTR", "STORE_ATTR",
@@ -3879,9 +3940,9 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
     if not inst.properties.no_save_ip:
         out.emit(f"frame->instr_ptr = next_instr;\n")
     out.emit(f"next_instr += 1;\n")
-    out.emit(f"INSTRUCTION_STATS({name});\n")
+    out.emit(f"INSTRUCTION_STATS({canonical_handler(name)});\n")
     if is_target:
-        qualifier = "" if transaction or inst.name == "BINARY_OP" or name in ("CALL", "CALL_KW", "STORE_SUBSCR", "LOAD_GLOBAL", "LOAD_ATTR", "STORE_ATTR") else "const "
+        qualifier = "" if transaction or inst.name == "BINARY_OP" or canonical_handler(name) in ("CALL", "CALL_KW", "STORE_SUBSCR", "LOAD_GLOBAL", "LOAD_ATTR", "STORE_ATTR") else "const "
         out.emit(f"_PyIRWord* {qualifier}this_instr = next_instr - 1;\n")
         out.emit("(void)this_instr;\n")
     if record:
@@ -3969,7 +4030,7 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
         count = " + ".join(f"({item.size or '1'})" for item in inputs)
         out.emit(f"_PyValue_RecheckWindow(window, {count});\n")
     if inst.properties.uses_opcode:
-        out.emit(f"opcode = {name};\n")
+        out.emit(f"opcode = {canonical_handler(name)};\n")
     mode = store_mode(inst, external_io(inst)[1]) if fmt.store_dst else None
     if mode == STORE_LEAVE:
         out.emit(f"if (IR_IS_LOCAL({FIELD_VARS[fmt.field_of(ROLE_DST)]})) {{\n")
@@ -3985,7 +4046,11 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
             out.emit(f"(void){own};\n")
     for box in sorted(emitter.boxes):
         out.emit(f"PyObject *{box} = NULL;\n")
-    stack: Stack = IRStack(slot_layout(inst, fmt, mode), roles)
+    layout = slot_layout(inst, fmt, mode)
+    if emitter.execution_variant is not None:
+        layout = replace(layout, local_fields=emitter.execution_variant.local_fields,
+                         temp_fields=emitter.execution_variant.temp_fields)
+    stack: Stack = IRStack(layout, roles)
     insert_braces = len([p for p in inst.parts if isinstance(p, Uop)]) > 1
     reachable = True
     for part in inst.parts:
@@ -4034,9 +4099,11 @@ def generate_ir_cases(analysis: Analysis, formats: dict[str, IRFormat],
     out.emit("\n")
     for name, inst in sorted(handler_instructions(analysis).items()):
         emitter.handler_format = formats[name]
+        emitter.execution_variant = EXECUTION_VARIANTS.get(name)
         generate_handler(name, inst, formats[name], emitter, out,
                          name in boxing)
         emitter.handler_format = None
+        emitter.execution_variant = None
 
 
 def generate_ir_labels(analysis: Analysis, emitter: Emitter) -> None:

@@ -25,6 +25,8 @@ from generators_common import DEFAULT_INPUT, ROOT, write_header
 from cwriter import CWriter
 from ir_generator import (
     BINARY_OP_FAMILY,
+    EXECUTION_VARIANTS,
+    canonical_handler,
     FUSED_SHADOWS,
     first_ir_only_handler,
     Extent,
@@ -56,7 +58,7 @@ def shadow_of(name: str, analysis: Analysis) -> str:
     for fused, compare in FUSED_SHADOWS.items():
         if name.startswith(fused) or name.startswith("INSTRUMENTED_" + fused):
             return compare
-    return name
+    return canonical_handler(name)
 
 
 def handler_facts(analysis: Analysis, formats: dict[str, IRFormat]
@@ -85,7 +87,7 @@ def handler_facts(analysis: Analysis, formats: dict[str, IRFormat]
             parts.append("_PyIR_H_INSTRUMENTED")
         if name in binary:
             parts.append("_PyIR_H_BINARY_OP")
-        if name in analysis.ir_only:
+        if name in analysis.ir_only or name in EXECUTION_VARIANTS:
             parts.append("_PyIR_H_IR_ONLY")
         if name.endswith("_NOFB"):
             parts.append("_PyIR_H_NOFB")

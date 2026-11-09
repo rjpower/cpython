@@ -226,7 +226,9 @@ class AssemblerTest(unittest.TestCase):
                         if type(value) not in (int, float):
                             self.assertIs(result, value)
                     if SPECIALIZES:
-                        self.assertIn("LOAD_ATTR_SHAPE", handlers(read))
+                        expected = ("LOAD_ATTR_SHAPE" if local else
+                                    "LOAD_ATTR_SHAPE_LOCAL_TEMP")
+                        self.assertIn(expected, handlers(read))
                     attr = next(word for word in get_ir(read.__code__)
                                 if word[0] == "LOAD_ATTR")
                     self.assertEqual(attr[1] < nlocalsplus(read), local)

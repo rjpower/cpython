@@ -936,8 +936,13 @@ def _get_instructions_bytes(code, linestarts=None, line_offset=0, co_positions=N
             # that the jump is in the word)
             if _is_fused(runs):
                 op = runs
+            elif runs >= _IR_FIRST_ONLY_HANDLER:
+                # Execution-only variants preserve their specialization in
+                # the adaptive view; structural IR handlers keep their base.
+                shadow = _ir_contract[runs].shadow
+                op = shadow if shadow < _IR_FIRST_ONLY_HANDLER else _deoptop(runs)
             else:
-                op = _deoptop(runs) if runs >= _IR_FIRST_ONLY_HANDLER else runs
+                op = runs
         if arg_resolver:
             argval, argrepr = arg_resolver.get_argval_argrepr(handler, arg, offset)
             if _is_fused(handler):

@@ -2411,11 +2411,32 @@ force_instrument_lock_held(PyCodeObject *code, PyInterpreterState *interp)
     /* Source edges borrow branch wrappers only while LINE observation is
      * enabled. Remove that private forcing before updating ordinary tools. */
     _PyCoMonitoringData *old = code->_co_monitoring;
-    if (old) {
+    bool restarted = interp->last_restart_version > code->_co_instrumentation_version;
+    uint8_t old_line = old ? old->active_monitors.tools[PY_MONITORING_EVENT_LINE] : 0;
+    uint8_t local_line = old ? old->local_monitors.tools[PY_MONITORING_EVENT_LINE] : 0;
+    for (int tool = 0; old && tool < PY_MONITORING_TOOL_IDS; tool++) {
+        if (old->tool_versions[tool] != interp->monitoring_tool_versions[tool]) {
+            local_line &= ~(1 << tool);
+        }
+    }
+    uint8_t new_line = interp->monitors.tools[PY_MONITORING_EVENT_LINE] | local_line;
+    uint8_t relevant_line = old_line | new_line;
+    uint8_t stale_line = 0;
+    for (int tool = 0; tool < PY_MONITORING_TOOL_IDS; tool++) {
+        /* Tool identities advance the global version. Unlike local versions,
+         * this successful-code snapshot is not overwritten by SetLocalEvents. */
+        if ((relevant_line & (1 << tool)) &&
+            interp->monitoring_tool_versions[tool] > code->_co_instrumentation_version)
+        {
+            stale_line |= 1 << tool;
+        }
+    }
+    if (old && (old_line != new_line || stale_line || (restarted && relevant_line))) {
         if (old->line_epoch == UINT64_MAX) {
             PyErr_SetString(PyExc_OverflowError, "LINE configuration changed too many times");
             return -1;
         }
+        /* An unrelated INSTRUCTION change must not replay an observed LINE. */
         old->line_epoch++;
     }
     if (old && old->source_forced) {
@@ -2440,7 +2461,6 @@ force_instrument_lock_held(PyCodeObject *code, PyInterpreterState *interp)
     _Py_LocalMonitors new_events;
     _Py_LocalMonitors removed_events;
 
-    bool restarted = interp->last_restart_version > code->_co_instrumentation_version;
     if (restarted) {
         removed_events = code->_co_monitoring->active_monitors;
         new_events = active_events;
@@ -2450,6 +2470,10 @@ force_instrument_lock_held(PyCodeObject *code, PyInterpreterState *interp)
         new_events = monitors_sub(active_events, code->_co_monitoring->active_monitors);
         assert(monitors_are_empty(monitors_and(new_events, removed_events)));
     }
+    /* A reused LINE tool must not inherit its predecessor's DISABLE masks,
+     * even when both identities select the same event bit. */
+    removed_events.tools[PY_MONITORING_EVENT_LINE] |= old_line & stale_line;
+    new_events.tools[PY_MONITORING_EVENT_LINE] |= new_line & stale_line;
     code->_co_monitoring->active_monitors = active_events;
     if (monitors_are_empty(new_events) && monitors_are_empty(removed_events)) {
         goto done;

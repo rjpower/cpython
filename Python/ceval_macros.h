@@ -572,24 +572,31 @@ _PyIR_AdoptTemp(PyValueBorrow view)
  * STORE_FAST, _PyIR_STORE_DST): the local's old value is released after
  * it, as STORE_FAST does (IR_RETIRE_LOCAL).  A temporary's slot holds
  * NULL, or V when the handler wrote it there before (IR_STORE_TEMP_DST). */
-#define IR_STORE_DST(F, V) \
+#define IR_STORE_DST_IMPL(F, V, VALUE) \
     do { \
-        if ((F) == IR_NO_DST) { \
-            PyValue_XCLOSE(V); \
-        } \
-        else if (IR_IS_LOCAL(F)) { \
+        if (IR_IS_LOCAL(F)) { \
             PyValue ir_old = IR_SLOT(F); \
-            IR_SLOT(F) = _PyValue_Publish(&(V)); \
+            IR_SLOT(F) = (VALUE); \
             _PyValue_CheckHome(IR_SLOT(F)); \
             IR_RETIRE_LOCAL(ir_old); \
+        } \
+        else if ((F) == IR_NO_DST) { \
+            PyValue_XCLOSE(V); \
         } \
         else { \
             assert(PyValue_IsNull(IR_SLOT(F)) \
                    || PyValue_Is(IR_SLOT(F), (V))); \
-            IR_SLOT(F) = _PyValue_Publish(&(V)); \
+            IR_SLOT(F) = (VALUE); \
             _PyValue_CheckTemp(IR_SLOT(F)); \
         } \
     } while (0)
+
+#define IR_STORE_DST(F, V) \
+    IR_STORE_DST_IMPL(F, V, _PyValue_Publish(&(V)))
+
+/* Only a checked constructor-result proof selects this owner transfer. */
+#define IR_STORE_CANONICAL_DST(F, V) \
+    IR_STORE_DST_IMPL(F, V, (V))
 
 /* The source is a borrowed value from a canonical home. */
 #define IR_CANONICAL_HOME_DUP(V) \

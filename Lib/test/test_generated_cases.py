@@ -392,6 +392,115 @@ class TestIRCases(unittest.TestCase):
                 with self.assertRaises(SyntaxError):
                     generate(source.replace(old, new, 1))
 
+    def test_canonical_numeric_constructor_proof(self):
+        source = (Path(__file__).resolve().parents[2] /
+                  "Python" / "bytecodes.c").read_text()
+        Path(self.temp_input_filename).write_text(source)
+        with handle_stderr():
+            analysis = analyzer.analyze_files([self.temp_input_filename])
+        formats = ir_generator.compute_formats(analysis)
+        names = ('BINARY_OP_MULTIPLY_FLOAT', 'BINARY_OP_ADD_FLOAT',
+                 'BINARY_OP_SUBTRACT_FLOAT', 'BINARY_OP_TRUEDIV_FLOAT')
+        for name in names:
+            contract = ir_generator.canonical_numeric_result(
+                analysis.instructions[name], formats[name])
+            self.assertIsNotNone(contract, name)
+            self.assertEqual(contract.result, 'res')
+        output = io.StringIO()
+        ir_generator.generate_ir([self.temp_input_filename], analysis, output, False)
+        for name in names:
+            handler = self.handler(output.getvalue(), name)
+            self.assertIn('IR_STORE_CANONICAL_DST(IR_A(ir_word), res);', handler)
+            self.assertNotIn('IR_STORE_DST(IR_A(ir_word), res);', handler)
+        for name in ('BINARY_OP_ADD_INT', 'BINARY_OP_SUBTRACT_INT'):
+            self.assertIsNone(ir_generator.canonical_numeric_result(
+                analysis.instructions[name], formats[name]))
+            self.assertIn('IR_STORE_DST(IR_A(ir_word), res);',
+                          self.handler(output.getvalue(), name))
+
+        # Eligibility follows the source, not the opcode/producer names.
+        renamed = source.replace('BINARY_OP_MULTIPLY_FLOAT', 'RENAMED_PRODUCT')
+        Path(self.temp_input_filename).write_text(renamed)
+        with handle_stderr():
+            other = analyzer.analyze_files(
+                [self.temp_input_filename], SequentialNumbers())
+        other_formats = ir_generator.compute_formats(other)
+        self.assertIsNotNone(ir_generator.canonical_numeric_result(
+            other.instructions['RENAMED_PRODUCT'], other_formats['RENAMED_PRODUCT']))
+
+    def test_canonical_numeric_constructor_mutations_fail_closed(self):
+        source = (Path(__file__).resolve().parents[2] /
+                  "Python" / "bytecodes.c").read_text()
+        changes = (
+            ('_BINARY_OP_MULTIPLY_FLOAT, (left, right -- res, l, r)',
+             '_BINARY_OP_MULTIPLY_FLOAT, (PyValue_FromDouble/1, left, right -- res, l, r)'),
+            ('_BINARY_OP_MULTIPLY_FLOAT, (left, right -- res, l, r)',
+             '_BINARY_OP_MULTIPLY_FLOAT, (PyValue_FloatOperandValues/1, left, right -- res, l, r)'),
+            ('_BINARY_OP_MULTIPLY_FLOAT + _POP_TOP_NUMBER + _POP_TOP_NUMBER;',
+             '_BINARY_OP_MULTIPLY_FLOAT + flush + _POP_TOP_NUMBER + _POP_TOP_NUMBER;'),
+            ('res = PyValue_FromDouble(a * b);',
+             'res = unknown_result(a * b);'),
+            ('res = PyValue_FromDouble(a * b);',
+             'if (a) { res = PyValue_FromDouble(a * b); } else { res = unknown_result(); }'),
+            ('res = PyValue_FromDouble(a * b);',
+             'res = PyValue_FromDouble(a * b); res = unknown_result();'),
+            ('res = PyValue_FromDouble(a * b);',
+             'res = PyValue_FromDouble(a * b); mutate(&res);'),
+            ('res = PyValue_FromDouble(a * b);',
+             'res = PyValue_FromDouble(unknown_result());'),
+            ('res = PyValue_FromDouble(a * b);',
+             'PyValue (*PyValue_FromDouble)(double) = replacement; res = PyValue_FromDouble(a * b);'),
+            ('res = PyValue_FromDouble(a * b);',
+             '#define PyValue_FromDouble replacement\nres = PyValue_FromDouble(a * b);\n#undef PyValue_FromDouble'),
+            ('res = PyValue_FromDouble(a * b);',
+             'res = PyValue_FromDouble(a * b);\n#if 1\nspam();\n#endif'),
+            ('res = PyValue_FromDouble(a * b);\n            if (PyValue_IsNull(res)) {\n                ERROR_NO_POP();\n            }',
+             'res = PyValue_FromDouble(a * b);'),
+            ('res = PyValue_FromDouble(a * b);',
+             'res = PyValue_FromDouble(a * b); EXIT_IF(a == 0.0);'),
+            ('res = PyValue_FromDouble(a * b);',
+             'res = PyValue_FromDouble(a * b); PyValue_CLOSE(res);'),
+            ('assert(PyValue_IsInlineFloat(value) || PyValue_IsInlineInt(value));',
+             'assert(PyValue_IsInlineFloat(value) || PyValue_IsInlineInt(value)); spam();'),
+            ('assert(PyValue_IsInlineFloat(value) || PyValue_IsInlineInt(value));',
+             'assert(PyValue_FloatCheck(value));'),
+            ('_BINARY_OP_MULTIPLY_FLOAT, (left, right -- res, l, r)',
+             '_BINARY_OP_MULTIPLY_FLOAT, (left, right -- left, l, r)'),
+            ('_BINARY_OP_MULTIPLY_FLOAT + _POP_TOP_NUMBER + _POP_TOP_NUMBER;',
+             '_BINARY_OP_MULTIPLY_FLOAT + _POP_TOP_NUMBER + _POP_TOP_NUMBER + _REPLACE_RESULT;\n'
+             '        op(_REPLACE_RESULT, (res -- res)) { mutate(&res); }'),
+        )
+        for old, new in changes:
+            with self.subTest(new=new):
+                self.assertIn(old, source)
+                Path(self.temp_input_filename).write_text(source.replace(old, new, 1))
+                with handle_stderr():
+                    analysis = analyzer.analyze_files([self.temp_input_filename])
+                formats = ir_generator.compute_formats(analysis)
+                self.assertIsNone(ir_generator.canonical_numeric_result(
+                    analysis.instructions['BINARY_OP_MULTIPLY_FLOAT'],
+                    formats['BINARY_OP_MULTIPLY_FLOAT']))
+
+    def test_canonical_numeric_direct_int64_boundary(self):
+        source = '''
+        inst(DIRECT, (-- result)) {
+            result = PyValue_FromInt64(42);
+            if (PyValue_IsNull(result)) { ERROR_NO_POP(); }
+        }
+        '''
+        for constructor, valid in (('PyValue_FromInt64', True),
+                                   ('_PyValue_BoxInt64', False),
+                                   ('_PyValue_FromIntScaled', False)):
+            with self.subTest(constructor=constructor):
+                with handle_stderr():
+                    analysis = analyzer.analyze_forest(
+                        parse_src(source.replace('PyValue_FromInt64', constructor)),
+                        SequentialNumbers())
+                formats = ir_generator.compute_formats(analysis)
+                contract = ir_generator.canonical_numeric_result(
+                    analysis.instructions['DIRECT'], formats['DIRECT'])
+                self.assertEqual(contract is not None, valid)
+
     def test_canonical_return_provenance_fails_closed(self):
         source = (Path(__file__).resolve().parents[2] /
                   "Python" / "bytecodes.c").read_text()

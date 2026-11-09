@@ -1823,6 +1823,7 @@ class SlotLayout:
     temp_fields: tuple[str, ...] = ()
     store_dst: bool = False         # dst may name a local
     canonical_return: bool = False  # proven unchanged canonical slot input
+    canonical_numeric_result: str | None = None  # checked constructor owner
 
     @staticmethod
     def empty() -> "SlotLayout":
@@ -2167,7 +2168,9 @@ class IRStack(Stack):
                 if self.published_temporary_result:
                     field = FIELD_VARS[lay.dst]
                     out.emit(f"if (IR_IS_LOCAL({field}) || {field} == IR_NO_DST) {{\n")
-                self.dst_stores.append(f"IR_STORE_DST({FIELD_VARS[lay.dst]}, {var.name})")
+                macro = ("IR_STORE_CANONICAL_DST"
+                         if var.name == lay.canonical_numeric_result else "IR_STORE_DST")
+                self.dst_stores.append(f"{macro}({FIELD_VARS[lay.dst]}, {var.name})")
                 out.emit(f"{self.dst_stores[-1]};\n")
                 if self.published_temporary_result:
                     out.emit("}\n")
@@ -3972,6 +3975,122 @@ def generate_handler(name: str, inst: Instruction, fmt: IRFormat,
     emit_handler(name, inst, fmt, emitter, out, record, {})
 
 
+@dataclass(frozen=True)
+class CanonicalNumericResult:
+    "A canonical constructor owner preserved through the complete uop chain."
+    producer: Uop
+    result: str
+
+
+def canonical_numeric_result(inst: Instruction, fmt: IRFormat
+                             ) -> CanonicalNumericResult | None:
+    "Recognize bounded source proofs, independently of instruction names."
+    inputs, outputs = external_io(inst)
+    # Skip entries are unnamed feedback padding and emit no code or C
+    # binding. A Flush or any future part requires a separate proof.
+    if any(not isinstance(part, (Uop, Skip)) for part in inst.parts):
+        return None
+    parts = [part for part in inst.parts if isinstance(part, Uop)]
+    if any(cache.name != "unused" for part in parts for cache in part.caches):
+        return None
+    if (not fmt.store_dst or fmt.window or not parts or len(outputs) != 1
+            or outputs[0].item.is_array() or outputs[0].aliased
+            or outputs[0].external >= 0
+            or fmt.field_of(ROLE_DST) is None):
+        return None
+    producer = parts[0]
+    if not producer.stack.outputs:
+        return None
+    result = producer.stack.outputs[0].name
+    if (outputs[0].item.name != result or result in producer.aliased_outputs
+            or any(item.is_array() for part in parts
+                   for item in (*part.stack.inputs, *part.stack.outputs))):
+        return None
+    constructors = {"PyValue_FromDouble", "PyValue_FromInt64"}
+    trusted = constructors | {"PyValue_FloatOperandValues",
+                             "PyValue_CLOSE_SPECIALIZED",
+                             "_PyFloat_OrLongExactDealloc"}
+    # C name resolution is outside this parser. Exclude local bindings and
+    # preprocessing that could replace the audited global helper boundary.
+    if any(item.name in trusted for part in parts
+           for item in (*part.stack.inputs, *part.stack.outputs)):
+        return None
+    tokens = [token for part in parts for token in part.body.tokens()
+              if token.kind != "COMMENT"]
+    if any(token.kind.startswith("CMACRO") for token in tokens):
+        return None
+    assignments = [stmt for stmt in producer.body.body
+                   if isinstance(stmt, SimpleStmt)
+                   and _statement_text(stmt)[:2] == [result, "="]]
+    if len(assignments) != 1:
+        return None
+    assignment = _statement_text(assignments[0])
+    if (len(assignment) < 7 or assignment[2] not in constructors
+            or assignment[3] != "(" or assignment[-2:] != [")", ";"]):
+        return None
+    constructor = assignment[2]
+    if sum(token.text == constructor for token in tokens) != 1:
+        return None
+    argument = assignment[4:-2]
+    null_error = f"if (PyValue_IsNull({result})) {{ ERROR_NO_POP(); }}"
+    if constructor == "PyValue_FromDouble":
+        if (len(producer.stack.inputs) != 2
+                or len(producer.stack.outputs) != 3
+                or len(argument) != 3 or argument[0] != "a"
+                or argument[1] not in {"+", "-", "*", "/"}
+                or argument[2] != "b"):
+            return None
+        left, right = [item.name for item in producer.stack.inputs]
+        _, l, r = [item.name for item in producer.stack.outputs]
+        if len({left, right, result, l, r, "a", "b"}) != 7:
+            return None
+        expected_prefix = f"""double a, b;
+            EXIT_IF(!PyValue_FloatOperandValues({left}, {right}, &a, &b));"""
+        expected_tail = f"""STAT_INC(BINARY_OP, hit);
+            {result} = {constructor}(a {argument[1]} b);
+            {null_error}
+            {l} = {left}; {r} = {right}; INPUTS_DEAD();"""
+        bodies = ["{" + expected_prefix + guard + expected_tail + "}"
+                  for guard in ("", "EXIT_IF(b == 0.0);")]
+        if not any([t.text for t in producer.body.tokens() if t.kind != "COMMENT"]
+                   == [t.text for t in tokenize(body)] for body in bodies):
+            return None
+        if len(parts) != 3:
+            return None
+        depth = 3
+        for part in parts[1:]:
+            if (len(part.stack.inputs) != 1 or part.stack.outputs
+                    or part.stack.inputs[0].name == result):
+                return None
+            value = part.stack.inputs[0].name
+            expected = f"""{{
+                assert(PyValue_IsInlineFloat({value}) || PyValue_IsInlineInt({value}));
+                PyValue_CLOSE_SPECIALIZED({value}, _PyFloat_OrLongExactDealloc);
+            }}"""
+            if ([t.text for t in part.body.tokens() if t.kind != "COMMENT"]
+                    != [t.text for t in tokenize(expected)]):
+                return None
+            # Each suffix consumes only the top input owner, never result0.
+            depth -= 1
+            if depth <= 0:
+                return None
+        if depth != 1:
+            return None
+    else:
+        # This constructor's API is unconditional; narrow Box/Scaled helpers
+        # do not qualify. Start with a constant argument and no input owners.
+        if (inputs or len(parts) != 1 or len(producer.stack.outputs) != 1
+                or not re.fullmatch(r"-?(0|[1-9][0-9]*)", "".join(argument))):
+            return None
+        if not -(1 << 63) < int("".join(argument)) < (1 << 63):
+            return None
+        expected = f"{{ {result} = {constructor}({''.join(argument)}); {null_error} }}"
+        if ([t.text for t in producer.body.tokens() if t.kind != "COMMENT"]
+                != [t.text for t in tokenize(expected)]):
+            return None
+    return CanonicalNumericResult(producer, result)
+
+
 def canonical_return_input(inst: Instruction) -> bool:
     """A return transfers a canonical slot input without changing its bits.
 
@@ -4166,7 +4285,9 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
     for box in sorted(emitter.boxes):
         out.emit(f"PyObject *{box} = NULL;\n")
     layout = slot_layout(inst, fmt, mode)
-    layout = replace(layout, canonical_return=canonical_return_input(inst))
+    numeric = canonical_numeric_result(inst, fmt)
+    layout = replace(layout, canonical_return=canonical_return_input(inst),
+                     canonical_numeric_result=numeric.result if numeric else None)
     if emitter.execution_variant is not None:
         layout = replace(layout, local_fields=emitter.execution_variant.local_fields,
                          temp_fields=emitter.execution_variant.temp_fields)

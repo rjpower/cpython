@@ -2861,6 +2861,120 @@ class ConstSlotsTest(unittest.TestCase):
         self.assertIsInstance(before, ZeroDivisionError)
         self.assertIs(before, after)
 
+    def test_settrace_forward_caught_redirect_preserves_exception_owners(self):
+        source = """def f():
+    value = 0
+    before = after = None
+    try:
+        1 / 0
+    except ZeroDivisionError as error:
+        before = sys.exception()
+        value += 1
+        value += 2  # source
+        value += 4  # target
+        after = sys.exception()
+    return value, before, after
+"""
+        namespace = {"sys": sys}
+        exec(source, namespace)
+        f = namespace["f"]
+        target_line = next(i for i, line in enumerate(source.splitlines(), 1)
+                           if "# target" in line)
+        source_line = next(i for i, line in enumerate(source.splitlines(), 1)
+                           if "# source" in line)
+        for warm in (0, 20):
+            with self.subTest(warm=warm):
+                for _ in range(warm):
+                    self.assertEqual(f()[0], 7)
+                observed = []
+                events = 0
+                def tracer(frame, event, arg):
+                    nonlocal events
+                    if frame.f_code is f.__code__ and event == "line":
+                        events += 1
+                        self.assertLess(events, 80)
+                        if frame.f_lineno == source_line and not observed:
+                            inherited = sys.exception()
+                            observed.append(inherited)
+                            self.assertIs(inherited, frame.f_locals["error"])
+                            try:
+                                raise LookupError("callback owned")
+                            except LookupError as callback:
+                                frame.f_lineno = target_line
+                                self.assertIs(sys.exception(), callback)
+                            self.assertIs(sys.exception(), inherited)
+                    return tracer
+
+                previous = sys.gettrace()
+                sys.settrace(tracer)
+                try:
+                    value, before, after = f()
+                finally:
+                    sys.settrace(previous)
+                self.assertEqual(value, 5)
+                self.assertEqual(len(observed), 1)
+                self.assertIs(before, observed[0])
+                self.assertIs(after, before)
+
+    def test_settrace_forward_caught_refuses_missing_loop_owner(self):
+        source = """def f():
+    value = 0
+    try:
+        1 / 0
+    except ZeroDivisionError as error:
+        value += 1  # source
+        for item in (2,):
+            value += item  # target
+    return value
+"""
+        namespace = {}
+        exec(source, namespace)
+        f = namespace["f"]
+        source_line = next(i for i, line in enumerate(source.splitlines(), 1)
+                           if "# source" in line)
+        target_line = next(i for i, line in enumerate(source.splitlines(), 1)
+                           if "# target" in line)
+        instructions = list(dis.get_instructions(f))
+        loops = [inst for inst in instructions
+                 if inst.opname.startswith("FOR_ITER")]
+        self.assertEqual(len(loops), 1)
+        loop = loops[0]
+        words = _testinternalcapi.get_ir(f.__code__)
+        nlocalsplus = len(_testinternalcapi.get_co_localskinds(f.__code__))
+        self.assertGreaterEqual(words[loop.offset][2], nlocalsplus)
+        target_instructions = [inst for inst in instructions
+                               if inst.positions.lineno == target_line]
+        self.assertTrue(target_instructions)
+        for inst in target_instructions:
+            self.assertGreater(inst.offset, loop.offset)
+            self.assertLess(inst.offset, loop.argval)
+        backedges = [inst for inst in target_instructions
+                     if inst.opname.startswith("JUMP_BACKWARD")]
+        self.assertEqual(len(backedges), 1)
+        self.assertEqual(backedges[0].argval, loop.offset)
+        refused = []
+        def tracer(frame, event, arg):
+            if (frame.f_code is f.__code__ and event == "line" and
+                    frame.f_lineno == source_line and not refused):
+                before = frame.f_lasti
+                inherited = sys.exception()
+                refused.append(before)
+                with self.assertRaisesRegex(ValueError, "incoming temporary"):
+                    frame.f_lineno = target_line
+                self.assertEqual(frame.f_lasti, before)
+                self.assertEqual(frame.f_locals["value"], 0)
+                self.assertIs(frame.f_locals["error"], inherited)
+                self.assertIs(sys.exception(), inherited)
+            return tracer
+
+        previous = sys.gettrace()
+        sys.settrace(tracer)
+        try:
+            self.assertEqual(f(), 3)
+        finally:
+            sys.settrace(previous)
+        self.assertEqual(len(refused), 1)
+
     def test_settrace_cannot_manufacture_or_exit_caught_context(self):
         source = """def f(reraise=False):
     value = 0

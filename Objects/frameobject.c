@@ -2850,9 +2850,12 @@ register_context_cut(PyCodeObject *code, RegisterResumeAnalysis *analysis,
 
 static int
 register_caught_slice(PyCodeObject *code, RegisterResumeAnalysis *analysis,
-                      RegisterResumePlan *plan, int current, int target, int node)
+                      RegisterResumePlan *plan, int current, int target, int node,
+                      bool forward)
 {
     int n = analysis->n;
+    int first = forward ? current : target;
+    int stop = forward ? target : current;
     unsigned char *reach = PyMem_Calloc((size_t)Py_MAX(n, 1), 1);
     unsigned char *seen = PyMem_Calloc((size_t)Py_MAX(n, 1), 1);
     int *queue = PyMem_New(int, Py_MAX(n, 1));
@@ -2861,10 +2864,10 @@ register_caught_slice(PyCodeObject *code, RegisterResumeAnalysis *analysis,
         PyErr_NoMemory();
         return -1;
     }
-    /* Only paths capable of reaching the stopped phase matter. */
+    /* Only paths capable of reaching this slice's landing matter. */
     int head = 0, tail = 0;
-    reach[current] = 1;
-    queue[tail++] = current;
+    reach[stop] = 1;
+    queue[tail++] = stop;
     while (head < tail) {
         int to = queue[head++];
         for (int e = analysis->reverse_heads[to]; e >= 0;
@@ -2878,37 +2881,44 @@ register_caught_slice(PyCodeObject *code, RegisterResumeAnalysis *analysis,
         }
     }
     int result = 0;
-    /* Target must dominate this dynamic arrival after the caught PUSH. */
-    int start = node;  /* node == PUSH pc + 1 */
-    if (start >= n || !reach[target]) {
+    if (!reach[first]) {
         goto done;
     }
-    head = tail = 0;
-    seen[start] = 1;
-    queue[tail++] = start;
-    while (head < tail) {
-        int i = queue[head++];
-        if (i == target) {
-            continue;
-        }
-        if (i == current) {
+    if (!forward) {
+        /* A backward target must dominate this arrival after the caught PUSH. */
+        int start = node;  /* node == PUSH pc + 1 */
+        if (start >= n) {
             goto done;
         }
-        for (int e = analysis->edge_heads[i]; e >= 0; e = analysis->edges[e].next) {
-            int j = analysis->edges[e].to;
-            if (!seen[j] && reach[j]) {
-                seen[j] = 1;
-                queue[tail++] = j;
+        head = tail = 0;
+        seen[start] = 1;
+        queue[tail++] = start;
+        while (head < tail) {
+            int i = queue[head++];
+            if (i == target) {
+                continue;
+            }
+            if (i == current) {
+                goto done;
+            }
+            for (int e = analysis->edge_heads[i]; e >= 0;
+                 e = analysis->edges[e].next)
+            {
+                int j = analysis->edges[e].to;
+                if (!seen[j] && reach[j]) {
+                    seen[j] = 1;
+                    queue[tail++] = j;
+                }
             }
         }
     }
     memset(seen, 0, (size_t)n);
     head = tail = 0;
-    seen[target] = 1;
-    queue[tail++] = target;
+    seen[first] = 1;
+    queue[tail++] = first;
     while (head < tail) {
         int i = queue[head++];
-        if (i == current) {
+        if (i == stop) {
             continue;
         }
         if (analysis->context[i] != node || register_context_cut(code, analysis, plan, i)) {
@@ -2918,6 +2928,11 @@ register_caught_slice(PyCodeObject *code, RegisterResumeAnalysis *analysis,
             int j = analysis->edges[e].to;
             if (!reach[j]) {
                 continue;
+            }
+            if (forward && (analysis->edges[e].phase < 0 ||
+                            analysis->edges[e].floor >= 0))
+            {
+                goto done;  /* Forward survival is proved only on normal edges. */
             }
             if (j <= i) {
                 goto done;  /* repeated producer/iteration is not the same owner */
@@ -3217,8 +3232,21 @@ register_resume_plan(_PyInterpreterFrame *frame, int current, int target,
         }
         return result;
     }
-    if (!allow_anchor || target >= current) {
+    bool forward = target > current;
+    if (!allow_anchor || target == current) {
         return 0;
+    }
+    if (forward) {
+        if (phase.kind != REGISTER_RESUME_PRE_WORD || phase.pc != current) {
+            return 0;
+        }
+        for (int col = 0; col < analysis->nsave_columns; col++) {
+            if (phase.save_tops[col] != 0 ||
+                analysis->save_tops[(size_t)target * analysis->nsave_columns + col] != 0)
+            {
+                return 0;
+            }
+        }
     }
     const int *before = analysis->origins + (size_t)current * analysis->nt;
     const int *after = analysis->origins + (size_t)target * analysis->nt;
@@ -3252,7 +3280,7 @@ register_resume_plan(_PyInterpreterFrame *frame, int current, int target,
         }
     }
     return register_caught_slice(_PyFrame_GetCode(frame), analysis, plan,
-                                  current, target, context);
+                                  current, target, context, forward);
 }
 
 static int *

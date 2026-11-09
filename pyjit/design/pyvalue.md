@@ -5,16 +5,27 @@ instance fields and value-native C APIs. This page specifies the encoding as
 built, compares it with other dynamic-language runtimes, and lists the gaps
 we should close. It is the reference for value, container and C-boundary work.
 
-**Current implementation, 2026-11-07.** Runtime HEAD is `7780e32e0e2`.
-The eight-byte PyValue format is unchanged. Release, debug and stats builds
-report 117 modules each; release and debug full suites pass 54,361 tests with
-no failures. Final-v4 candidate / upstream and candidate / interim factors are
-1.263136 and 1.054877 on 29 kernels, and 1.084920 and 0.902391 on the selected
-12-result subset. The results establish no convincing broad elapsed-time win
-or upstream parity. No new boxing census was run; zero-box remains diagnostic,
-not a performance gate. See the [final report](../bench/results/interpreter-throughput-20261106.md),
-[Integration C receipt](../issues/interpreter-throughput/integration-c.md)
-and [call/frame contract](call-and-frame-lifetimes.md).
+**Current implementation, 2026-11-09.** The eight-byte PyValue encoding and
+canonical-home rule below remain the representation contract. The frame/call
+candidate is integrated through runtime `bfd67cbe4b4`; it is not promoted.
+The independently qualified golden remains `0765e9be47f`. The candidate has
+met the logging timing target, while repeated generator, coroutine and nbody
+losses against golden and full qualification remain open. Current identities,
+measurements and gates belong to [STATUS](../STATUS.md),
+[HANDOFF](../HANDOFF.md) and the [frame/call plan](../issues/frame-call-model-20261109/plan.md).
+The ownership and call-boundary details are in the
+[call/frame contract](call-and-frame-lifetimes.md).
+
+**Historical interpreter-throughput checkpoint, 2026-11-07.** At runtime
+`7780e32e0e2`, release, debug and stats built 117 modules each; release and
+debug full suites passed 54,361 tests with no failures. Final-v4 candidate /
+upstream and candidate / interim factors were 1.263136 and 1.054877 on 29
+kernels, and 1.084920 and 0.902391 on a selected 12-result subset. That
+receipt did not establish a broad elapsed-time win or upstream parity. It ran
+no new boxing census; zero-box was diagnostic, not a performance gate for that
+checkpoint. These numbers are not current frame/call measurements. See the
+[historical final report](../bench/results/interpreter-throughput-20261106.md)
+and [Integration C receipt](../issues/interpreter-throughput/integration-c.md).
 
 **Historical rollout evidence at `6a0e4c12c17`.** That runtime had the 55-row
 value-slot table, including `new_` and `init_` (16 hot, 39 cold), type-call
@@ -30,19 +41,20 @@ receipt](../issues/checkpoint-closure/kernels-6a0e4c12c17.md), and
 100-box probe and wrapper proposal below are also historical, superseded
 evidence.
 
-**Historical rollout snapshot, 2026-11-05.** Runtime `d6eae4b1c1c` uses this value format
-and builds in debug, release and stats configurations. The source snapshot
+**Historical rollout snapshot, 2026-11-05.** Runtime `d6eae4b1c1c` used this value format
+and built in debug, release and stats configurations. The source snapshot
 below specifies the representation; it does not certify the later runtime's
 full API migration. Numeric compatibility marks, the mechanical ownership
-sweep, direct-slot ports and selective Clinic value methods have landed.
+sweep, direct-slot ports and selective Clinic value methods had landed.
 Manual API callers, remaining Decimal methods/constructors/slots, indirect
-slot invocations and complete static/dynamic qualification remain open.
-Linux no-op startup is zero-box. The next reviewed candidate in full
-qualification has eight kernels with zero boxes across all raw processes;
-21 still have startup or setup boxes. Zero loop deltas alone do not pass R27.
-The [closure plan](../issues/checkpoint-closure/plan.md) records current source
-identities, reviews and checks. The R27 no-core-box rule in
-[value-api.md](value-api.md) remains the checkpoint requirement.
+slot invocations and complete static/dynamic qualification were still open
+at that snapshot. Linux startup-only execution was zero-box. The candidate then in full
+qualification had eight kernels with zero boxes across all raw processes;
+21 still had startup or setup boxes. Zero loop deltas alone did not pass R27.
+The [closure plan](../issues/checkpoint-closure/plan.md) records that campaign's
+source identities, reviews and checks. The R27 no-core-box rule in
+[value-api.md](value-api.md) was that checkpoint's requirement, not the current
+frame/call performance gate.
 
 Historical representation source snapshot: the universal-value worktree
 `build/worktrees/pyvalue-rc-universal` at `5de7bd62ef9` (2026-11-04), which

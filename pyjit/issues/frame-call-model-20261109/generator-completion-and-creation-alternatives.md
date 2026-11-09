@@ -103,7 +103,10 @@ at the creation boundary, rather than adding an execution alias.
 The positive admission must include standard Python provider, pinned function/
 code version, expected entry semantics and no PEP523 interception. Function
 flags alone do not prove that user-replaced code begins with the expected
-RETURN_GENERATOR contract. A general call result must distinguish immediate
+RETURN_GENERATOR contract. Legitimate prologs can perform GET_ITER or cell/freevar
+setup before RETURN_GENERATOR. Direct binding may bypass only a positively proved
+inert entry sequence; it must execute required prolog semantics or retain the
+existing route. A general call result must distinguish immediate
 object result from an entered child frame; measure any new branch/return-struct
 cost on ordinary CALL, not just the generator benchmark. Reuse binding logic for
 exact/default/kwargs routes rather than introducing another incomplete binder.

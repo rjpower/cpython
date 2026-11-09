@@ -1,54 +1,37 @@
 # Project status
 
 The active [frame/call redesign](issues/frame-call-model-20261109/plan.md)
-is integrated through engineering `488e85fa3a8`. It remains unpromoted.
-Frames use initialized storage and explicit call/result ownership. Compact IR
-keeps source boundaries in metadata. Observers publish committed results before
-callbacks; debugger transfers use an exact stopped-state view rather than
-assuming a callback stopped before an operation. Canonical local duplicates
-reuse their existing PyValue bits through the shared final store.
+is integrated through engineering `bfd67cbe4b4`. It remains unpromoted.
+Frames use initialized storage and explicit call/result ownership; source
+boundaries live in metadata. Proved VM completion directly decodes immutable
+SEND/FOR fields and specializes one shared owner/observer body. Native/THROW
+providers retain publication. There is no new frame ABI or per-resume work.
+Release/debug build 117 modules and pass575 focused tests/11modules each.
+The [eleventh report](issues/frame-call-model-20261109/eleventh-integration-report.md)
+records compiled tradeoffs, current counters and validation limits.
 
-The current bounded nonneutral committed view copies the actual site's rows,
-applies its selected normal transfer, and invalidates consumed old origins.
-It admits only inherited handled context, empty stopped/target saved-binding
-states and a target without incoming scratch requirements. Existing PRE and
-neutral-jump recipes keep their separate proofs. Tracing now uses explicit
-borrow views for its argument window. Independent source/result review approved.
-Release/debug each build 117 modules. Both pass 455 frame/observer tests with
-one skip, including all of monitoring. After a narrow warning cleanup, both
-rebuild and pass the seven targeted checks. All five core designs match `488e85fa3a8`.
+Logging preserves parity in its latest four-pair check: **0.80151/upstream**,
+all pairs below0.820. The full two-campaign six-round gate belongs to32; the
+latest change is not assigned logging's observed gain. Current four-pair golden
+losses persist: generators+7.0%, coroutines+2.6%, nbody+4.5%. Source32's full29
+screen remains **0.96632/golden**, **1.19038/upstream**, not new34 evidence.
 
-The last full release diagnostic belongs to `3cde040a1afd`: 54,563 tests,
-six failed modules (monitoring, peepholer, sys_settrace, pdb, gc_verify and tools).
-Current focused checks repair the monitoring and API-lint failures. The GC
-negative control passes separately on retained417 release, current31 release
-and debug, but its full-run failure remains unresolved. Full release/debug
-qualification, current stats and final performance gates remain open. The
-current API check passes 306 units with zero failing findings/parse errors.
-Golden remains immutable and selected.
+Current34 counters pass18 capture/identity gates with100% event running:
+generators1.0330 instructions and1.0842 cycles/golden; coroutines0.9908/1.0293;
+nbody0.9860/1.0366. No single extra-work explanation fits all three. Compiled
+SEND_GEN already coalesces the apparently duplicate state loads. Next: preserve
+proved canonical values through plain yield and list-child transfers, using
+existing transfer/store machinery. In a separate source worktree, the reviewed
+NULL-only PRE query and consumer are being implemented. File ownership is
+explicit; native integration and timing remain serialized.
 
-Logging meets the timing gate at `488e85fa3a8`: two independent six-round
-upstream campaigns give **0.90235** and **0.89841** elapsed ratios, with every
-pair below 0.937. The unchanged 29-workload screens give geometric means
-**0.96632/golden** and **1.19038/upstream**. Four original losses are flat or
-faster in the screen (unpack, float, pickle, deepcopy_memo). Four-pair repeats
-confirm three remaining losses against golden: generators +7.1%, coroutines +8.7%
-and nbody +4.9%. The goal remains active. The
-[ninth report](issues/frame-call-model-20261109/ninth-integration-report.md)
-records the complete breakdown and exact evidence.
-
-Current counters confirm generators/coroutines execute 5–6% more instructions;
-nbody executes 1.4% fewer but takes 5.6% more cycles. All 18 counter captures and
-six zero-loss cycle profiles pass their gates. Nbody's six further branch
-captures show fewer branches and no consistent miss penalty. Next: peer-review
-shared completion specialization against saved continuations and direct heap
-frame binding, then admit a bounded shared-model improvement. The normal
-frame/call owner model remains coherent; a new ABI needs evidence for its
-per-resume work and frame-size costs. The next NULL-only debugger proposal
-remains design-only. Review remaining debugger cases against documented useful jumps and explicit safe
-refusals across active protocols; no blanket skips or weaker assertions. See the
-[scope review](issues/frame-call-model-20261109/debugger-transfer-scope-review.md).
-Full qualification, current stats and final review still remain.
+Full release/debug qualification and current stats remain open. The last full
+release diagnostic at31 ran 54,563 tests with six failed modules. Focused32
+checks repair monitoring/tools; its API check passes306 units with zero failing
+findings/parse errors. Peepholer, sys_settrace and pdb still have open debugger
+cases. The GC negative-control full-run failure is unresolved despite isolated
+method/module passes. No blanket skips or weaker assertions. Golden remains
+immutable and selected; the overall goal stays active.
 
 The previous [execution-boundary and operand-mode packet](issues/execution-boundaries-20261108/plan.md)
 implements the first three bounded cold-review recommendations at runtime

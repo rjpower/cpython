@@ -2,17 +2,20 @@
 
 ## Current goal: frame/call model and logging parity
 
-Logging's timing gate is met at `488e85fa3a8`. Continue repairing the three
+Logging's timing gate was met at `488e85fa3a8`; the basic checks at33/34 preserve parity. Continue repairing the three
 confirmed broad losses and completing qualification. Follow Python's data
 model; source positions are metadata. The goal tool remains active without a
 budget. Golden is immutable and selected. See the
 [active plan](issues/frame-call-model-20261109/plan.md) and
-[ninth report](issues/frame-call-model-20261109/ninth-integration-report.md).
+[eleventh report](issues/frame-call-model-20261109/eleventh-integration-report.md).
 
 Runtime source:
 `/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/execution-boundaries-20261108`,
-branch `pyjit/frame-call-model-20261109`, clean engineering HEAD
-`488e85fa3a88aed7d673c154b22d40ba42080a18`. Root owns all native jobs and commits.
+branch `pyjit/frame-call-model-20261109`, committed engineering HEAD
+`bfd67cbe4b410c9c78292a8eb17849bb24edcb20`. A now owns a canonical-home
+source-proof packet in this primary source; inspect its pending diff before
+any native job. The reviewed shared-completion specialization is committed.
+Root owns all native jobs and commits.
 Release/debug `build/execution-boundaries-{release,debug}` identify this commit
 and check 117 modules. Stats still identifies192 and needs a current rebuild.
 Cache magic 64416. Canonical documentation stays in this checkout; runtime
@@ -38,7 +41,11 @@ Evidence: `build/pyjit-link-wave1/frame-call-model-20261109/` (E11).
   open; GC negative control failed full run despite exact method/whole-module
   passes on retained417 release/current31 release/debug. No cause/repair claimed.
   Full release/debug qualification and current stats remain open.
-- All five core design pages are cross-reviewed and match `488e85fa3a8`; diagrams unchanged.
+- All five core design pages describe the integrated34 contract; diagrams unchanged.
+- Integrated33 removes two generic completion decoder calls with proved immutable
+  SEND/FOR fields. Both builds check117modules and pass575tests/11modules; final
+  independent post-review accepted. Initialnewformatselectorfailure and corrected
+  twin-based selector retained. CurrentStep machine body unchanged at33.
 
 ### Performance and active execution
 
@@ -63,15 +70,41 @@ round1; remaining counts match golden. No consistent branch-miss cause is proved
 The original collector attempt failed before capturing due to a shadowed loader;
 retain it separately from the reviewed successful v2 campaign.
 
-Native queue is idle after these captures. A proposes three generator/coroutine
-alternatives; B/H independently peer them. H retains flat reports from existing
-raw profiles; this is read-only processing, not a new capture. Source32 remains
-frozen until root admits the reviewed source packet. Shared completion
-specialization is the smallest proposed experiment; saved continuations add
-per-resume/header cost and direct heap-frame binding needs partial-construction
-GC and call-result contracts. No implementation is admitted yet. Root owns native
-jobs and commits. Inspect actual agent state; queued messages do not start idle
-agents.
+33 basic elapsed campaigns complete with stable identities: four pairs each,
+golden gen1.057876/coro1.050444/nbody1.070179/logging.649643; upstream
+logging.895730 (allpairs<.904), gen1.473238/coro1.400457/nbody.923726.
+E11/completion33-basic-{golden,upstream}. They are not direct32/33 component
+comparisons. Committed identity logs check117each. Retained clean33 ELF is
+E11/completion34-baseline/python, SHA349eb492a3026bea2e6f95aef7d7b9a9fa83aa1fbd5da5190b3a1a03a80d24e7.
+A's separate capture-during34 copy raced the build and is explicitly unqualified;
+never call that copy a33 baseline.
+
+Integrated34 specializes one completion body with literal kind/canonical input
+on proved VM returns; native/THROW still publishes. B/H independent source,
+compiled/result reviews pass. Release/debug117build modules and575tests/11modules
+each. Committed identity logs117each. E11/completion34-repeat-golden fourpairs:
+gen1.070491/coro1.026246/nbody1.045276. completion34-basic-upstream fourpairs:
+logging.801505 (all<.820), gen1.500233/coro1.371763/nbody.892967. Do not attribute
+cross-campaign differences to one helper. Current34 PMU18valid100%running,
+byte-identical identities, independently recomputed: gen cycles/instr/CPI
+1.084226/1.032996/1.049594; coro1.029274/.990849/1.038779;
+nbody1.036633/.986041/1.051308. Evidence completion34-workload-perf-stat and
+completion34-workload-perf-summary.json. Native queue is idle after these jobs.
+
+Active source workstreams (reconcile actual agents): A implements exact plain
+YIELD canonical transfer and list-child final publication proofs in primary I,
+Tools/cases_generator/ir_generator.py +focused generator tests. Metadata/ABI
+unchanged, expected generated changes limited to proof-selected final stores;
+root regenerates only after source/mutation peer. B/H implement NULL PRE in N:
+`build/worktrees/null-pre-20261109`, branchpyjit/null-pre-20261109 frombfd67.
+B owns Objects/frameobject.c+test_code, H owns pycore_ir_outcomes.h+private
+query/contract controls; exact shared query agreed. New analysis storage only
+eligible ordinary real-LINE PRE; strict ALL projection/reproof must remain
+conservative. No native build or worker commit in N. Root will review/apply,
+validate the merged primary source and remove this task-created worktree after
+integration. Canonical documentation stays in C. Do not read N copies as current
+designs or launch a second build there. All native jobs remain root-owned and
+serialized. Inspect source cleanliness before any frozen performance window.
 
 B's debugger scope audit remains design-only: 11 ordinary positives, 11 proposed
 protocol-crossing refusals, 2 unresolved same-caught arm cases. Current32 census

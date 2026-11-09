@@ -1,6 +1,6 @@
 # Register interpreter: current contract
 
-This page describes the register interpreter integrated at `488e85fa3a8`.
+This page describes the register interpreter integrated at `bfd67cbe4b4`.
 Its bounded observer and debugger contracts still require broad qualification.
 See [status](../STATUS.md), the
 [active packet](../issues/frame-call-model-20261109/plan.md), and the immutable
@@ -131,6 +131,20 @@ publishes A, or discards at IR_NO_DST. CLEANUP_THROW completes into that same
 recipient and its named real successor. Native and Python-generator routes use
 the same owning completion primitive; ordinary CALL return does not pay a
 universal generator transaction.
+
+A VM child's completed return reads the actual site's immutable SEND/FOR word.
+The constructor proves its destination, window and signed exit geometry;
+specialization and instrumentation preserve those operand fields. The saved
+physical continuation plus the signed distance selects completion, including
+an assembler-provided far-jump adapter. No general metadata decoder is needed
+on this positively declared return path.
+
+One C completion body serves all providers. Proved VM returns instantiate it
+with a literal SEND/FOR kind and canonical input, letting the compiler remove
+redundant publication and inapplicable owner checks. Native and THROW providers
+use the same body with general publication. The existing observer adapter,
+window detachment, destination installation and post-retirement PC reload are
+shared; the specialization introduces no frame state or per-resume work.
 
 Completion separates fallible PRE observation while original owners exist from
 POST observation after the semantic outcome is committed. It detaches windows,

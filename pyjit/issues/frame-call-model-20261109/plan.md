@@ -38,58 +38,50 @@ permanent experiment switches or weakened correctness assertions.
 
 ## Current execution
 
-Engineering `488e85fa3a88aed7d673c154b22d40ba42080a18` is integrated and
-independently source/result reviewed. The exact committed-frame view supports
-normal nonneutral edges using copied site rows and the existing selected normal
-transfer. Old-origin cuts remain separate from physical replacement values.
-New permission requires inherited context, empty stopped and target saved-binding
-states, and no target scratch demand. PRE/neutral strict recipes are unchanged;
-nonneutral POST cannot use their pre-site survivor proof or source-only fallback.
-The six legacy tracing window reads now use explicit borrowed views.
+Engineering `bfd67cbe4b410c9c78292a8eb17849bb24edcb20` is integrated and
+independently source/compiled/result reviewed. Proved VM SEND/FOR completion
+specializes one C body with canonical input; native/THROW providers retain
+publication. The frame ABI, physical continuation and owner/observer contract
+are unchanged. Release/debug build117 modules and pass575 focused tests across
+11modules each. Completion text grows1194 bytes; no clone or unconditional
+normal-path spill bank appears. The [eleventh report](eleventh-integration-report.md)
+records the exact evidence and limits.
 
-Release/debug each build 117 modules and pass 455 focused frame/observer tests
-with one skip, including the entire monitoring module. The subsequent allocation
-warning cleanup rebuilds 117 modules and passes all seven targeted checks in each
-profile. Those later checks do not retroactively rerun the 455 gate. All five
-core design pages are synchronized and cross-reviewed. Full qualification and
-promotion remain open.
+Four-pair basic campaigns give logging0.801505/upstream (allpairs<0.820), while
+golden losses persist: generators1.070491, coroutines1.026246, nbody1.045276.
+Current34 normalized counters are cycles/instructions/CPI: generators
+1.084226/1.032996/1.049594; coroutines1.029274/0.990849/1.038779;
+nbody1.036633/0.986041/1.051308. All18 captures pass at100%running with stable
+identities; independent arithmetic agrees. Different campaigns do not isolate
+component gains, and no layout cause is established. The full29 screen and
+independent two-campaign logging gate remain the32 evidence in the
+[ninth report](ninth-integration-report.md).
 
-The last full release diagnostic at31 runs 54,563 tests with six failed modules:
-monitoring, peepholer, sys_settrace, pdb, gc_verify and tools. Current focused
-checks repair monitoring/tools. Isolated GC method and module pass in three
-roles; its full-run failure remains unresolved. See the
-[eighth report](eighth-integration-report.md) for exact31 evidence.
+Two source streams now run in parallel. In the primary integration source, A
+implements bounded canonical-home proofs for plain yield and list-child final
+publication through existing machinery. Actual SEND_GEN assembly already
+coalesces state loads, so state-helper consolidation is not a demonstrated
+speedup. In isolated `build/worktrees/null-pre-20261109`, H supplies the shared
+cold physical query and B extends existing frame analysis with forward
+must-NULL facts and VALUE/NULL_ONLY obligations. Existing strict adapters retain
+ALL demands. New permission stays ordinary real-LINE PRE/inherited context/empty
+saved bindings, with all-alias and physical-cell reproof. No protocol-policy
+ports or broader caught/yield transfer permission are admitted.
 
-Current32 meets the logging timing gate: two independent six-round upstream
-campaigns give 0.902351 and 0.898412, every pair below 0.937. Both full 29 screens
-complete with stable identities: geometric means 0.966319/golden and 1.190384/
-upstream. The four-pair golden repeat confirms generators 1.070556,
-coroutines 1.086596 and nbody 1.048799. The other four original losses are flat
-or faster in the two-pair screen. See the
-[ninth report](ninth-integration-report.md) for complete evidence and limits.
-Current PMU is complete: 18 valid cycle/instruction captures and six valid
-zero-loss profiles with stable identities. Generators/coroutines execute 5–6%
-more instructions; nbody executes 1.4% fewer but takes 5.6% more cycles. Six further
-nbody branch captures show fewer branches and no consistent miss increase.
-The [three-option proposal](generator-completion-and-creation-alternatives.md)
-compares completion specialization, saved continuations and direct heap-frame
-binding. Runtime remains frozen until a source proposal passes independent
-review and root admission; c142 captures remain historical.
-
-The [NULL-only consumer proposal](null-only-consumer-interface.md) and shared
-physical transfer contract are independently reviewed but not implemented.
-Retained roots, caught exits and yield remain separate capabilities. The
-[debugger scope review](debugger-transfer-scope-review.md) distinguishes documented
-useful jumps from CPython's permissiveness across active context protocols.
-No runtime edits are admitted during measurement/qualification freeze.
+Root owns generation/build/tests and reviewed integration into the primary
+runtime. The isolated source has no separate build. Native performance windows
+require a frozen clean primary source; full suites remain for the coherent
+combined checkpoint. Golden/upstream controls and all sealed evidence stay
+immutable. The three-option completion/continuation/heap-binding review remains
+reference for larger alternatives, not permission for a new ABI.
 
 ## Parallel responsibilities
 
 | Stream | Owner | Current deliverable |
 | --- | --- | --- |
-| Completion and creation design | Sol 6.1 medium A | Three structural alternatives, concrete shared-completion proposal and reviewed bounded implementation |
-| Independent source and regression review | Sol 6.1 medium B | Current nbody counts/assembly, completion alternatives peer, debugger capability review |
-| Independent measurement/model review | Sol 6.1 medium H | Retained current profile reports, counter audit and completion alternatives peer |
+| Canonical-home transfer | Sol 6.1 medium A | Plain-yield and list-child full-chain source proofs, mutation negatives and focused implementation in primary source |
+| NULL-only PRE consumer | Sol 6.1 medium B | Existing frame analysis/Plan extension and tests in isolated source; independent canonical proof review |
+| Shared physical facts and review | Sol 6.1 medium H | Cold NULL query/private contract controls in isolated source, independent source/counter audits |
 | Integration and measurement | Coordinator | Source admission, serialized native gates/commit/basic performance, qualification and final logging campaigns |
 
 Workers propose first and independently review each other's contracts. Runtime
@@ -99,12 +91,12 @@ Reviewers inspect actual source and measured evidence after each integration.
 
 ## Work sequence
 
-1. Use the accepted current counters/profiles to select the next structural
-   increment. Compare shared completion specialization, explicit saved
-   continuations and direct owning heap-frame binding; include per-resume work,
-   frame-size, GC, observation and ordinary-call costs. Keep measured workload
-   counts distinct from sample locations; old profiles do not establish the
-   current cause. Nbody's remaining CPI penalty is not yet explained.
+1. Finish the independently reviewed canonical-home packet in the primary
+   source, inspect exact generated-handler changes, run focused gates and
+   basic performance. In parallel complete the isolated shared NULL query and
+   frame consumer under explicit file ownership. Keep one ownership/transfer
+   model, source-derived facts and strong negative/reentry tests. No new state
+   field or benchmark-specific shortcut is admitted.
 2. Fold the independent cold architectural review into the next admission.
    Keep one frame/call/owner model. A new optimization needs a concrete producer
    or call-shape proof and an isolated comparison, not a benchmark-specific path.

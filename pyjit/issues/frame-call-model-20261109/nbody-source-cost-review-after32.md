@@ -169,3 +169,28 @@ canonical duplication through the existing checked canonical-home producer
 mechanism; it must preserve temporary publication before receiver retirement,
 folded-local reentry behavior and all sink semantics. That would be a source
 proof experiment, not an established repair for this higher-CPI observation.
+
+## Qualification after shared completion34
+
+The bfd67cbe4b41 campaign supersedes the instruction-excess premise for
+coroutines. Recomputing arithmetic means from the three normalized rows per
+role in E11/completion34-workload-perf-summary.json reproduces:
+
+| Workload | Cycles/golden | Instructions/golden | CPI/golden |
+| --- | ---: | ---: | ---: |
+| nbody | 1.036633 | 0.986041 | 1.051308 |
+| generators | 1.084226 | 1.032996 | 1.049594 |
+| coroutines | 1.029274 | 0.990849 | 1.038779 |
+
+All 18 invocations are accepted with stable identity and 100% event running.
+Coroutines and nbody now execute fewer instructions than golden; generators
+retain about 3.30% more. A common added-work explanation no longer fits these
+three workloads. These campaigns are not a paired 33/34 component comparison,
+so their differences do not establish an attributable gain from specialization.
+The older flat locations and branch counts remain 32 evidence, not 34 profiles.
+
+No new layout cause follows. The proposed list-child final-store proof is a
+bounded source simplification with its own ownership and measurement gates;
+it does not explain the CPI residual. After that isolated packet, the prepared
+NULL PRE capability addresses actual unsupported ordinary debugger jumps.
+Neither justifies more alignment tuning or an open-ended nbody counter search.

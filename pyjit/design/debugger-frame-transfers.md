@@ -1,6 +1,6 @@
 # Debugger entry and frame transfers
 
-This describes the contract integrated at `488e85fa3a8`. Full qualification and
+This describes the contract integrated at `bfd67cbe4b4`. Full qualification and
 the broader transfer model remain open. See [status](../STATUS.md), the
 [frame ABI](call-and-frame-lifetimes.md), [observer contract](handler-and-observer-contract.md)
 and [repair evidence](../issues/frame-call-model-20261109/qualification-repairs.md).

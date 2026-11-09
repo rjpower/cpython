@@ -10,6 +10,7 @@ candidate; its [report](issues/frame-call-model-20261109/closing-report.md)
 separates measured performance, Python behavior and optional tooling/capability
 limits. The [next five priorities](issues/frame-call-model-20261109/next-steps.md)
 come from independent architectural reviews.
+Browser entrypoint: [Loom goal](http://127.0.0.1:7878/s/xzzlxx17/artifacts/goal).
 
 The universal-value register interpreter is implemented. Native method/tracing
 JIT tiers remain unfinished. The published

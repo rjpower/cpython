@@ -38,15 +38,31 @@ permanent experiment switches or weakened correctness assertions.
 
 ## Current execution
 
-The second merged release build passes its 117-module check; all 11 new
-frame/call tests pass. The initial four-file focused run fails on method-output
-ownership, source-only callback exception context and debugger redirection.
-Independent reviews also found raw location-table consumers that need the new
-envelope and a malformed fixed-payload validation gap. Those are current repair
-work. Shared-owner/loop completion and protected/suspended debugger recipes
-remain open. No new elapsed-time result or full qualification is claimed.
-The [progress](progress.md), [frame source review](fresh-code-review.md) and
-[observer source review](observer-code-review.md) record the evidence and limits.
+The first reviewed engineering increment is committed at runtime `6ef45e391aa`.
+It is not qualified or promoted. Release checks 117 modules; the 22-module focus
+runs 2,694 tests with 18 modules passing. Subsequent ownership/observer checks
+pass GC, weakref, finalization, UUID, frame calls and source-boundary modules.
+Useful debugger resumes and one tight-loop source event case remain failing.
+Literal fixtures, source context/positions and observed delegation crashes are
+repaired. Full release/debug qualification has not run this packet.
+
+The first balanced two-round logging/upstream screen is **1.003646**, near parity
+but above the gate. Logging/golden is **0.742426**; unpack/golden **0.833936**.
+Other broad losses remain, notably deepcopy_memo **1.092133** and nbody
+**1.055594**; the former spectral gain is absent. Warmed logging counters are
+1.08061× upstream instructions and 1.01471× cycles. See the
+[first integration report](integration-report.md) for exact protocols, failures,
+profiles and limits. Do not infer component attribution from the combined image.
+
+The independently reviewed [semantic completion proposal](semantic-completion-proposal.md)
+is admitted for runtime/compiler implementation: loop/send outcomes, generator
+resumption and physically compact static programs. The
+[debugger proposal](debugger-owner-recipe-proposal.md) starts with real loop
+anchors and nullable call cells. A measured frame-tail initialization cost
+motivates a separate arena-invariant design; it is not yet implementation
+admission. Shared-owner and protected/suspended reconstruction work remains open.
+The [progress](progress.md) and [latest source review](source-origin-post-review.md)
+record current evidence and unresolved gates.
 
 ## Parallel responsibilities
 

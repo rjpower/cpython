@@ -195,3 +195,186 @@ zero-width range ordering and marshal roundtrips. These changes are frozen for
 the coordinator's second regeneration/build. They have host syntax/diff checks,
 not native admission. The provisional debugger and retained ownership-artifact
 limitations above remain open.
+
+### Second native checkpoint: observer failures and bounded source repair
+
+Coordinator evidence reports merge2 release built 117 modules and passed all
+11 frame-call tests; boundary focus still failed source callback EH, ordinary
+line redirection and ancestor redirection. This is not observer admission.
+The source inventory identifies the last empty try-body line with handler -1
+while the preceding pass correctly names handler 3.
+
+The frontend removes a last source NOP by copying its span onto a locationless
+POP_BLOCK. Labeling then pops protection before that marker becomes a NOP.
+The bounded repair prevents source-span transfer onto POP_BLOCK/across differing
+exception contexts and preserves inherited marker context before popping. It
+does not derive a handler from the actual successor. The regression now checks
+the callback traceback line and a later ordinary exception outside protection.
+
+Cold debugger liveness also missed scalar multi-output definitions: method
+LOAD_ATTR defines both result and self, while the analysis killed only one
+DST slot. It now kills the generated write extent. Pending ancestor CALL
+redirection uses an explicit observer phase and the real saved continuation,
+keeps the original discard recipient and defers all scratch retirement until
+the VM child retires. A owns the bit/init/copy/completion/error paths; B owns
+the setter. The completion helper publishes its destination before closing
+owners and must preserve any later callback redirect. Initial supported
+ancestor routes remain ignored-result ordinary VM CALLs without protected or
+suspended state; wider debugger recipes remain outstanding.
+
+Remaining raw consumers now unwrap the container before their independent
+payload decoding: remote debugging, GDB and test_code. Fixed payload high bits
+are rejected consistently with runtime location readers. ENTRY records are
+removed and rejected because there is no preceding executed source transition;
+assembly rejects a leading source-only span rather than silently losing it.
+Remote malformed-memory tests use an isolated subprocess and restore altered
+bytes before assertions. All Python edits parse and diff checks pass; root owns
+regeneration and the next native receipt. No runtime/performance claim is made.
+
+### Third checkpoint follow-up
+
+Coordinator reports merge3 release built and ordinary plus bounded ancestor
+line jumps now pass. Source-only EH still fails in both modes: the last pass
+record still has handler -1. The earlier repair was insufficient. A second
+read-only inspection identifies three same-line NOP elimination paths that
+ignore exception context; line propagation can copy a protected pass's line
+onto an unprotected successor, after which the final sweep drops the original
+protected source span. All same-line elimination paths must require matching
+exception context, as the no-location transfer already does. C remains frozen
+while root verifies the separate scalar-sink owner repair.
+
+The GDB port also used bytes where its actual proxy supplies Latin-1 str.
+The corrected reader compares string magic and encodes header slices for integer
+parsing while preserving the existing character payload reader. A new pure
+parser test covers the actual proxy input without requiring GDB or an inferior.
+Host checks pass. Nested source-only try regressions exercise both inner and
+outer exception selection in trace and monitoring modes and inspect source
+handler records. These tests are not yet native receipts.
+
+The complete same-line context guard is now source-integrated in all three NOP
+elimination paths and frozen for merge5. GDB's actual-string pure parser checks
+pass on the host. Root's merge4 scalar-sink repair and cache diagnosis are
+separate coordinator evidence; neither proves the source EH fix. The next gate
+is a fresh minimal source-map inventory followed by trace/monitor callbacks.
+
+### Source-origin correction after merge5
+
+Coordinator reports merge5 built 117 modules, 13 frame-call tests and two GDB
+parser tests passed, and simple source callback EH plus basic/ancestor jumps
+passed. The nested regression still exposed multiple copies of one pass line
+with inner, outer and absent handlers. Matching line/context during deletion
+was necessary but insufficient: propagated marker locations were being emitted
+as new source events.
+
+The compiler now tracks explicit source origin separately from i_loc. Opcode
+and source-origin bitfields share the existing opcode storage unit; no extra
+standalone word is added to each CFG instruction. Initial explicit spans set
+the bit; POP_BLOCK markers clear it; location propagation never creates it;
+legitimate same-context NOP merges transfer it. Struct copies preserve it. The
+register CFG carries the bit without runtime storage, and source-edge assembly
+emits only original zero-word spans. Nested tests now demand exactly one record
+per original pass and exercise both inner and outer exception handling. Empty
+branch joins and loop backedges are also exercised in trace/monitor modes.
+This batch is frozen for the coordinator's next native build.
+
+The raw GDB/remote envelope ports do not yet make external inspection during a
+source-only callback use f_lineno/source cursor instead of the preceding real
+PC. That source-override consumer gap remains open. It does not change ordinary
+execution or the current elapsed checkpoint, but prevents claiming complete
+external observer admission.
+
+### Observed generator crash in the larger core screen
+
+Coordinator reports the six-module small focus passed 112 tests, including
+nested source EH and new backedges. A subsequent 17-module core screen passed
+11 modules but aborted observed generator/delegation cases in three modules
+with `_TAIL_CALL_CACHE`. This is a correctness blocker, not a flaky retry.
+
+The minimal coordinator probe shows SEND beneath an INSTRUMENTED_LINE wrapper
+and aborts before the first yield. Source forcing called `instrument` for every
+branch-shaped format, but SEND has no instrumentation twin: its table entry is
+zero. That wrote CACHE into the displaced opcode under the LINE wrapper, which
+explains why the adaptive dump still displayed LINE before dispatch aborted.
+
+The bounded repair forces only existing real branch twins. Unsupported branches
+that do not save IP use the existing transparent INSTRUCTION wrapper with zero
+instruction tools to record actual ingress; this is observer-only. Landing
+source events use the recorded predecessor and actual destination. Separate
+per-site tool masks preserve DISABLE while retaining wrappers required by other
+source events. Current SEND/FOR_ITER target+1 handling is restored until semantic
+completion lowering changes producers and consumers together. Native and Python
+iterator delegation are added in both trace and monitoring modes. This source
+batch is frozen for native rebuild; no passing receipt is claimed yet.
+
+The remaining loop-body debugger test requires retaining valid iterator/index
+owners across a jump, which the provisional empty-live-set gate cannot admit.
+The next recipe must prove target input provenance and preserve required homes,
+not accept coincidental non-NULL slot contents. The separate folded-store jump
+still needs its compact-word/live-state inventory. Existing behavior assertions
+remain intact.
+
+### Build7 trace diagnosis and bounded metadata cleanup
+
+A coordinated native PRINT probe completed the async-for trace with the full
+event sequence. Repeating with the test's old lineno/lasti predicate raised an
+AssertionError at a source-only LINE (`__anext__`, real predecessor PC 2, source
+line 6, real-PC line 5); the test swallowed the exception and tracing stopped.
+The representation-aware predicate now independently validates the exact edge
+record and adjacent/coalesced source coverage for LINE only. Both callers are
+ported and exact expected event sequences remain unchanged. The fresh reviewer
+approved the predicate with host acceptance/rejection checks.
+
+The bounded batch also coalesces redundant zero-width co_lines rows, adds a
+trusted normalized-map helper with an explicit internal invariant failure,
+names the three observer wrapper modes, and preserves source origin through
+same-EH folded loads. Pure-expression removal/null elision may retain an origin
+only in matching source/exception context; producer/pop context mismatches are
+not silently merged. Native confirmation remains the coordinator's next gate.
+The larger debugger design is proposal-only in
+`debugger-owner-recipe-proposal.md`; it is not part of this source batch.
+
+### Build9 remaining tight-loop trace diagnosis
+
+Build9 passed the coordinator's 1,009-test focused ownership/GC/observer gate
+apart from remaining debugger recipes and the tight-loop trace case. The three
+other duplicate landing-LINE cases are repaired. Tight-loop expected events
+remain unchanged.
+
+The remaining duplicate precedes the source-only loop header: legacy
+`sys_trace_jump_func` sees the real backward source and destination on body
+line 5 and emits a same-line backward LINE before
+`_Py_call_instrumentation_jump` processes the sparse edge's header line 4 and
+body line 5. Landing suppression therefore cannot remove this earlier event.
+The proposed bounded repair makes this legacy same-line fallback defer when
+that exact taken edge contains an intervening distinct source line. The sparse
+source engine and real landing then supply the iteration's line sequence. This
+requires no ordinary-dispatch state or source scan. Runtime edits are held
+while the coordinator commits and measures the initial engineering checkpoint.
+
+### Semantic completion proposal peer review
+
+Reviewed `semantic-completion-proposal.md` independently against the current
+instrumentation and source-engine consumers. Approved its bounded direction:
+FOR_ITER's item destination is distinct from SEND's completion destination;
+edge definitions/kills replace union-write assumptions; generator completion
+returns an explicit fallible status and real continuation; pre/post commit
+errors have distinct recipes; and three events at FOR_ITER have independently
+disableable masks. Retained owner region R remains outside this increment.
+
+The prepared-resume treatment of discarded mortal VM inputs is necessary:
+SEND transfers its window owner, whereas an external native send duplicates a
+borrowed argument. A possibly last VM input must be detached and the child
+committed as current/executing, with recursion and exception links valid, before
+closing that C owner. It then dispatches the already-entered child. Ordinary
+borrowed duplicate sends must not inherit this work. Delegated suspension keeps
+its receiver-relative real input home, and remote readers must reject the
+sentinel before subtracting two.
+
+Implementation admission still requires actual code evidence that pre/post
+callback EH recipes match owner state, post-state and continuation are published
+before retirement callbacks, callback redirects are not overwritten, every
+specialization/provider follows the same contract, and prepared child entry
+accounts for recursion and links exactly once. Source instrumentation migration
+must cover accessors, add/remove/restart/DISABLE, sanity checks, allocation,
+branch-pair APIs and async-for SEND references together. No passing runtime
+receipt or performance gain is inferred from proposal approval.

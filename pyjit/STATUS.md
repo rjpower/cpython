@@ -4,12 +4,17 @@ Active work: the [frame/call model redesign](issues/frame-call-model-20261109/pl
 continues in the existing runtime checkout, branch `pyjit/frame-call-model-20261109`.
 The goal is unchanged logging parity and repaired broad regressions, with compact
 executable IR and source/observer positions in metadata. Frame/call and IR
-architecture proposals have passed independent review. The first merged release
-build checks 117 modules, and all 11 new frame/call tests pass. Focused integration
-still fails on method-output ownership, source callback exception context and
-debugger redirection; repairs and independent source review are in progress.
-No new performance result or qualification is claimed. See the packet's
-[progress](issues/frame-call-model-20261109/progress.md).
+architecture proposals have passed independent review. First engineering source
+`6ef45e391aa` is committed but unqualified: release checks 117 modules and 18 of
+22 focused modules pass, with debugger resumes and a tight-loop LINE duplication
+still open. The first two-round logging/upstream screen is **1.00365**, versus
+1.39308 at the preceding candidate; this does not pass the parity gate.
+Logging/golden is **0.74243** and unpack/golden **0.83394**, but deepcopy_memo
+and nbody still regress. Logging's measured instruction excess falls from about
+5,617 to 1,124 per outer iteration. See the [first integration report](issues/frame-call-model-20261109/integration-report.md)
+for qualification limits and retained evidence. Reviewed semantic loop/send
+completion and debugger owner recipes are now being implemented; final full
+qualification, broad repair and parity campaigns remain required.
 
 The previous [execution-boundary and operand-mode packet](issues/execution-boundaries-20261108/plan.md)
 implements the first three bounded cold-review recommendations at runtime
@@ -84,18 +89,18 @@ retained perf metadata warning. See the report before interpreting samples.
 
 ## What remains
 
-The [current follow-up plan](issues/execution-boundaries-20261108/next-steps.md)
-owns the next work and preserves all nine cold-review ideas. Keep the golden runtime immutable; changes start from it and
+The [current frame/call plan](issues/frame-call-model-20261109/plan.md)
+owns the next work; the previous packet retains the earlier nine cold-review
+ideas and evidence. Keep the golden runtime immutable; changes
 pass design → peer review → implementation → focused checks → post-review →
 integration. Broad performance screens and full suites belong at coherent
 integration points.
 
-Canonical NOP/POP words remain source/monitoring anchors. The active packet's
-selected false-bool edges omit NOP testing/PC updates, and exact/general Python
-completion can discard an ignored result without a register home or POP entry.
-Logging enters 142 handlers versus golden 151, with zero POP entries and 20
-frame entries unchanged. These counts are not throughput measurements. General
-metadata-only anchors and physical compaction still need a coherent mapping design.
+The current engineering increment uses compact real instruction positions and
+source-edge metadata. Semantic loop/send completion, shared branch/exception
+owner retirement and owner-aware debugger recipes remain under implementation.
+Normal execution does not walk source maps. First profiles identify redundant
+frame-tail initialization; its separate arena proposal still requires review.
 
 Borrowed frame views are a reviewed investigation, not an approved implementation.
 Ownership anchors, GC traversal, promotion, ordinary fallback and a complete

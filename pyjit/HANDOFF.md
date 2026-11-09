@@ -11,28 +11,38 @@ started at revisions 8/18 at the initial reviewed-implementation milestone.
 
 Continue the existing runtime checkout
 `build/worktrees/execution-boundaries-20261108`, now branch
-`pyjit/frame-call-model-20261109` from `4b3d739d867`. It contains in-progress
-runtime edits; the merged release snapshot builds, but fails focused integration
-and is not qualified.
-Canonical documentation remains in this checkout. Evidence is
-`build/pyjit-link-wave1/frame-call-model-20261109/`; starting-state identities
-are recorded. Reuse candidate `execution-boundaries-{release,debug,stats}`
-builds against this source. Frozen golden/upstream builds remain untouched.
+`pyjit/frame-call-model-20261109` from `4b3d739d867`. First engineering source is
+committed at `6ef45e391aa8462be3d165d8d9056e4e06e0a634`.
+The release ELF was rebuilt for that identity, checking 117 modules. It is not
+qualified: the 22-module focus runs 2,694 tests, 18 modules pass; useful debugger
+resumes and tight-loop LINE duplication remain open. The subsequent nine-module
+1,009-test check passes GC, weakref, finalization, UUID, frame-call, boundary
+and disposal modules. Source positions, fixtures and observed delegation crashes
+are repaired. See `merge8-integrated-release-focus.log` and
+`merge9-focused-release-focus.log`; no full qualification has run this packet.
 
-Sol 6.1 medium workers have independently reviewed the design and are
-implementing it. Frame worker owns direct guarded binding, virtual empty kwargs,
-canonical transfers, plain recipients/continuations, frame headers and generated
-handler changes. IR worker owns compact lowering, sparse source-line metadata,
-instrumentation, code/persistence and frame/debugger consumers. Shared edits are
-coordinated directly. The coordinator owns native regeneration/builds/checks,
-commits, integration, quiet measurement and fresh cold review. `merge1` failed
-bootstrap compilation: the new materializer lacked frontend opcode metadata.
-It is now semantic opcode 127, with cache magic 64412. `merge2` builds and checks
-117 modules; 11 new frame/call tests pass. The four-file focused run fails
-method-output home validation, source-only callback exceptions and debugger
-redirects; remaining generator cleanup words also fail the new invariant.
-See `merge2-small-release-focus.log` and the two cold source reviews in the
-packet. Workers are fixing these categories before broader tests or timing.
+Canonical documentation remains in this checkout. Evidence is
+`build/pyjit-link-wave1/frame-call-model-20261109/`. Release/debug/stats candidate
+builds still target the existing source; debug/stats have not been rebuilt this
+packet. Golden/upstream builds remain untouched. First clean-source measurements:
+`first-engineering-upstream/` gives logging 1.003646 (two rounds),
+`first-engineering-golden-v2/` gives logging 0.742426 and unpack 0.833936, while
+other broad losses remain. `first-perf-{stat,record}/`, `first-perf-summary.json`
+and `first-profile/` retain the current counters/profile and metadata warnings.
+The first golden attempt supplied a nonexistent module-log path and was rejected
+before timing; preserve it. The [integration report](issues/frame-call-model-20261109/integration-report.md)
+owns interpretation and limits; near parity is not the required final pass.
+
+Sol 6.1 medium A/B workers are implementing the independently reviewed
+`semantic-completion-proposal.md`. A owns runtime/generator/header/frame phases;
+B owns compiler/assembly/outcomes, observers/masks/validation and bounded debugger
+recipes. They agree shared interfaces first; root owns regeneration, builds,
+merged checks, commits and timing. Runtime freeze was lifted after all first
+captures completed; subsequent uncommitted edits are next-increment work, not
+inputs to the retained 6ef measurements. B's tight-loop legacy tracing fix is
+source-only until rebuilt. Shared exception/branch owner retirement and useful
+protected/suspended debugger recipes remain open. No retained-owner bank has
+been admitted. Preserve the three unrelated canonical changes below.
 
 The revised design has one public compact instruction-offset domain. Removed
 frontend bookkeeping creates no synthetic instruction events or recovery slots.
@@ -52,7 +62,7 @@ The 2026-11-08 golden runtime is published. Read [STATUS](STATUS.md), the
 The previous 435-line board is [archived](archive/20261108/HANDOFF.md).
 Do not recover active assignments from its historical instructions.
 
-## Active follow-up
+## Previous qualified candidate
 
 The [execution-boundary packet](issues/execution-boundaries-20261108/plan.md)
 is integrated at `4b3d739d867b06ea4c9ed936982cfeb3503e93be`. Its source is

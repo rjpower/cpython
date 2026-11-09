@@ -100,3 +100,81 @@ retirement rather than indexing a physical slot. Added custom attribute/item
 provider sink coverage and a failure-only method-home diagnostic; no native
 run by this worker. Source is frozen for coordinator rebuild. Loop/shared-owner
 completion remains proposal-only in the proposal's final section.
+
+Coordinator admitted the bounded ancestor-call redirect protocol with B's
+setter proof. A added one frame bit (within the existing bitfield byte),
+initialization/copy coverage, exceptional-child reset, and a cold completion
+helper. After child retirement it clears the bit and publishes the real target
+before clearing caller scratch; the held result stays C-owned and the original
+recipient is unchanged. Return macros refresh the continuation after redirected
+completion callbacks, preserving a subsequent successful redirect. The general
+loop/send/retained-owner proposal has no runtime implementation yet; retained
+region admission depends on an actual irreducible owner inventory.
+
+Independent source-origin/observer post-review found no new concrete runtime
+blocker in the bounded repairs. Original source identity survives compile-time
+transforms without adding hot runtime metadata; capability-aware wrappers and
+separate tool masks address the observed delegation abort. The narrow LINE-only
+trace-helper contract port is approved with exact expected traces unchanged.
+Host pure-helper boundary checks and actual-string GDB parsing pass; no native
+jobs by the reviewer. Mixed-tool DISABLE/re-enable and source-cursor external
+readers remain explicit gates. See `source-origin-post-review.md`.
+
+The same reviewer approved `debugger-owner-recipe-proposal.md` for a bounded
+next increment: first inventory and fix same-loop iterator/index preservation
+and folded-assignment replay, retaining existing behavior expectations. Recipes
+must prove dynamic owner survival on every admitted path; static producer IDs
+or non-NULL homes are insufficient across loop iterations. Current conservative
+rejections remain incomplete behavior, not the final debugger contract.
+
+Coordinator merge7/8 integration: release builds both check 117 modules. The
+three reproduced delegated-generator crashes no longer abort. The apparent async
+trace truncation was caused by the test helper rejecting the new source-only
+LINE/real-PC relation; its narrowly reviewed port retains exact event sequences.
+The three fixture modules execute 334 tests; disassembly's 143 pass. Subsequent
+merge8 integrated focus executes 2,694 tests across 22 modules, with 18 modules
+passing. Remaining modules are code, IR, monitoring and sys_settrace: useful
+owner-aware debugger resumes remain rejected, and four tracing scenarios emit
+duplicate consecutive LINE events at source/real-instruction boundaries. The
+source-position coalescing and pure-expression first-line assertions now pass.
+The duplicate-event mechanism is under bounded repair. No full qualification or
+elapsed measurement is claimed. Exact logs: `merge7-fixtures-release-focus.log`,
+`merge7-observer-core-release-focus.log`, `merge8-integrated-release-focus.log`.
+
+The coordinator ports five monitoring literal expectations to compact real PCs
+and three call feedback-size assertions to 32 bytes. Source LINE expectations
+are retained; only removed instructions and relocated actual destinations change.
+Independent latest-source review is `source-origin-post-review.md`; debugger
+expansion remains proposal-only in `debugger-owner-recipe-proposal.md`. The
+semantic completion worker is preparing a reviewed shared loop/send ABI while
+the coordinator closes this first integration and measures it.
+
+Semantic completion proposal is now separate in
+`semantic-completion-proposal.md`. Read-only source census covered every
+FOR_ITER/SEND family member, generator return/yield/initial input, the static
+init program, relaxation, monitoring event/tool masks, raw yield-from and
+remote return-slot consumers. B approved the corrected destination split and
+requires explicit per-edge definition/kill metadata and fallible cold return
+completion. FOR_ITER generator yields use A; SEND yields use B+2; FOR_ITER
+exhaustion must never overwrite the last loop local. No implementation is
+admitted or started. Shared/exception cleanup and any retained-owner region
+remain outside this increment pending actual inventory.
+
+Semantic completion implementation admitted by root after independent B review.
+A source now has a shared completion status/result ABI; all native FOR_ITER
+exhaustion paths and SEND completion providers call the ownership primitive.
+RETURN is terminal: the ordinary CALL recipient remains inline, generator
+completion goes through the fallible cold helper after child retirement.
+The physical init program has two real words and no dummy NOP. Prepared VM
+resume detaches the sent owner, publishes child/current/exc/recursion state,
+then disposes or publishes input before dispatch, avoiding last-owner callbacks
+against an advertised caller window. CLEANUP_THROW joins SEND completion with
+four detached inputs and no invented STOP event. B owns positive ingress
+proof, per-outcome compiler/observer facts, and event-mask integration.
+
+Host in-memory whole-source analysis/generation passes at this checkpoint;
+canonical return provenance recognizes both unchanged checked chains. No
+native generation, build or tests run by A. Source is not yet frozen: focused
+contract/runtime tests and independent source review remain. Standalone
+short-circuit POP_ITER and other shared/exception cleanup remain outside this
+increment; no whole-program absence claim is made.

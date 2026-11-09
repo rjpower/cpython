@@ -26,6 +26,7 @@ struct _frame {
     /* Observed edge already processed before this real LINE landing. */
     int f_line_next;            /* compact landing offset, -1 if inactive */
     int f_line_previous;        /* preceding source line, including unknown -1 */
+    uint64_t f_lineno_generation; /* successful debugger redirect commits */
     uint64_t f_line_epoch;      /* monitoring configuration at publication */
     char f_trace_lines;         /* Emit per-line trace events? */
     char f_trace_opcodes;       /* Emit per-opcode trace events? */

@@ -8,6 +8,7 @@ import math
 import sys
 import types
 import unittest
+import warnings
 import weakref
 from test import support
 from test.support import import_helper
@@ -2030,8 +2031,8 @@ class StoreFoldTest(unittest.TestCase):
         self.run_specialized(lambda: self.assertEqual(f(3), "ababab"))
 
     def test_set_lineno_after_folded_store(self):
-        # The frame-state simulation (frameobject.c) pops the result of a
-        # word that stores it.
+        # Jumping back reuses the stored local without requiring the retired
+        # arithmetic result as an incoming temporary owner.
         def f():
             x = 1 + len("a")
             y = x + 1
@@ -2048,6 +2049,139 @@ class StoreFoldTest(unittest.TestCase):
             self.assertEqual(f(), 3)
         finally:
             sys.settrace(None)
+
+    def test_set_lineno_plain_call_null_home_after_specialization(self):
+        def f():
+            x = 1 + len("a")
+            y = x + 1
+            return y
+
+        for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 2):
+            self.assertEqual(f(), 3)
+        jumped = False
+        def tracer(frame, event, arg):
+            nonlocal jumped
+            if (frame.f_code is f.__code__ and event == "line" and
+                    frame.f_lineno == f.__code__.co_firstlineno + 2 and not jumped):
+                jumped = True
+                frame.f_lineno = f.__code__.co_firstlineno + 1
+            return tracer
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", RuntimeWarning)
+            sys.settrace(tracer)
+            try:
+                self.assertEqual(f(), 3)
+            finally:
+                sys.settrace(None)
+        self.assertTrue(jumped)
+
+    def test_set_lineno_warning_preserves_nested_redirect(self):
+        def f():
+            x = 1 + len("a")
+            y = x + 1
+            return y
+
+        active = None
+        warned = False
+        def showwarning(*args, **kwargs):
+            nonlocal warned
+            warned = True
+            active.f_locals["y"] = 40
+            active.f_lineno = f.__code__.co_firstlineno + 3
+
+        def tracer(frame, event, arg):
+            nonlocal active
+            if (frame.f_code is f.__code__ and event == "line" and
+                    frame.f_lineno == f.__code__.co_firstlineno + 2 and active is None):
+                active = frame
+                frame.f_lineno = f.__code__.co_firstlineno + 1
+            return tracer
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("always", RuntimeWarning)
+            warnings.showwarning = showwarning
+            sys.settrace(tracer)
+            try:
+                self.assertEqual(f(), 40)
+            finally:
+                sys.settrace(None)
+        self.assertTrue(warned)
+
+    def test_set_lineno_warning_same_pc_commit_and_getter(self):
+        for nested in (False, True):
+            with self.subTest(nested=nested):
+                calls = []
+                def probe(value):
+                    calls.append(value)
+                    return len(value)
+
+                def f():
+                    x = 1 + probe("a")
+                    y = x + 1
+                    return y
+
+                active = None
+                lines = []
+                warnings_seen = []
+                def showwarning(*args, **kwargs):
+                    warnings_seen.append(True)
+                    line = active.f_lineno
+                    if nested:
+                        active.f_locals["y"] = 40
+                        active.f_lineno = line
+
+                def tracer(frame, event, arg):
+                    nonlocal active
+                    if frame.f_code is f.__code__ and event == "line":
+                        offset = frame.f_lineno - f.__code__.co_firstlineno
+                        lines.append(offset)
+                        if offset == 2 and active is None:
+                            active = frame
+                            frame.f_lineno = f.__code__.co_firstlineno + 1
+                    return tracer
+
+                with warnings.catch_warnings():
+                    warnings.simplefilter("always", RuntimeWarning)
+                    warnings.showwarning = showwarning
+                    sys.settrace(tracer)
+                    try:
+                        self.assertEqual(f(), 3)
+                    finally:
+                        sys.settrace(None)
+                self.assertEqual(len(warnings_seen), 1)
+                # The LINE wrapper dispatches the redirected assignment;
+                # its callback is not repeated just for the new destination.
+                # Count body executions independently of observer delivery.
+                self.assertEqual(calls, ["a"] if nested else ["a", "a"])
+                self.assertEqual(lines, [1, 2, 3] if nested else [1, 2, 2, 3])
+
+    def test_set_lineno_does_not_invent_a_method_receiver(self):
+        class C:
+            def method(self, arg):
+                return arg
+
+        def f(obj):
+            value = obj.method(
+                1)
+            return value
+
+        rejected = False
+        def tracer(frame, event, arg):
+            nonlocal rejected
+            if (frame.f_code is f.__code__ and event == "line" and
+                    frame.f_lineno == f.__code__.co_firstlineno + 3):
+                with self.assertRaisesRegex(ValueError, "incoming temporary"):
+                    frame.f_lineno = f.__code__.co_firstlineno + 2
+                rejected = True
+            return tracer
+
+        sys.settrace(tracer)
+        try:
+            self.assertEqual(f(C()), 1)
+        finally:
+            sys.settrace(None)
+        self.assertTrue(rejected)
 
 
 K = 3

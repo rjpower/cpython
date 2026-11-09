@@ -1016,29 +1016,15 @@ completion_handler_safe(struct _PyCodeConstructor *con, int entry, int exc_slot,
                                               : _PyIR_FieldOparg(word);
         int window = -1;
         unsigned int reads = 0, defs = 0, nullable = 0;
-        uint32_t nullable_inputs = _PyIR_NullableInputs(word);
         for (int f = 0; f < 4; f++) {
-            int role = fmt->roles[f];
-            if (role >= _PyIR_ROLE_IN0) {
-                unsigned int home = completion_home_mask(fields[f], base, count);
-                int input = role - _PyIR_ROLE_IN0;
-                if (input < 32 && (nullable_inputs & (1u << input))) {
-                    nullable |= home & ~nonnull;
-                }
-            }
-            if (role == _PyIR_ROLE_BASE) {
+            if (fmt->roles[f] == _PyIR_ROLE_BASE) {
                 window = (int)fields[f];
             }
         }
-        int read_extent = _PyIR_Extent(fmt->reads, arg);
         for (int k = 0; k < count; k++) {
-            int home = base + k, relative = home - window;
-            if (window >= 0 && relative >= 0 && relative < read_extent) {
-                if (relative < 32 && (nullable_inputs & (1u << relative)) &&
-                    !(nonnull & (1u << k)))
-                {
-                    nullable |= 1u << k;
-                }
+            int home = base + k;
+            if (!(nonnull & (1u << k)) && _PyIR_NullableHome(word, arg, home)) {
+                nullable |= 1u << k;
             }
             if (_PyIR_ReadsHome(word, arg, home)) {
                 reads |= 1u << k;

@@ -1457,6 +1457,29 @@ source_map(PyCodeObject *code)
     return _PyIRSource_Stored(code->co_linetable);
 }
 
+/* A successful debugger commit can select the same physical word. The
+ * generation distinguishes that intent from frameobject creation or a lazy
+ * public line-cache update. This state is used only around observed callbacks. */
+typedef struct {
+    _PyInstr *instruction;
+    uint64_t generation;
+} ObserverRedirectState;
+
+static ObserverRedirectState
+observer_redirect_state(_PyInterpreterFrame *frame)
+{
+    return (ObserverRedirectState){frame->instr_ptr,
+        frame->frame_obj ? frame->frame_obj->f_lineno_generation : 0};
+}
+
+static bool
+observer_redirected(_PyInterpreterFrame *frame, ObserverRedirectState before)
+{
+    ObserverRedirectState after = observer_redirect_state(frame);
+    return after.instruction != before.instruction ||
+           after.generation != before.generation;
+}
+
 static int
 source_line_event(PyThreadState *tstate, _PyInterpreterFrame *frame,
                   const _PyIRSourceMap *map, uint32_t index)
@@ -1469,7 +1492,7 @@ source_line_event(PyThreadState *tstate, _PyInterpreterFrame *frame,
     }
     _PyIRSourceEvent event;
     _PyIRSource_Event(map, index, &event);
-    _PyInstr *before = frame->instr_ptr;
+    ObserverRedirectState before = observer_redirect_state(frame);
     PyFrameObject *object = _PyFrame_GetFrameObject(frame);
     if (object == NULL) {
         goto error;
@@ -1495,7 +1518,7 @@ source_line_event(PyThreadState *tstate, _PyInterpreterFrame *frame,
             if (err) {
                 goto error;
             }
-            if (frame->instr_ptr != before) {
+            if (observer_redirected(frame, before)) {
                 return 1;
             }
         }
@@ -1513,7 +1536,7 @@ source_line_event(PyThreadState *tstate, _PyInterpreterFrame *frame,
         if (res > 0) {
             monitoring->source_line_tools[index] &= ~(1 << tool);
         }
-        if (frame->instr_ptr != before) {
+        if (observer_redirected(frame, before)) {
             return 1;
         }
     }
@@ -1521,7 +1544,7 @@ source_line_event(PyThreadState *tstate, _PyInterpreterFrame *frame,
     object->f_lineno = old_line;
     return 0;
 error:
-    if (frame->instr_ptr == before) {
+    if (!observer_redirected(frame, before)) {
         _PyEval_RecordSourceError(tstate, frame, index);
         if (frame->frame_obj) {
             frame->frame_obj->f_source_event_error = (int)index;
@@ -1594,8 +1617,8 @@ _PyIR_ObserveStep(PyThreadState *tstate, _PyInterpreterFrame *frame,
         return result;
     }
     int from = instr_offset(frame, site);
-    _PyInstr *before = frame->instr_ptr;
-    assert(before == site);
+    ObserverRedirectState before = observer_redirect_state(frame);
+    assert(before.instruction == site);
     if (phase == 0) {
         if (kind == _PY_IR_SEND_THROW ||
             !get_tools_for_instruction(code, tstate->interp, from,
@@ -1644,7 +1667,7 @@ _PyIR_ObserveStep(PyThreadState *tstate, _PyInterpreterFrame *frame,
                     goto error;
                 }
             }
-            if (frame->instr_ptr != before) {
+            if (observer_redirected(frame, before)) {
                 goto redirected;
             }
         }
@@ -1670,7 +1693,7 @@ _PyIR_ObserveStep(PyThreadState *tstate, _PyInterpreterFrame *frame,
             goto error;
         }
     }
-    if (frame->instr_ptr == before) {
+    if (!observer_redirected(frame, before)) {
         return result;
     }
 redirected:
@@ -1698,12 +1721,12 @@ _Py_call_instrumentation_jump(
         int to = dest_offset(frame, dest);
         PyValue args[4] = { PyValue_NULL, PyValue_NULL, PyValue_NULL,
                             PyValue_FromInt64(to) };
-        _PyInstr *instr_ptr = frame->instr_ptr;
+        ObserverRedirectState before = observer_redirect_state(frame);
         int err = call_instrumentation_vector(instr, tstate, event, frame, src, 3, args);
         if (err) {
             return NULL;
         }
-        if (frame->instr_ptr != instr_ptr) {
+        if (observer_redirected(frame, before)) {
             return frame->instr_ptr;
         }
     }

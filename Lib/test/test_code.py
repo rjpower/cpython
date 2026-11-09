@@ -1529,6 +1529,86 @@ class ConstSlotsTest(unittest.TestCase):
         self.assertIsInstance(result, int)
         self.assertGreater(len(lines), 6)
 
+    def test_settrace_replays_body_with_current_iterator_anchor(self):
+        for values in (range(3), iter((0, 1, 2))):
+            with self.subTest(values=type(values)):
+                def f(values):
+                    total = 0
+                    for i in values:
+                        total += 5
+                        total += 6
+                    return total
+
+                applied = False
+                def tracer(frame, event, arg):
+                    nonlocal applied
+                    if (frame.f_code is f.__code__ and event == 'line' and
+                            frame.f_lineno == f.__code__.co_firstlineno + 4 and
+                            not applied):
+                        applied = True
+                        frame.f_lineno = f.__code__.co_firstlineno + 3
+                    return tracer
+
+                old_trace = sys.gettrace()
+                sys.settrace(tracer)
+                try:
+                    self.assertEqual(f(values), 38)
+                finally:
+                    sys.settrace(old_trace)
+                self.assertTrue(applied)
+
+    def test_settrace_cannot_reuse_an_exhausted_loop_anchor(self):
+        def f():
+            total = 0
+            for item in (1,):
+                total += 5
+            for item in (2,):
+                total += 6
+            return total
+
+        rejected = False
+        def tracer(frame, event, arg):
+            nonlocal rejected
+            if (frame.f_code is f.__code__ and event == 'line' and
+                    frame.f_lineno == f.__code__.co_firstlineno + 5):
+                with self.assertRaisesRegex(ValueError, 'incoming temporary'):
+                    frame.f_lineno = f.__code__.co_firstlineno + 3
+                rejected = True
+            return tracer
+
+        old_trace = sys.gettrace()
+        sys.settrace(tracer)
+        try:
+            self.assertEqual(f(), 11)
+        finally:
+            sys.settrace(old_trace)
+        self.assertTrue(rejected)
+
+    def test_settrace_cannot_enter_body_before_iterator_creation(self):
+        def f():
+            total = 0
+            for item in (1,):
+                total += 5
+            return total
+
+        rejected = False
+        def tracer(frame, event, arg):
+            nonlocal rejected
+            if (frame.f_code is f.__code__ and event == 'line' and
+                    frame.f_lineno == f.__code__.co_firstlineno + 1):
+                with self.assertRaisesRegex(ValueError, 'incoming temporary'):
+                    frame.f_lineno = f.__code__.co_firstlineno + 3
+                rejected = True
+            return tracer
+
+        old_trace = sys.gettrace()
+        sys.settrace(tracer)
+        try:
+            self.assertEqual(f(), 5)
+        finally:
+            sys.settrace(old_trace)
+        self.assertTrue(rejected)
+
     def test_marshal_copy(self):
         import marshal
         code = self.loop.__code__

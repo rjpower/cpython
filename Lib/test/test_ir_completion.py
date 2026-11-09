@@ -550,6 +550,25 @@ class SemanticCompletionTests(unittest.TestCase):
                 else:
                     replace()
 
+    def test_nullable_deletion_value_cannot_alias_required_receiver(self):
+        def consume(values):
+            for outer in values:
+                for value in outer:
+                    pass
+
+        code = consume.__code__
+        words = list(struct.unpack(f'<{len(code.co_code) // 8}Q', code.co_code))
+        site = [i.offset for i in dis.get_instructions(consume)
+                if i.opname == 'FOR_ITER'][-1]
+        base = (words[site] >> 28) & 4095
+        exception = base - 1
+        table = exception_entry(site, 1, len(words), exception << 1)
+        words.extend((dis.opmap['STORE_ATTR'] | (base << 16) | (base << 28),
+                      dis.opmap['RERAISE'] | (exception << 16)))
+        with self.assertRaisesRegex(ValueError, 'semantic completion'):
+            code.replace(co_code=struct.pack(f'<{len(words)}Q', *words),
+                         co_exceptiontable=table, co_linetable=b'')
+
     def test_handler_reuses_unwind_cleared_null_call_self(self):
         def delegate(factory):
             try:

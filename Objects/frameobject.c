@@ -1329,12 +1329,36 @@ frame_trace_opcodes_set_impl(PyFrameObject *self, PyObject *value)
     return 0;
 }
 
+/* Physical successors retain relaxed IR_JUMP words as real instructions. */
+static void
+register_resume_successors(PyCodeObject *code, int i, int next[2])
+{
+    _PyIRWord word = code->co_words[i];
+    const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
+    next[0] = i + 1;
+    next[1] = -1;
+    if ((fmt->flags & (_PyIR_JUMPS | _PyIR_FORWARD)) &&
+        !(fmt->flags & _PyIR_NAMES_TARGET))
+    {
+        next[1] = fmt->flags & (_PyIR_FORWARD | _PyIR_FUSED)
+            ? i + 1 + IR_DS(word) : (int)IR_CD(word);
+    }
+    if (IS_SCOPE_EXIT_OPCODE(_PyIR_HandlerBase[IR_HANDLER(word)]) ||
+        (fmt->flags & _PyIR_JUMP_ALWAYS))
+    {
+        next[0] = -1;
+    }
+}
+
 /* Debugger redirection must use the executable register contract. A slot
  * containing an unrelated value is not a reconstruction of a missing input.
- * This cold dataflow admits only sites with no required temporary inputs. */
+ * This cold dataflow computes incoming owners for the recipes below. NULL
+ * protocol inputs are omitted only under the whole-code invariant. */
 static unsigned char *
-register_resume_sites(PyCodeObject *code)
+register_resume_sites(_PyInterpreterFrame *frame, bool allow_null,
+                      uint64_t **required)
 {
+    PyCodeObject *code = _PyFrame_GetCode(frame);
     int n = (int)Py_SIZE(code), nl = code->co_nlocalsplus;
     int nt = code->co_framesize - FRAME_SPECIALS_SIZE - nl;
     int nb = (nt + 63) / 64;
@@ -1347,10 +1371,73 @@ register_resume_sites(PyCodeObject *code)
     uint64_t *work = PyMem_Calloc(stride, sizeof(uint64_t));
     uint64_t *edge = PyMem_Calloc(stride, sizeof(uint64_t));
     unsigned char *safe = PyMem_Calloc((size_t)Py_MAX(n, 1), 1);
-    if (live == NULL || work == NULL || edge == NULL || safe == NULL) {
+    unsigned char *null_home = PyMem_Calloc((size_t)Py_MAX(nt, 1), 1);
+    if (live == NULL || work == NULL || edge == NULL || safe == NULL ||
+        null_home == NULL)
+    {
         PyMem_Free(live); PyMem_Free(work); PyMem_Free(edge); PyMem_Free(safe);
+        PyMem_Free(null_home);
         PyErr_NoMemory();
         return NULL;
+    }
+    /* Entry initializes scratch to NULL. Admit only homes with no possible
+     * boundary writer anywhere in this code, including transport writes.
+     * CALL's private binding phase is excluded by the setter event gate;
+     * active child overlap uses the separate, stricter analysis below. */
+    if (allow_null) {
+        memset(null_home, 1, (size_t)nt);
+        for (int i = 0; i < n; i++) {
+            _PyIRWord word = code->co_words[i];
+            const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
+            int arg = _PyCode_InstrOparg(code, i);
+            int opcode = _PyIR_BaseOpcode(IR_HANDLER(word));
+            uint32_t fields[] = {IR_A(word), IR_B(word), IR_C(word), IR_D(word)};
+            int window = -1;
+            for (int f = 0; f < 4; f++) {
+                int role = fmt->roles[f];
+                if (role >= _PyIR_ROLE_LOCAL_IN && role <= _PyIR_ROLE_CELL &&
+                    fields[f] >= (uint32_t)nl)
+                {
+                    PyErr_SetString(PyExc_ValueError,
+                                    "jump requires valid named-local operands");
+                    goto error;
+                }
+                if (role == _PyIR_ROLE_BASE) {
+                    window = (int)fields[f];
+                }
+            }
+            for (int j = 0; j < nt; j++) {
+                int home = nl + j;
+                bool written = _PyIR_DefinesHome(word, arg, home);
+                for (int taken = 0; taken < 2; taken++) {
+                    _PyIRSlotOutcome outcome = _PyIR_Outcome(word, taken);
+                    written |= outcome.semantic &&
+                        ((home >= outcome.first &&
+                          home < outcome.first + outcome.count) ||
+                         home == outcome.dst);
+                }
+                if (opcode == SWAP && window >= 0) {
+                    written |= home == window || home == window + arg - 1;
+                }
+                /* Unknown activation adapters can reuse the scratch tail. */
+                if ((fmt->effects & _PyIR_PUSHES_FRAME) &&
+                    opcode != CALL && opcode != CALL_KW &&
+                    opcode != CALL_FUNCTION_EX)
+                {
+                    written |= window < 0 || home >= window;
+                }
+                if (written) {
+                    null_home[j] = 0;
+                }
+            }
+        }
+        /* These facts describe boundary states, never an active child's
+         * aliased argument cells. Validate the actual source snapshot too. */
+        for (int j = 0; j < nt; j++) {
+            if (null_home[j] && !PyValue_IsNull(frame->base[nl + j])) {
+                null_home[j] = 0;
+            }
+        }
     }
     bool changed;
     do {
@@ -1358,18 +1445,9 @@ register_resume_sites(PyCodeObject *code)
         for (int i = n; i-- > 0;) {
             _PyIRWord word = code->co_words[i];
             const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
-            int baseop = _PyIR_HandlerBase[IR_HANDLER(word)];
             memset(work, 0, stride * sizeof(uint64_t));
-            int successors[2] = {i + 1, -1};
-            if ((fmt->flags & (_PyIR_JUMPS | _PyIR_FORWARD)) &&
-                !(fmt->flags & _PyIR_NAMES_TARGET))
-            {
-                successors[1] = fmt->flags & (_PyIR_FORWARD | _PyIR_FUSED)
-                    ? i + 1 + IR_DS(word) : (int)IR_CD(word);
-            }
-            if (IS_SCOPE_EXIT_OPCODE(baseop) || (fmt->flags & _PyIR_JUMP_ALWAYS)) {
-                successors[0] = -1;
-            }
+            int successors[2];
+            register_resume_successors(code, i, successors);
             for (int k = 0; k < 2; k++) {
                 int next = successors[k];
                 if (next >= 0 && next < n) {
@@ -1388,52 +1466,29 @@ register_resume_sites(PyCodeObject *code)
                     }
                 }
             }
-            uint32_t fields[] = {IR_A(word), IR_B(word), IR_C(word), IR_D(word)};
-            int arg = _PyCode_InstrOparg(code, i), window = -1;
-            for (int f = 0; f < 4; f++) {
-                if (fmt->roles[f] == _PyIR_ROLE_BASE) {
-                    window = (int)fields[f];
-                }
-            }
-            /* Conditional outputs are not guaranteed on both successors. */
+            int arg = _PyCode_InstrOparg(code, i);
+            /* Conditional and semantic outputs are handled per edge above.
+             * Other definitions use the actual generated output mapping. */
             if (!_PyIR_Outcome(word, 0).semantic &&
                 !(fmt->flags & (_PyIR_JUMPS | _PyIR_FORWARD)))
             {
-                for (int f = 0; f < 4; f++) {
-                    int slot = (int)fields[f] - nl;
-                    if (fmt->roles[f] == _PyIR_ROLE_DST) {
-                        int writes = _PyIR_Extent(fmt->writes, arg);
-                        for (int j = 0; j < writes; j++) {
-                            int output = slot + j;
-                            if (output >= 0 && output < nt) {
-                                work[output / 64] &= ~((uint64_t)1 << (output % 64));
-                            }
-                        }
-                    }
-                }
-                if (window >= 0) {
-                    int writes = _PyIR_Extent(fmt->writes, arg);
-                    for (int j = 0; j < writes; j++) {
-                        int slot = window + j - nl;
-                        if (slot >= 0 && slot < nt) {
-                            work[slot / 64] &= ~((uint64_t)1 << (slot % 64));
-                        }
+                for (int j = 0; j < nt; j++) {
+                    if (_PyIR_DefinesHome(word, arg, nl + j)) {
+                        work[j / 64] &= ~((uint64_t)1 << (j % 64));
                     }
                 }
             }
-            for (int f = 0; f < 4; f++) {
-                int slot = (int)fields[f] - nl;
-                if (fmt->roles[f] >= _PyIR_ROLE_IN0 && slot >= 0 && slot < nt) {
-                    work[slot / 64] |= (uint64_t)1 << (slot % 64);
-                }
-            }
-            if (window >= 0) {
-                int reads = _PyIR_Extent(fmt->reads, arg);
-                for (int j = 0; j < reads; j++) {
-                    int slot = window + j - nl;
-                    if (slot >= 0 && slot < nt) {
-                        work[slot / 64] |= (uint64_t)1 << (slot % 64);
-                    }
+            /* Transparent observation can hide the runtime reader. Use its
+             * recovered handler, never a family-wide NULL capability. */
+            _PyInstr *instr = _PyFrame_InstrAt(frame, i);
+            int handler = _PyIR_RealHandler(frame, instr);
+            _PyIRWord actual = (word & ~(_PyIRWord)0xffff) | handler;
+            for (int j = 0; j < nt; j++) {
+                int home = nl + j;
+                if (_PyIR_ReadsHome(word, arg, home) &&
+                    !(null_home[j] && _PyIR_NullableHome(actual, arg, home)))
+                {
+                    work[j / 64] |= (uint64_t)1 << (j % 64);
                 }
             }
             /* Immutable entry constants have a valid home at every site. */
@@ -1457,8 +1512,238 @@ register_resume_sites(PyCodeObject *code)
             safe[i] &= live[(size_t)i * stride + j] == 0;
         }
     }
-    PyMem_Free(live); PyMem_Free(work); PyMem_Free(edge);
+    if (required != NULL) {
+        *required = live;
+    }
+    else {
+        PyMem_Free(live);
+    }
+    PyMem_Free(work); PyMem_Free(edge); PyMem_Free(null_home);
     return safe;
+error:
+    PyMem_Free(live); PyMem_Free(work); PyMem_Free(edge);
+    PyMem_Free(null_home); PyMem_Free(safe);
+    return NULL;
+}
+
+/* A pair survives only untouched physical operations. Even a read is a
+ * conservative cut: COPY and moves cannot manufacture the original owner.
+ * Unknown child overlap is a cut unless the pair lies below its window. */
+static bool
+register_anchor_cut(PyCodeObject *code, int i, int base)
+{
+    _PyIRWord word = code->co_words[i];
+    const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
+    int arg = _PyCode_InstrOparg(code, i);
+    for (int home = base; home < base + 2; home++) {
+        if (_PyIR_ReadsHome(word, arg, home) ||
+            _PyIR_DefinesHome(word, arg, home))
+        {
+            return true;
+        }
+        for (int taken = 0; taken < 2; taken++) {
+            _PyIRSlotOutcome outcome = _PyIR_Outcome(word, taken);
+            if (outcome.semantic &&
+                ((home >= outcome.first && home < outcome.first + outcome.count) ||
+                 home == outcome.dst))
+            {
+                return true;
+            }
+        }
+    }
+    if (fmt->effects & _PyIR_PUSHES_FRAME) {
+        uint32_t fields[] = {IR_A(word), IR_B(word), IR_C(word), IR_D(word)};
+        for (int f = 0; f < 4; f++) {
+            if (fmt->roles[f] == _PyIR_ROLE_BASE) {
+                return (int)fields[f] <= base + 1;
+            }
+        }
+        return true;
+    }
+    return false;
+}
+
+/* Establish a dynamic body phase, not a static producer identity. INVALID
+ * propagates over every path except the candidate's successful body edge,
+ * which establishes a new valid generation of its iterator/cursor pair. */
+static bool
+register_anchor_phase(PyCodeObject *code, int header, int base,
+                      int current, int target, unsigned char *phase)
+{
+    int n = (int)Py_SIZE(code);
+    memset(phase, 0, (size_t)n);
+    phase[0] = 1;  /* reachable without a surviving candidate body anchor */
+    bool changed;
+    do {
+        changed = false;
+        for (int i = 0; i < n; i++) {
+            if (!phase[i]) {
+                continue;
+            }
+            int next[2];
+            register_resume_successors(code, i, next);
+            bool cut = register_anchor_cut(code, i, base);
+            for (int k = 0; k < 2; k++) {
+                int to = next[k];
+                if (to < 0 || to >= n) {
+                    continue;
+                }
+                unsigned char outgoing = cut ? 1 : phase[i];
+                if (i == header) {
+                    outgoing = k == 0 ? 2 : 1;
+                }
+                unsigned char merged = phase[to] | outgoing;
+                if (merged != phase[to]) {
+                    phase[to] = merged;
+                    changed = true;
+                }
+            }
+        }
+    } while (changed);
+    return phase[current] == 2 && phase[target] == 2;
+}
+
+/* The initial recipe is a backward replay inside one acyclic body slice.
+ * First prove the target dominates current from body entry. Then require
+ * every path from target to first current to avoid cuts and re-entry. */
+static bool
+register_anchor_slice(PyCodeObject *code, int header, int base,
+                      int current, int target, unsigned char *seen, int *queue)
+{
+    int n = (int)Py_SIZE(code);
+    for (int pass = 0; pass < 2; pass++) {
+        memset(seen, 0, (size_t)n);
+        int head = 0, tail = 0;
+        int start = pass == 0 ? header + 1 : target;
+        bool arrived = false;
+        if (start < 0 || start >= n) {
+            return false;
+        }
+        queue[tail++] = start;
+        seen[start] = 1;
+        while (head < tail) {
+            int i = queue[head++];
+            if (i == current) {
+                if (pass == 0) {
+                    return false;  /* body ingress bypasses target */
+                }
+                arrived = true;
+                continue;
+            }
+            if (pass == 0 && i == target) {
+                continue;
+            }
+            if (i == header || register_anchor_cut(code, i, base)) {
+                if (pass == 1) {
+                    return false;
+                }
+                continue;
+            }
+            int next[2];
+            register_resume_successors(code, i, next);
+            bool successor = false;
+            for (int k = 0; k < 2; k++) {
+                int to = next[k];
+                if (to < 0 || to >= n) {
+                    continue;
+                }
+                successor = true;
+                if (pass == 1 && to <= i) {
+                    return false;  /* no iteration/reinitialization replay */
+                }
+                if (!seen[to]) {
+                    seen[to] = 1;
+                    queue[tail++] = to;
+                }
+            }
+            if (pass == 1 && !successor) {
+                return false;
+            }
+        }
+        if (pass == 1 && !arrived) {
+            return false;
+        }
+    }
+    return true;
+}
+
+static int
+register_resume_recipe(_PyInterpreterFrame *frame, int current, int target,
+                       unsigned char *safe, uint64_t *required,
+                       bool allow_anchor, int *preserve)
+{
+    *preserve = -1;
+    if (safe[current] && safe[target]) {
+        return 1;
+    }
+    if (!allow_anchor || target >= current) {
+        return 0;
+    }
+    PyCodeObject *code = _PyFrame_GetCode(frame);
+    int n = (int)Py_SIZE(code), nl = code->co_nlocalsplus;
+    int nt = code->co_framesize - FRAME_SPECIALS_SIZE - nl;
+    size_t stride = (size_t)Py_MAX((nt + 63) / 64, 1);
+    unsigned char *phase = NULL;
+    int *queue = NULL;
+    int result = 0;
+    for (int header = 0; header < n; header++) {
+        _PyIRWord word = code->co_words[header];
+        if (_PyIR_BaseOpcode(IR_HANDLER(word)) != FOR_ITER) {
+            continue;
+        }
+        int base = (int)IR_B(word);
+        int item = (int)IR_A(word);
+        if (base < nl || base + 1 >= nl + nt ||
+            item == base || item == base + 1)
+        {
+            continue;
+        }
+        bool fits = true;
+        for (int j = 0; j < nt; j++) {
+            uint64_t bit = (uint64_t)1 << (j % 64);
+            if ((required[(size_t)current * stride + j / 64] |
+                 required[(size_t)target * stride + j / 64]) & bit)
+            {
+                fits &= nl + j == base || nl + j == base + 1;
+            }
+        }
+        if (!fits || !PyValue_IsObject(frame->base[base]) ||
+            !(PyValue_IsNull(frame->base[base + 1]) ||
+              PyValue_IsTaggedIndex(frame->base[base + 1])))
+        {
+            continue;
+        }
+        PyObject *receiver = PyValue_AsKnownObjectBorrow(frame->base[base]);
+        if (PyValue_IsNull(frame->base[base + 1])) {
+            if (!PyIter_Check(receiver)) {
+                continue;
+            }
+        }
+        else if (PyValue_UntagIndex(frame->base[base + 1]) < 0 ||
+                 Py_TYPE(receiver)->_tp_iteritem == NULL)
+        {
+            continue;
+        }
+        if (phase == NULL) {
+            phase = PyMem_Malloc((size_t)n);
+            queue = PyMem_New(int, n);
+            if (phase == NULL || queue == NULL) {
+                PyErr_NoMemory();
+                result = -1;
+                break;
+            }
+        }
+        if (register_anchor_phase(code, header, base, current, target, phase) &&
+            register_anchor_slice(code, header, base, current, target, phase, queue))
+        {
+            *preserve = base;
+            result = 1;
+            break;
+        }
+    }
+    PyMem_Free(phase);
+    PyMem_Free(queue);
+    return result;
 }
 
 static int *
@@ -1655,11 +1940,8 @@ frame_lineno_set_impl(PyFrameObject *self, PyObject *value)
                         "jump requires a suspended or protected owner recipe");
         return -1;
     }
-    unsigned char *safe = register_resume_sites(code);
-    if (safe == NULL) {
-        PyMem_Free(lines);
-        return -1;
-    }
+    unsigned char *safe = NULL;
+    uint64_t *required = NULL;
     int current = _PyInterpreterFrame_LASTI(self->f_frame);
     bool pending_call = false;
     _PyInterpreterFrame *observed =
@@ -1700,27 +1982,49 @@ frame_lineno_set_impl(PyFrameObject *self, PyObject *value)
         _PyIRSource_Event(&source, (uint32_t)self->f_source_event, &event);
         current = event.to;
     }
-    int best_addr = -1;
-    if (current >= 0 && current < len && safe[current]) {
+    safe = register_resume_sites(self->f_frame, !pending_call, &required);
+    if (safe == NULL) {
+        PyMem_Free(lines);
+        return -1;
+    }
+    int best_addr = -1, preserve = -1;
+    int recipe = 0;
+    if (current >= 0 && current < len) {
         for (int i = 0; i < len; i++) {
-            if (lines[i] == new_lineno && safe[i]) {
-                best_addr = i;
+            if (lines[i] != new_lineno) {
+                continue;
+            }
+            recipe = register_resume_recipe(self->f_frame, current, i, safe,
+                                            required, !pending_call, &preserve);
+            if (recipe != 0) {
+                if (recipe > 0) {
+                    best_addr = i;
+                }
                 break;
             }
         }
-        for (uint32_t j = 0; best_addr < 0 && j < source.nrecords; j++) {
+        for (uint32_t j = 0; best_addr < 0 && recipe >= 0 && j < source.nrecords; j++) {
             _PyIRSourceEvent event;
             _PyIRSource_Event(&source, j, &event);
-            if (event.line == new_lineno && safe[event.to] && event.handler < 0) {
-                best_addr = event.to;
+            if (event.line == new_lineno && event.handler < 0) {
+                recipe = register_resume_recipe(self->f_frame, current, event.to,
+                                                safe, required, !pending_call,
+                                                &preserve);
+                if (recipe > 0) {
+                    best_addr = event.to;
+                    break;
+                }
             }
         }
     }
+    PyMem_Free(required);
     PyMem_Free(safe);
     PyMem_Free(lines);
     if (best_addr < 0) {
-        PyErr_SetString(PyExc_ValueError,
-                        "jump requires an incoming temporary register owner");
+        if (recipe >= 0) {
+            PyErr_SetString(PyExc_ValueError,
+                            "jump requires an incoming temporary register owner");
+        }
         return -1;
     }
     // Populate any NULL locals that the compiler might have "proven" to exist
@@ -1732,24 +2036,83 @@ frame_lineno_set_impl(PyFrameObject *self, PyObject *value)
         // analysis (like we do in the compiler) is probably too expensive:
         unbound += PyValue_IsNull(self->f_frame->base[i]);
     }
+    if (self->f_lineno_generation == UINT64_MAX) {
+        PyErr_SetString(PyExc_OverflowError, "debugger redirect generation exhausted");
+        return -1;
+    }
+    _PyInterpreterFrame *frame = self->f_frame;
+    _PyInstr *before_pc = frame->instr_ptr;
+    _PyInstr *before_return = frame->return_pc;
+    int before_event = self->f_source_event;
+    uint64_t before_generation = self->f_lineno_generation;
+    int before_pending = frame->pending_redirect;
     if (unbound) {
         const char *e = "assigning None to %d unbound local%s";
         const char *s = (unbound == 1) ? "" : "s";
         if (PyErr_WarnFormat(PyExc_RuntimeWarning, 0, e, unbound, s)) {
             return -1;
         }
-        // Do this in a second pass to avoid writing a bunch of Nones when
-        // warnings are being treated as errors and the previous bit raises:
-        for (int i = 0; i < code->co_nlocalsplus; i++) {
-            if (PyValue_IsNull(self->f_frame->base[i])) {
-                self->f_frame->base[i] = PyValue_None;
-                unbound--;
+        /* Warning hooks may execute Python and redirect this same frame.
+         * Honor that redirect. Otherwise repeat the cold proof against the
+         * current handlers and homes before mutating any owner. */
+        if (self->f_frame != frame || frame->instr_ptr != before_pc ||
+            frame->return_pc != before_return ||
+            self->f_source_event != before_event ||
+            self->f_lineno_generation != before_generation ||
+            frame->pending_redirect != before_pending)
+        {
+            return 0;
+        }
+        safe = register_resume_sites(frame, !pending_call, &required);
+        if (safe == NULL) {
+            return -1;
+        }
+        int valid = register_resume_recipe(frame, current, best_addr, safe,
+                                           required, !pending_call, &preserve);
+        PyMem_Free(required);
+        PyMem_Free(safe);
+        if (valid < 0) {
+            return -1;
+        }
+        if (!valid) {
+            PyErr_SetString(PyExc_ValueError,
+                            "jump owner state changed during warning");
+            return -1;
+        }
+    }
+    int nslots = code->co_framesize - FRAME_SPECIALS_SIZE;
+    PyValue *retired = NULL;
+    if (!pending_call) {
+        retired = PyMem_New(PyValue, Py_MAX(nslots - code->co_nlocalsplus, 1));
+        if (retired == NULL) {
+            PyErr_NoMemory();
+            return -1;
+        }
+    }
+    /* No callback is possible between the final proof and the commit. */
+    for (int i = 0; i < code->co_nlocalsplus; i++) {
+        if (PyValue_IsNull(frame->base[i])) {
+            frame->base[i] = PyValue_None;
+        }
+    }
+    int nretired = 0;
+    if (!pending_call) {
+        const uint32_t *constants = _PyCode_CONSTSLOTS(code);
+        for (int slot = code->co_nlocalsplus; slot < nslots; slot++) {
+            bool constant = false;
+            for (int j = 0; j < code->co_nconstslots; j++) {
+                constant |= constants[j * 2] == (uint32_t)slot;
+            }
+            if (!constant &&
+                !(preserve >= 0 && (slot == preserve || slot == preserve + 1))) {
+                retired[nretired++] = frame->base[slot];
+                frame->base[slot] = PyValue_NULL;
             }
         }
-        assert(unbound == 0);
     }
     /* Commit the continuation before any closing callback. A suspended
      * caller's overlap remains untouched until its child retires. */
+    self->f_lineno_generation++;
     self->f_lineno = 0;
     self->f_line_next = -1;
     self->f_frame->return_pc = _PyFrame_InstrAt(self->f_frame, best_addr);
@@ -1760,22 +2123,12 @@ frame_lineno_set_impl(PyFrameObject *self, PyObject *value)
         return 0;
     }
     self->f_frame->instr_ptr = self->f_frame->return_pc;
-    /* Both sites require no incoming temporary values. Retire source
-     * scratch owners without manufacturing a historical evaluation stack. */
-    PyValue *base = self->f_frame->base;
-    const uint32_t *constants = _PyCode_CONSTSLOTS(code);
-    int nslots = code->co_framesize - FRAME_SPECIALS_SIZE;
-    for (int slot = code->co_nlocalsplus; slot < nslots; slot++) {
-        bool constant = false;
-        for (int j = 0; j < code->co_nconstslots; j++) {
-            constant |= constants[j * 2] == (uint32_t)slot;
-        }
-        if (!constant) {
-            PyValue old = base[slot];
-            base[slot] = PyValue_NULL;
-            PyValue_XCLOSE(old);
-        }
+    /* All surplus owners are detached before the first callback. A nested
+     * redirect can now install new owners without later closes clearing them. */
+    for (int i = 0; i < nretired; i++) {
+        PyValue_XCLOSE(retired[i]);
     }
+    PyMem_Free(retired);
     return 0;
 }
 
@@ -2072,6 +2425,7 @@ _PyFrame_New_NoTrack(PyCodeObject *code)
     f->f_line_next = -1;
     f->f_line_previous = -1;
     f->f_line_epoch = 0;
+    f->f_lineno_generation = 0;
     f->f_extra_locals = NULL;
     f->f_locals_cache = NULL;
     f->f_overwritten_fast_locals = NULL;

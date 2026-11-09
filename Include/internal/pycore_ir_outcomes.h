@@ -80,15 +80,12 @@ _PyIR_Outcome(_PyIRWord word, int taken)
  * collection updates can encode their trailing values outside the window.
  * Opaque call/activation adapters retain the conservative full-window rule. */
 static inline int
-_PyIR_ReadsHome(_PyIRWord word, int arg, int home)
+_PyIR_ReadsWindowHome(_PyIRWord word, int arg, int home)
 {
     const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
     uint32_t fields[] = {IR_A(word), IR_B(word), IR_C(word), IR_D(word)};
     int window = -1;
     for (int f = 0; f < 4; f++) {
-        if (fmt->roles[f] >= _PyIR_ROLE_IN0 && (int)fields[f] == home) {
-            return 1;
-        }
         if (fmt->roles[f] == _PyIR_ROLE_BASE) {
             window = (int)fields[f];
         }
@@ -117,6 +114,50 @@ _PyIR_ReadsHome(_PyIRWord word, int arg, int home)
         default:
             return 1;
     }
+}
+
+/* A physical home can alias several semantic inputs. Every actual read,
+ * including an independent window use, must accept NULL. */
+static inline int
+_PyIR_NullableHome(_PyIRWord word, int arg, int home)
+{
+    const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
+    uint32_t inputs = _PyIR_NullableInputs(word);
+    uint32_t fields[] = {IR_A(word), IR_B(word), IR_C(word), IR_D(word)};
+    int seen = 0;
+    for (int f = 0; f < 4; f++) {
+        int role = fmt->roles[f];
+        if (role >= _PyIR_ROLE_IN0 && (int)fields[f] == home) {
+            int input = role - _PyIR_ROLE_IN0;
+            if (input >= 32 || !(inputs & (1u << input))) {
+                return 0;
+            }
+            seen = 1;
+        }
+        if (role == _PyIR_ROLE_BASE && _PyIR_ReadsWindowHome(word, arg, home)) {
+            int relative = home - (int)fields[f];
+            if (relative < 0 || relative >= 32 ||
+                !(inputs & (1u << relative)))
+            {
+                return 0;
+            }
+            seen = 1;
+        }
+    }
+    return seen;
+}
+
+static inline int
+_PyIR_ReadsHome(_PyIRWord word, int arg, int home)
+{
+    const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
+    uint32_t fields[] = {IR_A(word), IR_B(word), IR_C(word), IR_D(word)};
+    for (int f = 0; f < 4; f++) {
+        if (fmt->roles[f] >= _PyIR_ROLE_IN0 && (int)fields[f] == home) {
+            return 1;
+        }
+    }
+    return _PyIR_ReadsWindowHome(word, arg, home);
 }
 
 /* Ordinary fresh definitions use the emitter's physical output mapping.

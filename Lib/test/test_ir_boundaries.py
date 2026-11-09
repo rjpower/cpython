@@ -307,6 +307,90 @@ class CompactBoundaryTests(unittest.TestCase):
             mon.free_tool_id(tool)
             it.close()
 
+    def test_generator_entry_events_precede_source_lines_after_reconfiguration(self):
+        mon = sys.monitoring
+        tool = mon.DEBUGGER_ID
+        events = mon.events
+        mon.use_tool_id(tool, 'generator-entry-source-order')
+        self.addCleanup(mon.free_tool_id, tool)
+        for event in (events.PY_START, events.PY_RESUME, events.LINE):
+            self.addCleanup(mon.register_callback, tool, event, None)
+        for warmed in (False, True):
+            with self.subTest(warmed=warmed):
+                def gen():
+                    pass
+                    yield 1
+                    pass
+                    yield 2
+
+                gen.__code__ = gen.__code__.replace()
+                if warmed:
+                    warm(lambda: list(gen()))
+                code = gen.__code__
+                words = {i.offset: i for i in instructions(gen)}
+                raw = code.co_linetable
+                version, size, count = struct.unpack_from('<III', raw, 4)
+                records = [struct.unpack_from('<10i', raw, 16 + size + index * 40)
+                           for index in range(count)]
+                self.assertTrue(all(words[record[1]].opname != 'RESUME' for record in records))
+                seen = []
+
+                def on_start(observed, offset):
+                    if observed is code:
+                        self.assertEqual(words[offset].opname, 'RESUME')
+                        seen.append(('start',))
+
+                def on_resume(observed, offset):
+                    if observed is code:
+                        self.assertEqual(words[offset].opname, 'RESUME')
+                        seen.append(('resume',))
+
+                def on_line(observed, line):
+                    if observed is code:
+                        seen.append(('line', line - code.co_firstlineno))
+
+                mon.register_callback(tool, events.PY_START, on_start)
+                mon.register_callback(tool, events.PY_RESUME, on_resume)
+                mon.register_callback(tool, events.LINE, on_line)
+                iterator = gen()
+                try:
+                    mon.set_local_events(tool, code, events.PY_START | events.PY_RESUME | events.LINE)
+                    # The suspended code is absent from the executing-frame
+                    # walk; its own RESUME must refresh before any observer.
+                    mon.set_events(tool, events.PY_START)
+                    self.assertEqual(next(iterator), 1)
+                    self.assertEqual(seen, [('start',), ('line', 1), ('line', 2)])
+                    mon.restart_events()
+                    self.assertEqual(next(iterator), 2)
+                    self.assertEqual(seen, [('start',), ('line', 1), ('line', 2),
+                                            ('resume',), ('line', 3), ('line', 4)])
+                finally:
+                    mon.set_events(tool, 0)
+                    mon.set_local_events(tool, code, 0)
+                    iterator.close()
+
+    def test_source_map_cannot_observe_before_generator_resume(self):
+        def gen():
+            yield 1
+
+        code = gen.__code__
+        words = instructions(gen)
+        entry = next(i for i in words if i.opname == 'RESUME')
+        raw = code.co_linetable
+        version, size, _ = struct.unpack_from('<III', raw, 4)
+        record = struct.pack('<10i', entry.offset - 1, entry.offset, 0,
+                             code.co_firstlineno, code.co_firstlineno,
+                             -1, -1, -1, 0, 0)
+        for handler in ('RESUME', 'INSTRUMENTED_RESUME'):
+            with self.subTest(handler=handler):
+                encoded = list(struct.unpack(f'<{len(code.co_code) // 8}Q', code.co_code))
+                encoded[entry.offset] = ((encoded[entry.offset] & ~65535) |
+                                         dis._all_opmap[handler])
+                with self.assertRaisesRegex(ValueError, 'source map.*entry RESUME'):
+                    code.replace(co_code=struct.pack(f'<{len(encoded)}Q', *encoded),
+                                 co_linetable=(b'IRSM' + struct.pack('<III', version, size, 1) +
+                                               raw[16:16 + size] + record))
+
     def test_observed_delegation_dispatches_real_handlers(self):
         def leaf():
             yield 1

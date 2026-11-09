@@ -3111,11 +3111,8 @@ _Py_Specialize_ForIter(PyValue iter, PyValue null_or_index, _PyInstr *instr, int
             return;
         }
         else if (tp == &PyGen_Type && oparg <= SHRT_MAX) {
-            // The generator returns to END_FOR, or for a relaxed FOR_ITER
-            // to a jump there
-            assert(IR_HANDLER(instr[1 + oparg]) == IR_JUMP ||
-                   instr_opcode(instr + 1 + oparg) == END_FOR ||
-                   instr_opcode(instr + 1 + oparg) == INSTRUMENTED_END_FOR);
+            // The operation carries its real exhausted continuation; a
+            // generator return uses the same outcome as native exhaustion.
             /* Don't specialize if PEP 523 is active */
             if (!_PyInterpreterState_IsSpecializationEnabled(_PyInterpreterState_GET())) {
                 goto failure;
@@ -3488,16 +3485,16 @@ _Py_GatherStats_GetIter(PyValue iterable)
  * be lifted.
  */
 
-#define NO_LOC_4 (128 | (PY_CODE_LOCATION_INFO_NONE << 3) | 3)
+#define NO_LOC_2 (128 | (PY_CODE_LOCATION_INFO_NONE << 3) | 1)
 
 static const PyBytesObject no_location = {
     PyVarObject_HEAD_INIT(&PyBytes_Type, 1)
-    .ob_sval = { NO_LOC_4 }
+    .ob_sval = { NO_LOC_2 }
 };
 
 
-const struct _PyCode3 _Py_InitCleanup = {
-    _PyVarObject_HEAD_INIT(&PyCode_Type, 3),
+const struct _PyCode2 _Py_InitCleanup = {
+    _PyVarObject_HEAD_INIT(&PyCode_Type, 2),
     .co_consts = (PyObject *)&_Py_SINGLETON(tuple_empty),
     .co_names = (PyObject *)&_Py_SINGLETON(tuple_empty),
     .co_exceptiontable = (PyObject *)&_Py_SINGLETON(bytes_empty),
@@ -3508,14 +3505,13 @@ const struct _PyCode3 _Py_InitCleanup = {
     .co_name = &_Py_ID(__init__),
     .co_qualname = &_Py_ID(__init__),
     .co_linetable = (PyObject *)&no_location,
-    ._co_firsttraceable = 3,
+    ._co_firsttraceable = 2,
     .co_stacksize = 2,
     .co_framesize = 2 + FRAME_SPECIALS_SIZE,
     // The same words as _PyIR_InitCleanupExec (Python/ir.c), which this
     // static code object starts with as its executing copy
     ._co_exec = &_PyIR_InitCleanupExec,
     .co_words = {
-        IR_WORD(NOP, 0, 0, 0, 0),
         IR_WORD(EXIT_INIT_CHECK, 1, 0, 0, 0),
         IR_WORD(RETURN_VALUE, 0, 0, 0, 0),
     }

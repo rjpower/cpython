@@ -567,7 +567,7 @@ codegen_add_yield_from(compiler *c, location loc, int await)
     ADDOP_JUMP(c, loc, JUMP_NO_INTERRUPT, send);
 
     USE_LABEL(c, fail);
-    ADDOP(c, loc, CLEANUP_THROW);
+    ADDOP_JUMP(c, loc, CLEANUP_THROW, exit);
 
     USE_LABEL(c, exit);
     ADDOP(c, loc, END_SEND);
@@ -758,7 +758,9 @@ codegen_enter_scope(compiler *c, identifier name, int scope_type,
          before returning. */
         location loc = LOCATION(lineno, lineno, -1, -1);
         ADDOP_IN_SCOPE(c, loc, RETURN_GENERATOR);
-        ADDOP_IN_SCOPE(c, loc, POP_TOP);
+        /* The initial resume input is compiler bookkeeping, not a source
+         * statement before the generator's entry RESUME. */
+        ADDOP_IN_SCOPE(c, NO_LOCATION, POP_TOP);
     }
 
     ADDOP_I_IN_SCOPE(c, loc, RESUME, RESUME_AT_FUNC_START);

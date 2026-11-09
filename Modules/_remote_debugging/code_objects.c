@@ -473,19 +473,12 @@ parse_code_object(RemoteUnwinderObject *unwinder,
     bool ok = parse_linetable(addrq, PyBytes_AS_STRING(meta->linetable),
                               PyBytes_GET_SIZE(meta->linetable),
                               meta->first_lineno, &info);
-    if (!ok) {
-        info.lineno = -1;
-        info.end_lineno = -1;
-        info.column = -1;
-        info.end_column = -1;
-    }
-
     // Create the LocationInfo structseq: (lineno, end_lineno, col_offset, end_col_offset)
-    PyObject *location = make_location_info(unwinder,
+    PyObject *location = ok ? make_location_info(unwinder,
         info.lineno,
         info.end_lineno,
         info.column,
-        info.end_column);
+        info.end_column) : Py_NewRef(Py_None);
     if (!location) {
         goto error;
     }

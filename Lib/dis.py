@@ -404,7 +404,9 @@ def _decode_word(handler, fields, fbinit=None):
     format of handler.  The oparg is that of the stack instruction except
     that a jump names its target, and FOR_ITER and SEND their exit as a
     distance from the next word; it is None if it is in a feedback table
-    that fbinit does not hold."""
+    that fbinit does not hold. A SEND destination receives completion, and a
+    YIELD_VALUE destination receives the next resume input; neither is an
+    unconditional definition during the current operation."""
     row = _ir_contract[handler]
     roles, imm, base = row.roles, row.imm, row.base
     dst = None
@@ -412,7 +414,7 @@ def _decode_word(handler, fields, fbinit=None):
     fb = None
     for k, role in enumerate(roles):
         if role == _ROLE_DST:
-            # 4095, outside the slot range, is a call whose result is released
+            # The sentinel discards a semantic result or unused resume input.
             dst = fields[k] if fields[k] != 0xFFF else None
         elif role == _ROLE_BASE or role >= _ROLE_IN0:
             srcs.append(fields[k])

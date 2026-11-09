@@ -10,6 +10,7 @@
 #include "pycore_interp.h"        // PyInterpreterState.co_extra_freefuncs
 #include "pycore_interpframe.h"   // FRAME_SPECIALS_SIZE
 #include "pycore_ir_source.h"
+#include "pycore_ir_outcomes.h"
 #include "pycore_opcode_metadata.h" // _PyOpcode_Caches
 #include "pycore_opcode_utils.h"  // RESUME_AT_FUNC_START
 #include "pycore_pymem.h"         // _PyMem_FreeDelayed()
@@ -656,6 +657,9 @@ normalize_source_map(const _PyIRSourceMap *map, uint32_t nwords)
     return result;
 }
 
+static int completion_handler_safe(struct _PyCodeConstructor *, int, int, int,
+                                   int, int);
+
 static int
 validate_source_map(struct _PyCodeConstructor *con)
 {
@@ -683,12 +687,38 @@ validate_source_map(struct _PyCodeConstructor *con)
             event.edge < 0 || event.edge > _PyIR_SOURCE_TAKEN ||
             event.line <= 0 || event.handler < -1 || event.handler >= nwords ||
             (event.handler >= 0 &&
-             (event.exc_slot < PyTuple_GET_SIZE(con->localsplusnames) + event.lasti ||
-              event.exc_slot >= nslots ||
-              (event.lasti != 0 && event.lasti != 1))))
+             ((event.lasti != 0 && event.lasti != 1) ||
+              event.exc_slot < PyTuple_GET_SIZE(con->localsplusnames) + event.lasti ||
+              event.exc_slot >= nslots)))
         {
             PyErr_SetString(PyExc_ValueError, "code: source map does not fit code");
             return -1;
+        }
+        const _PyIRWord *words = (const _PyIRWord *)PyBytes_AS_STRING(con->code);
+        if (_PyIR_HandlerBase[IR_HANDLER(words[event.to])] == RESUME) {
+            PyErr_SetString(PyExc_ValueError,
+                            "code: source map cannot precede an entry RESUME");
+            return -1;
+        }
+        if (event.handler >= 0) {
+            _PyIRWord from = words[event.from];
+            int opcode = _PyIR_BaseOpcode(IR_HANDLER(from));
+            bool completed = ((opcode == FOR_ITER || opcode == SEND) &&
+                              event.edge == _PyIR_SOURCE_TAKEN) ||
+                             (opcode == CLEANUP_THROW &&
+                              event.edge == _PyIR_SOURCE_TAKEN);
+            if (completed) {
+                int safe = completion_handler_safe(con, event.handler,
+                    event.exc_slot, event.lasti, IR_B(from),
+                    _PyIR_CompletionWindow(opcode));
+                if (safe <= 0) {
+                    if (safe == 0) {
+                        PyErr_SetString(PyExc_ValueError,
+                                        "code: source handler reads a retired completion owner");
+                    }
+                    return -1;
+                }
+            }
         }
     }
     return 0;
@@ -859,6 +889,385 @@ invalid:
     return -1;
 }
 
+static int
+completion_varint(const unsigned char **cursor, const unsigned char *end,
+                  int *value)
+{
+    uint32_t result = 0;
+    unsigned char byte;
+    do {
+        if (*cursor == end || result > ((uint32_t)INT_MAX >> 6)) {
+            return -1;
+        }
+        byte = *(*cursor)++;
+        result = (result << 6) | (byte & 63);
+    } while (byte & 64);
+    *value = (int)result;
+    return 0;
+}
+
+typedef struct {
+    uint16_t *facts;
+    int *queue;
+    int n, head, tail, count;
+} completion_worklist;
+
+enum {
+    COMPLETION_HOME_MASK = 15,
+    COMPLETION_REACHED = 256,
+    COMPLETION_QUEUED = 512,
+};
+
+/* Low bits mean the original owner is unavailable. The next four mean that
+ * unavailable home may be non-NULL; OR joins preserve both possibilities. */
+static int
+completion_enqueue(completion_worklist *work, int target, unsigned int mask,
+                   unsigned int nonnull)
+{
+    unsigned int facts = mask | ((nonnull & mask) << 4);
+    if (target < 0 || target >= work->n) {
+        return 0;
+    }
+    unsigned int old = work->facts[target];
+    if ((old & COMPLETION_REACHED) && (old & facts) == facts) {
+        return 1;
+    }
+    work->facts[target] |= facts | COMPLETION_REACHED;
+    if (!(old & COMPLETION_QUEUED)) {
+        work->facts[target] |= COMPLETION_QUEUED;
+        work->queue[work->tail] = target;
+        work->tail = (work->tail + 1) % work->n;
+        work->count++;
+    }
+    return 1;
+}
+
+static unsigned int
+completion_home_mask(int slot, int base, int count)
+{
+    return slot >= base && slot < base + count ? 1u << (slot - base) : 0;
+}
+
+static int
+completion_exception_edge(completion_worklist *work, int target, int slot,
+                          int lasti, int base, int count, unsigned int mask,
+                          unsigned int nonnull)
+{
+    if ((lasti != 0 && lasti != 1) || slot < lasti) {
+        return 0;
+    }
+    int floor = slot - lasti;
+    for (int k = 0; k < count; k++) {
+        if (base + k >= floor) {
+            mask |= 1u << k;
+            nonnull &= ~(1u << k);
+        }
+    }
+    mask &= ~completion_home_mask(slot, base, count);
+    if (lasti) {
+        mask &= ~completion_home_mask(slot - 1, base, count);
+    }
+    return completion_enqueue(work, target, mask, nonnull);
+}
+
+/* A preserved prefix need not contain live semantic operands. Generator
+ * StopIteration wrappers, for example, keep an iterator below their real
+ * exception/lasti inputs. Prove that completed homes are not read as those
+ * old values on any normal or exceptional handler path. This is the final
+ * encoded proof for both compiled programs and public code constructors. */
+static int
+completion_handler_safe(struct _PyCodeConstructor *con, int entry, int exc_slot,
+                        int lasti, int base, int count)
+{
+    const _PyIRWord *words = (const _PyIRWord *)PyBytes_AS_STRING(con->code);
+    int n = (int)(PyBytes_GET_SIZE(con->code) / sizeof(*words));
+    _PyIRSourceMap source;
+    if (_PyIRSource_Decode(PyBytes_AS_STRING(con->linetable),
+                          PyBytes_GET_SIZE(con->linetable), &source) < 0)
+    {
+        return 0;
+    }
+    completion_worklist work = {.n = n};
+    work.facts = PyMem_Calloc((size_t)n, sizeof(*work.facts));
+    work.queue = PyMem_Malloc((size_t)n * sizeof(int));
+    if (work.facts == NULL || work.queue == NULL) {
+        PyMem_Free(work.facts);
+        PyMem_Free(work.queue);
+        PyErr_NoMemory();
+        return -1;
+    }
+    unsigned int initial = (1u << count) - 1;
+    /* Preserved homes may still be PRE owners. Only the actual unwind, not
+     * POST's retirement alone, proves them NULL on both admitted paths. */
+    int safe = completion_exception_edge(&work, entry, exc_slot, lasti,
+                                         base, count, initial, initial);
+    while (safe && work.count) {
+        int i = work.queue[work.head];
+        work.head = (work.head + 1) % n;
+        work.count--;
+        work.facts[i] &= ~COMPLETION_QUEUED;
+        unsigned int mask = work.facts[i] & COMPLETION_HOME_MASK;
+        unsigned int nonnull = (work.facts[i] >> 4) & COMPLETION_HOME_MASK;
+        _PyIRWord word = words[i];
+        int opcode = _PyIR_BaseOpcode(IR_HANDLER(word));
+        const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
+        uint32_t fields[] = {IR_A(word), IR_B(word), IR_C(word), IR_D(word)};
+        int arg = fmt->imm == _PyIR_LOC_FBARG ? IR_MAX_SLOTS
+                                              : _PyIR_FieldOparg(word);
+        int window = -1;
+        unsigned int reads = 0, defs = 0, nullable = 0;
+        uint32_t nullable_inputs = _PyIR_NullableInputs(word);
+        for (int f = 0; f < 4; f++) {
+            int role = fmt->roles[f];
+            if (role >= _PyIR_ROLE_IN0) {
+                unsigned int home = completion_home_mask(fields[f], base, count);
+                int input = role - _PyIR_ROLE_IN0;
+                if (input < 32 && (nullable_inputs & (1u << input))) {
+                    nullable |= home & ~nonnull;
+                }
+            }
+            if (role == _PyIR_ROLE_BASE) {
+                window = (int)fields[f];
+            }
+        }
+        int read_extent = _PyIR_Extent(fmt->reads, arg);
+        for (int k = 0; k < count; k++) {
+            int home = base + k, relative = home - window;
+            if (window >= 0 && relative >= 0 && relative < read_extent) {
+                if (relative < 32 && (nullable_inputs & (1u << relative)) &&
+                    !(nonnull & (1u << k)))
+                {
+                    nullable |= 1u << k;
+                }
+            }
+            if (_PyIR_ReadsHome(word, arg, home)) {
+                reads |= 1u << k;
+            }
+            if (_PyIR_DefinesHome(word, arg, home)) {
+                defs |= 1u << k;
+            }
+        }
+        /* RERAISE's implicit owner prefix is absent from its encoded reads.
+         * Explicit retirement operands still require their original owners. */
+        if (reads & mask & ~nullable) {
+            PyErr_Format(PyExc_ValueError,
+                "code: invalid semantic completion window or handler "
+                "(%U:%d; entry=%d pc=%d opcode=%d base=%d count=%d "
+                "unavailable=%u may_nonnull=%u reads=%u)", con->qualname, con->firstlineno,
+                entry, i, opcode, base, count, mask, nonnull, reads);
+            safe = -1;
+            break;
+        }
+        const unsigned char *cursor = (const unsigned char *)PyBytes_AS_STRING(con->exceptiontable);
+        const unsigned char *end = cursor + PyBytes_GET_SIZE(con->exceptiontable);
+        while (cursor < end) {
+            int start, size, target, slot_lasti;
+            if (completion_varint(&cursor, end, &start) < 0 ||
+                completion_varint(&cursor, end, &size) < 0 ||
+                completion_varint(&cursor, end, &target) < 0 ||
+                completion_varint(&cursor, end, &slot_lasti) < 0)
+            {
+                safe = 0;
+                break;
+            }
+            if (i >= start && i - start < size) {
+                safe = completion_exception_edge(&work, target,
+                    slot_lasti >> 1, slot_lasti & 1, base, count, mask, nonnull);
+                break;
+            }
+        }
+        if (!safe) {
+            break;
+        }
+        bool jumps = (fmt->flags & (_PyIR_JUMPS | _PyIR_FORWARD)) &&
+                     !(fmt->flags & _PyIR_NAMES_TARGET);
+        for (int taken = 0; taken <= (int)jumps; taken++) {
+            if (!taken && (IS_SCOPE_EXIT_OPCODE(opcode) ||
+                           (fmt->flags & _PyIR_JUMP_ALWAYS)))
+            {
+                continue;
+            }
+            int next = !taken ? i + 1
+                : fmt->flags & (_PyIR_FORWARD | _PyIR_FUSED)
+                    ? i + 1 + IR_DS(word) : (int)IR_CD(word);
+            unsigned int edge = mask;
+            unsigned int edge_nonnull = nonnull;
+            _PyIRSlotOutcome outcome = _PyIR_Outcome(word, taken);
+            if (fmt->output_kind == _PyIR_OUTPUT_OUTCOME && !outcome.semantic) {
+                safe = 0;
+                break;
+            }
+            if (outcome.semantic) {
+                /* Only actual produced values define a valid new input;
+                 * a retired NULL home remains unavailable to readers. */
+                for (int k = 0; k < count; k++) {
+                    if (base + k >= outcome.first &&
+                        base + k - outcome.first < outcome.count)
+                    {
+                        edge |= 1u << k;
+                        edge_nonnull &= ~(1u << k);
+                    }
+                }
+                edge &= ~completion_home_mask(outcome.dst, base, count);
+                if (opcode == FOR_ITER && !taken) {
+                    edge &= ~completion_home_mask(IR_B(word) + 1, base, count);
+                }
+                if (opcode == SEND && !taken) {
+                    edge &= ~completion_home_mask(IR_B(word) + 2, base, count);
+                }
+            }
+            else {
+                edge &= ~defs;
+            }
+            for (uint32_t j = 0; j < source.nrecords; j++) {
+                _PyIRSourceEvent event;
+                _PyIRSource_Event(&source, j, &event);
+                if (event.from == i && event.edge == taken && event.handler >= 0 &&
+                    !completion_exception_edge(&work, event.handler, event.exc_slot,
+                                               event.lasti, base, count, edge, edge_nonnull))
+                {
+                    safe = 0;
+                    break;
+                }
+            }
+            if (!safe) {
+                break;
+            }
+            if (!completion_enqueue(&work, next, edge, edge_nonnull)) {
+                safe = 0;
+                break;
+            }
+        }
+    }
+    PyMem_Free(work.facts);
+    PyMem_Free(work.queue);
+    return safe;
+}
+
+/* These words now own completion, rather than returning to frontend cleanup.
+ * Validate their complete windows and the anchors their EH recipes preserve. */
+static int
+validate_completion_words(struct _PyCodeConstructor *con)
+{
+    const _PyIRWord *words = (const _PyIRWord *)PyBytes_AS_STRING(con->code);
+    int n = (int)(PyBytes_GET_SIZE(con->code) / sizeof(*words));
+    int nl = (int)PyTuple_GET_SIZE(con->localsplusnames);
+    int limit = nl + con->stacksize;
+    bool has_completion = false;
+    for (int i = 0; i < n; i++) {
+        _PyIRWord word = words[i];
+        int opcode = _PyIR_BaseOpcode(IR_HANDLER(word));
+        int count = _PyIR_CompletionWindow(opcode);
+        if (!count && opcode != RETURN_GENERATOR) {
+            continue;
+        }
+        has_completion = true;
+        int base = (int)IR_B(word), dst = (int)IR_A(word);
+        if ((count && (base < nl || base > limit - count)) ||
+            (dst != IR_NO_DST && dst >= limit) ||
+            (opcode == RETURN_GENERATOR && dst != IR_NO_DST) ||
+            (opcode == FOR_ITER && dst >= base && dst < base + 2) ||
+            (opcode == YIELD_VALUE && IR_C(word) == 1 && dst != base))
+        {
+            goto invalid;
+        }
+        if (opcode == FOR_ITER || opcode == SEND || opcode == CLEANUP_THROW) {
+            int target = opcode == CLEANUP_THROW ? (int)IR_CD(word)
+                                                : i + 1 + IR_DS(word);
+            if (target < 0 || target >= n) {
+                goto invalid;
+            }
+        }
+    }
+    if (!has_completion) {
+        return 0;
+    }
+    /* Named-local fields cannot borrow scratch homes. The handler proof
+     * relies on that distinction when it reads the executable field roles. */
+    for (int i = 0; i < n; i++) {
+        const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(words[i]));
+        uint32_t fields[] = {IR_A(words[i]), IR_B(words[i]),
+                             IR_C(words[i]), IR_D(words[i])};
+        for (int f = 0; f < 4; f++) {
+            if (fmt->roles[f] >= _PyIR_ROLE_LOCAL_IN &&
+                fmt->roles[f] <= _PyIR_ROLE_CELL && fields[f] >= (uint32_t)nl)
+            {
+                goto invalid;
+            }
+        }
+    }
+    const unsigned char *cursor = (const unsigned char *)PyBytes_AS_STRING(con->exceptiontable);
+    const unsigned char *end = cursor + PyBytes_GET_SIZE(con->exceptiontable);
+    int previous_end = 0;
+    while (cursor < end) {
+        int fields[4];
+        for (int f = 0; f < 4; f++) {
+            const unsigned char *first = cursor;
+            if (cursor == end || ((*cursor & 128) != (f == 0 ? 128 : 0)) ||
+                completion_varint(&cursor, end, &fields[f]) < 0)
+            {
+                goto invalid;
+            }
+            for (const unsigned char *p = first + 1; p < cursor; p++) {
+                if (*p & 128) {
+                    goto invalid;
+                }
+            }
+        }
+        int start = fields[0], size = fields[1], target = fields[2];
+        int slot = fields[3] >> 1, floor = slot - (fields[3] & 1);
+        if (start < previous_end || start > n || size <= 0 ||
+            size > n - start || target >= n || floor < nl || slot >= limit)
+        {
+            goto invalid;
+        }
+        previous_end = start + size;
+    }
+    cursor = (const unsigned char *)PyBytes_AS_STRING(con->exceptiontable);
+    while (cursor < end) {
+        int start, size, target, slot_lasti;
+        if (completion_varint(&cursor, end, &start) < 0 ||
+            completion_varint(&cursor, end, &size) < 0 ||
+            completion_varint(&cursor, end, &target) < 0 ||
+            completion_varint(&cursor, end, &slot_lasti) < 0 ||
+            start > n || size > n - start || target >= n)
+        {
+            goto invalid;
+        }
+        int slot = slot_lasti >> 1;
+        int floor = slot - (slot_lasti & 1);
+        if (floor < nl || slot >= limit) {
+            goto invalid;
+        }
+        for (int i = start; i < start + size; i++) {
+            int opcode = _PyIR_BaseOpcode(IR_HANDLER(words[i]));
+            if (opcode == FOR_ITER || opcode == SEND || opcode == CLEANUP_THROW) {
+                int base = IR_B(words[i]), dst = IR_A(words[i]);
+                int count = _PyIR_CompletionWindow(opcode);
+                if (dst != IR_NO_DST && dst >= nl && dst < floor &&
+                    (dst < base || dst >= base + count))
+                {
+                    goto invalid;
+                }
+                int safe = completion_handler_safe(con, target, slot,
+                                                   slot_lasti & 1, base, count);
+                if (safe < 0) {
+                    return -1;
+                }
+                if (!safe) {
+                    goto invalid;
+                }
+            }
+        }
+    }
+    return 0;
+invalid:
+    PyErr_Format(PyExc_ValueError,
+                 "code: invalid semantic completion window or handler (%U:%d)",
+                 con->qualname, con->firstlineno);
+    return -1;
+}
+
 int
 _PyCode_Validate(struct _PyCodeConstructor *con)
 {
@@ -934,7 +1343,9 @@ _PyCode_Validate(struct _PyCodeConstructor *con)
             return -1;
         }
     }
-    if (validate_source_map(con) < 0 || validate_virtual_kwargs(con) < 0) {
+    if (validate_completion_words(con) < 0 || validate_source_map(con) < 0 ||
+        validate_virtual_kwargs(con) < 0)
+    {
         return -1;
     }
     return 0;
@@ -1988,20 +2399,28 @@ _PyLineTable_NextAddressRange(PyCodeAddressRange *range)
 
 
 typedef struct {
+    int offset;
+    int line;
+} line_source_row;
+
+typedef struct {
     PyObject_HEAD
     PyCodeObject *li_code;
     PyCodeAddressRange li_line;
+    line_source_row *li_sources;
+    uint32_t li_source_count;
+    uint32_t li_source_next;
     int li_offset;
-    int li_source_offset;
-    int li_source_line;
+    int li_range_end;
+    int li_range_line;
     int li_last_line;
 } lineiterator;
-
 
 static void
 lineiter_dealloc(PyObject *self)
 {
     lineiterator *li = (lineiterator*)self;
+    PyMem_Free(li->li_sources);
     Py_DECREF(li->li_code);
     Py_TYPE(li)->tp_free(li);
 }
@@ -2019,52 +2438,41 @@ static PyObject *
 lineiter_next(PyObject *self)
 {
     lineiterator *li = (lineiterator*)self;
-    PyCodeAddressRange *bounds = &li->li_line;
-    _PyIRSourceMap source = _PyIRSource_Stored(li->li_code->co_linetable);
-find_source:;
-    int next_source = INT_MAX, source_line = INT_MAX;
-    for (uint32_t i = 0; i < source.nrecords; i++) {
-        _PyIRSourceEvent event;
-        _PyIRSource_Event(&source, i, &event);
-        if (event.to < li->li_offset ||
-            (event.to == li->li_source_offset && event.line <= li->li_source_line))
-        {
-            continue;
+    int next_source = INT_MAX;
+    while (li->li_source_next < li->li_source_count) {
+        line_source_row row = li->li_sources[li->li_source_next];
+        if (row.offset > li->li_offset) {
+            next_source = row.offset;
+            break;
         }
-        if (event.to < next_source ||
-            (event.to == next_source && event.line < source_line))
-        {
-            next_source = event.to;
-            source_line = event.line;
+        li->li_source_next++;
+        if (row.offset == li->li_offset && row.line != li->li_last_line) {
+            li->li_last_line = row.line;
+            return Py_BuildValue("iii", row.offset, row.offset, row.line);
         }
-    }
-    if (next_source == li->li_offset) {
-        li->li_source_offset = next_source;
-        li->li_source_line = source_line;
-        int real_line = _PyCode_CheckLineNumber(next_source, bounds);
-        if (source_line == real_line || source_line == li->li_last_line) {
-            /* Runtime edge events remain distinct. Static line ranges merge
-             * adjacent equal lines, including zero-width eliminated spans. */
-            goto find_source;
-        }
-        li->li_last_line = source_line;
-        return Py_BuildValue("iii", next_source, next_source, source_line);
     }
     if (li->li_offset >= Py_SIZE(li->li_code)) {
         return NULL;
     }
-    int line = _PyCode_CheckLineNumber(li->li_offset, bounds);
-    int start = li->li_offset;
-    int end = bounds->ar_end;
-    // Merge overlapping entries:
-    while (_PyLineTable_NextAddressRange(bounds)) {
-        if (bounds->ar_line != line) {
-            _PyLineTable_PreviousAddressRange(bounds);
-            break;
+    if (li->li_offset >= li->li_range_end) {
+        PyCodeAddressRange *bounds = &li->li_line;
+        int line = _PyCode_CheckLineNumber(li->li_offset, bounds);
+        int end = bounds->ar_end;
+        while (_PyLineTable_NextAddressRange(bounds)) {
+            if (bounds->ar_line != line) {
+                _PyLineTable_PreviousAddressRange(bounds);
+                break;
+            }
+            end = bounds->ar_end;
         }
-        end = bounds->ar_end;
+        /* A source row can split this range. Retain the merged end so the
+         * next split never seeks the raw location cursor backwards. */
+        li->li_range_end = end;
+        li->li_range_line = line;
     }
-    end = Py_MIN(end, next_source);
+    int start = li->li_offset;
+    int end = Py_MIN(li->li_range_end, next_source);
+    int line = li->li_range_line;
     li->li_offset = end;
     li->li_last_line = line;
     return Py_BuildValue("iiO&", start, end,
@@ -2121,6 +2529,16 @@ PyTypeObject _PyLineIterator = {
     PyObject_Free,                      /* tp_free */
 };
 
+static int
+compare_source_rows(const void *left, const void *right)
+{
+    const line_source_row *a = left, *b = right;
+    if (a->offset != b->offset) {
+        return (a->offset > b->offset) - (a->offset < b->offset);
+    }
+    return (a->line > b->line) - (a->line < b->line);
+}
+
 static lineiterator *
 new_linesiterator(PyCodeObject *code)
 {
@@ -2129,11 +2547,44 @@ new_linesiterator(PyCodeObject *code)
         return NULL;
     }
     li->li_code = (PyCodeObject*)Py_NewRef(code);
-    li->li_offset = 0;
-    li->li_source_offset = -1;
-    li->li_source_line = -1;
+    li->li_sources = NULL;
+    li->li_source_count = li->li_source_next = 0;
+    li->li_offset = li->li_range_end = 0;
+    li->li_range_line = -1;
     li->li_last_line = INT_MIN;
     _PyCode_InitAddressRange(code, &li->li_line);
+    _PyIRSourceMap source = _PyIRSource_Stored(code->co_linetable);
+    if (source.nrecords) {
+        li->li_sources = PyMem_Calloc(source.nrecords, sizeof(line_source_row));
+        if (li->li_sources == NULL) {
+            PyErr_NoMemory();
+            Py_DECREF(li);
+            return NULL;
+        }
+        for (uint32_t i = 0; i < source.nrecords; i++) {
+            _PyIRSourceEvent event;
+            _PyIRSource_Event(&source, i, &event);
+            li->li_sources[i] = (line_source_row){event.to, event.line};
+        }
+        qsort(li->li_sources, source.nrecords, sizeof(line_source_row), compare_source_rows);
+        /* Static co_lines rows are sorted independently of runtime edge
+         * order. Filter redundant rows with one forward location-table walk. */
+        PyCodeAddressRange future;
+        _PyCode_InitAddressRange(code, &future);
+        for (uint32_t i = 0; i < source.nrecords; i++) {
+            line_source_row row = li->li_sources[i];
+            if (row.line == _PyCode_CheckLineNumber(row.offset, &future)) {
+                continue;
+            }
+            uint32_t count = li->li_source_count;
+            if (count && li->li_sources[count - 1].offset == row.offset &&
+                li->li_sources[count - 1].line == row.line)
+            {
+                continue;
+            }
+            li->li_sources[li->li_source_count++] = row;
+        }
+    }
     return li;
 }
 
@@ -3092,6 +3543,7 @@ free_monitoring_data(_PyCoMonitoringData *data)
     if (data->left_tools) {
         PyMem_Free(data->left_tools);
     }
+    PyMem_Free(data->stop_tools);
     if (data->lines) {
         PyMem_Free(data->lines);
     }

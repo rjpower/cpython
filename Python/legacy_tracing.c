@@ -7,6 +7,7 @@
 #include "pycore_ceval.h"         // export _PyEval_SetProfile()
 #include "pycore_frame.h"         // PyFrameObject members
 #include "pycore_interpframe.h"   // _PyFrame_GetCode()
+#include "pycore_ir_source.h"     // _PyIRSource_Stored()
 #include "pycore_long_value.h"    // _PyValue_AsInt()
 #include "pycore_tstate.h"        // _PyThreadStateImpl
 #include "pycore_tuple.h"         // _PyTuple_PackValues()
@@ -440,6 +441,19 @@ sys_trace_jump_func(
     if (to_line != from_line) {
         /* Will be handled by target INSTRUMENTED_LINE */
         return disable;
+    }
+    _PyIRSourceMap source = _PyIRSource_Stored(code->co_linetable);
+    for (uint32_t i = 0; i < source.nrecords; i++) {
+        _PyIRSourceEvent edge;
+        _PyIRSource_Event(&source, i, &edge);
+        if (edge.from == from && edge.to == to &&
+            edge.edge == _PyIR_SOURCE_TAKEN && edge.line != from_line)
+        {
+            /* The compact backedge crosses a source-only loop header.
+             * Its source events and landing LINE supply the iteration;
+             * emitting the real target here would precede that header. */
+            return disable;
+        }
     }
     PyFrameObject *frame = PyEval_GetFrame();
     if (frame == NULL) {

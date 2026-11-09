@@ -210,6 +210,7 @@ _PyFrame_ClearExceptCode(_PyInterpreterFrame *frame)
     assert(_PyThreadState_GET()->current_frame != frame);
     PyFrameObject *f = FT_ATOMIC_LOAD_PTR_RELAXED(frame->frame_obj);
     if (f != NULL) {
+        f->f_line_next = -1;
         FT_ATOMIC_STORE_PTR_RELAXED(frame->frame_obj, NULL);
         if (!_PyObject_IsUniquelyReferenced((PyObject *)f)) {
             take_ownership(f, frame);

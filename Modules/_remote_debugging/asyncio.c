@@ -344,9 +344,42 @@ get_awaited_coro_address(
      * keeps its slots in its frame, in owned_slots. */
     uint16_t return_slot = GET_MEMBER(uint16_t, iframe, unwinder->debug_offsets.interpreter_frame.return_slot);
 
-    if (return_slot >= 2) {
+    if (return_slot >= 2 && return_slot != IR_NO_DST) {
+        uintptr_t code_addr = GET_MEMBER_NO_TAG(uintptr_t, iframe,
+            unwinder->debug_offsets.interpreter_frame.executable);
+        char code[SIZEOF_CODE_OBJ];
+        if (code_addr == 0 || code_addr >= Py_PTR_LIMIT ||
+            code_addr > UINTPTR_MAX - sizeof(code))
+        {
+            PyErr_SetString(PyExc_RuntimeError, "Invalid awaited frame code address");
+            return -1;
+        }
+        if (_Py_RemoteDebug_PagedReadRemoteMemory(&unwinder->handle,
+                                                code_addr, sizeof(code), code) < 0)
+        {
+            return -1;
+        }
+        int locals = GET_MEMBER(int, code, unwinder->debug_offsets.code_object.nlocalsplus);
+        int stack = GET_MEMBER(int, code, unwinder->debug_offsets.code_object.stacksize);
+        if (locals < 0 || stack < 0 || locals > IR_NO_DST ||
+            stack > IR_NO_DST - locals || return_slot >= locals + stack)
+        {
+            PyErr_SetString(PyExc_RuntimeError, "Invalid awaited frame return slot");
+            return -1;
+        }
+        size_t owned_offset = (size_t)unwinder->debug_offsets.interpreter_frame.owned_slots;
+        if (gi_iframe_addr > UINTPTR_MAX - owned_offset) {
+            PyErr_SetString(PyExc_RuntimeError, "Invalid awaited frame slots address");
+            return -1;
+        }
         uintptr_t slots_addr = gi_iframe_addr
-            + (uintptr_t)unwinder->debug_offsets.interpreter_frame.owned_slots;
+            + owned_offset;
+        size_t receiver_delta = sizeof(PyValue) * (size_t)(return_slot - 2);
+        if (slots_addr > UINTPTR_MAX - sizeof(PyValue) ||
+            receiver_delta > UINTPTR_MAX - sizeof(PyValue) - slots_addr) {
+            PyErr_SetString(PyExc_RuntimeError, "Invalid awaited receiver address");
+            return -1;
+        }
         // The slot holds a PyValue word: only an object has a remote address.
         PyValue slot;
         err = _Py_RemoteDebug_PagedReadRemoteMemory(

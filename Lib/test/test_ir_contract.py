@@ -308,7 +308,13 @@ class ContractTests(unittest.TestCase):
                 if name.startswith("INSTRUMENTED_"):
                     self.assertEqual(twin, h)
                 if twin is None:
-                    self.assertEqual(row.events, 0)
+                    if row.base == opcode.opmap["SEND"]:
+                        self.assertEqual(row.events, events.STOP_ITERATION | events.BRANCH_LEFT)
+                    elif row.base in {opcode.opmap[name] for name in
+                                      ('CLEANUP_THROW', 'RAISE_VARARGS', 'RERAISE')}:
+                        self.assertEqual(row.events, events.RERAISE)
+                    else:
+                        self.assertEqual(row.events, 0)
                     continue
                 self.assertTrue(opcode.opname[twin].startswith("INSTRUMENTED_"))
                 self.assertEqual(ROWS[twin].twin, twin)
@@ -326,6 +332,8 @@ class ContractTests(unittest.TestCase):
             "INSTRUMENTED_POP_JUMP_IF_TRUE": {"BRANCH_RIGHT", "BRANCH_LEFT"},
             "INSTRUMENTED_END_SEND": {"STOP_ITERATION", "BRANCH_LEFT"},
             "INSTRUMENTED_END_FOR": {"STOP_ITERATION"},
+            "INSTRUMENTED_FOR_ITER": {"BRANCH_LEFT", "BRANCH_RIGHT", "STOP_ITERATION"},
+            "SEND": {"STOP_ITERATION", "BRANCH_LEFT"},
             "INSTRUMENTED_RESUME": {"PY_START", "PY_RESUME"},
         }
         for name, names in expected.items():
@@ -336,12 +344,10 @@ class ContractTests(unittest.TestCase):
         self.assertEqual(BY_NAME["CALL"].twin, opcode.opmap["INSTRUMENTED_CALL"])
 
     def test_monitoring_run(self):
-        # Every event that a twin fires (some twin's events has it) and
-        # that fires in a code object is in the events of the twins of that
-        # code object's handlers, or of the twins that instrumentation adds
-        # to any code.  The run is coarse: an event names the offset of its
-        # source, not of the twin that fires it (BRANCH_LEFT names the
-        # jump), so this checks the code object, not the word.
+        # Every declared event observed in a code object belongs to one of
+        # its semantic handlers or a transparent observer added to any code.
+        # This is a code-object check: branch callbacks identify the semantic
+        # branch site even when another handler reports the outcome.
         events = sys.monitoring.events
         twin_events = 0
         for row in ROWS.values():
@@ -393,9 +399,8 @@ class ContractTests(unittest.TestCase):
                           if isinstance(c, types.CodeType)}:
             allowed = added
             for _, h, *_ in dis._unpack_opargs(co.co_code):
-                twin = ROWS[h].twin if h in ROWS else None
-                if twin is not None:
-                    allowed |= ROWS[twin].events
+                if h in ROWS:
+                    allowed |= ROWS[h].events
             with self.subTest(code=co.co_name):
                 self.assertEqual(fired.get(co, 0) & ~allowed, 0)
 
@@ -419,7 +424,7 @@ class ContractTests(unittest.TestCase):
         suspends = {name for name in names_with(_opcode.IR_SUSPENDS)}
         self.assertEqual(suspends, {"YIELD_VALUE", "INSTRUMENTED_YIELD_VALUE",
                                     "RETURN_GENERATOR"})
-        for name in ("CALL_PY_EXACT_ARGS", "SEND_GEN", "FOR_ITER_GEN",
+        for name in ("CALL_PY_EXACT_ARGS", "SEND", "SEND_GEN", "FOR_ITER_GEN",
                      "LOAD_ATTR_PROPERTY"):
             self.assertTrue(BY_NAME[name].effects & _opcode.IR_PUSHES_FRAME,
                             name)

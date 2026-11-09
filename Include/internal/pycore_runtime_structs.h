@@ -139,10 +139,9 @@ struct pyruntimestate {
      * structures.
      *
      * IMPORTANT:
-     * This struct is **NOT** backwards compatible between minor version of the
-     * interpreter and the members, order of members and size can change between
-     * minor versions. This struct is only guaranteed to be stable between patch
-     * versions for a given minor version of the interpreter.
+     * The fork's fixed descriptor prefix identifies schema and value ABI.
+     * Readers must validate it before copying this layout; Python version
+     * alone does not establish compatibility.
      */
     _Py_DebugOffsets debug_offsets;
 

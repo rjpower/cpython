@@ -351,7 +351,8 @@ def declare_variables(inst: Instruction, out: CWriter,
             if var.used and var.name not in seen:
                 seen.add(var.name)
                 declare_variable(var, out, roles or {})
-        if any(token.text in CALL_INVOKE_MARKERS for token in part.body.tokens()):
+        if part.properties.always_exits or any(
+                token.text in CALL_INVOKE_MARKERS for token in part.body.tokens()):
             break
 
 
@@ -1275,9 +1276,13 @@ def compute_format(group: str, members: list[Instruction]) -> IRFormat:
         for m in members
     ]
     dst_offset = min((o for o in new_outputs if o is not None), default=None)
-    array_inputs = any(m.properties.window for m in members) or any(
+    # These semantic operations have distinct body/yield and completion
+    # outcomes. Their completion markers replace JUMPBY, but the executable
+    # ABI remains an explicit window and a real forward exit.
+    completes_step = group in {"FOR_ITER", "SEND"}
+    array_inputs = completes_step or any(m.properties.window for m in members) or any(
         item.is_array() for m in members for item in io[m.name][0])
-    jumps = any(m.properties.jumps for m in members)
+    jumps = completes_step or any(m.properties.jumps for m in members)
     fused = group in FUSED_JUMPS
     forward = jumps and (group in FORWARD_JUMPS or fused)
     has_fb = any(uses_feedback(m) for m in members)
@@ -1387,8 +1392,9 @@ def compute_format(group: str, members: list[Instruction]) -> IRFormat:
         fused=fused,
         no_fold=no_fold,
         store_dst=store_dst, runs_code=any(runs_code(m) for m in members),
-        discards=store_dst and store_mode(head, io[head.name][1]) in
-            (STORE_RESULT, STORE_RETURN),
+        discards=(store_dst and store_mode(head, io[head.name][1]) in
+            (STORE_RESULT, STORE_RETURN)) or group in
+            {"SEND", "CLEANUP_THROW", "YIELD_VALUE", "RETURN_GENERATOR"},
         unpacks=unpacks,
         jump_always=jumps and jumps_always(head),
         names_target=jumps and names_target_only(head),
@@ -1457,7 +1463,7 @@ def jump_tokens(uop: Uop) -> list[tuple[int, list[str]]]:
             depth += 1
         elif tkn.kind == "RBRACE":
             depth -= 1
-        elif tkn.text in ("JUMPBY", "JUMPTO"):
+        elif tkn.text in ("JUMPBY", "JUMPTO", "IR_COMPLETE_STEP"):
             arg = []
             nesting = 0
             for t in tokens[i + 1:]:
@@ -1470,6 +1476,10 @@ def jump_tokens(uop: Uop) -> list[tuple[int, list[str]]]:
                     if nesting == 0:
                         break
                 arg.append(t.text)
+            if tkn.text == "IR_COMPLETE_STEP":
+                # Its checked arguments are kind, held value, target. The
+                # target is a real jump, not the other outcome's successor.
+                arg = arg[4:]
             result.append((depth, arg))
     return result
 
@@ -1670,6 +1680,10 @@ def store_mode(inst: Instruction, outputs: list[Entry]) -> str | None:
     elsewhere leaves to the head."""
     # The terminal adapter publishes the native result itself, or the Python
     # child's eventual return. Its unused DSL C output still has a real dst.
+    if inst.properties.always_exits and "IR_COMPLETE_STEP" in uop_tokens(inst):
+        # Completion owns its explicit recipient; frontend output aliases
+        # describe stack conversion, not stores performed after the marker.
+        return None
     if uses_call_transaction(inst):
         return STORE_RESULT
     if inst.properties.switches_frame:
@@ -2349,6 +2363,9 @@ class IREmitter(Emitter):
         self._replacers["IR_DST_SLOT"] = self.ir_dst_slot
         self._replacers["IR_BASE"] = self.ir_base
         self._replacers["IR_WINDOW_TAKEN"] = self.ir_window_taken
+        self._replacers["IR_COMPLETE_STEP"] = self.complete_step
+        self._replacers["IR_RETURN_TO_CALLER"] = self.return_to_caller
+        self._replacers["IR_ENTER_GENERATOR"] = self.enter_generator
         self._replacers["IR_TRY_DICT_FIRST_PROBE"] = self.try_dict_first_probe
         self._replacers["IR_RETIRE_PUBLISHED"] = self.retire_published
         self._replacers["IR_RETIRE_PUBLISHED_RESULT"] = self.retire_published
@@ -3568,6 +3585,87 @@ class IREmitter(Emitter):
         stack.window_taken = True
         return True
 
+    def complete_step(self, tkn, tkn_iter, uop, storage, inst):
+        """A completed loop/send consumes its window, not its body outputs.
+
+        The helper owns both the held result and detached input owners on
+        every exit. Do not flush the other outcome's cached window here.
+        """
+        kind, value, distance = self.macro_args(tkn, tkn_iter, 3)
+        assert inst is not None
+        fmt = self.format_of(inst)
+        base = FIELD_VARS[fmt.field_of(ROLE_BASE)]
+        dst = FIELD_VARS[fmt.field_of(ROLE_DST)]
+        self.emit("{\n")
+        target = (f"_PyFrame_InstrAt(frame, {distance})" if kind == "_PY_IR_SEND_THROW"
+                  else f"next_instr + {distance}")
+        self.emit(f"_PyIRStepResult ir_step_result = _PyEval_CompleteStep(tstate, frame, this_instr, {base}, {dst}, {target}, {value}, {kind});\n")
+        self.emit("next_instr = ir_step_result.next;\n")
+        self.emit("if (ir_step_result.status < 0) { JUMP_TO_LABEL(error); }\n")
+        self.emit("DISPATCH();\n")
+        self.emit("}\n")
+        return False
+
+    def return_to_caller(self, tkn, tkn_iter, uop, storage, inst):
+        """Terminal transfer; the retired child has no fictitious output."""
+        value, generator_return = self.macro_args(tkn, tkn_iter, 2)
+        assert isinstance(storage.stack, IRStack)
+        if not storage.stack.layout.canonical_return:
+            self.emit(f"{value} = _PyValue_Publish(&{value});\n")
+        else:
+            self.emit(f"assert(_PyValue_IsHome({value}));\n")
+        self.emit(f"if ({generator_return}) {{\n")
+        self.emit(f"_PyIRStepResult ir_step_result = _PyEval_CompleteGeneratorReturn(tstate, frame, {value});\n")
+        self.emit("next_instr = ir_step_result.next;\n")
+        self.emit("if (ir_step_result.status < 0) { JUMP_TO_LABEL(error); }\n")
+        self.emit("}\n")
+        self.emit("else {\n")
+        self.emit("next_instr = frame->return_pc;\n")
+        self.emit(f"if (_PyFrame_SetReturnValue(frame, {value})) {{ next_instr = frame->return_pc; }}\n")
+        self.emit("}\n")
+        self.emit("LLTRACE_RESUME_FRAME();\n")
+        self.emit("DISPATCH();\n")
+        return False
+
+    def enter_generator(self, tkn, tkn_iter, uop, storage, inst):
+        """Commit a resumed child's complete state before disposing input.
+
+        In particular an unused sent value may be the last mortal owner;
+        neither the caller window nor an unentered child may advertise it
+        while its finalizer executes.
+        """
+        gen, kind = self.macro_args(tkn, tkn_iter, 2)
+        assert inst is not None
+        fmt = self.format_of(inst)
+        base = FIELD_VARS[fmt.field_of(ROLE_BASE)]
+        dst = FIELD_VARS[fmt.field_of(ROLE_DST)]
+        self.emit("{\n")
+        self.emit(f"_PyInterpreterFrame *ir_resumed_frame = &{gen}->gi_iframe;\n")
+        self.emit("PyValue ir_resume_input = PyValue_None;\n")
+        self.emit(f"if ({kind} == _PY_IR_SEND) {{\n")
+        self.emit(f"ir_resume_input = IR_SLOT({base} + 2);\n")
+        self.emit(f"IR_SLOT({base} + 2) = PyValue_NULL;\n")
+        self.emit("}\n")
+        self.emit(f"frame->return_slot = (uint16_t)({kind} == _PY_IR_SEND ? {base} + 2 : {dst});\n")
+        self.emit("frame->return_pc = next_instr;\n")
+        self.emit("ir_resumed_frame->previous = frame;\n")
+        self.emit(f"{gen}->gi_exc_state.previous_item = tstate->exc_info;\n")
+        self.emit(f"tstate->exc_info = &{gen}->gi_exc_state;\n")
+        self.emit("frame = tstate->current_frame = ir_resumed_frame;\n")
+        self.emit("slots = _PyFrame_Slots(frame);\n")
+        self.emit("if (_Py_EnterRecursivePy(tstate)) {\n")
+        self.emit("PyValue_XCLOSE(ir_resume_input);\n")
+        self.emit("JUMP_TO_LABEL(exit_unwind_notrace);\n")
+        self.emit("}\n")
+        self.emit("_PyFrame_SetReturnValue(frame, ir_resume_input);\n")
+        self.emit("LOAD_IP(0);\n")
+        self.emit("IR_SKIP_RESUME();\n")
+        self.emit("DTRACE_FUNCTION_ENTRY();\n")
+        self.emit("LLTRACE_RESUME_FRAME();\n")
+        self.emit("DISPATCH();\n")
+        self.emit("}\n")
+        return False
+
     def ir_instruction_size(
         self,
         tkn: Token,
@@ -3901,14 +3999,7 @@ def canonical_return_input(inst: Instruction) -> bool:
         frame = tstate->current_frame = dying->previous;
         _PyEval_FrameClearAndPop(tstate, dying);
         RELOAD_STACK();
-        if (generator_return) {
-            next_instr = _PyEval_GeneratorReturnTarget(frame);
-        }
-        else {
-            next_instr = frame->return_pc;
-        }
-        res = temp;
-        LLTRACE_RESUME_FRAME();
+        IR_RETURN_TO_CALLER(temp, generator_return);
     }"""
     if body != [t.text for t in tokenize(expected_body)]:
         return False
@@ -4088,7 +4179,7 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
         except SyntaxError as ex:
             ex.msg = f"{name}: {ex.msg}"
             raise
-        if emitter.call_finished:
+        if not reachable or emitter.call_finished:
             break
     out.start_line()
     if reachable:
@@ -4308,6 +4399,17 @@ def monitoring_events(name: str, inst: Instruction) -> list[str]:
         events.update(EVENT_PREFIX + e for e in MONITORING_HELPERS.get(tkn.text, ()))
     if name.startswith("INSTRUMENTED_") and uses_call_transaction(inst):
         events.update(EVENT_PREFIX + e for e in TRANSACTION_EVENTS)
+    # Completion has one semantic site, including when the producer is a
+    # specialized native iterator or a Python generator returning to it.
+    if any(t.text in {"IR_COMPLETE_STEP", "IR_ENTER_GENERATOR"}
+           for t in uop_token_list(inst)):
+        group = inst.family.name if inst.family else name.removeprefix("INSTRUMENTED_")
+        if group == "FOR_ITER":
+            events.update(EVENT_PREFIX + e for e in
+                          ("BRANCH_LEFT", "BRANCH_RIGHT", "STOP_ITERATION"))
+        elif group == "SEND":
+            events.update(EVENT_PREFIX + e for e in
+                          ("BRANCH_LEFT", "STOP_ITERATION"))
     return sorted(events)
 
 
@@ -4401,6 +4503,28 @@ class HandlerContract:
     through: Extent
     twin: str | None
     result_phase: str
+    output_kind: str
+
+
+def handler_output_kind(inst: Instruction, fmt: IRFormat) -> str:
+    """Physical output locations, using the emitter's store mode.
+
+    Window flush always writes the frontend slots. STORE_RESULT then moves
+    only the first result to dst; a variable trailing output stays in place.
+    Frame-return forms use the same explicit recipient without that flush.
+    """
+    if not fmt.window:
+        return "_PyIR_OUTPUT_REGISTER_DST"
+    if set(uop_tokens(inst)) & {"IR_COMPLETE_STEP", "IR_ENTER_GENERATOR"}:
+        return "_PyIR_OUTPUT_OUTCOME"
+    mode = store_mode(inst, external_io(inst)[1]) if fmt.store_dst else None
+    if mode == STORE_LEAVE:
+        raise analysis_error("unclassified window output adapter", inst.where)
+    if mode in (STORE_RESULT, STORE_RETURN):
+        if fmt.dst_offset is None:
+            raise analysis_error("window result has no physical offset", inst.where)
+        return "_PyIR_OUTPUT_WINDOW_DST_FIRST"
+    return "_PyIR_OUTPUT_WINDOW"
 
 
 RESULT_PHASE_NONE = "_PyIR_RESULT_PHASE_NONE"
@@ -4865,12 +4989,22 @@ def result_publication_contract(
         result, None, producer, "generic")
 
 
+def writes_suspended_frame_state(inst: Instruction) -> bool:
+    """Recognize state writes, rather than guards mentioning a child state."""
+    tokens = " ".join(uop_tokens(inst))
+    return bool(re.search(
+        r"\bgi_frame_state\s*=\s*FRAME_(?:CREATED|SUSPENDED)\b", tokens)
+        or re.search(
+            r"\bFT_ATOMIC_STORE_INT8_RELEASE\s*\(\s*\w+\s*->\s*"
+            r"gi_frame_state\s*,\s*FRAME_(?:CREATED|SUSPENDED)\b", tokens))
+
+
 def handler_effects(name: str, inst: Instruction, fmt: IRFormat,
                     boxes: bool) -> list[str]:
     "The _PyIR_* effect bits of handler name, which runs inst"
     p = inst.properties
     tokens = {t.text for t in uop_token_list(inst)}
-    suspends = p.switches_frame and bool(tokens & {"FRAME_SUSPENDED", "FRAME_CREATED"})
+    suspends = p.switches_frame and writes_suspended_frame_state(inst)
     pushes_frame = p.switches_frame and not p.returns and not suspends
     specializes = fmt.fb != LOC_NONE and any(
         isinstance(part, Uop) and "specializing" in part.annotations
@@ -4919,6 +5053,7 @@ def handler_contracts(analysis: Analysis,
             twin=twin_of(name, fmt, ids),
             result_phase=(publication.phase if publication is not None
                           else RESULT_PHASE_NONE),
+            output_kind=handler_output_kind(inst, fmt),
         )
     return result
 

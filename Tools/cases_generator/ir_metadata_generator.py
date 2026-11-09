@@ -155,6 +155,7 @@ def format_initializer(fmt: IRFormat, shadow: str,
         f".borrow_mask = {fmt.borrow_mask:#x}, "
         f".fb_kind = {fb_kind}, .fb_size = {fb_size}, "
         f".result_phase = {contract.result_phase}, "
+        f".output_kind = {contract.output_kind}, "
         f".reads = {extent_initializer(contract.reads)}, "
         f".writes = {extent_initializer(contract.writes)}, "
         f".through = {extent_initializer(contract.through)}, "
@@ -247,7 +248,11 @@ def generate_ir_metadata(
                 indices[name] = analysis.instructions[name].opcode
         for name in sorted(indices, key=lambda name: indices[name]):
             twin = rows[name].twin
-            events = monitoring_events(twin, insts[twin]) if twin else []
+            # Semantic completion can report events without a separate
+            # instrumented handler (SEND). Keep that capability in its row.
+            event_handler = twin or name
+            events = (monitoring_events(event_handler, insts[event_handler])
+                      if event_handler in insts else [])
             init = format_initializer(formats[name], shadow_of(name, analysis),
                                       rows[name], events)
             out.emit(f"[{name}] = {init},\n")

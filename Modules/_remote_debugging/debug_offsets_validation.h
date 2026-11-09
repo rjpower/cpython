@@ -31,7 +31,7 @@
 #define FIELD_SIZE(type, member) sizeof(((type *)0)->member)
 
 enum {
-    PY_REMOTE_DEBUG_OFFSETS_TOTAL_SIZE = 960,
+    PY_REMOTE_DEBUG_OFFSETS_TOTAL_SIZE = 1032,
     PY_REMOTE_ASYNC_DEBUG_OFFSETS_TOTAL_SIZE = 104,
 };
 
@@ -298,6 +298,8 @@ validate_fixed_field(
     APPLY(code_object, filename, sizeof(uintptr_t), _Alignof(uintptr_t), buffer_size); \
     APPLY(code_object, linetable, sizeof(uintptr_t), _Alignof(uintptr_t), buffer_size); \
     APPLY(code_object, firstlineno, sizeof(int), _Alignof(int), buffer_size); \
+    APPLY(code_object, nlocalsplus, sizeof(int), _Alignof(int), buffer_size); \
+    APPLY(code_object, stacksize, sizeof(int), _Alignof(int), buffer_size); \
     APPLY(code_object, co_words, sizeof(uint64_t), _Alignof(uint64_t), buffer_size); \
     APPLY(code_object, co_tlbc, sizeof(uintptr_t), _Alignof(uintptr_t), buffer_size)
 
@@ -348,6 +350,22 @@ _PyRemoteDebug_ValidateDebugOffsetsLayout(struct _Py_DebugOffsets *debug_offsets
      * or local object view. Fields used only for remote address arithmetic
      * (e.g. runtime_state.interpreters_head) are also checked as a sanity
      * bound on the offset value. */
+    PY_REMOTE_DEBUG_VALIDATE_READ_SECTION(stack_chunk, MAX_STACK_CHUNK_SIZE);
+    PY_REMOTE_DEBUG_VALIDATE_FIELD(stack_chunk, previous, sizeof(uintptr_t),
+                                   _Alignof(uintptr_t), MAX_STACK_CHUNK_SIZE);
+    PY_REMOTE_DEBUG_VALIDATE_FIELD(stack_chunk, chunk_size, sizeof(size_t),
+                                   _Alignof(size_t), MAX_STACK_CHUNK_SIZE);
+    PY_REMOTE_DEBUG_VALIDATE_FIELD(stack_chunk, data, sizeof(PyValue),
+                                   _Alignof(PyValue), MAX_STACK_CHUNK_SIZE);
+    if (debug_offsets->stack_chunk.data <
+            debug_offsets->stack_chunk.previous + sizeof(uintptr_t) ||
+        debug_offsets->stack_chunk.data <
+            debug_offsets->stack_chunk.chunk_size + sizeof(size_t))
+    {
+        PyErr_SetString(PyExc_RuntimeError,
+                        "Invalid debug offsets: stack chunk data overlaps header");
+        return -1;
+    }
     PY_REMOTE_DEBUG_VALIDATE_SECTION(runtime_state);
     PY_REMOTE_DEBUG_RUNTIME_STATE_FIELDS(
         PY_REMOTE_DEBUG_VALIDATE_FIELD,

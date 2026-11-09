@@ -80,13 +80,9 @@ typedef struct _PyThreadStateImpl {
     // _PyEvalActivation), or NULL.  Stack-switching code saves and restores
     // it with current_frame.
     struct _PyEvalActivation *eval_activation;
-    /* Exceptional source-only observer context; ordinary execution never
-     * updates these fields. A frame object need not exist on allocation error. */
     /* Frame whose observer callback is running; callback frames themselves
      * are not suspended semantic children of this frame. */
     struct _PyInterpreterFrame *observed_frame;
-    struct _PyInterpreterFrame *source_error_frame;
-    uint32_t source_error_record;
 
     // Distinguishes between yield and return from PyEval_EvalFrame().
     // See gen_send_ex2() in Objects/genobject.c

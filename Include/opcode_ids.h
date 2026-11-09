@@ -17,7 +17,6 @@ extern "C" {
 #define CALL_FUNCTION_EX                         4
 #define CHECK_EG_MATCH                           5
 #define CHECK_EXC_MATCH                          6
-#define CLEANUP_THROW                            7
 #define DELETE_SUBSCR                            8
 #define END_FOR                                  9
 #define END_SEND                                10
@@ -94,6 +93,7 @@ extern "C" {
 #define LOAD_FAST_AND_CLEAR                     83
 #define LOAD_FAST_BORROW                        84
 #define LOAD_FAST_CHECK                         86
+#define CLEANUP_THROW                           87
 #define LOAD_FROM_DICT_OR_DEREF                 88
 #define LOAD_FROM_DICT_OR_GLOBALS               89
 #define LOAD_GLOBAL                             90

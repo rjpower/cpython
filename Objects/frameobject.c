@@ -10,6 +10,7 @@
 #include "pycore_genobject.h"     // _PyGen_GetGeneratorFromFrame()
 #include "pycore_interpframe.h"   // _PyFrame_GetLocalsArray()
 #include "pycore_ir_source.h"
+#include "pycore_ir_outcomes.h"
 #include "pycore_list.h"          // _PyList_AppendTakeRef()
 #include "pycore_long_value.h"    // _PyValue_AsLongAndOverflow()
 #include "pycore_modsupport.h"    // _PyArg_CheckPositional()
@@ -1344,9 +1345,10 @@ register_resume_sites(PyCodeObject *code)
     }
     uint64_t *live = PyMem_Calloc((size_t)Py_MAX(n, 1) * stride, sizeof(uint64_t));
     uint64_t *work = PyMem_Calloc(stride, sizeof(uint64_t));
+    uint64_t *edge = PyMem_Calloc(stride, sizeof(uint64_t));
     unsigned char *safe = PyMem_Calloc((size_t)Py_MAX(n, 1), 1);
-    if (live == NULL || work == NULL || safe == NULL) {
-        PyMem_Free(live); PyMem_Free(work); PyMem_Free(safe);
+    if (live == NULL || work == NULL || edge == NULL || safe == NULL) {
+        PyMem_Free(live); PyMem_Free(work); PyMem_Free(edge); PyMem_Free(safe);
         PyErr_NoMemory();
         return NULL;
     }
@@ -1371,8 +1373,18 @@ register_resume_sites(PyCodeObject *code)
             for (int k = 0; k < 2; k++) {
                 int next = successors[k];
                 if (next >= 0 && next < n) {
+                    memcpy(edge, live + (size_t)next * stride, stride * sizeof(uint64_t));
+                    _PyIRSlotOutcome outcome = _PyIR_Outcome(word, k == 1);
+                    if (outcome.semantic) {
+                        for (int r = 0; r <= outcome.count; r++) {
+                            int slot = (r < outcome.count ? outcome.first + r : outcome.dst) - nl;
+                            if (slot >= 0 && slot < nt && slot + nl != IR_NO_DST) {
+                                edge[slot / 64] &= ~((uint64_t)1 << (slot % 64));
+                            }
+                        }
+                    }
                     for (int j = 0; j < nb; j++) {
-                        work[j] |= live[(size_t)next * stride + j];
+                        work[j] |= edge[j];
                     }
                 }
             }
@@ -1384,7 +1396,9 @@ register_resume_sites(PyCodeObject *code)
                 }
             }
             /* Conditional outputs are not guaranteed on both successors. */
-            if (!(fmt->flags & (_PyIR_JUMPS | _PyIR_FORWARD))) {
+            if (!_PyIR_Outcome(word, 0).semantic &&
+                !(fmt->flags & (_PyIR_JUMPS | _PyIR_FORWARD)))
+            {
                 for (int f = 0; f < 4; f++) {
                     int slot = (int)fields[f] - nl;
                     if (fmt->roles[f] == _PyIR_ROLE_DST) {
@@ -1443,7 +1457,7 @@ register_resume_sites(PyCodeObject *code)
             safe[i] &= live[(size_t)i * stride + j] == 0;
         }
     }
-    PyMem_Free(live); PyMem_Free(work);
+    PyMem_Free(live); PyMem_Free(work); PyMem_Free(edge);
     return safe;
 }
 
@@ -1737,6 +1751,7 @@ frame_lineno_set_impl(PyFrameObject *self, PyObject *value)
     /* Commit the continuation before any closing callback. A suspended
      * caller's overlap remains untouched until its child retires. */
     self->f_lineno = 0;
+    self->f_line_next = -1;
     self->f_frame->return_pc = _PyFrame_InstrAt(self->f_frame, best_addr);
     self->f_source_event = -1;
     self->f_source_event_error = -1;
@@ -1902,6 +1917,7 @@ static int
 frame_tp_clear(PyObject *op)
 {
     PyFrameObject *f = PyFrameObject_CAST(op);
+    f->f_line_next = -1;
     Py_CLEAR(f->f_trace);
     Py_CLEAR(f->f_extra_locals);
     Py_CLEAR(f->f_locals_cache);
@@ -2028,8 +2044,13 @@ init_frame(PyThreadState *tstate, _PyInterpreterFrame *frame,
            PyFunctionObject *func, PyObject *locals)
 {
     PyCodeObject *code = (PyCodeObject *)func->func_code;
+    /* This is the direct heap initializer. Escape/generator destinations
+     * instead receive a complete move and need no preliminary fill. */
+    for (int i = 0; i < _PyFrame_NumSlotsForCodeObject(code); i++) {
+        frame->owned_slots[i] = PyValue_NULL;
+    }
     _PyFrame_Initialize(tstate, frame, PyValue_DUP(PyValue_FromObjectBorrow(func)),
-                        Py_XNewRef(locals), code, frame->owned_slots, 0, NULL);
+                        Py_XNewRef(locals), code, frame->owned_slots, NULL);
 }
 
 PyFrameObject*
@@ -2048,6 +2069,9 @@ _PyFrame_New_NoTrack(PyCodeObject *code)
     f->f_lineno = 0;
     f->f_source_event = -1;
     f->f_source_event_error = -1;
+    f->f_line_next = -1;
+    f->f_line_previous = -1;
+    f->f_line_epoch = 0;
     f->f_extra_locals = NULL;
     f->f_locals_cache = NULL;
     f->f_overwritten_fast_locals = NULL;

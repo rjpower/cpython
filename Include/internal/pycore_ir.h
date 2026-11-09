@@ -255,6 +255,13 @@ enum {
  * pycore_ir_metadata.h by Tools/cases_generator/ir_metadata_generator.py,
  * indexed by handler; Python reads it through _opcode.get_ir_contract().
  * Heap effects, guards and result type facts are not in it yet. */
+enum {
+    _PyIR_OUTPUT_REGISTER_DST,
+    _PyIR_OUTPUT_WINDOW,
+    _PyIR_OUTPUT_WINDOW_DST_FIRST,
+    _PyIR_OUTPUT_OUTCOME,
+};
+
 typedef struct _PyIRFormat {
     uint16_t flags;         // _PyIR_VALID, ...: the format
     uint16_t effects;       // _PyIR_RAISES, ...: the handler
@@ -268,6 +275,12 @@ typedef struct _PyIRFormat {
     uint8_t fb_kind;        // _PyFbKind of the entry, where fb is a field
     uint8_t fb_size;        // the bytes of that entry's type, or 0
     uint8_t result_phase;   // _PyIR_RESULT_PHASE_*: conditional success fact
+    uint8_t output_kind;    // actual physical publication, not fold capability:
+                            // REGISTER_DST: outputs at dst; WINDOW: at base;
+                            // WINDOW_DST_FIRST: base outputs, with only the
+                            // result at base+dst moved to the explicit dst;
+                            // OUTCOME: use the semantic per-edge contract.
+                            // UNPACKS additionally transfers to its local run.
     _PyIRExtent reads;      // the stack inputs, from the deepest
     _PyIRExtent writes;     // the stack outputs, from the same slot
     _PyIRExtent through;    // the deepest inputs that the handler leaves
@@ -282,7 +295,7 @@ typedef struct _PyIRFormat {
     uint16_t shadow;        // the instruction that the handler stands for
     uint16_t twin;          // the handler that instrumentation runs on the
                             // word (itself for a twin), or 0
-    uint32_t events;        // bit e: twin fires sys.monitoring event e
+    uint32_t events;        // bit e: semantic handler or twin can fire event e
 } _PyIRFormat;
 
 #include "pycore_ir_metadata.h"
@@ -362,7 +375,7 @@ typedef struct _PyCodeExec {
  * with self in slot 0 and the result of __init__ in slot 1. */
 typedef struct {
     _PyCodeExec exec;
-    _PyIRWord words[3];
+    _PyIRWord words[2];
 } _PyIRStaticExec;
 extern _PyIRStaticExec _PyIR_InitCleanup;
 #define _PyIR_InitCleanupExec (_PyIR_InitCleanup.exec)

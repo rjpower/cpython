@@ -523,6 +523,9 @@ def tier_variable(node: parser.CodeDef) -> int | None:
 CALL_INVOKE_MARKERS = frozenset(("IR_INVOKE_CALL", "IR_INVOKE_GUARDED_PYTHON_CALL"))
 
 IR_MARKER_EFFECTS = {
+    "IR_COMPLETE_STEP": frozenset(("escapes", "error", "sync", "pc", "terminal")),
+    "IR_RETURN_TO_CALLER": frozenset(("escapes", "error", "sync", "pc", "terminal", "frame")),
+    "IR_ENTER_GENERATOR": frozenset(("escapes", "error", "sync", "pc", "terminal", "frame")),
     "IR_TRY_DICT_FIRST_PROBE": frozenset(("escapes", "error", "sync", "pc")),
     "IR_BEGIN_CALL_EFFECTS": frozenset(),
     **dict.fromkeys(("IR_PREPARE_CALL_METHOD", "IR_PREPARE_CALL_TUPLE",
@@ -1028,7 +1031,8 @@ def compute_properties(op: parser.CodeDef) -> Properties:
         deopts=deopts_if,
         side_exit=exits_if,
         oparg=oparg_used(op),
-        jumps=variable_used(op, "JUMPBY") or variable_used(op, "JUMPTO"),
+        jumps=(variable_used(op, "JUMPBY") or variable_used(op, "JUMPTO") or
+               (variable_used(op, "IR_COMPLETE_STEP") and oparg_used(op))),
         eval_breaker="CHECK_PERIODIC" in op.name,
         needs_this=(variable_used(op, "this_instr")
                     or variable_used(op, "FB_COUNTER")

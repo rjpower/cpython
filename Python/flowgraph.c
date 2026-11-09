@@ -253,9 +253,7 @@ basicblock_append_instructions(basicblock *to, basicblock *from)
 static inline int
 basicblock_nofallthrough(const basicblock *b) {
     cfg_instr *last = basicblock_last_instr(b);
-    return (last &&
-            (IS_SCOPE_EXIT_OPCODE(last->i_opcode) ||
-             IS_UNCONDITIONAL_JUMP_OPCODE(last->i_opcode)));
+    return last && IS_NO_FALLTHROUGH_OPCODE(last->i_opcode);
 }
 
 #define BB_NO_FALLTHROUGH(B) (basicblock_nofallthrough(B))
@@ -887,8 +885,7 @@ calculate_stackdepth(cfg_builder *g)
             }
             depth = new_depth;
             assert(!IS_ASSEMBLER_OPCODE(instr->i_opcode));
-            if (IS_UNCONDITIONAL_JUMP_OPCODE(instr->i_opcode) ||
-                IS_SCOPE_EXIT_OPCODE(instr->i_opcode))
+            if (IS_NO_FALLTHROUGH_OPCODE(instr->i_opcode))
             {
                 /* remaining code is dead */
                 next = NULL;

@@ -128,6 +128,8 @@ typedef struct _PyCoMonitoringData {
      * STOP_ITERATION tools are in tools.  NULL until BRANCH_LEFT is first
      * monitored, and then tools is not NULL */
     uint8_t *left_tools;
+    /* FOR_ITER's completion observation is independent of both branches. */
+    uint8_t *stop_tools;
     /* The version of tools when they instrument the code */
     uintptr_t tool_versions[PY_MONITORING_TOOL_IDS];
     /* Information to support line events */
@@ -135,6 +137,7 @@ typedef struct _PyCoMonitoringData {
     /* The tools that are to be notified for line events for the matching code unit */
     uint8_t *line_tools;
     uint8_t *source_line_tools;  /* per source-only edge record */
+    uint64_t line_epoch;        /* invalidates pending observed LINE landings */
     /* Observer-only wrappers: branch twin (1), landing LINE (2), or
      * INSTRUCTION wrapper recording otherwise unsaved ingress PC (4). */
     uint8_t *source_forced;

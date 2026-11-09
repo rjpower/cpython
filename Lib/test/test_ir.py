@@ -1313,7 +1313,7 @@ class RelaxationTest(unittest.TestCase):
             self.assertEqual(f(gen(4)), 6 * nlines)
             self.assertEqual(f(()), 0)
         index, jumps = self.relaxed(f, "FOR_ITER")
-        self.assertEqual(jumps, ["IR_JUMP"] * 3)
+        self.assertEqual(jumps, ["IR_JUMP"] * 2)
         # The loop exits by distance 1, to the second jump
         self.assertEqual(list(dis.get_instructions(f))[index].arg, 1)
         AssemblerTest.check_offsets(self, f)
@@ -1370,8 +1370,8 @@ class RelaxationTest(unittest.TestCase):
             self.assertIn("SEND_GEN", handlers(namespace["outer"]))
 
     def test_events_of_a_relaxed_loop(self):
-        # The jumps that relaxation adds have no events, and the branches of
-        # the loop go where they would without them.
+        # Relaxation preserves the semantic branch pairs. Its actual jump
+        # words have INSTRUCTION events, checked separately below.
         source = """if 1:
             def f(xs):
                 n = 0
@@ -1382,7 +1382,7 @@ class RelaxationTest(unittest.TestCase):
         """
         relaxed = relaxed_compile(source)["f"]
         plain = make_function(source)
-        self.assertEqual(self.relaxed(relaxed, "FOR_ITER")[1], ["IR_JUMP"] * 3)
+        self.assertEqual(self.relaxed(relaxed, "FOR_ITER")[1], ["IR_JUMP"] * 2)
         self.assertEqual(self.relaxed(plain, "FOR_ITER")[1], [])
 
         def canonical(func, offset):
@@ -1415,8 +1415,23 @@ class RelaxationTest(unittest.TestCase):
 
         def opcodes(func):
             result, events = trace(func, [0, 1, 1], opcodes=True)
+            ir = get_ir(func.__code__)
+            instructions = [offset for event, offset, _ in events if event == "opcode"]
+            for offset in instructions:
+                self.assertIn(offset, range(len(ir)))
+            helpers = [offset for offset in instructions if ir[offset][0] == "IR_JUMP"]
+            if func is relaxed:
+                site, _ = self.relaxed(func, "FOR_ITER")
+                self.assertEqual(helpers, [site + 1] * 3 + [site + 2])
+                for index, offset in enumerate(instructions):
+                    if ir[offset][0] == "IR_JUMP":
+                        self.assertGreater(index, 0)
+                        self.assertEqual(instructions[index - 1], site)
+            else:
+                self.assertEqual(helpers, [])
             return result, [(event, canonical(func, lasti), line)
-                            for event, lasti, line in events]
+                            for event, lasti, line in events
+                            if event != "opcode" or ir[lasti][0] != "IR_JUMP"]
 
         self.assertEqual(branches(relaxed), branches(plain))
         self.assertEqual(opcodes(relaxed), opcodes(plain))

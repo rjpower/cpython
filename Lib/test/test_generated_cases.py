@@ -410,7 +410,8 @@ class TestIRCases(unittest.TestCase):
             ("PyValue temp = retval;",
              "retval = PyValue_DUP(retval); PyValue temp = retval;",
              ("RETURN_VALUE", "INSTRUMENTED_RETURN_VALUE")),
-            ("res = temp;", "res = PyValue_DUP(temp);",
+            ("IR_RETURN_TO_CALLER(temp, generator_return);",
+             "temp = PyValue_DUP(temp); IR_RETURN_TO_CALLER(temp, generator_return);",
              ("RETURN_VALUE", "INSTRUMENTED_RETURN_VALUE")),
             ("PyValue held = TAKE(val);",
              "val = PyValue_None; PyValue held = TAKE(val);",
@@ -436,10 +437,133 @@ class TestIRCases(unittest.TestCase):
                 except SyntaxError:
                     continue
                 for name in affected:
-                    self.assertNotIn("IR_STORE_CANONICAL_RETURN(",
-                                     self.handler(output.getvalue(), name))
-                    self.assertIn("IR_STORE_RETURN(",
-                                  self.handler(output.getvalue(), name))
+                    handler = self.handler(output.getvalue(), name)
+                    self.assertNotIn("assert(_PyValue_IsHome(temp));", handler)
+                    self.assertIn("temp = _PyValue_Publish(&temp);", handler)
+
+    def test_completion_result_local_does_not_capture_held_value(self):
+        source = (Path(__file__).resolve().parents[2] /
+                  "Python" / "bytecodes.c").read_text()
+        self.assertIn("PyValue completed =", source)
+        Path(self.temp_input_filename).write_text(source)
+        analysis = analyzer.analyze_files([self.temp_input_filename])
+        output = io.StringIO()
+        ir_generator.generate_ir(
+            [self.temp_input_filename], analysis, output, False)
+        for name in ("FOR_ITER", "FOR_ITER_LIST", "SEND", "CLEANUP_THROW"):
+            with self.subTest(name=name):
+                handler = self.handler(output.getvalue(), name)
+                self.assertIn("PyValue completed =", handler)
+                self.assertIn("_PyIRStepResult ir_step_result =", handler)
+                self.assertNotIn("&completed", handler)
+                self.assertIn(", completed, _PY_IR_", handler)
+                self.assertNotIn("_PyIRStepResult completed =", handler)
+                if name == "CLEANUP_THROW":
+                    self.assertNotIn("assert(!IR_IS_LOCAL(dst)", handler)
+        for name in ("FOR_ITER_GEN", "SEND_GEN"):
+            self.assertNotIn("PyValue new_frame;",
+                             self.handler(output.getvalue(), name))
+
+    def test_suspension_effect_requires_a_state_write(self):
+        source = (Path(__file__).resolve().parents[2] /
+                  "Python" / "bytecodes.c").read_text()
+        Path(self.temp_input_filename).write_text(source)
+        analysis = analyzer.analyze_files([self.temp_input_filename])
+        for name in ("SEND", "SEND_GEN"):
+            self.assertIn("FRAME_CREATED", ir_generator.uop_tokens(
+                analysis.instructions[name]))
+            self.assertFalse(ir_generator.writes_suspended_frame_state(
+                analysis.instructions[name]))
+        for name in ("YIELD_VALUE", "INSTRUMENTED_YIELD_VALUE", "RETURN_GENERATOR"):
+            self.assertTrue(ir_generator.writes_suspended_frame_state(
+                analysis.instructions[name]))
+        source = source.replace(
+            "FT_ATOMIC_STORE_INT8_RELEASE(gen->gi_frame_state, FRAME_SUSPENDED + oparg);",
+            "assert(gen->gi_frame_state == FRAME_SUSPENDED + oparg);")
+        source = source.replace("gen->gi_frame_state = FRAME_CREATED;",
+                                "assert(gen->gi_frame_state == FRAME_CREATED);")
+        Path(self.temp_input_filename).write_text(source)
+        mutated = analyzer.analyze_files([self.temp_input_filename])
+        for name in ("YIELD_VALUE", "INSTRUMENTED_YIELD_VALUE", "RETURN_GENERATOR"):
+            self.assertFalse(ir_generator.writes_suspended_frame_state(
+                mutated.instructions[name]))
+
+    def test_physical_output_mapping_matches_window_finalization(self):
+        source = (Path(__file__).resolve().parents[2] /
+                  "Python" / "bytecodes.c").read_text()
+        Path(self.temp_input_filename).write_text(source)
+        analysis = analyzer.analyze_files([self.temp_input_filename])
+        formats = ir_generator.compute_formats(analysis)
+        contracts = ir_generator.handler_contracts(analysis, formats)
+        output = io.StringIO()
+        ir_generator.generate_ir(
+            [self.temp_input_filename], analysis, output, False)
+        for name in ("PUSH_EXC_INFO", "LOAD_SUPER_ATTR_METHOD"):
+            with self.subTest(name=name):
+                self.assertEqual(contracts[name].output_kind, "_PyIR_OUTPUT_WINDOW")
+                handler = self.handler(output.getvalue(), name)
+                self.assertIn("IR_PUBLISH_TEMP(window[", handler)
+                self.assertNotIn("IR_MOVE_TO_DST", handler)
+        for name in ("LOAD_SUPER_ATTR", "INSTRUMENTED_LOAD_SUPER_ATTR"):
+            with self.subTest(name=name):
+                self.assertEqual(contracts[name].output_kind,
+                                 "_PyIR_OUTPUT_WINDOW_DST_FIRST")
+                handler = self.handler(output.getvalue(), name)
+                self.assertIn("IR_PUBLISH_TEMP(window[1]", handler)
+                self.assertIn("IR_MOVE_TO_DST_OR_DISCARD", handler)
+                self.assertEqual(formats[name].dst_offset, 0)
+        self.assertEqual(contracts["CALL"].output_kind,
+                         "_PyIR_OUTPUT_WINDOW_DST_FIRST")
+        self.assertIn("call_destination = IR_A(ir_word)",
+                      self.handler(output.getvalue(), "CALL"))
+        self.assertEqual(contracts["FOR_ITER_GEN"].output_kind,
+                         "_PyIR_OUTPUT_OUTCOME")
+        with mock.patch.object(ir_generator, "store_mode",
+                               return_value=ir_generator.STORE_LEAVE):
+            with self.assertRaisesRegex(SyntaxError, "unclassified window output"):
+                ir_generator.handler_output_kind(
+                    analysis.instructions["PUSH_EXC_INFO"], formats["PUSH_EXC_INFO"])
+
+    def test_generator_resume_commits_before_input_disposal(self):
+        source = (Path(__file__).resolve().parents[2] /
+                  "Python" / "bytecodes.c").read_text()
+        Path(self.temp_input_filename).write_text(source)
+        analysis = analyzer.analyze_files([self.temp_input_filename])
+        for name in ("FOR_ITER", "SEND"):
+            self.assertTrue(analysis.instructions[name].properties.jumps)
+            self.assertTrue(analysis.instructions[name].properties.error_without_pop)
+        self.assertTrue(analysis.instructions["CLEANUP_THROW"].properties.jumps)
+        throw_format = ir_generator.compute_formats(analysis)["CLEANUP_THROW"]
+        self.assertTrue(throw_format.jump_always)
+        self.assertFalse(throw_format.names_target)
+        self.assertEqual(throw_format.imm, ir_generator.LOC_CD)
+        self.assertTrue(analysis.instructions["RETURN_VALUE"].properties.always_exits)
+        output = io.StringIO()
+        ir_generator.generate_ir(
+            [self.temp_input_filename], analysis, output, False)
+        for name in ("SEND", "SEND_GEN", "FOR_ITER_GEN"):
+            with self.subTest(name=name):
+                handler = self.handler(output.getvalue(), name)
+                self.assertEqual(handler.count("_Py_EnterRecursivePy(tstate)"), 1)
+                self.assertNotIn("py_recursion_remaining--", handler)
+                entered = handler.index("frame = tstate->current_frame = ir_resumed_frame;")
+                consumed = handler.index("_PyFrame_SetReturnValue(frame, ir_resume_input);")
+                self.assertLess(entered, consumed)
+                if name != "FOR_ITER_GEN":
+                    detached = handler.index("IR_SLOT(IR_B(ir_word) + 2) = PyValue_NULL;")
+                    self.assertLess(detached, entered)
+        for name in ("RETURN_VALUE", "INSTRUMENTED_RETURN_VALUE"):
+            with self.subTest(name=name):
+                handler = self.handler(output.getvalue(), name)
+                retired = handler.index("_PyEval_FrameClearAndPop(tstate, dying);")
+                completed = handler.index("_PyEval_CompleteGeneratorReturn(")
+                published = handler.index("_PyFrame_SetReturnValue(frame, temp)")
+                self.assertLess(retired, completed)
+                self.assertLess(retired, published)
+                self.assertNotIn("IR_STORE_RETURN", handler)
+        handler = self.handler(output.getvalue(), "CLEANUP_THROW")
+        self.assertIn("_PyFrame_InstrAt(frame, oparg)", handler)
+        self.assertNotIn("next_instr + oparg", handler)
 
     def run_ir_test(self, input: str, expected: str):
         self.assertEqual(self.ir_output(input).strip(), expected.strip())
@@ -2256,6 +2380,7 @@ class TestIRCases(unittest.TestCase):
                 ".imm = _PyIR_LOC_B, .fb = _PyIR_LOC_NONE, .ninputs = 0, "
                 ".dst = 0, .borrow_mask = 0x0, .fb_kind = 0, .fb_size = 0, "
                 ".result_phase = _PyIR_RESULT_PHASE_NONE, "
+                ".output_kind = _PyIR_OUTPUT_REGISTER_DST, "
                 ".reads = { 0, _PyIR_EXT_FIXED }, "
                 ".writes = { 1, _PyIR_EXT_FIXED }, "
                 ".through = { 0, _PyIR_EXT_FIXED }, .shadow = LOAD, "
@@ -2274,6 +2399,7 @@ class TestIRCases(unittest.TestCase):
             ".ninputs = 0, .dst = _PyIR_NO_DST, .borrow_mask = 0x0, "
             ".fb_kind = 0, .fb_size = 0, "
             ".result_phase = _PyIR_RESULT_PHASE_NONE, "
+            ".output_kind = _PyIR_OUTPUT_REGISTER_DST, "
             ".reads = { 0, _PyIR_EXT_FIXED }, "
             ".writes = { 0, _PyIR_EXT_FIXED }, "
             ".through = { 0, _PyIR_EXT_FIXED }, .shadow = IR_PASS, "
@@ -2487,6 +2613,16 @@ class TestCallTransactionMarkers(unittest.TestCase):
         output = io.StringIO()
         ir_generator.generate_ir([source], cls.analysis, output, False)
         cls.interpreter = output.getvalue()
+
+    def test_send_completion_events_without_instrumented_twin(self):
+        output = io.StringIO()
+        ir_metadata_generator.generate_ir_metadata(
+            [str(ir_generator.DEFAULT_INPUT)], self.analysis, output)
+        row = next(line for line in output.getvalue().splitlines()
+                   if line.lstrip().startswith("[SEND] = "))
+        self.assertIn(".twin = 0", row)
+        self.assertIn("(1u << PY_MONITORING_EVENT_BRANCH_LEFT)", row)
+        self.assertIn("(1u << PY_MONITORING_EVENT_STOP_ITERATION)", row)
 
     def test_real_callout_and_transfer_properties(self):
         for name in ("_MAYBE_EXPAND_METHOD", "_MONITOR_CALL",

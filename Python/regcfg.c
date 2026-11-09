@@ -235,7 +235,7 @@ op_jumps(const _PyRegOp *op)
 static inline int
 op_ends_flow(int opcode)
 {
-    return IS_SCOPE_EXIT_OPCODE(opcode) || IS_UNCONDITIONAL_JUMP_OPCODE(opcode);
+    return IS_NO_FALLTHROUGH_OPCODE(opcode);
 }
 
 /* The stack depth at the entry of exception handler block h, without the

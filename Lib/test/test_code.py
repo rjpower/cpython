@@ -204,6 +204,7 @@ import unittest
 import textwrap
 import weakref
 import dis
+import struct
 
 try:
     import ctypes
@@ -1954,6 +1955,50 @@ class CodeLocationTest(unittest.TestCase):
         self.check_lines(parse_location_table)
         self.check_lines(misshappen)
         self.check_lines(bug93662)
+
+    def test_large_source_line_iterator_keeps_complete_word_coverage(self):
+        namespace = {}
+        source = 'def func(owner):\n' + ''.join(
+            f'    owner.value = {index}\n    {index}\n' for index in range(256))
+        exec(compile(source, '<source-line-iterator>', 'exec'), namespace)
+        code = namespace['func'].__code__
+        original = code.co_linetable
+        ranges = list(code.co_lines())
+        self.assertGreaterEqual(len(ranges), 256)
+        self.assertTrue(any(start == end for start, end, _ in ranges))
+        self.assertEqual(ranges[0][0], 0)
+        self.assertEqual(ranges[-1][1], len(code.co_code) // 8)
+        self.assertEqual([end for _, end, _ in ranges[:-1]],
+                         [start for start, _, _ in ranges[1:]])
+        self.assertEqual([line for start, end, line in ranges for _ in range(start, end)],
+                         [position[0] for position in code.co_positions()])
+        self.assertEqual(ranges, list(code.co_lines()))
+        self.assertEqual(code.co_linetable, original)
+
+    def test_source_line_rows_at_one_landing_are_sorted_and_deduplicated(self):
+        def func():
+            return None
+
+        code = func.__code__
+        target = list(dis.get_instructions(func))[-1].offset
+        real_line = list(code.co_positions())[target][0]
+        raw = code.co_linetable
+        version, size, _ = struct.unpack_from('<III', raw, 4)
+        source_lines = [real_line + 30, real_line + 10, real_line,
+                        real_line + 20, real_line + 10]
+        records = b''.join(struct.pack('<10i', target - 1, target, 0,
+                                       line, line, 0, 1, -1, 0, 0)
+                           for line in source_lines)
+        code = code.replace(co_linetable=(
+            b'IRSM' + struct.pack('<III', version, size, len(source_lines)) +
+            raw[16:16 + size] + records))
+        original = code.co_linetable
+        ranges = list(code.co_lines())
+        self.assertEqual([(start, line) for start, end, line in ranges if start == end],
+                         [(target, real_line + offset) for offset in (10, 20, 30)])
+        self.assertEqual([line for start, end, line in ranges for _ in range(start, end)],
+                         [position[0] for position in code.co_positions()])
+        self.assertEqual(code.co_linetable, original)
 
     @cpython_only
     def test_code_new_empty(self):

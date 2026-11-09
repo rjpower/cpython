@@ -32,69 +32,9 @@ write_memory(proc_handle_t *handle, uintptr_t remote_address, size_t len, const 
 }
 
 static int
-is_prerelease_version(uint64_t version)
+ensure_debug_offset_compatibility(const _Py_DebugOffsets *debug_offsets)
 {
-    return (version & 0xF0) != 0xF0;
-}
-
-static int
-ensure_debug_offset_compatibility(const _Py_DebugOffsets* debug_offsets)
-{
-    if (memcmp(debug_offsets->cookie, _Py_Debug_Cookie, sizeof(debug_offsets->cookie)) != 0) {
-        // The remote is probably running a Python version predating debug offsets.
-        PyErr_SetString(
-            PyExc_RuntimeError,
-            "Can't determine the Python version of the remote process");
-        return -1;
-    }
-
-    // Assume debug offsets could change from one pre-release version to another,
-    // or one minor version to another, but are stable across patch versions.
-    if (is_prerelease_version(Py_Version) && Py_Version != debug_offsets->version) {
-        PyErr_SetString(
-            PyExc_RuntimeError,
-            "Can't send commands from a pre-release Python interpreter"
-            " to a process running a different Python version");
-        return -1;
-    }
-
-    if (is_prerelease_version(debug_offsets->version) && Py_Version != debug_offsets->version) {
-        PyErr_SetString(
-            PyExc_RuntimeError,
-            "Can't send commands to a pre-release Python interpreter"
-            " from a process running a different Python version");
-        return -1;
-    }
-
-    unsigned int remote_major = (debug_offsets->version >> 24) & 0xFF;
-    unsigned int remote_minor = (debug_offsets->version >> 16) & 0xFF;
-
-    if (PY_MAJOR_VERSION != remote_major || PY_MINOR_VERSION != remote_minor) {
-        PyErr_Format(
-            PyExc_RuntimeError,
-            "Can't send commands from a Python %d.%d process to a Python %d.%d process",
-            PY_MAJOR_VERSION, PY_MINOR_VERSION, remote_major, remote_minor);
-        return -1;
-    }
-
-    // The debug offsets differ between free threaded and non-free threaded builds.
-    if (_Py_Debug_Free_Threaded && !debug_offsets->free_threaded) {
-        PyErr_SetString(
-            PyExc_RuntimeError,
-            "Cannot send commands from a free-threaded Python process"
-            " to a process running a non-free-threaded version");
-        return -1;
-    }
-
-    if (!_Py_Debug_Free_Threaded && debug_offsets->free_threaded) {
-        PyErr_SetString(
-            PyExc_RuntimeError,
-            "Cannot send commands to a free-threaded Python process"
-            " from a process running a non-free-threaded version");
-        return -1;
-    }
-
-    return 0;
+    return _PyDebugOffsets_Validate(debug_offsets);
 }
 
 static int

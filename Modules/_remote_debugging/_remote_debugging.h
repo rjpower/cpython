@@ -419,6 +419,7 @@ typedef struct {
 typedef struct {
     uintptr_t remote_addr;
     size_t size;
+    size_t data_offset;
     void *local_copy;
 } StackChunkInfo;
 
@@ -516,7 +517,6 @@ extern int RemoteDebugging_InitState(RemoteDebuggingState *st);
 extern void cached_code_metadata_destroy(void *ptr);
 
 /* Validation */
-extern int is_prerelease_version(uint64_t version);
 extern int validate_debug_offsets(struct _Py_DebugOffsets *debug_offsets);
 #define PY_REMOTE_DEBUG_INVALID_ASYNC_DEBUG_OFFSETS (-2)
 

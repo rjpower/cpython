@@ -1230,7 +1230,7 @@ dummy_func(
 
         op(_BINARY_OP_SUBSCR_INIT_CALL, (container, sub, getitem -- new_frame)) {
             STAT_INC(BINARY_OP, hit);
-            _PyInterpreterFrame* pushed_frame = _PyFrame_PushUnchecked(tstate, getitem, 2, frame);
+            _PyInterpreterFrame* pushed_frame = _PyFrame_PushUnchecked(tstate, getitem, frame);
             pushed_frame->base[0] = TAKE(container);
             pushed_frame->base[1] = TAKE(sub);
             INPUTS_DEAD();
@@ -1472,10 +1472,9 @@ dummy_func(
             taken = TAKE(value);
         }
 
-        // The stack effect here is a bit misleading.
-        // retval is popped from the stack, but res
-        // is pushed to a different frame, the callers' frame.
-        returns op(_RETURN_VALUE, (retval -- res)) {
+        // The result remains C-owned through child retirement. Completion
+        // publishes it to the caller or consumes it as a loop/send outcome.
+        returns op(_RETURN_VALUE, (retval --)) {
             assert(frame->owner != FRAME_OWNED_BY_INTERPRETER);
             PyValue temp = retval;
             DEAD(retval);
@@ -1489,17 +1488,7 @@ dummy_func(
             frame = tstate->current_frame = dying->previous;
             _PyEval_FrameClearAndPop(tstate, dying);
             RELOAD_STACK();
-            // A frame resumes at the word after the one that made the call,
-            // except after a generator's return, when a SEND or FOR_ITER
-            // goes on to its exit.
-            if (generator_return) {
-                next_instr = _PyEval_GeneratorReturnTarget(frame);
-            }
-            else {
-                next_instr = frame->return_pc;
-            }
-            res = temp;
-            LLTRACE_RESUME_FRAME();
+            IR_RETURN_TO_CALLER(temp, generator_return);
         }
 
         macro(RETURN_VALUE) =
@@ -1598,19 +1587,11 @@ dummy_func(
             assert(frame->owner != FRAME_OWNED_BY_INTERPRETER);
             if (!IS_PEP523_HOOKED(tstate) &&
                 (Py_TYPE(receiver_o) == &PyGen_Type || Py_TYPE(receiver_o) == &PyCoro_Type) &&
+                !(FT_ATOMIC_LOAD_INT8_RELAXED(((PyGenObject *)receiver_o)->gi_frame_state) == FRAME_CREATED && !PyValue_IsNone(v)) &&
                 gen_try_set_executing((PyGenObject *)receiver_o))
             {
                 PyGenObject *gen = (PyGenObject *)receiver_o;
-                _PyInterpreterFrame *gen_frame = &gen->gi_iframe;
-                _PyFrame_SetReturnValue(gen_frame, TAKE(v));
-                SYNC_SP();
-                gen->gi_exc_state.previous_item = tstate->exc_info;
-                tstate->exc_info = &gen->gi_exc_state;
-                frame->return_slot = (uint16_t)IR_DST_SLOT;
-                frame->return_pc = next_instr;
-                assert(gen_frame->previous == NULL);
-                gen_frame->previous = frame;
-                DISPATCH_INLINED(gen_frame);
+                IR_ENTER_GENERATOR(gen, _PY_IR_SEND);
             }
             if (!PyValue_IsNull(null_or_index) && PyValue_IsNone(v)) {
                 _PyStatusValue next = _PyForIter_VirtualIteratorNext(tstate, frame, receiver, &window[1]);
@@ -1621,8 +1602,8 @@ dummy_func(
                     if (found < 0) {
                         ERROR_NO_POP();
                     }
-                    JUMPBY(oparg);
-                    DISPATCH();
+                    PyValue completed = PyValue_IsNull(item) ? PyValue_None : item;
+                    IR_COMPLETE_STEP(_PY_IR_SEND, completed, oparg);
                 }
                 retval = item;
                 DEAD(v);
@@ -1632,11 +1613,12 @@ dummy_func(
                 if (sent.status == PYGEN_ERROR) {
                     ERROR_NO_POP();
                 }
+                if (sent.status == PYGEN_RETURN) {
+                    PyValue completed = sent.value;
+                    IR_COMPLETE_STEP(_PY_IR_SEND, completed, oparg);
+                }
                 PyValue_CLOSE(v);
                 retval = sent.value;
-                if (sent.status == PYGEN_RETURN) {
-                    JUMPBY(oparg);
-                }
             }
         }
 
@@ -1646,16 +1628,10 @@ dummy_func(
             EXIT_IF(!PyValue_IsObject(receiver));
             PyGenObject *gen = (PyGenObject *)PyValue_AsKnownObjectBorrow(receiver);
             EXIT_IF(Py_TYPE(gen) != &PyGen_Type && Py_TYPE(gen) != &PyCoro_Type);
+            EXIT_IF(FT_ATOMIC_LOAD_INT8_RELAXED(gen->gi_frame_state) == FRAME_CREATED && !PyValue_IsNone(v));
             EXIT_IF(!gen_try_set_executing((PyGenObject *)gen));
             STAT_INC(SEND, hit);
-            _PyInterpreterFrame *pushed_frame = &gen->gi_iframe;
-            _PyFrame_SetReturnValue(pushed_frame, TAKE(v));
-            gen->gi_exc_state.previous_item = tstate->exc_info;
-            tstate->exc_info = &gen->gi_exc_state;
-            frame->return_slot = (uint16_t)IR_DST_SLOT;
-            frame->return_pc = next_instr;
-            pushed_frame->previous = frame;
-            gen_frame = PyValue_Wrap(pushed_frame);
+            IR_ENTER_GENERATOR(gen, _PY_IR_SEND);
         }
 
         macro(SEND_GEN) =
@@ -1683,10 +1659,8 @@ dummy_func(
                 if (index < 0) {
                     ERROR_NO_POP();
                 }
-                next = none;
-                DEAD(none);
-                JUMPBY(oparg);
-                DISPATCH();
+                PyValue completed = PyValue_None;
+                IR_COMPLETE_STEP(_PY_IR_SEND, completed, oparg);
             }
             DEAD(none);
             next = next_index.value;
@@ -1712,15 +1686,16 @@ dummy_func(
             if (what == PYGEN_ERROR) {
                 ERROR_NO_POP();
             }
+            if (what == PYGEN_RETURN) {
+                PyValue completed = sent.value;
+                IR_COMPLETE_STEP(_PY_IR_SEND, completed, oparg);
+            }
             PyValue_CLOSE(v);
             asend = iter;
             DEAD(iter);
             null_out = null_in;
             DEAD(null_in);
             retval = sent.value;
-            if (what == PYGEN_RETURN) {
-                JUMPBY(oparg);
-            }
         }
 
         macro(SEND_ASYNC_GEN) =
@@ -1747,7 +1722,7 @@ dummy_func(
             _PyInterpreterFrame *gen_frame = frame;
             // The value sent in when the generator resumes takes the slot
             // of the value it yields
-            gen_frame->return_slot = (uint16_t)IR_BASE;
+            gen_frame->return_slot = (uint16_t)IR_DST_SLOT;
             _PyThreadState_UpdateLastProfiledFrame(tstate, gen_frame, gen_frame->previous);
             frame = tstate->current_frame = frame->previous;
             gen_frame->previous = NULL;
@@ -1831,7 +1806,7 @@ dummy_func(
         }
 
         tier1 op(_MONITOR_END_ASYNC_FOR, ( -- )) {
-            assert(INSTR_OPCODE(JUMP_TARGET(oparg)) == END_SEND || INSTR_OPCODE(JUMP_TARGET(oparg)) >= MIN_INSTRUMENTED_OPCODE);
+            assert(_PyIR_BaseOpcode(_PyIR_RealHandler(frame, JUMP_TARGET(oparg))) == SEND);
             INSTRUMENTED_JUMP(JUMP_TARGET(oparg), this_instr+1, PY_MONITORING_EVENT_BRANCH_RIGHT);
         }
 
@@ -1845,17 +1820,13 @@ dummy_func(
             PyObject *exc_value = PyValue_AsKnownObjectBorrow(exc_value_st);
             assert(exc_value && PyExceptionInstance_Check(exc_value));
             int matches = PyErr_GivenExceptionMatches(exc_value, PyExc_StopIteration);
-            if (matches) {
-                value = PyValue_DUP(((PyStopIterationObject *)exc_value)->value);
-                DECREF_INPUTS();
-                null_out = null_in;
-                none = PyValue_None;
-            }
-            else {
+            if (!matches) {
                 _PyErr_SetRaisedException(tstate, Py_NewRef(exc_value));
                 monitor_reraise(tstate, frame, this_instr);
                 goto exception_unwind;
             }
+            PyValue completed = PyValue_DUP(((PyStopIterationObject *)exc_value)->value);
+            IR_COMPLETE_STEP(_PY_IR_SEND_THROW, completed, oparg);
         }
 
         pure inst(LOAD_COMMON_CONSTANT, ( -- value)) {
@@ -2857,7 +2828,7 @@ dummy_func(
             PyCodeObject *code = (PyCodeObject *)f->func_code;
             EXIT_IF(!_PyThreadState_HasStackSpace(tstate, code->co_framesize));
             STAT_INC(LOAD_ATTR, hit);
-            _PyInterpreterFrame *pushed_frame = _PyFrame_PushUnchecked(tstate, PyValue_DUP(PyValue_FromObjectBorrow(fget)), 1, frame);
+            _PyInterpreterFrame *pushed_frame = _PyFrame_PushUnchecked(tstate, PyValue_DUP(PyValue_FromObjectBorrow(fget)), frame);
             pushed_frame->base[0] = TAKE(owner);
             new_frame = PyValue_Wrap(pushed_frame);
         }
@@ -2882,7 +2853,7 @@ dummy_func(
             STAT_INC(LOAD_ATTR, hit);
             PyObject *name = GETITEM(FRAME_CO_NAMES, oparg >> 1);
             _PyInterpreterFrame *pushed_frame = _PyFrame_PushUnchecked(
-                tstate, PyValue_DUP(PyValue_FromObjectBorrow(f)), 2, frame);
+                tstate, PyValue_DUP(PyValue_FromObjectBorrow(f)), frame);
             pushed_frame->base[0] = TAKE(owner);
             pushed_frame->base[1] = PyValue_DUP(PyValue_FromObjectBorrow(name));
             new_frame = PyValue_Wrap(pushed_frame);
@@ -3725,11 +3696,9 @@ dummy_func(
             _GUARD_ITER_VIRTUAL +
             _PUSH_TAGGED_ZERO;
 
-        // Most members of this family are "secretly" super-instructions.
-        // When the loop is exhausted, they jump, and the jump target is
-        // always END_FOR, which pops two values off the stack.
-        // This is optimized by skipping that instruction and combining
-        // its effect (popping 'iter' instead of pushing 'next'.)
+        // The body outcome preserves the iterator/cursor pair and defines
+        // the item recipient. Exhaustion retires the pair, preserves the
+        // last item binding and continues at the real exit target.
 
         family(FOR_ITER, INLINE_CACHE_ENTRIES_FOR_ITER) = {
             FOR_ITER_LIST,
@@ -3761,9 +3730,8 @@ dummy_func(
                 if (found < 0) {
                     ERROR_NO_POP();
                 }
-                // Jump forward by oparg and skip the following END_FOR
-                JUMPBY(oparg + 1);
-                DISPATCH();
+                PyValue completed = PyValue_IsNull(item) ? PyValue_None : item;
+                IR_COMPLETE_STEP(_PY_IR_FOR_ITER, completed, oparg);
             }
             next = item;
         }
@@ -3784,9 +3752,8 @@ dummy_func(
                 if (index < 0) {
                     ERROR_NO_POP();
                 }
-                // Jump forward by oparg and skip the following END_FOR
-                JUMPBY(oparg + 1);
-                DISPATCH();
+                PyValue completed = PyValue_None;
+                IR_COMPLETE_STEP(_PY_IR_FOR_ITER, completed, oparg);
             }
             null_or_index = PyValue_TagIndex(index);
             next = next_index.value;
@@ -3806,9 +3773,8 @@ dummy_func(
                 if (found < 0) {
                     ERROR_NO_POP();
                 }
-                // Jump forward by oparg and skip the following END_FOR
-                JUMPBY(oparg + 1);
-                DISPATCH();
+                PyValue completed = PyValue_IsNull(item) ? PyValue_None : item;
+                IR_COMPLETE_STEP(_PY_IR_FOR_ITER, completed, oparg);
             }
             next = item;
             INSTRUMENTED_JUMP(this_instr, next_instr, PY_MONITORING_EVENT_BRANCH_LEFT);
@@ -3837,9 +3803,8 @@ dummy_func(
             STAT_INC(FOR_ITER, hit);
             if ((size_t)PyValue_UntagIndex(null_or_index) >= (size_t)PyList_GET_SIZE(list_o)) {
                 null_or_index = PyValue_TagIndex(-1);
-                /* Jump forward oparg, then skip following END_FOR instruction */
-                JUMPBY(oparg + 1);
-                DISPATCH();
+                PyValue completed = PyValue_None;
+                IR_COMPLETE_STEP(_PY_IR_FOR_ITER, completed, oparg);
             }
 #endif
         }
@@ -3871,9 +3836,8 @@ dummy_func(
             STAT_INC(FOR_ITER, hit);
             if ((size_t)PyValue_UntagIndex(null_or_index) >= (size_t)PyTuple_GET_SIZE(tuple_o)) {
                 null_or_index = PyValue_TagIndex(-1);
-                /* Jump forward oparg, then skip following END_FOR instruction */
-                JUMPBY(oparg + 1);
-                DISPATCH();
+                PyValue completed = PyValue_None;
+                IR_COMPLETE_STEP(_PY_IR_FOR_ITER, completed, oparg);
             }
         }
 
@@ -3909,9 +3873,8 @@ dummy_func(
 #endif
             STAT_INC(FOR_ITER, hit);
             if (r->len <= 0) {
-                // Jump over END_FOR instruction.
-                JUMPBY(oparg + 1);
-                DISPATCH();
+                PyValue completed = PyValue_None;
+                IR_COMPLETE_STEP(_PY_IR_FOR_ITER, completed, oparg);
             }
         }
 
@@ -3942,14 +3905,7 @@ dummy_func(
             EXIT_IF(Py_TYPE(gen) != &PyGen_Type);
             EXIT_IF(!gen_try_set_executing((PyGenObject *)gen));
             STAT_INC(FOR_ITER, hit);
-            _PyInterpreterFrame *pushed_frame = &gen->gi_iframe;
-            _PyFrame_SetReturnValue(pushed_frame, PyValue_None);
-            gen->gi_exc_state.previous_item = tstate->exc_info;
-            tstate->exc_info = &gen->gi_exc_state;
-            pushed_frame->previous = frame;
-            frame->return_slot = (uint16_t)IR_DST_SLOT;
-            frame->return_pc = next_instr;
-            gen_frame = PyValue_Wrap(pushed_frame);
+            IR_ENTER_GENERATOR(gen, _PY_IR_FOR_ITER);
         }
 
         macro(FOR_ITER_GEN) =
@@ -4336,7 +4292,7 @@ dummy_func(
             else {
                 // A generator's slots are in the generator object, not on
                 // the value stack.
-                pushed_frame = _PyFrame_PushUnchecked(tstate, callable, oparg + has_self, frame);
+                pushed_frame = _PyFrame_PushUnchecked(tstate, callable, frame);
                 PyValue *first_non_self_local = pushed_frame->base + has_self;
                 // Without a self, slot 0 may be a constant slot that
                 // _PyFrame_Initialize filled: it is not ours to write
@@ -4515,8 +4471,8 @@ dummy_func(
             /* The shim gets the result of __init__ in slot 1 */
             _PyInterpreterFrame *shim = _PyFrame_PushTrampolineUnchecked(
                 tstate, (PyCodeObject *)&_Py_InitCleanup, 1, frame);
-            assert(_PyCode_InstrHandler(_PyFrame_GetCode(shim), 1) == EXIT_INIT_CHECK);
-            assert(_PyCode_InstrHandler(_PyFrame_GetCode(shim), 2) == RETURN_VALUE);
+            assert(_PyCode_InstrHandler(_PyFrame_GetCode(shim), 0) == EXIT_INIT_CHECK);
+            assert(_PyCode_InstrHandler(_PyFrame_GetCode(shim), 1) == RETURN_VALUE);
             /* Push self onto stack of shim */
             shim->base[0] = PyValue_DUP(self);
             _PyInterpreterFrame *temp = _PyEvalFramePushAndInit(
@@ -5263,7 +5219,7 @@ dummy_func(
             frame->instr_ptr++;
             _PyFrame_Copy(frame, gen_frame);
             // The value of the first send takes the slot of res
-            gen_frame->return_slot = (uint16_t)IR_BASE;
+            gen_frame->return_slot = (uint16_t)IR_DST_SLOT;
             assert(frame->frame_obj == NULL);
             gen->gi_frame_state = FRAME_CREATED;
             gen_frame->owner = FRAME_OWNED_BY_GENERATOR;

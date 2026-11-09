@@ -1979,12 +1979,14 @@ class TestBranchAndJumpEvents(CheckEvents):
             ('branch left', 'whilefunc', 1, 2),
             ('branch right', 'whilefunc', 1, 3)])
 
+        loop = next(i for i in dis.get_instructions(func) if i.opname == 'FOR_ITER')
+        self.assertEqual((loop.offset, loop.jump_target), (6, 12))
         self.check_events(func, recorders = BRANCH_OFFSET_RECORDERS, expected = [
             ('branch left', 'func', 6, 7),
             ('branch right', 'func', 7, 10),
             ('branch left', 'func', 6, 7),
             ('branch left', 'func', 7, 8),
-            ('branch right', 'func', 6, 14)])
+            ('branch right', 'func', 6, 12)])
 
     def test_except_star(self):
 

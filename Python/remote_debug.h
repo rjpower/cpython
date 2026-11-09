@@ -1668,12 +1668,22 @@ _Py_RemoteDebug_ReadDebugOffsets(
         _set_debug_exception_cause(PyExc_RuntimeError, "PyRuntime address lookup failed during debug offsets initialization");
         return -1;
     }
+    _Py_DebugOffsetsPrefix prefix;
+    if (_Py_RemoteDebug_ReadRemoteMemory(handle, *runtime_start_address,
+                                        sizeof(prefix), &prefix) != 0) {
+        _set_debug_exception_cause(PyExc_RuntimeError,
+                                  "Failed to read remote layout prefix");
+        return -1;
+    }
+    if (_PyDebugOffsets_ValidatePrefix(&prefix) < 0) {
+        return -1;
+    }
     size_t size = sizeof(struct _Py_DebugOffsets);
     if (0 != _Py_RemoteDebug_ReadRemoteMemory(handle, *runtime_start_address, size, debug_offsets)) {
         _set_debug_exception_cause(PyExc_RuntimeError, "Failed to read debug offsets structure from remote process");
         return -1;
     }
-    return 0;
+    return _PyDebugOffsets_Validate(debug_offsets);
 }
 
 #ifdef __cplusplus

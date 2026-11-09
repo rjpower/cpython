@@ -2131,6 +2131,16 @@ enter_handlers(py_tail_call_funcptr handler, TAIL_CALL_PARAMS)
     return handler(TAIL_CALL_ARGS);
 }
 
+void
+_PyEval_RecordSourceError(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                          uint32_t record)
+{
+    _PyEvalActivation *activation = ((_PyThreadStateImpl *)tstate)->eval_activation;
+    assert(activation != NULL);
+    activation->source_error_frame = frame;
+    activation->source_error_record = record;
+}
+
 /* The evaluation loop.  _PyEval_EvalFrameDefault() wraps each activation in
    its borrow floor.  The loop sets up the activation and calls the first
    handler, and the handlers run the frames by tail calls until one of them
@@ -2162,6 +2172,8 @@ _PyEval_EvalFrameLoop(PyThreadState *tstate, _PyInterpreterFrame *frame, int thr
     _PyThreadStateImpl *tstate_impl = (_PyThreadStateImpl *)tstate;
     _PyEvalActivation activation;
     activation.previous = tstate_impl->eval_activation;
+    activation.source_error_frame = NULL;
+    activation.source_error_record = 0;
     tstate_impl->eval_activation = &activation;
 #if _Py_STACK_GROWS_DOWN
     assert(_Py_get_machine_stack_pointer() <= (uintptr_t)&activation);
@@ -2898,18 +2910,103 @@ clear_gen_frame(PyThreadState *tstate, _PyInterpreterFrame * frame)
     ((_PyThreadStateImpl *)tstate)->generator_return_kind = GENERATOR_RETURN;
 }
 
-_PyInstr *
-_PyEval_GeneratorReturnTarget(_PyInterpreterFrame *frame)
+_PyIRStepResult
+_PyEval_CompleteStep(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                     _PyInstr *site, int base, int destination,
+                     _PyInstr *exit, PyValue value, enum _PyIRStepKind kind)
 {
-    _PyInstr *next = frame->return_pc;
-    if (frame->owner == FRAME_OWNED_BY_INTERPRETER) {
-        return next;
+    /* This out-of-line owner accepts native results as well as canonical
+     * homes. Keep publication out of the register-only handler body. */
+    value = _PyValue_Publish(&value);
+    PyValue *window = frame->base + base;
+    PyValue receiver = window[0];
+    PyCodeObject *code = _PyFrame_GetCode(frame);
+    frame->instr_ptr = site;
+    if (code->_co_monitoring != NULL &&
+        kind != _PY_IR_SEND_THROW && PyValue_IsObject(receiver)) {
+        PyObject *object = PyValue_AsKnownObjectBorrow(receiver);
+        if (PyGen_CheckExact(object) || PyCoro_CheckExact(object)) {
+            _PyIRStepResult observed = _PyIR_ObserveStep(
+                tstate, frame, site, exit, PyValue_Borrow(value), kind, 0);
+            if (observed.status < 0) {
+                PyValue_XCLOSE(value);
+                return observed;
+            }
+            if (observed.status == _PY_IR_STEP_REDIRECT) {
+                PyValue_XCLOSE(value);
+                observed.next = frame->instr_ptr;
+                return observed;
+            }
+        }
     }
-    PyCodeObject *co = _PyFrame_GetCode(frame);
-    int i = (int)_PyFrame_InstrOffset(frame, frame->instr_ptr);
-    assert(_PyIR_BaseOpcode(_PyCode_InstrHandler(co, i)) == SEND ||
-           _PyIR_BaseOpcode(_PyCode_InstrHandler(co, i)) == FOR_ITER);
-    return next + _PyCode_InstrOparg(co, i);
+
+    /* A nonredirecting PRE callback cannot move the active frame or mutate
+     * its scratch window. Its homes anchor receiver throughout observation;
+     * a redirect returned above, before any cached input is reused.
+     *
+     * Commit the outcome without callbacks. A SEND destination may overlap
+     * any input; detach the whole window before publishing it. */
+    PyValue cursor = window[1];
+    PyValue sent = kind != _PY_IR_FOR_ITER ? window[2] : PyValue_NULL;
+    PyValue exception = kind == _PY_IR_SEND_THROW ? window[3] : PyValue_NULL;
+    window[0] = window[1] = PyValue_NULL;
+    if (kind != _PY_IR_FOR_ITER) {
+        window[2] = PyValue_NULL;
+    }
+    if (kind == _PY_IR_SEND_THROW) {
+        window[3] = PyValue_NULL;
+    }
+    PyValue displaced = PyValue_NULL;
+    if (kind != _PY_IR_FOR_ITER && destination != IR_NO_DST) {
+        assert(destination < _PyFrame_NumSlots(frame));
+        displaced = frame->base[destination];
+        assert(destination < _PyFrame_GetCode(frame)->co_nlocalsplus ||
+               PyValue_IsNull(displaced));
+        frame->base[destination] = value;
+        _PyValue_CheckHome(value);
+        value = PyValue_NULL;
+    }
+    frame->return_pc = exit;
+    _PyIRStepResult observed = {exit, _PY_IR_STEP_EXIT};
+    if (code->_co_monitoring != NULL) {
+        observed = _PyIR_ObserveStep(
+            tstate, frame, site, exit, PyValue_Borrow(PyValue_None), kind, 1);
+    }
+    /* POST callbacks run at the semantic operation for exception attribution.
+     * Once they succeed, finalizers see its completed continuation. */
+    if (observed.status >= 0) {
+        frame->instr_ptr = observed.next;
+    }
+    PyValue_XCLOSE(exception);
+    PyValue_XCLOSE(sent);
+    PyValue_XCLOSE(cursor);
+    PyValue_XCLOSE(receiver);
+    PyValue_XCLOSE(displaced);
+    PyValue_XCLOSE(value);
+    if (observed.status < 0) {
+        return observed;
+    }
+    observed.next = frame->instr_ptr;
+    return observed;
+}
+
+_PyIRStepResult
+_PyEval_CompleteGeneratorReturn(PyThreadState *tstate,
+                                _PyInterpreterFrame *frame, PyValue value)
+{
+    if (frame->owner == FRAME_OWNED_BY_INTERPRETER) {
+        _PyFrame_SetReturnValue(frame, value);
+        return (_PyIRStepResult){frame->return_pc, _PY_IR_STEP_EXIT};
+    }
+    _PyInstr *site = frame->instr_ptr;
+    uint64_t word = FT_ATOMIC_LOAD_UINT64_RELAXED(*site);
+    PyCodeObject *code = _PyFrame_GetCode(frame);
+    int offset = (int)_PyFrame_InstrOffset(frame, site);
+    int opcode = _PyIR_BaseOpcode(_PyCode_InstrHandler(code, offset));
+    assert(opcode == SEND || opcode == FOR_ITER);
+    return _PyEval_CompleteStep(tstate, frame, site, IR_B(word), IR_A(word),
+        frame->return_pc + _PyCode_InstrOparg(code, offset), value,
+        opcode == SEND ? _PY_IR_SEND : _PY_IR_FOR_ITER);
 }
 
 void
@@ -2944,7 +3041,7 @@ eval_frame_push_and_init_code(PyThreadState *tstate, PyValue func,
         PyErr_NoMemory();
         goto fail;
     }
-    _PyFrame_Initialize(tstate, frame, func, locals, code, frame->base, 0, previous);
+    _PyFrame_Initialize(tstate, frame, func, locals, code, frame->base, previous);
     if (initialize_locals(tstate, func_obj, code, frame->base, args, argcount, kwnames)) {
         assert(frame->owner == FRAME_OWNED_BY_THREAD);
         _PyThreadState_UpdateLastProfiledFrame(tstate, frame, tstate->current_frame);
@@ -5335,18 +5432,9 @@ _PyForIter_VirtualIteratorNext(PyThreadState *tstate, _PyInterpreterFrame *frame
         return result;
     }
     if (step.status == PYGEN_RETURN) {
-        // The iterator ended. A return value is reported as the
-        // StopIteration it stands for, then dropped.
-        if (!PyValue_IsNull(step.value) && !PyValue_IsNone(step.value)) {
-            if (_PyGen_SetStopIterationValue(step.value) < 0) {
-                PyValue_CLOSE(step.value);
-                result.status = -1;
-                return result;
-            }
-            _PyEval_MonitorRaise(tstate, frame, frame->instr_ptr);
-            _PyErr_Clear(tstate);
-        }
-        PyValue_XCLOSE(step.value);
+        /* The semantic completion reports an implicit StopIteration once.
+         * Keep the returned owner without fabricating a separate RAISE. */
+        result.value = step.value;
         return result;
     }
     if (_PyErr_ExceptionMatches(tstate, PyExc_StopIteration)) {

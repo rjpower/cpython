@@ -40,6 +40,10 @@ extern int _PyEval_SetTraceValueAllThreads(PyInterpreterState *interp, _Py_value
 
 extern int _PyEval_SetOpcodeTrace(PyFrameObject *f, bool enable);
 
+/* Retain a failed source event's handler recipe across cleanup reentry. */
+extern void _PyEval_RecordSourceError(PyThreadState *tstate,
+                                    _PyInterpreterFrame *frame, uint32_t record);
+
 // Helper to look up a builtin object
 // Export for 'array' shared extension
 PyAPI_FUNC(PyObject*) _PyEval_GetBuiltin(PyObject *);
@@ -319,9 +323,29 @@ PyAPI_FUNC(void) _PyEval_MonitorRaise(PyThreadState *tstate, _PyInterpreterFrame
 PyAPI_FUNC(bool) _PyEval_NoToolsForUnwind(PyThreadState *tstate, _PyInterpreterFrame *frame);
 PyAPI_FUNC(int) _PyEval_UnpackIterableValue(PyThreadState *tstate, PyObject *v, int argcnt, int argcntafter, PyValue *sp);
 PyAPI_FUNC(void) _PyEval_FrameClearAndPop(PyThreadState *tstate, _PyInterpreterFrame *frame);
-/* Where frame resumes when a generator that it resumed returns: past the
- * exit of its SEND or FOR_ITER, or for the entry frame, the next word. */
-PyAPI_FUNC(_PyInstr *) _PyEval_GeneratorReturnTarget(_PyInterpreterFrame *frame);
+/* Distinct semantic outcomes share one completion/ownership protocol. */
+enum _PyIRStepKind { _PY_IR_FOR_ITER, _PY_IR_SEND, _PY_IR_SEND_THROW };
+enum _PyIRStepStatus {
+    _PY_IR_STEP_ERROR_PRE = -2,
+    _PY_IR_STEP_ERROR_POST = -1,
+    _PY_IR_STEP_EXIT = 0,
+    _PY_IR_STEP_REDIRECT = 1
+};
+typedef struct {
+    _PyInstr *next;
+    enum _PyIRStepStatus status;
+} _PyIRStepResult;
+
+/* PRE (0) observes the held completion value while the input window is
+ * intact. POST (1) observes the committed semantic outcome. */
+PyAPI_FUNC(_PyIRStepResult) _PyIR_ObserveStep(
+    PyThreadState *, _PyInterpreterFrame *, _PyInstr *, _PyInstr *,
+    PyValueBorrow, enum _PyIRStepKind, int);
+PyAPI_FUNC(_PyIRStepResult) _PyEval_CompleteStep(
+    PyThreadState *, _PyInterpreterFrame *, _PyInstr *, int, int,
+    _PyInstr *, PyValue, enum _PyIRStepKind);
+PyAPI_FUNC(_PyIRStepResult) _PyEval_CompleteGeneratorReturn(
+    PyThreadState *, _PyInterpreterFrame *, PyValue);
 
 PyAPI_FUNC(PyObject *) _PyEval_GetANext(PyObject *aiter);
 PyAPI_FUNC(void) _PyEval_LoadGlobalValue(PyObject *globals, PyObject *builtins,

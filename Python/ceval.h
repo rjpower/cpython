@@ -354,6 +354,10 @@ typedef struct {
 typedef struct _PyEvalActivation {
     struct _PyEvalActivation *previous;   /* restored when this one exits */
     _PyEntryFrame entry;                   /* its entry frame */
+    /* A nested C entry must not consume its parent's pending source error.
+     * This storage also covers failure to allocate an observer frame object. */
+    _PyInterpreterFrame *source_error_frame;
+    uint32_t source_error_record;
 } _PyEvalActivation;
 
 static int
@@ -530,13 +534,17 @@ static _PyExceptionHandler
 get_frame_exception_handler(_PyInterpreterFrame *frame, int offset)
 {
     _PyThreadStateImpl *tstate = (_PyThreadStateImpl *)_PyThreadState_GET();
+    _PyEvalActivation *activation = tstate->eval_activation;
     PyFrameObject *object = frame->frame_obj;
-    if (tstate->source_error_frame == frame) {
+    if (object != NULL) {
+        object->f_line_next = -1;
+    }
+    if (activation != NULL && activation->source_error_frame == frame) {
         PyCodeObject *code = _PyFrame_GetCode(frame);
         _PyIRSourceMap map = _PyIRSource_Stored(code->co_linetable);
         _PyIRSourceEvent event;
-        _PyIRSource_Event(&map, tstate->source_error_record, &event);
-        tstate->source_error_frame = NULL;
+        _PyIRSource_Event(&map, activation->source_error_record, &event);
+        activation->source_error_frame = NULL;
         if (object != NULL) {
             object->f_source_event_error = -1;
             object->f_source_event = -1;

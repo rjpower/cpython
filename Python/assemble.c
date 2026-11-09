@@ -435,8 +435,7 @@ assemble_source_map(struct assembler *a, _PyRegCfg *cfg)
                     goto error;
                 }
             }
-            if (!IS_SCOPE_EXIT_OPCODE(op->opcode) &&
-                !IS_UNCONDITIONAL_JUMP_OPCODE(op->opcode) &&
+            if (!IS_NO_FALLTHROUGH_OPCODE(op->opcode) &&
                 assemble_source_edge(writer, cfg, op->word,
                                      _PyIR_SOURCE_FALLTHROUGH, b, i + 1) < 0)
             {
@@ -821,15 +820,9 @@ error:
 /* The farthest exit of FOR_ITER and SEND that the assembler does not relax */
 int _PyIR_MaxForward = IR_MAX_FORWARD;
 
-/* The words of a relaxed FOR_ITER and of a relaxed SEND, its own included.
- * A relaxed FOR_ITER at word w exits by distance 1, so that
- *
- *     w + 1   IR_JUMP to w + 4, the body
- *     w + 2   IR_JUMP to END_FOR, where a generator returns
- *     w + 3   IR_JUMP past END_FOR, where an exhausted iterator goes
- *
- * and a relaxed SEND at w has w + 1, to w + 3, and w + 2, to END_SEND. */
-#define RELAXED_FOR_ITER_WORDS 4
+/* Both outcomes name real continuations: fallthrough jumps over the exit
+ * jump, and completion takes the exit jump. No cleanup word is a target. */
+#define RELAXED_FOR_ITER_WORDS 3
 #define RELAXED_SEND_WORDS 3
 
 /* A code object past a register IR field limit: source can reach these, so
@@ -875,9 +868,7 @@ choose_handler(_PyRegOp *op, PyObject *consts)
     return opcode;
 }
 
-/* The word that op jumps to.  END_ASYNC_FOR names the SEND of its loop,
- * which starts its block; its target is the END_SEND where that SEND
- * exits, which sys.monitoring needs. */
+/* END_ASYNC_FOR names its semantic SEND site for branch observation. */
 static int
 jump_target(_PyRegCfg *cfg, _PyRegOp *op)
 {
@@ -886,7 +877,7 @@ jump_target(_PyRegCfg *cfg, _PyRegOp *op)
     if (op->opcode == END_ASYNC_FOR) {
         _PyRegOp *send = &cfg->ops[b->start];
         assert(send->opcode == SEND);
-        return cfg->blocks[send->target].word;
+        return send->word;
     }
     return b->word;
 }
@@ -1093,6 +1084,192 @@ done:
     return res;
 }
 
+static int
+next_frontend_op(_PyRegCfg *cfg, int first, int skip_resume)
+{
+    while (first < cfg->nops) {
+        int opcode = cfg->ops[first].opcode;
+        if (opcode != _PyReg_DEAD && opcode != NOP &&
+            !(skip_resume && opcode == RESUME))
+        {
+            return first;
+        }
+        first++;
+    }
+    return -1;
+}
+
+static int
+completion_error(_PyRegCfg *cfg, _PyRegOp *op, const char *detail)
+{
+    _PyRegSlots slots;
+    _PyRegCfg_OpSlots(cfg, op, &slots);
+    int handler_base = op->except < 0 ? cfg->nlocalsplus
+        : cfg->nlocalsplus + cfg->blocks[op->except].startdepth - 1
+          - cfg->blocks[op->except].preserve_lasti;
+    int target = op->completion ? op->completion - 1
+        : op->target >= 0 ? next_frontend_op(cfg, cfg->blocks[op->target].start, 0)
+        : next_frontend_op(cfg, (int)(op - cfg->ops) + 1, 0);
+    _PyRegOp *end = target >= 0 ? &cfg->ops[target] : NULL;
+    const int *out = _PyReg_OUT(cfg, op);
+    const int *in = end ? _PyReg_IN(cfg, end) : NULL;
+    PyErr_Format(PyExc_SystemError,
+        "invalid completion at line %d: %s "
+        "(op=%d depth=%d nread=%d nout=%d base=%d dst=%d locals=%d "
+        "handler=%d floor=%d target=%d target_op=%d target_nread=%d "
+        "out=[%d,%d,%d] target_in=[%d,%d,%d])",
+        op->loc.lineno, detail, op->opcode, op->depth, op->nread, op->nout,
+        slots.base, slots.dst, cfg->nlocalsplus, op->except, handler_base,
+        target, end ? end->opcode : -1, end ? end->nread : -1,
+        op->nout > 0 ? out[0] : -1, op->nout > 1 ? out[1] : -1,
+        op->nout > 2 ? out[2] : -1,
+        end && end->nread > 0 ? in[0] : -1,
+        end && end->nread > 1 ? in[1] : -1,
+        end && end->nread > 2 ? in[2] : -1);
+    return ERROR;
+}
+
+/* Allocation still sees the frontend's explicit ownership effects. Once its
+ * physical homes are known, transfer each effect to its semantic producer.
+ * Keep the frontend operations for allocation/verification; they get no word.
+ * A shared END_SEND also has CLEANUP_THROW ingress, not just SEND ingress. */
+static int
+lower_completions(_PyRegCfg *cfg)
+{
+    for (int i = 0; i < cfg->nops; i++) {
+        _PyRegOp *op = &cfg->ops[i];
+        if (op->opcode == FOR_ITER || op->opcode == SEND) {
+            int target = next_frontend_op(cfg, cfg->blocks[op->target].start, 0);
+            int expected = op->opcode == FOR_ITER ? END_FOR : END_SEND;
+            if (target < 0 || cfg->ops[target].opcode != expected || op->nout != 3) {
+                return completion_error(cfg, op, "missing completion producer/target");
+            }
+            _PyRegOp *end = &cfg->ops[target];
+            if (end->nread != 3 ||
+                memcmp(_PyReg_OUT(cfg, op), _PyReg_IN(cfg, end), 3 * sizeof(int)))
+            {
+                return completion_error(cfg, op, "completion window differs from producer");
+            }
+            end->flags |= _PyReg_COMPLETED;
+            op->completion = target + 1;
+            if (op->opcode == FOR_ITER) {
+                int pop = next_frontend_op(cfg, target + 1, 0);
+                if (pop < 0 || cfg->ops[pop].opcode != POP_ITER ||
+                    cfg->ops[pop].nread != 2 ||
+                    memcmp(_PyReg_IN(cfg, &cfg->ops[pop]),
+                           _PyReg_OUT(cfg, op), 2 * sizeof(int)))
+                {
+                    return completion_error(cfg, op, "missing iterator retirement");
+                }
+                cfg->ops[pop].flags |= _PyReg_COMPLETED;
+            }
+        }
+        else if (op->opcode == CLEANUP_THROW) {
+            int target = op->target < 0 ? -1
+                : next_frontend_op(cfg, cfg->blocks[op->target].start, 0);
+            if (target < 0 || cfg->ops[target].opcode != END_SEND ||
+                op->nout != 3 || cfg->ops[target].nread != 3 ||
+                memcmp(_PyReg_OUT(cfg, op), _PyReg_IN(cfg, &cfg->ops[target]),
+                       3 * sizeof(int)))
+            {
+                return completion_error(cfg, op, "throw completion window differs");
+            }
+            op->completion = target + 1;
+            cfg->ops[target].flags |= _PyReg_COMPLETED;
+        }
+        else if (op->opcode == RETURN_GENERATOR ||
+                 (op->opcode == YIELD_VALUE && op->oparg == 0))
+        {
+            if (op->flags & _PyReg_DISCARD) {
+                /* The ordinary fresh-result sink pass already proved the
+                 * sole resume-input consumer and preserved its source span. */
+                continue;
+            }
+            int pop = next_frontend_op(cfg, i + 1, 1);
+            if (pop >= 0 && cfg->ops[pop].opcode == POP_TOP && op->nout == 1 &&
+                cfg->ops[pop].nread == 1 &&
+                _PyReg_IN(cfg, &cfg->ops[pop])[0] == _PyReg_OUT(cfg, op)[0])
+            {
+                op->flags |= _PyReg_DISCARD;
+                cfg->ops[pop].flags |= _PyReg_COMPLETED | _PyReg_ELIDED_NOP;
+            }
+            else if (op->opcode == RETURN_GENERATOR) {
+                return completion_error(cfg, op, "initial resume input is consumed");
+            }
+        }
+    }
+    /* Every entry into a removed completion block must have completed the
+     * same operation already. Other iterator pops (e.g. any/all early exit)
+     * remain explicit until their consuming branch contract is lowered. */
+    for (int b = 0; b < cfg->nblocks; b++) {
+        int first = next_frontend_op(cfg, cfg->blocks[b].start, 0);
+        if (first < 0 || first >= cfg->blocks[b].end ||
+            !(cfg->ops[first].flags & _PyReg_COMPLETED) ||
+            (cfg->ops[first].opcode != END_FOR && cfg->ops[first].opcode != END_SEND))
+        {
+            continue;
+        }
+        for (int p = 0; p < cfg->nblocks; p++) {
+            _PyRegBlock *pred = &cfg->blocks[p];
+            for (int j = pred->start; j < pred->end; j++) {
+                _PyRegOp *incoming = &cfg->ops[j];
+                if (incoming->target == b && incoming->opcode != END_ASYNC_FOR &&
+                    incoming->completion != first + 1)
+                {
+                    return completion_error(cfg, incoming, "uncompleted edge into completion");
+                }
+            }
+            if (p + 1 == b && pred->falls_through && pred->reachable) {
+                int last = pred->end - 1;
+                while (last >= pred->start &&
+                       (cfg->ops[last].opcode == NOP || cfg->ops[last].opcode == _PyReg_DEAD))
+                {
+                    last--;
+                }
+                if (last < pred->start || cfg->ops[last].completion != first + 1) {
+                    return completion_error(cfg, &cfg->ops[first], "uncompleted fallthrough");
+                }
+            }
+        }
+    }
+    for (int i = 0; i < cfg->nops; i++) {
+        _PyRegOp *op = &cfg->ops[i];
+        if (!op->completion) {
+            continue;
+        }
+        _PyRegSlots slots;
+        _PyRegCfg_OpSlots(cfg, op, &slots);
+        int count = op->opcode == FOR_ITER ? 2 : op->opcode == SEND ? 3 : 4;
+        int limit = cfg->nlocalsplus + cfg->ntemps;
+        if (slots.base < cfg->nlocalsplus || slots.base > limit - count) {
+            return completion_error(cfg, op, "physical completion window is outside frame");
+        }
+        int handler_base = cfg->nlocalsplus;
+        if (op->except >= 0) {
+            _PyRegBlock *handler = &cfg->blocks[op->except];
+            handler_base += handler->startdepth - 1 - handler->preserve_lasti;
+        }
+        /* Final code construction proves the actual handler cannot read a
+         * retired home before redefining it. A preserved exception prefix may
+         * contain dead implicit unwind anchors, as in generator wrappers. */
+        int dst = slots.dst;
+        if (op->opcode != FOR_ITER) {
+            _PyRegSlots completed;
+            _PyRegCfg_OpSlots(cfg, &cfg->ops[op->completion - 1], &completed);
+            dst = completed.dst;
+        }
+        if (dst != IR_NO_DST &&
+            (dst < 0 || dst >= limit ||
+             (dst >= cfg->nlocalsplus && dst < handler_base &&
+              (dst < slots.base || dst >= slots.base + count)) ||
+             (op->opcode == FOR_ITER && dst >= slots.base && dst < slots.base + 2)))
+        {
+            return completion_error(cfg, op, "completion destination aliases a live owner");
+        }
+    }
+    return SUCCESS;
+}
+
 /* Choose the handlers.  A compare marked by _PyRegPass_FuseJump starts
  * fused with its jump, which then has no word of its own; place_entries()
  * unfuses the pairs whose compare gets no entry, and layout() those whose
@@ -1100,6 +1277,7 @@ done:
 static int
 choose_handlers(_PyRegCfg *cfg, PyObject *consts)
 {
+    RETURN_IF_ERROR(lower_completions(cfg));
     for (int i = 0; i < cfg->nops; i++) {
         _PyRegOp *op = &cfg->ops[i];
         op->fb = -1;
@@ -1110,7 +1288,7 @@ choose_handlers(_PyRegCfg *cfg, PyObject *consts)
         }
         assert(!IS_PSEUDO_INSTR(op->opcode));
         assert(IS_VALID_OPCODE(op->opcode));
-        if (op->opcode == NOP || (op->flags & _PyReg_ELIDED)) {
+        if (op->opcode == NOP || (op->flags & (_PyReg_ELIDED | _PyReg_COMPLETED))) {
             op->handler = NOP;
             op->nwords = 0;
             continue;
@@ -1303,6 +1481,11 @@ encode(_PyRegCfg *cfg, _PyRegOp *op, int reachable, _PyIRWord *word)
     const _PyIRFormat *fmt = _PyIR_FormatOf(op->handler);
     _PyRegSlots slots;
     _PyRegCfg_OpSlots(cfg, op, &slots);
+    if ((op->opcode == SEND || op->opcode == CLEANUP_THROW) && op->completion) {
+        _PyRegSlots completed;
+        _PyRegCfg_OpSlots(cfg, &cfg->ops[op->completion - 1], &completed);
+        slots.dst = completed.dst;
+    }
     int oparg = handler_oparg(cfg, op);
     // Every role's value, then a pick per field.  DST is meaningless when
     // fmt->dst is _PyIR_NO_DST.
@@ -1421,7 +1604,6 @@ assemble_words(struct assembler *a, _PyRegCfg *cfg, PyObject *consts,
                 if (op->opcode == FOR_ITER) {
                     words[w + 1] = jump_word(w + RELAXED_FOR_ITER_WORDS);
                     words[w + 2] = jump_word(exit);
-                    words[w + 3] = jump_word(exit + 1);
                 }
                 else {
                     assert(op->opcode == SEND);

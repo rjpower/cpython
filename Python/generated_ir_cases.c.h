@@ -3183,7 +3183,7 @@
                 IR_STORE_TEMP_DST(IR_A(ir_word), res);
                 _PyValue_XCLOSE_POINTER(ir_own_B);
             }
-            IR_STORE_DST(IR_A(ir_word), res);
+            IR_STORE_CANONICAL_DST(IR_A(ir_word), res);
             if (!PyValue_IsNull(ir_displaced) &&
                 finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
@@ -18902,7 +18902,7 @@
                 value = temp;
                 LLTRACE_RESUME_FRAME();
             }
-            IR_STORE_RETURN(value);
+            IR_STORE_CANONICAL_RETURN(value);
             DISPATCH();
         }
 

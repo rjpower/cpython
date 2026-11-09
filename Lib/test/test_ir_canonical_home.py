@@ -1,4 +1,4 @@
-"""Ownership and value behavior of canonical local duplicates."""
+"""Ownership and value behavior of canonical home transfers."""
 
 import gc
 import math
@@ -32,6 +32,118 @@ def loads(function, name):
 
 
 class CanonicalHomeTests(unittest.TestCase):
+    def test_list_child_local_temporary_and_discard(self):
+        def local(seq, index):
+            result = seq[index]
+            return result
+
+        def temporary(seq, index):
+            return seq[index] + 1
+
+        def discard(seq, index):
+            seq[index]
+
+        for _ in range(64):
+            self.assertEqual(local([2.5], 0), 2.5)
+            self.assertEqual(temporary([2.5], 0), 3.5)
+            self.assertIsNone(discard([2.5], 0))
+        routes = {}
+        for function in (local, temporary, discard):
+            words = _testinternalcapi.get_ir(function.__code__, True)
+            self.assertIn('BINARY_OP_SUBSCR_LIST_INT',
+                          [word[0] for word in words])
+            routes[function] = next(word for word in words
+                                    if word[0] == 'BINARY_OP_SUBSCR_LIST_INT')
+        local_count = len(_testinternalcapi.get_co_localskinds(local.__code__))
+        self.assertLess(routes[local][1], local_count)
+        temp_count = len(_testinternalcapi.get_co_localskinds(temporary.__code__))
+        self.assertGreaterEqual(routes[temporary][1], temp_count)
+        self.assertLess(routes[temporary][1], 4095)
+        self.assertEqual(routes[discard][1], 4095)
+        for value in (2, 2.5, 1 << 100, -0.0, float('inf'), float('nan')):
+            with self.subTest(value=value):
+                result = local([value], -1)
+                if isinstance(value, float) and math.isnan(value):
+                    self.assertTrue(math.isnan(result))
+                    self.assertTrue(math.isnan(temporary([value], 0)))
+                else:
+                    self.assertEqual(result, value)
+                    self.assertEqual(temporary([value], 0), value + 1)
+                if value == 0:
+                    self.assertEqual(math.copysign(1, result), -1)
+                self.assertIsNone(discard([value], 0))
+        with self.assertRaises(IndexError):
+            local([], 0)
+
+    def test_list_child_survives_last_list_owner_retirement(self):
+        retired, references = [], []
+
+        class Child:
+            pass
+
+        class Sibling:
+            def __del__(self):
+                gc.collect()
+                retired.append(True)
+
+        def factory():
+            child = Child()
+            references.append(weakref.ref(child))
+            return [child, Sibling()]
+
+        def read(make):
+            return make()[0]
+
+        for _ in range(64):
+            self.assertEqual(read(lambda: [2.5]), 2.5)
+        self.assertIn('BINARY_OP_SUBSCR_LIST_INT',
+                      [word[0] for word in _testinternalcapi.get_ir(
+                          read.__code__, True)])
+        result = read(factory)
+        gc.collect()
+        self.assertIs(references[0](), result)
+        self.assertEqual(retired, [True])
+        del result
+        gc.collect()
+        self.assertIsNone(references[0]())
+
+    def test_yielded_canonical_values_and_owned_child(self):
+        def source(make):
+            yield make()
+
+        def first(make):
+            for item in source(make):
+                return item
+
+        for _ in range(64):
+            self.assertEqual(first(lambda: 2.5), 2.5)
+        for value in (1 << 100, -0.0, float('inf'), float('nan')):
+            with self.subTest(value=value):
+                result = first(lambda: value)
+                if math.isnan(value):
+                    self.assertTrue(math.isnan(result))
+                else:
+                    self.assertEqual(result, value)
+                if value == 0:
+                    self.assertEqual(math.copysign(1, result), -1)
+
+        class Child:
+            pass
+
+        references = []
+
+        def make():
+            value = Child()
+            references.append(weakref.ref(value))
+            return value
+
+        result = first(make)
+        gc.collect()
+        self.assertIs(references[0](), result)
+        del result
+        gc.collect()
+        self.assertIsNone(references[0]())
+
     def test_real_temporary_and_folded_local_routes(self):
         temporary = loads(constant_multiply, "LOAD_FAST_BORROW")
         nl = len(_testinternalcapi.get_co_localskinds(

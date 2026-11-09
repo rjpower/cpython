@@ -91,7 +91,7 @@ from analyzer import (
     analysis_error,
     analyze_files,
 )
-from parser import (BlockStmt, ForStmt, IfStmt, MacroIfStmt, SimpleStmt, Stmt,
+from parser import (BlockStmt, ForStmt, IfStmt, MacroIfStmt, Parser, SimpleStmt, Stmt,
                     WhileStmt)
 from generators_common import (
     DEFAULT_INPUT,
@@ -2016,7 +2016,7 @@ class SlotLayout:
     local_fields: tuple[str, ...] = ()
     temp_fields: tuple[str, ...] = ()
     store_dst: bool = False         # dst may name a local
-    canonical_return: bool = False  # proven unchanged canonical slot input
+    canonical_frame_transfer: bool = False  # proven unchanged canonical slot input
     canonical_result: str | None = None  # checked canonical owner
 
     @staticmethod
@@ -2313,7 +2313,7 @@ class IRStack(Stack):
             self.refuse_inplace(var, memory_offset)
             if memory_offset.as_int() != 0:
                 raise StackError(f"'{var.name}' is written after the frame changed")
-            macro = ("IR_STORE_CANONICAL_RETURN" if self.layout.canonical_return
+            macro = ("IR_STORE_CANONICAL_RETURN" if self.layout.canonical_frame_transfer
                      else "IR_STORE_RETURN")
             out.emit(f"{macro}({var.name});\n")
             return True
@@ -3881,7 +3881,7 @@ class IREmitter(Emitter):
         """Terminal transfer; the retired child has no fictitious output."""
         value, generator_return = self.macro_args(tkn, tkn_iter, 2)
         assert isinstance(storage.stack, IRStack)
-        if not storage.stack.layout.canonical_return:
+        if not storage.stack.layout.canonical_frame_transfer:
             self.emit(f"{value} = _PyValue_Publish(&{value});\n")
         else:
             self.emit(f"assert(_PyValue_IsHome({value}));\n")
@@ -4266,6 +4266,71 @@ class CanonicalResult:
     result: str
 
 
+def canonical_body_tokens(part: Uop) -> list[str]:
+    "Read the complete source body, including preprocessor arm delimiters."
+    context = part.context
+    tokens = context.owner.tokens[context.begin:context.end]
+    begin = tokens.index(part.body.open)
+    end = tokens.index(part.body.close, begin)
+    tokens = tokens[begin:end + 1]
+    # Emission reads the mutable AST. Reparse the original token objects so
+    # source delimiters cannot certify a body changed after analysis.
+    reader = Parser("", filename=context.owner.filename)
+    reader.tokens = tokens
+    if reader.block() != part.body:
+        return []
+    return [token.text for token in tokens
+            if token.kind != "COMMENT"]
+
+
+def canonical_list_child_source(parts: list[Uop]) -> CanonicalResult | None:
+    "Prove one guarded list-child duplicate and both owner retirements."
+    shapes = (
+        (("value",), ("value",)),
+        (("nos", "unused"), ("nos", "unused")),
+        (("list_st", "sub_st"), ("res", "ls", "ss")),
+        (("value",), ()),
+        (("value",), ()),
+    )
+    if len(parts) != len(shapes):
+        return None
+    bodies = (
+        "{ EXIT_IF(!PyValue_IsInlineInt(value)); }",
+        """{
+            PyObject *o = PyValue_AsKnownObjectBorrow(nos);
+            EXIT_IF(!PyList_CheckExact(o));
+        }""",
+        """{
+            PyObject *list = PyValue_AsKnownObjectBorrow(list_st);
+            assert(PyList_CheckExact(list));
+            Py_ssize_t index = PyValue_InlineInt64(sub_st);
+            if (index < 0) { index += PyList_GET_SIZE(list); }
+            EXIT_IF(index < 0 || index >= PyList_GET_SIZE(list));
+            res = PyValue_XDUP(PyList_GET_VALUE(list, index));
+            assert(!PyValue_IsNull(res));
+            STAT_INC(BINARY_OP, hit);
+            ls = list_st;
+            ss = sub_st;
+            INPUTS_DEAD();
+        }""",
+        """{
+            assert(PyValue_LongCheckExact(value));
+            PyValue_CLOSE_SPECIALIZED(value, _PyLong_ExactDealloc);
+        }""",
+        "{ PyValue_XCLOSE(value); }",
+    )
+    for part, (inputs, outputs), body in zip(parts, shapes, bodies):
+        if (tuple(item.name for item in part.stack.inputs) != inputs
+                or tuple(item.name for item in part.stack.outputs) != outputs
+                or any(item.is_array() for item in
+                       (*part.stack.inputs, *part.stack.outputs))
+                or any(cache.name != "unused" for cache in part.caches)
+                or canonical_body_tokens(part)
+                    != [token.text for token in tokenize(body)]):
+            return None
+    return CanonicalResult(parts[2], "res")
+
+
 def canonical_result_source(inst: Instruction, fmt: IRFormat
                             ) -> CanonicalResult | None:
     "Recognize bounded source proofs, independently of instruction names."
@@ -4282,6 +4347,10 @@ def canonical_result_source(inst: Instruction, fmt: IRFormat
             or outputs[0].external >= 0
             or fmt.field_of(ROLE_DST) is None):
         return None
+    list_child = canonical_list_child_source(parts)
+    if (list_child is not None and len(inputs) == 2 and fmt.n_inputs == 2
+            and outputs[0].item.name == list_child.result):
+        return list_child
     producer = parts[0]
     if not producer.stack.outputs:
         return None
@@ -4394,13 +4463,65 @@ def canonical_result_source(inst: Instruction, fmt: IRFormat
     return CanonicalResult(producer, result)
 
 
-def canonical_return_input(inst: Instruction) -> bool:
-    """A return transfers a canonical slot input without changing its bits.
+def canonical_frame_transfer_input(inst: Instruction) -> bool:
+    """A return or yield transfers a canonical home owner unchanged.
 
     Fail closed to ordinary publication if the checked uop chain changes.
     Native/SEND results do not acquire this fact from their handler name.
     """
+    if any(not isinstance(part, (Uop, Skip)) for part in inst.parts):
+        return False
     parts = [p for p in inst.parts if isinstance(p, Uop)]
+    if any(cache.name != "unused" for part in parts for cache in part.caches):
+        return False
+    if len(parts) == 2:
+        prefix, transfer = parts
+        shapes = ((("value",), ("taken",)), (("retval",), ("value",)))
+        if all((tuple(item.name for item in part.stack.inputs),
+                tuple(item.name for item in part.stack.outputs)) == shape
+               for part, shape in zip(parts, shapes)):
+            expected_yield = """{
+                assert(frame->owner != FRAME_OWNED_BY_INTERPRETER);
+                frame->instr_ptr++;
+                PyGenObject *gen = _PyGen_GetGeneratorFromFrame(frame);
+                assert(FRAME_SUSPENDED_YIELD_FROM == FRAME_SUSPENDED + 1);
+                assert(oparg == 0 || oparg == 1);
+                PyValue temp = retval;
+                DEAD(retval);
+                SAVE_STACK();
+                DTRACE_FUNCTION_RETURN();
+                tstate->exc_info = gen->gi_exc_state.previous_item;
+                gen->gi_exc_state.previous_item = NULL;
+                _Py_LeaveRecursiveCallPy(tstate);
+                _PyInterpreterFrame *gen_frame = frame;
+                gen_frame->return_slot = (uint16_t)IR_DST_SLOT;
+                _PyThreadState_UpdateLastProfiledFrame(tstate, gen_frame, gen_frame->previous);
+                frame = tstate->current_frame = frame->previous;
+                gen_frame->previous = NULL;
+                ((_PyThreadStateImpl *)tstate)->generator_return_kind = GENERATOR_YIELD;
+                FT_ATOMIC_STORE_INT8_RELEASE(gen->gi_frame_state, FRAME_SUSPENDED + oparg);
+                #ifdef Py_DEBUG
+                if (!PyValue_IsNone(frame->f_executable)) {
+                    Py_ssize_t i = INSTR_OFFSET_OF(frame->instr_ptr);
+                    assert(i >= 0 && i <= INT_MAX);
+                    int opcode = _PyIR_BaseOpcode(
+                        _PyCode_InstrHandler(_PyFrame_GetCode(frame), (int)i));
+                    assert(opcode == SEND || opcode == FOR_ITER);
+                }
+                #endif
+                RELOAD_STACK();
+                next_instr = frame->return_pc;
+                value = temp;
+                LLTRACE_RESUME_FRAME();
+            }"""
+            if (not any(item.is_array() for part in parts
+                        for item in (*part.stack.inputs, *part.stack.outputs))
+                    and canonical_body_tokens(prefix)
+                    == [token.text for token in tokenize(
+                        "{ taken = TAKE(value); }")]
+                    and canonical_body_tokens(transfer)
+                    == [token.text for token in tokenize(expected_yield)]):
+                return True
     if [p.name for p in parts] not in (
         ["_MAKE_HEAP_SAFE", "_RETURN_VALUE"],
         ["_RETURN_VALUE_EVENT", "_RETURN_VALUE"],
@@ -4589,7 +4710,7 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
         out.emit(f"PyObject *{box} = NULL;\n")
     layout = slot_layout(inst, fmt, mode)
     canonical = canonical_result_source(inst, fmt)
-    layout = replace(layout, canonical_return=canonical_return_input(inst),
+    layout = replace(layout, canonical_frame_transfer=canonical_frame_transfer_input(inst),
                      canonical_result=canonical.result if canonical else None)
     if emitter.execution_variant is not None:
         layout = replace(layout, local_fields=emitter.execution_variant.local_fields,

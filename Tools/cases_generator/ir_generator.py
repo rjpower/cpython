@@ -150,18 +150,29 @@ class ExecutionVariant:
     base: str
     local_fields: tuple[str, ...] = ()
     temp_fields: tuple[str, ...] = ()
+    boundary_mask: int = 0
+    postcall_discard: bool = False
 
 
 # Execution-only refinements: canonical words keep their ordinary handlers.
 EXECUTION_VARIANTS = {
+    "CALL_PY_EXACT_ARGS_DISCARD": ExecutionVariant(
+        "CALL_PY_EXACT_ARGS", postcall_discard=True),
+    "CALL_PY_GENERAL_DISCARD": ExecutionVariant(
+        "CALL_PY_GENERAL", postcall_discard=True),
+    "POP_JUMP_IF_FALSE_BOOL_SKIP_TAKEN": ExecutionVariant(
+        "POP_JUMP_IF_FALSE_BOOL", boundary_mask=1),
+    "POP_JUMP_IF_FALSE_BOOL_SKIP_FALLTHROUGH": ExecutionVariant(
+        "POP_JUMP_IF_FALSE_BOOL", boundary_mask=2),
+    "POP_JUMP_IF_FALSE_BOOL_SKIP_BOTH": ExecutionVariant(
+        "POP_JUMP_IF_FALSE_BOOL", boundary_mask=3),
     "LOAD_ATTR_SHAPE_LOCAL_TEMP": ExecutionVariant(
         "LOAD_ATTR_SHAPE", local_fields=("B",), temp_fields=("A",)),
 }
 
 
 def execution_variants(analysis: Analysis) -> dict[str, ExecutionVariant]:
-    # Synthetic generator inputs may reuse a specialization's name without
-    # declaring its family or operand contract.
+    # Synthetic inputs may reuse a specialization name without its family.
     return {name: variant for name, variant in EXECUTION_VARIANTS.items()
             if variant.base in analysis.instructions
             and analysis.instructions[variant.base].family is not None}
@@ -1772,7 +1783,7 @@ def compute_formats(analysis: Analysis) -> dict[str, IRFormat]:
         fmt = formats[variant.base]
         local_inputs = {fmt.input_field(k) for k in range(fmt.n_inputs)
                         if fmt.borrow_mask & (1 << k)}
-        if (fmt.window
+        if ((fmt.window and (variant.local_fields or variant.temp_fields))
                 or not set(variant.local_fields) <= local_inputs
                 or not set(variant.temp_fields) <= {fmt.field_of(ROLE_DST)}
                 or set(variant.local_fields) & set(variant.temp_fields)):
@@ -2342,6 +2353,7 @@ class IREmitter(Emitter):
         self._replacers["IR_BASE"] = self.ir_base
         self._replacers["IR_WINDOW_TAKEN"] = self.ir_window_taken
         self._replacers["IR_EXECUTE_ORDINARY_NOP"] = self.execute_ordinary_nop
+        self._replacers["JUMPTO"] = self.boundary_jump
         self._replacers["IR_TRY_DICT_FIRST_PROBE"] = self.try_dict_first_probe
         self._replacers["IR_RETIRE_PUBLISHED"] = self.retire_published
         self._replacers["IR_RETIRE_PUBLISHED_RESULT"] = self.retire_published
@@ -2619,9 +2631,21 @@ class IREmitter(Emitter):
         self.emit("}\n")
         return True
 
+    def boundary_jump(self, tkn, tkn_iter, uop, storage, inst):
+        variant = self.execution_variant
+        if variant is None or not variant.boundary_mask:
+            self.emit(tkn)
+            return True
+        target, = self.macro_args(tkn, tkn_iter, 1)
+        self.emit(f"JUMPTO({target});\n")
+        if variant.boundary_mask & 1:
+            self.emit("next_instr += 1;\n")
+        return True
+
     def execute_ordinary_nop(self, tkn, tkn_iter, uop, storage, inst):
         self.macro_args(tkn, tkn_iter, 0)
-        self.execute_nop_boundary = True
+        self.execute_nop_boundary = not (self.execution_variant is not None
+                                           and self.execution_variant.boundary_mask)
         return True
 
     def call_reload(self, inst):
@@ -3474,7 +3498,13 @@ class IREmitter(Emitter):
         field = fmt.field_of(ROLE_DST)
         if field is None:
             raise analysis_error(f"{inst.name} has no dst", tkn)
-        self.emit(FIELD_VARS[field])
+        if (self.execution_variant is not None
+                and self.execution_variant.postcall_discard):
+            if uop.name != "_SAVE_RETURN_SLOT":
+                raise analysis_error("discard recipient requires save-return-slot", tkn)
+            self.emit(f"({FIELD_VARS[field]} | IR_POSTCALL_DISCARD)")
+        else:
+            self.emit(FIELD_VARS[field])
         return True
 
     def ir_base(
@@ -3652,6 +3682,10 @@ def write_uop(
             if inst.family is None:
                 emitter.emit(f"(void){cache.name};\n")
     emitter.emit_object_inputs(uop, storage, inst)
+    variant = emitter.execution_variant
+    if (variant is not None and variant.boundary_mask & 2
+            and uop.name == "_POP_JUMP_IF_FALSE"):
+        emitter.emit("next_instr += 1;\n")
     reachable, storage = emitter.emit_tokens(uop, storage, inst, False)
     if emitter.pending_owner is not None:
         raise analysis_error(
@@ -3877,7 +3911,35 @@ def generate_handler(name: str, inst: Instruction, fmt: IRFormat,
     locals; the second declares them, a view as a PyValueBorrow (S8).  A
     name with both roles is refused: the DSL gives the owner another name,
     as `taken = TAKE(value)` does."""
+    emitter.execution_variant = EXECUTION_VARIANTS.get(name)
+    variant = emitter.execution_variant
+    if variant is not None and variant.boundary_mask:
+        if variant.base != "POP_JUMP_IF_FALSE_BOOL" or variant.boundary_mask not in (1, 2, 3):
+            raise ValueError(f"invalid boundary continuation for {name}")
+    if variant is not None and variant.postcall_discard:
+        if variant.base not in ("CALL_PY_EXACT_ARGS", "CALL_PY_GENERAL"):
+            raise ValueError(f"invalid discard completion for {name}")
+        parts = [part for part in inst.parts if isinstance(part, Uop)]
+        if ([part.name for part in parts[-2:]] !=
+                ["_SAVE_RETURN_SLOT", "_PUSH_FRAME"] or not fmt.window
+                or not fmt.discards or not fmt.store_dst):
+            raise analysis_error("discard completion requires checked Python "
+                                 "child commit", inst.where)
+        save_body = " ".join(token.text for token in parts[-2].body.tokens())
+        if save_body != "{ frame -> return_slot = ( uint16_t ) IR_DST_SLOT ; }":
+            raise analysis_error("discard completion requires the checked "
+                                 "recipient store", inst.where)
     validate_ordinary_nop_boundary(inst, fmt)
+    if variant is not None and variant.boundary_mask:
+        branch = next(part for part in inst.parts if isinstance(part, Uop)
+                      and part.name == "_POP_JUMP_IF_FALSE")
+        expected = ("{ assert ( PyValue_BoolCheck ( cond ) ) ; "
+                    "int flag = PyValue_IsFalse ( cond ) ; DEAD ( cond ) ; "
+                    "RECORD_BRANCH_TAKEN ( FB_BRANCH ( ) , flag ) ; "
+                    "if ( flag ) { JUMPTO ( oparg ) ; } }")
+        if " ".join(token.text for token in branch.body.tokens()) != expected:
+            raise analysis_error("boundary continuation requires the checked "
+                                 "boolean branch body", inst.where)
     validate_dict_first_probe(inst, fmt)
     validate_guarded_python_call(inst, fmt)
     emitter.result_publication = result_publication_contract(inst, fmt)
@@ -4016,6 +4078,9 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
             flags.append("CALL_INSTRUMENTED")
         if polls_at_end(name, inst):
             flags.append("CALL_PERIODIC")
+        if (emitter.execution_variant is not None
+                and emitter.execution_variant.postcall_discard):
+            flags.append("CALL_POSTCALL_DISCARD")
         emitter.call_flags = "(" + (" | ".join(flags) or "0") + ")"
         # The transaction's state is in registers: its numeric homes, read
         # once, and what the handler did (register-ir-v2-a3.md 3.5, R-b)

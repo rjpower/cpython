@@ -352,3 +352,12 @@ INSTRUMENTED_IS_OP_JUMP 313
 
 # Execution-only operand ownership refinement.
 LOAD_ATTR_SHAPE_LOCAL_TEMP 319
+
+# Execution-only checked boolean edge continuations.
+POP_JUMP_IF_FALSE_BOOL_SKIP_TAKEN 320
+POP_JUMP_IF_FALSE_BOOL_SKIP_FALLTHROUGH 321
+POP_JUMP_IF_FALSE_BOOL_SKIP_BOTH 322
+
+# Execution-only Python call completion recipients.
+CALL_PY_EXACT_ARGS_DISCARD 323
+CALL_PY_GENERAL_DISCARD 324

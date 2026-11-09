@@ -167,13 +167,8 @@ _PyFrame_NumSlots(_PyInterpreterFrame *f)
  * where a call stores its result in a local, is released as STORE_FAST
  * releases it. */
 static inline void
-_PyFrame_SetReturnValue(_PyInterpreterFrame *f, PyValue v)
+_PyFrame_PublishReturnSlot(_PyInterpreterFrame *f, PyValue v)
 {
-    if (f->return_slot == IR_NO_DST) {
-        // A call whose result nothing reads (_PyIR_DISCARDS)
-        PyValue_XCLOSE(v);
-        return;
-    }
 #ifdef Py_DEBUG
     if (f->owner != FRAME_OWNED_BY_INTERPRETER) {
         assert(f->return_slot < _PyFrame_NumSlots(f));
@@ -185,6 +180,49 @@ _PyFrame_SetReturnValue(_PyInterpreterFrame *f, PyValue v)
     f->base[f->return_slot] = v;
     _PyValue_CheckHome(v);
     PyValue_XCLOSE(old);
+}
+
+static inline void
+_PyFrame_SetReturnValue(_PyInterpreterFrame *f, PyValue v)
+{
+    assert(!(f->return_slot & IR_POSTCALL_DISCARD));
+    if (f->return_slot == IR_NO_DST) {
+        PyValue_XCLOSE(v);
+        return;
+    }
+    _PyFrame_PublishReturnSlot(f, v);
+}
+
+/* Complete a Python child's owned result after retiring that child. An
+ * instrumented boundary materializes its original home and uses the existing POP;
+ * ordinary disposal is part of CALL, whose source line is the same. */
+static inline _PyInstr *
+_PyFrame_CompleteReturn(_PyInterpreterFrame *f, PyValue value, _PyInstr *next)
+{
+    uint16_t recipient = f->return_slot;
+    if (recipient < IR_NO_DST) {
+        _PyFrame_PublishReturnSlot(f, value);
+        return next;
+    }
+    if (recipient == IR_NO_DST) {
+        PyValue_XCLOSE(value);
+        return next;
+    }
+    assert(recipient & IR_POSTCALL_DISCARD);
+    uint16_t slot = recipient & ~IR_POSTCALL_DISCARD;
+    f->return_slot = slot;
+    _PyIRWord word = FT_ATOMIC_LOAD_UINT64_RELAXED(*next);
+    int ordinary = IR_HANDLER(word) == POP_TOP && IR_A(word) == slot;
+#ifdef Py_DEBUG
+    ordinary = ordinary && f->lltrace < 5;
+#endif
+    if (!ordinary) {
+        _PyFrame_PublishReturnSlot(f, value);
+        return next;
+    }
+    /* All homes remain valid while finalization can re-enter the caller. */
+    PyValue_XCLOSE(value);
+    return next + 1;
 }
 
 /* Release the temporaries of f from slot first on and leave them NULL.

@@ -81,6 +81,8 @@ def handler_facts(analysis: Analysis, formats: dict[str, IRFormat]
         parts = ["_PyIR_H_METADATA"]
         if name in dispatch:
             parts.append("_PyIR_H_DISPATCH")
+            if inst is not None and not inst.properties.no_save_ip:
+                parts.append("_PyIR_H_SAVES_IP")
         if inst is not None and inst.family:
             parts.append("_PyIR_H_SPECIALIZED")
         if name.startswith("INSTRUMENTED_"):
@@ -188,7 +190,8 @@ def generate_ir_metadata(
         for kind, bit in (("SPECIALIZED", 1), ("INSTRUMENTED", 2),
                           ("BINARY_OP", 4), ("IR_ONLY", 8), ("NOFB", 16),
                           ("PSEUDO", 32), ("METADATA", 64), ("DISPATCH", 128),
-                          ("PRISTINE", 256), ("ADAPTIVE", 512)):
+                          ("PRISTINE", 256), ("ADAPTIVE", 512),
+                          ("SAVES_IP", 1024)):
             out.emit(f"#define _PyIR_H_{kind} {bit}\n")
         out.emit("\n")
         for ctype, table, values in (

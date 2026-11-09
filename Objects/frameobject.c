@@ -2244,6 +2244,8 @@ frame_lineno_set_impl(PyFrameObject *self, PyObject *value)
     }
     /* Finally set the new lasti and return OK. */
     self->f_lineno = 0;
+    /* A pending call must honor the debugger-selected continuation. */
+    self->f_frame->return_slot &= ~IR_POSTCALL_DISCARD;
     self->f_frame->instr_ptr = _PyFrame_InstrAt(self->f_frame, best_addr);
     return 0;
 }

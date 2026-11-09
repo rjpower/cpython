@@ -761,7 +761,8 @@ _PyIR_UnpackToLocals(PyValue *locals, PyValue *window, int n)
 /* After a frame switch, V goes to the slot of the frame that control came
  * back to (frame->return_slot). */
 #define IR_STORE_RETURN(V) \
-    _PyFrame_SetReturnValue(frame, _PyValue_Publish(&(V)))
+    (next_instr = _PyFrame_CompleteReturn( \
+        frame, _PyValue_Publish(&(V)), next_instr))
 
 /* The oparg and feedback entry of another instruction of the frame. */
 #define _PyIR_Oparg(FRAME, INSTR) \

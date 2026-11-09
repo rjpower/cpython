@@ -363,7 +363,9 @@ class AssemblerTest(unittest.TestCase):
         for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 10):
             self.assertEqual(f(False, noop), 2)
         self.assertEqual(f(True, noop), 1)
-        self.assertIn("POP_JUMP_IF_FALSE_BOOL", handlers(f))
+        self.assertTrue(any(name == "POP_JUMP_IF_FALSE_BOOL" or
+                            name.startswith("POP_JUMP_IF_FALSE_BOOL_SKIP_")
+                            for name in handlers(f)))
         nop = next(i for i in dis.get_instructions(f) if i.opname == "NOP")
         self.assertTrue(nop.starts_line)
         self.assertIsNotNone(nop.line_number)

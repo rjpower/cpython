@@ -131,7 +131,7 @@ class ContractTests(unittest.TestCase):
         for h, row in ROWS.items():
             op = row.base
             if (op >= opcode.MIN_INSTRUMENTED_OPCODE
-                    or opcode.opname[h] in opcode._specialized_opmap):
+                    or opcode.opname[row.shadow] in opcode._specialized_opmap):
                 continue
             if row.flags & _opcode.IR_FUSED:
                 # The compare and the jump on its result: two inputs, no output
@@ -773,7 +773,8 @@ class SourceScanTests(unittest.TestCase):
         for h, row in ROWS.items():
             name = opcode.opname[h]
             if name not in popped:
-                name = opcode.opname[row.base]
+                shadow = opcode.opname[row.shadow]
+                name = shadow if shadow in popped else opcode.opname[row.base]
             for oparg in OPARGS:
                 counts = (extent(row.reads, oparg),
                           extent(row.writes, oparg))
@@ -791,7 +792,7 @@ class SourceScanTests(unittest.TestCase):
                     if scanned and None not in scanned:
                         self.assertEqual(counts, scanned)
                     if counts != expected:
-                        invokes.add(opcode.opname[h])
+                        invokes.add(name)
                         self.assertEqual(counts, (expected[0], expected[1] + 1))
         self.assertEqual(invokes, {
             "CALL_PY_GENERAL", "CALL_BOUND_METHOD_GENERAL", "CALL_KW_PY",

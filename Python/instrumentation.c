@@ -1960,6 +1960,17 @@ force_instrument_lock_held(PyCodeObject *code, PyInterpreterState *interp)
     if (exec == NULL) {
         return -1;
     }
+    /* A patched anchor can be reached by an unwrapped predecessor. Restore
+     * those dependent continuations before changing any target handlers. */
+    for (int i = 0; i < code_len; i++) {
+        int handler = IR_HANDLER(exec->words[i]);
+        if (handler == POP_JUMP_IF_FALSE_BOOL_SKIP_TAKEN ||
+            handler == POP_JUMP_IF_FALSE_BOOL_SKIP_FALLTHROUGH ||
+            handler == POP_JUMP_IF_FALSE_BOOL_SKIP_BOTH)
+        {
+            _PyIR_SetHandler(&exec->words[i], POP_JUMP_IF_FALSE);
+        }
+    }
     if (update_instrumentation_data(code, interp)) {
         return -1;
     }

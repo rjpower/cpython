@@ -771,6 +771,7 @@ typedef enum {
 #define CALL_MONITORED 4
 #define CALL_INSTRUMENTED 8
 #define CALL_PERIODIC 16
+#define CALL_POSTCALL_DISCARD 32
 
 /* The state of one call, which lives only in the frame of the out-of-line
  * call_transaction_run_*(), across the helpers it calls (R-c).  Numeric
@@ -790,6 +791,7 @@ typedef struct {
     int monitored;
     int periodic;
     int prepared;
+    int postcall_discard;
 } _PyCallTransaction;
 
 /* Raise the SystemError of a failed revalidation. An operation error can be
@@ -3050,6 +3052,19 @@ _PyEvalFramePushAndInit_Ex(PyThreadState *tstate, PyValue func,
     return frame;
 }
 
+/* Keep the destination numeric through preparation and native fallback. */
+static inline uint16_t
+call_python_recipient(_PyCallTransaction *call, PyCodeObject *code)
+{
+    uint16_t recipient = (uint16_t)call->destination;
+    if (call->postcall_discard && call->frame->owner == FRAME_OWNED_BY_THREAD &&
+        !(code->co_flags & (CO_GENERATOR | CO_COROUTINE | CO_ASYNC_GENERATOR)))
+    {
+        recipient |= IR_POSTCALL_DISCARD;
+    }
+    return recipient;
+}
+
 /* The caller owns its whole window until the final non-reentrant commit. */
 static int
 call_transaction_overlap_python(_PyCallTransaction *call,
@@ -3124,7 +3139,7 @@ call_transaction_overlap_python(_PyCallTransaction *call,
     if (flags & CO_VARKEYWORDS) {
         child->base[extra] = PyValue_FromObjectSteal(kwdict);
     }
-    call->frame->return_slot = (uint16_t)call->destination;
+    call->frame->return_slot = call_python_recipient(call, code);
     call->tstate->current_frame = child;
     *out = child;
     return 0;
@@ -3226,7 +3241,7 @@ call_transaction_push_python_fallback(_PyCallTransaction *call,
     PyValue *retired = storage + call->count;
     call_transaction_detach(call, retired);
     retired_count = call->count;
-    call->frame->return_slot = (uint16_t)call->destination;
+    call->frame->return_slot = call_python_recipient(call, code);
     assert(child->previous == call->frame);
     call->tstate->current_frame = child;
     status = 0;
@@ -3335,6 +3350,7 @@ call_transaction_init(PyThreadState *tstate, _PyInterpreterFrame *frame,
         .monitored = (flags & CALL_MONITORED) != 0,
         .periodic = (flags & CALL_PERIODIC) != 0,
         .prepared = (flags & CALL_PREPARED) != 0,
+        .postcall_discard = (flags & CALL_POSTCALL_DISCARD) != 0,
     };
 }
 

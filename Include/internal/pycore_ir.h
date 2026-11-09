@@ -73,6 +73,8 @@ extern "C" {
  * it tells the handler to release the result (_PyIR_DISCARDS), where a
  * CALL; POP_TOP pair took two words. */
 #define IR_NO_DST       IR_FIELD_MAX
+/* Pending Python call completion; low bits retain the original temporary. */
+#define IR_POSTCALL_DISCARD 0x8000
 /* A target in a 12-bit field is a signed distance in words from the next
  * word, -2048 to 2047.  FOR_ITER and SEND reach at most IR_MAX_FORWARD, the
  * non-negative half (2^11 - 1), and the assembler relaxes a loop whose exit

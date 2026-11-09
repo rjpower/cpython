@@ -7,7 +7,10 @@
 #include "pycore_ceval.h"         // export _PyEval_SetProfile()
 #include "pycore_frame.h"         // PyFrameObject members
 #include "pycore_interpframe.h"   // _PyFrame_GetCode()
+#include "pycore_ir.h"            // _PyCode_InstrHandler()
+#include "pycore_ir_source.h"     // _PyIRSource_Stored()
 #include "pycore_long_value.h"    // _PyValue_AsInt()
+#include "pycore_pyerrors.h"      // PyStopIterationObject
 #include "pycore_tstate.h"        // _PyThreadStateImpl
 #include "pycore_tuple.h"         // _PyTuple_PackValues()
 #include "pycore_value_api.h"     // _PyBox_CALL_ADAPTER()
@@ -376,6 +379,40 @@ offset_from_word(PyValueBorrow word, int *out)
 }
 
 static PyValue
+sys_trace_stop_iteration_func(
+    PyThreadState *tstate, PyObject *callable, const PyValue *args,
+    size_t nargsf, PyObject *kwnames
+) {
+    assert(kwnames == NULL);
+    assert(PyVectorcall_NARGS(nargsf) == 3);
+    PyValueBorrow code_arg = PyValue_Borrow(args[0]);
+    PyValueBorrow offset_arg = PyValue_Borrow(args[1]);
+    PyValueBorrow exception_arg = PyValue_Borrow(args[2]);
+    /* STOP is a semantic completion notification. The legacy API omits
+     * implicit valueless FOR exhaustion; actual RAISE events remain intact.
+     * Use the immutable event site, not a callback-redirected frame PC. */
+    if (PyValue_IsObject(code_arg) && PyValue_IsInlineInt(offset_arg) &&
+        PyValue_IsObject(exception_arg))
+    {
+        PyObject *code_obj = PyValue_AsKnownObjectBorrow(code_arg);
+        PyObject *exc = PyValue_AsKnownObjectBorrow(exception_arg);
+        int64_t offset = PyValue_InlineInt64(offset_arg);
+        if (PyCode_Check(code_obj) && Py_IS_TYPE(exc, (PyTypeObject *)PyExc_StopIteration)) {
+            PyCodeObject *code = (PyCodeObject *)code_obj;
+            if (offset >= 0 && offset < Py_SIZE(code) &&
+                _PyIR_BaseOpcode(_PyCode_InstrHandler(code, (int)offset)) == FOR_ITER)
+            {
+                PyValue value = ((PyStopIterationObject *)exc)->value;
+                if (PyValue_IsNull(value) || PyValue_IsNone(value)) {
+                    return PyValue_None;
+                }
+            }
+        }
+    }
+    return sys_trace_exception_func(tstate, callable, args, nargsf, kwnames);
+}
+
+static PyValue
 sys_trace_line_func(
     PyThreadState *tstate, PyObject *callable, const PyValue *args,
     size_t nargsf, PyObject *kwnames
@@ -440,6 +477,19 @@ sys_trace_jump_func(
     if (to_line != from_line) {
         /* Will be handled by target INSTRUMENTED_LINE */
         return disable;
+    }
+    _PyIRSourceMap source = _PyIRSource_Stored(code->co_linetable);
+    for (uint32_t i = 0; i < source.nrecords; i++) {
+        _PyIRSourceEvent edge;
+        _PyIRSource_Event(&source, i, &edge);
+        if (edge.from == from && edge.to == to &&
+            edge.edge == _PyIR_SOURCE_TAKEN && edge.line != from_line)
+        {
+            /* The compact backedge crosses a source-only loop header.
+             * Its source events and landing LINE supply the iteration;
+             * emitting the real target here would precede that header. */
+            return disable;
+        }
     }
     PyFrameObject *frame = PyEval_GetFrame();
     if (frame == NULL) {
@@ -707,8 +757,12 @@ setup_trace_callbacks(void *Py_UNUSED(arg))
     }
     if (set_callbacks(PY_MONITORING_SYS_TRACE_ID,
                       sys_trace_exception_func, PyTrace_EXCEPTION,
-                      PY_MONITORING_EVENT_RAISE,
-                      PY_MONITORING_EVENT_STOP_ITERATION)) {
+                      PY_MONITORING_EVENT_RAISE, -1)) {
+        return -1;
+    }
+    if (set_callbacks(PY_MONITORING_SYS_TRACE_ID,
+                      sys_trace_stop_iteration_func, PyTrace_EXCEPTION,
+                      PY_MONITORING_EVENT_STOP_ITERATION, -1)) {
         return -1;
     }
     if (set_callbacks(PY_MONITORING_SYS_TRACE_ID,

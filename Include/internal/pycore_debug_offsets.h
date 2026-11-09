@@ -8,8 +8,14 @@ extern "C" {
 #  error "this header requires Py_BUILD_CORE define"
 #endif
 
+#include <stddef.h>                // offsetof
 
-#define _Py_Debug_Cookie "xdebugpy"
+#define _Py_Debug_Cookie "pyjitdbg"
+#define _Py_Debug_OffsetsSchema 1
+/* Format 1: register IR and the current tagged PyValue representation. */
+#define _Py_Debug_OffsetsABI (UINT64_C(1) << 32 | \
+    (uint64_t)SIZEOF_VOID_P << 16 | (uint64_t)sizeof(PyValue) << 8 | \
+    (uint64_t)PY_BIG_ENDIAN)
 
 #if defined(__APPLE__)
 #  include <mach-o/loader.h>
@@ -68,10 +74,21 @@ extern "C" {
 # define _Py_Debug_code_object_co_tlbc 0
 
 
-typedef struct _Py_DebugOffsets {
-    char cookie[8] _Py_NONSTRING;
-    uint64_t version;
+/* Validate this fixed prefix before copying any remote descriptor body. */
+#define _Py_DEBUG_OFFSETS_PREFIX_FIELDS \
+    char cookie[8] _Py_NONSTRING; \
+    uint64_t schema; \
+    uint64_t descriptor_size; \
+    uint64_t version; \
+    uint64_t abi; \
     uint64_t free_threaded;
+
+typedef struct {
+    _Py_DEBUG_OFFSETS_PREFIX_FIELDS
+} _Py_DebugOffsetsPrefix;
+
+typedef struct _Py_DebugOffsets {
+    _Py_DEBUG_OFFSETS_PREFIX_FIELDS
     // Runtime state offset;
     struct _runtime_state {
         uint64_t size;
@@ -146,6 +163,8 @@ typedef struct _Py_DebugOffsets {
         uint64_t linetable;
         uint64_t firstlineno;
         uint64_t argcount;
+        uint64_t nlocalsplus;
+        uint64_t stacksize;
         uint64_t localsplusnames;
         uint64_t localspluskinds;
         // The 8-byte IR words as the compiler emitted them; a frame runs
@@ -283,11 +302,51 @@ typedef struct _Py_DebugOffsets {
         uint64_t int_base;
         uint64_t int_shift;
     } pyvalue;
+    struct {
+        uint64_t size;
+        uint64_t previous;
+        uint64_t chunk_size;
+        uint64_t data;
+    } stack_chunk;
 } _Py_DebugOffsets;
+#undef _Py_DEBUG_OFFSETS_PREFIX_FIELDS
+
+static_assert(sizeof(_Py_DebugOffsetsPrefix) == 48, "fixed remote prefix");
+static_assert(offsetof(_Py_DebugOffsets, runtime_state) == 48,
+              "remote descriptor starts with its fixed prefix");
+
+static inline int
+_PyDebugOffsets_ValidatePrefix(const _Py_DebugOffsetsPrefix *prefix)
+{
+    if (memcmp(prefix->cookie, _Py_Debug_Cookie, 8) != 0 ||
+        prefix->schema != _Py_Debug_OffsetsSchema ||
+        prefix->descriptor_size != sizeof(_Py_DebugOffsets) ||
+        prefix->version != PY_VERSION_HEX ||
+        prefix->abi != _Py_Debug_OffsetsABI ||
+        prefix->free_threaded != _Py_Debug_Free_Threaded)
+    {
+        PyErr_SetString(PyExc_RuntimeError,
+                        "Incompatible PyJIT remote layout descriptor");
+        return -1;
+    }
+    return 0;
+}
+
+
+static inline int
+_PyDebugOffsets_Validate(const _Py_DebugOffsets *offsets)
+{
+    _Py_DebugOffsetsPrefix prefix;
+    memcpy(&prefix, offsets, sizeof(prefix));
+    return _PyDebugOffsets_ValidatePrefix(&prefix);
+}
 
 
 #define _Py_DebugOffsets_INIT(debug_cookie) { \
     .cookie = debug_cookie, \
+    .schema = _Py_Debug_OffsetsSchema, \
+    .descriptor_size = sizeof(_Py_DebugOffsets), \
+    .abi = _Py_Debug_OffsetsABI, \
     .version = PY_VERSION_HEX, \
     .free_threaded = _Py_Debug_Free_Threaded, \
     .runtime_state = { \
@@ -353,6 +412,8 @@ typedef struct _Py_DebugOffsets {
         .linetable = offsetof(PyCodeObject, co_linetable), \
         .firstlineno = offsetof(PyCodeObject, co_firstlineno), \
         .argcount = offsetof(PyCodeObject, co_argcount), \
+        .nlocalsplus = offsetof(PyCodeObject, co_nlocalsplus), \
+        .stacksize = offsetof(PyCodeObject, co_stacksize), \
         .localsplusnames = offsetof(PyCodeObject, co_localsplusnames), \
         .localspluskinds = offsetof(PyCodeObject, co_localspluskinds), \
         .co_words = offsetof(PyCodeObject, co_words), \
@@ -450,6 +511,12 @@ typedef struct _Py_DebugOffsets {
         .double_offset = Py_DOUBLE_OFFSET, \
         .int_base = Py_INT_BASE, \
         .int_shift = Py_INT_SHIFT, \
+    }, \
+    .stack_chunk = { \
+        .size = sizeof(_PyStackChunk), \
+        .previous = offsetof(_PyStackChunk, previous), \
+        .chunk_size = offsetof(_PyStackChunk, size), \
+        .data = offsetof(_PyStackChunk, data), \
     }, \
 }
 

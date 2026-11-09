@@ -404,7 +404,9 @@ def _decode_word(handler, fields, fbinit=None):
     format of handler.  The oparg is that of the stack instruction except
     that a jump names its target, and FOR_ITER and SEND their exit as a
     distance from the next word; it is None if it is in a feedback table
-    that fbinit does not hold."""
+    that fbinit does not hold. A SEND destination receives completion, and a
+    YIELD_VALUE destination receives the next resume input; neither is an
+    unconditional definition during the current operation."""
     row = _ir_contract[handler]
     roles, imm, base = row.roles, row.imm, row.base
     dst = None
@@ -412,7 +414,7 @@ def _decode_word(handler, fields, fbinit=None):
     fb = None
     for k, role in enumerate(roles):
         if role == _ROLE_DST:
-            # 4095, outside the slot range, is a call whose result is released
+            # The sentinel discards a semantic result or unused resume input.
             dst = fields[k] if fields[k] != 0xFFF else None
         elif role == _ROLE_BASE or role >= _ROLE_IN0:
             srcs.append(fields[k])
@@ -936,8 +938,13 @@ def _get_instructions_bytes(code, linestarts=None, line_offset=0, co_positions=N
             # that the jump is in the word)
             if _is_fused(runs):
                 op = runs
+            elif runs >= _IR_FIRST_ONLY_HANDLER:
+                # Execution-only variants preserve their specialization in
+                # the adaptive view; structural IR handlers keep their base.
+                shadow = _ir_contract[runs].shadow
+                op = shadow if shadow < _IR_FIRST_ONLY_HANDLER else _deoptop(runs)
             else:
-                op = _deoptop(runs) if runs >= _IR_FIRST_ONLY_HANDLER else runs
+                op = runs
         if arg_resolver:
             argval, argrepr = arg_resolver.get_argval_argrepr(handler, arg, offset)
             if _is_fused(handler):

@@ -91,7 +91,7 @@ from analyzer import (
     analysis_error,
     analyze_files,
 )
-from parser import (BlockStmt, ForStmt, IfStmt, MacroIfStmt, SimpleStmt, Stmt,
+from parser import (BlockStmt, ForStmt, IfStmt, MacroIfStmt, Parser, SimpleStmt, Stmt,
                     WhileStmt)
 from generators_common import (
     DEFAULT_INPUT,
@@ -106,7 +106,7 @@ from generators_common import (
     write_header,
 )
 from cwriter import CWriter
-from lexer import Token
+from lexer import Token, tokenize
 from stack import (
     Local,
     PointerOffset,
@@ -143,6 +143,32 @@ def first_ir_only_handler(analysis: Analysis) -> int:
 # (Include/internal/pycore_ir.h), from ir_word, which every handler receives.
 FIELDS = ("A", "B", "C", "D")
 FIELD_VARS = {f: f"IR_{f}(ir_word)" for f in FIELDS}
+
+
+@dataclass(frozen=True)
+class ExecutionVariant:
+    base: str
+    local_fields: tuple[str, ...] = ()
+    temp_fields: tuple[str, ...] = ()
+
+
+# Execution-only refinements: canonical words keep their ordinary handlers.
+EXECUTION_VARIANTS = {
+    "LOAD_ATTR_SHAPE_LOCAL_TEMP": ExecutionVariant(
+        "LOAD_ATTR_SHAPE", local_fields=("B",), temp_fields=("A",)),
+}
+
+
+def execution_variants(analysis: Analysis) -> dict[str, ExecutionVariant]:
+    # Synthetic inputs may reuse a specialization name without its family.
+    return {name: variant for name, variant in EXECUTION_VARIANTS.items()
+            if variant.base in analysis.instructions
+            and analysis.instructions[variant.base].family is not None}
+
+
+def canonical_handler(name: str) -> str:
+    variant = EXECUTION_VARIANTS.get(name)
+    return variant.base if variant is not None else name
 
 
 def owner_name(field: str) -> str:
@@ -204,11 +230,6 @@ FORWARD_JUMPS = ("FOR_ITER", "SEND")
 FUSED_JUMPS = ("COMPARE_OP_JUMP", "CONTAINS_OP_JUMP", "IS_OP_JUMP")
 FUSED_SHADOWS = {"COMPARE_OP_JUMP": "COMPARE_OP",
                  "CONTAINS_OP_JUMP": "CONTAINS_OP", "IS_OP_JUMP": "IS_OP"}
-
-# The families whose dst field may be IR_NO_DST, so that the word of a call
-# whose result is popped at once (CALL; POP_TOP) needs no POP_TOP.  The
-# intrinsics are not calls in this sense and keep their POP_TOP.
-DISCARDING = ("CALL", "CALL_KW", "CALL_FUNCTION_EX")
 
 # The unpacks: their dst field names the first of a run of locals that
 # receive the elements in order (the STORE_FASTs folded in), or is IR_NO_DST.
@@ -274,7 +295,7 @@ class IRFormat:
                                     # the local's old value
     runs_code: bool = False         # a member may run Python code, see
                                     # runs_code()
-    discards: bool = False          # dst may be IR_NO_DST, see DISCARDING
+    discards: bool = False          # scalar result may use the IR_NO_DST sink
     unpacks: bool = False           # dst names a run of locals for the
                                     # elements, or IR_NO_DST, see UNPACKS
     # The rest of the instruction contract (pycore_ir.h, _PyIRFormat)
@@ -330,7 +351,8 @@ def declare_variables(inst: Instruction, out: CWriter,
             if var.used and var.name not in seen:
                 seen.add(var.name)
                 declare_variable(var, out, roles or {})
-        if any(token.text in CALL_INVOKE_MARKERS for token in part.body.tokens()):
+        if part.properties.always_exits or any(
+                token.text in CALL_INVOKE_MARKERS for token in part.body.tokens()):
             break
 
 
@@ -353,6 +375,7 @@ def uop_runs_code(uop: Uop) -> bool:
 RELEASE_LIKE = re.compile(r"CLOSE|DECREF|CLEAR|SETREF|RETIRE|Close|Clear|"
                           r"Dealloc|_READER|FINISH_VALUE")
 RELEASES = {
+    "IR_DEFER_CLOSE",
     "PyValue_CLOSE", "PyValue_XCLOSE", "PyValue_CLEAR", "_PyValue_CloseStack",
     "_PyValue_CLOSE_POINTER", "_PyValue_XCLOSE_POINTER", "DECREF_INPUTS",
     "Py_DECREF", "Py_XDECREF", "Py_CLEAR", "Py_SETREF", "Py_XSETREF",
@@ -1080,7 +1103,8 @@ def handler_ids(analysis: Analysis) -> dict[str, int]:
     has none."""
     ids = {name: inst.opcode for name, inst in analysis.instructions.items()
            if name != BINARY_OP_FAMILY and name not in STACK_ONLY}
-    names = sorted(analysis.ir_only) + binary_op_handlers(analysis)
+    names = (sorted(analysis.ir_only) + binary_op_handlers(analysis)
+             + list(execution_variants(analysis)))
     table = analysis.numbers
     for name in names:
         ids[name] = table.number(
@@ -1095,6 +1119,9 @@ def handler_instructions(analysis: Analysis) -> dict[str, Instruction]:
               if name in insts}
     for name in binary_op_handlers(analysis):
         result[name] = insts[BINARY_OP_FAMILY]
+    for name, variant in execution_variants(analysis).items():
+        if variant.base in result:
+            result[name] = result[variant.base]
     return result
 
 
@@ -1250,9 +1277,13 @@ def compute_format(group: str, members: list[Instruction]) -> IRFormat:
         for m in members
     ]
     dst_offset = min((o for o in new_outputs if o is not None), default=None)
-    array_inputs = any(m.properties.window for m in members) or any(
+    # These semantic operations have distinct body/yield and completion
+    # outcomes. Their completion markers replace JUMPBY, but the executable
+    # ABI remains an explicit window and a real forward exit.
+    completes_step = group in {"FOR_ITER", "SEND"}
+    array_inputs = completes_step or any(m.properties.window for m in members) or any(
         item.is_array() for m in members for item in io[m.name][0])
-    jumps = any(m.properties.jumps for m in members)
+    jumps = completes_step or any(m.properties.jumps for m in members)
     fused = group in FUSED_JUMPS
     forward = jumps and (group in FORWARD_JUMPS or fused)
     has_fb = any(uses_feedback(m) for m in members)
@@ -1362,7 +1393,9 @@ def compute_format(group: str, members: list[Instruction]) -> IRFormat:
         fused=fused,
         no_fold=no_fold,
         store_dst=store_dst, runs_code=any(runs_code(m) for m in members),
-        discards=store_dst and window and group in DISCARDING,
+        discards=(store_dst and store_mode(head, io[head.name][1]) in
+            (STORE_RESULT, STORE_RETURN)) or group in
+            {"SEND", "CLEANUP_THROW", "YIELD_VALUE", "RETURN_GENERATOR"},
         unpacks=unpacks,
         jump_always=jumps and jumps_always(head),
         names_target=jumps and names_target_only(head),
@@ -1419,6 +1452,199 @@ def uop_token_list(inst: Instruction) -> list[Token]:
             for t in part.body.tokens() if t.kind != "COMMENT"]
 
 
+OBSERVER_MARKER = "IR_OBSERVE_COMMITTED_BRANCH"
+
+
+def observer_terminal_arguments(tokens: list[Token]) -> tuple[list[str], int]:
+    """One literal owner edge, independent of the reported monitoring event."""
+    if len(tokens) < 4 or tokens[1].kind != "LPAREN":
+        raise analysis_error("malformed terminal observer", tokens[0])
+    args: list[list[str]] = [[]]
+    depth = 0
+    end = -1
+    for i, token in enumerate(tokens[2:], 2):
+        if token.kind == "RPAREN" and depth == 0:
+            end = i
+            break
+        if token.kind in ("LPAREN", "LBRACKET"):
+            depth += 1
+        elif token.kind in ("RPAREN", "RBRACKET"):
+            depth -= 1
+        if token.kind == "COMMA" and depth == 0:
+            args.append([])
+        else:
+            args[-1].append(token.text)
+    if end < 0 or len(args) != 4 or any(not arg for arg in args):
+        raise analysis_error("terminal observer takes source, destination, event, owner edge", tokens[0])
+    if [t.kind for t in tokens[end + 1:]] != ["SEMI"]:
+        raise analysis_error("semantic work follows terminal observer", tokens[0])
+    if args[2] not in (["PY_MONITORING_EVENT_BRANCH_LEFT"],
+                       ["PY_MONITORING_EVENT_BRANCH_RIGHT"],
+                       ["PY_MONITORING_EVENT_JUMP"]):
+        raise analysis_error("terminal observer requires a literal event", tokens[0])
+    edges = {"_PyIR_SOURCE_FALLTHROUGH": 0, "_PyIR_SOURCE_TAKEN": 1}
+    if len(args[3]) != 1 or args[3][0] not in edges:
+        raise analysis_error("terminal observer requires a literal owner edge", tokens[0])
+    edge = edges[args[3][0]]
+    targets = (["JUMP_TARGET", "(", "oparg", ")"],
+               ["next_instr", "+", "IR_FUSED_DISTANCE", "(", ")"])
+    if (edge == 0 and args[1] != ["next_instr"] or
+            edge == 1 and args[1] not in targets):
+        raise analysis_error("terminal observer owner edge disagrees with destination", tokens[0])
+    return [" ".join(arg) for arg in args], edge
+
+
+def observer_terminal_paths(inst: Instruction, fmt: IRFormat) -> dict[Token, tuple[int, str]]:
+    """Check terminal composition and distinguish a defined NULL result.
+
+    Storage.push_outputs supplies the separate live-input/defined-output proof
+    when each marker is emitted. Metadata and emission use these same paths.
+    """
+    paths: dict[Token, tuple[int, str]] = {}
+    if OBSERVER_MARKER not in uop_tokens(inst):
+        return paths
+    parts = [p for p in inst.parts if not isinstance(p, Skip)]
+
+    def walk(stmt, nulls: set[str], owners: set[str], spent: set[str],
+             deferred: set[str], following: bool, uop: Uop):
+        if isinstance(stmt, BlockStmt):
+            for index, child in enumerate(stmt.body):
+                if not walk(child, nulls, owners, spent, deferred,
+                            following or index + 1 < len(stmt.body), uop):
+                    return False
+            return True
+        if isinstance(stmt, IfStmt):
+            left = (set(nulls), set(owners), set(spent), set(deferred))
+            right = (set(nulls), set(owners), set(spent), set(deferred))
+            left_live = walk(stmt.body, *left, following, uop)
+            right_live = True
+            if stmt.else_body is not None:
+                right_live = walk(stmt.else_body, *right, following, uop)
+            if left_live and right_live:
+                if left[1] != right[1] or left[3] != right[3]:
+                    raise analysis_error("ambiguous terminal C ownership at join", stmt.if_)
+                result = (left[0] & right[0], left[1], left[2] | right[2], left[3])
+            elif left_live:
+                result = left
+            else:
+                result = right
+            for destination, source in zip((nulls, owners, spent, deferred), result):
+                destination.clear()
+                destination.update(source)
+            return left_live or right_live
+        tokens = [t for t in stmt.tokens() if t.kind != "COMMENT"]
+        markers = [t for t in tokens if t.text == OBSERVER_MARKER]
+        if not isinstance(stmt, SimpleStmt):
+            raise analysis_error("terminal observer in unsupported control flow", tokens[0])
+        texts = [t.text for t in tokens]
+        def mentions(name):
+            pieces = name.replace('.', ' . ').split()
+            return any(texts[i:i + len(pieces)] == pieces for i in range(len(texts)))
+        for name in spent:
+            if mentions(name):
+                raise analysis_error("terminal C owner used after transfer: " + name, tokens[0])
+        used_owners = {name for name in owners if mentions(name)}
+        if used_owners:
+            calls = {texts[i] for i in range(len(texts) - 1)
+                     if tokens[i].kind == "IDENTIFIER" and texts[i + 1] == "("}
+            audited = set(VIEW_RELEASES) | {
+                "PyValue_DUP", "PyValue_IsNull", "_PyValue_IsTrue",
+                "IR_DEFER_CLOSE", "IR_COMPLETE_STEP"}
+            if calls - audited:
+                raise analysis_error("unproved terminal C owner transport", tokens[0])
+            bindings = declared_locals(uop_token_list(inst))
+            if any(name in bindings or any(c.name == name for c in uop.caches)
+                   for name in calls):
+                raise analysis_error("shadowed terminal owner helper", tokens[0])
+
+        def transfer(name):
+            if name in owners:
+                owners.remove(name)
+                spent.add(name)
+
+        if texts[:1] == ["IR_DEFER_CLOSE"]:
+            if len(texts) != 5 or texts[2] not in owners:
+                raise analysis_error("deferred observer owner is not held", tokens[0])
+            transfer(texts[2])
+            deferred.add(texts[2])
+        output_names = {item.name for item in uop.stack.outputs}
+        if len(texts) > 3 and texts[:1] == ["PyValue"] and texts[2] == "=":
+            rhs = "".join(texts[3:-1])
+            transfer(rhs)
+            if rhs not in ("PyValue_NULL", "PyValue_None", "PyValue_True", "PyValue_False"):
+                owners.add(texts[1])
+        elif len(texts) > 3 and texts[0] == "_PyStatusValue" and texts[2] == "=":
+            helper = "_PyForIter_VirtualIteratorNext"
+            if (texts[3] != helper or helper in declared_locals(uop_token_list(inst)) or
+                    any(cache.name == helper for cache in uop.caches)):
+                raise analysis_error("unproved terminal status owner", tokens[0])
+            owners.add(texts[1] + ".value")
+        elif texts[:2] == ["PyObject", "*"]:
+            raise analysis_error("unproved terminal C object owner", tokens[0])
+        if len(texts) > 2 and texts[0] in VIEW_RELEASES and texts[1] == "(":
+            transfer("".join(texts[2:-2]))
+        if len(texts) > 2 and texts[1] == "=" and texts[0] in output_names:
+            transfer("".join(texts[2:-1]))
+        elif len(texts) > 2 and texts[1] == "=" and texts[0] in owners:
+            raise analysis_error("terminal C owner overwritten before transfer", tokens[0])
+        elif (len(texts) > 2 and texts[1] == "=" and
+              "".join(texts[2:-1]) in owners):
+            raise analysis_error("unproved terminal C owner assignment", tokens[0])
+        if len(texts) > 2 and texts[1] == "=":
+            if texts[2:] == ["PyValue_NULL", ";"]:
+                nulls.add(texts[0])
+            else:
+                nulls.discard(texts[0])
+        if not markers:
+            exits = texts and texts[0] in {
+                "ERROR_NO_POP", "IR_COMPLETE_STEP", "IR_RETURN_TO_CALLER", "DISPATCH"}
+            if exits and deferred:
+                raise analysis_error("deferred owner exits before terminal observer", tokens[0])
+            return not exits
+        marker = markers[0]
+        if owners:
+            raise analysis_error("terminal observer has untransferred C owners: " +
+                                 ", ".join(sorted(owners)), marker)
+        if len(markers) != 1 or texts[0] != OBSERVER_MARKER or following:
+            raise analysis_error("semantic work follows terminal observer", marker)
+        if not parts or parts[-1] is not uop:
+            raise analysis_error("terminal observer must finish the composed handler", marker)
+        _, edge = observer_terminal_arguments(tokens)
+        inputs, outputs = external_io(inst)
+        if fmt.window:
+            if (len(inputs) != 2 or len(outputs) != 3 or
+                    any(x.size for x in inputs) or any(x.item.size for x in outputs) or
+                    fmt.dst_offset != 2 or not fmt.store_dst):
+                raise analysis_error("unsupported terminal observer window", marker)
+            kind = "_PyIR_OBSERVER_FOR_BODY"
+        elif len(outputs) == 1 and uop.stack.outputs and uop.stack.outputs[-1].name in nulls:
+            kind = "_PyIR_OBSERVER_FORMAT_NULL_FIRST"
+        else:
+            kind = "_PyIR_OBSERVER_FORMAT_VALUE"
+        paths[marker] = edge, kind
+        return False
+
+    for part in parts:
+        if isinstance(part, Uop) and any(t.text == OBSERVER_MARKER for t in part.body.tokens()):
+            deferred: set[str] = set()
+            live = walk(part.body, set(), set(), set(), deferred, False, part)
+            if live and deferred:
+                raise analysis_error("deferred owner leaves terminal observer path", inst.where)
+    return paths
+
+
+def observer_outcomes(inst: Instruction, fmt: IRFormat) -> tuple[str, str]:
+    result = ["_PyIR_OBSERVER_NONE", "_PyIR_OBSERVER_NONE"]
+    for edge, kind in observer_terminal_paths(inst, fmt).values():
+        if result[edge] not in ("_PyIR_OBSERVER_NONE", kind):
+            raise analysis_error("conflicting terminal observer edge facts", inst.where)
+        result[edge] = kind
+    tokens = set(uop_tokens(inst))
+    if "IR_COMPLETE_STEP" in tokens:
+        result[1] = "_PyIR_OBSERVER_COMPLETION"
+    return tuple(result)
+
+
 def jump_tokens(uop: Uop) -> list[tuple[int, list[str]]]:
     """The JUMPBY and JUMPTO of uop: the brace depth of each, 1 at the top of
     the body, and the tokens of its argument"""
@@ -1431,7 +1657,7 @@ def jump_tokens(uop: Uop) -> list[tuple[int, list[str]]]:
             depth += 1
         elif tkn.kind == "RBRACE":
             depth -= 1
-        elif tkn.text in ("JUMPBY", "JUMPTO"):
+        elif tkn.text in ("JUMPBY", "JUMPTO", "IR_COMPLETE_STEP"):
             arg = []
             nesting = 0
             for t in tokens[i + 1:]:
@@ -1444,6 +1670,10 @@ def jump_tokens(uop: Uop) -> list[tuple[int, list[str]]]:
                     if nesting == 0:
                         break
                 arg.append(t.text)
+            if tkn.text == "IR_COMPLETE_STEP":
+                # Its checked arguments are kind, held value, target. The
+                # target is a real jump, not the other outcome's successor.
+                arg = arg[4:]
             result.append((depth, arg))
     return result
 
@@ -1644,6 +1874,10 @@ def store_mode(inst: Instruction, outputs: list[Entry]) -> str | None:
     elsewhere leaves to the head."""
     # The terminal adapter publishes the native result itself, or the Python
     # child's eventual return. Its unused DSL C output still has a real dst.
+    if inst.properties.always_exits and "IR_COMPLETE_STEP" in uop_tokens(inst):
+        # Completion owns its explicit recipient; frontend output aliases
+        # describe stack conversion, not stores performed after the marker.
+        return None
     if uses_call_transaction(inst):
         return STORE_RESULT
     if inst.properties.switches_frame:
@@ -1735,6 +1969,18 @@ def compute_formats(analysis: Analysis) -> dict[str, IRFormat]:
             inputs=[], n_inputs=0, dst_offset=None, borrow_mask=0,
             imm=LOC_NONE, fb=LOC_NONE, jumps=False,
             transparent=True, runs_code=runs_code(insts[name]))
+    for name, variant in execution_variants(analysis).items():
+        if variant.base not in formats:
+            continue
+        fmt = formats[variant.base]
+        local_inputs = {fmt.input_field(k) for k in range(fmt.n_inputs)
+                        if fmt.borrow_mask & (1 << k)}
+        if ((fmt.window and (variant.local_fields or variant.temp_fields))
+                or not set(variant.local_fields) <= local_inputs
+                or not set(variant.temp_fields) <= {fmt.field_of(ROLE_DST)}
+                or set(variant.local_fields) & set(variant.temp_fields)):
+            raise ValueError(f"invalid operand modes for {name}")
+        formats[name] = fmt
     return formats
 
 
@@ -1767,7 +2013,11 @@ class SlotLayout:
     dst: str | None = None
     dst_offset: int | None = None   # register: position of dst; window:
                                     # its offset from base
+    local_fields: tuple[str, ...] = ()
+    temp_fields: tuple[str, ...] = ()
     store_dst: bool = False         # dst may name a local
+    canonical_frame_transfer: bool = False  # proven unchanged canonical slot input
+    canonical_result: str | None = None  # checked canonical owner
 
     @staticmethod
     def empty() -> "SlotLayout":
@@ -1903,6 +2153,8 @@ class IRStack(Stack):
         # finish_displaced_local takes it by value, so a handler may store
         # dst once (generate_handler checks).
         self.dst_stores: list[str] = []
+        self.observer_deferred: str | None = None
+        self.observer_inputs: list[str] = []
 
     def copy(self) -> "IRStack":
         other = super().copy()
@@ -1915,6 +2167,7 @@ class IRStack(Stack):
         other.spent_views = set(self.spent_views)
         other.roles = self.roles
         other.window_taken = self.window_taken
+        other.observer_inputs = list(self.observer_inputs)
         return other
 
     def code_ran(self) -> None:
@@ -1995,6 +2248,15 @@ class IRStack(Stack):
                 return f"IR_VIEW({self.input_field(p)})"
         return super().load(var, memory_offset)
 
+    def array_output(self, var: StackItem, memory_offset: PointerOffset) -> str:
+        address = super().array_output(var, memory_offset)
+        if self.layout.store_dst and not self.layout.window:
+            # A scalar result can be discarded or folded into a local when
+            # its conditional trailing array is empty. No array home exists
+            # then, so even forming its address would be invalid.
+            return f"(({var.size}) ? {address} : NULL)"
+        return address
+
     def pop(self, var: StackItem, out: CWriter) -> Local:
         before = self.variables[-1] if self.variables else None
         old_name = before.name if before is not None else None
@@ -2034,8 +2296,10 @@ class IRStack(Stack):
         if not names:
             raise StackError(f"no variable holds the view of the input "
                              f"in {f} when the handler takes it")
-        out.emit(f"{owner_name(self.layout.in_fields[p])} = "
-                 f"IR_CONSUME_INPUT({f}, {names[-1]});\n")
+        field = self.layout.in_fields[p]
+        consume = ("PyValue_NULL" if field in self.layout.local_fields else
+                   f"IR_CONSUME_INPUT({f}, {names[-1]})")
+        out.emit(f"{owner_name(field)} = {consume};\n")
 
     def store(self, out: CWriter, var: Local, memory_offset: PointerOffset,
               canonical_result: str | None = None) -> bool:
@@ -2049,7 +2313,9 @@ class IRStack(Stack):
             self.refuse_inplace(var, memory_offset)
             if memory_offset.as_int() != 0:
                 raise StackError(f"'{var.name}' is written after the frame changed")
-            out.emit(f"IR_STORE_RETURN({var.name});\n")
+            macro = ("IR_STORE_CANONICAL_RETURN" if self.layout.canonical_frame_transfer
+                     else "IR_STORE_RETURN")
+            out.emit(f"{macro}({var.name});\n")
             return True
         lay = self.layout
         if lay.window:
@@ -2084,10 +2350,29 @@ class IRStack(Stack):
             previous = None
         slot = self.out_slot(memory_offset)
         if lay.store_dst and p == lay.dst_offset:
+            if lay.dst in lay.temp_fields:
+                if self.final and self.published_temporary_result:
+                    return True
+                if var.name == canonical_result:
+                    out.emit(f"assert(PyValue_IsNull({slot}) || "
+                             f"PyValue_Is({slot}, {var.name}));\n")
+                    out.emit(f"{slot} = {var.name};\n")
+                    out.emit(f"_PyValue_CheckTemp({slot});\n")
+                else:
+                    out.emit(f"IR_STORE_TEMP({slot}, {var.name});\n")
+                return False
             if self.final:
                 if self.published_temporary_result:
-                    out.emit(f"if (IR_IS_LOCAL({FIELD_VARS[lay.dst]})) {{\n")
-                self.dst_stores.append(f"IR_STORE_DST({FIELD_VARS[lay.dst]}, {var.name})")
+                    field = FIELD_VARS[lay.dst]
+                    out.emit(f"if (IR_IS_LOCAL({field}) || {field} == IR_NO_DST) {{\n")
+                macro = ("IR_STORE_CANONICAL_DST"
+                         if var.name == lay.canonical_result else "IR_STORE_DST")
+                if self.observer_deferred is not None:
+                    macro = "IR_COMMIT_OBSERVED_DST"
+                    expression = f"{macro}({FIELD_VARS[lay.dst]}, {var.name}, {self.observer_deferred})"
+                else:
+                    expression = f"{macro}({FIELD_VARS[lay.dst]}, {var.name})"
+                self.dst_stores.append(expression)
                 out.emit(f"{self.dst_stores[-1]};\n")
                 if self.published_temporary_result:
                     out.emit("}\n")
@@ -2283,7 +2568,11 @@ class IREmitter(Emitter):
         self._replacers["IR_DST_SLOT"] = self.ir_dst_slot
         self._replacers["IR_BASE"] = self.ir_base
         self._replacers["IR_WINDOW_TAKEN"] = self.ir_window_taken
-        self._replacers["IR_EXECUTE_ORDINARY_NOP"] = self.execute_ordinary_nop
+        self._replacers["IR_COMPLETE_STEP"] = self.complete_step
+        self._replacers["IR_OBSERVE_COMMITTED_BRANCH"] = self.observe_committed_branch
+        self._replacers["IR_DEFER_CLOSE"] = self.defer_observer_input
+        self._replacers["IR_RETURN_TO_CALLER"] = self.return_to_caller
+        self._replacers["IR_ENTER_GENERATOR"] = self.enter_generator
         self._replacers["IR_TRY_DICT_FIRST_PROBE"] = self.try_dict_first_probe
         self._replacers["IR_RETIRE_PUBLISHED"] = self.retire_published
         self._replacers["IR_RETIRE_PUBLISHED_RESULT"] = self.retire_published
@@ -2335,6 +2624,7 @@ class IREmitter(Emitter):
         self.call_flags = ""
         # The format of the handler being emitted
         self.handler_format: IRFormat | None = None
+        self.execution_variant: ExecutionVariant | None = None
         self.result_publication: "ResultPublicationContract | None" = None
         # Whether the handler being emitted has a value record, value_temps:
         # only a handler whose contract has BOXES does (boxing_handlers)
@@ -2394,8 +2684,10 @@ class IREmitter(Emitter):
         if tkn.text == "IR_RETIRE_PUBLISHED_RESULT":
             fmt = self.format_of(inst)
             dst = FIELD_VARS[fmt.field_of(ROLE_DST)]
-            failure_result = (
-                f"(IR_IS_LOCAL({dst}) ? {result_name} : PyValue_NULL)")
+            if (self.execution_variant is None or
+                    fmt.field_of(ROLE_DST) not in self.execution_variant.temp_fields):
+                failure_result = (
+                    f"((IR_IS_LOCAL({dst}) || {dst} == IR_NO_DST) ? {result_name} : PyValue_NULL)")
             assert isinstance(storage.stack, IRStack)
             storage.stack.published_temporary_result = True
         window = (FIELD_VARS[self.format_of(inst).field_of(ROLE_BASE)]
@@ -2513,7 +2805,71 @@ class IREmitter(Emitter):
         self.reader_error()
         self.emit("}\n")
 
-    def unpack_to_locals(self, fmt, count):
+    def defer_observer_input(self, tkn, tkn_iter, uop, storage, inst):
+        owner, = self.macro_args(tkn, tkn_iter, 1)
+        stack = storage.stack
+        assert isinstance(stack, IRStack)
+        if owner in stack.observer_inputs:
+            raise analysis_error("duplicate deferred observer owner", tkn)
+        captured = f"ir_observer_input_{len(stack.observer_inputs)}"
+        self.emit(f"PyValue {captured} = {owner};\n")
+        self.emit(f"{owner} = PyValue_NULL;\n")
+        stack.observer_inputs.append(captured)
+        return True
+
+    def observe_committed_branch(self, tkn, tkn_iter, uop, storage, inst):
+        assert inst is not None
+        args, _ = self.instruction_macro_args(tkn, tkn_iter)
+        if len(args) != 4:
+            raise analysis_error("terminal observer takes source, destination, event, owner edge", tkn)
+        assert next(tkn_iter).kind == "SEMI"
+        source, destination, event, _ = (" ".join(t.text for t in arg) for arg in args)
+        contracts = observer_terminal_paths(inst, self.format_of(inst))
+        if tkn not in contracts:
+            raise analysis_error("uncertified terminal observer", tkn)
+        self.check_owner_exit(tkn)
+        stack = storage.stack
+        assert isinstance(stack, IRStack)
+        if stack.dst_stores or stack.observer_deferred is not None:
+            raise analysis_error("terminal observer has a prior destination commit", tkn)
+        # Each exclusive path owns its own final commit, rather than adding
+        # mutually exclusive stores to the ordinary shared counter.
+        stack.dst_stores = list(stack.dst_stores)
+        reserved = {"ir_observer_deferred", "ir_observer_next", "ir_observer_result",
+                    "ir_observer_exception"}
+        if reserved & set(uop_tokens(inst)) or any(
+                name.startswith("ir_observer_input_") for name in uop_tokens(inst)):
+            raise analysis_error("terminal observer reserved local name", tkn)
+        self.emit("{\n")
+        self.emit("PyValue ir_observer_deferred = PyValue_NULL;\n")
+        stack.observer_deferred = "ir_observer_deferred"
+        storage.push_outputs()
+        fmt = self.format_of(inst)
+        mode = store_mode(inst, external_io(inst)[1]) if fmt.store_dst else None
+        emit_final_outputs(inst, fmt, mode, stack, self.out)
+        self.emit(f"_PyInstr *ir_observer_next = {destination};\n")
+        self.emit("frame->return_pc = ir_observer_next;\n")
+        edge, _ = contracts[tkn]
+        self.emit("_PyIRObserverResult ir_observer_result = _PyIR_ObserveCommittedBranch(\n")
+        self.emit(f"tstate, frame, this_instr, {source}, ir_observer_next, {event}, {edge});\n")
+        self.emit("PyObject *ir_observer_exception = ir_observer_result.status < 0\n")
+        self.emit("? PyErr_GetRaisedException() : NULL;\n")
+        self.emit("assert(ir_observer_result.status >= 0 || ir_observer_exception != NULL);\n")
+        self.emit("frame->instr_ptr = ir_observer_result.next;\n")
+        self.emit("PyValue_XCLOSE(ir_observer_deferred);\n")
+        for owner in stack.observer_inputs:
+            self.emit(f"PyValue_XCLOSE({owner});\n")
+        self.emit(f"_PyValueTemps_Close({self.temps});\n")
+        self.emit("if (ir_observer_result.status < 0) {\n")
+        self.emit("PyErr_SetRaisedException(ir_observer_exception);\n")
+        self.emit("next_instr = frame->instr_ptr + 1;\n")
+        self.reader_error()
+        self.emit("}\n")
+        self.emit("next_instr = frame->instr_ptr;\n")
+        self.emit("DISPATCH();\n}\n")
+        return False
+
+    def unpack_to_locals(self, fmt, count, canonical=False):
         """The elements are in the window, in stack order; if dst names a
         run of locals they go there, one element at a time as the STORE_FASTs
         they replace would, so that a __del__ sees the same locals.  A
@@ -2521,11 +2877,12 @@ class IREmitter(Emitter):
         dst = FIELD_VARS[fmt.field_of(ROLE_DST)]
         self.emit(f"if (IR_IS_LOCAL({dst})) {{\n")
         self.emit(f"int ir_n = {count};\n")
-        self.emit(f"int ir_rest = IR_UNPACK_TO_LOCALS(&IR_SLOT({dst}), "
+        macro = "IR_UNPACK_CANONICAL_TO_LOCALS" if canonical else "IR_UNPACK_TO_LOCALS"
+        self.emit(f"int ir_rest = {macro}(&IR_SLOT({dst}), "
                   "window, ir_n);\n")
         self.emit("if (ir_rest >= 0 &&\n")
         self.emit("    finish_unpack_to_locals(tstate, frame, next_instr, "
-                  f"{self.temps}, &IR_SLOT({dst}), window, ir_n, ir_rest) < 0) {{\n")
+                  f"{self.temps}, &IR_SLOT({dst}), window, ir_n, ir_rest, {int(canonical)}) < 0) {{\n")
         self.emit("next_instr = frame->instr_ptr + 1;\n")
         self.reader_error()
         self.emit("}\n")
@@ -2547,20 +2904,15 @@ class IREmitter(Emitter):
         self.emit("IR_STORE_CANONICAL_TEMP_DST(IR_A(ir_word), ir_leaf_result);\n")
         self.emit_ordered_retirement(
             "ir_leaf_key", "ir_leaf_dict",
-            "(IR_IS_LOCAL(IR_A(ir_word)) ? ir_leaf_result : PyValue_NULL)",
+            "((IR_IS_LOCAL(IR_A(ir_word)) || IR_A(ir_word) == IR_NO_DST) ? ir_leaf_result : PyValue_NULL)",
             "NULL", None)
-        self.emit("if (IR_IS_LOCAL(IR_A(ir_word))) {\n")
+        self.emit("if (IR_IS_LOCAL(IR_A(ir_word)) || IR_A(ir_word) == IR_NO_DST) {\n")
         self.emit("IR_STORE_DST(IR_A(ir_word), ir_leaf_result);\n")
         self.release_displaced()
         self.emit("}\n")
         self.emit("DISPATCH();\n")
         self.emit("}\n")
         self.emit("}\n")
-        return True
-
-    def execute_ordinary_nop(self, tkn, tkn_iter, uop, storage, inst):
-        self.macro_args(tkn, tkn_iter, 0)
-        self.execute_nop_boundary = True
         return True
 
     def call_reload(self, inst):
@@ -2626,8 +2978,17 @@ class IREmitter(Emitter):
         self.emit("assert(frame->instr_ptr == this_instr);\n")
         self.emit("{\n")
         argc = f"{self.call_argc}, " if self.call_kind != "CALL_TRANSACTION_EX" else ""
-        self.emit(f"_PyCallResult call_result = {run_override or self.call_run}(tstate, frame, "
-                  f"call_base, call_destination, {argc}{self.call_flags} | call_state);\n")
+        if run_override:
+            self.emit(f"_PyCallResult call_result = call_bind_known_python(tstate, frame, "
+                      f"call_base, call_destination, {argc}fb);\n")
+            self.emit("if (call_result.status > 0) {\n")
+            self.emit(f"call_result = call_transaction_run_vector(tstate, frame, "
+                      f"call_base, call_destination, {argc}"
+                      f"{self.call_flags} | call_state | CALL_PREPARED);\n")
+            self.emit("}\n")
+        else:
+            self.emit(f"_PyCallResult call_result = {self.call_run}(tstate, frame, "
+                      f"call_base, call_destination, {argc}{self.call_flags} | call_state);\n")
         self.emit("if (call_result.status < 0) {\n")
         self.reader_error()
         self.emit("}\n")
@@ -2643,7 +3004,7 @@ class IREmitter(Emitter):
 
     def invoke_call(self, tkn, tkn_iter, uop, storage, inst):
         self.macro_args(tkn, tkn_iter, 0)
-        run_override = ("call_transaction_run_guarded_python_vector"
+        run_override = ("call_bind_known_python"
                         if tkn.text == "IR_INVOKE_GUARDED_PYTHON_CALL" else None)
         if run_override:
             self.emit("assert(fb->func_version >= FUNC_VERSION_FIRST_VALID);\n")
@@ -3495,6 +3856,87 @@ class IREmitter(Emitter):
         stack.window_taken = True
         return True
 
+    def complete_step(self, tkn, tkn_iter, uop, storage, inst):
+        """A completed loop/send consumes its window, not its body outputs.
+
+        The helper owns both the held result and detached input owners on
+        every exit. Do not flush the other outcome's cached window here.
+        """
+        kind, value, distance = self.macro_args(tkn, tkn_iter, 3)
+        assert inst is not None
+        fmt = self.format_of(inst)
+        base = FIELD_VARS[fmt.field_of(ROLE_BASE)]
+        dst = FIELD_VARS[fmt.field_of(ROLE_DST)]
+        self.emit("{\n")
+        target = (f"_PyFrame_InstrAt(frame, {distance})" if kind == "_PY_IR_SEND_THROW"
+                  else f"next_instr + {distance}")
+        self.emit(f"_PyIRStepResult ir_step_result = _PyEval_CompleteStep(tstate, frame, this_instr, {base}, {dst}, {target}, {value}, {kind});\n")
+        self.emit("next_instr = ir_step_result.next;\n")
+        self.emit("if (ir_step_result.status < 0) { JUMP_TO_LABEL(error); }\n")
+        self.emit("DISPATCH();\n")
+        self.emit("}\n")
+        return False
+
+    def return_to_caller(self, tkn, tkn_iter, uop, storage, inst):
+        """Terminal transfer; the retired child has no fictitious output."""
+        value, generator_return = self.macro_args(tkn, tkn_iter, 2)
+        assert isinstance(storage.stack, IRStack)
+        if not storage.stack.layout.canonical_frame_transfer:
+            self.emit(f"{value} = _PyValue_Publish(&{value});\n")
+        else:
+            self.emit(f"assert(_PyValue_IsHome({value}));\n")
+        self.emit(f"if ({generator_return}) {{\n")
+        self.emit(f"_PyIRStepResult ir_step_result = _PyEval_CompleteGeneratorReturn(tstate, frame, {value});\n")
+        self.emit("next_instr = ir_step_result.next;\n")
+        self.emit("if (ir_step_result.status < 0) { JUMP_TO_LABEL(error); }\n")
+        self.emit("}\n")
+        self.emit("else {\n")
+        self.emit("next_instr = frame->return_pc;\n")
+        self.emit(f"if (_PyFrame_SetReturnValue(frame, {value})) {{ next_instr = frame->return_pc; }}\n")
+        self.emit("}\n")
+        self.emit("LLTRACE_RESUME_FRAME();\n")
+        self.emit("DISPATCH();\n")
+        return False
+
+    def enter_generator(self, tkn, tkn_iter, uop, storage, inst):
+        """Commit a resumed child's complete state before disposing input.
+
+        In particular an unused sent value may be the last mortal owner;
+        neither the caller window nor an unentered child may advertise it
+        while its finalizer executes.
+        """
+        gen, kind = self.macro_args(tkn, tkn_iter, 2)
+        assert inst is not None
+        fmt = self.format_of(inst)
+        base = FIELD_VARS[fmt.field_of(ROLE_BASE)]
+        dst = FIELD_VARS[fmt.field_of(ROLE_DST)]
+        self.emit("{\n")
+        self.emit(f"_PyInterpreterFrame *ir_resumed_frame = &{gen}->gi_iframe;\n")
+        self.emit("PyValue ir_resume_input = PyValue_None;\n")
+        self.emit(f"if ({kind} == _PY_IR_SEND) {{\n")
+        self.emit(f"ir_resume_input = IR_SLOT({base} + 2);\n")
+        self.emit(f"IR_SLOT({base} + 2) = PyValue_NULL;\n")
+        self.emit("}\n")
+        self.emit(f"frame->return_slot = (uint16_t)({kind} == _PY_IR_SEND ? {base} + 2 : {dst});\n")
+        self.emit("frame->return_pc = next_instr;\n")
+        self.emit("ir_resumed_frame->previous = frame;\n")
+        self.emit(f"{gen}->gi_exc_state.previous_item = tstate->exc_info;\n")
+        self.emit(f"tstate->exc_info = &{gen}->gi_exc_state;\n")
+        self.emit("frame = tstate->current_frame = ir_resumed_frame;\n")
+        self.emit("slots = _PyFrame_Slots(frame);\n")
+        self.emit("if (_Py_EnterRecursivePy(tstate)) {\n")
+        self.emit("PyValue_XCLOSE(ir_resume_input);\n")
+        self.emit("JUMP_TO_LABEL(exit_unwind_notrace);\n")
+        self.emit("}\n")
+        self.emit("_PyFrame_SetReturnValue(frame, ir_resume_input);\n")
+        self.emit("LOAD_IP(0);\n")
+        self.emit("IR_SKIP_RESUME();\n")
+        self.emit("DTRACE_FUNCTION_ENTRY();\n")
+        self.emit("LLTRACE_RESUME_FRAME();\n")
+        self.emit("DISPATCH();\n")
+        self.emit("}\n")
+        return False
+
     def ir_instruction_size(
         self,
         tkn: Token,
@@ -3663,44 +4105,6 @@ def value_bridge_bound(name: str, inst: Instruction) -> int:
     )
 
 
-def validate_ordinary_nop_boundary(inst: Instruction, fmt: IRFormat) -> None:
-    parts = [p for p in inst.parts if isinstance(p, Uop)]
-    markers = [p for p in parts if any(
-        t.text == "IR_EXECUTE_ORDINARY_NOP" for t in p.body.tokens())]
-    if not markers:
-        return
-    expected = ["_GUARD_TOS_BOOL", "_POP_JUMP_IF_FALSE",
-                "_EXECUTE_ORDINARY_NOP"]
-    stack_effects = [
-        ([('value', True, '')], [('value', True, '')]),
-        ([('cond', False, '')], []),
-        ([], []),
-    ]
-    def stack_items(items):
-        return [(item.name, item.peek, item.size) for item in items]
-
-    inputs, outputs = external_io(inst)
-    if [p.name for p in parts] != expected or inst.parts[-1] is not parts[-1]:
-        raise analysis_error("IR_EXECUTE_ORDINARY_NOP requires the checked "
-                             "terminal boolean branch", inst.where)
-    statements = parts[0].body.body
-    guard = (" ".join(t.text for t in statements[0].tokens())
-             if statements and isinstance(statements[0], SimpleStmt) else "")
-    marker = " ".join(t.text for t in parts[-1].body.tokens())
-    if (guard != "EXIT_IF ( ! PyValue_BoolCheck ( value ) ) ;"
-            or marker != "{ IR_EXECUTE_ORDINARY_NOP ( ) ; }"
-            or not parts[0].is_guard() or not parts[1].properties.jumps
-            or [(stack_items(p.stack.inputs), stack_items(p.stack.outputs))
-                for p in parts] != stack_effects
-            or len(inputs) != 1 or inputs[0].size or outputs or fmt.window
-            or fmt.store_dst or releases_object(inst)
-            or any(p.properties.escapes or p.properties.eval_breaker
-                   or p.properties.switches_frame or p.properties.error_with_pop
-                   or p.properties.error_without_pop
-                   for p in parts)):
-        raise analysis_error("IR_EXECUTE_ORDINARY_NOP requires the checked "
-                             "terminal boolean branch", inst.where)
-
 
 def validate_dict_first_probe(inst: Instruction, fmt: IRFormat) -> None:
     parts = [p for p in inst.parts if isinstance(p, Uop)]
@@ -3738,7 +4142,7 @@ def validate_dict_first_probe(inst: Instruction, fmt: IRFormat) -> None:
             or fmt.window or fmt.n_inputs != 2 or fmt.borrow_mask != 3
             or fmt.input_field(0) != "B" or fmt.input_field(1) != "C"
             or fmt.field_of(ROLE_DST) != "A" or not fmt.store_dst
-            or fmt.discards or fmt.unpacks):
+            or fmt.unpacks):
         raise analysis_error("IR_TRY_DICT_FIRST_PROBE requires the checked "
                              "dictionary reader prefix and scalar format", inst.where)
 
@@ -3801,6 +4205,22 @@ def validate_guarded_python_call(inst: Instruction, fmt: IRFormat) -> None:
         raise analysis_error("guarded Python call requires the checked prefix", inst.where)
 
 
+def emit_final_outputs(inst, fmt, mode, stack: IRStack, out: CWriter) -> None:
+    """The physical final publication shared by ordinary and observed paths."""
+    stack.final = True
+    stack.flush(out)
+    if mode == STORE_RESULT and fmt.window:
+        dst = FIELD_VARS[fmt.field_of(ROLE_DST)]
+        if stack.observer_deferred is not None:
+            expression = (f"IR_MOVE_OBSERVED_DST({dst}, window[{fmt.dst_offset}], "
+                          f"{stack.observer_deferred})")
+        else:
+            macro = "IR_MOVE_TO_DST_OR_DISCARD" if fmt.discards else "IR_MOVE_TO_DST"
+            expression = f"{macro}({dst}, window[{fmt.dst_offset}])"
+        stack.dst_stores.append(expression)
+        out.emit(f"{expression};\n")
+
+
 def generate_handler(name: str, inst: Instruction, fmt: IRFormat,
                      emitter: IREmitter, out: CWriter, record: bool) -> None:
     """The handler name, which runs inst: inst itself, or for a handler of a
@@ -3816,7 +4236,7 @@ def generate_handler(name: str, inst: Instruction, fmt: IRFormat,
     locals; the second declares them, a view as a PyValueBorrow (S8).  A
     name with both roles is refused: the DSL gives the owner another name,
     as `taken = TAKE(value)` does."""
-    validate_ordinary_nop_boundary(inst, fmt)
+    emitter.execution_variant = EXECUTION_VARIANTS.get(name)
     validate_dict_first_probe(inst, fmt)
     validate_guarded_python_call(inst, fmt)
     emitter.result_publication = result_publication_contract(inst, fmt)
@@ -3839,6 +4259,308 @@ def generate_handler(name: str, inst: Instruction, fmt: IRFormat,
     emit_handler(name, inst, fmt, emitter, out, record, {})
 
 
+@dataclass(frozen=True)
+class CanonicalResult:
+    "A checked canonical owner preserved through the complete uop chain."
+    producer: Uop
+    result: str
+
+
+def canonical_body_tokens(part: Uop) -> list[str]:
+    "Read the complete source body, including preprocessor arm delimiters."
+    context = part.context
+    tokens = context.owner.tokens[context.begin:context.end]
+    begin = tokens.index(part.body.open)
+    end = tokens.index(part.body.close, begin)
+    tokens = tokens[begin:end + 1]
+    # Emission reads the mutable AST. Reparse the original token objects so
+    # source delimiters cannot certify a body changed after analysis.
+    reader = Parser("", filename=context.owner.filename)
+    reader.tokens = tokens
+    if reader.block() != part.body:
+        return []
+    return [token.text for token in tokens
+            if token.kind != "COMMENT"]
+
+
+def canonical_list_child_source(parts: list[Uop]) -> CanonicalResult | None:
+    "Prove one guarded list-child duplicate and both owner retirements."
+    shapes = (
+        (("value",), ("value",)),
+        (("nos", "unused"), ("nos", "unused")),
+        (("list_st", "sub_st"), ("res", "ls", "ss")),
+        (("value",), ()),
+        (("value",), ()),
+    )
+    if len(parts) != len(shapes):
+        return None
+    bodies = (
+        "{ EXIT_IF(!PyValue_IsInlineInt(value)); }",
+        """{
+            PyObject *o = PyValue_AsKnownObjectBorrow(nos);
+            EXIT_IF(!PyList_CheckExact(o));
+        }""",
+        """{
+            PyObject *list = PyValue_AsKnownObjectBorrow(list_st);
+            assert(PyList_CheckExact(list));
+            Py_ssize_t index = PyValue_InlineInt64(sub_st);
+            if (index < 0) { index += PyList_GET_SIZE(list); }
+            EXIT_IF(index < 0 || index >= PyList_GET_SIZE(list));
+            res = PyValue_XDUP(PyList_GET_VALUE(list, index));
+            assert(!PyValue_IsNull(res));
+            STAT_INC(BINARY_OP, hit);
+            ls = list_st;
+            ss = sub_st;
+            INPUTS_DEAD();
+        }""",
+        """{
+            assert(PyValue_LongCheckExact(value));
+            PyValue_CLOSE_SPECIALIZED(value, _PyLong_ExactDealloc);
+        }""",
+        "{ PyValue_XCLOSE(value); }",
+    )
+    for part, (inputs, outputs), body in zip(parts, shapes, bodies):
+        if (tuple(item.name for item in part.stack.inputs) != inputs
+                or tuple(item.name for item in part.stack.outputs) != outputs
+                or any(item.is_array() for item in
+                       (*part.stack.inputs, *part.stack.outputs))
+                or any(cache.name != "unused" for cache in part.caches)
+                or canonical_body_tokens(part)
+                    != [token.text for token in tokenize(body)]):
+            return None
+    return CanonicalResult(parts[2], "res")
+
+
+def canonical_result_source(inst: Instruction, fmt: IRFormat
+                            ) -> CanonicalResult | None:
+    "Recognize bounded source proofs, independently of instruction names."
+    inputs, outputs = external_io(inst)
+    # Skip entries are unnamed feedback padding and emit no code or C
+    # binding. A Flush or any future part requires a separate proof.
+    if any(not isinstance(part, (Uop, Skip)) for part in inst.parts):
+        return None
+    parts = [part for part in inst.parts if isinstance(part, Uop)]
+    if any(cache.name != "unused" for part in parts for cache in part.caches):
+        return None
+    if (not fmt.store_dst or fmt.window or not parts or len(outputs) != 1
+            or outputs[0].item.is_array() or outputs[0].aliased
+            or outputs[0].external >= 0
+            or fmt.field_of(ROLE_DST) is None):
+        return None
+    list_child = canonical_list_child_source(parts)
+    if (list_child is not None and len(inputs) == 2 and fmt.n_inputs == 2
+            and outputs[0].item.name == list_child.result):
+        return list_child
+    producer = parts[0]
+    if not producer.stack.outputs:
+        return None
+    result = producer.stack.outputs[0].name
+    if (outputs[0].item.name != result or result in producer.aliased_outputs
+            or any(item.is_array() for part in parts
+                   for item in (*part.stack.inputs, *part.stack.outputs))):
+        return None
+    constructors = {"PyValue_FromDouble", "PyValue_FromInt64"}
+    trusted = constructors | {"PyValue_FloatOperandValues",
+                             "PyValue_CLOSE_SPECIALIZED",
+                             "_PyFloat_OrLongExactDealloc"}
+    # C name resolution is outside this parser. Exclude local bindings and
+    # preprocessing that could replace the audited global helper boundary.
+    if any(item.name in trusted for part in parts
+           for item in (*part.stack.inputs, *part.stack.outputs)):
+        return None
+    tokens = [token for part in parts for token in part.body.tokens()
+              if token.kind != "COMMENT"]
+    if any(token.kind.startswith("CMACRO") for token in tokens):
+        return None
+    local_field = fmt.field_of(ROLE_LOCAL_IN)
+    home_helpers = {"GETLOCAL", "PyValue_DUP", "assert", "PyValue_IsNull"}
+    if (len(parts) == 1 and not inputs and fmt.n_inputs == 0
+            and producer.properties.pure
+            and len(producer.stack.outputs) == 1
+            and local_field is not None
+            and fmt.imm == FIELD_LOCS[local_field]
+            and not any(item.name in home_helpers for part in parts
+                        for item in (*part.stack.inputs, *part.stack.outputs))
+            and not any(cache.name in home_helpers for part in parts
+                        for cache in part.caches)):
+        expected = f"""{{
+            assert(!PyValue_IsNull(GETLOCAL(oparg)));
+            {result} = PyValue_DUP(GETLOCAL(oparg));
+        }}"""
+        if ([token.text for token in producer.body.tokens()
+             if token.kind != "COMMENT"]
+                == [token.text for token in tokenize(expected)]):
+            return CanonicalResult(producer, result)
+    assignments = [stmt for stmt in producer.body.body
+                   if isinstance(stmt, SimpleStmt)
+                   and _statement_text(stmt)[:2] == [result, "="]]
+    if len(assignments) != 1:
+        return None
+    assignment = _statement_text(assignments[0])
+    if (len(assignment) < 7 or assignment[2] not in constructors
+            or assignment[3] != "(" or assignment[-2:] != [")", ";"]):
+        return None
+    constructor = assignment[2]
+    if sum(token.text == constructor for token in tokens) != 1:
+        return None
+    argument = assignment[4:-2]
+    null_error = f"if (PyValue_IsNull({result})) {{ ERROR_NO_POP(); }}"
+    if constructor == "PyValue_FromDouble":
+        if (len(producer.stack.inputs) != 2
+                or len(producer.stack.outputs) != 3
+                or len(argument) != 3 or argument[0] != "a"
+                or argument[1] not in {"+", "-", "*", "/"}
+                or argument[2] != "b"):
+            return None
+        left, right = [item.name for item in producer.stack.inputs]
+        _, l, r = [item.name for item in producer.stack.outputs]
+        if len({left, right, result, l, r, "a", "b"}) != 7:
+            return None
+        expected_prefix = f"""double a, b;
+            EXIT_IF(!PyValue_FloatOperandValues({left}, {right}, &a, &b));"""
+        expected_tail = f"""STAT_INC(BINARY_OP, hit);
+            {result} = {constructor}(a {argument[1]} b);
+            {null_error}
+            {l} = {left}; {r} = {right}; INPUTS_DEAD();"""
+        bodies = ["{" + expected_prefix + guard + expected_tail + "}"
+                  for guard in ("", "EXIT_IF(b == 0.0);")]
+        if not any([t.text for t in producer.body.tokens() if t.kind != "COMMENT"]
+                   == [t.text for t in tokenize(body)] for body in bodies):
+            return None
+        if len(parts) != 3:
+            return None
+        depth = 3
+        for part in parts[1:]:
+            if (len(part.stack.inputs) != 1 or part.stack.outputs
+                    or part.stack.inputs[0].name == result):
+                return None
+            value = part.stack.inputs[0].name
+            expected = f"""{{
+                assert(PyValue_IsInlineFloat({value}) || PyValue_IsInlineInt({value}));
+                PyValue_CLOSE_SPECIALIZED({value}, _PyFloat_OrLongExactDealloc);
+            }}"""
+            if ([t.text for t in part.body.tokens() if t.kind != "COMMENT"]
+                    != [t.text for t in tokenize(expected)]):
+                return None
+            # Each suffix consumes only the top input owner, never result0.
+            depth -= 1
+            if depth <= 0:
+                return None
+        if depth != 1:
+            return None
+    else:
+        # This constructor's API is unconditional; narrow Box/Scaled helpers
+        # do not qualify. Start with a constant argument and no input owners.
+        if (inputs or len(parts) != 1 or len(producer.stack.outputs) != 1
+                or not re.fullmatch(r"-?(0|[1-9][0-9]*)", "".join(argument))):
+            return None
+        if not -(1 << 63) < int("".join(argument)) < (1 << 63):
+            return None
+        expected = f"{{ {result} = {constructor}({''.join(argument)}); {null_error} }}"
+        if ([t.text for t in producer.body.tokens() if t.kind != "COMMENT"]
+                != [t.text for t in tokenize(expected)]):
+            return None
+    return CanonicalResult(producer, result)
+
+
+def canonical_frame_transfer_input(inst: Instruction) -> bool:
+    """A return or yield transfers a canonical home owner unchanged.
+
+    Fail closed to ordinary publication if the checked uop chain changes.
+    Native/SEND results do not acquire this fact from their handler name.
+    """
+    if any(not isinstance(part, (Uop, Skip)) for part in inst.parts):
+        return False
+    parts = [p for p in inst.parts if isinstance(p, Uop)]
+    if any(cache.name != "unused" for part in parts for cache in part.caches):
+        return False
+    if len(parts) == 2:
+        prefix, transfer = parts
+        shapes = ((("value",), ("taken",)), (("retval",), ("value",)))
+        if all((tuple(item.name for item in part.stack.inputs),
+                tuple(item.name for item in part.stack.outputs)) == shape
+               for part, shape in zip(parts, shapes)):
+            expected_yield = """{
+                assert(frame->owner != FRAME_OWNED_BY_INTERPRETER);
+                frame->instr_ptr++;
+                PyGenObject *gen = _PyGen_GetGeneratorFromFrame(frame);
+                assert(FRAME_SUSPENDED_YIELD_FROM == FRAME_SUSPENDED + 1);
+                assert(oparg == 0 || oparg == 1);
+                PyValue temp = retval;
+                DEAD(retval);
+                SAVE_STACK();
+                DTRACE_FUNCTION_RETURN();
+                tstate->exc_info = gen->gi_exc_state.previous_item;
+                gen->gi_exc_state.previous_item = NULL;
+                _Py_LeaveRecursiveCallPy(tstate);
+                _PyInterpreterFrame *gen_frame = frame;
+                gen_frame->return_slot = (uint16_t)IR_DST_SLOT;
+                _PyThreadState_UpdateLastProfiledFrame(tstate, gen_frame, gen_frame->previous);
+                frame = tstate->current_frame = frame->previous;
+                gen_frame->previous = NULL;
+                ((_PyThreadStateImpl *)tstate)->generator_return_kind = GENERATOR_YIELD;
+                FT_ATOMIC_STORE_INT8_RELEASE(gen->gi_frame_state, FRAME_SUSPENDED + oparg);
+                #ifdef Py_DEBUG
+                if (!PyValue_IsNone(frame->f_executable)) {
+                    Py_ssize_t i = INSTR_OFFSET_OF(frame->instr_ptr);
+                    assert(i >= 0 && i <= INT_MAX);
+                    int opcode = _PyIR_BaseOpcode(
+                        _PyCode_InstrHandler(_PyFrame_GetCode(frame), (int)i));
+                    assert(opcode == SEND || opcode == FOR_ITER);
+                }
+                #endif
+                RELOAD_STACK();
+                next_instr = frame->return_pc;
+                value = temp;
+                LLTRACE_RESUME_FRAME();
+            }"""
+            if (not any(item.is_array() for part in parts
+                        for item in (*part.stack.inputs, *part.stack.outputs))
+                    and canonical_body_tokens(prefix)
+                    == [token.text for token in tokenize(
+                        "{ taken = TAKE(value); }")]
+                    and canonical_body_tokens(transfer)
+                    == [token.text for token in tokenize(expected_yield)]):
+                return True
+    if [p.name for p in parts] not in (
+        ["_MAKE_HEAP_SAFE", "_RETURN_VALUE"],
+        ["_RETURN_VALUE_EVENT", "_RETURN_VALUE"],
+    ):
+        return False
+    prefix = [t.text for t in parts[0].body.tokens() if t.kind != "COMMENT"]
+    body = [t.text for t in parts[1].body.tokens() if t.kind != "COMMENT"]
+    expected_body = """{
+        assert(frame->owner != FRAME_OWNED_BY_INTERPRETER);
+        PyValue temp = retval;
+        DEAD(retval);
+        SAVE_STACK();
+        _PyFrame_AssertTemporariesClear(frame);
+        DTRACE_FUNCTION_RETURN();
+        _Py_LeaveRecursiveCallPy(tstate);
+        _PyInterpreterFrame *dying = frame;
+        int generator_return = dying->owner == FRAME_OWNED_BY_GENERATOR;
+        frame = tstate->current_frame = dying->previous;
+        _PyEval_FrameClearAndPop(tstate, dying);
+        RELOAD_STACK();
+        IR_RETURN_TO_CALLER(temp, generator_return);
+    }"""
+    if body != [t.text for t in tokenize(expected_body)]:
+        return False
+    if parts[0].name == "_MAKE_HEAP_SAFE":
+        return prefix == ["{", "taken", "=", "TAKE", "(", "value", ")", ";", "}"]
+    expected_event = """{
+        PyValue held = TAKE(val);
+        int err = _Py_call_instrumentation_arg(
+            tstate, PY_MONITORING_EVENT_PY_RETURN, frame, this_instr, held);
+        if (err) {
+            PyValue_CLOSE(held);
+            ERROR_IF(true);
+        }
+        taken = held;
+    }"""
+    return prefix == [t.text for t in tokenize(expected_event)]
+
+
 def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
                  emitter: IREmitter, out: CWriter, record: bool,
                  roles: dict[str, set[str]]) -> None:
@@ -3847,18 +4569,17 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
     emitter.taken_outputs = set()
     operation = None
     emitter.has_record = record
-    if name != inst.name:
+    if name != inst.name and name not in EXECUTION_VARIANTS:
         operation = "NB_" + name.removeprefix(BINARY_OP_FAMILY + "_")
     transaction = uses_call_transaction(inst)
     emitter.call_finished = False
-    emitter.execute_nop_boundary = False
     emitter.call_fallback_used = False
     emitter.call_fallback = f"call_transaction_fallback_{name}"
     is_target = inst.is_target and name == inst.name
     out.emit("\n")
     out.emit(f"TARGET({name}) {{\n")
     bridge_bound = value_bridge_bound(name, inst)
-    out.emit(f"int opcode = {name};\n")
+    out.emit(f"int opcode = {canonical_handler(name)};\n")
     out.emit(f"(void)(opcode);\n")
     if not record:
         # No value record: the dispatch macros finish no bridges
@@ -3867,7 +4588,7 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
     if inst.properties.needs_prev:
         out.emit(f"_PyIRWord* const prev_instr = frame->instr_ptr;\n")
     if not is_target:
-        qualifier = "" if transaction or inst.name == "BINARY_OP" or name in ("CALL", "CALL_KW", "INSTRUMENTED_CALL", "INSTRUMENTED_CALL_KW", "CALL_NON_PY_GENERAL", "CALL_KW_NON_PY", "CALL_BUILTIN_O", "LOAD_ATTR_SLOT", "STORE_ATTR_SLOT",
+        qualifier = "" if transaction or inst.name == "BINARY_OP" or canonical_handler(name) in ("CALL", "CALL_KW", "INSTRUMENTED_CALL", "INSTRUMENTED_CALL_KW", "CALL_NON_PY_GENERAL", "CALL_KW_NON_PY", "CALL_BUILTIN_O", "LOAD_ATTR_SLOT", "STORE_ATTR_SLOT",
                                    "BUILD_MAP", "STORE_SUBSCR", "STORE_SUBSCR_DICT",
                                    "STORE_ATTR_WITH_HINT", "BINARY_OP_SUBSCR_DICT", "LOAD_GLOBAL",
                                    "LOAD_ATTR", "STORE_ATTR",
@@ -3879,9 +4600,9 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
     if not inst.properties.no_save_ip:
         out.emit(f"frame->instr_ptr = next_instr;\n")
     out.emit(f"next_instr += 1;\n")
-    out.emit(f"INSTRUCTION_STATS({name});\n")
+    out.emit(f"INSTRUCTION_STATS({canonical_handler(name)});\n")
     if is_target:
-        qualifier = "" if transaction or inst.name == "BINARY_OP" or name in ("CALL", "CALL_KW", "STORE_SUBSCR", "LOAD_GLOBAL", "LOAD_ATTR", "STORE_ATTR") else "const "
+        qualifier = "" if transaction or inst.name == "BINARY_OP" or canonical_handler(name) in ("CALL", "CALL_KW", "STORE_SUBSCR", "LOAD_GLOBAL", "LOAD_ATTR", "STORE_ATTR") else "const "
         out.emit(f"_PyIRWord* {qualifier}this_instr = next_instr - 1;\n")
         out.emit("(void)this_instr;\n")
     if record:
@@ -3969,14 +4690,16 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
         count = " + ".join(f"({item.size or '1'})" for item in inputs)
         out.emit(f"_PyValue_RecheckWindow(window, {count});\n")
     if inst.properties.uses_opcode:
-        out.emit(f"opcode = {name};\n")
+        out.emit(f"opcode = {canonical_handler(name)};\n")
     mode = store_mode(inst, external_io(inst)[1]) if fmt.store_dst else None
     if mode == STORE_LEAVE:
-        out.emit(f"if (IR_IS_LOCAL({FIELD_VARS[fmt.field_of(ROLE_DST)]})) {{\n")
+        dst = FIELD_VARS[fmt.field_of(ROLE_DST)]
+        out.emit(f"if (IR_IS_LOCAL({dst}) || {dst} == IR_NO_DST) {{\n")
         emitter.emit_jump_to_predicted(inst)
         out.emit("}\n")
     elif mode == STORE_NEVER:
-        out.emit(f"assert(!IR_IS_LOCAL({FIELD_VARS[fmt.field_of(ROLE_DST)]}));\n")
+        dst = FIELD_VARS[fmt.field_of(ROLE_DST)]
+        out.emit(f"assert(!IR_IS_LOCAL({dst}) && {dst} != IR_NO_DST);\n")
     declare_variables(inst, out, emitter.declared_roles)
     for k in range(fmt.n_inputs):
         if fmt.borrow_mask & (1 << k):
@@ -3985,7 +4708,14 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
             out.emit(f"(void){own};\n")
     for box in sorted(emitter.boxes):
         out.emit(f"PyObject *{box} = NULL;\n")
-    stack: Stack = IRStack(slot_layout(inst, fmt, mode), roles)
+    layout = slot_layout(inst, fmt, mode)
+    canonical = canonical_result_source(inst, fmt)
+    layout = replace(layout, canonical_frame_transfer=canonical_frame_transfer_input(inst),
+                     canonical_result=canonical.result if canonical else None)
+    if emitter.execution_variant is not None:
+        layout = replace(layout, local_fields=emitter.execution_variant.local_fields,
+                         temp_fields=emitter.execution_variant.temp_fields)
+    stack: Stack = IRStack(layout, roles)
     insert_braces = len([p for p in inst.parts if isinstance(p, Uop)]) > 1
     reachable = True
     for part in inst.parts:
@@ -3994,25 +4724,19 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
         except SyntaxError as ex:
             ex.msg = f"{name}: {ex.msg}"
             raise
-        if emitter.call_finished:
+        if not reachable or emitter.call_finished:
             break
     out.start_line()
     if reachable:
         assert isinstance(stack, IRStack)
-        stack.final = True
-        stack.flush(out)
-        if mode == STORE_RESULT and fmt.window:
-            # The result is in its slot of the window; a local takes it
-            dst = FIELD_VARS[fmt.field_of(ROLE_DST)]
-            macro = "IR_MOVE_TO_DST_OR_DISCARD" if fmt.discards else "IR_MOVE_TO_DST"
-            stack.dst_stores.append(f"{macro}({dst}, window[{fmt.dst_offset}])")
-            out.emit(f"{stack.dst_stores[-1]};\n")
+        emit_final_outputs(inst, fmt, mode, stack, out)
         if fmt.store_dst:
             emitter.release_displaced()
         if fmt.unpacks:
-            emitter.unpack_to_locals(fmt, UNPACKS[fmt.group])
-        if emitter.execute_nop_boundary:
-            out.emit("IR_EXECUTE_ORDINARY_NOP();\n")
+            emitter.unpack_to_locals(
+                fmt, UNPACKS[fmt.group], canonical=inst.name in (
+                    "UNPACK_SEQUENCE_TWO_TUPLE", "UNPACK_SEQUENCE_TUPLE",
+                    "UNPACK_SEQUENCE_LIST"))
         out.emit("DISPATCH();\n")
     if transaction and emitter.call_fallback_used:
         out.emit(f"{emitter.call_fallback}:;\n")
@@ -4034,9 +4758,11 @@ def generate_ir_cases(analysis: Analysis, formats: dict[str, IRFormat],
     out.emit("\n")
     for name, inst in sorted(handler_instructions(analysis).items()):
         emitter.handler_format = formats[name]
+        emitter.execution_variant = EXECUTION_VARIANTS.get(name)
         generate_handler(name, inst, formats[name], emitter, out,
                          name in boxing)
         emitter.handler_format = None
+        emitter.execution_variant = None
 
 
 def generate_ir_labels(analysis: Analysis, emitter: Emitter) -> None:
@@ -4211,6 +4937,17 @@ def monitoring_events(name: str, inst: Instruction) -> list[str]:
         events.update(EVENT_PREFIX + e for e in MONITORING_HELPERS.get(tkn.text, ()))
     if name.startswith("INSTRUMENTED_") and uses_call_transaction(inst):
         events.update(EVENT_PREFIX + e for e in TRANSACTION_EVENTS)
+    # Completion has one semantic site, including when the producer is a
+    # specialized native iterator or a Python generator returning to it.
+    if any(t.text in {"IR_COMPLETE_STEP", "IR_ENTER_GENERATOR"}
+           for t in uop_token_list(inst)):
+        group = inst.family.name if inst.family else name.removeprefix("INSTRUMENTED_")
+        if group == "FOR_ITER":
+            events.update(EVENT_PREFIX + e for e in
+                          ("BRANCH_LEFT", "BRANCH_RIGHT", "STOP_ITERATION"))
+        elif group == "SEND":
+            events.update(EVENT_PREFIX + e for e in
+                          ("BRANCH_LEFT", "STOP_ITERATION"))
     return sorted(events)
 
 
@@ -4234,7 +4971,7 @@ CONSTRUCTOR = re.compile(r"New(?!Ref)|Alloc|^PyValue_From|_PyFrame_Push|_Py_Make
 # releases the boxes and adds none, so a handler that boxes nothing passes
 # it NULL.  The macros that box without naming value_temps are listed;
 # test_ir_contract checks the list against Python/ceval_macros.h.
-NON_BOXING_CALLS = {"finish_displaced_local", "finish_unpack_to_locals", "retire_published_values",
+NON_BOXING_CALLS = {"_PyValueTemps_Close", "finish_displaced_local", "finish_unpack_to_locals", "retire_published_values",
                     "value_attribute_complete", "value_operation_finish",
                     "value_reader_complete"}
 
@@ -4291,9 +5028,6 @@ def boxing_handlers(analysis: Analysis, formats: dict[str, IRFormat]) -> set[str
                    for p in inst.parts):
                 raise analysis_error("IR_TRY_DICT_FIRST_PROBE cannot use "
                                      "a value record", inst.where)
-            if emitter.execute_nop_boundary:
-                raise analysis_error("IR_EXECUTE_ORDINARY_NOP cannot follow "
-                                     "boxed inputs", inst.where)
             result.add(name)
     return result
 
@@ -4307,6 +5041,29 @@ class HandlerContract:
     through: Extent
     twin: str | None
     result_phase: str
+    output_kind: str
+    observer_outcome: tuple[str, str]
+
+
+def handler_output_kind(inst: Instruction, fmt: IRFormat) -> str:
+    """Physical output locations, using the emitter's store mode.
+
+    Window flush always writes the frontend slots. STORE_RESULT then moves
+    only the first result to dst; a variable trailing output stays in place.
+    Frame-return forms use the same explicit recipient without that flush.
+    """
+    if not fmt.window:
+        return "_PyIR_OUTPUT_REGISTER_DST"
+    if set(uop_tokens(inst)) & {"IR_COMPLETE_STEP", "IR_ENTER_GENERATOR"}:
+        return "_PyIR_OUTPUT_OUTCOME"
+    mode = store_mode(inst, external_io(inst)[1]) if fmt.store_dst else None
+    if mode == STORE_LEAVE:
+        raise analysis_error("unclassified window output adapter", inst.where)
+    if mode in (STORE_RESULT, STORE_RETURN):
+        if fmt.dst_offset is None:
+            raise analysis_error("window result has no physical offset", inst.where)
+        return "_PyIR_OUTPUT_WINDOW_DST_FIRST"
+    return "_PyIR_OUTPUT_WINDOW"
 
 
 RESULT_PHASE_NONE = "_PyIR_RESULT_PHASE_NONE"
@@ -4771,12 +5528,22 @@ def result_publication_contract(
         result, None, producer, "generic")
 
 
+def writes_suspended_frame_state(inst: Instruction) -> bool:
+    """Recognize state writes, rather than guards mentioning a child state."""
+    tokens = " ".join(uop_tokens(inst))
+    return bool(re.search(
+        r"\bgi_frame_state\s*=\s*FRAME_(?:CREATED|SUSPENDED)\b", tokens)
+        or re.search(
+            r"\bFT_ATOMIC_STORE_INT8_RELEASE\s*\(\s*\w+\s*->\s*"
+            r"gi_frame_state\s*,\s*FRAME_(?:CREATED|SUSPENDED)\b", tokens))
+
+
 def handler_effects(name: str, inst: Instruction, fmt: IRFormat,
                     boxes: bool) -> list[str]:
     "The _PyIR_* effect bits of handler name, which runs inst"
     p = inst.properties
     tokens = {t.text for t in uop_token_list(inst)}
-    suspends = p.switches_frame and bool(tokens & {"FRAME_SUSPENDED", "FRAME_CREATED"})
+    suspends = p.switches_frame and writes_suspended_frame_state(inst)
     pushes_frame = p.switches_frame and not p.returns and not suspends
     specializes = fmt.fb != LOC_NONE and any(
         isinstance(part, Uop) and "specializing" in part.annotations
@@ -4825,6 +5592,8 @@ def handler_contracts(analysis: Analysis,
             twin=twin_of(name, fmt, ids),
             result_phase=(publication.phase if publication is not None
                           else RESULT_PHASE_NONE),
+            output_kind=handler_output_kind(inst, fmt),
+            observer_outcome=observer_outcomes(inst, fmt),
         )
     return result
 

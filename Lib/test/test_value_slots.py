@@ -2130,12 +2130,11 @@ class SendAndGeneratorFromCTests(unittest.TestCase):
 
 
 class ForLoopMonitoringTests(unittest.TestCase):
-    """The end of a for loop over a generator, as FOR_ITER reports it in
-    this tree (value-api-m1b-m2.md, section 1.2, FOR_ITER row): one RAISE
-    event with StopIteration(v) for a return value, none for a None return.
-    The base tree already does this; upstream's FOR_ITER_GEN path reports
-    STOP_ITERATION at END_FOR instead, which the register IR does not take
-    here."""
+    """Generator completion emits one semantic STOP with its exact value.
+
+    STOP and RAISE(StopIteration) are interchangeable monitoring events; modern
+    observers retain completion notification for None as well as other values.
+    """
 
     def record(self, gen_func):
         monitoring = sys.monitoring
@@ -2173,14 +2172,14 @@ class ForLoopMonitoringTests(unittest.TestCase):
             yield 1
             return 5
 
-        self.assertEqual(self.record(gen), [('raise', StopIteration, 5)])
+        self.assertEqual(self.record(gen), [('stop', StopIteration, 5)])
 
     def test_return_none(self):
         def gen():
             yield 1
             return None
 
-        self.assertEqual(self.record(gen), [])
+        self.assertEqual(self.record(gen), [('stop', StopIteration, None)])
 
 
 class UnsupportedOperandTests(unittest.TestCase):

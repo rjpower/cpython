@@ -294,40 +294,6 @@ class TestIRCases(unittest.TestCase):
         end = output.find("TARGET(", start + 1)
         return output[start:end if end >= 0 else len(output)]
 
-    def test_ordinary_nop_boundary_contract(self):
-        source = (Path(__file__).resolve().parents[2] /
-                  "Python" / "bytecodes.c").read_text()
-
-        def generate(text):
-            Path(self.temp_input_filename).write_text(text)
-            with handle_stderr():
-                analysis = analyzer.analyze_files([self.temp_input_filename])
-            out = io.StringIO()
-            ir_generator.generate_ir([self.temp_input_filename], analysis, out, False)
-            return out.getvalue()
-
-        output = generate(source)
-        branch = self.handler(output, "POP_JUMP_IF_FALSE_BOOL")
-        self.assertEqual(branch.count("IR_EXECUTE_ORDINARY_NOP();"), 1)
-        self.assertLess(branch.index("IR_CONSUME_INPUT"),
-                        branch.index("IR_EXECUTE_ORDINARY_NOP();"))
-        self.assertLess(branch.index("IR_EXECUTE_ORDINARY_NOP();"),
-                        branch.rindex("DISPATCH();"))
-        self.assertNotIn("IR_EXECUTE_ORDINARY_NOP();",
-                         self.handler(output, "POP_JUMP_IF_TRUE_BOOL"))
-
-        guard = "EXIT_IF(!PyValue_BoolCheck(value));"
-        branch_call = "RECORD_BRANCH_TAKEN(FB_BRANCH(), flag);"
-        for old, new in ((guard, "EXIT_IF(!PyValue_IsObject(value));"),
-                         (branch_call, "spam_call(); " + branch_call),
-                         ("_POP_JUMP_IF_FALSE +\n            _EXECUTE_ORDINARY_NOP;",
-                          "_EXECUTE_ORDINARY_NOP +\n            _POP_JUMP_IF_FALSE;")):
-            with self.subTest(old=old):
-                self.assertIn(old, source)
-                with self.assertRaisesRegex(SyntaxError,
-                                            "requires the checked terminal boolean branch"):
-                    generate(source.replace(old, new, 1))
-
     def test_dict_first_probe_contract(self):
         source = (Path(__file__).resolve().parents[2] /
                   "Python" / "bytecodes.c").read_text()
@@ -391,13 +357,15 @@ class TestIRCases(unittest.TestCase):
         output = generate(source)
         body = self.handler(output, "CALL_PY_GENERAL")
         success, fallback = body.split("call_transaction_fallback_CALL_PY_GENERAL:;")
-        self.assertIn("call_transaction_run_guarded_python_vector(", success)
-        self.assertNotIn("call_transaction_run_vector(", success)
+        self.assertIn("call_bind_known_python(", success)
+        self.assertIn("if (call_result.status > 0)", success)
+        self.assertIn("call_transaction_run_vector(", success)
+        self.assertIn("CALL_PREPARED", success)
         self.assertIn("call_transaction_run_vector(", fallback)
-        self.assertNotIn("call_transaction_run_guarded_python_vector(", fallback)
+        self.assertNotIn("call_bind_known_python(", fallback)
         other = self.handler(output, "CALL_BOUND_METHOD_GENERAL")
         self.assertIn("call_transaction_run_vector(", other)
-        self.assertNotIn("call_transaction_run_guarded_python_vector(", other)
+        self.assertNotIn("call_bind_known_python(", other)
 
         changes = (
             ("_CHECK_PEP_523 +\n            _CHECK_FUNCTION_VERSION +\n"
@@ -423,6 +391,620 @@ class TestIRCases(unittest.TestCase):
                 self.assertIn(old, source)
                 with self.assertRaises(SyntaxError):
                     generate(source.replace(old, new, 1))
+
+    def test_terminal_observer_ownership_and_composition(self):
+        source = """
+        inst(OP, (value -- res)) {
+            PyValue held = TAKE(value);
+            res = held;
+            IR_OBSERVE_COMMITTED_BRANCH(this_instr, JUMP_TARGET(oparg),
+                                        PY_MONITORING_EVENT_BRANCH_RIGHT, _PyIR_SOURCE_TAKEN);
+        }
+        """
+        output = self.ir_output(source)
+        self.assertNotIn("value_boxes[", output)
+        self.assertNotIn("value_owners", output)
+        self.assertFalse(ir_generator.boxes_into_record(
+            "_PyValueTemps_Close(value_temps);"))
+        self.assertTrue(ir_generator.boxes_into_record(
+            "unknown_helper(value_temps);"))
+        changes = (
+            ("res = held;", "PyValue_CLOSE(held);", "not defined"),
+            ("PyValue held = TAKE(value);\n            res = held;",
+             "res = PyValue_None;", "still live"),
+            ("res = held;", "PyValue extra = PyValue_DUP(held); res = held;",
+             "untransferred C owners"),
+            ("res = held;", "PyValue alias = held; PyValue_CLOSE(held); res = alias;",
+             "used after transfer"),
+            ("res = held;", "if (flag) { PyValue_CLOSE(held); } res = held;",
+             "ambiguous terminal C ownership"),
+            ("res = held;", "steal(held); res = held;",
+             "unproved terminal C owner transport"),
+            ("res = held;", "int ir_observer_next = 0; res = held;",
+             "reserved local"),
+            ("PY_MONITORING_EVENT_BRANCH_RIGHT, _PyIR_SOURCE_TAKEN);",
+             "PY_MONITORING_EVENT_BRANCH_RIGHT, _PyIR_SOURCE_TAKEN); PyValue_CLOSE(res);",
+             "follows terminal observer"),
+            ("PY_MONITORING_EVENT_BRANCH_RIGHT, _PyIR_SOURCE_TAKEN);",
+             "PY_MONITORING_EVENT_BRANCH_RIGHT, _PyIR_SOURCE_TAKEN); "
+             "IR_OBSERVE_COMMITTED_BRANCH(this_instr, JUMP_TARGET(oparg), "
+             "PY_MONITORING_EVENT_BRANCH_RIGHT, _PyIR_SOURCE_TAKEN);", "follows terminal observer"),
+        )
+        for old, new, message in changes:
+            with self.subTest(message=message):
+                self.assertIn(old, source)
+                with self.assertRaisesRegex(SyntaxError, message):
+                    self.ir_output(source.replace(old, new, 1))
+        with self.assertRaisesRegex(SyntaxError, "finish the composed handler"):
+            self.ir_output(source.replace("inst(OP,", "op(_OP,") + """
+            op(_AFTER, (--)) { do_work(); }
+            macro(OP) = _OP + _AFTER;
+        """)
+
+    def test_terminal_observer_defined_null_edge(self):
+        source = """
+        inst(OP, (value -- res)) {
+            PyValue held = TAKE(value);
+            if (flag) {
+                res = held;
+                IR_OBSERVE_COMMITTED_BRANCH(this_instr, JUMP_TARGET(oparg),
+                                            PY_MONITORING_EVENT_BRANCH_RIGHT, _PyIR_SOURCE_TAKEN);
+            }
+            else {
+                IR_DEFER_CLOSE(held);
+                res = PyValue_NULL;
+                IR_OBSERVE_COMMITTED_BRANCH(this_instr, next_instr,
+                                            PY_MONITORING_EVENT_BRANCH_LEFT, _PyIR_SOURCE_FALLTHROUGH);
+            }
+        }
+        """
+        Path(self.temp_input_filename).write_text(parser.BEGIN_MARKER + source + parser.END_MARKER)
+        analysis = analyzer.analyze_files([self.temp_input_filename], SequentialNumbers())
+        formats = ir_generator.compute_formats(analysis)
+        # Terminal C emission still has the instruction's normal CFG and
+        # logical result. It is not a return/frame-exit analysis marker.
+        self.assertFalse(analysis.uops['OP'].properties.always_exits)
+        self.assertTrue(analysis.uops['OP'].properties.sync_sp)
+        self.assertEqual(len(ir_generator.external_io(analysis.instructions['OP'])[1]), 1)
+        self.assertEqual(ir_generator.observer_outcomes(
+            analysis.instructions['OP'], formats['OP']),
+            ('_PyIR_OBSERVER_FORMAT_NULL_FIRST', '_PyIR_OBSERVER_FORMAT_VALUE'))
+        self.ir_output(source)
+        with self.assertRaisesRegex(SyntaxError, "after transfer|not held|duplicate deferred"):
+            self.ir_output(source.replace("IR_DEFER_CLOSE(held);",
+                "IR_DEFER_CLOSE(held); IR_DEFER_CLOSE(held);"))
+        with self.assertRaisesRegex(SyntaxError, "not held"):
+            self.ir_output(source.replace("IR_DEFER_CLOSE(held);",
+                                          "IR_DEFER_CLOSE(unknown);"))
+        for suffix in ('held = PyValue_None;', 'PyValue_CLOSE(held);', 'read(held);'):
+            with self.subTest(suffix=suffix):
+                with self.assertRaisesRegex(SyntaxError, "after transfer"):
+                    self.ir_output(source.replace('IR_DEFER_CLOSE(held);',
+                        'IR_DEFER_CLOSE(held); ' + suffix))
+        with self.assertRaisesRegex(SyntaxError, 'deferred owner exits'):
+            self.ir_output(source.replace('IR_DEFER_CLOSE(held);',
+                                          'IR_DEFER_CLOSE(held); ERROR_NO_POP();'))
+
+    def test_terminal_observer_explicit_owner_edge(self):
+        jump = """
+        inst(OP, (--)) {
+            IR_OBSERVE_COMMITTED_BRANCH(this_instr, JUMP_TARGET(oparg),
+                PY_MONITORING_EVENT_JUMP, _PyIR_SOURCE_TAKEN);
+        }
+        """
+        self.ir_output(jump)
+        for old, new, message in (
+            (", _PyIR_SOURCE_TAKEN", "", "takes source, destination, event, owner edge"),
+            ("_PyIR_SOURCE_TAKEN", "edge", "literal owner edge"),
+            ("_PyIR_SOURCE_TAKEN", "_PyIR_SOURCE_FALLTHROUGH", "disagrees with destination"),
+            ("JUMP_TARGET(oparg)", "next_instr", "disagrees with destination"),
+            ("PY_MONITORING_EVENT_JUMP", "event", "literal event"),
+        ):
+            with self.subTest(message=message, new=new):
+                with self.assertRaisesRegex(SyntaxError, message):
+                    self.ir_output(jump.replace(old, new))
+        iterator = """
+        inst(OP, (iter, index_or_null --)) {
+            PyValue held = TAKE(iter);
+            (void)index_or_null;
+            DEAD(index_or_null);
+            IR_DEFER_CLOSE(held);
+            IR_OBSERVE_COMMITTED_BRANCH(prev_instr, next_instr,
+                PY_MONITORING_EVENT_BRANCH_RIGHT, _PyIR_SOURCE_FALLTHROUGH);
+        }
+        """
+        output = self.ir_output(iterator)
+        callback = output.index("_PyIR_ObserveCommittedBranch(")
+        self.assertIn("this_instr, prev_instr, ir_observer_next, "
+                      "PY_MONITORING_EVENT_BRANCH_RIGHT, 0", output)
+        self.assertLess(output.index("frame->return_pc ="), callback)
+        self.assertLess(callback, output.index("PyValue_XCLOSE(ir_observer_input_0)"))
+        analysis = self.analyze(iterator)
+        formats = ir_generator.compute_formats(analysis)
+        self.assertEqual(ir_generator.observer_outcomes(
+            analysis.instructions['OP'], formats['OP']),
+            ('_PyIR_OBSERVER_FORMAT_VALUE', '_PyIR_OBSERVER_NONE'))
+
+    def test_terminal_observer_dotted_owner_mutations(self):
+        source = (Path(__file__).resolve().parents[2] / 'Python' / 'bytecodes.c').read_text()
+        start = source.index('inst(INSTRUMENTED_FOR_ITER,')
+        for argument in ('step.value', '&step.value'):
+            with self.subTest(argument=argument):
+                changed = source[:start] + source[start:].replace(
+                    'PyValue item = step.value;',
+                    f'opaque({argument}); PyValue item = step.value;', 1)
+                Path(self.temp_input_filename).write_text(changed)
+                analysis = analyzer.analyze_files([self.temp_input_filename])
+                formats = ir_generator.compute_formats(analysis)
+                with self.assertRaisesRegex(SyntaxError, 'unproved terminal C owner transport'):
+                    ir_generator.observer_terminal_paths(
+                        analysis.instructions['INSTRUMENTED_FOR_ITER'],
+                        formats['INSTRUMENTED_FOR_ITER'])
+
+    def test_canonical_numeric_constructor_proof(self):
+        source = (Path(__file__).resolve().parents[2] /
+                  "Python" / "bytecodes.c").read_text()
+        Path(self.temp_input_filename).write_text(source)
+        with handle_stderr():
+            analysis = analyzer.analyze_files([self.temp_input_filename])
+        formats = ir_generator.compute_formats(analysis)
+        names = ('BINARY_OP_MULTIPLY_FLOAT', 'BINARY_OP_ADD_FLOAT',
+                 'BINARY_OP_SUBTRACT_FLOAT', 'BINARY_OP_TRUEDIV_FLOAT')
+        for name in names:
+            contract = ir_generator.canonical_result_source(
+                analysis.instructions[name], formats[name])
+            self.assertIsNotNone(contract, name)
+            self.assertEqual(contract.result, 'res')
+        output = io.StringIO()
+        ir_generator.generate_ir([self.temp_input_filename], analysis, output, False)
+        for name in names:
+            handler = self.handler(output.getvalue(), name)
+            self.assertIn('IR_STORE_CANONICAL_DST(IR_A(ir_word), res);', handler)
+            self.assertNotIn('IR_STORE_DST(IR_A(ir_word), res);', handler)
+        for name in ('BINARY_OP_ADD_INT', 'BINARY_OP_SUBTRACT_INT'):
+            self.assertIsNone(ir_generator.canonical_result_source(
+                analysis.instructions[name], formats[name]))
+            self.assertIn('IR_STORE_DST(IR_A(ir_word), res);',
+                          self.handler(output.getvalue(), name))
+
+        # Eligibility follows the source, not the opcode/producer names.
+        renamed = source.replace('BINARY_OP_MULTIPLY_FLOAT', 'RENAMED_PRODUCT')
+        Path(self.temp_input_filename).write_text(renamed)
+        with handle_stderr():
+            other = analyzer.analyze_files(
+                [self.temp_input_filename], SequentialNumbers())
+        other_formats = ir_generator.compute_formats(other)
+        self.assertIsNotNone(ir_generator.canonical_result_source(
+            other.instructions['RENAMED_PRODUCT'], other_formats['RENAMED_PRODUCT']))
+
+    def test_canonical_numeric_constructor_mutations_fail_closed(self):
+        source = (Path(__file__).resolve().parents[2] /
+                  "Python" / "bytecodes.c").read_text()
+        changes = (
+            ('_BINARY_OP_MULTIPLY_FLOAT, (left, right -- res, l, r)',
+             '_BINARY_OP_MULTIPLY_FLOAT, (PyValue_FromDouble/1, left, right -- res, l, r)'),
+            ('_BINARY_OP_MULTIPLY_FLOAT, (left, right -- res, l, r)',
+             '_BINARY_OP_MULTIPLY_FLOAT, (PyValue_FloatOperandValues/1, left, right -- res, l, r)'),
+            ('_BINARY_OP_MULTIPLY_FLOAT + _POP_TOP_NUMBER + _POP_TOP_NUMBER;',
+             '_BINARY_OP_MULTIPLY_FLOAT + flush + _POP_TOP_NUMBER + _POP_TOP_NUMBER;'),
+            ('res = PyValue_FromDouble(a * b);',
+             'res = unknown_result(a * b);'),
+            ('res = PyValue_FromDouble(a * b);',
+             'if (a) { res = PyValue_FromDouble(a * b); } else { res = unknown_result(); }'),
+            ('res = PyValue_FromDouble(a * b);',
+             'res = PyValue_FromDouble(a * b); res = unknown_result();'),
+            ('res = PyValue_FromDouble(a * b);',
+             'res = PyValue_FromDouble(a * b); mutate(&res);'),
+            ('res = PyValue_FromDouble(a * b);',
+             'res = PyValue_FromDouble(unknown_result());'),
+            ('res = PyValue_FromDouble(a * b);',
+             'PyValue (*PyValue_FromDouble)(double) = replacement; res = PyValue_FromDouble(a * b);'),
+            ('res = PyValue_FromDouble(a * b);',
+             '#define PyValue_FromDouble replacement\nres = PyValue_FromDouble(a * b);\n#undef PyValue_FromDouble'),
+            ('res = PyValue_FromDouble(a * b);',
+             'res = PyValue_FromDouble(a * b);\n#if 1\nspam();\n#endif'),
+            ('res = PyValue_FromDouble(a * b);\n            if (PyValue_IsNull(res)) {\n                ERROR_NO_POP();\n            }',
+             'res = PyValue_FromDouble(a * b);'),
+            ('res = PyValue_FromDouble(a * b);',
+             'res = PyValue_FromDouble(a * b); EXIT_IF(a == 0.0);'),
+            ('res = PyValue_FromDouble(a * b);',
+             'res = PyValue_FromDouble(a * b); PyValue_CLOSE(res);'),
+            ('assert(PyValue_IsInlineFloat(value) || PyValue_IsInlineInt(value));',
+             'assert(PyValue_IsInlineFloat(value) || PyValue_IsInlineInt(value)); spam();'),
+            ('assert(PyValue_IsInlineFloat(value) || PyValue_IsInlineInt(value));',
+             'assert(PyValue_FloatCheck(value));'),
+            ('_BINARY_OP_MULTIPLY_FLOAT, (left, right -- res, l, r)',
+             '_BINARY_OP_MULTIPLY_FLOAT, (left, right -- left, l, r)'),
+            ('_BINARY_OP_MULTIPLY_FLOAT + _POP_TOP_NUMBER + _POP_TOP_NUMBER;',
+             '_BINARY_OP_MULTIPLY_FLOAT + _POP_TOP_NUMBER + _POP_TOP_NUMBER + _REPLACE_RESULT;\n'
+             '        op(_REPLACE_RESULT, (res -- res)) { mutate(&res); }'),
+        )
+        for old, new in changes:
+            with self.subTest(new=new):
+                self.assertIn(old, source)
+                Path(self.temp_input_filename).write_text(source.replace(old, new, 1))
+                with handle_stderr():
+                    analysis = analyzer.analyze_files([self.temp_input_filename])
+                formats = ir_generator.compute_formats(analysis)
+                self.assertIsNone(ir_generator.canonical_result_source(
+                    analysis.instructions['BINARY_OP_MULTIPLY_FLOAT'],
+                    formats['BINARY_OP_MULTIPLY_FLOAT']))
+
+    def test_canonical_numeric_direct_int64_boundary(self):
+        source = '''
+        inst(DIRECT, (-- result)) {
+            result = PyValue_FromInt64(42);
+            if (PyValue_IsNull(result)) { ERROR_NO_POP(); }
+        }
+        '''
+        for constructor, valid in (('PyValue_FromInt64', True),
+                                   ('_PyValue_BoxInt64', False),
+                                   ('_PyValue_FromIntScaled', False)):
+            with self.subTest(constructor=constructor):
+                with handle_stderr():
+                    analysis = analyzer.analyze_forest(
+                        parse_src(source.replace('PyValue_FromInt64', constructor)),
+                        SequentialNumbers())
+                formats = ir_generator.compute_formats(analysis)
+                contract = ir_generator.canonical_result_source(
+                    analysis.instructions['DIRECT'], formats['DIRECT'])
+                self.assertEqual(contract is not None, valid)
+
+    def test_canonical_local_duplicate_source(self):
+        source = (Path(__file__).resolve().parents[2] /
+                  "Python" / "bytecodes.c").read_text()
+        Path(self.temp_input_filename).write_text(source)
+        with handle_stderr():
+            analysis = analyzer.analyze_files([self.temp_input_filename])
+        formats = ir_generator.compute_formats(analysis)
+        out = io.StringIO()
+        ir_generator.generate_ir([self.temp_input_filename], analysis, out, False)
+        for name in ("LOAD_FAST", "LOAD_FAST_BORROW"):
+            with self.subTest(name=name):
+                contract = ir_generator.canonical_result_source(
+                    analysis.instructions[name], formats[name])
+                self.assertIsNotNone(contract)
+                self.assertEqual(contract.result, "value")
+                handler = self.handler(out.getvalue(), name)
+                self.assertIn("IR_STORE_CANONICAL_DST(IR_A(ir_word), value);",
+                              handler)
+
+        template = """
+        pure inst(RENAMED_LOCAL_DUP, (-- result)) {
+            assert(!PyValue_IsNull(GETLOCAL(oparg)));
+            result = PyValue_DUP(GETLOCAL(oparg));
+        }
+        """
+        variants = (
+            (template, True),
+            (template.replace("GETLOCAL(oparg)", "GETLOCAL(oparg + 1)"), False),
+            (template.replace("PyValue_DUP(GETLOCAL(oparg))",
+                              "GETLOCAL(oparg)"),
+             False),
+            (template.replace("result = PyValue_DUP(GETLOCAL(oparg));",
+                              "result = PyValue_DUP(GETLOCAL(oparg)); callback();"),
+             False),
+            (template.replace("result = PyValue_DUP(GETLOCAL(oparg));",
+                              "result = PyValue_DUP(GETLOCAL(oparg)); result = PyValue_NULL;"),
+             False),
+            (template.replace("(-- result)", "(GETLOCAL -- result)"), False),
+            (template.replace("pure inst(RENAMED_LOCAL_DUP, (-- result))",
+                              "pure inst(RENAMED_LOCAL_DUP, (GETLOCAL/1 -- result))"),
+             False),
+            (template.replace("result = PyValue_DUP(GETLOCAL(oparg));",
+                              "#define GETLOCAL(x) replacement(x)\n"
+                              "result = PyValue_DUP(GETLOCAL(oparg));\n"
+                              "#undef GETLOCAL"),
+             False),
+        )
+        for text, valid in variants:
+            with self.subTest(source=text), mock.patch.dict(
+                ir_generator.FEEDBACK_LAYOUTS,
+                {"RENAMED_LOCAL_DUP": ir_generator.FB_HEADER}
+            ):
+                with handle_stderr():
+                    variant = analyzer.analyze_forest(
+                        parse_src(text), SequentialNumbers())
+                variant_formats = ir_generator.compute_formats(variant)
+                contract = ir_generator.canonical_result_source(
+                    variant.instructions["RENAMED_LOCAL_DUP"],
+                    variant_formats["RENAMED_LOCAL_DUP"])
+                self.assertEqual(contract is not None, valid)
+
+    def test_canonical_frame_transfer_provenance_fails_closed(self):
+        source = (Path(__file__).resolve().parents[2] /
+                  "Python" / "bytecodes.c").read_text()
+
+        def analyze(text):
+            Path(self.temp_input_filename).write_text(text)
+            with handle_stderr():
+                return analyzer.analyze_files([self.temp_input_filename])
+
+        original = analyze(source)
+        for name in ("RETURN_VALUE", "INSTRUMENTED_RETURN_VALUE"):
+            self.assertTrue(ir_generator.canonical_frame_transfer_input(
+                original.instructions[name]))
+
+        changes = (
+            ("PyValue temp = retval;",
+             "retval = PyValue_DUP(retval); PyValue temp = retval;",
+             ("RETURN_VALUE", "INSTRUMENTED_RETURN_VALUE")),
+            ("IR_RETURN_TO_CALLER(temp, generator_return);",
+             "temp = PyValue_DUP(temp); IR_RETURN_TO_CALLER(temp, generator_return);",
+             ("RETURN_VALUE", "INSTRUMENTED_RETURN_VALUE")),
+            ("PyValue held = TAKE(val);",
+             "val = PyValue_None; PyValue held = TAKE(val);",
+             ("INSTRUMENTED_RETURN_VALUE",)),
+            ("taken = held;", "taken = PyValue_DUP(held);",
+             ("INSTRUMENTED_RETURN_VALUE",)),
+            ("taken = held;", "transform(&held); taken = held;",
+             ("INSTRUMENTED_RETURN_VALUE",)),
+        )
+        for old, new, affected in changes:
+            with self.subTest(new=new):
+                self.assertIn(old, source)
+                analysis = analyze(source.replace(old, new, 1))
+                for name in affected:
+                    self.assertFalse(ir_generator.canonical_frame_transfer_input(
+                        analysis.instructions[name]))
+                # An unsupported mutation may also be rejected by ownership
+                # validation; it must never silently regain canonical stores.
+                output = io.StringIO()
+                try:
+                    ir_generator.generate_ir(
+                        [self.temp_input_filename], analysis, output, False)
+                except SyntaxError:
+                    continue
+                for name in affected:
+                    handler = self.handler(output.getvalue(), name)
+                    self.assertNotIn("assert(_PyValue_IsHome(temp));", handler)
+                    self.assertIn("temp = _PyValue_Publish(&temp);", handler)
+
+    def test_canonical_list_child_and_yield_sources(self):
+        source = (Path(__file__).resolve().parents[2] /
+                  "Python" / "bytecodes.c").read_text()
+
+        def analyze(text, numbers=None):
+            Path(self.temp_input_filename).write_text(text)
+            with handle_stderr():
+                return analyzer.analyze_files([self.temp_input_filename], numbers)
+
+        analysis = analyze(source)
+        formats = ir_generator.compute_formats(analysis)
+        contract = ir_generator.canonical_result_source(
+            analysis.instructions['BINARY_OP_SUBSCR_LIST_INT'],
+            formats['BINARY_OP_SUBSCR_LIST_INT'])
+        self.assertIsNotNone(contract)
+        self.assertEqual(contract.result, 'res')
+        self.assertTrue(ir_generator.canonical_frame_transfer_input(
+            analysis.instructions['YIELD_VALUE']))
+        self.assertFalse(ir_generator.canonical_frame_transfer_input(
+            analysis.instructions['INSTRUMENTED_YIELD_VALUE']))
+        output = io.StringIO()
+        ir_generator.generate_ir([self.temp_input_filename], analysis, output, False)
+        handler = self.handler(output.getvalue(), 'BINARY_OP_SUBSCR_LIST_INT')
+        early = 'IR_STORE_TEMP_DST(IR_A(ir_word), res);'
+        close = '_PyValue_XCLOSE_POINTER(ir_own_B);'
+        final = 'IR_STORE_CANONICAL_DST(IR_A(ir_word), res);'
+        self.assertLess(handler.index(early), handler.index(close))
+        self.assertLess(handler.index(close), handler.index(final))
+        self.assertNotIn('IR_STORE_CANONICAL_TEMP_DST', handler)
+        self.assertIn('IR_STORE_CANONICAL_RETURN(value);',
+                      self.handler(output.getvalue(), 'YIELD_VALUE'))
+        self.assertIn('IR_STORE_RETURN(value);',
+                      self.handler(output.getvalue(), 'INSTRUMENTED_YIELD_VALUE'))
+
+        # Neither proof depends on the instruction or uop names.
+        renamed = source.replace('BINARY_OP_SUBSCR_LIST_INT', 'RENAMED_LIST_CHILD')
+        renamed = renamed.replace('YIELD_VALUE', 'RENAMED_YIELD')
+        other = analyze(renamed, SequentialNumbers())
+        other_formats = ir_generator.compute_formats(other)
+        self.assertIsNotNone(ir_generator.canonical_result_source(
+            other.instructions['RENAMED_LIST_CHILD'],
+            other_formats['RENAMED_LIST_CHILD']))
+        self.assertTrue(ir_generator.canonical_frame_transfer_input(
+            other.instructions['RENAMED_YIELD']))
+
+    def test_canonical_list_child_mutations_fail_closed(self):
+        source = (Path(__file__).resolve().parents[2] /
+                  "Python" / "bytecodes.c").read_text()
+        duplicate = 'res = PyValue_XDUP(PyList_GET_VALUE(list, index));'
+        changes = (
+            (duplicate, 'res = PyList_GET_VALUE(list, index);'),
+            (duplicate, duplicate + ' res = PyValue_None;'),
+            (duplicate, duplicate + ' opaque(&res);'),
+            (duplicate, 'PyValue_CLOSE(list_st); ' + duplicate),
+            (duplicate, 'PyValue (*PyList_GET_VALUE)(void) = replacement; ' + duplicate),
+            (duplicate, '#define PyList_GET_VALUE replacement\n' + duplicate +
+             '\n#undef PyList_GET_VALUE'),
+            ('_BINARY_OP_SUBSCR_LIST_INT, (list_st, sub_st -- res, ls, ss)',
+             '_BINARY_OP_SUBSCR_LIST_INT, (PyList_GET_VALUE/1, list_st, sub_st -- res, ls, ss)'),
+            ('EXIT_IF(index < 0 || index >= PyList_GET_SIZE(list));',
+             'EXIT_IF(index < 0 || index > PyList_GET_SIZE(list));'),
+            ('index += PyList_GET_SIZE(list);', 'index = 0;'),
+            ('ls = list_st;', 'ls = res;'),
+            ('PyValue_XCLOSE(value);', 'PyValue_XCLOSE(value); opaque();'),
+            ('_BINARY_OP_SUBSCR_LIST_INT + _POP_TOP_INT + POP_TOP;',
+             '_BINARY_OP_SUBSCR_LIST_INT + flush + _POP_TOP_INT + POP_TOP;'),
+        )
+        for old, new in changes:
+            with self.subTest(new=new):
+                self.assertIn(old, source)
+                Path(self.temp_input_filename).write_text(source.replace(old, new, 1))
+                with handle_stderr():
+                    analysis = analyzer.analyze_files([self.temp_input_filename])
+                formats = ir_generator.compute_formats(analysis)
+                self.assertIsNone(ir_generator.canonical_result_source(
+                    analysis.instructions['BINARY_OP_SUBSCR_LIST_INT'],
+                    formats['BINARY_OP_SUBSCR_LIST_INT']))
+
+    def test_canonical_yield_mutations_fail_closed(self):
+        source = (Path(__file__).resolve().parents[2] /
+                  "Python" / "bytecodes.c").read_text()
+        start = source.index('window op(_YIELD_VALUE,')
+        changes = (
+            ('PyValue temp = retval;', 'PyValue temp = PyValue_DUP(retval);'),
+            ('PyValue temp = retval;', 'opaque(&retval); PyValue temp = retval;'),
+            ('value = temp;', 'value = PyValue_DUP(temp);'),
+            ('value = temp;', 'value = temp; opaque(&value);'),
+            ('value = temp;', 'PyValue temp2 = PyValue_None; value = temp2;'),
+            ('value = temp;', '#define temp replacement\nvalue = temp;\n#undef temp'),
+            ('#endif\n            RELOAD_STACK();',
+             '#else\n            value = PyValue_None;\n#endif\n            RELOAD_STACK();'),
+            ('window op(_YIELD_VALUE, (retval -- value))',
+             'window op(_YIELD_VALUE, (TAKE/1, retval -- value))'),
+        )
+        for old, new in changes:
+            with self.subTest(new=new):
+                self.assertIn(old, source[start:])
+                changed = source[:start] + source[start:].replace(old, new, 1)
+                Path(self.temp_input_filename).write_text(changed)
+                with handle_stderr():
+                    analysis = analyzer.analyze_files([self.temp_input_filename])
+                self.assertFalse(ir_generator.canonical_frame_transfer_input(
+                    analysis.instructions['YIELD_VALUE']))
+
+        # An AST rewrite must not retain a proof from its stale source span.
+        for move_debug_arm in (False, True):
+            with self.subTest(ast_debug_arm=move_debug_arm):
+                Path(self.temp_input_filename).write_text(source)
+                with handle_stderr():
+                    analysis = analyzer.analyze_files([self.temp_input_filename])
+                instruction = analysis.instructions['YIELD_VALUE']
+                body = instruction.parts[-1].body
+                if move_debug_arm:
+                    debug = next(stmt for stmt in body.body
+                                 if isinstance(stmt, ir_generator.MacroIfStmt))
+                    debug.else_body, debug.body = debug.body, []
+                    debug.else_ = next(ir_generator.tokenize('#else\n'))
+                else:
+                    body.body.append(body.body[-1])
+                self.assertFalse(ir_generator.canonical_frame_transfer_input(
+                    instruction))
+
+    def test_completion_result_local_does_not_capture_held_value(self):
+        source = (Path(__file__).resolve().parents[2] /
+                  "Python" / "bytecodes.c").read_text()
+        self.assertIn("PyValue completed =", source)
+        Path(self.temp_input_filename).write_text(source)
+        analysis = analyzer.analyze_files([self.temp_input_filename])
+        output = io.StringIO()
+        ir_generator.generate_ir(
+            [self.temp_input_filename], analysis, output, False)
+        for name in ("FOR_ITER", "FOR_ITER_LIST", "SEND", "CLEANUP_THROW"):
+            with self.subTest(name=name):
+                handler = self.handler(output.getvalue(), name)
+                self.assertIn("PyValue completed =", handler)
+                self.assertIn("_PyIRStepResult ir_step_result =", handler)
+                self.assertNotIn("&completed", handler)
+                self.assertIn(", completed, _PY_IR_", handler)
+                self.assertNotIn("_PyIRStepResult completed =", handler)
+                if name == "CLEANUP_THROW":
+                    self.assertNotIn("assert(!IR_IS_LOCAL(dst)", handler)
+        for name in ("FOR_ITER_GEN", "SEND_GEN"):
+            self.assertNotIn("PyValue new_frame;",
+                             self.handler(output.getvalue(), name))
+
+    def test_suspension_effect_requires_a_state_write(self):
+        source = (Path(__file__).resolve().parents[2] /
+                  "Python" / "bytecodes.c").read_text()
+        Path(self.temp_input_filename).write_text(source)
+        analysis = analyzer.analyze_files([self.temp_input_filename])
+        for name in ("SEND", "SEND_GEN"):
+            self.assertIn("FRAME_CREATED", ir_generator.uop_tokens(
+                analysis.instructions[name]))
+            self.assertFalse(ir_generator.writes_suspended_frame_state(
+                analysis.instructions[name]))
+        for name in ("YIELD_VALUE", "INSTRUMENTED_YIELD_VALUE", "RETURN_GENERATOR"):
+            self.assertTrue(ir_generator.writes_suspended_frame_state(
+                analysis.instructions[name]))
+        source = source.replace(
+            "FT_ATOMIC_STORE_INT8_RELEASE(gen->gi_frame_state, FRAME_SUSPENDED + oparg);",
+            "assert(gen->gi_frame_state == FRAME_SUSPENDED + oparg);")
+        source = source.replace("gen->gi_frame_state = FRAME_CREATED;",
+                                "assert(gen->gi_frame_state == FRAME_CREATED);")
+        Path(self.temp_input_filename).write_text(source)
+        mutated = analyzer.analyze_files([self.temp_input_filename])
+        for name in ("YIELD_VALUE", "INSTRUMENTED_YIELD_VALUE", "RETURN_GENERATOR"):
+            self.assertFalse(ir_generator.writes_suspended_frame_state(
+                mutated.instructions[name]))
+
+    def test_physical_output_mapping_matches_window_finalization(self):
+        source = (Path(__file__).resolve().parents[2] /
+                  "Python" / "bytecodes.c").read_text()
+        Path(self.temp_input_filename).write_text(source)
+        analysis = analyzer.analyze_files([self.temp_input_filename])
+        formats = ir_generator.compute_formats(analysis)
+        contracts = ir_generator.handler_contracts(analysis, formats)
+        output = io.StringIO()
+        ir_generator.generate_ir(
+            [self.temp_input_filename], analysis, output, False)
+        for name in ("PUSH_EXC_INFO", "LOAD_SUPER_ATTR_METHOD"):
+            with self.subTest(name=name):
+                self.assertEqual(contracts[name].output_kind, "_PyIR_OUTPUT_WINDOW")
+                handler = self.handler(output.getvalue(), name)
+                self.assertIn("IR_PUBLISH_TEMP(window[", handler)
+                self.assertNotIn("IR_MOVE_TO_DST", handler)
+        for name in ("LOAD_SUPER_ATTR", "INSTRUMENTED_LOAD_SUPER_ATTR"):
+            with self.subTest(name=name):
+                self.assertEqual(contracts[name].output_kind,
+                                 "_PyIR_OUTPUT_WINDOW_DST_FIRST")
+                handler = self.handler(output.getvalue(), name)
+                self.assertIn("IR_PUBLISH_TEMP(window[1]", handler)
+                self.assertIn("IR_MOVE_TO_DST_OR_DISCARD", handler)
+                self.assertEqual(formats[name].dst_offset, 0)
+        self.assertEqual(contracts["CALL"].output_kind,
+                         "_PyIR_OUTPUT_WINDOW_DST_FIRST")
+        self.assertIn("call_destination = IR_A(ir_word)",
+                      self.handler(output.getvalue(), "CALL"))
+        self.assertEqual(contracts["FOR_ITER_GEN"].output_kind,
+                         "_PyIR_OUTPUT_OUTCOME")
+        with mock.patch.object(ir_generator, "store_mode",
+                               return_value=ir_generator.STORE_LEAVE):
+            with self.assertRaisesRegex(SyntaxError, "unclassified window output"):
+                ir_generator.handler_output_kind(
+                    analysis.instructions["PUSH_EXC_INFO"], formats["PUSH_EXC_INFO"])
+
+    def test_generator_resume_commits_before_input_disposal(self):
+        source = (Path(__file__).resolve().parents[2] /
+                  "Python" / "bytecodes.c").read_text()
+        Path(self.temp_input_filename).write_text(source)
+        analysis = analyzer.analyze_files([self.temp_input_filename])
+        for name in ("FOR_ITER", "SEND"):
+            self.assertTrue(analysis.instructions[name].properties.jumps)
+            self.assertTrue(analysis.instructions[name].properties.error_without_pop)
+        self.assertTrue(analysis.instructions["CLEANUP_THROW"].properties.jumps)
+        throw_format = ir_generator.compute_formats(analysis)["CLEANUP_THROW"]
+        self.assertTrue(throw_format.jump_always)
+        self.assertFalse(throw_format.names_target)
+        self.assertEqual(throw_format.imm, ir_generator.LOC_CD)
+        self.assertTrue(analysis.instructions["RETURN_VALUE"].properties.always_exits)
+        output = io.StringIO()
+        ir_generator.generate_ir(
+            [self.temp_input_filename], analysis, output, False)
+        for name in ("SEND", "SEND_GEN", "FOR_ITER_GEN"):
+            with self.subTest(name=name):
+                handler = self.handler(output.getvalue(), name)
+                self.assertEqual(handler.count("_Py_EnterRecursivePy(tstate)"), 1)
+                self.assertNotIn("py_recursion_remaining--", handler)
+                entered = handler.index("frame = tstate->current_frame = ir_resumed_frame;")
+                consumed = handler.index("_PyFrame_SetReturnValue(frame, ir_resume_input);")
+                self.assertLess(entered, consumed)
+                if name != "FOR_ITER_GEN":
+                    detached = handler.index("IR_SLOT(IR_B(ir_word) + 2) = PyValue_NULL;")
+                    self.assertLess(detached, entered)
+        for name in ("RETURN_VALUE", "INSTRUMENTED_RETURN_VALUE"):
+            with self.subTest(name=name):
+                handler = self.handler(output.getvalue(), name)
+                retired = handler.index("_PyEval_FrameClearAndPop(tstate, dying);")
+                completed = handler.index("_PyEval_CompleteGeneratorReturn(")
+                published = handler.index("_PyFrame_SetReturnValue(frame, temp)")
+                self.assertLess(retired, completed)
+                self.assertLess(retired, published)
+                self.assertNotIn("IR_STORE_RETURN", handler)
+        handler = self.handler(output.getvalue(), "CLEANUP_THROW")
+        self.assertIn("_PyFrame_InstrAt(frame, oparg)", handler)
+        self.assertNotIn("next_instr + oparg", handler)
 
     def run_ir_test(self, input: str, expected: str):
         self.assertEqual(self.ir_output(input).strip(), expected.strip())
@@ -459,11 +1041,11 @@ class TestIRCases(unittest.TestCase):
                 self.assertEqual(handler.count(store), 1)
                 self.assertLess(handler.index(store), retire)
                 self.assertIn(
-                    "(IR_IS_LOCAL(IR_A(ir_word)) ? attr : PyValue_NULL)",
+                    "((IR_IS_LOCAL(IR_A(ir_word)) || IR_A(ir_word) == IR_NO_DST) ? attr : PyValue_NULL)",
                               handler[retire:])
-                self.assertIn("null = &IR_SLOT(IR_A(ir_word) + 1);", handler[retire:])
+                self.assertIn("null = ((oparg & 1) ? &IR_SLOT(IR_A(ir_word) + 1) : NULL);", handler[retire:])
                 self.assertIn("null[0] = PyValue_NULL;", handler[retire:])
-                self.assertIn("if (IR_IS_LOCAL(IR_A(ir_word))) {\n"
+                self.assertIn("if (IR_IS_LOCAL(IR_A(ir_word)) || IR_A(ir_word) == IR_NO_DST) {\n"
                               "                IR_STORE_DST(IR_A(ir_word), attr);",
                               handler[retire:])
                 self.assertIn("finish_displaced_local(", handler[retire:])
@@ -491,7 +1073,7 @@ class TestIRCases(unittest.TestCase):
         self.assertEqual(handler.count(direct), 1)
         self.assertLess(handler.index(direct), retire)
         self.assertIn("JUMP_TO_LABEL(error)", handler[failure:local])
-        self.assertIn("if (IR_IS_LOCAL(IR_A(ir_word)))", handler[failure:local])
+        self.assertIn("if (IR_IS_LOCAL(IR_A(ir_word)) || IR_A(ir_word) == IR_NO_DST)", handler[failure:local])
         self.assertIn("null[0] = PyValue_NULL;", handler[retire:])
 
     def test_canonical_home_declaration_rejections(self):
@@ -1680,8 +2262,28 @@ class TestIRCases(unittest.TestCase):
         self.assertIn("IR_STORE_TEMP(IR_SLOT(IR_A(ir_word)), res);",
                       self.handler(output, "ALIAS"))
         self.assertNotIn("IR_STORE_DST", self.handler(output, "PAIR"))
-        self.assertIn("assert(!IR_IS_LOCAL(IR_A(ir_word)));",
+        self.assertIn("assert(!IR_IS_LOCAL(IR_A(ir_word)) && IR_A(ir_word) != IR_NO_DST);",
                       self.handler(output, "PAIR"))
+
+    def test_scalar_conditional_array_has_no_empty_home(self):
+        source = """
+        inst(ATTR, (owner -- attr, null[oparg & 1])) {
+            attr = PyValue_DUP(owner);
+            PyValue_CLOSE(owner);
+            if (oparg & 1) {
+                null[0] = PyValue_NULL;
+            }
+        }
+        """
+        fmt = self.formats(source)["ATTR"]
+        self.assertTrue(fmt.discards)
+        handler = self.handler(self.ir_output(source), "ATTR")
+        self.assertIn(
+            "null = ((oparg & 1) ? &IR_SLOT(IR_A(ir_word) + 1) : NULL);",
+            handler)
+        self.assertNotIn("null = &IR_SLOT", handler)
+        self.assertIn("if (oparg & 1)", handler)
+        self.assertIn("IR_STORE_DST(IR_A(ir_word), attr)", handler)
 
     def test_unused_outputs_pass_through(self):
         input = """
@@ -1734,7 +2336,7 @@ class TestIRCases(unittest.TestCase):
             res = SPAM(callable, args, oparg);
             IR_CLEAR_SLOTS(&window[1], oparg);
             IR_PUBLISH_TEMP(window[0], res);
-            IR_MOVE_TO_DST(IR_A(ir_word), window[0]);
+            IR_MOVE_TO_DST_OR_DISCARD(IR_A(ir_word), window[0]);
             if (!PyValue_IsNull(ir_displaced) &&
                 finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
@@ -1746,6 +2348,7 @@ class TestIRCases(unittest.TestCase):
         self.run_ir_test(input, output)
         fmt = self.formats(input)["OP"]
         self.assertTrue(fmt.window)
+        self.assertTrue(fmt.discards)
         self.assertEqual(fmt.roles, [ir_generator.ROLE_DST,
                                      ir_generator.ROLE_BASE,
                                      ir_generator.ROLE_IMM,
@@ -2211,13 +2814,15 @@ class TestIRCases(unittest.TestCase):
         self.assertEqual(ir_generator.num_handlers(analysis), 258)
         # The oparg names the local that LOAD reads (_PyIR_ROLE_LOCAL_IN).
         # Only the twin runs Python itself; the format does, as the twin's.
-        load = ("{ .flags = _PyIR_VALID | _PyIR_STORE_DST | _PyIR_RUNS_CODE, "
+        load = ("{ .flags = _PyIR_VALID | _PyIR_STORE_DST | _PyIR_RUNS_CODE | _PyIR_DISCARDS, "
                 ".effects = 0, "
                 ".roles = { _PyIR_ROLE_DST, "
                 "_PyIR_ROLE_LOCAL_IN, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, "
                 ".imm = _PyIR_LOC_B, .fb = _PyIR_LOC_NONE, .ninputs = 0, "
                 ".dst = 0, .borrow_mask = 0x0, .fb_kind = 0, .fb_size = 0, "
                 ".result_phase = _PyIR_RESULT_PHASE_NONE, "
+                ".output_kind = _PyIR_OUTPUT_REGISTER_DST, "
+                ".observer_outcome = { _PyIR_OBSERVER_NONE, _PyIR_OBSERVER_NONE }, "
                 ".reads = { 0, _PyIR_EXT_FIXED }, "
                 ".writes = { 1, _PyIR_EXT_FIXED }, "
                 ".through = { 0, _PyIR_EXT_FIXED }, .shadow = LOAD, "
@@ -2236,6 +2841,8 @@ class TestIRCases(unittest.TestCase):
             ".ninputs = 0, .dst = _PyIR_NO_DST, .borrow_mask = 0x0, "
             ".fb_kind = 0, .fb_size = 0, "
             ".result_phase = _PyIR_RESULT_PHASE_NONE, "
+            ".output_kind = _PyIR_OUTPUT_REGISTER_DST, "
+            ".observer_outcome = { _PyIR_OBSERVER_NONE, _PyIR_OBSERVER_NONE }, "
             ".reads = { 0, _PyIR_EXT_FIXED }, "
             ".writes = { 0, _PyIR_EXT_FIXED }, "
             ".through = { 0, _PyIR_EXT_FIXED }, .shadow = IR_PASS, "
@@ -2449,6 +3056,16 @@ class TestCallTransactionMarkers(unittest.TestCase):
         output = io.StringIO()
         ir_generator.generate_ir([source], cls.analysis, output, False)
         cls.interpreter = output.getvalue()
+
+    def test_send_completion_events_without_instrumented_twin(self):
+        output = io.StringIO()
+        ir_metadata_generator.generate_ir_metadata(
+            [str(ir_generator.DEFAULT_INPUT)], self.analysis, output)
+        row = next(line for line in output.getvalue().splitlines()
+                   if line.lstrip().startswith("[SEND] = "))
+        self.assertIn(".twin = 0", row)
+        self.assertIn("(1u << PY_MONITORING_EVENT_BRANCH_LEFT)", row)
+        self.assertIn("(1u << PY_MONITORING_EVENT_STOP_ITERATION)", row)
 
     def test_real_callout_and_transfer_properties(self):
         for name in ("_MAYBE_EXPAND_METHOD", "_MONITOR_CALL",

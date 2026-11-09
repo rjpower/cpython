@@ -21,6 +21,13 @@ struct _frame {
     _PyInterpreterFrame *f_frame; /* points to the frame data */
     PyObject *f_trace;          /* Trace function */
     int f_lineno;               /* Current line number. Only valid if non-zero */
+    int f_source_event;         /* source-only observer cursor, -1 otherwise */
+    int f_source_event_error;   /* explicit callback exception recipe, -1 otherwise */
+    /* Observed edge already processed before this real LINE landing. */
+    int f_line_next;            /* compact landing offset, -1 if inactive */
+    int f_line_previous;        /* preceding source line, including unknown -1 */
+    uint64_t f_lineno_generation; /* successful debugger redirect commits */
+    uint64_t f_line_epoch;      /* monitoring configuration at publication */
     char f_trace_lines;         /* Emit per-line trace events? */
     char f_trace_opcodes;       /* Emit per-opcode trace events? */
     PyObject *f_extra_locals;   /* Dict for locals set by users using f_locals, could be NULL */

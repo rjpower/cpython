@@ -2,7 +2,7 @@
 // from:
 //   Python/bytecodes.c
 // Do not edit!
-static py_tail_call_funcptr instruction_funcptr_handler_table[319];
+static py_tail_call_funcptr instruction_funcptr_handler_table[320];
 
 static PyValue Py_PRESERVE_NONE_CC _TAIL_CALL_error(TAIL_CALL_PARAMS);
 static PyValue Py_PRESERVE_NONE_CC _TAIL_CALL_exception_unwind(TAIL_CALL_PARAMS);
@@ -196,6 +196,7 @@ static PyValue Py_PRESERVE_NONE_CC _TAIL_CALL_LOAD_ATTR_NONDESCRIPTOR_NO_DICT(TA
 static PyValue Py_PRESERVE_NONE_CC _TAIL_CALL_LOAD_ATTR_NONDESCRIPTOR_WITH_VALUES(TAIL_CALL_PARAMS);
 static PyValue Py_PRESERVE_NONE_CC _TAIL_CALL_LOAD_ATTR_PROPERTY(TAIL_CALL_PARAMS);
 static PyValue Py_PRESERVE_NONE_CC _TAIL_CALL_LOAD_ATTR_SHAPE(TAIL_CALL_PARAMS);
+static PyValue Py_PRESERVE_NONE_CC _TAIL_CALL_LOAD_ATTR_SHAPE_LOCAL_TEMP(TAIL_CALL_PARAMS);
 static PyValue Py_PRESERVE_NONE_CC _TAIL_CALL_LOAD_ATTR_SLOT(TAIL_CALL_PARAMS);
 static PyValue Py_PRESERVE_NONE_CC _TAIL_CALL_LOAD_ATTR_WITH_HINT(TAIL_CALL_PARAMS);
 static PyValue Py_PRESERVE_NONE_CC _TAIL_CALL_LOAD_BUILD_CLASS(TAIL_CALL_PARAMS);
@@ -228,6 +229,7 @@ static PyValue Py_PRESERVE_NONE_CC _TAIL_CALL_MATCH_CLASS(TAIL_CALL_PARAMS);
 static PyValue Py_PRESERVE_NONE_CC _TAIL_CALL_MATCH_KEYS(TAIL_CALL_PARAMS);
 static PyValue Py_PRESERVE_NONE_CC _TAIL_CALL_MATCH_MAPPING(TAIL_CALL_PARAMS);
 static PyValue Py_PRESERVE_NONE_CC _TAIL_CALL_MATCH_SEQUENCE(TAIL_CALL_PARAMS);
+static PyValue Py_PRESERVE_NONE_CC _TAIL_CALL_MATERIALIZE_KWARGS(TAIL_CALL_PARAMS);
 static PyValue Py_PRESERVE_NONE_CC _TAIL_CALL_NOP(TAIL_CALL_PARAMS);
 static PyValue Py_PRESERVE_NONE_CC _TAIL_CALL_POP_EXCEPT(TAIL_CALL_PARAMS);
 static PyValue Py_PRESERVE_NONE_CC _TAIL_CALL_POP_ITER(TAIL_CALL_PARAMS);
@@ -307,7 +309,7 @@ static PyValue Py_PRESERVE_NONE_CC _TAIL_CALL_UNKNOWN_OPCODE(TAIL_CALL_PARAMS) {
 JUMP_TO_LABEL(error);
 }
 
-static py_tail_call_funcptr instruction_funcptr_handler_table[319] = {
+static py_tail_call_funcptr instruction_funcptr_handler_table[320] = {
     [0] = _TAIL_CALL_CACHE,
     [1] = _TAIL_CALL_BINARY_SLICE,
     [2] = _TAIL_CALL_BUILD_TEMPLATE,
@@ -315,7 +317,7 @@ static py_tail_call_funcptr instruction_funcptr_handler_table[319] = {
     [4] = _TAIL_CALL_CALL_FUNCTION_EX,
     [5] = _TAIL_CALL_CHECK_EG_MATCH,
     [6] = _TAIL_CALL_CHECK_EXC_MATCH,
-    [7] = _TAIL_CALL_CLEANUP_THROW,
+    [7] = _TAIL_CALL_UNKNOWN_OPCODE,
     [8] = _TAIL_CALL_DELETE_SUBSCR,
     [9] = _TAIL_CALL_END_FOR,
     [10] = _TAIL_CALL_END_SEND,
@@ -395,7 +397,7 @@ static py_tail_call_funcptr instruction_funcptr_handler_table[319] = {
     [84] = _TAIL_CALL_LOAD_FAST_BORROW,
     [85] = _TAIL_CALL_UNKNOWN_OPCODE,
     [86] = _TAIL_CALL_LOAD_FAST_CHECK,
-    [87] = _TAIL_CALL_UNKNOWN_OPCODE,
+    [87] = _TAIL_CALL_CLEANUP_THROW,
     [88] = _TAIL_CALL_LOAD_FROM_DICT_OR_DEREF,
     [89] = _TAIL_CALL_LOAD_FROM_DICT_OR_GLOBALS,
     [90] = _TAIL_CALL_LOAD_GLOBAL,
@@ -435,7 +437,7 @@ static py_tail_call_funcptr instruction_funcptr_handler_table[319] = {
     [124] = _TAIL_CALL_UNPACK_SEQUENCE_LIST,
     [125] = _TAIL_CALL_UNPACK_SEQUENCE_TUPLE,
     [126] = _TAIL_CALL_UNPACK_SEQUENCE_TWO_TUPLE,
-    [127] = _TAIL_CALL_UNKNOWN_OPCODE,
+    [127] = _TAIL_CALL_MATERIALIZE_KWARGS,
     [128] = _TAIL_CALL_RESUME,
     [129] = _TAIL_CALL_BINARY_OP_ADD_FLOAT,
     [130] = _TAIL_CALL_BINARY_OP_ADD_INT,
@@ -627,4 +629,5 @@ static py_tail_call_funcptr instruction_funcptr_handler_table[319] = {
     [316] = _TAIL_CALL_UNKNOWN_OPCODE,
     [317] = _TAIL_CALL_UNKNOWN_OPCODE,
     [318] = _TAIL_CALL_UNKNOWN_OPCODE,
+    [319] = _TAIL_CALL_LOAD_ATTR_SHAPE_LOCAL_TEMP,
 };

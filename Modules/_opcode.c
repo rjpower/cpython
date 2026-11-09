@@ -403,13 +403,14 @@ static PyStructSequence_Field ir_contract_fields[] = {
     {"fb_kind", "the kind of the feedback entry"},
     {"fb_size", "the size of the feedback entry, or 0"},
     {"result_phase", "the first output's conditional publication phase"},
+    {"output_kind", "the handler's physical output publication mapping"},
     {"reads", "the stack inputs, a (k, form) extent"},
     {"writes", "the stack outputs, a (k, form) extent"},
     {"through", "the deepest inputs left in place, a (k, form) extent"},
     {"shadow", "the instruction that the handler stands for"},
     {"base", "the opcode that the handler stands for"},
     {"twin", "the handler that instrumentation runs, or None"},
-    {"events", "bit e: the twin fires sys.monitoring event e"},
+    {"events", "bit e: the semantic handler or its twin can fire monitoring event e"},
     {NULL}
 };
 
@@ -449,6 +450,7 @@ ir_contract_row(PyTypeObject *type, int h)
         PyLong_FromLong(fmt->fb_kind),
         PyLong_FromLong(fmt->fb_size),
         PyLong_FromLong(fmt->result_phase),
+        PyLong_FromLong(fmt->output_kind),
         Py_BuildValue("(ii)", fmt->reads.k, fmt->reads.form),
         Py_BuildValue("(ii)", fmt->writes.k, fmt->writes.form),
         Py_BuildValue("(ii)", fmt->through.k, fmt->through.form),
@@ -574,6 +576,10 @@ _opcode_exec(PyObject *m) {
     ADD_IR_CONSTANT("IR_NO_FOLD", _PyIR_NO_FOLD);
     ADD_IR_CONSTANT("IR_TRANSPARENT", _PyIR_TRANSPARENT);
     ADD_IR_CONSTANT("IR_STORE_DST", _PyIR_STORE_DST);
+    ADD_IR_CONSTANT("IR_OUTPUT_REGISTER_DST", _PyIR_OUTPUT_REGISTER_DST);
+    ADD_IR_CONSTANT("IR_OUTPUT_WINDOW", _PyIR_OUTPUT_WINDOW);
+    ADD_IR_CONSTANT("IR_OUTPUT_WINDOW_DST_FIRST", _PyIR_OUTPUT_WINDOW_DST_FIRST);
+    ADD_IR_CONSTANT("IR_OUTPUT_OUTCOME", _PyIR_OUTPUT_OUTCOME);
     ADD_IR_CONSTANT("IR_UNPACKS", _PyIR_UNPACKS);
     ADD_IR_CONSTANT("IR_RUNS_CODE", _PyIR_RUNS_CODE);
     ADD_IR_CONSTANT("IR_JUMP_ALWAYS", _PyIR_JUMP_ALWAYS);

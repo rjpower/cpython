@@ -25,6 +25,8 @@ from generators_common import DEFAULT_INPUT, ROOT, write_header
 from cwriter import CWriter
 from ir_generator import (
     BINARY_OP_FAMILY,
+    EXECUTION_VARIANTS,
+    canonical_handler,
     FUSED_SHADOWS,
     first_ir_only_handler,
     Extent,
@@ -56,7 +58,7 @@ def shadow_of(name: str, analysis: Analysis) -> str:
     for fused, compare in FUSED_SHADOWS.items():
         if name.startswith(fused) or name.startswith("INSTRUMENTED_" + fused):
             return compare
-    return name
+    return canonical_handler(name)
 
 
 def handler_facts(analysis: Analysis, formats: dict[str, IRFormat]
@@ -79,13 +81,15 @@ def handler_facts(analysis: Analysis, formats: dict[str, IRFormat]
         parts = ["_PyIR_H_METADATA"]
         if name in dispatch:
             parts.append("_PyIR_H_DISPATCH")
+            if inst is not None and not inst.properties.no_save_ip:
+                parts.append("_PyIR_H_SAVES_IP")
         if inst is not None and inst.family:
             parts.append("_PyIR_H_SPECIALIZED")
         if name.startswith("INSTRUMENTED_"):
             parts.append("_PyIR_H_INSTRUMENTED")
         if name in binary:
             parts.append("_PyIR_H_BINARY_OP")
-        if name in analysis.ir_only:
+        if name in analysis.ir_only or name in EXECUTION_VARIANTS:
             parts.append("_PyIR_H_IR_ONLY")
         if name.endswith("_NOFB"):
             parts.append("_PyIR_H_NOFB")
@@ -151,6 +155,8 @@ def format_initializer(fmt: IRFormat, shadow: str,
         f".borrow_mask = {fmt.borrow_mask:#x}, "
         f".fb_kind = {fb_kind}, .fb_size = {fb_size}, "
         f".result_phase = {contract.result_phase}, "
+        f".output_kind = {contract.output_kind}, "
+        f".observer_outcome = {{ {', '.join(contract.observer_outcome)} }}, "
         f".reads = {extent_initializer(contract.reads)}, "
         f".writes = {extent_initializer(contract.writes)}, "
         f".through = {extent_initializer(contract.through)}, "
@@ -186,7 +192,8 @@ def generate_ir_metadata(
         for kind, bit in (("SPECIALIZED", 1), ("INSTRUMENTED", 2),
                           ("BINARY_OP", 4), ("IR_ONLY", 8), ("NOFB", 16),
                           ("PSEUDO", 32), ("METADATA", 64), ("DISPATCH", 128),
-                          ("PRISTINE", 256), ("ADAPTIVE", 512)):
+                          ("PRISTINE", 256), ("ADAPTIVE", 512),
+                          ("SAVES_IP", 1024)):
             out.emit(f"#define _PyIR_H_{kind} {bit}\n")
         out.emit("\n")
         for ctype, table, values in (
@@ -242,7 +249,11 @@ def generate_ir_metadata(
                 indices[name] = analysis.instructions[name].opcode
         for name in sorted(indices, key=lambda name: indices[name]):
             twin = rows[name].twin
-            events = monitoring_events(twin, insts[twin]) if twin else []
+            # Semantic completion can report events without a separate
+            # instrumented handler (SEND). Keep that capability in its row.
+            event_handler = twin or name
+            events = (monitoring_events(event_handler, insts[event_handler])
+                      if event_handler in insts else [])
             init = format_initializer(formats[name], shadow_of(name, analysis),
                                       rows[name], events)
             out.emit(f"[{name}] = {init},\n")

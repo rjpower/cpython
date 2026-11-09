@@ -7,7 +7,8 @@
 #
 # To add a handler, give it a line in its region and the next free number.
 # To remove one, rewrite its line as `# removed: NAME NUMBER`; the number is
-# never reused, and the slot is a hole (a zeroed _PyIR_Formats row, an
+# not reused within a format revision, and the slot is a hole (a zeroed
+# _PyIR_Formats row, an
 # UNKNOWN_OPCODE dispatch entry).  `ir_numbers.py --check-numbers` (run by
 # `make regen-cases`) proves that this file matches Python/bytecodes.c.
 
@@ -28,7 +29,7 @@ BINARY_OP_INPLACE_ADD_UNICODE 3
 CALL_FUNCTION_EX 4
 CHECK_EG_MATCH 5
 CHECK_EXC_MATCH 6
-CLEANUP_THROW 7
+# removed: CLEANUP_THROW 7
 DELETE_SUBSCR 8
 END_FOR 9
 END_SEND 10
@@ -108,7 +109,9 @@ LOAD_FAST_AND_CLEAR 83
 LOAD_FAST_BORROW 84
 # removed: LOAD_FAST_BORROW_LOAD_FAST_BORROW 85
 LOAD_FAST_CHECK 86
-# removed: LOAD_FAST_LOAD_FAST 87
+# Format 64414 deliberately repurposes retired LOAD_FAST_LOAD_FAST slot 87
+# for argument-bearing CLEANUP_THROW; old caches are incompatible.
+CLEANUP_THROW 87
 LOAD_FROM_DICT_OR_DEREF 88
 LOAD_FROM_DICT_OR_GLOBALS 89
 LOAD_GLOBAL 90
@@ -148,6 +151,7 @@ TO_BOOL_STR 123
 UNPACK_SEQUENCE_LIST 124
 UNPACK_SEQUENCE_TUPLE 125
 UNPACK_SEQUENCE_TWO_TUPLE 126
+MATERIALIZE_KWARGS 127
 RESUME 128
 BINARY_OP_ADD_FLOAT 129
 BINARY_OP_ADD_INT 130
@@ -349,3 +353,18 @@ INSTRUMENTED_CONTAINS_OP_JUMP 312
 INSTRUMENTED_IS_OP_JUMP 313
 
 # range B6 303 319
+
+# Execution-only operand ownership refinement.
+LOAD_ATTR_SHAPE_LOCAL_TEMP 319
+
+# Execution-only checked boolean edge continuations.
+# removed: POP_JUMP_IF_FALSE_BOOL_SKIP_TAKEN 320
+# removed: POP_JUMP_IF_FALSE_BOOL_SKIP_FALLTHROUGH 321
+# removed: POP_JUMP_IF_FALSE_BOOL_SKIP_BOTH 322
+
+# Execution-only Python call completion recipients.
+# removed: CALL_PY_EXACT_ARGS_DISCARD 323
+# removed: CALL_PY_GENERAL_DISCARD 324
+
+# Materialize a compiler-proven virtual local binding on its first read.
+# removed: MATERIALIZE_KWARGS 325

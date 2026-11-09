@@ -1371,6 +1371,7 @@ allocate_chunk(int size_in_bytes, _PyStackChunk* previous)
     res->previous = previous;
     res->size = size_in_bytes;
     res->top = 0;
+    res->initialized = &res->data[0];
     return res;
 }
 
@@ -1487,8 +1488,11 @@ init_threadstate(_PyThreadStateImpl *_tstate,
     _tstate->base_frame.frame_obj = NULL;
     _tstate->base_frame.instr_ptr = NULL;
     _tstate->base_frame.return_slot = 0;
+    _tstate->base_frame.return_pc = NULL;
+    _tstate->base_frame.pending_kwargs = IR_NO_DST;
     _tstate->base_frame.owner = FRAME_OWNED_BY_INTERPRETER;
     _tstate->base_frame.visited = 0;
+    _tstate->base_frame.pending_redirect = 0;
 #ifdef Py_DEBUG
     _tstate->base_frame.lltrace = 0;
 #endif
@@ -3110,9 +3114,16 @@ chunk_frames_end(_PyStackChunk *chunk)
 static _PyInterpreterFrame *
 push_chunk(PyThreadState *tstate, int nslots)
 {
-    int size = nslots + FRAME_SPECIALS_SIZE + 1;
+    /* Include the chunk header, the spare owned_slots word after the
+     * frame header, and the strict value/header separation cell. */
+    size_t needed = offsetof(_PyStackChunk, data) + sizeof(PyObject *) *
+        ((size_t)nslots + FRAME_SPECIALS_SIZE + 2 + MINIMUM_OVERHEAD);
     int allocate_size = _PY_DATA_STACK_CHUNK_SIZE;
-    while (allocate_size < (int)sizeof(PyObject*)*(size + MINIMUM_OVERHEAD)) {
+    while ((size_t)allocate_size < needed) {
+        if (allocate_size > INT_MAX / 2) {
+            PyErr_NoMemory();
+            return NULL;
+        }
         allocate_size *= 2;
     }
     _PyStackChunk *new;
@@ -3142,6 +3153,8 @@ push_chunk(PyThreadState *tstate, int nslots)
     tstate->datastack_chunk = new;
     _PyInterpreterFrame *frame =
         (_PyInterpreterFrame *)(chunk_frames_end(new) - FRAME_SPECIALS_SIZE);
+    PyObject **value_end = &new->data[nslots];
+    _PyStackChunk_EnsureFrameStorage(new, (PyObject **)frame, value_end);
     frame->base = _PyDataStack_Slots(&new->data[0]);
     frame->saved_top = saved_top;
     tstate->datastack_limit = (PyObject **)frame;

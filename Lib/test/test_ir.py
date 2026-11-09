@@ -5,9 +5,11 @@ import dis
 import gc
 import io
 import math
+import opcode
 import sys
 import types
 import unittest
+import warnings
 import weakref
 from test import support
 from test.support import import_helper
@@ -226,7 +228,9 @@ class AssemblerTest(unittest.TestCase):
                         if type(value) not in (int, float):
                             self.assertIs(result, value)
                     if SPECIALIZES:
-                        self.assertIn("LOAD_ATTR_SHAPE", handlers(read))
+                        expected = ("LOAD_ATTR_SHAPE" if local else
+                                    "LOAD_ATTR_SHAPE_LOCAL_TEMP")
+                        self.assertIn(expected, handlers(read))
                     attr = next(word for word in get_ir(read.__code__)
                                 if word[0] == "LOAD_ATTR")
                     self.assertEqual(attr[1] < nlocalsplus(read), local)
@@ -343,7 +347,7 @@ class AssemblerTest(unittest.TestCase):
         self.assertEqual(f(C()), 5)
 
     @unittest.skipUnless(SPECIALIZES, "the IR is not specialised")
-    def test_bool_branch_nop_observation(self):
+    def test_bool_branch_source_boundary_observation(self):
         def f(flag, enable):
             enable()
             value = 4
@@ -362,16 +366,16 @@ class AssemblerTest(unittest.TestCase):
             self.assertEqual(f(False, noop), 2)
         self.assertEqual(f(True, noop), 1)
         self.assertIn("POP_JUMP_IF_FALSE_BOOL", handlers(f))
-        nop = next(i for i in dis.get_instructions(f) if i.opname == "NOP")
-        self.assertTrue(nop.starts_line)
-        self.assertIsNotNone(nop.line_number)
+        instructions = list(dis.get_instructions(f))
+        self.assertNotIn("NOP", [i.opname for i in instructions])
+        source_line = f.__code__.co_firstlineno + 5  # try:
         self.assertEqual(f(False, noop), 2)
 
         events = []
         def tracer(frame, event, arg):
             if frame.f_code is f.__code__:
                 frame.f_trace_opcodes = True
-                events.append((event, frame.f_lasti))
+                events.append((event, frame.f_lasti, frame.f_lineno))
             return tracer
 
         def enable():
@@ -387,7 +391,7 @@ class AssemblerTest(unittest.TestCase):
 
         def jump(frame, event, arg):
             if (frame.f_code is f.__code__ and event == "line" and
-                    frame.f_lineno == nop.line_number):
+                    frame.f_lineno == source_line):
                 frame.f_lineno = f.__code__.co_firstlineno + 9
             return jump
 
@@ -400,7 +404,7 @@ class AssemblerTest(unittest.TestCase):
         mon = sys.monitoring
         tool = mon.DEBUGGER_ID
         seen = []
-        mon.use_tool_id(tool, "test_ir_nop")
+        mon.use_tool_id(tool, "test_ir_source")
         try:
             for event in (mon.events.BRANCH_LEFT, mon.events.BRANCH_RIGHT):
                 mon.register_callback(tool, event,
@@ -413,18 +417,21 @@ class AssemblerTest(unittest.TestCase):
             mon.set_local_events(tool, f.__code__, 0)
             mon.free_tool_id(tool)
         self.assertGreaterEqual(len({dst for _, dst in seen}), 2)
-        self.assertIn(("opcode", nop.offset), events)
+        self.assertIn(source_line,
+                      [line for event, _, line in events if event == "line"])
+        self.assertTrue({offset for event, offset, _ in events if event == "opcode"}
+                        <= {i.offset for i in instructions})
 
         def raising(frame, event, arg):
-            if (frame.f_code is f.__code__ and event == "opcode" and
-                    frame.f_lasti == nop.offset):
-                raise LookupError("nop observer")
+            if (frame.f_code is f.__code__ and event == "line" and
+                    frame.f_lineno == source_line):
+                raise LookupError("source boundary observer")
             frame.f_trace_opcodes = True
             return raising
 
         sys.settrace(raising)
         try:
-            with self.assertRaisesRegex(LookupError, "nop observer"):
+            with self.assertRaisesRegex(LookupError, "source boundary observer"):
                 f(False, noop)
         finally:
             sys.settrace(None)
@@ -846,7 +853,7 @@ class FeedbackLayoutTest(unittest.TestCase):
         total = int.from_bytes(code.co_fbinit[:4], sys.byteorder) & 0xFFFF
         position = 2
         sizes = {"UNARY": (24,), "BINARY": (32,), "ATTR": (40,),
-                 "GLOBAL": (32,), "CALL": (24,), "BRANCH": (16, 24)}
+                 "GLOBAL": (32,), "CALL": (32,), "BRANCH": (16, 24)}
         for kind, unit, arg, units in entries[1:]:
             self.assertEqual(unit, position)
             self.assertIn(units * 8, sizes[kinds[kind]])
@@ -1023,7 +1030,7 @@ class FeedbackLayoutTest(unittest.TestCase):
                     c.replace(co_fbinit=fbinit)
         # A word that names a unit that starts no entry, or whose entry is
         # too small for its handler
-        short = table(word(0, 0, 5), word(dis._FEEDBACK_KINDS.index("CALL"), 2, 0))
+        short = table(word(0, 0, 6), word(dis._FEEDBACK_KINDS.index("CALL"), 2, 0))
         with self.assertRaisesRegex(ValueError, "feedback"):
             c.replace(co_fbinit=short)
 
@@ -1286,6 +1293,49 @@ class RelaxationTest(unittest.TestCase):
             jumps.append(word[0])
         return index, jumps
 
+    def test_for_iter_encoded_destination_geometry(self):
+        # Construction must reject a temporary A that the emitted move never
+        # writes. Mutated code is never executed.
+        for name, repeats in (("near", 1), ("far", IR_MAX_FORWARD)):
+            source = ("def f(xs):\n"
+                      "    n = 0\n"
+                      "    for x in xs:\n"
+                      + "        n = n + x\n" * repeats
+                      + "    return n\n")
+            code = make_function(source).__code__
+            ir = get_ir(code)
+            index = next(i for i, row in enumerate(ir) if row[0] == "FOR_ITER")
+            successors = [row[0] for row in ir[index + 1:index + 3]]
+            if name == "far":
+                self.assertEqual(successors, ["IR_JUMP", "IR_JUMP"])
+            else:
+                self.assertNotEqual(successors, ["IR_JUMP", "IR_JUMP"])
+            word = int.from_bytes(code.co_code[8 * index:8 * (index + 1)],
+                                  "little")
+            a, b, c, d = ((word >> shift) & IR_FIELD_MAX
+                          for shift in (16, 28, 40, 52))
+            self.assertGreaterEqual(b, code.co_nlocals)
+            stacksize = max(code.co_stacksize, b + 4 - code.co_nlocals)
+            for handler in ("FOR_ITER", "INSTRUMENTED_FOR_ITER"):
+                for dst in (a, b + 2, 0, IR_FIELD_MAX, b + 3):
+                    with self.subTest(shape=name, handler=handler, dst=dst):
+                        replacement = encode_words((opcode.opmap[handler],
+                                                    dst, b, c, d))
+                        data = (code.co_code[:8 * index] + replacement +
+                                code.co_code[8 * (index + 1):])
+
+                        def construct():
+                            return code.replace(
+                                co_code=data, co_stacksize=stacksize,
+                                co_linetable=memoryview(code.co_linetable).tobytes())
+
+                        if dst == b + 3:
+                            with self.assertRaisesRegex(ValueError,
+                                                        "semantic completion window"):
+                                construct()
+                        else:
+                            self.assertIsInstance(construct(), types.CodeType)
+
     def test_far_for_iter(self):
         nlines = IR_MAX_FORWARD
         source = ("def f(it):\n"
@@ -1308,7 +1358,7 @@ class RelaxationTest(unittest.TestCase):
             self.assertEqual(f(gen(4)), 6 * nlines)
             self.assertEqual(f(()), 0)
         index, jumps = self.relaxed(f, "FOR_ITER")
-        self.assertEqual(jumps, ["IR_JUMP"] * 3)
+        self.assertEqual(jumps, ["IR_JUMP"] * 2)
         # The loop exits by distance 1, to the second jump
         self.assertEqual(list(dis.get_instructions(f))[index].arg, 1)
         AssemblerTest.check_offsets(self, f)
@@ -1365,8 +1415,8 @@ class RelaxationTest(unittest.TestCase):
             self.assertIn("SEND_GEN", handlers(namespace["outer"]))
 
     def test_events_of_a_relaxed_loop(self):
-        # The jumps that relaxation adds have no events, and the branches of
-        # the loop go where they would without them.
+        # Relaxation preserves the semantic branch pairs. Its actual jump
+        # words have INSTRUCTION events, checked separately below.
         source = """if 1:
             def f(xs):
                 n = 0
@@ -1377,7 +1427,7 @@ class RelaxationTest(unittest.TestCase):
         """
         relaxed = relaxed_compile(source)["f"]
         plain = make_function(source)
-        self.assertEqual(self.relaxed(relaxed, "FOR_ITER")[1], ["IR_JUMP"] * 3)
+        self.assertEqual(self.relaxed(relaxed, "FOR_ITER")[1], ["IR_JUMP"] * 2)
         self.assertEqual(self.relaxed(plain, "FOR_ITER")[1], [])
 
         def canonical(func, offset):
@@ -1410,8 +1460,23 @@ class RelaxationTest(unittest.TestCase):
 
         def opcodes(func):
             result, events = trace(func, [0, 1, 1], opcodes=True)
+            ir = get_ir(func.__code__)
+            instructions = [offset for event, offset, _ in events if event == "opcode"]
+            for offset in instructions:
+                self.assertIn(offset, range(len(ir)))
+            helpers = [offset for offset in instructions if ir[offset][0] == "IR_JUMP"]
+            if func is relaxed:
+                site, _ = self.relaxed(func, "FOR_ITER")
+                self.assertEqual(helpers, [site + 1] * 3 + [site + 2])
+                for index, offset in enumerate(instructions):
+                    if ir[offset][0] == "IR_JUMP":
+                        self.assertGreater(index, 0)
+                        self.assertEqual(instructions[index - 1], site)
+            else:
+                self.assertEqual(helpers, [])
             return result, [(event, canonical(func, lasti), line)
-                            for event, lasti, line in events]
+                            for event, lasti, line in events
+                            if event != "opcode" or ir[lasti][0] != "IR_JUMP"]
 
         self.assertEqual(branches(relaxed), branches(plain))
         self.assertEqual(opcodes(relaxed), opcodes(plain))
@@ -2010,8 +2075,8 @@ class StoreFoldTest(unittest.TestCase):
         self.run_specialized(lambda: self.assertEqual(f(3), "ababab"))
 
     def test_set_lineno_after_folded_store(self):
-        # The frame-state simulation (frameobject.c) pops the result of a
-        # word that stores it.
+        # Jumping back reuses the stored local without requiring the retired
+        # arithmetic result as an incoming temporary owner.
         def f():
             x = 1 + len("a")
             y = x + 1
@@ -2028,6 +2093,139 @@ class StoreFoldTest(unittest.TestCase):
             self.assertEqual(f(), 3)
         finally:
             sys.settrace(None)
+
+    def test_set_lineno_plain_call_null_home_after_specialization(self):
+        def f():
+            x = 1 + len("a")
+            y = x + 1
+            return y
+
+        for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 2):
+            self.assertEqual(f(), 3)
+        jumped = False
+        def tracer(frame, event, arg):
+            nonlocal jumped
+            if (frame.f_code is f.__code__ and event == "line" and
+                    frame.f_lineno == f.__code__.co_firstlineno + 2 and not jumped):
+                jumped = True
+                frame.f_lineno = f.__code__.co_firstlineno + 1
+            return tracer
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", RuntimeWarning)
+            sys.settrace(tracer)
+            try:
+                self.assertEqual(f(), 3)
+            finally:
+                sys.settrace(None)
+        self.assertTrue(jumped)
+
+    def test_set_lineno_warning_preserves_nested_redirect(self):
+        def f():
+            x = 1 + len("a")
+            y = x + 1
+            return y
+
+        active = None
+        warned = False
+        def showwarning(*args, **kwargs):
+            nonlocal warned
+            warned = True
+            active.f_locals["y"] = 40
+            active.f_lineno = f.__code__.co_firstlineno + 3
+
+        def tracer(frame, event, arg):
+            nonlocal active
+            if (frame.f_code is f.__code__ and event == "line" and
+                    frame.f_lineno == f.__code__.co_firstlineno + 2 and active is None):
+                active = frame
+                frame.f_lineno = f.__code__.co_firstlineno + 1
+            return tracer
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("always", RuntimeWarning)
+            warnings.showwarning = showwarning
+            sys.settrace(tracer)
+            try:
+                self.assertEqual(f(), 40)
+            finally:
+                sys.settrace(None)
+        self.assertTrue(warned)
+
+    def test_set_lineno_warning_same_pc_commit_and_getter(self):
+        for nested in (False, True):
+            with self.subTest(nested=nested):
+                calls = []
+                def probe(value):
+                    calls.append(value)
+                    return len(value)
+
+                def f():
+                    x = 1 + probe("a")
+                    y = x + 1
+                    return y
+
+                active = None
+                lines = []
+                warnings_seen = []
+                def showwarning(*args, **kwargs):
+                    warnings_seen.append(True)
+                    line = active.f_lineno
+                    if nested:
+                        active.f_locals["y"] = 40
+                        active.f_lineno = line
+
+                def tracer(frame, event, arg):
+                    nonlocal active
+                    if frame.f_code is f.__code__ and event == "line":
+                        offset = frame.f_lineno - f.__code__.co_firstlineno
+                        lines.append(offset)
+                        if offset == 2 and active is None:
+                            active = frame
+                            frame.f_lineno = f.__code__.co_firstlineno + 1
+                    return tracer
+
+                with warnings.catch_warnings():
+                    warnings.simplefilter("always", RuntimeWarning)
+                    warnings.showwarning = showwarning
+                    sys.settrace(tracer)
+                    try:
+                        self.assertEqual(f(), 3)
+                    finally:
+                        sys.settrace(None)
+                self.assertEqual(len(warnings_seen), 1)
+                # The LINE wrapper dispatches the redirected assignment;
+                # its callback is not repeated just for the new destination.
+                # Count body executions independently of observer delivery.
+                self.assertEqual(calls, ["a"] if nested else ["a", "a"])
+                self.assertEqual(lines, [1, 2, 3] if nested else [1, 2, 2, 3])
+
+    def test_set_lineno_does_not_invent_a_method_receiver(self):
+        class C:
+            def method(self, arg):
+                return arg
+
+        def f(obj):
+            value = obj.method(
+                1)
+            return value
+
+        rejected = False
+        def tracer(frame, event, arg):
+            nonlocal rejected
+            if (frame.f_code is f.__code__ and event == "line" and
+                    frame.f_lineno == f.__code__.co_firstlineno + 3):
+                with self.assertRaisesRegex(ValueError, "incoming temporary"):
+                    frame.f_lineno = f.__code__.co_firstlineno + 2
+                rejected = True
+            return tracer
+
+        sys.settrace(tracer)
+        try:
+            self.assertEqual(f(C()), 1)
+        finally:
+            sys.settrace(None)
+        self.assertTrue(rejected)
 
 
 K = 3
@@ -2199,14 +2397,20 @@ class RegCfgTest(unittest.TestCase):
         self.assertNotIn("POP_TOP", self.names(f))
         self.assertNotIn("PUSH_NULL", self.names(f))
 
-    def test_pop_top_that_ends_a_line_stays(self):
-        # A debugger that starts tracing inside the call (pdb.set_trace())
-        # stops at the word after it, and that must still be on the line
+    def test_call_discard_across_source_lines(self):
+        # Source boundaries do not require a temporary result or a POP word.
         def f(g):
             g()
             return 1
-        self.assertIn("POP_TOP", self.names(f))
+        self.assertNotIn("POP_TOP", self.names(f))
         self.assertNotIn("PUSH_NULL", self.names(f))
+        call = next(word for word in get_ir(f.__code__) if word[0] == "CALL")
+        self.assertEqual(call[1], IR_FIELD_MAX)
+        first = f.__code__.co_firstlineno
+        result, events = trace(f, lambda: object())
+        self.assertEqual(result, 1)
+        self.assertEqual([e[2] - first for e in events if e[0] == "line"],
+                         [1, 2])
 
     # d. Truth folding in value context
 

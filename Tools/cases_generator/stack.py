@@ -312,6 +312,9 @@ class Stack:
         indirect = "&" if var.is_array() else ""
         return f"{indirect}{self.address(memory_offset)}"
 
+    def array_output(self, var: StackItem, memory_offset: PointerOffset) -> str:
+        return f"&{self.address(memory_offset)}"
+
     def store(self, out: CWriter, var: Local, memory_offset: PointerOffset) -> None:
         "Write var, which the stack holds at memory_offset, to memory"
         out.emit(f"{self.address(memory_offset)} = {var.name};\n")
@@ -660,7 +663,7 @@ class Storage:
         offset = stack.logical_sp
         for ouput in uop.stack.outputs:
             if ouput.is_array() and ouput.used and not ouput.peek:
-                out.emit(f"{ouput.name} = &{stack.address(offset)};\n")
+                out.emit(f"{ouput.name} = {stack.array_output(ouput, offset)};\n")
             offset = offset.push(ouput)
         for var in inputs:
             stack.push(var)

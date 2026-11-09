@@ -250,9 +250,12 @@ class Bdb:
 
     @contextmanager
     def set_enterframe(self, frame):
+        previous = self.enterframe
         self.enterframe = frame
-        yield
-        self.enterframe = None
+        try:
+            yield
+        finally:
+            self.enterframe = previous
 
     def trace_dispatch(self, frame, event, arg):
         """Dispatch a trace function for debugged frames based on the event.
@@ -521,6 +524,27 @@ class Bdb:
         """Called when we are about to execute an opcode."""
         pass
 
+    def user_entry(self, frame):
+        """Called synchronously at an explicit debugger entry.
+
+        Reuse the existing interaction hook without emitting an opcode event.
+        """
+        self.user_opcode(frame)
+
+    def _dispatch_entry(self, frame):
+        # Activation and error cleanup run inside the private entry transaction,
+        # where debugger interaction cannot recursively trace itself.
+        try:
+            self.start_trace()
+            with self.set_enterframe(frame):
+                self.user_entry(frame)
+                self.restart_events()
+                if self.quitting:
+                    raise BdbQuit
+        except BaseException:
+            self.stop_trace()
+            raise
+
     def _set_trace_opcodes(self, trace_opcodes):
         if trace_opcodes != self.trace_opcodes:
             self.trace_opcodes = trace_opcodes
@@ -608,9 +632,14 @@ class Bdb:
             # trace function, so we just skip this set_trace() call.
             return
 
-        self.stop_trace()
         if frame is None:
             frame = sys._getframe().f_back
+        self._prepare_set_trace(frame)
+        sys._debugger_entry(frame, self._dispatch_entry)
+
+    def _prepare_set_trace(self, frame):
+        """Install frame hooks without entering or activating the debugger."""
+        self.stop_trace()
         self.reset()
         with self.set_enterframe(frame):
             while frame:
@@ -620,9 +649,6 @@ class Bdb:
                 # We need f_trace_lines == True for the debugger to work
                 frame.f_trace_lines = True
                 frame = frame.f_back
-            self.set_stepinstr()
-            self.enterframe = None
-        self.start_trace()
 
     def set_continue(self):
         """Stop only at breakpoints or when finished.

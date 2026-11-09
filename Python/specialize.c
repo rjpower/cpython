@@ -416,6 +416,9 @@ fb_put_row(_PyFbPoly *poly, int i, fb_row row, int opcode)
     poly->aux[i] = row.aux;
     poly->index[i] = row.index;
     poly->descr[i] = row.descr;
+    if (opcode == LOAD_ATTR_SHAPE_LOCAL_TEMP) {
+        opcode = LOAD_ATTR_SHAPE;
+    }
     poly->handler[i] = (uint16_t)opcode;
 }
 
@@ -536,6 +539,9 @@ fb_begin_call(_PyInstr *instr, PyTypeObject *callable_type)
 static void
 fb_record(_PyInstr *instr, _PyFbHeader *h, int opcode)
 {
+    if (opcode == LOAD_ATTR_SHAPE_LOCAL_TEMP) {
+        opcode = LOAD_ATTR_SHAPE;
+    }
     if (h->poly == 0) {
         h->state = FB_MONO;
         return;
@@ -593,6 +599,14 @@ specialize(_PyInstr *instr, uint8_t specialized_opcode)
     assert(!PyErr_Occurred());
     int handler = instr_is_fused(instr) ? fused_form(specialized_opcode)
                                         : specialized_opcode;
+    if (handler == LOAD_ATTR_SHAPE) {
+        _PyIRWord word = FT_ATOMIC_LOAD_UINT64_RELAXED(*instr);
+        int nlocalsplus = _PyFrame_GetCode(current_frame())->co_nlocalsplus;
+        if (IR_B(word) < (uint32_t)nlocalsplus &&
+            IR_A(word) >= (uint32_t)nlocalsplus && IR_A(word) != IR_NO_DST) {
+            handler = LOAD_ATTR_SHAPE_LOCAL_TEMP;
+        }
+    }
     if (!set_opcode(instr, handler)) {
         STAT_INC(_PyOpcode_Deopt[specialized_opcode], failure);
         SPECIALIZATION_FAIL(_PyOpcode_Deopt[specialized_opcode],
@@ -2166,6 +2180,34 @@ specialize_py_call(PyFunctionObject *func, _PyInstr *instr, int nargs,
         return -1;
     }
     fb->func_version = version;
+    /* The hit path reads current defaults through the guarded function;
+     * the cache stores layout facts, never borrowed object pointers. */
+    fb->binding_flags = 0;
+    int supplied = nargs + bound_method;
+    PyObject *defaults = func->func_defaults;
+    Py_ssize_t ndefaults = defaults == NULL ? 0 : PyTuple_GET_SIZE(defaults);
+    Py_ssize_t first_default = code->co_argcount - ndefaults;
+    if (!bound_method && (code->co_flags & CO_OPTIMIZED) &&
+        !(code->co_flags & (CO_GENERATOR | CO_COROUTINE | CO_ASYNC_GENERATOR)) &&
+        code->co_kwonlyargcount == 0 && supplied <= code->co_argcount &&
+        supplied >= first_default && ndefaults <= UINT16_MAX &&
+        supplied - first_default <= UINT16_MAX)
+    {
+        fb->bound_count = (uint16_t)supplied;
+        fb->default_start = (uint16_t)(supplied - first_default);
+        int extra = code->co_argcount;
+        fb->binding_flags = _Py_CALL_BIND_DIRECT;
+        if (code->co_flags & CO_VARARGS) {
+            fb->binding_flags |= _Py_CALL_BIND_VARARGS;
+            extra++;
+        }
+        fb->kwargs_slot = code->co_flags & CO_VARKEYWORDS ? extra : IR_NO_DST;
+        if ((code->co_flags & (CO_VARKEYWORDS | CO_VIRTUAL_KWARGS)) ==
+            (CO_VARKEYWORDS | CO_VIRTUAL_KWARGS))
+        {
+            fb->binding_flags |= _Py_CALL_BIND_VIRTUAL_KWARGS;
+        }
+    }
     uint8_t opcode;
     if (argcount == nargs + bound_method) {
         opcode =
@@ -3069,11 +3111,8 @@ _Py_Specialize_ForIter(PyValue iter, PyValue null_or_index, _PyInstr *instr, int
             return;
         }
         else if (tp == &PyGen_Type && oparg <= SHRT_MAX) {
-            // The generator returns to END_FOR, or for a relaxed FOR_ITER
-            // to a jump there
-            assert(IR_HANDLER(instr[1 + oparg]) == IR_JUMP ||
-                   instr_opcode(instr + 1 + oparg) == END_FOR ||
-                   instr_opcode(instr + 1 + oparg) == INSTRUMENTED_END_FOR);
+            // The operation carries its real exhausted continuation; a
+            // generator return uses the same outcome as native exhaustion.
             /* Don't specialize if PEP 523 is active */
             if (!_PyInterpreterState_IsSpecializationEnabled(_PyInterpreterState_GET())) {
                 goto failure;
@@ -3446,16 +3485,16 @@ _Py_GatherStats_GetIter(PyValue iterable)
  * be lifted.
  */
 
-#define NO_LOC_4 (128 | (PY_CODE_LOCATION_INFO_NONE << 3) | 3)
+#define NO_LOC_2 (128 | (PY_CODE_LOCATION_INFO_NONE << 3) | 1)
 
 static const PyBytesObject no_location = {
     PyVarObject_HEAD_INIT(&PyBytes_Type, 1)
-    .ob_sval = { NO_LOC_4 }
+    .ob_sval = { NO_LOC_2 }
 };
 
 
-const struct _PyCode3 _Py_InitCleanup = {
-    _PyVarObject_HEAD_INIT(&PyCode_Type, 3),
+const struct _PyCode2 _Py_InitCleanup = {
+    _PyVarObject_HEAD_INIT(&PyCode_Type, 2),
     .co_consts = (PyObject *)&_Py_SINGLETON(tuple_empty),
     .co_names = (PyObject *)&_Py_SINGLETON(tuple_empty),
     .co_exceptiontable = (PyObject *)&_Py_SINGLETON(bytes_empty),
@@ -3466,14 +3505,13 @@ const struct _PyCode3 _Py_InitCleanup = {
     .co_name = &_Py_ID(__init__),
     .co_qualname = &_Py_ID(__init__),
     .co_linetable = (PyObject *)&no_location,
-    ._co_firsttraceable = 3,
+    ._co_firsttraceable = 2,
     .co_stacksize = 2,
     .co_framesize = 2 + FRAME_SPECIALS_SIZE,
     // The same words as _PyIR_InitCleanupExec (Python/ir.c), which this
     // static code object starts with as its executing copy
     ._co_exec = &_PyIR_InitCleanupExec,
     .co_words = {
-        IR_WORD(NOP, 0, 0, 0, 0),
         IR_WORD(EXIT_INIT_CHECK, 1, 0, 0, 0),
         IR_WORD(RETURN_VALUE, 0, 0, 0, 0),
     }

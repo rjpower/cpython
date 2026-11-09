@@ -167,13 +167,8 @@ _PyFrame_NumSlots(_PyInterpreterFrame *f)
  * where a call stores its result in a local, is released as STORE_FAST
  * releases it. */
 static inline void
-_PyFrame_SetReturnValue(_PyInterpreterFrame *f, PyValue v)
+_PyFrame_PublishReturnSlot(_PyInterpreterFrame *f, PyValue v)
 {
-    if (f->return_slot == IR_NO_DST) {
-        // A call whose result nothing reads (_PyIR_DISCARDS)
-        PyValue_XCLOSE(v);
-        return;
-    }
 #ifdef Py_DEBUG
     if (f->owner != FRAME_OWNED_BY_INTERPRETER) {
         assert(f->return_slot < _PyFrame_NumSlots(f));
@@ -186,6 +181,27 @@ _PyFrame_SetReturnValue(_PyInterpreterFrame *f, PyValue v)
     _PyValue_CheckHome(v);
     PyValue_XCLOSE(old);
 }
+
+void _PyFrame_CompleteRedirect(_PyInterpreterFrame *frame);
+
+static inline int
+_PyFrame_SetReturnValue(_PyInterpreterFrame *f, PyValue v)
+{
+    int redirected = f->pending_redirect;
+    if (redirected) {
+        _PyFrame_CompleteRedirect(f);
+    }
+    if (f->return_slot == IR_NO_DST) {
+        PyValue_XCLOSE(v);
+        return redirected;
+    }
+    _PyFrame_PublishReturnSlot(f, v);
+    return redirected;
+}
+
+/* Materialize a compiler-proven virtual empty kwargs binding before a read
+ * or before publishing a frame object to observers. */
+int _PyFrame_MaterializeKwargs(_PyInterpreterFrame *frame);
 
 /* Release the temporaries of f from slot first on and leave them NULL.
  * The slot rules of register-ir.md §1.5.4 (regcfg.c:_PyRegCfg_Compact)
@@ -242,6 +258,9 @@ static inline void _PyFrame_Copy(_PyInterpreterFrame *src, _PyInterpreterFrame *
     dest->tlbc_index = src->tlbc_index;
 #endif
     dest->return_slot = src->return_slot;
+    dest->return_pc = src->return_pc;
+    dest->pending_kwargs = src->pending_kwargs;
+    dest->pending_redirect = src->pending_redirect;
     // visited is GC bookkeeping for the current stack walk, not frame state.
     dest->visited = 0;
 #ifdef Py_DEBUG
@@ -276,13 +295,12 @@ _PyFrame_CodeHome(PyCodeObject *code)
     return PyValue_DUP(_PyValue_PointerBorrow((PyObject *)code));
 }
 
-/* Consumes reference to func and locals. The caller is responsible for slots
-   before null_from. */
+/* Consumes func and locals. The caller supplies initialized value storage. */
 static inline void
 _PyFrame_Initialize(
     PyThreadState *tstate, _PyInterpreterFrame *frame, PyValue func,
     PyObject *locals, PyCodeObject *code, PyValue *base,
-    int null_from, _PyInterpreterFrame *previous)
+    _PyInterpreterFrame *previous)
 {
     frame->previous = previous;
     frame->base = base;
@@ -295,17 +313,16 @@ _PyFrame_Initialize(
     frame->frame_obj = NULL;
     (void)tstate;
     _PyFrame_InitIRInstrPtr(frame, code);
+    frame->return_pc = frame->instr_ptr;
     frame->return_slot = 0;
+    frame->pending_kwargs = IR_NO_DST;
+    frame->pending_redirect = 0;
     frame->owner = FRAME_OWNED_BY_THREAD;
     frame->visited = 0;
 #ifdef Py_DEBUG
     frame->lltrace = 0;
 #endif
 
-    int nslots = _PyFrame_NumSlotsForCodeObject(code);
-    for (int i = null_from; i < nslots; i++) {
-        frame->base[i] = PyValue_NULL;
-    }
     // The constant slots (CO_FAST_CONST): owners of inline scalars and
     // immortals, which own no count.  A mortal constant, as after
     // code.replace(co_consts=...), gets one.
@@ -460,18 +477,43 @@ _PyThreadState_HasStackSpace(PyThreadState *tstate, int size)
         size < tstate->datastack_limit - tstate->datastack_top;
 }
 
+/* Reserve initialized cells before any header write. Old headers are not
+ * values: crossing their invalidated storage fills only the uncertain tail.
+ * No owner can be retired or callback invoked inside this commit. */
+static inline void
+_PyStackChunk_EnsureFrameStorage(_PyStackChunk *chunk, PyObject **header,
+                                PyObject **value_end)
+{
+    assert(&chunk->data[0] <= chunk->initialized);
+    assert(&chunk->data[0] <= value_end && value_end < header);
+    if (chunk->initialized > header) {
+        chunk->initialized = header;
+    }
+    if (chunk->initialized < value_end) {
+        PyValue *first = _PyDataStack_Slots(chunk->initialized);
+        PyValue *end = _PyDataStack_Slots(value_end);
+        while (first < end) {
+            *first++ = PyValue_NULL;
+        }
+        chunk->initialized = value_end;
+    }
+}
+
 /* Push a frame header and nslots slots, the header onto the frame stack and
  * the slots onto the value stack.  Must be guarded by
  * _PyThreadState_HasStackSpace(), for nslots + FRAME_SPECIALS_SIZE. */
 static inline _PyInterpreterFrame *
 _PyThreadState_PushFrameUnchecked(PyThreadState *tstate, int nslots)
 {
+    PyObject **header = tstate->datastack_limit - FRAME_SPECIALS_SIZE;
+    PyObject **end = tstate->datastack_top + nslots;
+    _PyStackChunk_EnsureFrameStorage(tstate->datastack_chunk, header, end);
     _PyInterpreterFrame *frame =
-        (_PyInterpreterFrame *)(tstate->datastack_limit - FRAME_SPECIALS_SIZE);
+        (_PyInterpreterFrame *)header;
     frame->base = _PyDataStack_Slots(tstate->datastack_top);
     frame->saved_top = frame->base;
     tstate->datastack_limit = (PyObject **)frame;
-    tstate->datastack_top += nslots;
+    tstate->datastack_top = end;
     assert(tstate->datastack_top < tstate->datastack_limit);
     return frame;
 }
@@ -493,6 +535,15 @@ _PyThreadState_PopFrame(PyThreadState *tstate, _PyInterpreterFrame *frame)
     _PyStackChunk *chunk = tstate->datastack_chunk;
     assert(chunk);
     assert((PyObject **)frame == tstate->datastack_limit);
+#ifndef NDEBUG
+    /* The code owner may already be cleared. Check the physical departing
+     * suffix, including an overlapping caller's previously NULL tail. */
+    for (PyValue *p = frame->base;
+         p < _PyDataStack_Slots(tstate->datastack_top); p++)
+    {
+        assert(PyValue_IsNull(*p));
+    }
+#endif
     // Only the frame that a chunk was allocated for has its first slot.  The
     // root chunk stays, for the next frame.
     if (frame->base == _PyDataStack_Slots(&chunk->data[0])
@@ -510,7 +561,7 @@ _PyThreadState_PopFrame(PyThreadState *tstate, _PyInterpreterFrame *frame)
  * Must be guarded by _PyThreadState_HasStackSpace()
  * Consumes reference to func. */
 static inline _PyInterpreterFrame *
-_PyFrame_PushUnchecked(PyThreadState *tstate, PyValue func, int null_locals_from, _PyInterpreterFrame * previous)
+_PyFrame_PushUnchecked(PyThreadState *tstate, PyValue func, _PyInterpreterFrame *previous)
 {
     CALL_STAT_INC(frames_pushed);
     PyFunctionObject *func_obj = (PyFunctionObject *)PyValue_AsKnownObjectBorrow(func);
@@ -518,7 +569,7 @@ _PyFrame_PushUnchecked(PyThreadState *tstate, PyValue func, int null_locals_from
     _PyInterpreterFrame *new_frame = _PyThreadState_PushFrameUnchecked(
         tstate, _PyFrame_NumSlotsForCodeObject(code));
     _PyFrame_Initialize(tstate, new_frame, func, NULL, code,
-                        new_frame->base, null_locals_from, previous);
+                        new_frame->base, previous);
     return new_frame;
 }
 
@@ -540,30 +591,32 @@ _PyFrame_PushOverlapping(PyThreadState *tstate, PyValue func,
     assert(previous->owner == FRAME_OWNED_BY_THREAD);
     assert(base > previous->base &&
            base <= _PyDataStack_Slots(tstate->datastack_top));
-    /* Arguments occupy [0, nargs); the remaining caller homes below
-     * null_from are already NULL. Only the new tail needs initialization. */
     int nslots = _PyFrame_NumSlotsForCodeObject(code);
+#ifndef NDEBUG
     PyValue *previous_end = previous->base +
         _PyFrame_NumSlotsForCodeObject(_PyFrame_GetCode(previous));
     assert(base + nargs <= previous_end);
     Py_ssize_t known = previous_end - base;
-    int null_from = known < nslots ? (int)known : nslots;
-    assert(null_from >= nargs);
-#ifndef NDEBUG
-    for (int i = nargs; i < null_from; i++) {
+    int shared = known < nslots ? (int)known : nslots;
+    assert(shared >= nargs);
+    for (int i = nargs; i < shared; i++) {
         assert(PyValue_IsNull(base[i]));
     }
 #endif
+    PyValue *saved_top = _PyDataStack_Slots(tstate->datastack_top);
+    PyValue *end = base + nslots;
+    PyValue *physical_end = end > saved_top ? end : saved_top;
     _PyInterpreterFrame *frame =
         (_PyInterpreterFrame *)(tstate->datastack_limit - FRAME_SPECIALS_SIZE);
-    frame->saved_top = _PyDataStack_Slots(tstate->datastack_top);
+    _PyStackChunk_EnsureFrameStorage(tstate->datastack_chunk,
+        (PyObject **)frame, _PyDataStack_Address(physical_end));
+    frame->saved_top = saved_top;
     tstate->datastack_limit = (PyObject **)frame;
-    PyValue *end = base + nslots;
     if (end > frame->saved_top) {
         tstate->datastack_top = _PyDataStack_Address(end);
     }
     assert(tstate->datastack_top < tstate->datastack_limit);
-    _PyFrame_Initialize(tstate, frame, func, NULL, code, base, null_from, previous);
+    _PyFrame_Initialize(tstate, frame, func, NULL, code, base, previous);
     return frame;
 }
 
@@ -592,9 +645,9 @@ _PyFrame_PushTrampolineUnchecked(PyThreadState *tstate, PyCodeObject *code, int 
 #endif
     assert(return_slot < nslots);
     frame->return_slot = (uint16_t)return_slot;
-    for (int i = 0; i < nslots; i++) {
-        frame->base[i] = PyValue_NULL;
-    }
+    frame->return_pc = frame->instr_ptr;
+    frame->pending_kwargs = IR_NO_DST;
+    frame->pending_redirect = 0;
     return frame;
 }
 

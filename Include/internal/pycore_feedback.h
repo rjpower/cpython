@@ -152,7 +152,15 @@ typedef struct {
         uint32_t type_version;      // CALL_ALLOC_AND_ENTER_INIT: the class
     };
     uint32_t callable_type_version; // recorded but not guarded
+    uint16_t bound_count;          // supplied positionals for the direct plan
+    uint16_t default_start;        // index in current func_defaults
+    uint16_t kwargs_slot;          // IR_NO_DST when no **kwargs binding
+    uint16_t binding_flags;        // _Py_CALL_BIND_*; scalar-only guarded plan
 } _PyFbCall;
+
+#define _Py_CALL_BIND_DIRECT 1
+#define _Py_CALL_BIND_VARARGS 2
+#define _Py_CALL_BIND_VIRTUAL_KWARGS 4
 
 /* One row per observation.  type_version[i] is the first version of the
  * observation and aux[i] the second: the operand types for BINARY, the

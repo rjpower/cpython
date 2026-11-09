@@ -1,0 +1,56 @@
+diff --git a/Lib/test/test_ir.py b/Lib/test/test_ir.py
+--- a/Lib/test/test_ir.py
++++ b/Lib/test/test_ir.py
+@@ -6,5 +6,6 @@ import gc
+ import io
+ import math
++import opcode
+ import sys
+ import types
+ import unittest
+@@ -1292,4 +1293,45 @@ class RelaxationTest(unittest.TestCase):
+             jumps.append(word[0])
+         return index, jumps
+ 
++    def test_for_iter_encoded_destination_geometry(self):
++        # Construction must reject a temporary A that the emitted move never
++        # writes. Mutated code is never executed.
++        for name, repeats in (("near", 1), ("far", IR_MAX_FORWARD)):
++            source = ("def f(xs):\n"
++                      "    n = 0\n"
++                      "    for x in xs:\n"
++                      + "        n = n + x\n" * repeats
++                      + "    return n\n")
++            code = make_function(source).__code__
++            ir = get_ir(code)
++            index = next(i for i, row in enumerate(ir) if row[0] == "FOR_ITER")
++            successors = [row[0] for row in ir[index + 1:index + 3]]
++            if name == "far":
++                self.assertEqual(successors, ["IR_JUMP", "IR_JUMP"])
++            else:
++                self.assertNotEqual(successors, ["IR_JUMP", "IR_JUMP"])
++            word = int.from_bytes(code.co_code[8 * index:8 * (index + 1)],
++                                  "little")
++            a, b, c, d = ((word >> shift) & IR_FIELD_MAX
++                          for shift in (16, 28, 40, 52))
++            self.assertGreaterEqual(b, code.co_nlocals)
++            stacksize = max(code.co_stacksize, b + 4 - code.co_nlocals)
++            for handler in ("FOR_ITER", "INSTRUMENTED_FOR_ITER"):
++                for dst in (a, b + 2, 0, IR_FIELD_MAX, b + 3):
++                    with self.subTest(shape=name, handler=handler, dst=dst):
++                        replacement = encode_words((opcode.opmap[handler],
++                                                    dst, b, c, d))
++                        data = (code.co_code[:8 * index] + replacement +
++                                code.co_code[8 * (index + 1):])
++                        def construct():
++                            return code.replace(
++                                co_code=data, co_stacksize=stacksize,
++                                co_linetable=memoryview(code.co_linetable).tobytes())
++                        if dst == b + 3:
++                            with self.assertRaisesRegex(ValueError,
++                                                        "semantic completion window"):
++                                construct()
++                        else:
++                            self.assertIsInstance(construct(), types.CodeType)
++
+     def test_far_for_iter(self):

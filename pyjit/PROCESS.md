@@ -60,7 +60,12 @@ universal-value runtime or JIT should exist.
 
 ## Model roles
 
-Current user direction (2026-11-05) replaces the previous provider's model names:
+Current packet direction (2026-11-08): use **Sol 6.1, medium effort** for bulk
+work and implementation, with independent proposal/code review and coordinator
+integration. This supersedes the older default role allocation for the active
+[execution-boundary packet](issues/execution-boundaries-20261108/plan.md).
+
+The earlier default allocation (2026-11-05) replaced the previous provider's names:
 
 - **Terra, medium effort:** implementation, ownership-sensitive ports and finishing.
 - **Luna, medium effort:** bounded mechanical ports and documentation sync.

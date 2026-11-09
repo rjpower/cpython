@@ -30,7 +30,7 @@ struct _PyRegCfg;
 /* Finish the code unit's CFG and convert it into the register CFG
  * (Python/regcfg.c), with its passes run and its slots assigned. */
 int _PyCfg_OptimizedCfgToRegCfg(struct _PyCfgBuilder *g, _PyCompile_CodeUnitMetadata *umd,
-                                int *stackdepth, int *nlocalsplus,
+                                int code_flags, int *stackdepth, int *nlocalsplus,
                                 struct _PyRegCfg **result);
 
 PyCodeObject *

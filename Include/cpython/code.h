@@ -160,6 +160,9 @@ struct PyCodeObject _PyCode_DEF(1);
 /* A function defined in class scope */
 #define CO_METHOD  0x8000000
 
+/* The compiler proves reads of the empty **kwargs binding materialize it. */
+#define CO_VIRTUAL_KWARGS 0x10000000
+
 /* This should be defined if a future statement modifies the syntax.
    For example, when a keyword is added.
 */

@@ -264,6 +264,11 @@ gen_raise_already_executing_error(PyGenObject *gen)
 static inline PyValueBorrow
 _PyGen_YieldFromRef(_PyInterpreterFrame *frame)
 {
+    /* Delegating yields always retain a real receiver window. Ordinary
+     * ignored resume inputs use IR_NO_DST and never reach this lookup. */
+    assert(frame->return_slot != IR_NO_DST);
+    assert(frame->return_slot >= 2 &&
+           frame->return_slot < _PyFrame_NumSlots(frame));
     PyValueBorrow ref = PyValue_Borrow(frame->base[frame->return_slot - 2]);
     assert(!PyValue_IsNull(ref));
     return ref;
@@ -293,8 +298,7 @@ static _PyStatusValue
     _PyErr_StackItem *prev_exc_info = tstate->exc_info;
     gen->gi_exc_state.previous_item = prev_exc_info;
     tstate->exc_info = &gen->gi_exc_state;
-    /* A yield returns to the trampoline's second INTERPRETER_EXIT, one word
-       past the entry frame's instr_ptr (Python/ceval.c). */
+    /* The entry frame carries its actual interpreter-exit continuation. */
 
     if (exc) {
         assert(_PyErr_Occurred(tstate));

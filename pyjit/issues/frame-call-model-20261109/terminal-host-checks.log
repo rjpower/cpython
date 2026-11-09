@@ -1,0 +1,28 @@
+test_terminal_observer_defined_null_edge (__main__.TestIRCases.test_terminal_observer_defined_null_edge) ... ok
+test_terminal_observer_dotted_owner_mutations (__main__.TestIRCases.test_terminal_observer_dotted_owner_mutations) ... ok
+test_terminal_observer_ownership_and_composition (__main__.TestIRCases.test_terminal_observer_ownership_and_composition) ... ok
+
+----------------------------------------------------------------------
+Ran 3 tests in 0.984s
+
+OK
+{
+  "tests": 3,
+  "ir_bytes": 789982,
+  "metadata_bytes": 269380,
+  "changed_handlers": [
+    "INSTRUMENTED_COMPARE_OP_JUMP",
+    "INSTRUMENTED_CONTAINS_OP_JUMP",
+    "INSTRUMENTED_FOR_ITER",
+    "INSTRUMENTED_IS_OP_JUMP",
+    "INSTRUMENTED_JUMP_IF_FALSE_OR_POP",
+    "INSTRUMENTED_JUMP_IF_TRUE_OR_POP",
+    "INSTRUMENTED_POP_JUMP_IF_FALSE",
+    "INSTRUMENTED_POP_JUMP_IF_NONE",
+    "INSTRUMENTED_POP_JUMP_IF_NOT_NONE",
+    "INSTRUMENTED_POP_JUMP_IF_TRUE"
+  ],
+  "ordinary_handlers": 262,
+  "ordinary_sha256_before": "953e15a9f8b555ab3973972012e8c1472259767e57c865d54635b1de4b8bf4bf",
+  "ordinary_sha256_after": "953e15a9f8b555ab3973972012e8c1472259767e57c865d54635b1de4b8bf4bf"
+}

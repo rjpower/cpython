@@ -1,0 +1,48 @@
+diff --git a/Include/internal/pycore_ir.h b/Include/internal/pycore_ir.h
+--- a/Include/internal/pycore_ir.h
++++ b/Include/internal/pycore_ir.h
+@@ -262,4 +262,15 @@ enum {
+     _PyIR_OUTPUT_OUTCOME,
+ };
+ 
++/* A checked observer edge whose terminal provider has committed its physical
++ * outputs before the callback. Generated from the provider, not inferred from
++ * its event name. An absent fact cannot authorize POST inspection. */
++enum {
++    _PyIR_OBSERVER_NONE,
++    _PyIR_OBSERVER_FORMAT_VALUE,
++    _PyIR_OBSERVER_FORMAT_NULL_FIRST,
++    _PyIR_OBSERVER_FOR_BODY,
++    _PyIR_OBSERVER_COMPLETION,
++};
++
+ typedef struct _PyIRFormat {
+@@ -276,3 +287,4 @@ typedef struct _PyIRFormat {
+     uint8_t fb_size;        // the bytes of that entry's type, or 0
+     uint8_t result_phase;   // _PyIR_RESULT_PHASE_*: conditional success fact
++    uint8_t observer_outcome[2]; // checked fallthrough/taken POST facts
+     uint8_t output_kind;    // actual physical publication, not fold capability:
+diff --git a/Include/internal/pycore_ir_outcomes.h b/Include/internal/pycore_ir_outcomes.h
+--- a/Include/internal/pycore_ir_outcomes.h
++++ b/Include/internal/pycore_ir_outcomes.h
+@@ -16,4 +16,20 @@ typedef struct {
+     int dst;
+ } _PyIRSlotOutcome;
+ 
++/* Constructor words are pristine; monitoring runs their twin. Resolve the
++ * single generated provider fact from that twin, or from a direct no-twin
++ * helper such as SEND. This is a cold declaration, not a success inference. */
++static inline int
++_PyIR_ObserverOutcome(_PyIRWord word, int edge)
++{
++    if (edge < 0 || edge > 1) {
++        return _PyIR_OBSERVER_NONE;
++    }
++    const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
++    if (fmt->twin != 0) {
++        fmt = _PyIR_FormatOf(fmt->twin);
++    }
++    return fmt->observer_outcome[edge];
++}
++
+ /* Inputs whose ABI accepts NULL: window-relative positions for WINDOW rows,

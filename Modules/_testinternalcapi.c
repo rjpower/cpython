@@ -28,6 +28,7 @@
 #include "pycore_import.h"        // _PyImport_ClearExtension()
 #include "pycore_initconfig.h"    // _Py_GetConfigsAsDict()
 #include "pycore_instruction_sequence.h"  // _PyInstructionSequence_New()
+#include "pycore_ir_outcomes.h"    // _PyIR_NormalPhysicalTransfer()
 #include "pycore_interpframe.h"   // _PyFrame_GetFunction()
 #include "pycore_lock.h"          // PyEvent_WaitTimed()
 #include "pycore_list.h"          // _PyList_SetItemTakeValue()
@@ -1653,6 +1654,26 @@ get_ir(PyObject *self, PyObject *args)
         Py_DECREF(item);
     }
     return result;
+}
+
+static PyObject *
+ir_normal_physical_transfer(PyObject *self, PyObject *args)
+{
+    int handler, a, b, c, d, arg, edge, home, nl, limit;
+    if (!PyArg_ParseTuple(args, "iiiiiiiiii", &handler, &a, &b, &c, &d,
+                          &arg, &edge, &home, &nl, &limit)) {
+        return NULL;
+    }
+    if (handler < 0 || handler >= IR_NUM_HANDLERS ||
+        a < 0 || a > IR_FIELD_MAX || b < 0 || b > IR_FIELD_MAX ||
+        c < 0 || c > IR_FIELD_MAX || d < 0 || d > IR_FIELD_MAX) {
+        PyErr_SetString(PyExc_ValueError, "invalid IR word field");
+        return NULL;
+    }
+    _PyIRWord word = IR_WORD(handler, a, b, c, d);
+    _PyIRPhysicalTransfer result =
+        _PyIR_NormalPhysicalTransfer(word, arg, edge, home, nl, limit);
+    return Py_BuildValue("(ii)", result.kind, result.source);
 }
 
 /* Set the farthest exit of FOR_ITER and SEND that the assembler does not
@@ -3933,6 +3954,13 @@ gc_verify_with_pymem_array(PyObject *self, PyObject *factory)
 }
 
 static PyObject *
+frame_has_virtual_kwargs(PyObject *self, PyObject *Py_UNUSED(args))
+{
+    _PyInterpreterFrame *frame = _PyThreadState_GET()->current_frame;
+    return PyBool_FromLong(frame != NULL && frame->pending_kwargs != IR_NO_DST);
+}
+
+static PyObject *
 common_constant_storage(PyObject *module, PyObject *Py_UNUSED(args))
 {
     PyInterpreterState *interp = _PyInterpreterState_GET();
@@ -4261,7 +4289,134 @@ set_inline_exception_value(PyObject *self, PyObject *exception)
     return NULL;
 }
 
+typedef struct {
+    PyObjectArenaAllocator original;
+    int allocations;
+    void *memory[2];
+    size_t sizes[2];
+} DirtyFrameArena;
+
+static void *
+dirty_frame_arena_alloc(void *context, size_t size)
+{
+    DirtyFrameArena *arena = context;
+    void *memory = arena->original.alloc(arena->original.ctx, size);
+    if (memory != NULL) {
+        memset(memory, 0xa5, size);
+        assert(arena->allocations < 2);
+        arena->memory[arena->allocations] = memory;
+        arena->sizes[arena->allocations++] = size;
+    }
+    return memory;
+}
+
+static void
+dirty_frame_arena_free(void *context, void *memory, size_t size)
+{
+    DirtyFrameArena *arena = context;
+    arena->original.free(arena->original.ctx, memory, size);
+}
+
+static void
+assert_frame_arena_null(_PyInterpreterFrame *frame, int count)
+{
+    for (int i = 0; i < count; i++) {
+        assert(PyValue_IsNull(frame->base[i]));
+    }
+}
+
+/* Run only in an isolated subprocess: the allocator hook is process-global.
+ * No Python callback occurs between installing it and restoring it. */
+static PyObject *
+test_frame_arena(PyObject *self, PyObject *Py_UNUSED(ignored))
+{
+    PyThreadState state = {0};
+    DirtyFrameArena arena = {0};
+    PyObject_GetArenaAllocator(&arena.original);
+    PyObjectArenaAllocator dirty = {
+        &arena, dirty_frame_arena_alloc, dirty_frame_arena_free
+    };
+    PyObject_SetArenaAllocator(&dirty);
+    _PyInterpreterFrame *frame = _PyThreadState_PushFrame(
+        &state, FRAME_SPECIALS_SIZE + 1);
+    PyObject_SetArenaAllocator(&arena.original);
+    if (frame == NULL) {
+        return PyErr_NoMemory();
+    }
+    assert(arena.allocations == 1);
+    assert_frame_arena_null(frame, 1);
+    _PyThreadState_PopFrame(&state, frame);
+
+    _PyStackChunk *root = state.datastack_chunk;
+    int large = (int)(state.datastack_limit - state.datastack_top) -
+                FRAME_SPECIALS_SIZE - 1;
+    assert(_PyThreadState_HasStackSpace(&state, large + FRAME_SPECIALS_SIZE));
+    frame = _PyThreadState_PushFrameUnchecked(&state, large);
+    assert_frame_arena_null(frame, large);
+    _PyThreadState_PopFrame(&state, frame);
+    PyObject **high = root->initialized;
+
+    _PyInterpreterFrame *headers[8];
+    for (int i = 0; i < 8; i++) {
+        assert(_PyThreadState_HasStackSpace(&state, FRAME_SPECIALS_SIZE + 1));
+        headers[i] = _PyThreadState_PushFrameUnchecked(&state, 1);
+        assert_frame_arena_null(headers[i], 1);
+    }
+    assert(root->initialized < high);
+    for (int i = 8; i-- > 0;) {
+        _PyThreadState_PopFrame(&state, headers[i]);
+    }
+    frame = _PyThreadState_PushFrameUnchecked(&state, large);
+    assert_frame_arena_null(frame, large);
+    assert(root->initialized == _PyDataStack_Address(frame->base + large));
+    _PyThreadState_PopFrame(&state, frame);
+
+    _PyInterpreterFrame *anchor = _PyThreadState_PushFrameUnchecked(&state, 1);
+    for (int repeat = 0; repeat < 2; repeat++) {
+        _PyStackChunk *cached = state.datastack_cached_chunk;
+        PyObject_SetArenaAllocator(&dirty);
+        frame = _PyThreadState_PushFrame(&state,
+            FRAME_SPECIALS_SIZE + 2 * large);
+        PyObject_SetArenaAllocator(&arena.original);
+        if (frame == NULL) {
+            _PyThreadState_PopFrame(&state, anchor);
+            arena.original.free(arena.original.ctx, root, arena.sizes[0]);
+            if (cached != NULL) {
+                arena.original.free(arena.original.ctx, cached, arena.sizes[1]);
+            }
+            return PyErr_NoMemory();
+        }
+        if (repeat) {
+            assert(state.datastack_chunk == cached);
+        }
+        assert_frame_arena_null(frame, 2 * large);
+        _PyThreadState_PopFrame(&state, frame);
+        assert(state.datastack_chunk == root);
+    }
+    _PyThreadState_PopFrame(&state, anchor);
+    _PyStackChunk *cached = state.datastack_cached_chunk;
+    assert(arena.allocations == 2);
+    assert(arena.memory[0] == root && arena.memory[1] == cached);
+    arena.original.free(arena.original.ctx, cached, arena.sizes[1]);
+    arena.original.free(arena.original.ctx, root, arena.sizes[0]);
+    Py_RETURN_NONE;
+}
+
+/* Read-only addresses for isolated remote-reader corruption tests. */
+static PyObject *
+remote_debug_layout(PyObject *self, PyObject *Py_UNUSED(ignored))
+{
+    return Py_BuildValue("{s:K,s:n,s:n,s:n,s:i}",
+        "descriptor", (unsigned long long)(uintptr_t)&_PyRuntime.debug_offsets,
+        "chunk_section", (Py_ssize_t)offsetof(_Py_DebugOffsets, stack_chunk),
+        "generator_frame", (Py_ssize_t)offsetof(PyGenObject, gi_iframe),
+        "return_slot", (Py_ssize_t)offsetof(_PyInterpreterFrame, return_slot),
+        "no_dst", IR_NO_DST);
+}
+
 static PyMethodDef module_functions[] = {
+    {"test_frame_arena", test_frame_arena, METH_NOARGS},
+    {"remote_debug_layout", remote_debug_layout, METH_NOARGS},
     {"set_inline_exception_value", set_inline_exception_value, METH_O},
     {"compile_without_copyprop_kill", compile_without_copyprop_kill,
      METH_VARARGS, NULL},
@@ -4270,6 +4425,7 @@ static PyMethodDef module_functions[] = {
     {"test_list_setitem_take_value", test_list_setitem_take_value, METH_NOARGS},
     {"dict_vm_storage", dict_vm_storage, METH_O},
     {"common_constant_storage", common_constant_storage, METH_NOARGS},
+    {"frame_has_virtual_kwargs", frame_has_virtual_kwargs, METH_NOARGS},
     {"pyvalue_contract", pyvalue_contract, METH_O, NULL},
     {"pyvalue_internal_contract", pyvalue_internal_contract, METH_NOARGS, NULL},
     {"pyvalue_home_violations", pyvalue_home_violations, METH_NOARGS, NULL},
@@ -4333,6 +4489,8 @@ static PyMethodDef module_functions[] = {
     {"get_co_localskinds", get_co_localskinds, METH_O, NULL},
     {"get_feedback", get_feedback, METH_VARARGS, NULL},
     {"get_ir", get_ir, METH_VARARGS, NULL},
+    {"ir_normal_physical_transfer", ir_normal_physical_transfer,
+     METH_VARARGS, NULL},
     {"set_ir_max_forward", set_ir_max_forward, METH_O, NULL},
     {"set_ir_max_slots", set_ir_max_slots, METH_O, NULL},
     {"get_code_var_counts", _PyCFunction_CAST(get_code_var_counts),

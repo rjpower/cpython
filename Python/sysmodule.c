@@ -22,6 +22,7 @@ Data members:
 #include "pycore_frame.h"         // _PyInterpreterFrame
 #include "pycore_import.h"        // _PyImport_SetDLOpenFlags()
 #include "pycore_initconfig.h"    // _PyStatus_EXCEPTION()
+#include "pycore_instruments.h"    // _PY_DEBUGGER_ENTRY_EVENT
 #include "pycore_interpframe.h"   // _PyFrame_GetFirstComplete()
 #include "pycore_list.h"          // PyList_AppendValue()
 #include "pycore_long.h"          // _PY_LONG_MAX_STR_DIGITS_THRESHOLD
@@ -39,6 +40,7 @@ Data members:
 #include "pycore_runtime.h"       // _PyRuntimeState_Get*()
 #include "pycore_structseq.h"     // _PyStructSequence_InitBuiltinWithFlags()
 #include "pycore_sysmodule.h"     // export _PySys_GetSizeOf()
+#include "pycore_tstate.h"         // _PyThreadStateImpl
 #include "pycore_tuple.h"         // _PyTuple_PackValues()
 #include "pycore_unicodeobject.h" // _PyUnicode_InternImmortal()
 #include "pycore_value_api.h"     // _PyValue_FromObjectKnown()
@@ -2200,6 +2202,53 @@ sys_getunicodeinternedsize_impl(PyObject *module, int _only_immortal)
 }
 
 /*[clinic input]
+sys._debugger_entry
+
+    frame: object(subclass_of="&PyFrame_Type")
+    callback: object
+    /
+
+Invoke a private debugger entry callback for an active ancestor frame.
+[clinic start generated code]*/
+
+static PyValue
+sys__debugger_entry_impl(PyObject *module, PyObject *frame,
+                         PyValueBorrow callback)
+/*[clinic end generated code: output=c13f7027a5c1ac13 input=c8b4ebd5ebae81ad]*/
+{
+    PyThreadState *tstate = _PyThreadState_GET();
+    _PyInterpreterFrame *entry = tstate->current_frame;
+    /* The executing native CALL has held inputs: it cannot authorize an
+     * ordinary boundary recipe for its own Python frame. Only strict active
+     * ancestors retain the real pending-child/overlap contract. */
+    _PyInterpreterFrame *ancestor = entry ? entry->previous : NULL;
+    while (ancestor != NULL && ancestor->frame_obj != (PyFrameObject *)frame) {
+        ancestor = ancestor->previous;
+    }
+    if (ancestor == NULL || _PyFrame_IsIncomplete(ancestor)) {
+        PyErr_SetString(PyExc_ValueError,
+                        "debugger entry requires a strict active ancestor");
+        return PyValue_NULL;
+    }
+    _PyThreadStateImpl *impl = (_PyThreadStateImpl *)tstate;
+    _PyInterpreterFrame *old_observed = impl->observed_frame;
+    int old_what = tstate->what_event;
+    impl->observed_frame = entry;
+    tstate->what_event = _PY_DEBUGGER_ENTRY_EVENT;
+    tstate->tracing++;
+    _PyIRObserverSpec unsupported = {.phase = _PY_IR_OBSERVER_UNSUPPORTED};
+    _PyIRObserverScope scope;
+    _PyEval_EnterObserverContext(tstate, &unsupported, &scope);
+    PyValue result = _PyValue_CallOneArg(
+        tstate, callback, PyValue_FromObjectBorrow(frame));
+    _PyEval_LeaveObserverContext(tstate, &scope);
+    tstate->tracing--;
+    tstate->what_event = old_what;
+    impl->observed_frame = old_observed;
+    return result;
+}
+
+/*[clinic input]
 sys._getframe
 
     depth: int = 0
@@ -3039,6 +3088,7 @@ static PyMethodDef sys_methods[] = {
     SYS_GETREFCOUNT_METHODDEF
     SYS_GETRECURSIONLIMIT_METHODDEF
     SYS_GETSIZEOF_METHODDEF
+    SYS__DEBUGGER_ENTRY_METHODDEF
     SYS__GETFRAME_METHODDEF
     SYS__GETFRAMEMODULENAME_METHODDEF
     SYS_GETWINDOWSVERSION_METHODDEF

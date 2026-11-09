@@ -3,7 +3,9 @@
 A handler number is a fact of the .pyc format, so it is chosen by hand and
 checked in rather than derived from the sorted names.  Adding a handler needs
 a line in the table; removing one leaves a `# removed: NAME NUMBER` line so
-that the number is never reused.  See ir_numbers.txt for the layout.
+that the number is not reused within a format revision. An incompatible
+revision must change the cache magic and pinned table together. See
+ir_numbers.txt for the layout.
 
 Run as a script, `ir_numbers.py --check-numbers Python/bytecodes.c` proves
 that the table and the source agree.

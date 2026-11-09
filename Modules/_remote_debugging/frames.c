@@ -30,8 +30,12 @@ process_single_stack_chunk(
     uintptr_t chunk_addr,
     StackChunkInfo *chunk_info
 ) {
-    // Start with default size assumption
-    size_t current_size = _PY_DATA_STACK_CHUNK_SIZE;
+    // Read the target header first; its allocation size is not a local ABI.
+    size_t current_size = (size_t)unwinder->debug_offsets.stack_chunk.size;
+    if (chunk_addr > UINTPTR_MAX - current_size) {
+        PyErr_SetString(PyExc_RuntimeError, "Invalid stack chunk address");
+        return -1;
+    }
 
     char *this_chunk = PyMem_RawMalloc(current_size);
     if (!this_chunk) {
@@ -47,19 +51,19 @@ process_single_stack_chunk(
     }
 
     // Check actual size and reread if necessary
-    size_t actual_size = GET_MEMBER(size_t, this_chunk, offsetof(_PyStackChunk, size));
-    if (actual_size != current_size) {
-        // Validate size: reject garbage (too small or unreasonably large)
-        // Size must be at least enough for the header and reasonably bounded
-        if (actual_size <= offsetof(_PyStackChunk, data) || actual_size > MAX_STACK_CHUNK_SIZE) {
-            PyMem_RawFree(this_chunk);
-            PyErr_Format(PyExc_RuntimeError,
-                "Invalid stack chunk size %zu (corrupted remote memory)", actual_size);
-            set_exception_cause(unwinder, PyExc_RuntimeError,
-                "Invalid stack chunk size (corrupted remote memory)");
-            return -1;
-        }
+    size_t actual_size = GET_MEMBER(size_t, this_chunk, unwinder->debug_offsets.stack_chunk.chunk_size);
+    // Validate even when the allocation happens to equal the header size.
+    if (actual_size < current_size || actual_size > MAX_STACK_CHUNK_SIZE ||
+        chunk_addr > UINTPTR_MAX - actual_size) {
+        PyMem_RawFree(this_chunk);
+        PyErr_Format(PyExc_RuntimeError,
+            "Invalid stack chunk size %zu (corrupted remote memory)", actual_size);
+        set_exception_cause(unwinder, PyExc_RuntimeError,
+            "Invalid stack chunk size (corrupted remote memory)");
+        return -1;
+    }
 
+    if (actual_size != current_size) {
         char *tmp = PyMem_RawRealloc(this_chunk, actual_size);
         if (!tmp) {
             PyMem_RawFree(this_chunk);
@@ -79,6 +83,7 @@ process_single_stack_chunk(
 
     chunk_info->remote_addr = chunk_addr;
     chunk_info->size = current_size;
+    chunk_info->data_offset = (size_t)unwinder->debug_offsets.stack_chunk.data;
     chunk_info->local_copy = this_chunk;
     return 0;
 }
@@ -126,7 +131,7 @@ copy_stack_chunks(RemoteUnwinderObject *unwinder,
         }
 
         // Get next chunk address and increment count
-        chunk_addr = GET_MEMBER(uintptr_t, chunks[count].local_copy, offsetof(_PyStackChunk, previous));
+        chunk_addr = GET_MEMBER(uintptr_t, chunks[count].local_copy, unwinder->debug_offsets.stack_chunk.previous);
         count++;
     }
 
@@ -147,16 +152,16 @@ find_frame_in_chunks(StackChunkList *chunks, uintptr_t remote_ptr)
 {
     for (size_t i = 0; i < chunks->count; ++i) {
         // Validate size: reject garbage that would cause underflow
-        if (chunks->chunks[i].size <= offsetof(_PyStackChunk, data)) {
+        if (chunks->chunks[i].size <= chunks->chunks[i].data_offset) {
             // Skip this chunk - corrupted size from remote memory
             continue;
         }
-        uintptr_t base = chunks->chunks[i].remote_addr + offsetof(_PyStackChunk, data);
-        size_t payload = chunks->chunks[i].size - offsetof(_PyStackChunk, data);
+        uintptr_t base = chunks->chunks[i].remote_addr + chunks->chunks[i].data_offset;
+        size_t payload = chunks->chunks[i].size - chunks->chunks[i].data_offset;
 
         if (payload >= SIZEOF_INTERP_FRAME &&
                 remote_ptr >= base &&
-                remote_ptr <= base + payload - SIZEOF_INTERP_FRAME) {
+                remote_ptr - base <= payload - SIZEOF_INTERP_FRAME) {
             return (char *)chunks->chunks[i].local_copy + (remote_ptr - chunks->chunks[i].remote_addr);
         }
     }

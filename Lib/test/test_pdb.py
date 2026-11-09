@@ -1,6 +1,7 @@
 # A test suite for pdb; not very comprehensive at the moment.
 
 import _colorize
+import dis
 import doctest
 import gc
 import io
@@ -3218,7 +3219,7 @@ def test_pdb_issue_gh_108976():
 
 def test_pdb_issue_gh_127321():
     """See GH-127321
-    breakpoint() should stop at a opcode that has a line number
+    Immediate debugger entry should have a valid source position.
     >>> def test_function():
     ...     import pdb; pdb_instance = pdb.Pdb(nosigint=True, readrc=False)
     ...     [1, 2] and pdb_instance.set_trace()
@@ -3227,8 +3228,8 @@ def test_pdb_issue_gh_127321():
     ...     'continue'
     ... ]):
     ...    test_function()
-    > <doctest test.test_pdb.test_pdb_issue_gh_127321[0]>(4)test_function()
-    -> a = 1
+    > <doctest test.test_pdb.test_pdb_issue_gh_127321[0]>(3)test_function()
+    -> [1, 2] and pdb_instance.set_trace()
     (Pdb) continue
     """
 
@@ -3557,6 +3558,54 @@ def test_pdb_commands_last_breakpoint():
 class PdbTestCase(unittest.TestCase):
     def tearDown(self):
         os_helper.unlink(os_helper.TESTFN)
+
+    def test_issue_gh_127321_position_and_continue(self):
+        for backend in ('settrace', 'monitoring'):
+            with self.subTest(backend=backend):
+                stops = []
+                bindings = []
+
+                class RecordingPdb(pdb.Pdb):
+                    def interaction(self, frame, tb_or_exc):
+                        stops.append((frame.f_code, frame.f_lasti,
+                                      frame.f_lineno, 'a' in frame.f_locals))
+                        return super().interaction(frame, tb_or_exc)
+
+                output = StringIO()
+                debugger = RecordingPdb(
+                    backend=backend, stdin=StringIO('continue\n'), stdout=output,
+                    nosigint=True, readrc=False)
+
+                def test_function():
+                    pdb_instance = debugger
+                    [1, 2] and pdb_instance.set_trace()
+                    a = 1
+                    bindings.append(a)
+                    return a
+
+                previous_trace = sys.gettrace()
+                previous_pdb = pdb.Pdb._last_pdb_instance
+                try:
+                    result = test_function()
+                finally:
+                    debugger.stop_trace()
+                    sys.settrace(previous_trace)
+                    if pdb.Pdb._last_pdb_instance is debugger:
+                        pdb.Pdb._last_pdb_instance = previous_pdb
+
+                self.assertEqual(result, 1)
+                self.assertEqual(bindings, [1])
+                self.assertEqual(len(stops), 1)
+                code, pc, line, bound = stops[0]
+                self.assertIs(code, test_function.__code__)
+                self.assertEqual(line, code.co_firstlineno + 2)
+                self.assertFalse(bound)
+                instructions = [inst for inst in dis.get_instructions(code)
+                                if inst.offset == pc]
+                self.assertEqual(len(instructions), 1)
+                self.assertEqual(instructions[0].positions.lineno, line)
+                self.assertGreater(line, 0)
+                self.assertNotIn('***', output.getvalue())
 
     @support.cpython_only
     def test_lazy_import(self):

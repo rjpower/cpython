@@ -1,14 +1,18 @@
 # Register IR: current contract
 
-This page describes the IR in the canonical runtime checkout at
-`/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/pyvalue-rc-universal`,
-HEAD `0765e9be47f55d97ba5d31d2ae1c02a55ea2e5ae` (2026-11-08). That tree is
-clean; the checkpoint's full-suite and performance qualification is tied to
-`0267d428808`, whose successor only changes comments. This is an as-built
-contract, not a proposal. The archived [register IR history](archive/register-ir-20261108.md)
-keeps dated decisions and analysis; [compiler and IR](compiler-and-ir.md),
-[call/frame lifetimes](call-and-frame-lifetimes.md), and the
-[observer contract](handler-and-observer-contract.md) cover deeper details.
+This describes the register interpreter integrated at `4d666e1b482`.
+It defines the executable and ownership contract; [status](../STATUS.md)
+tracks qualification. The bounded observer and debugger rules below do not
+authorize every source transfer.
+The immutable golden `0765e9be47f`, qualified at functional `0267d428808`, remains
+the [baseline](../bench/results/interpreter-parity-20261108.md).
+
+The [archive](archive/register-ir-20261108.md) retains earlier designs.
+[Call/frame lifetimes](call-and-frame-lifetimes.md) and the
+[observer contract](handler-and-observer-contract.md) define ownership and
+observation. Release points implement the selected RC runtime; they are not a
+Python guarantee of immediate finalization. See
+[language and lifetime policy](lifetimes-and-language-semantics.md).
 
 ## Producer path
 
@@ -24,7 +28,7 @@ store and truth simplification]
     compact --> assemble[Word and metadata assembly]
     assemble --> code[Code object<br/>immutable words + feedback init]
     code --> first[Lazy image creation<br/>ir.c: make_exec]
-    first --> live[Private executing copy<br/>words + feedback vector]
+    first --> live[Per-code executing copy<br/>words + feedback vector]
 ```
 
 `Python/compile.c` sequences CFG optimization, `_PyCfg_OptimizedCfgToRegCfg`
@@ -85,25 +89,100 @@ verifier checks slot ranges, window extents, destination legality, and jump
 boundaries. A jump target is a word index and must land on an instruction.
 Exception ranges and source lines are likewise expressed in word offsets.
 
-## Execution copy, feedback and NOP anchors
+## Compact execution and source positions
 
-`Python/ir.c:make_exec` allocates one `_PyCodeExec` per code object, shared by
-frames and threads under the free-threaded publication protocol. It contains a
-copy of the immutable words and, when needed, feedback storage. Specialization
-and monitoring change the handler field of executing words; free-threaded
-specialization is disabled. Immutable code-object
-words remain the source template. Feedback entries hold borrowed pointers and
-counters, not GC-owned references. Entry zero is a shared header-only entry.
+`Python/ir.c:make_exec` allocates a shared `_PyCodeExec` for a code object:
+mutable executing words and feedback storage. Specialization and monitoring
+patch its handlers; pristine code words remain the template. A frame owns its
+code, keeping both code and executing allocation alive. Feedback contains
+borrowed predictions and counters, not owning GC edges. Entry zero is the
+shared header-only entry. Free-threaded specialization remains disabled.
 
-Some emitted NOP words retain a source-line or instrumentation location. A NOP
-is therefore part of the observable word stream and remains addressable by
-line/exception metadata even when ordinary dispatch can skip its handler.
-The current M2b optimization checks and executes one live NOP inline only on
-the checked `POP_JUMP_IF_FALSE_BOOL` continuation. Instrumented wrappers keep their own
-handlers, and debug lltrace declines the inline path. The NOP word and PC
-publication remain in place. This dispatch elision is a local optimization,
-not a requirement of register IR. Metadata-only anchors have been proposed
-but are not implemented.
+Compiler source-only operations occupy no executable word. Pristine streams
+admit semantic operations and real control transfers; source-only line events live in the versioned
+`co_linetable` container alongside ordinary word-position data. `f_lasti`,
+disassembly offsets, jump targets and `co_positions()` describe compact real
+words. `co_lines()` also retains source-only zero-width entries. There is no
+second public instruction coordinate domain and no INSTRUCTION event for an
+eliminated operation.
+
+Eligible unique fresh scalar results use `IR_NO_DST`. Calls use the same plain
+recipient, including across source lines and generator-related control flow;
+there is no tagged postcall recipient or live-POP decoder. A producer may still
+use a real internal result window before its final discard; that slot traffic
+is distinct from dispatching a release operation. Shared-owner/exception/branch
+cleanup words remain a separate unfinished inventory. The overall objective
+of eliminating standalone release-only execution is not yet complete.
+
+A single shape-reader ownership variant, `LOAD_ATTR_SHAPE_LOCAL_TEMP`, remains:
+its local input and temporary destination are static. Generated canonical,
+family, statistics and feedback mappings cover the physical handler domain.
+Adaptive disassembly names the specialization; internal executing-IR inspection
+can expose an ownership variant. This does not create a product of every mode.
+
+## Semantic completion and generated contracts
+
+FOR_ITER defines its item recipient only on its body edge; exhaustion retires
+its iterator/cursor and preserves the last item binding. SEND yields into its
+receiver window but completes into its explicit result recipient. CLEANUP_THROW
+has its own named real target and shares SEND completion ownership. YIELD_VALUE
+names its incoming resume recipient separately from its outgoing value.
+Semantic edge definitions override the frontend's stack-shape union.
+
+Source-edge assembly follows the same controlling operation as word encoding.
+A fused comparison uses its paired conditional jump's target and fallthrough,
+while source records retain the emitted comparison's actual executable offset.
+
+Long FOR_ITER/SEND branches use actual IR_JUMP adapter words. The observer
+recognizes only their exact assembler shape for LINE/branch grouping; helper
+words retain their own INSTRUCTION events. The static initialization shim also
+contains only its real operations, with an explicit saved continuation.
+
+`_PyIRFormat` describes operand roles, stack-shape extents, fold capability,
+effects, feedback and monitoring. Per-handler `output_kind` separately describes
+actual publication: register dst, window, first window result moved to dst, or
+semantic outcome. A conditional trailing window output stays in its actual
+window even when the first result moves. `_PyIR_STORE_DST` alone says a local
+fold is allowed, not where every output is physically written.
+
+Cold consumers share `_PyIR_Outcome`, `_PyIR_ReadsHome`, `_PyIR_DefinesHome` and
+`_PyIR_NullableInputs` from `pycore_ir_outcomes.h`. They distinguish explicit
+source fields from untouched window holes, preserve through owners and SWAP
+provenance, and admit only audited nullable roles. A generated per-edge
+`observer_outcome` declares which terminal observer sees committed output;
+unmarked handlers receive no POST claim. `_PyIR_ObservedHomes` decodes the
+physical result and retired input homes, keeping a new value or explicit NULL
+separate from an old input's unavailable owner. The constructor checks a
+declared source callback's POST exception recipe and both compute PRE and
+observer POST for ordinary exception coverage. FOR_ITER's temporary A must be
+its actual B+2 item home; a local A moves that item, and IR_NO_DST discards it.
+These checks are not a general bytecode type verifier or native recovery map.
+
+The positive terminal marker supplies reported source, physical continuation,
+monitoring event and an explicit owner edge. Its literal edge and destination
+shape drive the same metadata and runtime call. The event does not select the
+owner edge: POP_ITER reports BRANCH_RIGHT while its own outcome falls through;
+an unconditional JUMP takes its target. The actual executing word remains the
+owner/EH site even when a callback reports another source word. Zero-output
+transfers have valid committed facts without creating a result owner.
+
+Scoped source callbacks retain the immediate real continuation separately from
+the normalized landing in their source record. Only a completed provider grants
+SOURCE_POST scope; unproved inline hooks still deliver source events under an
+unsupported scope. The setter uses the same Plan for real PRE, certified
+owner-neutral committed JUMP and bounded non-neutral committed outcomes. PRE
+and neutral JUMP borrow exact site rows. A non-neutral view copies that site's
+context, saved bindings and origins, applies the selected normal transfer, then
+cuts old input provenance independently of replacement values. Token-creating
+transfers are excluded from this copied-row path.
+
+The new non-neutral permission requires exact scope/site/edge/continuation and
+redirect generation, inherited handled context, empty stopped and target
+saved-binding state and a real target with no incoming scratch-owner requirement.
+It cannot use a
+pre-site survivor recipe or a source-only fallback. Existing PRE restoration
+and neutral JUMP rules retain their own proofs. General SOURCE_POST and yield
+transfers require separate stopped-state authority.
 
 ## Explicit boundary
 

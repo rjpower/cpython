@@ -19,7 +19,7 @@ from test.support import (
     requires_remote_subprocess_debugging,
 )
 from test.support.import_helper import import_module
-from test.support.script_helper import make_script
+from test.support.script_helper import make_script, assert_python_ok
 from test.support.socket_helper import find_unused_port
 
 import subprocess
@@ -4537,6 +4537,124 @@ class TestMetadataDegradation(RemoteInspectionTestBase):
         frame = self._find_frame_in_trace(trace, lambda f: f.funcname == "g")
         self.assertIsNotNone(frame)
         self.assertEqual(frame.filename, "x" * 1024)
+
+    def test_remote_layout_prefix_and_chunk_rejection(self):
+        assert_python_ok("-c", textwrap.dedent("""
+            import ctypes
+            import os
+            import struct
+            import _testinternalcapi
+            from _remote_debugging import RemoteUnwinder
+
+            layout = _testinternalcapi.remote_debug_layout()
+            address = layout['descriptor']
+            saved = ctypes.string_at(address, 48)
+            assert saved[:8] == b'pyjitdbg'
+            def reject(offset, payload):
+                original = ctypes.string_at(address + offset, len(payload))
+                try:
+                    ctypes.memmove(address + offset, payload, len(payload))
+                    try:
+                        RemoteUnwinder(os.getpid())
+                    except RuntimeError:
+                        pass
+                    else:
+                        raise AssertionError(('accepted remote layout', offset))
+                finally:
+                    ctypes.memmove(address + offset, original, len(original))
+            reject(0, b'badmagic')
+            for offset in (8, 16, 24, 32, 40):
+                value = struct.unpack_from('=Q', saved, offset)[0]
+                reject(offset, struct.pack('=Q', value ^ 1))
+            chunk = layout['chunk_section']
+            # Header size, previous, allocation-size field and data offset.
+            for field in range(4):
+                reject(chunk + field * 8, struct.pack('=Q', (1 << 64) - 1))
+            assert RemoteUnwinder(os.getpid()).get_stack_trace()
+        """))
+
+    def test_remote_await_slot_bounds(self):
+        assert_python_ok("-c", textwrap.dedent("""
+            import asyncio
+            import ctypes
+            import os
+            import _testinternalcapi
+            from _remote_debugging import RemoteUnwinder
+
+            async def blocked():
+                await asyncio.Future()
+
+            async def main():
+                task = asyncio.create_task(blocked(), name='bounded-target')
+                await asyncio.sleep(0)
+                coroutine = task.get_coro()
+                layout = _testinternalcapi.remote_debug_layout()
+                address = id(coroutine) + layout['generator_frame'] + layout['return_slot']
+                slot = ctypes.c_uint16.from_address(address)
+                original = slot.value
+                assert coroutine.cr_await is not None
+                assert 2 <= original < layout['no_dst'], original
+                trace = RemoteUnwinder(os.getpid()).get_all_awaited_by()
+                targets = [target for info in trace for target in info.awaited_by
+                           if target.task_name == 'bounded-target']
+                assert len(targets) == 1, trace
+                assert any(frame.funcname == 'blocked'
+                           for coro in targets[0].coroutine_stack
+                           for frame in coro.call_stack), targets
+                try:
+                    slot.value = layout['no_dst']
+                    assert RemoteUnwinder(os.getpid()).get_all_awaited_by()
+                    # Both are non-sentinel uint16 values, above this target's
+                    # actual value-home count. Reject before receiver math.
+                    for invalid in (layout['no_dst'] - 1, 65534):
+                        slot.value = invalid
+                        try:
+                            RemoteUnwinder(os.getpid()).get_all_awaited_by()
+                        except RuntimeError as error:
+                            assert 'return slot' in str(error), str(error)
+                        else:
+                            raise AssertionError(('accepted awaited slot', invalid))
+                finally:
+                    slot.value = original
+                    task.cancel()
+                    try:
+                        await task
+                    except asyncio.CancelledError:
+                        pass
+            asyncio.run(main())
+        """))
+
+    def test_malformed_remote_source_map_degrades_to_no_location(self):
+        # Construction rejects these maps. Corrupt only an isolated child's
+        # bytes to exercise remote-memory validation rather than construction.
+        assert_python_ok("-c", textwrap.dedent("""
+            import ctypes
+            import os
+            from _remote_debugging import RemoteUnwinder
+
+            def sample(read):
+                return read()
+
+            table = sample.__code__.co_linetable
+            assert table[:4] == b'IRSM'
+            address = ctypes.pythonapi.PyBytes_AsString
+            address.argtypes = [ctypes.py_object]
+            address.restype = ctypes.c_void_p
+            pointer = address(table)
+            for offset, payload in ((4, b'\\x02\\0\\0\\0'),
+                                    (8, b'\\xff' * 4),
+                                    (12, b'\\xff' * 4)):
+                saved = table[offset:offset + 4]
+                try:
+                    ctypes.memmove(pointer + offset, payload, 4)
+                    trace = sample(RemoteUnwinder(os.getpid()).get_stack_trace)
+                finally:
+                    ctypes.memmove(pointer + offset, saved, 4)
+                frames = [frame for interpreter in trace for thread in interpreter.threads
+                          for frame in thread.frame_info if frame.funcname == 'sample']
+                assert len(frames) == 1, trace
+                assert frames[0].location is None, frames[0]
+        """))
 
     def test_oversized_linetable_degrades_to_no_location(self):
         """A linetable over MAX_LINETABLE_SIZE degrades to a frame without

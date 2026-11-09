@@ -1,71 +1,100 @@
 # Coordinator handoff
 
-The 2026-11-08 golden runtime is published. Read [STATUS](STATUS.md), the
-[manifest](issues/golden-20261108/README.md), [current IR](design/register-ir.md),
-[interpreter](design/interpreter.md) and [next plan](issues/golden-20261108/next-steps.md).
-The previous 435-line board is [archived](archive/20261108/HANDOFF.md).
-Do not recover active assignments from its historical instructions.
+## Closed checkpoint
 
-## Source and evidence
+Runtime `4d666e1b482cb4983c7683f91c5922af14d0ab40`, branch
+`pyjit/frame-call-model-20261109`, is clean and frozen. Production changes are
+`24f4d270ced`; the final commit adds reviewed debugger tests. No unfinished
+coroutine, owner-bundle or GDB port is included. No native job remains queued.
+The next round starts from [the five priorities](issues/frame-call-model-20261109/next-steps.md),
+not the older numbered integration reports or unqualified drafts.
 
-- Canonical documentation: `/home/power/code/cpython/.worktrees/python-jit`,
-  branch `weaver/python-jit`. This checkout's CPython implementation is not the
-  measured runtime. Use the published combined golden snapshot for a coherent
-  source/documentation checkout; see the manifest.
-- Runtime: `/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/pyvalue-rc-universal`,
-  branch `boil/pyvalue-rc-universal`, clean HEAD `0765e9be47f55d97ba5d31d2ae1c02a55ea2e5ae`.
-  Origin has this branch and immutable tag `pyjit-golden-20261108-runtime`.
-  Runtime implementation is frozen. Its old `boil/` documentation is historical;
-  the combined publication replaces it with canonical `pyjit/` documentation.
-- Functional qualification and all final timing captures: `0267d428808`.
-  Runtime successor `0765e9be47f` moves one existing comment. Debug `.text`
-  matches exactly. Release differs only in four address-relocation bytes for
-  equivalent `f` literals caused by build-identifier suffix merging. Do not
-  claim whole ELF identity. The exact measured ELF is retained.
-- Build root: `/home/power/code/cpython/.worktrees/python-boil-the-ocean/build`.
-  Builds: `pyvalue-rc-repr-{release,debug,stats}`. Current binaries identify
-  `0765e9be47f`, GCC 15.2.0, JIT off, 117 modules each; rebuilt stats smoke
-  passed 142 tests. Matched upstream: `upstream-release-devlibs-3a440b6`
-  at `3a440b65695`; historical interim: `eba351fee7d`.
-- Evidence under build root: `pyjit-link-wave1/interpreter-parity-20261108/`.
-  Its `run-checks.py`, `run-performance.py` and receipts contain exact commands.
-  Final captures include `final-qualified-*`, `comment-cleanup-*`,
-  `final-target-{1,2}`, `final-broad`, `final-vs-r5`, `final-perf-*`,
-  `spectral-perf-*`, `profile-analysis` and `warmed-shape-comparison`.
-  Retain failures and do not reuse output names. The
-  [report](bench/results/interpreter-parity-20261108.md) records evidence limits.
-- Temporary route/hit counters were retired byte-for-byte; stats was rebuilt
-  after restoring the header layout. Current runtime has no diagnostic overlay.
-  R5's ELF remains at `baseline-identities/candidate-python` under the evidence
-  root. Its old build-local control copy and the prior task worktree were
-  removed; recreate that copy before reusing the direct-comparison launcher.
+Logging confirmations pass at 0.906735/0.897500 upstream. Full29 means are
+0.934192/golden and 1.174985/upstream. All 65 micro instruction and six timed memory
+rows completed on upstream/golden/candidate. Current PMU 18/18 and profiles 6/6
+pass identity/running/loss checks. See [report](issues/frame-call-model-20261109/closing-report.md),
+[tables](issues/frame-call-model-20261109/closing-benchmark-tables.md) and
+[independent audit](issues/frame-call-model-20261109/final-performance-audit.md).
 
-## Next execution
+Full release/debug each run 54,645 tests. Known failures: GDB 16/21 respectively,
+nine frame-jump errors in each, plus one debug trace-format assertion. Pdb,
+monitoring and collectors pass. Stats smoke 150; API 306 units/zero failing
+findings/parse errors. Do not call the full suite green. GDB format is not a
+throughput/Python-semantics gate. The historical GC negative-control failure
+remains unexplained, despite passing these final diagnostics.
 
-The golden review is advisory. Follow the staged [next plan](issues/golden-20261108/next-steps.md)
-before more runtime edits. Calls already use frame stacking/overlap; logging has
-no consuming-binder fallback and its hot callees have zero constant homes.
-Its retained message is mortal. Do not repeat obsolete argument-copy or
-constant-home hypotheses. Keep spectral in integration screens. Its CPI
-regression has no established cause.
+## Local paths and controls
 
-Use Terra medium for implementation, Luna medium for documentation/mechanical
-work, Sol for substantial design/debug/review. Workers do not commit. The
-coordinator owns integration, native builds/tests and quiet measurements. Use
-`uv run` for host Python drivers, sanitize `PYTHON*`/`LD_PRELOAD` before native
-children, and use the existing shared caches. One compiler: GCC. JIT off must
-be checked in native children, including the fork's own method-JIT admission.
+BASE=`/home/power/code/cpython/.worktrees/python-boil-the-ocean/build`.
+Canonical docs are `/home/power/code/cpython/.worktrees/python-jit`, branch
+`weaver/python-jit`; its implementation files are not the measured runtime.
 
-## Preserved local work
+| Role | Source below BASE | Build below BASE | Full HEAD |
+| --- | --- | --- | --- |
+| Candidate | worktrees/execution-boundaries-20261108 | execution-boundaries-{release,debug,stats} | 4d666e1b482cb4983c7683f91c5922af14d0ab40 |
+| Golden | worktrees/pyvalue-rc-universal | pyvalue-rc-repr-{release,debug,stats} | 0765e9be47f55d97ba5d31d2ae1c02a55ea2e5ae |
+| Upstream | worktrees/upstream-3a440b6 | upstream-release-devlibs-3a440b6 | 3a440b65695615e9fd9912342b79cdd54fced0d2 |
 
-These canonical changes predate this checkpoint and remain outside its commits:
-emptied `bench/results/checkpoint-6a0e4c12c17.md`, appended
-`issues/checkpoint-closure/ctypes-rawpin-build.log`, and untracked
-`issues/checkpoint-closure/w5-release.lock`. The published tree uses their
-committed content. Do not stage, reset or delete them incidentally.
+Golden and upstream source/builds remain immutable. Golden is published as
+`pyjit-golden-20261108-runtime`; no new promotion is implied. Candidate magic is
+64416; all three builds identify the current full source and check 117 modules.
+Upstream checks 116 modules. Physical DSO counts 78 upstream/213 value builds
+include historical ABI files and are not checked-module counts.
 
-The [cleanup audit](issues/golden-20261108/cleanup-audit.md) found dirty legacy
-worktrees, cited ignored evidence and an active bulk-build source dependency.
-Keep those paths; clean Git status alone does not make a worktree disposable.
-Historical branches, ABI and build names retain their identities. Canonical
-docs own current state; Loom artifacts mirror them and retain prior revisions.
+Root owns native execution, builds, commits and measurements. Existing launchers:
+`issues/frame-call-model-20261109/run-checks.py`, the preceding packet's
+`measure.py`, and the closing supplemental/PMU scripts. Read their argument
+requirements and preserve output directories. Host Python uses
+`UV_CACHE_DIR=/home/power/.cache/uv uv run --no-project python -B`.
+Measurements use GCC 15.2, CPU 15, JIT off, hash 0 and fixed inputs. No source/build
+or benchmark mutation during timing. Full suites belong at coherent checkpoints.
+
+## Evidence and deferred source
+
+E11=`BASE/pyjit-link-wave1/frame-call-model-20261109`.
+
+- Final timing: closing39-kernels-{golden,upstream}, closing39-logging-{1,2}.
+- Full coverage: closing39-supplemental-v2. Initial supplemental preflight
+  measured nothing and is retained separately.
+- Current counters/profiles: closing39-gap-perf-{stat,record}, matching retained
+  ELFs and calibration in each directory. Older36 counters are historical.
+- Full diagnostics: closing39-full-release-release-full.log and
+  closing39-full-debug-debug-full.log. Build/stats/API logs start closing39-.
+- Deferred complete source: deferred-after39-source/{all-pending.patch,
+  owner-and-coroutine.patch,gdb-tooling.patch,manifest.json}. These apply on
+  committed38; the first includes test ports already landed in39.
+- Authoritative isolated coroutine packet: coroutine40-frozen-source.patch.
+  Release minimal passed; debug asserted on its synthetic handler-to-RESUME
+  negative. Exact patch reversed. It is not admitted; owner draft is unreviewed
+  natively and partial GDB port unfinished.
+
+The task-owned null-pre-20261109 worktree and branch were removed only after
+verifying complete archive hashes. Do not recreate them from stale agent task
+messages. Historical source/evidence worktrees remain untouched.
+
+Old417 executable moved from build-local python-canonical-before to
+`E11/retained-controls/python-canonical-before`. SHA256:
+`f010ea12dd5b93cea78b670639d340029331df7ae1f0ac39993d239600fb47fe`.
+Its relocation.json maps the old path; sealed historical manifests are unchanged.
+
+## Documentation and Loom
+
+Repository pages own current state. GOAL → current plan → STATUS → core designs
+and closing report is the navigation path. Loom mirrors these, with the top-five
+plan and benchmark tables linked from the report. Six old one-revision artifacts
+are preserved in `archive/20261109/loom-artifacts.json` before active removal;
+current goal/plan/report histories remain intact. Earlier goal, handoff and
+PyValue pages are archived, not competing active instructions.
+
+## Preserved unrelated work
+
+Never stage/reset/delete these preexisting canonical changes:
+
+- pyjit/bench/results/checkpoint-6a0e4c12c17.md, empty; SHA256
+  e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855.
+- pyjit/issues/checkpoint-closure/ctypes-rawpin-build.log, four appended lines;
+  SHA256 f37dca15ab40ec8eb18814673f351c0b545698b22611c0c025b64b4c196bb6fe.
+- Untracked empty pyjit/issues/checkpoint-closure/w5-release.lock.
+
+The prior [handoff](archive/20261109/HANDOFF-before-round-closure.md) preserves
+exact historical state. Use current Git, processes and evidence when resuming.

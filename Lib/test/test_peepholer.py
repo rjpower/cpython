@@ -2647,6 +2647,7 @@ class DirectCfgOptimizerTests(CfgOptimizationTestCase):
         ]
         expected_insts = [
             ('SETUP_FINALLY', handler := self.Label(), 10),
+            ('NOP', None, 10),
             ('LOAD_SMALL_INT', 1, 11),
             ('RETURN_VALUE', None, 11),
             handler,

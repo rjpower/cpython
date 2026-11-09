@@ -1,0 +1,55 @@
+--- a/Lib/test/test_ir_completion.py
++++ b/Lib/test/test_ir_completion.py
+@@ -689,7 +689,8 @@
+         def choose(left, right):
+             return (left + 1) or right
+ 
+-        def source_handler(code, site_name, edge, dst, read, nullable):
++        def source_handler(code, site_name, edge, dst, read, nullable,
++                           ordinary=False):
+             words = list(struct.unpack(f'<{len(code.co_code) // 8}Q',
+                                        code.co_code))
+             instruction = next(i for i in dis.get_instructions(code)
+@@ -716,21 +717,34 @@
+             version, size, count = struct.unpack_from('<III', raw, 4)
+             locations = raw[16:16 + size] + bytes((0xf8 + len(words) - handler - 1,))
+             records = raw[16 + size:]
+-            event = struct.pack('<10i', site,
+-                                instruction.jump_target if edge else site + 1,
+-                                edge,
+-                                code.co_firstlineno, code.co_firstlineno,
+-                                0, 1, handler, base + 4, 0)
+-            source = (b'IRSM' + struct.pack('<III', version, len(locations), count + 1)
+-                      + locations + records + event)
++            if ordinary:
++                source = (b'IRSM' + struct.pack('<III', version, len(locations), count)
++                          + locations + records)
++                exceptiontable = exception_entry(site, 1, handler,
++                                                 (base + 4) << 1)
++            else:
++                event = struct.pack('<10i', site,
++                                    instruction.jump_target if edge else site + 1,
++                                    edge,
++                                    code.co_firstlineno, code.co_firstlineno,
++                                    0, 1, handler, base + 4, 0)
++                source = (b'IRSM' + struct.pack('<III', version, len(locations), count + 1)
++                          + locations + records + event)
++                exceptiontable = code.co_exceptiontable
+             stacksize = max(code.co_stacksize, base + 5 - code.co_nlocals)
+             return code.replace(co_code=struct.pack(f'<{len(words)}Q', *words),
+                                 co_names=code.co_names + ('terminal_sink',),
+-                                co_linetable=source, co_stacksize=stacksize)
++                                co_linetable=source, co_exceptiontable=exceptiontable,
++                                co_stacksize=stacksize)
+ 
+         loop = iterate.__code__
+         self.assertIsNotNone(source_handler(loop, 'FOR_ITER', 0,
+                                             'window', 'item', False))
++        # The same encoded item read is valid after an observer commit but
++        # unavailable to an ordinary exception before FOR_ITER produces it.
++        with self.assertRaisesRegex(ValueError, 'semantic completion'):
++            source_handler(loop, 'FOR_ITER', 0, 'window', 'item', False,
++                           ordinary=True)
+         for dst, read, nullable in (('window', 'cursor', True),
+                                     ('discard', 'item', False)):
+             with self.subTest(dst=dst, read=read):

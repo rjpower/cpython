@@ -12,6 +12,7 @@
 #include "pycore_emscripten_signal.h"  // _Py_CHECK_EMSCRIPTEN_SIGNALS
 #include "pycore_floatobject.h"   // _PyFloat_ExactDealloc()
 #include "pycore_frame.h"
+#include "pycore_ir_source.h"
 #include "pycore_function.h"
 #include "pycore_genobject.h"     // _PyCoro_GetAwaitableIter()
 #include "pycore_gc_trace.h"      // _PyGC_CHECK_NOT_SWEEPING()
@@ -353,6 +354,11 @@ typedef struct {
 typedef struct _PyEvalActivation {
     struct _PyEvalActivation *previous;   /* restored when this one exits */
     _PyEntryFrame entry;                   /* its entry frame */
+    /* A nested C entry must not consume its parent's pending source error.
+     * This storage also covers failure to allocate an observer frame object. */
+    _PyInterpreterFrame *source_error_frame;
+    uint32_t source_error_record;
+    const _PyIRObserverSpec *observer_context;
 } _PyEvalActivation;
 
 static int
@@ -525,7 +531,31 @@ get_exception_handler(PyCodeObject *code, int index)
     return none;
 }
 
-
+static _PyExceptionHandler
+get_frame_exception_handler(_PyInterpreterFrame *frame, int offset)
+{
+    _PyThreadStateImpl *tstate = (_PyThreadStateImpl *)_PyThreadState_GET();
+    _PyEvalActivation *activation = tstate->eval_activation;
+    PyFrameObject *object = frame->frame_obj;
+    if (object != NULL) {
+        object->f_line_next = -1;
+    }
+    if (activation != NULL && activation->source_error_frame == frame) {
+        PyCodeObject *code = _PyFrame_GetCode(frame);
+        _PyIRSourceMap map = _PyIRSource_Stored(code->co_linetable);
+        _PyIRSourceEvent event;
+        _PyIRSource_Event(&map, activation->source_error_record, &event);
+        activation->source_error_frame = NULL;
+        if (object != NULL) {
+            object->f_source_event_error = -1;
+            object->f_source_event = -1;
+            object->f_lineno = 0;
+        }
+        return (_PyExceptionHandler){event.handler >= 0, event.exc_slot,
+                                     event.handler, event.lasti};
+    }
+    return get_exception_handler(_PyFrame_GetCode(frame), offset);
+}
 
 /* Logic for the raise statement (too complicated for inlining).
    This *consumes* a reference count to each of its arguments. */

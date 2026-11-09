@@ -4,13 +4,24 @@ We are rebuilding CPython around canonical eight-byte PyValues, a register
 interpreter, reference counting with cyclic collection, and a shared method
 and tracing JIT. Extensions are rebuilt and ported.
 
-The **2026-11-08 golden runtime** is published as
-[`pyjit-golden-20261108-runtime`](https://github.com/rjpower/cpython/tree/pyjit-golden-20261108-runtime).
-It is the reproducible baseline for the next experiments. Release and debug
-qualification passed 54,394 tests each. It remains slower than upstream:
-about 1.38× elapsed time on logging and 1.24× on the broad benchmark screen.
-The native JIT is unfinished. Read the [golden manifest](issues/golden-20261108/README.md)
-for exact identities, qualifications and measurement limits.
+Start with the [goal](GOAL.md), [current plan](issues/object-call-20261109/plan.md)
+and [status](STATUS.md). The frame/call round is closed at a frozen
+candidate; its [report](issues/frame-call-model-20261109/closing-report.md)
+separates measured performance, Python behavior and optional tooling/capability
+limits. The [next five priorities](issues/frame-call-model-20261109/next-steps.md)
+come from independent architectural reviews. The active round follows the
+[Astra survey](issues/object-call-20261109/astra-survey.md) of object lookup and
+calling conventions; its first lanes are canonical class values and keyword
+binding plans.
+Browser entrypoint: [Loom goal](http://127.0.0.1:7878/s/xzzlxx17/artifacts/goal).
+
+The universal-value register interpreter is implemented. Native method/tracing
+JIT tiers remain unfinished. The published
+[2026-11-08 golden runtime](https://github.com/rjpower/cpython/tree/pyjit-golden-20261108-runtime)
+remains an immutable comparison control; its
+[manifest](issues/golden-20261108/README.md) retains qualification and identities.
+Python's [lifetime policy](design/lifetimes-and-language-semantics.md) governs
+semantics rather than exact CPython destruction timing.
 
 | Read | Purpose |
 | --- | --- |

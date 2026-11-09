@@ -53,9 +53,9 @@ FEEDBACK = {
     "STORE_ATTR": ("ATTR", 40),
     "LOAD_SUPER_ATTR": ("ATTR", 40),
     "LOAD_GLOBAL": ("GLOBAL", 32),
-    "CALL": ("CALL", 24),
-    "CALL_KW": ("CALL", 24),
-    "CALL_FUNCTION_EX": ("CALL", 24),
+    "CALL": ("CALL", 32),
+    "CALL_KW": ("CALL", 32),
+    "CALL_FUNCTION_EX": ("CALL", 32),
 }
 # Branches whose entries keep only the taken history
 NOT_SPECIALIZING = {"POP_JUMP_IF_NONE", "POP_JUMP_IF_NOT_NONE"}
@@ -91,6 +91,149 @@ def names_with(bit, key="effects"):
 
 
 class ContractTests(unittest.TestCase):
+
+    def test_normal_physical_transfer(self):
+        testapi = import_helper.import_module("_testinternalcapi")
+        named = {**opcode.opmap, **opcode._specialized_opmap,
+                 **opcode._ir_opmap}
+        preserve = (0, -1)
+        set_null = (1, -1)
+        unknown = (2, -1)
+
+        def transfer(name, fields, arg, edge, home, nl=2, limit=10):
+            return testapi.ir_normal_physical_transfer(
+                named[name], *fields, arg, edge, home, nl, limit)
+
+        copy = (4, 2, 0, 0)
+        self.assertEqual(transfer("COPY", copy, 2, 0, 6), (3, 4))
+        self.assertEqual(transfer("COPY", copy, 2, 0, 4), preserve)
+        self.assertEqual(transfer("COPY", copy, 2, 0, 7), preserve)
+        self.assertEqual(transfer("COPY", copy, 2, 1, 6), unknown)
+        self.assertEqual(transfer("COPY", (8, 2, 0, 0), 2, 0, 9), unknown)
+        self.assertEqual(transfer("COPY", copy, 2**31 - 1, 0, 6), unknown)
+
+        swap = (4, 3, 0, 0)
+        self.assertEqual(transfer("SWAP", swap, 3, 0, 4), (3, 6))
+        self.assertEqual(transfer("SWAP", swap, 3, 0, 6), (3, 4))
+        self.assertEqual(transfer("SWAP", swap, 3, 0, 5), preserve)
+        self.assertEqual(transfer("SWAP", (9, 3, 0, 0), 3, 0, 9), unknown)
+
+        store_fast = (4, 0, 0, 0)
+        self.assertEqual(transfer("STORE_FAST", store_fast, 0, 0, 4), set_null)
+        self.assertEqual(transfer("STORE_FAST", store_fast, 0, 0, 5), preserve)
+
+        pop_top = (4, 0, 0, 0)
+        row = BY_NAME["POP_TOP"]
+        self.assertEqual(row.roles, (_opcode.IR_ROLE_IN0,
+                                     _opcode.IR_ROLE_NONE,
+                                     _opcode.IR_ROLE_NONE,
+                                     _opcode.IR_ROLE_NONE))
+        self.assertEqual((extent(row.reads, 0), extent(row.writes, 0),
+                          extent(row.through, 0)), (1, 0, 0))
+        self.assertIsNone(row.twin)
+        self.assertEqual(transfer("POP_TOP", pop_top, 0, 0, 4), set_null)
+        self.assertEqual(transfer("POP_TOP", pop_top, 0, 0, 5), preserve)
+        # Successive retirements retain each other's NULL facts.
+        self.assertEqual(transfer("POP_TOP", (5, 0, 0, 0), 0, 0, 4), preserve)
+        self.assertEqual(transfer("POP_TOP", (5, 0, 0, 0), 0, 0, 5), set_null)
+        self.assertEqual(transfer("POP_TOP", (0, 0, 0, 0), 0, 0, 4), unknown)
+        self.assertEqual(transfer("POP_TOP", (10, 0, 0, 0), 0, 0, 4), unknown)
+        self.assertEqual(transfer("POP_TOP", pop_top, 0, 1, 4), unknown)
+
+        for_iter = (6, 4, 0, 1)
+        self.assertEqual(transfer("FOR_ITER", for_iter, 1, 1, 4), set_null)
+        self.assertEqual(transfer("FOR_ITER", for_iter, 1, 1, 5), set_null)
+        self.assertEqual(transfer("FOR_ITER", for_iter, 1, 0, 5), unknown)
+        self.assertEqual(transfer("FOR_ITER", for_iter, 1, 0, 7), unknown)
+        self.assertEqual(transfer("FOR_ITER", for_iter, 1, 1, 7), unknown)
+        self.assertEqual(transfer("FOR_ITER", (7, 4, 0, 1), 1, 1, 4), unknown)
+        self.assertEqual(transfer("FOR_ITER_RANGE", for_iter, 1, 1, 4), set_null)
+        self.assertEqual(transfer("FOR_ITER_GEN", for_iter, 1, 1, 4), set_null)
+        self.assertEqual(transfer("FOR_ITER_GEN", for_iter, 1, 0, 7), unknown)
+
+        load_global = (5, 0, 0, 0)
+        self.assertEqual(transfer("LOAD_GLOBAL", load_global, 0, 0, 6), preserve)
+        self.assertEqual(transfer("LOAD_GLOBAL", load_global, 1, 0, 6), unknown)
+
+    def test_call_normal_physical_transfer(self):
+        testapi = import_helper.import_module("_testinternalcapi")
+        named = {**opcode.opmap, **opcode._specialized_opmap,
+                 **opcode._ir_opmap}
+        # Pin the finite family audited for success-only window retirement.
+        calls = {
+            "CALL", "INSTRUMENTED_CALL", "CALL_BOUND_METHOD_EXACT_ARGS",
+            "CALL_PY_EXACT_ARGS", "CALL_TYPE_1", "CALL_STR_1", "CALL_TUPLE_1",
+            "CALL_BUILTIN_CLASS", "CALL_BUILTIN_O", "CALL_BUILTIN_FAST",
+            "CALL_BUILTIN_FAST_WITH_KEYWORDS", "CALL_LEN", "CALL_ISINSTANCE",
+            "CALL_LIST_APPEND", "CALL_METHOD_DESCRIPTOR_O",
+            "CALL_METHOD_DESCRIPTOR_FAST_WITH_KEYWORDS",
+            "CALL_METHOD_DESCRIPTOR_NOARGS", "CALL_METHOD_DESCRIPTOR_FAST",
+            "CALL_ALLOC_AND_ENTER_INIT", "CALL_PY_GENERAL",
+            "CALL_BOUND_METHOD_GENERAL", "CALL_NON_PY_GENERAL",
+        }
+        self.assertEqual(calls, {name for name, row in BY_NAME.items()
+                                 if row.base == opcode.opmap["CALL"]}
+                         | {"INSTRUMENTED_CALL"})
+        unknown = (2, -1)
+        set_null = (1, -1)
+
+        def transfer(name, dst, home, *, argc=1, encoded_arg=None,
+                     edge=0, base=4):
+            if encoded_arg is None:
+                encoded_arg = argc
+            return testapi.ir_normal_physical_transfer(
+                named[name], dst, base, encoded_arg, 0,
+                argc, edge, home, 2, 10)
+
+        for name in sorted(calls):
+            argc = 2 if name == "CALL_ISINSTANCE" else 1
+            with self.subTest(handler=name):
+                # A new result at BASE is a value, not a known NULL.
+                self.assertEqual(transfer(name, 4, 4, argc=argc), unknown)
+                for home in range(5, 6 + argc):
+                    self.assertEqual(transfer(name, 4, home, argc=argc),
+                                     set_null)
+                # Folded local and sink destinations drain the whole window.
+                for dst in (0, 4095):
+                    for home in range(4, 6 + argc):
+                        self.assertEqual(transfer(name, dst, home, argc=argc),
+                                         set_null)
+                for home in (3, 9):
+                    self.assertEqual(transfer(name, 4, home, argc=argc),
+                                     unknown)
+                # Direct variants cannot publish to arbitrary scratch A.
+                for dst in (5, 6, 8):
+                    self.assertEqual(transfer(name, dst, 5, argc=argc), unknown)
+                self.assertEqual(transfer(name, 4, 5, argc=argc, edge=1),
+                                 unknown)
+                self.assertEqual(transfer(name, 4, 5, argc=argc,
+                                          encoded_arg=argc + 1), unknown)
+                self.assertEqual(transfer(name, 9, 9, argc=argc, base=9),
+                                 unknown)
+        for name in ("CALL_KW", "INSTRUMENTED_CALL_KW"):
+            self.assertEqual(transfer(name, 4, 5), unknown)
+
+    def test_generator_completion_operand_layout(self):
+        families = {opcode.opmap['SEND'], opcode.opmap['FOR_ITER']}
+        # Exported base uses BaseOpcode, which retains instrumented IDs.
+        # Include their positively declared canonical-family twin links.
+        twins = {row.twin for row in ROWS.values()
+                 if row.base in families and row.twin}
+        selected = set()
+        for handler, row in ROWS.items():
+            if row.base not in families and handler not in twins:
+                continue
+            name = opcode.opname[handler]
+            selected.add(name)
+            with self.subTest(handler=name):
+                self.assertEqual(row.roles, (_opcode.IR_ROLE_DST,
+                                             _opcode.IR_ROLE_BASE,
+                                             _opcode.IR_ROLE_FB,
+                                             _opcode.IR_ROLE_IMM))
+                self.assertEqual(row.imm, _opcode.IR_LOC_D)
+                self.assertTrue(row.flags & _opcode.IR_FORWARD)
+        self.assertTrue({'SEND', 'SEND_GEN', 'FOR_ITER', 'FOR_ITER_GEN',
+                         'INSTRUMENTED_FOR_ITER'} <= selected)
 
     def test_result_publication_phase(self):
         phase = _opcode.IR_RESULT_PHASE_DST_TEMP_CANONICAL_BEFORE_RETIRE
@@ -131,7 +274,7 @@ class ContractTests(unittest.TestCase):
         for h, row in ROWS.items():
             op = row.base
             if (op >= opcode.MIN_INSTRUMENTED_OPCODE
-                    or opcode.opname[h] in opcode._specialized_opmap):
+                    or opcode.opname[row.shadow] in opcode._specialized_opmap):
                 continue
             if row.flags & _opcode.IR_FUSED:
                 # The compare and the jump on its result: two inputs, no output
@@ -308,7 +451,13 @@ class ContractTests(unittest.TestCase):
                 if name.startswith("INSTRUMENTED_"):
                     self.assertEqual(twin, h)
                 if twin is None:
-                    self.assertEqual(row.events, 0)
+                    if row.base == opcode.opmap["SEND"]:
+                        self.assertEqual(row.events, events.STOP_ITERATION | events.BRANCH_LEFT)
+                    elif row.base in {opcode.opmap[name] for name in
+                                      ('CLEANUP_THROW', 'RAISE_VARARGS', 'RERAISE')}:
+                        self.assertEqual(row.events, events.RERAISE)
+                    else:
+                        self.assertEqual(row.events, 0)
                     continue
                 self.assertTrue(opcode.opname[twin].startswith("INSTRUMENTED_"))
                 self.assertEqual(ROWS[twin].twin, twin)
@@ -326,6 +475,8 @@ class ContractTests(unittest.TestCase):
             "INSTRUMENTED_POP_JUMP_IF_TRUE": {"BRANCH_RIGHT", "BRANCH_LEFT"},
             "INSTRUMENTED_END_SEND": {"STOP_ITERATION", "BRANCH_LEFT"},
             "INSTRUMENTED_END_FOR": {"STOP_ITERATION"},
+            "INSTRUMENTED_FOR_ITER": {"BRANCH_LEFT", "BRANCH_RIGHT", "STOP_ITERATION"},
+            "SEND": {"STOP_ITERATION", "BRANCH_LEFT"},
             "INSTRUMENTED_RESUME": {"PY_START", "PY_RESUME"},
         }
         for name, names in expected.items():
@@ -336,12 +487,10 @@ class ContractTests(unittest.TestCase):
         self.assertEqual(BY_NAME["CALL"].twin, opcode.opmap["INSTRUMENTED_CALL"])
 
     def test_monitoring_run(self):
-        # Every event that a twin fires (some twin's events has it) and
-        # that fires in a code object is in the events of the twins of that
-        # code object's handlers, or of the twins that instrumentation adds
-        # to any code.  The run is coarse: an event names the offset of its
-        # source, not of the twin that fires it (BRANCH_LEFT names the
-        # jump), so this checks the code object, not the word.
+        # Every declared event observed in a code object belongs to one of
+        # its semantic handlers or a transparent observer added to any code.
+        # This is a code-object check: branch callbacks identify the semantic
+        # branch site even when another handler reports the outcome.
         events = sys.monitoring.events
         twin_events = 0
         for row in ROWS.values():
@@ -393,9 +542,8 @@ class ContractTests(unittest.TestCase):
                           if isinstance(c, types.CodeType)}:
             allowed = added
             for _, h, *_ in dis._unpack_opargs(co.co_code):
-                twin = ROWS[h].twin if h in ROWS else None
-                if twin is not None:
-                    allowed |= ROWS[twin].events
+                if h in ROWS:
+                    allowed |= ROWS[h].events
             with self.subTest(code=co.co_name):
                 self.assertEqual(fired.get(co, 0) & ~allowed, 0)
 
@@ -419,7 +567,7 @@ class ContractTests(unittest.TestCase):
         suspends = {name for name in names_with(_opcode.IR_SUSPENDS)}
         self.assertEqual(suspends, {"YIELD_VALUE", "INSTRUMENTED_YIELD_VALUE",
                                     "RETURN_GENERATOR"})
-        for name in ("CALL_PY_EXACT_ARGS", "SEND_GEN", "FOR_ITER_GEN",
+        for name in ("CALL_PY_EXACT_ARGS", "SEND", "SEND_GEN", "FOR_ITER_GEN",
                      "LOAD_ATTR_PROPERTY"):
             self.assertTrue(BY_NAME[name].effects & _opcode.IR_PUSHES_FRAME,
                             name)
@@ -773,7 +921,8 @@ class SourceScanTests(unittest.TestCase):
         for h, row in ROWS.items():
             name = opcode.opname[h]
             if name not in popped:
-                name = opcode.opname[row.base]
+                shadow = opcode.opname[row.shadow]
+                name = shadow if shadow in popped else opcode.opname[row.base]
             for oparg in OPARGS:
                 counts = (extent(row.reads, oparg),
                           extent(row.writes, oparg))
@@ -791,7 +940,7 @@ class SourceScanTests(unittest.TestCase):
                     if scanned and None not in scanned:
                         self.assertEqual(counts, scanned)
                     if counts != expected:
-                        invokes.add(opcode.opname[h])
+                        invokes.add(name)
                         self.assertEqual(counts, (expected[0], expected[1] + 1))
         self.assertEqual(invokes, {
             "CALL_PY_GENERAL", "CALL_BOUND_METHOD_GENERAL", "CALL_KW_PY",

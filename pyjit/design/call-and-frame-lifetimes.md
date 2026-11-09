@@ -1,79 +1,264 @@
 # Calls, frame homes and observation
 
-Current qualification, measured tradeoffs and follow-up are in the
-[interpreter-parity checkpoint report](../bench/results/interpreter-parity-20261108.md).
+This is the frame/call contract integrated at `4d666e1b482`. Its bounded
+observer and debugger qualification limits are recorded in status. The immutable
+golden `0765e9be47f` retains its functional qualification at `0267d428808`.
+See [status](../STATUS.md), the [round plan](../issues/frame-call-model-20261109/plan.md)
+and the [baseline report](../bench/results/interpreter-parity-20261108.md).
 
-Reviewed contract and bounded implementation, 2026-11-07. The A/B call
-paths below were first documented at runtime `7780e32e0e2`; the current R1–R5
-batch is summarized next. This page records ownership and observation
-contracts, not a throughput claim. See [compiler and IR](compiler-and-ir.md),
-[observer contract](handler-and-observer-contract.md), and the
-[holistic review](../issues/interpreter-throughput/holistic-design-review.md).
+Frame ownership defines retention and cleanup responsibility. It does not
+require a separate register-release instruction or make immediate finalization
+a Python language rule. The selected RC runtime still needs bounded owning
+storage and valid reentry phases. See [language/lifetime policy](lifetimes-and-language-semantics.md),
+[register IR](register-ir.md) and the [observer contract](handler-and-observer-contract.md).
 
-The common positional-call transfer is integrated at `8a8fdc91368`, including
-default filling, empty varargs and fresh empty kwargs. Its
-[integration receipt](../issues/interpreter-throughput/integration-a.md)
-records checks and limitations. The bounded overlap-initialization recipe
-below is integrated at `ba37cc10058`; its checks and mixed screening results
-are recorded in the
-[B receipt](../issues/interpreter-throughput/integration-b.md).
-The independent [call-path follow-up audit](../issues/interpreter-throughput/call-followup-audit.md)
-records retained GCC structure and a possible future experiment. It is static
-evidence, not a throughput result.
+## One owning-frame ABI
 
-## Current integration batch: R1–R5
+A frame owns its executing code and function separately, plus bindings and
+transfer temporaries in canonical PyValue homes. Code is a distinct lifetime
+anchor because function.__code__ is mutable. Globals/builtins views, caller link,
+base, storage checkpoint and real executable continuation complete the frame.
+A borrowed mortal C view requires an owner; no ordinary borrowed frame-home bank
+has been introduced.
 
-R1–R3 simplify call preparation while preserving caller ownership and
-fallback semantics. R4 declares the shared success-path first-output
-publication phase. R5 adds a checked canonical-source fact for one shape
-result's first temporary flush. The batch retains the owning frame-home model;
-it adds no native JIT recovery protocol. See the [R4 receipt](../issues/interpreter-architecture-20261107/integration-r4.md)
-and [R5 receipt](../issues/interpreter-architecture-20261107/integration-r5.md)
-for the implementation details, reviews and evidence. Current results establish
-no broad speedup or upstream parity.
+| Fact | Meaning | Representation |
+| --- | --- | --- |
+| Initialized | Bits can be safely inspected | Canonical PyValue or NULL throughout physical value storage |
+| Owning | A counted edge must remain or be retired | Home contents and tag; NULL owns nothing |
+| Future-read live | A later operation needs the current value | Compiler dataflow, distinct from owner occupancy |
+| Pending empty kwargs | No Python object has been exposed yet | One compiler-proven local index, otherwise IR_NO_DST |
 
-## Interpreter-parity packet: P1/P2, M2b, M1 and P3 integrated
+Locals remain observable even after their last program read. Dead-but-owned
+temporaries can also survive until semantic consumption. The compiler's owner
+occupancy constrains compaction and overlapping windows; future-read liveness
+alone does not authorize dropping a GC edge or reading uninitialized memory.
+GC traversal and frame copies inspect the physical homes. Unwind retires the
+appropriate suffix and preserves handler-required anchors. Normal thread clear
+is already local-only after asserting scratch owners NULL; generator/exposed
+paths have their corresponding complete ownership handling.
 
-P1/P2 is integrated at `0539e0c1ff9`. `_PyFrame_CodeHome` accepts a typed
-`PyCodeObject *` and returns a duplicated pointer borrow: mortal code gains a
-reference, while immortal code retains its no-count tag. Both ordinary frame
-initialization and unchecked trampoline initialization use this helper. The
-generic object-to-value constructor keeps its scalar checks and reaches the
-pointer-borrow tail only after those checks have established pointer form.
-Successful refresh publishes the original PC and can return immediately;
-failure still performs the later validation because error construction may
-reenter. These ownership and refresh changes have focused release/debug checks,
-but no performance claim. See the
-[source review](../issues/interpreter-parity-20261108/p2-source-review.md) and
-[post-review](../issues/interpreter-parity-20261108/p2-post-review.md).
+## Initialized storage frontier
 
-M2b is integrated at `73c20472a9f`. Its ordinary boolean continuation executes
-one checked live NOP inline, with original PC publication and the NOP word
-retained; wrappers keep their handlers and debug lltrace declines. M1 is
-integrated at `d93b83800a5`. Its owned exact-dict first-probe identity hit
-begins with borrowed container/key inputs and uses shared ordered retirement.
-A temporary owns the result before key/dict retirement; a folded local is
-written afterward, following successful retirement and callback refresh. A
-decline leaves the generic reader path and input state untouched. These changes do not alter the current register-word
-layout. Regeneration removes affected entries from the unused legacy
-optimizing expansion table, so a future optimizing frontend needs a suitable
-lowering before using that table.
+Thread chunks contain opposing value/header stacks. Each chunk has one
+initialized frontier: below it, inactive value cells are NULL; live frame homes
+have canonical values. The common reservation helper establishes capacity and
+valid cells before a header is written. It truncates the frontier before a new
+header overwrites value-capable storage, initializes only a newly exposed suffix,
+then constructs the header and commits stack pointers without callbacks.
 
-P3's private unbound `CALL_PY_GENERAL` guarded entry shares the call-record
-initializer and existing overlap/consuming paths. The successful guarded entry
-keeps its callable/provider proof only until potentially allocating kwargs
-preparation; final callable, code, vectorcall, hook, defaults, stack-capacity
-and argument-offset checks remain after allocation. Push/final post-allocation
-guards remain in place, and the generic fallback still uses the generic
-transaction runner. P3 is integrated at `10627c339fa`; the combined batch
-passed release/debug correctness qualification at `0267d428808`. The batch is
-kept after measured review, with the spectral regression accepted; upstream
-parity remains open. See the [checkpoint report](../bench/results/interpreter-parity-20261108.md),
-[M2b post-review](../issues/interpreter-parity-20261108/m2b-post-review-round2.md),
-[M1 post-review](../issues/interpreter-parity-20261108/m1-post-review.md),
-[implementation contract](../issues/interpreter-parity-20261108/implementation-contracts.md).
+```mermaid
+flowchart TD
+    reserve[Reserve value range and header capacity] --> truncate[Truncate initialized frontier before header]
+    truncate --> fill[Fill only uncertain value suffix with NULL]
+    fill --> header[Construct frame header and transfer arguments]
+    header --> active[Publish complete child]
+    active --> retire[Keep storage reserved while owners retire]
+    retire --> pop[Pop stack pointers; keep newest frontier]
+    pop --> reserve
+```
 
-## R5 canonical-source publication
+Fresh chunks start with frontier=data and do not assume a zeroing allocator.
+Cached chunks retain their proved frontier. A nested finalizer can change it;
+outer pop never restores an obsolete saved frontier. A departing frame remains
+reserved through all decrefs, even after unlinking, and leaves reusable cells
+NULL before pop. This covers ordinary/exceptional entry, overlap, recursion
+failure and generator construction, through a common storage reservation
+contract. Heap frames initialize once at actual construction; full ownership
+copies write every destination home and clear every moved source.
+
+## Known Python binding and generic providers
+
+The caller owns argument evaluation and its contiguous call window until
+non-reentrant commit. Exact Python calls transfer those owners directly.
+A versioned `_PyFbCall` binding plan lets CALL_PY_GENERAL use the inline
+`call_bind_known_python` primitive for supported positional shapes. Function
+version/provider guards establish the plan; it checks supplied count, executable
+and capacity, fills missing defaults, and installs empty variadic bindings.
+Overlong defaults that cannot fit plan scalars decline the plan rather than
+truncate. Defaults are duplicated from canonical tuple homes.
+
+| Resource | Before overlap commit | After commit |
+| --- | --- | --- |
+| Callable | Caller window owner | Child function owner; old cell NULL |
+| Receiver and supplied arguments | Caller window owners | Same physical cells owned as child bindings |
+| Missing defaults | Defaults tuple owns sources | Child owns canonical duplicates |
+| Empty varargs | Immortal singleton | Child's argument local |
+| Empty kwargs | Prepared dict or virtual binding | Owning local or pending local index |
+| Executable code | Function and explicit pin/guard | Child has its own code owner |
+
+The child is fully clearable/current before any remaining callback-capable
+retirement. Caller argument homes must not be blanket-cleared after overlap:
+they have become child bindings. Other owners stay outside that transferred
+window under the compiler's physical occupancy proof.
+
+A pre-effect known-plan miss enters the existing out-of-line transaction.
+Keyword/EX, nonstandard providers, instrumentation and unsupported owner/storage
+shapes retain their complete handling. Generic preparation pins resources while
+caller homes remain owning, performs monitoring once, and refreshes after
+callbacks or fallible preparation. Its consuming binder can use copies when
+required by that provider's ownership contract. No callback is replayed after
+a miss, and no fallback begins after child commit. Errors retire the published
+owner state. This is one ABI with guarded fast binding, not two frame models.
+
+## Deferred empty kwargs
+
+For a statically eligible immutable kwargs binding, a frame records a pending
+empty dict local while that physical cell remains NULL. It is not an unbound
+Python variable. The compiler inserts MATERIALIZE_KWARGS before its first read,
+including reads that register folding would otherwise absorb. Initial eligibility
+excludes rebinding, clearing, deletion and capture hazards. Structural code
+replacement must retain or re-establish the barrier proof; a public flag alone
+cannot authorize reading a pending NULL home.
+
+Frame-object publication materializes the binding before locals/debugger access,
+including observation of an ancestor from child callbacks. The materializer
+creates a fresh dictionary and commits it to the canonical local; allocation
+failure follows the existing error protocol. Generic/unsupported binding is
+eager. Unrelated local reads and stores acquire no per-home pending-class test.
+
+## Result destinations and canonical transfer
+
+A caller records a plain return_slot (local, temporary or IR_NO_DST) and a native
+return_pc pointing at a real executable continuation. The frame's code owner pins
+that pointer. Hidden entry and the two-operation init shim use real continuations
+as well, beginning at their real word-zero continuation.
+
+RETURN_VALUE takes a canonical owner from a real home, holds it in C across
+child unlink/retirement, then gives it to the caller's recipient. The generator
+checks its unchanged provenance chain and fails closed to ordinary publication
+if that chain changes. Ordinary CALL completion stays inline; generator return
+uses the cold semantic completion adapter. Discard closes the held owner instead
+of writing an unused register. Local replacement retires the current displaced
+owner, including observer mutations. The saved recipient and continuation fully
+describe normal return.
+
+Window-to-local moves likewise transfer already canonical home bits instead of
+repeating exact-number publication checks. Tuple/list unpack has a separately
+proved canonical source path; generic value-slot/native providers retain
+publication unless their producer contract proves it. The
+[canonical transfer audit](../issues/frame-call-model-20261109/canonical-transfer-proof.md)
+records those bounded producer chains. It does not authorize blanket removal
+of normalization from raw results.
+
+Pure local duplication uses the same canonical final store. The generator
+requires the exact local-index read and owned duplicate, with no input owner,
+callback, result mutation or named cache. This applies to LOAD_FAST and
+LOAD_FAST_BORROW by source proof, independently of their names. It removes
+redundant publication checks while retaining the duplicate owner and the shared
+local/temporary/discard destination protocol. See the
+[source review](../issues/frame-call-model-20261109/canonical-home-post-review.md).
+
+Four float arithmetic producers also transfer their final constructor result
+without normalizing it again. The generator checks the direct canonical
+constructor assignment, its exact error path and the full non-reentrant input
+retirement chain. Named cache bindings, preprocessing, changed result identity
+or unsupported suffixes prevent the optimization. Local, temporary and discard
+destinations share one final-store implementation; only the value expression
+differs. This proof neither moves publication across callbacks nor applies to
+conditional integer constructors. See the
+[constructor contract](../issues/frame-call-model-20261109/numeric-canonical-result-proposal.md).
+
+## Semantic iteration, delegation and input resume
+
+| Outcome | Retained homes | Defined recipient | Retired homes |
+| --- | --- | --- | --- |
+| FOR_ITER body | Iterator B and updated cursor B+1 | Item A, unless discarded | Previous scratch item ownership as consumed by its operation |
+| FOR_ITER exhaustion | Last named loop item remains | No item definition | B/B+1 |
+| SEND yield | Receiver B and cursor B+1 | Yielded value B+2 | Sent input owner |
+| SEND completion | Outer retained anchors | Completed value A, unless discarded | B/B+1/B+2 |
+| CLEANUP_THROW completion | Outer retained anchors | Shared delegation result A | Its four-input window |
+
+Frontend END_FOR/END_SEND stack shapes can remain compiler input, but covered
+semantic operations encode their actual successor and recipient directly.
+Standalone shared-owner/branch cleanup remains an unfinished separate category;
+no claim is made that all POP_TOP/POP_ITER execution has disappeared.
+
+The shared owning helper has explicit PRE/POST failure status. PRE observes
+original receiver/window state; POST observes the committed outcome. Windows
+are detached before their owners close, outputs and the real continuation are
+published, and later supported redirects are preserved. Required outer exception
+anchors survive. The encoded constructor proof checks actual handler reads,
+nullable roles, fresh physical definitions and exceptional source callbacks;
+implicit semantically unread RERAISE anchors can be NULL without discarding
+saved locals that an enclosing handler restores.
+
+Declared terminal branch observers publish their actual outputs before a
+callback. FOR body publication writes the item at B+2 or moves it to a folded
+local; an OR_POP drop writes an explicit NULL. Consumed inputs and displaced
+local owners stay in C until the callback decision, then retire with the
+callback exception preserved. The generated edge fact and constructor check
+physical outputs separately from unavailable old input owners.
+
+A yielded outgoing owner and the next incoming send recipient are different
+roles. For IR_NO_DST input, VM SEND first detaches its source transfer cell,
+commits the resumed child's frame/exception/recursion links, then closes the
+held input owner. A last-owner finalizer therefore sees a valid running frame.
+Native entry duplicates/transfers according to its provider contract and reaches
+the same recipient protocol. Delegated suspension keeps the real receiver/home
+relationship needed by yield-from inspection.
+
+## Reentry, debugger redirects and observers
+
+All callback phases publish a coherent current frame, compact PC, code owner,
+valid homes and exception state. A C-local held result remains an explicit owner
+while detached windows are NULL. A decline preserves its inputs; a committed
+operation cannot replay a provider after effects.
+
+The cold debugger recipe validates incoming owners/NULL requirements before
+changing state. Bounded PRE and certified owner-neutral committed JUMP
+transfers share a stopped-state view and restore saved named-local bindings
+from surviving per-local LOAD_FAST_AND_CLEAR token chains, including a genuinely
+unbound NULL. The committed view borrows the actual site's unchanged rows only
+after checking the generated positive zero-IO contract, selected successor,
+scoped generation and committed return PC. New committed cancellation needs
+inherited handled context and an empty target scratch requirement; other
+targets retain their prior strict proof. A target that reads such a local before
+a guaranteed binding definition needs an actual unbound check or is refused.
+An admitted ignored-result caller redirect while its VM child is active records
+a pending target without touching the overlapping child-owned
+window. Completion clears the flag, publishes the selected continuation and
+retires surplus caller scratch only after child retirement. Exceptional child
+retirement cancels the request, including one requested during cleanup. Broader
+protected/suspended recipes remain work under review. A bounded backward replay
+within a FOR body preserves its current iterator/cursor pair only after proving
+all-path body-phase availability, target dominance and a cut-free path to the
+current site. A matching static producer or non-NULL pair alone does not prove
+dynamic identity. Nullable operands require a separate current-NULL proof; every
+aliased read of the physical home must accept NULL.
+
+The setter detaches all surplus owners before committing the target and closing
+the detached values. Closing callbacks may redirect again; the outer setter
+makes no later frame writes. Successful commits increment a cold frame-object
+generation, including when the selected physical PC is unchanged. Observer
+transactions use that generation alongside the PC before restoring cursors,
+cached continuations or an old source-error recipe. Public line getters and
+lazy frame-object creation do not express redirect intent. Warning reproof
+captures scoped authority again before validating the Plan; it cannot upgrade
+a deliberately unauthorized source-only target.
+
+Other positively certified committed edges bind a request-owned copy of the
+exact site's context, save-column and origin rows. The selected normal transfer
+and shared old-owner cuts establish the stopped state; a replacement value or
+NULL cannot revive a consumed origin. This path excludes token creation and
+requires inherited context, empty stopped and target save columns, and no
+incoming target scratch owner. It neither restores saved locals nor borrows a
+PRE survivor proof or source-only target fallback. Warning reproof recaptures
+the scope and rebuilds the view. PRE and neutral-JUMP support remain unchanged.
+
+Source-only events use immutable edge metadata and a frame-object display cursor.
+Scoped observer records bind a callback to its frame, site, edge, phase and
+redirect generation. They prevent an unsupported hook from borrowing another
+callback's authority. The setter uses bounded PRE plans, exact real LINE
+identity and certified committed edge views. A Python tracing LINE can be a
+legacy monitoring-JUMP callback; its public name does not select a PRE phase.
+SOURCE_POST and yield-ready setter authority remain unimplemented.
+Pending source errors belong to the evaluator activation, so nested finalizer
+entry cannot replace the outer handler recipe even when no frame object could
+be allocated. Cold LINE handoff has its own landing/previous-line/epoch fields;
+public f_lineno remains display/cache state. Reconfiguration, redirects, error
+selection and frame clearing invalidate that continuation state before callbacks.
+
+## Canonical source and reader publication
 
 `attr = IR_CANONICAL_HOME_DUP(found)` records a narrow producer fact on the
 existing frozen publication contract. The checker accepts the direct,
@@ -103,7 +288,7 @@ history are in the
 [canonical-output proposal](../issues/interpreter-architecture-20261107/canonical-output-boundary-proposal.md)
 and [RHS refinement](../issues/interpreter-architecture-20261107/canonical-output-rhs-review.md).
 
-## R4 first-output publication phase
+## First-output publication phase
 
 `IR_RETIRE_PUBLISHED_RESULT(attr, receiver)` declares one success-path fact
 for the five specialized attribute producers. The generated
@@ -135,178 +320,14 @@ producer sequence and effect-free, disjoint suffix; it rejects conditional or
 ambiguous result assignments, reassignment, result escape, suffix overlap,
 frame access, and releases before any later uop.
 
-## What a home means
+## History and boundaries
 
-The frame has one `PyValue` array. Locals, cells, free variables and hidden
-constant homes precede transfer temporaries. A home contains NULL, an inline
-value, an immortal, or its owning object reference. A mortal borrow is a C-local
-view supported by an owner; it is not a second owner in a frame slot.
+The [2026-11-08 candidate report](../issues/execution-boundaries-20261108/report.md)
+retains the prior implementation and its qualification limits. Golden and
+earlier integration receipts remain historical evidence. The active
+[frame/call packet](../issues/frame-call-model-20261109/plan.md) records source
+reviews, native failures and repairs without qualifying unfinished work.
 
-This is the current owning-home contract, not a requirement of eight-byte
-values. Pinned upstream can carry a borrowed argument into a synchronous
-child frame, preserve overwritten caller locals and promote on frame escape.
-The [source comparison](../issues/interpreter-parity-20261108/borrow-frame-followup.md)
-and [next-packet proposal](../issues/interpreter-parity-20261108/borrowed-frame-views-proposal.md)
-review that alternative. No borrowed mortal frame slot is supported by the
-current candidate; changing it requires updating GC edge accounting, copies,
-retirement, observations and native transfers together.
-
-Three distinct questions must remain separate:
-
-| Fact | Meaning | Current representation |
-| --- | --- | --- |
-| Initialized/valid | Reading the bits is safe | Every physical slot contains a valid value or NULL |
-| Owns a value | Someone must retain/release this value | Slot contents and the value tag; a NULL slot owns nothing |
-| Future-read live | A later operation reads this value before replacement | Compiler temporary-register liveness, discarded after compaction |
-
-A value can own a reference without a future read, including values below a
-non-exiting loop. `regcfg.c:789` and the verifier at `1274` preserve that case.
-Locals remain observable through frame locals even after their last program
-read. Consequently, exporting future-read liveness alone cannot justify
-skipping initialization, tracing roots, copying homes, or releasing owners.
-
-The compactor tracks occupied slots until consumption (`compact_op`, around
-`regcfg.c:898`), allocates later held temporaries above earlier ones, and
-maintains contiguous call windows. Exception edges preserve canonical homes
-below the handler's boundary; unwinding releases higher homes in reverse order.
-GC visits all physical slots (`gc.c:483`), and frame copying moves all of them
-(`pycore_interpframe.h:224`). Those consumers require the NULL invariant today.
-
-## Existing frame stack and ordinary cleanup
-
-Thread stack chunks already contain opposing frame-header and value stacks.
-`base` names the homes and `saved_top` restores the value frontier on pop.
-Generators and detached frame objects own separate arrays. Exact positional
-calls already overlap a thread caller's argument window with the child's
-initial locals; they do not allocate a second argument array.
-
-Exact positional calls and the common positional-call transfer use the
-thread-stack overlap path through `pycore_interpframe.h:_PyFrame_PushOverlapping`.
-Generator-owned callers use the existing non-overlap transfer branch. The
-common path fills defaults and installs empty varargs and fresh empty kwargs
-as needed; its checks and limitations are in the A receipt.
-
-**Normal thread cleanup is already locals-only.** At `frame.c:185`,
-`_PyFrame_ClearExceptCode` asserts temporaries are NULL, then clears only
-`co_nlocalsplus`. Exception unwind clears temporaries separately; generators
-and detached/exposed-frame paths need their existing full handling. Earlier
-throughput notes describing all frame retirement as a full-slot scan were too
-broad. Do not implement that optimization a second time.
-
-## Call ownership protocol
-
-The generic binder currently consumes copies while the actual caller window
-remains owning (`ceval.c:3054`). Allocation, keyword comparison, error creation,
-monitoring and reference release may reenter. Offering original window owners
-to this consuming binder would leave observable stale owners or require rollback
-after arbitrary partial consumption. This duplication is a consequence of the
-provider contract; it is not evidence that frames lack a stack.
-
-The exact and common positional paths share a prepare/guard/commit protocol.
-Instrumented, free-threaded, keyword/EX and generator-owned callers retain
-their existing provider paths. The common overlap path also declines when the
-executable or sufficient stack space is unavailable. The protocol is:
-
-1. Prepare while the actual caller homes remain owning. Pin code and any
-   resource needed across allocation. Allocate a fresh empty `**kwargs` dict
-   when required; the empty `*args` tuple may be the immortal singleton.
-   Complete monitoring/preparation exactly once using the existing transaction.
-2. Refresh after the last possible escape. Reread callable, code identity,
-   standard vectorcall, defaults, entry policy and stack capacity. A declined
-   shape releases prepared resources and refreshes before fallback. A failure
-   remains an error; a callback already performed must not be replayed.
-3. Commit with no allocation, release that can run code, instrumentation,
-   deoptimization or other failure between first ownership detachment and a
-   clearable, published child. Frame/header initialization and owning duplicates
-   must have a transitive non-escaping proof. Use the pinned code, or prove the
-   helper's fresh `func_code` read equals it at this point.
-4. Publish the child's current-frame link and caller return destination before
-   any remaining release. Keep the existing child-not-started failure cleanup,
-   recursion/RESUME, monitor and exception protocols. No fallback after commit.
-
-| Input/resource | Before commit | After overlapping commit |
-| --- | --- | --- |
-| Callable window owner | Caller window | Child `f_funcobj`; old window cell NULL |
-| Receiver and supplied arguments | Caller contiguous window | Same physical cells, now child argument locals |
-| Missing positional defaults | Defaults tuple owns source values | Child owns duplicates in missing local homes |
-| Empty varargs | Immortal singleton | Child's varargs local |
-| Prepared fresh kwargs dict | Owning C local | Child's kwargs local, C owner cleared |
-| Other caller-window cells | Caller owners or NULL | Retired exactly once or left NULL under the reviewed mapping |
-
-Do not blanket-clear an overlapping window: argument cells are now child
-homes. Borrowed locals are not legal array inputs for this call window.
-Ordinary CALL provenance is verified by `regcfg.c:1172` and `1440`.
-Instrumented calls retain the existing provider, preserving its monitor-once
-behavior. CALL_KW and CALL_FUNCTION_EX remain outside the overlap path.
-
-## Bounded initialization recipe: reuse the known-NULL overlap
-
-Integration B applies this bounded recipe using an existing ownership
-invariant, not a future-read map. Let `B` be the child base, `A` its supplied argument
-count, `E = B + child_nslots`, and
-`P = previous->base + previous_nslots`. The initial child argument owners are
-`[B, B+A)`. The caller's non-argument homes in `[B+A, min(E,P))` are already
-NULL under the existing overlapping-call contract. Only `[max(B+A,P), E)`
-needs new NULL stores, when that interval is nonempty.
-
-The proof obligations are precise:
-
-- Both frames use the same thread value stack/chunk; previous owns thread
-  storage, and `B` lies in its temporary call window, above its local/constant
-  homes. Supplied arguments fit inside the existing window and child locals.
-- Occupancy/stack ordering puts every other caller-held owner below the call
-  window, including dead-but-owned temporaries. The existing overlap helper
-  already relies on higher homes being NULL; the future-live verifier check
-  alone is not the whole proof.
-- Capture caller extent before child fields or stack frontiers change. There
-  is no escaping call between the final guard and using the known-NULL range.
-- Zero any newly exposed tail before the child can be observed. Skip the
-  transferred arguments. Fill hidden child constants normally afterward,
-  including mortal constants installed by `code.replace`. Then install
-  prepared defaults/empty varargs/kwargs for the common-call route.
-- Preserve `saved_top` and parent ownership boundaries. Do not reuse this
-  argument for generator storage, stack growth into another chunk, ordinary
-  non-overlap entry, or arbitrary free stack memory containing stale headers.
-
-The implementation is confined to overlap initialization: it computes the
-already-valid prefix, initializes the remaining tail, and retains normal
-constant filling. The helper accepts the proven prefix boundary; debug
-assertions verify every skipped non-argument cell is NULL. It does not treat an
-argument count as evidence that uninitialized memory is valid. No code-object
-layout or per-op bitmap is needed.
-
-Tests cover smaller/equal/larger child extents, defaults and constants, receiver/no
-receiver, nested calls, mortal values/finalizers, exception unwind, exposed
-frames and the generator fallback. The common positional commit uses exactly
-the same window proof. The A and B landings were integrated separately;
-preserve that measurement history when interpreting their receipts. An
-independent static audit notes a possible slow-path outlining experiment, but
-does not establish dynamic frequency or a speedup.
-The initialization change has unproven throughput benefit: its extra bounds
-calculation may outweigh a short saved clear. The current contract is a local
-known-NULL reuse rule, not a general liveness optimization.
-
-## Observation, effects and later metadata
-
-One generated operation contract should describe operand homes/roles,
-consume/publish/release points, exceptional edges, may-escape effects and frame
-switch/suspension. Expand the existing metadata rather than adding a second
-hand-maintained opcode table. A word-level `RUNS_CODE` flag is conservative;
-it does not by itself prove a particular helper or phase is non-escaping.
-Releasing a mortal owner and overwriting a local can escape even when an
-arithmetic or lookup body cannot.
-
-At an observation point, initialized homes, PC, current frame, executable
-identity and exception state must describe the actual phase. An opaque callback
-invalidates cached frame/executable/home assumptions as its contract requires.
-Tracing/debugger locals, generator suspension, frame detachment and invalidation
-must use the same home contract. An instruction PC alone is not enough to
-describe intermediate consume/publish phases or C-local owners.
-
-Do not add runtime liveness metadata to solve the overlap-NULL case. If future
-measurements justify dropping the all-slots-valid invariant, define one
-ownership-validity map, with instruction phases and all observers updated in
-one reviewed packet. Future-read sets can help derive it but cannot replace it.
-Typed optimizing SSA, hardware allocation and deoptimization snapshots remain
-the JIT's separate representation; they recover this interpreter state at
-exits instead of forcing SSA machinery into the baseline dispatch loop.
+Machine registers, typed SSA, OSR and native deoptimization snapshots belong to
+the future method/tracing tiers. They must recover this interpreter's owning
+frame state rather than introduce a competing baseline ownership convention.

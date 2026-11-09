@@ -3,7 +3,8 @@
 Stages describe outcomes and gates, not percentages or an inflexible waterfall.
 The qualified interpreter is frozen as the
 [2026-11-08 golden baseline](issues/golden-20261108/README.md); the
-[next plan](issues/golden-20261108/next-steps.md) governs further optimization.
+[frame/call closing report](issues/frame-call-model-20261109/closing-report.md)
+tracks the optimized candidate and its measured limits.
 The baseline extension profile is part of runtime integration; wider extension
 migration can proceed alongside later compiler work.
 
@@ -18,7 +19,7 @@ flowchart LR
 | Stage | Deliverable | Exit evidence |
 | --- | --- | --- |
 | [1. Runtime](stages/01-runtime/README.md) | One coherent canonical-value runtime under RC | Qualified at `0267d428808`; selected interpreter batch kept after performance admission |
-| [2. Baseline](stages/02-baseline/README.md) | A trustworthy register-interpreter starting point | Baseline qualification complete; parity remains open (broad screen 1.2412× upstream) |
+| [2. Baseline](stages/02-baseline/README.md) | A trustworthy register-interpreter starting point | Golden baseline qualified; optimized candidate measured; logging target met. Broad parity and capability limits are in STATUS. |
 | [3. Method JIT](stages/03-method-jit/README.md) | Cohesive method compilation through shared optimizing IR | Whole-method/native transitions, recovery, ownership and measured workloads validated |
 | [4. Tracing](stages/04-tracing-jit/README.md) | Hot-path compilation using the same compiler core | Trace guards, exits, recovery and interactions with method code validated and measured |
 | [5. Extensions](stages/05-extensions/README.md) | Practical incremental source ports and opaque interfaces | Declared extensions rebuild and pass their behavior/lifetime tests against the selected API |

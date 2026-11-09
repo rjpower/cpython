@@ -383,9 +383,9 @@ PyAPI_FUNC(int) _Py_Instrument(PyCodeObject *co, PyInterpreterState *interp);
 
 extern PyObject *_PyInstrumentation_BranchesIterator(PyCodeObject *code);
 
-struct _PyCode3 _PyCode_DEF(3);
+struct _PyCode2 _PyCode_DEF(2);
 
-PyAPI_DATA(const struct _PyCode3) _Py_InitCleanup;
+PyAPI_DATA(const struct _PyCode2) _Py_InitCleanup;
 
 #ifdef Py_GIL_DISABLED
 

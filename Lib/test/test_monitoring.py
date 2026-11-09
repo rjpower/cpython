@@ -1302,11 +1302,10 @@ class TestLineAndInstructionEvents(CheckEvents):
             ('instruction', 'func2', 3),
             ('instruction', 'func2', 4),
             ('instruction', 'func2', 5),
-            ('instruction', 'func2', 6),
             ('line', 'func2', 3),
+            ('instruction', 'func2', 6),
             ('instruction', 'func2', 7),
             ('instruction', 'func2', 8),
-            ('instruction', 'func2', 9),
             ('line', 'get_events', 11)])
 
     def test_try_except(self):
@@ -1322,22 +1321,21 @@ class TestLineAndInstructionEvents(CheckEvents):
         self.check_events(func3, recorders = LINE_AND_INSTRUCTION_RECORDERS, expected = [
             ('line', 'get_events', 10),
             ('line', 'func3', 1),
-            ('instruction', 'func3', 1),
             ('line', 'func3', 2),
-            ('instruction', 'func3', 2),
+            ('instruction', 'func3', 1),
             ('line', 'func3', 3),
+            ('instruction', 'func3', 2),
             ('instruction', 'func3', 3),
             ('instruction', 'func3', 4),
-            ('instruction', 'func3', 5),
             ('line', 'func3', 4),
-            ('instruction', 'func3', 6),
+            ('instruction', 'func3', 5),
             ('line', 'func3', 5),
+            ('instruction', 'func3', 6),
             ('instruction', 'func3', 7),
-            ('instruction', 'func3', 8),
             ('line', 'func3', 6),
+            ('instruction', 'func3', 8),
             ('instruction', 'func3', 9),
             ('instruction', 'func3', 10),
-            ('instruction', 'func3', 11),
             ('line', 'get_events', 11)])
 
     def test_with_restart(self):
@@ -1981,12 +1979,14 @@ class TestBranchAndJumpEvents(CheckEvents):
             ('branch left', 'whilefunc', 1, 2),
             ('branch right', 'whilefunc', 1, 3)])
 
+        loop = next(i for i in dis.get_instructions(func) if i.opname == 'FOR_ITER')
+        self.assertEqual((loop.offset, loop.jump_target), (6, 12))
         self.check_events(func, recorders = BRANCH_OFFSET_RECORDERS, expected = [
             ('branch left', 'func', 6, 7),
             ('branch right', 'func', 7, 10),
             ('branch left', 'func', 6, 7),
             ('branch left', 'func', 7, 8),
-            ('branch right', 'func', 6, 14)])
+            ('branch right', 'func', 6, 12)])
 
     def test_except_star(self):
 
@@ -2013,8 +2013,8 @@ class TestBranchAndJumpEvents(CheckEvents):
             ('branch', 'func', 4, 4),
             ('line', 'func', 5),
             ('line', 'meth', 1),
-            ('jump', 'func', 5, '[offset=31]'),
-            ('branch', 'func', '[offset=33]', '[offset=34]'),
+            ('jump', 'func', 5, '[offset=29]'),
+            ('branch', 'func', '[offset=31]', '[offset=32]'),
             ('line', 'get_events', 11)])
 
         self.check_events(func, recorders = FLOW_AND_LINE_RECORDERS, expected = [
@@ -2028,8 +2028,8 @@ class TestBranchAndJumpEvents(CheckEvents):
             ('line', 'func', 5),
             ('line', 'meth', 1),
             ('return', 'meth', None),
-            ('jump', 'func', 5, '[offset=31]'),
-            ('branch', 'func', '[offset=33]', '[offset=34]'),
+            ('jump', 'func', 5, '[offset=29]'),
+            ('branch', 'func', '[offset=31]', '[offset=32]'),
             ('return', 'func', None),
             ('line', 'get_events', 11)])
 
@@ -2042,7 +2042,7 @@ class TestBranchAndJumpEvents(CheckEvents):
             return None
 
         in_loop = ('branch left', 'foo', 1, 2)
-        exit_loop = ('branch right', 'foo', 1, 5)
+        exit_loop = ('branch right', 'foo', 1, 4)
         self.check_events(foo, recorders = BRANCH_OFFSET_RECORDERS, expected = [
             in_loop,
             in_loop,
@@ -2091,7 +2091,7 @@ class TestBranchAndJumpEvents(CheckEvents):
         self.check_events(func, recorders = BRANCHES_RECORDERS, expected = [
             ('branch left', 'func', 2, 3),
             ('branch right', 'func', 4, 6),
-            ('branch right', 'func', 6, 8),
+            ('branch right', 'func', 6, 9),
             ('branch left', 'func', 2, 3),
             ('branch left', 'func', 4, 5),
             ('branch left', 'func', 2, 3),
@@ -2099,7 +2099,7 @@ class TestBranchAndJumpEvents(CheckEvents):
             ('branch left', 'func', 6, 7),
             ('branch left', 'func', 2, 3),
             ('branch right', 'func', 4, 6),
-            ('branch right', 'func', 6, 8),
+            ('branch right', 'func', 6, 9),
             ('branch right', 'func', 2, 10)])
 
     def test_callback_set_frame_lineno(self):

@@ -101,7 +101,8 @@ HEADER_EVENT_DESC warning and support flat locations only, not a capture timelin
 
 The next reviewed increment separates cancellable PRE expression inputs from
 active saved-local obligations. Losing a saved origin keeps its obligation
-active; only matching TOP restoration ends it. The following scoped cold phase
+active. Independent named locals may restore in either order; only nested saves
+of the same name require youngest-first restoration. The following scoped cold phase
 contract must distinguish consumed branch results, C-held results awaiting
 publication, yield-before-suspension and an actually suspended frame. Saved-local
 restoration, caught exits and retained outer-with roots need explicit actions
@@ -111,3 +112,26 @@ After coherent repairs: full release/debug qualification, API checks, current
 stats, the unchanged 29-workload screen, repeat material losses, and the two
 final parity campaigns. Profile a repeated current loss before admitting further
 hot-path changes. Startup RSS and a zero-box census remain outside admission.
+
+## Following increment: retained failures and model correction
+
+The first uncommitted native28 draft builds both profiles and runs 123 focused
+tests each, with one new test error. Its global save stack incorrectly rejects
+the compiler's legal normal restore order: save left, save right, restore left,
+restore right. The error path uses the opposite restore order. The revised
+reviewed model tracks active obligations separately per actual named-local
+index. Independent locals commute; nested saves of the same local remain ordered.
+The compiler is not changed to fit the failed proof. Keep the positive two-local
+control and add a genuinely nested same-local negative. This draft is not an
+integrated source or a measured performance result.
+
+The ordinary-source FOR observer probe also finds a real unpublished-owner leak:
+three fresh results remain alive after collection when BRANCH_LEFT raises,
+versus zero in the no-error control. Both candidate profiles and matched
+upstream show it. Debug verification identifies C-held references without heap
+referrers. A complete semantic output commit must make results reachable by
+error cleanup and prevent stores after redirects; reproducing upstream's leak
+is not a compatibility requirement. Evidence is
+`ownership28-for-body-error-v2/`. The first probe raised again while observing
+exception matching; all roles failed, so it is not leak evidence. The corrected
+probe filters the actual FOR_ITER instruction offset from each role's disassembly.

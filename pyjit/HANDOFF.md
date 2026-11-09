@@ -4,112 +4,89 @@
 
 Continue until unchanged JIT-off logging reaches matched upstream parity and
 broad regressions are repaired. Follow Python's data model; source boundaries
-are metadata. The active [plan](issues/frame-call-model-20261109/plan.md) owns
+are metadata. The [active plan](issues/frame-call-model-20261109/plan.md) owns
 admission. Golden remains immutable and selected. The goal tool is active,
 without a token budget.
 
-Runtime source is
+Runtime source:
 `/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/execution-boundaries-20261108`,
 branch `pyjit/frame-call-model-20261109`, committed engineering HEAD
-`4a1f70fcef49bccf210180fa69cfc4fb409a80cd`. It now has live uncommitted worker
-changes. Do not build, regenerate or measure until all workers finish and root
-freezes source. Cache magic is 64416. Canonical docs are in this coordinator
-checkout. Candidate builds are `build/execution-boundaries-{release,debug,stats}`;
-current evidence is `build/pyjit-link-wave1/frame-call-model-20261109/`, relative
-to python-boil-the-ocean. Release/debug identify clean 4a; stats still identifies
-192. Workers never run shared native jobs or actual regeneration.
+`c1424be11db46b5d9e2aca84bcc96ddad6a7ea62`. Live next-packet edits are admitted
+only under explicit worker file ownership. Root alone regenerates, builds,
+tests, commits and measures after freezing source. Cache magic is 64416.
+Canonical documentation stays in this checkout; runtime worktree copies are
+historical. Build/evidence paths below are relative to python-boil-the-ocean.
 
-The integrated model includes overlapping owning call frames, lazy kwargs,
-compact words with sparse source edges, semantic loop/send/throw completion,
-initialized arena frontiers, activation-local source errors, explicit debugger
-entry, bounded context/owner plans, per-named-local save obligations and PRE
-cancellation. Same real-LINE identity preserves the current PC and phase,
-including a later with-exit operation on the header's line.
-
-Read the [frame ABI](design/call-and-frame-lifetimes.md),
-[debugger transfer design](design/debugger-frame-transfers.md),
-[fifth report](issues/frame-call-model-20261109/fifth-integration-report.md) and
-[repair log](issues/frame-call-model-20261109/qualification-repairs.md).
+Candidate release/debug builds `build/execution-boundaries-{release,debug}`
+identify c142 and check 117 modules. Stats still identifies192 and needs a
+current rebuild. Evidence: `build/pyjit-link-wave1/frame-call-model-20261109/`.
+The [sixth report](issues/frame-call-model-20261109/sixth-integration-report.md)
+and [repair log](issues/frame-call-model-20261109/qualification-repairs.md)
+record exact scopes and failed attempts.
 
 ### Executed checks and limits
 
-- 4a release/debug each check 117 modules and pass 125 focused tests with one
-  skip. Identity/large-window checks pass two tests each. The latter ports an
-  obsolete capacity expectation into one successful 101-argument call.
-- The last wide check, before that test-only port, runs 999 tests per profile.
-  Four modules fail: monitoring, pdb, peepholer and sys_settrace. Trace errors
-  fall from 65 to 38; 21 diagnostic assertions and the now-ported capacity
-  expectation also fail. Pdb has two failures/two errors. Do not call this full
-  qualification. The last full release remains 87: 54,504 tests, 13 failed
-  modules, 126 failures and 99 errors.
-- Native28's first global save-stack proof rejected independent local restores;
-  the committed per-local model fixes it. Retain that failure and two fixture
-  retries: code.replace requires distinct equal co_linetable bytes, not the
-  same object. The first wide check hung by restarting an earlier operation on
-  the same with-header line. Root captured SIGUSR1 faulthandler output, stopped
-  only its worker, and fixed identity. The bounded probe has 16 passing rows
-  per profile with no cap, errors or nonidentity redirects.
-- The corrected tracing-profiler module passes 28 tests per profile at26;
-  the obsolete test_cprofile selector was a harness error. Compile corpus at26
-  accepts 2,154 valid files; eleven invalid parser fixtures remain SyntaxError.
-  Stats192 passes 146 smoke tests. API lint and current full qualification remain
-  open; do not transfer these old passes to live worker source.
+- Native29 debug: 363 tests across six core modules, one skip, all pass.
+  Release selected gate:22 pass. Eight additional observer/frame modules:
+  64 tests pass per profile. Owner probes leave zero survivors after collection
+  from660 values, and zero from three FOR items on both normal/error paths.
+- Dependency-correct release accepts2,156 valid library files;11 intentionally
+  invalid parser fixtures remain SyntaxError. Missing Makefile dependencies on
+  four IR headers are fixed; retain the earlier stale-object v2 failure.
+- Native29 wide release:999 tests,14 skips, four failed modules. Monitoring has
+  one error; peepholer three; sys_settrace38; pdb two failures/two errors.
+  The21 obsolete diagnostic mismatches are gone. Last full release remains87:
+  54,504 tests,13 failed modules,126 failures and99 errors. Full release/debug,
+  current stats and306-unit API lint remain open.
+- c142 is independently source/result reviewed. Its five canonical design
+  pages are synchronized; two changed Mermaid diagrams rendered and inspected
+  under `design-diagrams29/`. Historical qualification does not transfer to live
+  worker edits.
 
-### Performance and live assignments
+### Current measurements and assignments
 
-Clean4a, GCC15.2, JIT0, CPU15: two balanced pairs give logging/upstream
-0.838496 (0.812193, 0.865650). The separate two-pair golden campaign has logging
-0.585975, nbody0.999512, pickle1.014001. Stable identities hold pre/post. Nbody's
-old87 loss does not repeat. Do not combine campaigns or infer cold-fix causality.
-Final parity needs two independent balanced six-round campaigns after coherent
-qualification, mean at most1.0 and every pair at most1.02.
+Clean c142, GCC15.2, JIT0, CPU15: two balanced pairs logging/upstream0.936868;
+separate golden logging0.653035,nbody1.041296,pickle1.026258. Four-pair repeat:
+nbody1.019904,pickle1.021510. All pre/post identities stable. Final logging needs
+two independent balanced six-round campaigns, mean at most1.0 and every pair
+at most1.02, after coherent qualification.
 
-All three Sol6.1 medium workers are active; the earlier third-agent thread-limit
-problem was resolved. Reconcile actual agent states after restart:
+Current warmed PMU: logging/upstream cycles0.918210,instructions1.044970;
+nbody/golden cycles1.040876,instructions1.033309. Logging18/nbody12 stat captures
+are valid at100%event running. Both cycle-record comparisons report zero lost
+samples. `sixth-perf-input-postflight.json` confirms401 logging inputs unchanged.
+Use the retained native profiles for location evidence; no old-image timing or
+handler census supplies current causal attribution. Launched perf works at
+kernel level2; independent worker attach was denied and GDB is unavailable.
 
-- A (`boundary_design_impl`): generator terminal output publication,
-  activation-owned observer scope, exact-frame source-error invalidation,
-  instrumentation and private entry masking. Owns generator/bytecodes/ceval/
-  frame.c/instrumentation/sysmodule and focused observer tests. No Clinic
-  signature change. Finite composed/direct provider census must be migrated
-  explicitly; a provider cannot advertise POST before all its outputs commit.
-- B (`boundary_cold_review`): frameobject saved-local restore actions and
-  test_code. Root read the actual draft; A source peer and native checks remain.
-  Full-exit PRE only, same handled context, ordinary locals, available acyclic
-  saved generations. Source POST/yield/context-exit require separate proof.
-- H (`holistic_assessment`): constructor geometry and shared cold output proof,
-  codeobject/header/test_ir under A's exact enum interface agreement. The direct
-  geometry application was initially rejected by automatic review for missing
-  root admission. After actual root/A/B patch review and explicit source/test
-  admission, the same direct tool succeeded; no workaround was used. Broader
-  POST schema/worklist is separate and must compose with A's generated facts.
-- Root: integration source review, actual regeneration, native release/debug,
-  focused tests, post-review, commits, quiet screens, full/broad/final gates,
-  canonical/Loom state. No worker commits or native jobs.
+Reconcile actual Sol6.1 medium agent states after restart:
 
-The [cold review](issues/frame-call-model-20261109/cold-checkpoint28-review.md)
-has eight ranked actions, mapped to these streams in the fifth report. Ordinary
-frame-exit scratch ownership remains an explicit integration audit. The FOR
-observer-error probe retains three unpublished results after collection on both
-candidate profiles and upstream. Do not copy upstream's bug. A's terminal
-transaction must publish state before callbacks, preserve callback exceptions
-through closes, and never overwrite a newer redirect.
+- A (`boundary_design_impl`): admitted producer increment in bytecodes,
+  generator, instrumentation and provider tests: four-argument explicit owner
+  edge marker, positive source-publication argument, physical-next threading,
+  terminal JUMP/POP_ITER. Host evidence changes only these three providers,
+  preserving prior ten observed and262 ordinary bodies. Actual source review
+  and merged native gate pending. Yield is separate, not admitted yet.
+- B (`boundary_cold_review`): actual debugger failure diagnosis and revised
+  shared stopped-state proposal. Root executed84 capped cold/warm probe rows:
+  list/set/dict ordinals2/3/4 stop at pc9 INSTRUMENTED_JUMP_BACKWARD and refuse;
+  ordinal1/5 real LINE stops commit. All six unchanged fixtures have zero source
+  records. Their line callbacks run under JUMP monitoring, not PRE LINE.
+  A's certified JUMP outcome supplies a concrete POST consumer witness. Peer
+  and root admission precede consumer edits; no broad event-name inference.
+- H (`holistic_assessment`): independent schema/source/result reviews and design
+  synchronization complete. Current performance review ranks audited canonical
+  home duplication, float path and fixed call binding. A bounded canonical-home
+  producer proposal is requested; no optimization source edits admitted yet.
+- Root: integration, native gates, quiet performance, final full/broad checks,
+  profiling and canonical/Loom state. Workers never commit or run native jobs.
 
-The stable192 nbody census warms20 separate run(1) calls and captures0/2/4.
-All material routes match except removed POP_ITER40,005/outer and POP_TOP2/outer;
-17,600,702 vs17,560,695 entered handlers. POWER retry counts are nonlinear on both
-roles. This is not native-cost evidence. Earlier PMU belongs to87 and supports
-flat locations only despite zero lost samples. Current-image profiling follows
-coherent correctness. Perf attach to a separate trace worker was denied at
-kernel level2, whereas the existing launched perf protocol works; no GDB is
-installed. Do not ask for the same perf setup again.
-
-Remaining: source-aware remote/GDB cursor display, protected owner/context
-transfers, complete terminal provider census, frame-exit audit, full release/debug,
-current stats/API lint, unchanged29-workload screen with repeated material losses,
-both final logging campaigns and fresh cold source/result review. Preserve seven
-canonical diagrams (new debugger transaction rendered/inspected; retained blocks
-unchanged), golden controls, sealed evidence and the unrelated paths below.
+Next: complete and review the coherent producer/consumer packet, focused native
+release/debug checks, commit/basic performance, then coherent full suites,
+current stats/API, unchanged29-workload screen with material-loss repeats, final
+logging campaigns and cold review. Retained roots, caught exits, true yield and
+remaining completion providers need explicit semantic contracts. Preserve sealed
+controls/evidence and unrelated local work listed below.
 
 ## Previous qualified candidate
 

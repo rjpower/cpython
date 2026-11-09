@@ -1,0 +1,12 @@
+diff --git a/Objects/codeobject.c b/Objects/codeobject.c
+--- a/Objects/codeobject.c
++++ b/Objects/codeobject.c
+@@ -1138,6 +1138,7 @@ validate_completion_words(struct _PyCodeConstructor *con)
+         if ((count && (base < nl || base > limit - count)) ||
+             (dst != IR_NO_DST && dst >= limit) ||
+             (opcode == RETURN_GENERATOR && dst != IR_NO_DST) ||
+-            (opcode == FOR_ITER && dst >= base && dst < base + 2) ||
++            (opcode == FOR_ITER && dst >= nl && dst != IR_NO_DST &&
++             dst != base + 2) ||
+             (opcode == YIELD_VALUE && IR_C(word) == 1 && dst != base))
+         {

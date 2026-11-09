@@ -2,8 +2,8 @@
 
 The active [interpreter](interpreter.md), [IR](register-ir.md) and
 [frame ABI](call-and-frame-lifetimes.md) share one owning-home model. This page
-describes the 2026-11-09 integration source, including observer repairs still
-under qualification. [Status](../STATUS.md) separates it from the immutable
+describes the contract integrated at `c1424be11db4`, whose broad qualification
+remains open. [Status](../STATUS.md) separates it from the immutable
 qualified golden runtime. Release phases implement RC; they do not impose an
 immediate-finalization guarantee on Python programs.
 
@@ -22,6 +22,7 @@ remote readers must cover the actual handler domain.
 | Through prefix | Values remain in the same physical homes, not fresh definitions |
 | output_kind | Actual register/window/first-result publication, or semantic outcome |
 | result_phase | Checked first-result publication before input retirement |
+| observer_outcome | Generated per-edge fact for a declared committed terminal callback |
 | Effects | Conservative raises, escape, frame switch, suspension, polling and other capabilities |
 | Events | Monitoring capabilities of the semantic handler or its wrapper |
 
@@ -61,6 +62,15 @@ the selected real continuation before closes, and honors later redirects.
 Ordinary CALL return remains inline. Implicit StopIteration completion and real
 error reporting must each produce their appropriate single monitoring event.
 
+Declared terminal branches publish output homes and the selected continuation
+before their callback. Inputs and displaced local owners remain in C until the
+callback decision, then close with its error preserved. The generated edge fact
+describes the physical result and the unavailable old input owner separately;
+a fresh value or explicit NULL at an aliased home cannot restore that old owner.
+The constructor checks the declared source-callback POST recipe and both compute
+PRE and committed POST for an ordinary exception handler. A terminal fact does
+not claim whole-handler purity or authorize a debugger transfer.
+
 ## Executable position and source context
 
 `f_lasti`, branch targets, disassembly and INSTRUCTION events use compact real
@@ -94,6 +104,13 @@ activation and restores the parent on exit. The error recipe therefore survives
 a nested error during outer result retirement. Frame-object allocation failure
 can still record it. The optional frame-object source cursor supplies display
 and traceback state; it is not the only copy of handler selection.
+
+The activation also holds a synchronous observer record for the actual frame,
+site, edge, phase, event and redirect generation. Callback entry saves and
+replaces that record; exit restores it before closing a callback result.
+Unsupported callbacks have no transfer authority. Nested activation lookup
+requires the actual frame and event; a changed generation invalidates the old
+outcome, so only a separately proved fresh PRE landing can authorize a jump.
 
 A separate cold frame-object record carries expected real LINE landing,
 previous source line and monitoring epoch. Public f_lineno remains display/cache
@@ -141,5 +158,6 @@ JIT recovery maps remain separate from these baseline contracts.
 Debugger owner recipes remain bounded: NULL requirements and actual iterator
 generation must be proved before admitting a target. Remote layout is versioned
 and target-described; remote/GDB active source-cursor display is a separate
-consumer port still pending. The current integration must complete its native
-observer gates, broad repair and parity campaign before promotion.
+consumer port still pending. Bounded PRE restoration and exact real LINE
+identity are the current setter authority; SOURCE_POST and yield transfers
+need their own stopped-state proof. Broad repair and parity remain open.

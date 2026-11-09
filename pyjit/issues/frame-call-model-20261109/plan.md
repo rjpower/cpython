@@ -38,41 +38,54 @@ permanent experiment switches or weakened correctness assertions.
 
 ## Current execution
 
-Engineering `4a1f70fcef49bccf210180fa69cfc4fb409a80cd` integrates bounded PRE
-cancellation, derived per-named-local save obligations and real-LINE identity.
-Different locals restore independently; nested saves of the same local remain
-ordered. A repeated current source line preserves its actual phase and PC,
-including the later with-exit operation on the header's line. The previous
-first-word selection could reenter the scope indefinitely; the bounded probe and
-unchanged original fixture now pass. The old arbitrary stack-projection capacity
-test is ported to prove one successful 101-argument call after cancellation.
+Engineering `c1424be11db46b5d9e2aca84bcc96ddad6a7ea62` integrates terminal
+observer output commits and saved-local restoration on the existing frame ABI.
+Generated terminal providers publish final homes and continuation before a
+callback; detached owners remain in C through retirement. Activation-owned
+scopes identify the actual frame, site, phase, edge and redirect generation.
+Restoration uses explicit source-home actions, preserves genuinely unbound
+locals, and rejects targets that would read those locals unchecked. Physical
+replacement values never resurrect an old saved-owner obligation.
 
-Release/debug each check 117 modules and pass 125 focused tests with one skip.
-The renamed frame-model identity/large-window gate passes two tests each. The
-last wide gate, before that test-only port, runs 999 tests per profile and still
-fails four modules: monitoring, pdb, peepholer and sys_settrace. Trace errors
-fall from 65 to 38; 21 old diagnostic assertions and the now-ported capacity
-expectation also fail. Pdb retains two failures/two errors. These focused and
-wide checks do not establish full qualification; golden remains selected.
-The [repair log](qualification-repairs.md) and [fourth report](fourth-integration-report.md)
-retain earlier identities, failures and screens.
+Release/debug builds check 117 modules. Debug passes 363 tests across six core
+modules, with one skip; both profiles pass 64 additional observer/frame tests.
+The 22 selected release ownership/diagnostic tests pass. Owner probes leave no
+survivors after collection, including the formerly stranded FOR result on a
+callback error. The constructor accepts 2,156 valid library files with no new
+rejections. The current release wide check runs 999 tests with 14 skips and
+still fails four modules: monitoring (one error), peepholer (three errors),
+sys_settrace (38 errors), and pdb (two failures/two errors). The 21 obsolete
+diagnostic mismatches are repaired. These checks do not establish full
+qualification; golden remains selected. The [repair log](qualification-repairs.md)
+retains exact receipts and failed attempts.
 
-The latest clean two-pair logging/upstream screen at 4a is 0.838496 (pairs
-0.812193 and 0.865650). The separate 4a two-pair golden screen has logging
-0.585975, nbody 0.999512 and pickle 1.014001. Do not combine campaigns or
-attribute a gain/loss to cold changes. Final two independent six-round parity
-campaigns, full suites, API checks and the unchanged broad screen remain open.
+The current clean two-pair logging/upstream screen is 0.936868 (pairs 0.913258
+and 0.961087). The separate golden screen has logging 0.653035, nbody 1.041296
+and pickle 1.026258. Four-pair repeats give nbody 1.019904 and pickle 1.021510.
+Warmed PMU counts show logging/upstream cycles 0.918210 and instructions 1.044970;
+nbody/golden cycles 1.040876 and instructions 1.033309. The [sixth report](sixth-integration-report.md)
+owns current evidence and limits. Do not combine campaigns or attribute changes
+to cold code without an experiment. Final parity campaigns, full suites, API
+checks and the unchanged broad screen remain open.
 
-The [cold checkpoint review](cold-checkpoint28-review.md) ranks eight actions.
-Three parallel implementation streams now address saved-local restoration,
-outputs committed before observation, and shared encoded POST ownership proof.
-The FOR callback-error probe confirms an unpublished result leak on candidate
-and upstream; reproducing upstream's bug is not a compatibility requirement.
-Exact physical home mapping and old-owner provenance remain separate facts.
-The quiet screen is complete and the source freeze is released for the three
-reviewed streams under explicit file/interface ownership. The
-[debugger design](../../design/debugger-frame-transfers.md)
-distinguishes the implemented PRE rules from these next capabilities.
+The [next independently reviewed packet](next-provider-stopped-state-peer-review.md)
+uses one request-owned stopped-state view for exact committed source edges and
+the existing restoration Plan. It will separate physical continuation, normalized
+source landing, reported monitoring event and actual owner edge. Extend the
+terminal contract to jumps and iterator retirement; keep legacy uncommitted
+source hooks unauthorized. The first consumer scope has inherited exception
+context, a save-empty target, no incoming target scratch and no token-creating
+transfer. Yield cancellation is a separately gated pre-suspension adapter;
+retained protocol roots and caught exits require their own proofs. The basic
+performance/profile capture is complete. The producer stream is admitted;
+the consumer stream first investigates actual each-LINE callback stops: a
+native compile inventory finds no source-only records in any of its six
+unchanged fixtures. Event ordinals alone do not establish SOURCE_POST.
+A bounded 84-row probe confirms the repeated list/set/dict stops occur inside
+backward JUMP callbacks. The [amended consumer](stopped-state-actual-jump-amendment.md)
+is now admitted: a positively declared owner-neutral committed edge supplies
+the shared stopped view and restoration Plan. Public LINE spelling grants no
+authority; SOURCE_POST and yield consumers remain separate.
 
 ## Parallel responsibilities
 
@@ -90,17 +103,19 @@ Reviewers inspect actual source and measured evidence after each integration.
 
 ## Work sequence
 
-1. Complete the reviewed saved-local action and terminal-output contracts in
-   disjoint files. Agree generated declarations and shared cold decoders first;
-   no provider advertises POST before its outputs and continuation are committed.
-2. Use one generator final-output convention and one constructor ownership
-   worklist. Preserve unrelated ordinary generated handlers byte for byte.
-   Migrate the finite composed/direct provider census explicitly; do not turn
-   the old generic callback marker into a terminal action blindly.
-3. Run minimal host generator/constructor checks, then focused release/debug
-   frame, observer and generator tests. Post-review actual source and results,
-   integrate, and take basic logging/nbody/pickle screens. Repair remaining
-   restoration/context/phase cases without weakening target availability.
+1. Integrate explicit owner-edge terminal facts, source-publication authority,
+   terminal jumps and iterator retirement under the reviewed shared generator
+   convention. Preserve unrelated ordinary handlers. Actual owner site and
+   reported monitoring source are separate coordinates.
+2. Diagnose each failing debugger phase at its actual PC; admit the stopped-state
+   consumer only with a concrete witness and positive publication authority.
+   Reuse the existing Analysis/Plan and constructor decoder. Complete retained
+   protocol roots, caught exits and yield cancellation through reviewed recipes;
+   do not turn the generic callback marker into a terminal action blindly.
+3. Use minimal host checks, then focused release/debug frame/observer/constructor
+   gates. Independently review the actual diff and results, integrate, and take
+   basic logging/nbody/pickle screens. Use current profiles to select throughput
+   work without weakening target availability or changing the workloads.
 4. Run full release/debug suites and API checks at the coherent integration,
    rebuild stats and run the unchanged 29-workload screen. Repeat material losses
    and profile the current native image before another hot-path optimization.

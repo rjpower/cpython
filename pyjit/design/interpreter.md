@@ -1,9 +1,8 @@
 # Register interpreter: current contract
 
-This page describes the active frame/call source on branch
-`pyjit/frame-call-model-20261109`, through `4a1f70fcef4`. Its semantic-completion,
-initialized-arena and bounded observer repairs are not a fully
-qualified replacement for golden `0765e9be47f`. See [status](../STATUS.md), the
+This page describes the register interpreter integrated at `c1424be11db4`.
+Its bounded observer and debugger contracts still require broad qualification.
+See [status](../STATUS.md), the
 [active packet](../issues/frame-call-model-20261109/plan.md), and the immutable
 [baseline report](../bench/results/interpreter-parity-20261108.md).
 
@@ -13,7 +12,7 @@ runtime. Its owning homes and release protocol implement RC; Python does not
 require immediate finalization. [Lifetime policy](lifetimes-and-language-semantics.md)
 separates language behavior from that implementation choice.
 The [debugger transfer model](debugger-frame-transfers.md) defines explicit
-entry, cold context/owner proofs and the remaining restoration work.
+entry, cold context/owner proofs and bounded saved-local restoration.
 
 ## Entry and dispatch
 
@@ -33,10 +32,12 @@ flowchart TD
     entry[Evaluator activation] --> word[Real executing IR word]
     word --> handler[Generic or specialized semantic operation]
     word --> wrapper[Instrumented wrapper]
-    wrapper --> observer[Callback and redirect validation]
-    observer --> handler
-    handler --> ordinary[Publish ordinary result or branch]
-    ordinary --> word
+    wrapper --> pre[PRE callback where required]
+    pre --> handler
+    handler --> ordinary[Publish result or branch]
+    ordinary -->|declared terminal| post[Committed callback]
+    ordinary -->|otherwise| word
+    post --> word
     handler --> child_entry[Commit a child and its result recipient]
     child_entry --> word
     handler --> completion[Complete loop, delegation or return]
@@ -149,8 +150,12 @@ they do not invent an INSTRUCTION event or a virtual public offset.
 
 The constructor's completion proof follows normal/error/source-callback edges,
 tracks unavailable original homes and definite NULL, and rejects required reads
-of retired owners. Actual exception/lasti definitions and fresh physical output
-locations matter; frontend writes and pass-through shapes alone are insufficient.
+of retired owners. Generated terminal observer facts distinguish the committed
+physical output from a retired old owner at the same home. A source-only
+callback error uses the declared POST state; an ordinary exception recipe
+covered by that word must work for both compute PRE and observer POST. Actual
+exception/lasti definitions and fresh physical output locations matter;
+frontend writes and pass-through shapes alone are insufficient.
 Implicit RERAISE anchors may be semantically unread, while saved locals that a
 handler restores remain required. This preserves the selected PEP479 and
 inlined-comprehension error semantics without a second unwind engine.
@@ -166,7 +171,7 @@ it before callbacks and accepts only matching continuation/configuration;
 reconfiguration produces a fresh landing event without replaying old edges.
 Exact relaxation adapters normalize LINE landings while their helper words keep
 real INSTRUCTION events. Setter, exception and frame-clear paths invalidate the
-handoff before callbacks. These observer repairs remain under integration.
+handoff before callbacks. Broader event parity remains under qualification.
 
 ## Limits
 

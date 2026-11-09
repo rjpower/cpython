@@ -35,7 +35,7 @@ a source-only callback is not the proof: the published PC can be a predecessor
 and the source event can have a different EH recipe. Initially leave that case
 on the existing path rather than treating logical and physical phases alike.
 
-This should address many `JumpStackModelTestCase.test_jump_to_running_line`
+This should address many `JumpFrameModelTestCase.test_jump_to_running_line`
 cases without touching structured contexts. Add real-LINE same-PC cases inside
 try, except and with, verifying locals and `sys.exception()`; retain a source-only
 same-offset negative/control to enforce the phase distinction. A's generation

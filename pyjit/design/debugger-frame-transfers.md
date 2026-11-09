@@ -1,7 +1,6 @@
 # Debugger entry and frame transfers
 
-This describes engineering source `4a1f70fcef4` on
-`pyjit/frame-call-model-20261109`. Focused checks pass; full qualification and
+This describes the contract integrated at `c1424be11db4`. Full qualification and
 the broader transfer model remain open. See [status](../STATUS.md), the
 [frame ABI](call-and-frame-lifetimes.md), [observer contract](handler-and-observer-contract.md)
 and [repair evidence](../issues/frame-call-model-20261109/qualification-repairs.md).
@@ -47,11 +46,12 @@ flowchart TD
     identity -->|no| analyze[Decode final IR, source metadata and canonical EH]
     analyze --> needs[Derive incoming owner requirements]
     analyze --> context[Derive handled context and saved-owner origins]
-    needs --> plan[Select target and preserve-home plan]
+    needs --> plan[Select target, preserve homes and saved bindings]
     context --> plan
     plan --> warning[Warn and reprove after callback-capable preparation]
-    warning --> detach[Detach surplus owners without callbacks]
-    detach --> commit[Commit continuation, cursors and redirect generation]
+    warning --> detach[Detach surplus owners and restore sources without callbacks]
+    detach --> restore[Install saved bindings]
+    restore --> commit[Commit continuation, cursors and redirect generation]
     commit --> retire[Close detached owners; perform no later frame writes]
 ```
 
@@ -86,8 +86,13 @@ the obligation active. Ambiguous joins, lost origins and repeated active produce
 cannot establish an empty column. Request allocation products are checked before
 mutation. These facts come from actual words, not trusted compiler annotations.
 
-`RegisterResumePlan` carries a preserve-home bitmap. Its single application path
-detaches surplus scratch owners, commits state, then closes the detached owners.
+`RegisterResumePlan` carries a preserve-home bitmap and saved-local restoration
+actions. Its single application path detaches surplus scratch and displaced
+local owners, installs bindings, commits state, then closes detached owners.
+An actual restored NULL binding is admitted only when each read before a
+guaranteed binding definition uses an unbound-binding check. A physical
+nullable input is not such a check: NULL can mean deletion or absent optional
+self in a handler ABI.
 Warning callbacks can redirect the frame: generation detects that intent and
 cancels the outer request. Otherwise the plan is reproved against current state.
 Closing callbacks never encounter subsequent writes from the old transaction.
@@ -97,7 +102,7 @@ Closing callbacks never encounter subsequent writes from the old transaction.
 | Phase or state | Current proof and behavior |
 | --- | --- |
 | Real LINE identity | Requested resolved line equals the actual current LINE wrapper's line; exact observed frame; no source/error, pending-child or suspended phase. Preserve current PC, all owners and exception links; commit generation. Earlier words sharing that line do not restart the expression or scope. |
-| Cancellable PRE operation | A centralized phase factory proves the actual real LINE before its handler. Current expression inputs may be detached when the target needs none and all saved-local columns are positively empty; handled context and independently proved roots must survive. Source-only targets do not acquire this permission. |
+| Cancellable PRE operation | A centralized phase factory proves the actual real LINE before its handler. Current expression inputs may be detached when the target needs none; proven saved named locals may be restored from per-local chains. Handled context and independently proved roots must survive. Source-only targets do not acquire this permission. |
 | INHERITED context | Existing physical incoming-owner/NULL proof. Bounded FOR-body replay still requires an empty exception table. Ordinary protected try need not create a caught context. |
 | Same CAUGHT context | Backward replay preserves actual saved-previous owners and every parent; path/dominance proof excludes read, replacement, pop and reentry. Active exception links remain untouched. |
 | Pending ignored Python call | Caller changes its continuation only; overlapping child owners remain intact until successful child completion. Used-result, external and protected child cases still need their own plans. |
@@ -110,21 +115,19 @@ exception. It does not implement caught exit.
 
 ## Remaining model work
 
-The current PRE plan distinguishes disposable expression inputs from saved-local
-obligations. It cannot yet execute restoration actions to leave an active
-comprehension. The next plan restores actual saved bindings before committing
-the target, then retires displaced owners after the whole frame is valid.
+The bounded PRE plan distinguishes disposable expression inputs from saved-local
+obligations and restores proven bindings before committing the target. It retires
+displaced owners after the whole frame is valid.
 Retained outer-with/loop roots need their own availability proof. Source POST,
 protected source-only destinations, yield-before-suspension and an actually
 suspended frame remain distinct phases with different owner contracts.
 
-Observed providers must commit outputs before advertising POST. The cold review
-found FOR-body and OR_POP results still held in C across callbacks, followed by
-old output stores. The next generator convention publishes a complete semantic
-outcome and forbids stores after a redirect; constructor and debugger proofs
-must use that same physical mapping. A fresh value at an old input's home does
-not restore the old owner's provenance. The current implementation does not
-claim these provider repairs are complete.
+Declared terminal providers now commit FOR body and OR_POP outputs before their
+callbacks. The constructor checks the generated per-edge physical mapping and
+old-owner cuts. A fresh value at an old input's home does not restore its
+provenance. This fact does not itself authorize setter SOURCE_POST. That transfer
+needs a stopped-state proof of the provider edge, owner lineage and target
+context; yield and suspended-frame transfers remain separate.
 
 Caught exit needs the target's actual exception-restoration link. A Python
 callback may hold the target's previous context in its own saved-previous cell;

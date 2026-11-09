@@ -701,3 +701,52 @@ TOP-only matching restore conditions explicit. Actual encoded producer and
 transport roles audited; same-caught roots remain independently required.
 Restoration/POST/context-exit/suspension implementation not admitted by review.
 Runtime remains frozen for root quiet measurements.
+
+A docs-only POST phase proposal ready: one cold scoped observer context with
+actual site/next/outcome, no hot frame or dispatch work. Audit distinguishes
+consuming branch POST, completion PRE/POST, pre-suspension YIELD and actual
+suspension. OR_POP post-callback result stores identified as explicit admission
+blocker; yield PC-only test must become generation-aware typed result before
+allowing cancellation. Runtime remains timing-frozen. B peer requested.
+
+A independent actual PRE cancellation source/test peer approved: signed SAVE
+origins, top-only matching restoration, active-on-loss, centralized typed PRE
+phase and caught roots verified; four focused tests include genuineNULL outer
+binding and newerredirect during detached close. Native root-owned. Additional
+POST census identifies FOR body result publication after callback alongside
+OR_POP; terminal generator commit proposal in preparation, no runtime edits.
+
+Native28 exposed global saved-local TOP as overly strong: independent local
+restorations commute in normal/EH order. A acknowledged missed source condition;
+per-distinct-local active-top model independently approved in direction, with
+matching-youngest only within same local and per-column exact joins. Source
+re-review pending. Terminal observer commit proposal written separately; FOR
+unpublished item leak confirmed by root on candidate and upstream, fixed-source
+filtered weakref probe retained. No A runtime edits in this proposal phase.
+
+Coordinator source29 review: A terminal emitter/scopes/error-preserving closes,
+B saved-local actions, H generated edge decoder/selected-home constructor clients
+and encoded witnesses are source-ready, not native-qualified. Host3 generator
+methods/mutations pass; full in-memory generation changes10 instrumented handlers
+and leaves262 ordinary blocks byte-identical. Root owner-alias/deferred-spelling
+findings are repaired. Root fixture inventory on existing4a identifies OR_POP
+A==B; cold tests now explicitly select fresh A and actual taken targets.
+
+Native29 is held for A's real saved-NULL target safety finding: restoring genuine
+unbound state can reach an unchecked/folded local read. B/H implement a bounded
+binding proof on existing sparse edges, ordinary PRE versus source POST, with
+actual checked reads and guaranteed-bound definitions. Physical write alone is
+not a non-NULL binding proof. Root explicitly admitted H header helpers and B
+frameobject/test changes; all other runtime source is frozen. No native29 build,
+regeneration or new performance result yet. The21 diagnostic-only testport remains
+a canonical patch; root reviewed its preserved errors/side effects. C docs5840512
+and Loom plan29/report10 describe the measured4a checkpoint, not this live diff.
+
+A next-provider preparation (read-only during native29): concrete plan in
+next-terminal-provider-implementation-plan.md selects owner-neutral jumps and
+POP_ITER first, typed pre-switch YIELD_READY separately, whole legacy completion
+providers later. B caught public-event versus owner-edge conflation before any
+source edit; refined single marker has explicit edge literal plus destination
+shape proof. H peers zero-output format facts; B peers physical-next/publication
+interface. First SOURCE_POST consumer must not mutate Analysis token-parent
+tables from a copied row. No next-packet runtime source is admitted or changed.

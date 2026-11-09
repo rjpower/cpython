@@ -232,3 +232,39 @@ The `fifth-engineering-{release,debug}-identity.log` files identify clean4a and
 The separate `fifth-engineering-golden/` has logging0.585975, nbody0.999512,
 pickle1.014001. See the [fifth report](fifth-integration-report.md) for pair values,
 limits and the next three-stream packet. Engineering timing is not final parity.
+
+## Terminal observers and saved-local restoration: c1424be11db
+
+Independent source and result review admitted this bounded engineering commit.
+Terminal providers publish outputs and continuation before observation, retain
+detached owners in C, and preserve callback errors through retirement. Explicit
+saved-local actions preserve genuine NULL bindings; an all-alias target proof
+rejects unchecked reads. One generated outcome declaration feeds the existing
+constructor ownership worklist, with separate compute-PRE and callback-POST
+facts. Generated changes affect ten instrumented providers; 262 ordinary
+handler bodies remain unchanged.
+
+Evidence is under `build/pyjit-link-wave1/frame-call-model-20261109/`:
+
+- `ownership29-dependencies-*`: corrected release build, three formerly failed
+  methods passing, 2,156 valid compiler-corpus files and 11 intentionally invalid
+  files. The earlier v2 retry used stale `codeobject.o`; missing IR header
+  dependencies are now repaired in Makefile.pre.in. Retain that failed receipt.
+- `ownership29-final-*`: debug build checks 117 modules; six core modules pass
+  363 tests with one skip. The selected release gate passes 22 tests. Debug
+  ownership probes leave zero survivors from 660 created values; the FOR
+  callback-error probe creates three values and leaves zero, with all three
+  errors caught. Its non-error control also leaves zero survivors.
+- `ownership29-observers-*`: eight modules pass 64 tests on each profile.
+- `ownership29-wide-*`: release runs 999 tests, 14 skips; monitoring has one
+  error, peepholer three, sys_settrace 38, pdb two failures/two errors. The 21
+  diagnostic mismatches are gone. This is not a wide-suite pass.
+- `ownership29-committed-*`: release/debug identities rebuilt after commit;
+  each checks 117 modules. Stats still identifies the older 192 image.
+
+The [final source review](native29-final-source-review.md) and
+[cold source/result review](native29-cold-source-review.md) retain the exact
+scope. SOURCE_POST setter authority, yield cancellation, retained roots and
+caught exits remain open. The next packet is independently reviewed in
+[provider/stopped-state peer review](next-provider-stopped-state-peer-review.md).
+No full qualification or new performance result is claimed by this repair gate.

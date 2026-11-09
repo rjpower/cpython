@@ -1,50 +1,42 @@
 # Project status
 
-Active work: the [frame/call model redesign](issues/frame-call-model-20261109/plan.md)
-continues in the existing runtime checkout on branch
-`pyjit/frame-call-model-20261109`, through engineering `4a1f70fcef4`.
-The frame stack, compact IR and semantic completion model includes explicit
-debugger entry, cold inherited/same-caught transfer plans, per-local saved-binding
-obligations and bounded PRE cancellation. Real-LINE identity preserves the
-actual current operation, fixing a repeated with-entry loop. It is not qualified
-or promoted. Release/debug each check 117 modules and pass 125 focused tests;
-the renamed frame-model identity/large-window gate passes two tests each.
-The latest wide check runs 999 tests per profile before that test-only port;
-four modules still fail. Trace errors fall from 65 to 38. The
-remaining work concerns observer output commits, saved-local restoration and
-their shared encoded ownership proof.
-The last full release diagnostic belongs to `87f13087ed9`: 54,504 tests, 13 failed
-modules, 126 failures and 99 errors. The
-[fifth report](issues/frame-call-model-20261109/fifth-integration-report.md)
-owns the latest screen; the [repair log](issues/frame-call-model-20261109/qualification-repairs.md)
-owns later gates. Final release/debug qualification remains open.
+The active [frame/call redesign](issues/frame-call-model-20261109/plan.md)
+is integrated through engineering `c1424be11db4`, with further reviewed work
+in the existing runtime checkout. It is not fully qualified or promoted.
+The frame stack, compact register IR and initialized arena now have terminal
+observer output commits, activation-owned phase scopes and explicit saved-local
+restoration. Genuine unbound bindings remain unbound; unsafe target reads refuse.
+The [sixth report](issues/frame-call-model-20261109/sixth-integration-report.md)
+owns current qualification and performance evidence.
 
-The latest matched logging/upstream screen at `4a1f70fcef4` is **0.83850× elapsed
-time**, about 16% faster, over two balanced pairs. This does not replace the final
-parity campaigns. The separate two-pair golden screen has logging 0.58598,
-nbody 0.99951 and pickle 1.01400. Nbody's earlier 5.6% loss does not repeat;
-pickle remains in the broad follow-up screen. The stable
-existing-counter census shows fewer nbody handlers with otherwise equal material
-routes, not a native cost attribution. Older PMU evidence belongs to the older
-87 image. The previous broad screen repaired material unpack, float and deepcopy
-losses; the full broad rerun remains open. See the
-[second integration report](issues/frame-call-model-20261109/second-integration-report.md)
-for protocols, retained failures, profiles and qualification limits.
+Release/debug builds each check 117 modules. Debug passes 363 core tests with
+one skip; each profile passes 64 further observer/frame tests. The 22 selected
+release constructor/diagnostic checks and eventual ownership probes pass.
+The compiler accepts 2,156 valid library files without new rejections.
+The current 999-test release wide gate still fails four modules: monitoring
+(one error), peepholer (three), sys_settrace (38), pdb (two failures/two errors).
+The old 21 diagnostic mismatches are repaired. The last full release diagnostic
+remains 87: 54,504 tests and 13 failed modules. Final full suites, stats and
+API checks remain open. Golden stays immutable and selected.
 
-Qualification repair `37a67b9d155` is integrated after independent source and
-result review. Fused branches now describe both source edges using their actual
-encoded control operation; repeating a real LINE preserves protected owners and
-exception state. Compact-format, frame-size and frozen-embedding consumers are
-updated. Release/debug each pass 1,027 tests across eight affected modules;
-2,152 valid library files compile without rejection. Cache magic is 64416.
-These are focused checks, not full qualification. Explicit entry, bounded context
-transfers and PRE cancellation are integrated. Three workers now implement
-terminal observer commits, saved-local actions and shared cold proof;
-source-aware tooling and semantic owner retirement remain open. See the
-[qualification repair log](issues/frame-call-model-20261109/qualification-repairs.md).
-The remaining owner-retirement model needs explicit semantic transitions;
-ordinary thread returns require scratch homes cleared. Seven canonical design
-diagrams render and have been inspected. Golden remains immutable and selected.
+The current clean two-pair logging/upstream screen is **0.93687× elapsed time**,
+about 6% faster. A separate golden screen gives logging 0.65303, nbody 1.04130
+and pickle 1.02626; four-pair repeats give nbody 1.01990 and pickle 1.02151.
+Final parity campaigns and the unchanged broad screen remain open. Current
+warmed PMU counts show logging/upstream cycles 0.91821 and instructions 1.04497;
+nbody/golden cycles 1.04088 and instructions 1.03331. Flat profiles locate method
+lookup, calls/retirement and numeric/local paths; they do not assign causal
+speedup budgets. See the [performance review](issues/frame-call-model-20261109/sixth-performance-review.md).
+
+Next: explicit actual-owner edges and positive source-publication authority for
+terminal jumps/iterator retirement, then a shared stopped-state consumer backed
+by actual failing callback phases. The six each-LINE fixtures have no source-only
+records; a bounded native probe locates their repeated refusals in backward-jump
+callbacks. Public line events do not independently establish a PRE state.
+Retained protocol roots, caught exits, yield cancellation and complete observer
+qualification remain work in the [repair plan](issues/frame-call-model-20261109/plan.md).
+The five current design specifications are synchronized to c142; both changed
+Mermaid diagrams render and have been inspected.
 
 The previous [execution-boundary and operand-mode packet](issues/execution-boundaries-20261108/plan.md)
 implements the first three bounded cold-review recommendations at runtime

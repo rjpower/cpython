@@ -1,12 +1,9 @@
 # Register IR: current contract
 
-This describes the active 2026-11-09 frame/call source in
-`build/worktrees/execution-boundaries-20261108`, branch
-`pyjit/frame-call-model-20261109`, through `4a1f70fcef4`. Semantic completion,
-initialized frame storage and bounded observer repairs are integrated; broader
-debugger qualification remains open. This is a source contract, not full qualification or
-parity evidence. [Status](../STATUS.md) and the
-[active packet](../issues/frame-call-model-20261109/plan.md) track admission.
+This describes the register interpreter integrated at `c1424be11db4`.
+It defines the executable and ownership contract; [status](../STATUS.md)
+tracks qualification. The bounded observer and debugger rules below do not
+authorize every source transfer.
 The immutable golden `0765e9be47f`, qualified at functional `0267d428808`, remains
 the [baseline](../bench/results/interpreter-parity-20261108.md).
 
@@ -151,9 +148,15 @@ fold is allowed, not where every output is physically written.
 Cold consumers share `_PyIR_Outcome`, `_PyIR_ReadsHome`, `_PyIR_DefinesHome` and
 `_PyIR_NullableInputs` from `pycore_ir_outcomes.h`. They distinguish explicit
 source fields from untouched window holes, preserve through owners and SWAP
-provenance, and admit only audited nullable roles. The constructor checks
-completion/error ownership, including exceptional source-edge callbacks;
-these facts are not a general bytecode type verifier or native recovery map.
+provenance, and admit only audited nullable roles. A generated per-edge
+`observer_outcome` declares which terminal observer sees committed output;
+unmarked handlers receive no POST claim. `_PyIR_ObservedHomes` decodes the
+physical result and retired input homes, keeping a new value or explicit NULL
+separate from an old input's unavailable owner. The constructor checks a
+declared source callback's POST exception recipe and both compute PRE and
+observer POST for ordinary exception coverage. FOR_ITER's temporary A must be
+its actual B+2 item home; a local A moves that item, and IR_NO_DST discards it.
+These checks are not a general bytecode type verifier or native recovery map.
 
 ## Explicit boundary
 

@@ -1,10 +1,8 @@
 # Calls, frame homes and observation
 
-This is the active 2026-11-09 frame/call source contract on branch
-`pyjit/frame-call-model-20261109`. Engineering commit `4a1f70fcef4` includes
-completion, arena, observer and bounded debugger repairs; full qualification
-remains open. The immutable golden
-`0765e9be47f` retains its separate functional qualification at `0267d428808`.
+This is the frame/call contract integrated at `c1424be11db4`. Its bounded
+observer and debugger rules remain subject to broad qualification. The immutable
+golden `0765e9be47f` retains its functional qualification at `0267d428808`.
 See [status](../STATUS.md), the [active packet](../issues/frame-call-model-20261109/plan.md)
 and the [baseline report](../bench/results/interpreter-parity-20261108.md).
 
@@ -176,6 +174,13 @@ nullable roles, fresh physical definitions and exceptional source callbacks;
 implicit semantically unread RERAISE anchors can be NULL without discarding
 saved locals that an enclosing handler restores.
 
+Declared terminal branch observers publish their actual outputs before a
+callback. FOR body publication writes the item at B+2 or moves it to a folded
+local; an OR_POP drop writes an explicit NULL. Consumed inputs and displaced
+local owners stay in C until the callback decision, then retire with the
+callback exception preserved. The generated edge fact and constructor check
+physical outputs separately from unavailable old input owners.
+
 A yielded outgoing owner and the next incoming send recipient are different
 roles. For IR_NO_DST input, VM SEND first detaches its source transfer cell,
 commits the resumed child's frame/exception/recursion links, then closes the
@@ -192,7 +197,10 @@ while detached windows are NULL. A decline preserves its inputs; a committed
 operation cannot replay a provider after effects.
 
 The cold debugger recipe validates incoming owners/NULL requirements before
-changing state. An admitted ignored-result caller redirect while its VM child
+changing state. Bounded PRE transfers restore saved named-local bindings from
+surviving per-local LOAD_FAST_AND_CLEAR token chains, including a genuinely
+unbound NULL. A target that reads such a local without an actual unbound check
+is refused. An admitted ignored-result caller redirect while its VM child
 is active records a pending target without touching the overlapping child-owned
 window. Completion clears the flag, publishes the selected continuation and
 retires surplus caller scratch only after child retirement. Exceptional child
@@ -213,6 +221,10 @@ cached continuations or an old source-error recipe. Public line getters and
 lazy frame-object creation do not express redirect intent.
 
 Source-only events use immutable edge metadata and a frame-object display cursor.
+Scoped observer records bind a callback to its frame, site, edge, phase and
+redirect generation. They prevent an unsupported hook from borrowing another
+callback's authority. The setter currently uses bounded PRE plans and exact
+real LINE identity; a SOURCE_POST record alone does not admit a jump.
 Pending source errors belong to the evaluator activation, so nested finalizer
 entry cannot replace the outer handler recipe even when no frame object could
 be allocated. Cold LINE handoff has its own landing/previous-line/epoch fields;

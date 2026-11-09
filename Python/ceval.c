@@ -2969,14 +2969,18 @@ clear_gen_frame(PyThreadState *tstate, _PyInterpreterFrame * frame)
     ((_PyThreadStateImpl *)tstate)->generator_return_kind = GENERATOR_RETURN;
 }
 
-_PyIRStepResult
-_PyEval_CompleteStep(PyThreadState *tstate, _PyInterpreterFrame *frame,
-                     _PyInstr *site, int base, int destination,
-                     _PyInstr *exit, PyValue value, enum _PyIRStepKind kind)
+static inline Py_ALWAYS_INLINE _PyIRStepResult
+complete_step_impl(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                   _PyInstr *site, int base, int destination,
+                   _PyInstr *exit, PyValue value, enum _PyIRStepKind kind,
+                   bool canonical_input)
 {
-    /* This out-of-line owner accepts native results as well as canonical
-     * homes. Keep publication out of the register-only handler body. */
-    value = _PyValue_Publish(&value);
+    if (canonical_input) {
+        assert(_PyValue_IsHome(value));
+    }
+    else {
+        value = _PyValue_Publish(&value);
+    }
     PyValue *window = frame->base + base;
     PyValue receiver = window[0];
     PyCodeObject *code = _PyFrame_GetCode(frame);
@@ -3058,6 +3062,17 @@ _PyEval_CompleteStep(PyThreadState *tstate, _PyInterpreterFrame *frame,
 }
 
 _PyIRStepResult
+_PyEval_CompleteStep(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                     _PyInstr *site, int base, int destination,
+                     _PyInstr *exit, PyValue value, enum _PyIRStepKind kind)
+{
+    /* Native completions still need publication; generator returns arrive
+     * from the emitter's checked canonical input or its Publish fallback. */
+    return complete_step_impl(tstate, frame, site, base, destination, exit,
+                              value, kind, false);
+}
+
+_PyIRStepResult
 _PyEval_CompleteGeneratorReturn(PyThreadState *tstate,
                                 _PyInterpreterFrame *frame, PyValue value)
 {
@@ -3074,9 +3089,13 @@ _PyEval_CompleteGeneratorReturn(PyThreadState *tstate,
     _PyIRWord word = code->co_words[offset];
     int opcode = _PyIR_HandlerBase[IR_HANDLER(word)];
     assert(opcode == SEND || opcode == FOR_ITER);
-    return _PyEval_CompleteStep(tstate, frame, site, IR_B(word), IR_A(word),
-        frame->return_pc + IR_DS(word), value,
-        opcode == SEND ? _PY_IR_SEND : _PY_IR_FOR_ITER);
+    _PyInstr *exit = frame->return_pc + IR_DS(word);
+    if (opcode == SEND) {
+        return complete_step_impl(tstate, frame, site, IR_B(word), IR_A(word),
+                                  exit, value, _PY_IR_SEND, true);
+    }
+    return complete_step_impl(tstate, frame, site, IR_B(word), IR_A(word),
+                              exit, value, _PY_IR_FOR_ITER, true);
 }
 
 void

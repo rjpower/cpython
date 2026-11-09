@@ -122,6 +122,24 @@ class ContractTests(unittest.TestCase):
         self.assertEqual(transfer("STORE_FAST", store_fast, 0, 0, 4), set_null)
         self.assertEqual(transfer("STORE_FAST", store_fast, 0, 0, 5), preserve)
 
+        pop_top = (4, 0, 0, 0)
+        row = BY_NAME["POP_TOP"]
+        self.assertEqual(row.roles, (_opcode.IR_ROLE_IN0,
+                                     _opcode.IR_ROLE_NONE,
+                                     _opcode.IR_ROLE_NONE,
+                                     _opcode.IR_ROLE_NONE))
+        self.assertEqual((extent(row.reads, 0), extent(row.writes, 0),
+                          extent(row.through, 0)), (1, 0, 0))
+        self.assertIsNone(row.twin)
+        self.assertEqual(transfer("POP_TOP", pop_top, 0, 0, 4), set_null)
+        self.assertEqual(transfer("POP_TOP", pop_top, 0, 0, 5), preserve)
+        # Successive retirements retain each other's NULL facts.
+        self.assertEqual(transfer("POP_TOP", (5, 0, 0, 0), 0, 0, 4), preserve)
+        self.assertEqual(transfer("POP_TOP", (5, 0, 0, 0), 0, 0, 5), set_null)
+        self.assertEqual(transfer("POP_TOP", (0, 0, 0, 0), 0, 0, 4), unknown)
+        self.assertEqual(transfer("POP_TOP", (10, 0, 0, 0), 0, 0, 4), unknown)
+        self.assertEqual(transfer("POP_TOP", pop_top, 0, 1, 4), unknown)
+
         for_iter = (6, 4, 0, 1)
         self.assertEqual(transfer("FOR_ITER", for_iter, 1, 1, 4), set_null)
         self.assertEqual(transfer("FOR_ITER", for_iter, 1, 1, 5), set_null)
@@ -136,6 +154,64 @@ class ContractTests(unittest.TestCase):
         load_global = (5, 0, 0, 0)
         self.assertEqual(transfer("LOAD_GLOBAL", load_global, 0, 0, 6), preserve)
         self.assertEqual(transfer("LOAD_GLOBAL", load_global, 1, 0, 6), unknown)
+
+    def test_call_normal_physical_transfer(self):
+        testapi = import_helper.import_module("_testinternalcapi")
+        named = {**opcode.opmap, **opcode._specialized_opmap,
+                 **opcode._ir_opmap}
+        # Pin the finite family audited for success-only window retirement.
+        calls = {
+            "CALL", "INSTRUMENTED_CALL", "CALL_BOUND_METHOD_EXACT_ARGS",
+            "CALL_PY_EXACT_ARGS", "CALL_TYPE_1", "CALL_STR_1", "CALL_TUPLE_1",
+            "CALL_BUILTIN_CLASS", "CALL_BUILTIN_O", "CALL_BUILTIN_FAST",
+            "CALL_BUILTIN_FAST_WITH_KEYWORDS", "CALL_LEN", "CALL_ISINSTANCE",
+            "CALL_LIST_APPEND", "CALL_METHOD_DESCRIPTOR_O",
+            "CALL_METHOD_DESCRIPTOR_FAST_WITH_KEYWORDS",
+            "CALL_METHOD_DESCRIPTOR_NOARGS", "CALL_METHOD_DESCRIPTOR_FAST",
+            "CALL_ALLOC_AND_ENTER_INIT", "CALL_PY_GENERAL",
+            "CALL_BOUND_METHOD_GENERAL", "CALL_NON_PY_GENERAL",
+        }
+        self.assertEqual(calls, {name for name, row in BY_NAME.items()
+                                 if row.base == opcode.opmap["CALL"]}
+                         | {"INSTRUMENTED_CALL"})
+        unknown = (2, -1)
+        set_null = (1, -1)
+
+        def transfer(name, dst, home, *, argc=1, encoded_arg=None,
+                     edge=0, base=4):
+            if encoded_arg is None:
+                encoded_arg = argc
+            return testapi.ir_normal_physical_transfer(
+                named[name], dst, base, encoded_arg, 0,
+                argc, edge, home, 2, 10)
+
+        for name in sorted(calls):
+            argc = 2 if name == "CALL_ISINSTANCE" else 1
+            with self.subTest(handler=name):
+                # A new result at BASE is a value, not a known NULL.
+                self.assertEqual(transfer(name, 4, 4, argc=argc), unknown)
+                for home in range(5, 6 + argc):
+                    self.assertEqual(transfer(name, 4, home, argc=argc),
+                                     set_null)
+                # Folded local and sink destinations drain the whole window.
+                for dst in (0, 4095):
+                    for home in range(4, 6 + argc):
+                        self.assertEqual(transfer(name, dst, home, argc=argc),
+                                         set_null)
+                for home in (3, 9):
+                    self.assertEqual(transfer(name, 4, home, argc=argc),
+                                     unknown)
+                # Direct variants cannot publish to arbitrary scratch A.
+                for dst in (5, 6, 8):
+                    self.assertEqual(transfer(name, dst, 5, argc=argc), unknown)
+                self.assertEqual(transfer(name, 4, 5, argc=argc, edge=1),
+                                 unknown)
+                self.assertEqual(transfer(name, 4, 5, argc=argc,
+                                          encoded_arg=argc + 1), unknown)
+                self.assertEqual(transfer(name, 9, 9, argc=argc, base=9),
+                                 unknown)
+        for name in ("CALL_KW", "INSTRUMENTED_CALL_KW"):
+            self.assertEqual(transfer(name, 4, 5), unknown)
 
     def test_generator_completion_operand_layout(self):
         families = {opcode.opmap['SEND'], opcode.opmap['FOR_ITER']}

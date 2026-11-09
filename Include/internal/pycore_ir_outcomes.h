@@ -545,6 +545,50 @@ _PyIR_NormalPhysicalTransfer(_PyIRWord word, int arg, int edge, int home,
     }
 
     switch (_PyIR_HandlerBase[handler]) {
+        case POP_TOP:
+            /* The emitted scalar retirement detaches scratch A before
+             * closing it. A normal continuation keeps other scratch homes. */
+            if (edge || handler != POP_TOP ||
+                fmt->roles[0] != _PyIR_ROLE_IN0 ||
+                fmt->roles[1] != _PyIR_ROLE_NONE ||
+                fmt->roles[2] != _PyIR_ROLE_NONE ||
+                fmt->roles[3] != _PyIR_ROLE_NONE ||
+                (fmt->flags & (_PyIR_WINDOW | _PyIR_JUMPS | _PyIR_FORWARD)) ||
+                (fmt->effects & _PyIR_PUSHES_FRAME) ||
+                fmt->output_kind != _PyIR_OUTPUT_REGISTER_DST ||
+                reads != 1 || writes != 0 || through != 0 ||
+                IR_A(word) < (uint32_t)nl ||
+                _PyIR_Outcome(word, edge).semantic)
+            {
+                return unknown;
+            }
+            if (home == (int)IR_A(word)) {
+                return (_PyIRPhysicalTransfer){_PyIR_PHYSICAL_SET_NULL, -1};
+            }
+            return preserve;
+        case CALL:
+            /* Every successful vector-CALL route drains its input window:
+             * native retirement clears it, and a Python child consumes the
+             * moved arguments before publishing the parent's recipient.
+             * Direct specializations leave a temporary result at BASE. */
+            if (edge || fmt->roles[0] != _PyIR_ROLE_DST ||
+                fmt->roles[1] != _PyIR_ROLE_BASE ||
+                fmt->roles[2] != _PyIR_ROLE_IMM ||
+                fmt->roles[3] != _PyIR_ROLE_FB ||
+                arg < 0 || arg != (int)IR_C(word) ||
+                reads != arg + 2 || writes > 1 || through != 0 ||
+                fmt->dst != 0 || base < 0 ||
+                fmt->output_kind != _PyIR_OUTPUT_WINDOW_DST_FIRST ||
+                (dst >= nl && dst != IR_NO_DST && dst != base))
+            {
+                return unknown;
+            }
+            if (home >= base && home - base < reads && home != dst) {
+                return (_PyIRPhysicalTransfer){_PyIR_PHYSICAL_SET_NULL, -1};
+            }
+            /* Neither a new result nor an overlapping child's unused tail
+             * supplies a must-NULL fact. */
+            return unknown;
         case COPY:
             if (edge || fmt->roles[0] != _PyIR_ROLE_BASE ||
                 fmt->roles[1] != _PyIR_ROLE_IMM || arg != (int)IR_B(word) ||

@@ -195,13 +195,20 @@ the first with-handler's suppression tail, which jumps49→21. That tail execute
 POP_TOP5 at44, POP_EXCEPT4 at45, POP_TOP3 at46, POP_TOP2 at47, and POP_TOP1 at48.
 The current query treats POP_TOP's input as UNKNOWN; therefore an exception
 ingress that forgets NULL facts cannot re-establish home2 before the meet at21.
-This is a graph/fact hypothesis pending root's fresh 38 mask capture, not a
-reason to bypass that meet or weaken the target requirements.
+Root's fresh 38 capture confirms this merge gap: across_with home2 is physically
+NULL, current must-NULL1 but target must-NULL0, with VALUE1/NULL_ONLY0. The
+completed-comprehension home5 now has current/target must-NULL1 and
+VALUE0/NULL_ONLY1, consistent with its original test passing. The evidence is
+`E11/call38-call-gdb-masks`; no meet or target requirement is bypassed.
 
 The actual generated POP_TOP handler reads A, calls `IR_CONSUME_INPUT(A, value)`
 and closes the detached owner. That macro NULLs a scratch A before closing it;
 a local A keeps its binding. POP_TOP has no specialized family or instrumented
-twin. An audited normal scratch-consumption transfer could therefore establish
-NULL at A while preserving other homes, with ordinary error facts still
-conservative. Such a refinement requires its own actual-source peer and root
-admission; it is not part of the frozen CALL patch.
+twin. Root admitted this audited normal scratch-consumption transfer in the
+same pending 38 packet after H's direction peer: establish NULL at scratch A
+and preserve other scratch homes. The latter is necessary when pc48 retires
+home1 after pc47 has cleared home2. Local A and malformed geometry remain
+UNKNOWN in this first scope, and ordinary error facts stay conservative.
+The N header/contract delta has passed host AST/diff checks and awaits H's
+actual-source peer and root's native retry. It does not generalize from IN0
+roles to unaudited consuming handlers.

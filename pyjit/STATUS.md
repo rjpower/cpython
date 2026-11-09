@@ -1,41 +1,33 @@
 # Project status
 
-The frame/call redesign is integrated through engineering `d7abf803c60` and
-remains unpromoted. Frames use initialized storage and explicit call/result
-ownership; source boundaries live in metadata. The new cold frame analysis
-distinguishes owned-value requirements from proved NULL inputs using the
-existing graph and Plan. Committed37 preserves caught owners across a bounded
-forward same-exception jump. Release/debug build117 modules and pass136 focused
-tests plus four selected originals/controls each;36 passed691 across13 modules.
-The original three peepholer failures and same-except forward witness are repaired.
-See the [thirteenth report](issues/frame-call-model-20261109/thirteenth-integration-report.md).
+The frame/call redesign is integrated through engineering `24f4d270ced` and
+remains unpromoted. Frames use initialized storage and explicit argument/result
+ownership; source boundaries live in metadata. The shared cold analysis now
+recognizes drained successful call windows and named owner retirement, while
+keeping VALUE requirements independent from physical NULL facts. Both builds
+check 117 modules and pass 860 frame/observer tests across 14 modules, with two
+skips each. Four original synchronous jump cases pass unchanged in both roles.
+See the [fourteenth report](issues/frame-call-model-20261109/fourteenth-integration-report.md).
 
-Logging remains faster than upstream in current36's basic check: **0.913965**.
-The final two-campaign six-round gate still needs repeating at final source.
-Four-pair golden means are generators1.037690, coroutines0.948954 and
-nbody0.982620; nbody has one slower pair. The generator loss persists. The latest
-full29 screen belongs to35: **0.954489/golden**, **1.163732/upstream**. Small
-float/deepcopy_memo differences in that screen remain unconfirmed.
+Logging's full timing gate passed at32. Basic37 logging/upstream is 0.907800. Current38's
+four-pair golden ratios are logging 0.572018, generators 0.992624,
+coroutines 0.871626 and nbody 0.975905; the generator loss does not repeat.
+The latest full 29-workload screen belongs to35:
+**0.954489/golden**, **1.163732/upstream**. Final-source logging campaigns and
+broad performance qualification remain required.
 
-Current generator counters pass six captures with stable identity and100%
-running: cycles1.045237, instructions1.020424 and CPI1.024316/golden. Two current
-recordings also pass. Both added work and execution efficiency contribute;
-source cause is not yet isolated. These are36 measurements, not relabelled34.
+Current hardware evidence belongs to36, not38: generator cycles1.045237,
+instructions1.020424 and CPI1.024316/golden, six valid counter captures and two
+recordings. Both extra work and execution efficiency contribute; source cause
+is not isolated. Cross-campaign timing differences do not attribute cost to a
+cold debugger helper.
 
-Basic37 gives logging0.907800/upstream and golden logging0.645187,
-generators1.006499, coroutines0.958126 and nbody0.979884 over two pairs. The
-generator difference has not yet been repeated at37. These are combined-image
-checks, not causal attribution to a cold helper. The source-reviewed CALL
-success-window NULL proof is applied for native qualification next. It covers
-the finite22-route family and exact recipient geometry, retaining UNKNOWN for
-outside-window and unsupported states.
-
-Full release/debug qualification and current stats remain open. The36 release
-debugger census has23 trace errors and four Pdb outcomes. Ordinary protocol
-capabilities remain obligations; unsupported crossings need explicit reviewed
-safety tests. The GC negative-control full-run failure remains unexplained.
-No blanket skips or weaker assertions. Golden is immutable and selected; the
-goal remains active.
+Current38's release debugger census runs 726 tests with 13 skips: 20 trace-jump
+errors and two Pdb transcript failures. Ordinary Pdb jump commands now pass.
+Reviewed test ports cover explicit unsafe protocol crossings and immediate
+Pdb entry positions; they are pending native validation. Coroutine entry facts
+and retained exception/loop owner capabilities remain runtime work. Full release qualification is running; final debug qualification,
+current stats and the unexplained historical GC negative-control failure remain open. Golden stays immutable and selected.
 
 The previous [execution-boundary and operand-mode packet](issues/execution-boundaries-20261108/plan.md)
 implements the first three bounded cold-review recommendations at runtime

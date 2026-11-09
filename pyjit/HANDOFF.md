@@ -9,52 +9,43 @@ immutable and selected. See [plan](issues/frame-call-model-20261109/plan.md)
 and [thirteenth report](issues/frame-call-model-20261109/thirteenth-integration-report.md).
 
 Primary runtime: `build/worktrees/execution-boundaries-20261108`, branch
-`pyjit/frame-call-model-20261109`, committed HEAD
-`d7abf803c607b0de3cec58d7e91ba91ff1699792`. The reviewed CALL38 two-file
-patch is now dirty there for root-owned release/debug build/native checks.
-Evidence patch: E11/call38-frozen-source.patch. Inspect actual job state
-before any native command. Do not time the dirty source. Committed37 identity
-builds check117 modules each; stats still identifies192 and needs rebuilding.
-Magic64416. Root owns native jobs, commits and merged validation. Canonical
-docs stay in this checkout. E11 is
-`build/pyjit-link-wave1/frame-call-model-20261109/` under python-boil-the-ocean.
+`pyjit/frame-call-model-20261109`, clean committed HEAD `24f4d270ced`.
+Both committed identity builds check117 modules. Magic64416; stats still192.
+E11=`build/pyjit-link-wave1/frame-call-model-20261109/` under
+python-boil-the-ocean. Root owns native jobs and commits. Current native job is
+full release `call38-full-release`; inspect processes before starting another job.
+Never mutate source/builds or benchmark inputs during timing.
 
-Forward37:136 focused tests/2modules/1skip each and four selected original,
-backward, newforward and strengthened refusal tests pass both roles. Compiled
-geometry pins negative FORpc16 BASE4/cursor5, target17..20/exit21, back20→16;
-test derives all geometry without constants. H postreview accepts. Basic37
-stable two-pair golden logging.645187/gen1.006499/coro.958126/nbody.979884;
-upstreamlogging.907800. Generator needs current final repeat. CALL38 frozen
-header+contract packet is applied for builds. N retains A/B source based36;
-compare only assigned files and preserve both retained patches. No worker build.
+38 release/debug frame/observer gate:860tests/14modules/2skips each PASS;
+minimal137/2/1skip each; four original selected jump cases each PASS. Release
+census726/13skips retains20trace errors +2Pdb transcript failures, ordinary Pdb
+basic commands PASS. Final integrated patch `E11/call38-integrated-source.patch`.
+Independent review: `call38-and-pdb-independent-review.md`. The query remains
+cold; do not attribute hot-path gains to it.
 
-NULL36: minimal300tests/3modules/2skips and frame-observer691/13/1skip pass both.
-The first minimal warning-fixture failure is retained in both roles; exact
-outer-two-local assertion and binding checkpoint before nested setter repair
-the fixture without runtime changes. Original3 peepholer cases pass unchanged.
-Current release debugger census:726tests/13skips;23traceerrors and4Pdb outcomes.
-Read-only trace-capabilities-v2 runs all24 original methods with one request
-each/no caps. Firstattempt capped5 during regex setup. GDB masks-v2 proves two
-actualNULL CALL-self homes classifiedVALUE:4→21/home2 and33→4/home5. Original
-GDB script failed on optimized-out phase; v2 reports matrices, not phase authority.
+Isolated N=`build/worktrees/null-pre-20261109`, now fast-forwarded to38 after
+reversing exactly retained37+38 patches; pending test ports preserved. A owns
+Lib/test/test_sys_settrace.py and test_pdb.py; H owns Objects/frameobject.c and
+test_code.py for coroutine ingress. B drafts shared owner-bundle capability
+proposal, review-only. No worker native execution/build/commit. Prologue pc0
+ordinary or source-error recipes must withhold the new coroutine NULL seed;
+created throw is a real ingress there. Preserve all pending patches and remove
+N only after integration/evidence retention.
 
-Current36 performance E11/null36-repeat-golden fourpairs:
-gen1.037690/coro.948954/nbody.982620 (one nbody pair>1). Basic-upstream two:
-logging.913965/gen1.433626/coro1.279977/nbody.846876/float.818632/pickle.919044.
-Generator stat-v2:6/6valid100%running/stable, cycles1.045237/instr1.020424/
-CPI1.024316; firststat parentaffinity rejection retained. Generatorrecord2/2valid
-stable with expectedELFs; source locations still need analysis. Collector
-retarget exactly2constants; independent peer +root hostgate PASS. No new full29
-at36:35screen remains.954489/golden and1.163732/upstream.
+38 four-pair golden logging0.572018/gen0.992624/coro0.871626/nbody0.975905;
+stableidentities. Prior37 basic logging/upstream0.907800; golden logging0.645187/gen1.006499/
+coro0.958126/nbody0.979884 (two pairs, generator repeat required). Current PMU
+remains36 cycles1.045237/instructions1.020424/CPI1.024316; two recordings use
+retained matching ELF. Full29 remains35 .954489/golden,1.163732/upstream.
+Full release/debug qualification, current stats/API, final broad/logging tests
+and cold review remain open. Last full release is31. Its GC negative-control
+failure is unexplained; isolated golden/candidate controls passed, not a repair.
 
-Isolated `build/worktrees/null-pre-20261109` was safely cleaned by reversing the
-retained original frozen patch, then fast-forwarded to committed36. It now
-holds the frozen forward37 packet (A frameobject+test_code); B/H CALL query work
-must use nonoverlapping files after provider peer. No separate native build.
-Root retained original36 patch and integrated36 patch; do not discard new
-pending source. Remove the task-created worktree only after final integration.
-Earlier sections below retain historical32/33/34 evidence; their active-job
-wording is superseded by this current section.
+Read-only GDB17.1 is installed and Tools/gdb/libpython.py is already IR/PyValue
+aware. A new full suite may exercise tests previously skipped without GDB.
+Retain old417 executable `execution-boundaries-release/python-canonical-before`
+until final evidence cleanup; never overwrite it. Protected canonical files
+listed below remain excluded from commits. Earlier sections are historical.
 
 ### Integrated and tested
 

@@ -84,6 +84,16 @@ current load/test/branch. Classification must not load code/nlocals repeatedly
 to save one cheap return-side test. SEND has a static proof; local/temp choices
 elsewhere need measured emitted code rather than an assumed free classification.
 
+"Once at entry" is not necessarily amortized. Every CALL commit usually has one
+return; every SEND resume usually has one yield or completion. Before selecting
+this experiment, count recipient updates and deliveries in the exact tree and
+yield-from kernels, partitioned by static producer and destination class. Compare
+the added classification/mask/stores, including any code/nlocals loads, with the
+removed old-owner load/tag/test branches across the whole pair of paths. A
+saved descriptor may merely move work. Root's later cold37 two-pair generator
+screen was about1.0065/golden, so the earlier36 loss also needs a repeat before
+it motivates this ABI change. Neither observation identifies a source cause.
+
 Pending redirect remains authoritative and is checked before consuming the
 descriptor. A redirect may change the destination and must replace/invalidate
 the descriptor at its real commit. The existing pending-child admission requires

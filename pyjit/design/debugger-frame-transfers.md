@@ -1,6 +1,6 @@
 # Debugger entry and frame transfers
 
-This describes the contract integrated at `bfd67cbe4b4`. Full qualification and
+This describes the contract integrated at `24f4d270ced`. Full qualification and
 the broader transfer model remain open. See [status](../STATUS.md), the
 [frame ABI](call-and-frame-lifetimes.md), [observer contract](handler-and-observer-contract.md)
 and [repair evidence](../issues/frame-call-model-20261109/qualification-repairs.md).
@@ -75,8 +75,9 @@ authorize an aliased nonnullable reader.
 For eligible ordinary PRE requests, a forward must-NULL matrix intersects
 reachable ingress facts, including the initial-entry predecessor on a backedge.
 The shared physical query reads COPY/SWAP sources simultaneously, certifies
-STORE_FAST and completed-FOR clearing, and forgets unsupported/error/child-tail
-facts. Constants are initialized values rather than NULL. Backward VALUE and
+STORE_FAST, completed-FOR and audited successful vector-CALL clearing. Named
+scratch retirement clears its input and preserves other homes. It forgets
+unsupported/error/child-tail facts. Constants are initialized values rather than NULL. Backward VALUE and
 NULL_ONLY demands use the same graph, all-alias input checks and actual reader;
 a NULL clear discharges only NULL_ONLY. The strict projection retains the old
 ALL requirements and unions both new lanes. Facts are not owner identities.

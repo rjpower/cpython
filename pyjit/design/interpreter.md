@@ -1,6 +1,6 @@
 # Register interpreter: current contract
 
-This page describes the register interpreter integrated at `d7abf803c60`.
+This page describes the register interpreter integrated at `24f4d270ced`.
 Its bounded observer and debugger contracts still require broad qualification.
 See [status](../STATUS.md), the
 [active packet](../issues/frame-call-model-20261109/plan.md), and the immutable

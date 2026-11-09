@@ -38,49 +38,39 @@ permanent experiment switches or weakened correctness assertions.
 
 ## Current execution
 
-Engineering `d7abf803c607b0de3cec58d7e91ba91ff1699792` is committed.
-Both profiles build117 modules and pass136 focused tests plus four selected
-original/backward/forward/refusal controls each. The preceding NULL36 packet
-passed691 tests/13 modules in both roles and repaired three original peepholer
-cases. The [thirteenth report](thirteenth-integration-report.md) records both.
+Engineering `24f4d270ced` is committed. Release/debug check117 modules and
+pass860 focused tests/14 modules/two skips each. The four original synchronous
+jump cases pass unchanged. A release debugger census retains20 trace errors
+and two Pdb transcript failures; basic Pdb jump commands pass. See the
+[fourteenth report](fourteenth-integration-report.md).
 
-Current37 basic logging is0.907800/upstream. Two-pair golden ratios are
-logging0.645187, generators1.006499, coroutines0.958126 and nbody0.979884.
-Generator37 needs a repeat before declaring its earlier loss repaired. The
-current hardware evidence remains36: cycles1.045237/instructions1.020424/
-CPI1.024316/golden, six valid100% captures and two records; no37 profile is
-claimed. The latest full29 screen is35. Final two six-round logging campaigns
-and broad checks remain required at the final source.
+Current38's four-pair golden check passes stable identities: logging0.572018,
+generators0.992624, coroutines0.871626 and nbody0.975905. The earlier generator
+loss does not repeat. Full release qualification of frozen38 is running. Basic37 gave
+logging0.907800/upstream over two pairs. The full29 screen remains35, and counters remain36.
+Final qualification and logging campaigns must use the final coherent source.
 
-Forward same-caught PRE now reuses the existing graph, origins, cuts and Plan,
-preserves the old backward proof, and requires fresh PRE/empty saves/exact
-caught roots with a normal-edge-only current-to-target survival slice. Finally
-payload roots and sibling except arms remain probe-first. The next CALL
-success-window NULL query has a finite22-route provider census and independent
-source approval; it is applied to the primary runtime for native checks.
-The shared contract excludes arbitrary temporary aliases and unknown tails.
+The isolated source has been fast-forwarded to38 while preserving the reviewed
+refusal and Pdb test ports. H owns coroutine first-resume analysis and tests;
+A owns only those debugger test ports. B designs a shared retained-owner/context
+recipe for remaining ordinary exception/loop transfers. Created-throw ingress
+at prologue0 is explicitly excluded from the bounded coroutine NULL proof when
+ordinary or source-error recipes cover it. No separate native build exists.
+Root owns all native gates, commits and measurements. Workers do not mutate the
+primary source or builds during frozen qualification or performance windows.
 
-The isolated source now has committed36 plus the frozen forward packet. B/H
-have reviewed the CALL success-window physical fact separately. Read-only C
-matrix probes confirm two ordinary refusals need a NULL fact after completed
-CALLs; every provider and result alias must support the proof before admission.
-No separate native build exists. Root owns source admission, native jobs,
-commits and qualification. Full suites belong at a coherent combined checkpoint,
-with no source/build mutation during quiet performance windows.
-
-The aggregate cold-analysis budget is stricter for large eligible PRE requests
-than the previous single lane; retain that qualification caveat. Golden and
-upstream controls and sealed evidence remain immutable. Current stats, full
-release/debug suites, generator repair, final logging gate and cold review
-remain open.
+The aggregate cold-analysis budget remains a qualification caveat. Golden and
+upstream controls and sealed evidence stay immutable. No test port may turn an
+ordinary capability failure into a permitted refusal without a reviewed
+semantic distinction and strong unchanged-state/normal-cleanup controls.
 
 ## Parallel responsibilities
 
 | Stream | Owner | Current deliverable |
 | --- | --- | --- |
-| Canonical-home transfer | Sol 6.1 medium A | Canonical35 integrated; forward same-caught implementation frozen for root native gate |
-| NULL-only PRE consumer | Sol 6.1 medium B | NULL36 integrated; CALL success-window proof and actual-state diagnosis |
-| Shared physical facts and review | Sol 6.1 medium H | NULL36 integrated; independent source/provider and current PMU audits |
+| Debugger test ports | Sol 6.1 medium A | Explicit protocol refusal controls and immediate-entry Pdb position/continuation |
+| Retained owner/context model | Sol 6.1 medium B | Shared owner-bundle proposal for ordinary caught/finally/loop capabilities |
+| Coroutine ingress and review | Sol 6.1 medium H | Bounded first-resume proof, independent source/result reviews |
 | Integration and measurement | Coordinator | Source admission, serialized native gates/commit/basic performance, qualification and final logging campaigns |
 
 Workers propose first and independently review each other's contracts. Runtime

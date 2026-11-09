@@ -10,8 +10,12 @@ The frame/call round is closed at runtime `4d666e1b482`. Full diagnostics,
 the complete benchmark set, current profiles and independent reviews are
 published in the [report](issues/frame-call-model-20261109/closing-report.md).
 Logging meets the round's parity gate; broad upstream parity remains open.
-The [next five priorities](issues/frame-call-model-20261109/next-steps.md) guide
-the next round. The coordinator owns integration and measured outcomes.
+The active [object/call plan](issues/object-call-20261109/plan.md), reviewed by
+[Astra](issues/object-call-20261109/astra-survey.md), selects canonical attribute
+lookup and reusable keyword binding as the next bounded improvements. Publish
+the current checkpoint to the golden branch before runtime edits. Preserve the
+previous immutable tags and native controls. The coordinator owns integration
+and measured outcomes.
 
 Logging parity is the throughput target for this round. Use unchanged kernels,
 GCC, JIT disabled, fixed affinity/hash seed and verified native/source identities.
@@ -41,7 +45,7 @@ Python does not guarantee prompt finalization or CPython's internal frame layout
 
 | Read | Purpose |
 | --- | --- |
-| [Plan](issues/frame-call-model-20261109/plan.md) | Round closure and ranked next work |
+| [Plan](issues/object-call-20261109/plan.md) | Active object/call round and integration gates |
 | [Status](STATUS.md) | Actual source, results and limitations |
 | [Report](issues/frame-call-model-20261109/closing-report.md) | Full results, profiling and analysis |
 | [Next five priorities](issues/frame-call-model-20261109/next-steps.md) | Evidence, risks and first experiments |

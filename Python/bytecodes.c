@@ -3269,10 +3269,10 @@ dummy_func(
             DEAD(cond);
             RECORD_BRANCH_TAKEN(FB_TAKEN(), flag);
             if (flag) {
-                INSTRUMENTED_JUMP(this_instr, next_instr + IR_FUSED_DISTANCE(), PY_MONITORING_EVENT_BRANCH_RIGHT);
+                IR_OBSERVE_COMMITTED_BRANCH(this_instr, next_instr + IR_FUSED_DISTANCE(), PY_MONITORING_EVENT_BRANCH_RIGHT);
             }
             else {
-                INSTRUMENTED_JUMP(this_instr, next_instr, PY_MONITORING_EVENT_BRANCH_LEFT);
+                IR_OBSERVE_COMMITTED_BRANCH(this_instr, next_instr, PY_MONITORING_EVENT_BRANCH_LEFT);
             }
         }
 
@@ -3777,7 +3777,7 @@ dummy_func(
                 IR_COMPLETE_STEP(_PY_IR_FOR_ITER, completed, oparg);
             }
             next = item;
-            INSTRUMENTED_JUMP(this_instr, next_instr, PY_MONITORING_EVENT_BRANCH_LEFT);
+            IR_OBSERVE_COMMITTED_BRANCH(this_instr, next_instr, PY_MONITORING_EVENT_BRANCH_LEFT);
         }
 
         op(_ITER_CHECK_LIST, (iter, null_or_index -- iter, null_or_index)) {
@@ -5398,10 +5398,10 @@ dummy_func(
             DEAD(cond);
             RECORD_BRANCH_TAKEN(FB_BRANCH(), jump);
             if (jump) {
-                INSTRUMENTED_JUMP(this_instr, JUMP_TARGET(oparg), PY_MONITORING_EVENT_BRANCH_RIGHT);
+                IR_OBSERVE_COMMITTED_BRANCH(this_instr, JUMP_TARGET(oparg), PY_MONITORING_EVENT_BRANCH_RIGHT);
             }
             else {
-                INSTRUMENTED_JUMP(this_instr, next_instr, PY_MONITORING_EVENT_BRANCH_LEFT);
+                IR_OBSERVE_COMMITTED_BRANCH(this_instr, next_instr, PY_MONITORING_EVENT_BRANCH_LEFT);
             }
         }
 
@@ -5411,10 +5411,10 @@ dummy_func(
             DEAD(cond);
             RECORD_BRANCH_TAKEN(FB_BRANCH(), jump);
             if (jump) {
-                INSTRUMENTED_JUMP(this_instr, JUMP_TARGET(oparg), PY_MONITORING_EVENT_BRANCH_RIGHT);
+                IR_OBSERVE_COMMITTED_BRANCH(this_instr, JUMP_TARGET(oparg), PY_MONITORING_EVENT_BRANCH_RIGHT);
             }
             else {
-                INSTRUMENTED_JUMP(this_instr, next_instr, PY_MONITORING_EVENT_BRANCH_LEFT);
+                IR_OBSERVE_COMMITTED_BRANCH(this_instr, next_instr, PY_MONITORING_EVENT_BRANCH_LEFT);
             }
         }
 
@@ -5429,11 +5429,11 @@ dummy_func(
             RECORD_BRANCH_TAKEN(FB_BRANCH(), jump);
             if (jump) {
                 DEAD(value);
-                INSTRUMENTED_JUMP(this_instr, JUMP_TARGET(oparg), PY_MONITORING_EVENT_BRANCH_RIGHT);
+                IR_OBSERVE_COMMITTED_BRANCH(this_instr, JUMP_TARGET(oparg), PY_MONITORING_EVENT_BRANCH_RIGHT);
             }
             else {
                 PyValue_CLOSE(value);
-                INSTRUMENTED_JUMP(this_instr, next_instr, PY_MONITORING_EVENT_BRANCH_LEFT);
+                IR_OBSERVE_COMMITTED_BRANCH(this_instr, next_instr, PY_MONITORING_EVENT_BRANCH_LEFT);
             }
         }
 
@@ -5447,12 +5447,12 @@ dummy_func(
             }
             if (!truth) {
                 res = held;
-                INSTRUMENTED_JUMP(this_instr, JUMP_TARGET(oparg), PY_MONITORING_EVENT_BRANCH_RIGHT);
+                IR_OBSERVE_COMMITTED_BRANCH(this_instr, JUMP_TARGET(oparg), PY_MONITORING_EVENT_BRANCH_RIGHT);
             }
             else {
-                PyValue_CLOSE(held);
+                IR_DEFER_CLOSE(held);
                 res = PyValue_NULL;
-                INSTRUMENTED_JUMP(this_instr, next_instr, PY_MONITORING_EVENT_BRANCH_LEFT);
+                IR_OBSERVE_COMMITTED_BRANCH(this_instr, next_instr, PY_MONITORING_EVENT_BRANCH_LEFT);
             }
         }
 
@@ -5466,12 +5466,12 @@ dummy_func(
             }
             if (truth) {
                 res = held;
-                INSTRUMENTED_JUMP(this_instr, JUMP_TARGET(oparg), PY_MONITORING_EVENT_BRANCH_RIGHT);
+                IR_OBSERVE_COMMITTED_BRANCH(this_instr, JUMP_TARGET(oparg), PY_MONITORING_EVENT_BRANCH_RIGHT);
             }
             else {
-                PyValue_CLOSE(held);
+                IR_DEFER_CLOSE(held);
                 res = PyValue_NULL;
-                INSTRUMENTED_JUMP(this_instr, next_instr, PY_MONITORING_EVENT_BRANCH_LEFT);
+                IR_OBSERVE_COMMITTED_BRANCH(this_instr, next_instr, PY_MONITORING_EVENT_BRANCH_LEFT);
             }
         }
 
@@ -5480,11 +5480,11 @@ dummy_func(
             RECORD_BRANCH_TAKEN(FB_BRANCH(), jump);
             if (jump) {
                 PyValue_CLOSE(value);
-                INSTRUMENTED_JUMP(this_instr, JUMP_TARGET(oparg), PY_MONITORING_EVENT_BRANCH_RIGHT);
+                IR_OBSERVE_COMMITTED_BRANCH(this_instr, JUMP_TARGET(oparg), PY_MONITORING_EVENT_BRANCH_RIGHT);
             }
             else {
                 DEAD(value);
-                INSTRUMENTED_JUMP(this_instr, next_instr, PY_MONITORING_EVENT_BRANCH_LEFT);
+                IR_OBSERVE_COMMITTED_BRANCH(this_instr, next_instr, PY_MONITORING_EVENT_BRANCH_LEFT);
             }
         }
 

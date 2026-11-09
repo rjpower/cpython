@@ -10676,14 +10676,49 @@
                 assert(PyValue_BoolCheck(cond));
                 int flag = PyValue_IsTrue(cond) ^ IR_FUSED_IF_FALSE();
                 RECORD_BRANCH_TAKEN(((_PyFbHeader *)fb)->taken, flag);
-                if (flag) {
-                    INSTRUMENTED_JUMP(this_instr, next_instr + IR_FUSED_DISTANCE(), PY_MONITORING_EVENT_BRANCH_RIGHT);
+                if (flag) {{
+                        PyValue ir_observer_deferred = PyValue_NULL;
+                        _PyInstr *ir_observer_next = next_instr + IR_FUSED_DISTANCE ( );
+                        frame->return_pc = ir_observer_next;
+                        _PyIRObserverResult ir_observer_result = _PyIR_ObserveCommittedBranch(
+                        tstate, frame, this_instr, this_instr, ir_observer_next, PY_MONITORING_EVENT_BRANCH_RIGHT, 1);
+                        PyObject *ir_observer_exception = ir_observer_result.status < 0
+                        ? PyErr_GetRaisedException() : NULL;
+                        assert(ir_observer_result.status >= 0 || ir_observer_exception != NULL);
+                        frame->instr_ptr = ir_observer_result.next;
+                        PyValue_XCLOSE(ir_observer_deferred);
+                        _PyValueTemps_Close(NULL);
+                        if (ir_observer_result.status < 0) {
+                            PyErr_SetRaisedException(ir_observer_exception);
+                            next_instr = frame->instr_ptr + 1;
+                            JUMP_TO_LABEL(error);
+                        }
+                        next_instr = frame->instr_ptr;
+                    DISPATCH();
+}
                 }
-                else {
-                    INSTRUMENTED_JUMP(this_instr, next_instr, PY_MONITORING_EVENT_BRANCH_LEFT);
+                else {{
+                        PyValue ir_observer_deferred = PyValue_NULL;
+                        _PyInstr *ir_observer_next = next_instr;
+                        frame->return_pc = ir_observer_next;
+                        _PyIRObserverResult ir_observer_result = _PyIR_ObserveCommittedBranch(
+                        tstate, frame, this_instr, this_instr, ir_observer_next, PY_MONITORING_EVENT_BRANCH_LEFT, 0);
+                        PyObject *ir_observer_exception = ir_observer_result.status < 0
+                        ? PyErr_GetRaisedException() : NULL;
+                        assert(ir_observer_result.status >= 0 || ir_observer_exception != NULL);
+                        frame->instr_ptr = ir_observer_result.next;
+                        PyValue_XCLOSE(ir_observer_deferred);
+                        _PyValueTemps_Close(NULL);
+                        if (ir_observer_result.status < 0) {
+                            PyErr_SetRaisedException(ir_observer_exception);
+                            next_instr = frame->instr_ptr + 1;
+                            JUMP_TO_LABEL(error);
+                        }
+                        next_instr = frame->instr_ptr;
+                    DISPATCH();
+}
                 }
             }
-            DISPATCH();
         }
 
         TARGET(INSTRUMENTED_CONTAINS_OP_JUMP) {
@@ -10742,14 +10777,49 @@
                 assert(PyValue_BoolCheck(cond));
                 int flag = PyValue_IsTrue(cond) ^ IR_FUSED_IF_FALSE();
                 RECORD_BRANCH_TAKEN(((_PyFbHeader *)fb)->taken, flag);
-                if (flag) {
-                    INSTRUMENTED_JUMP(this_instr, next_instr + IR_FUSED_DISTANCE(), PY_MONITORING_EVENT_BRANCH_RIGHT);
+                if (flag) {{
+                        PyValue ir_observer_deferred = PyValue_NULL;
+                        _PyInstr *ir_observer_next = next_instr + IR_FUSED_DISTANCE ( );
+                        frame->return_pc = ir_observer_next;
+                        _PyIRObserverResult ir_observer_result = _PyIR_ObserveCommittedBranch(
+                        tstate, frame, this_instr, this_instr, ir_observer_next, PY_MONITORING_EVENT_BRANCH_RIGHT, 1);
+                        PyObject *ir_observer_exception = ir_observer_result.status < 0
+                        ? PyErr_GetRaisedException() : NULL;
+                        assert(ir_observer_result.status >= 0 || ir_observer_exception != NULL);
+                        frame->instr_ptr = ir_observer_result.next;
+                        PyValue_XCLOSE(ir_observer_deferred);
+                        _PyValueTemps_Close(NULL);
+                        if (ir_observer_result.status < 0) {
+                            PyErr_SetRaisedException(ir_observer_exception);
+                            next_instr = frame->instr_ptr + 1;
+                            JUMP_TO_LABEL(error);
+                        }
+                        next_instr = frame->instr_ptr;
+                    DISPATCH();
+}
                 }
-                else {
-                    INSTRUMENTED_JUMP(this_instr, next_instr, PY_MONITORING_EVENT_BRANCH_LEFT);
+                else {{
+                        PyValue ir_observer_deferred = PyValue_NULL;
+                        _PyInstr *ir_observer_next = next_instr;
+                        frame->return_pc = ir_observer_next;
+                        _PyIRObserverResult ir_observer_result = _PyIR_ObserveCommittedBranch(
+                        tstate, frame, this_instr, this_instr, ir_observer_next, PY_MONITORING_EVENT_BRANCH_LEFT, 0);
+                        PyObject *ir_observer_exception = ir_observer_result.status < 0
+                        ? PyErr_GetRaisedException() : NULL;
+                        assert(ir_observer_result.status >= 0 || ir_observer_exception != NULL);
+                        frame->instr_ptr = ir_observer_result.next;
+                        PyValue_XCLOSE(ir_observer_deferred);
+                        _PyValueTemps_Close(NULL);
+                        if (ir_observer_result.status < 0) {
+                            PyErr_SetRaisedException(ir_observer_exception);
+                            next_instr = frame->instr_ptr + 1;
+                            JUMP_TO_LABEL(error);
+                        }
+                        next_instr = frame->instr_ptr;
+                    DISPATCH();
+}
                 }
             }
-            DISPATCH();
         }
 
         TARGET(INSTRUMENTED_END_ASYNC_FOR) {
@@ -10970,17 +11040,29 @@
                     DISPATCH();
                 }
             }
-            next = item;
-            INSTRUMENTED_JUMP(this_instr, next_instr, PY_MONITORING_EVENT_BRANCH_LEFT);
-            IR_PUBLISH_TEMP(window[1], null_or_index);
-            IR_PUBLISH_TEMP(window[2], next);
-            IR_MOVE_TO_DST_OR_DISCARD(IR_A(ir_word), window[2]);
-            if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
-                next_instr = frame->instr_ptr + 1;
-                JUMP_TO_LABEL(error);
-            }
+            next = item;{
+                PyValue ir_observer_deferred = PyValue_NULL;
+                IR_PUBLISH_TEMP(window[1], null_or_index);
+                IR_PUBLISH_TEMP(window[2], next);
+                IR_MOVE_OBSERVED_DST(IR_A(ir_word), window[2], ir_observer_deferred);
+                _PyInstr *ir_observer_next = next_instr;
+                frame->return_pc = ir_observer_next;
+                _PyIRObserverResult ir_observer_result = _PyIR_ObserveCommittedBranch(
+                tstate, frame, this_instr, this_instr, ir_observer_next, PY_MONITORING_EVENT_BRANCH_LEFT, 0);
+                PyObject *ir_observer_exception = ir_observer_result.status < 0
+                ? PyErr_GetRaisedException() : NULL;
+                assert(ir_observer_result.status >= 0 || ir_observer_exception != NULL);
+                frame->instr_ptr = ir_observer_result.next;
+                PyValue_XCLOSE(ir_observer_deferred);
+                _PyValueTemps_Close(NULL);
+                if (ir_observer_result.status < 0) {
+                    PyErr_SetRaisedException(ir_observer_exception);
+                    next_instr = frame->instr_ptr + 1;
+                    JUMP_TO_LABEL(error);
+                }
+                next_instr = frame->instr_ptr;
             DISPATCH();
+}
         }
 
         TARGET(INSTRUMENTED_INSTRUCTION) {
@@ -11061,14 +11143,49 @@
                 assert(PyValue_BoolCheck(cond));
                 int flag = PyValue_IsTrue(cond) ^ IR_FUSED_IF_FALSE();
                 RECORD_BRANCH_TAKEN(((_PyFbHeader *)fb)->taken, flag);
-                if (flag) {
-                    INSTRUMENTED_JUMP(this_instr, next_instr + IR_FUSED_DISTANCE(), PY_MONITORING_EVENT_BRANCH_RIGHT);
+                if (flag) {{
+                        PyValue ir_observer_deferred = PyValue_NULL;
+                        _PyInstr *ir_observer_next = next_instr + IR_FUSED_DISTANCE ( );
+                        frame->return_pc = ir_observer_next;
+                        _PyIRObserverResult ir_observer_result = _PyIR_ObserveCommittedBranch(
+                        tstate, frame, this_instr, this_instr, ir_observer_next, PY_MONITORING_EVENT_BRANCH_RIGHT, 1);
+                        PyObject *ir_observer_exception = ir_observer_result.status < 0
+                        ? PyErr_GetRaisedException() : NULL;
+                        assert(ir_observer_result.status >= 0 || ir_observer_exception != NULL);
+                        frame->instr_ptr = ir_observer_result.next;
+                        PyValue_XCLOSE(ir_observer_deferred);
+                        _PyValueTemps_Close(NULL);
+                        if (ir_observer_result.status < 0) {
+                            PyErr_SetRaisedException(ir_observer_exception);
+                            next_instr = frame->instr_ptr + 1;
+                            JUMP_TO_LABEL(error);
+                        }
+                        next_instr = frame->instr_ptr;
+                    DISPATCH();
+}
                 }
-                else {
-                    INSTRUMENTED_JUMP(this_instr, next_instr, PY_MONITORING_EVENT_BRANCH_LEFT);
+                else {{
+                        PyValue ir_observer_deferred = PyValue_NULL;
+                        _PyInstr *ir_observer_next = next_instr;
+                        frame->return_pc = ir_observer_next;
+                        _PyIRObserverResult ir_observer_result = _PyIR_ObserveCommittedBranch(
+                        tstate, frame, this_instr, this_instr, ir_observer_next, PY_MONITORING_EVENT_BRANCH_LEFT, 0);
+                        PyObject *ir_observer_exception = ir_observer_result.status < 0
+                        ? PyErr_GetRaisedException() : NULL;
+                        assert(ir_observer_result.status >= 0 || ir_observer_exception != NULL);
+                        frame->instr_ptr = ir_observer_result.next;
+                        PyValue_XCLOSE(ir_observer_deferred);
+                        _PyValueTemps_Close(NULL);
+                        if (ir_observer_result.status < 0) {
+                            PyErr_SetRaisedException(ir_observer_exception);
+                            next_instr = frame->instr_ptr + 1;
+                            JUMP_TO_LABEL(error);
+                        }
+                        next_instr = frame->instr_ptr;
+                    DISPATCH();
+}
                 }
             }
-            DISPATCH();
         }
 
         TARGET(INSTRUMENTED_JUMP_BACKWARD) {
@@ -11138,16 +11255,53 @@
                 JUMP_TO_LABEL(error);
             }
             if (!truth) {
-                res = held;
-                INSTRUMENTED_JUMP(this_instr, JUMP_TARGET(oparg), PY_MONITORING_EVENT_BRANCH_RIGHT);
+                res = held;{
+                    PyValue ir_observer_deferred = PyValue_NULL;
+                    IR_STORE_TEMP(IR_SLOT(IR_A(ir_word)), res);
+                    _PyInstr *ir_observer_next = JUMP_TARGET ( oparg );
+                    frame->return_pc = ir_observer_next;
+                    _PyIRObserverResult ir_observer_result = _PyIR_ObserveCommittedBranch(
+                    tstate, frame, this_instr, this_instr, ir_observer_next, PY_MONITORING_EVENT_BRANCH_RIGHT, 1);
+                    PyObject *ir_observer_exception = ir_observer_result.status < 0
+                    ? PyErr_GetRaisedException() : NULL;
+                    assert(ir_observer_result.status >= 0 || ir_observer_exception != NULL);
+                    frame->instr_ptr = ir_observer_result.next;
+                    PyValue_XCLOSE(ir_observer_deferred);
+                    _PyValueTemps_Close(NULL);
+                    if (ir_observer_result.status < 0) {
+                        PyErr_SetRaisedException(ir_observer_exception);
+                        next_instr = frame->instr_ptr + 1;
+                        JUMP_TO_LABEL(error);
+                    }
+                    next_instr = frame->instr_ptr;
+                DISPATCH();
+}
             }
-            else {
-                PyValue_CLOSE(held);
-                res = PyValue_NULL;
-                INSTRUMENTED_JUMP(this_instr, next_instr, PY_MONITORING_EVENT_BRANCH_LEFT);
+            else {PyValue ir_observer_input_0 = held;
+                held = PyValue_NULL;
+                res = PyValue_NULL;{
+                    PyValue ir_observer_deferred = PyValue_NULL;
+                    IR_STORE_TEMP(IR_SLOT(IR_A(ir_word)), res);
+                    _PyInstr *ir_observer_next = next_instr;
+                    frame->return_pc = ir_observer_next;
+                    _PyIRObserverResult ir_observer_result = _PyIR_ObserveCommittedBranch(
+                    tstate, frame, this_instr, this_instr, ir_observer_next, PY_MONITORING_EVENT_BRANCH_LEFT, 0);
+                    PyObject *ir_observer_exception = ir_observer_result.status < 0
+                    ? PyErr_GetRaisedException() : NULL;
+                    assert(ir_observer_result.status >= 0 || ir_observer_exception != NULL);
+                    frame->instr_ptr = ir_observer_result.next;
+                    PyValue_XCLOSE(ir_observer_deferred);
+                    PyValue_XCLOSE(ir_observer_input_0);
+                    _PyValueTemps_Close(NULL);
+                    if (ir_observer_result.status < 0) {
+                        PyErr_SetRaisedException(ir_observer_exception);
+                        next_instr = frame->instr_ptr + 1;
+                        JUMP_TO_LABEL(error);
+                    }
+                    next_instr = frame->instr_ptr;
+                DISPATCH();
+}
             }
-            IR_STORE_TEMP(IR_SLOT(IR_A(ir_word)), res);
-            DISPATCH();
         }
 
         TARGET(INSTRUMENTED_JUMP_IF_TRUE_OR_POP) {
@@ -11175,16 +11329,53 @@
                 JUMP_TO_LABEL(error);
             }
             if (truth) {
-                res = held;
-                INSTRUMENTED_JUMP(this_instr, JUMP_TARGET(oparg), PY_MONITORING_EVENT_BRANCH_RIGHT);
+                res = held;{
+                    PyValue ir_observer_deferred = PyValue_NULL;
+                    IR_STORE_TEMP(IR_SLOT(IR_A(ir_word)), res);
+                    _PyInstr *ir_observer_next = JUMP_TARGET ( oparg );
+                    frame->return_pc = ir_observer_next;
+                    _PyIRObserverResult ir_observer_result = _PyIR_ObserveCommittedBranch(
+                    tstate, frame, this_instr, this_instr, ir_observer_next, PY_MONITORING_EVENT_BRANCH_RIGHT, 1);
+                    PyObject *ir_observer_exception = ir_observer_result.status < 0
+                    ? PyErr_GetRaisedException() : NULL;
+                    assert(ir_observer_result.status >= 0 || ir_observer_exception != NULL);
+                    frame->instr_ptr = ir_observer_result.next;
+                    PyValue_XCLOSE(ir_observer_deferred);
+                    _PyValueTemps_Close(NULL);
+                    if (ir_observer_result.status < 0) {
+                        PyErr_SetRaisedException(ir_observer_exception);
+                        next_instr = frame->instr_ptr + 1;
+                        JUMP_TO_LABEL(error);
+                    }
+                    next_instr = frame->instr_ptr;
+                DISPATCH();
+}
             }
-            else {
-                PyValue_CLOSE(held);
-                res = PyValue_NULL;
-                INSTRUMENTED_JUMP(this_instr, next_instr, PY_MONITORING_EVENT_BRANCH_LEFT);
+            else {PyValue ir_observer_input_0 = held;
+                held = PyValue_NULL;
+                res = PyValue_NULL;{
+                    PyValue ir_observer_deferred = PyValue_NULL;
+                    IR_STORE_TEMP(IR_SLOT(IR_A(ir_word)), res);
+                    _PyInstr *ir_observer_next = next_instr;
+                    frame->return_pc = ir_observer_next;
+                    _PyIRObserverResult ir_observer_result = _PyIR_ObserveCommittedBranch(
+                    tstate, frame, this_instr, this_instr, ir_observer_next, PY_MONITORING_EVENT_BRANCH_LEFT, 0);
+                    PyObject *ir_observer_exception = ir_observer_result.status < 0
+                    ? PyErr_GetRaisedException() : NULL;
+                    assert(ir_observer_result.status >= 0 || ir_observer_exception != NULL);
+                    frame->instr_ptr = ir_observer_result.next;
+                    PyValue_XCLOSE(ir_observer_deferred);
+                    PyValue_XCLOSE(ir_observer_input_0);
+                    _PyValueTemps_Close(NULL);
+                    if (ir_observer_result.status < 0) {
+                        PyErr_SetRaisedException(ir_observer_exception);
+                        next_instr = frame->instr_ptr + 1;
+                        JUMP_TO_LABEL(error);
+                    }
+                    next_instr = frame->instr_ptr;
+                DISPATCH();
+}
             }
-            IR_STORE_TEMP(IR_SLOT(IR_A(ir_word)), res);
-            DISPATCH();
         }
 
         TARGET(INSTRUMENTED_LINE) {
@@ -11428,14 +11619,49 @@
                 assert(PyValue_BoolCheck(cond));
                 int jump = PyValue_IsFalse(cond);
                 RECORD_BRANCH_TAKEN(((_PyFbHeader *)fb)->history, jump);
-                if (jump) {
-                    INSTRUMENTED_JUMP(this_instr, JUMP_TARGET(oparg), PY_MONITORING_EVENT_BRANCH_RIGHT);
+                if (jump) {{
+                        PyValue ir_observer_deferred = PyValue_NULL;
+                        _PyInstr *ir_observer_next = JUMP_TARGET ( oparg );
+                        frame->return_pc = ir_observer_next;
+                        _PyIRObserverResult ir_observer_result = _PyIR_ObserveCommittedBranch(
+                        tstate, frame, this_instr, this_instr, ir_observer_next, PY_MONITORING_EVENT_BRANCH_RIGHT, 1);
+                        PyObject *ir_observer_exception = ir_observer_result.status < 0
+                        ? PyErr_GetRaisedException() : NULL;
+                        assert(ir_observer_result.status >= 0 || ir_observer_exception != NULL);
+                        frame->instr_ptr = ir_observer_result.next;
+                        PyValue_XCLOSE(ir_observer_deferred);
+                        _PyValueTemps_Close(NULL);
+                        if (ir_observer_result.status < 0) {
+                            PyErr_SetRaisedException(ir_observer_exception);
+                            next_instr = frame->instr_ptr + 1;
+                            JUMP_TO_LABEL(error);
+                        }
+                        next_instr = frame->instr_ptr;
+                    DISPATCH();
+}
                 }
-                else {
-                    INSTRUMENTED_JUMP(this_instr, next_instr, PY_MONITORING_EVENT_BRANCH_LEFT);
+                else {{
+                        PyValue ir_observer_deferred = PyValue_NULL;
+                        _PyInstr *ir_observer_next = next_instr;
+                        frame->return_pc = ir_observer_next;
+                        _PyIRObserverResult ir_observer_result = _PyIR_ObserveCommittedBranch(
+                        tstate, frame, this_instr, this_instr, ir_observer_next, PY_MONITORING_EVENT_BRANCH_LEFT, 0);
+                        PyObject *ir_observer_exception = ir_observer_result.status < 0
+                        ? PyErr_GetRaisedException() : NULL;
+                        assert(ir_observer_result.status >= 0 || ir_observer_exception != NULL);
+                        frame->instr_ptr = ir_observer_result.next;
+                        PyValue_XCLOSE(ir_observer_deferred);
+                        _PyValueTemps_Close(NULL);
+                        if (ir_observer_result.status < 0) {
+                            PyErr_SetRaisedException(ir_observer_exception);
+                            next_instr = frame->instr_ptr + 1;
+                            JUMP_TO_LABEL(error);
+                        }
+                        next_instr = frame->instr_ptr;
+                    DISPATCH();
+}
                 }
             }
-            DISPATCH();
         }
 
         TARGET(INSTRUMENTED_POP_JUMP_IF_NONE) {
@@ -11459,14 +11685,51 @@
             RECORD_BRANCH_TAKEN(((_PyFbHeader *)fb)->history, jump);
             if (jump) {
                 ir_own_A = IR_CONSUME_INPUT(IR_A(ir_word), value);
-                INSTRUMENTED_JUMP(this_instr, JUMP_TARGET(oparg), PY_MONITORING_EVENT_BRANCH_RIGHT);
+                {
+                    PyValue ir_observer_deferred = PyValue_NULL;
+                    _PyInstr *ir_observer_next = JUMP_TARGET ( oparg );
+                    frame->return_pc = ir_observer_next;
+                    _PyIRObserverResult ir_observer_result = _PyIR_ObserveCommittedBranch(
+                    tstate, frame, this_instr, this_instr, ir_observer_next, PY_MONITORING_EVENT_BRANCH_RIGHT, 1);
+                    PyObject *ir_observer_exception = ir_observer_result.status < 0
+                    ? PyErr_GetRaisedException() : NULL;
+                    assert(ir_observer_result.status >= 0 || ir_observer_exception != NULL);
+                    frame->instr_ptr = ir_observer_result.next;
+                    PyValue_XCLOSE(ir_observer_deferred);
+                    _PyValueTemps_Close(NULL);
+                    if (ir_observer_result.status < 0) {
+                        PyErr_SetRaisedException(ir_observer_exception);
+                        next_instr = frame->instr_ptr + 1;
+                        JUMP_TO_LABEL(error);
+                    }
+                    next_instr = frame->instr_ptr;
+                DISPATCH();
+}
             }
             else {
                 ir_own_A = IR_CONSUME_INPUT(IR_A(ir_word), value);
                 PyValue_XCLOSE(ir_own_A);
-                INSTRUMENTED_JUMP(this_instr, next_instr, PY_MONITORING_EVENT_BRANCH_LEFT);
+                {
+                    PyValue ir_observer_deferred = PyValue_NULL;
+                    _PyInstr *ir_observer_next = next_instr;
+                    frame->return_pc = ir_observer_next;
+                    _PyIRObserverResult ir_observer_result = _PyIR_ObserveCommittedBranch(
+                    tstate, frame, this_instr, this_instr, ir_observer_next, PY_MONITORING_EVENT_BRANCH_LEFT, 0);
+                    PyObject *ir_observer_exception = ir_observer_result.status < 0
+                    ? PyErr_GetRaisedException() : NULL;
+                    assert(ir_observer_result.status >= 0 || ir_observer_exception != NULL);
+                    frame->instr_ptr = ir_observer_result.next;
+                    PyValue_XCLOSE(ir_observer_deferred);
+                    _PyValueTemps_Close(NULL);
+                    if (ir_observer_result.status < 0) {
+                        PyErr_SetRaisedException(ir_observer_exception);
+                        next_instr = frame->instr_ptr + 1;
+                        JUMP_TO_LABEL(error);
+                    }
+                    next_instr = frame->instr_ptr;
+                DISPATCH();
+}
             }
-            DISPATCH();
         }
 
         TARGET(INSTRUMENTED_POP_JUMP_IF_NOT_NONE) {
@@ -11491,13 +11754,50 @@
             if (jump) {
                 ir_own_A = IR_CONSUME_INPUT(IR_A(ir_word), value);
                 PyValue_XCLOSE(ir_own_A);
-                INSTRUMENTED_JUMP(this_instr, JUMP_TARGET(oparg), PY_MONITORING_EVENT_BRANCH_RIGHT);
+                {
+                    PyValue ir_observer_deferred = PyValue_NULL;
+                    _PyInstr *ir_observer_next = JUMP_TARGET ( oparg );
+                    frame->return_pc = ir_observer_next;
+                    _PyIRObserverResult ir_observer_result = _PyIR_ObserveCommittedBranch(
+                    tstate, frame, this_instr, this_instr, ir_observer_next, PY_MONITORING_EVENT_BRANCH_RIGHT, 1);
+                    PyObject *ir_observer_exception = ir_observer_result.status < 0
+                    ? PyErr_GetRaisedException() : NULL;
+                    assert(ir_observer_result.status >= 0 || ir_observer_exception != NULL);
+                    frame->instr_ptr = ir_observer_result.next;
+                    PyValue_XCLOSE(ir_observer_deferred);
+                    _PyValueTemps_Close(NULL);
+                    if (ir_observer_result.status < 0) {
+                        PyErr_SetRaisedException(ir_observer_exception);
+                        next_instr = frame->instr_ptr + 1;
+                        JUMP_TO_LABEL(error);
+                    }
+                    next_instr = frame->instr_ptr;
+                DISPATCH();
+}
             }
             else {
                 ir_own_A = IR_CONSUME_INPUT(IR_A(ir_word), value);
-                INSTRUMENTED_JUMP(this_instr, next_instr, PY_MONITORING_EVENT_BRANCH_LEFT);
+                {
+                    PyValue ir_observer_deferred = PyValue_NULL;
+                    _PyInstr *ir_observer_next = next_instr;
+                    frame->return_pc = ir_observer_next;
+                    _PyIRObserverResult ir_observer_result = _PyIR_ObserveCommittedBranch(
+                    tstate, frame, this_instr, this_instr, ir_observer_next, PY_MONITORING_EVENT_BRANCH_LEFT, 0);
+                    PyObject *ir_observer_exception = ir_observer_result.status < 0
+                    ? PyErr_GetRaisedException() : NULL;
+                    assert(ir_observer_result.status >= 0 || ir_observer_exception != NULL);
+                    frame->instr_ptr = ir_observer_result.next;
+                    PyValue_XCLOSE(ir_observer_deferred);
+                    _PyValueTemps_Close(NULL);
+                    if (ir_observer_result.status < 0) {
+                        PyErr_SetRaisedException(ir_observer_exception);
+                        next_instr = frame->instr_ptr + 1;
+                        JUMP_TO_LABEL(error);
+                    }
+                    next_instr = frame->instr_ptr;
+                DISPATCH();
+}
             }
-            DISPATCH();
         }
 
         TARGET(INSTRUMENTED_POP_JUMP_IF_TRUE) {
@@ -11535,14 +11835,49 @@
                 assert(PyValue_BoolCheck(cond));
                 int jump = PyValue_IsTrue(cond);
                 RECORD_BRANCH_TAKEN(((_PyFbHeader *)fb)->history, jump);
-                if (jump) {
-                    INSTRUMENTED_JUMP(this_instr, JUMP_TARGET(oparg), PY_MONITORING_EVENT_BRANCH_RIGHT);
+                if (jump) {{
+                        PyValue ir_observer_deferred = PyValue_NULL;
+                        _PyInstr *ir_observer_next = JUMP_TARGET ( oparg );
+                        frame->return_pc = ir_observer_next;
+                        _PyIRObserverResult ir_observer_result = _PyIR_ObserveCommittedBranch(
+                        tstate, frame, this_instr, this_instr, ir_observer_next, PY_MONITORING_EVENT_BRANCH_RIGHT, 1);
+                        PyObject *ir_observer_exception = ir_observer_result.status < 0
+                        ? PyErr_GetRaisedException() : NULL;
+                        assert(ir_observer_result.status >= 0 || ir_observer_exception != NULL);
+                        frame->instr_ptr = ir_observer_result.next;
+                        PyValue_XCLOSE(ir_observer_deferred);
+                        _PyValueTemps_Close(NULL);
+                        if (ir_observer_result.status < 0) {
+                            PyErr_SetRaisedException(ir_observer_exception);
+                            next_instr = frame->instr_ptr + 1;
+                            JUMP_TO_LABEL(error);
+                        }
+                        next_instr = frame->instr_ptr;
+                    DISPATCH();
+}
                 }
-                else {
-                    INSTRUMENTED_JUMP(this_instr, next_instr, PY_MONITORING_EVENT_BRANCH_LEFT);
+                else {{
+                        PyValue ir_observer_deferred = PyValue_NULL;
+                        _PyInstr *ir_observer_next = next_instr;
+                        frame->return_pc = ir_observer_next;
+                        _PyIRObserverResult ir_observer_result = _PyIR_ObserveCommittedBranch(
+                        tstate, frame, this_instr, this_instr, ir_observer_next, PY_MONITORING_EVENT_BRANCH_LEFT, 0);
+                        PyObject *ir_observer_exception = ir_observer_result.status < 0
+                        ? PyErr_GetRaisedException() : NULL;
+                        assert(ir_observer_result.status >= 0 || ir_observer_exception != NULL);
+                        frame->instr_ptr = ir_observer_result.next;
+                        PyValue_XCLOSE(ir_observer_deferred);
+                        _PyValueTemps_Close(NULL);
+                        if (ir_observer_result.status < 0) {
+                            PyErr_SetRaisedException(ir_observer_exception);
+                            next_instr = frame->instr_ptr + 1;
+                            JUMP_TO_LABEL(error);
+                        }
+                        next_instr = frame->instr_ptr;
+                    DISPATCH();
+}
                 }
             }
-            DISPATCH();
         }
 
         TARGET(INSTRUMENTED_RESUME) {

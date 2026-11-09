@@ -262,6 +262,17 @@ enum {
     _PyIR_OUTPUT_OUTCOME,
 };
 
+/* A checked observer edge whose terminal provider has committed its physical
+ * outputs before the callback. Generated from the provider, not inferred from
+ * its event name. An absent fact cannot authorize POST inspection. */
+enum {
+    _PyIR_OBSERVER_NONE,
+    _PyIR_OBSERVER_FORMAT_VALUE,
+    _PyIR_OBSERVER_FORMAT_NULL_FIRST,
+    _PyIR_OBSERVER_FOR_BODY,
+    _PyIR_OBSERVER_COMPLETION,
+};
+
 typedef struct _PyIRFormat {
     uint16_t flags;         // _PyIR_VALID, ...: the format
     uint16_t effects;       // _PyIR_RAISES, ...: the handler
@@ -275,6 +286,7 @@ typedef struct _PyIRFormat {
     uint8_t fb_kind;        // _PyFbKind of the entry, where fb is a field
     uint8_t fb_size;        // the bytes of that entry's type, or 0
     uint8_t result_phase;   // _PyIR_RESULT_PHASE_*: conditional success fact
+    uint8_t observer_outcome[2]; // checked fallthrough/taken POST facts
     uint8_t output_kind;    // actual physical publication, not fold capability:
                             // REGISTER_DST: outputs at dst; WINDOW: at base;
                             // WINDOW_DST_FIRST: base outputs, with only the

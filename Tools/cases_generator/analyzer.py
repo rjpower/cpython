@@ -523,6 +523,7 @@ def tier_variable(node: parser.CodeDef) -> int | None:
 CALL_INVOKE_MARKERS = frozenset(("IR_INVOKE_CALL", "IR_INVOKE_GUARDED_PYTHON_CALL"))
 
 IR_MARKER_EFFECTS = {
+    "IR_OBSERVE_COMMITTED_BRANCH": frozenset(("escapes", "error", "sync", "pc")),
     "IR_COMPLETE_STEP": frozenset(("escapes", "error", "sync", "pc", "terminal")),
     "IR_RETURN_TO_CALLER": frozenset(("escapes", "error", "sync", "pc", "terminal", "frame")),
     "IR_ENTER_GENERATOR": frozenset(("escapes", "error", "sync", "pc", "terminal", "frame")),

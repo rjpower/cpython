@@ -660,6 +660,8 @@ normalize_source_map(const _PyIRSourceMap *map, uint32_t nwords)
 
 static int completion_handler_safe(struct _PyCodeConstructor *, int, int, int,
                                    int, int);
+static int observer_handler_safe(struct _PyCodeConstructor *, _PyIRWord, int,
+                                 int, int, int, int);
 
 static int
 validate_source_map(struct _PyCodeConstructor *con)
@@ -708,10 +710,16 @@ validate_source_map(struct _PyCodeConstructor *con)
                               event.edge == _PyIR_SOURCE_TAKEN) ||
                              (opcode == CLEANUP_THROW &&
                               event.edge == _PyIR_SOURCE_TAKEN);
-            if (completed) {
-                int safe = completion_handler_safe(con, event.handler,
-                    event.exc_slot, event.lasti, IR_B(from),
-                    _PyIR_CompletionWindow(opcode));
+            int observer = _PyIR_ObserverOutcome(from, event.edge);
+            if (observer || completed) {
+                int safe = observer
+                    ? observer_handler_safe(con, from, event.edge,
+                                            event.handler, event.exc_slot,
+                                            event.lasti, 1)
+                    : completion_handler_safe(con, event.handler,
+                                              event.exc_slot, event.lasti,
+                                              IR_B(from),
+                                              _PyIR_CompletionWindow(opcode));
                 if (safe <= 0) {
                     if (safe == 0) {
                         PyErr_SetString(PyExc_ValueError,
@@ -892,24 +900,26 @@ invalid:
 
 
 typedef struct {
-    uint16_t *facts;
+    uint32_t *facts;
     int *queue;
     int n, head, tail, count;
+    int homes[8], nhomes;
 } completion_worklist;
 
 enum {
-    COMPLETION_HOME_MASK = 15,
-    COMPLETION_REACHED = 256,
-    COMPLETION_QUEUED = 512,
+    COMPLETION_REACHED = 1u << 24,
+    COMPLETION_QUEUED = 1u << 25,
 };
 
-/* Low bits mean the original owner is unavailable. The next four mean that
- * unavailable home may be non-NULL; OR joins preserve both possibilities. */
+/* Low bits mean the original owner is unavailable. The next nhomes bits mean
+ * that unavailable home may be non-NULL; OR joins preserve both possibilities. */
 static int
 completion_enqueue(completion_worklist *work, int target, unsigned int mask,
                    unsigned int nonnull)
 {
-    unsigned int facts = mask | ((nonnull & mask) << 4);
+    unsigned int limit = (1u << work->nhomes) - 1;
+    unsigned int facts = (mask & limit) |
+                         ((nonnull & mask & limit) << work->nhomes);
     if (target < 0 || target >= work->n) {
         return 0;
     }
@@ -928,29 +938,34 @@ completion_enqueue(completion_worklist *work, int target, unsigned int mask,
 }
 
 static unsigned int
-completion_home_mask(int slot, int base, int count)
+completion_home_mask(int slot, const int *homes, int count)
 {
-    return slot >= base && slot < base + count ? 1u << (slot - base) : 0;
+    for (int k = 0; k < count; k++) {
+        if (slot == homes[k]) {
+            return 1u << k;
+        }
+    }
+    return 0;
 }
 
 static int
 completion_exception_edge(completion_worklist *work, int target, int slot,
-                          int lasti, int base, int count, unsigned int mask,
+                          int lasti, unsigned int mask,
                           unsigned int nonnull)
 {
     if ((lasti != 0 && lasti != 1) || slot < lasti) {
         return 0;
     }
     int floor = slot - lasti;
-    for (int k = 0; k < count; k++) {
-        if (base + k >= floor) {
+    for (int k = 0; k < work->nhomes; k++) {
+        if (work->homes[k] >= floor) {
             mask |= 1u << k;
             nonnull &= ~(1u << k);
         }
     }
-    mask &= ~completion_home_mask(slot, base, count);
+    mask &= ~completion_home_mask(slot, work->homes, work->nhomes);
     if (lasti) {
-        mask &= ~completion_home_mask(slot - 1, base, count);
+        mask &= ~completion_home_mask(slot - 1, work->homes, work->nhomes);
     }
     return completion_enqueue(work, target, mask, nonnull);
 }
@@ -961,9 +976,13 @@ completion_exception_edge(completion_worklist *work, int target, int slot,
  * old values on any normal or exceptional handler path. This is the final
  * encoded proof for both compiled programs and public code constructors. */
 static int
-completion_handler_safe(struct _PyCodeConstructor *con, int entry, int exc_slot,
-                        int lasti, int base, int count)
+owner_handler_safe(struct _PyCodeConstructor *con, int entry, int exc_slot,
+                   int lasti, const int *homes, int count,
+                   unsigned int initial, unsigned int initial_nonnull)
 {
+    if (count <= 0 || count > 8) {
+        return 0;
+    }
     const _PyIRWord *words = (const _PyIRWord *)PyBytes_AS_STRING(con->code);
     int n = (int)(PyBytes_GET_SIZE(con->code) / sizeof(*words));
     _PyIRSourceMap source;
@@ -972,7 +991,8 @@ completion_handler_safe(struct _PyCodeConstructor *con, int entry, int exc_slot,
     {
         return 0;
     }
-    completion_worklist work = {.n = n};
+    completion_worklist work = {.n = n, .nhomes = count};
+    memcpy(work.homes, homes, (size_t)count * sizeof(int));
     work.facts = PyMem_Calloc((size_t)n, sizeof(*work.facts));
     work.queue = PyMem_Malloc((size_t)n * sizeof(int));
     if (work.facts == NULL || work.queue == NULL) {
@@ -981,33 +1001,26 @@ completion_handler_safe(struct _PyCodeConstructor *con, int entry, int exc_slot,
         PyErr_NoMemory();
         return -1;
     }
-    unsigned int initial = (1u << count) - 1;
     /* Preserved homes may still be PRE owners. Only the actual unwind, not
      * POST's retirement alone, proves them NULL on both admitted paths. */
     int safe = completion_exception_edge(&work, entry, exc_slot, lasti,
-                                         base, count, initial, initial);
+                                         initial, initial_nonnull);
     while (safe && work.count) {
         int i = work.queue[work.head];
         work.head = (work.head + 1) % n;
         work.count--;
         work.facts[i] &= ~COMPLETION_QUEUED;
-        unsigned int mask = work.facts[i] & COMPLETION_HOME_MASK;
-        unsigned int nonnull = (work.facts[i] >> 4) & COMPLETION_HOME_MASK;
+        unsigned int limit = (1u << count) - 1;
+        unsigned int mask = work.facts[i] & limit;
+        unsigned int nonnull = (work.facts[i] >> count) & limit;
         _PyIRWord word = words[i];
         int opcode = _PyIR_BaseOpcode(IR_HANDLER(word));
         const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
-        uint32_t fields[] = {IR_A(word), IR_B(word), IR_C(word), IR_D(word)};
         int arg = fmt->imm == _PyIR_LOC_FBARG ? IR_MAX_SLOTS
                                               : _PyIR_FieldOparg(word);
-        int window = -1;
         unsigned int reads = 0, defs = 0, nullable = 0;
-        for (int f = 0; f < 4; f++) {
-            if (fmt->roles[f] == _PyIR_ROLE_BASE) {
-                window = (int)fields[f];
-            }
-        }
         for (int k = 0; k < count; k++) {
-            int home = base + k;
+            int home = work.homes[k];
             if (!(nonnull & (1u << k)) && _PyIR_NullableHome(word, arg, home)) {
                 nullable |= 1u << k;
             }
@@ -1025,7 +1038,7 @@ completion_handler_safe(struct _PyCodeConstructor *con, int entry, int exc_slot,
                 "code: invalid semantic completion window or handler "
                 "(%U:%d; entry=%d pc=%d opcode=%d base=%d count=%d "
                 "unavailable=%u may_nonnull=%u reads=%u)", con->qualname, con->firstlineno,
-                entry, i, opcode, base, count, mask, nonnull, reads);
+                entry, i, opcode, work.homes[0], count, mask, nonnull, reads);
             safe = -1;
             break;
         }
@@ -1043,7 +1056,7 @@ completion_handler_safe(struct _PyCodeConstructor *con, int entry, int exc_slot,
             }
             if (i >= start && i - start < size) {
                 safe = completion_exception_edge(&work, target,
-                    slot_lasti >> 1, slot_lasti & 1, base, count, mask, nonnull);
+                    slot_lasti >> 1, slot_lasti & 1, mask, nonnull);
                 break;
             }
         }
@@ -1072,19 +1085,19 @@ completion_handler_safe(struct _PyCodeConstructor *con, int entry, int exc_slot,
                 /* Only actual produced values define a valid new input;
                  * a retired NULL home remains unavailable to readers. */
                 for (int k = 0; k < count; k++) {
-                    if (base + k >= outcome.first &&
-                        base + k - outcome.first < outcome.count)
+                    if (work.homes[k] >= outcome.first &&
+                        work.homes[k] - outcome.first < outcome.count)
                     {
                         edge |= 1u << k;
                         edge_nonnull &= ~(1u << k);
                     }
                 }
-                edge &= ~completion_home_mask(outcome.dst, base, count);
+                edge &= ~completion_home_mask(outcome.dst, work.homes, count);
                 if (opcode == FOR_ITER && !taken) {
-                    edge &= ~completion_home_mask(IR_B(word) + 1, base, count);
+                    edge &= ~completion_home_mask(IR_B(word) + 1, work.homes, count);
                 }
                 if (opcode == SEND && !taken) {
-                    edge &= ~completion_home_mask(IR_B(word) + 2, base, count);
+                    edge &= ~completion_home_mask(IR_B(word) + 2, work.homes, count);
                 }
             }
             else {
@@ -1095,7 +1108,7 @@ completion_handler_safe(struct _PyCodeConstructor *con, int entry, int exc_slot,
                 _PyIRSource_Event(&source, j, &event);
                 if (event.from == i && event.edge == taken && event.handler >= 0 &&
                     !completion_exception_edge(&work, event.handler, event.exc_slot,
-                                               event.lasti, base, count, edge, edge_nonnull))
+                                               event.lasti, edge, edge_nonnull))
                 {
                     safe = 0;
                     break;
@@ -1115,6 +1128,62 @@ completion_handler_safe(struct _PyCodeConstructor *con, int entry, int exc_slot,
     return safe;
 }
 
+static int
+completion_handler_safe(struct _PyCodeConstructor *con, int entry, int exc_slot,
+                        int lasti, int base, int count)
+{
+    int homes[8];
+    if (count <= 0 || count > 8) {
+        return 0;
+    }
+    for (int k = 0; k < count; k++) {
+        homes[k] = base + k;
+    }
+    unsigned int initial = (1u << count) - 1;
+    return owner_handler_safe(con, entry, exc_slot, lasti, homes, count,
+                              initial, initial);
+}
+
+static int
+observer_handler_safe(struct _PyCodeConstructor *con, _PyIRWord word, int edge,
+                      int entry, int exc_slot, int lasti, int post)
+{
+    int nl = (int)PyTuple_GET_SIZE(con->localsplusnames);
+    int limit = nl + con->stacksize;
+    _PyIRObservedHomes observed;
+    if (!_PyIR_ObservedHomes(word, edge, nl, limit, &observed)) {
+        return 0;
+    }
+    if (observed.count == 0) {
+        return 1;
+    }
+    unsigned int unavailable = 0, may_nonnull = 0;
+    for (int k = 0; k < observed.count; k++) {
+        int home = observed.home[k];
+        if (home < nl || home >= limit) {
+            return 0;
+        }
+        for (int j = 0; j < k; j++) {
+            if (observed.home[j] == home) {
+                return 0;
+            }
+        }
+        unsigned int bit = 1u << k;
+        if (observed.old_cut[k] ||
+            observed.physical[k] == _PyIR_OBSERVED_MISSING ||
+            (!post && observed.physical[k] != _PyIR_OBSERVED_UNKNOWN))
+        {
+            unavailable |= bit;
+            may_nonnull |= bit;
+        }
+        else if (observed.physical[k] == _PyIR_OBSERVED_NULL) {
+            unavailable |= bit;
+        }
+    }
+    return owner_handler_safe(con, entry, exc_slot, lasti, observed.home,
+                              observed.count, unavailable, may_nonnull);
+}
+
 /* These words now own completion, rather than returning to frontend cleanup.
  * Validate their complete windows and the anchors their EH recipes preserve. */
 static int
@@ -1124,20 +1193,30 @@ validate_completion_words(struct _PyCodeConstructor *con)
     int n = (int)(PyBytes_GET_SIZE(con->code) / sizeof(*words));
     int nl = (int)PyTuple_GET_SIZE(con->localsplusnames);
     int limit = nl + con->stacksize;
-    bool has_completion = false;
+    bool has_owner_proof = false;
     for (int i = 0; i < n; i++) {
         _PyIRWord word = words[i];
         int opcode = _PyIR_BaseOpcode(IR_HANDLER(word));
         int count = _PyIR_CompletionWindow(opcode);
+        for (int edge = 0; edge < 2; edge++) {
+            if (_PyIR_ObserverOutcome(word, edge)) {
+                _PyIRObservedHomes observed;
+                if (!_PyIR_ObservedHomes(word, edge, nl, limit, &observed)) {
+                    goto invalid;
+                }
+                has_owner_proof = true;
+            }
+        }
         if (!count && opcode != RETURN_GENERATOR) {
             continue;
         }
-        has_completion = true;
+        has_owner_proof = true;
         int base = (int)IR_B(word), dst = (int)IR_A(word);
         if ((count && (base < nl || base > limit - count)) ||
             (dst != IR_NO_DST && dst >= limit) ||
             (opcode == RETURN_GENERATOR && dst != IR_NO_DST) ||
-            (opcode == FOR_ITER && dst >= base && dst < base + 2) ||
+            (opcode == FOR_ITER && dst >= nl && dst != IR_NO_DST &&
+             dst != base + 2) ||
             (opcode == YIELD_VALUE && IR_C(word) == 1 && dst != base))
         {
             goto invalid;
@@ -1150,7 +1229,7 @@ validate_completion_words(struct _PyCodeConstructor *con)
             }
         }
     }
-    if (!has_completion) {
+    if (!has_owner_proof) {
         return 0;
     }
     /* Named-local fields cannot borrow scratch homes. The handler proof
@@ -1190,6 +1269,23 @@ validate_completion_words(struct _PyCodeConstructor *con)
         }
         for (int i = start; i < start + size; i++) {
             int opcode = _PyIR_BaseOpcode(IR_HANDLER(words[i]));
+            for (int edge = 0; edge < 2; edge++) {
+                if (!_PyIR_ObserverOutcome(words[i], edge)) {
+                    continue;
+                }
+                int pre = observer_handler_safe(con, words[i], edge, target,
+                                                slot, slot_lasti & 1, 0);
+                int post = pre > 0
+                    ? observer_handler_safe(con, words[i], edge, target,
+                                            slot, slot_lasti & 1, 1)
+                    : pre;
+                if (pre < 0 || post < 0) {
+                    return -1;
+                }
+                if (!pre || !post) {
+                    goto invalid;
+                }
+            }
             if (opcode == FOR_ITER || opcode == SEND || opcode == CLEANUP_THROW) {
                 int base = IR_B(words[i]), dst = IR_A(words[i]);
                 int count = _PyIR_CompletionWindow(opcode);

@@ -1354,6 +1354,8 @@ register_resume_successors(PyCodeObject *code, int i, int next[2])
 
 typedef struct {
     int from, to, next, reverse_next, floor;
+    /* -1 is a pre-operation error; 0/1 is a committed normal outcome. */
+    int phase;
 } RegisterResumeEdge;
 
 typedef struct {
@@ -1364,6 +1366,7 @@ typedef struct {
     _PyIRExceptionEntry *handlers;
     int *context, *origins, *parents;
     int *save_tops, *save_parents, *save_columns;
+    unsigned char *save_acyclic;
     int nsave_columns;
     int *edge_heads, *reverse_heads, nedges;
     RegisterResumeEdge *edges;
@@ -1373,9 +1376,34 @@ typedef struct {
 } RegisterResumeAnalysis;
 
 typedef struct {
+    int local, home;
+} RegisterLocalRestore;
+
+typedef struct {
     uint64_t *preserve;
     size_t stride;
+    RegisterLocalRestore *restores;
+    int nrestores;
 } RegisterResumePlan;
+
+static void
+register_resume_plan_clear(RegisterResumePlan *plan)
+{
+    PyMem_Free(plan->preserve);
+    PyMem_Free(plan->restores);
+    memset(plan, 0, sizeof(*plan));
+}
+
+static bool
+register_plan_restores_local(const RegisterResumePlan *plan, int local)
+{
+    for (int i = 0; i < plan->nrestores; i++) {
+        if (plan->restores[i].local == local) {
+            return true;
+        }
+    }
+    return false;
+}
 
 typedef struct {
     enum { REGISTER_RESUME_OTHER, REGISTER_RESUME_PRE_WORD } kind;
@@ -1391,7 +1419,22 @@ register_resume_phase(PyFrameObject *self, int current, int what_event,
 {
     RegisterResumePhase phase = {REGISTER_RESUME_OTHER, current};
     _PyInterpreterFrame *frame = self->f_frame;
+    _PyIRObserverSpec context;
+    if (!_PyEval_GetObserverContext(PyThreadState_GET(), frame, what_event, &context)) {
+        return phase;
+    }
+    bool original_pre = context.phase == _PY_IR_OBSERVER_PRE_WORD &&
+                        context.site == frame->instr_ptr &&
+                        context.generation == self->f_lineno_generation;
+    /* A completed setter publishes a fresh PRE landing before its closes.
+     * The enclosing LINE/source adapter already honors generation changes;
+     * its old input/output facts are no longer authority for this landing. */
+    bool committed_pre = context.generation != self->f_lineno_generation &&
+                         (context.phase == _PY_IR_OBSERVER_PRE_WORD ||
+                          context.phase == _PY_IR_OBSERVER_SOURCE_POST) &&
+                         frame->instr_ptr == frame->return_pc;
     if (what_event == PY_MONITORING_EVENT_LINE && observed == frame &&
+        (original_pre || committed_pre) &&
         !pending_call && !frame->pending_redirect &&
         self->f_source_event < 0 && self->f_source_event_error < 0 &&
         current >= 0 && current < Py_SIZE(_PyFrame_GetCode(frame)) &&
@@ -1415,6 +1458,7 @@ register_resume_analysis_clear(RegisterResumeAnalysis *analysis)
     PyMem_Free(analysis->save_tops);
     PyMem_Free(analysis->save_parents);
     PyMem_Free(analysis->save_columns);
+    PyMem_Free(analysis->save_acyclic);
     PyMem_Free(analysis->edge_heads);
     PyMem_Free(analysis->reverse_heads);
     PyMem_Free(analysis->edges);
@@ -1457,11 +1501,12 @@ register_resume_handlers(PyCodeObject *code, RegisterResumeAnalysis *analysis)
 }
 
 static void
-register_resume_add_edge(RegisterResumeAnalysis *analysis, int from, int to, int floor)
+register_resume_add_edge(RegisterResumeAnalysis *analysis, int from, int to,
+                         int floor, int phase)
 {
     int index = analysis->nedges++;
     analysis->edges[index] = (RegisterResumeEdge){from, to,
-        analysis->edge_heads[from], analysis->reverse_heads[to], floor};
+        analysis->edge_heads[from], analysis->reverse_heads[to], floor, phase};
     analysis->edge_heads[from] = analysis->reverse_heads[to] = index;
 }
 
@@ -1503,12 +1548,13 @@ register_resume_graph(PyCodeObject *code, RegisterResumeAnalysis *analysis)
         register_resume_successors(code, i, next);
         for (int k = 0; k < 2; k++) {
             if (next[k] >= 0 && next[k] < analysis->n) {
-                register_resume_add_edge(analysis, i, next[k], -1);
+                register_resume_add_edge(analysis, i, next[k], -1, k);
             }
         }
         _PyIRExceptionEntry handler = analysis->handlers[i];
         if (handler.target >= 0) {
-            register_resume_add_edge(analysis, i, handler.target, handler.slot - handler.lasti);
+            register_resume_add_edge(analysis, i, handler.target,
+                                     handler.slot - handler.lasti, -1);
         }
     }
     for (uint32_t j = 0; j < source.nrecords; j++) {
@@ -1518,7 +1564,7 @@ register_resume_graph(PyCodeObject *code, RegisterResumeAnalysis *analysis)
         analysis->source_heads[event->from] = (int)j;
         if (event->handler >= 0) {
             register_resume_add_edge(analysis, event->from, event->handler,
-                                     event->exc_slot - event->lasti);
+                                     event->exc_slot - event->lasti, event->edge);
         }
     }
     return 0;
@@ -2517,6 +2563,197 @@ done:
     return result;
 }
 
+/* A static producer token identifies one dynamic binding only if that
+ * producer cannot reenter. Cyclic producers need a stronger generation witness
+ * before their saved values can be used for restoration. */
+static int
+register_save_acyclic(RegisterResumeAnalysis *analysis, int producer)
+{
+    int n = analysis->n;
+    if (analysis->save_acyclic == NULL) {
+        analysis->save_acyclic = PyMem_Calloc((size_t)Py_MAX(n, 1), 1);
+        if (analysis->save_acyclic == NULL) {
+            PyErr_NoMemory();
+            return -1;
+        }
+    }
+    if (analysis->save_acyclic[producer]) {
+        return analysis->save_acyclic[producer] == 1;
+    }
+    if ((size_t)n > SIZE_MAX / sizeof(int)) {
+        PyErr_NoMemory();
+        return -1;
+    }
+    unsigned char *seen = PyMem_Calloc((size_t)Py_MAX(n, 1), 1);
+    int *queue = PyMem_New(int, Py_MAX(n, 1));
+    if (seen == NULL || queue == NULL) {
+        PyMem_Free(seen); PyMem_Free(queue);
+        PyErr_NoMemory();
+        return -1;
+    }
+    int head = 0, tail = 0;
+    seen[producer] = 1;
+    queue[tail++] = producer;
+    int result = 1;
+    while (head < tail && result) {
+        int pc = queue[head++];
+        for (int edge = analysis->edge_heads[pc]; edge >= 0;
+             edge = analysis->edges[edge].next)
+        {
+            int next = analysis->edges[edge].to;
+            if (next == producer) {
+                result = 0;
+                break;
+            }
+            if (!seen[next]) {
+                seen[next] = 1;
+                queue[tail++] = next;
+            }
+        }
+    }
+    analysis->save_acyclic[producer] = result ? 1 : 2;
+    PyMem_Free(seen); PyMem_Free(queue);
+    return result;
+}
+
+/* Restoring a genuine unbound local must not expose it to a borrow whose
+ * original control flow proved the binding existed. Keep that obligation on
+ * every path until an encoded successful outcome guarantees a bound value.
+ * Ordinary errors precede the definition; source callback errors follow it. */
+static int
+register_unbound_target_safe(PyCodeObject *code, RegisterResumeAnalysis *analysis,
+                             int target, int local)
+{
+    size_t n = (size_t)Py_MAX(analysis->n, 1);
+    if (n > SIZE_MAX / sizeof(int)) {
+        PyErr_NoMemory();
+        return -1;
+    }
+    unsigned char *seen = PyMem_Calloc(n, 1);
+    int *queue = PyMem_New(int, n);
+    if (seen == NULL || queue == NULL) {
+        PyMem_Free(seen); PyMem_Free(queue);
+        PyErr_NoMemory();
+        return -1;
+    }
+    int head = 0, tail = 0, result = 1;
+    seen[target] = 1;
+    queue[tail++] = target;
+    while (head < tail && result) {
+        int pc = queue[head++];
+        _PyIRWord word = code->co_words[pc];
+        int arg = _PyCode_InstrOparg(code, pc);
+        if (_PyIR_BindingRead(word, arg, local) == _PyIR_BINDING_REQUIRES_VALUE) {
+            result = 0;
+            break;
+        }
+        for (int e = analysis->edge_heads[pc]; e >= 0;
+             e = analysis->edges[e].next)
+        {
+            RegisterResumeEdge edge = analysis->edges[e];
+            if (edge.phase >= 0 &&
+                _PyIR_DefinesBinding(word, arg, edge.phase, local))
+            {
+                continue;
+            }
+            if (!seen[edge.to]) {
+                seen[edge.to] = 1;
+                queue[tail++] = edge.to;
+            }
+        }
+    }
+    PyMem_Free(seen); PyMem_Free(queue);
+    return result;
+}
+
+static int
+register_saved_locals_plan(_PyInterpreterFrame *frame, int current, int target,
+                           RegisterResumeAnalysis *analysis, bool can_restore,
+                           RegisterResumePlan *plan)
+{
+    PyCodeObject *code = _PyFrame_GetCode(frame);
+    const int *origins = analysis->origins + (size_t)current * analysis->nt;
+    for (int local = 0; local < analysis->nl; local++) {
+        int col = analysis->save_columns[local];
+        if (col < 0) {
+            continue;
+        }
+        int top = analysis->save_tops[(size_t)current * analysis->nsave_columns + col];
+        if (analysis->save_tops[(size_t)target * analysis->nsave_columns + col] != 0 ||
+            top < 0)
+        {
+            return 0;
+        }
+        if (top == 0) {
+            continue;
+        }
+        _PyLocals_Kind kind = _PyLocals_GetKind(code->co_localspluskinds, local);
+        if (!can_restore || !(kind & CO_FAST_LOCAL) ||
+            (kind & (CO_FAST_CELL | CO_FAST_FREE | CO_FAST_CONST)) ||
+            !register_origin_chain(analysis->save_parents, analysis->n, top, -1,
+                                     analysis->n))
+        {
+            return 0;
+        }
+        int selected = -1;
+        for (int node = top; node > 0; node = analysis->save_parents[node - 1]) {
+            _PyIRWord word = code->co_words[node - 1];
+            if (_PyIR_BaseOpcode(IR_HANDLER(word)) != LOAD_FAST_AND_CLEAR ||
+                (int)IR_B(word) != local)
+            {
+                return 0;
+            }
+            int acyclic = register_save_acyclic(analysis, node - 1);
+            if (acyclic <= 0) {
+                return acyclic;
+            }
+            int home = -1;
+            for (int j = 0; j < analysis->nt; j++) {
+                if (origins[j] == -node) {
+                    home = analysis->nl + j;
+                    break;
+                }
+            }
+            if (home < 0) {
+                /* Losing any binding-state token leaves an obligation; a
+                 * coincidentally NULL or equal home cannot replace it. */
+                return 0;
+            }
+            if (analysis->save_parents[node - 1] == 0) {
+                selected = home;
+            }
+        }
+        if (selected < analysis->nl) {
+            return 0;
+        }
+        if (PyValue_IsNull(frame->base[selected])) {
+            int safe = register_unbound_target_safe(code, analysis, target, local);
+            if (safe <= 0) {
+                return safe;
+            }
+        }
+        int relative = selected - analysis->nl;
+        if (analysis->required[(size_t)target * analysis->stride + relative / 64] &
+            ((uint64_t)1 << (relative % 64)))
+        {
+            return 0;
+        }
+        const uint32_t *constants = _PyCode_CONSTSLOTS(code);
+        for (int i = 0; i < code->co_nconstslots; i++) {
+            if (constants[i * 2] == (uint32_t)selected) {
+                return 0;
+            }
+        }
+        for (int i = 0; i < plan->nrestores; i++) {
+            if (plan->restores[i].home == selected) {
+                return 0;
+            }
+        }
+        plan->restores[plan->nrestores++] = (RegisterLocalRestore){local, selected};
+    }
+    return 1;
+}
+
 static int
 register_resume_plan(_PyInterpreterFrame *frame, int current, int target,
                      RegisterResumeAnalysis *analysis, bool allow_anchor,
@@ -2524,20 +2761,17 @@ register_resume_plan(_PyInterpreterFrame *frame, int current, int target,
 {
     bool can_cancel = phase.kind == REGISTER_RESUME_PRE_WORD && phase.pc == current;
     memset(plan->preserve, 0, plan->stride * sizeof(uint64_t));
-    /* Empty means positively restored, not merely that every saved value
-     * origin was lost. This rung cannot abandon a named-local obligation. */
-    for (int col = 0; col < analysis->nsave_columns; col++) {
-        if (analysis->save_tops[(size_t)current * analysis->nsave_columns + col] != 0 ||
-            analysis->save_tops[(size_t)target * analysis->nsave_columns + col] != 0)
-        {
-            return 0;
-        }
-    }
+    plan->nrestores = 0;
     int context = analysis->context[current];
     if (context < 0 || context != analysis->context[target] ||
         !register_context_chain(analysis, context, -1))
     {
         return 0;
+    }
+    int restored = register_saved_locals_plan(frame, current, target,
+                                             analysis, can_cancel && allow_anchor, plan);
+    if (restored <= 0) {
+        return restored;
     }
     if (context == 0) {
         if (can_cancel && analysis->safe[target]) {
@@ -2780,13 +3014,9 @@ frame_lineno_set_impl(PyFrameObject *self, PyObject *value)
     _PyInterpreterFrame *frame_at_line = self->f_frame;
     int real_current = _PyInterpreterFrame_LASTI(frame_at_line);
     _PyThreadStateImpl *line_tstate = (_PyThreadStateImpl *)PyThreadState_GET();
-    if (what_event == PY_MONITORING_EVENT_LINE && !is_suspended &&
-        line_tstate->observed_frame == frame_at_line &&
-        !frame_at_line->pending_redirect &&
-        self->f_source_event < 0 && self->f_source_event_error < 0 &&
-        real_current >= 0 && real_current < len &&
-        IR_HANDLER(FT_ATOMIC_LOAD_UINT64_RELAXED(*frame_at_line->instr_ptr)) ==
-            INSTRUMENTED_LINE &&
+    RegisterResumePhase identity_phase = register_resume_phase(
+        self, real_current, what_event, false, line_tstate->observed_frame);
+    if (!is_suspended && identity_phase.kind == REGISTER_RESUME_PRE_WORD &&
         PyCode_Addr2Line(code, real_current) == new_lineno)
     {
         PyMem_Free(lines);
@@ -2798,6 +3028,7 @@ frame_lineno_set_impl(PyFrameObject *self, PyObject *value)
         self->f_line_next = -1;
         self->f_lineno = 0;
         self->f_lineno_generation++;
+        _PyEval_InvalidateSourceErrors(PyThreadState_GET(), frame_at_line);
         return 0;
     }
 
@@ -2858,7 +3089,10 @@ frame_lineno_set_impl(PyFrameObject *self, PyObject *value)
     }
     plan.stride = analysis.stride;
     plan.preserve = PyMem_Calloc(plan.stride, sizeof(uint64_t));
-    if (plan.preserve == NULL) {
+    plan.restores = PyMem_Calloc((size_t)Py_MAX(analysis.nsave_columns, 1),
+                                 sizeof(*plan.restores));
+    if (plan.preserve == NULL || plan.restores == NULL) {
+        register_resume_plan_clear(&plan);
         register_resume_analysis_clear(&analysis);
         PyMem_Free(lines);
         PyErr_NoMemory();
@@ -2873,7 +3107,7 @@ frame_lineno_set_impl(PyFrameObject *self, PyObject *value)
         int *origins = PyMem_New(int, Py_MAX(analysis.nt, 1));
         if (origins == NULL) {
             register_resume_analysis_clear(&analysis);
-            PyMem_Free(plan.preserve); PyMem_Free(lines);
+            register_resume_plan_clear(&plan); PyMem_Free(lines);
             PyErr_NoMemory();
             return -1;
         }
@@ -2882,7 +3116,7 @@ frame_lineno_set_impl(PyFrameObject *self, PyObject *value)
         int *saved = PyMem_New(int, Py_MAX(analysis.nsave_columns, 1));
         if (saved == NULL) {
             PyMem_Free(origins); register_resume_analysis_clear(&analysis);
-            PyMem_Free(plan.preserve); PyMem_Free(lines);
+            register_resume_plan_clear(&plan); PyMem_Free(lines);
             PyErr_NoMemory();
             return -1;
         }
@@ -2936,7 +3170,7 @@ frame_lineno_set_impl(PyFrameObject *self, PyObject *value)
     register_resume_analysis_clear(&analysis);
     PyMem_Free(lines);
     if (best_addr < 0) {
-        PyMem_Free(plan.preserve);
+        register_resume_plan_clear(&plan);
         if (recipe >= 0) {
             PyErr_SetString(PyExc_ValueError,
                             "jump requires an incoming temporary register owner");
@@ -2950,10 +3184,11 @@ frame_lineno_set_impl(PyFrameObject *self, PyObject *value)
     for (int i = 0; i < code->co_nlocalsplus; i++) {
         // Counting every unbound local is overly-cautious, but a full flow
         // analysis (like we do in the compiler) is probably too expensive:
-        unbound += PyValue_IsNull(self->f_frame->base[i]);
+        unbound += PyValue_IsNull(self->f_frame->base[i]) &&
+                   !register_plan_restores_local(&plan, i);
     }
     if (self->f_lineno_generation == UINT64_MAX) {
-        PyMem_Free(plan.preserve);
+        register_resume_plan_clear(&plan);
         PyErr_SetString(PyExc_OverflowError, "debugger redirect generation exhausted");
         return -1;
     }
@@ -2967,7 +3202,7 @@ frame_lineno_set_impl(PyFrameObject *self, PyObject *value)
         const char *e = "assigning None to %d unbound local%s";
         const char *s = (unbound == 1) ? "" : "s";
         if (PyErr_WarnFormat(PyExc_RuntimeWarning, 0, e, unbound, s)) {
-            PyMem_Free(plan.preserve);
+            register_resume_plan_clear(&plan);
             return -1;
         }
         /* Warning hooks may execute Python and redirect this same frame.
@@ -2979,22 +3214,22 @@ frame_lineno_set_impl(PyFrameObject *self, PyObject *value)
             self->f_lineno_generation != before_generation ||
             frame->pending_redirect != before_pending)
         {
-            PyMem_Free(plan.preserve);
+            register_resume_plan_clear(&plan);
             return 0;
         }
         if (register_resume_analyze(frame, !pending_call, &analysis) < 0) {
-            PyMem_Free(plan.preserve);
+            register_resume_plan_clear(&plan);
             return -1;
         }
         int valid = register_resume_plan(frame, current, best_addr, &analysis,
                                           !pending_call, selected_phase, &plan);
         register_resume_analysis_clear(&analysis);
         if (valid < 0) {
-            PyMem_Free(plan.preserve);
+            register_resume_plan_clear(&plan);
             return -1;
         }
         if (!valid) {
-            PyMem_Free(plan.preserve);
+            register_resume_plan_clear(&plan);
             PyErr_SetString(PyExc_ValueError,
                             "jump owner state changed during warning");
             return -1;
@@ -3002,21 +3237,32 @@ frame_lineno_set_impl(PyFrameObject *self, PyObject *value)
     }
     int nslots = code->co_framesize - FRAME_SPECIALS_SIZE;
     PyValue *retired = NULL;
+    PyValue *restored_values = NULL;
     if (!pending_call) {
-        retired = PyMem_New(PyValue, Py_MAX(nslots - code->co_nlocalsplus, 1));
-        if (retired == NULL) {
-            PyMem_Free(plan.preserve);
+        size_t count = (size_t)(nslots - code->co_nlocalsplus) + plan.nrestores;
+        if (count > SIZE_MAX / sizeof(PyValue)) {
+            register_resume_plan_clear(&plan);
+            PyErr_NoMemory();
+            return -1;
+        }
+        retired = PyMem_New(PyValue, Py_MAX(count, 1));
+        restored_values = PyMem_Calloc((size_t)Py_MAX(plan.nrestores, 1), sizeof(PyValue));
+        if (retired == NULL || restored_values == NULL) {
+            PyMem_Free(retired); PyMem_Free(restored_values);
+            register_resume_plan_clear(&plan);
             PyErr_NoMemory();
             return -1;
         }
     }
     /* No callback is possible between the final proof and the commit. */
-    for (int i = 0; i < code->co_nlocalsplus; i++) {
-        if (PyValue_IsNull(frame->base[i])) {
-            frame->base[i] = PyValue_None;
-        }
-    }
     int nretired = 0;
+    for (int i = 0; i < plan.nrestores; i++) {
+        RegisterLocalRestore action = plan.restores[i];
+        restored_values[i] = frame->base[action.home];
+        frame->base[action.home] = PyValue_NULL;
+        retired[nretired++] = frame->base[action.local];
+        frame->base[action.local] = PyValue_NULL;
+    }
     if (!pending_call) {
         const uint32_t *constants = _PyCode_CONSTSLOTS(code);
         for (int slot = code->co_nlocalsplus; slot < nslots; slot++) {
@@ -3030,7 +3276,17 @@ frame_lineno_set_impl(PyFrameObject *self, PyObject *value)
             }
         }
     }
-    PyMem_Free(plan.preserve);
+    for (int i = 0; i < code->co_nlocalsplus; i++) {
+        if (PyValue_IsNull(frame->base[i]) && !register_plan_restores_local(&plan, i)) {
+            frame->base[i] = PyValue_None;
+        }
+    }
+    for (int i = 0; i < plan.nrestores; i++) {
+        frame->base[plan.restores[i].local] = restored_values[i];
+        restored_values[i] = PyValue_NULL;
+    }
+    PyMem_Free(restored_values);
+    register_resume_plan_clear(&plan);
     /* Commit the continuation before any closing callback. A suspended
      * caller's overlap remains untouched until its child retires. */
     self->f_lineno_generation++;
@@ -3044,6 +3300,7 @@ frame_lineno_set_impl(PyFrameObject *self, PyObject *value)
         return 0;
     }
     self->f_frame->instr_ptr = self->f_frame->return_pc;
+    _PyEval_InvalidateSourceErrors(PyThreadState_GET(), self->f_frame);
     /* All surplus owners are detached before the first callback. A nested
      * redirect can now install new owners without later closes clearing them. */
     for (int i = 0; i < nretired; i++) {

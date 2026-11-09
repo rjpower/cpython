@@ -1144,7 +1144,7 @@ _borrowed_word_impl(PyObject *obj)
 static int
 call_one_instrument(
     PyInterpreterState *interp, PyThreadState *tstate, const PyValue *args,
-    size_t nargsf, int8_t tool, int event)
+    size_t nargsf, int8_t tool, int event, const _PyIRObserverSpec *context)
 {
     assert(0 <= tool && tool < 8);
     assert(tstate->tracing == 0);
@@ -1158,8 +1158,12 @@ call_one_instrument(
     _PyThreadStateImpl *impl = (_PyThreadStateImpl *)tstate;
     _PyInterpreterFrame *old_observed = impl->observed_frame;
     impl->observed_frame = tstate->current_frame;
+    _PyIRObserverSpec unsupported = {.phase = _PY_IR_OBSERVER_UNSUPPORTED};
+    _PyIRObserverScope scope;
+    _PyEval_EnterObserverContext(tstate, context ? context : &unsupported, &scope);
     PyValue res = _PyValue_VectorcallTstate(
         tstate, _borrowed_word(instrument), args, nargsf, NULL);
+    _PyEval_LeaveObserverContext(tstate, &scope);
     impl->observed_frame = old_observed;
     tstate->tracing--;
     tstate->what_event = old_what;
@@ -1353,9 +1357,10 @@ remove_local_tool(PyCodeObject *code, PyInterpreterState *interp,
 }
 
 static int
-call_instrumentation_vector(
+call_instrumentation_vector_context(
     _PyInstr *instr, PyThreadState *tstate, int event,
-    _PyInterpreterFrame *frame, _PyInstr *arg2, Py_ssize_t nargs, PyValue args[])
+    _PyInterpreterFrame *frame, _PyInstr *arg2, Py_ssize_t nargs, PyValue args[],
+    const _PyIRObserverSpec *context)
 {
     if (tstate->tracing) {
         return 0;
@@ -1381,7 +1386,7 @@ call_instrumentation_vector(
         assert(tool >= 0 && tool < 8);
         assert(tools & (1 << tool));
         tools ^= (1 << tool);
-        int res = call_one_instrument(interp, tstate, callargs, nargsf, tool, event);
+        int res = call_one_instrument(interp, tstate, callargs, nargsf, tool, event, context);
         if (res == 0) {
             /* Nothing to do */
         }
@@ -1415,6 +1420,15 @@ call_instrumentation_vector(
         }
     }
     return err;
+}
+
+static int
+call_instrumentation_vector(
+    _PyInstr *instr, PyThreadState *tstate, int event,
+    _PyInterpreterFrame *frame, _PyInstr *arg2, Py_ssize_t nargs, PyValue args[])
+{
+    return call_instrumentation_vector_context(instr, tstate, event, frame,
+                                                arg2, nargs, args, NULL);
 }
 
 Py_NO_INLINE int
@@ -1494,6 +1508,10 @@ source_line_event(PyThreadState *tstate, _PyInterpreterFrame *frame,
     _PyIRSourceEvent event;
     _PyIRSource_Event(map, index, &event);
     ObserverRedirectState before = observer_redirect_state(frame);
+    _PyIRObserverSpec context = {
+        frame, _PyFrame_InstrAt(frame, event.from),
+        _PyFrame_InstrAt(frame, event.to), before.generation,
+        PY_MONITORING_EVENT_LINE, _PY_IR_OBSERVER_SOURCE_POST, event.edge, index};
     PyFrameObject *object = _PyFrame_GetFrameObject(frame);
     if (object == NULL) {
         goto error;
@@ -1511,8 +1529,11 @@ source_line_event(PyThreadState *tstate, _PyInterpreterFrame *frame,
             _PyThreadStateImpl *impl = (_PyThreadStateImpl *)tstate;
             _PyInterpreterFrame *old_observed = impl->observed_frame;
             impl->observed_frame = frame;
+            _PyIRObserverScope scope;
+            _PyEval_EnterObserverContext(tstate, &context, &scope);
             int err = impl->value_tracefunc(
                 tstate->c_traceobj, object, PyTrace_LINE, PyValue_Borrow(PyValue_None));
+            _PyEval_LeaveObserverContext(tstate, &scope);
             impl->observed_frame = old_observed;
             tstate->tracing--;
             tstate->what_event = old_what;
@@ -1530,7 +1551,7 @@ source_line_event(PyThreadState *tstate, _PyInterpreterFrame *frame,
         tools &= ~(1 << tool);
         int res = call_one_instrument(tstate->interp, tstate, &args[1],
                                      2 | PY_VECTORCALL_ARGUMENTS_OFFSET,
-                                     tool, PY_MONITORING_EVENT_LINE);
+                                     tool, PY_MONITORING_EVENT_LINE, &context);
         if (res < 0) {
             goto error;
         }
@@ -1647,9 +1668,14 @@ _PyIR_ObserveStep(PyThreadState *tstate, _PyInterpreterFrame *frame,
             _PyErr_SetRaisedException(tstate, exc);
             goto error;
         }
-        int err = _Py_call_instrumentation_arg(tstate,
-            PY_MONITORING_EVENT_STOP_ITERATION, frame, site,
-            PyValue_FromObjectBorrow(exc));
+        _PyIRObserverSpec context = {frame, site, next, before.generation,
+            PY_MONITORING_EVENT_STOP_ITERATION, _PY_IR_OBSERVER_STEP_READY,
+            _PyIR_SOURCE_TAKEN, UINT32_MAX};
+        PyValue args[4] = {PyValue_NULL, PyValue_NULL, PyValue_NULL,
+                          PyValue_DUP(PyValue_FromObjectBorrow(exc))};
+        int err = call_instrumentation_vector_context(site, tstate,
+            PY_MONITORING_EVENT_STOP_ITERATION, frame, site, 3, args, &context);
+        PyValue_XCLOSE(args[3]);
         Py_DECREF(exc);
         if (err < 0) {
             goto error;
@@ -1662,7 +1688,11 @@ _PyIR_ObserveStep(PyThreadState *tstate, _PyInterpreterFrame *frame,
             if (get_tools_for_instruction(code, tstate->interp, from, event)) {
                 PyValue args[4] = {PyValue_NULL, PyValue_NULL, PyValue_NULL,
                                   PyValue_FromInt64(dest_offset(frame, next))};
-                if (call_instrumentation_vector(site, tstate, event, frame, site, 3, args)) {
+                _PyIRObserverSpec context = {frame, site, next, before.generation,
+                    event, _PY_IR_OBSERVER_POST_COMMITTED,
+                    _PyIR_SOURCE_TAKEN, UINT32_MAX};
+                if (call_instrumentation_vector_context(
+                        site, tstate, event, frame, site, 3, args, &context)) {
                     goto error;
                 }
             }
@@ -1703,6 +1733,46 @@ error:
      * separate source-error cursor retains an unredirected edge recipe. */
     return (_PyIRStepResult){frame->instr_ptr + 1,
         phase == 0 ? _PY_IR_STEP_ERROR_PRE : _PY_IR_STEP_ERROR_POST};
+}
+
+_PyIRObserverResult
+_PyIR_ObserveCommittedBranch(PyThreadState *tstate, _PyInterpreterFrame *frame,
+    _PyInstr *site, _PyInstr *reported_source, _PyInstr *next, int event, int edge)
+{
+    PyCodeObject *code = _PyFrame_GetCode(frame);
+    if (tstate->tracing || code->_co_monitoring == NULL ||
+        (code->co_flags & CO_NO_MONITORING_EVENTS)) {
+        return (_PyIRObserverResult){0, next};
+    }
+    ObserverRedirectState before = observer_redirect_state(frame);
+    _PyIRObserverSpec context = {frame, site, next, before.generation,
+        event, _PY_IR_OBSERVER_POST_COMMITTED, edge, UINT32_MAX};
+    PyValue args[4] = {PyValue_NULL, PyValue_NULL, PyValue_NULL,
+                      PyValue_FromInt64(dest_offset(frame, next))};
+    if (call_instrumentation_vector_context(site, tstate, event, frame,
+                                            reported_source, 3, args, &context)) {
+        return (_PyIRObserverResult){-1, frame->instr_ptr};
+    }
+    if (observer_redirected(frame, before)) {
+        return (_PyIRObserverResult){1, frame->instr_ptr};
+    }
+    if (code->_co_monitoring->active_monitors.tools[PY_MONITORING_EVENT_LINE]) {
+        int line = PyCode_Addr2Line(code, instr_offset(frame, site));
+        bool advanced = false;
+        uint64_t epoch = code->_co_monitoring->line_epoch;
+        int status = source_edge_events(tstate, frame, instr_offset(frame, site),
+            dest_offset(frame, next), edge, &line, &advanced, &epoch);
+        if (status < 0) {
+            return (_PyIRObserverResult){-1, frame->instr_ptr};
+        }
+        if (status > 0) {
+            return (_PyIRObserverResult){1, frame->instr_ptr};
+        }
+        if (record_line_landing(frame, next, line, epoch) < 0) {
+            return (_PyIRObserverResult){-1, frame->instr_ptr};
+        }
+    }
+    return (_PyIRObserverResult){0, next};
 }
 
 Py_NO_INLINE _PyInstr *
@@ -1870,6 +1940,9 @@ _Py_call_instrumentation_line(PyThreadState *tstate, _PyInterpreterFrame* frame,
         }
     }
 
+    ObserverRedirectState line_before = observer_redirect_state(frame);
+    _PyIRObserverSpec context = {frame, instr, instr, line_before.generation,
+        PY_MONITORING_EVENT_LINE, _PY_IR_OBSERVER_PRE_WORD, -1, UINT32_MAX};
     uint8_t tools = code->_co_monitoring->line_tools != NULL ?
         code->_co_monitoring->line_tools[i] :
         (interp->monitors.tools[PY_MONITORING_EVENT_LINE] |
@@ -1895,9 +1968,12 @@ _Py_call_instrumentation_line(PyThreadState *tstate, _PyInterpreterFrame* frame,
                 _PyThreadStateImpl *impl = (_PyThreadStateImpl *)tstate;
                 _PyInterpreterFrame *old_observed = impl->observed_frame;
                 impl->observed_frame = frame;
+                _PyIRObserverScope scope;
+                _PyEval_EnterObserverContext(tstate, &context, &scope);
                 int err = impl->value_tracefunc(
                     tstate->c_traceobj, frame_obj, PyTrace_LINE,
                     PyValue_Borrow(PyValue_None));
+                _PyEval_LeaveObserverContext(tstate, &scope);
                 impl->observed_frame = old_observed;
                 frame_obj->f_lineno = 0;
                 tstate->tracing--;
@@ -1922,7 +1998,7 @@ _Py_call_instrumentation_line(PyThreadState *tstate, _PyInterpreterFrame* frame,
         tools &= ~(1 << tool);
         int res = call_one_instrument(interp, tstate, &args[1],
                                       2 | PY_VECTORCALL_ARGUMENTS_OFFSET,
-                                      tool, PY_MONITORING_EVENT_LINE);
+                                      tool, PY_MONITORING_EVENT_LINE, &context);
         if (res == 0) {
             /* Nothing to do */
         }
@@ -1979,7 +2055,7 @@ _Py_call_instrumentation_instruction(PyThreadState *tstate, _PyInterpreterFrame*
         tools &= ~(1 << tool);
         int res = call_one_instrument(interp, tstate, &args[1],
                                       2 | PY_VECTORCALL_ARGUMENTS_OFFSET,
-                                      tool, PY_MONITORING_EVENT_INSTRUCTION);
+                                      tool, PY_MONITORING_EVENT_INSTRUCTION, NULL);
         if (res == 0) {
             /* Nothing to do */
         }
@@ -3355,7 +3431,7 @@ capi_call_instrumentation(PyMonitoringState *state, PyObject *codelike, int32_t 
         assert(tool >= 0 && tool < 8);
         assert(tools & (1 << tool));
         tools ^= (1 << tool);
-        int res = call_one_instrument(interp, tstate, callargs, nargsf, tool, event);
+        int res = call_one_instrument(interp, tstate, callargs, nargsf, tool, event, NULL);
         if (res == 0) {
             /* Nothing to do */
         }

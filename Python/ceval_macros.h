@@ -598,6 +598,41 @@ _PyIR_AdoptTemp(PyValueBorrow view)
 #define IR_STORE_CANONICAL_DST(F, V) \
     IR_STORE_DST_IMPL(F, V, (V))
 
+/* Observation sees the committed binding; its displaced or ignored owner
+ * stays in C until the terminal adapter has published its continuation. */
+#define IR_COMMIT_OBSERVED_DST(F, V, RETIRED) \
+    do { \
+        assert(PyValue_IsNull(RETIRED)); \
+        if (IR_IS_LOCAL(F)) { \
+            (RETIRED) = IR_SLOT(F); \
+            IR_SLOT(F) = _PyValue_Publish(&(V)); \
+            _PyValue_CheckHome(IR_SLOT(F)); \
+        } \
+        else if ((F) == IR_NO_DST) { \
+            (RETIRED) = (V); \
+        } \
+        else { \
+            assert(PyValue_IsNull(IR_SLOT(F)) || PyValue_Is(IR_SLOT(F), (V))); \
+            IR_SLOT(F) = _PyValue_Publish(&(V)); \
+            _PyValue_CheckTemp(IR_SLOT(F)); \
+        } \
+    } while (0)
+
+#define IR_MOVE_OBSERVED_DST(F, SLOT, RETIRED) \
+    do { \
+        assert(PyValue_IsNull(RETIRED)); \
+        if (IR_IS_LOCAL(F)) { \
+            (RETIRED) = IR_SLOT(F); \
+            IR_SLOT(F) = (SLOT); \
+            (SLOT) = PyValue_NULL; \
+            _PyValue_CheckHome(IR_SLOT(F)); \
+        } \
+        else if ((F) == IR_NO_DST) { \
+            (RETIRED) = (SLOT); \
+            (SLOT) = PyValue_NULL; \
+        } \
+    } while (0)
+
 /* The source is a borrowed value from a canonical home. */
 #define IR_CANONICAL_HOME_DUP(V) \
     (assert(_PyValue_IsHome(V)), PyValue_XDUP(V))

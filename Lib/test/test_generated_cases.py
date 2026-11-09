@@ -392,6 +392,115 @@ class TestIRCases(unittest.TestCase):
                 with self.assertRaises(SyntaxError):
                     generate(source.replace(old, new, 1))
 
+    def test_terminal_observer_ownership_and_composition(self):
+        source = """
+        inst(OP, (value -- res)) {
+            PyValue held = TAKE(value);
+            res = held;
+            IR_OBSERVE_COMMITTED_BRANCH(this_instr, next_instr,
+                                        PY_MONITORING_EVENT_BRANCH_RIGHT);
+        }
+        """
+        output = self.ir_output(source)
+        self.assertNotIn("value_boxes[", output)
+        self.assertNotIn("value_owners", output)
+        self.assertFalse(ir_generator.boxes_into_record(
+            "_PyValueTemps_Close(value_temps);"))
+        self.assertTrue(ir_generator.boxes_into_record(
+            "unknown_helper(value_temps);"))
+        changes = (
+            ("res = held;", "PyValue_CLOSE(held);", "not defined"),
+            ("PyValue held = TAKE(value);\n            res = held;",
+             "res = PyValue_None;", "still live"),
+            ("res = held;", "PyValue extra = PyValue_DUP(held); res = held;",
+             "untransferred C owners"),
+            ("res = held;", "PyValue alias = held; PyValue_CLOSE(held); res = alias;",
+             "used after transfer"),
+            ("res = held;", "if (flag) { PyValue_CLOSE(held); } res = held;",
+             "ambiguous terminal C ownership"),
+            ("res = held;", "steal(held); res = held;",
+             "unproved terminal C owner transport"),
+            ("res = held;", "int ir_observer_next = 0; res = held;",
+             "reserved local"),
+            ("PY_MONITORING_EVENT_BRANCH_RIGHT);",
+             "PY_MONITORING_EVENT_BRANCH_RIGHT); PyValue_CLOSE(res);",
+             "follows terminal observer"),
+            ("PY_MONITORING_EVENT_BRANCH_RIGHT);",
+             "PY_MONITORING_EVENT_BRANCH_RIGHT); "
+             "IR_OBSERVE_COMMITTED_BRANCH(this_instr, next_instr, "
+             "PY_MONITORING_EVENT_BRANCH_RIGHT);", "follows terminal observer"),
+        )
+        for old, new, message in changes:
+            with self.subTest(message=message):
+                self.assertIn(old, source)
+                with self.assertRaisesRegex(SyntaxError, message):
+                    self.ir_output(source.replace(old, new, 1))
+        with self.assertRaisesRegex(SyntaxError, "finish the composed handler"):
+            self.ir_output(source.replace("inst(OP,", "op(_OP,") + """
+            op(_AFTER, (--)) { do_work(); }
+            macro(OP) = _OP + _AFTER;
+        """)
+
+    def test_terminal_observer_defined_null_edge(self):
+        source = """
+        inst(OP, (value -- res)) {
+            PyValue held = TAKE(value);
+            if (flag) {
+                res = held;
+                IR_OBSERVE_COMMITTED_BRANCH(this_instr, next_instr,
+                                            PY_MONITORING_EVENT_BRANCH_RIGHT);
+            }
+            else {
+                IR_DEFER_CLOSE(held);
+                res = PyValue_NULL;
+                IR_OBSERVE_COMMITTED_BRANCH(this_instr, next_instr,
+                                            PY_MONITORING_EVENT_BRANCH_LEFT);
+            }
+        }
+        """
+        Path(self.temp_input_filename).write_text(parser.BEGIN_MARKER + source + parser.END_MARKER)
+        analysis = analyzer.analyze_files([self.temp_input_filename], SequentialNumbers())
+        formats = ir_generator.compute_formats(analysis)
+        # Terminal C emission still has the instruction's normal CFG and
+        # logical result. It is not a return/frame-exit analysis marker.
+        self.assertFalse(analysis.uops['OP'].properties.always_exits)
+        self.assertTrue(analysis.uops['OP'].properties.sync_sp)
+        self.assertEqual(len(ir_generator.external_io(analysis.instructions['OP'])[1]), 1)
+        self.assertEqual(ir_generator.observer_outcomes(
+            analysis.instructions['OP'], formats['OP']),
+            ('_PyIR_OBSERVER_FORMAT_NULL_FIRST', '_PyIR_OBSERVER_FORMAT_VALUE'))
+        self.ir_output(source)
+        with self.assertRaisesRegex(SyntaxError, "after transfer|not held|duplicate deferred"):
+            self.ir_output(source.replace("IR_DEFER_CLOSE(held);",
+                "IR_DEFER_CLOSE(held); IR_DEFER_CLOSE(held);"))
+        with self.assertRaisesRegex(SyntaxError, "not held"):
+            self.ir_output(source.replace("IR_DEFER_CLOSE(held);",
+                                          "IR_DEFER_CLOSE(unknown);"))
+        for suffix in ('held = PyValue_None;', 'PyValue_CLOSE(held);', 'read(held);'):
+            with self.subTest(suffix=suffix):
+                with self.assertRaisesRegex(SyntaxError, "after transfer"):
+                    self.ir_output(source.replace('IR_DEFER_CLOSE(held);',
+                        'IR_DEFER_CLOSE(held); ' + suffix))
+        with self.assertRaisesRegex(SyntaxError, 'deferred owner exits'):
+            self.ir_output(source.replace('IR_DEFER_CLOSE(held);',
+                                          'IR_DEFER_CLOSE(held); ERROR_NO_POP();'))
+
+    def test_terminal_observer_dotted_owner_mutations(self):
+        source = (Path(__file__).resolve().parents[2] / 'Python' / 'bytecodes.c').read_text()
+        start = source.index('inst(INSTRUMENTED_FOR_ITER,')
+        for argument in ('step.value', '&step.value'):
+            with self.subTest(argument=argument):
+                changed = source[:start] + source[start:].replace(
+                    'PyValue item = step.value;',
+                    f'opaque({argument}); PyValue item = step.value;', 1)
+                Path(self.temp_input_filename).write_text(changed)
+                analysis = analyzer.analyze_files([self.temp_input_filename])
+                formats = ir_generator.compute_formats(analysis)
+                with self.assertRaisesRegex(SyntaxError, 'unproved terminal C owner transport'):
+                    ir_generator.observer_terminal_paths(
+                        analysis.instructions['INSTRUMENTED_FOR_ITER'],
+                        formats['INSTRUMENTED_FOR_ITER'])
+
     def test_canonical_numeric_constructor_proof(self):
         source = (Path(__file__).resolve().parents[2] /
                   "Python" / "bytecodes.c").read_text()
@@ -2490,6 +2599,7 @@ class TestIRCases(unittest.TestCase):
                 ".dst = 0, .borrow_mask = 0x0, .fb_kind = 0, .fb_size = 0, "
                 ".result_phase = _PyIR_RESULT_PHASE_NONE, "
                 ".output_kind = _PyIR_OUTPUT_REGISTER_DST, "
+                ".observer_outcome = { _PyIR_OBSERVER_NONE, _PyIR_OBSERVER_NONE }, "
                 ".reads = { 0, _PyIR_EXT_FIXED }, "
                 ".writes = { 1, _PyIR_EXT_FIXED }, "
                 ".through = { 0, _PyIR_EXT_FIXED }, .shadow = LOAD, "
@@ -2509,6 +2619,7 @@ class TestIRCases(unittest.TestCase):
             ".fb_kind = 0, .fb_size = 0, "
             ".result_phase = _PyIR_RESULT_PHASE_NONE, "
             ".output_kind = _PyIR_OUTPUT_REGISTER_DST, "
+            ".observer_outcome = { _PyIR_OBSERVER_NONE, _PyIR_OBSERVER_NONE }, "
             ".reads = { 0, _PyIR_EXT_FIXED }, "
             ".writes = { 0, _PyIR_EXT_FIXED }, "
             ".through = { 0, _PyIR_EXT_FIXED }, .shadow = IR_PASS, "

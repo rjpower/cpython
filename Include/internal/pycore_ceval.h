@@ -13,6 +13,7 @@ extern "C" {
 #include "pycore_borrow.h"        // _PyBorrowScope_Exit()
 #include "pycore_code.h"          // _PyCode_GetTLBCFast()
 #include "pycore_interp.h"        // PyInterpreterState.eval_frame
+#include "pycore_ir_observer.h"   // Scoped callback ownership phase
 #include "pycore_pystate.h"       // _PyThreadState_GET()
 #include "pycore_stats.h"         // EVAL_CALL_STAT_INC()
 #include "pycore_typedefs.h"      // _PyInterpreterFrame

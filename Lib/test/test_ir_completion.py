@@ -477,29 +477,31 @@ class SemanticCompletionTests(unittest.TestCase):
     def test_completion_handler_skips_only_untouched_window_holes(self):
         def consume(values):
             for outer in values:
-                for value in outer:
-                    pass
+                for middle in outer:
+                    for value in middle:
+                        pass
 
         code = consume.__code__
         original = list(struct.unpack(f'<{len(code.co_code) // 8}Q', code.co_code))
         site = [i.offset for i in dis.get_instructions(consume)
                 if i.opname == 'FOR_ITER'][-1]
         base = (original[site] >> 28) & 4095
-        self.assertGreaterEqual(base, len(_testinternalcapi.get_co_localskinds(code)) + 2)
+        self.assertGreaterEqual(base, len(_testinternalcapi.get_co_localskinds(code)) + 4)
         exception = base - 1
         table = exception_entry(site, 1, len(original), exception << 1)
-        # Both retired iterator homes lie in untouched middle positions.
+        # The retired inputs and not-yet-produced item are untouched middle
+        # positions; ordinary PRE unwind may leave all three unavailable.
         # These are constructor proofs only: the synthetic handlers are not run.
         shapes = {
             'LIST_APPEND': (base - 1, 0, 4, 0),
             'SET_ADD': (base - 1, 0, 4, 0),
             'MAP_ADD': (base - 1, 0, 0, 4),
-            'DICT_MERGE': (base - 1, 1, 0, 0),
+            'DICT_MERGE': (base - 4, 5, 0, 0),
             'DICT_UPDATE': (base - 1, 4, 0, 0),
             'LIST_EXTEND': (base - 1, 4, 0, 0),
             'SET_UPDATE': (base - 1, 4, 0, 0),
             'COPY': (base - 1, 4, 0, 0),
-            'SWAP': (base - 1, 4, 0, 0),
+            'SWAP': (base - 1, 5, 0, 0),
         }
         for name, fields in shapes.items():
             with self.subTest(opcode=name):
@@ -677,6 +679,88 @@ class SemanticCompletionTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'semantic completion'):
             code.replace(co_code=struct.pack(f'<{len(words)}Q', *words),
                          co_linetable=source)
+
+    def test_constructor_terminal_observer_owners(self):
+        def iterate(values):
+            for value in values:
+                pass
+            return None
+
+        def choose(left, right):
+            return (left + 1) or right
+
+        def source_handler(code, site_name, edge, dst, read, nullable,
+                           ordinary=False):
+            words = list(struct.unpack(f'<{len(code.co_code) // 8}Q',
+                                       code.co_code))
+            instruction = next(i for i in dis.get_instructions(code)
+                               if i.opname == site_name)
+            site = instruction.offset
+            base = (words[site] >> 28) & 4095
+            self.assertGreaterEqual(base, code.co_nlocals)
+            if dst == 'result':
+                dst = base + 1
+            elif dst == 'window':
+                dst = base + 2
+            elif dst == 'discard':
+                dst = 4095
+            words[site] = (words[site] & ~(4095 << 16)) | (dst << 16)
+            home = {'item': base + 2, 'cursor': base + 1,
+                    'input': base, 'result': dst}[read]
+            handler = len(words)
+            if nullable:
+                words.append(dis.opmap['STORE_GLOBAL'] | (home << 16))
+                words.append(dis.opmap['RETURN_VALUE'])
+            else:
+                words.append(dis.opmap['RETURN_VALUE'] | (home << 16))
+            raw = code.co_linetable
+            version, size, count = struct.unpack_from('<III', raw, 4)
+            locations = raw[16:16 + size] + bytes((0xf8 + len(words) - handler - 1,))
+            records = raw[16 + size:]
+            if ordinary:
+                source = (b'IRSM' + struct.pack('<III', version, len(locations), count)
+                          + locations + records)
+                exceptiontable = exception_entry(site, 1, handler,
+                                                 (base + 4) << 1)
+            else:
+                event = struct.pack('<10i', site,
+                                    instruction.jump_target if edge else site + 1,
+                                    edge,
+                                    code.co_firstlineno, code.co_firstlineno,
+                                    0, 1, handler, base + 4, 0)
+                source = (b'IRSM' + struct.pack('<III', version, len(locations), count + 1)
+                          + locations + records + event)
+                exceptiontable = code.co_exceptiontable
+            stacksize = max(code.co_stacksize, base + 5 - code.co_nlocals)
+            return code.replace(co_code=struct.pack(f'<{len(words)}Q', *words),
+                                co_names=code.co_names + ('terminal_sink',),
+                                co_linetable=source, co_exceptiontable=exceptiontable,
+                                co_stacksize=stacksize)
+
+        loop = iterate.__code__
+        self.assertIsNotNone(source_handler(loop, 'FOR_ITER', 0,
+                                            'window', 'item', False))
+        # The same encoded item read is valid after an observer commit but
+        # unavailable to an ordinary exception before FOR_ITER produces it.
+        with self.assertRaisesRegex(ValueError, 'semantic completion'):
+            source_handler(loop, 'FOR_ITER', 0, 'window', 'item', False,
+                           ordinary=True)
+        for dst, read, nullable in (('window', 'cursor', True),
+                                    ('discard', 'item', False)):
+            with self.subTest(dst=dst, read=read):
+                with self.assertRaisesRegex(ValueError, 'semantic completion'):
+                    source_handler(loop, 'FOR_ITER', 0, dst, read, nullable)
+        self.assertIsNotNone(source_handler(loop, 'FOR_ITER', 0,
+                                            'discard', 'item', True))
+
+        branch = choose.__code__
+        self.assertIsNotNone(source_handler(branch, 'JUMP_IF_TRUE_OR_POP', 0,
+                                            'result', 'result', True))
+        self.assertIsNotNone(source_handler(branch, 'JUMP_IF_TRUE_OR_POP', 1,
+                                            'result', 'result', False))
+        with self.assertRaisesRegex(ValueError, 'semantic completion'):
+            source_handler(branch, 'JUMP_IF_TRUE_OR_POP', 0,
+                           'result', 'input', True)
 
     def test_post_completion_restores_inlined_comprehension_local(self):
         tool = sys.monitoring.PROFILER_ID

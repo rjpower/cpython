@@ -156,6 +156,7 @@ def format_initializer(fmt: IRFormat, shadow: str,
         f".fb_kind = {fb_kind}, .fb_size = {fb_size}, "
         f".result_phase = {contract.result_phase}, "
         f".output_kind = {contract.output_kind}, "
+        f".observer_outcome = {{ {', '.join(contract.observer_outcome)} }}, "
         f".reads = {extent_initializer(contract.reads)}, "
         f".writes = {extent_initializer(contract.writes)}, "
         f".through = {extent_initializer(contract.through)}, "

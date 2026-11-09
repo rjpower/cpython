@@ -1,6 +1,7 @@
 #define _PY_INTERPRETER
 
 #include "Python.h"
+#include "pycore_ceval.h"         // _PyEval_InvalidateSourceErrors()
 #include "pycore_frame.h"         // _PyFrame_New_NoTrack()
 #include "pycore_interpframe.h"   // _PyFrame_GetCode()
 #include "pycore_genobject.h"     // _PyGen_GetGeneratorFromFrame()
@@ -16,6 +17,7 @@ _PyFrame_CompleteRedirect(_PyInterpreterFrame *frame)
      * closing remaining scratch owners, whose finalizers can inspect it. */
     frame->pending_redirect = 0;
     frame->instr_ptr = frame->return_pc;
+    _PyEval_InvalidateSourceErrors(_PyThreadState_GET(), frame);
     _PyFrame_ClearTemporaries(frame, _PyFrame_GetCode(frame)->co_nlocalsplus);
 }
 

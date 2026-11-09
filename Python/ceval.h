@@ -358,6 +358,7 @@ typedef struct _PyEvalActivation {
      * This storage also covers failure to allocate an observer frame object. */
     _PyInterpreterFrame *source_error_frame;
     uint32_t source_error_record;
+    const _PyIRObserverSpec *observer_context;
 } _PyEvalActivation;
 
 static int

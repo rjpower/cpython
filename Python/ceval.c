@@ -2141,6 +2141,64 @@ _PyEval_RecordSourceError(PyThreadState *tstate, _PyInterpreterFrame *frame,
     activation->source_error_record = record;
 }
 
+void
+_PyEval_InvalidateSourceErrors(PyThreadState *tstate, _PyInterpreterFrame *frame)
+{
+    _PyEvalActivation *activation = ((_PyThreadStateImpl *)tstate)->eval_activation;
+    for (; activation != NULL; activation = activation->previous) {
+        if (activation->source_error_frame == frame) {
+            activation->source_error_frame = NULL;
+            activation->source_error_record = 0;
+        }
+    }
+}
+
+void
+_PyEval_EnterObserverContext(PyThreadState *tstate,
+                              const _PyIRObserverSpec *context,
+                              _PyIRObserverScope *scope)
+{
+    scope->activation = ((_PyThreadStateImpl *)tstate)->eval_activation;
+    scope->previous = NULL;
+    if (scope->activation != NULL) {
+        scope->previous = scope->activation->observer_context;
+        scope->activation->observer_context = context;
+    }
+}
+
+void
+_PyEval_LeaveObserverContext(PyThreadState *tstate, _PyIRObserverScope *scope)
+{
+    assert(scope->activation == ((_PyThreadStateImpl *)tstate)->eval_activation);
+    if (scope->activation != NULL) {
+        scope->activation->observer_context = scope->previous;
+    }
+}
+
+int
+_PyEval_GetObserverContext(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                            int event, _PyIRObserverSpec *result)
+{
+    _PyThreadStateImpl *impl = (_PyThreadStateImpl *)tstate;
+    for (_PyEvalActivation *activation = impl->eval_activation;
+         activation != NULL; activation = activation->previous)
+    {
+        const _PyIRObserverSpec *context = activation->observer_context;
+        if (context == NULL) {
+            continue;
+        }
+        if (context->phase == _PY_IR_OBSERVER_UNSUPPORTED ||
+            context->frame != frame || impl->observed_frame != frame ||
+            context->event != event || tstate->what_event != event)
+        {
+            return 0;
+        }
+        *result = *context;
+        return 1;
+    }
+    return 0;
+}
+
 /* The evaluation loop.  _PyEval_EvalFrameDefault() wraps each activation in
    its borrow floor.  The loop sets up the activation and calls the first
    handler, and the handlers run the frames by tail calls until one of them
@@ -2174,6 +2232,7 @@ _PyEval_EvalFrameLoop(PyThreadState *tstate, _PyInterpreterFrame *frame, int thr
     activation.previous = tstate_impl->eval_activation;
     activation.source_error_frame = NULL;
     activation.source_error_record = 0;
+    activation.observer_context = NULL;
     tstate_impl->eval_activation = &activation;
 #if _Py_STACK_GROWS_DOWN
     assert(_Py_get_machine_stack_pointer() <= (uintptr_t)&activation);
@@ -2929,7 +2988,11 @@ _PyEval_CompleteStep(PyThreadState *tstate, _PyInterpreterFrame *frame,
             _PyIRStepResult observed = _PyIR_ObserveStep(
                 tstate, frame, site, exit, PyValue_Borrow(value), kind, 0);
             if (observed.status < 0) {
+                PyObject *error = PyErr_GetRaisedException();
+                assert(error != NULL);
                 PyValue_XCLOSE(value);
+                PyErr_SetRaisedException(error);
+                observed.next = frame->instr_ptr + 1;
                 return observed;
             }
             if (observed.status == _PY_IR_STEP_REDIRECT) {
@@ -2977,6 +3040,8 @@ _PyEval_CompleteStep(PyThreadState *tstate, _PyInterpreterFrame *frame,
     if (observed.status >= 0) {
         frame->instr_ptr = observed.next;
     }
+    PyObject *error = observed.status < 0 ? PyErr_GetRaisedException() : NULL;
+    assert(observed.status >= 0 || error != NULL);
     PyValue_XCLOSE(exception);
     PyValue_XCLOSE(sent);
     PyValue_XCLOSE(cursor);
@@ -2984,6 +3049,8 @@ _PyEval_CompleteStep(PyThreadState *tstate, _PyInterpreterFrame *frame,
     PyValue_XCLOSE(displaced);
     PyValue_XCLOSE(value);
     if (observed.status < 0) {
+        PyErr_SetRaisedException(error);
+        observed.next = frame->instr_ptr + 1;
         return observed;
     }
     observed.next = frame->instr_ptr;

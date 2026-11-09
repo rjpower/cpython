@@ -2236,8 +2236,12 @@ sys__debugger_entry_impl(PyObject *module, PyObject *frame,
     impl->observed_frame = entry;
     tstate->what_event = _PY_DEBUGGER_ENTRY_EVENT;
     tstate->tracing++;
+    _PyIRObserverSpec unsupported = {.phase = _PY_IR_OBSERVER_UNSUPPORTED};
+    _PyIRObserverScope scope;
+    _PyEval_EnterObserverContext(tstate, &unsupported, &scope);
     PyValue result = _PyValue_CallOneArg(
         tstate, callback, PyValue_FromObjectBorrow(frame));
+    _PyEval_LeaveObserverContext(tstate, &scope);
     tstate->tracing--;
     tstate->what_event = old_what;
     impl->observed_frame = old_observed;

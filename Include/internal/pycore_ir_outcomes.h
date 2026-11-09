@@ -16,6 +16,210 @@ typedef struct {
     int dst;
 } _PyIRSlotOutcome;
 
+static inline _PyIRSlotOutcome _PyIR_Outcome(_PyIRWord word, int taken);
+static inline int _PyIR_DefinesHome(_PyIRWord word, int arg, int home);
+
+/* Constructor words are pristine; monitoring runs their twin. Resolve the
+ * single generated provider fact from that twin, or from a direct no-twin
+ * helper such as SEND. This is a cold declaration, not a success inference. */
+static inline int
+_PyIR_ObserverOutcome(_PyIRWord word, int edge)
+{
+    if (edge < 0 || edge > 1) {
+        return _PyIR_OBSERVER_NONE;
+    }
+    const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
+    if (fmt->twin != 0) {
+        fmt = _PyIR_FormatOf(fmt->twin);
+    }
+    return fmt->observer_outcome[edge];
+}
+
+enum {
+    _PyIR_OBSERVED_UNKNOWN,
+    _PyIR_OBSERVED_MISSING,
+    _PyIR_OBSERVED_VALUE,
+    _PyIR_OBSERVED_NULL,
+};
+
+typedef struct {
+    int home[8];
+    uint8_t physical[8];
+    uint8_t old_cut[8];
+    int count;
+} _PyIRObservedHomes;
+
+static inline int
+_PyIR_ObserveHome(_PyIRObservedHomes *observed, int home, int nl, int limit,
+                  int physical, int old_cut)
+{
+    if (home < nl) {
+        return 1;  /* Named-local restoration has its own owner proof. */
+    }
+    if (home >= limit) {
+        return 0;
+    }
+    int k;
+    for (k = 0; k < observed->count; k++) {
+        if (observed->home[k] == home) {
+            break;
+        }
+    }
+    if (k == observed->count) {
+        if (k == 8) {
+            return 0;
+        }
+        observed->home[k] = home;
+        observed->physical[k] = _PyIR_OBSERVED_UNKNOWN;
+        observed->old_cut[k] = 0;
+        observed->count++;
+    }
+    observed->physical[k] = physical;
+    observed->old_cut[k] |= old_cut;
+    return 1;
+}
+
+/* Decode only a positively declared, committed observer edge. This records
+ * physical publication separately from an old input's retired provenance:
+ * storing a replacement into the same home never revives the old owner. */
+static inline int
+_PyIR_ObservedHomes(_PyIRWord word, int edge, int nl, int limit,
+                    _PyIRObservedHomes *observed)
+{
+    int kind = _PyIR_ObserverOutcome(word, edge);
+    if (kind == _PyIR_OBSERVER_NONE || nl < 0 || limit < nl) {
+        return 0;
+    }
+    *observed = (_PyIRObservedHomes){0};
+    const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
+    uint32_t fields[] = {IR_A(word), IR_B(word), IR_C(word), IR_D(word)};
+    int base = -1, dst = -1;
+    for (int f = 0; f < 4; f++) {
+        int role = fmt->roles[f];
+        if (role == _PyIR_ROLE_BASE) {
+            base = (int)fields[f];
+        }
+        else if (role == _PyIR_ROLE_DST) {
+            dst = (int)fields[f];
+        }
+        else if (role >= _PyIR_ROLE_IN0 &&
+                 !_PyIR_ObserveHome(observed, (int)fields[f], nl, limit,
+                                    _PyIR_OBSERVED_MISSING, 1))
+        {
+            return 0;
+        }
+    }
+    int arg = fmt->imm == _PyIR_LOC_FBARG ? IR_MAX_SLOTS
+                                              : _PyIR_FieldOparg(word);
+    int reads = _PyIR_Extent(fmt->reads, arg);
+    int writes = _PyIR_Extent(fmt->writes, arg);
+    int through = _PyIR_Extent(fmt->through, arg);
+    if (reads < 0 || writes < 0 || through < 0 || through > reads ||
+        writes < through || reads > 8 || writes > 8)
+    {
+        return 0;
+    }
+    if (base >= 0) {
+        if (base < nl || base > limit - Py_MAX(reads, writes)) {
+            return 0;
+        }
+        for (int k = 0; k < reads; k++) {
+            if (!_PyIR_ObserveHome(observed, base + k, nl, limit,
+                                   k < through ? _PyIR_OBSERVED_UNKNOWN
+                                               : _PyIR_OBSERVED_MISSING,
+                                   k >= through))
+            {
+                return 0;
+            }
+        }
+    }
+    if (kind == _PyIR_OBSERVER_FOR_BODY) {
+        if (base < 0 || reads != 2 || writes != 3 || fmt->dst != 2 ||
+            (dst >= nl && dst != IR_NO_DST && dst != base + 2))
+        {
+            return 0;
+        }
+        if (!_PyIR_ObserveHome(observed, base + 1, nl, limit,
+                               _PyIR_OBSERVED_UNKNOWN, 1) ||
+            !_PyIR_ObserveHome(observed, base + 2, nl, limit,
+                dst == IR_NO_DST || dst < nl ? _PyIR_OBSERVED_NULL
+                                            : _PyIR_OBSERVED_VALUE, 0))
+        {
+            return 0;
+        }
+    }
+    else if (kind == _PyIR_OBSERVER_COMPLETION) {
+        _PyIRSlotOutcome outcome = _PyIR_Outcome(word, edge);
+        if (!outcome.semantic || outcome.first < nl || outcome.count > 8 ||
+            outcome.first > limit - outcome.count)
+        {
+            return 0;
+        }
+        for (int k = 0; k < outcome.count; k++) {
+            if (!_PyIR_ObserveHome(observed, outcome.first + k, nl, limit,
+                                   _PyIR_OBSERVED_MISSING, 1))
+            {
+                return 0;
+            }
+        }
+        if (outcome.dst != IR_NO_DST &&
+            !_PyIR_ObserveHome(observed, outcome.dst, nl, limit,
+                               _PyIR_OBSERVED_VALUE, 0))
+        {
+            return 0;
+        }
+    }
+    else if (kind == _PyIR_OBSERVER_FORMAT_VALUE ||
+             kind == _PyIR_OBSERVER_FORMAT_NULL_FIRST)
+    {
+        int first_null = kind == _PyIR_OBSERVER_FORMAT_NULL_FIRST;
+        if (fmt->output_kind == _PyIR_OUTPUT_REGISTER_DST) {
+            if (writes - through > 0 && dst < 0) {
+                return 0;
+            }
+            for (int k = 0; k < writes - through; k++) {
+                if (dst == IR_NO_DST) {
+                    break;
+                }
+                if (!_PyIR_ObserveHome(observed, dst + k, nl, limit,
+                        first_null && k == 0 ? _PyIR_OBSERVED_NULL
+                                             : _PyIR_OBSERVED_VALUE, 0))
+                {
+                    return 0;
+                }
+            }
+        }
+        else if (fmt->output_kind == _PyIR_OUTPUT_WINDOW ||
+                 fmt->output_kind == _PyIR_OUTPUT_WINDOW_DST_FIRST)
+        {
+            if (base < 0 ||
+                (fmt->output_kind == _PyIR_OUTPUT_WINDOW_DST_FIRST &&
+                 (fmt->dst < through || fmt->dst >= writes ||
+                  (dst >= nl && dst != IR_NO_DST && dst != base + fmt->dst))))
+            {
+                return 0;
+            }
+            for (int k = through; k < writes; k++) {
+                int moved = fmt->output_kind == _PyIR_OUTPUT_WINDOW_DST_FIRST &&
+                            k == fmt->dst && (dst == IR_NO_DST || dst < nl);
+                if (!_PyIR_ObserveHome(observed, base + k, nl, limit,
+                        moved || (first_null && k == fmt->dst)
+                            ? _PyIR_OBSERVED_NULL : _PyIR_OBSERVED_VALUE, 0))
+                {
+                    return 0;
+                }
+            }
+        }
+        else {
+            return 0;
+        }
+    }
+    else {
+        return 0;
+    }
+    return 1;
+}
+
 /* Inputs whose ABI accepts NULL: window-relative positions for WINDOW rows,
  * semantic IN0+k positions for register rows. This is a read capability,
  * not a definition or retirement: cold consumers must independently prove
@@ -56,7 +260,7 @@ _PyIR_Outcome(_PyIRWord word, int taken)
 {
     int base = (int)IR_B(word);
     int dst = (int)IR_A(word);
-    switch (_PyIR_BaseOpcode(IR_HANDLER(word))) {
+    switch (_PyIR_HandlerBase[IR_HANDLER(word)]) {
         case FOR_ITER:
             return taken ? (_PyIRSlotOutcome){1, base, 2, IR_NO_DST}
                          : (_PyIRSlotOutcome){1, base + 1, 1, dst};
@@ -158,6 +362,70 @@ _PyIR_ReadsHome(_PyIRWord word, int arg, int home)
         }
     }
     return _PyIR_ReadsWindowHome(word, arg, home);
+}
+
+enum {
+    _PyIR_BINDING_NO_READ,
+    _PyIR_BINDING_CHECKED_NULL,
+    _PyIR_BINDING_REQUIRES_VALUE,
+};
+
+/* A saved NULL fast-local can reach a checked read, but not an unchecked
+ * local borrow or any other physical alias that requires a value. */
+static inline int
+_PyIR_BindingRead(_PyIRWord word, int arg, int home)
+{
+    const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
+    uint32_t fields[] = {IR_A(word), IR_B(word), IR_C(word), IR_D(word)};
+    int opcode = _PyIR_BaseOpcode(IR_HANDLER(word));
+    int result = _PyIR_BINDING_NO_READ;
+    for (int f = 0; f < 4; f++) {
+        if ((int)fields[f] != home) {
+            continue;
+        }
+        switch (fmt->roles[f]) {
+            case _PyIR_ROLE_LOCAL_IN:
+                if (opcode == LOAD_FAST_CHECK) {
+                    result = Py_MAX(result, _PyIR_BINDING_CHECKED_NULL);
+                }
+                else {
+                    return _PyIR_BINDING_REQUIRES_VALUE;
+                }
+                break;
+            case _PyIR_ROLE_LOCAL_CLEAR:
+                if (opcode == DELETE_FAST) {
+                    result = Py_MAX(result, _PyIR_BINDING_CHECKED_NULL);
+                }
+                else {
+                    return _PyIR_BINDING_REQUIRES_VALUE;
+                }
+                break;
+            case _PyIR_ROLE_LOCAL_MOVE:
+            case _PyIR_ROLE_CELL:
+                return _PyIR_BINDING_REQUIRES_VALUE;
+        }
+    }
+    if (_PyIR_ReadsHome(word, arg, home)) {
+        return _PyIR_BINDING_REQUIRES_VALUE;
+    }
+    return result;
+}
+
+/* A physical write need not bind a value: STORE_FAST can receive a saved
+ * NULL, and DELETE_FAST deliberately clears its local. Only a checked
+ * committed output that guarantees a value can discharge this obligation. */
+static inline int
+_PyIR_DefinesBinding(_PyIRWord word, int arg, int edge, int home)
+{
+    (void)arg;
+    int kind = _PyIR_ObserverOutcome(word, edge);
+    if ((kind == _PyIR_OBSERVER_FOR_BODY ||
+         kind == _PyIR_OBSERVER_COMPLETION) &&
+        _PyIR_Outcome(word, edge).dst == home)
+    {
+        return 1;
+    }
+    return 0;
 }
 
 /* Ordinary fresh definitions use the emitter's physical output mapping.

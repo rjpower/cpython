@@ -375,6 +375,7 @@ def uop_runs_code(uop: Uop) -> bool:
 RELEASE_LIKE = re.compile(r"CLOSE|DECREF|CLEAR|SETREF|RETIRE|Close|Clear|"
                           r"Dealloc|_READER|FINISH_VALUE")
 RELEASES = {
+    "IR_DEFER_CLOSE",
     "PyValue_CLOSE", "PyValue_XCLOSE", "PyValue_CLEAR", "_PyValue_CloseStack",
     "_PyValue_CLOSE_POINTER", "_PyValue_XCLOSE_POINTER", "DECREF_INPUTS",
     "Py_DECREF", "Py_XDECREF", "Py_CLEAR", "Py_SETREF", "Py_XSETREF",
@@ -1451,6 +1452,164 @@ def uop_token_list(inst: Instruction) -> list[Token]:
             for t in part.body.tokens() if t.kind != "COMMENT"]
 
 
+OBSERVER_MARKER = "IR_OBSERVE_COMMITTED_BRANCH"
+
+
+def observer_terminal_paths(inst: Instruction, fmt: IRFormat) -> dict[Token, tuple[int, str]]:
+    """Check terminal composition and distinguish a defined NULL result.
+
+    Storage.push_outputs supplies the separate live-input/defined-output proof
+    when each marker is emitted. Metadata and emission use these same paths.
+    """
+    paths: dict[Token, tuple[int, str]] = {}
+    if OBSERVER_MARKER not in uop_tokens(inst):
+        return paths
+    parts = [p for p in inst.parts if not isinstance(p, Skip)]
+
+    def walk(stmt, nulls: set[str], owners: set[str], spent: set[str],
+             deferred: set[str], following: bool, uop: Uop):
+        if isinstance(stmt, BlockStmt):
+            for index, child in enumerate(stmt.body):
+                if not walk(child, nulls, owners, spent, deferred,
+                            following or index + 1 < len(stmt.body), uop):
+                    return False
+            return True
+        if isinstance(stmt, IfStmt):
+            left = (set(nulls), set(owners), set(spent), set(deferred))
+            right = (set(nulls), set(owners), set(spent), set(deferred))
+            left_live = walk(stmt.body, *left, following, uop)
+            right_live = True
+            if stmt.else_body is not None:
+                right_live = walk(stmt.else_body, *right, following, uop)
+            if left_live and right_live:
+                if left[1] != right[1] or left[3] != right[3]:
+                    raise analysis_error("ambiguous terminal C ownership at join", stmt.if_)
+                result = (left[0] & right[0], left[1], left[2] | right[2], left[3])
+            elif left_live:
+                result = left
+            else:
+                result = right
+            for destination, source in zip((nulls, owners, spent, deferred), result):
+                destination.clear()
+                destination.update(source)
+            return left_live or right_live
+        tokens = [t for t in stmt.tokens() if t.kind != "COMMENT"]
+        markers = [t for t in tokens if t.text == OBSERVER_MARKER]
+        if not isinstance(stmt, SimpleStmt):
+            raise analysis_error("terminal observer in unsupported control flow", tokens[0])
+        texts = [t.text for t in tokens]
+        def mentions(name):
+            pieces = name.replace('.', ' . ').split()
+            return any(texts[i:i + len(pieces)] == pieces for i in range(len(texts)))
+        for name in spent:
+            if mentions(name):
+                raise analysis_error("terminal C owner used after transfer: " + name, tokens[0])
+        used_owners = {name for name in owners if mentions(name)}
+        if used_owners:
+            calls = {texts[i] for i in range(len(texts) - 1)
+                     if tokens[i].kind == "IDENTIFIER" and texts[i + 1] == "("}
+            audited = set(VIEW_RELEASES) | {
+                "PyValue_DUP", "PyValue_IsNull", "_PyValue_IsTrue",
+                "IR_DEFER_CLOSE", "IR_COMPLETE_STEP"}
+            if calls - audited:
+                raise analysis_error("unproved terminal C owner transport", tokens[0])
+            bindings = declared_locals(uop_token_list(inst))
+            if any(name in bindings or any(c.name == name for c in uop.caches)
+                   for name in calls):
+                raise analysis_error("shadowed terminal owner helper", tokens[0])
+
+        def transfer(name):
+            if name in owners:
+                owners.remove(name)
+                spent.add(name)
+
+        if texts[:1] == ["IR_DEFER_CLOSE"]:
+            if len(texts) != 5 or texts[2] not in owners:
+                raise analysis_error("deferred observer owner is not held", tokens[0])
+            transfer(texts[2])
+            deferred.add(texts[2])
+        output_names = {item.name for item in uop.stack.outputs}
+        if len(texts) > 3 and texts[:1] == ["PyValue"] and texts[2] == "=":
+            rhs = "".join(texts[3:-1])
+            transfer(rhs)
+            if rhs not in ("PyValue_NULL", "PyValue_None", "PyValue_True", "PyValue_False"):
+                owners.add(texts[1])
+        elif len(texts) > 3 and texts[0] == "_PyStatusValue" and texts[2] == "=":
+            helper = "_PyForIter_VirtualIteratorNext"
+            if (texts[3] != helper or helper in declared_locals(uop_token_list(inst)) or
+                    any(cache.name == helper for cache in uop.caches)):
+                raise analysis_error("unproved terminal status owner", tokens[0])
+            owners.add(texts[1] + ".value")
+        elif texts[:2] == ["PyObject", "*"]:
+            raise analysis_error("unproved terminal C object owner", tokens[0])
+        if len(texts) > 2 and texts[0] in VIEW_RELEASES and texts[1] == "(":
+            transfer("".join(texts[2:-2]))
+        if len(texts) > 2 and texts[1] == "=" and texts[0] in output_names:
+            transfer("".join(texts[2:-1]))
+        elif len(texts) > 2 and texts[1] == "=" and texts[0] in owners:
+            raise analysis_error("terminal C owner overwritten before transfer", tokens[0])
+        elif (len(texts) > 2 and texts[1] == "=" and
+              "".join(texts[2:-1]) in owners):
+            raise analysis_error("unproved terminal C owner assignment", tokens[0])
+        if len(texts) > 2 and texts[1] == "=":
+            if texts[2:] == ["PyValue_NULL", ";"]:
+                nulls.add(texts[0])
+            else:
+                nulls.discard(texts[0])
+        if not markers:
+            exits = texts and texts[0] in {
+                "ERROR_NO_POP", "IR_COMPLETE_STEP", "IR_RETURN_TO_CALLER", "DISPATCH"}
+            if exits and deferred:
+                raise analysis_error("deferred owner exits before terminal observer", tokens[0])
+            return not exits
+        marker = markers[0]
+        if owners:
+            raise analysis_error("terminal observer has untransferred C owners: " +
+                                 ", ".join(sorted(owners)), marker)
+        if len(markers) != 1 or texts[0] != OBSERVER_MARKER or following:
+            raise analysis_error("semantic work follows terminal observer", marker)
+        if not parts or parts[-1] is not uop:
+            raise analysis_error("terminal observer must finish the composed handler", marker)
+        events = [t for t in texts if t in (
+            "PY_MONITORING_EVENT_BRANCH_LEFT", "PY_MONITORING_EVENT_BRANCH_RIGHT")]
+        if len(events) != 1:
+            raise analysis_error("terminal observer requires one actual branch edge", marker)
+        edge = int(events[0].endswith("RIGHT"))
+        inputs, outputs = external_io(inst)
+        if fmt.window:
+            if (len(inputs) != 2 or len(outputs) != 3 or
+                    any(x.size for x in inputs) or any(x.item.size for x in outputs) or
+                    fmt.dst_offset != 2 or not fmt.store_dst):
+                raise analysis_error("unsupported terminal observer window", marker)
+            kind = "_PyIR_OBSERVER_FOR_BODY"
+        elif len(outputs) == 1 and uop.stack.outputs and uop.stack.outputs[-1].name in nulls:
+            kind = "_PyIR_OBSERVER_FORMAT_NULL_FIRST"
+        else:
+            kind = "_PyIR_OBSERVER_FORMAT_VALUE"
+        paths[marker] = edge, kind
+        return False
+
+    for part in parts:
+        if isinstance(part, Uop) and any(t.text == OBSERVER_MARKER for t in part.body.tokens()):
+            deferred: set[str] = set()
+            live = walk(part.body, set(), set(), set(), deferred, False, part)
+            if live and deferred:
+                raise analysis_error("deferred owner leaves terminal observer path", inst.where)
+    return paths
+
+
+def observer_outcomes(inst: Instruction, fmt: IRFormat) -> tuple[str, str]:
+    result = ["_PyIR_OBSERVER_NONE", "_PyIR_OBSERVER_NONE"]
+    for edge, kind in observer_terminal_paths(inst, fmt).values():
+        if result[edge] not in ("_PyIR_OBSERVER_NONE", kind):
+            raise analysis_error("conflicting terminal observer edge facts", inst.where)
+        result[edge] = kind
+    tokens = set(uop_tokens(inst))
+    if "IR_COMPLETE_STEP" in tokens:
+        result[1] = "_PyIR_OBSERVER_COMPLETION"
+    return tuple(result)
+
+
 def jump_tokens(uop: Uop) -> list[tuple[int, list[str]]]:
     """The JUMPBY and JUMPTO of uop: the brace depth of each, 1 at the top of
     the body, and the tokens of its argument"""
@@ -1959,6 +2118,8 @@ class IRStack(Stack):
         # finish_displaced_local takes it by value, so a handler may store
         # dst once (generate_handler checks).
         self.dst_stores: list[str] = []
+        self.observer_deferred: str | None = None
+        self.observer_inputs: list[str] = []
 
     def copy(self) -> "IRStack":
         other = super().copy()
@@ -1971,6 +2132,7 @@ class IRStack(Stack):
         other.spent_views = set(self.spent_views)
         other.roles = self.roles
         other.window_taken = self.window_taken
+        other.observer_inputs = list(self.observer_inputs)
         return other
 
     def code_ran(self) -> None:
@@ -2170,7 +2332,12 @@ class IRStack(Stack):
                     out.emit(f"if (IR_IS_LOCAL({field}) || {field} == IR_NO_DST) {{\n")
                 macro = ("IR_STORE_CANONICAL_DST"
                          if var.name == lay.canonical_numeric_result else "IR_STORE_DST")
-                self.dst_stores.append(f"{macro}({FIELD_VARS[lay.dst]}, {var.name})")
+                if self.observer_deferred is not None:
+                    macro = "IR_COMMIT_OBSERVED_DST"
+                    expression = f"{macro}({FIELD_VARS[lay.dst]}, {var.name}, {self.observer_deferred})"
+                else:
+                    expression = f"{macro}({FIELD_VARS[lay.dst]}, {var.name})"
+                self.dst_stores.append(expression)
                 out.emit(f"{self.dst_stores[-1]};\n")
                 if self.published_temporary_result:
                     out.emit("}\n")
@@ -2367,6 +2534,8 @@ class IREmitter(Emitter):
         self._replacers["IR_BASE"] = self.ir_base
         self._replacers["IR_WINDOW_TAKEN"] = self.ir_window_taken
         self._replacers["IR_COMPLETE_STEP"] = self.complete_step
+        self._replacers["IR_OBSERVE_COMMITTED_BRANCH"] = self.observe_committed_branch
+        self._replacers["IR_DEFER_CLOSE"] = self.defer_observer_input
         self._replacers["IR_RETURN_TO_CALLER"] = self.return_to_caller
         self._replacers["IR_ENTER_GENERATOR"] = self.enter_generator
         self._replacers["IR_TRY_DICT_FIRST_PROBE"] = self.try_dict_first_probe
@@ -2600,6 +2769,70 @@ class IREmitter(Emitter):
         self.emit("next_instr = frame->instr_ptr + 1;\n")
         self.reader_error()
         self.emit("}\n")
+
+    def defer_observer_input(self, tkn, tkn_iter, uop, storage, inst):
+        owner, = self.macro_args(tkn, tkn_iter, 1)
+        stack = storage.stack
+        assert isinstance(stack, IRStack)
+        if owner in stack.observer_inputs:
+            raise analysis_error("duplicate deferred observer owner", tkn)
+        captured = f"ir_observer_input_{len(stack.observer_inputs)}"
+        self.emit(f"PyValue {captured} = {owner};\n")
+        self.emit(f"{owner} = PyValue_NULL;\n")
+        stack.observer_inputs.append(captured)
+        return True
+
+    def observe_committed_branch(self, tkn, tkn_iter, uop, storage, inst):
+        assert inst is not None
+        args, _ = self.instruction_macro_args(tkn, tkn_iter)
+        if len(args) != 3:
+            raise analysis_error("terminal observer takes source, destination, event", tkn)
+        assert next(tkn_iter).kind == "SEMI"
+        source, destination, event = (" ".join(t.text for t in arg) for arg in args)
+        contracts = observer_terminal_paths(inst, self.format_of(inst))
+        if tkn not in contracts:
+            raise analysis_error("uncertified terminal observer", tkn)
+        self.check_owner_exit(tkn)
+        stack = storage.stack
+        assert isinstance(stack, IRStack)
+        if stack.dst_stores or stack.observer_deferred is not None:
+            raise analysis_error("terminal observer has a prior destination commit", tkn)
+        # Each exclusive path owns its own final commit, rather than adding
+        # mutually exclusive stores to the ordinary shared counter.
+        stack.dst_stores = list(stack.dst_stores)
+        reserved = {"ir_observer_deferred", "ir_observer_next", "ir_observer_result",
+                    "ir_observer_exception"}
+        if reserved & set(uop_tokens(inst)) or any(
+                name.startswith("ir_observer_input_") for name in uop_tokens(inst)):
+            raise analysis_error("terminal observer reserved local name", tkn)
+        self.emit("{\n")
+        self.emit("PyValue ir_observer_deferred = PyValue_NULL;\n")
+        stack.observer_deferred = "ir_observer_deferred"
+        storage.push_outputs()
+        fmt = self.format_of(inst)
+        mode = store_mode(inst, external_io(inst)[1]) if fmt.store_dst else None
+        emit_final_outputs(inst, fmt, mode, stack, self.out)
+        self.emit(f"_PyInstr *ir_observer_next = {destination};\n")
+        self.emit("frame->return_pc = ir_observer_next;\n")
+        edge, _ = contracts[tkn]
+        self.emit("_PyIRObserverResult ir_observer_result = _PyIR_ObserveCommittedBranch(\n")
+        self.emit(f"tstate, frame, this_instr, {source}, ir_observer_next, {event}, {edge});\n")
+        self.emit("PyObject *ir_observer_exception = ir_observer_result.status < 0\n")
+        self.emit("? PyErr_GetRaisedException() : NULL;\n")
+        self.emit("assert(ir_observer_result.status >= 0 || ir_observer_exception != NULL);\n")
+        self.emit("frame->instr_ptr = ir_observer_result.next;\n")
+        self.emit("PyValue_XCLOSE(ir_observer_deferred);\n")
+        for owner in stack.observer_inputs:
+            self.emit(f"PyValue_XCLOSE({owner});\n")
+        self.emit(f"_PyValueTemps_Close({self.temps});\n")
+        self.emit("if (ir_observer_result.status < 0) {\n")
+        self.emit("PyErr_SetRaisedException(ir_observer_exception);\n")
+        self.emit("next_instr = frame->instr_ptr + 1;\n")
+        self.reader_error()
+        self.emit("}\n")
+        self.emit("next_instr = frame->instr_ptr;\n")
+        self.emit("DISPATCH();\n}\n")
+        return False
 
     def unpack_to_locals(self, fmt, count, canonical=False):
         """The elements are in the window, in stack order; if dst names a
@@ -3937,6 +4170,22 @@ def validate_guarded_python_call(inst: Instruction, fmt: IRFormat) -> None:
         raise analysis_error("guarded Python call requires the checked prefix", inst.where)
 
 
+def emit_final_outputs(inst, fmt, mode, stack: IRStack, out: CWriter) -> None:
+    """The physical final publication shared by ordinary and observed paths."""
+    stack.final = True
+    stack.flush(out)
+    if mode == STORE_RESULT and fmt.window:
+        dst = FIELD_VARS[fmt.field_of(ROLE_DST)]
+        if stack.observer_deferred is not None:
+            expression = (f"IR_MOVE_OBSERVED_DST({dst}, window[{fmt.dst_offset}], "
+                          f"{stack.observer_deferred})")
+        else:
+            macro = "IR_MOVE_TO_DST_OR_DISCARD" if fmt.discards else "IR_MOVE_TO_DST"
+            expression = f"{macro}({dst}, window[{fmt.dst_offset}])"
+        stack.dst_stores.append(expression)
+        out.emit(f"{expression};\n")
+
+
 def generate_handler(name: str, inst: Instruction, fmt: IRFormat,
                      emitter: IREmitter, out: CWriter, record: bool) -> None:
     """The handler name, which runs inst: inst itself, or for a handler of a
@@ -4305,14 +4554,7 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
     out.start_line()
     if reachable:
         assert isinstance(stack, IRStack)
-        stack.final = True
-        stack.flush(out)
-        if mode == STORE_RESULT and fmt.window:
-            # The result is in its slot of the window; a local takes it
-            dst = FIELD_VARS[fmt.field_of(ROLE_DST)]
-            macro = "IR_MOVE_TO_DST_OR_DISCARD" if fmt.discards else "IR_MOVE_TO_DST"
-            stack.dst_stores.append(f"{macro}({dst}, window[{fmt.dst_offset}])")
-            out.emit(f"{stack.dst_stores[-1]};\n")
+        emit_final_outputs(inst, fmt, mode, stack, out)
         if fmt.store_dst:
             emitter.release_displaced()
         if fmt.unpacks:
@@ -4554,7 +4796,7 @@ CONSTRUCTOR = re.compile(r"New(?!Ref)|Alloc|^PyValue_From|_PyFrame_Push|_Py_Make
 # releases the boxes and adds none, so a handler that boxes nothing passes
 # it NULL.  The macros that box without naming value_temps are listed;
 # test_ir_contract checks the list against Python/ceval_macros.h.
-NON_BOXING_CALLS = {"finish_displaced_local", "finish_unpack_to_locals", "retire_published_values",
+NON_BOXING_CALLS = {"_PyValueTemps_Close", "finish_displaced_local", "finish_unpack_to_locals", "retire_published_values",
                     "value_attribute_complete", "value_operation_finish",
                     "value_reader_complete"}
 
@@ -4625,6 +4867,7 @@ class HandlerContract:
     twin: str | None
     result_phase: str
     output_kind: str
+    observer_outcome: tuple[str, str]
 
 
 def handler_output_kind(inst: Instruction, fmt: IRFormat) -> str:
@@ -5175,6 +5418,7 @@ def handler_contracts(analysis: Analysis,
             result_phase=(publication.phase if publication is not None
                           else RESULT_PHASE_NONE),
             output_kind=handler_output_kind(inst, fmt),
+            observer_outcome=observer_outcomes(inst, fmt),
         )
     return result
 

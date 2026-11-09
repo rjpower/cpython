@@ -1,0 +1,161 @@
+diff --git a/Modules/_decimal/_decimal.c b/Modules/_decimal/_decimal.c
+index 08c935fdcf9..9a6a4dd5f29 100644
+--- a/Modules/_decimal/_decimal.c
++++ b/Modules/_decimal/_decimal.c
+@@ -30,6 +30,10 @@
+ #endif
+ 
+ #include <Python.h>
++#include "pycore_dict.h"          // PyDict_GetValue()
++#include "pycore_list.h"          // PyList_AppendValue()
++#include "pycore_long_value.h"    // _PyValue_IntAsSsize_t()
++#include "pycore_value_ops.h"     // _PyValue_IsTrue()
+ #include "pycore_object.h"        // _PyObject_VisitType()
+ #include "pycore_pystate.h"       // _PyThreadState_GET()
+ #include "pycore_tuple.h"         // _PyTuple_FromPair
+@@ -437,14 +441,14 @@ flags_as_list(decimal_state *state, uint32_t flags)
+ 
+     for (cm = state->cond_map; cm->name != NULL; cm++) {
+         if (flags&cm->flag) {
+-            if (PyList_Append(list, cm->ex) < 0) {
++            if (PyList_AppendValue(list, PyValue_FromObjectBorrow(cm->ex)) < 0) {
+                 goto error;
+             }
+         }
+     }
+     for (cm = state->signal_map+1; cm->name != NULL; cm++) {
+         if (flags&cm->flag) {
+-            if (PyList_Append(list, cm->ex) < 0) {
++            if (PyList_AppendValue(list, PyValue_FromObjectBorrow(cm->ex)) < 0) {
+                 goto error;
+             }
+         }
+@@ -470,7 +474,7 @@ signals_as_list(decimal_state *state, uint32_t flags)
+ 
+     for (cm = state->signal_map; cm->name != NULL; cm++) {
+         if (flags&cm->flag) {
+-            if (PyList_Append(list, cm->ex) < 0) {
++            if (PyList_AppendValue(list, PyValue_FromObjectBorrow(cm->ex)) < 0) {
+                 Py_DECREF(list);
+                 return NULL;
+             }
+@@ -483,7 +487,7 @@ signals_as_list(decimal_state *state, uint32_t flags)
+ static uint32_t
+ list_as_flags(decimal_state *state, PyObject *list)
+ {
+-    PyObject *item;
++    PyValue item;
+     uint32_t flags, x;
+     Py_ssize_t n, j;
+ 
+@@ -492,12 +496,14 @@ list_as_flags(decimal_state *state, PyObject *list)
+     n = PyList_Size(list);
+     flags = 0;
+     for (j = 0; j < n; j++) {
+-        item = PyList_GetItemRef(list, j);
+-        if (item == NULL) {
++        item = PyList_GetValue(list, j);
++        if (PyValue_IsNull(item)) {
+             return DEC_ERR_OCCURRED;
+         }
+-        x = exception_as_flag(state, item);
+-        Py_DECREF(item);
++        PyObject *object = PyValue_IsObject(item)
++            ? PyValue_AsKnownObjectBorrow(item) : NULL;
++        x = exception_as_flag(state, object);
++        PyValue_CLOSE(item);
+         if (x & DEC_ERRORS) {
+             return x;
+         }
+@@ -520,7 +526,7 @@ flags_as_dict(decimal_state *state, uint32_t flags)
+ 
+     for (cm = state->signal_map; cm->name != NULL; cm++) {
+         PyObject *b = flags&cm->flag ? Py_True : Py_False;
+-        if (PyDict_SetItem(dict, cm->ex, b) < 0) {
++        if (PyDict_SetValue(dict, PyValue_FromObjectBorrow(cm->ex), PyValue_FromObjectBorrow(b)) < 0) {
+             Py_DECREF(dict);
+             return NULL;
+         }
+@@ -532,7 +538,7 @@ flags_as_dict(decimal_state *state, uint32_t flags)
+ static uint32_t
+ dict_as_flags(decimal_state *state, PyObject *val)
+ {
+-    PyObject *b;
++    PyValue b;
+     DecCondMap *cm;
+     uint32_t flags = 0;
+     int x;
+@@ -550,7 +556,7 @@ dict_as_flags(decimal_state *state, PyObject *val)
+     }
+ 
+     for (cm = state->signal_map; cm->name != NULL; cm++) {
+-        int found = PyDict_GetItemRef(val, cm->ex, &b);
++        int found = PyDict_GetValue(val, PyValue_FromObjectBorrow(cm->ex), &b);
+         if (found < 0) {
+             return DEC_ERR_OCCURRED;
+         }
+@@ -560,8 +566,8 @@ dict_as_flags(decimal_state *state, PyObject *val)
+             return DEC_INVALID_SIGNALS;
+         }
+ 
+-        x = PyObject_IsTrue(b);
+-        Py_DECREF(b);
++        x = _PyValue_IsTrue(b);
++        PyValue_CLOSE(b);
+         if (x < 0) {
+             return DEC_ERR_OCCURRED;
+         }
+@@ -732,7 +738,7 @@ signaldict_setitem(PyObject *self, PyObject *key, PyObject *value)
+         return -1;
+     }
+ 
+-    x = PyObject_IsTrue(value);
++    x = _PyValue_IsTrue(PyValue_FromObjectBorrow(value));
+     if (x < 0) {
+         return -1;
+     }
+@@ -953,7 +959,7 @@ context_setprec(PyObject *self, PyObject *value, void *Py_UNUSED(closure))
+     mpd_context_t *ctx;
+     mpd_ssize_t x;
+ 
+-    x = PyLong_AsSsize_t(value);
++    x = _PyValue_IntAsSsize_t(PyValue_FromObjectBorrow(value));
+     if (x == -1 && PyErr_Occurred()) {
+         return -1;
+     }
+@@ -973,7 +979,7 @@ context_setemin(PyObject *self, PyObject *value, void *Py_UNUSED(closure))
+     mpd_context_t *ctx;
+     mpd_ssize_t x;
+ 
+-    x = PyLong_AsSsize_t(value);
++    x = _PyValue_IntAsSsize_t(PyValue_FromObjectBorrow(value));
+     if (x == -1 && PyErr_Occurred()) {
+         return -1;
+     }
+@@ -993,7 +999,7 @@ context_setemax(PyObject *self, PyObject *value, void *Py_UNUSED(closure))
+     mpd_context_t *ctx;
+     mpd_ssize_t x;
+ 
+-    x = PyLong_AsSsize_t(value);
++    x = _PyValue_IntAsSsize_t(PyValue_FromObjectBorrow(value));
+     if (x == -1 && PyErr_Occurred()) {
+         return -1;
+     }
+@@ -1103,7 +1109,7 @@ context_setcapitals(PyObject *self, PyObject *value, void *Py_UNUSED(closure))
+ {
+     mpd_ssize_t x;
+ 
+-    x = PyLong_AsSsize_t(value);
++    x = _PyValue_IntAsSsize_t(PyValue_FromObjectBorrow(value));
+     if (x == -1 && PyErr_Occurred()) {
+         return -1;
+     }
+@@ -1254,7 +1260,7 @@ context_setclamp(PyObject *self, PyObject *value, void *Py_UNUSED(closure))
+     mpd_context_t *ctx;
+     mpd_ssize_t x;
+ 
+-    x = PyLong_AsSsize_t(value);
++    x = _PyValue_IntAsSsize_t(PyValue_FromObjectBorrow(value));
+     if (x == -1 && PyErr_Occurred()) {
+         return -1;
+     }

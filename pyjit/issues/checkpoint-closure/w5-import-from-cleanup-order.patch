@@ -1,0 +1,57 @@
+--- a/Python/ceval.c
++++ b/Python/ceval.c
+@@ -4709,8 +4709,8 @@
+ done:
+     Py_XDECREF(module_origin);
+     PyValue_XCLOSE(origin_value);
++    PyValue_XCLOSE(spec_value);
+     PyValue_XCLOSE(mod_name_value);
+-    PyValue_XCLOSE(spec_value);
+     Py_XDECREF(unknown_name);
+     return PyValue_NULL;
+ }
+--- a/Lib/test/test_import/__init__.py
++++ b/Lib/test/test_import/__init__.py
+@@ -416,6 +416,42 @@
+                 r"\(unknown location\)"):
+             exec("from inline_spec_source import value", namespace)
+ 
++    def test_from_import_error_cleanup_order(self):
++        events = []
++
++        class EphemeralName(str):
++            def __del__(self):
++                events.append("name")
++
++        class BadTruth:
++            def __bool__(self):
++                return 42
++
++        class EphemeralSpec:
++            @property
++            def has_location(self):
++                return BadTruth()
++
++            def __del__(self):
++                events.append("spec")
++
++        class ImportSource:
++            def __getattribute__(self, name):
++                if name == "__name__":
++                    return EphemeralName("cleanup_order_source")
++                if name == "__spec__":
++                    return EphemeralSpec()
++                if name == "missing":
++                    raise AttributeError(name)
++                return object.__getattribute__(self, name)
++
++        namespace = {
++            "__builtins__": {"__import__": lambda *args: ImportSource()},
++        }
++        with self.assertRaisesRegex(TypeError, "must return a bool"):
++            exec("from cleanup_order_source import missing", namespace)
++        self.assertEqual(events, ["spec", "name"])
++
+     def test_from_import_missing_attribute_lookup_once(self):
+         lookups = []
+ 

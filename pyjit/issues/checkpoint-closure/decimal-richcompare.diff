@@ -1,0 +1,266 @@
+--- a/Modules/_decimal/_decimal.c
++++ b/Modules/_decimal/_decimal.c
+@@ -3661,10 +3661,10 @@
+ /******************************************************************************/
+ 
+ static PyObject *
+-multiply_by_denominator(PyObject *v, PyObject *r, PyObject *context)
++multiply_by_denominator(PyObject *v, PyValueBorrow r, PyObject *context)
+ {
+     PyObject *result;
+-    PyObject *tmp = NULL;
++    PyValue tmp;
+     PyObject *denom = NULL;
+     uint32_t status = 0;
+     mpd_context_t maxctx;
+@@ -3672,13 +3672,18 @@
+     mpd_t *vv;
+ 
+     /* v is not special, r is a rational */
+-    tmp = PyObject_GetAttrString(r, "denominator");
+-    if (tmp == NULL) {
++    PyObject *name = PyUnicode_FromString("denominator");
++    if (name == NULL) {
++        return NULL;
++    }
++    tmp = _PyValue_GetAttr(r, name);
++    Py_DECREF(name);
++    if (PyValue_IsNull(tmp)) {
+         return NULL;
+     }
+     decimal_state *state = get_module_state_from_ctx(context);
+-    denom = PyDec_FromLongExact(state, tmp, context);
+-    Py_DECREF(tmp);
++    denom = PyDecType_FromLongExact(state->PyDec_Type, PyValue_Borrow(tmp), context);
++    PyValue_CLOSE(tmp);
+     if (denom == NULL) {
+         return NULL;
+     }
+@@ -3722,92 +3727,85 @@
+ }
+ 
+ static PyObject *
+-numerator_as_decimal(PyObject *r, PyObject *context)
++numerator_as_decimal(PyValueBorrow r, PyObject *context)
+ {
+-    PyObject *tmp, *num;
+-
+-    tmp = PyObject_GetAttrString(r, "numerator");
+-    if (tmp == NULL) {
++    PyObject *name = PyUnicode_FromString("numerator");
++    if (name == NULL) {
++        return NULL;
++    }
++    PyValue tmp = _PyValue_GetAttr(r, name);
++    Py_DECREF(name);
++    if (PyValue_IsNull(tmp)) {
+         return NULL;
+     }
+-
+     decimal_state *state = get_module_state_from_ctx(context);
+-    num = PyDec_FromLongExact(state, tmp, context);
+-    Py_DECREF(tmp);
++    PyObject *num = PyDecType_FromLongExact(state->PyDec_Type,
++                                            PyValue_Borrow(tmp), context);
++    PyValue_CLOSE(tmp);
+     return num;
+ }
+ 
+-/* Convert v and w for comparison. v is a Decimal. If w is a Rational, both
+-   v and w have to be transformed. Return 1 for success, with new references
+-   to the converted objects in vcmp and wcmp. Return 0 for failure. In that
+-   case wcmp is either NULL or Py_NotImplemented (new reference) and vcmp
+-   is undefined. */
++/* Return 1 for converted operands, 0 for NotImplemented, or -1 on error. */
+ static int
+-convert_op_cmp(PyObject **vcmp, PyObject **wcmp, PyObject *v, PyObject *w,
+-               int op, PyObject *context)
++convert_op_cmp_value(PyObject **vcmp, PyObject **wcmp, PyObject *v,
++                     PyValueBorrow w, int op, PyObject *context)
+ {
+     mpd_context_t *ctx = CTX(context);
+-
++    decimal_state *state = get_module_state_from_ctx(context);
++    PyObject *obj = PyValue_IsObject(w) ? PyValue_AsKnownObjectBorrow(w) : NULL;
+     *vcmp = v;
++    *wcmp = NULL;
+ 
+-    decimal_state *state = get_module_state_from_ctx(context);
+-    if (PyDec_Check(state, w)) {
+-        *wcmp = Py_NewRef(w);
++    if (obj != NULL && PyDec_Check(state, obj)) {
++        *wcmp = Py_NewRef(obj);
+     }
+-    else if (PyLong_Check(w)) {
+-        *wcmp = PyDec_FromLongExact(state, w, context);
++    else if (PyValue_LongCheck(w)) {
++        *wcmp = PyDecType_FromLongExact(state->PyDec_Type, w, context);
+     }
+-    else if (PyFloat_Check(w)) {
++    else if (PyValue_FloatCheck(w)) {
+         if (op != Py_EQ && op != Py_NE &&
+             dec_addstatus(context, MPD_Float_operation)) {
+-            *wcmp = NULL;
+-        }
+-        else {
+-            ctx->status |= MPD_Float_operation;
+-            *wcmp = PyDec_FromFloatExact(state, w, context);
++            return -1;
+         }
++        ctx->status |= MPD_Float_operation;
++        *wcmp = PyDecType_FromFloatExact(state->PyDec_Type, w, context);
+     }
+-    else if (PyComplex_Check(w) && (op == Py_EQ || op == Py_NE)) {
+-        Py_complex c = PyComplex_AsCComplex(w);
++    else if (obj != NULL && PyComplex_Check(obj) &&
++             (op == Py_EQ || op == Py_NE)) {
++        Py_complex c = PyComplex_AsCComplex(obj);
+         if (c.real == -1.0 && PyErr_Occurred()) {
+-            *wcmp = NULL;
++            return -1;
+         }
+-        else if (c.imag == 0.0) {
+-            PyObject *tmp = PyFloat_FromDouble(c.real);
+-            if (tmp == NULL) {
+-                *wcmp = NULL;
+-            }
+-            else {
+-                ctx->status |= MPD_Float_operation;
+-                *wcmp = PyDec_FromFloatExact(state, tmp, context);
+-                Py_DECREF(tmp);
+-            }
++        if (c.imag != 0.0) {
++            return 0;
+         }
+-        else {
+-            *wcmp = Py_NewRef(Py_NotImplemented);
++        PyValue real = PyValue_FromDouble(c.real);
++        if (PyValue_IsNull(real)) {
++            return -1;
+         }
++        ctx->status |= MPD_Float_operation;
++        *wcmp = PyDecType_FromFloatExact(state->PyDec_Type,
++                                         PyValue_Borrow(real), context);
++        PyValue_CLOSE(real);
+     }
+     else {
+-        int is_rational = PyObject_IsInstance(w, state->Rational);
++        int is_rational = _PyValue_IsInstance(w, PyValue_FromObjectBorrow(state->Rational));
+         if (is_rational < 0) {
+-            *wcmp = NULL;
++            return -1;
+         }
+-        else if (is_rational > 0) {
+-            *wcmp = numerator_as_decimal(w, context);
+-            if (*wcmp && !mpd_isspecial(MPD(v))) {
+-                *vcmp = multiply_by_denominator(v, w, context);
+-                if (*vcmp == NULL) {
+-                    Py_CLEAR(*wcmp);
+-                }
+-            }
++        if (!is_rational) {
++            return 0;
+         }
+-        else {
+-            *wcmp = Py_NewRef(Py_NotImplemented);
++        *wcmp = numerator_as_decimal(w, context);
++        if (*wcmp != NULL && !mpd_isspecial(MPD(v))) {
++            *vcmp = multiply_by_denominator(v, w, context);
++            if (*vcmp == NULL) {
++                Py_CLEAR(*wcmp);
++            }
+         }
+     }
+-
+-    if (*wcmp == NULL || *wcmp == Py_NotImplemented) {
+-        return 0;
++    if (*wcmp == NULL) {
++        return -1;
+     }
+     if (*vcmp == v) {
+         Py_INCREF(v);
+@@ -3815,12 +3813,6 @@
+     return 1;
+ }
+ 
+-#define CONVERT_BINOP_CMP(vcmp, wcmp, v, w, op, ctx) \
+-    if (!convert_op_cmp(vcmp, wcmp, v, w, op, ctx)) {  \
+-        return *(wcmp);                                \
+-    }                                                  \
+-
+-
+ /******************************************************************************/
+ /*                          Conversions from decimal                          */
+ /******************************************************************************/
+@@ -6257,8 +6249,8 @@
+ }
+ 
+ /* Special methods */
+-static PyObject *
+-dec_richcompare(PyObject *v, PyObject *w, int op)
++static PyValue
++dec_richcompare_value(PyValueBorrow left, PyValueBorrow w, int op)
+ {
+     PyObject *a;
+     PyObject *b;
+@@ -6266,13 +6258,18 @@
+     uint32_t status = 0;
+     int a_issnan, b_issnan;
+     int r;
+-    decimal_state *state = find_state_left_or_right(v, w);
+-
+-#ifdef Py_DEBUG
++    decimal_state *state = find_state_left_or_right_value(left, w);
++    assert(PyValue_IsObject(left));
++    PyObject *v = PyValue_AsKnownObjectBorrow(left);
+     assert(PyDec_Check(state, v));
+-#endif
+-    CURRENT_CONTEXT(state, context);
+-    CONVERT_BINOP_CMP(&a, &b, v, w, op, context);
++    context = optional_context_value(state, PyValue_FromObjectBorrow(Py_None));
++    if (context == NULL) {
++        return PyValue_NULL;
++    }
++    int converted = convert_op_cmp_value(&a, &b, v, w, op, context);
++    if (converted <= 0) {
++        return converted < 0 ? PyValue_NULL : PyValue_NotImplemented;
++    }
+ 
+     a_issnan = mpd_issnan(MPD(a));
+     b_issnan = mpd_issnan(MPD(b));
+@@ -6284,12 +6281,12 @@
+         /* sNaNs or op={le,ge,lt,gt} always signal. */
+         if (a_issnan || b_issnan || (op != Py_EQ && op != Py_NE)) {
+             if (dec_addstatus(context, status)) {
+-                return NULL;
++                return PyValue_NULL;
+             }
+         }
+         /* qNaN comparison with op={eq,ne} or comparison
+          * with InvalidOperation disabled. */
+-        return (op == Py_NE) ? incr_true() : incr_false();
++        return (op == Py_NE) ? PyValue_True : PyValue_False;
+     }
+ 
+     switch (op) {
+@@ -6313,9 +6310,11 @@
+         break;
+     }
+ 
+-    return PyBool_FromLong(r);
++    return r ? PyValue_True : PyValue_False;
+ }
+ 
++_Py_VALUE_THUNK_RICHCMP(dec_richcompare, dec_richcompare_value)
++
+ /*[clinic input]
+ @value_function
+ _decimal.Decimal.__ceil__
+@@ -6751,6 +6750,7 @@
+     {Py_tp_str, dec_str},
+     {Py_tp_doc, (void *)dec_new__doc__},
+     {Py_tp_richcompare, dec_richcompare},
++    {_Py_value_richcompare, dec_richcompare_value},
+     {Py_tp_methods, dec_methods},
+     {Py_tp_getset, dec_getsets},
+     {Py_tp_new, dec_new},

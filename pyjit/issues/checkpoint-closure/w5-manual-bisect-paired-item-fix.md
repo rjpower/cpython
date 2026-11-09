@@ -1,0 +1,5 @@
+# Additive bisect paired sequence-item fix
+
+Apply `w5-manual-bisect-paired-item-fix.patch` after `w5-manual-bisect-value-search.patch`; the original packet remains frozen. Both search directions now capture the object `sq_item` and matching paired value row once, validate the row in debug builds, then call the saved value row for value-aware sequence types. Object-only extension slots use the saved object function and its owned-result adapter. This avoids boxing scalar results from core sequences without re-looking up a possibly changed slot during the search. The test mutates a Python sequence subclass's `__getitem__` from a key callback and checks the cached dispatch behavior.
+
+Baseline: main runtime commit `d6eae4b1c1c200444b325240a00791b44288b1e3`, after the frozen bisect packet. The W5 release build imported all 117 modules and the focused `TestBisectC.test_key_callback_changes_sequence_getitem` passed. D compilation of `Modules/_bisectmodule.o` passed. `git diff --check` is clean.

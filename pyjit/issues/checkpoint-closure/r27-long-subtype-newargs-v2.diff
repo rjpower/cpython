@@ -1,0 +1,88 @@
+--- a/Objects/longobject.c
++++ b/Objects/longobject.c
+@@ -6071,41 +6071,31 @@
+ static PyObject *
+ long_subtype_new(PyTypeObject *type, PyValueBorrow x, PyValueBorrow obase)
+ {
+-    PyLongObject *tmp, *newobj;
+-    Py_ssize_t size, ndigits;
+-    int sign;
+-
+     assert(PyType_IsSubtype(type, &PyLong_Type));
+     PyValue tmpv = long_new_impl(&PyLong_Type, x, obase);
+-    if (PyValue_IsNull(tmpv))
+-        return NULL;
+-    // The int may be inline: the subtype copies digits, so it needs an object.
+-    tmp = (PyLongObject *)_PyValue_AsObjectAt(tmpv, BOX_SITE_PARSER);
+-    PyValue_CLOSE(tmpv);
+-    if (tmp == NULL)
++    if (PyValue_IsNull(tmpv)) {
+         return NULL;
+-    assert(PyLong_Check(tmp));
+-    size = _PyLong_DigitCount(tmp);
+-    /* Fast operations for single digit integers (including zero)
+-     * assume that there is always at least one digit present. */
+-    ndigits = size ? size : 1;
+-    newobj = (PyLongObject *)type->tp_alloc(type, ndigits);
++    }
++    digit digits[_PyLong_WORD_DIGITS];
++    _PyLongSpan span = _PyLong_SpanOfValue(PyValue_Borrow(tmpv), digits);
++    /* Compact zero still needs one initialized digit. */
++    Py_ssize_t ndigits = span.n ? span.n : 1;
++    PyLongObject *newobj = (PyLongObject *)type->tp_alloc(type, ndigits);
+     if (newobj == NULL) {
+-        Py_DECREF(tmp);
++        PyValue_CLOSE(tmpv);
+         return NULL;
+     }
+     assert(PyLong_Check(newobj));
+-    if (_PyLong_IsCompact(tmp)) {
+-        sign = _PyLong_CompactSign(tmp);
++    _PyLong_InitTag(newobj);
++    _PyLong_SetSignAndDigitCount(newobj,
++                                 span.n ? (span.neg ? -1 : 1) : 0, span.n);
++    if (span.n) {
++        memcpy(newobj->long_value.ob_digit, span.d, span.n * sizeof(digit));
+     }
+     else {
+-        sign = _PyLong_NonCompactSign(tmp);
++        newobj->long_value.ob_digit[0] = 0;
+     }
+-    _PyLong_InitTag(newobj);
+-    _PyLong_SetSignAndDigitCount(newobj, sign, size);
+-    memcpy(newobj->long_value.ob_digit, tmp->long_value.ob_digit,
+-           ndigits * sizeof(digit));
+-    Py_DECREF(tmp);
++    PyValue_CLOSE(tmpv);
+     return (PyObject *)newobj;
+ }
+ 
+@@ -6117,13 +6107,23 @@
+ int___getnewargs___impl(PyValueBorrow self)
+ /*[clinic end generated code: output=ab1207a4049d9924 input=5904770ab1fb8c75]*/
+ {
+-    PyObject *obj = _PyValue_AsObjectAt(self, BOX_SITE_PARSER);
+-    if (obj == NULL) {
++    digit digits[_PyLong_WORD_DIGITS];
++    _PyLongSpan span = _PyLong_SpanOfValue(self, digits);
++    _PyLongOut out;
++    digit *dest = _PyLong_OutReserve(&out, span.n);
++    if (dest == NULL) {
++        return PyValue_NULL;
++    }
++    memcpy(dest, span.d, span.n * sizeof(digit));
++    out.n = span.n;
++    out.neg = span.neg;
++    PyValue copy = _PyLong_OutValue(&out);
++    if (PyValue_IsNull(copy)) {
+         return PyValue_NULL;
+     }
+-    PyObject *copy = _PyLong_Copy((PyLongObject *)obj);
+-    Py_DECREF(obj);
+-    return _PyValue_FromObjectResult(Py_BuildValue("(N)", copy));
++    PyObject *tuple = _PyTuple_PackValues(1, (PyValueBorrow[]){PyValue_Borrow(copy)});
++    PyValue_CLOSE(copy);
++    return _PyValue_FromObjectResult(tuple);
+ }
+ 
+ /*[clinic input]

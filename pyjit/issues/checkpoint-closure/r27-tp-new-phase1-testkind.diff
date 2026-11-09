@@ -1,0 +1,11 @@
+--- a/Modules/_testinternalcapi/value_slots.c
++++ b/Modules/_testinternalcapi/value_slots.c
+@@ -1250,7 +1250,7 @@
+     KIND_HASH, KIND_REPR, KIND_GETATTRO, KIND_SETATTRO, KIND_DESCRGET,
+     KIND_DESCRSET, KIND_SUBSCRIPT, KIND_ASSSUBSCRIPT, KIND_ITEM,
+     KIND_ASSITEM, KIND_CONTAINS, KIND_ITERNEXT, KIND_SEND, KIND_VECTORCALL,
+-    KIND_CONCAT,
++    KIND_CONCAT, KIND_NEW,
+ };
+ 
+ typedef struct {

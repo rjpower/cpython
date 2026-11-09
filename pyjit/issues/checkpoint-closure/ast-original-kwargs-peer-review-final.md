@@ -1,0 +1,7 @@
+# Original keyword dictionary: final source review
+
+Reviewed `ast-original-kwargs-pyvalue.patch` followed by **`ast-original-kwargs-pyvalue-review-fixes-v2.patch`**. The earlier `ast-original-kwargs-pyvalue-review-fixes.patch` is historical and must not be layered with v2.
+
+The selected type-call route retains the original argument tuple and keyword dictionary through C `tp_new` and `tp_init`, keeps the result owned as a PyValue, checks the object result, and preserves the initialized result type check. It is limited to the existing object/value type-call pair and the class object's exact built-in vectorcall pair. The added recursion guard leaves on the missing-new, normal, and error paths. Exact built-in `type` now bypasses this route, preserving its active vectorcall's keyword validation before the special one-or-three-argument error. The `slot_tp_new` fallback looks up `__new__` on the class before calling it with the original dictionary, rather than looking on the metaclass. Its fallible value-to-object conversion consumes the owned attribute result and returns NULL on failure.
+
+**Source approved.** The base plus v2 had release-config syntax-only compilation according to the author; this review did not link a runtime. Merged validation should run direct C `PyObject_Call` probes for `type` with zero, one and three positional arguments and a non-string keyword key, plus a class `__new__` lookup callback and recursion case. The added Python `**kwargs` test helps but does not by itself prove the direct C route.

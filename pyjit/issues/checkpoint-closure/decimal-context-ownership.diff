@@ -1,0 +1,121 @@
+--- a/Modules/_decimal/_decimal.c
++++ b/Modules/_decimal/_decimal.c
+@@ -2256,6 +2256,7 @@
+     if (global == NULL) {
+         return PyValue_NULL;
+     }
++    Py_INCREF(global);
+     PyObject *local_object;
+     if (PyValue_IsNone(local)) {
+         local_object = global;
+@@ -2267,11 +2268,13 @@
+     else {
+         PyErr_SetString(PyExc_TypeError,
+             "optional argument must be a context");
++        Py_DECREF(global);
+         return PyValue_NULL;
+     }
+ 
+     PyObject *local_copy = context_copy(state, local_object);
+     if (local_copy == NULL) {
++        Py_DECREF(global);
+         return PyValue_NULL;
+     }
+ 
+@@ -2282,6 +2285,7 @@
+     );
+     if (ret < 0) {
+         Py_DECREF(local_copy);
++        Py_DECREF(global);
+         return PyValue_NULL;
+     }
+ 
+@@ -2290,11 +2294,12 @@
+                            state->PyDecContextManager_Type);
+     if (self == NULL) {
+         Py_DECREF(local_copy);
++        Py_DECREF(global);
+         return PyValue_NULL;
+     }
+ 
+     self->local = local_copy;
+-    self->global = Py_NewRef(global);
++    self->global = global;
+     PyObject_GC_Track(self);
+ 
+     return PyValue_FromObjectSteal((PyObject *)self);
+@@ -4107,8 +4112,10 @@
+     if (context == NULL) {
+         return PyValue_NULL;
+     }
++    Py_INCREF(context);
+     fmt = (char *)PyUnicode_AsUTF8AndSize(fmtarg, &size);
+     if (fmt == NULL) {
++        Py_DECREF(context);
+         return PyValue_NULL;
+     }
+ 
+@@ -4116,6 +4123,7 @@
+         if (PyErr_WarnEx(PyExc_DeprecationWarning,
+                          "Format specifier 'N' is deprecated and "
+                          "slated for removal in Python 3.18", 1) < 0) {
++            Py_DECREF(context);
+             return PyValue_NULL;
+         }
+     }
+@@ -4126,6 +4134,7 @@
+         replace_fillchar = 1;
+         fmt = dec_strdup(fmt, size);
+         if (fmt == NULL) {
++            Py_DECREF(context);
+             return PyValue_NULL;
+         }
+         fmt[0] = '_';
+@@ -4136,7 +4145,9 @@
+             PyMem_Free(fmt);
+         }
+ 
+-        return pydec_format(dec, context, fmtarg, state);
++        PyValue fallback = pydec_format(dec, context, fmtarg, state);
++        Py_DECREF(context);
++        return fallback;
+     }
+ 
+     if (replace_fillchar) {
+@@ -4219,6 +4230,7 @@
+     Py_XDECREF(dot);
+     if (replace_fillchar) PyMem_Free(fmt);
+     if (decstring) mpd_free(decstring);
++    Py_DECREF(context);
+     return result == NULL ? PyValue_NULL : PyValue_FromObjectSteal(result);
+ }
+ 
+@@ -6363,8 +6375,10 @@
+     if (context == NULL) {
+         return PyValue_NULL;
+     }
++    Py_INCREF(context);
+     int converted = convert_op_cmp_value(&a, &b, v, w, op, context);
+     if (converted <= 0) {
++        Py_DECREF(context);
+         return converted < 0 ? PyValue_NULL : PyValue_NotImplemented;
+     }
+ 
+@@ -6378,14 +6392,17 @@
+         /* sNaNs or op={le,ge,lt,gt} always signal. */
+         if (a_issnan || b_issnan || (op != Py_EQ && op != Py_NE)) {
+             if (dec_addstatus(context, status)) {
++                Py_DECREF(context);
+                 return PyValue_NULL;
+             }
+         }
+         /* qNaN comparison with op={eq,ne} or comparison
+          * with InvalidOperation disabled. */
++        Py_DECREF(context);
+         return (op == Py_NE) ? PyValue_True : PyValue_False;
+     }
+ 
++    Py_DECREF(context);
+     switch (op) {
+     case Py_EQ:
+         r = (r == 0);

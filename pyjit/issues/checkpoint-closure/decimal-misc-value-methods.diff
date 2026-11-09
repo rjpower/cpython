@@ -1,0 +1,223 @@
+--- a/Modules/_decimal/_decimal.c
++++ b/Modules/_decimal/_decimal.c
+@@ -2193,6 +2193,7 @@
+ }
+ 
+ /*[clinic input]
++@value_function
+ _decimal.setcontext
+ 
+     context: object
+@@ -2200,12 +2201,23 @@
+ 
+ Set a new default context.
+ [clinic start generated code]*/
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
+-_decimal_setcontext(PyObject *module, PyObject *context)
+-/*[clinic end generated code: output=8065f870be2852ce input=b57d7ee786b022a6]*/
++static PyValue
++_decimal_setcontext_impl(PyObject *module, PyValueBorrow context)
++/*[clinic end generated code: output=88ce3140b84b5c25 input=018ef3ce3947fc9f]*/
+ {
+-    return PyDec_SetCurrentContext(module, context);
++    decimal_state *state = get_module_state(module);
++    if (!PyValue_IsObject(context) ||
++        !PyDecContext_Check(state, PyValue_AsKnownObjectBorrow(context))) {
++        PyErr_SetString(PyExc_TypeError, "argument must be a context");
++        return PyValue_NULL;
++    }
++    PyObject *result = PyDec_SetCurrentContext(module,
++                                                PyValue_AsKnownObjectBorrow(context));
++    return result == NULL ? PyValue_NULL : PyValue_FromObjectSteal(result);
+ }
+ 
+ /* Context manager object for the 'with' statement. The manager
+@@ -2349,27 +2361,31 @@
+ }
+ 
+ /*[clinic input]
++@value_function
+ _decimal.ContextManager.__exit__
+ 
+     *exc_info: array
+ 
+ Restore the global context.
+ [clinic start generated code]*/
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
++static PyValue
+ _decimal_ContextManager___exit___impl(PyDecContextManagerObject *self,
+-                                      PyObject * const *exc_info,
++                                      const PyValue *exc_info,
+                                       Py_ssize_t exc_info_length)
+-/*[clinic end generated code: output=744a645b0145842d input=a86ec9080e28dff3]*/
++/*[clinic end generated code: output=476094901c0c12bc input=ea858c22bc7ee91e]*/
+ {
+     PyObject *ret;
+     ret = PyDec_SetCurrentContext(PyType_GetModule(Py_TYPE(self)), self->global);
+     if (ret == NULL) {
+-        return NULL;
++        return PyValue_NULL;
+     }
+     Py_DECREF(ret);
+ 
+-    Py_RETURN_NONE;
++    return PyValue_None;
+ }
+ 
+ 
+@@ -6498,18 +6514,22 @@
+ }
+ 
+ /*[clinic input]
++@value_function
+ _decimal.Decimal.__deepcopy__
+ 
+     memo: object
+     /
+ 
+ [clinic start generated code]*/
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
+-_decimal_Decimal___deepcopy__(PyObject *self, PyObject *memo)
+-/*[clinic end generated code: output=988fb34e0136b376 input=f95598c6f43233aa]*/
++static PyValue
++_decimal_Decimal___deepcopy___impl(PyObject *self, PyValueBorrow memo)
++/*[clinic end generated code: output=3b6f2d73b0f2cab0 input=671817a7f65eb9ce]*/
+ {
+-    return Py_NewRef(self);
++    return PyValue_DUP(PyValue_FromObjectBorrow(self));
+ }
+ 
+ /*[clinic input]
+--- a/Modules/_decimal/clinic/_decimal.c.h
++++ b/Modules/_decimal/clinic/_decimal.c.h
+@@ -651,9 +651,33 @@
+ "--\n"
+ "\n"
+ "Set a new default context.");
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+ #define _DECIMAL_SETCONTEXT_METHODDEF    \
+-    {"setcontext", (PyCFunction)_decimal_setcontext, METH_O, _decimal_setcontext__doc__},
++    {"setcontext", _PyCFunction_CAST(_decimal_setcontext), METH_VALUE|METH_O, _decimal_setcontext__doc__},
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
++
++static PyValue
++_decimal_setcontext_impl(PyObject *module, PyValueBorrow context);
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
++
++static PyValue
++_decimal_setcontext(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
++{
++    PyValue return_value = PyValue_NULL;
++    PyValueBorrow context;
++
++    context = PyValue_Borrow(args[0]);
++    return_value = _decimal_setcontext_impl(PyValue_AsKnownObjectBorrow(module), context);
++
++    return return_value;
++}
+ 
+ PyDoc_STRVAR(_decimal_localcontext__doc__,
+ "localcontext($module, /, ctx=None, **kwargs)\n"
+@@ -769,25 +793,34 @@
+ "--\n"
+ "\n"
+ "Restore the global context.");
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+ #define _DECIMAL_CONTEXTMANAGER___EXIT___METHODDEF    \
+-    {"__exit__", _PyCFunction_CAST(_decimal_ContextManager___exit__), METH_FASTCALL, _decimal_ContextManager___exit____doc__},
++    {"__exit__", _PyCFunction_CAST(_decimal_ContextManager___exit__), METH_VALUE, _decimal_ContextManager___exit____doc__},
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
++static PyValue
+ _decimal_ContextManager___exit___impl(PyDecContextManagerObject *self,
+-                                      PyObject * const *exc_info,
++                                      const PyValue *exc_info,
+                                       Py_ssize_t exc_info_length);
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
+-_decimal_ContextManager___exit__(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
++static PyValue
++_decimal_ContextManager___exit__(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+ {
+-    PyObject *return_value = NULL;
+-    PyObject * const *exc_info;
++    PyValue return_value = PyValue_NULL;
++    const PyValue *exc_info;
+     Py_ssize_t exc_info_length;
+ 
+     exc_info = args;
+     exc_info_length = nargs;
+-    return_value = _decimal_ContextManager___exit___impl((PyDecContextManagerObject *)self, exc_info, exc_info_length);
++    return_value = _decimal_ContextManager___exit___impl((PyDecContextManagerObject *)PyValue_AsKnownObjectBorrow(self), exc_info, exc_info_length);
+ 
+     return return_value;
+ }
+@@ -4502,9 +4535,33 @@
+ "__deepcopy__($self, memo, /)\n"
+ "--\n"
+ "\n");
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+ #define _DECIMAL_DECIMAL___DEEPCOPY___METHODDEF    \
+-    {"__deepcopy__", (PyCFunction)_decimal_Decimal___deepcopy__, METH_O, _decimal_Decimal___deepcopy____doc__},
++    {"__deepcopy__", _PyCFunction_CAST(_decimal_Decimal___deepcopy__), METH_VALUE|METH_O, _decimal_Decimal___deepcopy____doc__},
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
++
++static PyValue
++_decimal_Decimal___deepcopy___impl(PyObject *self, PyValueBorrow memo);
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
++
++static PyValue
++_decimal_Decimal___deepcopy__(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
++{
++    PyValue return_value = PyValue_NULL;
++    PyValueBorrow memo;
++
++    memo = PyValue_Borrow(args[0]);
++    return_value = _decimal_Decimal___deepcopy___impl(PyValue_AsKnownObjectBorrow(self), memo);
++
++    return return_value;
++}
+ 
+ PyDoc_STRVAR(_decimal_Decimal___floor____doc__,
+ "__floor__($self, /)\n"
+@@ -7417,4 +7474,4 @@
+ #ifndef _DECIMAL_CONTEXT_APPLY_METHODDEF
+     #define _DECIMAL_CONTEXT_APPLY_METHODDEF
+ #endif /* !defined(_DECIMAL_CONTEXT_APPLY_METHODDEF) */
+-/*[clinic end generated code: output=edfad83b3886d14a input=a9049054013a1b77]*/
++/*[clinic end generated code: output=a5d583f636db2ecc input=a9049054013a1b77]*/

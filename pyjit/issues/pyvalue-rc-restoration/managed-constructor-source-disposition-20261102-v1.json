@@ -1,0 +1,18 @@
+{
+  "status": "ACCEPT_MANAGED_INITIALIZATION_BEFORE_CREATE_SOURCE_NOT_RUNTIME",
+  "author_receipt": "build/pyvalue-managed-constructor-source-20261102-v1/receipt.json",
+  "author_sha256": "c80472150ffea2869f40f1de7e3bf440ba1638219180a9046719e2a20f9bd453",
+  "review_sha256": "b11eaaadd4879ba62dd03c8a4a3cae570dea805dd0da168d396c53bf2f3bb4a2",
+  "design_review_sha256": "e30f187aa42072a8bfd5227d8b9379d5ebe92b6962e1c3091f3f826e19799946",
+  "actual_first_edit_utc": "2026-11-02T01:21:32.664449323+00:00",
+  "source_window_closed_early": true,
+  "owned_paths": 3,
+  "context_paths": 3,
+  "new_runtime_ast_methods": 2,
+  "total_runtime_ast_methods": 12,
+  "syntax": "Actual fixture passes; full type TU retains existing wider container/Clinic failures",
+  "closed": "Type installation and pure declared/managed field initialization before Init/CREATE, retaining sole type INCREF and variable size prepublication",
+  "candidate_build": false,
+  "runtime_tests_executed": false,
+  "performance_measured": false
+}

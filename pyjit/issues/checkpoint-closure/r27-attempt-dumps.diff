@@ -1,0 +1,53 @@
+diff --git a/Lib/test/test_tools/test_check_r27.py b/Lib/test/test_tools/test_check_r27.py
+index 2214edc6263..0e3244a6b91 100644
+--- a/Lib/test/test_tools/test_check_r27.py
++++ b/Lib/test/test_tools/test_check_r27.py
+@@ -9,6 +9,7 @@
+ import tempfile
+ import unittest
+ from pathlib import Path
++from unittest.mock import patch
+ 
+ from test.test_tools import imports_under_tool, skip_if_missing
+ 
+@@ -314,6 +315,19 @@ def test_bad_shape_is_an_error(self):
+ 
+ 
+ class CompletenessTests(unittest.TestCase):
++    def test_suite_uses_requested_dump_directory(self):
++        with tempfile.TemporaryDirectory() as tmp:
++            directory = Path(tmp, "attempt")
++            args = check_r27.build_parser().parse_args([
++                "suite", "--build", tmp, "--dumps", str(directory),
++                "-o", str(Path(tmp, "summary.json"))])
++            with (patch.object(check_r27, "check_build_flags"),
++                  patch.object(check_r27, "run_suite", return_value=(None, 0)) as run,
++                  patch.object(check_r27, "collect", return_value=clean_summary()),
++                  patch.object(check_r27, "suite_gate", return_value=0)):
++                self.assertEqual(check_r27.cmd_suite(args), 0)
++            self.assertEqual(run.call_args.args[2], directory)
++
+     def test_suite_rejects_stale_dumps(self):
+         with tempfile.TemporaryDirectory() as tmp:
+             directory = Path(tmp)
+diff --git a/Tools/build/check_r27.py b/Tools/build/check_r27.py
+index 56a73516883..43943b97909 100644
+--- a/Tools/build/check_r27.py
++++ b/Tools/build/check_r27.py
+@@ -893,7 +893,7 @@ def cmd_suite(args):
+     # Absolute: the workers run in other directories.
+     build = Path(args.build).resolve()
+     check_build_flags(build)
+-    directory = build / "r27-dumps"
++    directory = Path(args.dumps).resolve() if args.dumps else build / "r27-dumps"
+     folded, rc = run_suite(build, args.jobs, directory, args.regrtest)
+     cdb = load_cdb(args.cdb) if args.cdb else None
+     summary = collect(directory, args.src, cdb, folded=folded, delete=True,
+@@ -1022,6 +1022,7 @@ def suite_options(sp):
+ 
+     sp = common(sub.add_parser("suite", help="run regrtest on a stats build"))
+     sp.add_argument("--build", required=True)
++    sp.add_argument("--dumps", help="fresh stats directory for this attempt")
+     sp.add_argument("-j", "--jobs", type=int, default=os.cpu_count() or 1)
+     suite_options(sp)
+     sp.add_argument("regrtest", nargs="*", help="regrtest arguments after --")

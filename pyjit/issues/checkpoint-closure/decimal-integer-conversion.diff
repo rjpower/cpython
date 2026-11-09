@@ -1,0 +1,107 @@
+--- a/Modules/_decimal/_decimal.c
++++ b/Modules/_decimal/_decimal.c
+@@ -2550,7 +2550,7 @@
+ /* Convert from a PyLongObject. The context is not modified; flags set
+    during conversion are accumulated in the status parameter. */
+ static PyObject *
+-dec_from_long(decimal_state *state, PyTypeObject *type, PyObject *v,
++dec_from_long(decimal_state *state, PyTypeObject *type, PyValueBorrow v,
+               const mpd_context_t *ctx, uint32_t *status)
+ {
+     PyObject *dec = PyDecType_New(state, type);
+@@ -2559,9 +2559,14 @@
+         return NULL;
+     }
+ 
++    if (PyValue_IsInlineInt(v)) {
++        mpd_qset_i64(MPD(dec), PyValue_InlineInt64(v), ctx, status);
++        return dec;
++    }
++
+     PyLongExport export_long;
+ 
+-    if (PyLong_Export(v, &export_long) == -1) {
++    if (PyLong_Export(PyValue_AsKnownObjectBorrow(v), &export_long) == -1) {
+         Py_DECREF(dec);
+         return NULL;
+     }
+@@ -2596,12 +2601,12 @@
+ /* Return a new PyDecObject from a PyLongObject. Use the context for
+    conversion. */
+ static PyObject *
+-PyDecType_FromLong(PyTypeObject *type, PyObject *v, PyObject *context)
++PyDecType_FromLong(PyTypeObject *type, PyValueBorrow v, PyObject *context)
+ {
+     PyObject *dec;
+     uint32_t status = 0;
+ 
+-    if (!PyLong_Check(v)) {
++    if (!PyValue_LongCheck(v)) {
+         PyErr_SetString(PyExc_TypeError, "argument must be an integer");
+         return NULL;
+     }
+@@ -2623,14 +2628,14 @@
+ /* Return a new PyDecObject from a PyLongObject. Use a maximum context
+    for conversion. If the conversion is not exact, set InvalidOperation. */
+ static PyObject *
+-PyDecType_FromLongExact(PyTypeObject *type, PyObject *v,
++PyDecType_FromLongExact(PyTypeObject *type, PyValueBorrow v,
+                         PyObject *context)
+ {
+     PyObject *dec;
+     uint32_t status = 0;
+     mpd_context_t maxctx;
+ 
+-    if (!PyLong_Check(v)) {
++    if (!PyValue_LongCheck(v)) {
+         PyErr_SetString(PyExc_TypeError, "argument must be an integer");
+         return NULL;
+     }
+@@ -2675,7 +2680,7 @@
+     assert(PyType_IsSubtype(type, state->PyDec_Type));
+ #endif
+     if (PyLong_Check(v)) {
+-        return PyDecType_FromLongExact(type, v, context);
++        return PyDecType_FromLongExact(type, PyValue_FromObjectBorrow(v), context);
+     }
+     if (!PyFloat_Check(v)) {
+         PyErr_SetString(PyExc_TypeError,
+@@ -2740,7 +2745,7 @@
+     }
+     k--;
+ 
+-    dec = PyDecType_FromLongExact(type, n, context);
++    dec = PyDecType_FromLongExact(type, PyValue_FromObjectBorrow(n), context);
+     Py_DECREF(n);
+     if (dec == NULL) {
+         return NULL;
+@@ -3083,9 +3088,9 @@
+         PyDecType_FromSsizeExact((st)->PyDec_Type, v, context)
+ 
+ #define PyDec_FromLong(st, pylong, context) \
+-        PyDecType_FromLong((st)->PyDec_Type, pylong, context)
++        PyDecType_FromLong((st)->PyDec_Type, PyValue_FromObjectBorrow(pylong), context)
+ #define PyDec_FromLongExact(st, pylong, context) \
+-        PyDecType_FromLongExact((st)->PyDec_Type, pylong, context)
++        PyDecType_FromLongExact((st)->PyDec_Type, PyValue_FromObjectBorrow(pylong), context)
+ 
+ #define PyDec_FromFloat(st, pyfloat, context) \
+         PyDecType_FromFloat((st)->PyDec_Type, pyfloat, context)
+@@ -3153,7 +3158,7 @@
+         return PyDecType_FromDecimalExact(type, v, context);
+     }
+     else if (PyLong_Check(v)) {
+-        return PyDecType_FromLongExact(type, v, context);
++        return PyDecType_FromLongExact(type, PyValue_FromObjectBorrow(v), context);
+     }
+     else if (PyFloat_Check(v)) {
+         if (dec_addstatus(context, MPD_Float_operation)) {
+@@ -3279,7 +3284,7 @@
+         return PyDecType_FromUnicodeExactWS(type, v, context);
+     }
+     else if (PyLong_Check(v)) {
+-        return PyDecType_FromLongExact(type, v, context);
++        return PyDecType_FromLongExact(type, PyValue_FromObjectBorrow(v), context);
+     }
+     else if (PyTuple_Check(v) || PyList_Check(v)) {
+         return PyDecType_FromSequenceExact(type, v, context);

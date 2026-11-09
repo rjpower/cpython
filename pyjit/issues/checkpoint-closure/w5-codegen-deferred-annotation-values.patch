@@ -1,0 +1,86 @@
+diff --git a/Include/internal/pycore_compile.h b/Include/internal/pycore_compile.h
+index 31738f2074d..ef600fe8005 100644
+--- a/Include/internal/pycore_compile.h
++++ b/Include/internal/pycore_compile.h
+@@ -139,6 +139,7 @@ int _PyCompile_EnterScope(struct _PyCompiler *c, identifier name, int scope_type
+ void _PyCompile_ExitScope(struct _PyCompiler *c);
+ int _PyCompile_SetQualname(struct _PyCompiler *c);
+ Py_ssize_t _PyCompile_AddConst(struct _PyCompiler *c, PyObject *o);
++Py_ssize_t _PyCompile_AddConstValue(struct _PyCompiler *c, PyValueBorrow value);
+ _PyInstructionSequence *_PyCompile_InstrSequence(struct _PyCompiler *c);
+ int _PyCompile_StartAnnotationSetup(struct _PyCompiler *c);
+ int _PyCompile_EndAnnotationSetup(struct _PyCompiler *c);
+diff --git a/Python/codegen.c b/Python/codegen.c
+index 2defdf816f2..6693507c923 100644
+--- a/Python/codegen.c
++++ b/Python/codegen.c
+@@ -316,6 +316,17 @@ codegen_addop_load_const(compiler *c, location loc, PyObject *o)
+     return SUCCESS;
+ }
+ 
++static int
++codegen_addop_load_const_value(compiler *c, location loc, PyValueBorrow value)
++{
++    Py_ssize_t arg = _PyCompile_AddConstValue(c, value);
++    if (arg < 0) {
++        return ERROR;
++    }
++    ADDOP_I(c, loc, LOAD_CONST, arg);
++    return SUCCESS;
++}
++
+ #define ADDOP_LOAD_CONST(C, LOC, O) \
+     RETURN_IF_ERROR(codegen_addop_load_const((C), (LOC), (O)))
+ 
+@@ -867,13 +878,11 @@ codegen_deferred_annotations_body(compiler *c, location loc,
+     for (Py_ssize_t i = 0; i < annotations_len; i++) {
+         /* PyLong_AsVoidPtr is the native boundary for recorded AST pointers. */
+         PyValue ptr_v = PyList_GetValue(deferred_anno, i);
+-        PyObject *ptr = PyValue_IsNull(ptr_v) ? NULL : _PyValue_AsObjectAt(ptr_v, BOX_SITE_LIST);
+-        PyValue_XCLOSE(ptr_v);
+-        if (ptr == NULL) {
++        if (PyValue_IsNull(ptr_v)) {
+             return ERROR;
+         }
+-        stmt_ty st = (stmt_ty)_PyValue_IntAsVoidPtr(PyValue_FromObjectBorrow(ptr));
+-        Py_DECREF(ptr);
++        stmt_ty st = (stmt_ty)_PyValue_IntAsVoidPtr(ptr_v);
++        PyValue_CLOSE(ptr_v);
+         if (st == NULL) {
+             return ERROR;
+         }
+@@ -895,8 +904,8 @@ codegen_deferred_annotations_body(compiler *c, location loc,
+         NEW_JUMP_TARGET_LABEL(c, not_set);
+ 
+         if (idx != -1) {
+-            int ret = codegen_addop_load_const_new(
+-                c, LOC(st), _PyValue_AsObjectAt(cond_index, BOX_SITE_COMPILER));
++            int ret = codegen_addop_load_const_value(
++                c, LOC(st), cond_index);
+             if (ret < 0) {
+                 Py_DECREF(mangled);
+                 return ERROR;
+diff --git a/Python/compile.c b/Python/compile.c
+index 28bc07695c3..4f64fdd2686 100644
+--- a/Python/compile.c
++++ b/Python/compile.c
+@@ -566,6 +566,19 @@ _PyCompile_AddConst(compiler *c, PyObject *o)
+     return arg;
+ }
+ 
++Py_ssize_t
++_PyCompile_AddConstValue(compiler *c, PyValueBorrow value)
++{
++    PyValue key = const_cache_insert(c->c_const_cache, value, true);
++    if (PyValue_IsNull(key)) {
++        return ERROR;
++    }
++
++    Py_ssize_t arg = dict_add_value(c->u->u_metadata.u_consts, key);
++    PyValue_CLOSE(key);
++    return arg;
++}
++
+ static PyObject *
+ list2dict(PyObject *list)
+ {

@@ -1,0 +1,328 @@
+--- a/Objects/stringlib/unicode_format.h
++++ b/Objects/stringlib/unicode_format.h
+@@ -145,59 +145,46 @@
+ /************************************************************************/
+ 
+ /* do the equivalent of obj.name */
+-static PyObject *
+-getattr(PyObject *obj, SubString *name)
++static PyValue
++getattr(PyValueBorrow obj, SubString *name)
+ {
+-    PyObject *newobj;
+     PyObject *str = SubString_new_object(name);
+     if (str == NULL)
+-        return NULL;
+-    PyValue newval = _PyValue_GetAttr(PyValue_FromObjectBorrow(obj), str);
++        return PyValue_NULL;
++    PyValue newval = _PyValue_GetAttr(obj, str);
+     Py_DECREF(str);
+-    newobj = PyValue_IsNull(newval) ? NULL
+-           : _PyValue_AsObjectStealAt(newval, BOX_SITE_ATTRIBUTE);
+-    return newobj;
++    return newval;
+ }
+ 
+ /* do the equivalent of obj[idx], where obj is a sequence */
+-static PyObject *
+-getitem_sequence(PyObject *obj, Py_ssize_t idx)
++static PyValue
++getitem_sequence(PyValueBorrow obj, Py_ssize_t idx)
+ {
+-    PyValue item = _PyValue_SequenceGetItem(PyValue_FromObjectBorrow(obj), idx);
+-    return PyValue_IsNull(item) ? NULL
+-         : _PyValue_AsObjectStealAt(item, BOX_SITE_SEQUENCE);
++    return _PyValue_SequenceGetItem(obj, idx);
+ }
+ 
+ /* do the equivalent of obj[idx], where obj is not a sequence */
+-static PyObject *
+-getitem_idx(PyObject *obj, Py_ssize_t idx)
++static PyValue
++getitem_idx(PyValueBorrow obj, Py_ssize_t idx)
+ {
+-    PyObject *newobj;
+-    PyObject *idx_obj = PyLong_FromSsize_t(idx);
+-    if (idx_obj == NULL)
+-        return NULL;
+-    PyValue newval = _PyValue_GetItem(PyValue_FromObjectBorrow(obj),
+-                                      PyValue_FromObjectBorrow(idx_obj));
+-    Py_DECREF(idx_obj);
+-    newobj = PyValue_IsNull(newval) ? NULL
+-           : _PyValue_AsObjectStealAt(newval, BOX_SITE_SEQUENCE);
+-    return newobj;
++    PyValue key = PyValue_FromInt64(idx);
++    if (PyValue_IsNull(key))
++        return PyValue_NULL;
++    PyValue newval = _PyValue_GetItem(obj, key);
++    PyValue_CLOSE(key);
++    return newval;
+ }
+ 
+ /* do the equivalent of obj[name] */
+-static PyObject *
+-getitem_str(PyObject *obj, SubString *name)
++static PyValue
++getitem_str(PyValueBorrow obj, SubString *name)
+ {
+-    PyObject *newobj;
+     PyObject *str = SubString_new_object(name);
+     if (str == NULL)
+-        return NULL;
+-    PyValue newval = _PyValue_GetItem(PyValue_FromObjectBorrow(obj),
+-                                      PyValue_FromObjectBorrow(str));
++        return PyValue_NULL;
++    PyValue newval = _PyValue_GetItem(obj, PyValue_FromObjectBorrow(str));
+     Py_DECREF(str);
+-    newobj = PyValue_IsNull(newval) ? NULL
+-           : _PyValue_AsObjectStealAt(newval, BOX_SITE_SEQUENCE);
+-    return newobj;
++    return newval;
+ }
+ 
+ typedef struct {
+@@ -404,11 +391,11 @@
+     format_spec.  It handles getindex and getattr lookups and consumes
+     the entire input string.
+ */
+-static PyObject *
++static PyValue
+ get_field_object(SubString *input, PyObject *args, PyObject *kwargs,
+                  AutoNumber *auto_number)
+ {
+-    PyObject *obj = NULL;
++    PyValue obj = PyValue_NULL;
+     int ok;
+     int is_attribute;
+     SubString name;
+@@ -435,12 +422,10 @@
+         /* Use PyObject_GetItem instead of PyDict_GetItem because this
+            code is no longer just used with kwargs. It might be passed
+            a non-dict when called through format_map. */
+-        PyValue obj_v = _PyValue_GetItem(PyValue_FromObjectBorrow(kwargs),
+-                                         PyValue_FromObjectBorrow(key));
++        obj = _PyValue_GetItem(PyValue_FromObjectBorrow(kwargs),
++                               PyValue_FromObjectBorrow(key));
+         Py_DECREF(key);
+-        obj = PyValue_IsNull(obj_v) ? NULL
+-            : _PyValue_AsObjectStealAt(obj_v, BOX_SITE_SEQUENCE);
+-        if (obj == NULL) {
++        if (PyValue_IsNull(obj)) {
+             goto error;
+         }
+     }
+@@ -456,11 +441,8 @@
+         }
+ 
+         /* look up in args */
+-        PyValue obj_v = _PyValue_SequenceGetItem(PyValue_FromObjectBorrow(args),
+-                                                 index);
+-        obj = PyValue_IsNull(obj_v) ? NULL
+-            : _PyValue_AsObjectStealAt(obj_v, BOX_SITE_SEQUENCE);
+-        if (obj == NULL) {
++        obj = _PyValue_SequenceGetItem(PyValue_FromObjectBorrow(args), index);
++        if (PyValue_IsNull(obj)) {
+             PyErr_Format(PyExc_IndexError,
+                          "Replacement index %zd out of range for positional "
+                          "args tuple",
+@@ -472,33 +454,34 @@
+     /* iterate over the rest of the field_name */
+     while ((ok = FieldNameIterator_next(&rest, &is_attribute, &index,
+                                         &name)) == 2) {
+-        PyObject *tmp;
++        PyValue tmp;
+ 
+         if (is_attribute)
+             /* getattr lookup "." */
+-            tmp = getattr(obj, &name);
++            tmp = getattr(PyValue_Borrow(obj), &name);
+         else
+             /* getitem lookup "[]" */
+             if (index == -1)
+-                tmp = getitem_str(obj, &name);
++                tmp = getitem_str(PyValue_Borrow(obj), &name);
+             else
+-                if (_PyValue_SequenceCheck(PyValue_FromObjectBorrow(obj)))
+-                    tmp = getitem_sequence(obj, index);
++                if (_PyValue_SequenceCheck(obj))
++                    tmp = getitem_sequence(PyValue_Borrow(obj), index);
+                 else
+                     /* not a sequence */
+-                    tmp = getitem_idx(obj, index);
+-        if (tmp == NULL)
++                    tmp = getitem_idx(PyValue_Borrow(obj), index);
++        if (PyValue_IsNull(tmp))
+             goto error;
+ 
+         /* assign to obj */
+-        Py_SETREF(obj, tmp);
++        PyValue_CLOSE(obj);
++        obj = tmp;
+     }
+     /* end of iterator, this is the non-error case */
+     if (ok == 1)
+         return obj;
+ error:
+-    Py_XDECREF(obj);
+-    return NULL;
++    PyValue_XCLOSE(obj);
++    return PyValue_NULL;
+ }
+ 
+ /************************************************************************/
+@@ -514,29 +497,31 @@
+     appends to the output.
+ */
+ static int
+-render_field(PyObject *fieldobj, SubString *format_spec, _PyUnicodeWriter *writer)
++render_field(PyValueBorrow fieldobj, SubString *format_spec, _PyUnicodeWriter *writer)
+ {
+     int ok = 0;
+     PyObject *result = NULL;
+     PyObject *format_spec_object = NULL;
+     int (*formatter) (_PyUnicodeWriter*, PyObject *, PyObject *, Py_ssize_t, Py_ssize_t) = NULL;
+     int err;
++    PyObject *fieldobj_o = PyValue_IsObject(fieldobj)
++        ? PyValue_AsKnownObjectBorrow(fieldobj) : NULL;
+ 
+     /* If we know the type exactly, skip the lookup of __format__ and just
+        call the formatter directly. */
+-    if (PyUnicode_CheckExact(fieldobj))
++    if (fieldobj_o != NULL && PyUnicode_CheckExact(fieldobj_o))
+         formatter = _PyUnicode_FormatAdvancedWriter;
+-    else if (PyLong_CheckExact(fieldobj))
++    else if (fieldobj_o != NULL && PyLong_CheckExact(fieldobj_o))
+         formatter = _PyLong_FormatAdvancedWriter;
+-    else if (PyFloat_CheckExact(fieldobj))
++    else if (fieldobj_o != NULL && PyFloat_CheckExact(fieldobj_o))
+         formatter = _PyFloat_FormatAdvancedWriter;
+-    else if (PyComplex_CheckExact(fieldobj))
++    else if (fieldobj_o != NULL && PyComplex_CheckExact(fieldobj_o))
+         formatter = _PyComplex_FormatAdvancedWriter;
+ 
+     if (formatter) {
+         /* we know exactly which formatter will be called when __format__ is
+            looked up, so call it directly, instead. */
+-        err = formatter(writer, fieldobj, format_spec->str,
++        err = formatter(writer, fieldobj_o, format_spec->str,
+                         format_spec->start, format_spec->end);
+         return (err == 0);
+     }
+@@ -552,7 +537,7 @@
+         if (format_spec_object == NULL)
+             goto done;
+ 
+-        result = _PyValue_Format(PyValue_FromObjectBorrow(fieldobj), PyValue_FromObjectBorrow(format_spec_object));
++        result = _PyValue_Format(fieldobj, PyValue_FromObjectBorrow(format_spec_object));
+     }
+     if (result == NULL)
+         goto done;
+@@ -779,17 +764,17 @@
+ 
+ /* do the !r or !s conversion on obj */
+ static PyObject *
+-do_conversion(PyObject *obj, Py_UCS4 conversion)
++do_conversion(PyValueBorrow obj, Py_UCS4 conversion)
+ {
+     /* XXX in pre-3.0, do we need to convert this to unicode, since it
+        might have returned a string? */
+     switch (conversion) {
+     case 'r':
+-        return _PyValue_Repr(PyValue_FromObjectBorrow(obj));
++        return _PyValue_Repr(obj);
+     case 's':
+-        return _PyValue_Str(PyValue_FromObjectBorrow(obj));
++        return _PyValue_Str(obj);
+     case 'a':
+-        return _PyValue_ASCII(PyValue_FromObjectBorrow(_PyObject_CAST(obj)));
++        return _PyValue_ASCII(obj);
+     default:
+         if (conversion > 32 && conversion < 127) {
+                 /* It's the ASCII subrange; casting to char is safe
+@@ -826,23 +811,24 @@
+               int recursion_depth, AutoNumber *auto_number)
+ {
+     PyObject *tmp = NULL;
+-    PyObject *fieldobj = NULL;
++    PyValue fieldobj = PyValue_NULL;
+     SubString expanded_format_spec;
+     SubString *actual_format_spec;
+     int result = 0;
+ 
+     /* convert field_name to an object */
+     fieldobj = get_field_object(field_name, args, kwargs, auto_number);
+-    if (fieldobj == NULL)
++    if (PyValue_IsNull(fieldobj))
+         goto done;
+ 
+     if (conversion != '\0') {
+-        tmp = do_conversion(fieldobj, conversion);
++        tmp = do_conversion(PyValue_Borrow(fieldobj), conversion);
+         if (tmp == NULL)
+             goto done;
+ 
+         /* do the assignment, transferring ownership: fieldobj = tmp */
+-        Py_SETREF(fieldobj, tmp);
++        PyValue_CLOSE(fieldobj);
++        fieldobj = PyValue_FromObjectSteal(tmp);
+         tmp = NULL;
+     }
+ 
+@@ -862,13 +848,13 @@
+     else
+         actual_format_spec = format_spec;
+ 
+-    if (render_field(fieldobj, actual_format_spec, writer) == 0)
++    if (render_field(PyValue_Borrow(fieldobj), actual_format_spec, writer) == 0)
+         goto done;
+ 
+     result = 1;
+ 
+ done:
+-    Py_XDECREF(fieldobj);
++    PyValue_XCLOSE(fieldobj);
+     Py_XDECREF(tmp);
+ 
+     return result;
+@@ -977,6 +963,30 @@
+     return do_string_format(self, NULL, obj);
+ }
+ 
++static PyValue
++do_string_format_value(PyValueBorrow self, const PyValue *args,
++                       Py_ssize_t nargs, PyObject *kwnames)
++{
++    PyObject *positional = _PyTuple_FromValueArray(args, nargs);
++    if (positional == NULL) {
++        return PyValue_NULL;
++    }
++    PyObject *keywords = NULL;
++    if (kwnames != NULL) {
++        const PyValue *keyword_values = nargs ? args + nargs : args;
++        keywords = _PyValue_StackAsDict(keyword_values, kwnames);
++        if (keywords == NULL) {
++            Py_DECREF(positional);
++            return PyValue_NULL;
++        }
++    }
++    PyObject *result = do_string_format(PyValue_AsKnownObjectBorrow(self),
++                                        positional, keywords);
++    Py_DECREF(positional);
++    Py_XDECREF(keywords);
++    return _PyValue_FromObjectResult(result);
++}
++
+ 
+ /************************************************************************/
+ /*********** formatteriterator ******************************************/
+--- a/Objects/unicodeobject.c
++++ b/Objects/unicodeobject.c
+@@ -14387,7 +14387,7 @@
+     UNICODE_ISIDENTIFIER_METHODDEF
+     UNICODE_ISPRINTABLE_METHODDEF
+     UNICODE_ZFILL_METHODDEF
+-    {"format", _PyCFunction_CAST(do_string_format), METH_VARARGS | METH_KEYWORDS, format__doc__},
++    {"format", _PyCFunction_CAST(do_string_format_value), METH_VALUE | METH_KEYWORDS, format__doc__},
+     {"format_map", do_string_format_map, METH_O, format_map__doc__},
+     UNICODE___FORMAT___METHODDEF
+     UNICODE_MAKETRANS_METHODDEF

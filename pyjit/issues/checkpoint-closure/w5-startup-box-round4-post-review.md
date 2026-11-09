@@ -1,0 +1,5 @@
+# W5 startup boxes: round-4 post-review
+
+Reviewed the refreshed [`w5-startup-boxes.patch`](w5-startup-boxes.patch), still based on runtime commit `58db4324fec`. **Approved for integration; no remaining must-fix finding in the three-file Linux patch.** The common `_io_open_impl` error label now uses `PyValue_XCLOSE(path_or_fd)`, which accepts both an owned pre-RawIO value and the `PyValue_NULL` left by the successful RawIO `PyValue_CLEAR`. This resolves the round-3 debug assertion without changing the `PyValue_CLOSE` contract.
+
+Luna reports `make -j6 all` on W5 release and debug builds (117 modules, no failed imports), plus a direct post-RawIO failure probe: `io.open(r, 'r', buffering=0, closefd=False)` raises the expected ValueError and leaves descriptor `r` valid in both builds. The earlier round-2 approval and round-3 finding remain as review history. Windows total zero-box behavior remains unproven because its console initializer still has an object-convention boundary; the accepted startup gate is Linux.

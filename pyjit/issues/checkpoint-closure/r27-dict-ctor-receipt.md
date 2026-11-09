@@ -1,0 +1,3 @@
+# Dictionary constructor value port receipt
+
+Patch: `r27-dict-ctor-values.diff`, based on the runtime's in-progress dictionary source at `7baf96ed017`. The coordinator approved the source review. W5 release shadow build passed `test_dict` (154 tests) and `r27-dict-ctor-probe.py`; W5 debug shadow passed that probe with assertions enabled. The probe covers inline invalid arguments, malformed iterator entries and their notes, keyword values, frozendict identity, and subclass/metaclass dispatch. W5 source and both shadow interpreters were restored. These checks are packet evidence; merged qualification belongs to the coordinator.

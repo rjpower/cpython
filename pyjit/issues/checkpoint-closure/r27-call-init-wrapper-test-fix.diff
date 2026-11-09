@@ -1,0 +1,14 @@
+--- a/Lib/test/test_value_slots.py
++++ b/Lib/test/test_value_slots.py
+@@ -164,8 +164,10 @@
+     def test_direct_init_and_type_call(self):
+         self.assertIsNone(object.__init__(17))
+         self.assertIsNone(object.__init__(1.5))
++        self.assertIsNone(object.__init__(17, 1))
++        self.assertIsNone(object.__init__(1.5, 1))
+         with self.assertRaises(TypeError):
+-            object.__init__(17, 1)
++            object.__init__(object(), 1)
+ 
+         class Override:
+             def __init__(self):

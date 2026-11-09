@@ -1,0 +1,33 @@
+{
+  "utc": "2026-11-01T17:58:37.322915+00:00",
+  "decision": "ACCEPT_M1_SOURCE_FOR_FOCUSED_NATIVE_VALIDATION_ONLY",
+  "source_head": "15987a03c236d5257b8a7b944bf858ee20e52fc3",
+  "source_parent": "f0a49b6d30a38db705329bcfd5e5f2d6d2413710",
+  "changed_paths": 18,
+  "source_capsule": {
+    "path": "build/worktrees/jit-method-baseline/build/jit-method-m1-source/capsule.json",
+    "sha256": "e25c69ed5cb61bfc7a53be1bab05533cb9d07916a5a3fa2fddb3990a62d28cb3"
+  },
+  "independent_source_review": {
+    "review.md": {
+      "path": "boil/issues/jit-e2e-system/m1-source-review-20261101-v1.md",
+      "sha256": "489eaad41c2135a29a98c61028eede879ed06d910a5c745faaf75f28f6dffbb1"
+    },
+    "receipt.json": {
+      "path": "boil/issues/jit-e2e-system/m1-source-receipt-20261101-v1.json",
+      "sha256": "34e946292c5b0ab8ea30f0441189f4159f5482f1cffb7d4d9cc812c77c7a2439"
+    }
+  },
+  "generated_helpers": 63,
+  "classified_handlers": 290,
+  "host_generator_tests_passed": 31,
+  "final_syntax_translation_units_passed": 7,
+  "native_bytes_executed": false,
+  "native_tests_written": 6,
+  "existing_semantic_tests_retained": 8,
+  "source_attempt_closed_early": true,
+  "future_source_edits_authorized": false,
+  "candidate_execution_authorized_by_this_decision": false,
+  "integration_or_performance_acceptance": false,
+  "remaining": "Exact held-controller readiness review, then root finite activation and actual debug/native behavior review."
+}

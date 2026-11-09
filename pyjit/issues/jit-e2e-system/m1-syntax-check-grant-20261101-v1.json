@@ -1,0 +1,24 @@
+{
+  "utc": "2026-11-01T17:32:06.456246+00:00",
+  "decision": "AUTHORIZE_BOUNDED_M1_SYNTAX_ONLY_CHECKS",
+  "source_grant": {
+    "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/boil/issues/jit-e2e-system/m1-source-grant-20261101-v1.json",
+    "sha256": "c94efe3ea019211483771ed042862e6f4edbb0dfb7d9bcfb6f1ff7a752356cd7"
+  },
+  "deadline_utc": "2026-11-01T18:47:09.038683+00:00",
+  "aggregate_compiler_ceiling_seconds": 120,
+  "configuration": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/jit-method-baseline/build/jit-method-m0-v2-debug-20261101",
+  "scope": "Use matching retained debug compiler flags for syntax-only checks of changed M1 translation units; no objects, executable, link, candidate Python/JIT execution, full build, timing or changes to retained configuration/products. Write new command/result/stream logs under M1 evidence only.",
+  "translation_units": [
+    "Python/ceval.c",
+    "Python/jit_runtime.c",
+    "Python/jit_baseline.c",
+    "Python/jit_backend_x86.c",
+    "Python/ir.c",
+    "Python/instrumentation.c",
+    "Modules/_testinternalcapi.c"
+  ],
+  "motivation": "Actual M0 generated-C failure showed cheap physical/source checks need real C syntax validation before full profile exposure.",
+  "standalone_encoder_budget_unchanged": true,
+  "gc_work_authorized": false
+}

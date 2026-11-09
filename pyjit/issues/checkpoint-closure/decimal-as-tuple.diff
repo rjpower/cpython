@@ -1,0 +1,164 @@
+--- a/Modules/_decimal/_decimal.c
++++ b/Modules/_decimal/_decimal.c
+@@ -4602,22 +4602,25 @@
+ }
+ 
+ /*[clinic input]
++@value_function
+ _decimal.Decimal.as_tuple
+ 
+     cls: defining_class
+ 
+ Return a tuple representation of the number.
+ [clinic start generated code]*/
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
++static PyValue
+ _decimal_Decimal_as_tuple_impl(PyObject *self, PyTypeObject *cls)
+-/*[clinic end generated code: output=d68b967becee8ab9 input=bfa86d640224d9f5]*/
++/*[clinic end generated code: output=8c65719cd8579832 input=cd81be0738c8b3c2]*/
+ {
+-    PyObject *result = NULL;
+-    PyObject *sign = NULL;
++    PyValue result = PyValue_NULL;
++    PyValue sign = PyValue_NULL;
+     PyObject *coeff = NULL;
+-    PyObject *expt = NULL;
+-    PyObject *tmp = NULL;
++    PyValue expt = PyValue_NULL;
+     mpd_t *x = NULL;
+     char *intstring = NULL;
+     Py_ssize_t intlen, i;
+@@ -4629,30 +4632,33 @@
+         goto out;
+     }
+ 
+-    sign = PyLong_FromUnsignedLong(mpd_sign(MPD(self)));
+-    if (sign == NULL) {
+-        goto out;
+-    }
++    sign = PyValue_FromInlineInt(mpd_sign(MPD(self)));
+ 
+     if (mpd_isinfinite(x)) {
+-        expt = PyUnicode_FromString("F");
+-        if (expt == NULL) {
++        PyObject *marker = PyUnicode_FromString("F");
++        if (marker == NULL) {
+             goto out;
+         }
++        expt = PyValue_FromObjectSteal(marker);
+         /* decimal.py has non-compliant infinity payloads. */
+-        coeff = Py_BuildValue("(i)", 0);
++        coeff = _PyTuple_PackValues(1, (PyValueBorrow[]){
++            PyValue_Borrow(PyValue_FromInlineInt(0))});
+         if (coeff == NULL) {
+             goto out;
+         }
+     }
+     else {
+         if (mpd_isnan(x)) {
+-            expt = PyUnicode_FromString(mpd_isqnan(x)?"n":"N");
++            PyObject *marker = PyUnicode_FromString(mpd_isqnan(x)?"n":"N");
++            if (marker == NULL) {
++                goto out;
++            }
++            expt = PyValue_FromObjectSteal(marker);
+         }
+         else {
+-            expt = PyLong_FromSsize_t(MPD(self)->exp);
++            expt = PyValue_FromInt64(MPD(self)->exp);
+         }
+-        if (expt == NULL) {
++        if (PyValue_IsNull(expt)) {
+             goto out;
+         }
+ 
+@@ -4676,11 +4682,8 @@
+             }
+ 
+             for (i = 0; i < intlen; i++) {
+-                tmp = PyLong_FromLong(intstring[i]-'0');
+-                if (tmp == NULL) {
+-                    goto out;
+-                }
+-                PyTuple_SET_ITEM(coeff, i, tmp);
++                PyTuple_SET_VALUE(coeff, i,
++                                  PyValue_FromInlineInt(intstring[i]-'0'));
+             }
+         }
+         else {
+@@ -4692,15 +4695,17 @@
+     }
+ 
+     decimal_state *state = PyType_GetModuleState(cls);
+-    result = PyObject_CallFunctionObjArgs((PyObject *)state->DecimalTuple,
+-                                          sign, coeff, expt, NULL);
++    PyValue args[3] = {sign, PyValue_DUP(PyValue_FromObjectBorrow(coeff)), expt};
++    result = _PyValue_Vectorcall(PyValue_FromObjectBorrow(state->DecimalTuple),
++                                 args, 3, NULL);
++    PyValue_CLOSE(args[1]);
+ 
+ out:
+     if (x) mpd_del(x);
+     if (intstring) mpd_free(intstring);
+-    Py_XDECREF(sign);
++    PyValue_XCLOSE(sign);
+     Py_XDECREF(coeff);
+-    Py_XDECREF(expt);
++    PyValue_XCLOSE(expt);
+     return result;
+ }
+ 
+--- a/Modules/_decimal/clinic/_decimal.c.h
++++ b/Modules/_decimal/clinic/_decimal.c.h
+@@ -1408,21 +1408,35 @@
+ "--\n"
+ "\n"
+ "Return a tuple representation of the number.");
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+ #define _DECIMAL_DECIMAL_AS_TUPLE_METHODDEF    \
+-    {"as_tuple", _PyCFunction_CAST(_decimal_Decimal_as_tuple), METH_METHOD|METH_FASTCALL|METH_KEYWORDS, _decimal_Decimal_as_tuple__doc__},
++    {"as_tuple", _PyCFunction_CAST(_decimal_Decimal_as_tuple), METH_VALUE|METH_METHOD|METH_KEYWORDS, _decimal_Decimal_as_tuple__doc__},
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
++static PyValue
+ _decimal_Decimal_as_tuple_impl(PyObject *self, PyTypeObject *cls);
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
+-_decimal_Decimal_as_tuple(PyObject *self, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
++static PyValue
++_decimal_Decimal_as_tuple(PyValueBorrow self, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+ {
++    PyValue return_value = PyValue_NULL;
++
+     if (nargs || (kwnames && PyTuple_GET_SIZE(kwnames))) {
+         PyErr_SetString(PyExc_TypeError, "as_tuple() takes no arguments");
+-        return NULL;
++        goto exit;
+     }
+-    return _decimal_Decimal_as_tuple_impl(self, cls);
++    return_value = _decimal_Decimal_as_tuple_impl(PyValue_AsKnownObjectBorrow(self), cls);
++
++exit:
++    return return_value;
+ }
+ 
+ PyDoc_STRVAR(_decimal_Decimal_exp__doc__,
+@@ -7290,4 +7304,4 @@
+ #ifndef _DECIMAL_CONTEXT_APPLY_METHODDEF
+     #define _DECIMAL_CONTEXT_APPLY_METHODDEF
+ #endif /* !defined(_DECIMAL_CONTEXT_APPLY_METHODDEF) */
+-/*[clinic end generated code: output=f58113269b20b956 input=a9049054013a1b77]*/
++/*[clinic end generated code: output=3fdbf05cd4278dc6 input=a9049054013a1b77]*/

@@ -1,0 +1,3 @@
+ACCEPT additive observer clarification872b7d51 to the accepted24730 settlement design. A callback during replacement or temporary-owner cleanup can change monitoring epoch after the original RESUME service. Before any ordinary dispatch or fresh native admission, refetch and validate the live frame/code/exec/word backing, synchronize instrumentation only if its epoch differs, recheck identity and errors, and reconstruct the exact pending logical word. Active observers then use the current instrumented interpreter handler.
+
+This performs no second RESUME/poll, semantic operation, or compilation retry. The original proposal/review remain immutable. Exact implementation and runtime results remain pending separate grants.

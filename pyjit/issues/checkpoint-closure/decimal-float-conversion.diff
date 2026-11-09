@@ -1,0 +1,189 @@
+--- a/Modules/_decimal/_decimal.c
++++ b/Modules/_decimal/_decimal.c
+@@ -33,6 +33,7 @@
+ #include "pycore_dict.h"          // PyDict_GetValue()
+ #include "pycore_list.h"          // PyList_AppendValue()
+ #include "pycore_long_value.h"    // _PyValue_IntAsSsize_t()
++#include "pycore_value_call.h"    // _PyValue_CallMethodNoArgs()
+ #include "pycore_value_ops.h"     // _PyValue_IsTrue()
+ #include "pycore_object.h"        // _PyObject_VisitType()
+ #include "pycore_pystate.h"       // _PyThreadState_GET()
+@@ -122,7 +123,6 @@
+     binaryfunc _py_long_multiply;
+     binaryfunc _py_long_floor_divide;
+     ternaryfunc _py_long_power;
+-    unaryfunc _py_float_abs;
+ } decimal_state;
+ 
+ static inline decimal_state *
+@@ -2663,11 +2663,12 @@
+ /* Return a PyDecObject or a subtype from a PyFloatObject.
+    Conversion is exact. */
+ static PyObject *
+-PyDecType_FromFloatExact(PyTypeObject *type, PyObject *v,
++PyDecType_FromFloatExact(PyTypeObject *type, PyValueBorrow v,
+                          PyObject *context)
+ {
+-    PyObject *dec, *tmp;
+-    PyObject *n, *d, *n_d;
++    PyObject *dec;
++    PyValue n, d, n_d, tmp;
++    PyObject *method;
+     mpd_ssize_t k;
+     double x;
+     int sign;
+@@ -2679,16 +2680,16 @@
+ #ifdef Py_DEBUG
+     assert(PyType_IsSubtype(type, state->PyDec_Type));
+ #endif
+-    if (PyLong_Check(v)) {
+-        return PyDecType_FromLongExact(type, PyValue_FromObjectBorrow(v), context);
++    if (PyValue_LongCheck(v)) {
++        return PyDecType_FromLongExact(type, v, context);
+     }
+-    if (!PyFloat_Check(v)) {
++    if (!PyValue_FloatCheck(v)) {
+         PyErr_SetString(PyExc_TypeError,
+             "argument must be int or float");
+         return NULL;
+     }
+ 
+-    x = PyFloat_AsDouble(v);
++    x = _PyValue_AsDouble(v);
+     if (x == -1.0 && PyErr_Occurred()) {
+         return NULL;
+     }
+@@ -2710,43 +2711,54 @@
+         return dec;
+     }
+ 
+-    /* absolute value of the float */
+-    tmp = state->_py_float_abs(v);
+-    if (tmp == NULL) {
++    /* float.__abs__ returns an exact float even for a float subclass. */
++    tmp = PyValue_FromDouble(fabs(x));
++    if (PyValue_IsNull(tmp)) {
+         return NULL;
+     }
+-
+-    /* float as integer ratio: numerator/denominator */
+-    n_d = PyObject_CallMethod(tmp, "as_integer_ratio", NULL);
+-    Py_DECREF(tmp);
+-    if (n_d == NULL) {
++    method = PyUnicode_FromString("as_integer_ratio");
++    if (method == NULL) {
++        PyValue_CLOSE(tmp);
+         return NULL;
+     }
+-    n = PyTuple_GetItemRef(n_d, 0);
+-    d = PyTuple_GetItemRef(n_d, 1);
+-    Py_DECREF(n_d);
+-    if (n == NULL || d == NULL) {
+-        Py_XDECREF(n);
+-        Py_XDECREF(d);
++    n_d = _PyValue_CallMethodNoArgs(tmp, method);
++    Py_DECREF(method);
++    PyValue_CLOSE(tmp);
++    if (PyValue_IsNull(n_d)) {
++        return NULL;
++    }
++    n = PyTuple_GetValue(PyValue_AsKnownObjectBorrow(n_d), 0);
++    d = PyTuple_GetValue(PyValue_AsKnownObjectBorrow(n_d), 1);
++    PyValue_CLOSE(n_d);
++    if (PyValue_IsNull(n) || PyValue_IsNull(d)) {
++        PyValue_XCLOSE(n);
++        PyValue_XCLOSE(d);
+         return NULL;
+     }
+ 
+-    tmp = PyObject_CallMethod(d, "bit_length", NULL);
+-    Py_DECREF(d);
+-    if (tmp == NULL) {
+-        Py_DECREF(n);
++    method = PyUnicode_FromString("bit_length");
++    if (method == NULL) {
++        PyValue_CLOSE(n);
++        PyValue_CLOSE(d);
+         return NULL;
+     }
+-    k = PyLong_AsSsize_t(tmp);
+-    Py_DECREF(tmp);
++    tmp = _PyValue_CallMethodNoArgs(d, method);
++    Py_DECREF(method);
++    PyValue_CLOSE(d);
++    if (PyValue_IsNull(tmp)) {
++        PyValue_CLOSE(n);
++        return NULL;
++    }
++    k = _PyValue_IntAsSsize_t(tmp);
++    PyValue_CLOSE(tmp);
+     if (k == -1 && PyErr_Occurred()) {
+-        Py_DECREF(n);
++        PyValue_CLOSE(n);
+         return NULL;
+     }
+     k--;
+ 
+-    dec = PyDecType_FromLongExact(type, PyValue_FromObjectBorrow(n), context);
+-    Py_DECREF(n);
++    dec = PyDecType_FromLongExact(type, PyValue_Borrow(n), context);
++    PyValue_CLOSE(n);
+     if (dec == NULL) {
+         return NULL;
+     }
+@@ -2792,7 +2804,7 @@
+ }
+ 
+ static PyObject *
+-PyDecType_FromFloat(PyTypeObject *type, PyObject *v,
++PyDecType_FromFloat(PyTypeObject *type, PyValueBorrow v,
+                     PyObject *context)
+ {
+     PyObject *dec;
+@@ -3093,9 +3105,9 @@
+         PyDecType_FromLongExact((st)->PyDec_Type, PyValue_FromObjectBorrow(pylong), context)
+ 
+ #define PyDec_FromFloat(st, pyfloat, context) \
+-        PyDecType_FromFloat((st)->PyDec_Type, pyfloat, context)
++        PyDecType_FromFloat((st)->PyDec_Type, PyValue_FromObjectBorrow(pyfloat), context)
+ #define PyDec_FromFloatExact(st, pyfloat, context) \
+-        PyDecType_FromFloatExact((st)->PyDec_Type, pyfloat, context)
++        PyDecType_FromFloatExact((st)->PyDec_Type, PyValue_FromObjectBorrow(pyfloat), context)
+ 
+ #define PyDec_FromSequence(st, sequence, context) \
+         PyDecType_FromSequence((st)->PyDec_Type, sequence, context)
+@@ -3136,7 +3148,7 @@
+ 
+     decimal_state *state = PyType_GetModuleState(cls);
+     CURRENT_CONTEXT(state, context);
+-    result = PyDecType_FromFloatExact(state->PyDec_Type, pyfloat, context);
++    result = PyDecType_FromFloatExact(state->PyDec_Type, PyValue_FromObjectBorrow(pyfloat), context);
+     if (type != state->PyDec_Type && result != NULL) {
+         Py_SETREF(result,
+             PyObject_CallFunctionObjArgs((PyObject *)type, result, NULL));
+@@ -3164,7 +3176,7 @@
+         if (dec_addstatus(context, MPD_Float_operation)) {
+             return NULL;
+         }
+-        return PyDecType_FromFloatExact(type, v, context);
++        return PyDecType_FromFloatExact(type, PyValue_FromObjectBorrow(v), context);
+     }
+     else {
+         PyErr_Format(PyExc_TypeError,
+@@ -3293,7 +3305,7 @@
+         if (dec_addstatus(context, MPD_Float_operation)) {
+             return NULL;
+         }
+-        return PyDecType_FromFloatExact(type, v, context);
++        return PyDecType_FromFloatExact(type, PyValue_FromObjectBorrow(v), context);
+     }
+     else {
+         PyErr_Format(PyExc_TypeError,
+@@ -7905,7 +7917,6 @@
+     state->_py_long_multiply = PyLong_Type.tp_as_number->nb_multiply;
+     state->_py_long_floor_divide = PyLong_Type.tp_as_number->nb_floor_divide;
+     state->_py_long_power = PyLong_Type.tp_as_number->nb_power;
+-    state->_py_float_abs = PyFloat_Type.tp_as_number->nb_absolute;
+ 
+ 
+     /* Init types */

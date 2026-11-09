@@ -1,0 +1,5 @@
+# Decimal Context binary family: peer review
+
+Approved the bounded migration of the 21 `DecCtx_BinaryFunc` methods. Each generated Clinic method should opt in individually to `METH_VALUE`, keep the checked Context receiver as an object, lend both polymorphic operands as `PyValueBorrow`, and use the approved `convert_op_value` for each. The current binary family raises TypeError for an unsupported operand; it does not return NotImplemented.
+
+The macro must release the first converted Decimal if conversion of the second fails, both converted Decimals if allocation or status handling fails, and the result if status handling fails. It transfers a successful Decimal result with `PyValue_FromObjectSteal`; errors return `PyValue_NULL`. The two `DecCtx_BinaryFunc_NO_CTX` methods, ternary method and object-form numeric slots require separate review. Focused comparison with `_pydecimal` should cover inline and heap integers in both positions, bool and int subclasses, unsupported types in both positions, and traps.

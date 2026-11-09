@@ -1,0 +1,109 @@
+--- a/Modules/_decimal/_decimal.c
++++ b/Modules/_decimal/_decimal.c
+@@ -8656,15 +8656,15 @@
+     }
+ 
+ #define SetItem(VALUE) \
+-    PyStructSequence_SET_ITEM(version, pos++, VALUE); \
++    PyStructSequence_SET_VALUE(version, pos++, PyValue_FromInlineInt(VALUE)); \
+     if (PyErr_Occurred()) { \
+         Py_DECREF(version); \
+         return NULL; \
+     }
+ 
+-    SetItem(PyLong_FromLong(major))
+-    SetItem(PyLong_FromLong(minor))
+-    SetItem(PyLong_FromLong(micro))
++    SetItem(major)
++    SetItem(minor)
++    SetItem(micro)
+ #undef SetItem
+ 
+     return version;
+@@ -8777,9 +8777,9 @@
+ #undef CREATE_TYPE
+ 
+     ASSIGN_PTR(obj, PyUnicode_FromString("decimal"));
+-    CHECK_INT(PyDict_SetItemString(state->PyDec_Type->tp_dict, "__module__", obj));
+-    CHECK_INT(PyDict_SetItemString(state->PyDecContext_Type->tp_dict,
+-                                   "__module__", obj));
++    CHECK_INT(PyDict_SetValueString(state->PyDec_Type->tp_dict, "__module__", PyValue_FromObjectBorrow(obj)));
++    CHECK_INT(PyDict_SetValueString(state->PyDecContext_Type->tp_dict,
++                                    "__module__", PyValue_FromObjectBorrow(obj)));
+     Py_CLEAR(obj);
+ 
+ 
+@@ -8808,7 +8808,7 @@
+     }
+     ASSIGN_PTR(state->DecimalTuple, (PyTypeObject *)obj);
+     ASSIGN_PTR(obj, PyUnicode_FromString("decimal"));
+-    CHECK_INT(PyDict_SetItemString(state->DecimalTuple->tp_dict, "__module__", obj));
++    CHECK_INT(PyDict_SetValueString(state->DecimalTuple->tp_dict, "__module__", PyValue_FromObjectBorrow(obj)));
+     Py_CLEAR(obj);
+ 
+     /* MutableMapping */
+@@ -8854,23 +8854,29 @@
+ 
+         switch (cm->flag) {
+         case MPD_Float_operation:
+-            base = _PyTuple_FromPair(state->DecimalException, PyExc_TypeError);
++            base = _PyTuple_PackValues(2, (PyValueBorrow[]){
++                PyValue_FromObjectBorrow(state->DecimalException),
++                PyValue_FromObjectBorrow(PyExc_TypeError)});
+             break;
+         case MPD_Division_by_zero:
+-            base = _PyTuple_FromPair(state->DecimalException,
+-                                     PyExc_ZeroDivisionError);
++            base = _PyTuple_PackValues(2, (PyValueBorrow[]){
++                PyValue_FromObjectBorrow(state->DecimalException),
++                PyValue_FromObjectBorrow(PyExc_ZeroDivisionError)});
+             break;
+         case MPD_Overflow:
+-            base = _PyTuple_FromPair(state->signal_map[INEXACT].ex,
+-                                     state->signal_map[ROUNDED].ex);
++            base = _PyTuple_PackValues(2, (PyValueBorrow[]){
++                PyValue_FromObjectBorrow(state->signal_map[INEXACT].ex),
++                PyValue_FromObjectBorrow(state->signal_map[ROUNDED].ex)});
+             break;
+         case MPD_Underflow:
+-            base = PyTuple_Pack(3, state->signal_map[INEXACT].ex,
+-                                   state->signal_map[ROUNDED].ex,
+-                                   state->signal_map[SUBNORMAL].ex);
++            base = _PyTuple_PackValues(3, (PyValueBorrow[]){
++                PyValue_FromObjectBorrow(state->signal_map[INEXACT].ex),
++                PyValue_FromObjectBorrow(state->signal_map[ROUNDED].ex),
++                PyValue_FromObjectBorrow(state->signal_map[SUBNORMAL].ex)});
+             break;
+         default:
+-            base = PyTuple_Pack(1, state->DecimalException);
++            base = _PyTuple_PackValues(1, (PyValueBorrow[]){
++                PyValue_FromObjectBorrow(state->DecimalException)});
+             break;
+         }
+ 
+@@ -8885,7 +8891,8 @@
+         CHECK_INT(PyModule_AddObjectRef(m, cm->name, cm->ex));
+ 
+         /* add to signal tuple */
+-        PyTuple_SET_ITEM(state->SignalTuple, i, Py_NewRef(cm->ex));
++        PyTuple_SET_VALUE(state->SignalTuple, i,
++                          PyValue_DUP(PyValue_FromObjectBorrow(cm->ex)));
+     }
+ 
+     /*
+@@ -8901,10 +8908,13 @@
+     for (cm = state->cond_map+1; cm->name != NULL; cm++) {
+         PyObject *base;
+         if (cm->flag == MPD_Division_undefined) {
+-            base = _PyTuple_FromPair(state->signal_map[0].ex, PyExc_ZeroDivisionError);
++            base = _PyTuple_PackValues(2, (PyValueBorrow[]){
++                PyValue_FromObjectBorrow(state->signal_map[0].ex),
++                PyValue_FromObjectBorrow(PyExc_ZeroDivisionError)});
+         }
+         else {
+-            base = PyTuple_Pack(1, state->signal_map[0].ex);
++            base = _PyTuple_PackValues(1, (PyValueBorrow[]){
++                PyValue_FromObjectBorrow(state->signal_map[0].ex)});
+         }
+         if (base == NULL) {
+             goto error; /* GCOV_NOT_REACHED */

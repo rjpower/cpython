@@ -1,0 +1,30 @@
+--- a/Python/pystats.c
++++ b/Python/pystats.c
+@@ -861,5 +861,8 @@ receipt_write(int fd, const char *text, size_t length)
+     while (length != 0) {
+         ssize_t written = write(fd, text, length);
++        if (written < 0 && errno == EINTR) {
++            continue;
++        }
+         if (written <= 0) {
+             return -1;
+         }
+@@ -902,6 +905,6 @@ _PyStats_ChildCreated(pid_t child, const char *source,
+     int saved_errno = errno;
+     char dir[MAXPATHLEN + 1], path[MAXPATHLEN + 1], tmp[MAXPATHLEN + 1];
+-    char item[256];
++    char item[512];
+     int fd = -1;
+     unsigned long long serial = ++child_receipt_serial;
+     if (child <= 0 || parent_stem[0] == '\0' || candidate_count > 4096) {
+@@ -963,6 +966,9 @@ _PyStats_ChildCreated(pid_t child, const char *source,
+             goto failed;
+         }
+     }
+-    if (RECEIPT_TEXT(fd, "]}\n") < 0 || close(fd) < 0) {
++    if (RECEIPT_TEXT(fd, "]}\n") < 0) {
++        goto failed;
++    }
++    if (close(fd) < 0) {
+         fd = -1;
+         goto failed;

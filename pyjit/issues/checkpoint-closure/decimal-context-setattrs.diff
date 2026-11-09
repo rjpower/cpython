@@ -1,0 +1,148 @@
+--- a/Modules/_decimal/_decimal.c
++++ b/Modules/_decimal/_decimal.c
+@@ -619,11 +619,11 @@
+ 
+ #ifdef EXTRA_FUNCTIONALITY
+ static uint32_t
+-long_as_flags(PyObject *v)
++long_as_flags_value(PyValueBorrow v)
+ {
+     long x;
+ 
+-    x = PyLong_AsLong(v);
++    x = _PyValue_AsLong(v);
+     if (x == -1 && PyErr_Occurred()) {
+         return DEC_ERR_OCCURRED;
+     }
+@@ -642,6 +642,12 @@
+ 
+     return x;
+ }
++
++static uint32_t
++long_as_flags(PyObject *v)
++{
++    return long_as_flags_value(PyValue_FromObjectBorrow(v));
++}
+ #endif
+ 
+ static int
+@@ -1419,66 +1425,84 @@
+ /* Set the given attributes.  An attribute is left unchanged if the
+    corresponding argument is NULL. */
+ static int
+-context_setattrs(PyObject *self, PyObject *prec, PyObject *rounding,
+-                 PyObject *emin, PyObject *emax, PyObject *capitals,
+-                 PyObject *clamp, PyObject *status, PyObject *traps) {
+-
+-    int ret;
+-    if (prec != NULL && context_setprec(self, prec, NULL) < 0) {
++context_setattrs_value(PyObject *self, PyValueBorrow prec,
++                       PyValueBorrow rounding, PyValueBorrow emin,
++                       PyValueBorrow emax, PyValueBorrow capitals,
++                       PyValueBorrow clamp, PyValueBorrow status,
++                       PyValueBorrow traps)
++{
++    if (!PyValue_IsNull(prec) && context_setprec_value(self, prec, NULL) < 0) {
+         return -1;
+     }
+-    if (rounding != NULL && context_setround(self, rounding, NULL) < 0) {
++    if (!PyValue_IsNull(rounding) && context_setround_value(self, rounding, NULL) < 0) {
+         return -1;
+     }
+-    if (emin != NULL && context_setemin(self, emin, NULL) < 0) {
++    if (!PyValue_IsNull(emin) && context_setemin_value(self, emin, NULL) < 0) {
+         return -1;
+     }
+-    if (emax != NULL && context_setemax(self, emax, NULL) < 0) {
++    if (!PyValue_IsNull(emax) && context_setemax_value(self, emax, NULL) < 0) {
+         return -1;
+     }
+-    if (capitals != NULL && context_setcapitals(self, capitals, NULL) < 0) {
++    if (!PyValue_IsNull(capitals) && context_setcapitals_value(self, capitals, NULL) < 0) {
+         return -1;
+     }
+-    if (clamp != NULL && context_setclamp(self, clamp, NULL) < 0) {
+-       return -1;
++    if (!PyValue_IsNull(clamp) && context_setclamp_value(self, clamp, NULL) < 0) {
++        return -1;
+     }
+ 
+-    if (traps != NULL) {
+-        if (PyList_Check(traps)) {
+-            ret = context_settraps_list(self, traps);
+-        }
+-#ifdef EXTRA_FUNCTIONALITY
+-        else if (PyLong_Check(traps)) {
+-            ret = context_settraps(self, traps, NULL);
++    PyValueBorrow values[] = {traps, status};
++    for (int i = 0; i < 2; i++) {
++        PyValueBorrow value = values[i];
++        if (PyValue_IsNull(value)) {
++            continue;
+         }
+-#endif
+-        else {
+-            ret = context_settraps_dict(self, traps);
+-        }
+-        if (ret < 0) {
+-            return ret;
+-        }
+-    }
+-    if (status != NULL) {
+-        if (PyList_Check(status)) {
+-            ret = context_setstatus_list(self, status);
++        PyObject *obj = PyValue_IsObject(value) ? PyValue_AsKnownObjectBorrow(value) : NULL;
++        int ret;
++        if (obj != NULL && PyList_Check(obj)) {
++            ret = i == 0 ? context_settraps_list(self, obj)
++                         : context_setstatus_list(self, obj);
+         }
+ #ifdef EXTRA_FUNCTIONALITY
+-        else if (PyLong_Check(status)) {
+-            ret = context_setstatus(self, status, NULL);
++        else if (PyValue_LongCheck(value)) {
++            uint32_t flags = long_as_flags_value(value);
++            if (flags & DEC_ERRORS) {
++                return -1;
++            }
++            int ok = i == 0 ? mpd_qsettraps(CTX(self), flags)
++                            : mpd_qsetstatus(CTX(self), flags);
++            if (!ok) {
++                INTERNAL_ERROR_INT("context_setattrs_value");
++            }
++            ret = 0;
+         }
+ #endif
++        else if (obj != NULL) {
++            ret = i == 0 ? context_settraps_dict(self, obj)
++                         : context_setstatus_dict(self, obj);
++        }
+         else {
+-            ret = context_setstatus_dict(self, status);
++            PyErr_SetString(PyExc_TypeError, "argument must be a signal dict");
++            return -1;
+         }
+         if (ret < 0) {
+             return ret;
+         }
+     }
+-
+     return 0;
+ }
+ 
++/* Object entry points use this until their Clinic parsers lend values. */
++static int
++context_setattrs(PyObject *self, PyObject *prec, PyObject *rounding,
++                 PyObject *emin, PyObject *emax, PyObject *capitals,
++                 PyObject *clamp, PyObject *status, PyObject *traps)
++{
++    return context_setattrs_value(self, _Py_VALUE_ARG(prec), _Py_VALUE_ARG(rounding),
++                                  _Py_VALUE_ARG(emin), _Py_VALUE_ARG(emax),
++                                  _Py_VALUE_ARG(capitals), _Py_VALUE_ARG(clamp),
++                                  _Py_VALUE_ARG(status), _Py_VALUE_ARG(traps));
++}
++
+ /*[clinic input]
+ _decimal.Context.clear_traps
+ 

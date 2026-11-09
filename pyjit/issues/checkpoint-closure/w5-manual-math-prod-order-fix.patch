@@ -1,0 +1,60 @@
+--- a/Modules/mathmodule.c
++++ b/Modules/mathmodule.c
+@@ -3130,8 +3130,10 @@
+         }
+         PyValue item = next.value;
+         PyValue temp = _PyValue_Multiply(result, item);
+-        PyValue_CLOSE(item);
++        /* Keep the established finalizer order: discard the old accumulator
++           before releasing the input item. */
+         PyValue_CLOSE(result);
++        PyValue_CLOSE(item);
+         result = temp;
+         if (PyValue_IsNull(result)) {
+             Py_DECREF(iter);
+--- a/Lib/test/test_math.py
++++ b/Lib/test/test_math.py
+@@ -2234,6 +2234,43 @@
+         with self.assertRaises(RuntimeError):
+             prod([10., BadMultiply()])
+ 
++        # The old accumulator is released before the current iterable item.
++        # User finalizers can observe that order.
++        finalizers = []
++
++        class Product:
++            def __init__(self, name):
++                self.name = name
++
++            def __mul__(self, other):
++                return Product("intermediate" if self.name == "start"
++                               else "final")
++
++            def __del__(self):
++                finalizers.append(self.name)
++
++        class Item:
++            def __del__(self):
++                finalizers.append("item")
++
++        class Items:
++            def __init__(self):
++                self.count = 0
++
++            def __iter__(self):
++                return self
++
++            def __next__(self):
++                if self.count == 2:
++                    raise StopIteration
++                self.count += 1
++                return Item()
++
++        product = prod(Items(), start=Product("start"))
++        del product
++        self.assertLess(finalizers.index("intermediate"),
++                        finalizers.index("item", finalizers.index("intermediate") + 1))
++
+         # Test overflow in fast-path for integers
+         self.assertEqual(prod([1, 1, 2**32, 1, 1]), 2**32)
+         # Test overflow in fast-path for floats

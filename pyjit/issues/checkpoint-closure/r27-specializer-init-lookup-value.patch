@@ -1,0 +1,25 @@
+diff --git a/Python/specialize.c b/Python/specialize.c
+--- a/Python/specialize.c
++++ b/Python/specialize.c
+@@ -1999,12 +1999,18 @@
+         SPECIALIZATION_FAIL(CALL, SPEC_FAIL_EXPECTED_ERROR);
+         return NULL;
+     }
+-    PyObject *init = _PyType_LookupRefAndVersion(tp, &_Py_ID(__init__), tp_version);
+-    if (init == NULL || !PyFunction_Check(init)) {
++    (void)_PyType_GetVersionForCurrentState(_PyInterpreterState_GET(), tp);
++    PyValue init_value;
++    unsigned int version = _PyType_LookupValueAndVersion(
++        tp, &_Py_ID(__init__), &init_value);
++    *tp_version = version;
++    if (PyValue_IsNull(init_value) || !PyValue_IsObject(init_value) ||
++        !PyFunction_Check(PyValue_AsKnownObjectBorrow(init_value))) {
+         SPECIALIZATION_FAIL(CALL, SPEC_FAIL_CALL_INIT_NOT_PYTHON);
+-        Py_XDECREF(init);
++        PyValue_XCLOSE(init_value);
+         return NULL;
+     }
++    PyObject *init = PyValue_AsKnownObjectSteal(init_value);
+     int kind = function_kind((PyCodeObject *)PyFunction_GET_CODE(init));
+     if (kind != SIMPLE_FUNCTION) {
+         SPECIALIZATION_FAIL(CALL, SPEC_FAIL_CALL_INIT_NOT_SIMPLE);

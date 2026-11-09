@@ -1,0 +1,205 @@
+--- a/Modules/_decimal/_decimal.c
++++ b/Modules/_decimal/_decimal.c
+@@ -3329,34 +3329,35 @@
+    an exact conversion. If the result does not meet the restrictions
+    for an mpd_t, fail with InvalidOperation. */
+ static PyObject *
+-PyDecType_FromObjectExact(PyTypeObject *type, PyObject *v, PyObject *context)
++PyDecType_FromObjectExact(PyTypeObject *type, PyValueBorrow v, PyObject *context)
+ {
+     decimal_state *state = get_module_state_from_ctx(context);
+-    if (v == NULL) {
++    if (PyValue_IsNull(v)) {
+         return PyDecType_FromSsizeExact(type, 0, context);
+     }
+-    else if (PyDec_Check(state, v)) {
+-        return PyDecType_FromDecimalExact(type, v, context);
++    PyObject *obj = PyValue_IsObject(v) ? PyValue_AsKnownObjectBorrow(v) : NULL;
++    if (obj != NULL && PyDec_Check(state, obj)) {
++        return PyDecType_FromDecimalExact(type, obj, context);
+     }
+-    else if (PyUnicode_Check(v)) {
+-        return PyDecType_FromUnicodeExactWS(type, v, context);
++    else if (obj != NULL && PyUnicode_Check(obj)) {
++        return PyDecType_FromUnicodeExactWS(type, obj, context);
+     }
+-    else if (PyLong_Check(v)) {
+-        return PyDecType_FromLongExact(type, PyValue_FromObjectBorrow(v), context);
++    else if (PyValue_LongCheck(v)) {
++        return PyDecType_FromLongExact(type, v, context);
+     }
+-    else if (PyTuple_Check(v) || PyList_Check(v)) {
+-        return PyDecType_FromSequenceExact(type, v, context);
++    else if (obj != NULL && (PyTuple_Check(obj) || PyList_Check(obj))) {
++        return PyDecType_FromSequenceExact(type, obj, context);
+     }
+-    else if (PyFloat_Check(v)) {
++    else if (PyValue_FloatCheck(v)) {
+         if (dec_addstatus(context, MPD_Float_operation)) {
+             return NULL;
+         }
+-        return PyDecType_FromFloatExact(type, PyValue_FromObjectBorrow(v), context);
++        return PyDecType_FromFloatExact(type, v, context);
+     }
+     else {
+         PyErr_Format(PyExc_TypeError,
+             "conversion from %s to Decimal is not supported",
+-            Py_TYPE(v)->tp_name);
++            PyValue_TYPE(v)->tp_name);
+         return NULL;
+     }
+ }
+@@ -3364,16 +3365,17 @@
+ /* The context is used during conversion. This function is the
+    equivalent of context.create_decimal(). */
+ static PyObject *
+-PyDec_FromObject(PyObject *v, PyObject *context)
++PyDec_FromObject(PyValueBorrow v, PyObject *context)
+ {
+     decimal_state *state = get_module_state_from_ctx(context);
+-    if (v == NULL) {
++    if (PyValue_IsNull(v)) {
+         return PyDec_FromSsize(state, 0, context);
+     }
+-    else if (PyDec_Check(state, v)) {
++    PyObject *obj = PyValue_IsObject(v) ? PyValue_AsKnownObjectBorrow(v) : NULL;
++    if (obj != NULL && PyDec_Check(state, obj)) {
+         mpd_context_t *ctx = CTX(context);
+-        if (mpd_isnan(MPD(v)) &&
+-            MPD(v)->digits > ctx->prec - ctx->clamp) {
++        if (mpd_isnan(MPD(obj)) &&
++            MPD(obj)->digits > ctx->prec - ctx->clamp) {
+             /* Special case: too many NaN payload digits */
+             PyObject *result;
+             if (dec_addstatus(context, MPD_Conversion_syntax)) {
+@@ -3386,27 +3388,27 @@
+             mpd_setspecial(MPD(result), MPD_POS, MPD_NAN);
+             return result;
+         }
+-        return dec_apply(v, context);
++        return dec_apply(obj, context);
+     }
+-    else if (PyUnicode_Check(v)) {
+-        return PyDec_FromUnicode(state, v, context);
++    else if (obj != NULL && PyUnicode_Check(obj)) {
++        return PyDec_FromUnicode(state, obj, context);
+     }
+-    else if (PyLong_Check(v)) {
+-        return PyDec_FromLong(state, v, context);
++    else if (PyValue_LongCheck(v)) {
++        return PyDecType_FromLong(state->PyDec_Type, v, context);
+     }
+-    else if (PyTuple_Check(v) || PyList_Check(v)) {
+-        return PyDec_FromSequence(state, v, context);
++    else if (obj != NULL && (PyTuple_Check(obj) || PyList_Check(obj))) {
++        return PyDec_FromSequence(state, obj, context);
+     }
+-    else if (PyFloat_Check(v)) {
++    else if (PyValue_FloatCheck(v)) {
+         if (dec_addstatus(context, MPD_Float_operation)) {
+             return NULL;
+         }
+-        return PyDec_FromFloat(state, v, context);
++        return PyDecType_FromFloat(state->PyDec_Type, v, context);
+     }
+     else {
+         PyErr_Format(PyExc_TypeError,
+             "conversion from %s to Decimal is not supported",
+-            Py_TYPE(v)->tp_name);
++            PyValue_TYPE(v)->tp_name);
+         return NULL;
+     }
+ }
+@@ -3433,10 +3435,11 @@
+     decimal_state *state = get_module_state_by_def(type);
+     CONTEXT_CHECK_VA(state, context);
+ 
+-    return PyDecType_FromObjectExact(type, value, context);
++    return PyDecType_FromObjectExact(type, PyValue_FromObjectBorrow(value), context);
+ }
+ 
+ /*[clinic input]
++@value_function
+ _decimal.Context.create_decimal
+ 
+     self as context: self
+@@ -3448,12 +3451,19 @@
+ Unlike the Decimal constructor, this function observes the context
+ limits.
+ [clinic start generated code]*/
+-
+-static PyObject *
+-_decimal_Context_create_decimal_impl(PyObject *context, PyObject *num)
+-/*[clinic end generated code: output=85e08ae02f3b34da input=d2c4946cf7804fbe]*/
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
++
++static PyValue
++_decimal_Context_create_decimal_impl(PyObject *context, PyValueBorrow num)
++/*[clinic end generated code: output=62236d6d69fa65aa input=236dd0a2f2d0bbef]*/
+ {
+-    return PyDec_FromObject(num, context);
++    PyObject *result = PyDec_FromObject(num, context);
++    if (result == NULL) {
++        return PyValue_NULL;
++    }
++    return PyValue_FromObjectSteal(result);
+ }
+ 
+ 
+--- a/Modules/_decimal/clinic/_decimal.c.h
++++ b/Modules/_decimal/clinic/_decimal.c.h
+@@ -976,18 +976,27 @@
+ "\n"
+ "Unlike the Decimal constructor, this function observes the context\n"
+ "limits.");
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+ #define _DECIMAL_CONTEXT_CREATE_DECIMAL_METHODDEF    \
+-    {"create_decimal", _PyCFunction_CAST(_decimal_Context_create_decimal), METH_FASTCALL, _decimal_Context_create_decimal__doc__},
++    {"create_decimal", _PyCFunction_CAST(_decimal_Context_create_decimal), METH_VALUE, _decimal_Context_create_decimal__doc__},
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
+-_decimal_Context_create_decimal_impl(PyObject *context, PyObject *num);
++static PyValue
++_decimal_Context_create_decimal_impl(PyObject *context, PyValueBorrow num);
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
+-_decimal_Context_create_decimal(PyObject *context, PyObject *const *args, Py_ssize_t nargs)
++static PyValue
++_decimal_Context_create_decimal(PyValueBorrow context, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+ {
+-    PyObject *return_value = NULL;
+-    PyObject *num = NULL;
++    PyValue return_value = PyValue_NULL;
++    PyValueBorrow num = PyValue_Borrow(PyValue_NULL);
+ 
+     if (!_PyArg_CheckPositional("create_decimal", nargs, 0, 1)) {
+         goto exit;
+@@ -995,9 +1004,9 @@
+     if (nargs < 1) {
+         goto skip_optional;
+     }
+-    num = args[0];
++    num = PyValue_Borrow(args[0]);
+ skip_optional:
+-    return_value = _decimal_Context_create_decimal_impl(context, num);
++    return_value = _decimal_Context_create_decimal_impl(PyValue_AsKnownObjectBorrow(context), num);
+ 
+ exit:
+     return return_value;
+@@ -7172,4 +7181,4 @@
+ #ifndef _DECIMAL_CONTEXT_APPLY_METHODDEF
+     #define _DECIMAL_CONTEXT_APPLY_METHODDEF
+ #endif /* !defined(_DECIMAL_CONTEXT_APPLY_METHODDEF) */
+-/*[clinic end generated code: output=b22bec900e02e442 input=a9049054013a1b77]*/
++/*[clinic end generated code: output=8f432f6d454f009b input=a9049054013a1b77]*/

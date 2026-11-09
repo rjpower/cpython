@@ -1,0 +1,24 @@
+--- a/Modules/_collectionsmodule.c
++++ b/Modules/_collectionsmodule.c
+@@ -2701,8 +2701,8 @@
+         &PyDict_Type, &_Py_ID(__setitem__));
+     bool fast = mapping_get.status == 1 && dict_get.status == 1 &&
+         mapping_setitem.status == 1 && dict_setitem.status == 1 &&
+-        _PyValue_IsSameWord(mapping_get.value, dict_get.value) &&
+-        _PyValue_IsSameWord(mapping_setitem.value, dict_setitem.value) &&
++        PyValue_Is(mapping_get.value, dict_get.value) &&
++        PyValue_Is(mapping_setitem.value, dict_setitem.value) &&
+         PyValue_IsObject(mapping) &&
+         PyDict_Check(PyValue_AsKnownObjectBorrow(mapping));
+     PyValue_XCLOSE(mapping_get.value);
+@@ -2807,9 +2807,7 @@
+             }
+             /* Inline zero boxes to the cached zero object at the old API
+                boundary, so preserve the default-argument identity test. */
+-            bool is_default = _PyValue_IsSameWord(oldval, zero) ||
+-                (PyValue_IsInlineInt(oldval) &&
+-                 PyValue_InlineInt64(oldval) == 0);
++            bool is_default = PyValue_Is(oldval, zero);
+             PyValue newval = is_default
+                 ? PyValue_DUP(one) : _PyValue_Add(oldval, one);
+             PyValue_CLOSE(oldval);

@@ -1,0 +1,204 @@
+diff --git a/Include/internal/pycore_floatobject.h b/Include/internal/pycore_floatobject.h
+index 23a512cb657..1e5dd14523d 100644
+--- a/Include/internal/pycore_floatobject.h
++++ b/Include/internal/pycore_floatobject.h
+@@ -47,6 +47,13 @@ extern int _PyFloat_FormatAdvancedWriter(
+     Py_ssize_t start,
+     Py_ssize_t end);
+ 
++extern int _PyFloat_FormatAdvancedWriterValue(
++    _PyUnicodeWriter *writer,
++    PyValueBorrow value,
++    PyObject *format_spec,
++    Py_ssize_t start,
++    Py_ssize_t end);
++
+ extern PyObject* _Py_string_to_number_with_underscores(
+     const char *str, Py_ssize_t len, const char *what, PyObject *obj, void *arg,
+     PyObject *(*innerfunc)(const char *, Py_ssize_t, void *));
+diff --git a/Objects/floatobject.c b/Objects/floatobject.c
+index 59edc7a2b11..9259779e9d6 100644
+--- a/Objects/floatobject.c
++++ b/Objects/floatobject.c
+@@ -1913,16 +1913,11 @@ float___format___impl(PyValueBorrow self, PyObject *format_spec)
+     _PyUnicodeWriter writer;
+     int ret;
+ 
+-    PyObject *obj = _PyValue_AsObjectAt(self, BOX_SITE_PARSER);
+-    if (obj == NULL) {
+-        return PyValue_NULL;
+-    }
+     _PyUnicodeWriter_Init(&writer);
+-    ret = _PyFloat_FormatAdvancedWriter(
++    ret = _PyFloat_FormatAdvancedWriterValue(
+         &writer,
+-        obj,
++        self,
+         format_spec, 0, PyUnicode_GET_LENGTH(format_spec));
+-    Py_DECREF(obj);
+     if (ret == -1) {
+         _PyUnicodeWriter_Dealloc(&writer);
+         return PyValue_NULL;
+diff --git a/Objects/stringlib/unicode_format.h b/Objects/stringlib/unicode_format.h
+index 8e2887ab964..d6e31f7e009 100644
+--- a/Objects/stringlib/unicode_format.h
++++ b/Objects/stringlib/unicode_format.h
+@@ -507,6 +507,13 @@ render_field(PyValueBorrow fieldobj, SubString *format_spec, _PyUnicodeWriter *w
+     PyObject *fieldobj_o = PyValue_IsObject(fieldobj)
+         ? PyValue_AsKnownObjectBorrow(fieldobj) : NULL;
+ 
++    if (PyValue_IsInlineFloat(fieldobj) ||
++        (fieldobj_o != NULL && PyFloat_CheckExact(fieldobj_o))) {
++        return _PyFloat_FormatAdvancedWriterValue(
++            writer, fieldobj, format_spec->str,
++            format_spec->start, format_spec->end) == 0;
++    }
++
+     /* If we know the type exactly, skip the lookup of __format__ and just
+        call the formatter directly. */
+     if (fieldobj_o != NULL && PyUnicode_CheckExact(fieldobj_o))
+diff --git a/Objects/unicode_formatter.c b/Objects/unicode_formatter.c
+index 8f241306944..72ade93c82f 100644
+--- a/Objects/unicode_formatter.c
++++ b/Objects/unicode_formatter.c
+@@ -385,7 +385,7 @@ typedef struct {
+   if failure, sets the exception
+ */
+ static int
+-parse_internal_render_format_spec(PyObject *obj,
++parse_internal_render_format_spec(const char *type_name,
+                                   PyObject *format_spec,
+                                   Py_ssize_t start, Py_ssize_t end,
+                                   InternalFormatSpec *format,
+@@ -550,7 +550,7 @@ parse_internal_render_format_spec(PyObject *obj,
+         if (actual_format_spec != NULL) {
+             PyErr_Format(PyExc_ValueError,
+                 "Invalid format specifier '%U' for object of type '%.200s'",
+-                actual_format_spec, Py_TYPE(obj)->tp_name);
++                actual_format_spec, type_name);
+             Py_DECREF(actual_format_spec);
+         }
+         return 0;
+@@ -1378,7 +1378,7 @@ format_long_internal(PyObject *value, const InternalFormatSpec *format,
+ 
+ /* much of this is taken from unicodeobject.c */
+ static int
+-format_float_internal(PyObject *value,
++format_float_internal(PyValueBorrow value,
+                       const InternalFormatSpec *format,
+                       _PyUnicodeWriter *writer)
+ {
+@@ -1430,7 +1430,7 @@ format_float_internal(PyObject *value,
+            format the result. We take care of that later. */
+         type = 'g';
+ 
+-    val = _PyValue_AsDouble(PyValue_FromObjectBorrow(value));
++    val = _PyValue_AsDouble(value);
+     if (val == -1.0 && PyErr_Occurred())
+         goto done;
+ 
+@@ -1815,7 +1815,8 @@ _PyUnicode_FormatAdvancedWriter(_PyUnicodeWriter *writer,
+     }
+ 
+     /* parse the format_spec */
+-    if (!parse_internal_render_format_spec(obj, format_spec, start, end,
++    if (!parse_internal_render_format_spec(Py_TYPE(obj)->tp_name,
++                                           format_spec, start, end,
+                                            &format, 's', '<'))
+         return -1;
+ 
+@@ -1851,7 +1852,8 @@ _PyLong_FormatAdvancedWriter(_PyUnicodeWriter *writer,
+     }
+ 
+     /* parse the format_spec */
+-    if (!parse_internal_render_format_spec(obj, format_spec, start, end,
++    if (!parse_internal_render_format_spec(Py_TYPE(obj)->tp_name,
++                                           format_spec, start, end,
+                                            &format, 'd', '>'))
+         goto done;
+ 
+@@ -1883,7 +1885,8 @@ _PyLong_FormatAdvancedWriter(_PyUnicodeWriter *writer,
+         }
+         if (tmp == NULL)
+             goto done;
+-        result = format_float_internal(tmp, &format, writer);
++        result = format_float_internal(PyValue_FromObjectBorrow(tmp),
++                                       &format, writer);
+         break;
+ 
+     default:
+@@ -1898,20 +1901,29 @@ _PyLong_FormatAdvancedWriter(_PyUnicodeWriter *writer,
+ }
+ 
+ int
+-_PyFloat_FormatAdvancedWriter(_PyUnicodeWriter *writer,
+-                              PyObject *obj,
+-                              PyObject *format_spec,
+-                              Py_ssize_t start, Py_ssize_t end)
++_PyFloat_FormatAdvancedWriterValue(_PyUnicodeWriter *writer,
++                                   PyValueBorrow value,
++                                   PyObject *format_spec,
++                                   Py_ssize_t start, Py_ssize_t end)
+ {
+     InternalFormatSpec format;
++    const char *type_name = PyValue_TYPE(value)->tp_name;
+ 
+     /* check for the special case of zero length format spec, make
+        it equivalent to str(obj) */
+-    if (start == end)
+-        return format_obj(obj, writer);
++    if (start == end) {
++        PyObject *str = _PyValue_Str(value);
++        if (str == NULL) {
++            return -1;
++        }
++        int err = _PyUnicodeWriter_WriteStr(writer, str);
++        Py_DECREF(str);
++        return err;
++    }
+ 
+     /* parse the format_spec */
+-    if (!parse_internal_render_format_spec(obj, format_spec, start, end,
++    if (!parse_internal_render_format_spec(type_name,
++                                           format_spec, start, end,
+                                            &format, '\0', '>'))
+         return -1;
+ 
+@@ -1927,15 +1939,25 @@ _PyFloat_FormatAdvancedWriter(_PyUnicodeWriter *writer,
+     case 'n':
+     case '%':
+         /* no conversion, already a float.  do the formatting */
+-        return format_float_internal(obj, &format, writer);
++        return format_float_internal(value, &format, writer);
+ 
+     default:
+         /* unknown */
+-        unknown_presentation_type(format.type, Py_TYPE(obj)->tp_name);
++        unknown_presentation_type(format.type, type_name);
+         return -1;
+     }
+ }
+ 
++int
++_PyFloat_FormatAdvancedWriter(_PyUnicodeWriter *writer,
++                              PyObject *obj,
++                              PyObject *format_spec,
++                              Py_ssize_t start, Py_ssize_t end)
++{
++    return _PyFloat_FormatAdvancedWriterValue(
++        writer, PyValue_FromObjectBorrow(obj), format_spec, start, end);
++}
++
+ int
+ _PyComplex_FormatAdvancedWriter(_PyUnicodeWriter *writer,
+                                 PyObject *obj,
+@@ -1950,7 +1972,8 @@ _PyComplex_FormatAdvancedWriter(_PyUnicodeWriter *writer,
+         return format_obj(obj, writer);
+ 
+     /* parse the format_spec */
+-    if (!parse_internal_render_format_spec(obj, format_spec, start, end,
++    if (!parse_internal_render_format_spec(Py_TYPE(obj)->tp_name,
++                                           format_spec, start, end,
+                                            &format, '\0', '>'))
+         return -1;
+ 

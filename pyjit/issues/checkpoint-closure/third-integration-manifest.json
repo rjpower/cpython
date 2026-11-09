@@ -1,0 +1,24 @@
+{
+  "base": "3f480256304",
+  "applied": [
+    "long-value-bytearray-provider.diff",
+    "struct-value-pack-integration-v2.diff",
+    "struct-value-pack-tests.diff",
+    "struct-value-include-integration-v2.diff",
+    "unicode-value-format.patch",
+    "w5-property-value-fields.patch",
+    "w5-property-value-fields-review-fixes.patch",
+    "r27-inventory-checker-hardening.patch",
+    "r27-inventory-comments-hardening.patch",
+    "property-local-borrow-fix.patch",
+    "w5-flowgraph-const-values.patch",
+    "w5-property-readonly-accessors-v2.patch",
+    "script-helper-env-probe-stats.patch"
+  ],
+  "notes": [
+    "Rebased struct over mechanical extractor ports and existing long_value include. Original packets retained.",
+    "Property borrows remain scalar locals; no borrow array admitted.",
+    "Flowgraph delta was frozen before the current compile; coordinator reviewed all ownership/error paths.",
+    "Original readonly packet has malformed hunk counts; v2 is generated from reviewed intent with valid counts."
+  ]
+}

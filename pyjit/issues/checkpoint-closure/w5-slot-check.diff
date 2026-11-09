@@ -1,0 +1,81 @@
+diff --git a/Tools/build/check_value_api.py b/Tools/build/check_value_api.py
+--- a/Tools/build/check_value_api.py
++++ b/Tools/build/check_value_api.py
+@@ slot family marking @@
+-MARKED_SLOT_FAMILIES = frozenset()
++MARKED_SLOT_FAMILIES = frozenset({
++    "number", "compare", "hash", "repr", "attribute", "descriptor",
++    "subscript", "iteration", "call",
++})
+@@ direct-call matcher @@
++SLOT_CALL_MATCHER = (
++    "callExpr(callee(expr(hasDescendant(memberExpr(member("
++    "hasAnyName({names})))))))"
++    '.bind("slotcall")'.format(
++        names=", ".join(f'"{name}"' for name in sorted(SLOT_FAMILIES)))
++)
+@@ query @@
++    f"match {SLOT_CALL_MATCHER}",
+@@ findings @@
+-        elif binding == "slot" and kind == "core":
++        elif binding in ("slot", "slotcall") and kind == "core":
+@@
+-            findings.append(Finding(
+-                path, line, column, "slot-read",
+-                f"read of {field} ({family} family)",
+-                family in MARKED_SLOT_FAMILIES))
++            if binding == "slotcall":
++                findings.append(Finding(
++                    path, line, column, "slot-call",
++                    f"direct call of {field} ({family} family)",
++                    family in MARKED_SLOT_FAMILIES))
++            else:
++                findings.append(Finding(
++                    path, line, column, "slot-read",
++                    f"read of {field} ({family} family)", False))
+@@ fixtures @@
++    "slot_call_direct": ("""
++        PyObject *f(PyObject *o) {
++            return Py_TYPE(o)->tp_as_number->nb_add(o, o);
++        }""", "slot-call", 1),
++    "slot_call_parenthesized": ("""
++        PyObject *f(PyObject *o) {
++            return ((Py_TYPE(o)->tp_richcompare))(o, o, Py_EQ);
++        }""", "slot-call", 1),
++    "slot_call_cast": ("""
++        PyObject *f(PyObject *o) {
++            return ((binaryfunc)Py_TYPE(o)->tp_as_number->nb_add)(o, o);
++        }""", "slot-call", 1),
++    "slot_read_comparison": ("""
++        int f(PyObject *o) {
++            return Py_TYPE(o)->tp_hash == NULL;
++        }""", "slot-call", 0),
++    "slot_read_argument": ("""
++        static void consume(iternextfunc);
++        void f(PyObject *o) {
++            consume(Py_TYPE(o)->tp_iternext);
++        }""", "slot-call", 0),
++    "slot_read_copy": ("""
++        PyObject *f(PyObject *o) {
++            unaryfunc next = Py_TYPE(o)->tp_iternext;
++            return NULL;
++        }""", "slot-call", 0),
+@@ test @@
++    def test_slot_call_fixtures_and_marked_families(self):
++        fixtures = {
++            name: count
++            for name, (_, rule, count) in check_value_api.SELF_TESTS.items()
++            if rule == "slot-call"
++        }
++        self.assertEqual(fixtures, {
++            "slot_call_direct": 1,
++            "slot_call_parenthesized": 1,
++            "slot_call_cast": 1,
++            "slot_read_comparison": 0,
++            "slot_read_argument": 0,
++            "slot_read_copy": 0,
++        })
++        self.assertEqual(check_value_api.MARKED_SLOT_FAMILIES, {
++            "number", "compare", "hash", "repr", "attribute",
++            "descriptor", "subscript", "iteration", "call",
++        })

@@ -1,0 +1,1996 @@
+{
+ "kernel deepcopy": {
+  "ir": {
+   "counts": {
+    "call_pop_top": 543,
+    "const_loads": 473,
+    "const_scalar": 357,
+    "fusable_compare_branch": 1380,
+    "load_fast_any": 8388,
+    "load_fast_borrow_to_temp": 7728,
+    "load_fast_to_temp": 8358,
+    "not_taken": 1500,
+    "null_stores": 25143,
+    "op_COPY": 0,
+    "op_PUSH_NULL": 1500,
+    "op_STORE_FAST": 780,
+    "op_STORE_FAST_STORE_FAST": 0,
+    "op_UNPACK_SEQUENCE": 330,
+    "slot_reads": 36980,
+    "slot_writes": 25994,
+    "total": 29762
+   },
+   "ir": true,
+   "kernel": "/tmp/ckpt-dbce/shims/deepcopy.py",
+   "top": [
+    [
+     "LOAD_FAST_BORROW",
+     7728
+    ],
+    [
+     "CALL",
+     3760
+    ],
+    [
+     "LOAD_GLOBAL",
+     3368
+    ],
+    [
+     "POP_JUMP_IF_FALSE",
+     1620
+    ],
+    [
+     "PUSH_NULL",
+     1500
+    ],
+    [
+     "RETURN_VALUE",
+     1324
+    ],
+    [
+     "CONTAINS_OP",
+     1050
+    ],
+    [
+     "FOR_ITER",
+     1000
+    ],
+    [
+     "STORE_FAST",
+     780
+    ],
+    [
+     "JUMP_BACKWARD",
+     739
+    ],
+    [
+     "LOAD_ATTR",
+     678
+    ],
+    [
+     "STORE_SUBSCR",
+     675
+    ],
+    [
+     "POP_TOP",
+     633
+    ],
+    [
+     "LOAD_FAST",
+     600
+    ],
+    [
+     "POP_JUMP_IF_NONE",
+     420
+    ]
+   ]
+  },
+  "upstream": {
+   "counts": {
+    "call_pop_top": 543,
+    "const_loads": 473,
+    "const_scalar": 357,
+    "fusable_compare_branch": 1350,
+    "load_fast_any": 9476,
+    "not_taken": 1500,
+    "op_COPY": 0,
+    "op_PUSH_NULL": 1500,
+    "op_STORE_FAST": 2541,
+    "op_STORE_FAST_STORE_FAST": 390,
+    "op_UNPACK_SEQUENCE": 330,
+    "total": 33271
+   },
+   "ir": false,
+   "kernel": "/tmp/ckpt-dbce/shims/deepcopy.py",
+   "top": [
+    [
+     "LOAD_FAST_BORROW",
+     6695
+    ],
+    [
+     "CALL",
+     3760
+    ],
+    [
+     "LOAD_GLOBAL",
+     3368
+    ],
+    [
+     "STORE_FAST",
+     2541
+    ],
+    [
+     "LOAD_FAST_BORROW_LOAD_FAST_BORROW",
+     2241
+    ],
+    [
+     "POP_JUMP_IF_FALSE",
+     1620
+    ],
+    [
+     "PUSH_NULL",
+     1500
+    ],
+    [
+     "RETURN_VALUE",
+     1324
+    ],
+    [
+     "CONTAINS_OP",
+     1050
+    ],
+    [
+     "FOR_ITER",
+     1000
+    ],
+    [
+     "JUMP_BACKWARD",
+     739
+    ],
+    [
+     "LOAD_ATTR",
+     678
+    ],
+    [
+     "STORE_SUBSCR",
+     675
+    ],
+    [
+     "POP_TOP",
+     633
+    ],
+    [
+     "POP_JUMP_IF_NONE",
+     420
+    ]
+   ]
+  }
+ },
+ "kernel deepcopy_reduce": {
+  "ir": {
+   "counts": {
+    "call_pop_top": 8,
+    "const_loads": 31,
+    "const_scalar": 20,
+    "fusable_compare_branch": 10,
+    "load_fast_any": 74,
+    "load_fast_borrow_to_temp": 71,
+    "load_fast_to_temp": 74,
+    "not_taken": 15,
+    "null_stores": 279,
+    "op_COPY": 0,
+    "op_PUSH_NULL": 14,
+    "op_STORE_FAST": 4,
+    "op_STORE_FAST_STORE_FAST": 0,
+    "op_UNPACK_SEQUENCE": 2,
+    "slot_reads": 403,
+    "slot_writes": 274,
+    "total": 348
+   },
+   "ir": true,
+   "kernel": "/tmp/ckpt-dbce/shims/deepcopy_reduce.py",
+   "top": [
+    [
+     "LOAD_FAST_BORROW",
+     71
+    ],
+    [
+     "CALL",
+     42
+    ],
+    [
+     "LOAD_GLOBAL",
+     38
+    ],
+    [
+     "RETURN_VALUE",
+     18
+    ],
+    [
+     "POP_JUMP_IF_FALSE",
+     18
+    ],
+    [
+     "PUSH_NULL",
+     14
+    ],
+    [
+     "LOAD_ATTR",
+     13
+    ],
+    [
+     "LOAD_COMMON_CONSTANT",
+     12
+    ],
+    [
+     "LOAD_CONST",
+     10
+    ],
+    [
+     "POP_TOP",
+     9
+    ],
+    [
+     "LOAD_SMALL_INT",
+     9
+    ],
+    [
+     "STORE_NAME",
+     8
+    ],
+    [
+     "CONTAINS_OP",
+     7
+    ],
+    [
+     "POP_JUMP_IF_NONE",
+     7
+    ],
+    [
+     "STORE_SUBSCR",
+     7
+    ]
+   ]
+  },
+  "upstream": {
+   "counts": {
+    "call_pop_top": 8,
+    "const_loads": 31,
+    "const_scalar": 20,
+    "fusable_compare_branch": 9,
+    "load_fast_any": 102,
+    "not_taken": 15,
+    "op_COPY": 0,
+    "op_PUSH_NULL": 14,
+    "op_STORE_FAST": 24,
+    "op_STORE_FAST_STORE_FAST": 2,
+    "op_UNPACK_SEQUENCE": 2,
+    "total": 406
+   },
+   "ir": false,
+   "kernel": "/tmp/ckpt-dbce/shims/deepcopy_reduce.py",
+   "top": [
+    [
+     "LOAD_FAST_BORROW",
+     81
+    ],
+    [
+     "CALL",
+     42
+    ],
+    [
+     "LOAD_GLOBAL",
+     38
+    ],
+    [
+     "STORE_FAST",
+     24
+    ],
+    [
+     "RETURN_VALUE",
+     18
+    ],
+    [
+     "POP_JUMP_IF_FALSE",
+     18
+    ],
+    [
+     "LOAD_FAST_BORROW_LOAD_FAST_BORROW",
+     18
+    ],
+    [
+     "PUSH_NULL",
+     14
+    ],
+    [
+     "LOAD_ATTR",
+     13
+    ],
+    [
+     "LOAD_COMMON_CONSTANT",
+     12
+    ],
+    [
+     "LOAD_CONST",
+     10
+    ],
+    [
+     "POP_TOP",
+     9
+    ],
+    [
+     "LOAD_SMALL_INT",
+     9
+    ],
+    [
+     "STORE_NAME",
+     8
+    ],
+    [
+     "TO_BOOL",
+     8
+    ]
+   ]
+  }
+ },
+ "kernel deepcopy_memo": {
+  "ir": {
+   "counts": {
+    "call_pop_top": 211,
+    "const_loads": 14,
+    "const_scalar": 12,
+    "fusable_compare_branch": 318,
+    "load_fast_any": 1412,
+    "load_fast_borrow_to_temp": 1399,
+    "load_fast_to_temp": 1412,
+    "not_taken": 215,
+    "null_stores": 4066,
+    "op_COPY": 0,
+    "op_PUSH_NULL": 412,
+    "op_STORE_FAST": 8,
+    "op_STORE_FAST_STORE_FAST": 0,
+    "op_UNPACK_SEQUENCE": 3,
+    "slot_reads": 6136,
+    "slot_writes": 4266,
+    "total": 4925
+   },
+   "ir": true,
+   "kernel": "/tmp/ckpt-dbce/shims/deepcopy_memo.py",
+   "top": [
+    [
+     "LOAD_FAST_BORROW",
+     1399
+    ],
+    [
+     "CALL",
+     754
+    ],
+    [
+     "LOAD_GLOBAL",
+     547
+    ],
+    [
+     "PUSH_NULL",
+     412
+    ],
+    [
+     "POP_JUMP_IF_FALSE",
+     319
+    ],
+    [
+     "CONTAINS_OP",
+     313
+    ],
+    [
+     "RETURN_VALUE",
+     219
+    ],
+    [
+     "POP_TOP",
+     214
+    ],
+    [
+     "FOR_ITER",
+     212
+    ],
+    [
+     "JUMP_BACKWARD",
+     206
+    ],
+    [
+     "BINARY_OP",
+     109
+    ],
+    [
+     "POP_JUMP_IF_NOT_NONE",
+     106
+    ],
+    [
+     "LOAD_ATTR",
+     14
+    ],
+    [
+     "LOAD_FAST",
+     12
+    ],
+    [
+     "STORE_SUBSCR",
+     10
+    ]
+   ]
+  },
+  "upstream": {
+   "counts": {
+    "call_pop_top": 210,
+    "const_loads": 14,
+    "const_scalar": 12,
+    "fusable_compare_branch": 318,
+    "load_fast_any": 1632,
+    "not_taken": 215,
+    "op_COPY": 0,
+    "op_PUSH_NULL": 412,
+    "op_STORE_FAST": 536,
+    "op_STORE_FAST_STORE_FAST": 4,
+    "op_UNPACK_SEQUENCE": 3,
+    "total": 5677
+   },
+   "ir": false,
+   "kernel": "/tmp/ckpt-dbce/shims/deepcopy_memo.py",
+   "top": [
+    [
+     "LOAD_FAST_BORROW",
+     1185
+    ],
+    [
+     "CALL",
+     754
+    ],
+    [
+     "LOAD_GLOBAL",
+     547
+    ],
+    [
+     "STORE_FAST",
+     536
+    ],
+    [
+     "LOAD_FAST_BORROW_LOAD_FAST_BORROW",
+     436
+    ],
+    [
+     "PUSH_NULL",
+     412
+    ],
+    [
+     "POP_JUMP_IF_FALSE",
+     319
+    ],
+    [
+     "CONTAINS_OP",
+     313
+    ],
+    [
+     "RETURN_VALUE",
+     219
+    ],
+    [
+     "POP_TOP",
+     214
+    ],
+    [
+     "FOR_ITER",
+     212
+    ],
+    [
+     "JUMP_BACKWARD",
+     206
+    ],
+    [
+     "BINARY_OP",
+     109
+    ],
+    [
+     "POP_JUMP_IF_NOT_NONE",
+     106
+    ],
+    [
+     "LOAD_ATTR",
+     14
+    ]
+   ]
+  }
+ },
+ "kernel pickle": {
+  "ir": {
+   "counts": {
+    "call_pop_top": 63,
+    "const_loads": 5,
+    "const_scalar": 5,
+    "load_fast_any": 185,
+    "load_fast_borrow_to_temp": 183,
+    "load_fast_to_temp": 185,
+    "null_stores": 346,
+    "op_COPY": 0,
+    "op_PUSH_NULL": 60,
+    "op_STORE_FAST": 0,
+    "op_STORE_FAST_STORE_FAST": 0,
+    "op_UNPACK_SEQUENCE": 0,
+    "slot_reads": 535,
+    "slot_writes": 349,
+    "total": 409
+   },
+   "ir": true,
+   "kernel": "/tmp/ckpt-dbce/shims/pickle.py",
+   "top": [
+    [
+     "LOAD_FAST_BORROW",
+     183
+    ],
+    [
+     "CALL",
+     65
+    ],
+    [
+     "POP_TOP",
+     63
+    ],
+    [
+     "PUSH_NULL",
+     60
+    ],
+    [
+     "LOAD_GLOBAL",
+     8
+    ],
+    [
+     "FOR_ITER",
+     6
+    ],
+    [
+     "LOAD_ATTR",
+     5
+    ],
+    [
+     "JUMP_BACKWARD",
+     4
+    ],
+    [
+     "LOAD_SMALL_INT",
+     3
+    ],
+    [
+     "RETURN_VALUE",
+     3
+    ],
+    [
+     "LOAD_FAST",
+     2
+    ],
+    [
+     "GET_ITER",
+     2
+    ],
+    [
+     "POP_ITER",
+     2
+    ],
+    [
+     "LOAD_COMMON_CONSTANT",
+     2
+    ],
+    [
+     "BUILD_TUPLE",
+     1
+    ]
+   ]
+  },
+  "upstream": {
+   "counts": {
+    "call_pop_top": 63,
+    "const_loads": 5,
+    "const_scalar": 5,
+    "load_fast_any": 129,
+    "op_COPY": 0,
+    "op_PUSH_NULL": 60,
+    "op_STORE_FAST": 8,
+    "op_STORE_FAST_STORE_FAST": 0,
+    "op_UNPACK_SEQUENCE": 0,
+    "total": 361
+   },
+   "ir": false,
+   "kernel": "/tmp/ckpt-dbce/shims/pickle.py",
+   "top": [
+    [
+     "LOAD_FAST_BORROW",
+     67
+    ],
+    [
+     "CALL",
+     65
+    ],
+    [
+     "POP_TOP",
+     63
+    ],
+    [
+     "PUSH_NULL",
+     60
+    ],
+    [
+     "LOAD_FAST_BORROW_LOAD_FAST_BORROW",
+     60
+    ],
+    [
+     "LOAD_GLOBAL",
+     8
+    ],
+    [
+     "STORE_FAST",
+     8
+    ],
+    [
+     "FOR_ITER",
+     6
+    ],
+    [
+     "LOAD_ATTR",
+     5
+    ],
+    [
+     "JUMP_BACKWARD",
+     4
+    ],
+    [
+     "LOAD_SMALL_INT",
+     3
+    ],
+    [
+     "RETURN_VALUE",
+     3
+    ],
+    [
+     "LOAD_FAST",
+     2
+    ],
+    [
+     "GET_ITER",
+     2
+    ],
+    [
+     "POP_ITER",
+     2
+    ]
+   ]
+  }
+ },
+ "kernel unpickle": {
+  "ir": {
+   "counts": {
+    "call_pop_top": 63,
+    "const_loads": 5,
+    "const_scalar": 5,
+    "load_fast_any": 128,
+    "load_fast_borrow_to_temp": 126,
+    "load_fast_to_temp": 128,
+    "null_stores": 298,
+    "op_COPY": 0,
+    "op_PUSH_NULL": 60,
+    "op_STORE_FAST": 0,
+    "op_STORE_FAST_STORE_FAST": 0,
+    "op_UNPACK_SEQUENCE": 0,
+    "slot_reads": 435,
+    "slot_writes": 300,
+    "total": 360
+   },
+   "ir": true,
+   "kernel": "/tmp/ckpt-dbce/shims/unpickle.py",
+   "top": [
+    [
+     "LOAD_FAST_BORROW",
+     126
+    ],
+    [
+     "CALL",
+     68
+    ],
+    [
+     "POP_TOP",
+     63
+    ],
+    [
+     "PUSH_NULL",
+     60
+    ],
+    [
+     "LOAD_ATTR",
+     10
+    ],
+    [
+     "LOAD_GLOBAL",
+     8
+    ],
+    [
+     "FOR_ITER",
+     6
+    ],
+    [
+     "JUMP_BACKWARD",
+     4
+    ],
+    [
+     "LOAD_SMALL_INT",
+     3
+    ],
+    [
+     "RETURN_VALUE",
+     3
+    ],
+    [
+     "LOAD_FAST",
+     2
+    ],
+    [
+     "GET_ITER",
+     2
+    ],
+    [
+     "POP_ITER",
+     2
+    ],
+    [
+     "LOAD_COMMON_CONSTANT",
+     2
+    ],
+    [
+     "BUILD_TUPLE",
+     1
+    ]
+   ]
+  },
+  "upstream": {
+   "counts": {
+    "call_pop_top": 63,
+    "const_loads": 5,
+    "const_scalar": 5,
+    "load_fast_any": 136,
+    "op_COPY": 0,
+    "op_PUSH_NULL": 60,
+    "op_STORE_FAST": 10,
+    "op_STORE_FAST_STORE_FAST": 0,
+    "op_UNPACK_SEQUENCE": 0,
+    "total": 378
+   },
+   "ir": false,
+   "kernel": "/tmp/ckpt-dbce/shims/unpickle.py",
+   "top": [
+    [
+     "LOAD_FAST_BORROW",
+     133
+    ],
+    [
+     "CALL",
+     68
+    ],
+    [
+     "POP_TOP",
+     63
+    ],
+    [
+     "PUSH_NULL",
+     60
+    ],
+    [
+     "LOAD_ATTR",
+     10
+    ],
+    [
+     "STORE_FAST",
+     10
+    ],
+    [
+     "LOAD_GLOBAL",
+     8
+    ],
+    [
+     "FOR_ITER",
+     6
+    ],
+    [
+     "JUMP_BACKWARD",
+     4
+    ],
+    [
+     "LOAD_SMALL_INT",
+     3
+    ],
+    [
+     "RETURN_VALUE",
+     3
+    ],
+    [
+     "LOAD_FAST",
+     2
+    ],
+    [
+     "GET_ITER",
+     2
+    ],
+    [
+     "POP_ITER",
+     2
+    ],
+    [
+     "LOAD_COMMON_CONSTANT",
+     2
+    ]
+   ]
+  }
+ },
+ "kernel logging_format": {
+  "ir": {
+   "counts": {
+    "call_pop_top": 126,
+    "const_loads": 548,
+    "const_scalar": 458,
+    "fusable_compare_branch": 111,
+    "load_fast_any": 766,
+    "load_fast_borrow_to_temp": 705,
+    "load_fast_to_temp": 706,
+    "not_taken": 260,
+    "null_stores": 4718,
+    "op_COPY": 30,
+    "op_PUSH_NULL": 120,
+    "op_STORE_FAST": 62,
+    "op_STORE_FAST_STORE_FAST": 0,
+    "op_UNPACK_SEQUENCE": 10,
+    "slot_reads": 6960,
+    "slot_writes": 4722,
+    "total": 5891
+   },
+   "ir": true,
+   "kernel": "/tmp/ckpt-dbce/shims/logging_format.py",
+   "top": [
+    [
+     "LOAD_ATTR",
+     1037
+    ],
+    [
+     "LOAD_FAST_BORROW",
+     705
+    ],
+    [
+     "CALL",
+     671
+    ],
+    [
+     "LOAD_GLOBAL",
+     569
+    ],
+    [
+     "POP_JUMP_IF_FALSE",
+     431
+    ],
+    [
+     "RETURN_VALUE",
+     364
+    ],
+    [
+     "LOAD_COMMON_CONSTANT",
+     233
+    ],
+    [
+     "STORE_ATTR",
+     220
+    ],
+    [
+     "BINARY_OP",
+     181
+    ],
+    [
+     "LOAD_SMALL_INT",
+     165
+    ],
+    [
+     "COMPARE_OP",
+     151
+    ],
+    [
+     "LOAD_CONST",
+     150
+    ],
+    [
+     "POP_TOP",
+     136
+    ],
+    [
+     "PUSH_NULL",
+     120
+    ],
+    [
+     "STORE_FAST",
+     62
+    ]
+   ]
+  },
+  "upstream": {
+   "counts": {
+    "call_pop_top": 126,
+    "const_loads": 548,
+    "const_scalar": 458,
+    "fusable_compare_branch": 111,
+    "load_fast_any": 1952,
+    "not_taken": 260,
+    "op_COPY": 70,
+    "op_PUSH_NULL": 120,
+    "op_STORE_FAST": 475,
+    "op_STORE_FAST_STORE_FAST": 20,
+    "op_UNPACK_SEQUENCE": 10,
+    "total": 7970
+   },
+   "ir": false,
+   "kernel": "/tmp/ckpt-dbce/shims/logging_format.py",
+   "top": [
+    [
+     "LOAD_FAST_BORROW",
+     1601
+    ],
+    [
+     "LOAD_ATTR",
+     1037
+    ],
+    [
+     "CALL",
+     671
+    ],
+    [
+     "LOAD_GLOBAL",
+     569
+    ],
+    [
+     "STORE_FAST",
+     475
+    ],
+    [
+     "POP_JUMP_IF_FALSE",
+     441
+    ],
+    [
+     "TO_BOOL",
+     410
+    ],
+    [
+     "RETURN_VALUE",
+     364
+    ],
+    [
+     "LOAD_FAST_BORROW_LOAD_FAST_BORROW",
+     290
+    ],
+    [
+     "LOAD_COMMON_CONSTANT",
+     233
+    ],
+    [
+     "STORE_ATTR",
+     220
+    ],
+    [
+     "BINARY_OP",
+     181
+    ],
+    [
+     "LOAD_SMALL_INT",
+     165
+    ],
+    [
+     "COMPARE_OP",
+     151
+    ],
+    [
+     "LOAD_CONST",
+     150
+    ]
+   ]
+  }
+ },
+ "kernel logging_silent": {
+  "ir": {
+   "counts": {
+    "call_pop_top": 16,
+    "const_loads": 18,
+    "const_scalar": 18,
+    "fusable_compare_branch": 1,
+    "load_fast_any": 15,
+    "load_fast_borrow_to_temp": 14,
+    "load_fast_to_temp": 15,
+    "null_stores": 173,
+    "op_COPY": 0,
+    "op_PUSH_NULL": 0,
+    "op_STORE_FAST": 1,
+    "op_STORE_FAST_STORE_FAST": 0,
+    "op_UNPACK_SEQUENCE": 0,
+    "slot_reads": 243,
+    "slot_writes": 146,
+    "total": 215
+   },
+   "ir": true,
+   "kernel": "/tmp/ckpt-dbce/shims/logging_silent.py",
+   "top": [
+    [
+     "LOAD_ATTR",
+     46
+    ],
+    [
+     "CALL",
+     30
+    ],
+    [
+     "RETURN_VALUE",
+     24
+    ],
+    [
+     "POP_JUMP_IF_FALSE",
+     21
+    ],
+    [
+     "LOAD_GLOBAL",
+     18
+    ],
+    [
+     "POP_TOP",
+     16
+    ],
+    [
+     "LOAD_FAST_BORROW",
+     14
+    ],
+    [
+     "LOAD_COMMON_CONSTANT",
+     13
+    ],
+    [
+     "NOP",
+     10
+    ],
+    [
+     "BINARY_OP",
+     10
+    ],
+    [
+     "LOAD_SMALL_INT",
+     5
+    ],
+    [
+     "FOR_ITER",
+     2
+    ],
+    [
+     "STORE_FAST",
+     1
+    ],
+    [
+     "LOAD_FAST",
+     1
+    ],
+    [
+     "GET_ITER",
+     1
+    ]
+   ]
+  },
+  "upstream": {
+   "counts": {
+    "call_pop_top": 16,
+    "const_loads": 18,
+    "const_scalar": 18,
+    "fusable_compare_branch": 1,
+    "load_fast_any": 70,
+    "op_COPY": 0,
+    "op_PUSH_NULL": 0,
+    "op_STORE_FAST": 3,
+    "op_STORE_FAST_STORE_FAST": 0,
+    "op_UNPACK_SEQUENCE": 0,
+    "total": 292
+   },
+   "ir": false,
+   "kernel": "/tmp/ckpt-dbce/shims/logging_silent.py",
+   "top": [
+    [
+     "LOAD_FAST_BORROW",
+     69
+    ],
+    [
+     "LOAD_ATTR",
+     46
+    ],
+    [
+     "CALL",
+     30
+    ],
+    [
+     "RETURN_VALUE",
+     24
+    ],
+    [
+     "POP_JUMP_IF_FALSE",
+     21
+    ],
+    [
+     "TO_BOOL",
+     20
+    ],
+    [
+     "LOAD_GLOBAL",
+     18
+    ],
+    [
+     "POP_TOP",
+     16
+    ],
+    [
+     "LOAD_COMMON_CONSTANT",
+     13
+    ],
+    [
+     "NOP",
+     10
+    ],
+    [
+     "BINARY_OP",
+     10
+    ],
+    [
+     "LOAD_SMALL_INT",
+     5
+    ],
+    [
+     "STORE_FAST",
+     3
+    ],
+    [
+     "FOR_ITER",
+     2
+    ],
+    [
+     "LOAD_FAST",
+     1
+    ]
+   ]
+  }
+ },
+ "kernel logging_simple": {
+  "ir": {
+   "counts": {
+    "call_pop_top": 126,
+    "const_loads": 528,
+    "const_scalar": 438,
+    "fusable_compare_branch": 101,
+    "load_fast_any": 716,
+    "load_fast_borrow_to_temp": 655,
+    "load_fast_to_temp": 656,
+    "not_taken": 230,
+    "null_stores": 4497,
+    "op_COPY": 30,
+    "op_PUSH_NULL": 120,
+    "op_STORE_FAST": 61,
+    "op_STORE_FAST_STORE_FAST": 0,
+    "op_UNPACK_SEQUENCE": 10,
+    "slot_reads": 6669,
+    "slot_writes": 4520,
+    "total": 5659
+   },
+   "ir": true,
+   "kernel": "/tmp/ckpt-dbce/shims/logging_simple.py",
+   "top": [
+    [
+     "LOAD_ATTR",
+     1007
+    ],
+    [
+     "LOAD_FAST_BORROW",
+     655
+    ],
+    [
+     "CALL",
+     641
+    ],
+    [
+     "LOAD_GLOBAL",
+     528
+    ],
+    [
+     "POP_JUMP_IF_FALSE",
+     411
+    ],
+    [
+     "RETURN_VALUE",
+     354
+    ],
+    [
+     "LOAD_COMMON_CONSTANT",
+     233
+    ],
+    [
+     "STORE_ATTR",
+     220
+    ],
+    [
+     "BINARY_OP",
+     161
+    ],
+    [
+     "LOAD_CONST",
+     150
+    ],
+    [
+     "LOAD_SMALL_INT",
+     145
+    ],
+    [
+     "COMPARE_OP",
+     141
+    ],
+    [
+     "POP_TOP",
+     136
+    ],
+    [
+     "PUSH_NULL",
+     120
+    ],
+    [
+     "STORE_FAST",
+     61
+    ]
+   ]
+  },
+  "upstream": {
+   "counts": {
+    "call_pop_top": 126,
+    "const_loads": 528,
+    "const_scalar": 438,
+    "fusable_compare_branch": 101,
+    "load_fast_any": 1912,
+    "not_taken": 230,
+    "op_COPY": 70,
+    "op_PUSH_NULL": 120,
+    "op_STORE_FAST": 464,
+    "op_STORE_FAST_STORE_FAST": 20,
+    "op_UNPACK_SEQUENCE": 10,
+    "total": 7728
+   },
+   "ir": false,
+   "kernel": "/tmp/ckpt-dbce/shims/logging_simple.py",
+   "top": [
+    [
+     "LOAD_FAST_BORROW",
+     1591
+    ],
+    [
+     "LOAD_ATTR",
+     1007
+    ],
+    [
+     "CALL",
+     641
+    ],
+    [
+     "LOAD_GLOBAL",
+     528
+    ],
+    [
+     "STORE_FAST",
+     464
+    ],
+    [
+     "POP_JUMP_IF_FALSE",
+     421
+    ],
+    [
+     "TO_BOOL",
+     400
+    ],
+    [
+     "RETURN_VALUE",
+     354
+    ],
+    [
+     "LOAD_FAST_BORROW_LOAD_FAST_BORROW",
+     260
+    ],
+    [
+     "LOAD_COMMON_CONSTANT",
+     233
+    ],
+    [
+     "STORE_ATTR",
+     220
+    ],
+    [
+     "BINARY_OP",
+     161
+    ],
+    [
+     "LOAD_CONST",
+     150
+    ],
+    [
+     "POP_TOP",
+     146
+    ],
+    [
+     "LOAD_SMALL_INT",
+     145
+    ]
+   ]
+  }
+ },
+ "kernel xml_etree_generate": {
+  "ir": {
+   "counts": {
+    "call_pop_top": 255312,
+    "const_loads": 872037,
+    "const_scalar": 358067,
+    "fusable_compare_branch": 308019,
+    "load_fast_any": 1022952,
+    "load_fast_borrow_to_temp": 971371,
+    "load_fast_to_temp": 1022942,
+    "not_taken": 204841,
+    "null_stores": 5392765,
+    "op_COPY": 20,
+    "op_PUSH_NULL": 255351,
+    "op_STORE_FAST": 2230,
+    "op_STORE_FAST_STORE_FAST": 0,
+    "op_UNPACK_SEQUENCE": 1090,
+    "slot_reads": 7545979,
+    "slot_writes": 5495273,
+    "total": 6773775
+   },
+   "ir": true,
+   "kernel": "/tmp/ckpt-dbce/shims/xml_etree_generate.py",
+   "top": [
+    [
+     "LOAD_FAST_BORROW",
+     971371
+    ],
+    [
+     "CALL",
+     615455
+    ],
+    [
+     "LOAD_GLOBAL",
+     566836
+    ],
+    [
+     "POP_JUMP_IF_FALSE",
+     565959
+    ],
+    [
+     "LOAD_CONST",
+     513960
+    ],
+    [
+     "LOAD_ATTR",
+     357573
+    ],
+    [
+     "FOR_ITER",
+     308314
+    ],
+    [
+     "LOAD_COMMON_CONSTANT",
+     306513
+    ],
+    [
+     "POP_TOP",
+     306383
+    ],
+    [
+     "RETURN_VALUE",
+     306003
+    ],
+    [
+     "BINARY_OP",
+     255740
+    ],
+    [
+     "PUSH_NULL",
+     255351
+    ],
+    [
+     "CONTAINS_OP",
+     205320
+    ],
+    [
+     "JUMP_BACKWARD",
+     205171
+    ],
+    [
+     "POP_JUMP_IF_TRUE",
+     154700
+    ]
+   ]
+  },
+  "upstream": {
+   "counts": {
+    "call_pop_top": 255312,
+    "const_loads": 872037,
+    "const_scalar": 358067,
+    "fusable_compare_branch": 308019,
+    "load_fast_any": 1896554,
+    "not_taken": 204841,
+    "op_COPY": 30,
+    "op_PUSH_NULL": 255351,
+    "op_STORE_FAST": 512074,
+    "op_STORE_FAST_STORE_FAST": 1090,
+    "op_UNPACK_SEQUENCE": 1090,
+    "total": 8673041
+   },
+   "ir": false,
+   "kernel": "/tmp/ckpt-dbce/shims/xml_etree_generate.py",
+   "top": [
+    [
+     "LOAD_FAST_BORROW",
+     1641183
+    ],
+    [
+     "CALL",
+     615455
+    ],
+    [
+     "LOAD_GLOBAL",
+     566836
+    ],
+    [
+     "POP_JUMP_IF_FALSE",
+     565969
+    ],
+    [
+     "LOAD_CONST",
+     513960
+    ],
+    [
+     "STORE_FAST",
+     512074
+    ],
+    [
+     "TO_BOOL",
+     412650
+    ],
+    [
+     "LOAD_ATTR",
+     357573
+    ],
+    [
+     "FOR_ITER",
+     308314
+    ],
+    [
+     "LOAD_COMMON_CONSTANT",
+     306513
+    ],
+    [
+     "POP_TOP",
+     306383
+    ],
+    [
+     "RETURN_VALUE",
+     306003
+    ],
+    [
+     "BINARY_OP",
+     255740
+    ],
+    [
+     "PUSH_NULL",
+     255351
+    ],
+    [
+     "CONTAINS_OP",
+     205320
+    ]
+   ]
+  }
+ },
+ "kernel xml_etree_iterparse": {
+  "ir": {
+   "counts": {
+    "call_pop_top": 472,
+    "const_loads": 1328,
+    "const_scalar": 1077,
+    "fusable_compare_branch": 2,
+    "load_fast_any": 613374,
+    "load_fast_borrow_to_temp": 613312,
+    "load_fast_to_temp": 613374,
+    "not_taken": 204431,
+    "null_stores": 4907938,
+    "op_COPY": 0,
+    "op_PUSH_NULL": 161,
+    "op_STORE_FAST": 408320,
+    "op_STORE_FAST_STORE_FAST": 0,
+    "op_UNPACK_SEQUENCE": 204120,
+    "slot_reads": 6136327,
+    "slot_writes": 5111511,
+    "total": 4910106
+   },
+   "ir": true,
+   "kernel": "/tmp/ckpt-dbce/shims/xml_etree_iterparse.py",
+   "top": [
+    [
+     "LOAD_FAST_BORROW",
+     613312
+    ],
+    [
+     "LOAD_ATTR",
+     410044
+    ],
+    [
+     "CALL",
+     409408
+    ],
+    [
+     "POP_JUMP_IF_FALSE",
+     408721
+    ],
+    [
+     "LOAD_GLOBAL",
+     408458
+    ],
+    [
+     "JUMP_BACKWARD",
+     408451
+    ],
+    [
+     "STORE_FAST",
+     408320
+    ],
+    [
+     "YIELD_VALUE",
+     408240
+    ],
+    [
+     "POP_TOP",
+     204833
+    ],
+    [
+     "SEND",
+     204360
+    ],
+    [
+     "BUILD_TUPLE",
+     204240
+    ],
+    [
+     "FOR_ITER",
+     204153
+    ],
+    [
+     "UNPACK_SEQUENCE",
+     204120
+    ],
+    [
+     "LIST_APPEND",
+     204120
+    ],
+    [
+     "JUMP_BACKWARD_NO_INTERRUPT",
+     204120
+    ]
+   ]
+  },
+  "upstream": {
+   "counts": {
+    "call_pop_top": 472,
+    "const_loads": 1328,
+    "const_scalar": 1077,
+    "fusable_compare_branch": 2,
+    "load_fast_any": 1023369,
+    "not_taken": 204431,
+    "op_COPY": 0,
+    "op_PUSH_NULL": 161,
+    "op_STORE_FAST": 204812,
+    "op_STORE_FAST_STORE_FAST": 204140,
+    "op_UNPACK_SEQUENCE": 204120,
+    "total": 5729693
+   },
+   "ir": false,
+   "kernel": "/tmp/ckpt-dbce/shims/xml_etree_iterparse.py",
+   "top": [
+    [
+     "LOAD_FAST_BORROW",
+     819007
+    ],
+    [
+     "LOAD_ATTR",
+     410044
+    ],
+    [
+     "CALL",
+     409408
+    ],
+    [
+     "TO_BOOL",
+     408960
+    ],
+    [
+     "POP_JUMP_IF_FALSE",
+     408721
+    ],
+    [
+     "LOAD_GLOBAL",
+     408458
+    ],
+    [
+     "JUMP_BACKWARD",
+     408451
+    ],
+    [
+     "YIELD_VALUE",
+     408240
+    ],
+    [
+     "POP_TOP",
+     204833
+    ],
+    [
+     "STORE_FAST",
+     204812
+    ],
+    [
+     "SEND",
+     204360
+    ],
+    [
+     "LOAD_FAST_BORROW_LOAD_FAST_BORROW",
+     204300
+    ],
+    [
+     "BUILD_TUPLE",
+     204240
+    ],
+    [
+     "FOR_ITER",
+     204153
+    ],
+    [
+     "STORE_FAST_STORE_FAST",
+     204140
+    ]
+   ]
+  }
+ },
+ "kernel xml_etree_parse": {
+  "ir": {
+   "counts": {
+    "call_pop_top": 51150,
+    "const_loads": 143888,
+    "const_scalar": 61396,
+    "fusable_compare_branch": 61601,
+    "load_fast_any": 164446,
+    "load_fast_borrow_to_temp": 154128,
+    "load_fast_to_temp": 164444,
+    "not_taken": 41116,
+    "null_stores": 917028,
+    "op_COPY": 4,
+    "op_PUSH_NULL": 40867,
+    "op_STORE_FAST": 446,
+    "op_STORE_FAST_STORE_FAST": 0,
+    "op_UNPACK_SEQUENCE": 218,
+    "slot_reads": 1307954,
+    "slot_writes": 916849,
+    "total": 1173357
+   },
+   "ir": true,
+   "kernel": "/tmp/ckpt-dbce/shims/xml_etree_parse.py",
+   "top": [
+    [
+     "LOAD_FAST_BORROW",
+     154128
+    ],
+    [
+     "LOAD_GLOBAL",
+     113470
+    ],
+    [
+     "CALL",
+     113293
+    ],
+    [
+     "POP_JUMP_IF_FALSE",
+     113281
+    ],
+    [
+     "LOAD_CONST",
+     82490
+    ],
+    [
+     "LOAD_ATTR",
+     71807
+    ],
+    [
+     "LOAD_COMMON_CONSTANT",
+     61392
+    ],
+    [
+     "RETURN_VALUE",
+     61349
+    ],
+    [
+     "POP_TOP",
+     51159
+    ],
+    [
+     "FOR_ITER",
+     41179
+    ],
+    [
+     "CONTAINS_OP",
+     41062
+    ],
+    [
+     "BINARY_OP",
+     41048
+    ],
+    [
+     "PUSH_NULL",
+     40867
+    ],
+    [
+     "POP_JUMP_IF_TRUE",
+     30998
+    ],
+    [
+     "JUMP_BACKWARD",
+     20655
+    ]
+   ]
+  },
+  "upstream": {
+   "counts": {
+    "call_pop_top": 51150,
+    "const_loads": 143888,
+    "const_scalar": 61396,
+    "fusable_compare_branch": 61601,
+    "load_fast_any": 349533,
+    "not_taken": 41116,
+    "op_COPY": 6,
+    "op_PUSH_NULL": 40867,
+    "op_STORE_FAST": 82067,
+    "op_STORE_FAST_STORE_FAST": 218,
+    "op_UNPACK_SEQUENCE": 218,
+    "total": 1543379
+   },
+   "ir": false,
+   "kernel": "/tmp/ckpt-dbce/shims/xml_etree_parse.py",
+   "top": [
+    [
+     "LOAD_FAST_BORROW",
+     308396
+    ],
+    [
+     "LOAD_GLOBAL",
+     113470
+    ],
+    [
+     "CALL",
+     113293
+    ],
+    [
+     "POP_JUMP_IF_FALSE",
+     113283
+    ],
+    [
+     "TO_BOOL",
+     82680
+    ],
+    [
+     "LOAD_CONST",
+     82490
+    ],
+    [
+     "STORE_FAST",
+     82067
+    ],
+    [
+     "LOAD_ATTR",
+     71807
+    ],
+    [
+     "LOAD_COMMON_CONSTANT",
+     61392
+    ],
+    [
+     "RETURN_VALUE",
+     61349
+    ],
+    [
+     "POP_TOP",
+     51159
+    ],
+    [
+     "FOR_ITER",
+     41179
+    ],
+    [
+     "CONTAINS_OP",
+     41062
+    ],
+    [
+     "BINARY_OP",
+     41048
+    ],
+    [
+     "PUSH_NULL",
+     40867
+    ]
+   ]
+  }
+ },
+ "kernel xml_etree_process": {
+  "ir": {
+   "counts": {
+    "call_pop_top": 305142,
+    "const_loads": 844100,
+    "const_scalar": 326269,
+    "fusable_compare_branch": 296540,
+    "load_fast_any": 786472,
+    "load_fast_borrow_to_temp": 745366,
+    "load_fast_to_temp": 786466,
+    "not_taken": 133679,
+    "null_stores": 4861698,
+    "op_COPY": 12,
+    "op_PUSH_NULL": 152819,
+    "op_STORE_FAST": 40478,
+    "op_STORE_FAST_STORE_FAST": 0,
+    "op_UNPACK_SEQUENCE": 20228,
+    "slot_reads": 6681485,
+    "slot_writes": 4772852,
+    "total": 6074732
+   },
+   "ir": true,
+   "kernel": "/tmp/ckpt-dbce/shims/xml_etree_process.py",
+   "top": [
+    [
+     "LOAD_FAST_BORROW",
+     745366
+    ],
+    [
+     "LOAD_GLOBAL",
+     569621
+    ],
+    [
+     "CALL",
+     560858
+    ],
+    [
+     "LOAD_CONST",
+     517819
+    ],
+    [
+     "POP_JUMP_IF_FALSE",
+     467463
+    ],
+    [
+     "LOAD_ATTR",
+     408415
+    ],
+    [
+     "POP_TOP",
+     336685
+    ],
+    [
+     "RETURN_VALUE",
+     335799
+    ],
+    [
+     "LOAD_COMMON_CONSTANT",
+     326262
+    ],
+    [
+     "FOR_ITER",
+     227194
+    ],
+    [
+     "CONTAINS_OP",
+     202301
+    ],
+    [
+     "JUMP_BACKWARD",
+     155337
+    ],
+    [
+     "PUSH_NULL",
+     152819
+    ],
+    [
+     "STORE_ATTR",
+     152464
+    ],
+    [
+     "BINARY_OP",
+     132756
+    ]
+   ]
+  },
+  "upstream": {
+   "counts": {
+    "call_pop_top": 305142,
+    "const_loads": 844100,
+    "const_scalar": 326269,
+    "fusable_compare_branch": 296540,
+    "load_fast_any": 1633190,
+    "not_taken": 133679,
+    "op_COPY": 16,
+    "op_PUSH_NULL": 152819,
+    "op_STORE_FAST": 319397,
+    "op_STORE_FAST_STORE_FAST": 20228,
+    "op_UNPACK_SEQUENCE": 20228,
+    "total": 7577085
+   },
+   "ir": false,
+   "kernel": "/tmp/ckpt-dbce/shims/xml_etree_process.py",
+   "top": [
+    [
+     "LOAD_FAST_BORROW",
+     1458067
+    ],
+    [
+     "LOAD_GLOBAL",
+     569621
+    ],
+    [
+     "CALL",
+     560858
+    ],
+    [
+     "LOAD_CONST",
+     517819
+    ],
+    [
+     "POP_JUMP_IF_FALSE",
+     467467
+    ],
+    [
+     "LOAD_ATTR",
+     408415
+    ],
+    [
+     "POP_TOP",
+     336685
+    ],
+    [
+     "RETURN_VALUE",
+     335799
+    ],
+    [
+     "LOAD_COMMON_CONSTANT",
+     326262
+    ],
+    [
+     "STORE_FAST",
+     319397
+    ],
+    [
+     "TO_BOOL",
+     295440
+    ],
+    [
+     "FOR_ITER",
+     227194
+    ],
+    [
+     "CONTAINS_OP",
+     202301
+    ],
+    [
+     "JUMP_BACKWARD",
+     155337
+    ],
+    [
+     "PUSH_NULL",
+     152819
+    ]
+   ]
+  }
+ }
+}

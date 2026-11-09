@@ -1,0 +1,11 @@
+--- a/Python/codegen.c
++++ b/Python/codegen.c
+@@ -876,7 +876,7 @@
+     ADDOP_I(c, loc, BUILD_MAP, 0); // stack now contains <annos>
+ 
+     for (Py_ssize_t i = 0; i < annotations_len; i++) {
+-        /* PyLong_AsVoidPtr is the native boundary for recorded AST pointers. */
++        /* Recorded AST pointer values stay tagged in the constants list. */
+         PyValue ptr_v = PyList_GetValue(deferred_anno, i);
+         if (PyValue_IsNull(ptr_v)) {
+             return ERROR;

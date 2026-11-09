@@ -1,0 +1,27 @@
+{
+  "base": "7baf96ed017",
+  "applied": [
+    "w5-property-method-signatures.patch",
+    "builtin-id-audit-values.patch",
+    "selected-legacy-attribute-slot-owner.patch",
+    "tuplegetter-value-slot.patch",
+    "r27-fromkeys-value.diff",
+    "r27-memory-count-value.diff",
+    "r27-long-subtype-newargs-v2.diff",
+    "w5-codegen-deferred-annotation-values.patch",
+    "w5-import-from-value-integration-v3.patch",
+    "w5-import-from-modulespec-fix-v2.patch",
+    "dict-subscript-missing-value.patch",
+    "codegen-pointer-comment-fix.patch",
+    "modulespec-header-cycle-fix.patch",
+    "w5-manual-copied-slot-followup.patch",
+    "w5-import-from-cleanup-order.patch",
+    "r27-remote-writer-scalars.diff"
+  ],
+  "generated": "Regenerate IR from merged bytecode producer; exclude worker generated header",
+  "notes": [
+    "Importv3 excludes unrelatedisolatedmanualdeclarationmark andalreadylandedStoreNamehunk. Earlierfailedpackets preserved.",
+    "FullModuleSpecfixv2 replacespreviousincrementalinterface-onlyartifact; mainpreimagevalidated.",
+    "Removedcyclicvaluehelperinclude;onlyPyValuetypedefsrequiredfromPython.h."
+  ]
+}

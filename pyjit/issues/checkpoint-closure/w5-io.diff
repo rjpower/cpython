@@ -1,0 +1,32 @@
+--- a/Modules/_io/bufferedio.c
++++ b/Modules/_io/bufferedio.c
+@@ -1415,12 +1415,7 @@
+         return PyValue_NULL;
+     }
+ 
+-    PyObject *target_obj = _PyValue_AsObjectAt(targetobj, BOX_SITE_PARSER);
+-    if (target_obj == NULL) {
+-        return PyValue_NULL;
+-    }
+-    target = PyNumber_AsOff_t(target_obj, PyExc_ValueError);
+-    Py_DECREF(target_obj);
++    target = _PyNumber_AsOffValue(targetobj, PyExc_ValueError);
+     if (target == -1 && PyErr_Occurred())
+         return PyValue_NULL;
+ 
+--- a/Modules/_io/fileio.c
++++ b/Modules/_io/fileio.c
+@@ -585,11 +585,8 @@
+     _setmode(self->fd, O_BINARY);
+ #endif
+ 
+-    PyObject *name_attr = _PyValue_AsObjectAt(nameobj, BOX_SITE_PARSER);
+-    if (name_attr == NULL)
+-        goto error;
+-    int set_name = _PyValue_SetAttr(PyValue_FromObjectBorrow((PyObject *)self), &_Py_ID(name), PyValue_FromObjectBorrow(name_attr));
+-    Py_DECREF(name_attr);
++    int set_name = _PyValue_SetAttr(PyValue_FromObjectBorrow((PyObject *)self),
++                                    &_Py_ID(name), nameobj);
+     if (set_name < 0)
+         goto error;
+ 

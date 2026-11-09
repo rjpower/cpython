@@ -1,0 +1,5 @@
+# Decimal current-context regression review, round 2
+
+The separate `decimal-context-lifetime-tests-v2.diff` replaces the initial subprocess fixture with one in-process test. **Approved.** It restores the original `_pydecimal.Decimal.__new__` descriptor and `__format__` both explicitly after the formatting phase and through cleanup if an assertion fails. It also restores the original current Context through cleanup. The tracked Context has no test-local owner during each callback, so its finalization checks genuinely exercise the C code's owned reference. The three callback points remain fallback constructor, `localcontext` flag truth, and Rational numerator. The author ran the test once successfully with no skips.
+
+The Rational ABC registration uses a local class and does not alter the C Decimal type or module state. This fixture no longer starts a child process, so it adds no subprocess accounting path. This round supersedes the fixture-shape description in the earlier review; the earlier source-lifetime findings and approved C fix remain unchanged.

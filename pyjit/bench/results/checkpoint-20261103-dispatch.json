@@ -1,0 +1,2825 @@
+{
+ "kernel fannkuch": {
+  "ir": {
+   "counts": {
+    "call_pop_top": 623532,
+    "const_loads": 15251145,
+    "const_scalar": 14963865,
+    "fusable_compare_branch": 2843309,
+    "load_fast_any": 8832699,
+    "load_fast_borrow_to_temp": 8832683,
+    "load_fast_to_temp": 8832683,
+    "not_taken": 3588158,
+    "null_stores": 37144419,
+    "op_COPY": 0,
+    "op_PUSH_NULL": 1247058,
+    "op_STORE_FAST": 0,
+    "op_STORE_FAST_STORE_FAST": 0,
+    "op_UNPACK_SEQUENCE": 0,
+    "slot_reads": 60815721,
+    "slot_writes": 41990063,
+    "total": 53069157
+   },
+   "ir": true,
+   "kernel": "/home/power/code/cpython/.worktrees/python-jit/pyjit/bench/internal/kernels/fannkuch.py",
+   "top": [
+    [
+     "BINARY_OP",
+     10837519
+    ],
+    [
+     "LOAD_SMALL_INT",
+     9770129
+    ],
+    [
+     "LOAD_FAST_BORROW",
+     8832683
+    ],
+    [
+     "LOAD_COMMON_CONSTANT",
+     5193736
+    ],
+    [
+     "POP_JUMP_IF_FALSE",
+     4861834
+    ],
+    [
+     "COMPARE_OP",
+     2843309
+    ],
+    [
+     "JUMP_BACKWARD",
+     2615425
+    ],
+    [
+     "BUILD_SLICE",
+     1731245
+    ],
+    [
+     "STORE_SLICE",
+     1731245
+    ],
+    [
+     "CALL",
+     1247068
+    ],
+    [
+     "PUSH_NULL",
+     1247058
+    ],
+    [
+     "STORE_SUBSCR",
+     884179
+    ],
+    [
+     "POP_TOP",
+     623532
+    ],
+    [
+     "NOP",
+     362880
+    ],
+    [
+     "LOAD_CONST",
+     287280
+    ]
+   ]
+  },
+  "upstream": {
+   "counts": {
+    "call_pop_top": 623532,
+    "const_loads": 15251145,
+    "const_scalar": 14963865,
+    "fusable_compare_branch": 2843309,
+    "load_fast_any": 17328392,
+    "not_taken": 3588158,
+    "op_COPY": 1247058,
+    "op_PUSH_NULL": 1247058,
+    "op_STORE_FAST": 4845654,
+    "op_STORE_FAST_STORE_FAST": 0,
+    "op_UNPACK_SEQUENCE": 0,
+    "total": 70923145
+   },
+   "ir": false,
+   "kernel": "/home/power/code/cpython/.worktrees/python-jit/pyjit/bench/internal/kernels/fannkuch.py",
+   "top": [
+    [
+     "LOAD_FAST_BORROW",
+     12232524
+    ],
+    [
+     "BINARY_OP",
+     10837519
+    ],
+    [
+     "LOAD_SMALL_INT",
+     9770129
+    ],
+    [
+     "LOAD_COMMON_CONSTANT",
+     5193736
+    ],
+    [
+     "LOAD_FAST_BORROW_LOAD_FAST_BORROW",
+     5095852
+    ],
+    [
+     "POP_JUMP_IF_FALSE",
+     4861834
+    ],
+    [
+     "STORE_FAST",
+     4845654
+    ],
+    [
+     "COMPARE_OP",
+     2843309
+    ],
+    [
+     "JUMP_BACKWARD",
+     2615425
+    ],
+    [
+     "TO_BOOL",
+     2018525
+    ],
+    [
+     "BUILD_SLICE",
+     1731245
+    ],
+    [
+     "STORE_SLICE",
+     1731245
+    ],
+    [
+     "CALL",
+     1247068
+    ],
+    [
+     "PUSH_NULL",
+     1247058
+    ],
+    [
+     "COPY",
+     1247058
+    ]
+   ]
+  }
+ },
+ "kernel raytrace": {
+  "ir": {
+   "counts": {
+    "call_pop_top": 534664,
+    "const_loads": 1878950,
+    "const_scalar": 1863573,
+    "fusable_compare_branch": 253766,
+    "load_fast_any": 1547981,
+    "load_fast_borrow_to_temp": 1496800,
+    "load_fast_to_temp": 1542596,
+    "not_taken": 704893,
+    "null_stores": 25746563,
+    "op_COPY": 0,
+    "op_PUSH_NULL": 136824,
+    "op_STORE_FAST": 471710,
+    "op_STORE_FAST_STORE_FAST": 0,
+    "op_UNPACK_SEQUENCE": 210291,
+    "slot_reads": 40801622,
+    "slot_writes": 24676051,
+    "total": 29606956
+   },
+   "ir": true,
+   "kernel": "/home/power/code/cpython/.worktrees/python-jit/pyjit/bench/internal/kernels/raytrace.py",
+   "top": [
+    [
+     "LOAD_ATTR",
+     8641032
+    ],
+    [
+     "BINARY_OP",
+     5639278
+    ],
+    [
+     "RETURN_VALUE",
+     2867044
+    ],
+    [
+     "CALL",
+     2794180
+    ],
+    [
+     "STORE_ATTR",
+     1601798
+    ],
+    [
+     "LOAD_FAST_BORROW",
+     1496800
+    ],
+    [
+     "LOAD_COMMON_CONSTANT",
+     1062813
+    ],
+    [
+     "LOAD_GLOBAL",
+     859444
+    ],
+    [
+     "LOAD_SMALL_INT",
+     675367
+    ],
+    [
+     "POP_TOP",
+     545525
+    ],
+    [
+     "POP_JUMP_IF_FALSE",
+     538013
+    ],
+    [
+     "STORE_FAST",
+     471710
+    ],
+    [
+     "FOR_ITER",
+     419623
+    ],
+    [
+     "JUMP_BACKWARD",
+     367657
+    ],
+    [
+     "COMPARE_OP",
+     253766
+    ]
+   ]
+  },
+  "upstream": {
+   "counts": {
+    "call_pop_top": 534664,
+    "const_loads": 1878950,
+    "const_scalar": 1863573,
+    "fusable_compare_branch": 253766,
+    "load_fast_any": 12601270,
+    "not_taken": 704893,
+    "op_COPY": 0,
+    "op_PUSH_NULL": 136824,
+    "op_STORE_FAST": 1125640,
+    "op_STORE_FAST_STORE_FAST": 225556,
+    "op_UNPACK_SEQUENCE": 210291,
+    "total": 41877624
+   },
+   "ir": false,
+   "kernel": "/home/power/code/cpython/.worktrees/python-jit/pyjit/bench/internal/kernels/raytrace.py",
+   "top": [
+    [
+     "LOAD_FAST_BORROW",
+     10096300
+    ],
+    [
+     "LOAD_ATTR",
+     8641032
+    ],
+    [
+     "BINARY_OP",
+     5639278
+    ],
+    [
+     "RETURN_VALUE",
+     2867044
+    ],
+    [
+     "CALL",
+     2794180
+    ],
+    [
+     "LOAD_FAST_BORROW_LOAD_FAST_BORROW",
+     2453789
+    ],
+    [
+     "STORE_ATTR",
+     1601798
+    ],
+    [
+     "STORE_FAST",
+     1125640
+    ],
+    [
+     "LOAD_COMMON_CONSTANT",
+     1062813
+    ],
+    [
+     "LOAD_GLOBAL",
+     859444
+    ],
+    [
+     "LOAD_SMALL_INT",
+     675367
+    ],
+    [
+     "POP_TOP",
+     545525
+    ],
+    [
+     "POP_JUMP_IF_FALSE",
+     538013
+    ],
+    [
+     "FOR_ITER",
+     419623
+    ],
+    [
+     "JUMP_BACKWARD",
+     367657
+    ]
+   ]
+  }
+ },
+ "kernel go": {
+  "ir": {
+   "counts": {
+    "call_pop_top": 320022,
+    "const_loads": 1112181,
+    "const_scalar": 1066652,
+    "fusable_compare_branch": 1329737,
+    "load_fast_any": 1633460,
+    "load_fast_borrow_to_temp": 1522554,
+    "load_fast_to_temp": 1632243,
+    "not_taken": 1028228,
+    "null_stores": 13972802,
+    "op_COPY": 126036,
+    "op_PUSH_NULL": 72313,
+    "op_STORE_FAST": 160689,
+    "op_STORE_FAST_STORE_FAST": 0,
+    "op_UNPACK_SEQUENCE": 648,
+    "slot_reads": 22701409,
+    "slot_writes": 15186057,
+    "total": 18762468
+   },
+   "ir": true,
+   "kernel": "/home/power/code/cpython/.worktrees/python-jit/pyjit/bench/internal/kernels/go.py",
+   "top": [
+    [
+     "LOAD_ATTR",
+     5284518
+    ],
+    [
+     "LOAD_FAST_BORROW",
+     1522554
+    ],
+    [
+     "POP_JUMP_IF_FALSE",
+     1457991
+    ],
+    [
+     "COMPARE_OP",
+     1329770
+    ],
+    [
+     "BINARY_OP",
+     1154800
+    ],
+    [
+     "CALL",
+     1141033
+    ],
+    [
+     "LOAD_GLOBAL",
+     952588
+    ],
+    [
+     "RETURN_VALUE",
+     921860
+    ],
+    [
+     "STORE_ATTR",
+     776489
+    ],
+    [
+     "LOAD_SMALL_INT",
+     630647
+    ],
+    [
+     "FOR_ITER",
+     545079
+    ],
+    [
+     "POP_JUMP_IF_TRUE",
+     485202
+    ],
+    [
+     "JUMP_BACKWARD",
+     455966
+    ],
+    [
+     "LOAD_COMMON_CONSTANT",
+     435317
+    ],
+    [
+     "POP_TOP",
+     376856
+    ]
+   ]
+  },
+  "upstream": {
+   "counts": {
+    "call_pop_top": 320022,
+    "const_loads": 1112181,
+    "const_scalar": 1066652,
+    "fusable_compare_branch": 1329737,
+    "load_fast_any": 7741975,
+    "not_taken": 1028228,
+    "op_COPY": 621926,
+    "op_PUSH_NULL": 72313,
+    "op_STORE_FAST": 2181871,
+    "op_STORE_FAST_STORE_FAST": 32920,
+    "op_UNPACK_SEQUENCE": 648,
+    "total": 28667983
+   },
+   "ir": false,
+   "kernel": "/home/power/code/cpython/.worktrees/python-jit/pyjit/bench/internal/kernels/go.py",
+   "top": [
+    [
+     "LOAD_FAST_BORROW",
+     7011467
+    ],
+    [
+     "LOAD_ATTR",
+     5284518
+    ],
+    [
+     "STORE_FAST",
+     2181871
+    ],
+    [
+     "POP_JUMP_IF_FALSE",
+     1514875
+    ],
+    [
+     "COMPARE_OP",
+     1329770
+    ],
+    [
+     "BINARY_OP",
+     1154800
+    ],
+    [
+     "CALL",
+     1141033
+    ],
+    [
+     "LOAD_GLOBAL",
+     952588
+    ],
+    [
+     "RETURN_VALUE",
+     921860
+    ],
+    [
+     "STORE_ATTR",
+     776489
+    ],
+    [
+     "TO_BOOL",
+     773776
+    ],
+    [
+     "LOAD_SMALL_INT",
+     630647
+    ],
+    [
+     "COPY",
+     621926
+    ],
+    [
+     "LOAD_FAST_BORROW_LOAD_FAST_BORROW",
+     619602
+    ],
+    [
+     "POP_JUMP_IF_TRUE",
+     557179
+    ]
+   ]
+  }
+ },
+ "kernel nbody": {
+  "ir": {
+   "counts": {
+    "call_pop_top": 7,
+    "const_loads": 1700041,
+    "const_scalar": 1700041,
+    "load_fast_any": 3240065,
+    "load_fast_borrow_to_temp": 3200060,
+    "load_fast_to_temp": 3240065,
+    "null_stores": 19640893,
+    "op_COPY": 1500000,
+    "op_PUSH_NULL": 0,
+    "op_STORE_FAST": 2500278,
+    "op_STORE_FAST_STORE_FAST": 0,
+    "op_UNPACK_SEQUENCE": 1200131,
+    "slot_reads": 29081342,
+    "slot_writes": 23361268,
+    "total": 19300999
+   },
+   "ir": true,
+   "kernel": "/home/power/code/cpython/.worktrees/python-jit/pyjit/bench/internal/kernels/nbody.py",
+   "top": [
+    [
+     "BINARY_OP",
+     6900354
+    ],
+    [
+     "LOAD_FAST_BORROW",
+     3200060
+    ],
+    [
+     "STORE_FAST",
+     2500278
+    ],
+    [
+     "LOAD_SMALL_INT",
+     1500006
+    ],
+    [
+     "STORE_SUBSCR",
+     1500003
+    ],
+    [
+     "COPY",
+     1500000
+    ],
+    [
+     "UNPACK_SEQUENCE",
+     1200131
+    ],
+    [
+     "FOR_ITER",
+     360043
+    ],
+    [
+     "JUMP_BACKWARD",
+     320036
+    ],
+    [
+     "LOAD_CONST",
+     200031
+    ],
+    [
+     "GET_ITER",
+     40007
+    ],
+    [
+     "POP_ITER",
+     40007
+    ],
+    [
+     "LOAD_FAST",
+     40005
+    ],
+    [
+     "LOAD_GLOBAL",
+     10
+    ],
+    [
+     "CALL",
+     9
+    ]
+   ]
+  },
+  "upstream": {
+   "counts": {
+    "call_pop_top": 7,
+    "const_loads": 1700041,
+    "const_scalar": 1700041,
+    "load_fast_any": 7140291,
+    "op_COPY": 3000000,
+    "op_PUSH_NULL": 0,
+    "op_STORE_FAST": 2120202,
+    "op_STORE_FAST_STORE_FAST": 800091,
+    "op_UNPACK_SEQUENCE": 1200131,
+    "total": 28581241
+   },
+   "ir": false,
+   "kernel": "/home/power/code/cpython/.worktrees/python-jit/pyjit/bench/internal/kernels/nbody.py",
+   "top": [
+    [
+     "BINARY_OP",
+     6900354
+    ],
+    [
+     "LOAD_FAST_BORROW",
+     6300128
+    ],
+    [
+     "COPY",
+     3000000
+    ],
+    [
+     "SWAP",
+     3000000
+    ],
+    [
+     "STORE_FAST",
+     2120202
+    ],
+    [
+     "LOAD_SMALL_INT",
+     1500006
+    ],
+    [
+     "STORE_SUBSCR",
+     1500003
+    ],
+    [
+     "UNPACK_SEQUENCE",
+     1200131
+    ],
+    [
+     "LOAD_FAST_BORROW_LOAD_FAST_BORROW",
+     800158
+    ],
+    [
+     "STORE_FAST_STORE_FAST",
+     800091
+    ],
+    [
+     "EXTENDED_ARG",
+     460001
+    ],
+    [
+     "FOR_ITER",
+     360043
+    ],
+    [
+     "JUMP_BACKWARD",
+     320036
+    ],
+    [
+     "LOAD_CONST",
+     200031
+    ],
+    [
+     "GET_ITER",
+     40007
+    ]
+   ]
+  }
+ },
+ "kernel spectral_norm": {
+  "ir": {
+   "counts": {
+    "call_pop_top": 3,
+    "const_loads": 2709208,
+    "const_scalar": 2709208,
+    "load_fast_any": 2054385,
+    "load_fast_borrow_to_temp": 2054343,
+    "load_fast_to_temp": 2054385,
+    "null_stores": 16340758,
+    "op_COPY": 1,
+    "op_PUSH_NULL": 5200,
+    "op_STORE_FAST": 1362702,
+    "op_STORE_FAST_STORE_FAST": 0,
+    "op_UNPACK_SEQUENCE": 681330,
+    "slot_reads": 22456865,
+    "slot_writes": 17708807,
+    "total": 17011597
+   },
+   "ir": true,
+   "kernel": "/home/power/code/cpython/.worktrees/python-jit/pyjit/bench/internal/kernels/spectral_norm.py",
+   "top": [
+    [
+     "BINARY_OP",
+     6760521
+    ],
+    [
+     "LOAD_FAST_BORROW",
+     2054343
+    ],
+    [
+     "LOAD_SMALL_INT",
+     2033206
+    ],
+    [
+     "STORE_FAST",
+     1362702
+    ],
+    [
+     "CALL",
+     686586
+    ],
+    [
+     "FOR_ITER",
+     686584
+    ],
+    [
+     "LOAD_GLOBAL",
+     681425
+    ],
+    [
+     "JUMP_BACKWARD",
+     681341
+    ],
+    [
+     "UNPACK_SEQUENCE",
+     681330
+    ],
+    [
+     "RETURN_VALUE",
+     681262
+    ],
+    [
+     "LOAD_CONST",
+     676000
+    ],
+    [
+     "GET_ITER",
+     5243
+    ],
+    [
+     "POP_ITER",
+     5243
+    ],
+    [
+     "PUSH_NULL",
+     5200
+    ],
+    [
+     "BUILD_TUPLE",
+     5200
+    ]
+   ]
+  },
+  "upstream": {
+   "counts": {
+    "call_pop_top": 3,
+    "const_loads": 2709208,
+    "const_scalar": 2709208,
+    "load_fast_any": 4082647,
+    "op_COPY": 1,
+    "op_PUSH_NULL": 5200,
+    "op_STORE_FAST": 686733,
+    "op_STORE_FAST_STORE_FAST": 681331,
+    "op_UNPACK_SEQUENCE": 681330,
+    "total": 19045221
+   },
+   "ir": false,
+   "kernel": "/home/power/code/cpython/.worktrees/python-jit/pyjit/bench/internal/kernels/spectral_norm.py",
+   "top": [
+    [
+     "BINARY_OP",
+     6760521
+    ],
+    [
+     "LOAD_FAST_BORROW",
+     2049145
+    ],
+    [
+     "LOAD_FAST_BORROW_LOAD_FAST_BORROW",
+     2033460
+    ],
+    [
+     "LOAD_SMALL_INT",
+     2033206
+    ],
+    [
+     "STORE_FAST",
+     686733
+    ],
+    [
+     "CALL",
+     686586
+    ],
+    [
+     "FOR_ITER",
+     686584
+    ],
+    [
+     "LOAD_GLOBAL",
+     681425
+    ],
+    [
+     "JUMP_BACKWARD",
+     681341
+    ],
+    [
+     "STORE_FAST_STORE_FAST",
+     681331
+    ],
+    [
+     "UNPACK_SEQUENCE",
+     681330
+    ],
+    [
+     "RETURN_VALUE",
+     681262
+    ],
+    [
+     "LOAD_CONST",
+     676000
+    ],
+    [
+     "GET_ITER",
+     5243
+    ],
+    [
+     "POP_ITER",
+     5243
+    ]
+   ]
+  }
+ },
+ "kernel nqueens": {
+  "ir": {
+   "counts": {
+    "call_pop_top": 4,
+    "const_loads": 784916,
+    "const_scalar": 619410,
+    "fusable_compare_branch": 234786,
+    "load_fast_any": 713514,
+    "load_fast_borrow_to_temp": 673193,
+    "load_fast_to_temp": 713513,
+    "not_taken": 196489,
+    "null_stores": 12695457,
+    "op_COPY": 123073,
+    "op_PUSH_NULL": 82753,
+    "op_STORE_FAST": 0,
+    "op_STORE_FAST_STORE_FAST": 0,
+    "op_UNPACK_SEQUENCE": 0,
+    "slot_reads": 16549063,
+    "slot_writes": 13344000,
+    "total": 11850310
+   },
+   "ir": true,
+   "kernel": "/home/power/code/cpython/.worktrees/python-jit/pyjit/bench/internal/kernels/nqueens.py",
+   "top": [
+    [
+     "BINARY_OP",
+     1728373
+    ],
+    [
+     "FOR_ITER",
+     1639478
+    ],
+    [
+     "JUMP_BACKWARD",
+     1473969
+    ],
+    [
+     "POP_TOP",
+     904038
+    ],
+    [
+     "YIELD_VALUE",
+     702436
+    ],
+    [
+     "LOAD_FAST_BORROW",
+     673193
+    ],
+    [
+     "LOAD_DEREF",
+     662117
+    ],
+    [
+     "LOAD_SMALL_INT",
+     357768
+    ],
+    [
+     "LOAD_COMMON_CONSTANT",
+     344395
+    ],
+    [
+     "SET_ADD",
+     339464
+    ],
+    [
+     "LIST_APPEND",
+     322560
+    ],
+    [
+     "POP_JUMP_IF_FALSE",
+     272993
+    ],
+    [
+     "STORE_SUBSCR",
+     259519
+    ],
+    [
+     "CALL",
+     205840
+    ],
+    [
+     "LOAD_GLOBAL",
+     205838
+    ]
+   ]
+  },
+  "upstream": {
+   "counts": {
+    "call_pop_top": 4,
+    "const_loads": 784916,
+    "const_scalar": 619410,
+    "fusable_compare_branch": 234786,
+    "load_fast_any": 2164767,
+    "not_taken": 196489,
+    "op_COPY": 342273,
+    "op_PUSH_NULL": 82753,
+    "op_STORE_FAST": 811949,
+    "op_STORE_FAST_STORE_FAST": 0,
+    "op_UNPACK_SEQUENCE": 0,
+    "total": 14592232
+   },
+   "ir": false,
+   "kernel": "/home/power/code/cpython/.worktrees/python-jit/pyjit/bench/internal/kernels/nqueens.py",
+   "top": [
+    [
+     "BINARY_OP",
+     1728373
+    ],
+    [
+     "FOR_ITER",
+     1639478
+    ],
+    [
+     "JUMP_BACKWARD",
+     1473969
+    ],
+    [
+     "LOAD_FAST_BORROW",
+     1357245
+    ],
+    [
+     "POP_TOP",
+     904038
+    ],
+    [
+     "STORE_FAST",
+     811949
+    ],
+    [
+     "LOAD_FAST_BORROW_LOAD_FAST_BORROW",
+     767201
+    ],
+    [
+     "YIELD_VALUE",
+     702436
+    ],
+    [
+     "LOAD_DEREF",
+     662117
+    ],
+    [
+     "LOAD_SMALL_INT",
+     357768
+    ],
+    [
+     "LOAD_COMMON_CONSTANT",
+     344395
+    ],
+    [
+     "COPY",
+     342273
+    ],
+    [
+     "SET_ADD",
+     339464
+    ],
+    [
+     "LIST_APPEND",
+     322560
+    ],
+    [
+     "SWAP",
+     299839
+    ]
+   ]
+  }
+ },
+ "kernel float": {
+  "ir": {
+   "counts": {
+    "call_pop_top": 100003,
+    "const_loads": 400007,
+    "const_scalar": 400006,
+    "fusable_compare_branch": 299997,
+    "load_fast_any": 700003,
+    "load_fast_borrow_to_temp": 700002,
+    "load_fast_to_temp": 700003,
+    "not_taken": 299765,
+    "null_stores": 6100033,
+    "op_COPY": 100000,
+    "op_PUSH_NULL": 0,
+    "op_STORE_FAST": 100000,
+    "op_STORE_FAST_STORE_FAST": 0,
+    "op_UNPACK_SEQUENCE": 0,
+    "slot_reads": 10500028,
+    "slot_writes": 6400029,
+    "total": 7899942
+   },
+   "ir": true,
+   "kernel": "/home/power/code/cpython/.worktrees/python-jit/pyjit/bench/internal/kernels/float.py",
+   "top": [
+    [
+     "LOAD_ATTR",
+     1699992
+    ],
+    [
+     "BINARY_OP",
+     1100003
+    ],
+    [
+     "STORE_ATTR",
+     899997
+    ],
+    [
+     "LOAD_FAST_BORROW",
+     700002
+    ],
+    [
+     "CALL",
+     600005
+    ],
+    [
+     "LOAD_GLOBAL",
+     400005
+    ],
+    [
+     "FOR_ITER",
+     300004
+    ],
+    [
+     "RETURN_VALUE",
+     300002
+    ],
+    [
+     "JUMP_BACKWARD",
+     300000
+    ],
+    [
+     "COMPARE_OP",
+     299997
+    ],
+    [
+     "POP_JUMP_IF_FALSE",
+     299997
+    ],
+    [
+     "LOAD_SMALL_INT",
+     200004
+    ],
+    [
+     "LOAD_COMMON_CONSTANT",
+     200002
+    ],
+    [
+     "JUMP_FORWARD",
+     199918
+    ],
+    [
+     "POP_TOP",
+     100003
+    ]
+   ]
+  },
+  "upstream": {
+   "counts": {
+    "call_pop_top": 100003,
+    "const_loads": 400007,
+    "const_scalar": 400006,
+    "fusable_compare_branch": 299997,
+    "load_fast_any": 3599995,
+    "not_taken": 299765,
+    "op_COPY": 400000,
+    "op_PUSH_NULL": 0,
+    "op_STORE_FAST": 900001,
+    "op_STORE_FAST_STORE_FAST": 0,
+    "op_UNPACK_SEQUENCE": 0,
+    "total": 12199935
+   },
+   "ir": false,
+   "kernel": "/home/power/code/cpython/.worktrees/python-jit/pyjit/bench/internal/kernels/float.py",
+   "top": [
+    [
+     "LOAD_FAST_BORROW",
+     3099994
+    ],
+    [
+     "LOAD_ATTR",
+     1699992
+    ],
+    [
+     "BINARY_OP",
+     1100003
+    ],
+    [
+     "STORE_FAST",
+     900001
+    ],
+    [
+     "STORE_ATTR",
+     899997
+    ],
+    [
+     "CALL",
+     600005
+    ],
+    [
+     "LOAD_FAST_BORROW_LOAD_FAST_BORROW",
+     500000
+    ],
+    [
+     "LOAD_GLOBAL",
+     400005
+    ],
+    [
+     "COPY",
+     400000
+    ],
+    [
+     "FOR_ITER",
+     300004
+    ],
+    [
+     "RETURN_VALUE",
+     300002
+    ],
+    [
+     "JUMP_BACKWARD",
+     300000
+    ],
+    [
+     "SWAP",
+     300000
+    ],
+    [
+     "COMPARE_OP",
+     299997
+    ],
+    [
+     "POP_JUMP_IF_FALSE",
+     299997
+    ]
+   ]
+  }
+ },
+ "kernel chaos": {
+  "ir": {
+   "counts": {
+    "call_pop_top": 5005,
+    "const_loads": 617498,
+    "const_scalar": 617498,
+    "fusable_compare_branch": 166514,
+    "load_fast_any": 665224,
+    "load_fast_borrow_to_temp": 645223,
+    "load_fast_to_temp": 655224,
+    "not_taken": 65744,
+    "null_stores": 6496975,
+    "op_COPY": 0,
+    "op_PUSH_NULL": 35001,
+    "op_STORE_FAST": 30002,
+    "op_STORE_FAST_STORE_FAST": 0,
+    "op_UNPACK_SEQUENCE": 5000,
+    "slot_reads": 10773245,
+    "slot_writes": 6856766,
+    "total": 7321871
+   },
+   "ir": true,
+   "kernel": "/home/power/code/cpython/.worktrees/python-jit/pyjit/bench/internal/kernels/chaos.py",
+   "top": [
+    [
+     "BINARY_OP",
+     2496468
+    ],
+    [
+     "LOAD_ATTR",
+     1261768
+    ],
+    [
+     "LOAD_FAST_BORROW",
+     645223
+    ],
+    [
+     "LOAD_SMALL_INT",
+     517398
+    ],
+    [
+     "CALL",
+     400135
+    ],
+    [
+     "LOAD_GLOBAL",
+     245115
+    ],
+    [
+     "RETURN_VALUE",
+     240004
+    ],
+    [
+     "STORE_ATTR",
+     220066
+    ],
+    [
+     "FOR_ITER",
+     211094
+    ],
+    [
+     "COMPARE_OP",
+     156514
+    ],
+    [
+     "JUMP_BACKWARD",
+     151121
+    ],
+    [
+     "POP_JUMP_IF_FALSE",
+     122440
+    ],
+    [
+     "LOAD_COMMON_CONSTANT",
+     80100
+    ],
+    [
+     "POP_JUMP_IF_NOT_NONE",
+     75000
+    ],
+    [
+     "GET_ITER",
+     65003
+    ]
+   ]
+  },
+  "upstream": {
+   "counts": {
+    "call_pop_top": 5005,
+    "const_loads": 617498,
+    "const_scalar": 617498,
+    "fusable_compare_branch": 166514,
+    "load_fast_any": 3165958,
+    "not_taken": 65744,
+    "op_COPY": 10000,
+    "op_PUSH_NULL": 35001,
+    "op_STORE_FAST": 699828,
+    "op_STORE_FAST_STORE_FAST": 15001,
+    "op_UNPACK_SEQUENCE": 5000,
+    "total": 10532435
+   },
+   "ir": false,
+   "kernel": "/home/power/code/cpython/.worktrees/python-jit/pyjit/bench/internal/kernels/chaos.py",
+   "top": [
+    [
+     "BINARY_OP",
+     2496468
+    ],
+    [
+     "LOAD_FAST_BORROW",
+     2045646
+    ],
+    [
+     "LOAD_ATTR",
+     1261768
+    ],
+    [
+     "LOAD_FAST_BORROW_LOAD_FAST_BORROW",
+     1100311
+    ],
+    [
+     "STORE_FAST",
+     699828
+    ],
+    [
+     "LOAD_SMALL_INT",
+     517398
+    ],
+    [
+     "CALL",
+     400135
+    ],
+    [
+     "LOAD_GLOBAL",
+     245115
+    ],
+    [
+     "RETURN_VALUE",
+     240004
+    ],
+    [
+     "STORE_ATTR",
+     220066
+    ],
+    [
+     "FOR_ITER",
+     211094
+    ],
+    [
+     "COMPARE_OP",
+     156514
+    ],
+    [
+     "JUMP_BACKWARD",
+     151121
+    ],
+    [
+     "POP_JUMP_IF_FALSE",
+     122440
+    ],
+    [
+     "LOAD_COMMON_CONSTANT",
+     80100
+    ]
+   ]
+  }
+ },
+ "kernel richards": {
+  "ir": {
+   "counts": {
+    "call_pop_top": 43380,
+    "const_loads": 349806,
+    "const_scalar": 349806,
+    "fusable_compare_branch": 88331,
+    "load_fast_any": 343884,
+    "load_fast_borrow_to_temp": 267627,
+    "load_fast_to_temp": 267627,
+    "not_taken": 513653,
+    "null_stores": 3845962,
+    "op_COPY": 32543,
+    "op_PUSH_NULL": 0,
+    "op_STORE_FAST": 2327,
+    "op_STORE_FAST_STORE_FAST": 0,
+    "op_UNPACK_SEQUENCE": 0,
+    "slot_reads": 6442146,
+    "slot_writes": 3941596,
+    "total": 5789061
+   },
+   "ir": true,
+   "kernel": "/home/power/code/cpython/.worktrees/python-jit/pyjit/bench/internal/kernels/richards.py",
+   "top": [
+    [
+     "LOAD_ATTR",
+     1484211
+    ],
+    [
+     "CALL",
+     547105
+    ],
+    [
+     "RETURN_VALUE",
+     481311
+    ],
+    [
+     "POP_JUMP_IF_FALSE",
+     442427
+    ],
+    [
+     "LOAD_GLOBAL",
+     437377
+    ],
+    [
+     "STORE_ATTR",
+     371567
+    ],
+    [
+     "LOAD_FAST_BORROW",
+     267627
+    ],
+    [
+     "LOAD_COMMON_CONSTANT",
+     222329
+    ],
+    [
+     "JUMP_IF_FALSE_OR_POP",
+     207999
+    ],
+    [
+     "POP_JUMP_IF_NOT_NONE",
+     192218
+    ],
+    [
+     "BINARY_OP",
+     147310
+    ],
+    [
+     "POP_JUMP_IF_NONE",
+     140330
+    ],
+    [
+     "UNARY_NOT",
+     124296
+    ],
+    [
+     "LOAD_SMALL_INT",
+     122476
+    ],
+    [
+     "JUMP_BACKWARD",
+     116260
+    ]
+   ]
+  },
+  "upstream": {
+   "counts": {
+    "call_pop_top": 43380,
+    "const_loads": 349806,
+    "const_scalar": 349806,
+    "fusable_compare_branch": 88331,
+    "load_fast_any": 2443932,
+    "not_taken": 513653,
+    "op_COPY": 371467,
+    "op_PUSH_NULL": 0,
+    "op_STORE_FAST": 417397,
+    "op_STORE_FAST_STORE_FAST": 0,
+    "op_UNPACK_SEQUENCE": 0,
+    "total": 9784097
+   },
+   "ir": false,
+   "kernel": "/home/power/code/cpython/.worktrees/python-jit/pyjit/bench/internal/kernels/richards.py",
+   "top": [
+    [
+     "LOAD_FAST_BORROW",
+     2239738
+    ],
+    [
+     "LOAD_ATTR",
+     1484211
+    ],
+    [
+     "TO_BOOL",
+     858791
+    ],
+    [
+     "POP_JUMP_IF_FALSE",
+     650426
+    ],
+    [
+     "CALL",
+     547105
+    ],
+    [
+     "RETURN_VALUE",
+     481311
+    ],
+    [
+     "LOAD_GLOBAL",
+     437377
+    ],
+    [
+     "STORE_FAST",
+     417397
+    ],
+    [
+     "STORE_ATTR",
+     371567
+    ],
+    [
+     "COPY",
+     371467
+    ],
+    [
+     "POP_TOP",
+     268722
+    ],
+    [
+     "LOAD_COMMON_CONSTANT",
+     222329
+    ],
+    [
+     "POP_JUMP_IF_NOT_NONE",
+     192218
+    ],
+    [
+     "POP_JUMP_IF_TRUE",
+     172400
+    ],
+    [
+     "BINARY_OP",
+     147310
+    ]
+   ]
+  }
+ },
+ "kernel generators": {
+  "ir": {
+   "counts": {
+    "call_pop_top": 3,
+    "const_loads": 200004,
+    "const_scalar": 200004,
+    "load_fast_any": 4,
+    "load_fast_borrow_to_temp": 2,
+    "load_fast_to_temp": 4,
+    "not_taken": 99999,
+    "null_stores": 7375807,
+    "op_COPY": 0,
+    "op_PUSH_NULL": 0,
+    "op_STORE_FAST": 0,
+    "op_STORE_FAST_STORE_FAST": 0,
+    "op_UNPACK_SEQUENCE": 0,
+    "slot_reads": 7775812,
+    "slot_writes": 7375806,
+    "total": 6106863
+   },
+   "ir": true,
+   "kernel": "/home/power/code/cpython/.worktrees/python-jit/pyjit/bench/internal/kernels/generators.py",
+   "top": [
+    [
+     "YIELD_VALUE",
+     1568946
+    ],
+    [
+     "SEND",
+     1568945
+    ],
+    [
+     "JUMP_BACKWARD_NO_INTERRUPT",
+     1468946
+    ],
+    [
+     "LOAD_ATTR",
+     400001
+    ],
+    [
+     "POP_TOP",
+     200002
+    ],
+    [
+     "LOAD_COMMON_CONSTANT",
+     200001
+    ],
+    [
+     "POP_JUMP_IF_FALSE",
+     200000
+    ],
+    [
+     "FOR_ITER",
+     100003
+    ],
+    [
+     "RETURN_VALUE",
+     100002
+    ],
+    [
+     "GET_ITER",
+     100001
+    ],
+    [
+     "JUMP_BACKWARD",
+     100001
+    ],
+    [
+     "END_SEND",
+     99999
+    ],
+    [
+     "CALL",
+     4
+    ],
+    [
+     "LOAD_SMALL_INT",
+     3
+    ],
+    [
+     "LOAD_GLOBAL",
+     3
+    ]
+   ]
+  },
+  "upstream": {
+   "counts": {
+    "call_pop_top": 3,
+    "const_loads": 200004,
+    "const_scalar": 200004,
+    "load_fast_any": 400005,
+    "not_taken": 99999,
+    "op_COPY": 0,
+    "op_PUSH_NULL": 0,
+    "op_STORE_FAST": 100002,
+    "op_STORE_FAST_STORE_FAST": 0,
+    "op_UNPACK_SEQUENCE": 0,
+    "total": 6806866
+   },
+   "ir": false,
+   "kernel": "/home/power/code/cpython/.worktrees/python-jit/pyjit/bench/internal/kernels/generators.py",
+   "top": [
+    [
+     "YIELD_VALUE",
+     1568946
+    ],
+    [
+     "SEND",
+     1568945
+    ],
+    [
+     "JUMP_BACKWARD_NO_INTERRUPT",
+     1468946
+    ],
+    [
+     "LOAD_FAST_BORROW",
+     400003
+    ],
+    [
+     "LOAD_ATTR",
+     400001
+    ],
+    [
+     "POP_TOP",
+     200002
+    ],
+    [
+     "LOAD_COMMON_CONSTANT",
+     200001
+    ],
+    [
+     "TO_BOOL",
+     200000
+    ],
+    [
+     "POP_JUMP_IF_FALSE",
+     200000
+    ],
+    [
+     "FOR_ITER",
+     100003
+    ],
+    [
+     "STORE_FAST",
+     100002
+    ],
+    [
+     "RETURN_VALUE",
+     100002
+    ],
+    [
+     "GET_ITER",
+     100001
+    ],
+    [
+     "JUMP_BACKWARD",
+     100001
+    ],
+    [
+     "END_SEND",
+     99999
+    ]
+   ]
+  }
+ },
+ "kernel coroutines": {
+  "ir": {
+   "counts": {
+    "call_pop_top": 4,
+    "const_loads": 728360,
+    "const_scalar": 728360,
+    "fusable_compare_branch": 242785,
+    "load_fast_any": 3,
+    "load_fast_borrow_to_temp": 2,
+    "load_fast_to_temp": 3,
+    "not_taken": 121394,
+    "null_stores": 3520407,
+    "op_COPY": 0,
+    "op_PUSH_NULL": 242784,
+    "op_STORE_FAST": 0,
+    "op_STORE_FAST_STORE_FAST": 0,
+    "op_UNPACK_SEQUENCE": 0,
+    "slot_reads": 4127375,
+    "slot_writes": 3277619,
+    "total": 3277628
+   },
+   "ir": true,
+   "kernel": "/home/power/code/cpython/.worktrees/python-jit/pyjit/bench/internal/kernels/coroutines.py",
+   "top": [
+    [
+     "LOAD_SMALL_INT",
+     485573
+    ],
+    [
+     "BINARY_OP",
+     364176
+    ],
+    [
+     "CALL",
+     242790
+    ],
+    [
+     "LOAD_GLOBAL",
+     242788
+    ],
+    [
+     "LOAD_COMMON_CONSTANT",
+     242787
+    ],
+    [
+     "RETURN_VALUE",
+     242787
+    ],
+    [
+     "POP_JUMP_IF_FALSE",
+     242786
+    ],
+    [
+     "COMPARE_OP",
+     242785
+    ],
+    [
+     "GET_AWAITABLE",
+     242784
+    ],
+    [
+     "PUSH_NULL",
+     242784
+    ],
+    [
+     "SEND",
+     242784
+    ],
+    [
+     "END_SEND",
+     242784
+    ],
+    [
+     "POP_TOP",
+     4
+    ],
+    [
+     "LOAD_ATTR",
+     3
+    ],
+    [
+     "LOAD_FAST_BORROW",
+     2
+    ]
+   ]
+  },
+  "upstream": {
+   "counts": {
+    "call_pop_top": 4,
+    "const_loads": 728360,
+    "const_scalar": 728360,
+    "fusable_compare_branch": 242785,
+    "load_fast_any": 606968,
+    "not_taken": 121394,
+    "op_COPY": 0,
+    "op_PUSH_NULL": 242784,
+    "op_STORE_FAST": 3,
+    "op_STORE_FAST_STORE_FAST": 0,
+    "op_UNPACK_SEQUENCE": 0,
+    "total": 3884596
+   },
+   "ir": false,
+   "kernel": "/home/power/code/cpython/.worktrees/python-jit/pyjit/bench/internal/kernels/coroutines.py",
+   "top": [
+    [
+     "LOAD_FAST_BORROW",
+     606967
+    ],
+    [
+     "LOAD_SMALL_INT",
+     485573
+    ],
+    [
+     "BINARY_OP",
+     364176
+    ],
+    [
+     "CALL",
+     242790
+    ],
+    [
+     "LOAD_GLOBAL",
+     242788
+    ],
+    [
+     "LOAD_COMMON_CONSTANT",
+     242787
+    ],
+    [
+     "RETURN_VALUE",
+     242787
+    ],
+    [
+     "POP_JUMP_IF_FALSE",
+     242786
+    ],
+    [
+     "COMPARE_OP",
+     242785
+    ],
+    [
+     "GET_AWAITABLE",
+     242784
+    ],
+    [
+     "PUSH_NULL",
+     242784
+    ],
+    [
+     "SEND",
+     242784
+    ],
+    [
+     "END_SEND",
+     242784
+    ],
+    [
+     "POP_TOP",
+     4
+    ],
+    [
+     "LOAD_ATTR",
+     3
+    ]
+   ]
+  }
+ },
+ "kernel deltablue": {
+  "ir": {
+   "counts": {
+    "call_pop_top": 21984,
+    "const_loads": 23597,
+    "const_scalar": 23294,
+    "fusable_compare_branch": 32521,
+    "load_fast_any": 16317,
+    "load_fast_borrow_to_temp": 15184,
+    "load_fast_to_temp": 16209,
+    "not_taken": 33783,
+    "null_stores": 458893,
+    "op_COPY": 0,
+    "op_PUSH_NULL": 0,
+    "op_STORE_FAST": 2,
+    "op_STORE_FAST_STORE_FAST": 0,
+    "op_UNPACK_SEQUENCE": 0,
+    "slot_reads": 628013,
+    "slot_writes": 426678,
+    "total": 545927
+   },
+   "ir": true,
+   "kernel": "/home/power/code/cpython/.worktrees/python-jit/pyjit/bench/internal/kernels/deltablue.py",
+   "top": [
+    [
+     "LOAD_ATTR",
+     189904
+    ],
+    [
+     "CALL",
+     58188
+    ],
+    [
+     "RETURN_VALUE",
+     51422
+    ],
+    [
+     "LOAD_GLOBAL",
+     39980
+    ],
+    [
+     "COMPARE_OP",
+     36451
+    ],
+    [
+     "POP_JUMP_IF_FALSE",
+     34759
+    ],
+    [
+     "POP_TOP",
+     21984
+    ],
+    [
+     "STORE_ATTR",
+     21506
+    ],
+    [
+     "LOAD_COMMON_CONSTANT",
+     20916
+    ],
+    [
+     "FOR_ITER",
+     16840
+    ],
+    [
+     "JUMP_BACKWARD",
+     16682
+    ],
+    [
+     "LOAD_FAST_BORROW",
+     15184
+    ],
+    [
+     "BINARY_OP",
+     5857
+    ],
+    [
+     "POP_JUMP_IF_TRUE",
+     4995
+    ],
+    [
+     "LOAD_SMALL_INT",
+     2176
+    ]
+   ]
+  },
+  "upstream": {
+   "counts": {
+    "call_pop_top": 21984,
+    "const_loads": 23597,
+    "const_scalar": 23294,
+    "fusable_compare_branch": 32521,
+    "load_fast_any": 160870,
+    "not_taken": 33783,
+    "op_COPY": 1819,
+    "op_PUSH_NULL": 0,
+    "op_STORE_FAST": 23538,
+    "op_STORE_FAST_STORE_FAST": 1,
+    "op_UNPACK_SEQUENCE": 0,
+    "total": 726098
+   },
+   "ir": false,
+   "kernel": "/home/power/code/cpython/.worktrees/python-jit/pyjit/bench/internal/kernels/deltablue.py",
+   "top": [
+    [
+     "LOAD_ATTR",
+     189904
+    ],
+    [
+     "LOAD_FAST_BORROW",
+     151798
+    ],
+    [
+     "CALL",
+     58188
+    ],
+    [
+     "RETURN_VALUE",
+     51422
+    ],
+    [
+     "LOAD_GLOBAL",
+     39980
+    ],
+    [
+     "COMPARE_OP",
+     36451
+    ],
+    [
+     "POP_JUMP_IF_FALSE",
+     35765
+    ],
+    [
+     "STORE_FAST",
+     23538
+    ],
+    [
+     "POP_TOP",
+     23088
+    ],
+    [
+     "STORE_ATTR",
+     21506
+    ],
+    [
+     "LOAD_COMMON_CONSTANT",
+     20916
+    ],
+    [
+     "FOR_ITER",
+     16840
+    ],
+    [
+     "JUMP_BACKWARD",
+     16682
+    ],
+    [
+     "TO_BOOL",
+     8847
+    ],
+    [
+     "LOAD_FAST_BORROW_LOAD_FAST_BORROW",
+     7939
+    ]
+   ]
+  }
+ },
+ "kernel unpack_sequence": {
+  "ir": {
+   "counts": {
+    "call_pop_top": 5,
+    "const_loads": 9,
+    "const_scalar": 9,
+    "load_fast_any": 811,
+    "load_fast_borrow_to_temp": 809,
+    "load_fast_to_temp": 811,
+    "null_stores": 8867,
+    "op_COPY": 0,
+    "op_PUSH_NULL": 0,
+    "op_STORE_FAST": 8000,
+    "op_STORE_FAST_STORE_FAST": 0,
+    "op_UNPACK_SEQUENCE": 800,
+    "slot_reads": 9680,
+    "slot_writes": 16860,
+    "total": 9667
+   },
+   "ir": true,
+   "kernel": "/home/power/code/cpython/.worktrees/python-jit/pyjit/bench/internal/kernels/unpack_sequence.py",
+   "top": [
+    [
+     "STORE_FAST",
+     8000
+    ],
+    [
+     "LOAD_FAST_BORROW",
+     809
+    ],
+    [
+     "UNPACK_SEQUENCE",
+     800
+    ],
+    [
+     "CALL",
+     13
+    ],
+    [
+     "LOAD_GLOBAL",
+     11
+    ],
+    [
+     "RETURN_VALUE",
+     6
+    ],
+    [
+     "POP_TOP",
+     5
+    ],
+    [
+     "LOAD_SMALL_INT",
+     5
+    ],
+    [
+     "FOR_ITER",
+     4
+    ],
+    [
+     "LOAD_COMMON_CONSTANT",
+     4
+    ],
+    [
+     "LOAD_ATTR",
+     2
+    ],
+    [
+     "LOAD_FAST",
+     2
+    ],
+    [
+     "GET_ITER",
+     2
+    ],
+    [
+     "JUMP_BACKWARD",
+     2
+    ],
+    [
+     "POP_ITER",
+     2
+    ]
+   ]
+  },
+  "upstream": {
+   "counts": {
+    "call_pop_top": 5,
+    "const_loads": 9,
+    "const_scalar": 9,
+    "load_fast_any": 811,
+    "op_COPY": 0,
+    "op_PUSH_NULL": 0,
+    "op_STORE_FAST": 6,
+    "op_STORE_FAST_STORE_FAST": 4000,
+    "op_UNPACK_SEQUENCE": 800,
+    "total": 5679
+   },
+   "ir": false,
+   "kernel": "/home/power/code/cpython/.worktrees/python-jit/pyjit/bench/internal/kernels/unpack_sequence.py",
+   "top": [
+    [
+     "STORE_FAST_STORE_FAST",
+     4000
+    ],
+    [
+     "LOAD_FAST_BORROW",
+     807
+    ],
+    [
+     "UNPACK_SEQUENCE",
+     800
+    ],
+    [
+     "CALL",
+     13
+    ],
+    [
+     "LOAD_GLOBAL",
+     11
+    ],
+    [
+     "STORE_FAST",
+     6
+    ],
+    [
+     "EXTENDED_ARG",
+     6
+    ],
+    [
+     "RETURN_VALUE",
+     6
+    ],
+    [
+     "POP_TOP",
+     5
+    ],
+    [
+     "LOAD_SMALL_INT",
+     5
+    ],
+    [
+     "FOR_ITER",
+     4
+    ],
+    [
+     "LOAD_COMMON_CONSTANT",
+     4
+    ],
+    [
+     "LOAD_ATTR",
+     2
+    ],
+    [
+     "LOAD_FAST_BORROW_LOAD_FAST_BORROW",
+     2
+    ],
+    [
+     "LOAD_FAST",
+     2
+    ]
+   ]
+  }
+ },
+ "kernel comprehensions": {
+  "ir": {
+   "counts": {
+    "call_pop_top": 5,
+    "const_loads": 82,
+    "const_scalar": 46,
+    "fusable_compare_branch": 19,
+    "load_fast_any": 273,
+    "load_fast_borrow_to_temp": 244,
+    "load_fast_to_temp": 273,
+    "not_taken": 73,
+    "null_stores": 2876,
+    "op_COPY": 18,
+    "op_PUSH_NULL": 18,
+    "op_STORE_FAST": 27,
+    "op_STORE_FAST_STORE_FAST": 0,
+    "op_UNPACK_SEQUENCE": 0,
+    "slot_reads": 3588,
+    "slot_writes": 3039,
+    "total": 2417
+   },
+   "ir": true,
+   "kernel": "/home/power/code/cpython/.worktrees/python-jit/pyjit/bench/internal/kernels/comprehensions.py",
+   "top": [
+    [
+     "LOAD_ATTR",
+     388
+    ],
+    [
+     "FOR_ITER",
+     313
+    ],
+    [
+     "JUMP_BACKWARD",
+     253
+    ],
+    [
+     "LOAD_FAST_BORROW",
+     244
+    ],
+    [
+     "CALL",
+     194
+    ],
+    [
+     "LIST_APPEND",
+     162
+    ],
+    [
+     "POP_JUMP_IF_TRUE",
+     82
+    ],
+    [
+     "BINARY_OP",
+     72
+    ],
+    [
+     "LOAD_GLOBAL",
+     65
+    ],
+    [
+     "SWAP",
+     65
+    ],
+    [
+     "LOAD_COMMON_CONSTANT",
+     59
+    ],
+    [
+     "RETURN_VALUE",
+     47
+    ],
+    [
+     "COMPARE_OP",
+     43
+    ],
+    [
+     "POP_JUMP_IF_FALSE",
+     43
+    ],
+    [
+     "POP_ITER",
+     43
+    ]
+   ]
+  },
+  "upstream": {
+   "counts": {
+    "call_pop_top": 5,
+    "const_loads": 82,
+    "const_scalar": 46,
+    "fusable_compare_branch": 19,
+    "load_fast_any": 657,
+    "not_taken": 73,
+    "op_COPY": 42,
+    "op_PUSH_NULL": 18,
+    "op_STORE_FAST": 279,
+    "op_STORE_FAST_STORE_FAST": 4,
+    "op_UNPACK_SEQUENCE": 0,
+    "total": 3223
+   },
+   "ir": false,
+   "kernel": "/home/power/code/cpython/.worktrees/python-jit/pyjit/bench/internal/kernels/comprehensions.py",
+   "top": [
+    [
+     "LOAD_FAST_BORROW",
+     573
+    ],
+    [
+     "LOAD_ATTR",
+     388
+    ],
+    [
+     "FOR_ITER",
+     313
+    ],
+    [
+     "STORE_FAST",
+     279
+    ],
+    [
+     "JUMP_BACKWARD",
+     253
+    ],
+    [
+     "CALL",
+     194
+    ],
+    [
+     "LIST_APPEND",
+     162
+    ],
+    [
+     "TO_BOOL",
+     130
+    ],
+    [
+     "POP_JUMP_IF_TRUE",
+     82
+    ],
+    [
+     "BINARY_OP",
+     72
+    ],
+    [
+     "POP_JUMP_IF_FALSE",
+     67
+    ],
+    [
+     "LOAD_GLOBAL",
+     65
+    ],
+    [
+     "SWAP",
+     65
+    ],
+    [
+     "LOAD_COMMON_CONSTANT",
+     59
+    ],
+    [
+     "LOAD_FAST_BORROW_LOAD_FAST_BORROW",
+     55
+    ]
+   ]
+  }
+ },
+ "kernel json_dumps": {
+  "ir": {
+   "counts": {
+    "call_pop_top": 4004,
+    "const_loads": 16009,
+    "const_scalar": 8007,
+    "load_fast_any": 44017,
+    "load_fast_borrow_to_temp": 44012,
+    "load_fast_to_temp": 44017,
+    "not_taken": 56014,
+    "null_stores": 220125,
+    "op_COPY": 0,
+    "op_PUSH_NULL": 8002,
+    "op_STORE_FAST": 4009,
+    "op_STORE_FAST_STORE_FAST": 0,
+    "op_UNPACK_SEQUENCE": 4,
+    "slot_reads": 352166,
+    "slot_writes": 220130,
+    "total": 316144
+   },
+   "ir": true,
+   "kernel": "/home/power/code/cpython/.worktrees/python-jit/pyjit/bench/internal/kernels/json_dumps.py",
+   "top": [
+    [
+     "LOAD_ATTR",
+     56016
+    ],
+    [
+     "LOAD_FAST_BORROW",
+     44012
+    ],
+    [
+     "LOAD_GLOBAL",
+     40013
+    ],
+    [
+     "CALL",
+     28011
+    ],
+    [
+     "POP_JUMP_IF_FALSE",
+     28007
+    ],
+    [
+     "POP_JUMP_IF_TRUE",
+     16004
+    ],
+    [
+     "POP_JUMP_IF_NOT_NONE",
+     16004
+    ],
+    [
+     "JUMP_FORWARD",
+     16004
+    ],
+    [
+     "RETURN_VALUE",
+     12005
+    ],
+    [
+     "LOAD_COMMON_CONSTANT",
+     8004
+    ],
+    [
+     "PUSH_NULL",
+     8002
+    ],
+    [
+     "POP_JUMP_IF_NONE",
+     8002
+    ],
+    [
+     "FOR_ITER",
+     4012
+    ],
+    [
+     "STORE_FAST",
+     4009
+    ],
+    [
+     "JUMP_BACKWARD",
+     4006
+    ]
+   ]
+  },
+  "upstream": {
+   "counts": {
+    "call_pop_top": 4004,
+    "const_loads": 16009,
+    "const_scalar": 8007,
+    "load_fast_any": 124039,
+    "not_taken": 56014,
+    "op_COPY": 0,
+    "op_PUSH_NULL": 8002,
+    "op_STORE_FAST": 24007,
+    "op_STORE_FAST_STORE_FAST": 4,
+    "op_UNPACK_SEQUENCE": 4,
+    "total": 460179
+   },
+   "ir": false,
+   "kernel": "/home/power/code/cpython/.worktrees/python-jit/pyjit/bench/internal/kernels/json_dumps.py",
+   "top": [
+    [
+     "LOAD_FAST_BORROW",
+     116032
+    ],
+    [
+     "LOAD_ATTR",
+     56016
+    ],
+    [
+     "TO_BOOL",
+     44011
+    ],
+    [
+     "LOAD_GLOBAL",
+     40013
+    ],
+    [
+     "CALL",
+     28011
+    ],
+    [
+     "POP_JUMP_IF_FALSE",
+     28007
+    ],
+    [
+     "STORE_FAST",
+     24007
+    ],
+    [
+     "POP_JUMP_IF_TRUE",
+     16004
+    ],
+    [
+     "POP_JUMP_IF_NOT_NONE",
+     16004
+    ],
+    [
+     "JUMP_FORWARD",
+     16004
+    ],
+    [
+     "RETURN_VALUE",
+     12005
+    ],
+    [
+     "LOAD_COMMON_CONSTANT",
+     8004
+    ],
+    [
+     "PUSH_NULL",
+     8002
+    ],
+    [
+     "POP_JUMP_IF_NONE",
+     8002
+    ],
+    [
+     "LOAD_FAST_BORROW_LOAD_FAST_BORROW",
+     8002
+    ]
+   ]
+  }
+ },
+ "kernel json_loads": {
+  "ir": {
+   "counts": {
+    "call_pop_top": 63,
+    "const_loads": 185,
+    "const_scalar": 65,
+    "fusable_compare_branch": 60,
+    "load_fast_any": 902,
+    "load_fast_borrow_to_temp": 901,
+    "load_fast_to_temp": 902,
+    "not_taken": 540,
+    "null_stores": 3456,
+    "op_COPY": 0,
+    "op_PUSH_NULL": 180,
+    "op_STORE_FAST": 240,
+    "op_STORE_FAST_STORE_FAST": 0,
+    "op_UNPACK_SEQUENCE": 120,
+    "slot_reads": 5080,
+    "slot_writes": 3276,
+    "total": 4175
+   },
+   "ir": true,
+   "kernel": "/home/power/code/cpython/.worktrees/python-jit/pyjit/bench/internal/kernels/json_loads.py",
+   "top": [
+    [
+     "LOAD_FAST_BORROW",
+     901
+    ],
+    [
+     "CALL",
+     604
+    ],
+    [
+     "LOAD_ATTR",
+     422
+    ],
+    [
+     "POP_JUMP_IF_NOT_NONE",
+     420
+    ],
+    [
+     "LOAD_GLOBAL",
+     303
+    ],
+    [
+     "STORE_FAST",
+     240
+    ],
+    [
+     "RETURN_VALUE",
+     182
+    ],
+    [
+     "PUSH_NULL",
+     180
+    ],
+    [
+     "POP_JUMP_IF_FALSE",
+     180
+    ],
+    [
+     "LOAD_CONST",
+     120
+    ],
+    [
+     "UNPACK_SEQUENCE",
+     120
+    ],
+    [
+     "POP_TOP",
+     63
+    ],
+    [
+     "LOAD_SMALL_INT",
+     63
+    ],
+    [
+     "JUMP_FORWARD",
+     60
+    ],
+    [
+     "POP_JUMP_IF_TRUE",
+     60
+    ]
+   ]
+  },
+  "upstream": {
+   "counts": {
+    "call_pop_top": 63,
+    "const_loads": 185,
+    "const_scalar": 65,
+    "fusable_compare_branch": 60,
+    "load_fast_any": 1384,
+    "not_taken": 540,
+    "op_COPY": 0,
+    "op_PUSH_NULL": 180,
+    "op_STORE_FAST": 64,
+    "op_STORE_FAST_STORE_FAST": 120,
+    "op_UNPACK_SEQUENCE": 120,
+    "total": 4788
+   },
+   "ir": false,
+   "kernel": "/home/power/code/cpython/.worktrees/python-jit/pyjit/bench/internal/kernels/json_loads.py",
+   "top": [
+    [
+     "LOAD_FAST_BORROW",
+     1143
+    ],
+    [
+     "CALL",
+     604
+    ],
+    [
+     "LOAD_ATTR",
+     422
+    ],
+    [
+     "POP_JUMP_IF_NOT_NONE",
+     420
+    ],
+    [
+     "LOAD_GLOBAL",
+     303
+    ],
+    [
+     "LOAD_FAST_BORROW_LOAD_FAST_BORROW",
+     240
+    ],
+    [
+     "RETURN_VALUE",
+     182
+    ],
+    [
+     "PUSH_NULL",
+     180
+    ],
+    [
+     "TO_BOOL",
+     180
+    ],
+    [
+     "POP_JUMP_IF_FALSE",
+     180
+    ],
+    [
+     "LOAD_CONST",
+     120
+    ],
+    [
+     "UNPACK_SEQUENCE",
+     120
+    ],
+    [
+     "STORE_FAST_STORE_FAST",
+     120
+    ],
+    [
+     "STORE_FAST",
+     64
+    ],
+    [
+     "POP_TOP",
+     63
+    ]
+   ]
+  }
+ },
+ "kernel regex_compile": {
+  "ir": {
+   "counts": {
+    "call_pop_top": 537557,
+    "const_loads": 1542207,
+    "const_scalar": 1294868,
+    "fusable_compare_branch": 1116301,
+    "load_fast_any": 2497622,
+    "load_fast_borrow_to_temp": 2327849,
+    "load_fast_to_temp": 2494689,
+    "not_taken": 494915,
+    "null_stores": 14118114,
+    "op_COPY": 66014,
+    "op_PUSH_NULL": 432603,
+    "op_STORE_FAST": 939528,
+    "op_STORE_FAST_STORE_FAST": 0,
+    "op_UNPACK_SEQUENCE": 359329,
+    "slot_reads": 19978790,
+    "slot_writes": 15517894,
+    "total": 18001919
+   },
+   "ir": true,
+   "kernel": "/home/power/code/cpython/.worktrees/python-jit/pyjit/bench/internal/kernels/regex_compile.py",
+   "top": [
+    [
+     "LOAD_FAST_BORROW",
+     2327849
+    ],
+    [
+     "LOAD_GLOBAL",
+     2033160
+    ],
+    [
+     "POP_JUMP_IF_FALSE",
+     1337644
+    ],
+    [
+     "CALL",
+     1214033
+    ],
+    [
+     "LOAD_ATTR",
+     1007846
+    ],
+    [
+     "STORE_FAST",
+     939528
+    ],
+    [
+     "FOR_ITER",
+     821337
+    ],
+    [
+     "BINARY_OP",
+     764358
+    ],
+    [
+     "LOAD_SMALL_INT",
+     751281
+    ],
+    [
+     "JUMP_BACKWARD",
+     724952
+    ],
+    [
+     "RETURN_VALUE",
+     582346
+    ],
+    [
+     "POP_TOP",
+     561966
+    ],
+    [
+     "IS_OP",
+     550037
+    ],
+    [
+     "LOAD_COMMON_CONSTANT",
+     535799
+    ],
+    [
+     "PUSH_NULL",
+     432603
+    ]
+   ]
+  },
+  "upstream": {
+   "counts": {
+    "call_pop_top": 537557,
+    "const_loads": 1542207,
+    "const_scalar": 1294868,
+    "fusable_compare_branch": 1052695,
+    "load_fast_any": 5008560,
+    "not_taken": 494915,
+    "op_COPY": 89178,
+    "op_PUSH_NULL": 432603,
+    "op_STORE_FAST": 1521770,
+    "op_STORE_FAST_STORE_FAST": 320256,
+    "op_UNPACK_SEQUENCE": 359329,
+    "total": 22225651
+   },
+   "ir": false,
+   "kernel": "/home/power/code/cpython/.worktrees/python-jit/pyjit/bench/internal/kernels/regex_compile.py",
+   "top": [
+    [
+     "LOAD_FAST_BORROW",
+     4038119
+    ],
+    [
+     "LOAD_GLOBAL",
+     2033160
+    ],
+    [
+     "STORE_FAST",
+     1521770
+    ],
+    [
+     "POP_JUMP_IF_FALSE",
+     1353367
+    ],
+    [
+     "CALL",
+     1214033
+    ],
+    [
+     "LOAD_ATTR",
+     1007846
+    ],
+    [
+     "LOAD_FAST_BORROW_LOAD_FAST_BORROW",
+     823248
+    ],
+    [
+     "FOR_ITER",
+     821337
+    ],
+    [
+     "BINARY_OP",
+     764358
+    ],
+    [
+     "LOAD_SMALL_INT",
+     751281
+    ],
+    [
+     "JUMP_BACKWARD",
+     724952
+    ],
+    [
+     "RETURN_VALUE",
+     582346
+    ],
+    [
+     "POP_TOP",
+     576818
+    ],
+    [
+     "IS_OP",
+     550037
+    ],
+    [
+     "LOAD_COMMON_CONSTANT",
+     535799
+    ]
+   ]
+  }
+ }
+}

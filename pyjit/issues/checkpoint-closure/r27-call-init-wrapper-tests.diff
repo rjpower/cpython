@@ -1,0 +1,35 @@
+--- a/Lib/test/test_value_slots.py
++++ b/Lib/test/test_value_slots.py
+@@ -161,6 +161,32 @@
+         with self.assertRaisesRegex(TypeError, "object is not callable"):
+             C()
+ 
++    def test_direct_init_and_type_call(self):
++        self.assertIsNone(object.__init__(17))
++        self.assertIsNone(object.__init__(1.5))
++        with self.assertRaises(TypeError):
++            object.__init__(17, 1)
++
++        class Override:
++            def __init__(self):
++                raise AssertionError("wrong initializer")
++
++        instance = object.__new__(Override)
++        self.assertIsNone(object.__init__(instance))
++        self.assertEqual(type.__call__(int, 17), 17)
++        self.assertEqual(type.__call__(float, 1.5), 1.5)
++        self.assertIs(type.__call__(type, 17), int)
++
++        class Meta(type):
++            def __call__(cls):
++                return 42
++
++        class C(metaclass=Meta):
++            pass
++
++        self.assertEqual(C(), 42)
++        self.assertIs(type(type.__call__(C)), C)
++
+     def test_unknown_name(self):
+         with self.assertRaises(ValueError):
+             value_slot(int, 'nb_nothing')

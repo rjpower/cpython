@@ -1,0 +1,104 @@
+--- a/Objects/typeobject.c
++++ b/Objects/typeobject.c
+@@ -2672,8 +2672,8 @@
+     return result;
+ }
+ 
+-static PyObject *
+-type_call(PyObject *self, PyObject *args, PyObject *kwds)
++Py_VALUE_ENTRY PyObject *
++_Py_type_call(PyObject *self, PyObject *args, PyObject *kwds)
+ {
+     PyTypeObject *type = PyTypeObject_CAST(self);
+     PyObject *obj;
+@@ -5721,15 +5721,22 @@
+     }
+     PyObject *kwds = NULL;
+     PyValue result = PyValue_NULL;
+-    if (kwnames != NULL) {
++    if (kwnames != NULL && PyTuple_GET_SIZE(kwnames) != 0) {
+         kwds = _PyValue_StackAsDict(args + nargs, kwnames);
+         if (kwds == NULL) {
+             goto done;
+         }
+     }
+-    if (type == &PyType_Type && nargs != 3) {
+-        PyErr_SetString(PyExc_TypeError, "type() takes 1 or 3 arguments");
+-        goto done;
++    if (type == &PyType_Type) {
++        if (nargs == 1 && (kwds == NULL || PyDict_GET_SIZE(kwds) == 0)) {
++            result = PyValue_DUP(PyValue_FromObjectBorrow(
++                (PyObject *)PyValue_TYPE(PyValue_Borrow(args[0]))));
++            goto done;
++        }
++        if (nargs != 3) {
++            PyErr_SetString(PyExc_TypeError, "type() takes 1 or 3 arguments");
++            goto done;
++        }
+     }
+     newfunc object_new_fn = type->tp_new;
+     if (object_new_fn == NULL) {
+@@ -5779,6 +5786,14 @@
+     return result;
+ }
+ 
++PyValue
++_Py_type_call_value(PyThreadState *tstate, PyObject *callable,
++                     const PyValue *args, size_t nargsf, PyObject *kwnames)
++{
++    return type_call_value(tstate, (PyTypeObject *)callable, args,
++                           PyVectorcall_NARGS(nargsf), kwnames);
++}
++
+ static PyValue
+ type_value_vectorcall(PyThreadState *tstate, PyObject *metatype,
+                       const PyValue *args, size_t nargsf, PyObject *kwnames)
+@@ -5798,7 +5813,7 @@
+     }
+     ternaryfunc selected_call = Py_TYPE(metatype)->tp_call;
+     PyValue result;
+-    if (selected_call == type_call) {
++    if (selected_call == _Py_type_call) {
+         result = type_call_value(tstate, (PyTypeObject *)metatype, args,
+                                  nargs, kwnames);
+     }
+@@ -8003,7 +8018,7 @@
+     0,                                          /* tp_as_sequence */
+     0,                                          /* tp_as_mapping */
+     0,                                          /* tp_hash */
+-    type_call,                                  /* tp_call */
++    _Py_type_call,                              /* tp_call */
+     0,                                          /* tp_str */
+     _Py_type_getattro,                          /* tp_getattro */
+     type_setattro,                              /* tp_setattro */
+@@ -8036,6 +8051,7 @@
+     .tp_value_vectorcall_offset = offsetof(PyTypeObject, tp_value_vectorcall),
+     .tp_value_vectorcall = (_Py_valuefunc)type_value_vectorcall,
+     .tp_value = {
++        .call = _Py_VALUE_SLOT_INIT(call, _Py_type_call_value),
+         .getattro = _Py_VALUE_SLOT_INIT(getattro, _Py_type_getattro_value),
+         .setattro = _Py_VALUE_SLOT_INIT(setattro, type_setattro_value),
+         .nb_or = _Py_VALUE_SLOT_INIT(nb_or, _Py_union_type_or_value),
+--- a/Objects/value_pairs.c
++++ b/Objects/value_pairs.c
+@@ -18,6 +18,8 @@
+ #include "pycore_value_slots.h"   // _PyValueSlotPair
+ 
+ const _PyValueSlotPair _PyValueSlot_Pairs[] = {
++    {_Py_VALUE_SLOT_INDEX_call, (void *)_Py_type_call,
++     _Py_VALUE_SLOT_INIT(call, _Py_type_call_value)},
+     {_Py_VALUE_SLOT_INDEX_init_, (void *)_Py_object_init,
+      _Py_VALUE_SLOT_INIT(init_, _Py_object_init_value)},
+     {_Py_VALUE_SLOT_INDEX_init_, (void *)_Py_slot_tp_init,
+--- a/Include/internal/pycore_typeobject.h
++++ b/Include/internal/pycore_typeobject.h
+@@ -155,6 +155,9 @@
+ int _Py_object_init_value(PyValueBorrow, const PyValue *, Py_ssize_t, PyObject *);
+ int _Py_slot_tp_init(PyObject *, PyObject *, PyObject *);
+ int _Py_slot_tp_init_value(PyValueBorrow, const PyValue *, Py_ssize_t, PyObject *);
++PyObject *_Py_type_call(PyObject *, PyObject *, PyObject *);
++PyValue _Py_type_call_value(PyThreadState *, PyObject *, const PyValue *,
++                            size_t, PyObject *);
+ PyObject *_Py_slot_tp_new(PyTypeObject *, PyObject *, PyObject *);
+ PyValue _Py_slot_tp_new_value(PyTypeObject *, const PyValue *, Py_ssize_t, PyObject *);
+ 

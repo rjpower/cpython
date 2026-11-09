@@ -1,0 +1,98 @@
+{
+  "decision": "ACCEPT_M3_DESIGN_AND_AUTHORIZE_BOUNDED_OBSERVED_LOOP_SOURCE",
+  "start_utc": "2026-11-01T20:01:13.818210+00:00",
+  "checkpoint_utc": "2026-11-01T20:31:13.818210+00:00",
+  "deadline_utc": "2026-11-01T21:31:13.818210+00:00",
+  "source_ceiling_seconds": 5400,
+  "extension_authorized": false,
+  "worktree": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/jit-observed-loop",
+  "branch": "boil/jit-observed-loop",
+  "base_source_head": "3174bc0ab726cb7b7b39f25d93f4ec9194c88d3a",
+  "source_owner": "restart_audit",
+  "independent_reviewer": "qualification_review_resumed",
+  "reviewed_design": {
+    "m3-design-20261101-v1.md": {
+      "path": "boil/issues/jit-e2e-system/m3-design-20261101-v1.md",
+      "sha256": "955ac8ce1c1db98830d24b1c438702ec69c0c8f07dfa63bf58f1cb80310a1e89"
+    },
+    "m3-design-review-20261101-v1.md": {
+      "path": "boil/issues/jit-e2e-system/m3-design-review-20261101-v1.md",
+      "sha256": "5c0e2610c7c4487c14c02f7edcf42cdba15bf01fc4fbf057b50a117be25d202c"
+    },
+    "m3-design-receipt-20261101-v1.json": {
+      "path": "boil/issues/jit-e2e-system/m3-design-receipt-20261101-v1.json",
+      "sha256": "f1541ca86671a2bc4c50d85fbb7fa6d4bc11be8ab9badbef92770ffc040665e3"
+    }
+  },
+  "m2_behavior_prerequisite": {
+    "path": "boil/issues/jit-e2e-system/m2-behavior-decision-20261101-v1.json",
+    "sha256": "4e65f9d82b14307d6c715050694648b61f0c2d914896cde5997b084494c17f4e"
+  },
+  "allowed_source_paths": [
+    "Include/internal/pycore_jit.h",
+    "Include/internal/pycore_jit_ir.h",
+    "Python/jit_record.c",
+    "Python/jit_ir.c",
+    "Python/jit_regalloc.c",
+    "Python/jit_runtime.c",
+    "Python/jit_baseline.c",
+    "Python/jit_backend_x86.c",
+    "Python/jit_x86.h",
+    "Python/ceval.c",
+    "Python/ceval_macros.h",
+    "Python/bytecodes.c",
+    "Python/instrumentation.c",
+    "Python/generated_jit_helpers.c.h",
+    "Python/generated_ir_cases.c.h",
+    "Tools/cases_generator/jit_helpers_generator.py",
+    "Tools/cases_generator/ir_generator.py",
+    "Makefile.pre.in",
+    "Modules/_testinternalcapi.c",
+    "Lib/test/test_jit_method.py",
+    "Lib/test/test_generated_cases.py"
+  ],
+  "hypothesis": "A genuine observed loop through shared typed SSA and call-aware allocation removes scalar helper calls and home traffic, preserving exact Python effects, calls, owners and recovery.",
+  "checkpoint_requirement": "Concrete generated BEFORE/outcome recording and terminal/Python-return pairing, graph/effect/FrameState structures and executable host checks. Report unfinished paths honestly; declarations or fabricated event graphs are insufficient.",
+  "completion_requirement": "All three reviewed dependency steps: actual recording; shared verified SSA/passes/LIR/register allocation/spills; immutable baseline+native-loop replacement with recoverable entries, statepoints, guards and meaningful mixed-loop fixtures. No partial M3 completion credit.",
+  "implementation_contracts": [
+    "One shared optimizer/LIR/backend/owner; no parallel trace bytecode or runtime selector.",
+    "Only the nominated temporary method Unit records. Unrelated baseline helpers acquire no recorder lookup or branch.",
+    "Preserve actual boxed identity and exact owner consume/overwrite ordering; releases are reentrant statepoints. Owning boxed temporary operations stay generic until modeled.",
+    "Reserve recovery before effects; AFTER recovery cannot allocate or replay effects.",
+    "No semantic code/function/object root, old Unit pin or native label across Python callees; fresh return imports all continuation facts.",
+    "Separate source words, SSA identities, LIR operations, native labels and recoverable entries in every consumer.",
+    "Configuration-proven native poll retains each real periodic service exactly once, with correct source PC and terminal handling.",
+    "One recording attempt per State/source stamp, bounded event/graph/state/spill memory charged to the existing process budget; failed optional optimization returns to baseline.",
+    "Preserve all28accepted methods, all old opcode formats/IDs and pristine/marshal behavior; no workload or function-name admission filter.",
+    "Freeze and independently review exact source before fresh candidate execution."
+  ],
+  "fixed_bounds": {
+    "sessions_per_flow": 1,
+    "nominated_paths_per_state_stamp": 1,
+    "events": 512,
+    "values": 1024,
+    "nodes": 2048,
+    "states": 256,
+    "map_entries": 4096,
+    "recoverable_homes": 64,
+    "spill_slots": 64,
+    "live_or_retired_units": 64,
+    "process_metadata_code_compiler_bytes": 8388608
+  },
+  "host_generators_tests_authorized": true,
+  "syntax_only_checks": {
+    "authorized": true,
+    "aggregate_compiler_ceiling_seconds": 120,
+    "configuration": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/jit-natural-method-fixture-correction/build/jit-method-m2-v2-debug-20261101",
+    "scope": "Actual changed/new TUs and new worktree includes with matching retained configuration; no candidate object/link/config/build-product mutation."
+  },
+  "standalone_encoder_checks": {
+    "authorized": true,
+    "aggregate_ceiling_seconds": 120,
+    "scope": "Small actual SSA/LIR/allocator/encoder fixtures, including failure and spill paths; host fixture execution only, never emitted machine bytes or candidate executable."
+  },
+  "candidate_build_runtime_timing_or_integration_authorized": false,
+  "heap_storage_rewrite_or_gc_authorized": false,
+  "preserve_all_previous_source_images_and_evidence": true,
+  "next_gate": "Exact source freeze/review, bounded focused native behavior/emission; measured mechanism costs and broad qualification later."
+}

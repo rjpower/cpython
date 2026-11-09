@@ -1,0 +1,323 @@
+diff --git a/Include/internal/pycore_ceval.h b/Include/internal/pycore_ceval.h
+index 15356ba627d..39f864c6fb8 100644
+--- a/Include/internal/pycore_ceval.h
++++ b/Include/internal/pycore_ceval.h
+@@ -297,6 +297,7 @@ PyAPI_FUNC(void) _PyEval_FormatExcCheckArg(PyThreadState *tstate, PyObject *exc,
+ PyAPI_FUNC(void) _PyEval_FormatExcUnbound(PyThreadState *tstate, PyCodeObject *co, int oparg);
+ PyAPI_FUNC(void) _PyEval_FormatKwargsError(PyThreadState *tstate, PyObject *func, PyObject *kwargs, PyObject *dupkey);
+ PyAPI_FUNC(PyObject *) _PyEval_ImportFrom(PyThreadState *, PyObject *, PyObject *);
++PyAPI_FUNC(PyValue) _PyEval_ImportFromValue(PyThreadState *, PyValueBorrow, PyObject *);
+ 
+ PyAPI_FUNC(PyObject *) _PyEval_LazyImportName(
+     PyThreadState *tstate, PyObject *builtins, PyObject *globals,
+diff --git a/Lib/test/test_import/__init__.py b/Lib/test/test_import/__init__.py
+index be0b04e297d..2bdd8956ea0 100644
+--- a/Lib/test/test_import/__init__.py
++++ b/Lib/test/test_import/__init__.py
+@@ -383,6 +383,44 @@ def test_from_import_missing_attr_raises_ImportError(self):
+         with self.assertRaises(ImportError):
+             from importlib import something_that_should_not_exist_anywhere
+ 
++    def test_from_import_inline_attribute_value(self):
++        module = ModuleType("inline_import_source")
++        module.value = 42
++        namespace = {
++            "__builtins__": {"__import__": lambda *args: module},
++        }
++        exec("from inline_import_source import value", namespace)
++        self.assertEqual(namespace["value"], 42)
++
++    def test_from_import_inline_source_value(self):
++        namespace = {
++            "__builtins__": {"__import__": lambda *args: 17},
++        }
++        with self.assertRaises(ImportError):
++            exec("from inline_import_source import value", namespace)
++
++    def test_from_import_missing_attribute_lookup_once(self):
++        lookups = []
++
++        class ImportSource:
++            def __getattribute__(self, name):
++                if name == "value":
++                    lookups.append(name)
++                    raise AttributeError(name)
++                if name == "__name__":
++                    return "custom_import_source"
++                if name == "__spec__":
++                    return None
++                return object.__getattribute__(self, name)
++
++        source = ImportSource()
++        namespace = {
++            "__builtins__": {"__import__": lambda *args: source},
++        }
++        with self.assertRaises(ImportError):
++            exec("from custom_import_source import value", namespace)
++        self.assertEqual(lookups, ["value"])
++
+     def test_from_import_missing_attr_has_name_and_path(self):
+         with CleanImport('os'):
+             import os
+diff --git a/Python/bytecodes.c b/Python/bytecodes.c
+index b831aa1270c..d6891466592 100644
+--- a/Python/bytecodes.c
++++ b/Python/bytecodes.c
+@@ -3417,18 +3417,18 @@ dummy_func(
+ 
+         inst(IMPORT_FROM, (from -- from, res)) {
+             PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
+-            PyObject *res_o;
+-            if (PyLazyImport_CheckExact(PyValue_AsKnownObjectBorrow(from))) {
+-                res_o = _PyEval_LazyImportFrom(
++            if (PyValue_IsObject(from) &&
++                PyLazyImport_CheckExact(PyValue_AsKnownObjectBorrow(from)))
++            {
++                PyObject *res_o = _PyEval_LazyImportFrom(
+                     tstate, frame, PyValue_AsKnownObjectBorrow(from), name);
++                ERROR_IF(res_o == NULL);
++                res = PyValue_FromObjectSteal(res_o);
+             }
+             else {
+-                res_o = _PyEval_ImportFrom(
+-                    tstate, PyValue_AsKnownObjectBorrow(from), name);
++                res = _PyEval_ImportFromValue(tstate, PyValue_Borrow(from), name);
++                ERROR_IF(PyValue_IsNull(res));
+             }
+-
+-            ERROR_IF(res_o == NULL);
+-            res = PyValue_FromObjectSteal(res_o);
+         }
+ 
+         tier1 inst(JUMP_FORWARD, (--)) {
+diff --git a/Python/ceval.c b/Python/ceval.c
+index 2e301ce5043..15eeee163ec 100644
+--- a/Python/ceval.c
++++ b/Python/ceval.c
+@@ -4534,56 +4529,71 @@ _PyEval_LazyImportName(PyThreadState *tstate, PyObject *builtins,
+     return res;
+ }
+ 
+-PyObject *
+-_PyEval_ImportFrom(PyThreadState *tstate, PyObject *v, PyObject *name)
+-{
+-    PyObject *x;
+-    PyObject *fullmodname, *mod_name, *origin, *mod_name_or_unknown, *errmsg, *spec;
+-
+-    if (PyObject_GetOptionalAttr(v, name, &x) != 0) {
+-        return x;
++static PyValue
++_eval_import_from_miss(PyThreadState *tstate, PyValueBorrow v, PyObject *name)
++{
++    PyValue mod_name_value = PyValue_NULL;
++    PyValue spec_value = PyValue_NULL;
++    PyObject *mod_name = NULL;
++    PyObject *mod_name_or_unknown = NULL;
++    PyObject *unknown_name = NULL;
++    PyObject *origin = NULL;
++    PyObject *errmsg = NULL;
++
++    _PyStatusValue name_attr = _PyValue_GetOptionalAttr(
++        v, &_Py_ID(__name__));
++    if (name_attr.status < 0) {
++        return PyValue_NULL;
+     }
+-    /* Issue #17636: in case this failed because of a circular relative
+-       import, try to fallback on reading the module directly from
+-       sys.modules. */
+-    if (PyObject_GetOptionalAttr(v, &_Py_ID(__name__), &mod_name) < 0) {
+-        return NULL;
++    if (name_attr.status > 0 && PyValue_IsObject(name_attr.value) &&
++        PyUnicode_Check(PyValue_AsKnownObjectBorrow(name_attr.value)))
++    {
++        mod_name_value = name_attr.value;
++        mod_name = PyValue_AsKnownObjectBorrow(mod_name_value);
+     }
+-    if (mod_name == NULL || !PyUnicode_Check(mod_name)) {
+-        Py_CLEAR(mod_name);
++    else {
++        PyValue_XCLOSE(name_attr.value);
+         goto error;
+     }
+-    fullmodname = PyUnicode_FromFormat("%U.%U", mod_name, name);
++
++    PyObject *fullmodname = PyUnicode_FromFormat("%U.%U", mod_name, name);
+     if (fullmodname == NULL) {
+-        Py_DECREF(mod_name);
+-        return NULL;
++        goto done;
+     }
+-    x = PyImport_GetModule(fullmodname);
++    PyObject *x = PyImport_GetModule(fullmodname);
+     Py_DECREF(fullmodname);
+     if (x == NULL && !_PyErr_Occurred(tstate)) {
+         goto error;
+     }
+-    Py_DECREF(mod_name);
+-    return x;
++    PyValue_CLOSE(mod_name_value);
++    if (x == NULL) {
++        return PyValue_NULL;
++    }
++    return PyValue_FromObjectSteal(x);
+ 
+- error:
++error:
+     if (mod_name == NULL) {
+-        mod_name_or_unknown = PyUnicode_FromString("<unknown module name>");
+-        if (mod_name_or_unknown == NULL) {
+-            return NULL;
++        unknown_name = PyUnicode_FromString("<unknown module name>");
++        if (unknown_name == NULL) {
++            goto done;
+         }
+-    } else {
++        mod_name_or_unknown = unknown_name;
++    }
++    else {
+         mod_name_or_unknown = mod_name;
+     }
+-    // mod_name is no longer an owned reference
+-    assert(mod_name_or_unknown);
+-    assert(mod_name == NULL || mod_name == mod_name_or_unknown);
+ 
+-    origin = NULL;
+-    if (PyObject_GetOptionalAttr(v, &_Py_ID(__spec__), &spec) < 0) {
+-        Py_DECREF(mod_name_or_unknown);
+-        return NULL;
++    _PyStatusValue spec_attr = _PyValue_GetOptionalAttr(
++        v, &_Py_ID(__spec__));
++    if (spec_attr.status < 0) {
++        goto done;
++    }
++    if (spec_attr.status > 0) {
++        spec_value = spec_attr.value;
+     }
++    PyObject *spec = PyValue_IsObject(spec_value)
++        ? PyValue_AsKnownObjectBorrow(spec_value) : NULL;
++
+     if (spec == NULL) {
+         errmsg = PyUnicode_FromFormat(
+             "cannot import name %R from %R (unknown location)",
+@@ -4606,24 +4616,24 @@ _PyEval_ImportFrom(PyThreadState *tstate, PyObject *v, PyObject *name)
+             goto done;
+         }
+         if (stdlib_modules && PyAnySet_Check(stdlib_modules)) {
+-            is_possibly_shadowing_stdlib = PySet_ContainsValue(stdlib_modules, PyValue_FromObjectBorrow(mod_name_or_unknown));
++            is_possibly_shadowing_stdlib = PySet_ContainsValue(
++                stdlib_modules, PyValue_FromObjectBorrow(mod_name_or_unknown));
+             if (is_possibly_shadowing_stdlib < 0) {
+-                Py_DECREF(stdlib_modules);
++                Py_XDECREF(stdlib_modules);
+                 goto done;
+             }
+         }
+         Py_XDECREF(stdlib_modules);
+     }
+ 
+-    if (origin == NULL && PyModule_Check(v)) {
+-        // Fall back to __file__ for diagnostics if we don't have
+-        // an origin that is a location
+-        origin = PyModule_GetFilenameObject(v);
++    if (origin == NULL && PyValue_IsObject(v) &&
++        PyModule_Check(PyValue_AsKnownObjectBorrow(v)))
++    {
++        origin = PyModule_GetFilenameObject(PyValue_AsKnownObjectBorrow(v));
+         if (origin == NULL) {
+             if (!PyErr_ExceptionMatches(PyExc_SystemError)) {
+                 goto done;
+             }
+-            // PyModule_GetFilenameObject raised "module filename missing"
+             _PyErr_Clear(tstate);
+         }
+         assert(origin == NULL || PyUnicode_Check(origin));
+@@ -4647,8 +4657,6 @@ _PyEval_ImportFrom(PyThreadState *tstate, PyObject *v, PyObject *name)
+         else if (rc > 0) {
+             if (is_possibly_shadowing) {
+                 assert(origin);
+-                // For non-stdlib modules, only mention the possibility of
+-                // shadowing if the module is being initialized.
+                 errmsg = PyUnicode_FromFormat(
+                     "cannot import name %R from %R "
+                     "(consider renaming %R if it has the same name "
+@@ -4690,16 +4698,40 @@ _PyEval_ImportFrom(PyThreadState *tstate, PyObject *v, PyObject *name)
+ 
+ done_with_errmsg:
+     if (errmsg != NULL) {
+-        /* NULL checks for mod_name and origin done by _PyErr_SetImportErrorWithNameFrom */
+         _PyErr_SetImportErrorWithNameFrom(errmsg, mod_name, origin, name);
+         Py_DECREF(errmsg);
+     }
+ 
+ done:
+     Py_XDECREF(origin);
+-    Py_XDECREF(spec);
+-    Py_DECREF(mod_name_or_unknown);
+-    return NULL;
++    PyValue_XCLOSE(mod_name_value);
++    PyValue_XCLOSE(spec_value);
++    Py_XDECREF(unknown_name);
++    return PyValue_NULL;
++}
++
++PyValue
++_PyEval_ImportFromValue(PyThreadState *tstate, PyValueBorrow v, PyObject *name)
++{
++    _PyStatusValue attr = _PyValue_GetOptionalAttr(v, name);
++    if (attr.status > 0) {
++        return attr.value;
++    }
++    if (attr.status < 0) {
++        return PyValue_NULL;
++    }
++    return _eval_import_from_miss(tstate, v, name);
++}
++
++PyObject *
++_PyEval_ImportFrom(PyThreadState *tstate, PyObject *v, PyObject *name)
++{
++    PyValue result = _PyEval_ImportFromValue(
++        tstate, PyValue_FromObjectBorrow(v), name);
++    if (PyValue_IsNull(result)) {
++        return NULL;
++    }
++    return _PyValue_AsObjectStealAt(result, BOX_SITE_ATTRIBUTE);
+ }
+ 
+ #define CANNOT_CATCH_MSG "catching classes that do not inherit from "\
+diff --git a/Python/generated_ir_cases.c.h b/Python/generated_ir_cases.c.h
+index dfc9b49f677..2eb9c7b6b77 100644
+--- a/Python/generated_ir_cases.c.h
++++ b/Python/generated_ir_cases.c.h
+@@ -10325,19 +10325,22 @@
+                 ir_obj_from = PyValue_AsKnownObjectBorrow(from);
+             }
+             PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
+-            PyObject *res_o;
+-            if (PyLazyImport_CheckExact(ir_obj_from)) {
+-                res_o = _PyEval_LazyImportFrom(
++            if (PyValue_IsObject(from) &&
++                PyLazyImport_CheckExact(ir_obj_from))
++            {
++                PyObject *res_o = _PyEval_LazyImportFrom(
+                     tstate, frame, ir_obj_from, name);
++                if (res_o == NULL) {
++                    JUMP_TO_LABEL(error);
++                }
++                res = PyValue_FromObjectSteal(res_o);
+             }
+             else {
+-                res_o = _PyEval_ImportFrom(
+-                    tstate, ir_obj_from, name);
+-            }
+-            if (res_o == NULL) {
+-                JUMP_TO_LABEL(error);
++                res = _PyEval_ImportFromValue(tstate, PyValue_Borrow(from), name);
++                if (PyValue_IsNull(res)) {
++                    JUMP_TO_LABEL(error);
++                }
+             }
+-            res = PyValue_FromObjectSteal(res_o);
+             IR_STORE_DST(IR_A(ir_word), res);
+             if (!PyValue_IsNull(ir_displaced) &&
+                 finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {

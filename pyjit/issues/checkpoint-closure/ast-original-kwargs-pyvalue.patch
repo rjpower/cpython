@@ -1,0 +1,141 @@
+--- a/Objects/call.c
++++ b/Objects/call.c
+@@ -1,5 +1,6 @@
+ #include "Python.h"
+ #include "pycore_borrow.h"        // _PyBorrowScope_Enter()
++#include "pycore_typeobject.h"    // _PyType_CallWithOriginalDict()
+ #include "pycore_call.h"          // _PyObject_CallNoArgsTstate()
+ #include "pycore_ceval.h"         // _Py_EnterRecursiveCallTstate()
+ #include "pycore_dict.h"          // _PyDict_NewPresized()
+@@ -1476,6 +1477,13 @@
+             _Py_LeaveRecursiveCallTstate(tstate);
+             return res;
+         }
++        if (kwargs != NULL && PyDict_GET_SIZE(kwargs) != 0) {
++            PyValue result = PyValue_NULL;
++            if (_PyType_CallWithOriginalDict(tstate, c, args, kwargs,
++                                             &result)) {
++                return result;
++            }
++        }
+     }
+     /* The tuple's words are the window: no box, no copy. */
+     Py_ssize_t nargs = PyTuple_GET_SIZE(args);
+--- a/Objects/typeobject.c
++++ b/Objects/typeobject.c
+@@ -5825,6 +5825,72 @@
+     return result;
+ }
+ 
++static int
++dict_has_non_unicode_keys(PyObject *dict)
++{
++    Py_ssize_t pos = 0;
++    PyValueBorrow key, value;
++    while (_PyDict_NextBorrowed(dict, &pos, &key, &value)) {
++        if (!PyValue_IsObject(key) ||
++                !PyUnicode_Check(PyValue_AsKnownObjectBorrow(key))) {
++            return 1;
++        }
++    }
++    return 0;
++}
++
++int
++_PyType_CallWithOriginalDict(PyThreadState *tstate, PyObject *callable,
++                             PyObject *args, PyObject *kwargs,
++                             PyValue *result)
++{
++    if (!PyType_Check(callable) || !dict_has_non_unicode_keys(kwargs)) {
++        return 0;
++    }
++    PyTypeObject *metatype = Py_TYPE(callable);
++    PyTypeObject *type = (PyTypeObject *)callable;
++    if (metatype->tp_call != _Py_type_call ||
++            _PyType_VALUE_SLOT(metatype, call) != _Py_type_call_value ||
++            type->tp_vectorcall != _PyValue_VectorcallThunk ||
++            type->tp_value_vectorcall != (_Py_valuefunc)type_value_vectorcall) {
++        return 0;
++    }
++
++    assert(PyTuple_Check(args));
++    assert(PyDict_Check(kwargs));
++    assert(!_PyErr_Occurred(tstate));
++    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
++    if (callable == (PyObject *)&PyType_Type && nargs != 3) {
++        PyErr_SetString(PyExc_TypeError, "type() takes 1 or 3 arguments");
++        *result = PyValue_NULL;
++        return 1;
++    }
++    if (type->tp_new == NULL) {
++        _PyErr_Format(tstate, PyExc_TypeError,
++                      "cannot create '%s' instances", type->tp_name);
++        *result = PyValue_NULL;
++        return 1;
++    }
++
++    _PyBorrowMark mark = _PyBorrowScope_Enter(tstate);
++    PyObject *obj = type->tp_new(type, args, kwargs);
++    obj = _Py_CheckFunctionResult(tstate, callable, obj, NULL);
++    if (obj != NULL && PyObject_TypeCheck(obj, type)) {
++        PyTypeObject *result_type = Py_TYPE(obj);
++        if (result_type->tp_init != NULL &&
++                result_type->tp_init(obj, args, kwargs) < 0) {
++            assert(_PyErr_Occurred(tstate));
++            Py_SETREF(obj, NULL);
++        }
++        else {
++            assert(!_PyErr_Occurred(tstate));
++        }
++    }
++    _PyBorrowScope_Exit(tstate, mark);
++    *result = obj == NULL ? PyValue_NULL : _PyValue_FromObjectResult(obj);
++    return 1;
++}
++
+ /* Align up to the nearest multiple of alignof(max_align_t)
+  * (like _Py_ALIGN_UP, but for a size rather than pointer)
+  */
+@@ -13530,6 +13596,21 @@
+ _Py_slot_tp_init(PyObject *self, PyObject *args, PyObject *kwds)
+ {
+     Py_ssize_t nargs = PyTuple_GET_SIZE(args);
++    if (kwds != NULL && dict_has_non_unicode_keys(kwds)) {
++        PyObject *result = call_method(self, &_Py_ID(__init__), args, kwds);
++        if (result == NULL) {
++            return -1;
++        }
++        if (result != Py_None) {
++            PyErr_Format(PyExc_TypeError,
++                         "__init__() should return None, not '%.200s'",
++                         Py_TYPE(result)->tp_name);
++            Py_DECREF(result);
++            return -1;
++        }
++        Py_DECREF(result);
++        return 0;
++    }
+     if (kwds == NULL || PyDict_GET_SIZE(kwds) == 0) {
+         return _Py_slot_tp_init_value(PyValue_FromObjectBorrow(self),
+                                       _PyTuple_ITEMS(args), nargs, NULL);
+@@ -13569,6 +13650,9 @@
+ {
+     PyThreadState *tstate = _PyThreadState_GET();
+     Py_ssize_t nargs = PyTuple_GET_SIZE(args);
++    if (kwds != NULL && dict_has_non_unicode_keys(kwds)) {
++        return call_method((PyObject *)type, &_Py_ID(__new__), args, kwds);
++    }
+     PyValue result;
+     if (kwds == NULL || PyDict_GET_SIZE(kwds) == 0) {
+         result = _Py_slot_tp_new_value(type, _PyTuple_ITEMS(args), nargs, NULL);
+--- a/Include/internal/pycore_typeobject.h
++++ b/Include/internal/pycore_typeobject.h
+@@ -158,6 +158,8 @@
+ PyObject *_Py_type_call(PyObject *, PyObject *, PyObject *);
+ PyValue _Py_type_call_value(PyThreadState *, PyObject *, const PyValue *,
+                             size_t, PyObject *);
++int _PyType_CallWithOriginalDict(PyThreadState *, PyObject *, PyObject *,
++                                PyObject *, PyValue *);
+ PyObject *_Py_slot_tp_new(PyTypeObject *, PyObject *, PyObject *);
+ PyValue _Py_slot_tp_new_value(PyTypeObject *, const PyValue *, Py_ssize_t, PyObject *);
+ 

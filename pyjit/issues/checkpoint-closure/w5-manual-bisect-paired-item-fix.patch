@@ -1,0 +1,147 @@
+--- a/Modules/_bisectmodule.c
++++ b/Modules/_bisectmodule.c
+@@ -13,6 +13,7 @@
+ #include "pycore_list.h"          // PyList_InsertValue()
+ #include "pycore_value.h"         // PyValue
+ #include "pycore_value_ops.h"     // _PyValue_IsTrue()
++#include "pycore_value_slots.h"   // _PyType_VALUE_SLOT()
+ 
+ /*[clinic input]
+ value_emission
+@@ -57,12 +58,6 @@
+     return NULL;
+ }
+ 
+-static ssizeargfunc
+-get_sq_item(PyObject *s)
+-{
+-    return get_sq_item_type(Py_TYPE(s));
+-}
+-
+ /* Box the three arguments of a bisect call for the object-form search below.
+    On failure, any box made is released and an exception is set. */
+ static int
+@@ -94,10 +89,15 @@
+         if (hi < 0)
+             return -1;
+     }
+-    ssizeargfunc sq_item = get_sq_item(list);
++    PyTypeObject *list_type = Py_TYPE(list);
++    ssizeargfunc sq_item = get_sq_item_type(list_type);
+     if (sq_item == NULL) {
+         return -1;
+     }
++    _Py_itemvaluefunc value_item = _PyType_VALUE_SLOT(list_type, item);
++    if (value_item != NULL) {
++        _PyType_CHECK_VALUE_ROW(list_type, _Py_VALUE_SLOT_INDEX_item);
++    }
+     if (Py_EnterRecursiveCall(" in _bisect.bisect_right")) {
+         return -1;
+     }
+@@ -111,13 +111,21 @@
+            signed overflow.  (See issue 13496.) */
+         mid = ((size_t)lo + hi) / 2;
+         assert(mid >= 0);
+-        // PySequence_GetItem, but we already checked the types.
+-        PyObject *litem_obj = sq_item(list, mid);
+-        assert((PyErr_Occurred() == NULL) ^ (litem_obj == NULL));
+-        if (litem_obj == NULL) {
+-            goto error;
++        // PySequence_GetItem, but the two selected slot rows are cached.
++        if (value_item != NULL) {
++            litem = value_item(list, mid);
++            if (PyValue_IsNull(litem)) {
++                goto error;
++            }
++        }
++        else {
++            PyObject *litem_obj = sq_item(list, mid);
++            assert((PyErr_Occurred() == NULL) ^ (litem_obj == NULL));
++            if (litem_obj == NULL) {
++                goto error;
++            }
++            litem = _PyValue_FromObjectResult(litem_obj);
+         }
+-        litem = _PyValue_FromObjectResult(litem_obj);
+         if (!PyValue_IsNone(key)) {
+             PyValue newitem = _PyValue_CallOneArg(_PyThreadState_GET(), key,
+                                                   litem);
+@@ -325,10 +333,15 @@
+         if (hi < 0)
+             return -1;
+     }
+-    ssizeargfunc sq_item = get_sq_item(list);
++    PyTypeObject *list_type = Py_TYPE(list);
++    ssizeargfunc sq_item = get_sq_item_type(list_type);
+     if (sq_item == NULL) {
+         return -1;
+     }
++    _Py_itemvaluefunc value_item = _PyType_VALUE_SLOT(list_type, item);
++    if (value_item != NULL) {
++        _PyType_CHECK_VALUE_ROW(list_type, _Py_VALUE_SLOT_INDEX_item);
++    }
+     if (Py_EnterRecursiveCall(" in _bisect.bisect_left")) {
+         return -1;
+     }
+@@ -342,13 +355,21 @@
+            signed overflow.  (See issue 13496.) */
+         mid = ((size_t)lo + hi) / 2;
+         assert(mid >= 0);
+-        // PySequence_GetItem, but we already checked the types.
+-        PyObject *litem_obj = sq_item(list, mid);
+-        assert((PyErr_Occurred() == NULL) ^ (litem_obj == NULL));
+-        if (litem_obj == NULL) {
+-            goto error;
++        // PySequence_GetItem, but the two selected slot rows are cached.
++        if (value_item != NULL) {
++            litem = value_item(list, mid);
++            if (PyValue_IsNull(litem)) {
++                goto error;
++            }
++        }
++        else {
++            PyObject *litem_obj = sq_item(list, mid);
++            assert((PyErr_Occurred() == NULL) ^ (litem_obj == NULL));
++            if (litem_obj == NULL) {
++                goto error;
++            }
++            litem = _PyValue_FromObjectResult(litem_obj);
+         }
+-        litem = _PyValue_FromObjectResult(litem_obj);
+         if (!PyValue_IsNone(key)) {
+             PyValue newitem = _PyValue_CallOneArg(_PyThreadState_GET(), key,
+                                                   litem);
+--- a/Lib/test/test_bisect.py
++++ b/Lib/test/test_bisect.py
+@@ -233,6 +233,31 @@
+                 mod.bisect_right(precomputed_arr, x)
+             )
+ 
++    def test_key_callback_changes_sequence_getitem(self):
++        calls = []
++
++        class Sequence(list):
++            def __getitem__(self, index):
++                calls.append(("old", index))
++                return super().__getitem__(index)
++
++        def new_getitem(self, index):
++            calls.append(("new", index))
++            return super(Sequence, self).__getitem__(index)
++
++        sequence = Sequence(range(4))
++        changed = False
++
++        def key(value):
++            nonlocal changed
++            if not changed:
++                changed = True
++                Sequence.__getitem__ = new_getitem
++            return value
++
++        self.assertEqual(self.module.bisect_right(sequence, 2.5, key=key), 3)
++        self.assertEqual(calls, [("old", 2), ("new", 3)])
++
+     def test_insort(self):
+         from random import shuffle
+         mod = self.module

@@ -1,0 +1,34 @@
+diff --git a/Lib/test/test_pystats.py b/Lib/test/test_pystats.py
+--- a/Lib/test/test_pystats.py
++++ b/Lib/test/test_pystats.py
+@@ -194,6 +194,30 @@
+                 PYTHONMALLOC='malloc_debug', PYTHONSTATS='1',
+                 PYTHON_PYSTATS_DIR=directory)
+ 
++    def test_owner_metadata_with_failing_python_allocator(self):
++        # _testcapi hooks every PyMem domain until process exit. The stats
++        # reporter must still resolve the PCs it recorded before the hook.
++        code = """
++            import atexit
++            from test.support import inject_memory_error
++            atexit.register(lambda: None)
++            inject_memory_error()
++        """
++        with tempfile.TemporaryDirectory() as directory:
++            script_helper.assert_python_ok(
++                '-X', 'pystats', '-c', textwrap.dedent(code),
++                PYTHONSTATS='', PYTHON_PYSTATS_DIR=directory)
++            dumps = list(Path(directory).glob('*.txt'))
++            self.assertTrue(dumps)
++            for dump in dumps:
++                lines = dump.read_text().splitlines()
++                owners = [line for line in lines
++                          if line.startswith('Box owner (')]
++                self.assertTrue(owners)
++                self.assertTrue(any(line.startswith('Box object [')
++                                    for line in lines))
++                self.assertFalse(any('?' in line for line in owners))
++
+     def test_stats_toggle_on(self):
+         """Check the toggle on functionality.
+         """

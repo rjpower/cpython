@@ -1,0 +1,189 @@
+--- a/Include/cpython/object.h
++++ b/Include/cpython/object.h
+@@ -209,7 +209,7 @@
+     _Py_valuefunc send;
+     _Py_valuefunc sq_concat;
+     _Py_valuefunc sq_inplace_concat;
+-    _Py_valuefunc new;
++    _Py_valuefunc new_;
+ } _PyValueSlots;
+ 
+ // If this structure is modified, Doc/includes/typestruct.h should be updated
+--- a/Include/internal/pycore_value_slots.h
++++ b/Include/internal/pycore_value_slots.h
+@@ -160,7 +160,7 @@
+     X(send, as_async.am_send, SEND, NONE) \
+     X(sq_concat, as_sequence.sq_concat, CONCAT, CONCAT) \
+     X(sq_inplace_concat, as_sequence.sq_inplace_concat, CONCAT, CONCAT) \
+-    X(new, ht_type.tp_new, NEW, NONE)
++    X(new_, ht_type.tp_new, NEW, NONE)
+ 
+ /* _Py_VALUE_SLOT_INDEX_<field>: the row of a field. */
+ #define _Py_VALUE_SLOT_ENUM(FIELD, PATH, KIND, WRAPPER) \
+@@ -171,7 +171,7 @@
+ };
+ #undef _Py_VALUE_SLOT_ENUM
+ 
+-static_assert(_Py_VALUE_SLOT_COUNT == 53, "53 value slot fields");
++static_assert(_Py_VALUE_SLOT_COUNT == 54, "54 value slot fields");
+ static_assert(sizeof(_PyValueSlots) ==
+               _Py_VALUE_SLOT_COUNT * sizeof(_Py_valuefunc),
+               "_PyValueSlots has one field per row of the slot table");
+--- a/Include/internal/pycore_slots_generated.h
++++ b/Include/internal/pycore_slots_generated.h
+@@ -59,7 +59,7 @@
+ #define _Py_value_send 306
+ #define _Py_value_sq_concat 307
+ #define _Py_value_sq_inplace_concat 308
+-#define _Py_value_new 309
++#define _Py_value_new_ 309
+ 
+ static inline uint16_t
+ _PySlot_resolve_type_slot(uint16_t slot_id)
+@@ -219,7 +219,7 @@
+         case _Py_value_send:
+         case _Py_value_sq_concat:
+         case _Py_value_sq_inplace_concat:
+-        case _Py_value_new:
++        case _Py_value_new_:
+             return slot_id;
+         default:
+             return Py_slot_invalid;
+@@ -589,8 +589,8 @@
+             return (void*)tp->tp_value.sq_concat;
+         case _Py_value_sq_inplace_concat:
+             return (void*)tp->tp_value.sq_inplace_concat;
+-        case _Py_value_new:
+-            return (void*)tp->tp_value.new;
++        case _Py_value_new_:
++            return (void*)tp->tp_value.new_;
+     }
+     _PySlot_err_bad_slot("PyType_GetSlot", slot_id);
+     return NULL;
+@@ -1005,8 +1005,8 @@
+         case _Py_value_sq_inplace_concat:
+             ht->ht_type.tp_value.sq_inplace_concat = (_Py_valuefunc)slot.sl_func;
+             break;
+-        case _Py_value_new:
+-            ht->ht_type.tp_value.new = (_Py_valuefunc)slot.sl_func;
++        case _Py_value_new_:
++            ht->ht_type.tp_value.new_ = (_Py_valuefunc)slot.sl_func;
+             break;
+     }
+ }
+@@ -1175,7 +1175,7 @@
+         case _Py_value_send: return _PySlot_DTYPE_FUNC;
+         case _Py_value_sq_concat: return _PySlot_DTYPE_FUNC;
+         case _Py_value_sq_inplace_concat: return _PySlot_DTYPE_FUNC;
+-        case _Py_value_new: return _PySlot_DTYPE_FUNC;
++        case _Py_value_new_: return _PySlot_DTYPE_FUNC;
+         default: return _PySlot_DTYPE_VOID;
+     }
+ }
+--- a/Python/slots.toml
++++ b/Python/slots.toml
+@@ -1111,6 +1111,6 @@
+ value_field = 'sq_inplace_concat'
+ 
+ [309]
+-name = '_Py_value_new'
++name = '_Py_value_new_'
+ kind = 'type'
+-value_field = 'new'
++value_field = 'new_'
+--- a/Python/slots_generated.c
++++ b/Python/slots_generated.c
+@@ -172,5 +172,5 @@
+     "_Py_value_send",
+     "_Py_value_sq_concat",
+     "_Py_value_sq_inplace_concat",
+-    "_Py_value_new",
++    "_Py_value_new_",
+ };
+--- a/Objects/typeobject.c
++++ b/Objects/typeobject.c
+@@ -12437,21 +12437,25 @@
+     PyThreadState *tstate = _PyThreadState_GET();
+     _PyBorrowMark mark = _PyBorrowScope_Enter(tstate);
+     newfunc object_new = type->tp_new;
+-    _Py_newvaluefunc value_new = _PyType_VALUE_SLOT(type, new);
+-    PyValue result;
++    _Py_newvaluefunc value_new = _PyType_VALUE_SLOT(type, new_);
++    PyValue result = PyValue_NULL;
++    PyObject *object_result = NULL;
+     if (value_new != NULL) {
+-        _PyType_CHECK_VALUE_ROW(type, _Py_VALUE_SLOT_INDEX_new);
++        _PyType_CHECK_VALUE_ROW(type, _Py_VALUE_SLOT_INDEX_new_);
+         result = value_new(subtype, args + 1, nargs - 1, kwnames);
+         _PyValue_ASSERT_RESULT(tstate, result);
+     }
+     else {
+-        PyObject *res = object_new(subtype, args_tuple, kwds);
+-        res = _Py_CheckFunctionResult(tstate, (PyObject *)type, res, NULL);
+-        result = _PyValue_FromObjectResult(res);
++        object_result = object_new(subtype, args_tuple, kwds);
+     }
+     Py_DECREF(args_tuple);
+     Py_XDECREF(kwds);
+     _PyBorrowScope_Exit(tstate, mark);
++    if (value_new == NULL) {
++        object_result = _Py_CheckFunctionResult(tstate, (PyObject *)type,
++                                                object_result, NULL);
++        return _PyValue_FromObjectResult(object_result);
++    }
+     return result;
+ }
+ 
+@@ -14139,7 +14143,7 @@
+     if (p->function == (void *)FUNC) { \
+         return _Py_VALUE_SLOT_INIT(FIELD, FUNC##_value); \
+     }
+-    SLOT_VALUE_PAIR(new, _Py_slot_tp_new)
++    SLOT_VALUE_PAIR(new_, _Py_slot_tp_new)
+     SLOT_VALUE_PAIR(nb_add, slot_nb_add)
+     SLOT_VALUE_PAIR(nb_subtract, slot_nb_subtract)
+     SLOT_VALUE_PAIR(nb_multiply, slot_nb_multiply)
+@@ -14590,7 +14594,7 @@
+                list.  Cut all that nonsense short -- this speeds
+                up instance creation tremendously. */
+             specific = (void *)type->tp_new;
+-            assert(row == _Py_VALUE_SLOT_INDEX_new);
++            assert(row == _Py_VALUE_SLOT_INDEX_new_);
+             specific_value = *value_slot_field(type, row);
+             /* XXX I'm not 100% sure that there isn't a hole
+                in this reasoning that requires additional
+--- a/Objects/longobject.c
++++ b/Objects/longobject.c
+@@ -7498,7 +7498,7 @@
+     .tp_value_vectorcall = (_Py_valuefunc)long_vectorcall,
+     .tp_version_tag = _Py_TYPE_VERSION_INT,
+     .tp_value = {
+-        .new = _Py_VALUE_SLOT_INIT(new, long_new_value),
++        .new_ = _Py_VALUE_SLOT_INIT(new_, long_new_value),
+         .nb_add = _Py_VALUE_SLOT_INIT(nb_add, _PyLong_ValueAdd),
+         .nb_subtract = _Py_VALUE_SLOT_INIT(nb_subtract, _PyLong_ValueSubtract),
+         .nb_multiply = _Py_VALUE_SLOT_INIT(nb_multiply, _PyLong_ValueMultiply),
+--- a/Objects/floatobject.c
++++ b/Objects/floatobject.c
+@@ -2036,7 +2036,7 @@
+     .tp_value_vectorcall = (_Py_valuefunc)float_vectorcall,
+     .tp_version_tag = _Py_TYPE_VERSION_FLOAT,
+     .tp_value = {
+-        .new = _Py_VALUE_SLOT_INIT(new, float_new_value),
++        .new_ = _Py_VALUE_SLOT_INIT(new_, float_new_value),
+         .nb_add = _Py_VALUE_SLOT_INIT(nb_add, _PyFloat_ValueAdd),
+         .nb_subtract = _Py_VALUE_SLOT_INIT(nb_subtract,
+                                            _PyFloat_ValueSubtract),
+--- a/Objects/value_pairs.c
++++ b/Objects/value_pairs.c
+@@ -18,8 +18,8 @@
+ #include "pycore_value_slots.h"   // _PyValueSlotPair
+ 
+ const _PyValueSlotPair _PyValueSlot_Pairs[] = {
+-    {_Py_VALUE_SLOT_INDEX_new, (void *)_Py_slot_tp_new,
+-     _Py_VALUE_SLOT_INIT(new, _Py_slot_tp_new_value)},
++    {_Py_VALUE_SLOT_INDEX_new_, (void *)_Py_slot_tp_new,
++     _Py_VALUE_SLOT_INIT(new_, _Py_slot_tp_new_value)},
+     {_Py_VALUE_SLOT_INDEX_hash, (void *)PyObject_HashNotImplemented,
+      _Py_VALUE_SLOT_INIT(hash, _PyValue_HashNotImplemented)},
+     {_Py_VALUE_SLOT_INDEX_hash, (void *)PyObject_GenericHash,

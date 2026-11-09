@@ -1,0 +1,137 @@
+--- a/Modules/_decimal/_decimal.c
++++ b/Modules/_decimal/_decimal.c
+@@ -163,6 +163,21 @@
+ }
+ 
+ static inline decimal_state *
++find_state_left_or_right_value(PyValueBorrow left, PyValueBorrow right)
++{
++    PyTypeObject *base;
++    if (PyType_GetBaseByToken(PyValue_TYPE(left), &dec_spec, &base) != 1) {
++        assert(!PyErr_Occurred());
++        PyType_GetBaseByToken(PyValue_TYPE(right), &dec_spec, &base);
++    }
++    assert(base != NULL);
++    void *state = _PyType_GetModuleState(base);
++    assert(state != NULL);
++    Py_DECREF(base);
++    return (decimal_state *)state;
++}
++
++static inline decimal_state *
+ find_state_ternary(PyObject *left, PyObject *right, PyObject *modulus)
+ {
+     PyTypeObject *base;
+@@ -3538,6 +3553,19 @@
+     return 0;
+ }
+ 
++/* 1: converted, 0: unsupported, -1: exception. */
++static int
++convert_op_slot(PyObject **result, PyValueBorrow value, PyObject *context)
++{
++    decimal_state *state = get_module_state_from_ctx(context);
++    if (!PyValue_LongCheck(value) &&
++        !(PyValue_IsObject(value) &&
++          PyDec_Check(state, PyValue_AsKnownObjectBorrow(value)))) {
++        return 0;
++    }
++    return convert_op_value(result, value, context) ? 1 : -1;
++}
++
+ /* Return NotImplemented for unsupported types. */
+ #define CONVERT_OP(a, v, context) \
+     if (!convert_op(NOT_IMPL, a, v, context)) { \
+@@ -4661,34 +4689,40 @@
+ 
+ /* Binary number method that uses default module context. */
+ #define Dec_BinaryNumberMethod(MPDFUNC) \
+-static PyObject *                                                \
+-nm_##MPDFUNC(PyObject *self, PyObject *other)                    \
+-{                                                                \
+-    PyObject *a, *b;                                             \
+-    PyObject *result;                                            \
+-    PyObject *context;                                           \
+-    uint32_t status = 0;                                         \
+-                                                                 \
+-    decimal_state *state = find_state_left_or_right(self, other); \
+-    CURRENT_CONTEXT(state, context) ;                            \
+-    CONVERT_BINOP(&a, &b, self, other, context);                 \
+-                                                                 \
+-    if ((result = dec_alloc(state)) == NULL) {                   \
+-        Py_DECREF(a);                                            \
+-        Py_DECREF(b);                                            \
+-        return NULL;                                             \
+-    }                                                            \
+-                                                                 \
+-    MPDFUNC(MPD(result), MPD(a), MPD(b), CTX(context), &status); \
+-    Py_DECREF(a);                                                \
+-    Py_DECREF(b);                                                \
+-    if (dec_addstatus(context, status)) {                        \
+-        Py_DECREF(result);                                       \
+-        return NULL;                                             \
+-    }                                                            \
+-                                                                 \
+-    return result;                                               \
+-}
++static PyValue                                                                    \
++nm_##MPDFUNC##_value(PyValueBorrow self, PyValueBorrow other)                     \
++{                                                                                 \
++    PyObject *a, *b, *result;                                                     \
++    uint32_t status = 0;                                                          \
++    decimal_state *state = find_state_left_or_right_value(self, other);           \
++    PyObject *context = optional_context_value(state, PyValue_Borrow(PyValue_None));\
++    if (context == NULL) {                                                        \
++        return PyValue_NULL;                                                      \
++    }                                                                             \
++    int converted = convert_op_slot(&a, self, context);                           \
++    if (converted <= 0) {                                                         \
++        return converted < 0 ? PyValue_NULL : PyValue_NotImplemented;             \
++    }                                                                             \
++    converted = convert_op_slot(&b, other, context);                              \
++    if (converted <= 0) {                                                         \
++        Py_DECREF(a);                                                             \
++        return converted < 0 ? PyValue_NULL : PyValue_NotImplemented;             \
++    }                                                                             \
++    if ((result = dec_alloc(state)) == NULL) {                                    \
++        Py_DECREF(a);                                                             \
++        Py_DECREF(b);                                                             \
++        return PyValue_NULL;                                                      \
++    }                                                                             \
++    MPDFUNC(MPD(result), MPD(a), MPD(b), CTX(context), &status);                  \
++    Py_DECREF(a);                                                                 \
++    Py_DECREF(b);                                                                 \
++    if (dec_addstatus(context, status)) {                                         \
++        Py_DECREF(result);                                                        \
++        return PyValue_NULL;                                                      \
++    }                                                                             \
++    return PyValue_FromObjectSteal(result);                                       \
++}                                                                                 \
++_Py_VALUE_THUNK_BINARY(nm_##MPDFUNC, nm_##MPDFUNC##_value)
+ 
+ /* Boolean function without a context arg.
+    Argument Clinic provides PyObject *self
+@@ -6653,9 +6687,13 @@
+ 
+     // Number protocol
+     {Py_nb_add, nm_mpd_qadd},
++    {_Py_value_nb_add, nm_mpd_qadd_value},
+     {Py_nb_subtract, nm_mpd_qsub},
++    {_Py_value_nb_subtract, nm_mpd_qsub_value},
+     {Py_nb_multiply, nm_mpd_qmul},
++    {_Py_value_nb_multiply, nm_mpd_qmul_value},
+     {Py_nb_remainder, nm_mpd_qrem},
++    {_Py_value_nb_remainder, nm_mpd_qrem_value},
+     {Py_nb_divmod, nm_mpd_qdivmod},
+     {Py_nb_power, nm_mpd_qpow},
+     {Py_nb_negative, nm_mpd_qminus},
+@@ -6666,7 +6704,9 @@
+     {_Py_value_nb_int, nm_dec_as_long_value},
+     {Py_nb_float, PyDec_AsFloat},
+     {Py_nb_floor_divide, nm_mpd_qdivint},
++    {_Py_value_nb_floor_divide, nm_mpd_qdivint_value},
+     {Py_nb_true_divide, nm_mpd_qdiv},
++    {_Py_value_nb_true_divide, nm_mpd_qdiv_value},
+     {0, NULL},
+ };
+ 

@@ -1,0 +1,62 @@
+--- a/Objects/descrobject.c
++++ b/Objects/descrobject.c
+@@ -1958,7 +1958,7 @@
+ {
+     propertyobject *prop = (propertyobject *)PyValue_AsKnownObjectBorrow(self);
+     PyValue old = prop->prop_doc;
+-    prop->prop_doc = PyValue_DUP(value);
++    prop->prop_doc = PyValue_XDUP(value);
+     PyValue_XCLOSE(old);
+     return 0;
+ }
+@@ -2169,9 +2169,10 @@
+ {
+     PyValue value = obj == NULL ? PyValue_NULL :
+         PyValue_FromObjectSteal(Py_NewRef(obj));
+-    return _PyValue_THUNK_EXIT(
+-        property_descr_get_value(self, PyValue_Borrow(value), type),
+-        BOX_SITE_ATTRIBUTE);
++    PyValue result = property_descr_get_value(self, PyValue_Borrow(value),
++                                              type);
++    PyValue_XCLOSE(value);
++    return _PyValue_THUNK_EXIT(result, BOX_SITE_ATTRIBUTE);
+ }
+ 
+ Py_VALUE_ENTRY static int
+@@ -2241,7 +2242,7 @@
+     PyValue_CLOSE(type);
+     if (!PyValue_IsNull(result) && PyValue_IsObject(result) &&
+         PyObject_TypeCheck(PyValue_AsKnownObjectBorrow(result),
+-                           &PyProperty_Type) && !PyValue_IsNull(old_name))
++                           &PyProperty_Type))
+     {
+         propertyobject *new_prop = (propertyobject *)
+             PyValue_AsKnownObjectBorrow(result);
+@@ -2416,7 +2417,7 @@
+     propertyobject *prop = _propertyobject_CAST(
+         PyValue_AsKnownObjectBorrow(op));
+     PyValue old = prop->prop_name;
+-    prop->prop_name = PyValue_DUP(value);
++    prop->prop_name = PyValue_XDUP(value);
+     PyValue_XCLOSE(old);
+     return 0;
+ }
+--- a/Lib/test/test_property.py
++++ b/Lib/test/test_property.py
+@@ -87,6 +87,16 @@
+         self.assertEqual(prop.__name__, 11)
+         self.assertEqual((prop.getter(None).fget, prop.setter(None).fset,
+                           prop.deleter(None).fdel), (7, 8, 9))
++
++        def named_getter(instance):
++            return None
++
++        prop = property(named_getter, doc="description")
++        prop.__name__ = "custom"
++        del prop.__name__
++        self.assertEqual(prop.__name__, "named_getter")
++        del prop.__doc__
++        self.assertIsNone(prop.__doc__)
+ 
+         calls = []
+         holder = {}

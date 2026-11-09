@@ -1,0 +1,121 @@
+--- a/Modules/_decimal/_decimal.c
++++ b/Modules/_decimal/_decimal.c
+@@ -643,11 +643,6 @@
+     return x;
+ }
+ 
+-static uint32_t
+-long_as_flags(PyObject *v)
+-{
+-    return long_as_flags_value(PyValue_FromObjectBorrow(v));
+-}
+ #endif
+ 
+ static int
+@@ -933,36 +928,6 @@
+ /*                         Context Object, Part 1                             */
+ /******************************************************************************/
+ 
+-#define Dec_CONTEXT_GET_SSIZE(mem)                          \
+-static PyObject *                                           \
+-context_get##mem(PyObject *self, void *Py_UNUSED(closure))  \
+-{                                                           \
+-    return PyLong_FromSsize_t(mpd_get##mem(CTX(self)));     \
+-}
+-
+-#define Dec_CONTEXT_GET_ULONG(mem)                              \
+-static PyObject *                                               \
+-context_get##mem(PyObject *self, void *Py_UNUSED(closure))      \
+-{                                                               \
+-    return PyLong_FromUnsignedLong(mpd_get##mem(CTX(self)));    \
+-}
+-
+-
+-#ifdef EXTRA_FUNCTIONALITY
+-Dec_CONTEXT_GET_ULONG(traps)
+-Dec_CONTEXT_GET_ULONG(status)
+-#endif
+-
+-
+-
+-#ifdef EXTRA_FUNCTIONALITY
+-static PyObject *
+-context_getallcr(PyObject *self, void *Py_UNUSED(closure))
+-{
+-    return PyLong_FromLong(mpd_getcr(CTX(self)));
+-}
+-#endif
+-
+ /*[clinic input]
+ _decimal.Context.Etiny
+ 
+@@ -1172,12 +1137,12 @@
+ 
+ #ifdef EXTRA_FUNCTIONALITY
+ static int
+-context_settraps(PyObject *self, PyObject *value, void *Py_UNUSED(closure))
++context_settraps_value(PyObject *self, PyValueBorrow value, void *Py_UNUSED(closure))
+ {
+     mpd_context_t *ctx;
+     uint32_t flags;
+ 
+-    flags = long_as_flags(value);
++    flags = long_as_flags_value(value);
+     if (flags & DEC_ERRORS) {
+         return -1;
+     }
+@@ -1237,12 +1202,12 @@
+ 
+ #ifdef EXTRA_FUNCTIONALITY
+ static int
+-context_setstatus(PyObject *self, PyObject *value, void *Py_UNUSED(closure))
++context_setstatus_value(PyObject *self, PyValueBorrow value, void *Py_UNUSED(closure))
+ {
+     mpd_context_t *ctx;
+     uint32_t flags;
+ 
+-    flags = long_as_flags(value);
++    flags = long_as_flags_value(value);
+     if (flags & DEC_ERRORS) {
+         return -1;
+     }
+@@ -1324,12 +1289,12 @@
+ 
+ #ifdef EXTRA_FUNCTIONALITY
+ static int
+-context_setallcr(PyObject *self, PyObject *value, void *Py_UNUSED(closure))
++context_setallcr_value(PyObject *self, PyValueBorrow value, void *Py_UNUSED(closure))
+ {
+     mpd_context_t *ctx;
+     mpd_ssize_t x;
+ 
+-    x = PyLong_AsSsize_t(value);
++    x = _PyValue_IntAsSsize_t(value);
+     if (x == -1 && PyErr_Occurred()) {
+         return -1;
+     }
+@@ -1906,6 +1871,11 @@
+ CONTEXT_VALUE_GETSET(capitals, PyValue_FromInt64(CtxCaps(self)))
+ CONTEXT_VALUE_GETSET(round, PyValue_DUP(PyValue_FromObjectBorrow(
+     get_module_state_from_ctx(self)->round_map[mpd_getround(CTX(self))])))
++#ifdef EXTRA_FUNCTIONALITY
++CONTEXT_VALUE_GETSET(allcr, PyValue_FromInt64(mpd_getcr(CTX(self))))
++CONTEXT_VALUE_GETSET(traps, PyValue_FromUInt64(mpd_gettraps(CTX(self))))
++CONTEXT_VALUE_GETSET(status, PyValue_FromUInt64(mpd_getstatus(CTX(self))))
++#endif
+ 
+ static PyGetSetDef context_getsets [] =
+ {
+@@ -1916,9 +1886,9 @@
+   _Py_VALUE_GETSET("capitals", context_getcapitals_value, context_setcapitals_descriptor, NULL, NULL),
+   _Py_VALUE_GETSET("clamp", context_getclamp_value, context_setclamp_descriptor, NULL, NULL),
+ #ifdef EXTRA_FUNCTIONALITY
+-  { "_allcr", context_getallcr, context_setallcr, NULL, NULL},
+-  { "_traps", context_gettraps, context_settraps, NULL, NULL},
+-  { "_flags", context_getstatus, context_setstatus, NULL, NULL},
++  _Py_VALUE_GETSET("_allcr", context_getallcr_value, context_setallcr_descriptor, NULL, NULL),
++  _Py_VALUE_GETSET("_traps", context_gettraps_value, context_settraps_descriptor, NULL, NULL),
++  _Py_VALUE_GETSET("_flags", context_getstatus_value, context_setstatus_descriptor, NULL, NULL),
+ #endif
+   {NULL}
+ };

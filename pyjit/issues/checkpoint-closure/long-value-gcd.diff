@@ -1,0 +1,142 @@
+--- a/Objects/longobject.c
++++ b/Objects/longobject.c
+@@ -5728,8 +5728,8 @@
+     }
+ }
+ 
+-PyObject *
+-_PyLong_GCD(PyObject *aarg, PyObject *barg)
++static PyValue
++long_gcd_heap_values(PyObject *aarg, PyObject *barg)
+ {
+     PyLongObject *a, *b, *c = NULL, *d = NULL, *r;
+     stwodigits x, y, q, s, t, c_carry, d_carry;
+@@ -5748,11 +5748,11 @@
+     /* Initial reduction: make sure that 0 <= b <= a. */
+     a = long_abs(a);
+     if (a == NULL)
+-        return NULL;
++        return PyValue_NULL;
+     b = long_abs(b);
+     if (b == NULL) {
+         Py_DECREF(a);
+-        return NULL;
++        return PyValue_NULL;
+     }
+     if (long_compare(_PyLong_SpanOf(a), _PyLong_SpanOf(b)) < 0) {
+         r = a;
+@@ -5781,7 +5781,10 @@
+             Py_DECREF(b);
+             Py_XDECREF(c);
+             Py_XDECREF(d);
+-            return (PyObject *)r;
++            if (r == NULL) {
++                return PyValue_NULL;
++            }
++            return PyValue_FromObjectSteal((PyObject *)r);
+         }
+         x = (((twodigits)a->long_value.ob_digit[size_a-1] << (2*PyLong_SHIFT-nbits)) |
+              ((twodigits)a->long_value.ob_digit[size_a-2] << (PyLong_SHIFT-nbits)) |
+@@ -5914,20 +5917,84 @@
+         y = x % y;
+         x = t;
+     }
+-#if LONG_MAX >> PyLong_SHIFT >> PyLong_SHIFT
+-    return PyLong_FromLong(x);
+-#elif LLONG_MAX >> PyLong_SHIFT >> PyLong_SHIFT
+-    return PyLong_FromLongLong(x);
+-#else
+-# error "_PyLong_GCD"
+-#endif
++    return PyValue_FromUInt64((uint64_t)x);
+ 
+ error:
+     Py_DECREF(a);
+     Py_DECREF(b);
+     Py_XDECREF(c);
+     Py_XDECREF(d);
+-    return NULL;
++    return PyValue_NULL;
++}
++
++
++/* Magnitude of a signed word without overflowing on INT64_MIN. */
++static uint64_t
++long_gcd_magnitude(int64_t value)
++{
++    return value < 0 ? 0 - (uint64_t)value : (uint64_t)value;
++}
++
++static PyValue
++long_gcd_words(uint64_t a, uint64_t b)
++{
++    while (b != 0) {
++        uint64_t remainder = a % b;
++        a = b;
++        b = remainder;
++    }
++    return PyValue_FromUInt64(a);
++}
++
++PyValue
++_PyLong_ValueGCD(PyValueBorrow left, PyValueBorrow right)
++{
++    assert(PyValue_LongCheck(left));
++    assert(PyValue_LongCheck(right));
++    digit left_digits[_PyLong_WORD_DIGITS];
++    digit right_digits[_PyLong_WORD_DIGITS];
++    int left_overflow, right_overflow;
++    int64_t left_word = _PyLong_SpanAsInt64AndOverflow(
++        _PyLong_SpanOfValue(left, left_digits), &left_overflow);
++    int64_t right_word = _PyLong_SpanAsInt64AndOverflow(
++        _PyLong_SpanOfValue(right, right_digits), &right_overflow);
++
++    if (!left_overflow && !right_overflow) {
++        return long_gcd_words(long_gcd_magnitude(left_word),
++                              long_gcd_magnitude(right_word));
++    }
++    if (left_overflow && right_overflow) {
++        return long_gcd_heap_values(PyValue_AsKnownObjectBorrow(left),
++                                    PyValue_AsKnownObjectBorrow(right));
++    }
++
++    PyValueBorrow huge = left_overflow ? left : right;
++    PyValueBorrow word = left_overflow ? right : left;
++    int64_t word_number = left_overflow ? right_word : left_word;
++    if (word_number == 0) {
++        return _PyLong_ValueAbsolute(huge);
++    }
++    PyValue rem = _PyLong_ValueRemainder(huge, word);
++    if (PyValue_IsNull(rem)) {
++        return PyValue_NULL;
++    }
++    digit rem_digits[_PyLong_WORD_DIGITS];
++    int overflow;
++    int64_t rem_number = _PyLong_SpanAsInt64AndOverflow(
++        _PyLong_SpanOfValue(PyValue_Borrow(rem), rem_digits), &overflow);
++    PyValue_CLOSE(rem);
++    assert(!overflow);
++    return long_gcd_words(long_gcd_magnitude(word_number),
++                          long_gcd_magnitude(rem_number));
++}
++
++/* Object compatibility entry; value-native callers use _PyLong_ValueGCD. */
++Py_VALUE_ENTRY PyObject *
++_PyLong_GCD(PyObject *left, PyObject *right)
++{
++    return _PyValue_THUNK_EXIT(
++        _PyLong_ValueGCD(PyValue_FromObjectBorrow(left),
++                         PyValue_FromObjectBorrow(right)), BOX_SITE_NUMBER);
+ }
+ 
+ static PyObject *
+--- a/Include/internal/pycore_long_value.h
++++ b/Include/internal/pycore_long_value.h
+@@ -279,6 +279,7 @@
+ PyAPI_FUNC(PyValue) _PyLong_ValueAdd(PyValueBorrow v, PyValueBorrow w);
+ PyAPI_FUNC(PyValue) _PyLong_ValueSubtract(PyValueBorrow v, PyValueBorrow w);
+ PyAPI_FUNC(PyValue) _PyLong_ValueMultiply(PyValueBorrow v, PyValueBorrow w);
++PyAPI_FUNC(PyValue) _PyLong_ValueGCD(PyValueBorrow v, PyValueBorrow w);
+ PyAPI_FUNC(PyValue) _PyLong_ValueRemainder(PyValueBorrow v, PyValueBorrow w);
+ PyAPI_FUNC(PyValue) _PyLong_ValueDivmod(PyValueBorrow v, PyValueBorrow w);
+ PyAPI_FUNC(PyValue) _PyLong_ValueFloorDivide(PyValueBorrow v,

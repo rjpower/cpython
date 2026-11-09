@@ -1,0 +1,78 @@
+--- a/Lib/test/test_pystats.py
++++ b/Lib/test/test_pystats.py
+@@ -79,6 +79,8 @@
+     code = code.replace('_TEST_CODE_', textwrap.dedent(test_code))
+     script_args = args + ['-c', code]
+     env_vars = dict(env_vars or {})
++    # Toggle tests control startup collection independently of their parent.
++    env_vars.setdefault('PYTHONSTATS', '')
+     # Each run dumps into a directory of its own, never the shared default.
+     # A process can dump more than once (sys._stats_dump(), then exit), so
+     # the counters of all its dumps add up.
+@@ -314,9 +316,13 @@
+         """Check that the dump has a box count for every site class.
+         """
+         code = """
++        import _testinternalcapi
+         def func_start():
++            sys._stats_clear()
+             items = [1000]
+             items.pop()
++            _testinternalcapi.pyvalue_contract(1000)
++            sys._stats_off()
+         """
+         stats = run_test_code_stats(code, args=['-X', 'pystats'])
+         sites = ['unattributed', 'number', 'compare', 'repr', 'sequence',
+@@ -326,8 +332,9 @@
+         boxes = {site: int(stats[f'Boxing by site ({site})'])
+                  for site in sites}
+         self.assertIn('Entry unboxing', stats)
+-        # list.pop() boxes the inline int it removes.
+-        self.assertGreaterEqual(boxes['list'], 1)
++        self.assertEqual(boxes['list'], 0)
++        # The test-only owning bridge deliberately projects an inline value.
++        self.assertGreaterEqual(boxes['test'], 1)
+         self.assertEqual(sum(boxes.values()),
+                          int(stats['Object inline int boxes'])
+                          + int(stats['Object inline float boxes']))
+@@ -337,13 +344,14 @@
+         value-api-v2a0.md, section 4.7).
+         """
+         code = """
+-        import operator
++        import _testcapi
+         def func_start():
+-            # int's value slots are in place (V2a-1a): PyNumber_Add() makes
+-            # its operands inline, the adapter boxes them for the object-form
+-            # operator.add(), which reaches int's nb_add thunk with objects,
+-            # and the thunk boxes the inline result.
+-            operator.add(1000, 2000)
++            sys._stats_clear()
++            # The object fastcall requires two adapter projections. The
++            # number API deliberately exercises parser and result thunks.
++            _testcapi.meth_fastcall(1000, 2000)
++            _testcapi.number_add(1000, 2000)
++            sys._stats_off()
+         """
+         stats = run_test_code_stats(code, args=['-X', 'pystats'])
+         kinds = box_kinds(stats)
+@@ -366,16 +374,15 @@
+         # Collection stops right after the statement, so that the template's
+         # threads add nothing; the dump at exit still has the counts.
+         for statement, expected in (
+-            # int's and str's value sides return NotImplemented; the C box is
+-            # the generic COMPARE_OP handler's.
+-            ("x == 'a'", {'core': 1, 'slot adapter': 0, 'thunk': 0,
++            # These core paths now stay in value form end to end.
++            ("x == 'a'", {'core': 0, 'slot adapter': 0, 'thunk': 0,
+                           'call adapter': 0}),
+             ("'a' in [x, 2000, 'a']", {'core': 0, 'slot adapter': 0,
+                                        'thunk': 0, 'call adapter': 0}),
+             ("repr([x, 2000])", {'core': 0, 'slot adapter': 0, 'thunk': 0,
+                                  'call adapter': 0}),
+             ("operator.add(x, 2000)", {'core': 0, 'slot adapter': 0,
+-                                       'thunk': 1, 'call adapter': 2}),
++                                       'thunk': 0, 'call adapter': 0}),
+         ):
+             with self.subTest(statement=statement):
+                 code = f"""

@@ -1,0 +1,82 @@
+--- a/Modules/_decimal/_decimal.c
++++ b/Modules/_decimal/_decimal.c
+@@ -4665,27 +4665,28 @@
+ 
+ /* Unary number method that uses the default module context. */
+ #define Dec_UnaryNumberMethod(MPDFUNC) \
+-static PyObject *                                           \
+-nm_##MPDFUNC(PyObject *self)                                \
+-{                                                           \
+-    PyObject *result;                                       \
+-    PyObject *context;                                      \
+-    uint32_t status = 0;                                    \
+-                                                            \
+-    decimal_state *state = get_module_state_by_def(Py_TYPE(self));   \
+-    CURRENT_CONTEXT(state, context);                        \
+-    if ((result = dec_alloc(state)) == NULL) {              \
+-        return NULL;                                        \
+-    }                                                       \
+-                                                            \
+-    MPDFUNC(MPD(result), MPD(self), CTX(context), &status); \
+-    if (dec_addstatus(context, status)) {                   \
+-        Py_DECREF(result);                                  \
+-        return NULL;                                        \
+-    }                                                       \
+-                                                            \
+-    return result;                                          \
+-}
++static PyValue                                                                    \
++nm_##MPDFUNC##_value(PyValueBorrow value)                                         \
++{                                                                                 \
++    PyObject *self = PyValue_AsKnownObjectBorrow(value);                          \
++    uint32_t status = 0;                                                          \
++    decimal_state *state = get_module_state_by_def(Py_TYPE(self));                \
++    PyObject *context = optional_context_value(state, PyValue_Borrow(PyValue_None));\
++    if (context == NULL) {                                                        \
++        return PyValue_NULL;                                                      \
++    }                                                                             \
++    PyObject *result = dec_alloc(state);                                          \
++    if (result == NULL) {                                                         \
++        return PyValue_NULL;                                                      \
++    }                                                                             \
++    MPDFUNC(MPD(result), MPD(self), CTX(context), &status);                       \
++    if (dec_addstatus(context, status)) {                                         \
++        Py_DECREF(result);                                                        \
++        return PyValue_NULL;                                                      \
++    }                                                                             \
++    return PyValue_FromObjectSteal(result);                                       \
++}                                                                                 \
++_Py_VALUE_THUNK_UNARY(nm_##MPDFUNC, nm_##MPDFUNC##_value)
+ 
+ /* Binary number method that uses default module context. */
+ #define Dec_BinaryNumberMethod(MPDFUNC) \
+@@ -4931,11 +4932,13 @@
+ _Py_VALUE_THUNK_UNARY(nm_dec_as_long, nm_dec_as_long_value)
+ 
+ static int
+-nm_nonzero(PyObject *v)
++nm_nonzero_value(PyValueBorrow value)
+ {
+-    return !mpd_iszero(MPD(v));
++    return !mpd_iszero(MPD(PyValue_AsKnownObjectBorrow(value)));
+ }
+ 
++_Py_VALUE_THUNK_INQUIRY(nm_nonzero, nm_nonzero_value)
++
+ static PyObject *
+ nm_mpd_qdivmod(PyObject *v, PyObject *w)
+ {
+@@ -6697,9 +6700,13 @@
+     {Py_nb_divmod, nm_mpd_qdivmod},
+     {Py_nb_power, nm_mpd_qpow},
+     {Py_nb_negative, nm_mpd_qminus},
++    {_Py_value_nb_negative, nm_mpd_qminus_value},
+     {Py_nb_positive, nm_mpd_qplus},
++    {_Py_value_nb_positive, nm_mpd_qplus_value},
+     {Py_nb_absolute, nm_mpd_qabs},
++    {_Py_value_nb_absolute, nm_mpd_qabs_value},
+     {Py_nb_bool, nm_nonzero},
++    {_Py_value_nb_bool, nm_nonzero_value},
+     {Py_nb_int, nm_dec_as_long},
+     {_Py_value_nb_int, nm_dec_as_long_value},
+     {Py_nb_float, PyDec_AsFloat},

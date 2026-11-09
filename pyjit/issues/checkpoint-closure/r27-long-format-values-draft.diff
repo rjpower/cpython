@@ -1,0 +1,320 @@
+--- a/Objects/longobject.c
++++ b/Objects/longobject.c
+@@ -2275,11 +2275,10 @@
+    if alternate is nonzero. */
+ 
+ static int
+-long_format_binary(PyObject *aa, int base, int alternate,
++long_format_binary_span(_PyLongSpan a, int base, int alternate,
+                    PyObject **p_output, _PyUnicodeWriter *writer,
+                    PyBytesWriter *bytes_writer, char **bytes_str)
+ {
+-    PyLongObject *a = (PyLongObject *)aa;
+     PyObject *v = NULL;
+     Py_ssize_t sz;
+     Py_ssize_t size_a;
+@@ -2289,12 +2288,8 @@
+     assert(base == 2 || base == 8 || base == 16);
+     // writer or bytes_writer can be used, but not both at the same time.
+     assert(writer == NULL || bytes_writer == NULL);
+-    if (a == NULL || !PyLong_Check(a)) {
+-        PyErr_BadInternalCall();
+-        return -1;
+-    }
+-    size_a = _PyLong_DigitCount(a);
+-    negative = _PyLong_IsNegative(a);
++    size_a = a.n;
++    negative = a.neg;
+ 
+     /* Compute a rough upper bound for the length of the string */
+     switch (base) {
+@@ -2324,7 +2319,7 @@
+             return -1;
+         }
+         size_a_in_bits = (size_a - 1) * PyLong_SHIFT +
+-                         bit_length_digit(a->long_value.ob_digit[size_a - 1]);
++                         bit_length_digit(a.d[size_a - 1]);
+         /* Allow 1 character for a '-' sign. */
+         sz = negative + (size_a_in_bits + (bits - 1)) / bits;
+     }
+@@ -2363,7 +2358,7 @@
+             int accumbits = 0;   /* # of bits in accum */               \
+             Py_ssize_t i;                                               \
+             for (i = 0; i < size_a; ++i) {                              \
+-                accum |= (twodigits)a->long_value.ob_digit[i] << accumbits;        \
++                accum |= (twodigits)a.d[i] << accumbits;        \
+                 accumbits += PyLong_SHIFT;                              \
+                 assert(accumbits >= bits);                              \
+                 do {                                                    \
+@@ -2443,6 +2438,22 @@
+     return 0;
+ }
+ 
++
++static int
++long_format_binary(PyObject *obj, int base, int alternate,
++                   PyObject **p_output, _PyUnicodeWriter *writer,
++                   PyBytesWriter *bytes_writer, char **bytes_str)
++{
++    assert(base == 2 || base == 8 || base == 16);
++    if (obj == NULL || !PyLong_Check(obj)) {
++        PyErr_BadInternalCall();
++        return -1;
++    }
++    return long_format_binary_span(_PyLong_SpanOf((PyLongObject *)obj),
++                                   base, alternate, p_output, writer,
++                                   bytes_writer, bytes_str);
++}
++
+ PyObject *
+ _PyLong_Format(PyObject *obj, int base)
+ {
+@@ -2470,6 +2481,39 @@
+                                   NULL, NULL);
+ }
+ 
++/* The word-backed span stays live through the synchronous formatter. */
++PyObject *
++_PyLong_FormatValue(PyValueBorrow value, int base)
++{
++    if (!PyValue_IsInlineInt(value)) {
++        return _PyLong_Format(PyValue_AsKnownObjectBorrow(value), base);
++    }
++    digit digits[_PyLong_WORD_DIGITS];
++    _PyLongSpan span = _PyLong_SpanOfValue(value, digits);
++    PyObject *str;
++    int err = base == 10
++        ? long_to_decimal_string_internal(span, &str, NULL, NULL, NULL)
++        : long_format_binary_span(span, base, 1, &str, NULL, NULL, NULL);
++    return err < 0 ? NULL : str;
++}
++
++int
++_PyLong_FormatWriterValue(_PyUnicodeWriter *writer, PyValueBorrow value,
++                          int base, int alternate)
++{
++    if (!PyValue_IsInlineInt(value)) {
++        return _PyLong_FormatWriter(writer, PyValue_AsKnownObjectBorrow(value),
++                                    base, alternate);
++    }
++    digit digits[_PyLong_WORD_DIGITS];
++    _PyLongSpan span = _PyLong_SpanOfValue(value, digits);
++    if (base == 10) {
++        return long_to_decimal_writer_span(writer, span);
++    }
++    return long_format_binary_span(span, base, alternate, NULL, writer,
++                                   NULL, NULL);
++}
++
+ char*
+ _PyLong_FormatBytesWriter(PyBytesWriter *writer, char *str,
+                           PyObject *obj,
+@@ -6142,16 +6186,9 @@
+     _PyUnicodeWriter writer;
+     int ret;
+ 
+-    PyObject *obj = _PyValue_AsObjectAt(self, BOX_SITE_PARSER);
+-    if (obj == NULL) {
+-        return PyValue_NULL;
+-    }
+     _PyUnicodeWriter_Init(&writer);
+-    ret = _PyLong_FormatAdvancedWriter(
+-        &writer,
+-        obj,
+-        format_spec, 0, PyUnicode_GET_LENGTH(format_spec));
+-    Py_DECREF(obj);
++    ret = _PyLong_FormatAdvancedWriterValue(
++        &writer, self, format_spec, 0, PyUnicode_GET_LENGTH(format_spec));
+     if (ret == -1) {
+         _PyUnicodeWriter_Dealloc(&writer);
+         return PyValue_NULL;
+--- a/Objects/unicode_formatter.c
++++ b/Objects/unicode_formatter.c
+@@ -1196,7 +1196,7 @@
+ /************************************************************************/
+ 
+ static int
+-format_long_internal(PyObject *value, const InternalFormatSpec *format,
++format_long_internal(PyValueBorrow value, const InternalFormatSpec *format,
+                      _PyUnicodeWriter *writer)
+ {
+     int result = -1;
+@@ -1251,7 +1251,7 @@
+ 
+         /* taken from unicodeobject.c formatchar() */
+         /* Integer input truncated to a character */
+-        x = _PyValue_AsLong(PyValue_FromObjectBorrow(value));
++        x = _PyValue_AsLong(value);
+         if (x == -1 && PyErr_Occurred())
+             goto done;
+         if (x < 0 || x > 0x10ffff) {
+@@ -1307,10 +1307,10 @@
+             && format->width == -1
+             && format->type != 'X' && format->type != 'n'
+             && !format->thousands_separators
+-            && PyLong_CheckExact(value))
++            && PyValue_LongCheckExact(value))
+         {
+             /* Fast path */
+-            return _PyLong_FormatWriter(writer, value, base, format->alternate);
++            return _PyLong_FormatWriterValue(writer, value, base, format->alternate);
+         }
+ 
+         /* The number of prefix chars is the same as the leading
+@@ -1319,7 +1319,7 @@
+             n_prefix = leading_chars_to_skip;
+ 
+         /* Do the hard part, converting to a string in a given base */
+-        tmp = _PyLong_Format(value, base);
++        tmp = _PyLong_FormatValue(value, base);
+         if (tmp == NULL)
+             goto done;
+ 
+@@ -1833,26 +1833,25 @@
+ }
+ 
+ int
+-_PyLong_FormatAdvancedWriter(_PyUnicodeWriter *writer,
+-                             PyObject *obj,
++_PyLong_FormatAdvancedWriterValue(_PyUnicodeWriter *writer,
++                                  PyValueBorrow value,
+                              PyObject *format_spec,
+                              Py_ssize_t start, Py_ssize_t end)
+ {
+-    PyObject *tmp = NULL;
+     InternalFormatSpec format;
+     int result = -1;
+ 
+     /* check for the special case of zero length format spec, make
+        it equivalent to str(obj) */
+     if (start == end) {
+-        if (PyLong_CheckExact(obj))
+-            return _PyLong_FormatWriter(writer, obj, 10, 0);
++        if (PyValue_LongCheckExact(value))
++            return _PyLong_WriteDecimal(writer, value);
+         else
+-            return format_obj(obj, writer);
++            return format_obj(PyValue_AsKnownObjectBorrow(value), writer);
+     }
+ 
+     /* parse the format_spec */
+-    if (!parse_internal_render_format_spec(Py_TYPE(obj),
++    if (!parse_internal_render_format_spec(PyValue_TYPE(value),
+                                            format_spec, start, end,
+                                            &format, 'd', '>'))
+         goto done;
+@@ -1867,7 +1866,7 @@
+     case 'X':
+     case 'n':
+         /* no type conversion needed, already an int.  do the formatting */
+-        result = format_long_internal(obj, &format, writer);
++        result = format_long_internal(value, &format, writer);
+         break;
+ 
+     case 'e':
+@@ -1879,27 +1878,35 @@
+     case '%':
+         /* convert to float */
+         {
+-            PyValue tmp_v = _PyValue_Float(PyValue_FromObjectBorrow(obj));
+-            tmp = PyValue_IsNull(tmp_v) ? NULL
+-                : _PyValue_AsObjectStealAt(tmp_v, BOX_SITE_NUMBER);
++            PyValue tmp = _PyValue_Float(value);
++            if (PyValue_IsNull(tmp)) {
++                goto done;
++            }
++            result = format_float_internal(PyValue_Borrow(tmp), &format, writer);
++            PyValue_CLOSE(tmp);
++            break;
+         }
+-        if (tmp == NULL)
+-            goto done;
+-        result = format_float_internal(PyValue_FromObjectBorrow(tmp),
+-                                       &format, writer);
+-        break;
+ 
+     default:
+         /* unknown */
+-        unknown_presentation_type(format.type, Py_TYPE(obj)->tp_name);
++        unknown_presentation_type(format.type, PyValue_TYPE(value)->tp_name);
+         goto done;
+     }
+ 
+ done:
+-    Py_XDECREF(tmp);
+     return result;
+ }
+ 
++
++int
++_PyLong_FormatAdvancedWriter(_PyUnicodeWriter *writer, PyObject *obj,
++                             PyObject *format_spec,
++                             Py_ssize_t start, Py_ssize_t end)
++{
++    return _PyLong_FormatAdvancedWriterValue(
++        writer, PyValue_FromObjectBorrow(obj), format_spec, start, end);
++}
++
+ int
+ _PyFloat_FormatAdvancedWriterValue(_PyUnicodeWriter *writer,
+                                    PyValueBorrow value,
+--- a/Objects/stringlib/unicode_format.h
++++ b/Objects/stringlib/unicode_format.h
+@@ -507,6 +507,12 @@
+     PyObject *fieldobj_o = PyValue_IsObject(fieldobj)
+         ? PyValue_AsKnownObjectBorrow(fieldobj) : NULL;
+ 
++    if (PyValue_LongCheckExact(fieldobj)) {
++        return _PyLong_FormatAdvancedWriterValue(
++            writer, fieldobj, format_spec->str,
++            format_spec->start, format_spec->end) == 0;
++    }
++
+     if (PyValue_IsInlineFloat(fieldobj) ||
+         (fieldobj_o != NULL && PyFloat_CheckExact(fieldobj_o))) {
+         return _PyFloat_FormatAdvancedWriterValue(
+@@ -518,8 +524,6 @@
+        call the formatter directly. */
+     if (fieldobj_o != NULL && PyUnicode_CheckExact(fieldobj_o))
+         formatter = _PyUnicode_FormatAdvancedWriter;
+-    else if (fieldobj_o != NULL && PyLong_CheckExact(fieldobj_o))
+-        formatter = _PyLong_FormatAdvancedWriter;
+     else if (fieldobj_o != NULL && PyComplex_CheckExact(fieldobj_o))
+         formatter = _PyComplex_FormatAdvancedWriter;
+ 
+--- a/Include/internal/pycore_long.h
++++ b/Include/internal/pycore_long.h
+@@ -118,6 +118,7 @@
+ 
+ /* Format the object based on the format_spec, as defined in PEP 3101
+    (Advanced String Formatting). */
++Py_VALUE_COMPAT(_PyLong_FormatAdvancedWriterValue)
+ extern int _PyLong_FormatAdvancedWriter(
+     _PyUnicodeWriter *writer,
+     PyObject *obj,
+--- a/Include/internal/pycore_long_value.h
++++ b/Include/internal/pycore_long_value.h
+@@ -305,6 +305,11 @@
+ /* Write the decimal repr of v, an int value, to writer: an inline int's word
+    span through the decimal kernel (R-inline in _PyValue_WriteRepr()). 0, or
+    -1 with an exception set. */
++extern int _PyLong_FormatAdvancedWriterValue(
++    _PyUnicodeWriter *, PyValueBorrow, PyObject *, Py_ssize_t, Py_ssize_t);
++extern PyObject *_PyLong_FormatValue(PyValueBorrow, int);
++extern int _PyLong_FormatWriterValue(_PyUnicodeWriter *, PyValueBorrow, int, int);
++
+ PyAPI_FUNC(int) _PyLong_WriteDecimal(_PyUnicodeWriter *writer,
+                                      PyValueBorrow v);
+ 
+--- a/Tools/build/value_ownership.toml
++++ b/Tools/build/value_ownership.toml
+@@ -1165,3 +1165,9 @@
+ value = "_PyFloat_FormatAdvancedWriterValue"
+ family = "number"
+ reason = "Status and writer/spec/range arguments are unchanged; borrow the object receiver as PyValue at the object boundary. Production core callers use the value writer; retain this entry for object-form callers"
++
++[[manual]]
++object = "_PyLong_FormatAdvancedWriter"
++value = "_PyLong_FormatAdvancedWriterValue"
++family = "number"
++reason = "Status and writer/spec/range arguments are unchanged; borrow the object receiver as PyValue at the object boundary. Production core callers use the value writer; retain this entry for object-form callers"

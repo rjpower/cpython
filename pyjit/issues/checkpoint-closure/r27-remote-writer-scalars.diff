@@ -1,0 +1,149 @@
+--- a/Modules/_remote_debugging/binary_io_writer.c
++++ b/Modules/_remote_debugging/binary_io_writer.c
+@@ -43,16 +43,6 @@
+ #define MAX_RLE_BUF_SIZE        (16 * 1024)
+ #define MAX_RLE_ENTRY_SIZE      (MAX_VARINT_SIZE + sizeof(uint8_t))
+ 
+-/* Helper macro: convert PyLong to int32, using default_val if conversion fails */
+-#define PYLONG_TO_INT32_OR_DEFAULT(obj, var, default_val) \
+-    do { \
+-        (var) = (int32_t)_PyValue_AsLong(PyValue_FromObjectBorrow(obj)); \
+-        if (UNLIKELY(PyErr_Occurred() != NULL)) { \
+-            PyErr_Clear(); \
+-            (var) = (default_val); \
+-        } \
+-    } while (0)
+-
+ /* ============================================================================
+  * WRITER-SPECIFIC UTILITY HELPERS
+  * ============================================================================ */
+@@ -863,13 +853,15 @@
+     PyValue item_v = PyTuple_Check(location)
+                          ? PyTuple_GetValue(location, i)
+                          : PyValue_DUP(PyStructSequence_GET_VALUE(location, i));
+-    PyObject *item = PyValue_IsNull(item_v) ? NULL
+-        : _PyValue_AsObjectStealAt(item_v, BOX_SITE_FIELD);
+-    if (item == NULL) {
++    if (PyValue_IsNull(item_v)) {
+         return -1;
+     }
+-    PYLONG_TO_INT32_OR_DEFAULT(item, *out, LOCATION_NOT_AVAILABLE);
+-    Py_DECREF(item);
++    *out = (int32_t)_PyValue_AsLong(item_v);
++    if (UNLIKELY(PyErr_Occurred() != NULL)) {
++        PyErr_Clear();
++        *out = LOCATION_NOT_AVAILABLE;
++    }
++    PyValue_CLOSE(item_v);
+     return 0;
+ }
+ 
+@@ -889,7 +881,7 @@
+         PyObject *filename = NULL;
+         PyObject *location = NULL;
+         PyObject *funcname = NULL;
+-        PyObject *opcode_obj = NULL;
++        PyValue opcode_obj_v = PyValue_NULL;
+         int32_t lineno = LOCATION_NOT_AVAILABLE;
+         int32_t end_lineno = LOCATION_NOT_AVAILABLE;
+         int32_t column = LOCATION_NOT_AVAILABLE;
+@@ -908,10 +900,9 @@
+         location = PyValue_IsNull(location_v) ? NULL : _PyValue_AsObjectStealAt(location_v, BOX_SITE_FIELD);
+         PyValue funcname_v = PyValue_DUP(PyStructSequence_GET_VALUE(frame_info, 2));
+         funcname = PyValue_IsNull(funcname_v) ? NULL : _PyValue_AsObjectStealAt(funcname_v, BOX_SITE_FIELD);
+-        PyValue opcode_obj_v = PyValue_DUP(PyStructSequence_GET_VALUE(frame_info, 3));
+-        opcode_obj = PyValue_IsNull(opcode_obj_v) ? NULL : _PyValue_AsObjectStealAt(opcode_obj_v, BOX_SITE_FIELD);
++        opcode_obj_v = PyValue_DUP(PyStructSequence_GET_VALUE(frame_info, 3));
+         if (filename == NULL || location == NULL || funcname == NULL ||
+-            opcode_obj == NULL)
++            PyValue_IsNull(opcode_obj_v))
+         {
+             goto done;
+         }
+@@ -931,8 +922,8 @@
+         Py_CLEAR(location);
+ 
+         /* Extract opcode (can be None) */
+-        if (opcode_obj != Py_None) {
+-            long opcode_long = _PyValue_AsLong(PyValue_FromObjectBorrow(opcode_obj));
++        if (!PyValue_IsNone(opcode_obj_v)) {
++            long opcode_long = _PyValue_AsLong(opcode_obj_v);
+             if (UNLIKELY(PyErr_Occurred() != NULL)) {
+                 PyErr_Clear();
+                 opcode = OPCODE_NONE;
+@@ -940,7 +931,7 @@
+                 opcode = (uint8_t)opcode_long;
+             }
+         }
+-        Py_CLEAR(opcode_obj);
++        PyValue_CLEAR(opcode_obj_v);
+ 
+         /* Intern filename and funcname */
+         if (writer_intern_string(writer, filename, &filename_idx) < 0 ||
+@@ -967,7 +958,7 @@
+         result = 0;
+ 
+ done:
+-        Py_XDECREF(opcode_obj);
++        PyValue_XCLOSE(opcode_obj_v);
+         Py_XDECREF(funcname);
+         Py_XDECREF(location);
+         Py_XDECREF(filename);
+@@ -992,22 +983,20 @@
+     }
+ 
+     PyValue thread_id_obj_v = PyValue_DUP(PyStructSequence_GET_VALUE(thread_info, 0));
+-    PyObject *thread_id_obj = PyValue_IsNull(thread_id_obj_v) ? NULL : _PyValue_AsObjectStealAt(thread_id_obj_v, BOX_SITE_FIELD);
+-    if (thread_id_obj == NULL) {
++    if (PyValue_IsNull(thread_id_obj_v)) {
+         return -1;
+     }
+-    uint64_t thread_id = _PyValue_IntAsUnsignedLongLong(PyValue_FromObjectBorrow(thread_id_obj));
+-    Py_DECREF(thread_id_obj);
++    uint64_t thread_id = _PyValue_IntAsUnsignedLongLong(thread_id_obj_v);
++    PyValue_CLOSE(thread_id_obj_v);
+     if (thread_id == (uint64_t)-1 && PyErr_Occurred()) {
+         return -1;
+     }
+     PyValue status_obj_v = PyValue_DUP(PyStructSequence_GET_VALUE(thread_info, 1));
+-    PyObject *status_obj = PyValue_IsNull(status_obj_v) ? NULL : _PyValue_AsObjectStealAt(status_obj_v, BOX_SITE_FIELD);
+-    if (status_obj == NULL) {
++    if (PyValue_IsNull(status_obj_v)) {
+         return -1;
+     }
+-    long status_long = _PyValue_AsLong(PyValue_FromObjectBorrow(status_obj));
+-    Py_DECREF(status_obj);
++    long status_long = _PyValue_AsLong(status_obj_v);
++    PyValue_CLOSE(status_obj_v);
+     if (status_long == -1 && PyErr_Occurred()) {
+         return -1;
+     }
+@@ -1105,18 +1094,17 @@
+         }
+ 
+         PyValue interp_id_obj_v = PyValue_DUP(PyStructSequence_GET_VALUE(interp_info, 0));
+-        PyObject *interp_id_obj = PyValue_IsNull(interp_id_obj_v) ? NULL : _PyValue_AsObjectStealAt(interp_id_obj_v, BOX_SITE_FIELD);
+         PyValue threads_v = PyValue_DUP(PyStructSequence_GET_VALUE(interp_info, 1));
+         PyObject *threads = PyValue_IsNull(threads_v) ? NULL : _PyValue_AsObjectStealAt(threads_v, BOX_SITE_FIELD);
+         Py_DECREF(interp_info);
+-        if (interp_id_obj == NULL || threads == NULL) {
+-            Py_XDECREF(interp_id_obj);
++        if (PyValue_IsNull(interp_id_obj_v) || threads == NULL) {
++            PyValue_XCLOSE(interp_id_obj_v);
+             Py_XDECREF(threads);
+             return -1;
+         }
+ 
+-        unsigned long long interp_id_long = _PyValue_IntAsUnsignedLongLong(PyValue_FromObjectBorrow(interp_id_obj));
+-        Py_DECREF(interp_id_obj);
++        unsigned long long interp_id_long = _PyValue_IntAsUnsignedLongLong(interp_id_obj_v);
++        PyValue_CLOSE(interp_id_obj_v);
+         if (interp_id_long == (unsigned long long)-1 && PyErr_Occurred()) {
+             Py_DECREF(threads);
+             return -1;
+@@ -1427,5 +1415,3 @@
+ 
+     PyMem_Free(writer);
+ }
+-
+-#undef PYLONG_TO_INT32_OR_DEFAULT

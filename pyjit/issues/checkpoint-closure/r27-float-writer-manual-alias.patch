@@ -1,0 +1,52 @@
+diff --git a/Include/internal/pycore_floatobject.h b/Include/internal/pycore_floatobject.h
+index 1e5dd14523d..8311776e5c9 100644
+--- a/Include/internal/pycore_floatobject.h
++++ b/Include/internal/pycore_floatobject.h
+@@ -40,6 +40,7 @@ extern void _PyFloat_DebugMallocStats(FILE* out);
+ 
+ /* Format the object based on the format_spec, as defined in PEP 3101
+    (Advanced String Formatting). */
++Py_VALUE_COMPAT(_PyFloat_FormatAdvancedWriterValue)
+ extern int _PyFloat_FormatAdvancedWriter(
+     _PyUnicodeWriter *writer,
+     PyObject *obj,
+diff --git a/Objects/floatobject.c b/Objects/floatobject.c
+index 9259779e9d6..4c247936220 100644
+--- a/Objects/floatobject.c
++++ b/Objects/floatobject.c
+@@ -11,7 +11,7 @@
+ #include "pycore_bitutils.h"      // _Py_bswap16()
+ #include "pycore_dtoa.h"          // _Py_dg_dtoa()
+ #include "pycore_descrobject.h"   // _Py_VALUE_GETTER()
+-#include "pycore_floatobject.h"   // _PyFloat_FormatAdvancedWriter()
++#include "pycore_floatobject.h"   // _PyFloat_FormatAdvancedWriterValue()
+ #include "pycore_freelist.h"      // _Py_FREELIST_FREE(), _Py_FREELIST_POP()
+ #include "pycore_initconfig.h"    // _PyStatus_OK()
+ #include "pycore_long.h"          // _PyLong_GetOne()
+diff --git a/Objects/stringlib/unicode_format.h b/Objects/stringlib/unicode_format.h
+index bd1a472c90f..a95bdfe4933 100644
+--- a/Objects/stringlib/unicode_format.h
++++ b/Objects/stringlib/unicode_format.h
+@@ -3,7 +3,7 @@
+ */
+ 
+ #include "pycore_complexobject.h" // _PyComplex_FormatAdvancedWriter()
+-#include "pycore_floatobject.h"   // _PyFloat_FormatAdvancedWriter()
++#include "pycore_floatobject.h"   // _PyFloat_FormatAdvancedWriterValue()
+ #include "pycore_tuple.h"         // _PyTuple_FromPairSteal
+ 
+ /************************************************************************/
+diff --git a/Tools/build/value_ownership.toml b/Tools/build/value_ownership.toml
+index 29649bac987..4475823e16c 100644
+--- a/Tools/build/value_ownership.toml
++++ b/Tools/build/value_ownership.toml
+@@ -1159,3 +1159,9 @@ object = "_PyLong_GCD"
+ value = "_PyLong_ValueGCD"
+ family = "number"
+ reason = "No production caller remains; adapt the owned PyValue result to the historical new-reference PyObject * return"
++
++[[manual]]
++object = "_PyFloat_FormatAdvancedWriter"
++value = "_PyFloat_FormatAdvancedWriterValue"
++family = "number"
++reason = "Status and writer/spec/range arguments are unchanged; borrow the object receiver as PyValue at the object boundary. Production core callers use the value writer; retain this entry for object-form callers"

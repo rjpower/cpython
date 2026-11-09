@@ -1,0 +1,23 @@
+{
+  "decision": "ACCEPT_DEPENDENT_SET_SOURCE_COMPONENT",
+  "decided_utc": "2026-11-01T23:45:00+00:00",
+  "original_source_window_closed_early": true,
+  "original_ceiling_utc": "2026-11-02T00:03:01.004851+00:00",
+  "checkpoint": "build/pyvalue-set-port-checkpoint-20261101-v5/checkpoint.json",
+  "checkpoint_sha256": "d624fdbe388860c36c39b3df2a6ad70ecaaa29c1752160b6eef735adf8a38e12",
+  "patch_sha256": "7c439a2218484c5dec559bb3cfe1a4429bd4dbfc7aeb784aed176bd678d408ab",
+  "independent_review": "build/pyvalue-rc-native-consumer-map-20261101-v1/set-component-review-receipt.json",
+  "independent_review_sha256": "4d2d38dfc4aafb011b17ee1362c05fe9dd56acc1ebdf8d90f4bba72e9a0ca0af",
+  "owned_paths": 6,
+  "host_ast_runtime_tests": 8,
+  "provisional_syntax_units_pass": 2,
+  "candidate_runtime_tests_run": false,
+  "whole_runtime_accepted": false,
+  "integration_complete": false,
+  "remaining": [
+    "Coherent dictionary providers and wider internal consumers",
+    "Value-native generic iterator, slot and native closure",
+    "Real callback, OOM, ownership and first-cleanup-error runtime tests",
+    "Coherent build, runtime qualification and matched interpreter performance"
+  ]
+}

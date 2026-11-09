@@ -1,0 +1,5 @@
+# Decimal Context divmod and power: source post-review
+
+Reviewed frozen [`decimal-context-power.diff`](decimal-context-power.diff). **Approved; no must-fix finding.** Both generated entries use value signatures. `divmod` owns converted operands and allocated quotient/remainder until status handling completes; `_PyTuple_FromPairSteal` consumes both results even if tuple creation fails, and the code checks its result before value transfer. `power` preserves optional `None` modulo, separate `qpow`/`qpowmod` branches, prior-operand cleanup when a later conversion fails, and status/trap handling.
+
+Terra reports extension compile/link, 69 focused Context tests, and `_pydecimal` comparisons for integer boundaries, modulo and invalid operands, plus an Inexact power trap. The existing C `divmod(1, 0)` behavior raises InvalidOperation while `_pydecimal` raises DivisionByZero; that case was checked against the prior C contract, not treated as a port regression. Merged integration remains the coordinator's gate.

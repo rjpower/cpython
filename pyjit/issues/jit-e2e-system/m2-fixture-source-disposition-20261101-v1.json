@@ -1,0 +1,28 @@
+{
+  "candidate_execution_authorized": false,
+  "changed_paths": [
+    "Lib/test/test_jit_method.py"
+  ],
+  "core_unchanged": true,
+  "decision": "ACCEPT_ONE_METHOD_TEST_ONLY_CORRECTION_FOR_NEW_FOCUSED_BATCH",
+  "future_source_edits_authorized": false,
+  "independent_receipt": {
+    "path": "boil/issues/jit-e2e-system/m2-fixture-source-receipt-20261101-v1.json",
+    "sha256": "f91013a9a5ec95f775efca0c3079398fd23d6156738cd60454be3b2b44e3c013"
+  },
+  "independent_review": {
+    "path": "boil/issues/jit-e2e-system/m2-fixture-source-review-20261101-v1.md",
+    "sha256": "d76e87cd876c2c1b9ce05d5ae380f2f6e5754b00382b9bb8e4d530ab257103bb"
+  },
+  "methods_pending": 28,
+  "remaining": "Bound/review a separate fresh full28-method batch; no rerun of the failed source/image or claim about unexecuted natural methods.",
+  "source_attempt_closed_early": true,
+  "source_capsule": {
+    "path": "build/worktrees/jit-natural-method-fixture-correction/build/jit-method-m2-fixture-source/capsule.json",
+    "sha256": "37ca17bd2a84ea16580732b16ec7cdde68afd0d522c390f9249b0c9a35dea569"
+  },
+  "source_head": "3174bc0ab726cb7b7b39f25d93f4ec9194c88d3a",
+  "source_parent": "3bcb891956a9d2796bbe5e92c4f0c9e2f2516899",
+  "unchanged_other_method_asts": 27,
+  "utc": "2026-11-01T19:46:39.085965+00:00"
+}

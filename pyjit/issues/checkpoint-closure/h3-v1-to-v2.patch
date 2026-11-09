@@ -1,0 +1,32 @@
+diff --git a/Python/pystats.c b/Python/pystats.c
+--- a/Python/pystats.c
++++ b/Python/pystats.c
+@@ -128,7 +128,10 @@
+     err += add_stat_dict(src, stats, LOAD_GLOBAL, "load_global");
+     err += add_stat_dict(src, stats, STORE_SUBSCR, "store_subscr");
+     err += add_stat_dict(src, stats, STORE_ATTR, "store_attr");
+-    err += add_stat_dict(src, stats, JUMP_BACKWARD, "jump_backward");
++    err += add_stat_dict(src, stats, POP_JUMP_IF_FALSE, "pop_jump_if_false");
++    err += add_stat_dict(src, stats, POP_JUMP_IF_TRUE, "pop_jump_if_true");
++    err += add_stat_dict(src, stats, GET_ITER, "get_iter");
++    err += add_stat_dict(src, stats, CALL_FUNCTION_EX, "call_function_ex");
+     err += add_stat_dict(src, stats, CALL, "call");
+     err += add_stat_dict(src, stats, CALL_KW, "call_kw");
+     err += add_stat_dict(src, stats, BINARY_OP, "binary_op");
+diff --git a/Lib/test/test_pystats.py b/Lib/test/test_pystats.py
+--- a/Lib/test/test_pystats.py
++++ b/Lib/test/test_pystats.py
+@@ -185,6 +185,13 @@
+                 'opcode[BINARY_OP_ADD].execution_count' in dump.read_text()
+                 for dump in dumps))
+ 
++    def test_malloc_debug_with_stats(self):
++        with tempfile.TemporaryDirectory() as directory:
++            script_helper.assert_python_ok(
++                '-c', 'import test.support',
++                PYTHONMALLOC='malloc_debug', PYTHONSTATS='1',
++                PYTHON_PYSTATS_DIR=directory)
++
+     def test_stats_toggle_on(self):
+         """Check the toggle on functionality.
+         """

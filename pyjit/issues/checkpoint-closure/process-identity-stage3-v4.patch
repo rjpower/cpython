@@ -1,0 +1,120 @@
+--- a/Python/pystats.c
++++ b/Python/pystats.c
+@@ -851,12 +851,13 @@
+              (unsigned int)(uintptr_t)hex_name);
+ }
+ 
++static uint64_t child_receipt_errors;
++
+ #ifndef MS_WINDOWS
+ // The run marker of this process: <stem>.run, replaced by its dump.
+ static char run_stem[41];
+ static pid_t run_pid;
+ static uint64_t child_receipt_serial;
+-static uint64_t child_receipt_errors;
+ static unsigned long long run_image_dev, run_image_ino;
+ 
+ static int
+@@ -881,7 +882,9 @@
+ void
+ _PyStats_CopyIntervalStem(char out[41])
+ {
+-    if (!_PyInterpreterState_GET()->pystats_enabled) {
++    /* A configured process remains accountable while collection is toggled
++       off. Only a process that never allocated stats is outside this gate. */
++    if (_PyInterpreterState_GET()->pystats_struct == NULL) {
+         out[0] = '\0';
+         return;
+     }
+--- a/Lib/test/test_tools/test_stage3_identity.py
++++ b/Lib/test/test_tools/test_stage3_identity.py
+@@ -89,6 +89,41 @@
+             folded.read_markers(tmp)
+             self.assertFalse(folded.identity_complete)
+ 
++    def test_duplicate_keys_and_nonregular_receipts_fail(self):
++        with tempfile.TemporaryDirectory() as tmp:
++            folded = self.make_dir(tmp, child=True)
++            path = Path(tmp) / f"{PARENT}.1.child"
++            path.write_text(path.read_text().replace('"version": 1,',
++                                                    '"version": 1, "version": 1,', 1))
++            folded.read_markers(tmp)
++            self.assertFalse(folded.identity_complete)
++            self.assertTrue(any("malformed child receipt" in e
++                                for e in folded.identity_errors))
++        with tempfile.TemporaryDirectory() as tmp:
++            folded = self.make_dir(tmp, child=True)
++            path = Path(tmp) / f"{PARENT}.1.child"
++            path.unlink()
++            path.symlink_to(Path(tmp) / "root-launch.json")
++            folded.read_markers(tmp)
++            self.assertFalse(folded.identity_complete)
++            self.assertTrue(any("malformed child receipt" in e
++                                for e in folded.identity_errors))
++
++    def test_unfinished_receipt_and_sticky_failure_fail(self):
++        with tempfile.TemporaryDirectory() as tmp:
++            folded = self.make_dir(tmp, child=True)
++            (Path(tmp) / f"{PARENT}.1.child").rename(
++                Path(tmp) / f"{PARENT}.1.child.tmp")
++            folded.read_markers(tmp)
++            self.assertFalse(folded.identity_complete)
++            self.assertTrue(any("unfinished child receipt" in e
++                                for e in folded.identity_errors))
++        folded = check_r27.Folded()
++        folded.add_text("Stats child receipt errors: 1\n", "case.txt",
++                        require_child_receipts=True)
++        self.assertIn("native child receipt publication failed",
++                      folded.accounting_errors)
++
+ 
+ if __name__ == "__main__":
+     unittest.main()
+--- a/pyjit/issues/checkpoint-closure/process-identity-probe.py
++++ b/pyjit/issues/checkpoint-closure/process-identity-probe.py
+@@ -29,6 +29,14 @@
+             "import os, sys\npid = os.fork()\n"
+             "if pid == 0:\n    sys.exit(0)\n"
+             "os.waitpid(pid, 0)\n", 2, 0),
++        "off_fork": (
++            "import os, sys\nsys._stats_off()\npid = os.fork()\n"
++            "if pid == 0:\n    os._exit(0)\n"
++            "os.waitpid(pid, 0)\nsys._stats_on()\n", 1, 0),
++        "late_on": (
++            "import os, sys\npid = os.fork()\n"
++            "if pid == 0:\n    os._exit(0)\n"
++            "os.waitpid(pid, 0)\nsys._stats_on()\n", 1, 0),
+         "argv_bytes": ("pass", 1, 0),
+     }
+     env = {k: v for k, v in os.environ.items() if not k.startswith("PYTHON")}
+@@ -39,6 +47,9 @@
+         directory.mkdir()
+         command = [str(args.python.resolve()), "-I", "-S", "-B", "-X", "pystats",
+                    "-X", f"pystats_dir={directory.resolve()}", "-c", code]
++        if name == "late_on":
++            command.remove("pystats")
++            command.remove("-X")
+         if name == "argv_bytes":
+             command.extend(["é", os.fsdecode(b"\xff"), "a\nb", "a b", ""])
+         with subprocess.Popen(command, env=env, stdout=subprocess.PIPE,
+@@ -63,6 +74,11 @@
+         if expected_zero:
+             if folded.identity_complete or not folded.accounting_errors:
+                 raise AssertionError("zero-stats outcome incorrectly admitted")
++        elif name == "off_fork":
++            if (folded.identity_complete or len(folded.child_receipts) != 1
++                or not any("lacks matching child marker" in error
++                           for error in folded.accounting_errors)):
++                raise AssertionError("stats-off fork was silently admitted")
+         elif not folded.identity_complete or folded.accounting_errors:
+             raise AssertionError(f"{name}: {folded.accounting_errors}")
+         identities = list(folded.identity_records.values())
+@@ -77,7 +93,7 @@
+                 raise AssertionError("fork did not publish one native child receipt")
+         elif any(identity["pid"] != proc.pid for identity in identities):
+             raise AssertionError(f"{name}: unexpected process identity")
+-        elif folded.child_receipts:
++        elif name != "off_fork" and folded.child_receipts:
+             raise AssertionError(f"{name}: unexpected native child receipt")
+         if name == "repeated" and len(folded.dump_identities) != 2:
+             raise AssertionError("repeated dump overwrote its interval stem")

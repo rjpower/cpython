@@ -1,0 +1,18 @@
+{
+  "utc": "2026-11-01T21:17:59.425099+00:00",
+  "decision": "ACCEPT_ADDITIVE_OBSERVER_SYNCHRONIZATION_DESIGN",
+  "clarification": {
+    "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/jit-method-m3-terminal-settlement-design-20261101-v1/observer-clarification.md",
+    "sha256": "872b7d51b71c32a9acea159eaff9be0dace19231bdb75f7e7e42cb5b8855caf3"
+  },
+  "original_review": {
+    "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/jit-method-m3-terminal-settlement-design-review-20261101-v1/review.md",
+    "sha256": "ed59bcf7c808407803e8f45096ff4f2d93eee42885b9447cf1f4f198cfeadb8a"
+  },
+  "review": {
+    "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/jit-method-m3-terminal-settlement-design-review-20261101-v1/observer-addendum.md",
+    "sha256": "c0bc9b8e964c7fe1efc70df78133fb0270bb7c049d0b384b3ed0a66ad1d10497"
+  },
+  "source_edits": false,
+  "candidate_compiler_or_rerun_calls": 0
+}

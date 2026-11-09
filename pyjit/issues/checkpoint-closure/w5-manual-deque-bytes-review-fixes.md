@@ -1,0 +1,5 @@
+# Additive deque and count-elements corrections
+
+Apply after `w5-manual-deque-bytes-followup.patch` (and, in turn, after the frozen deque iterator patch). The richcompare operator result is truth-tested through `_PyValue_RichCompareBool`, matching the old bool-returning helper and preserving observable or raising `__bool__`. `_count_elements` also treats inline zero as the cached zero object that the old object API would produce, preserving the default-argument identity check. The deque subtype constructor checks a failed `PyValue_FromInt64(maxlen)` result before vectorcall and closes its owned deque argument; out-of-inline-range conversion may fail during allocation. `test_deque.py` covers both bool conversion and propagation of a custom `__bool__` exception.
+
+The corrected final source passed a locked W5 release build/import (117 modules, 0 failed) and `test_collections`, `test_deque`, `test_bytes` (552 tests, 11 skipped). W5 sources were restored and rebuilt under lock. Validation log: `w5-manual-deque-bytes-validation.log`.

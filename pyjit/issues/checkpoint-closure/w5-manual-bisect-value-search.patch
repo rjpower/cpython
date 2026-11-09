@@ -1,0 +1,386 @@
+--- a/Modules/_bisectmodule.c
++++ b/Modules/_bisectmodule.c
+@@ -39,10 +39,9 @@
+ }
+ 
+ static ssizeargfunc
+-get_sq_item(PyObject *s)
++get_sq_item_type(PyTypeObject *tp)
+ {
+     // The parts of PySequence_GetItem that we only need to do once
+-    PyTypeObject *tp = Py_TYPE(s);
+     PySequenceMethods *m = tp->tp_as_sequence;
+     if (m && m->sq_item) {
+         return m->sq_item;
+@@ -58,6 +57,12 @@
+     return NULL;
+ }
+ 
++static ssizeargfunc
++get_sq_item(PyObject *s)
++{
++    return get_sq_item_type(Py_TYPE(s));
++}
++
+ /* Box the three arguments of a bisect call for the object-form search below.
+    On failure, any box made is released and an exception is set. */
+ static int
+@@ -77,10 +82,10 @@
+ }
+ 
+ static inline Py_ssize_t
+-internal_bisect_right(PyObject *list, PyObject *item, Py_ssize_t lo, Py_ssize_t hi,
+-                      PyObject* key)
++internal_bisect_right(PyObject *list, PyValueBorrow item, Py_ssize_t lo,
++                      Py_ssize_t hi, PyValueBorrow key)
+ {
+-    PyObject *litem;
++    PyValue litem = PyValue_NULL;
+     Py_ssize_t mid;
+     int res;
+ 
+@@ -96,8 +101,10 @@
+     if (Py_EnterRecursiveCall(" in _bisect.bisect_right")) {
+         return -1;
+     }
+-    PyTypeObject *tp = Py_TYPE(item);
++    PyTypeObject *tp = PyValue_TYPE(item);
+     richcmpfunc compare = tp->tp_richcompare;
++    PyObject *item_obj = PyValue_IsObject(item)
++        ? PyValue_AsKnownObjectBorrow(item) : NULL;
+     while (lo < hi) {
+         /* The (size_t)cast ensures that the addition and subsequent division
+            are performed as unsigned operations, avoiding difficulties from
+@@ -105,35 +112,45 @@
+         mid = ((size_t)lo + hi) / 2;
+         assert(mid >= 0);
+         // PySequence_GetItem, but we already checked the types.
+-        litem = sq_item(list, mid);
+-        assert((PyErr_Occurred() == NULL) ^ (litem == NULL));
+-        if (litem == NULL) {
++        PyObject *litem_obj = sq_item(list, mid);
++        assert((PyErr_Occurred() == NULL) ^ (litem_obj == NULL));
++        if (litem_obj == NULL) {
+             goto error;
+         }
+-        if (key != Py_None) {
+-            PyObject *newitem = PyObject_CallOneArg(key, litem);
+-            if (newitem == NULL) {
++        litem = _PyValue_FromObjectResult(litem_obj);
++        if (!PyValue_IsNone(key)) {
++            PyValue newitem = _PyValue_CallOneArg(_PyThreadState_GET(), key,
++                                                  litem);
++            if (PyValue_IsNull(newitem)) {
++                PyValue_CLOSE(litem);
++                litem = PyValue_NULL;
+                 goto error;
+             }
+-            Py_SETREF(litem, newitem);
++            PyValue_CLOSE(litem);
++            litem = newitem;
+         }
+         /* if item < key(list[mid]):
+          *     hi = mid
+          * else:
+          *     lo = mid + 1
+          */
+-        if (compare != NULL && Py_IS_TYPE(litem, tp)) {
++        if (compare != NULL && item_obj != NULL && PyValue_IsObject(litem) &&
++            Py_IS_TYPE(PyValue_AsKnownObjectBorrow(litem), tp)) {
+             // A fast path for comparing objects of the same type
+-            PyObject *res_obj = compare(item, litem, Py_LT);
++            PyObject *res_obj = compare(item_obj,
++                                        PyValue_AsKnownObjectBorrow(litem),
++                                        Py_LT);
+             if (res_obj == Py_True) {
+                 Py_DECREF(res_obj);
+-                Py_DECREF(litem);
++                PyValue_CLOSE(litem);
++                litem = PyValue_NULL;
+                 hi = mid;
+                 continue;
+             }
+             if (res_obj == Py_False) {
+                 Py_DECREF(res_obj);
+-                Py_DECREF(litem);
++                PyValue_CLOSE(litem);
++                litem = PyValue_NULL;
+                 lo = mid + 1;
+                 continue;
+             }
+@@ -143,7 +160,7 @@
+             if (res_obj == Py_NotImplemented) {
+                 Py_DECREF(res_obj);
+                 compare = NULL;
+-                res = _PyValue_RichCompareBool(PyValue_FromObjectBorrow(item), PyValue_FromObjectBorrow(litem), Py_LT);
++                res = _PyValue_RichCompareBool(item, litem, Py_LT);
+             }
+             else {
+                 res = _PyValue_IsTrue(PyValue_FromObjectBorrow(res_obj));
+@@ -152,12 +169,13 @@
+         }
+         else {
+             // A default path for comparing arbitrary objects
+-            res = _PyValue_RichCompareBool(PyValue_FromObjectBorrow(item), PyValue_FromObjectBorrow(litem), Py_LT);
++            res = _PyValue_RichCompareBool(item, litem, Py_LT);
+         }
+         if (res < 0) {
+             goto error;
+         }
+-        Py_DECREF(litem);
++        PyValue_CLOSE(litem);
++        litem = PyValue_NULL;
+         if (res)
+             hi = mid;
+         else
+@@ -167,7 +185,7 @@
+     return lo;
+ error:
+     Py_LeaveRecursiveCall();
+-    Py_XDECREF(litem);
++    PyValue_XCLOSE(litem);
+     return -1;
+ }
+ 
+@@ -175,15 +193,21 @@
+ bisect_right_values(PyValueBorrow a, PyValueBorrow x, Py_ssize_t lo,
+                     Py_ssize_t hi, PyValueBorrow key)
+ {
+-    PyObject *a_obj, *x_obj, *key_obj;
+-    if (bisect_box_args(a, x, key, &a_obj, &x_obj, &key_obj) < 0) {
+-        return -1;
++    PyObject *a_obj;
++    if (PyValue_IsObject(a)) {
++        a_obj = PyValue_AsKnownObjectBorrow(a);
+     }
+-    Py_ssize_t index = internal_bisect_right(a_obj, x_obj, lo, hi, key_obj);
+-    Py_DECREF(a_obj);
+-    Py_DECREF(x_obj);
+-    Py_DECREF(key_obj);
+-    return index;
++    else {
++        if (hi == -1) {
++            (void)_PyValue_SequenceSize(a);
++            return -1;
++        }
++        if (get_sq_item_type(PyValue_TYPE(a)) == NULL) {
++            return -1;
++        }
++        Py_UNREACHABLE();
++    }
++    return internal_bisect_right(a_obj, x, lo, hi, key);
+ }
+ 
+ /*[clinic input]
+@@ -241,7 +265,7 @@
+                           Py_ssize_t lo, Py_ssize_t hi, PyValueBorrow key)
+ /*[clinic end generated code: output=a9d02209327ccd11 input=f2caa8abec0763e8]*/
+ {
+-    PyObject *result, *key_x;
++    PyObject *result;
+     PyObject *a_obj, *x_obj, *key_obj;
+     Py_ssize_t index;
+ 
+@@ -249,14 +273,18 @@
+         return PyValue_NULL;
+     }
+     if (PyValue_IsNone(key)) {
+-        index = internal_bisect_right(a_obj, x_obj, lo, hi, key_obj);
++        index = internal_bisect_right(a_obj, PyValue_FromObjectBorrow(x_obj),
++                                      lo, hi, PyValue_FromObjectBorrow(key_obj));
+     } else {
+-        key_x = PyObject_CallOneArg(key_obj, x_obj);
+-        if (key_x == NULL) {
++        PyValue key_x = _PyValue_CallOneArg(_PyThreadState_GET(),
++                                            PyValue_FromObjectBorrow(key_obj),
++                                            PyValue_FromObjectBorrow(x_obj));
++        if (PyValue_IsNull(key_x)) {
+             goto error;
+         }
+-        index = internal_bisect_right(a_obj, key_x, lo, hi, key_obj);
+-        Py_DECREF(key_x);
++        index = internal_bisect_right(a_obj, PyValue_Borrow(key_x),
++                                      lo, hi, PyValue_FromObjectBorrow(key_obj));
++        PyValue_CLOSE(key_x);
+     }
+     if (index < 0)
+         goto error;
+@@ -285,10 +313,10 @@
+ }
+ 
+ static inline Py_ssize_t
+-internal_bisect_left(PyObject *list, PyObject *item, Py_ssize_t lo, Py_ssize_t hi,
+-                     PyObject *key)
++internal_bisect_left(PyObject *list, PyValueBorrow item, Py_ssize_t lo,
++                     Py_ssize_t hi, PyValueBorrow key)
+ {
+-    PyObject *litem;
++    PyValue litem = PyValue_NULL;
+     Py_ssize_t mid;
+     int res;
+ 
+@@ -304,8 +332,10 @@
+     if (Py_EnterRecursiveCall(" in _bisect.bisect_left")) {
+         return -1;
+     }
+-    PyTypeObject *tp = Py_TYPE(item);
++    PyTypeObject *tp = PyValue_TYPE(item);
+     richcmpfunc compare = tp->tp_richcompare;
++    PyObject *item_obj = PyValue_IsObject(item)
++        ? PyValue_AsKnownObjectBorrow(item) : NULL;
+     while (lo < hi) {
+         /* The (size_t)cast ensures that the addition and subsequent division
+            are performed as unsigned operations, avoiding difficulties from
+@@ -313,35 +343,44 @@
+         mid = ((size_t)lo + hi) / 2;
+         assert(mid >= 0);
+         // PySequence_GetItem, but we already checked the types.
+-        litem = sq_item(list, mid);
+-        assert((PyErr_Occurred() == NULL) ^ (litem == NULL));
+-        if (litem == NULL) {
++        PyObject *litem_obj = sq_item(list, mid);
++        assert((PyErr_Occurred() == NULL) ^ (litem_obj == NULL));
++        if (litem_obj == NULL) {
+             goto error;
+         }
+-        if (key != Py_None) {
+-            PyObject *newitem = PyObject_CallOneArg(key, litem);
+-            if (newitem == NULL) {
++        litem = _PyValue_FromObjectResult(litem_obj);
++        if (!PyValue_IsNone(key)) {
++            PyValue newitem = _PyValue_CallOneArg(_PyThreadState_GET(), key,
++                                                  litem);
++            if (PyValue_IsNull(newitem)) {
++                PyValue_CLOSE(litem);
++                litem = PyValue_NULL;
+                 goto error;
+             }
+-            Py_SETREF(litem, newitem);
++            PyValue_CLOSE(litem);
++            litem = newitem;
+         }
+         /* if key(list[mid]) < item:
+          *     lo = mid + 1
+          * else:
+          *     hi = mid
+          */
+-        if (compare != NULL && Py_IS_TYPE(litem, tp)) {
++        if (compare != NULL && item_obj != NULL && PyValue_IsObject(litem) &&
++            Py_IS_TYPE(PyValue_AsKnownObjectBorrow(litem), tp)) {
+             // A fast path for comparing objects of the same type
+-            PyObject *res_obj = compare(litem, item, Py_LT);
++            PyObject *res_obj = compare(PyValue_AsKnownObjectBorrow(litem),
++                                        item_obj, Py_LT);
+             if (res_obj == Py_True) {
+                 Py_DECREF(res_obj);
+-                Py_DECREF(litem);
++                PyValue_CLOSE(litem);
++                litem = PyValue_NULL;
+                 lo = mid + 1;
+                 continue;
+             }
+             if (res_obj == Py_False) {
+                 Py_DECREF(res_obj);
+-                Py_DECREF(litem);
++                PyValue_CLOSE(litem);
++                litem = PyValue_NULL;
+                 hi = mid;
+                 continue;
+             }
+@@ -351,7 +390,7 @@
+             if (res_obj == Py_NotImplemented) {
+                 Py_DECREF(res_obj);
+                 compare = NULL;
+-                res = _PyValue_RichCompareBool(PyValue_FromObjectBorrow(litem), PyValue_FromObjectBorrow(item), Py_LT);
++                res = _PyValue_RichCompareBool(litem, item, Py_LT);
+             }
+             else {
+                 res = _PyValue_IsTrue(PyValue_FromObjectBorrow(res_obj));
+@@ -360,12 +399,13 @@
+         }
+         else {
+             // A default path for comparing arbitrary objects
+-            res = _PyValue_RichCompareBool(PyValue_FromObjectBorrow(litem), PyValue_FromObjectBorrow(item), Py_LT);
++            res = _PyValue_RichCompareBool(litem, item, Py_LT);
+         }
+         if (res < 0) {
+             goto error;
+         }
+-        Py_DECREF(litem);
++        PyValue_CLOSE(litem);
++        litem = PyValue_NULL;
+         if (res)
+             lo = mid + 1;
+         else
+@@ -375,7 +415,7 @@
+     return lo;
+ error:
+     Py_LeaveRecursiveCall();
+-    Py_XDECREF(litem);
++    PyValue_XCLOSE(litem);
+     return -1;
+ }
+ 
+@@ -384,15 +424,21 @@
+ bisect_left_values(PyValueBorrow a, PyValueBorrow x, Py_ssize_t lo,
+                     Py_ssize_t hi, PyValueBorrow key)
+ {
+-    PyObject *a_obj, *x_obj, *key_obj;
+-    if (bisect_box_args(a, x, key, &a_obj, &x_obj, &key_obj) < 0) {
+-        return -1;
++    PyObject *a_obj;
++    if (PyValue_IsObject(a)) {
++        a_obj = PyValue_AsKnownObjectBorrow(a);
+     }
+-    Py_ssize_t index = internal_bisect_left(a_obj, x_obj, lo, hi, key_obj);
+-    Py_DECREF(a_obj);
+-    Py_DECREF(x_obj);
+-    Py_DECREF(key_obj);
+-    return index;
++    else {
++        if (hi == -1) {
++            (void)_PyValue_SequenceSize(a);
++            return -1;
++        }
++        if (get_sq_item_type(PyValue_TYPE(a)) == NULL) {
++            return -1;
++        }
++        Py_UNREACHABLE();
++    }
++    return internal_bisect_left(a_obj, x, lo, hi, key);
+ }
+ 
+ /*[clinic input]
+@@ -451,7 +497,7 @@
+                          Py_ssize_t lo, Py_ssize_t hi, PyValueBorrow key)
+ /*[clinic end generated code: output=bc0e9b70159ecab2 input=ff85a79826e22f31]*/
+ {
+-    PyObject *result, *key_x;
++    PyObject *result;
+     PyObject *a_obj, *x_obj, *key_obj;
+     Py_ssize_t index;
+ 
+@@ -459,14 +505,18 @@
+         return PyValue_NULL;
+     }
+     if (PyValue_IsNone(key)) {
+-        index = internal_bisect_left(a_obj, x_obj, lo, hi, key_obj);
++        index = internal_bisect_left(a_obj, PyValue_FromObjectBorrow(x_obj),
++                                     lo, hi, PyValue_FromObjectBorrow(key_obj));
+     } else {
+-        key_x = PyObject_CallOneArg(key_obj, x_obj);
+-        if (key_x == NULL) {
++        PyValue key_x = _PyValue_CallOneArg(_PyThreadState_GET(),
++                                            PyValue_FromObjectBorrow(key_obj),
++                                            PyValue_FromObjectBorrow(x_obj));
++        if (PyValue_IsNull(key_x)) {
+             goto error;
+         }
+-        index = internal_bisect_left(a_obj, key_x, lo, hi, key_obj);
+-        Py_DECREF(key_x);
++        index = internal_bisect_left(a_obj, PyValue_Borrow(key_x), lo, hi,
++                                     PyValue_FromObjectBorrow(key_obj));
++        PyValue_CLOSE(key_x);
+     }
+     if (index < 0)
+         goto error;

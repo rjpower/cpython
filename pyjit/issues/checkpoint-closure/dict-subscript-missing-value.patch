@@ -1,0 +1,29 @@
+--- a/Objects/dictobject.c
++++ b/Objects/dictobject.c
+@@ -134,6 +134,7 @@
+ #include "pycore_tuple.h"         // _PyTuple_Recycle()
+ #include "pycore_unicodeobject.h" // _PyUnicode_InternImmortal()
+ #include "pycore_value_api.h"     // _PyValue_AsObjectAt()
++#include "pycore_value_call.h"    // _PyValue_CallOneArg()
+ #include "pycore_value_slots.h"   // _PyValue_THUNK_EXIT()
+ 
+ #include "stringlib/eq.h"                // unicode_eq()
+@@ -3693,15 +3694,10 @@
+     if (!PyAnyDict_CheckExact(self)) {
+         PyObject *missing = _PyObject_LookupSpecial(self, &_Py_ID(__missing__));
+         if (missing != NULL) {
+-            PyObject *key_object = _PyValue_AsObjectAt(key, BOX_SITE_DICT);
+-            if (key_object == NULL) {
+-                Py_DECREF(missing);
+-                return PyValue_NULL;
+-            }
+-            PyObject *result = PyObject_CallOneArg(missing, key_object);
++            PyValue result = _PyValue_CallOneArg(
++                _PyThreadState_GET(), PyValue_FromObjectBorrow(missing), key);
+             Py_DECREF(missing);
+-            Py_DECREF(key_object);
+-            return _PyValue_FromObjectResult(result);
++            return result;
+         }
+         if (PyErr_Occurred()) {
+             return PyValue_NULL;

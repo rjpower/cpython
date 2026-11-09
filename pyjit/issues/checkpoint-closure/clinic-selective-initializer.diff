@@ -1,0 +1,122 @@
+--- a/Tools/clinic/libclinic/function.py
++++ b/Tools/clinic/libclinic/function.py
+@@ -162,6 +162,7 @@
+     vectorcall: bool = False
+     value_function: bool = False
+     value_constructor: bool = False
++    value_initializer: bool = False
+     # The type slot which the function implements (kind is SLOT).
+     slot: SlotSpec | None = None
+ 
+--- a/Tools/clinic/libclinic/dsl_parser.py
++++ b/Tools/clinic/libclinic/dsl_parser.py
+@@ -310,6 +310,7 @@
+         self.vectorcall: bool = False
+         self.value_function = False
+         self.value_constructor = False
++        self.value_initializer = False
+         self.slot = None
+         self.permit_long_summary = False
+         self.permit_long_docstring_body = False
+@@ -523,6 +524,13 @@
+             fail("@value_constructor cannot be used with the limited C API")
+         self.value_constructor = True
+ 
++    def at_value_initializer(self) -> None:
++        if self.value_initializer:
++            fail("Called @value_initializer twice!")
++        if self.clinic.codegen.limited_capi:
++            fail("@value_initializer cannot be used with the limited C API")
++        self.value_initializer = True
++
+     def at_coexist(self) -> None:
+         if self.coexist:
+             fail("Called @coexist twice!")
+@@ -749,6 +757,7 @@
+             "line_number": self.line_number,
+             "value_function": self.value_function,
+             "value_constructor": self.value_constructor,
++            "value_initializer": self.value_initializer,
+         }
+         if existing_function.kind is SLOT or self.slot is not None:
+             fail("Type slot methods cannot be cloned")
+@@ -829,6 +838,7 @@
+             vectorcall=self.vectorcall,
+             value_function=self.value_function,
+             value_constructor=self.value_constructor,
++            value_initializer=self.value_initializer,
+             slot=self.slot,
+         )
+         self.add_function(func)
+--- a/Tools/clinic/libclinic/clanguage.py
++++ b/Tools/clinic/libclinic/clanguage.py
+@@ -318,7 +318,7 @@
+         codegen = clinic.codegen
+         data = CRenderData()
+         data.value_emission = is_value_function(f, codegen)
+-        if f.value_function or f.value_constructor:
++        if f.value_function or f.value_constructor or f.value_initializer:
+             codegen.selective_value_used = True
+             codegen.add_include('pycore_value_call.h', 'METH_VALUE')
+ 
+@@ -520,7 +520,7 @@
+             if clinic.line_suffix:
+                 s = libclinic.suffix_all_lines(s, clinic.line_suffix)
+ 
+-            if (f.value_function or f.value_constructor) and s and (
++            if (f.value_function or f.value_constructor or f.value_initializer) and s and (
+                     'PyValue' in s or 'METH_VALUE' in s):
+                 s = ("#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)\n"
+                      '#  error "@value_function Clinic output requires a core build"\n'
+--- a/Tools/clinic/libclinic/parse_args.py
++++ b/Tools/clinic/libclinic/parse_args.py
+@@ -195,12 +195,17 @@
+     unsupported = (not eligible or any(
+         p.converter.alias_of is not None or p.deprecated_until is not None
+         or p.is_var_keyword() for p in f.parameters.values()))
+-    if f.value_function and (unsupported or f.kind.new_or_init or f.value_constructor):
++    if f.value_function and (unsupported or f.kind.new_or_init or f.value_constructor or f.value_initializer):
+         fail("@value_function requires a supported value parser")
+     if f.value_constructor and (unsupported or f.kind is not METHOD_NEW
+-                                or not f.vectorcall or f.value_function):
++                                or not f.vectorcall or f.value_function or f.value_initializer):
+         fail("@value_constructor requires a supported __new__ with @vectorcall")
+-    return (codegen.value_emission or f.value_function or f.value_constructor) and eligible
++    if f.value_initializer and (unsupported or f.kind is not METHOD_INIT
++                                or not f.vectorcall or f.value_function
++                                or f.value_constructor):
++        fail("@value_initializer requires a supported __init__ with @vectorcall")
++    return (codegen.value_emission or f.value_function or f.value_constructor
++            or f.value_initializer) and eligible
+ 
+ 
+ DOCSTRING_PROTOTYPE_VAR: Final[str] = libclinic.normalize_snippet("""
+--- a/Lib/test/test_clinic.py
++++ b/Lib/test/test_clinic.py
+@@ -6544,6 +6544,26 @@
+             with self.assertRaises(ClinicError):
+                 _make_clinic().parse(text)
+ 
++    def test_value_initializer_pairs_entries_and_defaults(self):
++        generated = self.generate(["""@value_initializer
++            @vectorcall
++            m.T.__init__
++                value: object = None"""])
++        self.assertIn('m_T___init___value(', generated)
++        self.assertIn('m_T_vectorcall(PyThreadState *tstate', generated)
++        self.assertIn('PyValue_Borrow(PyValue_None)', generated)
++        self.assertIn('tp_new', generated)
++        self.assertIn('Py_DECREF(self)', generated)
++
++    def test_value_initializer_rejects_unsupported(self):
++        prefix = "/*[clinic input]\nmodule m\nclass m.T \"PyObject *\" \"&TestType\"\n[clinic start generated code]*/\n"
++        for body in ("@value_initializer\nm.T.__init__",
++                     "@value_initializer\n@vectorcall\nm.f",
++                     "@value_initializer\n@value_constructor\n@vectorcall\nm.T.__init__"):
++            text = prefix + "/*[clinic input]\n" + body + "\n[clinic start generated code]*/\n"
++            with self.assertRaises(ClinicError):
++                _make_clinic().parse(text)
++
+     def test_multiple_file_destinations_rejected(self):
+         text = """
+             /*[clinic input]

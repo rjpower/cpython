@@ -1,0 +1,62 @@
+{
+  "callable_helpers": 62,
+  "classified_handlers": 290,
+  "compiler_calls": 0,
+  "decision": "ACCEPT_M0_SOURCE_FOR_FOCUSED_DEBUG_FEEDBACK",
+  "historical_checkpoint": {
+    "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/jit-method-baseline-m0-review-20261101-v1/checkpoint.json",
+    "sha256": "a75820d7d43e3620c2065d7a1618bda4b375f709099b45dfa6f938a1d444273f"
+  },
+  "host_replay_log": {
+    "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/jit-method-baseline-m0-review-20261101-v1/host-replay-v2.log",
+    "sha256": "c9392734538195347252b5a05731ea4eb01c6e068c7a21046318df039caadf59"
+  },
+  "host_tests": 30,
+  "independent_host_replay": {
+    "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/jit-method-baseline-m0-review-20261101-v1/host-replay.json",
+    "sha256": "353924a01542f6e2026a491e704cffe9a975985d252aa624e8671540978c860b"
+  },
+  "lifetime_note": {
+    "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/jit-e2e-first-slice-20261101-v1/activation-lifetime-note.md",
+    "sha256": "3c974e9af269c90216d5f563ed0b0dd0bae9555af27a6620e76272844c6fcffc"
+  },
+  "native_jit_credit": false,
+  "review": {
+    "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/jit-method-baseline-m0-review-20261101-v1/review.md",
+    "sha256": "dbb79209f4c2d4f67288dbc00c4bd9e4e9c2373708df1c12bcf596ef28f51a01"
+  },
+  "reviewer_first_failure": {
+    "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/jit-method-baseline-m0-review-20261101-v1/host-replay.log",
+    "sha256": "4d0e980b536e6eee4ea22e049833bc1eed0c27ad01719889b6e88048a46908db"
+  },
+  "runtime_fixture_methods": 8,
+  "runtime_source_writes": 0,
+  "source_base": "aa0c166ef399973bfd1ccd4010e50b84007c73d9",
+  "source_capsule": {
+    "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/jit-method-baseline/build/jit-method-m0-source/capsule.json",
+    "sha256": "3afcc7afa844e40474dc8f812f371695772d9a155d0e955d1715e587b65cf2ab"
+  },
+  "source_clean": true,
+  "source_files": {
+    "Include/internal/pycore_jit.h": "63e58052e3b1653b4f81206640f808cd483ada3739e25c8f2e2b620e05b271ad",
+    "Lib/test/test_generated_cases.py": "21dec51041a7a350d9276872ea942783ca3fcbb4777e0a08cfc50b156097f1f8",
+    "Lib/test/test_jit_method.py": "e4d8d8374010e411e3979de19f40b3d662b60b9e934bfec92d3c83761a854569",
+    "Makefile.pre.in": "8c666f9ec2331509ea0ed87195156aa2b7ce6db8810cd96f62b6a1f6115a20a0",
+    "Modules/_testinternalcapi.c": "51bdd66823da248f0cbc7034fb1d33498e266dfc82ca365cda4fb7e2ecd0d151",
+    "Python/bytecodes.c": "d0975064106c773ce0c6371d4cf3ee5122746d96cf9e02f4e27b39d100e87ae7",
+    "Python/ceval.c": "f3aba0259b152e8313d74beb007df0993d6d619c6274ab5969c6125bf7dff8f8",
+    "Python/ceval_macros.h": "e7c483e4f9326b480e38c3fca48bbae631be7701a8e928d50c763bf2b4d48a5e",
+    "Python/generated_ir_cases.c.h": "6f3dfcb1cb8add6ecb4d9fa078ac95c9308c6223465ff28f3f972a9960866d12",
+    "Python/generated_jit_helpers.c.h": "9ef183876d3dba551bf5019d1e4b0430c2c3ecb5ed416f26ffd3455b81fec8aa",
+    "Python/jit_runtime.c": "3be4e1176ad4ed977a75e2d0cad82eaf4bee58476850fd25ced22487deed5baf",
+    "Tools/cases_generator/ir_generator.py": "4b866a1d49b4eeb0696a3c5c9475c1acec3b2e775040c395bf82c89751ef1da9",
+    "Tools/cases_generator/jit_helpers_generator.py": "1edd930b051c7cb5234927b48c88520c7cb8d435a101c3ed48a0f1f051f05f39"
+  },
+  "source_head": "49cc47360ccd79c7a89acc8bfa3d546f94afc46c",
+  "source_patch": {
+    "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/jit-method-baseline/build/jit-method-m0-source/source.patch",
+    "sha256": "9a458164394a8574f6edbeb668122fd4fd20edcc4388344951f80b4e2a17d5de"
+  },
+  "target_calls": 0,
+  "utc": "2026-11-01T16:54:08.994111+00:00"
+}

@@ -1,0 +1,26 @@
+--- a/Modules/_decimal/_decimal.c
++++ b/Modules/_decimal/_decimal.c
+@@ -121,10 +121,6 @@
+     struct DecCondMap *signal_map;
+     struct DecCondMap *cond_map;
+ 
+-    /* External C-API functions */
+-    binaryfunc _py_long_multiply;
+-    binaryfunc _py_long_floor_divide;
+-    ternaryfunc _py_long_power;
+ } decimal_state;
+ 
+ static inline decimal_state *
+@@ -8771,12 +8767,6 @@
+ 
+     decimal_state *state = get_module_state(m);
+ 
+-    /* Init external C-API functions */
+-    state->_py_long_multiply = PyLong_Type.tp_as_number->nb_multiply;
+-    state->_py_long_floor_divide = PyLong_Type.tp_as_number->nb_floor_divide;
+-    state->_py_long_power = PyLong_Type.tp_as_number->nb_power;
+-
+-
+     /* Init types */
+ #define CREATE_TYPE(mod, tp, spec) do {                               \
+     tp = (PyTypeObject *)PyType_FromMetaclass(NULL, mod, spec, NULL); \

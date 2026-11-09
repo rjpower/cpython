@@ -1,0 +1,802 @@
+--- a/Modules/_decimal/_decimal.c
++++ b/Modules/_decimal/_decimal.c
+@@ -1015,11 +1015,6 @@
+     return 0;
+ }
+ 
+-static int
+-context_setprec(PyObject *self, PyObject *value, void *closure)
+-{
+-    return context_setprec_value(self, _Py_VALUE_ARG(value), closure);
+-}
+ 
+ static int
+ context_setemin_value(PyObject *self, PyValueBorrow value, void *Py_UNUSED(closure))
+@@ -1041,11 +1036,6 @@
+     return 0;
+ }
+ 
+-static int
+-context_setemin(PyObject *self, PyObject *value, void *closure)
+-{
+-    return context_setemin_value(self, _Py_VALUE_ARG(value), closure);
+-}
+ 
+ static int
+ context_setemax_value(PyObject *self, PyValueBorrow value, void *Py_UNUSED(closure))
+@@ -1067,11 +1057,6 @@
+     return 0;
+ }
+ 
+-static int
+-context_setemax(PyObject *self, PyObject *value, void *closure)
+-{
+-    return context_setemax_value(self, _Py_VALUE_ARG(value), closure);
+-}
+ 
+ #ifdef CONFIG_32
+ /*[clinic input]
+@@ -1164,11 +1149,6 @@
+     return 0;
+ }
+ 
+-static int
+-context_setround(PyObject *self, PyObject *value, void *closure)
+-{
+-    return context_setround_value(self, _Py_VALUE_ARG(value), closure);
+-}
+ 
+ static int
+ context_setcapitals_value(PyObject *self, PyValueBorrow value, void *Py_UNUSED(closure))
+@@ -1189,11 +1169,6 @@
+     return 0;
+ }
+ 
+-static int
+-context_setcapitals(PyObject *self, PyObject *value, void *closure)
+-{
+-    return context_setcapitals_value(self, _Py_VALUE_ARG(value), closure);
+-}
+ 
+ #ifdef EXTRA_FUNCTIONALITY
+ static int
+@@ -1346,11 +1321,6 @@
+     return 0;
+ }
+ 
+-static int
+-context_setclamp(PyObject *self, PyObject *value, void *closure)
+-{
+-    return context_setclamp_value(self, _Py_VALUE_ARG(value), closure);
+-}
+ 
+ #ifdef EXTRA_FUNCTIONALITY
+ static int
+@@ -1420,7 +1390,7 @@
+ _Py_VALUE_THUNK_SETATTRO(context_setattr, context_setattr_value)
+ 
+ /* In the constructor None means "not specified". */
+-#define NONE_TO_NULL(x) ((x) == Py_None ? NULL : (x))
++#define NONE_TO_NULL(x) (PyValue_IsNone(x) ? PyValue_Borrow(PyValue_NULL) : (x))
+ 
+ /* Set the given attributes.  An attribute is left unchanged if the
+    corresponding argument is NULL. */
+@@ -1491,17 +1461,7 @@
+     return 0;
+ }
+ 
+-/* Object entry points use this until their Clinic parsers lend values. */
+-static int
+-context_setattrs(PyObject *self, PyObject *prec, PyObject *rounding,
+-                 PyObject *emin, PyObject *emax, PyObject *capitals,
+-                 PyObject *clamp, PyObject *status, PyObject *traps)
+-{
+-    return context_setattrs_value(self, _Py_VALUE_ARG(prec), _Py_VALUE_ARG(rounding),
+-                                  _Py_VALUE_ARG(emin), _Py_VALUE_ARG(emax),
+-                                  _Py_VALUE_ARG(capitals), _Py_VALUE_ARG(clamp),
+-                                  _Py_VALUE_ARG(status), _Py_VALUE_ARG(traps));
+-}
++
+ 
+ /*[clinic input]
+ _decimal.Context.clear_traps
+@@ -1638,6 +1598,8 @@
+ }
+ 
+ /*[clinic input]
++@value_initializer
++@vectorcall
+ _decimal.Context.__init__ as context_init
+ 
+     prec: object = None
+@@ -1661,15 +1623,19 @@
+     ...             flags=[])
+     >>>
+ [clinic start generated code]*/
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+ static int
+-context_init_impl(PyObject *self, PyObject *prec, PyObject *rounding,
+-                  PyObject *emin, PyObject *emax, PyObject *capitals,
+-                  PyObject *clamp, PyObject *status, PyObject *traps)
+-/*[clinic end generated code: output=8bfdc59fbe862f44 input=45c704b93cd02959]*/
++context_init_impl(PyObject *self, PyValueBorrow prec, PyValueBorrow rounding,
++                  PyValueBorrow emin, PyValueBorrow emax,
++                  PyValueBorrow capitals, PyValueBorrow clamp,
++                  PyValueBorrow status, PyValueBorrow traps)
++/*[clinic end generated code: output=022dca86ffd44a60 input=fed38602c4e0ccb8]*/
+ {
+     /* The context has already been initialized with the default values. */
+-    return context_setattrs(
++    return context_setattrs_value(
+         self, NONE_TO_NULL(prec), NONE_TO_NULL(rounding),
+         NONE_TO_NULL(emin), NONE_TO_NULL(emax), NONE_TO_NULL(capitals),
+         NONE_TO_NULL(clamp), NONE_TO_NULL(status), NONE_TO_NULL(traps)
+@@ -1827,6 +1793,7 @@
+ }
+ 
+ /*[clinic input]
++@value_function
+ @text_signature "($self, /, **changes)"
+ _decimal.Context.__replace__
+ 
+@@ -1843,28 +1810,32 @@
+ 
+ Return a copy of the context with the specified attributes replaced.
+ [clinic start generated code]*/
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
++static PyValue
+ _decimal_Context___replace___impl(PyObject *self, PyTypeObject *cls,
+-                                  PyObject *prec, PyObject *rounding,
+-                                  PyObject *emin, PyObject *emax,
+-                                  PyObject *capitals, PyObject *clamp,
+-                                  PyObject *status, PyObject *traps)
+-/*[clinic end generated code: output=375ef0392df682ec input=414d9d00b25af6f3]*/
++                                  PyValueBorrow prec, PyValueBorrow rounding,
++                                  PyValueBorrow emin, PyValueBorrow emax,
++                                  PyValueBorrow capitals,
++                                  PyValueBorrow clamp, PyValueBorrow status,
++                                  PyValueBorrow traps)
++/*[clinic end generated code: output=63c726cbb3baa963 input=261652150e1eda06]*/
+ {
+     decimal_state *state = PyType_GetModuleState(cls);
+ 
+     PyObject *result = context_copy(state, self);
+     if (result == NULL) {
+-        return NULL;
++        return PyValue_NULL;
+     }
+-    if (context_setattrs(result, prec, rounding, emin, emax, capitals,
++    if (context_setattrs_value(result, prec, rounding, emin, emax, capitals,
+                          clamp, status, traps) < 0)
+     {
+         Py_DECREF(result);
+-        return NULL;
++        return PyValue_NULL;
+     }
+-    return result;
++    return PyValue_FromObjectSteal(result);
+ }
+ 
+ /*[clinic input]
+@@ -2231,7 +2202,10 @@
+  * owns one reference to the global (outer) context and one
+  * to the local (inner) context. */
+ 
++static PyObject *optional_context_value(decimal_state *, PyValueBorrow);
++
+ /*[clinic input]
++@value_function
+ @text_signature "($module, /, ctx=None, **kwargs)"
+ _decimal.localcontext
+ 
+@@ -2253,40 +2227,52 @@
+ the with-statement. If no context is specified, a copy of the current
+ default context is used.
+ [clinic start generated code]*/
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
+-_decimal_localcontext_impl(PyObject *module, PyObject *local, PyObject *prec,
+-                           PyObject *rounding, PyObject *Emin,
+-                           PyObject *Emax, PyObject *capitals,
+-                           PyObject *clamp, PyObject *flags, PyObject *traps)
+-/*[clinic end generated code: output=9bf4e47742a809b0 input=616abb6ee1654373]*/
++static PyValue
++_decimal_localcontext_impl(PyObject *module, PyValueBorrow local,
++                           PyValueBorrow prec, PyValueBorrow rounding,
++                           PyValueBorrow Emin, PyValueBorrow Emax,
++                           PyValueBorrow capitals, PyValueBorrow clamp,
++                           PyValueBorrow flags, PyValueBorrow traps)
++/*[clinic end generated code: output=fc604c00e692882e input=05fa1123fb053164]*/
+ {
+     PyObject *global;
+ 
+     decimal_state *state = get_module_state(module);
+-    CURRENT_CONTEXT(state, global);
+-    if (local == Py_None) {
+-        local = global;
++    global = optional_context_value(state, PyValue_FromObjectBorrow(Py_None));
++    if (global == NULL) {
++        return PyValue_NULL;
++    }
++    PyObject *local_object;
++    if (PyValue_IsNone(local)) {
++        local_object = global;
++    }
++    else if (PyValue_IsObject(local) &&
++             PyDecContext_Check(state, PyValue_AsKnownObjectBorrow(local))) {
++        local_object = PyValue_AsKnownObjectBorrow(local);
+     }
+-    else if (!PyDecContext_Check(state, local)) {
++    else {
+         PyErr_SetString(PyExc_TypeError,
+             "optional argument must be a context");
+-        return NULL;
++        return PyValue_NULL;
+     }
+ 
+-    PyObject *local_copy = context_copy(state, local);
++    PyObject *local_copy = context_copy(state, local_object);
+     if (local_copy == NULL) {
+-        return NULL;
++        return PyValue_NULL;
+     }
+ 
+-    int ret = context_setattrs(
++    int ret = context_setattrs_value(
+         local_copy, prec, rounding,
+         Emin, Emax, capitals,
+         clamp, flags, traps
+     );
+     if (ret < 0) {
+         Py_DECREF(local_copy);
+-        return NULL;
++        return PyValue_NULL;
+     }
+ 
+     PyDecContextManagerObject *self;
+@@ -2294,14 +2280,14 @@
+                            state->PyDecContextManager_Type);
+     if (self == NULL) {
+         Py_DECREF(local_copy);
+-        return NULL;
++        return PyValue_NULL;
+     }
+ 
+     self->local = local_copy;
+     self->global = Py_NewRef(global);
+     PyObject_GC_Track(self);
+ 
+-    return (PyObject *)self;
++    return PyValue_FromObjectSteal((PyObject *)self);
+ }
+ 
+ static int
+@@ -8857,6 +8843,11 @@
+     state->PyDec_Type->tp_vectorcall = _PyValue_VectorcallThunk;
+     state->PyDec_Type->tp_value_vectorcall = (_Py_valuefunc)dec_vectorcall;
+     CREATE_TYPE(m, state->PyDecContext_Type, &context_spec);
++    assert(state->PyDecContext_Type->tp_new == context_new);
++    assert(state->PyDecContext_Type->tp_init == context_init);
++    assert(PyType_HasFeature(state->PyDecContext_Type, Py_TPFLAGS_IMMUTABLETYPE));
++    state->PyDecContext_Type->tp_vectorcall = _PyValue_VectorcallThunk;
++    state->PyDecContext_Type->tp_value_vectorcall = (_Py_valuefunc)context_vectorcall;
+     CREATE_TYPE(m, state->PyDecContextManager_Type, &ctxmanager_spec);
+     CREATE_TYPE(m, state->PyDecSignalDictMixin_Type, &signaldict_spec);
+ 
+--- a/Modules/_decimal/clinic/_decimal.c.h
++++ b/Modules/_decimal/clinic/_decimal.c.h
+@@ -8,12 +8,11 @@
+ 
+ #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
+ #  include "pycore_gc.h"          // PyGC_Head
+-#  include "pycore_runtime.h"     // _Py_ID()
+ #  include "pycore_value.h"       // _PyValue_STATIC_IMMORTAL()
+ #endif
+ #include "pycore_abstract.h"      // _PyNumber_Index()
+-#include "pycore_borrow.h"        // _PyBorrow_TupleItems()
+-#include "pycore_modsupport.h"    // _PyArg_UnpackKeywords()
++#include "pycore_modsupport.h"    // _PyArg_UnpackKeywordsValue()
++#include "pycore_runtime.h"       // _Py_SINGLETON()
+ #include "pycore_tuple.h"         // _PyTuple_ITEMS()
+ #include "pycore_value_call.h"    // METH_VALUE
+ #include "pycore_value_slots.h"   // _PyValue_THUNK_EXIT()
+@@ -229,14 +228,21 @@
+ "    ...             traps=[InvalidOperation, DivisionByZero, Overflow],\n"
+ "    ...             flags=[])\n"
+ "    >>>");
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+ static int
+-context_init_impl(PyObject *self, PyObject *prec, PyObject *rounding,
+-                  PyObject *emin, PyObject *emax, PyObject *capitals,
+-                  PyObject *clamp, PyObject *status, PyObject *traps);
++context_init_impl(PyObject *self, PyValueBorrow prec, PyValueBorrow rounding,
++                  PyValueBorrow emin, PyValueBorrow emax,
++                  PyValueBorrow capitals, PyValueBorrow clamp,
++                  PyValueBorrow status, PyValueBorrow traps);
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+ static int
+-context_init(PyObject *self, PyObject *args, PyObject *kwargs)
++context_init_value(PyObject *self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+ {
+     int return_value = -1;
+     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
+@@ -266,80 +272,94 @@
+         .kwtuple = KWTUPLE,
+     };
+     #undef KWTUPLE
+-    PyObject *argsbuf[8];
+-    PyObject * const *fastargs;
+-    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
+-    Py_ssize_t noptargs = nargs + (kwargs ? PyDict_GET_SIZE(kwargs) : 0) - 0;
+-    PyObject *prec = Py_None;
+-    PyObject *rounding = Py_None;
+-    PyObject *emin = Py_None;
+-    PyObject *emax = Py_None;
+-    PyObject *capitals = Py_None;
+-    PyObject *clamp = Py_None;
+-    PyObject *status = Py_None;
+-    PyObject *traps = Py_None;
+-
+-    PyObject *const *_args_items = _PyBorrow_TupleItems(args, Py_MIN(nargs, 8));
+-    if (_args_items == NULL) {
+-        goto exit;
+-    }
+-    fastargs = _PyArg_UnpackKeywords(_args_items, nargs, kwargs, NULL, &_parser,
+-            /*minpos*/ 0, /*maxpos*/ 8, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
+-    if (!fastargs) {
+-        goto exit;
+-    }
+-    if (!noptargs) {
+-        goto skip_optional_pos;
+-    }
+-    if (fastargs[0]) {
+-        prec = fastargs[0];
+-        if (!--noptargs) {
+-            goto skip_optional_pos;
+-        }
++    Py_ssize_t _idx[8];
++    PyValueBorrow prec = PyValue_Borrow(PyValue_None);
++    PyValueBorrow rounding = PyValue_Borrow(PyValue_None);
++    PyValueBorrow emin = PyValue_Borrow(PyValue_None);
++    PyValueBorrow emax = PyValue_Borrow(PyValue_None);
++    PyValueBorrow capitals = PyValue_Borrow(PyValue_None);
++    PyValueBorrow clamp = PyValue_Borrow(PyValue_None);
++    PyValueBorrow status = PyValue_Borrow(PyValue_None);
++    PyValueBorrow traps = PyValue_Borrow(PyValue_None);
++
++    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
++            /*minpos*/ 0, /*maxpos*/ 8, /*minkw*/ 0, /*varpos*/ 0, _idx, 8)) {
++        goto exit;
+     }
+-    if (fastargs[1]) {
+-        rounding = fastargs[1];
+-        if (!--noptargs) {
+-            goto skip_optional_pos;
+-        }
++    if (_idx[0] >= 0) {
++        prec = PyValue_Borrow(args[_idx[0]]);
+     }
+-    if (fastargs[2]) {
+-        emin = fastargs[2];
+-        if (!--noptargs) {
+-            goto skip_optional_pos;
+-        }
++    if (_idx[1] >= 0) {
++        rounding = PyValue_Borrow(args[_idx[1]]);
+     }
+-    if (fastargs[3]) {
+-        emax = fastargs[3];
+-        if (!--noptargs) {
+-            goto skip_optional_pos;
+-        }
++    if (_idx[2] >= 0) {
++        emin = PyValue_Borrow(args[_idx[2]]);
+     }
+-    if (fastargs[4]) {
+-        capitals = fastargs[4];
+-        if (!--noptargs) {
+-            goto skip_optional_pos;
+-        }
++    if (_idx[3] >= 0) {
++        emax = PyValue_Borrow(args[_idx[3]]);
+     }
+-    if (fastargs[5]) {
+-        clamp = fastargs[5];
+-        if (!--noptargs) {
+-            goto skip_optional_pos;
+-        }
++    if (_idx[4] >= 0) {
++        capitals = PyValue_Borrow(args[_idx[4]]);
+     }
+-    if (fastargs[6]) {
+-        status = fastargs[6];
+-        if (!--noptargs) {
+-            goto skip_optional_pos;
+-        }
++    if (_idx[5] >= 0) {
++        clamp = PyValue_Borrow(args[_idx[5]]);
++    }
++    if (_idx[6] >= 0) {
++        status = PyValue_Borrow(args[_idx[6]]);
++    }
++    if (_idx[7] >= 0) {
++        traps = PyValue_Borrow(args[_idx[7]]);
+     }
+-    traps = fastargs[7];
+-skip_optional_pos:
+     return_value = context_init_impl(self, prec, rounding, emin, emax, capitals, clamp, status, traps);
+ 
+ exit:
+     return return_value;
+ }
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
++
++static int
++context_init(PyObject *self, PyObject *args, PyObject *kwargs)
++{
++    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
++    if (kwargs == NULL || PyDict_GET_SIZE(kwargs) == 0) {
++        return context_init_value(self, _PyTuple_ITEMS(args), nargs, NULL);
++    }
++    PyObject *kwnames;
++    PyValue *window = _PyValue_StackUnpackDict(_PyThreadState_GET(),
++        _PyTuple_ITEMS(args), nargs, kwargs, &kwnames);
++    if (window == NULL) {
++        return -1;
++    }
++    int result = context_init_value(self, window, nargs, kwnames);
++    _PyValue_StackUnpackDict_Free(window, nargs, kwnames);
++    return result;
++}
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
++
++static PyValue
++context_vectorcall(PyThreadState *tstate, PyObject *type, const PyValue *args,
++    size_t nargsf, PyObject *kwnames)
++{
++    assert(_PyType_CAST(type)->tp_init == context_init);
++    /* Make sure the type object is immutable: the generated
++     * vectorcall doesn't deal e.g. with users reassigning __init__. */
++    assert(PyType_HasFeature(_PyType_CAST(type), Py_TPFLAGS_IMMUTABLETYPE));
++    Py_ssize_t nargs = PyVectorcall_NARGS(nargsf);
++    PyObject *self = _PyType_CAST(type)->tp_new(_PyType_CAST(type),
++        (PyObject *)&_Py_SINGLETON(tuple_empty), NULL);
++    if (self == NULL) {
++        return PyValue_NULL;
++    }
++    if (context_init_value(self, args, nargs, kwnames) != 0) {
++        Py_DECREF(self);
++        return PyValue_NULL;
++    }
++    return PyValue_FromObjectSteal(self);
++}
+ 
+ PyDoc_STRVAR(_decimal_IEEEContext__doc__,
+ "IEEEContext($module, bits, /)\n"
+@@ -428,21 +448,31 @@
+ "--\n"
+ "\n"
+ "Return a copy of the context with the specified attributes replaced.");
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+ #define _DECIMAL_CONTEXT___REPLACE___METHODDEF    \
+-    {"__replace__", _PyCFunction_CAST(_decimal_Context___replace__), METH_METHOD|METH_FASTCALL|METH_KEYWORDS, _decimal_Context___replace____doc__},
++    {"__replace__", _PyCFunction_CAST(_decimal_Context___replace__), METH_VALUE|METH_METHOD|METH_KEYWORDS, _decimal_Context___replace____doc__},
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
++static PyValue
+ _decimal_Context___replace___impl(PyObject *self, PyTypeObject *cls,
+-                                  PyObject *prec, PyObject *rounding,
+-                                  PyObject *emin, PyObject *emax,
+-                                  PyObject *capitals, PyObject *clamp,
+-                                  PyObject *status, PyObject *traps);
++                                  PyValueBorrow prec, PyValueBorrow rounding,
++                                  PyValueBorrow emin, PyValueBorrow emax,
++                                  PyValueBorrow capitals,
++                                  PyValueBorrow clamp, PyValueBorrow status,
++                                  PyValueBorrow traps);
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
+-_decimal_Context___replace__(PyObject *self, PyTypeObject *cls, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
++static PyValue
++_decimal_Context___replace__(PyValueBorrow self, PyTypeObject *cls, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+ {
+-    PyObject *return_value = NULL;
++    PyValue return_value = PyValue_NULL;
+     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
+ 
+     #define NUM_KEYWORDS 8
+@@ -470,70 +500,45 @@
+         .kwtuple = KWTUPLE,
+     };
+     #undef KWTUPLE
+-    PyObject *argsbuf[8];
+-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 0;
+-    PyObject *prec = NULL;
+-    PyObject *rounding = NULL;
+-    PyObject *emin = NULL;
+-    PyObject *emax = NULL;
+-    PyObject *capitals = NULL;
+-    PyObject *clamp = NULL;
+-    PyObject *status = NULL;
+-    PyObject *traps = NULL;
+-
+-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
+-            /*minpos*/ 0, /*maxpos*/ 0, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
+-    if (!args) {
+-        goto exit;
+-    }
+-    if (!noptargs) {
+-        goto skip_optional_kwonly;
+-    }
+-    if (args[0]) {
+-        prec = args[0];
+-        if (!--noptargs) {
+-            goto skip_optional_kwonly;
+-        }
++    Py_ssize_t _idx[8];
++    PyValueBorrow prec = PyValue_Borrow(PyValue_NULL);
++    PyValueBorrow rounding = PyValue_Borrow(PyValue_NULL);
++    PyValueBorrow emin = PyValue_Borrow(PyValue_NULL);
++    PyValueBorrow emax = PyValue_Borrow(PyValue_NULL);
++    PyValueBorrow capitals = PyValue_Borrow(PyValue_NULL);
++    PyValueBorrow clamp = PyValue_Borrow(PyValue_NULL);
++    PyValueBorrow status = PyValue_Borrow(PyValue_NULL);
++    PyValueBorrow traps = PyValue_Borrow(PyValue_NULL);
++
++    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
++            /*minpos*/ 0, /*maxpos*/ 0, /*minkw*/ 0, /*varpos*/ 0, _idx, 8)) {
++        goto exit;
+     }
+-    if (args[1]) {
+-        rounding = args[1];
+-        if (!--noptargs) {
+-            goto skip_optional_kwonly;
+-        }
++    if (_idx[0] >= 0) {
++        prec = PyValue_Borrow(args[_idx[0]]);
+     }
+-    if (args[2]) {
+-        emin = args[2];
+-        if (!--noptargs) {
+-            goto skip_optional_kwonly;
+-        }
++    if (_idx[1] >= 0) {
++        rounding = PyValue_Borrow(args[_idx[1]]);
+     }
+-    if (args[3]) {
+-        emax = args[3];
+-        if (!--noptargs) {
+-            goto skip_optional_kwonly;
+-        }
++    if (_idx[2] >= 0) {
++        emin = PyValue_Borrow(args[_idx[2]]);
+     }
+-    if (args[4]) {
+-        capitals = args[4];
+-        if (!--noptargs) {
+-            goto skip_optional_kwonly;
+-        }
++    if (_idx[3] >= 0) {
++        emax = PyValue_Borrow(args[_idx[3]]);
+     }
+-    if (args[5]) {
+-        clamp = args[5];
+-        if (!--noptargs) {
+-            goto skip_optional_kwonly;
+-        }
++    if (_idx[4] >= 0) {
++        capitals = PyValue_Borrow(args[_idx[4]]);
+     }
+-    if (args[6]) {
+-        status = args[6];
+-        if (!--noptargs) {
+-            goto skip_optional_kwonly;
+-        }
++    if (_idx[5] >= 0) {
++        clamp = PyValue_Borrow(args[_idx[5]]);
++    }
++    if (_idx[6] >= 0) {
++        status = PyValue_Borrow(args[_idx[6]]);
+     }
+-    traps = args[7];
+-skip_optional_kwonly:
+-    return_value = _decimal_Context___replace___impl(self, cls, prec, rounding, emin, emax, capitals, clamp, status, traps);
++    if (_idx[7] >= 0) {
++        traps = PyValue_Borrow(args[_idx[7]]);
++    }
++    return_value = _decimal_Context___replace___impl(PyValue_AsKnownObjectBorrow(self), cls, prec, rounding, emin, emax, capitals, clamp, status, traps);
+ 
+ exit:
+     return return_value;
+@@ -597,20 +602,30 @@
+ "with-statement and restore the previous default context when exiting\n"
+ "the with-statement. If no context is specified, a copy of the current\n"
+ "default context is used.");
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+ #define _DECIMAL_LOCALCONTEXT_METHODDEF    \
+-    {"localcontext", _PyCFunction_CAST(_decimal_localcontext), METH_FASTCALL|METH_KEYWORDS, _decimal_localcontext__doc__},
++    {"localcontext", _PyCFunction_CAST(_decimal_localcontext), METH_VALUE|METH_KEYWORDS, _decimal_localcontext__doc__},
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
+-_decimal_localcontext_impl(PyObject *module, PyObject *local, PyObject *prec,
+-                           PyObject *rounding, PyObject *Emin,
+-                           PyObject *Emax, PyObject *capitals,
+-                           PyObject *clamp, PyObject *flags, PyObject *traps);
++static PyValue
++_decimal_localcontext_impl(PyObject *module, PyValueBorrow local,
++                           PyValueBorrow prec, PyValueBorrow rounding,
++                           PyValueBorrow Emin, PyValueBorrow Emax,
++                           PyValueBorrow capitals, PyValueBorrow clamp,
++                           PyValueBorrow flags, PyValueBorrow traps);
++#if !defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
++#  error "@value_function Clinic output requires a core build"
++#endif
+ 
+-static PyObject *
+-_decimal_localcontext(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
++static PyValue
++_decimal_localcontext(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+ {
+-    PyObject *return_value = NULL;
++    PyValue return_value = PyValue_NULL;
+     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
+ 
+     #define NUM_KEYWORDS 9
+@@ -638,81 +653,49 @@
+         .kwtuple = KWTUPLE,
+     };
+     #undef KWTUPLE
+-    PyObject *argsbuf[9];
+-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 0;
+-    PyObject *local = Py_None;
+-    PyObject *prec = NULL;
+-    PyObject *rounding = NULL;
+-    PyObject *Emin = NULL;
+-    PyObject *Emax = NULL;
+-    PyObject *capitals = NULL;
+-    PyObject *clamp = NULL;
+-    PyObject *flags = NULL;
+-    PyObject *traps = NULL;
+-
+-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
+-            /*minpos*/ 0, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
+-    if (!args) {
+-        goto exit;
+-    }
+-    if (!noptargs) {
+-        goto skip_optional_pos;
+-    }
+-    if (args[0]) {
+-        local = args[0];
+-        if (!--noptargs) {
+-            goto skip_optional_pos;
+-        }
++    Py_ssize_t _idx[9];
++    PyValueBorrow local = PyValue_Borrow(PyValue_None);
++    PyValueBorrow prec = PyValue_Borrow(PyValue_NULL);
++    PyValueBorrow rounding = PyValue_Borrow(PyValue_NULL);
++    PyValueBorrow Emin = PyValue_Borrow(PyValue_NULL);
++    PyValueBorrow Emax = PyValue_Borrow(PyValue_NULL);
++    PyValueBorrow capitals = PyValue_Borrow(PyValue_NULL);
++    PyValueBorrow clamp = PyValue_Borrow(PyValue_NULL);
++    PyValueBorrow flags = PyValue_Borrow(PyValue_NULL);
++    PyValueBorrow traps = PyValue_Borrow(PyValue_NULL);
++
++    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
++            /*minpos*/ 0, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, _idx, 9)) {
++        goto exit;
+     }
+-skip_optional_pos:
+-    if (!noptargs) {
+-        goto skip_optional_kwonly;
+-    }
+-    if (args[1]) {
+-        prec = args[1];
+-        if (!--noptargs) {
+-            goto skip_optional_kwonly;
+-        }
++    if (_idx[0] >= 0) {
++        local = PyValue_Borrow(args[_idx[0]]);
+     }
+-    if (args[2]) {
+-        rounding = args[2];
+-        if (!--noptargs) {
+-            goto skip_optional_kwonly;
+-        }
++    if (_idx[1] >= 0) {
++        prec = PyValue_Borrow(args[_idx[1]]);
+     }
+-    if (args[3]) {
+-        Emin = args[3];
+-        if (!--noptargs) {
+-            goto skip_optional_kwonly;
+-        }
++    if (_idx[2] >= 0) {
++        rounding = PyValue_Borrow(args[_idx[2]]);
+     }
+-    if (args[4]) {
+-        Emax = args[4];
+-        if (!--noptargs) {
+-            goto skip_optional_kwonly;
+-        }
++    if (_idx[3] >= 0) {
++        Emin = PyValue_Borrow(args[_idx[3]]);
+     }
+-    if (args[5]) {
+-        capitals = args[5];
+-        if (!--noptargs) {
+-            goto skip_optional_kwonly;
+-        }
++    if (_idx[4] >= 0) {
++        Emax = PyValue_Borrow(args[_idx[4]]);
+     }
+-    if (args[6]) {
+-        clamp = args[6];
+-        if (!--noptargs) {
+-            goto skip_optional_kwonly;
+-        }
++    if (_idx[5] >= 0) {
++        capitals = PyValue_Borrow(args[_idx[5]]);
+     }
+-    if (args[7]) {
+-        flags = args[7];
+-        if (!--noptargs) {
+-            goto skip_optional_kwonly;
+-        }
++    if (_idx[6] >= 0) {
++        clamp = PyValue_Borrow(args[_idx[6]]);
++    }
++    if (_idx[7] >= 0) {
++        flags = PyValue_Borrow(args[_idx[7]]);
++    }
++    if (_idx[8] >= 0) {
++        traps = PyValue_Borrow(args[_idx[8]]);
+     }
+-    traps = args[8];
+-skip_optional_kwonly:
+-    return_value = _decimal_localcontext_impl(module, local, prec, rounding, Emin, Emax, capitals, clamp, flags, traps);
++    return_value = _decimal_localcontext_impl(PyValue_AsKnownObjectBorrow(module), local, prec, rounding, Emin, Emax, capitals, clamp, flags, traps);
+ 
+ exit:
+     return return_value;
+@@ -7304,4 +7287,4 @@
+ #ifndef _DECIMAL_CONTEXT_APPLY_METHODDEF
+     #define _DECIMAL_CONTEXT_APPLY_METHODDEF
+ #endif /* !defined(_DECIMAL_CONTEXT_APPLY_METHODDEF) */
+-/*[clinic end generated code: output=3fdbf05cd4278dc6 input=a9049054013a1b77]*/
++/*[clinic end generated code: output=2053ef7b9498d09b input=a9049054013a1b77]*/

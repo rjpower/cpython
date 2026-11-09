@@ -1,0 +1,66 @@
+{
+ "schema": "boil-bench/1",
+ "build": {
+  "label": "U",
+  "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/upstream-release-3a440b6/python",
+  "version": "3.16.0a1+dev (heads/main:3a440b65695, Nov  3 2026, 15:54:35) [GCC 15.2.0]",
+  "git": [
+   "CPython",
+   "heads/main",
+   "3a440b65695"
+  ],
+  "hash_seed": 0
+ },
+ "machine": {
+  "hostname": "bento-cat",
+  "kernel": "7.0.0-43-generic",
+  "cpus": 16,
+  "cpu": "AMD Ryzen 7 3800X 8-Core Processor",
+  "memory": "65726112 kB"
+ },
+ "results": {
+  "rss": {
+   "startup": {
+    "group": "memory",
+    "unit": "KiB peak RSS",
+    "value": 9472,
+    "values": [
+     10508,
+     9472,
+     9440
+    ],
+    "loops": 1,
+    "runs": 3
+   },
+   "imports": {
+    "group": "memory",
+    "unit": "KiB peak RSS",
+    "value": 11216,
+    "values": [
+     14920,
+     11216,
+     10872
+    ],
+    "loops": 1,
+    "runs": 3
+   }
+  }
+ },
+ "runs": {
+  "rss": {
+   "timestamp": "2026-11-04T10:05:51-08:00",
+   "commit": {
+    "sha": "d8ad9d14d9fb7e6f3b9be22f030092fd2d5cfe87",
+    "dirty": true
+   },
+   "load_1min": {
+    "max": 1.97412109375,
+    "samples": [
+     1.97412109375,
+     1.97412109375,
+     1.97412109375
+    ]
+   }
+  }
+ }
+}

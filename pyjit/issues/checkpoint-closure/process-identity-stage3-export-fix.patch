@@ -1,0 +1,13 @@
+--- a/Include/internal/pycore_pystats.h
++++ b/Include/internal/pycore_pystats.h
+@@ -28,8 +28,8 @@
+ extern void _Py_StatsAfterFork(void);
+ /* Linux stats only: snapshot the parent interval before after-fork hooks,
+    then publish one receipt after a successful native child creation. */
+-extern void _PyStats_CopyIntervalStem(char out[41]);
+-extern void _PyStats_ChildCreated(pid_t child, const char *source,
++PyAPI_FUNC(void) _PyStats_CopyIntervalStem(char out[41]);
++PyAPI_FUNC(void) _PyStats_ChildCreated(pid_t child, const char *source,
+                                   const char *const *candidates,
+                                   size_t candidate_count,
+                                   const char parent_stem[41]);

@@ -1,0 +1,32 @@
+{
+  "candidate_execution_authorized_by_this_decision": false,
+  "changed_paths": 22,
+  "classified_handlers": 293,
+  "decision": "ACCEPT_M2_SOURCE_FOR_FOCUSED_NATIVE_VALIDATION_ONLY",
+  "final_syntax_translation_units_passed": 9,
+  "future_source_edits_authorized": false,
+  "generated_helpers": 82,
+  "host_generator_tests_passed": 33,
+  "independent_source_review": {
+    "receipt.json": {
+      "path": "boil/issues/jit-e2e-system/m2-source-receipt-20261101-v1.json",
+      "sha256": "7373c3556c6f06dd0fe57d4e6d27f3d724e91780eac2fc1e59772e437fd1168a"
+    },
+    "review.md": {
+      "path": "boil/issues/jit-e2e-system/m2-source-review-20261101-v1.md",
+      "sha256": "05c79bf53088597f50a58f4e48bb53aab40dbf323f5213ba07afb189cf97f395"
+    }
+  },
+  "integration_or_performance_acceptance": false,
+  "native_bytes_executed": false,
+  "remaining": "Bind/review held controller, then finite fresh debug/native validation, natural workload diagnostics and shared optimizing SSA.",
+  "runtime_methods_pending": 28,
+  "source_attempt_closed_early": true,
+  "source_capsule": {
+    "path": "build/worktrees/jit-natural-method/build/jit-method-m2-source/capsule.json",
+    "sha256": "1e7e030bc0f8eb77f2a27119ed7da3694ae453ad301ac051b092878695228f5a"
+  },
+  "source_head": "3bcb891956a9d2796bbe5e92c4f0c9e2f2516899",
+  "source_parent": "15987a03c236d5257b8a7b944bf858ee20e52fc3",
+  "utc": "2026-11-01T19:30:12.434054+00:00"
+}

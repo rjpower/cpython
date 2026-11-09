@@ -1,0 +1,45 @@
+{
+  "utc": "2026-11-01T20:13:59.699731+00:00",
+  "decision": "ACCEPT_REVIEWED_TWO_HELPER_COVERAGE_AMENDMENT_WITHIN_M3_SOURCE_GRANT",
+  "source_grant": {
+    "path": "boil/issues/jit-e2e-system/m3-source-grant-20261101-v1.json",
+    "sha256": "d2d3b7eb38d5eec72f4ad379b498321b7464270bc150da9bf13dfc74fd1d919d"
+  },
+  "deadline_utc": "2026-11-01T21:31:13.818210+00:00",
+  "extension_authorized": false,
+  "evidence": {
+    "campaign_manifest": "build/jit-method-m2-workload-diagnostics-20261101-v1/manifest.json",
+    "manifest_sha256": "a209570980ba227e6d0c0488a6267a8364c322843d63b2633e88686ba302078c",
+    "completion_sha256": "2487194f2f0c6f7cfdf4d1da3b6933c31c705db8681bde8292b43a3ca3d426a5",
+    "queried_targets": 12,
+    "new_native_entry_witnesses": 0,
+    "coverage_refused_common_constant": 8,
+    "coverage_refused_raise": 1
+  },
+  "design_review": {
+    "reviewer": "qualification_review_resumed",
+    "decision": "ACCEPT minimal two-helper design after actual DSL and generated interpreter inspection",
+    "scope": "Use the same analyzed DSL and existing generated Action/phase adapters; no new opcode, semantic copy, policy selector or backend."
+  },
+  "helpers": [
+    {
+      "name": "LOAD_COMMON_CONSTANT",
+      "handler": 79,
+      "contract": "Use current interpreter common_consts[oparg] and existing immortal-duplicate/store semantics."
+    },
+    {
+      "name": "RAISE_VARARGS",
+      "handler": 102,
+      "contract": "Preserve BoxArray failure, argument steal and window clear BEFORE callback-capable do_raise; preserve RAISE error-log vs reraising unwind phase and original raising word."
+    }
+  ],
+  "required_checks": [
+    "Generated helper window-clear and exact error/unwind phase checks",
+    "Implicit-None-return method with loop naturally enters native code",
+    "Raise with0/1/2args, invalid nonexception and constructor/finalizer/observer reentry; exact effects/traceback/ownership",
+    "Keep all28accepted runtime methods and unsupported CALL_FUNCTION_EX contract"
+  ],
+  "candidate_runtime_or_timing_authorized": false,
+  "allowed_source_paths_changed": false,
+  "old_attempts_may_be_edited": false
+}

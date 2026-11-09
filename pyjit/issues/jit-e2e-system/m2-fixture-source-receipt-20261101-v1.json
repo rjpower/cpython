@@ -1,0 +1,63 @@
+{
+  "utc": "2026-11-01T19:42:26.856954+00:00",
+  "decision": "ACCEPT_TEST_ONLY_SOURCE_FOR_SEPARATELY_AUTHORIZED_FRESH_FOCUSED_FEEDBACK",
+  "accepted": true,
+  "source_head": "3174bc0ab726cb7b7b39f25d93f4ec9194c88d3a",
+  "source_parent": "3bcb891956a9d2796bbe5e92c4f0c9e2f2516899",
+  "review": {
+    "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/jit-method-m2-fixture-source-review-20261101-v1/review.md",
+    "sha256": "d76e87cd876c2c1b9ce05d5ae380f2f6e5754b00382b9bb8e4d530ab257103bb"
+  },
+  "author_capsule": {
+    "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/jit-natural-method-fixture-correction/build/jit-method-m2-fixture-source/capsule.json",
+    "sha256": "37ca17bd2a84ea16580732b16ec7cdde68afd0d522c390f9249b0c9a35dea569"
+  },
+  "patch": {
+    "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/jit-natural-method-fixture-correction/build/jit-method-m2-fixture-source/source.patch",
+    "sha256": "19de50d20e491360066f697ca637386dc9ba38fe625c23e37acbb752ae0ff88e"
+  },
+  "source_file": {
+    "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/jit-natural-method-fixture-correction/Lib/test/test_jit_method.py",
+    "sha256": "aef4bc659b38cbb8c036876dfa7f75b77bd836fc80c45ee88abb1c11bf2caad6"
+  },
+  "source_reviewer": {
+    "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/jit-method-m2-fixture-source-review-20261101-v1/review_and_seal.py",
+    "sha256": "7ffce386895442a099f7b9e76967d1552f18b892f039493209de39922d0fd3c4"
+  },
+  "unchanged_method_asts": 27,
+  "method_ids": [
+    "TestMethodHelpers.test_loop_branch_and_python_call",
+    "TestMethodHelpers.test_c_call_dunder_and_effects_once",
+    "TestMethodHelpers.test_error_action_caught_without_replay",
+    "TestMethodHelpers.test_request_restored_on_raise_and_nested_request",
+    "TestMethodHelpers.test_bounded_before_effect_tier_down",
+    "TestMethodHelpers.test_profile_enabled_from_callee",
+    "TestMethodHelpers.test_owned_local_published_before_destructor_reentry",
+    "TestMethodHelpers.test_generator_callee_fallback_and_unexpected_exception",
+    "TestNativeMethods.test_loop_python_call_c_call_and_dunder",
+    "TestNativeMethods.test_raise_effect_and_traceback",
+    "TestNativeMethods.test_observer_after_effect_and_recompile",
+    "TestNativeMethods.test_unsupported_disables_only_affected_code",
+    "TestNativeMethods.test_ephemeral_code_constants_die_before_result_store",
+    "TestNativeMethods.test_callback_invalidation_keeps_live_native_return",
+    "TestNaturalMethods.test_call_heat_and_attribute_semantics",
+    "TestNaturalMethods.test_periodic_loop_iteration_and_containers",
+    "TestNaturalMethods.test_keyword_call_and_closure_continuation",
+    "TestNaturalMethods.test_unsupported_cache_and_unrelated_method",
+    "TestNaturalMethods.test_generator_creation_return_and_suspension",
+    "TestNaturalMethods.test_target_replacement_and_exception_frame_reuse",
+    "TestNaturalMethods.test_exec_only_words_rejected_by_constructor_and_marshal",
+    "TestNaturalMethods.test_observer_off_fresh_call_and_same_loop_rearm",
+    "TestNaturalMethods.test_pending_capacity_preserves_older_callers",
+    "TestNaturalMethods.test_actual_coroutine_creation_and_interpreted_suspension",
+    "TestNaturalMethods.test_visible_store_precedes_displaced_owner_finalizer",
+    "TestNaturalMethods.test_bootstrap_resource_failure_obeys_eligible_cooldown",
+    "TestNaturalMethods.test_cold_call_owns_original_operand_and_retries_observers",
+    "TestNaturalMethods.test_flow_failure_and_callback_error_restore_request"
+  ],
+  "whole_module_projection_exact": true,
+  "core_unchanged": true,
+  "old_worktree_unchanged": true,
+  "compiler_or_candidate_calls": 0,
+  "runtime_tests_pending": 28
+}

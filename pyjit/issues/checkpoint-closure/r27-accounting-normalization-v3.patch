@@ -1,0 +1,123 @@
+--- a/Tools/build/check_r27.py
++++ b/Tools/build/check_r27.py
+@@ -218,8 +218,16 @@
+                 if sep:
+                     info[key] = value
+             try:
+-                info["argv"] = json.loads(info["argv"])
+-            except (KeyError, ValueError):
++                raw_argv = json.loads(info["argv"])
++                if (not isinstance(raw_argv, list) or not raw_argv or
++                    any(not isinstance(arg, str) for arg in raw_argv)):
++                    raise ValueError("run argv is not a string list")
++                # The C marker escapes each raw byte as a JSON code point.
++                # Reconstruct Python's filesystem strings, including
++                # surrogateescape for invalid UTF-8 bytes.
++                info["argv"] = [os.fsdecode(arg.encode("latin-1"))
++                                for arg in raw_argv]
++            except (KeyError, ValueError, UnicodeEncodeError):
+                 self.accounting_errors.append(
+                     f"malformed run argv in {path.name}")
+             self.leftover_run.append(info)
+@@ -634,28 +642,33 @@
+ 
+ 
+ def normalize_accounting_argv(argv, summary):
+-    """Normalize the first build product and its explicit stats-dir option."""
++    """Normalize an exact executable and its explicit stats-dir option."""
+     words = list(argv)
+     build = summary.get("build")
+-    executable = None
+-    if build:
+-        products = {f"{build}/{name}": f"{{BUILD}}/{name}"
+-                    for name in ("python", "Programs/_testembed")}
+-        for i, arg in enumerate(words):
+-            if arg in products:
+-                words[i] = products[arg]
+-                executable = i
++    products = ({f"{build}/{name}": f"{{BUILD}}/{name}"
++                for name in ("python", "Programs/_testembed")}
++                if build else {})
++    if not words or words[0] not in products:
++        return tuple(words)
++    words[0] = products[words[0]]
++    dumps = summary.get("dump_dir")
++    if dumps:
++        i = 1
++        while i < len(argv):
++            arg = argv[i]
++            if arg in ("-c", "-m", "--") or not arg.startswith("-"):
+                 break
+-    dumps = summary.get("dump_dir")
+-    if dumps and executable is not None:
+-        for i in range(executable + 1, len(argv)):
+-            if argv[i] in ("-c", "-m", "--") or not argv[i].startswith("-"):
+-                break
+-            if (argv[i] == "-X" and i + 1 < len(argv) and
+-                argv[i + 1] == f"pystats_dir={dumps}"):
+-                words[i + 1] = "pystats_dir={DUMPS}"
+-            elif argv[i] == f"-Xpystats_dir={dumps}":
++            if arg == "-X" and i + 1 < len(argv):
++                if argv[i + 1] == f"pystats_dir={dumps}":
++                    words[i + 1] = "pystats_dir={DUMPS}"
++                i += 2
++                continue
++            if arg == "-W" and i + 1 < len(argv):
++                i += 2
++                continue
++            if arg == f"-Xpystats_dir={dumps}":
+                 words[i] = "-Xpystats_dir={DUMPS}"
++            i += 1
+     return tuple(words)
+ 
+ 
+--- a/Lib/test/test_tools/test_check_r27.py
++++ b/Lib/test/test_tools/test_check_r27.py
+@@ -244,6 +244,11 @@
+                 'argv: ["python","-c","a\\u000ab","a b"]\n')
+             (d / "bad.run").write_text(
+                 'pid: 5\nppid: 1\ntag: test_foo\nargv: ["python","-c"\n')
++            (d / "utf.run").write_text(
++                'pid: 6\nppid: 1\ntag: test_foo\n'
++                'argv: ["\\u00c3\\u00a9","\\u00ff"]\n')
++            (d / "notbytes.run").write_text(
++                'pid: 7\nppid: 1\ntag: test_foo\nargv: ["\\u20ac"]\n')
+             (d / "new.spawn").write_text(json.dumps({
+                 "tag": "test_foo", "pid": 4, "event": "subprocess.Popen",
+                 "reason": "-E", "argv": ["python", "-E"],
+@@ -254,9 +259,14 @@
+                 "counts": "true"}) + "\n")
+             folded = check_r27.Folded()
+             folded.read_markers(d)
+-            self.assertEqual(folded.leftover_run[1]["argv"],
++            by_id = {run["id"]: run for run in folded.leftover_run}
++            self.assertEqual(by_id["ok"]["argv"],
+                              ["python", "-c", "a\nb", "a b"])
++            self.assertEqual(by_id["utf"]["argv"],
++                             ["é", os.fsdecode(b"\xff")])
+             self.assertIn("malformed run argv in bad.run",
++                          folded.accounting_errors)
++            self.assertIn("malformed run argv in notbytes.run",
+                           folded.accounting_errors)
+             self.assertIn("incomplete spawn record in bad.spawn",
+                           folded.accounting_errors)
+@@ -352,10 +362,18 @@
+         self.assertEqual(normalize(
+             ["env", "-i", "/build/python", "-c", "/source/Lib/test"],
+             summary),
+-            ("env", "-i", "{BUILD}/python", "-c", "/source/Lib/test"))
++            ("env", "-i", "/build/python", "-c", "/source/Lib/test"))
+         self.assertEqual(normalize(
+             ["/build/python", "-c", "pystats_dir=/attempt"], summary),
+             ("{BUILD}/python", "-c", "pystats_dir=/attempt"))
++        self.assertEqual(normalize(
++            ["/bin/sh", "-c", "/build/python"], summary),
++            ("/bin/sh", "-c", "/build/python"))
++        self.assertEqual(normalize(
++            ["/build/python", "-X", "dev", "-X",
++             "pystats_dir=/attempt", "-c", "/build/python"], summary),
++            ("{BUILD}/python", "-X", "dev", "-X",
++             "pystats_dir={DUMPS}", "-c", "/build/python"))
+ 
+     def test_resets(self):
+         ok = clean_summary(resets_by_tag={"test_pystats": 4})

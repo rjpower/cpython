@@ -1,0 +1,106 @@
+--- a/Include/internal/pycore_moduleobject.h
++++ b/Include/internal/pycore_moduleobject.h
+@@ -18,7 +18,7 @@
+ extern int _PyModuleSpec_IsInitializing(PyObject *);
+ extern int _PyModuleSpec_GetFileOrigin(PyObject *, PyObject **);
+ extern int _PyModuleSpec_IsInitializingValue(PyValueBorrow);
+-extern _PyStatusValue _PyModuleSpec_GetFileOriginValue(PyValueBorrow);
++extern int _PyModuleSpec_GetFileOriginValue(PyValueBorrow, PyValue *);
+ extern int _PyModule_IsPossiblyShadowing(PyObject *);
+ 
+ extern int _PyModule_IsExtension(PyObject *obj);
+--- a/Objects/moduleobject.c
++++ b/Objects/moduleobject.c
+@@ -1275,21 +1275,23 @@
+ int
+ _PyModuleSpec_GetFileOrigin(PyObject *spec, PyObject **p_origin)
+ {
+-    _PyStatusValue result = _PyModuleSpec_GetFileOriginValue(
+-        PyValue_FromObjectBorrow(spec));
+-    if (result.status > 0) {
+-        *p_origin = PyValue_AsKnownObjectSteal(result.value);
+-    }
+-    return result.status;
+-}
+-
+-_PyStatusValue
+-_PyModuleSpec_GetFileOriginValue(PyValueBorrow spec)
+-{
++    PyValue origin = PyValue_NULL;
++    int status = _PyModuleSpec_GetFileOriginValue(
++        PyValue_FromObjectBorrow(spec), &origin);
++    if (status > 0) {
++        *p_origin = PyValue_AsKnownObjectSteal(origin);
++    }
++    return status;
++}
++
++int
++_PyModuleSpec_GetFileOriginValue(PyValueBorrow spec, PyValue *p_origin)
++{
++    *p_origin = PyValue_NULL;
+     _PyStatusValue has_location = _PyValue_GetOptionalAttr(
+         spec, &_Py_ID(has_location));
+     if (has_location.status <= 0) {
+-        return has_location;
++        return has_location.status;
+     }
+     // If origin is not a location, or doesn't exist, or is not a str, we could consider falling
+     // back to module.__file__. But the cases in which module.__file__ is not __spec__.origin
+@@ -1297,21 +1299,22 @@
+     int rc = _PyValue_IsTrue(has_location.value);
+     PyValue_CLOSE(has_location.value);
+     if (rc <= 0) {
+-        return (_PyStatusValue){.status = rc, .value = PyValue_NULL};
++        return rc;
+     }
+     // has_location is true, so origin is a location
+     _PyStatusValue origin = _PyValue_GetOptionalAttr(spec, &_Py_ID(origin));
+     if (origin.status <= 0) {
+-        return origin;
++        return origin.status;
+     }
+     assert(!PyValue_IsNull(origin.value));
+     if (!PyValue_IsObject(origin.value) ||
+         !PyUnicode_Check(PyValue_AsKnownObjectBorrow(origin.value)))
+     {
+         PyValue_CLOSE(origin.value);
+-        return (_PyStatusValue){.status = 0, .value = PyValue_NULL};
+-    }
+-    return origin;
++        return 0;
++    }
++    *p_origin = origin.value;
++    return 1;
+ }
+ 
+ int
+--- a/Python/ceval.c
++++ b/Python/ceval.c
+@@ -4601,12 +4601,12 @@
+         );
+         goto done_with_errmsg;
+     }
+-    _PyStatusValue origin_status = _PyModuleSpec_GetFileOriginValue(spec_value);
+-    if (origin_status.status < 0) {
++    int origin_status = _PyModuleSpec_GetFileOriginValue(
++        PyValue_Borrow(spec_value), &origin_value);
++    if (origin_status < 0) {
+         goto done;
+     }
+-    if (origin_status.status > 0) {
+-        origin_value = origin_status.value;
++    if (origin_status > 0) {
+         origin = PyValue_AsKnownObjectBorrow(origin_value);
+     }
+ 
+@@ -4657,7 +4657,8 @@
+         );
+     }
+     else {
+-        int rc = _PyModuleSpec_IsInitializingValue(spec_value);
++        int rc = _PyModuleSpec_IsInitializingValue(
++            PyValue_Borrow(spec_value));
+         if (rc < 0) {
+             goto done;
+         }

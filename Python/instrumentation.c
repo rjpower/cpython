@@ -1497,7 +1497,8 @@ observer_redirected(_PyInterpreterFrame *frame, ObserverRedirectState before)
 
 static int
 source_line_event(PyThreadState *tstate, _PyInterpreterFrame *frame,
-                  const _PyIRSourceMap *map, uint32_t index)
+                  const _PyIRSourceMap *map, uint32_t index,
+                  _PyInstr *physical_next, bool committed)
 {
     PyCodeObject *code = _PyFrame_GetCode(frame);
     _PyCoMonitoringData *monitoring = code->_co_monitoring;
@@ -1510,8 +1511,9 @@ source_line_event(PyThreadState *tstate, _PyInterpreterFrame *frame,
     ObserverRedirectState before = observer_redirect_state(frame);
     _PyIRObserverSpec context = {
         frame, _PyFrame_InstrAt(frame, event.from),
-        _PyFrame_InstrAt(frame, event.to), before.generation,
-        PY_MONITORING_EVENT_LINE, _PY_IR_OBSERVER_SOURCE_POST, event.edge, index};
+        physical_next, before.generation, PY_MONITORING_EVENT_LINE,
+        committed ? _PY_IR_OBSERVER_SOURCE_POST : _PY_IR_OBSERVER_UNSUPPORTED,
+        event.edge, index};
     PyFrameObject *object = _PyFrame_GetFrameObject(frame);
     if (object == NULL) {
         goto error;
@@ -1576,11 +1578,13 @@ error:
     return -1;
 }
 
-/* This is called only by instrumented semantic transitions. Ordinary dispatch
- * neither loads the source map nor updates a source cursor. */
+/* Ordinary dispatch neither loads the source map nor updates a source cursor.
+ * Only a completed provider grants SOURCE_POST authority. Legacy inline hooks
+ * still deliver the same source events while masking unfinished owner state. */
 static int
 source_edge_events(PyThreadState *tstate, _PyInterpreterFrame *frame,
-                   int from, int to, int edge, int *last_line, bool *advanced,
+                   int from, int to, int edge, _PyInstr *physical_next,
+                   bool committed, int *last_line, bool *advanced,
                    uint64_t *epoch)
 {
     PyCodeObject *code = _PyFrame_GetCode(frame);
@@ -1602,7 +1606,8 @@ source_edge_events(PyThreadState *tstate, _PyInterpreterFrame *frame,
         /* A callback can reconfigure monitoring. Associate this line with
          * the configuration whose callback snapshot is about to observe it. */
         *epoch = monitoring->line_epoch;
-        int err = source_line_event(tstate, frame, &map, i);
+        int err = source_line_event(tstate, frame, &map, i,
+                                    physical_next, committed);
         if (err) {
             return err;
         }
@@ -1709,7 +1714,7 @@ _PyIR_ObserveStep(PyThreadState *tstate, _PyInterpreterFrame *frame,
         uint64_t epoch = code->_co_monitoring->line_epoch;
         int edge = _PyIR_SOURCE_TAKEN;
         int err = source_edge_events(tstate, frame, from, dest_offset(frame, next),
-                                    edge, &line, &advanced, &epoch);
+                                    edge, next, true, &line, &advanced, &epoch);
         if (err < 0) {
             goto error;
         }
@@ -1761,7 +1766,7 @@ _PyIR_ObserveCommittedBranch(PyThreadState *tstate, _PyInterpreterFrame *frame,
         bool advanced = false;
         uint64_t epoch = code->_co_monitoring->line_epoch;
         int status = source_edge_events(tstate, frame, instr_offset(frame, site),
-            dest_offset(frame, next), edge, &line, &advanced, &epoch);
+            dest_offset(frame, next), edge, next, true, &line, &advanced, &epoch);
         if (status < 0) {
             return (_PyIRObserverResult){-1, frame->instr_ptr};
         }
@@ -1810,8 +1815,8 @@ _Py_call_instrumentation_jump(
     int source_edge = event == PY_MONITORING_EVENT_BRANCH_LEFT
         ? _PyIR_SOURCE_FALLTHROUGH : _PyIR_SOURCE_TAKEN;
     int source_result = source_edge_events(tstate, frame,
-        instr_offset(frame, src), dest_offset(frame, dest), source_edge, &source_line,
-        &source_advanced, &source_epoch);
+        instr_offset(frame, src), dest_offset(frame, dest), source_edge,
+        dest, false, &source_line, &source_advanced, &source_epoch);
     if (source_result < 0) {
         return NULL;
     }
@@ -1912,8 +1917,8 @@ _Py_call_instrumentation_line(PyThreadState *tstate, _PyInterpreterFrame* frame,
         frame->instr_ptr = prev;
         uint64_t source_epoch = monitoring->line_epoch;
         int source_result = source_edge_events(tstate, frame, prev_index, i,
-                                               edge, &prev_line, &source_advanced,
-                                               &source_epoch);
+                                               edge, instr, true, &prev_line,
+                                               &source_advanced, &source_epoch);
         if (source_result < 0) {
             return -1;
         }

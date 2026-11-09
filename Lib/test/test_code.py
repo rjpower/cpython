@@ -1745,6 +1745,173 @@ class ConstSlotsTest(unittest.TestCase):
                         sys.settrace(previous)
                 self.assertTrue(redirected)
 
+    def test_settrace_restores_binding_from_committed_backedge(self):
+        def f(values, prebound):
+            marker = "outer"
+            if not prebound:
+                del marker
+            result = [marker for marker in values]
+            return marker
+
+        first = f.__code__.co_firstlineno
+        target = first + 5
+        for prebound in (True, False):
+            for warm in (0, 20):
+                with self.subTest(prebound=prebound, warm=warm):
+                    for _ in range(warm):
+                        try:
+                            f([1, 2], prebound)
+                        except UnboundLocalError:
+                            self.assertFalse(prebound)
+                    redirected = []
+                    def tracer(frame, event, arg):
+                        if frame.f_code is f.__code__ and event == "line":
+                            word = _testinternalcapi.get_ir(f.__code__, True)[frame.f_lasti]
+                            if word[0] == "INSTRUMENTED_JUMP_BACKWARD" and not redirected:
+                                redirected.append(frame.f_lasti)
+                                self.assertEqual(frame.f_lineno, first + 4)
+                                frame.f_lineno = target
+                                if prebound:
+                                    self.assertEqual(frame.f_locals["marker"], "outer")
+                                else:
+                                    self.assertNotIn("marker", frame.f_locals)
+                        return tracer
+
+                    previous = sys.gettrace()
+                    with warnings.catch_warnings():
+                        warnings.simplefilter("ignore", RuntimeWarning)
+                        sys.settrace(tracer)
+                        try:
+                            if prebound:
+                                self.assertEqual(f([1, 2], prebound), "outer")
+                            else:
+                                with self.assertRaisesRegex(UnboundLocalError, "marker"):
+                                    f([1, 2], prebound)
+                        finally:
+                            sys.settrace(previous)
+                    self.assertEqual(len(redirected), 1)
+
+    def test_settrace_committed_backedge_requires_target_owners(self):
+        def f(values):
+            for outer in values:
+                checkpoint = outer
+            result = [marker for marker in values]
+            return result
+
+        first = f.__code__.co_firstlineno
+        attempted = []
+        def tracer(frame, event, arg):
+            if frame.f_code is f.__code__ and event == "line":
+                word = _testinternalcapi.get_ir(f.__code__, True)[frame.f_lasti]
+                if (word[0] == "INSTRUMENTED_JUMP_BACKWARD" and
+                        frame.f_lineno == first + 3 and not attempted):
+                    attempted.append(frame.f_lasti)
+                    with self.assertRaisesRegex(
+                            ValueError, "incoming temporary register owner"):
+                        frame.f_lineno = first + 2
+                    self.assertEqual(frame.f_lasti, attempted[0])
+            return tracer
+
+        previous = sys.gettrace()
+        sys.settrace(tracer)
+        try:
+            self.assertEqual(f([1, 2]), [1, 2])
+        finally:
+            sys.settrace(previous)
+        self.assertEqual(len(attempted), 1)
+
+    def test_settrace_committed_backedge_requires_saved_origin(self):
+        def f(values):
+            marker = "outer"
+            result = [marker for marker in values]
+            return marker
+
+        instruction = next(i for i in dis.get_instructions(f)
+                           if i.opname == "LOAD_FAST_AND_CLEAR")
+        code = f.__code__
+        words = list(struct.unpack(f'<{len(code.co_code) // 8}Q', code.co_code))
+        words[instruction.offset] = ((words[instruction.offset] & ~(4095 << 16)) |
+                                      (4095 << 16))
+        f.__code__ = code.replace(co_code=struct.pack(f'<{len(words)}Q', *words),
+                                 co_linetable=memoryview(code.co_linetable).tobytes())
+        class Finished(Exception):
+            pass
+        attempted = []
+        def tracer(frame, event, arg):
+            if frame.f_code is f.__code__ and event == "line":
+                word = _testinternalcapi.get_ir(f.__code__, True)[frame.f_lasti]
+                if word[0] == "INSTRUMENTED_JUMP_BACKWARD" and not attempted:
+                    attempted.append(frame.f_lasti)
+                    with self.assertRaisesRegex(
+                            ValueError, "incoming temporary register owner"):
+                        frame.f_lineno = code.co_firstlineno + 3
+                    # Abort the deliberately lost-binding program; the missing
+                    # token must not be replaced by a coincidentally NULL home.
+                    raise Finished
+            return tracer
+
+        previous = sys.gettrace()
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", RuntimeWarning)
+            sys.settrace(tracer)
+            try:
+                with self.assertRaises(Finished):
+                    f([1, 2])
+            finally:
+                sys.settrace(previous)
+        self.assertEqual(len(attempted), 1)
+
+    def test_settrace_backedge_restore_honors_close_time_redirect(self):
+        frames, closed, errors = [], [], []
+        def consume(value):
+            return 0
+        class Item:
+            def __del__(self):
+                frame = frames[0]
+                closed.append((frame.f_locals["marker"], frame.f_lineno))
+                try:
+                    frame.f_lineno = frame.f_code.co_firstlineno + 5
+                except Exception as error:
+                    errors.append(error)
+        def values():
+            yield Item()
+        def f(items):
+            marker = "outer"
+            checkpoint = 0
+            result = [consume(marker) for marker in items]
+            if checkpoint:
+                return marker, checkpoint
+            checkpoint = 7
+            return marker, checkpoint
+
+        first = f.__code__.co_firstlineno
+        redirected = []
+        def tracer(frame, event, arg):
+            if frame.f_code is f.__code__:
+                if event == "call":
+                    frames.append(frame)
+                elif event == "line":
+                    word = _testinternalcapi.get_ir(f.__code__, True)[frame.f_lasti]
+                    if word[0] == "INSTRUMENTED_JUMP_BACKWARD" and not redirected:
+                        redirected.append(frame.f_lasti)
+                        frame.f_lineno = first + 6
+            return tracer
+
+        previous = sys.gettrace()
+        # This checks our explicit close transaction, not a Python guarantee
+        # that another interpreter promptly destroys the iteration value.
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", RuntimeWarning)
+            sys.settrace(tracer)
+            try:
+                self.assertEqual(f(values()), ("outer", 0))
+            finally:
+                sys.settrace(previous)
+        self.assertEqual(len(redirected), 1)
+        self.assertEqual(closed, [("outer", first + 6)])
+        self.assertEqual(errors, [])
+        frames.clear()
+
     def test_settrace_saved_null_refuses_unchecked_target_binding(self):
         def raw(flag, values, obj):
             result = None

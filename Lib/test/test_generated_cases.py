@@ -397,8 +397,8 @@ class TestIRCases(unittest.TestCase):
         inst(OP, (value -- res)) {
             PyValue held = TAKE(value);
             res = held;
-            IR_OBSERVE_COMMITTED_BRANCH(this_instr, next_instr,
-                                        PY_MONITORING_EVENT_BRANCH_RIGHT);
+            IR_OBSERVE_COMMITTED_BRANCH(this_instr, JUMP_TARGET(oparg),
+                                        PY_MONITORING_EVENT_BRANCH_RIGHT, _PyIR_SOURCE_TAKEN);
         }
         """
         output = self.ir_output(source)
@@ -422,13 +422,13 @@ class TestIRCases(unittest.TestCase):
              "unproved terminal C owner transport"),
             ("res = held;", "int ir_observer_next = 0; res = held;",
              "reserved local"),
-            ("PY_MONITORING_EVENT_BRANCH_RIGHT);",
-             "PY_MONITORING_EVENT_BRANCH_RIGHT); PyValue_CLOSE(res);",
+            ("PY_MONITORING_EVENT_BRANCH_RIGHT, _PyIR_SOURCE_TAKEN);",
+             "PY_MONITORING_EVENT_BRANCH_RIGHT, _PyIR_SOURCE_TAKEN); PyValue_CLOSE(res);",
              "follows terminal observer"),
-            ("PY_MONITORING_EVENT_BRANCH_RIGHT);",
-             "PY_MONITORING_EVENT_BRANCH_RIGHT); "
-             "IR_OBSERVE_COMMITTED_BRANCH(this_instr, next_instr, "
-             "PY_MONITORING_EVENT_BRANCH_RIGHT);", "follows terminal observer"),
+            ("PY_MONITORING_EVENT_BRANCH_RIGHT, _PyIR_SOURCE_TAKEN);",
+             "PY_MONITORING_EVENT_BRANCH_RIGHT, _PyIR_SOURCE_TAKEN); "
+             "IR_OBSERVE_COMMITTED_BRANCH(this_instr, JUMP_TARGET(oparg), "
+             "PY_MONITORING_EVENT_BRANCH_RIGHT, _PyIR_SOURCE_TAKEN);", "follows terminal observer"),
         )
         for old, new, message in changes:
             with self.subTest(message=message):
@@ -447,14 +447,14 @@ class TestIRCases(unittest.TestCase):
             PyValue held = TAKE(value);
             if (flag) {
                 res = held;
-                IR_OBSERVE_COMMITTED_BRANCH(this_instr, next_instr,
-                                            PY_MONITORING_EVENT_BRANCH_RIGHT);
+                IR_OBSERVE_COMMITTED_BRANCH(this_instr, JUMP_TARGET(oparg),
+                                            PY_MONITORING_EVENT_BRANCH_RIGHT, _PyIR_SOURCE_TAKEN);
             }
             else {
                 IR_DEFER_CLOSE(held);
                 res = PyValue_NULL;
                 IR_OBSERVE_COMMITTED_BRANCH(this_instr, next_instr,
-                                            PY_MONITORING_EVENT_BRANCH_LEFT);
+                                            PY_MONITORING_EVENT_BRANCH_LEFT, _PyIR_SOURCE_FALLTHROUGH);
             }
         }
         """
@@ -484,6 +484,46 @@ class TestIRCases(unittest.TestCase):
         with self.assertRaisesRegex(SyntaxError, 'deferred owner exits'):
             self.ir_output(source.replace('IR_DEFER_CLOSE(held);',
                                           'IR_DEFER_CLOSE(held); ERROR_NO_POP();'))
+
+    def test_terminal_observer_explicit_owner_edge(self):
+        jump = """
+        inst(OP, (--)) {
+            IR_OBSERVE_COMMITTED_BRANCH(this_instr, JUMP_TARGET(oparg),
+                PY_MONITORING_EVENT_JUMP, _PyIR_SOURCE_TAKEN);
+        }
+        """
+        self.ir_output(jump)
+        for old, new, message in (
+            (", _PyIR_SOURCE_TAKEN", "", "takes source, destination, event, owner edge"),
+            ("_PyIR_SOURCE_TAKEN", "edge", "literal owner edge"),
+            ("_PyIR_SOURCE_TAKEN", "_PyIR_SOURCE_FALLTHROUGH", "disagrees with destination"),
+            ("JUMP_TARGET(oparg)", "next_instr", "disagrees with destination"),
+            ("PY_MONITORING_EVENT_JUMP", "event", "literal event"),
+        ):
+            with self.subTest(message=message, new=new):
+                with self.assertRaisesRegex(SyntaxError, message):
+                    self.ir_output(jump.replace(old, new))
+        iterator = """
+        inst(OP, (iter, index_or_null --)) {
+            PyValue held = TAKE(iter);
+            (void)index_or_null;
+            DEAD(index_or_null);
+            IR_DEFER_CLOSE(held);
+            IR_OBSERVE_COMMITTED_BRANCH(prev_instr, next_instr,
+                PY_MONITORING_EVENT_BRANCH_RIGHT, _PyIR_SOURCE_FALLTHROUGH);
+        }
+        """
+        output = self.ir_output(iterator)
+        callback = output.index("_PyIR_ObserveCommittedBranch(")
+        self.assertIn("this_instr, prev_instr, ir_observer_next, "
+                      "PY_MONITORING_EVENT_BRANCH_RIGHT, 0", output)
+        self.assertLess(output.index("frame->return_pc ="), callback)
+        self.assertLess(callback, output.index("PyValue_XCLOSE(ir_observer_input_0)"))
+        analysis = self.analyze(iterator)
+        formats = ir_generator.compute_formats(analysis)
+        self.assertEqual(ir_generator.observer_outcomes(
+            analysis.instructions['OP'], formats['OP']),
+            ('_PyIR_OBSERVER_FORMAT_VALUE', '_PyIR_OBSERVER_NONE'))
 
     def test_terminal_observer_dotted_owner_mutations(self):
         source = (Path(__file__).resolve().parents[2] / 'Python' / 'bytecodes.c').read_text()

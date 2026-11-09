@@ -1406,23 +1406,74 @@ register_plan_restores_local(const RegisterResumePlan *plan, int local)
 }
 
 typedef struct {
-    enum { REGISTER_RESUME_OTHER, REGISTER_RESUME_PRE_WORD } kind;
+    enum {
+        REGISTER_RESUME_OTHER,
+        REGISTER_RESUME_PRE_WORD,
+        REGISTER_RESUME_COMMITTED_NEUTRAL,
+    } kind;
     int pc;
-} RegisterResumePhase;
+    /* Neutral committed edges preserve these exact site rows. They are not
+     * the merged rows of the branch destination. */
+    int context;
+    const int *save_tops, *origins;
+} RegisterStoppedState;
 
-/* The request copies one proved observer phase. Later POST adapters can
- * supply this same view from their scoped callback record; raw event bits
- * elsewhere do not independently authorize cancellation. */
-static RegisterResumePhase
-register_resume_phase(PyFrameObject *self, int current, int what_event,
+static bool
+register_neutral_jump_scope(_PyInterpreterFrame *frame,
+                            const _PyIRObserverSpec *scope)
+{
+    PyCodeObject *code = _PyFrame_GetCode(frame);
+    uintptr_t first = (uintptr_t)frame->ir_words;
+    uintptr_t site = (uintptr_t)scope->site;
+    size_t size = (size_t)Py_SIZE(code) * sizeof(_PyIRWord);
+    if (scope->phase != _PY_IR_OBSERVER_POST_COMMITTED ||
+        scope->event != PY_MONITORING_EVENT_JUMP ||
+        scope->edge != _PyIR_SOURCE_TAKEN || site < first ||
+        site - first >= size || (site - first) % sizeof(_PyIRWord))
+    {
+        return false;
+    }
+    int pc = (int)((site - first) / sizeof(_PyIRWord));
+    _PyIRWord word = code->co_words[pc];
+    const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
+    int arg = _PyCode_InstrOparg(code, pc);
+    if (_PyIR_ObserverOutcome(word, scope->edge) != _PyIR_OBSERVER_FORMAT_VALUE ||
+        !(fmt->flags & (_PyIR_JUMPS | _PyIR_FORWARD)) ||
+        !(fmt->flags & _PyIR_JUMP_ALWAYS) ||
+        (fmt->effects & (_PyIR_PUSHES_FRAME | _PyIR_SUSPENDS)) ||
+        _PyIR_Extent(fmt->reads, arg) != 0 ||
+        _PyIR_Extent(fmt->writes, arg) != 0 ||
+        _PyIR_Extent(fmt->through, arg) != 0 ||
+        _PyIR_Outcome(word, scope->edge).semantic)
+    {
+        return false;
+    }
+    for (int f = 0; f < 4; f++) {
+        if (fmt->roles[f] != _PyIR_ROLE_NONE &&
+            fmt->roles[f] != _PyIR_ROLE_IMM && fmt->roles[f] != _PyIR_ROLE_FB)
+        {
+            return false;
+        }
+    }
+    int successors[2];
+    register_resume_successors(code, pc, successors);
+    return successors[1] >= 0 && successors[1] < Py_SIZE(code) &&
+           scope->next == _PyFrame_InstrAt(frame, successors[1]);
+}
+
+/* Capture one proved stopped phase. A certified neutral committed edge and
+ * PRE both borrow exact site rows; raw event bits do not authorize either. */
+static RegisterStoppedState
+register_stopped_state(PyFrameObject *self, int current, int what_event,
                        bool pending_call, _PyInterpreterFrame *observed)
 {
-    RegisterResumePhase phase = {REGISTER_RESUME_OTHER, current};
+    RegisterStoppedState phase = {.kind = REGISTER_RESUME_OTHER, .pc = current};
     _PyInterpreterFrame *frame = self->f_frame;
     _PyIRObserverSpec context;
     if (!_PyEval_GetObserverContext(PyThreadState_GET(), frame, what_event, &context)) {
         return phase;
     }
+    bool neutral_jump = register_neutral_jump_scope(frame, &context);
     bool original_pre = context.phase == _PY_IR_OBSERVER_PRE_WORD &&
                         context.site == frame->instr_ptr &&
                         context.generation == self->f_lineno_generation;
@@ -1431,10 +1482,14 @@ register_resume_phase(PyFrameObject *self, int current, int what_event,
      * its old input/output facts are no longer authority for this landing. */
     bool committed_pre = context.generation != self->f_lineno_generation &&
                          (context.phase == _PY_IR_OBSERVER_PRE_WORD ||
-                          context.phase == _PY_IR_OBSERVER_SOURCE_POST) &&
+                          context.phase == _PY_IR_OBSERVER_SOURCE_POST ||
+                          neutral_jump) &&
                          frame->instr_ptr == frame->return_pc;
-    if (what_event == PY_MONITORING_EVENT_LINE && observed == frame &&
-        (original_pre || committed_pre) &&
+    bool line_phase = what_event == PY_MONITORING_EVENT_LINE &&
+                      (original_pre || committed_pre);
+    bool fresh_jump_landing = what_event == PY_MONITORING_EVENT_JUMP &&
+                              neutral_jump && committed_pre;
+    if ((line_phase || fresh_jump_landing) && observed == frame &&
         !pending_call && !frame->pending_redirect &&
         self->f_source_event < 0 && self->f_source_event_error < 0 &&
         current >= 0 && current < Py_SIZE(_PyFrame_GetCode(frame)) &&
@@ -1442,6 +1497,16 @@ register_resume_phase(PyFrameObject *self, int current, int what_event,
         IR_HANDLER(FT_ATOMIC_LOAD_UINT64_RELAXED(*frame->instr_ptr)) == INSTRUMENTED_LINE)
     {
         phase.kind = REGISTER_RESUME_PRE_WORD;
+    }
+    else if (neutral_jump && what_event == PY_MONITORING_EVENT_JUMP &&
+             observed == frame && !pending_call && !frame->pending_redirect &&
+             self->f_source_event < 0 && self->f_source_event_error < 0 &&
+             context.generation == self->f_lineno_generation &&
+             frame->instr_ptr == context.site && frame->return_pc == context.next &&
+             current >= 0 && current < Py_SIZE(_PyFrame_GetCode(frame)) &&
+             context.site == _PyFrame_InstrAt(frame, current))
+    {
+        phase.kind = REGISTER_RESUME_COMMITTED_NEUTRAL;
     }
     return phase;
 }
@@ -2667,18 +2732,19 @@ register_unbound_target_safe(PyCodeObject *code, RegisterResumeAnalysis *analysi
 }
 
 static int
-register_saved_locals_plan(_PyInterpreterFrame *frame, int current, int target,
-                           RegisterResumeAnalysis *analysis, bool can_restore,
+register_saved_locals_plan(_PyInterpreterFrame *frame, int target,
+                           RegisterResumeAnalysis *analysis, RegisterStoppedState state,
+                           bool can_restore,
                            RegisterResumePlan *plan)
 {
     PyCodeObject *code = _PyFrame_GetCode(frame);
-    const int *origins = analysis->origins + (size_t)current * analysis->nt;
+    const int *origins = state.origins;
     for (int local = 0; local < analysis->nl; local++) {
         int col = analysis->save_columns[local];
         if (col < 0) {
             continue;
         }
-        int top = analysis->save_tops[(size_t)current * analysis->nsave_columns + col];
+        int top = state.save_tops[col];
         if (analysis->save_tops[(size_t)target * analysis->nsave_columns + col] != 0 ||
             top < 0)
         {
@@ -2757,19 +2823,29 @@ register_saved_locals_plan(_PyInterpreterFrame *frame, int current, int target,
 static int
 register_resume_plan(_PyInterpreterFrame *frame, int current, int target,
                      RegisterResumeAnalysis *analysis, bool allow_anchor,
-                     RegisterResumePhase phase, RegisterResumePlan *plan)
+                     RegisterStoppedState phase, RegisterResumePlan *plan)
 {
-    bool can_cancel = phase.kind == REGISTER_RESUME_PRE_WORD && phase.pc == current;
+    bool committed = phase.kind == REGISTER_RESUME_COMMITTED_NEUTRAL;
+    /* The current packet supports only a positively owner-neutral edge, so
+     * the exact pre-site rows are also its committed rows. */
+    phase.context = analysis->context[current];
+    phase.save_tops = analysis->save_tops + (size_t)current * analysis->nsave_columns;
+    phase.origins = analysis->origins + (size_t)current * analysis->nt;
     memset(plan->preserve, 0, plan->stride * sizeof(uint64_t));
     plan->nrestores = 0;
-    int context = analysis->context[current];
+    int context = phase.context;
+    bool can_cancel = phase.pc == current &&
+        (phase.kind == REGISTER_RESUME_PRE_WORD ||
+         (committed && context == 0 && analysis->safe[target]));
+    /* Other targets retain the existing strict recipes; the new committed
+     * permission does not reconstruct their required protocol roots. */
     if (context < 0 || context != analysis->context[target] ||
         !register_context_chain(analysis, context, -1))
     {
         return 0;
     }
-    int restored = register_saved_locals_plan(frame, current, target,
-                                             analysis, can_cancel && allow_anchor, plan);
+    int restored = register_saved_locals_plan(frame, target, analysis, phase,
+                                             can_cancel && allow_anchor, plan);
     if (restored <= 0) {
         return restored;
     }
@@ -3014,7 +3090,7 @@ frame_lineno_set_impl(PyFrameObject *self, PyObject *value)
     _PyInterpreterFrame *frame_at_line = self->f_frame;
     int real_current = _PyInterpreterFrame_LASTI(frame_at_line);
     _PyThreadStateImpl *line_tstate = (_PyThreadStateImpl *)PyThreadState_GET();
-    RegisterResumePhase identity_phase = register_resume_phase(
+    RegisterStoppedState identity_phase = register_stopped_state(
         self, real_current, what_event, false, line_tstate->observed_frame);
     if (!is_suspended && identity_phase.kind == REGISTER_RESUME_PRE_WORD &&
         PyCode_Addr2Line(code, real_current) == new_lineno)
@@ -3081,7 +3157,7 @@ frame_lineno_set_impl(PyFrameObject *self, PyObject *value)
         _PyIRSource_Event(&source, (uint32_t)self->f_source_event, &event);
         current = event.to;
     }
-    RegisterResumePhase phase = register_resume_phase(self, current, what_event,
+    RegisterStoppedState phase = register_stopped_state(self, current, what_event,
                                                        pending_call, observed);
     if (register_resume_analyze(self->f_frame, !pending_call, &analysis) < 0) {
         PyMem_Free(lines);
@@ -3135,7 +3211,7 @@ frame_lineno_set_impl(PyFrameObject *self, PyObject *value)
         }
     }
     int best_addr = -1;
-    RegisterResumePhase selected_phase = phase;
+    RegisterStoppedState selected_phase = phase;
     int recipe = 0;
     if (current >= 0 && current < len) {
         for (int i = 0; i < len; i++) {
@@ -3157,7 +3233,7 @@ frame_lineno_set_impl(PyFrameObject *self, PyObject *value)
             if (event.line == new_lineno && event.handler < 0) {
                 recipe = register_resume_plan(self->f_frame, current, event.to,
                                               &analysis, !pending_call,
-                                              (RegisterResumePhase){REGISTER_RESUME_OTHER, current},
+                                              (RegisterStoppedState){.kind = REGISTER_RESUME_OTHER, .pc = current},
                                               &plan);
                 if (recipe > 0) {
                     best_addr = event.to;
@@ -3221,8 +3297,21 @@ frame_lineno_set_impl(PyFrameObject *self, PyObject *value)
             register_resume_plan_clear(&plan);
             return -1;
         }
-        int valid = register_resume_plan(frame, current, best_addr, &analysis,
-                                          !pending_call, selected_phase, &plan);
+        bool phase_valid = true;
+        if (selected_phase.kind != REGISTER_RESUME_OTHER) {
+            _PyThreadStateImpl *impl = (_PyThreadStateImpl *)PyThreadState_GET();
+            RegisterStoppedState fresh = register_stopped_state(
+                self, current, PyThreadState_GET()->what_event,
+                pending_call, impl->observed_frame);
+            phase_valid = fresh.kind == selected_phase.kind && fresh.pc == current;
+            selected_phase = fresh;
+        }
+        /* A source-only target deliberately selected OTHER must not gain
+         * cancellation authority merely because preparation called Python. */
+        int valid = phase_valid
+            ? register_resume_plan(frame, current, best_addr, &analysis,
+                                   !pending_call, selected_phase, &plan)
+            : 0;
         register_resume_analysis_clear(&analysis);
         if (valid < 0) {
             register_resume_plan_clear(&plan);

@@ -1455,6 +1455,45 @@ def uop_token_list(inst: Instruction) -> list[Token]:
 OBSERVER_MARKER = "IR_OBSERVE_COMMITTED_BRANCH"
 
 
+def observer_terminal_arguments(tokens: list[Token]) -> tuple[list[str], int]:
+    """One literal owner edge, independent of the reported monitoring event."""
+    if len(tokens) < 4 or tokens[1].kind != "LPAREN":
+        raise analysis_error("malformed terminal observer", tokens[0])
+    args: list[list[str]] = [[]]
+    depth = 0
+    end = -1
+    for i, token in enumerate(tokens[2:], 2):
+        if token.kind == "RPAREN" and depth == 0:
+            end = i
+            break
+        if token.kind in ("LPAREN", "LBRACKET"):
+            depth += 1
+        elif token.kind in ("RPAREN", "RBRACKET"):
+            depth -= 1
+        if token.kind == "COMMA" and depth == 0:
+            args.append([])
+        else:
+            args[-1].append(token.text)
+    if end < 0 or len(args) != 4 or any(not arg for arg in args):
+        raise analysis_error("terminal observer takes source, destination, event, owner edge", tokens[0])
+    if [t.kind for t in tokens[end + 1:]] != ["SEMI"]:
+        raise analysis_error("semantic work follows terminal observer", tokens[0])
+    if args[2] not in (["PY_MONITORING_EVENT_BRANCH_LEFT"],
+                       ["PY_MONITORING_EVENT_BRANCH_RIGHT"],
+                       ["PY_MONITORING_EVENT_JUMP"]):
+        raise analysis_error("terminal observer requires a literal event", tokens[0])
+    edges = {"_PyIR_SOURCE_FALLTHROUGH": 0, "_PyIR_SOURCE_TAKEN": 1}
+    if len(args[3]) != 1 or args[3][0] not in edges:
+        raise analysis_error("terminal observer requires a literal owner edge", tokens[0])
+    edge = edges[args[3][0]]
+    targets = (["JUMP_TARGET", "(", "oparg", ")"],
+               ["next_instr", "+", "IR_FUSED_DISTANCE", "(", ")"])
+    if (edge == 0 and args[1] != ["next_instr"] or
+            edge == 1 and args[1] not in targets):
+        raise analysis_error("terminal observer owner edge disagrees with destination", tokens[0])
+    return [" ".join(arg) for arg in args], edge
+
+
 def observer_terminal_paths(inst: Instruction, fmt: IRFormat) -> dict[Token, tuple[int, str]]:
     """Check terminal composition and distinguish a defined NULL result.
 
@@ -1570,11 +1609,7 @@ def observer_terminal_paths(inst: Instruction, fmt: IRFormat) -> dict[Token, tup
             raise analysis_error("semantic work follows terminal observer", marker)
         if not parts or parts[-1] is not uop:
             raise analysis_error("terminal observer must finish the composed handler", marker)
-        events = [t for t in texts if t in (
-            "PY_MONITORING_EVENT_BRANCH_LEFT", "PY_MONITORING_EVENT_BRANCH_RIGHT")]
-        if len(events) != 1:
-            raise analysis_error("terminal observer requires one actual branch edge", marker)
-        edge = int(events[0].endswith("RIGHT"))
+        _, edge = observer_terminal_arguments(tokens)
         inputs, outputs = external_io(inst)
         if fmt.window:
             if (len(inputs) != 2 or len(outputs) != 3 or
@@ -2785,10 +2820,10 @@ class IREmitter(Emitter):
     def observe_committed_branch(self, tkn, tkn_iter, uop, storage, inst):
         assert inst is not None
         args, _ = self.instruction_macro_args(tkn, tkn_iter)
-        if len(args) != 3:
-            raise analysis_error("terminal observer takes source, destination, event", tkn)
+        if len(args) != 4:
+            raise analysis_error("terminal observer takes source, destination, event, owner edge", tkn)
         assert next(tkn_iter).kind == "SEMI"
-        source, destination, event = (" ".join(t.text for t in arg) for arg in args)
+        source, destination, event, _ = (" ".join(t.text for t in arg) for arg in args)
         contracts = observer_terminal_paths(inst, self.format_of(inst))
         if tkn not in contracts:
             raise analysis_error("uncertified terminal observer", tkn)

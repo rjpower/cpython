@@ -1,48 +1,50 @@
 # Project status
 
 The active [frame/call redesign](issues/frame-call-model-20261109/plan.md)
-is integrated through engineering `3cde040a1afd` in the existing runtime
-checkout. It is not fully qualified or promoted.
-The frame stack, compact register IR and initialized arena now have terminal
-observer output commits, activation-owned phase scopes and explicit saved-local
-restoration. Genuine unbound bindings remain unbound; unsafe target reads refuse.
-Committed jumps now provide an exact stopped-state view; canonical local loads
-reuse their existing value format without redundant publication checks.
-The [eighth report](issues/frame-call-model-20261109/eighth-integration-report.md)
-owns current component evidence. The local
-load change has independent source review, 117-module release/debug builds and
-25 focused tests passing in each profile. Four component pairs give nbody
-0.97077, logging 1.03461 and pickle 1.01118 versus retained417, using ratios of
-round medians. Logging slows in all four pairs; no general win is claimed.
+is integrated through engineering `488e85fa3a8`. It remains unpromoted.
+Frames use initialized storage and explicit call/result ownership. Compact IR
+keeps source boundaries in metadata. Observers publish committed results before
+callbacks; debugger transfers use an exact stopped-state view rather than
+assuming a callback stopped before an operation. Canonical local duplicates
+reuse their existing PyValue bits through the shared final store.
 
-At `417a8bd6e2e3`, release/debug each pass 343 focused tests with one skip, five generator
-methods and the selected twelve-test gate. Eventual ownership probes pass.
-The compiler accepts 2,156 valid library files without new rejections.
-The 999-test wide gate in each profile still fails four modules: monitoring
-(one error), peepholer (three), sys_settrace (24, down from 38), pdb (two failures/two errors).
-The old 21 diagnostic mismatches are repaired. The current full release
-diagnostic runs 54,563 tests with six failed modules: the four above, plus a
-GC-verifier negative control and test_tools API lint. The GC method and whole
-module pass on three isolated build roles; its full-run failure remains
-unresolved. Final full suites, stats and
-API checks remain open. Golden stays immutable and selected.
+The current bounded nonneutral committed view copies the actual site's rows,
+applies its selected normal transfer, and invalidates consumed old origins.
+It admits only inherited handled context, empty stopped/target saved-binding
+states and a target without incoming scratch requirements. Existing PRE and
+neutral-jump recipes keep their separate proofs. Tracing now uses explicit
+borrow views for its argument window. Independent source/result review approved.
+Release/debug each build 117 modules. Both pass 455 frame/observer tests with
+one skip, including all of monitoring. After a narrow warning cleanup, both
+rebuild and pass the seven targeted checks. All five core designs match `488e85fa3a8`.
 
-The clean `3cde040a1afd` two-pair logging/upstream screen is **0.92135× elapsed
-time**, about 8% faster. Prior417's separate golden screen gives logging
-0.61846, nbody 1.04803 and pickle 0.97892; it does not qualify current31.
-Final parity campaigns and the unchanged broad screen remain open. Retained c142
-warmed PMU counts show logging/upstream cycles 0.91821 and instructions 1.04497;
-nbody/golden cycles 1.04088 and instructions 1.03331. Flat profiles locate method
-lookup, calls/retirement and numeric/local paths; they do not assign causal
-speedup budgets. See the [performance review](issues/frame-call-model-20261109/sixth-performance-review.md).
+The last full release diagnostic belongs to `3cde040a1afd`: 54,563 tests,
+six failed modules (monitoring, peepholer, sys_settrace, pdb, gc_verify and tools).
+Current focused checks repair the monitoring and API-lint failures. The GC
+negative control passes separately on retained417 release, current31 release
+and debug, but its full-run failure remains unresolved. Full release/debug
+qualification, current stats and final performance gates remain open. The
+current API check passes 306 units with zero failing findings/parse errors.
+Golden remains immutable and selected.
 
-Next: integrate shared committed-edge and typed NULL-requirement capabilities for the
-remaining actual callback phases. All six each-LINE fixtures now pass without
-changing expectations. Public line events do not independently establish PRE.
-Retained protocol roots, caught exits, yield cancellation and complete observer
-qualification remain work in the [repair plan](issues/frame-call-model-20261109/plan.md).
-The five current design specifications are synchronized to `417a8bd6e2e3`; both previously changed
-Mermaid diagrams render and have been inspected.
+Logging meets the timing gate at `488e85fa3a8`: two independent six-round
+upstream campaigns give **0.90235** and **0.89841** elapsed ratios, with every
+pair below 0.937. The unchanged 29-workload screens give geometric means
+**0.96632/golden** and **1.19038/upstream**. Four original losses are flat or
+faster in the screen (unpack, float, pickle, deepcopy_memo). Four-pair repeats
+confirm three remaining losses against golden: generators +7.1%, coroutines +8.7%
+and nbody +4.9%. The goal remains active. The
+[ninth report](issues/frame-call-model-20261109/ninth-integration-report.md)
+records the complete breakdown and exact evidence.
+
+Next: collect current counters/profiles for those repeated losses, then admit
+an evidence-backed shared-model improvement. A fresh cold review finds normal
+frame/call ownership coherent; no new frame ABI rewrite is justified by code
+size alone. The next NULL-only debugger proposal remains design-only. Review
+remaining debugger cases against documented useful jumps and explicit safe
+refusals across active protocols; no blanket skips or weaker assertions. See the
+[scope review](issues/frame-call-model-20261109/debugger-transfer-scope-review.md).
+Full qualification, current stats and final review still remain.
 
 The previous [execution-boundary and operand-mode packet](issues/execution-boundaries-20261108/plan.md)
 implements the first three bounded cold-review recommendations at runtime

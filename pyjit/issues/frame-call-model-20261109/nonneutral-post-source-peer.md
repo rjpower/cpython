@@ -32,5 +32,7 @@ but the two negatives registered BRANCH_LEFT while their actual true
 conditionals emit BRANCH_RIGHT. Root's encoded probe showed src7→9 and
 src12→14. The test-only correction registers RIGHT for those two cases and
 asserts a taken successor; it retains their refusal and frame-state checks.
-Root owns the corrected native rerun and integration; this review does not
-claim those results.
+Root's corrected `ownership32-minimal-v2/{release,debug}.log` each report all
+seven selected tests passing, including both negative methods. That is a
+focused result, not full-module or suite qualification; root owns the wider
+native gate and integration.

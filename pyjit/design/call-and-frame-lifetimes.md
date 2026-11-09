@@ -1,6 +1,6 @@
 # Calls, frame homes and observation
 
-This is the frame/call contract integrated at `3cde040a1afd`. Its bounded
+This is the frame/call contract integrated at `488e85fa3a8`. Its bounded
 observer and debugger rules remain subject to broad qualification. The immutable
 golden `0765e9be47f` retains its functional qualification at `0267d428808`.
 See [status](../STATUS.md), the [active packet](../issues/frame-call-model-20261109/plan.md)
@@ -236,11 +236,20 @@ lazy frame-object creation do not express redirect intent. Warning reproof
 captures scoped authority again before validating the Plan; it cannot upgrade
 a deliberately unauthorized source-only target.
 
+Other positively certified committed edges bind a request-owned copy of the
+exact site's context, save-column and origin rows. The selected normal transfer
+and shared old-owner cuts establish the stopped state; a replacement value or
+NULL cannot revive a consumed origin. This path excludes token creation and
+requires inherited context, empty stopped and target save columns, and no
+incoming target scratch owner. It neither restores saved locals nor borrows a
+PRE survivor proof or source-only target fallback. Warning reproof recaptures
+the scope and rebuilds the view. PRE and neutral-JUMP support remain unchanged.
+
 Source-only events use immutable edge metadata and a frame-object display cursor.
 Scoped observer records bind a callback to its frame, site, edge, phase and
 redirect generation. They prevent an unsupported hook from borrowing another
 callback's authority. The setter uses bounded PRE plans, exact real LINE
-identity and certified neutral committed JUMP. A Python tracing LINE can be a
+identity and certified committed edge views. A Python tracing LINE can be a
 legacy monitoring-JUMP callback; its public name does not select a PRE phase.
 SOURCE_POST and yield-ready setter authority remain unimplemented.
 Pending source errors belong to the evaluator activation, so nested finalizer

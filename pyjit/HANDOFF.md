@@ -2,85 +2,88 @@
 
 ## Current goal: frame/call model and logging parity
 
-Continue until unchanged JIT-off logging reaches matched upstream parity and
-broad regressions are repaired. Follow Python's data model; source boundaries
-are metadata. The [active plan](issues/frame-call-model-20261109/plan.md) owns
-admission. Golden remains immutable and selected. The goal tool is active,
-without a token budget.
+Logging's timing gate is met at `488e85fa3a8`. Continue repairing the three
+confirmed broad losses and completing qualification. Follow Python's data
+model; source positions are metadata. The goal tool remains active without a
+budget. Golden is immutable and selected. See the
+[active plan](issues/frame-call-model-20261109/plan.md) and
+[ninth report](issues/frame-call-model-20261109/ninth-integration-report.md).
 
 Runtime source:
 `/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/execution-boundaries-20261108`,
 branch `pyjit/frame-call-model-20261109`, clean engineering HEAD
-`3cde040a1afdc433db274ff3771dabff08d7b777`. Root alone regenerates, builds,
-tests, commits and measures. Cache magic is 64416. Canonical documentation lives
-in this checkout; runtime copies are historical. Paths below are relative to
-python-boil-the-ocean.
-
+`488e85fa3a88aed7d673c154b22d40ba42080a18`. Root owns all native jobs and commits.
 Release/debug `build/execution-boundaries-{release,debug}` identify this commit
 and check 117 modules. Stats still identifies192 and needs a current rebuild.
-Evidence lives under `build/pyjit-link-wave1/frame-call-model-20261109/`.
-The [eighth report](issues/frame-call-model-20261109/eighth-integration-report.md)
-records current component evidence and links the preceding coherent417 gate.
+Cache magic 64416. Canonical documentation stays in this checkout; runtime
+copies are historical. Paths below are relative to python-boil-the-ocean.
+Evidence: `build/pyjit-link-wave1/frame-call-model-20261109/` (E11).
 
 ### Integrated and tested
 
-- `417a8bd6e2e3` adds explicit actual-owner/physical-next terminal facts and an
-  exact committed-jump stopped view. The six unchanged each-LINE fixtures pass.
-  Each profile passes343 focused tests with one skip, five generator methods
-  and a selected twelve-test gate. Ownership probes leave zero survivors from
-  660 values per profile. Both builds check117 modules.
-- Each wider run executes999 tests with14 skips, four modules still failing:
-  monitoring1 error, peepholer3, sys_settrace24 (down from38), pdb2 failures/
-  2 errors. Current full release diagnostic runs54,563 tests with six failed
-  modules: the four above plus GC-verifier negative control and test_tools.
-  GC exact method and whole module pass on retained417 release/current31
-  release/debug; the full-run failure remains unresolved. Current full suites, stats and306-unit API lint remain open.
-- `3cde040a1afd` reuses canonical local-home duplication instead of publishing
-  it again. Independent source/result review approved. Host four methods and
-  release/debug25 focused tests pass. Exactly two generated load bodies change;
-  285 other bodies, four numeric constructors and metadata remain unchanged.
-  Static GCC load-handler instructions shrink134 to85; this is not a dynamic
-  performance result. Committed release/debug identities check117 modules.
+- Current32 projects exact nonneutral committed observer edges through copied
+  context/save/origin rows and the existing normal transfer. Consumed old-origin
+  cuts remain independent of replacement values. New permission is inherited,
+  empty stopped/target saved bindings and safe target; prior PRE/neutral strict
+  recipes remain unchanged. Source-only nonneutral fallback is refused. Six
+  legacy tracing window reads now use explicit borrow views.
+- Both profiles pass 455 frame/observer tests with one skip, including monitoring.
+  The later size_t allocation-warning cleanup builds 117 modules and passes all
+  seven targeted methods in each role (`ownership32-minimal-v3`); the 455 gate
+  was not rerun after that arithmetic-only cleanup. Independent H post-review
+  approves; A/H source reviews and initial fixture-event failure/probe remain.
+  Current API lint passes 306 units, zero failing findings/parse errors.
+- Last full release diagnostic is31: 54,563 tests, six failed modules. Current
+  focused gates repair monitoring/tools. Peepholer, sys_settrace and pdb remain
+  open; GC negative control failed full run despite exact method/whole-module
+  passes on retained417 release/current31 release/debug. No cause/repair claimed.
+  Full release/debug qualification and current stats remain open.
+- All five core design pages are cross-reviewed and match `488e85fa3a8`; diagrams unchanged.
 
-### Measurements and active sequence
+### Performance and active execution
 
-Clean417 two-pair logging/upstream0.864255; separate golden logging0.618457,
-nbody1.048030,pickle0.978917. These are short engineering screens, not final
-parity. Retained PMU/profile captures belong to c142: logging/upstream
-cycles0.918210,instructions1.044970; nbody/golden cycles1.040876,
-instructions1.033309. Do not relabel them as current captures.
+GCC 15.2/JIT0/CPU 15, unchanged kernels, stable identities:
+logging confirmation1/2 gives 0.902351/0.898412 versus upstream over six balanced
+pairs each; every pair is below 0.937. Both 29 screens give 0.966319/golden and
+1.190384/upstream. Four-pair golden repeat confirms generators 1.070556,
+coroutines 1.086596, nbody 1.048799. Four original losses are flat or faster in the
+screen (unpack,float,pickle,deepcopy_memo). E11 directories are
+`ninth-logging-confirmation-{1,2}`, `ninth-engineering-{golden,upstream}` and
+`ninth-repeat-golden`. Do not combine campaigns or relabel c142 PMU as current.
 
-Native31 component measurement uses the retained clean417 executable
+Native queue is idle after current API lint. H is actively implementing generic
+`capture-workload-perf.py` using the sealed FIFO protocol; A is actively peering
+its plan/source and calibration gates. Both assignments were explicitly started
+after root caught messages queued to idle agents. No current PMU captures have
+run yet. Root waits for actual source peer/host checks, then profiles the three
+confirmed losses. Runtime/build/benchmark/Lib freeze continues. Do not launch
+other native jobs during quiet timing/profiling. Reconcile live agent states on
+recovery; a queued message does not trigger a completed agent.
+
+Source hypotheses: common generator/delegation completion and checked resume;
+static result-discard tests/semantic FOR completion for nbody. No current causal
+attribution yet. H's cold review finds normal frame/call ownership coherent;
+profile before another ABI rewrite. B's scope audit is design-only: 11 ordinary
+positives, 11 proposed protocol-crossing refusals, 2 unresolved same-caught arm
+cases. Actual-PC/provenance probes and independent admission precede test ports.
+No blanket skips, per-method setter restrictions or weakened assertions. The
+NULL-only shared physical/requirement proposal is reviewed, not implemented.
+
+Retained clean417 executable is still at
 `build/execution-boundaries-release/python-canonical-before`, SHA256
 `f010ea12dd5b93cea78b670639d340029331df7ae1f0ac39993d239600fb47fe`.
-Do not overwrite or remove it until the comparison finishes. Both executables
-share213 physical extension files (including historical ABI variants), whose
-exact paths/hashes remain unchanged; this is not a213-module qualification.
-The first `canonical31-component` preflight rejected a driver lexical/resolved
-symlink-key mismatch before timing. Preserve that failure. The corrected driver
-passed independent review. `canonical31-component-v2` completes four pairs with
-stable identities: ratios of round medians nbody0.970773, logging1.034605,
-pickle1.011179. Every logging pair slows; no general win is claimed.
+Do not overwrite/delete until comparisons are done. Its baseline manifest and
+component results are in E11/canonical-home-baseline and canonical31-component-v2.
+The 213 physical extension paths/hashes include historical ABI variants and are
+not 213 checked modules. First component preflight rejected lexical/resolved
+symlink keys; corrected campaign is stable and reports nbody 0.970773,
+logging 1.034605, pickle 1.011179 by ratios of round medians. Keep the failed attempt.
 
-Full release diagnostic is complete (six failed modules). Direct31 two-pair
-logging/upstream is0.921349 with stable identities. B is now admitted to implement
-only the peer-reviewed nonneutral POST view in frameobject/test_code, while A
-fixes six tracing window reads via explicit borrow views. No NULL-flow source
-is admitted yet. Root freezes both before builds and focused tests.
-The monitoring witness is a committed conditional edge; peepholer witnesses
-are real PRE states with independently proved NULL-only target requirements.
-A/B/H are reviewing shared transfer facts, simultaneous COPY/SWAP transport,
-ordinary nonsuspending-entry bounds and conservative unknown/error paths.
-Native builds/tests/timing await the next coherent source freeze.
-Retained roots, caught exits and pre-suspension yield need separate evidence.
-
-All native work and quiet timing serialize. Workers do read-only preparation
-and explicit nonoverlapping edits; root owns integration. Reconcile actual
-agent state after recovery rather than treating a completed assignment as live.
-After coherent repairs: release/debug full qualification, stats/API, unchanged
-29-workload screens with material-loss repeats, current PMU, two independent
-six-round logging/upstream campaigns and cold review. Final logging requires
-mean≤1.0 and every pair≤1.02. Golden remains immutable and selected.
+Next: reviewed current PMU/cycle profiles, shared-model improvement for persistent
+losses, focused checks/post-review/commit/basic performance, coherent full suites/
+stats and final review. Preserve timing parity through changes. Source/benchmark/
+control inputs and sealed evidence remain immutable during collection. Protected
+canonical local work is listed at the end of this document.
 
 ## Previous qualified candidate
 

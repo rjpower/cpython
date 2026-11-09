@@ -1,6 +1,6 @@
 # Register interpreter: current contract
 
-This page describes the register interpreter integrated at `3cde040a1afd`.
+This page describes the register interpreter integrated at `488e85fa3a8`.
 Its bounded observer and debugger contracts still require broad qualification.
 See [status](../STATUS.md), the
 [active packet](../issues/frame-call-model-20261109/plan.md), and the immutable
@@ -185,12 +185,21 @@ legacy inline hooks with unfinished work deliver the same events under an
 unsupported scope. Source records name normalized real landings, while the
 scope retains an immediate relaxation continuation when present.
 
-The setter can cancel from a certified owner-neutral committed JUMP using its
-exact site state. New cancellation requires inherited handled context, proved
-saved bindings and no incoming target scratch owners; existing strict protocol
-recipes retain their separate checks. A legacy LINE callback emitted on a
-backward JUMP carries that JUMP's committed scope. General SOURCE_POST, yield and
-suspended-frame transfers remain unadmitted.
+The setter shares one owner/restoration Plan across real PRE and certified
+committed views. Neutral JUMP borrows its exact site state; a legacy LINE
+callback emitted on a backward JUMP carries that JUMP's committed scope.
+Non-neutral outcomes use a request-owned copy of the exact site rows with the
+selected normal transfer applied. Retiring an old input cuts its provenance
+even when a replacement value occupies that home. This path excludes transfers
+that create context or saved-binding tokens.
+
+Non-neutral cancellation requires an exact scope, physical successor and
+generation, inherited handled context, empty stopped and target saved-binding
+state and no incoming target scratch owners. It cannot reuse PRE survivor proofs
+or source-only fallback. Warning callbacks require a fresh view and Plan; a newer redirect
+discards old edge authority. Existing PRE restoration and strict neutral
+protocol recipes retain their checks. General SOURCE_POST, yield and
+suspended-frame transfers require separate capabilities.
 
 A cold frame-object LINE handoff records expected real landing, previous source
 line and monitoring epoch. It is separate from public f_lineno. Landing detaches

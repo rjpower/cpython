@@ -38,43 +38,44 @@ permanent experiment switches or weakened correctness assertions.
 
 ## Current execution
 
-Engineering `417a8bd6e2e3` integrates exact actual-owner/physical-next
-terminal facts and committed-jump stopped-state restoration. It preserves
-existing strict owner recipes and repairs the six unchanged each-LINE fixtures.
-Each release/debug profile checks117 modules, passes343 focused tests with one
-skip, five generator methods and the selected twelve-test gate. The999-test
-wide gates still fail monitoring1, peepholer3, sys_settrace24 and pdb2 failures/
-2 errors. Full qualification remains open. See the
-[seventh report](seventh-integration-report.md).
+Engineering `488e85fa3a88aed7d673c154b22d40ba42080a18` is integrated and
+independently source/result reviewed. The exact committed-frame view supports
+normal nonneutral edges using copied site rows and the existing selected normal
+transfer. Old-origin cuts remain separate from physical replacement values.
+New permission requires inherited context, empty stopped and target saved-binding
+states, and no target scratch demand. PRE/neutral strict recipes are unchanged;
+nonneutral POST cannot use their pre-site survivor proof or source-only fallback.
+The six legacy tracing window reads now use explicit borrowed views.
 
-Engineering `3cde040a1afd` additionally reuses canonical local-home duplication
-through the shared final store. Independent actual source/result review approved;
-25 focused tests pass in each profile and committed builds check117 modules.
-Only two generated load handlers change; 285 other bodies, four numeric bodies
-and metadata stay unchanged. Four balanced before/after pairs give ratios of
-round medians nbody 0.970773, logging 1.034605 and pickle 1.011179. Logging slows
-in every pair. Full release runs54,563 tests with six failed modules: the known
-four, GC-verifier negative control and API-lint test_tools. Isolated GC method
-and module pass in three roles; its full-run failure remains unresolved.
-See the [eighth report](eighth-integration-report.md).
+Release/debug each build 117 modules and pass 455 focused frame/observer tests
+with one skip, including the entire monitoring module. The subsequent allocation
+warning cleanup rebuilds 117 modules and passes all seven targeted checks in each
+profile. Those later checks do not retroactively rerun the 455 gate. All five
+core design pages are synchronized and cross-reviewed. Full qualification and
+promotion remain open.
 
-Clean417 short screens give logging/upstream0.864255; separate golden
-logging0.618457,nbody1.048030,pickle0.978917. Retained c142 PMU/profile evidence
-is historical: logging/upstream cycles0.918210/instructions1.044970;
-nbody/golden cycles1.040876/instructions1.033309. Direct clean31 logging/upstream
-two-pair screen gives0.921349 (0.906858,0.936071). Final campaigns remain open;
-do not combine campaigns or infer dynamic gain from static assembly.
+The last full release diagnostic at31 runs 54,563 tests with six failed modules:
+monitoring, peepholer, sys_settrace, pdb, gc_verify and tools. Current focused
+checks repair monitoring/tools. Isolated GC method and module pass in three
+roles; its full-run failure remains unresolved. See the
+[eighth report](eighth-integration-report.md) for exact31 evidence.
 
-The [next shared capability proposal](nonneutral-post-and-null-requirements-proposal.md)
-addresses actual committed conditional callbacks and proved NULL-only incoming
-target requirements. It reuses the selected normal transfer and shared Plan;
-COPY/SWAP requirements transport simultaneously, required aliases dominate and
-fresh NULL seeds are bounded to ordinary nonsuspending entry. Shared physical
-transfer facts require independent review before implementation. General source,
-retained protocol roots, caught exits and yield remain separately gated. No
-runtime edits are admitted during native measurement/qualification freeze.
-The freeze has ended: B is implementing only the reviewed nonneutral POST view
-and A the six explicit tracing borrow views; NULL-flow source is not yet admitted.
+Current32 meets the logging timing gate: two independent six-round upstream
+campaigns give 0.902351 and 0.898412, every pair below 0.937. Both full 29 screens
+complete with stable identities: geometric means 0.966319/golden and 1.190384/
+upstream. The four-pair golden repeat confirms generators 1.070556,
+coroutines 1.086596 and nbody 1.048799. The other four original losses are flat
+or faster in the two-pair screen. See the
+[ninth report](ninth-integration-report.md) for complete evidence and limits.
+Current PMU/profile collection is being prepared; c142 captures remain historical.
+Runtime/build/benchmark/Lib freeze continues during the collection.
+
+The [NULL-only consumer proposal](null-only-consumer-interface.md) and shared
+physical transfer contract are independently reviewed but not implemented.
+Retained roots, caught exits and yield remain separate capabilities. The
+[debugger scope review](debugger-transfer-scope-review.md) distinguishes documented
+useful jumps from CPython's permissiveness across active context protocols.
+No runtime edits are admitted during measurement/qualification freeze.
 
 ## Parallel responsibilities
 
@@ -92,25 +93,31 @@ Reviewers inspect actual source and measured evidence after each integration.
 
 ## Work sequence
 
-1. Integrate explicit owner-edge terminal facts, source-publication authority,
-   terminal jumps and iterator retirement under the reviewed shared generator
-   convention. Preserve unrelated ordinary handlers. Actual owner site and
-   reported monitoring source are separate coordinates.
-2. Diagnose each failing debugger phase at its actual PC; admit the stopped-state
-   consumer only with a concrete witness and positive publication authority.
-   Reuse the existing Analysis/Plan and constructor decoder. Complete retained
-   protocol roots, caught exits and yield cancellation through reviewed recipes;
-   do not turn the generic callback marker into a terminal action blindly.
-3. Use minimal host checks, then focused release/debug frame/observer/constructor
-   gates. Independently review the actual diff and results, integrate, and take
-   basic logging/nbody/pickle screens. Use current profiles to select throughput
-   work without weakening target availability or changing the workloads.
-4. Run full release/debug suites and API checks at the coherent integration,
-   rebuild stats and run the unchanged 29-workload screen. Repeat material losses
-   and profile the current native image before another hot-path optimization.
-5. Complete both six-round logging/upstream campaigns, independent cold review,
-   canonical designs/diagrams and the repository/Loom report. Do not promote an
-   engineering screen or a static handler count into a parity claim.
+1. Collect current counters and profiles for the three confirmed losses:
+   generators, coroutines and nbody. Use the matched four-pair calibration,
+   retained executable identities and sealed FIFO hot-region protocol. Keep
+   per-workload instruction/cycle counts distinct from sample locations; old
+   source or profiles do not establish the current cause.
+2. Fold the independent cold architectural review into the next admission.
+   Keep one frame/call/owner model. A new optimization needs a concrete producer
+   or call-shape proof and an isolated comparison, not a benchmark-specific path.
+3. For correctness, admit only shared capabilities backed by actual failures.
+   The three ordinary PRE NULL-only witnesses use forward physical facts and
+   independent VALUE/NULL_ONLY demands, with simultaneous transports, all-alias
+   checks and conservative unsupported/error states. Do not reproduce arbitrary
+   CPython debugger crossings solely to satisfy its accepted jump matrix.
+4. Each admitted source packet gets the cheapest meaningful checks, native
+   release/debug focused gates, independent post-review, commit and basic
+   performance check. Keep full suites for coherent integration points.
+5. Run coherent full release/debug qualification and current stats. The current
+   API check already passes 306 units with zero failing findings/parse errors;
+   repeat it only when subsequent changes justify it. Retain the prior GC negative-control failure; a later pass alone does
+   not establish its cause. Resolve documented contract differences explicitly
+   and preserve their safety/behavior tests rather than silently weakening them.
+6. Complete two independent balanced six-round logging/upstream campaigns,
+   current profile evidence and a final cold review. Update canonical designs,
+   diagrams if changed, status and repository/Loom report. Logging parity and
+   repaired broad performance remain the completion conditions.
 
 ## Measurement and recovery
 

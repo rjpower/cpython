@@ -1,6 +1,6 @@
 # Register IR: current contract
 
-This describes the register interpreter integrated at `3cde040a1afd`.
+This describes the register interpreter integrated at `488e85fa3a8`.
 It defines the executable and ownership contract; [status](../STATUS.md)
 tracks qualification. The bounded observer and debugger rules below do not
 authorize every source transfer.
@@ -169,8 +169,20 @@ transfers have valid committed facts without creating a result owner.
 Scoped source callbacks retain the immediate real continuation separately from
 the normalized landing in their source record. Only a completed provider grants
 SOURCE_POST scope; unproved inline hooks still deliver source events under an
-unsupported scope. The current setter admits real PRE and certified
-owner-neutral committed JUMP recipes, not general SOURCE_POST or yield transfer.
+unsupported scope. The setter uses the same Plan for real PRE, certified
+owner-neutral committed JUMP and bounded non-neutral committed outcomes. PRE
+and neutral JUMP borrow exact site rows. A non-neutral view copies that site's
+context, saved bindings and origins, applies the selected normal transfer, then
+cuts old input provenance independently of replacement values. Token-creating
+transfers are excluded from this copied-row path.
+
+The new non-neutral permission requires exact scope/site/edge/continuation and
+redirect generation, inherited handled context, empty stopped and target
+saved-binding state and a real target with no incoming scratch-owner requirement.
+It cannot use a
+pre-site survivor recipe or a source-only fallback. Existing PRE restoration
+and neutral JUMP rules retain their own proofs. General SOURCE_POST and yield
+transfers require separate stopped-state authority.
 
 ## Explicit boundary
 

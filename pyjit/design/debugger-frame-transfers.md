@@ -1,6 +1,6 @@
 # Debugger entry and frame transfers
 
-This describes the contract integrated at `3cde040a1afd`. Full qualification and
+This describes the contract integrated at `488e85fa3a8`. Full qualification and
 the broader transfer model remain open. See [status](../STATUS.md), the
 [frame ABI](call-and-frame-lifetimes.md), [observer contract](handler-and-observer-contract.md)
 and [repair evidence](../issues/frame-call-model-20261109/qualification-repairs.md).
@@ -99,6 +99,14 @@ again before the full plan is reproved. A source-only target deliberately
 selected without cancellation authority cannot gain it during reproof.
 Closing callbacks never encounter subsequent writes from the old transaction.
 
+A certified nonneutral committed edge binds a copied exact-site context,
+save-column and origin row. The selected normal transfer applies once, then
+shared old-owner cuts remove consumed origins even if the same home contains a
+replacement value or NULL. Token-creating transfers are excluded before this
+step because they update analysis parent tables. This request-owned row is not
+the global meet at the landing. Warning reproof rebuilds the row from a fresh
+scope and analysis.
+
 ## Current supported plans
 
 | Phase or state | Current proof and behavior |
@@ -106,6 +114,7 @@ Closing callbacks never encounter subsequent writes from the old transaction.
 | Real LINE identity | Requested resolved line equals the actual current LINE wrapper's line; exact observed frame; no source/error, pending-child or suspended phase. Preserve current PC, all owners and exception links; commit generation. Earlier words sharing that line do not restart the expression or scope. |
 | Cancellable PRE operation | A centralized phase factory proves the actual real LINE before its handler. Current expression inputs may be detached when the target needs none; proven saved named locals may be restored from per-local chains. Handled context and independently proved roots must survive. Source-only targets do not acquire this permission. |
 | Neutral committed JUMP | A generated positive terminal fact, zero physical IO, non-owning roles and exact selected successor prove the actual site's rows survive unchanged. Scope frame/event/generation, site PC and committed return PC must match. New cancellation/restoration requires inherited context, a save-empty target and no target scratch inputs. |
+| Other certified committed edge | Exact scope, generated publication fact, physical geometry and selected normal successor prove a copied post-edge row. Cancellation requires inherited context, empty stopped and target save columns, and no incoming target scratch owner. It does not use a PRE survivor slice, restore saved bindings or select a source-only destination. |
 | INHERITED context | Existing physical incoming-owner/NULL proof. Bounded FOR-body replay still requires an empty exception table. Ordinary protected try need not create a caught context. |
 | Same CAUGHT context | Backward replay preserves actual saved-previous owners and every parent; path/dominance proof excludes read, replacement, pop and reentry. Active exception links remain untouched. |
 | Pending ignored Python call | Caller changes its continuation only; overlapping child owners remain intact until successful child completion. Used-result, external and protected child cases still need their own plans. |
@@ -119,12 +128,12 @@ exception. It does not implement caught exit.
 ## Remaining model work
 
 The shared stopped-state view distinguishes disposable expression inputs from
-saved-local obligations. PRE and certified neutral committed JUMP use exact
-site rows with the same restoration Plan. This repairs legacy tracing LINE
-callbacks delivered under a monitoring JUMP without pretending they are PRE
-LINE wrappers. Other targets retain their existing strict proofs; they do not
-acquire new cancellation authority. Displaced owners retire after the whole
-frame is valid.
+saved-local obligations. PRE and certified neutral committed JUMP retain their
+existing restoration and strict survivor proofs. Other certified committed
+edges use the same Plan with the bounded copied post-edge row; consumed inputs
+cannot be recovered through a PRE slice or source-only fallback. Public
+callback names do not choose the stopped phase. Displaced owners retire after
+the whole frame is valid.
 Retained outer-with/loop roots need their own availability proof. Source POST,
 protected source-only destinations, yield-before-suspension and an actually
 suspended frame remain distinct phases with different owner contracts.

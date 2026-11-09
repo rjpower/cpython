@@ -2,7 +2,7 @@
 
 The active [interpreter](interpreter.md), [IR](register-ir.md) and
 [frame ABI](call-and-frame-lifetimes.md) share one owning-home model. This page
-describes the contract integrated at `3cde040a1afd`, whose broad qualification
+describes the contract integrated at `488e85fa3a8`, whose broad qualification
 remains open. [Status](../STATUS.md) separates it from the immutable
 qualified golden runtime. Release phases implement RC; they do not impose an
 immediate-finalization guarantee on Python programs.
@@ -176,10 +176,19 @@ Debugger owner recipes remain bounded: NULL requirements and actual iterator
 generation must be proved before admitting a target. Remote layout is versioned
 and target-described; remote/GDB active source-cursor display is a separate
 consumer port still pending. Current setter authority covers bounded PRE
-restoration, exact real LINE identity and certified owner-neutral committed
-JUMP. The JUMP view borrows exact site rows, validates scoped generation
-and actual successor, and reuses the same owner/restoration Plan. New
-cancellation requires inherited context and an empty target scratch requirement;
-strict existing FOR/caught recipes do not gain cancellation permission.
-SOURCE_POST and yield transfers need their own stopped-state proof. Broad repair
-and parity remain open.
+restoration, exact real LINE identity, certified owner-neutral committed JUMP
+and bounded non-neutral committed outcomes. PRE and neutral JUMP borrow exact
+site rows. The non-neutral view copies context, saved-binding and origin rows,
+applies the selected normal transfer, and cuts consumed input origins without
+treating replacement values as their old owners. Token-creating transfers are
+excluded before that projection can change shared analysis state.
+
+Every committed view validates the exact scope, actual site, selected edge,
+physical successor and redirect generation. Non-neutral cancellation requires
+inherited context, empty stopped and target saved-binding state and a real target
+with no incoming scratch-owner requirement. It has no PRE survivor or source-only
+fallback.
+Warning reproof binds fresh rows; a changed generation can use only a separately
+proved fresh PRE landing. Existing PRE and strict neutral FOR/caught recipes
+retain their checks. SOURCE_POST and yield transfers need their own stopped-state
+proof. Broad repair and parity remain open.

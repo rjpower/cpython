@@ -12,12 +12,13 @@ published in the [report](issues/frame-call-model-20261109/closing-report.md).
 Logging meets the round's parity gate; broad upstream parity remains open.
 The active [object/call plan](issues/object-call-20261109/plan.md), reviewed by
 [Astra](issues/object-call-20261109/astra-survey.md), selects canonical attribute
-lookup and reusable keyword binding as the next bounded improvements. Publish
-the current checkpoint to the golden branch before runtime edits. Preserve the
-previous immutable tags and native controls. The coordinator owns integration
+lookup and reusable keyword binding as the next bounded improvements. The frozen checkpoint is published as `pyjit-golden-20261109-runtime`; the
+combined golden snapshot is `cb906f9bc52`. Preserve both generations of immutable
+tags and native controls. The coordinator owns integration
 and measured outcomes.
 
-Logging parity is the throughput target for this round. Use unchanged kernels,
+The current target is lower object/call execution cost and a smaller broad
+upstream gap, while retaining logging parity. Use unchanged kernels,
 GCC, JIT disabled, fixed affinity/hash seed and verified native/source identities.
 Report broad results and repeat material regressions; do not hide them in a
 geometric mean. Startup/import RSS and zero-box totals are not promotion gates.

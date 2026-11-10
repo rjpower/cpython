@@ -5,6 +5,8 @@ is 38 `24f4d270ced`). PyValue is the canonical eight-byte word in interpreter
 frames, core containers, cells, instance fields and value-native C APIs.
 Qualification and measurements belong to the [closing report](../issues/frame-call-model-20261109/closing-report.md)
 and [status](../STATUS.md), not this representation reference.
+The approved lookup-cache extension described below awaits merged native
+validation and integration; it does not change this frozen runtime identity.
 
 The [complete pre-cleanup page](archive/pyvalue-before-close-20261109.md)
 retains rollout history, old measurements and design comparisons unchanged.
@@ -32,6 +34,16 @@ PyValue represents an owner: a home or an owning C local. PyValueBorrow is a
 C-local view of that owner's exact bits and owns no reference. The separate
 C types prevent implicit conversion from borrow to owner. They do not prove
 arbitrary C aliases or the lifetime of derived PyObject pointers.
+
+Persistent value-cache metadata uses `_PyValueGuarded`, a separate word type
+that owns no reference and is not a typed borrow. Its bits may outlive the C
+call that recorded them. Only after validating the cache's version and live
+owner proof may a reader call `_PyValueGuarded_Load` to create a transient
+`PyValueBorrow`, then duplicate it into an owner before any callback can retire
+the protecting owner. The approved lookup increment shares the existing type
+and helpers in `pycore_value.h` between the C type cache and attribute feedback.
+Historical feedback snapshots copy guarded metadata without loading a borrow.
+This adds no value encoding, owning cache or exception to the C-local borrow rule.
 
 `Include/internal/pycore_pyvalue.h` requires the 64-bit GIL private runtime.
 The qualified platform is Linux x86-64 with GCC. Pointers must fit below 2^48;
@@ -216,7 +228,7 @@ frame escape, child overlap and initialized arena storage.
 | Dict | Generic keys and values contain PyValues; specialized unicode keys remain PyObject pointers. Split-dict/inline-instance values contain PyValues. |
 | Set/frozenset | Keys contain PyValues; empty entries use NULL. |
 | Cell and managed slots | Cell ob_ref and value-aware member fields contain PyValues. |
-| Caches | A non-owning cached value needs its cache/version lifetime proof; it is not an owning home merely because it has the same word type. |
+| Caches | Non-owning canonical payloads use `_PyValueGuarded` metadata, protected by a cache/version and live-owner proof; they are neither owning homes nor persistent typed borrows. |
 
 `_Py_VISIT_VALUE` visits only actual object values. GC therefore skips inline
 numbers, indices and NULL. `_PyGC_VisitValue` preserves the distinction between

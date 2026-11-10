@@ -1,11 +1,14 @@
 # Register IR: current contract
 
-This describes the register interpreter integrated at `4d666e1b482`.
+The baseline register interpreter was integrated at `4d666e1b482`.
 It defines the executable and ownership contract; [status](../STATUS.md)
 tracks qualification. The bounded observer and debugger rules below do not
 authorize every source transfer.
 The immutable golden `0765e9be47f`, qualified at functional `0267d428808`, remains
 the [baseline](../bench/results/interpreter-parity-20261108.md).
+The guarded keyword-call extension below is implemented in the current
+[object/call packet](../issues/object-call-20261109/plan.md); native validation
+and integration remain pending.
 
 The [archive](archive/register-ir-20261108.md) retains earlier designs.
 [Call/frame lifetimes](call-and-frame-lifetimes.md) and the
@@ -119,6 +122,35 @@ its local input and temporary destination are static. Generated canonical,
 family, statistics and feedback mappings cover the physical handler domain.
 Adaptive disassembly names the specialization; internal executing-IR inspection
 can expose an ownership variant. This does not create a product of every mode.
+
+## Guarded Python calls
+
+CALL_PY_GENERAL and CALL_KW_PY can invoke `call_bind_known_python` through
+`IR_INVOKE_GUARDED_PYTHON_CALL`. The generator requires the exact nonescaping
+PEP 523, function-version and recursion-check prefix, the typed `_PyFbCall`
+feedback entry, and the corresponding consuming window shape. The keyword
+shape includes its trailing kwnames owner. Altered guards, extra callbacks or
+changed consumption invalidate the producer proof. CALL_KW_BOUND_METHOD and
+instrumented calls retain their ordinary transaction invocation.
+
+The keyword plan caches one to three parameter destinations within the existing
+feedback payload, independently of function arity. It supports positional
+prefixes, permutation, positional defaults and explicitly supplied keyword-only
+arguments. The hit validates current names against the guarded code and checks
+current-default required-slot coverage before any owner moves. At most three
+keyword owners move through fixed C-local storage; the positional prefix stays
+in the overlapping frame window. Complete child homes and the existing return
+recipient/continuation are published through the same frame ABI. The
+[call/frame contract](call-and-frame-lifetimes.md#known-python-binding-and-generic-providers)
+defines the detailed guards, exclusions and ownership order.
+
+A helper miss occurs before effects with the original window intact. Generated
+completion selects the existing transaction for that call kind: vector for a
+positional call and keyword for CALL_KW_PY. No generic fallback starts after
+owner transfer, and no preparation or callback is replayed. Both hit and
+fallback use the same child-dispatch and error completion protocol. These
+checked producer facts authorize a bounded interpreter binding optimization;
+they do not define a native-JIT recovery map.
 
 ## Semantic completion and generated contracts
 

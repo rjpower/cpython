@@ -2,8 +2,9 @@
 
 Proposal only, against frozen runtime `4d666e1b482cb4983c7683f91c5922af14d0ab40`.
 No runtime changes, native execution, commits or performance claims accompany
-this document. The coordinator must publish the requested checkpoint before
-new runtime changes. Independent proposal review precedes implementation.
+this document. The coordinator reports that checkpoint publication completed at `cb906f9bc52`
+(runtime39 tags). Runtime edits remain gated on Astra’s final proposal approval.
+Independent proposal review precedes implementation.
 
 ## Problem and bounded outcome
 
@@ -16,7 +17,7 @@ already has a canonical representation. The observed class_attr_load micro
 is this instance route, not a direct `K.k` load.
 
 The smallest useful increment admits inline class scalars to the existing
-non-descriptor family and stores a borrowed canonical value. Keep its current
+non-descriptor family and stores a guarded canonical word. Keep its current
 instance-layout admission, custom-hook exclusions and method-bit restriction.
 Use the same result-acquisition and publication transaction as shape/module
 reads. No new opcode, object layout, owning cache, global cache, or alternative
@@ -65,7 +66,7 @@ not implementation files in this canonical documentation checkout.
    receiver type version. Existing type-cache rules support inherited borrowed
    values (`specialize.c:1697–1712`). A cache is not a root. A hit acquires an
    owned result while this guard still proves that a class owns the value.
-   Resetting/clearing feedback must never close a borrowed payload.
+   Resetting/clearing feedback must never close its non-owning metadata payload.
 
 There is a related ownership problem in the existing object path:
 `_LOAD_ATTR_NONDESCRIPTOR_{WITH_VALUES,NO_DICT}` closes `owner` before duplicating
@@ -78,12 +79,21 @@ reusing the family safely, including its current object values.
 
 ## Representation and coherent factoring
 
-Use one explicit borrowed value member, provisionally `PyValueBorrow class_value`,
-in `_PyFbAttr`'s existing final payload union. Keep `descr`, `fget`,
+Use `_PyValueGuarded class_value` in `_PyFbAttr`'s existing final payload
+union. A persistent `PyValueBorrow` field would violate the canonical rule that
+a typed borrow cannot escape into heap storage
+([PyValue native boundaries](../../design/pyvalue.md#native-and-extension-boundaries)).
+The existing `Include/internal/pycore_typecache.h:16–38` defines exactly the
+required guarded word and conversions. Move that narrow type and its two helpers
+to `pycore_value.h`, retaining their existing names; include the shared definition
+in feedback and type-cache consumers. Generalize its comment to version-guarded
+cache metadata rather than declaring it private to the type cache. Do not add
+a second encoding or allow it in owning homes. Keep `descr`, `fget`,
 `getattribute` and shape-transition views for the operations whose payloads
 really are those kinds. The selected handler determines the member's meaning.
 Both object non-descriptors and inline scalars write `class_value` using
-`PyValue_Borrow(descriptor)`. Methods continue to write/read `descr`; mutable
+`_PyValueGuarded_FromBorrow(PyValue_Borrow(descriptor))` while the specialization
+lookup still owns `descriptor`. Methods continue to write/read `descr`; mutable
 objects never become eligible merely because the field can represent them.
 This preserves the entry size on the supported 64-bit GIL runtime.
 
@@ -93,7 +103,9 @@ extract a `PyObject *` only in the method-specific checks. Merge the unshadowed
 Do not box an inline scalar to pass an assertion. The result path is:
 
 1. Read/validate type and receiver-state guards with no callbacks.
-2. Duplicate the borrowed canonical cached value into an owned `attr`.
+2. After those guards, use `_PyValueGuarded_Load(class_value)` to create a
+   transient C borrow, then immediately duplicate it into an owned `attr`.
+   Do not materialize that borrow in generated cache declarations before guards.
 3. Capture the receiver owner with `OWNER(owner)`.
 4. Retire through `IR_RETIRE_PUBLISHED_RESULT(attr, receiver)`, then let the
    normal generated destination store finish the transaction.
@@ -105,17 +117,19 @@ Check local, temporary, discarded and aliased destinations in generated output.
 
 The generator currently treats every four-unit cache operand as `PyObject *`
 (`Tools/cases_generator/ir_generator.py:4027–4032`). Add an explicit typed mapping
-for the new canonical borrowed cache operand and reject a size/type mismatch;
-do not cast tagged bits to an object pointer. Keep pointer operand generation
-for the existing object-only operands. Regenerate all affected products from
+for the new guarded-word cache operand and reject a size/type mismatch;
+do not cast tagged bits to an object pointer. Emit `_PyValueGuarded class_value = fb->class_value` as inert metadata; the
+handler explicitly loads its transient borrow after guards. Keep pointer operand
+generation for the existing object-only operands. Regenerate all affected products from
 this producer, including proof/contract output required by the repository.
 
 Polymorphic observations must preserve payload bits without interpreting a
 canonical scalar as a pointer. `fb_row_of`/`fb_put_row` (`specialize.c:373–422`)
 and `_PyFbPoly` currently copy `descr`. Give snapshots an explicit payload union
-with pointer and borrowed-value views, or a fixed-width raw storage member
-copied with `memcpy`; handler identity determines its meaning. Prefer the union
-if it avoids incidental conversions at binary descriptor sites. Copy the
+with pointer and `_PyValueGuarded` views; handler identity determines its
+meaning. Copy guarded bits as metadata without calling `_PyValueGuarded_Load`
+while taking or inspecting a historical observation. The snapshot is never an
+owner or a persistent typed borrow. Copy the
 correct active member according to the recorded handler, and never dereference
 or close a historical payload. Update all writers/readers together. The current
 `_testinternalcapi.get_feedback` exposes versions and handlers, not payload
@@ -154,8 +168,8 @@ fallbacks in any such proposal. No dictionary layout rewrite is proposed here.
 
 ## File boundaries and review questions
 
-Expected implementation boundaries are `Include/internal/pycore_feedback.h`,
-`Python/specialize.c`, `Python/bytecodes.c`, the typed-cache emitter in
+Expected implementation boundaries are `Include/internal/pycore_value.h`, `Include/internal/pycore_typecache.h`,
+`Include/internal/pycore_feedback.h`, `Python/specialize.c`, `Python/bytecodes.c`, the typed-cache emitter in
 `Tools/cases_generator/ir_generator.py`, their generated products, and focused
 existing test modules. Audit feedback snapshots and cache clearing together.
 Do not touch frame layouts, call binding, native getsets, hashing policy or
@@ -163,7 +177,8 @@ collector behavior. Scope cut: land scalar admission and safe result acquisition
 for the two existing non-descriptor handlers; defer direct-class loads and all
 new dictionary optimizations.
 
-Independent review should settle: exact borrowed payload/snapshot typing;
+Independent review should settle: guarded-word metadata/snapshot typing and
+transient-borrow creation strictly after the guards;
 shared-key insertion and dictionary replacement completeness; callback-free
 interval from guard to result acquisition; generated root/publication behavior;
 and unchanged descriptor/custom-hook exclusions. A review finding that this
@@ -200,6 +215,10 @@ checks, not reported results:
   a measurable useful path with no material unexplained application regression.
   Keep micro raw/net counts distinct from elapsed time and whole-program share.
 
+Astra’s first review required replacing the proposed persistent
+`PyValueBorrow` field with existing `_PyValueGuarded` metadata. This revision
+accepts that finding; typed borrows exist only transiently after guards.
+
 No native result, speedup, green-suite claim or admission is implied by this
-source proposal. It is ready for independent proposal review after coordination
-with the architecture survey and checkpoint publication.
+source proposal. It is ready for final independent proposal review alongside the architecture
+survey; checkpoint publication is complete.

@@ -1,8 +1,8 @@
 """Check that cached class lookup acquires its result before receiver cleanup."""
 
 import gc
+import sys
 import weakref
-import _testinternalcapi
 
 
 def check(slotted):
@@ -29,14 +29,16 @@ def check(slotted):
     def read():
         return Receiver().value
 
-    Receiver.value = Value()
+    Receiver.value = [Value()]
     for _ in range(100):
         read()
-    print(slotted, _testinternalcapi.get_ir(read.__code__, True), flush=True)
-    reference = weakref.ref(Receiver.value)
+    if "--show-ir" in sys.argv:
+        import _testinternalcapi
+        print(slotted, _testinternalcapi.get_ir(read.__code__, True), flush=True)
+    reference = weakref.ref(Receiver.value[0])
     armed = True
     result = read()
-    assert reference() is result
+    assert reference() is result[0]
     assert events == []
     del result
     gc.collect()

@@ -8,8 +8,11 @@ regressions no longer repeat; broad upstream parity remains open.
 Start with the [report](issues/frame-call-model-20261109/closing-report.md),
 [complete tables](issues/frame-call-model-20261109/closing-benchmark-tables.md)
 and [next five priorities](issues/frame-call-model-20261109/next-steps.md).
-The [plan](issues/frame-call-model-20261109/plan.md) records closure and scope.
-The engineering candidate is unpromoted; golden `0765e9be47f` stays immutable.
+The [closed plan](issues/frame-call-model-20261109/plan.md) records that round.
+Runtime39 is now published as `pyjit-golden-20261109-runtime`; the combined
+golden branch snapshot is `cb906f9bc52`. The previous golden `0765e9be47f` and
+its tags/builds remain immutable. Reported historical golden ratios above
+refer to that previous baseline.
 
 Both final logging confirmations pass:0.9067× and 0.8975× upstream elapsed time,
 all twelve pairs below0.924×. Coverage includes 29 application kernels, 65 micro
@@ -36,8 +39,18 @@ native bridges still box canonical values. See [IR](design/register-ir.md),
 [interpreter](design/interpreter.md), [frames/calls](design/call-and-frame-lifetimes.md)
 and [values](design/pyvalue.md).
 
-The next round prioritizes guarded canonical lookup, generator delivery,
-fixed-keyword binding, value-native boundaries and structured ownership effects.
+The active [object/call plan](issues/object-call-20261109/plan.md) starts with
+guarded canonical class-value caches and reusable keyword binding plans. Both
+producer changes are implemented and regenerated; native validation, actual-diff
+review and measurement are pending. Astra reviewed both proposals. The next
+lanes are generator-cycle delivery, value-native boundaries and structured
+ownership effects. No speedup is claimed for these pending changes.
+
+A targeted class-value lifetime witness crashes both frozen runtime39 and the
+upstream control. Runtime39 demonstrably uses the guarded NONDESCRIPTOR path.
+The lookup increment acquires and publishes the result before receiver
+retirement; this protects lifetime safety without requiring exact CPython
+finalizer timing. Native verification of the repair is pending.
 Native method/tracing JIT tiers remain unfinished. Coroutine/owner/GDB drafts are
 preserved outside this measured image; their temporary worktree is removed.
 The [handoff](HANDOFF.md) owns exact local paths and recovery. Unrelated user

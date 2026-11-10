@@ -16,6 +16,44 @@ ownership, clearing kwnames before overlap, defaults-hole proof, version/name
 guards and the generator's kind-specific fallback. Coordinator requested the
 bound apply to keyword count rather than benchmark arity; proposal reflects it.
 
-Next: independent proposal review, fold findings in, then await coordinator
-approval after golden publication. Root owns builds, tests, commits, integration
-and measurements. Initial proposal timebox met; no implementation started.
+Implementation approved after the independent
+[proposal review](proposal-peer-review.md) and golden publication at
+`cb906f9bc52`. Call regions were explicitly assigned independently of the
+parallel lookup lane. Root also assigned `CallStats.keyword_plan_hits` and its
+dump/aggregation. No generated products, builds, native tests or commits belong
+to this lane.
+
+Implementation progress (2026-11-10): bounded mapping, unchanged-size feedback
+union, explicit self/kwnames specializer interface, shared consuming binder,
+keyword generator contract/fallback and stats counter are implemented in the
+runtime worktree. All approved default-hole and explicit-kwonly scope remains.
+Nine focused host generator tests pass; the complete host generator module
+passes all 96 tests. Runtime tests parse and now cover permutations, positional/self prefixes,
+defaults and mutations, complete observed child locals, retirement reentry,
+ownership release, errors and generic fallbacks. Native execution remains root's.
+
+Self-review added a current-default-shape guard: MAKE_FUNCTION-created functions
+can share a code/version while carrying distinct default tuples. Required-slot
+coverage is rechecked before detach using at most three cached destinations;
+there is no generic name binding on the hit. A factory-constant regression
+exercises missing-default fallback after such a callable change.
+
+Host generator invocation must initialize the host standard library before
+appending source `Lib` to `sys.path`. `PYTHONPATH=Lib` failed at startup because
+this source codec module uses a newer CodecInfo argument than the UV host;
+that failed invocation executed no tests. The ordinary host invocation without
+the appended path likewise could not import `test`. Corrected invocation passes.
+
+The final source diff was reviewed and `git diff --check` passes. The feedback
+header asserts the unchanged call entry size. Root was notified that producer
+edits are stable; generated products remain untouched by this lane.
+
+Host command, from the runtime source:
+
+```
+UV_CACHE_DIR=/home/power/.cache/uv uv run --no-project python -B -c 'import sys, unittest; sys.path.append("Lib"); unittest.main(module=None, argv=["unittest", "test.test_generated_cases"])'
+```
+
+Next: root regenerates,
+compiles real release/debug builds and runs focused native tests. Independent
+actual-diff review and measurements precede integration. Root owns all of these.

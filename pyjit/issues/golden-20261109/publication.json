@@ -1,0 +1,9 @@
+{
+  "runtime": "4d666e1b482cb4983c7683f91c5922af14d0ab40",
+  "documentation": "7d39cc4983f14e922bba6940774c0eef11b2956f",
+  "previous_golden": "12a465d2355cee8946367cdfc0d3f9d8f0bf460a",
+  "combined": "cb906f9bc524f5151d03bd3cbb08e8a4bc13367b",
+  "remote_refs": "cb906f9bc524f5151d03bd3cbb08e8a4bc13367b\trefs/heads/pyjit/golden-20261108\n7d39cc4983f14e922bba6940774c0eef11b2956f\trefs/heads/weaver/python-jit\n7129589ef2c5a0b49f1c7db11fd87f0248f2e19b\trefs/tags/pyjit-golden-20261109\ncb906f9bc524f5151d03bd3cbb08e8a4bc13367b\trefs/tags/pyjit-golden-20261109^{}\n27ebac9910337becd18ba31e3acb0c8d967c5682\trefs/tags/pyjit-golden-20261109-runtime\n4d666e1b482cb4983c7683f91c5922af14d0ab40\trefs/tags/pyjit-golden-20261109-runtime^{}\n",
+  "implementation_blobs_equal": true,
+  "qualification": "engineering comparison baseline; known limits documented"
+}

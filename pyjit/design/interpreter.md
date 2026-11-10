@@ -2,7 +2,8 @@
 
 This page describes the register interpreter integrated at `4d666e1b482`.
 The closing report records full diagnostics and the remaining observer/tooling
-capability limits.
+capability limits. The approved guarded-attribute increment below is implemented
+in producers and awaits merged native validation and integration.
 See [status](../STATUS.md), the
 [round plan](../issues/frame-call-model-20261109/plan.md), and the immutable
 [baseline report](../bench/results/interpreter-parity-20261108.md).
@@ -84,6 +85,26 @@ value-capable memory; pop never restores a saved frontier. All retirement and
 reentry paths must leave reusable value cells NULL. Separate heap frames are
 initialized once, while full ownership copies initialize their destination by
 moving every home. See the [frame ABI](call-and-frame-lifetimes.md).
+
+## Guarded attribute values
+
+The [approved lookup increment](../issues/object-call-20261109/lookup-proposal.md)
+extends the existing non-descriptor instance-load handlers to canonical inline
+class values. Feedback stores `_PyValueGuarded` metadata, not a persistent
+`PyValueBorrow` or an owning home. A hit checks the receiver type version and
+its admitted layout, creates a transient borrow, then acquires an owned canonical
+result. It publishes that result through the existing result-retirement
+transaction before receiver retirement can run Python. Shape, instance-slot and
+module reads use that same publication contract with their own storage guards.
+
+The class-value path requires absence from shared instance keys and valid inline
+values, or a type with no instance dictionary. Shared-key insertion invalidates
+the owning type before publishing a new name; dictionary replacement invalidates
+inline values. Type/MRO changes invalidate the class-value proof. Descriptor and
+custom-hook classification remains unchanged. Polymorphic snapshots copy inert
+metadata according to the recorded handler; they never turn stale payloads into
+borrows or owners. Direct class-object scalar loads and new dictionary lookup
+recipes remain outside this increment.
 
 ## Python calls and ordinary return
 

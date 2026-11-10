@@ -1,10 +1,13 @@
 # Calls, frame homes and observation
 
-This is the frame/call contract integrated at `4d666e1b482`. Its bounded
+The baseline frame/call contract was integrated at `4d666e1b482`. Its bounded
 observer and debugger qualification limits are recorded in status. The immutable
 golden `0765e9be47f` retains its functional qualification at `0267d428808`.
 See [status](../STATUS.md), the [round plan](../issues/frame-call-model-20261109/plan.md)
 and the [baseline report](../bench/results/interpreter-parity-20261108.md).
+The keyword-plan extension below is implemented in the current
+[object/call packet](../issues/object-call-20261109/plan.md); native validation
+and integration remain pending.
 
 Frame ownership defines retention and cleanup responsibility. It does not
 require a separate register-release instruction or make immediate finalization
@@ -77,10 +80,41 @@ and capacity, fills missing defaults, and installs empty variadic bindings.
 Overlong defaults that cannot fit plan scalars decline the plan rather than
 truncate. Defaults are duplicated from canonical tuple homes.
 
+CALL_KW_PY uses the same primitive for one to three fixed keywords, independently
+of function arity. A union reuses the positional plan's six-byte payload for
+three `uint16_t` parameter destinations; flags record keyword count and self
+presence. The cache stores no names, tuple owners or argument values. Supported
+shapes include positional prefixes, permutations, positional default holes and
+keyword-only parameters when all are explicitly supplied. Variadics, omitted
+keyword-only defaults, bound-method wrappers and unsupported frame/provider
+shapes retain the generic path.
+
+Before effects, the keyword hit checks function/code version, standard provider,
+executable and capacity, cached self/count shape, an exact keyword tuple and exact
+Unicode entries. Each current name must be identical to the guarded code's name
+at its cached destination. Destination bounds, positional-only exclusion,
+positional-prefix exclusion and distinctness are checked before transfer. Equal
+but nonidentical names use the generic provider's language equality handling.
+Functions created from the same code can share a version while carrying different
+defaults, so the binder also checks current default count and required-slot
+coverage. Missing positional homes receive duplicates from those current
+defaults. Explicitly supplied keyword-only values need no kwdefaults lookup or
+dictionary-mutation guard.
+
+The keyword transfer first moves its bounded suffix into at most three C-local
+owners and NULLs their source homes and the detached names home. The unchanged
+positional prefix then becomes the overlapping child's prefix. Saved owners
+move into their cached destinations, missing defaults fill their homes, and the
+parent's return recipient and continuation are published before the child
+becomes current. Only then is the detached exact-string tuple closed. No
+callback, fallible step or miss is allowed inside this transfer. It uses the
+existing owning-frame ABI and cleanup rules without a per-frame binding flag.
+
 | Resource | Before overlap commit | After commit |
 | --- | --- | --- |
 | Callable | Caller window owner | Child function owner; old cell NULL |
-| Receiver and supplied arguments | Caller window owners | Same physical cells owned as child bindings |
+| Receiver and positional arguments | Caller window owners | Same physical cells owned as child bindings |
+| Fixed keywords | Caller window owners | Child locals, moved through bounded C-local owners |
 | Missing defaults | Defaults tuple owns sources | Child owns canonical duplicates |
 | Empty varargs | Immortal singleton | Child's argument local |
 | Empty kwargs | Prepared dict or virtual binding | Owning local or pending local index |
@@ -91,8 +125,9 @@ retirement. Caller argument homes must not be blanket-cleared after overlap:
 they have become child bindings. Other owners stay outside that transferred
 window under the compiler's physical occupancy proof.
 
-A pre-effect known-plan miss enters the existing out-of-line transaction.
-Keyword/EX, nonstandard providers, instrumentation and unsupported owner/storage
+A pre-effect known-plan miss enters the existing out-of-line transaction of
+the same call kind. Unsupported keyword shapes, EX, nonstandard providers,
+instrumentation and unsupported owner/storage
 shapes retain their complete handling. Generic preparation pins resources while
 caller homes remain owning, performs monitoring once, and refreshes after
 callbacks or fallible preparation. Its consuming binder can use copies when

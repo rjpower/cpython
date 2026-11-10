@@ -2,10 +2,12 @@
 
 ## Closed checkpoint
 
-Runtime `4d666e1b482cb4983c7683f91c5922af14d0ab40`, branch
-`pyjit/frame-call-model-20261109`, is clean and frozen. Production changes are
+Runtime `4d666e1b482cb4983c7683f91c5922af14d0ab40` is the frozen checkpoint.
+Its original source branch `pyjit/frame-call-model-20261109` is now the active
+object/call integration worktree, with pending producer changes; use the new
+detached golden source below for immutable comparisons. Production changes are
 `24f4d270ced`; the final commit adds reviewed debugger tests. No unfinished
-coroutine, owner-bundle or GDB port is included. No native job remains queued.
+coroutine, owner-bundle or GDB port is included. Root owns current native jobs; consult the active packet before running more.
 The next round starts from [the five priorities](issues/frame-call-model-20261109/next-steps.md),
 not the older numbered integration reports or unqualified drafts.
 
@@ -32,24 +34,36 @@ Canonical docs are `/home/power/code/cpython/.worktrees/python-jit`, branch
 | Role | Source below BASE | Build below BASE | Full HEAD |
 | --- | --- | --- | --- |
 | Candidate | worktrees/execution-boundaries-20261108 | execution-boundaries-{release,debug,stats} | 4d666e1b482cb4983c7683f91c5922af14d0ab40 |
-| Golden | worktrees/pyvalue-rc-universal | pyvalue-rc-repr-{release,debug,stats} | 0765e9be47f55d97ba5d31d2ae1c02a55ea2e5ae |
+| Previous golden | worktrees/pyvalue-rc-universal | pyvalue-rc-repr-{release,debug,stats} | 0765e9be47f55d97ba5d31d2ae1c02a55ea2e5ae |
+| Current golden | worktrees/golden-20261109-runtime | golden-20261109-release | 4d666e1b482cb4983c7683f91c5922af14d0ab40 |
 | Upstream | worktrees/upstream-3a440b6 | upstream-release-devlibs-3a440b6 | 3a440b65695615e9fd9912342b79cdd54fced0d2 |
 
-Golden and upstream source/builds remain immutable. Golden is published as
-`pyjit-golden-20261108-runtime`; no new promotion is implied. Candidate magic is
+Golden and upstream source/builds remain immutable. The previous golden tag is `pyjit-golden-20261108-runtime`. Current runtime39
+is published as `pyjit-golden-20261109-runtime`, with combined docs/runtime
+snapshot `cb906f9bc52` at `pyjit-golden-20261109` and the existing moving golden
+branch. [Publication receipt](issues/golden-20261109/publication.json) records
+remote readback. New frozen release build checks 117 modules and contains 79
+current DSOs; historical physical file counts are not admission gates. Candidate magic is
 64416; all three builds identify the current full source and check 117 modules.
 Upstream checks 116 modules. Physical DSO counts 78 upstream/213 value builds
 include historical ABI files and are not checked-module counts.
 
 Root owns native execution, builds, commits and measurements. Existing launchers:
-`issues/frame-call-model-20261109/run-checks.py`, the preceding packet's
-`measure.py`, and the closing supplemental/PMU scripts. Read their argument
+`issues/object-call-20261109/run-checks.py` and its `measure.py` target the
+current evidence directory and new runtime39 control. The closing
+supplemental/PMU scripts retain their historical identities. Read their argument
 requirements and preserve output directories. Host Python uses
 `UV_CACHE_DIR=/home/power/.cache/uv uv run --no-project python -B`.
 Measurements use GCC 15.2, CPU 15, JIT off, hash 0 and fixed inputs. No source/build
 or benchmark mutation during timing. Full suites belong at coherent checkpoints.
 
 ## Evidence and deferred source
+
+The active packet is [object/call](issues/object-call-20261109/plan.md), evidence
+`BASE/pyjit-link-wave1/object-call-20261109`. Lookup and keyword lanes have stable
+producer edits, root regenerated and started release compilation. Astra is
+reviewing actual code; native behavior and performance are not yet admitted.
+The active release/debug/stats builds are mutable; do not measure during builds.
 
 E11=`BASE/pyjit-link-wave1/frame-call-model-20261109`.
 

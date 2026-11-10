@@ -18,16 +18,18 @@ upstream. No new runtime code is included in this publication.
 
 Both full diagnostics ran 54,645 tests. Remaining failures concern GDB tooling,
 nine debugger frame-jump capabilities and one debug trace-format assertion.
-The Astra review also identifies a source-level acquire-after-receiver-retire
-hazard in two object-form class-attribute handlers. Initial coordinator lifetime
-controls pass but stay on generic LOAD_ATTR, so they do not exercise those
-handlers and do not disprove the finding. Focused coverage and the established
-result-publication contract belong to the next lookup lane. There is no claim
-of a reproduced stale-pointer failure or a completed repair.
+The Astra review also identified an acquire-after-receiver-retire hazard in two
+class-attribute handlers. Initial controls stayed generic and were inconclusive.
+A revised eligible list-valued witness now reproduces SIGSEGV in both runtime39
+and upstream; runtime39 prints its specialized NONDESCRIPTOR handler before
+failing. This is a lifetime-safety issue shared by the controls, not evidence of
+an introduced regression. The next lookup increment applies the established
+acquire/publish-before-retire contract; its native validation is pending.
+The immutable comparison baseline remains unchanged.
 
 ## Publication contract
 
-Publish immutable tags `pyjit-golden-20261109-runtime` for exact runtime39 and
+Published immutable tags `pyjit-golden-20261109-runtime` for exact runtime39 and
 `pyjit-golden-20261109` for the combined snapshot. The combined snapshot takes
 every implementation path from runtime39, removes historical `boil/` documents,
 and installs committed canonical `pyjit/` documents. Its merge parents include
@@ -37,4 +39,4 @@ Record resolved local and remote refs in `publication.json` afterward.
 
 The [object/call plan](../object-call-20261109/plan.md) owns subsequent work.
 The old baseline remains available for comparisons; a new frozen release build
-will provide a direct runtime39 control before new candidate measurements.
+provides a direct runtime39 control for new candidate measurements.

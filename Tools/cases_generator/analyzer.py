@@ -529,6 +529,8 @@ IR_MARKER_EFFECTS = {
     "IR_ENTER_GENERATOR": frozenset(("escapes", "error", "sync", "pc", "terminal", "frame")),
     "IR_TRY_DICT_FIRST_PROBE": frozenset(("escapes", "error", "sync", "pc")),
     "IR_BEGIN_CALL_EFFECTS": frozenset(),
+    # A checked conditional terminal transfer; its MISS arm is owner-neutral.
+    "IR_TRY_LEAF_CALL": frozenset(),
     **dict.fromkeys(("IR_PREPARE_CALL_METHOD", "IR_PREPARE_CALL_TUPLE",
                      "IR_MONITOR_CALL", "IR_REFRESH_CALL"),
                     frozenset(("escapes", "error", "sync", "pc"))),
@@ -567,6 +569,12 @@ def has_error_without_pop(op: parser.CodeDef) -> bool:
 
 
 NON_ESCAPING_FUNCTIONS = (
+    # Audited canonical raw reads/scalar comparisons; no allocation or release.
+    "ir_probe_global_value",
+    "ir_probe_shape_value",
+    "ir_probe_class_value",
+    "ir_compare_inline_int",
+    "ir_compare_inline_float",
     "native_vector_capture",
     "_PyShape_FindTransition",
     "PyCFunction_GET_FLAGS",

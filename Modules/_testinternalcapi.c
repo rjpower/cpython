@@ -1657,6 +1657,30 @@ get_ir(PyObject *self, PyObject *args)
 }
 
 static PyObject *
+ir_leaf_info(PyObject *self, PyObject *arg)
+{
+    if (!PyCode_Check(arg)) {
+        PyErr_SetString(PyExc_TypeError, "expected a code object");
+        return NULL;
+    }
+    _PyCodeExec *exec = _PyCode_GetExec((PyCodeObject *)arg);
+    if (exec == NULL) {
+        return NULL;
+    }
+    _PyIRLeafRegion *leaf = exec->leaf;
+#if defined(Py_GIL_DISABLED) || defined(__EMSCRIPTEN__) || defined(WITH_DTRACE) || defined(Py_DEBUG)
+    int supported = 0;
+#else
+    int supported = 1;
+#endif
+    return Py_BuildValue("(iKKKKi)", leaf != NULL,
+        (unsigned long long)(leaf == NULL ? 0 : leaf->hits),
+        (unsigned long long)(leaf == NULL ? 0 : leaf->probe_misses),
+        (unsigned long long)(leaf == NULL ? 0 : leaf->owner_misses),
+        (unsigned long long)(leaf == NULL ? 0 : leaf->entry_misses), supported);
+}
+
+static PyObject *
 ir_normal_physical_transfer(PyObject *self, PyObject *args)
 {
     int handler, a, b, c, d, arg, edge, home, nl, limit;
@@ -4489,6 +4513,7 @@ static PyMethodDef module_functions[] = {
     {"get_co_localskinds", get_co_localskinds, METH_O, NULL},
     {"get_feedback", get_feedback, METH_VARARGS, NULL},
     {"get_ir", get_ir, METH_VARARGS, NULL},
+    {"ir_leaf_info", ir_leaf_info, METH_O, NULL},
     {"ir_normal_physical_transfer", ir_normal_physical_transfer,
      METH_VARARGS, NULL},
     {"set_ir_max_forward", set_ir_max_forward, METH_O, NULL},

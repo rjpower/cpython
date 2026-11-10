@@ -7276,6 +7276,20 @@
                     JUMP_TO_PREDICTED(CALL);
                 }
             }
+            // _TRY_LEAF_CALL
+            {
+                {
+                    PyCodeObject *leaf_code = (PyCodeObject *)((PyFunctionObject *)PyValue_AsKnownObjectBorrow(callable))->func_code;
+                    if (leaf_code->_co_exec != NULL && leaf_code->_co_exec->leaf != NULL) {
+                        _PyIRStepResult leaf = ir_try_complete_leaf_call(tstate, frame, this_instr, fb->func_version);
+                        if (leaf.status) {
+                            slots = _PyFrame_Slots(frame);
+                            next_instr = leaf.next;
+                            DISPATCH();
+                        }
+                    }
+                }
+            }
             // _INIT_CALL_PY_EXACT_ARGS
             {
                 args = &window[2];
@@ -7978,14 +7992,12 @@
                 right = value;
                 (void)right;
                 STAT_INC(COMPARE_OP, hit);
-                double dleft = PyValue_InlineFloat(left);
-                double dright = PyValue_InlineFloat(right);
-                int sign_ish = COMPARISON_BIT(dleft, dright);
+                int comparison = ir_compare_inline_float(oparg, left, right);
                 l = left;
                 r = right;
                 ir_own_B = IR_CONSUME_INPUT(IR_B(ir_word), l);
                 ir_own_C = IR_CONSUME_INPUT(IR_C(ir_word), r);
-                res = (sign_ish & oparg) ? PyValue_True : PyValue_False;
+                res = comparison ? PyValue_True : PyValue_False;
             }
             // _POP_TOP_FLOAT
             {
@@ -8058,14 +8070,12 @@
                 right = value;
                 (void)right;
                 STAT_INC(COMPARE_OP, hit);
-                int64_t ileft = _PyValue_IntScaled(left);
-                int64_t iright = _PyValue_IntScaled(right);
-                int sign_ish = COMPARISON_BIT(ileft, iright);
+                int comparison = ir_compare_inline_int(oparg, left, right);
                 l = left;
                 r = right;
                 ir_own_B = IR_CONSUME_INPUT(IR_B(ir_word), l);
                 ir_own_C = IR_CONSUME_INPUT(IR_C(ir_word), r);
-                res =  (sign_ish & oparg) ? PyValue_True : PyValue_False;
+                res = comparison ? PyValue_True : PyValue_False;
             }
             // _POP_TOP_INT
             {
@@ -8207,14 +8217,12 @@
                 right = value;
                 (void)right;
                 STAT_INC(COMPARE_OP, hit);
-                double dleft = PyValue_InlineFloat(left);
-                double dright = PyValue_InlineFloat(right);
-                int sign_ish = COMPARISON_BIT(dleft, dright);
+                int comparison = ir_compare_inline_float(oparg, left, right);
                 l = left;
                 r = right;
                 ir_own_A = IR_CONSUME_INPUT(IR_A(ir_word), l);
                 ir_own_B = IR_CONSUME_INPUT(IR_B(ir_word), r);
-                res = (sign_ish & oparg) ? PyValue_True : PyValue_False;
+                res = comparison ? PyValue_True : PyValue_False;
             }
             // _POP_TOP_FLOAT
             {
@@ -8288,14 +8296,12 @@
                 right = value;
                 (void)right;
                 STAT_INC(COMPARE_OP, hit);
-                int64_t ileft = _PyValue_IntScaled(left);
-                int64_t iright = _PyValue_IntScaled(right);
-                int sign_ish = COMPARISON_BIT(ileft, iright);
+                int comparison = ir_compare_inline_int(oparg, left, right);
                 l = left;
                 r = right;
                 ir_own_A = IR_CONSUME_INPUT(IR_A(ir_word), l);
                 ir_own_B = IR_CONSUME_INPUT(IR_B(ir_word), r);
-                res =  (sign_ish & oparg) ? PyValue_True : PyValue_False;
+                res = comparison ? PyValue_True : PyValue_False;
             }
             // _POP_TOP_INT
             {
@@ -12628,34 +12634,18 @@
             PyValue *null;
             PyValue ir_own_B = PyValue_NULL;
             (void)ir_own_B;
-            // _CHECK_ATTR_CLASS
+            // _LOAD_ATTR_CLASS
             {
                 owner = IR_VIEW(IR_B(ir_word));
                 uint32_t class_version = fb->class_version;
-                if (Py_UNLIKELY(!PyValue_IsPointerSpace(owner))) {
-                    UPDATE_MISS_STATS(LOAD_ATTR);
-                    assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
-                    JUMP_TO_PREDICTED(LOAD_ATTR);
-                }
-                PyObject *owner_o = PyValue_AsKnownObjectBorrow(owner);
-                if (!PyType_Check(owner_o)) {
-                    UPDATE_MISS_STATS(LOAD_ATTR);
-                    assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
-                    JUMP_TO_PREDICTED(LOAD_ATTR);
-                }
-                assert(class_version != 0);
-                if (FT_ATOMIC_LOAD_UINT_RELAXED(((PyTypeObject *)owner_o)->tp_version_tag) != class_version) {
-                    UPDATE_MISS_STATS(LOAD_ATTR);
-                    assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
-                    JUMP_TO_PREDICTED(LOAD_ATTR);
-                }
-            }
-            // _LOAD_ATTR_CLASS
-            {
                 _PyValueGuarded class_value = fb->class_value;
+                PyValueBorrow found = ir_probe_class_value(owner, 0, class_version, class_value, false);
+                if (PyValue_IsNull(found)) {
+                    UPDATE_MISS_STATS(LOAD_ATTR);
+                    assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
+                    JUMP_TO_PREDICTED(LOAD_ATTR);
+                }
                 STAT_INC(LOAD_ATTR, hit);
-                PyValueBorrow found = _PyValueGuarded_Load(class_value);
-                assert(!PyValue_IsNull(found));
                 attr = IR_CANONICAL_HOME_DUP(found);
                 ir_own_B = IR_CONSUME_INPUT(IR_B(ir_word), owner);
                 PyValue receiver = ir_own_B;
@@ -12807,45 +12797,19 @@
             PyValue *null;
             PyValue ir_own_B = PyValue_NULL;
             (void)ir_own_B;
-            // _GUARD_TYPE_VERSION
+            // _LOAD_ATTR_CLASS_WITH_META
             {
                 owner = IR_VIEW(IR_B(ir_word));
                 uint32_t type_version = fb->type_version;
-                if (Py_UNLIKELY(!PyValue_IsPointerSpace(owner))) {
-                    UPDATE_MISS_STATS(LOAD_ATTR);
-                    assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
-                    JUMP_TO_PREDICTED(LOAD_ATTR);
-                }
-                PyTypeObject *tp = Py_TYPE(PyValue_AsKnownObjectBorrow(owner));
-                assert(type_version != 0);
-                if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
-                    UPDATE_MISS_STATS(LOAD_ATTR);
-                    assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
-                    JUMP_TO_PREDICTED(LOAD_ATTR);
-                }
-            }
-            // _CHECK_ATTR_CLASS
-            {
                 uint32_t class_version = fb->class_version;
-                PyObject *owner_o = PyValue_AsKnownObjectBorrow(owner);
-                if (!PyType_Check(owner_o)) {
-                    UPDATE_MISS_STATS(LOAD_ATTR);
-                    assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
-                    JUMP_TO_PREDICTED(LOAD_ATTR);
-                }
-                assert(class_version != 0);
-                if (FT_ATOMIC_LOAD_UINT_RELAXED(((PyTypeObject *)owner_o)->tp_version_tag) != class_version) {
-                    UPDATE_MISS_STATS(LOAD_ATTR);
-                    assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
-                    JUMP_TO_PREDICTED(LOAD_ATTR);
-                }
-            }
-            // _LOAD_ATTR_CLASS
-            {
                 _PyValueGuarded class_value = fb->class_value;
+                PyValueBorrow found = ir_probe_class_value(owner, type_version, class_version, class_value, true);
+                if (PyValue_IsNull(found)) {
+                    UPDATE_MISS_STATS(LOAD_ATTR);
+                    assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
+                    JUMP_TO_PREDICTED(LOAD_ATTR);
+                }
                 STAT_INC(LOAD_ATTR, hit);
-                PyValueBorrow found = _PyValueGuarded_Load(class_value);
-                assert(!PyValue_IsNull(found));
                 attr = IR_CANONICAL_HOME_DUP(found);
                 ir_own_B = IR_CONSUME_INPUT(IR_B(ir_word), owner);
                 PyValue receiver = ir_own_B;
@@ -13643,39 +13607,18 @@
             PyValue *null;
             PyValue ir_own_B = PyValue_NULL;
             (void)ir_own_B;
-            // _GUARD_TYPE_VERSION
+            // _LOAD_ATTR_SHAPE
             {
                 owner = IR_VIEW(IR_B(ir_word));
                 uint32_t type_version = fb->type_version;
-                if (Py_UNLIKELY(!PyValue_IsPointerSpace(owner))) {
-                    UPDATE_MISS_STATS(LOAD_ATTR);
-                    assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
-                    JUMP_TO_PREDICTED(LOAD_ATTR);
-                }
-                PyTypeObject *tp = Py_TYPE(PyValue_AsKnownObjectBorrow(owner));
-                assert(type_version != 0);
-                if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
-                    UPDATE_MISS_STATS(LOAD_ATTR);
-                    assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
-                    JUMP_TO_PREDICTED(LOAD_ATTR);
-                }
-            }
-            // _GUARD_SHAPE
-            {
                 uint32_t shape = fb->shape;
-                if (_PyObject_Shape(PyValue_AsKnownObjectBorrow(owner)) != shape) {
+                uint32_t offset = fb->offset;
+                PyValueBorrow found = ir_probe_shape_value(owner, type_version, shape, offset);
+                if (PyValue_IsNull(found)) {
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
                 }
-            }
-            // _LOAD_ATTR_SHAPE
-            {
-                uint32_t offset = fb->offset;
-                PyObject *owner_o = PyValue_AsKnownObjectBorrow(owner);
-                PyValueBorrow found =
-                PyValue_Borrow(*(PyValue *)((char *)owner_o + offset));
-                assert(!PyValue_IsNull(found));
                 attr = IR_CANONICAL_HOME_DUP(found);
                 STAT_INC(LOAD_ATTR, hit);
                 ir_own_B = IR_CONSUME_INPUT(IR_B(ir_word), owner);
@@ -13733,39 +13676,18 @@
             PyValue *null;
             PyValue ir_own_B = PyValue_NULL;
             (void)ir_own_B;
-            // _GUARD_TYPE_VERSION
+            // _LOAD_ATTR_SHAPE
             {
                 owner = IR_VIEW(IR_B(ir_word));
                 uint32_t type_version = fb->type_version;
-                if (Py_UNLIKELY(!PyValue_IsPointerSpace(owner))) {
-                    UPDATE_MISS_STATS(LOAD_ATTR);
-                    assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
-                    JUMP_TO_PREDICTED(LOAD_ATTR);
-                }
-                PyTypeObject *tp = Py_TYPE(PyValue_AsKnownObjectBorrow(owner));
-                assert(type_version != 0);
-                if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
-                    UPDATE_MISS_STATS(LOAD_ATTR);
-                    assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
-                    JUMP_TO_PREDICTED(LOAD_ATTR);
-                }
-            }
-            // _GUARD_SHAPE
-            {
                 uint32_t shape = fb->shape;
-                if (_PyObject_Shape(PyValue_AsKnownObjectBorrow(owner)) != shape) {
+                uint32_t offset = fb->offset;
+                PyValueBorrow found = ir_probe_shape_value(owner, type_version, shape, offset);
+                if (PyValue_IsNull(found)) {
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
                 }
-            }
-            // _LOAD_ATTR_SHAPE
-            {
-                uint32_t offset = fb->offset;
-                PyObject *owner_o = PyValue_AsKnownObjectBorrow(owner);
-                PyValueBorrow found =
-                PyValue_Borrow(*(PyValue *)((char *)owner_o + offset));
-                assert(!PyValue_IsNull(found));
                 attr = IR_CANONICAL_HOME_DUP(found);
                 STAT_INC(LOAD_ATTR, hit);
                 ir_own_B = PyValue_NULL;
@@ -14487,47 +14409,12 @@
             int oparg = (int)IR_CD(ir_word);
             (void)oparg;
             PyValue res;
-            // _GUARD_GLOBALS_VERSION
-            {
-                uint32_t globals_version = fb->globals_version;
-                PyDictObject *dict = (PyDictObject *)GLOBALS();
-                if (!PyDict_CheckExact(dict)) {
-                    UPDATE_MISS_STATS(LOAD_GLOBAL);
-                    assert(_PyOpcode_Deopt[opcode] == (LOAD_GLOBAL));
-                    JUMP_TO_PREDICTED(LOAD_GLOBAL);
-                }
-                PyDictKeysObject *keys = FT_ATOMIC_LOAD_PTR_ACQUIRE(dict->ma_keys);
-                if (FT_ATOMIC_LOAD_UINT32_RELAXED(keys->dk_version) != globals_version) {
-                    UPDATE_MISS_STATS(LOAD_GLOBAL);
-                    assert(_PyOpcode_Deopt[opcode] == (LOAD_GLOBAL));
-                    JUMP_TO_PREDICTED(LOAD_GLOBAL);
-                }
-                assert(keys->dk_kind == DICT_KEYS_UNICODE);
-            }
             // _LOAD_GLOBAL_BUILTINS
             {
+                uint32_t globals_version = fb->globals_version;
                 uint32_t builtins_version = fb->builtins_version;
                 uint32_t index = fb->index;
-                PyDictObject *dict = (PyDictObject *)BUILTINS();
-                if (!PyDict_CheckExact(dict)) {
-                    UPDATE_MISS_STATS(LOAD_GLOBAL);
-                    assert(_PyOpcode_Deopt[opcode] == (LOAD_GLOBAL));
-                    JUMP_TO_PREDICTED(LOAD_GLOBAL);
-                }
-                PyDictKeysObject *keys = FT_ATOMIC_LOAD_PTR_ACQUIRE(dict->ma_keys);
-                if (FT_ATOMIC_LOAD_UINT32_RELAXED(keys->dk_version) != builtins_version) {
-                    UPDATE_MISS_STATS(LOAD_GLOBAL);
-                    assert(_PyOpcode_Deopt[opcode] == (LOAD_GLOBAL));
-                    JUMP_TO_PREDICTED(LOAD_GLOBAL);
-                }
-                assert(keys->dk_kind == DICT_KEYS_UNICODE);
-                PyDictUnicodeEntry *entries = DK_UNICODE_ENTRIES(keys);
-                if (index >= (size_t)FT_ATOMIC_LOAD_SSIZE_RELAXED(keys->dk_nentries)) {
-                    UPDATE_MISS_STATS(LOAD_GLOBAL);
-                    assert(_PyOpcode_Deopt[opcode] == (LOAD_GLOBAL));
-                    JUMP_TO_PREDICTED(LOAD_GLOBAL);
-                }
-                PyValueBorrow found = PyValue_Borrow(entries[index].me_value);
+                PyValueBorrow found = ir_probe_global_value(GLOBALS(), BUILTINS(), LOAD_GLOBAL_BUILTIN, globals_version, builtins_version, index);
                 if (PyValue_IsNull(found)) {
                     UPDATE_MISS_STATS(LOAD_GLOBAL);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_GLOBAL));
@@ -14561,26 +14448,7 @@
             {
                 uint32_t globals_version = fb->globals_version;
                 uint32_t index = fb->index;
-                PyDictObject *dict = (PyDictObject *)GLOBALS();
-                if (!PyDict_CheckExact(dict)) {
-                    UPDATE_MISS_STATS(LOAD_GLOBAL);
-                    assert(_PyOpcode_Deopt[opcode] == (LOAD_GLOBAL));
-                    JUMP_TO_PREDICTED(LOAD_GLOBAL);
-                }
-                PyDictKeysObject *keys = FT_ATOMIC_LOAD_PTR_ACQUIRE(dict->ma_keys);
-                if (FT_ATOMIC_LOAD_UINT32_RELAXED(keys->dk_version) != globals_version) {
-                    UPDATE_MISS_STATS(LOAD_GLOBAL);
-                    assert(_PyOpcode_Deopt[opcode] == (LOAD_GLOBAL));
-                    JUMP_TO_PREDICTED(LOAD_GLOBAL);
-                }
-                assert(keys->dk_kind == DICT_KEYS_UNICODE);
-                PyDictUnicodeEntry *entries = DK_UNICODE_ENTRIES(keys);
-                if (index >= (size_t)FT_ATOMIC_LOAD_SSIZE_RELAXED(keys->dk_nentries)) {
-                    UPDATE_MISS_STATS(LOAD_GLOBAL);
-                    assert(_PyOpcode_Deopt[opcode] == (LOAD_GLOBAL));
-                    JUMP_TO_PREDICTED(LOAD_GLOBAL);
-                }
-                PyValueBorrow found = PyValue_Borrow(entries[index].me_value);
+                PyValueBorrow found = ir_probe_global_value(GLOBALS(), NULL, LOAD_GLOBAL_MODULE, globals_version, 0, index);
                 if (PyValue_IsNull(found)) {
                     UPDATE_MISS_STATS(LOAD_GLOBAL);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_GLOBAL));

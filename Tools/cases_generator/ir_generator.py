@@ -601,6 +601,8 @@ def classify_inputs(inst: Instruction, n_inputs: int) -> list[str]:
 # use of a view (IREmitter.check_inplace_input()).  The C compiler rejects
 # a view that reaches an owner, a home or a function that takes PyValue.
 INPLACE_READERS = {
+    "ir_probe_shape_value", "ir_probe_class_value",
+    "ir_compare_inline_int", "ir_compare_inline_float",
     "PyValue_DUP", "PyValue_XDUP", "IR_CANONICAL_HOME_DUP", "PyValue_AsObject",
     "PyValue_AsKnownObjectBorrow", "PyValue_TYPE",
     "PyValue_BoolCheck", "PyValue_FloatOperandValues", "PyValue_InlineFloat",
@@ -2574,6 +2576,7 @@ class IREmitter(Emitter):
         self._replacers["IR_RETURN_TO_CALLER"] = self.return_to_caller
         self._replacers["IR_ENTER_GENERATOR"] = self.enter_generator
         self._replacers["IR_TRY_DICT_FIRST_PROBE"] = self.try_dict_first_probe
+        self._replacers["IR_TRY_LEAF_CALL"] = self.try_leaf_call
         self._replacers["IR_RETIRE_PUBLISHED"] = self.retire_published
         self._replacers["IR_RETIRE_PUBLISHED_RESULT"] = self.retire_published
         self._replacers["IR_RETIRE_PUBLISHED_PAIR"] = self.retire_published
@@ -2911,6 +2914,21 @@ class IREmitter(Emitter):
         self.release_displaced()
         self.emit("}\n")
         self.emit("DISPATCH();\n")
+        self.emit("}\n")
+        self.emit("}\n")
+        return True
+
+    def try_leaf_call(self, tkn, tkn_iter, uop, storage, inst):
+        self.macro_args(tkn, tkn_iter, 0)
+        self.emit("{\n")
+        self.emit("PyCodeObject *leaf_code = (PyCodeObject *)((PyFunctionObject *)PyValue_AsKnownObjectBorrow(callable))->func_code;\n")
+        self.emit("if (leaf_code->_co_exec != NULL && leaf_code->_co_exec->leaf != NULL) {\n")
+        self.emit("_PyIRStepResult leaf = ir_try_complete_leaf_call(tstate, frame, this_instr, fb->func_version);\n")
+        self.emit("if (leaf.status) {\n")
+        self.emit("slots = _PyFrame_Slots(frame);\n")
+        self.emit("next_instr = leaf.next;\n")
+        self.emit("DISPATCH();\n")
+        self.emit("}\n")
         self.emit("}\n")
         self.emit("}\n")
         return True
@@ -4157,6 +4175,65 @@ def validate_dict_first_probe(inst: Instruction, fmt: IRFormat) -> None:
                              "dictionary reader prefix and scalar format", inst.where)
 
 
+def validate_leaf_call(inst: Instruction, fmt: IRFormat) -> None:
+    parts = [p for p in inst.parts if isinstance(p, Uop)]
+    if not any(t.text == "IR_TRY_LEAF_CALL" for p in parts for t in p.body.tokens()):
+        return
+    expected = ["_CHECK_PEP_523", "_CHECK_FUNCTION_VERSION",
+                "_CHECK_FUNCTION_EXACT_ARGS", "_CHECK_STACK_SPACE",
+                "_CHECK_RECURSION_REMAINING", "_TRY_LEAF_CALL",
+                "_INIT_CALL_PY_EXACT_ARGS", "_SAVE_RETURN_SLOT", "_PUSH_FRAME"]
+    guards = [
+        "{ DEOPT_IF(IS_PEP523_HOOKED(tstate)); }",
+        """{
+            PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
+            EXIT_IF(!PyFunction_Check(callable_o));
+            PyFunctionObject *func = (PyFunctionObject *)callable_o;
+            EXIT_IF(func->func_version != func_version);
+        }""",
+        """{
+            PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
+            assert(PyFunction_Check(callable_o));
+            PyFunctionObject *func = (PyFunctionObject *)callable_o;
+            PyCodeObject *code = (PyCodeObject *)func->func_code;
+            EXIT_IF(code->co_argcount != oparg + (!PyValue_IsNull(self_or_null)));
+        }""",
+        """{
+            PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
+            PyFunctionObject *func = (PyFunctionObject *)callable_o;
+            PyCodeObject *code = (PyCodeObject *)func->func_code;
+            DEOPT_IF(!_PyThreadState_HasStackSpace(tstate, code->co_framesize));
+        }""",
+        "{ DEOPT_IF(tstate->py_recursion_remaining <= 1); }",
+    ]
+    def tokens(body):
+        return [t.text for t in tokenize(body)]
+    def shape(items):
+        return [(i.name, i.peek, i.size) for i in items]
+    expected_io = [
+        [],
+        [("callable", True, ""), ("unused", True, ""), ("unused", True, "oparg")],
+        [("callable", True, ""), ("self_or_null", True, ""), ("unused", True, "oparg")],
+        [("callable", True, ""), ("unused", True, ""), ("unused", True, "oparg")],
+        [],
+    ]
+    if (inst.name != "CALL_PY_EXACT_ARGS" or [p.name for p in parts] != expected
+            or any(not isinstance(p, (Uop, Skip)) for p in inst.parts)
+            or not fmt.window or not fmt.store_dst or not fmt.discards
+            or fmt.field_of(ROLE_BASE) != "B" or fmt.field_of(ROLE_DST) != "A"
+            or fmt.fb != "_PyIR_LOC_D" or fmt.imm != "_PyIR_LOC_C"
+            or any(canonical_body_tokens(p) != tokens(body)
+                   for p, body in zip(parts[:5], guards))
+            or any(shape(p.stack.inputs) != expected or shape(p.stack.outputs) != expected
+                   for p, expected in zip(parts[:5], expected_io))
+            or [(c.name, c.size) for c in parts[1].caches] != [("func_version", 2)]
+            or canonical_body_tokens(parts[5]) != tokens("{ IR_TRY_LEAF_CALL(); }")
+            or parts[5].stack.inputs or parts[5].stack.outputs
+            or any(p.properties.escapes or p.properties.eval_breaker
+                   or p.properties.switches_frame for p in parts[:6])):
+        raise analysis_error("leaf call requires the complete plain exact prefix and untouched window", inst.where)
+
+
 def validate_guarded_python_call(inst: Instruction, fmt: IRFormat) -> None:
     parts = [p for p in inst.parts if isinstance(p, Uop)]
     markers = [(p, t) for p in parts for t in p.body.tokens()
@@ -4259,6 +4336,7 @@ def generate_handler(name: str, inst: Instruction, fmt: IRFormat,
     emitter.execution_variant = EXECUTION_VARIANTS.get(name)
     validate_dict_first_probe(inst, fmt)
     validate_guarded_python_call(inst, fmt)
+    validate_leaf_call(inst, fmt)
     emitter.result_publication = result_publication_contract(inst, fmt)
     saved = emitter.out
     roles: dict[str, set[str]] = {}
@@ -5369,6 +5447,56 @@ def _validate_publication_suffix(inst: Instruction, producer: Uop,
             "home", inst.where)
 
 
+def validate_raw_probe_publication(inst: Instruction, fmt: IRFormat,
+                                   producer: Uop) -> None:
+    probes = {"ir_probe_shape_value", "ir_probe_class_value"}
+    if not any(t.text in probes for t in producer.body.tokens()):
+        # Existing direct home/guarded-word reads remain positive sources.
+        # Renaming an opaque probe cannot bypass source validation.
+        direct = [
+            "PyValueBorrow found = PyValue_Borrow(owner);",
+            "PyValueBorrow found = _PyValueGuarded_Load(class_value);",
+        ]
+        initializers = [[t.text for t in tokenize(text)] for text in direct]
+        if any(isinstance(stmt, SimpleStmt) and _statement_text(stmt) in initializers
+               for stmt in producer.body.body):
+            return
+        raise analysis_error("canonical source requires a checked raw probe or direct home read", inst.where)
+    shape = """{
+        PyValueBorrow found = ir_probe_shape_value(owner, type_version, shape, offset);
+        DEOPT_IF(PyValue_IsNull(found));
+        attr = IR_CANONICAL_HOME_DUP(found);
+        STAT_INC(LOAD_ATTR, hit);
+        PyValue receiver = OWNER(owner);
+        IR_RETIRE_PUBLISHED_RESULT(attr, receiver);
+    }"""
+    cls = """{
+        PyValueBorrow found = ir_probe_class_value(owner, 0, class_version, class_value, false);
+        DEOPT_IF(PyValue_IsNull(found));
+        STAT_INC(LOAD_ATTR, hit);
+        attr = IR_CANONICAL_HOME_DUP(found);
+        PyValue receiver = OWNER(owner);
+        IR_RETIRE_PUBLISHED_RESULT(attr, receiver);
+    }"""
+    meta = cls.replace("owner, 0, class_version, class_value, false",
+                       "owner, type_version, class_version, class_value, true")
+    body = canonical_body_tokens(producer)
+    is_shape = body == [t.text for t in tokenize(shape)]
+    is_class = body == [t.text for t in tokenize(cls)]
+    is_meta = body == [t.text for t in tokenize(meta)]
+    cache = [(c.name, c.size) for c in producer.caches if c.name != "unused"]
+    expected_cache = ([("type_version", 2), ("shape", 0), ("offset", 1)] if is_shape else
+                      [("type_version", 2), ("class_version", 2), ("class_value", 4)] if is_meta else
+                      [("class_version", 2), ("class_value", 4)])
+    if (not (is_shape or is_class or is_meta) or fmt.fb_kind != "FB_ATTR"
+            or fmt.fb_layout != "_PyFbAttr" or fmt.field_of(ROLE_DST) != "A"
+            or fmt.input_field(0) != "B" or fmt.window
+            or cache != expected_cache
+            or [(i.name, i.peek, i.size) for i in producer.stack.inputs] != [("owner", False, "")]
+            or [(i.name, i.peek, i.size) for i in producer.stack.outputs] != [("attr", False, "")]):
+        raise analysis_error("raw probe requires exact typed guard/read, canonical acquisition and retirement", inst.where)
+
+
 def result_publication_contract(
     inst: Instruction, fmt: IRFormat,
 ) -> ResultPublicationContract | None:
@@ -5461,6 +5589,8 @@ def result_publication_contract(
                 raise analysis_error(
                     f"{inst.name}: canonical home declaration must be the "
                     "direct result assignment with one identifier", canonical_token)
+        if canonical_source:
+            validate_raw_probe_publication(inst, fmt, producer)
         _publication_result(inst, fmt, result, producer)
         outputs = external_io(inst)[1]
         _validate_publication_suffix(inst, producer, outputs, result)

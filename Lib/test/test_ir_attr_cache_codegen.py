@@ -104,8 +104,13 @@ class TestGuardedAttributeCodegen(unittest.TestCase):
                 start = output.index(f"TARGET({name}) {{")
                 end = output.find("TARGET(", start + 1)
                 handler = output[start:end]
-                guard = handler.index("tp_version_tag")
-                load = handler.index("_PyValueGuarded_Load(class_value)")
+                guard = (handler.index("class_version = fb->class_version")
+                         if name.startswith("LOAD_ATTR_CLASS") else
+                         handler.index("tp_version_tag"))
+                probe = ("ir_probe_class_value(owner,"
+                         if name.startswith("LOAD_ATTR_CLASS") else
+                         "_PyValueGuarded_Load(class_value)")
+                load = handler.index(probe)
                 acquire = handler.index("attr = IR_CANONICAL_HOME_DUP(found)")
                 publish = handler.index("IR_STORE_CANONICAL_TEMP_DST(")
                 retire = handler.index("retire_published_values(")

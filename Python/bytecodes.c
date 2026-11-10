@@ -2079,39 +2079,17 @@ dummy_func(
             _LOAD_GLOBAL +
             _NULL_SLOT_CONDITIONAL;
 
-        op(_GUARD_GLOBALS_VERSION, (globals_version/1 --)) {
-            PyDictObject *dict = (PyDictObject *)GLOBALS();
-            DEOPT_IF(!PyDict_CheckExact(dict));
-            PyDictKeysObject *keys = FT_ATOMIC_LOAD_PTR_ACQUIRE(dict->ma_keys);
-            DEOPT_IF(FT_ATOMIC_LOAD_UINT32_RELAXED(keys->dk_version) != globals_version);
-            assert(keys->dk_kind == DICT_KEYS_UNICODE);
-        }
-
         op(_LOAD_GLOBAL_MODULE, (globals_version/1, unused/1, index/1 -- res))
         {
-            PyDictObject *dict = (PyDictObject *)GLOBALS();
-            DEOPT_IF(!PyDict_CheckExact(dict));
-            PyDictKeysObject *keys = FT_ATOMIC_LOAD_PTR_ACQUIRE(dict->ma_keys);
-            DEOPT_IF(FT_ATOMIC_LOAD_UINT32_RELAXED(keys->dk_version) != globals_version);
-            assert(keys->dk_kind == DICT_KEYS_UNICODE);
-            PyDictUnicodeEntry *entries = DK_UNICODE_ENTRIES(keys);
-            DEOPT_IF(index >= (size_t)FT_ATOMIC_LOAD_SSIZE_RELAXED(keys->dk_nentries));
-            PyValueBorrow found = PyValue_Borrow(entries[index].me_value);
+            PyValueBorrow found = ir_probe_global_value(GLOBALS(), NULL, LOAD_GLOBAL_MODULE, globals_version, 0, index);
             DEOPT_IF(PyValue_IsNull(found));
             res = PyValue_XDUP(found);
             STAT_INC(LOAD_GLOBAL, hit);
         }
 
-        op(_LOAD_GLOBAL_BUILTINS, (builtins_version/1, index/1 -- res))
+        op(_LOAD_GLOBAL_BUILTINS, (globals_version/1, builtins_version/1, index/1 -- res))
         {
-            PyDictObject *dict = (PyDictObject *)BUILTINS();
-            DEOPT_IF(!PyDict_CheckExact(dict));
-            PyDictKeysObject *keys = FT_ATOMIC_LOAD_PTR_ACQUIRE(dict->ma_keys);
-            DEOPT_IF(FT_ATOMIC_LOAD_UINT32_RELAXED(keys->dk_version) != builtins_version);
-            assert(keys->dk_kind == DICT_KEYS_UNICODE);
-            PyDictUnicodeEntry *entries = DK_UNICODE_ENTRIES(keys);
-            DEOPT_IF(index >= (size_t)FT_ATOMIC_LOAD_SSIZE_RELAXED(keys->dk_nentries));
-            PyValueBorrow found = PyValue_Borrow(entries[index].me_value);
+            PyValueBorrow found = ir_probe_global_value(GLOBALS(), BUILTINS(), LOAD_GLOBAL_BUILTIN, globals_version, builtins_version, index);
             DEOPT_IF(PyValue_IsNull(found));
             res = PyValue_XDUP(found);
             STAT_INC(LOAD_GLOBAL, hit);
@@ -2124,7 +2102,6 @@ dummy_func(
 
         macro(LOAD_GLOBAL_BUILTIN) =
             unused/1 + // Skip over the entry distance
-            _GUARD_GLOBALS_VERSION +
             _LOAD_GLOBAL_BUILTINS +
             _NULL_SLOT_CONDITIONAL;
 
@@ -2689,12 +2666,9 @@ dummy_func(
             EXIT_IF(_PyObject_Shape(PyValue_AsKnownObjectBorrow(owner)) != shape);
         }
 
-        op(_LOAD_ATTR_SHAPE, (offset/1, owner -- attr)) {
-            PyObject *owner_o = PyValue_AsKnownObjectBorrow(owner);
-            PyValueBorrow found =
-                PyValue_Borrow(*(PyValue *)((char *)owner_o + offset));
-            // The shape proves the slot filled.
-            assert(!PyValue_IsNull(found));
+        op(_LOAD_ATTR_SHAPE, (type_version/2, shape/0, offset/1, owner -- attr)) {
+            PyValueBorrow found = ir_probe_shape_value(owner, type_version, shape, offset);
+            DEOPT_IF(PyValue_IsNull(found));
             attr = IR_CANONICAL_HOME_DUP(found);
             STAT_INC(LOAD_ATTR, hit);
             PyValue receiver = OWNER(owner);
@@ -2703,8 +2677,6 @@ dummy_func(
 
         macro(LOAD_ATTR_SHAPE) =
             unused/1 +
-            _GUARD_TYPE_VERSION +
-            _GUARD_SHAPE +
             _LOAD_ATTR_SHAPE +
             unused/5 +
             _PUSH_NULL_CONDITIONAL;
@@ -2796,16 +2768,24 @@ dummy_func(
 
         op(_CHECK_ATTR_CLASS, (class_version/2, owner -- owner)) {
             PyObject *owner_o = PyValue_AsKnownObjectBorrow(owner);
-
             EXIT_IF(!PyType_Check(owner_o));
             assert(class_version != 0);
             EXIT_IF(FT_ATOMIC_LOAD_UINT_RELAXED(((PyTypeObject *)owner_o)->tp_version_tag) != class_version);
         }
 
-        op(_LOAD_ATTR_CLASS, (class_value/4, owner -- attr)) {
+        op(_LOAD_ATTR_CLASS, (class_version/2, unused/2, class_value/4, owner -- attr)) {
+            PyValueBorrow found = ir_probe_class_value(owner, 0, class_version, class_value, false);
+            DEOPT_IF(PyValue_IsNull(found));
             STAT_INC(LOAD_ATTR, hit);
-            PyValueBorrow found = _PyValueGuarded_Load(class_value);
-            assert(!PyValue_IsNull(found));
+            attr = IR_CANONICAL_HOME_DUP(found);
+            PyValue receiver = OWNER(owner);
+            IR_RETIRE_PUBLISHED_RESULT(attr, receiver);
+        }
+
+        op(_LOAD_ATTR_CLASS_WITH_META, (type_version/2, class_version/2, class_value/4, owner -- attr)) {
+            PyValueBorrow found = ir_probe_class_value(owner, type_version, class_version, class_value, true);
+            DEOPT_IF(PyValue_IsNull(found));
+            STAT_INC(LOAD_ATTR, hit);
             attr = IR_CANONICAL_HOME_DUP(found);
             PyValue receiver = OWNER(owner);
             IR_RETIRE_PUBLISHED_RESULT(attr, receiver);
@@ -2813,16 +2793,12 @@ dummy_func(
 
         macro(LOAD_ATTR_CLASS) =
             unused/1 +
-            _CHECK_ATTR_CLASS +
-            unused/2 +
             _LOAD_ATTR_CLASS +
             _PUSH_NULL_CONDITIONAL;
 
         macro(LOAD_ATTR_CLASS_WITH_METACLASS_CHECK) =
             unused/1 +
-            _GUARD_TYPE_VERSION +
-            _CHECK_ATTR_CLASS +
-            _LOAD_ATTR_CLASS +
+            _LOAD_ATTR_CLASS_WITH_META +
             _PUSH_NULL_CONDITIONAL;
 
         op(_GUARD_BUILTIN_METACLASS, (owner -- owner)) {
@@ -3139,31 +3115,24 @@ dummy_func(
 
         inline_ok op(_COMPARE_OP_FLOAT, (left, right -- res, l, r)) {
             STAT_INC(COMPARE_OP, hit);
-            double dleft = PyValue_InlineFloat(left);
-            double dright = PyValue_InlineFloat(right);
-            // 1 if NaN, 2 if <, 4 if >, 8 if ==; this matches low four bits of the oparg
-            int sign_ish = COMPARISON_BIT(dleft, dright);
+            int comparison = ir_compare_inline_float(oparg, left, right);
             l = left;
             r = right;
             DEAD(left);
             DEAD(right);
-            res = (sign_ish & oparg) ? PyValue_True : PyValue_False;
+            res = comparison ? PyValue_True : PyValue_False;
             // It's always a bool, so we don't care about oparg & 16.
         }
 
         // Similar to COMPARE_OP_FLOAT
         inline_ok op(_COMPARE_OP_INT, (left, right -- res, l, r)) {
             STAT_INC(COMPARE_OP, hit);
-            // Scaled values compare as the values do.
-            int64_t ileft = _PyValue_IntScaled(left);
-            int64_t iright = _PyValue_IntScaled(right);
-            // 2 if <, 4 if >, 8 if ==; this matches the low 4 bits of the oparg
-            int sign_ish = COMPARISON_BIT(ileft, iright);
+            int comparison = ir_compare_inline_int(oparg, left, right);
             l = left;
             r = right;
             DEAD(left);
             DEAD(right);
-            res =  (sign_ish & oparg) ? PyValue_True : PyValue_False;
+            res = comparison ? PyValue_True : PyValue_False;
             // It's always a bool, so we don't care about oparg & 16.
         }
 
@@ -4385,6 +4354,10 @@ dummy_func(
             _SAVE_RETURN_SLOT +
             _PUSH_FRAME;
 
+        op(_TRY_LEAF_CALL, (--)) {
+            IR_TRY_LEAF_CALL();
+        }
+
         macro(CALL_PY_EXACT_ARGS) =
             unused/1 + // Skip over the entry distance
             _CHECK_PEP_523 +
@@ -4392,6 +4365,7 @@ dummy_func(
             _CHECK_FUNCTION_EXACT_ARGS +
             _CHECK_STACK_SPACE +
             _CHECK_RECURSION_REMAINING +
+            _TRY_LEAF_CALL +
             _INIT_CALL_PY_EXACT_ARGS +
             _SAVE_RETURN_SLOT +
             _PUSH_FRAME;

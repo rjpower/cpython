@@ -362,6 +362,35 @@ _PyFb_HasEntry(int opcode)
  * ir_feedback, which handlers index with their jump targets and feedback
  * indices.  The free-threaded build shares one copy between threads and does
  * not specialise it. */
+#define _Py_IR_LEAF_WORDS 32
+#define _Py_IR_LEAF_STEPS 2
+#define _Py_IR_LEAF_WINDOW 8
+
+enum {
+    _PY_IR_LEAF_ARGUMENT = 1,
+    _PY_IR_LEAF_CONSTANT,
+    _PY_IR_LEAF_GLOBAL,
+    _PY_IR_LEAF_SMALL_INT,
+};
+
+typedef struct {
+    uint32_t root;
+    uint16_t attributes[_Py_IR_LEAF_STEPS];
+    uint8_t kind;
+    uint8_t length;
+} _PyIRLeafPath;
+
+/* Derived syntax contains indices only. Counters never participate in proofs. */
+typedef struct {
+    _PyIRLeafPath paths[4];  // predicate operands, fallthrough and taken results
+    uint32_t comparison;
+    uint8_t conditional;
+    uint64_t hits;
+    uint64_t probe_misses;
+    uint64_t owner_misses;
+    uint64_t entry_misses;
+} _PyIRLeafRegion;
+
 typedef struct _PyCodeExec {
     _PyIRWord *words;
     char *entries;          // feedback entry 0, or NULL if no instruction
@@ -369,6 +398,7 @@ typedef struct _PyCodeExec {
     uint32_t nwords;
     uint32_t nlocalsplus;   // of the code, which IR_IS_LOCAL() reads
     _PyFbBlock *feedback;   // the header before entries, or NULL
+    _PyIRLeafRegion *leaf;  // optional bounded, scalar-only complete-body proof
 } _PyCodeExec;
 
 /* The feedback table of a code object, which follows its words: per entry,

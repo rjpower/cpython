@@ -1080,7 +1080,7 @@ static const struct {
     _PyCodeExec exec;
     _PyIRWord words[1];
 } entry_trampoline = {
-    .exec = { .nwords = 1, .nlocalsplus = 1 },
+    .exec = { .nwords = 1, .nlocalsplus = 1, .leaf = NULL },
     .words = {
         IR_WORD(INTERPRETER_EXIT, 1, 0, 0, 0),  /* reached on return and yield */
     },
@@ -1803,6 +1803,308 @@ done:
         failed = call_record_refresh(call);
     }
     return failed;
+}
+
+/* Raw probes read canonical homes while their original roots remain live.
+ * They never allocate, release an owner, specialize, or set an exception. */
+static inline PyValueBorrow
+ir_probe_global_value(PyObject *globals, PyObject *builtins, int handler,
+                      uint32_t globals_version, uint32_t builtins_version,
+                      uint32_t index)
+{
+    if (!PyDict_CheckExact(globals)) {
+        return PyValue_Borrow(PyValue_NULL);
+    }
+    PyDictKeysObject *keys = FT_ATOMIC_LOAD_PTR_ACQUIRE(((PyDictObject *)globals)->ma_keys);
+    if (FT_ATOMIC_LOAD_UINT32_RELAXED(keys->dk_version) != globals_version ||
+        keys->dk_kind != DICT_KEYS_UNICODE) {
+        return PyValue_Borrow(PyValue_NULL);
+    }
+    if (handler == LOAD_GLOBAL_BUILTIN) {
+        if (builtins == NULL || !PyDict_CheckExact(builtins)) {
+            return PyValue_Borrow(PyValue_NULL);
+        }
+        keys = FT_ATOMIC_LOAD_PTR_ACQUIRE(((PyDictObject *)builtins)->ma_keys);
+        if (FT_ATOMIC_LOAD_UINT32_RELAXED(keys->dk_version) != builtins_version ||
+            keys->dk_kind != DICT_KEYS_UNICODE) {
+            return PyValue_Borrow(PyValue_NULL);
+        }
+    }
+    else if (handler != LOAD_GLOBAL_MODULE) {
+        return PyValue_Borrow(PyValue_NULL);
+    }
+    if (index >= (size_t)FT_ATOMIC_LOAD_SSIZE_RELAXED(keys->dk_nentries)) {
+        return PyValue_Borrow(PyValue_NULL);
+    }
+    return PyValue_Borrow(DK_UNICODE_ENTRIES(keys)[index].me_value);
+}
+
+static inline PyValueBorrow
+ir_probe_shape_value(PyValueBorrow owner, uint32_t type_version,
+                     uint32_t shape, uint32_t offset)
+{
+#ifdef Py_GIL_DISABLED
+    return PyValue_Borrow(PyValue_NULL);
+#else
+    if (!PyValue_IsObject(owner)) {
+        return PyValue_Borrow(PyValue_NULL);
+    }
+    PyObject *object = PyValue_AsKnownObjectBorrow(owner);
+    PyTypeObject *type = Py_TYPE(object);
+    if (!type_version || FT_ATOMIC_LOAD_UINT_RELAXED(type->tp_version_tag) != type_version ||
+        !(type->tp_flags & Py_TPFLAGS_INLINE_VALUES) ||
+        _PyObject_Shape(object) != shape) {
+        return PyValue_Borrow(PyValue_NULL);
+    }
+    return PyValue_Borrow(*(PyValue *)((char *)object + offset));
+#endif
+}
+
+static inline PyValueBorrow
+ir_probe_class_value(PyValueBorrow owner, uint32_t type_version,
+                     uint32_t class_version, _PyValueGuarded value,
+                     bool check_metaclass)
+{
+    if (!PyValue_IsObject(owner)) {
+        return PyValue_Borrow(PyValue_NULL);
+    }
+    PyObject *object = PyValue_AsKnownObjectBorrow(owner);
+    if (!PyType_Check(object) || !class_version ||
+        (check_metaclass && (!type_version ||
+         FT_ATOMIC_LOAD_UINT_RELAXED(Py_TYPE(object)->tp_version_tag) != type_version)) ||
+        FT_ATOMIC_LOAD_UINT_RELAXED(((PyTypeObject *)object)->tp_version_tag) != class_version) {
+        return PyValue_Borrow(PyValue_NULL);
+    }
+    return _PyValueGuarded_Load(value);
+}
+
+static inline int
+ir_compare_inline_int(int mask, PyValueBorrow left, PyValueBorrow right)
+{
+    return !!(COMPARISON_BIT(_PyValue_IntScaled(left),
+                            _PyValue_IntScaled(right)) & mask);
+}
+
+static inline int
+ir_compare_inline_float(int mask, PyValueBorrow left, PyValueBorrow right)
+{
+    return !!(COMPARISON_BIT(PyValue_InlineFloat(left),
+                            PyValue_InlineFloat(right)) & mask);
+}
+
+static int
+ir_probe_inline_compare(int mask, PyValueBorrow left, PyValueBorrow right)
+{
+    if (PyValue_IsInlineInt(left) && PyValue_IsInlineInt(right)) {
+        return ir_compare_inline_int(mask, left, right);
+    }
+    if (PyValue_IsInlineFloat(left) && PyValue_IsInlineFloat(right)) {
+        return ir_compare_inline_float(mask, left, right);
+    }
+    return -1;
+}
+
+static PyValueBorrow
+ir_leaf_read_path(PyFunctionObject *function, PyCodeObject *code,
+                  const _PyIRLeafPath *path, PyValue *arguments)
+{
+    PyValueBorrow value = PyValue_Borrow(PyValue_NULL);
+    _PyCodeExec *exec = code->_co_exec;
+    switch (path->kind) {
+        case _PY_IR_LEAF_ARGUMENT:
+            value = PyValue_Borrow(arguments[path->root]);
+            break;
+        case _PY_IR_LEAF_CONSTANT:
+            value = PyTuple_GET_VALUE(code->co_consts, path->root);
+            break;
+        case _PY_IR_LEAF_SMALL_INT:
+            value = PyValue_Borrow(PyValue_FromInlineInt(path->root));
+            break;
+        case _PY_IR_LEAF_GLOBAL: {
+            uint32_t pc = path->root;
+            int handler = IR_HANDLER(exec->words[pc]);
+            _PyFbGlobal *proof = (_PyFbGlobal *)_PyIR_InstrFeedback(
+                code, exec, exec->words + pc);
+            if ((handler != LOAD_GLOBAL_MODULE && handler != LOAD_GLOBAL_BUILTIN) ||
+                proof->h.kind != FB_GLOBAL ||
+                (proof->h.state != FB_MONO && proof->h.state != FB_POLY &&
+                 proof->h.state != FB_MEGA)) {
+                return PyValue_Borrow(PyValue_NULL);
+            }
+            value = ir_probe_global_value(function->func_globals,
+                function->func_builtins, handler, proof->globals_version,
+                proof->builtins_version, proof->index);
+            break;
+        }
+        default:
+            return PyValue_Borrow(PyValue_NULL);
+    }
+    for (int i = 0; i < path->length && !PyValue_IsNull(value); i++) {
+        int pc = path->attributes[i];
+        int handler = IR_HANDLER(exec->words[pc]);
+        _PyFbAttr *proof = (_PyFbAttr *)_PyIR_InstrFeedback(
+            code, exec, exec->words + pc);
+        /* Historical polymorphism does not change the newest private proof.
+         * Consume only its supported live handler, never a poly-table row. */
+        if (proof->h.kind != FB_ATTR ||
+            (proof->h.state != FB_MONO && proof->h.state != FB_POLY &&
+             proof->h.state != FB_MEGA)) {
+            return PyValue_Borrow(PyValue_NULL);
+        }
+        if (handler == LOAD_ATTR_SHAPE || handler == LOAD_ATTR_SHAPE_LOCAL_TEMP) {
+            value = ir_probe_shape_value(value, proof->type_version,
+                proof->shape, proof->offset);
+        }
+        else if (handler == LOAD_ATTR_CLASS ||
+                 handler == LOAD_ATTR_CLASS_WITH_METACLASS_CHECK) {
+            value = ir_probe_class_value(value, proof->type_version,
+                proof->class_version, proof->class_value,
+                handler == LOAD_ATTR_CLASS_WITH_METACLASS_CHECK);
+        }
+        else {
+            return PyValue_Borrow(PyValue_NULL);
+        }
+    }
+    return value;
+}
+
+static int
+ir_leaf_entry_is_inert(PyThreadState *tstate, _PyInterpreterFrame *caller,
+                       PyFunctionObject *function, PyCodeObject *code)
+{
+#if defined(Py_GIL_DISABLED) || defined(__EMSCRIPTEN__) || defined(WITH_DTRACE) || defined(Py_DEBUG)
+    return 0;
+#else
+    if (tstate->current_frame != caller || caller->owner != FRAME_OWNED_BY_THREAD ||
+        caller->pending_redirect || IS_PEP523_HOOKED(tstate) ||
+        tstate->c_tracefunc || tstate->c_profilefunc || tstate->tracing ||
+        _PyValue_ClearingImmortals() || code->_co_monitoring != NULL ||
+        function->vectorcall != _PyFunction_Vectorcall ||
+        function->func_value_vectorcall != (_Py_valuefunc)_PyFunction_ValueVectorcall) {
+        return 0;
+    }
+    for (int i = 0; i < _PY_MONITORING_UNGROUPED_EVENTS; i++) {
+        if (tstate->interp->monitors.tools[i]) {
+            return 0;
+        }
+    }
+    return IR_HANDLER(code->_co_exec->words[0]) == RESUME &&
+        _Py_atomic_load_uintptr_relaxed(&tstate->eval_breaker) ==
+            code->_co_instrumentation_version;
+#endif
+}
+
+/* MISS changes no original home. DONE has no callback or error edge. */
+static Py_NO_INLINE _PyIRStepResult
+ir_try_complete_leaf_call(PyThreadState *tstate, _PyInterpreterFrame *caller,
+                          _PyInstr *site, uint32_t version)
+{
+    _PyIRStepResult miss = {site + 1, 0};
+    _PyIRWord word = FT_ATOMIC_LOAD_UINT64_RELAXED(*site);
+    int base = (int)IR_B(word);
+    int destination = (int)IR_A(word);
+    int argc = (int)IR_C(word);
+    PyValue *window = caller->base + base;
+    PyFunctionObject *function = (PyFunctionObject *)PyValue_AsKnownObjectBorrow(window[0]);
+    PyCodeObject *code = (PyCodeObject *)function->func_code;
+    int self = !PyValue_IsNull(window[1]);
+    if (code->_co_exec == NULL || code->_co_exec->leaf == NULL) {
+        return miss;
+    }
+    _PyIRLeafRegion *region = code->_co_exec->leaf;
+    if (argc + 2 > _Py_IR_LEAF_WINDOW || version < FUNC_VERSION_FIRST_VALID ||
+        function->func_version != version || code->co_argcount != argc + self ||
+        !ir_leaf_entry_is_inert(tstate, caller, function, code)) {
+        region->entry_misses++;
+        return miss;
+    }
+    PyValue *arguments = window + 2 - self;
+    int arm = 2;
+    if (region->conditional) {
+        PyValueBorrow left = ir_leaf_read_path(function, code, region->paths, arguments);
+        PyValueBorrow right = ir_leaf_read_path(function, code, region->paths + 1, arguments);
+        int comparison = PyValue_IsNull(left) || PyValue_IsNull(right) ? -1 :
+            ir_probe_inline_compare(region->comparison & IR_FUSED_OP_MASK, left, right);
+        if (comparison < 0) {
+            region->probe_misses++;
+            return miss;
+        }
+        arm += comparison ^ !!(region->comparison & _PyIR_FUSED_IF_FALSE);
+    }
+    PyValueBorrow found = ir_leaf_read_path(function, code, region->paths + arm, arguments);
+    if (PyValue_IsNull(found)) {
+        region->probe_misses++;
+        return miss;
+    }
+    PyValue result = PyValue_XDUP(found);
+    /* These are identities, not extra object owners. At most nine closes. */
+    PyObject *objects[_Py_IR_LEAF_WINDOW + 1];
+    int multiplicity[_Py_IR_LEAF_WINDOW + 1] = {0};
+    int distinct = 0;
+    int to_local = destination < _PyFrame_GetCode(caller)->co_nlocalsplus;
+    if (destination != IR_NO_DST && !to_local &&
+        !(destination >= base && destination < base + argc + 2) &&
+        !PyValue_IsNull(caller->base[destination])) {
+        goto decline;
+    }
+    for (int i = 0; i < argc + 3; i++) {
+        PyValueBorrow released;
+        if (i < argc + 2) {
+            released = PyValue_Borrow(window[i]);
+        }
+        else if (destination == IR_NO_DST) {
+            released = PyValue_Borrow(result);
+        }
+        else if (to_local) {
+            released = PyValue_Borrow(caller->base[destination]);
+        }
+        else {
+            continue;
+        }
+        if (!PyValue_RefcountOnObject(released)) {
+            continue;
+        }
+        PyObject *object = PyValue_AsKnownObjectBorrow(released);
+        int j = 0;
+        while (j < distinct && objects[j] != object) {
+            j++;
+        }
+        if (j == distinct) {
+            objects[distinct++] = object;
+        }
+        multiplicity[j]++;
+    }
+    for (int i = 0; i < distinct; i++) {
+        if (Py_REFCNT(objects[i]) <= multiplicity[i]) {
+            goto decline;
+        }
+    }
+    /* No callbacks, allocation, release or GIL drop occurred since admission.
+     * Only pending asynchronous eval work can change the admitted state. */
+    if (_Py_atomic_load_uintptr_relaxed(&tstate->eval_breaker) !=
+        FT_ATOMIC_LOAD_UINTPTR_ACQUIRE(code->_co_instrumentation_version)) {
+        region->entry_misses++;
+        PyValue_CLOSE(result);
+        return miss;
+    }
+    region->hits++;
+    /* No fallible work, callbacks, polls or unaccounted releases after this. */
+    PyValue retired[_Py_IR_LEAF_WINDOW];
+    for (int i = 0; i < argc + 2; i++) {
+        retired[i] = window[i];
+        window[i] = PyValue_NULL;
+    }
+    caller->return_slot = (uint16_t)destination;
+    caller->return_pc = site + 1;
+    for (int i = argc + 2; i-- > 0;) {
+        PyValue_XCLOSE(retired[i]);
+    }
+    _PyFrame_SetReturnValue(caller, result);
+    return (_PyIRStepResult){site + 1, 1};
+decline:
+    region->owner_misses++;
+    PyValue_CLOSE(result);
+    return miss;
 }
 
 /* The handlers' calls (call_transaction_run_*), after

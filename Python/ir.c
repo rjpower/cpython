@@ -47,6 +47,7 @@ _PyIRStaticExec _PyIR_InitCleanup = {
         .words = _PyIR_InitCleanup.words,
         .nwords = 2,
         .nlocalsplus = 0,
+        .leaf = NULL,
     },
     .words = {
         IR_WORD(EXIT_INIT_CHECK, 1, 0, 0, 0),
@@ -412,6 +413,346 @@ _PyIR_OriginalHandler(_PyInterpreterFrame *frame, const _PyIRWord *instr,
 
 /* The executing copy */
 
+typedef struct {
+    _PyIRLeafPath path;
+    uint32_t dependencies;
+    int slot;
+} LeafDefinition;
+
+typedef struct {
+    LeafDefinition definitions[_Py_IR_LEAF_WORDS];
+    int count;
+    uint32_t executed;
+} LeafBindings;
+
+/* Fail closed if generated operand/effect contracts grow beyond this consumer.
+ * Callback-capable read/compare/entry/return effects remain obligations for
+ * the guarded runtime path, never declarations of generic-opcode purity. */
+static int
+leaf_format(int handler)
+{
+    if (handler < 0 || handler >= IR_NUM_HANDLERS) {
+        return 0;
+    }
+    const _PyIRFormat *fmt = _PyIR_FormatOf(handler);
+    uint8_t roles[4] = {_PyIR_ROLE_DST, _PyIR_ROLE_NONE,
+                        _PyIR_ROLE_NONE, _PyIR_ROLE_NONE};
+    int inputs = 0, writes = 1, writes_form = _PyIR_EXT_FIXED;
+    int imm = _PyIR_LOC_NONE, fb = _PyIR_LOC_NONE;
+    int flags = _PyIR_VALID | _PyIR_STORE_DST | _PyIR_DISCARDS;
+    int effects = 0;
+    switch (handler) {
+        case LOAD_FAST: case LOAD_FAST_BORROW:
+            roles[1] = _PyIR_ROLE_LOCAL_IN;
+            imm = _PyIR_LOC_B;
+            effects = _PyIR_PURE;
+            break;
+        case LOAD_CONST: case LOAD_CONST_INLINE_INT: case LOAD_CONST_INLINE_FLOAT:
+            roles[2] = roles[3] = _PyIR_ROLE_IMM;
+            imm = _PyIR_LOC_CD;
+            effects = handler == LOAD_CONST ? _PyIR_PURE : 0;
+            break;
+        case LOAD_SMALL_INT: case LOAD_SMALL_INT_INLINE:
+            roles[1] = _PyIR_ROLE_IMM;
+            imm = _PyIR_LOC_B;
+            /* The range check below proves the immediate constructor cannot
+             * fail; its generic metadata conservatively includes allocation. */
+            effects = _PyIR_ALLOCATES |
+                (handler == LOAD_SMALL_INT ? _PyIR_PURE : _PyIR_RAISES);
+            break;
+        case LOAD_GLOBAL:
+            roles[1] = _PyIR_ROLE_FB;
+            roles[2] = roles[3] = _PyIR_ROLE_IMM;
+            imm = _PyIR_LOC_CD;
+            fb = _PyIR_LOC_B;
+            writes_form = _PyIR_EXT_BIT0;
+            flags = _PyIR_VALID | _PyIR_RUNS_CODE;
+            break;
+        case LOAD_ATTR:
+            roles[1] = _PyIR_ROLE_IN0;
+            roles[2] = _PyIR_ROLE_FB;
+            roles[3] = _PyIR_ROLE_IMM;
+            inputs = 1;
+            imm = _PyIR_LOC_D;
+            fb = _PyIR_LOC_C;
+            writes_form = _PyIR_EXT_BIT0;
+            flags |= _PyIR_NO_FOLD | _PyIR_RUNS_CODE;
+            break;
+        case COMPARE_OP_JUMP:
+            roles[0] = _PyIR_ROLE_IN0;
+            roles[1] = _PyIR_ROLE_IN0 + 1;
+            roles[2] = _PyIR_ROLE_FB;
+            roles[3] = _PyIR_ROLE_IMM;
+            inputs = 2;
+            writes = 0;
+            imm = _PyIR_LOC_D;
+            fb = _PyIR_LOC_C;
+            flags = _PyIR_VALID | _PyIR_RUNS_CODE | _PyIR_FORWARD | _PyIR_FUSED;
+            break;
+        case RETURN_VALUE:
+            roles[0] = _PyIR_ROLE_IN0;
+            inputs = 1;
+            writes = 0;
+            flags = _PyIR_VALID | _PyIR_RUNS_CODE;
+            break;
+        case RESUME:
+            roles[0] = _PyIR_ROLE_IMM;
+            writes = 0;
+            imm = _PyIR_LOC_A;
+            flags = _PyIR_VALID | _PyIR_RUNS_CODE;
+            break;
+        default:
+            return 0;
+    }
+    if (handler == LOAD_GLOBAL || handler == LOAD_ATTR ||
+        handler == COMPARE_OP_JUMP || handler == RETURN_VALUE || handler == RESUME) {
+        effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_ALLOCATES;
+        if (handler == LOAD_GLOBAL || handler == LOAD_ATTR || handler == COMPARE_OP_JUMP) {
+            effects |= _PyIR_SPECIALIZES;
+        }
+        if (handler == RESUME) {
+            effects |= _PyIR_POLLS;
+        }
+    }
+    return memcmp(fmt->roles, roles, sizeof(roles)) == 0 &&
+        fmt->flags == flags && fmt->effects == effects &&
+        fmt->imm == imm && fmt->fb == fb && fmt->ninputs == inputs &&
+        fmt->borrow_mask == (1 << inputs) - 1 &&
+        fmt->reads.form == _PyIR_EXT_FIXED && fmt->reads.k == inputs &&
+        fmt->writes.form == writes_form && fmt->writes.k == writes &&
+        fmt->through.form == _PyIR_EXT_FIXED && fmt->through.k == 0;
+}
+
+/* Only construction walks IR. Execution follows four bounded read paths. */
+static int
+leaf_source(PyCodeObject *co, LeafBindings *bindings, int slot,
+            LeafDefinition *out)
+{
+    if (slot < 0 || slot >= _PyFrame_NumSlotsForCodeObject(co)) {
+        return 0;
+    }
+    for (int i = bindings->count; i-- > 0;) {
+        if (bindings->definitions[i].slot == slot) {
+            *out = bindings->definitions[i];
+            return out->path.kind != 0;
+        }
+    }
+    *out = (LeafDefinition){.slot = slot};
+    if (slot < co->co_argcount) {
+        out->path.kind = _PY_IR_LEAF_ARGUMENT;
+        out->path.root = (uint32_t)slot;
+        return 1;
+    }
+    const uint32_t *constants = _PyCode_CONSTSLOTS(co);
+    for (int i = 0; i < co->co_nconstslots; i++) {
+        if (constants[2 * i] == (uint32_t)slot &&
+            constants[2 * i + 1] < (uint32_t)PyTuple_GET_SIZE(co->co_consts)) {
+            out->path.kind = _PY_IR_LEAF_CONSTANT;
+            out->path.root = constants[2 * i + 1];
+            return 1;
+        }
+    }
+    return 0;
+}
+
+static int
+leaf_consume(PyCodeObject *co, LeafBindings *bindings, int slot)
+{
+    if (slot < co->co_nlocalsplus) {
+        return 1;
+    }
+    for (int i = bindings->count; i-- > 0;) {
+        if (bindings->definitions[i].slot == slot) {
+            int live = bindings->definitions[i].path.kind != 0;
+            bindings->definitions[i].path.kind = 0;
+            return live;
+        }
+    }
+    return 0;
+}
+
+static int
+leaf_feedback(PyCodeObject *co, int pc, int kind)
+{
+    int unit = _PyCode_InstrFbIndex(co, pc);
+    if (unit < IR_FB_FIRST_UNIT) {
+        return 0;
+    }
+    int ordinal = _PyCode_FbOrdinal(co, (uint32_t)unit);
+    const _PyIRFormat *fmt = _PyIR_FormatOf(_PyCode_InstrHandler(co, pc));
+    if (ordinal <= 0 || _PyIR_FBINIT_KIND(_PyCode_FBINIT(co)[ordinal]) != kind ||
+        fmt->fb_kind != kind || fmt->fb_size == 0) {
+        return 0;
+    }
+    uint32_t end = ordinal + 1 < co->co_nfeedback
+        ? _PyIR_FBINIT_UNIT(_PyCode_FBINIT(co)[ordinal + 1])
+        : _PyCode_FbUnits(co);
+    return end >= (uint32_t)unit + (fmt->fb_size >> IR_FB_UNIT_SHIFT);
+}
+
+static int
+leaf_body(PyCodeObject *co, int pc, LeafBindings bindings,
+          _PyIRLeafRegion *region, int arm, uint32_t predicate_dependencies,
+          uint32_t *visited)
+{
+    while (pc > 0 && pc < Py_SIZE(co)) {
+        uint32_t bit = UINT32_C(1) << pc;
+        if (*visited & bit) {
+            return 0;
+        }
+        *visited |= bit;
+        _PyIRWord word = co->co_words[pc];
+        int handler = IR_HANDLER(word);
+        if (!leaf_format(handler)) {
+            return 0;
+        }
+        LeafDefinition value;
+        if (handler == RETURN_VALUE) {
+            if (!leaf_source(co, &bindings, IR_A(word), &value) ||
+                ((value.dependencies | predicate_dependencies) & bindings.executed)
+                    != bindings.executed) {
+                return 0;
+            }
+            region->paths[arm] = value.path;
+            return 1;
+        }
+        if (handler == COMPARE_OP_JUMP) {
+            LeafDefinition right;
+            if (region->conditional || !leaf_feedback(co, pc, FB_BINARY) ||
+                !leaf_source(co, &bindings, IR_A(word), &value) ||
+                !leaf_source(co, &bindings, IR_B(word), &right)) {
+                return 0;
+            }
+            int target = pc + 1 + IR_DS(word);
+            if (target <= pc + 1 || target >= Py_SIZE(co)) {
+                return 0;
+            }
+            int ordinal = _PyCode_FbOrdinal(co, IR_C(word));
+            uint32_t comparison = _PyIR_FBINIT_ARG(_PyCode_FBINIT(co)[ordinal]);
+            if (comparison & ~(IR_FUSED_OP_MASK | _PyIR_FUSED_IF_FALSE)) {
+                return 0;
+            }
+            if (((comparison & IR_FUSED_OP_MASK) >> 5) > Py_GE) {
+                return 0;
+            }
+            region->conditional = 1;
+            region->comparison = comparison;
+            region->paths[0] = value.path;
+            region->paths[1] = right.path;
+            uint32_t dependencies = value.dependencies | right.dependencies;
+            if (!leaf_consume(co, &bindings, IR_A(word)) ||
+                !leaf_consume(co, &bindings, IR_B(word))) {
+                return 0;
+            }
+            return leaf_body(co, pc + 1, bindings, region, 2,
+                             dependencies, visited) &&
+                   leaf_body(co, target, bindings, region, 3,
+                             dependencies, visited);
+        }
+        if (handler == LOAD_FAST || handler == LOAD_FAST_BORROW) {
+            if (IR_B(word) >= (uint32_t)co->co_nlocalsplus ||
+                !leaf_source(co, &bindings, IR_B(word), &value)) {
+                return 0;
+            }
+        }
+        else if (handler == LOAD_CONST || handler == LOAD_CONST_INLINE_INT ||
+                 handler == LOAD_CONST_INLINE_FLOAT) {
+            uint32_t constant = IR_CD(word);
+            if (constant >= (uint32_t)PyTuple_GET_SIZE(co->co_consts)) {
+                return 0;
+            }
+            value = (LeafDefinition){.path = {
+                .kind = _PY_IR_LEAF_CONSTANT, .root = constant}};
+        }
+        else if (handler == LOAD_SMALL_INT || handler == LOAD_SMALL_INT_INLINE) {
+            if (IR_B(word) >= _PY_NSMALLPOSINTS) {
+                return 0;
+            }
+            value = (LeafDefinition){.path = {
+                .kind = _PY_IR_LEAF_SMALL_INT, .root = IR_B(word)}};
+        }
+        else if (handler == LOAD_GLOBAL) {
+            if ((IR_CD(word) & 1) ||
+                (IR_CD(word) >> 1) >= (uint32_t)PyTuple_GET_SIZE(co->co_names) ||
+                !leaf_feedback(co, pc, FB_GLOBAL)) {
+                return 0;
+            }
+            value = (LeafDefinition){.path = {
+                .kind = _PY_IR_LEAF_GLOBAL, .root = (uint32_t)pc}};
+        }
+        else if (handler == LOAD_ATTR) {
+            if ((IR_D(word) & 1) ||
+                (IR_D(word) >> 1) >= (uint32_t)PyTuple_GET_SIZE(co->co_names) ||
+                !leaf_feedback(co, pc, FB_ATTR) ||
+                !leaf_source(co, &bindings, IR_B(word), &value) ||
+                value.path.length == _Py_IR_LEAF_STEPS ||
+                !leaf_consume(co, &bindings, IR_B(word))) {
+                return 0;
+            }
+            value.path.attributes[value.path.length++] = (uint16_t)pc;
+        }
+        else {
+            return 0;
+        }
+        int destination = (int)IR_A(word);
+        if (destination < co->co_nlocalsplus ||
+            destination >= _PyFrame_NumSlotsForCodeObject(co) ||
+            bindings.count == _Py_IR_LEAF_WORDS) {
+            return 0;
+        }
+        value.slot = destination;
+        value.dependencies |= bit;
+        bindings.definitions[bindings.count++] = value;
+        bindings.executed |= bit;
+        pc++;
+    }
+    return 0;
+}
+
+static _PyIRLeafRegion *
+make_leaf_region(PyCodeObject *co)
+{
+    if (Py_SIZE(co) < 2 || Py_SIZE(co) > _Py_IR_LEAF_WORDS ||
+        co->co_argcount > _Py_IR_LEAF_WINDOW - 2 || co->co_kwonlyargcount ||
+        co->co_ncellvars || co->co_nfreevars ||
+        (co->co_flags & (CO_OPTIMIZED | CO_NEWLOCALS)) !=
+            (CO_OPTIMIZED | CO_NEWLOCALS) ||
+        (co->co_flags & (CO_GENERATOR | CO_COROUTINE | CO_ASYNC_GENERATOR |
+                         CO_VARARGS | CO_VARKEYWORDS)) ||
+        PyBytes_GET_SIZE(co->co_exceptiontable) ||
+        _PyCode_InstrHandler(co, 0) != RESUME || !leaf_format(RESUME) ||
+        IR_A(co->co_words[0]) != 0) {
+        return NULL;
+    }
+    /* Validate implicit roots independently of their eventual use. */
+    const uint32_t *constants = _PyCode_CONSTSLOTS(co);
+    for (int i = 0; i < co->co_nconstslots; i++) {
+        uint32_t slot = constants[2 * i];
+        if (slot < (uint32_t)co->co_argcount || slot >= (uint32_t)co->co_nlocalsplus ||
+            constants[2 * i + 1] >= (uint32_t)PyTuple_GET_SIZE(co->co_consts) ||
+            !(_PyLocals_GetKind(co->co_localspluskinds, slot) & CO_FAST_CONST)) {
+            return NULL;
+        }
+        for (int j = 0; j < i; j++) {
+            if (constants[2 * j] == slot) {
+                return NULL;
+            }
+        }
+    }
+    _PyIRLeafRegion region = {0};
+    LeafBindings bindings = {0};
+    uint32_t visited = 1;
+    if (!leaf_body(co, 1, bindings, &region, 2, 0, &visited) ||
+        visited != (UINT32_MAX >> (32 - Py_SIZE(co)))) {
+        return NULL;
+    }
+    _PyIRLeafRegion *result = _PyMem_NoScanMalloc(sizeof(*result));
+    if (result != NULL) {
+        *result = region;
+    }
+    return result;
+}
+
 static _PyCodeExec *
 make_exec(PyCodeObject *co)
 {
@@ -432,6 +773,7 @@ make_exec(PyCodeObject *co)
         .words = words,
         .nwords = (uint32_t)nwords,
         .nlocalsplus = (uint32_t)co->co_nlocalsplus,
+        .leaf = make_leaf_region(co),
     };
     memcpy(words, _PyCode_WORDS(co), words_size);
     if (fb_size == 0) {
@@ -515,6 +857,7 @@ _PyCode_ClearExec(PyCodeObject *co)
     if (exec->feedback != NULL) {
         _PyFb_Clear(exec->feedback);
     }
+    _PyMem_NoScanFree(exec->leaf);
     _PyMem_NoScanFree(exec);
 }
 
@@ -526,6 +869,9 @@ _PyCode_ExecSizeOf(PyCodeObject *co)
         return 0;
     }
     size_t res = sizeof(_PyCodeExec) + exec->nwords * sizeof(_PyIRWord);
+    if (exec->leaf != NULL) {
+        res += sizeof(*exec->leaf);
+    }
     _PyFbBlock *feedback = exec->feedback;
     if (feedback != NULL) {
         res += feedback->size;
